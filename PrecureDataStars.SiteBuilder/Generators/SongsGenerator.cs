@@ -289,7 +289,7 @@ public sealed class SongsGenerator
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
     {
         // 作詞・作曲・編曲：構造化 song_credits を優先、無ければ Song のフリーテキスト列にフォールバック。
-        // BuildCreditRoleHtml は名義群（/persons/{id}/ リンク）の HTML を返す。
+        // BuildCreditRoleHtml は名義群（/people/{名前}/ リンク）の HTML を返す。
         // 行のラベル（「作詞」「作曲」「編曲」）も Role マスタを引いて
         // /creators/roles/{rep}/ にリンク化する（テンプレ側に渡す ...RoleLabelHtml がそれ）。
         // 出典シリーズは録音単位で持つようになったため、SongView レベルでは持たず、
@@ -954,7 +954,7 @@ public sealed class SongsGenerator
 
     /// <summary>
     /// 指定役職の <see cref="SongCredit"/> 行を HTML に解決する。
-    /// 構造化行があれば <see cref="StaffNameLinkResolver.ResolveAsHtml"/> 経由で <c>/persons/{id}/</c>
+    /// 構造化行があれば <see cref="StaffNameLinkResolver.ResolveAsHtml"/> 経由で <c>/people/{名前}/</c>
     /// への <c>&lt;a&gt;</c> リンクを生成し、<c>PrecedingSeparator</c> を挟んで連結する。
     /// 構造化行が無くフリーテキストのみのときはリンク化せず素のテキストを返す。
     /// 全体を <c>&lt;span class="staff-name"&gt;</c> でラップして、 CSS の <c>.staff-name</c> スタイル
@@ -1004,7 +1004,7 @@ public sealed class SongsGenerator
     /// 仕様：
     /// <list type="bullet">
     ///   <item>該当役の <see cref="SongCredit"/> 行が 1 件以上あれば、<see cref="StaffNameLinkResolver"/>
-    ///     で名義を /persons/{id}/ にリンク化し、<see cref="SongCredit.PrecedingSeparator"/>
+    ///     で名義を /people/{名前}/ にリンク化し、<see cref="SongCredit.PrecedingSeparator"/>
     ///     で連結した文字列を返す。役職名は表示しない（テンプレ側の th セルが
     ///     「作詞」「作曲」「編曲」を持つため）。</item>
     ///   <item>行が 1 件も無く、フリーテキストフォールバック（<paramref name="fallbackText"/>）が

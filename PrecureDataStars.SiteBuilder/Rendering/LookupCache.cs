@@ -99,7 +99,7 @@ internal sealed class LookupCache : ILookupCache
     /// <summary>
     /// 人物名義 ID → リンク化済み HTML 断片。
     /// <see cref="Utilities.StaffNameLinkResolver"/> 経由で人物詳細ページへの
-    /// <c>&lt;a href="/persons/{person_id}/"&gt;名義&lt;/a&gt;</c> を組み立てる。
+    /// <c>&lt;a href="/people/{名前}/"&gt;名義&lt;/a&gt;</c> を組み立てる。
     /// 共有名義（1 alias → 複数 person）は内部で「名義[1] [2]」のような添字付き複数リンクになる。
     /// resolver 未注入時はベース実装のプレーンエスケープにフォールバックする。
     /// </summary>
@@ -127,7 +127,7 @@ internal sealed class LookupCache : ILookupCache
         var name = ca.Name;
         if (string.IsNullOrEmpty(name)) return Task.FromResult<string?>(null);
         var escapedName = System.Net.WebUtility.HtmlEncode(name);
-        return Task.FromResult<string?>($"<a href=\"/characters/{ca.CharacterId}/\">{escapedName}</a>");
+        return Task.FromResult<string?>($"<a href=\"{PathUtil.CharacterUrl(ca.CharacterId)}\">{escapedName}</a>");
     }
 
     /// <summary>企業屋号 ID → リンク化済み HTML 断片。 屋号 → 親企業の company_id を解決し、<c>&lt;a href="/companies/{company_id}/"&gt;屋号名&lt;/a&gt;</c> を返す。親企業が引けないときは HTML エスケープしただけのプレーンテキストにフォールバック。</summary>
@@ -139,7 +139,7 @@ internal sealed class LookupCache : ILookupCache
         var escapedName = System.Net.WebUtility.HtmlEncode(name);
         if (ca.CompanyId > 0)
         {
-            return Task.FromResult<string?>($"<a href=\"/companies/{ca.CompanyId}/\">{escapedName}</a>");
+            return Task.FromResult<string?>($"<a href=\"{PathUtil.CompanyUrl(ca.CompanyId)}\">{escapedName}</a>");
         }
         return Task.FromResult<string?>(escapedName);
     }
@@ -152,7 +152,7 @@ internal sealed class LookupCache : ILookupCache
         var escapedName = System.Net.WebUtility.HtmlEncode(ca.Name ?? "");
         if (ca.CompanyId > 0)
         {
-            return Task.FromResult<string?>($"<a href=\"/companies/{ca.CompanyId}/\">{escapedName}</a>");
+            return Task.FromResult<string?>($"<a href=\"{PathUtil.CompanyUrl(ca.CompanyId)}\">{escapedName}</a>");
         }
         return Task.FromResult<string?>(escapedName);
     }

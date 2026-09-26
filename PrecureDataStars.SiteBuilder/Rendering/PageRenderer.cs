@@ -94,7 +94,7 @@ public sealed class PageRenderer
 
     /// <summary>
     /// ページ専用の OGP カード画像を書き出し、その絶対 URL を返す。
-    /// 出力パスは canonical パスを畳んだもの（<c>/persons/151/</c> → <c>/og/persons/151.png</c>、
+    /// 出力パスは canonical パスを畳んだもの（<c>/people/高橋任治/</c> → <c>/og/people/高橋任治.png</c>、
     /// ルートは <c>/og/home.png</c>）。ページごとに出力先が異なるため並列フェーズから呼んで安全。
     /// BaseUrl 未設定時は絶対 URL を組めないため何もせず空文字を返す。
     /// </summary>
@@ -103,7 +103,9 @@ public sealed class PageRenderer
         if (_ogCardRenderer is null || string.IsNullOrEmpty(_config.BaseUrl) || !spec.IsRenderable) return "";
 
         var relativePath = OgCardRelativePath(canonicalPath);
-        var missing = _ogCardRenderer.Render(spec, Path.Combine(_config.OutputDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        // 名前ベースの canonical（パーセントエンコード済み）はデコードしたファイル名で書き出し、URL はエンコード形のまま返す。
+        var missing = _ogCardRenderer.Render(spec, Path.Combine(_config.OutputDirectory,
+            PathUtil.DecodePath(relativePath).Replace('/', Path.DirectorySeparatorChar)));
         if (missing is not null)
         {
             lock (_ogCardGlyphLock) _ogCardGlyphWarnings.TryAdd(missing, canonicalPath);
@@ -446,7 +448,7 @@ public sealed class PageRenderer
               || urlPath.StartsWith("/bgms/", StringComparison.Ordinal)) activeUrl = "/music/";
         else if (urlPath.StartsWith("/books/", StringComparison.Ordinal)) activeUrl = "/books/";
         else if (urlPath.StartsWith("/creators/", StringComparison.Ordinal)
-              || urlPath.StartsWith("/persons/", StringComparison.Ordinal)
+              || urlPath.StartsWith("/people/", StringComparison.Ordinal)
               || urlPath.StartsWith("/companies/", StringComparison.Ordinal)) activeUrl = "/creators/";
         else if (urlPath.StartsWith("/stats/", StringComparison.Ordinal)) activeUrl = "/stats/";
         else if (urlPath.StartsWith("/articles/", StringComparison.Ordinal)) activeUrl = "/articles/";

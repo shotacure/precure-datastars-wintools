@@ -272,7 +272,7 @@ public sealed class SearchIndexGenerator
                 : (bk.HasKindle && !bk.HasPrint ? "Kindle" : "書籍");
             items.Add(new SearchIndexItem
             {
-                u = $"/books/{bk.BookId}/",
+                u = PathUtil.BookUrl(bk.BookId),
                 t = bk.Title,
                 k = "book",
                 s = subLabel,

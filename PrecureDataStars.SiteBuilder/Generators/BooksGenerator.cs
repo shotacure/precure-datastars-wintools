@@ -209,7 +209,7 @@ public sealed class BooksGenerator
         {
             BookId = book.BookId,
             Title = book.Title,
-            Url = $"/books/{book.BookId}/",
+            Url = PathUtil.BookUrl(book.BookId),
             CoverImageUrl = book.CoverImageUrl ?? "",
             ReleaseDateShort = FormatDateShort(book.ReleaseDate),
             PriceLabel = FormatPriceLabel(book),
@@ -299,6 +299,11 @@ public sealed class BooksGenerator
                 ReleaseDateKindle = book.ReleaseDateKindle.HasValue ? FormatDateLong(book.ReleaseDateKindle.Value) : "",
                 Publisher = publisher,
                 Isbn13 = book.Isbn13 ?? "",
+                Isbn10 = BookCodes.ToIsbn10(book.Isbn13),
+                CCode = book.CCode ?? "",
+                BookJanSecondRow = BookCodes.ToBookJanSecondRow(book.CCode, book.PriceExTax),
+                MagazineCode = book.MagazineCode ?? "",
+                PeriodicalCode = book.PeriodicalCode ?? "",
                 PageCountLabel = book.PageCount.HasValue ? $"{book.PageCount} ページ" : "",
                 // 判型は人手で整えた trim_size を優先し、無ければ Amazon 由来の装丁表記で代替する。
                 FormatLabel = !string.IsNullOrEmpty(book.TrimSize) ? book.TrimSize! : (book.BindingText ?? ""),
@@ -567,6 +572,21 @@ public sealed class BookDetailView
 
     /// <summary>ISBN-13（紙のみ、未登録なら空文字）。</summary>
     public string Isbn13 { get; set; } = "";
+
+    /// <summary>ISBN-10（978 始まりの ISBN-13 から導いた値。導けなければ空文字）。</summary>
+    public string Isbn10 { get; set; } = "";
+
+    /// <summary>Cコード（未登録なら空文字）。</summary>
+    public string CCode { get; set; } = "";
+
+    /// <summary>書籍 JAN の 2 段目（Cコードと税抜価格から導いた値。導けなければ空文字）。</summary>
+    public string BookJanSecondRow { get; set; } = "";
+
+    /// <summary>雑誌コード（未登録なら空文字）。</summary>
+    public string MagazineCode { get; set; } = "";
+
+    /// <summary>定期刊行物コード（雑誌 JAN、未登録なら空文字）。</summary>
+    public string PeriodicalCode { get; set; } = "";
 
     /// <summary>ページ数表記。</summary>
     public string PageCountLabel { get; set; } = "";

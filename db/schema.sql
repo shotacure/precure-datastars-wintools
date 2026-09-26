@@ -2980,6 +2980,10 @@ UNLOCK TABLES;
 -- release_date_kindle は Kindle 版が後日配信のときだけ入れる。
 -- isbn13 は紙のみが持つ。Amazon からは externalIds.eans（13 桁）を採る
 -- （isbns は ISBN-10 で紙の ASIN と同値になることが多く、13 桁の器には合わない）。
+-- ISBN 以外の流通コードとして c_code（Cコード）/ magazine_code（雑誌コード）/
+-- periodical_code（定期刊行物コード＝雑誌 JAN 18 桁）を持つ。書籍 JAN の 2 段目は
+-- Cコードと税抜価格から導けるため持たない。雑誌コードは月号に年を含まず一意にならない。
+-- 詳細ページの URL は ISBN-13 → 定期刊行物コード → Kindle ASIN → 紙の ASIN の順に最初にあるコード。
 --
 -- シリーズ所属は本テーブルではなく book_series（多対多）側の属性。行が 1 件も無ければ
 -- オールスターズ／シリーズ横断として扱う。
@@ -2998,6 +3002,9 @@ CREATE TABLE `books` (
   `release_date`                 date NOT NULL COMMENT '代表発売日（紙があれば紙、電子のみなら配信日）',
   `release_date_kindle`          date DEFAULT NULL COMMENT 'Kindle 版が後日配信のときの配信日',
   `isbn13`                       char(13) DEFAULT NULL COMMENT '紙のみ。Amazon externalIds.eans 由来',
+  `c_code`                       char(5) DEFAULT NULL COMMENT 'Cコード（"C" + 4 桁、例: C8776）',
+  `magazine_code`                varchar(8) DEFAULT NULL COMMENT '雑誌コード（5 桁-月号、例: 66557-17）',
+  `periodical_code`              varchar(18) DEFAULT NULL COMMENT '定期刊行物コード（雑誌 JAN、491 始まり 18 桁）',
   `page_count`                   smallint unsigned DEFAULT NULL,
   -- Amazon classifications.binding の生値（"ムック" / "大型本" / "単行本（ソフトカバー）" 等）。
   -- 取り込みの受け皿で、人手で整えた判型は trim_size に入れる。
@@ -3030,6 +3037,7 @@ CREATE TABLE `books` (
   `is_deleted`                   tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`book_id`),
   UNIQUE KEY `uq_books_isbn13` (`isbn13`),
+  UNIQUE KEY `uq_books_periodical_code` (`periodical_code`),
   KEY `ix_books_release`   (`release_date`),
   KEY `ix_books_publisher` (`publisher_product_company_id`),
   KEY `ix_books_title`     (`title`),
@@ -3126,6 +3134,41 @@ CREATE TABLE `book_credits` (
   CONSTRAINT `fk_book_credits_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases`    (`alias_id`),
   CONSTRAINT `ck_book_credits_alias_or_text` CHECK (((`person_alias_id` is not null) or (`credit_text` is not null)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='書籍クレジット（マスタ紐付け + フリーテキスト併用）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `legacy_entity_ids`
+--
+-- 旧 ID URL の台帳。サイトの人物・キャラクター・企業・書籍の詳細ページ URL は名前（書籍はコード）で作り、
+-- 公開済みの旧 URL（/persons/123/ 等）は 301 で新 URL へ転送する。その「旧 ID → いまの実体」を持つ。
+-- legacy_id は URL を切り替えた時点の ID で凍結し、以後変えない。実体側の列は entity_kind に対応する
+-- 1 列だけを持つ（MySQL は参照アクション付きの列を CHECK に使えないため、登録側で守る）。
+-- 実体の ID を振り直すと ON UPDATE CASCADE で追従するが、FOREIGN_KEY_CHECKS=0 で振り直すときは
+-- CASCADE が働かないので振り直しスクリプト側で明示的に更新する。実体を統合するときは削除の前に
+-- 統合先へ付け替える（付け替えずに削除すると ON DELETE CASCADE で行が消え、旧 URL は 404 になる）。
+--
+
+DROP TABLE IF EXISTS `legacy_entity_ids`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `legacy_entity_ids` (
+  `entity_kind`   varchar(16) NOT NULL COMMENT 'PERSON / CHARACTER / COMPANY / BOOK',
+  `legacy_id`     int NOT NULL COMMENT '公開済みの旧 URL に出ていた ID（凍結値）',
+  `person_id`     int DEFAULT NULL,
+  `character_id`  int DEFAULT NULL,
+  `company_id`    int DEFAULT NULL,
+  `book_id`       int DEFAULT NULL,
+  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`entity_kind`, `legacy_id`),
+  KEY `ix_lei_person`    (`person_id`),
+  KEY `ix_lei_character` (`character_id`),
+  KEY `ix_lei_company`   (`company_id`),
+  KEY `ix_lei_book`      (`book_id`),
+  CONSTRAINT `fk_lei_person`    FOREIGN KEY (`person_id`)    REFERENCES `persons` (`person_id`)       ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_lei_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`character_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_lei_company`   FOREIGN KEY (`company_id`)   REFERENCES `companies` (`company_id`)   ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_lei_book`      FOREIGN KEY (`book_id`)      REFERENCES `books` (`book_id`)          ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='旧 ID URL の台帳（URL 切り替え時点の ID を凍結）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

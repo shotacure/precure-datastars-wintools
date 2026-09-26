@@ -152,7 +152,7 @@
      役職ごと 1 行で「[役職バッジ] 人名(リンク済 HTML)」のフラットレイアウト（シリーズ詳細メインスタッフと共通）。
        バッジは data-role-code 属性でシリーズ一覧と同じ役職別色（SCREENPLAY=ピンク／STORYBOARD=水色／
        EPISODE_DIRECTOR=ピンク／ANIMATION_DIRECTOR=緑／ART_DIRECTOR=黄）を継承する。
-       NamesLine は <a href="/persons/N/">人名</a> でラップ済の HTML 断片、html.escape はかけない。
+       NamesLine は <a href="/people/{名前}/">人名</a> でラップ済の HTML 断片、html.escape はかけない。
        絵コンテと演出が同一人物の場合、テンプレ側で「絵コンテ」「演出」のバッジを 2 つ並べる
        （RoleCode は空、SubRoleLinks の各 Code / Label を使う）。 ##}}
   {{~ if (array.size Staff) > 0 ~}}
@@ -169,7 +169,7 @@
   {{## 主題歌・挿入歌（クレジットの直前）。
        - 旧 1 行表示（「OP「タイトル」　うた：歌唱者　TV size」）から、複数行リッチ表示に拡張。
          - 楽曲詳細ページと同じ構造化クレジット由来の HTML を流用し、作詞・作曲・編曲・歌の各行に
-           役職名（/creators/roles/{rep}/ 行きアンカー）＋ 名義（/persons/{id}/ または /characters/{id}/ 行き
+           役職名（/creators/roles/{rep}/ 行きアンカー）＋ 名義（/people/{名前}/ または /characters/{名前}/ 行き
            アンカー）をリンク化して表示する。構造化が無い項目はフォールバックの平文（リンクなし）。
          - 各楽曲は「ts-card」というカード型の箱に入れ、タイトル行とメタ行を縦に並べる。
        本放送限定行は「（本放送のみ）」を末尾につける。

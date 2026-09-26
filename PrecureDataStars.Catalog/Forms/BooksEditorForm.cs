@@ -204,7 +204,20 @@ public partial class BooksEditorForm : Form
         catch (Exception ex) { this.ShowError(ex); }
     }
 
-    /// <summary>絞り込みボックスの文字列で一覧を絞る。書名・読み・ISBN を対象にした部分一致。</summary>
+    /// <summary>Cコードの入力を正規化する（前後空白を除き英字を大文字化。空なら null）。</summary>
+    private static string? NormalizeCCode(string? text)
+        => FormHelpers.NullIfEmpty(text)?.ToUpperInvariant();
+
+    /// <summary>定期刊行物コードの入力を正規化する（バーコード下の表記に入る空白・ハイフンを除く。空なら null）。</summary>
+    private static string? NormalizePeriodicalCode(string? text)
+    {
+        var raw = FormHelpers.NullIfEmpty(text);
+        if (raw is null) return null;
+        var digits = new string(raw.Where(c => !char.IsWhiteSpace(c) && c != '-').ToArray());
+        return digits.Length == 0 ? null : digits;
+    }
+
+    /// <summary>絞り込みボックスの文字列で一覧を絞る。書名・読み・ISBN・雑誌コード・定期刊行物コードを対象にした部分一致。</summary>
     private void ApplyFilter()
     {
         string kw = txtFilter.Text?.Trim() ?? "";
@@ -214,7 +227,9 @@ public partial class BooksEditorForm : Form
             src = src.Where(b =>
                 b.Title.Contains(kw, StringComparison.OrdinalIgnoreCase)
                 || (b.TitleKana?.Contains(kw, StringComparison.OrdinalIgnoreCase) ?? false)
-                || (b.Isbn13?.Contains(kw, StringComparison.OrdinalIgnoreCase) ?? false));
+                || (b.Isbn13?.Contains(kw, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (b.MagazineCode?.Contains(kw, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (b.PeriodicalCode?.Contains(kw, StringComparison.OrdinalIgnoreCase) ?? false));
         }
 
         gridItems.DataSource = null;
@@ -243,6 +258,9 @@ public partial class BooksEditorForm : Form
             dtReleaseKindle.Enabled = chkHasKindleDate.Checked;
             dtReleaseKindle.Value = b.ReleaseDateKindle ?? b.ReleaseDate;
             txtIsbn13.Text = b.Isbn13 ?? "";
+            txtCCode.Text = b.CCode ?? "";
+            txtMagazineCode.Text = b.MagazineCode ?? "";
+            txtPeriodicalCode.Text = b.PeriodicalCode ?? "";
             numPageCount.Value = b.PageCount ?? 0;
             txtTrimSize.Text = b.TrimSize ?? "";
             txtBindingText.Text = b.BindingText ?? "";
@@ -289,6 +307,9 @@ public partial class BooksEditorForm : Form
         dtReleaseKindle.Enabled = false;
         dtReleaseKindle.Value = DateTime.Today;
         txtIsbn13.Text = "";
+        txtCCode.Text = "";
+        txtMagazineCode.Text = "";
+        txtPeriodicalCode.Text = "";
         numPageCount.Value = 0;
         txtTrimSize.Text = "";
         txtBindingText.Text = "";
@@ -323,6 +344,29 @@ public partial class BooksEditorForm : Form
         if (!chkHasPrint.Checked && !chkHasKindle.Checked)
         {
             MessageBox.Show(this, "紙版・Kindle 版の少なくとも一方にチェックを入れてください。", "入力エラー",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        // 流通コードは表記を正規化してから書式を確かめる（空欄は未設定として通す）。
+        string? cCode = NormalizeCCode(txtCCode.Text);
+        string? magazineCode = FormHelpers.NullIfEmpty(txtMagazineCode.Text);
+        string? periodicalCode = NormalizePeriodicalCode(txtPeriodicalCode.Text);
+        if (cCode is not null && !System.Text.RegularExpressions.Regex.IsMatch(cCode, @"^C\d{4}$"))
+        {
+            MessageBox.Show(this, "Cコードは「C + 数字 4 桁」（例: C8776）で入力してください。", "入力エラー",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (magazineCode is not null && !System.Text.RegularExpressions.Regex.IsMatch(magazineCode, @"^\d{5}-\d{2}$"))
+        {
+            MessageBox.Show(this, "雑誌コードは「数字 5 桁-月号 2 桁」（例: 66557-17）で入力してください。", "入力エラー",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (periodicalCode is not null && !System.Text.RegularExpressions.Regex.IsMatch(periodicalCode, @"^491\d{15}$"))
+        {
+            MessageBox.Show(this, "定期刊行物コードは「491」で始まる数字 18 桁で入力してください（空白・ハイフンは除いて保存します）。", "入力エラー",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
@@ -362,6 +406,9 @@ public partial class BooksEditorForm : Form
                 ReleaseDate = dtRelease.Value.Date,
                 ReleaseDateKindle = chkHasKindleDate.Checked ? dtReleaseKindle.Value.Date : null,
                 Isbn13 = FormHelpers.NullIfEmpty(txtIsbn13.Text),
+                CCode = cCode,
+                MagazineCode = magazineCode,
+                PeriodicalCode = periodicalCode,
                 PageCount = numPageCount.Value > 0 ? (ushort)numPageCount.Value : null,
                 TrimSize = FormHelpers.NullIfEmpty(txtTrimSize.Text),
                 BindingText = FormHelpers.NullIfEmpty(txtBindingText.Text),

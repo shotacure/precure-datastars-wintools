@@ -35,6 +35,9 @@ public sealed class BooksRepository : RepositoryBase
           release_date                  AS ReleaseDate,
           release_date_kindle           AS ReleaseDateKindle,
           isbn13                        AS Isbn13,
+          c_code                        AS CCode,
+          magazine_code                 AS MagazineCode,
+          periodical_code               AS PeriodicalCode,
           page_count                    AS PageCount,
           binding_text                  AS BindingText,
           trim_size                     AS TrimSize,
@@ -127,7 +130,9 @@ public sealed class BooksRepository : RepositoryBase
               AND (title LIKE @kw
                 OR title_kana LIKE @kw
                 OR title_en LIKE @kw
-                OR isbn13 LIKE @kw)
+                OR isbn13 LIKE @kw
+                OR magazine_code LIKE @kw
+                OR periodical_code LIKE @kw)
             ORDER BY release_date DESC, book_id
             LIMIT 200;
             """;
@@ -141,7 +146,7 @@ public sealed class BooksRepository : RepositoryBase
         const string sql = """
             INSERT INTO books
               (title, title_kana, title_en, publisher_product_company_id,
-               release_date, release_date_kindle, isbn13, page_count,
+               release_date, release_date_kindle, isbn13, c_code, magazine_code, periodical_code, page_count,
                binding_text, trim_size,
                price_ex_tax, price_inc_tax, price_kindle_inc_tax,
                has_print, has_kindle,
@@ -149,7 +154,7 @@ public sealed class BooksRepository : RepositoryBase
                notes, official_url, created_by, updated_by)
             VALUES
               (@Title, @TitleKana, @TitleEn, @PublisherProductCompanyId,
-               @ReleaseDate, @ReleaseDateKindle, @Isbn13, @PageCount,
+               @ReleaseDate, @ReleaseDateKindle, @Isbn13, @CCode, @MagazineCode, @PeriodicalCode, @PageCount,
                @BindingText, @TrimSize,
                @PriceExTax, @PriceIncTax, @PriceKindleIncTax,
                @HasPrint, @HasKindle,
@@ -175,6 +180,9 @@ public sealed class BooksRepository : RepositoryBase
               release_date                 = @ReleaseDate,
               release_date_kindle          = @ReleaseDateKindle,
               isbn13                       = @Isbn13,
+              c_code                       = @CCode,
+              magazine_code                = @MagazineCode,
+              periodical_code              = @PeriodicalCode,
               page_count                   = @PageCount,
               binding_text                 = @BindingText,
               trim_size                    = @TrimSize,

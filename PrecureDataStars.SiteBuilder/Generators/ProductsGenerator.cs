@@ -1243,7 +1243,7 @@ public sealed class ProductsGenerator
     ///     bgm_cue_credits の役職バッジ + 名義 HTML を組み立てる。</item>
     ///   <item><b>その他（DRAMA 等）</b>：タイトルは track_title_override 単体、下段は空。</item>
     /// </list>
-    /// 名義は person_aliases / character_aliases の構造化 ID を解決して /persons/{id}/ や
+    /// 名義は person_aliases / character_aliases の構造化 ID を解決して /people/{名前}/ や
     /// /characters/{id}/ へのリンク化を行う（楽曲詳細と同じソース）。
     /// </summary>
     private TrackRow BuildTrackRow(
@@ -1528,7 +1528,7 @@ public sealed class ProductsGenerator
                 //   原曲行：役職行の上に「原曲: 元曲タイトル」を muted で出す。元曲タイトルは
                 //     「曲名 + 半角SP + variant_label 接尾辞」。
                 //   クレジット行：劇伴 (BGM) 準拠で「作曲」「編曲」のみ役職バッジ + 名義を出す。
-                //     名義リンクは song_credits の構造化エントリがある場合のみ /persons/{id}/ にリンク、
+                //     名義リンクは song_credits の構造化エントリがある場合のみ /people/{名前}/ にリンク、
                 //     構造化が無い場合はフリーテキスト平文（リンク・下線無し）。同名義の作曲・編曲は
                 //     BuildMergedRoleSegmentsHtml で「[作曲][編曲] 名義」と自動マージされる。
                 if (t.SongRecordingId is int nrid

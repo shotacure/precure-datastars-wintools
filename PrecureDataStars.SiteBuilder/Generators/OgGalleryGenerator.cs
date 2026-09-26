@@ -71,13 +71,14 @@ public sealed class OgGalleryGenerator
 
             foreach (var item in items)
             {
-                // カード画像のパスから元ページの URL を逆算する（og/persons/151.png → /persons/151/）。
+                // カード画像のパスから元ページの URL を逆算する（og/people/高橋任治.png → /people/高橋任治/）。
                 string slug = item.Rel[..^4];
-                string pageUrl = slug == "home" ? "/" : $"/{slug}/";
+                // 名前ベースのページ（og/people/高橋任治.png）は URL 側をパーセントエンコードする。
+                string pageUrl = slug == "home" ? "/" : $"/{PathUtil.EncodePath(slug)}/";
 
                 sb.Append("<figure>");
                 sb.Append("<a href=\"").Append(HtmlUtil.Escape(pageUrl)).Append("\">");
-                sb.Append("<img loading=\"lazy\" src=\"/og/").Append(HtmlUtil.Escape(item.Rel))
+                sb.Append("<img loading=\"lazy\" src=\"/og/").Append(HtmlUtil.Escape(PathUtil.EncodePath(item.Rel)))
                   .Append("\" alt=\"").Append(HtmlUtil.Escape(item.Rel)).Append("\">");
                 sb.Append("</a>");
                 sb.Append("<figcaption>").Append(HtmlUtil.Escape(pageUrl)).Append("</figcaption>");

@@ -70,7 +70,7 @@
         <span class="fact-label">声</span>
         <span class="fact-value">
           {{~ if PrecureProfile.VoiceActorPersonId ~}}
-          <a href="/persons/{{ PrecureProfile.VoiceActorPersonId }}/">{{ PrecureProfile.VoiceActorName | html.escape }}</a>
+          <a href="{{ person_url PrecureProfile.VoiceActorPersonId }}">{{ PrecureProfile.VoiceActorName | html.escape }}</a>
           {{~ else ~}}
           {{ PrecureProfile.VoiceActorName | html.escape }}
           {{~ end ~}}
@@ -124,9 +124,9 @@
     <ul class="entity-list">
       {{~ for f in FamilyRelations ~}}
       <li class="entity-row">
-        <a class="entity-row-link" href="/characters/{{ f.RelatedCharacterId }}/" aria-label="{{ f.RelatedCharacterName | html.escape }}"></a>
+        <a class="entity-row-link" href="{{ character_url f.RelatedCharacterId }}" aria-label="{{ f.RelatedCharacterName | html.escape }}"></a>
         <span class="tag-badge">{{ f.RelationLabel | html.escape }}</span>
-        <a class="entity-row-name" href="/characters/{{ f.RelatedCharacterId }}/">{{ f.RelatedCharacterName | html.escape }}</a>
+        <a class="entity-row-name" href="{{ character_url f.RelatedCharacterId }}">{{ f.RelatedCharacterName | html.escape }}</a>
         {{~ if f.Notes != "" ~}}
         <span class="entity-row-sub muted">{{ f.Notes | html.escape }}</span>
         {{~ end ~}}

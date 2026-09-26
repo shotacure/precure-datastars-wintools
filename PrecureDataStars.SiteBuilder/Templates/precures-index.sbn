@@ -11,9 +11,9 @@
 <ul class="entity-list">
   {{~ for p in Precures ~}}
   <li class="entity-row">
-    <a class="entity-row-link" href="/characters/{{ p.CharacterId }}/" aria-label="{{ p.TransformName | html.escape }}"></a>
-    <a class="entity-row-name" href="/characters/{{ p.CharacterId }}/">{{ p.TransformName | html.escape }}</a>
-    <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }}{{~ if p.VoiceActorName != "" ~}} (CV: {{~ if p.VoiceActorPersonId ~}}<a href="/persons/{{ p.VoiceActorPersonId }}/">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}}){{~ end ~}}</span>
+    <a class="entity-row-link" href="{{ character_url p.CharacterId }}" aria-label="{{ p.TransformName | html.escape }}"></a>
+    <a class="entity-row-name" href="{{ character_url p.CharacterId }}">{{ p.TransformName | html.escape }}</a>
+    <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }}{{~ if p.VoiceActorName != "" ~}} (CV: {{~ if p.VoiceActorPersonId ~}}<a href="{{ person_url p.VoiceActorPersonId }}">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}}){{~ end ~}}</span>
   </li>
   {{~ end ~}}
 </ul>

@@ -7,7 +7,7 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// この型は
 /// 両者で共有するため本ファイルに外出ししている。
 /// 各文字列フィールドは「、」で連結済みの HTML 断片を保持する。PERSON エントリは
-/// <see cref="StaffNameLinkResolver"/> によって <c>&lt;a href="/persons/{id}/"&gt;表示名&lt;/a&gt;</c>
+/// <see cref="StaffNameLinkResolver"/> によって <c>&lt;a href="/people/{名前}/"&gt;表示名&lt;/a&gt;</c>
 /// 形式にラップ済み、TEXT エントリは HTML エスケープ済み。テンプレ側ではこれを <c>html.escape</c>
 /// を掛けずにそのまま出力する。
 /// 抽出ロジック（<c>ExtractStaffSummaryAsync</c>）と PERSON エントリ解決（<c>ResolveStaffEntryAsync</c>）

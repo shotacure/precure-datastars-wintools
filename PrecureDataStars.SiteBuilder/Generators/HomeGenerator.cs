@@ -646,7 +646,7 @@ WHERE e.is_deleted = 0
             // ジャンル未設定の書籍は種別欄が空にならないよう版構成（紙 / Kindle）で代替する。
             GenreLabel = primaryGenreLabelByBook.TryGetValue(b.BookId, out var g) ? g
                        : (b.HasKindle && !b.HasPrint ? "Kindle" : "書籍"),
-            BookUrl = $"/books/{b.BookId}/",
+            BookUrl = PathUtil.BookUrl(b.BookId),
             CoverImageUrl = b.CoverImageUrl ?? "",
             AmazonPrintUrl = printUrl,
             AmazonKindleUrl = kindleUrl,

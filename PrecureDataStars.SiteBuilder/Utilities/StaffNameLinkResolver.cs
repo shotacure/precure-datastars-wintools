@@ -49,7 +49,7 @@ public sealed class StaffNameLinkResolver
     /// HTML として直接埋め込み可能な文字列。
     /// <list type="bullet">
     ///   <item><description>person_alias_id が NULL またはマッチする人物が無い: <c>{displayText}</c>（HTML エスケープのみ）</description></item>
-    ///   <item><description>1 人物のみ: <c>&lt;a href="/persons/{id}/"&gt;{displayText}&lt;/a&gt;</c></description></item>
+    ///   <item><description>1 人物のみ: <c>&lt;a href="/people/{名前}/"&gt;{displayText}&lt;/a&gt;</c></description></item>
     ///   <item><description>複数人物（共有 alias）: <c>&lt;a href="..."&gt;{displayText}[1]&lt;/a&gt; &lt;a href="..."&gt;{displayText}[2]&lt;/a&gt;</c>（半角スペース区切り）</description></item>
     /// </list>
     /// </returns>
@@ -68,7 +68,7 @@ public sealed class StaffNameLinkResolver
         // 1 人物のみ → 単純な単一リンク。
         if (personIds.Count == 1)
         {
-            return $"<a href=\"/persons/{personIds[0]}/\">{HtmlUtil.Escape(displayText)}</a>";
+            return $"<a href=\"{PathUtil.PersonUrl(personIds[0])}\">{HtmlUtil.Escape(displayText)}</a>";
         }
 
         // 複数人物 → 「{displayText}[1] {displayText}[2] ...」の添字付き複数リンク。
@@ -76,7 +76,7 @@ public sealed class StaffNameLinkResolver
         var parts = new List<string>(personIds.Count);
         for (int i = 0; i < personIds.Count; i++)
         {
-            parts.Add($"<a href=\"/persons/{personIds[i]}/\">{HtmlUtil.Escape(displayText)}[{i + 1}]</a>");
+            parts.Add($"<a href=\"{PathUtil.PersonUrl(personIds[i])}\">{HtmlUtil.Escape(displayText)}[{i + 1}]</a>");
         }
         return string.Join(" ", parts);
     }

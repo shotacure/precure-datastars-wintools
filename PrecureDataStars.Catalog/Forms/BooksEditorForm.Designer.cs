@@ -34,6 +34,9 @@ partial class BooksEditorForm
     private CheckBox chkHasKindleDate = null!;
     private DateTimePicker dtReleaseKindle = null!;
     private TextBox txtIsbn13 = null!;
+    private TextBox txtCCode = null!;
+    private TextBox txtMagazineCode = null!;
+    private TextBox txtPeriodicalCode = null!;
     private NumericUpDown numPageCount = null!;
     private TextBox txtTrimSize = null!;
     private TextBox txtBindingText = null!;
@@ -106,6 +109,9 @@ partial class BooksEditorForm
         chkHasKindleDate = new CheckBox();
         dtReleaseKindle = new DateTimePicker();
         txtIsbn13 = new TextBox();
+        txtCCode = new TextBox();
+        txtMagazineCode = new TextBox();
+        txtPeriodicalCode = new TextBox();
         numPageCount = new NumericUpDown();
         txtTrimSize = new TextBox();
         txtBindingText = new TextBox();
@@ -218,6 +224,17 @@ partial class BooksEditorForm
 
         AddRow(pnlBasic, "ISBN13", txtIsbn13, y, labelW, fieldW); y += rowH;
         txtIsbn13.MaxLength = 13;
+
+        // ISBN 以外の流通コード（いずれも任意）。書籍 JAN の 2 段目は Cコードと税抜価格から導けるため入力欄を持たない。
+        AddRow(pnlBasic, "Cコード", txtCCode, y, labelW, 120); y += rowH;
+        txtCCode.MaxLength = 5;
+        txtCCode.PlaceholderText = "C8776";
+        AddRow(pnlBasic, "雑誌コード", txtMagazineCode, y, labelW, 120); y += rowH;
+        txtMagazineCode.MaxLength = 8;
+        txtMagazineCode.PlaceholderText = "66557-17";
+        AddRow(pnlBasic, "定期刊行物コード", txtPeriodicalCode, y, labelW, 200); y += rowH;
+        txtPeriodicalCode.MaxLength = 24;
+        txtPeriodicalCode.PlaceholderText = "491 で始まる 18 桁";
 
         AddRow(pnlBasic, "ページ数", numPageCount, y, labelW, 120); y += rowH;
         numPageCount.Minimum = 0; numPageCount.Maximum = 65535;

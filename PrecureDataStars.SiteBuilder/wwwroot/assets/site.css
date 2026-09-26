@@ -5005,7 +5005,7 @@ a.credit-role-link:focus-visible {
 /* カード内コンテンツはオーバーレイより上に重ね、デフォルト pointer-events: none で
    オーバーレイへクリックを透過させる。内部の <a> 全てに pointer-events: auto を効かせて
    個別クリック（人物詳細・役職統計）を拾う。
-   注意：構造化エントリの HTML は <span class="staff-name"><a href="/persons/X/">name</a></span>
+   注意：構造化エントリの HTML は <span class="staff-name"><a href="/people/X/">name</a></span>
    という形で、<a> 自身には staff-name クラスが付かない。なので `a.staff-name` ではキャッチできず、
    `.songs-card-grid a` 経由で全 <a> を一律拾う。 */
 .songs-card-grid {

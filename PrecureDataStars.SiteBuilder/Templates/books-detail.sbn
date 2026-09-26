@@ -83,6 +83,22 @@
         {{~ if Book.Isbn13 != "" ~}}
         <tr><th>ISBN</th><td><code>{{ Book.Isbn13 | html.escape }}</code></td></tr>
         {{~ end ~}}
+        {{## ISBN-10 と書籍 JAN の 2 段目は DB に持たず、ISBN-13・Cコード・税抜価格から導いた値。 ##}}
+        {{~ if Book.Isbn10 != "" ~}}
+        <tr><th>ISBN-10</th><td><code>{{ Book.Isbn10 | html.escape }}</code></td></tr>
+        {{~ end ~}}
+        {{~ if Book.CCode != "" ~}}
+        <tr><th>Cコード</th><td><code>{{ Book.CCode | html.escape }}</code></td></tr>
+        {{~ end ~}}
+        {{~ if Book.BookJanSecondRow != "" ~}}
+        <tr><th>書籍JANコード（2段目）</th><td><code>{{ Book.BookJanSecondRow | html.escape }}</code></td></tr>
+        {{~ end ~}}
+        {{~ if Book.MagazineCode != "" ~}}
+        <tr><th>雑誌コード</th><td><code>{{ Book.MagazineCode | html.escape }}</code></td></tr>
+        {{~ end ~}}
+        {{~ if Book.PeriodicalCode != "" ~}}
+        <tr><th>定期刊行物コード</th><td><code>{{ Book.PeriodicalCode | html.escape }}</code></td></tr>
+        {{~ end ~}}
         {{~ if Book.Notes != "" ~}}
         <tr><th>備考</th><td>{{ Book.Notes | html.escape }}</td></tr>
         {{~ end ~}}

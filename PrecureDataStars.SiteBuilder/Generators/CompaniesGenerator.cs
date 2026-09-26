@@ -988,7 +988,7 @@ public sealed class CompaniesGenerator
     /// <summary>メンバー履歴：屋号内の人物 1 名分のブロック。見出し＝代表名義＋担当回数ピル、配下に役職別グループ。</summary>
     private sealed class MemberHistoryPersonRow
     {
-        /// <summary>人物 ID（リンク先 /persons/{id}/）。共有名義時は代表 person を採用。</summary>
+        /// <summary>人物 ID（リンク先 /people/{名前}/）。共有名義時は代表 person を採用。</summary>
         public int PersonId { get; set; }
         /// <summary>表示名＝この屋号でのクレジット実績が最多の名義（名義違いは 1 人に統合）。</summary>
         public string PersonName { get; set; } = "";

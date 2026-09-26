@@ -27,8 +27,8 @@ public sealed class SingerHtmlBuilder
     /// 仕様：
     /// <list type="bullet">
     ///   <item>VOCALS 役の行を <see cref="SongRecordingSinger.SingerSeq"/> 順に並べ、
-    ///     PERSON 名義は /persons/{id}/、CHARACTER_WITH_CV 名義はキャラ /characters/{id}/ ＋
-    ///     CV 名義 /persons/{id}/ で構成する「キャラ名(CV:声優)」形式で出す。</item>
+    ///     PERSON 名義は /people/{名前}/、CHARACTER_WITH_CV 名義はキャラ /characters/{id}/ ＋
+    ///     CV 名義 /people/{名前}/ で構成する「キャラ名(CV:声優)」形式で出す。</item>
     ///   <item>スラッシュ並列（<see cref="SongRecordingSinger.SlashCharacterAliasId"/> 等）は
     ///     主名義側と同じ書式で「/」連結して出す。</item>
     ///   <item><see cref="SongRecordingSinger.AffiliationText"/> が非空なら末尾に半角スペース＋テキスト平文で添える。</item>
@@ -146,6 +146,6 @@ public sealed class SingerHtmlBuilder
         // character_aliases が CharacterId を直接持つため不要。
         // CharacterAlias は PersonAlias と違い DisplayTextOverride / GetDisplayName() を持たない
         // （表記揺れごとに別 alias 行を並存させる運用のため、表示テキストは常に Name そのもの）。
-        return $"<a href=\"/characters/{alias.CharacterId}/\">{HtmlUtil.Escape(alias.Name)}</a>";
+        return $"<a href=\"{PathUtil.CharacterUrl(alias.CharacterId)}\">{HtmlUtil.Escape(alias.Name)}</a>";
     }
 }

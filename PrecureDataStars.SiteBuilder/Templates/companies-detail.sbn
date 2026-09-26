@@ -195,7 +195,7 @@
     {{~ for pr in sec.Persons ~}}
     <div class="member-person-block">
       <div class="member-person-head">
-        <a class="member-person-name" href="/persons/{{ pr.PersonId }}/">{{ pr.PersonName | html.escape }}</a>
+        <a class="member-person-name" href="{{ person_url pr.PersonId }}">{{ pr.PersonName | html.escape }}</a>
         <span class="count-badges">{{~ if pr.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ pr.EpisodeCount }}</span>{{~ end ~}}{{~ if pr.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ pr.MovieCount }}</span>{{~ end ~}}</span>
       </div>
       {{~ for rg in pr.Roles ~}}

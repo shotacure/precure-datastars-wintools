@@ -88,6 +88,15 @@ public sealed class SiteBuilderPipeline
         // SeriesGenerator / EpisodeGenerator のスタッフバッジ系譜解決にも共有する。読み込みは 1 ビルド 1 回限り。
         var roleSuccessorResolver = await BuildRoleSuccessorResolverAsync(factory, ct).ConfigureAwait(false);
 
+        // 人物・キャラクター・企業の詳細ページ URL（名前ベース）と単発キャラの判定を 1 度だけ確定させる。
+        // 単発キャラの判定にクレジット関与を使うため CreditInvolvementIndex 構築後、かつ全ページ生成より前。
+        // 以降 PathUtil.PersonUrl / CharacterUrl / CompanyUrl はこの台帳を引く。
+        ctx.EntityUrls = await EntityUrlRegistry.BuildAsync(ctx, factory, involvementIndex, ct).ConfigureAwait(false);
+        PathUtil.UseEntityUrls(ctx.EntityUrls);
+
+        // 旧 ID URL → 新 URL の転送表を出力へ書き出す（デプロイで S3 に上がり、Lambda@Edge が 301 に使う）。
+        LegacyRedirectMapWriter.Write(config.OutputDirectory, ctx.EntityUrls.LegacyRedirects);
+
         // クレジット横断のカバレッジラベルをここで 1 回だけ算出して BuildContext に詰める。
         // プリキュア・キャラ・人物・企業・団体・シリーズ・エピソードの各詳細／索引ページから参照され、
         // 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」をサイト全体共通で表示する。

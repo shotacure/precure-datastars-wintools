@@ -347,7 +347,7 @@ public static class RoleTemplateRenderer
                     var names = new List<string>();
                     foreach (var e in currentBlock.Entries.Where(x => x.EntryKind == "PERSON" && x.PersonAliasId.HasValue))
                     {
-                        // HTML 版で取得。<a href="/persons/{id}/">名義</a> が返る。
+                        // HTML 版で取得。<a href="/people/{名前}/">名義</a> が返る。
                         var n = await lookup.LookupPersonAliasHtmlAsync(e.PersonAliasId!.Value).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(n)) names.Add(n!);
                     }

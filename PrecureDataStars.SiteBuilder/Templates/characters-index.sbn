@@ -37,17 +37,29 @@
   <ul class="entity-list entity-list-grid">
     {{~ for c in kg.Members ~}}
     <li class="entity-row">
-      <a class="entity-row-link" href="/characters/{{ c.CharacterId }}/" aria-label="{{ c.Name | html.escape }}"></a>
+      <a class="entity-row-link" href="{{ character_url c.CharacterId }}" aria-label="{{ c.Name | html.escape }}"></a>
       {{~ if c.HasInvolvement ~}}
-      <a class="entity-row-name" href="/characters/{{ c.CharacterId }}/">{{ c.Name | html.escape }}</a>
+      <a class="entity-row-name" href="{{ character_url c.CharacterId }}">{{ c.Name | html.escape }}</a>
       {{~ else ~}}
-      <a class="entity-row-name muted" href="/characters/{{ c.CharacterId }}/">{{ c.Name | html.escape }}</a>
+      <a class="entity-row-name muted" href="{{ character_url c.CharacterId }}">{{ c.Name | html.escape }}</a>
       {{~ end ~}}
       <span class="entity-row-count">{{ if c.EpisodeCount > 0 || c.MovieCount > 0 }}<span class="count-badges">{{~ if c.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ c.EpisodeCount }}</span>{{~ end ~}}{{~ if c.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ c.MovieCount }}</span>{{~ end ~}}</span>{{ else }}<span class="muted">—</span>{{ end }}</span>
     </li>
     {{~ end ~}}
   </ul>
   {{~ end ~}}
+  {{~ end ~}}
+  {{## 1 話だけ登場した単発キャラは個別ページを持たないため、種別サブセクションには並べず
+       シリーズごとのゲストキャラクターページへのリンク 1 行にまとめる。 ##}}
+  {{~ if s.GuestPageUrl != "" ~}}
+  <h3>ゲストキャラクター</h3>
+  <ul class="entity-list entity-list-grid">
+    <li class="entity-row">
+      <a class="entity-row-link" href="{{ s.GuestPageUrl }}" aria-label="ゲストキャラクター"></a>
+      <a class="entity-row-name" href="{{ s.GuestPageUrl }}">1 話だけ登場したキャラクター</a>
+      <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-person" title="人数"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg>{{ s.GuestCount }}</span></span></span>
+    </li>
+  </ul>
   {{~ end ~}}
 </section>
 {{~ end ~}}

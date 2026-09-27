@@ -92,6 +92,10 @@ internal sealed class CreditTreeRenderer
         if (r != null && string.Equals(r.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
             return Esc(roleName);
 
+        // 表記のみ（NOTICE 形式）の役職も役職詳細ページを作らないため、プレーンテキストで出す。
+        if (r != null && string.Equals(r.RoleFormatKind, "NOTICE", StringComparison.Ordinal))
+            return Esc(roleName);
+
         // VOICE_CAST フォーマット種の役職は声の出演一覧（/creators/voice-cast/）に集約しているため、
         // そちらに飛ばす。それ以外は /creators/roles/{role_code}/ の役職詳細ページへ。
         // どちらの URL も PathUtil に集約し、本レンダラ内に文字列リテラルでパスを持たない。
@@ -162,7 +166,10 @@ internal sealed class CreditTreeRenderer
         foreach (var cardSnap in cardSnapshots)
         {
             var card = cardSnap.Card;
-            html.Append("<div class=\"card\">");
+            // ロール（流れるクレジット）のカードは card-roll を足して見た目を分けられるようにする。
+            html.Append(string.Equals(card.Presentation, "ROLL", StringComparison.Ordinal)
+                ? "<div class=\"card card-roll\">"
+                : "<div class=\"card\">");
             var tierSnapshots = cardSnap.Tiers.OrderBy(t => t.Tier.TierNo).ToList();
 
             var cooperationContext = CollectCardCastingCooperationContext(cardSnap, roleMap);
@@ -481,14 +488,15 @@ internal sealed class CreditTreeRenderer
                 // {THEME_SONGS} ハンドラが series_theme_songs を引き当てるようにする。EPISODE スコープでは null。
                 int? scopeSeriesIdForCtx = scopeKind == "SERIES" ? resolveSeriesId : null;
                 // SERIES スコープの場合、テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。
-                string? scopeSeriesTitleForCtx = (scopeSeriesIdForCtx is int ssid
-                    && _ctx.SeriesById.TryGetValue(ssid, out var seriesForCtx))
-                    ? seriesForCtx.Title
+                // 映倫審査番号（{FILM_RATING_NO}）も同じシリーズから引く。
+                Series? seriesForCtx = scopeSeriesIdForCtx is int ssid && _ctx.SeriesById.TryGetValue(ssid, out var sfc)
+                    ? sfc
                     : null;
                 var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, scopeSeriesIdForCtx, creditKind,
                     siblingRoleResolver: siblingRoleResolver,
                     visitedRoleCodes: null,
-                    scopeSeriesTitle: scopeSeriesTitleForCtx);
+                    scopeSeriesTitle: seriesForCtx?.Title,
+                    scopeFilmRatingNo: seriesForCtx?.FilmRatingNo);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
 
                 string normalized = rendered.Replace("\r\n", "\n").Replace("\r", "\n");

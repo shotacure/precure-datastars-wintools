@@ -88,6 +88,9 @@ public sealed class Series
     /// <summary>本予告の YouTube 動画 URL。 シリーズ詳細ページで、登録があるシリーズだけ基本情報の直前に埋め込み表示する。 列自体はシリーズ共通だが、運用上の登録対象は映画作品を想定している。</summary>
     public string? YoutubeTrailerUrl { get; set; }
 
+    /// <summary>映倫審査番号（例: 27159）。映画のタイトルカードに併記される番号で、クレジットの「タイトル」役職（<c>TITLE</c>）のテンプレから <c>{FILM_RATING_NO}</c> で参照する。映画以外や未登録は null。</summary>
+    public string? FilmRatingNo { get; set; }
+
     // ── 配信・表示設定 ──
 
     /// <summary>配信版のイントロ尺（秒）。配信プラットフォーム向けの情報。</summary>

@@ -336,7 +336,10 @@ internal sealed class CreditPreviewRenderer
 
         foreach (var card in cards)
         {
-            html.Append("<div class=\"card\">");
+            // ロール（流れるクレジット）のカードは card-roll を足す（サイト側と同じ）。
+            html.Append(string.Equals(card.Presentation, "ROLL", StringComparison.Ordinal)
+                ? "<div class=\"card card-roll\">"
+                : "<div class=\"card\">");
             var tiers = (await _tiersRepo.GetByCardAsync(card.CardId, ct))
                 .OrderBy(t => t.TierNo).ToList();
 
@@ -691,7 +694,9 @@ internal sealed class CreditPreviewRenderer
 
         foreach (var dCard in draftCards)
         {
-            html.Append("<div class=\"card\">");
+            html.Append(string.Equals(dCard.Entity.Presentation, "ROLL", StringComparison.Ordinal)
+                ? "<div class=\"card card-roll\">"
+                : "<div class=\"card\">");
 
             // カード単位で CASTING_COOPERATION エントリを事前収集（Draft 側、DB 側と同等）。
             var draftCooperationContext = CollectDraftCardCastingCooperationContext(dCard, roleMap);
@@ -1040,11 +1045,13 @@ internal sealed class CreditPreviewRenderer
                 // {THEME_SONGS} ハンドラが series_theme_songs を引き当てるようにする。EPISODE スコープでは null。
                 int? scopeSeriesIdForCtx = scopeKind == "SERIES" ? resolveSeriesId : null;
                 // SERIES スコープの場合、テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。
-                string scopeSeriesTitleForCtx = await GetSeriesTitleAsync(scopeSeriesIdForCtx, ct);
+                // 映倫審査番号（{FILM_RATING_NO}）も同じシリーズから引く。
+                var (scopeSeriesTitleForCtx, scopeFilmRatingNoForCtx) = await GetSeriesTitleAndFilmRatingAsync(scopeSeriesIdForCtx, ct);
                 var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, scopeSeriesIdForCtx, creditKind,
                     siblingRoleResolver: siblingRoleResolver,
                     visitedRoleCodes: null,
-                    scopeSeriesTitle: scopeSeriesTitleForCtx);
+                    scopeSeriesTitle: scopeSeriesTitleForCtx,
+                    scopeFilmRatingNo: scopeFilmRatingNoForCtx);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct);
 
                 // 改行コード正規化。
@@ -1271,15 +1278,15 @@ internal sealed class CreditPreviewRenderer
         return raw.GetValueOrDefault() != 0;
     }
 
-    /// <summary>指定 series_id の <c>series.title</c> を軽量 SQL で取得する。 テンプレ DSL の <c>{SERIES_TITLE}</c> プレースホルダ展開に使う。 series_id が null・行未存在・論理削除済みは空文字を返す（テンプレ側では空に展開される）。</summary>
-    private async Task<string> GetSeriesTitleAsync(int? seriesId, CancellationToken ct)
+    /// <summary>指定 series_id の <c>series.title</c> と映倫審査番号 <c>series.film_rating_no</c> を軽量 SQL で取得する。 テンプレ DSL の <c>{SERIES_TITLE}</c> / <c>{FILM_RATING_NO}</c> プレースホルダ展開に使う。 series_id が null・行未存在・論理削除済み・未登録は空文字を返す（テンプレ側では空に展開される）。</summary>
+    private async Task<(string Title, string FilmRatingNo)> GetSeriesTitleAndFilmRatingAsync(int? seriesId, CancellationToken ct)
     {
-        if (!seriesId.HasValue) return "";
+        if (!seriesId.HasValue) return ("", "");
         await using var conn = await _factory.CreateOpenedAsync(ct);
-        var title = await conn.ExecuteScalarAsync<string?>(new CommandDefinition(
-            "SELECT title FROM series WHERE series_id = @id AND is_deleted = 0;",
+        var row = await conn.QuerySingleOrDefaultAsync<(string? Title, string? FilmRatingNo)>(new CommandDefinition(
+            "SELECT title, film_rating_no FROM series WHERE series_id = @id AND is_deleted = 0;",
             new { id = seriesId.Value }, cancellationToken: ct));
-        return title ?? "";
+        return (row.Title ?? "", row.FilmRatingNo ?? "");
     }
 
     /// <summary>絵コンテ役職コード。</summary>

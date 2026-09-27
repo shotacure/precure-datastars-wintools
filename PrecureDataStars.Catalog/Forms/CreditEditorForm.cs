@@ -1876,26 +1876,9 @@ public partial class CreditEditorForm : Form
 
             string newPresentation = rbPresentationCards.Checked ? "CARDS" : "ROLL";
 
-            // ─── presentation 切替の妥当性検証 ───
-            // CARDS → ROLL：ROLL は「カードは 1 枚（card_seq=1）固定」が制約のため、
-            //   Draft 上に有効カードが 2 枚以上ある場合は変更不可。
-            // ROLL → CARDS：制約がゆるくなる方向なので無条件で OK。
-            if (_currentCredit.Presentation == "CARDS" && newPresentation == "ROLL")
-            {
-                int liveCardCount = _draftSession?.Root.Cards.Count(c => c.State != DraftState.Deleted) ?? 0;
-                if (liveCardCount > 1)
-                {
-                    MessageBox.Show(this,
-                        $"presentation を ROLL に変更できません。\n"
-                        + $"ROLL は「カードは 1 枚（card_seq=1）固定」の制約があるため、\n"
-                        + $"現在の {liveCardCount} 枚のカードを 1 枚に整理してから変更してください。",
-                        "操作不可", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    // ラジオボタンの選択を元に戻す
-                    rbPresentationCards.Checked = true;
-                    rbPresentationRoll.Checked = false;
-                    return;
-                }
-            }
+            // クレジット単位の presentation は「クレジット全体の主な見せ方」。カードごとの見せ方（カード / ロール）は
+            // credit_cards.presentation で持ち、一括入力の @roll で指定する。1 つのクレジットの中で
+            // カード → ロール → カードと切り替わる映画の ED もあるため、ここではカード枚数を縛らない。
 
             // ─── 未保存の Draft 変更がある場合は警告 ───
             // クレジットプロパティ保存は即時 DB 反映だが、Draft は別系統。

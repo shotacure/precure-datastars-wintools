@@ -107,6 +107,10 @@ public static class CreditBulkInputParser
     // 値が空文字なら notes クリアの意味になる。
     private static readonly Regex NotesDirectiveRegex = new(@"^@notes=(?<value>.*)$", RegexOptions.Compiled);
 
+    // ディレクティブ行: @roll 単独行。そのカードをロール（流れるクレジット）として扱う。
+    // カード内のどこに書いてもよい（エンコーダはカード区切り直後に出す）。
+    private static readonly Regex RollDirectiveRegex = new(@"^@roll$", RegexOptions.Compiled);
+
     // ディレクティブ行: @cols=N 形式。N は 1 以上の整数。
     private static readonly Regex ColsDirectiveRegex = new(@"^@cols=(?<n>\d+)$", RegexOptions.Compiled);
 
@@ -390,6 +394,14 @@ public static class CreditBulkInputParser
                     }
                     // consumed=false の場合（pendingNotesTarget==None で警告発出済み）も、
                     // 当該行自体は無視（エントリ行として扱わない）。
+                    continue;
+                }
+
+                if (RollDirectiveRegex.IsMatch(trimmed))
+                {
+                    // カードの見せ方をロールにする。1 枚目のカードでも書けるよう、未作成なら暗黙のカードを作る。
+                    EnsureScaffold(ref curCard, ref curTier, ref curGroup, result);
+                    curCard!.Presentation = "ROLL";
                     continue;
                 }
 

@@ -12,6 +12,13 @@ public sealed class CreditCard
     /// <summary>クレジット内の表示順（1 始まり、credit_id 内 UNIQUE）。</summary>
     public byte CardSeq { get; set; }
 
+    /// <summary>
+    /// このカードの見せ方（"CARDS" = 1 画面ずつ切り替わるカード / "ROLL" = 流れるロール）。既定 "CARDS"。
+    /// 映画の ED のように「声の出演はカード → スタッフはロール → 著作権表記はまたカード」と
+    /// 1 つのクレジットの中で形式が切り替わるため、カード単位で持つ。ロール部分は ROLL のカード 1 枚で表す。
+    /// </summary>
+    public string Presentation { get; set; } = "CARDS";
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

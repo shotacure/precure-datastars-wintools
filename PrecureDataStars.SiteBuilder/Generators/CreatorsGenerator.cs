@@ -131,6 +131,8 @@ public sealed class CreatorsGenerator
         var roleByCode = allRoles.ToDictionary(r => r.RoleCode, r => r, StringComparer.Ordinal);
         var rankableRoles = allRoles
             .Where(r => !string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal))
+            // 表記のみの役職（著作権表記・タイトル）はスタッフの役職ではないので、役職詳細も索引も作らない。
+            .Where(r => !string.Equals(r.RoleFormatKind, "NOTICE", StringComparison.Ordinal))
             .Where(r => string.Equals(_resolver.GetRepresentative(r.RoleCode), r.RoleCode, StringComparison.Ordinal))
             .OrderBy(r => r.RoleCode, StringComparer.Ordinal)
             .ToList();

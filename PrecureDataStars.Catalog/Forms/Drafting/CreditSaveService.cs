@@ -550,7 +550,7 @@ internal sealed class CreditSaveService
 
     private static async Task<int> InsertCardAsync(MySqlConnection conn, MySqlTransaction tx, CreditCard c, CancellationToken ct)
     {
-        // credit_cards テーブルには presentation 列は無い（presentation は credits 側の列）。
+        // presentation（カード / ロール）はカード単位の列。Draft 側の Entity.Presentation をそのまま書く。
         //
         // card_seq は呼び出し側 Entity の値を尊重したいが、UI 側のフローで「新規 Card」が既存と同じ
         // card_seq=1（既定値）のまま渡ってくるケースがあり、UNIQUE(credit_id, card_seq) の
@@ -561,12 +561,12 @@ internal sealed class CreditSaveService
         // （新規 Card の所望位置が中間でも、escape → 最終番号付け の 2 段で正しく整列する）。
         // 自参照テーブルでの UPDATE 不可問題を避けるため、サブクエリを派生テーブル (cc) でラップしている。
         const string sql = """
-            INSERT INTO credit_cards (credit_id, card_seq, notes, created_by, updated_by)
+            INSERT INTO credit_cards (credit_id, card_seq, presentation, notes, created_by, updated_by)
             VALUES (@CreditId,
                     (SELECT COALESCE(MAX(cc.card_seq), 0) + 1
                        FROM (SELECT card_seq, credit_id FROM credit_cards) AS cc
                       WHERE cc.credit_id = @CreditId),
-                    @Notes, @CreatedBy, @UpdatedBy);
+                    @Presentation, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, c, transaction: tx, cancellationToken: ct));
@@ -681,6 +681,7 @@ internal sealed class CreditSaveService
         const string sql = """
             UPDATE credit_cards SET
               credit_id = @CreditId,
+              presentation = @Presentation,
               notes = @Notes,
               updated_by = @UpdatedBy
             WHERE card_id = @CardId;

@@ -3183,25 +3183,31 @@ CREATE TABLE `legacy_entity_ids` (
 --
 -- Table structure for table `published_entity_slugs`
 --
--- 本番に公開した人物 URL の記録。人物詳細は最新名義（全クレジット横断で最後に使われた名義）で名乗り、
--- URL も /people/{最新名義}/ で作るため、クレジットの入力が進むと URL が変わる。記録済みの旧 URL のうち
--- いまの URL と違うものを、SiteBuilder が転送表に載せて新 URL へ 301 で転送する。
+-- 本番に公開した人物・キャラクター URL の記録。人物詳細は最新名義（全クレジット横断で最後に使われた名義）で名乗り、
+-- URL も /people/{最新名義}/ で作るため、クレジットの入力が進むと URL が変わる。キャラクター詳細の URL
+-- （/characters/{キャラ名}/）もキャラ名を変えると変わる。記録済みの旧 URL のうちいまの URL と違うものを、
+-- SiteBuilder が転送表に載せて新 URL へ 301 で転送する。
 -- 記録は SiteBuilder の本番デプロイ成功時に追記する（INSERT IGNORE、記録済みの行は変えない）。
--- slug は完全一致で照合するため utf8mb4_bin。人物を統合するときは削除の前に person_id を統合先へ付け替える。
+-- slug は完全一致で照合するため utf8mb4_bin。区分（entity_kind）に応じて person_id / character_id のどちらか一方だけを持つ
+-- （両列とも参照先の CASCADE を持つので MySQL では CHECK 制約にできず、書き込み側で守る）。
+-- 人物・キャラクターを統合するときは削除の前に person_id / character_id を統合先へ付け替える。
 --
 
 DROP TABLE IF EXISTS `published_entity_slugs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `published_entity_slugs` (
-  `entity_kind`  varchar(16) NOT NULL COMMENT 'PERSON',
+  `entity_kind`  varchar(16) NOT NULL COMMENT 'PERSON / CHARACTER',
   `slug`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '公開した URL のスラッグ（デコード済み）',
-  `person_id`    int NOT NULL COMMENT 'その URL で公開した人物',
+  `person_id`    int DEFAULT NULL COMMENT 'その URL で公開した人物（PERSON の行のみ）',
+  `character_id` int DEFAULT NULL COMMENT 'その URL で公開したキャラクター（CHARACTER の行のみ）',
   `created_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最初に公開を記録した日時',
   PRIMARY KEY (`entity_kind`, `slug`),
   KEY `ix_pes_person` (`person_id`),
-  CONSTRAINT `fk_pes_person` FOREIGN KEY (`person_id`) REFERENCES `persons` (`person_id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='本番に公開した人物 URL の記録（旧名 URL の 301 転送用）';
+  KEY `ix_pes_character` (`character_id`),
+  CONSTRAINT `fk_pes_person` FOREIGN KEY (`person_id`) REFERENCES `persons` (`person_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_pes_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`character_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='本番に公開した人物・キャラクター URL の記録（旧名 URL の 301 転送用）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

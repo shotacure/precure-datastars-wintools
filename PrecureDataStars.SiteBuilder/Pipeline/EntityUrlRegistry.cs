@@ -11,8 +11,12 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// ビルド開始時に 1 度だけ組み立て、<see cref="PathUtil.PersonUrl"/> 等の URL 組み立てはすべてここを引く。
 /// <list type="bullet">
 ///   <item><description>人物 <c>/people/{名前}/</c>・企業 <c>/companies/{名前}/</c>・キャラ <c>/characters/{名前}/</c>。
-///     名前はマスタの正式名（persons.full_name / companies.name / characters.name）を
-///     <see cref="UrlSlug.FromName"/> で整えたもの。</description></item>
+///     名前は <see cref="UrlSlug.FromName"/> で整えたもの。企業・キャラはマスタの正式名（companies.name / characters.name）、
+///     人物は最新名義（<see cref="LatestAliasResolver.LatestPersonAliasIds"/>、TV 系のクレジットで最後に使われた名義。
+///     クレジットの無い人物は正式名 persons.full_name）。人物詳細の見出しもこの名前にそろえる（<see cref="PersonDisplayName"/>）。</description></item>
+///   <item><description>人物の URL は最新名義が変わると変わる。本番デプロイで公開した人物 URL は台帳 <c>published_entity_slugs</c> に
+///     記録しておき（<see cref="RecordPublishedPersonSlugsAsync"/>）、いまの URL と違う記録済みの旧 URL は新 URL へ 301 で転送する
+///     （<see cref="LegacyRedirects"/> に <c>/people/{旧名}</c> として載せる。別の人物がいまその名前の URL を使っていれば転送しない）。</description></item>
 ///   <item><description>同じ区分の中で名前（大文字小文字を区別しない）が衝突したら、ID の若い 1 件が素の名前を持ち、
 ///     残りは <c>_2</c>, <c>_3</c> … を付けて警告を出す（付け方はその都度判断して名前側で解消する前提の仮措置）。
 ///     数字だけの名前は旧 URL（<c>/persons/123/</c>）と区別できないため末尾に <c>_</c> を足す。</description></item>
@@ -33,6 +37,12 @@ public sealed class EntityUrlRegistry
     public const string GuestsSegment = "guests";
 
     private readonly Dictionary<int, string> _personUrls = new();
+    /// <summary>person_id → いまの人物 URL のスラッグ（デコード済み）。公開記録と旧名転送の突き合わせに使う。</summary>
+    private readonly Dictionary<int, string> _personSlugs = new();
+    /// <summary>person_id → 見出し名・読み（最新名義。クレジットの無い人物は正式名）。</summary>
+    private readonly Dictionary<int, (string Name, string Kana)> _personNames = new();
+    /// <summary>person_id → 最新名義の person_alias_id（クレジットの無い人物は載らない）。</summary>
+    private readonly Dictionary<int, int> _latestPersonAliasIds = new();
     private readonly Dictionary<int, string> _companyUrls = new();
     private readonly Dictionary<int, string> _characterUrls = new();
     private readonly Dictionary<int, string> _bookUrls = new();
@@ -46,6 +56,15 @@ public sealed class EntityUrlRegistry
 
     /// <summary>人物詳細ページの URL（パーセントエンコード済み）。台帳に無い ID は null。</summary>
     public string? PersonUrl(int personId) => _personUrls.TryGetValue(personId, out var u) ? u : null;
+
+    /// <summary>人物の見出し名（最新名義。クレジットの無い人物は正式名）。台帳に無い ID は null。</summary>
+    public string? PersonDisplayName(int personId) => _personNames.TryGetValue(personId, out var n) ? n.Name : null;
+
+    /// <summary>人物の見出し名の読み（最新名義の読み。読み未登録なら空文字）。台帳に無い ID は null。</summary>
+    public string? PersonDisplayKana(int personId) => _personNames.TryGetValue(personId, out var n) ? n.Kana : null;
+
+    /// <summary>人物の最新名義（TV 系のクレジットで最後に使われた、共同名義でない person_alias_id）。クレジットの無い人物は null。</summary>
+    public int? LatestPersonAliasId(int personId) => _latestPersonAliasIds.TryGetValue(personId, out var a) ? a : null;
 
     /// <summary>企業詳細ページの URL（パーセントエンコード済み）。台帳に無い ID は null。</summary>
     public string? CompanyUrl(int companyId) => _companyUrls.TryGetValue(companyId, out var u) ? u : null;
@@ -92,8 +111,30 @@ public sealed class EntityUrlRegistry
 
         var reg = new EntityUrlRegistry();
 
-        foreach (var (id, slug) in AssignSlugs("persons", persons.Select(p => (p.PersonId, p.FullName)), ctx.Logger))
+        // 人物は最新名義で名乗る。最新名義が無い（クレジットの無い）人物は正式名。
+        foreach (var (pid, aid) in LatestAliasResolver.LatestPersonAliasIds(ctx, index))
+            reg._latestPersonAliasIds[pid] = aid;
+        foreach (var p in persons)
+        {
+            if (reg._latestPersonAliasIds.TryGetValue(p.PersonId, out var aid)
+                && ctx.PersonAliasById.TryGetValue(aid, out var alias))
+            {
+                // 読みは名義の読み。名義が正式名と同じ表記なら、名義側に読みが無くても正式名の読みを使う。
+                string kana = alias.NameKana
+                    ?? (string.Equals(alias.Name, p.FullName, StringComparison.Ordinal) ? p.FullNameKana : null)
+                    ?? "";
+                reg._personNames[p.PersonId] = (alias.Name, kana);
+            }
+            else
+            {
+                reg._personNames[p.PersonId] = (p.FullName, p.FullNameKana ?? "");
+            }
+        }
+        foreach (var (id, slug) in AssignSlugs("persons", persons.Select(p => (p.PersonId, reg._personNames[p.PersonId].Name)), ctx.Logger))
+        {
+            reg._personSlugs[id] = slug;
             reg._personUrls[id] = $"/people/{UrlSlug.Encode(slug)}/";
+        }
 
         foreach (var (id, slug) in AssignSlugs("companies", companies.Select(c => (c.CompanyId, c.Name)), ctx.Logger))
             reg._companyUrls[id] = $"/companies/{UrlSlug.Encode(slug)}/";
@@ -152,11 +193,49 @@ public sealed class EntityUrlRegistry
                 if (urls is null || row.EntityId is not int eid || !urls.TryGetValue(eid, out var to)) continue;
                 reg._legacyRedirects.Add(new LegacyRedirect($"/{section}/{row.LegacyId}", to));
             }
+
+            // 旧名の人物 URL の転送表。本番で公開した記録（published_entity_slugs）のうち、いまの URL と違うものを
+            // いまの URL へ転送する。いま別の人物がその名前の URL を使っている（ページが実在する）ときは転送しない。
+            // 転送元のキーはデコード済みのスラッグで持つ（Lambda@Edge 側でリクエスト URI をデコードして引く）。
+            const string publishedSql = """
+                SELECT slug AS Slug, person_id AS PersonId
+                  FROM published_entity_slugs
+                 WHERE entity_kind = 'PERSON'
+                 ORDER BY slug
+                """;
+            var published = await conn.QueryAsync<PublishedPersonSlugRow>(
+                new CommandDefinition(publishedSql, cancellationToken: ct)).ConfigureAwait(false);
+            var liveSlugs = new HashSet<string>(reg._personSlugs.Values, StringComparer.OrdinalIgnoreCase);
+            foreach (var row in published)
+            {
+                if (liveSlugs.Contains(row.Slug)) continue;
+                if (!reg._personUrls.TryGetValue(row.PersonId, out var to)) continue;
+                reg._legacyRedirects.Add(new LegacyRedirect($"/people/{row.Slug}", to));
+            }
         }
 
         ctx.Logger.Info($"entity urls: persons {reg._personUrls.Count} / characters {reg._characterUrls.Count}"
             + $"（うちゲスト {reg._guestPlacements.Count}）/ companies {reg._companyUrls.Count} / books {reg._bookUrls.Count}");
         return reg;
+    }
+
+    /// <summary>
+    /// いまの人物 URL のスラッグを、本番で公開した記録として台帳 <c>published_entity_slugs</c> に追記する。
+    /// 本番デプロイが成功した（本番がこのビルドの出力と一致した）ときだけ呼ぶ。記録済みのスラッグはそのまま残す
+    /// （最初に公開した人物を指し続ける）。戻り値は新たに記録した件数。
+    /// </summary>
+    public async Task<int> RecordPublishedPersonSlugsAsync(IConnectionFactory factory, CancellationToken ct)
+    {
+        const string sql = """
+            INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, person_id)
+            VALUES ('PERSON', @Slug, @PersonId)
+            """;
+        var rows = _personSlugs.Select(kv => new { Slug = kv.Value, PersonId = kv.Key }).ToList();
+        await using var conn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        int inserted = await conn.ExecuteAsync(new CommandDefinition(sql, rows, tx, cancellationToken: ct)).ConfigureAwait(false);
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return inserted;
     }
 
     /// <summary>
@@ -276,8 +355,15 @@ internal sealed class LegacyEntityRow
     public int? EntityId { get; set; }
 }
 
+/// <summary>人物 URL の公開記録 <c>published_entity_slugs</c> の 1 行（スラッグ・その URL で公開した人物）。</summary>
+internal sealed class PublishedPersonSlugRow
+{
+    public string Slug { get; set; } = "";
+    public int PersonId { get; set; }
+}
+
 /// <summary>単発キャラの唯一の登場位置（映画系は EpisodeId / SeriesEpNo が null）。</summary>
 public sealed record GuestPlacement(int SeriesId, int? EpisodeId, int? SeriesEpNo);
 
-/// <summary>旧 ID URL（末尾スラッシュ無しのパス。例 <c>/persons/123</c>）→ 新 URL（パーセントエンコード済み、アンカー付きもあり）。</summary>
+/// <summary>旧 URL（末尾スラッシュ無しのパス。例 <c>/persons/123</c>、旧名の人物は <c>/people/{デコード済みスラッグ}</c>）→ 新 URL（パーセントエンコード済み、アンカー付きもあり）。</summary>
 public sealed record LegacyRedirect(string FromPath, string ToUrl);

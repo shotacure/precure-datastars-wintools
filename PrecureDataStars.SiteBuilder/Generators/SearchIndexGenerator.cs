@@ -167,13 +167,29 @@ public sealed class SearchIndexGenerator
         var allPersons = await personsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
         foreach (var p in allPersons)
         {
+            // 表示名は人物詳細の見出しと同じ最新名義。読みには見出しの読みに加えて、正式名と全名義の表記・読みも
+            // 「|」区切りで持たせ、旧名義や正式名で探しても引けるようにする（照合は部分一致なので区切りは跨がない前提）。
+            string displayName = _ctx.EntityUrls.PersonDisplayName(p.PersonId) ?? p.FullName;
+            string displayKana = _ctx.EntityUrls.PersonDisplayKana(p.PersonId) ?? "";
+            var readings = new List<string> { string.IsNullOrEmpty(displayKana) ? displayName : displayKana };
+            readings.Add(p.FullNameKana ?? p.FullName);
+            readings.Add(p.FullName);
+            if (_ctx.AliasIdsByPerson.TryGetValue(p.PersonId, out var aliasIds))
+            {
+                foreach (var aid in aliasIds)
+                {
+                    if (!_ctx.PersonAliasById.TryGetValue(aid, out var a)) continue;
+                    readings.Add(a.Name);
+                    if (!string.IsNullOrEmpty(a.NameKana)) readings.Add(a.NameKana);
+                }
+            }
             items.Add(new SearchIndexItem
             {
                 u = PathUtil.PersonUrl(p.PersonId),
-                t = p.FullName,
+                t = displayName,
                 k = "person",
                 s = "",
-                x = NormalizeForSearch(p.FullNameKana ?? p.FullName)
+                x = string.Join("|", readings.Select(NormalizeForSearch).Where(r => r.Length > 0).Distinct(StringComparer.Ordinal))
             });
         }
 

@@ -92,11 +92,10 @@ internal sealed class InvolvementSeriesRow
     public string AffiliationsLabel { get; set; } = "";
 
     /// <summary>
-    /// 担当した各話の内訳。担当話数が少ない行にだけ詰める
-    /// （<see cref="InvolvementRowBuilder.EpisodeBreakdownMaxCount"/> 参照）。
-    /// 「#1〜4, 8」の圧縮表記だけでは何の話か分からず、当該エピソードへのリンクも張れないため、
-    /// 少数担当の行に限ってサブタイトルと放送日を展開する。担当話数が多い行では圧縮表記のままにする
-    /// （数百話ぶんを並べても読めず、ページの主旨がぼやけるため）。
+    /// 担当した各話の内訳（サブタイトル・放送日・エピソード詳細へのリンク）。
+    /// エピソード単位の関与がある TV 系の行には必ず詰め、映画系など話数を持たない行では空。
+    /// 「#1〜4, 8」の圧縮表記だけでは何の話か分からないため、テンプレ側で既定では閉じた
+    /// 折りたたみ（details）として出し、開けば各話を辿れるようにする。
     /// </summary>
     public IReadOnlyList<InvolvementEpisodeRow> Episodes { get; set; } = Array.Empty<InvolvementEpisodeRow>();
 }

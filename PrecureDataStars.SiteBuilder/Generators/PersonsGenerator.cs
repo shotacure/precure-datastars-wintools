@@ -239,11 +239,10 @@ public sealed class PersonsGenerator
         // 解けたチェーンに含まれない alias を末尾にまとめて出す。
         var aliasViews = OrderAliasesChronologically(aliases);
 
-        // 代表名義（successor が無い alias を優先、無ければ先頭）。
-        PersonAlias? currentAlias = aliases.FirstOrDefault(a => a.SuccessorAliasId is null) ?? aliases.FirstOrDefault();
-        string displayName = currentAlias is null
-            ? person.FullName
-            : (currentAlias.DisplayTextOverride ?? currentAlias.Name);
+        // 見出しは最新名義（全クレジット横断で最後に使われた名義。URL と同じ EntityUrlRegistry の決定に従う）。
+        // クレジットの無い人物は正式名。
+        string displayName = _ctx.EntityUrls.PersonDisplayName(person.PersonId) ?? person.FullName;
+        string displayNameKana = _ctx.EntityUrls.PersonDisplayKana(person.PersonId) ?? (person.FullNameKana ?? "");
 
         // 役職別グループ化された関与一覧を組み立て（フラット、全名義横断）。
         var involvementGroups = BuildPersonInvolvementGroups(aliasIds);
@@ -271,6 +270,7 @@ public sealed class PersonsGenerator
             {
                 PersonId = person.PersonId,
                 DisplayName = displayName,
+                DisplayNameKana = displayNameKana,
                 FullName = person.FullName,
                 FullNameKana = person.FullNameKana ?? "",
                 NameEn = person.NameEn ?? "",
@@ -293,7 +293,7 @@ public sealed class PersonsGenerator
         string personUrl = PathUtil.PersonUrl(person.PersonId);
         var alternateNames = aliasViews
             .Select(a => a.Name)
-            .Where(n => !string.IsNullOrEmpty(n) && !string.Equals(n, person.FullName, StringComparison.Ordinal))
+            .Where(n => !string.IsNullOrEmpty(n) && !string.Equals(n, displayName, StringComparison.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
@@ -964,6 +964,8 @@ public sealed class PersonsGenerator
         public string DisplayName { get; set; } = "";
         public string FullName { get; set; } = "";
         public string FullNameKana { get; set; } = "";
+        /// <summary>見出し名（<see cref="DisplayName"/>）の読み。空文字なら読みの行を出さない。</summary>
+        public string DisplayNameKana { get; set; } = "";
         public string NameEn { get; set; } = "";
         public string Notes { get; set; } = "";
         /// <summary>誕生日表記（「YYYY年M月D日」または「M月D日」、未設定時は空文字）。</summary>

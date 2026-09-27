@@ -4798,10 +4798,10 @@ a.credit-role-link:focus-visible {
 .credit-card {
   list-style: none;
 }
-/* カード全域 = <a> でラップしてシリーズ詳細ページへ 1 タップ遷移。
-   ホバー時のグローバル下線（a:hover { text-decoration: underline }）を抑止し、
-   代わりに accent-pink のボーダーと淡い box-shadow で「動く」フィードバックを出す。 */
-.credit-card-link {
+/* カードの見出し枠。各話の内訳を持つ行では details の summary で、枠のどこを押しても開閉する
+   （シリーズ詳細への遷移はシリーズ名のリンク .credit-card-series だけが担う）。
+   各話を持たない行（映画など）は同じ見た目の素の div。 */
+.credit-card-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -4811,18 +4811,46 @@ a.credit-role-link:focus-visible {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: #fff;
-  text-decoration: none;
   color: inherit;
+}
+summary.credit-card-head {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.credit-card-link:hover,
-.credit-card-link:focus-visible {
+summary.credit-card-head::-webkit-details-marker { display: none; }
+summary.credit-card-head:hover,
+summary.credit-card-head:focus-visible {
   border-color: var(--accent-pink);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-  text-decoration: none;
+}
+/* 開閉の目印。右端に寄せ、開いているときは三角を下向きにする。 */
+.credit-card-toggle {
+  margin-left: auto;
+  font-size: 0.85em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.credit-card-toggle::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 0.8em;
+  transition: transform 0.12s ease;
+}
+.credit-card-details[open] > summary .credit-card-toggle::before {
+  transform: rotate(90deg);
 }
 .credit-card-series {
   font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+}
+a.credit-card-series:hover,
+a.credit-card-series:focus-visible {
+  color: var(--accent-pink);
+  text-decoration: underline;
 }
 .credit-card-range {
   font-family: var(--font-num);
@@ -5159,8 +5187,9 @@ a.credit-role-link:focus-visible {
   border-color: rgba(92, 174, 92, 0.45);
 }
 .role-badge[data-role-code="VOCALS"],
-.role-badge[data-role-code="BACKING_VOCALS"] {
-  /* 歌 / コーラス = 青系（同色相で並べる）。同じ録音に対し 歌 と コーラス を並べて出すため、 視認上同系統の青で揃える。 */
+.role-badge[data-role-code="BACKING_VOCALS"],
+.role-badge[data-role-code="DIALOGUE"] {
+  /* 歌 / コーラス / 台詞 = 青系（同色相で並べる）。同じ録音に対し 歌・コーラス・台詞 を並べて出すため、 視認上同系統の青で揃える。 */
   background: rgba(84, 112, 214, 0.14);
   color: #3b56b8;
   border-color: rgba(84, 112, 214, 0.45);
@@ -7391,6 +7420,12 @@ ins.adsbygoogle[data-ad-status="filled"] {
 }
 .entity-row-name {
   font-weight: 600;
+}
+/* 初参加順で旧名義の行に添える、いまの名乗り（最新名義）の括弧書き。 */
+.entity-row-current {
+  margin-left: -4px;
+  font-size: 0.88em;
+  white-space: nowrap;
 }
 /* 行ホバーで遷移先（主エンティティ名）に下線を出し、行全体がクリックできることを示す。 */
 .entity-row:hover a.entity-row-name {

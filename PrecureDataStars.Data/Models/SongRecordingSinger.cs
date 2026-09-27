@@ -82,11 +82,13 @@ public enum SingerBillingKind
     CharacterWithCv = 1
 }
 
-/// <summary>song_recording_singers.role_code の典型値を表す定数群。 roles マスタの任意の role_code を受け入れるため <c>string</c> 型のフィールドだが、 主用途は <see cref="Vocals"/> と <see cref="Chorus"/> の 2 値想定。</summary>
+/// <summary>song_recording_singers.role_code の典型値を表す定数群。 roles マスタの任意の role_code を受け入れるため <c>string</c> 型のフィールドだが、 主用途は <see cref="Vocals"/> / <see cref="Chorus"/> / <see cref="Dialogue"/> の 3 値想定。</summary>
 public static class SongRecordingSingerRoles
 {
     /// <summary>歌（既定）。</summary>
     public const string Vocals = "VOCALS";
     /// <summary>コーラス。<c>roles</c> マスタ上の役職コードは <c>BACKING_VOCALS</c>（表示名「コーラス」）。</summary>
     public const string Chorus = "BACKING_VOCALS";
+    /// <summary>台詞。曲中のセリフ担当（歌わずに台詞だけで参加する出演者）。<c>roles</c> マスタ上の役職コードは <c>DIALOGUE</c>（表示名「台詞」）。</summary>
+    public const string Dialogue = "DIALOGUE";
 }

@@ -812,7 +812,7 @@ Role: PRODUCTION 制作 (order 2)
 | `/creators/staff/` | スタッフ一覧。役職順（既定）/ 五十音順 / 初参加順（シリーズ別セクション）/ 参加話数が多い順 の 4 タブ。役職順は「TV シリーズでクレジットされた役職」と「映画でのみクレジットされた役職」の 2 セクションに分ける。役職順以外は人物と企業・団体を 1 リストに混在（個人/団体バッジ＋絞り込みトグル）。一度もクレジットの無い役職は索引にも役職詳細ページにも出さない |
 | `/creators/roles/{role_code}/` | 役職詳細。当該役職に関わった人物・企業/団体を 1 リストに混在し、五十音順 / 初参加順 / 担当話数が多い順 のタブで切替 |
 | `/creators/voice-cast/` | 声の出演一覧。1 行＝(声優 × シリーズ × キャラ) の粒度。キャラクター順（既定・シリーズ別セクション）/ 五十音順 / 初出演順（シリーズ別セクション）/ 出演話数が多い順 の 4 タブ |
-| `/people/{名前}/` `/companies/{名前}/` | 人物・企業/団体の個別詳細（直リンク用）。URL はマスタの正式名から作る（下記「詳細ページの URL」） |
+| `/people/{名前}/` `/companies/{名前}/` | 人物・企業/団体の個別詳細（直リンク用）。URL は人物は最新名義、企業/団体はマスタの正式名から作る（下記「詳細ページの URL」） |
 | `/characters/{名前}/` | キャラクター詳細。2 回以上登場したキャラ・プリキュア・歌唱や家族関係のあるキャラだけが持つ |
 | `/characters/guests/{slug}/` | ゲストキャラクター。そのシリーズで 1 話（映画は 1 本）だけ登場したキャラを登場話ごとに声優とあわせて一覧する |
 | `/books/` | 書籍索引。発売日順（既定）/ ジャンル別 / シリーズ別 の 3 タブ |
@@ -821,13 +821,15 @@ Role: PRODUCTION 制作 (order 2)
 
 ##### 詳細ページの URL（名前・コードベース）
 
-人物・キャラクター・企業/団体の詳細ページ URL は通し番号（ID）を使わず、マスタの正式名（`persons.full_name` / `characters.name` / `companies.name`）から作る。書籍はコードから作る。組み立ては `EntityUrlRegistry`（`CreditInvolvementIndex` 構築直後に 1 度だけ作る台帳）に集約し、`PathUtil.PersonUrl` / `CharacterUrl` / `CompanyUrl` / `BookUrl` とテンプレート関数 `person_url` / `character_url` / `company_url`（ID を渡す）はすべてこの台帳を引く。テンプレートに `/persons/{{ id }}/` のような直書きはしない。
+人物・キャラクター・企業/団体の詳細ページ URL は通し番号（ID）を使わず、名前から作る。キャラクター・企業/団体はマスタの正式名（`characters.name` / `companies.name`）、人物は最新名義（TV 系シリーズのクレジットで放送日がいちばん新しい回に使われた名義。TV 系のクレジットが無い人物だけ映画系を含めて判定する。複数の人物で共有する共同名義は候補から外し、クレジットの無い人物は正式名 `persons.full_name`。決め方は `LatestAliasResolver`）。書籍はコードから作る。組み立ては `EntityUrlRegistry`（`CreditInvolvementIndex` 構築直後に 1 度だけ作る台帳）に集約し、`PathUtil.PersonUrl` / `CharacterUrl` / `CompanyUrl` / `BookUrl` とテンプレート関数 `person_url` / `character_url` / `company_url`（ID を渡す）はすべてこの台帳を引く。テンプレートに `/persons/{{ id }}/` のような直書きはしない。
 
 - 名前の整え方（`UrlSlug.FromName`）：NFC 正規化 → 空白の連なりは前後が両方とも全角文字なら詰め、それ以外は `_`（`高橋 任治` → `高橋任治`、`John Smith` → `John_Smith`）→ `` / \ : * ? " < > | # % + { } ^ ` [ ] ~ `` と制御文字は `_` → `_` の連なりを 1 つに畳み、前後の `_` と `.` を落とす（`キュアブラック / 美墨なぎさ` → `キュアブラック_美墨なぎさ`）。数字だけになる名前は旧 ID URL と区別できないため末尾に `_` を足す
 - href・canonical・sitemap にはパーセントエンコードした形で書き、出力ファイル（と S3 キー）はデコードした名前で書き出す（`PathUtil.ToOutputFilePath`）。S3 の REST オリジンはパスをデコードしてキーを引くため一致する
 - 同じ区分で名前（大文字小文字を区別しない）が衝突したら、ID の若い 1 件が素の名前を持ち、残りに `_2`, `_3` … を付けてビルド警告を出す。付け方は衝突が出た時点で決めて名前側で解消する
 - 単発キャラ（プリキュアでなく、クレジット上の登場がちょうど 1 回で、歌唱の記録も家族関係も無いキャラ）は個別ページを持たず、登場シリーズの `/characters/guests/{slug}/` にまとめる。単発キャラへのリンクはその登場話の見出しアンカー（`#ep{話数}`、映画はアンカー無し）を指す。2 回目の登場が入力されると、次のビルドから自動的に個別ページになる。キャラクター一覧では種別サブセクションに並べず、シリーズごとに「ゲストキャラクター」行 1 つでゲストページへ案内する
-- 旧 ID URL（`/persons/123/` `/characters/123/` `/companies/123/` `/books/123/`）は 301 で新 URL へ転送する。旧 ID は URL を切り替えた時点で凍結した台帳テーブル `legacy_entity_ids`（区分・旧 ID・いまの実体 ID。実体 ID は `ON UPDATE CASCADE` で振り直しに追従）から引くので、人物・キャラ・企業・書籍の ID を振り直しても旧 URL は元の実体を指し続ける。`FOREIGN_KEY_CHECKS=0` で振り直すスクリプトはこの表も明示的に更新し、実体を統合するときは削除の前に統合先へ付け替える。転送表は毎ビルド作り、サイト出力の `_edge/legacy-redirects.json`（`{"/persons/123": "/persons/%E9…/", …}`、`LegacyRedirectMapWriter`）に書き出して通常のデプロイで S3 へ上げる。既定ビヘイビアの origin-request に関連付けた Lambda@Edge（`scripts/lambda-edge/legacy-redirect/index.mjs`、Node.js、us-east-1）が「区分 + 数字だけ」のパスでこの表を S3 から読み（5 分間メモリに保持）、キーがあれば 301（`Cache-Control: max-age=3600`）を返し、それ以外はそのままオリジンへ通す。表の更新はデプロイだけで反映され、関数の作り直しは要らない。`/_edge/` 配下は viewer-request の CloudFront Function（`scripts/cloudfront/viewer-request.js`）が外部アクセスを 404 にする。人物の区分名は `/people/` で、名前ベース URL を `/persons/{名前}/` で公開していた期間の URL は、同じ Function が `/people/{名前}/` へ 301 で付け替える（数字だけの旧 ID URL は Lambda@Edge 側）。転送表を CloudFront Function に埋め込まないのは、コード上限 10KB に収まらないため。KeyValueStore を使わないのは、ディストリビューションが定額 Free プランで KeyValueStore を使えないため。転送をやめるときは Lambda@Edge の関連付けを外す
+- 人物詳細の見出し（h1・読み・`<title>`・パンくず・OGP・JSON-LD）、検索の表示名、役職詳細・スタッフ一覧・歌系役職詳細の行表記も同じ最新名義で出す。検索の読みには正式名と全名義の表記・読みも持たせ、旧名義や正式名でも引ける。役職詳細・スタッフ一覧の「初参加順」で旧名義のまま置いた行には、その旧名義が TV 系のクレジットで使われたものに限り、いまの名乗り（最新名義）を括弧書きで添える（人物のみ。映画だけで使われた名義は名義変更ではないので基本は添えないが、映画が初出でラテン文字で書かれた名義（TAP スタッフのアルファベット表記など）は、TV 系に別の名義があれば添える。最新名義の行に旧名義を添えることもしない。企業の屋号は雑誌名・部門名など並立する別名義も多いので添えない）
+- 人物の最新名義はクレジットの入力が進むと変わり、URL も変わる。本番デプロイ（`--production --deploy`）が成功したとき（差分なしを含む。dry-run・中止・`--page` のピンポイントモードは除く）に、各人物のいまのスラッグを台帳テーブル `published_entity_slugs`（区分・スラッグ（デコード済み、`utf8mb4_bin` で完全一致）・その URL で公開した人物。`person_id` は `ON UPDATE CASCADE`）へ追記する（`INSERT IGNORE`、記録済みの行は変えない）。記録済みのスラッグのうち、いまの URL と違い、かつ別の人物がいまその名前の URL を使っていないものは、転送表に `/people/{旧名}` → いまの URL として載せ、旧名の URL を 301 で転送する。人物を統合するときは、削除の前にこの表の `person_id` も統合先へ付け替える
+- 旧 ID URL（`/persons/123/` `/characters/123/` `/companies/123/` `/books/123/`）は 301 で新 URL へ転送する。旧 ID は URL を切り替えた時点で凍結した台帳テーブル `legacy_entity_ids`（区分・旧 ID・いまの実体 ID。実体 ID は `ON UPDATE CASCADE` で振り直しに追従）から引くので、人物・キャラ・企業・書籍の ID を振り直しても旧 URL は元の実体を指し続ける。`FOREIGN_KEY_CHECKS=0` で振り直すスクリプトはこの表も明示的に更新し、実体を統合するときは削除の前に統合先へ付け替える。転送表は毎ビルド作り、サイト出力の `_edge/legacy-redirects.json`（`{"/persons/123": "/people/%E9…/", "/people/旧名": "/people/%E6…/", …}`。名前のキーはデコード済み、`LegacyRedirectMapWriter`）に書き出して通常のデプロイで S3 へ上げる。既定ビヘイビアの origin-request に関連付けた Lambda@Edge（`scripts/lambda-edge/legacy-redirect/index.mjs`、Node.js、us-east-1）が「区分 + 数字だけ」のパスと `/people/{名前}` のパス（URI をデコードして NFC 正規化してから引く）でこの表を S3 から読み（5 分間メモリに保持）、キーがあれば 301（`Cache-Control: max-age=3600`）を返し、それ以外はそのままオリジンへ通す。表の更新はデプロイだけで反映され、関数の作り直しは要らない。`/_edge/` 配下は viewer-request の CloudFront Function（`scripts/cloudfront/viewer-request.js`）が外部アクセスを 404 にする。人物の区分名は `/people/` で、名前ベース URL を `/persons/{名前}/` で公開していた期間の URL は、同じ Function が `/people/{名前}/` へ 301 で付け替える（数字だけの旧 ID URL は Lambda@Edge 側）。転送表を CloudFront Function に埋め込まないのは、コード上限 10KB に収まらないため。KeyValueStore を使わないのは、ディストリビューションが定額 Free プランで KeyValueStore を使えないため。転送をやめるときは Lambda@Edge の関連付けを外す
 
 トップページの DB 統計ボックスでは人物数と企業・団体数を合算した「クリエーター」1 項目（`DbStats.CreatorsCount` = 人物数＋企業・団体数）として表示し、リンク先は `/creators/` ランディング。
 
@@ -869,7 +871,7 @@ Role: PRODUCTION 制作 (order 2)
 
 ##### シリーズ詳細の「主題歌・挿入歌」セクション
 
-引き当て元はシリーズ種別で分かれる。`credit_attach_to='SERIES'`（映画系）は `series_theme_songs` をそのまま並べ、`credit_attach_to='EPISODE'`（TV / SPIN-OFF / OTONA / SHORT）は `episode_theme_songs` を `(theme_kind, song_recording_id, is_broadcast_only)` の 3 つ組でシリーズ単位に畳む（`ThemeSongSeriesAggregator`）。行の体裁は両者共通の `ts-card`（区分バッジ／曲名リンク／歌・コーラス・作詞・作曲・編曲のメタ行）で、集約側だけが曲名の右に使用話数ラベルを持つ。
+引き当て元はシリーズ種別で分かれる。`credit_attach_to='SERIES'`（映画系）は `series_theme_songs` をそのまま並べ、`credit_attach_to='EPISODE'`（TV / SPIN-OFF / OTONA / SHORT）は `episode_theme_songs` を `(theme_kind, song_recording_id, is_broadcast_only)` の 3 つ組でシリーズ単位に畳む（`ThemeSongSeriesAggregator`）。行の体裁は両者共通の `ts-card`（区分バッジ／曲名リンク／歌・コーラス・台詞・作詞・作曲・編曲のメタ行）で、集約側だけが曲名の右に使用話数ラベルを持つ。
 
 録音に公式 YouTube URL（`song_recordings.youtube_url`）が登録されていれば、見出し行と歌の行の間に動画を置く（下記「楽曲録音の YouTube 動画」）。
 
@@ -1389,6 +1391,8 @@ series_relation_kinds ──┘    │            │
 > 音楽種別 `music_class_code` は `song_recordings` 側で保持する設計。同一曲のカバーやアレンジが「主題歌→キャラソン」のように文脈で種別を変えるケースを表現するため、種別を録音単位で管理する。
 
 > `songs.*_name` / `song_recordings.singer_name` / `bgm_cues.composer_name`・`arranger_name` のフリーテキストは、構造化クレジット（`song_credits` / `song_recording_singers` / `bgm_cue_credits`）がまだ無い曲・録音・劇伴のためのフォールバック。サイトは画面表示だけでなく、meta description・OGP カード・JSON-LD・使用曲リストの副題といった平文の出力先でも、役職ごとに構造化行があればそれだけを使い、1 行も無い役職に限ってフリーテキストを使う（平文化は `CreditText` に集約。書式は画面表示と同じで、キャラ歌唱は「キャラ(CV:声優)」）。
+
+> `song_recording_singers.role_code` は `VOCALS`（歌）・`BACKING_VOCALS`（コーラス）・`DIALOGUE`（台詞：歌わずに曲中のセリフだけで参加する出演者）の 3 役を持つ。書式は 3 役とも同じ（キャラは「キャラ(CV:声優)」）で、楽曲詳細・商品詳細のトラック行・エピソード／シリーズの主題歌欄に歌 → コーラス → 台詞の順で並ぶ。`/creators/roles/vocals/` の担当曲数に数えるのは `VOCALS` だけ。
 
 #### `song_recordings` — 歌の歌唱者バージョン
 

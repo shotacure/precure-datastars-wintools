@@ -55,8 +55,6 @@ public sealed class CreatorsGenerator
     private readonly SongCreditsRepository _songCreditsRepo;
     private readonly SongRecordingSingersRepository _songRecSingersRepo;
 
-    /// <summary>person_id → 全クレジット横断で最後に使われた person_alias_id（<see cref="BuildLatestAliasMaps"/> で確定）。</summary>
-    private readonly Dictionary<int, int> _latestPersonAliasId = new();
 
     /// <summary>company_id → 全クレジット横断で最後に使われた company_alias_id（<see cref="BuildLatestAliasMaps"/> で確定）。</summary>
     private readonly Dictionary<int, int> _latestCompanyAliasId = new();
@@ -339,11 +337,25 @@ public sealed class CreatorsGenerator
                     ? (a.Name, a.NameKana ?? "")
                     : (p.FullName, p.FullNameKana ?? "");
 
-            var latest = _latestPersonAliasId.TryGetValue(p.PersonId, out var latestAid)
+            var latest = _ctx.EntityUrls.LatestPersonAliasId(p.PersonId) is int latestAid
                 ? AliasLabel(latestAid)
                 : (p.FullName, p.FullNameKana ?? "");
+            // 初参加行に最新名義を括弧で添える名義か。
+            //   - TV 系のクレジットで使われた旧名義（改名など）は添える。
+            //   - 映画だけで使われた名義は基本は名義変更ではないので添えないが、映画が初出でラテン文字で書かれた名義
+            //     （例：TAP スタッフの「FRANCIS P.CANEDA」）は、TV 系に別の名義（カタカナ表記など）があれば添えて同一人物と分かるようにする。
+            bool personHasTv = aliasIds.Any(a => _index.ByPersonAlias.TryGetValue(a, out var ai)
+                                                 && ai.Any(inv => !_ctx.IsMovieKindSeries(inv.SeriesId)));
+            bool NoteCurrentName(int aid)
+            {
+                if (!_index.ByPersonAlias.TryGetValue(aid, out var invs) || invs.Count == 0) return false;
+                if (invs.Any(inv => !_ctx.IsMovieKindSeries(inv.SeriesId))) return true;
+                if (!personHasTv || !_ctx.PersonAliasById.TryGetValue(aid, out var a) || !IsLatinName(a.Name)) return false;
+                var first = invs.MinBy(inv => CreditOrderKey(inv))!;
+                return _ctx.IsMovieKindSeries(first.SeriesId);
+            }
             AppendEntityRows(set, agg, "person", p.PersonId, PathUtil.PersonUrl(p.PersonId),
-                latest, AliasLabel, repNameMap, withWorksTooltip);
+                latest, AliasLabel, NoteCurrentName, repNameMap, withWorksTooltip);
         }
 
         // 企業・団体。
@@ -377,8 +389,9 @@ public sealed class CreatorsGenerator
             var latest = _latestCompanyAliasId.TryGetValue(c.CompanyId, out var latestAid)
                 ? AliasLabel(latestAid)
                 : (c.Name, c.NameKana ?? "");
+            // 企業の屋号は改名に限らず、雑誌名・部門名など並立する別名義も多いので、初参加行に最新屋号は添えない。
             AppendEntityRows(set, agg, "company", c.CompanyId, PathUtil.CompanyUrl(c.CompanyId),
-                latest, AliasLabel, repNameMap, withWorksTooltip);
+                latest, AliasLabel, _ => false, repNameMap, withWorksTooltip);
         }
 
         return set;
@@ -391,6 +404,7 @@ public sealed class CreatorsGenerator
     private void AppendEntityRows(
         EntityRowSet set, EntityAggregate agg, string entityKind, int entityId, string url,
         (string Name, string Kana) latest, Func<int, (string Name, string Kana)> aliasLabel,
+        Func<int, bool> noteCurrentName,
         IReadOnlyDictionary<string, string>? repNameMap, bool withWorksTooltip)
     {
         string tooltip = withWorksTooltip ? BuildWorksTooltip(agg.EpisodeKeys, agg.MovieSeriesIds) : "";
@@ -407,12 +421,18 @@ public sealed class CreatorsGenerator
             var debutRow = MakeEntityRow(entityKind, entityId, label.Name, label.Kana, url,
                 agg.EpisodeKeys.Count, agg.MovieSeriesIds.Count, agg.SeriesIds.Count, first, tooltip);
             debutRow.RolesLabel = rolesLabel;
+            // TV 系のクレジットで使われた旧名義で置いた初参加行には、いまの名乗り（最新名義）を括弧で添えて
+            // 同一人物と分かるようにする（添えるかは noteCurrentName が決める。企業は常に添えない）。
+            // 逆向き（最新名義の行に旧名義を添える）はしない。
+            if (!string.Equals(label.Name, latest.Name, StringComparison.Ordinal) && noteCurrentName(aid))
+                debutRow.CurrentNameNote = latest.Name;
             set.DebutRows.Add(debutRow);
         }
     }
 
     /// <summary>
-    /// 人物 → 全クレジット横断で最後に使われた名義、企業 → 同じく最後に使われた屋号 を引く辞書を作る。
+    /// 企業 → 全クレジット横断で最後に使われた屋号 を引く辞書を作る
+    /// （人物の最新名義は人物詳細の見出し・URL と同じものを <see cref="EntityUrlRegistry.LatestPersonAliasId"/> から引く）。
     /// 「最後」は関与の (シリーズ放送開始日, 話数, クレジット出現位置) が最も遅いもの（役職・種別を問わない）。
     /// ロゴ経由の関与はロゴを保有する屋号の使用として数える。
     /// </summary>
@@ -421,23 +441,6 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<int, List<int>> companyAliasesByCompany,
         IReadOnlyDictionary<int, List<int>> logosByCompanyAlias)
     {
-        _latestPersonAliasId.Clear();
-        foreach (var kv in aliasIdsByPersonId)
-        {
-            var best = (Start: long.MinValue, EpNo: int.MinValue, Pos: long.MinValue);
-            int? bestAid = null;
-            foreach (var aid in kv.Value)
-            {
-                if (!_index.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
-                foreach (var inv in invs)
-                {
-                    var key = CreditOrderKey(inv);
-                    if (bestAid is null || key.CompareTo(best) > 0) { best = key; bestAid = aid; }
-                }
-            }
-            if (bestAid is int b) _latestPersonAliasId[kv.Key] = b;
-        }
-
         _latestCompanyAliasId.Clear();
         foreach (var kv in companyAliasesByCompany)
         {
@@ -467,15 +470,34 @@ public sealed class CreatorsGenerator
         }
     }
 
+    /// <summary>
+    /// ラテン文字で書かれた名前か（ラテン文字を 1 字以上含み、ほかは空白・数字・句読点・記号だけ）。
+    /// 映画のクレジットでアルファベット表記された名義（例：「FRANCIS P.CANEDA」）の判定に使う。
+    /// </summary>
+    private static bool IsLatinName(string name)
+    {
+        bool hasLetter = false;
+        foreach (char ch in name)
+        {
+            if (char.IsLetter(ch))
+            {
+                // 基本ラテン・ラテン 1 補助・ラテン拡張 A/B・ラテン拡張追加・全角英字。
+                bool latin = ch <= 'ɏ' || (ch >= 'Ḁ' && ch <= 'ỿ')
+                             || (ch >= 'Ａ' && ch <= 'Ｚ') || (ch >= 'ａ' && ch <= 'ｚ');
+                if (!latin) return false;
+                hasLetter = true;
+            }
+            else if (!(char.IsWhiteSpace(ch) || char.IsDigit(ch) || char.IsPunctuation(ch) || char.IsSymbol(ch)))
+            {
+                return false;
+            }
+        }
+        return hasLetter;
+    }
+
     /// <summary>関与のクレジット上の並び順キー (シリーズ放送開始日シリアル, 話数, クレジット出現位置)。 シリーズスコープ（episode_id=null）は話数 0。</summary>
     private (long Start, int EpNo, long Pos) CreditOrderKey(Involvement inv)
-    {
-        long start = _ctx.SeriesStartDate(inv.SeriesId).DayNumber;
-        int epNo = inv.EpisodeId is int eid
-            ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
-            : 0;
-        return (start, epNo, inv.CreditPos);
-    }
+        => LatestAliasResolver.CreditOrderKey(_ctx, inv);
 
     /// <summary>/creators/roles/{rep_role_code}/ を 3 タブ（五十音順 / 初参加順 / 担当話数が多い順）で書き出す。</summary>
     private void GenerateRoleDetail(
@@ -618,8 +640,9 @@ public sealed class CreatorsGenerator
             rows.Add(new SongRoleRow
             {
                 PersonId = kv.Key,
-                PersonName = p.FullName,
-                PersonNameKana = p.FullNameKana ?? "",
+                // 人物詳細の見出し・URL と同じ最新名義で出す（クレジットの無い人物は正式名）。
+                PersonName = _ctx.EntityUrls.PersonDisplayName(p.PersonId) ?? p.FullName,
+                PersonNameKana = _ctx.EntityUrls.PersonDisplayKana(p.PersonId) ?? (p.FullNameKana ?? ""),
                 PersonUrl = PathUtil.PersonUrl(kv.Key),
                 SongCount = kv.Value.Count,
                 // 初参加順の代理キー。未取得は末尾に送るため int.MaxValue。
@@ -1021,8 +1044,9 @@ public sealed class CreatorsGenerator
 
                 var row = new VoiceCastRow
                 {
-                    PersonName = p.FullName,
-                    PersonNameKana = p.FullNameKana ?? "",
+                    // 人物詳細の見出し・URL と同じ最新名義で出す（クレジットの無い人物は正式名）。
+                    PersonName = _ctx.EntityUrls.PersonDisplayName(p.PersonId) ?? p.FullName,
+                    PersonNameKana = _ctx.EntityUrls.PersonDisplayKana(p.PersonId) ?? (p.FullNameKana ?? ""),
                     PersonUrl = PathUtil.PersonUrl(p.PersonId),
                     PersonId = p.PersonId,
                     SeriesTitle = series.Title,
@@ -1695,6 +1719,8 @@ public sealed class CreatorsGenerator
         public int EntityId { get; set; }
         public string EntityName { get; set; } = "";
         public string EntityNameKana { get; set; } = "";
+        /// <summary>初参加順の行を旧名義で置いたときの、いまの名乗り（人物の最新名義）。添えない行は空文字。 テンプレ側で名前の後ろに括弧書きで添える。</summary>
+        public string CurrentNameNote { get; set; } = "";
         public string EntityUrl { get; set; } = "";
         /// <summary>TV 系シリーズ（series_kinds.credit_attach_to='EPISODE'）での担当エピソード合計数。</summary>
         public int EpisodeCount { get; set; }

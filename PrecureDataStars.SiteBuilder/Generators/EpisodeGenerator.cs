@@ -990,6 +990,9 @@ public sealed class EpisodeGenerator
             // 該当録音にコーラス行が無ければ空文字列のままで、テンプレ側でも行を出さない。
             string chorusHtml = "";
             string chorusRoleLabelHtml = "";
+            // 台詞（DIALOGUE 役）もコーラスと同じ扱いで併出する。該当行が無ければ空文字列のまま。
+            string dialogueHtml = "";
+            string dialogueRoleLabelHtml = "";
             if (rec is not null)
             {
                 var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
@@ -1000,6 +1003,11 @@ public sealed class EpisodeGenerator
                 if (!string.IsNullOrEmpty(chorusHtml))
                 {
                     chorusRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Chorus, roleMap, "コーラス");
+                }
+                dialogueHtml = _singerHtml.BuildDialogueHtml(singers, personAliasMap, characterAliasMap);
+                if (!string.IsNullOrEmpty(dialogueHtml))
+                {
+                    dialogueRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Dialogue, roleMap, "台詞");
                 }
             }
 
@@ -1027,6 +1035,8 @@ public sealed class EpisodeGenerator
                 VocalistsRoleLabelHtml = vocalistsRoleLabelHtml,
                 ChorusHtml = chorusHtml,
                 ChorusRoleLabelHtml = chorusRoleLabelHtml,
+                DialogueHtml = dialogueHtml,
+                DialogueRoleLabelHtml = dialogueRoleLabelHtml,
                 Notes = t.Notes ?? "",
                 IsBroadcastOnly = t.IsBroadcastOnly
             });
@@ -1952,6 +1962,10 @@ public sealed class EpisodeGenerator
         public string ChorusHtml { get; set; } = "";
         /// <summary>「コーラス」役職ラベル HTML。 <see cref="ChorusHtml"/> が非空のときだけセットされる（<c>/creators/roles/BACKING_VOCALS/</c> へのリンク化済み HTML、未登録時はフォールバック固定文字列「コーラス」）。</summary>
         public string ChorusRoleLabelHtml { get; set; } = "";
+        /// <summary>台詞（DIALOGUE 役）連名の表示用 HTML。 該当録音に台詞行が無ければ空文字列（テンプレ側で行ごと出さない）。</summary>
+        public string DialogueHtml { get; set; } = "";
+        /// <summary>「台詞」役職ラベル HTML。 <see cref="DialogueHtml"/> が非空のときだけセットされる（<c>/creators/roles/DIALOGUE/</c> へのリンク化済み HTML、未登録時はフォールバック固定文字列「台詞」）。</summary>
+        public string DialogueRoleLabelHtml { get; set; } = "";
     }
 
     private sealed class CreditBlockView

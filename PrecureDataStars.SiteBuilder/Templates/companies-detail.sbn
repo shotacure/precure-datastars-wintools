@@ -107,23 +107,30 @@
     <ul class="credit-card-list">
       {{~ for r in g.SeriesRows ~}}
       <li class="credit-card">
-        <a class="credit-card-link" href="/series/{{ r.SeriesSlug }}/">
-          <span class="credit-card-series">{{ r.SeriesTitle | html.escape }}</span>
-          {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
-          {{~ if r.IsAllEpisodes ~}}
-          <span class="credit-card-range muted">(全話)</span>
-          {{~ else if r.RangeLabel != "" ~}}
-          <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
-          {{~ end ~}}
-        </a>
+        {{## カード枠は各話内訳の開閉スイッチ（details の summary）。シリーズ詳細への遷移はシリーズ名のリンクだけが担う。
+             各話を持たない行（映画など）は開閉を持たない素の枠にする。見出し部は capture で 1 回だけ組み立てて両方で使う。 ##}}
+        {{~ capture card_head ~}}
+            <a class="credit-card-series" href="/series/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>
+            {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
+            {{~ if r.IsAllEpisodes ~}}
+            <span class="credit-card-range muted">(全話)</span>
+            {{~ else if r.RangeLabel != "" ~}}
+            <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
+            {{~ end ~}}
+        {{~ end ~}}
         {{~ if r.Episodes.size > 0 ~}}
-        {{## 担当話が少ない行だけ内訳を出す。圧縮表記（#1〜4, 8）だけでは何の話か分からず、
-             当該エピソードへの導線も無いため、サブタイトル・放送日つきでリンクする。 ##}}
-        <ul class="credit-card-episodes">
-          {{~ for ep in r.Episodes ~}}
-          <li><a href="{{ ep.Url }}">{{ ep.Label | html.escape }}</a><span class="muted">{{ ep.OnAirLabel }}</span></li>
-          {{~ end ~}}
-        </ul>
+        {{## 担当した各話の内訳。圧縮表記（#1〜4, 8）だけでは何の話か分からず、
+             当該エピソードへの導線も無いため、サブタイトル・放送日つきでリンクする。既定では閉じておく。 ##}}
+        <details class="credit-card-details">
+          <summary class="credit-card-head">{{ card_head }}<span class="credit-card-toggle">各話（{{ r.Episodes.size }}話）</span></summary>
+          <ul class="credit-card-episodes">
+            {{~ for ep in r.Episodes ~}}
+            <li><a href="{{ ep.Url }}">{{ ep.Label | html.escape }}</a><span class="muted">{{ ep.OnAirLabel }}</span></li>
+            {{~ end ~}}
+          </ul>
+        </details>
+        {{~ else ~}}
+        <div class="credit-card-head">{{ card_head }}</div>
         {{~ end ~}}
       </li>
       {{~ end ~}}
@@ -143,23 +150,30 @@
     <ul class="credit-card-list">
       {{~ for r in g.SeriesRows ~}}
       <li class="credit-card">
-        <a class="credit-card-link" href="/series/{{ r.SeriesSlug }}/">
-          <span class="credit-card-series">{{ r.SeriesTitle | html.escape }}</span>
-          {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
-          {{~ if r.IsAllEpisodes ~}}
-          <span class="credit-card-range muted">(全話)</span>
-          {{~ else if r.RangeLabel != "" ~}}
-          <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
-          {{~ end ~}}
-        </a>
+        {{## カード枠は各話内訳の開閉スイッチ（details の summary）。シリーズ詳細への遷移はシリーズ名のリンクだけが担う。
+             各話を持たない行（映画など）は開閉を持たない素の枠にする。見出し部は capture で 1 回だけ組み立てて両方で使う。 ##}}
+        {{~ capture card_head ~}}
+            <a class="credit-card-series" href="/series/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>
+            {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
+            {{~ if r.IsAllEpisodes ~}}
+            <span class="credit-card-range muted">(全話)</span>
+            {{~ else if r.RangeLabel != "" ~}}
+            <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
+            {{~ end ~}}
+        {{~ end ~}}
         {{~ if r.Episodes.size > 0 ~}}
-        {{## 担当話が少ない行だけ内訳を出す。圧縮表記（#1〜4, 8）だけでは何の話か分からず、
-             当該エピソードへの導線も無いため、サブタイトル・放送日つきでリンクする。 ##}}
-        <ul class="credit-card-episodes">
-          {{~ for ep in r.Episodes ~}}
-          <li><a href="{{ ep.Url }}">{{ ep.Label | html.escape }}</a><span class="muted">{{ ep.OnAirLabel }}</span></li>
-          {{~ end ~}}
-        </ul>
+        {{## 担当した各話の内訳。圧縮表記（#1〜4, 8）だけでは何の話か分からず、
+             当該エピソードへの導線も無いため、サブタイトル・放送日つきでリンクする。既定では閉じておく。 ##}}
+        <details class="credit-card-details">
+          <summary class="credit-card-head">{{ card_head }}<span class="credit-card-toggle">各話（{{ r.Episodes.size }}話）</span></summary>
+          <ul class="credit-card-episodes">
+            {{~ for ep in r.Episodes ~}}
+            <li><a href="{{ ep.Url }}">{{ ep.Label | html.escape }}</a><span class="muted">{{ ep.OnAirLabel }}</span></li>
+            {{~ end ~}}
+          </ul>
+        </details>
+        {{~ else ~}}
+        <div class="credit-card-head">{{ card_head }}</div>
         {{~ end ~}}
       </li>
       {{~ end ~}}
@@ -209,15 +223,18 @@
         <ul class="credit-card-list">
           {{~ for w in rg.Works ~}}
           <li class="credit-card">
-            <a class="credit-card-link" href="/series/{{ w.SeriesSlug }}/">
-              <span class="credit-card-series">{{ w.SeriesTitle | html.escape }}</span>
-              {{~ if w.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ w.SeriesStartYearLabel }})</span>{{~ end ~}}
-              {{~ if w.IsAllEpisodes ~}}
-              <span class="credit-card-range muted">(全話)</span>
-              {{~ else if w.RangeLabel != "" ~}}
-              <span class="credit-card-range muted">({{ w.RangeLabel | html.escape }})</span>
-              {{~ end ~}}
-            </a>
+            {{## カード枠は各話内訳の開閉スイッチ（details の summary）。シリーズ詳細への遷移はシリーズ名のリンクだけが担う。
+                 各話を持たない行（映画など）は開閉を持たない素の枠にする。見出し部は capture で 1 回だけ組み立てて両方で使う。 ##}}
+            {{~ capture card_head ~}}
+                <a class="credit-card-series" href="/series/{{ w.SeriesSlug }}/">{{ w.SeriesTitle | html.escape }}</a>
+                {{~ if w.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ w.SeriesStartYearLabel }})</span>{{~ end ~}}
+                {{~ if w.IsAllEpisodes ~}}
+                <span class="credit-card-range muted">(全話)</span>
+                {{~ else if w.RangeLabel != "" ~}}
+                <span class="credit-card-range muted">({{ w.RangeLabel | html.escape }})</span>
+                {{~ end ~}}
+            {{~ end ~}}
+            <div class="credit-card-head">{{ card_head }}</div>
           </li>
           {{~ end ~}}
         </ul>

@@ -235,6 +235,10 @@ public sealed class TrackCreditHtmlBuilder
     public string BuildRecordingChorusHtml(SongRecording rec)
         => _singerHtml.BuildChorusHtml(SingersOf(rec), _personAliasMap, _characterAliasMap);
 
+    /// <summary>録音の台詞（DIALOGUE 役）連名 HTML を組み立てる（書式は <see cref="SingerHtmlBuilder.BuildDialogueHtml"/> と同一）。 該当行が無ければ空文字列。</summary>
+    public string BuildRecordingDialogueHtml(SongRecording rec)
+        => _singerHtml.BuildDialogueHtml(SingersOf(rec), _personAliasMap, _characterAliasMap);
+
     private IReadOnlyList<SongRecordingSinger> SingersOf(SongRecording rec)
         => _singersByRecording.TryGetValue(rec.SongRecordingId, out var list) ? list : Array.Empty<SongRecordingSinger>();
 

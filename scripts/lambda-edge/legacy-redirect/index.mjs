@@ -2,12 +2,15 @@
 //
 // /persons/123/ /characters/123/ /companies/123/ /books/123/ のような「区分 + 数字だけ」の旧 URL に来た
 // リクエストを、名前（書籍はコード）ベースの新 URL へ 301 で転送する。
+// あわせて、人物の旧名 URL（/people/{旧名義}/。最新名義が変わって URL が変わった人物の、本番で公開済みの URL）も
+// いまの URL へ 301 で転送する。表に無い /people/ の URL はそのままオリジンへ通す（いまのページはそのまま返る）。
 // viewer-request の CloudFront Function が先に "…/index.html" へ書き換えるので、その形も受ける。
 //
 // 転送表は SiteBuilder がビルドのたびにサイト出力の _edge/legacy-redirects.json に書き出し、
 // 通常のデプロイで S3（非公開バケット）へ上がる。本関数はそれを S3 から読み、数分間メモリに保持する
 // （表の更新はデプロイだけで反映され、関数の作り直しは要らない）。
-// 形式：{"/persons/123": "/persons/%E9%AB%98…/", …}（キーは末尾スラッシュ無しの旧パス）。
+// 形式：{"/persons/123": "/people/%E9%AB%98…/", "/people/旧名": "/people/%E6%96%B0…/", …}
+// （キーは末尾スラッシュ無しの旧パス。名前のキーはデコード済みの素の文字列なので、リクエスト URI もデコードして引く）。
 //
 // 旧 URL 以外のリクエストは何もせずそのままオリジンへ通す。表を読めないときも通す（旧ページが無ければ 404）。
 // Lambda@Edge は環境変数を使えないため、バケット名等は定数で持つ。
@@ -20,6 +23,22 @@ const BUCKET_REGION = 'your-bucket-region';
 const MAP_KEY = '_edge/legacy-redirects.json';
 const MAP_TTL_MS = 5 * 60 * 1000;
 const LEGACY_ID_PATH = /^\/(persons|characters|companies|books)\/(\d+)(?:\/(?:index\.html)?)?$/;
+const PEOPLE_NAME_PATH = /^\/people\/([^\/]+)(?:\/(?:index\.html)?)?$/;
+
+/** リクエスト URI から転送表のキーを作る。対象外の URI は null。 */
+function mapKeyOf(uri) {
+    const id = uri.match(LEGACY_ID_PATH);
+    if (id) return '/' + id[1] + '/' + id[2];
+    const name = uri.match(PEOPLE_NAME_PATH);
+    if (name) {
+        try {
+            return '/people/' + decodeURIComponent(name[1]).normalize('NFC');
+        } catch (e) {
+            return null; // 不正なパーセントエンコードは転送しない
+        }
+    }
+    return null;
+}
 
 const s3 = new S3Client({ region: BUCKET_REGION });
 let cachedMap = null;
@@ -35,8 +54,8 @@ async function loadMap() {
 
 export const handler = async (event) => {
     const request = event.Records[0].cf.request;
-    const m = request.uri.match(LEGACY_ID_PATH);
-    if (!m) return request;
+    const key = mapKeyOf(request.uri);
+    if (!key) return request;
 
     let map;
     try {
@@ -46,7 +65,7 @@ export const handler = async (event) => {
         return request;
     }
 
-    const location = map['/' + m[1] + '/' + m[2]];
+    const location = map[key];
     if (!location) return request;
 
     return {

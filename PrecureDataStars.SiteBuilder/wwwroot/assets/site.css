@@ -629,6 +629,14 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .series-card-sub a.role-badge {
   pointer-events: auto;
 }
+/* プリキュアバッジ行は薄いピンクの枠に収め、下のスタッフ行（役職バッジ + 人名）と見分けられるようにする。
+   地色はカードのホバー色（#fff7fb）より一段濃くして、ホバー中も枠が見えるようにする。 */
+.series-card-sub .precure-badges-row {
+  padding: 6px 8px;
+  background: #fdeef4;
+  border: 1px solid #f6c6d8;
+  border-radius: 8px;
+}
 
 /* 映画カード内の MOVIE_SHORT 子作品リスト。
    親映画にぶら下がる併映短編で、リンクは張らない（単独詳細ページ無し運用）。

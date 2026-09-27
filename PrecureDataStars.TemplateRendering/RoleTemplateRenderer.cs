@@ -239,6 +239,11 @@ public static class RoleTemplateRenderer
                 // テンプレ作者がシリーズ別カスタム見出しで「「{SERIES_TITLE}」主題歌」のように使う。
                 return System.Net.WebUtility.HtmlEncode(ctx.ScopeSeriesTitle ?? "");
 
+            case "FILM_RATING_NO":
+                // scope_kind=SERIES のシリーズの映倫審査番号（series.film_rating_no）。未登録や EPISODE スコープは空文字。
+                // 映画のタイトルカード（役職 TITLE）で「{SERIES_TITLE}{?FILM_RATING_NO} 映倫 {FILM_RATING_NO}{/?FILM_RATING_NO}」のように使う。
+                return System.Net.WebUtility.HtmlEncode(ctx.ScopeFilmRatingNo ?? "");
+
             case "PRODUCT":
                 {
                     // {PRODUCT:kind=OST_MOVIE} 形式。現スコープのシリーズに紐付くディスクを持ち、

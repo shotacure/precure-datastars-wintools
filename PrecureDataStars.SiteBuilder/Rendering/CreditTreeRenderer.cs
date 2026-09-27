@@ -481,14 +481,15 @@ internal sealed class CreditTreeRenderer
                 // {THEME_SONGS} ハンドラが series_theme_songs を引き当てるようにする。EPISODE スコープでは null。
                 int? scopeSeriesIdForCtx = scopeKind == "SERIES" ? resolveSeriesId : null;
                 // SERIES スコープの場合、テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。
-                string? scopeSeriesTitleForCtx = (scopeSeriesIdForCtx is int ssid
-                    && _ctx.SeriesById.TryGetValue(ssid, out var seriesForCtx))
-                    ? seriesForCtx.Title
+                // 映倫審査番号（{FILM_RATING_NO}）も同じシリーズから引く。
+                Series? seriesForCtx = scopeSeriesIdForCtx is int ssid && _ctx.SeriesById.TryGetValue(ssid, out var sfc)
+                    ? sfc
                     : null;
                 var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, scopeSeriesIdForCtx, creditKind,
                     siblingRoleResolver: siblingRoleResolver,
                     visitedRoleCodes: null,
-                    scopeSeriesTitle: scopeSeriesTitleForCtx);
+                    scopeSeriesTitle: seriesForCtx?.Title,
+                    scopeFilmRatingNo: seriesForCtx?.FilmRatingNo);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
 
                 string normalized = rendered.Replace("\r\n", "\n").Replace("\r", "\n");

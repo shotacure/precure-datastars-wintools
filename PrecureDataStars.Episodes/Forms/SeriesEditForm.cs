@@ -176,6 +176,7 @@ public partial class SeriesEditorForm : Form
             txtAbcSite.Text = "";
             txtAmazonPrimeAsin.Text = "";
             txtYoutubeTrailer.Text = "";
+            txtFilmRatingNo.Text = "";
             // 追加: 融合表示フラグも初期状態に戻す。
             chkHideStoryboardRole.Checked = false;
             return;
@@ -242,6 +243,7 @@ public partial class SeriesEditorForm : Form
         txtAbcSite.Text = _current.AbcOfficialSiteUrl ?? "";
         txtAmazonPrimeAsin.Text = _current.AmazonPrimeVideoAsin ?? "";
         txtYoutubeTrailer.Text = _current.YoutubeTrailerUrl ?? "";
+        txtFilmRatingNo.Text = _current.FilmRatingNo ?? "";
         // 追加: 「絵コンテ」融合表示フラグの読み込み。
         chkHideStoryboardRole.Checked = _current.HideStoryboardRole;
     }
@@ -292,6 +294,7 @@ public partial class SeriesEditorForm : Form
         _current.AbcOfficialSiteUrl = string.IsNullOrWhiteSpace(txtAbcSite.Text) ? null : txtAbcSite.Text.Trim();
         _current.AmazonPrimeVideoAsin = string.IsNullOrWhiteSpace(txtAmazonPrimeAsin.Text) ? null : txtAmazonPrimeAsin.Text.Trim();
         _current.YoutubeTrailerUrl = string.IsNullOrWhiteSpace(txtYoutubeTrailer.Text) ? null : txtYoutubeTrailer.Text.Trim();
+        _current.FilmRatingNo = string.IsNullOrWhiteSpace(txtFilmRatingNo.Text) ? null : txtFilmRatingNo.Text.Trim();
         // 追加: 「絵コンテ」融合表示フラグの保存。
         _current.HideStoryboardRole = chkHideStoryboardRole.Checked;
 

@@ -31,6 +31,7 @@ namespace PrecureDataStars.Episodes.Forms
         private System.Windows.Forms.Label lblAbcSite = null!;
         private System.Windows.Forms.Label lblAmazonPrimeAsin = null!;
         private System.Windows.Forms.Label lblYoutubeTrailer = null!;
+        private System.Windows.Forms.Label lblFilmRatingNo = null!;
 
         // エディタ
         private System.Windows.Forms.TextBox txtTitle = null!;
@@ -53,6 +54,7 @@ namespace PrecureDataStars.Episodes.Forms
         private System.Windows.Forms.TextBox txtAbcSite = null!;
         private System.Windows.Forms.TextBox txtAmazonPrimeAsin = null!;
         private System.Windows.Forms.TextBox txtYoutubeTrailer = null!;
+        private System.Windows.Forms.TextBox txtFilmRatingNo = null!;
 
         // 追加: 「絵コンテ」役職を独立表示せず「演出」と融合表示するシリーズか
         // （プレビューレンダラ専用フラグ）。
@@ -107,6 +109,8 @@ namespace PrecureDataStars.Episodes.Forms
             txtAmazonPrimeAsin = new TextBox();
             lblYoutubeTrailer = new Label();
             txtYoutubeTrailer = new TextBox();
+            lblFilmRatingNo = new Label();
+            txtFilmRatingNo = new TextBox();
             // 追加: 絵コンテ・演出融合表示フラグ用 CheckBox。
             chkHideStoryboardRole = new CheckBox();
             btnAdd = new Button();
@@ -468,13 +472,31 @@ namespace PrecureDataStars.Episodes.Forms
             txtYoutubeTrailer.Size = new Size(588, 27);
             txtYoutubeTrailer.TabIndex = 40;
             //
+            // lblFilmRatingNo
+            //
+            lblFilmRatingNo.AutoSize = true;
+            lblFilmRatingNo.Location = new Point(664, 732);
+            lblFilmRatingNo.Name = "lblFilmRatingNo";
+            lblFilmRatingNo.Size = new Size(78, 20);
+            lblFilmRatingNo.TabIndex = 41;
+            lblFilmRatingNo.Text = "映倫番号";
+            //
+            // txtFilmRatingNo
+            //   映画の映倫審査番号（例: 27159）。クレジットの「タイトル」役職のテンプレで {FILM_RATING_NO} として出す。
+            //
+            txtFilmRatingNo.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            txtFilmRatingNo.Location = new Point(900, 732);
+            txtFilmRatingNo.Name = "txtFilmRatingNo";
+            txtFilmRatingNo.Size = new Size(160, 27);
+            txtFilmRatingNo.TabIndex = 42;
+            //
             // chkHideStoryboardRole
             //   絵コンテ役職を独立表示せず演出と融合表示するシリーズかを切り替えるチェックボックス。
-            //   本予告URL 欄の直下に配置。AutoSize でテキストに合わせて幅を自動調整する。
+            //   映倫番号欄の直下に配置。AutoSize でテキストに合わせて幅を自動調整する。
             //
             chkHideStoryboardRole.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             chkHideStoryboardRole.AutoSize = true;
-            chkHideStoryboardRole.Location = new Point(900, 736);
+            chkHideStoryboardRole.Location = new Point(900, 772);
             chkHideStoryboardRole.Name = "chkHideStoryboardRole";
             chkHideStoryboardRole.TabIndex = 39;
             chkHideStoryboardRole.Text = "「絵コンテ」役職を独立表示せず「演出」と融合表示する（プレビュー専用）";
@@ -545,6 +567,8 @@ namespace PrecureDataStars.Episodes.Forms
             Controls.Add(txtAmazonPrimeAsin);
             Controls.Add(lblYoutubeTrailer);
             Controls.Add(txtYoutubeTrailer);
+            Controls.Add(lblFilmRatingNo);
+            Controls.Add(txtFilmRatingNo);
             // 追加: 絵コンテ・演出融合表示フラグ。
             Controls.Add(chkHideStoryboardRole);
             Controls.Add(btnAdd);

@@ -28,6 +28,9 @@ public sealed class TemplateContext
     /// <summary>scope_kind=SERIES のシリーズタイトル（<c>series.title</c>）。<c>{SERIES_TITLE}</c> プレースホルダの値として使う。 EPISODE スコープや未供給時は空文字。 シリーズ別カスタムテンプレで「「{SERIES_TITLE}」主題歌」のような見出しを書くために、呼び出し側が解決して詰める。</summary>
     public string ScopeSeriesTitle { get; }
 
+    /// <summary>scope_kind=SERIES のシリーズの映倫審査番号（<c>series.film_rating_no</c>）。<c>{FILM_RATING_NO}</c> プレースホルダの値として使う。 EPISODE スコープや未登録・未供給時は空文字。 映画のタイトルカード（役職 <c>TITLE</c>）でシリーズ名に番号を併記するために、呼び出し側が解決して詰める。</summary>
+    public string ScopeFilmRatingNo { get; }
+
     /// <summary>クレジットの種別（OP/ED/...）。<c>{THEME_SONGS}</c> の絞り込みに使う候補（は未使用）。</summary>
     public string CreditKind { get; }
 
@@ -68,7 +71,8 @@ public sealed class TemplateContext
     /// <summary>追加コンストラクタ：sibling-role 解決のためのコールバックと訪問済みセットを受け取る版。
     /// scope_kind=SERIES のクレジット（映画系列）では <paramref name="scopeSeriesId"/> を渡して
     /// <c>series_theme_songs</c> 経由の {THEME_SONGS} 展開を可能にする。
-    /// <paramref name="scopeSeriesTitle"/> を渡すと <c>{SERIES_TITLE}</c> プレースホルダで参照できる（省略時は空文字）。</summary>
+    /// <paramref name="scopeSeriesTitle"/> を渡すと <c>{SERIES_TITLE}</c> プレースホルダで、<paramref name="scopeFilmRatingNo"/> を渡すと
+    /// <c>{FILM_RATING_NO}</c> プレースホルダで参照できる（省略時は空文字）。</summary>
     public TemplateContext(
         string roleCode,
         string roleName,
@@ -79,7 +83,8 @@ public sealed class TemplateContext
         string creditKind,
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
         IReadOnlySet<string>? visitedRoleCodes,
-        string? scopeSeriesTitle = null)
+        string? scopeSeriesTitle = null,
+        string? scopeFilmRatingNo = null)
     {
         RoleCode = roleCode ?? "";
         RoleName = roleName ?? "";
@@ -88,6 +93,7 @@ public sealed class TemplateContext
         ScopeEpisodeId = scopeEpisodeId;
         ScopeSeriesId = scopeSeriesId;
         ScopeSeriesTitle = scopeSeriesTitle ?? "";
+        ScopeFilmRatingNo = scopeFilmRatingNo ?? "";
         CreditKind = creditKind ?? "";
         SiblingRoleResolver = siblingRoleResolver;
         VisitedRoleCodes = visitedRoleCodes ?? new HashSet<string>(StringComparer.Ordinal);
@@ -114,7 +120,8 @@ public sealed class TemplateContext
             creditKind: CreditKind,
             siblingRoleResolver: SiblingRoleResolver,
             visitedRoleCodes: visited,
-            scopeSeriesTitle: ScopeSeriesTitle);
+            scopeSeriesTitle: ScopeSeriesTitle,
+            scopeFilmRatingNo: ScopeFilmRatingNo);
     }
 }
 

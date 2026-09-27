@@ -255,6 +255,9 @@ CREATE TABLE `series` (
   -- 本予告の YouTube 動画 URL。シリーズ詳細ページで、登録があるシリーズだけ基本情報の直前に埋め込む。
   -- 列自体はシリーズ共通だが、運用上の登録対象は映画作品を想定している。
   `youtube_trailer_url` varchar(1024) DEFAULT NULL,
+  -- 映倫審査番号（例: 27159）。映画のタイトルカードに併記される番号で、クレジットの役職 TITLE の
+  -- テンプレ（role_templates）から {FILM_RATING_NO} で参照する。映画以外や未登録は NULL。
+  `film_rating_no` varchar(16) DEFAULT NULL COMMENT '映倫審査番号（映画のタイトルカードに併記）',
   `vod_intro` smallint unsigned DEFAULT NULL,
   `font_subtitle` varchar(64) DEFAULT NULL,
   -- 絵コンテ役職を独立表示せず演出と融合表示するか（プレビュー描画専用フラグ）。

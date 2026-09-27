@@ -28,6 +28,11 @@ partial class PersonAliasMembersEditDialog
     private Button btnPickVoice = null!;
     private Button btnClearVoice = null!;
 
+    private Label lblSlash = null!;
+    private TextBox txtSlashDisplay = null!;
+    private Button btnPickSlash = null!;
+    private Button btnClearSlash = null!;
+
     private Label lblNotes = null!;
     private TextBox txtNotes = null!;
 
@@ -52,9 +57,9 @@ partial class PersonAliasMembersEditDialog
 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(880, 540);
+        ClientSize = new Size(880, 572);
         StartPosition = FormStartPosition.CenterParent;
-        MinimumSize = new Size(720, 460);
+        MinimumSize = new Size(720, 492);
         Name = "PersonAliasMembersEditDialog";
         Text = "ユニット名義メンバー管理";
 
@@ -65,7 +70,8 @@ partial class PersonAliasMembersEditDialog
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             Text = "メンバーは PERSON（人物名義）または CHARACTER（キャラ名義）。" +
                    "PERSON メンバーが既にユニットだったり、このユニット自身が他ユニットのメンバーになっている場合は、" +
-                   "DB トリガーで保存時に拒否されます（ネスト不可）。CHARACTER メンバーには声優名義を任意で紐付けられます。",
+                   "DB トリガーで保存時に拒否されます（ネスト不可）。CHARACTER メンバーには声優名義と、" +
+                   "「/」で並べるもう一方のキャラ名義（変身後など）を任意で紐付けられます。",
             ForeColor = Color.DimGray
         };
 
@@ -88,16 +94,17 @@ partial class PersonAliasMembersEditDialog
         {
             new DataGridViewTextBoxColumn { Name = "colSeq",     HeaderText = "Seq",   Width = 60,  DataPropertyName = "Seq" },
             new DataGridViewTextBoxColumn { Name = "colKind",    HeaderText = "種別",  Width = 110, DataPropertyName = "KindLabel" },
-            new DataGridViewTextBoxColumn { Name = "colMember",  HeaderText = "メンバー", Width = 280, DataPropertyName = "MemberDisplay" },
+            new DataGridViewTextBoxColumn { Name = "colMember",  HeaderText = "メンバー", Width = 200, DataPropertyName = "MemberDisplay" },
+            new DataGridViewTextBoxColumn { Name = "colSlash",   HeaderText = "/ 相方キャラ", Width = 160, DataPropertyName = "SlashDisplay" },
             new DataGridViewTextBoxColumn { Name = "colVoice",   HeaderText = "声優",  Width = 180, DataPropertyName = "VoiceDisplay" },
-            new DataGridViewTextBoxColumn { Name = "colNotes",   HeaderText = "備考",  Width = 200, DataPropertyName = "Notes" }
+            new DataGridViewTextBoxColumn { Name = "colNotes",   HeaderText = "備考",  Width = 140, DataPropertyName = "Notes" }
         });
 
         grpDetail = new GroupBox
         {
             Text = "選択行の詳細",
             Location = new Point(8, 304),
-            Size = new Size(864, 176),
+            Size = new Size(864, 208),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
         };
 
@@ -137,10 +144,22 @@ partial class PersonAliasMembersEditDialog
         btnPickVoice  = new Button { Text = "声優 選択...", Location = new Point(448, 91), Size = new Size(110, 25) };
         btnClearVoice = new Button { Text = "クリア",       Location = new Point(564, 91), Size = new Size(60, 25) };
 
-        lblNotes = new Label { Text = "備考:", Location = new Point(12, 128), AutoSize = true };
-        txtNotes = new TextBox
+        // 「/」で並べるもう一方のキャラ名義（変身前後の併記の後者）。CHARACTER メンバーのときだけ有効。
+        lblSlash = new Label { Text = "/ 相方キャラ:", Location = new Point(12, 128), AutoSize = true };
+        txtSlashDisplay = new TextBox
         {
             Location = new Point(120, 124),
+            Size = new Size(320, 23),
+            ReadOnly = true,
+            BackColor = SystemColors.Window
+        };
+        btnPickSlash  = new Button { Text = "キャラ 選択...", Location = new Point(448, 123), Size = new Size(110, 25) };
+        btnClearSlash = new Button { Text = "クリア",         Location = new Point(564, 123), Size = new Size(60, 25) };
+
+        lblNotes = new Label { Text = "備考:", Location = new Point(12, 160), AutoSize = true };
+        txtNotes = new TextBox
+        {
+            Location = new Point(120, 156),
             Size = new Size(560, 23),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
@@ -157,12 +176,13 @@ partial class PersonAliasMembersEditDialog
             lblKind, cboKind,
             lblMember, txtMemberDisplay, btnPickPerson, btnPickCharacter,
             lblVoice, txtVoiceDisplay, btnPickVoice, btnClearVoice,
+            lblSlash, txtSlashDisplay, btnPickSlash, btnClearSlash,
             lblNotes, txtNotes,
             btnAdd, btnApply, btnDelete, btnUp, btnDown
         });
 
-        btnOk     = new Button { Text = "OK",        Location = new Point(704, 488), Size = new Size(80, 28), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.OK };
-        btnCancel = new Button { Text = "キャンセル", Location = new Point(792, 488), Size = new Size(80, 28), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.Cancel };
+        btnOk     = new Button { Text = "OK",        Location = new Point(704, 520), Size = new Size(80, 28), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.OK };
+        btnCancel = new Button { Text = "キャンセル", Location = new Point(792, 520), Size = new Size(80, 28), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.Cancel };
 
         Controls.Add(lblHeader);
         Controls.Add(gridMembers);

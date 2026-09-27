@@ -82,7 +82,8 @@ public static class BuildContextLookupExtensions
     ///   <item>PERSON 行：主名義・スラッシュ相方をそれぞれ人物参加者として返す。名義がユニット
     ///     （<see cref="BuildContext.UnitMembersByAlias"/> にメンバーを持つ）なら、ユニット名義自身に続けて
     ///     メンバーも返す。PERSON メンバーは人物参加者、CHARACTER メンバーはキャラ参加者
-    ///     （声優名義が紐付いていれば声優も同じ参加者に載せる）。</item>
+    ///     （声優名義が紐付いていれば声優も同じ参加者に載せる。「/」で並べるもう一方の名義があれば、
+    ///     それも同じ声優付きのキャラ参加者として返す）。</item>
     ///   <item>CHARACTER_WITH_CV 行：主キャラ・スラッシュ相方キャラを、いずれも同じ声優付きのキャラ参加者として返す。</item>
     /// </list>
     /// 返却順は「行の並び → ユニットのメンバー順」。同一の (人物, キャラ) 組は 1 回だけ返す。
@@ -116,7 +117,11 @@ public static class BuildContextLookupExtensions
                     if (m.MemberKind == PersonAliasMemberKind.Person)
                         Add(m.MemberPersonAliasId, null);
                     else
+                    {
                         Add(m.MemberVoicePersonAliasId, m.MemberCharacterAliasId);
+                        // 「/」で並べるもう一方の名義（変身後など）も同じ声優のキャラ参加者として載せる。
+                        if (m.MemberSlashCharacterAliasId is int msca) Add(m.MemberVoicePersonAliasId, msca);
+                    }
                 }
             }
         }

@@ -144,7 +144,7 @@ public sealed class ProductsGenerator
         // 人物リンクと歌唱者表記は他ページと同じ StaffNameLinkResolver / SingerHtmlBuilder を使う。
         _creditHtml = new TrackCreditHtmlBuilder(
             personAliasMap, characterAliasMap, _staffLinkResolver,
-            new SingerHtmlBuilder(_staffLinkResolver, _roleSuccessorResolver), roleMap,
+            new SingerHtmlBuilder(_staffLinkResolver, _roleSuccessorResolver, _ctx.UnitMembersByAlias), roleMap,
             _ctx.SongCreditsBySong, _ctx.SingersByRecording, _ctx.BgmCueCreditsByCue);
 
         var discsByProduct = allDiscs

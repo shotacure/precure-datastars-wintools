@@ -103,7 +103,7 @@ public sealed class EpisodeGenerator
         _factory = factory;
         _staffLinkResolver = staffLinkResolver;
         _roleSuccessorResolver = roleSuccessorResolver;
-        _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver);
+        _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver, ctx.UnitMembersByAlias);
 
         _creditKindsRepo = new CreditKindsRepository(factory);
         _songMusicClassesRepo = new SongMusicClassesRepository(factory);
@@ -997,7 +997,7 @@ public sealed class EpisodeGenerator
             {
                 var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
                 vocalistsHtml = _singerHtml.BuildVocalistsHtml(singers, rec.SingerName, personAliasMap, characterAliasMap);
-                vocalistsText = CreditText.Vocalists(singers, rec.SingerName, personAliasMap, characterAliasMap);
+                vocalistsText = CreditText.Vocalists(singers, rec.SingerName, personAliasMap, characterAliasMap, _ctx.UnitMembersByAlias);
                 vocalistsRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Vocals, roleMap, "歌");
                 chorusHtml = _singerHtml.BuildChorusHtml(singers, personAliasMap, characterAliasMap);
                 if (!string.IsNullOrEmpty(chorusHtml))
@@ -1194,7 +1194,7 @@ public sealed class EpisodeGenerator
                     var subParts = new List<string>();
                     string singerText = CreditText.Vocalists(
                         _ctx.SingersByRecording.TryGetValue(rid, out var recSingers) ? recSingers : null,
-                        rec.SingerName, _ctx.PersonAliasById, _ctx.CharacterAliasById);
+                        rec.SingerName, _ctx.PersonAliasById, _ctx.CharacterAliasById, _ctx.UnitMembersByAlias);
                     if (!string.IsNullOrEmpty(singerText)) subParts.Add(singerText);
                     if (!string.IsNullOrEmpty(u.SongSizeVariantCode)
                         && sizeVariantMap.TryGetValue(u.SongSizeVariantCode!, out var sv))

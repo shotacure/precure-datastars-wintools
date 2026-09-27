@@ -108,7 +108,7 @@ public sealed class ThemeSongRowBuilder
         _ctx = ctx;
         _staffLinkResolver = staffLinkResolver;
         _songMusicClassesRepo = songMusicClassesRepo;
-        _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver);
+        _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver, ctx.UnitMembersByAlias);
     }
 
     /// <summary>主題歌記述子のリストから描画用 ThemeSongRow リストを組み立てる。
@@ -194,7 +194,7 @@ public sealed class ThemeSongRowBuilder
             {
                 var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
                 vocalistsHtml = _singerHtml.BuildVocalistsHtml(singers, rec.SingerName, personAliasMap, characterAliasMap);
-                vocalistsText = CreditText.Vocalists(singers, rec.SingerName, personAliasMap, characterAliasMap);
+                vocalistsText = CreditText.Vocalists(singers, rec.SingerName, personAliasMap, characterAliasMap, _ctx.UnitMembersByAlias);
                 vocalistsRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Vocals, roleMap, "歌");
                 // コーラス（BACKING_VOCALS 役）も歌と同じ青系バッジで併出する。該当行が無ければ空のまま。
                 chorusHtml = _singerHtml.BuildChorusHtml(singers, personAliasMap, characterAliasMap);

@@ -382,9 +382,13 @@ public sealed class CharactersGenerator
         var fams = _ctx.FamilyRelationsByCharacter.TryGetValue(character.CharacterId, out var familyList)
             ? familyList
             : (IReadOnlyList<CharacterFamilyRelation>)Array.Empty<CharacterFamilyRelation>();
+        // 並びは相手のキャラがクレジットに初めて載った順（放送日 → その回のクレジット内の位置）。
+        // クレジットに一度も載っていない家族は後ろに回し、続柄の表示順（父・母・兄…）→ 手動の表示順で並べる。
         var familyRows = fams
-            .OrderBy(f => f.DisplayOrder ?? byte.MaxValue)
             .Where(f => charactersById.ContainsKey(f.RelatedCharacterId))
+            .OrderBy(f => FirstCreditKey(f.RelatedCharacterId, aliasesByCharacter))
+            .ThenBy(f => relationKindMap.TryGetValue(f.RelationCode, out var rk) ? rk.DisplayOrder ?? byte.MaxValue : byte.MaxValue)
+            .ThenBy(f => f.DisplayOrder ?? byte.MaxValue)
             .Select(f => new FamilyRelationRow
             {
                 RelationLabel = relationKindMap.TryGetValue(f.RelationCode, out var rk) ? rk.NameJa : f.RelationCode,
@@ -906,6 +910,31 @@ public sealed class CharactersGenerator
             }
         }
         return rows;
+    }
+
+    /// <summary>
+    /// キャラがクレジットに初めて載った位置の並べ替えキー（放送日時 → その回のクレジット内の位置）。
+    /// キャラの全名義の関与から最も早いものを採る。映画など話を持たないクレジットはシリーズの開始日を日時にする。
+    /// クレジットに一度も載っていないキャラは最大値（並べると末尾）。
+    /// </summary>
+    private (DateTime At, int CreditSeq) FirstCreditKey(
+        int characterId, IReadOnlyDictionary<int, List<CharacterAlias>> aliasesByCharacter)
+    {
+        var first = (At: DateTime.MaxValue, CreditSeq: int.MaxValue);
+        if (!aliasesByCharacter.TryGetValue(characterId, out var aliases)) return first;
+        foreach (var alias in aliases)
+        {
+            if (!_index.ByCharacterAlias.TryGetValue(alias.AliasId, out var invs)) continue;
+            foreach (var inv in invs)
+            {
+                DateTime at = inv.EpisodeId is int eid && _ctx.LookupEpisode(inv.SeriesId, eid) is { } ep
+                    ? ep.OnAirAt
+                    : _ctx.SeriesStartDate(inv.SeriesId).ToDateTime(TimeOnly.MinValue);
+                var key = (at, inv.CreditSeq);
+                if (key.CompareTo(first) < 0) first = key;
+            }
+        }
+        return first;
     }
 
     /// <summary>

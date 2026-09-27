@@ -20,6 +20,8 @@ namespace PrecureDataStars.Catalog.Forms;
 /// 検査せず、保存時に DB トリガーが拒否する。
 /// CHARACTER メンバーには、そのキャラを演じる声優の人物名義を任意で紐付けられる
 /// （サイト側でユニット歌唱をキャラ経由で声優の歌唱関与に展開するのに使う）。
+/// あわせて「/」で並べるもう一方のキャラ名義（変身前後の併記の後者）も任意で紐付けられる
+/// （歌唱者表示でユニットのメンバーを展開するとき「夢原のぞみ/キュアドリーム(CV:…)」と出すのに使う）。
 /// </summary>
 public partial class PersonAliasMembersEditDialog : Form
 {
@@ -54,8 +56,10 @@ public partial class PersonAliasMembersEditDialog : Form
                 MemberPersonAliasId = m.MemberPersonAliasId,
                 MemberCharacterAliasId = m.MemberCharacterAliasId,
                 MemberVoicePersonAliasId = m.MemberVoicePersonAliasId,
+                MemberSlashCharacterAliasId = m.MemberSlashCharacterAliasId,
                 MemberDisplay = m.MemberDisplay,
                 VoiceDisplay = m.VoiceDisplay,
+                SlashDisplay = m.SlashDisplay,
                 Notes = m.Notes
             });
         }
@@ -66,6 +70,8 @@ public partial class PersonAliasMembersEditDialog : Form
         btnPickCharacter.Click += async (_, __) => await OnPickCharacterAsync();
         btnPickVoice.Click += async (_, __) => await OnPickVoiceAsync();
         btnClearVoice.Click += (_, __) => SetVoice(null, "");
+        btnPickSlash.Click += async (_, __) => await OnPickSlashAsync();
+        btnClearSlash.Click += (_, __) => SetSlash(null, "");
         btnAdd.Click += (_, __) => OnAddNewLine();
         btnApply.Click += (_, __) => OnApplyLine();
         btnDelete.Click += (_, __) => OnDeleteLine();
@@ -126,6 +132,23 @@ public partial class PersonAliasMembersEditDialog : Form
         txtVoiceDisplay.Tag = voiceAliasId;
     }
 
+    /// <summary>CHARACTER メンバーの「/」で並べるもう一方のキャラ名義を選ぶ。</summary>
+    private async Task OnPickSlashAsync()
+    {
+        using var dlg = new CharacterAliasPickerDialog(_characterAliasesRepo);
+        if (dlg.ShowDialog(this) != DialogResult.OK || dlg.SelectedId is null) return;
+        var alias = await _characterAliasesRepo.GetByIdAsync(dlg.SelectedId.Value);
+        if (alias is null) return;
+        SetSlash(alias.AliasId, alias.Name);
+    }
+
+    /// <summary>相方キャラ欄の表示と保持値（Tag に int? の alias_id）をまとめて設定する。</summary>
+    private void SetSlash(int? slashAliasId, string display)
+    {
+        txtSlashDisplay.Text = display;
+        txtSlashDisplay.Tag = slashAliasId;
+    }
+
     /// <summary>kind を選び直したときに参照ボタンの強調と、声優欄の有効 / 無効を切り替える（メンバー入力欄は同じ TextBox を共有）。</summary>
     private void RefreshKindEnable()
     {
@@ -137,6 +160,10 @@ public partial class PersonAliasMembersEditDialog : Form
         txtVoiceDisplay.Enabled = !isPerson;
         btnPickVoice.Enabled = !isPerson;
         btnClearVoice.Enabled = !isPerson;
+        // 相方キャラも CHARACTER メンバー専用。
+        txtSlashDisplay.Enabled = !isPerson;
+        btnPickSlash.Enabled = !isPerson;
+        btnClearSlash.Enabled = !isPerson;
     }
 
     private void UpdateDetailFromSelection()
@@ -153,6 +180,7 @@ public partial class PersonAliasMembersEditDialog : Form
                 ? ("PERSON",    row.MemberPersonAliasId ?? 0)
                 : ("CHARACTER", row.MemberCharacterAliasId ?? 0);
             SetVoice(row.MemberVoicePersonAliasId, row.VoiceDisplay ?? "");
+            SetSlash(row.MemberSlashCharacterAliasId, row.SlashDisplay ?? "");
             txtNotes.Text = row.Notes ?? "";
         }
         else
@@ -162,6 +190,7 @@ public partial class PersonAliasMembersEditDialog : Form
             txtMemberDisplay.Text = "";
             txtMemberDisplay.Tag = null;
             SetVoice(null, "");
+            SetSlash(null, "");
             txtNotes.Text = "";
         }
         RefreshKindEnable();
@@ -184,8 +213,10 @@ public partial class PersonAliasMembersEditDialog : Form
         row.MemberPersonAliasId = updated.MemberPersonAliasId;
         row.MemberCharacterAliasId = updated.MemberCharacterAliasId;
         row.MemberVoicePersonAliasId = updated.MemberVoicePersonAliasId;
+        row.MemberSlashCharacterAliasId = updated.MemberSlashCharacterAliasId;
         row.MemberDisplay = updated.MemberDisplay;
         row.VoiceDisplay = updated.VoiceDisplay;
+        row.SlashDisplay = updated.SlashDisplay;
         row.Notes = updated.Notes;
         _members.ResetItem(_members.IndexOf(row));
     }
@@ -207,6 +238,8 @@ public partial class PersonAliasMembersEditDialog : Form
             row.MemberCharacterAliasId = null;
             row.MemberVoicePersonAliasId = null;
             row.VoiceDisplay = null;
+            row.MemberSlashCharacterAliasId = null;
+            row.SlashDisplay = null;
         }
         else
         {
@@ -215,6 +248,8 @@ public partial class PersonAliasMembersEditDialog : Form
             row.MemberPersonAliasId = null;
             row.MemberVoicePersonAliasId = txtVoiceDisplay.Tag as int?;
             row.VoiceDisplay = row.MemberVoicePersonAliasId.HasValue ? txtVoiceDisplay.Text : null;
+            row.MemberSlashCharacterAliasId = txtSlashDisplay.Tag as int?;
+            row.SlashDisplay = row.MemberSlashCharacterAliasId.HasValue ? txtSlashDisplay.Text : null;
         }
         row.MemberDisplay = txtMemberDisplay.Text;
         row.Notes = string.IsNullOrWhiteSpace(txtNotes.Text) ? null : txtNotes.Text;
@@ -270,8 +305,10 @@ public partial class PersonAliasMembersEditDialog : Form
             MemberPersonAliasId = m.MemberPersonAliasId,
             MemberCharacterAliasId = m.MemberCharacterAliasId,
             MemberVoicePersonAliasId = m.MemberVoicePersonAliasId,
+            MemberSlashCharacterAliasId = m.MemberSlashCharacterAliasId,
             MemberDisplay = m.MemberDisplay ?? "",
             VoiceDisplay = m.VoiceDisplay,
+            SlashDisplay = m.SlashDisplay,
             Notes = m.Notes
         }).ToList();
     }
@@ -287,6 +324,10 @@ public partial class PersonAliasMembersEditDialog : Form
         public string MemberDisplay { get; set; } = "";
         /// <summary>声優名義の表示名（未設定なら null）。</summary>
         public string? VoiceDisplay { get; set; }
+        /// <summary>CHARACTER メンバーの「/」で並べるもう一方のキャラ名義（PERSON メンバーでは常に null）。</summary>
+        public int? MemberSlashCharacterAliasId { get; set; }
+        /// <summary>相方キャラ名義の表示名（未設定なら null）。</summary>
+        public string? SlashDisplay { get; set; }
         public string? Notes { get; set; }
     }
 
@@ -300,6 +341,8 @@ public partial class PersonAliasMembersEditDialog : Form
         public int? MemberVoicePersonAliasId { get; set; }
         public string? MemberDisplay { get; set; }
         public string? VoiceDisplay { get; set; }
+        public int? MemberSlashCharacterAliasId { get; set; }
+        public string? SlashDisplay { get; set; }
         public string? Notes { get; set; }
 
         public string KindLabel => Kind == PersonAliasMemberKind.Person ? "PERSON" : "CHARACTER";

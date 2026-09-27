@@ -23,6 +23,7 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
           member_person_alias_id     AS MemberPersonAliasId,
           member_character_alias_id  AS MemberCharacterAliasId,
           member_voice_person_alias_id AS MemberVoicePersonAliasId,
+          member_slash_character_alias_id AS MemberSlashCharacterAliasId,
           notes                      AS Notes,
           created_at                 AS CreatedAt,
           updated_at                 AS UpdatedAt,
@@ -84,11 +85,11 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
             INSERT INTO person_alias_members
               (parent_alias_id, member_seq, member_kind,
                member_person_alias_id, member_character_alias_id, member_voice_person_alias_id,
-               notes, created_by, updated_by)
+               member_slash_character_alias_id, notes, created_by, updated_by)
             VALUES
               (@ParentAliasId, @MemberSeq, @MemberKindStr,
                @MemberPersonAliasId, @MemberCharacterAliasId, @MemberVoicePersonAliasId,
-               @Notes, @CreatedBy, @UpdatedBy);
+               @MemberSlashCharacterAliasId, @Notes, @CreatedBy, @UpdatedBy);
             """;
 
         await ExecuteAsync(sql, new
@@ -99,13 +100,14 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
             m.MemberPersonAliasId,
             m.MemberCharacterAliasId,
             m.MemberVoicePersonAliasId,
+            m.MemberSlashCharacterAliasId,
             m.Notes,
             m.CreatedBy,
             m.UpdatedBy
         }, ct).ConfigureAwait(false);
     }
 
-    /// <summary>更新（PK は parent_alias_id + member_seq、メンバー本体・声優・備考のみ書き換え可）。</summary>
+    /// <summary>更新（PK は parent_alias_id + member_seq、メンバー本体・声優・スラッシュ並列の名義・備考のみ書き換え可）。</summary>
     public async Task UpdateAsync(PersonAliasMember m, CancellationToken ct = default)
     {
         const string sql = """
@@ -114,6 +116,7 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
               member_person_alias_id     = @MemberPersonAliasId,
               member_character_alias_id  = @MemberCharacterAliasId,
               member_voice_person_alias_id = @MemberVoicePersonAliasId,
+              member_slash_character_alias_id = @MemberSlashCharacterAliasId,
               notes                      = @Notes,
               updated_by                 = @UpdatedBy
             WHERE parent_alias_id = @ParentAliasId
@@ -128,6 +131,7 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
             m.MemberPersonAliasId,
             m.MemberCharacterAliasId,
             m.MemberVoicePersonAliasId,
+            m.MemberSlashCharacterAliasId,
             m.Notes,
             m.UpdatedBy
         }, ct).ConfigureAwait(false);
@@ -172,11 +176,11 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
                     INSERT INTO person_alias_members
                       (parent_alias_id, member_seq, member_kind,
                        member_person_alias_id, member_character_alias_id, member_voice_person_alias_id,
-                       notes, created_by, updated_by)
+                       member_slash_character_alias_id, notes, created_by, updated_by)
                     VALUES
                       (@ParentAliasId, @MemberSeq, @MemberKindStr,
                        @MemberPersonAliasId, @MemberCharacterAliasId, @MemberVoicePersonAliasId,
-                       @Notes, @CreatedBy, @UpdatedBy);
+                       @MemberSlashCharacterAliasId, @Notes, @CreatedBy, @UpdatedBy);
                     """,
                     new
                     {
@@ -186,6 +190,7 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
                         m.MemberPersonAliasId,
                         m.MemberCharacterAliasId,
                         m.MemberVoicePersonAliasId,
+                        m.MemberSlashCharacterAliasId,
                         m.Notes,
                         CreatedBy = updatedBy,
                         UpdatedBy = updatedBy

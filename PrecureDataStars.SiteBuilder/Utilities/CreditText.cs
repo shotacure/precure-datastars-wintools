@@ -52,13 +52,15 @@ public static class CreditText
 
     /// <summary>
     /// 録音の歌唱者（VOCALS 役）を平文で返す。構造化行が無ければ <paramref name="fallbackText"/>
-    /// （song_recordings.singer_name）を返す。書式は <see cref="SingerHtmlBuilder.BuildVocalistsHtml"/> の表示テキストと同じ。
+    /// （song_recordings.singer_name）を返す。書式は <see cref="SingerHtmlBuilder.BuildVocalistsHtml"/> の表示テキストと同じ
+    /// （展開指定のユニット名義はメンバーを「（メンバー1、メンバー2…）」と括弧書きで続ける）。
     /// </summary>
     public static string Vocalists(
         IReadOnlyList<SongRecordingSinger>? singers,
         string? fallbackText,
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap,
+        IReadOnlyDictionary<int, IReadOnlyList<PersonAliasMember>> unitMembersByAlias)
     {
         var rows = (singers ?? Array.Empty<SongRecordingSinger>())
             .Where(s => string.Equals(s.RoleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal))
@@ -74,6 +76,18 @@ public static class CreditText
             if (s.BillingKind == SingerBillingKind.Person)
             {
                 sb.Append(PersonName(s.PersonAliasId, personAliasMap));
+                if (s.ExpandUnitMembers && s.PersonAliasId is int uid
+                    && unitMembersByAlias.TryGetValue(uid, out var members) && members.Count > 0)
+                {
+                    sb.Append('（').Append(string.Join("、", members.Select(m =>
+                    {
+                        if (m.MemberKind == PersonAliasMemberKind.Person) return PersonName(m.MemberPersonAliasId, personAliasMap);
+                        string c = CharacterName(m.MemberCharacterAliasId, characterAliasMap);
+                        if (m.MemberSlashCharacterAliasId.HasValue) c += "/" + CharacterName(m.MemberSlashCharacterAliasId, characterAliasMap);
+                        if (m.MemberVoicePersonAliasId.HasValue) c += $"(CV:{PersonName(m.MemberVoicePersonAliasId, personAliasMap)})";
+                        return c;
+                    }))).Append('）');
+                }
                 if (s.SlashPersonAliasId.HasValue)
                     sb.Append(" / ").Append(PersonName(s.SlashPersonAliasId, personAliasMap));
             }

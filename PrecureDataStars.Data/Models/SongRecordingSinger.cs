@@ -62,6 +62,14 @@ public sealed class SongRecordingSinger
     /// <summary>所属表記（"with ヤング・フレッシュ" 等の補助テキスト用、任意）。</summary>
     public string? AffiliationText { get; set; }
 
+    /// <summary>
+    /// PERSON 行の名義がユニット名義（person_alias_members にメンバーを持つ）のとき、表示でユニット名の後ろに
+    /// メンバーを括弧書きで展開するか（例: 「ぷりきゅあ5（夢原のぞみ/キュアドリーム(CV:三瓶由布子)、…）」）。
+    /// 同じユニットでも、歌の行では展開し、コーラスの行では名前だけ出す、のように行ごとに選べる。
+    /// ユニット名義でない行・CHARACTER_WITH_CV 行では意味を持たない。
+    /// </summary>
+    public bool ExpandUnitMembers { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

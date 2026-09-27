@@ -5,15 +5,17 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// シリーズ単位行（<see cref="InvolvementSeriesRow"/>）へ呼び出し側が差し込む付加情報。
-/// 人物詳細は「演じたキャラ名」（声優関与のシリーズ内連名）と「所属屋号ラベル」を
-/// スコープ別（シリーズ全体 / エピソード単位）に併記するため、これを解決して返す。
+/// 人物詳細は「演じたキャラ名」（声優関与のシリーズ内連名。表示名とキャラクター詳細へのリンク HTML の 2 形）と
+/// 「所属屋号ラベル」をスコープ別（シリーズ全体 / エピソード単位）に併記するため、これを解決して返す。
 /// 企業詳細のように付加情報を持たない呼び出し側は <see cref="Empty"/>（全フィールド空文字）になる。
 /// </summary>
 internal readonly record struct InvolvementSeriesRowExtras(
     string SeriesScopeCharacterNames,
     string PerEpisodeCharacterNames,
     string SeriesScopeAffiliationsLabel,
-    string PerEpisodeAffiliationsLabel)
+    string PerEpisodeAffiliationsLabel,
+    string SeriesScopeCharacterNamesHtml = "",
+    string PerEpisodeCharacterNamesHtml = "")
 {
     /// <summary>付加情報なしの既定値（全フィールド空文字）。extras フック未指定時に使う。</summary>
     internal static readonly InvolvementSeriesRowExtras Empty = new("", "", "", "");
@@ -104,6 +106,7 @@ internal static class InvolvementRowBuilder
                     RangeLabel = isMovieKindSeries ? "" : "シリーズ全体",
                     IsAllEpisodes = false,
                     CharacterNames = extras.SeriesScopeCharacterNames,
+                    CharacterNamesHtml = extras.SeriesScopeCharacterNamesHtml,
                     AffiliationsLabel = extras.SeriesScopeAffiliationsLabel
                 });
             }
@@ -125,6 +128,7 @@ internal static class InvolvementRowBuilder
                     RangeLabel = rangeLabel,
                     IsAllEpisodes = isAll,
                     CharacterNames = extras.PerEpisodeCharacterNames,
+                    CharacterNamesHtml = extras.PerEpisodeCharacterNamesHtml,
                     AffiliationsLabel = extras.PerEpisodeAffiliationsLabel,
                     Episodes = BuildEpisodeBreakdown(ctx, bySeries.Key, series.Slug, episodeNos, isAll)
                 });

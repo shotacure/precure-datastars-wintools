@@ -22,6 +22,11 @@ public sealed class CharactersGenerator
     /// 正確に解決するための索引。同一曲を複数録音で歌っている場合は出典が最も早い録音を採る。</summary>
     private IReadOnlyDictionary<int, IReadOnlyDictionary<int, SongRecording>>? _charSungRecordingByAlias;
 
+    /// <summary>person_alias_id → person_id（声優名を人物詳細へリンクするための逆引き。共有名義は並び先頭の人物にリンクする）。
+    /// <c>GenerateAsync</c> の冒頭で 1 度だけ詰め、声の出演履歴とゲストキャラクターページで使い回す。
+    /// 人物に紐付かない名義（ユニット名義など）はキーを持たず、リンクなしの文字で出す。</summary>
+    private Dictionary<int, int> _personIdByAlias = new();
+
     private readonly CharactersRepository _charactersRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     private readonly CharacterFamilyRelationsRepository _familyRepo;
@@ -58,6 +63,11 @@ public sealed class CharactersGenerator
     public async Task GenerateAsync(CancellationToken ct = default)
     {
         _ctx.Logger.Section("Generating characters");
+
+        _personIdByAlias = new Dictionary<int, int>();
+        foreach (var (personId, personAliasIds) in _ctx.AliasIdsByPerson)
+            foreach (var aid in personAliasIds)
+                _personIdByAlias.TryAdd(aid, personId);
 
         var allCharacters = (await _charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allAliases = (await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
@@ -477,12 +487,6 @@ public sealed class CharactersGenerator
         IReadOnlyDictionary<string, CharacterKind> kindMap,
         IReadOnlyDictionary<int, PersonAlias> personAliasById)
     {
-        // person_alias_id → person_id（声優リンク用。共有名義は並び先頭の人物にリンクする）。
-        var personIdByAlias = new Dictionary<int, int>();
-        foreach (var (personId, aliasIds) in _ctx.AliasIdsByPerson)
-            foreach (var aid in aliasIds)
-                personIdByAlias.TryAdd(aid, personId);
-
         int pages = 0;
         foreach (var (seriesId, characterIds) in _ctx.EntityUrls.GuestCharacterIdsBySeries)
         {
@@ -507,9 +511,7 @@ public sealed class CharactersGenerator
                     if (inv.PersonAliasId is not int paid || !personAliasById.TryGetValue(paid, out var pa)) continue;
                     string nm = pa.DisplayTextOverride ?? pa.Name;
                     if (string.IsNullOrEmpty(nm) || !seenActor.Add(nm)) continue;
-                    actorLinks.Add(personIdByAlias.TryGetValue(paid, out var pid)
-                        ? $"<a href=\"{PathUtil.PersonUrl(pid)}\">{HtmlUtil.Escape(nm)}</a>"
-                        : HtmlUtil.Escape(nm));
+                    actorLinks.Add(PersonLinkHtml(paid, nm));
                 }
 
                 rows.Add((placement, invs.Count > 0 ? invs[0].CreditSeq : int.MaxValue, new GuestCharacterRow
@@ -819,12 +821,14 @@ public sealed class CharactersGenerator
             var episodeNos = new HashSet<int>();
             bool hasSeriesScope = false;
 
-            // 声優名・キャラ名義名を集約用ハッシュ
+            // 声優名・キャラ名義名を集約用ハッシュ（声優名は表示名と人物詳細へのリンク HTML を並行して持つ）
             var actorNames = new List<string>();
+            var actorLinks = new List<string>();
             var seenActor = new HashSet<string>(StringComparer.Ordinal);
             var aliasNames = new List<string>();
             var seenAlias = new HashSet<string>(StringComparer.Ordinal);
             var seriesScopeActorNames = new List<string>();
+            var seriesScopeActorLinks = new List<string>();
             var seenScopeActor = new HashSet<string>(StringComparer.Ordinal);
             var seriesScopeAliasNames = new List<string>();
             var seenScopeAlias = new HashSet<string>(StringComparer.Ordinal);
@@ -847,8 +851,11 @@ public sealed class CharactersGenerator
                     string nm = pa.DisplayTextOverride ?? pa.Name;
                     if (!string.IsNullOrEmpty(nm))
                     {
-                        if (isSeriesScope) { if (seenScopeActor.Add(nm)) seriesScopeActorNames.Add(nm); }
-                        else               { if (seenActor.Add(nm))      actorNames.Add(nm); }
+                        if (isSeriesScope)
+                        {
+                            if (seenScopeActor.Add(nm)) { seriesScopeActorNames.Add(nm); seriesScopeActorLinks.Add(PersonLinkHtml(paid, nm)); }
+                        }
+                        else if (seenActor.Add(nm)) { actorNames.Add(nm); actorLinks.Add(PersonLinkHtml(paid, nm)); }
                     }
                 }
                 if (inv.CharacterAliasId is int caid && aliasById.TryGetValue(caid, out var ca))
@@ -871,7 +878,8 @@ public sealed class CharactersGenerator
                     RangeLabel = isMovieKindSeries ? "" : "シリーズ全体",
                     IsAllEpisodes = false,
                     AliasNames = string.Join("、", seriesScopeAliasNames),
-                    VoiceActorNames = string.Join("、", seriesScopeActorNames)
+                    VoiceActorNames = string.Join("、", seriesScopeActorNames),
+                    VoiceActorsHtml = string.Join("、", seriesScopeActorLinks)
                 });
             }
 
@@ -892,12 +900,22 @@ public sealed class CharactersGenerator
                     RangeLabel = rangeLabel,
                     IsAllEpisodes = isAll,
                     AliasNames = string.Join("、", aliasNames),
-                    VoiceActorNames = string.Join("、", actorNames)
+                    VoiceActorNames = string.Join("、", actorNames),
+                    VoiceActorsHtml = string.Join("、", actorLinks)
                 });
             }
         }
         return rows;
     }
+
+    /// <summary>
+    /// 声優名を人物詳細へのリンク HTML にする。名義が人物に紐付かない（ユニット名義など）ときは
+    /// エスケープ済みの文字だけを返す（リンクできないものに下線を出さない）。
+    /// </summary>
+    private string PersonLinkHtml(int personAliasId, string displayName)
+        => _personIdByAlias.TryGetValue(personAliasId, out var pid)
+            ? $"<a href=\"{PathUtil.PersonUrl(pid)}\">{HtmlUtil.Escape(displayName)}</a>"
+            : HtmlUtil.Escape(displayName);
 
     // ─── テンプレ用 DTO 群 ───
 
@@ -1095,5 +1113,8 @@ public sealed class CharactersGenerator
         public string AliasNames { get; set; } = "";
         /// <summary>シリーズ内で当該キャラを演じた声優名（連名は「、」連結）。</summary>
         public string VoiceActorNames { get; set; } = "";
+        /// <summary><see cref="VoiceActorNames"/> と同じ並びで、各声優名を人物詳細へのリンクにした HTML 断片（「、」連結）。
+        /// 人物に紐付かない名義はリンクなしの文字。エスケープ済みなのでテンプレ側で html.escape をかけない。</summary>
+        public string VoiceActorsHtml { get; set; } = "";
     }
 }

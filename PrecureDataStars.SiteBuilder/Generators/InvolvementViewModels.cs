@@ -88,6 +88,9 @@ internal sealed class InvolvementSeriesRow
     public bool IsAllEpisodes { get; set; }
     /// <summary>声優関与のとき演じたキャラ名（シリーズ内連名、「、」連結）。それ以外は空。</summary>
     public string CharacterNames { get; set; } = "";
+    /// <summary><see cref="CharacterNames"/> と同じ並びで、各キャラ名をキャラクター詳細へのリンクにした HTML 断片（「、」連結）。
+    /// エスケープ済みなのでテンプレ側で html.escape をかけない。声優関与以外の行は空。</summary>
+    public string CharacterNamesHtml { get; set; } = "";
     /// <summary>当該シリーズで当該人物がクレジットされた所属屋号の表示ラベル。</summary>
     public string AffiliationsLabel { get; set; } = "";
 

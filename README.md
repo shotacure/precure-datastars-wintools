@@ -534,6 +534,7 @@ series_title_short,m_no_detail,session_name,section_name,m_no_class,menu_title,c
 - 行頭 `& `（半角アンパサンド + 半角SP）で直前エントリと A/B 併記（保存時に `parallel_with_entry_id` 解決）
 - 行末 ` // 備考` で当該エントリの `notes` 設定
 - `@cols=N` で当該ブロックの `col_count` を明示指定
+- `@roll` 単独行で当該カードをロール（流れるクレジット、`credit_cards.presentation='ROLL'`）にする。カード内のどこに書いてもよく、逆翻訳ではカード区切り直後に出す。1 つのクレジットの中でカード → ロール → カードと切り替わる映画の ED は、ロール部分を `@roll` のカード 1 枚で表す
 - `@notes=値` で直近スコープ（Card/Tier/Group/Role/Block のうち最後に開いたもの）の `notes` を設定
 - 修飾子は重ねがけ可（例: `🎬 & 山田 太郎 // 旧名義あり`）
 - 250 ms デバウンスでパースしてプレビュー反映、Block 重大度の警告 1 件で「適用」ボタンが Disabled
@@ -629,6 +630,8 @@ Card / Tier / Group
 ```
 
 **ポイント**:
+- 著作権表記・映画のタイトルカードのような「表記のみ」の役職は `role_format_kind = 'NOTICE'` にする。クレジットに表示はするが、並ぶ企業・人物の関与（クレジット履歴・担当数・役職ラベル）には数えず、役職詳細ページ（`/creators/roles/{code}/`）も作らない。役職名もリンクにしない
+- 著作権表記のカードは役職 `COPYRIGHT`（役職名は画面に出さない）で表す。1 ブロックに © 表記の TEXT エントリと権利者の COMPANY エントリを並べ、既定テンプレ `{#BLOCKS}{TEXTS}{?COMPANIES}\n{COMPANIES:sep="/",wrap=""}{/?COMPANIES}{/BLOCKS}` で「© 表記」「会社/会社/…」の 2 行に出す
 - 映画のタイトルカード（作品タイトルと映倫審査番号だけのカード）は、カードの位置を示す役職 `TITLE`（エントリを持たず、役職名は画面に出さない）で表す。中身はシリーズマスタから引き、既定テンプレ `<strong>『{SERIES_TITLE}』</strong>{?FILM_RATING_NO}
 (映倫 {FILM_RATING_NO}){/?FILM_RATING_NO}` で `series.title`（太字・二重鉤括弧）と `series.film_rating_no`（「(映倫 番号)」）を出す（`{SERIES_TITLE}` / `{FILM_RATING_NO}` は SERIES スコープのクレジットでだけ値を持ち、EPISODE スコープでは空）
 - `{ROLE_LINK:code=MANGA}` は役職コードから役職詳細ページへのリンク化済み HTML を太字付きで埋め込むプレースホルダ。SiteBuilder 側は `<strong><a href="/creators/roles/manga/">漫画</a></strong>`、Catalog 側プレビューは `<strong>漫画</strong>`（リンクなし）を出力。`<strong>` ラップはレンダラ側で一律付与

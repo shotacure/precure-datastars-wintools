@@ -89,6 +89,13 @@ public sealed class CreditInvolvementIndex
             .Select(r => r.RoleCode)
             .ToHashSet(StringComparer.Ordinal);
 
+        // role_format_kind='NOTICE'（著作権表記・映画のタイトルカード等の「表記のみ」の役職）の role_code 集合。
+        // クレジット上に表示はするが、そこに並ぶ企業・人物はスタッフとしての関与ではないため、関与に数えない。
+        var noticeRoleCodes = ctx.RoleByCode.Values
+            .Where(r => string.Equals(r.RoleFormatKind, "NOTICE", StringComparison.Ordinal))
+            .Select(r => r.RoleCode)
+            .ToHashSet(StringComparer.Ordinal);
+
         // 主題歌ブロックのクレジット内出現位置の記録。
         var themeBlockSeqByContext = new Dictionary<(int EpKey, string CreditKind), int>();
         // エピソードごとの「最初の主題歌ブロック位置」フォールバック（INSERT 等、
@@ -178,6 +185,7 @@ public sealed class CreditInvolvementIndex
                         foreach (var crSnap in grpSnap.Roles.OrderBy(r => r.Role.OrderInGroup))
                         {
                             string roleCode = crSnap.Role.RoleCode ?? "";
+                            if (noticeRoleCodes.Contains(roleCode)) continue;
                             var blocks = crSnap.Blocks.OrderBy(b => b.Block.BlockSeq).ToList();
 
                             // この役職が主題歌（THEME_SONG 形式）なら、いま到達している

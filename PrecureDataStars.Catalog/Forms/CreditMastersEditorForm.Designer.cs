@@ -616,7 +616,7 @@ partial class CreditMastersEditorForm
         cboRoleFormatKind = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
         cboRoleFormatKind.Items.AddRange(new object[]
         {
-            "NORMAL", "SERIAL", "THEME_SONG", "VOICE_CAST", "COMPANY_ONLY", "LOGO_ONLY"
+            "NORMAL", "SERIAL", "THEME_SONG", "VOICE_CAST", "COMPANY_ONLY", "LOGO_ONLY", "NOTICE"
         });
         // 書式テンプレは role_templates テーブルへ移管。
         // 役職の書式テンプレは専用の「役職テンプレート」タブで編集する（役職タブには入力欄を置かない）。

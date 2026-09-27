@@ -772,6 +772,9 @@ public sealed class CreditBulkApplyService
         // ParsedCard.Notes が null の場合は明示クリア指示なので null をそのまま代入する。
         ApplyNotesIfChanged(targetCard, pc.Notes, n => targetCard.Entity.Notes = n,
             () => targetCard.Entity.Notes);
+        // カードの見せ方（カード / ロール）も同じ要領で、変わったときだけ転写する。
+        ApplyNotesIfChanged(targetCard, pc.Presentation, p => targetCard.Entity.Presentation = p ?? "CARDS",
+            () => targetCard.Entity.Presentation);
 
         // 既存の Tier をそのまま使うか、新規追加するか。
         // Card 作成直後の seed Tier (TierNo=1) は 1 つ既にあるので、最初の ParsedTier はそれを使う。
@@ -2589,7 +2592,7 @@ public sealed class CreditBulkApplyService
     private static string SerializeCardForCompare(ParsedCard c)
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append("C|notes=").Append(c.Notes ?? string.Empty).Append('\n');
+        sb.Append("C|notes=").Append(c.Notes ?? string.Empty).Append("|presentation=").Append(c.Presentation).Append('\n');
         foreach (var t in c.Tiers) sb.Append(SerializeTierForCompare(t));
         return sb.ToString();
     }

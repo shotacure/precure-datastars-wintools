@@ -336,7 +336,10 @@ internal sealed class CreditPreviewRenderer
 
         foreach (var card in cards)
         {
-            html.Append("<div class=\"card\">");
+            // ロール（流れるクレジット）のカードは card-roll を足す（サイト側と同じ）。
+            html.Append(string.Equals(card.Presentation, "ROLL", StringComparison.Ordinal)
+                ? "<div class=\"card card-roll\">"
+                : "<div class=\"card\">");
             var tiers = (await _tiersRepo.GetByCardAsync(card.CardId, ct))
                 .OrderBy(t => t.TierNo).ToList();
 
@@ -691,7 +694,9 @@ internal sealed class CreditPreviewRenderer
 
         foreach (var dCard in draftCards)
         {
-            html.Append("<div class=\"card\">");
+            html.Append(string.Equals(dCard.Entity.Presentation, "ROLL", StringComparison.Ordinal)
+                ? "<div class=\"card card-roll\">"
+                : "<div class=\"card\">");
 
             // カード単位で CASTING_COOPERATION エントリを事前収集（Draft 側、DB 側と同等）。
             var draftCooperationContext = CollectDraftCardCastingCooperationContext(dCard, roleMap);

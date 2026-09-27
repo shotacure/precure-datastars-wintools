@@ -10,7 +10,9 @@ namespace PrecureDataStars.Data.Models;
 /// "THEME_SONG"   ... 主題歌。entry が song_recording を持つ / 
 /// "VOICE_CAST"   ... 声の出演。entry がキャラクター名義 + 人物名義のペアを持つ / 
 /// "COMPANY_ONLY" ... 企業のみが並ぶ役職（制作著作・製作協力・レーベル等） / 
-/// "LOGO_ONLY"    ... ロゴのみが並ぶ役職。
+/// "LOGO_ONLY"    ... ロゴのみが並ぶ役職 /
+/// "NOTICE"       ... 表記のみの役職（著作権表記・映画のタイトルカード等）。クレジット上に表示はするが、
+///                    人物・企業の関与（クレジット履歴・担当数）には数えず、役職詳細ページも作らない。
 /// 役職の書式テンプレートは <see cref="RoleTemplate"/>（<c>role_templates</c> テーブル）で
 /// 管理し、本テーブルには持たない。
 /// 役職の系譜（変更元 → 変更先）は分裂・併合を含む多対多関係で表現する必要があるため、
@@ -27,7 +29,7 @@ public sealed class Role
     /// <summary>英語表示名（任意）。</summary>
     public string? NameEn { get; set; }
 
-    /// <summary>役職書式区分（"NORMAL"/"SERIAL"/"THEME_SONG"/"VOICE_CAST"/"COMPANY_ONLY"/"LOGO_ONLY"）。既定 "NORMAL"。</summary>
+    /// <summary>役職書式区分（"NORMAL"/"SERIAL"/"THEME_SONG"/"VOICE_CAST"/"COMPANY_ONLY"/"LOGO_ONLY"/"NOTICE"）。既定 "NORMAL"。</summary>
     public string RoleFormatKind { get; set; } = "NORMAL";
 
     /// <summary>表示順（小さい値ほど先頭。UNIQUE）。</summary>

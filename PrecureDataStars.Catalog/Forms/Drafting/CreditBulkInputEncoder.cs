@@ -140,6 +140,10 @@ internal static class CreditBulkInputEncoder
         DraftCard card, LookupCache cache, StringBuilder sb,
         bool isFirstCardInOutput, CancellationToken ct)
     {
+        // ロールのカードは @roll 単独行を先頭に出す（カードのときは出さない）。
+        if (string.Equals(card.Entity.Presentation, "ROLL", StringComparison.Ordinal))
+            sb.Append("@roll").Append(LineSeparator);
+
         // カード備考（@notes=...）。空文字 / null の場合は出力省略（パーサも空値を null として扱う）。
         EmitNotesDirective(card.Entity.Notes, sb);
 

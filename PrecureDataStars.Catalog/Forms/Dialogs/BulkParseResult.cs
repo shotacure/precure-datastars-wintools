@@ -54,6 +54,9 @@ public sealed class ParsedCard
 
     /// <summary>カードの備考（Notes に保存される。</summary>
     public string? Notes { get; set; }
+
+    /// <summary>カードの見せ方（"CARDS" / "ROLL"）。カード内の <c>@roll</c> 単独行で "ROLL" になる。既定 "CARDS"。</summary>
+    public string Presentation { get; set; } = "CARDS";
 }
 
 /// <summary>パース結果における 1 Tier 分の塊。 テキスト中の <c>--</c> 単独行で区切られる。tier_no は 1 と 2 のみが有効。</summary>

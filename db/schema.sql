@@ -1992,6 +1992,8 @@ CREATE TABLE `series_precures` (
 --   VOICE_CAST   … 声の出演。entry がキャラクター名義 + 人物名義のペアを持つ
 --   COMPANY_ONLY … 企業のみが並ぶ役職（制作著作・製作協力・レーベル等）
 --   LOGO_ONLY    … ロゴのみが並ぶ役職
+--   NOTICE       … 表記のみの役職（著作権表記・映画のタイトルカード等）。クレジットに表示はするが、
+--                  人物・企業の関与には数えず、役職詳細ページも作らない
 -- 書式テンプレートは role_templates テーブルで持つ。
 --
 DROP TABLE IF EXISTS `roles`;
@@ -2001,7 +2003,7 @@ CREATE TABLE `roles` (
   `role_code`               varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `name_ja`                 varchar(64)  NOT NULL,
   `name_en`                 varchar(64)  DEFAULT NULL,
-  `role_format_kind`        enum('NORMAL','SERIAL','THEME_SONG','VOICE_CAST','COMPANY_ONLY','LOGO_ONLY') NOT NULL DEFAULT 'NORMAL',
+  `role_format_kind`        enum('NORMAL','SERIAL','THEME_SONG','VOICE_CAST','COMPANY_ONLY','LOGO_ONLY','NOTICE') NOT NULL DEFAULT 'NORMAL',
   `display_order`           smallint unsigned DEFAULT NULL,
   -- HTML クレジット階層描画で左カラム（役職名）を表示するかの制御フラグ。
   -- 0=表示（既定）、1=非表示。
@@ -2158,6 +2160,10 @@ CREATE TABLE `credit_cards` (
   `card_id`    int             NOT NULL AUTO_INCREMENT,
   `credit_id`  int             NOT NULL,
   `card_seq`   tinyint unsigned NOT NULL,
+  -- カードの見せ方（CARDS=1 画面ずつ切り替わるカード / ROLL=流れるロール）。映画の ED のように
+  -- 1 つのクレジットの中でカード → ロール → カードと切り替わるため、カード単位で持つ。
+  -- ロール部分は ROLL のカード 1 枚で表す。credits.presentation はクレジット全体の主な見せ方。
+  `presentation` enum('CARDS','ROLL') NOT NULL DEFAULT 'CARDS' COMMENT 'カードの見せ方（CARDS=カード / ROLL=ロール）',
   `notes`      text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

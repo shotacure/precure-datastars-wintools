@@ -69,7 +69,7 @@ public sealed class SongsGenerator
         _characterAliasesRepo = new CharacterAliasesRepository(factory);
         _staffLinkResolver = staffLinkResolver;
         _roleSuccessorResolver = roleSuccessorResolver;
-        _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver);
+        _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver, ctx.UnitMembersByAlias);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -707,7 +707,7 @@ public sealed class SongsGenerator
         {
             SongRecordingId = r.SongRecordingId,
             // 平文の歌唱者（meta description / OGP カード用）。構造化行を優先し、無ければ singer_name。
-            SingerName = CreditText.Vocalists(recordingSingers, r.SingerName, personAliasMap, characterAliasMap),
+            SingerName = CreditText.Vocalists(recordingSingers, r.SingerName, personAliasMap, characterAliasMap, _ctx.UnitMembersByAlias),
             VariantLabel = r.VariantLabel ?? "",
             DisplayTitle = recDisplayTitle,
             MusicClassLabel = recMusicClassLabel,

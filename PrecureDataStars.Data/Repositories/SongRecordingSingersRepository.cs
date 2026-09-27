@@ -35,6 +35,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
           slash_character_alias_id   AS SlashCharacterAliasId,
           preceding_separator        AS PrecedingSeparator,
           affiliation_text           AS AffiliationText,
+          expand_unit_members        AS ExpandUnitMembers,
           notes                      AS Notes,
           created_at                 AS CreatedAt,
           updated_at                 AS UpdatedAt,
@@ -56,6 +57,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         public int? SlashCharacterAliasId { get; set; }
         public string? PrecedingSeparator { get; set; }
         public string? AffiliationText { get; set; }
+        public bool ExpandUnitMembers { get; set; }
         public string? Notes { get; set; }
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
@@ -75,6 +77,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
             SlashCharacterAliasId = SlashCharacterAliasId,
             PrecedingSeparator = PrecedingSeparator,
             AffiliationText = AffiliationText,
+            ExpandUnitMembers = ExpandUnitMembers,
             Notes = Notes,
             CreatedAt = CreatedAt,
             UpdatedAt = UpdatedAt,
@@ -349,13 +352,13 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
               (song_recording_id, role_code, singer_seq, billing_kind,
                person_alias_id, character_alias_id, voice_person_alias_id,
                slash_person_alias_id, slash_character_alias_id,
-               preceding_separator, affiliation_text, notes,
+               preceding_separator, affiliation_text, expand_unit_members, notes,
                created_by, updated_by)
             VALUES
               (@SongRecordingId, @RoleCode, @SingerSeq, @KindStr,
                @PersonAliasId, @CharacterAliasId, @VoicePersonAliasId,
                @SlashPersonAliasId, @SlashCharacterAliasId,
-               @PrecedingSeparator, @AffiliationText, @Notes,
+               @PrecedingSeparator, @AffiliationText, @ExpandUnitMembers, @Notes,
                @CreatedBy, @UpdatedBy);
             """;
 
@@ -372,6 +375,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
             s.SlashCharacterAliasId,
             s.PrecedingSeparator,
             s.AffiliationText,
+            s.ExpandUnitMembers,
             s.Notes,
             s.CreatedBy,
             s.UpdatedBy
@@ -391,6 +395,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
               slash_character_alias_id = @SlashCharacterAliasId,
               preceding_separator      = @PrecedingSeparator,
               affiliation_text         = @AffiliationText,
+              expand_unit_members      = @ExpandUnitMembers,
               notes                    = @Notes,
               updated_by               = @UpdatedBy
             WHERE song_recording_id = @SongRecordingId
@@ -411,6 +416,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
             s.SlashCharacterAliasId,
             s.PrecedingSeparator,
             s.AffiliationText,
+            s.ExpandUnitMembers,
             s.Notes,
             s.UpdatedBy
         }, ct).ConfigureAwait(false);
@@ -447,13 +453,13 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                       (song_recording_id, role_code, singer_seq, billing_kind,
                        person_alias_id, character_alias_id, voice_person_alias_id,
                        slash_person_alias_id, slash_character_alias_id,
-                       preceding_separator, affiliation_text, notes,
+                       preceding_separator, affiliation_text, expand_unit_members, notes,
                        created_by, updated_by)
                     VALUES
                       (@SongRecordingId, @RoleCode, @SingerSeq, @KindStr,
                        @PersonAliasId, @CharacterAliasId, @VoicePersonAliasId,
                        @SlashPersonAliasId, @SlashCharacterAliasId,
-                       @PrecedingSeparator, @AffiliationText, @Notes,
+                       @PrecedingSeparator, @AffiliationText, @ExpandUnitMembers, @Notes,
                        @CreatedBy, @UpdatedBy);
                     """,
                     new
@@ -470,6 +476,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                         // seq=1 では区切りなし
                         PrecedingSeparator = seq == 1 ? null : s.PrecedingSeparator,
                         s.AffiliationText,
+                        s.ExpandUnitMembers,
                         s.Notes,
                         CreatedBy = updatedBy,
                         UpdatedBy = updatedBy

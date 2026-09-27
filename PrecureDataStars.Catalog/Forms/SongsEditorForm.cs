@@ -647,6 +647,7 @@ public partial class SongsEditorForm : Form
                     SlashCharacterDisplay = s.SlashCharacterAliasId.HasValue ? (await _characterAliasesRepo.GetByIdAsync(s.SlashCharacterAliasId.Value))?.Name : null,
                     PrecedingSeparator = s.PrecedingSeparator,
                     AffiliationText = s.AffiliationText,
+                    ExpandUnitMembers = s.ExpandUnitMembers,
                     Notes = s.Notes
                 });
             }
@@ -670,6 +671,7 @@ public partial class SongsEditorForm : Form
                 SlashCharacterAliasId = l.SlashCharacterAliasId,
                 PrecedingSeparator = i == 0 ? null : l.PrecedingSeparator,
                 AffiliationText = l.AffiliationText,
+                ExpandUnitMembers = l.BillingKind == SingerBillingKind.Person && l.ExpandUnitMembers,
                 Notes = l.Notes
             }).ToList();
 

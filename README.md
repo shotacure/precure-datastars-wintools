@@ -1426,9 +1426,10 @@ series_relation_kinds ──┘    │            │
 | `member_person_alias_id` | INT FK NULL | PERSON メンバーの人物名義（→ `person_aliases`） |
 | `member_character_alias_id` | INT FK NULL | CHARACTER メンバーのキャラ名義（→ `character_aliases`） |
 | `member_voice_person_alias_id` | INT FK NULL | CHARACTER メンバーを演じる声優の名義（→ `person_aliases`、任意）。PERSON メンバーでは NULL（CHECK） |
+| `member_slash_character_alias_id` | INT FK NULL | CHARACTER メンバーの「/」で並べるもう一方のキャラ名義（→ `character_aliases`、任意）。変身前と変身後を並べる「夢原のぞみ/キュアドリーム(CV:三瓶由布子)」の後者で、声優は `member_voice_person_alias_id` を共有する。PERSON メンバーでは NULL（CHECK） |
 | `notes` | TEXT NULL | 備考 |
 
-歌唱者（`song_recording_singers`）の PERSON 行にユニット名義を置くと、サイトの表記はユニット名のまま（例：「うちやえゆか with Splash Stars」）で、メンバーの中身は出さない。一方で歌唱関与の集計ではユニットをメンバーへ展開する（`BuildContextLookupExtensions.ExpandSingerParticipants`）。PERSON メンバーは人物として、CHARACTER メンバーはキャラクターとして（声優が紐付いていれば声優にも）その録音を歌ったものとして扱い、人物詳細・キャラクター詳細の「楽曲」、`/creators/roles/vocals/` の担当曲数、主題歌経由のエピソード関与（`CreditInvolvementIndex`）のいずれにも載る。
+歌唱者（`song_recording_singers`）の PERSON 行にユニット名義を置くと、サイトの表記は既定ではユニット名のまま（例：「うちやえゆか with Splash Stars」）で、メンバーの中身は出さない。その行の `expand_unit_members` を 1 にすると、ユニット名の後ろにメンバーを「（メンバー1、メンバー2…）」と括弧書きで展開する（キャラメンバーは「キャラ/相方キャラ(CV:声優)」、人物メンバーは人物名。各名前はそれぞれの詳細ページへリンク）。例：歌「ぷりきゅあ5（夢原のぞみ/キュアドリーム(CV:三瓶 由布子)、…）」。同じユニットでも、歌の行では展開し、コーラスの行では名前だけ出す、のように行ごとに選べる（Catalog の歌唱者編集の「ユニットのメンバーを展開して表示」）。楽曲詳細・商品詳細・主題歌欄の表示と、meta description・JSON-LD などの平文も同じ形になる。一方で歌唱関与の集計ではユニットをメンバーへ展開する（`BuildContextLookupExtensions.ExpandSingerParticipants`）。PERSON メンバーは人物として、CHARACTER メンバーはキャラクターとして（声優が紐付いていれば声優にも。「/」で並べるもう一方のキャラ名義があればそれも）その録音を歌ったものとして扱い、人物詳細・キャラクター詳細の「楽曲」、`/creators/roles/vocals/` の担当曲数、主題歌経由のエピソード関与（`CreditInvolvementIndex`）のいずれにも載る。
 
 #### `bgm_sessions` — 劇伴の録音セッションマスタ
 

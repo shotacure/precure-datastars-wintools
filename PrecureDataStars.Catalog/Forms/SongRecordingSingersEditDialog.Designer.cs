@@ -45,6 +45,7 @@ partial class SongRecordingSingersEditDialog
     private Label lblSepHint = null!;
     private Label lblAffiliation = null!;
     private TextBox txtAffiliation = null!;
+    private CheckBox chkExpandUnit = null!;
     private Label lblAffHint = null!;
     private Label lblNotes = null!;
     private TextBox txtNotes = null!;
@@ -166,6 +167,14 @@ partial class SongRecordingSingersEditDialog
             ForeColor = Color.DimGray
         };
 
+        // PERSON 主名義がユニット名義のとき、サイトでユニット名の後ろにメンバーを括弧書きで展開して出すか。
+        chkExpandUnit = new CheckBox
+        {
+            Text = "ユニットのメンバーを展開して表示",
+            Location = new Point(608, 246),
+            AutoSize = true
+        };
+
         lblAffiliation = new Label { Text = "所属表記:", Location = new Point(12, 280), AutoSize = true };
         txtAffiliation = new TextBox { Location = new Point(160, 276), Size = new Size(440, 23), MaxLength = 64 };
         lblAffHint = new Label
@@ -199,7 +208,7 @@ partial class SongRecordingSingersEditDialog
             lblCharacter, txtCharacterDisplay, btnPickCharacter,
             lblVoice, txtVoiceDisplay, btnPickVoice,
             lblSlashCharacter, txtSlashCharacterDisplay, btnPickSlashCharacter, btnClearSlashCharacter,
-            lblSeparator, txtSeparator, lblSepHint,
+            lblSeparator, txtSeparator, lblSepHint, chkExpandUnit,
             lblAffiliation, txtAffiliation, lblAffHint,
             lblNotes, txtNotes,
             btnAdd, btnApply, btnDelete, btnUp, btnDown

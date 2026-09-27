@@ -36,6 +36,13 @@ public sealed class PersonAliasMember
     /// </summary>
     public int? MemberVoicePersonAliasId { get; set; }
 
+    /// <summary>
+    /// CHARACTER メンバーの「/」で並べるもう一方の名義（→ character_aliases.alias_id、任意）。
+    /// 変身前と変身後を並べる「夢原のぞみ/キュアドリーム(CV:三瓶由布子)」の後者。声優は
+    /// <see cref="MemberVoicePersonAliasId"/> を共有する。<see cref="MemberKind"/> が PERSON のときは常に NULL。
+    /// </summary>
+    public int? MemberSlashCharacterAliasId { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

@@ -15,11 +15,17 @@ public sealed class SingerHtmlBuilder
     private readonly StaffNameLinkResolver _staffLinkResolver;
     // 役職コード → 統計ページ用の代表 role_code 解決（/creators/roles/{rep}/）。
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
+    // ユニット名義 alias_id → 構成メンバー（member_seq 順）。展開指定の歌唱者行でメンバーを括弧書きに出すのに使う。
+    private readonly IReadOnlyDictionary<int, IReadOnlyList<PersonAliasMember>> _unitMembersByAlias;
 
-    public SingerHtmlBuilder(StaffNameLinkResolver staffLinkResolver, RoleSuccessorResolver roleSuccessorResolver)
+    public SingerHtmlBuilder(
+        StaffNameLinkResolver staffLinkResolver,
+        RoleSuccessorResolver roleSuccessorResolver,
+        IReadOnlyDictionary<int, IReadOnlyList<PersonAliasMember>> unitMembersByAlias)
     {
         _staffLinkResolver = staffLinkResolver;
         _roleSuccessorResolver = roleSuccessorResolver;
+        _unitMembersByAlias = unitMembersByAlias;
     }
 
     /// <summary>
@@ -31,6 +37,9 @@ public sealed class SingerHtmlBuilder
     ///     CV 名義 /people/{名前}/ で構成する「キャラ名(CV:声優)」形式で出す。</item>
     ///   <item>スラッシュ並列（<see cref="SongRecordingSinger.SlashCharacterAliasId"/> 等）は
     ///     主名義側と同じ書式で「/」連結して出す。</item>
+    ///   <item>PERSON 行の名義がユニット名義で <see cref="SongRecordingSinger.ExpandUnitMembers"/> が立っていれば、
+    ///     ユニット名の後ろにメンバーを「（メンバー1、メンバー2…）」と括弧書きで展開する。キャラメンバーは
+    ///     「キャラ/相方キャラ(CV:声優)」、人物メンバーは人物リンクで出す。</item>
     ///   <item><see cref="SongRecordingSinger.AffiliationText"/> が非空なら末尾に半角スペース＋テキスト平文で添える。</item>
     ///   <item>行が 1 件も無ければフォールバックとして <paramref name="fallbackSingerName"/>
     ///     （<see cref="SongRecording.SingerName"/> のフリーテキスト）の HTML エスケープ平文を返す。</item>
@@ -114,6 +123,7 @@ public sealed class SingerHtmlBuilder
         {
             // PERSON：主名義 + （あれば）スラッシュ並列の相方。両方とも person_alias。
             string main = ResolvePersonAliasLink(s.PersonAliasId, personAliasMap);
+            if (s.ExpandUnitMembers) main += RenderUnitMembers(s.PersonAliasId, personAliasMap, characterAliasMap);
             if (s.SlashPersonAliasId.HasValue)
             {
                 string slash = ResolvePersonAliasLink(s.SlashPersonAliasId, personAliasMap);
@@ -134,6 +144,35 @@ public sealed class SingerHtmlBuilder
             string cv = ResolvePersonAliasLink(s.VoicePersonAliasId, personAliasMap);
             return $"{charPart}(CV:{cv})";
         }
+    }
+
+    /// <summary>
+    /// ユニット名義のメンバーを「（メンバー1、メンバー2…）」の HTML にする。メンバーを持たない名義なら空文字。
+    /// キャラメンバーは「キャラ/相方キャラ(CV:声優)」（声優未登録なら CV 部分を省く）、人物メンバーは人物リンク。
+    /// </summary>
+    private string RenderUnitMembers(
+        int? unitAliasId,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+    {
+        if (unitAliasId is not int uid || !_unitMembersByAlias.TryGetValue(uid, out var members) || members.Count == 0)
+            return "";
+        var parts = new List<string>(members.Count);
+        foreach (var m in members)
+        {
+            if (m.MemberKind == PersonAliasMemberKind.Person)
+            {
+                parts.Add(ResolvePersonAliasLink(m.MemberPersonAliasId, personAliasMap));
+                continue;
+            }
+            string charPart = ResolveCharacterAliasLink(m.MemberCharacterAliasId, characterAliasMap);
+            if (m.MemberSlashCharacterAliasId.HasValue)
+                charPart += "/" + ResolveCharacterAliasLink(m.MemberSlashCharacterAliasId, characterAliasMap);
+            if (m.MemberVoicePersonAliasId.HasValue)
+                charPart += $"(CV:{ResolvePersonAliasLink(m.MemberVoicePersonAliasId, personAliasMap)})";
+            parts.Add(charPart);
+        }
+        return "（" + string.Join("、", parts) + "）";
     }
 
     private string ResolvePersonAliasLink(int? aliasId, IReadOnlyDictionary<int, PersonAlias> personAliasMap)

@@ -50,6 +50,7 @@ public partial class SongRecordingSingersEditDialog : Form
                 SlashCharacterDisplay = l.SlashCharacterDisplay,
                 Separator = l.PrecedingSeparator,
                 AffiliationText = l.AffiliationText,
+                ExpandUnitMembers = l.ExpandUnitMembers,
                 Notes = l.Notes
             });
         }
@@ -109,6 +110,8 @@ public partial class SongRecordingSingersEditDialog : Form
         txtCharacterDisplay.Enabled = btnPickCharacter.Enabled = !isPerson;
         txtVoiceDisplay.Enabled = btnPickVoice.Enabled = !isPerson;
         txtSlashCharacterDisplay.Enabled = btnPickSlashCharacter.Enabled = btnClearSlashCharacter.Enabled = !isPerson;
+        // メンバー展開はユニット名義（PERSON 主名義）の行だけで意味を持つ。
+        chkExpandUnit.Enabled = isPerson;
     }
 
     /// <summary>選択行の値を詳細パネルに流し込む。</summary>
@@ -135,6 +138,7 @@ public partial class SongRecordingSingersEditDialog : Form
             txtSeparator.Text = row.Separator ?? "";
             txtSeparator.Enabled = row.Seq >= 2;
             txtAffiliation.Text = row.AffiliationText ?? "";
+            chkExpandUnit.Checked = row.ExpandUnitMembers;
             txtNotes.Text = row.Notes ?? "";
         }
         else
@@ -149,6 +153,7 @@ public partial class SongRecordingSingersEditDialog : Form
             txtSeparator.Text = "";
             txtSeparator.Enabled = true;
             txtAffiliation.Text = "";
+            chkExpandUnit.Checked = false;
             txtNotes.Text = "";
         }
         RefreshKindEnable();
@@ -181,6 +186,7 @@ public partial class SongRecordingSingersEditDialog : Form
         row.SlashCharacterAliasId = updated.SlashCharacterAliasId; row.SlashCharacterDisplay = updated.SlashCharacterDisplay;
         row.Separator = row.Seq >= 2 ? updated.Separator : null;
         row.AffiliationText = updated.AffiliationText;
+        row.ExpandUnitMembers = updated.ExpandUnitMembers;
         row.Notes = updated.Notes;
         row.RecomputeFullDisplay();
 
@@ -205,6 +211,7 @@ public partial class SongRecordingSingersEditDialog : Form
             line.PersonDisplay = txtPersonDisplay.Text;
             line.SlashPersonAliasId = txtSlashPersonDisplay.Tag as int?;
             line.SlashPersonDisplay = string.IsNullOrEmpty(txtSlashPersonDisplay.Text) ? null : txtSlashPersonDisplay.Text;
+            line.ExpandUnitMembers = chkExpandUnit.Checked;
         }
         else
         {
@@ -279,6 +286,7 @@ public partial class SongRecordingSingersEditDialog : Form
             SlashCharacterDisplay = l.SlashCharacterDisplay,
             PrecedingSeparator = l.Separator,
             AffiliationText = l.AffiliationText,
+            ExpandUnitMembers = l.ExpandUnitMembers,
             Notes = l.Notes
         }).ToList();
     }
@@ -302,6 +310,8 @@ public partial class SongRecordingSingersEditDialog : Form
         public string? SlashCharacterDisplay { get; set; }
         public string? PrecedingSeparator { get; set; }
         public string? AffiliationText { get; set; }
+        /// <summary>PERSON 主名義がユニット名義のとき、表示でメンバーを展開するか。</summary>
+        public bool ExpandUnitMembers { get; set; }
         public string? Notes { get; set; }
     }
 
@@ -322,6 +332,7 @@ public partial class SongRecordingSingersEditDialog : Form
         public string? SlashCharacterDisplay { get; set; }
         public string? Separator { get; set; }
         public string? AffiliationText { get; set; }
+        public bool ExpandUnitMembers { get; set; }
         public string? Notes { get; set; }
 
         /// <summary>グリッド表示用の Kind 文字列。</summary>
@@ -337,6 +348,7 @@ public partial class SongRecordingSingersEditDialog : Form
             if (Kind == SingerBillingKind.Person)
             {
                 sb.Append(PersonDisplay ?? "");
+                if (ExpandUnitMembers) sb.Append("（メンバー展開）");
                 if (!string.IsNullOrEmpty(SlashPersonDisplay)) sb.Append(" / ").Append(SlashPersonDisplay);
             }
             else

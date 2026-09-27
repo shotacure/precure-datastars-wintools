@@ -149,17 +149,11 @@ internal static class InvolvementRowBuilder
     }
 
     /// <summary>
-    /// 担当エピソードの内訳を展開する上限。これ以下の行だけサブタイトルと放送日を並べる。
-    /// 数話しか担当していない人物・企業のページは「#6」という数字しか出ず、
-    /// 何の話なのか分からないうえ当該エピソードへのリンクも張られない状態だった。
-    /// 一方で数百話を担当する常連スタッフの行まで展開すると、リストが本文を埋め尽くして
-    /// ページの主旨がぼやける。少数担当の行に限って展開する線引きにしている。
-    /// </summary>
-    internal const int EpisodeBreakdownMaxCount = 20;
-
-    /// <summary>
-    /// 担当話数が少ない行について、各話のサブタイトル・放送日・詳細ページ URL を解決する。
-    /// 全話担当の行は圧縮表記側で「(全話)」と表現できるため展開しない。
+    /// 担当した各話のサブタイトル・放送日・詳細ページ URL を解決する。
+    /// 「#1〜4, 8」の圧縮表記だけでは何の話か分からず、当該エピソードへのリンクも張れないため、
+    /// TV 系（エピソード単位の関与がある行）はすべて各話の内訳を持たせる。
+    /// 表示側では折りたたみ（既定で閉じた details）に入れるので、担当話数が多い行でもページの主旨は埋もれない。
+    /// 全話担当の行も同じく内訳を持つ（見出しの「(全話)」表記とは独立）。
     /// </summary>
     private static IReadOnlyList<InvolvementEpisodeRow> BuildEpisodeBreakdown(
         BuildContext ctx,
@@ -168,7 +162,7 @@ internal static class InvolvementRowBuilder
         IReadOnlyCollection<int> episodeNos,
         bool isAllEpisodes)
     {
-        if (isAllEpisodes || episodeNos.Count == 0 || episodeNos.Count > EpisodeBreakdownMaxCount)
+        if (episodeNos.Count == 0)
             return Array.Empty<InvolvementEpisodeRow>();
 
         if (!ctx.EpisodesBySeries.TryGetValue(seriesId, out var seriesEpisodes))

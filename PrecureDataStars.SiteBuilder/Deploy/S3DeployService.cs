@@ -48,8 +48,11 @@ public sealed class S3DeployService
         _logger = logger;
     }
 
-    /// <summary>差分同期 ＋ invalidation を実行する。</summary>
-    public async Task RunAsync(CancellationToken ct = default)
+    /// <summary>
+    /// 差分同期 ＋ invalidation を実行する。戻り値は「本番がこのビルドの出力と一致した」か
+    /// （反映した・もともと差分が無かったときは true、dry-run・確認で中止したときは false）。
+    /// </summary>
+    public async Task<bool> RunAsync(CancellationToken ct = default)
     {
         _logger.Section("Deploy to S3 + CloudFront");
 
@@ -127,14 +130,14 @@ public sealed class S3DeployService
         if (toUpload.Count == 0 && toDelete.Count == 0)
         {
             _logger.Success("S3 は最新です（差分なし）。invalidation も不要。");
-            return;
+            return true;
         }
 
         // 5) dry-run はここで終了（S3 / CloudFront を一切変更しない）。
         if (_config.Deploy.DryRun)
         {
             _logger.Success("DRY-RUN のため変更は行いませんでした。");
-            return;
+            return false;
         }
 
         // 6) 破壊的操作（削除）がある場合は対話確認。--yes で省略。
@@ -145,7 +148,7 @@ public sealed class S3DeployService
             if (!string.Equals(answer?.Trim(), "y", StringComparison.OrdinalIgnoreCase))
             {
                 _logger.Warn("デプロイを中止しました（確認で N）。");
-                return;
+                return false;
             }
         }
 
@@ -165,6 +168,7 @@ public sealed class S3DeployService
 
         // 9) CloudFront invalidation（変更パスのみ。多ければ /* にフォールバック）。
         await InvalidateAsync(cloudFront, toUpload.Select(u => u.Key).Concat(toDelete), ct).ConfigureAwait(false);
+        return true;
     }
 
     /// <summary>名前付きプロファイルから資格情報を解決する。プロファイル未指定なら null を返し、

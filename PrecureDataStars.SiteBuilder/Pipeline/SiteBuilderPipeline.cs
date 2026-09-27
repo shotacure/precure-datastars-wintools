@@ -310,7 +310,16 @@ public sealed class SiteBuilderPipeline
         if (config.Deploy.Requested)
         {
             var deployer = new Deploy.S3DeployService(config, logger);
-            await deployer.RunAsync(ct).ConfigureAwait(false);
+            bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
+
+            // 本番がこのビルドの出力と一致したら、いまの人物 URL を公開記録（published_entity_slugs）に追記する。
+            // 以後のビルドで最新名義が変わって URL が変わったとき、この記録から旧 URL → 新 URL の 301 を作る。
+            // ピンポイントモード（--page）は一部のページしか上げないため記録しない。
+            if (published && string.IsNullOrEmpty(config.PageFilter))
+            {
+                int added = await ctx.EntityUrls.RecordPublishedPersonSlugsAsync(factory, ct).ConfigureAwait(false);
+                logger.Info($"Published slugs  : 人物 URL の公開記録に {added} 件を追加");
+            }
         }
     }
 

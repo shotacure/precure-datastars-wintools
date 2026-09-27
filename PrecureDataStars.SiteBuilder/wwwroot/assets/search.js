@@ -131,11 +131,16 @@
       var item = indexData[j];
       var titleLower = (item.t || '').toLowerCase();
       var reading = item.x || '';
+      // 表示タイトルもクエリと同じ正規化（空白除去・カナ→ひらがな・小文字化）をかけた形で照合する。
+      // 人名は「秋元 由紀」のように姓名の間に空白を持ち、読みが登録済みだと reading はかなになるため、
+      // これが無いと空白なしの「秋元由紀」で引けない。正規化結果は項目ごとに 1 回だけ作って持ち回す。
+      if (item._tn === undefined) item._tn = normalizeQuery(item.t || '');
+      var titleNorm = item._tn;
       var allMatch = true;
-      // 全クエリ語について「正規化済み reading」または「lowercase title」のいずれかに含まれるかをチェック。
+      // 全クエリ語について「正規化済み reading」「正規化済み title」「lowercase title」のいずれかに含まれるかをチェック。
       for (var k = 0; k < terms.length; k++) {
         var t = terms[k];
-        if (reading.indexOf(t.norm) === -1 && titleLower.indexOf(t.raw) === -1) {
+        if (reading.indexOf(t.norm) === -1 && titleNorm.indexOf(t.norm) === -1 && titleLower.indexOf(t.raw) === -1) {
           allMatch = false;
           break;
         }

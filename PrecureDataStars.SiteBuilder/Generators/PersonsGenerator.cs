@@ -709,8 +709,10 @@ public sealed class PersonsGenerator
     /// </summary>
     private InvolvementSeriesRowExtras ResolveSeriesRowExtras(IEnumerable<Involvement> invs)
     {
-        var seriesScopeCharacterNames = new List<string>();
-        var perEpisodeCharacterNames = new List<string>();
+        // 演じたキャラは character_id 単位で初出順に集める（同名の別キャラも取りこぼさず、それぞれの詳細へリンクする）。
+        // 表示名は最初に出てきた名義（character_aliases.name）。
+        var seriesScopeCharacters = new List<(int CharacterId, string Name)>();
+        var perEpisodeCharacters = new List<(int CharacterId, string Name)>();
         // 所属屋号 ID の集合をシリーズスコープ別・エピソード単位別に分けて収集。
         // 同一シリーズ内で複数の屋号で所属クレジットされる例（移籍など）があるため、
         // HashSet で重複排除し、後で名前解決して列挙する。
@@ -722,13 +724,9 @@ public sealed class PersonsGenerator
         {
             if (inv.EpisodeId is int)
             {
-                // 声優関与のとき演じたキャラ名を集める（シリーズ単位で重複排除）。
+                // 声優関与のとき演じたキャラを集める（シリーズ単位で重複排除）。
                 if (inv.Kind == InvolvementKind.CharacterVoice && inv.CharacterAliasId.HasValue)
-                {
-                    string? name = ResolveCharacterName(inv.CharacterAliasId.Value);
-                    if (!string.IsNullOrEmpty(name) && !perEpisodeCharacterNames.Contains(name))
-                        perEpisodeCharacterNames.Add(name);
-                }
+                    AddCharacter(perEpisodeCharacters, inv.CharacterAliasId.Value);
                 // 所属屋号 ID を初出順で記録（人物詳細での所属併記用）。
                 if (inv.AffiliationCompanyAliasId is int affId
                     && !perEpisodeAffiliationIds.Contains(affId))
@@ -739,11 +737,7 @@ public sealed class PersonsGenerator
             else
             {
                 if (inv.Kind == InvolvementKind.CharacterVoice && inv.CharacterAliasId.HasValue)
-                {
-                    string? name = ResolveCharacterName(inv.CharacterAliasId.Value);
-                    if (!string.IsNullOrEmpty(name) && !seriesScopeCharacterNames.Contains(name))
-                        seriesScopeCharacterNames.Add(name);
-                }
+                    AddCharacter(seriesScopeCharacters, inv.CharacterAliasId.Value);
                 if (inv.AffiliationCompanyAliasId is int affIdS
                     && !seriesScopeAffiliationIds.Contains(affIdS))
                 {
@@ -769,10 +763,26 @@ public sealed class PersonsGenerator
         }
 
         return new InvolvementSeriesRowExtras(
-            SeriesScopeCharacterNames: string.Join("、", seriesScopeCharacterNames),
-            PerEpisodeCharacterNames: string.Join("、", perEpisodeCharacterNames),
+            SeriesScopeCharacterNames: string.Join("、", seriesScopeCharacters.Select(c => c.Name)),
+            PerEpisodeCharacterNames: string.Join("、", perEpisodeCharacters.Select(c => c.Name)),
             SeriesScopeAffiliationsLabel: ResolveAffLabel(seriesScopeAffiliationIds),
-            PerEpisodeAffiliationsLabel: ResolveAffLabel(perEpisodeAffiliationIds));
+            PerEpisodeAffiliationsLabel: ResolveAffLabel(perEpisodeAffiliationIds),
+            SeriesScopeCharacterNamesHtml: CharacterLinksHtml(seriesScopeCharacters),
+            PerEpisodeCharacterNamesHtml: CharacterLinksHtml(perEpisodeCharacters));
+
+        // character_alias_id からキャラを引き、未登場の character_id なら初出順で追加する。
+        void AddCharacter(List<(int CharacterId, string Name)> list, int characterAliasId)
+        {
+            if (!_ctx.CharacterAliasById.TryGetValue(characterAliasId, out var ca)) return;
+            if (string.IsNullOrEmpty(ca.Name)) return;
+            if (list.Any(c => c.CharacterId == ca.CharacterId)) return;
+            list.Add((ca.CharacterId, ca.Name));
+        }
+
+        // キャラ名をキャラクター詳細（単発キャラはゲストキャラクターページの該当話）へのリンクにして「、」で連結する。
+        static string CharacterLinksHtml(List<(int CharacterId, string Name)> list)
+            => string.Join("、", list.Select(c =>
+                $"<a href=\"{PathUtil.CharacterUrl(c.CharacterId)}\">{HtmlUtil.Escape(c.Name)}</a>"));
     }
 
     /// <summary>
@@ -928,9 +938,6 @@ public sealed class PersonsGenerator
             .ToList();
     }
 
-    /// <summary>character_alias_id からキャラ名を引く。 BuildContext.CharacterAliasById に全件辞書化済みのため同期 lookup で完結する。</summary>
-    private string? ResolveCharacterName(int aliasId)
-        => _ctx.CharacterAliasById.TryGetValue(aliasId, out var ca) ? ca.Name : null;
 
     /// <summary>company_alias_id から屋号名を引く。 BuildContext.CompanyAliasById に全件辞書化済みのため同期 lookup で完結する。</summary>
     private string? GetCompanyAliasName(int aliasId)

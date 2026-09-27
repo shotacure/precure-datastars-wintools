@@ -116,8 +116,9 @@
             {{~ if r.AffiliationsLabel != "" ~}}
             <span class="credit-card-affiliation muted">所属：{{ r.AffiliationsLabel | html.escape }}</span>
             {{~ end ~}}
-            {{~ if r.CharacterNames != "" ~}}
-            <span class="credit-card-character">— {{ r.CharacterNames | html.escape }}</span>
+            {{## 演じたキャラはキャラクター詳細へのリンク済み HTML なので html.escape をかけない。 ##}}
+            {{~ if r.CharacterNamesHtml != "" ~}}
+            <span class="credit-card-character">— {{ r.CharacterNamesHtml }}</span>
             {{~ end ~}}
         {{~ end ~}}
         {{~ if r.Episodes.size > 0 ~}}
@@ -206,8 +207,9 @@
                  AffiliationsLabel は屋号名（複数あれば「、」連結）。括弧書きの形で名前と区別する。 ##}}
             <span class="credit-card-affiliation muted">所属：{{ r.AffiliationsLabel | html.escape }}</span>
             {{~ end ~}}
-            {{~ if r.CharacterNames != "" ~}}
-            <span class="credit-card-character">— {{ r.CharacterNames | html.escape }}</span>
+            {{## 演じたキャラはキャラクター詳細へのリンク済み HTML なので html.escape をかけない。 ##}}
+            {{~ if r.CharacterNamesHtml != "" ~}}
+            <span class="credit-card-character">— {{ r.CharacterNamesHtml }}</span>
             {{~ end ~}}
         {{~ end ~}}
         {{~ if r.Episodes.size > 0 ~}}

@@ -116,7 +116,7 @@
       {{~ end ~}}
     </div>
     {{~ end ~}}
-    {{~ if r.VocalistsHtml != "" || r.ChorusHtml != "" || r.SeriesTitle != "" ~}}
+    {{~ if r.VocalistsHtml != "" || r.ChorusHtml != "" || r.DialogueHtml != "" || r.SeriesTitle != "" ~}}
     <div class="song-credits song-recording-vocalists-credits">
       {{~ if r.VocalistsHtml != "" ~}}
       <div class="key-staff-line">
@@ -128,6 +128,12 @@
       <div class="key-staff-line">
         <span class="role-badge role-badge-sm" data-role-code="BACKING_VOCALS">コーラス</span>
         <span class="key-staff-names">{{ r.ChorusHtml }}</span>
+      </div>
+      {{~ end ~}}
+      {{~ if r.DialogueHtml != "" ~}}
+      <div class="key-staff-line">
+        <span class="role-badge role-badge-sm" data-role-code="DIALOGUE">台詞</span>
+        <span class="key-staff-names">{{ r.DialogueHtml }}</span>
       </div>
       {{~ end ~}}
       {{~ if r.SeriesTitle != "" ~}}

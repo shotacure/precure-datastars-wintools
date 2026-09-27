@@ -1332,6 +1332,7 @@ public sealed class ProductsGenerator
                     string arrangementHtml = BuildSongCreditNamesHtml(song, "ARRANGEMENT");
                     string vocalsHtml = BuildRecordingSingersHtml(rec);
                     string chorusHtml = BuildRecordingChorusHtml(rec);
+                    string dialogueHtml = _creditHtml!.BuildRecordingDialogueHtml(rec);
                     metaLineHtml = _creditHtml!.BuildMergedRoleSegmentsHtml(new[]
                     {
                         ("LYRICS",         "作詞",   lyricsHtml),
@@ -1339,6 +1340,7 @@ public sealed class ProductsGenerator
                         ("ARRANGEMENT",    "編曲",   arrangementHtml),
                         ("VOCALS",         "歌",     vocalsHtml),
                         ("BACKING_VOCALS", "コーラス", chorusHtml),
+                        ("DIALOGUE",       "台詞",   dialogueHtml),
                     });
 
                     // この録音が「劇伴としても扱う」紐付け（song_recording_bgm_assignments）を

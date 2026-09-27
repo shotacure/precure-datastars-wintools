@@ -679,6 +679,7 @@ public sealed class SongsGenerator
         var recordingSingers = singersByRecording.TryGetValue(r.SongRecordingId, out var singerList) ? singerList : new List<SongRecordingSinger>();
         string vocalistsHtml = _singerHtml.BuildVocalistsHtml(recordingSingers, r.SingerName, personAliasMap, characterAliasMap);
         string chorusHtml = _singerHtml.BuildChorusHtml(recordingSingers, personAliasMap, characterAliasMap);
+        string dialogueHtml = _singerHtml.BuildDialogueHtml(recordingSingers, personAliasMap, characterAliasMap);
 
         // 表示タイトル（曲名 + 半角SP + variant_label 接尾辞）と録音単位の音楽種別ラベル。
         string recDisplayTitle = SongDisplayTitle.Build(song.Title, r.VariantLabel);
@@ -718,6 +719,7 @@ public sealed class SongsGenerator
             YoutubeId = YoutubeUtil.ExtractId(r.YoutubeUrl),
             VocalistsHtml = vocalistsHtml,
             ChorusHtml = chorusHtml,
+            DialogueHtml = dialogueHtml,
             Tracks = tracksRows,
             ThemeUsages = themeRows
         };
@@ -921,6 +923,13 @@ public sealed class SongsGenerator
         if (!string.IsNullOrEmpty(chorusHtml))
         {
             groups.Add((new List<(string, string)> { ("BACKING_VOCALS", "コーラス") }, chorusHtml, false));
+        }
+
+        // 台詞（DIALOGUE）もコーラスと同じく構造化 singers のみから、末尾に独立追加する。
+        string dialogueHtml = _singerHtml.BuildDialogueHtml(singers, personAliasMap, characterAliasMap);
+        if (!string.IsNullOrEmpty(dialogueHtml))
+        {
+            groups.Add((new List<(string, string)> { ("DIALOGUE", "台詞") }, dialogueHtml, false));
         }
 
         if (groups.Count == 0) return "";
@@ -1314,6 +1323,8 @@ public sealed class SongsGenerator
         public string VocalistsHtml { get; set; } = "";
         /// <summary>コーラス（BACKING_VOCALS）の表示用 HTML。 該当録音にコーラス歌唱者が居なければ空文字列。空でなければ songs-detail で「コーラス」バッジ + 名義を 1 行表示する。</summary>
         public string ChorusHtml { get; set; } = "";
+        /// <summary>台詞（DIALOGUE）の表示用 HTML。 該当録音に台詞の担当が居なければ空文字列。空でなければ songs-detail で「台詞」バッジ + 名義を 1 行表示する。</summary>
+        public string DialogueHtml { get; set; } = "";
         public IReadOnlyList<RecordingTrackRow> Tracks { get; set; } = Array.Empty<RecordingTrackRow>();
         public IReadOnlyList<RecordingThemeRow> ThemeUsages { get; set; } = Array.Empty<RecordingThemeRow>();
     }

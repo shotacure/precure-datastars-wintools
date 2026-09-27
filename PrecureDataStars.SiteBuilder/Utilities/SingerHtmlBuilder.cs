@@ -54,6 +54,13 @@ public sealed class SingerHtmlBuilder
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
         => BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Chorus, personAliasMap, characterAliasMap);
 
+    /// <summary>DIALOGUE（台詞）役の連名 HTML を返す。 書式は歌・コーラスと同一（キャラ台詞は「キャラ(CV:声優)」）。該当行が無ければ空文字列（フリーテキストのフォールバックは無い）。</summary>
+    public string BuildDialogueHtml(
+        IReadOnlyList<SongRecordingSinger> singers,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+        => BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Dialogue, personAliasMap, characterAliasMap);
+
     /// <summary>役職ラベルを <c>/creators/roles/{rep_role_code}/</c> リンク付き HTML に整形する。 役職マスタに未登録（または和名が空）のときは <paramref name="fallbackLabel"/> のエスケープ平文を返す。</summary>
     public string BuildSongRoleLabelLinkHtml(string roleCode, IReadOnlyDictionary<string, Role> roleMap, string fallbackLabel)
     {

@@ -61,6 +61,10 @@ public sealed class ThemeSongRow
     public string ChorusHtml { get; set; } = "";
     /// <summary>「コーラス」役職ラベル HTML（/creators/roles/BACKING_VOCALS/ リンク付き、未登録時は固定文字列「コーラス」）。 <see cref="ChorusHtml"/> が非空のときだけセットされる。</summary>
     public string ChorusRoleLabelHtml { get; set; } = "";
+    /// <summary>台詞（DIALOGUE 役）連名の表示用 HTML。 該当録音に台詞行が無ければ空文字列。</summary>
+    public string DialogueHtml { get; set; } = "";
+    /// <summary>「台詞」役職ラベル HTML（/creators/roles/DIALOGUE/ リンク付き、未登録時は固定文字列「台詞」）。 <see cref="DialogueHtml"/> が非空のときだけセットされる。</summary>
+    public string DialogueRoleLabelHtml { get; set; } = "";
 }
 
 /// <summary>主題歌行の入力ソース 1 件分（EPISODE / SERIES どちらの主題歌テーブルからでも来る共通形）。
@@ -184,6 +188,8 @@ public sealed class ThemeSongRowBuilder
             string vocalistsRoleLabelHtml = "";
             string chorusHtml = "";
             string chorusRoleLabelHtml = "";
+            string dialogueHtml = "";
+            string dialogueRoleLabelHtml = "";
             if (rec is not null)
             {
                 var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
@@ -195,6 +201,12 @@ public sealed class ThemeSongRowBuilder
                 if (!string.IsNullOrEmpty(chorusHtml))
                 {
                     chorusRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Chorus, roleMap, "コーラス");
+                }
+                // 台詞（DIALOGUE 役）もコーラスと同じ扱いで併出する。該当行が無ければ空のまま。
+                dialogueHtml = _singerHtml.BuildDialogueHtml(singers, personAliasMap, characterAliasMap);
+                if (!string.IsNullOrEmpty(dialogueHtml))
+                {
+                    dialogueRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Dialogue, roleMap, "台詞");
                 }
             }
 
@@ -221,6 +233,8 @@ public sealed class ThemeSongRowBuilder
                 VocalistsRoleLabelHtml = vocalistsRoleLabelHtml,
                 ChorusHtml = chorusHtml,
                 ChorusRoleLabelHtml = chorusRoleLabelHtml,
+                DialogueHtml = dialogueHtml,
+                DialogueRoleLabelHtml = dialogueRoleLabelHtml,
                 Notes = d.Notes ?? "",
                 IsBroadcastOnly = d.IsBroadcastOnly,
                 EpisodeRangeLabel = d.EpisodeRangeLabel ?? "",

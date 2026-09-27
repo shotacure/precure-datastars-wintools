@@ -869,7 +869,7 @@ Role: PRODUCTION 制作 (order 2)
 
 ##### シリーズ詳細の「主題歌・挿入歌」セクション
 
-引き当て元はシリーズ種別で分かれる。`credit_attach_to='SERIES'`（映画系）は `series_theme_songs` をそのまま並べ、`credit_attach_to='EPISODE'`（TV / SPIN-OFF / OTONA / SHORT）は `episode_theme_songs` を `(theme_kind, song_recording_id, is_broadcast_only)` の 3 つ組でシリーズ単位に畳む（`ThemeSongSeriesAggregator`）。行の体裁は両者共通の `ts-card`（区分バッジ／曲名リンク／歌・コーラス・作詞・作曲・編曲のメタ行）で、集約側だけが曲名の右に使用話数ラベルを持つ。
+引き当て元はシリーズ種別で分かれる。`credit_attach_to='SERIES'`（映画系）は `series_theme_songs` をそのまま並べ、`credit_attach_to='EPISODE'`（TV / SPIN-OFF / OTONA / SHORT）は `episode_theme_songs` を `(theme_kind, song_recording_id, is_broadcast_only)` の 3 つ組でシリーズ単位に畳む（`ThemeSongSeriesAggregator`）。行の体裁は両者共通の `ts-card`（区分バッジ／曲名リンク／歌・コーラス・台詞・作詞・作曲・編曲のメタ行）で、集約側だけが曲名の右に使用話数ラベルを持つ。
 
 録音に公式 YouTube URL（`song_recordings.youtube_url`）が登録されていれば、見出し行と歌の行の間に動画を置く（下記「楽曲録音の YouTube 動画」）。
 
@@ -1389,6 +1389,8 @@ series_relation_kinds ──┘    │            │
 > 音楽種別 `music_class_code` は `song_recordings` 側で保持する設計。同一曲のカバーやアレンジが「主題歌→キャラソン」のように文脈で種別を変えるケースを表現するため、種別を録音単位で管理する。
 
 > `songs.*_name` / `song_recordings.singer_name` / `bgm_cues.composer_name`・`arranger_name` のフリーテキストは、構造化クレジット（`song_credits` / `song_recording_singers` / `bgm_cue_credits`）がまだ無い曲・録音・劇伴のためのフォールバック。サイトは画面表示だけでなく、meta description・OGP カード・JSON-LD・使用曲リストの副題といった平文の出力先でも、役職ごとに構造化行があればそれだけを使い、1 行も無い役職に限ってフリーテキストを使う（平文化は `CreditText` に集約。書式は画面表示と同じで、キャラ歌唱は「キャラ(CV:声優)」）。
+
+> `song_recording_singers.role_code` は `VOCALS`（歌）・`BACKING_VOCALS`（コーラス）・`DIALOGUE`（台詞：歌わずに曲中のセリフだけで参加する出演者）の 3 役を持つ。書式は 3 役とも同じ（キャラは「キャラ(CV:声優)」）で、楽曲詳細・商品詳細のトラック行・エピソード／シリーズの主題歌欄に歌 → コーラス → 台詞の順で並ぶ。`/creators/roles/vocals/` の担当曲数に数えるのは `VOCALS` だけ。
 
 #### `song_recordings` — 歌の歌唱者バージョン
 

@@ -5,6 +5,7 @@
 // あわせて、人物の旧名 URL（/people/{旧名義}/。最新名義が変わって URL が変わった人物の、本番で公開済みの URL）と
 // キャラの旧名 URL（/characters/{旧キャラ名}/。キャラ名を変えて URL が変わったキャラの、本番で公開済みの URL）も
 // いまの URL へ 301 で転送する。表に無い名前の URL はそのままオリジンへ通す（いまのページはそのまま返る）。
+// 廃止した役職詳細（/creators/roles/{code}/。歌唱系は /creators/singers/ に集約）も表にあれば転送する。
 // viewer-request の CloudFront Function が先に "…/index.html" へ書き換えるので、その形も受ける。
 //
 // 転送表は SiteBuilder がビルドのたびにサイト出力の _edge/legacy-redirects.json に書き出し、
@@ -26,6 +27,8 @@ const MAP_TTL_MS = 5 * 60 * 1000;
 const LEGACY_ID_PATH = /^\/(persons|characters|companies|books)\/(\d+)(?:\/(?:index\.html)?)?$/;
 // 名前 URL は 1 階層だけ（/characters/guests/{slug}/ のような 2 階層のパスは対象外）。
 const NAME_PATH = /^\/(people|characters)\/([^\/]+)(?:\/(?:index\.html)?)?$/;
+// 役職詳細 URL（表に載っている廃止ページだけが転送される）。
+const ROLE_PATH = /^\/creators\/roles\/([^\/]+)(?:\/(?:index\.html)?)?$/;
 
 /** リクエスト URI から転送表のキーを作る。対象外の URI は null。 */
 function mapKeyOf(uri) {
@@ -39,6 +42,8 @@ function mapKeyOf(uri) {
             return null; // 不正なパーセントエンコードは転送しない
         }
     }
+    const role = uri.match(ROLE_PATH);
+    if (role) return '/creators/roles/' + role[1];
     return null;
 }
 

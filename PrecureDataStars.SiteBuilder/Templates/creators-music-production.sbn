@@ -1,0 +1,111 @@
+<h1>歴代プリキュア音楽製作</h1>
+
+<p class="lead">
+  歴代プリキュアの主題歌・挿入歌・キャラクターソングの製作に携わった人々の一覧です。役職、初参加曲、参加曲数から探せます。
+  「役職」タブから作詞・作曲・編曲それぞれの担当者一覧へ、「初参加順」タブでは初めて参加した曲と担当した役職を、「参加曲数が多い順」タブでは参加曲数を掲載しています。参加曲数は作詞・作曲・編曲をあわせて曲単位で数えています。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+</p>
+
+{{## 音楽製作。楽曲のクレジット（song_credits）の作詞・作曲・編曲を人物単位に束ねた一覧。
+     ・役職タブ：作詞・作曲・編曲の役職詳細（/creators/roles/{code}/）への入口（人数つき）。
+     ・初参加順タブ：その人が関わった曲の最小 recording_id（録音 ID は初出順）の昇順。初参加曲と役職を添える。
+     ・参加曲数が多い順タブ：3 役職を横断して song_id 単位で重複排除した曲数の降順。
+     ・タブ切替はスタッフ一覧と同じインライン JS。 ##}}
+<div class="creators-root creators-tabs products-tabs">
+  <div class="tabs" role="tablist" aria-label="音楽製作一覧の並べ替え">
+    <button type="button" class="tab-btn is-active" data-tab="roles"
+            role="tab" aria-selected="true" aria-controls="music-tab-panel-roles">
+      役職
+    </button>
+    <button type="button" class="tab-btn" data-tab="debut"
+            role="tab" aria-selected="false" aria-controls="music-tab-panel-debut">
+      初参加順
+    </button>
+    <button type="button" class="tab-btn" data-tab="count"
+            role="tab" aria-selected="false" aria-controls="music-tab-panel-count">
+      参加曲数が多い順
+    </button>
+  </div>
+
+  {{## ──────── 役職パネル（既定） ──────── ##}}
+  <div class="tab-panel is-active" id="music-tab-panel-roles"
+       data-tab-panel="roles" role="tabpanel">
+    {{~ if (array.size Roles) == 0 ~}}
+    <p class="empty-row">楽曲の作家情報はまだ登録されていません。</p>
+    {{~ else ~}}
+    <ul class="entity-list entity-list-grid">
+      {{~ for r in Roles ~}}
+      <li class="entity-row">
+        <a class="entity-row-link" href="{{ r.RoleUrl }}" aria-label="{{ r.RoleNameJa | html.escape }}"></a>
+        <a class="entity-row-name" href="{{ r.RoleUrl }}">{{ r.RoleNameJa | html.escape }}</a>
+        <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-person" title="人物"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg>{{ r.PersonCount }}</span></span></span>
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── 初参加順パネル ──────── ##}}
+  <div class="tab-panel" id="music-tab-panel-debut"
+       data-tab-panel="debut" role="tabpanel" hidden>
+    {{~ if (array.size DebutRows) == 0 ~}}
+    <p class="empty-row">楽曲の作家情報はまだ登録されていません。</p>
+    {{~ else ~}}
+    <ul class="entity-list">
+      {{~ for e in DebutRows ~}}
+      <li class="entity-row">
+        <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
+        {{## 担当した役職はバッジで並べ、初参加曲と見た目で分ける。 ##}}
+        <span class="music-role-badges">{{~ for rl in (e.RolesLabel | string.split "・") ~}}<span class="tag-badge">{{ rl | html.escape }}</span>{{~ end ~}}</span>
+        {{~ if e.DebutSongTitle != "" ~}}<span class="entity-row-sub muted">初参加：<a href="{{ e.DebutSongUrl }}">{{ e.DebutSongTitle | html.escape }}</a></span>{{~ end ~}}
+        <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-song">🎵 {{ e.SongCount }}</span></span></span>
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── 参加曲数が多い順パネル ──────── ##}}
+  <div class="tab-panel" id="music-tab-panel-count"
+       data-tab-panel="count" role="tabpanel" hidden>
+    {{~ if (array.size CountRows) == 0 ~}}
+    <p class="empty-row">楽曲の作家情報はまだ登録されていません。</p>
+    {{~ else ~}}
+    <ul class="entity-list">
+      {{~ for e in CountRows ~}}
+      <li class="entity-row">
+        <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
+        <span class="music-role-badges">{{~ for rl in (e.RolesLabel | string.split "・") ~}}<span class="tag-badge">{{ rl | html.escape }}</span>{{~ end ~}}</span>
+        <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-song">🎵 {{ e.SongCount }}</span></span></span>
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.querySelector('.creators-tabs');
+  if (!root) return;
+
+  var buttons = root.querySelectorAll('.tab-btn');
+  var panels  = root.querySelectorAll('.tab-panel');
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-tab');
+      buttons.forEach(function (b) {
+        var active = b.getAttribute('data-tab') === key;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach(function (p) {
+        var active = p.getAttribute('data-tab-panel') === key;
+        p.classList.toggle('is-active', active);
+        if (active) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
+      });
+    });
+  });
+})();
+</script>

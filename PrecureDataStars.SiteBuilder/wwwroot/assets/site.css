@@ -4360,6 +4360,22 @@ body.subtitle-embargo-dialog-open {
   gap: 24px;
   margin: 24px 0;
 }
+/* 音楽製作一覧の行で、担当した役職（作詞・作曲・編曲）をバッジで並べる。名前・初参加曲との間に余白を取る。 */
+.music-role-badges {
+  display: inline-flex;
+  gap: 4px;
+  margin: 0 8px;
+  vertical-align: middle;
+}
+/* カードが 4 枚のランディング（/creators/）は 2 列固定にして 2×2 に揃える（3 列だと 1 枚だけ次の行に落ちる）。狭い画面では 1 列。 */
+.music-categories.is-two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 640px) {
+  .music-categories.is-two-col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .music-category-card {
   /* ランディング (/music/・/creators/・/stats/) 共用カード。flex 列で内部を縦積みし、
    親 grid の align-items:stretch と組み合わせて、最終子要素 (件数バッジ/カバレッジラベル) を

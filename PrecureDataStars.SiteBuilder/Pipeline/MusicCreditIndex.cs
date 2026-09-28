@@ -163,7 +163,7 @@ public static class MusicCreditViewBuilder
 
     /// <summary>
     /// 演奏系の役職（楽器・指揮など）のバッジで役職名の前に付ける絵文字。専用の絵文字が無い楽器は近いもので代用する
-    /// （金管はトランペット、木管はフルート、ハープはヴァイオリン）。作詞・作曲・編曲・歌唱・レコーディング・音盤製作の役職には付けない。
+    /// （金管はトランペット、木管はフルート、ハープはヴァイオリン、ハーモニカは音符）。作詞・作曲・編曲・歌唱・レコーディング・音盤製作の役職には付けない。
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string> RoleEmojiByCode = new Dictionary<string, string>(StringComparer.Ordinal)
     {
@@ -190,6 +190,7 @@ public static class MusicCreditViewBuilder
         ["CLARINET"] = "🪈",
         ["OBOE"] = "🪈",
         ["BASSOON"] = "🪈",
+        ["HARMONICA"] = "🎵",
         ["HARP"] = "🎻",
         ["VIOLIN"] = "🎻",
         ["STRINGS"] = "🎻",

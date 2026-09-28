@@ -263,7 +263,10 @@ public sealed class PersonsGenerator
 
         // 「音楽クレジット」セクション（作詞・作曲・編曲 / 演奏・コーラス等 / レコーディング / 音盤製作）。
         var songCards = BuildPersonSongCards(aliasIds);
-        var musicSections = BuildPersonMusicSections(aliasIds, songCards);
+        // 別名義で参加した曲は、カードに「〇〇 名義」を添える（歌唱・コーラス・作詞・作曲・編曲・演奏など）。
+        foreach (var card in songCards)
+            card.AliasNote = AliasNote(SongAliasIds(card.SongId, aliasIds), displayName);
+        var musicSections = BuildPersonMusicSections(aliasIds, songCards, displayName);
         // 誕生日表記：BirthYearVisibility=PUBLIC かつ BirthYear ありなら「YYYY年M月D日」、
         // 非公開もしくは未設定なら年抜きの「M月D日」。BirthMonth / BirthDay の片方でも未設定なら空文字。
         string birthday = FormatBirthday(person);
@@ -965,7 +968,7 @@ public sealed class PersonsGenerator
     /// </list>
     /// 何も無い区分は出さない。
     /// </summary>
-    private IReadOnlyList<PersonMusicSection> BuildPersonMusicSections(IReadOnlyList<int> aliasIds, IReadOnlyList<PersonSongCard> songCards)
+    private IReadOnlyList<PersonMusicSection> BuildPersonMusicSections(IReadOnlyList<int> aliasIds, IReadOnlyList<PersonSongCard> songCards, string displayName)
     {
         var bgmGroups = BuildPersonInvolvementGroups(aliasIds, inv => inv.EntryKind == "BGM_CUE_CREDIT");
         var musicRows = aliasIds
@@ -1019,11 +1022,11 @@ public sealed class PersonsGenerator
                 .Where(x => x.Roles.Count > 0)
                 .Select(x => x.Card.WithRoles(x.Roles))
                 .ToList();
-            var songItems = BuildMusicCreditItems(songRows.Where(r => InGroup(r.RoleCode)));
+            var songItems = BuildMusicCreditItems(songRows.Where(r => InGroup(r.RoleCode)), displayName);
             if (cards.Count > 0 || songItems.Count > 0)
                 songSubs.Add(new PersonMusicSubsection { Label = label, SongCards = cards, Items = songItems });
 
-            var bgmItems = BuildMusicCreditItems(sessionRows.Where(r => InGroup(r.RoleCode)));
+            var bgmItems = BuildMusicCreditItems(sessionRows.Where(r => InGroup(r.RoleCode)), displayName);
             bool isWriting = rowGroup == MusicCreditGroups.Writing;
             var groupBgm = isWriting ? bgmGroups : Array.Empty<InvolvementGroup>();
             if (isWriting)
@@ -1031,7 +1034,7 @@ public sealed class PersonsGenerator
             if (bgmItems.Count > 0 || groupBgm.Count > 0)
                 bgmSubs.Add(new PersonMusicSubsection { Label = label, BgmGroups = groupBgm, Items = bgmItems });
 
-            var discItems = BuildMusicCreditItems(productRows.Where(r => InGroup(r.RoleCode)));
+            var discItems = BuildMusicCreditItems(productRows.Where(r => InGroup(r.RoleCode)), displayName);
             if (discItems.Count > 0)
                 discSubs.Add(new PersonMusicSubsection { Label = label, Items = discItems });
         }
@@ -1092,7 +1095,7 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>音盤の音楽クレジット行を、紐付け先（曲・録音・劇伴セッション・商品）ごとの 1 行に束ねる。並びは根拠の盤の発売日順。</summary>
-    private IReadOnlyList<PersonMusicCreditItem> BuildMusicCreditItems(IEnumerable<MusicCredit> rows)
+    private IReadOnlyList<PersonMusicCreditItem> BuildMusicCreditItems(IEnumerable<MusicCredit> rows, string displayName)
     {
         var items = new List<(DateTime Sort, PersonMusicCreditItem Item)>();
         foreach (var g in rows.GroupBy(r => (r.TargetKind, r.SongId, r.SongRecordingId, r.BgmSeriesId, r.BgmSessionNo, r.ProductCatalogNo)))
@@ -1114,9 +1117,53 @@ public sealed class PersonsGenerator
                 })
                 .OrderBy(b => b.DisplayOrder)
                 .ToList();
-            items.Add((sort, new PersonMusicCreditItem { Title = title, Url = url, SubLabel = sub, Roles = roles }));
+            string aliasNote = AliasNote(g.Where(r => r.PersonAliasId.HasValue).Select(r => r.PersonAliasId!.Value), displayName);
+            items.Add((sort, new PersonMusicCreditItem { Title = title, Url = url, SubLabel = sub, Roles = roles, AliasNote = aliasNote }));
         }
         return items.OrderBy(x => x.Sort).ThenBy(x => x.Item.Title, StringComparer.Ordinal).Select(x => x.Item).ToList();
+    }
+
+    /// <summary>
+    /// 人物が曲に参加したときの名義 ID 群（作詞・作曲・編曲 song_credits、歌唱 song_recording_singers をユニットのメンバーまで展開、
+    /// 音楽クレジット music_credits の曲・録音紐付け）。人物の名義に含まれるものだけ返す。
+    /// </summary>
+    private IEnumerable<int> SongAliasIds(int songId, IReadOnlyList<int> aliasIds)
+    {
+        var mine = aliasIds.ToHashSet();
+        if (_ctx.SongCreditsBySong.TryGetValue(songId, out var credits))
+            foreach (var c in credits)
+                if (mine.Contains(c.PersonAliasId)) yield return c.PersonAliasId;
+        if (_ctx.MusicCredits.BySong.TryGetValue(songId, out var songRows))
+            foreach (var r in songRows)
+                if (r.PersonAliasId is int a && mine.Contains(a)) yield return a;
+        if (_recordingsBySong is not null && _recordingsBySong.TryGetValue(songId, out var recs))
+        {
+            foreach (var rec in recs)
+            {
+                if (_ctx.SingersByRecording.TryGetValue(rec.SongRecordingId, out var singers))
+                    foreach (var sg in singers)
+                        foreach (var part in _ctx.ExpandSingerParticipants(sg))
+                            if (part.PersonAliasId is int pa && mine.Contains(pa)) yield return pa;
+                if (_ctx.MusicCredits.ByRecording.TryGetValue(rec.SongRecordingId, out var recRows))
+                    foreach (var r in recRows)
+                        if (r.PersonAliasId is int a && mine.Contains(a)) yield return a;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 別名義での参加を示す注記。使った名義のうち見出し名（本名義）と違うもの（空白の違いを除く）を「〇〇・〇〇 名義」で返す。無ければ空文字。
+    /// </summary>
+    private string AliasNote(IEnumerable<int> usedAliasIds, string displayName)
+    {
+        static string Norm(string t) => t.Replace(" ", "").Replace("　", "");
+        var names = usedAliasIds
+            .Distinct()
+            .Select(id => _ctx.PersonAliasById.TryGetValue(id, out var a) ? (a.DisplayTextOverride ?? a.Name) : null)
+            .Where(n => !string.IsNullOrEmpty(n) && Norm(n!) != Norm(displayName))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        return names.Count == 0 ? "" : $"{string.Join("・", names)} 名義";
     }
 
     /// <summary>company_alias_id から屋号名を引く。 BuildContext.CompanyAliasById に全件辞書化済みのため同期 lookup で完結する。</summary>
@@ -1192,11 +1239,16 @@ public sealed class PersonsGenerator
         /// <summary>補足（劇伴セッション名など）。</summary>
         public string SubLabel { get; set; } = "";
         public IReadOnlyList<RoleBadgeView> Roles { get; set; } = Array.Empty<RoleBadgeView>();
+        /// <summary>別名義で参加したときの「〇〇 名義」（無ければ空文字）。</summary>
+        public string AliasNote { get; set; } = "";
     }
 
     /// <summary>担当楽曲カード 1 行。1 曲につき 1 行で、複数役職は <see cref="Roles"/> に並べる。</summary>
     private sealed class PersonSongCard
     {
+        /// <summary>別名義で参加したときの「〇〇 名義」（無ければ空文字）。</summary>
+        public string AliasNote { get; set; } = "";
+
         /// <summary>役職バッジだけを差し替えた複製（音楽クレジットの区分ごとに振り分けるときに使う）。</summary>
         public PersonSongCard WithRoles(IReadOnlyList<RoleBadgeView> roles)
         {

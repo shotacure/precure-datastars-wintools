@@ -8741,11 +8741,31 @@ body.has-art-track-bar {
 .music-credit-block .music-credit-group-heading:first-child {
   margin-top: 8px;
 }
+/* 楽曲・劇伴・商品詳細のクレジット欄：役職バッジ + 名前の 1 ユニットの中では改行しない。
+   狭い画面で 1 ユニットが画面幅を超えるときだけ折り返しを許す（横スクロールを出さないため）。 */
+.music-credit-row {
+  margin: 6px 0 10px;
+}
+.music-credit-unit {
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .music-credit-unit {
+    white-space: normal;
+  }
+}
 /* 区分の中の小見出し（歌 / 劇伴 / 音盤）。 */
 .music-credit-sub-heading {
   margin: 12px 0 6px;
   font-size: 0.92em;
   color: var(--muted);
+}
+/* 別名義のクレジットに添える本名義（「仲弓 香乃（ゆかな）」）と、人物詳細の曲カードの「〇〇 名義」。 */
+.staff-primary-name {
+  font-size: 0.9em;
+}
+.person-song-card-alias {
+  font-size: 0.85em;
 }
 /* 盤の所属表記（「（タバック）」など）。 */
 .music-credit-affiliation {

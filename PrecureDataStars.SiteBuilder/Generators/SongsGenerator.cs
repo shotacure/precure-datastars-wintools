@@ -313,8 +313,9 @@ public sealed class SongsGenerator
         string stringsArrangementRoleLabelHtml =
             $"<span class=\"role-badge role-badge-sm\" data-role-code=\"{StringsArrangementRole}\">{HtmlUtil.Escape(MusicCreditViewBuilder.RoleName(_ctx, StringsArrangementRole))}</span>";
         // 曲に共通の音楽クレジット（伴奏の演奏者・録音側スタッフなど。music_credits の SONG 紐付け）。
+        // 「演奏・レコーディング」の欄に、役職ごとのユニットを横に流して並べる。
         string songMusicCreditsHtml = _ctx.MusicCredits.BySong.TryGetValue(song.SongId, out var songMusicRows)
-            ? MusicCreditHtml.Render(MusicCreditViewBuilder.Build(_ctx, songMusicRows), "h3")
+            ? MusicCreditHtml.Render(MusicCreditViewBuilder.Build(_ctx, songMusicRows))
             : "";
 
         // 録音バージョン群。
@@ -334,8 +335,9 @@ public sealed class SongsGenerator
             // ビュー本体の組み立てとは入力が別系統なので、BuildRecordingView の引数を増やさず後付けする。
             recordingView.PlayRows = BuildRecordingPlayRows(tracksRows);
             // 録音ごとの音楽クレジット（カバー等、録音ごとに違う演奏者・スタッフ。music_credits の SONG_RECORDING 紐付け）。
+            // 録音ごとの音楽クレジット（カバー等）。役職ごとのユニットを横に流して並べる。
             recordingView.MusicCreditsHtml = _ctx.MusicCredits.ByRecording.TryGetValue(r.SongRecordingId, out var recMusicRows)
-                ? MusicCreditHtml.Render(MusicCreditViewBuilder.Build(_ctx, recMusicRows), "h4")
+                ? MusicCreditHtml.Render(MusicCreditViewBuilder.Build(_ctx, recMusicRows))
                 : "";
             recordingViews.Add(recordingView);
         }
@@ -1072,6 +1074,8 @@ public sealed class SongsGenerator
             {
                 string display = alias.GetDisplayName();
                 sb.Append(_staffLinkResolver.ResolveAsHtml(row.PersonAliasId, display));
+                // 別名義なら本名義を括弧で添える（例：仲弓 香乃（ゆかな））。
+                sb.Append(MusicCreditViewBuilder.PrimaryNameSuffixHtml(_ctx, row.PersonAliasId));
             }
             else
             {
@@ -1308,14 +1312,14 @@ public sealed class SongsGenerator
         public string StringsArrangementHtml { get; set; } = "";
         /// <summary>「ストリングス編曲」役職ラベル HTML（役職詳細ページが無いのでリンクしない）。</summary>
         public string StringsArrangementRoleLabelHtml { get; set; } = "";
-        /// <summary>曲に共通の音楽クレジット（演奏・コーラス等 / レコーディング 等）の組み立て済み HTML。無ければ空文字。</summary>
+        /// <summary>曲に共通の音楽クレジット（演奏・コーラス等 / レコーディング 等）の組み立て済み HTML（出典の段落込み）。無ければ空文字。</summary>
         public string MusicCreditsHtml { get; set; } = "";
         public string Notes { get; set; } = "";
     }
 
     private sealed class RecordingView
     {
-        /// <summary>この録音だけの音楽クレジット（カバー等）の組み立て済み HTML。無ければ空文字。</summary>
+        /// <summary>この録音だけの音楽クレジット（カバー等）の組み立て済み HTML（出典の段落込み）。無ければ空文字。</summary>
         public string MusicCreditsHtml { get; set; } = "";
         public int SongRecordingId { get; set; }
         /// <summary>歌唱者の平文（<see cref="CreditText.Vocalists"/> で構造化優先に解決済み。構造化行が無ければ <c>song_recordings.singer_name</c>）。 画面表示は <see cref="VocalistsHtml"/> を使う。</summary>

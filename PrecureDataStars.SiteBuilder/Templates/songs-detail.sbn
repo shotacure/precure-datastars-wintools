@@ -16,36 +16,19 @@
          役職ラベルは Generator が .role-badge.role-badge-sm[data-role-code] 形の <a> として渡す
          （LYRICS/COMPOSITION/ARRANGEMENT/VOCALS は CSS で色相環 4 色のバッジに着色済み）。
        - 備考は名義行とは別に muted 段落で続ける。 ##}}
+  {{## 基本情報（作詞・作曲・編曲）。役職ごとに改行せず、役職バッジ + 名前のユニットを横に流して並べる（ユニットの中では改行しない）。 ##}}
   {{~ if Song.LyricsHtml != "" || Song.CompositionHtml != "" || Song.ArrangementHtml != "" || Song.StringsArrangementHtml != "" ~}}
-  <section id="basic-info" class="song-credits">
+  <section id="basic-info">
     <h2>基本情報</h2>
-    {{~ if Song.LyricsHtml != "" ~}}
-    <div class="key-staff-line">
-      {{ Song.LyricsRoleLabelHtml }}
-      <span class="key-staff-names">{{ Song.LyricsHtml }}</span>
+    <div class="staff-badges-row music-credit-row">
+      {{~ if Song.LyricsHtml != "" ~}}<span class="staff-badge-group music-credit-unit">{{ Song.LyricsRoleLabelHtml }}{{ Song.LyricsHtml }}</span>{{~ end ~}}
+      {{~ if Song.CompositionHtml != "" ~}}<span class="staff-badge-group music-credit-unit">{{ Song.CompositionRoleLabelHtml }}{{ Song.CompositionHtml }}</span>{{~ end ~}}
+      {{~ if Song.ArrangementHtml != "" ~}}<span class="staff-badge-group music-credit-unit">{{ Song.ArrangementRoleLabelHtml }}{{ Song.ArrangementHtml }}</span>{{~ end ~}}
+      {{~ if Song.StringsArrangementHtml != "" ~}}<span class="staff-badge-group music-credit-unit">{{ Song.StringsArrangementRoleLabelHtml }}{{ Song.StringsArrangementHtml }}</span>{{~ end ~}}
     </div>
-    {{~ end ~}}
-    {{~ if Song.CompositionHtml != "" ~}}
-    <div class="key-staff-line">
-      {{ Song.CompositionRoleLabelHtml }}
-      <span class="key-staff-names">{{ Song.CompositionHtml }}</span>
-    </div>
-    {{~ end ~}}
-    {{~ if Song.ArrangementHtml != "" ~}}
-    <div class="key-staff-line">
-      {{ Song.ArrangementRoleLabelHtml }}
-      <span class="key-staff-names">{{ Song.ArrangementHtml }}</span>
-    </div>
-    {{~ end ~}}
-    {{~ if Song.StringsArrangementHtml != "" ~}}
-    <div class="key-staff-line">
-      {{ Song.StringsArrangementRoleLabelHtml }}
-      <span class="key-staff-names">{{ Song.StringsArrangementHtml }}</span>
-    </div>
-    {{~ end ~}}
   </section>
   {{~ end ~}}
-  {{## 曲に共通の音楽クレジット（伴奏の演奏者・録音側のスタッフ）。区分ごとの小見出しと出典の盤は組み立て済み HTML に含む。 ##}}
+  {{## 曲に共通の音楽クレジット（伴奏の演奏者・録音側のスタッフ）。基本情報と同じく役職ごとのユニットを横に流す。出典の盤は組み立て済み HTML に含む。 ##}}
   {{~ if Song.MusicCreditsHtml != "" ~}}
   <section id="music-credits">
     <h2>演奏・レコーディング</h2>
@@ -162,13 +145,10 @@
       {{~ end ~}}
     </div>
     {{~ end ~}}
+    {{## この録音だけの音楽クレジット（カバー等）。役職ごとのユニットを横に流す。 ##}}
+    {{ r.MusicCreditsHtml }}
     {{~ if r.Notes != "" ~}}
     <p class="muted">{{ r.Notes | html.escape }}</p>
-    {{~ end ~}}
-    {{## この録音だけの音楽クレジット（カバー等）。 ##}}
-    {{~ if r.MusicCreditsHtml != "" ~}}
-    <h3>演奏・レコーディング</h3>
-    {{ r.MusicCreditsHtml }}
     {{~ end ~}}
 
     {{## 本編使用。EPISODE 紐付け（TV 系）は「シリーズ × 区分 × broadcast_only × usage_actuality」で

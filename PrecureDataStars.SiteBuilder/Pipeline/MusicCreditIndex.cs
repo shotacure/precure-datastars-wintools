@@ -220,7 +220,7 @@ public static class MusicCreditViewBuilder
         for (int i = 0; i < rows.Count; i++)
         {
             var r = rows[i];
-            if (i > 0) sb.Append(HtmlUtil.Escape(string.IsNullOrEmpty(r.PrecedingSeparator) ? "、" : r.PrecedingSeparator));
+            if (i > 0) sb.Append(HtmlUtil.Escape(Separator(r.PrecedingSeparator)));
             sb.Append(NameHtml(ctx, r));
             string aff = AffiliationName(ctx, r);
             string nextAff = i + 1 < rows.Count ? AffiliationName(ctx, rows[i + 1]) : "";
@@ -235,6 +235,13 @@ public static class MusicCreditViewBuilder
             NamesHtml = sb.ToString()
         };
     }
+
+    /// <summary>
+    /// 名義の区切りの表示。盤の表記が「／」「/」「、」や区切りなしのときは「 / 」にそろえる。
+    /// 「&」「,」「 with 」のように盤の表記に意味のある区切りはそのまま出す。
+    /// </summary>
+    private static string Separator(string? printed)
+        => string.IsNullOrWhiteSpace(printed) || printed.Trim() is "／" or "/" or "、" ? " / " : printed;
 
     /// <summary>名義 1 つ分の HTML（詳細ページへのリンク）。</summary>
     public static string NameHtml(BuildContext ctx, MusicCredit r)
@@ -259,9 +266,10 @@ public static class MusicCreditViewBuilder
                 name = r.RawText ?? r.PrintedText ?? "";
                 break;
         }
-        return url.Length > 0
+        string link = url.Length > 0
             ? $"<a class=\"staff-name\" href=\"{HtmlUtil.Escape(url)}\">{HtmlUtil.Escape(name)}</a>"
             : $"<span class=\"staff-name\">{HtmlUtil.Escape(name)}</span>";
+        return r.EntryKind == "PERSON" && r.PersonAliasId is int aliasId ? link + PrimaryNameSuffixHtml(ctx, aliasId) : link;
     }
 
     private static string AffiliationName(BuildContext ctx, MusicCredit r)
@@ -297,6 +305,21 @@ public static class MusicCreditViewBuilder
         }
     }
 
+    /// <summary>
+    /// 別名義でのクレジットに、人物の本名義（人物詳細の見出しと同じ名義）を括弧で添える HTML。
+    /// 例：「仲弓 香乃」→「（ゆかな）」。名義が本名義と同じ（空白の違いを除く）なら空文字。
+    /// </summary>
+    public static string PrimaryNameSuffixHtml(BuildContext ctx, int personAliasId)
+    {
+        if (!ctx.PersonAliasById.TryGetValue(personAliasId, out var alias)) return "";
+        if (PersonIdOf(ctx, personAliasId) is not int pid) return "";
+        string? primary = ctx.EntityUrls.PersonDisplayName(pid);
+        if (string.IsNullOrEmpty(primary)) return "";
+        static string Norm(string t) => t.Replace(" ", "").Replace("　", "");
+        if (Norm(primary) == Norm(alias.DisplayTextOverride ?? alias.Name)) return "";
+        return $"<span class=\"staff-primary-name muted\">（{HtmlUtil.Escape(primary)}）</span>";
+    }
+
     /// <summary>名義 → 人物 ID（共同名義は先頭の人物）。</summary>
     public static int? PersonIdOf(BuildContext ctx, int personAliasId)
         => ctx.PersonIdByAlias.TryGetValue(personAliasId, out var pid) ? pid : null;
@@ -305,45 +328,56 @@ public static class MusicCreditViewBuilder
 /// <summary>
 /// 音楽クレジットのブロック（<see cref="MusicCreditBlockView"/>）を HTML に書き出すヘルパ。
 /// 曲・録音・劇伴セッション・商品の各ページで同じ見た目にするため、テンプレではなくここで 1 か所に組み立てる。
-/// 区分ごとに小見出しを立て、各役職は楽曲詳細の作家欄と同じ「.song-credits の中の .key-staff-line」で並べる。
+/// 区分ごとの小見出しは立てず、役職ごとのユニット（役職バッジ + 名前）を横に流して並べる。
 /// 根拠にした盤は末尾に「出典：」として添える。
 /// </summary>
 public static class MusicCreditHtml
 {
-    /// <param name="headingTag">区分の小見出しに使うタグ（h3 / h4 など）。</param>
-    public static string Render(MusicCreditBlockView block, string headingTag)
+    /// <summary>
+    /// 役職ごとのユニット（役職バッジ + 名前の並び）を横に流して書き出す（外枠 .staff-badges-row 込み）。
+    /// 役職ごとに改行して縦に伸びないよう、ユニットを行内で続けて並べ、ユニットの中では改行しない（.music-credit-unit）。
+    /// 区分の見出しは立てず、区分の順（作詞・作曲・編曲 → 演奏・コーラス等 → レコーディング → 音盤製作）に並べる。
+    /// </summary>
+    public static string RenderUnits(MusicCreditBlockView block)
     {
         if (block.IsEmpty) return "";
         var sb = new System.Text.StringBuilder();
-        sb.Append("<div class=\"music-credit-block\">");
+        sb.Append("<div class=\"staff-badges-row music-credit-row\">");
         foreach (var g in block.Groups)
         {
-            sb.Append('<').Append(headingTag).Append(" class=\"music-credit-group-heading\">")
-              .Append(HtmlUtil.Escape(g.GroupLabel))
-              .Append("</").Append(headingTag).Append('>');
-            sb.Append("<div class=\"song-credits music-credit-lines\">");
             foreach (var line in g.Lines)
             {
-                sb.Append("<div class=\"key-staff-line\">")
+                sb.Append("<span class=\"staff-badge-group music-credit-unit\">")
                   .Append("<span class=\"role-badge role-badge-sm\" data-role-code=\"").Append(HtmlUtil.Escape(line.RoleCode)).Append("\">")
                   .Append(HtmlUtil.Escape(line.RoleLabel)).Append("</span>")
-                  .Append("<span class=\"key-staff-names\">").Append(line.NamesHtml).Append("</span>")
-                  .Append("</div>");
+                  .Append(line.NamesHtml)
+                  .Append("</span>");
             }
-            sb.Append("</div>");
-        }
-        if (block.Sources.Count > 0)
-        {
-            sb.Append("<p class=\"muted music-credit-sources\">出典：");
-            for (int i = 0; i < block.Sources.Count; i++)
-            {
-                if (i > 0) sb.Append('、');
-                sb.Append("<a href=\"").Append(HtmlUtil.Escape(block.Sources[i].Url)).Append("\">")
-                  .Append(HtmlUtil.Escape(block.Sources[i].Title)).Append("</a>");
-            }
-            sb.Append("</p>");
         }
         sb.Append("</div>");
         return sb.ToString();
+    }
+
+    /// <summary>根拠にした盤の「出典：」段落（無ければ空文字）。</summary>
+    public static string RenderSources(MusicCreditBlockView block)
+    {
+        if (block.Sources.Count == 0) return "";
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<p class=\"muted music-credit-sources\">出典：");
+        for (int i = 0; i < block.Sources.Count; i++)
+        {
+            if (i > 0) sb.Append('、');
+            sb.Append("<a href=\"").Append(HtmlUtil.Escape(block.Sources[i].Url)).Append("\">")
+              .Append(HtmlUtil.Escape(block.Sources[i].Title)).Append("</a>");
+        }
+        sb.Append("</p>");
+        return sb.ToString();
+    }
+
+    /// <summary>全役職のユニットを横に流し、末尾に出典を添える。</summary>
+    public static string Render(MusicCreditBlockView block)
+    {
+        if (block.IsEmpty) return "";
+        return "<div class=\"music-credit-block\">" + RenderUnits(block) + RenderSources(block) + "</div>";
     }
 }

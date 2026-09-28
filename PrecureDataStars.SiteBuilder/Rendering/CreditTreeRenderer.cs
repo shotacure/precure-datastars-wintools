@@ -1360,11 +1360,11 @@ internal sealed class CreditTreeRenderer
                         : (e.RawCharacterText ?? "(キャラ未指定)");
                     string charHtml = PrependMisprintHtml(Esc(charName), e.CharacterMisprintText);
 
-                    string voiceText = e.PersonAliasId.HasValue
-                        ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(声優不明)")
-                        : "(声優未指定)";
-                    string voiceHtml = _staffLinkResolver.ResolveAsHtml(e.PersonAliasId, voiceText);
-                    voiceHtml = PrependMisprintHtml(voiceHtml, e.PersonMisprintText);
+                    // 声優側は PERSON と同じく「名前 + (所属)」で出す（スペシャルゲストの「たくや (ザ・たっち)」など）。
+                    // 人物側の誤記前置も ResolvePersonWithAffiliationHtmlAsync が行う。
+                    string voiceHtml = e.PersonAliasId.HasValue
+                        ? await ResolvePersonWithAffiliationHtmlAsync(e, ct).ConfigureAwait(false)
+                        : Esc("(声優未指定)");
                     return $"{charHtml} … {voiceHtml}";
                 }
 

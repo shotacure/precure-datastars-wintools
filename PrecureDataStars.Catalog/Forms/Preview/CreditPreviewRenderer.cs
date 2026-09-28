@@ -1939,8 +1939,9 @@ internal sealed class CreditPreviewRenderer
                     string charName = e.CharacterAliasId.HasValue
                         ? ((await _lookup.LookupCharacterAliasNameAsync(e.CharacterAliasId.Value)) ?? "(キャラ不明)")
                         : (e.RawCharacterText ?? "(キャラ未指定)");
+                    // 声優側は PERSON と同じく「名前 + (所属)」で出す（スペシャルゲストの「たくや (ザ・たっち)」など）。
                     string voice = e.PersonAliasId.HasValue
-                        ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value)) ?? "(声優不明)")
+                        ? await ResolvePersonWithAffiliationAsync(e, ct)
                         : "(声優未指定)";
                     return $"{charName} … {voice}";
                 }

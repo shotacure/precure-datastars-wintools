@@ -245,7 +245,7 @@ public sealed class AnniversaryGenerator
         if (episodes > 0) parts.Add($"エピソード{episodes}話の放送");
         if (movies > 0) parts.Add($"映画{movies}本の公開");
         if (characterBirthdays > 0) parts.Add($"キャラクター{characterBirthdays}人の誕生日");
-        if (personBirthdays > 0) parts.Add($"クリエーター{personBirthdays}人の誕生日");
+        if (personBirthdays > 0) parts.Add($"クリエイター{personBirthdays}人の誕生日");
 
         return parts.Count == 0
             ? $"{dateLabel}にプリキュアで起きた出来事。この日付に該当する記録は現在のところ登録がありません。歴代シリーズの放送日・公開日・誕生日を日付から引ける記念日カレンダーです。"
@@ -325,7 +325,7 @@ public sealed class AnniversaryGenerator
         var layout = new LayoutModel
         {
             PageTitle = "プリキュア記念日カレンダー",
-            MetaDescription = $"歴代プリキュアの放送日・映画公開日・キャラクターとクリエーターの誕生日を、{totalEntries} 件ぶん日付から引ける記念日カレンダー。今日は何の日かを 1 月 1 日から 12 月 31 日まで日付別にたどれます。",
+            MetaDescription = $"歴代プリキュアの放送日・映画公開日・キャラクターとクリエイターの誕生日を、{totalEntries} 件ぶん日付から引ける記念日カレンダー。今日は何の日かを 1 月 1 日から 12 月 31 日まで日付別にたどれます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

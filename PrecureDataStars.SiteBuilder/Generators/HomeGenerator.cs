@@ -147,7 +147,7 @@ public sealed class HomeGenerator
         var upcomingBooks = BuildUpcomingBooks(allBooks, primaryGenreLabelByBook, amazonTag, todayDate);
         var dbStats = await BuildDbStatsAsync(allEpisodes.Count, ct).ConfigureAwait(false);
 
-        // キャラクター・クリエーターのデータ充足率（暫定表記。テスト・本番とも表示）。
+        // キャラクター・クリエイターのデータ充足率（暫定表記。テスト・本番とも表示）。
         var dataSufficiencyLabel = await BuildDataSufficiencyLabelAsync(ct).ConfigureAwait(false);
 
         // 本放送フォーマットの調査完了率（暫定表記。テスト・本番とも表示）。
@@ -220,7 +220,7 @@ public sealed class HomeGenerator
                     new OgCardBadge("", $"{dbStats.SongsCount}歌"),
                     new OgCardBadge("", $"{dbStats.BgmsCount}劇伴"),
                     new OgCardBadge("", $"{dbStats.MusicProductsCount}音楽商品"),
-                    new OgCardBadge("", $"{dbStats.CreatorsCount}クリエーター")
+                    new OgCardBadge("", $"{dbStats.CreatorsCount}クリエイター")
                 }
             }
         };
@@ -306,7 +306,7 @@ public sealed class HomeGenerator
     }
 
     /// <summary>
-    /// トップに出す「キャラクター・クリエーターのデータ充足率」ラベルを組み立てる。
+    /// トップに出す「キャラクター・クリエイターのデータ充足率」ラベルを組み立てる。
     /// 充足率 ＝ (OP・ED 両方のクレジットが揃っている最後の TV 話の通算話数) ÷
     /// (パートが入力されている最後の TV 話の通算話数)。フロンティア（最後に揃っている回）の
     /// シリーズ名・話数も添える。クレジット入力が現在に追いつくまでの暫定表記で、テスト・本番とも表示する
@@ -341,7 +341,7 @@ WHERE s.kind_code = 'TV' AND e.is_deleted = 0 AND e.total_ep_no IS NOT NULL
         if (frontier is null || denominator is not int den || den <= 0) return "";
 
         double pct = (double)frontier.TotalEp / den * 100.0;
-        return $"（キャラクターおよびクリエーターのデータ充足率：{pct:0.00}%『{frontier.Title}』第{frontier.Ep}話まで）";
+        return $"（キャラクターおよびクリエイターのデータ充足率：{pct:0.00}%『{frontier.Title}』第{frontier.Ep}話まで）";
     }
 
     /// <summary>充足率フロンティア（OP・ED 揃いの最終話）の行。</summary>
@@ -974,11 +974,11 @@ WHERE e.is_deleted = 0
         /// <summary>可視ブランド表記（例: プリキュアデータベース「precure-datastars」）。hero の h1 に出す。</summary>
         public string SiteBrandLabel { get; set; } = "";
         /// <summary>本番モードかどうか。true のとき DB 統計ボックスのうちプリキュア・キャラクター・
-        /// クリエーターをテンプレ側で非表示にする（データが揃いきるまでの暫定措置）。</summary>
+        /// クリエイターをテンプレ側で非表示にする（データが揃いきるまでの暫定措置）。</summary>
         public bool IsProductionMode { get; set; }
         /// <summary>最終ビルド表記の表示文字列（導入）。 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」のような 完成形を C# 側で組み立てて流し込む。</summary>
         public string BuildLabel { get; set; } = "";
-        /// <summary>キャラクター・クリエーターのデータ充足率の表示文字列（暫定表記）。
+        /// <summary>キャラクター・クリエイターのデータ充足率の表示文字列（暫定表記）。
         /// 空文字なら非表示。BuildLabel の直下に赤字で出す。</summary>
         public string DataSufficiencyLabel { get; set; } = "";
         /// <summary>本放送フォーマットの調査完了率の表示文字列（暫定表記）。
@@ -1105,7 +1105,7 @@ WHERE e.is_deleted = 0
         public int PersonsCount { get; set; }
         public int CompaniesCount { get; set; }
 
-        /// <summary>「クリエーター」集計値。人物（PersonsCount）と企業・団体（CompaniesCount）を 合算したもの。トップの DB 統計ボックスでは両者を別々に出さず、この合算値で 「クリエーター」1 項目として表示し、リンク先は /creators/ ランディングにする。 個別の人物数・企業数は他用途のため PersonsCount / CompaniesCount として保持する。</summary>
+        /// <summary>「クリエイター」集計値。人物（PersonsCount）と企業・団体（CompaniesCount）を 合算したもの。トップの DB 統計ボックスでは両者を別々に出さず、この合算値で 「クリエイター」1 項目として表示し、リンク先は /creators/ ランディングにする。 個別の人物数・企業数は他用途のため PersonsCount / CompaniesCount として保持する。</summary>
         public int CreatorsCount => PersonsCount + CompaniesCount;
     }
 

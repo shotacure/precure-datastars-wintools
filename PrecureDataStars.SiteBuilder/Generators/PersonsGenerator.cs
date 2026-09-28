@@ -191,7 +191,7 @@ public sealed class PersonsGenerator
                     g => (IReadOnlyList<SongRecording>)g.OrderBy(r => r.SongRecordingId).ToList());
         }
 
-        // 人物索引は「クリエーター > スタッフ」（/creators/staff/）に集約。
+        // 人物索引は「クリエイター > スタッフ」（/creators/staff/）に集約。
         // 本ジェネレータは人物単体の詳細ページ（/people/{名前}/）生成に専念する。
 
         // 詳細ページ。関与が 1 件もない人物もページは作る（直リンク用）。
@@ -346,7 +346,7 @@ public sealed class PersonsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "歴代クリエーター", Url = PathUtil.CreatorsLandingUrl() },
+                new BreadcrumbItem { Label = "歴代クリエイター", Url = PathUtil.CreatorsLandingUrl() },
                 new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = PathUtil.CreatorsStaffUrl() },
                 new BreadcrumbItem { Label = displayName, Url = "" }
             },
@@ -384,7 +384,7 @@ public sealed class PersonsGenerator
             .Select(g => new OgCardFactLine(g.RoleLabel, FormatInvolvementCount(g)))
             .ToArray();
 
-        // 前置きは置かない。「クリエーター」と名乗らせなくても、氏名と担当役職の並びで何者かは伝わる。
+        // 前置きは置かない。「クリエイター」と名乗らせなくても、氏名と担当役職の並びで何者かは伝わる。
         return new OgCardSpec(Kicker: "", Title: displayName)
         {
             // 担当話数はクレジット登録済みの範囲でしか数えられない。母数を示さずに数だけ出すと

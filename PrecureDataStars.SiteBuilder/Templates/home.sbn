@@ -7,7 +7,7 @@
   <p class="lead">プリキュアまるごとデータベース。</p>
   <p class="muted home-build-info">{{ BuildLabel }}</p>
   {{~ if DataSufficiencyLabel != "" ~}}
-  {{## キャラクター・クリエーターのデータ充足率（暫定表記・赤字）。追いついたら除去する。 ##}}
+  {{## キャラクター・クリエイターのデータ充足率（暫定表記・赤字）。追いついたら除去する。 ##}}
   <p class="home-data-sufficiency">{{ DataSufficiencyLabel }}</p>
   {{~ end ~}}
   {{## 本放送フォーマットの調査完了率（暫定表記・赤字）。調査完了率が 100% に到達して役目を終えたため、
@@ -47,7 +47,7 @@
          2 セット並べる。CSS 側で .home-db-stats-link-music-products を捉まえてペア間の
          余白を制御し、「N点」「M枚」が単一語として読みやすい間隔に整える。 ##}}
     <li><a class="home-db-stats-link home-db-stats-link-music-products" href="/products/"><span class="home-db-stats-value">{{ DbStats.MusicProductsCount }}</span><span class="home-db-stats-label">点</span><span class="home-db-stats-value">{{ DbStats.MusicDiscsCount }}</span><span class="home-db-stats-label">枚</span><span class="home-db-stats-label">音楽商品</span></a></li>
-    <li><a class="home-db-stats-link" href="/creators/"><span class="home-db-stats-value">{{ DbStats.CreatorsCount }}</span><span class="home-db-stats-label">クリエーター</span></a></li>
+    <li><a class="home-db-stats-link" href="/creators/"><span class="home-db-stats-value">{{ DbStats.CreatorsCount }}</span><span class="home-db-stats-label">クリエイター</span></a></li>
   </ul>
 </section>
 

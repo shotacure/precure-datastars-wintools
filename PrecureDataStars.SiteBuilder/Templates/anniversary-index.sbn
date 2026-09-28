@@ -10,14 +10,14 @@
      狭い幅では 1 列の日付リストへ倒す（CSS 側で切り替え。DOM は 1 つのまま）。 ##}}
 <section>
   <h1>プリキュア記念日カレンダー</h1>
-  <p class="lead">歴代プリキュアの放送日・映画公開日・キャラクターとクリエーターの誕生日。エブリデイ、プリキュア。</p>
+  <p class="lead">歴代プリキュアの放送日・映画公開日・キャラクターとクリエイターの誕生日。エブリデイ、プリキュア。</p>
   {{## 升目の曜日は DisplayYear（ビルド年）のもの。日付ページ自体は月日しか持たないので、
        どの年の曜日で組んだ面かは凡例と並べて断っておく。 ##}}
   <p class="muted anniv-legend">
     <span class="cal-chip cal-chip-ep"><span class="cal-chip-emoji">📺</span>TV 放送</span>
     <span class="cal-chip cal-chip-movie"><span class="cal-chip-emoji">🎥</span>劇場公開</span>
     <span class="cal-chip cal-chip-bday cal-chip-plain"><span class="cal-chip-emoji">🎂</span>キャラクター誕生日</span>
-    <span class="cal-chip cal-chip-person"><span class="cal-chip-emoji">🎂</span>クリエーター誕生日</span>
+    <span class="cal-chip cal-chip-person"><span class="cal-chip-emoji">🎂</span>クリエイター誕生日</span>
     <span class="anniv-legend-note">カレンダー配列は<span id="anniv-cal-year">{{ DisplayYear }}</span>年</span>
   </p>
 </section>

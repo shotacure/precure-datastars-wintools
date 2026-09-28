@@ -11,7 +11,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// 統計セクション全体の入口。サブタイトル統計（<c>/stats/subtitles/</c>）、エピソード尺統計
 /// （<c>/stats/episodes/</c>）の 2 大セクションへのリンクを並べる索引ページ。
 /// 役職別ランキング（<c>/creators/roles/</c>）・声優ランキング（<c>/creators/voice-cast/</c>）は
-/// 「クリエーター」セクションへ移設済みで <see cref="CreatorsGenerator"/> が生成するため、本ランディングは
+/// 「クリエイター」セクションへ移設済みで <see cref="CreatorsGenerator"/> が生成するため、本ランディングは
 /// 関与系を扱わない。
 /// 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」
 /// 表記（カバレッジラベル）を 2 セクション（サブタイトル統計 / エピソード尺統計）の各 h2 直下に

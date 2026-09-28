@@ -91,7 +91,7 @@ public sealed class CompaniesGenerator
             .GroupBy(ap => ap.AliasId)
             .ToDictionary(g => g.Key, g => g.OrderBy(x => x.PersonSeq).First().PersonId);
 
-        // 企業索引は「クリエーター > スタッフ」（/creators/staff/）に集約。
+        // 企業索引は「クリエイター > スタッフ」（/creators/staff/）に集約。
         // 本ジェネレータは企業・団体単体の詳細ページ（/companies/{id}/）生成に専念する。
 
         // 詳細ページ。
@@ -210,7 +210,7 @@ public sealed class CompaniesGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "歴代クリエーター", Url = PathUtil.CreatorsLandingUrl() },
+                new BreadcrumbItem { Label = "歴代クリエイター", Url = PathUtil.CreatorsLandingUrl() },
                 new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = PathUtil.CreatorsStaffUrl() },
                 new BreadcrumbItem { Label = displayName, Url = "" }
             },

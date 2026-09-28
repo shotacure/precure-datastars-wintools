@@ -2442,6 +2442,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .song-recording .song-credits.song-recording-vocalists-credits {
   margin: 6px 0 8px;
 }
+/* 表記ではメンバーを出さないユニット名義に添えるメンバー列（例：DARK ELEMENTS（竹内 浩明、…））。
+   名義そのものより一段控えめにする。 */
+.unit-members-hidden {
+  font-size: 0.85em;
+}
 
 /* 収録商品カードリスト（歌詳細 /songs/{id}/ 各録音バージョン配下）。
    カード全域 = 1 リンクの構造で、/products/ 索引の products-card と DOM・見た目を揃える
@@ -7446,7 +7451,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: var(--muted, #9ca3af);
   font-style: italic;
 }
-/* クリエーターセクション（スタッフ / 役職詳細 / 声の出演）。/creators/ 配下に統合された
+/* クリエイターセクション（スタッフ / 役職詳細 / 声の出演）。/creators/ 配下に統合された
    索引・詳細ページ共通のレイアウトを定義する。 */
 
 /* エンティティ行リスト（スタッフ / 役職詳細 / 声の出演 / キャラクター索引 共通）。
@@ -7505,6 +7510,11 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-size: 0.88em;
   white-space: nowrap;
 }
+/* 歌唱一覧のキャラクターの行で、キャラ名の直後に添える「(CV: 声優)」。 */
+.entity-row-cv {
+  margin-left: -6px;
+  white-space: nowrap;
+}
 /* 行ホバーで遷移先（主エンティティ名）に下線を出し、行全体がクリックできることを示す。 */
 .entity-row:hover a.entity-row-name {
   text-decoration: underline;
@@ -7555,6 +7565,11 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .entity-badge-company {
   background: var(--surface-2, #eef2ff);
   color: var(--fg, #3730a3);
+}
+/* 歌唱一覧のキャラクターの行（星のアイコン）。歌手（個人と同じピンク）と見分けられる紫系。 */
+.entity-badge-character {
+  background: rgba(126, 87, 194, 0.12);
+  color: var(--accent-purple, #7e57c2);
 }
 
 /* 担当数・出演数・登場数の絵文字ピルバッジ。「📺 N（話）」「🎥 N（本）」を
@@ -7628,7 +7643,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: #be123c;
 }
 
-/* 個人 / 団体 絞り込みトグル。タブ行の下に小さく置く。 */
+/* 個人 / 団体（歌唱一覧では歌手 / キャラクター）の絞り込みトグル。タブ行の下に小さく置く。
+   見た目は音楽制作の並べ替え切り替え（.sort-toggle-btn）とそろえ、選択中は文字と枠を本文色にする。 */
 .entity-filter {
   display: flex;
   flex-wrap: wrap;
@@ -7643,28 +7659,29 @@ ins.adsbygoogle[data-ad-status="filled"] {
   appearance: none;
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--fg);
+  color: var(--muted);
   padding: 3px 12px;
   border-radius: 999px;
-  font-size: 0.85em;
+  font-size: 0.88em;
   cursor: pointer;
 }
 .entity-filter-btn:hover:not(.is-active) {
   background: var(--surface-2, rgba(0, 0, 0, 0.04));
 }
 .entity-filter-btn.is-active {
-  background: var(--accent-pink, #ec4899);
-  border-color: var(--accent-pink, #ec4899);
-  color: #fff;
+  color: var(--fg);
+  border-color: var(--fg);
 }
 .entity-filter-btn:focus-visible {
   outline: 2px solid var(--accent-pink, #ec4899);
   outline-offset: 2px;
 }
 
-/* 個人/団体トグルの行出し分け（entity-row の li を data-entity-type 属性で隠す）。 */
+/* 個人/団体・歌手/キャラクターのトグルの行出し分け（entity-row の li を data-entity-type 属性で隠す）。 */
 .creators-root[data-entity-filter="person"] [data-entity-type="company"],
-.creators-root[data-entity-filter="company"] [data-entity-type="person"] {
+.creators-root[data-entity-filter="company"] [data-entity-type="person"],
+.creators-root[data-entity-filter="singer"] [data-entity-type="character"],
+.creators-root[data-entity-filter="character"] [data-entity-type="singer"] {
   display: none;
 }
 

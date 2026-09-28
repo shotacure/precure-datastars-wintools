@@ -8,7 +8,8 @@
 
 {{## 音楽制作。
      ・役職タブ：音楽クレジットの区分ごとに役職を並べ、役職詳細（/creators/roles/{code}/）へ送る（人数・団体数つき）。
-     ・一覧タブ（Tabs）：歌（詞曲）/ 歌（演奏）/ 劇伴（作編曲）/ 劇伴（演奏）/ 制作。歌は曲単位、劇伴と制作は作品（シリーズ・映画）単位で数える。
+     ・一覧タブ（Tabs）：歌（詞曲）/ 歌（演奏）/ 劇伴（作編曲）/ 劇伴（演奏）/ 制作。歌は曲数（🎵）、劇伴と制作は作品数を
+       TV シリーズ（📺）と映画（🎥）に分けて出す。制作の盤（商品）に付いたクレジットは盤の数（💿）で出す。
      ・一覧タブの中は「初参加順（シリーズ別セクション）/ 多い順」を小さな切り替えで並べ替える（data-sort-panel）。
      ・タブ切替はスタッフ一覧と同じインライン JS。 ##}}
 <div class="creators-root creators-tabs products-tabs">
@@ -69,7 +70,7 @@
             <a class="entity-row-name" href="{{ e.Url }}">{{ e.Name | html.escape }}</a>
             <span class="music-role-badges">{{~ for b in e.Roles ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>
             {{~ if e.DebutLabel != "" ~}}<span class="entity-row-sub muted">初参加：<a href="{{ e.DebutUrl }}">{{ e.DebutLabel | html.escape }}</a></span>{{~ end ~}}
-            <span class="entity-row-count"><span class="count-badges">{{~ if t.IsByWork ~}}<span class="count-pill">{{ e.Count }}作品</span>{{~ else ~}}<span class="count-pill count-pill-song">🎵 {{ e.Count }}</span>{{~ end ~}}</span></span>
+            <span class="entity-row-count"><span class="count-badges">{{~ if t.IsByWork ~}}{{~ if e.TvWorkCount > 0 ~}}<span class="count-pill count-pill-tv" title="TVシリーズ {{ e.TvWorkCount }} 作品">📺 {{ e.TvWorkCount }}</span>{{~ end ~}}{{~ if e.MovieWorkCount > 0 ~}}<span class="count-pill count-pill-movie" title="映画 {{ e.MovieWorkCount }} 本">🎥 {{ e.MovieWorkCount }}</span>{{~ end ~}}{{~ if e.ProductCount > 0 ~}}<span class="count-pill count-pill-cd" title="音盤 {{ e.ProductCount }} 点">💿 {{ e.ProductCount }}</span>{{~ end ~}}{{~ else ~}}<span class="count-pill count-pill-song">🎵 {{ e.Count }}</span>{{~ end ~}}</span></span>
           </li>
           {{~ end ~}}
         </ul>
@@ -81,7 +82,7 @@
       <li class="entity-row">
         <a class="entity-row-name" href="{{ e.Url }}">{{ e.Name | html.escape }}</a>
         <span class="music-role-badges">{{~ for b in e.Roles ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>
-        <span class="entity-row-count"><span class="count-badges">{{~ if t.IsByWork ~}}<span class="count-pill">{{ e.Count }}作品</span>{{~ else ~}}<span class="count-pill count-pill-song">🎵 {{ e.Count }}</span>{{~ end ~}}</span></span>
+        <span class="entity-row-count"><span class="count-badges">{{~ if t.IsByWork ~}}{{~ if e.TvWorkCount > 0 ~}}<span class="count-pill count-pill-tv" title="TVシリーズ {{ e.TvWorkCount }} 作品">📺 {{ e.TvWorkCount }}</span>{{~ end ~}}{{~ if e.MovieWorkCount > 0 ~}}<span class="count-pill count-pill-movie" title="映画 {{ e.MovieWorkCount }} 本">🎥 {{ e.MovieWorkCount }}</span>{{~ end ~}}{{~ if e.ProductCount > 0 ~}}<span class="count-pill count-pill-cd" title="音盤 {{ e.ProductCount }} 点">💿 {{ e.ProductCount }}</span>{{~ end ~}}{{~ else ~}}<span class="count-pill count-pill-song">🎵 {{ e.Count }}</span>{{~ end ~}}</span></span>
       </li>
       {{~ end ~}}
     </ul>

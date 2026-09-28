@@ -521,6 +521,7 @@ public sealed class CharactersGenerator
                 rows.Add((placement, invs.Count > 0 ? invs[0].CreditSeq : int.MaxValue, new GuestCharacterRow
                 {
                     Name = ch.Name,
+                    KindCode = ch.CharacterKind,
                     KindLabel = kindMap.TryGetValue(ch.CharacterKind, out var k) ? k.NameJa : ch.CharacterKind,
                     VoiceActorsHtml = string.Join("、", actorLinks)
                 }));
@@ -1002,6 +1003,8 @@ public sealed class CharactersGenerator
     private sealed class GuestCharacterRow
     {
         public string Name { get; set; } = "";
+        /// <summary>種別コード（character_kinds.kind_code）。種別バッジの色分け（data-kind）に使う。</summary>
+        public string KindCode { get; set; } = "";
         public string KindLabel { get; set; } = "";
         /// <summary>演じた声優のリンク済み HTML（「、」連結、テンプレ側でエスケープしない）。未登録なら空。</summary>
         public string VoiceActorsHtml { get; set; } = "";

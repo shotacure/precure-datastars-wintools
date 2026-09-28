@@ -7382,6 +7382,37 @@ ins.adsbygoogle[data-ad-status="filled"] {
   white-space: nowrap;
 }
 
+/* キャラクター種別バッジ（ゲストキャラクター一覧の行で、名前の後ろに種別を出す）。
+   関連作品バッジと同じ形で、種別ごとに色を分ける（プリキュア＝ピンク / 味方＝青 / 敵＝紫 / とりまく人々＝グレー）。 */
+.character-kind-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 600;
+  line-height: 1.4;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.character-kind-badge[data-kind="PRECURE"] {
+  background: #fdf2f8;
+  color: #be185d;
+  border-color: #fbcfe8;
+}
+.character-kind-badge[data-kind="ALLY"] {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+.character-kind-badge[data-kind="VILLAIN"] {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border-color: #ddd6fe;
+}
+
 /* 映画 BGM リスト（series-detail の #movie-bgm-list セクション）。 */
 #movie-bgm-list .movie-bgm-table {
   width: 100%;

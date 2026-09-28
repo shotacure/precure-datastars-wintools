@@ -263,9 +263,9 @@ public sealed class PersonsGenerator
 
         // 「音楽クレジット」セクション（作詞・作曲・編曲 / 演奏・コーラス等 / レコーディング / 音盤製作）。
         var songCards = BuildPersonSongCards(aliasIds);
-        // 別名義で参加した曲は、カードに「〇〇 名義」を添える（歌唱・コーラス・作詞・作曲・編曲・演奏など）。
+        // 曲ごとに、どの役職でどの名義を使ったかを控えておく（音楽クレジットの小見出しごとに「〇〇 名義」を添えるため）。
         foreach (var card in songCards)
-            card.AliasNote = AliasNote(SongAliasIds(card.SongId, aliasIds), displayName);
+            card.AliasUses = SongAliasUses(card.SongId, aliasIds).ToList();
         var musicSections = BuildPersonMusicSections(aliasIds, songCards, displayName);
         // 誕生日表記：BirthYearVisibility=PUBLIC かつ BirthYear ありなら「YYYY年M月D日」、
         // 非公開もしくは未設定なら年抜きの「M月D日」。BirthMonth / BirthDay の片方でも未設定なら空文字。
@@ -1020,7 +1020,14 @@ public sealed class PersonsGenerator
             var cards = songCards
                 .Select(c => (Card: c, Roles: cardRoles(c)))
                 .Where(x => x.Roles.Count > 0)
-                .Select(x => x.Card.WithRoles(x.Roles))
+                .Select(x =>
+                {
+                    // 小見出しの役職で使った名義のうち、本名義と違うものだけを「〇〇 名義」として添える。
+                    var copy = x.Card.WithRoles(x.Roles);
+                    var codes = x.Roles.Select(b => b.Code).ToHashSet(StringComparer.Ordinal);
+                    copy.AliasNote = AliasNote(x.Card.AliasUses.Where(u => codes.Contains(u.RoleCode)).Select(u => u.AliasId), displayName);
+                    return copy;
+                })
                 .ToList();
             var songItems = BuildMusicCreditItems(songRows.Where(r => InGroup(r.RoleCode)), displayName);
             if (cards.Count > 0 || songItems.Count > 0)
@@ -1124,18 +1131,18 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 人物が曲に参加したときの名義 ID 群（作詞・作曲・編曲 song_credits、歌唱 song_recording_singers をユニットのメンバーまで展開、
+    /// 人物が曲に参加したときの（役職, 名義 ID）の組（作詞・作曲・編曲 song_credits、歌唱 song_recording_singers をユニットのメンバーまで展開、
     /// 音楽クレジット music_credits の曲・録音紐付け）。人物の名義に含まれるものだけ返す。
     /// </summary>
-    private IEnumerable<int> SongAliasIds(int songId, IReadOnlyList<int> aliasIds)
+    private IEnumerable<(string RoleCode, int AliasId)> SongAliasUses(int songId, IReadOnlyList<int> aliasIds)
     {
         var mine = aliasIds.ToHashSet();
         if (_ctx.SongCreditsBySong.TryGetValue(songId, out var credits))
             foreach (var c in credits)
-                if (mine.Contains(c.PersonAliasId)) yield return c.PersonAliasId;
+                if (mine.Contains(c.PersonAliasId)) yield return (c.CreditRole, c.PersonAliasId);
         if (_ctx.MusicCredits.BySong.TryGetValue(songId, out var songRows))
             foreach (var r in songRows)
-                if (r.PersonAliasId is int a && mine.Contains(a)) yield return a;
+                if (r.PersonAliasId is int a && mine.Contains(a)) yield return (r.RoleCode, a);
         if (_recordingsBySong is not null && _recordingsBySong.TryGetValue(songId, out var recs))
         {
             foreach (var rec in recs)
@@ -1143,10 +1150,10 @@ public sealed class PersonsGenerator
                 if (_ctx.SingersByRecording.TryGetValue(rec.SongRecordingId, out var singers))
                     foreach (var sg in singers)
                         foreach (var part in _ctx.ExpandSingerParticipants(sg))
-                            if (part.PersonAliasId is int pa && mine.Contains(pa)) yield return pa;
+                            if (part.PersonAliasId is int pa && mine.Contains(pa)) yield return (sg.RoleCode, pa);
                 if (_ctx.MusicCredits.ByRecording.TryGetValue(rec.SongRecordingId, out var recRows))
                     foreach (var r in recRows)
-                        if (r.PersonAliasId is int a && mine.Contains(a)) yield return a;
+                        if (r.PersonAliasId is int a && mine.Contains(a)) yield return (r.RoleCode, a);
             }
         }
     }
@@ -1246,8 +1253,11 @@ public sealed class PersonsGenerator
     /// <summary>担当楽曲カード 1 行。1 曲につき 1 行で、複数役職は <see cref="Roles"/> に並べる。</summary>
     private sealed class PersonSongCard
     {
-        /// <summary>別名義で参加したときの「〇〇 名義」（無ければ空文字）。</summary>
+        /// <summary>別名義で参加したときの「〇〇 名義」（無ければ空文字）。音楽クレジットの小見出しごとに、その役職で使った名義から決める。</summary>
         public string AliasNote { get; set; } = "";
+
+        /// <summary>この曲で人物が使った（役職, 名義 ID）の組。</summary>
+        public IReadOnlyList<(string RoleCode, int AliasId)> AliasUses { get; set; } = Array.Empty<(string, int)>();
 
         /// <summary>役職バッジだけを差し替えた複製（音楽クレジットの区分ごとに振り分けるときに使う）。</summary>
         public PersonSongCard WithRoles(IReadOnlyList<RoleBadgeView> roles)

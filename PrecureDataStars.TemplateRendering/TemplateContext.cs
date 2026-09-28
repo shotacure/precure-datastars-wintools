@@ -31,6 +31,9 @@ public sealed class TemplateContext
     /// <summary>scope_kind=SERIES のシリーズの映倫審査番号（<c>series.film_rating_no</c>）。<c>{FILM_RATING_NO}</c> プレースホルダの値として使う。 EPISODE スコープや未登録・未供給時は空文字。 映画のタイトルカード（役職 <c>TITLE</c>）でシリーズ名に番号を併記するために、呼び出し側が解決して詰める。</summary>
     public string ScopeFilmRatingNo { get; }
 
+    /// <summary>scope_kind=SERIES のシリーズのタイトルカードに CJ マークが付くか（<c>series.film_cj_mark</c>）。<c>{CJ_MARK}</c> プレースホルダの値（付くときは「CJ」、付かないときは空文字）に使う。 EPISODE スコープや未供給時は false。</summary>
+    public bool ScopeFilmCjMark { get; }
+
     /// <summary>クレジットの種別（OP/ED/...）。<c>{THEME_SONGS}</c> の絞り込みに使う候補（は未使用）。</summary>
     public string CreditKind { get; }
 
@@ -72,7 +75,7 @@ public sealed class TemplateContext
     /// scope_kind=SERIES のクレジット（映画系列）では <paramref name="scopeSeriesId"/> を渡して
     /// <c>series_theme_songs</c> 経由の {THEME_SONGS} 展開を可能にする。
     /// <paramref name="scopeSeriesTitle"/> を渡すと <c>{SERIES_TITLE}</c> プレースホルダで、<paramref name="scopeFilmRatingNo"/> を渡すと
-    /// <c>{FILM_RATING_NO}</c> プレースホルダで参照できる（省略時は空文字）。</summary>
+    /// <c>{FILM_RATING_NO}</c> プレースホルダで参照できる（省略時は空文字）。<paramref name="scopeFilmCjMark"/> は <c>{CJ_MARK}</c> の値になる（省略時は false）。</summary>
     public TemplateContext(
         string roleCode,
         string roleName,
@@ -84,7 +87,8 @@ public sealed class TemplateContext
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
         IReadOnlySet<string>? visitedRoleCodes,
         string? scopeSeriesTitle = null,
-        string? scopeFilmRatingNo = null)
+        string? scopeFilmRatingNo = null,
+        bool scopeFilmCjMark = false)
     {
         RoleCode = roleCode ?? "";
         RoleName = roleName ?? "";
@@ -94,6 +98,7 @@ public sealed class TemplateContext
         ScopeSeriesId = scopeSeriesId;
         ScopeSeriesTitle = scopeSeriesTitle ?? "";
         ScopeFilmRatingNo = scopeFilmRatingNo ?? "";
+        ScopeFilmCjMark = scopeFilmCjMark;
         CreditKind = creditKind ?? "";
         SiblingRoleResolver = siblingRoleResolver;
         VisitedRoleCodes = visitedRoleCodes ?? new HashSet<string>(StringComparer.Ordinal);
@@ -121,7 +126,8 @@ public sealed class TemplateContext
             siblingRoleResolver: SiblingRoleResolver,
             visitedRoleCodes: visited,
             scopeSeriesTitle: ScopeSeriesTitle,
-            scopeFilmRatingNo: ScopeFilmRatingNo);
+            scopeFilmRatingNo: ScopeFilmRatingNo,
+            scopeFilmCjMark: ScopeFilmCjMark);
     }
 }
 

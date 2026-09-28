@@ -40,6 +40,7 @@ public sealed class ProductsRepository : RepositoryBase
           title_short                    AS TitleShort,
           title_en                       AS TitleEn,
           product_kind_code              AS ProductKindCode,
+          music_credits_checked          AS MusicCreditsChecked,
           release_date                   AS ReleaseDate,
           price_ex_tax                   AS PriceExTax,
           price_inc_tax                  AS PriceIncTax,

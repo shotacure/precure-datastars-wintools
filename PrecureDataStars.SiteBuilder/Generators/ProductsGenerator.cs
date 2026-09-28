@@ -807,7 +807,7 @@ public sealed class ProductsGenerator
             Discs = discViews,
             // 盤のスタッフ（音盤製作・録音の割り振りが決まらない録音側スタッフ。music_credits の PRODUCT 紐付け）。
             MusicCreditsHtml = _ctx.MusicCredits.ByProduct.TryGetValue(product.ProductCatalogNo, out var productMusicRows)
-                ? MusicCreditHtml.Render(MusicCreditViewBuilder.Build(_ctx, productMusicRows), "h3")
+                ? MusicCreditHtml.Render(MusicCreditViewBuilder.Build(_ctx, productMusicRows))
                 : ""
         };
 

@@ -25,7 +25,8 @@
     {{~ for c in g.Characters ~}}
     <li class="entity-row is-static">
       <span class="entity-row-name">{{ c.Name | html.escape }}</span>
-      <span class="entity-row-sub muted">{{ c.KindLabel | html.escape }}{{~ if c.VoiceActorsHtml != "" ~}}　CV: {{ c.VoiceActorsHtml }}{{~ end ~}}</span>
+      {{~ if c.KindLabel != "" ~}}<span class="character-kind-badge" data-kind="{{ c.KindCode | html.escape }}">{{ c.KindLabel | html.escape }}</span>{{~ end ~}}
+      {{~ if c.VoiceActorsHtml != "" ~}}<span class="entity-row-sub muted">CV: {{ c.VoiceActorsHtml }}</span>{{~ end ~}}
     </li>
     {{~ end ~}}
   </ul>

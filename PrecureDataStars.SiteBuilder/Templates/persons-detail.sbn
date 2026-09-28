@@ -269,6 +269,7 @@
             {{~ end ~}}
           </div>
           <div class="person-song-card-title">{{ c.Title | html.escape }}</div>
+          {{~ if c.AliasNote != "" ~}}<div class="person-song-card-alias muted">{{ c.AliasNote | html.escape }}</div>{{~ end ~}}
           {{~ if c.SeriesTitle != "" ~}}
           <div class="person-song-card-series muted">
             {{ c.SeriesTitle | html.escape }}
@@ -287,6 +288,7 @@
         <span class="music-credit-item-roles">{{~ for b in it.Roles ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>
         <a class="music-credit-item-title" href="{{ it.Url }}">{{ it.Title | html.escape }}</a>
         {{~ if it.SubLabel != "" ~}}<span class="muted music-credit-item-sub">{{ it.SubLabel | html.escape }}</span>{{~ end ~}}
+        {{~ if it.AliasNote != "" ~}}<span class="muted music-credit-item-sub">（{{ it.AliasNote | html.escape }}）</span>{{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>

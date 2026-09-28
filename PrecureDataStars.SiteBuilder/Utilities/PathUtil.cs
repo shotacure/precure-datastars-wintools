@@ -87,7 +87,7 @@ public static class PathUtil
 
     /// <summary>
     /// 役職詳細ページの URL パス。
-    /// 「クリエーター」セクション <c>/creators/roles/</c> 配下の役職詳細を指す。
+    /// 「クリエイター」セクション <c>/creators/roles/</c> 配下の役職詳細を指す。
     /// 当該役職に関わった人物・企業/団体を 1 リストに混在させ、五十音順／初参加順／
     /// 担当話数が多い順のタブで切り替える脱ランキング型の一覧ページ。
     /// CreditTreeRenderer の役職アンカー（hover 時の出典リンク等）、シリーズ／
@@ -126,7 +126,7 @@ public static class PathUtil
             or PrecureDataStars.Data.Models.SongRecordingSingerRoles.Chorus
             or PrecureDataStars.Data.Models.SongRecordingSingerRoles.Dialogue;
 
-    /// <summary>クリエーターのトップ（ランディング）ページ URL（<c>/creators/</c>）。</summary>
+    /// <summary>クリエイターのトップ（ランディング）ページ URL（<c>/creators/</c>）。</summary>
     /// <summary>記念日インデックス（月日一覧）の URL パス。</summary>
     public static string AnniversaryIndexUrl() => "/anniversary/";
 

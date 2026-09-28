@@ -258,6 +258,8 @@ CREATE TABLE `series` (
   -- 映倫審査番号（例: 27159）。映画のタイトルカードに併記される番号で、クレジットの役職 TITLE の
   -- テンプレ（role_templates）から {FILM_RATING_NO} で参照する。映画以外や未登録は NULL。
   `film_rating_no` varchar(16) DEFAULT NULL COMMENT '映倫審査番号（映画のタイトルカードに併記）',
+  -- タイトルカードに CJ マークが付くか。役職 TITLE のテンプレから {CJ_MARK}（付く作品では「CJ」）で参照する。
+  `film_cj_mark` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'タイトルカードに CJ マークが付くか',
   `vod_intro` smallint unsigned DEFAULT NULL,
   `font_subtitle` varchar(64) DEFAULT NULL,
   -- 絵コンテ役職を独立表示せず演出と融合表示するか（プレビュー描画専用フラグ）。
@@ -643,6 +645,9 @@ CREATE TABLE `products` (
   `title_short` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `title_en` varchar(255) DEFAULT NULL,
   `product_kind_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  -- この盤のクレジット（音盤の音楽クレジット・楽曲クレジット）を確認・投入済みなら 1。クレジット情報が載っていないと
+  -- 確認できた盤も 1。サイトの音楽系ページの「〇年〇月〇日発売「〇〇」時点の情報」の基準点に使う。
+  `music_credits_checked` tinyint(1) NOT NULL DEFAULT 0,
   `release_date` date NOT NULL,
   `price_ex_tax` int DEFAULT NULL,
   `price_inc_tax` int DEFAULT NULL,

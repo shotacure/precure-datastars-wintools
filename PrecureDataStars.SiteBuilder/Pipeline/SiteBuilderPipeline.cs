@@ -213,7 +213,7 @@ public sealed class SiteBuilderPipeline
         await new MusicGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
-        // クリエーター系ページ（ランディング + スタッフ + 役職詳細 + 声の出演）。
+        // クリエイター系ページ（ランディング + スタッフ + 役職詳細 + 声の出演）。
         // CreditInvolvementIndex の集約結果に依存するため、人物・企業・プリキュア系より後ろで実行する。
         reporter.BeginSection("creators");
         await new CreatorsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
@@ -353,7 +353,7 @@ public sealed class SiteBuilderPipeline
         yield return ("books",              "書籍",             Get("books"));
         yield return ("songs",              "楽曲",             Get("songs"));
         yield return ("music",              "音楽・劇伴",       null);
-        yield return ("creators",           "クリエーター",     null);
+        yield return ("creators",           "クリエイター",     null);
         // 記念日は 366 日 + 索引 1 ページで常に一定。
         yield return ("anniversary",        "記念日",           367);
         yield return ("stats_landing",      "統計ランディング", 1);

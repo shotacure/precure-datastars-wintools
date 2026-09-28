@@ -488,7 +488,7 @@ internal sealed class CreditTreeRenderer
                 // {THEME_SONGS} ハンドラが series_theme_songs を引き当てるようにする。EPISODE スコープでは null。
                 int? scopeSeriesIdForCtx = scopeKind == "SERIES" ? resolveSeriesId : null;
                 // SERIES スコープの場合、テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。
-                // 映倫審査番号（{FILM_RATING_NO}）も同じシリーズから引く。
+                // 映倫審査番号（{FILM_RATING_NO}）と CJ マークの有無（{CJ_MARK}）も同じシリーズから引く。
                 Series? seriesForCtx = scopeSeriesIdForCtx is int ssid && _ctx.SeriesById.TryGetValue(ssid, out var sfc)
                     ? sfc
                     : null;
@@ -496,7 +496,8 @@ internal sealed class CreditTreeRenderer
                     siblingRoleResolver: siblingRoleResolver,
                     visitedRoleCodes: null,
                     scopeSeriesTitle: seriesForCtx?.Title,
-                    scopeFilmRatingNo: seriesForCtx?.FilmRatingNo);
+                    scopeFilmRatingNo: seriesForCtx?.FilmRatingNo,
+                    scopeFilmCjMark: seriesForCtx?.FilmCjMark ?? false);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
 
                 string normalized = rendered.Replace("\r\n", "\n").Replace("\r", "\n");
@@ -1359,11 +1360,11 @@ internal sealed class CreditTreeRenderer
                         : (e.RawCharacterText ?? "(キャラ未指定)");
                     string charHtml = PrependMisprintHtml(Esc(charName), e.CharacterMisprintText);
 
-                    string voiceText = e.PersonAliasId.HasValue
-                        ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(声優不明)")
-                        : "(声優未指定)";
-                    string voiceHtml = _staffLinkResolver.ResolveAsHtml(e.PersonAliasId, voiceText);
-                    voiceHtml = PrependMisprintHtml(voiceHtml, e.PersonMisprintText);
+                    // 声優側は PERSON と同じく「名前 + (所属)」で出す（スペシャルゲストの「たくや (ザ・たっち)」など）。
+                    // 人物側の誤記前置も ResolvePersonWithAffiliationHtmlAsync が行う。
+                    string voiceHtml = e.PersonAliasId.HasValue
+                        ? await ResolvePersonWithAffiliationHtmlAsync(e, ct).ConfigureAwait(false)
+                        : Esc("(声優未指定)");
                     return $"{charHtml} … {voiceHtml}";
                 }
 

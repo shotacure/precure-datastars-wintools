@@ -1604,6 +1604,29 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin: 0;
   padding: 0;
 }
+/* 映画のタイトルカード：タイトルと同じ幅の透明な箱に、左下へ CJ マークの印、右下へ映倫審査番号を寄せる。 */
+.credit-section .film-title-card {
+  display: inline-flex;
+  flex-direction: column;
+}
+.credit-section .film-title-marks {
+  display: flex;
+  align-items: center;
+}
+.credit-section .film-title-marks .film-rating {
+  margin-left: auto;
+}
+/* CJ マークの印（小さく丸囲みで出す）。 */
+.credit-section .cj-mark {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.75em;
+  line-height: 1.4;
+  vertical-align: middle;
+  opacity: 0.8;
+}
 /* コンテンツ領域ヘッダ上書き（role_templates.content_header_override）。
    左カラム役職名の代替として、シリーズ別「役職名の表示テキスト・位置だけ変える」用途で使う。
    本体（フォールバック表 or テンプレ展開結果）と視覚的に区切るために下マージンを取る。
@@ -2418,6 +2441,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* 録音セクション内の歌唱者専用ラッパ：基本情報セクション本体より上下マージンをタイト目に。 */
 .song-recording .song-credits.song-recording-vocalists-credits {
   margin: 6px 0 8px;
+}
+/* 表記ではメンバーを出さないユニット名義に添えるメンバー列（例：DARK ELEMENTS（竹内 浩明、…））。
+   名義そのものより一段控えめにする。 */
+.unit-members-hidden {
+  font-size: 0.85em;
 }
 
 /* 収録商品カードリスト（歌詳細 /songs/{id}/ 各録音バージョン配下）。
@@ -7359,6 +7387,37 @@ ins.adsbygoogle[data-ad-status="filled"] {
   white-space: nowrap;
 }
 
+/* キャラクター種別バッジ（ゲストキャラクター一覧の行で、名前の後ろに種別を出す）。
+   関連作品バッジと同じ形で、種別ごとに色を分ける（プリキュア＝ピンク / 味方＝青 / 敵＝紫 / とりまく人々＝グレー）。 */
+.character-kind-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 600;
+  line-height: 1.4;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.character-kind-badge[data-kind="PRECURE"] {
+  background: #fdf2f8;
+  color: #be185d;
+  border-color: #fbcfe8;
+}
+.character-kind-badge[data-kind="ALLY"] {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+.character-kind-badge[data-kind="VILLAIN"] {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border-color: #ddd6fe;
+}
+
 /* 映画 BGM リスト（series-detail の #movie-bgm-list セクション）。 */
 #movie-bgm-list .movie-bgm-table {
   width: 100%;
@@ -7392,7 +7451,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: var(--muted, #9ca3af);
   font-style: italic;
 }
-/* クリエーターセクション（スタッフ / 役職詳細 / 声の出演）。/creators/ 配下に統合された
+/* クリエイターセクション（スタッフ / 役職詳細 / 声の出演）。/creators/ 配下に統合された
    索引・詳細ページ共通のレイアウトを定義する。 */
 
 /* エンティティ行リスト（スタッフ / 役職詳細 / 声の出演 / キャラクター索引 共通）。
@@ -7451,6 +7510,11 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-size: 0.88em;
   white-space: nowrap;
 }
+/* 歌唱一覧のキャラクターの行で、キャラ名の直後に添える「(CV: 声優)」。 */
+.entity-row-cv {
+  margin-left: -6px;
+  white-space: nowrap;
+}
 /* 行ホバーで遷移先（主エンティティ名）に下線を出し、行全体がクリックできることを示す。 */
 .entity-row:hover a.entity-row-name {
   text-decoration: underline;
@@ -7501,6 +7565,11 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .entity-badge-company {
   background: var(--surface-2, #eef2ff);
   color: var(--fg, #3730a3);
+}
+/* 歌唱一覧のキャラクターの行（星のアイコン）。歌手（個人と同じピンク）と見分けられる紫系。 */
+.entity-badge-character {
+  background: rgba(126, 87, 194, 0.12);
+  color: var(--accent-purple, #7e57c2);
 }
 
 /* 担当数・出演数・登場数の絵文字ピルバッジ。「📺 N（話）」「🎥 N（本）」を
@@ -7574,7 +7643,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: #be123c;
 }
 
-/* 個人 / 団体 絞り込みトグル。タブ行の下に小さく置く。 */
+/* 個人 / 団体（歌唱一覧では歌手 / キャラクター）の絞り込みトグル。タブ行の下に小さく置く。
+   見た目は音楽制作の並べ替え切り替え（.sort-toggle-btn）とそろえ、選択中は文字と枠を本文色にする。 */
 .entity-filter {
   display: flex;
   flex-wrap: wrap;
@@ -7589,28 +7659,29 @@ ins.adsbygoogle[data-ad-status="filled"] {
   appearance: none;
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--fg);
+  color: var(--muted);
   padding: 3px 12px;
   border-radius: 999px;
-  font-size: 0.85em;
+  font-size: 0.88em;
   cursor: pointer;
 }
 .entity-filter-btn:hover:not(.is-active) {
   background: var(--surface-2, rgba(0, 0, 0, 0.04));
 }
 .entity-filter-btn.is-active {
-  background: var(--accent-pink, #ec4899);
-  border-color: var(--accent-pink, #ec4899);
-  color: #fff;
+  color: var(--fg);
+  border-color: var(--fg);
 }
 .entity-filter-btn:focus-visible {
   outline: 2px solid var(--accent-pink, #ec4899);
   outline-offset: 2px;
 }
 
-/* 個人/団体トグルの行出し分け（entity-row の li を data-entity-type 属性で隠す）。 */
+/* 個人/団体・歌手/キャラクターのトグルの行出し分け（entity-row の li を data-entity-type 属性で隠す）。 */
 .creators-root[data-entity-filter="person"] [data-entity-type="company"],
-.creators-root[data-entity-filter="company"] [data-entity-type="person"] {
+.creators-root[data-entity-filter="company"] [data-entity-type="person"],
+.creators-root[data-entity-filter="singer"] [data-entity-type="character"],
+.creators-root[data-entity-filter="character"] [data-entity-type="singer"] {
   display: none;
 }
 
@@ -8741,11 +8812,31 @@ body.has-art-track-bar {
 .music-credit-block .music-credit-group-heading:first-child {
   margin-top: 8px;
 }
+/* 楽曲・劇伴・商品詳細のクレジット欄：役職バッジ + 名前の 1 ユニットの中では改行しない。
+   狭い画面で 1 ユニットが画面幅を超えるときだけ折り返しを許す（横スクロールを出さないため）。 */
+.music-credit-row {
+  margin: 6px 0 10px;
+}
+.music-credit-unit {
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .music-credit-unit {
+    white-space: normal;
+  }
+}
 /* 区分の中の小見出し（歌 / 劇伴 / 音盤）。 */
 .music-credit-sub-heading {
   margin: 12px 0 6px;
   font-size: 0.92em;
   color: var(--muted);
+}
+/* 別名義のクレジットに添える本名義（「仲弓 香乃（ゆかな）」）と、人物詳細の曲カードの「〇〇 名義」。 */
+.staff-primary-name {
+  font-size: 0.9em;
+}
+.person-song-card-alias {
+  font-size: 0.85em;
 }
 /* 盤の所属表記（「（タバック）」など）。 */
 .music-credit-affiliation {

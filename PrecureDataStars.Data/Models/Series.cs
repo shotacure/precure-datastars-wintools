@@ -91,6 +91,9 @@ public sealed class Series
     /// <summary>映倫審査番号（例: 27159）。映画のタイトルカードに併記される番号で、クレジットの「タイトル」役職（<c>TITLE</c>）のテンプレから <c>{FILM_RATING_NO}</c> で参照する。映画以外や未登録は null。</summary>
     public string? FilmRatingNo { get; set; }
 
+    /// <summary>タイトルカードに CJ マークが付くか。クレジットの「タイトル」役職（<c>TITLE</c>）のテンプレから <c>{CJ_MARK}</c> で参照する（付く作品では「CJ」、付かない作品では空）。</summary>
+    public bool FilmCjMark { get; set; }
+
     // ── 配信・表示設定 ──
 
     /// <summary>配信版のイントロ尺（秒）。配信プラットフォーム向けの情報。</summary>

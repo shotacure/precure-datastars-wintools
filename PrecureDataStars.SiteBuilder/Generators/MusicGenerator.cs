@@ -808,7 +808,7 @@ public sealed class MusicGenerator
                         Caption = session?.Caption ?? "",
                         // このセッションの演奏者・録音側スタッフ（music_credits の BGM_SESSION 紐付け）。
                         MusicCreditsHtml = _ctx.MusicCredits.BySession.TryGetValue((seriesId, g.Key), out var sessionMusicRows)
-                            ? MusicCreditHtml.Render(MusicCreditViewBuilder.Build(_ctx, sessionMusicRows), "h3")
+                            ? MusicCreditHtml.Render(MusicCreditViewBuilder.Build(_ctx, sessionMusicRows))
                             : "",
                         Groups = groups
                     };

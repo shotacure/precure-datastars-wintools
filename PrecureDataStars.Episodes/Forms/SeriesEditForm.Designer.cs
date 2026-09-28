@@ -55,6 +55,7 @@ namespace PrecureDataStars.Episodes.Forms
         private System.Windows.Forms.TextBox txtAmazonPrimeAsin = null!;
         private System.Windows.Forms.TextBox txtYoutubeTrailer = null!;
         private System.Windows.Forms.TextBox txtFilmRatingNo = null!;
+        private System.Windows.Forms.CheckBox chkFilmCjMark = null!;
 
         // 追加: 「絵コンテ」役職を独立表示せず「演出」と融合表示するシリーズか
         // （プレビューレンダラ専用フラグ）。
@@ -111,6 +112,7 @@ namespace PrecureDataStars.Episodes.Forms
             txtYoutubeTrailer = new TextBox();
             lblFilmRatingNo = new Label();
             txtFilmRatingNo = new TextBox();
+            chkFilmCjMark = new CheckBox();
             // 追加: 絵コンテ・演出融合表示フラグ用 CheckBox。
             chkHideStoryboardRole = new CheckBox();
             btnAdd = new Button();
@@ -490,6 +492,18 @@ namespace PrecureDataStars.Episodes.Forms
             txtFilmRatingNo.Size = new Size(160, 27);
             txtFilmRatingNo.TabIndex = 42;
             //
+            // chkFilmCjMark
+            //   映画のタイトルカードに CJ マークが付くか。クレジットの「タイトル」役職のテンプレで {CJ_MARK} として出す。
+            //   映倫番号欄の右隣に配置。
+            //
+            chkFilmCjMark.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            chkFilmCjMark.AutoSize = true;
+            chkFilmCjMark.Location = new Point(1076, 734);
+            chkFilmCjMark.Name = "chkFilmCjMark";
+            chkFilmCjMark.TabIndex = 43;
+            chkFilmCjMark.Text = "CJ マークあり";
+            chkFilmCjMark.UseVisualStyleBackColor = true;
+            //
             // chkHideStoryboardRole
             //   絵コンテ役職を独立表示せず演出と融合表示するシリーズかを切り替えるチェックボックス。
             //   映倫番号欄の直下に配置。AutoSize でテキストに合わせて幅を自動調整する。
@@ -569,6 +583,7 @@ namespace PrecureDataStars.Episodes.Forms
             Controls.Add(txtYoutubeTrailer);
             Controls.Add(lblFilmRatingNo);
             Controls.Add(txtFilmRatingNo);
+            Controls.Add(chkFilmCjMark);
             // 追加: 絵コンテ・演出融合表示フラグ。
             Controls.Add(chkHideStoryboardRole);
             Controls.Add(btnAdd);

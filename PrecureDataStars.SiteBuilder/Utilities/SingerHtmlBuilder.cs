@@ -40,6 +40,8 @@ public sealed class SingerHtmlBuilder
     ///   <item>PERSON 行の名義がユニット名義で <see cref="SongRecordingSinger.ExpandUnitMembers"/> が立っていれば、
     ///     ユニット名の後ろにメンバーを「（メンバー1、メンバー2…）」と括弧書きで展開する。キャラメンバーは
     ///     「キャラ/相方キャラ(CV:声優)」、人物メンバーは人物リンクで出す。</item>
+    ///   <item><paramref name="showHiddenUnitMembers"/> が true なら、展開が立っていないユニット名義にも
+    ///     同じ書式のメンバー列を小さめの字（<c>span.unit-members-hidden</c>）で添える（楽曲詳細の録音表示用）。</item>
     ///   <item><see cref="SongRecordingSinger.AffiliationText"/> が非空なら末尾に半角スペース＋テキスト平文で添える。</item>
     ///   <item>行が 1 件も無ければフォールバックとして <paramref name="fallbackSingerName"/>
     ///     （<see cref="SongRecording.SingerName"/> のフリーテキスト）の HTML エスケープ平文を返す。</item>
@@ -49,9 +51,10 @@ public sealed class SingerHtmlBuilder
         IReadOnlyList<SongRecordingSinger> singers,
         string? fallbackSingerName,
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap,
+        bool showHiddenUnitMembers = false)
     {
-        string html = BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Vocals, personAliasMap, characterAliasMap);
+        string html = BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Vocals, personAliasMap, characterAliasMap, showHiddenUnitMembers);
         if (!string.IsNullOrEmpty(html)) return html;
         return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlUtil.Escape(fallbackSingerName);
     }
@@ -87,7 +90,8 @@ public sealed class SingerHtmlBuilder
         IReadOnlyList<SongRecordingSinger> singers,
         string roleCode,
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap,
+        bool showHiddenUnitMembers = false)
     {
         var rows = singers
             .Where(s => string.Equals(s.RoleCode, roleCode, StringComparison.Ordinal))
@@ -104,7 +108,7 @@ public sealed class SingerHtmlBuilder
                 // 区切り文字も HTML エスケープしてから出力する。
                 sb.Append(HtmlUtil.Escape(s.PrecedingSeparator ?? ""));
             }
-            sb.Append(RenderSingerEntry(s, personAliasMap, characterAliasMap));
+            sb.Append(RenderSingerEntry(s, personAliasMap, characterAliasMap, showHiddenUnitMembers));
             if (!string.IsNullOrEmpty(s.AffiliationText))
             {
                 sb.Append(' ').Append(HtmlUtil.Escape(s.AffiliationText));
@@ -117,16 +121,20 @@ public sealed class SingerHtmlBuilder
     private string RenderSingerEntry(
         SongRecordingSinger s,
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap,
+        bool showHiddenUnitMembers)
     {
         if (s.BillingKind == SingerBillingKind.Person)
         {
             // PERSON：主名義 + （あれば）スラッシュ並列の相方。両方とも person_alias。
             string main = ResolvePersonAliasLink(s.PersonAliasId, personAliasMap);
             if (s.ExpandUnitMembers) main += RenderUnitMembers(s.PersonAliasId, personAliasMap, characterAliasMap);
+            else if (showHiddenUnitMembers) main += RenderHiddenUnitMembers(s.PersonAliasId, personAliasMap, characterAliasMap);
             if (s.SlashPersonAliasId.HasValue)
             {
                 string slash = ResolvePersonAliasLink(s.SlashPersonAliasId, personAliasMap);
+                if (!s.ExpandUnitMembers && showHiddenUnitMembers)
+                    slash += RenderHiddenUnitMembers(s.SlashPersonAliasId, personAliasMap, characterAliasMap);
                 return $"{main} / {slash}";
             }
             return main;
@@ -173,6 +181,19 @@ public sealed class SingerHtmlBuilder
             parts.Add(charPart);
         }
         return "（" + string.Join("、", parts) + "）";
+    }
+
+    /// <summary>
+    /// 表記ではメンバーを展開しないユニット名義のメンバー列を、小さめの字の <c>span.unit-members-hidden</c> で包んで返す。
+    /// 書式は <see cref="RenderUnitMembers"/> と同じ。メンバーを持たない名義なら空文字。
+    /// </summary>
+    private string RenderHiddenUnitMembers(
+        int? unitAliasId,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+    {
+        string members = RenderUnitMembers(unitAliasId, personAliasMap, characterAliasMap);
+        return members.Length == 0 ? "" : $"<span class=\"unit-members-hidden\">{members}</span>";
     }
 
     private string ResolvePersonAliasLink(int? aliasId, IReadOnlyDictionary<int, PersonAlias> personAliasMap)

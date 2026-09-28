@@ -244,6 +244,11 @@ public static class RoleTemplateRenderer
                 // 映画のタイトルカード（役職 TITLE）で「{SERIES_TITLE}{?FILM_RATING_NO} 映倫 {FILM_RATING_NO}{/?FILM_RATING_NO}」のように使う。
                 return System.Net.WebUtility.HtmlEncode(ctx.ScopeFilmRatingNo ?? "");
 
+            case "CJ_MARK":
+                // scope_kind=SERIES のシリーズのタイトルカードに CJ マークが付くとき「CJ」、付かないときは空文字（series.film_cj_mark）。
+                // 映画のタイトルカード（役職 TITLE）で「{?CJ_MARK} <span class="cj-mark">{CJ_MARK}</span>{/?CJ_MARK}」のように使う。
+                return ctx.ScopeFilmCjMark ? "CJ" : "";
+
             case "PRODUCT":
                 {
                     // {PRODUCT:kind=OST_MOVIE} 形式。現スコープのシリーズに紐付くディスクを持ち、

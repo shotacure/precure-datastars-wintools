@@ -1604,6 +1604,29 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin: 0;
   padding: 0;
 }
+/* 映画のタイトルカード：タイトルと同じ幅の透明な箱に、左下へ CJ マークの印、右下へ映倫審査番号を寄せる。 */
+.credit-section .film-title-card {
+  display: inline-flex;
+  flex-direction: column;
+}
+.credit-section .film-title-marks {
+  display: flex;
+  align-items: center;
+}
+.credit-section .film-title-marks .film-rating {
+  margin-left: auto;
+}
+/* CJ マークの印（小さく丸囲みで出す）。 */
+.credit-section .cj-mark {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.75em;
+  line-height: 1.4;
+  vertical-align: middle;
+  opacity: 0.8;
+}
 /* コンテンツ領域ヘッダ上書き（role_templates.content_header_override）。
    左カラム役職名の代替として、シリーズ別「役職名の表示テキスト・位置だけ変える」用途で使う。
    本体（フォールバック表 or テンプレ展開結果）と視覚的に区切るために下マージンを取る。

@@ -632,8 +632,7 @@ Card / Tier / Group
 **ポイント**:
 - 著作権表記・映画のタイトルカードのような「表記のみ」の役職は `role_format_kind = 'NOTICE'` にする。クレジットに表示はするが、並ぶ企業・人物の関与（クレジット履歴・担当数・役職ラベル）には数えず、役職詳細ページ（`/creators/roles/{code}/`）も作らない。役職名もリンクにしない
 - 著作権表記のカードは役職 `COPYRIGHT`（役職名は画面に出さない）で表す。1 ブロックに © 表記の TEXT エントリと権利者の COMPANY エントリを並べ、既定テンプレ `{#BLOCKS}{TEXTS}{?COMPANIES}\n{COMPANIES:sep="/",wrap=""}{/?COMPANIES}{/BLOCKS}` で「© 表記」「会社/会社/…」の 2 行に出す
-- 映画のタイトルカード（作品タイトルと映倫審査番号だけのカード）は、カードの位置を示す役職 `TITLE`（エントリを持たず、役職名は画面に出さない）で表す。中身はシリーズマスタから引き、既定テンプレ `<strong>『{SERIES_TITLE}』</strong>{?FILM_RATING_NO}
-(映倫 {FILM_RATING_NO}){/?FILM_RATING_NO}` で `series.title`（太字・二重鉤括弧）と `series.film_rating_no`（「(映倫 番号)」）を出す（`{SERIES_TITLE}` / `{FILM_RATING_NO}` は SERIES スコープのクレジットでだけ値を持ち、EPISODE スコープでは空）
+- 映画のタイトルカード（作品タイトルと映倫審査番号だけのカード）は、カードの位置を示す役職 `TITLE`（エントリを持たず、役職名は画面に出さない）で表す。中身はシリーズマスタから引き、既定テンプレ `<span class="film-title-card"><strong>『{SERIES_TITLE}』</strong><span class="film-title-marks">{?CJ_MARK}<span class="cj-mark" title="CJマーク">{CJ_MARK}</span>{/?CJ_MARK}{?FILM_RATING_NO}<span class="film-rating">(映倫 {FILM_RATING_NO})</span>{/?FILM_RATING_NO}</span></span>` で `series.title`（太字・二重鉤括弧）を出し、その下に、タイトルと同じ幅の箱の左寄せで CJ マークの印（`series.film_cj_mark` が立っている作品だけ、丸囲みの「CJ」）、右寄せで `series.film_rating_no`（「(映倫 番号)」）を出す（`{SERIES_TITLE}` / `{FILM_RATING_NO}` は SERIES スコープのクレジットでだけ値を持ち、EPISODE スコープでは空）
 - `{ROLE_LINK:code=MANGA}` は役職コードから役職詳細ページへのリンク化済み HTML を太字付きで埋め込むプレースホルダ。SiteBuilder 側は `<strong><a href="/creators/roles/manga/">漫画</a></strong>`、Catalog 側プレビューは `<strong>漫画</strong>`（リンクなし）を出力。`<strong>` ラップはレンダラ側で一律付与
 - `{ROLE:MANGA.PERSONS}` は兄弟役職参照の構文。同 Group 内で `role_code='MANGA'` の役職を 1 つ探し、その役職配下の Block 群を一巡りして `{PERSONS}` を Block ごとに評価
 - `{ROLE:CODE.PLACEHOLDER}` の 1 段ネスト不可（無限ループ防止）
@@ -1065,6 +1064,7 @@ series_relation_kinds ──┘    │            │
 | `abc_official_site_url` | VARCHAR(1024) NULL | ABC（テレビ朝日系）公式サイト URL |
 | `amazon_prime_distribution_url` | VARCHAR(1024) NULL | Amazon Prime Video 配信 URL |
 | `film_rating_no` | VARCHAR(16) NULL | 映倫審査番号（映画のタイトルカードに併記。クレジットの役職 `TITLE` のテンプレで `{FILM_RATING_NO}` として出す） |
+| `film_cj_mark` | TINYINT(1) NOT NULL DEFAULT 0 | タイトルカードに CJ マークが付くか（役職 `TITLE` のテンプレで `{CJ_MARK}` として出す。付く作品では「CJ」、付かない作品では空） |
 | `vod_intro` | SMALLINT UNSIGNED NULL | 配信版の東映動画タイトル尺（秒） |
 | `font_subtitle` | VARCHAR(64) NULL | サブタイトル表示用フォント名（暫定フィールド） |
 | `hide_storyboard_role` | TINYINT(1) NOT NULL DEFAULT 0 | 「絵コンテ」役職を独立表示せず「演出」と融合表示するか（プレビュー描画専用フラグ） |

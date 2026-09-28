@@ -88,6 +88,20 @@ internal sealed class CreditPreviewRenderer
             margin: 16px;
             line-height: 1.6;
           }
+          /* 映画のタイトルカード：タイトルと同じ幅の箱の左下に CJ マークの印、右下に映倫審査番号 */
+          .film-title-card { display: inline-flex; flex-direction: column; }
+          .film-title-marks { display: flex; align-items: center; }
+          .film-title-marks .film-rating { margin-left: auto; }
+          /* 映画のタイトルカードの CJ マークの印 */
+          .cj-mark {
+            display: inline-block;
+            padding: 0 4px;
+            border: 1px solid #888;
+            border-radius: 50%;
+            font-size: 0.75em;
+            line-height: 1.4;
+            vertical-align: middle;
+          }
           /* クレジット種別見出し（オープニングクレジット／エンディングクレジット） */
           h1 {
             font-size: 16px;
@@ -1045,13 +1059,14 @@ internal sealed class CreditPreviewRenderer
                 // {THEME_SONGS} ハンドラが series_theme_songs を引き当てるようにする。EPISODE スコープでは null。
                 int? scopeSeriesIdForCtx = scopeKind == "SERIES" ? resolveSeriesId : null;
                 // SERIES スコープの場合、テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。
-                // 映倫審査番号（{FILM_RATING_NO}）も同じシリーズから引く。
-                var (scopeSeriesTitleForCtx, scopeFilmRatingNoForCtx) = await GetSeriesTitleAndFilmRatingAsync(scopeSeriesIdForCtx, ct);
+                // 映倫審査番号（{FILM_RATING_NO}）と CJ マークの有無（{CJ_MARK}）も同じシリーズから引く。
+                var (scopeSeriesTitleForCtx, scopeFilmRatingNoForCtx, scopeFilmCjMarkForCtx) = await GetSeriesTitleAndFilmRatingAsync(scopeSeriesIdForCtx, ct);
                 var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, scopeSeriesIdForCtx, creditKind,
                     siblingRoleResolver: siblingRoleResolver,
                     visitedRoleCodes: null,
                     scopeSeriesTitle: scopeSeriesTitleForCtx,
-                    scopeFilmRatingNo: scopeFilmRatingNoForCtx);
+                    scopeFilmRatingNo: scopeFilmRatingNoForCtx,
+                    scopeFilmCjMark: scopeFilmCjMarkForCtx);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct);
 
                 // 改行コード正規化。
@@ -1278,15 +1293,15 @@ internal sealed class CreditPreviewRenderer
         return raw.GetValueOrDefault() != 0;
     }
 
-    /// <summary>指定 series_id の <c>series.title</c> と映倫審査番号 <c>series.film_rating_no</c> を軽量 SQL で取得する。 テンプレ DSL の <c>{SERIES_TITLE}</c> / <c>{FILM_RATING_NO}</c> プレースホルダ展開に使う。 series_id が null・行未存在・論理削除済み・未登録は空文字を返す（テンプレ側では空に展開される）。</summary>
-    private async Task<(string Title, string FilmRatingNo)> GetSeriesTitleAndFilmRatingAsync(int? seriesId, CancellationToken ct)
+    /// <summary>指定 series_id の <c>series.title</c>、映倫審査番号 <c>series.film_rating_no</c>、CJ マークの有無 <c>series.film_cj_mark</c> を軽量 SQL で取得する。 テンプレ DSL の <c>{SERIES_TITLE}</c> / <c>{FILM_RATING_NO}</c> / <c>{CJ_MARK}</c> プレースホルダ展開に使う。 series_id が null・行未存在・論理削除済み・未登録は空文字（CJ マークは false）を返す（テンプレ側では空に展開される）。</summary>
+    private async Task<(string Title, string FilmRatingNo, bool FilmCjMark)> GetSeriesTitleAndFilmRatingAsync(int? seriesId, CancellationToken ct)
     {
-        if (!seriesId.HasValue) return ("", "");
+        if (!seriesId.HasValue) return ("", "", false);
         await using var conn = await _factory.CreateOpenedAsync(ct);
-        var row = await conn.QuerySingleOrDefaultAsync<(string? Title, string? FilmRatingNo)>(new CommandDefinition(
-            "SELECT title, film_rating_no FROM series WHERE series_id = @id AND is_deleted = 0;",
+        var row = await conn.QuerySingleOrDefaultAsync<(string? Title, string? FilmRatingNo, bool FilmCjMark)>(new CommandDefinition(
+            "SELECT title, film_rating_no, film_cj_mark FROM series WHERE series_id = @id AND is_deleted = 0;",
             new { id = seriesId.Value }, cancellationToken: ct));
-        return (row.Title ?? "", row.FilmRatingNo ?? "");
+        return (row.Title ?? "", row.FilmRatingNo ?? "", row.FilmCjMark);
     }
 
     /// <summary>絵コンテ役職コード。</summary>

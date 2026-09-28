@@ -108,6 +108,18 @@ public static class PathUtil
     public static string CreatorsRoleUrl(string roleCode)
         => IsSingerRole(roleCode) ? CreatorsSingersUrl() : $"/creators/roles/{roleCode.ToLowerInvariant()}/";
 
+    /// <summary>
+    /// 楽曲のクレジット行（作詞・作曲・編曲・歌・コーラス・台詞）の役職バッジのリンク先。
+    /// 作詞・作曲・編曲は役職詳細、歌唱系は歌唱ページ。それ以外（出典など役職でないもの）は空文字（リンクしない）。
+    /// 劇伴の作曲・編曲は役職詳細が楽曲の作家の一覧なので、呼び出し側でリンクしない。
+    /// </summary>
+    public static string SongRoleBadgeUrl(string roleCode)
+        => IsSingerRole(roleCode) ? CreatorsSingersUrl()
+         : roleCode is PrecureDataStars.Data.Models.SongCreditRoles.Lyrics
+             or PrecureDataStars.Data.Models.SongCreditRoles.Composition
+             or PrecureDataStars.Data.Models.SongCreditRoles.Arrangement ? CreatorsRoleUrl(roleCode)
+         : "";
+
     /// <summary>歌唱系の役職（歌・コーラス・台詞）か。これらは役職詳細ページを持たず歌唱ページに集約する。</summary>
     public static bool IsSingerRole(string roleCode)
         => roleCode is PrecureDataStars.Data.Models.SongRecordingSingerRoles.Vocals

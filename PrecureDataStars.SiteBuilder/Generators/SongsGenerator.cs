@@ -935,12 +935,7 @@ public sealed class SongsGenerator
         if (groups.Count == 0) return "";
 
         // エピソード一覧スタッフ行と同型の構造で組み立てる。
-        // 役職バッジはリンクにせず素のバッジ（span）で出す。索引は 744 曲ぶんのカードを並べるため、
-        // 1 カードあたり 4 個のバッジをリンク化すると同じ 5 つの役職ページへ約 2,900 本のリンクが集中し、
-        // ページ内リンクの 64% を宛先 5 種が占めていた。索引の役目は各楽曲ページ・人物ページへ
-        // 導線を配ることなので、そちらへリンクを集中させる（役職ページへは楽曲詳細側からリンクする）。
-        // サイト内の他の索引・詳細テンプレ（bgms-index / bgms-detail / characters-detail）も
-        // 同じく span を使っており、表記の流儀もそちらに揃う。
+        // 役職バッジはエピソード一覧・シリーズ詳細と同じく、役職詳細（作詞・作曲・編曲）・歌唱ページ（歌・コーラス・台詞）へのリンクにする。
         var sb = new System.Text.StringBuilder();
         sb.Append("<div class=\"staff-badges-row\">");
         foreach (var g in groups)
@@ -948,11 +943,19 @@ public sealed class SongsGenerator
             sb.Append("<span class=\"staff-badge-group\">");
             foreach (var (code, label) in g.Badges)
             {
-                sb.Append("<span class=\"role-badge role-badge-sm\" data-role-code=\"")
-                  .Append(HtmlUtil.Escape(code))
-                  .Append("\">")
-                  .Append(HtmlUtil.Escape(label))
-                  .Append("</span>");
+                string href = PathUtil.SongRoleBadgeUrl(code);
+                if (href.Length > 0)
+                    sb.Append("<a class=\"role-badge role-badge-sm\" data-role-code=\"")
+                      .Append(HtmlUtil.Escape(code))
+                      .Append("\" href=\"").Append(HtmlUtil.Escape(href)).Append("\">")
+                      .Append(HtmlUtil.Escape(label))
+                      .Append("</a>");
+                else
+                    sb.Append("<span class=\"role-badge role-badge-sm\" data-role-code=\"")
+                      .Append(HtmlUtil.Escape(code))
+                      .Append("\">")
+                      .Append(HtmlUtil.Escape(label))
+                      .Append("</span>");
             }
             sb.Append(g.NameHtml);
             sb.Append("</span>");

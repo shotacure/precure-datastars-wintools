@@ -120,19 +120,19 @@
     <div class="song-credits song-recording-vocalists-credits">
       {{~ if r.VocalistsHtml != "" ~}}
       <div class="key-staff-line">
-        <span class="role-badge role-badge-sm" data-role-code="VOCALS">歌</span>
+        <a class="role-badge role-badge-sm" data-role-code="VOCALS" href="/creators/singers/">歌</a>
         <span class="key-staff-names">{{ r.VocalistsHtml }}</span>
       </div>
       {{~ end ~}}
       {{~ if r.ChorusHtml != "" ~}}
       <div class="key-staff-line">
-        <span class="role-badge role-badge-sm" data-role-code="BACKING_VOCALS">コーラス</span>
+        <a class="role-badge role-badge-sm" data-role-code="BACKING_VOCALS" href="/creators/singers/">コーラス</a>
         <span class="key-staff-names">{{ r.ChorusHtml }}</span>
       </div>
       {{~ end ~}}
       {{~ if r.DialogueHtml != "" ~}}
       <div class="key-staff-line">
-        <span class="role-badge role-badge-sm" data-role-code="DIALOGUE">台詞</span>
+        <a class="role-badge role-badge-sm" data-role-code="DIALOGUE" href="/creators/singers/">台詞</a>
         <span class="key-staff-names">{{ r.DialogueHtml }}</span>
       </div>
       {{~ end ~}}

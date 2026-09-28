@@ -171,6 +171,7 @@ public static class MusicCreditViewBuilder
         ["PROGRAMMING"] = "🎛️",
         ["KEYBOARD"] = "🎹",
         ["PIANO"] = "🎹",
+        ["ORGAN"] = "🎹",
         ["GUITAR"] = "🎸",
         ["ELECTRIC_GUITAR"] = "🎸",
         ["BASS"] = "🎸",

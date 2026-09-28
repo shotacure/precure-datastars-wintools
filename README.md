@@ -1424,9 +1424,9 @@ series_relation_kinds ──┘    │            │
 | `entry_kind` | ENUM('PERSON','CHARACTER','COMPANY','TEXT') | 名義の種類 |
 | `person_alias_id` / `character_alias_id` / `company_alias_id` | NULL FK | 名義（`entry_kind` に対応する列だけ） |
 | `raw_text` | VARCHAR(255) NULL | TEXT のときの表記 |
-| `printed_text` | VARCHAR(255) NULL | 盤の印刷表記が名義の表記と違うとき（ローマ字・大文字小文字・空白・誤記）の印刷どおりの表記。サイトでは名義の表記で出し、印刷表記は title 属性に添える |
+| `printed_text` | VARCHAR(255) NULL | 盤の印刷表記が名義の表記と違うとき（ローマ字・大文字小文字・空白・誤記）の印刷どおりの表記。記録用で、サイトには出さない（名義の表記で出す） |
 | `is_misprint` | TINYINT(1) | `printed_text` が誤記なら 1 |
-| `role_label_text` | VARCHAR(64) NULL | 盤の役職の印刷表記（Guiter / Condu / レコーディングコーディネイト 等）。役職そのものは 1 つにまとめ、表記の違いをここに残す |
+| `role_label_text` | VARCHAR(64) NULL | 盤の役職の印刷表記（Guiter / Condu / レコーディングコーディネイト 等）。役職そのものは 1 つにまとめ、表記の違いをここに残す（記録用で、サイトには出さない） |
 | `ensemble_note` | VARCHAR(64) NULL | 編成の注記（Tp.3 / 86443 / ×8 / 302st.304st. 等）。サイトでは役職名に括弧で添える。演奏系の役職（楽器・指揮など）のバッジは役職名の前に絵文字を付ける（`MusicCreditViewBuilder.BadgeLabel`。専用の絵文字が無い楽器は、金管は 🎺、木管は 🪈、ハープは 🎻 で代用） |
 | `affiliation_company_alias_id` / `affiliation_text` | NULL | 所属（屋号が名義マスタにあれば前者、無ければ後者） |
 | `preceding_separator` | VARCHAR(8) NULL | 直前の名義との区切り（／ , & 等）。無ければ「、」で出す |

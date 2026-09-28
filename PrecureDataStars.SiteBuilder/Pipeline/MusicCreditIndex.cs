@@ -74,7 +74,7 @@ public sealed class MusicCreditLineView
     public string RoleCode { get; init; } = "";
     /// <summary>役職名（役職マスタの名前。編成の注記があれば括弧で添える）。</summary>
     public string RoleLabel { get; init; } = "";
-    /// <summary>盤の役職の印刷表記（役職名と違うときだけ。title 属性に出す）。</summary>
+    /// <summary>盤の役職の印刷表記（役職名と違うときだけ。記録用で、表には出さない）。</summary>
     public string PrintedRoleLabel { get; init; } = "";
     /// <summary>名義の並び（リンク・区切り・所属を含む組み立て済み HTML）。</summary>
     public string NamesHtml { get; init; } = "";
@@ -99,7 +99,7 @@ public sealed class MusicCreditBlockView
 /// 音楽クレジットの行群を表示用ビューに組み立てるヘルパ（状態を持たないので並列レンダリングから呼んでよい）。
 /// 区分（作詞・作曲・編曲 → 演奏・コーラス等 → レコーディング → 音盤製作）ごとに、役職を盤の並びでの初出順に並べ、
 /// 同じ役職の名義は区切り（preceding_separator、無ければ「、」）でつなぐ。
-/// 名義は名義マスタの表記で出し、盤の印刷表記が違うときは title 属性に「盤の表記：…」を添える。
+/// 名義は名義マスタの表記で出す。盤の印刷表記（printed_text / role_label_text）と備考（notes）は記録用で、表には出さない。
 /// 所属は、続く名義と同じ所属なら最後の名義の後ろにまとめて 1 回だけ括弧で出す（「川崎公敬、渡辺絵里奈（タバック）」）。
 /// </summary>
 public static class MusicCreditViewBuilder
@@ -221,7 +221,7 @@ public static class MusicCreditViewBuilder
         };
     }
 
-    /// <summary>名義 1 つ分の HTML（詳細ページへのリンク。盤の印刷表記が違えば title 属性に添える）。</summary>
+    /// <summary>名義 1 つ分の HTML（詳細ページへのリンク）。</summary>
     public static string NameHtml(BuildContext ctx, MusicCredit r)
     {
         string name;
@@ -244,12 +244,9 @@ public static class MusicCreditViewBuilder
                 name = r.RawText ?? r.PrintedText ?? "";
                 break;
         }
-        string title = !string.IsNullOrEmpty(r.PrintedText) && !string.Equals(r.PrintedText, name, StringComparison.Ordinal)
-            ? $" title=\"{HtmlUtil.Escape((r.IsMisprint ? "盤の表記（誤記）：" : "盤の表記：") + r.PrintedText)}\""
-            : "";
         return url.Length > 0
-            ? $"<a class=\"staff-name\" href=\"{HtmlUtil.Escape(url)}\"{title}>{HtmlUtil.Escape(name)}</a>"
-            : $"<span class=\"staff-name\"{title}>{HtmlUtil.Escape(name)}</span>";
+            ? $"<a class=\"staff-name\" href=\"{HtmlUtil.Escape(url)}\">{HtmlUtil.Escape(name)}</a>"
+            : $"<span class=\"staff-name\">{HtmlUtil.Escape(name)}</span>";
     }
 
     private static string AffiliationName(BuildContext ctx, MusicCredit r)
@@ -312,11 +309,8 @@ public static class MusicCreditHtml
             sb.Append("<div class=\"song-credits music-credit-lines\">");
             foreach (var line in g.Lines)
             {
-                string title = line.PrintedRoleLabel.Length > 0
-                    ? $" title=\"{HtmlUtil.Escape("盤の表記：" + line.PrintedRoleLabel)}\""
-                    : "";
                 sb.Append("<div class=\"key-staff-line\">")
-                  .Append("<span class=\"role-badge role-badge-sm\" data-role-code=\"").Append(HtmlUtil.Escape(line.RoleCode)).Append('"').Append(title).Append('>')
+                  .Append("<span class=\"role-badge role-badge-sm\" data-role-code=\"").Append(HtmlUtil.Escape(line.RoleCode)).Append("\">")
                   .Append(HtmlUtil.Escape(line.RoleLabel)).Append("</span>")
                   .Append("<span class=\"key-staff-names\">").Append(line.NamesHtml).Append("</span>")
                   .Append("</div>");

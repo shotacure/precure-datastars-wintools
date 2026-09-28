@@ -38,6 +38,16 @@ public sealed class EntityUrlRegistry
     /// <summary>ゲストキャラクターページを置く <c>/characters/</c> 配下の予約セグメント。</summary>
     public const string GuestsSegment = "guests";
 
+    /// <summary>
+    /// 廃止したページの転送表（末尾スラッシュ無しの旧パス → 転送先 URL）。<see cref="LegacyRedirects"/> に毎ビルド載せる。
+    /// 歌唱系の役職詳細（歌・コーラス）は歌唱ページ <c>/creators/singers/</c> に集約した。
+    /// </summary>
+    private static readonly (string From, string To)[] RetiredPageRedirects =
+    {
+        ("/creators/roles/vocals", PathUtil.CreatorsSingersUrl()),
+        ("/creators/roles/backing_vocals", PathUtil.CreatorsSingersUrl()),
+    };
+
     private readonly Dictionary<int, string> _personUrls = new();
     /// <summary>person_id → いまの人物 URL のスラッグ（デコード済み）。公開記録と旧名転送の突き合わせに使う。</summary>
     private readonly Dictionary<int, string> _personSlugs = new();
@@ -229,6 +239,9 @@ public sealed class EntityUrlRegistry
                 reg._legacyRedirects.Add(new LegacyRedirect($"/{section}/{row.Slug}", to));
             }
         }
+
+        foreach (var (from, to) in RetiredPageRedirects)
+            reg._legacyRedirects.Add(new LegacyRedirect(from, to));
 
         ctx.Logger.Info($"entity urls: persons {reg._personUrls.Count} / characters {reg._characterUrls.Count}"
             + $"（うちゲスト {reg._guestPlacements.Count}）/ companies {reg._companyUrls.Count} / books {reg._bookUrls.Count}");

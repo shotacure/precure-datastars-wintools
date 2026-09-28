@@ -16,7 +16,7 @@
          役職ラベルは Generator が .role-badge.role-badge-sm[data-role-code] 形の <a> として渡す
          （LYRICS/COMPOSITION/ARRANGEMENT/VOCALS は CSS で色相環 4 色のバッジに着色済み）。
        - 備考は名義行とは別に muted 段落で続ける。 ##}}
-  {{~ if Song.LyricsHtml != "" || Song.CompositionHtml != "" || Song.ArrangementHtml != "" ~}}
+  {{~ if Song.LyricsHtml != "" || Song.CompositionHtml != "" || Song.ArrangementHtml != "" || Song.StringsArrangementHtml != "" ~}}
   <section id="basic-info" class="song-credits">
     <h2>基本情報</h2>
     {{~ if Song.LyricsHtml != "" ~}}
@@ -37,6 +37,19 @@
       <span class="key-staff-names">{{ Song.ArrangementHtml }}</span>
     </div>
     {{~ end ~}}
+    {{~ if Song.StringsArrangementHtml != "" ~}}
+    <div class="key-staff-line">
+      {{ Song.StringsArrangementRoleLabelHtml }}
+      <span class="key-staff-names">{{ Song.StringsArrangementHtml }}</span>
+    </div>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+  {{## 曲に共通の音楽クレジット（伴奏の演奏者・録音側のスタッフ）。区分ごとの小見出しと出典の盤は組み立て済み HTML に含む。 ##}}
+  {{~ if Song.MusicCreditsHtml != "" ~}}
+  <section id="music-credits">
+    <h2>演奏・レコーディング</h2>
+    {{ Song.MusicCreditsHtml }}
   </section>
   {{~ end ~}}
   {{~ if Song.Notes != "" ~}}
@@ -120,19 +133,19 @@
     <div class="song-credits song-recording-vocalists-credits">
       {{~ if r.VocalistsHtml != "" ~}}
       <div class="key-staff-line">
-        <span class="role-badge role-badge-sm" data-role-code="VOCALS">歌</span>
+        <a class="role-badge role-badge-sm" data-role-code="VOCALS" href="/creators/singers/">歌</a>
         <span class="key-staff-names">{{ r.VocalistsHtml }}</span>
       </div>
       {{~ end ~}}
       {{~ if r.ChorusHtml != "" ~}}
       <div class="key-staff-line">
-        <span class="role-badge role-badge-sm" data-role-code="BACKING_VOCALS">コーラス</span>
+        <a class="role-badge role-badge-sm" data-role-code="BACKING_VOCALS" href="/creators/singers/">コーラス</a>
         <span class="key-staff-names">{{ r.ChorusHtml }}</span>
       </div>
       {{~ end ~}}
       {{~ if r.DialogueHtml != "" ~}}
       <div class="key-staff-line">
-        <span class="role-badge role-badge-sm" data-role-code="DIALOGUE">台詞</span>
+        <a class="role-badge role-badge-sm" data-role-code="DIALOGUE" href="/creators/singers/">台詞</a>
         <span class="key-staff-names">{{ r.DialogueHtml }}</span>
       </div>
       {{~ end ~}}
@@ -151,6 +164,11 @@
     {{~ end ~}}
     {{~ if r.Notes != "" ~}}
     <p class="muted">{{ r.Notes | html.escape }}</p>
+    {{~ end ~}}
+    {{## この録音だけの音楽クレジット（カバー等）。 ##}}
+    {{~ if r.MusicCreditsHtml != "" ~}}
+    <h3>演奏・レコーディング</h3>
+    {{ r.MusicCreditsHtml }}
     {{~ end ~}}
 
     {{## 本編使用。EPISODE 紐付け（TV 系）は「シリーズ × 区分 × broadcast_only × usage_actuality」で

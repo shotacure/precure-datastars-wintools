@@ -2004,6 +2004,9 @@ CREATE TABLE `roles` (
   `name_ja`                 varchar(64)  NOT NULL,
   `name_en`                 varchar(64)  DEFAULT NULL,
   `role_format_kind`        enum('NORMAL','SERIAL','THEME_SONG','VOICE_CAST','COMPANY_ONLY','LOGO_ONLY','NOTICE') NOT NULL DEFAULT 'NORMAL',
+  -- 音楽クレジットの区分。NULL は本編クレジットだけで使う役職。
+  -- WRITING=作詞・作曲・編曲 / PERFORMANCE=演奏・コーラス等 / RECORDING=レコーディング / RELEASE=音盤製作。
+  `music_credit_group`      enum('WRITING','PERFORMANCE','RECORDING','RELEASE') DEFAULT NULL,
   `display_order`           smallint unsigned DEFAULT NULL,
   -- HTML クレジット階層描画で左カラム（役職名）を表示するかの制御フラグ。
   -- 0=表示（既定）、1=非表示。
@@ -2874,6 +2877,85 @@ CREATE TABLE `song_recording_singers` (
 -- 劇伴の作家連名（作曲 / 編曲）。bgm_cues は (series_id, m_no_detail) 複合 PK。
 -- 既存 bgm_cues.{composer|arranger}_name はフォールバックとして温存。
 --
+DROP TABLE IF EXISTS `music_credits`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+-- 音盤のブックレットに載る音楽クレジット（演奏・コーラス等 / レコーディング / 音盤製作）。
+-- 1 行 = 1 名義。紐付け先は曲・録音・劇伴セッション・商品のいずれか 1 つ。
+CREATE TABLE `music_credits` (
+  `music_credit_id`              int NOT NULL AUTO_INCREMENT,
+  -- 紐付け先。target_kind に対応する列だけを埋める（ck_music_credits_target）。
+  `target_kind`                  enum('SONG','SONG_RECORDING','BGM_SESSION','PRODUCT') NOT NULL,
+  `song_id`                      int DEFAULT NULL,
+  `song_recording_id`            int DEFAULT NULL,
+  `bgm_series_id`                int DEFAULT NULL,
+  `bgm_session_no`               tinyint unsigned DEFAULT NULL,
+  `product_catalog_no`           varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+  `role_code`                    varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  -- 紐付け先の中での表示順（盤の並び）。同じ役職の連名はこの順に並ぶ。
+  `credit_seq`                   smallint unsigned NOT NULL,
+  `entry_kind`                   enum('PERSON','CHARACTER','COMPANY','TEXT') NOT NULL,
+  `person_alias_id`              int DEFAULT NULL,
+  `character_alias_id`           int DEFAULT NULL,
+  `company_alias_id`             int DEFAULT NULL,
+  -- TEXT のときの表記（名義マスタに載せない名前）。
+  `raw_text`                     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- 盤の印刷表記が名義の表記と違うとき（ローマ字・大文字小文字・空白・誤記）の印刷どおりの表記。
+  `printed_text`                 varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- printed_text が誤記（Fanky Y.K. など）なら 1。
+  `is_misprint`                  tinyint(1) NOT NULL DEFAULT 0,
+  -- 盤の役職の印刷表記（Guiter / Condu / レコーディングコーディネイト など）。NULL なら役職名で出す。
+  `role_label_text`              varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- 編成の注記（Tp.3 / 86443 / ×8 / Vn×6、Vc×2 / 302st.304st. など）。
+  `ensemble_note`                varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- 所属。屋号が名義マスタにあれば affiliation_company_alias_id、無ければ affiliation_text。
+  `affiliation_company_alias_id` int DEFAULT NULL,
+  `affiliation_text`             varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- 直前の名義との区切り（／ , & 、 など）。先頭や役職の切り替わりでは NULL。
+  `preceding_separator`          varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- このクレジットの根拠にした盤。
+  `source_product_catalog_no`    varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+  `notes`                        text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`                   timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`                   timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`                   varchar(64) DEFAULT NULL,
+  `updated_by`                   varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`music_credit_id`),
+  KEY `ix_music_credits_song` (`song_id`),
+  KEY `ix_music_credits_recording` (`song_recording_id`),
+  KEY `ix_music_credits_session` (`bgm_series_id`, `bgm_session_no`),
+  KEY `ix_music_credits_product` (`product_catalog_no`),
+  KEY `ix_music_credits_role` (`role_code`),
+  KEY `ix_music_credits_person` (`person_alias_id`),
+  KEY `ix_music_credits_character` (`character_alias_id`),
+  KEY `ix_music_credits_company` (`company_alias_id`),
+  KEY `ix_music_credits_affiliation` (`affiliation_company_alias_id`),
+  KEY `ix_music_credits_source` (`source_product_catalog_no`),
+  -- CHECK が参照する列の FK は参照動作を RESTRICT に限る（MySQL は CASCADE / SET NULL の列を CHECK で参照できない）。
+  CONSTRAINT `fk_music_credits_song`        FOREIGN KEY (`song_id`)           REFERENCES `songs` (`song_id`)                    ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_music_credits_recording`   FOREIGN KEY (`song_recording_id`) REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_music_credits_session`     FOREIGN KEY (`bgm_series_id`, `bgm_session_no`) REFERENCES `bgm_sessions` (`series_id`, `session_no`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_music_credits_product`     FOREIGN KEY (`product_catalog_no`) REFERENCES `products` (`product_catalog_no`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_music_credits_role`        FOREIGN KEY (`role_code`)         REFERENCES `roles` (`role_code`)                  ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_music_credits_person`      FOREIGN KEY (`person_alias_id`)   REFERENCES `person_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_music_credits_character`   FOREIGN KEY (`character_alias_id`) REFERENCES `character_aliases` (`alias_id`)      ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_music_credits_company`     FOREIGN KEY (`company_alias_id`)  REFERENCES `company_aliases` (`alias_id`)         ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_music_credits_affiliation` FOREIGN KEY (`affiliation_company_alias_id`) REFERENCES `company_aliases` (`alias_id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_music_credits_source`      FOREIGN KEY (`source_product_catalog_no`) REFERENCES `products` (`product_catalog_no`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `ck_music_credits_target` CHECK (
+       (`target_kind` = 'SONG'           AND `song_id` IS NOT NULL AND `song_recording_id` IS NULL AND `bgm_series_id` IS NULL AND `bgm_session_no` IS NULL AND `product_catalog_no` IS NULL)
+    OR (`target_kind` = 'SONG_RECORDING' AND `song_id` IS NULL AND `song_recording_id` IS NOT NULL AND `bgm_series_id` IS NULL AND `bgm_session_no` IS NULL AND `product_catalog_no` IS NULL)
+    OR (`target_kind` = 'BGM_SESSION'    AND `song_id` IS NULL AND `song_recording_id` IS NULL AND `bgm_series_id` IS NOT NULL AND `bgm_session_no` IS NOT NULL AND `product_catalog_no` IS NULL)
+    OR (`target_kind` = 'PRODUCT'        AND `song_id` IS NULL AND `song_recording_id` IS NULL AND `bgm_series_id` IS NULL AND `bgm_session_no` IS NULL AND `product_catalog_no` IS NOT NULL)),
+  CONSTRAINT `ck_music_credits_entry` CHECK (
+       (`entry_kind` = 'PERSON'    AND `person_alias_id` IS NOT NULL AND `character_alias_id` IS NULL AND `company_alias_id` IS NULL)
+    OR (`entry_kind` = 'CHARACTER' AND `person_alias_id` IS NULL AND `character_alias_id` IS NOT NULL AND `company_alias_id` IS NULL)
+    OR (`entry_kind` = 'COMPANY'   AND `person_alias_id` IS NULL AND `character_alias_id` IS NULL AND `company_alias_id` IS NOT NULL)
+    OR (`entry_kind` = 'TEXT'      AND `person_alias_id` IS NULL AND `character_alias_id` IS NULL AND `company_alias_id` IS NULL AND `raw_text` IS NOT NULL)),
+  CONSTRAINT `ck_music_credits_seq_pos` CHECK (`credit_seq` >= 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
 DROP TABLE IF EXISTS `bgm_cue_credits`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;

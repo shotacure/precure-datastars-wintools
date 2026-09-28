@@ -98,6 +98,7 @@ public static class PathUtil
     /// <see cref="string.ToLowerInvariant"/> で小文字化する。
     /// 役職コードは規約上「英大文字 + アンダースコア」のみで構成されるため、
     /// 小文字化しても元コードと 1 対 1 に対応し衝突しない。
+    /// 歌唱系の役職（歌・コーラス・台詞）は役職詳細ページを持たず、歌唱ページ（<see cref="CreatorsSingersUrl"/>）を指す。
     /// 静的サイトは生成時に URL→ファイルパスを確定させるだけでリクエスト時に
     /// DB 照合を行わないため、本変換は出力パスと参照リンクの双方で
     /// 同じ本メソッドを通している限り常に整合する。
@@ -105,7 +106,25 @@ public static class PathUtil
     /// ままで行い、本メソッドが組み立てる URL 文字列だけを小文字化する。
     /// </summary>
     public static string CreatorsRoleUrl(string roleCode)
-        => $"/creators/roles/{roleCode.ToLowerInvariant()}/";
+        => IsSingerRole(roleCode) ? CreatorsSingersUrl() : $"/creators/roles/{roleCode.ToLowerInvariant()}/";
+
+    /// <summary>
+    /// 楽曲のクレジット行（作詞・作曲・編曲・歌・コーラス・台詞）の役職バッジのリンク先。
+    /// 作詞・作曲・編曲は役職詳細、歌唱系は歌唱ページ。それ以外（出典など役職でないもの）は空文字（リンクしない）。
+    /// 劇伴の作曲・編曲は役職詳細が楽曲の作家の一覧なので、呼び出し側でリンクしない。
+    /// </summary>
+    public static string SongRoleBadgeUrl(string roleCode)
+        => IsSingerRole(roleCode) ? CreatorsSingersUrl()
+         : roleCode is PrecureDataStars.Data.Models.SongCreditRoles.Lyrics
+             or PrecureDataStars.Data.Models.SongCreditRoles.Composition
+             or PrecureDataStars.Data.Models.SongCreditRoles.Arrangement ? CreatorsRoleUrl(roleCode)
+         : "";
+
+    /// <summary>歌唱系の役職（歌・コーラス・台詞）か。これらは役職詳細ページを持たず歌唱ページに集約する。</summary>
+    public static bool IsSingerRole(string roleCode)
+        => roleCode is PrecureDataStars.Data.Models.SongRecordingSingerRoles.Vocals
+            or PrecureDataStars.Data.Models.SongRecordingSingerRoles.Chorus
+            or PrecureDataStars.Data.Models.SongRecordingSingerRoles.Dialogue;
 
     /// <summary>クリエーターのトップ（ランディング）ページ URL（<c>/creators/</c>）。</summary>
     /// <summary>記念日インデックス（月日一覧）の URL パス。</summary>
@@ -121,6 +140,12 @@ public static class PathUtil
 
     /// <summary>声の出演（声優）一覧ページの URL（/creators/voice-cast/）。</summary>
     public static string CreatorsVoiceCastUrl() => "/creators/voice-cast/";
+
+    /// <summary>音楽制作（楽曲の作詞・作曲・編曲の担当者）一覧ページの URL（/creators/music-production/）。</summary>
+    public static string CreatorsMusicProductionUrl() => "/creators/music-production/";
+
+    /// <summary>歌唱（楽曲の歌・コーラス・台詞の担当者）一覧ページの URL（/creators/singers/）。</summary>
+    public static string CreatorsSingersUrl() => "/creators/singers/";
 
     /// <summary>全ファイルパスから親ディレクトリを再帰的に作成する。</summary>
     public static void EnsureParentDirectory(string filePath)

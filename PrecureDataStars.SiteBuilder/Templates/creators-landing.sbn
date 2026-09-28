@@ -4,12 +4,13 @@
   プリキュアの歴史を紡いできた人々。
 </p>
 
-{{## 音楽カテゴリランディング（/music/）と同型の 2 カード構成。
+{{## 音楽カテゴリランディング（/music/）と同型のカード構成（スタッフ / 声の出演 / 音楽制作 / 歌唱）。
      ・スタッフカードの件数は人物 + 企業・団体の混在総数（クレジットがあるエンティティ数）。
      ・声の出演カードの件数は声の出演が確認できる声優数。
+     ・音楽制作カードの件数は楽曲の作詞・作曲・編曲に関わった人物数、歌唱カードは歌唱に関わった人物数（キャラとしての歌唱は声優として数える）。
      カードの意匠は .music-categories / .music-category-card 系をそのまま流用し、カード全域を
      <a> でラップして 1 リンクとして扱う（カード内部にテキストリンクは置かない）。 ##}}
-<section class="music-categories">
+<section class="music-categories is-two-col">
   <a class="music-category-card" href="/creators/staff/">
     <h2>スタッフ</h2>
     <p>プリキュア制作にまつわるたくさんのお仕事と、それに携わった人々の記録。役職、初参加作品、担当話数からスタッフさんを探せます。</p>
@@ -27,6 +28,28 @@
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ VoiceCastCount }}</span>
+        <span class="music-category-stats-label">名</span>
+      </li>
+    </ul>
+  </a>
+
+  <a class="music-category-card" href="/creators/music-production/">
+    <h2>音楽制作</h2>
+    <p>主題歌・挿入歌・キャラクターソングと劇伴の制作に携わった人々の記録。役職、初参加、参加数から探せます。</p>
+    <ul class="music-category-stats">
+      <li>
+        <span class="music-category-stats-value">{{ MusicProductionCount }}</span>
+        <span class="music-category-stats-label">名</span>
+      </li>
+    </ul>
+  </a>
+
+  <a class="music-category-card" href="/creators/singers/">
+    <h2>歌唱</h2>
+    <p>主題歌・挿入歌・キャラクターソングを歌った人々の記録。歌手、キャラクター、初参加曲、参加曲数から探せます。</p>
+    <ul class="music-category-stats">
+      <li>
+        <span class="music-category-stats-value">{{ SingerCount }}</span>
         <span class="music-category-stats-label">名</span>
       </li>
     </ul>

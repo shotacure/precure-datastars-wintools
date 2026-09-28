@@ -1,0 +1,28 @@
+<p class="muted">
+  <a href="/creators/music-production/">音楽制作</a>{{~ if GroupLabel != "" ~}} ／ {{ GroupLabel | html.escape }}{{~ end ~}}
+</p>
+
+<h1>{{ RoleNameJa | html.escape }}</h1>
+
+<p class="lead">
+  歴代プリキュアの楽曲・劇伴・音盤で「{{ RoleNameJa | html.escape }}」を担当した人物・団体の一覧です。初めて担当した順に並べ、担当した曲・劇伴の録音・盤を添えています。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+</p>
+
+{{## 音楽クレジット（music_credits、ストリングス編曲は song_credits）の役職 1 つ分。
+     1 行 = 人物または団体。担当先（曲・劇伴セッション・盤）は根拠の盤の発売日順に並べ、それぞれの詳細へリンクする。 ##}}
+{{~ if (array.size Rows) == 0 ~}}
+<p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
+{{~ else ~}}
+<ul class="entity-list music-role-detail-list">
+  {{~ for e in Rows ~}}
+  <li class="entity-row">
+    <a class="entity-row-name" href="{{ e.Url }}">{{ e.Name | html.escape }}</a>
+    <span class="entity-row-sub muted">
+      {{~ for t in e.Targets ~}}{{~ if for.index > 0 ~}}、{{~ end ~}}<a href="{{ t.Url }}">{{ t.Title | html.escape }}</a>{{~ if t.Sub != "" ~}}（{{ t.Sub | html.escape }}）{{~ end ~}}{{~ end ~}}
+    </span>
+  </li>
+  {{~ end ~}}
+</ul>
+{{~ end ~}}

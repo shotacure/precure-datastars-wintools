@@ -813,9 +813,11 @@ Role: PRODUCTION 制作 (order 2)
 | `/series/` | 全シリーズ索引。種別・話数併記 |
 | `/series/{slug}/` | シリーズ詳細。基本情報 → 関連作品 → プリキュア → メインスタッフ → 主題歌・挿入歌 → クレジット → BGM リスト → エピソード一覧 → 劇伴 → 外部サイト |
 | `/series/{slug}/{seriesEpNo}/` | エピソード詳細（中核ページ） |
-| `/creators/` | クリエーターのランディング。スタッフ / 声の出演の 2 カードを案内 |
-| `/creators/staff/` | スタッフ一覧。役職順（既定）/ 五十音順 / 初参加順（シリーズ別セクション）/ 参加話数が多い順 の 4 タブ。役職順は「TV シリーズでクレジットされた役職」と「映画でのみクレジットされた役職」の 2 セクションに分ける。役職順以外は人物と企業・団体を 1 リストに混在（個人/団体バッジ＋絞り込みトグル）。一度もクレジットの無い役職は索引にも役職詳細ページにも出さない |
+| `/creators/` | クリエーターのランディング。スタッフ / 声の出演 / 音楽制作 / 歌唱の 4 カードを案内 |
+| `/creators/staff/` | スタッフ一覧。役職順（既定）/ 五十音順 / 初参加順（シリーズ別セクション）/ 参加話数が多い順 の 4 タブ。役職順は「TV シリーズでクレジットされた役職」と「映画でのみクレジットされた役職」の 2 セクションに分ける。役職順以外は人物と企業・団体を 1 リストに混在（個人/団体バッジ＋絞り込みトグル）。一度もクレジットの無い役職は索引にも役職詳細ページにも出さない。主題歌・挿入歌の使用を経由した関与（楽曲の作家・歌唱）は数えず、作詞・作曲・編曲・歌唱系の役職も役職順に載せない（音楽制作・歌唱ページに分ける） |
 | `/creators/roles/{role_code}/` | 役職詳細。当該役職に関わった人物・企業/団体を 1 リストに混在し、五十音順 / 初参加順 / 担当話数が多い順 のタブで切替 |
+| `/creators/music-production/` | 音楽制作一覧。役職（既定。`roles.music_credit_group` の区分ごとに役職を並べ、役職詳細へ送る。歌唱系の役職は歌唱ページが担うので載せない）/ 歌（詞曲）（`song_credits` と曲・録音に付いた `music_credits` の作詞・作曲・編曲）/ 歌（演奏）（曲・録音に付いた `music_credits` の演奏・コーラス等）/ 劇伴（作編曲）（`bgm_cue_credits` と劇伴セッションに付いた `music_credits` の作詞・作曲・編曲）/ 劇伴（演奏）（劇伴セッションに付いた `music_credits` の演奏・コーラス等）/ 制作（どこに付いたものも含むレコーディング・音盤製作）の 6 タブ。歌は曲単位、劇伴と制作は作品（シリーズ・映画。盤はディスクに登録されたシリーズ）単位で数える（演奏者はセッション単位でしか関わりが分からないため）。一覧タブの中は「初参加順 / 多い順」を切り替え、初参加順はスタッフ一覧と同じ「シリーズ名（年）」見出しのシリーズ別セクション（歌は初参加の曲の出典シリーズ、劇伴は作品）。歌唱ページの初参加順・キャラクタータブも同じ見出しにそろえる。盤だけに付くスタッフは歌・劇伴に数えず、役職タブからたどる。作詞・作曲・編曲以外の音楽の役職は、担当した人物・団体と担当先（曲・劇伴セッション・盤）を並べた役職詳細（`creators-music-role-detail.sbn`）を持つ |
+| `/creators/singers/` | 歌唱一覧。録音の歌唱者（`song_recording_singers`）を歌・コーラス・台詞の別なくユニットのメンバーまで展開して集計する。歌手（既定。人物名義で参加した人を、歌・台詞で参加した「ボーカル」とコーラスだけの「コーラスのみ」のセクションに分ける）/ キャラクター（キャラ × 声優の組を最初に歌った録音のシリーズ別セクションで。プリキュアは「変身前 / 変身後」の名義を並べる）/ 初参加順 / 参加曲数が多い順（この 2 つは人物単位で、キャラとしての参加は声優の参加として合算）の 4 タブ。歌唱系の役職（歌・コーラス・台詞）は役職詳細ページを持たず、役職リンクはこのページを指す（`PathUtil.IsSingerRole`）。旧 `/creators/roles/vocals/`・`/creators/roles/backing_vocals/` は転送表でここへ 301 |
 | `/creators/voice-cast/` | 声の出演一覧。1 行＝(声優 × シリーズ × キャラ) の粒度。キャラクター順（既定・シリーズ別セクション）/ 五十音順 / 初出演順（シリーズ別セクション）/ 出演話数が多い順 の 4 タブ |
 | `/people/{名前}/` `/companies/{名前}/` | 人物・企業/団体の個別詳細（直リンク用）。URL は人物は最新名義、企業/団体はマスタの正式名から作る（下記「詳細ページの URL」） |
 | `/characters/{名前}/` | キャラクター詳細。2 回以上登場したキャラ・プリキュア・歌唱や家族関係のあるキャラだけが持つ |
@@ -841,13 +843,15 @@ Role: PRODUCTION 制作 (order 2)
 
 ##### クリエーターセクションと役職詳細ページの URL
 
-`CreatorsGenerator` が `/creators/`（ランディング）・`/creators/staff/`（スタッフ一覧）・`/creators/roles/{role_code}/`（役職詳細）・`/creators/voice-cast/`（声の出演一覧）の 4 種を生成する。人物・企業/団体は「順位」を持たずタブ（五十音順／初参加順／担当話数が多い順 ほか）での並べ替えのみを提供。スタッフ一覧は人物と企業・団体を 1 リストに混在させ、行ごとに個人/団体バッジで区別、上部トグルで個人のみ・団体のみへ絞り込める。役職詳細ページは `/creators/roles/{role_code}/` 形式。`roles` テーブルは業務コード `role_code`（`varchar(32)`・`utf8mb4_bin`）を PK とし数値サロゲートを持たないため、URL パス上の役職コードは `string.ToLowerInvariant()` で小文字化する（例: `/creators/roles/screenplay/`）。出力先パスと参照リンクは `PathUtil.RoleStatsUrl()` に集約。閲覧者向けに不要な内部コード（役職コード／区分）は表示せず、日本語の役職名のみを出す。
+`CreatorsGenerator` が `/creators/`（ランディング）・`/creators/staff/`（スタッフ一覧）・`/creators/roles/{role_code}/`（役職詳細）・`/creators/voice-cast/`（声の出演一覧）・`/creators/music-production/`（音楽制作一覧）・`/creators/singers/`（歌唱一覧）の 6 種を生成する。作詞・作曲・編曲の役職詳細は `song_credits` を直接集計し（本編に登場しない楽曲の作家も拾う）、パンくずは音楽制作の下に置く。人物・企業/団体は「順位」を持たずタブ（五十音順／初参加順／担当話数が多い順 ほか）での並べ替えのみを提供。スタッフ一覧は人物と企業・団体を 1 リストに混在させ、行ごとに個人/団体バッジで区別、上部トグルで個人のみ・団体のみへ絞り込める。役職詳細ページは `/creators/roles/{role_code}/` 形式。`roles` テーブルは業務コード `role_code`（`varchar(32)`・`utf8mb4_bin`）を PK とし数値サロゲートを持たないため、URL パス上の役職コードは `string.ToLowerInvariant()` で小文字化する（例: `/creators/roles/screenplay/`）。出力先パスと参照リンクは `PathUtil.RoleStatsUrl()` に集約。閲覧者向けに不要な内部コード（役職コード／区分）は表示せず、日本語の役職名のみを出す。
 
 声の出演一覧は (声優 × シリーズ × キャラ) ごとに 1 行へフラット展開する。1 行の出演話数は当該 (声優 × シリーズ × キャラ) の重複排除済みエピソード数で、シリーズ全体スコープのみのクレジットは話数「—」表示の 1 行として残す。順位はサブタイトル統計・エピソード尺統計のみに Wimbledon 形式で用い、人物・企業/団体・声優には用いない。
 
 並べ替えの一貫方針として、五十音順以外のすべてのタブでは「同じ話数内では初めてクレジットされた位置の順」を暗黙の副ソートキーとする。`CreditInvolvementIndex` が、クレジット階層を表示順（同一エピソード内の credit レコードを明示順序カラム `credits.credit_seq` 昇順 → credit_id 昇順で並べ、各 credit 内を card_seq → tier_no → group_no → order_in_group → block_seq → entry_seq）でエピソード単位に走査する過程で、各関与に 0 始まりの出現連番 `Involvement.CreditSeq` を採番する。`credits` テーブルはクレジット階層の最上位で、明示順序カラム `credit_seq`（smallint unsigned, 同一スコープ内 1 始まり, `UNIQUE(series_id,credit_seq)` / `UNIQUE(episode_id,credit_seq)`）を持つ。WinTools のクレジット編集画面にはクレジット一覧の ↑↓ 並べ替えボタンがあり、`CreditsRepository.BulkUpdateSeqAsync` で即時 DB 反映する。新規クレジットの `InsertAsync` は同一スコープ内 `MAX(credit_seq)+1` を自動採番。集計側は (シリーズ放送開始日, シリーズ内話数) が同点になった行・役職を、この最小 `CreditSeq` の昇順で並べる。`roles.display_order` はマスタ管理画面のグリッド表示順を決めるだけの値で、公開サイトの並べ替えには用いない。完全同点（同一話・同一クレジット位置で初出）の場合にのみ内部 `role_code` で安定化する。五十音順タブは読み仮名で並びが完全に一意に定まるためこの副キーは挟まない。キャラクター一覧（`/characters/`）も同方針で、大セクションを所属シリーズ（最早登場シリーズ）単位に束ね、その中を種別（character_kind）サブセクションに分けたうえで、種別内のキャラ配列を読み仮名順ではなく「最も早くクレジットされた位置」順に統一する。各キャラの「登場話数」は全作品横断の集計を TV 系シリーズ（`credit_attach_to='EPISODE'`）の話数「N 話」と映画系シリーズ（`credit_attach_to='SERIES'`）の本数「M 本」に分離表記する。所属シリーズが確定しない（クレジット皆無の）キャラは末尾「その他（未登場）」セクションへ送る。
 
 主題歌・劇伴スタッフ（`song_credits` / `song_recording_singers` / `bgm_cue_credits` 由来）は曲・録音単位のマスタから `episode_theme_songs` 経由でエピソードに紐づくため、それ自体はクレジット階層上の物理位置を持たない。`CreditInvolvementIndex` は階層走査時に THEME_SONG 形式の役職ブロックへ到達した時点の `CreditSeq` を「(エピソード, 親 credit の kind=OP/ED)」をキーに控え、主題歌スタッフへ `theme_kind`（OP/ED/INSERT）に応じてその位置を継承させる（OP 主題歌→OP クレジット内の主題歌ブロック位置、ED→ED、INSERT 等の親 kind 非対応は同エピソード最初の主題歌ブロック位置にフォールバック、主題歌ブロックが階層に無ければクレジット末尾相当）。劇伴は同エピソードの主題歌ブロック位置→末尾相当の順でフォールバック。
+
+人物詳細は「本編クレジット」と「音楽クレジット」を別のセクションにする。本編クレジットには本編のクレジット階層に載った関与だけを出し（本編の「音楽」の役職はこちら）、主題歌・挿入歌経由の作家・歌唱と劇伴の作曲・編曲は出さない。音楽クレジットは関わった先（歌 / 劇伴 / 音盤）の大見出しの中に小見出しを立て（作詞・作曲・編曲 / 歌唱 / コーラスのみ / 演奏等 / レコーディング / 音盤製作。歌唱は歌・台詞で参加した曲、コーラスのみは `song_recording_singers` のコーラスだけの曲、演奏等は `music_credits` の演奏・コーラス等）、曲のカード（担当した区分の役職だけをバッジに持つ）・劇伴の作曲・編曲（`bgm_cue_credits` からシリーズごとの曲数つきの行。本編での使用が登録されていれば使用話数のグループも）・音盤の音楽クレジット（`music_credits` の紐付け先ごとの行）を並べる。`music_credits` は本編の関与索引（`CreditInvolvementIndex`）に入れず、エピソード詳細・スタッフ一覧・役職詳細には出ない。楽曲詳細は曲に共通の分を「演奏・レコーディング」セクションに、録音ごとの分を各録音のセクションに、劇伴詳細はセッションごとに（既定で閉じた開閉欄）、商品詳細は盤の分を「ディスクスタッフ」セクションに出す。
 
 スタッフ一覧・役職詳細の担当量（話数・本数）は、人物 1 人・企業 1 社の全名義（企業は全屋号とロゴ）を合算する。初参加順タブは名義ごとの行で、各名義をその名義が初めてクレジットされたシリーズのセクションに、その名義の表記で置く（改名・屋号変更があれば、新しい名義が初めて出たシリーズにも改めて並ぶ。数はどの行も全名義の合算）。担当話数（参加話数）が多い順タブは人物・企業ごとに 1 行で、表記は全クレジット（役職・種別を問わない）で最後に使われた名義にする。役職順タブで「映画のみ」とするのは、TV 系シリーズ（`credit_attach_to='EPISODE'`）のクレジットが 1 件も無い役職。
 
@@ -1400,6 +1404,35 @@ series_relation_kinds ──┘    │            │
 > `songs.*_name` / `song_recordings.singer_name` / `bgm_cues.composer_name`・`arranger_name` のフリーテキストは、構造化クレジット（`song_credits` / `song_recording_singers` / `bgm_cue_credits`）がまだ無い曲・録音・劇伴のためのフォールバック。サイトは画面表示だけでなく、meta description・OGP カード・JSON-LD・使用曲リストの副題といった平文の出力先でも、役職ごとに構造化行があればそれだけを使い、1 行も無い役職に限ってフリーテキストを使う（平文化は `CreditText` に集約。書式は画面表示と同じで、キャラ歌唱は「キャラ(CV:声優)」）。
 
 > `song_recording_singers.role_code` は `VOCALS`（歌）・`BACKING_VOCALS`（コーラス）・`DIALOGUE`（台詞：歌わずに曲中のセリフだけで参加する出演者）の 3 役を持つ。書式は 3 役とも同じ（キャラは「キャラ(CV:声優)」）で、楽曲詳細・商品詳細のトラック行・エピソード／シリーズの主題歌欄に歌 → コーラス → 台詞の順で並ぶ。`/creators/roles/vocals/` の担当曲数に数えるのは `VOCALS` だけ。
+
+#### `music_credits` — 音盤の音楽クレジット
+
+音盤のブックレットに載る音楽クレジット（演奏・コーラス等 / レコーディング / 音盤製作）を 1 行 = 1 名義で持つ。紐付け先は `target_kind` で次のいずれか 1 つに決まり、対応する列だけを埋める（CHECK `ck_music_credits_target`）。
+
+- `SONG`：曲（伴奏の演奏者など、曲に共通のクレジット。録音をやり直した版は別の曲として登録する運用なので、伴奏の演奏者は曲に付く）
+- `SONG_RECORDING`：録音（カバー等、録音ごとに違うクレジット）
+- `BGM_SESSION`：劇伴の録音セッション（→ `bgm_sessions`）
+- `PRODUCT`：商品（音盤製作のスタッフ。録音側のスタッフでも、どの録音の担当か割り振れないものはここ）
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `music_credit_id` | INT PK AUTO_INCREMENT | |
+| `target_kind` | ENUM('SONG','SONG_RECORDING','BGM_SESSION','PRODUCT') | 紐付け先の種類 |
+| `song_id` / `song_recording_id` / `bgm_series_id` + `bgm_session_no` / `product_catalog_no` | NULL FK | 紐付け先（`target_kind` に対応する列だけ） |
+| `role_code` | VARCHAR(32) FK | 役職（→ `roles`。区分は `roles.music_credit_group`） |
+| `credit_seq` | SMALLINT UNSIGNED | 紐付け先の中での表示順（盤の並び） |
+| `entry_kind` | ENUM('PERSON','CHARACTER','COMPANY','TEXT') | 名義の種類 |
+| `person_alias_id` / `character_alias_id` / `company_alias_id` | NULL FK | 名義（`entry_kind` に対応する列だけ） |
+| `raw_text` | VARCHAR(255) NULL | TEXT のときの表記 |
+| `printed_text` | VARCHAR(255) NULL | 盤の印刷表記が名義の表記と違うとき（ローマ字・大文字小文字・空白・誤記）の印刷どおりの表記。サイトでは名義の表記で出し、印刷表記は title 属性に添える |
+| `is_misprint` | TINYINT(1) | `printed_text` が誤記なら 1 |
+| `role_label_text` | VARCHAR(64) NULL | 盤の役職の印刷表記（Guiter / Condu / レコーディングコーディネイト 等）。役職そのものは 1 つにまとめ、表記の違いをここに残す |
+| `ensemble_note` | VARCHAR(64) NULL | 編成の注記（Tp.3 / 86443 / ×8 / 302st.304st. 等）。サイトでは役職名に括弧で添える。演奏系の役職（楽器・指揮など）のバッジは役職名の前に絵文字を付ける（`MusicCreditViewBuilder.BadgeLabel`。専用の絵文字が無い楽器は、金管は 🎺、木管は 🪈、ハープは 🎻 で代用） |
+| `affiliation_company_alias_id` / `affiliation_text` | NULL | 所属（屋号が名義マスタにあれば前者、無ければ後者） |
+| `preceding_separator` | VARCHAR(8) NULL | 直前の名義との区切り（／ , & 等）。無ければ「、」で出す |
+| `source_product_catalog_no` | VARCHAR(32) NULL FK | このクレジットの根拠にした盤（→ `products`）。サイトでは「出典：」として添える |
+
+> `roles.music_credit_group` は音楽クレジットの区分（`WRITING`=作詞・作曲・編曲 / `PERFORMANCE`=演奏・コーラス等 / `RECORDING`=レコーディング / `RELEASE`=音盤製作）。NULL は本編クレジットだけで使う役職。作詞・作曲・編曲（`song_credits` / `bgm_cue_credits`）と歌唱（`song_recording_singers`）の役職もこの区分を持ち、サイトの音楽クレジット欄はこの区分で小見出しを分ける。ストリングス編曲（`STRINGS_ARRANGEMENT`）は作家なので `song_credits` に作詞・作曲・編曲と並べて持つ。曲の見出しに出るコーラス（「コーラス／ぷりきゅあ5」など）は `song_recording_singers` のまま、ブックレットのミュージシャン欄のコーラスは `music_credits` に入れる。
 
 #### `song_recordings` — 歌の歌唱者バージョン
 

@@ -81,12 +81,17 @@ public sealed class TrackCreditHtmlBuilder
     /// 役職マスタに登録があれば <see cref="Role.NameJa"/> を採用、無ければ <paramref name="fallbackLabel"/>。
     /// CSS は既存の <c>.role-badge[data-role-code]</c> 規約に合わせる（色相環 4 色 +
     /// SERIES グレー等の既存マッピングがそのまま効く）。
+    /// 楽曲の作家・歌唱系の役職は役職詳細・歌唱ページへのリンクにする（<see cref="PathUtil.SongRoleBadgeUrl"/>）。
+    /// 劇伴の作曲・編曲はリンク先が楽曲の作家の一覧になるので、<paramref name="linkable"/>=false で素のバッジにする。
     /// </summary>
-    public string BuildRoleBadgeHtml(string roleCode, string fallbackLabel)
+    public string BuildRoleBadgeHtml(string roleCode, string fallbackLabel, bool linkable = true)
     {
         string label = (_roleMap.TryGetValue(roleCode, out var r) && !string.IsNullOrEmpty(r.NameJa))
             ? r.NameJa : fallbackLabel;
-        return $"<span class=\"role-badge role-badge-sm\" data-role-code=\"{Escape(roleCode)}\">{Escape(label)}</span>";
+        string href = linkable ? PathUtil.SongRoleBadgeUrl(roleCode) : "";
+        return href.Length > 0
+            ? $"<a class=\"role-badge role-badge-sm\" data-role-code=\"{Escape(roleCode)}\" href=\"{Escape(href)}\">{Escape(label)}</a>"
+            : $"<span class=\"role-badge role-badge-sm\" data-role-code=\"{Escape(roleCode)}\">{Escape(label)}</span>";
     }
 
     /// <summary>
@@ -308,7 +313,8 @@ public sealed class TrackCreditHtmlBuilder
                     "ARRANGEMENT" => "編曲",
                     _ => rc
                 };
-                badgesSb.Append(BuildRoleBadgeHtml(rc, fallback));
+                // 劇伴の作曲・編曲はリンクしない（役職詳細は楽曲の作家の一覧のため）。
+                badgesSb.Append(BuildRoleBadgeHtml(rc, fallback, linkable: false));
             }
             var nameSb = new StringBuilder();
             for (int i = 0; i < mg.Items.Count; i++)

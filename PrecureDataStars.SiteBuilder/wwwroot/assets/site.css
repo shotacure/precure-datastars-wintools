@@ -4360,6 +4360,22 @@ body.subtitle-embargo-dialog-open {
   gap: 24px;
   margin: 24px 0;
 }
+/* 音楽製作一覧の行で、担当した役職（作詞・作曲・編曲）をバッジで並べる。名前・初参加曲との間に余白を取る。 */
+.music-role-badges {
+  display: inline-flex;
+  gap: 4px;
+  margin: 0 8px;
+  vertical-align: middle;
+}
+/* カードが 4 枚のランディング（/creators/）は 2 列固定にして 2×2 に揃える（3 列だと 1 枚だけ次の行に落ちる）。狭い画面では 1 列。 */
+.music-categories.is-two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 640px) {
+  .music-categories.is-two-col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .music-category-card {
   /* ランディング (/music/・/creators/・/stats/) 共用カード。flex 列で内部を縦積みし、
    親 grid の align-items:stretch と組み合わせて、最終子要素 (件数バッジ/カバレッジラベル) を
@@ -8714,4 +8730,79 @@ body.has-art-track-bar {
 /* 楽曲詳細はボタンとバッジで 1 組を成すので、ボタンだけ消すとバッジが宙に浮く。組ごと畳む。 */
 .hide-premium-art-tracks .song-recording-play:has(.art-track-play.is-premium-only:not([data-art-track-alt-id])) {
   display: none;
+}
+
+/* ── 音楽クレジット（人物詳細の「音楽クレジット」欄、楽曲・劇伴・商品詳細の演奏・レコーディング・ディスクスタッフ） ── */
+/* 区分（作詞・作曲・編曲 / 演奏・コーラス等 / レコーディング / 音盤製作）の小見出し。 */
+.music-credit-group-heading {
+  margin: 18px 0 8px;
+  font-size: 1.02em;
+}
+.music-credit-block .music-credit-group-heading:first-child {
+  margin-top: 8px;
+}
+/* 区分の中の小見出し（歌 / 劇伴 / 音盤）。 */
+.music-credit-sub-heading {
+  margin: 12px 0 6px;
+  font-size: 0.92em;
+  color: var(--muted);
+}
+/* 盤の所属表記（「（タバック）」など）。 */
+.music-credit-affiliation {
+  font-size: 0.9em;
+}
+/* 根拠にした盤。 */
+.music-credit-sources {
+  margin: 10px 0 0;
+  font-size: 0.88em;
+}
+/* 人物詳細：音盤の音楽クレジットの行（役職バッジ + 紐付け先）。 */
+.music-credit-item-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.music-credit-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.music-credit-item-roles {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.music-credit-item-sub {
+  font-size: 0.9em;
+}
+/* 劇伴詳細：セッションの演奏・レコーディング（既定で閉じる）。 */
+.bgm-session-credits {
+  margin: 4px 0 16px;
+}
+.bgm-session-credits > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.92em;
+}
+/* 音楽製作：歌・劇伴タブの中の並べ替え切り替え（初参加順 / 多い順）。 */
+.sort-toggle {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+.sort-toggle-btn {
+  padding: 3px 12px;
+  font-size: 0.88em;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sort-toggle-btn.is-active {
+  color: var(--fg);
+  border-color: var(--fg);
 }

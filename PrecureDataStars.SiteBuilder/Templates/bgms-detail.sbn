@@ -58,6 +58,13 @@
     <span class="bgm-session-caption">{{ sec.Caption | html.escape }}</span>
     {{~ end ~}}
   </h2>
+  {{## このセッションの演奏者・録音側スタッフ。一覧が長くなるので既定では閉じておく。 ##}}
+  {{~ if sec.MusicCreditsHtml != "" ~}}
+  <details class="bgm-session-credits">
+    <summary>演奏・レコーディング</summary>
+    {{ sec.MusicCreditsHtml }}
+  </details>
+  {{~ end ~}}
   {{## 配信音源（YouTube アートトラック）の再生対象リスト。data-art-track-mode="single" は
        「押した 1 件だけ鳴らして終わる」指定。cue は音源が違えば別 cue として登録されており、
        連番の派生（~Harp Only~ 等）が隣接して並ぶため、連続再生すると同じ曲が続けて鳴ってしまう。

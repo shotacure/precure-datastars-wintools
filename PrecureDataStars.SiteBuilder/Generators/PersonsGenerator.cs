@@ -245,7 +245,9 @@ public sealed class PersonsGenerator
         string displayNameKana = _ctx.EntityUrls.PersonDisplayKana(person.PersonId) ?? (person.FullNameKana ?? "");
 
         // 役職別グループ化された関与一覧を組み立て（フラット、全名義横断）。
-        var involvementGroups = BuildPersonInvolvementGroups(aliasIds);
+        // 本編クレジットの欄には本編のクレジット階層に載った関与だけを出す（主題歌・挿入歌経由の作家・歌唱と
+        // 劇伴の作曲・編曲は音楽クレジットの欄に分ける）。
+        var involvementGroups = BuildPersonInvolvementGroups(aliasIds, IsMainInvolvement);
 
         // クレジットのある名義が 2 つ以上あるときだけ、名義単位のセクション（初登場順）に分ける
         // （企業・団体詳細と同じ規律）。1 つ以下ならテンプレ側は involvementGroups のフラット表示を使う。
@@ -255,11 +257,13 @@ public sealed class PersonsGenerator
         // 同一名義が同じ話数に複数役職でクレジットされている場合、role ごとの EpisodeCount を
         // 合算すると同じ話数を二重に数えてしまうため、全名義の関与を再度 InvolvementRowBuilder に
         // 通してシリーズ単位で distinct 集計する（CompaniesGenerator と同じ規律）。
-        var allPersonInvolvements = aliasIds.Where(_index.ByPersonAlias.ContainsKey).SelectMany(id => _index.ByPersonAlias[id]).ToList();
+        var allPersonInvolvements = aliasIds.Where(_index.ByPersonAlias.ContainsKey).SelectMany(id => _index.ByPersonAlias[id])
+            .Where(IsMainInvolvement).ToList();
         var (_, creditEpisodeCountTotal, creditMovieCountTotal) = InvolvementRowBuilder.BuildSeriesRows(_ctx, allPersonInvolvements);
 
-        // 「楽曲」セクションのカード行（構造化エントリ song_credits / song_recording_singers から）。
+        // 「音楽クレジット」セクション（作詞・作曲・編曲 / 演奏・コーラス等 / レコーディング / 音盤製作）。
         var songCards = BuildPersonSongCards(aliasIds);
+        var musicSections = BuildPersonMusicSections(aliasIds, songCards);
         // 誕生日表記：BirthYearVisibility=PUBLIC かつ BirthYear ありなら「YYYY年M月D日」、
         // 非公開もしくは未設定なら年抜きの「M月D日」。BirthMonth / BirthDay の片方でも未設定なら空文字。
         string birthday = FormatBirthday(person);
@@ -285,7 +289,7 @@ public sealed class PersonsGenerator
             InvolvementSections = involvementSections,
             CreditEpisodeCountTotal = creditEpisodeCountTotal,
             CreditMovieCountTotal = creditMovieCountTotal,
-            SongCards = songCards,
+            MusicSections = musicSections,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 人物詳細の構造化データは Schema.org の Person 型。
@@ -510,11 +514,12 @@ public sealed class PersonsGenerator
     /// <see cref="InvolvementRowBuilder"/>（CompaniesGenerator と共用）に集約し、本メソッドは
     /// 役職グループ編成と人物詳細固有の付加情報（<see cref="ResolveSeriesRowExtras"/>）を担う。
     /// </summary>
-    private IReadOnlyList<InvolvementGroup> BuildPersonInvolvementGroups(IReadOnlyList<int> aliasIds)
+    private IReadOnlyList<InvolvementGroup> BuildPersonInvolvementGroups(IReadOnlyList<int> aliasIds, Func<Involvement, bool> include)
     {
         var all = aliasIds
             .Where(_index.ByPersonAlias.ContainsKey)
             .SelectMany(id => _index.ByPersonAlias[id])
+            .Where(include)
             .ToList();
         if (all.Count == 0) return Array.Empty<InvolvementGroup>();
 
@@ -632,6 +637,8 @@ public sealed class PersonsGenerator
                     "VOICE_CAST" => PathUtil.CreatorsVoiceCastUrl(),
                     _ => PathUtil.CreatorsRoleUrl(roleCode)
                 };
+                // 劇伴の作曲・編曲はリンクしない（作曲・編曲の役職詳細は楽曲の作家の一覧のため）。
+                if (string.Equals(categoryPrefix, "BGM", StringComparison.Ordinal)) roleUrl = "";
             }
             // 声の出演で複数のキャラ（役）を演じている場合は、役を大くくりにしたサブセクションを組み立てる。
             // テンプレはこちらを優先描画し、各役の配下にシリーズと話数を出す（シリーズや映画をまたぐ役も
@@ -665,17 +672,17 @@ public sealed class PersonsGenerator
         IReadOnlyList<int> aliasIds,
         IReadOnlyDictionary<int, PersonAlias> aliasById)
     {
-        var candidates = aliasIds.Where(id => _index.ByPersonAlias.ContainsKey(id) && _index.ByPersonAlias[id].Count > 0).ToList();
+        var candidates = aliasIds.Where(id => _index.ByPersonAlias.ContainsKey(id) && _index.ByPersonAlias[id].Any(IsMainInvolvement)).ToList();
         if (candidates.Count <= 1) return Array.Empty<AliasInvolvementSection>();
 
         var sections = new List<(DateTime FirstAt, AliasInvolvementSection Section)>();
         foreach (var aliasId in candidates)
         {
-            var groups = BuildPersonInvolvementGroups(new[] { aliasId });
+            var groups = BuildPersonInvolvementGroups(new[] { aliasId }, IsMainInvolvement);
             if (groups.Count == 0) continue;
 
             DateTime firstAt = DateTime.MaxValue;
-            foreach (var inv in _index.ByPersonAlias[aliasId])
+            foreach (var inv in _index.ByPersonAlias[aliasId].Where(IsMainInvolvement))
             {
                 DateTime at = inv.EpisodeId is int eid && _ctx.LookupEpisode(inv.SeriesId, eid) is { } ep
                     ? ep.OnAirAt
@@ -687,7 +694,7 @@ public sealed class PersonsGenerator
             if (string.IsNullOrEmpty(aliasName)) continue;
 
             // 名義見出しの合計バッジも role 別 EpisodeCount の単純合算ではなく distinct 集計にする。
-            var (_, aliasEpisodeCount, aliasMovieCount) = InvolvementRowBuilder.BuildSeriesRows(_ctx, _index.ByPersonAlias[aliasId]);
+            var (_, aliasEpisodeCount, aliasMovieCount) = InvolvementRowBuilder.BuildSeriesRows(_ctx, _index.ByPersonAlias[aliasId].Where(IsMainInvolvement).ToList());
 
             sections.Add((firstAt, new AliasInvolvementSection
             {
@@ -939,6 +946,179 @@ public sealed class PersonsGenerator
     }
 
 
+    /// <summary>
+    /// 本編クレジットの関与か。主題歌・挿入歌経由の作家・歌唱（SONG_CREDIT / RECORDING_SINGER）と
+    /// 劇伴の作曲・編曲（BGM_CUE_CREDIT）は音楽クレジットの欄で扱うので、本編クレジットの欄には出さない。
+    /// 本編のクレジット階層に載る「音楽」などの役職は本編側に残る。
+    /// </summary>
+    private static bool IsMainInvolvement(Involvement inv)
+        => inv.EntryKind is not ("SONG_CREDIT" or "RECORDING_SINGER" or "BGM_CUE_CREDIT");
+
+    /// <summary>
+    /// 「音楽クレジット」セクションを、関わった先（歌 → 劇伴 → 音盤）の大見出しと、区分（作詞・作曲・編曲 → 演奏・コーラス等 →
+    /// レコーディング → 音盤製作）の小見出しに分けて組み立てる。
+    /// <list type="bullet">
+    ///   <item><description>曲のカード（song_credits / song_recording_singers）は、担当した役職の区分ごとに振り分ける
+    ///     （作詞と歌の両方を担当した曲は、それぞれの区分に役職を分けて出る）。</description></item>
+    ///   <item><description>劇伴の作曲・編曲（bgm_cue_credits）は「作詞・作曲・編曲」に、シリーズごとの使用話数つきで出す。</description></item>
+    ///   <item><description>音盤の音楽クレジット（music_credits）は、紐付け先（曲・録音・劇伴セッション・商品）ごとに 1 行で出す。</description></item>
+    /// </list>
+    /// 何も無い区分は出さない。
+    /// </summary>
+    private IReadOnlyList<PersonMusicSection> BuildPersonMusicSections(IReadOnlyList<int> aliasIds, IReadOnlyList<PersonSongCard> songCards)
+    {
+        var bgmGroups = BuildPersonInvolvementGroups(aliasIds, inv => inv.EntryKind == "BGM_CUE_CREDIT");
+        var musicRows = aliasIds
+            .Where(_ctx.MusicCredits.ByPersonAlias.ContainsKey)
+            .SelectMany(id => _ctx.MusicCredits.ByPersonAlias[id])
+            .ToList();
+
+        // 大見出しは関わった先（歌 / 劇伴 / 音盤）、その中の小見出しは区分（作詞・作曲・編曲 / 演奏・コーラス等 / レコーディング / 音盤製作）。
+        //   歌   … 曲のカードと、曲・録音に付いた音楽クレジット
+        //   劇伴 … 劇伴の作曲・編曲と、劇伴セッションに付いた音楽クレジット
+        //   音盤 … 商品（盤）に付いた音楽クレジット
+        var songRows = musicRows.Where(r => r.TargetKind is MusicCreditTargetKinds.Song or MusicCreditTargetKinds.SongRecording).ToList();
+        var sessionRows = musicRows.Where(r => r.TargetKind == MusicCreditTargetKinds.BgmSession).ToList();
+        var productRows = musicRows.Where(r => r.TargetKind == MusicCreditTargetKinds.Product).ToList();
+        var bgmCueItems = BuildBgmCueCreditItems(aliasIds);
+
+        var songSubs = new List<PersonMusicSubsection>();
+        var bgmSubs = new List<PersonMusicSubsection>();
+        var discSubs = new List<PersonMusicSubsection>();
+
+        // 小見出し：作詞・作曲・編曲 / 歌唱 / コーラスのみ / 演奏等 / レコーディング / 音盤製作。
+        //   歌唱       … 曲のカードのうち、歌・台詞で参加した曲（同じ曲でコーラスもしていればバッジに並べる）
+        //   コーラスのみ … 曲のカードのうち、歌唱者行のコーラスだけで参加した曲
+        //   演奏等     … 音盤の音楽クレジットの演奏・コーラス等（ミュージシャン欄のコーラスもここ）
+        bool IsSingerVoice(string code) => code is SongRecordingSingerRoles.Vocals or SongRecordingSingerRoles.Dialogue;
+        var buckets = new (string Label, Func<PersonSongCard, IReadOnlyList<RoleBadgeView>> CardRoles, string? RowGroup)[]
+        {
+            ("作詞・作曲・編曲",
+                c => c.Roles.Where(b => MusicCreditViewBuilder.GroupOf(_ctx, b.Code) == MusicCreditGroups.Writing).ToList(),
+                MusicCreditGroups.Writing),
+            ("歌唱",
+                c => c.Roles.Any(b => IsSingerVoice(b.Code))
+                    ? c.Roles.Where(b => PathUtil.IsSingerRole(b.Code)).ToList()
+                    : Array.Empty<RoleBadgeView>(),
+                null),
+            ("コーラスのみ",
+                c => !c.Roles.Any(b => IsSingerVoice(b.Code))
+                    ? c.Roles.Where(b => b.Code == SongRecordingSingerRoles.Chorus).ToList()
+                    : Array.Empty<RoleBadgeView>(),
+                null),
+            ("演奏等", _ => Array.Empty<RoleBadgeView>(), MusicCreditGroups.Performance),
+            (MusicCreditGroups.Label(MusicCreditGroups.Recording), _ => Array.Empty<RoleBadgeView>(), MusicCreditGroups.Recording),
+            (MusicCreditGroups.Label(MusicCreditGroups.Release), _ => Array.Empty<RoleBadgeView>(), MusicCreditGroups.Release),
+        };
+        foreach (var (label, cardRoles, rowGroup) in buckets)
+        {
+            bool InGroup(string roleCode) => rowGroup is not null && MusicCreditViewBuilder.GroupOf(_ctx, roleCode) == rowGroup;
+
+            var cards = songCards
+                .Select(c => (Card: c, Roles: cardRoles(c)))
+                .Where(x => x.Roles.Count > 0)
+                .Select(x => x.Card.WithRoles(x.Roles))
+                .ToList();
+            var songItems = BuildMusicCreditItems(songRows.Where(r => InGroup(r.RoleCode)));
+            if (cards.Count > 0 || songItems.Count > 0)
+                songSubs.Add(new PersonMusicSubsection { Label = label, SongCards = cards, Items = songItems });
+
+            var bgmItems = BuildMusicCreditItems(sessionRows.Where(r => InGroup(r.RoleCode)));
+            bool isWriting = rowGroup == MusicCreditGroups.Writing;
+            var groupBgm = isWriting ? bgmGroups : Array.Empty<InvolvementGroup>();
+            if (isWriting)
+                bgmItems = bgmCueItems.Concat(bgmItems).ToList();
+            if (bgmItems.Count > 0 || groupBgm.Count > 0)
+                bgmSubs.Add(new PersonMusicSubsection { Label = label, BgmGroups = groupBgm, Items = bgmItems });
+
+            var discItems = BuildMusicCreditItems(productRows.Where(r => InGroup(r.RoleCode)));
+            if (discItems.Count > 0)
+                discSubs.Add(new PersonMusicSubsection { Label = label, Items = discItems });
+        }
+
+        var sections = new List<PersonMusicSection>();
+        if (songSubs.Count > 0) sections.Add(new PersonMusicSection { Label = "歌", Subsections = songSubs });
+        if (bgmSubs.Count > 0) sections.Add(new PersonMusicSection { Label = "劇伴", Subsections = bgmSubs });
+        if (discSubs.Count > 0) sections.Add(new PersonMusicSection { Label = "音盤", Subsections = discSubs });
+        return sections;
+    }
+
+    /// <summary>
+    /// 劇伴の作曲・編曲（bgm_cue_credits）を、シリーズごとの 1 行（担当した役職のバッジ + 曲数）に束ねる。
+    /// 本編での使用（episode_uses）の有無に関わらず、劇伴のクレジットそのものから出す。並びはシリーズの放送開始日順。
+    /// </summary>
+    private IReadOnlyList<PersonMusicCreditItem> BuildBgmCueCreditItems(IReadOnlyList<int> aliasIds)
+    {
+        var aliasSet = aliasIds.ToHashSet();
+        var bySeries = new Dictionary<int, (HashSet<string> Cues, HashSet<string> Roles)>();
+        foreach (var kv in _ctx.BgmCueCreditsByCue)
+        {
+            foreach (var c in kv.Value)
+            {
+                if (!aliasSet.Contains(c.PersonAliasId)) continue;
+                if (!bySeries.TryGetValue(kv.Key.SeriesId, out var acc))
+                {
+                    acc = (new HashSet<string>(StringComparer.Ordinal), new HashSet<string>(StringComparer.Ordinal));
+                    bySeries[kv.Key.SeriesId] = acc;
+                }
+                acc.Cues.Add(kv.Key.MNoDetail);
+                acc.Roles.Add(c.CreditRole);
+            }
+        }
+        return bySeries
+            .Where(kv => _ctx.SeriesById.ContainsKey(kv.Key))
+            .OrderBy(kv => _ctx.SeriesStartDate(kv.Key))
+            .Select(kv =>
+            {
+                var series = _ctx.SeriesById[kv.Key];
+                return new PersonMusicCreditItem
+                {
+                    Title = series.Title,
+                    Url = PathUtil.BgmsForSeriesUrl(series.Slug),
+                    SubLabel = $"劇伴 {kv.Value.Cues.Count}曲",
+                    Roles = kv.Value.Roles
+                        .Select(code => new RoleBadgeView
+                        {
+                            Code = code,
+                            Label = MusicCreditViewBuilder.RoleName(_ctx, code),
+                            Url = "",
+                            DisplayOrder = _roleMap!.TryGetValue(code, out var role) ? role.DisplayOrder ?? 0 : 0
+                        })
+                        .OrderBy(b => b.DisplayOrder)
+                        .ToList()
+                };
+            })
+            .ToList();
+    }
+
+    /// <summary>音盤の音楽クレジット行を、紐付け先（曲・録音・劇伴セッション・商品）ごとの 1 行に束ねる。並びは根拠の盤の発売日順。</summary>
+    private IReadOnlyList<PersonMusicCreditItem> BuildMusicCreditItems(IEnumerable<MusicCredit> rows)
+    {
+        var items = new List<(DateTime Sort, PersonMusicCreditItem Item)>();
+        foreach (var g in rows.GroupBy(r => (r.TargetKind, r.SongId, r.SongRecordingId, r.BgmSeriesId, r.BgmSessionNo, r.ProductCatalogNo)))
+        {
+            var target = MusicCreditViewBuilder.DescribeTarget(_ctx, g.First());
+            if (target is not { } t) continue;
+            var (title, url, sub, sort) = t;
+            foreach (var r in g)
+            {
+                if (MusicCreditViewBuilder.DescribeTarget(_ctx, r) is { } rt && rt.Sort < sort) sort = rt.Sort;
+            }
+            var roles = g.GroupBy(r => r.RoleCode, StringComparer.Ordinal)
+                .Select(rg => new RoleBadgeView
+                {
+                    Code = rg.Key,
+                    Label = MusicCreditViewBuilder.BadgeLabel(_ctx, rg.Key),
+                    Url = "",
+                    DisplayOrder = _roleMap!.TryGetValue(rg.Key, out var role) ? role.DisplayOrder ?? 0 : 0
+                })
+                .OrderBy(b => b.DisplayOrder)
+                .ToList();
+            items.Add((sort, new PersonMusicCreditItem { Title = title, Url = url, SubLabel = sub, Roles = roles }));
+        }
+        return items.OrderBy(x => x.Sort).ThenBy(x => x.Item.Title, StringComparer.Ordinal).Select(x => x.Item).ToList();
+    }
+
     /// <summary>company_alias_id から屋号名を引く。 BuildContext.CompanyAliasById に全件辞書化済みのため同期 lookup で完結する。</summary>
     private string? GetCompanyAliasName(int aliasId)
         => _ctx.CompanyAliasById.TryGetValue(aliasId, out var ca) ? ca.Name : null;
@@ -959,8 +1139,8 @@ public sealed class PersonsGenerator
         public int CreditEpisodeCountTotal { get; set; }
         /// <summary>クレジットセクション見出し横に出す合計担当本数（映画系シリーズ横断）。</summary>
         public int CreditMovieCountTotal { get; set; }
-        /// <summary>構造化エントリ（song_credits / song_recording_singers）由来の担当楽曲カード行群。</summary>
-        public IReadOnlyList<PersonSongCard> SongCards { get; set; } = Array.Empty<PersonSongCard>();
+        /// <summary>音楽クレジット（区分ごと。何も無い区分は含まない）。</summary>
+        public IReadOnlyList<PersonMusicSection> MusicSections { get; set; } = Array.Empty<PersonMusicSection>();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
@@ -984,9 +1164,47 @@ public sealed class PersonsGenerator
         public string YoutubeUrl { get; set; } = "";
     }
 
+    /// <summary>音楽クレジットの大見出し 1 つ分（関わった先：歌 / 劇伴 / 音盤）。</summary>
+    private sealed class PersonMusicSection
+    {
+        public string Label { get; set; } = "";
+        /// <summary>中の小見出し（区分：作詞・作曲・編曲 / 演奏・コーラス等 / レコーディング / 音盤製作。何も無いものは含まない）。</summary>
+        public IReadOnlyList<PersonMusicSubsection> Subsections { get; set; } = Array.Empty<PersonMusicSubsection>();
+    }
+
+    /// <summary>音楽クレジットの大見出しの中の小見出し 1 つ分（区分）。</summary>
+    private sealed class PersonMusicSubsection
+    {
+        public string Label { get; set; } = "";
+        /// <summary>担当した曲のカード（この区分の役職だけをバッジに持つ）。「歌」だけで使う。</summary>
+        public IReadOnlyList<PersonSongCard> SongCards { get; set; } = Array.Empty<PersonSongCard>();
+        /// <summary>劇伴の作曲・編曲（役職別グループ → シリーズ行）。作詞・作曲・編曲の区分だけで使う。</summary>
+        public IReadOnlyList<InvolvementGroup> BgmGroups { get; set; } = Array.Empty<InvolvementGroup>();
+        /// <summary>音盤の音楽クレジット（紐付け先ごとの行）。</summary>
+        public IReadOnlyList<PersonMusicCreditItem> Items { get; set; } = Array.Empty<PersonMusicCreditItem>();
+    }
+
+    /// <summary>音盤の音楽クレジットの 1 行（紐付け先 1 つ分）。</summary>
+    private sealed class PersonMusicCreditItem
+    {
+        public string Title { get; set; } = "";
+        public string Url { get; set; } = "";
+        /// <summary>補足（劇伴セッション名など）。</summary>
+        public string SubLabel { get; set; } = "";
+        public IReadOnlyList<RoleBadgeView> Roles { get; set; } = Array.Empty<RoleBadgeView>();
+    }
+
     /// <summary>担当楽曲カード 1 行。1 曲につき 1 行で、複数役職は <see cref="Roles"/> に並べる。</summary>
     private sealed class PersonSongCard
     {
+        /// <summary>役職バッジだけを差し替えた複製（音楽クレジットの区分ごとに振り分けるときに使う）。</summary>
+        public PersonSongCard WithRoles(IReadOnlyList<RoleBadgeView> roles)
+        {
+            var copy = (PersonSongCard)MemberwiseClone();
+            copy.Roles = roles;
+            return copy;
+        }
+
         public int SongId { get; set; }
         public string SongUrl { get; set; } = "";
         public string Title { get; set; } = "";

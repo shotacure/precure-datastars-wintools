@@ -1,5 +1,5 @@
 <p class="muted">
-  <a href="/creators/staff/">スタッフ</a>
+  <a href="/creators/music-production/">音楽制作</a>
 </p>
 
 <h1>{{ RoleNameJa | html.escape }}</h1>

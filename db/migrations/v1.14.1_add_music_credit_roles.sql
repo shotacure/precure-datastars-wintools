@@ -8,6 +8,8 @@
 --                              本編クレジットの EXECUTIVE_PRODUCER とは別の役職にして、音楽クレジットの区分を持たせる。
 --   ORGAN                      オルガン（演奏の区分）。ピアノの次に並べる（ギター以降の演奏系の display_order を 1 つずつ後ろへずらす）。
 --   HARMONICA                  ハーモニカ（演奏の区分）。ファゴットの次に並べる（ハープ以降の演奏系の display_order を 1 つずつ後ろへずらす）。
+--   MUSIC_COORDINATION         音楽コーディネート（レコーディングの区分）。演奏者手配会社の側で録音全体の段取りを受け持つ人。
+--                              ミュージシャンコーディネイトの前に並べる（それ以降のレコーディング系の display_order を 1 つずつ後ろへずらす）。
 --
 -- あわせて SYNTH_OPERATION の表示名を「シンセサイザー」に縮める（「シンセサイザー・オペレート」は長いため）。
 --
@@ -35,5 +37,14 @@ UPDATE `roles` SET `display_order` = `display_order` + 1, `updated_by` = 'migrat
 
 INSERT IGNORE INTO `roles` (`role_code`, `name_ja`, `name_en`, `role_format_kind`, `music_credit_group`, `display_order`, `created_by`, `updated_by`) VALUES
   ('HARMONICA', 'ハーモニカ', 'Harmonica', 'NORMAL', 'PERFORMANCE', 2223, 'migration', 'migration');
+
+-- MUSIC_COORDINATION の入る場所（ミュージシャンコーディネイトの 2305）を空ける。TRACKDOWN_STUDIO を入れた後の並びが前提。
+UPDATE `roles` SET `display_order` = `display_order` + 1, `updated_by` = 'migration'
+ WHERE `display_order` BETWEEN 2305 AND 2308
+   AND NOT EXISTS (SELECT 1 FROM (SELECT `role_code` FROM `roles` WHERE `role_code` = 'MUSIC_COORDINATION') AS `t`)
+ ORDER BY `display_order` DESC;
+
+INSERT IGNORE INTO `roles` (`role_code`, `name_ja`, `name_en`, `role_format_kind`, `music_credit_group`, `display_order`, `created_by`, `updated_by`) VALUES
+  ('MUSIC_COORDINATION', '音楽コーディネート', 'Music Coordination', 'NORMAL', 'RECORDING', 2305, 'migration', 'migration');
 
 UPDATE `roles` SET `name_ja` = 'シンセサイザー', `updated_by` = 'migration' WHERE `role_code` = 'SYNTH_OPERATION';

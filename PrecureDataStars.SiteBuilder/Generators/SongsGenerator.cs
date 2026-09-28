@@ -694,7 +694,9 @@ public sealed class SongsGenerator
         // 歌唱者は「歌：」プレフィックスを付けた目立つ表示にするため、HTML（リンク化済み）と
         // フォールバック平文の両方をテンプレに渡す。
         var recordingSingers = singersByRecording.TryGetValue(r.SongRecordingId, out var singerList) ? singerList : new List<SongRecordingSinger>();
-        string vocalistsHtml = _singerHtml.BuildVocalistsHtml(recordingSingers, r.SingerName, personAliasMap, characterAliasMap);
+        // 録音ごとの表示では、表記でメンバーを出さないユニット名義にも誰が歌ったかを小さめの字で添える。
+        string vocalistsHtml = _singerHtml.BuildVocalistsHtml(recordingSingers, r.SingerName, personAliasMap, characterAliasMap,
+            showHiddenUnitMembers: true);
         string chorusHtml = _singerHtml.BuildChorusHtml(recordingSingers, personAliasMap, characterAliasMap);
         string dialogueHtml = _singerHtml.BuildDialogueHtml(recordingSingers, personAliasMap, characterAliasMap);
 

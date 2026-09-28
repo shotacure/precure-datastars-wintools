@@ -38,6 +38,13 @@ public sealed class Product
     /// <summary>商品種別コード（→ product_kinds）。</summary>
     public string ProductKindCode { get; set; } = "";
 
+    /// <summary>
+    /// この盤のクレジット（音盤の音楽クレジット・楽曲クレジット）を確認・投入済みなら true。
+    /// クレジット情報が載っていないと確認できた盤も true にする。サイトの音楽系ページの
+    /// 「〇年〇月〇日発売「〇〇」時点の情報」の基準点（true の盤のうち発売日が最も新しいもの）に使う。
+    /// </summary>
+    public bool MusicCreditsChecked { get; set; }
+
     // ── 販売情報 ──
 
     /// <summary>発売日。</summary>

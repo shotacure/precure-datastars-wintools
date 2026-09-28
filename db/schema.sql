@@ -643,6 +643,9 @@ CREATE TABLE `products` (
   `title_short` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `title_en` varchar(255) DEFAULT NULL,
   `product_kind_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  -- この盤のクレジット（音盤の音楽クレジット・楽曲クレジット）を確認・投入済みなら 1。クレジット情報が載っていないと
+  -- 確認できた盤も 1。サイトの音楽系ページの「〇年〇月〇日発売「〇〇」時点の情報」の基準点に使う。
+  `music_credits_checked` tinyint(1) NOT NULL DEFAULT 0,
   `release_date` date NOT NULL,
   `price_ex_tax` int DEFAULT NULL,
   `price_inc_tax` int DEFAULT NULL,

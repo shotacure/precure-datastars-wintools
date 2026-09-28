@@ -13,18 +13,22 @@
 <section class="music-categories is-two-col">
   <a class="music-category-card" href="/creators/staff/">
     <h2>スタッフ</h2>
-    <p>プリキュア制作にまつわるたくさんのお仕事と、それに携わった人々の記録。役職、初参加作品、担当話数からスタッフさんを探せます。</p>
+    <p>プリキュア制作にまつわるたくさんのお仕事と、それに携わった人々の記録。</p>
     <ul class="music-category-stats">
       <li>
-        <span class="music-category-stats-value">{{ StaffCount }}</span>
-        <span class="music-category-stats-label">人・団体</span>
+        <span class="music-category-stats-value">{{ StaffPersonCount }}</span>
+        <span class="music-category-stats-label">名</span>
+      </li>
+      <li>
+        <span class="music-category-stats-value">{{ StaffCompanyCount }}</span>
+        <span class="music-category-stats-label">団体</span>
       </li>
     </ul>
   </a>
 
   <a class="music-category-card" href="/creators/voice-cast/">
     <h2>声の出演</h2>
-    <p>プリキュアに出演した声優さんと、演じたキャラクターの記録。キャラクター、初出演作品、出演話数から声優さんを探せます。</p>
+    <p>プリキュアに出演した声優さんと、演じたキャラクターの記録。</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ VoiceCastCount }}</span>
@@ -35,18 +39,22 @@
 
   <a class="music-category-card" href="/creators/music-production/">
     <h2>音楽制作</h2>
-    <p>主題歌・挿入歌・キャラクターソングと劇伴の制作に携わった人々の記録。役職、初参加、参加数から探せます。</p>
+    <p>プリキュアの主題歌・挿入歌・キャラクターソングと劇伴の制作に携わった人々の記録。</p>
     <ul class="music-category-stats">
       <li>
-        <span class="music-category-stats-value">{{ MusicProductionCount }}</span>
+        <span class="music-category-stats-value">{{ MusicProductionPersonCount }}</span>
         <span class="music-category-stats-label">名</span>
+      </li>
+      <li>
+        <span class="music-category-stats-value">{{ MusicProductionCompanyCount }}</span>
+        <span class="music-category-stats-label">団体</span>
       </li>
     </ul>
   </a>
 
   <a class="music-category-card" href="/creators/singers/">
     <h2>歌唱</h2>
-    <p>主題歌・挿入歌・キャラクターソングを歌った人々の記録。歌手、キャラクター、初参加曲、参加曲数から探せます。</p>
+    <p>プリキュアの主題歌・挿入歌・キャラクターソングを歌った人々の記録。</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ SingerCount }}</span>

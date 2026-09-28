@@ -34,6 +34,13 @@ public sealed class MusicCreditIndex
 
     public int Count { get; }
 
+    /// <summary>
+    /// 音楽系ページ（音楽制作・歌唱・作詞作曲編曲や音楽の役職詳細）の基準点ラベル。
+    /// クレジット確認済み（products.music_credits_checked）の盤のうち発売日が最も新しいもので
+    /// 「yyyy年M月d日発売「商品名」時点の情報を表示しています」と組み立てる。確認済みの盤が無ければ空文字。
+    /// </summary>
+    public string CoverageLabel { get; }
+
     public MusicCreditIndex(IReadOnlyList<MusicCredit> rows, IReadOnlyList<Product> products, IReadOnlyList<BgmSession> sessions, IReadOnlyList<Disc> discs)
     {
         SeriesIdByProduct = discs
@@ -41,6 +48,14 @@ public sealed class MusicCreditIndex
             .GroupBy(d => d.ProductCatalogNo, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.OrderBy(d => d.DiscNoInSet ?? 0).First().SeriesId!.Value, StringComparer.Ordinal);
         Count = rows.Count;
+        var latestChecked = products
+            .Where(p => p.MusicCreditsChecked)
+            .OrderByDescending(p => p.ReleaseDate)
+            .ThenBy(p => p.ProductCatalogNo, StringComparer.Ordinal)
+            .FirstOrDefault();
+        CoverageLabel = latestChecked is null
+            ? ""
+            : $"{latestChecked.ReleaseDate:yyyy年M月d日}発売「{latestChecked.Title}」時点の情報を表示しています";
         static IReadOnlyDictionary<TKey, IReadOnlyList<MusicCredit>> Group<TKey>(IEnumerable<MusicCredit> src, Func<MusicCredit, TKey> key)
             where TKey : notnull
             => src.GroupBy(key).ToDictionary(g => g.Key, g => (IReadOnlyList<MusicCredit>)g

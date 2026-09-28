@@ -806,6 +806,10 @@ public sealed class MusicGenerator
                         SessionNo = g.Key,
                         SessionName = session?.SessionName ?? "(未設定)",
                         Caption = session?.Caption ?? "",
+                        // このセッションの演奏者・録音側スタッフ（music_credits の BGM_SESSION 紐付け）。
+                        MusicCreditsHtml = _ctx.MusicCredits.BySession.TryGetValue((seriesId, g.Key), out var sessionMusicRows)
+                            ? MusicCreditHtml.Render(MusicCreditViewBuilder.Build(_ctx, sessionMusicRows), "h3")
+                            : "",
                         Groups = groups
                     };
                 })
@@ -1290,6 +1294,8 @@ public sealed class MusicGenerator
         /// 出さない（見出しは SessionName だけになる）。
         /// </summary>
         public string Caption { get; set; } = "";
+        /// <summary>このセッションの演奏・レコーディングのクレジット（組み立て済み HTML）。無ければ空文字。</summary>
+        public string MusicCreditsHtml { get; set; } = "";
         /// <summary>
         /// セッション内のセクション単位のまとまり（section_no 昇順）。セクションを持たないセッションでは
         /// 見出し名 "" のグループ 1 つだけになり、テンプレ側は小見出しを出さずに従来どおり並べる。

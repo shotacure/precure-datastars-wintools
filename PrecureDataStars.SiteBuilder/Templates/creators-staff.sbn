@@ -5,7 +5,7 @@
   「役職順」タブは初クレジット順に役職を並べてクレジットされた人数・団体数を記載しています。役職詳細ページには歴代スタッフの一覧を掲載しています。
   「初参加順」タブは、スタッフさんや団体を初めてクレジットされたシリーズごとに並べて担当役職および担当作品数を掲載しています。
   「参加話数が多い順」タブは、スタッフさんや団体ごとにシリーズ通算の担当作品数および担当役職を掲載しています。
-  主題歌・挿入歌の作詞・作曲・編曲は<a href="/creators/music-production/">音楽製作</a>、歌唱は<a href="/creators/singers/">歌唱</a>にまとめています。
+  主題歌・挿入歌の作詞・作曲・編曲は<a href="/creators/music-production/">音楽制作</a>、歌唱は<a href="/creators/singers/">歌唱</a>にまとめています。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>

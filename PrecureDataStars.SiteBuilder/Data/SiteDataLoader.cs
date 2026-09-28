@@ -58,6 +58,9 @@ public static class SiteDataLoader
         var roleTemplatesRepo = new RoleTemplatesRepository(factory);
         var familyRepo = new CharacterFamilyRelationsRepository(factory);
         var personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
+        var musicCreditsRepo = new MusicCreditsRepository(factory);
+        var productsRepo = new ProductsRepository(factory);
+        var bgmSessionsRepo = new BgmSessionsRepository(factory);
         var magazineIssuesRepo = new MagazineIssuesRepository(factory);
 
         // シリーズ：論理削除済を除く全件。GetAllAsync は start_date, series_id 順で返す。
@@ -260,11 +263,24 @@ public static class SiteDataLoader
 
         // person_id → alias_id 群の逆引き辞書。PersonsGenerator / CreatorsGenerator が
         // 個別に同じ辞書を構築していた処理を SiteDataLoader に集約する。
-        var aliasIdsByPerson = (await personAliasPersonsRepo.GetAllAsync(ct).ConfigureAwait(false))
+        var aliasPersonLinks = await personAliasPersonsRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var aliasIdsByPerson = aliasPersonLinks
             .GroupBy(l => l.PersonId)
             .ToDictionary(
                 g => g.Key,
                 g => (IReadOnlyList<int>)g.OrderBy(l => l.AliasId).Select(l => l.AliasId).ToList());
+        // alias_id → person_id（共同名義は person_seq が最小の人物）。音楽クレジットの名義リンクに使う。
+        var personIdByAlias = aliasPersonLinks
+            .GroupBy(l => l.AliasId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(l => l.PersonSeq).ThenBy(l => l.PersonId).First().PersonId);
+
+        // 音盤の音楽クレジット（music_credits）。見出し・根拠の盤の表示用に商品と劇伴セッションも全件載せる。
+        var musicCredits = new MusicCreditIndex(
+            await musicCreditsRepo.GetAllAsync(ct).ConfigureAwait(false),
+            await productsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false),
+            await bgmSessionsRepo.GetAllAsync(ct).ConfigureAwait(false),
+            await new DiscsRepository(factory).GetByProductReleaseOrderAsync(ct).ConfigureAwait(false));
+        logger.Info($"music_credits: {musicCredits.Count} 行");
         logger.Info($"family={familyRelationsByCharacter.Count} char / alias_persons={aliasIdsByPerson.Count} person");
 
         return new BuildContext
@@ -307,7 +323,9 @@ public static class SiteDataLoader
             RoleByCode = roleByCode,
             RoleTemplateResolver = roleTemplateResolver,
             FamilyRelationsByCharacter = familyRelationsByCharacter,
-            AliasIdsByPerson = aliasIdsByPerson
+            AliasIdsByPerson = aliasIdsByPerson,
+            PersonIdByAlias = personIdByAlias,
+            MusicCredits = musicCredits
         };
     }
 }

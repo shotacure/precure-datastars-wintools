@@ -153,6 +153,12 @@ public sealed class BuildContext
     /// <summary>person_id → 紐付く alias_id 群（alias_id 昇順）の全件辞書。 PersonsGenerator / CreatorsGenerator がそれぞれ <c>PersonAliasPersonsRepository.GetByPersonAsync</c> を 人物数（~5,000）分発火していた N+1 を BuildContext 共有 1 回構築に集約する。</summary>
     public required IReadOnlyDictionary<int, IReadOnlyList<int>> AliasIdsByPerson { get; init; }
 
+    /// <summary>person_alias_id → person_id（共同名義は person_seq が最小の人物）の全件辞書。</summary>
+    public required IReadOnlyDictionary<int, int> PersonIdByAlias { get; init; }
+
+    /// <summary>音盤のブックレットに載る音楽クレジット（<c>music_credits</c>）の全件索引。本編クレジットの関与索引とは別に持つ。</summary>
+    public required MusicCreditIndex MusicCredits { get; init; }
+
     /// <summary>
     /// episode_id → そのエピソードに紐付くクレジット（scope=EPISODE）一覧の事前展開辞書。
     /// 旧 SeriesGenerator / EpisodeGenerator はページごとに <c>CreditsRepository.GetByEpisodeAsync</c> を

@@ -82,18 +82,24 @@
   {{## ──────── 初参加順パネル ──────── ##}}
   <div class="tab-panel" id="singers-tab-panel-debut"
        data-tab-panel="debut" role="tabpanel" hidden>
-    {{~ if (array.size DebutRows) == 0 ~}}
+    {{~ if (array.size DebutSections) == 0 ~}}
     <p class="empty-row">歌唱情報はまだ登録されていません。</p>
     {{~ else ~}}
-    <ul class="entity-list">
-      {{~ for e in DebutRows ~}}
-      <li class="entity-row">
-        <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
-        {{~ if e.DebutSongTitle != "" ~}}<span class="entity-row-sub muted">初参加：<a href="{{ e.DebutSongUrl }}">{{ e.DebutSongTitle | html.escape }}</a></span>{{~ end ~}}
-        <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-song">🎵 {{ e.SongCount }}</span></span></span>
-      </li>
-      {{~ end ~}}
-    </ul>
+    {{## 初参加の録音の出典シリーズごとのセクション（スタッフ一覧・声の出演一覧の初参加順と同じ「シリーズ名（年）」見出し）。 ##}}
+    {{~ for sec in DebutSections ~}}
+    <section class="creators-series-section">
+      <h2 class="creators-series-heading">{{~ if sec.SeriesUrl != "" ~}}<a href="{{ sec.SeriesUrl }}">{{ sec.SeriesHeadingLabel | html.escape }}</a>{{~ else ~}}{{ sec.SeriesHeadingLabel | html.escape }}{{~ end ~}}</h2>
+      <ul class="entity-list">
+        {{~ for e in sec.Members ~}}
+        <li class="entity-row">
+          <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
+          {{~ if e.DebutSongTitle != "" ~}}<span class="entity-row-sub muted">初参加：<a href="{{ e.DebutSongUrl }}">{{ e.DebutSongTitle | html.escape }}</a></span>{{~ end ~}}
+          <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-song">🎵 {{ e.SongCount }}</span></span></span>
+        </li>
+        {{~ end ~}}
+      </ul>
+    </section>
+    {{~ end ~}}
     {{~ end ~}}
   </div>
 

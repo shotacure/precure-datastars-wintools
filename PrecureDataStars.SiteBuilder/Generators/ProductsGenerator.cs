@@ -804,7 +804,11 @@ public sealed class ProductsGenerator
                 Notes = product.Notes ?? "",
                 OfficialUrl = product.OfficialUrl ?? ""
             },
-            Discs = discViews
+            Discs = discViews,
+            // 盤のスタッフ（音盤製作・録音の割り振りが決まらない録音側スタッフ。music_credits の PRODUCT 紐付け）。
+            MusicCreditsHtml = _ctx.MusicCredits.ByProduct.TryGetValue(product.ProductCatalogNo, out var productMusicRows)
+                ? MusicCreditHtml.Render(MusicCreditViewBuilder.Build(_ctx, productMusicRows), "h3")
+                : ""
         };
 
         // 構造化データ。音楽系の商品種別なら MusicAlbum、それ以外は Product。
@@ -1826,6 +1830,8 @@ public sealed class ProductsGenerator
     {
         public ProductView Product { get; set; } = new();
         public IReadOnlyList<DiscView> Discs { get; set; } = Array.Empty<DiscView>();
+        /// <summary>盤のスタッフ（組み立て済み HTML）。無ければ空文字。</summary>
+        public string MusicCreditsHtml { get; set; } = "";
     }
 
     /// <summary>商品詳細テンプレ用の表示 DTO。 レーベル・販売元は構造化 ID から解決した文字列のみを保持する （社名は構造化 ID で解決する）。</summary>

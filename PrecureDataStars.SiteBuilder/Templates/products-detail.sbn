@@ -185,6 +185,14 @@
   {{~ end ~}}
   </div>
 
+  {{## 盤のスタッフ（音盤製作と、録音の割り振りが決まらない録音側のスタッフ）。区分ごとの小見出しは組み立て済み HTML に含む。 ##}}
+  {{~ if MusicCreditsHtml != "" ~}}
+  <section id="disc-staff">
+    <h2>ディスクスタッフ</h2>
+    {{ MusicCreditsHtml }}
+  </section>
+  {{~ end ~}}
+
   {{## 外部リンクセクション。詳細ページの末尾に置く。Product.OfficialUrl があるときのみ表示。 ##}}
   {{~ if Product.OfficialUrl != "" ~}}
   <section id="external-links">

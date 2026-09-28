@@ -1,88 +1,95 @@
-<h1>歴代プリキュア音楽製作</h1>
+<h1>歴代プリキュア音楽制作</h1>
 
 <p class="lead">
-  歴代プリキュアの主題歌・挿入歌・キャラクターソングの製作に携わった人々の一覧です。役職、初参加曲、参加曲数から探せます。
-  「役職」タブから作詞・作曲・編曲それぞれの担当者一覧へ、「初参加順」タブでは初めて参加した曲と担当した役職を、「参加曲数が多い順」タブでは参加曲数を掲載しています。参加曲数は作詞・作曲・編曲をあわせて曲単位で数えています。
+  歴代プリキュアの主題歌・挿入歌・キャラクターソングと劇伴の制作に携わった人々の一覧です。役職、初参加、参加数から探せます。
+  「役職」タブは作詞・作曲・編曲、演奏・コーラス等、レコーディング、音盤製作の区分ごとに役職を並べ、担当者の一覧へ案内しています。
+  「歌（詞曲）」「歌（演奏）」タブは主題歌・挿入歌・キャラクターソングに関わった方を参加曲数で、「劇伴（作編曲）」「劇伴（演奏）」タブは劇伴に関わった方を、「制作」タブはレコーディングと音盤製作に関わった方を参加作品数で掲載しています。歌唱は<a href="/creators/singers/">歌唱</a>のページにまとめています。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
-{{## 音楽製作。楽曲のクレジット（song_credits）の作詞・作曲・編曲を人物単位に束ねた一覧。
-     ・役職タブ：作詞・作曲・編曲の役職詳細（/creators/roles/{code}/）への入口（人数つき）。
-     ・初参加順タブ：その人が関わった曲の最小 recording_id（録音 ID は初出順）の昇順。初参加曲と役職を添える。
-     ・参加曲数が多い順タブ：3 役職を横断して song_id 単位で重複排除した曲数の降順。
+{{## 音楽制作。
+     ・役職タブ：音楽クレジットの区分ごとに役職を並べ、役職詳細（/creators/roles/{code}/）へ送る（人数・団体数つき）。
+     ・一覧タブ（Tabs）：歌（詞曲）/ 歌（演奏）/ 劇伴（作編曲）/ 劇伴（演奏）/ 制作。歌は曲単位、劇伴と制作は作品（シリーズ・映画）単位で数える。
+     ・一覧タブの中は「初参加順（シリーズ別セクション）/ 多い順」を小さな切り替えで並べ替える（data-sort-panel）。
      ・タブ切替はスタッフ一覧と同じインライン JS。 ##}}
 <div class="creators-root creators-tabs products-tabs">
-  <div class="tabs" role="tablist" aria-label="音楽製作一覧の並べ替え">
+  <div class="tabs" role="tablist" aria-label="音楽制作一覧の切り替え">
     <button type="button" class="tab-btn is-active" data-tab="roles"
             role="tab" aria-selected="true" aria-controls="music-tab-panel-roles">
       役職
     </button>
-    <button type="button" class="tab-btn" data-tab="debut"
-            role="tab" aria-selected="false" aria-controls="music-tab-panel-debut">
-      初参加順
+    {{~ for t in Tabs ~}}
+    <button type="button" class="tab-btn" data-tab="{{ t.Key }}"
+            role="tab" aria-selected="false" aria-controls="music-tab-panel-{{ t.Key }}">
+      {{ t.Label | html.escape }}
     </button>
-    <button type="button" class="tab-btn" data-tab="count"
-            role="tab" aria-selected="false" aria-controls="music-tab-panel-count">
-      参加曲数が多い順
-    </button>
+    {{~ end ~}}
   </div>
 
   {{## ──────── 役職パネル（既定） ──────── ##}}
   <div class="tab-panel is-active" id="music-tab-panel-roles"
        data-tab-panel="roles" role="tabpanel">
-    {{~ if (array.size Roles) == 0 ~}}
-    <p class="empty-row">楽曲の作家情報はまだ登録されていません。</p>
+    {{~ if (array.size RoleSections) == 0 ~}}
+    <p class="empty-row">音楽のクレジット情報はまだ登録されていません。</p>
     {{~ else ~}}
-    <ul class="entity-list entity-list-grid">
-      {{~ for r in Roles ~}}
-      <li class="entity-row">
-        <a class="entity-row-link" href="{{ r.RoleUrl }}" aria-label="{{ r.RoleNameJa | html.escape }}"></a>
-        <a class="entity-row-name" href="{{ r.RoleUrl }}">{{ r.RoleNameJa | html.escape }}</a>
-        <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-person" title="人物"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg>{{ r.PersonCount }}</span></span></span>
-      </li>
-      {{~ end ~}}
-    </ul>
+    {{~ for sec in RoleSections ~}}
+    <section class="creators-series-section">
+      <h2 class="creators-series-heading">{{ sec.Label | html.escape }}</h2>
+      <ul class="entity-list entity-list-grid">
+        {{~ for r in sec.Roles ~}}
+        <li class="entity-row">
+          <a class="entity-row-link" href="{{ r.RoleUrl }}" aria-label="{{ r.RoleNameJa | html.escape }}"></a>
+          <a class="entity-row-name" href="{{ r.RoleUrl }}">{{ r.RoleNameJa | html.escape }}</a>
+          <span class="entity-row-count"><span class="count-badges">{{~ if r.PersonCount > 0 ~}}<span class="count-pill count-pill-person" title="人物"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg>{{ r.PersonCount }}</span>{{~ end ~}}{{~ if r.CompanyCount > 0 ~}}<span class="count-pill count-pill-company" title="企業・団体"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg>{{ r.CompanyCount }}</span>{{~ end ~}}</span></span>
+        </li>
+        {{~ end ~}}
+      </ul>
+    </section>
+    {{~ end ~}}
     {{~ end ~}}
   </div>
 
-  {{## ──────── 初参加順パネル ──────── ##}}
-  <div class="tab-panel" id="music-tab-panel-debut"
-       data-tab-panel="debut" role="tabpanel" hidden>
-    {{~ if (array.size DebutRows) == 0 ~}}
-    <p class="empty-row">楽曲の作家情報はまだ登録されていません。</p>
+  {{## ──────── 一覧パネル（歌（詞曲）/ 歌（演奏）/ 劇伴（作編曲）/ 劇伴（演奏）/ 制作） ──────── ##}}
+  {{~ for t in Tabs ~}}
+  <div class="tab-panel" id="music-tab-panel-{{ t.Key }}"
+       data-tab-panel="{{ t.Key }}" role="tabpanel" hidden>
+    {{~ if (array.size t.CountRows) == 0 ~}}
+    <p class="empty-row">このクレジット情報はまだ登録されていません。</p>
     {{~ else ~}}
-    <ul class="entity-list">
-      {{~ for e in DebutRows ~}}
+    <div class="sort-toggle" role="group" aria-label="並べ替え">
+      <button type="button" class="sort-toggle-btn is-active" data-sort="debut">初参加順</button>
+      <button type="button" class="sort-toggle-btn" data-sort="count">{{ t.CountSortLabel | html.escape }}</button>
+    </div>
+    <div data-sort-panel="debut">
+      {{~ for sec in t.DebutSections ~}}
+      <section class="creators-series-section">
+        <h2 class="creators-series-heading">{{~ if sec.SeriesUrl != "" ~}}<a href="{{ sec.SeriesUrl }}">{{ sec.SeriesHeadingLabel | html.escape }}</a>{{~ else ~}}{{ sec.SeriesHeadingLabel | html.escape }}{{~ end ~}}</h2>
+        <ul class="entity-list">
+          {{~ for e in sec.Members ~}}
+          <li class="entity-row">
+            <a class="entity-row-name" href="{{ e.Url }}">{{ e.Name | html.escape }}</a>
+            <span class="music-role-badges">{{~ for b in e.Roles ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>
+            {{~ if e.DebutLabel != "" ~}}<span class="entity-row-sub muted">初参加：<a href="{{ e.DebutUrl }}">{{ e.DebutLabel | html.escape }}</a></span>{{~ end ~}}
+            <span class="entity-row-count"><span class="count-badges">{{~ if t.IsByWork ~}}<span class="count-pill">{{ e.Count }}作品</span>{{~ else ~}}<span class="count-pill count-pill-song">🎵 {{ e.Count }}</span>{{~ end ~}}</span></span>
+          </li>
+          {{~ end ~}}
+        </ul>
+      </section>
+      {{~ end ~}}
+    </div>
+    <ul class="entity-list" data-sort-panel="count" hidden>
+      {{~ for e in t.CountRows ~}}
       <li class="entity-row">
-        <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
-        {{## 担当した役職はバッジで並べ、初参加曲と見た目で分ける。 ##}}
-        <span class="music-role-badges">{{~ for rl in (e.RolesLabel | string.split "・") ~}}<span class="tag-badge">{{ rl | html.escape }}</span>{{~ end ~}}</span>
-        {{~ if e.DebutSongTitle != "" ~}}<span class="entity-row-sub muted">初参加：<a href="{{ e.DebutSongUrl }}">{{ e.DebutSongTitle | html.escape }}</a></span>{{~ end ~}}
-        <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-song">🎵 {{ e.SongCount }}</span></span></span>
+        <a class="entity-row-name" href="{{ e.Url }}">{{ e.Name | html.escape }}</a>
+        <span class="music-role-badges">{{~ for b in e.Roles ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>
+        <span class="entity-row-count"><span class="count-badges">{{~ if t.IsByWork ~}}<span class="count-pill">{{ e.Count }}作品</span>{{~ else ~}}<span class="count-pill count-pill-song">🎵 {{ e.Count }}</span>{{~ end ~}}</span></span>
       </li>
       {{~ end ~}}
     </ul>
     {{~ end ~}}
   </div>
-
-  {{## ──────── 参加曲数が多い順パネル ──────── ##}}
-  <div class="tab-panel" id="music-tab-panel-count"
-       data-tab-panel="count" role="tabpanel" hidden>
-    {{~ if (array.size CountRows) == 0 ~}}
-    <p class="empty-row">楽曲の作家情報はまだ登録されていません。</p>
-    {{~ else ~}}
-    <ul class="entity-list">
-      {{~ for e in CountRows ~}}
-      <li class="entity-row">
-        <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
-        <span class="music-role-badges">{{~ for rl in (e.RolesLabel | string.split "・") ~}}<span class="tag-badge">{{ rl | html.escape }}</span>{{~ end ~}}</span>
-        <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-song">🎵 {{ e.SongCount }}</span></span></span>
-      </li>
-      {{~ end ~}}
-    </ul>
-    {{~ end ~}}
-  </div>
+  {{~ end ~}}
 </div>
 
 <script>
@@ -104,6 +111,21 @@
         var active = p.getAttribute('data-tab-panel') === key;
         p.classList.toggle('is-active', active);
         if (active) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
+      });
+    });
+  });
+
+  // タブの中の並べ替え切り替え（同じパネル内の data-sort-panel を出し分ける）。
+  root.querySelectorAll('.sort-toggle').forEach(function (toggle) {
+    var panel = toggle.parentElement;
+    var sortButtons = toggle.querySelectorAll('.sort-toggle-btn');
+    sortButtons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.getAttribute('data-sort');
+        sortButtons.forEach(function (b) { b.classList.toggle('is-active', b === btn); });
+        panel.querySelectorAll('[data-sort-panel]').forEach(function (list) {
+          if (list.getAttribute('data-sort-panel') === key) { list.removeAttribute('hidden'); } else { list.setAttribute('hidden', ''); }
+        });
       });
     });
   });

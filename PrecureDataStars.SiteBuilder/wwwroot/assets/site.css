@@ -8897,3 +8897,54 @@ body.has-art-track-bar {
   color: var(--fg);
   border-color: var(--fg);
 }
+/* 音楽クレジットの役職詳細：1 人 1 行のアコーディオン。
+   閉じた状態は「開閉の三角｜名前｜件数（右寄せ）」、開くと劇伴・歌・盤の担当先を 1 行ずつ並べる。 */
+.music-role-member {
+  border-bottom: 1px solid var(--border);
+}
+.music-role-member > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+.music-role-member > summary::-webkit-details-marker { display: none; }
+.music-role-member > summary::before {
+  content: "▶";
+  display: inline-block;
+  font-size: 0.7em;
+  color: var(--muted);
+  transition: transform 0.12s ease;
+}
+.music-role-member[open] > summary::before {
+  transform: rotate(90deg);
+}
+.music-role-member > summary:hover {
+  background: var(--surface-2, rgba(0, 0, 0, 0.03));
+}
+.music-role-member > summary:hover a.entity-row-name {
+  text-decoration: underline;
+}
+.music-role-member-body {
+  padding: 0 10px 10px 30px;
+}
+/* 担当先の区分（劇伴 / 歌 / 盤）の小見出し。 */
+.music-role-member-kind {
+  margin: 6px 0 2px;
+  font-size: 0.82em;
+  font-weight: 600;
+  color: var(--muted);
+}
+.music-role-member-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.music-role-member-items > li {
+  padding: 1px 0;
+  font-size: 0.92em;
+  line-height: 1.6;
+}

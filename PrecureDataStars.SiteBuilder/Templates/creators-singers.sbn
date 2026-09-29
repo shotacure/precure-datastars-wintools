@@ -25,10 +25,14 @@
     </button>
   </div>
 
+  <div class="list-toolbar">
   <div class="entity-filter" role="group" aria-label="歌手・キャラクターで絞り込み">
     <button type="button" class="entity-filter-btn is-active" data-entity-filter-set="all">すべて</button>
     <button type="button" class="entity-filter-btn" data-entity-filter-set="singer">歌手のみ</button>
     <button type="button" class="entity-filter-btn" data-entity-filter-set="character">キャラクターのみ</button>
+  </div>
+  {{## 件数での並べ替えボタン（count-sort.js）。data-count-sort-for のリストの行を、件数バッジの種類ごとに多い順／少ない順で並べ替える。対象リストが出ているときだけ表示される。 ##}}
+  <button type="button" class="count-sort-btn" data-count-sort-for="singers-count-list" hidden></button>
   </div>
 
   {{## ──────── 初参加順パネル（既定） ──────── ##}}
@@ -63,7 +67,7 @@
     {{~ if (array.size CountRows) == 0 ~}}
     <p class="empty-row">歌唱情報はまだ登録されていません。</p>
     {{~ else ~}}
-    <ul class="entity-list">
+    <ul class="entity-list" id="singers-count-list">
       {{~ for e in CountRows ~}}
       <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
         {{~ if e.EntityKind == "singer" ~}}<span class="entity-badge entity-badge-person" aria-label="歌手" title="歌手"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>

@@ -8901,6 +8901,59 @@ body.has-art-track-bar {
   color: var(--fg);
   border-color: var(--fg);
 }
+/* タブとリストの間の段（絞り込み・初参加順／多い順の切り替えを左に、件数での並べ替えボタンを右に置く）。 */
+.list-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 4px 0 14px;
+}
+.list-toolbar > .entity-filter,
+.list-toolbar > .sort-toggle {
+  margin: 0;
+}
+.list-toolbar > .count-sort-btn {
+  margin-left: auto;
+}
+/* 並べ替えボタンだけの段で、ボタンが隠れているタブ（初参加順など）では段ごと詰める。 */
+.list-toolbar:not(:has(> .entity-filter, > .sort-toggle, > .count-sort-btn:not([hidden]))) {
+  display: none;
+}
+/* 件数バッジでの並べ替えボタン（count-sort.js が中身を描く）。バッジと同じ絵文字・色に ⬇ / ⬆ を添える。 */
+.count-sort-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+.count-sort-btn[hidden] {
+  display: none;
+}
+.count-sort-btn:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+/* 種類ごとの段階は .count-pill + .count-pill-{種類} の色をそのまま使い、大きさだけボタン向けに広げる。 */
+.count-sort-pill {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.88em;
+  line-height: 1.6;
+}
+/* 合計・もとの並びの段階は特定の色を持たないので、本文色の枠にする。 */
+.count-sort-pill-total,
+.count-sort-pill-none {
+  color: var(--fg);
+  border-color: var(--fg);
+  background: transparent;
+}
+.count-sort-arrow {
+  font-size: 0.95em;
+}
 /* 音楽クレジットの役職詳細：1 人 1 行のアコーディオン。
    閉じた状態は「開閉の三角｜名前｜件数（右寄せ）」、開くと劇伴・歌・盤の担当先を 1 行ずつ並べる。 */
 .music-role-member {

@@ -418,15 +418,13 @@ public sealed class PageRenderer
     };
 
     /// <summary>
-    /// 本番モードのときだけグローバルナビから外す URL の集合。データが揃いきるまでの暫定措置として、
-    /// プリキュア・キャラクターをヘッダの導線から外す（ページ自体は本番でも生成され、
-    /// 他ページの内部リンクからは従来どおり遷移できる＝ナビに出さないだけ）。読み物は本番では
-    /// 生成自体を行わない（<see cref="Pipeline.SiteBuilderPipeline"/> 側でスキップ）ため、ここでも外す。
+    /// 本番モードのときだけグローバルナビから外す URL の集合。読み物は本番では
+    /// 生成自体を行わない（<see cref="Pipeline.SiteBuilderPipeline"/> 側でスキップ）ため、ナビからも外す。
     /// テストモードでは全項目を出す。
     /// </summary>
     private static readonly HashSet<string> ProductionHiddenNavUrls = new(StringComparer.Ordinal)
     {
-        "/precures/", "/characters/", "/articles/",
+        "/articles/",
     };
 
     /// <summary>

@@ -163,9 +163,6 @@ public sealed class HomeGenerator
         {
             SiteName = _ctx.Config.SiteName,
             SiteBrandLabel = _ctx.Config.SiteBrandLabel,
-            // 本番モードでは DB 統計ボックスのうちプリキュア・キャラクターを隠す
-            // （データが揃いきるまでの暫定措置。ヘッダナビの ProductionHiddenNavUrls と歩調を合わせる）。
-            IsProductionMode = _ctx.Config.IsProductionMode,
             // 最終ビルド表記は「○○年○○月○○日現在 『○○プリキュア』第n話時点
             BuildLabel = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
             DataSufficiencyLabel = dataSufficiencyLabel,
@@ -973,9 +970,6 @@ WHERE e.is_deleted = 0
         public string SiteName { get; set; } = "";
         /// <summary>可視ブランド表記（例: プリキュアデータベース「precure-datastars」）。hero の h1 に出す。</summary>
         public string SiteBrandLabel { get; set; } = "";
-        /// <summary>本番モードかどうか。true のとき DB 統計ボックスのうちプリキュア・キャラクター・
-        /// クリエイターをテンプレ側で非表示にする（データが揃いきるまでの暫定措置）。</summary>
-        public bool IsProductionMode { get; set; }
         /// <summary>最終ビルド表記の表示文字列（導入）。 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」のような 完成形を C# 側で組み立てて流し込む。</summary>
         public string BuildLabel { get; set; } = "";
         /// <summary>キャラクター・クリエイターのデータ充足率の表示文字列（暫定表記）。

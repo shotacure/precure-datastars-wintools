@@ -331,7 +331,8 @@ public sealed class EntityUrlRegistry
     {
         // character_id → そのキャラの名義で集まった登場（TV は (series, episode)、映画は (series, null)）。
         var appearances = new Dictionary<int, HashSet<(int SeriesId, int? EpisodeId)>>();
-        foreach (var (aliasId, invs) in index.ByCharacterAlias)
+        // 登場は声の出演のクレジットだけで数える（主題歌・挿入歌の歌唱は下の「歌唱の記録」で別に見る）。
+        foreach (var (aliasId, invs) in index.VoiceCastByCharacterAlias)
         {
             if (!ctx.CharacterAliasById.TryGetValue(aliasId, out var alias)) continue;
             foreach (var inv in invs)

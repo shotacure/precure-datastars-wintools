@@ -168,35 +168,14 @@ public sealed class CharactersGenerator
         // TV 系（series_kinds.credit_attach_to='EPISODE'）：登場話数を加算。
         // 映画系（'SERIES'：MOVIE / MOVIE_SHORT / SPRING / EVENT）：当該シリーズに関与が 1 件以上で 1 本。
         (int Episode, int Movie) CountAppearances(int characterId)
-        {
-            if (!aliasesByCharacter.TryGetValue(characterId, out var aliases)) return (0, 0);
-            var tvEpisodes = new HashSet<(int SeriesId, int EpNo)>();
-            var movieSeries = new HashSet<int>();
-            foreach (var a in aliases)
-            {
-                if (!_index.ByCharacterAlias.TryGetValue(a.AliasId, out var invs)) continue;
-                foreach (var inv in invs)
-                {
-                    if (!_ctx.SeriesById.ContainsKey(inv.SeriesId)) continue;
-                    bool isMovieKind = _ctx.IsMovieKindSeries(inv.SeriesId);
-                    if (isMovieKind)
-                    {
-                        movieSeries.Add(inv.SeriesId);
-                    }
-                    else if (inv.EpisodeId is int eid)
-                    {
-                        var ep = _ctx.LookupEpisode(inv.SeriesId, eid);
-                        if (ep is not null) tvEpisodes.Add((inv.SeriesId, ep.SeriesEpNo));
-                    }
-                }
-            }
-            return (tvEpisodes.Count, movieSeries.Count);
-        }
+            => aliasesByCharacter.TryGetValue(characterId, out var aliases)
+                ? CharacterAppearanceCounter.Count(_ctx, _index, aliases.Select(a => a.AliasId))
+                : (0, 0);
 
         // クレジットに 1 件でも登場するか（リンクの下線シグナル分け用）。
         bool HasAnyInvolvement(int characterId) =>
             aliasesByCharacter.TryGetValue(characterId, out var aliases)
-            && aliases.Any(a => _index.ByCharacterAlias.ContainsKey(a.AliasId));
+            && aliases.Any(a => _index.VoiceCastByCharacterAlias.ContainsKey(a.AliasId));
 
         // 各キャラの「最も早くクレジットされた位置」と、その所属（＝最早登場）シリーズ ID を求める。
         // 大セクションはこの所属シリーズで束ね、シリーズ内の並びはクレジット順に統一する。
@@ -214,7 +193,7 @@ public sealed class CharactersGenerator
 
             foreach (var a in aliases)
             {
-                if (!_index.ByCharacterAlias.TryGetValue(a.AliasId, out var invs)) continue;
+                if (!_index.VoiceCastByCharacterAlias.TryGetValue(a.AliasId, out var invs)) continue;
                 foreach (var inv in invs)
                 {
                     long start = _ctx.SeriesStartDate(inv.SeriesId).DayNumber;
@@ -315,9 +294,30 @@ public sealed class CharactersGenerator
             .Select(s => s.Section)
             .ToList();
 
+        // 登場話数順タブ：個別ページを持つキャラ（単発のゲストは除く）のうち登場のあるものを 1 リストに、
+        // 登場話数と登場本数の合計が多い順に並べる。同数は初登場の早い順（クレジット順）。
+        var countRows = entries
+            .Where(e => !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId) && (e.Ep + e.Mv) > 0)
+            .OrderByDescending(e => e.Ep + e.Mv)
+            .ThenBy(e => e.Key.Start)
+            .ThenBy(e => e.Key.EpNo)
+            .ThenBy(e => e.Key.Seq)
+            .ThenBy(e => e.Ch.Name, StringComparer.Ordinal)
+            .Select(e => new CharacterIndexRow
+            {
+                CharacterId = e.Ch.CharacterId,
+                Name = e.Ch.Name,
+                NameKana = e.Ch.NameKana ?? "",
+                EpisodeCount = e.Ep,
+                MovieCount = e.Mv,
+                HasInvolvement = e.Has
+            })
+            .ToList();
+
         var content = new CharactersIndexModel
         {
             Sections = sections,
+            CountRows = countRows,
             TotalCount = characters.Count,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
@@ -503,8 +503,8 @@ public sealed class CharactersGenerator
                 var placement = _ctx.EntityUrls.GetGuestPlacement(characterId)!;
 
                 var invs = (aliasesByCharacter.TryGetValue(characterId, out var aliases) ? aliases : new List<CharacterAlias>())
-                    .Where(a => _index.ByCharacterAlias.ContainsKey(a.AliasId))
-                    .SelectMany(a => _index.ByCharacterAlias[a.AliasId])
+                    .Where(a => _index.VoiceCastByCharacterAlias.ContainsKey(a.AliasId))
+                    .SelectMany(a => _index.VoiceCastByCharacterAlias[a.AliasId])
                     .OrderBy(i => i.CreditSeq)
                     .ToList();
 
@@ -665,7 +665,7 @@ public sealed class CharactersGenerator
             if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
         }
 
-        // 出演シリーズ数（VoiceCastRow はシリーズ単位 1 行のため、行数 = 出演シリーズ数）。
+        // 出演シリーズ数（VoiceCastRow は声優の交代やシリーズ全体スコープで同じシリーズに複数行あり得るため、シリーズ名の重複を除いて数える）。
         int seriesCount = voiceRows
             .Select(v => v.SeriesTitle)
             .Where(t => !string.IsNullOrEmpty(t))
@@ -802,8 +802,8 @@ public sealed class CharactersGenerator
         IReadOnlyDictionary<int, PersonAlias> personAliasById)
     {
         var all = aliasIds
-            .Where(_index.ByCharacterAlias.ContainsKey)
-            .SelectMany(id => _index.ByCharacterAlias[id])
+            .Where(_index.VoiceCastByCharacterAlias.ContainsKey)
+            .SelectMany(id => _index.VoiceCastByCharacterAlias[id])
             .ToList();
         if (all.Count == 0) return new List<VoiceCastRow>();
 
@@ -823,15 +823,11 @@ public sealed class CharactersGenerator
                 : new List<int>();
 
             // エピソード単位とシリーズ全体スコープを分けて処理
-            var episodeNos = new HashSet<int>();
             bool hasSeriesScope = false;
 
-            // 声優名・キャラ名義名を集約用ハッシュ（声優名は表示名と人物詳細へのリンク HTML を並行して持つ）
-            var actorNames = new List<string>();
-            var actorLinks = new List<string>();
-            var seenActor = new HashSet<string>(StringComparer.Ordinal);
-            var aliasNames = new List<string>();
-            var seenAlias = new HashSet<string>(StringComparer.Ordinal);
+            // エピソード単位は話ごとに声優名（表示名と人物詳細へのリンク HTML）とキャラ名義を集める。
+            // 声優が途中で交代したキャラは、後で「同じ声優の組み合わせで演じた話」ごとに行を分ける。
+            var episodeActs = new SortedDictionary<int, (List<string> Names, List<string> Links, HashSet<string> Seen, List<string> Aliases, HashSet<string> SeenAlias)>();
             var seriesScopeActorNames = new List<string>();
             var seriesScopeActorLinks = new List<string>();
             var seenScopeActor = new HashSet<string>(StringComparer.Ordinal);
@@ -841,6 +837,7 @@ public sealed class CharactersGenerator
             foreach (var inv in bySeries)
             {
                 bool isSeriesScope = !inv.EpisodeId.HasValue;
+                (List<string> Names, List<string> Links, HashSet<string> Seen, List<string> Aliases, HashSet<string> SeenAlias)? act = null;
                 if (isSeriesScope)
                 {
                     hasSeriesScope = true;
@@ -848,7 +845,14 @@ public sealed class CharactersGenerator
                 else
                 {
                     var ep = _ctx.LookupEpisode(bySeries.Key, inv.EpisodeId!.Value);
-                    if (ep is not null) episodeNos.Add(ep.SeriesEpNo);
+                    if (ep is null) continue;
+                    if (!episodeActs.TryGetValue(ep.SeriesEpNo, out var a))
+                    {
+                        a = (new List<string>(), new List<string>(), new HashSet<string>(StringComparer.Ordinal),
+                             new List<string>(), new HashSet<string>(StringComparer.Ordinal));
+                        episodeActs[ep.SeriesEpNo] = a;
+                    }
+                    act = a;
                 }
 
                 if (inv.PersonAliasId is int paid && personAliasById.TryGetValue(paid, out var pa))
@@ -856,17 +860,17 @@ public sealed class CharactersGenerator
                     string nm = pa.DisplayTextOverride ?? pa.Name;
                     if (!string.IsNullOrEmpty(nm))
                     {
-                        if (isSeriesScope)
+                        if (act is { } e)
                         {
-                            if (seenScopeActor.Add(nm)) { seriesScopeActorNames.Add(nm); seriesScopeActorLinks.Add(PersonLinkHtml(paid, nm)); }
+                            if (e.Seen.Add(nm)) { e.Names.Add(nm); e.Links.Add(PersonLinkHtml(paid, nm)); }
                         }
-                        else if (seenActor.Add(nm)) { actorNames.Add(nm); actorLinks.Add(PersonLinkHtml(paid, nm)); }
+                        else if (seenScopeActor.Add(nm)) { seriesScopeActorNames.Add(nm); seriesScopeActorLinks.Add(PersonLinkHtml(paid, nm)); }
                     }
                 }
                 if (inv.CharacterAliasId is int caid && aliasById.TryGetValue(caid, out var ca))
                 {
-                    if (isSeriesScope) { if (seenScopeAlias.Add(ca.Name)) seriesScopeAliasNames.Add(ca.Name); }
-                    else               { if (seenAlias.Add(ca.Name))      aliasNames.Add(ca.Name); }
+                    if (act is { } e) { if (e.SeenAlias.Add(ca.Name)) e.Aliases.Add(ca.Name); }
+                    else              { if (seenScopeAlias.Add(ca.Name)) seriesScopeAliasNames.Add(ca.Name); }
                 }
             }
 
@@ -888,14 +892,34 @@ public sealed class CharactersGenerator
                 });
             }
 
-            // エピソード単位の集約 1 行
-            if (episodeNos.Count > 0)
+            // エピソード単位は「同じ声優（連名なら同じ組み合わせ）で演じた話」ごとに 1 行。
+            // 声優が途中で交代したキャラは、交代前後が別の行になり、それぞれの担当話数の範囲が分かる。
+            // 行はその声優で最初に演じた話の順に並べる。1 行だけでシリーズの全話にわたるときは「(全話)」。
+            var actorGroups = episodeActs
+                .GroupBy(kv => string.Join("\u001F", kv.Value.Names))
+                .Select(g => (
+                    EpNos: g.Select(kv => kv.Key).ToList(),
+                    First: g.First().Value))
+                .OrderBy(g => g.EpNos.Min())
+                .ToList();
+            foreach (var g in actorGroups)
             {
-                bool isAll = allSeriesEpNos.Count > 0
-                    && episodeNos.SetEquals(allSeriesEpNos);
+                var epNos = new HashSet<int>(g.EpNos);
+                bool isAll = actorGroups.Count == 1
+                    && allSeriesEpNos.Count > 0
+                    && epNos.SetEquals(allSeriesEpNos);
                 string rangeLabel = isAll
                     ? string.Empty
-                    : EpisodeRangeCompressor.Compress(episodeNos);
+                    : EpisodeRangeCompressor.Compress(epNos);
+
+                // 名義はこのグループの話で使われたものを登場順に集める。
+                var groupAliases = new List<string>();
+                var seenGroupAlias = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var epNo in g.EpNos.OrderBy(n => n))
+                {
+                    foreach (var nm in episodeActs[epNo].Aliases)
+                        if (seenGroupAlias.Add(nm)) groupAliases.Add(nm);
+                }
 
                 rows.Add(new VoiceCastRow
                 {
@@ -904,9 +928,9 @@ public sealed class CharactersGenerator
                     SeriesStartYearLabel = series.StartDate.Year.ToString(),
                     RangeLabel = rangeLabel,
                     IsAllEpisodes = isAll,
-                    AliasNames = string.Join("、", aliasNames),
-                    VoiceActorNames = string.Join("、", actorNames),
-                    VoiceActorsHtml = string.Join("、", actorLinks)
+                    AliasNames = string.Join("、", groupAliases),
+                    VoiceActorNames = string.Join("、", g.First.Names),
+                    VoiceActorsHtml = string.Join("、", g.First.Links)
                 });
             }
         }
@@ -925,7 +949,7 @@ public sealed class CharactersGenerator
         if (!aliasesByCharacter.TryGetValue(characterId, out var aliases)) return first;
         foreach (var alias in aliases)
         {
-            if (!_index.ByCharacterAlias.TryGetValue(alias.AliasId, out var invs)) continue;
+            if (!_index.VoiceCastByCharacterAlias.TryGetValue(alias.AliasId, out var invs)) continue;
             foreach (var inv in invs)
             {
                 DateTime at = inv.EpisodeId is int eid && _ctx.LookupEpisode(inv.SeriesId, eid) is { } ep
@@ -953,6 +977,8 @@ public sealed class CharactersGenerator
     {
         /// <summary>大セクション = 所属シリーズ（最早登場シリーズ）。放送開始日昇順、末尾に「その他（未登場）」。</summary>
         public IReadOnlyList<CharacterSeriesSection> Sections { get; set; } = Array.Empty<CharacterSeriesSection>();
+        /// <summary>登場話数順タブの行（個別ページを持つキャラ、登場話数と登場本数の合計が多い順）。</summary>
+        public IReadOnlyList<CharacterIndexRow> CountRows { get; set; } = Array.Empty<CharacterIndexRow>();
         public int TotalCount { get; set; }
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の lead 段落末尾に表示する。</summary>
         public string CoverageLabel { get; set; } = "";

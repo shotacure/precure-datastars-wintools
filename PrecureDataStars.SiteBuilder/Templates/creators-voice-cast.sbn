@@ -36,6 +36,11 @@
     </button>
   </div>
 
+  <div class="list-toolbar">
+  {{## 件数での並べ替えボタン（count-sort.js）。data-count-sort-for のリストの行を、件数バッジの種類ごとに多い順／少ない順で並べ替える。対象リストが出ているときだけ表示される。 ##}}
+  <button type="button" class="count-sort-btn" data-count-sort-for="vc-count-list" hidden></button>
+  </div>
+
   {{## ──────── キャラクター順パネル（既定・シリーズセクション） ──────── ##}}
   <div class="tab-panel is-active" id="vc-tab-panel-character"
        data-tab-panel="character" role="tabpanel">
@@ -125,7 +130,7 @@
     {{~ if (array.size CountRows) == 0 ~}}
     <p class="empty-row">声の出演がまだ登録されていません。</p>
     {{~ else ~}}
-    <ul class="entity-list">
+    <ul class="entity-list" id="vc-count-list">
       {{~ for r in CountRows ~}}
       <li class="entity-row">
         <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>

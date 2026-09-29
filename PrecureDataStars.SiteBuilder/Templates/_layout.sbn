@@ -389,6 +389,8 @@ gtag('config', '{{ Ga4MeasurementId }}');
      defer で読み込み、<nav id="pageSectionNav"> を起点に id 付きセクションを走査して
      チップストリップを自動構築する。スクロールスパイとタブ切替追従もここで担う。 ##}}
 <script src="/assets/section-nav.js" defer></script>
+{{## 件数バッジでの並べ替えボタン（.count-sort-btn）の JS。ボタンの無いページでは何もしない。 ##}}
+<script src="/assets/count-sort.js" defer></script>
 {{## モバイル用ハンバーガーメニューの開閉 JS。
      #mobileNavToggle のクリック → #mobileNavOverlay 表示・aria-expanded 切替、
      背景クリック・✕ ボタン・Escape キーで閉じる挙動と、モバイル幅（≤768px）でのみ

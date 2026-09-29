@@ -118,6 +118,17 @@ internal sealed class CreditTreeRenderer
         return $"<del title=\"クレジット時の誤記\">{Esc(misprint)}</del> {baseHtml}";
     }
 
+    /// <summary>
+    /// 人物名の代わりに画面に出た伏せ字（<see cref="CreditBlockEntry.PersonMaskedText"/>）があれば、
+    /// 「伏せ字 (正名義)」の形にくるんだ HTML を返す。正名義側は人物詳細へのリンクなどを含んだ HTML のまま括弧に入れる。
+    /// <paramref name="masked"/> が null / 空文字の場合は <paramref name="nameHtml"/> をそのまま返す。
+    /// </summary>
+    private static string WrapMaskedHtml(string nameHtml, string? masked)
+    {
+        if (string.IsNullOrEmpty(masked)) return nameHtml;
+        return $"<span class=\"staff-masked\" title=\"クレジットでは伏せられた表記\">{Esc(masked)}</span> <span class=\"staff-masked-actual\">({nameHtml})</span>";
+    }
+
     /// <summary>企業屋号（company_alias）の表示名を、親企業詳細ページへのリンク済み HTML に変換する。</summary>
     private async Task<string> BuildCompanyAliasHtmlAsync(int? aliasId, string displayName)
     {
@@ -1291,10 +1302,12 @@ internal sealed class CreditTreeRenderer
         {
             name += $" ({e.AffiliationText})";
         }
+        // 伏せ字があれば「伏せ字 (正名義)」の形にして、伏せ字の有無が違う行を同名として融合させない。
+        if (!string.IsNullOrEmpty(e.PersonMaskedText)) name = $"{e.PersonMaskedText} ({name})";
         return name;
     }
 
-    /// <summary>人物名義 ＋ 所属屋号を「リンク済み HTML 断片」として返す。 人物側に誤記（<see cref="CreditBlockEntry.PersonMisprintText"/>）が立っていれば 「&lt;del&gt;誤記&lt;/del&gt; 正名義(所属)」の形で左側に前置する。</summary>
+    /// <summary>人物名義 ＋ 所属屋号を「リンク済み HTML 断片」として返す。 人物側に誤記（<see cref="CreditBlockEntry.PersonMisprintText"/>）が立っていれば 「&lt;del&gt;誤記&lt;/del&gt; 正名義(所属)」の形で左側に前置する。 伏せ字（<see cref="CreditBlockEntry.PersonMaskedText"/>）が立っていれば「伏せ字 (正名義(所属))」の形にする。</summary>
     private async Task<string> ResolvePersonWithAffiliationHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         // 表示テキスト：LookupCache.LookupPersonAliasNameAsync は pa.Name を返す。
@@ -1336,6 +1349,8 @@ internal sealed class CreditTreeRenderer
             string sep = e.AffiliationInline ? " " : "<br>";
             nameHtml += $"{sep}<span class=\"staff-affiliation\">({affilInnerHtml})</span>";
         }
+        // 伏せ字（「？」など）があれば、所属まで含めた正名義の塊を括弧に入れて伏せ字の後ろに添える。
+        nameHtml = WrapMaskedHtml(nameHtml, e.PersonMaskedText);
         // 誤記は所属の外側、名義断片全体の左に前置（誤記は名義そのものに対する注釈であって、
         // 所属表記まで含めた塊に対するものではないため、所属より外で前置するのが意味的に整合）。
         return PrependMisprintHtml(nameHtml, e.PersonMisprintText);

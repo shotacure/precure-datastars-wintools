@@ -6670,6 +6670,10 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   font-size: 0.8em;
   color: var(--muted);
 }
+/* 声優などを伏せてクレジットされた行（「？」）の後ろに添える、正名義の括弧部分。 */
+.staff-masked-actual {
+  color: var(--muted);
+}
 /* 1 人分のスタッフ表記（名義 + 所属屋号 + 担当話数 範囲ラベル）を 1 ユニットとして扱い、
    ユニット途中での改行を抑止する。連名間の 、 区切りはこのユニットの外側に置くため、
    行幅を超えるときは 、 の直後で素直に改行される（、 は kinsoku で行頭禁則のため、

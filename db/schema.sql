@@ -2334,6 +2334,9 @@ CREATE TABLE `credit_block_entries` (
   `person_misprint_text`           varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `character_misprint_text`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `company_misprint_text`          varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- 人物名の代わりに画面に出た伏せ字表記（「謎の少女　？」の「？」など）。NULL = 伏せ字なし。
+  --   名義（person_alias_id）は本来の人物に紐付けたまま持ち、表示は「伏せ字 (正名義)」の形にする。
+  `person_masked_text`             varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `company_alias_id`               int             DEFAULT NULL,
   `logo_id`                        int             DEFAULT NULL,
   `raw_text`                       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,

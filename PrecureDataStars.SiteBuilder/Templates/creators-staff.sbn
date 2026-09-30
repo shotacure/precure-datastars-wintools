@@ -9,7 +9,7 @@
 {{## スタッフ一覧。
      ・役職順タブ：役職名 + その役職に関わった人物数・企業/団体数の索引。各役職名から
        役職詳細ページ（/creators/roles/{code}/）へ送り出す。最も軽量なので既定タブにする。
-     ・五十音順 / 初参加順 / 参加話数が多い順タブ：人物と企業・団体を 1 リストに混在させた
+     ・五十音順 / 初参加順 / 参加話数順タブ：人物と企業・団体を 1 リストに混在させた
        一覧。行ごとに「個人 / 団体」バッジで区別し、上部の絞り込みトグルで
        個人のみ・団体のみに切り替えられる（data-entity-filter を CSS で解決）。
      ・タブ切替は /products/ や旧 /persons/ と同じインライン JS（外部 JS を増やさない）。
@@ -36,7 +36,7 @@
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="staff-tab-panel-count">
-      参加話数が多い順
+      参加話数順
     </button>
   </div>
 
@@ -160,7 +160,7 @@
     {{~ end ~}}
   </div>
 
-  {{## ──────── 参加話数が多い順パネル ──────── ##}}
+  {{## ──────── 参加話数順パネル ──────── ##}}
   <div class="tab-panel" id="staff-tab-panel-count"
        data-tab-panel="count" role="tabpanel" hidden>
     {{~ if (array.size CountRows) == 0 ~}}

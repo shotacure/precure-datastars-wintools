@@ -6,7 +6,7 @@
 
 <p class="lead">
   「{{ RoleNameJa | html.escape }}」を担当した人物の一覧です。
-  「初参加順」「担当曲数が多い順」をタブで切り替えられます。
+  「初参加順」「担当曲数順」をタブで切り替えられます。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
@@ -32,7 +32,7 @@
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="song-role-tab-panel-count">
-      担当曲数が多い順
+      担当曲数順
     </button>
   </div>
 
@@ -80,7 +80,7 @@
     {{~ end ~}}
   </div>
 
-  {{## ──────── 担当曲数が多い順パネル ──────── ##}}
+  {{## ──────── 担当曲数順パネル ──────── ##}}
   <div class="tab-panel" id="song-role-tab-panel-count"
        data-tab-panel="count" role="tabpanel" hidden>
     {{~ if (array.size CountRows) == 0 ~}}

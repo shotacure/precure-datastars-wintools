@@ -71,7 +71,7 @@
 </section>
 
 <script id="home-anniversary-data" type="application/json">{{ AnniversaryJson }}</script>
-<script src="/assets/anniversaries.js" defer></script>
+<script src="{{ asset_url "/assets/anniversaries.js" }}" defer></script>
 
 {{## ──────── 今月のカレンダー（JS 動的生成） ────────
      上の home-anniversary-data（エピソード放送日・映画公開日・キャラクター誕生日・
@@ -106,7 +106,7 @@
 <p class="home-calendar-more">
   <a href="/anniversary/">日付から探す — プリキュア記念日カレンダー</a>
 </p>
-<script src="/assets/calendar.js" defer></script>
+<script src="{{ asset_url "/assets/calendar.js" }}" defer></script>
 
 {{## ──────── 今後の放送予定（未来の放送予定） ────────
      /episodes/ ランディングと同一の episodes-index-section 構造で表示する。

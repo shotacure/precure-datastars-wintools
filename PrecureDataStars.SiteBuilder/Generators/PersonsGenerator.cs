@@ -735,7 +735,7 @@ public sealed class PersonsGenerator
             if (inv.EpisodeId is int)
             {
                 // 声優関与のとき演じたキャラを集める（シリーズ単位で重複排除）。
-                if (inv.Kind == InvolvementKind.CharacterVoice && inv.CharacterAliasId.HasValue)
+                if (inv.IsVoiceCast && inv.CharacterAliasId.HasValue)
                     AddCharacter(perEpisodeCharacters, inv.CharacterAliasId.Value);
                 // 所属屋号 ID を初出順で記録（人物詳細での所属併記用）。
                 if (inv.AffiliationCompanyAliasId is int affId
@@ -746,7 +746,7 @@ public sealed class PersonsGenerator
             }
             else
             {
-                if (inv.Kind == InvolvementKind.CharacterVoice && inv.CharacterAliasId.HasValue)
+                if (inv.IsVoiceCast && inv.CharacterAliasId.HasValue)
                     AddCharacter(seriesScopeCharacters, inv.CharacterAliasId.Value);
                 if (inv.AffiliationCompanyAliasId is int affIdS
                     && !seriesScopeAffiliationIds.Contains(affIdS))
@@ -809,7 +809,7 @@ public sealed class PersonsGenerator
 
         foreach (var inv in roleGroup)
         {
-            if (inv.Kind != InvolvementKind.CharacterVoice) continue;
+            if (!inv.IsVoiceCast) continue;
             if (inv.CharacterAliasId is not int caId) continue;
             if (!_ctx.CharacterAliasById.TryGetValue(caId, out var ca)) continue;
             int charId = ca.CharacterId;
@@ -955,7 +955,7 @@ public sealed class PersonsGenerator
     /// 本編のクレジット階層に載る「音楽」などの役職は本編側に残る。
     /// </summary>
     private static bool IsMainInvolvement(Involvement inv)
-        => inv.EntryKind is not ("SONG_CREDIT" or "RECORDING_SINGER" or "BGM_CUE_CREDIT");
+        => inv.IsMainCredit;
 
     /// <summary>
     /// 「音楽クレジット」セクションを、関わった先（歌 → 劇伴 → 音盤）の大見出しと、区分（作詞・作曲・編曲 → 演奏・コーラス等 →

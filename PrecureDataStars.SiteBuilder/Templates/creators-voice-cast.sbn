@@ -6,7 +6,7 @@
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
-{{## 声の出演一覧。4 タブ（キャラクター順＝既定 / 五十音順 / 初出演順 / 出演話数が多い順）。
+{{## 声の出演一覧。4 タブ（キャラクター順＝既定 / 五十音順 / 初出演順 / 出演話数順）。
      スタッフ一覧が役職順を筆頭にしているのに合わせ、声の出演はキャラクター順を筆頭・既定にする。
      キャラクター順・初出演順はシリーズ別セクション。シリーズ名は見出しに集約し、
      表本体からはシリーズ列を出さない（全タブ共通でシリーズ列なし）。
@@ -32,7 +32,7 @@
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="vc-tab-panel-count">
-      出演話数が多い順
+      出演話数順
     </button>
   </div>
 
@@ -124,7 +124,7 @@
     {{~ end ~}}
   </div>
 
-  {{## ──────── 出演話数が多い順パネル（セクション無し） ──────── ##}}
+  {{## ──────── 出演話数順パネル（セクション無し） ──────── ##}}
   <div class="tab-panel" id="vc-tab-panel-count"
        data-tab-panel="count" role="tabpanel" hidden>
     {{~ if (array.size CountRows) == 0 ~}}

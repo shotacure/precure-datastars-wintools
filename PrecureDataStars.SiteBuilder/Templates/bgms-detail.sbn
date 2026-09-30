@@ -179,4 +179,4 @@
 
 {{## 配信音源（YouTube アートトラック）の再生スクリプト。最初の再生クリックまで
      iframe_api を読み込まないため、押されなければ外部リクエストは発生しない。 ##}}
-<script src="/assets/art-track-player.js" defer></script>
+<script src="{{ asset_url "/assets/art-track-player.js" }}" defer></script>

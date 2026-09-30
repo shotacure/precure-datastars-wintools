@@ -72,17 +72,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Kiwi+Maru:wght@400;500&family=Kaisei+Decol:wght@400;500;700&family=DotGothic16&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="{{ asset_url "/assets/site.css" }}">
 
 {{## ──────── サブタイトル解禁ガード JS ────────
      未放送話（前話の予告がまだ放送されていない話数）のサブタイトルをぼかす／解禁する判定ロジック。
      calendar.js・search.js 等がこの後で window.PCDS.subtitleEmbargo を参照するため、defer スクリプトの
      実行順序（文書順）を保証すべく、他の全 defer スクリプトより前（head 内）に置く。 ##}}
-<script src="/assets/subtitle-embargo.js" defer></script>
+<script src="{{ asset_url "/assets/subtitle-embargo.js" }}" defer></script>
 {{## 配信音源の Premium 限定表示設定。設定トグルはフッター＝全ページにあるため、
      再生ボタンのあるページでしか読まない art-track-player.js とは分けて全ページで読み込む。
      描画のちらつきを避けるため、再生系より先に当たるよう head 側に置く。 ##}}
-<script src="/assets/art-track-pref.js" defer></script>
+<script src="{{ asset_url "/assets/art-track-pref.js" }}" defer></script>
 
 {{## ──────── JSON-LD（Schema.org 構造化データ） ────────
      Generator 側で組み立てた JSON 文字列をそのまま埋め込む。空文字なら出力しない。 ##}}
@@ -384,28 +384,28 @@ gtag('config', '{{ Ga4MeasurementId }}');
 </footer>
 {{## サイト内検索の JS。
      defer で読み込んでヘッダの検索ボックスを起動。fetch('/search-index.json') は初回入力時に走る。 ##}}
-<script src="/assets/search.js" defer></script>
+<script src="{{ asset_url "/assets/search.js" }}" defer></script>
 {{## セクションナビの JS。
      defer で読み込み、<nav id="pageSectionNav"> を起点に id 付きセクションを走査して
      チップストリップを自動構築する。スクロールスパイとタブ切替追従もここで担う。 ##}}
-<script src="/assets/section-nav.js" defer></script>
+<script src="{{ asset_url "/assets/section-nav.js" }}" defer></script>
 {{## 件数バッジでの並べ替えボタン（.count-sort-btn）の JS。ボタンの無いページでは何もしない。 ##}}
-<script src="/assets/count-sort.js" defer></script>
+<script src="{{ asset_url "/assets/count-sort.js" }}" defer></script>
 {{## モバイル用ハンバーガーメニューの開閉 JS。
      #mobileNavToggle のクリック → #mobileNavOverlay 表示・aria-expanded 切替、
      背景クリック・✕ ボタン・Escape キーで閉じる挙動と、モバイル幅（≤768px）でのみ
      ヘッダ内 .site-search を本オーバーレイ内へ DOM 移動する処理を担う。
      デスクトップ幅では CSS の display:none で本体が見えないため、JS は走っても無害。 ##}}
-<script src="/assets/mobile-nav.js" defer></script>
+<script src="{{ asset_url "/assets/mobile-nav.js" }}" defer></script>
 {{## クレジット表の役職名カラム・キャラ名カラムの幅統一 JS。
      .credit-section 内の全 td.role-name / td.character-cell の最大幅を測定し、
      CSS 変数 --credit-role-name-w / --credit-character-cell-w をセクションに書き込んで
      縦軸を揃える。ResizeObserver でウィンドウ幅変化にも追従する。
      .credit-section が無いページでは何もせず終了するため、グローバルに defer 読み込みする。 ##}}
-<script src="/assets/credit-align.js" defer></script>
+<script src="{{ asset_url "/assets/credit-align.js" }}" defer></script>
 {{## SNS シェアボタンの JS。
      クリップボードコピーボタンと、コピー成功時のトースト表示を担う。
      .share-buttons が無いページでは何もせず終了する。 ##}}
-<script src="/assets/share-buttons.js" defer></script>
+<script src="{{ asset_url "/assets/share-buttons.js" }}" defer></script>
 </body>
 </html>

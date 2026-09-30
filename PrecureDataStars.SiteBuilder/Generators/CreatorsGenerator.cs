@@ -13,13 +13,13 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// <list type="bullet">
 ///   <item><description><c>/creators/</c> … スタッフ / 声の出演の 2 カードを案内するランディング。</description></item>
 ///   <item><description><c>/creators/staff/</c> … 役職順 / 五十音順 / 初参加順 /
-///     参加話数が多い順 の 4 タブ。五十音順以降のタブは人物と企業・団体を 1 リストに混在させ、
+///     参加話数順 の 4 タブ。五十音順以降のタブは人物と企業・団体を 1 リストに混在させ、
 ///     行ごとに「個人 / 団体」バッジで区別し、上部トグルで個人のみ・団体のみに絞れる。</description></item>
 ///   <item><description><c>/creators/roles/{rep_role_code}/</c> … 当該役職クラスタに
-///     関わった人物・企業/団体を 1 リストに混在させ、五十音順 / 初参加順 / 担当話数が多い順
+///     関わった人物・企業/団体を 1 リストに混在させ、五十音順 / 初参加順 / 担当話数順
 ///     のタブで切り替える役職詳細。</description></item>
 ///   <item><description><c>/creators/voice-cast/</c> … 五十音順 / キャラクター順 /
-///     初出演順 / 出演話数が多い順 の 4 タブで声優を並べる。</description></item>
+///     初出演順 / 出演話数順 の 4 タブで声優を並べる。</description></item>
 /// </list>
 /// 集計の骨格：
 /// <list type="bullet">
@@ -143,7 +143,7 @@ public sealed class CreatorsGenerator
         var personById = allPersons.ToDictionary(p => p.PersonId);
         var companyById = allCompanies.ToDictionary(c => c.CompanyId);
 
-        // 「担当話数が多い順」の行表記に使う、人物・企業ごとの最後に使われた名義を先に確定させる。
+        // 「担当話数順」の行表記に使う、人物・企業ごとの最後に使われた名義を先に確定させる。
         BuildLatestAliasMaps(aliasIdsByPersonId, companyAliasesByCompany, logosByCompanyAlias);
 
         // ── 役職詳細ページ群を生成し、あわせて「役職順」タブ用の索引エントリも構築 ──
@@ -315,14 +315,14 @@ public sealed class CreatorsGenerator
             allCompanies, companyAliasById, repNameMap: null, withWorksTooltip: true);
 
     /// <summary>
-    /// 人物・企業/団体の行群を「初参加順用（名義ごとの行）」と「担当話数が多い順用（エンティティごとの行）」の
+    /// 人物・企業/団体の行群を「初参加順用（名義ごとの行）」と「担当話数順用（エンティティごとの行）」の
     /// 2 系統で作る。担当量（話数・本数・シリーズ数・作品 tooltip・役職ラベル）はどちらの系統でも
     /// エンティティ（人物 1 人 / 企業 1 社）の全名義を合算した値。
     /// <list type="bullet">
     ///   <item><description>初参加順用：名義ごとに、その名義が最初にクレジットされた位置へ 1 行ずつ置く。
     ///     行の表記はその名義（その時にクレジットされた名前）。改名・屋号変更があれば、
     ///     新しい名義が初めて出たシリーズのセクションにも改めて並ぶ。</description></item>
-    ///   <item><description>担当話数が多い順用：エンティティ 1 行。表記は全クレジット横断で最後に使われた名義
+    ///   <item><description>担当話数順用：エンティティ 1 行。表記は全クレジット横断で最後に使われた名義
     ///     （<see cref="_latestPersonAliasId"/> / <see cref="_latestCompanyAliasId"/>）。</description></item>
     /// </list>
     /// 企業・団体は COMPANY エントリ + LOGO エントリ + leading_company の 3 ルートを合算し、
@@ -369,11 +369,14 @@ public sealed class CreatorsGenerator
             //   - TV 系のクレジットで使われた旧名義（改名など）は添える。
             //   - 映画だけで使われた名義は基本は名義変更ではないので添えないが、映画が初出でラテン文字で書かれた名義
             //     （例：TAP スタッフの「FRANCIS P.CANEDA」）は、TV 系に別の名義（カタカナ表記など）があれば添えて同一人物と分かるようにする。
+            //   - 判定は本編のクレジットだけで行う（主題歌・挿入歌の作家・歌唱や劇伴の作曲・編曲は見ない）。
             bool personHasTv = aliasIds.Any(a => _index.ByPersonAlias.TryGetValue(a, out var ai)
-                                                 && ai.Any(inv => !_ctx.IsMovieKindSeries(inv.SeriesId)));
+                                                 && ai.Any(inv => inv.IsMainCredit && !_ctx.IsMovieKindSeries(inv.SeriesId)));
             bool NoteCurrentName(int aid)
             {
-                if (!_index.ByPersonAlias.TryGetValue(aid, out var invs) || invs.Count == 0) return false;
+                if (!_index.ByPersonAlias.TryGetValue(aid, out var all)) return false;
+                var invs = all.Where(inv => inv.IsMainCredit).ToList();
+                if (invs.Count == 0) return false;
                 if (invs.Any(inv => !_ctx.IsMovieKindSeries(inv.SeriesId))) return true;
                 if (!personHasTv || !_ctx.PersonAliasById.TryGetValue(aid, out var a) || !IsLatinName(a.Name)) return false;
                 var first = invs.MinBy(inv => CreditOrderKey(inv))!;
@@ -423,7 +426,7 @@ public sealed class CreatorsGenerator
     }
 
     /// <summary>
-    /// 1 エンティティ分の集計結果から、担当話数が多い順用の 1 行と、初参加順用の名義ごとの行を
+    /// 1 エンティティ分の集計結果から、担当話数順用の 1 行と、初参加順用の名義ごとの行を
     /// <paramref name="set"/> に積む。担当量・tooltip・役職ラベルは全行でエンティティ合算値を共有する。
     /// </summary>
     private void AppendEntityRows(
@@ -524,7 +527,7 @@ public sealed class CreatorsGenerator
     private (long Start, int EpNo, long Pos) CreditOrderKey(Involvement inv)
         => LatestAliasResolver.CreditOrderKey(_ctx, inv);
 
-    /// <summary>/creators/roles/{rep_role_code}/ を 3 タブ（五十音順 / 初参加順 / 担当話数が多い順）で書き出す。</summary>
+    /// <summary>/creators/roles/{rep_role_code}/ を 3 タブ（五十音順 / 初参加順 / 担当話数順）で書き出す。</summary>
     private void GenerateRoleDetail(
         Role role,
         IReadOnlySet<string> memberCodes,
@@ -562,7 +565,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した人物・企業・団体を一覧にしました。初参加順・担当話数が多い順で並べ替えられます。",
+            MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した人物・企業・団体を一覧にしました。初参加順・担当話数順で並べ替えられます。",
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 BuildEntityBadges(content.PersonCount, content.CompanyCount),
@@ -677,7 +680,7 @@ public sealed class CreatorsGenerator
         return rows;
     }
 
-    /// <summary>歌系役職 1 種の専用ページ <c>/creators/roles/{code}/</c> を「五十音順 / 担当曲数が多い順」の 2 タブで書き出す。</summary>
+    /// <summary>歌系役職 1 種の専用ページ <c>/creators/roles/{code}/</c> を「五十音順 / 担当曲数順」の 2 タブで書き出す。</summary>
     private void GenerateSongRoleDetail(Role role, List<SongRoleRow> rows)
     {
         var content = new SongRoleDetailModel
@@ -693,7 +696,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアの楽曲で役職「{role.NameJa}」を担当した人物を一覧にしました。初参加順・担当曲数が多い順で並べ替えられます。",
+            MetaDescription = $"歴代プリキュアの楽曲で役職「{role.NameJa}」を担当した人物を一覧にしました。初参加順・担当曲数順で並べ替えられます。",
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 new[] { new OgCardBadge("人物", $"{rows.Count}人") },
@@ -724,7 +727,7 @@ public sealed class CreatorsGenerator
         .ThenBy(r => r.PersonName, StringComparer.Ordinal)
         .ToList();
 
-    /// <summary>担当曲数が多い順：曲数降順 → 読み → 名前（順位は付けない）。</summary>
+    /// <summary>担当曲数順：曲数降順 → 読み → 名前（順位は付けない）。</summary>
     private static List<SongRoleRow> SortSongRowsByCount(IEnumerable<SongRoleRow> rows) => rows
         .OrderByDescending(r => r.SongCount)
         .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
@@ -915,7 +918,7 @@ public sealed class CreatorsGenerator
             Key = key,
             Label = label,
             IsByWork = byWork,
-            CountSortLabel = byWork ? "参加作品数が多い順" : "参加曲数が多い順",
+            CountSortLabel = byWork ? "参加作品数順" : "参加曲数順",
             DebutSections = BuildDebutSeriesSections(
                 rows.OrderBy(r => r.DebutSort).ThenBy(r => r.NameKana, StringComparer.Ordinal).ThenBy(r => r.Name, StringComparer.Ordinal).ToList(),
                 r => r.DebutSeriesId),
@@ -1315,7 +1318,7 @@ public sealed class CreatorsGenerator
     }
 
     /// <summary>
-    /// <c>/creators/singers/</c> を 2 タブ（初参加順 / 参加曲数が多い順）で書き出す。
+    /// <c>/creators/singers/</c> を 2 タブ（初参加順 / 参加曲数順）で書き出す。
     /// 歌・コーラス・台詞の別を問わず、録音の歌唱者行（song_recording_singers）をユニットのメンバーまで展開し
     /// （<see cref="BuildContextLookupExtensions.ExpandSingerParticipants(BuildContext, SongRecordingSinger)"/>）、
     /// 「歌手」（人物単位。本人名義での参加）と「キャラクター」（キャラ × 声優の組ごと）の行を 1 つのリストに並べる。
@@ -1626,7 +1629,7 @@ public sealed class CreatorsGenerator
 
     /// <summary>
     /// <c>/creators/voice-cast/</c> を 4 タブ（五十音順 / キャラクター順 /
-    /// 初出演順 / 出演話数が多い順）で書き出す。
+    /// 初出演順 / 出演話数順）で書き出す。
     /// 1 行 = (声優 × シリーズ × キャラ) 粒度。別シリーズで同じ声優が同じ／別のキャラを
     /// 演じていれば、それぞれ別の行として、その都度キャラ名が出る。
     /// CHARACTER_VOICE 経由の関与のうち character_alias_id が解決できるものを対象とする。
@@ -1695,7 +1698,7 @@ public sealed class CreatorsGenerator
             })
             .ToList();
 
-        // 出演話数が多い順（セクション無し）：声優 1 人 = 1 行（countAggRows に集約済み）。
+        // 出演話数順（セクション無し）：声優 1 人 = 1 行（countAggRows に集約済み）。
         // 話数は全シリーズ・全キャラ通算（重複排除）。添え書きは代表キャラ（クレジット話数最多）で、
         // 他のキャラもあるときはテンプレ側で「他」が付く。
         // 並びは話数降順 → 初登場シリーズ → 最早話数 → クレジット出現位置 → 声優読み。
@@ -1760,7 +1763,8 @@ public sealed class CreatorsGenerator
                 if (!_index.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
                 foreach (var inv in invs)
                 {
-                    if (inv.Kind != InvolvementKind.CharacterVoice) continue;
+                    // 声の出演のクレジットだけを数える（キャラ名義での主題歌・挿入歌の歌唱は除く）。
+                    if (!inv.IsVoiceCast) continue;
                     if (inv.CharacterAliasId is not int caId) continue;
                     if (!aliasToCharId.TryGetValue(caId, out var charId)) continue;
                     int epNo = 0;
@@ -1815,7 +1819,7 @@ public sealed class CreatorsGenerator
         // 初出演順タブ用：声優 1 人 = 1 行（初参加シリーズのセクションにのみ載せる）。
         // 話数は全シリーズ・全キャラ通算の重複排除エピソード数。
         var debutRows = new List<VoiceCastRow>();
-        // 出演話数が多い順タブ用：声優 1 人 = 1 行。代表キャラ＝クレジット話数が最も多いキャラ
+        // 出演話数順タブ用：声優 1 人 = 1 行。代表キャラ＝クレジット話数が最も多いキャラ
         //（同数なら初登場が早い方）。他のキャラもあるときはテンプレ側で「他」を付ける。
         var countAggRows = new List<VoiceCastRow>();
         var distinctPersons = new HashSet<int>();
@@ -1838,7 +1842,8 @@ public sealed class CreatorsGenerator
                 if (!_index.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
                 foreach (var inv in invs)
                 {
-                    if (inv.Kind != InvolvementKind.CharacterVoice) continue;
+                    // 声の出演のクレジットだけを数える（キャラ名義での主題歌・挿入歌の歌唱は除く）。
+                    if (!inv.IsVoiceCast) continue;
                     if (inv.CharacterAliasId is not int caId) continue;
                     if (!aliasToCharId.TryGetValue(caId, out var charId)) continue;
 
@@ -1924,7 +1929,7 @@ public sealed class CreatorsGenerator
         return (rows, debutRows, countAggRows, distinctPersons);
     }
 
-    /// <summary>声優 1 人分の「初出演順」集約 1 行と「出演話数が多い順」集約 1 行を追加する。</summary>
+    /// <summary>声優 1 人分の「初出演順」集約 1 行と「出演話数順」集約 1 行を追加する。</summary>
     private static void AppendPersonDebutAndCountRows(
         List<VoiceCastRow> personRows,
         HashSet<(int SeriesId, int EpNo)> personEpisodeKeys,
@@ -1961,7 +1966,7 @@ public sealed class CreatorsGenerator
                 EarliestPos = debutSource.EarliestPos
             });
 
-            // 出演話数が多い順タブ用の 1 行：声優単位の通算（重複排除）話数。
+            // 出演話数順タブ用の 1 行：声優単位の通算（重複排除）話数。
             // 代表キャラ＝クレジット話数が最も多いキャラ（同数なら初登場が早い方）。
             var byChar = personRows
                 .GroupBy(r => r.CharacterId)
@@ -2265,7 +2270,7 @@ public sealed class CreatorsGenerator
         .ThenBy(r => r.EntityName, StringComparer.Ordinal)
         .ToList();
 
-    /// <summary>担当話数が多い順：担当量降順（TV 話 + 映画本の単純合算 <see cref="EntityRow.TotalCount"/>） → 最早クレジット (放送開始, 話数, クレジット出現位置) → 読み → 名前（順位は付けない）。 五十音順以外（並びのルールが完全には一意に決まらないタブ）では、クレジット 出現位置を暗黙の副ソートキーとして効かせ、同点行の並びを安定させる方針。 ここでは担当量が同数の行を、初出が早い順 → そのエピソード内のクレジット 記載位置順に整える。</summary>
+    /// <summary>担当話数順：担当量降順（TV 話 + 映画本の単純合算 <see cref="EntityRow.TotalCount"/>） → 最早クレジット (放送開始, 話数, クレジット出現位置) → 読み → 名前（順位は付けない）。 五十音順以外（並びのルールが完全には一意に決まらないタブ）では、クレジット 出現位置を暗黙の副ソートキーとして効かせ、同点行の並びを安定させる方針。 ここでは担当量が同数の行を、初出が早い順 → そのエピソード内のクレジット 記載位置順に整える。</summary>
     private static List<EntityRow> SortByCount(IEnumerable<EntityRow> rows) => rows
         .OrderByDescending(r => r.TotalCount)
         .ThenBy(r => r.FirstSortStart)
@@ -2425,7 +2430,7 @@ public sealed class CreatorsGenerator
 
     /// <summary>
     /// 人物・企業/団体の一覧行の 2 系統。<see cref="DebutRows"/> は名義ごと（初参加順タブ用）、
-    /// <see cref="CountRows"/> はエンティティごと（担当話数が多い順タブ・件数集計用）。
+    /// <see cref="CountRows"/> はエンティティごと（担当話数順タブ・件数集計用）。
     /// </summary>
     private sealed class EntityRowSet
     {
@@ -2516,7 +2521,7 @@ public sealed class CreatorsGenerator
         public string GroupLabel { get; set; } = "";
         /// <summary>初参加順：初参加の作品ごとのセクション（行は <see cref="MusicRoleDetailRow"/>）。</summary>
         public IReadOnlyList<DebutSeriesSection> DebutSections { get; set; } = Array.Empty<DebutSeriesSection>();
-        /// <summary>参加数が多い順。</summary>
+        /// <summary>参加数順。</summary>
         public IReadOnlyList<MusicRoleDetailRow> CountRows { get; set; } = Array.Empty<MusicRoleDetailRow>();
         public string CoverageLabel { get; set; } = "";
     }
@@ -2538,7 +2543,7 @@ public sealed class CreatorsGenerator
         public int SongCount { get; set; }
         /// <summary>担当した盤の点数（💿）。</summary>
         public int ProductCount { get; set; }
-        /// <summary>件数の合計（📺 + 🎥 + 🎵 + 💿）。参加数が多い順の並べ替えに使う。</summary>
+        /// <summary>件数の合計（📺 + 🎥 + 🎵 + 💿）。参加数順の並べ替えに使う。</summary>
         public int Count { get; set; }
         /// <summary>劇伴：1 作品 1 行（Sub は担当した録音回を「・」でつないだもの）。</summary>
         public IReadOnlyList<MusicRoleTarget> BgmItems { get; set; } = Array.Empty<MusicRoleTarget>();
@@ -2561,7 +2566,7 @@ public sealed class CreatorsGenerator
     {
         /// <summary>初参加順タブ：初参加の録音の出典シリーズごとのセクション（行は <see cref="SingerListRow"/>）。</summary>
         public IReadOnlyList<DebutSeriesSection> DebutSections { get; set; } = Array.Empty<DebutSeriesSection>();
-        /// <summary>参加曲数が多い順タブ。</summary>
+        /// <summary>参加曲数順タブ。</summary>
         public IReadOnlyList<SingerListRow> CountRows { get; set; } = Array.Empty<SingerListRow>();
         public string CoverageLabel { get; set; } = "";
     }
@@ -2780,7 +2785,7 @@ public sealed class CreatorsGenerator
         public int EarliestEpNo { get; set; }
         /// <summary>最早話数内でこの (声優 × シリーズ × キャラ) が最初にクレジットされた 階層位置 (CreditSeq, CreditSubSeq) の合成キー。</summary>
         public long EarliestPos { get; set; }
-        /// <summary>出演話数が多い順タブ（声優単位の集約行）専用：代表キャラ以外にも演じたキャラが
+        /// <summary>出演話数順タブ（声優単位の集約行）専用：代表キャラ以外にも演じたキャラが
         /// 居るとき true。テンプレ側で「（キャラ 役 他）」の「他」を付ける。</summary>
         public bool HasOtherCharacters { get; set; }
     }

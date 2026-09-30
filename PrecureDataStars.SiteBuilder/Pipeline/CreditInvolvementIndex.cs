@@ -73,7 +73,7 @@ public sealed class CreditInvolvementIndex
         ByCharacterAlias = byCharacter;
         VoiceCastByCharacterAlias = byCharacter
             .Select(kv => (kv.Key, List: (IReadOnlyList<Involvement>)kv.Value
-                .Where(i => string.Equals(i.EntryKind, "CHARACTER_VOICE", StringComparison.Ordinal))
+                .Where(i => i.IsVoiceCast)
                 .ToList()))
             .Where(x => x.List.Count > 0)
             .ToDictionary(x => x.Key, x => x.List);
@@ -746,6 +746,21 @@ public sealed class Involvement
 
     /// <summary>CHARACTER_VOICE のとき演じたキャラクター名義 ID（任意）。</summary>
     public int? CharacterAliasId { get; init; }
+
+    /// <summary>
+    /// 本編クレジット（クレジット階層のエントリ・ブロック先頭企業）の関与か。
+    /// 主題歌・挿入歌経由の作家・歌唱（SONG_CREDIT / RECORDING_SINGER）と劇伴の作曲・編曲（BGM_CUE_CREDIT）は
+    /// 使用された話に紐付けて同じ索引に入っているが、本編のクレジットではないので false。
+    /// </summary>
+    public bool IsMainCredit => EntryKind is not ("SONG_CREDIT" or "RECORDING_SINGER" or "BGM_CUE_CREDIT");
+
+    /// <summary>
+    /// 声の出演のクレジット（クレジット階層の CHARACTER_VOICE エントリ）か。
+    /// キャラ名義で主題歌・挿入歌を歌った記録（RECORDING_SINGER）も <see cref="InvolvementKind.CharacterVoice"/> 種別で
+    /// 入っているため、種別だけで声の出演と判定してはいけない。声優の出演話数・演じた役の集計はこちらで絞る。
+    /// </summary>
+    public bool IsVoiceCast => Kind == InvolvementKind.CharacterVoice
+        && string.Equals(EntryKind, "CHARACTER_VOICE", StringComparison.Ordinal);
 
     /// <summary>CHARACTER_VOICE で raw_character_text を使っている場合の生テキスト。</summary>
     public string? RawCharacterText { get; init; }

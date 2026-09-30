@@ -881,7 +881,7 @@ Role: PRODUCTION 制作 (order 2)
 
 `/series/` の TV シリーズセクション（カード型リスト `series-card-list`）は、各 TV シリーズカードの本体（番号／タイトル／放送期間／話数）の下にサブ行（プリキュアバッジ → スタッフバッジ）を出す。いずれの段も該当データが 0 件ならその段を出さず、両方 0 件ならサブ行自体を出さない。集計対象は TV シリーズのみで、映画・スピンオフ等のセクションはサブ行を持たない。
 
-プリキュアバッジは当該シリーズに紐付くプリキュア（`series_precures`、`display_order` 昇順・同値時 `precure_id` 昇順）を 1 体 1 バッジで並べる。各バッジは `/precures/{precure_id}/` へのリンクで、表記はプリキュア観点の名義連結：`transform_alias_id`（変身後）→ `transform2_alias_id`（変身後 2）→ `pre_transform_alias_id`（変身前）の各 `character_aliases.name` を、この順で「 / 」連結する（NULL・未解決の名義は除外。すべて空のときのみ変身後名義へフォールバック）。`characters.name` は表記には用いない。標準担当声優（`precures.voice_actor_person_id`）が登録されていれば連結名の後ろに「 (CV: ○○)」を付す。この名義連結ロジックは `/precures/{id}/` 詳細ページの h1 と共有する（共有ヘルパ `PrecureNaming.JoinAliasNames`）。
+プリキュアバッジは当該シリーズに紐付くプリキュア（`series_precures`、`display_order` 昇順・同値時 `precure_id` 昇順）を 1 体 1 バッジで並べる。各バッジは `/precures/{precure_id}/` へのリンクで、表記は名義連結：`pre_transform_alias_id`（変身前）→ `transform_alias_id`（変身後）→ `transform2_alias_id`（変身後 2）の各 `character_aliases.name` を、この順で「 / 」連結する（歌唱の表記と同じ変身前 → 変身後の順）（NULL・未解決の名義は除外。すべて空のときのみ変身後名義へフォールバック）。`characters.name` は表記には用いない。標準担当声優（`precures.voice_actor_person_id`）が登録されていれば連結名の後ろに「 (CV: ○○)」を付す。この名義連結ロジックは `/precures/{id}/` 詳細ページの h1 と共有する（共有ヘルパ `PrecureNaming.JoinAliasNames`）。
 
 バッジの地色はプリキュアマスタの `key_color`（`char(7)`・`#RRGGBB`・NULL 可、フォーマットは CHECK 制約 `ck_precures_key_color` で担保）。文字色は地色を WCAG 2.x 定義の相対輝度（linearized sRGB の加重和 0.2126R + 0.7152G + 0.0722B）に変換し、しきい値 0.179 を境に暗グレー `#1a1a1a` ／明グレー `#f5f5f5` を自動で出し分ける。ボーダーは文字色側に寄せた半透明色（暗文字側 `rgba(0,0,0,.22)`／明文字側 `rgba(255,255,255,.30)`）。地色・文字色・ボーダーはビルド時に算出され、バッジ要素のインライン `style` として出力する。`key_color` 未設定または不正値のプリキュアはインライン色を持たず、`.precure-badge` の CSS 既定で描画される。色解決は `SeriesGenerator.ResolveBadgeColors` に集約、バッジ整形は `BuildPrecureBadges`。
 

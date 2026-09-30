@@ -652,11 +652,11 @@ public sealed class SeriesGenerator
         var badges = new List<PrecureBadge>(rows.Count);
         foreach (var r in rows)
         {
-            // 表記：プリキュア観点で「変身後 / 変身後 2 / 変身前」の名義名を「 / 」連結
-            // （NULL・空の名義は除外）。すべて空のときのみ変身後名義へフォールバック。
+            // 表記：「変身前 / 変身後 / 変身後 2」の名義名を「 / 」連結（歌唱の表記と同じ変身前 → 変身後の順。
+            // NULL・空の名義は除外）。すべて空のときのみ変身後名義へフォールバック。
             // 声優ありなら「 (CV: ○○)」を後置。characters.name は表記には用いない。
             string baseName = PrecureNaming.JoinAliasNames(
-                r.TransformName, r.Transform2Name, r.PreTransformName);
+                r.PreTransformName, r.TransformName, r.Transform2Name);
             if (string.IsNullOrEmpty(baseName)) baseName = r.TransformName;
             string label = string.IsNullOrEmpty(r.VoiceActorName)
                 ? baseName

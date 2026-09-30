@@ -125,8 +125,8 @@
   {{## プリキュアセクション。
        series_precures テーブルから取得した当該シリーズ所属プリキュア一覧（display_order 昇順、
        同値時 precure_id 昇順）。紐付けが 0 件のシリーズ（クリーンDB等）ではセクション自体を非表示。
-       表示は声の出演一覧と同じ行リスト：変身後名を主役（行全体クリックでキャラクター詳細へ）、
-       変身前名と「(CV: 声優)」を添え書きにする。CV の声優名だけは個別リンクで人物詳細へ。 ##}}
+       表示は声の出演一覧と同じ行リスト：「変身前名 / 変身後名」を主役（行全体クリックでキャラクター詳細へ）、
+       「(CV: 声優)」を添え書きにする。CV の声優名だけは個別リンクで人物詳細へ。 ##}}
   {{~ if (array.size Precures) > 0 ~}}
   <section id="precures">
     <h2>プリキュア</h2>
@@ -134,8 +134,8 @@
       {{~ for p in Precures ~}}
       <li class="entity-row">
         <a class="entity-row-link" href="{{ character_url p.CharacterId }}" aria-label="{{ p.TransformName | html.escape }}"></a>
-        <a class="entity-row-name" href="{{ character_url p.CharacterId }}">{{ p.TransformName | html.escape }}</a>
-        <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }} (CV: {{~ if p.VoiceActorPersonId ~}}<a href="{{ person_url p.VoiceActorPersonId }}">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}})</span>
+        <a class="entity-row-name" href="{{ character_url p.CharacterId }}">{{~ if p.PreTransformName != "" ~}}{{ p.PreTransformName | html.escape }} / {{ end }}{{ p.TransformName | html.escape }}</a>
+        <span class="entity-row-sub muted">(CV: {{~ if p.VoiceActorPersonId ~}}<a href="{{ person_url p.VoiceActorPersonId }}">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}})</span>
       </li>
       {{~ end ~}}
     </ul>

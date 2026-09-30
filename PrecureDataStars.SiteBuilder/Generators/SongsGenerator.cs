@@ -41,6 +41,9 @@ public sealed class SongsGenerator
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
     // 歌唱者連名の HTML 化（3 ジェネレータ共通ビルダ）。
     private readonly SingerHtmlBuilder _singerHtml;
+    // 歌唱者の平文をユニットのメンバー展開なしで組むときに渡す空の辞書（ページタイトル用）。
+    private static readonly IReadOnlyDictionary<int, IReadOnlyList<PersonAliasMember>> NoUnitMembers =
+        new Dictionary<int, IReadOnlyList<PersonAliasMember>>();
 
     public SongsGenerator(
         BuildContext ctx,
@@ -386,9 +389,23 @@ public sealed class SongsGenerator
             CreditText.SongCreditNameList(songCreditRows, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap),
             CreditText.SongCreditNameList(songCreditRows, SongCreditRoles.Composition, song.ComposerName, personAliasMap));
 
+        // PageTitle（<title>・og:title・シェア文の見出し）は検索で「曲名＋歌い手」に当たるよう、
+        // 先頭録音の歌唱者を添えて「「曲名」歌: {歌唱者}」の形にする。
+        // ユニットのメンバー展開は見出しとして長くなりすぎるため載せない（ユニット名義のみ）。
+        // 歌唱者が無い曲は「「曲名」」のみ。
+        var repRecording = recordings.FirstOrDefault();
+        string titleSingerText = repRecording is null
+            ? ""
+            : CreditText.Vocalists(
+                singersByRecording.TryGetValue(repRecording.SongRecordingId, out var repSingers) ? repSingers : null,
+                repRecording.SingerName, personAliasMap, characterAliasMap, NoUnitMembers);
+        string pageTitle = string.IsNullOrWhiteSpace(titleSingerText)
+            ? $"「{song.Title}」"
+            : $"「{song.Title}」歌: {titleSingerText}";
+
         var layout = new LayoutModel
         {
-            PageTitle = song.Title,
+            PageTitle = pageTitle,
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {

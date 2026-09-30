@@ -463,7 +463,7 @@ public sealed class CharactersGenerator
 
         var layout = new LayoutModel
         {
-            PageTitle = character.Name,
+            PageTitle = BuildCharacterPageTitle(character.Name, voiceRows),
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
@@ -619,6 +619,29 @@ public sealed class CharactersGenerator
             Badges = badges,
             InlineFacts = facts
         };
+    }
+
+    /// <summary>
+    /// キャラクター詳細ページの PageTitle（<c>&lt;title&gt;</c>・og:title・シェア文の見出し）を組み立てる。
+    /// 検索で「キャラ名＋声優名」の組み合わせに当たるよう、「{キャラ名}(CV:{声優1}、{声優2})」の形にする。
+    /// 声優は <see cref="VoiceCastRow.VoiceActorNames"/>（連名連結）を「、」で割って出現順に重複排除し、最大 2 名。
+    /// 3 名以上なら末尾に「ほか」を添える。声優が 1 人もいなければキャラ名のみ。
+    /// </summary>
+    private static string BuildCharacterPageTitle(string characterName, IReadOnlyList<VoiceCastRow> voiceRows)
+    {
+        var voiceActors = voiceRows
+            .SelectMany(v => string.IsNullOrEmpty(v.VoiceActorNames)
+                ? Array.Empty<string>()
+                : v.VoiceActorNames.Split('、', StringSplitOptions.RemoveEmptyEntries))
+            .Select(n => n.Trim())
+            .Where(n => !string.IsNullOrEmpty(n))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (voiceActors.Count == 0) return characterName;
+
+        string cv = string.Join("、", voiceActors.Take(2));
+        if (voiceActors.Count > 2) cv += "ほか";
+        return $"{characterName}(CV:{cv})";
     }
 
     /// <summary>

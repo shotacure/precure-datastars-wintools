@@ -6,7 +6,7 @@
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
-{{## 2 タブ（初登場順＝既定 / 登場話数順）。タブ切替はスタッフ一覧と同じインライン JS（外部 JS を増やさない）。
+{{## 2 タブ（初登場順＝既定 / 登場回数順）。タブ切替はスタッフ一覧と同じインライン JS（外部 JS を増やさない）。
      行はシリーズ詳細・声の出演と同じ行リスト表現：プリキュア名を主役（行全体クリックで
      キャラクター詳細へ）、変身前名と「(CV: 声優)」を添え書きに。CV の声優名だけは個別リンク。
      2 つのタブは行構造が同一だが、パラメータ付き include を避けて各パネルに直接展開する。 ##}}
@@ -18,7 +18,7 @@
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="precures-tab-panel-count">
-      登場話数順
+      登場回数順
     </button>
   </div>
 
@@ -51,7 +51,7 @@
     {{~ end ~}}
   </div>
 
-  {{## ──────── 登場話数順パネル（セクション無し） ──────── ##}}
+  {{## ──────── 登場回数順パネル（セクション無し） ──────── ##}}
   <div class="tab-panel" id="precures-tab-panel-count"
        data-tab-panel="count" role="tabpanel" hidden>
     <ul class="entity-list" id="precures-count-list">

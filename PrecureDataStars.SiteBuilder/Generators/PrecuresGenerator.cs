@@ -64,7 +64,7 @@ public sealed class PrecuresGenerator
     /// <c>/precures/</c>（プリキュア索引）。2 タブ構成。
     /// ・初登場順：最初に登場したシリーズ（紐付くシリーズのうち放送開始の最も早いもの）ごとのセクション。
     ///   セクション内は precure_id 昇順 = 概ね登場順。紐付くシリーズが無いプリキュアは末尾の「その他」。
-    /// ・登場話数順：全員を 1 リストにし、キャラクターの登場話数と登場本数の合計が多い順（同数は登場順）。
+    /// ・登場回数順：全員を 1 リストにし、キャラクターの登場話数と登場本数の合計が多い順（同数は登場順）。
     /// 各行のリンク先は <c>/characters/{character_id}/</c>（プリキュア詳細は廃止済み）。
     /// </summary>
     private void GenerateIndex(
@@ -130,7 +130,7 @@ public sealed class PrecuresGenerator
             })
             .ToList();
 
-        // 登場話数順タブ：登場話数と登場本数の合計が多い順、同数は登場順。
+        // 登場回数順タブ：登場話数と登場本数の合計が多い順、同数は登場順。
         var countRows = rows
             .OrderByDescending(r => r.EpisodeCount + r.MovieCount)
             .ThenBy(r => r.Order)
@@ -170,7 +170,7 @@ public sealed class PrecuresGenerator
         public IReadOnlyList<PrecureIndexRow> Precures { get; set; } = Array.Empty<PrecureIndexRow>();
         /// <summary>初登場順タブのセクション（初登場シリーズごと、放送開始順）。</summary>
         public IReadOnlyList<PrecureDebutSection> DebutSections { get; set; } = Array.Empty<PrecureDebutSection>();
-        /// <summary>登場話数順タブの行（登場話数と登場本数の合計が多い順）。</summary>
+        /// <summary>登場回数順タブの行（登場話数と登場本数の合計が多い順）。</summary>
         public IReadOnlyList<PrecureIndexRow> CountRows { get; set; } = Array.Empty<PrecureIndexRow>();
         public int TotalCount { get; set; }
         /// <summary>クレジット横断カバレッジラベル。 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記を テンプレ側の lead 段落末尾に表示する。</summary>

@@ -6,7 +6,7 @@
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
-{{## 2 タブ（初登場順＝既定 / 登場話数順）。タブ切替はスタッフ一覧と同じインライン JS（外部 JS を増やさない）。 ##}}
+{{## 2 タブ（初登場順＝既定 / 登場回数順）。タブ切替はスタッフ一覧と同じインライン JS（外部 JS を増やさない）。 ##}}
 <div class="characters-tabs products-tabs">
   <div class="tabs" role="tablist" aria-label="キャラクター一覧の並べ替え">
     <button type="button" class="tab-btn is-active" data-tab="debut"
@@ -15,7 +15,7 @@
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="characters-tab-panel-count">
-      登場話数順
+      登場回数順
     </button>
   </div>
 
@@ -86,7 +86,7 @@
 {{~ end ~}}
   </div>
 
-  {{## ──────── 登場話数順パネル（セクション無し） ──────── ##}}
+  {{## ──────── 登場回数順パネル（セクション無し） ──────── ##}}
   <div class="tab-panel" id="characters-tab-panel-count"
        data-tab-panel="count" role="tabpanel" hidden>
     {{~ if (array.size CountRows) == 0 ~}}

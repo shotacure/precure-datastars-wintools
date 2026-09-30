@@ -294,7 +294,7 @@ public sealed class CharactersGenerator
             .Select(s => s.Section)
             .ToList();
 
-        // 登場話数順タブ：個別ページを持つキャラ（単発のゲストは除く）のうち登場のあるものを 1 リストに、
+        // 登場回数順タブ：個別ページを持つキャラ（単発のゲストは除く）のうち登場のあるものを 1 リストに、
         // 登場話数と登場本数の合計が多い順に並べる。同数は初登場の早い順（クレジット順）。
         var countRows = entries
             .Where(e => !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId) && (e.Ep + e.Mv) > 0)
@@ -977,7 +977,7 @@ public sealed class CharactersGenerator
     {
         /// <summary>大セクション = 所属シリーズ（最早登場シリーズ）。放送開始日昇順、末尾に「その他（未登場）」。</summary>
         public IReadOnlyList<CharacterSeriesSection> Sections { get; set; } = Array.Empty<CharacterSeriesSection>();
-        /// <summary>登場話数順タブの行（個別ページを持つキャラ、登場話数と登場本数の合計が多い順）。</summary>
+        /// <summary>登場回数順タブの行（個別ページを持つキャラ、登場話数と登場本数の合計が多い順）。</summary>
         public IReadOnlyList<CharacterIndexRow> CountRows { get; set; } = Array.Empty<CharacterIndexRow>();
         public int TotalCount { get; set; }
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の lead 段落末尾に表示する。</summary>

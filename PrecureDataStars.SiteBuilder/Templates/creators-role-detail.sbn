@@ -6,7 +6,7 @@
 
 <p class="lead">
   「{{ RoleNameJa | html.escape }}」を担当した人物・企業・団体の一覧です。
-  「初参加順」「担当話数順」をタブで切り替えられます。
+  「初参加順」「担当回数順」をタブで切り替えられます。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
@@ -39,7 +39,7 @@
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="role-tab-panel-count">
-      担当話数順
+      担当回数順
     </button>
   </div>
 
@@ -108,7 +108,7 @@
     {{~ end ~}}
   </div>
 
-  {{## ──────── 担当話数順パネル ──────── ##}}
+  {{## ──────── 担当回数順パネル ──────── ##}}
   <div class="tab-panel" id="role-tab-panel-count"
        data-tab-panel="count" role="tabpanel" hidden>
     {{~ if (array.size CountRows) == 0 ~}}

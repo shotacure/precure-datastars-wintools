@@ -773,7 +773,7 @@ public sealed class SeriesGenerator
                         {
                             Slug = c.Slug,
                             Title = c.Title,
-                            KindLabel = LookupKindLabel(c.KindCode),
+                            KindLabel = LookupKindLabel(c),
                             // 公開日は親映画と同じ運用のため、子作品行では出さない（カラム自体は空）。
                             Period = "",
                             // 子作品単体の尺を親と同じ尺カラム位置に出す。
@@ -935,7 +935,7 @@ public sealed class SeriesGenerator
             {
                 Slug = parentForRelated.Slug,
                 Title = parentForRelated.Title,
-                KindLabel = LookupKindLabel(parentForRelated.KindCode),
+                KindLabel = LookupKindLabel(parentForRelated),
                 Period = FormatRelatedPeriod(parentForRelated),
                 RelationCode = s.RelationToParent ?? "",
                 RelationLabelJa = (!string.IsNullOrEmpty(s.RelationToParent)
@@ -953,7 +953,7 @@ public sealed class SeriesGenerator
         {
             Slug = x.Slug,
             Title = x.Title,
-            KindLabel = LookupKindLabel(x.KindCode),
+            KindLabel = LookupKindLabel(x),
             Period = FormatRelatedPeriod(x),
             RelationCode = x.RelationToParent ?? "",
             RelationLabelJa = (!string.IsNullOrEmpty(x.RelationToParent)
@@ -970,7 +970,7 @@ public sealed class SeriesGenerator
             {
                 Slug = p.Slug,
                 Title = p.Title,
-                KindLabel = LookupKindLabel(p.KindCode),
+                KindLabel = LookupKindLabel(p),
                 Period = FormatRelatedPeriod(p)
             };
         }
@@ -1026,7 +1026,7 @@ public sealed class SeriesGenerator
             Title = s.Title,
             TitleKana = s.TitleKana ?? "",
             TitleEn = s.TitleEn ?? "",
-            KindLabel = LookupKindLabel(s.KindCode),
+            KindLabel = LookupKindLabel(s),
             Period = seriesPeriod,
             PeriodLabel = periodLabel,
             PeriodEstimateNote = (seriesEstimated && s.EndDate.HasValue) ? EstimateNote : "",
@@ -1495,9 +1495,21 @@ public sealed class SeriesGenerator
         }
     }
 
-    /// <summary>kind_code → 表示用ラベル（name_ja）。</summary>
-    private string LookupKindLabel(string code)
-        => _ctx.SeriesKindByCode.TryGetValue(code, out var kind) ? kind.NameJa : code;
+    /// <summary>
+    /// シリーズの種別の表示用ラベル（series_kinds.name_ja）。映画の種別は公開の季節で呼び分けているので、
+    /// 季節と公開月がずれた作品には実際の公開の季節を添える（延期などで公開時期が動いた作品のため）。
+    /// 秋映画（併映を含む）が 9〜12 月以外の公開なら「（春公開）」、春映画が 6〜12 月の公開なら「（秋公開）」。
+    /// </summary>
+    private string LookupKindLabel(Series series)
+    {
+        string label = _ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var kind) ? kind.NameJa : series.KindCode;
+        int month = series.StartDate.Month;
+        if (series.KindCode is "MOVIE" or "MOVIE_SHORT" && month is < 9)
+            return label + "（春公開）";
+        if (series.KindCode == "SPRING" && month >= 6)
+            return label + "（秋公開）";
+        return label;
+    }
 
     /// <summary>メインスタッフセクション群を構築する。 TV 系（credit_attach_to='EPISODE'）はエピソードスコープ Involvement から、 映画系（credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）は SERIES スコープ Involvement から集計する。役職セットはそれぞれ <see cref="TvKeyStaffRoleSpecs"/> と <see cref="MovieKeyStaffRoleSpecs"/>。</summary>
     private async Task<IReadOnlyList<KeyStaffSection>> BuildMainStaffSectionsAsync(

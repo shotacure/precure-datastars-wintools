@@ -230,7 +230,7 @@ public static class MusicCreditViewBuilder
             string aff = AffiliationName(ctx, r);
             string nextAff = i + 1 < rows.Count ? AffiliationName(ctx, rows[i + 1]) : "";
             if (aff.Length > 0 && !string.Equals(aff, nextAff, StringComparison.Ordinal))
-                sb.Append("<span class=\"music-credit-affiliation muted\">（").Append(HtmlUtil.Escape(aff)).Append("）</span>");
+                sb.Append("<span class=\"music-credit-affiliation muted\">（").Append(AffiliationHtml(ctx, r, aff)).Append("）</span>");
         }
         return new MusicCreditLineView
         {
@@ -275,6 +275,17 @@ public static class MusicCreditViewBuilder
             ? $"<a class=\"staff-name\" href=\"{HtmlUtil.Escape(url)}\">{HtmlUtil.Escape(name)}</a>"
             : $"<span class=\"staff-name\">{HtmlUtil.Escape(name)}</span>";
         return r.EntryKind == "PERSON" && r.PersonAliasId is int aliasId ? link + PrimaryNameSuffixHtml(ctx, aliasId) : link;
+    }
+
+    /// <summary>
+    /// 所属の表示。企業マスタの屋号に紐付いていれば企業詳細へのリンク（hover 限定下線の staff-name）、
+    /// 自由記述の所属は文字のみ。
+    /// </summary>
+    private static string AffiliationHtml(BuildContext ctx, MusicCredit r, string aff)
+    {
+        if (r.AffiliationCompanyAliasId is int a && ctx.CompanyAliasById.TryGetValue(a, out var ca) && ca.CompanyId > 0)
+            return $"<a class=\"staff-name\" href=\"{HtmlUtil.Escape(PathUtil.CompanyUrl(ca.CompanyId))}\">{HtmlUtil.Escape(aff)}</a>";
+        return HtmlUtil.Escape(aff);
     }
 
     private static string AffiliationName(BuildContext ctx, MusicCredit r)

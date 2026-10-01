@@ -249,9 +249,10 @@ public sealed class PersonsGenerator
         // 劇伴の作曲・編曲は音楽クレジットの欄に分ける）。
         var involvementGroups = BuildPersonInvolvementGroups(aliasIds, IsMainInvolvement);
 
-        // クレジットのある名義が 2 つ以上あるときだけ、名義単位のセクション（初登場順）に分ける
-        // （企業・団体詳細と同じ規律）。1 つ以下ならテンプレ側は involvementGroups のフラット表示を使う。
-        var involvementSections = BuildPersonAliasInvolvementSections(aliasIds, aliasById);
+        // クレジットのある名義が 2 つ以上あるとき、または 1 つでも見出しの名前（表示名義）と違うときは、
+        // 名義単位のセクション（初登場順）に分ける（企業・団体詳細と同じ規律）。改名して見出しが現在の名前になった
+        // 人物でも、クレジットされた当時の名義が分かるようにする。それ以外はテンプレ側が involvementGroups のフラット表示を使う。
+        var involvementSections = BuildPersonAliasInvolvementSections(aliasIds, aliasById, displayName);
 
         // クレジット合計バッジは role 別 EpisodeCount の単純合算ではなく distinct 話数・本数で出す。
         // 同一名義が同じ話数に複数役職でクレジットされている場合、role ごとの EpisodeCount を
@@ -661,7 +662,8 @@ public sealed class PersonsGenerator
 
     /// <summary>
     /// クレジット履歴を「名義」単位のセクション（初登場順）に分けて組み立てる。
-    /// クレジットのある名義が 2 つ以上あるときだけ非空リストを返し、1 つ以下なら空リスト（呼び出し側が
+    /// クレジットのある名義が 2 つ以上あるとき、または 1 つだけでもその名義が見出しの名前（<paramref name="displayName"/>）と
+    /// 違うときに非空リストを返す。それ以外は空リスト（呼び出し側が
     /// <see cref="BuildPersonInvolvementGroups"/> の全名義横断フラット表示にフォールバックする前提）。
     /// 各セクションの役職別グループは、当該名義 1 件だけを渡した <see cref="BuildPersonInvolvementGroups"/> の
     /// 再利用で組み立てる（声の出演の役（キャラ）大くくりサブセクションも自動的に引き継がれる）。
@@ -669,10 +671,15 @@ public sealed class PersonsGenerator
     /// </summary>
     private IReadOnlyList<AliasInvolvementSection> BuildPersonAliasInvolvementSections(
         IReadOnlyList<int> aliasIds,
-        IReadOnlyDictionary<int, PersonAlias> aliasById)
+        IReadOnlyDictionary<int, PersonAlias> aliasById,
+        string displayName)
     {
         var candidates = aliasIds.Where(id => _index.ByPersonAlias.ContainsKey(id) && _index.ByPersonAlias[id].Any(IsMainInvolvement)).ToList();
-        if (candidates.Count <= 1) return Array.Empty<AliasInvolvementSection>();
+        if (candidates.Count == 0) return Array.Empty<AliasInvolvementSection>();
+        if (candidates.Count == 1
+            && (!aliasById.TryGetValue(candidates[0], out var onlyAlias)
+                || string.Equals(onlyAlias.Name, displayName, StringComparison.Ordinal)))
+            return Array.Empty<AliasInvolvementSection>();
 
         var sections = new List<(DateTime FirstAt, AliasInvolvementSection Section)>();
         foreach (var aliasId in candidates)
@@ -703,7 +710,8 @@ public sealed class PersonsGenerator
                 MovieCount = aliasMovieCount
             }));
         }
-        return sections.Count > 1
+        // 名義が 1 つだけのときも、入口の判定（見出しの名前と違う）を通っていればセクションを出す。
+        return sections.Count > 0
             ? sections.OrderBy(s => s.FirstAt).Select(s => s.Section).ToList()
             : Array.Empty<AliasInvolvementSection>();
     }
@@ -1181,9 +1189,9 @@ public sealed class PersonsGenerator
         /// <summary>クレジット（フラット）。名義を横断した役職別グループ → シリーズ行。
         /// <see cref="InvolvementSections"/> が空（クレジットのある名義が 1 つだけ）のときにテンプレ側が使う。</summary>
         public IReadOnlyList<InvolvementGroup> InvolvementGroups { get; set; } = Array.Empty<InvolvementGroup>();
-        /// <summary>クレジット（名義別）。クレジットのある名義が 2 つ以上あるときだけ、
+        /// <summary>クレジット（名義別）。クレジットのある名義が 2 つ以上あるとき、または 1 つでも見出しの名前と違うときに、
         /// 名義単位のセクション（初登場順）に分ける。各セクション内は役職別グループ → シリーズ行。
-        /// 1 つ以下のときは空（テンプレ側は <see cref="InvolvementGroups"/> のフラット表示にフォールバック）。</summary>
+        /// それ以外は空（テンプレ側は <see cref="InvolvementGroups"/> のフラット表示にフォールバック）。</summary>
         public IReadOnlyList<AliasInvolvementSection> InvolvementSections { get; set; } = Array.Empty<AliasInvolvementSection>();
         /// <summary>クレジットセクション見出し横に出す合計担当話数（TV 系シリーズ横断）。</summary>
         public int CreditEpisodeCountTotal { get; set; }

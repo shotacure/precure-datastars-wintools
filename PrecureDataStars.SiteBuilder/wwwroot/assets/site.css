@@ -1,6 +1,9 @@
 /* precure-datastars site styles 方針: - クレジット部分は Catalog 側 CreditPreviewRenderer の CSS をそのまま流用する （fallback-table / fallback-vc-table / .card / .tier / .group / .rol */
 
 :root {
+  /* 明るい配色だけのサイト。端末がダークモードでも、フォーム部品やスクロールバーを含めて明るい配色で描かせる
+     （ブラウザによる自動の色反転を防ぐ。「only」を付けないと止まらない。<meta name="color-scheme"> と同じ指定）。 */
+  color-scheme: only light;
   --bg: #ffffff;
   --fg: #1a1a1a;
   --muted: #666666;

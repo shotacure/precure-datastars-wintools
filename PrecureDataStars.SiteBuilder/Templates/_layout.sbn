@@ -17,6 +17,8 @@
      theme-color はモバイルブラウザのアドレスバー色を指定（プリキュアピンク）。 ##}}
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <meta name="theme-color" content="#ec4899">
+{{## 明るい配色だけのサイトであることをブラウザに伝える。「only」を付けないと Chrome などの自動ダーク化（端末がダークモードのときに色を反転させる機能）は止まらない。 ##}}
+<meta name="color-scheme" content="only light">
 
 {{## ──────── Google Search Console 所有権確認（任意） ──────── ##}}
 {{~ if GoogleSiteVerification != "" ~}}

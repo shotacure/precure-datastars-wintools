@@ -11,9 +11,30 @@
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
-{{## クラスタ系譜で同一視している「歴代の名前」。閲覧者向けに日本語の役職名のみ並べる
-     （内部の役職コードは出さない方針）。0 件のときはセクションごと非表示。 ##}}
-{{~ if (array.size AlternateNames) > 0 ~}}
+{{## 系譜でまとめた役職の「役職名の変遷」。実際にクレジットされた表記が 2 つ以上あるときは、表記ごとに
+     初めてクレジットされた順に、担当数とクレジットされた作品（TV 系は話数の範囲つき）を並べる。
+     表記が 1 つ以下で、系譜に別の名前だけがあるときは「歴代の役職名」を 1 行で出す。
+     閲覧者向けに日本語の役職名のみ並べる（内部の役職コードは出さない方針）。 ##}}
+{{~ if (array.size NameHistory) > 0 ~}}
+<section id="role-name-history" class="role-name-history">
+  <h2>役職名の変遷</h2>
+  <ol class="role-name-history-list">
+    {{~ for h in NameHistory ~}}
+    <li class="role-name-history-item">
+      <div class="role-name-history-head">
+        <span class="role-name-history-name">{{ h.RoleNameJa | html.escape }}</span>
+        <span class="count-badges">{{~ if h.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ h.EpisodeCount }}</span>{{~ end ~}}{{~ if h.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ h.MovieCount }}</span>{{~ end ~}}</span>
+      </div>
+      <ul class="role-name-history-works">
+        {{~ for w in h.Works ~}}
+        <li><a href="{{ w.SeriesUrl }}">{{ w.SeriesTitle | html.escape }}</a><span class="muted series-year">({{ w.SeriesYearLabel }})</span>{{~ if w.EpisodeRangeLabel != "" ~}} <span class="muted role-name-history-range">{{ w.EpisodeRangeLabel | html.escape }}</span>{{~ end ~}}</li>
+        {{~ end ~}}
+      </ul>
+    </li>
+    {{~ end ~}}
+  </ol>
+</section>
+{{~ else if (array.size AlternateNames) > 0 ~}}
 <p class="muted role-aliases">
   歴代の役職名：
   {{~ for a in AlternateNames ~}}{{ a.RoleNameJa | html.escape }}{{ if for.last == false }}・{{ end }}{{~ end ~}}
@@ -72,6 +93,7 @@
         {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
         <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
         <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}</span></span>
+        {{~ if e.RoleUsageNote != "" ~}}<span class="entity-row-role-usage muted">（{{ e.RoleUsageNote | html.escape }}）</span>{{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>
@@ -100,6 +122,7 @@
           {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
           <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
           <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}</span></span>
+          {{~ if e.RoleUsageNote != "" ~}}<span class="entity-row-role-usage muted">（{{ e.RoleUsageNote | html.escape }}）</span>{{~ end ~}}
         </li>
         {{~ end ~}}
       </ul>
@@ -122,6 +145,7 @@
         {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
         <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
         <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}</span></span>
+        {{~ if e.RoleUsageNote != "" ~}}<span class="entity-row-role-usage muted">（{{ e.RoleUsageNote | html.escape }}）</span>{{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>

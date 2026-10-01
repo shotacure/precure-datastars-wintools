@@ -7522,6 +7522,44 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-size: 0.88em;
   white-space: nowrap;
 }
+/* 役職詳細の行で、系譜でまとめた別の表記でもクレジットされた人に添える「（デジタル撮影監督 1・撮影監督 1）」。
+   件数の下に 1 行で置く。 */
+.entity-row-role-usage {
+  flex-basis: 100%;
+  font-size: 0.85em;
+}
+/* 役職詳細の「役職名の変遷」。表記ごとに件数とクレジットされた作品を並べる。 */
+.role-name-history-list {
+  list-style: none;
+  margin: 0 0 1.5em;
+  padding: 0;
+}
+.role-name-history-item {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.role-name-history-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+.role-name-history-name {
+  font-weight: 600;
+}
+.role-name-history-works {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  font-size: 0.9em;
+}
+.role-name-history-works > li {
+  overflow-wrap: anywhere;
+}
+.role-name-history-range {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
 /* 歌唱一覧のキャラクターの行で、キャラ名の直後に添える「(CV: 声優)」。 */
 .entity-row-cv {
   margin-left: -6px;

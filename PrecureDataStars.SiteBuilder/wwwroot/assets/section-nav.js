@@ -227,7 +227,7 @@
 
     // ナビ枠を組み立て。アクセシビリティのため aria-label 付与。
     navHost.removeAttribute('hidden');
-    navHost.setAttribute('aria-label', 'ページ内セクションナビ');
+    navHost.setAttribute('aria-label', 'もくじ');
     navHost.setAttribute('role', 'navigation');
     // 年エリア・件数バッジエリアの予約は「ナビ内に 1 個でも該当属性がある」ときのみ。
     // CSS は .has-year / .has-count クラスを見て該当列の場所を確保する（visibility:hidden で

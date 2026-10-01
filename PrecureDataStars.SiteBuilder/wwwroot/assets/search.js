@@ -180,10 +180,11 @@
     return (m ? m[1] : item.t) + '（サブタイトル未公開）';
   }
 
-  /** 1 件の結果を <a> 要素として描画。 */
-  function renderResult(item) {
+  /** 1 件の結果を <a> 要素として描画。id は検索欄の aria-activedescendant が指す先（何件目か）。 */
+  function renderResult(item, index) {
     var a = document.createElement('a');
     a.className = 'site-search-result-item';
+    a.id = 'site-search-option-' + index;
     a.href = item.u;
     a.setAttribute('role', 'option');
 
@@ -222,7 +223,7 @@
       return;
     }
     for (var i = 0; i < results.length; i++) {
-      container.appendChild(renderResult(results[i]));
+      container.appendChild(renderResult(results[i], i));
     }
     container.classList.add('open');
   }
@@ -271,6 +272,23 @@
     if (!input || !results) return;
 
     var debounceTimer = null;
+
+    // 読み上げ向けの combobox の状態（aria-expanded・aria-activedescendant）を、結果の箱の開閉と
+    // 矢印キーで選んだ候補（.selected）に合わせる。開閉と選択はあちこちで切り替わるので、
+    // 結果の箱の変化を見て一か所で書き換える。
+    function syncComboboxState() {
+      input.setAttribute('aria-expanded', results.classList.contains('open') ? 'true' : 'false');
+      var selected = results.querySelector('.site-search-result-item.selected');
+      if (selected) {
+        input.setAttribute('aria-activedescendant', selected.id);
+      } else {
+        input.removeAttribute('aria-activedescendant');
+      }
+    }
+    new MutationObserver(syncComboboxState).observe(results, {
+      childList: true, subtree: true, attributes: true, attributeFilter: ['class']
+    });
+    syncComboboxState();
 
     /** 検索して結果を描く。afterRender は結果を描いた後に呼ぶ（索引の読み込みを待つため非同期）。 */
     function doSearch(afterRender) {

@@ -158,12 +158,12 @@ gtag('config', '{{ Ga4MeasurementId }}');
   <span class="hamburger-line" aria-hidden="true"></span>
   <span class="hamburger-line" aria-hidden="true"></span>
 </button>
-<div id="mobileNavOverlay" class="mobile-nav-overlay" hidden role="dialog" aria-modal="true" aria-label="グローバルナビ（モバイル）">
+<div id="mobileNavOverlay" class="mobile-nav-overlay" hidden role="dialog" aria-modal="true" aria-label="メニュー">
   {{## 背景の暗幕。クリックで閉じる。data 属性で mobile-nav.js が拾う。 ##}}
   <div class="mobile-nav-overlay-backdrop" data-mobile-nav-close></div>
   {{## 右からスライドインするパネル本体。グローバルナビとサイト内検索ボックス（モバイル時のみ
        JS で本パネル内に移設される）を縦並びで提示。 ##}}
-  <nav class="mobile-nav-overlay-panel" aria-label="グローバルナビ（モバイル）">
+  <nav class="mobile-nav-overlay-panel" aria-label="グローバルナビ">
     <button type="button" class="mobile-nav-overlay-close" data-mobile-nav-close aria-label="閉じる">✕</button>
     {{## 項目列は LayoutModel.NavItems（PageRenderer がヘッダナビと共通で組み立て、
          現在ページの所属セクションに IsActive を立てる）。先頭のホームだけ固定で足す。 ##}}
@@ -252,7 +252,8 @@ gtag('config', '{{ Ga4MeasurementId }}');
          検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
     <div class="site-search">
       <input id="site-search-input" type="search" placeholder="サイト内検索" autocomplete="off"
-             aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results">
+             role="combobox" aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results"
+             aria-expanded="false">
       {{## キーボードショートカットのヒントチップ（/ キーでフォーカス。search.js が処理）。
            装飾なので aria-hidden、入力中（focus-within）とモバイルでは CSS で非表示。 ##}}
       <span class="site-search-kbd" aria-hidden="true">/</span>

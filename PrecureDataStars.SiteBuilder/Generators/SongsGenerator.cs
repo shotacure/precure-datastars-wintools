@@ -328,7 +328,7 @@ public sealed class SongsGenerator
         var recordingViews = new List<RecordingView>();
         foreach (var r in recordings)
         {
-            var tracksRows = BuildRecordingTrackRows(r.SongRecordingId,
+            var tracksRows = BuildRecordingTrackRows(_ctx, r.SongRecordingId,
                 tracksByRecording, discMap, productMap, sizeVariantMap, partVariantMap);
             var themeRows = BuildRecordingThemeUsageRows(r.SongRecordingId,
                 themeSongsByRecording, seriesThemeSongsByRecording);
@@ -536,6 +536,7 @@ public sealed class SongsGenerator
     }
 
     private static List<RecordingTrackRow> BuildRecordingTrackRows(
+        BuildContext ctx,
         int songRecordingId,
         IReadOnlyDictionary<int, List<Track>> tracksByRecording,
         IReadOnlyDictionary<string, Disc> discMap,
@@ -551,10 +552,6 @@ public sealed class SongsGenerator
             {
                 if (!discMap.TryGetValue(t.CatalogNo, out var disc)) continue;
                 if (!productMap.TryGetValue(disc.ProductCatalogNo, out var prod)) continue;
-                // 特例：MJCG-80146（プリキュア「全曲集 1」）、MJCG-83027（同 2）は寄せ集めの
-                // 曲集で、各楽曲の収録盤として並べると煩雑になるため、歌詳細ページの
-                // 収録盤一覧から除外する（劇伴詳細でも同じ品番を除外している）。
-                if (disc.ProductCatalogNo == "MJCG-80146" || disc.ProductCatalogNo == "MJCG-83027") continue;
 
                 string sizeLabel = (t.SongSizeVariantCode != null && sizeVariantMap.TryGetValue(t.SongSizeVariantCode, out var sv)) ? sv.NameJa : "";
                 string partLabel = (t.SongPartVariantCode != null && partVariantMap.TryGetValue(t.SongPartVariantCode, out var pv)) ? pv.NameJa : "";
@@ -641,6 +638,26 @@ public sealed class SongsGenerator
                     CoverImageUrl = prod.CoverImageUrl ?? ""
                 });
             }
+            // 流通元を替えて同じ中身のまま再発売された盤（Reissues）のトラックは、行にすると初回盤と二重に並ぶので、
+            // 同じトラック（トラック番号・サイズ・パートが同じ）の初回盤の行に、本行と同じ「発売日／品番／Tr」の書き方で添える。
+            // 初回盤の行が見つからないときは、そのまま行として残す。劇伴詳細も同じ扱い。
+            var merged = new List<RecordingTrackRow>(tracksRows.Count);
+            foreach (var row in tracksRows)
+            {
+                var firstPressNo = Reissues.FirstPressOf(row.ProductCatalogNo);
+                var firstPressRow = firstPressNo is null ? null : tracksRows.FirstOrDefault(x =>
+                    x.ProductCatalogNo == firstPressNo && x.TrackNo == row.TrackNo && x.SubOrder == row.SubOrder
+                    && x.SongSizeVariantCode == row.SongSizeVariantCode && x.SongPartVariantCode == row.SongPartVariantCode);
+                if (firstPressRow is null)
+                {
+                    merged.Add(row);
+                    continue;
+                }
+                firstPressRow.ReissueNote = $"再発売盤 {row.ProductReleaseDateShort}／{row.DiscCatalogNo}／{row.DiscTrackLabel}";
+                firstPressRow.ReissueUrl = $"{row.ProductUrl}#track-{row.DiscCatalogNo}-{row.TrackNo}-{row.SubOrder}";
+            }
+            tracksRows = merged;
+
             // ソート基準：発売日（昇順、DateTime 原値）→ 品番（昇順、文字列順）→ Disc 番（昇順）→ Track 番（昇順）。
             tracksRows = tracksRows
                 .OrderBy(x => x.ProductReleaseDateRaw)
@@ -1391,6 +1408,10 @@ public sealed class SongsGenerator
         public string ProductReleaseDateShort { get; set; } = "";
         /// <summary>発売日の DateTime 原値。 ソートキーは数値で持つ（日本語フォーマット済み文字列だと "2004年10月" が "2004年2月" より先に並ぶ lex 比較になるのを避けるため）。</summary>
         public DateTime ProductReleaseDateRaw { get; set; }
+        /// <summary>初回盤の行に添える再発売盤の同じトラック（「再発売盤 2004.9.24／MJCD-23001／Tr01」）。それ以外は空文字。</summary>
+        public string ReissueNote { get; set; } = "";
+        /// <summary>再発売盤の商品詳細の該当トラックへの URL（<see cref="ReissueNote"/> があるときだけ）。</summary>
+        public string ReissueUrl { get; set; } = "";
         public string ProductUrl { get; set; } = "";
         public string DiscCatalogNo { get; set; } = "";
         public uint? DiscNoInSet { get; set; }

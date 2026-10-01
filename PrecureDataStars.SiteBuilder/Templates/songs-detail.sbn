@@ -219,6 +219,12 @@
             </div>
           </div>
         </a>
+        {{## 流通元を替えて同じ中身のまま再発売された盤の同じトラック（行には出さない）を、本行と同じ書き方で初回盤の行に添え、
+             再発売盤の該当トラックへリンクする。
+             カード全体がリンクなので、入れ子にせずカードの下に置く。 ##}}
+        {{~ if t.ReissueNote != "" ~}}
+        <a class="recording-tracks-reissue muted" href="{{ t.ReissueUrl }}">{{ t.ReissueNote | html.escape }}</a>
+        {{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>

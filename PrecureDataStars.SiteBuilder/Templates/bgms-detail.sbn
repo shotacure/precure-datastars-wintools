@@ -160,6 +160,11 @@
               <span class="bgm-rec-title">「{{ r.TrackTitle | html.escape }}」</span>
               {{~ end ~}}
             </a>
+            {{## 流通元を替えて同じ中身のまま再発売された盤の同じトラック（行には出さない）を、本行と同じ書き方で初回盤の行に添え、
+                 再発売盤の該当トラックへリンクする。 ##}}
+            {{~ if r.ReissueNote != "" ~}}
+            <a class="bgm-rec-reissue muted" href="{{ r.ReissueUrl }}">{{ r.ReissueNote | html.escape }}</a>
+            {{~ end ~}}
           </li>
           {{~ end ~}}
         </ul>

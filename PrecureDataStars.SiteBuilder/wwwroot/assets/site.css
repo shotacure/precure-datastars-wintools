@@ -2825,6 +2825,25 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   background-color: var(--surface-2, #fff7fb);
   text-decoration: none;
 }
+/* 初回盤の行に添える再発売盤の同じトラック（「再発売盤 無印 OST1(再)-Tr.3」）。行の下に一段下げて小さく出し、再発売盤の該当トラックへリンクする。 */
+.bgm-rec-reissue,
+.recording-tracks-reissue {
+  display: inline-block;
+  font-size: 0.88em;
+  text-decoration: none;
+}
+.bgm-rec-reissue {
+  margin-left: 1em;
+}
+.recording-tracks-reissue {
+  margin: 4px 0 0 14px;
+}
+.bgm-rec-reissue:hover,
+.bgm-rec-reissue:focus-visible,
+.recording-tracks-reissue:hover,
+.recording-tracks-reissue:focus-visible {
+  text-decoration: underline;
+}
 /* 「OST1-Tr.2」部分。等幅数字でやや muted。タイトル「サブタイトル」より一段下げる。 */
 .bgm-rec-disc-track {
   color: var(--muted);

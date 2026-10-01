@@ -6394,6 +6394,8 @@ a.credit-card-series:focus-visible {
   grid-column: 3;
   justify-self: start;
   min-width: 0;
+  /* justify-self:start の grid item は折り返さない文字列の幅まで広がるので、列幅で打ち切って省略記号を出す。 */
+  max-width: 100%;
   font-size: 0.88em;
   overflow: hidden;
   text-overflow: ellipsis;

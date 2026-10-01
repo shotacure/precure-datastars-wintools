@@ -306,7 +306,7 @@
         }
       }
 
-      // どれも視界に無いときは最後のハイライトを維持する。
+      // どれも視界に無いときは最後のハイライトを維持する（最初の節より上へ戻ったときは scroll 側で先頭に戻す）。
       if (pickedId) setCurrent(items, pickedId);
     }, {
       // 上端は固定ヘッダぶんを差し引く。下端は画面上半分以内のセクションを優先するため -55%。
@@ -348,6 +348,9 @@
         var pos   = (window.scrollY + topOffsetPx) - firstTop;
         var pct   = Math.max(0, Math.min(100, (pos / range) * 100));
         list.style.setProperty('--progress', pct.toFixed(2) + '%');
+        // 最初の節の上端が現在地の帯より下にある（ページ先頭付近にいる）ときは、どの節も帯に入らず
+        // IntersectionObserver が現在地を更新しないので、最初の節を現在地にする。
+        if (pos < 0) setCurrent(items, items[0].id);
       });
     };
     window.addEventListener('scroll', scrollProgressHandler, { passive: true });

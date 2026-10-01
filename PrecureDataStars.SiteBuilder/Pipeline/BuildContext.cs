@@ -159,6 +159,9 @@ public sealed class BuildContext
     /// <summary>音盤のブックレットに載る音楽クレジット（<c>music_credits</c>）の全件索引。本編クレジットの関与索引とは別に持つ。</summary>
     public required MusicCreditIndex MusicCredits { get; init; }
 
+    /// <summary>主題歌の再生ボタン用に、録音ごとに鳴らす配信音源を選んだ索引（シリーズ詳細・エピソード詳細で使う）。</summary>
+    public required ThemeArtTrackIndex ThemeArtTracks { get; init; }
+
     /// <summary>
     /// episode_id → そのエピソードに紐付くクレジット（scope=EPISODE）一覧の事前展開辞書。
     /// 旧 SeriesGenerator / EpisodeGenerator はページごとに <c>CreditsRepository.GetByEpisodeAsync</c> を

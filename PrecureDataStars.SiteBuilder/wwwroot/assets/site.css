@@ -1366,6 +1366,19 @@ a.series-card-children-title:hover {
   gap: 8px;
   margin-bottom: 4px;
 }
+/* 配信音源の再生ボタン：カードの右上に固定する。見出しが折り返しても行を増やさないよう、
+   ボタンのあるカードだけ見出し行の右側をボタンの幅だけ空ける。 */
+.theme-songs-list .ts-card {
+  position: relative;
+}
+.theme-songs-list .ts-card:has(> .ts-headline > .ts-play) > .ts-headline {
+  padding-right: 2.6em;
+}
+.theme-songs-list .ts-play {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+}
 .theme-songs-list .ts-kind {
   display: inline-block;
   font-size: 0.82em;

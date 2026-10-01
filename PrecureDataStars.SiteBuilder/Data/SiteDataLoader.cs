@@ -276,11 +276,16 @@ public static class SiteDataLoader
             .ToDictionary(g => g.Key, g => g.OrderBy(l => l.PersonSeq).ThenBy(l => l.PersonId).First().PersonId);
 
         // 音盤の音楽クレジット（music_credits）。見出し・根拠の盤の表示用に商品と劇伴セッションも全件載せる。
+        var allProducts = await productsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        var allDiscs = await new DiscsRepository(factory).GetByProductReleaseOrderAsync(ct).ConfigureAwait(false);
         var musicCredits = new MusicCreditIndex(
             await musicCreditsRepo.GetAllAsync(ct).ConfigureAwait(false),
-            await productsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false),
+            allProducts,
             await bgmSessionsRepo.GetAllAsync(ct).ConfigureAwait(false),
-            await new DiscsRepository(factory).GetByProductReleaseOrderAsync(ct).ConfigureAwait(false));
+            allDiscs);
+        // 主題歌の再生ボタン用に、録音ごとに鳴らす配信音源を選んでおく。
+        var themeArtTracks = new ThemeArtTrackIndex(tracksByCatalogNo, allDiscs.ToList(), allProducts.ToList());
+        logger.Info($"theme art tracks: {themeArtTracks.ByRecording.Count} 録音分");
         logger.Info($"music_credits: {musicCredits.Count} 行");
         logger.Info($"family={familyRelationsByCharacter.Count} char / alias_persons={aliasIdsByPerson.Count} person");
 
@@ -327,7 +332,8 @@ public static class SiteDataLoader
             FamilyRelationsByCharacter = familyRelationsByCharacter,
             AliasIdsByPerson = aliasIdsByPerson,
             PersonIdByAlias = personIdByAlias,
-            MusicCredits = musicCredits
+            MusicCredits = musicCredits,
+            ThemeArtTracks = themeArtTracks
         };
     }
 }

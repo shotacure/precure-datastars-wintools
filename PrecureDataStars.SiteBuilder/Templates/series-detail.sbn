@@ -172,9 +172,13 @@
        入る区間があれば「（本放送では #35～38 を除く）」の附記付き）を持つ。
        主題歌が 1 件も無いシリーズではセクション自体を描画しない。 ##}}
   {{~ if (array.size ThemeSongs) > 0 ~}}
+  {{## 配信音源の再生ボタンは見出し行の右端に置く（録音ごとに 1 つ。歌入りで本編のサイズを優先し、カラオケしか無ければ出さない）。
+       リストは押した 1 件だけ鳴らす（同じ曲の本放送版・配信版が並ぶことがあるため、連続再生はしない）。 ##}}
+  {{~ has_theme_play = false ~}}
+  {{~ for t in ThemeSongs ~}}{{~ if t.ArtTrackId != "" ~}}{{~ has_theme_play = true ~}}{{~ end ~}}{{~ end ~}}
   <section id="theme-songs">
     <h2>主題歌・挿入歌</h2>
-    <ul class="theme-songs-list">
+    <ul class="theme-songs-list"{{~ if has_theme_play ~}} data-art-track-list data-art-track-mode="single"{{~ end ~}}>
       {{~ for t in ThemeSongs ~}}
       <li class="ts-card">
         <div class="ts-headline">
@@ -182,6 +186,7 @@
           <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>{{~ else ~}}{{ t.Title | html.escape }}{{~ end ~}}」</span>
           {{~ if t.EpisodeRangeLabel != "" ~}}<span class="ts-range muted">{{ t.EpisodeRangeLabel | html.escape }}</span>{{~ end ~}}
           {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
+          {{~ if t.ArtTrackId != "" ~}}<button type="button" class="art-track-play ts-play{{ if t.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ t.ArtTrackId | html.escape }}"{{ if t.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }}{{ if t.ArtTrackAltId != "" }} data-art-track-alt-id="{{ t.ArtTrackAltId | html.escape }}" data-art-track-alt-sub="{{ t.ArtTrackAltSourceAlbum | html.escape }}"{{ end }} data-art-track-title="{{ t.Title | html.escape }}" data-art-track-sub="{{ t.ArtTrackSourceAlbum | html.escape }}" aria-label="{{ t.Title | html.escape }} を再生{{ if t.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if t.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>{{~ end ~}}
         </div>
         {{## 録音の公式 YouTube 動画（URL 登録があるときだけ）。エピソード予告と同じ iframe 埋め込み。 ##}}
         {{~ if t.YoutubeId != "" ~}}
@@ -218,6 +223,9 @@
       {{~ end ~}}
     </ul>
   </section>
+  {{~ if has_theme_play ~}}
+  <script src="{{ asset_url "/assets/art-track-player.js" }}" defer></script>
+  {{~ end ~}}
   {{~ end ~}}
 
   {{## SERIES スコープのクレジット階層。EpisodeGenerator と同一の credit-section 構造で、

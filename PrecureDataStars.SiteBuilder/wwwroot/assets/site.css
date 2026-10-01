@@ -5,7 +5,7 @@
   --fg: #1a1a1a;
   --muted: #666666;
   --border: #d0d0d0;
-  --accent: #e91e63;
+  --accent: #d81b60;
   --hl: #fff7d6;
   --table-stripe: #f7f7f8;
   --container-w: 960px;
@@ -23,9 +23,10 @@
   /* アクセント書体・ドット/デジタル系。ビルド情報スタンプ・大きな尺数値など「ここぞ」の数箇所に効かせる。 */
   --font-accent-dot: "DotGothic16", "Courier New", monospace;
 
-  /* プリキュア風カラフルアクセント変数 メインカラー（pink）はそのまま --accent。 */
-  --accent-pink:   #e91e63;
-  --accent-blue:   #3b82c4;
+  /* プリキュア風カラフルアクセント変数 メインカラー（pink）はそのまま --accent。
+     pink と blue は白地の文字色として WCAG の 4.5:1 を満たす濃さ（pink 4.9:1、blue 5.2:1）。 */
+  --accent-pink:   #d81b60;
+  --accent-blue:   #3370aa;
   --accent-yellow: #d4a017;
   --accent-green:  #4ca36b;
   --accent-purple: #7e57c2;
@@ -6705,24 +6706,25 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   line-height: 1.6;
 }
 
+/* 役職バッジの文字色は、各色の淡い背景の上で 4.5:1 を満たすよう、背景・枠の色より濃くしている。 */
 /* プロデューサー・企画 = 紫（企画はプロデューサー枠のフォールバックなので同色） */
 .role-badge[data-role-code="PRODUCER"],
 .role-badge[data-role-code="PLANNING"] {
   background: rgba(126, 87, 194, 0.13);
-  color: var(--accent-purple);
+  color: #7a54bc;
   border-color: rgba(126, 87, 194, 0.42);
 }
 /* シリーズ構成・脚本 = 青 */
 .role-badge[data-role-code="SERIES_COMPOSITION"],
 .role-badge[data-role-code="SCREENPLAY"] {
   background: rgba(59, 130, 196, 0.13);
-  color: var(--accent-blue);
+  color: #316ca4;
   border-color: rgba(59, 130, 196, 0.42);
 }
 /* 絵コンテ = ティール（青系と暖系の中間） */
 .role-badge[data-role-code="STORYBOARD"] {
   background: rgba(46, 167, 173, 0.14);
-  color: var(--accent-teal);
+  color: #20767a;
   border-color: rgba(46, 167, 173, 0.45);
 }
 /* シリーズディレクター・演出・監督 = ピンク */
@@ -6730,14 +6732,14 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 .role-badge[data-role-code="EPISODE_DIRECTOR"],
 .role-badge[data-role-code="DIRECTOR"] {
   background: rgba(233, 30, 99, 0.13);
-  color: var(--accent-pink);
+  color: #c71958;
   border-color: rgba(233, 30, 99, 0.42);
 }
 /* キャラクターデザイン・作画監督 = 緑 */
 .role-badge[data-role-code="CHARACTER_DESIGN"],
 .role-badge[data-role-code="ANIMATION_DIRECTOR"] {
   background: rgba(76, 163, 107, 0.14);
-  color: var(--accent-green);
+  color: #38784f;
   border-color: rgba(76, 163, 107, 0.42);
 }
 /* 美術デザイン・美術（TV）・美術監督 = 黄 */
@@ -6745,7 +6747,7 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 .role-badge[data-role-code="ART_DIRECTOR"],
 .role-badge[data-role-code="ART_DIRECTOR_TV"] {
   background: rgba(212, 160, 23, 0.14);
-  color: var(--accent-yellow);
+  color: #8a680f;
   border-color: rgba(212, 160, 23, 0.42);
 }
 
@@ -7947,8 +7949,9 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: #666;
   padding: 4px 0;
 }
-.cal-dow.cal-sun { color: #d2557a; }
-.cal-dow.cal-sat { color: #4a78c4; }
+/* 日曜・土曜の文字色は、白地と曜日の淡い背景のどちらでも 4.5:1 を満たす濃さにしている。 */
+.cal-dow.cal-sun { color: #b84a6b; }
+.cal-dow.cal-sat { color: #4570b6; }
 .cal-cell {
   min-height: 92px;
   border: 1px solid #ececf1;
@@ -7972,8 +7975,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: #555;
   margin-bottom: 4px;
 }
-.cal-cell.cal-sun .cal-daynum { color: #d2557a; }
-.cal-cell.cal-sat .cal-daynum { color: #4a78c4; }
+.cal-cell.cal-sun .cal-daynum { color: #b84a6b; }
+.cal-cell.cal-sat .cal-daynum { color: #4570b6; }
 .cal-chips {
   display: flex;
   flex-direction: column;
@@ -8112,9 +8115,9 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-weight: 600;
 }
 .cal-day-row.cal-sun .cal-day-md,
-.cal-day-row.cal-sun .cal-day-dow { color: #d2557a; }
+.cal-day-row.cal-sun .cal-day-dow { color: #b84a6b; }
 .cal-day-row.cal-sat .cal-day-md,
-.cal-day-row.cal-sat .cal-day-dow { color: #4a78c4; }
+.cal-day-row.cal-sat .cal-day-dow { color: #4570b6; }
 .cal-day-today-mark {
   display: inline-block;
   padding: 1px 6px;

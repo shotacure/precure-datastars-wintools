@@ -43,7 +43,8 @@ public static class FormatTableBuilder
             var row = new FormatTableRow
             {
                 PartName = partTypeMap.TryGetValue(p.PartType, out var pt) ? pt.NameJa : p.PartType,
-                Notes = p.Notes ?? ""
+                // 入力の略語「OA時」などは、サイトでは「本放送時」と出す。
+                Notes = BroadcastNoteText.ForDisplay(p.Notes)
             };
 
             if (p.OaLength is ushort oa)

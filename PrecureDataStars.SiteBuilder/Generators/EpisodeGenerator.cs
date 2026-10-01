@@ -612,7 +612,7 @@ public sealed class EpisodeGenerator
                 YoutubeId = YoutubeUtil.ExtractId(ep.YoutubeTrailerUrl),
                 SpecialYoutubeTrailerUrl = ep.YoutubeSpecialTrailerUrl ?? "",
                 SpecialYoutubeId = YoutubeUtil.ExtractId(ep.YoutubeSpecialTrailerUrl),
-                Notes = ep.Notes ?? ""
+                Notes = BroadcastNoteText.ForDisplay(ep.Notes)
             },
             FormatTable = formatTable,
             TitleCharInfoHtml = titleCharInfoHtml,

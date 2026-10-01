@@ -172,6 +172,13 @@ public sealed class SiteBuilderPipeline
         new EpisodesIndexGenerator(ctx, pageRenderer, seriesGenerator.GetEpisodeStaffSummaries()).Generate();
         reporter.EndSection();
 
+        // クリエイター系ページ（ランディング + スタッフ + 役職詳細 + 声の出演 + 歌唱 + 音楽制作）。
+        // 各一覧に載せた人物・企業/団体を ctx.CreatorLists に記録し、続く人物・企業詳細のパンくずが
+        // 本人の載っている一覧を経由するのに使うので、人物・企業詳細より前に走らせる。
+        reporter.BeginSection("creators");
+        await new CreatorsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
+        reporter.EndSection();
+
         reporter.BeginSection("persons");
         await new PersonsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
@@ -213,12 +220,6 @@ public sealed class SiteBuilderPipeline
         // /songs/（楽曲）の生成後に走らせて、/music/ ランディングから両方へ誘導できるようにする。
         reporter.BeginSection("music");
         await new MusicGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
-        reporter.EndSection();
-
-        // クリエイター系ページ（ランディング + スタッフ + 役職詳細 + 声の出演）。
-        // CreditInvolvementIndex の集約結果に依存するため、人物・企業・プリキュア系より後ろで実行する。
-        reporter.BeginSection("creators");
-        await new CreatorsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
         // 日付別の記念日ページ（366 日）+ 索引。

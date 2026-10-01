@@ -343,13 +343,9 @@ public sealed class PersonsGenerator
         {
             PageTitle = displayName,
             MetaDescription = metaDescription,
-            Breadcrumbs = new[]
-            {
-                new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "歴代クリエイター", Url = PathUtil.CreatorsLandingUrl() },
-                new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = PathUtil.CreatorsStaffUrl() },
-                new BreadcrumbItem { Label = displayName, Url = "" }
-            },
+            // パンくずの中間の段は、本人が載っている一覧（スタッフ → 声の出演 → 歌唱 → 音楽制作 の順で最初のもの）。
+            // どの一覧にも載っていなければ中間の段を置かない。
+            Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForPerson(person.PersonId), displayName),
             OgType = "profile",
             JsonLd = jsonLd,
             OgCard = BuildOgCard(displayName, involvementGroups, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)

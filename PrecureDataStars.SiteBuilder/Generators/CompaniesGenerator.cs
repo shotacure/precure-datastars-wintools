@@ -207,13 +207,9 @@ public sealed class CompaniesGenerator
         {
             PageTitle = company.Name,
             MetaDescription = metaDescription,
-            Breadcrumbs = new[]
-            {
-                new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "歴代クリエイター", Url = PathUtil.CreatorsLandingUrl() },
-                new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = PathUtil.CreatorsStaffUrl() },
-                new BreadcrumbItem { Label = displayName, Url = "" }
-            },
+            // パンくずの中間の段は、この企業・団体が載っている一覧（スタッフ → 音楽制作 の順で最初のもの）。
+            // どの一覧にも載っていなければ中間の段を置かない。
+            Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForCompany(company.CompanyId), displayName),
             // 企業ページは website 寄り（プロフィール的でもあるが OGP profile は人物用なので使わない）。
             OgType = "website",
             JsonLd = jsonLd,

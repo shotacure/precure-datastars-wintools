@@ -100,6 +100,9 @@ public sealed class CreatorsGenerator
         _precuresRepo = new PrecuresRepository(factory);
     }
 
+    /// <summary>各一覧に載せた人物・企業/団体の記録。生成の最後に <see cref="BuildContext.CreatorLists"/> へ差し込む。</summary>
+    private readonly CreatorListMembership _lists = new();
+
     public async Task GenerateAsync(CancellationToken ct = default)
     {
         _ctx.Logger.Section("Generating creators");
@@ -293,6 +296,9 @@ public sealed class CreatorsGenerator
         // ── ランディング（/creators/） ──
         GenerateLanding(staffPersonCount, staffCompanyCount, voiceCastCount,
             musicProductionPersonCount, musicProductionCompanyCount, singerCount);
+
+        // 人物・企業詳細のパンくずが「本人が載っている一覧」を経由できるよう、各一覧に載せた顔ぶれを渡す。
+        _ctx.CreatorLists = _lists;
 
         _ctx.Logger.Success(
             $"creators: {rankableRoles.Count} 役職詳細 + スタッフ + 声の出演 + 音楽制作 + 歌唱 + ランディング");
@@ -918,6 +924,11 @@ public sealed class CreatorsGenerator
 
         var allEntities = new[] { songWritingAcc, songPerformanceAcc, bgmWritingAcc, bgmPerformanceAcc, productionAcc }
             .SelectMany(a => a.ByEntity.Keys).Distinct().ToList();
+        foreach (var k in allEntities)
+        {
+            if (k.Kind == 'P') _lists.MusicProductionPersons.Add(k.Id);
+            else if (k.Kind == 'C') _lists.MusicProductionCompanies.Add(k.Id);
+        }
         personCount = allEntities.Count(k => k.Kind == 'P');
         companyCount = allEntities.Count(k => k.Kind == 'C');
 
@@ -1483,6 +1494,9 @@ public sealed class CreatorsGenerator
                 DebutSongUrl = PathUtil.SongUrl(v.FirstSongId)
             });
         }
+        // 歌手の行に載せた人物（キャラクターの行の声優は声の出演一覧の側に載る）。
+        foreach (var pid in singerAcc.ByPerson.Keys.Where(personById.ContainsKey)) _lists.SingerPersons.Add(pid);
+
         // 人数は、歌手の行の人と、キャラクターの行の声優を合わせた人物の数。
         personCount = singerAcc.ByPerson.Keys.Where(personById.ContainsKey)
             .Concat(charAcc.Keys.Where(k => characterById.ContainsKey(k.CharId) && personById.ContainsKey(k.PersonId)).Select(k => k.PersonId))
@@ -1669,6 +1683,11 @@ public sealed class CreatorsGenerator
             aliasIdsByPersonId, allPersons, companyAliasesByCompany, logosByCompanyAlias,
             allCompanies, companyAliasById, repNameMap, withWorksTooltip: false);
         var rows = rowSet.CountRows;
+        foreach (var r in rows)
+        {
+            if (string.Equals(r.EntityKind, "person", StringComparison.Ordinal)) _lists.StaffPersons.Add(r.EntityId);
+            else _lists.StaffCompanies.Add(r.EntityId);
+        }
 
         staffPersonCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal));
         staffCompanyCount = rows.Count - staffPersonCount;
@@ -1794,6 +1813,7 @@ public sealed class CreatorsGenerator
             .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
             .ThenBy(r => r.PersonName, StringComparer.Ordinal)
             .ToList();
+        foreach (var r in countRows) _lists.VoiceCastPersons.Add(r.PersonId);
 
         var content = new VoiceCastModel
         {
@@ -2071,6 +2091,7 @@ public sealed class CreatorsGenerator
             var rep = byChar[0].First;
             countAggRows.Add(new VoiceCastRow
             {
+                PersonId = rep.PersonId,
                 PersonName = rep.PersonName,
                 PersonNameKana = rep.PersonNameKana,
                 PersonUrl = rep.PersonUrl,

@@ -266,6 +266,12 @@ public sealed class BuildContext
     public EntityUrlRegistry EntityUrls { get; set; } = EntityUrlRegistry.Empty;
 
     /// <summary>
+    /// クリエイターの各一覧（スタッフ・声の出演・歌唱・音楽制作）に載った人物・企業/団体の記録。
+    /// CreatorsGenerator が人物・企業詳細より前に作って差し込み、人物・企業詳細のパンくずが引く。
+    /// </summary>
+    public CreatorListMembership CreatorLists { get; set; } = CreatorListMembership.Empty;
+
+    /// <summary>
     /// サブタイトル解禁時刻の事前計算辞書（episode_id → 解禁時刻）。
     /// <see cref="Utilities.SubtitleEmbargoCalculator.Build"/> がビルド開始時に 1 度だけ構築する。
     /// 辞書に載るのはビルド時点（<see cref="BuildStartedAt"/>）でまだ解禁前の話だけ。辞書に無いエピソードは

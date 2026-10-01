@@ -189,9 +189,12 @@ public static class AnniversaryDataBuilder
         }
 
         // ── 人物誕生日（生年は公開設定が PUBLIC かつ判明時のみ持たせる）──
+        // カレンダーに出すのは、声の出演がある人物なら出演回数が一定以上、それ以外は OP か各話のチーフとして
+        // クレジットされたことがある人物だけ（BirthdayCalendarEligibility）。人物詳細の誕生日はこの絞り込みに関係なく出す。
         foreach (var pe in persons)
         {
             if (pe.BirthMonth is not byte pm || pe.BirthDay is not byte pd) continue;
+            if (!ctx.BirthdayCalendar.IsEligible(pe.PersonId)) continue;
             int? birthYear = (string.Equals(pe.BirthYearVisibility, "PUBLIC", StringComparison.Ordinal) && pe.BirthYear.HasValue)
                 ? pe.BirthYear.Value
                 : null;

@@ -109,6 +109,10 @@ public sealed class SiteBuilderPipeline
             ctx.CreditCoverageLabel = StatsCoverageLabel.Build(latestCreditEpisode);
         }
 
+        // 人物の誕生日を記念日カレンダーに出すかの判定。ホーム（声の出演一覧より先に作る）と記念日ページが
+        // 同じ判定を使うよう、関与索引の構築直後に 1 回だけ決める。
+        ctx.BirthdayCalendar = BirthdayCalendarEligibility.Build(ctx, involvementIndex);
+
         reporter.PageWritten();
         reporter.EndSection();
 

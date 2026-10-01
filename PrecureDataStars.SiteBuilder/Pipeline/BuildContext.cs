@@ -275,6 +275,13 @@ public sealed class BuildContext
     public CreatorListMembership CreatorLists { get; set; } = CreatorListMembership.Empty;
 
     /// <summary>
+    /// 人物の誕生日を記念日カレンダー（ホームのカレンダー・今日の記念日・記念日の日別ページ）に出すかの判定。
+    /// <see cref="CreditInvolvementIndex"/> 構築直後に Pipeline が 1 度だけ詰める（ホームは声の出演一覧より先に作るため）。
+    /// 未構築なら全員を出す。
+    /// </summary>
+    public BirthdayCalendarEligibility BirthdayCalendar { get; set; } = BirthdayCalendarEligibility.All;
+
+    /// <summary>
     /// サブタイトル解禁時刻の事前計算辞書（episode_id → 解禁時刻）。
     /// <see cref="Utilities.SubtitleEmbargoCalculator.Build"/> がビルド開始時に 1 度だけ構築する。
     /// 辞書に載るのはビルド時点（<see cref="BuildStartedAt"/>）でまだ解禁前の話だけ。辞書に無いエピソードは

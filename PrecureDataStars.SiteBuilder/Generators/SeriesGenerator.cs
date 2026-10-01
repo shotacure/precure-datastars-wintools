@@ -1382,18 +1382,13 @@ public sealed class SeriesGenerator
         var seenAd = new HashSet<string>(StringComparer.Ordinal);
         var seenAt = new HashSet<string>(StringComparer.Ordinal);
 
+        // 区分（1=脚本、2=絵コンテ、3=演出、4=作画監督、5=美術）の判定は、記念日カレンダーに誕生日を出す人物の
+        // 判定（BirthdayCalendarEligibility）と共通の EpisodeChiefRoles に置く。役職マスタに無いコードは対象外。
         int? ClassifyRole(CreditCardRole cr)
         {
             if (cr.RoleCode is null) return null;
             if (!_roleMap!.TryGetValue(cr.RoleCode, out var role)) return null;
-            string code = cr.RoleCode;
-            string nm = role.NameJa ?? "";
-            if (code == "SCREENPLAY"          || nm == "脚本")     return 1;
-            if (code == "STORYBOARD"          || nm == "絵コンテ") return 2;
-            if (code == "EPISODE_DIRECTOR"    || nm == "演出")     return 3;
-            if (code == "ANIMATION_DIRECTOR"  || nm == "作画監督") return 4;
-            if (code == "ART_DIRECTOR"        || nm == "美術")     return 5;
-            return null;
+            return EpisodeChiefRoles.Classify(cr.RoleCode, role.NameJa);
         }
 
         // クレジットと階層 6 段はすべて SiteDataLoader が事前展開済み（BuildContext.CreditsByEpisode /

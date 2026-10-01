@@ -60,6 +60,11 @@
   /** クエリ文字列を正規化する。SearchIndexGenerator.NormalizeForSearch と対応する処理。 */
   function normalizeQuery(s) {
     if (!s) return '';
+    // NFKC で全角英数・全角記号を半角に、半角カナを全角にそろえる（「ＣＵＲＥ」「ｷｭｱ」「！」でも当たるように）。
+    // 波ダッシュ「〜」と全角チルダ（NFKC で半角「~」になる）・半角「~」は同じ文字として「~」にそろえる。
+    // 索引側（SearchIndexGenerator.NormalizeForSearch）も同じ規則で正規化している。
+    if (s.normalize) s = s.normalize('NFKC');
+    s = s.replace(/[\u301C\uFF5E]/g, '~');
     var out = '';
     for (var i = 0; i < s.length; i++) {
       var ch = s.charCodeAt(i);
@@ -267,7 +272,8 @@
 
     var debounceTimer = null;
 
-    function doSearch() {
+    /** 検索して結果を描く。afterRender は結果を描いた後に呼ぶ（索引の読み込みを待つため非同期）。 */
+    function doSearch(afterRender) {
       var q = input.value;
       if (q.trim().length === 0) {
         results.innerHTML = '';
@@ -277,6 +283,7 @@
       loadIndex(function () {
         var hits = performSearch(q);
         renderResults(results, hits, q);
+        if (afterRender) afterRender();
       });
     }
 
@@ -309,10 +316,13 @@
       if (input.value.trim().length > 0) doSearch();
     });
 
-    // 結果ボックス外クリックで閉じる。
+    // 結果ボックス外クリックで閉じる。スマホ用メニューの開閉ボタンは除く
+    // （検索欄はメニューの中にあるので、メニューを開いた時点で結果が閉じると見えなくなる）。
+    var mobileNavToggle = document.getElementById('mobileNavToggle');
     document.addEventListener('click', function (e) {
       if (e.target === input) return;
       if (results.contains(e.target)) return;
+      if (mobileNavToggle && mobileNavToggle.contains(e.target)) return;
       results.classList.remove('open');
     });
 
@@ -341,9 +351,22 @@
     var initialQuery = new URLSearchParams(window.location.search).get('q');
     if (initialQuery && initialQuery.trim().length > 0) {
       input.value = initialQuery;
-      doSearch();
-      // 検索ボックスが見えている場合のみフォーカスする（モバイルの閉じたオーバーレイ内では何もしない）。
-      if (input.offsetParent !== null) input.focus();
+      // 検索ボックスが見えている（デスクトップ幅）ならフォーカスする。スマホ幅では検索ボックスが閉じたメニューの
+      // いちばん下にあるので、メニューを開き、結果を描いた後で検索ボックスがメニューの上端に来るまでスクロールする
+      // （結果を描く前はメニューの中身が短く、スクロールの余地が無い）。画面のキーボードで結果が隠れないよう、
+      // スマホ幅ではフォーカスは移さない。
+      if (input.offsetParent !== null) {
+        doSearch();
+        input.focus();
+      } else if (window.PCDS && window.PCDS.mobileNav) {
+        window.PCDS.mobileNav.open();
+        doSearch(function () {
+          var box = input.closest('.site-search') || input;
+          if (box.scrollIntoView) box.scrollIntoView({ block: 'start' });
+        });
+      } else {
+        doSearch();
+      }
     }
   });
 })();

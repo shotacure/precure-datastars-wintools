@@ -314,10 +314,13 @@ public sealed class SearchIndexGenerator
         _ctx.Logger.Success($"search-index.json: {items.Count} 件");
     }
 
-    /// <summary>検索インデックスの「読み」フィールド用に文字列を正規化する。 全角カタカナ → ひらがな、英数字 → 小文字、空白除去。JS 側でクエリも同じ正規化を行うことで マッチ判定がシンプルになる。</summary>
+    /// <summary>検索インデックスの「読み」フィールド用に文字列を正規化する。 NFKC 正規化（全角英数・半角カナをそろえる）と波ダッシュの統一のあと、全角カタカナ → ひらがな、英数字 → 小文字、空白除去。JS 側でクエリも同じ正規化を行うことで マッチ判定がシンプルになる。</summary>
     private static string NormalizeForSearch(string s)
     {
         if (string.IsNullOrEmpty(s)) return "";
+        // NFKC で全角英数・全角記号を半角に、半角カナを全角にそろえ、波ダッシュ「〜」・全角チルダ・半角「~」を
+        // 「~」に統一する。ブラウザ側（search.js の normalizeQuery）も同じ規則で検索語を正規化する。
+        s = s.Normalize(System.Text.NormalizationForm.FormKC).Replace('\u301C', '~').Replace('\uFF5E', '~');
         var chars = new char[s.Length];
         int idx = 0;
         foreach (char ch in s)

@@ -968,8 +968,9 @@ public sealed class PersonsGenerator
         => inv.IsMainCredit;
 
     /// <summary>
-    /// 「音楽クレジット」セクションを、関わった先（歌 → 劇伴 → 音盤）の大見出しと、区分（作詞・作曲・編曲 → 演奏・コーラス等 →
-    /// レコーディング → 音盤製作）の小見出しに分けて組み立てる。
+    /// 「音楽クレジット」セクションを、区分（作詞・作曲・編曲 → 歌唱 → コーラスのみ → 演奏等 → レコーディング → 音盤製作）の見出しと、
+    /// その中の関わった先（歌 → 劇伴 → 音盤）の枠に分けて組み立てる。本編クレジットの「役職 → シリーズの枠」と同じ見た目にし、
+    /// 区分の見出しには件数の札（🎵 曲 / 🎼 劇伴 / 💿 盤）を、枠は既定で閉じて件数を添える。
     /// <list type="bullet">
     ///   <item><description>曲のカード（song_credits / song_recording_singers）は、担当した役職の区分ごとに振り分ける
     ///     （作詞と歌の両方を担当した曲は、それぞれの区分に役職を分けて出る）。</description></item>
@@ -986,7 +987,7 @@ public sealed class PersonsGenerator
             .SelectMany(id => _ctx.MusicCredits.ByPersonAlias[id])
             .ToList();
 
-        // 大見出しは関わった先（歌 / 劇伴 / 音盤）、その中の小見出しは区分（作詞・作曲・編曲 / 演奏・コーラス等 / レコーディング / 音盤製作）。
+        // 見出しは区分（作詞・作曲・編曲 / 歌唱 / コーラスのみ / 演奏等 / レコーディング / 音盤製作）、その中の枠は関わった先（歌 / 劇伴 / 音盤）。
         //   歌   … 曲のカードと、曲・録音に付いた音楽クレジット
         //   劇伴 … 劇伴の作曲・編曲と、劇伴セッションに付いた音楽クレジット
         //   音盤 … 商品（盤）に付いた音楽クレジット
@@ -995,11 +996,9 @@ public sealed class PersonsGenerator
         var productRows = musicRows.Where(r => r.TargetKind == MusicCreditTargetKinds.Product).ToList();
         var bgmCueItems = BuildBgmCueCreditItems(aliasIds);
 
-        var songSubs = new List<PersonMusicSubsection>();
-        var bgmSubs = new List<PersonMusicSubsection>();
-        var discSubs = new List<PersonMusicSubsection>();
+        var sections = new List<PersonMusicSection>();
 
-        // 小見出し：作詞・作曲・編曲 / 歌唱 / コーラスのみ / 演奏等 / レコーディング / 音盤製作。
+        // 区分：作詞・作曲・編曲 / 歌唱 / コーラスのみ / 演奏等 / レコーディング / 音盤製作。
         //   歌唱       … 曲のカードのうち、歌・台詞で参加した曲（同じ曲でコーラスもしていればバッジに並べる）
         //   コーラスのみ … 曲のカードのうち、歌唱者行のコーラスだけで参加した曲
         //   演奏等     … 音盤の音楽クレジットの演奏・コーラス等（ミュージシャン欄のコーラスもここ）
@@ -1040,26 +1039,38 @@ public sealed class PersonsGenerator
                 })
                 .ToList();
             var songItems = BuildMusicCreditItems(songRows.Where(r => InGroup(r.RoleCode)), displayName);
-            if (cards.Count > 0 || songItems.Count > 0)
-                songSubs.Add(new PersonMusicSubsection { Label = label, SongCards = cards, Items = songItems });
 
             var bgmItems = BuildMusicCreditItems(sessionRows.Where(r => InGroup(r.RoleCode)), displayName);
             bool isWriting = rowGroup == MusicCreditGroups.Writing;
             var groupBgm = isWriting ? bgmGroups : Array.Empty<InvolvementGroup>();
             if (isWriting)
                 bgmItems = bgmCueItems.Concat(bgmItems).ToList();
-            if (bgmItems.Count > 0 || groupBgm.Count > 0)
-                bgmSubs.Add(new PersonMusicSubsection { Label = label, BgmGroups = groupBgm, Items = bgmItems });
 
             var discItems = BuildMusicCreditItems(productRows.Where(r => InGroup(r.RoleCode)), displayName);
-            if (discItems.Count > 0)
-                discSubs.Add(new PersonMusicSubsection { Label = label, Items = discItems });
-        }
 
-        var sections = new List<PersonMusicSection>();
-        if (songSubs.Count > 0) sections.Add(new PersonMusicSection { Label = "歌", Subsections = songSubs });
-        if (bgmSubs.Count > 0) sections.Add(new PersonMusicSection { Label = "劇伴", Subsections = bgmSubs });
-        if (discSubs.Count > 0) sections.Add(new PersonMusicSection { Label = "音盤", Subsections = discSubs });
+            var songKeys = cards.Select(c => MusicCreditCounting.Key(MusicCreditCounting.Song, c.SongUrl, ""))
+                .Concat(songItems.Select(it => MusicCreditCounting.Key(MusicCreditCounting.Song, it.Url, it.SubLabel)))
+                .ToHashSet(StringComparer.Ordinal);
+            var bgmKeys = bgmItems.Select(it => MusicCreditCounting.Key(MusicCreditCounting.Bgm, it.Url, it.SubLabel)).ToHashSet(StringComparer.Ordinal);
+            var discKeys = discItems.Select(it => MusicCreditCounting.Key(MusicCreditCounting.Disc, it.Url, it.SubLabel)).ToHashSet(StringComparer.Ordinal);
+
+            var kinds = new List<PersonMusicKind>();
+            if (cards.Count > 0 || songItems.Count > 0)
+                kinds.Add(new PersonMusicKind { Label = MusicCreditCounting.Song, CountLabel = MusicCreditCounting.CountLabel(MusicCreditCounting.Song, songKeys.Count), SongCards = cards, Items = songItems });
+            if (bgmItems.Count > 0 || groupBgm.Count > 0)
+                kinds.Add(new PersonMusicKind { Label = MusicCreditCounting.Bgm, CountLabel = MusicCreditCounting.CountLabel(MusicCreditCounting.Bgm, bgmKeys.Count), BgmGroups = groupBgm, Items = bgmItems });
+            if (discItems.Count > 0)
+                kinds.Add(new PersonMusicKind { Label = MusicCreditCounting.Disc, CountLabel = MusicCreditCounting.CountLabel(MusicCreditCounting.Disc, discKeys.Count), Items = discItems });
+            if (kinds.Count > 0)
+                sections.Add(new PersonMusicSection
+                {
+                    Label = label,
+                    Kinds = kinds,
+                    SongKeys = songKeys,
+                    BgmKeys = bgmKeys,
+                    DiscKeys = discKeys
+                });
+        }
         return sections;
     }
 
@@ -1205,6 +1216,10 @@ public sealed class PersonsGenerator
         public int CreditMovieCountTotal { get; set; }
         /// <summary>音楽クレジット（区分ごと。何も無い区分は含まない）。</summary>
         public IReadOnlyList<PersonMusicSection> MusicSections { get; set; } = Array.Empty<PersonMusicSection>();
+        /// <summary>音楽クレジットの見出しの札（全区分を通して重複を除いた曲数・劇伴の件数・盤数）。</summary>
+        public int MusicSongTotal => MusicSections.SelectMany(s => s.SongKeys).Distinct(StringComparer.Ordinal).Count();
+        public int MusicBgmTotal => MusicSections.SelectMany(s => s.BgmKeys).Distinct(StringComparer.Ordinal).Count();
+        public int MusicDiscTotal => MusicSections.SelectMany(s => s.DiscKeys).Distinct(StringComparer.Ordinal).Count();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
@@ -1231,15 +1246,25 @@ public sealed class PersonsGenerator
     /// <summary>音楽クレジットの大見出し 1 つ分（関わった先：歌 / 劇伴 / 音盤）。</summary>
     private sealed class PersonMusicSection
     {
+        /// <summary>区分の名前（作詞・作曲・編曲 / 歌唱 / コーラスのみ / 演奏等 / レコーディング / 音盤製作）。</summary>
         public string Label { get; set; } = "";
-        /// <summary>中の小見出し（区分：作詞・作曲・編曲 / 演奏・コーラス等 / レコーディング / 音盤製作。何も無いものは含まない）。</summary>
-        public IReadOnlyList<PersonMusicSubsection> Subsections { get; set; } = Array.Empty<PersonMusicSubsection>();
+        /// <summary>関わった先（歌 / 劇伴 / 音盤）の枠。何も無いものは含まない。</summary>
+        public IReadOnlyList<PersonMusicKind> Kinds { get; set; } = Array.Empty<PersonMusicKind>();
+        /// <summary>件数の札（🎵 曲 / 🎼 劇伴 / 💿 盤）。見出しの合計でも重複を除くため、数えたキーを持つ。</summary>
+        public IReadOnlySet<string> SongKeys { get; set; } = new HashSet<string>();
+        public IReadOnlySet<string> BgmKeys { get; set; } = new HashSet<string>();
+        public IReadOnlySet<string> DiscKeys { get; set; } = new HashSet<string>();
+        public int SongCount => SongKeys.Count;
+        public int BgmCount => BgmKeys.Count;
+        public int DiscCount => DiscKeys.Count;
     }
 
-    /// <summary>音楽クレジットの大見出しの中の小見出し 1 つ分（区分）。</summary>
-    private sealed class PersonMusicSubsection
+    /// <summary>区分の中の枠 1 つ分（歌 / 劇伴 / 音盤）。既定で閉じた開閉枠に入れる。</summary>
+    private sealed class PersonMusicKind
     {
         public string Label { get; set; } = "";
+        /// <summary>開閉ボタンに出す件数（「10曲」「7件」「8枚」）。</summary>
+        public string CountLabel { get; set; } = "";
         /// <summary>担当した曲のカード（この区分の役職だけをバッジに持つ）。「歌」だけで使う。</summary>
         public IReadOnlyList<PersonSongCard> SongCards { get; set; } = Array.Empty<PersonSongCard>();
         /// <summary>劇伴の作曲・編曲（役職別グループ → シリーズ行）。作詞・作曲・編曲の区分だけで使う。</summary>

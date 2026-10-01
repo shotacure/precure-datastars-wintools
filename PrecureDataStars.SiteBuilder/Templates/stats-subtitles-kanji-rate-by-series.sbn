@@ -5,26 +5,29 @@
 </section>
 
 <section>
-  <table class="stats-series-ranking-table">
-    <thead>
-      <tr>
-        <th class="col-rank">順位</th>
-        <th class="col-series">シリーズ</th>
-        <th class="col-year">年度</th>
-        <th class="col-value">漢字率</th>
-        <th class="col-value">漢字 / 総文字数</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{~ for r in Rows ~}}
-      <tr>
-        <td class="col-rank">{{ r.Rank }}</td>
-        <td class="col-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a></td>
-        <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
-        <td class="col-value">{{ r.RatioPercent | math.format "0.0" }}%</td>
-        <td class="col-value muted">{{ r.KanjiCount }} / {{ r.TotalCount }}</td>
-      </tr>
-      {{~ end ~}}
-    </tbody>
-  </table>
+  {{## スマホの幅でも表だけを横スクロールさせ、ページ全体を横にはみ出させない。 ##}}
+  <div class="stats-table-scroll">
+    <table class="stats-series-ranking-table">
+      <thead>
+        <tr>
+          <th class="col-rank">順位</th>
+          <th class="col-series">シリーズ</th>
+          <th class="col-year">年度</th>
+          <th class="col-value">漢字率</th>
+          <th class="col-value">漢字 / 総文字数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in Rows ~}}
+        <tr>
+          <td class="col-rank">{{ r.Rank }}</td>
+          <td class="col-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a></td>
+          <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
+          <td class="col-value">{{ r.RatioPercent | math.format "0.0" }}%</td>
+          <td class="col-value muted">{{ r.KanjiCount }} / {{ r.TotalCount }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </div>
 </section>

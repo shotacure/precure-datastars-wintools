@@ -5,26 +5,29 @@
 </section>
 
 <section>
-  <table class="stats-series-ranking-table">
-    <thead>
-      <tr>
-        <th class="col-rank">順位</th>
-        <th class="col-series">シリーズ</th>
-        <th class="col-year">年度</th>
-        <th class="col-value">平均文字数</th>
-        <th class="col-epcount">話数</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{~ for r in Rows ~}}
-      <tr>
-        <td class="col-rank">{{ r.Rank }}</td>
-        <td class="col-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a></td>
-        <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
-        <td class="col-value">{{ r.AverageLabel }}</td>
-        <td class="col-epcount muted">{{ r.EpisodeCount }} 話</td>
-      </tr>
-      {{~ end ~}}
-    </tbody>
-  </table>
+  {{## スマホの幅でも表だけを横スクロールさせ、ページ全体を横にはみ出させない。 ##}}
+  <div class="stats-table-scroll">
+    <table class="stats-series-ranking-table">
+      <thead>
+        <tr>
+          <th class="col-rank">順位</th>
+          <th class="col-series">シリーズ</th>
+          <th class="col-year">年度</th>
+          <th class="col-value">平均文字数</th>
+          <th class="col-epcount">話数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in Rows ~}}
+        <tr>
+          <td class="col-rank">{{ r.Rank }}</td>
+          <td class="col-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a></td>
+          <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
+          <td class="col-value">{{ r.AverageLabel }}</td>
+          <td class="col-epcount muted">{{ r.EpisodeCount }} 話</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </div>
 </section>

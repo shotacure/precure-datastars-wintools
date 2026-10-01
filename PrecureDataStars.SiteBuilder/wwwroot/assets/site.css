@@ -3554,6 +3554,11 @@ body.subtitle-embargo-dialog-open {
 .stats-symbols-scroll {
   overflow-x: auto;
 }
+/* 統計のシリーズ別の表（ランキング・文字種別・パート尺など）。列が多くスマホの幅に収まらないので、
+   表だけを横スクロールさせ、ページ全体を横にはみ出させない。 */
+.stats-table-scroll {
+  overflow-x: auto;
+}
 .stats-by-series-symbols-table {
   border-collapse: collapse;
   margin: 8px 0 16px;
@@ -6080,6 +6085,100 @@ a.credit-card-series:focus-visible {
   padding-right: 16px;
   white-space: nowrap;
 }
+/* ──────────────────── クレジットの表：スマホの幅 ────────────────────
+   クレジットの表（役職名 | 中身）は、パソコンの幅では役職名の列を credit-align.js がページ内でそろえた幅
+   （--credit-role-name-w。最も長い役職名に合わせる）で並べる。スマホの幅ではその幅と各列の最低幅の合計が画面を
+   超え、名前の列が 1 文字幅まで押しつぶされたり、ページが横にはみ出したりしていた。
+   スマホの幅では各行を「役職名の列 + 中身の列」の grid に組み替える。
+     - 役職名の列は固定の幅（8.5em）にし、長い役職名はその中で折り返す。空の役職名のセルも同じ幅を取るので、
+       同じページの表どうしで列の位置がそろう（credit-align.js のそろえ幅は、組み替えた後の列の幅を測ってしまい
+       狭くなるので、スマホの幅では使わない）。
+     - 中身のセル（所属を前に置く行の屋号と名前、2 列・3 列の枠の各列）は中身の列に縦に積む
+       （屋号の下に名前、多段組みは 1 列）。
+     - 声の出演の表は「役職名 | キャラ名 | 声優名」の 3 列で、キャラ名の列も固定の幅（8em）にする。
+       名前はなるべく語の途中で折り返さず、収まらないときだけ折り返す。 */
+@media (max-width: 768px) {
+  .credit-section {
+    --credit-role-col-m: 8.5em;
+    --credit-char-col-m: 8em;
+  }
+  .credit-section table.fallback-table,
+  .credit-section table.fallback-table > tbody,
+  .credit-section table.fallback-vc-table,
+  .credit-section table.fallback-vc-table > tbody {
+    display: block;
+    max-width: none;
+  }
+  .credit-section table.fallback-table tr {
+    display: grid;
+    grid-template-columns: var(--credit-role-col-m) minmax(0, 1fr);
+    column-gap: 10px;
+  }
+  .credit-section table.fallback-vc-table tr {
+    display: grid;
+    grid-template-columns: var(--credit-role-col-m) var(--credit-char-col-m) minmax(0, 1fr);
+    column-gap: 10px;
+  }
+  /* パソコンの幅の、セルの種類ごとの最低幅・右余白（td.role-name など、こちらより優先度が高い）も打ち消す。 */
+  .credit-section table.fallback-table td,
+  .credit-section table.fallback-vc-table td,
+  .credit-section table.fallback-table td.role-name,
+  .credit-section table.fallback-table td.entry-cell,
+  .credit-section table.fallback-table td.affil-prefix,
+  .credit-section table.fallback-vc-table td.role-name,
+  .credit-section table.fallback-vc-table td.character-cell,
+  .credit-section table.fallback-vc-table td.actor-cell,
+  .credit-section table.fallback-vc-table tr.cooperation-row > td.role-name,
+  .credit-section table.fallback-vc-table tr.cooperation-row > td.character-cell {
+    display: block;
+    min-width: 0;
+    width: auto;
+    padding: 0;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  .credit-section table.fallback-table td.role-name,
+  .credit-section table.fallback-vc-table td.role-name {
+    grid-column: 1;
+    white-space: normal;
+  }
+  .credit-section table.fallback-table td:not(.role-name) {
+    grid-column: 2;
+  }
+  .credit-section table.fallback-table td.affil-prefix {
+    white-space: normal;
+  }
+  .credit-section table.fallback-vc-table td.character-cell {
+    grid-column: 2;
+    white-space: normal;
+  }
+  .credit-section table.fallback-vc-table td.actor-cell {
+    grid-column: 3;
+  }
+  /* 協力の行（「キャスティング協力 | 屋号」）は役職に近いので、スマホの幅では見出しを役職名の列に置き、
+     屋号はキャラ名と声優名の 2 列分の幅を使う（声優名の列だけでは屋号が途中で折り返す）。 */
+  .credit-section table.fallback-vc-table tr.cooperation-row > td.role-name {
+    display: none;
+  }
+  .credit-section table.fallback-vc-table tr.cooperation-row > td.character-cell {
+    grid-column: 1;
+    white-space: normal;
+  }
+  .credit-section table.fallback-vc-table tr.cooperation-row > td.actor-cell {
+    grid-column: 2 / span 2;
+  }
+  /* 行間の区切り（ブロックの切れ目・協力の行）は td の上余白で付けているので、grid にしても残す。 */
+  .credit-section table.fallback-table tr.block-break > td,
+  .credit-section table.fallback-vc-table tr.block-break > td,
+  .credit-section table.fallback-vc-table tr.cooperation-row > td {
+    padding-top: 6px;
+  }
+  /* テンプレ展開結果のブロックも、上限を付けた役職名の列の右から始める。 */
+  .credit-section .role-rendered {
+    margin-left: calc(var(--credit-role-col-m) + 10px);
+  }
+}
+
 /* ════════════════════════════════════════════════════════════════ セクション内ナビ — 左サイド縦タイムライン型 - HTML 骨格は _layout.sbn が出力する <nav id="pageSectionNav"> プレースホルダのみで、 中身は */
 
 /* ナビ本体は左サイドに固定。 */

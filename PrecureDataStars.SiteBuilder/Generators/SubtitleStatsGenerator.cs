@@ -39,7 +39,7 @@ public sealed class SubtitleStatsGenerator
         // カバレッジラベルを先に算出。BuildContext のシリーズ・エピソードを走査して
         // サブタイトル本文が登録済みの最新 TV エピソードを 1 件特定する。
         var latest = StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx);
-        _coverageLabel = StatsCoverageLabel.Build(latest);
+        _coverageLabel = StatsCoverageLabel.BuildSubtitle(latest, _ctx.BuildStartedAt);
 
         // ── 索引 ──
         GenerateIndex();
@@ -82,7 +82,7 @@ public sealed class SubtitleStatsGenerator
             PageTitle = "歴代サブタイトル統計",
             OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代サブタイトル統計")
             {
-                MetaLeft = StatsCoverageLabel.Build(StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx)),
+                MetaLeft = _coverageLabel,
                 Badges = new[] { new OgCardBadge("対象", $"{StatsCoverageLabel.CountTvEpisodesWithSubtitle(_ctx)}話") }
             },
             MetaDescription = "プリキュア全シリーズのサブタイトルを大解剖。文字数・漢字率・記号率・よく使われる文字まで、タイトルに隠れた傾向を数字で楽しめます。",

@@ -222,12 +222,14 @@ public sealed class EpisodeGenerator
     /// 比較対象になる）。そのためパート尺統計と同じ「最新放送済話」ではなく、サブタイトル統計
     /// ページのカバレッジラベルと同じ <see cref="StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle"/>
     /// （サブタイトル登録済みの最新 TV 話。未放送回も対象）を参照点にする。
-    /// 表記はパート尺統計側と同一書式で、未放送回が参照点のときは未来日付になり得る
-    /// （例:「2026年6月28日現在 『名探偵プリキュア！』第22話時点」）。
+    /// 参照点が放送済みならパート尺統計側と同一書式（「2026年6月28日現在 『名探偵プリキュア！』第22話時点」）、
+    /// まだ放送前なら「『名探偵プリキュア！』第36話（2026年10月4日放送予定）までのサブタイトルで集計」とし、
+    /// 未来の日付を「現在」と書かない（<see cref="StatsCoverageLabel.BuildSubtitle"/>）。
     /// </summary>
     private string BuildSubtitleCoverageCaption()
     {
-        return BuildLatestAiredCaption(StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx));
+        return StatsCoverageLabel.BuildSubtitle(
+            StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx), _ctx.BuildStartedAt, withSuffix: false);
     }
 
     /// <summary>偏差値ゲージ背景のヒストグラムのビン数。ビン幅は (75-25)/25 = 偏差値 2.0 刻み。</summary>

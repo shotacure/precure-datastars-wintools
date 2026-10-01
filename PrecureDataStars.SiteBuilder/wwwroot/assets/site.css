@@ -2177,6 +2177,59 @@ a.series-card-children-title:hover {
   background-color: var(--hl, #fff7d6);
   animation: track-target-flash 2.4s ease-out;
 }
+/* 同じトラックに続く枝番（編集でつないだ 2 つ目以降の劇伴、メドレーの後ろの隠しトラックなど）。
+   トラックの枠の grid の全幅を使い、頭の「＋」で続きであることを示す。劇伴・歌の詳細から飛んできたときは同じ色で光らせる。 */
+.products-tracks-card .track-sub-part {
+  grid-column: 1 / -1;
+  scroll-margin-top: 110px;
+  border-radius: 4px;
+}
+/* 「＋」と曲名を横に並べたまま、曲名（と札）の側だけを折り返す。 */
+.products-tracks-card .track-sub-titleline {
+  display: flex;
+  align-items: baseline;
+  margin-top: 6px;
+  font-weight: 600;
+}
+.products-tracks-card .track-sub-title-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.products-tracks-card .track-sub-plus {
+  color: var(--muted);
+  font-weight: 700;
+  margin-right: 6px;
+}
+/* 枝番の歌の曲名は、親の曲名（枠全体のリンク）より手前に出して、それ単体で押せるようにする。 */
+.products-tracks-card .track-sub-title-link {
+  position: relative;
+  z-index: 2;
+  color: inherit;
+  text-decoration: none;
+}
+.products-tracks-card .track-sub-title-link:hover,
+.products-tracks-card .track-sub-title-link:focus-visible {
+  text-decoration: underline;
+}
+/* 劇伴を編集でつないだトラックの札（「2曲の編集」）。サイズの札と同じ大きさで、色は灰色。 */
+.products-tracks-card .track-edit-badge {
+  display: inline-block;
+  font-size: 0.72em;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--table-stripe);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.products-tracks-card .track-sub-part:target {
+  background-color: var(--hl, #fff7d6);
+  animation: track-target-flash 2.4s ease-out;
+}
 @keyframes track-target-flash {
   0%   { background-color: var(--hl, #fff7d6); }
   100% { background-color: transparent; }
@@ -8769,9 +8822,11 @@ button.art-track-play.is-playing::before {
   position: relative;
   z-index: 2;
 }
-/* 再生ボタンを持つカードでは、メタ行の全幅 span をやめて 1 列目に留める。
-   ボタンが 2 行目・右列に入るため、そのままでは重なってしまう。 */
-.products-tracks-card-grid.has-art-track > .track-meta-line {
+/* 再生ボタンを持つカードでは、メタ行と枝番の部分（.track-sub-part）の全幅 span をやめて 1 列目に留める。
+   ボタンが 2 行目・右列に入るため、そのままでは重なってしまう。親にメタ行が無いトラック（メドレーなど）でも、
+   枝番の部分がボタンの左の空いた 2 行目に入り、ボタンだけの行が空かない。 */
+.products-tracks-card-grid.has-art-track > .track-meta-line,
+.products-tracks-card-grid.has-art-track > .track-sub-part {
   grid-column: 1;
 }
 

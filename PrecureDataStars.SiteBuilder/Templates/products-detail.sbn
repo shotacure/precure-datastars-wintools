@@ -147,6 +147,9 @@
               {{~ if t.KindBadgesHtml != "" ~}}
               <span class="track-title-badges">{{ t.KindBadgesHtml }}</span>
               {{~ end ~}}
+              {{~ if t.EditLabel != "" ~}}
+              <span class="track-title-badges"><span class="track-edit-badge">{{ t.EditLabel | html.escape }}</span></span>
+              {{~ end ~}}
             </div>
             {{## 1 行目 右セル：尺。tabular-nums で桁揃え、小数点以下は .micro-fraction で
                  添字風小フォント表示（音楽商品詳細の従来表記を維持）。 ##}}
@@ -171,6 +174,19 @@
             {{~ end ~}}
             {{~ if t.MetaLineHtml != "" ~}}
             <div class="track-meta-line">{{ t.MetaLineHtml }}</div>
+            {{~ end ~}}
+            {{## 同じトラックに続く枝番（編集でつないだ 2 つ目以降の劇伴、メドレーの後ろの隠しトラックなど）。別の枠にせず、
+                 頭に「＋」を付けて枠の中に続ける。劇伴は「M 番号 [メニュー] 作曲・編曲」の行だけ、歌は曲名の行とクレジットの行。
+                 劇伴・歌の詳細からのリンクがここに着地するよう、枝番つきの id を付ける。 ##}}
+            {{~ for sp in t.SubParts ~}}
+            <div class="track-sub-part" id="track-{{ d.CatalogNo }}-{{ t.TrackNo }}-{{ sp.SubOrder }}">
+              {{~ if sp.TitleHtml != "" ~}}
+              <div class="track-sub-titleline"><span class="track-sub-plus" aria-hidden="true">＋</span><span class="track-sub-title-body">{{ sp.TitleHtml }}{{~ if sp.KindBadgesHtml != "" ~}}<span class="track-title-badges">{{ sp.KindBadgesHtml }}</span>{{~ end ~}}</span></div>
+              {{~ end ~}}
+              {{~ if sp.MetaLineHtml != "" ~}}
+              <div class="track-meta-line">{{~ if sp.TitleHtml == "" ~}}<span class="track-sub-plus" aria-hidden="true">＋</span>{{~ end ~}}{{ sp.MetaLineHtml }}</div>
+              {{~ end ~}}
+            </div>
             {{~ end ~}}
             {{~ if t.BgmAssignmentMetaLineHtml != "" ~}}
             <div class="track-meta-line track-meta-line-bgm-assignment">{{ t.BgmAssignmentMetaLineHtml }}</div>

@@ -790,8 +790,8 @@ public sealed class CreditBulkApplyService
             }
             else
             {
-                // 新規 Tier 追加。最大 2 までしか作らない（仕様）。3 つ目以降は無視。
-                if (targetCard.Tiers.Count >= 2) break;
+                // 新規 Tier 追加。CreditCardTier.MaxTierNo までしか作らない（仕様）。それを超える分は無視。
+                if (targetCard.Tiers.Count >= PrecureDataStars.Data.Models.CreditCardTier.MaxTierNo) break;
                 targetTier = AppendNewTier(session, targetCard);
             }
 
@@ -2186,8 +2186,8 @@ public sealed class CreditBulkApplyService
             }
             if (oldTier is null || draftTier is null)
             {
-                // Tier は最大 2 個（仕様）。3 つ目以降は無視（ApplyCardAsync と同じ挙動）。
-                if (draftCard.Tiers.Count >= 2) break;
+                // Tier は最大 CreditCardTier.MaxTierNo 個（仕様）。それを超える分は無視（ApplyCardAsync と同じ挙動）。
+                if (draftCard.Tiers.Count >= PrecureDataStars.Data.Models.CreditCardTier.MaxTierNo) break;
                 var addedTier = AppendNewTier(session, draftCard);
                 await ApplyTierAsync(newTier, session, addedTier, updatedBy, ct);
                 draftTier = addedTier;

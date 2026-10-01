@@ -9,7 +9,7 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///   <item><description><c>XXX:</c> または <c>XXX：</c>（行末コロン）→ 役職開始</description></item>
 ///   <item><description><c>-</c>（半角ハイフン1個・前後トリム後の単独行）→ ブロック区切り</description></item>
 ///   <item><description><c>--</c> → グループ区切り</description></item>
-///   <item><description><c>---</c> → ティア区切り（最大 tier_no=2）</description></item>
+///   <item><description><c>---</c> → ティア区切り（最大 tier_no=<see cref="PrecureDataStars.Data.Models.CreditCardTier.MaxTierNo"/>）</description></item>
 ///   <item><description><c>----</c> → カード区切り</description></item>
 ///   <item><description>空行 → 同一役職内のブロック区切り</description></item>
 ///   <item><description><c>[XXX]</c>（行全体）→ COMPANY エントリ（位置に関係なく常に COMPANY 扱い）</description></item>
@@ -48,7 +48,7 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     LOGO エントリの場合は屋号部分（<c>#</c> の左側）に対してのみ <c>=&gt;</c> を解釈する。CI バージョン部は対象外。</description></item>
 /// </list>
 /// 警告は適用ブロックレベル（<see cref="WarningSeverity.Block"/>）と通常警告に分かれる。
-/// 適用ブロックの例: 先頭が役職指定でない／ハイフン4個以上／ティア3個目超／<c>&lt;X&gt;</c> 直後にキャラ指定なし行。
+/// 適用ブロックの例: 先頭が役職指定でない／ハイフン4個以上／ティア上限（<see cref="PrecureDataStars.Data.Models.CreditCardTier.MaxTierNo"/>）超／<c>&lt;X&gt;</c> 直後にキャラ指定なし行。
 /// </summary>
 public static class CreditBulkInputParser
 {
@@ -309,14 +309,15 @@ public static class CreditBulkInputParser
                 }
                 else if (hyphens == 3)
                 {
-                    // ティア区切り: 同カード内で次の Tier を作る（最大 2 まで）。
-                    if (curCard!.Tiers.Count >= 2)
+                    // ティア区切り: 同カード内で次の Tier を作る（最大 CreditCardTier.MaxTierNo まで）。
+                    if (curCard!.Tiers.Count >= PrecureDataStars.Data.Models.CreditCardTier.MaxTierNo)
                     {
+                        int maxTier = PrecureDataStars.Data.Models.CreditCardTier.MaxTierNo;
                         result.Warnings.Add(new ParseWarning
                         {
                             Severity = WarningSeverity.Block,
                             LineNumber = lineNo,
-                            Message = $"{lineNo} 行目: ティアは最大 2 つまで。3 つ目以降は使えません（カードを分けてください）。"
+                            Message = $"{lineNo} 行目: ティアは最大 {maxTier} つまで。{maxTier + 1} つ目以降は使えません（カードを分けてください）。"
                         });
                         continue;
                     }

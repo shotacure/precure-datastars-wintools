@@ -639,9 +639,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* 映画カード内の MOVIE_SHORT 子作品リスト。
-   親映画にぶら下がる併映短編で、リンクは張らない（単独詳細ページ無し運用）。
+   親映画にぶら下がる併映短編で、タイトルは短編の詳細ページへのリンク。
    カード余白クリックで親映画にナビするオーバーレイは下に敷いてあるため、
-   pointer-events: none で子作品全体をクリックスルーに倒す。 */
+   pointer-events: none で子作品全体をクリックスルーに倒し、タイトルのリンクだけ auto で拾う。 */
 .series-card-children {
   list-style: none;
   margin: 8px 0 0;
@@ -669,6 +669,14 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .series-card-children-title {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+a.series-card-children-title {
+  pointer-events: auto;
+  color: inherit;
+  text-decoration: none;
+}
+a.series-card-children-title:hover {
+  text-decoration: underline;
 }
 .series-card-children-meta {
   font-family: var(--font-num);

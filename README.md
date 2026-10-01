@@ -907,7 +907,7 @@ Role: PRODUCTION 制作 (order 2)
 
 ##### シリーズ一覧の映画セクション
 
-`/series/` の映画セクションはカード型リスト（`series-card-list`）として親映画（`kind_code ∈ {MOVIE, SPRING}`）を公開日昇順で並べる。秋映画（`MOVIE`）／春映画（`SPRING`）のシーズンバッジ（`.movie-badge-fall` / `.movie-badge-spring`）はメタ行に並ぶ。親映画には公開日と、親＋全子（`MOVIE_SHORT`）の合計上映時間を出す（いずれかが `run_time_seconds` NULL なら空）。親映画にぶら下がる子作品（`MOVIE_SHORT`、`seq_in_parent` 昇順）は親カードの中の小リスト（`<ul class="movie-child-list"><li>…</li></ul>`）として箇条書きで並べる。子作品はリンクを張らない。子単体の上映時間（`RelatedSeriesRow.RuntimeLabel`、`run_time_seconds` NULL なら空）を併記。
+`/series/` の映画セクションはカード型リスト（`series-card-list`）として親映画（`kind_code ∈ {MOVIE, SPRING}`）を公開日昇順で並べる。秋映画（`MOVIE`）／春映画（`SPRING`）のシーズンバッジ（`.movie-badge-fall` / `.movie-badge-spring`）はメタ行に並ぶ。親映画には公開日と、親＋全子（`MOVIE_SHORT`）の合計上映時間を出す（いずれかが `run_time_seconds` NULL なら空）。親映画にぶら下がる子作品（`MOVIE_SHORT`、`seq_in_parent` 昇順）は親カードの中の小リスト（`<ul class="movie-child-list"><li>…</li></ul>`）として箇条書きで並べる。子作品のタイトルは子作品自身の詳細ページ（`/series/{slug}/`。短編も含め全シリーズが詳細ページを持つ）へリンクする。子単体の上映時間（`RelatedSeriesRow.RuntimeLabel`、`run_time_seconds` NULL なら空）を併記。
 
 #### C. エピソード詳細ページの構成（中核）
 

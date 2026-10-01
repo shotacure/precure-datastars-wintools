@@ -95,26 +95,19 @@
            子＝パート側の見え方なので「パート作品」を name_ja から、いや、ここでは reverse 値「セット作品」が入る点に注意）
        重要：実装では SeriesRelationKind.NameJaReverse を採用するため、自分が無印 TV シリーズ、子が映画版なら「映画」、
        SEGMENT は「セット作品」（親側＝セット作品＝大本作品の名乗り）が入る。文脈で「映画／続編／併映／セット作品」が読める。
-       HasOwnPage=true なら <a> で詳細ページへ、false（MOVIE_SHORT 等）はリンクなしテキストのみ。 ##}}
+       どの作品も単独の詳細ページを持つので、行全体と名前を詳細ページへリンクする。 ##}}
   {{~ if (array.size RelatedWorks) > 0 ~}}
   <section id="related-works">
     <h2>関連作品</h2>
-    {{## サイト共通の行リスト表現（entity-list / entity-row）。単独ページを持つ作品は
-         オーバーレイで行全体クリック、持たない作品（MOVIE_SHORT 等）はテキストのみ。 ##}}
+    {{## サイト共通の行リスト表現（entity-list / entity-row）。オーバーレイで行全体クリック。 ##}}
     <ul class="entity-list">
       {{~ for r in RelatedWorks ~}}
       <li class="entity-row">
-        {{~ if r.HasOwnPage ~}}
         <a class="entity-row-link" href="/series/{{ r.Slug }}/" aria-label="{{ r.Title | html.escape }}"></a>
-        {{~ end ~}}
         {{~ if r.RelationLabelJa != "" ~}}
         <span class="relation-badge" data-relation-code="{{ r.RelationCode }}">{{ r.RelationLabelJa | html.escape }}</span>
         {{~ end ~}}
-        {{~ if r.HasOwnPage ~}}
         <a class="entity-row-name" href="/series/{{ r.Slug }}/">{{ r.Title | html.escape }}</a>
-        {{~ else ~}}
-        <span class="entity-row-name">{{ r.Title | html.escape }}</span>
-        {{~ end ~}}
         <span class="entity-row-count muted">{{ r.Period }}</span>
       </li>
       {{~ end ~}}

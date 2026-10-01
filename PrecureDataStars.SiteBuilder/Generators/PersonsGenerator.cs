@@ -328,8 +328,14 @@ public sealed class PersonsGenerator
             // MetaDescription と同じ文面を入れて二重整合性を担保する。
             ["description"] = metaDescription
         };
-        if (alternateNames.Count > 0) jsonLdDict["alternateName"] = alternateNames;
-        if (!string.IsNullOrEmpty(person.NameEn)) jsonLdDict["givenName"] = person.NameEn;
+        // 英語表記（persons.name_en、氏名全体のローマ字）は正式名の英語表記なので、見出しの名前が正式名と同じときだけ
+        // 別名として添える（givenName は「名」だけを入れる欄なので氏名全体は入れない）。見出しが別の名義のときに
+        // 正式名のローマ字を添えると、別の名義の読みが混ざって見える。
+        var alternateNamesForJsonLd = alternateNames.ToList();
+        if (!string.IsNullOrEmpty(person.NameEn) && string.Equals(displayName, person.FullName, StringComparison.Ordinal)
+            && !alternateNamesForJsonLd.Contains(person.NameEn, StringComparer.Ordinal))
+            alternateNamesForJsonLd.Add(person.NameEn);
+        if (alternateNamesForJsonLd.Count > 0) jsonLdDict["alternateName"] = alternateNamesForJsonLd;
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + personUrl;
         if (topJobTitles.Count > 0)
         {

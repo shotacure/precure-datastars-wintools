@@ -1295,10 +1295,10 @@ public sealed class EpisodeGenerator
         int budget = targetMaxChars - siteSuffix.Length;
 
         // og:title が『シリーズ』第N話「サブタイトル」を持つため、説明文ではそれを繰り返さず、
-        // 放送日（OA:yyyy.M.d）・通算（全プリキュアTV通算の累計値）・主要スタッフでページ固有の情報を出す。
+        // 放送日（放送:yyyy.M.d）・通算（全プリキュアTV通算の累計値）・主要スタッフでページ固有の情報を出す。
         var segments = new List<string>
         {
-            "OA:" + ep.OnAirAt.ToString("yyyy.M.d"),
+            "放送:" + ep.OnAirAt.ToString("yyyy.M.d"),
         };
         if (ep.TotalEpNo is int tep) segments.Add($"通算{tep}話");
         if (ep.TotalOaNo is int toa) segments.Add($"放送{toa}回");

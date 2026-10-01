@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ if PageTitle != "" }}{{ PageTitle | html.escape }} | {{ end }}{{ SiteBrandLabel | html.escape }}</title>
-{{## canonical は BaseUrl が設定されているときのみ絶対 URL で出力する。 ##}}
-{{~ if BaseUrl != "" && CanonicalPath != "" ~}}
+{{## canonical は BaseUrl が設定されているときのみ絶対 URL で出力する。404 ページ（SuppressCanonical）は出さない。 ##}}
+{{~ if BaseUrl != "" && CanonicalPath != "" && !SuppressCanonical ~}}
 <link rel="canonical" href="{{ BaseUrl }}{{ CanonicalPath }}">
 {{~ end ~}}
 {{~ if MetaDescription != "" ~}}
@@ -36,7 +36,7 @@
      画像は Generator 側または PageRenderer の自動補完で
      入った場合のみ出力する。og:url / og:title / og:description / og:type は
      必ず出力する（OG パーサが空欄を嫌うため）。site_name と locale は固定値。 ##}}
-{{~ if BaseUrl != "" && CanonicalPath != "" ~}}
+{{~ if BaseUrl != "" && CanonicalPath != "" && !SuppressCanonical ~}}
 <meta property="og:url" content="{{ BaseUrl }}{{ CanonicalPath }}">
 {{~ end ~}}
 <meta property="og:type" content="{{ OgType }}">

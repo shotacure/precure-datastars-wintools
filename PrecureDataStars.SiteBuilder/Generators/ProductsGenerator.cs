@@ -24,6 +24,9 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// </summary>
 public sealed class ProductsGenerator
 {
+    /// <summary>同じ題名の商品が複数ある題名の集合（GenerateAsync が並列レンダリングの前に確定させる）。</summary>
+    private HashSet<string> _duplicateTitles = new(StringComparer.Ordinal);
+
     private readonly BuildContext _ctx;
     private readonly PageRenderer _page;
 
@@ -205,6 +208,14 @@ public sealed class ProductsGenerator
             .Select(d => (d.CatalogNo, SongsGenerator.FormatAlbumLabel(
                 productByCatalogNo[d.ProductCatalogNo].Title, d.Title ?? "", d.DiscNoInSet)))
             .ToList());
+
+        // 同じ題名の商品が複数ある（初回盤と再発売盤など）題名の集合。詳細ページの title に品番を添えて見分けられるようにする。
+        // 並列レンダリングの前に確定させ、以後は読み取りだけにする。
+        _duplicateTitles = allProducts
+            .GroupBy(x => x.Title, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToHashSet(StringComparer.Ordinal);
 
         var urlPaths = new string[allProducts.Count];
         Parallel.For(0, allProducts.Count, i =>
@@ -908,7 +919,8 @@ public sealed class ProductsGenerator
 
         var layout = new LayoutModel
         {
-            PageTitle = product.Title,
+            // 同じ題名の商品がほかにもあるときは、title に品番を添えて見分けられるようにする。
+            PageTitle = _duplicateTitles.Contains(product.Title) ? $"{product.Title}（{product.ProductCatalogNo}）" : product.Title,
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {

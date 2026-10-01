@@ -118,6 +118,10 @@ public sealed class LayoutModel
     /// _share-buttons.sbn は ShareUrl 空により出力されない。</summary>
     public bool SuppressShareButtons { get; set; }
 
+    /// <summary>canonical と og:url を出さないページで true にする（404 ページ。どの URL で返っても
+    /// 「このページが正規の URL」と主張する意味が無いため）。</summary>
+    public bool SuppressCanonical { get; set; }
+
     // ── フッタ注記の出し分けフラグ（PageRenderer がコンテンツ HTML から自動検出して詰める） ──
 
     /// <summary>本文にアソシエイトタグ付きの Amazon リンク（<c>?tag=</c> / <c>&amp;tag=</c>）が含まれるか。

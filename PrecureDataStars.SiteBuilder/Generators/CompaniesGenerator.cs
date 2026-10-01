@@ -188,13 +188,15 @@ public sealed class CompaniesGenerator
 
         // MetaDescription を実データから動的構築する。
         // 「{会社名}は、プリキュアシリーズで{役職1}({N作品})・{役職2}({N作品})などを担当した企業・団体。」を骨格にする。
-        var metaDescription = BuildCompanyMetaDescription(displayName, groups);
+        // ページの名前（meta description・JSON-LD・パンくず・共有用の画像）は、見出し・title と同じ正式名にそろえる。
+        // 代表屋号（略称など）は JSON-LD の別名（alternateName）に入る。
+        var metaDescription = BuildCompanyMetaDescription(company.Name, groups);
 
         var jsonLdDict = new Dictionary<string, object?>
         {
             ["@context"] = "https://schema.org",
             ["@type"] = "Organization",
-            ["name"] = displayName,
+            ["name"] = company.Name,
             ["description"] = metaDescription
         };
         if (alternateNames.Count > 0) jsonLdDict["alternateName"] = alternateNames;
@@ -209,11 +211,11 @@ public sealed class CompaniesGenerator
             MetaDescription = metaDescription,
             // パンくずの中間の段は、この企業・団体が載っている一覧（スタッフ → 音楽制作 の順で最初のもの）。
             // どの一覧にも載っていなければ中間の段を置かない。
-            Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForCompany(company.CompanyId), displayName),
+            Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForCompany(company.CompanyId), company.Name),
             // 企業ページは website 寄り（プロフィール的でもあるが OGP profile は人物用なので使わない）。
             OgType = "website",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(displayName, groups, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(company.Name, groups, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
         };
 
         _page.RenderAndWrite(

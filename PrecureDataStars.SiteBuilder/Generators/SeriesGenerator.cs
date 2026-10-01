@@ -1309,7 +1309,7 @@ public sealed class SeriesGenerator
         const int targetMaxChars = 140;
 
         var sb = new System.Text.StringBuilder();
-        // ① 基本：『シリーズ名』(YYYY年放送開始/公開、全N話)
+        // ① 基本：『シリーズ名』(YYYY年放送開始/公開、全 N 話)。話数は本文の「全 N 話」と同じく数字の前後に空白を入れる。
         // 映画系（KindCode が "MOVIE" / "MOVIE_SHORT" / "SPRING" 等）は「公開」表記、それ以外は「放送開始」。
         bool isMovie = s.KindCode == "MOVIE" || s.KindCode == "MOVIE_SHORT" || s.KindCode == "SPRING";
         sb.Append('『').Append(s.Title).Append("』(")
@@ -1317,7 +1317,7 @@ public sealed class SeriesGenerator
           .Append(isMovie ? "公開" : "放送開始");
         if (s.Episodes.HasValue && s.Episodes.Value > 0 && !isMovie)
         {
-            sb.Append("、全").Append(s.Episodes.Value).Append('話');
+            sb.Append("、全 ").Append(s.Episodes.Value).Append(" 話");
         }
         sb.Append(")。");
 

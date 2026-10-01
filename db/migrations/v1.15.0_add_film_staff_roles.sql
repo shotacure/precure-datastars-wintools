@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.14.2_add_film_staff_roles.sql
+-- v1.15.0_add_film_staff_roles.sql
 --
 -- 映画のクレジットで使われる役職を追加する。
 --   COMPOSITING_DIRECTOR   撮影監督。デジタル撮影監督（DIGITAL_COMPOSITING_DIRECTOR）の次に並べる。

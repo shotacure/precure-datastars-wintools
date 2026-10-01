@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.14.2_add_persons_primary_alias.sql
+-- v1.15.0_add_persons_primary_alias.sql
 --
 -- 人物の「本名義」を指定する列を persons に追加する。
 --   primary_alias_id  INT NULL  人物詳細の見出し・URL・各一覧の行表記に使う名義（person_aliases.alias_id）。
@@ -12,9 +12,9 @@
 -- 冪等性: 列・外部キーごとに INFORMATION_SCHEMA で存在確認してから ALTER を発行する。
 -- =====================================================================
 
-DROP PROCEDURE IF EXISTS _v1142_add_persons_primary_alias;
+DROP PROCEDURE IF EXISTS _v1150_add_persons_primary_alias;
 DELIMITER $$
-CREATE PROCEDURE _v1142_add_persons_primary_alias()
+CREATE PROCEDURE _v1150_add_persons_primary_alias()
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
@@ -37,5 +37,5 @@ BEGIN
 END$$
 DELIMITER ;
 
-CALL _v1142_add_persons_primary_alias();
-DROP PROCEDURE IF EXISTS _v1142_add_persons_primary_alias;
+CALL _v1150_add_persons_primary_alias();
+DROP PROCEDURE IF EXISTS _v1150_add_persons_primary_alias;

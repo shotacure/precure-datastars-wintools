@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.14.2_add_published_slugs_last_published_at.sql
+-- v1.15.0_add_published_slugs_last_published_at.sql
 --
 -- 本番に公開した URL の記録（published_entity_slugs）に、最後に公開した日時の列を足す。
 --   last_published_at  TIMESTAMP NULL  その URL を最後に本番で公開したデプロイの日時
@@ -13,9 +13,9 @@
 -- 冪等性: 列の存在を INFORMATION_SCHEMA で確認してから ALTER する。埋め込みは NULL の行だけ。
 -- =====================================================================
 
-DROP PROCEDURE IF EXISTS _v1142_add_published_slugs_last_published_at;
+DROP PROCEDURE IF EXISTS _v1150_add_published_slugs_last_published_at;
 DELIMITER $$
-CREATE PROCEDURE _v1142_add_published_slugs_last_published_at()
+CREATE PROCEDURE _v1150_add_published_slugs_last_published_at()
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
@@ -29,7 +29,7 @@ BEGIN
 END$$
 DELIMITER ;
 
-CALL _v1142_add_published_slugs_last_published_at();
-DROP PROCEDURE IF EXISTS _v1142_add_published_slugs_last_published_at;
+CALL _v1150_add_published_slugs_last_published_at();
+DROP PROCEDURE IF EXISTS _v1150_add_published_slugs_last_published_at;
 
 UPDATE `published_entity_slugs` SET `last_published_at` = `created_at` WHERE `last_published_at` IS NULL;

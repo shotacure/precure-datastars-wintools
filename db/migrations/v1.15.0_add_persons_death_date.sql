@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.14.2_add_persons_death_date.sql
+-- v1.15.0_add_persons_death_date.sql
 --
 -- 人物の没年月日を持つ列を persons に追加する。
 --   death_year   smallint unsigned NULL  没年（西暦）。存命・不明は NULL
@@ -19,9 +19,9 @@
 -- 冪等性: 列・制約ごとに INFORMATION_SCHEMA で存在確認してから ALTER を発行する。
 -- =====================================================================
 
-DROP PROCEDURE IF EXISTS _v1142_add_persons_death_date;
+DROP PROCEDURE IF EXISTS _v1150_add_persons_death_date;
 DELIMITER $$
-CREATE PROCEDURE _v1142_add_persons_death_date()
+CREATE PROCEDURE _v1150_add_persons_death_date()
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
@@ -91,5 +91,5 @@ BEGIN
 END$$
 DELIMITER ;
 
-CALL _v1142_add_persons_death_date();
-DROP PROCEDURE IF EXISTS _v1142_add_persons_death_date;
+CALL _v1150_add_persons_death_date();
+DROP PROCEDURE IF EXISTS _v1150_add_persons_death_date;

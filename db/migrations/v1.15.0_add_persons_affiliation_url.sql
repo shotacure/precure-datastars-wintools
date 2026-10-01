@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.14.2_add_persons_affiliation_url.sql
+-- v1.15.0_add_persons_affiliation_url.sql
 --
 -- 人物の所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページの URL を持つ列を
 -- persons に追加する。
@@ -14,9 +14,9 @@
 -- 冪等性: INFORMATION_SCHEMA で列の存在・説明を確認してから ALTER を発行する。
 -- =====================================================================
 
-DROP PROCEDURE IF EXISTS _v1142_add_persons_affiliation_url;
+DROP PROCEDURE IF EXISTS _v1150_add_persons_affiliation_url;
 DELIMITER $$
-CREATE PROCEDURE _v1142_add_persons_affiliation_url()
+CREATE PROCEDURE _v1150_add_persons_affiliation_url()
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
@@ -40,5 +40,5 @@ BEGIN
 END$$
 DELIMITER ;
 
-CALL _v1142_add_persons_affiliation_url();
-DROP PROCEDURE IF EXISTS _v1142_add_persons_affiliation_url;
+CALL _v1150_add_persons_affiliation_url();
+DROP PROCEDURE IF EXISTS _v1150_add_persons_affiliation_url;

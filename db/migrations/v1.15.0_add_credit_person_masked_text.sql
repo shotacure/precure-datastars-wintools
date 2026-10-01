@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.14.2_add_credit_person_masked_text.sql
+-- v1.15.0_add_credit_person_masked_text.sql
 --
 -- credit_block_entries に「画面で人物名の代わりに出た表記」の列を追加する。
 --   person_masked_text  VARCHAR(32) NULL ... PERSON / CHARACTER_VOICE 人物側の伏せ字表記

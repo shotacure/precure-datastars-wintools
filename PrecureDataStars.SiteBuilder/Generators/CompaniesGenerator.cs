@@ -152,6 +152,13 @@ public sealed class CompaniesGenerator
         // (人物 × 所属屋号 × シリーズ) の 3 軸で 1 行ずつまとめて、シリーズ放送開始日 → 人物読み の順で並べる。
         var memberHistory = BuildMemberHistory(aliases);
 
+        // 音盤の音楽クレジット。会社そのものが載っている行と、人物の所属として載っている行を分けて出す。
+        var musicOwnRoles = BuildMusicOwnRoles(company, aliases);
+        var musicMemberRoles = BuildMusicMemberRoles(company, aliases);
+        var musicTotal = new MusicCountSet();
+        musicTotal.AddRange(musicOwnRoles.Select(r => r.Counts));
+        musicTotal.AddRange(musicMemberRoles.Select(r => r.Counts));
+
         var content = new CompanyDetailModel
         {
             Company = new CompanyView
@@ -175,6 +182,10 @@ public sealed class CompaniesGenerator
             CreditMovieCountTotal = creditMovieCountTotal,
             LogoAliases = logoAliases,
             MemberHistory = memberHistory,
+            MusicOwnRoles = musicOwnRoles,
+            MusicMemberRoles = musicMemberRoles,
+            MusicTotal = musicTotal,
+            MusicCoverageLabel = _ctx.MusicCredits.CoverageLabel,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 企業詳細の構造化データは Schema.org の Organization 型。
@@ -444,6 +455,143 @@ public sealed class CompaniesGenerator
         }
 
         return string.Join("、", parts);
+    }
+
+    /// <summary>音楽クレジットの紐付け先の枠（歌 / 劇伴 / 音盤）と、その並び。</summary>
+    private static readonly (string Label, string[] TargetKinds)[] MusicTargetKindSections =
+    {
+        (MusicCreditCounting.Song, new[] { MusicCreditTargetKinds.Song, MusicCreditTargetKinds.SongRecording }),
+        (MusicCreditCounting.Bgm, new[] { MusicCreditTargetKinds.BgmSession }),
+        (MusicCreditCounting.Disc, new[] { MusicCreditTargetKinds.Product }),
+    };
+
+    /// <summary>
+    /// 会社そのものが音盤の音楽クレジットに載っている行（録音スタジオ・マスタリング・ストリングスなど）を、
+    /// 役職 → 紐付け先の枠（歌 / 劇伴 / 音盤）の入れ子で組み立てる。役職は役職マスタの表示順。
+    /// </summary>
+    private IReadOnlyList<CompanyMusicRoleGroup> BuildMusicOwnRoles(Company company, IReadOnlyList<CompanyAlias> aliases)
+    {
+        var rows = aliases
+            .Where(a => _ctx.MusicCredits.ByCompanyAlias.ContainsKey(a.AliasId))
+            .SelectMany(a => _ctx.MusicCredits.ByCompanyAlias[a.AliasId])
+            .ToList();
+        var result = new List<(int Order, CompanyMusicRoleGroup Role)>();
+        foreach (var rg in rows.GroupBy(r => r.RoleCode, StringComparer.Ordinal))
+        {
+            var kinds = BuildMusicKinds(company, rg.ToList(), withAliasNote: true);
+            if (kinds.Count == 0) continue;
+            var group = new CompanyMusicRoleGroup { RoleCode = rg.Key, RoleLabel = MusicCreditViewBuilder.RoleName(_ctx, rg.Key), Kinds = kinds };
+            group.Counts.AddRange(kinds.Select(k => k.Counts));
+            result.Add((RoleOrder(rg.Key), group));
+        }
+        return result.OrderBy(x => x.Order).ThenBy(x => x.Role.RoleCode, StringComparer.Ordinal).Select(x => x.Role).ToList();
+    }
+
+    /// <summary>
+    /// 会社（その全屋号）を所属として音盤の音楽クレジットに載った人物を、役職 → 人物 → 紐付け先の枠（歌 / 劇伴 / 音盤）の入れ子で組み立てる。
+    /// 「誰を通じて、何に」クレジットされたかを示すため。役職は役職マスタの表示順、人物はその役職での最初の紐付け先の発売日順。
+    /// 人物名は盤に載った名義で出し、人物ページへリンクする（人物に紐付かない名義は文字だけ）。
+    /// </summary>
+    private IReadOnlyList<CompanyMusicRoleGroup> BuildMusicMemberRoles(Company company, IReadOnlyList<CompanyAlias> aliases)
+    {
+        var rows = aliases
+            .Where(a => _ctx.MusicCredits.ByAffiliationCompanyAlias.ContainsKey(a.AliasId))
+            .SelectMany(a => _ctx.MusicCredits.ByAffiliationCompanyAlias[a.AliasId])
+            .Where(r => r.PersonAliasId.HasValue)
+            .ToList();
+        var result = new List<(int Order, CompanyMusicRoleGroup Role)>();
+        foreach (var rg in rows.GroupBy(r => r.RoleCode, StringComparer.Ordinal))
+        {
+            var persons = new List<(DateTime First, CompanyMusicMemberPerson Person)>();
+            // 人物に紐付く名義は人物ごとに、紐付かない名義は名義ごとに（負の名義 ID をキーにして）まとめる。
+            foreach (var pg in rg.GroupBy(r => MusicCreditViewBuilder.PersonIdOf(_ctx, r.PersonAliasId!.Value) is int pid ? pid : -r.PersonAliasId!.Value))
+            {
+                var names = pg.Select(r => _ctx.PersonAliasById.TryGetValue(r.PersonAliasId!.Value, out var pa) ? (pa.DisplayTextOverride ?? pa.Name) : "")
+                    .Where(n => n.Length > 0)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+                var kinds = BuildMusicKinds(company, pg.ToList(), withAliasNote: false);
+                if (names.Count == 0 || kinds.Count == 0) continue;
+                var first = pg.Select(r => MusicCreditViewBuilder.DescribeTarget(_ctx, r)?.Sort ?? DateTime.MaxValue).Min();
+                var person = new CompanyMusicMemberPerson
+                {
+                    Name = string.Join("・", names),
+                    Url = pg.Key > 0 ? PathUtil.PersonUrl(pg.Key) : "",
+                    AliasNote = CompanyAliasNote(company, pg.Select(r => r.AffiliationCompanyAliasId!.Value)),
+                    Kinds = kinds
+                };
+                person.Counts.AddRange(kinds.Select(k => k.Counts));
+                persons.Add((first, person));
+            }
+            if (persons.Count == 0) continue;
+            var group = new CompanyMusicRoleGroup
+            {
+                RoleCode = rg.Key,
+                RoleLabel = MusicCreditViewBuilder.RoleName(_ctx, rg.Key),
+                Persons = persons.OrderBy(p => p.First).ThenBy(p => p.Person.Name, StringComparer.Ordinal).Select(p => p.Person).ToList()
+            };
+            group.Counts.AddRange(group.Persons.Select(p => p.Counts));
+            result.Add((RoleOrder(rg.Key), group));
+        }
+        return result.OrderBy(x => x.Order).ThenBy(x => x.Role.RoleCode, StringComparer.Ordinal).Select(x => x.Role).ToList();
+    }
+
+    private int RoleOrder(string roleCode) => _roleMap!.TryGetValue(roleCode, out var role) ? role.DisplayOrder ?? 0 : 0;
+
+    /// <summary>
+    /// 音楽クレジットの行を、紐付け先の枠（歌 / 劇伴 / 音盤）ごとに、紐付け先 1 つ = 1 行に束ねる。並びは根拠の盤の発売日順。
+    /// 歌は曲単位で 1 行にする（同じ曲の曲と録音への紐付けは、曲への行を残して 1 行にまとめる）。
+    /// <paramref name="withAliasNote"/> が真なら、正式名と違う屋号で載ったときの「〇〇 名義」を添える（会社そのものの行）。
+    /// 同じ枠に同じ題名の盤（再発など）が並ぶときは、見分けられるよう品番を補足に出す。
+    /// </summary>
+    private IReadOnlyList<CompanyMusicKindSection> BuildMusicKinds(Company company, IReadOnlyList<MusicCredit> rows, bool withAliasNote)
+    {
+        var sections = new List<CompanyMusicKindSection>();
+        foreach (var (label, kinds) in MusicTargetKindSections)
+        {
+            var items = new List<(DateTime Sort, string Key, string? CatalogNo, CompanyMusicItem Item)>();
+            foreach (var g in rows.Where(r => kinds.Contains(r.TargetKind))
+                         .GroupBy(r => (r.TargetKind, r.SongId, r.SongRecordingId, r.BgmSeriesId, r.BgmSessionNo, r.ProductCatalogNo)))
+            {
+                if (MusicCreditViewBuilder.DescribeTarget(_ctx, g.First()) is not { } t) continue;
+                string aliasNote = withAliasNote
+                    ? CompanyAliasNote(company, g.Where(r => r.CompanyAliasId.HasValue).Select(r => r.CompanyAliasId!.Value))
+                    : "";
+                items.Add((t.Sort, MusicCreditCounting.Key(label, t.Url, t.Sub), g.Key.ProductCatalogNo,
+                    new CompanyMusicItem { Title = t.Title, Url = t.Url, SubLabel = t.Sub, AliasNote = aliasNote }));
+            }
+            if (items.Count == 0) continue;
+            var merged = items
+                .GroupBy(x => x.Key, StringComparer.Ordinal)
+                .Select(x => x.OrderBy(y => y.Item.Url.Contains('#') ? 1 : 0).ThenBy(y => y.Sort).First() with { Sort = x.Min(y => y.Sort) })
+                .ToList();
+            var duplicateTitles = merged.GroupBy(x => x.Item.Title, StringComparer.Ordinal).Where(x => x.Count() > 1).Select(x => x.Key).ToHashSet(StringComparer.Ordinal);
+            foreach (var x in merged)
+                if (x.CatalogNo is not null && x.Item.SubLabel.Length == 0 && duplicateTitles.Contains(x.Item.Title))
+                    x.Item.SubLabel = x.CatalogNo;
+            var section = new CompanyMusicKindSection
+            {
+                Label = label,
+                CountLabel = MusicCreditCounting.CountLabel(label, merged.Count),
+                Items = merged.OrderBy(x => x.Sort).ThenBy(x => x.Item.Title, StringComparer.Ordinal).Select(x => x.Item).ToList()
+            };
+            section.Counts.Add(label, merged.Select(x => x.Key));
+            sections.Add(section);
+        }
+        return sections;
+    }
+
+    /// <summary>使われた屋号のうち、正式名と違うもの（空白の違いを除く）を「〇〇・〇〇 名義」で返す（無ければ空文字）。</summary>
+    private string CompanyAliasNote(Company company, IEnumerable<int> aliasIds)
+    {
+        static string Norm(string t) => t.Replace(" ", "").Replace("　", "");
+        var names = aliasIds
+            .Distinct()
+            .Select(id => _ctx.CompanyAliasById.TryGetValue(id, out var a) ? a.Name : null)
+            .Where(n => !string.IsNullOrEmpty(n) && Norm(n!) != Norm(company.Name))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        return names.Count == 0 ? "" : $"{string.Join("・", names)} 名義";
     }
 
     /// <summary>
@@ -950,6 +1098,14 @@ public sealed class CompaniesGenerator
 
     private sealed class CompanyDetailModel
     {
+        /// <summary>音楽クレジット：会社そのものが載っている行（役職 → 歌 / 劇伴 / 音盤）。無ければ空。</summary>
+        public IReadOnlyList<CompanyMusicRoleGroup> MusicOwnRoles { get; set; } = Array.Empty<CompanyMusicRoleGroup>();
+        /// <summary>音楽クレジット：会社を所属として載った人物（役職 → 人物 → 歌 / 劇伴 / 音盤）。無ければ空。</summary>
+        public IReadOnlyList<CompanyMusicRoleGroup> MusicMemberRoles { get; set; } = Array.Empty<CompanyMusicRoleGroup>();
+        /// <summary>音楽クレジットの見出しの札（全体で重複を除いた曲数・劇伴の件数・盤数）。</summary>
+        public MusicCountSet MusicTotal { get; set; } = new();
+        /// <summary>音楽クレジットの基準点ラベル（クレジット確認済みの最新の盤）。</summary>
+        public string MusicCoverageLabel { get; set; } = "";
         public CompanyView Company { get; set; } = new();
         /// <summary>クレジット（フラット）。屋号を横断した役職別グループ → シリーズ行。
         /// <see cref="InvolvementSections"/> が空（クレジットのある屋号が 1 つだけ）のときにテンプレ側が使う。</summary>
@@ -1069,5 +1225,76 @@ public sealed class CompaniesGenerator
         public string Description { get; set; } = "";
         /// <summary>当該ロゴがクレジットされたシリーズ・話数範囲の小書き注記。</summary>
         public string CreditRangeLabel { get; set; } = "";
+    }
+    /// <summary>
+    /// 音楽クレジットの件数の札（🎵 曲 / 🎼 劇伴 / 💿 盤）。上の段（役職・見出し）で合計するときも重複を除けるよう、数えたキーを持つ。
+    /// </summary>
+    private sealed class MusicCountSet
+    {
+        private readonly HashSet<string> _song = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _bgm = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _disc = new(StringComparer.Ordinal);
+        public int SongCount => _song.Count;
+        public int BgmCount => _bgm.Count;
+        public int DiscCount => _disc.Count;
+
+        public void Add(string kind, IEnumerable<string> keys)
+        {
+            var set = kind switch { MusicCreditCounting.Song => _song, MusicCreditCounting.Bgm => _bgm, _ => _disc };
+            set.UnionWith(keys);
+        }
+
+        public void AddRange(IEnumerable<MusicCountSet> others)
+        {
+            foreach (var o in others)
+            {
+                _song.UnionWith(o._song);
+                _bgm.UnionWith(o._bgm);
+                _disc.UnionWith(o._disc);
+            }
+        }
+    }
+
+    /// <summary>音楽クレジット：紐付け先の枠（歌 / 劇伴 / 音盤）1 つ分。既定で閉じた開閉枠に入れる。</summary>
+    private sealed class CompanyMusicKindSection
+    {
+        public string Label { get; set; } = "";
+        /// <summary>開閉ボタンに出す件数（「10曲」「7件」「8枚」）。</summary>
+        public string CountLabel { get; set; } = "";
+        public IReadOnlyList<CompanyMusicItem> Items { get; set; } = Array.Empty<CompanyMusicItem>();
+        public MusicCountSet Counts { get; } = new();
+    }
+
+    /// <summary>音楽クレジット：紐付け先（曲・録音・劇伴セッション・商品）1 つ分の行。</summary>
+    private sealed class CompanyMusicItem
+    {
+        public string Title { get; set; } = "";
+        public string Url { get; set; } = "";
+        /// <summary>補足（劇伴セッション名、同じ題名の盤の品番など）。</summary>
+        public string SubLabel { get; set; } = "";
+        /// <summary>正式名と違う屋号で載ったときの「〇〇 名義」（無ければ空文字）。</summary>
+        public string AliasNote { get; set; } = "";
+    }
+
+    /// <summary>音楽クレジット：役職 1 つ分。会社そのものの行なら <see cref="Kinds"/>、所属スタッフなら <see cref="Persons"/> を持つ。</summary>
+    private sealed class CompanyMusicRoleGroup
+    {
+        public string RoleCode { get; set; } = "";
+        public string RoleLabel { get; set; } = "";
+        public IReadOnlyList<CompanyMusicKindSection> Kinds { get; set; } = Array.Empty<CompanyMusicKindSection>();
+        public IReadOnlyList<CompanyMusicMemberPerson> Persons { get; set; } = Array.Empty<CompanyMusicMemberPerson>();
+        public MusicCountSet Counts { get; } = new();
+    }
+
+    /// <summary>所属スタッフの音楽クレジット：人物 1 人分（盤に載った名義、人物ページへのリンク、関わった歌 / 劇伴 / 音盤の枠）。</summary>
+    private sealed class CompanyMusicMemberPerson
+    {
+        public string Name { get; set; } = "";
+        /// <summary>人物ページの URL（人物に紐付かない名義なら空文字）。</summary>
+        public string Url { get; set; } = "";
+        /// <summary>正式名と違う屋号を所属として載ったときの「〇〇 名義」（無ければ空文字）。</summary>
+        public string AliasNote { get; set; } = "";
+        public IReadOnlyList<CompanyMusicKindSection> Kinds { get; set; } = Array.Empty<CompanyMusicKindSection>();
+        public MusicCountSet Counts { get; } = new();
     }
 }

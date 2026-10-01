@@ -181,7 +181,7 @@
     {{~ end ~}}
     {{~ end ~}}
   </section>
-  {{~ else ~}}
+  {{~ else if (array.size MusicOwnRoles) == 0 && (array.size MusicMemberRoles) == 0 ~}}
   <section id="credits">
     <h2>クレジット</h2>
     <p class="empty-row">この企業・団体のクレジット情報はまだ登録されていません。</p>
@@ -241,6 +241,91 @@
       </div>
       {{~ end ~}}
     </div>
+    {{~ end ~}}
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
+  {{## 音楽クレジット（音盤のブックレット由来の music_credits）。本編のクレジット・メンバー履歴と同じ見た目で、
+       役職の見出し（件数の札つき）の下に、関わった先（歌 / 劇伴 / 音盤）の枠を並べる。枠は既定で閉じ、開閉ボタンに件数を添える。
+       ・この会社のクレジット：会社そのものが載っている行（録音スタジオ・マスタリング・ストリングスなど）。役職 → 枠。
+       ・所属スタッフのクレジット：会社を所属として載った人物。役職 → 人物（盤に載った名義、件数の札つき）→ 枠で、
+         誰を通じて何にクレジットされたかを示す。
+       札：🎵＝歌の曲数、🎼＝劇伴の録音の件数、💿＝盤の枚数（重複を除く）。どちらも無いときはセクションごと出さない。 ##}}
+  {{~ if (array.size MusicOwnRoles) > 0 || (array.size MusicMemberRoles) > 0 ~}}
+  <section id="music-credits">
+    <h2>音楽クレジット
+      <span class="muted role-count"><span class="count-badges">{{~ if MusicTotal.SongCount > 0 ~}}<span class="count-pill count-pill-song">🎵 {{ MusicTotal.SongCount }}</span>{{~ end ~}}{{~ if MusicTotal.BgmCount > 0 ~}}<span class="count-pill count-pill-bgm">🎼 {{ MusicTotal.BgmCount }}</span>{{~ end ~}}{{~ if MusicTotal.DiscCount > 0 ~}}<span class="count-pill count-pill-cd">💿 {{ MusicTotal.DiscCount }}</span>{{~ end ~}}</span></span>
+    </h2>
+    {{~ if MusicCoverageLabel != "" ~}}
+    <p class="muted stats-coverage">{{ MusicCoverageLabel | html.escape }}</p>
+    {{~ end ~}}
+    {{~ if (array.size MusicOwnRoles) > 0 ~}}
+    <h3 class="music-credit-group-heading">この会社のクレジット</h3>
+    {{~ for mr in MusicOwnRoles ~}}
+    <h4 class="credit-role-heading">
+      <span class="credit-role-link">{{ mr.RoleLabel | html.escape }}</span>
+      <span class="muted role-count"><span class="count-badges">{{~ if mr.Counts.SongCount > 0 ~}}<span class="count-pill count-pill-song">🎵 {{ mr.Counts.SongCount }}</span>{{~ end ~}}{{~ if mr.Counts.BgmCount > 0 ~}}<span class="count-pill count-pill-bgm">🎼 {{ mr.Counts.BgmCount }}</span>{{~ end ~}}{{~ if mr.Counts.DiscCount > 0 ~}}<span class="count-pill count-pill-cd">💿 {{ mr.Counts.DiscCount }}</span>{{~ end ~}}</span></span>
+    </h4>
+    <ul class="credit-card-list">
+      {{~ for ks in mr.Kinds ~}}
+      <li class="credit-card">
+        <details class="credit-card-details">
+          <summary class="credit-card-head"><span class="credit-card-series">{{ ks.Label | html.escape }}</span><span class="credit-card-toggle">一覧{{~ if ks.CountLabel != "" ~}}（{{ ks.CountLabel }}）{{~ end ~}}</span></summary>
+          <div class="music-credit-card-body">
+            <ul class="music-credit-item-list">
+              {{~ for it in ks.Items ~}}
+              <li class="music-credit-item">
+                <a class="music-credit-item-title" href="{{ it.Url }}">{{ it.Title | html.escape }}</a>
+                {{~ if it.SubLabel != "" ~}}<span class="muted music-credit-item-sub">{{ it.SubLabel | html.escape }}</span>{{~ end ~}}
+                {{~ if it.AliasNote != "" ~}}<span class="muted music-credit-item-sub">（{{ it.AliasNote | html.escape }}）</span>{{~ end ~}}
+              </li>
+              {{~ end ~}}
+            </ul>
+          </div>
+        </details>
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+    {{~ end ~}}
+    {{~ if (array.size MusicMemberRoles) > 0 ~}}
+    <h3 class="music-credit-group-heading">所属スタッフのクレジット</h3>
+    <p class="muted">この企業・団体を所属としてクレジットされた人物と、関わった歌・劇伴・音盤です。</p>
+    {{~ for mr in MusicMemberRoles ~}}
+    <h4 class="credit-role-heading">
+      <span class="credit-role-link">{{ mr.RoleLabel | html.escape }}</span>
+      <span class="muted role-count"><span class="count-badges">{{~ if mr.Counts.SongCount > 0 ~}}<span class="count-pill count-pill-song">🎵 {{ mr.Counts.SongCount }}</span>{{~ end ~}}{{~ if mr.Counts.BgmCount > 0 ~}}<span class="count-pill count-pill-bgm">🎼 {{ mr.Counts.BgmCount }}</span>{{~ end ~}}{{~ if mr.Counts.DiscCount > 0 ~}}<span class="count-pill count-pill-cd">💿 {{ mr.Counts.DiscCount }}</span>{{~ end ~}}</span></span>
+    </h4>
+    {{~ for pr in mr.Persons ~}}
+    <div class="member-person-block">
+      <div class="member-person-head">
+        {{~ if pr.Url != "" ~}}<a class="member-person-name" href="{{ pr.Url }}">{{ pr.Name | html.escape }}</a>{{~ else ~}}<span class="member-person-name">{{ pr.Name | html.escape }}</span>{{~ end ~}}
+        {{~ if pr.AliasNote != "" ~}}<span class="muted">（{{ pr.AliasNote | html.escape }}）</span>{{~ end ~}}
+        <span class="count-badges">{{~ if pr.Counts.SongCount > 0 ~}}<span class="count-pill count-pill-song">🎵 {{ pr.Counts.SongCount }}</span>{{~ end ~}}{{~ if pr.Counts.BgmCount > 0 ~}}<span class="count-pill count-pill-bgm">🎼 {{ pr.Counts.BgmCount }}</span>{{~ end ~}}{{~ if pr.Counts.DiscCount > 0 ~}}<span class="count-pill count-pill-cd">💿 {{ pr.Counts.DiscCount }}</span>{{~ end ~}}</span>
+      </div>
+      <ul class="credit-card-list">
+        {{~ for ks in pr.Kinds ~}}
+        <li class="credit-card">
+          <details class="credit-card-details">
+            <summary class="credit-card-head"><span class="credit-card-series">{{ ks.Label | html.escape }}</span><span class="credit-card-toggle">一覧{{~ if ks.CountLabel != "" ~}}（{{ ks.CountLabel }}）{{~ end ~}}</span></summary>
+            <div class="music-credit-card-body">
+              <ul class="music-credit-item-list">
+                {{~ for it in ks.Items ~}}
+                <li class="music-credit-item">
+                  <a class="music-credit-item-title" href="{{ it.Url }}">{{ it.Title | html.escape }}</a>
+                  {{~ if it.SubLabel != "" ~}}<span class="muted music-credit-item-sub">{{ it.SubLabel | html.escape }}</span>{{~ end ~}}
+                  {{~ if it.AliasNote != "" ~}}<span class="muted music-credit-item-sub">（{{ it.AliasNote | html.escape }}）</span>{{~ end ~}}
+                </li>
+                {{~ end ~}}
+              </ul>
+            </div>
+          </details>
+        </li>
+        {{~ end ~}}
+      </ul>
+    </div>
+    {{~ end ~}}
     {{~ end ~}}
     {{~ end ~}}
   </section>

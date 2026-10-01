@@ -7789,6 +7789,12 @@ ins.adsbygoogle[data-ad-status="filled"] {
   border-color: rgba(8, 145, 178, 0.32);
   color: #0e7490;
 }
+/* 劇伴の件数（🎼）= 緑寄りの淡い色味。人物・企業詳細の音楽クレジットで、劇伴の録音・シリーズの行の件数に使う。 */
+.count-pill-bgm {
+  background: rgba(76, 163, 107, 0.10);
+  border-color: rgba(76, 163, 107, 0.34);
+  color: #38784f;
+}
 /* 歌（録音）の件数（🎤）= ローズ寄りの淡い色味。楽曲索引（歌一覧）の件数に使う。 */
 .count-pill-mic {
   background: rgba(225, 29, 72, 0.10);
@@ -9022,6 +9028,22 @@ body.has-art-track-bar {
 }
 .music-credit-item-sub {
   font-size: 0.9em;
+}
+/* 人物・企業詳細の音楽クレジット：歌 / 劇伴 / 音盤の枠を開いた中身。本編のクレジットの各話の内訳と同じく、
+   左の線で枠の中身であることを示す。 */
+.music-credit-card-body {
+  margin: 6px 0 4px 12px;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--border);
+}
+.music-credit-card-body > .music-credit-item-list {
+  margin-bottom: 0;
+}
+.music-credit-card-body > .music-credit-item-list > .music-credit-item:last-child {
+  border-bottom: none;
+}
+.music-credit-card-body > .person-songs-card-list {
+  margin: 4px 0 8px;
 }
 /* 劇伴詳細：セッションの演奏・レコーディング（既定で閉じる）。 */
 .bgm-session-credits {

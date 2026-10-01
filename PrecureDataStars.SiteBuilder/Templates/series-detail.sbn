@@ -346,11 +346,16 @@
   {{~ end ~}}
 
   {{## 劇伴一覧へのリンク。別ページ /bgms/{slug}/ へのボタン状リンクのみで、説明文は置かない。
-       劇伴データが登録されているかどうかは別ページ側でハンドリングする想定なので、ここでは常にリンクを出す。 ##}}
+       劇伴一覧ページは劇伴が登録された作品にだけあるので、ボタンはその作品（自作品・子作品）の分だけ並べ、
+       1 つも無ければ節ごと出さない。 ##}}
+  {{~ if (array.size BgmLinks) > 0 ~}}
   <section id="bgms">
     <h2>劇伴</h2>
-    <p><a class="button-link" href="/bgms/{{ Series.Slug }}/">『{{ Series.Title | html.escape }}』劇伴一覧</a></p>
+    {{~ for b in BgmLinks ~}}
+    <p><a class="button-link" href="{{ b.Url }}">『{{ b.Title | html.escape }}』劇伴一覧</a></p>
+    {{~ end ~}}
   </section>
+  {{~ end ~}}
 
   {{## 外部サイト。
        マーケティング観点で「自サイト内コンテンツ → 関連リンク」の順で誘導する方が、ページ内回遊が伸びやすい。

@@ -49,6 +49,13 @@ public static class BuildContextLookupExtensions
         return null;
     }
 
+    /// <summary>
+    /// シリーズの劇伴一覧ページ（<c>/bgms/{slug}/</c>）があるか。劇伴一覧は劇伴（bgm_cues）が 1 件以上
+    /// 登録されたシリーズにだけ生成されるので、その有無で判定する。
+    /// </summary>
+    public static bool HasBgmPage(this BuildContext ctx, int seriesId)
+        => ctx.BgmCuesBySeries.TryGetValue(seriesId, out var cues) && cues.Count > 0;
+
     /// <summary>シリーズ ID から放送開始年（西暦 4 桁文字列）を引く。未登録シリーズは空文字。 シリーズ年度注釈（複数シリーズが並列で出る文脈の「年度」列・薄色 inline span）用。</summary>
     public static string StartYearLabel(this BuildContext ctx, int seriesId)
         => ctx.SeriesById.TryGetValue(seriesId, out var s) ? s.StartDate.Year.ToString() : "";

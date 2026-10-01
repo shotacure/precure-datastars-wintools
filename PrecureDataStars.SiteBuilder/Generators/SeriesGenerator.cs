@@ -1169,9 +1169,23 @@ public sealed class SeriesGenerator
             });
         }
 
+        // 劇伴一覧へのボタン。劇伴一覧ページは劇伴が登録されたシリーズにだけあるので、
+        // 自作品に劇伴があれば自作品の分、単独ページを持たない同時上映の短編に劇伴があればその分を公開日順に並べる
+        // （3 本立ての映画のように、劇伴が短編ごとに分かれている作品があるため）。続編の TV など単独ページを
+        // 持つ子作品は、それぞれのページに自分の劇伴一覧ボタンがあるのでここには並べない。
+        var bgmLinks = new List<BgmLinkRow>();
+        if (_ctx.HasBgmPage(s.SeriesId))
+            bgmLinks.Add(new BgmLinkRow { Url = PathUtil.BgmsForSeriesUrl(s.Slug), Title = s.Title });
+        foreach (var child in allRelated)
+        {
+            if (SeriesClassifier.IsMovieShortChild(child) && _ctx.HasBgmPage(child.SeriesId))
+                bgmLinks.Add(new BgmLinkRow { Url = PathUtil.BgmsForSeriesUrl(child.Slug), Title = child.Title });
+        }
+
         var content = new SeriesDetailModel
         {
             Series = seriesView,
+            BgmLinks = bgmLinks,
             Episodes = epRows,
             RelatedWorks = relatedWorks,
             Parent = parent,
@@ -1820,12 +1834,14 @@ public sealed class SeriesGenerator
     private sealed class SeriesDetailModel
     {
         public SeriesDetailView Series { get; set; } = new();
+        /// <summary>「劇伴」節のボタン（劇伴一覧ページがある自作品・子作品の分）。空なら節ごと出さない。</summary>
+        public IReadOnlyList<BgmLinkRow> BgmLinks { get; set; } = Array.Empty<BgmLinkRow>();
         public IReadOnlyList<EpisodeIndexRow> Episodes { get; set; } = Array.Empty<EpisodeIndexRow>();
         /// <summary>
         /// 「関連作品」セクション用。
-        /// 単独ページを持たない作品（MOVIE_SHORT 等）と単独ページを持つ作品（続編・スピンオフ等）を
-        /// 1 つのリストにまとめて保持する。ソート順は公開日（StartDate）昇順、同日内は seq_in_parent → series_id 昇順。
-        /// 各行は <see cref="RelatedSeriesRow.HasOwnPage"/> でリンク化要否を、<see cref="RelatedSeriesRow.RelationLabelJa"/> で
+        /// 親・子作品（続編・映画・同時上映の短編・スピンオフ等）を 1 つのリストにまとめて保持する。
+        /// ソート順は公開日（StartDate）昇順、同日内は seq_in_parent → series_id 昇順。
+        /// 各行は <see cref="RelatedSeriesRow.RelationLabelJa"/> で
         /// バッジ表示文字列（series_relation_kinds.name_ja_reverse）を持つ。
         /// </summary>
         public IReadOnlyList<RelatedSeriesRow> RelatedWorks { get; set; } = Array.Empty<RelatedSeriesRow>();
@@ -1864,6 +1880,14 @@ public sealed class SeriesGenerator
     }
 
     /// <summary>映画 BGM リストの 1 行 DTO（テンプレ描画用）。</summary>
+    /// <summary>シリーズ詳細の「劇伴」節に並べる劇伴一覧ページへのボタン 1 つ分。</summary>
+    private sealed class BgmLinkRow
+    {
+        public string Url { get; set; } = "";
+        /// <summary>ボタンに出す作品名（『』で括るのはテンプレ側）。</summary>
+        public string Title { get; set; } = "";
+    }
+
     private sealed class MovieBgmCueRow
     {
         public int Seq { get; set; }

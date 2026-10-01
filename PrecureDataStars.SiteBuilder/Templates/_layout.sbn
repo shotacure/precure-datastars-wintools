@@ -23,6 +23,15 @@
 <meta name="google-site-verification" content="{{ GoogleSiteVerification }}">
 {{~ end ~}}
 
+{{~ if SubtitleRevealAt != "" ~}}
+{{## ──────── サブタイトル解禁前の各話ページ ────────
+     SNS のカード用のメタ（og:* / twitter:*）を出さない（題名の無いカードが SNS 側に残らないように）。
+     解禁時刻と解禁後のタイトル・共有文だけを渡し、subtitle-embargo.js が解禁後にタブのタイトルと
+     共有ボタンの文を差し替える（JavaScript が動かない環境では次のビルドまで題名無しのまま）。 ##}}
+<meta name="pcds-subtitle-reveal-at" content="{{ SubtitleRevealAt }}">
+<meta name="pcds-revealed-title" content="{{ RevealedPageTitle | html.escape }} | {{ SiteBrandLabel | html.escape }}">
+<meta name="pcds-revealed-share-text" content="{{ RevealedShareText | html.escape }}">
+{{~ else ~}}
 {{## ──────── OGP（Open Graph Protocol）+ Twitter カード ────────
      画像は Generator 側または PageRenderer の自動補完で
      入った場合のみ出力する。og:url / og:title / og:description / og:type は
@@ -63,6 +72,7 @@
 <meta name="twitter:title" content="{{ if PageTitle != "" }}{{ PageTitle | html.escape }}{{ else }}{{ SiteBrandLabel | html.escape }}{{ end }}">
 {{~ if MetaDescription != "" ~}}
 <meta name="twitter:description" content="{{ MetaDescription | html.escape }}">
+{{~ end ~}}
 {{~ end ~}}
 
 {{## Google Fonts: 本文・見出しのベースは Noto Sans JP（可読性の高い日本語ゴシック）。

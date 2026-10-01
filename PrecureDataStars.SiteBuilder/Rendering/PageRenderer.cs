@@ -121,15 +121,6 @@ public sealed class PageRenderer
         return $"og/{slug}.png";
     }
 
-    /// <summary>
-    /// 指定 canonical パスのカード画像の絶対 URL を返す（描画はしない）。
-    /// 自前のカードを出せない事情があるページが、既に生成される別ページのカードを
-    /// <c>og:image</c> に充てたいときに使う（例：サブタイトル解禁前のエピソードがトップのカードを指す）。
-    /// BaseUrl 未設定時は空文字。
-    /// </summary>
-    public string OgCardUrlFor(string canonicalPath)
-        => string.IsNullOrEmpty(_config.BaseUrl) ? "" : $"{_config.BaseUrl}/{OgCardRelativePath(canonicalPath)}";
-
     /// <summary>本ビルドで出力した HTML ページ一覧（書き込み順）。SeoGenerator が sitemap.xml を構築する際に参照。</summary>
     public IReadOnlyList<WrittenPage> WrittenPages => _writtenPages;
 
@@ -194,6 +185,8 @@ public sealed class PageRenderer
             layoutMeta.ShareUrl = layoutMeta.BaseUrl + layoutMeta.CanonicalPath;
         if (string.IsNullOrEmpty(layoutMeta.ShareText))
             layoutMeta.ShareText = BuildShareText(layoutMeta.PageTitle, layoutMeta.SiteBrandLabel);
+        if (!string.IsNullOrEmpty(layoutMeta.RevealedPageTitle) && string.IsNullOrEmpty(layoutMeta.RevealedShareText))
+            layoutMeta.RevealedShareText = BuildShareText(layoutMeta.RevealedPageTitle, layoutMeta.SiteBrandLabel);
         if (string.IsNullOrEmpty(layoutMeta.ShareHashtags))
             layoutMeta.ShareHashtags = DefaultShareHashtags;
 

@@ -715,16 +715,19 @@ public sealed class EpisodeGenerator
 
         var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
 
+        // シリーズタイトルは『』で囲む（ページ <title>・OG・シェア文に共通で反映される）。
+        // サブタイトル未確定話は鉤括弧を出さず「第N話（サブタイトル「未定」）」の形にする。
+        string fullPageTitle = string.IsNullOrEmpty(ep.TitleText)
+            ? $"『{series.Title}』 第{ep.SeriesEpNo}話{ep.TitleDisplayText}"
+            : $"『{series.Title}』 第{ep.SeriesEpNo}話「{ep.TitleText}」";
+
         var layout = new LayoutModel
         {
-            // シリーズタイトルは『』で囲む（ページ <title>・OG・シェア文に共通で反映される）。
-            // サブタイトル未確定話は鉤括弧を出さず「第N話（サブタイトル「未定」）」の形にする。
-            // 解禁前の話は「第N話」だけにする（og:title・twitter:title・画像の alt・共有文もここから作られる）。
-            PageTitle = ownEmbargoed
-                ? $"『{series.Title}』 第{ep.SeriesEpNo}話"
-                : string.IsNullOrEmpty(ep.TitleText)
-                    ? $"『{series.Title}』 第{ep.SeriesEpNo}話{ep.TitleDisplayText}"
-                    : $"『{series.Title}』 第{ep.SeriesEpNo}話「{ep.TitleText}」",
+            // 解禁前の話は「第N話」だけにする（共有文もここから作られる）。題名入りのタイトルは
+            // RevealedPageTitle で渡し、解禁後に subtitle-embargo.js がタブのタイトルと共有文を差し替える。
+            PageTitle = ownEmbargoed ? $"『{series.Title}』 第{ep.SeriesEpNo}話" : fullPageTitle,
+            SubtitleRevealAt = ownEmbargoed ? SubtitleGuardRenderer.ToRevealAtIso(ownRevealAt!.Value) : "",
+            RevealedPageTitle = ownEmbargoed ? fullPageTitle : "",
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
@@ -739,12 +742,10 @@ public sealed class EpisodeGenerator
 
         // サブタイトル解禁前の話は専用カードを作らない。カードは画像なのでサイト側のガード
         // （ぼかし＋解禁時刻での自動解除）を効かせられず、SNS のプレビューに題名がそのまま出てしまう。
-        // 伏せ字にするより、既に生成されているトップのカードを指すほうが素直（解禁後のビルドで
-        // 自動的に専用カードへ戻る）。
+        // 解禁前のページは SNS のカード用のメタ自体を出さない（_layout.sbn が SubtitleRevealAt を見て抑止する）。
+        // 解禁後のビルドで自動的に専用カードが付く。
         if (!ownEmbargoed)
             layout.OgCard = BuildOgCard(series, ep, content);
-        else
-            layout.OgImage = _page.OgCardUrlFor("/");
 
         // レンダリングとファイル書き出しまでを並列フェーズ内で実施する。
         // サマリ・sitemap 記録は呼び出し側（GenerateAsync）が元のページ順で逐次実行する。

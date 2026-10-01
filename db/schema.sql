@@ -1450,8 +1450,10 @@ CREATE TABLE `persons` (
   `death_day`              tinyint unsigned                                               DEFAULT NULL,
   `notes`            text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションにアイコン付きで並ぶ。
+  -- official_url は本人の公式サイト、affiliation_url は所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ。
   -- wikipedia_url は内部メモとして保持するだけで、サイト UI からはリンクしない。
-  `official_url`     varchar(1024) DEFAULT NULL,
+  `official_url`     varchar(1024) DEFAULT NULL COMMENT '本人の公式サイト URL（詳細ページに外部リンクとして表示）',
+  `affiliation_url`  varchar(1024) DEFAULT NULL COMMENT '所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL',
   `x_url`            varchar(1024) DEFAULT NULL,
   `instagram_url`    varchar(1024) DEFAULT NULL,
   `youtube_url`      varchar(1024) DEFAULT NULL,

@@ -27,6 +27,7 @@ public sealed class PersonsRepository : RepositoryBase
           death_day              AS DeathDay,
           notes            AS Notes,
           official_url     AS OfficialUrl,
+          affiliation_url  AS AffiliationUrl,
           x_url            AS XUrl,
           instagram_url    AS InstagramUrl,
           youtube_url      AS YoutubeUrl,
@@ -90,14 +91,14 @@ public sealed class PersonsRepository : RepositoryBase
                birth_year, birth_year_visibility, birth_month, birth_day,
                death_year, death_month, death_day,
                notes,
-               official_url, x_url, instagram_url, youtube_url, wikipedia_url,
+               official_url, affiliation_url, x_url, instagram_url, youtube_url, wikipedia_url,
                created_by, updated_by)
             VALUES
               (@FamilyName, @GivenName, @FullName, @FullNameKana, @PrimaryAliasId, @NameEn,
                @BirthYear, @BirthYearVisibility, @BirthMonth, @BirthDay,
                @DeathYear, @DeathMonth, @DeathDay,
                @Notes,
-               @OfficialUrl, @XUrl, @InstagramUrl, @YoutubeUrl, @WikipediaUrl,
+               @OfficialUrl, @AffiliationUrl, @XUrl, @InstagramUrl, @YoutubeUrl, @WikipediaUrl,
                @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -125,6 +126,7 @@ public sealed class PersonsRepository : RepositoryBase
               death_day              = @DeathDay,
               notes            = @Notes,
               official_url     = @OfficialUrl,
+              affiliation_url  = @AffiliationUrl,
               x_url            = @XUrl,
               instagram_url    = @InstagramUrl,
               youtube_url      = @YoutubeUrl,

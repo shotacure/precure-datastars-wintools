@@ -291,6 +291,7 @@ public sealed class PersonsGenerator
                 DeathDate = deathDate,
                 DeathDateLabel = deathDateLabel,
                 OfficialUrl = person.OfficialUrl ?? "",
+                AffiliationUrl = person.AffiliationUrl ?? "",
                 XUrl = person.XUrl ?? "",
                 InstagramUrl = person.InstagramUrl ?? "",
                 YoutubeUrl = person.YoutubeUrl ?? ""
@@ -1260,8 +1261,10 @@ public sealed class PersonsGenerator
         public string DeathDate { get; set; } = "";
         /// <summary>没年月日の行の見出し（年しか分からないときは「没年」、それ以外は「没年月日」）。</summary>
         public string DeathDateLabel { get; set; } = "";
-        /// <summary>事務所等の公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
+        /// <summary>本人の公式サイト URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
         public string OfficialUrl { get; set; } = "";
+        /// <summary>所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL。「外部リンク」セクションに「所属先」として、公式ページの次に出す。</summary>
+        public string AffiliationUrl { get; set; } = "";
         public string XUrl { get; set; } = "";
         public string InstagramUrl { get; set; } = "";
         public string YoutubeUrl { get; set; } = "";

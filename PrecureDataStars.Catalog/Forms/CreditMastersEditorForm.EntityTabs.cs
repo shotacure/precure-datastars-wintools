@@ -143,6 +143,7 @@ public partial class CreditMastersEditorForm
                 p.DeathYear, p.DeathMonth, p.DeathDay);
             txtPNotes.Text = p.Notes ?? "";
             txtPOfficialUrl.Text = p.OfficialUrl ?? "";
+            txtPAffiliationUrl.Text = p.AffiliationUrl ?? "";
             txtPXUrl.Text = p.XUrl ?? "";
             txtPInstagramUrl.Text = p.InstagramUrl ?? "";
             txtPYoutubeUrl.Text = p.YoutubeUrl ?? "";
@@ -157,7 +158,7 @@ public partial class CreditMastersEditorForm
         txtPFamily.Text = ""; txtPGiven.Text = "";
         txtPFullName.Text = ""; txtPFullNameKana.Text = "";
         txtPNameEn.Text = ""; txtPNotes.Text = "";
-        txtPOfficialUrl.Text = ""; txtPXUrl.Text = "";
+        txtPOfficialUrl.Text = ""; txtPAffiliationUrl.Text = ""; txtPXUrl.Text = "";
         txtPInstagramUrl.Text = ""; txtPYoutubeUrl.Text = "";
         txtPWikipediaUrl.Text = "";
         LoadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown, cboPBirthYearVis,
@@ -213,6 +214,7 @@ public partial class CreditMastersEditorForm
                 current.DeathDay = pdd.Day;
                 current.Notes = NullIfEmpty(txtPNotes.Text);
                 current.OfficialUrl = NullIfEmpty(txtPOfficialUrl.Text);
+                current.AffiliationUrl = NullIfEmpty(txtPAffiliationUrl.Text);
                 current.XUrl = NullIfEmpty(txtPXUrl.Text);
                 current.InstagramUrl = NullIfEmpty(txtPInstagramUrl.Text);
                 current.YoutubeUrl = NullIfEmpty(txtPYoutubeUrl.Text);
@@ -241,6 +243,7 @@ public partial class CreditMastersEditorForm
                     DeathDay = pdd.Day,
                     Notes = NullIfEmpty(txtPNotes.Text),
                     OfficialUrl = NullIfEmpty(txtPOfficialUrl.Text),
+                    AffiliationUrl = NullIfEmpty(txtPAffiliationUrl.Text),
                     XUrl = NullIfEmpty(txtPXUrl.Text),
                     InstagramUrl = NullIfEmpty(txtPInstagramUrl.Text),
                     YoutubeUrl = NullIfEmpty(txtPYoutubeUrl.Text),

@@ -6061,6 +6061,8 @@ a.credit-card-series:focus-visible {
   background: #f0f1f3;
 }
 .external-link-official  { border-color: #6b7280; }
+/* 所属先（事務所・会社・楽団などのサイトにある本人のプロフィール）。公式ページのグレーと見分けられる青。 */
+.external-link-affiliation { border-color: #2563eb; }
 .external-link-x         { border-color: #0f172a; }
 .external-link-instagram { border-color: #d6249f; }
 .external-link-youtube   { border-color: #ff0000; }

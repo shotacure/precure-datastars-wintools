@@ -53,9 +53,11 @@ partial class CreditMastersEditorForm
     /// <summary>本名義（persons.primary_alias_id）の選択。先頭は「指定なし」、続けてその人物の名義。</summary>
     private ComboBox cboPPrimaryAlias = null!;
     private TextBox txtPNotes = null!;
-    // 外部リンク 5 列。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示する。
+    // 外部リンク 6 列。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示する。
     // Wikipedia だけは内部値として保持はするがサイト UI からはリンクしない（schema.org sameAs 等の将来用途のメモ）。
     private TextBox txtPOfficialUrl = null!;
+    // 所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ。本人の公式サイトとは別の欄。
+    private TextBox txtPAffiliationUrl = null!;
     private TextBox txtPXUrl = null!;
     private TextBox txtPInstagramUrl = null!;
     private TextBox txtPYoutubeUrl = null!;
@@ -569,15 +571,17 @@ partial class CreditMastersEditorForm
         txtPNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtPNotes);
 
-        // 外部リンク 5 行。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示。
+        // 外部リンク 6 行。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示。
+        // 公式ページは本人の公式サイト、所属先のページは事務所・会社・楽団などのサイトにある本人のプロフィール。
         // Wikipedia は内部値として保持するのみで、サイト UI からはリンクしない。
-        txtPOfficialUrl = new TextBox(); txtPXUrl = new TextBox(); txtPInstagramUrl = new TextBox();
-        txtPYoutubeUrl = new TextBox(); txtPWikipediaUrl = new TextBox();
-        AddLabeledControl(pnl, "公式ページ URL",  txtPOfficialUrl,  18, 368, inputWidth: 450);
-        AddLabeledControl(pnl, "X (Twitter)",     txtPXUrl,         18, 400, inputWidth: 450);
-        AddLabeledControl(pnl, "Instagram",       txtPInstagramUrl, 18, 432, inputWidth: 450);
-        AddLabeledControl(pnl, "YouTube",         txtPYoutubeUrl,   18, 464, inputWidth: 450);
-        AddLabeledControl(pnl, "Wikipedia (内部)", txtPWikipediaUrl, 18, 496, inputWidth: 450);
+        txtPOfficialUrl = new TextBox(); txtPAffiliationUrl = new TextBox(); txtPXUrl = new TextBox();
+        txtPInstagramUrl = new TextBox(); txtPYoutubeUrl = new TextBox(); txtPWikipediaUrl = new TextBox();
+        AddLabeledControl(pnl, "公式ページ URL",  txtPOfficialUrl,    18, 368, inputWidth: 450);
+        AddLabeledControl(pnl, "所属先のページ",  txtPAffiliationUrl, 18, 400, inputWidth: 450);
+        AddLabeledControl(pnl, "X (Twitter)",     txtPXUrl,           18, 432, inputWidth: 450);
+        AddLabeledControl(pnl, "Instagram",       txtPInstagramUrl,   18, 464, inputWidth: 450);
+        AddLabeledControl(pnl, "YouTube",         txtPYoutubeUrl,     18, 496, inputWidth: 450);
+        AddLabeledControl(pnl, "Wikipedia (内部)", txtPWikipediaUrl,   18, 528, inputWidth: 450);
 
         btnNewPerson = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSavePerson = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };

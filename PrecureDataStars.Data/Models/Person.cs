@@ -62,8 +62,14 @@ public sealed class Person
 
     // ── 外部リンク（詳細ページの末尾「外部リンク」セクションに出る） ──
 
-    /// <summary>事務所等の公式ページ URL（任意）。詳細ページにアイコン付きで表示。</summary>
+    /// <summary>本人の公式サイト URL（任意）。詳細ページにアイコン付きで表示。</summary>
     public string? OfficialUrl { get; set; }
+
+    /// <summary>
+    /// 所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL（任意）。
+    /// 詳細ページに「所属先」として、公式ページの次に表示する。所属先が変わったらこの値だけを書き換える。
+    /// </summary>
+    public string? AffiliationUrl { get; set; }
 
     /// <summary>X (Twitter) プロフィール URL（任意）。詳細ページにアイコン付きで表示。</summary>
     public string? XUrl { get; set; }

@@ -248,6 +248,7 @@ public sealed class SubtitleStatsGenerator
             r.Katakana,
             r.Latin,
             r.Digits,
+            r.Symbols,
             r.TotalCount,
             SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
             KanjiPercent    = r.TotalCount > 0 ? r.Kanji    * 100.0 / r.TotalCount : 0.0,
@@ -255,6 +256,7 @@ public sealed class SubtitleStatsGenerator
             KatakanaPercent = r.TotalCount > 0 ? r.Katakana * 100.0 / r.TotalCount : 0.0,
             LatinPercent    = r.TotalCount > 0 ? r.Latin    * 100.0 / r.TotalCount : 0.0,
             DigitsPercent   = r.TotalCount > 0 ? r.Digits   * 100.0 / r.TotalCount : 0.0,
+            SymbolsPercent  = r.TotalCount > 0 ? r.Symbols  * 100.0 / r.TotalCount : 0.0,
         }).ToList();
 
         var content = new { Rows = view, CoverageLabel = _coverageLabel };

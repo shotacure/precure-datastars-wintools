@@ -1,30 +1,33 @@
 <section>
   <h1>シリーズ別 記号率</h1>
-  <p class="lead">プリキュアテレビシリーズのサブタイトル記号率（シリーズ内の空白を除いた全文字数に対する、記号文字の割合）が高い順の上位 100 件です。記号は「ひらがな・カタカナ・漢字・英字・数字以外」の文字（句読点・記号・絵文字など）として集計しています。対象はテレビシリーズのみで、スピンオフ・映画は含みません。同点は同順位で、次の順位は同点者数だけ飛びます（Wimbledon 形式。100 位が同点の場合は全件表示します）。<br>
+  <p class="lead">プリキュアテレビシリーズのサブタイトル記号率（シリーズ内の空白を除いた全文字数に対する、記号文字の割合）が高い順の上位 100 件です。記号は「ひらがな・カタカナ・漢字・英字・数字以外」の文字（句読点・記号・絵文字など。長音「ー」はカタカナに数えます）として集計しています。対象はテレビシリーズのみで、スピンオフ・映画は含みません。同点は同順位で、次の順位は同点者数だけ飛びます（Wimbledon 形式。100 位が同点の場合は全件表示します）。<br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>
 
 <section>
-  <table class="stats-series-ranking-table">
-    <thead>
-      <tr>
-        <th class="col-rank">順位</th>
-        <th class="col-series">シリーズ</th>
-        <th class="col-year">年度</th>
-        <th class="col-value">記号率</th>
-        <th class="col-value">記号 / 総文字数</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{~ for r in Rows ~}}
-      <tr>
-        <td class="col-rank">{{ r.Rank }}</td>
-        <td class="col-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a></td>
-        <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
-        <td class="col-value">{{ r.RatioPercent | math.format "0.0" }}%</td>
-        <td class="col-value muted">{{ r.KanjiCount }} / {{ r.TotalCount }}</td>
-      </tr>
-      {{~ end ~}}
-    </tbody>
-  </table>
+  {{## スマホの幅でも表だけを横スクロールさせ、ページ全体を横にはみ出させない。 ##}}
+  <div class="stats-table-scroll">
+    <table class="stats-series-ranking-table">
+      <thead>
+        <tr>
+          <th class="col-rank">順位</th>
+          <th class="col-series">シリーズ</th>
+          <th class="col-year">年度</th>
+          <th class="col-value">記号率</th>
+          <th class="col-value">記号 / 総文字数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in Rows ~}}
+        <tr>
+          <td class="col-rank">{{ r.Rank }}</td>
+          <td class="col-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a></td>
+          <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
+          <td class="col-value">{{ r.RatioPercent | math.format "0.0" }}%</td>
+          <td class="col-value muted">{{ r.KanjiCount }} / {{ r.TotalCount }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </div>
 </section>

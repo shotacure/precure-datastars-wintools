@@ -66,6 +66,11 @@ partial class CreditMastersEditorForm
     private ComboBox cboPBirthYearVis = null!;
     private ComboBox cboPBirthMonth = null!;
     private ComboBox cboPBirthDay = null!;
+    // 没年月日入力欄（没年 NUD ＋「なし」チェック・月／日コンボ）。「なし」は存命・不明。
+    private NumericUpDown nudPDeathYear = null!;
+    private CheckBox chkPDeathNone = null!;
+    private ComboBox cboPDeathMonth = null!;
+    private ComboBox cboPDeathDay = null!;
     private Button btnNewPerson = null!;
     private Button btnSavePerson = null!;
     private Button btnDeletePerson = null!;
@@ -463,6 +468,66 @@ partial class CreditMastersEditorForm
         });
     }
 
+    /// <summary>
+    /// 「没年月日」入力行（没年 NumericUpDown ＋「なし」チェック・月／日コンボ）を 1 行に配置する。
+    /// 「なし」チェック時は没年を NULL（存命・不明）とし、NUD を無効化する。月／日は先頭項目「(未)」が NULL を表す。
+    /// 列の位置は誕生日の行にそろえ、公開可否の欄は持たない（没年月日は分かっていれば出す）。
+    /// </summary>
+    private static void AddDeathDateRow(
+        Panel panel, int x, int y,
+        out NumericUpDown nudYear, out CheckBox chkNone,
+        out ComboBox cboMonth, out ComboBox cboDay)
+    {
+        var lbl = new Label { Text = "没年月日", Location = new Point(x, y + 4), Size = new Size(110, 20) };
+        nudYear = new NumericUpDown
+        {
+            Location = new Point(x + 114, y),
+            Size = new Size(66, 23),
+            Minimum = 1900,
+            Maximum = 2155,
+            ThousandsSeparator = false,
+            Value = 2000,
+            Enabled = false
+        };
+        chkNone = new CheckBox
+        {
+            Text = "なし",
+            Checked = true,
+            Location = new Point(x + 184, y + 2),
+            Size = new Size(56, 22)
+        };
+        cboMonth = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Location = new Point(x + 346, y),
+            Size = new Size(58, 23)
+        };
+        cboMonth.Items.Add("(未)");
+        for (int i = 1; i <= 12; i++) cboMonth.Items.Add(i);
+        cboMonth.SelectedIndex = 0;
+        var lblM = new Label { Text = "月", Location = new Point(x + 406, y + 4), Size = new Size(18, 20) };
+        cboDay = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Location = new Point(x + 428, y),
+            Size = new Size(58, 23)
+        };
+        cboDay.Items.Add("(未)");
+        for (int i = 1; i <= 31; i++) cboDay.Items.Add(i);
+        cboDay.SelectedIndex = 0;
+        var lblD = new Label { Text = "日", Location = new Point(x + 488, y + 4), Size = new Size(18, 20) };
+
+        // 「なし」チェックと没年 NUD の活性を連動させる。
+        var nudYearRef = nudYear;
+        var chkRef = chkNone;
+        chkNone.CheckedChanged += (_, __) => nudYearRef.Enabled = !chkRef.Checked;
+
+        panel.Controls.AddRange(new Control[]
+        {
+            lbl, nudYear, chkNone, cboMonth, lblM, cboDay, lblD
+        });
+    }
+
     private void BuildPersonsTab()
     {
         tabPersons.Padding = new Padding(8);
@@ -495,8 +560,12 @@ partial class CreditMastersEditorForm
             out nudPBirthYear, out chkPBirthYearUnknown, out cboPBirthYearVis,
             out cboPBirthMonth, out cboPBirthDay);
 
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, 250), Size = new Size(110, 20) };
-        txtPNotes.Location = new Point(132, 246);
+        AddDeathDateRow(pnl, 18, 242,
+            out nudPDeathYear, out chkPDeathNone,
+            out cboPDeathMonth, out cboPDeathDay);
+
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, 282), Size = new Size(110, 20) };
+        txtPNotes.Location = new Point(132, 278);
         txtPNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtPNotes);
 
@@ -504,11 +573,11 @@ partial class CreditMastersEditorForm
         // Wikipedia は内部値として保持するのみで、サイト UI からはリンクしない。
         txtPOfficialUrl = new TextBox(); txtPXUrl = new TextBox(); txtPInstagramUrl = new TextBox();
         txtPYoutubeUrl = new TextBox(); txtPWikipediaUrl = new TextBox();
-        AddLabeledControl(pnl, "公式ページ URL",  txtPOfficialUrl,  18, 336, inputWidth: 450);
-        AddLabeledControl(pnl, "X (Twitter)",     txtPXUrl,         18, 368, inputWidth: 450);
-        AddLabeledControl(pnl, "Instagram",       txtPInstagramUrl, 18, 400, inputWidth: 450);
-        AddLabeledControl(pnl, "YouTube",         txtPYoutubeUrl,   18, 432, inputWidth: 450);
-        AddLabeledControl(pnl, "Wikipedia (内部)", txtPWikipediaUrl, 18, 464, inputWidth: 450);
+        AddLabeledControl(pnl, "公式ページ URL",  txtPOfficialUrl,  18, 368, inputWidth: 450);
+        AddLabeledControl(pnl, "X (Twitter)",     txtPXUrl,         18, 400, inputWidth: 450);
+        AddLabeledControl(pnl, "Instagram",       txtPInstagramUrl, 18, 432, inputWidth: 450);
+        AddLabeledControl(pnl, "YouTube",         txtPYoutubeUrl,   18, 464, inputWidth: 450);
+        AddLabeledControl(pnl, "Wikipedia (内部)", txtPWikipediaUrl, 18, 496, inputWidth: 450);
 
         btnNewPerson = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSavePerson = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };

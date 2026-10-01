@@ -203,7 +203,8 @@ public static class AnniversaryDataBuilder
                 Day = pd,
                 PersonName = pe.FullName,
                 PersonUrl = PathUtil.PersonUrl(pe.PersonId),
-                BirthYear = birthYear
+                BirthYear = birthYear,
+                IsDeceased = pe.DeathYear.HasValue
             });
         }
     }

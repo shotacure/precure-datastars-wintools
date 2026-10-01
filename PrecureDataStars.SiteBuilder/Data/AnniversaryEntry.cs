@@ -94,4 +94,10 @@ public sealed record AnniversaryEntry
 
     /// <summary>生年。公開設定が <c>PUBLIC</c> かつ判明している場合のみ非 null。</summary>
     public int? BirthYear { get; init; }
+
+    /// <summary>
+    /// 亡くなった人か（没年がある人物）。トップの「今日の記念日」はこの人の誕生日に年齢を添えない。
+    /// 記念日の日別ページの「YYYY年生まれ」は生年の事実なので、この値に関わらず出す。
+    /// </summary>
+    public bool IsDeceased { get; init; }
 }

@@ -271,6 +271,10 @@ public sealed class PersonsGenerator
         // 誕生日表記：BirthYearVisibility=PUBLIC かつ BirthYear ありなら「YYYY年M月D日」、
         // 非公開もしくは未設定なら年抜きの「M月D日」。BirthMonth / BirthDay の片方でも未設定なら空文字。
         string birthday = FormatBirthday(person);
+        // 没年月日表記：分かっている所まで（「2025年8月20日」「2016年10月」「2016年」）。没年が無ければ空文字。
+        // 年しか分からないときは見出しを「没年」にする。
+        string deathDate = FormatDeathDate(person);
+        string deathDateLabel = person.DeathMonth is null ? "没年" : "没年月日";
 
         var content = new PersonDetailModel
         {
@@ -284,6 +288,8 @@ public sealed class PersonsGenerator
                 NameEn = person.NameEn ?? "",
                 Notes = person.Notes ?? "",
                 Birthday = birthday,
+                DeathDate = deathDate,
+                DeathDateLabel = deathDateLabel,
                 OfficialUrl = person.OfficialUrl ?? "",
                 XUrl = person.XUrl ?? "",
                 InstagramUrl = person.InstagramUrl ?? "",
@@ -902,6 +908,18 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
+    /// 没年月日表記を組み立てる。分かっている所までを「YYYY年M月D日」「YYYY年M月」「YYYY年」で返す。
+    /// 没年が無い（存命・不明）なら空文字を返す（没年月日の行を出さない）。
+    /// </summary>
+    private static string FormatDeathDate(Person p)
+    {
+        if (p.DeathYear is not ushort y) return "";
+        if (p.DeathMonth is not byte m) return $"{y}年";
+        if (p.DeathDay is not byte d) return $"{y}年{m}月";
+        return $"{y}年{m}月{d}日";
+    }
+
+    /// <summary>
     /// 構造化エントリ（song_credits / song_recording_singers）に紐付いた当該人物の担当楽曲をカード行群に集約する。
     /// 1 カード = 1 曲。同じ曲で複数役職（作詞 + 作曲 等）を持つ場合は同カード内に役職バッジを並べる。
     /// 出典シリーズ・タイトルは、その人が歌った曲は「歌った録音」から、作詞作曲編曲だけの曲は当該曲の
@@ -1236,6 +1254,10 @@ public sealed class PersonsGenerator
         public string Notes { get; set; } = "";
         /// <summary>誕生日表記（「YYYY年M月D日」または「M月D日」、未設定時は空文字）。</summary>
         public string Birthday { get; set; } = "";
+        /// <summary>没年月日表記（「YYYY年M月D日」「YYYY年M月」「YYYY年」、存命・不明なら空文字）。</summary>
+        public string DeathDate { get; set; } = "";
+        /// <summary>没年月日の行の見出し（年しか分からないときは「没年」、それ以外は「没年月日」）。</summary>
+        public string DeathDateLabel { get; set; } = "";
         /// <summary>事務所等の公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
         public string OfficialUrl { get; set; } = "";
         public string XUrl { get; set; } = "";

@@ -843,7 +843,8 @@ WHERE e.is_deleted = 0
                         d = e.Day,
                         pn = e.PersonName,
                         pu = e.PersonUrl,
-                        by = e.BirthYear
+                        // by は「今日の記念日」で年齢を添えるための生年。亡くなった人には年齢を添えないので出さない。
+                        by = e.IsDeceased ? null : e.BirthYear
                     });
                     break;
             }

@@ -1443,6 +1443,11 @@ CREATE TABLE `persons` (
   `birth_year_visibility`  varchar(16)                                                    NOT NULL DEFAULT 'PUBLIC',  -- PUBLIC=生成に出す / PRIVATE=出さない（本人スタンス尊重）
   `birth_month`            tinyint unsigned                                               DEFAULT NULL,
   `birth_day`              tinyint unsigned                                               DEFAULT NULL,
+  -- 没年月日：年・月・日を別の列で持ち、一部だけ分かっている日付（「2016年」など）も表せる。
+  -- 没年がある人物は、人物詳細に没年月日を出し、トップの「今日の記念日」で誕生日に年齢を添えない。
+  `death_year`             smallint unsigned                                              DEFAULT NULL,  -- 没年（西暦。存命・不明は NULL）
+  `death_month`            tinyint unsigned                                               DEFAULT NULL,
+  `death_day`              tinyint unsigned                                               DEFAULT NULL,
   `notes`            text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションにアイコン付きで並ぶ。
   -- wikipedia_url は内部メモとして保持するだけで、サイト UI からはリンクしない。
@@ -1464,7 +1469,11 @@ CREATE TABLE `persons` (
   CONSTRAINT `ck_persons_birth_year_visibility` CHECK (`birth_year_visibility` IN ('PUBLIC','PRIVATE')),
   CONSTRAINT `ck_persons_birth_month`           CHECK (`birth_month` IS NULL OR (`birth_month` BETWEEN 1 AND 12)),
   CONSTRAINT `ck_persons_birth_day`             CHECK (`birth_day`   IS NULL OR (`birth_day`   BETWEEN 1 AND 31)),
-  CONSTRAINT `ck_persons_birth_day_needs_month` CHECK (`birth_day` IS NULL OR `birth_month` IS NOT NULL)
+  CONSTRAINT `ck_persons_birth_day_needs_month` CHECK (`birth_day` IS NULL OR `birth_month` IS NOT NULL),
+  CONSTRAINT `ck_persons_death_month`           CHECK (`death_month` IS NULL OR (`death_month` BETWEEN 1 AND 12)),
+  CONSTRAINT `ck_persons_death_day`             CHECK (`death_day`   IS NULL OR (`death_day`   BETWEEN 1 AND 31)),
+  CONSTRAINT `ck_persons_death_day_needs_month` CHECK (`death_day` IS NULL OR `death_month` IS NOT NULL),
+  CONSTRAINT `ck_persons_death_month_needs_year` CHECK (`death_month` IS NULL OR `death_year` IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

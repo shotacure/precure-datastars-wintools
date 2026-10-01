@@ -22,6 +22,9 @@ public sealed class PersonsRepository : RepositoryBase
           birth_year_visibility  AS BirthYearVisibility,
           birth_month            AS BirthMonth,
           birth_day              AS BirthDay,
+          death_year             AS DeathYear,
+          death_month            AS DeathMonth,
+          death_day              AS DeathDay,
           notes            AS Notes,
           official_url     AS OfficialUrl,
           x_url            AS XUrl,
@@ -85,12 +88,14 @@ public sealed class PersonsRepository : RepositoryBase
             INSERT INTO persons
               (family_name, given_name, full_name, full_name_kana, primary_alias_id, name_en,
                birth_year, birth_year_visibility, birth_month, birth_day,
+               death_year, death_month, death_day,
                notes,
                official_url, x_url, instagram_url, youtube_url, wikipedia_url,
                created_by, updated_by)
             VALUES
               (@FamilyName, @GivenName, @FullName, @FullNameKana, @PrimaryAliasId, @NameEn,
                @BirthYear, @BirthYearVisibility, @BirthMonth, @BirthDay,
+               @DeathYear, @DeathMonth, @DeathDay,
                @Notes,
                @OfficialUrl, @XUrl, @InstagramUrl, @YoutubeUrl, @WikipediaUrl,
                @CreatedBy, @UpdatedBy);
@@ -115,6 +120,9 @@ public sealed class PersonsRepository : RepositoryBase
               birth_year_visibility  = @BirthYearVisibility,
               birth_month            = @BirthMonth,
               birth_day              = @BirthDay,
+              death_year             = @DeathYear,
+              death_month            = @DeathMonth,
+              death_day              = @DeathDay,
               notes            = @Notes,
               official_url     = @OfficialUrl,
               x_url            = @XUrl,

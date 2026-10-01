@@ -45,6 +45,18 @@ public sealed class Person
     /// <summary>誕生日（1-31、任意）。<see cref="BirthMonth"/> が無いとき本値も持てない。</summary>
     public byte? BirthDay { get; set; }
 
+    /// <summary>
+    /// 没年（西暦、任意）。存命・不明なら <c>null</c>。値がある人物は「亡くなった人」として扱い、
+    /// サイトの人物詳細に没年月日を出し、トップの「今日の記念日」で誕生日に年齢を添えない。
+    /// </summary>
+    public ushort? DeathYear { get; set; }
+
+    /// <summary>没月（1-12、任意）。<see cref="DeathYear"/> が無いとき本値も持てない。</summary>
+    public byte? DeathMonth { get; set; }
+
+    /// <summary>没日（1-31、任意）。<see cref="DeathMonth"/> が無いとき本値も持てない。</summary>
+    public byte? DeathDay { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

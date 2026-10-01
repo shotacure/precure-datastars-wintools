@@ -1481,8 +1481,11 @@ public sealed class CreatorsGenerator
             rows.Add(new SingerListRow
             {
                 EntityKind = "character",
-                // 変身するキャラは「変身前 / 変身後」（例：美墨なぎさ / キュアブラック）、それ以外は最初に歌ったときの名義。
-                Name = transformNameByCharacter.TryGetValue(charId, out var transformName) ? transformName : fa?.Name ?? "",
+                // 変身するキャラは「変身前 / 変身後」（例：美墨なぎさ / キュアブラック）、それ以外は最初に歌ったときの名義
+                // （苗字の無い名義ならフルネームの名義）。
+                Name = transformNameByCharacter.TryGetValue(charId, out var transformName)
+                    ? transformName
+                    : fa is null ? "" : _ctx.CharacterAliasNames.DisplayName(fa),
                 NameKana = fa?.NameKana ?? "",
                 Url = PathUtil.CharacterUrl(charId),
                 VoiceName = _ctx.EntityUrls.PersonDisplayName(pid) ?? person.FullName,
@@ -1904,8 +1907,9 @@ public sealed class CreatorsGenerator
                     bestAlias = caId;
                 }
             }
+            // 苗字の無い名義（「志穂」など）が最頻でも、役名はフルネームの名義（「久保田 志穂」）で出す。
             if (bestAlias >= 0 && aliasById.TryGetValue(bestAlias, out var ba))
-                repAliasNameByChar[charId] = ba.Name;
+                repAliasNameByChar[charId] = _ctx.CharacterAliasNames.DisplayName(ba);
         }
         return repAliasNameByChar;
     }

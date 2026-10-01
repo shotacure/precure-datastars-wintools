@@ -797,12 +797,13 @@ public sealed class PersonsGenerator
             PerEpisodeCharacterNamesHtml: CharacterLinksHtml(perEpisodeCharacters));
 
         // character_alias_id からキャラを引き、未登場の character_id なら初出順で追加する。
+        // 役名は苗字の無い名義ならフルネームの名義で出す（CharacterAliasNames）。
         void AddCharacter(List<(int CharacterId, string Name)> list, int characterAliasId)
         {
             if (!_ctx.CharacterAliasById.TryGetValue(characterAliasId, out var ca)) return;
             if (string.IsNullOrEmpty(ca.Name)) return;
             if (list.Any(c => c.CharacterId == ca.CharacterId)) return;
-            list.Add((ca.CharacterId, ca.Name));
+            list.Add((ca.CharacterId, _ctx.CharacterAliasNames.DisplayName(ca)));
         }
 
         // キャラ名をキャラクター詳細（単発キャラはゲストキャラクターページの該当話）へのリンクにして「、」で連結する。
@@ -838,7 +839,8 @@ public sealed class PersonsGenerator
 
             if (!byChar.TryGetValue(charId, out var acc))
             {
-                acc = (ca.Name, key, new Dictionary<int, (HashSet<int>, bool)>());
+                // 見出しの役名は苗字の無い名義ならフルネームの名義で出す（CharacterAliasNames）。
+                acc = (_ctx.CharacterAliasNames.DisplayName(ca), key, new Dictionary<int, (HashSet<int>, bool)>());
                 byChar[charId] = acc;
             }
             if (key < acc.FirstKey)

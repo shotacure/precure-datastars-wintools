@@ -83,6 +83,14 @@ public sealed class SiteBuilderPipeline
         // 構築タイミングはホーム・About 直後（SeriesGenerator より前）。
         var involvementIndex = await CreditInvolvementIndex.BuildAsync(ctx, factory, ct).ConfigureAwait(false);
 
+        // キャラクターを 1 つの名前で指すときの表示名（苗字の無い名義 → フルネームの名義。正式名と空白の有無だけ
+        // 違うときは正式名の表記）。各 Generator の並列のページ生成から読むだけなので、ページ生成の前に 1 度だけ作る。
+        {
+            var characters = await new CharactersRepository(factory).GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+            ctx.CharacterAliasNames = CharacterAliasNames.Build(
+                ctx.CharacterAliasById, characters.ToDictionary(c => c.CharacterId, c => c.Name));
+        }
+
         // 役職系譜（role_successions）を読んで Resolver を構築する。
         // CreatorsGenerator がクラスタ統合集計（役職詳細・スタッフ一覧）を行うために必要。
         // SeriesGenerator / EpisodeGenerator のスタッフバッジ系譜解決にも共有する。読み込みは 1 ビルド 1 回限り。

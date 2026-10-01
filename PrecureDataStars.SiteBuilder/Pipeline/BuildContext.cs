@@ -282,6 +282,12 @@ public sealed class BuildContext
     public BirthdayCalendarEligibility BirthdayCalendar { get; set; } = BirthdayCalendarEligibility.All;
 
     /// <summary>
+    /// キャラクターを 1 つの名前で指すときの名義の表示名（苗字の無い名義をフルネームの名義に置き換える）。
+    /// データ読み込み直後に Pipeline が 1 度だけ詰める。未構築なら名義の表記をそのまま返す。
+    /// </summary>
+    public CharacterAliasNames CharacterAliasNames { get; set; } = CharacterAliasNames.Identity;
+
+    /// <summary>
     /// サブタイトル解禁時刻の事前計算辞書（episode_id → 解禁時刻）。
     /// <see cref="Utilities.SubtitleEmbargoCalculator.Build"/> がビルド開始時に 1 度だけ構築する。
     /// 辞書に載るのはビルド時点（<see cref="BuildStartedAt"/>）でまだ解禁前の話だけ。辞書に無いエピソードは

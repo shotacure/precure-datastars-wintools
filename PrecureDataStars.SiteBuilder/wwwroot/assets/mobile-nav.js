@@ -50,6 +50,9 @@
 
   // 開状態を保持するフラグ（getAttribute('hidden') を毎回見るより軽い）。
   var isOpen = false;
+  // 開いている間のフォーカスの閉じ込め（focus-trap.js）。開いたらメニュー内の最初のボタンへ移し、
+  // Tab でメニューの外（背後のページ）へ出ないようにする。閉じるときに解き、開閉ボタンへ戻す。
+  var trap = null;
 
   function open() {
     if (isOpen) return;
@@ -58,6 +61,7 @@
     toggle.setAttribute('aria-expanded', 'true');
     toggle.setAttribute('aria-label', 'メニューを閉じる');
     document.body.classList.add('mobile-nav-open');
+    if (window.PCDS && window.PCDS.focusTrap) trap = window.PCDS.focusTrap.activate(overlay);
   }
 
   function close() {
@@ -67,7 +71,12 @@
     toggle.setAttribute('aria-expanded', 'false');
     toggle.setAttribute('aria-label', 'メニューを開く');
     document.body.classList.remove('mobile-nav-open');
+    if (trap) { trap.release(); trap = null; }
   }
+
+  // 検索の ?q= ディープリンク（search.js）が、スマホ幅でメニューを開いて結果を見せるのに使う。
+  window.PCDS = window.PCDS || {};
+  window.PCDS.mobileNav = { open: open, close: close };
 
   // ハンバーガーボタン本体のクリックでトグル。
   toggle.addEventListener('click', function () {

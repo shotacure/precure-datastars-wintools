@@ -127,6 +127,9 @@
   }
 
   // ── 初回確認ダイアログ ──
+  // 開いている間のフォーカスの閉じ込め（focus-trap.js）。閉じるときに解く。
+  var dialogTrap = null;
+
   function showDialogIfNeeded(hasActiveEmbargo) {
     if (!hasActiveEmbargo) return;
     if (getPreference() !== null) return;
@@ -134,12 +137,14 @@
     if (!dialog) return;
     dialog.hidden = false;
     document.body.classList.add('subtitle-embargo-dialog-open');
+    if (window.PCDS && window.PCDS.focusTrap) dialogTrap = window.PCDS.focusTrap.activate(dialog);
   }
 
   function closeDialog() {
     var dialog = document.getElementById('subtitle-embargo-dialog');
     if (dialog) dialog.hidden = true;
     document.body.classList.remove('subtitle-embargo-dialog-open');
+    if (dialogTrap) { dialogTrap.release(); dialogTrap = null; }
   }
 
   function wireDialog() {

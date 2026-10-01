@@ -84,6 +84,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Kiwi+Maru:wght@400;500&family=Kaisei+Decol:wght@400;500;700&family=DotGothic16&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ asset_url "/assets/site.css" }}">
 
+{{## ──────── ダイアログのキーボード操作（フォーカスを中に閉じ込め、閉じたら戻す） ────────
+     subtitle-embargo.js・art-track-pref.js・mobile-nav.js が window.PCDS.focusTrap を使うので、それらより前に置く。 ##}}
+<script src="{{ asset_url "/assets/focus-trap.js" }}" defer></script>
 {{## ──────── サブタイトル解禁ガード JS ────────
      未放送話（前話の予告がまだ放送されていない話数）のサブタイトルをぼかす／解禁する判定ロジック。
      calendar.js・search.js 等がこの後で window.PCDS.subtitleEmbargo を参照するため、defer スクリプトの

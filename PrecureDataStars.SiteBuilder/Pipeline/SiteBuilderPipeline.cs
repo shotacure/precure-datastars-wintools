@@ -87,6 +87,8 @@ public sealed class SiteBuilderPipeline
         // CreatorsGenerator がクラスタ統合集計（役職詳細・スタッフ一覧）を行うために必要。
         // SeriesGenerator / EpisodeGenerator のスタッフバッジ系譜解決にも共有する。読み込みは 1 ビルド 1 回限り。
         var roleSuccessorResolver = await BuildRoleSuccessorResolverAsync(factory, ct).ConfigureAwait(false);
+        // 役職詳細ページへのリンク（PathUtil.CreatorsRoleUrl）も系譜の代表へ向ける。
+        PathUtil.UseRoleRepresentatives(roleSuccessorResolver);
 
         // 人物・キャラクター・企業の詳細ページ URL（名前ベース）と単発キャラの判定を 1 度だけ確定させる。
         // 単発キャラの判定にクレジット関与を使うため CreditInvolvementIndex 構築後、かつ全ページ生成より前。

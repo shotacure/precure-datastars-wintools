@@ -285,9 +285,9 @@ public sealed class EntityUrlRegistry
     }
 
     /// <summary>
-    /// person_id → いま公開している人物 URL のスラッグ（<c>published_entity_slugs</c> で最後に記録したもの）。
-    /// 記録は本番デプロイのたびに新しいスラッグだけを追記する（INSERT IGNORE）ので、記録日時が最も新しい行が
-    /// いま公開している URL に当たる。同じ日時の行が複数あるときはスラッグの順で決めて結果を揺らさない。
+    /// person_id → いま公開している人物 URL のスラッグ（<c>published_entity_slugs</c> で最後に公開した日時が最も新しいもの）。
+    /// 本番デプロイのたびに、いまの URL の行の last_published_at をデプロイ時刻に更新するので、その値が最も新しい行が
+    /// いま公開している URL に当たる。同じ日時の行が複数あるときは最初に公開した日時 → スラッグの順で決めて結果を揺らさない。
     /// </summary>
     private static async Task<Dictionary<int, string>> LoadCurrentPublishedPersonSlugsAsync(
         IConnectionFactory factory, CancellationToken ct)
@@ -296,7 +296,7 @@ public sealed class EntityUrlRegistry
             SELECT person_id AS PersonId, slug AS Slug
               FROM published_entity_slugs
              WHERE entity_kind = 'PERSON' AND person_id IS NOT NULL
-             ORDER BY person_id, created_at DESC, slug
+             ORDER BY person_id, last_published_at DESC, created_at DESC, slug
             """;
         await using var conn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<(int PersonId, string Slug)>(
@@ -309,26 +309,40 @@ public sealed class EntityUrlRegistry
 
     /// <summary>
     /// いまの人物 URL・キャラ詳細 URL のスラッグを、本番で公開した記録として台帳 <c>published_entity_slugs</c> に追記する。
-    /// 本番デプロイが成功した（本番がこのビルドの出力と一致した）ときだけ呼ぶ。記録済みのスラッグはそのまま残す
+    /// 本番デプロイが成功した（本番がこのビルドの出力と一致した）ときだけ呼ぶ。記録済みのスラッグの持ち主はそのまま残す
     /// （最初に公開した実体を指し続ける）。区分に応じて person_id / character_id の一方だけを埋める。
+    /// あわせて、いまの URL の行（同じ実体の行）の last_published_at をこのデプロイの時刻に更新する
+    /// （一度別の URL に変わってから元の URL に戻っても、いま公開している URL を正しく引けるように）。
     /// 戻り値は新たに記録した件数（人物・キャラ）。
     /// </summary>
     public async Task<(int Persons, int Characters)> RecordPublishedSlugsAsync(IConnectionFactory factory, CancellationToken ct)
     {
         const string personSql = """
-            INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, person_id)
-            VALUES ('PERSON', @Slug, @EntityId)
+            INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, person_id, last_published_at)
+            VALUES ('PERSON', @Slug, @EntityId, @At)
             """;
         const string characterSql = """
-            INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, character_id)
-            VALUES ('CHARACTER', @Slug, @EntityId)
+            INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, character_id, last_published_at)
+            VALUES ('CHARACTER', @Slug, @EntityId, @At)
             """;
-        var personRows = _personSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key }).ToList();
-        var characterRows = _characterSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key }).ToList();
+        // 記録済みの行は、同じ実体の行だけ最後に公開した日時を更新する（別の実体が先に使っていたスラッグは触らない）。
+        const string personTouchSql = """
+            UPDATE published_entity_slugs SET last_published_at = @At
+             WHERE entity_kind = 'PERSON' AND slug = @Slug AND person_id = @EntityId
+            """;
+        const string characterTouchSql = """
+            UPDATE published_entity_slugs SET last_published_at = @At
+             WHERE entity_kind = 'CHARACTER' AND slug = @Slug AND character_id = @EntityId
+            """;
+        var at = DateTime.Now;
+        var personRows = _personSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
+        var characterRows = _characterSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
         await using var conn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         int persons = await conn.ExecuteAsync(new CommandDefinition(personSql, personRows, tx, cancellationToken: ct)).ConfigureAwait(false);
         int characters = await conn.ExecuteAsync(new CommandDefinition(characterSql, characterRows, tx, cancellationToken: ct)).ConfigureAwait(false);
+        await conn.ExecuteAsync(new CommandDefinition(personTouchSql, personRows, tx, cancellationToken: ct)).ConfigureAwait(false);
+        await conn.ExecuteAsync(new CommandDefinition(characterTouchSql, characterRows, tx, cancellationToken: ct)).ConfigureAwait(false);
         await tx.CommitAsync(ct).ConfigureAwait(false);
         return (persons, characters);
     }

@@ -3290,7 +3290,8 @@ CREATE TABLE `legacy_entity_ids` (
 -- URL も /people/{最新名義}/ で作るため、クレジットの入力が進むと URL が変わる。キャラクター詳細の URL
 -- （/characters/{キャラ名}/）もキャラ名を変えると変わる。記録済みの旧 URL のうちいまの URL と違うものを、
 -- SiteBuilder が転送表に載せて新 URL へ 301 で転送する。
--- 記録は SiteBuilder の本番デプロイ成功時に追記する（INSERT IGNORE、記録済みの行は変えない）。
+-- 記録は SiteBuilder の本番デプロイ成功時に追記する（INSERT IGNORE、記録済みの行の持ち主は変えない）。
+-- あわせて、いまの URL の行の last_published_at をデプロイ時刻に更新し、人物の「いま公開している名義」はその値が最も新しい行から選ぶ。
 -- slug は完全一致で照合するため utf8mb4_bin。区分（entity_kind）に応じて person_id / character_id のどちらか一方だけを持つ
 -- （両列とも参照先の CASCADE を持つので MySQL では CHECK 制約にできず、書き込み側で守る）。
 -- 人物・キャラクターを統合するときは削除の前に person_id / character_id を統合先へ付け替える。
@@ -3305,6 +3306,7 @@ CREATE TABLE `published_entity_slugs` (
   `person_id`    int DEFAULT NULL COMMENT 'その URL で公開した人物（PERSON の行のみ）',
   `character_id` int DEFAULT NULL COMMENT 'その URL で公開したキャラクター（CHARACTER の行のみ）',
   `created_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最初に公開を記録した日時',
+  `last_published_at` timestamp NULL DEFAULT NULL COMMENT '最後に本番で公開したデプロイの日時（デプロイのたびに更新）',
   PRIMARY KEY (`entity_kind`, `slug`),
   KEY `ix_pes_person` (`person_id`),
   KEY `ix_pes_character` (`character_id`),

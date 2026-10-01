@@ -315,7 +315,7 @@ public sealed class SiteBuilderPipeline
             bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
 
             // 本番がこのビルドの出力と一致したら、いまの人物・キャラ URL を公開記録（published_entity_slugs）に追記する。
-            // 以後のビルドで人物の最新名義やキャラ名が変わって URL が変わったとき、この記録から旧 URL → 新 URL の 301 を作る。
+            // 以後のビルドで人物の表示名義やキャラ名が変わって URL が変わったとき、この記録から旧 URL → 新 URL の 301 を作る。
             // ピンポイントモード（--page）は一部のページしか上げないため記録しない。
             if (published && string.IsNullOrEmpty(config.PageFilter))
             {

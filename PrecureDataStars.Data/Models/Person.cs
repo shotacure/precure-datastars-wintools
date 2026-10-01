@@ -23,6 +23,13 @@ public sealed class Person
     /// <summary>フルネームの読み（ひらがな等）。</summary>
     public string? FullNameKana { get; set; }
 
+    /// <summary>
+    /// 本名義（<c>person_aliases.alias_id</c>、任意）。サイトの人物詳細の見出し・URL・一覧の行表記に使う名義。
+    /// 未指定（<c>null</c>）なら、いま公開している名義、まだ公開していなければ TV 系のクレジットで最後に使われた名義になる。
+    /// 改名した人物の現在の名義を出したいときに指定する。
+    /// </summary>
+    public int? PrimaryAliasId { get; set; }
+
     /// <summary>英語表記（任意）。</summary>
     public string? NameEn { get; set; }
 

@@ -1436,6 +1436,8 @@ CREATE TABLE `persons` (
   `given_name`       varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks   DEFAULT NULL,
   `full_name`        varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  NOT NULL,
   `full_name_kana`   varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  DEFAULT NULL,
+  -- 本名義：見出し・URL・一覧の行表記に使う名義。NULL なら公開中の名義 → TV 系のクレジットで最後に使われた名義。
+  `primary_alias_id` int                                                                  DEFAULT NULL,
   `name_en`          varchar(128)                                                         DEFAULT NULL,
   `birth_year`             smallint unsigned                                              DEFAULT NULL,  -- 生年（西暦。不明は NULL）
   `birth_year_visibility`  varchar(16)                                                    NOT NULL DEFAULT 'PUBLIC',  -- PUBLIC=生成に出す / PRIVATE=出さない（本人スタンス尊重）
@@ -1457,6 +1459,8 @@ CREATE TABLE `persons` (
   PRIMARY KEY (`person_id`),
   KEY `ix_persons_full_name`      (`full_name`),
   KEY `ix_persons_full_name_kana` (`full_name_kana`),
+  KEY `ix_persons_primary_alias`  (`primary_alias_id`),
+  CONSTRAINT `fk_persons_primary_alias` FOREIGN KEY (`primary_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_persons_birth_year_visibility` CHECK (`birth_year_visibility` IN ('PUBLIC','PRIVATE')),
   CONSTRAINT `ck_persons_birth_month`           CHECK (`birth_month` IS NULL OR (`birth_month` BETWEEN 1 AND 12)),
   CONSTRAINT `ck_persons_birth_day`             CHECK (`birth_day`   IS NULL OR (`birth_day`   BETWEEN 1 AND 31)),

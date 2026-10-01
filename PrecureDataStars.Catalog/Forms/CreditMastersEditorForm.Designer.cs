@@ -50,6 +50,8 @@ partial class CreditMastersEditorForm
     private TextBox txtPFullName = null!;
     private TextBox txtPFullNameKana = null!;
     private TextBox txtPNameEn = null!;
+    /// <summary>本名義（persons.primary_alias_id）の選択。先頭は「指定なし」、続けてその人物の名義。</summary>
+    private ComboBox cboPPrimaryAlias = null!;
     private TextBox txtPNotes = null!;
     // 外部リンク 5 列。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示する。
     // Wikipedia だけは内部値として保持はするがサイト UI からはリンクしない（schema.org sameAs 等の将来用途のメモ）。
@@ -467,7 +469,8 @@ partial class CreditMastersEditorForm
         gridPersons = new DataGridView { Dock = DockStyle.Top, Height = 340 };
         ConfigureListGrid(gridPersons);
 
-        var pnl = new Panel { Dock = DockStyle.Fill, Padding = new Padding(18) };
+        // 入力欄が縦に長いので、ウインドウが低くても下の欄まで届くようスクロールできる枠にする。
+        var pnl = new Panel { Dock = DockStyle.Fill, Padding = new Padding(18), AutoScroll = true };
         txtPFamily = new TextBox(); txtPGiven = new TextBox();
         txtPFullName = new TextBox(); txtPFullNameKana = new TextBox();
         txtPNameEn = new TextBox(); txtPNotes = new TextBox { Multiline = true };
@@ -478,12 +481,22 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "フルネーム(かな)", txtPFullNameKana, 18, 114, inputWidth: 320);
         AddLabeledControl(pnl, "英語表記",      txtPNameEn,       18, 146, inputWidth: 320);
 
-        AddBirthdayRow(pnl, 18, 178,
+        // 本名義：サイトの見出し・URL・一覧の行表記に使う名義。指定なしなら、いま公開している名義、
+        // まだ公開していなければ TV 系のクレジットで最後に使われた名義になる。名前の欄と並べて置く。
+        cboPPrimaryAlias = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            DisplayMember = "Label",
+            ValueMember = "Id"
+        };
+        AddLabeledControl(pnl, "本名義", cboPPrimaryAlias, 18, 178, inputWidth: 320);
+
+        AddBirthdayRow(pnl, 18, 210,
             out nudPBirthYear, out chkPBirthYearUnknown, out cboPBirthYearVis,
             out cboPBirthMonth, out cboPBirthDay);
 
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, 218), Size = new Size(110, 20) };
-        txtPNotes.Location = new Point(132, 214);
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, 250), Size = new Size(110, 20) };
+        txtPNotes.Location = new Point(132, 246);
         txtPNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtPNotes);
 
@@ -491,11 +504,11 @@ partial class CreditMastersEditorForm
         // Wikipedia は内部値として保持するのみで、サイト UI からはリンクしない。
         txtPOfficialUrl = new TextBox(); txtPXUrl = new TextBox(); txtPInstagramUrl = new TextBox();
         txtPYoutubeUrl = new TextBox(); txtPWikipediaUrl = new TextBox();
-        AddLabeledControl(pnl, "公式ページ URL",  txtPOfficialUrl,  18, 304, inputWidth: 450);
-        AddLabeledControl(pnl, "X (Twitter)",     txtPXUrl,         18, 336, inputWidth: 450);
-        AddLabeledControl(pnl, "Instagram",       txtPInstagramUrl, 18, 368, inputWidth: 450);
-        AddLabeledControl(pnl, "YouTube",         txtPYoutubeUrl,   18, 400, inputWidth: 450);
-        AddLabeledControl(pnl, "Wikipedia (内部)", txtPWikipediaUrl, 18, 432, inputWidth: 450);
+        AddLabeledControl(pnl, "公式ページ URL",  txtPOfficialUrl,  18, 336, inputWidth: 450);
+        AddLabeledControl(pnl, "X (Twitter)",     txtPXUrl,         18, 368, inputWidth: 450);
+        AddLabeledControl(pnl, "Instagram",       txtPInstagramUrl, 18, 400, inputWidth: 450);
+        AddLabeledControl(pnl, "YouTube",         txtPYoutubeUrl,   18, 432, inputWidth: 450);
+        AddLabeledControl(pnl, "Wikipedia (内部)", txtPWikipediaUrl, 18, 464, inputWidth: 450);
 
         btnNewPerson = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSavePerson = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };

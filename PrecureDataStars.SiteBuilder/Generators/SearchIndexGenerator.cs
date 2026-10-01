@@ -166,7 +166,7 @@ public sealed class SearchIndexGenerator
         var allPersons = await personsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
         foreach (var p in allPersons)
         {
-            // 表示名は人物詳細の見出しと同じ最新名義。読みには見出しの読みに加えて、正式名と全名義の表記・読みも
+            // 表示名は人物詳細の見出しと同じ表示名義。読みには見出しの読みに加えて、正式名と全名義の表記・読みも
             // 「|」区切りで持たせ、旧名義や正式名で探しても引けるようにする（照合は部分一致なので区切りは跨がない前提）。
             string displayName = _ctx.EntityUrls.PersonDisplayName(p.PersonId) ?? p.FullName;
             string displayKana = _ctx.EntityUrls.PersonDisplayKana(p.PersonId) ?? "";

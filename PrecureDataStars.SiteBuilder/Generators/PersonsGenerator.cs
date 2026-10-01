@@ -239,8 +239,8 @@ public sealed class PersonsGenerator
         // 解けたチェーンに含まれない alias を末尾にまとめて出す。
         var aliasViews = OrderAliasesChronologically(aliases);
 
-        // 見出しは最新名義（全クレジット横断で最後に使われた名義。URL と同じ EntityUrlRegistry の決定に従う）。
-        // クレジットの無い人物は正式名。
+        // 見出しは表示名義（本名義 → 公開中の名義 → 最新名義。URL と同じ EntityUrlRegistry の決定に従う）。
+        // 表示名義の無い人物は正式名。
         string displayName = _ctx.EntityUrls.PersonDisplayName(person.PersonId) ?? person.FullName;
         string displayNameKana = _ctx.EntityUrls.PersonDisplayKana(person.PersonId) ?? (person.FullNameKana ?? "");
 

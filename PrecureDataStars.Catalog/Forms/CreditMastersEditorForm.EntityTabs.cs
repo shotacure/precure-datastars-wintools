@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using PrecureDataStars.Data.Models;
@@ -51,6 +52,36 @@ public partial class CreditMastersEditorForm
         return (year, vis, month, day);
     }
 
+    /// <summary>本名義の選択肢の読み込み世代。選択が切り替わったら古い読み込み結果は書き戻さない。</summary>
+    private int _primaryAliasLoadGen;
+
+    /// <summary>本名義の「指定なし」の表示。</summary>
+    private const string PrimaryAliasNoneLabel = "(指定なし：公開中の名義 → 最新名義)";
+
+    /// <summary>
+    /// 本名義コンボに「指定なし」とその人物の名義を並べ、<paramref name="selectedAliasId"/> を選ぶ。
+    /// 名義は非同期で読むので、読み終えた時点で別の人物が選ばれていたら書き戻さない。
+    /// </summary>
+    private async Task LoadPrimaryAliasChoicesAsync(int? personId, int? selectedAliasId)
+    {
+        int gen = Interlocked.Increment(ref _primaryAliasLoadGen);
+        var items = new System.Collections.Generic.List<IdLabel<int?>> { new(null, PrimaryAliasNoneLabel) };
+        try
+        {
+            if (personId is int pid)
+            {
+                var aliases = await _personAliasesRepo.GetByPersonAsync(pid);
+                if (gen != Volatile.Read(ref _primaryAliasLoadGen)) return;
+                items.AddRange(aliases
+                    .OrderBy(a => a.AliasId)
+                    .Select(a => new IdLabel<int?>(a.AliasId, $"#{a.AliasId}  {a.Name}")));
+            }
+            cboPPrimaryAlias.DataSource = items;
+            cboPPrimaryAlias.SelectedIndex = Math.Max(0, items.FindIndex(i => i.Id == selectedAliasId));
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
     private void OnPersonRowSelected()
     {
         if (gridPersons.CurrentRow?.DataBoundItem is Person p)
@@ -69,6 +100,7 @@ public partial class CreditMastersEditorForm
             txtPInstagramUrl.Text = p.InstagramUrl ?? "";
             txtPYoutubeUrl.Text = p.YoutubeUrl ?? "";
             txtPWikipediaUrl.Text = p.WikipediaUrl ?? "";
+            _ = LoadPrimaryAliasChoicesAsync(p.PersonId, p.PrimaryAliasId);
         }
     }
 
@@ -83,6 +115,7 @@ public partial class CreditMastersEditorForm
         txtPWikipediaUrl.Text = "";
         LoadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown, cboPBirthYearVis,
             cboPBirthMonth, cboPBirthDay, null, "PUBLIC", null, null);
+        _ = LoadPrimaryAliasChoicesAsync(null, null);
     }
 
     private async Task SavePersonAsync()
@@ -129,6 +162,7 @@ public partial class CreditMastersEditorForm
                 current.InstagramUrl = NullIfEmpty(txtPInstagramUrl.Text);
                 current.YoutubeUrl = NullIfEmpty(txtPYoutubeUrl.Text);
                 current.WikipediaUrl = NullIfEmpty(txtPWikipediaUrl.Text);
+                current.PrimaryAliasId = (cboPPrimaryAlias.SelectedItem as IdLabel<int?>)?.Id;
                 current.UpdatedBy = Environment.UserName;
                 await _personsRepo.UpdateAsync(current);
             }

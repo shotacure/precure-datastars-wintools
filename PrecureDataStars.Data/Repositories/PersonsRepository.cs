@@ -16,6 +16,7 @@ public sealed class PersonsRepository : RepositoryBase
           given_name       AS GivenName,
           full_name        AS FullName,
           full_name_kana   AS FullNameKana,
+          primary_alias_id AS PrimaryAliasId,
           name_en          AS NameEn,
           birth_year             AS BirthYear,
           birth_year_visibility  AS BirthYearVisibility,
@@ -82,13 +83,13 @@ public sealed class PersonsRepository : RepositoryBase
     {
         const string sql = """
             INSERT INTO persons
-              (family_name, given_name, full_name, full_name_kana, name_en,
+              (family_name, given_name, full_name, full_name_kana, primary_alias_id, name_en,
                birth_year, birth_year_visibility, birth_month, birth_day,
                notes,
                official_url, x_url, instagram_url, youtube_url, wikipedia_url,
                created_by, updated_by)
             VALUES
-              (@FamilyName, @GivenName, @FullName, @FullNameKana, @NameEn,
+              (@FamilyName, @GivenName, @FullName, @FullNameKana, @PrimaryAliasId, @NameEn,
                @BirthYear, @BirthYearVisibility, @BirthMonth, @BirthDay,
                @Notes,
                @OfficialUrl, @XUrl, @InstagramUrl, @YoutubeUrl, @WikipediaUrl,
@@ -108,6 +109,7 @@ public sealed class PersonsRepository : RepositoryBase
               given_name       = @GivenName,
               full_name        = @FullName,
               full_name_kana   = @FullNameKana,
+              primary_alias_id = @PrimaryAliasId,
               name_en          = @NameEn,
               birth_year             = @BirthYear,
               birth_year_visibility  = @BirthYearVisibility,

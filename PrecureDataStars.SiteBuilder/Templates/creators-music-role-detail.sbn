@@ -5,7 +5,7 @@
 <h1>{{ RoleNameJa | html.escape }}</h1>
 
 <p class="lead">
-  歴代プリキュアの楽曲・劇伴・音盤で「{{ RoleNameJa | html.escape }}」を担当した人物・団体の一覧です。
+  歴代プリキュアの歌・劇伴・音盤で「{{ RoleNameJa | html.escape }}」を担当した人物・団体の一覧です。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>

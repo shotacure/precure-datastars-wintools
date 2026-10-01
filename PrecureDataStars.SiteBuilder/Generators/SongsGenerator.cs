@@ -457,7 +457,7 @@ public sealed class SongsGenerator
         }
 
         return new OgCardSpec(
-            Kicker: string.IsNullOrWhiteSpace(musicClassLabel) ? "楽曲" : musicClassLabel,
+            Kicker: string.IsNullOrWhiteSpace(musicClassLabel) ? "歌" : musicClassLabel,
             Title: song.Title)
         {
             KickerRight = string.IsNullOrWhiteSpace(repSeriesTitle) ? "" : $"『{repSeriesTitle}』",

@@ -176,7 +176,7 @@
        0 件のキャラはセクションごと省略する。 ##}}
   {{~ if (array.size SongCards) > 0 ~}}
   <section id="songs">
-    <h2>楽曲</h2>
+    <h2>歌</h2>
     <ul class="person-songs-card-list">
       {{~ for c in SongCards ~}}
       <li class="person-song-card cat-{{ c.BadgeClassSuffix }}">

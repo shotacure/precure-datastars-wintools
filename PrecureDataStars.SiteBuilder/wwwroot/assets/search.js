@@ -36,10 +36,10 @@
     'series':    'シリーズ',
     'episode':   'エピソード',
     'precure':   'プリキュア',
-    'character': 'キャラ',
+    'character': 'キャラクター',
     'person':    '人物',
     'company':   '企業・団体',
-    'song':      '楽曲',
+    'song':      '歌',
     'product':   '商品',
     'book':      '書籍'
   };

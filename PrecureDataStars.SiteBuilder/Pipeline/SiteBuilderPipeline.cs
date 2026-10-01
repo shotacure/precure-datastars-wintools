@@ -354,7 +354,7 @@ public sealed class SiteBuilderPipeline
         yield return ("characters",         "キャラクター",     Get("characters"));
         yield return ("products",           "商品",             Get("products"));
         yield return ("books",              "書籍",             Get("books"));
-        yield return ("songs",              "楽曲",             Get("songs"));
+        yield return ("songs",              "歌",               Get("songs"));
         yield return ("music",              "音楽・劇伴",       null);
         yield return ("creators",           "クリエイター",     null);
         // 記念日は 366 日 + 索引 1 ページで常に一定。

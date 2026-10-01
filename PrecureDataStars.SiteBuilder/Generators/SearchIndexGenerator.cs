@@ -104,6 +104,9 @@ public sealed class SearchIndexGenerator
         var allPrecures = await precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
         var allCharacterAliases = (await characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allCharacters = (await charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+        // 種別の補足はキャラクター一覧のタブと同じ、種別マスタの日本語名を出す。
+        var characterKindNames = (await new CharacterKindsRepository(_factory).GetAllAsync(ct).ConfigureAwait(false))
+            .ToDictionary(k => k.CharacterKindCode, k => k.NameJa, StringComparer.Ordinal);
         var characterAliasMap = allCharacterAliases.ToDictionary(a => a.AliasId);
         var characterMap = allCharacters.ToDictionary(c => c.CharacterId);
         foreach (var p in allPrecures)
@@ -156,7 +159,7 @@ public sealed class SearchIndexGenerator
                 u = PathUtil.CharacterUrl(c.CharacterId),
                 t = c.Name,
                 k = "character",
-                s = CharacterKindLabel(c.CharacterKind),
+                s = characterKindNames.TryGetValue(c.CharacterKind, out var kindName) && !string.IsNullOrEmpty(kindName) ? kindName : c.CharacterKind,
                 x = NormalizeForSearch(c.NameKana ?? c.Name)
             });
         }
@@ -346,15 +349,6 @@ public sealed class SearchIndexGenerator
         _ => kindCode
     };
 
-    /// <summary>キャラ種別コードを日本語ラベルに変換（検索結果のサブテキスト用）。</summary>
-    private static string CharacterKindLabel(string kindCode) => kindCode switch
-    {
-        "PRECURE" => "プリキュア",
-        "ALLY" => "仲間",
-        "VILLAIN" => "敵",
-        "SUPPORTING" => "サブキャラ",
-        _ => kindCode
-    };
 
     /// <summary>検索インデックス JSON のアイテム 1 件分。プロパティ名は短縮形（容量削減のため）。</summary>
     private sealed class SearchIndexItem

@@ -92,7 +92,7 @@
   </div>
   <div id="home-calendar-grid"></div>
   <p class="muted home-calendar-legend">
-    <span class="cal-legend cal-legend-bday">キャラ誕生日</span>
+    <span class="cal-legend cal-legend-bday">キャラクター誕生日</span>
     <span class="cal-legend cal-legend-movie">映画公開</span>
     <span class="cal-legend cal-legend-person">人物誕生日</span>
     <span class="cal-legend cal-legend-ep">TV 放送</span>

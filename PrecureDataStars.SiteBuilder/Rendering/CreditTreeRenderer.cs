@@ -1249,7 +1249,7 @@ internal sealed class CreditTreeRenderer
             if (!string.IsNullOrEmpty(n)) return n;
         }
         if (!string.IsNullOrWhiteSpace(e.RawCharacterText)) return e.RawCharacterText!;
-        return "(キャラ未指定)";
+        return "(キャラクター未指定)";
     }
 
     /// <summary>キャラ名義（character_alias）の表示名を「キャラ詳細ページへのリンク済み HTML 断片」として返す。</summary>
@@ -1272,7 +1272,7 @@ internal sealed class CreditTreeRenderer
         }
         if (!string.IsNullOrWhiteSpace(e.RawCharacterText))
             return PrependMisprintHtml(Esc(e.RawCharacterText!), e.CharacterMisprintText);
-        return PrependMisprintHtml("(キャラ未指定)", e.CharacterMisprintText);
+        return PrependMisprintHtml("(キャラクター未指定)", e.CharacterMisprintText);
     }
 
     /// <summary>人物名義 ＋ 所属屋号をプレーンテキストとして返す（融合表示の同名判定にだけ使う）。</summary>
@@ -1371,8 +1371,8 @@ internal sealed class CreditTreeRenderer
                     // 通常は VC 専用テーブル内でキャラ／声優別カラムに分けて出す。
                     // ここではキャラ側・人物側それぞれの誤記をそれぞれの名義に前置する。
                     string charName = e.CharacterAliasId.HasValue
-                        ? ((await _lookup.LookupCharacterAliasNameAsync(e.CharacterAliasId.Value).ConfigureAwait(false)) ?? "(キャラ不明)")
-                        : (e.RawCharacterText ?? "(キャラ未指定)");
+                        ? ((await _lookup.LookupCharacterAliasNameAsync(e.CharacterAliasId.Value).ConfigureAwait(false)) ?? "(キャラクター不明)")
+                        : (e.RawCharacterText ?? "(キャラクター未指定)");
                     string charHtml = PrependMisprintHtml(Esc(charName), e.CharacterMisprintText);
 
                     // 声優側は PERSON と同じく「名前 + (所属)」で出す（スペシャルゲストの「たくや (ザ・たっち)」など）。

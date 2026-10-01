@@ -58,8 +58,7 @@ public sealed class SearchIndexGenerator
         // ── シリーズ ──
         foreach (var s in _ctx.Series)
         {
-            // 子作品（秋映画併映短編・子映画など）は単独詳細ページを生成しないため検索インデックスからも除外する。
-            if (SeriesClassifier.IsChildOfMovie(s)) continue;
+            // 親を持つ映画・同時上映の短編・スピンオフも含め、すべてのシリーズが単独詳細ページを持つので全件載せる。
             items.Add(new SearchIndexItem
             {
                 u = $"/series/{s.Slug}/",

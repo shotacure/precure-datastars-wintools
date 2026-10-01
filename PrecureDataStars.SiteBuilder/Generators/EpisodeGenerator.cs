@@ -145,10 +145,6 @@ public sealed class EpisodeGenerator
         var jobs = new List<(Series Series, Episode Episode)>();
         foreach (var s in _ctx.Series)
         {
-            // 子作品（parent_series_id != NULL の映画系、SPIN-OFF を除く）は単独詳細ページを
-            // 持たないため、配下のエピソードページも生成しない（仕様上 credit_attach_to=SERIES なので
-            // エピソード自体を持たないはずだが念のためスキップ）。
-            if (SeriesClassifier.IsChildOfMovie(s)) continue;
             if (!_ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)) continue;
             foreach (var e in eps) jobs.Add((s, e));
         }

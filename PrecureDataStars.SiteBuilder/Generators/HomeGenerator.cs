@@ -97,8 +97,8 @@ public sealed class HomeGenerator
         foreach (var (sid, eps) in _ctx.EpisodesBySeries)
         {
             if (!_ctx.SeriesById.TryGetValue(sid, out var s)) continue;
-            // 子作品（'MOVIE_SHORT'）は単独詳細ページを生成しないので、配下のエピソードは
-            // ホームのリンク対象から除外。SPIN-OFF / OTONA / SHORT / EVENT は単独ページがあるので含める。
+            // 同時上映の短編（'MOVIE_SHORT'）は作品数を親映画に含めて数えるので、配下のエピソード（通常は無い）は
+            // ホームの集計・リンク対象から除外。SPIN-OFF / OTONA / SHORT / EVENT は含める。
             if (SeriesClassifier.IsMovieShortChild(s)) continue;
             foreach (var e in eps)
             {
@@ -145,7 +145,8 @@ public sealed class HomeGenerator
         var upcomingProducts = BuildUpcomingProducts(allProducts, productKindMap, discsByProductCatalogNo, _ctx.SeriesById, amazonTag, todayDate);
         var latestBooks = BuildLatestBooks(allBooks, primaryGenreLabelByBook, amazonTag, todayDate);
         var upcomingBooks = BuildUpcomingBooks(allBooks, primaryGenreLabelByBook, amazonTag, todayDate);
-        var dbStats = await BuildDbStatsAsync(allEpisodes.Count, ct).ConfigureAwait(false);
+        // エピソード数は、作った時点で放送済みの話だけを数える（「第N話時点の情報を表示しています」・充足率の分母とそろえる）。
+        var dbStats = await BuildDbStatsAsync(allEpisodes.Count(x => x.Episode.OnAirAt <= buildAt), ct).ConfigureAwait(false);
 
         // キャラクター・クリエイターのデータ充足率（暫定表記。テスト・本番とも表示）。
         var dataSufficiencyLabel = await BuildDataSufficiencyLabelAsync(ct).ConfigureAwait(false);

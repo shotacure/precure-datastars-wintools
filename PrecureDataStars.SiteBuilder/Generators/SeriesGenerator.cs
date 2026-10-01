@@ -803,7 +803,8 @@ public sealed class SeriesGenerator
             ShortSeries = shortRows,
             EventSeries = eventRows,
             SpinOffSeries = spinOffRows,
-            TotalCount = _ctx.Series.Count
+            TotalCount = _ctx.Series.Count,
+            MovieShortCount = _ctx.Series.Count(SeriesClassifier.IsMovieShortChild)
         };
         var layout = new LayoutModel
         {
@@ -1696,6 +1697,9 @@ public sealed class SeriesGenerator
         /// <summary>スピンオフセクション（<c>kind_code='SPIN-OFF'</c>）。狭義のスピンオフ作品のみ。 スピンオフ系のうち OTONA / SHORT / EVENT は別セクションに分離し、 ここは純粋な SPIN-OFF のみに範囲縮小。行 DTO は TV と共通の <see cref="TvSeriesRow"/> を流用。</summary>
         public IReadOnlyList<TvSeriesRow> SpinOffSeries { get; set; } = Array.Empty<TvSeriesRow>();
         public int TotalCount { get; set; }
+        /// <summary>全作品数のうち同時上映の短編（MOVIE_SHORT）の本数。トップの作品数（短編を親映画に含めて数える）と
+        /// 食い違って見えないよう、リード文で「（同時上映の短編 N 本を含む）」と添える。</summary>
+        public int MovieShortCount { get; set; }
     }
 
     /// <summary>TV シリーズ／スピンオフ一覧の 1 行分。連番付きの表形式で描画される。 <c>Children</c> プロパティは持たない（TV の下に子作品を字下げ表示しないため）。</summary>

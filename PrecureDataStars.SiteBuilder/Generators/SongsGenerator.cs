@@ -1197,7 +1197,7 @@ public sealed class SongsGenerator
         return kindLabel;
     }
 
-    /// <summary>整数リスト（昇順、重複なし前提）を連続区間に圧縮して「第1〜3, 5〜7話」のような表記を返す。 単独要素は「第1話」、単一連続は「第1〜49話」、複数区間は「第1〜3, 5〜7話」のように整形する。 空リストは空文字を返す。</summary>
+    /// <summary>整数リスト（昇順、重複なし前提）を連続区間に圧縮して「第1～3, 5～7話」のような表記を返す。 単独要素は「第1話」、単一連続は「第1～49話」、複数区間は「第1～3, 5～7話」のように整形する。 範囲の記号はサイトのほかの話数の範囲（シリーズの主題歌・クレジットの担当話数など）と同じ全角チルダ「～」。 空リストは空文字を返す。</summary>
     private static string CompressEpisodeNumbers(IReadOnlyList<int> sortedDistinctNos)
     {
         if (sortedDistinctNos.Count == 0) return "";
@@ -1227,7 +1227,7 @@ public sealed class SongsGenerator
             if (i > 0) sb.Append(", ");
             var (s, e) = ranges[i];
             if (s == e) sb.Append(s);
-            else sb.Append(s).Append('〜').Append(e);
+            else sb.Append(s).Append('～').Append(e);
         }
         sb.Append("話");
         return sb.ToString();

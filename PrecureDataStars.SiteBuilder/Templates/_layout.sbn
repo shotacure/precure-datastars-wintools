@@ -251,7 +251,7 @@ gtag('config', '{{ Ga4MeasurementId }}');
          JS で /search-index.json を初回入力時に fetch し、クライアント側で全文検索する。
          検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
     <div class="site-search">
-      <input id="site-search-input" type="search" placeholder="サイト内検索..." autocomplete="off"
+      <input id="site-search-input" type="search" placeholder="サイト内検索" autocomplete="off"
              aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results">
       {{## キーボードショートカットのヒントチップ（/ キーでフォーカス。search.js が処理）。
            装飾なので aria-hidden、入力中（focus-within）とモバイルでは CSS で非表示。 ##}}

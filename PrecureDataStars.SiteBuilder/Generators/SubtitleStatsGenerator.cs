@@ -75,6 +75,14 @@ public sealed class SubtitleStatsGenerator
 
     // 索引
 
+    /// <summary>
+    /// 率（%）を分子・分母から 1 回で求める。集計クエリの Ratio は MySQL の整数どうしの割り算で小数第 4 位に丸められて
+    /// いるため、それを 100 倍してから表示で小数第 1 位に丸めると、2 回丸めて 0.1 ずれることがある（6÷11＝54.545…% が 54.6%）。
+    /// 分母が 0 のときは 0。
+    /// </summary>
+    private static double RatioPercent(long numerator, long denominator)
+        => denominator > 0 ? numerator * 100.0 / denominator : 0.0;
+
     private void GenerateIndex()
     {
         var layout = new LayoutModel
@@ -171,7 +179,7 @@ public sealed class SubtitleStatsGenerator
         // 指標値は漢字率の百分率（小数 1 桁＋%）。漢字/総文字数の内訳はエピソード詳細側に委ねる。
         var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
             r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
-            true, r.Rank, (r.Ratio * 100.0).ToString("0.0") + "%", r.TitleText)));
+            true, r.Rank, RatioPercent(r.KanjiCount, r.TotalCount).ToString("0.0") + "%", r.TitleText)));
         string slug = ascending ? "least" : "most";
         string label = ascending ? "低い順" : "高い順";
         string url = $"/stats/subtitles/kanji-rate/episode/{slug}/";
@@ -191,7 +199,7 @@ public sealed class SubtitleStatsGenerator
             r.KanjiCount,
             r.TotalCount,
             SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
-            RatioPercent = r.Ratio * 100.0
+            RatioPercent = RatioPercent(r.KanjiCount, r.TotalCount)
         }).ToList();
         var layout = MakeLayout("シリーズ別 漢字率", "シリーズ別 漢字率");
         _page.RenderAndWrite("/stats/subtitles/kanji-rate-by-series/", "stats", "stats-subtitles-kanji-rate-by-series.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
@@ -205,7 +213,7 @@ public sealed class SubtitleStatsGenerator
         // 指標値は記号率の百分率（小数 1 桁＋%）。記号/総文字数の内訳はエピソード詳細側に委ねる。
         var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
             r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
-            true, r.Rank, (r.Ratio * 100.0).ToString("0.0") + "%", r.TitleText)));
+            true, r.Rank, RatioPercent(r.KanjiCount, r.TotalCount).ToString("0.0") + "%", r.TitleText)));
         string slug = ascending ? "least" : "most";
         string label = ascending ? "低い順" : "高い順";
         string url = $"/stats/subtitles/symbol-rate/episode/{slug}/";
@@ -225,7 +233,7 @@ public sealed class SubtitleStatsGenerator
             r.KanjiCount,
             r.TotalCount,
             SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
-            RatioPercent = r.Ratio * 100.0
+            RatioPercent = RatioPercent(r.KanjiCount, r.TotalCount)
         }).ToList();
         var layout = MakeLayout("シリーズ別 記号率", "シリーズ別 記号率");
         _page.RenderAndWrite("/stats/subtitles/symbol-rate-by-series/", "stats", "stats-subtitles-symbol-rate-by-series.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);

@@ -31,26 +31,26 @@
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/episodes/part-a/longest/">
-        <span class="stats-landing-link-title">A パート尺 長い順 TOP 100</span>
-        <span class="stats-landing-link-desc">本編 A パート（OP 後・中 CM 前のパート）が長い回のランキングです。</span>
+        <span class="stats-landing-link-title">Aパート尺 長い順 TOP 100</span>
+        <span class="stats-landing-link-desc">本編 Aパート（OP 後・中 CM 前のパート）が長い回のランキングです。</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/episodes/part-a/shortest/">
-        <span class="stats-landing-link-title">A パート尺 短い順 TOP 100</span>
-        <span class="stats-landing-link-desc">本編 A パートが短い回のランキングです。</span>
+        <span class="stats-landing-link-title">Aパート尺 短い順 TOP 100</span>
+        <span class="stats-landing-link-desc">本編 Aパートが短い回のランキングです。</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/episodes/part-b/longest/">
-        <span class="stats-landing-link-title">B パート尺 長い順 TOP 100</span>
-        <span class="stats-landing-link-desc">本編 B パートが長い回のランキングです。</span>
+        <span class="stats-landing-link-title">Bパート尺 長い順 TOP 100</span>
+        <span class="stats-landing-link-desc">本編 Bパートが長い回のランキングです。</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/episodes/part-b/shortest/">
-        <span class="stats-landing-link-title">B パート尺 短い順 TOP 100</span>
-        <span class="stats-landing-link-desc">本編 B パートが短い回のランキングです。</span>
+        <span class="stats-landing-link-title">Bパート尺 短い順 TOP 100</span>
+        <span class="stats-landing-link-desc">本編 Bパートが短い回のランキングです。</span>
       </a>
     </li>
   </ul>

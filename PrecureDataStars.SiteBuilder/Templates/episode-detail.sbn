@@ -397,7 +397,7 @@
        （毎週変動するため）はエリア右下に小さく出す。 ##}}
   {{~ if (array.size PartLengthStats) > 0 ~}}
   <section id="partlength-stats">
-    <h2>パート尺統計<span class="help-tip" tabindex="0">?<span class="help-tip-text">このエピソードのアバン・A パート・B パートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体で何位にあたるかを、偏差値とあわせて示します。ゲージは偏差値 25〜75 の範囲で、中央の線が 50（平均）、背景の薄い棒グラフは同じ集計範囲での尺の分布です。</span></span></h2>
+    <h2>パート尺統計<span class="help-tip" tabindex="0">?<span class="help-tip-text">このエピソードのアバン・Aパート・Bパートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体で何位にあたるかを、偏差値とあわせて示します。ゲージは偏差値 25〜75 の範囲で、中央の線が 50（平均）、背景の薄い棒グラフは同じ集計範囲での尺の分布です。</span></span></h2>
     <div class="partstat-cards">
       {{~ for s in PartLengthStats ~}}
       <div class="partstat-card">

@@ -10,8 +10,8 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// エピソード尺・CM 入り時刻統計のページ群を生成するジェネレータ。
 /// 1 ページ 1 ランキング厳守の方針で、7 詳細ページ + 1 ランディングの 8 ページ構成。
 /// <list type="bullet">
-///   <item><description>A パート尺 長い順 / 短い順</description></item>
-///   <item><description>B パート尺 長い順 / 短い順</description></item>
+///   <item><description>Aパート尺 長い順 / 短い順</description></item>
+///   <item><description>Bパート尺 長い順 / 短い順</description></item>
 ///   <item><description>中 CM 入り時刻 早い順 / 遅い順</description></item>
 ///   <item><description>シリーズ × パート別 平均/最短/最長（series-summary）</description></item>
 /// </list>
@@ -53,10 +53,10 @@ public sealed class EpisodePartStatsGenerator
         GenerateIndex(episodeIdsWithParts);
 
         // パート尺ランキング A/B × 長短 = 4 ページ
-        await GeneratePartLengthAsync(ct, "PART_A", "A パート", ascending: false).ConfigureAwait(false);
-        await GeneratePartLengthAsync(ct, "PART_A", "A パート", ascending: true).ConfigureAwait(false);
-        await GeneratePartLengthAsync(ct, "PART_B", "B パート", ascending: false).ConfigureAwait(false);
-        await GeneratePartLengthAsync(ct, "PART_B", "B パート", ascending: true).ConfigureAwait(false);
+        await GeneratePartLengthAsync(ct, "PART_A", "Aパート", ascending: false).ConfigureAwait(false);
+        await GeneratePartLengthAsync(ct, "PART_A", "Aパート", ascending: true).ConfigureAwait(false);
+        await GeneratePartLengthAsync(ct, "PART_B", "Bパート", ascending: false).ConfigureAwait(false);
+        await GeneratePartLengthAsync(ct, "PART_B", "Bパート", ascending: true).ConfigureAwait(false);
 
         // アバンタイトル尺 × 長短 = 2 ページ + アバンスキップ回 1 ページ
         await GenerateAvantLengthAsync(ct, ascending: false).ConfigureAwait(false);
@@ -85,7 +85,7 @@ public sealed class EpisodePartStatsGenerator
                 MetaLeft = _coverageLabel,
                 Badges = new[] { new OgCardBadge("対象", $"{StatsCoverageLabel.CountTvEpisodesWithParts(_ctx, episodeIdsWithParts)}話") }
             },
-            MetaDescription = "アバンの長さ、A パート・B パートの尺、中 CM の入り時刻まで。プリキュア全シリーズの本編の“尺”を集計した統計です。",
+            MetaDescription = "アバンの長さ、Aパート・Bパートの尺、中 CM の入り時刻まで。プリキュア全シリーズの本編の“尺”を集計した統計です。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -98,7 +98,7 @@ public sealed class EpisodePartStatsGenerator
 
     // パート尺
 
-    /// <summary>A / B パート尺ランキングを 1 ページ生成。</summary>
+    /// <summary>A / Bパート尺ランキングを 1 ページ生成。</summary>
     private async Task GeneratePartLengthAsync(CancellationToken ct, string partType, string partLabel, bool ascending)
     {
         var rows = await _repo.GetPartLengthRankingAsync(partType, ascending, Limit, ct).ConfigureAwait(false);

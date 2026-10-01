@@ -19,7 +19,7 @@
 
   <a class="music-category-card" href="/stats/episodes/">
     <h2>歴代エピソード尺統計</h2>
-    <p>歴代プリキュア全TVシリーズ（スピンオフ除く）のエピソードを対象に、A/B パート尺ランキング、中 CM 入り時刻ランキング、シリーズ別パート平均尺などをまとめています。</p>
+    <p>歴代プリキュア全TVシリーズ（スピンオフ除く）のエピソードを対象に、A/Bパート尺ランキング、中 CM 入り時刻ランキング、シリーズ別パート平均尺などをまとめています。</p>
     <p class="muted stats-coverage">{{ EpisodeCoverageLabel }}</p>
   </a>
 </section>

@@ -27,6 +27,14 @@
 (function () {
   'use strict';
 
+  // 日本時間の今日の年月日。記念日は日本での放送日・公開日・誕生日なので、海外から見ても
+  // 端末の時間帯ではなく日本の日付で「今日」を決める（日本に夏時間は無いので UTC+9 固定でよい）。
+  function japanToday() {
+    var t = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() };
+  }
+
+
   // ── 設定 ──
   // 今週の記念日：今日を含まない過去 6 日間（昨日 / 2日前 / ... / 6日前）。
   // ※今日分は「今日の記念日」セクションに行くので、ここでは除外する。
@@ -54,11 +62,10 @@
       return;
     }
 
-    var now = new Date();
-    var today = { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() };
+    var today = japanToday();
 
     // 統合データを種別で振り分ける。エピソード（ep）は従来ロジックへ。
-    // 誕生日（cb=キャラ / pb=人物）は「閲覧日と同じ月日」のものだけを抽出し、
+    // 誕生日（cb=キャラ / pb=人物）は「日本時間の今日と同じ月日」のものだけを抽出し、
     // 今日の記念日でエピソードより上に表示する。映画（mv）は今日の記念日には
     // 出さずカレンダー専用（calendar.js が同じ JSON を読む）。
     var eps = [];

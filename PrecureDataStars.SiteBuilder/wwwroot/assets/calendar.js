@@ -30,6 +30,14 @@
 (function () {
   'use strict';
 
+  // 日本時間の今日の年月日。記念日は日本での放送日・公開日・誕生日なので、海外から見ても
+  // 端末の時間帯ではなく日本の日付で「今日」を決める（日本に夏時間は無いので UTC+9 固定でよい）。
+  function japanToday() {
+    var t = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() };
+  }
+
+
   var WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
   // チップ優先順位（小さいほど上）。
   var KIND_ORDER = { cb: 0, mv: 1, pb: 2, ep: 3 };
@@ -73,10 +81,10 @@
 
     ALL_ITEMS = items;
 
-    var now = new Date();
-    REAL_YEAR = now.getFullYear();
-    REAL_MONTH = now.getMonth() + 1; // 1-12
-    REAL_DAY = now.getDate();
+    var today = japanToday();
+    REAL_YEAR = today.y;
+    REAL_MONTH = today.m; // 1-12
+    REAL_DAY = today.d;
 
     // 月グリッドの初期表示は当月、7 日縦並びの初期表示は今日。
     viewYear = REAL_YEAR;

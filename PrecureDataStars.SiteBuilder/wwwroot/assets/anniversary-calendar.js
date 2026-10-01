@@ -30,6 +30,14 @@
 (function () {
   'use strict';
 
+  // 日本時間の今日の年月日。記念日は日本での放送日・公開日・誕生日なので、海外から見ても
+  // 端末の時間帯ではなく日本の日付で「今日」を決める（日本に夏時間は無いので UTC+9 固定でよい）。
+  function japanToday() {
+    var t = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() };
+  }
+
+
   var WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
   function isLeapYear(y) {
@@ -150,9 +158,9 @@
     if (note) note.textContent = String(year);
   }
 
-  /** 閲覧時の月日に一致するセルへ、ホームと同じ本日の強調を当てる。 */
-  function markToday(root, now) {
-    var key = (now.getMonth() + 1) + '-' + now.getDate();
+  /** 日本時間の今日の月日に一致するセルへ、ホームと同じ本日の強調を当てる。 */
+  function markToday(root, today) {
+    var key = today.m + '-' + today.d;
     var cell = root.querySelector('.anniv-cell[data-md="' + key + '"]');
     if (!cell) return;
 
@@ -170,12 +178,12 @@
     var root = document.getElementById('anniv-calendar');
     if (!root) return;
 
-    var now = new Date();
-    var year = now.getFullYear();
+    var today = japanToday();
+    var year = today.y;
     var builtYear = parseInt(root.getAttribute('data-cal-year'), 10);
 
     if (builtYear !== year) relayout(root, year);
-    markToday(root, now);
+    markToday(root, today);
   }
 
   if (document.readyState === 'loading') {

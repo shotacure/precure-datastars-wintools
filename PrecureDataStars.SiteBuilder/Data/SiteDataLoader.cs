@@ -132,7 +132,8 @@ public static class SiteDataLoader
         // サブタイトル解禁時刻の事前計算（DB アクセスなし。前話の on_air_at から算出するだけ）。
         // /series/{slug}/{n}/・/episodes/・ホーム・統計 7 系統・検索インデックスなど、サブタイトルが
         // 出現しうる全ページがこの辞書を参照する。実装は SubtitleEmbargoCalculator（Utilities）を参照。
-        var subtitleRevealAtByEpisodeId = SubtitleEmbargoCalculator.Build(allEpisodes, DateTimeOffset.Now);
+        var buildStartedAt = DateTimeOffset.Now;
+        var subtitleRevealAtByEpisodeId = SubtitleEmbargoCalculator.Build(allEpisodes, buildStartedAt);
         logger.Info($"subtitle_embargo: {subtitleRevealAtByEpisodeId.Count} エピソードが解禁待ち圏内");
 
         // サブタイトル文字統計の事前展開（DB アクセスなし、ロード済み episodes の title_char_stats JSON を C# 側でパース）。
@@ -298,6 +299,7 @@ public static class SiteDataLoader
             SeriesById = seriesById,
             LatestAiredTvEpisode = latestAired,
             SubtitleRevealAtByEpisodeId = subtitleRevealAtByEpisodeId,
+            BuildStartedAt = buildStartedAt,
             PartLengthStatsByEpisode = partLengthStatsByEpisode,
             TitleCharIndex = titleCharIndex,
             EpisodePartsByEpisode = episodePartsByEpisode,

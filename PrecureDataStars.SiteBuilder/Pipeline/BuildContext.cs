@@ -268,8 +268,15 @@ public sealed class BuildContext
     /// <summary>
     /// サブタイトル解禁時刻の事前計算辞書（episode_id → 解禁時刻）。
     /// <see cref="Utilities.SubtitleEmbargoCalculator.Build"/> がビルド開始時に 1 度だけ構築する。
-    /// 辞書に無いエピソードは解禁時刻を算出できない、またはビルド時点で十分過去に解禁済みのため
-    /// 常に解禁済み扱い（<see cref="Rendering.SubtitleGuardRenderer"/> がガード無しでそのまま出力する）。
+    /// 辞書に載るのはビルド時点（<see cref="BuildStartedAt"/>）でまだ解禁前の話だけ。辞書に無いエピソードは
+    /// 解禁時刻を算出できない、またはビルド時点で解禁済みのため常に解禁済み扱い
+    /// （<see cref="Rendering.SubtitleGuardRenderer"/> がガード無しでそのまま出力する）。
     /// </summary>
     public required IReadOnlyDictionary<int, DateTimeOffset> SubtitleRevealAtByEpisodeId { get; init; }
+
+    /// <summary>
+    /// ビルドの基準時刻。サブタイトル解禁時刻の辞書を作った時刻で、ページタイトル・OGP など
+    /// 後から隠せない出力で「解禁前か」を判定するときも、この時刻で比べて辞書と判定をそろえる。
+    /// </summary>
+    public required DateTimeOffset BuildStartedAt { get; init; }
 }

@@ -21,16 +21,11 @@ public static class SubtitleEmbargoCalculator
     private static readonly TimeSpan RevealOffsetFromOnAir = new(0, 28, 40);
 
     /// <summary>
-    /// ビルド時点からこの日数より過去の解禁時刻は辞書から除外する。
-    /// 除外された話はビルド時点で確実に解禁済みのため、常に解禁済みとして扱ってよい
-    /// （判定自体はブラウザ側 JS が現在時刻と比較して行うため、本フィルタは表示可否を左右しない）。
-    /// 1000 話超のエピソード一覧ページで無駄な data-reveal-at 属性を量産しないための絞り込み。
-    /// </summary>
-    private static readonly TimeSpan RetentionHorizon = TimeSpan.FromDays(60);
-
-    /// <summary>
     /// 全エピソードからサブタイトル解禁時刻の辞書（episode_id → 解禁時刻）を構築する。
-    /// 解禁時刻がビルド時点から <see cref="RetentionHorizon"/> より過去のエピソードは含めない。
+    /// 辞書に載せるのはビルド時点でまだ解禁前の話だけ。ビルド時点で解禁済みの話は、ぼかしの枠
+    /// （data-reveal-at）を付けずに出力して、JavaScript が動かない閲覧者にもそのまま読めるようにする。
+    /// 辞書に載った話は、各ジェネレータが HTML のぼかしに加えて、ページタイトル・OGP・JSON-LD・共有文など
+    /// 後から隠せない出力から題名を外す判断にも使う。
     /// </summary>
     /// <param name="episodes">全エピソード（is_deleted = 0 済み前提）。</param>
     /// <param name="buildTime">ビルド実行時刻。</param>
@@ -42,7 +37,6 @@ public static class SubtitleEmbargoCalculator
             .OrderBy(e => e.TotalOaNo!.Value)
             .ToList();
 
-        var horizon = buildTime - RetentionHorizon;
         var result = new Dictionary<int, DateTimeOffset>();
         for (int i = 1; i < ordered.Count; i++)
         {
@@ -51,7 +45,7 @@ public static class SubtitleEmbargoCalculator
             var prevOnAirJst = new DateTimeOffset(
                 DateTime.SpecifyKind(prevEp.OnAirAt, DateTimeKind.Unspecified), JstOffset);
             var revealAt = prevOnAirJst + RevealOffsetFromOnAir;
-            if (revealAt < horizon) continue;
+            if (revealAt <= buildTime) continue;
             result[curEp.EpisodeId] = revealAt;
         }
         return result;

@@ -416,11 +416,18 @@ public sealed class EpisodeGenerator
             ? $"『{series.TitleShort}』"
             : $"『{series.Title}』";
 
+        // ビルド時点でサブタイトル解禁前の話か。ページタイトル・OGP・JSON-LD・共有文・サブタイトル分析は
+        // ぼかしの外に出る（タブ・SNS のカード・ページのソースで読める）ため、解禁前は題名を載せずに作る。
+        // 解禁後の表示には、解禁時刻を過ぎてからの再ビルドが要る。
+        bool ownEmbargoed = SubtitleGuardRenderer.IsEmbargoedAt(ownRevealAt, _ctx.BuildStartedAt);
+
         // 文字情報 HTML を作る（既存 BuildTitleInformationPerCharAsync の移植）。
+        // 解禁前の話は、題名の文字そのものが並ぶので節ごと出さない。
         string titleCharInfoHtml = "";
         if (!string.IsNullOrEmpty(ep.TitleCharStats))
         {
-            titleCharInfoHtml = await _titleCharInfo.RenderAsync(ep, ct).ConfigureAwait(false);
+            if (!ownEmbargoed)
+                titleCharInfoHtml = await _titleCharInfo.RenderAsync(ep, ct).ConfigureAwait(false);
         }
         else if (!string.IsNullOrEmpty(ep.TitleText))
         {
@@ -654,7 +661,8 @@ public sealed class EpisodeGenerator
             ["@context"] = "https://schema.org",
             ["@type"] = "TVEpisode",
             // サブタイトル未確定話は誌面文言の引用プレースホルダを構造化データに載せず「第N話」で識別する。
-            ["name"] = string.IsNullOrEmpty(ep.TitleText) ? $"第{ep.SeriesEpNo}話" : ep.TitleText,
+            // 解禁前の話も題名を載せず「第N話」にする。
+            ["name"] = string.IsNullOrEmpty(ep.TitleText) || ownEmbargoed ? $"第{ep.SeriesEpNo}話" : ep.TitleText,
             ["episodeNumber"] = ep.SeriesEpNo,
             ["datePublished"] = ep.OnAirAt.ToString("yyyy-MM-dd"),
             ["inLanguage"] = "ja",
@@ -711,9 +719,12 @@ public sealed class EpisodeGenerator
         {
             // シリーズタイトルは『』で囲む（ページ <title>・OG・シェア文に共通で反映される）。
             // サブタイトル未確定話は鉤括弧を出さず「第N話（サブタイトル「未定」）」の形にする。
-            PageTitle = string.IsNullOrEmpty(ep.TitleText)
-                ? $"『{series.Title}』 第{ep.SeriesEpNo}話{ep.TitleDisplayText}"
-                : $"『{series.Title}』 第{ep.SeriesEpNo}話「{ep.TitleText}」",
+            // 解禁前の話は「第N話」だけにする（og:title・twitter:title・画像の alt・共有文もここから作られる）。
+            PageTitle = ownEmbargoed
+                ? $"『{series.Title}』 第{ep.SeriesEpNo}話"
+                : string.IsNullOrEmpty(ep.TitleText)
+                    ? $"『{series.Title}』 第{ep.SeriesEpNo}話{ep.TitleDisplayText}"
+                    : $"『{series.Title}』 第{ep.SeriesEpNo}話「{ep.TitleText}」",
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
@@ -730,9 +741,7 @@ public sealed class EpisodeGenerator
         // （ぼかし＋解禁時刻での自動解除）を効かせられず、SNS のプレビューに題名がそのまま出てしまう。
         // 伏せ字にするより、既に生成されているトップのカードを指すほうが素直（解禁後のビルドで
         // 自動的に専用カードへ戻る）。
-        // 判定は解禁時刻との比較で行う。解禁時刻辞書には直近に解禁済みの話も残っているため、
-        // 辞書に載っていること自体は未解禁を意味しない。
-        if (!SubtitleGuardRenderer.IsEmbargoedAt(ownRevealAt, DateTimeOffset.Now))
+        if (!ownEmbargoed)
             layout.OgCard = BuildOgCard(series, ep, content);
         else
             layout.OgImage = _page.OgCardUrlFor("/");

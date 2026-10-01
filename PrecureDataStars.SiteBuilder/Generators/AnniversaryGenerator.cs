@@ -50,7 +50,8 @@ public sealed class AnniversaryGenerator
             .ToDictionary(g => g.Key, g => (IReadOnlyList<AnniversaryEntry>)g.ToList());
 
         // 解禁判定の基準時刻はビルド開始時点で固定する（日をまたぐ長時間ビルドでも面ごとにぶれない）。
-        var now = DateTimeOffset.Now;
+        // 解禁時刻の辞書と同じ時刻で比べ、各話ページのタイトル・OGP の出し分けとそろえる。
+        var now = _ctx.BuildStartedAt;
 
         // 索引のカレンダーはホームの当月カレンダーと同じく実際の曜日で組む。
         // 日付ページ自体は月日だけで年を持たないが、壁掛けカレンダーとして読めるほうが

@@ -9,7 +9,7 @@
 {{## 歌唱。録音の歌唱者（song_recording_singers）を、歌・コーラス・台詞の別なくユニットのメンバーまで展開して集計した一覧。
      ・歌手（人物単位。本人名義での参加）とキャラクター（キャラ × 声優の組）の行を 1 つのリストに並べ、
        行頭のアイコン（歌手 = 人 / キャラクター = 星）で区別する。キャラクターの行は「キャラ名(CV: 声優)」。
-     ・初参加順タブ：初参加の録音の出典シリーズごとのセクション。参加曲数が多い順タブ：曲数の多い順。
+     ・初参加順タブ：初参加の録音の出典シリーズごとのセクション。参加曲数順タブ：曲数の多い順。
      ・タブの下の絞り込み（すべて / 歌手のみ / キャラクターのみ）はルートの data-entity-filter を書き換え、
        行の出し分けは site.css 側のセレクタが解決する。絞り込みで行が無くなったシリーズ見出しは JS で隠す。
      ・タブ切替はスタッフ一覧と同じインライン JS。 ##}}
@@ -21,14 +21,18 @@
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="singers-tab-panel-count">
-      参加曲数が多い順
+      参加曲数順
     </button>
   </div>
 
+  <div class="list-toolbar">
   <div class="entity-filter" role="group" aria-label="歌手・キャラクターで絞り込み">
     <button type="button" class="entity-filter-btn is-active" data-entity-filter-set="all">すべて</button>
     <button type="button" class="entity-filter-btn" data-entity-filter-set="singer">歌手のみ</button>
     <button type="button" class="entity-filter-btn" data-entity-filter-set="character">キャラクターのみ</button>
+  </div>
+  {{## 件数での並べ替えボタン（count-sort.js）。data-count-sort-for のリストの行を、件数バッジの種類ごとに多い順／少ない順で並べ替える。対象リストが出ているときだけ表示される。 ##}}
+  <button type="button" class="count-sort-btn" data-count-sort-for="singers-count-list" hidden></button>
   </div>
 
   {{## ──────── 初参加順パネル（既定） ──────── ##}}
@@ -57,13 +61,13 @@
     {{~ end ~}}
   </div>
 
-  {{## ──────── 参加曲数が多い順パネル ──────── ##}}
+  {{## ──────── 参加曲数順パネル ──────── ##}}
   <div class="tab-panel" id="singers-tab-panel-count"
        data-tab-panel="count" role="tabpanel" hidden>
     {{~ if (array.size CountRows) == 0 ~}}
     <p class="empty-row">歌唱情報はまだ登録されていません。</p>
     {{~ else ~}}
-    <ul class="entity-list">
+    <ul class="entity-list" id="singers-count-list">
       {{~ for e in CountRows ~}}
       <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
         {{~ if e.EntityKind == "singer" ~}}<span class="entity-badge entity-badge-person" aria-label="歌手" title="歌手"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>

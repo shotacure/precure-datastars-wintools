@@ -42,6 +42,8 @@ public sealed class NotFoundGenerator
         var layout = new LayoutModel
         {
             PageTitle = "ページが見つかりませんでした",
+            // 404 はどの URL でも返るので、canonical・og:url で正規の URL を主張しない。
+            SuppressCanonical = true,
             // 404 ページは検索インデックス対象外で、SNS シェア対象でもない。ただし
             MetaDescription = $"{_ctx.Config.SiteName} — お探しのページが見つかりませんでした。サイトトップやシリーズ一覧、サイト内検索から目的のページを探し直してみてください。"
             // Breadcrumbs はあえて空。404 にパンくずは意味がない（経路が壊れている前提のため）。

@@ -22,6 +22,8 @@ public sealed class MusicCreditIndex
     public IReadOnlyDictionary<int, IReadOnlyList<MusicCredit>> ByPersonAlias { get; }
     public IReadOnlyDictionary<int, IReadOnlyList<MusicCredit>> ByCharacterAlias { get; }
     public IReadOnlyDictionary<int, IReadOnlyList<MusicCredit>> ByCompanyAlias { get; }
+    /// <summary>所属の屋号（affiliation_company_alias_id）→ その屋号を所属として添えた名義の行。企業詳細の「所属スタッフのクレジット」に使う。</summary>
+    public IReadOnlyDictionary<int, IReadOnlyList<MusicCredit>> ByAffiliationCompanyAlias { get; }
 
     /// <summary>product_catalog_no → 商品（見出し・根拠の盤の表示用）。</summary>
     public IReadOnlyDictionary<string, Product> ProductByCatalogNo { get; }
@@ -69,10 +71,38 @@ public sealed class MusicCreditIndex
         ByPersonAlias = Group(rows.Where(r => r.PersonAliasId.HasValue), r => r.PersonAliasId!.Value);
         ByCharacterAlias = Group(rows.Where(r => r.CharacterAliasId.HasValue), r => r.CharacterAliasId!.Value);
         ByCompanyAlias = Group(rows.Where(r => r.CompanyAliasId.HasValue), r => r.CompanyAliasId!.Value);
+        ByAffiliationCompanyAlias = Group(rows.Where(r => r.AffiliationCompanyAliasId.HasValue), r => r.AffiliationCompanyAliasId!.Value);
         ProductByCatalogNo = products.GroupBy(p => p.ProductCatalogNo, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         SessionByKey = sessions.ToDictionary(s => (s.SeriesId, s.SessionNo));
     }
+}
+
+/// <summary>
+/// 人物・企業詳細の音楽クレジットの件数の数え方。歌は曲単位（録音へのリンクの印「#…」を外した曲の URL）、
+/// 劇伴は録音（セッション）やシリーズの行単位（URL + 補足）、音盤は盤単位（商品の URL）で重複を除いて数える。
+/// </summary>
+public static class MusicCreditCounting
+{
+    public const string Song = "歌";
+    public const string Bgm = "劇伴";
+    public const string Disc = "音盤";
+
+    /// <summary>紐付け先の種類（歌 / 劇伴 / 音盤）と行の URL・補足から、重複を除くためのキーを作る。</summary>
+    public static string Key(string kind, string url, string sub) => kind switch
+    {
+        Song => url.IndexOf('#') is int i && i >= 0 ? url[..i] : url,
+        Bgm => url + "|" + sub,
+        _ => url
+    };
+
+    /// <summary>枠の開閉ボタンに出す件数（「10曲」「7件」「8枚」）。0 なら空文字。</summary>
+    public static string CountLabel(string kind, int count) => count <= 0 ? "" : kind switch
+    {
+        Song => $"{count}曲",
+        Bgm => $"{count}件",
+        _ => $"{count}枚"
+    };
 }
 
 /// <summary>音楽クレジットの表示用ビュー：区分 1 つ分（例「演奏・コーラス等」）。</summary>
@@ -173,6 +203,7 @@ public static class MusicCreditViewBuilder
         ["PIANO"] = "🎹",
         ["ORGAN"] = "🎹",
         ["GUITAR"] = "🎸",
+        ["FOLK_GUITAR"] = "🎸",
         ["ELECTRIC_GUITAR"] = "🎸",
         ["BASS"] = "🎸",
         ["ELECTRIC_BASS"] = "🎸",
@@ -181,12 +212,14 @@ public static class MusicCreditViewBuilder
         ["LATIN_PERCUSSION"] = "🪇",
         ["TRUMPET"] = "🎺",
         ["TROMBONE"] = "🎺",
+        ["BASS_TROMBONE"] = "🎺",
         ["HORN"] = "🎺",
         ["SAXOPHONE"] = "🎷",
         ["ALTO_SAX"] = "🎷",
         ["TENOR_SAX"] = "🎷",
         ["BARITONE_SAX"] = "🎷",
         ["FLUTE"] = "🪈",
+        ["PICCOLO"] = "🪈",
         ["CLARINET"] = "🪈",
         ["OBOE"] = "🪈",
         ["BASSOON"] = "🪈",
@@ -227,7 +260,7 @@ public static class MusicCreditViewBuilder
             string aff = AffiliationName(ctx, r);
             string nextAff = i + 1 < rows.Count ? AffiliationName(ctx, rows[i + 1]) : "";
             if (aff.Length > 0 && !string.Equals(aff, nextAff, StringComparison.Ordinal))
-                sb.Append("<span class=\"music-credit-affiliation muted\">（").Append(HtmlUtil.Escape(aff)).Append("）</span>");
+                sb.Append("<span class=\"music-credit-affiliation muted\">（").Append(AffiliationHtml(ctx, r, aff)).Append("）</span>");
         }
         return new MusicCreditLineView
         {
@@ -272,6 +305,17 @@ public static class MusicCreditViewBuilder
             ? $"<a class=\"staff-name\" href=\"{HtmlUtil.Escape(url)}\">{HtmlUtil.Escape(name)}</a>"
             : $"<span class=\"staff-name\">{HtmlUtil.Escape(name)}</span>";
         return r.EntryKind == "PERSON" && r.PersonAliasId is int aliasId ? link + PrimaryNameSuffixHtml(ctx, aliasId) : link;
+    }
+
+    /// <summary>
+    /// 所属の表示。企業マスタの屋号に紐付いていれば企業詳細へのリンク（hover 限定下線の staff-name）、
+    /// 自由記述の所属は文字のみ。
+    /// </summary>
+    private static string AffiliationHtml(BuildContext ctx, MusicCredit r, string aff)
+    {
+        if (r.AffiliationCompanyAliasId is int a && ctx.CompanyAliasById.TryGetValue(a, out var ca) && ca.CompanyId > 0)
+            return $"<a class=\"staff-name\" href=\"{HtmlUtil.Escape(PathUtil.CompanyUrl(ca.CompanyId))}\">{HtmlUtil.Escape(aff)}</a>";
+        return HtmlUtil.Escape(aff);
     }
 
     private static string AffiliationName(BuildContext ctx, MusicCredit r)

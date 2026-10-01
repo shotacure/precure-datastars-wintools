@@ -95,26 +95,19 @@
            子＝パート側の見え方なので「パート作品」を name_ja から、いや、ここでは reverse 値「セット作品」が入る点に注意）
        重要：実装では SeriesRelationKind.NameJaReverse を採用するため、自分が無印 TV シリーズ、子が映画版なら「映画」、
        SEGMENT は「セット作品」（親側＝セット作品＝大本作品の名乗り）が入る。文脈で「映画／続編／併映／セット作品」が読める。
-       HasOwnPage=true なら <a> で詳細ページへ、false（MOVIE_SHORT 等）はリンクなしテキストのみ。 ##}}
+       どの作品も単独の詳細ページを持つので、行全体と名前を詳細ページへリンクする。 ##}}
   {{~ if (array.size RelatedWorks) > 0 ~}}
   <section id="related-works">
     <h2>関連作品</h2>
-    {{## サイト共通の行リスト表現（entity-list / entity-row）。単独ページを持つ作品は
-         オーバーレイで行全体クリック、持たない作品（MOVIE_SHORT 等）はテキストのみ。 ##}}
+    {{## サイト共通の行リスト表現（entity-list / entity-row）。オーバーレイで行全体クリック。 ##}}
     <ul class="entity-list">
       {{~ for r in RelatedWorks ~}}
       <li class="entity-row">
-        {{~ if r.HasOwnPage ~}}
         <a class="entity-row-link" href="/series/{{ r.Slug }}/" aria-label="{{ r.Title | html.escape }}"></a>
-        {{~ end ~}}
         {{~ if r.RelationLabelJa != "" ~}}
         <span class="relation-badge" data-relation-code="{{ r.RelationCode }}">{{ r.RelationLabelJa | html.escape }}</span>
         {{~ end ~}}
-        {{~ if r.HasOwnPage ~}}
         <a class="entity-row-name" href="/series/{{ r.Slug }}/">{{ r.Title | html.escape }}</a>
-        {{~ else ~}}
-        <span class="entity-row-name">{{ r.Title | html.escape }}</span>
-        {{~ end ~}}
         <span class="entity-row-count muted">{{ r.Period }}</span>
       </li>
       {{~ end ~}}
@@ -125,8 +118,8 @@
   {{## プリキュアセクション。
        series_precures テーブルから取得した当該シリーズ所属プリキュア一覧（display_order 昇順、
        同値時 precure_id 昇順）。紐付けが 0 件のシリーズ（クリーンDB等）ではセクション自体を非表示。
-       表示は声の出演一覧と同じ行リスト：変身後名を主役（行全体クリックでキャラクター詳細へ）、
-       変身前名と「(CV: 声優)」を添え書きにする。CV の声優名だけは個別リンクで人物詳細へ。 ##}}
+       表示は声の出演一覧と同じ行リスト：「変身前名 / 変身後名」を主役（行全体クリックでキャラクター詳細へ）、
+       「(CV: 声優)」を添え書きにする。CV の声優名だけは個別リンクで人物詳細へ。 ##}}
   {{~ if (array.size Precures) > 0 ~}}
   <section id="precures">
     <h2>プリキュア</h2>
@@ -134,8 +127,8 @@
       {{~ for p in Precures ~}}
       <li class="entity-row">
         <a class="entity-row-link" href="{{ character_url p.CharacterId }}" aria-label="{{ p.TransformName | html.escape }}"></a>
-        <a class="entity-row-name" href="{{ character_url p.CharacterId }}">{{ p.TransformName | html.escape }}</a>
-        <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }} (CV: {{~ if p.VoiceActorPersonId ~}}<a href="{{ person_url p.VoiceActorPersonId }}">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}})</span>
+        <a class="entity-row-name" href="{{ character_url p.CharacterId }}">{{~ if p.PreTransformName != "" ~}}{{ p.PreTransformName | html.escape }} / {{ end }}{{ p.TransformName | html.escape }}</a>
+        <span class="entity-row-sub muted">(CV: {{~ if p.VoiceActorPersonId ~}}<a href="{{ person_url p.VoiceActorPersonId }}">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}})</span>
       </li>
       {{~ end ~}}
     </ul>
@@ -179,9 +172,13 @@
        入る区間があれば「（本放送では #35～38 を除く）」の附記付き）を持つ。
        主題歌が 1 件も無いシリーズではセクション自体を描画しない。 ##}}
   {{~ if (array.size ThemeSongs) > 0 ~}}
+  {{## 配信音源の再生ボタンは見出し行の右端に置く（録音ごとに 1 つ。歌入りで本編のサイズを優先し、カラオケしか無ければ出さない）。
+       リストは押した 1 件だけ鳴らす（同じ曲の本放送版・配信版が並ぶことがあるため、連続再生はしない）。 ##}}
+  {{~ has_theme_play = false ~}}
+  {{~ for t in ThemeSongs ~}}{{~ if t.ArtTrackId != "" ~}}{{~ has_theme_play = true ~}}{{~ end ~}}{{~ end ~}}
   <section id="theme-songs">
     <h2>主題歌・挿入歌</h2>
-    <ul class="theme-songs-list">
+    <ul class="theme-songs-list"{{~ if has_theme_play ~}} data-art-track-list data-art-track-mode="single"{{~ end ~}}>
       {{~ for t in ThemeSongs ~}}
       <li class="ts-card">
         <div class="ts-headline">
@@ -189,6 +186,7 @@
           <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>{{~ else ~}}{{ t.Title | html.escape }}{{~ end ~}}」</span>
           {{~ if t.EpisodeRangeLabel != "" ~}}<span class="ts-range muted">{{ t.EpisodeRangeLabel | html.escape }}</span>{{~ end ~}}
           {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
+          {{~ if t.ArtTrackId != "" ~}}<button type="button" class="art-track-play ts-play{{ if t.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ t.ArtTrackId | html.escape }}"{{ if t.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }}{{ if t.ArtTrackAltId != "" }} data-art-track-alt-id="{{ t.ArtTrackAltId | html.escape }}" data-art-track-alt-sub="{{ t.ArtTrackAltSourceAlbum | html.escape }}"{{ end }} data-art-track-title="{{ t.Title | html.escape }}" data-art-track-sub="{{ t.ArtTrackSourceAlbum | html.escape }}" aria-label="{{ t.Title | html.escape }} を再生{{ if t.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if t.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>{{~ end ~}}
         </div>
         {{## 録音の公式 YouTube 動画（URL 登録があるときだけ）。エピソード予告と同じ iframe 埋め込み。 ##}}
         {{~ if t.YoutubeId != "" ~}}
@@ -225,6 +223,9 @@
       {{~ end ~}}
     </ul>
   </section>
+  {{~ if has_theme_play ~}}
+  <script src="{{ asset_url "/assets/art-track-player.js" }}" defer></script>
+  {{~ end ~}}
   {{~ end ~}}
 
   {{## SERIES スコープのクレジット階層。EpisodeGenerator と同一の credit-section 構造で、
@@ -346,11 +347,16 @@
   {{~ end ~}}
 
   {{## 劇伴一覧へのリンク。別ページ /bgms/{slug}/ へのボタン状リンクのみで、説明文は置かない。
-       劇伴データが登録されているかどうかは別ページ側でハンドリングする想定なので、ここでは常にリンクを出す。 ##}}
+       劇伴一覧ページは劇伴が登録された作品にだけあるので、ボタンはその作品（自作品・子作品）の分だけ並べ、
+       1 つも無ければ節ごと出さない。 ##}}
+  {{~ if (array.size BgmLinks) > 0 ~}}
   <section id="bgms">
     <h2>劇伴</h2>
-    <p><a class="button-link" href="/bgms/{{ Series.Slug }}/">『{{ Series.Title | html.escape }}』劇伴一覧</a></p>
+    {{~ for b in BgmLinks ~}}
+    <p><a class="button-link" href="{{ b.Url }}">『{{ b.Title | html.escape }}』劇伴一覧</a></p>
+    {{~ end ~}}
   </section>
+  {{~ end ~}}
 
   {{## 外部サイト。
        マーケティング観点で「自サイト内コンテンツ → 関連リンク」の順で誘導する方が、ページ内回遊が伸びやすい。

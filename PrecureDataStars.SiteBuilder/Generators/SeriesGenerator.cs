@@ -16,13 +16,13 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     子作品（併映短編・子映画）は字下げ表示せず、映画系は下の映画セクションに出す。</description></item>
 ///   <item><description>映画セクション：親 TV を持たない単独映画系（秋映画・春映画など、<c>parent_series_id</c> が NULL）
 ///     を公開順に親作品として並べ、その下に親映画にぶら下がる子作品（併映短編・子映画）を字下げ表示する。
-///     親映画タイトル先頭に「秋映画／春映画」のシーズンバッジを置く。子作品はリンクなしテキスト表示。</description></item>
+///     親映画タイトル先頭に「秋映画／春映画」のシーズンバッジを置く。子作品は自身の詳細ページへリンクする。</description></item>
 ///   <item><description>スピンオフセクション：<c>SPIN-OFF</c> 種別だけを放送順に連番付きで並べる。
 ///     セクション見出しから自明なので [スピンオフ] のテキストラベルは出さない。</description></item>
 /// </list>
-/// 子作品（<c>parent_series_id</c> が NULL でない映画系）は単独詳細ページを生成しない。
-/// 親映画詳細の中の「併映・子作品」セクションに一覧表示するだけにとどめる。
-/// これにより sitemap・search-index・ナビからも自動的に除外される（生成しないため）。
+/// 同時上映の短編（MOVIE_SHORT）も含め、すべてのシリーズに単独詳細ページを生成する。短編は独自の
+/// クレジット・主題歌・劇伴・ゲストキャラクターを持ち得るため、人物・キャラクター等の関与欄から
+/// 短編へ直接リンクできるようにする。親映画詳細の「関連作品」にも短編を並べる。
 /// 個別シリーズページのエピソード一覧は <see cref="SeriesKind.CreditAttachTo"/> が EPISODE のときだけ表示する。
 /// 表構造ではなく <c>&lt;dl class="ep-list"&gt;</c> + <c>&lt;dt&gt;</c>（話数 + サブタイトル）+ <c>&lt;dd&gt;</c>
 /// （字下げでスタッフ群）の縦並びレイアウト。
@@ -194,13 +194,10 @@ public sealed class SeriesGenerator
 
         GenerateIndex();
 
-        // 子作品（parent_series_id != NULL の映画系）は単独詳細ページを生成しない。
-        // 親映画詳細の「併映・子作品」セクションに表示されるだけにする。
-        // SPIN-OFF は親を持っても単独ページが必要（parent_series_id を持つことは想定していないが念のため）。
+        // 同時上映の短編（MOVIE_SHORT）を含む全シリーズに単独詳細ページを生成する。
         int generated = 0;
         foreach (var s in _ctx.Series)
         {
-            if (SeriesClassifier.IsMovieShortChild(s)) continue;
             await GenerateDetailAsync(s, ct).ConfigureAwait(false);
             generated++;
         }
@@ -652,11 +649,11 @@ public sealed class SeriesGenerator
         var badges = new List<PrecureBadge>(rows.Count);
         foreach (var r in rows)
         {
-            // 表記：プリキュア観点で「変身後 / 変身後 2 / 変身前」の名義名を「 / 」連結
-            // （NULL・空の名義は除外）。すべて空のときのみ変身後名義へフォールバック。
+            // 表記：「変身前 / 変身後 / 変身後 2」の名義名を「 / 」連結（歌唱の表記と同じ変身前 → 変身後の順。
+            // NULL・空の名義は除外）。すべて空のときのみ変身後名義へフォールバック。
             // 声優ありなら「 (CV: ○○)」を後置。characters.name は表記には用いない。
             string baseName = PrecureNaming.JoinAliasNames(
-                r.TransformName, r.Transform2Name, r.PreTransformName);
+                r.PreTransformName, r.TransformName, r.Transform2Name);
             if (string.IsNullOrEmpty(baseName)) baseName = r.TransformName;
             string label = string.IsNullOrEmpty(r.VoiceActorName)
                 ? baseName
@@ -776,13 +773,12 @@ public sealed class SeriesGenerator
                         {
                             Slug = c.Slug,
                             Title = c.Title,
-                            KindLabel = LookupKindLabel(c.KindCode),
+                            KindLabel = LookupKindLabel(c),
                             // 公開日は親映画と同じ運用のため、子作品行では出さない（カラム自体は空）。
                             Period = "",
                             // 子作品単体の尺を親と同じ尺カラム位置に出す。
                             // run_time_seconds 未登録（NULL）の子は空文字でセル空表示。
-                            RuntimeLabel = FormatRuntimeSeconds(c.RunTimeSeconds),
-                            HasOwnPage = false
+                            RuntimeLabel = FormatRuntimeSeconds(c.RunTimeSeconds)
                         })
                         .ToList()
                 };
@@ -807,7 +803,8 @@ public sealed class SeriesGenerator
             ShortSeries = shortRows,
             EventSeries = eventRows,
             SpinOffSeries = spinOffRows,
-            TotalCount = _ctx.Series.Count
+            TotalCount = _ctx.Series.Count,
+            MovieShortCount = _ctx.Series.Count(SeriesClassifier.IsMovieShortChild)
         };
         var layout = new LayoutModel
         {
@@ -938,9 +935,8 @@ public sealed class SeriesGenerator
             {
                 Slug = parentForRelated.Slug,
                 Title = parentForRelated.Title,
-                KindLabel = LookupKindLabel(parentForRelated.KindCode),
+                KindLabel = LookupKindLabel(parentForRelated),
                 Period = FormatRelatedPeriod(parentForRelated),
-                HasOwnPage = !SeriesClassifier.IsMovieShortChild(parentForRelated),
                 RelationCode = s.RelationToParent ?? "",
                 RelationLabelJa = (!string.IsNullOrEmpty(s.RelationToParent)
                     && _relationKindReverseLabelMapCache.TryGetValue(s.RelationToParent, out var parentLbl))
@@ -957,9 +953,8 @@ public sealed class SeriesGenerator
         {
             Slug = x.Slug,
             Title = x.Title,
-            KindLabel = LookupKindLabel(x.KindCode),
+            KindLabel = LookupKindLabel(x),
             Period = FormatRelatedPeriod(x),
-            HasOwnPage = !SeriesClassifier.IsMovieShortChild(x),
             RelationCode = x.RelationToParent ?? "",
             RelationLabelJa = (!string.IsNullOrEmpty(x.RelationToParent)
                 && _relationKindForwardLabelMapCache.TryGetValue(x.RelationToParent, out var childLbl))
@@ -967,8 +962,7 @@ public sealed class SeriesGenerator
                 : ""
         }));
 
-        // 親シリーズへのリンク。自分が子作品の場合は親への戻るリンクとして使う想定だが、
-        // そもそも子作品は単独ページを生成しないのでここに到達するのは SPIN-OFF などのみ。
+        // 親シリーズへのリンク。自分が子作品（続編 TV・映画・同時上映の短編など）の場合に、親への戻るリンクとして使う。
         RelatedSeriesRow? parent = null;
         if (s.ParentSeriesId is int pid && _ctx.SeriesById.TryGetValue(pid, out var p))
         {
@@ -976,9 +970,8 @@ public sealed class SeriesGenerator
             {
                 Slug = p.Slug,
                 Title = p.Title,
-                KindLabel = LookupKindLabel(p.KindCode),
-                Period = FormatRelatedPeriod(p),
-                HasOwnPage = !SeriesClassifier.IsMovieShortChild(p)
+                KindLabel = LookupKindLabel(p),
+                Period = FormatRelatedPeriod(p)
             };
         }
 
@@ -1033,7 +1026,7 @@ public sealed class SeriesGenerator
             Title = s.Title,
             TitleKana = s.TitleKana ?? "",
             TitleEn = s.TitleEn ?? "",
-            KindLabel = LookupKindLabel(s.KindCode),
+            KindLabel = LookupKindLabel(s),
             Period = seriesPeriod,
             PeriodLabel = periodLabel,
             PeriodEstimateNote = (seriesEstimated && s.EndDate.HasValue) ? EstimateNote : "",
@@ -1169,9 +1162,23 @@ public sealed class SeriesGenerator
             });
         }
 
+        // 劇伴一覧へのボタン。劇伴一覧ページは劇伴が登録されたシリーズにだけあるので、
+        // 自作品に劇伴があれば自作品の分、単独ページを持たない同時上映の短編に劇伴があればその分を公開日順に並べる
+        // （3 本立ての映画のように、劇伴が短編ごとに分かれている作品があるため）。続編の TV など単独ページを
+        // 持つ子作品は、それぞれのページに自分の劇伴一覧ボタンがあるのでここには並べない。
+        var bgmLinks = new List<BgmLinkRow>();
+        if (_ctx.HasBgmPage(s.SeriesId))
+            bgmLinks.Add(new BgmLinkRow { Url = PathUtil.BgmsForSeriesUrl(s.Slug), Title = s.Title });
+        foreach (var child in allRelated)
+        {
+            if (SeriesClassifier.IsMovieShortChild(child) && _ctx.HasBgmPage(child.SeriesId))
+                bgmLinks.Add(new BgmLinkRow { Url = PathUtil.BgmsForSeriesUrl(child.Slug), Title = child.Title });
+        }
+
         var content = new SeriesDetailModel
         {
             Series = seriesView,
+            BgmLinks = bgmLinks,
             Episodes = epRows,
             RelatedWorks = relatedWorks,
             Parent = parent,
@@ -1303,7 +1310,7 @@ public sealed class SeriesGenerator
         const int targetMaxChars = 140;
 
         var sb = new System.Text.StringBuilder();
-        // ① 基本：『シリーズ名』(YYYY年放送開始/公開、全N話)
+        // ① 基本：『シリーズ名』(YYYY年放送開始/公開、全 N 話)。話数は本文の「全 N 話」と同じく数字の前後に空白を入れる。
         // 映画系（KindCode が "MOVIE" / "MOVIE_SHORT" / "SPRING" 等）は「公開」表記、それ以外は「放送開始」。
         bool isMovie = s.KindCode == "MOVIE" || s.KindCode == "MOVIE_SHORT" || s.KindCode == "SPRING";
         sb.Append('『').Append(s.Title).Append("』(")
@@ -1311,7 +1318,7 @@ public sealed class SeriesGenerator
           .Append(isMovie ? "公開" : "放送開始");
         if (s.Episodes.HasValue && s.Episodes.Value > 0 && !isMovie)
         {
-            sb.Append("、全").Append(s.Episodes.Value).Append('話');
+            sb.Append("、全 ").Append(s.Episodes.Value).Append(" 話");
         }
         sb.Append(")。");
 
@@ -1375,18 +1382,13 @@ public sealed class SeriesGenerator
         var seenAd = new HashSet<string>(StringComparer.Ordinal);
         var seenAt = new HashSet<string>(StringComparer.Ordinal);
 
+        // 区分（1=脚本、2=絵コンテ、3=演出、4=作画監督、5=美術）の判定は、記念日カレンダーに誕生日を出す人物の
+        // 判定（BirthdayCalendarEligibility）と共通の EpisodeChiefRoles に置く。役職マスタに無いコードは対象外。
         int? ClassifyRole(CreditCardRole cr)
         {
             if (cr.RoleCode is null) return null;
             if (!_roleMap!.TryGetValue(cr.RoleCode, out var role)) return null;
-            string code = cr.RoleCode;
-            string nm = role.NameJa ?? "";
-            if (code == "SCREENPLAY"          || nm == "脚本")     return 1;
-            if (code == "STORYBOARD"          || nm == "絵コンテ") return 2;
-            if (code == "EPISODE_DIRECTOR"    || nm == "演出")     return 3;
-            if (code == "ANIMATION_DIRECTOR"  || nm == "作画監督") return 4;
-            if (code == "ART_DIRECTOR"        || nm == "美術")     return 5;
-            return null;
+            return EpisodeChiefRoles.Classify(cr.RoleCode, role.NameJa);
         }
 
         // クレジットと階層 6 段はすべて SiteDataLoader が事前展開済み（BuildContext.CreditsByEpisode /
@@ -1488,9 +1490,21 @@ public sealed class SeriesGenerator
         }
     }
 
-    /// <summary>kind_code → 表示用ラベル（name_ja）。</summary>
-    private string LookupKindLabel(string code)
-        => _ctx.SeriesKindByCode.TryGetValue(code, out var kind) ? kind.NameJa : code;
+    /// <summary>
+    /// シリーズの種別の表示用ラベル（series_kinds.name_ja）。映画の種別は公開の季節で呼び分けているので、
+    /// 季節と公開月がずれた作品には実際の公開の季節を添える（延期などで公開時期が動いた作品のため）。
+    /// 秋映画（併映を含む）が 9〜12 月以外の公開なら「（春公開）」、春映画が 6〜12 月の公開なら「（秋公開）」。
+    /// </summary>
+    private string LookupKindLabel(Series series)
+    {
+        string label = _ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var kind) ? kind.NameJa : series.KindCode;
+        int month = series.StartDate.Month;
+        if (series.KindCode is "MOVIE" or "MOVIE_SHORT" && month is < 9)
+            return label + "（春公開）";
+        if (series.KindCode == "SPRING" && month >= 6)
+            return label + "（秋公開）";
+        return label;
+    }
 
     /// <summary>メインスタッフセクション群を構築する。 TV 系（credit_attach_to='EPISODE'）はエピソードスコープ Involvement から、 映画系（credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）は SERIES スコープ Involvement から集計する。役職セットはそれぞれ <see cref="TvKeyStaffRoleSpecs"/> と <see cref="MovieKeyStaffRoleSpecs"/>。</summary>
     private async Task<IReadOnlyList<KeyStaffSection>> BuildMainStaffSectionsAsync(
@@ -1690,6 +1704,9 @@ public sealed class SeriesGenerator
         /// <summary>スピンオフセクション（<c>kind_code='SPIN-OFF'</c>）。狭義のスピンオフ作品のみ。 スピンオフ系のうち OTONA / SHORT / EVENT は別セクションに分離し、 ここは純粋な SPIN-OFF のみに範囲縮小。行 DTO は TV と共通の <see cref="TvSeriesRow"/> を流用。</summary>
         public IReadOnlyList<TvSeriesRow> SpinOffSeries { get; set; } = Array.Empty<TvSeriesRow>();
         public int TotalCount { get; set; }
+        /// <summary>全作品数のうち同時上映の短編（MOVIE_SHORT）の本数。トップの作品数（短編を親映画に含めて数える）と
+        /// 食い違って見えないよう、リード文で「（同時上映の短編 N 本を含む）」と添える。</summary>
+        public int MovieShortCount { get; set; }
     }
 
     /// <summary>TV シリーズ／スピンオフ一覧の 1 行分。連番付きの表形式で描画される。 <c>Children</c> プロパティは持たない（TV の下に子作品を字下げ表示しないため）。</summary>
@@ -1785,7 +1802,7 @@ public sealed class SeriesGenerator
         public string SeasonBadgeLabel { get; set; } = "";
         /// <summary>親 + 子（MOVIE_SHORT）合計の上映時間ラベル（「m分ss秒」形式）。</summary>
         public string RuntimeLabel { get; set; } = "";
-        /// <summary>親映画にぶら下がる子作品（'MOVIE_SHORT' のみ、seq_in_parent 昇順）。HasOwnPage=false で表示テキストのみ。</summary>
+        /// <summary>親映画にぶら下がる子作品（'MOVIE_SHORT' のみ、seq_in_parent 昇順）。タイトルは子作品の詳細ページへリンクする。</summary>
         public IReadOnlyList<RelatedSeriesRow> Children { get; set; } = Array.Empty<RelatedSeriesRow>();
         /// <summary>
         /// メインスタッフサマリ（プロデューサー / 脚本 / 監督 / キャラクターデザイン / 作画監督 / 美術監督 の 6 役職）。
@@ -1803,8 +1820,6 @@ public sealed class SeriesGenerator
         public string Period { get; set; } = "";
         /// <summary>子作品（MOVIE_SHORT・併映短編）単体の上映時間ラベル（「m分ss秒」形式）。</summary>
         public string RuntimeLabel { get; set; } = "";
-        /// <summary>子作品（HasOwnPage=false）はリンク化せず表示のみ行う。</summary>
-        public bool HasOwnPage { get; set; } = true;
         /// <summary>親に対する関係種別コード。</summary>
         public string RelationCode { get; set; } = "";
         /// <summary>
@@ -1820,12 +1835,14 @@ public sealed class SeriesGenerator
     private sealed class SeriesDetailModel
     {
         public SeriesDetailView Series { get; set; } = new();
+        /// <summary>「劇伴」節のボタン（劇伴一覧ページがある自作品・子作品の分）。空なら節ごと出さない。</summary>
+        public IReadOnlyList<BgmLinkRow> BgmLinks { get; set; } = Array.Empty<BgmLinkRow>();
         public IReadOnlyList<EpisodeIndexRow> Episodes { get; set; } = Array.Empty<EpisodeIndexRow>();
         /// <summary>
         /// 「関連作品」セクション用。
-        /// 単独ページを持たない作品（MOVIE_SHORT 等）と単独ページを持つ作品（続編・スピンオフ等）を
-        /// 1 つのリストにまとめて保持する。ソート順は公開日（StartDate）昇順、同日内は seq_in_parent → series_id 昇順。
-        /// 各行は <see cref="RelatedSeriesRow.HasOwnPage"/> でリンク化要否を、<see cref="RelatedSeriesRow.RelationLabelJa"/> で
+        /// 親・子作品（続編・映画・同時上映の短編・スピンオフ等）を 1 つのリストにまとめて保持する。
+        /// ソート順は公開日（StartDate）昇順、同日内は seq_in_parent → series_id 昇順。
+        /// 各行は <see cref="RelatedSeriesRow.RelationLabelJa"/> で
         /// バッジ表示文字列（series_relation_kinds.name_ja_reverse）を持つ。
         /// </summary>
         public IReadOnlyList<RelatedSeriesRow> RelatedWorks { get; set; } = Array.Empty<RelatedSeriesRow>();
@@ -1864,6 +1881,14 @@ public sealed class SeriesGenerator
     }
 
     /// <summary>映画 BGM リストの 1 行 DTO（テンプレ描画用）。</summary>
+    /// <summary>シリーズ詳細の「劇伴」節に並べる劇伴一覧ページへのボタン 1 つ分。</summary>
+    private sealed class BgmLinkRow
+    {
+        public string Url { get; set; } = "";
+        /// <summary>ボタンに出す作品名（『』で括るのはテンプレ側）。</summary>
+        public string Title { get; set; } = "";
+    }
+
     private sealed class MovieBgmCueRow
     {
         public int Seq { get; set; }

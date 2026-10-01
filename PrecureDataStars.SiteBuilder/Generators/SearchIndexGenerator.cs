@@ -58,8 +58,7 @@ public sealed class SearchIndexGenerator
         // ── シリーズ ──
         foreach (var s in _ctx.Series)
         {
-            // 子作品（秋映画併映短編・子映画など）は単独詳細ページを生成しないため検索インデックスからも除外する。
-            if (SeriesClassifier.IsChildOfMovie(s)) continue;
+            // 親を持つ映画・同時上映の短編・スピンオフも含め、すべてのシリーズが単独詳細ページを持つので全件載せる。
             items.Add(new SearchIndexItem
             {
                 u = $"/series/{s.Slug}/",
@@ -105,6 +104,9 @@ public sealed class SearchIndexGenerator
         var allPrecures = await precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
         var allCharacterAliases = (await characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allCharacters = (await charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+        // 種別の補足はキャラクター一覧のタブと同じ、種別マスタの日本語名を出す。
+        var characterKindNames = (await new CharacterKindsRepository(_factory).GetAllAsync(ct).ConfigureAwait(false))
+            .ToDictionary(k => k.CharacterKindCode, k => k.NameJa, StringComparer.Ordinal);
         var characterAliasMap = allCharacterAliases.ToDictionary(a => a.AliasId);
         var characterMap = allCharacters.ToDictionary(c => c.CharacterId);
         foreach (var p in allPrecures)
@@ -157,7 +159,7 @@ public sealed class SearchIndexGenerator
                 u = PathUtil.CharacterUrl(c.CharacterId),
                 t = c.Name,
                 k = "character",
-                s = CharacterKindLabel(c.CharacterKind),
+                s = characterKindNames.TryGetValue(c.CharacterKind, out var kindName) && !string.IsNullOrEmpty(kindName) ? kindName : c.CharacterKind,
                 x = NormalizeForSearch(c.NameKana ?? c.Name)
             });
         }
@@ -167,7 +169,7 @@ public sealed class SearchIndexGenerator
         var allPersons = await personsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
         foreach (var p in allPersons)
         {
-            // 表示名は人物詳細の見出しと同じ最新名義。読みには見出しの読みに加えて、正式名と全名義の表記・読みも
+            // 表示名は人物詳細の見出しと同じ表示名義。読みには見出しの読みに加えて、正式名と全名義の表記・読みも
             // 「|」区切りで持たせ、旧名義や正式名で探しても引けるようにする（照合は部分一致なので区切りは跨がない前提）。
             string displayName = _ctx.EntityUrls.PersonDisplayName(p.PersonId) ?? p.FullName;
             string displayKana = _ctx.EntityUrls.PersonDisplayKana(p.PersonId) ?? "";
@@ -315,10 +317,13 @@ public sealed class SearchIndexGenerator
         _ctx.Logger.Success($"search-index.json: {items.Count} 件");
     }
 
-    /// <summary>検索インデックスの「読み」フィールド用に文字列を正規化する。 全角カタカナ → ひらがな、英数字 → 小文字、空白除去。JS 側でクエリも同じ正規化を行うことで マッチ判定がシンプルになる。</summary>
+    /// <summary>検索インデックスの「読み」フィールド用に文字列を正規化する。 NFKC 正規化（全角英数・半角カナをそろえる）と波ダッシュの統一のあと、全角カタカナ → ひらがな、英数字 → 小文字、空白除去。JS 側でクエリも同じ正規化を行うことで マッチ判定がシンプルになる。</summary>
     private static string NormalizeForSearch(string s)
     {
         if (string.IsNullOrEmpty(s)) return "";
+        // NFKC で全角英数・全角記号を半角に、半角カナを全角にそろえ、波ダッシュ「〜」・全角チルダ・半角「~」を
+        // 「~」に統一する。ブラウザ側（search.js の normalizeQuery）も同じ規則で検索語を正規化する。
+        s = s.Normalize(System.Text.NormalizationForm.FormKC).Replace('\u301C', '~').Replace('\uFF5E', '~');
         var chars = new char[s.Length];
         int idx = 0;
         foreach (char ch in s)
@@ -344,15 +349,6 @@ public sealed class SearchIndexGenerator
         _ => kindCode
     };
 
-    /// <summary>キャラ種別コードを日本語ラベルに変換（検索結果のサブテキスト用）。</summary>
-    private static string CharacterKindLabel(string kindCode) => kindCode switch
-    {
-        "PRECURE" => "プリキュア",
-        "ALLY" => "仲間",
-        "VILLAIN" => "敵",
-        "SUPPORTING" => "サブキャラ",
-        _ => kindCode
-    };
 
     /// <summary>検索インデックス JSON のアイテム 1 件分。プロパティ名は短縮形（容量削減のため）。</summary>
     private sealed class SearchIndexItem

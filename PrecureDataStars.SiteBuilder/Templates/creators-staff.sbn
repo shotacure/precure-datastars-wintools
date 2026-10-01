@@ -9,7 +9,7 @@
 {{## スタッフ一覧。
      ・役職順タブ：役職名 + その役職に関わった人物数・企業/団体数の索引。各役職名から
        役職詳細ページ（/creators/roles/{code}/）へ送り出す。最も軽量なので既定タブにする。
-     ・五十音順 / 初参加順 / 参加話数が多い順タブ：人物と企業・団体を 1 リストに混在させた
+     ・五十音順 / 初参加順 / 参加回数順タブ：人物と企業・団体を 1 リストに混在させた
        一覧。行ごとに「個人 / 団体」バッジで区別し、上部の絞り込みトグルで
        個人のみ・団体のみに切り替えられる（data-entity-filter を CSS で解決）。
      ・タブ切替は /products/ や旧 /persons/ と同じインライン JS（外部 JS を増やさない）。
@@ -36,18 +36,23 @@
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="staff-tab-panel-count">
-      参加話数が多い順
+      参加回数順
     </button>
   </div>
 
   {{## 個人 / 団体 の絞り込みトグル。役職順タブは「役職名＋人数」の索引で
        エンティティ行を持たないため、このトグルは無意味になる。よって役職順タブが
-       アクティブな間はトグル自体を隠し、五十音順 / 初参加順 / 参加話数順タブで
+       アクティブな間はトグル自体を隠し、五十音順 / 初参加順 / 参加回数順タブで
        のみ表示する（表示制御はルートの data-active-tab 属性を CSS が解決）。 ##}}
+  <div class="list-toolbar">
   <div class="entity-filter" role="group" aria-label="個人・団体で絞り込み">
     <button type="button" class="entity-filter-btn is-active" data-entity-filter-set="all">すべて</button>
     <button type="button" class="entity-filter-btn" data-entity-filter-set="person">個人のみ</button>
     <button type="button" class="entity-filter-btn" data-entity-filter-set="company">団体のみ</button>
+  </div>
+  {{## 件数での並べ替えボタン（count-sort.js）。data-count-sort-for のリストの行を、件数バッジの種類ごとに多い順／少ない順で並べ替える。対象リストが出ているときだけ表示される。 ##}}
+  <button type="button" class="count-sort-btn" data-count-sort-for="staff-roles-tv staff-roles-movie" data-count-sort-initial="none" hidden></button>
+  <button type="button" class="count-sort-btn" data-count-sort-for="staff-count-list" hidden></button>
   </div>
 
   {{## ──────── 役職順パネル（既定） ──────── ##}}
@@ -64,7 +69,7 @@
     <section class="creators-series-section">
       <h2 class="creators-series-heading">TVシリーズでクレジットされた役職</h2>
     {{~ end ~}}
-    <ul class="entity-list entity-list-grid">
+    <ul class="entity-list entity-list-grid" id="staff-roles-tv">
       {{~ for r in TvRoles ~}}
       <li class="entity-row">
         {{~ if r.PersonCount > 0 || r.CompanyCount > 0 ~}}
@@ -82,7 +87,7 @@
     </section>
     <section class="creators-series-section">
       <h2 class="creators-series-heading">映画でのみクレジットされた役職</h2>
-      <ul class="entity-list entity-list-grid">
+      <ul class="entity-list entity-list-grid" id="staff-roles-movie">
         {{~ for r in MovieOnlyRoles ~}}
         <li class="entity-row">
           {{~ if r.PersonCount > 0 || r.CompanyCount > 0 ~}}
@@ -155,13 +160,13 @@
     {{~ end ~}}
   </div>
 
-  {{## ──────── 参加話数が多い順パネル ──────── ##}}
+  {{## ──────── 参加回数順パネル ──────── ##}}
   <div class="tab-panel" id="staff-tab-panel-count"
        data-tab-panel="count" role="tabpanel" hidden>
     {{~ if (array.size CountRows) == 0 ~}}
     <p class="empty-row">該当するスタッフがまだ登録されていません。</p>
     {{~ else ~}}
-    <ul class="entity-list">
+    <ul class="entity-list" id="staff-count-list">
       {{~ for e in CountRows ~}}
       <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
         <a class="entity-row-link" href="{{ e.EntityUrl }}" aria-label="{{ e.EntityName | html.escape }}"></a>

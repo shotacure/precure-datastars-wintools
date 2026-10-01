@@ -186,7 +186,11 @@ public sealed class SubtitleStatsRepository : RepositoryBase
         return await QueryListAsync<EpisodeRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
-    /// <summary>シリーズ別の文字種別比率（漢字 / ひらがな / カタカナ / 英字 / 数字）。 出典 SQL：「歴代シリーズ・サブタイトル漢字率.sql」</summary>
+    /// <summary>
+    /// シリーズ別の文字種別比率（漢字 / ひらがな / カタカナ / 英字 / 数字 / 記号）。 出典 SQL：「歴代シリーズ・サブタイトル漢字率.sql」
+    /// 記号は title_char_stats.categories の句読点・記号・絵文字・その他の合計。総文字数は全カテゴリの合計（空白を除いた全文字）で、
+    /// シリーズ単位の漢字率ランキング（<see cref="GetKanjiRateSeriesAsync"/>）の分母と一致する。長音「ー」はカタカナに数える。
+    /// </summary>
     public async Task<IReadOnlyList<SeriesCharTypeRow>> GetCharTypeBreakdownBySeriesAsync(CancellationToken ct = default)
     {
         const string sql = """
@@ -201,7 +205,8 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               JOIN series   s ON s.series_id = e.series_id
               JOIN JSON_TABLE(JSON_KEYS(e.title_char_stats, '$.categories'),
                               '$[*]' COLUMNS (k VARCHAR(20) PATH '$')) AS jt
-              WHERE e.is_deleted = 0 AND jt.k IN ('Kanji','Hiragana','Katakana','Latin','Digits')
+              WHERE e.is_deleted = 0
+                AND jt.k IN ('Kanji','Hiragana','Katakana','Latin','Digits','Punct','Symbols','Emoji','Other')
             )
             SELECT
               SeriesId, SeriesTitle, SeriesSlug,
@@ -210,6 +215,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               SUM(IF(Cat='Katakana', Cnt, 0)) AS Katakana,
               SUM(IF(Cat='Latin',    Cnt, 0)) AS Latin,
               SUM(IF(Cat='Digits',   Cnt, 0)) AS Digits,
+              SUM(IF(Cat IN ('Punct','Symbols','Emoji','Other'), Cnt, 0)) AS Symbols,
               SUM(Cnt) AS TotalCount
             FROM cats
             GROUP BY SeriesId, SeriesTitle, SeriesSlug
@@ -222,7 +228,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
     /// <summary>
     /// シリーズ × 記号の出現回数セルを取得する。
     /// 各エピソードの <c>title_char_stats.chars</c> JSON を <c>JSON_TABLE</c> で展開し、
-    /// 「漢字 (Han / 々)・ひらがな・カタカナ・英字・数字・空白でない文字」を記号と判定して
+    /// 「漢字 (Han / 々)・ひらがな・カタカナ（長音「ー」を含む）・英字・数字・空白でない文字」を記号と判定して
     /// シリーズ × 文字単位の合計を取る。「、」「。」「「」「」」などの句読点も自動的に含まれる。
     /// 戻り値はフラットなセル行群（1 行 = 1 シリーズ内の 1 記号のカウント）。
     /// 列順序のソースは別途 <see cref="GetSymbolsByFirstAppearAsync"/> から取得する。
@@ -255,8 +261,10 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                    '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')
                  ) jt
             WHERE e.is_deleted = 0
-              -- 記号判定：漢字でもひらがなでもカタカナでも英字でも数字でも空白でもない（句読点・絵文字等を含む）
-              AND jt.ch NOT REGEXP '\\p{Han}|[々]|\\p{Hiragana}|\\p{Katakana}|[A-Za-z]|[0-9]|[ 　]'
+              -- 記号判定：漢字でもひらがなでもカタカナでも英字でも数字でも空白でもない（句読点・絵文字等を含む）。
+              -- 長音「ー」は Unicode ではカタカナでなくひらがな・カタカナ共通の文字なので、明示してカタカナ側に入れる
+              -- （記号率・文字種別の集計に使う title_char_stats.categories もカタカナに数えている）
+              AND jt.ch NOT REGEXP '\\p{Han}|[々]|\\p{Hiragana}|\\p{Katakana}|[ー]|[A-Za-z]|[0-9]|[ 　]'
             GROUP BY s.series_id, s.title, s.slug, CONVERT(jt.ch USING utf8mb4) COLLATE utf8mb4_bin, jt.ch
             ORDER BY s.series_id;
             """;
@@ -389,6 +397,9 @@ public sealed class SubtitleStatsRepository : RepositoryBase
         public long Katakana { get; set; }
         public long Latin { get; set; }
         public long Digits { get; set; }
+        /// <summary>記号（句読点・記号・絵文字・その他）の文字数。</summary>
+        public long Symbols { get; set; }
+        /// <summary>空白を除いた全文字数（全カテゴリの合計）。</summary>
         public long TotalCount { get; set; }
     }
 
@@ -683,8 +694,9 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                      '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')
                    ) jt
               WHERE e.is_deleted = 0
-                -- 記号判定：漢字でもひらがなでもカタカナでも英字でも数字でも空白でもない
-                AND jt.ch NOT REGEXP '\\p{Han}|[々]|\\p{Hiragana}|\\p{Katakana}|[A-Za-z]|[0-9]|[ 　]'
+                -- 記号判定：漢字でもひらがなでもカタカナでも英字でも数字でも空白でもない。
+                -- 長音「ー」は Unicode ではカタカナでないので、明示してカタカナ側に入れる
+                AND jt.ch NOT REGEXP '\\p{Han}|[々]|\\p{Hiragana}|\\p{Katakana}|[ー]|[A-Za-z]|[0-9]|[ 　]'
             ),
             grouped AS (
               SELECT

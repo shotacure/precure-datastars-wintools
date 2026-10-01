@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using PrecureDataStars.Data.Models;
@@ -51,6 +52,81 @@ public partial class CreditMastersEditorForm
         return (year, vis, month, day);
     }
 
+    /// <summary>没年月日入力欄にモデル値（没年・月・日）を流し込む。没年が無ければ「なし」（存命・不明）にする。</summary>
+    private static void LoadDeathDateControls(
+        NumericUpDown nudYear, CheckBox chkNone, ComboBox cboMonth, ComboBox cboDay,
+        ushort? deathYear, byte? deathMonth, byte? deathDay)
+    {
+        if (deathYear.HasValue)
+        {
+            chkNone.Checked = false;
+            nudYear.Enabled = true;
+            decimal v = deathYear.Value;
+            if (v < nudYear.Minimum) v = nudYear.Minimum;
+            if (v > nudYear.Maximum) v = nudYear.Maximum;
+            nudYear.Value = v;
+        }
+        else
+        {
+            chkNone.Checked = true;
+            nudYear.Enabled = false;
+        }
+        // 月／日：index 0 が「(未)」= NULL。値ありは index = 値。
+        cboMonth.SelectedIndex = deathMonth.HasValue ? deathMonth.Value : 0;
+        cboDay.SelectedIndex = deathDay.HasValue ? deathDay.Value : 0;
+    }
+
+    /// <summary>没年月日入力欄からモデル値（没年・月・日）を読み出す。</summary>
+    private static (ushort? Year, byte? Month, byte? Day) ReadDeathDateControls(
+        NumericUpDown nudYear, CheckBox chkNone, ComboBox cboMonth, ComboBox cboDay)
+    {
+        ushort? year = chkNone.Checked ? (ushort?)null : (ushort)nudYear.Value;
+        byte? month = cboMonth.SelectedIndex > 0 ? (byte)cboMonth.SelectedIndex : null;
+        byte? day = cboDay.SelectedIndex > 0 ? (byte)cboDay.SelectedIndex : null;
+        return (year, month, day);
+    }
+
+    /// <summary>
+    /// 没年月日の組み合わせを確かめる。月があるなら年、日があるなら月が要る（DB の CHECK 制約と同じ決まり）。
+    /// 問題があれば利用者向けのメッセージを返し、無ければ null を返す。
+    /// </summary>
+    private static string? ValidateDeathDate((ushort? Year, byte? Month, byte? Day) d)
+    {
+        if (d.Month.HasValue && !d.Year.HasValue) return "没年月日：月を入れるときは没年も入れてください（「なし」のチェックを外します）。";
+        if (d.Day.HasValue && !d.Month.HasValue) return "没年月日：日を入れるときは月も入れてください。";
+        return null;
+    }
+
+    /// <summary>本名義の選択肢の読み込み世代。選択が切り替わったら古い読み込み結果は書き戻さない。</summary>
+    private int _primaryAliasLoadGen;
+
+    /// <summary>本名義の「指定なし」の表示。</summary>
+    private const string PrimaryAliasNoneLabel = "(指定なし：公開中の名義 → 最新名義)";
+
+    /// <summary>
+    /// 本名義コンボに「指定なし」とその人物の名義を並べ、<paramref name="selectedAliasId"/> を選ぶ。
+    /// 名義は非同期で読むので、読み終えた時点で別の人物が選ばれていたら書き戻さない。
+    /// </summary>
+    private async Task LoadPrimaryAliasChoicesAsync(int? personId, int? selectedAliasId)
+    {
+        int gen = Interlocked.Increment(ref _primaryAliasLoadGen);
+        var items = new System.Collections.Generic.List<IdLabel<int?>> { new(null, PrimaryAliasNoneLabel) };
+        try
+        {
+            if (personId is int pid)
+            {
+                var aliases = await _personAliasesRepo.GetByPersonAsync(pid);
+                if (gen != Volatile.Read(ref _primaryAliasLoadGen)) return;
+                items.AddRange(aliases
+                    .OrderBy(a => a.AliasId)
+                    .Select(a => new IdLabel<int?>(a.AliasId, $"#{a.AliasId}  {a.Name}")));
+            }
+            cboPPrimaryAlias.DataSource = items;
+            cboPPrimaryAlias.SelectedIndex = Math.Max(0, items.FindIndex(i => i.Id == selectedAliasId));
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
     private void OnPersonRowSelected()
     {
         if (gridPersons.CurrentRow?.DataBoundItem is Person p)
@@ -63,12 +139,16 @@ public partial class CreditMastersEditorForm
             LoadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown, cboPBirthYearVis,
                 cboPBirthMonth, cboPBirthDay,
                 p.BirthYear, p.BirthYearVisibility, p.BirthMonth, p.BirthDay);
+            LoadDeathDateControls(nudPDeathYear, chkPDeathNone, cboPDeathMonth, cboPDeathDay,
+                p.DeathYear, p.DeathMonth, p.DeathDay);
             txtPNotes.Text = p.Notes ?? "";
             txtPOfficialUrl.Text = p.OfficialUrl ?? "";
+            txtPAffiliationUrl.Text = p.AffiliationUrl ?? "";
             txtPXUrl.Text = p.XUrl ?? "";
             txtPInstagramUrl.Text = p.InstagramUrl ?? "";
             txtPYoutubeUrl.Text = p.YoutubeUrl ?? "";
             txtPWikipediaUrl.Text = p.WikipediaUrl ?? "";
+            _ = LoadPrimaryAliasChoicesAsync(p.PersonId, p.PrimaryAliasId);
         }
     }
 
@@ -78,11 +158,13 @@ public partial class CreditMastersEditorForm
         txtPFamily.Text = ""; txtPGiven.Text = "";
         txtPFullName.Text = ""; txtPFullNameKana.Text = "";
         txtPNameEn.Text = ""; txtPNotes.Text = "";
-        txtPOfficialUrl.Text = ""; txtPXUrl.Text = "";
+        txtPOfficialUrl.Text = ""; txtPAffiliationUrl.Text = ""; txtPXUrl.Text = "";
         txtPInstagramUrl.Text = ""; txtPYoutubeUrl.Text = "";
         txtPWikipediaUrl.Text = "";
         LoadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown, cboPBirthYearVis,
             cboPBirthMonth, cboPBirthDay, null, "PUBLIC", null, null);
+        LoadDeathDateControls(nudPDeathYear, chkPDeathNone, cboPDeathMonth, cboPDeathDay, null, null, null);
+        _ = LoadPrimaryAliasChoicesAsync(null, null);
     }
 
     private async Task SavePersonAsync()
@@ -91,6 +173,10 @@ public partial class CreditMastersEditorForm
         {
             if (string.IsNullOrWhiteSpace(txtPFullName.Text))
             { MessageBox.Show(this, "フルネームは必須です。"); return; }
+
+            var pdd = ReadDeathDateControls(nudPDeathYear, chkPDeathNone, cboPDeathMonth, cboPDeathDay);
+            if (ValidateDeathDate(pdd) is string deathDateError)
+            { MessageBox.Show(this, deathDateError); return; }
 
             // かな（full_name_kana）が入っていて英語（name_en）が空のとき、
             if (!IsBlank(txtPFullNameKana.Text) && IsBlank(txtPNameEn.Text))
@@ -123,12 +209,17 @@ public partial class CreditMastersEditorForm
                 current.BirthYearVisibility = pbd.Visibility;
                 current.BirthMonth = pbd.Month;
                 current.BirthDay = pbd.Day;
+                current.DeathYear = pdd.Year;
+                current.DeathMonth = pdd.Month;
+                current.DeathDay = pdd.Day;
                 current.Notes = NullIfEmpty(txtPNotes.Text);
                 current.OfficialUrl = NullIfEmpty(txtPOfficialUrl.Text);
+                current.AffiliationUrl = NullIfEmpty(txtPAffiliationUrl.Text);
                 current.XUrl = NullIfEmpty(txtPXUrl.Text);
                 current.InstagramUrl = NullIfEmpty(txtPInstagramUrl.Text);
                 current.YoutubeUrl = NullIfEmpty(txtPYoutubeUrl.Text);
                 current.WikipediaUrl = NullIfEmpty(txtPWikipediaUrl.Text);
+                current.PrimaryAliasId = (cboPPrimaryAlias.SelectedItem as IdLabel<int?>)?.Id;
                 current.UpdatedBy = Environment.UserName;
                 await _personsRepo.UpdateAsync(current);
             }
@@ -147,8 +238,12 @@ public partial class CreditMastersEditorForm
                     BirthYearVisibility = pbd.Visibility,
                     BirthMonth = pbd.Month,
                     BirthDay = pbd.Day,
+                    DeathYear = pdd.Year,
+                    DeathMonth = pdd.Month,
+                    DeathDay = pdd.Day,
                     Notes = NullIfEmpty(txtPNotes.Text),
                     OfficialUrl = NullIfEmpty(txtPOfficialUrl.Text),
+                    AffiliationUrl = NullIfEmpty(txtPAffiliationUrl.Text),
                     XUrl = NullIfEmpty(txtPXUrl.Text),
                     InstagramUrl = NullIfEmpty(txtPInstagramUrl.Text),
                     YoutubeUrl = NullIfEmpty(txtPYoutubeUrl.Text),

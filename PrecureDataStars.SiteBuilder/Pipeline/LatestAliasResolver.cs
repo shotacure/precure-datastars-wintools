@@ -22,6 +22,8 @@ public static class LatestAliasResolver
     /// person_id → 最新名義の person_alias_id。TV 系シリーズ（credit_attach_to='EPISODE'）のクレジットで
     /// 最後に使われた名義を正とする（映画のクレジットは表記が TV と違うことがあるため、見出しの名乗りには使わない）。
     /// TV 系のクレジットが 1 件も無い人物に限り、映画系を含めた全クレジットで最後に使われた名義にする。
+    /// 決めるのは本編のクレジット（<see cref="Involvement.IsMainCredit"/>）で、主題歌・挿入歌の作家・歌唱や劇伴の作曲・編曲は
+    /// 使われた話に紐付いていても見ない。本編のクレジットが 1 件も無い人物（歌手・作家だけの人物）に限り、それらも含めて同じ順で決める。
     /// 複数の人物が共有する名義（共同名義）は、その人物個人の名前として扱えないため候補から外す。
     /// クレジットに一度も出ない人物は辞書に載らない（呼び出し側で正式名にフォールバックする）。
     /// </summary>
@@ -38,8 +40,8 @@ public static class LatestAliasResolver
         var result = new Dictionary<int, int>();
         foreach (var (personId, aliasIds) in ctx.AliasIdsByPerson)
         {
-            // TV 系で最後の名義 → 無ければ全クレジットで最後の名義。
-            int? Pick(bool tvOnly)
+            // 本編の TV 系で最後の名義 → 本編の全クレジット → 歌・劇伴も含めた TV 系 → 歌・劇伴も含めた全クレジット の順。
+            int? Pick(bool mainOnly, bool tvOnly)
             {
                 var best = (Start: long.MinValue, EpNo: int.MinValue, Pos: long.MinValue);
                 int? bestAid = null;
@@ -49,6 +51,7 @@ public static class LatestAliasResolver
                     if (!index.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
                     foreach (var inv in invs)
                     {
+                        if (mainOnly && !inv.IsMainCredit) continue;
                         if (tvOnly && ctx.IsMovieKindSeries(inv.SeriesId)) continue;
                         var key = CreditOrderKey(ctx, inv);
                         if (bestAid is null || key.CompareTo(best) > 0) { best = key; bestAid = aid; }
@@ -56,7 +59,9 @@ public static class LatestAliasResolver
                 }
                 return bestAid;
             }
-            if ((Pick(tvOnly: true) ?? Pick(tvOnly: false)) is int b) result[personId] = b;
+            if ((Pick(mainOnly: true, tvOnly: true) ?? Pick(mainOnly: true, tvOnly: false)
+                 ?? Pick(mainOnly: false, tvOnly: true) ?? Pick(mainOnly: false, tvOnly: false)) is int b)
+                result[personId] = b;
         }
         return result;
     }

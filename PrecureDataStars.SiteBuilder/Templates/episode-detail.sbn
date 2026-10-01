@@ -176,9 +176,13 @@
        楽曲タイトルは SongLink が引けていれば <a> でラップして詳細ページへリンク。
        KindLabel は OP / ED / 挿入歌 の表示文字列（コード値そのままではない）に正規化済み。 ##}}
   {{~ if (array.size ThemeSongs) > 0 ~}}
+  {{## 配信音源の再生ボタンは見出し行の右端に置く（録音ごとに 1 つ。歌入りで本編のサイズを優先し、カラオケしか無ければ出さない）。
+       リストは押した 1 件だけ鳴らす（同じ曲の本放送版・配信版が並ぶことがあるため、連続再生はしない）。 ##}}
+  {{~ has_theme_play = false ~}}
+  {{~ for t in ThemeSongs ~}}{{~ if t.ArtTrackId != "" ~}}{{~ has_theme_play = true ~}}{{~ end ~}}{{~ end ~}}
   <section id="theme-songs">
     <h2>主題歌・挿入歌</h2>
-    <ul class="theme-songs-list">
+    <ul class="theme-songs-list"{{~ if has_theme_play ~}} data-art-track-list data-art-track-mode="single"{{~ end ~}}>
       {{~ for t in ThemeSongs ~}}
       <li class="ts-card">
         {{## 1 行目：[OP/ED/挿入歌バッジ] 「タイトル」 (TV size) (本放送のみ) ##}}
@@ -186,6 +190,7 @@
           <span class="ts-kind">{{ t.KindLabel | html.escape }}</span>
           <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>{{~ else ~}}{{ t.Title | html.escape }}{{~ end ~}}」</span>
           {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
+          {{~ if t.ArtTrackId != "" ~}}<button type="button" class="art-track-play ts-play{{ if t.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ t.ArtTrackId | html.escape }}"{{ if t.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }}{{ if t.ArtTrackAltId != "" }} data-art-track-alt-id="{{ t.ArtTrackAltId | html.escape }}" data-art-track-alt-sub="{{ t.ArtTrackAltSourceAlbum | html.escape }}"{{ end }} data-art-track-title="{{ t.Title | html.escape }}" data-art-track-sub="{{ t.ArtTrackSourceAlbum | html.escape }}" aria-label="{{ t.Title | html.escape }} を再生{{ if t.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if t.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>{{~ end ~}}
         </div>
         {{## 2 行目以降：作詞・作曲・編曲・歌 のメタ情報。
              各行は「[役職ラベル]：[名義 HTML]」の形。空判定で行ごと省略する。
@@ -217,6 +222,9 @@
       {{~ end ~}}
     </ul>
   </section>
+  {{~ if has_theme_play ~}}
+  <script src="{{ asset_url "/assets/art-track-player.js" }}" defer></script>
+  {{~ end ~}}
   {{~ end ~}}
 
   {{## 使用音声（episode_uses をパート別にグルーピングして表示）。
@@ -300,7 +308,7 @@
     </ul>
     {{## 参照点はパート尺統計（最新放送済話基準の BuildPointCaption）と異なり、
          サブタイトル登録済みの最終話基準（先行登録された未放送話も比較対象に入るため）。
-         書式は BuildPointCaption と同一で、参照点が未放送話のときは未来日付になり得る。 ##}}
+         放送済みなら書式は BuildPointCaption と同一、参照点がまだ放送前なら「第N話（〇年〇月〇日放送予定）までのサブタイトルで集計」。 ##}}
     {{~ if SubtitleBuildPointCaption != "" ~}}
     <p class="section-refpoint">（{{ SubtitleBuildPointCaption | html.escape }}）</p>
     {{~ end ~}}
@@ -397,7 +405,7 @@
        （毎週変動するため）はエリア右下に小さく出す。 ##}}
   {{~ if (array.size PartLengthStats) > 0 ~}}
   <section id="partlength-stats">
-    <h2>パート尺統計<span class="help-tip" tabindex="0">?<span class="help-tip-text">このエピソードのアバン・A パート・B パートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体で何位にあたるかを、偏差値とあわせて示します。ゲージは偏差値 25〜75 の範囲で、中央の線が 50（平均）、背景の薄い棒グラフは同じ集計範囲での尺の分布です。</span></span></h2>
+    <h2>パート尺統計<span class="help-tip" tabindex="0">?<span class="help-tip-text">このエピソードのアバン・Aパート・Bパートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体で何位にあたるかを、偏差値とあわせて示します。ゲージは偏差値 25〜75 の範囲で、中央の線が 50（平均）、背景の薄い棒グラフは同じ集計範囲での尺の分布です。</span></span></h2>
     <div class="partstat-cards">
       {{~ for s in PartLengthStats ~}}
       <div class="partstat-card">

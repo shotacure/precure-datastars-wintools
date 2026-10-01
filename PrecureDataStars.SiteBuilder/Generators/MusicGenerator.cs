@@ -110,9 +110,8 @@ public sealed class MusicGenerator
         // tracks.length_frames は CD のフレーム単位尺（75 frames = 1 秒）。劇伴詳細ページの
         // cue カードヘッダに出す「尺」は、リスト先頭（発売日昇順で最も古い = 初出盤）の
         // トラック length_frames を秒に換算して表示する。
-        // 特例：MJCG-80146（プリキュア「全曲集 1」）、MJCG-83027（同 2）は寄せ集めの曲集で
-        // 各シリーズの収録盤として案内すると煩雑になるため、歌・劇伴の詳細ページの
-        // 収録盤一覧から除外する（歌側の収録盤集計ロジックでも同じ品番を除外する）。
+        // 流通元を替えて同じ中身のまま再発売された盤（Reissues）のトラックは、行にすると初回盤と二重に並ぶので
+        // 同じトラックの初回盤の行に、本行と同じ「{盤の略称}-Tr.{N}」の書き方で添える（歌の詳細も同じ）。
         // ORDER BY は安定タイブレーク前提（発売日 → 品番 → トラック番号 → サブ順）。
         //
         // UNION ALL の 2 系統で収録盤行を取る：
@@ -144,7 +143,6 @@ public sealed class MusicGenerator
              WHERE t.bgm_series_id IS NOT NULL
                AND t.bgm_m_no_detail IS NOT NULL
                AND p.is_deleted = 0
-               AND p.product_catalog_no NOT IN ('MJCG-80146', 'MJCG-83027')
 
             UNION ALL
 
@@ -175,7 +173,6 @@ public sealed class MusicGenerator
               JOIN discs    d ON d.catalog_no = t.catalog_no
               JOIN products p ON p.product_catalog_no = d.product_catalog_no
              WHERE p.is_deleted = 0
-               AND p.product_catalog_no NOT IN ('MJCG-80146', 'MJCG-83027')
 
              ORDER BY ReleaseDate ASC,
                       ProductCatalogNo ASC,
@@ -226,6 +223,21 @@ public sealed class MusicGenerator
                 ArtTrackId = r.YoutubeEmbeddable == true ? (r.YoutubeArtTrackId ?? "") : "",
                 ArtTrackPremiumOnly = string.Equals(r.YoutubePlayability, "PREMIUM_ONLY", StringComparison.Ordinal)
             });
+        }
+        // 再発売盤のトラックを、同じ cue・同じトラック番号の初回盤の行に添えて、行からは外す。
+        // 初回盤の行が見つからないときは、そのまま行として残す。
+        foreach (var list in dict.Values)
+        {
+            foreach (var rec in list.ToList())
+            {
+                var firstPressNo = Reissues.FirstPressOf(rec.ProductCatalogNo);
+                if (firstPressNo is null) continue;
+                var firstPressRow = list.FirstOrDefault(x => x.ProductCatalogNo == firstPressNo && x.TrackNo == rec.TrackNo && x.SubOrder == rec.SubOrder);
+                if (firstPressRow is null) continue;
+                firstPressRow.ReissueNote = $"再発売盤 {rec.DiscTitleShort}-Tr.{rec.TrackNo}";
+                firstPressRow.ReissueUrl = $"/products/{rec.ProductCatalogNo}/#track-{rec.DiscCatalogNo}-{rec.TrackNo}-{rec.SubOrder}";
+                list.Remove(rec);
+            }
         }
         return dict;
     }
@@ -1402,6 +1414,10 @@ public sealed class MusicGenerator
         public string ArtTrackId { get; set; } = "";
         /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>
         public bool ArtTrackPremiumOnly { get; set; }
+        /// <summary>初回盤の行に添える再発売盤の同じトラック（「再発売盤 無印 OST1(再)-Tr.3」）。それ以外は空文字。</summary>
+        public string ReissueNote { get; set; } = "";
+        /// <summary>再発売盤の商品詳細の該当トラックへの URL（<see cref="ReissueNote"/> があるときだけ）。</summary>
+        public string ReissueUrl { get; set; } = "";
         /// <summary>
         /// この行が cue の再生音源として採用された盤かどうか。収録盤リストで ♪ 印を出す判定に使う。
         /// 同じ cue でも盤によって尺が違うため、どの盤の音源が鳴るかは必ず明示する。

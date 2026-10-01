@@ -72,6 +72,8 @@ public sealed class ScribanRenderer
         functions.Import("person_url", new Func<int, string>(PathUtil.PersonUrl));
         functions.Import("character_url", new Func<int, string>(PathUtil.CharacterUrl));
         functions.Import("company_url", new Func<int, string>(PathUtil.CompanyUrl));
+        // CSS・JS の URL に中身の版の印を付ける（{{ asset_url "/assets/site.css" }}）。
+        functions.Import("asset_url", new Func<string, string>(AssetUrl.Versioned));
         return functions;
     }
 

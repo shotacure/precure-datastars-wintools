@@ -145,10 +145,6 @@ public sealed class EpisodeGenerator
         var jobs = new List<(Series Series, Episode Episode)>();
         foreach (var s in _ctx.Series)
         {
-            // 子作品（parent_series_id != NULL の映画系、SPIN-OFF を除く）は単独詳細ページを
-            // 持たないため、配下のエピソードページも生成しない（仕様上 credit_attach_to=SERIES なので
-            // エピソード自体を持たないはずだが念のためスキップ）。
-            if (SeriesClassifier.IsChildOfMovie(s)) continue;
             if (!_ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)) continue;
             foreach (var e in eps) jobs.Add((s, e));
         }
@@ -226,12 +222,14 @@ public sealed class EpisodeGenerator
     /// 比較対象になる）。そのためパート尺統計と同じ「最新放送済話」ではなく、サブタイトル統計
     /// ページのカバレッジラベルと同じ <see cref="StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle"/>
     /// （サブタイトル登録済みの最新 TV 話。未放送回も対象）を参照点にする。
-    /// 表記はパート尺統計側と同一書式で、未放送回が参照点のときは未来日付になり得る
-    /// （例:「2026年6月28日現在 『名探偵プリキュア！』第22話時点」）。
+    /// 参照点が放送済みならパート尺統計側と同一書式（「2026年6月28日現在 『名探偵プリキュア！』第22話時点」）、
+    /// まだ放送前なら「『名探偵プリキュア！』第36話（2026年10月4日放送予定）までのサブタイトルで集計」とし、
+    /// 未来の日付を「現在」と書かない（<see cref="StatsCoverageLabel.BuildSubtitle"/>）。
     /// </summary>
     private string BuildSubtitleCoverageCaption()
     {
-        return BuildLatestAiredCaption(StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx));
+        return StatsCoverageLabel.BuildSubtitle(
+            StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx), _ctx.BuildStartedAt, withSuffix: false);
     }
 
     /// <summary>偏差値ゲージ背景のヒストグラムのビン数。ビン幅は (75-25)/25 = 偏差値 2.0 刻み。</summary>
@@ -420,11 +418,18 @@ public sealed class EpisodeGenerator
             ? $"『{series.TitleShort}』"
             : $"『{series.Title}』";
 
+        // ビルド時点でサブタイトル解禁前の話か。ページタイトル・OGP・JSON-LD・共有文・サブタイトル分析は
+        // ぼかしの外に出る（タブ・SNS のカード・ページのソースで読める）ため、解禁前は題名を載せずに作る。
+        // 解禁後の表示には、解禁時刻を過ぎてからの再ビルドが要る。
+        bool ownEmbargoed = SubtitleGuardRenderer.IsEmbargoedAt(ownRevealAt, _ctx.BuildStartedAt);
+
         // 文字情報 HTML を作る（既存 BuildTitleInformationPerCharAsync の移植）。
+        // 解禁前の話は、題名の文字そのものが並ぶので節ごと出さない。
         string titleCharInfoHtml = "";
         if (!string.IsNullOrEmpty(ep.TitleCharStats))
         {
-            titleCharInfoHtml = await _titleCharInfo.RenderAsync(ep, ct).ConfigureAwait(false);
+            if (!ownEmbargoed)
+                titleCharInfoHtml = await _titleCharInfo.RenderAsync(ep, ct).ConfigureAwait(false);
         }
         else if (!string.IsNullOrEmpty(ep.TitleText))
         {
@@ -607,7 +612,7 @@ public sealed class EpisodeGenerator
                 YoutubeId = YoutubeUtil.ExtractId(ep.YoutubeTrailerUrl),
                 SpecialYoutubeTrailerUrl = ep.YoutubeSpecialTrailerUrl ?? "",
                 SpecialYoutubeId = YoutubeUtil.ExtractId(ep.YoutubeSpecialTrailerUrl),
-                Notes = ep.Notes ?? ""
+                Notes = BroadcastNoteText.ForDisplay(ep.Notes)
             },
             FormatTable = formatTable,
             TitleCharInfoHtml = titleCharInfoHtml,
@@ -658,7 +663,8 @@ public sealed class EpisodeGenerator
             ["@context"] = "https://schema.org",
             ["@type"] = "TVEpisode",
             // サブタイトル未確定話は誌面文言の引用プレースホルダを構造化データに載せず「第N話」で識別する。
-            ["name"] = string.IsNullOrEmpty(ep.TitleText) ? $"第{ep.SeriesEpNo}話" : ep.TitleText,
+            // 解禁前の話も題名を載せず「第N話」にする。
+            ["name"] = string.IsNullOrEmpty(ep.TitleText) || ownEmbargoed ? $"第{ep.SeriesEpNo}話" : ep.TitleText,
             ["episodeNumber"] = ep.SeriesEpNo,
             ["datePublished"] = ep.OnAirAt.ToString("yyyy-MM-dd"),
             ["inLanguage"] = "ja",
@@ -711,13 +717,19 @@ public sealed class EpisodeGenerator
 
         var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
 
+        // シリーズタイトルは『』で囲む（ページ <title>・OG・シェア文に共通で反映される）。
+        // サブタイトル未確定話は鉤括弧を出さず「第N話（サブタイトル「未定」）」の形にする。
+        string fullPageTitle = string.IsNullOrEmpty(ep.TitleText)
+            ? $"『{series.Title}』 第{ep.SeriesEpNo}話{ep.TitleDisplayText}"
+            : $"『{series.Title}』 第{ep.SeriesEpNo}話「{ep.TitleText}」";
+
         var layout = new LayoutModel
         {
-            // シリーズタイトルは『』で囲む（ページ <title>・OG・シェア文に共通で反映される）。
-            // サブタイトル未確定話は鉤括弧を出さず「第N話（サブタイトル「未定」）」の形にする。
-            PageTitle = string.IsNullOrEmpty(ep.TitleText)
-                ? $"『{series.Title}』 第{ep.SeriesEpNo}話{ep.TitleDisplayText}"
-                : $"『{series.Title}』 第{ep.SeriesEpNo}話「{ep.TitleText}」",
+            // 解禁前の話は「第N話」だけにする（共有文もここから作られる）。題名入りのタイトルは
+            // RevealedPageTitle で渡し、解禁後に subtitle-embargo.js がタブのタイトルと共有文を差し替える。
+            PageTitle = ownEmbargoed ? $"『{series.Title}』 第{ep.SeriesEpNo}話" : fullPageTitle,
+            SubtitleRevealAt = ownEmbargoed ? SubtitleGuardRenderer.ToRevealAtIso(ownRevealAt!.Value) : "",
+            RevealedPageTitle = ownEmbargoed ? fullPageTitle : "",
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
@@ -732,14 +744,10 @@ public sealed class EpisodeGenerator
 
         // サブタイトル解禁前の話は専用カードを作らない。カードは画像なのでサイト側のガード
         // （ぼかし＋解禁時刻での自動解除）を効かせられず、SNS のプレビューに題名がそのまま出てしまう。
-        // 伏せ字にするより、既に生成されているトップのカードを指すほうが素直（解禁後のビルドで
-        // 自動的に専用カードへ戻る）。
-        // 判定は解禁時刻との比較で行う。解禁時刻辞書には直近に解禁済みの話も残っているため、
-        // 辞書に載っていること自体は未解禁を意味しない。
-        if (!SubtitleGuardRenderer.IsEmbargoedAt(ownRevealAt, DateTimeOffset.Now))
+        // 解禁前のページは SNS のカード用のメタ自体を出さない（_layout.sbn が SubtitleRevealAt を見て抑止する）。
+        // 解禁後のビルドで自動的に専用カードが付く。
+        if (!ownEmbargoed)
             layout.OgCard = BuildOgCard(series, ep, content);
-        else
-            layout.OgImage = _page.OgCardUrlFor("/");
 
         // レンダリングとファイル書き出しまでを並列フェーズ内で実施する。
         // サマリ・sitemap 記録は呼び出し側（GenerateAsync）が元のページ順で逐次実行する。
@@ -1017,6 +1025,8 @@ public sealed class EpisodeGenerator
                 ? SongDisplayTitle.Build(song.Title, rec?.VariantLabel)
                 : "(曲名未登録)";
 
+            // 再生ボタンで鳴らす配信音源（歌入りで本編のサイズを優先。カラオケしか無ければ無し）。
+            ThemeArtTrack? artTrack = _ctx.ThemeArtTracks.ByRecording.TryGetValue(t.SongRecordingId, out var at) ? at : null;
             rows.Add(new ThemeSongRow
             {
                 KindLabel = kindLabel,
@@ -1038,7 +1048,12 @@ public sealed class EpisodeGenerator
                 DialogueHtml = dialogueHtml,
                 DialogueRoleLabelHtml = dialogueRoleLabelHtml,
                 Notes = t.Notes ?? "",
-                IsBroadcastOnly = t.IsBroadcastOnly
+                IsBroadcastOnly = t.IsBroadcastOnly,
+                ArtTrackId = artTrack?.ArtTrackId ?? "",
+                ArtTrackPremiumOnly = artTrack?.PremiumOnly ?? false,
+                ArtTrackSourceAlbum = artTrack?.SourceAlbum ?? "",
+                ArtTrackAltId = artTrack?.AltArtTrackId ?? "",
+                ArtTrackAltSourceAlbum = artTrack?.AltSourceAlbum ?? ""
             });
         }
         return rows;
@@ -1287,10 +1302,10 @@ public sealed class EpisodeGenerator
         int budget = targetMaxChars - siteSuffix.Length;
 
         // og:title が『シリーズ』第N話「サブタイトル」を持つため、説明文ではそれを繰り返さず、
-        // 放送日（OA:yyyy.M.d）・通算（全プリキュアTV通算の累計値）・主要スタッフでページ固有の情報を出す。
+        // 放送日（放送:yyyy.M.d）・通算（全プリキュアTV通算の累計値）・主要スタッフでページ固有の情報を出す。
         var segments = new List<string>
         {
-            "OA:" + ep.OnAirAt.ToString("yyyy.M.d"),
+            "放送:" + ep.OnAirAt.ToString("yyyy.M.d"),
         };
         if (ep.TotalEpNo is int tep) segments.Add($"通算{tep}話");
         if (ep.TotalOaNo is int toa) segments.Add($"放送{toa}回");
@@ -1940,6 +1955,16 @@ public sealed class EpisodeGenerator
         public string Notes { get; set; } = "";
         /// <summary>本放送限定フラグ（「（本放送のみ）」を末尾に併記する）。</summary>
         public bool IsBroadcastOnly { get; set; }
+        /// <summary>再生ボタンで鳴らす配信音源（<see cref="BuildContext.ThemeArtTracks"/> が選んだもの）。無ければ空文字でボタンを出さない。</summary>
+        public string ArtTrackId { get; set; } = "";
+        /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>
+        public bool ArtTrackPremiumOnly { get; set; }
+        /// <summary>音源が入っている盤の表記（プレイヤーの補足に出す）。</summary>
+        public string ArtTrackSourceAlbum { get; set; } = "";
+        /// <summary>会員限定のときの代わり（誰でも再生できる同じサイズの音源）。無ければ空文字。</summary>
+        public string ArtTrackAltId { get; set; } = "";
+        /// <summary>代わりの音源が入っている盤の表記。</summary>
+        public string ArtTrackAltSourceAlbum { get; set; } = "";
 
         // ── 構造化クレジット由来の HTML 群 ──
         /// <summary>作詞の表示用 HTML。</summary>

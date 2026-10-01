@@ -39,6 +39,16 @@ public sealed class ThemeSongRow
     /// <summary>録音の公式 YouTube 動画 ID（<c>song_recordings.youtube_url</c> から抽出）。
     /// 空文字なら動画は出さない。シリーズ詳細の ts-card で見出し行の直下に埋め込む。</summary>
     public string YoutubeId { get; set; } = "";
+    /// <summary>再生ボタンで鳴らす配信音源（<see cref="BuildContext.ThemeArtTracks"/> が選んだもの）。無ければ空文字でボタンを出さない。</summary>
+    public string ArtTrackId { get; set; } = "";
+    /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>
+    public bool ArtTrackPremiumOnly { get; set; }
+    /// <summary>音源が入っている盤の表記（プレイヤーの補足に出す）。</summary>
+    public string ArtTrackSourceAlbum { get; set; } = "";
+    /// <summary>会員限定のときの代わり（誰でも再生できる同じサイズの音源）。無ければ空文字。</summary>
+    public string ArtTrackAltId { get; set; } = "";
+    /// <summary>代わりの音源が入っている盤の表記。</summary>
+    public string ArtTrackAltSourceAlbum { get; set; } = "";
 
     // ── 構造化クレジット由来の HTML 群 ──
     /// <summary>作詞の表示用 HTML。</summary>
@@ -216,6 +226,8 @@ public sealed class ThemeSongRowBuilder
                 ? SongDisplayTitle.Build(song.Title, rec?.VariantLabel)
                 : "(曲名未登録)";
 
+            // 再生ボタンで鳴らす配信音源（歌入りで本編のサイズを優先。カラオケしか無ければ無し）。
+            ThemeArtTrack? artTrack = _ctx.ThemeArtTracks.ByRecording.TryGetValue(d.SongRecordingId, out var at) ? at : null;
             rows.Add(new ThemeSongRow
             {
                 KindLabel = kindLabel,
@@ -239,6 +251,11 @@ public sealed class ThemeSongRowBuilder
                 IsBroadcastOnly = d.IsBroadcastOnly,
                 EpisodeRangeLabel = d.EpisodeRangeLabel ?? "",
                 YoutubeId = YoutubeUtil.ExtractId(rec?.YoutubeUrl),
+                ArtTrackId = artTrack?.ArtTrackId ?? "",
+                ArtTrackPremiumOnly = artTrack?.PremiumOnly ?? false,
+                ArtTrackSourceAlbum = artTrack?.SourceAlbum ?? "",
+                ArtTrackAltId = artTrack?.AltArtTrackId ?? "",
+                ArtTrackAltSourceAlbum = artTrack?.AltSourceAlbum ?? "",
             });
         }
         return rows;

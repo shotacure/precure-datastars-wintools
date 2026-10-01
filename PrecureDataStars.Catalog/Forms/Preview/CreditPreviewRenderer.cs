@@ -202,6 +202,10 @@ internal sealed class CreditPreviewRenderer
             font-size: 80%;
             color: #888;
           }
+          /* 伏せ字（「？」など）の後ろに添える正名義の括弧部分。SiteBuilder の .staff-masked-actual と同じ意匠。 */
+          .staff-masked-actual {
+            color: #888;
+          }
           /* VOICE_CAST 役職用の 3 カラムフォールバック表
              （役職名 | キャラ名義 | 声優名義）。テンプレ未定義時に role_format_kind="VOICE_CAST" を
              検出して適用する。.fallback-table と挙動を揃えるため共通項目は重複定義しない。 */
@@ -1870,6 +1874,8 @@ internal sealed class CreditPreviewRenderer
             string sep = e.AffiliationInline ? " " : "<br>";
             nameHtml += $"{sep}<span class=\"staff-affiliation\">({Esc(affilInnerLabel)})</span>";
         }
+        // 伏せ字（「？」など）があれば、所属まで含めた正名義の塊を括弧に入れて伏せ字の後ろに添える。
+        nameHtml = WrapMaskedHtml(nameHtml, e.PersonMaskedText);
         return PrependMisprintHtml(nameHtml, e.PersonMisprintText);
     }
 
@@ -1903,6 +1909,17 @@ internal sealed class CreditPreviewRenderer
     {
         if (string.IsNullOrEmpty(misprint)) return baseHtml;
         return $"<del title=\"クレジット時の誤記\">{Esc(misprint)}</del> {baseHtml}";
+    }
+
+    /// <summary>
+    /// 人物名の代わりに画面に出た伏せ字（<see cref="CreditBlockEntry.PersonMaskedText"/>）があれば、
+    /// 「伏せ字 (正名義)」の形にくるんだ HTML を返す。SiteBuilder の CreditTreeRenderer と同じ表記。
+    /// <paramref name="masked"/> が null / 空文字の場合は <paramref name="nameHtml"/> をそのまま返す。
+    /// </summary>
+    private static string WrapMaskedHtml(string nameHtml, string? masked)
+    {
+        if (string.IsNullOrEmpty(masked)) return nameHtml;
+        return $"<span class=\"staff-masked\">{Esc(masked)}</span> <span class=\"staff-masked-actual\">({nameHtml})</span>";
     }
 
     /// <summary>1 エントリを表示文字列に解決する（フォールバック表示用）。種別ごとに名義・屋号・ロゴ屋号名・キャラ 名義 + 声優名義・フリーテキストを LookupCache 経由で引いて整形する。 LOGO は CI バージョンラベルを出さず、紐づく屋号名のみを表示する。</summary>

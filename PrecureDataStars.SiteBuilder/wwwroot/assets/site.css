@@ -1,11 +1,14 @@
 /* precure-datastars site styles 方針: - クレジット部分は Catalog 側 CreditPreviewRenderer の CSS をそのまま流用する （fallback-table / fallback-vc-table / .card / .tier / .group / .rol */
 
 :root {
+  /* 明るい配色だけのサイト。端末がダークモードでも、フォーム部品やスクロールバーを含めて明るい配色で描かせる
+     （ブラウザによる自動の色反転を防ぐ。「only」を付けないと止まらない。<meta name="color-scheme"> と同じ指定）。 */
+  color-scheme: only light;
   --bg: #ffffff;
   --fg: #1a1a1a;
   --muted: #666666;
   --border: #d0d0d0;
-  --accent: #e91e63;
+  --accent: #d81b60;
   --hl: #fff7d6;
   --table-stripe: #f7f7f8;
   --container-w: 960px;
@@ -23,9 +26,10 @@
   /* アクセント書体・ドット/デジタル系。ビルド情報スタンプ・大きな尺数値など「ここぞ」の数箇所に効かせる。 */
   --font-accent-dot: "DotGothic16", "Courier New", monospace;
 
-  /* プリキュア風カラフルアクセント変数 メインカラー（pink）はそのまま --accent。 */
-  --accent-pink:   #e91e63;
-  --accent-blue:   #3b82c4;
+  /* プリキュア風カラフルアクセント変数 メインカラー（pink）はそのまま --accent。
+     pink と blue は白地の文字色として WCAG の 4.5:1 を満たす濃さ（pink 4.9:1、blue 5.2:1）。 */
+  --accent-pink:   #d81b60;
+  --accent-blue:   #3370aa;
   --accent-yellow: #d4a017;
   --accent-green:  #4ca36b;
   --accent-purple: #7e57c2;
@@ -639,9 +643,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* 映画カード内の MOVIE_SHORT 子作品リスト。
-   親映画にぶら下がる併映短編で、リンクは張らない（単独詳細ページ無し運用）。
+   親映画にぶら下がる併映短編で、タイトルは短編の詳細ページへのリンク。
    カード余白クリックで親映画にナビするオーバーレイは下に敷いてあるため、
-   pointer-events: none で子作品全体をクリックスルーに倒す。 */
+   pointer-events: none で子作品全体をクリックスルーに倒し、タイトルのリンクだけ auto で拾う。 */
 .series-card-children {
   list-style: none;
   margin: 8px 0 0;
@@ -669,6 +673,14 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .series-card-children-title {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+a.series-card-children-title {
+  pointer-events: auto;
+  color: inherit;
+  text-decoration: none;
+}
+a.series-card-children-title:hover {
+  text-decoration: underline;
 }
 .series-card-children-meta {
   font-family: var(--font-num);
@@ -1356,6 +1368,19 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   align-items: baseline;
   gap: 8px;
   margin-bottom: 4px;
+}
+/* 配信音源の再生ボタン：カードの右上に固定する。見出しが折り返しても行を増やさないよう、
+   ボタンのあるカードだけ見出し行の右側をボタンの幅だけ空ける。 */
+.theme-songs-list .ts-card {
+  position: relative;
+}
+.theme-songs-list .ts-card:has(> .ts-headline > .ts-play) > .ts-headline {
+  padding-right: 2.6em;
+}
+.theme-songs-list .ts-play {
+  position: absolute;
+  top: 10px;
+  right: 12px;
 }
 .theme-songs-list .ts-kind {
   display: inline-block;
@@ -2155,6 +2180,59 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background-color: var(--hl, #fff7d6);
   animation: track-target-flash 2.4s ease-out;
 }
+/* 同じトラックに続く枝番（編集でつないだ 2 つ目以降の劇伴、メドレーの後ろの隠しトラックなど）。
+   トラックの枠の grid の全幅を使い、頭の「＋」で続きであることを示す。劇伴・歌の詳細から飛んできたときは同じ色で光らせる。 */
+.products-tracks-card .track-sub-part {
+  grid-column: 1 / -1;
+  scroll-margin-top: 110px;
+  border-radius: 4px;
+}
+/* 「＋」と曲名を横に並べたまま、曲名（と札）の側だけを折り返す。 */
+.products-tracks-card .track-sub-titleline {
+  display: flex;
+  align-items: baseline;
+  margin-top: 6px;
+  font-weight: 600;
+}
+.products-tracks-card .track-sub-title-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.products-tracks-card .track-sub-plus {
+  color: var(--muted);
+  font-weight: 700;
+  margin-right: 6px;
+}
+/* 枝番の歌の曲名は、親の曲名（枠全体のリンク）より手前に出して、それ単体で押せるようにする。 */
+.products-tracks-card .track-sub-title-link {
+  position: relative;
+  z-index: 2;
+  color: inherit;
+  text-decoration: none;
+}
+.products-tracks-card .track-sub-title-link:hover,
+.products-tracks-card .track-sub-title-link:focus-visible {
+  text-decoration: underline;
+}
+/* 劇伴を編集でつないだトラックの札（「2曲の編集」）。サイズの札と同じ大きさで、色は灰色。 */
+.products-tracks-card .track-edit-badge {
+  display: inline-block;
+  font-size: 0.72em;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--table-stripe);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.products-tracks-card .track-sub-part:target {
+  background-color: var(--hl, #fff7d6);
+  animation: track-target-flash 2.4s ease-out;
+}
 @keyframes track-target-flash {
   0%   { background-color: var(--hl, #fff7d6); }
   100% { background-color: transparent; }
@@ -2815,6 +2893,25 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 .bgm-rec-line:focus-visible {
   background-color: var(--surface-2, #fff7fb);
   text-decoration: none;
+}
+/* 初回盤の行に添える再発売盤の同じトラック（「再発売盤 無印 OST1(再)-Tr.3」）。行の下に一段下げて小さく出し、再発売盤の該当トラックへリンクする。 */
+.bgm-rec-reissue,
+.recording-tracks-reissue {
+  display: inline-block;
+  font-size: 0.88em;
+  text-decoration: none;
+}
+.bgm-rec-reissue {
+  margin-left: 1em;
+}
+.recording-tracks-reissue {
+  margin: 4px 0 0 14px;
+}
+.bgm-rec-reissue:hover,
+.bgm-rec-reissue:focus-visible,
+.recording-tracks-reissue:hover,
+.recording-tracks-reissue:focus-visible {
+  text-decoration: underline;
 }
 /* 「OST1-Tr.2」部分。等幅数字でやや muted。タイトル「サブタイトル」より一段下げる。 */
 .bgm-rec-disc-track {
@@ -3544,6 +3641,11 @@ body.subtitle-embargo-dialog-open {
 
 /* ──────────────────── 統計：シリーズ別記号集計（横スクロール） ──────────────────── */
 .stats-symbols-scroll {
+  overflow-x: auto;
+}
+/* 統計のシリーズ別の表（ランキング・文字種別・パート尺など）。列が多くスマホの幅に収まらないので、
+   表だけを横スクロールさせ、ページ全体を横にはみ出させない。 */
+.stats-table-scroll {
   overflow-x: auto;
 }
 .stats-by-series-symbols-table {
@@ -5959,6 +6061,8 @@ a.credit-card-series:focus-visible {
   background: #f0f1f3;
 }
 .external-link-official  { border-color: #6b7280; }
+/* 所属先（事務所・会社・楽団などのサイトにある本人のプロフィール）。公式ページのグレーと見分けられる青。 */
+.external-link-affiliation { border-color: #2563eb; }
 .external-link-x         { border-color: #0f172a; }
 .external-link-instagram { border-color: #d6249f; }
 .external-link-youtube   { border-color: #ff0000; }
@@ -6072,6 +6176,100 @@ a.credit-card-series:focus-visible {
   padding-right: 16px;
   white-space: nowrap;
 }
+/* ──────────────────── クレジットの表：スマホの幅 ────────────────────
+   クレジットの表（役職名 | 中身）は、パソコンの幅では役職名の列を credit-align.js がページ内でそろえた幅
+   （--credit-role-name-w。最も長い役職名に合わせる）で並べる。スマホの幅ではその幅と各列の最低幅の合計が画面を
+   超え、名前の列が 1 文字幅まで押しつぶされたり、ページが横にはみ出したりしていた。
+   スマホの幅では各行を「役職名の列 + 中身の列」の grid に組み替える。
+     - 役職名の列は固定の幅（8.5em）にし、長い役職名はその中で折り返す。空の役職名のセルも同じ幅を取るので、
+       同じページの表どうしで列の位置がそろう（credit-align.js のそろえ幅は、組み替えた後の列の幅を測ってしまい
+       狭くなるので、スマホの幅では使わない）。
+     - 中身のセル（所属を前に置く行の屋号と名前、2 列・3 列の枠の各列）は中身の列に縦に積む
+       （屋号の下に名前、多段組みは 1 列）。
+     - 声の出演の表は「役職名 | キャラ名 | 声優名」の 3 列で、キャラ名の列も固定の幅（8em）にする。
+       名前はなるべく語の途中で折り返さず、収まらないときだけ折り返す。 */
+@media (max-width: 768px) {
+  .credit-section {
+    --credit-role-col-m: 8.5em;
+    --credit-char-col-m: 8em;
+  }
+  .credit-section table.fallback-table,
+  .credit-section table.fallback-table > tbody,
+  .credit-section table.fallback-vc-table,
+  .credit-section table.fallback-vc-table > tbody {
+    display: block;
+    max-width: none;
+  }
+  .credit-section table.fallback-table tr {
+    display: grid;
+    grid-template-columns: var(--credit-role-col-m) minmax(0, 1fr);
+    column-gap: 10px;
+  }
+  .credit-section table.fallback-vc-table tr {
+    display: grid;
+    grid-template-columns: var(--credit-role-col-m) var(--credit-char-col-m) minmax(0, 1fr);
+    column-gap: 10px;
+  }
+  /* パソコンの幅の、セルの種類ごとの最低幅・右余白（td.role-name など、こちらより優先度が高い）も打ち消す。 */
+  .credit-section table.fallback-table td,
+  .credit-section table.fallback-vc-table td,
+  .credit-section table.fallback-table td.role-name,
+  .credit-section table.fallback-table td.entry-cell,
+  .credit-section table.fallback-table td.affil-prefix,
+  .credit-section table.fallback-vc-table td.role-name,
+  .credit-section table.fallback-vc-table td.character-cell,
+  .credit-section table.fallback-vc-table td.actor-cell,
+  .credit-section table.fallback-vc-table tr.cooperation-row > td.role-name,
+  .credit-section table.fallback-vc-table tr.cooperation-row > td.character-cell {
+    display: block;
+    min-width: 0;
+    width: auto;
+    padding: 0;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  .credit-section table.fallback-table td.role-name,
+  .credit-section table.fallback-vc-table td.role-name {
+    grid-column: 1;
+    white-space: normal;
+  }
+  .credit-section table.fallback-table td:not(.role-name) {
+    grid-column: 2;
+  }
+  .credit-section table.fallback-table td.affil-prefix {
+    white-space: normal;
+  }
+  .credit-section table.fallback-vc-table td.character-cell {
+    grid-column: 2;
+    white-space: normal;
+  }
+  .credit-section table.fallback-vc-table td.actor-cell {
+    grid-column: 3;
+  }
+  /* 協力の行（「キャスティング協力 | 屋号」）は役職に近いので、スマホの幅では見出しを役職名の列に置き、
+     屋号はキャラ名と声優名の 2 列分の幅を使う（声優名の列だけでは屋号が途中で折り返す）。 */
+  .credit-section table.fallback-vc-table tr.cooperation-row > td.role-name {
+    display: none;
+  }
+  .credit-section table.fallback-vc-table tr.cooperation-row > td.character-cell {
+    grid-column: 1;
+    white-space: normal;
+  }
+  .credit-section table.fallback-vc-table tr.cooperation-row > td.actor-cell {
+    grid-column: 2 / span 2;
+  }
+  /* 行間の区切り（ブロックの切れ目・協力の行）は td の上余白で付けているので、grid にしても残す。 */
+  .credit-section table.fallback-table tr.block-break > td,
+  .credit-section table.fallback-vc-table tr.block-break > td,
+  .credit-section table.fallback-vc-table tr.cooperation-row > td {
+    padding-top: 6px;
+  }
+  /* テンプレ展開結果のブロックも、上限を付けた役職名の列の右から始める。 */
+  .credit-section .role-rendered {
+    margin-left: calc(var(--credit-role-col-m) + 10px);
+  }
+}
+
 /* ════════════════════════════════════════════════════════════════ セクション内ナビ — 左サイド縦タイムライン型 - HTML 骨格は _layout.sbn が出力する <nav id="pageSectionNav"> プレースホルダのみで、 中身は */
 
 /* ナビ本体は左サイドに固定。 */
@@ -6287,6 +6485,8 @@ a.credit-card-series:focus-visible {
   grid-column: 3;
   justify-self: start;
   min-width: 0;
+  /* justify-self:start の grid item は折り返さない文字列の幅まで広がるので、列幅で打ち切って省略記号を出す。 */
+  max-width: 100%;
   font-size: 0.88em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6596,24 +6796,25 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   line-height: 1.6;
 }
 
+/* 役職バッジの文字色は、各色の淡い背景の上で 4.5:1 を満たすよう、背景・枠の色より濃くしている。 */
 /* プロデューサー・企画 = 紫（企画はプロデューサー枠のフォールバックなので同色） */
 .role-badge[data-role-code="PRODUCER"],
 .role-badge[data-role-code="PLANNING"] {
   background: rgba(126, 87, 194, 0.13);
-  color: var(--accent-purple);
+  color: #7a54bc;
   border-color: rgba(126, 87, 194, 0.42);
 }
 /* シリーズ構成・脚本 = 青 */
 .role-badge[data-role-code="SERIES_COMPOSITION"],
 .role-badge[data-role-code="SCREENPLAY"] {
   background: rgba(59, 130, 196, 0.13);
-  color: var(--accent-blue);
+  color: #316ca4;
   border-color: rgba(59, 130, 196, 0.42);
 }
 /* 絵コンテ = ティール（青系と暖系の中間） */
 .role-badge[data-role-code="STORYBOARD"] {
   background: rgba(46, 167, 173, 0.14);
-  color: var(--accent-teal);
+  color: #20767a;
   border-color: rgba(46, 167, 173, 0.45);
 }
 /* シリーズディレクター・演出・監督 = ピンク */
@@ -6621,14 +6822,14 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 .role-badge[data-role-code="EPISODE_DIRECTOR"],
 .role-badge[data-role-code="DIRECTOR"] {
   background: rgba(233, 30, 99, 0.13);
-  color: var(--accent-pink);
+  color: #c71958;
   border-color: rgba(233, 30, 99, 0.42);
 }
 /* キャラクターデザイン・作画監督 = 緑 */
 .role-badge[data-role-code="CHARACTER_DESIGN"],
 .role-badge[data-role-code="ANIMATION_DIRECTOR"] {
   background: rgba(76, 163, 107, 0.14);
-  color: var(--accent-green);
+  color: #38784f;
   border-color: rgba(76, 163, 107, 0.42);
 }
 /* 美術デザイン・美術（TV）・美術監督 = 黄 */
@@ -6636,7 +6837,7 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 .role-badge[data-role-code="ART_DIRECTOR"],
 .role-badge[data-role-code="ART_DIRECTOR_TV"] {
   background: rgba(212, 160, 23, 0.14);
-  color: var(--accent-yellow);
+  color: #8a680f;
   border-color: rgba(212, 160, 23, 0.42);
 }
 
@@ -6668,6 +6869,10 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 }
 .staff-affiliation {
   font-size: 0.8em;
+  color: var(--muted);
+}
+/* 声優などを伏せてクレジットされた行（「？」）の後ろに添える、正名義の括弧部分。 */
+.staff-masked-actual {
   color: var(--muted);
 }
 /* 1 人分のスタッフ表記（名義 + 所属屋号 + 担当話数 範囲ラベル）を 1 ユニットとして扱い、
@@ -7510,6 +7715,44 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-size: 0.88em;
   white-space: nowrap;
 }
+/* 役職詳細の行で、系譜でまとめた別の表記でもクレジットされた人に添える「（デジタル撮影監督 1・撮影監督 1）」。
+   件数の下に 1 行で置く。 */
+.entity-row-role-usage {
+  flex-basis: 100%;
+  font-size: 0.85em;
+}
+/* 役職詳細の「役職名の変遷」。表記ごとに件数とクレジットされた作品を並べる。 */
+.role-name-history-list {
+  list-style: none;
+  margin: 0 0 1.5em;
+  padding: 0;
+}
+.role-name-history-item {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.role-name-history-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+.role-name-history-name {
+  font-weight: 600;
+}
+.role-name-history-works {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  font-size: 0.9em;
+}
+.role-name-history-works > li {
+  overflow-wrap: anywhere;
+}
+.role-name-history-range {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
 /* 歌唱一覧のキャラクターの行で、キャラ名の直後に添える「(CV: 声優)」。 */
 .entity-row-cv {
   margin-left: -6px;
@@ -7635,6 +7878,12 @@ ins.adsbygoogle[data-ad-status="filled"] {
   background: rgba(8, 145, 178, 0.10);
   border-color: rgba(8, 145, 178, 0.32);
   color: #0e7490;
+}
+/* 劇伴の件数（🎼）= 緑寄りの淡い色味。人物・企業詳細の音楽クレジットで、劇伴の録音・シリーズの行の件数に使う。 */
+.count-pill-bgm {
+  background: rgba(76, 163, 107, 0.10);
+  border-color: rgba(76, 163, 107, 0.34);
+  color: #38784f;
 }
 /* 歌（録音）の件数（🎤）= ローズ寄りの淡い色味。楽曲索引（歌一覧）の件数に使う。 */
 .count-pill-mic {
@@ -7796,8 +8045,9 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: #666;
   padding: 4px 0;
 }
-.cal-dow.cal-sun { color: #d2557a; }
-.cal-dow.cal-sat { color: #4a78c4; }
+/* 日曜・土曜の文字色は、白地と曜日の淡い背景のどちらでも 4.5:1 を満たす濃さにしている。 */
+.cal-dow.cal-sun { color: #b84a6b; }
+.cal-dow.cal-sat { color: #4570b6; }
 .cal-cell {
   min-height: 92px;
   border: 1px solid #ececf1;
@@ -7821,8 +8071,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: #555;
   margin-bottom: 4px;
 }
-.cal-cell.cal-sun .cal-daynum { color: #d2557a; }
-.cal-cell.cal-sat .cal-daynum { color: #4a78c4; }
+.cal-cell.cal-sun .cal-daynum { color: #b84a6b; }
+.cal-cell.cal-sat .cal-daynum { color: #4570b6; }
 .cal-chips {
   display: flex;
   flex-direction: column;
@@ -7961,9 +8211,9 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-weight: 600;
 }
 .cal-day-row.cal-sun .cal-day-md,
-.cal-day-row.cal-sun .cal-day-dow { color: #d2557a; }
+.cal-day-row.cal-sun .cal-day-dow { color: #b84a6b; }
 .cal-day-row.cal-sat .cal-day-md,
-.cal-day-row.cal-sat .cal-day-dow { color: #4a78c4; }
+.cal-day-row.cal-sat .cal-day-dow { color: #4570b6; }
 .cal-day-today-mark {
   display: inline-block;
   padding: 1px 6px;
@@ -8577,9 +8827,11 @@ button.art-track-play.is-playing::before {
   position: relative;
   z-index: 2;
 }
-/* 再生ボタンを持つカードでは、メタ行の全幅 span をやめて 1 列目に留める。
-   ボタンが 2 行目・右列に入るため、そのままでは重なってしまう。 */
-.products-tracks-card-grid.has-art-track > .track-meta-line {
+/* 再生ボタンを持つカードでは、メタ行と枝番の部分（.track-sub-part）の全幅 span をやめて 1 列目に留める。
+   ボタンが 2 行目・右列に入るため、そのままでは重なってしまう。親にメタ行が無いトラック（メドレーなど）でも、
+   枝番の部分がボタンの左の空いた 2 行目に入り、ボタンだけの行が空かない。 */
+.products-tracks-card-grid.has-art-track > .track-meta-line,
+.products-tracks-card-grid.has-art-track > .track-sub-part {
   grid-column: 1;
 }
 
@@ -8831,7 +9083,7 @@ body.has-art-track-bar {
   font-size: 0.92em;
   color: var(--muted);
 }
-/* 別名義のクレジットに添える本名義（「仲弓 香乃（ゆかな）」）と、人物詳細の曲カードの「〇〇 名義」。 */
+/* 別名義のクレジットに添える、いまの名前（「仲弓 香乃（ゆかな）」）と、人物詳細の曲カードの「〇〇 名義」。 */
 .staff-primary-name {
   font-size: 0.9em;
 }
@@ -8869,6 +9121,22 @@ body.has-art-track-bar {
 .music-credit-item-sub {
   font-size: 0.9em;
 }
+/* 人物・企業詳細の音楽クレジット：歌 / 劇伴 / 音盤の枠を開いた中身。本編のクレジットの各話の内訳と同じく、
+   左の線で枠の中身であることを示す。 */
+.music-credit-card-body {
+  margin: 6px 0 4px 12px;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--border);
+}
+.music-credit-card-body > .music-credit-item-list {
+  margin-bottom: 0;
+}
+.music-credit-card-body > .music-credit-item-list > .music-credit-item:last-child {
+  border-bottom: none;
+}
+.music-credit-card-body > .person-songs-card-list {
+  margin: 4px 0 8px;
+}
 /* 劇伴詳細：セッションの演奏・レコーディング（既定で閉じる）。 */
 .bgm-session-credits {
   margin: 4px 0 16px;
@@ -8896,4 +9164,108 @@ body.has-art-track-bar {
 .sort-toggle-btn.is-active {
   color: var(--fg);
   border-color: var(--fg);
+}
+/* タブとリストの間の段（絞り込み・初参加順／多い順の切り替えを左に、件数での並べ替えボタンを右に置く）。 */
+.list-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 4px 0 14px;
+}
+.list-toolbar > .entity-filter,
+.list-toolbar > .sort-toggle {
+  margin: 0;
+}
+.list-toolbar > .count-sort-btn {
+  margin-left: auto;
+}
+/* 並べ替えボタンだけの段で、ボタンが隠れているタブ（初参加順など）では段ごと詰める。 */
+.list-toolbar:not(:has(> .entity-filter, > .sort-toggle, > .count-sort-btn:not([hidden]))) {
+  display: none;
+}
+/* 件数バッジでの並べ替えボタン（count-sort.js が中身を描く）。バッジと同じ絵文字・色に ⬇ / ⬆ を添える。 */
+.count-sort-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+.count-sort-btn[hidden] {
+  display: none;
+}
+.count-sort-btn:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+/* 種類ごとの段階は .count-pill + .count-pill-{種類} の色をそのまま使い、大きさだけボタン向けに広げる。 */
+.count-sort-pill {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.88em;
+  line-height: 1.6;
+}
+/* 合計・もとの並びの段階は特定の色を持たないので、本文色の枠にする。 */
+.count-sort-pill-total,
+.count-sort-pill-none {
+  color: var(--fg);
+  border-color: var(--fg);
+  background: transparent;
+}
+.count-sort-arrow {
+  font-size: 0.95em;
+}
+/* 音楽クレジットの役職詳細：1 人 1 行のアコーディオン。
+   閉じた状態は「開閉の三角｜名前｜件数（右寄せ）」、開くと劇伴・歌・盤の担当先を 1 行ずつ並べる。 */
+.music-role-member {
+  border-bottom: 1px solid var(--border);
+}
+.music-role-member > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+.music-role-member > summary::-webkit-details-marker { display: none; }
+.music-role-member > summary::before {
+  content: "▶";
+  display: inline-block;
+  font-size: 0.7em;
+  color: var(--muted);
+  transition: transform 0.12s ease;
+}
+.music-role-member[open] > summary::before {
+  transform: rotate(90deg);
+}
+.music-role-member > summary:hover {
+  background: var(--surface-2, rgba(0, 0, 0, 0.03));
+}
+.music-role-member > summary:hover a.entity-row-name {
+  text-decoration: underline;
+}
+.music-role-member-body {
+  padding: 0 10px 10px 30px;
+}
+/* 担当先の区分（劇伴 / 歌 / 盤）の小見出し。 */
+.music-role-member-kind {
+  margin: 6px 0 2px;
+  font-size: 0.82em;
+  font-weight: 600;
+  color: var(--muted);
+}
+.music-role-member-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.music-role-member-items > li {
+  padding: 1px 0;
+  font-size: 0.92em;
+  line-height: 1.6;
 }

@@ -23,6 +23,13 @@ public sealed class Person
     /// <summary>フルネームの読み（ひらがな等）。</summary>
     public string? FullNameKana { get; set; }
 
+    /// <summary>
+    /// 本名義（<c>person_aliases.alias_id</c>、任意）。サイトの人物詳細の見出し・URL・一覧の行表記に使う名義。
+    /// 未指定（<c>null</c>）なら、いま公開している名義、まだ公開していなければ TV 系のクレジットで最後に使われた名義になる。
+    /// 改名した人物の現在の名義を出したいときに指定する。
+    /// </summary>
+    public int? PrimaryAliasId { get; set; }
+
     /// <summary>英語表記（任意）。</summary>
     public string? NameEn { get; set; }
 
@@ -38,13 +45,31 @@ public sealed class Person
     /// <summary>誕生日（1-31、任意）。<see cref="BirthMonth"/> が無いとき本値も持てない。</summary>
     public byte? BirthDay { get; set; }
 
+    /// <summary>
+    /// 没年（西暦、任意）。存命・不明なら <c>null</c>。値がある人物は「亡くなった人」として扱い、
+    /// サイトの人物詳細に没年月日を出し、トップの「今日の記念日」で誕生日に年齢を添えない。
+    /// </summary>
+    public ushort? DeathYear { get; set; }
+
+    /// <summary>没月（1-12、任意）。<see cref="DeathYear"/> が無いとき本値も持てない。</summary>
+    public byte? DeathMonth { get; set; }
+
+    /// <summary>没日（1-31、任意）。<see cref="DeathMonth"/> が無いとき本値も持てない。</summary>
+    public byte? DeathDay { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 
     // ── 外部リンク（詳細ページの末尾「外部リンク」セクションに出る） ──
 
-    /// <summary>事務所等の公式ページ URL（任意）。詳細ページにアイコン付きで表示。</summary>
+    /// <summary>本人の公式サイト URL（任意）。詳細ページにアイコン付きで表示。</summary>
     public string? OfficialUrl { get; set; }
+
+    /// <summary>
+    /// 所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL（任意）。
+    /// 詳細ページに「所属先」として、公式ページの次に表示する。所属先が変わったらこの値だけを書き換える。
+    /// </summary>
+    public string? AffiliationUrl { get; set; }
 
     /// <summary>X (Twitter) プロフィール URL（任意）。詳細ページにアイコン付きで表示。</summary>
     public string? XUrl { get; set; }

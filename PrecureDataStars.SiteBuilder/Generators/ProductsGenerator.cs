@@ -24,6 +24,9 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// </summary>
 public sealed class ProductsGenerator
 {
+    /// <summary>同じ題名の商品が複数ある題名の集合（GenerateAsync が並列レンダリングの前に確定させる）。</summary>
+    private HashSet<string> _duplicateTitles = new(StringComparer.Ordinal);
+
     private readonly BuildContext _ctx;
     private readonly PageRenderer _page;
 
@@ -205,6 +208,14 @@ public sealed class ProductsGenerator
             .Select(d => (d.CatalogNo, SongsGenerator.FormatAlbumLabel(
                 productByCatalogNo[d.ProductCatalogNo].Title, d.Title ?? "", d.DiscNoInSet)))
             .ToList());
+
+        // 同じ題名の商品が複数ある（初回盤と再発売盤など）題名の集合。詳細ページの title に品番を添えて見分けられるようにする。
+        // 並列レンダリングの前に確定させ、以後は読み取りだけにする。
+        _duplicateTitles = allProducts
+            .GroupBy(x => x.Title, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToHashSet(StringComparer.Ordinal);
 
         var urlPaths = new string[allProducts.Count];
         Parallel.For(0, allProducts.Count, i =>
@@ -670,6 +681,10 @@ public sealed class ProductsGenerator
                     bgmSeriesPrefixMap, bgmAssignmentsByRecordingId);
                 trackRows.Add(row);
             }
+            // 1 つのトラックに中身が 2 つ以上ある（劇伴を編集でつないだ、歌のメドレーの後ろに隠しトラックが続くなど）ときは、
+            // 1 トラック = 1 枠（再生ボタンも 1 つ）に保つため、枝番（sub_order > 0）を別の枠にせず親の枠の中に並べる。
+            // 枝番の劇伴には曲名が無く、別の枠にするとメニュー名が曲名の位置に出てしまうため。
+            trackRows = MergeSubOrderRows(trackRows);
 
             string discKindLabel = (disc.DiscKindCode != null && discKindMap.TryGetValue(disc.DiscKindCode, out var dk))
                 ? dk.NameJa : "";
@@ -908,7 +923,8 @@ public sealed class ProductsGenerator
 
         var layout = new LayoutModel
         {
-            PageTitle = product.Title,
+            // 同じ題名の商品がほかにもあるときは、title に品番を添えて見分けられるようにする。
+            PageTitle = _duplicateTitles.Contains(product.Title) ? $"{product.Title}（{product.ProductCatalogNo}）" : product.Title,
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
@@ -1930,10 +1946,76 @@ public sealed class ProductsGenerator
         public IReadOnlyList<TrackRow> Tracks { get; set; } = Array.Empty<TrackRow>();
     }
 
+    /// <summary>
+    /// 枝番（sub_order &gt; 0）の行を、同じトラック番号の親の行（sub_order = 0）にまとめる。
+    /// 枝番は親の <see cref="TrackRow.SubParts"/> に足し、枠としては出さない（同じトラックの枝番どうしは種別がそろう、トリガーで担保）。
+    /// <list type="bullet">
+    ///   <item><description>劇伴：枝番は曲名を持たないので、「M 番号 [メニュー] 作曲・編曲」の行だけを足す。
+    ///     親の曲名の横に「N曲の編集」の札を付ける（編集でつないだ 1 曲であることを示す）。</description></item>
+    ///   <item><description>歌：枝番の曲名（歌詳細へのリンク）とサイズ・パートの札、クレジットの行を足す（メドレーの後ろの隠しトラックなど）。</description></item>
+    /// </list>
+    /// 親が見つからない枝番（異常データ）は、そのまま枠として残す。
+    /// </summary>
+    private static List<TrackRow> MergeSubOrderRows(List<TrackRow> rows)
+    {
+        var merged = new List<TrackRow>(rows.Count);
+        TrackRow? parent = null;
+        foreach (var row in rows)
+        {
+            if (row.SubOrder == 0)
+            {
+                parent = row;
+                merged.Add(row);
+                continue;
+            }
+            if (parent is null || parent.TrackNo != row.TrackNo)
+            {
+                merged.Add(row);
+                continue;
+            }
+            bool isSong = row.ContentKindCode == "SONG";
+            parent.SubParts.Add(new SubPart
+            {
+                SubOrder = row.SubOrder,
+                // 歌は曲名を歌詳細へのリンクで出す。親の曲名のような枠全体のリンク（オーバーレイ）にはしない。
+                TitleHtml = isSong && row.Title.Length > 0
+                    ? (row.SongLink.Length > 0
+                        ? $"<a class=\"track-sub-title-link\" href=\"{HtmlEscape(row.SongLink)}\"><span class=\"track-title-text\">{HtmlEscape(row.Title)}</span></a>"
+                        : $"<span class=\"track-title-text\">{HtmlEscape(row.Title)}</span>")
+                    : "",
+                KindBadgesHtml = isSong ? row.KindBadgesHtml : "",
+                MetaLineHtml = row.MetaLineHtml
+            });
+        }
+        foreach (var row in merged)
+        {
+            if (row.SubParts.Count > 0 && row.ContentKindCode == "BGM")
+                row.EditLabel = $"{row.SubParts.Count + 1}曲の編集";
+        }
+        return merged;
+    }
+
+    /// <summary>親の枠にまとめた枝番 1 つ分（商品詳細のトラックの枠の中に「＋」で続ける部分）。</summary>
+    private sealed class SubPart
+    {
+        /// <summary>枝番（sub_order）。劇伴・歌の詳細からのリンクの着地点（id="track-{盤}-{トラック}-{枝番}"）に使う。</summary>
+        public byte SubOrder { get; set; }
+        /// <summary>歌の曲名（歌詳細へのリンク）。劇伴は空文字。</summary>
+        public string TitleHtml { get; set; } = "";
+        /// <summary>歌のサイズ・パートの札。劇伴は空文字。</summary>
+        public string KindBadgesHtml { get; set; } = "";
+        /// <summary>劇伴は「M 番号 [メニュー] 作曲・編曲」、歌はクレジットの行の HTML（親の行と同じ組み立て）。</summary>
+        public string MetaLineHtml { get; set; } = "";
+    }
+
     private sealed class TrackRow
     {
         public byte TrackNo { get; set; }
         public byte SubOrder { get; set; }
+        /// <summary>同じトラックに続く枝番（編集でつないだ 2 つ目以降の劇伴、メドレーの後ろの隠しトラックなど）。親の枠の中に「＋」で続けて並べる。</summary>
+        public List<SubPart> SubParts { get; } = new();
+        /// <summary>劇伴を編集でつないだトラックの札（「2曲の編集」）。それ以外は空文字。</summary>
+        public string EditLabel { get; set; } = "";
         /// <summary>トラックの ISRC（12 文字英数字）。未取得は空。No. セルのツールチップに使用。</summary>
         public string Isrc { get; set; } = "";
         /// <summary>

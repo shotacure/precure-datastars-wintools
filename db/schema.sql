@@ -1436,15 +1436,24 @@ CREATE TABLE `persons` (
   `given_name`       varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks   DEFAULT NULL,
   `full_name`        varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  NOT NULL,
   `full_name_kana`   varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  DEFAULT NULL,
+  -- 本名義：見出し・URL・一覧の行表記に使う名義。NULL なら公開中の名義 → TV 系のクレジットで最後に使われた名義。
+  `primary_alias_id` int                                                                  DEFAULT NULL,
   `name_en`          varchar(128)                                                         DEFAULT NULL,
   `birth_year`             smallint unsigned                                              DEFAULT NULL,  -- 生年（西暦。不明は NULL）
   `birth_year_visibility`  varchar(16)                                                    NOT NULL DEFAULT 'PUBLIC',  -- PUBLIC=生成に出す / PRIVATE=出さない（本人スタンス尊重）
   `birth_month`            tinyint unsigned                                               DEFAULT NULL,
   `birth_day`              tinyint unsigned                                               DEFAULT NULL,
+  -- 没年月日：年・月・日を別の列で持ち、一部だけ分かっている日付（「2016年」など）も表せる。
+  -- 没年がある人物は、人物詳細に没年月日を出し、トップの「今日の記念日」で誕生日に年齢を添えない。
+  `death_year`             smallint unsigned                                              DEFAULT NULL,  -- 没年（西暦。存命・不明は NULL）
+  `death_month`            tinyint unsigned                                               DEFAULT NULL,
+  `death_day`              tinyint unsigned                                               DEFAULT NULL,
   `notes`            text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションにアイコン付きで並ぶ。
+  -- official_url は本人の公式サイト、affiliation_url は所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ。
   -- wikipedia_url は内部メモとして保持するだけで、サイト UI からはリンクしない。
-  `official_url`     varchar(1024) DEFAULT NULL,
+  `official_url`     varchar(1024) DEFAULT NULL COMMENT '本人の公式サイト URL（詳細ページに外部リンクとして表示）',
+  `affiliation_url`  varchar(1024) DEFAULT NULL COMMENT '所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL',
   `x_url`            varchar(1024) DEFAULT NULL,
   `instagram_url`    varchar(1024) DEFAULT NULL,
   `youtube_url`      varchar(1024) DEFAULT NULL,
@@ -1457,10 +1466,16 @@ CREATE TABLE `persons` (
   PRIMARY KEY (`person_id`),
   KEY `ix_persons_full_name`      (`full_name`),
   KEY `ix_persons_full_name_kana` (`full_name_kana`),
+  KEY `ix_persons_primary_alias`  (`primary_alias_id`),
+  CONSTRAINT `fk_persons_primary_alias` FOREIGN KEY (`primary_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_persons_birth_year_visibility` CHECK (`birth_year_visibility` IN ('PUBLIC','PRIVATE')),
   CONSTRAINT `ck_persons_birth_month`           CHECK (`birth_month` IS NULL OR (`birth_month` BETWEEN 1 AND 12)),
   CONSTRAINT `ck_persons_birth_day`             CHECK (`birth_day`   IS NULL OR (`birth_day`   BETWEEN 1 AND 31)),
-  CONSTRAINT `ck_persons_birth_day_needs_month` CHECK (`birth_day` IS NULL OR `birth_month` IS NOT NULL)
+  CONSTRAINT `ck_persons_birth_day_needs_month` CHECK (`birth_day` IS NULL OR `birth_month` IS NOT NULL),
+  CONSTRAINT `ck_persons_death_month`           CHECK (`death_month` IS NULL OR (`death_month` BETWEEN 1 AND 12)),
+  CONSTRAINT `ck_persons_death_day`             CHECK (`death_day`   IS NULL OR (`death_day`   BETWEEN 1 AND 31)),
+  CONSTRAINT `ck_persons_death_day_needs_month` CHECK (`death_day` IS NULL OR `death_month` IS NOT NULL),
+  CONSTRAINT `ck_persons_death_month_needs_year` CHECK (`death_month` IS NULL OR `death_year` IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -2334,6 +2349,9 @@ CREATE TABLE `credit_block_entries` (
   `person_misprint_text`           varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `character_misprint_text`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `company_misprint_text`          varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- 人物名の代わりに画面に出た伏せ字表記（「謎の少女　？」の「？」など）。NULL = 伏せ字なし。
+  --   名義（person_alias_id）は本来の人物に紐付けたまま持ち、表示は「伏せ字 (正名義)」の形にする。
+  `person_masked_text`             varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `company_alias_id`               int             DEFAULT NULL,
   `logo_id`                        int             DEFAULT NULL,
   `raw_text`                       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -3283,7 +3301,8 @@ CREATE TABLE `legacy_entity_ids` (
 -- URL も /people/{最新名義}/ で作るため、クレジットの入力が進むと URL が変わる。キャラクター詳細の URL
 -- （/characters/{キャラ名}/）もキャラ名を変えると変わる。記録済みの旧 URL のうちいまの URL と違うものを、
 -- SiteBuilder が転送表に載せて新 URL へ 301 で転送する。
--- 記録は SiteBuilder の本番デプロイ成功時に追記する（INSERT IGNORE、記録済みの行は変えない）。
+-- 記録は SiteBuilder の本番デプロイ成功時に追記する（INSERT IGNORE、記録済みの行の持ち主は変えない）。
+-- あわせて、いまの URL の行の last_published_at をデプロイ時刻に更新し、人物の「いま公開している名義」はその値が最も新しい行から選ぶ。
 -- slug は完全一致で照合するため utf8mb4_bin。区分（entity_kind）に応じて person_id / character_id のどちらか一方だけを持つ
 -- （両列とも参照先の CASCADE を持つので MySQL では CHECK 制約にできず、書き込み側で守る）。
 -- 人物・キャラクターを統合するときは削除の前に person_id / character_id を統合先へ付け替える。
@@ -3298,6 +3317,7 @@ CREATE TABLE `published_entity_slugs` (
   `person_id`    int DEFAULT NULL COMMENT 'その URL で公開した人物（PERSON の行のみ）',
   `character_id` int DEFAULT NULL COMMENT 'その URL で公開したキャラクター（CHARACTER の行のみ）',
   `created_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最初に公開を記録した日時',
+  `last_published_at` timestamp NULL DEFAULT NULL COMMENT '最後に本番で公開したデプロイの日時（デプロイのたびに更新）',
   PRIMARY KEY (`entity_kind`, `slug`),
   KEY `ix_pes_person` (`person_id`),
   KEY `ix_pes_character` (`character_id`),

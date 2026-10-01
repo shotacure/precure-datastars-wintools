@@ -97,8 +97,8 @@ public sealed class HomeGenerator
         foreach (var (sid, eps) in _ctx.EpisodesBySeries)
         {
             if (!_ctx.SeriesById.TryGetValue(sid, out var s)) continue;
-            // 子作品（'MOVIE_SHORT'）は単独詳細ページを生成しないので、配下のエピソードは
-            // ホームのリンク対象から除外。SPIN-OFF / OTONA / SHORT / EVENT は単独ページがあるので含める。
+            // 同時上映の短編（'MOVIE_SHORT'）は作品数を親映画に含めて数えるので、配下のエピソード（通常は無い）は
+            // ホームの集計・リンク対象から除外。SPIN-OFF / OTONA / SHORT / EVENT は含める。
             if (SeriesClassifier.IsMovieShortChild(s)) continue;
             foreach (var e in eps)
             {
@@ -145,7 +145,8 @@ public sealed class HomeGenerator
         var upcomingProducts = BuildUpcomingProducts(allProducts, productKindMap, discsByProductCatalogNo, _ctx.SeriesById, amazonTag, todayDate);
         var latestBooks = BuildLatestBooks(allBooks, primaryGenreLabelByBook, amazonTag, todayDate);
         var upcomingBooks = BuildUpcomingBooks(allBooks, primaryGenreLabelByBook, amazonTag, todayDate);
-        var dbStats = await BuildDbStatsAsync(allEpisodes.Count, ct).ConfigureAwait(false);
+        // エピソード数は、作った時点で放送済みの話だけを数える（「第N話時点の情報を表示しています」・充足率の分母とそろえる）。
+        var dbStats = await BuildDbStatsAsync(allEpisodes.Count(x => x.Episode.OnAirAt <= buildAt), ct).ConfigureAwait(false);
 
         // キャラクター・クリエイターのデータ充足率（暫定表記。テスト・本番とも表示）。
         var dataSufficiencyLabel = await BuildDataSufficiencyLabelAsync(ct).ConfigureAwait(false);
@@ -163,9 +164,6 @@ public sealed class HomeGenerator
         {
             SiteName = _ctx.Config.SiteName,
             SiteBrandLabel = _ctx.Config.SiteBrandLabel,
-            // 本番モードでは DB 統計ボックスのうちプリキュア・キャラクターを隠す
-            // （データが揃いきるまでの暫定措置。ヘッダナビの ProductionHiddenNavUrls と歩調を合わせる）。
-            IsProductionMode = _ctx.Config.IsProductionMode,
             // 最終ビルド表記は「○○年○○月○○日現在 『○○プリキュア』第n話時点
             BuildLabel = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
             DataSufficiencyLabel = dataSufficiencyLabel,
@@ -845,7 +843,8 @@ WHERE e.is_deleted = 0
                         d = e.Day,
                         pn = e.PersonName,
                         pu = e.PersonUrl,
-                        by = e.BirthYear
+                        // by は「今日の記念日」で年齢を添えるための生年。亡くなった人には年齢を添えないので出さない。
+                        by = e.IsDeceased ? null : e.BirthYear
                     });
                     break;
             }
@@ -973,9 +972,6 @@ WHERE e.is_deleted = 0
         public string SiteName { get; set; } = "";
         /// <summary>可視ブランド表記（例: プリキュアデータベース「precure-datastars」）。hero の h1 に出す。</summary>
         public string SiteBrandLabel { get; set; } = "";
-        /// <summary>本番モードかどうか。true のとき DB 統計ボックスのうちプリキュア・キャラクター・
-        /// クリエイターをテンプレ側で非表示にする（データが揃いきるまでの暫定措置）。</summary>
-        public bool IsProductionMode { get; set; }
         /// <summary>最終ビルド表記の表示文字列（導入）。 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」のような 完成形を C# 側で組み立てて流し込む。</summary>
         public string BuildLabel { get; set; } = "";
         /// <summary>キャラクター・クリエイターのデータ充足率の表示文字列（暫定表記）。
@@ -1131,6 +1127,7 @@ public sealed class AboutGenerator
         var layout = new LayoutModel
         {
             PageTitle = "このサイトについて",
+            MetaDescription = $"{_ctx.Config.SiteBrandLabel}について。どんなサイトか、運営者、データの扱い方などの設計方針、権利表記を説明しています。",
             // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
             SuppressShareButtons = true,
             Breadcrumbs = new[]

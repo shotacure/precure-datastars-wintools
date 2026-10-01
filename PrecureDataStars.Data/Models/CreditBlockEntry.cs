@@ -63,6 +63,13 @@ public sealed class CreditBlockEntry
     /// </summary>
     public string? CompanyMisprintText { get; set; }
 
+    /// <summary>
+    /// 人物名の代わりに画面に出た伏せ字表記（例：声優を伏せた「謎の少女　？」の「？」）。PERSON / CHARACTER_VOICE で使う。
+    /// 名義（<see cref="PersonAliasId"/>）は本来の人物に紐付けたまま持ち、集計も通常どおり数える。
+    /// NULL = 伏せ字なし。値があれば表示は「伏せ字 (正名義)」の形にする。
+    /// </summary>
+    public string? PersonMaskedText { get; set; }
+
     /// <summary>企業名義 ID（→ company_aliases.alias_id）。EntryKind が COMPANY のときのみ。</summary>
     public int? CompanyAliasId { get; set; }
 

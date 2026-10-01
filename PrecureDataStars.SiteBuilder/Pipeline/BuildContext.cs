@@ -159,6 +159,9 @@ public sealed class BuildContext
     /// <summary>音盤のブックレットに載る音楽クレジット（<c>music_credits</c>）の全件索引。本編クレジットの関与索引とは別に持つ。</summary>
     public required MusicCreditIndex MusicCredits { get; init; }
 
+    /// <summary>主題歌の再生ボタン用に、録音ごとに鳴らす配信音源を選んだ索引（シリーズ詳細・エピソード詳細で使う）。</summary>
+    public required ThemeArtTrackIndex ThemeArtTracks { get; init; }
+
     /// <summary>
     /// episode_id → そのエピソードに紐付くクレジット（scope=EPISODE）一覧の事前展開辞書。
     /// 旧 SeriesGenerator / EpisodeGenerator はページごとに <c>CreditsRepository.GetByEpisodeAsync</c> を
@@ -266,10 +269,36 @@ public sealed class BuildContext
     public EntityUrlRegistry EntityUrls { get; set; } = EntityUrlRegistry.Empty;
 
     /// <summary>
+    /// クリエイターの各一覧（スタッフ・声の出演・歌唱・音楽制作）に載った人物・企業/団体の記録。
+    /// CreatorsGenerator が人物・企業詳細より前に作って差し込み、人物・企業詳細のパンくずが引く。
+    /// </summary>
+    public CreatorListMembership CreatorLists { get; set; } = CreatorListMembership.Empty;
+
+    /// <summary>
+    /// 人物の誕生日を記念日カレンダー（ホームのカレンダー・今日の記念日・記念日の日別ページ）に出すかの判定。
+    /// <see cref="CreditInvolvementIndex"/> 構築直後に Pipeline が 1 度だけ詰める（ホームは声の出演一覧より先に作るため）。
+    /// 未構築なら全員を出す。
+    /// </summary>
+    public BirthdayCalendarEligibility BirthdayCalendar { get; set; } = BirthdayCalendarEligibility.All;
+
+    /// <summary>
+    /// キャラクターを 1 つの名前で指すときの名義の表示名（苗字の無い名義をフルネームの名義に置き換える）。
+    /// データ読み込み直後に Pipeline が 1 度だけ詰める。未構築なら名義の表記をそのまま返す。
+    /// </summary>
+    public CharacterAliasNames CharacterAliasNames { get; set; } = CharacterAliasNames.Identity;
+
+    /// <summary>
     /// サブタイトル解禁時刻の事前計算辞書（episode_id → 解禁時刻）。
     /// <see cref="Utilities.SubtitleEmbargoCalculator.Build"/> がビルド開始時に 1 度だけ構築する。
-    /// 辞書に無いエピソードは解禁時刻を算出できない、またはビルド時点で十分過去に解禁済みのため
-    /// 常に解禁済み扱い（<see cref="Rendering.SubtitleGuardRenderer"/> がガード無しでそのまま出力する）。
+    /// 辞書に載るのはビルド時点（<see cref="BuildStartedAt"/>）でまだ解禁前の話だけ。辞書に無いエピソードは
+    /// 解禁時刻を算出できない、またはビルド時点で解禁済みのため常に解禁済み扱い
+    /// （<see cref="Rendering.SubtitleGuardRenderer"/> がガード無しでそのまま出力する）。
     /// </summary>
     public required IReadOnlyDictionary<int, DateTimeOffset> SubtitleRevealAtByEpisodeId { get; init; }
+
+    /// <summary>
+    /// ビルドの基準時刻。サブタイトル解禁時刻の辞書を作った時刻で、ページタイトル・OGP など
+    /// 後から隠せない出力で「解禁前か」を判定するときも、この時刻で比べて辞書と判定をそろえる。
+    /// </summary>
+    public required DateTimeOffset BuildStartedAt { get; init; }
 }

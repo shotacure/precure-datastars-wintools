@@ -5,24 +5,130 @@
 <h1>{{ RoleNameJa | html.escape }}</h1>
 
 <p class="lead">
-  歴代プリキュアの楽曲・劇伴・音盤で「{{ RoleNameJa | html.escape }}」を担当した人物・団体の一覧です。初めて担当した順に並べ、担当した曲・劇伴の録音・盤を添えています。
+  歴代プリキュアの歌・劇伴・音盤で「{{ RoleNameJa | html.escape }}」を担当した人物・団体の一覧です。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
 {{## 音楽クレジット（music_credits、ストリングス編曲は song_credits）の役職 1 つ分。
-     1 行 = 人物または団体。担当先（曲・劇伴セッション・盤）は根拠の盤の発売日順に並べ、それぞれの詳細へリンクする。 ##}}
-{{~ if (array.size Rows) == 0 ~}}
+     ・1 行 = 人物または団体のアコーディオン（details）。閉じた状態は名前と件数（劇伴の TV 作品数 📺・映画本数 🎥、歌の曲数 🎵、盤の点数 💿）。
+       開くと担当先を「劇伴（1 作品 1 行、録音回を添える）/ 歌（曲・録音ごとに 1 行）/ 盤」に分けて並べる。
+     ・並べ替えは音楽制作ページと同じ「初参加順（初参加の作品ごとのセクション）/ 参加数順」の切り替え（data-sort-panel）。
+       パラメータ付き include は使わない方針なので、行の中身は両方の並びに直接展開する。 ##}}
+{{~ if (array.size CountRows) == 0 ~}}
 <p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
 {{~ else ~}}
-<ul class="entity-list music-role-detail-list">
-  {{~ for e in Rows ~}}
-  <li class="entity-row">
-    <a class="entity-row-name" href="{{ e.Url }}">{{ e.Name | html.escape }}</a>
-    <span class="entity-row-sub muted">
-      {{~ for t in e.Targets ~}}{{~ if for.index > 0 ~}}、{{~ end ~}}<a href="{{ t.Url }}">{{ t.Title | html.escape }}</a>{{~ if t.Sub != "" ~}}（{{ t.Sub | html.escape }}）{{~ end ~}}{{~ end ~}}
-    </span>
-  </li>
-  {{~ end ~}}
-</ul>
+<div class="music-role-detail">
+  <div class="list-toolbar">
+  <div class="sort-toggle" role="group" aria-label="並べ替え">
+    <button type="button" class="sort-toggle-btn is-active" data-sort="debut">初参加順</button>
+    <button type="button" class="sort-toggle-btn" data-sort="count">参加数順</button>
+  </div>
+  {{## 件数での並べ替えボタン（count-sort.js）。data-count-sort-for のリストの行を、件数バッジの種類ごとに多い順／少ない順で並べ替える。対象リストが出ているときだけ表示される。 ##}}
+  <button type="button" class="count-sort-btn" data-count-sort-for="music-role-count-list" hidden></button>
+  </div>
+
+  <div data-sort-panel="debut">
+    {{~ for sec in DebutSections ~}}
+    <section class="creators-series-section">
+      <h2 class="creators-series-heading">{{~ if sec.SeriesUrl != "" ~}}<a href="{{ sec.SeriesUrl }}">{{ sec.SeriesHeadingLabel | html.escape }}</a>{{~ else ~}}{{ sec.SeriesHeadingLabel | html.escape }}{{~ end ~}}</h2>
+      <ul class="entity-list music-role-member-list">
+        {{~ for e in sec.Members ~}}
+        <li>
+          <details class="music-role-member">
+            <summary>
+              <a class="entity-row-name" href="{{ e.Url }}">{{ e.Name | html.escape }}</a>
+              <span class="entity-row-count"><span class="count-badges">{{~ if e.TvWorkCount > 0 ~}}<span class="count-pill count-pill-tv" title="劇伴 TVシリーズ {{ e.TvWorkCount }} 作品">📺 {{ e.TvWorkCount }}</span>{{~ end ~}}{{~ if e.MovieWorkCount > 0 ~}}<span class="count-pill count-pill-movie" title="劇伴 映画 {{ e.MovieWorkCount }} 本">🎥 {{ e.MovieWorkCount }}</span>{{~ end ~}}{{~ if e.SongCount > 0 ~}}<span class="count-pill count-pill-song" title="歌 {{ e.SongCount }} 曲">🎵 {{ e.SongCount }}</span>{{~ end ~}}{{~ if e.ProductCount > 0 ~}}<span class="count-pill count-pill-cd" title="音盤 {{ e.ProductCount }} 点">💿 {{ e.ProductCount }}</span>{{~ end ~}}</span></span>
+            </summary>
+            <div class="music-role-member-body">
+              {{~ if (array.size e.BgmItems) > 0 ~}}
+              <div class="music-role-member-kind">劇伴</div>
+              <ul class="music-role-member-items">
+                {{~ for t in e.BgmItems ~}}
+                <li><a href="{{ t.Url }}">{{ t.Title | html.escape }}</a>{{~ if t.Sub != "" ~}}<span class="muted">（{{ t.Sub | html.escape }}）</span>{{~ end ~}}</li>
+                {{~ end ~}}
+              </ul>
+              {{~ end ~}}
+              {{~ if (array.size e.SongItems) > 0 ~}}
+              <div class="music-role-member-kind">歌</div>
+              <ul class="music-role-member-items">
+                {{~ for t in e.SongItems ~}}
+                <li><a href="{{ t.Url }}">{{ t.Title | html.escape }}</a></li>
+                {{~ end ~}}
+              </ul>
+              {{~ end ~}}
+              {{~ if (array.size e.ProductItems) > 0 ~}}
+              <div class="music-role-member-kind">盤</div>
+              <ul class="music-role-member-items">
+                {{~ for t in e.ProductItems ~}}
+                <li><a href="{{ t.Url }}">{{ t.Title | html.escape }}</a></li>
+                {{~ end ~}}
+              </ul>
+              {{~ end ~}}
+            </div>
+          </details>
+        </li>
+        {{~ end ~}}
+      </ul>
+    </section>
+    {{~ end ~}}
+  </div>
+
+  <ul class="entity-list music-role-member-list" id="music-role-count-list" data-sort-panel="count" hidden>
+    {{~ for e in CountRows ~}}
+    <li>
+      <details class="music-role-member">
+        <summary>
+          <a class="entity-row-name" href="{{ e.Url }}">{{ e.Name | html.escape }}</a>
+          <span class="entity-row-count"><span class="count-badges">{{~ if e.TvWorkCount > 0 ~}}<span class="count-pill count-pill-tv" title="劇伴 TVシリーズ {{ e.TvWorkCount }} 作品">📺 {{ e.TvWorkCount }}</span>{{~ end ~}}{{~ if e.MovieWorkCount > 0 ~}}<span class="count-pill count-pill-movie" title="劇伴 映画 {{ e.MovieWorkCount }} 本">🎥 {{ e.MovieWorkCount }}</span>{{~ end ~}}{{~ if e.SongCount > 0 ~}}<span class="count-pill count-pill-song" title="歌 {{ e.SongCount }} 曲">🎵 {{ e.SongCount }}</span>{{~ end ~}}{{~ if e.ProductCount > 0 ~}}<span class="count-pill count-pill-cd" title="音盤 {{ e.ProductCount }} 点">💿 {{ e.ProductCount }}</span>{{~ end ~}}</span></span>
+        </summary>
+        <div class="music-role-member-body">
+          {{~ if (array.size e.BgmItems) > 0 ~}}
+          <div class="music-role-member-kind">劇伴</div>
+          <ul class="music-role-member-items">
+            {{~ for t in e.BgmItems ~}}
+            <li><a href="{{ t.Url }}">{{ t.Title | html.escape }}</a>{{~ if t.Sub != "" ~}}<span class="muted">（{{ t.Sub | html.escape }}）</span>{{~ end ~}}</li>
+            {{~ end ~}}
+          </ul>
+          {{~ end ~}}
+          {{~ if (array.size e.SongItems) > 0 ~}}
+          <div class="music-role-member-kind">歌</div>
+          <ul class="music-role-member-items">
+            {{~ for t in e.SongItems ~}}
+            <li><a href="{{ t.Url }}">{{ t.Title | html.escape }}</a></li>
+            {{~ end ~}}
+          </ul>
+          {{~ end ~}}
+          {{~ if (array.size e.ProductItems) > 0 ~}}
+          <div class="music-role-member-kind">盤</div>
+          <ul class="music-role-member-items">
+            {{~ for t in e.ProductItems ~}}
+            <li><a href="{{ t.Url }}">{{ t.Title | html.escape }}</a></li>
+            {{~ end ~}}
+          </ul>
+          {{~ end ~}}
+        </div>
+      </details>
+    </li>
+    {{~ end ~}}
+  </ul>
+</div>
+
+<script>
+(function () {
+  // 並べ替えの切り替え（同じ枠の中の data-sort-panel を出し分ける）。
+  var root = document.querySelector('.music-role-detail');
+  if (!root) return;
+  var sortButtons = root.querySelectorAll('.sort-toggle-btn');
+  sortButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-sort');
+      sortButtons.forEach(function (b) { b.classList.toggle('is-active', b === btn); });
+      root.querySelectorAll('[data-sort-panel]').forEach(function (list) {
+        if (list.getAttribute('data-sort-panel') === key) { list.removeAttribute('hidden'); } else { list.setAttribute('hidden', ''); }
+      });
+    });
+  });
+})();
+</script>
 {{~ end ~}}

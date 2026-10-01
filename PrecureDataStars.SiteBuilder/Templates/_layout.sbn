@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ if PageTitle != "" }}{{ PageTitle | html.escape }} | {{ end }}{{ SiteBrandLabel | html.escape }}</title>
-{{## canonical は BaseUrl が設定されているときのみ絶対 URL で出力する。 ##}}
-{{~ if BaseUrl != "" && CanonicalPath != "" ~}}
+{{## canonical は BaseUrl が設定されているときのみ絶対 URL で出力する。404 ページ（SuppressCanonical）は出さない。 ##}}
+{{~ if BaseUrl != "" && CanonicalPath != "" && !SuppressCanonical ~}}
 <link rel="canonical" href="{{ BaseUrl }}{{ CanonicalPath }}">
 {{~ end ~}}
 {{~ if MetaDescription != "" ~}}
@@ -17,17 +17,28 @@
      theme-color はモバイルブラウザのアドレスバー色を指定（プリキュアピンク）。 ##}}
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <meta name="theme-color" content="#ec4899">
+{{## 明るい配色だけのサイトであることをブラウザに伝える。「only」を付けないと Chrome などの自動ダーク化（端末がダークモードのときに色を反転させる機能）は止まらない。 ##}}
+<meta name="color-scheme" content="only light">
 
 {{## ──────── Google Search Console 所有権確認（任意） ──────── ##}}
 {{~ if GoogleSiteVerification != "" ~}}
 <meta name="google-site-verification" content="{{ GoogleSiteVerification }}">
 {{~ end ~}}
 
+{{~ if SubtitleRevealAt != "" ~}}
+{{## ──────── サブタイトル解禁前の各話ページ ────────
+     SNS のカード用のメタ（og:* / twitter:*）を出さない（題名の無いカードが SNS 側に残らないように）。
+     解禁時刻と解禁後のタイトル・共有文だけを渡し、subtitle-embargo.js が解禁後にタブのタイトルと
+     共有ボタンの文を差し替える（JavaScript が動かない環境では次のビルドまで題名無しのまま）。 ##}}
+<meta name="pcds-subtitle-reveal-at" content="{{ SubtitleRevealAt }}">
+<meta name="pcds-revealed-title" content="{{ RevealedPageTitle | html.escape }} | {{ SiteBrandLabel | html.escape }}">
+<meta name="pcds-revealed-share-text" content="{{ RevealedShareText | html.escape }}">
+{{~ else ~}}
 {{## ──────── OGP（Open Graph Protocol）+ Twitter カード ────────
      画像は Generator 側または PageRenderer の自動補完で
      入った場合のみ出力する。og:url / og:title / og:description / og:type は
      必ず出力する（OG パーサが空欄を嫌うため）。site_name と locale は固定値。 ##}}
-{{~ if BaseUrl != "" && CanonicalPath != "" ~}}
+{{~ if BaseUrl != "" && CanonicalPath != "" && !SuppressCanonical ~}}
 <meta property="og:url" content="{{ BaseUrl }}{{ CanonicalPath }}">
 {{~ end ~}}
 <meta property="og:type" content="{{ OgType }}">
@@ -64,6 +75,7 @@
 {{~ if MetaDescription != "" ~}}
 <meta name="twitter:description" content="{{ MetaDescription | html.escape }}">
 {{~ end ~}}
+{{~ end ~}}
 
 {{## Google Fonts: 本文・見出しのベースは Noto Sans JP（可読性の高い日本語ゴシック）。
      ブランド表記（ヘッダ・フッタのサイト名、ホーム大見出し・タグライン）は Kiwi Maru を据え置き、
@@ -72,17 +84,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Kiwi+Maru:wght@400;500&family=Kaisei+Decol:wght@400;500;700&family=DotGothic16&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="{{ asset_url "/assets/site.css" }}">
 
+{{## ──────── ダイアログのキーボード操作（フォーカスを中に閉じ込め、閉じたら戻す） ────────
+     subtitle-embargo.js・art-track-pref.js・mobile-nav.js が window.PCDS.focusTrap を使うので、それらより前に置く。 ##}}
+<script src="{{ asset_url "/assets/focus-trap.js" }}" defer></script>
 {{## ──────── サブタイトル解禁ガード JS ────────
      未放送話（前話の予告がまだ放送されていない話数）のサブタイトルをぼかす／解禁する判定ロジック。
      calendar.js・search.js 等がこの後で window.PCDS.subtitleEmbargo を参照するため、defer スクリプトの
      実行順序（文書順）を保証すべく、他の全 defer スクリプトより前（head 内）に置く。 ##}}
-<script src="/assets/subtitle-embargo.js" defer></script>
+<script src="{{ asset_url "/assets/subtitle-embargo.js" }}" defer></script>
 {{## 配信音源の Premium 限定表示設定。設定トグルはフッター＝全ページにあるため、
      再生ボタンのあるページでしか読まない art-track-player.js とは分けて全ページで読み込む。
      描画のちらつきを避けるため、再生系より先に当たるよう head 側に置く。 ##}}
-<script src="/assets/art-track-pref.js" defer></script>
+<script src="{{ asset_url "/assets/art-track-pref.js" }}" defer></script>
 
 {{## ──────── JSON-LD（Schema.org 構造化データ） ────────
      Generator 側で組み立てた JSON 文字列をそのまま埋め込む。空文字なら出力しない。 ##}}
@@ -145,12 +160,12 @@ gtag('config', '{{ Ga4MeasurementId }}');
   <span class="hamburger-line" aria-hidden="true"></span>
   <span class="hamburger-line" aria-hidden="true"></span>
 </button>
-<div id="mobileNavOverlay" class="mobile-nav-overlay" hidden role="dialog" aria-modal="true" aria-label="グローバルナビ（モバイル）">
+<div id="mobileNavOverlay" class="mobile-nav-overlay" hidden role="dialog" aria-modal="true" aria-label="メニュー">
   {{## 背景の暗幕。クリックで閉じる。data 属性で mobile-nav.js が拾う。 ##}}
   <div class="mobile-nav-overlay-backdrop" data-mobile-nav-close></div>
   {{## 右からスライドインするパネル本体。グローバルナビとサイト内検索ボックス（モバイル時のみ
        JS で本パネル内に移設される）を縦並びで提示。 ##}}
-  <nav class="mobile-nav-overlay-panel" aria-label="グローバルナビ（モバイル）">
+  <nav class="mobile-nav-overlay-panel" aria-label="グローバルナビ">
     <button type="button" class="mobile-nav-overlay-close" data-mobile-nav-close aria-label="閉じる">✕</button>
     {{## 項目列は LayoutModel.NavItems（PageRenderer がヘッダナビと共通で組み立て、
          現在ページの所属セクションに IsActive を立てる）。先頭のホームだけ固定で足す。 ##}}
@@ -238,8 +253,9 @@ gtag('config', '{{ Ga4MeasurementId }}');
          JS で /search-index.json を初回入力時に fetch し、クライアント側で全文検索する。
          検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
     <div class="site-search">
-      <input id="site-search-input" type="search" placeholder="サイト内検索..." autocomplete="off"
-             aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results">
+      <input id="site-search-input" type="search" placeholder="サイト内検索" autocomplete="off"
+             role="combobox" aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results"
+             aria-expanded="false">
       {{## キーボードショートカットのヒントチップ（/ キーでフォーカス。search.js が処理）。
            装飾なので aria-hidden、入力中（focus-within）とモバイルでは CSS で非表示。 ##}}
       <span class="site-search-kbd" aria-hidden="true">/</span>
@@ -384,26 +400,28 @@ gtag('config', '{{ Ga4MeasurementId }}');
 </footer>
 {{## サイト内検索の JS。
      defer で読み込んでヘッダの検索ボックスを起動。fetch('/search-index.json') は初回入力時に走る。 ##}}
-<script src="/assets/search.js" defer></script>
+<script src="{{ asset_url "/assets/search.js" }}" defer></script>
 {{## セクションナビの JS。
      defer で読み込み、<nav id="pageSectionNav"> を起点に id 付きセクションを走査して
      チップストリップを自動構築する。スクロールスパイとタブ切替追従もここで担う。 ##}}
-<script src="/assets/section-nav.js" defer></script>
+<script src="{{ asset_url "/assets/section-nav.js" }}" defer></script>
+{{## 件数バッジでの並べ替えボタン（.count-sort-btn）の JS。ボタンの無いページでは何もしない。 ##}}
+<script src="{{ asset_url "/assets/count-sort.js" }}" defer></script>
 {{## モバイル用ハンバーガーメニューの開閉 JS。
      #mobileNavToggle のクリック → #mobileNavOverlay 表示・aria-expanded 切替、
      背景クリック・✕ ボタン・Escape キーで閉じる挙動と、モバイル幅（≤768px）でのみ
      ヘッダ内 .site-search を本オーバーレイ内へ DOM 移動する処理を担う。
      デスクトップ幅では CSS の display:none で本体が見えないため、JS は走っても無害。 ##}}
-<script src="/assets/mobile-nav.js" defer></script>
+<script src="{{ asset_url "/assets/mobile-nav.js" }}" defer></script>
 {{## クレジット表の役職名カラム・キャラ名カラムの幅統一 JS。
      .credit-section 内の全 td.role-name / td.character-cell の最大幅を測定し、
      CSS 変数 --credit-role-name-w / --credit-character-cell-w をセクションに書き込んで
      縦軸を揃える。ResizeObserver でウィンドウ幅変化にも追従する。
      .credit-section が無いページでは何もせず終了するため、グローバルに defer 読み込みする。 ##}}
-<script src="/assets/credit-align.js" defer></script>
+<script src="{{ asset_url "/assets/credit-align.js" }}" defer></script>
 {{## SNS シェアボタンの JS。
      クリップボードコピーボタンと、コピー成功時のトースト表示を担う。
      .share-buttons が無いページでは何もせず終了する。 ##}}
-<script src="/assets/share-buttons.js" defer></script>
+<script src="{{ asset_url "/assets/share-buttons.js" }}" defer></script>
 </body>
 </html>

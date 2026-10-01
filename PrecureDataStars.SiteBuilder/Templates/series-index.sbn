@@ -1,7 +1,7 @@
 <h1>歴代プリキュアシリーズ</h1>
 
 <p class="lead">
-  初代から最新作まで、TV シリーズ・映画・スピンオフを合わせた全 {{ TotalCount }} 作品を、放送・公開順に並べました。歴代プリキュアの“全作品マップ”です。
+  初代から最新作まで、TV シリーズ・映画・スピンオフを合わせた全 {{ TotalCount }} 作品{{ if MovieShortCount > 0 }}（同時上映の短編 {{ MovieShortCount }} 本を含む）{{ end }}を、放送・公開順に並べました。歴代プリキュアの“全作品マップ”です。
 </p>
 
 {{## ──────── 共通カード語彙について ────────
@@ -64,7 +64,7 @@
        1. ヘッダ：連番（::before） + タイトル
        2. メタ行：シーズンバッジ（秋／春、任意） + 公開日 + 尺
        3. 子作品（MOVIE_SHORT、任意）：親映画にぶら下がる併映短編を、カード内の小リストとして列挙。
-          子作品は単独詳細ページを持たない運用のためリンクなし。タイトル + 尺だけを出す。 ##}}
+          タイトル + 尺を出し、タイトルは短編自身の詳細ページへリンクする。 ##}}
 {{~ if (array.size MovieSeries) > 0 ~}}
 <section id="movies">
   <h2>映画</h2>
@@ -101,11 +101,11 @@
         <ul class="series-card-children movie-child-list">
           {{~ for c in m.Children ~}}
           <li>
-            <span class="series-card-children-title">{{ c.Title | html.escape }}</span>
+            <a class="series-card-children-title" href="/series/{{ c.Slug }}/">{{ c.Title | html.escape }}</a>
             <span class="series-card-children-meta muted">{{ c.RuntimeLabel }}</span>
           </li>
           {{~ end ~}}
-        </div>
+        </ul>
         {{~ end ~}}
       </div>
     </li>

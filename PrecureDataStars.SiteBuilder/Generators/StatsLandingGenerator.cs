@@ -50,7 +50,7 @@ public sealed class StatsLandingGenerator
 
         var content = new ContentModel
         {
-            SubtitleCoverageLabel = StatsCoverageLabel.Build(latestSubtitle),
+            SubtitleCoverageLabel = StatsCoverageLabel.BuildSubtitle(latestSubtitle, _ctx.BuildStartedAt),
             EpisodeCoverageLabel  = StatsCoverageLabel.Build(latestParts)
         };
         var layout = new LayoutModel

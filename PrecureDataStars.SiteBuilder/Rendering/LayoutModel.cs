@@ -93,6 +93,19 @@ public sealed class LayoutModel
     /// <summary>SNS シェアボタンに渡すシェア用本文テキスト。</summary>
     public string ShareText { get; set; } = "";
 
+    /// <summary>
+    /// ビルド時点でサブタイトル解禁前の各話ページの解禁時刻（ISO 8601）。空でないページは、
+    /// SNS のカード用のメタ（og:* / twitter:*）を出さず、解禁時刻と解禁後のタイトル・共有文を
+    /// &lt;meta&gt; で渡す。subtitle-embargo.js が解禁時刻を過ぎてから、タブのタイトルと共有ボタンの文を差し替える。
+    /// </summary>
+    public string SubtitleRevealAt { get; set; } = "";
+
+    /// <summary>解禁後のページタイトル（サブタイトル入り）。<see cref="SubtitleRevealAt"/> と組で使う。</summary>
+    public string RevealedPageTitle { get; set; } = "";
+
+    /// <summary>解禁後の共有文。<see cref="PageRenderer"/> が <see cref="RevealedPageTitle"/> から組み立てる。</summary>
+    public string RevealedShareText { get; set; } = "";
+
     /// <summary>SNS シェアボタンに渡すシェア対象 URL。 <see cref="PageRenderer"/> が <c>BaseUrl + CanonicalPath</c> から組み立てる。 <c>BaseUrl</c> が空のときは空文字となり、シェアボタンは本値が空のため非表示にする。</summary>
     public string ShareUrl { get; set; } = "";
 
@@ -104,6 +117,10 @@ public sealed class LayoutModel
     /// true のとき <see cref="PageRenderer"/> は ShareUrl の自動組み立てをスキップし、
     /// _share-buttons.sbn は ShareUrl 空により出力されない。</summary>
     public bool SuppressShareButtons { get; set; }
+
+    /// <summary>canonical と og:url を出さないページで true にする（404 ページ。どの URL で返っても
+    /// 「このページが正規の URL」と主張する意味が無いため）。</summary>
+    public bool SuppressCanonical { get; set; }
 
     // ── フッタ注記の出し分けフラグ（PageRenderer がコンテンツ HTML から自動検出して詰める） ──
 

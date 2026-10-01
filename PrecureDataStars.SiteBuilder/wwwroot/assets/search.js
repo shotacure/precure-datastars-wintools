@@ -36,10 +36,10 @@
     'series':    'シリーズ',
     'episode':   'エピソード',
     'precure':   'プリキュア',
-    'character': 'キャラ',
+    'character': 'キャラクター',
     'person':    '人物',
     'company':   '企業・団体',
-    'song':      '楽曲',
+    'song':      '歌',
     'product':   '商品',
     'book':      '書籍'
   };
@@ -60,6 +60,11 @@
   /** クエリ文字列を正規化する。SearchIndexGenerator.NormalizeForSearch と対応する処理。 */
   function normalizeQuery(s) {
     if (!s) return '';
+    // NFKC で全角英数・全角記号を半角に、半角カナを全角にそろえる（「ＣＵＲＥ」「ｷｭｱ」「！」でも当たるように）。
+    // 波ダッシュ「〜」と全角チルダ（NFKC で半角「~」になる）・半角「~」は同じ文字として「~」にそろえる。
+    // 索引側（SearchIndexGenerator.NormalizeForSearch）も同じ規則で正規化している。
+    if (s.normalize) s = s.normalize('NFKC');
+    s = s.replace(/[\u301C\uFF5E]/g, '~');
     var out = '';
     for (var i = 0; i < s.length; i++) {
       var ch = s.charCodeAt(i);
@@ -175,10 +180,11 @@
     return (m ? m[1] : item.t) + '（サブタイトル未公開）';
   }
 
-  /** 1 件の結果を <a> 要素として描画。 */
-  function renderResult(item) {
+  /** 1 件の結果を <a> 要素として描画。id は検索欄の aria-activedescendant が指す先（何件目か）。 */
+  function renderResult(item, index) {
     var a = document.createElement('a');
     a.className = 'site-search-result-item';
+    a.id = 'site-search-option-' + index;
     a.href = item.u;
     a.setAttribute('role', 'option');
 
@@ -217,7 +223,7 @@
       return;
     }
     for (var i = 0; i < results.length; i++) {
-      container.appendChild(renderResult(results[i]));
+      container.appendChild(renderResult(results[i], i));
     }
     container.classList.add('open');
   }
@@ -267,7 +273,25 @@
 
     var debounceTimer = null;
 
-    function doSearch() {
+    // 読み上げ向けの combobox の状態（aria-expanded・aria-activedescendant）を、結果の箱の開閉と
+    // 矢印キーで選んだ候補（.selected）に合わせる。開閉と選択はあちこちで切り替わるので、
+    // 結果の箱の変化を見て一か所で書き換える。
+    function syncComboboxState() {
+      input.setAttribute('aria-expanded', results.classList.contains('open') ? 'true' : 'false');
+      var selected = results.querySelector('.site-search-result-item.selected');
+      if (selected) {
+        input.setAttribute('aria-activedescendant', selected.id);
+      } else {
+        input.removeAttribute('aria-activedescendant');
+      }
+    }
+    new MutationObserver(syncComboboxState).observe(results, {
+      childList: true, subtree: true, attributes: true, attributeFilter: ['class']
+    });
+    syncComboboxState();
+
+    /** 検索して結果を描く。afterRender は結果を描いた後に呼ぶ（索引の読み込みを待つため非同期）。 */
+    function doSearch(afterRender) {
       var q = input.value;
       if (q.trim().length === 0) {
         results.innerHTML = '';
@@ -277,6 +301,7 @@
       loadIndex(function () {
         var hits = performSearch(q);
         renderResults(results, hits, q);
+        if (afterRender) afterRender();
       });
     }
 
@@ -309,10 +334,13 @@
       if (input.value.trim().length > 0) doSearch();
     });
 
-    // 結果ボックス外クリックで閉じる。
+    // 結果ボックス外クリックで閉じる。スマホ用メニューの開閉ボタンは除く
+    // （検索欄はメニューの中にあるので、メニューを開いた時点で結果が閉じると見えなくなる）。
+    var mobileNavToggle = document.getElementById('mobileNavToggle');
     document.addEventListener('click', function (e) {
       if (e.target === input) return;
       if (results.contains(e.target)) return;
+      if (mobileNavToggle && mobileNavToggle.contains(e.target)) return;
       results.classList.remove('open');
     });
 
@@ -341,9 +369,22 @@
     var initialQuery = new URLSearchParams(window.location.search).get('q');
     if (initialQuery && initialQuery.trim().length > 0) {
       input.value = initialQuery;
-      doSearch();
-      // 検索ボックスが見えている場合のみフォーカスする（モバイルの閉じたオーバーレイ内では何もしない）。
-      if (input.offsetParent !== null) input.focus();
+      // 検索ボックスが見えている（デスクトップ幅）ならフォーカスする。スマホ幅では検索ボックスが閉じたメニューの
+      // いちばん下にあるので、メニューを開き、結果を描いた後で検索ボックスがメニューの上端に来るまでスクロールする
+      // （結果を描く前はメニューの中身が短く、スクロールの余地が無い）。画面のキーボードで結果が隠れないよう、
+      // スマホ幅ではフォーカスは移さない。
+      if (input.offsetParent !== null) {
+        doSearch();
+        input.focus();
+      } else if (window.PCDS && window.PCDS.mobileNav) {
+        window.PCDS.mobileNav.open();
+        doSearch(function () {
+          var box = input.closest('.site-search') || input;
+          if (box.scrollIntoView) box.scrollIntoView({ block: 'start' });
+        });
+      } else {
+        doSearch();
+      }
     }
   });
 })();

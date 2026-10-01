@@ -239,8 +239,8 @@ public sealed class PersonsGenerator
         // 解けたチェーンに含まれない alias を末尾にまとめて出す。
         var aliasViews = OrderAliasesChronologically(aliases);
 
-        // 見出しは最新名義（全クレジット横断で最後に使われた名義。URL と同じ EntityUrlRegistry の決定に従う）。
-        // クレジットの無い人物は正式名。
+        // 見出しは表示名義（本名義 → 公開中の名義 → 最新名義。URL と同じ EntityUrlRegistry の決定に従う）。
+        // 表示名義の無い人物は正式名。
         string displayName = _ctx.EntityUrls.PersonDisplayName(person.PersonId) ?? person.FullName;
         string displayNameKana = _ctx.EntityUrls.PersonDisplayKana(person.PersonId) ?? (person.FullNameKana ?? "");
 
@@ -249,9 +249,10 @@ public sealed class PersonsGenerator
         // 劇伴の作曲・編曲は音楽クレジットの欄に分ける）。
         var involvementGroups = BuildPersonInvolvementGroups(aliasIds, IsMainInvolvement);
 
-        // クレジットのある名義が 2 つ以上あるときだけ、名義単位のセクション（初登場順）に分ける
-        // （企業・団体詳細と同じ規律）。1 つ以下ならテンプレ側は involvementGroups のフラット表示を使う。
-        var involvementSections = BuildPersonAliasInvolvementSections(aliasIds, aliasById);
+        // クレジットのある名義が 2 つ以上あるとき、または 1 つでも見出しの名前（表示名義）と違うときは、
+        // 名義単位のセクション（初登場順）に分ける（企業・団体詳細と同じ規律）。改名して見出しが現在の名前になった
+        // 人物でも、クレジットされた当時の名義が分かるようにする。それ以外はテンプレ側が involvementGroups のフラット表示を使う。
+        var involvementSections = BuildPersonAliasInvolvementSections(aliasIds, aliasById, displayName);
 
         // クレジット合計バッジは role 別 EpisodeCount の単純合算ではなく distinct 話数・本数で出す。
         // 同一名義が同じ話数に複数役職でクレジットされている場合、role ごとの EpisodeCount を
@@ -270,6 +271,10 @@ public sealed class PersonsGenerator
         // 誕生日表記：BirthYearVisibility=PUBLIC かつ BirthYear ありなら「YYYY年M月D日」、
         // 非公開もしくは未設定なら年抜きの「M月D日」。BirthMonth / BirthDay の片方でも未設定なら空文字。
         string birthday = FormatBirthday(person);
+        // 没年月日表記：分かっている所まで（「2025年8月20日」「2016年10月」「2016年」）。没年が無ければ空文字。
+        // 年しか分からないときは見出しを「没年」にする。
+        string deathDate = FormatDeathDate(person);
+        string deathDateLabel = person.DeathMonth is null ? "没年" : "没年月日";
 
         var content = new PersonDetailModel
         {
@@ -283,7 +288,10 @@ public sealed class PersonsGenerator
                 NameEn = person.NameEn ?? "",
                 Notes = person.Notes ?? "",
                 Birthday = birthday,
+                DeathDate = deathDate,
+                DeathDateLabel = deathDateLabel,
                 OfficialUrl = person.OfficialUrl ?? "",
+                AffiliationUrl = person.AffiliationUrl ?? "",
                 XUrl = person.XUrl ?? "",
                 InstagramUrl = person.InstagramUrl ?? "",
                 YoutubeUrl = person.YoutubeUrl ?? ""
@@ -327,8 +335,14 @@ public sealed class PersonsGenerator
             // MetaDescription と同じ文面を入れて二重整合性を担保する。
             ["description"] = metaDescription
         };
-        if (alternateNames.Count > 0) jsonLdDict["alternateName"] = alternateNames;
-        if (!string.IsNullOrEmpty(person.NameEn)) jsonLdDict["givenName"] = person.NameEn;
+        // 英語表記（persons.name_en、氏名全体のローマ字）は正式名の英語表記なので、見出しの名前が正式名と同じときだけ
+        // 別名として添える（givenName は「名」だけを入れる欄なので氏名全体は入れない）。見出しが別の名義のときに
+        // 正式名のローマ字を添えると、別の名義の読みが混ざって見える。
+        var alternateNamesForJsonLd = alternateNames.ToList();
+        if (!string.IsNullOrEmpty(person.NameEn) && string.Equals(displayName, person.FullName, StringComparison.Ordinal)
+            && !alternateNamesForJsonLd.Contains(person.NameEn, StringComparer.Ordinal))
+            alternateNamesForJsonLd.Add(person.NameEn);
+        if (alternateNamesForJsonLd.Count > 0) jsonLdDict["alternateName"] = alternateNamesForJsonLd;
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + personUrl;
         if (topJobTitles.Count > 0)
         {
@@ -343,13 +357,9 @@ public sealed class PersonsGenerator
         {
             PageTitle = displayName,
             MetaDescription = metaDescription,
-            Breadcrumbs = new[]
-            {
-                new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "歴代クリエイター", Url = PathUtil.CreatorsLandingUrl() },
-                new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = PathUtil.CreatorsStaffUrl() },
-                new BreadcrumbItem { Label = displayName, Url = "" }
-            },
+            // パンくずの中間の段は、本人が載っている一覧（スタッフ → 声の出演 → 歌唱 → 音楽制作 の順で最初のもの）。
+            // どの一覧にも載っていなければ中間の段を置かない。
+            Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForPerson(person.PersonId), displayName),
             OgType = "profile",
             JsonLd = jsonLd,
             OgCard = BuildOgCard(displayName, involvementGroups, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
@@ -665,7 +675,8 @@ public sealed class PersonsGenerator
 
     /// <summary>
     /// クレジット履歴を「名義」単位のセクション（初登場順）に分けて組み立てる。
-    /// クレジットのある名義が 2 つ以上あるときだけ非空リストを返し、1 つ以下なら空リスト（呼び出し側が
+    /// クレジットのある名義が 2 つ以上あるとき、または 1 つだけでもその名義が見出しの名前（<paramref name="displayName"/>）と
+    /// 違うときに非空リストを返す。それ以外は空リスト（呼び出し側が
     /// <see cref="BuildPersonInvolvementGroups"/> の全名義横断フラット表示にフォールバックする前提）。
     /// 各セクションの役職別グループは、当該名義 1 件だけを渡した <see cref="BuildPersonInvolvementGroups"/> の
     /// 再利用で組み立てる（声の出演の役（キャラ）大くくりサブセクションも自動的に引き継がれる）。
@@ -673,10 +684,15 @@ public sealed class PersonsGenerator
     /// </summary>
     private IReadOnlyList<AliasInvolvementSection> BuildPersonAliasInvolvementSections(
         IReadOnlyList<int> aliasIds,
-        IReadOnlyDictionary<int, PersonAlias> aliasById)
+        IReadOnlyDictionary<int, PersonAlias> aliasById,
+        string displayName)
     {
         var candidates = aliasIds.Where(id => _index.ByPersonAlias.ContainsKey(id) && _index.ByPersonAlias[id].Any(IsMainInvolvement)).ToList();
-        if (candidates.Count <= 1) return Array.Empty<AliasInvolvementSection>();
+        if (candidates.Count == 0) return Array.Empty<AliasInvolvementSection>();
+        if (candidates.Count == 1
+            && (!aliasById.TryGetValue(candidates[0], out var onlyAlias)
+                || string.Equals(onlyAlias.Name, displayName, StringComparison.Ordinal)))
+            return Array.Empty<AliasInvolvementSection>();
 
         var sections = new List<(DateTime FirstAt, AliasInvolvementSection Section)>();
         foreach (var aliasId in candidates)
@@ -707,7 +723,8 @@ public sealed class PersonsGenerator
                 MovieCount = aliasMovieCount
             }));
         }
-        return sections.Count > 1
+        // 名義が 1 つだけのときも、入口の判定（見出しの名前と違う）を通っていればセクションを出す。
+        return sections.Count > 0
             ? sections.OrderBy(s => s.FirstAt).Select(s => s.Section).ToList()
             : Array.Empty<AliasInvolvementSection>();
     }
@@ -735,7 +752,7 @@ public sealed class PersonsGenerator
             if (inv.EpisodeId is int)
             {
                 // 声優関与のとき演じたキャラを集める（シリーズ単位で重複排除）。
-                if (inv.Kind == InvolvementKind.CharacterVoice && inv.CharacterAliasId.HasValue)
+                if (inv.IsVoiceCast && inv.CharacterAliasId.HasValue)
                     AddCharacter(perEpisodeCharacters, inv.CharacterAliasId.Value);
                 // 所属屋号 ID を初出順で記録（人物詳細での所属併記用）。
                 if (inv.AffiliationCompanyAliasId is int affId
@@ -746,7 +763,7 @@ public sealed class PersonsGenerator
             }
             else
             {
-                if (inv.Kind == InvolvementKind.CharacterVoice && inv.CharacterAliasId.HasValue)
+                if (inv.IsVoiceCast && inv.CharacterAliasId.HasValue)
                     AddCharacter(seriesScopeCharacters, inv.CharacterAliasId.Value);
                 if (inv.AffiliationCompanyAliasId is int affIdS
                     && !seriesScopeAffiliationIds.Contains(affIdS))
@@ -781,12 +798,13 @@ public sealed class PersonsGenerator
             PerEpisodeCharacterNamesHtml: CharacterLinksHtml(perEpisodeCharacters));
 
         // character_alias_id からキャラを引き、未登場の character_id なら初出順で追加する。
+        // 役名は苗字の無い名義ならフルネームの名義で出す（CharacterAliasNames）。
         void AddCharacter(List<(int CharacterId, string Name)> list, int characterAliasId)
         {
             if (!_ctx.CharacterAliasById.TryGetValue(characterAliasId, out var ca)) return;
             if (string.IsNullOrEmpty(ca.Name)) return;
             if (list.Any(c => c.CharacterId == ca.CharacterId)) return;
-            list.Add((ca.CharacterId, ca.Name));
+            list.Add((ca.CharacterId, _ctx.CharacterAliasNames.DisplayName(ca)));
         }
 
         // キャラ名をキャラクター詳細（単発キャラはゲストキャラクターページの該当話）へのリンクにして「、」で連結する。
@@ -809,7 +827,7 @@ public sealed class PersonsGenerator
 
         foreach (var inv in roleGroup)
         {
-            if (inv.Kind != InvolvementKind.CharacterVoice) continue;
+            if (!inv.IsVoiceCast) continue;
             if (inv.CharacterAliasId is not int caId) continue;
             if (!_ctx.CharacterAliasById.TryGetValue(caId, out var ca)) continue;
             int charId = ca.CharacterId;
@@ -822,7 +840,8 @@ public sealed class PersonsGenerator
 
             if (!byChar.TryGetValue(charId, out var acc))
             {
-                acc = (ca.Name, key, new Dictionary<int, (HashSet<int>, bool)>());
+                // 見出しの役名は苗字の無い名義ならフルネームの名義で出す（CharacterAliasNames）。
+                acc = (_ctx.CharacterAliasNames.DisplayName(ca), key, new Dictionary<int, (HashSet<int>, bool)>());
                 byChar[charId] = acc;
             }
             if (key < acc.FirstKey)
@@ -892,6 +911,18 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
+    /// 没年月日表記を組み立てる。分かっている所までを「YYYY年M月D日」「YYYY年M月」「YYYY年」で返す。
+    /// 没年が無い（存命・不明）なら空文字を返す（没年月日の行を出さない）。
+    /// </summary>
+    private static string FormatDeathDate(Person p)
+    {
+        if (p.DeathYear is not ushort y) return "";
+        if (p.DeathMonth is not byte m) return $"{y}年";
+        if (p.DeathDay is not byte d) return $"{y}年{m}月";
+        return $"{y}年{m}月{d}日";
+    }
+
+    /// <summary>
     /// 構造化エントリ（song_credits / song_recording_singers）に紐付いた当該人物の担当楽曲をカード行群に集約する。
     /// 1 カード = 1 曲。同じ曲で複数役職（作詞 + 作曲 等）を持つ場合は同カード内に役職バッジを並べる。
     /// 出典シリーズ・タイトルは、その人が歌った曲は「歌った録音」から、作詞作曲編曲だけの曲は当該曲の
@@ -955,11 +986,12 @@ public sealed class PersonsGenerator
     /// 本編のクレジット階層に載る「音楽」などの役職は本編側に残る。
     /// </summary>
     private static bool IsMainInvolvement(Involvement inv)
-        => inv.EntryKind is not ("SONG_CREDIT" or "RECORDING_SINGER" or "BGM_CUE_CREDIT");
+        => inv.IsMainCredit;
 
     /// <summary>
-    /// 「音楽クレジット」セクションを、関わった先（歌 → 劇伴 → 音盤）の大見出しと、区分（作詞・作曲・編曲 → 演奏・コーラス等 →
-    /// レコーディング → 音盤製作）の小見出しに分けて組み立てる。
+    /// 「音楽クレジット」セクションを、区分（作詞・作曲・編曲 → 歌唱 → コーラスのみ → 演奏等 → レコーディング → 音盤製作）の見出しと、
+    /// その中の関わった先（歌 → 劇伴 → 音盤）の枠に分けて組み立てる。本編クレジットの「役職 → シリーズの枠」と同じ見た目にし、
+    /// 区分の見出しには件数の札（🎵 曲 / 🎼 劇伴 / 💿 盤）を、枠は既定で閉じて件数を添える。
     /// <list type="bullet">
     ///   <item><description>曲のカード（song_credits / song_recording_singers）は、担当した役職の区分ごとに振り分ける
     ///     （作詞と歌の両方を担当した曲は、それぞれの区分に役職を分けて出る）。</description></item>
@@ -976,7 +1008,7 @@ public sealed class PersonsGenerator
             .SelectMany(id => _ctx.MusicCredits.ByPersonAlias[id])
             .ToList();
 
-        // 大見出しは関わった先（歌 / 劇伴 / 音盤）、その中の小見出しは区分（作詞・作曲・編曲 / 演奏・コーラス等 / レコーディング / 音盤製作）。
+        // 見出しは区分（作詞・作曲・編曲 / 歌唱 / コーラスのみ / 演奏等 / レコーディング / 音盤製作）、その中の枠は関わった先（歌 / 劇伴 / 音盤）。
         //   歌   … 曲のカードと、曲・録音に付いた音楽クレジット
         //   劇伴 … 劇伴の作曲・編曲と、劇伴セッションに付いた音楽クレジット
         //   音盤 … 商品（盤）に付いた音楽クレジット
@@ -985,11 +1017,9 @@ public sealed class PersonsGenerator
         var productRows = musicRows.Where(r => r.TargetKind == MusicCreditTargetKinds.Product).ToList();
         var bgmCueItems = BuildBgmCueCreditItems(aliasIds);
 
-        var songSubs = new List<PersonMusicSubsection>();
-        var bgmSubs = new List<PersonMusicSubsection>();
-        var discSubs = new List<PersonMusicSubsection>();
+        var sections = new List<PersonMusicSection>();
 
-        // 小見出し：作詞・作曲・編曲 / 歌唱 / コーラスのみ / 演奏等 / レコーディング / 音盤製作。
+        // 区分：作詞・作曲・編曲 / 歌唱 / コーラスのみ / 演奏等 / レコーディング / 音盤製作。
         //   歌唱       … 曲のカードのうち、歌・台詞で参加した曲（同じ曲でコーラスもしていればバッジに並べる）
         //   コーラスのみ … 曲のカードのうち、歌唱者行のコーラスだけで参加した曲
         //   演奏等     … 音盤の音楽クレジットの演奏・コーラス等（ミュージシャン欄のコーラスもここ）
@@ -1030,26 +1060,38 @@ public sealed class PersonsGenerator
                 })
                 .ToList();
             var songItems = BuildMusicCreditItems(songRows.Where(r => InGroup(r.RoleCode)), displayName);
-            if (cards.Count > 0 || songItems.Count > 0)
-                songSubs.Add(new PersonMusicSubsection { Label = label, SongCards = cards, Items = songItems });
 
             var bgmItems = BuildMusicCreditItems(sessionRows.Where(r => InGroup(r.RoleCode)), displayName);
             bool isWriting = rowGroup == MusicCreditGroups.Writing;
             var groupBgm = isWriting ? bgmGroups : Array.Empty<InvolvementGroup>();
             if (isWriting)
                 bgmItems = bgmCueItems.Concat(bgmItems).ToList();
-            if (bgmItems.Count > 0 || groupBgm.Count > 0)
-                bgmSubs.Add(new PersonMusicSubsection { Label = label, BgmGroups = groupBgm, Items = bgmItems });
 
             var discItems = BuildMusicCreditItems(productRows.Where(r => InGroup(r.RoleCode)), displayName);
-            if (discItems.Count > 0)
-                discSubs.Add(new PersonMusicSubsection { Label = label, Items = discItems });
-        }
 
-        var sections = new List<PersonMusicSection>();
-        if (songSubs.Count > 0) sections.Add(new PersonMusicSection { Label = "歌", Subsections = songSubs });
-        if (bgmSubs.Count > 0) sections.Add(new PersonMusicSection { Label = "劇伴", Subsections = bgmSubs });
-        if (discSubs.Count > 0) sections.Add(new PersonMusicSection { Label = "音盤", Subsections = discSubs });
+            var songKeys = cards.Select(c => MusicCreditCounting.Key(MusicCreditCounting.Song, c.SongUrl, ""))
+                .Concat(songItems.Select(it => MusicCreditCounting.Key(MusicCreditCounting.Song, it.Url, it.SubLabel)))
+                .ToHashSet(StringComparer.Ordinal);
+            var bgmKeys = bgmItems.Select(it => MusicCreditCounting.Key(MusicCreditCounting.Bgm, it.Url, it.SubLabel)).ToHashSet(StringComparer.Ordinal);
+            var discKeys = discItems.Select(it => MusicCreditCounting.Key(MusicCreditCounting.Disc, it.Url, it.SubLabel)).ToHashSet(StringComparer.Ordinal);
+
+            var kinds = new List<PersonMusicKind>();
+            if (cards.Count > 0 || songItems.Count > 0)
+                kinds.Add(new PersonMusicKind { Label = MusicCreditCounting.Song, CountLabel = MusicCreditCounting.CountLabel(MusicCreditCounting.Song, songKeys.Count), SongCards = cards, Items = songItems });
+            if (bgmItems.Count > 0 || groupBgm.Count > 0)
+                kinds.Add(new PersonMusicKind { Label = MusicCreditCounting.Bgm, CountLabel = MusicCreditCounting.CountLabel(MusicCreditCounting.Bgm, bgmKeys.Count), BgmGroups = groupBgm, Items = bgmItems });
+            if (discItems.Count > 0)
+                kinds.Add(new PersonMusicKind { Label = MusicCreditCounting.Disc, CountLabel = MusicCreditCounting.CountLabel(MusicCreditCounting.Disc, discKeys.Count), Items = discItems });
+            if (kinds.Count > 0)
+                sections.Add(new PersonMusicSection
+                {
+                    Label = label,
+                    Kinds = kinds,
+                    SongKeys = songKeys,
+                    BgmKeys = bgmKeys,
+                    DiscKeys = discKeys
+                });
+        }
         return sections;
     }
 
@@ -1185,9 +1227,9 @@ public sealed class PersonsGenerator
         /// <summary>クレジット（フラット）。名義を横断した役職別グループ → シリーズ行。
         /// <see cref="InvolvementSections"/> が空（クレジットのある名義が 1 つだけ）のときにテンプレ側が使う。</summary>
         public IReadOnlyList<InvolvementGroup> InvolvementGroups { get; set; } = Array.Empty<InvolvementGroup>();
-        /// <summary>クレジット（名義別）。クレジットのある名義が 2 つ以上あるときだけ、
+        /// <summary>クレジット（名義別）。クレジットのある名義が 2 つ以上あるとき、または 1 つでも見出しの名前と違うときに、
         /// 名義単位のセクション（初登場順）に分ける。各セクション内は役職別グループ → シリーズ行。
-        /// 1 つ以下のときは空（テンプレ側は <see cref="InvolvementGroups"/> のフラット表示にフォールバック）。</summary>
+        /// それ以外は空（テンプレ側は <see cref="InvolvementGroups"/> のフラット表示にフォールバック）。</summary>
         public IReadOnlyList<AliasInvolvementSection> InvolvementSections { get; set; } = Array.Empty<AliasInvolvementSection>();
         /// <summary>クレジットセクション見出し横に出す合計担当話数（TV 系シリーズ横断）。</summary>
         public int CreditEpisodeCountTotal { get; set; }
@@ -1195,6 +1237,10 @@ public sealed class PersonsGenerator
         public int CreditMovieCountTotal { get; set; }
         /// <summary>音楽クレジット（区分ごと。何も無い区分は含まない）。</summary>
         public IReadOnlyList<PersonMusicSection> MusicSections { get; set; } = Array.Empty<PersonMusicSection>();
+        /// <summary>音楽クレジットの見出しの札（全区分を通して重複を除いた曲数・劇伴の件数・盤数）。</summary>
+        public int MusicSongTotal => MusicSections.SelectMany(s => s.SongKeys).Distinct(StringComparer.Ordinal).Count();
+        public int MusicBgmTotal => MusicSections.SelectMany(s => s.BgmKeys).Distinct(StringComparer.Ordinal).Count();
+        public int MusicDiscTotal => MusicSections.SelectMany(s => s.DiscKeys).Distinct(StringComparer.Ordinal).Count();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
@@ -1211,8 +1257,14 @@ public sealed class PersonsGenerator
         public string Notes { get; set; } = "";
         /// <summary>誕生日表記（「YYYY年M月D日」または「M月D日」、未設定時は空文字）。</summary>
         public string Birthday { get; set; } = "";
-        /// <summary>事務所等の公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
+        /// <summary>没年月日表記（「YYYY年M月D日」「YYYY年M月」「YYYY年」、存命・不明なら空文字）。</summary>
+        public string DeathDate { get; set; } = "";
+        /// <summary>没年月日の行の見出し（年しか分からないときは「没年」、それ以外は「没年月日」）。</summary>
+        public string DeathDateLabel { get; set; } = "";
+        /// <summary>本人の公式サイト URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
         public string OfficialUrl { get; set; } = "";
+        /// <summary>所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL。「外部リンク」セクションに「所属先」として、公式ページの次に出す。</summary>
+        public string AffiliationUrl { get; set; } = "";
         public string XUrl { get; set; } = "";
         public string InstagramUrl { get; set; } = "";
         public string YoutubeUrl { get; set; } = "";
@@ -1221,15 +1273,25 @@ public sealed class PersonsGenerator
     /// <summary>音楽クレジットの大見出し 1 つ分（関わった先：歌 / 劇伴 / 音盤）。</summary>
     private sealed class PersonMusicSection
     {
+        /// <summary>区分の名前（作詞・作曲・編曲 / 歌唱 / コーラスのみ / 演奏等 / レコーディング / 音盤製作）。</summary>
         public string Label { get; set; } = "";
-        /// <summary>中の小見出し（区分：作詞・作曲・編曲 / 演奏・コーラス等 / レコーディング / 音盤製作。何も無いものは含まない）。</summary>
-        public IReadOnlyList<PersonMusicSubsection> Subsections { get; set; } = Array.Empty<PersonMusicSubsection>();
+        /// <summary>関わった先（歌 / 劇伴 / 音盤）の枠。何も無いものは含まない。</summary>
+        public IReadOnlyList<PersonMusicKind> Kinds { get; set; } = Array.Empty<PersonMusicKind>();
+        /// <summary>件数の札（🎵 曲 / 🎼 劇伴 / 💿 盤）。見出しの合計でも重複を除くため、数えたキーを持つ。</summary>
+        public IReadOnlySet<string> SongKeys { get; set; } = new HashSet<string>();
+        public IReadOnlySet<string> BgmKeys { get; set; } = new HashSet<string>();
+        public IReadOnlySet<string> DiscKeys { get; set; } = new HashSet<string>();
+        public int SongCount => SongKeys.Count;
+        public int BgmCount => BgmKeys.Count;
+        public int DiscCount => DiscKeys.Count;
     }
 
-    /// <summary>音楽クレジットの大見出しの中の小見出し 1 つ分（区分）。</summary>
-    private sealed class PersonMusicSubsection
+    /// <summary>区分の中の枠 1 つ分（歌 / 劇伴 / 音盤）。既定で閉じた開閉枠に入れる。</summary>
+    private sealed class PersonMusicKind
     {
         public string Label { get; set; } = "";
+        /// <summary>開閉ボタンに出す件数（「10曲」「7件」「8枚」）。</summary>
+        public string CountLabel { get; set; } = "";
         /// <summary>担当した曲のカード（この区分の役職だけをバッジに持つ）。「歌」だけで使う。</summary>
         public IReadOnlyList<PersonSongCard> SongCards { get; set; } = Array.Empty<PersonSongCard>();
         /// <summary>劇伴の作曲・編曲（役職別グループ → シリーズ行）。作詞・作曲・編曲の区分だけで使う。</summary>

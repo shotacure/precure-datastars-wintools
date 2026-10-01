@@ -1,36 +1,41 @@
 <section>
   <h1>シリーズ別 文字種別比率</h1>
-  <p class="lead">プリキュア各シリーズのサブタイトルに使われた文字種別（漢字 / ひらがな / カタカナ / 英字 / 数字）ごとの文字数と、シリーズ内の全文字（空白除く）に対する比率の一覧です。<br>
+  <p class="lead">プリキュア各シリーズのサブタイトルに使われた文字種別（漢字 / ひらがな / カタカナ / 英字 / 数字 / 記号）ごとの文字数と、シリーズ内の全文字（空白除く）に対する比率の一覧です。記号は句読点・記号・絵文字などで、長音「ー」はカタカナに数えます。<br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>
 
 <section>
-  <table class="stats-by-series-types-table">
-    <thead>
-      <tr>
-        <th class="col-series">シリーズ</th>
-        <th class="col-year">年度</th>
-        <th class="col-num">漢字</th>
-        <th class="col-num">ひらがな</th>
-        <th class="col-num">カタカナ</th>
-        <th class="col-num">英字</th>
-        <th class="col-num">数字</th>
-        <th class="col-num">総文字数</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{~ for r in Rows ~}}
-      <tr>
-        <td class="col-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a></td>
-        <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
-        <td class="col-num">{{ r.Kanji }}<br><span class="muted">{{ r.KanjiPercent | math.format "0.0" }}%</span></td>
-        <td class="col-num">{{ r.Hiragana }}<br><span class="muted">{{ r.HiraganaPercent | math.format "0.0" }}%</span></td>
-        <td class="col-num">{{ r.Katakana }}<br><span class="muted">{{ r.KatakanaPercent | math.format "0.0" }}%</span></td>
-        <td class="col-num">{{ r.Latin }}<br><span class="muted">{{ r.LatinPercent | math.format "0.0" }}%</span></td>
-        <td class="col-num">{{ r.Digits }}<br><span class="muted">{{ r.DigitsPercent | math.format "0.0" }}%</span></td>
-        <td class="col-num">{{ r.TotalCount }}</td>
-      </tr>
-      {{~ end ~}}
-    </tbody>
-  </table>
+  {{## スマホの幅でも表だけを横スクロールさせ、ページ全体を横にはみ出させない。 ##}}
+  <div class="stats-table-scroll">
+    <table class="stats-by-series-types-table">
+      <thead>
+        <tr>
+          <th class="col-series">シリーズ</th>
+          <th class="col-year">年度</th>
+          <th class="col-num">漢字</th>
+          <th class="col-num">ひらがな</th>
+          <th class="col-num">カタカナ</th>
+          <th class="col-num">英字</th>
+          <th class="col-num">数字</th>
+          <th class="col-num">記号</th>
+          <th class="col-num">総文字数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in Rows ~}}
+        <tr>
+          <td class="col-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a></td>
+          <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
+          <td class="col-num">{{ r.Kanji }}<br><span class="muted">{{ r.KanjiPercent | math.format "0.0" }}%</span></td>
+          <td class="col-num">{{ r.Hiragana }}<br><span class="muted">{{ r.HiraganaPercent | math.format "0.0" }}%</span></td>
+          <td class="col-num">{{ r.Katakana }}<br><span class="muted">{{ r.KatakanaPercent | math.format "0.0" }}%</span></td>
+          <td class="col-num">{{ r.Latin }}<br><span class="muted">{{ r.LatinPercent | math.format "0.0" }}%</span></td>
+          <td class="col-num">{{ r.Digits }}<br><span class="muted">{{ r.DigitsPercent | math.format "0.0" }}%</span></td>
+          <td class="col-num">{{ r.Symbols }}<br><span class="muted">{{ r.SymbolsPercent | math.format "0.0" }}%</span></td>
+          <td class="col-num">{{ r.TotalCount }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </div>
 </section>

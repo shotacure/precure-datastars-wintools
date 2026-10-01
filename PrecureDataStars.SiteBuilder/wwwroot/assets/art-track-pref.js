@@ -59,17 +59,22 @@
     if (input) input.checked = (pref !== 'hide');
   }
 
+  // 開いている間のフォーカスの閉じ込め（focus-trap.js）。閉じるときに解き、再生ボタンへフォーカスを戻す。
+  var dialogTrap = null;
+
   function openDialog() {
     var dialog = document.getElementById('art-track-premium-dialog');
     if (!dialog) return;
     dialog.hidden = false;
     document.body.classList.add('subtitle-embargo-dialog-open');
+    if (window.PCDS && window.PCDS.focusTrap) dialogTrap = window.PCDS.focusTrap.activate(dialog);
   }
 
   function closeDialog() {
     var dialog = document.getElementById('art-track-premium-dialog');
     if (dialog) dialog.hidden = true;
     document.body.classList.remove('subtitle-embargo-dialog-open');
+    if (dialogTrap) { dialogTrap.release(); dialogTrap = null; }
   }
 
   function choose(pref) {

@@ -9,6 +9,12 @@
  * 「現在時刻が解禁時刻を過ぎている」または「閲覧者が早期表示に同意済み」なら
  * is-revealed クラスを付けてぼかしを解除する。
  *
+ * ビルド時点で解禁前だった各話ページは、<title> と共有ボタンの文を「第N話」だけで出力し、
+ *   <meta name="pcds-subtitle-reveal-at">・<meta name="pcds-revealed-title">・<meta name="pcds-revealed-share-text">
+ * で解禁時刻と解禁後の値を渡す。本スクリプトは、タブのタイトルを本文のぼかしと同じ条件（解禁時刻を過ぎた、
+ * または早期表示に同意済み）で差し替え、共有ボタンの文は解禁時刻を過ぎたときだけ差し替える
+ * （共有はほかの人に題名を見せることになるため、閲覧者の同意だけでは差し替えない）。
+ *
  * 同意状態は localStorage に保存し、次回以降は確認ダイアログを出さず記憶した設定に従う。
  * フッターの運営情報リンク列に常設のトグルスイッチ（#subtitle-embargo-toggle、checkbox）を置き、
  * いつでも切り替えられる。
@@ -55,6 +61,49 @@
     return getPreference() === 'reveal';
   }
 
+  function metaContent(name) {
+    var el = document.querySelector('meta[name="' + name + '"]');
+    return el ? el.getAttribute('content') || '' : '';
+  }
+
+  // 差し替え前の <title>（「第N話」だけのもの）。設定を「隠す」へ戻したときに戻すため、最初に 1 度だけ控える。
+  var originalTitle = null;
+  var shareTextApplied = false;
+
+  /** ビルド時点で解禁前だった各話ページの、タブのタイトルと共有ボタンの文を判定結果に合わせる。 */
+  function applyPageTitle() {
+    var revealAt = metaContent('pcds-subtitle-reveal-at');
+    if (!revealAt) return;
+    if (originalTitle === null) originalTitle = document.title;
+    var revealedTitle = metaContent('pcds-revealed-title');
+    if (revealedTitle) document.title = isRevealed(revealAt) ? revealedTitle : originalTitle;
+
+    if (shareTextApplied || !isPastReveal(revealAt)) return;
+    var shareText = metaContent('pcds-revealed-share-text');
+    if (!shareText) return;
+    var links = document.querySelectorAll('a.share-button[href]');
+    for (var i = 0; i < links.length; i++) {
+      var a = links[i];
+      try {
+        var u = new URL(a.getAttribute('href'));
+        if (!u.searchParams.has('text')) continue;
+        // Bluesky は url パラメータを持たず、本文の末尾に URL を続ける。
+        if (a.classList.contains('share-button-bluesky')) {
+          var cur = u.searchParams.get('text') || '';
+          var sp = cur.lastIndexOf(' ');
+          var shareUrl = sp >= 0 ? cur.substring(sp + 1) : '';
+          u.searchParams.set('text', shareUrl ? shareText + ' ' + shareUrl : shareText);
+        } else {
+          u.searchParams.set('text', shareText);
+        }
+        a.setAttribute('href', u.toString());
+      } catch (e) {
+        // URL として読めないリンクはそのままにする。
+      }
+    }
+    shareTextApplied = true;
+  }
+
   /** ページ内の全ガード要素へ現在の判定結果を反映する。現在アクティブな embargo が 1 件でもあれば true。 */
   function applyGuards() {
     var els = document.querySelectorAll(GUARD_SELECTOR);
@@ -65,6 +114,7 @@
       el.classList.toggle('is-revealed', revealed);
       if (!revealed) hasActiveEmbargo = true;
     }
+    applyPageTitle();
     updateToggleUi();
     return hasActiveEmbargo;
   }
@@ -77,6 +127,9 @@
   }
 
   // ── 初回確認ダイアログ ──
+  // 開いている間のフォーカスの閉じ込め（focus-trap.js）。閉じるときに解く。
+  var dialogTrap = null;
+
   function showDialogIfNeeded(hasActiveEmbargo) {
     if (!hasActiveEmbargo) return;
     if (getPreference() !== null) return;
@@ -84,12 +137,14 @@
     if (!dialog) return;
     dialog.hidden = false;
     document.body.classList.add('subtitle-embargo-dialog-open');
+    if (window.PCDS && window.PCDS.focusTrap) dialogTrap = window.PCDS.focusTrap.activate(dialog);
   }
 
   function closeDialog() {
     var dialog = document.getElementById('subtitle-embargo-dialog');
     if (dialog) dialog.hidden = true;
     document.body.classList.remove('subtitle-embargo-dialog-open');
+    if (dialogTrap) { dialogTrap.release(); dialogTrap = null; }
   }
 
   function wireDialog() {

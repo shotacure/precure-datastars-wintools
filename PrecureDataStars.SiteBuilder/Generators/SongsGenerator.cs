@@ -41,6 +41,9 @@ public sealed class SongsGenerator
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
     // 歌唱者連名の HTML 化（3 ジェネレータ共通ビルダ）。
     private readonly SingerHtmlBuilder _singerHtml;
+    // 歌唱者の平文をユニットのメンバー展開なしで組むときに渡す空の辞書（ページタイトル用）。
+    private static readonly IReadOnlyDictionary<int, IReadOnlyList<PersonAliasMember>> NoUnitMembers =
+        new Dictionary<int, IReadOnlyList<PersonAliasMember>>();
 
     public SongsGenerator(
         BuildContext ctx,
@@ -325,7 +328,7 @@ public sealed class SongsGenerator
         var recordingViews = new List<RecordingView>();
         foreach (var r in recordings)
         {
-            var tracksRows = BuildRecordingTrackRows(r.SongRecordingId,
+            var tracksRows = BuildRecordingTrackRows(_ctx, r.SongRecordingId,
                 tracksByRecording, discMap, productMap, sizeVariantMap, partVariantMap);
             var themeRows = BuildRecordingThemeUsageRows(r.SongRecordingId,
                 themeSongsByRecording, seriesThemeSongsByRecording);
@@ -386,9 +389,23 @@ public sealed class SongsGenerator
             CreditText.SongCreditNameList(songCreditRows, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap),
             CreditText.SongCreditNameList(songCreditRows, SongCreditRoles.Composition, song.ComposerName, personAliasMap));
 
+        // PageTitle（<title>・og:title・シェア文の見出し）は検索で「曲名＋歌い手」に当たるよう、
+        // 先頭録音の歌唱者を添えて「「曲名」歌: {歌唱者}」の形にする。
+        // ユニットのメンバー展開は見出しとして長くなりすぎるため載せない（ユニット名義のみ）。
+        // 歌唱者が無い曲は「「曲名」」のみ。
+        var repRecording = recordings.FirstOrDefault();
+        string titleSingerText = repRecording is null
+            ? ""
+            : CreditText.Vocalists(
+                singersByRecording.TryGetValue(repRecording.SongRecordingId, out var repSingers) ? repSingers : null,
+                repRecording.SingerName, personAliasMap, characterAliasMap, NoUnitMembers);
+        string pageTitle = string.IsNullOrWhiteSpace(titleSingerText)
+            ? $"「{song.Title}」"
+            : $"「{song.Title}」歌: {titleSingerText}";
+
         var layout = new LayoutModel
         {
-            PageTitle = song.Title,
+            PageTitle = pageTitle,
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
@@ -440,7 +457,7 @@ public sealed class SongsGenerator
         }
 
         return new OgCardSpec(
-            Kicker: string.IsNullOrWhiteSpace(musicClassLabel) ? "楽曲" : musicClassLabel,
+            Kicker: string.IsNullOrWhiteSpace(musicClassLabel) ? "歌" : musicClassLabel,
             Title: song.Title)
         {
             KickerRight = string.IsNullOrWhiteSpace(repSeriesTitle) ? "" : $"『{repSeriesTitle}』",
@@ -519,6 +536,7 @@ public sealed class SongsGenerator
     }
 
     private static List<RecordingTrackRow> BuildRecordingTrackRows(
+        BuildContext ctx,
         int songRecordingId,
         IReadOnlyDictionary<int, List<Track>> tracksByRecording,
         IReadOnlyDictionary<string, Disc> discMap,
@@ -534,10 +552,6 @@ public sealed class SongsGenerator
             {
                 if (!discMap.TryGetValue(t.CatalogNo, out var disc)) continue;
                 if (!productMap.TryGetValue(disc.ProductCatalogNo, out var prod)) continue;
-                // 特例：MJCG-80146（プリキュア「全曲集 1」）、MJCG-83027（同 2）は寄せ集めの
-                // 曲集で、各楽曲の収録盤として並べると煩雑になるため、歌詳細ページの
-                // 収録盤一覧から除外する（劇伴詳細でも同じ品番を除外している）。
-                if (disc.ProductCatalogNo == "MJCG-80146" || disc.ProductCatalogNo == "MJCG-83027") continue;
 
                 string sizeLabel = (t.SongSizeVariantCode != null && sizeVariantMap.TryGetValue(t.SongSizeVariantCode, out var sv)) ? sv.NameJa : "";
                 string partLabel = (t.SongPartVariantCode != null && partVariantMap.TryGetValue(t.SongPartVariantCode, out var pv)) ? pv.NameJa : "";
@@ -624,6 +638,26 @@ public sealed class SongsGenerator
                     CoverImageUrl = prod.CoverImageUrl ?? ""
                 });
             }
+            // 流通元を替えて同じ中身のまま再発売された盤（Reissues）のトラックは、行にすると初回盤と二重に並ぶので、
+            // 同じトラック（トラック番号・サイズ・パートが同じ）の初回盤の行に、本行と同じ「発売日／品番／Tr」の書き方で添える。
+            // 初回盤の行が見つからないときは、そのまま行として残す。劇伴詳細も同じ扱い。
+            var merged = new List<RecordingTrackRow>(tracksRows.Count);
+            foreach (var row in tracksRows)
+            {
+                var firstPressNo = Reissues.FirstPressOf(row.ProductCatalogNo);
+                var firstPressRow = firstPressNo is null ? null : tracksRows.FirstOrDefault(x =>
+                    x.ProductCatalogNo == firstPressNo && x.TrackNo == row.TrackNo && x.SubOrder == row.SubOrder
+                    && x.SongSizeVariantCode == row.SongSizeVariantCode && x.SongPartVariantCode == row.SongPartVariantCode);
+                if (firstPressRow is null)
+                {
+                    merged.Add(row);
+                    continue;
+                }
+                firstPressRow.ReissueNote = $"再発売盤 {row.ProductReleaseDateShort}／{row.DiscCatalogNo}／{row.DiscTrackLabel}";
+                firstPressRow.ReissueUrl = $"{row.ProductUrl}#track-{row.DiscCatalogNo}-{row.TrackNo}-{row.SubOrder}";
+            }
+            tracksRows = merged;
+
             // ソート基準：発売日（昇順、DateTime 原値）→ 品番（昇順、文字列順）→ Disc 番（昇順）→ Track 番（昇順）。
             tracksRows = tracksRows
                 .OrderBy(x => x.ProductReleaseDateRaw)
@@ -1180,7 +1214,7 @@ public sealed class SongsGenerator
         return kindLabel;
     }
 
-    /// <summary>整数リスト（昇順、重複なし前提）を連続区間に圧縮して「第1〜3, 5〜7話」のような表記を返す。 単独要素は「第1話」、単一連続は「第1〜49話」、複数区間は「第1〜3, 5〜7話」のように整形する。 空リストは空文字を返す。</summary>
+    /// <summary>整数リスト（昇順、重複なし前提）を連続区間に圧縮して「第1～3, 5～7話」のような表記を返す。 単独要素は「第1話」、単一連続は「第1～49話」、複数区間は「第1～3, 5～7話」のように整形する。 範囲の記号はサイトのほかの話数の範囲（シリーズの主題歌・クレジットの担当話数など）と同じ全角チルダ「～」。 空リストは空文字を返す。</summary>
     private static string CompressEpisodeNumbers(IReadOnlyList<int> sortedDistinctNos)
     {
         if (sortedDistinctNos.Count == 0) return "";
@@ -1210,7 +1244,7 @@ public sealed class SongsGenerator
             if (i > 0) sb.Append(", ");
             var (s, e) = ranges[i];
             if (s == e) sb.Append(s);
-            else sb.Append(s).Append('〜').Append(e);
+            else sb.Append(s).Append('～').Append(e);
         }
         sb.Append("話");
         return sb.ToString();
@@ -1374,6 +1408,10 @@ public sealed class SongsGenerator
         public string ProductReleaseDateShort { get; set; } = "";
         /// <summary>発売日の DateTime 原値。 ソートキーは数値で持つ（日本語フォーマット済み文字列だと "2004年10月" が "2004年2月" より先に並ぶ lex 比較になるのを避けるため）。</summary>
         public DateTime ProductReleaseDateRaw { get; set; }
+        /// <summary>初回盤の行に添える再発売盤の同じトラック（「再発売盤 2004.9.24／MJCD-23001／Tr01」）。それ以外は空文字。</summary>
+        public string ReissueNote { get; set; } = "";
+        /// <summary>再発売盤の商品詳細の該当トラックへの URL（<see cref="ReissueNote"/> があるときだけ）。</summary>
+        public string ReissueUrl { get; set; } = "";
         public string ProductUrl { get; set; } = "";
         public string DiscCatalogNo { get; set; } = "";
         public uint? DiscNoInSet { get; set; }

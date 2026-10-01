@@ -13,6 +13,17 @@ public static class PathUtil
     /// <summary>名前ベース URL 台帳を差し込む（ページ生成より前に 1 度だけ呼ぶ）。</summary>
     public static void UseEntityUrls(Pipeline.EntityUrlRegistry registry) => _entityUrls = registry;
 
+    /// <summary>
+    /// 役職コード → 役職の系譜（role_successions）の代表役職コード。役職詳細ページは系譜の代表にだけ作るので、
+    /// <see cref="CreatorsRoleUrl"/> は系譜でつながった役職のリンクを代表のページへ向ける。
+    /// <see cref="UseRoleRepresentatives"/> で差し込み、以降は読み取り専用（並列レンダリングから引いても安全）。
+    /// 未設定のあいだは役職コードをそのまま使う。
+    /// </summary>
+    private static Func<string, string> _roleRepresentative = code => code;
+
+    /// <summary>役職の系譜の解決を差し込む（ページ生成より前に 1 度だけ呼ぶ）。</summary>
+    public static void UseRoleRepresentatives(RoleSuccessorResolver resolver) => _roleRepresentative = resolver.GetRepresentative;
+
     /// <summary>「URL パス」（先頭スラッシュ付き、末尾スラッシュ付き）を「出力ファイルパス」に変換する。 末尾は <c>index.html</c> を付与。</summary>
     /// <param name="outputRoot">出力ルートディレクトリ。</param>
     /// <param name="urlPath">URL パス（例 "/series/precure/"）。先頭スラッシュは必須。パーセントエンコードされたセグメントはデコードしたファイル名で書き出す。</param>
@@ -104,9 +115,16 @@ public static class PathUtil
     /// 同じ本メソッドを通している限り常に整合する。
     /// なお内部のデータ処理（集計キー・系譜解決など）は実コード（大文字）の
     /// ままで行い、本メソッドが組み立てる URL 文字列だけを小文字化する。
+    /// 役職詳細ページは系譜の代表にだけあるので、系譜でつながった役職（例：CG監督 → CGディレクター）は
+    /// 代表の役職のページを指す（<see cref="UseRoleRepresentatives"/>）。
     /// </summary>
     public static string CreatorsRoleUrl(string roleCode)
-        => IsSingerRole(roleCode) ? CreatorsSingersUrl() : $"/creators/roles/{roleCode.ToLowerInvariant()}/";
+    {
+        if (IsSingerRole(roleCode)) return CreatorsSingersUrl();
+        string rep = _roleRepresentative(roleCode);
+        if (string.IsNullOrEmpty(rep)) rep = roleCode;
+        return $"/creators/roles/{rep.ToLowerInvariant()}/";
+    }
 
     /// <summary>
     /// 楽曲のクレジット行（作詞・作曲・編曲・歌・コーラス・台詞）の役職バッジのリンク先。

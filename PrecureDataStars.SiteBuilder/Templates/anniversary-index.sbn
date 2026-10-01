@@ -78,4 +78,4 @@
   </section>
   {{~ end ~}}
 </section>
-<script src="/assets/anniversary-calendar.js" defer></script>
+<script src="{{ asset_url "/assets/anniversary-calendar.js" }}" defer></script>

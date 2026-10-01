@@ -83,10 +83,20 @@ public sealed class SiteBuilderPipeline
         // 構築タイミングはホーム・About 直後（SeriesGenerator より前）。
         var involvementIndex = await CreditInvolvementIndex.BuildAsync(ctx, factory, ct).ConfigureAwait(false);
 
+        // キャラクターを 1 つの名前で指すときの表示名（苗字の無い名義 → フルネームの名義。正式名と空白の有無だけ
+        // 違うときは正式名の表記）。各 Generator の並列のページ生成から読むだけなので、ページ生成の前に 1 度だけ作る。
+        {
+            var characters = await new CharactersRepository(factory).GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+            ctx.CharacterAliasNames = CharacterAliasNames.Build(
+                ctx.CharacterAliasById, characters.ToDictionary(c => c.CharacterId, c => c.Name));
+        }
+
         // 役職系譜（role_successions）を読んで Resolver を構築する。
         // CreatorsGenerator がクラスタ統合集計（役職詳細・スタッフ一覧）を行うために必要。
         // SeriesGenerator / EpisodeGenerator のスタッフバッジ系譜解決にも共有する。読み込みは 1 ビルド 1 回限り。
         var roleSuccessorResolver = await BuildRoleSuccessorResolverAsync(factory, ct).ConfigureAwait(false);
+        // 役職詳細ページへのリンク（PathUtil.CreatorsRoleUrl）も系譜の代表へ向ける。
+        PathUtil.UseRoleRepresentatives(roleSuccessorResolver);
 
         // 人物・キャラクター・企業の詳細ページ URL（名前ベース）と単発キャラの判定を 1 度だけ確定させる。
         // 単発キャラの判定にクレジット関与を使うため CreditInvolvementIndex 構築後、かつ全ページ生成より前。
@@ -106,6 +116,10 @@ public sealed class SiteBuilderPipeline
             var latestCreditEpisode = StatsCoverageLabel.FindLatestTvEpisodeWithCredits(ctx, creditEpisodeIds);
             ctx.CreditCoverageLabel = StatsCoverageLabel.Build(latestCreditEpisode);
         }
+
+        // 人物の誕生日を記念日カレンダーに出すかの判定。ホーム（声の出演一覧より先に作る）と記念日ページが
+        // 同じ判定を使うよう、関与索引の構築直後に 1 回だけ決める。
+        ctx.BirthdayCalendar = BirthdayCalendarEligibility.Build(ctx, involvementIndex);
 
         reporter.PageWritten();
         reporter.EndSection();
@@ -170,6 +184,13 @@ public sealed class SiteBuilderPipeline
         new EpisodesIndexGenerator(ctx, pageRenderer, seriesGenerator.GetEpisodeStaffSummaries()).Generate();
         reporter.EndSection();
 
+        // クリエイター系ページ（ランディング + スタッフ + 役職詳細 + 声の出演 + 歌唱 + 音楽制作）。
+        // 各一覧に載せた人物・企業/団体を ctx.CreatorLists に記録し、続く人物・企業詳細のパンくずが
+        // 本人の載っている一覧を経由するのに使うので、人物・企業詳細より前に走らせる。
+        reporter.BeginSection("creators");
+        await new CreatorsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
+        reporter.EndSection();
+
         reporter.BeginSection("persons");
         await new PersonsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
@@ -211,12 +232,6 @@ public sealed class SiteBuilderPipeline
         // /songs/（楽曲）の生成後に走らせて、/music/ ランディングから両方へ誘導できるようにする。
         reporter.BeginSection("music");
         await new MusicGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
-        reporter.EndSection();
-
-        // クリエイター系ページ（ランディング + スタッフ + 役職詳細 + 声の出演）。
-        // CreditInvolvementIndex の集約結果に依存するため、人物・企業・プリキュア系より後ろで実行する。
-        reporter.BeginSection("creators");
-        await new CreatorsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
         // 日付別の記念日ページ（366 日）+ 索引。
@@ -313,7 +328,7 @@ public sealed class SiteBuilderPipeline
             bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
 
             // 本番がこのビルドの出力と一致したら、いまの人物・キャラ URL を公開記録（published_entity_slugs）に追記する。
-            // 以後のビルドで人物の最新名義やキャラ名が変わって URL が変わったとき、この記録から旧 URL → 新 URL の 301 を作る。
+            // 以後のビルドで人物の表示名義やキャラ名が変わって URL が変わったとき、この記録から旧 URL → 新 URL の 301 を作る。
             // ピンポイントモード（--page）は一部のページしか上げないため記録しない。
             if (published && string.IsNullOrEmpty(config.PageFilter))
             {
@@ -351,7 +366,7 @@ public sealed class SiteBuilderPipeline
         yield return ("characters",         "キャラクター",     Get("characters"));
         yield return ("products",           "商品",             Get("products"));
         yield return ("books",              "書籍",             Get("books"));
-        yield return ("songs",              "楽曲",             Get("songs"));
+        yield return ("songs",              "歌",               Get("songs"));
         yield return ("music",              "音楽・劇伴",       null);
         yield return ("creators",           "クリエイター",     null);
         // 記念日は 366 日 + 索引 1 ページで常に一定。

@@ -12,9 +12,12 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// <list type="bullet">
 ///   <item><description>人物 <c>/people/{名前}/</c>・企業 <c>/companies/{名前}/</c>・キャラ <c>/characters/{名前}/</c>。
 ///     名前は <see cref="UrlSlug.FromName"/> で整えたもの。企業・キャラはマスタの正式名（companies.name / characters.name）、
-///     人物は最新名義（<see cref="LatestAliasResolver.LatestPersonAliasIds"/>、TV 系のクレジットで最後に使われた名義。
-///     クレジットの無い人物は正式名 persons.full_name）。人物詳細の見出しもこの名前にそろえる（<see cref="PersonDisplayName"/>）。</description></item>
-///   <item><description>人物の URL は最新名義が変わると変わり、キャラの URL はキャラ名を変えると変わる。本番デプロイで公開した
+///     人物は表示名義（<see cref="DisplayPersonAliasId"/>）。表示名義は ① 指定した本名義（persons.primary_alias_id）
+///     → ② いま公開している名義（published_entity_slugs で最後に記録したスラッグに当たる名義）→ ③ 最新名義
+///     （<see cref="LatestAliasResolver.LatestPersonAliasIds"/>、TV 系のクレジットで最後に使われた名義）の順に決める。
+///     いったん公開した人物はクレジットの入力が進んでも名乗りが変わらず、変えるのは本名義を指定したときだけになる。
+///     どれも無い人物は正式名 persons.full_name。人物詳細の見出しもこの名前にそろえる（<see cref="PersonDisplayName"/>）。</description></item>
+///   <item><description>人物の URL は本名義を指定すると変わり、キャラの URL はキャラ名を変えると変わる。本番デプロイで公開した
 ///     人物・キャラの URL は台帳 <c>published_entity_slugs</c> に記録しておき（<see cref="RecordPublishedSlugsAsync"/>）、
 ///     いまの URL と違う記録済みの旧 URL は新 URL へ 301 で転送する（<see cref="LegacyRedirects"/> に <c>/people/{旧名}</c>・
 ///     <c>/characters/{旧名}</c> として載せる。同じ区分の別の実体がいまその名前の URL を使っていれば転送しない）。
@@ -51,10 +54,10 @@ public sealed class EntityUrlRegistry
     private readonly Dictionary<int, string> _personUrls = new();
     /// <summary>person_id → いまの人物 URL のスラッグ（デコード済み）。公開記録と旧名転送の突き合わせに使う。</summary>
     private readonly Dictionary<int, string> _personSlugs = new();
-    /// <summary>person_id → 見出し名・読み（最新名義。クレジットの無い人物は正式名）。</summary>
+    /// <summary>person_id → 見出し名・読み（表示名義。表示名義の無い人物は正式名）。</summary>
     private readonly Dictionary<int, (string Name, string Kana)> _personNames = new();
-    /// <summary>person_id → 最新名義の person_alias_id（クレジットの無い人物は載らない）。</summary>
-    private readonly Dictionary<int, int> _latestPersonAliasIds = new();
+    /// <summary>person_id → 表示名義の person_alias_id（本名義 → 公開中の名義 → 最新名義。どれも無い人物は載らない）。</summary>
+    private readonly Dictionary<int, int> _displayPersonAliasIds = new();
     private readonly Dictionary<int, string> _companyUrls = new();
     private readonly Dictionary<int, string> _characterUrls = new();
     /// <summary>character_id → いまのキャラ詳細 URL のスラッグ（デコード済み）。個別ページを持つキャラだけ載る（単発キャラは載らない）。
@@ -72,14 +75,17 @@ public sealed class EntityUrlRegistry
     /// <summary>人物詳細ページの URL（パーセントエンコード済み）。台帳に無い ID は null。</summary>
     public string? PersonUrl(int personId) => _personUrls.TryGetValue(personId, out var u) ? u : null;
 
-    /// <summary>人物の見出し名（最新名義。クレジットの無い人物は正式名）。台帳に無い ID は null。</summary>
+    /// <summary>人物の見出し名（表示名義。表示名義の無い人物は正式名）。台帳に無い ID は null。</summary>
     public string? PersonDisplayName(int personId) => _personNames.TryGetValue(personId, out var n) ? n.Name : null;
 
-    /// <summary>人物の見出し名の読み（最新名義の読み。読み未登録なら空文字）。台帳に無い ID は null。</summary>
+    /// <summary>人物の見出し名の読み（表示名義の読み。読み未登録なら空文字）。台帳に無い ID は null。</summary>
     public string? PersonDisplayKana(int personId) => _personNames.TryGetValue(personId, out var n) ? n.Kana : null;
 
-    /// <summary>人物の最新名義（TV 系のクレジットで最後に使われた、共同名義でない person_alias_id）。クレジットの無い人物は null。</summary>
-    public int? LatestPersonAliasId(int personId) => _latestPersonAliasIds.TryGetValue(personId, out var a) ? a : null;
+    /// <summary>
+    /// 人物の表示名義（見出し・URL・一覧の行表記に使う person_alias_id）。本名義 → 公開中の名義 → 最新名義の順に決めたもの。
+    /// どれも無い（本名義の指定もクレジットも無い）人物は null。
+    /// </summary>
+    public int? DisplayPersonAliasId(int personId) => _displayPersonAliasIds.TryGetValue(personId, out var a) ? a : null;
 
     /// <summary>企業詳細ページの URL（パーセントエンコード済み）。台帳に無い ID は null。</summary>
     public string? CompanyUrl(int companyId) => _companyUrls.TryGetValue(companyId, out var u) ? u : null;
@@ -126,12 +132,42 @@ public sealed class EntityUrlRegistry
 
         var reg = new EntityUrlRegistry();
 
-        // 人物は最新名義で名乗る。最新名義が無い（クレジットの無い）人物は正式名。
-        foreach (var (pid, aid) in LatestAliasResolver.LatestPersonAliasIds(ctx, index))
-            reg._latestPersonAliasIds[pid] = aid;
+        // 人物の表示名義を決める。① 本名義（persons.primary_alias_id。その人物の名義であるときだけ有効）
+        // → ② いま公開している名義（本番で最後に記録したスラッグに当たる名義。正式名で公開していた人物は名義に当てない）
+        // → ③ 最新名義。どれも無い人物は正式名で名乗る。
+        var latestAliasIds = LatestAliasResolver.LatestPersonAliasIds(ctx, index);
+        var publishedPersonSlugs = await LoadCurrentPublishedPersonSlugsAsync(factory, ct).ConfigureAwait(false);
         foreach (var p in persons)
         {
-            if (reg._latestPersonAliasIds.TryGetValue(p.PersonId, out var aid)
+            var ownAliasIds = ctx.AliasIdsByPerson.TryGetValue(p.PersonId, out var ids) ? ids : Array.Empty<int>();
+            int? chosen = null;
+            if (p.PrimaryAliasId is int primary && ownAliasIds.Contains(primary))
+            {
+                chosen = primary;
+            }
+            else if (p.PrimaryAliasId is int invalid)
+            {
+                ctx.Logger.Warn($"persons: 「{p.FullName}」(person_id={p.PersonId}) の本名義 alias_id={invalid} はこの人物の名義ではないため使いません。");
+            }
+            if (chosen is null && publishedPersonSlugs.TryGetValue(p.PersonId, out var publishedSlug))
+            {
+                foreach (var aid in ownAliasIds)
+                {
+                    if (ctx.PersonAliasById.TryGetValue(aid, out var a)
+                        && string.Equals(UrlSlug.FromName(a.Name), publishedSlug, StringComparison.OrdinalIgnoreCase))
+                    {
+                        chosen = aid;
+                        break;
+                    }
+                }
+            }
+            if (chosen is null && latestAliasIds.TryGetValue(p.PersonId, out var latest))
+                chosen = latest;
+            if (chosen is int c) reg._displayPersonAliasIds[p.PersonId] = c;
+        }
+        foreach (var p in persons)
+        {
+            if (reg._displayPersonAliasIds.TryGetValue(p.PersonId, out var aid)
                 && ctx.PersonAliasById.TryGetValue(aid, out var alias))
             {
                 // 読みは名義の読み。名義が正式名と同じ表記なら、名義側に読みが無くても正式名の読みを使う。
@@ -249,27 +285,64 @@ public sealed class EntityUrlRegistry
     }
 
     /// <summary>
+    /// person_id → いま公開している人物 URL のスラッグ（<c>published_entity_slugs</c> で最後に公開した日時が最も新しいもの）。
+    /// 本番デプロイのたびに、いまの URL の行の last_published_at をデプロイ時刻に更新するので、その値が最も新しい行が
+    /// いま公開している URL に当たる。同じ日時の行が複数あるときは最初に公開した日時 → スラッグの順で決めて結果を揺らさない。
+    /// </summary>
+    private static async Task<Dictionary<int, string>> LoadCurrentPublishedPersonSlugsAsync(
+        IConnectionFactory factory, CancellationToken ct)
+    {
+        const string sql = """
+            SELECT person_id AS PersonId, slug AS Slug
+              FROM published_entity_slugs
+             WHERE entity_kind = 'PERSON' AND person_id IS NOT NULL
+             ORDER BY person_id, last_published_at DESC, created_at DESC, slug
+            """;
+        await using var conn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<(int PersonId, string Slug)>(
+            new CommandDefinition(sql, cancellationToken: ct)).ConfigureAwait(false);
+        var result = new Dictionary<int, string>();
+        foreach (var (personId, slug) in rows)
+            result.TryAdd(personId, slug);
+        return result;
+    }
+
+    /// <summary>
     /// いまの人物 URL・キャラ詳細 URL のスラッグを、本番で公開した記録として台帳 <c>published_entity_slugs</c> に追記する。
-    /// 本番デプロイが成功した（本番がこのビルドの出力と一致した）ときだけ呼ぶ。記録済みのスラッグはそのまま残す
+    /// 本番デプロイが成功した（本番がこのビルドの出力と一致した）ときだけ呼ぶ。記録済みのスラッグの持ち主はそのまま残す
     /// （最初に公開した実体を指し続ける）。区分に応じて person_id / character_id の一方だけを埋める。
+    /// あわせて、いまの URL の行（同じ実体の行）の last_published_at をこのデプロイの時刻に更新する
+    /// （一度別の URL に変わってから元の URL に戻っても、いま公開している URL を正しく引けるように）。
     /// 戻り値は新たに記録した件数（人物・キャラ）。
     /// </summary>
     public async Task<(int Persons, int Characters)> RecordPublishedSlugsAsync(IConnectionFactory factory, CancellationToken ct)
     {
         const string personSql = """
-            INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, person_id)
-            VALUES ('PERSON', @Slug, @EntityId)
+            INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, person_id, last_published_at)
+            VALUES ('PERSON', @Slug, @EntityId, @At)
             """;
         const string characterSql = """
-            INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, character_id)
-            VALUES ('CHARACTER', @Slug, @EntityId)
+            INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, character_id, last_published_at)
+            VALUES ('CHARACTER', @Slug, @EntityId, @At)
             """;
-        var personRows = _personSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key }).ToList();
-        var characterRows = _characterSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key }).ToList();
+        // 記録済みの行は、同じ実体の行だけ最後に公開した日時を更新する（別の実体が先に使っていたスラッグは触らない）。
+        const string personTouchSql = """
+            UPDATE published_entity_slugs SET last_published_at = @At
+             WHERE entity_kind = 'PERSON' AND slug = @Slug AND person_id = @EntityId
+            """;
+        const string characterTouchSql = """
+            UPDATE published_entity_slugs SET last_published_at = @At
+             WHERE entity_kind = 'CHARACTER' AND slug = @Slug AND character_id = @EntityId
+            """;
+        var at = DateTime.Now;
+        var personRows = _personSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
+        var characterRows = _characterSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
         await using var conn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         int persons = await conn.ExecuteAsync(new CommandDefinition(personSql, personRows, tx, cancellationToken: ct)).ConfigureAwait(false);
         int characters = await conn.ExecuteAsync(new CommandDefinition(characterSql, characterRows, tx, cancellationToken: ct)).ConfigureAwait(false);
+        await conn.ExecuteAsync(new CommandDefinition(personTouchSql, personRows, tx, cancellationToken: ct)).ConfigureAwait(false);
+        await conn.ExecuteAsync(new CommandDefinition(characterTouchSql, characterRows, tx, cancellationToken: ct)).ConfigureAwait(false);
         await tx.CommitAsync(ct).ConfigureAwait(false);
         return (persons, characters);
     }
@@ -331,7 +404,8 @@ public sealed class EntityUrlRegistry
     {
         // character_id → そのキャラの名義で集まった登場（TV は (series, episode)、映画は (series, null)）。
         var appearances = new Dictionary<int, HashSet<(int SeriesId, int? EpisodeId)>>();
-        foreach (var (aliasId, invs) in index.ByCharacterAlias)
+        // 登場は声の出演のクレジットだけで数える（主題歌・挿入歌の歌唱は下の「歌唱の記録」で別に見る）。
+        foreach (var (aliasId, invs) in index.VoiceCastByCharacterAlias)
         {
             if (!ctx.CharacterAliasById.TryGetValue(aliasId, out var alias)) continue;
             foreach (var inv in invs)

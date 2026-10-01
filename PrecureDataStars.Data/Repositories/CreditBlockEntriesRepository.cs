@@ -28,6 +28,7 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
           person_misprint_text           AS PersonMisprintText,
           character_misprint_text        AS CharacterMisprintText,
           company_misprint_text          AS CompanyMisprintText,
+          person_masked_text             AS PersonMaskedText,
           company_alias_id               AS CompanyAliasId,
           logo_id                        AS LogoId,
           raw_text                       AS RawText,
@@ -88,14 +89,14 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
             INSERT INTO credit_block_entries
               (block_id, is_broadcast_only, entry_seq, entry_kind,
                person_alias_id, character_alias_id, raw_character_text,
-               person_misprint_text, character_misprint_text, company_misprint_text,
+               person_misprint_text, character_misprint_text, company_misprint_text, person_masked_text,
                company_alias_id, logo_id, raw_text,
                affiliation_company_alias_id, affiliation_person_alias_id, affiliation_text, affiliation_inline,
                parallel_with_entry_id, notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
-               @PersonMisprintText, @CharacterMisprintText, @CompanyMisprintText,
+               @PersonMisprintText, @CharacterMisprintText, @CompanyMisprintText, @PersonMaskedText,
                @CompanyAliasId, @LogoId, @RawText,
                @AffiliationCompanyAliasId, @AffiliationPersonAliasId, @AffiliationText, @AffiliationInline,
                @ParallelWithEntryId, @Notes, @CreatedBy, @UpdatedBy);
@@ -120,6 +121,7 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
               person_misprint_text          = @PersonMisprintText,
               character_misprint_text       = @CharacterMisprintText,
               company_misprint_text         = @CompanyMisprintText,
+              person_masked_text            = @PersonMaskedText,
               company_alias_id              = @CompanyAliasId,
               logo_id                       = @LogoId,
               raw_text                      = @RawText,

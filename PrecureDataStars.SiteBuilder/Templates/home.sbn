@@ -36,11 +36,8 @@
     <li><a class="home-db-stats-link" href="/series/#movies"><span class="home-db-stats-value">{{ DbStats.MovieSeriesCount }}</span><span class="home-db-stats-label">映画</span></a></li>
     <li><a class="home-db-stats-link" href="/series/#otona"><span class="home-db-stats-value">{{ DbStats.SpinOffSeriesCount }}</span><span class="home-db-stats-label">スピンオフ</span></a></li>
     <li><a class="home-db-stats-link" href="/episodes/"><span class="home-db-stats-value">{{ DbStats.EpisodeCount }}</span><span class="home-db-stats-label">エピソード</span></a></li>
-    {{## プリキュア・キャラクターは本番ではデータが揃いきるまで非表示（ヘッダナビと歩調を合わせる）。 ##}}
-    {{~ if IsProductionMode == false ~}}
     <li><a class="home-db-stats-link" href="/precures/"><span class="home-db-stats-value">{{ DbStats.PrecuresCount }}</span><span class="home-db-stats-label">プリキュア</span></a></li>
     <li><a class="home-db-stats-link" href="/characters/"><span class="home-db-stats-value">{{ DbStats.CharactersCount }}</span><span class="home-db-stats-label">キャラクター</span></a></li>
-    {{~ end ~}}
     <li><a class="home-db-stats-link" href="/songs/"><span class="home-db-stats-value">{{ DbStats.SongsCount }}</span><span class="home-db-stats-label">歌</span></a></li>
     <li><a class="home-db-stats-link" href="/bgms/"><span class="home-db-stats-value">{{ DbStats.BgmsCount }}</span><span class="home-db-stats-label">劇伴</span></a></li>
     {{## 音楽商品セルは「N 点 M 枚」の 2 ペア表示。<a> 内で他セルと同じ value + label の組を
@@ -74,7 +71,7 @@
 </section>
 
 <script id="home-anniversary-data" type="application/json">{{ AnniversaryJson }}</script>
-<script src="/assets/anniversaries.js" defer></script>
+<script src="{{ asset_url "/assets/anniversaries.js" }}" defer></script>
 
 {{## ──────── 今月のカレンダー（JS 動的生成） ────────
      上の home-anniversary-data（エピソード放送日・映画公開日・キャラクター誕生日・
@@ -95,7 +92,7 @@
   </div>
   <div id="home-calendar-grid"></div>
   <p class="muted home-calendar-legend">
-    <span class="cal-legend cal-legend-bday">キャラ誕生日</span>
+    <span class="cal-legend cal-legend-bday">キャラクター誕生日</span>
     <span class="cal-legend cal-legend-movie">映画公開</span>
     <span class="cal-legend cal-legend-person">人物誕生日</span>
     <span class="cal-legend cal-legend-ep">TV 放送</span>
@@ -109,7 +106,7 @@
 <p class="home-calendar-more">
   <a href="/anniversary/">日付から探す — プリキュア記念日カレンダー</a>
 </p>
-<script src="/assets/calendar.js" defer></script>
+<script src="{{ asset_url "/assets/calendar.js" }}" defer></script>
 
 {{## ──────── 今後の放送予定（未来の放送予定） ────────
      /episodes/ ランディングと同一の episodes-index-section 構造で表示する。

@@ -50,6 +50,9 @@ public static class ThemeSongSeriesAggregator
         var episodeNosByGroup = new Dictionary<(string ThemeKind, int SongRecordingId, bool IsBroadcastOnly), HashSet<int>>();
         // theme_kind → 本放送限定行が押さえている話数の集合（差し替え区間の附記に使う）。
         var broadcastOnlyEpisodeNosByKind = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+        // theme_kind → 既定行（is_broadcast_only=0）が登録されている話数の集合。
+        // 範囲の穴を本放送限定行で埋め戻すのは、その話に同じ種別の既定行が無いとき（既定行の側を登録しない運用）だけにする。
+        var defaultEpisodeNosByKind = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
 
         foreach (var ep in episodes)
         {
@@ -69,15 +72,13 @@ public static class ThemeSongSeriesAggregator
                 }
                 nos.Add(ep.SeriesEpNo);
 
-                if (t.IsBroadcastOnly)
+                var byKind = t.IsBroadcastOnly ? broadcastOnlyEpisodeNosByKind : defaultEpisodeNosByKind;
+                if (!byKind.TryGetValue(t.ThemeKind, out var kindNos))
                 {
-                    if (!broadcastOnlyEpisodeNosByKind.TryGetValue(t.ThemeKind, out var bcastNos))
-                    {
-                        bcastNos = new HashSet<int>();
-                        broadcastOnlyEpisodeNosByKind[t.ThemeKind] = bcastNos;
-                    }
-                    bcastNos.Add(ep.SeriesEpNo);
+                    kindNos = new HashSet<int>();
+                    byKind[t.ThemeKind] = kindNos;
                 }
+                kindNos.Add(ep.SeriesEpNo);
             }
         }
 
@@ -97,6 +98,7 @@ public static class ThemeSongSeriesAggregator
         {
             var (themeKind, songRecordingId, isBroadcastOnly) = kv.Key;
             broadcastOnlyEpisodeNosByKind.TryGetValue(themeKind, out var broadcastOnlyNos);
+            defaultEpisodeNosByKind.TryGetValue(themeKind, out var defaultNos);
 
             result.Add(new ThemeSongDescriptor(
                 SongRecordingId: songRecordingId,
@@ -109,7 +111,7 @@ public static class ThemeSongSeriesAggregator
                 // 備考は話ごとの記述なのでシリーズ単位には畳まない。
                 Notes: null,
                 EpisodeRangeLabel: BuildRangeLabel(
-                    kv.Value, allEpisodeNos, isBroadcastOnly, broadcastOnlyNos)));
+                    kv.Value, allEpisodeNos, isBroadcastOnly, broadcastOnlyNos, defaultNos)));
         }
         return result;
     }
@@ -123,6 +125,8 @@ public static class ThemeSongSeriesAggregator
     /// 既定行の側を登録しない運用）。どちらでも附記が出るよう、除外集合は
     /// 「自グループの話数のうち本放送限定行と重なるもの」と
     /// 「自グループの範囲内の穴のうち本放送限定行が埋めているもの」の和で求める。
+    /// ただし穴の話に同じ種別の既定行（別の曲）が登録されていれば、その穴は別の曲の使用区間なので埋め戻さない
+    /// （例：前期 ED の使用範囲の間に、後期 ED の既定行と本放送限定行が並立している話）。
     /// 後者は範囲表記側にも足し戻して、素の穴あき表記（「#1～34, 39～49」）ではなく
     /// 連続範囲＋附記として読ませる。</para>
     /// </summary>
@@ -130,11 +134,13 @@ public static class ThemeSongSeriesAggregator
     /// <param name="allEpisodeNos">シリーズ内の全話数（「(全話)」判定の母集合）。</param>
     /// <param name="isBroadcastOnly">当該グループが本放送限定行かどうか。</param>
     /// <param name="broadcastOnlyNos">同一種別で本放送限定行が押さえている話数（無ければ null）。</param>
+    /// <param name="defaultNos">同一種別で既定行が登録されている話数（無ければ null）。</param>
     private static string BuildRangeLabel(
         HashSet<int> episodeNos,
         HashSet<int> allEpisodeNos,
         bool isBroadcastOnly,
-        HashSet<int>? broadcastOnlyNos)
+        HashSet<int>? broadcastOnlyNos,
+        HashSet<int>? defaultNos)
     {
         // 本放送限定行そのものは差し替える側なので附記を持たない
         // （テンプレ側が「（本放送のみ）」バッジを別途出す）。
@@ -153,6 +159,7 @@ public static class ThemeSongSeriesAggregator
             if (episodeNos.Contains(n)) continue;
             if (!allEpisodeNos.Contains(n)) continue;
             if (!broadcastOnlyNos.Contains(n)) continue;
+            if (defaultNos is not null && defaultNos.Contains(n)) continue;
             filledHoles.Add(n);
             excluded.Add(n);
         }

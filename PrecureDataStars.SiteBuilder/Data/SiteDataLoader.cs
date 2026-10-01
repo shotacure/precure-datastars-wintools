@@ -132,7 +132,8 @@ public static class SiteDataLoader
         // サブタイトル解禁時刻の事前計算（DB アクセスなし。前話の on_air_at から算出するだけ）。
         // /series/{slug}/{n}/・/episodes/・ホーム・統計 7 系統・検索インデックスなど、サブタイトルが
         // 出現しうる全ページがこの辞書を参照する。実装は SubtitleEmbargoCalculator（Utilities）を参照。
-        var subtitleRevealAtByEpisodeId = SubtitleEmbargoCalculator.Build(allEpisodes, DateTimeOffset.Now);
+        var buildStartedAt = DateTimeOffset.Now;
+        var subtitleRevealAtByEpisodeId = SubtitleEmbargoCalculator.Build(allEpisodes, buildStartedAt);
         logger.Info($"subtitle_embargo: {subtitleRevealAtByEpisodeId.Count} エピソードが解禁待ち圏内");
 
         // サブタイトル文字統計の事前展開（DB アクセスなし、ロード済み episodes の title_char_stats JSON を C# 側でパース）。
@@ -275,11 +276,16 @@ public static class SiteDataLoader
             .ToDictionary(g => g.Key, g => g.OrderBy(l => l.PersonSeq).ThenBy(l => l.PersonId).First().PersonId);
 
         // 音盤の音楽クレジット（music_credits）。見出し・根拠の盤の表示用に商品と劇伴セッションも全件載せる。
+        var allProducts = await productsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        var allDiscs = await new DiscsRepository(factory).GetByProductReleaseOrderAsync(ct).ConfigureAwait(false);
         var musicCredits = new MusicCreditIndex(
             await musicCreditsRepo.GetAllAsync(ct).ConfigureAwait(false),
-            await productsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false),
+            allProducts,
             await bgmSessionsRepo.GetAllAsync(ct).ConfigureAwait(false),
-            await new DiscsRepository(factory).GetByProductReleaseOrderAsync(ct).ConfigureAwait(false));
+            allDiscs);
+        // 主題歌の再生ボタン用に、録音ごとに鳴らす配信音源を選んでおく。
+        var themeArtTracks = new ThemeArtTrackIndex(tracksByCatalogNo, allDiscs.ToList(), allProducts.ToList());
+        logger.Info($"theme art tracks: {themeArtTracks.ByRecording.Count} 録音分");
         logger.Info($"music_credits: {musicCredits.Count} 行");
         logger.Info($"family={familyRelationsByCharacter.Count} char / alias_persons={aliasIdsByPerson.Count} person");
 
@@ -298,6 +304,7 @@ public static class SiteDataLoader
             SeriesById = seriesById,
             LatestAiredTvEpisode = latestAired,
             SubtitleRevealAtByEpisodeId = subtitleRevealAtByEpisodeId,
+            BuildStartedAt = buildStartedAt,
             PartLengthStatsByEpisode = partLengthStatsByEpisode,
             TitleCharIndex = titleCharIndex,
             EpisodePartsByEpisode = episodePartsByEpisode,
@@ -325,7 +332,8 @@ public static class SiteDataLoader
             FamilyRelationsByCharacter = familyRelationsByCharacter,
             AliasIdsByPerson = aliasIdsByPerson,
             PersonIdByAlias = personIdByAlias,
-            MusicCredits = musicCredits
+            MusicCredits = musicCredits,
+            ThemeArtTracks = themeArtTracks
         };
     }
 }

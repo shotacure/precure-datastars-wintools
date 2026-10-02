@@ -796,6 +796,7 @@ Role: PRODUCTION 制作 (order 2)
    - `SiteNameJa`: サイト名の日本語キーワード部（例 `プリキュアデータベース`）。`SiteName` と合成した「`SiteNameJa`「`SiteName`」」形式の可視ブランド表記が `<title>` サフィックス・フッタのワードマーク・ホーム h1・`og:site_name`・シェアテキストに出る。ヘッダのワードマークは、固有名詞の `SiteName` を主役（大きく太く）にし、本値を肩書きとして小さく淡く前に添える（カギかっこなし。幅 560px 以下では肩書きを上の段に回した 2 段）。構造化データの `name` には本値のみを使う。空のときは英字ワードマーク単体の表記になる
    - `Ga4MeasurementId` / `GoogleAdSenseClientId`: GA4 メジャメント ID と AdSense パブリッシャー ID。設定したままでよく、タグ・ads.txt が実際に出力されるのは本番モードのみ
    - `AmazonAssociateTag`: Amazon アソシエイトのトラッキング ID（例 `yourtag-22`）。商品詳細の Amazon リンクに `?tag=` として付与しアフィリエイト計測に使う
+   - `OgCardTitleFont` / `OgCardBodyFont` / `OgCardEmphasisFont` / `OgCardNumberFont` / `OgCardWatermarkFont`: OGP カードの書体ファイルのパス（見出し / 本文 / 本文の強調部 / 大きい数字 / 透かし）。商用書体はリポジトリに同梱できないため、インストール済みファイルをローカルの App.config で指す（`%LOCALAPPDATA%` などの環境変数可）。空なら同梱の Noto Sans JP。指定したファイルが無ければ起動時に止まる
 4. ビルド & 実行:
    ```bash
    # テストモード（既定）: SiteOutputDirTest へ生成。GA4 / AdSense / ads.txt は出力しない

@@ -99,6 +99,23 @@
 		<add key="SitePublishedYear" value="2026" />
 
 		<!--
+			OGP カード（SNS 共有時の画像）に使う書体ファイルのパス。
+			商用書体はリポジトリに同梱できないため、この PC にインストールされたファイルを指す。
+			空なら同梱の Noto Sans JP で描く。%LOCALAPPDATA% などの環境変数は展開される。
+			  OgCardTitleFont     : 見出し（氏名・作品名・サブタイトル）と識別子
+			  OgCardBodyFont      : 本文（値・単位・注記・年表の目盛り）
+			  OgCardEmphasisFont  : 本文の強調部（役職名などのラベル、前置きの作品名。空なら見出しと同じ）
+			  OgCardNumberFont    : 大きいピンクの数字（空なら見出しと同じ）
+			  OgCardWatermarkFont : 右上の透かし（空なら見出しと同じ）
+			カーニングと詰め（kern / palt）は HarfBuzz で効かせる。
+		-->
+		<add key="OgCardTitleFont" value="" />
+		<add key="OgCardBodyFont" value="" />
+		<add key="OgCardEmphasisFont" value="" />
+		<add key="OgCardNumberFont" value="" />
+		<add key="OgCardWatermarkFont" value="" />
+
+		<!--
 			Amazon アソシエイトのトラッキング ID。
 			商品詳細ページの Amazon リンクに ?tag= として付与し、アフィリエイト計測に使う。
 			例: yourtag-22 のような「アソシエイトタグ-数字」形式。

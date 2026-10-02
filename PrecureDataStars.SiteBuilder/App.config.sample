@@ -107,6 +107,9 @@
 			  OgCardEmphasisFont  : 本文の強調部（役職名などのラベル、前置きの作品名。空なら見出しと同じ）
 			  OgCardNumberFont    : 大きいピンクの数字（空なら見出しと同じ）
 			  OgCardWatermarkFont : 右上の透かし（空なら見出しと同じ）
+			  OgCardTitleCondensedFonts : 見出し書体のコンデンス版（字幅を詰めた別ファイル。UD新ゴ コンデンス90〜50 など）を
+			                              「;」区切りで。見出しが 1 行に収まらないとき、長体の代わりに広い順に差し替える。
+			                              空なら長体（字形を横に縮める）で詰める
 			カーニングと詰め（kern / palt）は HarfBuzz で効かせる。
 		-->
 		<add key="OgCardTitleFont" value="" />
@@ -114,6 +117,7 @@
 		<add key="OgCardEmphasisFont" value="" />
 		<add key="OgCardNumberFont" value="" />
 		<add key="OgCardWatermarkFont" value="" />
+		<add key="OgCardTitleCondensedFonts" value="" />
 
 		<!--
 			Amazon アソシエイトのトラッキング ID。

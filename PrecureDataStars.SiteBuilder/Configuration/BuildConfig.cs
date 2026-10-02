@@ -55,7 +55,8 @@ public sealed class BuildConfig
     public string AmazonAssociateTag { get; }
 
     /// <summary>OGP カードの書体ファイル（App.config の <c>OgCardTitleFont</c> / <c>OgCardBodyFont</c> / <c>OgCardEmphasisFont</c> /
-    /// <c>OgCardNumberFont</c> / <c>OgCardWatermarkFont</c>）。空のものは同梱の Noto Sans JP にフォールバックする。</summary>
+    /// <c>OgCardNumberFont</c> / <c>OgCardWatermarkFont</c>、見出しのコンデンス版は <c>OgCardTitleCondensedFonts</c>）。
+    /// 空のものは同梱の Noto Sans JP にフォールバックする。</summary>
     public Rendering.OgCardFontPaths OgCardFonts { get; }
 
     /// <summary>本番モードかどうか。コマンドライン引数 <c>--production</c> 指定時のみ true。
@@ -217,12 +218,27 @@ public sealed class BuildConfig
             Body: ReadFontPath("OgCardBodyFont"),
             Emphasis: ReadFontPath("OgCardEmphasisFont"),
             Number: ReadFontPath("OgCardNumberFont"),
-            Watermark: ReadFontPath("OgCardWatermarkFont"));
+            Watermark: ReadFontPath("OgCardWatermarkFont"),
+            TitleCondensed: ReadFontPaths("OgCardTitleCondensedFonts"));
 
         static string ReadFontPath(string key)
         {
             var raw = (ConfigurationManager.AppSettings[key] ?? "").Trim();
             if (raw.Length == 0) return "";
+            return ResolveFontPath(key, raw);
+        }
+
+        // 「;」区切りで複数のファイルを指す設定（見出しのコンデンス版）。
+        static IReadOnlyList<string> ReadFontPaths(string key)
+        {
+            var raw = (ConfigurationManager.AppSettings[key] ?? "").Trim();
+            return raw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(part => ResolveFontPath(key, part))
+                .ToList();
+        }
+
+        static string ResolveFontPath(string key, string raw)
+        {
             var full = Path.GetFullPath(Environment.ExpandEnvironmentVariables(raw));
             if (!File.Exists(full))
                 throw new InvalidOperationException($"App.config の {key} が指すフォントが見つかりません: {full}");

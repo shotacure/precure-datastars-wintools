@@ -13,8 +13,18 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// <param name="Emphasis">本文の強調部（役職名などのラベル、前置きの作品名）。空なら <see cref="Title"/> と同じ書体。</param>
 /// <param name="Number">大きいピンクの数字。空なら <see cref="Title"/> と同じ書体。</param>
 /// <param name="Watermark">右上の透かし。空なら <see cref="Title"/> と同じ書体。</param>
-public sealed record OgCardFontPaths(string Title = "", string Body = "", string Emphasis = "", string Number = "", string Watermark = "")
+/// <param name="TitleCondensed">
+/// 見出し書体のコンデンス版（UD新ゴ コンデンス90〜50 など、同じ書体の字幅を詰めた別ファイル）。
+/// 見出しが 1 行に収まらないとき、長体（字形を横に縮める）の代わりに広い順に差し替えて使う。
+/// 無ければ長体で詰める。順序は問わない（幅の比は読み込み時に実測して並べ直す）。
+/// </param>
+public sealed record OgCardFontPaths(
+    string Title = "", string Body = "", string Emphasis = "", string Number = "", string Watermark = "",
+    IReadOnlyList<string>? TitleCondensed = null)
 {
     /// <summary>何も指定しない（同梱フォントだけで描く）。</summary>
     public static OgCardFontPaths Bundled { get; } = new();
+
+    /// <summary>見出し書体のコンデンス版のパス（指定が無ければ空）。</summary>
+    public IReadOnlyList<string> TitleCondensedPaths => TitleCondensed ?? Array.Empty<string>();
 }

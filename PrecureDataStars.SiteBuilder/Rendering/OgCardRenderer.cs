@@ -221,6 +221,12 @@ public sealed class OgCardRenderer : IDisposable
     /// <summary>読み込んだ書体のうち Dispose すべきもの（同じ書体を複数の用途で共有するため重複を持たない）。</summary>
     private readonly List<SKTypeface> _ownedTypefaces = new();
 
+    /// <summary>
+    /// 書体（ハンドル）→ そのコンデンス版を広い順に並べたもの。見出しが 1 行に収まらないとき、長体の代わりに差し替える。
+    /// 今は見出し書体（<see cref="_boldTypeface"/>）にだけ持たせる。
+    /// </summary>
+    private readonly Dictionary<IntPtr, IReadOnlyList<SKTypeface>> _condensedByHandle = new();
+
     /// <summary>ワードマークにブランド書体で描けない文字があった場合の記録（重複報告の抑止）。</summary>
     private readonly HashSet<string> _missingGlyphReported = new();
     private readonly object _missingGlyphLock = new();
@@ -257,6 +263,16 @@ public sealed class OgCardRenderer : IDisposable
         _numberTypeface = fonts.Number.Length > 0 ? Own(LoadTypeface(fonts.Number)) : _boldTypeface;
         _watermarkTypeface = fonts.Watermark.Length > 0 ? Own(LoadTypeface(fonts.Watermark)) : _boldTypeface;
 
+        // 見出し書体のコンデンス版。字幅の比は実測して広い順に並べる（設定の順序に頼らない）。
+        var condensed = new List<(float Ratio, SKTypeface Typeface)>();
+        foreach (var path in fonts.TitleCondensedPaths)
+        {
+            var typeface = Own(LoadTypeface(path));
+            condensed.Add((MeasureWidthRatio(typeface, _boldTypeface), typeface));
+        }
+        if (condensed.Count > 0)
+            _condensedByHandle[_boldTypeface.Handle] = condensed.OrderByDescending(c => c.Ratio).Select(c => c.Typeface).ToList();
+
         foreach (var typeface in _ownedTypefaces)
             _shapers[typeface.Handle] = new OgTextShaper(typeface);
         // ワードマークはサイトのヘッダと同じ見た目にする。Kiwi Maru はかなを全角のまま組む書体なので、
@@ -269,6 +285,16 @@ public sealed class OgCardRenderer : IDisposable
     {
         _ownedTypefaces.Add(typeface);
         return typeface;
+    }
+
+    /// <summary>基準の書体に対する字幅の比（かな・漢字・欧文を含む見本の幅で測る）。コンデンス版の並べ替えに使う。</summary>
+    private static float MeasureWidthRatio(SKTypeface typeface, SKTypeface baseTypeface)
+    {
+        const string probe = "あいう漢字ABC";
+        using var font = new SKFont(typeface, 100f);
+        using var baseFont = new SKFont(baseTypeface, 100f);
+        float baseWidth = baseFont.MeasureText(probe);
+        return baseWidth > 0f ? font.MeasureText(probe) / baseWidth : 1f;
     }
 
     // ──────── 文字の計測と描画（HarfBuzz で字詰めを効かせる） ────────
@@ -689,27 +715,30 @@ public sealed class OgCardRenderer : IDisposable
         y += 22f;
         if (rubyUnits.Count > 0)
         {
-            float scaleX;
+            // 詰めた結果の書体（コンデンス版に差し替わることがある）と長体の率を、描画側へ渡す。
+            SKTypeface fittedTypeface = titleTypeface;
+            float scaleX = 1f;
             using (var baseFont = new SKFont(titleTypeface, titleSize))
             using (var rubyFont = new SKFont(_bodyTypeface, titleSize * RubySizeRatio))
             {
                 // 振り仮名も地の文と同じ率で詰める（振り仮名だけ等幅のままだと、振り仮名のほうが広い字で地の文に空きができる）。
-                scaleX = CondenseToFit(baseFont, () =>
+                CondenseToFit(baseFont, () =>
                 {
                     rubyFont.ScaleX = baseFont.ScaleX;
                     return WrapRubyUnits(rubyUnits, baseFont, rubyFont, paint, contentWidth, 2).Count <= 1;
                 });
-                baseFont.ScaleX = scaleX;
+                fittedTypeface = baseFont.Typeface ?? titleTypeface;
+                scaleX = baseFont.ScaleX;
                 rubyFont.ScaleX = scaleX;
                 if (WrapRubyUnits(rubyUnits, baseFont, rubyFont, paint, contentWidth, DenseTitleMaxLines + 1).Count > DenseTitleMaxLines)
                     truncated = true;
             }
-            y = DrawRubyTitle(canvas, paint, rubyUnits, PaddingLeft, y, contentWidth, sizes, DenseTitleMaxLines, titleTypeface, scaleX);
+            y = DrawRubyTitle(canvas, paint, rubyUnits, PaddingLeft, y, contentWidth, sizes, DenseTitleMaxLines, fittedTypeface, scaleX);
         }
         else
         {
             using var titleFont = new SKFont(titleTypeface, titleSize);
-            titleFont.ScaleX = CondenseToFit(titleFont, () => WrapText(spec.Title, titleFont, paint, contentWidth, 2).Count <= 1);
+            CondenseToFit(titleFont, () => WrapText(spec.Title, titleFont, paint, contentWidth, 2).Count <= 1);
             if (WrapText(spec.Title, titleFont, paint, contentWidth, DenseTitleMaxLines + 1).Count > DenseTitleMaxLines)
                 truncated = true;
             var titleLines = FitTitle(spec.Title, titleFont, paint, contentWidth, sizes, DenseTitleMaxLines);
@@ -755,35 +784,44 @@ public sealed class OgCardRenderer : IDisposable
     }
 
     /// <summary>
-    /// 長体の下限と刻み。見出しを折り返さずに済むなら、折り返すより先に下限まで横幅を詰める。
-    /// 刻みを細かくして、必要な分だけ詰める（1 文字や記号 1 つだけが次の行へ落ちる組にしない）。
+    /// 長体の下限と刻み（コンデンス版を持たない書体に使う）。見出しを折り返さずに済むなら、折り返すより先に
+    /// 下限まで横幅を詰める。刻みを細かくして、必要な分だけ詰める（1 文字や記号 1 つだけが次の行へ落ちる組にしない）。
     /// </summary>
     private const float CondenseMin = 0.5f;
     private const float CondenseStep = 0.02f;
 
     /// <summary>
-    /// 見出しが 1 行に収まる横方向の拡大率を返す。等幅（1.0）で収まればそのまま、収まらなければ
-    /// <see cref="CondenseMin"/> まで刻みで詰めて試し、どこでも収まらなければ 1.0（折り返しに任せる）。
+    /// 見出しが 1 行に収まるように <paramref name="font"/> を詰める。等幅で収まればそのまま true。
+    /// 収まらなければ、書体にコンデンス版（<see cref="_condensedByHandle"/>）があれば広い順に書体を差し替えて試し、
+    /// 無い書体は長体（<see cref="CondenseMin"/> まで刻みで）を試す。どれでも収まらなければ元の書体・等幅に戻して
+    /// false を返す（呼び出し側が折り返しや級数の縮小に回す）。
     /// 収まるかどうかは <paramref name="fitsOnOneLine"/>（出力に使う折り返しそのもの）で判定するので、
-    /// 幅の見積もりと実際の折り返しがずれて改行が出ることはない。判定中は <paramref name="font"/> の
-    /// 拡大率を書き換えるので、判定はこのフォントで測ること。
+    /// 幅の見積もりと実際の折り返しがずれて改行が出ることはない。判定はこのフォントで測ること。
     /// </summary>
-    private static float CondenseToFit(SKFont font, Func<bool> fitsOnOneLine)
+    private bool CondenseToFit(SKFont font, Func<bool> fitsOnOneLine)
     {
-        float original = font.ScaleX;
-        try
+        var baseTypeface = font.Typeface ?? throw new InvalidOperationException("書体の無いフォントです。");
+        font.ScaleX = 1f;
+        if (fitsOnOneLine()) return true;
+
+        if (_condensedByHandle.TryGetValue(baseTypeface.Handle, out var variants))
         {
-            for (float scaleX = 1f; scaleX >= CondenseMin - 0.0001f; scaleX -= CondenseStep)
+            foreach (var variant in variants)
             {
-                font.ScaleX = scaleX;
-                if (fitsOnOneLine()) return scaleX;
+                font.Typeface = variant;
+                if (fitsOnOneLine()) return true;
             }
-            return 1f;
+            font.Typeface = baseTypeface;
+            return false;
         }
-        finally
+
+        for (float scaleX = 1f - CondenseStep; scaleX >= CondenseMin - 0.0001f; scaleX -= CondenseStep)
         {
-            font.ScaleX = original;
+            font.ScaleX = scaleX;
+            if (fitsOnOneLine()) return true;
         }
+        font.ScaleX = 1f;
+        return false;
     }
 
     /// <summary>
@@ -1483,12 +1521,7 @@ public sealed class OgCardRenderer : IDisposable
             if (Measure(font, text) <= maxWidth) return new List<string> { text };
         }
         font.Size = WatermarkMinSize;
-        float scaleX = CondenseToFit(font, () => Measure(font, text) <= maxWidth);
-        if (scaleX < 1f)
-        {
-            font.ScaleX = scaleX;
-            return new List<string> { text };
-        }
+        if (CondenseToFit(font, () => Measure(font, text) <= maxWidth)) return new List<string> { text };
         var lines = WrapAtNaturalBreaks(text, font, paint, maxWidth, maxLines + 1);
         if (lines.Count > maxLines)
         {
@@ -1579,10 +1612,8 @@ public sealed class OgCardRenderer : IDisposable
             foreach (float size in TitleSizeCandidates)
             {
                 titleFont.Size = size;
-                float scaleX = CondenseToFit(titleFont, () => WrapText(spec.Title, titleFont, paint, contentWidth, 2).Count <= 1);
-                if (scaleX < 1f || Measure(titleFont, spec.Title) <= contentWidth)
+                if (CondenseToFit(titleFont, () => WrapText(spec.Title, titleFont, paint, contentWidth, 2).Count <= 1))
                 {
-                    titleFont.ScaleX = scaleX;
                     titleLines = new List<string> { spec.Title };
                     break;
                 }

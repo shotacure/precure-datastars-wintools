@@ -290,6 +290,8 @@ public sealed class PersonsGenerator
                 Birthday = birthday,
                 DeathDate = deathDate,
                 DeathDateLabel = deathDateLabel,
+                // 初参加：本編クレジット（声の出演を含む）のいちばん早い話。収録範囲外なら空。
+                FirstAppearanceHtml = FirstAppearanceResolver.Resolve(_ctx, allPersonInvolvements)?.ToHtml() ?? "",
                 OfficialUrl = person.OfficialUrl ?? "",
                 AffiliationUrl = person.AffiliationUrl ?? "",
                 XUrl = person.XUrl ?? "",
@@ -1261,6 +1263,8 @@ public sealed class PersonsGenerator
         public string DeathDate { get; set; } = "";
         /// <summary>没年月日の行の見出し（年しか分からないときは「没年」、それ以外は「没年月日」）。</summary>
         public string DeathDateLabel { get; set; } = "";
+        /// <summary>初参加の話（リンク付き HTML、<see cref="FirstAppearanceResolver"/>）。収録範囲外・該当なしは空文字。</summary>
+        public string FirstAppearanceHtml { get; set; } = "";
         /// <summary>本人の公式サイト URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
         public string OfficialUrl { get; set; } = "";
         /// <summary>所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL。「外部リンク」セクションに「所属先」として、公式ページの次に出す。</summary>

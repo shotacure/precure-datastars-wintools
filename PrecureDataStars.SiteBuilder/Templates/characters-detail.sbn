@@ -39,6 +39,13 @@
         <span class="fact-value">{{ Character.Birthday | html.escape }}</span>
       </div>
       {{~ end ~}}
+      {{## 初登場は声の出演のクレジットから求めた話（クレジットの収録範囲内で確定したものだけ。リンク済み HTML）。 ##}}
+      {{~ if Character.FirstAppearanceHtml != "" ~}}
+      <div class="fact">
+        <span class="fact-label">初登場</span>
+        <span class="fact-value is-wrap">{{ Character.FirstAppearanceHtml }}</span>
+      </div>
+      {{~ end ~}}
       {{~ if Character.Notes != "" ~}}
       <div class="fact">
         <span class="fact-label">備考</span>

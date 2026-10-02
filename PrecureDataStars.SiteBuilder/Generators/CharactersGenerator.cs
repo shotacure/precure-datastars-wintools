@@ -426,6 +426,10 @@ public sealed class CharactersGenerator
                 NameEn = character.NameEn ?? "",
                 KindLabel = kindLabel,
                 Birthday = birthday,
+                // 初登場：声の出演のクレジット（歌唱は含めない）のいちばん早い話。収録範囲外なら空。
+                FirstAppearanceHtml = FirstAppearanceResolver.Resolve(_ctx,
+                    aliasIds.Where(_index.VoiceCastByCharacterAlias.ContainsKey)
+                            .SelectMany(id => _index.VoiceCastByCharacterAlias[id]))?.ToHtml() ?? "",
                 Notes = character.Notes ?? "",
                 OfficialUrl = character.OfficialUrl ?? ""
             },
@@ -1139,6 +1143,8 @@ public sealed class CharactersGenerator
         public string KindLabel { get; set; } = "";
         /// <summary>誕生日表記（「YYYY年M月D日」または「M月D日」、未設定時は空文字）。生年は BirthYearVisibility=PUBLIC のときだけ年付き表記。</summary>
         public string Birthday { get; set; } = "";
+        /// <summary>初登場の話（リンク付き HTML、<see cref="FirstAppearanceResolver"/>）。収録範囲外・該当なしは空文字。</summary>
+        public string FirstAppearanceHtml { get; set; } = "";
         public string Notes { get; set; } = "";
         /// <summary>キャラクター公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
         public string OfficialUrl { get; set; } = "";

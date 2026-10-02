@@ -17,8 +17,8 @@
 
   {{## 基本情報セクションは h1 + 直下 muted（よみ）に内容がない情報だけを出す。
        氏名・よみは上ですでに出ているので table 行に再出ししない。
-       誕生日（BirthYearVisibility に応じて年抜き）・没年月日・備考がすべて空のときはセクション自体を省略する。 ##}}
-  {{~ if Person.Birthday != "" || Person.DeathDate != "" || Person.Notes != "" ~}}
+       誕生日（BirthYearVisibility に応じて年抜き）・没年月日・初参加・備考がすべて空のときはセクション自体を省略する。 ##}}
+  {{~ if Person.Birthday != "" || Person.DeathDate != "" || Person.FirstAppearanceHtml != "" || Person.Notes != "" ~}}
   <section id="basic-info">
     <h2>基本情報</h2>
     <div class="fact-grid">
@@ -33,6 +33,13 @@
       <div class="fact">
         <span class="fact-label">{{ Person.DeathDateLabel }}</span>
         <span class="fact-value">{{ Person.DeathDate | html.escape }}</span>
+      </div>
+      {{~ end ~}}
+      {{## 初参加は本編クレジット（声の出演を含む）から求めた話（クレジットの収録範囲内で確定したものだけ。リンク済み HTML）。 ##}}
+      {{~ if Person.FirstAppearanceHtml != "" ~}}
+      <div class="fact">
+        <span class="fact-label">初参加</span>
+        <span class="fact-value is-wrap">{{ Person.FirstAppearanceHtml }}</span>
       </div>
       {{~ end ~}}
       {{~ if Person.Notes != "" ~}}

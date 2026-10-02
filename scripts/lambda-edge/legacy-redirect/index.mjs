@@ -4,6 +4,7 @@
 // リクエストを、名前（書籍はコード）ベースの新 URL へ 301 で転送する。
 // あわせて、人物の旧名 URL（/people/{旧名義}/。最新名義が変わって URL が変わった人物の、本番で公開済みの URL）と
 // キャラの旧名 URL（/characters/{旧キャラ名}/。キャラ名を変えて URL が変わったキャラの、本番で公開済みの URL）と、
+// 企業の旧名 URL（/companies/{旧正式名}/。正式名を直して URL が変わった企業の、本番で公開済みの URL）と、
 // 書籍の旧コード URL（/books/{旧コード}/。あとから ISBN を入れるなどして URL に使うコードが変わった書籍の、
 // その本が持つほかのコードの URL）も、いまの URL へ 301 で転送する。表に無い名前の URL はそのままオリジンへ通す
 // （いまのページはそのまま返る）。
@@ -28,7 +29,7 @@ const MAP_KEY = '_edge/legacy-redirects.json';
 const MAP_TTL_MS = 5 * 60 * 1000;
 const LEGACY_ID_PATH = /^\/(persons|characters|companies|books)\/(\d+)(?:\/(?:index\.html)?)?$/;
 // 名前・コード URL は 1 階層だけ（/characters/guests/{slug}/ のような 2 階層のパスは対象外）。
-const NAME_PATH = /^\/(people|characters|books)\/([^\/]+)(?:\/(?:index\.html)?)?$/;
+const NAME_PATH = /^\/(people|characters|companies|books)\/([^\/]+)(?:\/(?:index\.html)?)?$/;
 // 役職詳細 URL（表に載っている廃止ページだけが転送される）。
 const ROLE_PATH = /^\/creators\/roles\/([^\/]+)(?:\/(?:index\.html)?)?$/;
 

@@ -41,6 +41,67 @@
 </p>
 {{~ end ~}}
 
+{{## 担当の移り変わり（線表）。見出しのボタンで開閉するアコーディオン。
+     畳んだ状態は文字を出さない細線だけの概観（続けて担当した期間の線、本文 4 行ぶんの高さに収める）で、
+     概観を押しても開く。開くと名前・年の目盛り・担当した話の帯・映画の点の線表を全行出し、行にマウスを載せる
+     （スマホは帯をタップする）と担当期間と作品ごとの担当話を出す（role-timeline.js）。
+     横軸はクレジットを収録している全期間で、TV シリーズ 1 作を 1 本の帯にする。 ##}}
+{{~ if Timeline ~}}
+<section id="role-timeline" class="role-timeline">
+  <h2 class="rtl-title">
+    <button type="button" class="rtl-toggle" aria-expanded="false" aria-controls="role-timeline-body">
+      <span class="rtl-toggle-label">担当の移り変わり</span>
+      <span class="rtl-toggle-state" aria-hidden="true">展開する</span>
+    </button>
+  </h2>
+  <div class="rtl-body" id="role-timeline-body">
+    <button type="button" class="rtl-mini-btn" aria-label="担当の移り変わりを展開する">
+      <svg class="rtl-mini" viewBox="{{ Timeline.MiniViewBox }}" preserveAspectRatio="none" style="height:{{ Timeline.MiniHeight }}px" aria-hidden="true" focusable="false">
+        <path class="rtl-mini-bands" transform="scale(1 {{ Timeline.MiniHeight }})" d="{{ Timeline.MiniBandsPath }}"/>
+        <path class="rtl-mini-lines" d="{{ Timeline.MiniLinesPath }}"/>
+      </svg>
+    </button>
+    <noscript><style>.role-timeline .rtl-full { display: block; } .role-timeline .rtl-mini-btn { display: none; }</style></noscript>
+    <div class="rtl-full">
+      <p class="rtl-note muted">TV のオープニングにクレジットされた人物・企業・団体と、続けて 3 クール以上担当した（担当の間隔が 13 週以内でつながる期間が 39 週以上ある）人物・企業・団体を、担当を始めた順に並べています。</p>
+      <ul class="rtl-legend" aria-label="凡例">
+        <li><span class="rtl-key rtl-key-tv"></span>担当した話（TV）</li>
+        <li><span class="rtl-key rtl-key-movie"></span>映画</li>
+        <li><span class="rtl-key rtl-key-span"></span>続けて担当した期間</li>
+      </ul>
+      <div class="rtl{{ if Timeline.TickDensityClass != "" }} {{ Timeline.TickDensityClass }}{{ end }}">
+        <div class="rtl-bands" aria-hidden="true">
+          {{~ for b in Timeline.Bands ~}}<span class="rtl-band{{ if b.IsAlt }} rtl-band-alt{{ end }}" style="left:{{ b.Left }}%;width:{{ b.Width }}%"></span>{{~ end ~}}
+        </div>
+        <div class="rtl-axis">
+          <div class="rtl-axis-track">
+            {{~ for t in Timeline.Ticks ~}}
+            {{~ if t.ShowLabel ~}}<a class="rtl-tick{{ if t.IsMinor }} rtl-tick-minor{{ end }}" style="left:{{ t.Left }}%" href="{{ t.SeriesUrl }}" title="{{ t.SeriesTitle | html.escape }}">{{ t.YearLabel }}</a>
+            {{~ else ~}}<span class="rtl-tick" style="left:{{ t.Left }}%" aria-hidden="true"></span>
+            {{~ end ~}}
+            {{~ end ~}}
+          </div>
+        </div>
+        <ol class="rtl-rows">
+          {{~ for r in Timeline.Rows ~}}
+          <li class="rtl-row" data-entity-type="{{ r.EntityKind }}" data-period="{{ r.PeriodLabel | html.escape }}" data-works="{{ r.WorksText | html.escape }}">
+            <a class="rtl-name" href="{{ r.EntityUrl }}">{{~ if r.EntityKind == "person" ~}}<span class="rtl-badge rtl-badge-person" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>{{~ else ~}}<span class="rtl-badge rtl-badge-company" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" fill-rule="evenodd"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}<span class="rtl-name-text">{{ r.EntityName | html.escape }}</span></a>
+            <div class="rtl-track" aria-hidden="true">
+              {{~ for m in r.Spans ~}}<span class="rtl-span" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}
+              {{~ for m in r.Segments ~}}<span class="rtl-seg" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}
+              {{~ for m in r.Movies ~}}<span class="rtl-movie" style="left:{{ m.Left }}%"></span>{{~ end ~}}
+            </div>
+          </li>
+          {{~ end ~}}
+        </ol>
+      </div>
+      <button type="button" class="rtl-collapse-btn">たたむ</button>
+    </div>
+  </div>
+</section>
+<script src="{{ asset_url "/assets/role-timeline.js" }}" defer></script>
+{{~ end ~}}
+
 {{## 役職詳細。人物・企業/団体を 1 リストに混在させ、行ごとに「個人 / 団体」バッジで区別。
      上部トグルで個人のみ・団体のみに絞れる。3 タブはテーブル構造が同一だが、
      パラメータ付き include を避けて各パネルにテーブルを直接展開する（スタッフ一覧と同方針）。

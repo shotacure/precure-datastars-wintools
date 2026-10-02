@@ -17,7 +17,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     行ごとに「個人 / 団体」バッジで区別し、上部トグルで個人のみ・団体のみに絞れる。</description></item>
 ///   <item><description><c>/creators/roles/{rep_role_code}/</c> … 当該役職クラスタに
 ///     関わった人物・企業/団体を 1 リストに混在させ、五十音順 / 初参加順 / 担当回数順
-///     のタブで切り替える役職詳細。</description></item>
+///     のタブで切り替える役職詳細。タブの上に担当の移り変わりの線表（<see cref="RoleTimelineBuilder"/>）を置く。</description></item>
 ///   <item><description><c>/creators/voice-cast/</c> … 五十音順 / キャラクター順 /
 ///     初出演順 / 出演回数順 の 4 タブで声優を並べる。</description></item>
 /// </list>
@@ -151,6 +151,8 @@ public sealed class CreatorsGenerator
 
         // ── 役職詳細ページ群を生成し、あわせて「役職順」タブ用の索引エントリも構築 ──
         var roleIndexEntries = new List<RoleIndexEntry>();
+        // 役職詳細の線表。軸（期間・シリーズの帯）は全役職で共通なので 1 度だけ確定させる。
+        var roleTimeline = new RoleTimelineBuilder(_ctx);
         // 音楽制作ページの役職タブ用（作詞・作曲・編曲の役職詳細への入口）。
         var musicRoleEntries = new List<RoleIndexEntry>();
 
@@ -215,7 +217,7 @@ public sealed class CreatorsGenerator
             int personCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal));
             int companyCount = rows.Count - personCount;
 
-            GenerateRoleDetail(role, memberCodes, roleByCode, rowSet);
+            GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline);
 
             // 役職順タブの並べ替えキー：この役職が最も早くクレジットされた
             long roleSortStart = long.MaxValue;
@@ -469,6 +471,8 @@ public sealed class CreatorsGenerator
         countRow.RolesLabel = rolesLabel;
         countRow.RoleUsageNote = usageNote;
         set.CountRows.Add(countRow);
+        set.TimelineEntities.Add(new RoleTimelineEntity(
+            entityKind, latest.Name, url, countRow.FirstSortPos, agg.HasOpeningCredit, agg.EpisodeKeys, agg.MovieSeriesIds));
 
         foreach (var (aid, first) in agg.FirstByAlias)
         {
@@ -555,12 +559,13 @@ public sealed class CreatorsGenerator
     private (long Start, int EpNo, long Pos) CreditOrderKey(Involvement inv)
         => LatestAliasResolver.CreditOrderKey(_ctx, inv);
 
-    /// <summary>/creators/roles/{rep_role_code}/ を 3 タブ（五十音順 / 初参加順 / 担当回数順）で書き出す。</summary>
+    /// <summary>/creators/roles/{rep_role_code}/ を 3 タブ（五十音順 / 初参加順 / 担当回数順）で書き出す。タブの上に担当の移り変わりの線表を置く。</summary>
     private void GenerateRoleDetail(
         Role role,
         IReadOnlySet<string> memberCodes,
         IReadOnlyDictionary<string, Role> roleByCode,
-        EntityRowSet rowSet)
+        EntityRowSet rowSet,
+        RoleTimelineBuilder roleTimeline)
     {
         var rows = rowSet.CountRows;
 
@@ -586,6 +591,7 @@ public sealed class CreatorsGenerator
             CountRows = SortByCount(rows),
             AlternateNames = alternateNames,
             NameHistory = BuildRoleNameHistory(memberCodes, roleByCode),
+            Timeline = roleTimeline.Build(rowSet.TimelineEntities),
             CoverageLabel = _ctx.CreditCoverageLabel,
             // 個人と団体が両方そろっているときだけ entity-filter を出すための件数（片方だけの役職では絞り込みが無意味）。
             PersonCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal)),
@@ -2502,6 +2508,9 @@ public sealed class CreatorsGenerator
 
         public HashSet<int> SeriesIds { get; } = new();
 
+        /// <summary>集計対象の関与に TV 系シリーズのオープニングのクレジット（credit_kind = 'OP'。映画のオープニングは含めない）のものがあるか。役職詳細の線表で、メイン級のスタッフとして期間の長さによらず載せる判定に使う。</summary>
+        public bool HasOpeningCredit { get; private set; }
+
         /// <summary>エンティティ全体の最早関与。</summary>
         public FirstCreditAccumulator First { get; }
 
@@ -2521,11 +2530,14 @@ public sealed class CreatorsGenerator
         public void Offer(int aliasId, Involvement inv, string? rep)
         {
             if (rep is null) return;
-            if (_owner._ctx.IsMovieKindSeries(inv.SeriesId))
+            bool isMovie = _owner._ctx.IsMovieKindSeries(inv.SeriesId);
+            if (isMovie)
                 MovieSeriesIds.Add(inv.SeriesId);
             else
                 EpisodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
             SeriesIds.Add(inv.SeriesId);
+            if (!isMovie && inv.IsMainCredit && string.Equals(inv.CreditKind, "OP", StringComparison.Ordinal))
+                HasOpeningCredit = true;
             First.Offer(inv);
             if (!_firstByAlias.TryGetValue(aliasId, out var aliasFirst))
             {
@@ -2580,6 +2592,8 @@ public sealed class CreatorsGenerator
     {
         public List<EntityRow> DebutRows { get; } = new();
         public List<EntityRow> CountRows { get; } = new();
+        /// <summary>役職詳細の線表（<see cref="RoleTimelineBuilder"/>）の入力。エンティティごとに 1 件（<see cref="CountRows"/> と同じ顔ぶれ）。</summary>
+        public List<RoleTimelineEntity> TimelineEntities { get; } = new();
     }
 
     private sealed class LandingModel
@@ -2764,6 +2778,8 @@ public sealed class CreatorsGenerator
         /// <summary>役職名の変遷（実際にクレジットされた表記が 2 つ以上あるときだけ入る）。入っているときは
         /// テンプレが <see cref="AlternateNames"/> の 1 行の代わりにこの節を出す。</summary>
         public IReadOnlyList<RoleNameHistoryItem> NameHistory { get; set; } = Array.Empty<RoleNameHistoryItem>();
+        /// <summary>担当の移り変わりの線表。続けて担当した期間を持つ人物・企業/団体が居ないときは null（テンプレは節を出さない）。</summary>
+        public RoleTimelineModel? Timeline { get; set; }
         public string CoverageLabel { get; set; } = "";
         /// <summary>個人・団体の件数。両方 &gt; 0 のときだけ entity-filter（すべて / 個人のみ / 団体のみ）をテンプレで表示する（片方だけの役職では絞り込みが無意味なため）。</summary>
         public int PersonCount { get; set; }

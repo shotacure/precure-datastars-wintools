@@ -54,6 +54,11 @@ public sealed class BuildConfig
     /// <summary>Amazon アソシエイトのトラッキング ID（例: yourtag-22）。</summary>
     public string AmazonAssociateTag { get; }
 
+    /// <summary>OGP カードの書体ファイル（App.config の <c>OgCardTitleFont</c> / <c>OgCardBodyFont</c> / <c>OgCardEmphasisFont</c> /
+    /// <c>OgCardNumberFont</c> / <c>OgCardWatermarkFont</c>、見出しのコンデンス版は <c>OgCardTitleCondensedFonts</c>）。
+    /// 空のものは同梱の Noto Sans JP にフォールバックする。</summary>
+    public Rendering.OgCardFontPaths OgCardFonts { get; }
+
     /// <summary>本番モードかどうか。コマンドライン引数 <c>--production</c> 指定時のみ true。
     /// テストモード（既定）では出力先が <c>SiteOutputDirTest</c> に切り替わり、
     /// <see cref="Ga4MeasurementId"/> / <see cref="GoogleAdSenseClientId"/> が空文字に正規化されて
@@ -103,6 +108,7 @@ public sealed class BuildConfig
         int publishedYear,
         string defaultOgImage,
         string amazonAssociateTag,
+        Rendering.OgCardFontPaths ogCardFonts,
         bool isProductionMode,
         string awsS3Bucket,
         string awsRegion,
@@ -124,6 +130,7 @@ public sealed class BuildConfig
         PublishedYear = publishedYear;
         DefaultOgImage = defaultOgImage;
         AmazonAssociateTag = amazonAssociateTag;
+        OgCardFonts = ogCardFonts;
         IsProductionMode = isProductionMode;
         AwsS3Bucket = awsS3Bucket;
         AwsRegion = awsRegion;
@@ -203,6 +210,50 @@ public sealed class BuildConfig
         // 商品詳細の Amazon リンクは tag なしで出力する（リンク自体は出す）。
         var amazonTag = (ConfigurationManager.AppSettings["AmazonAssociateTag"] ?? "").Trim();
 
+        // OGP カードの書体。商用書体はリポジトリに同梱できないので、インストール済みファイルのパスを
+        // ローカルの App.config で指す。空なら同梱の Noto Sans JP。指定があるのにファイルが無ければ
+        // 設定ミスなので起動時に止める（気づかずに Noto で焼いてデプロイしないため）。
+        var ogFonts = new Rendering.OgCardFontPaths(
+            Title: ReadFontPath("OgCardTitleFont"),
+            Body: ReadFontPath("OgCardBodyFont"),
+            Emphasis: ReadFontPath("OgCardEmphasisFont"),
+            Number: ReadFontPath("OgCardNumberFont"),
+            Watermark: ReadFontPath("OgCardWatermarkFont"),
+            TitleCondensed: ReadFontPaths("OgCardTitleCondensedFonts"),
+            Notice: ReadFontPath("OgCardNoticeFont"),
+            ObliqueDegrees: ReadDegrees("OgCardObliqueDegrees"));
+
+        // 斜体の角度（度）。未設定・不正なら 0（立てたまま）。
+        static float ReadDegrees(string key)
+        {
+            var raw = (ConfigurationManager.AppSettings[key] ?? "").Trim();
+            return float.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0f;
+        }
+
+        static string ReadFontPath(string key)
+        {
+            var raw = (ConfigurationManager.AppSettings[key] ?? "").Trim();
+            if (raw.Length == 0) return "";
+            return ResolveFontPath(key, raw);
+        }
+
+        // 「;」区切りで複数のファイルを指す設定（見出しのコンデンス版）。
+        static IReadOnlyList<string> ReadFontPaths(string key)
+        {
+            var raw = (ConfigurationManager.AppSettings[key] ?? "").Trim();
+            return raw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(part => ResolveFontPath(key, part))
+                .ToList();
+        }
+
+        static string ResolveFontPath(string key, string raw)
+        {
+            var full = Path.GetFullPath(Environment.ExpandEnvironmentVariables(raw));
+            if (!File.Exists(full))
+                throw new InvalidOperationException($"App.config の {key} が指すフォントが見つかりません: {full}");
+            return full;
+        }
+
         // テストモードでは GA4 / AdSense の ID を空に正規化して、タグ・ads.txt の出力経路ごと止める。
         // ID は App.config に常設したまま運用できる（公開ビルドのたびに値をよける必要がない）。
         var effectiveGa4 = isProductionMode ? ga4.Trim() : "";
@@ -224,7 +275,7 @@ public sealed class BuildConfig
         return new BuildConfig(
             cs, outputDir, articlesDir, baseUrl, siteName, siteNameJa,
             effectiveGa4, gsv.Trim(), effectiveAds, publishedYear,
-            defaultOg, amazonTag, isProductionMode,
+            defaultOg, amazonTag, ogFonts, isProductionMode,
             awsBucket, awsRegion, awsProfile, cfDist, protectedPrefixes, deploy,
             pageFilter ?? "");
     }

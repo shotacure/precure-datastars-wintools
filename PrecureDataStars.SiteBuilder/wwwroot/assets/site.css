@@ -100,16 +100,22 @@ a:hover { text-decoration: underline; }
   color: var(--fg);
   /* ヘッダのサイト名ワードマークはブランド書体（Kiwi Maru）を据え置く。 */
   font-family: var(--font-brand);
-  /* 日本語部と英字部の 2 span 構成。ベースラインを揃えて 1 つのワードマークとして読ませる。 */
+  /* 肩書き（日本語）と固有名詞（英字）の 2 span 構成。ベースラインを揃えて 1 つのワードマークとして読ませる。 */
   display: inline-flex;
   align-items: baseline;
+  gap: 0.4em;
   white-space: nowrap;
 }
-/* ワードマークの英字部。日本語キーワード部より一段小さく淡くし、視線が日本語側に落ちるようにする。 */
-.site-title-en {
-  font-size: 0.78em;
+/* ワードマークの肩書き（「プリキュアデータベース」）。固有名詞より一段小さく淡くし、視線が名前に落ちるようにする。 */
+.site-title-ja {
+  font-size: 0.72em;
   font-weight: 400;
   color: var(--muted);
+}
+/* ワードマークの固有名詞（「precure-datastars」）。サイト名の主役。 */
+.site-title-en {
+  font-weight: 700;
+  color: var(--fg);
 }
 .site-nav a {
   margin-left: 16px;
@@ -686,6 +692,17 @@ a.series-card-children-title:hover {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+/* 併映短編のメインスタッフ。タイトルの下の行に、中黒の分だけ字下げして出す。
+   人物・役職のリンクだけ押せるようにする（親の pointer-events: none を部分的に戻す）。 */
+.series-card-children-staff {
+  flex: 1 0 100%;
+  padding-left: 1em;
+  line-height: 1.7;
+}
+.series-card-children-staff a.staff-name,
+.series-card-children-staff a.role-badge {
+  pointer-events: auto;
 }
 
 .series-flat {
@@ -1742,6 +1759,13 @@ a.series-card-children-title:hover {
 }
 .credit-section table.fallback-vc-table td.character-cell.dim {
   color: #ccc;
+}
+/* まとまりの頭に出る見出し（映画の声の出演で作品ごとに並ぶときの作品名、「特別出演」など）。
+   名前の行と見分けられるよう、少し小さく薄い色で出す。 */
+.credit-section table.fallback-table td.block-heading,
+.credit-section table.fallback-vc-table td.block-heading {
+  font-size: 0.9em;
+  color: #666;
 }
 /* CASTING_COOPERATION 由来の「協力」行。 */
 .credit-section table.fallback-vc-table tr.cooperation-row > td.role-name {
@@ -5340,6 +5364,12 @@ a.credit-card-series:focus-visible {
   color: #3c823c;
   border-color: rgba(92, 174, 92, 0.45);
 }
+.role-badge[data-role-code="MUSIC"] {
+  /* 音楽（劇伴一覧で本編クレジットの担当者に付ける）= 橙系。作曲の黄橙と編曲の緑の両方を兼ねる役職なので、どちらとも別の色にする */
+  background: rgba(230, 120, 50, 0.14);
+  color: #a8521a;
+  border-color: rgba(230, 120, 50, 0.45);
+}
 .role-badge[data-role-code="VOCALS"],
 .role-badge[data-role-code="BACKING_VOCALS"],
 .role-badge[data-role-code="DIALOGUE"] {
@@ -6246,6 +6276,10 @@ a.credit-card-series:focus-visible {
   .credit-section table.fallback-vc-table td.actor-cell {
     grid-column: 3;
   }
+  /* まとまりの頭の見出しは、キャラ名と声優名の 2 列分の幅を使う。 */
+  .credit-section table.fallback-vc-table td.character-cell.block-heading {
+    grid-column: 2 / span 2;
+  }
   /* 協力の行（「キャスティング協力 | 屋号」）は役職に近いので、スマホの幅では見出しを役職名の列に置き、
      屋号はキャラ名と声優名の 2 列分の幅を使う（声優名の列だけでは屋号が途中で折り返す）。 */
   .credit-section table.fallback-vc-table tr.cooperation-row > td.role-name {
@@ -6751,10 +6785,12 @@ body.mobile-nav-open {
     top: 8px;
     right: 8px;
   }
-  /* ワードマークの英字部を畳んでヘッダを 1 行に収める（ハンバーガーボタンとの衝突回避）。
-     英字部は日本語キーワード部に対する装飾的な併記なので、狭幅では落としてよい。 */
-  .site-title-en {
-    display: none;
+  /* 狭幅ではワードマークを 2 段にし、肩書きを上の段に回す（1 行だとハンバーガーボタンとぶつかるため）。 */
+  .site-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    line-height: 1.25;
   }
 }
 
@@ -7753,14 +7789,20 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
 }
+/* タブ・並べ替えボタンのラベル末尾の「順」（「初参加順」「担当回数順」など）。スマホでは隠して「初参加」「担当回数」と短く見せる。 */
+@media (max-width: 768px) {
+  .tab-sfx { display: none; }
+}
 /* 年表タブの「担当（出演・参加）の移り変わり」（線表。役職詳細・声の出演・歌唱）。
-   見出し・説明文・凡例のあとに、名前・年の目盛り付きの線表を全行出す。
-   色は件数バッジにそろえ、TV は青、映画は橙、歌は紫。 */
+   説明文・凡例のあとに、名前・年の目盛り付きの線表を全行出す。
+   色は件数バッジにそろえ、TV は青、映画は橙、歌は紫、劇伴は緑。盤は濃い青の四角（形でも区別する）。 */
 .role-timeline {
   --rtl-tv: #3b82c4;
   --rtl-span: rgba(59, 130, 196, 0.38);
   --rtl-movie: #c8820f;
   --rtl-song: #7e57c2;
+  --rtl-bgm: #4ca36b;
+  --rtl-disc: #2563a8;
   --rtl-band-alt: #f4f5f8;
   --rtl-grid: #e6e7eb;
   --rtl-name-w: 11.5em;
@@ -7768,12 +7810,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
   --rtl-track-x: calc(var(--rtl-name-w) + var(--rtl-gap));
   margin: 0 0 2em;
 }
-/* 年表タブの見出し（タブの中の最初の見出しなので上の余白を詰める）。 */
-.rtl-title {
-  margin-top: 8px;
-}
 .rtl-note {
-  margin: 0 0 6px;
+  margin: 10px 0 6px;
   font-size: 0.85em;
 }
 .rtl-legend {
@@ -7798,6 +7836,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .rtl-key-tv { width: 18px; height: 10px; border-radius: 3px; background: var(--rtl-tv); }
 .rtl-key-movie { width: 9px; height: 9px; border-radius: 50%; background: var(--rtl-movie); }
 .rtl-key-song { width: 9px; height: 9px; border-radius: 50%; background: var(--rtl-song); }
+.rtl-key-bgm { width: 9px; height: 9px; border-radius: 50%; background: var(--rtl-bgm); }
+.rtl-key-disc { width: 9px; height: 9px; border-radius: 2px; background: var(--rtl-disc); }
 .rtl-key-span { width: 18px; height: 2px; border-radius: 1px; background: var(--rtl-span); }
 
 .rtl {
@@ -7948,6 +7988,28 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   margin: -4.5px 0 0 -4.5px;
   border-radius: 50%;
   background: var(--rtl-song);
+  box-shadow: 0 0 0 2px #fff;
+}
+/* 劇伴（録音回の曲が初めて盤に収められた日の点）。 */
+.rtl-bgm {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--rtl-bgm);
+  box-shadow: 0 0 0 2px #fff;
+}
+/* 盤（発売日の四角）。 */
+.rtl-disc {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 2px;
+  background: var(--rtl-disc);
   box-shadow: 0 0 0 2px #fff;
 }
 /* 行にマウスを載せる・帯をタップすると出す、担当期間と作品ごとの担当話（role-timeline.js）。 */
@@ -9516,4 +9578,292 @@ body.has-art-track-bar {
   padding: 1px 0;
   font-size: 0.92em;
   line-height: 1.6;
+}
+
+/* ──────── 引用ボックス（_cite-box.sbn） ────────
+   シェアボタンの直下に置く「このページを引用する」。シェアカードと同じ角丸の箱で、色は控えめなグレー。
+   引用文は <pre> だが折り返して読める幅に収める（URL は overflow-wrap で途中改行を許す）。 */
+.cite-box {
+  margin: 0 0 1.2em;
+  padding: 1.1em 1.2em 1.2em;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fafafa;
+}
+.cite-box-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  font-size: 0.95em;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 0.6em;
+  padding: 0;
+  border: 0;
+  letter-spacing: 0.04em;
+}
+.cite-box-heading svg {
+  width: 1.05em;
+  height: 1.05em;
+  flex: none;
+}
+.cite-box-lead {
+  margin: 0 0 0.7em;
+  font-size: 0.88em;
+  color: var(--muted);
+}
+.cite-box-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6em 0.8em;
+}
+.cite-box-text {
+  flex: 1 1 20em;
+  margin: 0;
+  padding: 0.7em 0.9em;
+  font-family: var(--font-base);
+  font-size: 0.9em;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.cite-box-copy {
+  flex: none;
+}
+.cite-box-alt {
+  margin-top: 0.8em;
+  font-size: 0.9em;
+}
+.cite-box-alt summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.cite-box-alt .cite-box-item {
+  margin-top: 0.5em;
+}
+.cite-box-note {
+  margin: 0.8em 0 0;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+/* ──────── 歴代記録バッジ（エピソード詳細の h1 直下） ────────
+   歴代 10 位以内（is-global：金）とシリーズ内の最長・最短（is-series：桃）のピル。 */
+.ep-record-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  margin: -0.2em 0 1em;
+}
+.ep-record-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.2em 0.75em;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.84em;
+  font-weight: 600;
+  line-height: 1.5;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ep-record-badge::before {
+  content: "🏆";
+  font-size: 0.95em;
+}
+.ep-record-badge.is-global {
+  color: #8a5a00;
+  background: #fff6dc;
+  border-color: #f1d38a;
+}
+.ep-record-badge.is-series {
+  color: #7a3b5a;
+  background: #fdf0f6;
+  border-color: #f3c2d7;
+}
+.ep-record-badge:hover,
+.ep-record-badge:focus-visible {
+  text-decoration: underline;
+}
+
+/* ──────── チーフの組み合わせの通算回数（エピソード詳細のスタッフセクション） ────────
+   #staff は flex（セットを横に並べる）なので、リストと注記は全幅の子にして下に回す。 */
+#staff .staff-combo-list {
+  flex-basis: 100%;
+  list-style: none;
+  margin: 0.4em 0 0;
+  padding: 0.6em 0 0;
+  border-top: 1px dashed var(--border);
+  font-size: 0.9em;
+  display: grid;
+  gap: 0.25em;
+}
+#staff .staff-combo-list li {
+  white-space: normal;
+}
+.staff-combo-label {
+  color: var(--muted);
+  margin-right: 0.5em;
+}
+.staff-combo-label::after {
+  content: "：";
+}
+.staff-combo-value b {
+  font-weight: 700;
+}
+#staff .staff-combo-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* ──────── 歴代記録（/stats/records/） ────────
+   分類ごとに記録カードをグリッドで並べる。カードは順位・名前（＋添え書き）・値の 3 列。 */
+.records-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 1em;
+  margin: 0.8em 0 1.4em;
+}
+.records-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.9em 1em 1em;
+  background: #fff;
+}
+.records-card-title {
+  margin: 0 0 0.6em;
+  padding: 0;
+  border: 0;
+  font-size: 1em;
+  font-weight: 600;
+}
+.records-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45em;
+}
+.records-entry {
+  display: grid;
+  grid-template-columns: 1.8em minmax(0, 1fr) auto;
+  gap: 0.5em;
+  align-items: baseline;
+}
+.records-rank {
+  font-family: var(--font-num);
+  font-weight: 700;
+  color: var(--accent);
+  text-align: center;
+}
+.records-entry:first-child .records-rank {
+  font-size: 1.15em;
+}
+.records-body {
+  min-width: 0;
+}
+.records-name {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.records-sub {
+  display: block;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.records-role {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.records-value {
+  font-family: var(--font-num);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.records-empty {
+  margin: 0;
+  font-size: 0.9em;
+}
+.records-more {
+  margin: 0.7em 0 0;
+  font-size: 0.88em;
+  text-align: right;
+}
+
+/* ──────── 本放送・配信・円盤の尺の違い（/stats/records/format-differences/） ──────── */
+.fmtdiff-count {
+  font-size: 0.7em;
+  font-weight: 400;
+  margin-left: 0.6em;
+}
+.fmtdiff-series {
+  margin: 1.4em 0 0.5em;
+  font-size: 1.02em;
+}
+.fmtdiff-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6em;
+}
+.fmtdiff-row {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6em 0.9em;
+}
+.fmtdiff-ep {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 0.6em;
+  align-items: baseline;
+  margin-bottom: 0.35em;
+}
+.fmtdiff-date {
+  font-size: 0.85em;
+}
+.fmtdiff-parts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25em;
+  font-size: 0.9em;
+}
+.fmtdiff-parts li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 1em;
+  align-items: center;
+}
+.fmtdiff-part {
+  font-weight: 600;
+  min-width: 6em;
+}
+.fmtdiff-src b {
+  font-family: var(--font-num);
+  font-weight: 600;
+}
+.fmtdiff-src i {
+  font-style: normal;
+  font-family: var(--font-num);
+  color: var(--accent);
+}
+.fmtdiff-note {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 0.92em;
+}
+
+/* ──────── ホームの商品・書籍カードの状態バッジとカウントダウン ────────
+   要素は常に出力し、文言が空のときだけ消す。閲覧時に release-countdown.js が文言を入れ替えるので、
+   空 → 非空（発売日が来た）や非空 → 空（発売から 7 日過ぎた）の切り替えが CSS だけで済む。 */
+.home-product-card-badge:empty,
+.home-product-card-countdown:empty {
+  display: none;
 }

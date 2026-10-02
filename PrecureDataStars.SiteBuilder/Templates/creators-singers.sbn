@@ -1,8 +1,6 @@
 <h1>歴代プリキュア歌唱</h1>
 
 <p class="lead">
-  プリキュアの主題歌・挿入歌・キャラクターソングを歌った人々の記録。
-<br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
@@ -18,11 +16,11 @@
   <div class="tabs" role="tablist" aria-label="歌唱一覧の並べ替え">
     <button type="button" class="tab-btn is-active" data-tab="debut"
             role="tab" aria-selected="true" aria-controls="singers-tab-panel-debut">
-      初参加順
+      初参加<span class="tab-sfx">順</span>
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="singers-tab-panel-count">
-      参加曲数順
+      参加曲数<span class="tab-sfx">順</span>
     </button>
     {{~ if Timeline ~}}
     <button type="button" class="tab-btn" data-tab="timeline"

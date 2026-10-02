@@ -22,7 +22,7 @@ public sealed class SubtitleStatsGenerator
     /// <summary>1 ページあたりの最大件数（TOP 100）。</summary>
     private const int Limit = 100;
 
-    /// <summary>当ジェネレータが生成する全ページに付与するカバレッジラベル （「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記）。</summary>
+    /// <summary>当ジェネレータが生成する全ページに付与するカバレッジラベル （「『○○プリキュア』第N話(YYYY.M.D)時点」表記）。</summary>
     private string _coverageLabel = "";
 
     public SubtitleStatsGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
@@ -91,9 +91,9 @@ public sealed class SubtitleStatsGenerator
             OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代サブタイトル統計")
             {
                 MetaLeft = _coverageLabel,
-                Badges = new[] { new OgCardBadge("対象", $"{StatsCoverageLabel.CountTvEpisodesWithSubtitle(_ctx)}話") }
+                Subtitle = "文字数、漢字率、記号率、よく使われる文字まで、プリキュアのサブタイトルを数字で眺めてみると、作品ごとの個性が見えてきます。"
             },
-            MetaDescription = "プリキュア全シリーズのサブタイトルを大解剖。文字数・漢字率・記号率・よく使われる文字まで、タイトルに隠れた傾向を数字で楽しめます。",
+            MetaDescription = "歴代プリキュア全話のサブタイトル統計。文字数・漢字率・記号率と、よく使われる文字を全シリーズで集計しました。作品ごとのタイトルの個性が数字で見えてきます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

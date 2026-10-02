@@ -7,6 +7,28 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// </summary>
 public static class EpisodeChiefRoles
 {
+    /// <summary>区分 1：脚本。</summary>
+    public const int Screenplay = 1;
+    /// <summary>区分 2：絵コンテ。</summary>
+    public const int Storyboard = 2;
+    /// <summary>区分 3：演出。</summary>
+    public const int EpisodeDirector = 3;
+    /// <summary>区分 4：作画監督。</summary>
+    public const int AnimationDirector = 4;
+    /// <summary>区分 5：美術。</summary>
+    public const int ArtDirector = 5;
+
+    /// <summary>区分の表示名（1=脚本、2=絵コンテ、3=演出、4=作画監督、5=美術）。区分外は空文字。</summary>
+    public static string Label(int chiefRole) => chiefRole switch
+    {
+        Screenplay => "脚本",
+        Storyboard => "絵コンテ",
+        EpisodeDirector => "演出",
+        AnimationDirector => "作画監督",
+        ArtDirector => "美術",
+        _ => ""
+    };
+
     /// <summary>
     /// 役職を各話のチーフの区分に振り分ける。1=脚本、2=絵コンテ、3=演出、4=作画監督、5=美術。該当しなければ null。
     /// 役職コードか、役職マスタの日本語名で判定する（同じ名前で別コードの役職も拾う）。

@@ -99,6 +99,31 @@
 		<add key="SitePublishedYear" value="2026" />
 
 		<!--
+			OGP カード（SNS 共有時の画像）に使う書体ファイルのパス。
+			商用書体はリポジトリに同梱できないため、この PC にインストールされたファイルを指す。
+			空なら同梱の Noto Sans JP で描く。%LOCALAPPDATA% などの環境変数は展開される。
+			  OgCardTitleFont     : 見出し（氏名・作品名・サブタイトル）と識別子
+			  OgCardBodyFont      : 本文（値・単位・注記・年表の目盛り）
+			  OgCardEmphasisFont  : 本文の強調部（役職名などのラベル、前置きの作品名。空なら見出しと同じ）
+			  OgCardNumberFont    : 大きいピンクの数字（空なら見出しと同じ）
+			  OgCardWatermarkFont : 右上の透かし（空なら見出しと同じ）
+			  OgCardTitleCondensedFonts : 見出し書体のコンデンス版（字幅を詰めた別ファイル。UD新ゴ コンデンス90〜50 など）を
+			                              「;」区切りで。見出しが 1 行に収まらないとき、長体の代わりに広い順に差し替える。
+			                              空なら長体（字形を横に縮める）で詰める
+			  OgCardNoticeFont    : 注意書き系のページ（規約・About など）の本文（空なら本文と同じ）。機械的な斜体で組む
+			  OgCardObliqueDegrees : 機械的な斜体の角度（度。右に倒す）。ホームの特徴の言葉と注意書きの本文に使う。空なら 0
+			カーニングと詰め（kern / palt）は HarfBuzz で効かせる。
+		-->
+		<add key="OgCardTitleFont" value="" />
+		<add key="OgCardBodyFont" value="" />
+		<add key="OgCardEmphasisFont" value="" />
+		<add key="OgCardNumberFont" value="" />
+		<add key="OgCardWatermarkFont" value="" />
+		<add key="OgCardTitleCondensedFonts" value="" />
+		<add key="OgCardNoticeFont" value="" />
+		<add key="OgCardObliqueDegrees" value="" />
+
+		<!--
 			Amazon アソシエイトのトラッキング ID。
 			商品詳細ページの Amazon リンクに ?tag= として付与し、アフィリエイト計測に使う。
 			例: yourtag-22 のような「アソシエイトタグ-数字」形式。

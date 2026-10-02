@@ -139,6 +139,21 @@ internal sealed class CreditTreeRenderer
         return $"<a href=\"{PathUtil.CompanyUrl(cid.Value)}\">{Esc(displayName)}</a>";
     }
 
+    /// <summary>
+    /// ブロック先頭の見出し（<see cref="CreditRoleBlock.HeadingSeriesId"/> / <see cref="CreditRoleBlock.HeadingText"/>）の HTML。
+    /// 作品を指す見出しは作品ページへのリンクにし、表示文字は見出しの文字（画面の表記どおり）があればそれ、
+    /// 無ければ作品の正式タイトル。作品ではない見出し（「特別出演」など）は文字だけを出す。見出しが無ければ空文字。
+    /// </summary>
+    private string BuildBlockHeadingHtml(CreditRoleBlock block)
+    {
+        if (block.HeadingSeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var series))
+        {
+            string text = string.IsNullOrEmpty(block.HeadingText) ? series.Title : block.HeadingText!;
+            return $"<a href=\"{PathUtil.SeriesUrl(series.Slug)}\">{Esc(text)}</a>";
+        }
+        return string.IsNullOrEmpty(block.HeadingText) ? "" : Esc(block.HeadingText!);
+    }
+
     /// <summary>ロゴエントリの表示を「屋号名に置換 + 親企業詳細ページへのリンク」に変換する。 CI バージョンラベルは省く方針（屋号単位で集約した方が読み手にとって分かりやすいため）。 解決失敗時はプレースホルダ文字列を返す。</summary>
     private async Task<string> BuildLogoHtmlAsync(int? logoId)
     {
@@ -964,9 +979,29 @@ internal sealed class CreditTreeRenderer
 
             bool isFirstRowOfThisBlock = true;
 
-            if (hasLeading)
+            // ブロック先頭の見出し（作品名・「特別出演」など）。屋号よりも上に 1 行で出す。
+            string headingHtml = BuildBlockHeadingHtml(bs.Block);
+            if (headingHtml.Length > 0)
             {
                 bool addBreakClass = !isFirstBlock;
+                html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
+                if (firstRow)
+                {
+                    html.Append($"<td class=\"role-name\">{roleNameHtml}</td>");
+                    firstRow = false;
+                }
+                else
+                {
+                    html.Append("<td class=\"role-name\"></td>");
+                }
+                html.Append($"<td class=\"entry-cell block-heading\" colspan=\"{cols}\">{headingHtml}</td>");
+                html.Append("</tr>");
+                isFirstRowOfThisBlock = false;
+            }
+
+            if (hasLeading)
+            {
+                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -1065,9 +1100,31 @@ internal sealed class CreditTreeRenderer
 
             bool isFirstRowOfThisBlock = true;
 
-            if (hasLeading)
+            // ブロック先頭の見出し（作品ごとのまとまりの頭に出る作品名・「特別出演」など）。
+            // キャラ名と声優名の 2 カラムにまたがる 1 行で、屋号よりも上に出す。
+            string headingHtml = BuildBlockHeadingHtml(bs.Block);
+            if (headingHtml.Length > 0)
             {
                 bool addBreakClass = !isFirstBlock;
+                html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
+                if (firstRow)
+                {
+                    html.Append($"<td class=\"role-name\">{roleNameHtmlFirst}</td>");
+                    firstRow = false;
+                }
+                else
+                {
+                    html.Append("<td class=\"role-name\"></td>");
+                }
+                html.Append($"<td class=\"character-cell block-heading\" colspan=\"2\">{headingHtml}</td>");
+                html.Append("</tr>");
+                isFirstRowOfThisBlock = false;
+                prevCharLabel = null;
+            }
+
+            if (hasLeading)
+            {
+                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {

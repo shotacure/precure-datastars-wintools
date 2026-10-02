@@ -1,8 +1,6 @@
 <h1>歴代プリキュアスタッフ</h1>
 
 <p class="lead">
-  プリキュア制作にまつわるたくさんのお仕事と、それに携わった人々の記録。
-<br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
@@ -22,21 +20,21 @@
   <div class="tabs" role="tablist" aria-label="スタッフ一覧の並べ替え">
     <button type="button" class="tab-btn is-active" data-tab="roles"
             role="tab" aria-selected="true" aria-controls="staff-tab-panel-roles">
-      役職順
+      役職<span class="tab-sfx">順</span>
     </button>
     {{## 五十音順タブは読み（kana）データ未整備のため一旦無効化。データが揃ったらこのコメントを外して復活させる。
     <button type="button" class="tab-btn" data-tab="kana"
             role="tab" aria-selected="false" aria-controls="staff-tab-panel-kana">
-      五十音順
+      五十音<span class="tab-sfx">順</span>
     </button>
     ##}}
     <button type="button" class="tab-btn" data-tab="debut"
             role="tab" aria-selected="false" aria-controls="staff-tab-panel-debut">
-      初参加順
+      初参加<span class="tab-sfx">順</span>
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="staff-tab-panel-count">
-      参加回数順
+      参加回数<span class="tab-sfx">順</span>
     </button>
   </div>
 

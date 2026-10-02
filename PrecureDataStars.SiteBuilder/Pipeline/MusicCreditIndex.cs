@@ -39,7 +39,7 @@ public sealed class MusicCreditIndex
     /// <summary>
     /// 音楽系ページ（音楽制作・歌唱・作詞作曲編曲や音楽の役職詳細）の基準点ラベル。
     /// クレジット確認済み（products.music_credits_checked）の盤のうち発売日が最も新しいもので
-    /// 「yyyy年M月d日発売「商品名」時点の情報を表示しています」と組み立てる。確認済みの盤が無ければ空文字。
+    /// 「「商品名」(YYYY.M.D)時点」（日付は発売日）と組み立てる。確認済みの盤が無ければ空文字。
     /// </summary>
     public string CoverageLabel { get; }
 
@@ -57,7 +57,7 @@ public sealed class MusicCreditIndex
             .FirstOrDefault();
         CoverageLabel = latestChecked is null
             ? ""
-            : $"{latestChecked.ReleaseDate:yyyy年M月d日}発売「{latestChecked.Title}」時点の情報を表示しています";
+            : $"「{latestChecked.Title}」({Utilities.StatsCoverageLabel.ShortDate(latestChecked.ReleaseDate)})時点";
         static IReadOnlyDictionary<TKey, IReadOnlyList<MusicCredit>> Group<TKey>(IEnumerable<MusicCredit> src, Func<MusicCredit, TKey> key)
             where TKey : notnull
             => src.GroupBy(key).ToDictionary(g => g.Key, g => (IReadOnlyList<MusicCredit>)g

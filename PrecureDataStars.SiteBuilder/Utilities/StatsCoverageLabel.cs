@@ -8,8 +8,8 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// 文言フォーマットは HomeGenerator の最終ビルド表記と揃えるが、日付の出処は異なり
 /// <b>「カバレッジ最新話の放送日」</b>を採用する（HomeGenerator はビルド日を使う）：
 /// <list type="bullet">
-///   <item><description>該当 TV エピソードあり：<c>「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」</c>
-///     （日付は当該エピソードの <see cref="Episode.OnAirAt"/> ベース）</description></item>
+///   <item><description>該当 TV エピソードあり：<c>「『○○プリキュア』第N話(YYYY.M.D)時点」</c>
+///     （日付は当該エピソードの <see cref="Episode.OnAirAt"/> ベース。<see cref="EpisodePoint"/>）</description></item>
 ///   <item><description>該当無し（クリーン DB 等）：空文字を返す → テンプレ側で「ラベル無し」として空表示する</description></item>
 /// </list>
 /// 「最終話」の判定軸は統計ページごとに異なる：
@@ -27,41 +27,36 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// </summary>
 public static class StatsCoverageLabel
 {
-    /// <summary>カバレッジラベル文字列を組み立てる。</summary>
+    /// <summary>基準点の日付の短い表記（「2009.2.1」。年・月・日をピリオドでつなぎ、0 で埋めない）。</summary>
+    public static string ShortDate(DateTime date) => $"{date.Year}.{date.Month}.{date.Day}";
+
+    /// <summary>話を基準点にした表記（「『○○プリキュア』第N話(YYYY.M.D)時点」。日付はその話の放送日。シリーズは正式名）。</summary>
+    public static string EpisodePoint(Series series, Episode episode)
+        => $"『{series.Title}』第{episode.SeriesEpNo}話({ShortDate(episode.OnAirAt)})時点";
+
+    /// <summary>カバレッジラベル文字列を組み立てる（<see cref="EpisodePoint"/>）。</summary>
     /// <param name="latest">
     /// 対象軸での最終話。null のときは空文字を返す（テンプレ側で「カバレッジラベル無し」として空表示にする）。
     /// </param>
     public static string Build((Series Series, Episode Episode)? latest)
-    {
-        if (latest is null) return string.Empty;
-        var (series, episode) = latest.Value;
-        var oa = episode.OnAirAt;
-        string datePart = $"{oa.Year}年{oa.Month}月{oa.Day}日現在";
-        return $"{datePart} 『{series.Title}』第{episode.SeriesEpNo}話時点の情報を表示しています";
-    }
+        => latest is { } la ? EpisodePoint(la.Series, la.Episode) : string.Empty;
 
     /// <summary>
     /// サブタイトル統計のカバレッジラベル。サブタイトルは先行して判明した未放送回も集計に含めるので、
-    /// 参照点の話がビルド時点でまだ放送前なら「〇年〇月〇日現在」とは書かず、
-    /// 「『○○プリキュア』第N話（YYYY年M月D日放送予定）までのサブタイトルで集計しています」とする
-    /// （未来の日付を「現在」と書かないため）。放送済みなら <see cref="Build"/> と同じ表記。
+    /// 参照点の話がビルド時点でまだ放送前なら「〜時点」とは書かず、「『○○プリキュア』第N話(YYYY.M.D放送予定)まで」とする。
+    /// 放送済みなら <see cref="Build"/> と同じ表記。各話ページの括弧書きにも同じ文字列を使う。
     /// </summary>
     /// <param name="latest">サブタイトル登録済みの最新 TV エピソード（<see cref="FindLatestTvEpisodeWithSubtitle"/>）。null なら空文字。</param>
     /// <param name="buildTime">ビルドの基準時刻（<see cref="BuildContext.BuildStartedAt"/>）。</param>
-    /// <param name="withSuffix">文末を付けるか。false なら各話ページの括弧書き用に「…で集計」「…第N話時点」で止める。</param>
-    public static string BuildSubtitle((Series Series, Episode Episode)? latest, DateTimeOffset buildTime, bool withSuffix = true)
+    public static string BuildSubtitle((Series Series, Episode Episode)? latest, DateTimeOffset buildTime)
     {
         if (latest is null) return string.Empty;
         var (series, episode) = latest.Value;
         var oa = episode.OnAirAt;
         var onAirJst = new DateTimeOffset(DateTime.SpecifyKind(oa, DateTimeKind.Unspecified), TimeSpan.FromHours(9));
         if (onAirJst > buildTime)
-        {
-            string head = $"『{series.Title}』第{episode.SeriesEpNo}話（{oa.Year}年{oa.Month}月{oa.Day}日放送予定）までのサブタイトルで集計";
-            return withSuffix ? head + "しています" : head;
-        }
-        string aired = $"{oa.Year}年{oa.Month}月{oa.Day}日現在 『{series.Title}』第{episode.SeriesEpNo}話時点";
-        return withSuffix ? aired + "の情報を表示しています" : aired;
+            return $"『{series.Title}』第{episode.SeriesEpNo}話({ShortDate(oa)}放送予定)まで";
+        return EpisodePoint(series, episode);
     }
 
     /// <summary>サブタイトル本文が登録済みの最新 TV エピソードを判定する。 集計対象は <c>kind_code = 'TV'</c> のシリーズに限定。 「タイトルが入力されていればそこまで日付を進める」方針なので、未放送回でも対象にする。</summary>

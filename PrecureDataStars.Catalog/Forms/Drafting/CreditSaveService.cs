@@ -605,8 +605,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertBlockAsync(MySqlConnection conn, MySqlTransaction tx, CreditRoleBlock b, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_role_blocks (card_role_id, block_seq, col_count, leading_company_alias_id, notes, created_by, updated_by)
-            VALUES (@CardRoleId, @BlockSeq, @ColCount, @LeadingCompanyAliasId, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_role_blocks (card_role_id, block_seq, col_count, leading_company_alias_id, heading_series_id, heading_text, notes, created_by, updated_by)
+            VALUES (@CardRoleId, @BlockSeq, @ColCount, @LeadingCompanyAliasId, @HeadingSeriesId, @HeadingText, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, b, transaction: tx, cancellationToken: ct));
@@ -746,6 +746,8 @@ internal sealed class CreditSaveService
               card_role_id = @CardRoleId,
               col_count = @ColCount,
               leading_company_alias_id = @LeadingCompanyAliasId,
+              heading_series_id = @HeadingSeriesId,
+              heading_text = @HeadingText,
               notes = @Notes,
               updated_by = @UpdatedBy
             WHERE block_id = @BlockId;

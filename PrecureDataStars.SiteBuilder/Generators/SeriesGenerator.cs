@@ -765,8 +765,8 @@ public sealed class SeriesGenerator
                     SeasonBadgeClass = GetSeasonBadgeClass(m.KindCode),
                     SeasonBadgeLabel = GetSeasonBadgeLabel(m.KindCode),
                     RuntimeLabel = runtimeLabel,
-                    // 親映画のメインスタッフサマリ。子作品（MOVIE_SHORT）は子配下では出さず親カードに集約しない
-                    // （子作品は別シリーズとして独自の SERIES-attached クレジットを持ち得るため）。
+                    // 親映画のメインスタッフサマリ。子作品（MOVIE_SHORT）のスタッフは親カードに混ぜず、
+                    // 子作品の行に子作品自身の SERIES-attached クレジットから集計したものを出す。
                     KeyStaffSummary = GetKeyStaffSummary(m.SeriesId),
                     Children = children
                         .Select(c => new RelatedSeriesRow
@@ -778,7 +778,9 @@ public sealed class SeriesGenerator
                             Period = "",
                             // 子作品単体の尺を親と同じ尺カラム位置に出す。
                             // run_time_seconds 未登録（NULL）の子は空文字でセル空表示。
-                            RuntimeLabel = FormatRuntimeSeconds(c.RunTimeSeconds)
+                            RuntimeLabel = FormatRuntimeSeconds(c.RunTimeSeconds),
+                            // 子作品（併映短編）自身のメインスタッフ。親映画と同じ役職セットで集計する。
+                            KeyStaffSummary = GetKeyStaffSummary(c.SeriesId)
                         })
                         .ToList()
                 };
@@ -812,6 +814,8 @@ public sealed class SeriesGenerator
             // 本文リード行と同じ母数をカードにも置く。内訳は区分ごとの行数から採る。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアシリーズ")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "歴代プリキュアを放送・公開の順に、話数や放送期間、主要スタッフとともに一覧にしました。",
                 Badges = new[]
                 {
                     new OgCardBadge("全", $"{_ctx.Series.Count}作"),
@@ -819,7 +823,7 @@ public sealed class SeriesGenerator
                     new OgCardBadge("映画", $"{movieRows.Count}作")
                 }
             },
-            MetaDescription = $"歴代プリキュア {_ctx.Series.Count} 作品（TV {tvRows.Count} 作・映画 {movieRows.Count} 作ほか）を放送・公開順に。各作品の話数・放送期間・主要スタッフからたどれます。",
+            MetaDescription = $"歴代プリキュア {_ctx.Series.Count} 作品（TV {tvRows.Count} 作・映画 {movieRows.Count} 作ほか）の一覧。放送・公開の順に、各作品の話数・放送期間・主要スタッフをまとめました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1251,7 +1255,7 @@ public sealed class SeriesGenerator
             },
             OgType = s.KindCode == "MOVIE" ? "video.movie" : "video.tv_show",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(content)
+            OgCard = BuildOgCard(content, s.StartDate.Year)
         };
 
         _page.RenderAndWrite(seriesUrl, "series", "series-detail.sbn", content, layout);
@@ -1271,14 +1275,20 @@ public sealed class SeriesGenerator
     /// 「作品種別 → 作品名 → 規模のバッジ（話数・プリキュア人数）→ 主要スタッフ」の順に置き、
     /// 作品名だけでは分からない規模と座組がカード内で読み取れるようにする。
     /// </summary>
-    private static OgCardSpec BuildOgCard(SeriesDetailModel content)
+    private static OgCardSpec BuildOgCard(SeriesDetailModel content, int startYear)
     {
         var view = content.Series;
 
         // バッジには値そのものを載せる（PeriodLabel / RunTimeLabel は見出し語なので使わない）。
+        // 話数を持たない作品（映画など）は、TV の各話カードと同じ組み（題名・公開日・主要スタッフだけを大きく）にする。
+        // 尺や数のバッジは持たない。
+        bool isMovieLike = string.IsNullOrWhiteSpace(view.Episodes);
         var badges = new List<OgCardBadge>();
-        if (!string.IsNullOrWhiteSpace(view.Episodes)) badges.Add(new OgCardBadge("全", $"{view.Episodes}話"));
-        if (!string.IsNullOrWhiteSpace(view.RunTimeSeconds)) badges.Add(new OgCardBadge("1話", view.RunTimeSeconds));
+        if (!isMovieLike)
+        {
+            badges.Add(new OgCardBadge("全", $"{view.Episodes}話"));
+            if (!string.IsNullOrWhiteSpace(view.RunTimeSeconds)) badges.Add(new OgCardBadge("1話", view.RunTimeSeconds));
+        }
 
         // 主要スタッフは役職ごとに全員を出す。連名を落とすと「誰が作ったか」の答えが変わってしまう。
         // 役職名の色はエピソードカードと同じくサイトの役職バッジの配色に揃える。
@@ -1292,70 +1302,75 @@ public sealed class SeriesGenerator
             })
             .ToArray();
 
+        if (isMovieLike)
+        {
+            // 映画など：各話カードと同じ疎の組み。「種別 → 題名 → 公開日 → 主要スタッフ（役職色で流し込み）」。透かしは公開年。
+            return new OgCardSpec(
+                Kicker: string.IsNullOrWhiteSpace(view.KindLabel) ? "映画" : view.KindLabel,
+                Title: view.Title)
+            {
+                Subtitle = view.Period,
+                InlineFacts = staff,
+                BandColorHex = OgCardColors.Episode,
+                Watermark = startYear.ToString()
+            };
+        }
+
         return new OgCardSpec(
             Kicker: string.IsNullOrWhiteSpace(view.KindLabel) ? "シリーズ" : view.KindLabel,
             Title: view.Title)
         {
-            KickerRight = view.Period,
+            // 放送期間は見出しの下の補助行に置く（右上は透かしの放送開始年に譲る）。
+            Subtitle = view.Period,
             Badges = badges,
-            Facts = staff
+            Facts = staff,
+            BandColorHex = OgCardColors.Episode,
+            // 透かしは放送開始年。23 年続くシリーズのどこかが、縮小表示でも分かる。
+            Watermark = startYear.ToString()
         };
     }
 
-    /// <summary>シリーズ詳細ページの &lt;meta name="description"&gt; 用説明文を実データから組み立てる。</summary>
+    /// <summary>
+    /// シリーズ詳細の meta description。「『作品』は 2004 年 2 月放送開始の TV シリーズ（全 49 話）。プリキュアは〇〇（声：△△さん）ほか。
+    /// 各話のサブタイトルと放送日、主要スタッフ、主題歌、劇伴、商品をまとめました。」の順で 140 字ほどに収める。
+    /// </summary>
     private static string BuildSeriesMetaDescription(
         Series s,
         IReadOnlyList<SeriesPrecureRow> precureRows)
     {
-        const int targetMaxChars = 140;
+        const int targetMaxChars = 150;
+        bool isMovie = s.KindCode == "MOVIE" || s.KindCode == "MOVIE_SHORT" || s.KindCode == "SPRING";
+        string tail = isMovie
+            ? "スタッフ、主題歌、劇伴、商品をまとめました。"
+            : "各話のサブタイトルと放送日、主要スタッフ、主題歌、劇伴、商品をまとめました。";
 
         var sb = new System.Text.StringBuilder();
-        // ① 基本：『シリーズ名』(YYYY年放送開始/公開、全 N 話)。話数は本文の「全 N 話」と同じく数字の前後に空白を入れる。
-        // 映画系（KindCode が "MOVIE" / "MOVIE_SHORT" / "SPRING" 等）は「公開」表記、それ以外は「放送開始」。
-        bool isMovie = s.KindCode == "MOVIE" || s.KindCode == "MOVIE_SHORT" || s.KindCode == "SPRING";
-        sb.Append('『').Append(s.Title).Append("』(")
-          .Append(s.StartDate.Year).Append('年')
-          .Append(isMovie ? "公開" : "放送開始");
-        if (s.Episodes.HasValue && s.Episodes.Value > 0 && !isMovie)
+        sb.Append('『').Append(s.Title).Append("』は");
+        sb.Append(s.StartDate.Year).Append('年').Append(s.StartDate.Month).Append('月');
+        if (isMovie)
         {
-            sb.Append("、全 ").Append(s.Episodes.Value).Append(" 話");
+            sb.Append("公開の映画。");
         }
-        sb.Append(")。");
-
-        // ② 主役プリキュア声優（最大 2 名）。
-        // precureRows は SeriesGenerator がプリキュア紐付けの順序で詰めている前提（主役→脇役の順）。
-        // VoiceActorName が空の行はスキップ。TransformName + VoiceActorName のペアを「変身名(CV)」で並べる。
-        var precuresForDesc = precureRows
-            .Where(p => !string.IsNullOrWhiteSpace(p.TransformName) && !string.IsNullOrWhiteSpace(p.VoiceActorName))
-            .Take(2)
-            .ToList();
-        if (precuresForDesc.Count > 0)
+        else
         {
-            sb.Append("主役プリキュア：");
-            for (int i = 0; i < precuresForDesc.Count; i++)
-            {
-                var p = precuresForDesc[i];
-                var fragment = $"{p.TransformName}({p.VoiceActorName})";
-                // 末尾「ほか。」分（4 字）+ 既存末尾の区切り分も考慮して、超過しそうなら打ち切り。
-                if (sb.Length + fragment.Length + 4 > targetMaxChars) break;
-                if (i > 0) sb.Append('、');
-                sb.Append(fragment);
-            }
-            // 一覧から削った主役がいるならば「ほか」を、無いならピリオドのみ。
-            if (precureRows.Count(p => !string.IsNullOrWhiteSpace(p.VoiceActorName)) > precuresForDesc.Count)
-            {
-                if (sb.Length + 3 <= targetMaxChars) sb.Append("ほか");
-            }
+            sb.Append("放送開始の TV シリーズ");
+            if (s.Episodes.HasValue && s.Episodes.Value > 0) sb.Append("（全 ").Append(s.Episodes.Value).Append(" 話）");
             sb.Append('。');
         }
 
-        // ③ 締めの定型文（サイトの位置付け文。140 字に収まる限りで足す）。
-        const string suffix = "プリキュアシリーズのエピソード・スタッフ・楽曲をまとめたファンデータベースです。";
-        if (sb.Length + suffix.Length <= targetMaxChars)
+        // プリキュア（最大 2 名）：変身名（声：声優さん）。
+        var precures = precureRows
+            .Where(p => !string.IsNullOrWhiteSpace(p.TransformName) && !string.IsNullOrWhiteSpace(p.VoiceActorName))
+            .Take(2)
+            .Select(p => $"{p.TransformName}（声：{p.VoiceActorName}さん）")
+            .ToList();
+        if (precures.Count > 0)
         {
-            sb.Append(suffix);
+            bool more = precureRows.Count(p => !string.IsNullOrWhiteSpace(p.VoiceActorName)) > precures.Count;
+            string fragment = "プリキュアは" + string.Join("、", precures) + (more ? "ほか" : "") + "。";
+            if (sb.Length + fragment.Length + tail.Length <= targetMaxChars) sb.Append(fragment);
         }
-
+        sb.Append(tail);
         return sb.ToString();
     }
 
@@ -1820,6 +1835,8 @@ public sealed class SeriesGenerator
         public string Period { get; set; } = "";
         /// <summary>子作品（MOVIE_SHORT・併映短編）単体の上映時間ラベル（「m分ss秒」形式）。</summary>
         public string RuntimeLabel { get; set; } = "";
+        /// <summary>子作品（併映短編）自身のメインスタッフサマリ（映画カードの子作品行に出す）。クレジットが無ければ空。</summary>
+        public IReadOnlyList<KeyStaffRoleGroup> KeyStaffSummary { get; set; } = Array.Empty<KeyStaffRoleGroup>();
         /// <summary>親に対する関係種別コード。</summary>
         public string RelationCode { get; set; } = "";
         /// <summary>

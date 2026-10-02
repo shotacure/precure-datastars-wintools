@@ -20,7 +20,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description>「今日の記念日」はビルド時計算をやめて全エピソードの放送日（年月日）を
 ///     JSON として埋め込み、クライアント側 JavaScript で「今日」を動的に判定して描画する方式に変更。
 ///     ビルド日と閲覧日がズレても、サイトを開いた瞬間の「今日」で記念日が出る。</description></item>
-///   <item><description>「最終ビルド」表記を「○○年○○月○○日現在 『○○プリキュア』第n話時点の情報を表示しています」
+///   <item><description>「最終ビルド」表記を「『○○プリキュア』第n話(YYYY.M.D)時点」
 ///     形式で表示する。基準点は <see cref="BuildContext.LatestAiredTvEpisode"/>（全 TV シリーズを横断した
 ///     最新放送済話）。LatestAiredTvEpisode が null のときはプリキュア部分を省略。</description></item>
 ///   <item><description>データベース統計セクションはコンパクト表示（横並び 1 行）、項目は 11 個。
@@ -164,7 +164,7 @@ public sealed class HomeGenerator
         {
             SiteName = _ctx.Config.SiteName,
             SiteBrandLabel = _ctx.Config.SiteBrandLabel,
-            // 最終ビルド表記は「○○年○○月○○日現在 『○○プリキュア』第n話時点
+            // 最終ビルド表記は「『○○プリキュア』第n話(YYYY.M.D)時点」
             BuildLabel = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
             DataSufficiencyLabel = dataSufficiencyLabel,
             BroadcastFormatLabel = broadcastFormatLabel,
@@ -191,7 +191,7 @@ public sealed class HomeGenerator
             // SEO：ホームの <title>・og:title / twitter:title に載せるキャッチ。
             // <title> は "{PageTitle} | {SiteBrandLabel}" 形式で組まれる。
             PageTitle = "プリキュアまるごとデータベース",
-            MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優、キャラクターまで。「好き」を深掘りするための情報をファンの手で集めた、個人運営の非公式ファンデータベースです。",
+            MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優さん、キャラクターまで。「好き」を深掘りするための情報を、ファンの手で集めた個人運営の非公式データベースです。",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",
             JsonLd = jsonLd,
@@ -202,24 +202,16 @@ public sealed class HomeGenerator
             // 見出しはサイト名（ヒーローの h1 と同じ）、その下にタグライン、
             // 数はトップの統計タイルと同じ並び・同じ単位で置く。
             // ホームのカードはサイトトップのヒーローをそのまま持ち込む。
-            // 見出しはサイト名、その下にタグライン、いずれもブランド書体の濃ピンク（.hero.hero-gradient と同値）。
-            // 基準点は数の直下に置く（いつ時点の数かは、数を読んだあとに要る情報のため）。
-            OgCard = new OgCardSpec(Kicker: "", Title: _ctx.Config.SiteBrandLabel)
+            // ヘッダのワードマークと同じく、肩書き（「プリキュアデータベース」）を小さく前に添え、固有名詞（「precure-datastars」）を
+            // 見出しにする。その下にタグライン、いずれもブランド書体の濃ピンク（.hero.hero-gradient と同値）。
+            // 数を誇る代わりに、タグライン「プリキュアまるごとデータベース。」をマティスえれがんとの斜体で大きく組む。
+            // ホームには透かしを置かない（サイト名そのものが主役で、添える属性が無い）。
+            OgCard = new OgCardSpec(Kicker: _ctx.Config.SiteNameJa, Title: _ctx.Config.SiteName)
             {
                 HeroVoice = true,
-                Subtitle = "プリキュアまるごとデータベース。",
-                MetaLeft = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
-                Badges = new[]
-                {
-                    new OgCardBadge("", $"{dbStats.TvSeriesCount}TVシリーズ"),
-                    new OgCardBadge("", $"{dbStats.MovieSeriesCount}映画"),
-                    new OgCardBadge("", $"{dbStats.SpinOffSeriesCount}スピンオフ"),
-                    new OgCardBadge("", $"{dbStats.EpisodeCount}エピソード"),
-                    new OgCardBadge("", $"{dbStats.SongsCount}歌"),
-                    new OgCardBadge("", $"{dbStats.BgmsCount}劇伴"),
-                    new OgCardBadge("", $"{dbStats.MusicProductsCount}音楽商品"),
-                    new OgCardBadge("", $"{dbStats.CreatorsCount}クリエイター")
-                }
+                // 2 行に割って、幅いっぱいまで大きく組む。
+                Statement = "プリキュアまるごと\nデータベース。",
+                StatementFontFamily = "FOT-マティスえれがんと Pro EB"
             }
         };
 
@@ -641,6 +633,7 @@ WHERE e.is_deleted = 0
         {
             Title = b.Title,
             ReleaseDate = $"{b.ReleaseDate.Year}年{b.ReleaseDate.Month}月{b.ReleaseDate.Day}日",
+            ReleaseDateIso = releaseDateOnly.ToString("yyyy-MM-dd"),
             // ジャンル未設定の書籍は種別欄が空にならないよう版構成（紙 / Kindle）で代替する。
             GenreLabel = primaryGenreLabelByBook.TryGetValue(b.BookId, out var g) ? g
                        : (b.HasKindle && !b.HasPrint ? "Kindle" : "書籍"),
@@ -750,15 +743,9 @@ WHERE e.is_deleted = 0
         };
     }
 
-    /// <summary>最終ビルド表記文字列を組み立てる。 LatestAiredTvEpisode あり → 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」 （日付は当該エピソードの <see cref="Episode.OnAirAt"/> ベース。サイト共通の <see cref="Utilities.StatsCoverageLabel"/> と挙動を統一）。 LatestAiredTvEpisode なし（クリーン DB 等） → 空文字を返してテンプレ側で非表示にする。 時刻部分は付けない方針（変更概要 D の指示文に時刻表記が無いため、日単位までの粒度）。 「ビルド日付」は内部進行管理であってユーザー向け情報ではないため一切表に出さない。</summary>
+    /// <summary>最終ビルド表記文字列を組み立てる。 LatestAiredTvEpisode あり → 「『○○プリキュア』第n話(YYYY.M.D)時点」 （日付は当該エピソードの <see cref="Episode.OnAirAt"/> ベース。サイト共通の <see cref="Utilities.StatsCoverageLabel"/> と同じ表記）。 LatestAiredTvEpisode なし（クリーン DB 等） → 空文字を返してテンプレ側で非表示にする。 時刻部分は付けない（日単位までの粒度）。 「ビルド日付」は内部進行管理であってユーザー向け情報ではないため一切表に出さない。</summary>
     private static string BuildBuildLabel((Series Series, Episode Episode)? latest)
-    {
-        if (latest is null) return string.Empty;
-        var (series, episode) = latest.Value;
-        var oa = episode.OnAirAt;
-        string datePart = $"{oa.Year}年{oa.Month}月{oa.Day}日現在";
-        return $"{datePart} 『{series.Title}』第{episode.SeriesEpNo}話時点の情報を表示しています";
-    }
+        => StatsCoverageLabel.Build(latest);
 
     /// <summary>記念日（今日の記念日）と「今月のカレンダー」JS 用の統合 JSON を生成する。</summary>
     /// プロパティ名は容量削減のため短縮形。共通: k(種別), m(月), d(日)。
@@ -924,6 +911,7 @@ WHERE e.is_deleted = 0
             ProductCatalogNo = p.ProductCatalogNo,
             Title = p.Title,
             ReleaseDate = JpDateFormat.Date(p.ReleaseDate),
+            ReleaseDateIso = releaseDateOnly.ToString("yyyy-MM-dd"),
             ProductKindLabel = productKindMap.TryGetValue(p.ProductKindCode, out var pk) ? pk.NameJa : p.ProductKindCode,
             ProductUrl = PathUtil.ProductUrl(p.ProductCatalogNo),
             CoverImageUrl = p.CoverImageUrl ?? "",
@@ -972,7 +960,7 @@ WHERE e.is_deleted = 0
         public string SiteName { get; set; } = "";
         /// <summary>可視ブランド表記（例: プリキュアデータベース「precure-datastars」）。hero の h1 に出す。</summary>
         public string SiteBrandLabel { get; set; } = "";
-        /// <summary>最終ビルド表記の表示文字列（導入）。 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」のような 完成形を C# 側で組み立てて流し込む。</summary>
+        /// <summary>最終ビルド表記の表示文字列（導入）。 「『○○プリキュア』第n話(YYYY.M.D)時点」のような 完成形を C# 側で組み立てて流し込む。</summary>
         public string BuildLabel { get; set; } = "";
         /// <summary>キャラクター・クリエイターのデータ充足率の表示文字列（暫定表記）。
         /// 空文字なら非表示。BuildLabel の直下に赤字で出す。</summary>
@@ -1043,10 +1031,12 @@ WHERE e.is_deleted = 0
         public string SeriesLabel { get; set; } = "";
         /// <summary>税込価格の表示文字列（カンマ区切り）。未設定なら空。</summary>
         public string PriceIncTax { get; set; } = "";
-        /// <summary>状態バッジ表記（「予約受付中」「本日発売」「発売中」、または空）。</summary>
+        /// <summary>状態バッジ表記（「予約受付中」「本日発売」「発売中」、または空）。ビルド日基準の初期表示で、閲覧時に release-countdown.js が閲覧日基準に更新する。</summary>
         public string ReleaseStatusLabel { get; set; } = "";
-        /// <summary>発売予定の商品にだけ立つ「発売まで N 日」文字列。 発売済み or 発売日同日のときは空文字でカードに行ごと出さない。</summary>
+        /// <summary>発売予定の商品にだけ立つ「発売まで N 日」文字列。 発売済み or 発売日同日のときは空文字でカードに行ごと出さない。ビルド日基準の初期表示で、閲覧時に release-countdown.js が閲覧日基準に更新する。</summary>
         public string DaysUntilLabel { get; set; } = "";
+        /// <summary>発売日（yyyy-MM-dd）。カードの <c>data-release-date</c> に出し、release-countdown.js が閲覧日との差を計算するのに使う。</summary>
+        public string ReleaseDateIso { get; set; } = "";
     }
 
     /// <summary>
@@ -1069,10 +1059,12 @@ WHERE e.is_deleted = 0
         public string AmazonKindleUrl { get; set; } = "";
         /// <summary>税込価格の表示文字列（紙が無ければ Kindle 価格）。未設定なら空。</summary>
         public string PriceIncTax { get; set; } = "";
-        /// <summary>状態バッジ表記（「予約受付中」「本日発売」「発売中」、または空）。</summary>
+        /// <summary>状態バッジ表記（「予約受付中」「本日発売」「発売中」、または空）。ビルド日基準の初期表示で、閲覧時に release-countdown.js が閲覧日基準に更新する。</summary>
         public string ReleaseStatusLabel { get; set; } = "";
-        /// <summary>発売予定の書籍にだけ立つ「発売まで N 日」文字列。</summary>
+        /// <summary>発売予定の書籍にだけ立つ「発売まで N 日」文字列。ビルド日基準の初期表示で、閲覧時に release-countdown.js が閲覧日基準に更新する。</summary>
         public string DaysUntilLabel { get; set; } = "";
+        /// <summary>発売日（yyyy-MM-dd）。カードの <c>data-release-date</c> に出し、release-countdown.js が閲覧日との差を計算するのに使う。</summary>
+        public string ReleaseDateIso { get; set; } = "";
     }
 
     /// <summary>

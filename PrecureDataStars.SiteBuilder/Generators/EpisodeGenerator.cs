@@ -63,6 +63,17 @@ public sealed class EpisodeGenerator
     //    系譜代表の role_code を引くだけのため、Persons/CompaniesGenerator と同じ Resolver を共有する。
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
 
+    // ── チーフの顔ぶれ索引（組み合わせの通算回数）。パイプラインが全ジェネレータ共通で 1 度だけ
+    //    構築する読み取り専用の索引で、スタッフセクションの「演出と作画監督の組み合わせ：通算 N 回目」に使う。
+    private readonly EpisodeChiefStaffIndex _chiefIndex;
+
+    // ── 歴代記録バッジ（h1 直下）。歴代でこの順位以内の尺を持つ回にだけバッジを出す。
+    private const int RecordBadgeTopRank = 10;
+
+    // ── シリーズ内の最長・最短バッジは、同種パートを持つ話がこの数以上あるシリーズでだけ出す
+    //    （話数の少ないシリーズで「最長」が自明になるのを避ける）。
+    private const int RecordBadgeMinSeriesTotal = 10;
+
     // ── 使用音声（episode_uses）の表示ラベル解決用マスタリポジトリ群 ──
     // episode_uses 行そのものは BuildContext.EpisodeUsesByEpisode から引く。
     // 各マスタ（トラック内容種別 / サイズ違い / パート違い）は初回参照時に 1 度だけ全件ロードして
@@ -96,13 +107,15 @@ public sealed class EpisodeGenerator
         PageRenderer page,
         IConnectionFactory factory,
         StaffNameLinkResolver staffLinkResolver,
-        RoleSuccessorResolver roleSuccessorResolver)
+        RoleSuccessorResolver roleSuccessorResolver,
+        EpisodeChiefStaffIndex chiefIndex)
     {
         _ctx = ctx;
         _page = page;
         _factory = factory;
         _staffLinkResolver = staffLinkResolver;
         _roleSuccessorResolver = roleSuccessorResolver;
+        _chiefIndex = chiefIndex;
         _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver, ctx.UnitMembersByAlias);
 
         _creditKindsRepo = new CreditKindsRepository(factory);
@@ -222,14 +235,13 @@ public sealed class EpisodeGenerator
     /// 比較対象になる）。そのためパート尺統計と同じ「最新放送済話」ではなく、サブタイトル統計
     /// ページのカバレッジラベルと同じ <see cref="StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle"/>
     /// （サブタイトル登録済みの最新 TV 話。未放送回も対象）を参照点にする。
-    /// 参照点が放送済みならパート尺統計側と同一書式（「2026年6月28日現在 『名探偵プリキュア！』第22話時点」）、
-    /// まだ放送前なら「『名探偵プリキュア！』第36話（2026年10月4日放送予定）までのサブタイトルで集計」とし、
-    /// 未来の日付を「現在」と書かない（<see cref="StatsCoverageLabel.BuildSubtitle"/>）。
+    /// 参照点が放送済みならパート尺統計側と同一書式（「『名探偵プリキュア！』第22話(2026.6.28)時点」）、
+    /// まだ放送前なら「『名探偵プリキュア！』第36話(2026.10.4放送予定)まで」とする（<see cref="StatsCoverageLabel.BuildSubtitle"/>）。
     /// </summary>
     private string BuildSubtitleCoverageCaption()
     {
         return StatsCoverageLabel.BuildSubtitle(
-            StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx), _ctx.BuildStartedAt, withSuffix: false);
+            StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx), _ctx.BuildStartedAt);
     }
 
     /// <summary>偏差値ゲージ背景のヒストグラムのビン数。ビン幅は (75-25)/25 = 偏差値 2.0 刻み。</summary>
@@ -404,6 +416,9 @@ public sealed class EpisodeGenerator
                 : Array.Empty<int>()
         }).ToList();
 
+        // h1 直下の歴代記録バッジ（歴代 10 位以内、またはシリーズ内で最長・最短の尺を持つ回）。
+        var recordBadges = BuildRecordBadges(partLengthStats);
+
         // パート尺統計表のヘッダ用に、当該シリーズの正式タイトル（series.title）をテンプレに渡す。
         // 後段：略称（series.title_short）は生成・UI ともに一切使わない方針に変更し、
         // シリーズ表記は正式名（Title）を使う。プロパティ名は SeriesTitleShortQuoted の
@@ -488,6 +503,9 @@ public sealed class EpisodeGenerator
         // スタッフ情報（クレジット階層から脚本／絵コンテ／演出／作画監督／美術監督を抽出）。
         // クレジットセクションとは別に「主要スタッフ」セクションとして上部基本情報の近くに出す。
         var staffRows = BuildStaffRows(credits);
+
+        // チーフの組み合わせの通算回数（演出と作画監督 / 脚本・演出・作画監督）。スタッフ行の下に添える。
+        var staffCombos = BuildStaffCombos(series, ep);
 
         // 使用音声（episode_uses）セクションをパート別に構築。
         var episodeUseSections = await BuildEpisodeUsesViewAsync(ep.EpisodeId, ct).ConfigureAwait(false);
@@ -622,6 +640,8 @@ public sealed class EpisodeGenerator
             ThemeSongs = themeRows,
             CreditBlocks = creditBlocks,
             Staff = staffRows,
+            StaffCombos = staffCombos,
+            RecordBadges = recordBadges,
             EpisodeUseSections = episodeUseSections,
             Totals = totalsItems,
             BuildPointCaption = buildPointCaption,
@@ -653,7 +673,7 @@ public sealed class EpisodeGenerator
         // 単純な定型文「N話のフォーマット表・スタッフ・主題歌情報」だと全エピソードで重複コンテンツ化し、
         // SERP の CTR にも反映されにくいため、放送日・主要スタッフ 2 役職・OP/ED の楽曲名まで含めて
         // 個別性の高い 140 字目安の説明文を作る。
-        var metaDescription = BuildMetaDescription(ep, staffRows, _ctx.Config.SiteName);
+        var metaDescription = BuildMetaDescription(series, ep, staffRows);
 
         // エピソード詳細の構造化データは Schema.org の TVEpisode 型。
         string baseUrl = _ctx.Config.BaseUrl;
@@ -758,30 +778,6 @@ public sealed class EpisodeGenerator
     // ════════════════════ OGP カード ════════════════════
 
     /// <summary>
-    /// 帯グラフの配色 CSS クラス（<c>fmt-p-*</c>）を、OGP カード描画用の実色とハッチ有無へ写す。
-    /// site.css のパレット定義と同値にすることで、ページ本体の帯とカードの帯が同じ見え方になる。
-    /// CM 枠と導入枠は CSS 側が斜線グラデーションのため、カードでもハッチとして描く。
-    /// </summary>
-    private static (string Hex, bool Hatched) OgBarPalette(string paletteCss) => paletteCss switch
-    {
-        "fmt-p-avant" => ("#c9b8ec", false),
-        "fmt-p-op" => ("#f6b3cf", false),
-        "fmt-p-a" => ("#aacdf2", false),
-        "fmt-p-b" => ("#a4dcc4", false),
-        "fmt-p-c" => ("#cfe6a3", false),
-        "fmt-p-ed" => ("#f8cb96", false),
-        "fmt-p-trailer" => ("#f1e092", false),
-        "fmt-p-sponsor" => ("#e2e2e8", false),
-        "fmt-p-cm" => ("#ececf0", true),
-        "fmt-p-intro" => ("#dfdfe6", true),
-        _ => ("#d7d7de", false)
-    };
-
-    /// <summary>尺の凡例に載せるパート（本編の骨格にあたるものだけを選ぶ。CM・提供は帯の色で足りる）。</summary>
-    private static readonly string[] OgBarCaptionPalettes =
-        { "fmt-p-avant", "fmt-p-op", "fmt-p-a", "fmt-p-b", "fmt-p-c", "fmt-p-ed", "fmt-p-trailer" };
-
-    /// <summary>
     /// 統合ラベル（「絵コンテ・演出」）を、構成役職ごとに色を分けた断片列へ分解する。
     /// 単独役職の行は断片化しない（空配列を返し、呼び出し側の単色ラベルにフォールバックする）。
     /// </summary>
@@ -805,35 +801,11 @@ public sealed class EpisodeGenerator
 
     /// <summary>
     /// エピソード詳細ページの OGP カードを組み立てる。
-    /// 「所属シリーズ → 話数 → 通算バッジ → サブタイトル → 尺構成の帯グラフ → メインスタッフ」の順に積み、
-    /// このサイトにしか無い情報（パート単位の尺構成と通算話数）がカード 1 枚で読み取れる状態にする。
-    /// 尺データが無いエピソードでは帯グラフの段が丸ごと落ちる（他の段はそのまま出る）。
+    /// 載せるのは「話数・作品名（右上の透かし）→ サブタイトル（その作品の本編テロップの書体）→ 放送日 → 各話スタッフ」だけ。
+    /// 通算話数や尺構成はカードでは読まれない情報なので載せず、見出しとスタッフを大きく組む。
     /// </summary>
     private static OgCardSpec BuildOgCard(Series series, Episode ep, EpisodeContentModel content)
     {
-        // 通算はプリキュア全体を母数にした 2 種（話数と放送回数）を並べる。
-        // ニチアサ通算は母数が別作品を含むためカードには載せない。
-        var badges = new List<OgCardBadge>();
-        if (!string.IsNullOrEmpty(content.Episode.TotalEpNo)) badges.Add(new OgCardBadge("通算", $"{content.Episode.TotalEpNo}話"));
-        if (!string.IsNullOrEmpty(content.Episode.TotalOaNo)) badges.Add(new OgCardBadge("放送", $"{content.Episode.TotalOaNo}回"));
-
-        // 帯グラフは本放送のバーを採る（配信・円盤版ではなく放送当時の構成を見せたいため）。
-        var segments = new List<OgCardBarSegment>();
-        var captionParts = new List<string>();
-        var oaBar = content.FormatTable.Bars.FirstOrDefault();
-        if (oaBar is not null)
-        {
-            foreach (var segment in oaBar.Segments)
-            {
-                var (hex, hatched) = OgBarPalette(segment.PaletteCss);
-                segments.Add(new OgCardBarSegment(segment.Seconds, segment.ShortLabel, hex, hatched));
-
-                // 幅の狭い区画は帯の中にラベルを置けないため、骨格パートの尺は凡例側で読ませる。
-                if (OgBarCaptionPalettes.Contains(segment.PaletteCss) && !string.IsNullOrWhiteSpace(segment.ShortLabel))
-                    captionParts.Add($"{segment.ShortLabel} {HtmlUtil.FormatSeconds(segment.Seconds)}");
-            }
-        }
-
         // メインスタッフは役職と担当者の対で流し込む（カード側でラベルと値を色分けして表示する）。
         var staff = content.Staff
             .Where(s => !string.IsNullOrWhiteSpace(s.NamesLine))
@@ -848,38 +820,34 @@ public sealed class EpisodeGenerator
             .ToArray();
 
         return new OgCardSpec(
-            Kicker: $"『{series.Title}』",
+            // 作品名と話数は右上の透かし（話数を大きく、作品名をその脇に）で見せるので、前置きの行は置かない。
+            Kicker: "",
             // サブタイトル未確定話は誌面文言のプレースホルダをそのまま主題に据える。
-            Title: string.IsNullOrEmpty(ep.TitleText) ? ep.TitleDisplayText : ep.TitleText)
+            Title: string.IsNullOrEmpty(ep.TitleText) ? ep.TitleDisplayText : ep.TitleText,
+            // 放送「日」まで。時刻はカード上で読ませたい情報ではないので落とす。
+            Subtitle: JpDateFormat.Date(ep.OnAirAt))
         {
-            // 右上は放送「日」まで。時刻はカード上で読ませたい情報ではないので落とす。
-            KickerRight = JpDateFormat.Date(ep.OnAirAt),
             // サブタイトルはサイト本体と同じくルビ付きで組む（title_rich_html が無い話は素で組まれる）。
             TitleRubyHtml = ep.TitleRichHtml ?? "",
-            Headline = $"第{ep.SeriesEpNo}話",
-            Badges = badges,
-            Bar = segments,
-            BarCaption = string.Join(" ／ ", captionParts),
-            BarTotalLabel = string.IsNullOrEmpty(content.FormatTable.OaTotal) ? "" : $"本放送 {content.FormatTable.OaTotal}",
+            // 作品の本編テロップと同じ書体（series.font_subtitle）。無ければ既定の見出し書体。
+            TitleFontFamily = series.FontSubtitle ?? "",
+            // サブタイトルは本編のテロップと同じく、白い字に黒フチと影で組む。
+            TitleTelopStyle = true,
+            BandColorHex = OgCardColors.Episode,
+            Watermark = $"第{ep.SeriesEpNo}話",
+            WatermarkAside = series.Title,
             InlineFacts = staff
         };
     }
 
     /// <summary>
-    /// 「いま現在」キャプションを組み立てる。例: 「2026年5月3日現在 『キミとアイドルプリキュア♪』第14話時点」。
-    /// 日付とシリーズ名の間は読点ではなく空白で区切る（サイト共通のカバレッジラベル
-    /// <see cref="Utilities.StatsCoverageLabel"/> と同じ書式に揃える）。
+    /// 「いま現在」キャプションを組み立てる。例: 「『キミとアイドルプリキュア♪』第14話(2026.5.3)時点」。
+    /// サイト共通のカバレッジラベル（<see cref="Utilities.StatsCoverageLabel.EpisodePoint"/>）と同じ書式。
     /// 対象エピソードが存在しない場合は空文字を返す（テンプレ側で表示自体を抑止する）。
-    /// シリーズ名は正式名称（<see cref="Series.Title"/>）を使う。
     /// シリーズ表記は正式名を使う（TitleShort は「『プリキュア』第N話時点」のような曖昧な表記を生むため使わない）。
     /// </summary>
     private static string BuildLatestAiredCaption((Series Series, Episode Episode)? latest)
-    {
-        if (latest is not { } la) return "";
-        var d = la.Episode.OnAirAt;
-        string seriesLabel = la.Series.Title;
-        return $"{d.Year}年{d.Month}月{d.Day}日現在 『{seriesLabel}』第{la.Episode.SeriesEpNo}話時点";
-    }
+        => latest is { } la ? StatsCoverageLabel.EpisodePoint(la.Series, la.Episode) : "";
 
     /// <summary>主題歌行を表示用 DTO に変換する（縦リスト 1 行表現）。 テンプレ側で「OP「タイトル」 うた：歌唱者」のように 1 行ずつ並べる前提。 楽曲タイトルは詳細ページへのリンクを張れるよう、SongLink プロパティで URL を渡す。</summary>
     // ── 主題歌・挿入歌セクション専用：構造化クレジット表示でマスタを参照するためのキャッシュ。
@@ -1278,54 +1246,34 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>
-    /// エピソード詳細ページの <c>&lt;meta name="description"&gt;</c> 用の説明文を、実データから組み立てる。
-    /// 構成は下記の優先度で「シリーズ名・話数・サブタイトル・放送日 → 主要スタッフ 2 行 →
-    /// 主題歌 (OP / ED) 2 曲」の順。<c>targetMaxChars</c>（140 字）を超えそうな段で打ち切り、
-    /// 短く済むエピソードは尻切れにならずに自然に終わる設計とする。説明文は OG / Twitter Card にも
-    /// 流用されるため、検索結果と SNS 共有プレビューの両方で読みやすい長さに収める。
-    /// スタッフ抽出は <see cref="BuildStaffRowsAsync"/> の結果をそのまま再利用する（重複クエリを避けるため）。
-    /// 主題歌行は OP / ED のみ採用し、挿入歌は字数節約のため description には含めない。
+    /// エピソード詳細の meta description。「『作品』第N話「サブタイトル」（放送日）。役職：名前（主要 3 役職）。何をまとめたページか。」
+    /// の順で、検索結果に出る 140 字ほどに収める。クレジットは「役職：名前」の表記（敬称略）。
+    /// 主題歌はシリーズ単位で全話共通なので、その話固有の情報ではないため載せない。
     /// </summary>
-    private static string BuildMetaDescription(
-        Episode ep,
-        IReadOnlyList<StaffRow> staffRows,
-        string siteName)
+    private static string BuildMetaDescription(Series series, Episode ep, IReadOnlyList<StaffRow> staffRows)
     {
-        // meta description / og:description / twitter:description は概ね 120〜160 字程度で
-        // 切り詰められるため、保守的に 140 字を目標値に置く（厳密上限ではなく、超えそうな段で
-        // 追加を打ち切るためのガード値）。日本語 1 文字 = 1 char カウントで運用。
-        const int targetMaxChars = 140;
+        const int targetMaxChars = 150;
+        const string tail = "各話スタッフ、主題歌・挿入歌、パート構成をまとめました。";
 
-        // 末尾にサイト名を必ず添える（カードにブランドを出す）。その分の文字数を先に確保し、
-        // 本文（OA日付・通算・スタッフ）はサイト名を除いた予算内で打ち切る。各項目は "/" 区切り。
-        var siteSuffix = string.IsNullOrEmpty(siteName) ? "" : $" — {siteName}";
-        int budget = targetMaxChars - siteSuffix.Length;
+        var sb = new System.Text.StringBuilder();
+        sb.Append('『').Append(series.Title).Append("』第").Append(ep.SeriesEpNo).Append('話');
+        if (!string.IsNullOrWhiteSpace(ep.TitleText)) sb.Append('「').Append(ep.TitleText).Append('」');
+        sb.Append('（').Append(ep.OnAirAt.ToString("yyyy年M月d日")).Append("放送）。");
 
-        // og:title が『シリーズ』第N話「サブタイトル」を持つため、説明文ではそれを繰り返さず、
-        // 放送日（放送:yyyy.M.d）・通算（全プリキュアTV通算の累計値）・主要スタッフでページ固有の情報を出す。
-        var segments = new List<string>
-        {
-            "放送:" + ep.OnAirAt.ToString("yyyy.M.d"),
-        };
-        if (ep.TotalEpNo is int tep) segments.Add($"通算{tep}話");
-        if (ep.TotalOaNo is int toa) segments.Add($"放送{toa}回");
-
-        // 主要スタッフ（最大 3 役職：脚本→絵コンテ・演出系→作画監督…の順。予算内で打ち切る）。
-        // 主題歌はシリーズ単位で全話共通＝そのエピソード固有の情報ではないため載せない。
-        int staffAdded = 0;
+        // 主要スタッフ（最大 3 役職）。末尾の一文を残せる範囲で足す。
+        var credits = new List<string>();
         foreach (var staff in staffRows)
         {
-            if (staffAdded >= 3) break;
+            if (credits.Count >= 3) break;
             if (string.IsNullOrWhiteSpace(staff.NamesLine)) continue;
-            // staff.NamesLine は <a href="..."> でラップされた HTML 断片を含むため、プレーンテキスト化する。
-            var seg = $"{staff.RoleLabel}:{StripHtmlTags(staff.NamesLine)}";
-            // 既存の "/" 連結長 ＋ "/" ＋ seg が予算超過なら採用しない（直前項目で打ち切り）。
-            if (string.Join("/", segments).Length + 1 + seg.Length > budget) break;
-            segments.Add(seg);
-            staffAdded++;
+            string seg = $"{staff.RoleLabel}：{StripHtmlTags(staff.NamesLine)}";
+            string joined = string.Join("、", credits.Append(seg)) + "。";
+            if (sb.Length + joined.Length + tail.Length > targetMaxChars) break;
+            credits.Add(seg);
         }
-
-        return string.Join("/", segments) + siteSuffix;
+        if (credits.Count > 0) sb.Append(string.Join("、", credits)).Append('。');
+        sb.Append(tail);
+        return sb.ToString();
     }
 
     /// <summary>スタッフ行群から「演出」役職の人物名一覧を取り出す。</summary>
@@ -1381,6 +1329,117 @@ public sealed class EpisodeGenerator
     {
         if (string.IsNullOrEmpty(s)) return s;
         return System.Text.RegularExpressions.Regex.Replace(s, "<[^>]*>", "");
+    }
+
+    /// <summary>
+    /// h1 直下の歴代記録バッジを組み立てる。アバンタイトル・A パート・B パートの OA 尺が
+    /// 歴代 <see cref="RecordBadgeTopRank"/> 位以内（長い側・短い側のどちらも）ならそのランキングページへのバッジ、
+    /// シリーズ内で最長・最短（同率含む）なら、歴代側のバッジが無いときに限りシリーズ別集計へのバッジを出す。
+    /// 順位の母集団と同点の扱いはパート尺統計 SQL（RANK()）と同じ。
+    /// </summary>
+    private static IReadOnlyList<RecordBadge> BuildRecordBadges(IReadOnlyList<EpisodePartsRepository.PartLengthStat> stats)
+    {
+        var badges = new List<RecordBadge>();
+        foreach (var s in stats)
+        {
+            string? slug = s.PartType switch
+            {
+                "AVANT" => "avant",
+                "PART_A" => "part-a",
+                "PART_B" => "part-b",
+                _ => null
+            };
+            if (slug is null) continue;
+
+            bool globalLongest = s.GlobalRank <= RecordBadgeTopRank;
+            bool globalShortest = s.GlobalRankShortest <= RecordBadgeTopRank;
+            if (globalLongest)
+            {
+                badges.Add(new RecordBadge
+                {
+                    Label = $"{s.PartTypeNameJa} 歴代 {s.GlobalRank} 位の長さ",
+                    Url = $"/stats/episodes/{slug}/longest/",
+                    Css = "is-global"
+                });
+            }
+            if (globalShortest)
+            {
+                badges.Add(new RecordBadge
+                {
+                    Label = $"{s.PartTypeNameJa} 歴代 {s.GlobalRankShortest} 位の短さ",
+                    Url = $"/stats/episodes/{slug}/shortest/",
+                    Css = "is-global"
+                });
+            }
+            if (s.SeriesTotal < RecordBadgeMinSeriesTotal) continue;
+            if (s.SeriesRank == 1 && !globalLongest)
+            {
+                badges.Add(new RecordBadge
+                {
+                    Label = $"{s.PartTypeNameJa} シリーズ内で最長",
+                    Url = "/stats/episodes/series-summary/",
+                    Css = "is-series"
+                });
+            }
+            if (s.SeriesRankShortest == 1 && !globalShortest)
+            {
+                badges.Add(new RecordBadge
+                {
+                    Label = $"{s.PartTypeNameJa} シリーズ内で最短",
+                    Url = "/stats/episodes/series-summary/",
+                    Css = "is-series"
+                });
+            }
+        }
+        return badges;
+    }
+
+    /// <summary>
+    /// スタッフセクションに添える「チーフの組み合わせの通算回数」の行を組み立てる。
+    /// 組み合わせごとに <see cref="EpisodeChiefStaffIndex.Lookup"/> で通算情報を引き、
+    /// 「通算 N 回目（初回 第a話 / 前回 第b話 / 次回 第c話）」の形にする。初回は「初めての組み合わせ」。
+    /// 他シリーズの話を参照するときは『正式タイトル』を前置する（単一の参照なので年度は付けない）。
+    /// 構成役職のどれかが無い回（未収録・該当役職なし）は行を出さない。
+    /// </summary>
+    private IReadOnlyList<StaffComboRow> BuildStaffCombos(Series series, Episode ep)
+    {
+        var rows = new List<StaffComboRow>();
+        foreach (var combo in EpisodeChiefStaffIndex.Combos)
+        {
+            var occurrence = _chiefIndex.Lookup(combo, ep.EpisodeId);
+            if (occurrence is null) continue;
+
+            string head = occurrence.Ordinal == 1
+                ? "初めての組み合わせ"
+                : $"通算 <b>{occurrence.Ordinal}</b> 回目";
+
+            var refs = new List<string>();
+            if (occurrence.Ordinal > 2)
+                refs.Add("初回 " + EpisodeRefHtml(series, occurrence.FirstEpisodeId));
+            if (occurrence.PreviousEpisodeId is int prevId)
+                refs.Add("前回 " + EpisodeRefHtml(series, prevId));
+            if (occurrence.NextEpisodeId is int nextId)
+                refs.Add("次回 " + EpisodeRefHtml(series, nextId));
+
+            rows.Add(new StaffComboRow
+            {
+                Label = combo.Label,
+                Html = refs.Count > 0 ? $"{head}（{string.Join(" / ", refs)}）" : head
+            });
+        }
+        return rows;
+    }
+
+    /// <summary>話へのリンク。同じシリーズなら「第N話」、別シリーズなら「『正式タイトル』 第N話」。</summary>
+    private string EpisodeRefHtml(Series current, int episodeId)
+    {
+        if (!_ctx.EpisodeById.TryGetValue(episodeId, out var target)) return "";
+        if (!_ctx.SeriesById.TryGetValue(target.SeriesId, out var owner)) return "";
+        string url = PathUtil.EpisodeUrl(owner.Slug, target.SeriesEpNo);
+        string label = owner.SeriesId == current.SeriesId
+            ? $"第{target.SeriesEpNo}話"
+            : $"『{HtmlUtil.Escape(owner.Title)}』 第{target.SeriesEpNo}話";
+        return $"<a href=\"{url}\">{label}</a>";
     }
 
     /// <summary>主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。</summary>
@@ -1759,11 +1818,15 @@ public sealed class EpisodeGenerator
         public IReadOnlyList<CreditBlockView> CreditBlocks { get; set; } = Array.Empty<CreditBlockView>();
         /// <summary>主要スタッフ情報（脚本／絵コンテ／演出／作画監督／美術）。クレジット階層から抽出した抜粋。</summary>
         public IReadOnlyList<StaffRow> Staff { get; set; } = Array.Empty<StaffRow>();
+        /// <summary>チーフの組み合わせの通算回数（演出と作画監督 / 脚本・演出・作画監督）。構成役職が揃わない回は空。</summary>
+        public IReadOnlyList<StaffComboRow> StaffCombos { get; set; } = Array.Empty<StaffComboRow>();
+        /// <summary>h1 直下の歴代記録バッジ。歴代 10 位以内、またはシリーズ内で最長・最短の尺を持つ回だけ非空。</summary>
+        public IReadOnlyList<RecordBadge> RecordBadges { get; set; } = Array.Empty<RecordBadge>();
         /// <summary>使用音声セクション。episode_uses をパート別にグルーピングしたもの。 0 件のエピソードでは空配列で、テンプレ側でセクション自体を非表示にする。</summary>
         public IReadOnlyList<EpisodeUseSection> EpisodeUseSections { get; set; } = Array.Empty<EpisodeUseSection>();
         /// <summary>通算情報の項目列（シリーズ内話数 + 全シリーズ通算 + ニチアサ通算 等）。テンプレ側で放送日時と並ぶファクトタイルとして描画。</summary>
         public IReadOnlyList<TotalsItem> Totals { get; set; } = Array.Empty<TotalsItem>();
-        /// <summary>ビルド時刻時点の参照点キャプション（例：「2026年5月3日現在 『キミとアイドルプリキュア♪』第14話時点」）。 毎週変動するセクションの右下注記に出す。</summary>
+        /// <summary>ビルド時刻時点の参照点キャプション（例：「『キミとアイドルプリキュア♪』第14話(2026.5.3)時点」）。 毎週変動するセクションの右下注記に出す。</summary>
         public string BuildPointCaption { get; set; } = "";
         /// <summary>サブタイトル分析専用の参照点（サブタイトル登録済みの最終話基準。放送済基準の BuildPointCaption とは別物）。</summary>
         public string SubtitleBuildPointCaption { get; set; } = "";
@@ -1849,6 +1912,25 @@ public sealed class EpisodeGenerator
         public string Code { get; set; } = "";
         public string Label { get; set; } = "";
         public string Url { get; set; } = "";
+    }
+
+    /// <summary>チーフの組み合わせの通算回数 1 行（「演出と作画監督の組み合わせ：通算 3 回目（前回 第12話 / 次回 第20話）」）。</summary>
+    private sealed class StaffComboRow
+    {
+        /// <summary>組み合わせの名前（「演出と作画監督」「脚本・演出・作画監督」）。</summary>
+        public string Label { get; set; } = "";
+        /// <summary>通算回数と前後の話への参照（リンク化済み HTML 断片）。</summary>
+        public string Html { get; set; } = "";
+    }
+
+    /// <summary>h1 直下の歴代記録バッジ 1 件（「Aパート 歴代 2 位の長さ」など）。</summary>
+    private sealed class RecordBadge
+    {
+        public string Label { get; set; } = "";
+        /// <summary>根拠のランキングページ。</summary>
+        public string Url { get; set; } = "";
+        /// <summary>配色の modifier（is-global = 歴代、is-series = シリーズ内）。</summary>
+        public string Css { get; set; } = "";
     }
 
     /// <summary>通算情報 1 項目（ラベル + 値 + 任意の説明）。テンプレ側で「小ラベル＋値」の縦 2 段ファクトタイル 1 枚として描画する。</summary>

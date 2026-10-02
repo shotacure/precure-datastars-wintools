@@ -103,6 +103,14 @@
           <li>
             <a class="series-card-children-title" href="/series/{{ c.Slug }}/">{{ c.Title | html.escape }}</a>
             <span class="series-card-children-meta muted">{{ c.RuntimeLabel }}</span>
+            {{~ if (array.size c.KeyStaffSummary) > 0 ~}}
+            {{## 併映短編自身のメインスタッフ。親映画の行と同じ staff-badges-row 意匠。 ##}}
+            <div class="series-card-children-staff staff-badges-row">
+              {{~ for g in c.KeyStaffSummary ~}}
+              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url mem.PersonId }}">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+              {{~ end ~}}
+            </div>
+            {{~ end ~}}
           </li>
           {{~ end ~}}
         </ul>

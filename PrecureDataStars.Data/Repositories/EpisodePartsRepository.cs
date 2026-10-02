@@ -323,6 +323,9 @@ public sealed class EpisodePartsRepository : RepositoryBase
         /// <summary>シリーズ内での OA 尺順位（降順、1 が最長）。</summary>
         public required int SeriesRank { get; init; }
 
+        /// <summary>シリーズ内での OA 尺順位（昇順、1 が最短）。同点は同じ順位で、次の順位は同点の数だけ繰り下がる。</summary>
+        public required int SeriesRankShortest { get; init; }
+
         /// <summary>シリーズ内の同種パートを持つエピソード総数。</summary>
         public required int SeriesTotal { get; init; }
 
@@ -331,6 +334,9 @@ public sealed class EpisodePartsRepository : RepositoryBase
 
         /// <summary>全シリーズ横断（歴代）での OA 尺順位。</summary>
         public required int GlobalRank { get; init; }
+
+        /// <summary>全シリーズ横断（歴代）での OA 尺順位（昇順、1 が最短）。</summary>
+        public required int GlobalRankShortest { get; init; }
 
         /// <summary>全シリーズ横断の同種パートを持つエピソード総数。</summary>
         public required int GlobalTotal { get; init; }
@@ -370,6 +376,10 @@ series_stats AS (
             PARTITION BY p.series_id, p.part_type
             ORDER BY p.seconds DESC
         ) AS series_rank,
+        RANK() OVER (
+            PARTITION BY p.series_id, p.part_type
+            ORDER BY p.seconds ASC
+        ) AS series_rank_shortest,
         COUNT(*) OVER (
             PARTITION BY p.series_id, p.part_type
         ) AS series_total,
@@ -389,6 +399,10 @@ global_stats AS (
             PARTITION BY p.part_type
             ORDER BY p.seconds DESC
         ) AS global_rank,
+        RANK() OVER (
+            PARTITION BY p.part_type
+            ORDER BY p.seconds ASC
+        ) AS global_rank_shortest,
         COUNT(*) OVER (
             PARTITION BY p.part_type
         ) AS global_total,
@@ -406,9 +420,11 @@ SELECT
     pt.name_ja           AS PartTypeNameJa,
     p.title_short        AS SeriesTitleShort,
     s.series_rank        AS SeriesRank,
+    s.series_rank_shortest AS SeriesRankShortest,
     s.series_total       AS SeriesTotal,
     50.0 + 10.0 * (p.seconds - s.series_avg) / NULLIF(s.series_std, 0) AS SeriesHensachi,
     g.global_rank        AS GlobalRank,
+    g.global_rank_shortest AS GlobalRankShortest,
     g.global_total       AS GlobalTotal,
     50.0 + 10.0 * (p.seconds - g.global_avg) / NULLIF(g.global_std, 0) AS GlobalHensachi
 FROM parts p

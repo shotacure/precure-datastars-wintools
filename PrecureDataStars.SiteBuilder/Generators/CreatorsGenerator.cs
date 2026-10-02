@@ -173,6 +173,8 @@ public sealed class CreatorsGenerator
         {
             foreach (var aid in kv.Value) personIdByAlias[aid] = kv.Key;
         }
+        // 音楽の年表（作詞・作曲・編曲・音楽の役職詳細・音楽制作・歌唱）で歌・劇伴・盤を時期に置くための日付。
+        var musicDates = await MusicTimelineDates.LoadAsync(_ctx, _discsRepo, _productsRepo, ct).ConfigureAwait(false);
 
         foreach (var role in rankableRoles)
         {
@@ -194,7 +196,7 @@ public sealed class CreatorsGenerator
                 var songRows = BuildSongRoleRows(role.RoleCode, allSongCredits, allSingers,
                     personIdByAlias, personById);
                 if (songRows.Count == 0) continue;
-                GenerateSongRoleDetail(role, songRows);
+                GenerateSongRoleDetail(role, songRows, musicDates);
                 musicRoleEntries.Add(new RoleIndexEntry
                 {
                     RoleNameJa = role.NameJa,
@@ -288,7 +290,7 @@ public sealed class CreatorsGenerator
         // 音楽制作ページの「歌（演奏）」へ回す。
         var leadSingers = LeadSingerPersons(allSingers, personIdByAlias);
         GenerateMusicProduction(musicRoleEntries, allSongCredits, allSingers, leadSingers, personIdByAlias, personById, allRoles,
-            out int musicProductionPersonCount, out int musicProductionCompanyCount);
+            musicDates, out int musicProductionPersonCount, out int musicProductionCompanyCount);
         var characterById = allCharacters.ToDictionary(c => c.CharacterId);
         // 変身するキャラ（プリキュア）は歌唱ページのキャラクタータブで「変身前 / 変身後」の名義を並べる。
         var transformNameByCharacter = new Dictionary<int, string>();
@@ -301,9 +303,8 @@ public sealed class CreatorsGenerator
                 transformNameByCharacter[pre.CharacterId] = $"{pre.Name} / {post.Name}";
             }
         }
-        var firstReleaseByRecording = await LoadFirstReleaseByRecordingAsync(ct).ConfigureAwait(false);
         GenerateSingers(allSingers, leadSingers, personIdByAlias, personById, characterById, transformNameByCharacter,
-            firstReleaseByRecording, out int singerCount);
+            musicDates, out int singerCount);
 
         // ── ランディング（/creators/） ──
         GenerateLanding(staffPersonCount, staffCompanyCount, voiceCastCount,
@@ -618,13 +619,8 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した人物・企業・団体を一覧にしました。初参加順・担当回数順で並べ替えられます。",
-            OgCard = BuildCreatorsOgCard(
-                role.NameJa,
-                BuildEntityBadges(content.PersonCount, content.CompanyCount),
-                alternateNames.Count > 0
-                    ? new[] { new OgCardFactLine("別称", string.Join("・", alternateNames.Select(a => a.RoleNameJa))) }
-                    : Array.Empty<OgCardFactLine>()),
+            MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した方々（人物・企業・団体）を一覧にしました。初参加順・担当回数順で並べ替えられます。",
+            OgCard = BuildRoleOgCard(role, content.PersonCount, content.CompanyCount, rows, rowSet.TimelineEntities, alternateNames),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -782,6 +778,7 @@ public sealed class CreatorsGenerator
             rows.Add(new SongRoleRow
             {
                 PersonId = kv.Key,
+                SongIds = kv.Value,
                 // 人物詳細の見出し・URL と同じ表示名義で出す（クレジットの無い人物は正式名）。
                 PersonName = _ctx.EntityUrls.PersonDisplayName(p.PersonId) ?? p.FullName,
                 PersonNameKana = _ctx.EntityUrls.PersonDisplayKana(p.PersonId) ?? (p.FullNameKana ?? ""),
@@ -794,9 +791,21 @@ public sealed class CreatorsGenerator
         return rows;
     }
 
-    /// <summary>歌系役職 1 種の専用ページ <c>/creators/roles/{code}/</c> を「五十音順 / 担当曲数順」の 2 タブで書き出す。</summary>
-    private void GenerateSongRoleDetail(Role role, List<SongRoleRow> rows)
+    /// <summary>
+    /// 歌系役職 1 種の専用ページ <c>/creators/roles/{code}/</c> を「五十音順 / 担当曲数順」の 2 タブで書き出し、
+    /// 担当した曲を初めて盤に収められた日に置いた線表を年表タブに置く（1 年間に 2 曲以上担当した人）。
+    /// </summary>
+    private void GenerateSongRoleDetail(Role role, List<SongRoleRow> rows, MusicTimelineDates musicDates)
     {
+        var collector = new MusicTimelineCollector(_ctx, musicDates);
+        foreach (var r in rows)
+            foreach (var songId in r.SongIds)
+                collector.AddSong(('P', r.PersonId), songId);
+        var timelineEntities = rows
+            .Select(r => collector.ToEntity(('P', r.PersonId), "person", r.PersonName, r.PersonUrl, r.DebutRecordingId))
+            .OfType<RoleTimelineEntity>()
+            .ToList();
+
         var content = new SongRoleDetailModel
         {
             RoleNameJa = role.NameJa,
@@ -805,12 +814,14 @@ public sealed class CreatorsGenerator
             // KanaRows = SortSongRowsByKana(rows),
             DebutRows = SortSongRowsByDebut(rows),
             CountRows = SortSongRowsByCount(rows),
+            Timeline = new RoleTimelineBuilder(_ctx, RoleTimelineBuilder.ExtendToFor(timelineEntities))
+                .Build(timelineEntities, RoleTimelineRules.SongWriter),
             CoverageLabel = MusicCoverageLabel
         };
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアの歌で役職「{role.NameJa}」を担当した人物を一覧にしました。初参加順・担当曲数順で並べ替えられます。",
+            MetaDescription = $"歴代プリキュアの歌で役職「{role.NameJa}」を担当した方々を一覧にしました。初参加順・担当曲数順で並べ替えられます。",
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 new[] { new OgCardBadge("人物", $"{rows.Count}人") },
@@ -873,6 +884,7 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<int, int> personIdByAlias,
         IReadOnlyDictionary<int, Person> personById,
         IReadOnlyList<Role> allRoles,
+        MusicTimelineDates musicDates,
         out int personCount,
         out int companyCount)
     {
@@ -957,7 +969,7 @@ public sealed class CreatorsGenerator
         companyCount = allEntities.Count(k => k.Kind == 'C');
 
         // ── 役職 ──
-        var roleSections = BuildMusicRoleSections(songCreditRoleEntries, allSongCredits, personIdByAlias, personById, allRoles, minRecIdBySong);
+        var roleSections = BuildMusicRoleSections(songCreditRoleEntries, allSongCredits, personIdByAlias, personById, allRoles, minRecIdBySong, musicDates);
 
         var content = new SongPersonListModel
         {
@@ -975,11 +987,12 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア音楽制作",
-            MetaDescription = "プリキュアの主題歌・挿入歌・キャラクターソングと劇伴の制作に携わった人々を一覧。役職、初参加、参加数から探せます。",
+            MetaDescription = "歴代プリキュアの音楽制作スタッフ一覧。作詞・作曲・編曲から演奏・エンジニアまで、歌・劇伴・音盤のクレジットに名前のある方々（人物・団体）を役職ごとにまとめました。",
             OgCard = BuildCreatorsOgCard(
                 "歴代プリキュア音楽制作",
                 BuildEntityBadges(personCount, companyCount),
-                new[] { new OgCardFactLine("集計元", "歌・劇伴・音盤のクレジット") }, MusicCoverageLabel),
+                Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
+                "作詞・作曲・編曲から演奏・エンジニアまで、プリキュアの歌と劇伴、音盤を作った方々を一覧にしました。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1006,6 +1019,26 @@ public sealed class CreatorsGenerator
             // 劇伴のタブは初参加の作品を劇伴詳細へ、制作のタブはシリーズ詳細へリンクする。
             string url = bgm ? PathUtil.BgmsForSeriesUrl(series.Slug) : PathUtil.SeriesUrl(series.Slug);
             acc.Add(key, seriesId, roleCode, _ctx.SeriesStartDate(seriesId).DayNumber, series.Title, url, seriesId, productCatalogNo);
+        }
+    }
+
+    /// <summary>音楽クレジット 1 行を、年表の入力に担当先（曲・録音・劇伴の録音回・盤）の単位で足す。</summary>
+    private void AddMusicCreditToTimeline(MusicTimelineCollector timeline, (char Kind, int Id) key, MusicCredit r)
+    {
+        switch (r.TargetKind)
+        {
+            case MusicCreditTargetKinds.Song when r.SongId is int sid:
+                timeline.AddSong(key, sid);
+                break;
+            case MusicCreditTargetKinds.SongRecording when r.SongRecordingId is int rid && _ctx.SongRecordingById.TryGetValue(rid, out var rec):
+                timeline.AddSong(key, rec.SongId, rid);
+                break;
+            case MusicCreditTargetKinds.BgmSession when r.BgmSeriesId is int bsid:
+                timeline.AddSession(key, bsid, r.BgmSessionNo ?? 0);
+                break;
+            case MusicCreditTargetKinds.Product when r.ProductCatalogNo is string pc:
+                timeline.AddProduct(key, pc);
+                break;
         }
     }
 
@@ -1037,7 +1070,7 @@ public sealed class CreatorsGenerator
             Key = key,
             Label = label,
             IsByWork = byWork,
-            CountSortLabel = byWork ? "参加作品数順" : "参加曲数順",
+            CountSortLabel = byWork ? "参加作品数" : "参加曲数",
             DebutSections = BuildDebutSeriesSections(
                 rows.OrderBy(r => r.DebutSort).ThenBy(r => r.NameKana, StringComparer.Ordinal).ThenBy(r => r.Name, StringComparer.Ordinal).ToList(),
                 r => r.DebutSeriesId),
@@ -1056,7 +1089,8 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<int, int> personIdByAlias,
         IReadOnlyDictionary<int, Person> personById,
         IReadOnlyList<Role> allRoles,
-        IReadOnlyDictionary<int, int> minRecIdBySong)
+        IReadOnlyDictionary<int, int> minRecIdBySong,
+        MusicTimelineDates musicDates)
     {
         var entryByCode = songCreditRoleEntries.ToDictionary(e => e.RoleNameKey, StringComparer.Ordinal);
         var musicRowsByRole = _ctx.MusicCredits.BySong.Values
@@ -1082,7 +1116,7 @@ public sealed class CreatorsGenerator
                 }
                 var rows = musicRowsByRole.TryGetValue(role.RoleCode, out var mr) ? mr : new List<MusicCredit>();
                 var songCreditRows = allSongCredits.Where(c => string.Equals(c.CreditRole, role.RoleCode, StringComparison.Ordinal)).ToList();
-                var detail = BuildMusicRoleDetailRows(rows, songCreditRows, personIdByAlias, personById, minRecIdBySong);
+                var detail = BuildMusicRoleDetailRows(rows, songCreditRows, personIdByAlias, personById, minRecIdBySong, musicDates);
                 if (detail.Count == 0) continue;
                 GenerateMusicRoleDetail(role, detail);
                 entries.Add(new RoleIndexEntry
@@ -1111,9 +1145,12 @@ public sealed class CreatorsGenerator
         IReadOnlyList<SongCredit> songCreditRows,
         IReadOnlyDictionary<int, int> personIdByAlias,
         IReadOnlyDictionary<int, Person> personById,
-        IReadOnlyDictionary<int, int> minRecIdBySong)
+        IReadOnlyDictionary<int, int> minRecIdBySong,
+        MusicTimelineDates musicDates)
     {
         var accByEntity = new Dictionary<(char Kind, int Id), MusicRoleTargetAccumulator>();
+        // 年表タブの入力（担当先を曲・録音回・盤の単位で、初めて盤に収められた日・発売日に置く）。
+        var timeline = new MusicTimelineCollector(_ctx, musicDates);
         MusicRoleTargetAccumulator AccOf((char Kind, int Id) key)
         {
             if (!accByEntity.TryGetValue(key, out var acc))
@@ -1130,6 +1167,7 @@ public sealed class CreatorsGenerator
         {
             if (EntityKeyOf(r, personIdByAlias) is not { } key) continue;
             if (MusicCreditViewBuilder.DescribeTarget(_ctx, r) is not { } t) continue;
+            AddMusicCreditToTimeline(timeline, key, r);
             var acc = AccOf(key);
             switch (r.TargetKind)
             {
@@ -1155,6 +1193,7 @@ public sealed class CreatorsGenerator
             if (PersonKey(c.PersonAliasId, personIdByAlias) is not { } key) continue;
             if (!_ctx.SongById.TryGetValue(c.SongId, out var song)) continue;
             AccOf(key).AddSong(c.SongId, song.Title, PathUtil.SongUrl(c.SongId), DateTime.MaxValue, SeriesOfSong(c.SongId));
+            timeline.AddSong(key, c.SongId);
         }
 
         var result = new List<MusicRoleDetailRow>();
@@ -1200,6 +1239,7 @@ public sealed class CreatorsGenerator
                 .First();
             row.FirstSort = debut.Sort;
             row.DebutSeriesId = debut.SeriesId;
+            row.TimelineEntity = timeline.ToEntity(key, ent.Kind, ent.Name, ent.Url, debut.Sort.Ticks);
             result.Add(row);
         }
         return result
@@ -1260,9 +1300,13 @@ public sealed class CreatorsGenerator
         }
     }
 
-    /// <summary>音楽クレジットの役職詳細 <c>/creators/roles/{code}/</c>（関わった人・団体と担当先の一覧）を書き出す。</summary>
+    /// <summary>
+    /// 音楽クレジットの役職詳細 <c>/creators/roles/{code}/</c>（関わった人・団体と担当先の一覧）を書き出し、
+    /// 担当先を時期に置いた線表を年表の切り替えに置く（一覧の全員）。
+    /// </summary>
     private void GenerateMusicRoleDetail(Role role, IReadOnlyList<MusicRoleDetailRow> rows)
     {
+        var timelineEntities = rows.Select(r => r.TimelineEntity).OfType<RoleTimelineEntity>().ToList();
         var content = new MusicRoleDetailModel
         {
             RoleNameJa = role.NameJa,
@@ -1273,6 +1317,8 @@ public sealed class CreatorsGenerator
                 .ThenBy(r => r.NameKana, StringComparer.Ordinal)
                 .ThenBy(r => r.Name, StringComparer.Ordinal)
                 .ToList(),
+            Timeline = new RoleTimelineBuilder(_ctx, RoleTimelineBuilder.ExtendToFor(timelineEntities))
+                .Build(timelineEntities, RoleTimelineRules.MusicRole),
             CoverageLabel = MusicCoverageLabel
         };
         int persons = rows.Count(r => r.EntityKind == "person");
@@ -1280,7 +1326,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアの歌・劇伴・音盤で「{role.NameJa}」を担当した人物・団体を一覧にしました。",
+            MetaDescription = $"歴代プリキュアの歌・劇伴・音盤で「{role.NameJa}」を担当した方々（人物・団体）を一覧にしました。",
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 BuildEntityBadges(persons, companies),
@@ -1453,7 +1499,7 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<int, Person> personById,
         IReadOnlyDictionary<int, Character> characterById,
         IReadOnlyDictionary<int, string> transformNameByCharacter,
-        IReadOnlyDictionary<int, DateOnly> firstReleaseByRecording,
+        MusicTimelineDates musicDates,
         out int personCount)
     {
         var singerAcc = new SongParticipationAccumulator();   // 本人名義での参加（歌手の行）
@@ -1502,7 +1548,7 @@ public sealed class CreatorsGenerator
                 EntityUrl = r.PersonUrl,
                 // 同じ日に初めて参加した行は一覧と同じく歌手 → キャラクターの順に並べる。
                 FirstSortPos = (long)r.DebutRecordingId * 2,
-                Songs = TimelineSongs(singerRecs.GetValueOrDefault(r.PersonId), firstReleaseByRecording)
+                Songs = TimelineSongs(singerRecs.GetValueOrDefault(r.PersonId), musicDates)
             });
             rows.Add(new SingerListRow
             {
@@ -1536,7 +1582,7 @@ public sealed class CreatorsGenerator
                 EntitySubLabel = $"CV: {voiceName}",
                 EntityUrl = PathUtil.CharacterUrl(charId),
                 FirstSortPos = (long)v.FirstRecId * 2 + 1,
-                Songs = TimelineSongs(charRecs.GetValueOrDefault((charId, pid)), firstReleaseByRecording)
+                Songs = TimelineSongs(charRecs.GetValueOrDefault((charId, pid)), musicDates)
             });
             rows.Add(new SingerListRow
             {
@@ -1577,8 +1623,7 @@ public sealed class CreatorsGenerator
             .ToList();
 
         // 年表タブの線表（一覧の行すべて）。軸は最後の歌まで伸ばす。
-        var lastSongDate = timelineEntities.SelectMany(e => e.Songs).Select(x => x.Date).DefaultIfEmpty().Max();
-        var timelineBuilder = new RoleTimelineBuilder(_ctx, lastSongDate == default ? null : lastSongDate.AddDays(1));
+        var timelineBuilder = new RoleTimelineBuilder(_ctx, RoleTimelineBuilder.ExtendToFor(timelineEntities));
         var content = new SingersModel
         {
             DebutSections = BuildDebutSeriesSections(debutRows, r => r.DebutSeriesId),
@@ -1589,7 +1634,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア歌唱",
-            MetaDescription = "プリキュアの主題歌・挿入歌・キャラクターソングを歌った人々を一覧。歌手とキャラクターを、初参加曲と参加曲数から探せます。",
+            MetaDescription = "歴代プリキュアの歌手一覧。主題歌・挿入歌・キャラクターソングを歌った方々とキャラクターを、初参加の曲と参加曲数とともにまとめました。",
             OgCard = BuildCreatorsOgCard(
                 "歴代プリキュア歌唱",
                 new[]
@@ -1597,7 +1642,8 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("人物", $"{personCount}人"),
                     new OgCardBadge("キャラクター", $"{characterCount}組")
                 },
-                new[] { new OgCardFactLine("集計元", "歌のクレジット（劇中歌・キャラクターソングを含む）") }, MusicCoverageLabel),
+                Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
+                "主題歌からキャラクターソングまで、プリキュアの歌を歌った方々とキャラクターを一覧にしました。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1621,52 +1667,19 @@ public sealed class CreatorsGenerator
     }
 
     /// <summary>
-    /// 線表に描く歌（録音ごとに、初めて盤に収められた日と曲名）。盤に収められていない録音は出典シリーズの
-    /// 放送・公開開始日に置き、出典シリーズも無い録音は描かない。
+    /// 線表に描く歌（録音ごとに、初めて盤に収められた日と曲名。日付の決め方は <see cref="MusicTimelineDates.Recording"/>）。
+    /// 日付の分からない録音は描かない。
     /// </summary>
-    private IReadOnlyCollection<RoleTimelineSong> TimelineSongs(
-        IReadOnlySet<int>? recordingIds, IReadOnlyDictionary<int, DateOnly> firstReleaseByRecording)
+    private IReadOnlyCollection<RoleTimelinePoint> TimelineSongs(IReadOnlySet<int>? recordingIds, MusicTimelineDates musicDates)
     {
-        if (recordingIds is null) return Array.Empty<RoleTimelineSong>();
-        var songs = new List<RoleTimelineSong>(recordingIds.Count);
+        if (recordingIds is null) return Array.Empty<RoleTimelinePoint>();
+        var songs = new List<RoleTimelinePoint>(recordingIds.Count);
         foreach (var recId in recordingIds)
         {
-            if (!_ctx.SongRecordingById.TryGetValue(recId, out var rec)) continue;
-            DateOnly date;
-            if (firstReleaseByRecording.TryGetValue(recId, out var released)) date = released;
-            else if (rec.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var series)) date = series.StartDate;
-            else continue;
-            songs.Add(new RoleTimelineSong(date, _ctx.SongById.TryGetValue(rec.SongId, out var song) ? song.Title : ""));
+            if (!_ctx.SongRecordingById.TryGetValue(recId, out var rec) || musicDates.Recording(recId) is not DateOnly date) continue;
+            songs.Add(new RoleTimelinePoint(date, _ctx.SongById.TryGetValue(rec.SongId, out var song) ? song.Title : ""));
         }
         return songs;
-    }
-
-    /// <summary>
-    /// 録音 → 初めて収められた盤の発売日（その録音を収めたトラックを持つ盤のうち、商品の発売日が最も早いもの）。
-    /// 削除済みの盤・商品は数えない。
-    /// </summary>
-    private async Task<Dictionary<int, DateOnly>> LoadFirstReleaseByRecordingAsync(CancellationToken ct)
-    {
-        var discs = await _discsRepo.GetByProductReleaseOrderAsync(ct).ConfigureAwait(false);
-        var products = (await _productsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false))
-            .ToDictionary(p => p.ProductCatalogNo, StringComparer.Ordinal);
-        var releaseByCatalog = new Dictionary<string, DateOnly>(StringComparer.Ordinal);
-        foreach (var d in discs)
-        {
-            if (products.TryGetValue(d.ProductCatalogNo, out var p))
-                releaseByCatalog[d.CatalogNo] = DateOnly.FromDateTime(p.ReleaseDate);
-        }
-        var first = new Dictionary<int, DateOnly>();
-        foreach (var (catalogNo, tracks) in _ctx.TracksByCatalogNo)
-        {
-            if (!releaseByCatalog.TryGetValue(catalogNo, out var date)) continue;
-            foreach (var t in tracks)
-            {
-                if (t.SongRecordingId is not int recId) continue;
-                if (!first.TryGetValue(recId, out var cur) || date < cur) first[recId] = date;
-            }
-        }
-        return first;
     }
 
     /// <summary>
@@ -1834,12 +1847,12 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアスタッフ",
-            MetaDescription = "プリキュアを支えたスタッフ（人物・企業・団体）を一覧。役職や参加話数で並べ替えて、「あの人はどの作品に関わった？」をたどれます。",
+            MetaDescription = "歴代プリキュアのスタッフ一覧。脚本・演出・作画監督から制作会社まで、プリキュアを支えてきた方々（人物・企業・団体）を役職ごとにまとめました。参加話数や初参加の作品で並べ替えられます。",
             OgCard = BuildCreatorsOgCard(
                 "歴代プリキュアスタッフ",
-                BuildEntityBadges(content.PersonCount, content.CompanyCount)
-                    .Append(new OgCardBadge("役職", $"{roleIndexEntries.Count}種")).ToArray(),
-                Array.Empty<OgCardFactLine>()),
+                BuildEntityBadges(content.PersonCount, content.CompanyCount),
+                Array.Empty<OgCardFactLine>(), null,
+                "脚本・演出・作画から制作会社まで、プリキュアを支えてきた方々（人物・企業・団体）を役職ごとに一覧にしました。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1954,15 +1967,15 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア声優",
-            MetaDescription = "プリキュアのキャラクターを演じた声優を一覧。キャラクター・初出演・出演話数で並べ替えて、「このキャラの声は誰？」がすぐわかります。",
+            MetaDescription = "歴代プリキュアの声優さん一覧。キャラクターを演じた声優さんを作品ごと・役ごとにまとめました。初出演の作品や出演話数で並べ替えられます。",
             OgCard = BuildCreatorsOgCard(
                 "歴代プリキュア声優",
                 new[]
                 {
-                    new OgCardBadge("声優", $"{countRows.Count}人"),
-                    new OgCardBadge("シリーズ", $"{charSections.Count}作品")
+                    new OgCardBadge("声優", $"{countRows.Count}人")
                 },
-                Array.Empty<OgCardFactLine>()),
+                Array.Empty<OgCardFactLine>(), null,
+                "あのキャラの声は誰？ プリキュアのキャラクターを演じた声優さんを、作品ごと・役ごとに一覧にしました。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2187,7 +2200,12 @@ public sealed class CreatorsGenerator
                     EntityKind = "person",
                     EntityName = personRows[0].PersonName,
                     EntityUrl = personRows[0].PersonUrl,
-                    FirstSortPos = personRows.Min(r => r.EarliestPos),
+                    // 初めて出演した話（最も早いシリーズの最も早い話）の中でのクレジットの位置。
+                    FirstSortPos = personRows
+                        .OrderBy(r => r.SeriesSortStart)
+                        .ThenBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
+                        .ThenBy(r => r.EarliestPos)
+                        .First().EarliestPos,
                     Episodes = timelineEpisodes,
                     MovieSeriesIds = personMovieSeries,
                     SeriesNotes = charNotes
@@ -2378,7 +2396,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代クリエイター",
-            MetaDescription = "脚本・演出・作画から制作会社まで、プリキュアを作り上げたスタッフと、キャラクターを演じた声優、歌を作り、歌った人々。作品の「裏側」を担った作り手をたどれます。",
+            MetaDescription = "歴代プリキュアのクリエイター一覧。脚本・演出・作画から制作会社までのスタッフの方々、キャラクターを演じた声優さん、歌を作り歌った方々を、作品ごと・役職ごとにまとめました。",
             OgCard = BuildCreatorsOgCard(
                 "歴代クリエイター",
                 new[]
@@ -2388,7 +2406,8 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("音楽制作", $"{musicProductionPersonCount}名・{musicProductionCompanyCount}団体"),
                     new OgCardBadge("歌唱", $"{singerCount}人")
                 },
-                Array.Empty<OgCardFactLine>()),
+                Array.Empty<OgCardFactLine>(), null,
+                "脚本・演出・作画から制作会社、声優さん、作詞・作曲・歌手の方々まで、プリキュアを作り上げた方々をまとめて一覧にしました。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2408,10 +2427,106 @@ public sealed class CreatorsGenerator
     /// 母数を書かずに数だけ流すと「歴代の全数」と読まれてしまうため、カード単体で完結させる。
     /// </summary>
     /// <param name="coverageLabel">基準点ラベル。null なら本編クレジットの収録範囲（<see cref="BuildContext.CreditCoverageLabel"/>）。</param>
-    private OgCardSpec BuildCreatorsOgCard(string title, IReadOnlyList<OgCardBadge> badges, IReadOnlyList<OgCardFactLine> facts, string? coverageLabel = null) =>
+    /// <summary>
+    /// 役職詳細の OGP カード（人物・企業と同じプロフィール組み）。
+    /// 「役職名 → 人物数・団体数と、この役職がクレジットされた TV の話数・映画の本数 → 担当の多い順の顔ぶれ →
+    /// この役職が置かれていた期間の年表 → 別称・初出」の順に置く。透かしは初出の年。
+    /// 役職名と人数だけでは「いつからある役職で、誰の仕事か」が伝わらないため、顔ぶれと期間で役職の輪郭を示す。
+    /// </summary>
+    private OgCardSpec BuildRoleOgCard(
+        Role role, int personCount, int companyCount,
+        IReadOnlyList<EntityRow> rows, IReadOnlyList<RoleTimelineEntity> entities,
+        IReadOnlyList<AlternateNameItem> alternateNames)
+    {
+        // この役職がクレジットされた話・映画（担当者をまたいで 1 話・1 本に畳む）。
+        var episodes = new HashSet<(int SeriesId, int EpisodeId)>();
+        var movies = new HashSet<int>();
+        foreach (var e in entities)
+        {
+            foreach (var key in e.Episodes) if (key.EpisodeId != 0) episodes.Add(key);
+            foreach (var sid in e.MovieSeriesIds) movies.Add(sid);
+        }
+
+        var badges = new List<OgCardBadge>(BuildEntityBadges(personCount, companyCount));
+        if (episodes.Count > 0) badges.Add(new OgCardBadge("TV", $"{episodes.Count}話"));
+        if (movies.Count > 0) badges.Add(new OgCardBadge("映画", $"{movies.Count}本"));
+
+        // 担当の多い順に 4 者まで。「名前 n話 / n本」を読点で並べる。
+        var top = rows.OrderByDescending(r => r.TotalCount).ThenBy(r => r.FirstSortStart).ThenBy(r => r.FirstSortEpNo).Take(4).ToList();
+        var facts = new List<OgCardFactLine>();
+        if (top.Count > 0)
+        {
+            facts.Add(new OgCardFactLine("担当の多い順", string.Join("、", top.Select(r =>
+            {
+                string count = (r.EpisodeCount, r.MovieCount) switch
+                {
+                    (> 0, > 0) => $"{r.EpisodeCount}話 / {r.MovieCount}本",
+                    (> 0, _) => $"{r.EpisodeCount}話",
+                    _ => $"{r.MovieCount}本"
+                };
+                return $"{r.EntityName} {count}";
+            }))));
+        }
+
+        // この役職が置かれていた期間：作品ごとに、クレジットされた最初の話から最後の話まで（映画は公開日の点）。
+        var segments = new List<OgCardTimelineSegment>();
+        foreach (var g in episodes.GroupBy(k => k.SeriesId))
+        {
+            DateOnly? first = null, last = null;
+            foreach (var (sid, eid) in g)
+            {
+                if (!_ctx.EpisodeById.TryGetValue(eid, out var ep)) continue;
+                if (first is null || ep.OnAirDate < first) first = ep.OnAirDate;
+                if (last is null || ep.OnAirDate > last) last = ep.OnAirDate;
+            }
+            if (first is DateOnly f && last is DateOnly l)
+                segments.Add(new OgCardTimelineSegment(f, l.AddDays(7), OgCardColors.Staff));
+        }
+        foreach (var sid in movies)
+        {
+            if (_ctx.SeriesById.TryGetValue(sid, out var mv))
+                segments.Add(new OgCardTimelineSegment(mv.StartDate, mv.StartDate, OgCardColors.Staff));
+        }
+
+        // 初出：この役職が最初にクレジットされた話（映画なら公開日）。透かしはその年。
+        (DateOnly Date, string Text)? debut = null;
+        foreach (var (sid, eid) in episodes)
+        {
+            if (!_ctx.EpisodeById.TryGetValue(eid, out var ep) || !_ctx.SeriesById.TryGetValue(sid, out var s)) continue;
+            if (debut is null || ep.OnAirDate < debut.Value.Date)
+                debut = (ep.OnAirDate, $"『{s.Title}』第{ep.SeriesEpNo}話({ep.OnAirDate:yyyy.M.d})");
+        }
+        foreach (var sid in movies)
+        {
+            if (!_ctx.SeriesById.TryGetValue(sid, out var mv)) continue;
+            if (debut is null || mv.StartDate < debut.Value.Date)
+                debut = (mv.StartDate, $"『{mv.Title}』({mv.StartDate:yyyy.M.d} 公開)");
+        }
+
+        var foot = new List<OgCardFactLine>();
+        if (alternateNames.Count > 0)
+            foot.Add(new OgCardFactLine("別称", string.Join("・", alternateNames.Select(a => a.RoleNameJa))));
+        if (debut is not null) foot.Add(new OgCardFactLine("初出", debut.Value.Text));
+
+        return new OgCardSpec(Kicker: "", Title: role.NameJa)
+        {
+            MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
+            BandColorHex = OgCardColors.Staff,
+            Badges = badges,
+            InlineFacts = facts,
+            Watermark = debut is null ? "" : debut.Value.Date.Year.ToString(),
+            Timeline = segments.OrderBy(s => s.Start).ToList(),
+            TimelineEnd = DateOnly.FromDateTime(_ctx.BuildStartedAt.Date),
+            FootFacts = foot
+        };
+    }
+
+    private OgCardSpec BuildCreatorsOgCard(string title, IReadOnlyList<OgCardBadge> badges, IReadOnlyList<OgCardFactLine> facts, string? coverageLabel = null, string lead = "") =>
         new(Kicker: "", Title: title)
         {
             MetaLeft = OgCoverageLabel.Compact(coverageLabel ?? _ctx.CreditCoverageLabel),
+            // どんなページかのリード文（数の下に添える）。
+            Subtitle = lead,
             Badges = badges,
             Facts = facts
         };
@@ -2782,6 +2897,7 @@ public sealed class CreatorsGenerator
         public string Label { get; set; } = "";
         /// <summary>参加数を作品数で数えるタブなら true（曲数なら false）。</summary>
         public bool IsByWork { get; set; }
+        /// <summary>多い順の並べ替えボタンのラベル（「参加作品数」「参加曲数」）。末尾の「順」はスマホで隠せるようテンプレ側で付ける。</summary>
         public string CountSortLabel { get; set; } = "";
         /// <summary>初参加順（初参加のシリーズごとのセクション）。</summary>
         public IReadOnlyList<DebutSeriesSection> DebutSections { get; set; } = Array.Empty<DebutSeriesSection>();
@@ -2836,12 +2952,16 @@ public sealed class CreatorsGenerator
         public IReadOnlyList<DebutSeriesSection> DebutSections { get; set; } = Array.Empty<DebutSeriesSection>();
         /// <summary>参加数順。</summary>
         public IReadOnlyList<MusicRoleDetailRow> CountRows { get; set; } = Array.Empty<MusicRoleDetailRow>();
+        /// <summary>年表タブ（切り替え）の線表。載せる行が無ければ null（年表を出さない）。</summary>
+        public RoleTimelineModel? Timeline { get; set; }
         public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>音楽クレジットの役職詳細の 1 行（人物または団体と、その担当先）。</summary>
     private sealed class MusicRoleDetailRow
     {
+        /// <summary>年表の入力（担当先を時期に置いたもの。テンプレの行には出さない）。</summary>
+        public RoleTimelineEntity? TimelineEntity { get; set; }
         public string EntityKind { get; set; } = "";
         public string Name { get; set; } = "";
         public string NameKana { get; set; } = "";
@@ -2951,6 +3071,8 @@ public sealed class CreatorsGenerator
         /// <summary>初参加順（recording_id 順）の行。五十音順の代替として既定タブに使う。</summary>
         public IReadOnlyList<SongRoleRow> DebutRows { get; set; } = Array.Empty<SongRoleRow>();
         public IReadOnlyList<SongRoleRow> CountRows { get; set; } = Array.Empty<SongRoleRow>();
+        /// <summary>年表タブ（切り替え）の線表。載せる行が無ければ null（年表を出さない）。</summary>
+        public RoleTimelineModel? Timeline { get; set; }
         public string CoverageLabel { get; set; } = "";
     }
 
@@ -2958,6 +3080,8 @@ public sealed class CreatorsGenerator
     private sealed class SongRoleRow
     {
         public int PersonId { get; set; }
+        /// <summary>担当した曲（song_id。作詞・作曲・編曲の役職詳細の年表に使う。他では空）。</summary>
+        public IReadOnlyCollection<int> SongIds { get; set; } = Array.Empty<int>();
         public string PersonName { get; set; } = "";
         public string PersonNameKana { get; set; } = "";
         public string PersonUrl { get; set; } = "";

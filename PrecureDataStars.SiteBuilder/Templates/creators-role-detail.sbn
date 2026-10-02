@@ -5,9 +5,6 @@
 <h1>{{ RoleNameJa | html.escape }}</h1>
 
 <p class="lead">
-  「{{ RoleNameJa | html.escape }}」を担当した人物・企業・団体の一覧です。
-  「初参加順」「担当回数順」{{ if Timeline }}「年表」{{ end }}をタブで切り替えられます。
-<br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
@@ -51,16 +48,16 @@
          データが揃ったらこのコメントを外し、初参加順ボタンの is-active / aria-selected を戻す。
     <button type="button" class="tab-btn is-active" data-tab="kana"
             role="tab" aria-selected="true" aria-controls="role-tab-panel-kana">
-      五十音順
+      五十音<span class="tab-sfx">順</span>
     </button>
     ##}}
     <button type="button" class="tab-btn is-active" data-tab="debut"
             role="tab" aria-selected="true" aria-controls="role-tab-panel-debut">
-      初参加順
+      初参加<span class="tab-sfx">順</span>
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="role-tab-panel-count">
-      担当回数順
+      担当回数<span class="tab-sfx">順</span>
     </button>
     {{~ if Timeline ~}}
     <button type="button" class="tab-btn" data-tab="timeline"

@@ -13,7 +13,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// 役職別ランキング（<c>/creators/roles/</c>）・声優ランキング（<c>/creators/voice-cast/</c>）は
 /// 「クリエイター」セクションへ移設済みで <see cref="CreatorsGenerator"/> が生成するため、本ランディングは
 /// 関与系を扱わない。
-/// 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」
+/// 「『○○プリキュア』第N話(YYYY.M.D)時点」
 /// 表記（カバレッジラベル）を 2 セクション（サブタイトル統計 / エピソード尺統計）の各 h2 直下に
 /// 個別表示する。2 つの統計はそれぞれ最終断面が異なるため、ページ上部に 1 つだけ表示する形では不正確になる。
 /// <list type="bullet">
@@ -51,21 +51,19 @@ public sealed class StatsLandingGenerator
         var content = new ContentModel
         {
             SubtitleCoverageLabel = StatsCoverageLabel.BuildSubtitle(latestSubtitle, _ctx.BuildStartedAt),
-            EpisodeCoverageLabel  = StatsCoverageLabel.Build(latestParts)
+            EpisodeCoverageLabel  = StatsCoverageLabel.Build(latestParts),
+            // 歴代記録はパート尺（上の尺軸）とクレジット（サイト共通の収録範囲）の 2 本の基準点を持つ。
+            CreditCoverageLabel   = _ctx.CreditCoverageLabel
         };
         var layout = new LayoutModel
         {
             PageTitle = "統計",
-            // 件数は 2 軸で基準が違うため数バッジは置かず、何が見られるかを事実行で示す。
+            // 集計対象の話数はサイト側の都合の数なのでカードには出さず、どんなページかをリード文で示す。
             OgCard = new OgCardSpec(Kicker: "", Title: "統計")
             {
-                Badges = new[]
-                {
-                    new OgCardBadge("サブタイトル", $"{StatsCoverageLabel.CountTvEpisodesWithSubtitle(_ctx)}話"),
-                    new OgCardBadge("尺データ", $"{StatsCoverageLabel.CountTvEpisodesWithParts(_ctx, episodeIdsWithParts)}話")
-                }
+                Subtitle = "サブタイトルの漢字率から本編の尺まで、歴代プリキュアの全話を数字で読んでみると、意外な傾向が見えてきます。"
             },
-            MetaDescription = "サブタイトルの漢字率や文字数、本編パートの尺やアバンの長さまで。歴代プリキュア全レギュラー TV シリーズの全エピソードを数字で読み解く統計集です。",
+            MetaDescription = "歴代プリキュア全話の統計。サブタイトルの文字数・漢字率・記号率と、本編パート・アバンタイトルの尺を全シリーズで集計しました。数字から見える意外な傾向をどうぞ。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -82,7 +80,9 @@ public sealed class StatsLandingGenerator
     {
         /// <summary>サブタイトル統計カードに添えるカバレッジラベル。</summary>
         public string SubtitleCoverageLabel { get; set; } = "";
-        /// <summary>エピソード尺統計カードに添えるカバレッジラベル。</summary>
+        /// <summary>エピソード尺統計カードに添えるカバレッジラベル。歴代記録カードの尺側にも使う。</summary>
         public string EpisodeCoverageLabel { get; set; } = "";
+        /// <summary>歴代記録カードのクレジット側に添えるカバレッジラベル（本編クレジットの収録範囲）。</summary>
+        public string CreditCoverageLabel { get; set; } = "";
     }
 }

@@ -178,8 +178,20 @@ public partial class CreditEditorForm
                                 else leadingLabel = $"  先頭=#{lcid}";
                             }
 
+                            // ブロック先頭の見出し（作品名・「特別出演」など）があればラベルに併記する。
+                            string headingLabel = "";
+                            if (!string.IsNullOrEmpty(block.HeadingText))
+                            {
+                                headingLabel = $"  見出し=「{block.HeadingText}」";
+                            }
+                            else if (block.HeadingSeriesId is int hsid)
+                            {
+                                string? htitle = await _lookupCache.LookupSeriesTitleAsync(hsid);
+                                headingLabel = $"  見出し=「{htitle ?? "作品 #" + hsid}」";
+                            }
+
                             var blockNode = new TreeNode(
-                                $"🔵 Block #{blockDisplayIndex}  ({block.ColCount} cols, {entries.Count} entries){leadingLabel}")
+                                $"🔵 Block #{blockDisplayIndex}  ({block.ColCount} cols, {entries.Count} entries){headingLabel}{leadingLabel}")
                             {
                                 Tag = new NodeTag(NodeKind.Block, draftBlock.CurrentId, draftBlock)
                             };

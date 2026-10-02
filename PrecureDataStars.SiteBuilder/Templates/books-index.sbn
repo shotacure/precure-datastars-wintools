@@ -21,7 +21,7 @@
   <div class="tabs" role="tablist" aria-label="書籍一覧の並べ替え">
     <button type="button" class="tab-btn is-active" data-tab="release"
             role="tab" aria-selected="true" aria-controls="books-tab-panel-release">
-      発売日順
+      発売日<span class="tab-sfx">順</span>
     </button>
     <button type="button" class="tab-btn" data-tab="genre"
             role="tab" aria-selected="false" aria-controls="books-tab-panel-genre">

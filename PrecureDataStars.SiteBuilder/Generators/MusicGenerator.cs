@@ -411,10 +411,12 @@ public sealed class MusicGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア音楽",
-            MetaDescription = $"主題歌・挿入歌 {recordingsCount} 件、劇伴(BGM) {bgmCueTotal} 件、音楽商品 {productsCount} 点 {discsCount} 枚。歴代プリキュアの「音」をまるごと集めた入口です。",
+            MetaDescription = $"歴代プリキュアの音楽の入口。主題歌・挿入歌 {recordingsCount} 件、劇伴（BGM）{bgmCueTotal} 件、音楽商品 {productsCount} 点 {discsCount} 枚を、曲・作品・商品ごとにまとめました。",
             // ページ本文の 3 カードに出している数をそのままカードにも置く。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア音楽")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "主題歌・挿入歌・劇伴から音楽商品まで、プリキュアの音楽をまとめて案内します。",
                 Badges = new[]
                 {
                     new OgCardBadge("歌", $"{recordingsCount}件"),
@@ -480,12 +482,22 @@ public sealed class MusicGenerator
     /// 名義は人物詳細ページへのリンク用 PersonId を持つ。共同名義やフリーテキストのみのものは
     /// PersonId を持たずテキスト表示のみとなる。作曲と編曲の集合が同順序で完全一致するときは
     /// 同じ人物カード（メンバー名列）に作曲・編曲バッジが連続して並ぶ統合表示にする。
+    /// 本編クレジットに「音楽」が入っているシリーズは、この集計に代えて本編クレジットの担当者を
+    /// [音楽] バッジで出す（<see cref="BuildBgmStaffFromMainCredit"/>）。
     /// </summary>
     private void GenerateBgmIndex(
         IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> cuesBySeries,
         IReadOnlyDictionary<(int SeriesId, string MNoDetail), List<BgmCueRecording>> recordingsByBgmCue,
         IReadOnlyDictionary<(int SeriesId, string MNoDetail, string Role), List<BgmCueCreditAlias>> creditAliasesByBgmCue)
     {
+        // 名義 alias_id → 人物 ID（所属人物が 1 人に絞れる名義のみ）。本編クレジット由来のスタッフ名を
+        // 人物詳細へリンクするときに使う。共同名義（複数人物）はリンクしないので辞書に入れない。
+        var singlePersonIdByAlias = _ctx.AliasIdsByPerson
+            .SelectMany(kv => kv.Value.Select(aliasId => (AliasId: aliasId, PersonId: kv.Key)))
+            .GroupBy(x => x.AliasId)
+            .Where(g => g.Count() == 1)
+            .ToDictionary(g => g.Key, g => g.First().PersonId);
+
         var rows = new List<BgmIndexRow>();
         foreach (var s in _ctx.Series.OrderBy(x => x.StartDate).ThenBy(x => x.SeriesId))
         {
@@ -504,11 +516,17 @@ public sealed class MusicGenerator
                 .GroupBy(c => string.IsNullOrEmpty(c.MNoClass) ? $"__detail__:{c.MNoDetail}" : c.MNoClass)
                 .Count();
 
-            // 主要作曲家・編曲家。担当割合 20% 以上の人物を頻度降順で抽出し、
-            // 作曲・編曲の集合が同順序で完全一致するなら作曲・編曲バッジが連続する 1 グループに統合する。
-            // ただし暫定固定（ProvisionalBgmStaffOverride）対象シリーズは集計を使わず固定の顔ぶれで出す。
+            // スタッフ行の出どころは次の優先順位で決める。
+            //   1. 本編クレジットの「音楽」（TV 等は 1 話 OP、映画等は作品のクレジット）があればそれを [音楽] で出す
+            //   2. 暫定固定（ProvisionalBgmStaffOverride）対象シリーズは固定の顔ぶれで出す
+            //   3. それ以外は劇伴データから担当割合 20% 以上の人物を頻度降順で抽出し、
+            //      作曲・編曲の集合が同順序で完全一致するなら作曲・編曲バッジが連続する 1 グループに統合する
             IReadOnlyList<BgmStaffGroup> staffGroups;
-            if (ProvisionalBgmStaffOverride.TryGetValue(s.SeriesId, out var fixedStaffNames))
+            if (BuildBgmStaffFromMainCredit(s, singlePersonIdByAlias) is { } creditStaffGroups)
+            {
+                staffGroups = creditStaffGroups;
+            }
+            else if (ProvisionalBgmStaffOverride.TryGetValue(s.SeriesId, out var fixedStaffNames))
             {
                 // 暫定固定表示：作曲・編曲を同一の顔ぶれ・並び（フリーテキスト＝リンクなし）にして
                 // [作曲][編曲] 統合グループ 1 つで出す。BuildBgmStaffGroups に同一リストを渡すことで
@@ -560,9 +578,11 @@ public sealed class MusicGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア劇伴音楽(BGM)",
-            MetaDescription = $"歴代プリキュア {rows.Count} 作品の劇伴(BGM) {totalSongs} 曲 {totalCues} バージョン。M ナンバー・メニュータイトル・作編曲のクレジットから、タイトルがわからない「あの曲」を探せます。",
+            MetaDescription = $"歴代プリキュア {rows.Count} 作品の劇伴（BGM）一覧。{totalSongs} 曲 {totalCues} バージョンを、M ナンバー・メニュータイトル・作曲者・収録盤とともにまとめました。",
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア劇伴音楽(BGM)")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "作品ごとの劇伴（BGM）を、M ナンバー・作曲者・収録盤とともに一覧にしました。あの場面の曲も見つかります。",
                 Badges = BuildBgmCountBadges(
                     new[] { new OgCardBadge("作品", $"{rows.Count}作") },
                     totalSongs, totalCues, sources)
@@ -575,6 +595,85 @@ public sealed class MusicGenerator
             }
         };
         _page.RenderAndWrite("/bgms/", "music", "bgms-index.sbn", content, layout);
+    }
+
+    /// <summary>本編クレジットで劇伴の担当者を表す役職コード（「音楽」）。</summary>
+    private const string MainCreditMusicRoleCode = "MUSIC";
+
+    /// <summary>
+    /// 劇伴一覧のスタッフ行を本編クレジットの「音楽」から組み立てる。
+    /// 参照するクレジットは、各話にクレジットが付くシリーズ（credit_attach_to=EPISODE）なら 1 話の OP、
+    /// 作品単位でクレジットが付くシリーズ（映画など）なら作品のクレジット全件。
+    /// 「音楽」の担当者をクレジット順に並べ、同じ名義・同じテキストは 1 回だけ出す。
+    /// PERSON エントリは名義の表示テキストで出し、所属人物が 1 人に絞れる名義だけ人物詳細へリンクする。
+    /// TEXT エントリはテキストのまま（リンクなし）で出す。
+    /// 該当クレジットが未入力か「音楽」の担当者がいないときは null を返し、呼び出し側は劇伴データの集計に回す。
+    /// </summary>
+    private IReadOnlyList<BgmStaffGroup>? BuildBgmStaffFromMainCredit(
+        Series s,
+        IReadOnlyDictionary<int, int> singlePersonIdByAlias)
+    {
+        IEnumerable<Credit> credits;
+        if (SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode))
+        {
+            var firstEpisode = _ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)
+                ? eps.FirstOrDefault(e => e.SeriesEpNo == 1)
+                : null;
+            if (firstEpisode is null
+                || !_ctx.CreditsByEpisode.TryGetValue(firstEpisode.EpisodeId, out var epCredits))
+                return null;
+            credits = epCredits.Where(c => string.Equals(c.CreditKind, "OP", StringComparison.Ordinal));
+        }
+        else
+        {
+            if (!_ctx.CreditsBySeries.TryGetValue(s.SeriesId, out var seriesCredits)) return null;
+            credits = seriesCredits;
+        }
+
+        var members = new List<BgmKeyStaffEntry>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var credit in credits)
+        {
+            if (!_ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cards)) continue;
+            var entries = cards
+                .SelectMany(card => card.Tiers)
+                .SelectMany(tier => tier.Groups)
+                .SelectMany(group => group.Roles)
+                .Where(role => string.Equals(role.Role.RoleCode, MainCreditMusicRoleCode, StringComparison.Ordinal))
+                .SelectMany(role => role.Blocks)
+                .SelectMany(block => block.Entries);
+            foreach (var entry in entries)
+            {
+                if (string.Equals(entry.EntryKind, "PERSON", StringComparison.Ordinal)
+                    && entry.PersonAliasId is int aliasId
+                    && _ctx.PersonAliasById.TryGetValue(aliasId, out var alias))
+                {
+                    if (!seen.Add($"alias:{aliasId}")) continue;
+                    members.Add(new BgmKeyStaffEntry
+                    {
+                        Name = alias.GetDisplayName(),
+                        PersonId = singlePersonIdByAlias.TryGetValue(aliasId, out var personId) ? personId : null
+                    });
+                }
+                else if (string.Equals(entry.EntryKind, "TEXT", StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(entry.RawText))
+                {
+                    string text = entry.RawText.Trim();
+                    if (!seen.Add($"text:{text}")) continue;
+                    members.Add(new BgmKeyStaffEntry { Name = text, PersonId = null });
+                }
+            }
+        }
+
+        if (members.Count == 0) return null;
+        return new[]
+        {
+            new BgmStaffGroup
+            {
+                Roles = new[] { new BgmRoleBadge { RoleCode = MainCreditMusicRoleCode, RoleLabel = "音楽" } },
+                Members = members
+            }
+        };
     }
 
     /// <summary>
@@ -1002,11 +1101,9 @@ public sealed class MusicGenerator
 
     /// <summary>
     /// 劇伴詳細ページの OGP カードを組み立てる。
-    /// 「『シリーズ名』→ 劇伴音楽(BGM) → 量の数 → 主要な作曲・編曲」の順に置く。
-    /// 商品詳細のカードと同じ組み方で、識別（どの作品か）を上段に、量を数のバッジに、
-    /// 中身の手がかりを事実行に振り分ける。
-    /// 数は 2 行に割り、記録している数と、そのうち音源が存在する分（曲数・バージョン数・総再生時間）を
-    /// 引き比べられるようにする。
+    /// 「劇伴音楽(BGM) → 作品名 → 期間 → 量の数（曲数・バージョン数・音源の収録時間）→ 作曲・編曲」の順に置き、
+    /// 右上の透かしに放送開始年（映画は公開年）を出す。
+    /// 商品詳細のカードと同じ組み方で、識別（どの作品か）を見出しに、量を数のバッジに、中身の手がかりを事実行に振り分ける。
     /// 曲目は並べない。総曲数に対して数行しか入らず、どれが載るかは並び順で決まってしまうため、
     /// 一部だけを見せるより規模を数で示す方が正確に伝わる。
     /// </summary>
@@ -1020,11 +1117,11 @@ public sealed class MusicGenerator
     {
         var badges = BuildBgmCountBadges(Array.Empty<OgCardBadge>(), songCount, cueCount, sources);
 
-        return new OgCardSpec(
-            Kicker: $"『{series.Title}』",
-            Title: "劇伴音楽(BGM)")
+        return new OgCardSpec(Kicker: "劇伴音楽(BGM)", Title: series.Title)
         {
-            KickerRight = periodLabel ?? "",
+            Subtitle = periodLabel ?? "",
+            BandColorHex = OgCardColors.Music,
+            Watermark = series.StartDate.Year.ToString(),
             Badges = badges,
             InlineFacts = BuildBgmStaffFactLines(staffGroups)
         };
@@ -1048,14 +1145,25 @@ public sealed class MusicGenerator
             string names = string.Join("、", g.Members.Select(m => m.Name));
             if (label.Length == 0 || names.Length == 0) continue;
 
-            lines.Add(new OgCardFactLine(label, names));
+            // 役職名はサイトの楽曲バッジと同じ色（作曲は黄橙、編曲は緑）。「作曲・編曲」の統合行は役職ごとに色を分ける。
+            var parts = new List<OgCardLabelPart>();
+            foreach (var r in g.Roles)
+            {
+                if (parts.Count > 0) parts.Add(new OgCardLabelPart("・", ""));
+                parts.Add(new OgCardLabelPart(r.RoleLabel, OgRolePalette.ColorFor(r.RoleCode)));
+            }
+            lines.Add(new OgCardFactLine(label, names)
+            {
+                LabelColorHex = g.Roles.Count == 1 ? OgRolePalette.ColorFor(g.Roles[0].RoleCode) : "",
+                LabelParts = g.Roles.Count > 1 ? parts : Array.Empty<OgCardLabelPart>()
+            });
         }
         return lines.ToArray();
     }
 
     /// <summary>
-    /// 劇伴詳細ページの &lt;meta name="description"&gt; 用説明文を実データから組み立てる。
-    /// 商品詳細と同じ流儀で、先頭に「何の・どれだけ」を置き、残りの字数で中身の手がかりを足す。
+    /// 劇伴詳細の meta description。「『作品』の劇伴（BGM）N 曲 M バージョン（期間）。作曲・編曲：〇〇。
+    /// M ナンバーとメニュータイトル、収録 CD をまとめました。」の順で 140 字ほどに収める。
     /// </summary>
     private static string BuildBgmMetaDescription(
         Series series,
@@ -1063,35 +1171,27 @@ public sealed class MusicGenerator
         string countsLabel,
         IReadOnlyList<BgmStaffGroup> staffGroups)
     {
-        const int targetMaxChars = 140;
+        const int targetMaxChars = 150;
+        const string tail = "M ナンバーとメニュータイトル、収録 CD をまとめました。";
+
         var sb = new System.Text.StringBuilder();
+        sb.Append('『').Append(series.Title).Append("』の劇伴（BGM）").Append(countsLabel);
+        if (!string.IsNullOrWhiteSpace(periodLabel)) sb.Append('（').Append(periodLabel).Append('）');
+        sb.Append('。');
 
-        // ① 『タイトル』の劇伴(BGM) N曲 Mバージョン。
-        sb.Append('『').Append(series.Title).Append("』の劇伴(BGM) ").Append(countsLabel).Append('。');
-
-        // ② 放送・公開期間（あれば）
-        if (!string.IsNullOrWhiteSpace(periodLabel))
-        {
-            var fragment = $"{periodLabel}。";
-            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
-        }
-
-        // ③ 主要な作曲・編曲（入る分だけ）
+        // 作曲・編曲（入る分だけ）。「役職：名前」の表記。
+        var kept = new List<string>();
         foreach (var g in staffGroups)
         {
             string label = string.Join("・", g.Roles.Select(r => r.RoleLabel));
             string names = string.Join("、", g.Members.Select(m => m.Name));
             if (label.Length == 0 || names.Length == 0) continue;
-
-            var fragment = $"{label}:{names}。";
-            if (sb.Length + fragment.Length > targetMaxChars) break;
-            sb.Append(fragment);
+            string joined = string.Join("、", kept.Append($"{label}：{names}")) + "。";
+            if (sb.Length + joined.Length + tail.Length > targetMaxChars) break;
+            kept.Add($"{label}：{names}");
         }
-
-        // ④ 余白があれば、ページで何がたどれるかを 1 文だけ添える。
-        const string tail = "M ナンバー・メニュータイトルと収録 CD をたどれます。";
-        if (sb.Length + tail.Length <= targetMaxChars) sb.Append(tail);
-
+        if (kept.Count > 0) sb.Append(string.Join("、", kept)).Append('。');
+        sb.Append(tail);
         return sb.ToString();
     }
 
@@ -1188,9 +1288,10 @@ public sealed class MusicGenerator
         var (timeLabel, timeFraction) = FormatTotalLengthFrames(sources.TotalFrames);
         if (timeLabel.Length == 0) return badges.ToArray();
 
-        badges.Add(new OgCardBadge("(収録", $"{sources.SongCount}曲") { NewLine = true });
-        if (showVersions) badges.Add(new OgCardBadge("", $"{sources.VersionCount}ver."));
-        badges.Add(new OgCardBadge("", timeLabel) { Fraction = timeFraction, Tail = ")" });
+        // 音源のある分は、曲数が記録と同じなら収録時間だけ、少なければ「収録 n曲」を添えて引き比べられるようにする。
+        if (sources.SongCount < songCount)
+            badges.Add(new OgCardBadge("収録", $"{sources.SongCount}曲") { NewLine = true });
+        badges.Add(new OgCardBadge(sources.SongCount < songCount ? "" : "収録", timeLabel) { Fraction = timeFraction, NewLine = sources.SongCount >= songCount });
 
         return badges.ToArray();
     }
@@ -1245,18 +1346,18 @@ public sealed class MusicGenerator
     /// </summary>
     private sealed class BgmStaffGroup
     {
-        /// <summary>役職バッジ列。通常 1 件、作曲と編曲のメンバーが完全一致するときは 2 件並ぶ。</summary>
+        /// <summary>役職バッジ列。通常 1 件、作曲と編曲のメンバーが完全一致するときは 2 件並ぶ。本編クレジット由来は「音楽」1 件。</summary>
         public IReadOnlyList<BgmRoleBadge> Roles { get; set; } = Array.Empty<BgmRoleBadge>();
-        /// <summary>このグループに属するメンバー（人物）の列。頻度降順。</summary>
+        /// <summary>このグループに属するメンバー（人物）の列。劇伴データ集計由来は頻度降順、本編クレジット由来はクレジット順。</summary>
         public IReadOnlyList<BgmKeyStaffEntry> Members { get; set; } = Array.Empty<BgmKeyStaffEntry>();
     }
 
     /// <summary>役職バッジ 1 個分（コードと表示ラベルのみ）。</summary>
     private sealed class BgmRoleBadge
     {
-        /// <summary>役職コード。"COMPOSITION" / "ARRANGEMENT"。CSS の役職バッジ色を当てる data-role-code に渡す。</summary>
+        /// <summary>役職コード。"COMPOSITION" / "ARRANGEMENT" / "MUSIC"。CSS の役職バッジ色を当てる data-role-code に渡す。</summary>
         public string RoleCode { get; set; } = "";
-        /// <summary>役職表示ラベル。「作曲」「編曲」。</summary>
+        /// <summary>役職表示ラベル。「作曲」「編曲」「音楽」。</summary>
         public string RoleLabel { get; set; } = "";
     }
 

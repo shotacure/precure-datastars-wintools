@@ -14,6 +14,8 @@ namespace PrecureDataStars.Data.Models;
 /// 独立して持つと「row_count と実エントリ数の不整合」という不正状態を生む余地があるため。
 /// <see cref="LeadingCompanyAliasId"/> はブロック先頭に企業名を出すケースの企業名義を入れる。
 /// 「(株)○○ 　脚本: A 　演出: B」のように先頭企業名を伴うブロック構成で使用。
+/// <see cref="HeadingSeriesId"/> / <see cref="HeadingText"/> はブロック先頭に出す見出し（作品名・「特別出演」など）。
+/// 見出しは屋号よりも上に出る。
 /// </summary>
 public sealed class CreditRoleBlock
 {
@@ -31,6 +33,22 @@ public sealed class CreditRoleBlock
 
     /// <summary>ブロック先頭に出す企業名義 ID（→ company_aliases.alias_id、任意）。</summary>
     public int? LeadingCompanyAliasId { get; set; }
+
+    /// <summary>
+    /// ブロック先頭の見出しにする作品 ID（→ series.series_id、任意）。
+    /// 複数の作品のキャラクターが並ぶ映画の声の出演で、作品ごとのまとまりの頭に出る作品名を表す。
+    /// 表示文字は <see cref="HeadingText"/> があればそれ、無ければ作品の正式タイトル。
+    /// </summary>
+    public int? HeadingSeriesId { get; set; }
+
+    /// <summary>
+    /// ブロック先頭の見出しの文字（任意、画面の表記どおり）。
+    /// 作品を指す見出しで画面の表記が正式タイトルと違うときの表示文字、または作品ではない見出し（「特別出演」など）。
+    /// </summary>
+    public string? HeadingText { get; set; }
+
+    /// <summary>見出し（作品または文字）を持つか。</summary>
+    public bool HasHeading => HeadingSeriesId is not null || !string.IsNullOrEmpty(HeadingText);
 
     /// <summary>備考。</summary>
     public string? Notes { get; set; }

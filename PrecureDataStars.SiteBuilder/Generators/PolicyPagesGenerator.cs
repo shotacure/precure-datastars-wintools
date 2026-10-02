@@ -24,8 +24,29 @@ public sealed class PolicyPagesGenerator
         GeneratePrivacy();
         GenerateDisclaimer();
         GenerateContact();
+        GenerateSources();
 
-        _ctx.Logger.Success("/privacy/, /disclaimer/, /contact/");
+        _ctx.Logger.Success("/privacy/, /disclaimer/, /contact/, /about/sources/");
+    }
+
+    /// <summary><c>/about/sources/</c> — データの出典と収録の決まり。データの種別ごとに、どこから採ったかを説明する。</summary>
+    private void GenerateSources()
+    {
+        var content = new SourcesContentModel { SiteName = _ctx.Config.SiteName };
+        var layout = new LayoutModel
+        {
+            PageTitle = "データの出典",
+            MetaDescription = $"{_ctx.Config.SiteName} に収録しているデータの出どころと、収録の決まりです。エピソード・クレジット・尺・楽曲・商品・書籍・人物・キャラクターの各データについて説明しています。",
+            // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
+            SuppressShareButtons = true,
+            Breadcrumbs = new[]
+            {
+                new BreadcrumbItem { Label = "ホーム", Url = "/" },
+                new BreadcrumbItem { Label = "このサイトについて", Url = "/about/" },
+                new BreadcrumbItem { Label = "データの出典", Url = "" }
+            }
+        };
+        _page.RenderAndWrite("/about/sources/", "policy", "sources.sbn", content, layout);
     }
 
     /// <summary>/privacy/ — プライバシーポリシー。</summary>
@@ -103,6 +124,12 @@ public sealed class PolicyPagesGenerator
 
     /// <summary>お問い合わせページに渡すコンテンツモデル。</summary>
     private sealed class ContactContentModel
+    {
+        public string SiteName { get; set; } = "";
+    }
+
+    /// <summary>データの出典ページに渡すコンテンツモデル。</summary>
+    private sealed class SourcesContentModel
     {
         public string SiteName { get; set; } = "";
     }

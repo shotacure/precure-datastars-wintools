@@ -70,7 +70,7 @@ public sealed class SiteBuilderPipeline
         // OGP カードのラスタライザは同梱フォントを 1 度だけ読み込んで全ページで使い回す
         // （読み取り専用の SKTypeface だけを共有するため並列レンダリングフェーズからも安全に呼べる）。
         var renderer = new ScribanRenderer();
-        using var ogCardRenderer = new OgCardRenderer(config.SiteBrandLabel);
+        using var ogCardRenderer = new OgCardRenderer(config.SiteBrandLabel, config.OgCardFonts);
         var pageRenderer = new PageRenderer(renderer, config, summary, reporter, ogCardRenderer);
 
         // スタッフ表示用の人物リンク解決ヘルパ。
@@ -109,7 +109,7 @@ public sealed class SiteBuilderPipeline
 
         // クレジット横断のカバレッジラベルをここで 1 回だけ算出して BuildContext に詰める。
         // プリキュア・キャラ・人物・企業・団体・シリーズ・エピソードの各詳細／索引ページから参照され、
-        // 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」をサイト全体共通で表示する。
+        // 「『○○プリキュア』第N話(YYYY.M.D)時点」をサイト全体共通で表示する。
         // CreditInvolvementIndex 構築後でなければ算出できないので、ここがタイミング上の最早地点。
         {
             var creditEpisodeIds = StatsCoverageLabel.CollectEpisodeIdsWithCredits(involvementIndex);
@@ -121,6 +121,11 @@ public sealed class SiteBuilderPipeline
         // 人物の誕生日を記念日カレンダーに出すかの判定。ホーム（声の出演一覧より先に作る）と記念日ページが
         // 同じ判定を使うよう、関与索引の構築直後に 1 回だけ決める。
         ctx.BirthdayCalendar = BirthdayCalendarEligibility.Build(ctx, involvementIndex);
+
+        // 各話のチーフ（脚本・絵コンテ・演出・作画監督・美術）の顔ぶれ索引。エピソード詳細の
+        // 「組み合わせの通算回数」と歴代記録の「多く組んだ演出と作画監督」が同じ索引を読む。
+        // 人物の表示名とリンク先を台帳から引くので、EntityUrls の確定後に 1 回だけ作る。
+        var chiefStaffIndex = EpisodeChiefStaffIndex.Build(ctx);
 
         reporter.PageWritten();
         reporter.EndSection();
@@ -137,7 +142,7 @@ public sealed class SiteBuilderPipeline
         reporter.EndSection();
 
         reporter.BeginSection("episodes");
-        await new EpisodeGenerator(ctx, pageRenderer, factory, staffLinkResolver, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
+        await new EpisodeGenerator(ctx, pageRenderer, factory, staffLinkResolver, roleSuccessorResolver, chiefStaffIndex).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
         reporter.BeginSection("home");
@@ -193,11 +198,11 @@ public sealed class SiteBuilderPipeline
         reporter.EndSection();
 
         reporter.BeginSection("persons");
-        await new PersonsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+        await new PersonsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
         reporter.BeginSection("companies");
-        await new CompaniesGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+        await new CompaniesGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
         // プリキュア・キャラクター系ページは ByCharacterAlias 逆引き（CHARACTER_VOICE エントリ経由）に
@@ -260,6 +265,12 @@ public sealed class SiteBuilderPipeline
         await new EpisodePartStatsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
+        // 歴代記録（/stats/records/）と本放送・配信・円盤の尺の違い。尺のランキングはパート尺統計と同じ SQL、
+        // スタッフ・キャラクターは関与索引とチーフの顔ぶれ索引から数える。
+        reporter.BeginSection("records");
+        await new RecordsGenerator(ctx, pageRenderer, factory, involvementIndex, chiefStaffIndex).GenerateAsync(ct).ConfigureAwait(false);
+        reporter.EndSection();
+
         // サイト全体の集約物（検索インデックス・sitemap / robots / ads.txt）は、ピンポイントビルド
         // （--page）では再生成しない。部分生成のため WrittenPages が当該ページのみになり、全件前提の
         // これらを上書きすると内容が壊れるため、既存ファイルをそのまま残す。
@@ -288,11 +299,15 @@ public sealed class SiteBuilderPipeline
         // ページ書き出しがすべて済んだこの位置で実行する。テストモードでのみ書き出す。
         new OgGalleryGenerator(ctx, config).Generate();
 
-        // OGP カードでブランド書体に無い文字が出た箇所を、まとめて 1 度だけ報告する。
-        // 該当する見出しは本文書体へ自動的に切り替えて描いているので出力は破綻しないが、
-        // 書体が混ざった面を把握できるよう情報として残す。
-        foreach (var (missing, samplePath) in pageRenderer.OgCardGlyphWarnings)
-            logger.Info($"OGP カード: ブランド書体に無い文字「{missing}」を含む見出しは本文書体で描画しました（例: {samplePath}）");
+        // OGP カードの書体に関する報告を、種類ごとに 1 度だけ出す。ブランド書体に無い文字の代替描画は情報として残し、
+        // 指定した書体（series.font_subtitle など）がこの PC に無い場合は、気づかずに別の書体で焼いてデプロイしないよう警告にする。
+        foreach (var (message, samplePath) in pageRenderer.OgCardGlyphWarnings)
+        {
+            if (message.StartsWith("書体「", StringComparison.Ordinal))
+                logger.Warn($"OGP カード: {message}（例: {samplePath}）");
+            else
+                logger.Info($"OGP カード: {message}（例: {samplePath}）");
+        }
 
         // ここでプログレスバーを片付けてから最終サマリを出す。
         reporter.Finish();
@@ -328,13 +343,13 @@ public sealed class SiteBuilderPipeline
             var deployer = new Deploy.S3DeployService(config, logger);
             bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
 
-            // 本番がこのビルドの出力と一致したら、いまの人物・キャラ URL を公開記録（published_entity_slugs）に追記する。
-            // 以後のビルドで人物の表示名義やキャラ名が変わって URL が変わったとき、この記録から旧 URL → 新 URL の 301 を作る。
+            // 本番がこのビルドの出力と一致したら、いまの人物・キャラ・企業 URL を公開記録（published_entity_slugs）に追記する。
+            // 以後のビルドで人物の表示名義・キャラ名・企業の正式名が変わって URL が変わったとき、この記録から旧 URL → 新 URL の 301 を作る。
             // ピンポイントモード（--page）は一部のページしか上げないため記録しない。
             if (published && string.IsNullOrEmpty(config.PageFilter))
             {
-                var (persons, characters) = await ctx.EntityUrls.RecordPublishedSlugsAsync(factory, ct).ConfigureAwait(false);
-                logger.Info($"Published slugs  : 公開記録に人物 URL {persons} 件・キャラ URL {characters} 件を追加");
+                var (persons, characters, companies) = await ctx.EntityUrls.RecordPublishedSlugsAsync(factory, ct).ConfigureAwait(false);
+                logger.Info($"Published slugs  : 公開記録に人物 URL {persons} 件・キャラ URL {characters} 件・企業 URL {companies} 件を追加");
             }
         }
     }
@@ -358,7 +373,8 @@ public sealed class SiteBuilderPipeline
         // 読み物は本番では生成しない（テストのみ）。登録も本番では行わず、進捗バーに空枠を残さない。
         if (!isProductionMode)
             yield return ("articles",       "読み物",           null);
-        yield return ("policy",             "規約ページ",       3);
+        // 規約ページはプライバシー・免責・お問い合わせ・データの出典の 4 ページで常に一定。
+        yield return ("policy",             "規約ページ",       4);
         yield return ("not_found",          "404",              1);
         yield return ("episodes_index",     "エピソード索引",   1);
         yield return ("persons",            "人物",             Get("persons"));
@@ -375,6 +391,8 @@ public sealed class SiteBuilderPipeline
         yield return ("stats_landing",      "統計ランディング", 1);
         yield return ("subtitle_stats",     "字幕統計",         null);
         yield return ("episode_part_stats", "パート尺統計",     null);
+        // 歴代記録は索引 1 ページ + 尺の違い 1 ページで常に一定。
+        yield return ("records",            "歴代記録",         2);
         yield return ("search_index",       "検索索引",         1);
         yield return ("seo",                "SEO ファイル",     1);
     }

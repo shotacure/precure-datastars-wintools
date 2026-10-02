@@ -1,0 +1,60 @@
+{{## /stats/records/ — 歴代記録。
+     RecordsGenerator から RecordsIndexModel { Groups, FormatDiff } で渡る。
+     Groups は大分類（本編の尺 / スタッフ・声優 / キャラクター）。各分類はカード（RecordItem）を並べ、
+     カードの中は順位・名前（リンク済み HTML）・添え書き・値の 3 位までの行（同率は全件）。
+     分類ごとに基準点ラベル（尺はパート情報、スタッフとキャラクターはクレジットの収録範囲）を h2 の下に出す。
+     末尾に「本放送・配信・円盤の尺の違い」への導線（stats-landing-list の横長カード）を置く。 ##}}
+<section>
+  <h1>歴代記録</h1>
+  <p class="lead">いちばん長いアバンタイトル、いちばん多く脚本を書いた方、いちばん多くの話に登場したキャラクター。歴代プリキュア全シリーズの「いちばん」を集めた記録集です。順位は同じ値を同じ順位とし、3 位まで載せています。</p>
+</section>
+
+{{~ for g in Groups ~}}
+<section id="{{ g.Id }}">
+  <h2>{{ g.Title | html.escape }}</h2>
+  {{~ if g.Lead != "" ~}}
+  <p>{{ g.Lead | html.escape }}<br>
+  <span class="muted stats-coverage">{{ g.CoverageLabel }}</span></p>
+  {{~ end ~}}
+  <div class="records-grid">
+    {{~ for it in g.Items ~}}
+    <article class="records-card" id="{{ it.Id }}">
+      <h3 class="records-card-title">{{ it.Title | html.escape }}</h3>
+      {{~ if (array.size it.Entries) > 0 ~}}
+      <ol class="records-entries">
+        {{~ for e in it.Entries ~}}
+        <li class="records-entry">
+          <span class="records-rank">{{ e.RankLabel }}</span>
+          <span class="records-body">
+            <span class="records-name">{{ e.NameHtml }}</span>
+            {{~ if e.SubHtml != "" ~}}<span class="records-sub">{{ e.SubHtml }}</span>{{~ end ~}}
+          </span>
+          <span class="records-value">{{ e.ValueLabel | html.escape }}</span>
+        </li>
+        {{~ end ~}}
+      </ol>
+      {{~ else ~}}
+      <p class="muted records-empty">まだ記録がありません。</p>
+      {{~ end ~}}
+      {{~ if it.MoreUrl != "" ~}}
+      <p class="records-more"><a href="{{ it.MoreUrl }}">{{ it.MoreLabel | html.escape }}</a></p>
+      {{~ end ~}}
+    </article>
+    {{~ end ~}}
+  </div>
+</section>
+{{~ end ~}}
+
+<section id="format-differences">
+  <h2>本放送・配信・円盤の違い</h2>
+  <p>同じ話でも、本放送と配信（Amazon Prime Video）、Blu-ray / DVD でパートの長さが違うことがあります。本放送を基準に、長さの違うパートがある話を並べています。<br>
+  <span class="muted stats-coverage">{{ FormatDiff.CoverageLabel }}</span></p>
+  <ul class="stats-landing-list">
+    <li>
+      <a class="stats-landing-link" href="/stats/records/format-differences/">
+        <span class="stats-landing-link-title">本放送・配信・円盤の尺の違い</span>
+        <span class="stats-landing-link-desc">比べた {{ FormatDiff.ComparedEpisodes }} 話のうち、本編の尺が違う話が {{ FormatDiff.MainCount }} 話、次回予告の尺が違う話が {{ FormatDiff.TrailerCount }} 話{{~ if FormatDiff.OtherCount > 0 ~}}、その他のパートが違う話が {{ FormatDiff.OtherCount }} 話{{~ end ~}}あります。</span>
+      </a>
+    </li>
+  </ul>
+</section>

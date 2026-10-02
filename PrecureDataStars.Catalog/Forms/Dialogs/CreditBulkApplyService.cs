@@ -684,7 +684,8 @@ public sealed class CreditBulkApplyService
                 foreach (var pb in pr.Blocks)
                 {
                     ct.ThrowIfCancellationRequested();
-                    if (pb.Rows.Count == 0 && pb.LeadingCompanyText is null && pb.Notes is null) continue;
+                    if (pb.Rows.Count == 0 && pb.LeadingCompanyText is null && pb.Notes is null
+                        && pb.HeadingSeriesId is null && pb.HeadingText is null) continue;
 
                     var block = AppendNewBlock(session, role, (byte)pb.ColCount);
 
@@ -692,6 +693,10 @@ public sealed class CreditBulkApplyService
                     {
                         block.Entity.Notes = pb.Notes;
                     }
+
+                    // ブロック先頭の見出し（作品・文字）。
+                    block.Entity.HeadingSeriesId = pb.HeadingSeriesId;
+                    block.Entity.HeadingText = pb.HeadingText;
 
                     if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
                     {
@@ -866,7 +871,8 @@ public sealed class CreditBulkApplyService
         // 配下 Block を順に追加。
         foreach (var pb in pr.Blocks)
         {
-            if (pb.Rows.Count == 0 && pb.LeadingCompanyText is null && pb.Notes is null) continue;
+            if (pb.Rows.Count == 0 && pb.LeadingCompanyText is null && pb.Notes is null
+                && pb.HeadingSeriesId is null && pb.HeadingText is null) continue;
             await ApplyParsedBlockNewAsync(pb, session, role, pr, updatedBy, ct);
         }
     }
@@ -885,6 +891,10 @@ public sealed class CreditBulkApplyService
         {
             block.Entity.Notes = pb.Notes;
         }
+
+        // ブロック先頭の見出し（作品・文字）。
+        block.Entity.HeadingSeriesId = pb.HeadingSeriesId;
+        block.Entity.HeadingText = pb.HeadingText;
 
         // [先頭企業屋号]
         if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
@@ -2422,6 +2432,15 @@ public sealed class CreditBulkApplyService
             draftBlock.MarkModified();
         }
 
+        // ブロック先頭の見出し（作品・文字）比較。
+        if (draftBlock.Entity.HeadingSeriesId != newBlock.HeadingSeriesId
+            || !string.Equals(draftBlock.Entity.HeadingText, newBlock.HeadingText, StringComparison.Ordinal))
+        {
+            draftBlock.Entity.HeadingSeriesId = newBlock.HeadingSeriesId;
+            draftBlock.Entity.HeadingText = newBlock.HeadingText;
+            draftBlock.MarkModified();
+        }
+
         // leading_company_alias_id 比較（旧/新の LeadingCompanyText 文字列が違うときだけ再解決）。
         if (!string.Equals(oldBlock.LeadingCompanyText, newBlock.LeadingCompanyText, StringComparison.Ordinal))
         {
@@ -2632,6 +2651,8 @@ public sealed class CreditBulkApplyService
         var sb = new System.Text.StringBuilder();
         sb.Append("B|cols=").Append(b.ColCount)
           .Append("|leading=").Append(b.LeadingCompanyText ?? string.Empty)
+          .Append("|hseries=").Append(b.HeadingSeriesId?.ToString() ?? string.Empty)
+          .Append("|htext=").Append(b.HeadingText ?? string.Empty)
           .Append("|notes=").Append(b.Notes ?? string.Empty).Append('\n');
         foreach (var row in b.Rows)
         {

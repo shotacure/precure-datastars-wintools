@@ -122,6 +122,11 @@ public sealed class LayoutModel
     /// 「このページが正規の URL」と主張する意味が無いため）。</summary>
     public bool SuppressCanonical { get; set; }
 
+    // ── 引用ボックス（_cite-box.sbn）用 ──
+
+    /// <summary>引用文に入れる参照日の既定値（ISO 8601、ビルド日）。閲覧時に cite-box.js が閲覧日へ差し替える。</summary>
+    public string BuildDateIso { get; set; } = "";
+
     // ── フッタ注記の出し分けフラグ（PageRenderer がコンテンツ HTML から自動検出して詰める） ──
 
     /// <summary>本文にアソシエイトタグ付きの Amazon リンク（<c>?tag=</c> / <c>&amp;tag=</c>）が含まれるか。

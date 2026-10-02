@@ -11,6 +11,16 @@
   <h1>第{{ Episode.SeriesEpNo }}話「{{ Episode.SubtitleGuardedH1Html }}」</h1>
   {{~ end ~}}
 
+  {{## 歴代記録のバッジ。アバンタイトル・A パート・B パートの尺が歴代 10 位以内、またはシリーズ内で
+       最長・最短の回にだけ出す（順位の根拠はパート尺統計セクション、リンク先は該当のランキング）。 ##}}
+  {{~ if (array.size RecordBadges) > 0 ~}}
+  <p class="ep-record-badges" aria-label="歴代記録">
+    {{~ for b in RecordBadges ~}}
+    <a class="ep-record-badge {{ b.Css }}" href="{{ b.Url }}">{{ b.Label | html.escape }}</a>
+    {{~ end ~}}
+  </p>
+  {{~ end ~}}
+
   {{## エピソード詳細では、サブタイトル文字情報・パート尺統計の各セクション末尾に出る
        BuildPointCaption（参照点キャプション）で「いま現在の参照点」を案内する。
        それ以外の要素（基本情報・クレジット・主題歌・使用音声 等）は登録の有無で表示が切り替わるだけで
@@ -163,6 +173,17 @@
       <span class="staff-badge-group">{{~ if (array.size s.SubRoleLinks) > 0 ~}}{{## 統合行「絵コンテ・演出」：バッジを 2 つ並べる ##}}{{~ for sr in s.SubRoleLinks ~}}{{~ if sr.Url != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ sr.Code }}" href="{{ sr.Url }}">{{ sr.Label | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ sr.Code }}">{{ sr.Label | html.escape }}</span>{{~ end ~}}{{~ end ~}}{{~ else if s.RoleUrl != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ s.RoleCode }}" href="{{ s.RoleUrl }}">{{ s.RoleLabel | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ s.RoleCode }}">{{ s.RoleLabel | html.escape }}</span>{{~ end ~}}{{ s.NamesLine }}</span>
     </div>
     {{~ end ~}}
+    {{## チーフの組み合わせの通算回数。演出と作画監督 / 脚本・演出・作画監督の 2 行で、
+         構成役職が揃わない回は行ごと出ない。Html はリンク化済みの断片なので html.escape はかけない。
+         数えているのは収録済みのクレジットの範囲なので、その断りを添える。 ##}}
+    {{~ if (array.size StaffCombos) > 0 ~}}
+    <ul class="staff-combo-list">
+      {{~ for c in StaffCombos ~}}
+      <li><span class="staff-combo-label">{{ c.Label | html.escape }}の組み合わせ</span><span class="staff-combo-value">{{ c.Html }}</span></li>
+      {{~ end ~}}
+    </ul>
+    <p class="section-refpoint staff-combo-note">（収録済みのクレジットの範囲で数えています）</p>
+    {{~ end ~}}
   </section>
   {{~ end ~}}
 
@@ -308,7 +329,7 @@
     </ul>
     {{## 参照点はパート尺統計（最新放送済話基準の BuildPointCaption）と異なり、
          サブタイトル登録済みの最終話基準（先行登録された未放送話も比較対象に入るため）。
-         放送済みなら書式は BuildPointCaption と同一、参照点がまだ放送前なら「第N話（〇年〇月〇日放送予定）までのサブタイトルで集計」。 ##}}
+         放送済みなら書式は BuildPointCaption と同一、参照点がまだ放送前なら「第N話(YYYY.M.D放送予定)まで」。 ##}}
     {{~ if SubtitleBuildPointCaption != "" ~}}
     <p class="section-refpoint">（{{ SubtitleBuildPointCaption | html.escape }}）</p>
     {{~ end ~}}

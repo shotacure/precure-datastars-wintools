@@ -239,18 +239,19 @@ public sealed class AnniversaryGenerator
         _page.RenderAndWrite(url, "anniversary", "anniversary-day.sbn", content, layout);
     }
 
-    /// <summary>日付別ページの meta description。件数の内訳をそのまま述べる。</summary>
+    /// <summary>日付別ページの meta description。「M月D日のプリキュア。出来事の内訳。何のページか。」</summary>
     private static string BuildMetaDescription(string dateLabel, int episodes, int movies, int characterBirthdays, int personBirthdays)
     {
         var parts = new List<string>();
-        if (episodes > 0) parts.Add($"エピソード{episodes}話の放送");
-        if (movies > 0) parts.Add($"映画{movies}本の公開");
-        if (characterBirthdays > 0) parts.Add($"キャラクター{characterBirthdays}人の誕生日");
-        if (personBirthdays > 0) parts.Add($"クリエイター{personBirthdays}人の誕生日");
+        if (episodes > 0) parts.Add($"エピソード {episodes} 話の放送");
+        if (movies > 0) parts.Add($"映画 {movies} 本の公開");
+        if (characterBirthdays > 0) parts.Add($"キャラクター {characterBirthdays} 人の誕生日");
+        if (personBirthdays > 0) parts.Add($"クリエイター {personBirthdays} 人の誕生日");
 
+        const string tail = "歴代の放送日・公開日・誕生日を日付ごとにまとめた記念日カレンダーです。";
         return parts.Count == 0
-            ? $"{dateLabel}にプリキュアで起きた出来事。この日付に該当する記録は現在のところ登録がありません。歴代シリーズの放送日・公開日・誕生日を日付から引ける記念日カレンダーです。"
-            : $"{dateLabel}にプリキュアで起きた出来事。{string.Join("、", parts)}。歴代シリーズの放送日・公開日・誕生日を日付から引ける記念日カレンダーです。";
+            ? $"{dateLabel}のプリキュア。この日の出来事は、いまのところ登録がありません。{tail}"
+            : $"{dateLabel}のプリキュア。{string.Join("、", parts)}。{tail}";
     }
 
     /// <summary>
@@ -302,9 +303,12 @@ public sealed class AnniversaryGenerator
 
         // 主役は日付。「◯月◯日のプリキュア」と言い換えず、日付を大きく置いて
         // 何があった日かは下の年表そのものに語らせる。
+        // 透かしは月日（「2/1」）。日付のカードであることが縮小表示でも分かる。
+        var md = System.Text.RegularExpressions.Regex.Match(dateLabel, @"(\d+)月(\d+)日");
         return new OgCardSpec(Kicker: "", Title: dateLabel, Subtitle: "プリキュアのできごと")
         {
-            Facts = facts
+            Facts = facts,
+            Watermark = md.Success ? $"{md.Groups[1].Value}/{md.Groups[2].Value}" : ""
         };
     }
 
@@ -326,7 +330,7 @@ public sealed class AnniversaryGenerator
         var layout = new LayoutModel
         {
             PageTitle = "プリキュア記念日カレンダー",
-            MetaDescription = $"歴代プリキュアの放送日・映画公開日・キャラクターとクリエイターの誕生日を、{totalEntries} 件ぶん日付から引ける記念日カレンダー。今日は何の日かを 1 月 1 日から 12 月 31 日まで日付別にたどれます。",
+            MetaDescription = $"プリキュアの記念日カレンダー。歴代の放送日・映画の公開日、キャラクターとクリエイターの方々の誕生日 {totalEntries} 件を、366 日の日付ごとにまとめました。今日は何の日かがすぐ分かります。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -334,15 +338,8 @@ public sealed class AnniversaryGenerator
             },
             OgCard = new OgCardSpec(Kicker: "", Title: "プリキュア記念日カレンダー")
             {
-                Badges = new[]
-                {
-                    new OgCardBadge("収録", $"{totalEntries}件"),
-                    new OgCardBadge("日付", "366日")
-                },
-                InlineFacts = new[]
-                {
-                    new OgCardFactLine("", "放送日・公開日・誕生日を日付から引ける")
-                }
+                Subtitle = "放送日・公開日・誕生日を、1 年 366 日の日付ごとに並べました。今日は、プリキュアの何の日でしょう。",
+                Badges = new[] { new OgCardBadge("収録", $"{totalEntries}件") }
             }
         };
 

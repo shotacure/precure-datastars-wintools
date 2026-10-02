@@ -31,6 +31,9 @@ public sealed class PersonsGenerator
 
     private readonly CreditInvolvementIndex _index;
 
+    /// <summary>役職系譜の代表コード。カードの年表を出すかどうか（サイトの年表に載る人か）の判定に使う。</summary>
+    private readonly RoleSuccessorResolver _roleSuccessorResolver;
+
     /// <summary>person_id → 当該人物に紐付く全 alias_id のリスト（person_alias_persons の逆引き）。 1 度ロードしたら使い回す。</summary>
     private IReadOnlyDictionary<int, IReadOnlyList<int>>? _aliasesByPerson;
 
@@ -62,11 +65,13 @@ public sealed class PersonsGenerator
         BuildContext ctx,
         PageRenderer page,
         IConnectionFactory factory,
-        CreditInvolvementIndex index)
+        CreditInvolvementIndex index,
+        RoleSuccessorResolver roleSuccessorResolver)
     {
         _ctx = ctx;
         _page = page;
         _index = index;
+        _roleSuccessorResolver = roleSuccessorResolver;
 
         _personsRepo = new PersonsRepository(factory);
         _aliasesRepo = new PersonAliasesRepository(factory);
@@ -275,6 +280,8 @@ public sealed class PersonsGenerator
         // 年しか分からないときは見出しを「没年」にする。
         string deathDate = FormatDeathDate(person);
         string deathDateLabel = person.DeathMonth is null ? "没年" : "没年月日";
+        // 初参加：本編クレジット（声の出演を含む）のいちばん早い話。収録範囲外なら null。基本情報と OGP カードで使う。
+        var firstAppearance = FirstAppearanceResolver.Resolve(_ctx, allPersonInvolvements);
 
         var content = new PersonDetailModel
         {
@@ -290,6 +297,7 @@ public sealed class PersonsGenerator
                 Birthday = birthday,
                 DeathDate = deathDate,
                 DeathDateLabel = deathDateLabel,
+                FirstAppearanceHtml = firstAppearance?.ToHtml() ?? "",
                 OfficialUrl = person.OfficialUrl ?? "",
                 AffiliationUrl = person.AffiliationUrl ?? "",
                 XUrl = person.XUrl ?? "",
@@ -362,7 +370,7 @@ public sealed class PersonsGenerator
             Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForPerson(person.PersonId), displayName),
             OgType = "profile",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(displayName, involvementGroups, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(displayName, involvementGroups, allPersonInvolvements, firstAppearance, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
         };
 
         _page.RenderAndWriteFile(personUrl, "persons-detail.sbn", content, layout);
@@ -370,14 +378,18 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 人物詳細ページの OGP カードを組み立てる。
-    /// 「氏名 → 関与規模のバッジ → 基準点 → 担当役職と話数」の順に置く。
-    /// 氏名だけのカードでは誰なのか伝わらないため、担当話数の多い役職を上から並べて
-    /// 「プリキュアで何をしてきた人か」を一目で示す。
+    /// 人物詳細ページの OGP カードを組み立てる（プロフィール組み）。
+    /// 「氏名 → TV 話数・映画本数 → 役職と話数 → 関わった期間の年表 → 初参加」の順に置く。
+    /// 氏名だけのカードでは誰なのか伝わらないため、担当話数の多い役職と、いつからいつまで関わったかの年表で
+    /// 「プリキュアで何をしてきた人か」を一目で示す。色帯は人物の青（声の出演しかない人物は緑）、透かしは主な役職。
+    /// 年表はサイトの年表（役職詳細・声の出演一覧）に載る人物にだけ出す（載らない人には単発の点しか描けず、意味が伝わらない）。
+    /// 年表を出さない人物には、代わりに関わった作品を 1 行 1 作品で並べる。
     /// </summary>
-    private static OgCardSpec BuildOgCard(
+    private OgCardSpec BuildOgCard(
         string displayName,
         IReadOnlyList<InvolvementGroup> involvementGroups,
+        IReadOnlyList<Involvement> mainInvolvements,
+        FirstAppearance? firstAppearance,
         int creditEpisodeCountTotal,
         int creditMovieCountTotal,
         string coverageLabel)
@@ -387,22 +399,38 @@ public sealed class PersonsGenerator
         if (creditEpisodeCountTotal > 0) badges.Add(new OgCardBadge("TV", $"{creditEpisodeCountTotal}話"));
         if (creditMovieCountTotal > 0) badges.Add(new OgCardBadge("映画", $"{creditMovieCountTotal}本"));
 
-        // 役職は担当規模の多い順。カードに載るのは上位数件で、溢れた分はレンダラ側が切り落とす。
+        // 役職は担当規模の多い順に上位 4 件。
         var roles = involvementGroups
             .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.Count > 0)
             .OrderByDescending(g => g.Count)
+            .Take(4)
             .Select(g => new OgCardFactLine(g.RoleLabel, FormatInvolvementCount(g)))
             .ToArray();
+
+        bool voiceOnly = mainInvolvements.Count > 0 && mainInvolvements.All(i => i.IsVoiceCast);
+        string bandColor = voiceOnly ? OgCardColors.VoiceActor : OgCardColors.Staff;
+        bool showTimeline = OgCareerCardParts.AppearsInSiteTimeline(_ctx, _roleSuccessorResolver, mainInvolvements);
 
         // 前置きは置かない。「クリエイター」と名乗らせなくても、氏名と担当役職の並びで何者かは伝わる。
         return new OgCardSpec(Kicker: "", Title: displayName)
         {
             // 担当話数はクレジット登録済みの範囲でしか数えられない。母数を示さずに数だけ出すと
-            // 「歴代の全担当数」と受け取られてしまうため、基準点をカード上で明記する。
-            // 位置は数の直下。数を読んだ直後に効く但し書きなので、数より先に目に入る上段には置かない。
+            // 「歴代の全担当数」と受け取られてしまうため、基準点を右下の注記に明記する。
             MetaLeft = OgCoverageLabel.Compact(coverageLabel),
             Badges = badges,
-            InlineFacts = roles
+            InlineFacts = roles,
+            BandColorHex = bandColor,
+            Watermark = OgCareerCardParts.ResolveMainRoleLabel(_ctx, mainInvolvements),
+            Timeline = showTimeline
+                ? OgCareerCardParts.BuildCareerTimeline(_ctx, mainInvolvements, bandColor)
+                : Array.Empty<OgCardTimelineSegment>(),
+            Facts = showTimeline
+                ? Array.Empty<OgCardFactLine>()
+                : OgCareerCardParts.BuildWorksLines(_ctx, mainInvolvements),
+            TimelineEnd = DateOnly.FromDateTime(_ctx.BuildStartedAt.Date),
+            FootFacts = firstAppearance is null
+                ? Array.Empty<OgCardFactLine>()
+                : new[] { new OgCardFactLine("初参加", firstAppearance.ToPlainText()) }
         };
     }
 
@@ -417,64 +445,35 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 人物詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
-    /// 構成：「{人名}は、プリキュアシリーズで{役職1}({N話})・{役職2}({N話})・{役職3}({N話})などを担当。」を骨格に、
-    /// 各セグメント追加前に <c>targetMaxChars=140</c> を超えないかを確認しつつ追記する。
-    /// 役職は <see cref="InvolvementGroup.Count"/> 降順（担当話数の多い順）でソートして
-    /// 上位を採用する。声優役は <see cref="InvolvementGroup.HasCharacterColumn"/> が true なので
-    /// 「演じた役（声優）」を簡略表現で別途付ける手もあるが、本リビジョンでは役職ラベルで統一する。
-    /// 関与役職が 1 件も無い人物（呼ばれない想定だが安全網として）は、定型文「{人名}のプリキュア関連クレジット一覧です。」に
-    /// フォールバックする。
+    /// 人物詳細の meta description。「〇〇さんのプリキュアでのお仕事をまとめました。役職（話数・本数）を多い順に 3 つ。
+    /// 作品ごと・役職ごとのクレジットと初参加の話。」の順で 140 字ほどに収める。
     /// </summary>
     private static string BuildPersonMetaDescription(
         string displayName,
         IReadOnlyList<InvolvementGroup> involvementGroups)
     {
-        const int targetMaxChars = 140;
+        const int targetMaxChars = 150;
+        string head = $"{displayName}さんのプリキュアでのお仕事をまとめました。";
+        const string tail = "作品ごと・役職ごとのクレジットと、初参加の話も分かります。";
 
-        if (involvementGroups.Count == 0)
-        {
-            return $"{displayName}のプリキュア関連クレジット一覧です。";
-        }
-
-        // 担当話数の多い順で上位役職を取り出し、最大 3 件まで採用する。
         var ordered = involvementGroups
-            .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.RoleLabel != "(役職未設定)")
+            .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.RoleLabel != "(役職未設定)" && g.Count > 0)
             .OrderByDescending(g => g.Count)
             .Take(3)
             .ToList();
+        if (ordered.Count == 0) return head + tail;
 
-        if (ordered.Count == 0)
-        {
-            return $"{displayName}のプリキュア関連クレジット一覧です。";
-        }
-
-        var sb = new System.Text.StringBuilder();
-        sb.Append(displayName).Append("は、プリキュアシリーズで");
-
-        int appended = 0;
+        // 「役職（N話・M本）」を多い順に、末尾の一文を残せる範囲で足す。
+        var parts = new List<string>();
         foreach (var g in ordered)
         {
-            // 「役職(N話・M本)」のフラグメントを組む。担当ゼロ（話数 + 本数とも 0）は弾く。
-            // TV 系シリーズへの担当は「話」、映画系シリーズへの担当は「本」で表記し、両方あれば「N話・M本」併記。
-            if (g.Count <= 0) continue;
-            var fragment = $"{g.RoleLabel}({g.CountLabel.Replace(" ", "")})";
-            // 末尾「などを担当。」(7 字) ぶんを残せるかの判定を含めて追加可否を決める。
-            int suffixLen = 7;
-            int joinerLen = appended > 0 ? 1 : 0;
-            if (sb.Length + joinerLen + fragment.Length + suffixLen > targetMaxChars) break;
-            if (appended > 0) sb.Append('・');
-            sb.Append(fragment);
-            appended++;
+            // CountLabel は「担当 97 話・2 本」の形なので、「担当」と空白を除いて「97話・2本」にする。
+            string part = $"{g.RoleLabel}（{g.CountLabel.Replace("担当", "").Replace(" ", "")}）";
+            string joined = string.Join("、", parts.Append(part)) + "など。";
+            if (head.Length + joined.Length + tail.Length > targetMaxChars) break;
+            parts.Add(part);
         }
-
-        if (appended == 0)
-        {
-            return $"{displayName}のプリキュア関連クレジット一覧です。";
-        }
-
-        sb.Append("などを担当。");
-        return sb.ToString();
+        return parts.Count == 0 ? head + tail : head + string.Join("、", parts) + "など。" + tail;
     }
 
     /// <summary>人物の名義群を時系列に並べる（predecessor チェーンを上に辿って root を見つけ、 successor チェーンで下降）。チェーンに含まれなかった alias は末尾に並べる。</summary>
@@ -1261,6 +1260,8 @@ public sealed class PersonsGenerator
         public string DeathDate { get; set; } = "";
         /// <summary>没年月日の行の見出し（年しか分からないときは「没年」、それ以外は「没年月日」）。</summary>
         public string DeathDateLabel { get; set; } = "";
+        /// <summary>初参加の話（リンク付き HTML、<see cref="FirstAppearanceResolver"/>）。収録範囲外・該当なしは空文字。</summary>
+        public string FirstAppearanceHtml { get; set; } = "";
         /// <summary>本人の公式サイト URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
         public string OfficialUrl { get; set; } = "";
         /// <summary>所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL。「外部リンク」セクションに「所属先」として、公式ページの次に出す。</summary>

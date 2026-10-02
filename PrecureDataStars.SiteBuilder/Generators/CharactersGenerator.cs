@@ -327,6 +327,8 @@ public sealed class CharactersGenerator
             // 本文リード行と同じ母数をカードにも置く。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代キャラクター")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "プリキュアから妖精、敵、ゲストまで、歴代のキャラクターを担当の声優さんと登場エピソードとともに作品ごとに一覧にしました。",
                 MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                 Badges = new[]
                 {
@@ -334,7 +336,7 @@ public sealed class CharactersGenerator
                     new OgCardBadge("作品", $"{sections.Count}作")
                 }
             },
-            MetaDescription = $"歴代プリキュアに登場するキャラクター {characters.Count} 名を作品別に。プリキュアたちから妖精・敵キャラ・ゲストまで、担当声優と登場エピソードからたどれます。",
+            MetaDescription = $"歴代プリキュアのキャラクター {characters.Count} 名の一覧。プリキュアから妖精・敵・ゲストまで、作品ごとに担当の声優さんと登場エピソードをまとめました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -410,11 +412,18 @@ public sealed class CharactersGenerator
         // PRECURE 種別かつ precures に紐付くキャラのみ、プリキュア固有プロフィール（4 区分名義 /
         // 学校 / 学年・組 / 家業 / 専属声優）を追加で詰める。それ以外は null（テンプレ側で非表示）。
         PrecureProfileView? precureProfile = null;
+        string keyColor = "";
         if (string.Equals(character.CharacterKind, "PRECURE", StringComparison.Ordinal)
             && precureByCharacter.TryGetValue(character.CharacterId, out var precure))
         {
             precureProfile = BuildPrecureProfile(precure, aliasById, personsById);
+            keyColor = precure.KeyColor ?? "";
         }
+
+        // 初登場：声の出演のクレジット（歌唱は含めない）のいちばん早い話。収録範囲外なら null。基本情報と OGP カードで使う。
+        var firstAppearance = FirstAppearanceResolver.Resolve(_ctx,
+            aliasIds.Where(_index.VoiceCastByCharacterAlias.ContainsKey)
+                    .SelectMany(id => _index.VoiceCastByCharacterAlias[id]));
 
         var content = new CharacterDetailModel
         {
@@ -426,6 +435,7 @@ public sealed class CharactersGenerator
                 NameEn = character.NameEn ?? "",
                 KindLabel = kindLabel,
                 Birthday = birthday,
+                FirstAppearanceHtml = firstAppearance?.ToHtml() ?? "",
                 Notes = character.Notes ?? "",
                 OfficialUrl = character.OfficialUrl ?? ""
             },
@@ -473,7 +483,7 @@ public sealed class CharactersGenerator
             },
             OgType = "profile",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(character, kindLabel, content, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(character, content, aliasIds, firstAppearance, keyColor, _ctx.CreditCoverageLabel)
         };
         _page.RenderAndWrite(PathUtil.CharacterUrl(character.CharacterId), "characters", "characters-detail.sbn", content, layout);
     }
@@ -557,7 +567,7 @@ public sealed class CharactersGenerator
             var layout = new LayoutModel
             {
                 PageTitle = title,
-                MetaDescription = $"『{series.Title}』に 1 話だけ登場したゲストキャラクター {rows.Count} 名を、登場話ごとに担当声優とあわせて一覧にしました。",
+                MetaDescription = $"『{series.Title}』に 1 話だけ登場したゲストキャラクター {rows.Count} 名を、登場話ごとに担当の声優さんとあわせて一覧にしました。",
                 OgCard = new OgCardSpec(Kicker: series.Title, Title: "ゲストキャラクター")
                 {
                     MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
@@ -582,22 +592,29 @@ public sealed class CharactersGenerator
     /// 「所属作品 → 名前 → 出演規模のバッジ → 基準点 → 声優」の順で、
     /// 名前だけでは伝わらない「どの作品の誰か」がカード内で完結するようにする。
     /// </summary>
-    private static OgCardSpec BuildOgCard(Character character, string kindLabel, CharacterDetailModel content, string coverageLabel)
+    /// <summary>
+    /// キャラクター詳細ページの OGP カードを組み立てる（プロフィール組み）。
+    /// 「名前 → 登場話数・映画本数 → 声優 → 登場した期間の年表 → 初登場」の順。
+    /// 色帯はプリキュアならイメージカラー（見える濃さに寄せる）、それ以外はキャラクターの藤色。透かしは出身作品の作品名。
+    /// </summary>
+    private OgCardSpec BuildOgCard(
+        Character character,
+        CharacterDetailModel content,
+        IReadOnlyList<int> aliasIds,
+        FirstAppearance? firstAppearance,
+        string keyColor,
+        string coverageLabel)
     {
-        // 出演したシリーズ数と、担当声優の実人数をバッジで見せる。
         var voiceActors = content.VoiceCastRows
             .SelectMany(v => v.VoiceActorNames.Split('、', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var seriesTitles = content.VoiceCastRows
-            .Select(v => v.SeriesTitle)
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
 
-        // 数として出すのは出演規模だけ。歌唱曲数はキャラクターの像を語らないので載せない。
+        // 登場の量は声の出演のクレジットだけで数える（キャラクター一覧のバッジと同じ数え方）。
+        var (episodeCount, movieCount) = CharacterAppearanceCounter.Count(_ctx, _index, aliasIds);
         var badges = new List<OgCardBadge>();
-        if (seriesTitles.Length > 0) badges.Add(new OgCardBadge("出演", $"{seriesTitles.Length}作品"));
+        if (episodeCount > 0) badges.Add(new OgCardBadge("TV", $"{episodeCount}話"));
+        if (movieCount > 0) badges.Add(new OgCardBadge("映画", $"{movieCount}本"));
 
         // 学校は作品を観れば分かる設定で、カードの限られた面積を割く価値が薄いので出さない。
         var facts = new List<OgCardFactLine>();
@@ -605,19 +622,34 @@ public sealed class CharactersGenerator
         if (content.PrecureProfile is { } profile && !string.IsNullOrWhiteSpace(profile.FamilyBusiness))
             facts.Add(new OgCardFactLine("家業", profile.FamilyBusiness));
 
-        // 前置きは所属作品。エピソードカードと同じ位置に同じ書式で置くことで、
-        // 「どの作品の話か」がカード種別をまたいで同じ場所で読める。
-        // キャラクター種別（プリキュア／妖精など）は名前と絵柄から明らかなので前置きには使わない。
-        // 出演作品は最初の 1 本を代表に据える（複数作品にまたがるキャラは件数バッジ側で伝わる）。
-        return new OgCardSpec(
-            Kicker: seriesTitles.Length > 0 ? $"『{seriesTitles[0]}』" : "キャラクター",
-            Title: character.Name)
+        string bandColor = string.IsNullOrEmpty(keyColor) ? OgCardColors.Character : OgCardColors.ForKeyColor(keyColor);
+
+        // 透かしは出身作品（初登場の作品。収録範囲外で初登場が決まらないときは声の出演履歴の最初の作品）。
+        string originTitle = firstAppearance?.Series.Title
+            ?? content.VoiceCastRows.Select(v => v.SeriesTitle).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t))
+            ?? "";
+
+        // 登場した作品を 1 行 1 作品で積む（作品名と、その作品での登場範囲）。キャラクターは所属作品にしか
+        // 出ないのが普通なので、人物カードのような期間の年表は意味を持たず、代わりにどの作品に出たかを並べる。
+        var works = content.VoiceCastRows
+            .Where(v => !string.IsNullOrWhiteSpace(v.SeriesTitle))
+            .GroupBy(v => v.SeriesTitle, StringComparer.Ordinal)
+            .Select(g => new OgCardFactLine("", $"『{g.Key}』" + (string.IsNullOrWhiteSpace(g.First().RangeLabel) ? "" : " " + g.First().RangeLabel)))
+            .ToArray();
+
+        // 作品名は透かしで見せるので、前置きの行は置かない。
+        return new OgCardSpec(Kicker: "", Title: character.Name)
         {
-            // 出演作品数もクレジット登録済みの範囲での集計なので、人物・企業カードと同じく
-            // 数の直下に基準点を明記する（母数を示さずに数だけ出すと歴代の全出演数と読まれる）。
+            // 登場話数もクレジット登録済みの範囲での集計なので、基準点を右下の注記に明記する。
             MetaLeft = OgCoverageLabel.Compact(coverageLabel),
             Badges = badges,
-            InlineFacts = facts
+            InlineFacts = facts,
+            Facts = works,
+            BandColorHex = bandColor,
+            Watermark = originTitle,
+            FootFacts = firstAppearance is null
+                ? Array.Empty<OgCardFactLine>()
+                : new[] { new OgCardFactLine("初登場", firstAppearance.ToPlainText()) }
         };
     }
 
@@ -645,33 +677,39 @@ public sealed class CharactersGenerator
     }
 
     /// <summary>
-    /// キャラクター詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
-    /// 構成：「{キャラ名}は、プリキュアシリーズに登場する{キャラ種別}。CV:{声優1}、{声優2}など。{N作品}に出演。」を骨格に、
-    /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
-    /// 声優名は <see cref="VoiceCastRow.VoiceActorNames"/>（連名連結）を「、」で割って重複排除し、最大 2 名。
-    /// 出演シリーズ数は <see cref="VoiceCastRow.SeriesTitle"/> の Distinct カウント。
+    /// キャラクター詳細の meta description。「〇〇は、『作品』に登場する種別。声は△△さん。登場した作品と話、名義、家族関係をまとめました。」
+    /// の順で 140 字ほどに収める。
     /// </summary>
     private static string BuildCharacterMetaDescription(
         string characterName,
         string kindLabel,
         IReadOnlyList<VoiceCastRow> voiceRows)
     {
-        const int targetMaxChars = 140;
-        var sb = new System.Text.StringBuilder();
+        const int targetMaxChars = 150;
+        const string tail = "登場した作品と話、名義、家族関係をまとめました。";
 
-        sb.Append(characterName).Append("は、プリキュアシリーズに登場");
-        if (!string.IsNullOrWhiteSpace(kindLabel))
+        // 登場作品（重複を除いて出た順に 2 作品まで）。
+        var seriesTitles = voiceRows
+            .Select(v => v.SeriesTitle)
+            .Where(t => !string.IsNullOrEmpty(t))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var sb = new System.Text.StringBuilder();
+        sb.Append(characterName).Append("は、");
+        if (seriesTitles.Count > 0)
         {
-            sb.Append("する").Append(kindLabel);
+            sb.Append(string.Join("", seriesTitles.Take(2).Select(t => $"『{t}』")));
+            if (seriesTitles.Count > 2) sb.Append("など");
+            sb.Append("に登場する");
         }
         else
         {
-            sb.Append("するキャラクター");
+            sb.Append("プリキュアシリーズに登場する");
         }
-        sb.Append("。");
+        sb.Append(string.IsNullOrWhiteSpace(kindLabel) ? "キャラクター" : kindLabel).Append('。');
 
-        // 声優 CV（最大 2 名）。VoiceActorNames は「、」連結のフリーテキストなので分割する。
-        var allVoiceActors = voiceRows
+        // 声の出演（最大 2 名）。VoiceActorNames は「、」連結のフリーテキストなので分割する。
+        var voices = voiceRows
             .SelectMany(v => string.IsNullOrEmpty(v.VoiceActorNames)
                 ? Array.Empty<string>()
                 : v.VoiceActorNames.Split('、', StringSplitOptions.RemoveEmptyEntries))
@@ -679,27 +717,12 @@ public sealed class CharactersGenerator
             .Where(n => !string.IsNullOrEmpty(n))
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        if (allVoiceActors.Count > 0)
+        if (voices.Count > 0)
         {
-            var pickedVoices = allVoiceActors.Take(2).ToList();
-            var fragment = "CV:" + string.Join("、", pickedVoices);
-            if (allVoiceActors.Count > 2) fragment += "など";
-            fragment += "。";
-            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
+            string fragment = "声は" + string.Join("、", voices.Take(2).Select(n => n + "さん")) + (voices.Count > 2 ? "ほか" : "") + "。";
+            if (sb.Length + fragment.Length + tail.Length <= targetMaxChars) sb.Append(fragment);
         }
-
-        // 出演シリーズ数（VoiceCastRow は声優の交代やシリーズ全体スコープで同じシリーズに複数行あり得るため、シリーズ名の重複を除いて数える）。
-        int seriesCount = voiceRows
-            .Select(v => v.SeriesTitle)
-            .Where(t => !string.IsNullOrEmpty(t))
-            .Distinct(StringComparer.Ordinal)
-            .Count();
-        if (seriesCount > 0)
-        {
-            var fragment = $"{seriesCount}作品に出演。";
-            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
-        }
-
+        sb.Append(tail);
         return sb.ToString();
     }
 
@@ -1139,6 +1162,8 @@ public sealed class CharactersGenerator
         public string KindLabel { get; set; } = "";
         /// <summary>誕生日表記（「YYYY年M月D日」または「M月D日」、未設定時は空文字）。生年は BirthYearVisibility=PUBLIC のときだけ年付き表記。</summary>
         public string Birthday { get; set; } = "";
+        /// <summary>初登場の話（リンク付き HTML、<see cref="FirstAppearanceResolver"/>）。収録範囲外・該当なしは空文字。</summary>
+        public string FirstAppearanceHtml { get; set; } = "";
         public string Notes { get; set; } = "";
         /// <summary>キャラクター公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
         public string OfficialUrl { get; set; } = "";

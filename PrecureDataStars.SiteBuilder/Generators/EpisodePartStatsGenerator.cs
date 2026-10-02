@@ -30,7 +30,7 @@ public sealed class EpisodePartStatsGenerator
     /// <summary>番組開始基準時刻（08:30:00）。中 CM 入り時刻の絶対時刻表示で使用。</summary>
     private static readonly TimeSpan ProgramStart = new TimeSpan(8, 30, 0);
 
-    /// <summary>当ジェネレータが生成する全ページに付与するカバレッジラベル （「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記）。</summary>
+    /// <summary>当ジェネレータが生成する全ページに付与するカバレッジラベル （「『○○プリキュア』第N話(YYYY.M.D)時点」表記）。</summary>
     private string _coverageLabel = "";
 
     public EpisodePartStatsGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
@@ -83,9 +83,9 @@ public sealed class EpisodePartStatsGenerator
             OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代エピソード尺統計")
             {
                 MetaLeft = _coverageLabel,
-                Badges = new[] { new OgCardBadge("対象", $"{StatsCoverageLabel.CountTvEpisodesWithParts(_ctx, episodeIdsWithParts)}話") }
+                Subtitle = "アバンタイトルの長さ、A パート・B パートの尺、中 CM の入り時刻まで、本編の“尺”を全話ぶん集計しました。"
             },
-            MetaDescription = "アバンの長さ、Aパート・Bパートの尺、中 CM の入り時刻まで。プリキュア全シリーズの本編の“尺”を集計した統計です。",
+            MetaDescription = "歴代プリキュア全話の本編の尺の統計。アバンタイトルの長さ、A パート・B パートの尺、中 CM の入り時刻を全シリーズで集計しました。長い回・短い回がひと目で分かります。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

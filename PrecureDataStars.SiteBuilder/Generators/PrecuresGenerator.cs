@@ -150,10 +150,12 @@ public sealed class PrecuresGenerator
             // 本文リード行と同じ母数をカードにも置く。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアオールスターズ")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "歴代の変身ヒロイン（プリキュア）を登場順に、変身前後の名前と担当の声優さんとともに一覧にしました。",
                 MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                 Badges = new[] { new OgCardBadge("変身ヒロイン", $"{rows.Count}名") }
             },
-            MetaDescription = $"歴代の変身ヒロイン（プリキュア）{rows.Count} 名を登場順に。変身前後の名前や担当声優をまとめています。",
+            MetaDescription = $"歴代プリキュア（変身ヒロイン）{rows.Count} 名の一覧。登場順に、変身前後の名前と担当の声優さんをまとめました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -173,7 +175,7 @@ public sealed class PrecuresGenerator
         /// <summary>登場回数順タブの行（登場話数と登場本数の合計が多い順）。</summary>
         public IReadOnlyList<PrecureIndexRow> CountRows { get; set; } = Array.Empty<PrecureIndexRow>();
         public int TotalCount { get; set; }
-        /// <summary>クレジット横断カバレッジラベル。 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記を テンプレ側の lead 段落末尾に表示する。</summary>
+        /// <summary>クレジット横断カバレッジラベル。 「『○○プリキュア』第N話(YYYY.M.D)時点」表記を テンプレ側の lead 段落末尾に表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
 

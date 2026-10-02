@@ -53,6 +53,8 @@
     <!-- OGP カード画像（1200x630 の PNG）のビルド時生成に使用。
          ネイティブ描画バックエンドは Windows 用ネイティブアセットが transitive に入る。 -->
     <PackageReference Include="SkiaSharp" />
+    <!-- OGP カードの文字組みに HarfBuzz を使い、カーニング（kern）と詰め（palt）を効かせる。 -->
+    <PackageReference Include="SkiaSharp.HarfBuzz" />
   </ItemGroup>
 
   <!--

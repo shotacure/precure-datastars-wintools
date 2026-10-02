@@ -765,8 +765,8 @@ public sealed class SeriesGenerator
                     SeasonBadgeClass = GetSeasonBadgeClass(m.KindCode),
                     SeasonBadgeLabel = GetSeasonBadgeLabel(m.KindCode),
                     RuntimeLabel = runtimeLabel,
-                    // 親映画のメインスタッフサマリ。子作品（MOVIE_SHORT）は子配下では出さず親カードに集約しない
-                    // （子作品は別シリーズとして独自の SERIES-attached クレジットを持ち得るため）。
+                    // 親映画のメインスタッフサマリ。子作品（MOVIE_SHORT）のスタッフは親カードに混ぜず、
+                    // 子作品の行に子作品自身の SERIES-attached クレジットから集計したものを出す。
                     KeyStaffSummary = GetKeyStaffSummary(m.SeriesId),
                     Children = children
                         .Select(c => new RelatedSeriesRow
@@ -778,7 +778,9 @@ public sealed class SeriesGenerator
                             Period = "",
                             // 子作品単体の尺を親と同じ尺カラム位置に出す。
                             // run_time_seconds 未登録（NULL）の子は空文字でセル空表示。
-                            RuntimeLabel = FormatRuntimeSeconds(c.RunTimeSeconds)
+                            RuntimeLabel = FormatRuntimeSeconds(c.RunTimeSeconds),
+                            // 子作品（併映短編）自身のメインスタッフ。親映画と同じ役職セットで集計する。
+                            KeyStaffSummary = GetKeyStaffSummary(c.SeriesId)
                         })
                         .ToList()
                 };
@@ -1833,6 +1835,8 @@ public sealed class SeriesGenerator
         public string Period { get; set; } = "";
         /// <summary>子作品（MOVIE_SHORT・併映短編）単体の上映時間ラベル（「m分ss秒」形式）。</summary>
         public string RuntimeLabel { get; set; } = "";
+        /// <summary>子作品（併映短編）自身のメインスタッフサマリ（映画カードの子作品行に出す）。クレジットが無ければ空。</summary>
+        public IReadOnlyList<KeyStaffRoleGroup> KeyStaffSummary { get; set; } = Array.Empty<KeyStaffRoleGroup>();
         /// <summary>親に対する関係種別コード。</summary>
         public string RelationCode { get; set; } = "";
         /// <summary>

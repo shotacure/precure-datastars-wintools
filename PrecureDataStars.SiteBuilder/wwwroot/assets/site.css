@@ -693,6 +693,17 @@ a.series-card-children-title:hover {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* 併映短編のメインスタッフ。タイトルの下の行に、中黒の分だけ字下げして出す。
+   人物・役職のリンクだけ押せるようにする（親の pointer-events: none を部分的に戻す）。 */
+.series-card-children-staff {
+  flex: 1 0 100%;
+  padding-left: 1em;
+  line-height: 1.7;
+}
+.series-card-children-staff a.staff-name,
+.series-card-children-staff a.role-badge {
+  pointer-events: auto;
+}
 
 .series-flat {
   list-style: none;

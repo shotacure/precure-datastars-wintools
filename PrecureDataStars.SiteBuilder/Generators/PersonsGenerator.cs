@@ -31,6 +31,9 @@ public sealed class PersonsGenerator
 
     private readonly CreditInvolvementIndex _index;
 
+    /// <summary>役職系譜の代表コード。カードの年表を出すかどうか（サイトの年表に載る人か）の判定に使う。</summary>
+    private readonly RoleSuccessorResolver _roleSuccessorResolver;
+
     /// <summary>person_id → 当該人物に紐付く全 alias_id のリスト（person_alias_persons の逆引き）。 1 度ロードしたら使い回す。</summary>
     private IReadOnlyDictionary<int, IReadOnlyList<int>>? _aliasesByPerson;
 
@@ -62,11 +65,13 @@ public sealed class PersonsGenerator
         BuildContext ctx,
         PageRenderer page,
         IConnectionFactory factory,
-        CreditInvolvementIndex index)
+        CreditInvolvementIndex index,
+        RoleSuccessorResolver roleSuccessorResolver)
     {
         _ctx = ctx;
         _page = page;
         _index = index;
+        _roleSuccessorResolver = roleSuccessorResolver;
 
         _personsRepo = new PersonsRepository(factory);
         _aliasesRepo = new PersonAliasesRepository(factory);
@@ -377,6 +382,8 @@ public sealed class PersonsGenerator
     /// 「氏名 → TV 話数・映画本数 → 役職と話数 → 関わった期間の年表 → 初参加」の順に置く。
     /// 氏名だけのカードでは誰なのか伝わらないため、担当話数の多い役職と、いつからいつまで関わったかの年表で
     /// 「プリキュアで何をしてきた人か」を一目で示す。色帯は人物の青（声の出演しかない人物は緑）、透かしは主な役職。
+    /// 年表はサイトの年表（役職詳細・声の出演一覧）に載る人物にだけ出す（載らない人には単発の点しか描けず、意味が伝わらない）。
+    /// 年表を出さない人物には、代わりに関わった作品を 1 行 1 作品で並べる。
     /// </summary>
     private OgCardSpec BuildOgCard(
         string displayName,
@@ -402,6 +409,7 @@ public sealed class PersonsGenerator
 
         bool voiceOnly = mainInvolvements.Count > 0 && mainInvolvements.All(i => i.IsVoiceCast);
         string bandColor = voiceOnly ? OgCardColors.VoiceActor : OgCardColors.Staff;
+        bool showTimeline = OgCareerCardParts.AppearsInSiteTimeline(_ctx, _roleSuccessorResolver, mainInvolvements);
 
         // 前置きは置かない。「クリエイター」と名乗らせなくても、氏名と担当役職の並びで何者かは伝わる。
         return new OgCardSpec(Kicker: "", Title: displayName)
@@ -412,87 +420,18 @@ public sealed class PersonsGenerator
             Badges = badges,
             InlineFacts = roles,
             BandColorHex = bandColor,
-            Watermark = ResolveMainRoleLabel(mainInvolvements),
-            Timeline = BuildCareerTimeline(mainInvolvements, bandColor),
+            Watermark = OgCareerCardParts.ResolveMainRoleLabel(_ctx, mainInvolvements),
+            Timeline = showTimeline
+                ? OgCareerCardParts.BuildCareerTimeline(_ctx, mainInvolvements, bandColor)
+                : Array.Empty<OgCardTimelineSegment>(),
+            Facts = showTimeline
+                ? Array.Empty<OgCardFactLine>()
+                : OgCareerCardParts.BuildWorksLines(_ctx, mainInvolvements),
             TimelineEnd = DateOnly.FromDateTime(_ctx.BuildStartedAt.Date),
             FootFacts = firstAppearance is null
                 ? Array.Empty<OgCardFactLine>()
                 : new[] { new OgCardFactLine("初参加", firstAppearance.ToPlainText()) }
         };
-    }
-
-    /// <summary>
-    /// 透かしに出す主な役職。TV のオープニングにクレジットされた役職（複数なら担当話数の多いもの）を最優先し、
-    /// 無ければ映画のオープニングの役職、どちらも無ければ担当話数がいちばん多い役職。
-    /// 本編の役職が無く声の出演だけの人物は「声の出演」。
-    /// </summary>
-    private string ResolveMainRoleLabel(IReadOnlyList<Involvement> mainInvolvements)
-    {
-        var byRole = mainInvolvements
-            .Where(i => i.Kind == InvolvementKind.Person && !string.IsNullOrEmpty(i.RoleCode))
-            .GroupBy(i => i.RoleCode, StringComparer.Ordinal)
-            .Select(g => new
-            {
-                Code = g.Key,
-                TvOp = g.Count(i => string.Equals(i.CreditKind, "OP", StringComparison.Ordinal) && !_ctx.IsMovieKindSeries(i.SeriesId)),
-                MovieOp = g.Count(i => string.Equals(i.CreditKind, "OP", StringComparison.Ordinal) && _ctx.IsMovieKindSeries(i.SeriesId)),
-                Total = g.Count()
-            })
-            .ToList();
-
-        var pick = byRole.Where(r => r.TvOp > 0).OrderByDescending(r => r.TvOp).ThenByDescending(r => r.Total).FirstOrDefault()
-            ?? byRole.Where(r => r.MovieOp > 0).OrderByDescending(r => r.MovieOp).ThenByDescending(r => r.Total).FirstOrDefault()
-            ?? byRole.OrderByDescending(r => r.Total).FirstOrDefault();
-        if (pick is not null)
-            return _ctx.RoleByCode.TryGetValue(pick.Code, out var role) ? role.NameJa : pick.Code;
-        return mainInvolvements.Any(i => i.IsVoiceCast) ? "声の出演" : "";
-    }
-
-    /// <summary>
-    /// 関わった期間の年表。作品ごとに、クレジットされた最初の話から最後の話までを 1 区間にし、
-    /// その作品でいちばん多い役職の色（役職バッジと同じ）で塗る。映画は公開日の点。
-    /// </summary>
-    private IReadOnlyList<OgCardTimelineSegment> BuildCareerTimeline(IReadOnlyList<Involvement> mainInvolvements, string fallbackColor)
-    {
-        var segments = new List<OgCardTimelineSegment>();
-        foreach (var g in mainInvolvements.GroupBy(i => i.SeriesId))
-        {
-            if (!_ctx.SeriesById.TryGetValue(g.Key, out var series)) continue;
-            string color = DominantRoleColor(g, fallbackColor);
-
-            if (_ctx.IsMovieKindSeries(g.Key))
-            {
-                segments.Add(new OgCardTimelineSegment(series.StartDate, series.StartDate, color));
-                continue;
-            }
-
-            DateTime? first = null, last = null;
-            foreach (var inv in g)
-            {
-                if (inv.EpisodeId is not int episodeId) continue;
-                var ep = _ctx.LookupEpisode(g.Key, episodeId);
-                if (ep is null) continue;
-                if (first is null || ep.OnAirAt < first) first = ep.OnAirAt;
-                if (last is null || ep.OnAirAt > last) last = ep.OnAirAt;
-            }
-            if (first is null || last is null) continue;
-            // 終わりは最後の話の放送週いっぱいまで伸ばす（1 話だけでも点ではなく短い帯になる）。
-            segments.Add(new OgCardTimelineSegment(DateOnly.FromDateTime(first.Value), DateOnly.FromDateTime(last.Value).AddDays(7), color));
-        }
-        return segments.OrderBy(s => s.Start).ToList();
-    }
-
-    /// <summary>作品の中でいちばん多い役職の色。役職バッジに色の無い役職や声の出演だけの作品は、声優なら緑、それ以外は色帯の色。</summary>
-    private static string DominantRoleColor(IEnumerable<Involvement> involvements, string fallbackColor)
-    {
-        var top = involvements
-            .Where(i => i.Kind == InvolvementKind.Person && !string.IsNullOrEmpty(i.RoleCode))
-            .GroupBy(i => i.RoleCode, StringComparer.Ordinal)
-            .OrderByDescending(g => g.Count())
-            .FirstOrDefault();
-        if (top is null) return involvements.Any(i => i.IsVoiceCast) ? OgCardColors.VoiceActor : fallbackColor;
-        string color = OgRolePalette.ColorFor(top.Key);
-        return string.IsNullOrEmpty(color) ? fallbackColor : color;
     }
 
     /// <summary>

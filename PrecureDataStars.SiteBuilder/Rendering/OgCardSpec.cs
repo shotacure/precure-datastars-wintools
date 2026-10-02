@@ -62,6 +62,18 @@ public sealed record OgCardSpec(
     public bool HeroVoice { get; init; }
 
     /// <summary>
+    /// ヒーロー調のカードで、見出しの下に大きく組む言葉（タグライン）。改行は "\n" で指定する。
+    /// <see cref="StatementFontFamily"/> の書体（無ければ透かしの書体）を機械的な斜体にして、数を並べる代わりに置く。
+    /// </summary>
+    public string Statement { get; init; } = "";
+
+    /// <summary>
+    /// <see cref="Statement"/> を組む書体の名前（「FOT-マティスえれがんと Pro EB」のように重さまで含む Windows の書体名）。
+    /// 空なら透かしの書体。見つからなければ透かしの書体で描き、警告になる。
+    /// </summary>
+    public string StatementFontFamily { get; init; } = "";
+
+    /// <summary>
     /// 見出しの上に大きく置く識別子（「第1話」など）。カードの中で最初に目に入る要素として、
     /// ブランド書体・本文色で見出しに次ぐ大きさで描く。空文字なら段ごと詰める。
     /// </summary>
@@ -157,11 +169,13 @@ public sealed record OgCardSpec(
     /// 高密度の組み方を使うか（識別子・バッジ・帯グラフ・事実行のいずれかを持つか）。
     /// 右上の透かしや見出しの書体指定を持つカードも含める。これらは高密度側の疎な組み方（見出しと日付だけを大きく組む）が
     /// 前提で、標準の組み方は見出しの書体指定を無視するため（クレジット未収録で事実行が無い話も、作品の書体で組む）。
+    /// ヒーロー調（ホーム）と、タグラインの言葉を持つカードも高密度側で組む。
     /// </summary>
     public bool IsDense =>
         !string.IsNullOrWhiteSpace(Headline) || Badges.Count > 0 || Bar.Count > 0
         || InlineFacts.Count > 0 || Facts.Count > 0 || IsProfile
-        || !string.IsNullOrWhiteSpace(Watermark) || !string.IsNullOrWhiteSpace(TitleFontFamily);
+        || !string.IsNullOrWhiteSpace(Watermark) || !string.IsNullOrWhiteSpace(TitleFontFamily)
+        || HeroVoice || !string.IsNullOrWhiteSpace(Statement);
 }
 
 /// <summary>
@@ -274,6 +288,11 @@ public static class OgRolePalette
         "SERIES_DIRECTOR" or "EPISODE_DIRECTOR" or "DIRECTOR" => "#e91e63",
         "CHARACTER_DESIGN" or "ANIMATION_DIRECTOR" => "#4ca36b",
         "ART_DESIGN" or "ART_DIRECTOR" or "ART_DIRECTOR_TV" => "#d4a017",
+        // 楽曲の役職（サイトの楽曲詳細のバッジと同じ 4 色）。
+        "LYRICS" => "#c0354c",
+        "COMPOSITION" => "#a17821",
+        "ARRANGEMENT" => "#3c823c",
+        "VOCALS" or "BACKING_VOCALS" or "DIALOGUE" => "#3b56b8",
         _ => ""
     };
 }

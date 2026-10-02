@@ -202,24 +202,16 @@ public sealed class HomeGenerator
             // 見出しはサイト名（ヒーローの h1 と同じ）、その下にタグライン、
             // 数はトップの統計タイルと同じ並び・同じ単位で置く。
             // ホームのカードはサイトトップのヒーローをそのまま持ち込む。
-            // 見出しはサイト名、その下にタグライン、いずれもブランド書体の濃ピンク（.hero.hero-gradient と同値）。
-            // 基準点は数の直下に置く（いつ時点の数かは、数を読んだあとに要る情報のため）。
-            OgCard = new OgCardSpec(Kicker: "", Title: _ctx.Config.SiteBrandLabel)
+            // ヘッダのワードマークと同じく、肩書き（「プリキュアデータベース」）を小さく前に添え、固有名詞（「precure-datastars」）を
+            // 見出しにする。その下にタグライン、いずれもブランド書体の濃ピンク（.hero.hero-gradient と同値）。
+            // 数を誇る代わりに、タグライン「プリキュアまるごとデータベース。」をマティスえれがんとの斜体で大きく組む。
+            // ホームには透かしを置かない（サイト名そのものが主役で、添える属性が無い）。
+            OgCard = new OgCardSpec(Kicker: _ctx.Config.SiteNameJa, Title: _ctx.Config.SiteName)
             {
                 HeroVoice = true,
-                Subtitle = "プリキュアまるごとデータベース。",
-                MetaLeft = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
-                Badges = new[]
-                {
-                    new OgCardBadge("", $"{dbStats.TvSeriesCount}TVシリーズ"),
-                    new OgCardBadge("", $"{dbStats.MovieSeriesCount}映画"),
-                    new OgCardBadge("", $"{dbStats.SpinOffSeriesCount}スピンオフ"),
-                    new OgCardBadge("", $"{dbStats.EpisodeCount}エピソード"),
-                    new OgCardBadge("", $"{dbStats.SongsCount}歌"),
-                    new OgCardBadge("", $"{dbStats.BgmsCount}劇伴"),
-                    new OgCardBadge("", $"{dbStats.MusicProductsCount}音楽商品"),
-                    new OgCardBadge("", $"{dbStats.CreatorsCount}クリエイター")
-                }
+                // 2 行に割って、幅いっぱいまで大きく組む。
+                Statement = "プリキュアまるごと\nデータベース。",
+                StatementFontFamily = "FOT-マティスえれがんと Pro EB"
             }
         };
 

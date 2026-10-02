@@ -13,6 +13,8 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// <param name="Emphasis">本文の強調部（役職名などのラベル、前置きの作品名）。空なら <see cref="Title"/> と同じ書体。</param>
 /// <param name="Number">大きいピンクの数字。空なら <see cref="Title"/> と同じ書体。</param>
 /// <param name="Watermark">右上の透かし。空なら <see cref="Title"/> と同じ書体。</param>
+/// <param name="Notice">注意書き系のページ（規約・About など）の本文。空なら <see cref="Body"/> と同じ書体。機械的な斜体で組む。</param>
+/// <param name="ObliqueDegrees">機械的な斜体の角度（度。右に倒す）。ホームの特徴の言葉と注意書きの本文に使う。0 なら立てたまま。</param>
 /// <param name="TitleCondensed">
 /// 見出し書体のコンデンス版（UD新ゴ コンデンス90〜50 など、同じ書体の字幅を詰めた別ファイル）。
 /// 見出しが 1 行に収まらないとき、長体（字形を横に縮める）の代わりに広い順に差し替えて使う。
@@ -20,7 +22,7 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// </param>
 public sealed record OgCardFontPaths(
     string Title = "", string Body = "", string Emphasis = "", string Number = "", string Watermark = "",
-    IReadOnlyList<string>? TitleCondensed = null)
+    IReadOnlyList<string>? TitleCondensed = null, string Notice = "", float ObliqueDegrees = 0f)
 {
     /// <summary>何も指定しない（同梱フォントだけで描く）。</summary>
     public static OgCardFontPaths Bundled { get; } = new();

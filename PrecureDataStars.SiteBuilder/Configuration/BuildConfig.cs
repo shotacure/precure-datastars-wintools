@@ -219,7 +219,16 @@ public sealed class BuildConfig
             Emphasis: ReadFontPath("OgCardEmphasisFont"),
             Number: ReadFontPath("OgCardNumberFont"),
             Watermark: ReadFontPath("OgCardWatermarkFont"),
-            TitleCondensed: ReadFontPaths("OgCardTitleCondensedFonts"));
+            TitleCondensed: ReadFontPaths("OgCardTitleCondensedFonts"),
+            Notice: ReadFontPath("OgCardNoticeFont"),
+            ObliqueDegrees: ReadDegrees("OgCardObliqueDegrees"));
+
+        // 斜体の角度（度）。未設定・不正なら 0（立てたまま）。
+        static float ReadDegrees(string key)
+        {
+            var raw = (ConfigurationManager.AppSettings[key] ?? "").Trim();
+            return float.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0f;
+        }
 
         static string ReadFontPath(string key)
         {

@@ -620,12 +620,7 @@ public sealed class CreatorsGenerator
         {
             PageTitle = $"{role.NameJa}（クリエイター）",
             MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した人物・企業・団体を一覧にしました。初参加順・担当回数順で並べ替えられます。",
-            OgCard = BuildCreatorsOgCard(
-                role.NameJa,
-                BuildEntityBadges(content.PersonCount, content.CompanyCount),
-                alternateNames.Count > 0
-                    ? new[] { new OgCardFactLine("別称", string.Join("・", alternateNames.Select(a => a.RoleNameJa))) }
-                    : Array.Empty<OgCardFactLine>()),
+            OgCard = BuildRoleOgCard(role, content.PersonCount, content.CompanyCount, rows, rowSet.TimelineEntities, alternateNames),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2429,6 +2424,100 @@ public sealed class CreatorsGenerator
     /// 母数を書かずに数だけ流すと「歴代の全数」と読まれてしまうため、カード単体で完結させる。
     /// </summary>
     /// <param name="coverageLabel">基準点ラベル。null なら本編クレジットの収録範囲（<see cref="BuildContext.CreditCoverageLabel"/>）。</param>
+    /// <summary>
+    /// 役職詳細の OGP カード（人物・企業と同じプロフィール組み）。
+    /// 「役職名 → 人物数・団体数と、この役職がクレジットされた TV の話数・映画の本数 → 担当の多い順の顔ぶれ →
+    /// この役職が置かれていた期間の年表 → 別称・初出」の順に置く。透かしは初出の年。
+    /// 役職名と人数だけでは「いつからある役職で、誰の仕事か」が伝わらないため、顔ぶれと期間で役職の輪郭を示す。
+    /// </summary>
+    private OgCardSpec BuildRoleOgCard(
+        Role role, int personCount, int companyCount,
+        IReadOnlyList<EntityRow> rows, IReadOnlyList<RoleTimelineEntity> entities,
+        IReadOnlyList<AlternateNameItem> alternateNames)
+    {
+        // この役職がクレジットされた話・映画（担当者をまたいで 1 話・1 本に畳む）。
+        var episodes = new HashSet<(int SeriesId, int EpisodeId)>();
+        var movies = new HashSet<int>();
+        foreach (var e in entities)
+        {
+            foreach (var key in e.Episodes) if (key.EpisodeId != 0) episodes.Add(key);
+            foreach (var sid in e.MovieSeriesIds) movies.Add(sid);
+        }
+
+        var badges = new List<OgCardBadge>(BuildEntityBadges(personCount, companyCount));
+        if (episodes.Count > 0) badges.Add(new OgCardBadge("TV", $"{episodes.Count}話"));
+        if (movies.Count > 0) badges.Add(new OgCardBadge("映画", $"{movies.Count}本"));
+
+        // 担当の多い順に 4 者まで。「名前 n話 / n本」を読点で並べる。
+        var top = rows.OrderByDescending(r => r.TotalCount).ThenBy(r => r.FirstSortStart).ThenBy(r => r.FirstSortEpNo).Take(4).ToList();
+        var facts = new List<OgCardFactLine>();
+        if (top.Count > 0)
+        {
+            facts.Add(new OgCardFactLine("担当の多い順", string.Join("、", top.Select(r =>
+            {
+                string count = (r.EpisodeCount, r.MovieCount) switch
+                {
+                    (> 0, > 0) => $"{r.EpisodeCount}話 / {r.MovieCount}本",
+                    (> 0, _) => $"{r.EpisodeCount}話",
+                    _ => $"{r.MovieCount}本"
+                };
+                return $"{r.EntityName} {count}";
+            }))));
+        }
+
+        // この役職が置かれていた期間：作品ごとに、クレジットされた最初の話から最後の話まで（映画は公開日の点）。
+        var segments = new List<OgCardTimelineSegment>();
+        foreach (var g in episodes.GroupBy(k => k.SeriesId))
+        {
+            DateOnly? first = null, last = null;
+            foreach (var (sid, eid) in g)
+            {
+                if (!_ctx.EpisodeById.TryGetValue(eid, out var ep)) continue;
+                if (first is null || ep.OnAirDate < first) first = ep.OnAirDate;
+                if (last is null || ep.OnAirDate > last) last = ep.OnAirDate;
+            }
+            if (first is DateOnly f && last is DateOnly l)
+                segments.Add(new OgCardTimelineSegment(f, l.AddDays(7), OgCardColors.Staff));
+        }
+        foreach (var sid in movies)
+        {
+            if (_ctx.SeriesById.TryGetValue(sid, out var mv))
+                segments.Add(new OgCardTimelineSegment(mv.StartDate, mv.StartDate, OgCardColors.Staff));
+        }
+
+        // 初出：この役職が最初にクレジットされた話（映画なら公開日）。透かしはその年。
+        (DateOnly Date, string Text)? debut = null;
+        foreach (var (sid, eid) in episodes)
+        {
+            if (!_ctx.EpisodeById.TryGetValue(eid, out var ep) || !_ctx.SeriesById.TryGetValue(sid, out var s)) continue;
+            if (debut is null || ep.OnAirDate < debut.Value.Date)
+                debut = (ep.OnAirDate, $"『{s.Title}』第{ep.SeriesEpNo}話({ep.OnAirDate:yyyy.M.d})");
+        }
+        foreach (var sid in movies)
+        {
+            if (!_ctx.SeriesById.TryGetValue(sid, out var mv)) continue;
+            if (debut is null || mv.StartDate < debut.Value.Date)
+                debut = (mv.StartDate, $"『{mv.Title}』({mv.StartDate:yyyy.M.d} 公開)");
+        }
+
+        var foot = new List<OgCardFactLine>();
+        if (alternateNames.Count > 0)
+            foot.Add(new OgCardFactLine("別称", string.Join("・", alternateNames.Select(a => a.RoleNameJa))));
+        if (debut is not null) foot.Add(new OgCardFactLine("初出", debut.Value.Text));
+
+        return new OgCardSpec(Kicker: "", Title: role.NameJa)
+        {
+            MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
+            BandColorHex = OgCardColors.Staff,
+            Badges = badges,
+            InlineFacts = facts,
+            Watermark = debut is null ? "" : debut.Value.Date.Year.ToString(),
+            Timeline = segments.OrderBy(s => s.Start).ToList(),
+            TimelineEnd = DateOnly.FromDateTime(_ctx.BuildStartedAt.Date),
+            FootFacts = foot
+        };
+    }
+
     private OgCardSpec BuildCreatorsOgCard(string title, IReadOnlyList<OgCardBadge> badges, IReadOnlyList<OgCardFactLine> facts, string? coverageLabel = null) =>
         new(Kicker: "", Title: title)
         {

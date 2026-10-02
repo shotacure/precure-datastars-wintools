@@ -436,25 +436,16 @@ public sealed class SongsGenerator
         string repSeriesTitle,
         IReadOnlyList<RecordingView> recordingViews)
     {
-        // 曲の作り手（作詞・作曲・編曲）を先に置く。録音の本数は曲そのものの性格を語らないので出さない。
+        // 曲の作り手（作詞・作曲・編曲）と、筆頭バージョン（先頭録音）の歌い手を同じ段に並べる。
+        // 項目名の色はサイトの楽曲詳細の役職バッジと同じ。録音の本数やバージョンの列は曲そのものの性格を語らないので出さない。
         // 名義は構造化優先で解決済みの平文（CreditText）を受け取る。
         var credits = new List<OgCardFactLine>();
-        if (!string.IsNullOrWhiteSpace(lyricistText)) credits.Add(new OgCardFactLine("作詞", lyricistText));
-        if (!string.IsNullOrWhiteSpace(composerText)) credits.Add(new OgCardFactLine("作曲", composerText));
-        if (!string.IsNullOrWhiteSpace(arrangerText)) credits.Add(new OgCardFactLine("編曲", arrangerText));
-
-        // その下に代表的なバージョン（先頭録音）を 1 件、歌唱者を字下げして添える。
-        // 同じ曲でも版によって歌い手が変わるため、版と歌い手は組で見せないと意味を成さない。
+        if (!string.IsNullOrWhiteSpace(lyricistText)) credits.Add(new OgCardFactLine("作詞", lyricistText) { LabelColorHex = OgRolePalette.ColorFor("LYRICS") });
+        if (!string.IsNullOrWhiteSpace(composerText)) credits.Add(new OgCardFactLine("作曲", composerText) { LabelColorHex = OgRolePalette.ColorFor("COMPOSITION") });
+        if (!string.IsNullOrWhiteSpace(arrangerText)) credits.Add(new OgCardFactLine("編曲", arrangerText) { LabelColorHex = OgRolePalette.ColorFor("ARRANGEMENT") });
         var rep = recordingViews.FirstOrDefault();
-        var versions = new List<OgCardFactLine>();
-        if (rep is not null)
-        {
-            string versionTitle = string.IsNullOrWhiteSpace(rep.DisplayTitle) ? song.Title : rep.DisplayTitle;
-            versions.Add(new OgCardFactLine("", versionTitle)
-            {
-                SubText = string.IsNullOrWhiteSpace(rep.SingerName) ? "" : $"歌 {rep.SingerName}"
-            });
-        }
+        if (rep is not null && !string.IsNullOrWhiteSpace(rep.SingerName))
+            credits.Add(new OgCardFactLine("歌", rep.SingerName) { LabelColorHex = OgRolePalette.ColorFor("VOCALS") });
 
         return new OgCardSpec(
             Kicker: string.IsNullOrWhiteSpace(musicClassLabel) ? "歌" : musicClassLabel,
@@ -463,8 +454,7 @@ public sealed class SongsGenerator
             // 出典作品は右上の透かしで見せる。
             Watermark = repSeriesTitle ?? "",
             BandColorHex = OgCardColors.Music,
-            InlineFacts = credits,
-            Facts = versions
+            InlineFacts = credits
         };
     }
 

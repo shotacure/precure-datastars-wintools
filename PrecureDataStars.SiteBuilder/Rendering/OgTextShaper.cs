@@ -168,6 +168,14 @@ public sealed class OgTextShaper : IDisposable
     /// SkiaSharp の文字揃えと同じ意味（Right なら x が右端、Center なら x が中央）。
     /// </summary>
     public void Draw(SKCanvas canvas, string text, float x, float baseline, SKTextAlign align, SKFont font, SKPaint paint)
+        => Draw(canvas, text, x, baseline, align, font, paint, null);
+
+    /// <summary>
+    /// 組んだ結果を、縁取り付きで描く。<paramref name="outline"/>（線の塗り。線の幅・角の丸みは呼び出し側が設定する）で
+    /// 同じ字形を先に描き、その上に <paramref name="paint"/> で塗る。線は字形の輪郭を中心に引かれるので、
+    /// 見えるフチの太さは線の幅の半分になる。<paramref name="outline"/> が null なら塗りだけ。
+    /// </summary>
+    public void Draw(SKCanvas canvas, string text, float x, float baseline, SKTextAlign align, SKFont font, SKPaint paint, SKPaint? outline)
     {
         var run = Shape(text, font.Size);
         if (run.Glyphs.Length == 0) return;
@@ -196,6 +204,7 @@ public sealed class OgTextShaper : IDisposable
         buffer.SetPositions(positions);
         using var blob = builder.Build();
         if (blob is null) return;
+        if (outline is not null) canvas.DrawText(blob, startX, baseline, outline);
         canvas.DrawText(blob, startX, baseline, paint);
     }
 

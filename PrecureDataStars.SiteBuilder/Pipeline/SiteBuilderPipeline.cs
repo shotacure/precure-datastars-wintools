@@ -198,11 +198,11 @@ public sealed class SiteBuilderPipeline
         reporter.EndSection();
 
         reporter.BeginSection("persons");
-        await new PersonsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+        await new PersonsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
         reporter.BeginSection("companies");
-        await new CompaniesGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+        await new CompaniesGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
         // プリキュア・キャラクター系ページは ByCharacterAlias 逆引き（CHARACTER_VOICE エントリ経由）に

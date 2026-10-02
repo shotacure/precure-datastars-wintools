@@ -217,6 +217,10 @@ public sealed class ProductsGenerator
             .Select(g => g.Key)
             .ToHashSet(StringComparer.Ordinal);
 
+        // 曲・劇伴の初出盤（発売の早い順に走査して最初に収録した商品）。カードの「初出 n曲」に使う。
+        // 並列レンダリングの前に確定させ、以後は読み取りだけにする。
+        BuildFirstReleaseIndex(allProducts, discsByProduct);
+
         var urlPaths = new string[allProducts.Count];
         Parallel.For(0, allProducts.Count, i =>
         {
@@ -935,7 +939,7 @@ public sealed class ProductsGenerator
             },
             OgType = "website",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(content.Product, totalTracks, discViews)
+            OgCard = BuildOgCard(content.Product, totalTracks, discViews, BuildOgContentFacts(discs, product.ProductCatalogNo))
         };
         _page.RenderAndWriteFile(productUrl, "products-detail.sbn", content, layout);
         return productUrl;
@@ -943,34 +947,160 @@ public sealed class ProductsGenerator
 
     /// <summary>
     /// 商品詳細ページの OGP カードを組み立てる。
-    /// 「商品種別 → 商品名 → 量のバッジ（枚数・トラック数・収録時間）→ 品番 → 冒頭の曲目」の順に置く。
+    /// 「商品種別 → 商品名 → 量のバッジ（枚数・トラック数・収録時間・初出の曲数）→ 発売日・品番・価格 → 作曲者・収録内容の内訳」の順に置き、
+    /// 右上の透かしに所属作品（1 枚目のディスクの作品）を出す。
     /// バッジは数の大小を語れるものだけに絞る。品番は識別子であって量ではないので、
-    /// 数字を大きく見せる枠には入れず 1 行の様式で置く。
-    /// 残りの面積は曲目に充てる。CD を見分ける決め手は曲目であって、
-    /// 発売元・販売元は商品ページを開けば済む情報なのでカードには載せない。
+    /// 数字を大きく見せる枠には入れず 1 行の様式で置く。発売日は右上を透かしに譲るので同じ行に並べる。
+    /// 曲目はカードの面積では数行しか入らず「何が入っている盤か」を語れないので、代わりに
+    /// 作曲者（劇伴の盤）と、歌・カラオケ・劇伴・ドラマの曲数の内訳で中身を示す。歌い手は載せない。
+    /// レーベル・販売元は商品ページを開けば済む情報なのでカードには載せない。
     /// </summary>
-    private static OgCardSpec BuildOgCard(ProductView product, int totalTracks, IReadOnlyList<DiscView> discs)
+    private static OgCardSpec BuildOgCard(ProductView product, int totalTracks, IReadOnlyList<DiscView> discs, (IReadOnlyList<OgCardFactLine> Facts, int FirstReleaseCount) content)
     {
-        // 数として見せるのは「量」だけ。枚数のあとに総トラック数を並べ、最後に収録時間を置く。
+        // 数として見せるのは「量」だけ。「2枚組」「10トラック」「41分51秒」は値だけで意味が通るので項目名を付けない。
+        // 「初出 n曲」はこの盤で初めて世に出た曲（歌・劇伴）の数。コレクター目線で盤の価値を語る、どの盤にも共通の数。
         var badges = new List<OgCardBadge>();
-        if (product.DiscCount > 1) badges.Add(new OgCardBadge("枚数", $"{product.DiscCount}枚組"));
-        if (totalTracks > 0) badges.Add(new OgCardBadge("収録", $"{totalTracks}トラック"));
-        if (!string.IsNullOrWhiteSpace(product.TotalLengthLabel)) badges.Add(new OgCardBadge("時間", product.TotalLengthLabel));
+        if (content.FirstReleaseCount > 0) badges.Add(new OgCardBadge("初出", $"{content.FirstReleaseCount}曲"));
+        if (product.DiscCount > 1) badges.Add(new OgCardBadge("", $"{product.DiscCount}枚組"));
+        if (totalTracks > 0) badges.Add(new OgCardBadge("", $"{totalTracks}トラック"));
+        if (!string.IsNullOrWhiteSpace(product.TotalLengthLabel)) badges.Add(new OgCardBadge("", product.TotalLengthLabel));
 
-        var catalogNo = string.IsNullOrWhiteSpace(product.ProductCatalogNo)
-            ? Array.Empty<OgCardFactLine>()
-            : new[] { new OgCardFactLine("品番", product.ProductCatalogNo) };
+        var facts = new List<OgCardFactLine>();
+        if (!string.IsNullOrWhiteSpace(product.ReleaseDate)) facts.Add(new OgCardFactLine("発売", product.ReleaseDate));
+        if (!string.IsNullOrWhiteSpace(product.ProductCatalogNo)) facts.Add(new OgCardFactLine("品番", product.ProductCatalogNo));
+        if (!string.IsNullOrWhiteSpace(product.PriceIncTax)) facts.Add(new OgCardFactLine("価格", $"{product.PriceIncTax}円（税込）"));
+        facts.AddRange(content.Facts);
+
+        // 透かしは所属作品（1 枚目のディスクの作品。合同盤はディスクごとに作品が違うが、代表として先頭を採る）。
+        string seriesTitle = discs.Select(d => d.SeriesTitle).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t)) ?? "";
 
         return new OgCardSpec(
             Kicker: string.IsNullOrWhiteSpace(product.ProductKindLabel) ? "音楽商品" : product.ProductKindLabel,
             Title: product.Title)
         {
-            KickerRight = string.IsNullOrWhiteSpace(product.ReleaseDate) ? "" : $"{product.ReleaseDate} 発売",
             BandColorHex = OgCardColors.Music,
+            Watermark = seriesTitle,
             Badges = badges,
-            InlineFacts = catalogNo,
-            Facts = BuildTrackFactLines(product, discs)
+            InlineFacts = facts
         };
+    }
+
+    /// <summary>録音 ID → その録音（歌入り）を最初に収録した商品の品番。<see cref="BuildFirstReleaseIndex"/> で確定。</summary>
+    private Dictionary<int, string>? _firstReleaseByRecording;
+
+    /// <summary>劇伴 cue（作品, M ナンバー）→ その cue を最初に収録した商品の品番。</summary>
+    private Dictionary<(int SeriesId, string MNoDetail), string>? _firstReleaseByCue;
+
+    /// <summary>
+    /// 曲・劇伴の初出盤を確定する。商品を発売日の早い順（同日は品番順）に走査し、歌入りの録音と劇伴の cue それぞれについて
+    /// 最初に収録した商品の品番を控える。カラオケ等（歌入り以外のパート）は初出の判定に数えない。
+    /// </summary>
+    private void BuildFirstReleaseIndex(IReadOnlyList<Product> products, IReadOnlyDictionary<string, List<Disc>> discsByProduct)
+    {
+        var byRecording = new Dictionary<int, string>();
+        var byCue = new Dictionary<(int, string), string>();
+        foreach (var product in products.OrderBy(p => p.ReleaseDate).ThenBy(p => p.ProductCatalogNo, StringComparer.Ordinal))
+        {
+            if (!discsByProduct.TryGetValue(product.ProductCatalogNo, out var discs)) continue;
+            foreach (var disc in discs)
+            {
+                if (!_ctx.TracksByCatalogNo.TryGetValue(disc.CatalogNo, out var tracks)) continue;
+                foreach (var t in tracks)
+                {
+                    if (string.Equals(t.ContentKindCode, "BGM", StringComparison.Ordinal))
+                    {
+                        if (t.BgmSeriesId is int sid && !string.IsNullOrEmpty(t.BgmMNoDetail))
+                            byCue.TryAdd((sid, t.BgmMNoDetail!), product.ProductCatalogNo);
+                        continue;
+                    }
+                    if (t.SongRecordingId is int rid && (t.SongPartVariantCode is null || string.Equals(t.SongPartVariantCode, "VOCAL", StringComparison.Ordinal)))
+                        byRecording.TryAdd(rid, product.ProductCatalogNo);
+                }
+            }
+        }
+        _firstReleaseByRecording = byRecording;
+        _firstReleaseByCue = byCue;
+    }
+
+    /// <summary>カードの「音楽」に並べる名前の上限。これを超える分は「ほか n 人」にまとめる。</summary>
+    private const int OgNamesMax = 4;
+
+    /// <summary>
+    /// 商品カードの中身の手がかり。劇伴の盤なら作曲者（劇伴の作曲クレジットを多い順に、最大 <see cref="OgNamesMax"/>）、
+    /// そして歌・カラオケ・劇伴・ドラマ・その他の曲数の内訳。項目名の色はサイトの楽曲詳細の役職バッジと同じ。
+    /// </summary>
+    private (IReadOnlyList<OgCardFactLine> Facts, int FirstReleaseCount) BuildOgContentFacts(List<Disc> discs, string productCatalogNo)
+    {
+        var composerCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var firstRecordings = new HashSet<int>();
+        var firstCues = new HashSet<(int, string)>();
+        int songs = 0, karaoke = 0, bgm = 0, drama = 0, other = 0;
+
+        foreach (var disc in discs)
+        {
+            if (!_ctx.TracksByCatalogNo.TryGetValue(disc.CatalogNo, out var tracks)) continue;
+            foreach (var t in tracks.Where(t => t.SubOrder == 0))
+            {
+                switch (t.ContentKindCode)
+                {
+                    case "SONG":
+                    case "SONG_OTHER":
+                        if ((t.SongPartVariantCode ?? "").StartsWith("INST", StringComparison.Ordinal)) karaoke++; else songs++;
+                        if (t.SongRecordingId is int rid && _firstReleaseByRecording is not null
+                            && _firstReleaseByRecording.TryGetValue(rid, out var firstOf) && string.Equals(firstOf, productCatalogNo, StringComparison.Ordinal))
+                            firstRecordings.Add(rid);
+                        break;
+                    case "BGM":
+                        bgm++;
+                        if (t.BgmSeriesId is int firstSid && !string.IsNullOrEmpty(t.BgmMNoDetail) && _firstReleaseByCue is not null
+                            && _firstReleaseByCue.TryGetValue((firstSid, t.BgmMNoDetail!), out var firstCueOf) && string.Equals(firstCueOf, productCatalogNo, StringComparison.Ordinal))
+                            firstCues.Add((firstSid, t.BgmMNoDetail!));
+                        // 劇伴トラックは cue（作品と M ナンバー）を直接指す。その cue の作曲クレジットを数える。
+                        if (t.BgmSeriesId is int bgmSeriesId && !string.IsNullOrEmpty(t.BgmMNoDetail)
+                            && _ctx.BgmCueCreditsByCue.TryGetValue((bgmSeriesId, t.BgmMNoDetail!), out var credits))
+                        {
+                            foreach (var c in credits.Where(c => string.Equals(c.CreditRole, "COMPOSITION", StringComparison.Ordinal)))
+                            {
+                                if (!_ctx.PersonAliasById.TryGetValue(c.PersonAliasId, out var alias)) continue;
+                                string name = alias.DisplayTextOverride ?? alias.Name;
+                                composerCounts[name] = composerCounts.TryGetValue(name, out int n) ? n + 1 : 1;
+                            }
+                        }
+                        break;
+                    case "DRAMA":
+                        drama++;
+                        break;
+                    default:
+                        other++;
+                        break;
+                }
+            }
+        }
+
+        var facts = new List<OgCardFactLine>();
+        if (composerCounts.Count > 0)
+        {
+            var composers = composerCounts.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => kv.Key).ToList();
+            facts.Add(new OgCardFactLine("音楽", JoinWithRest(composers)) { LabelColorHex = OgRolePalette.ColorFor("COMPOSITION") });
+        }
+
+        var parts = new List<string>();
+        if (songs > 0) parts.Add($"歌{songs}曲");
+        if (karaoke > 0) parts.Add($"カラオケ{karaoke}曲");
+        if (bgm > 0) parts.Add($"劇伴{bgm}曲");
+        if (drama > 0) parts.Add($"ドラマ{drama}");
+        if (other > 0) parts.Add($"その他{other}");
+        if (parts.Count > 1) facts.Add(new OgCardFactLine("内訳", string.Join("・", parts)));
+        return (facts, firstRecordings.Count + firstCues.Count);
+    }
+
+    /// <summary>名前を読点で並べ、上限を超える分は「ほか n 人」にまとめる。</summary>
+    private static string JoinWithRest(IReadOnlyList<string> names)
+    {
+        var shown = names.Take(OgNamesMax).ToList();
+        string joined = string.Join("、", shown);
+        int rest = names.Count - shown.Count;
+        return rest > 0 ? $"{joined} ほか{rest}人" : joined;
     }
 
     /// <summary>

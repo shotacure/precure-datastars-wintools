@@ -1276,9 +1276,15 @@ public sealed class SeriesGenerator
         var view = content.Series;
 
         // バッジには値そのものを載せる（PeriodLabel / RunTimeLabel は見出し語なので使わない）。
+        // 話数を持たない作品（映画など）は、TV の各話カードと同じ組み（題名・公開日・主要スタッフだけを大きく）にする。
+        // 尺や数のバッジは持たない。
+        bool isMovieLike = string.IsNullOrWhiteSpace(view.Episodes);
         var badges = new List<OgCardBadge>();
-        if (!string.IsNullOrWhiteSpace(view.Episodes)) badges.Add(new OgCardBadge("全", $"{view.Episodes}話"));
-        if (!string.IsNullOrWhiteSpace(view.RunTimeSeconds)) badges.Add(new OgCardBadge("1話", view.RunTimeSeconds));
+        if (!isMovieLike)
+        {
+            badges.Add(new OgCardBadge("全", $"{view.Episodes}話"));
+            if (!string.IsNullOrWhiteSpace(view.RunTimeSeconds)) badges.Add(new OgCardBadge("1話", view.RunTimeSeconds));
+        }
 
         // 主要スタッフは役職ごとに全員を出す。連名を落とすと「誰が作ったか」の答えが変わってしまう。
         // 役職名の色はエピソードカードと同じくサイトの役職バッジの配色に揃える。
@@ -1292,15 +1298,30 @@ public sealed class SeriesGenerator
             })
             .ToArray();
 
+        if (isMovieLike)
+        {
+            // 映画など：各話カードと同じ疎の組み。「種別 → 題名 → 公開日 → 主要スタッフ（役職色で流し込み）」。透かしは公開年。
+            return new OgCardSpec(
+                Kicker: string.IsNullOrWhiteSpace(view.KindLabel) ? "映画" : view.KindLabel,
+                Title: view.Title)
+            {
+                Subtitle = view.Period,
+                InlineFacts = staff,
+                BandColorHex = OgCardColors.Episode,
+                Watermark = startYear.ToString()
+            };
+        }
+
         return new OgCardSpec(
             Kicker: string.IsNullOrWhiteSpace(view.KindLabel) ? "シリーズ" : view.KindLabel,
             Title: view.Title)
         {
-            KickerRight = view.Period,
+            // 放送期間は見出しの下の補助行に置く（右上は透かしの放送開始年に譲る）。
+            Subtitle = view.Period,
             Badges = badges,
             Facts = staff,
             BandColorHex = OgCardColors.Episode,
-            // 透かしは放送開始年（映画は公開年）。23 年続くシリーズのどこかが、縮小表示でも分かる。
+            // 透かしは放送開始年。23 年続くシリーズのどこかが、縮小表示でも分かる。
             Watermark = startYear.ToString()
         };
     }

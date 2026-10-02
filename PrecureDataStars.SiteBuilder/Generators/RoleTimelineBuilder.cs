@@ -325,6 +325,24 @@ internal sealed class RoleTimelineBuilder
     /// 連続する <paramref name="windowDays"/> 日のあいだに入る参加の数の最大（日付順に並んだ <paramref name="credits"/> を
     /// 尺取りで数える。最初と最後の参加の日付の差が <paramref name="windowDays"/> 日以内なら同じ期間に入る）。
     /// </summary>
+    /// <summary>
+    /// 参加の日付の並びが、線表に載せる決まり（<paramref name="rules"/>）を満たすか。<see cref="BuildRow"/> の判定と同じ。
+    /// OGP カードのように線表そのものは組まず、「サイトの年表に載る人か」だけを知りたいときに使う。
+    /// </summary>
+    public static bool Qualifies(IEnumerable<DateOnly> dates, bool hasOpeningCredit, RoleTimelineRules rules)
+    {
+        if (rules.IncludeAll) return true;
+        if (rules.IncludeOpeningCredit && hasOpeningCredit) return true;
+        var sorted = dates.OrderBy(d => d.DayNumber).ToList();
+        int best = 0;
+        for (int i = 0, j = 0; i < sorted.Count; i++)
+        {
+            while (sorted[i].DayNumber - sorted[j].DayNumber > rules.WindowDays) j++;
+            best = Math.Max(best, i - j + 1);
+        }
+        return best >= rules.MinCreditsInWindow;
+    }
+
     private static int MaxCreditsInWindow(List<Credit> credits, int windowDays)
     {
         int best = 0;

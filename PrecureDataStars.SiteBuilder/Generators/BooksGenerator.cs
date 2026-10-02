@@ -322,18 +322,21 @@ public sealed class BooksGenerator
         {
             PageTitle = book.Title,
             MetaDescription = BuildDetailDescription(book, publisher, row.PrimaryGenreLabel),
-            // 商品詳細と同じ組み方。識別を上段に、量をバッジに、中身の手がかりを事実行に。
+            // 商品詳細と同じ組み方。ジャンルを前置きに、量（ページ・価格・判型・電子）をバッジに、
+            // 発売日・出版社・クレジット（著・編集・イラストなど）を事実行に。透かしは関連する作品（無ければ発売年）で、
+            // 右上は透かしに譲るので発売日は上段に置かない。
+            // 関連する作品が複数なら、作品名を 1 行 1 作品で添える。ジャンルは前置きに出すので事実行では繰り返さない。
             OgCard = new OgCardSpec(
                 Kicker: string.IsNullOrWhiteSpace(row.PrimaryGenreLabel) ? "書籍" : row.PrimaryGenreLabel,
                 Title: book.Title)
             {
-                KickerRight = $"{FormatDateLong(book.ReleaseDate)} 発売",
                 BandColorHex = OgCardColors.Book,
+                Watermark = seriesRows.Count > 0 ? seriesRows[0].Title : book.ReleaseDate.Year.ToString(),
                 Badges = BuildBookOgBadges(book),
-                InlineFacts = string.IsNullOrWhiteSpace(publisher)
-                    ? Array.Empty<OgCardFactLine>()
-                    : new[] { new OgCardFactLine("出版社", publisher) },
-                Facts = genreRows.Take(3).Select(g => new OgCardFactLine("", g)).ToArray()
+                InlineFacts = BuildBookOgFacts(FormatDateLong(book.ReleaseDate), book.Isbn13 ?? "", publisher, creditRows),
+                Facts = seriesRows.Count > 1
+                    ? seriesRows.Select(s => new OgCardFactLine("", $"『{s.Title}』")).ToArray()
+                    : Array.Empty<OgCardFactLine>()
             },
             Breadcrumbs = new[]
             {
@@ -363,6 +366,7 @@ public sealed class BooksGenerator
             if (!roleByCode.TryGetValue(byRole.Key, out var role)) continue;
 
             var names = new List<string>();
+            var plainNames = new List<string>();
             foreach (var c in byRole.OrderBy(c => c.DisplayOrder).ThenBy(c => c.BookCreditId))
             {
                 string display = c.CreditText ?? "";
@@ -372,6 +376,7 @@ public sealed class BooksGenerator
 
                 // 紐付けがあれば <a>、無ければエスケープ済み平文。判定は Resolver 側に任せる。
                 names.Add(_staffLinks.ResolveAsHtml(c.PersonAliasId, display));
+                plainNames.Add(display);
             }
             if (names.Count == 0) continue;
 
@@ -379,7 +384,8 @@ public sealed class BooksGenerator
             {
                 RoleLabel = role.NameJa,
                 DisplayOrder = role.DisplayOrder,
-                NamesHtml = string.Join("／", names)
+                NamesHtml = string.Join("／", names),
+                NamesText = string.Join("／", plainNames)
             });
         }
 
@@ -432,8 +438,23 @@ public sealed class BooksGenerator
         var badges = new List<OgCardBadge>();
         if (book.PageCount is ushort pages && pages > 0) badges.Add(new OgCardBadge("ページ", $"{pages}"));
         if (book.PriceIncTax is int price && price > 0) badges.Add(new OgCardBadge("価格", $"{price:#,0}円"));
+        if (!string.IsNullOrWhiteSpace(book.TrimSize)) badges.Add(new OgCardBadge("判型", book.TrimSize!));
         if (book.ReleaseDateKindle.HasValue) badges.Add(new OgCardBadge("電子", "Kindle あり"));
         return badges.ToArray();
+    }
+
+    /// <summary>
+    /// 書籍カードの事実行。発売日・ISBN・出版社と、役職ごとのクレジット（著・監修・イラストなど。役職マスタの順）。
+    /// ISBN は同名の改訂版や判型違いを見分ける鍵なので、音楽商品の品番と同じく事実行に置く。
+    /// </summary>
+    private static OgCardFactLine[] BuildBookOgFacts(string releaseDate, string isbn13, string publisher, IReadOnlyList<BookCreditGroup> creditRows)
+    {
+        var facts = new List<OgCardFactLine> { new("発売", releaseDate) };
+        if (!string.IsNullOrWhiteSpace(isbn13)) facts.Add(new OgCardFactLine("ISBN", isbn13));
+        if (!string.IsNullOrWhiteSpace(publisher)) facts.Add(new OgCardFactLine("出版社", publisher));
+        foreach (var g in creditRows)
+            if (!string.IsNullOrWhiteSpace(g.NamesText)) facts.Add(new OgCardFactLine(g.RoleLabel, g.NamesText));
+        return facts.ToArray();
     }
 
     private static string BuildDetailDescription(Book book, string publisher, string genreLabel)
@@ -635,4 +656,7 @@ public sealed class BookCreditGroup
 
     /// <summary>名義の並び（リンク済み HTML を「／」で連結済み）。</summary>
     public string NamesHtml { get; set; } = "";
+
+    /// <summary>名義の並びの平文（カード用。「／」で連結済み）。</summary>
+    public string NamesText { get; set; } = "";
 }

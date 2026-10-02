@@ -5346,6 +5346,12 @@ a.credit-card-series:focus-visible {
   color: #3c823c;
   border-color: rgba(92, 174, 92, 0.45);
 }
+.role-badge[data-role-code="MUSIC"] {
+  /* 音楽（劇伴一覧で本編クレジットの担当者に付ける）= 橙系。作曲の黄橙と編曲の緑の両方を兼ねる役職なので、どちらとも別の色にする */
+  background: rgba(230, 120, 50, 0.14);
+  color: #a8521a;
+  border-color: rgba(230, 120, 50, 0.45);
+}
 .role-badge[data-role-code="VOCALS"],
 .role-badge[data-role-code="BACKING_VOCALS"],
 .role-badge[data-role-code="DIALOGUE"] {

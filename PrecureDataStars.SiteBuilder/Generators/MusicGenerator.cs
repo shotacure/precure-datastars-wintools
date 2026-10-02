@@ -482,12 +482,22 @@ public sealed class MusicGenerator
     /// 名義は人物詳細ページへのリンク用 PersonId を持つ。共同名義やフリーテキストのみのものは
     /// PersonId を持たずテキスト表示のみとなる。作曲と編曲の集合が同順序で完全一致するときは
     /// 同じ人物カード（メンバー名列）に作曲・編曲バッジが連続して並ぶ統合表示にする。
+    /// 本編クレジットに「音楽」が入っているシリーズは、この集計に代えて本編クレジットの担当者を
+    /// [音楽] バッジで出す（<see cref="BuildBgmStaffFromMainCredit"/>）。
     /// </summary>
     private void GenerateBgmIndex(
         IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> cuesBySeries,
         IReadOnlyDictionary<(int SeriesId, string MNoDetail), List<BgmCueRecording>> recordingsByBgmCue,
         IReadOnlyDictionary<(int SeriesId, string MNoDetail, string Role), List<BgmCueCreditAlias>> creditAliasesByBgmCue)
     {
+        // 名義 alias_id → 人物 ID（所属人物が 1 人に絞れる名義のみ）。本編クレジット由来のスタッフ名を
+        // 人物詳細へリンクするときに使う。共同名義（複数人物）はリンクしないので辞書に入れない。
+        var singlePersonIdByAlias = _ctx.AliasIdsByPerson
+            .SelectMany(kv => kv.Value.Select(aliasId => (AliasId: aliasId, PersonId: kv.Key)))
+            .GroupBy(x => x.AliasId)
+            .Where(g => g.Count() == 1)
+            .ToDictionary(g => g.Key, g => g.First().PersonId);
+
         var rows = new List<BgmIndexRow>();
         foreach (var s in _ctx.Series.OrderBy(x => x.StartDate).ThenBy(x => x.SeriesId))
         {
@@ -506,11 +516,17 @@ public sealed class MusicGenerator
                 .GroupBy(c => string.IsNullOrEmpty(c.MNoClass) ? $"__detail__:{c.MNoDetail}" : c.MNoClass)
                 .Count();
 
-            // 主要作曲家・編曲家。担当割合 20% 以上の人物を頻度降順で抽出し、
-            // 作曲・編曲の集合が同順序で完全一致するなら作曲・編曲バッジが連続する 1 グループに統合する。
-            // ただし暫定固定（ProvisionalBgmStaffOverride）対象シリーズは集計を使わず固定の顔ぶれで出す。
+            // スタッフ行の出どころは次の優先順位で決める。
+            //   1. 本編クレジットの「音楽」（TV 等は 1 話 OP、映画等は作品のクレジット）があればそれを [音楽] で出す
+            //   2. 暫定固定（ProvisionalBgmStaffOverride）対象シリーズは固定の顔ぶれで出す
+            //   3. それ以外は劇伴データから担当割合 20% 以上の人物を頻度降順で抽出し、
+            //      作曲・編曲の集合が同順序で完全一致するなら作曲・編曲バッジが連続する 1 グループに統合する
             IReadOnlyList<BgmStaffGroup> staffGroups;
-            if (ProvisionalBgmStaffOverride.TryGetValue(s.SeriesId, out var fixedStaffNames))
+            if (BuildBgmStaffFromMainCredit(s, singlePersonIdByAlias) is { } creditStaffGroups)
+            {
+                staffGroups = creditStaffGroups;
+            }
+            else if (ProvisionalBgmStaffOverride.TryGetValue(s.SeriesId, out var fixedStaffNames))
             {
                 // 暫定固定表示：作曲・編曲を同一の顔ぶれ・並び（フリーテキスト＝リンクなし）にして
                 // [作曲][編曲] 統合グループ 1 つで出す。BuildBgmStaffGroups に同一リストを渡すことで
@@ -579,6 +595,85 @@ public sealed class MusicGenerator
             }
         };
         _page.RenderAndWrite("/bgms/", "music", "bgms-index.sbn", content, layout);
+    }
+
+    /// <summary>本編クレジットで劇伴の担当者を表す役職コード（「音楽」）。</summary>
+    private const string MainCreditMusicRoleCode = "MUSIC";
+
+    /// <summary>
+    /// 劇伴一覧のスタッフ行を本編クレジットの「音楽」から組み立てる。
+    /// 参照するクレジットは、各話にクレジットが付くシリーズ（credit_attach_to=EPISODE）なら 1 話の OP、
+    /// 作品単位でクレジットが付くシリーズ（映画など）なら作品のクレジット全件。
+    /// 「音楽」の担当者をクレジット順に並べ、同じ名義・同じテキストは 1 回だけ出す。
+    /// PERSON エントリは名義の表示テキストで出し、所属人物が 1 人に絞れる名義だけ人物詳細へリンクする。
+    /// TEXT エントリはテキストのまま（リンクなし）で出す。
+    /// 該当クレジットが未入力か「音楽」の担当者がいないときは null を返し、呼び出し側は劇伴データの集計に回す。
+    /// </summary>
+    private IReadOnlyList<BgmStaffGroup>? BuildBgmStaffFromMainCredit(
+        Series s,
+        IReadOnlyDictionary<int, int> singlePersonIdByAlias)
+    {
+        IEnumerable<Credit> credits;
+        if (SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode))
+        {
+            var firstEpisode = _ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)
+                ? eps.FirstOrDefault(e => e.SeriesEpNo == 1)
+                : null;
+            if (firstEpisode is null
+                || !_ctx.CreditsByEpisode.TryGetValue(firstEpisode.EpisodeId, out var epCredits))
+                return null;
+            credits = epCredits.Where(c => string.Equals(c.CreditKind, "OP", StringComparison.Ordinal));
+        }
+        else
+        {
+            if (!_ctx.CreditsBySeries.TryGetValue(s.SeriesId, out var seriesCredits)) return null;
+            credits = seriesCredits;
+        }
+
+        var members = new List<BgmKeyStaffEntry>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var credit in credits)
+        {
+            if (!_ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cards)) continue;
+            var entries = cards
+                .SelectMany(card => card.Tiers)
+                .SelectMany(tier => tier.Groups)
+                .SelectMany(group => group.Roles)
+                .Where(role => string.Equals(role.Role.RoleCode, MainCreditMusicRoleCode, StringComparison.Ordinal))
+                .SelectMany(role => role.Blocks)
+                .SelectMany(block => block.Entries);
+            foreach (var entry in entries)
+            {
+                if (string.Equals(entry.EntryKind, "PERSON", StringComparison.Ordinal)
+                    && entry.PersonAliasId is int aliasId
+                    && _ctx.PersonAliasById.TryGetValue(aliasId, out var alias))
+                {
+                    if (!seen.Add($"alias:{aliasId}")) continue;
+                    members.Add(new BgmKeyStaffEntry
+                    {
+                        Name = alias.GetDisplayName(),
+                        PersonId = singlePersonIdByAlias.TryGetValue(aliasId, out var personId) ? personId : null
+                    });
+                }
+                else if (string.Equals(entry.EntryKind, "TEXT", StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(entry.RawText))
+                {
+                    string text = entry.RawText.Trim();
+                    if (!seen.Add($"text:{text}")) continue;
+                    members.Add(new BgmKeyStaffEntry { Name = text, PersonId = null });
+                }
+            }
+        }
+
+        if (members.Count == 0) return null;
+        return new[]
+        {
+            new BgmStaffGroup
+            {
+                Roles = new[] { new BgmRoleBadge { RoleCode = MainCreditMusicRoleCode, RoleLabel = "音楽" } },
+                Members = members
+            }
+        };
     }
 
     /// <summary>
@@ -1251,18 +1346,18 @@ public sealed class MusicGenerator
     /// </summary>
     private sealed class BgmStaffGroup
     {
-        /// <summary>役職バッジ列。通常 1 件、作曲と編曲のメンバーが完全一致するときは 2 件並ぶ。</summary>
+        /// <summary>役職バッジ列。通常 1 件、作曲と編曲のメンバーが完全一致するときは 2 件並ぶ。本編クレジット由来は「音楽」1 件。</summary>
         public IReadOnlyList<BgmRoleBadge> Roles { get; set; } = Array.Empty<BgmRoleBadge>();
-        /// <summary>このグループに属するメンバー（人物）の列。頻度降順。</summary>
+        /// <summary>このグループに属するメンバー（人物）の列。劇伴データ集計由来は頻度降順、本編クレジット由来はクレジット順。</summary>
         public IReadOnlyList<BgmKeyStaffEntry> Members { get; set; } = Array.Empty<BgmKeyStaffEntry>();
     }
 
     /// <summary>役職バッジ 1 個分（コードと表示ラベルのみ）。</summary>
     private sealed class BgmRoleBadge
     {
-        /// <summary>役職コード。"COMPOSITION" / "ARRANGEMENT"。CSS の役職バッジ色を当てる data-role-code に渡す。</summary>
+        /// <summary>役職コード。"COMPOSITION" / "ARRANGEMENT" / "MUSIC"。CSS の役職バッジ色を当てる data-role-code に渡す。</summary>
         public string RoleCode { get; set; } = "";
-        /// <summary>役職表示ラベル。「作曲」「編曲」。</summary>
+        /// <summary>役職表示ラベル。「作曲」「編曲」「音楽」。</summary>
         public string RoleLabel { get; set; } = "";
     }
 

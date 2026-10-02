@@ -1,8 +1,6 @@
 <h1>歴代プリキュア歌唱</h1>
 
 <p class="lead">
-  プリキュアの主題歌・挿入歌・キャラクターソングを歌った人々の記録。
-<br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 

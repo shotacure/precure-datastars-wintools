@@ -109,7 +109,7 @@ public sealed class SiteBuilderPipeline
 
         // クレジット横断のカバレッジラベルをここで 1 回だけ算出して BuildContext に詰める。
         // プリキュア・キャラ・人物・企業・団体・シリーズ・エピソードの各詳細／索引ページから参照され、
-        // 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」をサイト全体共通で表示する。
+        // 「『○○プリキュア』第N話(YYYY.M.D)時点」をサイト全体共通で表示する。
         // CreditInvolvementIndex 構築後でなければ算出できないので、ここがタイミング上の最早地点。
         {
             var creditEpisodeIds = StatsCoverageLabel.CollectEpisodeIdsWithCredits(involvementIndex);

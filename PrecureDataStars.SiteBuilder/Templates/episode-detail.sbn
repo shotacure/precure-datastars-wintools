@@ -329,7 +329,7 @@
     </ul>
     {{## 参照点はパート尺統計（最新放送済話基準の BuildPointCaption）と異なり、
          サブタイトル登録済みの最終話基準（先行登録された未放送話も比較対象に入るため）。
-         放送済みなら書式は BuildPointCaption と同一、参照点がまだ放送前なら「第N話（〇年〇月〇日放送予定）までのサブタイトルで集計」。 ##}}
+         放送済みなら書式は BuildPointCaption と同一、参照点がまだ放送前なら「第N話(YYYY.M.D放送予定)まで」。 ##}}
     {{~ if SubtitleBuildPointCaption != "" ~}}
     <p class="section-refpoint">（{{ SubtitleBuildPointCaption | html.escape }}）</p>
     {{~ end ~}}

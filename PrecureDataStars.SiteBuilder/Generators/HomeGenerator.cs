@@ -20,7 +20,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description>「今日の記念日」はビルド時計算をやめて全エピソードの放送日（年月日）を
 ///     JSON として埋め込み、クライアント側 JavaScript で「今日」を動的に判定して描画する方式に変更。
 ///     ビルド日と閲覧日がズレても、サイトを開いた瞬間の「今日」で記念日が出る。</description></item>
-///   <item><description>「最終ビルド」表記を「○○年○○月○○日現在 『○○プリキュア』第n話時点の情報を表示しています」
+///   <item><description>「最終ビルド」表記を「『○○プリキュア』第n話(YYYY.M.D)時点」
 ///     形式で表示する。基準点は <see cref="BuildContext.LatestAiredTvEpisode"/>（全 TV シリーズを横断した
 ///     最新放送済話）。LatestAiredTvEpisode が null のときはプリキュア部分を省略。</description></item>
 ///   <item><description>データベース統計セクションはコンパクト表示（横並び 1 行）、項目は 11 個。
@@ -164,7 +164,7 @@ public sealed class HomeGenerator
         {
             SiteName = _ctx.Config.SiteName,
             SiteBrandLabel = _ctx.Config.SiteBrandLabel,
-            // 最終ビルド表記は「○○年○○月○○日現在 『○○プリキュア』第n話時点
+            // 最終ビルド表記は「『○○プリキュア』第n話(YYYY.M.D)時点」
             BuildLabel = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
             DataSufficiencyLabel = dataSufficiencyLabel,
             BroadcastFormatLabel = broadcastFormatLabel,
@@ -750,15 +750,9 @@ WHERE e.is_deleted = 0
         };
     }
 
-    /// <summary>最終ビルド表記文字列を組み立てる。 LatestAiredTvEpisode あり → 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」 （日付は当該エピソードの <see cref="Episode.OnAirAt"/> ベース。サイト共通の <see cref="Utilities.StatsCoverageLabel"/> と挙動を統一）。 LatestAiredTvEpisode なし（クリーン DB 等） → 空文字を返してテンプレ側で非表示にする。 時刻部分は付けない方針（変更概要 D の指示文に時刻表記が無いため、日単位までの粒度）。 「ビルド日付」は内部進行管理であってユーザー向け情報ではないため一切表に出さない。</summary>
+    /// <summary>最終ビルド表記文字列を組み立てる。 LatestAiredTvEpisode あり → 「『○○プリキュア』第n話(YYYY.M.D)時点」 （日付は当該エピソードの <see cref="Episode.OnAirAt"/> ベース。サイト共通の <see cref="Utilities.StatsCoverageLabel"/> と同じ表記）。 LatestAiredTvEpisode なし（クリーン DB 等） → 空文字を返してテンプレ側で非表示にする。 時刻部分は付けない（日単位までの粒度）。 「ビルド日付」は内部進行管理であってユーザー向け情報ではないため一切表に出さない。</summary>
     private static string BuildBuildLabel((Series Series, Episode Episode)? latest)
-    {
-        if (latest is null) return string.Empty;
-        var (series, episode) = latest.Value;
-        var oa = episode.OnAirAt;
-        string datePart = $"{oa.Year}年{oa.Month}月{oa.Day}日現在";
-        return $"{datePart} 『{series.Title}』第{episode.SeriesEpNo}話時点の情報を表示しています";
-    }
+        => StatsCoverageLabel.Build(latest);
 
     /// <summary>記念日（今日の記念日）と「今月のカレンダー」JS 用の統合 JSON を生成する。</summary>
     /// プロパティ名は容量削減のため短縮形。共通: k(種別), m(月), d(日)。
@@ -972,7 +966,7 @@ WHERE e.is_deleted = 0
         public string SiteName { get; set; } = "";
         /// <summary>可視ブランド表記（例: プリキュアデータベース「precure-datastars」）。hero の h1 に出す。</summary>
         public string SiteBrandLabel { get; set; } = "";
-        /// <summary>最終ビルド表記の表示文字列（導入）。 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」のような 完成形を C# 側で組み立てて流し込む。</summary>
+        /// <summary>最終ビルド表記の表示文字列（導入）。 「『○○プリキュア』第n話(YYYY.M.D)時点」のような 完成形を C# 側で組み立てて流し込む。</summary>
         public string BuildLabel { get; set; } = "";
         /// <summary>キャラクター・クリエイターのデータ充足率の表示文字列（暫定表記）。
         /// 空文字なら非表示。BuildLabel の直下に赤字で出す。</summary>

@@ -1,8 +1,6 @@
 <h1>歴代プリキュアスタッフ</h1>
 
 <p class="lead">
-  プリキュア制作にまつわるたくさんのお仕事と、それに携わった人々の記録。
-<br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 

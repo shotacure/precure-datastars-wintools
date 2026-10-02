@@ -13,7 +13,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// 役職別ランキング（<c>/creators/roles/</c>）・声優ランキング（<c>/creators/voice-cast/</c>）は
 /// 「クリエイター」セクションへ移設済みで <see cref="CreatorsGenerator"/> が生成するため、本ランディングは
 /// 関与系を扱わない。
-/// 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」
+/// 「『○○プリキュア』第N話(YYYY.M.D)時点」
 /// 表記（カバレッジラベル）を 2 セクション（サブタイトル統計 / エピソード尺統計）の各 h2 直下に
 /// 個別表示する。2 つの統計はそれぞれ最終断面が異なるため、ページ上部に 1 つだけ表示する形では不正確になる。
 /// <list type="bullet">

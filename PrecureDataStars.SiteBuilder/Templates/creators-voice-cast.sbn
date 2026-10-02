@@ -1,8 +1,6 @@
 <h1>歴代プリキュア声優</h1>
 
 <p class="lead">
-  プリキュアに出演した声優さんと、演じたキャラクターの記録。
-<br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 

@@ -235,14 +235,13 @@ public sealed class EpisodeGenerator
     /// 比較対象になる）。そのためパート尺統計と同じ「最新放送済話」ではなく、サブタイトル統計
     /// ページのカバレッジラベルと同じ <see cref="StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle"/>
     /// （サブタイトル登録済みの最新 TV 話。未放送回も対象）を参照点にする。
-    /// 参照点が放送済みならパート尺統計側と同一書式（「2026年6月28日現在 『名探偵プリキュア！』第22話時点」）、
-    /// まだ放送前なら「『名探偵プリキュア！』第36話（2026年10月4日放送予定）までのサブタイトルで集計」とし、
-    /// 未来の日付を「現在」と書かない（<see cref="StatsCoverageLabel.BuildSubtitle"/>）。
+    /// 参照点が放送済みならパート尺統計側と同一書式（「『名探偵プリキュア！』第22話(2026.6.28)時点」）、
+    /// まだ放送前なら「『名探偵プリキュア！』第36話(2026.10.4放送予定)まで」とする（<see cref="StatsCoverageLabel.BuildSubtitle"/>）。
     /// </summary>
     private string BuildSubtitleCoverageCaption()
     {
         return StatsCoverageLabel.BuildSubtitle(
-            StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx), _ctx.BuildStartedAt, withSuffix: false);
+            StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx), _ctx.BuildStartedAt);
     }
 
     /// <summary>偏差値ゲージ背景のヒストグラムのビン数。ビン幅は (75-25)/25 = 偏差値 2.0 刻み。</summary>
@@ -887,20 +886,13 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>
-    /// 「いま現在」キャプションを組み立てる。例: 「2026年5月3日現在 『キミとアイドルプリキュア♪』第14話時点」。
-    /// 日付とシリーズ名の間は読点ではなく空白で区切る（サイト共通のカバレッジラベル
-    /// <see cref="Utilities.StatsCoverageLabel"/> と同じ書式に揃える）。
+    /// 「いま現在」キャプションを組み立てる。例: 「『キミとアイドルプリキュア♪』第14話(2026.5.3)時点」。
+    /// サイト共通のカバレッジラベル（<see cref="Utilities.StatsCoverageLabel.EpisodePoint"/>）と同じ書式。
     /// 対象エピソードが存在しない場合は空文字を返す（テンプレ側で表示自体を抑止する）。
-    /// シリーズ名は正式名称（<see cref="Series.Title"/>）を使う。
     /// シリーズ表記は正式名を使う（TitleShort は「『プリキュア』第N話時点」のような曖昧な表記を生むため使わない）。
     /// </summary>
     private static string BuildLatestAiredCaption((Series Series, Episode Episode)? latest)
-    {
-        if (latest is not { } la) return "";
-        var d = la.Episode.OnAirAt;
-        string seriesLabel = la.Series.Title;
-        return $"{d.Year}年{d.Month}月{d.Day}日現在 『{seriesLabel}』第{la.Episode.SeriesEpNo}話時点";
-    }
+        => latest is { } la ? StatsCoverageLabel.EpisodePoint(la.Series, la.Episode) : "";
 
     /// <summary>主題歌行を表示用 DTO に変換する（縦リスト 1 行表現）。 テンプレ側で「OP「タイトル」 うた：歌唱者」のように 1 行ずつ並べる前提。 楽曲タイトルは詳細ページへのリンクを張れるよう、SongLink プロパティで URL を渡す。</summary>
     // ── 主題歌・挿入歌セクション専用：構造化クレジット表示でマスタを参照するためのキャッシュ。
@@ -1899,7 +1891,7 @@ public sealed class EpisodeGenerator
         public IReadOnlyList<EpisodeUseSection> EpisodeUseSections { get; set; } = Array.Empty<EpisodeUseSection>();
         /// <summary>通算情報の項目列（シリーズ内話数 + 全シリーズ通算 + ニチアサ通算 等）。テンプレ側で放送日時と並ぶファクトタイルとして描画。</summary>
         public IReadOnlyList<TotalsItem> Totals { get; set; } = Array.Empty<TotalsItem>();
-        /// <summary>ビルド時刻時点の参照点キャプション（例：「2026年5月3日現在 『キミとアイドルプリキュア♪』第14話時点」）。 毎週変動するセクションの右下注記に出す。</summary>
+        /// <summary>ビルド時刻時点の参照点キャプション（例：「『キミとアイドルプリキュア♪』第14話(2026.5.3)時点」）。 毎週変動するセクションの右下注記に出す。</summary>
         public string BuildPointCaption { get; set; } = "";
         /// <summary>サブタイトル分析専用の参照点（サブタイトル登録済みの最終話基準。放送済基準の BuildPointCaption とは別物）。</summary>
         public string SubtitleBuildPointCaption { get; set; } = "";

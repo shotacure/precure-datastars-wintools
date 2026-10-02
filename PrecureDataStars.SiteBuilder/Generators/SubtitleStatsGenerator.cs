@@ -22,7 +22,7 @@ public sealed class SubtitleStatsGenerator
     /// <summary>1 ページあたりの最大件数（TOP 100）。</summary>
     private const int Limit = 100;
 
-    /// <summary>当ジェネレータが生成する全ページに付与するカバレッジラベル （「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記）。</summary>
+    /// <summary>当ジェネレータが生成する全ページに付与するカバレッジラベル （「『○○プリキュア』第N話(YYYY.M.D)時点」表記）。</summary>
     private string _coverageLabel = "";
 
     public SubtitleStatsGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)

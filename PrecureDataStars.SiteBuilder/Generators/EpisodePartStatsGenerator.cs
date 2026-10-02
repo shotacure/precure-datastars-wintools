@@ -30,7 +30,7 @@ public sealed class EpisodePartStatsGenerator
     /// <summary>番組開始基準時刻（08:30:00）。中 CM 入り時刻の絶対時刻表示で使用。</summary>
     private static readonly TimeSpan ProgramStart = new TimeSpan(8, 30, 0);
 
-    /// <summary>当ジェネレータが生成する全ページに付与するカバレッジラベル （「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記）。</summary>
+    /// <summary>当ジェネレータが生成する全ページに付与するカバレッジラベル （「『○○プリキュア』第N話(YYYY.M.D)時点」表記）。</summary>
     private string _coverageLabel = "";
 
     public EpisodePartStatsGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)

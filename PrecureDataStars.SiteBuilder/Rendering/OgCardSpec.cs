@@ -185,9 +185,8 @@ public sealed record OgCardFactLine(string Label, string Text)
 public sealed record OgCardLabelPart(string Text, string ColorHex);
 
 /// <summary>
-/// サイト共通のカバレッジ表記（「YYYY年M月D日現在 『○○』第N話時点の情報を表示しています」）を、
-/// カードの狭い一行に収まる長さへ詰める。カードは前置き行の右端に置くため、
-/// 文末の説明句を落として「〜時点」までにする。
+/// サイト共通のカバレッジ表記（「『○○』第N話(YYYY.M.D)時点」）を、カードの狭い一行に収まる長さへ詰める。
+/// カードは前置き行の右端に置くため、「〜時点」より後ろに続く文があれば落とす。
 /// </summary>
 public static class OgCoverageLabel
 {

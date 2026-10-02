@@ -369,7 +369,8 @@ public sealed class SiteBuilderPipeline
         // 読み物は本番では生成しない（テストのみ）。登録も本番では行わず、進捗バーに空枠を残さない。
         if (!isProductionMode)
             yield return ("articles",       "読み物",           null);
-        yield return ("policy",             "規約ページ",       3);
+        // 規約ページはプライバシー・免責・お問い合わせ・データの出典の 4 ページで常に一定。
+        yield return ("policy",             "規約ページ",       4);
         yield return ("not_found",          "404",              1);
         yield return ("episodes_index",     "エピソード索引",   1);
         yield return ("persons",            "人物",             Get("persons"));

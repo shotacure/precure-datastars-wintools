@@ -22,8 +22,10 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 ///     いまの URL と違う記録済みの旧 URL は新 URL へ 301 で転送する（<see cref="LegacyRedirects"/> に <c>/people/{旧名}</c>・
 ///     <c>/characters/{旧名}</c> として載せる。同じ区分の別の実体がいまその名前の URL を使っていれば転送しない）。
 ///     個別ページを持っていたキャラが単発キャラ扱いに変わったときは、ゲストキャラクターページの登場話へ転送する。</description></item>
-///   <item><description>同じ区分の中で名前（大文字小文字を区別しない）が衝突したら、ID の若い 1 件が素の名前を持ち、
-///     残りは <c>_2</c>, <c>_3</c> … を付けて警告を出す（付け方はその都度判断して名前側で解消する前提の仮措置）。
+///   <item><description>同じ区分の中で名前（大文字小文字を区別しない）が衝突したら、キャラクターは全員に出身作品を
+///     「長老 (ふたりはプリキュア)」の形で添えて分ける（<see cref="QualifyCollidingCharacterNames"/>）。それで分けられない組と、
+///     人物・企業・書籍の衝突は、ID の若い 1 件が素の名前を持ち、残りは <c>_2</c>, <c>_3</c> … を付けて警告を出す
+///     （付け方はその都度判断して名前側で解消する前提の仮措置）。
 ///     数字だけの名前は旧 URL（<c>/persons/123/</c>）と区別できないため末尾に <c>_</c> を足す。</description></item>
 ///   <item><description>書籍 <c>/books/{コード}/</c>。コードは ISBN-13 → 定期刊行物コード → Kindle ASIN → 紙の ASIN の
 ///     順に最初にあるもの。どれも無い書籍は書名から作る（警告を出す）。</description></item>
@@ -198,9 +200,9 @@ public sealed class EntityUrlRegistry
             var anchor = GuestEpisodeAnchor(placement.SeriesEpNo);
             reg._characterUrls[characterId] = GuestCharactersUrl(series.Slug) + (anchor.Length > 0 ? "#" + anchor : "");
         }
-        var namedCharacters = characters
-            .Where(c => !reg._guestPlacements.ContainsKey(c.CharacterId))
-            .Select(c => (c.CharacterId, c.Name));
+        var namedCharacters = QualifyCollidingCharacterNames(
+            ctx, index,
+            characters.Where(c => !reg._guestPlacements.ContainsKey(c.CharacterId)).Select(c => (c.CharacterId, c.Name)).ToList());
         foreach (var (id, slug) in AssignSlugs("characters", namedCharacters, ctx.Logger, reserved: GuestsSegment))
         {
             reg._characterSlugs[id] = slug;
@@ -345,6 +347,59 @@ public sealed class EntityUrlRegistry
         await conn.ExecuteAsync(new CommandDefinition(characterTouchSql, characterRows, tx, cancellationToken: ct)).ConfigureAwait(false);
         await tx.CommitAsync(ct).ConfigureAwait(false);
         return (persons, characters);
+    }
+
+    /// <summary>
+    /// 名前が衝突するキャラクター（「長老」が 2 人など）には、全員に出身作品（声の出演で最初に登場した作品）を
+    /// 「長老 (ふたりはプリキュア)」の形で添えて URL を分ける。素の名前を誰か 1 人に残すと、あとから登場した側が
+    /// 番号付きの URL になり、どちらがどの作品のキャラか URL から分からなくなるため。
+    /// 本番で素の名前の URL を公開していたキャラは、公開記録（published_entity_slugs）から新しい URL へ 301 で転送される。
+    /// 出身作品が分からない、または出身作品まで同じ組は添えずに残す（<see cref="AssignSlugs"/> が番号を付けて警告する）。
+    /// </summary>
+    private static List<(int Id, string Name)> QualifyCollidingCharacterNames(
+        BuildContext ctx, CreditInvolvementIndex index, List<(int Id, string Name)> entries)
+    {
+        var colliding = entries
+            .GroupBy(e => UrlSlug.FromName(e.Name), StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .SelectMany(g => g.Select(e => e.Id))
+            .ToHashSet();
+        if (colliding.Count == 0) return entries;
+
+        // 衝突したキャラだけ、名義ごとの声の出演から最初に登場した作品を求める。
+        var involvementsByCharacter = new Dictionary<int, List<Involvement>>();
+        foreach (var (aliasId, invs) in index.VoiceCastByCharacterAlias)
+        {
+            if (!ctx.CharacterAliasById.TryGetValue(aliasId, out var alias) || !colliding.Contains(alias.CharacterId)) continue;
+            if (!involvementsByCharacter.TryGetValue(alias.CharacterId, out var list))
+                involvementsByCharacter[alias.CharacterId] = list = new List<Involvement>();
+            list.AddRange(invs);
+        }
+        // 出身作品は登場した作品のうち放送・公開の始まりがいちばん早いもの（クレジットの収録範囲では絞らない）。
+        string? OriginTitle(int characterId)
+        {
+            if (!involvementsByCharacter.TryGetValue(characterId, out var invs)) return null;
+            return invs
+                .Select(i => ctx.SeriesById.TryGetValue(i.SeriesId, out var series) ? series : null)
+                .Where(series => series is not null)
+                .OrderBy(series => series!.StartDate)
+                .ThenBy(series => series!.SeriesId)
+                .FirstOrDefault()?.Title;
+        }
+
+        var result = new List<(int Id, string Name)>(entries.Count);
+        foreach (var g in entries.GroupBy(e => UrlSlug.FromName(e.Name), StringComparer.OrdinalIgnoreCase))
+        {
+            var members = g.ToList();
+            if (members.Count == 1) { result.AddRange(members); continue; }
+
+            var origins = members.Select(m => OriginTitle(m.Id)).ToList();
+            bool distinct = origins.All(o => o is not null) && origins.Distinct(StringComparer.Ordinal).Count() == origins.Count;
+            if (!distinct) { result.AddRange(members); continue; }
+            for (int i = 0; i < members.Count; i++)
+                result.Add((members[i].Id, $"{members[i].Name} ({origins[i]})"));
+        }
+        return result;
     }
 
     /// <summary>

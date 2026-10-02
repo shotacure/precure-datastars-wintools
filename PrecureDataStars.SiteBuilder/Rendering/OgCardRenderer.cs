@@ -1925,7 +1925,20 @@ public sealed class OgCardRenderer : IDisposable
     /// ルビ組の 1 単位。<paramref name="Ruby"/> が空なら振り仮名を持たない素の文字。
     /// 折り返しは単位の境目でのみ起こすので、ルビ付きの文字が読みと切り離されることはない。
     /// </summary>
-    private sealed record RubyUnit(string Base, string Ruby);
+    private sealed record RubyUnit(string Base, string Ruby)
+    {
+        /// <summary>語の区切り（元の空白・改行）。字は描かず、<see cref="RubyGapRatio"/> ぶんの空きだけを取る。</summary>
+        public static readonly RubyUnit Gap = new(" ", "");
+
+        public bool IsGap => ReferenceEquals(this, Gap);
+    }
+
+    /// <summary>ルビ付き見出しの語の区切り（元の空白・改行）に取る空きの幅（字の大きさに対する比）。気持ち開ける程度。</summary>
+    private const float RubyGapRatio = 0.3f;
+
+    /// <summary>ルビ単位が行に占める幅。区切りは字の大きさの <see cref="RubyGapRatio"/>、それ以外は地の文の幅。</summary>
+    private float RubyUnitWidth(SKFont baseFont, RubyUnit unit) =>
+        unit.IsGap ? baseFont.Size * RubyGapRatio * baseFont.ScaleX : Measure(baseFont, unit.Base);
 
     /// <summary>
     /// <c>&lt;ruby&gt;漢&lt;rt&gt;かん&lt;/rt&gt;&lt;/ruby&gt;</c> 形式の HTML を組版単位へ分解する。
@@ -1937,10 +1950,20 @@ public sealed class OgCardRenderer : IDisposable
         var units = new List<RubyUnit>();
         int pos = 0;
 
+        // 改行（<br>）と空白は、サブタイトルの区切りなので「空き」の単位として残す（消すと前後の語がつながって読めてしまう）。
+        // 続く空白・改行は 1 つの空きにまとめる。
         void AddPlain(string text)
         {
-            foreach (var ch in System.Net.WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(text, "<[^>]+>", "")))
+            string withBreaks = System.Text.RegularExpressions.Regex.Replace(text, @"<br\s*/?>", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            foreach (var ch in System.Net.WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(withBreaks, "<[^>]+>", "")))
+            {
+                if (char.IsWhiteSpace(ch))
+                {
+                    if (units.Count > 0 && !units[^1].IsGap) units.Add(RubyUnit.Gap);
+                    continue;
+                }
                 units.Add(new RubyUnit(ch.ToString(), ""));
+            }
         }
 
         foreach (System.Text.RegularExpressions.Match m in RubyTagRegex.Matches(html))

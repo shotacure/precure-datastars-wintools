@@ -428,6 +428,9 @@ gtag('config', '{{ Ga4MeasurementId }}');
      クリップボードコピーボタンと、コピー成功時のトースト表示を担う。
      .share-buttons が無いページでは何もせず終了する。 ##}}
 <script src="{{ asset_url "/assets/share-buttons.js" }}" defer></script>
+{{## ホームの商品・書籍カードの「発売まで N 日」と状態バッジを閲覧日基準に更新する JS。
+     data-release-date を持つ要素が無いページでは何もせず終了する。 ##}}
+<script src="{{ asset_url "/assets/release-countdown.js" }}" defer></script>
 {{## 引用ボックスの JS。
      引用文の閲覧日をビルド日から閲覧日へ差し替え、引用文のコピーとトースト表示を担う。
      .cite-box が無いページでは何もせず終了する。 ##}}

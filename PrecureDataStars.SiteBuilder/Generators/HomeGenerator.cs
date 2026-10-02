@@ -641,6 +641,7 @@ WHERE e.is_deleted = 0
         {
             Title = b.Title,
             ReleaseDate = $"{b.ReleaseDate.Year}年{b.ReleaseDate.Month}月{b.ReleaseDate.Day}日",
+            ReleaseDateIso = releaseDateOnly.ToString("yyyy-MM-dd"),
             // ジャンル未設定の書籍は種別欄が空にならないよう版構成（紙 / Kindle）で代替する。
             GenreLabel = primaryGenreLabelByBook.TryGetValue(b.BookId, out var g) ? g
                        : (b.HasKindle && !b.HasPrint ? "Kindle" : "書籍"),
@@ -918,6 +919,7 @@ WHERE e.is_deleted = 0
             ProductCatalogNo = p.ProductCatalogNo,
             Title = p.Title,
             ReleaseDate = JpDateFormat.Date(p.ReleaseDate),
+            ReleaseDateIso = releaseDateOnly.ToString("yyyy-MM-dd"),
             ProductKindLabel = productKindMap.TryGetValue(p.ProductKindCode, out var pk) ? pk.NameJa : p.ProductKindCode,
             ProductUrl = PathUtil.ProductUrl(p.ProductCatalogNo),
             CoverImageUrl = p.CoverImageUrl ?? "",
@@ -1037,10 +1039,12 @@ WHERE e.is_deleted = 0
         public string SeriesLabel { get; set; } = "";
         /// <summary>税込価格の表示文字列（カンマ区切り）。未設定なら空。</summary>
         public string PriceIncTax { get; set; } = "";
-        /// <summary>状態バッジ表記（「予約受付中」「本日発売」「発売中」、または空）。</summary>
+        /// <summary>状態バッジ表記（「予約受付中」「本日発売」「発売中」、または空）。ビルド日基準の初期表示で、閲覧時に release-countdown.js が閲覧日基準に更新する。</summary>
         public string ReleaseStatusLabel { get; set; } = "";
-        /// <summary>発売予定の商品にだけ立つ「発売まで N 日」文字列。 発売済み or 発売日同日のときは空文字でカードに行ごと出さない。</summary>
+        /// <summary>発売予定の商品にだけ立つ「発売まで N 日」文字列。 発売済み or 発売日同日のときは空文字でカードに行ごと出さない。ビルド日基準の初期表示で、閲覧時に release-countdown.js が閲覧日基準に更新する。</summary>
         public string DaysUntilLabel { get; set; } = "";
+        /// <summary>発売日（yyyy-MM-dd）。カードの <c>data-release-date</c> に出し、release-countdown.js が閲覧日との差を計算するのに使う。</summary>
+        public string ReleaseDateIso { get; set; } = "";
     }
 
     /// <summary>
@@ -1063,10 +1067,12 @@ WHERE e.is_deleted = 0
         public string AmazonKindleUrl { get; set; } = "";
         /// <summary>税込価格の表示文字列（紙が無ければ Kindle 価格）。未設定なら空。</summary>
         public string PriceIncTax { get; set; } = "";
-        /// <summary>状態バッジ表記（「予約受付中」「本日発売」「発売中」、または空）。</summary>
+        /// <summary>状態バッジ表記（「予約受付中」「本日発売」「発売中」、または空）。ビルド日基準の初期表示で、閲覧時に release-countdown.js が閲覧日基準に更新する。</summary>
         public string ReleaseStatusLabel { get; set; } = "";
-        /// <summary>発売予定の書籍にだけ立つ「発売まで N 日」文字列。</summary>
+        /// <summary>発売予定の書籍にだけ立つ「発売まで N 日」文字列。ビルド日基準の初期表示で、閲覧時に release-countdown.js が閲覧日基準に更新する。</summary>
         public string DaysUntilLabel { get; set; } = "";
+        /// <summary>発売日（yyyy-MM-dd）。カードの <c>data-release-date</c> に出し、release-countdown.js が閲覧日との差を計算するのに使う。</summary>
+        public string ReleaseDateIso { get; set; } = "";
     }
 
     /// <summary>

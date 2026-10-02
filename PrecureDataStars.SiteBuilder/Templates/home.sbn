@@ -242,7 +242,9 @@
   <h2>音楽商品の発売予定</h2>
   <div class="home-product-cards">
     {{~ for p in UpcomingProducts ~}}
-    <article class="home-product-card">
+    {{## 状態バッジと「発売まで N 日」はビルド日基準の初期表示。要素は常に出し（空なら CSS の :empty で消える）、
+         release-countdown.js が data-release-date から閲覧日基準で文言と配色を更新する。 ##}}
+    <article class="home-product-card" data-release-date="{{ p.ReleaseDateIso }}">
       <a class="home-product-card-link" href="{{ p.ProductUrl }}" aria-label="{{ p.Title | html.escape }} の詳細を見る">
         <div class="home-product-card-thumb">
           {{~ if p.CoverImageUrl != "" ~}}
@@ -250,17 +252,13 @@
           {{~ else ~}}
           <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
           {{~ end ~}}
-          {{~ if p.ReleaseStatusLabel != "" ~}}
-          <span class="home-product-card-badge home-product-card-badge-upcoming">{{ p.ReleaseStatusLabel | html.escape }}</span>
-          {{~ end ~}}
+          <span class="home-product-card-badge{{~ if p.ReleaseStatusLabel != "" ~}} home-product-card-badge-upcoming{{~ end ~}}">{{ p.ReleaseStatusLabel | html.escape }}</span>
         </div>
         <div class="home-product-card-body">
           <h3 class="home-product-card-title">{{ p.Title | html.escape }}</h3>
           <p class="home-product-card-meta">
             <span class="home-product-card-date">{{ p.ReleaseDate }}</span>
-            {{~ if p.DaysUntilLabel != "" ~}}
             <span class="home-product-card-countdown">{{ p.DaysUntilLabel | html.escape }}</span>
-            {{~ end ~}}
           </p>
           {{~ if p.PriceIncTax != "" ~}}
           <p class="home-product-card-price">{{ p.PriceIncTax }} 円（税込）</p>
@@ -291,7 +289,7 @@
   <h2>新着の音楽商品</h2>
   <div class="home-product-cards">
     {{~ for p in LatestProducts ~}}
-    <article class="home-product-card">
+    <article class="home-product-card" data-release-date="{{ p.ReleaseDateIso }}">
       <a class="home-product-card-link" href="{{ p.ProductUrl }}" aria-label="{{ p.Title | html.escape }} の詳細を見る">
         <div class="home-product-card-thumb">
           {{~ if p.CoverImageUrl != "" ~}}
@@ -299,14 +297,13 @@
           {{~ else ~}}
           <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
           {{~ end ~}}
-          {{~ if p.ReleaseStatusLabel != "" ~}}
-          <span class="home-product-card-badge home-product-card-badge-released">{{ p.ReleaseStatusLabel | html.escape }}</span>
-          {{~ end ~}}
+          <span class="home-product-card-badge{{~ if p.ReleaseStatusLabel != "" ~}} home-product-card-badge-released{{~ end ~}}">{{ p.ReleaseStatusLabel | html.escape }}</span>
         </div>
         <div class="home-product-card-body">
           <h3 class="home-product-card-title">{{ p.Title | html.escape }}</h3>
           <p class="home-product-card-meta">
             <span class="home-product-card-date">{{ p.ReleaseDate }}</span>
+            <span class="home-product-card-countdown"></span>
           </p>
           {{~ if p.PriceIncTax != "" ~}}
           <p class="home-product-card-price">{{ p.PriceIncTax }} 円（税込）</p>
@@ -339,7 +336,7 @@
   <h2>書籍の発売予定</h2>
   <div class="home-product-cards">
     {{~ for b in UpcomingBooks ~}}
-    <article class="home-product-card">
+    <article class="home-product-card" data-release-date="{{ b.ReleaseDateIso }}">
       <a class="home-product-card-link" href="{{ b.BookUrl }}" aria-label="{{ b.Title | html.escape }} の詳細を見る">
         <div class="home-product-card-thumb">
           {{~ if b.CoverImageUrl != "" ~}}
@@ -347,17 +344,13 @@
           {{~ else ~}}
           <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
           {{~ end ~}}
-          {{~ if b.ReleaseStatusLabel != "" ~}}
-          <span class="home-product-card-badge home-product-card-badge-upcoming">{{ b.ReleaseStatusLabel | html.escape }}</span>
-          {{~ end ~}}
+          <span class="home-product-card-badge{{~ if b.ReleaseStatusLabel != "" ~}} home-product-card-badge-upcoming{{~ end ~}}">{{ b.ReleaseStatusLabel | html.escape }}</span>
         </div>
         <div class="home-product-card-body">
           <h3 class="home-product-card-title">{{ b.Title | html.escape }}</h3>
           <p class="home-product-card-meta">
             <span class="home-product-card-date">{{ b.ReleaseDate }}</span>
-            {{~ if b.DaysUntilLabel != "" ~}}
             <span class="home-product-card-countdown">{{ b.DaysUntilLabel | html.escape }}</span>
-            {{~ end ~}}
           </p>
           {{~ if b.PriceIncTax != "" ~}}
           <p class="home-product-card-price">{{ b.PriceIncTax }} 円（税込）</p>
@@ -388,7 +381,7 @@
   <h2>新着の書籍</h2>
   <div class="home-product-cards">
     {{~ for b in LatestBooks ~}}
-    <article class="home-product-card">
+    <article class="home-product-card" data-release-date="{{ b.ReleaseDateIso }}">
       <a class="home-product-card-link" href="{{ b.BookUrl }}" aria-label="{{ b.Title | html.escape }} の詳細を見る">
         <div class="home-product-card-thumb">
           {{~ if b.CoverImageUrl != "" ~}}
@@ -396,14 +389,13 @@
           {{~ else ~}}
           <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
           {{~ end ~}}
-          {{~ if b.ReleaseStatusLabel != "" ~}}
-          <span class="home-product-card-badge home-product-card-badge-released">{{ b.ReleaseStatusLabel | html.escape }}</span>
-          {{~ end ~}}
+          <span class="home-product-card-badge{{~ if b.ReleaseStatusLabel != "" ~}} home-product-card-badge-released{{~ end ~}}">{{ b.ReleaseStatusLabel | html.escape }}</span>
         </div>
         <div class="home-product-card-body">
           <h3 class="home-product-card-title">{{ b.Title | html.escape }}</h3>
           <p class="home-product-card-meta">
             <span class="home-product-card-date">{{ b.ReleaseDate }}</span>
+            <span class="home-product-card-countdown"></span>
           </p>
           {{~ if b.PriceIncTax != "" ~}}
           <p class="home-product-card-price">{{ b.PriceIncTax }} 円（税込）</p>

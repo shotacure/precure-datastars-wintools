@@ -23,8 +23,9 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///       <item><description>歌唱・作詞作曲編曲や音楽の役職詳細：ページに載る行をすべて載せる。</description></item>
 ///     </list>
 ///     載せた行には単発の参加も含めてすべての参加を描く。</description></item>
-///   <item><description>並びは、最初の参加の日付の早い順、同じなら最後の参加の日付の早い順
-///     （→ 呼び出し側が渡す並びのキー → 名前）。</description></item>
+///   <item><description>並びは、最初の参加の日付の早い順。同じ日に始めた行は、団体を先に置き、その中で最後の参加の
+///     日付の早い順（最初に抜けた順）、それも同じなら呼び出し側が渡す並びのキー（役職詳細・声の出演はその話のクレジットで
+///     上に出ている順）→ 名前。</description></item>
 ///   <item><description>描くものは、続けて参加した期間（2 件以上つながったものの細線）・TV の話（同じシリーズで話数が
 ///     続く間はひと続きの帯。1 話は放送日から <see cref="EpisodeSpanDays"/> 日の幅）・映画（公開日の点）・
 ///     歌・劇伴（初めて収められた盤の発売日の点。日付の決め方は <see cref="MusicTimelineDates"/>）・盤（発売日の四角）。</description></item>
@@ -140,6 +141,7 @@ internal sealed class RoleTimelineBuilder
 
         var ordered = rows
             .OrderBy(r => r.First)
+            .ThenBy(r => string.Equals(r.Row.EntityKind, "company", StringComparison.Ordinal) ? 0 : 1)
             .ThenBy(r => r.Last)
             .ThenBy(r => r.FirstPos)
             .ThenBy(r => r.Row.EntityName, StringComparer.Ordinal)
@@ -413,7 +415,10 @@ internal sealed class RoleTimelineEntity
     public string EntitySubLabel { get; init; } = "";
     /// <summary>名前のリンク先（人物・企業・キャラクター詳細）。</summary>
     public required string EntityUrl { get; init; }
-    /// <summary>最初と最後の参加の日付が同じ行どうしの並びのキー（小さいほうが先）。</summary>
+    /// <summary>
+    /// 最初と最後の参加の日付が同じ行どうしの並びのキー（小さいほうが先）。役職詳細・声の出演は初めてクレジットされた話の中での
+    /// クレジットの位置（その話のクレジットで上に出ている順）、歌唱・作詞作曲編曲は初参加の録音、音楽の役職詳細は最初の担当先の日付。
+    /// </summary>
     public long FirstSortPos { get; init; }
     /// <summary>オープニングのクレジットに出たことがあるか（役職詳細のメインスタッフの判定）。</summary>
     public bool HasOpeningCredit { get; init; }

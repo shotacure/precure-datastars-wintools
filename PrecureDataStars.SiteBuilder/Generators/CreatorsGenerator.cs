@@ -2203,7 +2203,12 @@ public sealed class CreatorsGenerator
                     EntityKind = "person",
                     EntityName = personRows[0].PersonName,
                     EntityUrl = personRows[0].PersonUrl,
-                    FirstSortPos = personRows.Min(r => r.EarliestPos),
+                    // 初めて出演した話（最も早いシリーズの最も早い話）の中でのクレジットの位置。
+                    FirstSortPos = personRows
+                        .OrderBy(r => r.SeriesSortStart)
+                        .ThenBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
+                        .ThenBy(r => r.EarliestPos)
+                        .First().EarliestPos,
                     Episodes = timelineEpisodes,
                     MovieSeriesIds = personMovieSeries,
                     SeriesNotes = charNotes

@@ -245,10 +245,10 @@ gtag('config', '{{ Ga4MeasurementId }}');
        折り返してしまう問題を、行を明示的に分けることで解消する設計。
        site-header 自体は sticky 固定で、2 行ぶんがそのままビューポート上端に張り付く。 ##}}
   <div class="container site-header-top">
-    {{## ワードマークは日本語キーワード部と英字部を別 span に割る。狭幅ビューポートでは
-         .site-title-en を畳んで 1 行に収める（英字部は装飾的な重複表示なので落としてよい）。
-         SiteNameJa 未設定時は英字ワードマーク単体にフォールバックする。 ##}}
-    <a class="site-title" href="/">{{~ if SiteNameJa != "" ~}}<span class="site-title-ja">{{ SiteNameJa | html.escape }}</span><span class="site-title-en">「{{ SiteName | html.escape }}」</span>{{~ else ~}}{{ SiteName | html.escape }}{{~ end ~}}</a>
+    {{## ワードマークは肩書き（日本語の「プリキュアデータベース」）と固有名詞（英字の「precure-datastars」）を別 span に割る。
+         主役は固有名詞で、肩書きは小さく淡く前に添える（名乗りの口上の順）。狭幅ビューポートでは肩書きを上の段に回して
+         2 段にし、どちらも落とさない。SiteNameJa 未設定時は英字ワードマーク単体にフォールバックする。 ##}}
+    <a class="site-title" href="/">{{~ if SiteNameJa != "" ~}}<span class="site-title-ja">{{ SiteNameJa | html.escape }}</span><span class="site-title-en">{{ SiteName | html.escape }}</span>{{~ else ~}}{{ SiteName | html.escape }}{{~ end ~}}</a>
     {{## サイト内検索ボックス。
          JS で /search-index.json を初回入力時に fetch し、クライアント側で全文検索する。
          検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}

@@ -28,7 +28,8 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 ///     （付け方はその都度判断して名前側で解消する前提の仮措置）。
 ///     数字だけの名前は旧 URL（<c>/persons/123/</c>）と区別できないため末尾に <c>_</c> を足す。</description></item>
 ///   <item><description>書籍 <c>/books/{コード}/</c>。コードは ISBN-13 → 定期刊行物コード → Kindle ASIN → 紙の ASIN の
-///     順に最初にあるもの。どれも無い書籍は書名から作る（警告を出す）。</description></item>
+///     順に最初にあるもの。どれも無い書籍は書名から作る（警告を出す）。その本が持つほかのコードの URL からも、
+///     いまの URL へ 301 で転送する（あとから ISBN を入れて URL が変わった本の旧 URL を 404 にしない）。</description></item>
 ///   <item><description>単発キャラ（<see cref="IsGuestCharacter"/>）は個別ページを持たず、登場シリーズごとの
 ///     ゲストキャラクターページ <c>/characters/guests/{series_slug}/</c> にまとめる。単発キャラへのリンクは
 ///     そのページの登場話アンカー（<c>#ep{話数}</c>、映画はアンカー無し）を指す。</description></item>
@@ -280,6 +281,23 @@ public sealed class EntityUrlRegistry
 
         foreach (var (from, to) in RetiredPageRedirects)
             reg._legacyRedirects.Add(new LegacyRedirect(from, to));
+
+        // 書籍は URL に使うコードの優先順（ISBN-13 → 定期刊行物コード → Kindle ASIN → 紙の ASIN）が変わると URL が変わる
+        // （Kindle だけ登録していた本にあとから紙版の ISBN を入れたときなど）。その本が持つほかのコードの URL からも
+        // いまの URL へ転送して、以前のコードで公開していたページを 404 にしない。ほかの本がいまそのコードの URL を
+        // 使っているときは転送しない。
+        var bookUrlPaths = new HashSet<string>(reg._bookUrls.Values.Select(u => u.TrimEnd('/')), StringComparer.OrdinalIgnoreCase);
+        foreach (var b in books.Where(b => !b.IsDeleted && reg._bookUrls.ContainsKey(b.BookId)))
+        {
+            string to = reg._bookUrls[b.BookId];
+            foreach (var code in new[] { b.Isbn13, b.PeriodicalCode, b.AmazonAsinKindle, b.AmazonAsinPrint })
+            {
+                if (string.IsNullOrWhiteSpace(code)) continue;
+                string from = $"/books/{UrlSlug.Encode(UrlSlug.FromName(code.Trim()))}";
+                if (bookUrlPaths.Contains(from)) continue;
+                reg._legacyRedirects.Add(new LegacyRedirect(from, to));
+            }
+        }
 
         ctx.Logger.Info($"entity urls: persons {reg._personUrls.Count} / characters {reg._characterUrls.Count}"
             + $"（うちゲスト {reg._guestPlacements.Count}）/ companies {reg._companyUrls.Count} / books {reg._bookUrls.Count}");

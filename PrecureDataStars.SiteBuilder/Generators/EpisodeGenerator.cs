@@ -63,6 +63,17 @@ public sealed class EpisodeGenerator
     //    系譜代表の role_code を引くだけのため、Persons/CompaniesGenerator と同じ Resolver を共有する。
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
 
+    // ── チーフの顔ぶれ索引（組み合わせの通算回数）。パイプラインが全ジェネレータ共通で 1 度だけ
+    //    構築する読み取り専用の索引で、スタッフセクションの「演出と作画監督の組み合わせ：通算 N 回目」に使う。
+    private readonly EpisodeChiefStaffIndex _chiefIndex;
+
+    // ── 歴代記録バッジ（h1 直下）。歴代でこの順位以内の尺を持つ回にだけバッジを出す。
+    private const int RecordBadgeTopRank = 10;
+
+    // ── シリーズ内の最長・最短バッジは、同種パートを持つ話がこの数以上あるシリーズでだけ出す
+    //    （話数の少ないシリーズで「最長」が自明になるのを避ける）。
+    private const int RecordBadgeMinSeriesTotal = 10;
+
     // ── 使用音声（episode_uses）の表示ラベル解決用マスタリポジトリ群 ──
     // episode_uses 行そのものは BuildContext.EpisodeUsesByEpisode から引く。
     // 各マスタ（トラック内容種別 / サイズ違い / パート違い）は初回参照時に 1 度だけ全件ロードして
@@ -96,13 +107,15 @@ public sealed class EpisodeGenerator
         PageRenderer page,
         IConnectionFactory factory,
         StaffNameLinkResolver staffLinkResolver,
-        RoleSuccessorResolver roleSuccessorResolver)
+        RoleSuccessorResolver roleSuccessorResolver,
+        EpisodeChiefStaffIndex chiefIndex)
     {
         _ctx = ctx;
         _page = page;
         _factory = factory;
         _staffLinkResolver = staffLinkResolver;
         _roleSuccessorResolver = roleSuccessorResolver;
+        _chiefIndex = chiefIndex;
         _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver, ctx.UnitMembersByAlias);
 
         _creditKindsRepo = new CreditKindsRepository(factory);
@@ -404,6 +417,9 @@ public sealed class EpisodeGenerator
                 : Array.Empty<int>()
         }).ToList();
 
+        // h1 直下の歴代記録バッジ（歴代 10 位以内、またはシリーズ内で最長・最短の尺を持つ回）。
+        var recordBadges = BuildRecordBadges(partLengthStats);
+
         // パート尺統計表のヘッダ用に、当該シリーズの正式タイトル（series.title）をテンプレに渡す。
         // 後段：略称（series.title_short）は生成・UI ともに一切使わない方針に変更し、
         // シリーズ表記は正式名（Title）を使う。プロパティ名は SeriesTitleShortQuoted の
@@ -488,6 +504,9 @@ public sealed class EpisodeGenerator
         // スタッフ情報（クレジット階層から脚本／絵コンテ／演出／作画監督／美術監督を抽出）。
         // クレジットセクションとは別に「主要スタッフ」セクションとして上部基本情報の近くに出す。
         var staffRows = BuildStaffRows(credits);
+
+        // チーフの組み合わせの通算回数（演出と作画監督 / 脚本・演出・作画監督）。スタッフ行の下に添える。
+        var staffCombos = BuildStaffCombos(series, ep);
 
         // 使用音声（episode_uses）セクションをパート別に構築。
         var episodeUseSections = await BuildEpisodeUsesViewAsync(ep.EpisodeId, ct).ConfigureAwait(false);
@@ -622,6 +641,8 @@ public sealed class EpisodeGenerator
             ThemeSongs = themeRows,
             CreditBlocks = creditBlocks,
             Staff = staffRows,
+            StaffCombos = staffCombos,
+            RecordBadges = recordBadges,
             EpisodeUseSections = episodeUseSections,
             Totals = totalsItems,
             BuildPointCaption = buildPointCaption,
@@ -1383,6 +1404,117 @@ public sealed class EpisodeGenerator
         return System.Text.RegularExpressions.Regex.Replace(s, "<[^>]*>", "");
     }
 
+    /// <summary>
+    /// h1 直下の歴代記録バッジを組み立てる。アバンタイトル・A パート・B パートの OA 尺が
+    /// 歴代 <see cref="RecordBadgeTopRank"/> 位以内（長い側・短い側のどちらも）ならそのランキングページへのバッジ、
+    /// シリーズ内で最長・最短（同率含む）なら、歴代側のバッジが無いときに限りシリーズ別集計へのバッジを出す。
+    /// 順位の母集団と同点の扱いはパート尺統計 SQL（RANK()）と同じ。
+    /// </summary>
+    private static IReadOnlyList<RecordBadge> BuildRecordBadges(IReadOnlyList<EpisodePartsRepository.PartLengthStat> stats)
+    {
+        var badges = new List<RecordBadge>();
+        foreach (var s in stats)
+        {
+            string? slug = s.PartType switch
+            {
+                "AVANT" => "avant",
+                "PART_A" => "part-a",
+                "PART_B" => "part-b",
+                _ => null
+            };
+            if (slug is null) continue;
+
+            bool globalLongest = s.GlobalRank <= RecordBadgeTopRank;
+            bool globalShortest = s.GlobalRankShortest <= RecordBadgeTopRank;
+            if (globalLongest)
+            {
+                badges.Add(new RecordBadge
+                {
+                    Label = $"{s.PartTypeNameJa} 歴代 {s.GlobalRank} 位の長さ",
+                    Url = $"/stats/episodes/{slug}/longest/",
+                    Css = "is-global"
+                });
+            }
+            if (globalShortest)
+            {
+                badges.Add(new RecordBadge
+                {
+                    Label = $"{s.PartTypeNameJa} 歴代 {s.GlobalRankShortest} 位の短さ",
+                    Url = $"/stats/episodes/{slug}/shortest/",
+                    Css = "is-global"
+                });
+            }
+            if (s.SeriesTotal < RecordBadgeMinSeriesTotal) continue;
+            if (s.SeriesRank == 1 && !globalLongest)
+            {
+                badges.Add(new RecordBadge
+                {
+                    Label = $"{s.PartTypeNameJa} シリーズ内で最長",
+                    Url = "/stats/episodes/series-summary/",
+                    Css = "is-series"
+                });
+            }
+            if (s.SeriesRankShortest == 1 && !globalShortest)
+            {
+                badges.Add(new RecordBadge
+                {
+                    Label = $"{s.PartTypeNameJa} シリーズ内で最短",
+                    Url = "/stats/episodes/series-summary/",
+                    Css = "is-series"
+                });
+            }
+        }
+        return badges;
+    }
+
+    /// <summary>
+    /// スタッフセクションに添える「チーフの組み合わせの通算回数」の行を組み立てる。
+    /// 組み合わせごとに <see cref="EpisodeChiefStaffIndex.Lookup"/> で通算情報を引き、
+    /// 「通算 N 回目（初回 第a話 / 前回 第b話 / 次回 第c話）」の形にする。初回は「初めての組み合わせ」。
+    /// 他シリーズの話を参照するときは『正式タイトル』を前置する（単一の参照なので年度は付けない）。
+    /// 構成役職のどれかが無い回（未収録・該当役職なし）は行を出さない。
+    /// </summary>
+    private IReadOnlyList<StaffComboRow> BuildStaffCombos(Series series, Episode ep)
+    {
+        var rows = new List<StaffComboRow>();
+        foreach (var combo in EpisodeChiefStaffIndex.Combos)
+        {
+            var occurrence = _chiefIndex.Lookup(combo, ep.EpisodeId);
+            if (occurrence is null) continue;
+
+            string head = occurrence.Ordinal == 1
+                ? "初めての組み合わせ"
+                : $"通算 <b>{occurrence.Ordinal}</b> 回目";
+
+            var refs = new List<string>();
+            if (occurrence.Ordinal > 2)
+                refs.Add("初回 " + EpisodeRefHtml(series, occurrence.FirstEpisodeId));
+            if (occurrence.PreviousEpisodeId is int prevId)
+                refs.Add("前回 " + EpisodeRefHtml(series, prevId));
+            if (occurrence.NextEpisodeId is int nextId)
+                refs.Add("次回 " + EpisodeRefHtml(series, nextId));
+
+            rows.Add(new StaffComboRow
+            {
+                Label = combo.Label,
+                Html = refs.Count > 0 ? $"{head}（{string.Join(" / ", refs)}）" : head
+            });
+        }
+        return rows;
+    }
+
+    /// <summary>話へのリンク。同じシリーズなら「第N話」、別シリーズなら「『正式タイトル』 第N話」。</summary>
+    private string EpisodeRefHtml(Series current, int episodeId)
+    {
+        if (!_ctx.EpisodeById.TryGetValue(episodeId, out var target)) return "";
+        if (!_ctx.SeriesById.TryGetValue(target.SeriesId, out var owner)) return "";
+        string url = PathUtil.EpisodeUrl(owner.Slug, target.SeriesEpNo);
+        string label = owner.SeriesId == current.SeriesId
+            ? $"第{target.SeriesEpNo}話"
+            : $"『{HtmlUtil.Escape(owner.Title)}』 第{target.SeriesEpNo}話";
+        return $"<a href=\"{url}\">{label}</a>";
+    }
+
     /// <summary>主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。</summary>
     private IReadOnlyList<StaffRow> BuildStaffRows(IReadOnlyList<Credit> credits)
     {
@@ -1759,6 +1891,10 @@ public sealed class EpisodeGenerator
         public IReadOnlyList<CreditBlockView> CreditBlocks { get; set; } = Array.Empty<CreditBlockView>();
         /// <summary>主要スタッフ情報（脚本／絵コンテ／演出／作画監督／美術）。クレジット階層から抽出した抜粋。</summary>
         public IReadOnlyList<StaffRow> Staff { get; set; } = Array.Empty<StaffRow>();
+        /// <summary>チーフの組み合わせの通算回数（演出と作画監督 / 脚本・演出・作画監督）。構成役職が揃わない回は空。</summary>
+        public IReadOnlyList<StaffComboRow> StaffCombos { get; set; } = Array.Empty<StaffComboRow>();
+        /// <summary>h1 直下の歴代記録バッジ。歴代 10 位以内、またはシリーズ内で最長・最短の尺を持つ回だけ非空。</summary>
+        public IReadOnlyList<RecordBadge> RecordBadges { get; set; } = Array.Empty<RecordBadge>();
         /// <summary>使用音声セクション。episode_uses をパート別にグルーピングしたもの。 0 件のエピソードでは空配列で、テンプレ側でセクション自体を非表示にする。</summary>
         public IReadOnlyList<EpisodeUseSection> EpisodeUseSections { get; set; } = Array.Empty<EpisodeUseSection>();
         /// <summary>通算情報の項目列（シリーズ内話数 + 全シリーズ通算 + ニチアサ通算 等）。テンプレ側で放送日時と並ぶファクトタイルとして描画。</summary>
@@ -1849,6 +1985,25 @@ public sealed class EpisodeGenerator
         public string Code { get; set; } = "";
         public string Label { get; set; } = "";
         public string Url { get; set; } = "";
+    }
+
+    /// <summary>チーフの組み合わせの通算回数 1 行（「演出と作画監督の組み合わせ：通算 3 回目（前回 第12話 / 次回 第20話）」）。</summary>
+    private sealed class StaffComboRow
+    {
+        /// <summary>組み合わせの名前（「演出と作画監督」「脚本・演出・作画監督」）。</summary>
+        public string Label { get; set; } = "";
+        /// <summary>通算回数と前後の話への参照（リンク化済み HTML 断片）。</summary>
+        public string Html { get; set; } = "";
+    }
+
+    /// <summary>h1 直下の歴代記録バッジ 1 件（「Aパート 歴代 2 位の長さ」など）。</summary>
+    private sealed class RecordBadge
+    {
+        public string Label { get; set; } = "";
+        /// <summary>根拠のランキングページ。</summary>
+        public string Url { get; set; } = "";
+        /// <summary>配色の modifier（is-global = 歴代、is-series = シリーズ内）。</summary>
+        public string Css { get; set; } = "";
     }
 
     /// <summary>通算情報 1 項目（ラベル + 値 + 任意の説明）。テンプレ側で「小ラベル＋値」の縦 2 段ファクトタイル 1 枚として描画する。</summary>

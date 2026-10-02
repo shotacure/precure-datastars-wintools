@@ -122,6 +122,11 @@ public sealed class SiteBuilderPipeline
         // 同じ判定を使うよう、関与索引の構築直後に 1 回だけ決める。
         ctx.BirthdayCalendar = BirthdayCalendarEligibility.Build(ctx, involvementIndex);
 
+        // 各話のチーフ（脚本・絵コンテ・演出・作画監督・美術）の顔ぶれ索引。エピソード詳細の
+        // 「組み合わせの通算回数」と歴代記録の「多く組んだ演出と作画監督」が同じ索引を読む。
+        // 人物の表示名とリンク先を台帳から引くので、EntityUrls の確定後に 1 回だけ作る。
+        var chiefStaffIndex = EpisodeChiefStaffIndex.Build(ctx);
+
         reporter.PageWritten();
         reporter.EndSection();
 
@@ -137,7 +142,7 @@ public sealed class SiteBuilderPipeline
         reporter.EndSection();
 
         reporter.BeginSection("episodes");
-        await new EpisodeGenerator(ctx, pageRenderer, factory, staffLinkResolver, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
+        await new EpisodeGenerator(ctx, pageRenderer, factory, staffLinkResolver, roleSuccessorResolver, chiefStaffIndex).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
         reporter.BeginSection("home");

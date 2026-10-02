@@ -6,7 +6,7 @@
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
-{{## 声の出演一覧。4 タブ（キャラクター順＝既定 / 五十音順 / 初出演順 / 出演回数順）。
+{{## 声の出演一覧。4 タブ（キャラクター順＝既定 / 五十音順 / 初出演順 / 出演回数順）と年表タブ（出演の移り変わりの線表）。
      スタッフ一覧が役職順を筆頭にしているのに合わせ、声の出演はキャラクター順を筆頭・既定にする。
      キャラクター順・初出演順はシリーズ別セクション。シリーズ名は見出しに集約し、
      表本体からはシリーズ列を出さない（全タブ共通でシリーズ列なし）。
@@ -34,6 +34,12 @@
             role="tab" aria-selected="false" aria-controls="vc-tab-panel-count">
       出演回数順
     </button>
+    {{~ if Timeline ~}}
+    <button type="button" class="tab-btn" data-tab="timeline"
+            role="tab" aria-selected="false" aria-controls="vc-tab-panel-timeline">
+      年表
+    </button>
+    {{~ end ~}}
   </div>
 
   <div class="list-toolbar">
@@ -142,6 +148,14 @@
     </ul>
     {{~ end ~}}
   </div>
+
+  {{## ──────── 年表パネル（出演の移り変わりの線表。中身は _role-timeline.sbn） ──────── ##}}
+  {{~ if Timeline ~}}
+  <div class="tab-panel" id="vc-tab-panel-timeline"
+       data-tab-panel="timeline" role="tabpanel" hidden>
+    {{ include '_role-timeline.sbn' }}
+  </div>
+  {{~ end ~}}
 </div>
 
 <script>

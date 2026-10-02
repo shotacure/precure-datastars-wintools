@@ -1,0 +1,48 @@
+{{## 年表タブの中身（担当・出演・参加の移り変わりの線表）。役職詳細・声の出演一覧・歌唱一覧の年表タブのパネルから
+     引数なしの include で取り込み、各ページのモデルの Timeline（RoleTimelineModel）を描く。
+     ・見出し・説明文（載せる決まり）・凡例のあとに、名前・年の目盛り・印（TV の話の帯 / 映画の点 / 歌の点 /
+       続けて参加した期間の細線）の線表を全行出す。行にマウスを載せる（スマホは帯をタップする）と参加期間と
+       作品ごとの参加を出す（role-timeline.js）。
+     ・行の data-entity-type は一覧の行と同じ値なので、ページの絞り込み（site.css）がそのまま線表の行にも効く。
+     ・横軸は TV シリーズ 1 作を 1 本の帯にし、帯の左端に放送開始年の目盛り（シリーズ詳細へのリンク）を置く。 ##}}
+<div class="role-timeline">
+  <h2 class="rtl-title">{{ Timeline.Title | html.escape }}</h2>
+  <p class="rtl-note muted">{{ Timeline.Note | html.escape }}</p>
+  <ul class="rtl-legend" aria-label="凡例">
+    {{~ for l in Timeline.Legend ~}}
+    <li><span class="rtl-key rtl-key-{{ l.Kind }}"></span>{{ l.Label | html.escape }}</li>
+    {{~ end ~}}
+  </ul>
+  <div class="rtl{{ if Timeline.TickDensityClass != "" }} {{ Timeline.TickDensityClass }}{{ end }}">
+    <div class="rtl-bands" aria-hidden="true">
+      {{~ for b in Timeline.Bands ~}}<span class="rtl-band{{ if b.IsAlt }} rtl-band-alt{{ end }}" style="left:{{ b.Left }}%;width:{{ b.Width }}%"></span>{{~ end ~}}
+    </div>
+    <div class="rtl-axis">
+      <div class="rtl-axis-track">
+        {{~ for t in Timeline.Ticks ~}}
+        {{~ if t.ShowLabel ~}}<a class="rtl-tick{{ if t.IsMinor }} rtl-tick-minor{{ end }}" style="left:{{ t.Left }}%" href="{{ t.SeriesUrl }}" title="{{ t.SeriesTitle | html.escape }}">{{ t.YearLabel }}</a>
+        {{~ else ~}}<span class="rtl-tick" style="left:{{ t.Left }}%" aria-hidden="true"></span>
+        {{~ end ~}}
+        {{~ end ~}}
+      </div>
+    </div>
+    <ol class="rtl-rows">
+      {{~ for r in Timeline.Rows ~}}
+      <li class="rtl-row" data-entity-type="{{ r.EntityKind }}" data-period="{{ r.PeriodLabel | html.escape }}" data-works="{{ r.WorksText | html.escape }}"{{ if r.EntitySubLabel != "" }} data-sub="{{ r.EntitySubLabel | html.escape }}"{{ end }}>
+        <a class="rtl-name" href="{{ r.EntityUrl }}">
+          {{~ if r.EntityKind == "company" ~}}<span class="rtl-badge rtl-badge-company" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" fill-rule="evenodd"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>
+          {{~ else if r.EntityKind == "character" ~}}<span class="rtl-badge rtl-badge-character" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M8 1.2l2 4.3 4.7.5-3.5 3.2 1 4.6L8 11.4l-4.2 2.4 1-4.6L1.3 6l4.7-.5z"/></svg></span>
+          {{~ else ~}}<span class="rtl-badge rtl-badge-person" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
+          {{~ end ~}}<span class="rtl-name-text">{{ r.EntityName | html.escape }}</span></a>
+        <div class="rtl-track" aria-hidden="true">
+          {{~ for m in r.Spans ~}}<span class="rtl-span" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}
+          {{~ for m in r.Segments ~}}<span class="rtl-seg" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}
+          {{~ for m in r.Movies ~}}<span class="rtl-movie" style="left:{{ m.Left }}%"></span>{{~ end ~}}
+          {{~ for m in r.Songs ~}}<span class="rtl-song" style="left:{{ m.Left }}%"></span>{{~ end ~}}
+        </div>
+      </li>
+      {{~ end ~}}
+    </ol>
+  </div>
+</div>
+<script src="{{ asset_url "/assets/role-timeline.js" }}" defer></script>

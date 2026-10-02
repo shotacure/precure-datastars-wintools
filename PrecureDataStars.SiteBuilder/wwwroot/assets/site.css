@@ -7753,13 +7753,14 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
 }
-/* 役職詳細の「担当の移り変わり」（線表）。見出しのボタンで開閉するアコーディオン。
-   畳んだ状態は文字のない細線だけの概観（SVG）、開くと名前・年の目盛り付きの線表を全行出す。
-   色は件数バッジにそろえ、TV の担当は青、映画は橙。 */
+/* 年表タブの「担当（出演・参加）の移り変わり」（線表。役職詳細・声の出演・歌唱）。
+   見出し・説明文・凡例のあとに、名前・年の目盛り付きの線表を全行出す。
+   色は件数バッジにそろえ、TV は青、映画は橙、歌は紫。 */
 .role-timeline {
   --rtl-tv: #3b82c4;
   --rtl-span: rgba(59, 130, 196, 0.38);
   --rtl-movie: #c8820f;
+  --rtl-song: #7e57c2;
   --rtl-band-alt: #f4f5f8;
   --rtl-grid: #e6e7eb;
   --rtl-name-w: 11.5em;
@@ -7767,72 +7768,10 @@ ins.adsbygoogle[data-ad-status="filled"] {
   --rtl-track-x: calc(var(--rtl-name-w) + var(--rtl-gap));
   margin: 0 0 2em;
 }
-/* 見出しそのものを開閉ボタンにする（見出しの装飾は h2 のまま）。 */
+/* 年表タブの見出し（タブの中の最初の見出しなので上の余白を詰める）。 */
 .rtl-title {
-  padding-right: 0;
+  margin-top: 8px;
 }
-.rtl-toggle {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.rtl-toggle-state {
-  flex: 0 0 auto;
-  font-size: 0.68em;
-  font-weight: 500;
-  color: var(--muted);
-}
-.rtl-toggle-state::after {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin: 0 2px 2px 7px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(45deg);
-  vertical-align: middle;
-}
-.role-timeline.is-expanded .rtl-toggle-state::after {
-  margin-bottom: -2px;
-  transform: rotate(-135deg);
-}
-.rtl-toggle:hover .rtl-toggle-state,
-.rtl-toggle:focus-visible .rtl-toggle-state { color: var(--rtl-tv); }
-
-/* 畳んだ概観：続けて担当した期間の線だけ。横は表示幅いっぱいに伸ばし、縦は本文 4 行ぶんまで。 */
-.rtl-mini-btn {
-  display: block;
-  width: 100%;
-  margin: 0;
-  padding: 6px 0;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  cursor: pointer;
-}
-.rtl-mini-btn:hover { background: rgba(59, 130, 196, 0.05); }
-.rtl-mini {
-  display: block;
-  width: 100%;
-  overflow: visible;
-}
-.rtl-mini-bands { fill: var(--rtl-band-alt); }
-.rtl-mini-lines { fill: var(--rtl-tv); }
-.rtl-full { display: none; }
-.role-timeline.is-expanded .rtl-full { display: block; }
-.role-timeline.is-expanded .rtl-mini-btn { display: none; }
-
 .rtl-note {
   margin: 0 0 6px;
   font-size: 0.85em;
@@ -7858,6 +7797,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
 }
 .rtl-key-tv { width: 18px; height: 10px; border-radius: 3px; background: var(--rtl-tv); }
 .rtl-key-movie { width: 9px; height: 9px; border-radius: 50%; background: var(--rtl-movie); }
+.rtl-key-song { width: 9px; height: 9px; border-radius: 50%; background: var(--rtl-song); }
 .rtl-key-span { width: 18px; height: 2px; border-radius: 1px; background: var(--rtl-span); }
 
 .rtl {
@@ -7962,6 +7902,7 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 }
 .rtl-badge-person { background: var(--accent-pink-weak, #fce7f3); color: var(--accent-pink-strong, #be185d); }
 .rtl-badge-company { background: var(--surface-2, #eef2ff); color: var(--fg, #3730a3); }
+.rtl-badge-character { background: rgba(126, 87, 194, 0.12); color: var(--accent-purple, #7e57c2); }
 .rtl-track {
   position: relative;
   flex: 1 1 auto;
@@ -7998,20 +7939,17 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   background: var(--rtl-movie);
   box-shadow: 0 0 0 2px #fff;
 }
-.rtl-collapse-btn {
-  display: block;
-  margin: 10px auto 0;
-  padding: 4px 16px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: #fff;
-  color: var(--fg);
-  font: inherit;
-  font-size: 0.85em;
-  cursor: pointer;
+/* 歌（初めて盤に収められた日の点。同じ日に出た曲は 1 つの点）。 */
+.rtl-song {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--rtl-song);
+  box-shadow: 0 0 0 2px #fff;
 }
-.rtl-collapse-btn:hover { border-color: var(--rtl-tv); color: var(--rtl-tv); }
-
 /* 行にマウスを載せる・帯をタップすると出す、担当期間と作品ごとの担当話（role-timeline.js）。 */
 .rtl-tip {
   position: fixed;
@@ -8028,6 +7966,7 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 }
 .rtl-tip[hidden] { display: none; }
 .rtl-tip-name { font-weight: 700; }
+.rtl-tip-sub { color: var(--muted); }
 .rtl-tip-period {
   margin-bottom: 4px;
   color: var(--muted);

@@ -1,33 +1,11 @@
-/* 役職詳細の「担当の移り変わり」（線表）。
-   - 見出しのボタン・畳んだ概観・「たたむ」ボタンで、細線だけの概観と全行の線表を切り替える（アコーディオン）。
-   - 開いた線表では、行にマウスを載せると（タッチでは帯の部分をタップすると）担当期間と作品ごとの担当話を出す。
-     内訳は行の data-period（担当期間）と data-works（作品ごとの担当。改行区切り）から組み立てる。
-     名前にキーボードのフォーカスが来たときも行の下に出す。 */
+/* 年表タブの「担当（出演・参加）の移り変わり」（線表。役職詳細・声の出演・歌唱）。
+   行にマウスを載せると（タッチでは帯の部分をタップすると）参加期間と作品ごとの参加を出す。
+   内訳は行の data-sub（名前の下に添える 1 行。キャラクターの CV など）・data-period（参加期間）・
+   data-works（作品ごとの参加。改行区切り）から組み立てる。名前にキーボードのフォーカスが来たときも行の下に出す。 */
 (function () {
   document.querySelectorAll('.role-timeline').forEach(function (sec) {
-    var toggle = sec.querySelector('.rtl-toggle');
-    var state = sec.querySelector('.rtl-toggle-state');
-    var mini = sec.querySelector('.rtl-mini-btn');
-    var collapse = sec.querySelector('.rtl-collapse-btn');
     var tl = sec.querySelector('.rtl');
-    if (!toggle || !tl) return;
-
-    function setExpanded(open) {
-      sec.classList.toggle('is-expanded', open);
-      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-      if (state) state.textContent = open ? 'たたむ' : '展開する';
-      if (!open) {
-        hide();
-        // 長い線表の下の方で畳んだときは、見出しが画面の上に隠れないよう見出しまで戻す。
-        var top = sec.getBoundingClientRect().top;
-        if (top < 0) sec.scrollIntoView({ block: 'start' });
-      }
-    }
-    toggle.addEventListener('click', function () {
-      setExpanded(!sec.classList.contains('is-expanded'));
-    });
-    if (mini) mini.addEventListener('click', function () { setExpanded(true); });
-    if (collapse) collapse.addEventListener('click', function () { setExpanded(false); });
+    if (!tl) return;
 
     var tip = document.createElement('div');
     tip.className = 'rtl-tip';
@@ -47,6 +25,13 @@
       name.className = 'rtl-tip-name';
       name.textContent = nameEl ? nameEl.textContent : '';
       tip.appendChild(name);
+      var subText = row.getAttribute('data-sub');
+      if (subText) {
+        var sub = document.createElement('div');
+        sub.className = 'rtl-tip-sub';
+        sub.textContent = subText;
+        tip.appendChild(sub);
+      }
       var period = document.createElement('div');
       period.className = 'rtl-tip-period';
       period.textContent = row.getAttribute('data-period') || '';

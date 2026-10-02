@@ -967,6 +967,7 @@ Role: PRODUCTION 制作 (order 2)
 - スタイル: `wwwroot/assets/site.css` 1 ファイル。CSS フレームワーク不採用、最低限の素朴スタイル。CSS 変数で色を管理
 - CSS・JS の読み込みはテンプレート関数 `asset_url`（`Utilities/AssetUrl.cs`）を通し、中身のハッシュから作った版の印を付ける（例：`/assets/site.css?v=2fd0d40cfe`）。中身を変えると URL も変わるので、ブラウザや CDN に古いファイルが残っていても新しいファイルが読み込まれる
 - 静的アセットは `wwwroot/` 配下を出力ルートに丸ごとコピー（`SiteBuilderPipeline.CopyStaticAssets`）
+- 引用ボックス: シェアボタンを出す全ページの本文末尾（シェアボタンの直下）に「このページを引用する」（`_cite-box.sbn`）を置く。引用文は SIST 02 の Web ページの参照書式（`"ページ名". プリキュアデータベース precure.tv. URL, (参照 YYYY-MM-DD).`）と、百科事典系サイト向けの `{{Cite web |url= |title= |website= |accessdate= |language=ja}}` の 2 つ。参照日はビルド日を既定値に埋め、`cite-box.js` が閲覧日に差し替えてコピーボタン（クリップボード＋トースト）を担う。運営情報系ページ（`SuppressShareButtons`）には出さない
 
 #### E. ログ・サマリ
 

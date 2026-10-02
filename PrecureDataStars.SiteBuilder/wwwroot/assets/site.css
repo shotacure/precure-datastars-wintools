@@ -9518,6 +9518,77 @@ body.has-art-track-bar {
   line-height: 1.6;
 }
 
+/* ──────── 引用ボックス（_cite-box.sbn） ────────
+   シェアボタンの直下に置く「このページを引用する」。シェアカードと同じ角丸の箱で、色は控えめなグレー。
+   引用文は <pre> だが折り返して読める幅に収める（URL は overflow-wrap で途中改行を許す）。 */
+.cite-box {
+  margin: 0 0 1.2em;
+  padding: 1.1em 1.2em 1.2em;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fafafa;
+}
+.cite-box-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  font-size: 0.95em;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 0.6em;
+  padding: 0;
+  border: 0;
+  letter-spacing: 0.04em;
+}
+.cite-box-heading svg {
+  width: 1.05em;
+  height: 1.05em;
+  flex: none;
+}
+.cite-box-lead {
+  margin: 0 0 0.7em;
+  font-size: 0.88em;
+  color: var(--muted);
+}
+.cite-box-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6em 0.8em;
+}
+.cite-box-text {
+  flex: 1 1 20em;
+  margin: 0;
+  padding: 0.7em 0.9em;
+  font-family: var(--font-base);
+  font-size: 0.9em;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.cite-box-copy {
+  flex: none;
+}
+.cite-box-alt {
+  margin-top: 0.8em;
+  font-size: 0.9em;
+}
+.cite-box-alt summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.cite-box-alt .cite-box-item {
+  margin-top: 0.5em;
+}
+.cite-box-note {
+  margin: 0.8em 0 0;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
 /* ──────── 歴代記録バッジ（エピソード詳細の h1 直下） ────────
    歴代 10 位以内（is-global：金）とシリーズ内の最長・最短（is-series：桃）のピル。 */
 .ep-record-badges {

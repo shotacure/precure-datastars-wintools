@@ -1,0 +1,46 @@
+{{## _cite-box.sbn — 「このページを引用する」ボックスの共通パーシャル。
+     _layout.sbn から _share-buttons.sbn の直後に include される。
+     スコープには LayoutModel のプロパティがそのまま渡るため、PageTitle / SiteNameJa / BaseUrl / ShareUrl /
+     BuildDateIso を直接参照できる。
+
+     表示条件はシェアボタンと同じ「ShareUrl が非空」。運営情報系ページ（SuppressShareButtons）や
+     BaseUrl 未設定のローカルビルドでは出さない。
+
+     引用文は 2 つの形を用意する。
+       - テキスト："ページ名". サイト名 ホスト名. URL, (参照 YYYY-MM-DD).
+         科学技術情報流通技術基準 SIST 02 の Web ページの参照書式。ページ名に『』「」が含まれても
+         二重引用符で括るので入れ子にならない。URL の直後は半角のカンマと空白にして、全角文字が URL に巻き込まれないようにする。
+       - Cite web テンプレート：二重波括弧で囲んだ「Cite web |url= |title= |website= |accessdate= |language=ja」
+         百科事典系サイトの編集者がそのまま貼れる形。二重波括弧は Scriban の構文と衝突する
+         （このコメントの中に書いても閉じ括弧でコメントが終わる）ので、本文ではエスケープブロックで素の文字として出す。
+     参照日はビルド日を既定値として埋めておき、cite-box.js が閲覧日に差し替える（JS 無効でも日付が空にならない）。
+     コピーボタンは share-buttons のピル（.share-button）を流用し、cite-box.js がクリップボードへ書き込む。 ##}}
+{{~ if ShareUrl != "" ~}}
+{{~ site_host = BaseUrl | string.replace "https://" "" | string.replace "http://" "" ~}}
+<aside class="cite-box" aria-label="このページを引用する">
+  <h2 class="cite-box-heading">
+    {{## 見出し用の引用符アイコン。装飾なので aria-hidden。 ##}}
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M3.2 11.6c-.9-.9-1.4-2-1.4-3.5 0-2.7 1.7-4.9 4.6-5.9l.6 1.1c-1.7.7-2.8 1.8-3.1 3.2.3-.1.6-.2 1-.2 1.5 0 2.6 1.1 2.6 2.6S6.3 11.5 4.8 11.5c-.6 0-1.2-.1-1.6-.4l0 .5zm7.3 0c-.9-.9-1.4-2-1.4-3.5 0-2.7 1.7-4.9 4.6-5.9l.6 1.1c-1.7.7-2.8 1.8-3.1 3.2.3-.1.6-.2 1-.2 1.5 0 2.6 1.1 2.6 2.6s-1.2 2.6-2.7 2.6c-.6 0-1.2-.1-1.6-.4l0 .5z"/></svg>
+    このページを引用する
+  </h2>
+  <p class="cite-box-lead">このページの情報を記事や資料で使うときは、次の形で出典を示してください（SIST 02 の書式）。日付は閲覧した日です。</p>
+  <div class="cite-box-item">
+    <pre class="cite-box-text" id="citeTextPlain" tabindex="0">"{{ PageTitle | html.escape }}". {{ SiteNameJa | html.escape }} {{ site_host | html.escape }}. {{ ShareUrl }}, (参照 <span data-cite-date="iso">{{ BuildDateIso }}</span>).</pre>
+    <button type="button" class="share-button cite-box-copy" data-cite-copy="citeTextPlain" aria-label="引用文をコピー">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.7" y="5.7" width="8.3" height="8.3" rx="1.4"/><path d="M3.6 10.3H3A1.5 1.5 0 0 1 1.5 8.8V3A1.5 1.5 0 0 1 3 1.5h5.8A1.5 1.5 0 0 1 10.3 3v.6"/></svg>
+      <span>引用文をコピー</span>
+    </button>
+  </div>
+  <details class="cite-box-alt">
+    <summary>Cite web テンプレートの形</summary>
+    <div class="cite-box-item">
+      <pre class="cite-box-text" id="citeTextCiteWeb" tabindex="0">{%{{{}%}Cite web |url={{ ShareUrl }} |title={{ PageTitle | html.escape }} |website={{ SiteNameJa | html.escape }} {{ site_host | html.escape }} |accessdate=<span data-cite-date="iso">{{ BuildDateIso }}</span> |language=ja{%{}}}%}</pre>
+      <button type="button" class="share-button cite-box-copy" data-cite-copy="citeTextCiteWeb" aria-label="テンプレートをコピー">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.7" y="5.7" width="8.3" height="8.3" rx="1.4"/><path d="M3.6 10.3H3A1.5 1.5 0 0 1 1.5 8.8V3A1.5 1.5 0 0 1 3 1.5h5.8A1.5 1.5 0 0 1 10.3 3v.6"/></svg>
+        <span>テンプレートをコピー</span>
+      </button>
+    </div>
+  </details>
+  <p class="cite-box-note">それぞれのデータの出どころは「<a href="/about/sources/">データの出典</a>」をご覧ください。</p>
+</aside>
+{{~ end ~}}

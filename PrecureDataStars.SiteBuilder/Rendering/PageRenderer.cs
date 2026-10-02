@@ -190,6 +190,10 @@ public sealed class PageRenderer
         if (string.IsNullOrEmpty(layoutMeta.ShareHashtags))
             layoutMeta.ShareHashtags = DefaultShareHashtags;
 
+        // 引用ボックスの参照日の既定値（ビルド日）。JS が動く環境では閲覧日に差し替わる。
+        if (string.IsNullOrEmpty(layoutMeta.BuildDateIso))
+            layoutMeta.BuildDateIso = DateTime.Now.ToString("yyyy-MM-dd");
+
         // Amazon 由来要素の有無をコンテンツ HTML から自動検出し、フッタ注記の出し分けに使う。
         // アフィリエイト参加表明はアソシエイトタグ付き URL（?tag= / &tag=）を含むページだけが対象
         // （免責事項のように本文で Amazon に言及しただけのページでは発火させない）。

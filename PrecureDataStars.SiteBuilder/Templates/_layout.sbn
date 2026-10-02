@@ -316,6 +316,11 @@ gtag('config', '{{ Ga4MeasurementId }}');
      はてなブックマーク / LINE / URL コピー の 6 ボタンを本文末尾に常設表示する。
      ShareUrl が空（BaseUrl 未設定のローカルビルド等）のときはパーシャル側で出力を抑制する。 ##}}
 {{ include '_share-buttons.sbn' }}
+
+{{## ──────── 引用ボックス ────────
+     共通パーシャル _cite-box.sbn。「このページを引用する」の引用文（テキスト / Cite web テンプレート）と
+     コピーボタンを、シェアボタンの直下に置く。表示条件はシェアボタンと同じ（ShareUrl が非空）。 ##}}
+{{ include '_cite-box.sbn' }}
 </main>
 
 {{## ──────── ページフッター ────────
@@ -423,5 +428,9 @@ gtag('config', '{{ Ga4MeasurementId }}');
      クリップボードコピーボタンと、コピー成功時のトースト表示を担う。
      .share-buttons が無いページでは何もせず終了する。 ##}}
 <script src="{{ asset_url "/assets/share-buttons.js" }}" defer></script>
+{{## 引用ボックスの JS。
+     引用文の閲覧日をビルド日から閲覧日へ差し替え、引用文のコピーとトースト表示を担う。
+     .cite-box が無いページでは何もせず終了する。 ##}}
+<script src="{{ asset_url "/assets/cite-box.js" }}" defer></script>
 </body>
 </html>

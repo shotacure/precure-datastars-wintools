@@ -358,17 +358,17 @@ internal sealed record RoleTimelineRules(
     /// <summary>役職詳細：メインスタッフ（オープニングに出た）と、1 年間（52 週）に 4 回以上担当したスタッフ（細線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules Staff = new(
         91, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: true, IncludeAll: false, "担当",
-        "メインスタッフおよび1年間に4回以上参加した実績のあるスタッフが対象。");
+        "対象: メインスタッフ&1年間で4回以上参加");
 
     /// <summary>声の出演：1 年間（52 週）に 4 回以上出演した声優（細線は 4 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules VoiceCast = new(
         28, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: false, IncludeAll: false, "出演",
-        "1年間に4回以上出演した実績のある声優が対象。");
+        "対象: 1年間で4回以上出演");
 
     /// <summary>歌唱：一覧に載る歌手・キャラクターすべて（続けて参加した期間の線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules Singers = new(
         91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, "参加",
-        "この一覧の歌手・キャラクターすべてが対象。歌は初めて盤に収められた日に置いています。");
+        "対象: すべて");
 }
 
 /// <summary>線表に載せる候補 1 つ分（<see cref="RoleTimelineBuilder.Build"/> の入力）。</summary>

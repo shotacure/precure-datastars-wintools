@@ -82,4 +82,12 @@ public sealed record FirstAppearance(Series Series, Episode? Episode, DateTime A
         }
         return $"<a href=\"{PathUtil.SeriesUrl(Series.Slug)}\">『{title}』</a>（{JpDateFormat.Date(At)}公開）";
     }
+
+    /// <summary>OGP カードなどテキストだけの場所向け。「『作品』第N話（2004.2.1）」「『作品』（2005.4.16 公開）」。</summary>
+    public string ToPlainText()
+    {
+        if (Episode is not null)
+            return $"『{Series.Title}』第{Episode.SeriesEpNo}話（{JpDateFormat.DotDate(Episode.OnAirAt)}）";
+        return $"『{Series.Title}』（{JpDateFormat.DotDate(At)} 公開）";
+    }
 }

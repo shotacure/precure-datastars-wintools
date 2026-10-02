@@ -275,6 +275,8 @@ public sealed class PersonsGenerator
         // 年しか分からないときは見出しを「没年」にする。
         string deathDate = FormatDeathDate(person);
         string deathDateLabel = person.DeathMonth is null ? "没年" : "没年月日";
+        // 初参加：本編クレジット（声の出演を含む）のいちばん早い話。収録範囲外なら null。基本情報と OGP カードで使う。
+        var firstAppearance = FirstAppearanceResolver.Resolve(_ctx, allPersonInvolvements);
 
         var content = new PersonDetailModel
         {
@@ -290,8 +292,7 @@ public sealed class PersonsGenerator
                 Birthday = birthday,
                 DeathDate = deathDate,
                 DeathDateLabel = deathDateLabel,
-                // 初参加：本編クレジット（声の出演を含む）のいちばん早い話。収録範囲外なら空。
-                FirstAppearanceHtml = FirstAppearanceResolver.Resolve(_ctx, allPersonInvolvements)?.ToHtml() ?? "",
+                FirstAppearanceHtml = firstAppearance?.ToHtml() ?? "",
                 OfficialUrl = person.OfficialUrl ?? "",
                 AffiliationUrl = person.AffiliationUrl ?? "",
                 XUrl = person.XUrl ?? "",
@@ -364,7 +365,7 @@ public sealed class PersonsGenerator
             Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForPerson(person.PersonId), displayName),
             OgType = "profile",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(displayName, involvementGroups, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(displayName, involvementGroups, allPersonInvolvements, firstAppearance, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
         };
 
         _page.RenderAndWriteFile(personUrl, "persons-detail.sbn", content, layout);
@@ -372,14 +373,16 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 人物詳細ページの OGP カードを組み立てる。
-    /// 「氏名 → 関与規模のバッジ → 基準点 → 担当役職と話数」の順に置く。
-    /// 氏名だけのカードでは誰なのか伝わらないため、担当話数の多い役職を上から並べて
-    /// 「プリキュアで何をしてきた人か」を一目で示す。
+    /// 人物詳細ページの OGP カードを組み立てる（プロフィール組み）。
+    /// 「氏名 → TV 話数・映画本数 → 役職と話数 → 関わった期間の年表 → 初参加」の順に置く。
+    /// 氏名だけのカードでは誰なのか伝わらないため、担当話数の多い役職と、いつからいつまで関わったかの年表で
+    /// 「プリキュアで何をしてきた人か」を一目で示す。色帯は人物の青（声の出演しかない人物は緑）、透かしは主な役職。
     /// </summary>
-    private static OgCardSpec BuildOgCard(
+    private OgCardSpec BuildOgCard(
         string displayName,
         IReadOnlyList<InvolvementGroup> involvementGroups,
+        IReadOnlyList<Involvement> mainInvolvements,
+        FirstAppearance? firstAppearance,
         int creditEpisodeCountTotal,
         int creditMovieCountTotal,
         string coverageLabel)
@@ -389,23 +392,107 @@ public sealed class PersonsGenerator
         if (creditEpisodeCountTotal > 0) badges.Add(new OgCardBadge("TV", $"{creditEpisodeCountTotal}話"));
         if (creditMovieCountTotal > 0) badges.Add(new OgCardBadge("映画", $"{creditMovieCountTotal}本"));
 
-        // 役職は担当規模の多い順。カードに載るのは上位数件で、溢れた分はレンダラ側が切り落とす。
+        // 役職は担当規模の多い順に上位 4 件。
         var roles = involvementGroups
             .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.Count > 0)
             .OrderByDescending(g => g.Count)
+            .Take(4)
             .Select(g => new OgCardFactLine(g.RoleLabel, FormatInvolvementCount(g)))
             .ToArray();
+
+        bool voiceOnly = mainInvolvements.Count > 0 && mainInvolvements.All(i => i.IsVoiceCast);
+        string bandColor = voiceOnly ? OgCardColors.VoiceActor : OgCardColors.Staff;
 
         // 前置きは置かない。「クリエイター」と名乗らせなくても、氏名と担当役職の並びで何者かは伝わる。
         return new OgCardSpec(Kicker: "", Title: displayName)
         {
             // 担当話数はクレジット登録済みの範囲でしか数えられない。母数を示さずに数だけ出すと
-            // 「歴代の全担当数」と受け取られてしまうため、基準点をカード上で明記する。
-            // 位置は数の直下。数を読んだ直後に効く但し書きなので、数より先に目に入る上段には置かない。
+            // 「歴代の全担当数」と受け取られてしまうため、基準点を右下の注記に明記する。
             MetaLeft = OgCoverageLabel.Compact(coverageLabel),
             Badges = badges,
-            InlineFacts = roles
+            InlineFacts = roles,
+            BandColorHex = bandColor,
+            Watermark = ResolveMainRoleLabel(mainInvolvements),
+            Timeline = BuildCareerTimeline(mainInvolvements, bandColor),
+            TimelineEnd = DateOnly.FromDateTime(_ctx.BuildStartedAt.Date),
+            FootFacts = firstAppearance is null
+                ? Array.Empty<OgCardFactLine>()
+                : new[] { new OgCardFactLine("初参加", firstAppearance.ToPlainText()) }
         };
+    }
+
+    /// <summary>
+    /// 透かしに出す主な役職。TV のオープニングにクレジットされた役職（複数なら担当話数の多いもの）を最優先し、
+    /// 無ければ映画のオープニングの役職、どちらも無ければ担当話数がいちばん多い役職。
+    /// 本編の役職が無く声の出演だけの人物は「声の出演」。
+    /// </summary>
+    private string ResolveMainRoleLabel(IReadOnlyList<Involvement> mainInvolvements)
+    {
+        var byRole = mainInvolvements
+            .Where(i => i.Kind == InvolvementKind.Person && !string.IsNullOrEmpty(i.RoleCode))
+            .GroupBy(i => i.RoleCode, StringComparer.Ordinal)
+            .Select(g => new
+            {
+                Code = g.Key,
+                TvOp = g.Count(i => string.Equals(i.CreditKind, "OP", StringComparison.Ordinal) && !_ctx.IsMovieKindSeries(i.SeriesId)),
+                MovieOp = g.Count(i => string.Equals(i.CreditKind, "OP", StringComparison.Ordinal) && _ctx.IsMovieKindSeries(i.SeriesId)),
+                Total = g.Count()
+            })
+            .ToList();
+
+        var pick = byRole.Where(r => r.TvOp > 0).OrderByDescending(r => r.TvOp).ThenByDescending(r => r.Total).FirstOrDefault()
+            ?? byRole.Where(r => r.MovieOp > 0).OrderByDescending(r => r.MovieOp).ThenByDescending(r => r.Total).FirstOrDefault()
+            ?? byRole.OrderByDescending(r => r.Total).FirstOrDefault();
+        if (pick is not null)
+            return _ctx.RoleByCode.TryGetValue(pick.Code, out var role) ? role.NameJa : pick.Code;
+        return mainInvolvements.Any(i => i.IsVoiceCast) ? "声の出演" : "";
+    }
+
+    /// <summary>
+    /// 関わった期間の年表。作品ごとに、クレジットされた最初の話から最後の話までを 1 区間にし、
+    /// その作品でいちばん多い役職の色（役職バッジと同じ）で塗る。映画は公開日の点。
+    /// </summary>
+    private IReadOnlyList<OgCardTimelineSegment> BuildCareerTimeline(IReadOnlyList<Involvement> mainInvolvements, string fallbackColor)
+    {
+        var segments = new List<OgCardTimelineSegment>();
+        foreach (var g in mainInvolvements.GroupBy(i => i.SeriesId))
+        {
+            if (!_ctx.SeriesById.TryGetValue(g.Key, out var series)) continue;
+            string color = DominantRoleColor(g, fallbackColor);
+
+            if (_ctx.IsMovieKindSeries(g.Key))
+            {
+                segments.Add(new OgCardTimelineSegment(series.StartDate, series.StartDate, color));
+                continue;
+            }
+
+            DateTime? first = null, last = null;
+            foreach (var inv in g)
+            {
+                if (inv.EpisodeId is not int episodeId) continue;
+                var ep = _ctx.LookupEpisode(g.Key, episodeId);
+                if (ep is null) continue;
+                if (first is null || ep.OnAirAt < first) first = ep.OnAirAt;
+                if (last is null || ep.OnAirAt > last) last = ep.OnAirAt;
+            }
+            if (first is null || last is null) continue;
+            // 終わりは最後の話の放送週いっぱいまで伸ばす（1 話だけでも点ではなく短い帯になる）。
+            segments.Add(new OgCardTimelineSegment(DateOnly.FromDateTime(first.Value), DateOnly.FromDateTime(last.Value).AddDays(7), color));
+        }
+        return segments.OrderBy(s => s.Start).ToList();
+    }
+
+    /// <summary>作品の中でいちばん多い役職の色。役職バッジに色の無い役職や声の出演だけの作品は、声優なら緑、それ以外は色帯の色。</summary>
+    private static string DominantRoleColor(IEnumerable<Involvement> involvements, string fallbackColor)
+    {
+        var top = involvements
+            .Where(i => i.Kind == InvolvementKind.Person && !string.IsNullOrEmpty(i.RoleCode))
+            .GroupBy(i => i.RoleCode, StringComparer.Ordinal)
+            .OrderByDescending(g => g.Count())
+            .FirstOrDefault();
+        if (top is null) return involvements.Any(i => i.IsVoiceCast) ? OgCardColors.VoiceActor : fallbackColor;
+        string color = OgRolePalette.ColorFor(top.Key);
+        return string.IsNullOrEmpty(color) ? fallbackColor : color;
     }
 
     /// <summary>

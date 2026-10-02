@@ -70,7 +70,7 @@ public sealed class SiteBuilderPipeline
         // OGP カードのラスタライザは同梱フォントを 1 度だけ読み込んで全ページで使い回す
         // （読み取り専用の SKTypeface だけを共有するため並列レンダリングフェーズからも安全に呼べる）。
         var renderer = new ScribanRenderer();
-        using var ogCardRenderer = new OgCardRenderer(config.SiteBrandLabel);
+        using var ogCardRenderer = new OgCardRenderer(config.SiteBrandLabel, config.OgCardFonts);
         var pageRenderer = new PageRenderer(renderer, config, summary, reporter, ogCardRenderer);
 
         // スタッフ表示用の人物リンク解決ヘルパ。
@@ -299,11 +299,15 @@ public sealed class SiteBuilderPipeline
         // ページ書き出しがすべて済んだこの位置で実行する。テストモードでのみ書き出す。
         new OgGalleryGenerator(ctx, config).Generate();
 
-        // OGP カードでブランド書体に無い文字が出た箇所を、まとめて 1 度だけ報告する。
-        // 該当する見出しは本文書体へ自動的に切り替えて描いているので出力は破綻しないが、
-        // 書体が混ざった面を把握できるよう情報として残す。
-        foreach (var (missing, samplePath) in pageRenderer.OgCardGlyphWarnings)
-            logger.Info($"OGP カード: ブランド書体に無い文字「{missing}」を含む見出しは本文書体で描画しました（例: {samplePath}）");
+        // OGP カードの書体に関する報告を、種類ごとに 1 度だけ出す。ブランド書体に無い文字の代替描画は情報として残し、
+        // 指定した書体（series.font_subtitle など）がこの PC に無い場合は、気づかずに別の書体で焼いてデプロイしないよう警告にする。
+        foreach (var (message, samplePath) in pageRenderer.OgCardGlyphWarnings)
+        {
+            if (message.StartsWith("書体「", StringComparison.Ordinal))
+                logger.Warn($"OGP カード: {message}（例: {samplePath}）");
+            else
+                logger.Info($"OGP カード: {message}（例: {samplePath}）");
+        }
 
         // ここでプログレスバーを片付けてから最終サマリを出す。
         reporter.Finish();

@@ -1251,7 +1251,7 @@ public sealed class SeriesGenerator
             },
             OgType = s.KindCode == "MOVIE" ? "video.movie" : "video.tv_show",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(content)
+            OgCard = BuildOgCard(content, s.StartDate.Year)
         };
 
         _page.RenderAndWrite(seriesUrl, "series", "series-detail.sbn", content, layout);
@@ -1271,7 +1271,7 @@ public sealed class SeriesGenerator
     /// 「作品種別 → 作品名 → 規模のバッジ（話数・プリキュア人数）→ 主要スタッフ」の順に置き、
     /// 作品名だけでは分からない規模と座組がカード内で読み取れるようにする。
     /// </summary>
-    private static OgCardSpec BuildOgCard(SeriesDetailModel content)
+    private static OgCardSpec BuildOgCard(SeriesDetailModel content, int startYear)
     {
         var view = content.Series;
 
@@ -1298,7 +1298,10 @@ public sealed class SeriesGenerator
         {
             KickerRight = view.Period,
             Badges = badges,
-            Facts = staff
+            Facts = staff,
+            BandColorHex = OgCardColors.Episode,
+            // 透かしは放送開始年（映画は公開年）。23 年続くシリーズのどこかが、縮小表示でも分かる。
+            Watermark = startYear.ToString()
         };
     }
 

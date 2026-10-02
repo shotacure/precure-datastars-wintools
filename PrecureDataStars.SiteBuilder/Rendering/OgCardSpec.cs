@@ -102,14 +102,75 @@ public sealed record OgCardSpec(
     /// </summary>
     public IReadOnlyList<OgCardFactLine> Facts { get; init; } = Array.Empty<OgCardFactLine>();
 
+    /// <summary>
+    /// 左端の色帯の色（<c>"#3370aa"</c> 形式）。カードの種別を色で見分けるためのもので、
+    /// エピソード・シリーズ・統計はピンク、人物は青、声優は緑、キャラクターはイメージカラー、音楽は紫、書籍は橙。
+    /// 空ならアクセントのピンク。透かしと年表の地色にも同じ色を使う。
+    /// </summary>
+    public string BandColorHex { get; init; } = "";
+
+    /// <summary>
+    /// 右上に薄く大きく置く透かしの文字。縮小表示でも「何のカードか」が形で伝わるようにする。
+    /// エピソードは「第12話」、シリーズは放送開始年、人物は主な役職、キャラクターと歌は出身シリーズの作品名、
+    /// 記念日は月日。空なら描かない。
+    /// </summary>
+    public string Watermark { get; init; } = "";
+
+    /// <summary>
+    /// 透かしの脇（左）に一回り小さく添える文字。エピソードの作品名（略さず、切れ目で折る）に使う。空なら描かない。
+    /// </summary>
+    public string WatermarkAside { get; init; } = "";
+
+    /// <summary>
+    /// 関わった期間の年表（人物・キャラクターのプロフィール組みでのみ使う）。
+    /// 非空ならプロフィール組みになり、残った余白いっぱいに年表を描く。
+    /// </summary>
+    public IReadOnlyList<OgCardTimelineSegment> Timeline { get; init; } = Array.Empty<OgCardTimelineSegment>();
+
+    /// <summary>年表の横軸の始まりと終わり。既定はシリーズの始まり（2004 年 2 月 1 日）から今日まで。</summary>
+    public DateOnly TimelineStart { get; init; } = new(2004, 2, 1);
+    public DateOnly TimelineEnd { get; init; } = DateOnly.FromDateTime(DateTime.Today);
+
+    /// <summary>
+    /// プロフィール組みの下端に据える事実行（初参加・初登場など）。1 行 1 項目。
+    /// 非空ならプロフィール組みになる。
+    /// </summary>
+    public IReadOnlyList<OgCardFactLine> FootFacts { get; init; } = Array.Empty<OgCardFactLine>();
+
+    /// <summary>プロフィール組みでの数の拡大率。0 なら既定（1.8 倍）。</summary>
+    public float StatScale { get; init; }
+
+    /// <summary>
+    /// 見出しに使う書体の名前（<c>series.font_subtitle</c>。「FOT-ハミング ProN B」のように Windows に見える書体名）。
+    /// エピソードのサブタイトルを、その作品の本編のテロップと同じ書体で組むためのもので、
+    /// インストールされていなければ既定の見出し書体で組んで警告を出す。空なら既定の見出し書体。
+    /// </summary>
+    public string TitleFontFamily { get; init; } = "";
+
     /// <summary>見出しが空のカードは意味を成さないため、描画対象として妥当かを判定する。</summary>
     public bool IsRenderable => !string.IsNullOrWhiteSpace(Title);
 
-    /// <summary>高密度の組み方を使うか（識別子・バッジ・帯グラフ・事実行のいずれかを持つか）。</summary>
+    /// <summary>プロフィールの組み方（年表か下端の事実行を持つ人物・キャラクターのカード）か。</summary>
+    public bool IsProfile => Timeline.Count > 0 || FootFacts.Count > 0;
+
+    /// <summary>
+    /// 高密度の組み方を使うか（識別子・バッジ・帯グラフ・事実行のいずれかを持つか）。
+    /// 右上の透かしや見出しの書体指定を持つカードも含める。これらは高密度側の疎な組み方（見出しと日付だけを大きく組む）が
+    /// 前提で、標準の組み方は見出しの書体指定を無視するため（クレジット未収録で事実行が無い話も、作品の書体で組む）。
+    /// </summary>
     public bool IsDense =>
         !string.IsNullOrWhiteSpace(Headline) || Badges.Count > 0 || Bar.Count > 0
-        || InlineFacts.Count > 0 || Facts.Count > 0;
+        || InlineFacts.Count > 0 || Facts.Count > 0 || IsProfile
+        || !string.IsNullOrWhiteSpace(Watermark) || !string.IsNullOrWhiteSpace(TitleFontFamily);
 }
+
+/// <summary>
+/// 年表の区間 1 つ。<paramref name="Start"/> と <paramref name="End"/> が同じなら点（映画など）として描く。
+/// </summary>
+/// <param name="Start">区間の始まり。</param>
+/// <param name="End">区間の終わり。</param>
+/// <param name="ColorHex">塗り色（役職の色など）。空なら色帯と同じ色。</param>
+public sealed record OgCardTimelineSegment(DateOnly Start, DateOnly End, string ColorHex = "");
 
 /// <summary>
 /// 角丸バッジ 1 個。ラベルを小さくアクセント色で、値を一回り大きく本文色で並べて描く。
@@ -215,4 +276,35 @@ public static class OgRolePalette
         "ART_DESIGN" or "ART_DIRECTOR" or "ART_DIRECTOR_TV" => "#d4a017",
         _ => ""
     };
+}
+
+/// <summary>
+/// カードの種別ごとの色（左端の色帯・透かし・年表の地色）。サイトのアクセント色の系統からとる。
+/// エピソード・シリーズ・統計はピンク、人物は青、声優は緑、プリキュア以外のキャラクターは藤色、音楽は紫、書籍は橙。
+/// プリキュアはこの表ではなく、そのプリキュアのイメージカラー（<c>precures.key_color</c>）を使う。
+/// </summary>
+public static class OgCardColors
+{
+    public const string Episode = "#e91e63";
+    public const string Staff = "#3370aa";
+    public const string VoiceActor = "#4ca36b";
+    public const string Character = "#9b7fd4";
+    public const string Music = "#7e57c2";
+    public const string Book = "#e8833a";
+
+    /// <summary>
+    /// プリキュアのイメージカラー（<c>precures.key_color</c>）を、色帯や透かしに使える濃さへ寄せる。
+    /// キュアホワイトの白に近い水色のように明るすぎる色は、淡い地の上では見えないので、
+    /// 色相を保ったまま明度を落とし、彩度が薄ければ少し上げる。読めなければ既定のキャラクターの色。
+    /// </summary>
+    public static string ForKeyColor(string? keyColorHex)
+    {
+        if (string.IsNullOrWhiteSpace(keyColorHex) || !SkiaSharp.SKColor.TryParse(keyColorHex, out var color))
+            return Character;
+        color.ToHsl(out float h, out float s, out float l);
+        if (l > 55f) l = 50f;
+        if (l < 22f) l = 30f;
+        if (s < 45f) s = 45f;
+        return SkiaSharp.SKColor.FromHsl(h, s, l).ToString();
+    }
 }

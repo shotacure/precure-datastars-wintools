@@ -966,6 +966,7 @@ public sealed class ProductsGenerator
             Title: product.Title)
         {
             KickerRight = string.IsNullOrWhiteSpace(product.ReleaseDate) ? "" : $"{product.ReleaseDate} 発売",
+            BandColorHex = OgCardColors.Music,
             Badges = badges,
             InlineFacts = catalogNo,
             Facts = BuildTrackFactLines(product, discs)

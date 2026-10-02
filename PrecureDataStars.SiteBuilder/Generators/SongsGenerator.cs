@@ -460,7 +460,9 @@ public sealed class SongsGenerator
             Kicker: string.IsNullOrWhiteSpace(musicClassLabel) ? "歌" : musicClassLabel,
             Title: song.Title)
         {
-            KickerRight = string.IsNullOrWhiteSpace(repSeriesTitle) ? "" : $"『{repSeriesTitle}』",
+            // 出典作品は右上の透かしで見せる。
+            Watermark = repSeriesTitle ?? "",
+            BandColorHex = OgCardColors.Music,
             InlineFacts = credits,
             Facts = versions
         };

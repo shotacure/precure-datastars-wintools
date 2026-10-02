@@ -265,6 +265,7 @@ public sealed class CompaniesGenerator
         // 前置きは置かない。団体名と担当役職の並びで何者かは伝わる。
         return new OgCardSpec(Kicker: "", Title: displayName)
         {
+            BandColorHex = OgCardColors.Staff,
             // 担当話数はクレジット登録済みの範囲でしか数えられないため、基準点を明記する。
             // 位置は数の直下。数を読んだ直後に効く但し書きなので、数より先に目に入る上段には置かない。
             MetaLeft = OgCoverageLabel.Compact(coverageLabel),

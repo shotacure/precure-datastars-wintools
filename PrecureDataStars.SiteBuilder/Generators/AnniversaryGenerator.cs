@@ -302,9 +302,12 @@ public sealed class AnniversaryGenerator
 
         // 主役は日付。「◯月◯日のプリキュア」と言い換えず、日付を大きく置いて
         // 何があった日かは下の年表そのものに語らせる。
+        // 透かしは月日（「2/1」）。日付のカードであることが縮小表示でも分かる。
+        var md = System.Text.RegularExpressions.Regex.Match(dateLabel, @"(\d+)月(\d+)日");
         return new OgCardSpec(Kicker: "", Title: dateLabel, Subtitle: "プリキュアのできごと")
         {
-            Facts = facts
+            Facts = facts,
+            Watermark = md.Success ? $"{md.Groups[1].Value}/{md.Groups[2].Value}" : ""
         };
     }
 

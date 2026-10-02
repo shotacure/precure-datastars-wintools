@@ -328,6 +328,7 @@ public sealed class BooksGenerator
                 Title: book.Title)
             {
                 KickerRight = $"{FormatDateLong(book.ReleaseDate)} 発売",
+                BandColorHex = OgCardColors.Book,
                 Badges = BuildBookOgBadges(book),
                 InlineFacts = string.IsNullOrWhiteSpace(publisher)
                     ? Array.Empty<OgCardFactLine>()

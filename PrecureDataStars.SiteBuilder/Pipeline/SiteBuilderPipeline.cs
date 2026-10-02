@@ -114,6 +114,7 @@ public sealed class SiteBuilderPipeline
         {
             var creditEpisodeIds = StatsCoverageLabel.CollectEpisodeIdsWithCredits(involvementIndex);
             var latestCreditEpisode = StatsCoverageLabel.FindLatestTvEpisodeWithCredits(ctx, creditEpisodeIds);
+            ctx.CreditCoverageEpisode = latestCreditEpisode;
             ctx.CreditCoverageLabel = StatsCoverageLabel.Build(latestCreditEpisode);
         }
 

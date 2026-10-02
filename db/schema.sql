@@ -1415,8 +1415,8 @@ DELIMITER ;
 --   credits / credit_cards / credit_card_roles / credit_role_blocks /
 --   credit_block_entries
 --     ... クレジット本体。シリーズ or エピソードに紐付き、OP/ED の 2 種、
---         CARDS（複数枚）or ROLL（巻物）の 2 形式。カード内で役職を tier=1/2 の
---         2 段、ブロックで役職下のレイアウト（rows×cols）、エントリで実値（人物名義／
+--         CARDS（複数枚）or ROLL（巻物）の 2 形式。カード内で役職を tier=1〜3 の
+--         最大 3 段、ブロックで役職下のレイアウト（rows×cols）、エントリで実値（人物名義／
 --         キャラクター名義／企業名義／ロゴ／歌録音／フリーテキスト）を持つ。
 --   episode_theme_songs
 --     ... エピソード × 主題歌（OP/ED 各 1、INSERT 複数可）の紐付け。
@@ -2201,7 +2201,8 @@ CREATE TABLE `credit_cards` (
 
 --
 -- Table structure for table `credit_card_tiers`
--- カード内の Tier（段組）1 つ = 1 行。tier_no=1（上段）／2（下段）。
+-- カード内の Tier（段組）1 つ = 1 行。tier_no は 1〜3（横位置の違う役職のまとまりごとに段を分ける。
+-- 例：2 列に並んだ役職の左の列＝1、右の列＝2、その下の中央＝3）。
 -- Tier を独立テーブルにすることで「ブランク Tier（役職ゼロの空 Tier）」も表現できる。
 -- カードが新規作成されると tier_no=1 が 1 行自動投入される（CreditCardsRepository.InsertAsync で実装）。
 --
@@ -2220,7 +2221,7 @@ CREATE TABLE `credit_card_tiers` (
   PRIMARY KEY (`card_tier_id`),
   UNIQUE KEY `uq_card_tier` (`card_id`,`tier_no`),
   CONSTRAINT `fk_card_tier_card`  FOREIGN KEY (`card_id`) REFERENCES `credit_cards` (`card_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `ck_card_tier_no`    CHECK ((`tier_no` BETWEEN 1 AND 2))
+  CONSTRAINT `ck_card_tier_no`    CHECK ((`tier_no` BETWEEN 1 AND 3))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

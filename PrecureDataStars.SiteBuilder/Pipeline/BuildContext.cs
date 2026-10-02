@@ -262,6 +262,12 @@ public sealed class BuildContext
     public string CreditCoverageLabel { get; set; } = string.Empty;
 
     /// <summary>
+    /// <see cref="CreditCoverageLabel"/> の基準にした話（クレジットが 1 件でも登録されている最新の TV の話）。
+    /// 該当が無いときは null。役職詳細の線表（<see cref="Generators.RoleTimelineBuilder"/>）が軸の終わりを決めるのに使う。
+    /// </summary>
+    public (Series Series, Episode Episode)? CreditCoverageEpisode { get; set; }
+
+    /// <summary>
     /// 人物・キャラクター・企業の詳細ページ URL（名前ベース）と単発キャラ（ゲストキャラクター）の台帳。
     /// <see cref="CreditInvolvementIndex"/> 構築直後に Pipeline が 1 度だけ詰める。
     /// URL 自体は <see cref="Utilities.PathUtil"/> 経由で引き、単発キャラの判定・所属はここから引く。

@@ -6,7 +6,7 @@
 
 <p class="lead">
   「{{ RoleNameJa | html.escape }}」を担当した人物・企業・団体の一覧です。
-  「初参加順」「担当回数順」をタブで切り替えられます。
+  「初参加順」「担当回数順」{{ if Timeline }}「年表」{{ end }}をタブで切り替えられます。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
@@ -62,6 +62,12 @@
             role="tab" aria-selected="false" aria-controls="role-tab-panel-count">
       担当回数順
     </button>
+    {{~ if Timeline ~}}
+    <button type="button" class="tab-btn" data-tab="timeline"
+            role="tab" aria-selected="false" aria-controls="role-tab-panel-timeline">
+      年表
+    </button>
+    {{~ end ~}}
   </div>
 
   {{## 個人と団体が両方あるときだけ絞り込みフィルタを出す。片方だけの役職（脚本＝個人のみ等）では無意味なので非表示。 ##}}
@@ -151,6 +157,14 @@
     </ul>
     {{~ end ~}}
   </div>
+
+  {{## ──────── 年表パネル（担当の移り変わりの線表。中身は _role-timeline.sbn） ──────── ##}}
+  {{~ if Timeline ~}}
+  <div class="tab-panel" id="role-tab-panel-timeline"
+       data-tab-panel="timeline" role="tabpanel" hidden>
+    {{ include '_role-timeline.sbn' }}
+  </div>
+  {{~ end ~}}
 </div>
 
 <script>

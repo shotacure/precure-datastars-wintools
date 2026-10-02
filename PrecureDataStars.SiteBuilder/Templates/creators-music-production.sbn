@@ -9,7 +9,6 @@
      ・一覧タブ（Tabs）：歌（詞曲）/ 歌（演奏）/ 劇伴（作編曲）/ 劇伴（演奏）/ 制作。歌は曲数（🎵）、劇伴と制作は作品数を
        TV シリーズ（📺）と映画（🎥）に分けて出す。制作の盤（商品）に付いたクレジットは盤の数（💿）で出す。
      ・一覧タブの中は「初参加順（シリーズ別セクション）/ 多い順」を小さな切り替えで並べ替える（data-sort-panel）。
-     ・最後の年表タブは、歌・劇伴・制作に 1 年間で 4 回以上参加した人物・団体の線表（中身は _role-timeline.sbn）。
      ・タブ切替はスタッフ一覧と同じインライン JS。 ##}}
 <div class="creators-root creators-tabs products-tabs">
   <div class="tabs" role="tablist" aria-label="音楽制作一覧の切り替え">
@@ -21,12 +20,6 @@
     <button type="button" class="tab-btn" data-tab="{{ t.Key }}"
             role="tab" aria-selected="false" aria-controls="music-tab-panel-{{ t.Key }}">
       {{ t.Label | html.escape }}
-    </button>
-    {{~ end ~}}
-    {{~ if Timeline ~}}
-    <button type="button" class="tab-btn" data-tab="timeline"
-            role="tab" aria-selected="false" aria-controls="music-tab-panel-timeline">
-      年表
     </button>
     {{~ end ~}}
   </div>
@@ -101,13 +94,6 @@
       {{~ end ~}}
     </ul>
     {{~ end ~}}
-  </div>
-  {{~ end ~}}
-  {{## ──────── 年表パネル（音楽制作の参加の移り変わりの線表。中身は _role-timeline.sbn） ──────── ##}}
-  {{~ if Timeline ~}}
-  <div class="tab-panel" id="music-tab-panel-timeline"
-       data-tab-panel="timeline" role="tabpanel" hidden>
-    {{ include '_role-timeline.sbn' }}
   </div>
   {{~ end ~}}
 </div>

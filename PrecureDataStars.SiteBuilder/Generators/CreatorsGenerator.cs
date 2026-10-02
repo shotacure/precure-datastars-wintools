@@ -894,9 +894,6 @@ public sealed class CreatorsGenerator
         out int companyCount)
     {
         var minRecIdBySong = MinRecordingIdBySong();
-        // 年表タブの入力（歌・劇伴・制作の全タブの参加を、人物・団体ごとに曲・録音回・盤の単位で集める）。
-        var timeline = new MusicTimelineCollector(_ctx, musicDates);
-        int? RecordingOf(MusicCredit r) => r.TargetKind == MusicCreditTargetKinds.SongRecording ? r.SongRecordingId : null;
         bool IsGroup(string roleCode, string group) => MusicCreditViewBuilder.GroupOf(_ctx, roleCode) == group;
 
         // 曲・録音に付いた音楽クレジット行を (曲 ID, 行) に展開する。
@@ -910,25 +907,16 @@ public sealed class CreatorsGenerator
         var songWritingAcc = new MusicEntityAccumulator();
         foreach (var c in allSongCredits)
             if (IsGroup(c.CreditRole, MusicCreditGroups.Writing) && PersonKey(c.PersonAliasId, personIdByAlias) is { } key)
-            {
                 AddSong(songWritingAcc, key, c.SongId, c.CreditRole, minRecIdBySong);
-                timeline.AddSong(key, c.SongId);
-            }
         foreach (var (songId, r) in songTargetRows)
             if (IsGroup(r.RoleCode, MusicCreditGroups.Writing) && EntityKeyOf(r, personIdByAlias) is { } key)
-            {
                 AddSong(songWritingAcc, key, songId, r.RoleCode, minRecIdBySong);
-                timeline.AddSong(key, songId, RecordingOf(r));
-            }
 
         // ── 歌（演奏）：曲に付いた音楽クレジットの演奏・コーラス等 ──
         var songPerformanceAcc = new MusicEntityAccumulator();
         foreach (var (songId, r) in songTargetRows)
             if (IsGroup(r.RoleCode, MusicCreditGroups.Performance) && EntityKeyOf(r, personIdByAlias) is { } key)
-            {
                 AddSong(songPerformanceAcc, key, songId, r.RoleCode, minRecIdBySong);
-                timeline.AddSong(key, songId, RecordingOf(r));
-            }
         // 歌唱ページの歌手に載らない人の本人名義での歌唱（コーラスだけ・名前の出ないユニットのメンバーだけ）は、
         // その歌唱役職（歌・コーラス等）で演奏側に載せる。キャラクターとしての歌唱は歌唱ページが受け持つ。
         foreach (var s in allSingers)
@@ -937,10 +925,7 @@ public sealed class CreatorsGenerator
             foreach (var p in _ctx.ExpandSingerParticipants(s))
                 if (p.CharacterAliasId is null && p.PersonAliasId is int paid
                     && personIdByAlias.TryGetValue(paid, out var pid) && !leadSingers.Contains(pid))
-                {
                     AddSong(songPerformanceAcc, ('P', pid), rec.SongId, s.RoleCode, minRecIdBySong);
-                    timeline.AddSong(('P', pid), rec.SongId, s.SongRecordingId);
-                }
         }
 
         // ── 劇伴（作編曲）：bgm_cue_credits と、劇伴セッションに付いた音楽クレジットの作詞・作曲・編曲 ──
@@ -948,27 +933,18 @@ public sealed class CreatorsGenerator
         foreach (var (cueKey, credits) in _ctx.BgmCueCreditsByCue)
             foreach (var c in credits)
                 if (PersonKey(c.PersonAliasId, personIdByAlias) is { } key)
-                {
                     AddSeries(bgmWritingAcc, key, cueKey.SeriesId, c.CreditRole, bgm: true);
-                    timeline.AddCue(key, cueKey.SeriesId, cueKey.MNoDetail);
-                }
         foreach (var (sessionKey, rows) in _ctx.MusicCredits.BySession)
             foreach (var r in rows)
                 if (IsGroup(r.RoleCode, MusicCreditGroups.Writing) && EntityKeyOf(r, personIdByAlias) is { } key)
-                {
                     AddSeries(bgmWritingAcc, key, sessionKey.SeriesId, r.RoleCode, bgm: true);
-                    timeline.AddSession(key, sessionKey.SeriesId, sessionKey.SessionNo);
-                }
 
         // ── 劇伴（演奏）：劇伴セッションに付いた音楽クレジットの演奏・コーラス等 ──
         var bgmPerformanceAcc = new MusicEntityAccumulator();
         foreach (var (sessionKey, rows) in _ctx.MusicCredits.BySession)
             foreach (var r in rows)
                 if (IsGroup(r.RoleCode, MusicCreditGroups.Performance) && EntityKeyOf(r, personIdByAlias) is { } key)
-                {
                     AddSeries(bgmPerformanceAcc, key, sessionKey.SeriesId, r.RoleCode, bgm: true);
-                    timeline.AddSession(key, sessionKey.SeriesId, sessionKey.SessionNo);
-                }
 
         // ── 制作：レコーディング・音盤製作。曲・劇伴セッションに付いたものは作品単位、盤に付いたものは盤（商品）単位で数える。
         //    盤の分の初参加は、ディスクに登録されたシリーズで決める。 ──
@@ -978,7 +954,6 @@ public sealed class CreatorsGenerator
         {
             if (!IsGroup(r.RoleCode, MusicCreditGroups.Recording) && !IsGroup(r.RoleCode, MusicCreditGroups.Release)) continue;
             if (EntityKeyOf(r, personIdByAlias) is not { } key) continue;
-            AddMusicCreditToTimeline(timeline, key, r);
             int? sid = SeriesOfMusicCredit(r, minRecIdBySong);
             if (r.TargetKind == MusicCreditTargetKinds.Product && r.ProductCatalogNo is string catalogNo)
             {
@@ -1001,14 +976,6 @@ public sealed class CreatorsGenerator
         // ── 役職 ──
         var roleSections = BuildMusicRoleSections(songCreditRoleEntries, allSongCredits, personIdByAlias, personById, allRoles, minRecIdBySong, musicDates);
 
-        // ── 年表（1 年間に 4 回以上参加した人物・団体） ──
-        var timelineEntities = new List<RoleTimelineEntity>();
-        foreach (var key in timeline.Keys)
-        {
-            if (ResolveMusicEntity(key, personById) is not { } ent) continue;
-            if (timeline.ToEntity(key, ent.Kind, ent.Name, ent.Url, 0) is { } e) timelineEntities.Add(e);
-        }
-
         var content = new SongPersonListModel
         {
             RoleSections = roleSections,
@@ -1020,8 +987,6 @@ public sealed class CreatorsGenerator
                 BuildMusicListTab("bgm-performance", "劇伴（演奏）", bgmPerformanceAcc, personById, byWork: true),
                 BuildMusicListTab("production", "制作", productionAcc, personById, byWork: true),
             },
-            Timeline = new RoleTimelineBuilder(_ctx, RoleTimelineBuilder.ExtendToFor(timelineEntities))
-                .Build(timelineEntities, RoleTimelineRules.MusicProduction),
             CoverageLabel = MusicCoverageLabel
         };
         var layout = new LayoutModel
@@ -2822,8 +2787,6 @@ public sealed class CreatorsGenerator
         public IReadOnlyList<MusicRoleSection> RoleSections { get; set; } = Array.Empty<MusicRoleSection>();
         /// <summary>一覧タブ（歌（詞曲）/ 歌（演奏）/ 劇伴（作編曲）/ 劇伴（演奏）/ 制作）。</summary>
         public IReadOnlyList<MusicListTab> Tabs { get; set; } = Array.Empty<MusicListTab>();
-        /// <summary>年表タブ（切り替え）の線表。載せる行が無ければ null（年表を出さない）。</summary>
-        public RoleTimelineModel? Timeline { get; set; }
         public string CoverageLabel { get; set; } = "";
     }
 

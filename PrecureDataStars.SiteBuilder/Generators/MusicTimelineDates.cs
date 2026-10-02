@@ -4,7 +4,7 @@ using PrecureDataStars.SiteBuilder.Pipeline;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// 音楽の年表（歌唱・音楽制作・作詞作曲編曲や音楽の役職詳細の年表タブ）で、歌・劇伴・盤の参加を時期に置くための日付。
+/// 音楽の年表（歌唱・作詞作曲編曲や音楽の役職詳細の年表タブ）で、歌・劇伴・盤の参加を時期に置くための日付。
 /// <list type="bullet">
 ///   <item><description>歌（録音）：その録音が初めて収められた盤（商品）の発売日。盤に無い録音は出典シリーズの開始日。</description></item>
 ///   <item><description>歌（曲）：その曲の録音のうち最も早い日。</description></item>

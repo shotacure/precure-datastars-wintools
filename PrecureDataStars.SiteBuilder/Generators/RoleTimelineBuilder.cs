@@ -5,7 +5,7 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// 「年表」タブの線表（担当・出演・参加の移り変わり）を組み立てる。役職詳細・声の出演一覧・歌唱一覧・音楽制作一覧・
+/// 「年表」タブの線表（担当・出演・参加の移り変わり）を組み立てる。役職詳細・声の出演一覧・歌唱一覧・
 /// 作詞作曲編曲や音楽の役職詳細で共通に使う。
 /// <list type="bullet">
 ///   <item><description>横軸は時期。最初の TV シリーズの放送開始から、クレジットを収録した最新の TV の話・映画まで
@@ -21,7 +21,6 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///         1 年間に 4 回以上担当したことがある。続けて担当した期間は 13 週以内の間隔でつなぐ。</description></item>
 ///       <item><description>声の出演：1 年間に 4 回以上出演したことがある。続けて出演した期間は 4 週以内の間隔でつなぐ。</description></item>
 ///       <item><description>歌唱・作詞作曲編曲や音楽の役職詳細：ページに載る行をすべて載せる。</description></item>
-///       <item><description>音楽制作：1 年間に 4 回以上参加したことがある。</description></item>
 ///     </list>
 ///     載せた行には単発の参加も含めてすべての参加を描く。</description></item>
 ///   <item><description>並びは、最初の参加の日付の早い順、同じなら最後の参加の日付の早い順
@@ -391,11 +390,6 @@ internal sealed record RoleTimelineRules(
     public static readonly RoleTimelineRules VoiceCast = new(
         28, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: false, IncludeAll: false, "出演",
         "対象: 1年間で4回以上出演");
-
-    /// <summary>音楽制作：1 年間（52 週）に 4 回以上参加した人物・団体（細線は 13 週以内の間隔でつなぐ）。</summary>
-    public static readonly RoleTimelineRules MusicProduction = new(
-        91, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: false, IncludeAll: false, "参加",
-        "対象: 1年間で4回以上参加");
 
     /// <summary>作詞・作曲・編曲や音楽の役職詳細：一覧に載る人物・団体すべて（細線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules MusicRole = new(

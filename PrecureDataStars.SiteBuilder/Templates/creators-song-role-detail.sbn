@@ -5,9 +5,6 @@
 <h1>{{ RoleNameJa | html.escape }}</h1>
 
 <p class="lead">
-  「{{ RoleNameJa | html.escape }}」を担当した人物の一覧です。
-  「初参加順」「担当曲数順」をタブで切り替えられます。
-<br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 

@@ -327,6 +327,8 @@ public sealed class CharactersGenerator
             // 本文リード行と同じ母数をカードにも置く。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代キャラクター")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "プリキュアから妖精、敵、ゲストまで、歴代のキャラクターを担当の声優さんと登場エピソードとともに作品ごとに一覧にしました。",
                 MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                 Badges = new[]
                 {
@@ -334,7 +336,7 @@ public sealed class CharactersGenerator
                     new OgCardBadge("作品", $"{sections.Count}作")
                 }
             },
-            MetaDescription = $"歴代プリキュアに登場するキャラクター {characters.Count} 名を作品別に。プリキュアたちから妖精・敵キャラ・ゲストまで、担当声優と登場エピソードからたどれます。",
+            MetaDescription = $"歴代プリキュアのキャラクター {characters.Count} 名の一覧。プリキュアから妖精・敵・ゲストまで、作品ごとに担当の声優さんと登場エピソードをまとめました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

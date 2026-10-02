@@ -987,11 +987,12 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア音楽制作",
-            MetaDescription = "プリキュアの主題歌・挿入歌・キャラクターソングと劇伴の制作に携わった人々を一覧。役職、初参加、参加数から探せます。",
+            MetaDescription = "歴代プリキュアの音楽制作スタッフ一覧。作詞・作曲・編曲から演奏・エンジニアまで、歌・劇伴・音盤のクレジットに名前のある方々（人物・団体）を役職ごとにまとめました。",
             OgCard = BuildCreatorsOgCard(
                 "歴代プリキュア音楽制作",
                 BuildEntityBadges(personCount, companyCount),
-                new[] { new OgCardFactLine("集計元", "歌・劇伴・音盤のクレジット") }, MusicCoverageLabel),
+                Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
+                "作詞・作曲・編曲から演奏・エンジニアまで、プリキュアの歌と劇伴、音盤を作った方々を一覧にしました。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1633,7 +1634,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア歌唱",
-            MetaDescription = "プリキュアの主題歌・挿入歌・キャラクターソングを歌った人々を一覧。歌手とキャラクターを、初参加曲と参加曲数から探せます。",
+            MetaDescription = "歴代プリキュアの歌手一覧。主題歌・挿入歌・キャラクターソングを歌った方々とキャラクターを、初参加の曲と参加曲数とともにまとめました。",
             OgCard = BuildCreatorsOgCard(
                 "歴代プリキュア歌唱",
                 new[]
@@ -1641,7 +1642,8 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("人物", $"{personCount}人"),
                     new OgCardBadge("キャラクター", $"{characterCount}組")
                 },
-                new[] { new OgCardFactLine("集計元", "歌のクレジット（劇中歌・キャラクターソングを含む）") }, MusicCoverageLabel),
+                Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
+                "主題歌からキャラクターソングまで、プリキュアの歌を歌った方々とキャラクターを一覧にしました。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1845,12 +1847,12 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアスタッフ",
-            MetaDescription = "プリキュアを支えたスタッフ（人物・企業・団体）を一覧。役職や参加話数で並べ替えて、「あの人はどの作品に関わった？」をたどれます。",
+            MetaDescription = "歴代プリキュアのスタッフ一覧。脚本・演出・作画監督から制作会社まで、プリキュアを支えてきた方々（人物・企業・団体）を役職ごとにまとめました。参加話数や初参加の作品で並べ替えられます。",
             OgCard = BuildCreatorsOgCard(
                 "歴代プリキュアスタッフ",
-                BuildEntityBadges(content.PersonCount, content.CompanyCount)
-                    .Append(new OgCardBadge("役職", $"{roleIndexEntries.Count}種")).ToArray(),
-                Array.Empty<OgCardFactLine>()),
+                BuildEntityBadges(content.PersonCount, content.CompanyCount),
+                Array.Empty<OgCardFactLine>(), null,
+                "脚本・演出・作画から制作会社まで、プリキュアを支えてきた方々（人物・企業・団体）を役職ごとに一覧にしました。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1965,15 +1967,15 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア声優",
-            MetaDescription = "プリキュアのキャラクターを演じた声優を一覧。キャラクター・初出演・出演話数で並べ替えて、「このキャラの声は誰？」がすぐわかります。",
+            MetaDescription = "歴代プリキュアの声優さん一覧。キャラクターを演じた声優さんを作品ごと・役ごとにまとめました。初出演の作品や出演話数で並べ替えられます。",
             OgCard = BuildCreatorsOgCard(
                 "歴代プリキュア声優",
                 new[]
                 {
-                    new OgCardBadge("声優", $"{countRows.Count}人"),
-                    new OgCardBadge("シリーズ", $"{charSections.Count}作品")
+                    new OgCardBadge("声優", $"{countRows.Count}人")
                 },
-                Array.Empty<OgCardFactLine>()),
+                Array.Empty<OgCardFactLine>(), null,
+                "あのキャラの声は誰？ プリキュアのキャラクターを演じた声優さんを、作品ごと・役ごとに一覧にしました。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2394,7 +2396,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代クリエイター",
-            MetaDescription = "脚本・演出・作画から制作会社まで、プリキュアを作り上げたスタッフと、キャラクターを演じた声優、歌を作り、歌った人々。作品の「裏側」を担った作り手をたどれます。",
+            MetaDescription = "歴代プリキュアのクリエイター一覧。脚本・演出・作画から制作会社までのスタッフの方々、キャラクターを演じた声優さん、歌を作り歌った方々を、作品ごと・役職ごとにまとめました。",
             OgCard = BuildCreatorsOgCard(
                 "歴代クリエイター",
                 new[]
@@ -2404,7 +2406,8 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("音楽制作", $"{musicProductionPersonCount}名・{musicProductionCompanyCount}団体"),
                     new OgCardBadge("歌唱", $"{singerCount}人")
                 },
-                Array.Empty<OgCardFactLine>()),
+                Array.Empty<OgCardFactLine>(), null,
+                "脚本・演出・作画から制作会社、声優さん、作詞・作曲・歌手の方々まで、プリキュアを作り上げた方々をまとめて一覧にしました。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2518,10 +2521,12 @@ public sealed class CreatorsGenerator
         };
     }
 
-    private OgCardSpec BuildCreatorsOgCard(string title, IReadOnlyList<OgCardBadge> badges, IReadOnlyList<OgCardFactLine> facts, string? coverageLabel = null) =>
+    private OgCardSpec BuildCreatorsOgCard(string title, IReadOnlyList<OgCardBadge> badges, IReadOnlyList<OgCardFactLine> facts, string? coverageLabel = null, string lead = "") =>
         new(Kicker: "", Title: title)
         {
             MetaLeft = OgCoverageLabel.Compact(coverageLabel ?? _ctx.CreditCoverageLabel),
+            // どんなページかのリード文（数の下に添える）。
+            Subtitle = lead,
             Badges = badges,
             Facts = facts
         };

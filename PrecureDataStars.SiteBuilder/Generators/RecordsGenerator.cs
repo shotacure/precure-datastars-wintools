@@ -101,16 +101,13 @@ public sealed class RecordsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代記録",
+            // カードは記録を並べず、どんなページかをリード文で示す（記録の項目数はサイト側の都合の数なので出さない）。
             OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代記録")
             {
                 MetaLeft = OgCoverageLabel.Compact(partsCoverage),
-                Badges = new[]
-                {
-                    new OgCardBadge("記録", $"{groups.Sum(g => g.Items.Count)}項目"),
-                    new OgCardBadge("尺の違う話", $"{formatDiff.EpisodesWithDifference}話")
-                }
+                Subtitle = "いちばん長いアバンタイトルは？ いちばん多く脚本を書いた方は？ 歴代プリキュアの「いちばん」を集めました。"
             },
-            MetaDescription = "いちばん長いアバンタイトル、いちばん多く脚本を書いた人、いちばん多くの話に登場したキャラクター。歴代プリキュア全シリーズの「いちばん」を集めた記録集です。",
+            MetaDescription = "歴代プリキュアの記録集。いちばん長いアバンタイトル、いちばん多く脚本を書いた方、いちばん多くの話に登場したキャラクターなど、全シリーズ・全話のデータから「いちばん」を集めました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -556,15 +553,16 @@ public sealed class RecordsGenerator
             PageTitle = "本放送・配信・円盤の尺の違い",
             OgCard = new OgCardSpec(Kicker: "歴代記録", Title: "本放送・配信・円盤の尺の違い")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "同じ話でも、本放送と配信・Blu-ray / DVD でパートの長さが違うことがあります。本放送を基準に、違いのある話を集めました。",
                 MetaLeft = OgCoverageLabel.Compact(content.CoverageLabel),
                 Badges = new[]
                 {
-                    new OgCardBadge("比べた話", $"{content.ComparedEpisodes}話"),
                     new OgCardBadge("本編が違う", $"{content.MainCount}話"),
                     new OgCardBadge("予告が違う", $"{content.TrailerCount}話")
                 }
             },
-            MetaDescription = "同じ話でも、本放送と配信（Amazon Prime Video）、Blu-ray / DVD でパートの長さが違うことがあります。本放送を基準に、長さの違うパートがある話を歴代プリキュア全シリーズから並べました。",
+            MetaDescription = "プリキュアの本放送・配信（Amazon Prime Video）・Blu-ray / DVD でパートの長さが違う話の一覧。本放送を基準に、歴代全シリーズから違いのある話を集めました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

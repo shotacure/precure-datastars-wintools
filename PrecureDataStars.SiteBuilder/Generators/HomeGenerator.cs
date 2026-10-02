@@ -191,7 +191,7 @@ public sealed class HomeGenerator
             // SEO：ホームの <title>・og:title / twitter:title に載せるキャッチ。
             // <title> は "{PageTitle} | {SiteBrandLabel}" 形式で組まれる。
             PageTitle = "プリキュアまるごとデータベース",
-            MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優、キャラクターまで。「好き」を深掘りするための情報をファンの手で集めた、個人運営の非公式ファンデータベースです。",
+            MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優さん、キャラクターまで。「好き」を深掘りするための情報を、ファンの手で集めた個人運営の非公式データベースです。",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",
             JsonLd = jsonLd,

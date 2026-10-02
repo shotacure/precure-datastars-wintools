@@ -260,13 +260,15 @@ public sealed class ProductsGenerator
             // 本文リード行と同じ母数をカードにも置く。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア音楽商品(CD/配信)")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "サウンドトラックから主題歌シングルまで、プリキュアの音楽商品を発売日・収録曲・購入先とともに一覧にしました。",
                 Badges = new[]
                 {
                     new OgCardBadge("商品", $"{products.Count}点"),
                     new OgCardBadge("ディスク", $"{discsByProduct.Values.Sum(d => d.Count)}枚")
                 }
             },
-            MetaDescription = $"歴代プリキュアの音楽商品(CD/配信) {products.Count} 点 {discsByProduct.Values.Sum(d => d.Count)} 枚。サウンドトラックや主題歌シングルの発売日・収録曲・購入先からお探しいただけます。",
+            MetaDescription = $"歴代プリキュアの音楽商品（CD・配信）{products.Count} 点 {discsByProduct.Values.Sum(d => d.Count)} 枚の一覧。サウンドトラックや主題歌シングルの発売日・収録曲・購入先をまとめました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

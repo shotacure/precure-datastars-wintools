@@ -329,7 +329,7 @@ public sealed class AnniversaryGenerator
         var layout = new LayoutModel
         {
             PageTitle = "プリキュア記念日カレンダー",
-            MetaDescription = $"歴代プリキュアの放送日・映画公開日・キャラクターとクリエイターの誕生日を、{totalEntries} 件ぶん日付から引ける記念日カレンダー。今日は何の日かを 1 月 1 日から 12 月 31 日まで日付別にたどれます。",
+            MetaDescription = $"プリキュアの記念日カレンダー。歴代の放送日・映画の公開日、キャラクターとクリエイターの方々の誕生日 {totalEntries} 件を、366 日の日付ごとにまとめました。今日は何の日かがすぐ分かります。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -337,15 +337,8 @@ public sealed class AnniversaryGenerator
             },
             OgCard = new OgCardSpec(Kicker: "", Title: "プリキュア記念日カレンダー")
             {
-                Badges = new[]
-                {
-                    new OgCardBadge("収録", $"{totalEntries}件"),
-                    new OgCardBadge("日付", "366日")
-                },
-                InlineFacts = new[]
-                {
-                    new OgCardFactLine("", "放送日・公開日・誕生日を日付から引ける")
-                }
+                Subtitle = "放送日・公開日・誕生日を、1 年 366 日の日付ごとに並べました。今日は、プリキュアの何の日でしょう。",
+                Badges = new[] { new OgCardBadge("収録", $"{totalEntries}件") }
             }
         };
 

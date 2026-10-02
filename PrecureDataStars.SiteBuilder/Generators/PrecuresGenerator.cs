@@ -150,10 +150,12 @@ public sealed class PrecuresGenerator
             // 本文リード行と同じ母数をカードにも置く。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアオールスターズ")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "歴代の変身ヒロイン（プリキュア）を登場順に、変身前後の名前と担当の声優さんとともに一覧にしました。",
                 MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                 Badges = new[] { new OgCardBadge("変身ヒロイン", $"{rows.Count}名") }
             },
-            MetaDescription = $"歴代の変身ヒロイン（プリキュア）{rows.Count} 名を登場順に。変身前後の名前や担当声優をまとめています。",
+            MetaDescription = $"歴代プリキュア（変身ヒロイン）{rows.Count} 名の一覧。登場順に、変身前後の名前と担当の声優さんをまとめました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

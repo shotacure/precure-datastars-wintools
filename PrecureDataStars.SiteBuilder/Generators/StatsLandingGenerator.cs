@@ -58,16 +58,12 @@ public sealed class StatsLandingGenerator
         var layout = new LayoutModel
         {
             PageTitle = "統計",
-            // 件数は 2 軸で基準が違うため数バッジは置かず、何が見られるかを事実行で示す。
+            // 集計対象の話数はサイト側の都合の数なのでカードには出さず、どんなページかをリード文で示す。
             OgCard = new OgCardSpec(Kicker: "", Title: "統計")
             {
-                Badges = new[]
-                {
-                    new OgCardBadge("サブタイトル", $"{StatsCoverageLabel.CountTvEpisodesWithSubtitle(_ctx)}話"),
-                    new OgCardBadge("尺データ", $"{StatsCoverageLabel.CountTvEpisodesWithParts(_ctx, episodeIdsWithParts)}話")
-                }
+                Subtitle = "サブタイトルの漢字率から本編の尺まで、歴代プリキュアの全話を数字で読んでみると、意外な傾向が見えてきます。"
             },
-            MetaDescription = "サブタイトルの漢字率や文字数、本編パートの尺やアバンの長さまで。歴代プリキュア全レギュラー TV シリーズの全エピソードを数字で読み解く統計集です。",
+            MetaDescription = "歴代プリキュア全話の統計。サブタイトルの文字数・漢字率・記号率と、本編パート・アバンタイトルの尺を全シリーズで集計しました。数字から見える意外な傾向をどうぞ。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

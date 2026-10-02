@@ -166,6 +166,13 @@ public sealed record OgCardSpec(
     public bool IsProfile => Timeline.Count > 0 || FootFacts.Count > 0;
 
     /// <summary>
+    /// 数だけのカード（索引・統計・ランディングなど）か。数のバッジを持ち、事実行・帯グラフ・年表を持たず、ヒーロー調でもない。
+    /// 数を大きく組み、説明文を添え、全体を上下中央に据える対象。
+    /// </summary>
+    public bool IsNumbersOnly =>
+        !HeroVoice && !IsProfile && Badges.Count > 0 && Facts.Count == 0 && InlineFacts.Count == 0 && Bar.Count == 0;
+
+    /// <summary>
     /// 高密度の組み方を使うか（識別子・バッジ・帯グラフ・事実行のいずれかを持つか）。
     /// 右上の透かしや見出しの書体指定を持つカードも含める。これらは高密度側の疎な組み方（見出しと日付だけを大きく組む）が
     /// 前提で、標準の組み方は見出しの書体指定を無視するため（クレジット未収録で事実行が無い話も、作品の書体で組む）。

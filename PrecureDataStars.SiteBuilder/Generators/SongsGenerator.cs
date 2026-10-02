@@ -252,13 +252,15 @@ public sealed class SongsGenerator
             // 本文リード行と同じ母数をカードにも置く。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアソング(歌)")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "オープニングからキャラクターソングまで、プリキュアの歌を作詞・作曲・歌手と収録 CD とともに一覧にしました。",
                 Badges = new[]
                 {
                     new OgCardBadge("収録", $"{allRows.Count}曲"),
                     new OgCardBadge("作品", $"{seriesSections.Count}作")
                 }
             },
-            MetaDescription = $"歴代プリキュアの歌 {allRows.Count} 曲。オープニング・エンディングから挿入歌・キャラクターソングまで、作詞・作曲・歌手や収録 CD からたどれます。",
+            MetaDescription = $"歴代プリキュアの歌 {allRows.Count} 曲の一覧。オープニング・エンディングから挿入歌・キャラクターソングまで、作詞・作曲・歌手と収録 CD をまとめました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

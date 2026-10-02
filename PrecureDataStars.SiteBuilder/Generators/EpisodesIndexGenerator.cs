@@ -125,13 +125,15 @@ public sealed class EpisodesIndexGenerator
             // 本文リード行と同じ母数をカードにも置く。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアTVエピソード")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "歴代プリキュアの全話を、サブタイトルと放送日、脚本・演出・作画監督とともに一覧にしました。",
                 Badges = new[]
                 {
                     new OgCardBadge("作品", $"{sections.Count}作"),
                     new OgCardBadge("話数", $"{totalEpisodes}話")
                 }
             },
-            MetaDescription = $"歴代プリキュアの全レギュラー TV シリーズ {sections.Count} 作・{totalEpisodes} 話。サブタイトル・放送日のほか、脚本・演出・作画監督からたどれます。",
+            MetaDescription = $"歴代プリキュア TV シリーズ {sections.Count} 作・{totalEpisodes} 話の全話リスト。サブタイトル・放送日のほか、脚本・演出・作画監督を各話にまとめました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

@@ -812,6 +812,8 @@ public sealed class SeriesGenerator
             // 本文リード行と同じ母数をカードにも置く。内訳は区分ごとの行数から採る。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアシリーズ")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "歴代プリキュアを放送・公開の順に、話数や放送期間、主要スタッフとともに一覧にしました。",
                 Badges = new[]
                 {
                     new OgCardBadge("全", $"{_ctx.Series.Count}作"),
@@ -819,7 +821,7 @@ public sealed class SeriesGenerator
                     new OgCardBadge("映画", $"{movieRows.Count}作")
                 }
             },
-            MetaDescription = $"歴代プリキュア {_ctx.Series.Count} 作品（TV {tvRows.Count} 作・映画 {movieRows.Count} 作ほか）を放送・公開順に。各作品の話数・放送期間・主要スタッフからたどれます。",
+            MetaDescription = $"歴代プリキュア {_ctx.Series.Count} 作品（TV {tvRows.Count} 作・映画 {movieRows.Count} 作ほか）の一覧。放送・公開の順に、各作品の話数・放送期間・主要スタッフをまとめました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

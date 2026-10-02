@@ -179,8 +179,12 @@ public sealed class OgCardRenderer : IDisposable
     /// 標準レイアウトの説明文の文字サイズと行送り。
     /// フッタまでの余白に何行入るかを実測して折り返すため、行送りは固定値で持つ。
     /// </summary>
-    private const float DescriptionFontSize = 32f;
-    private const float DescriptionLineHeight = 52f;
+    private const float DescriptionFontSize = 40f;
+
+    /// <summary>数だけのカード（索引・統計）に添えるリード文の字の大きさ（候補の先頭が標準）。</summary>
+    private const float NumbersOnlyLeadFontSize = 40f;
+    private static readonly float[] NumbersOnlyLeadSizeCandidates = { 40f, 36f, 32f, 28f };
+    private const float DescriptionLineHeight = 62f;
 
     /// <summary>
     /// ラベル＋値を 1 行に流すファクトの項目間隔と最大行数。
@@ -415,9 +419,10 @@ public sealed class OgCardRenderer : IDisposable
             // フッタが無い分だけ下に空きができるので、一度測ってから中身をカードの上下中央へ据える
             // （上詰めのままだと下半分がまるごと空いてしまう）。
             // フッタを持たないヒーロー調でも、下端は他のカードと同じ高さで止める（左下は X がドメイン名を重ねる場所）。
+            // 数だけのカード（索引・統計）も要素が少ないので、同じく上下中央に据える。
             float floor = FooterLineY - FooterClearance;
             float offset = 0f;
-            if (spec.HeroVoice)
+            if (spec.HeroVoice || spec.IsNumbersOnly)
             {
                 using var recorder = new SKPictureRecorder();
                 var probe = recorder.BeginRecording(SKRect.Create(CardWidth, CardHeight));
@@ -632,7 +637,8 @@ public sealed class OgCardRenderer : IDisposable
 
         // ── タグライン（罫のすぐ下） ──
         // サイトのヒーローが h1 → 罫 → lead の順で組んでいるのに合わせる。
-        if (!string.IsNullOrWhiteSpace(spec.Subtitle))
+        // 数だけのカードの説明文（リード文）は数の下に置くので、ここでは描かない。
+        if (!string.IsNullOrWhiteSpace(spec.Subtitle) && !spec.IsNumbersOnly)
         {
             using var leadFont = new SKFont(spec.HeroVoice ? _brandTypeface : _bodyTypeface, 26f);
             paint.Color = spec.HeroVoice ? HeroLeadColor : Muted;
@@ -654,6 +660,38 @@ public sealed class OgCardRenderer : IDisposable
         float statScale = spec.HeroVoice ? HeroStatsScale : badgesOnly ? StatsOnlyScale : statScaleHint;
         if (spec.Badges.Count > 0)
             y = DrawStats(canvas, paint, spec.Badges, PaddingLeft, y + (spec.HeroVoice ? 40f : 16f), contentWidth, statScale);
+
+        // ── リード文（数だけのカード。数の下の空きに、ページの説明文を注意書きの書体の斜体で 3 行まで） ──
+        if (spec.IsNumbersOnly && !string.IsNullOrWhiteSpace(spec.Subtitle))
+        {
+            // 字の大きさは、3 行までで下端（右下の注記の上）に収まる最大のものを候補から選ぶ。
+            using var leadFont = new SKFont(_noticeTypeface, NumbersOnlyLeadFontSize) { SkewX = _obliqueSkew };
+            paint.Color = Foreground;
+            float leadFloor = FooterLineY - FooterClearance;
+            var lines = new List<string>();
+            float room = contentWidth;
+            foreach (float size in NumbersOnlyLeadSizeCandidates)
+            {
+                leadFont.Size = size;
+                room = contentWidth - size * Math.Abs(_obliqueSkew);
+                lines = WrapText(spec.Subtitle, leadFont, paint, room, 4);
+                float bottom = y + 28f + lines.Count * size * 1.35f - size * 0.35f;
+                if (lines.Count <= 3 && bottom <= leadFloor) break;
+            }
+            if (lines.Count > 3)
+            {
+                lines = lines.Take(3).ToList();
+                lines[^1] = Ellipsize(lines[^1] + "…", leadFont, paint, room);
+            }
+            y += 28f;
+            foreach (var line in lines)
+            {
+                y += leadFont.Size;
+                DrawText(canvas, line, PaddingLeft, y, SKTextAlign.Left, leadFont, paint);
+                y += leadFont.Size * 0.35f;
+            }
+            y -= leadFont.Size * 0.35f;
+        }
 
         // 基準点などの注記（MetaLeft）は右下のサイト名の上に置く（DrawFooter）。
 

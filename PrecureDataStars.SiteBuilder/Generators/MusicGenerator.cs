@@ -411,10 +411,12 @@ public sealed class MusicGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア音楽",
-            MetaDescription = $"主題歌・挿入歌 {recordingsCount} 件、劇伴(BGM) {bgmCueTotal} 件、音楽商品 {productsCount} 点 {discsCount} 枚。歴代プリキュアの「音」をまるごと集めた入口です。",
+            MetaDescription = $"歴代プリキュアの音楽の入口。主題歌・挿入歌 {recordingsCount} 件、劇伴（BGM）{bgmCueTotal} 件、音楽商品 {productsCount} 点 {discsCount} 枚を、曲・作品・商品ごとにまとめました。",
             // ページ本文の 3 カードに出している数をそのままカードにも置く。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア音楽")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "主題歌・挿入歌・劇伴から音楽商品まで、プリキュアの音楽をまとめて案内します。",
                 Badges = new[]
                 {
                     new OgCardBadge("歌", $"{recordingsCount}件"),
@@ -560,9 +562,11 @@ public sealed class MusicGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア劇伴音楽(BGM)",
-            MetaDescription = $"歴代プリキュア {rows.Count} 作品の劇伴(BGM) {totalSongs} 曲 {totalCues} バージョン。M ナンバー・メニュータイトル・作編曲のクレジットから、タイトルがわからない「あの曲」を探せます。",
+            MetaDescription = $"歴代プリキュア {rows.Count} 作品の劇伴（BGM）一覧。{totalSongs} 曲 {totalCues} バージョンを、M ナンバー・メニュータイトル・作曲者・収録盤とともにまとめました。",
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア劇伴音楽(BGM)")
             {
+                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
+                Subtitle = "作品ごとの劇伴（BGM）を、M ナンバー・作曲者・収録盤とともに一覧にしました。あの場面の曲も見つかります。",
                 Badges = BuildBgmCountBadges(
                     new[] { new OgCardBadge("作品", $"{rows.Count}作") },
                     totalSongs, totalCues, sources)
@@ -1002,11 +1006,9 @@ public sealed class MusicGenerator
 
     /// <summary>
     /// 劇伴詳細ページの OGP カードを組み立てる。
-    /// 「『シリーズ名』→ 劇伴音楽(BGM) → 量の数 → 主要な作曲・編曲」の順に置く。
-    /// 商品詳細のカードと同じ組み方で、識別（どの作品か）を上段に、量を数のバッジに、
-    /// 中身の手がかりを事実行に振り分ける。
-    /// 数は 2 行に割り、記録している数と、そのうち音源が存在する分（曲数・バージョン数・総再生時間）を
-    /// 引き比べられるようにする。
+    /// 「劇伴音楽(BGM) → 作品名 → 期間 → 量の数（曲数・バージョン数・音源の収録時間）→ 作曲・編曲」の順に置き、
+    /// 右上の透かしに放送開始年（映画は公開年）を出す。
+    /// 商品詳細のカードと同じ組み方で、識別（どの作品か）を見出しに、量を数のバッジに、中身の手がかりを事実行に振り分ける。
     /// 曲目は並べない。総曲数に対して数行しか入らず、どれが載るかは並び順で決まってしまうため、
     /// 一部だけを見せるより規模を数で示す方が正確に伝わる。
     /// </summary>
@@ -1020,11 +1022,11 @@ public sealed class MusicGenerator
     {
         var badges = BuildBgmCountBadges(Array.Empty<OgCardBadge>(), songCount, cueCount, sources);
 
-        return new OgCardSpec(
-            Kicker: $"『{series.Title}』",
-            Title: "劇伴音楽(BGM)")
+        return new OgCardSpec(Kicker: "劇伴音楽(BGM)", Title: series.Title)
         {
-            KickerRight = periodLabel ?? "",
+            Subtitle = periodLabel ?? "",
+            BandColorHex = OgCardColors.Music,
+            Watermark = series.StartDate.Year.ToString(),
             Badges = badges,
             InlineFacts = BuildBgmStaffFactLines(staffGroups)
         };
@@ -1048,7 +1050,18 @@ public sealed class MusicGenerator
             string names = string.Join("、", g.Members.Select(m => m.Name));
             if (label.Length == 0 || names.Length == 0) continue;
 
-            lines.Add(new OgCardFactLine(label, names));
+            // 役職名はサイトの楽曲バッジと同じ色（作曲は黄橙、編曲は緑）。「作曲・編曲」の統合行は役職ごとに色を分ける。
+            var parts = new List<OgCardLabelPart>();
+            foreach (var r in g.Roles)
+            {
+                if (parts.Count > 0) parts.Add(new OgCardLabelPart("・", ""));
+                parts.Add(new OgCardLabelPart(r.RoleLabel, OgRolePalette.ColorFor(r.RoleCode)));
+            }
+            lines.Add(new OgCardFactLine(label, names)
+            {
+                LabelColorHex = g.Roles.Count == 1 ? OgRolePalette.ColorFor(g.Roles[0].RoleCode) : "",
+                LabelParts = g.Roles.Count > 1 ? parts : Array.Empty<OgCardLabelPart>()
+            });
         }
         return lines.ToArray();
     }
@@ -1188,9 +1201,10 @@ public sealed class MusicGenerator
         var (timeLabel, timeFraction) = FormatTotalLengthFrames(sources.TotalFrames);
         if (timeLabel.Length == 0) return badges.ToArray();
 
-        badges.Add(new OgCardBadge("(収録", $"{sources.SongCount}曲") { NewLine = true });
-        if (showVersions) badges.Add(new OgCardBadge("", $"{sources.VersionCount}ver."));
-        badges.Add(new OgCardBadge("", timeLabel) { Fraction = timeFraction, Tail = ")" });
+        // 音源のある分は、曲数が記録と同じなら収録時間だけ、少なければ「収録 n曲」を添えて引き比べられるようにする。
+        if (sources.SongCount < songCount)
+            badges.Add(new OgCardBadge("収録", $"{sources.SongCount}曲") { NewLine = true });
+        badges.Add(new OgCardBadge(sources.SongCount < songCount ? "" : "収録", timeLabel) { Fraction = timeFraction, NewLine = sources.SongCount >= songCount });
 
         return badges.ToArray();
     }

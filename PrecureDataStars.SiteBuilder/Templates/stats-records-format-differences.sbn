@@ -1,0 +1,63 @@
+{{## /stats/records/format-differences/ — 本放送・配信・円盤の尺の違い。
+     RecordsGenerator から FormatDiffModel で渡る。
+     先頭に「比べた話」「本編が違う話」「次回予告が違う話」のファクトタイル（.fact-grid）。
+     本文は本編 / 次回予告 / その他の 3 セクションで、それぞれシリーズごとの h3 の下に話を並べる。
+     話の行は「第N話 サブタイトル（ルビ付き・解禁ガード済み）  放送日」と、違ったパートごとの
+     「パート名  本放送 m:ss  配信 m:ss (+差)  円盤 m:ss (+差)  備考」。差は本放送を基準にした符号付き。 ##}}
+<section>
+  <h1>本放送・配信・円盤の尺の違い</h1>
+  <p class="lead">同じ話でも、本放送と配信（Amazon Prime Video）、Blu-ray / DVD でパートの長さが違うことがあります。本放送を基準に、長さの違うパートがある話を歴代プリキュア全シリーズから並べました。差は本放送より長ければ「+」、短ければ「−」で示します。本放送で実測できていないパートは比べていません。<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
+  <div class="fact-grid">
+    <div class="fact">
+      <span class="fact-label">比べた話</span>
+      <span class="fact-value">{{ ComparedEpisodes }}話</span>
+    </div>
+    <div class="fact">
+      <span class="fact-label">本編の尺が違う話</span>
+      <span class="fact-value">{{ MainCount }}話</span>
+    </div>
+    <div class="fact">
+      <span class="fact-label">次回予告の尺が違う話</span>
+      <span class="fact-value">{{ TrailerCount }}話</span>
+    </div>
+    {{~ if OtherCount > 0 ~}}
+    <div class="fact">
+      <span class="fact-label">その他のパートが違う話</span>
+      <span class="fact-value">{{ OtherCount }}話</span>
+    </div>
+    {{~ end ~}}
+  </div>
+</section>
+
+{{~ for sec in Sections ~}}
+<section id="{{ sec.Id }}">
+  <h2>{{ sec.Title | html.escape }}<span class="muted fmtdiff-count">{{ sec.EpisodeCount }}話</span></h2>
+  <p>{{ sec.Lead | html.escape }}</p>
+  {{~ for g in sec.SeriesGroups ~}}
+  <h3 class="fmtdiff-series"><a href="{{ g.SeriesUrl }}">{{ g.SeriesTitle | html.escape }}</a> <span class="stats-ep-year">({{ g.SeriesStartYearLabel }})</span> <span class="muted fmtdiff-count">{{ array.size g.Rows }}話</span></h3>
+  <ul class="fmtdiff-list">
+    {{~ for r in g.Rows ~}}
+    <li class="fmtdiff-row">
+      <div class="fmtdiff-ep">
+        <span class="ep-row-no">第{{ r.SeriesEpNo }}話</span>
+        <a class="fmtdiff-title" href="{{ r.EpisodeUrl }}">{{ r.TitleHtml }}</a>
+        <span class="muted fmtdiff-date">{{ r.OnAirDate | html.escape }}</span>
+      </div>
+      <ul class="fmtdiff-parts">
+        {{~ for p in r.Parts ~}}
+        <li>
+          <span class="fmtdiff-part"><span class="fmt-chip {{ p.PartCss }}"></span>{{ p.PartName | html.escape }}</span>
+          <span class="fmtdiff-src">本放送 <b>{{ p.OaLabel }}</b></span>
+          {{~ if p.VodLabel != "" ~}}<span class="fmtdiff-src">配信 <b>{{ p.VodLabel }}</b>{{~ if p.VodDeltaLabel != "" ~}} <i>{{ p.VodDeltaLabel }}</i>{{~ end ~}}</span>{{~ end ~}}
+          {{~ if p.DiscLabel != "" ~}}<span class="fmtdiff-src">円盤 <b>{{ p.DiscLabel }}</b>{{~ if p.DiscDeltaLabel != "" ~}} <i>{{ p.DiscDeltaLabel }}</i>{{~ end ~}}</span>{{~ end ~}}
+          {{~ if p.Note != "" ~}}<span class="fmtdiff-note">{{ p.Note | html.escape }}</span>{{~ end ~}}
+        </li>
+        {{~ end ~}}
+      </ul>
+    </li>
+    {{~ end ~}}
+  </ul>
+  {{~ end ~}}
+</section>
+{{~ end ~}}

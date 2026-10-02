@@ -9587,3 +9587,142 @@ body.has-art-track-bar {
   flex-basis: 100%;
   margin: 0;
 }
+
+/* ──────── 歴代記録（/stats/records/） ────────
+   分類ごとに記録カードをグリッドで並べる。カードは順位・名前（＋添え書き）・値の 3 列。 */
+.records-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 1em;
+  margin: 0.8em 0 1.4em;
+}
+.records-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.9em 1em 1em;
+  background: #fff;
+}
+.records-card-title {
+  margin: 0 0 0.6em;
+  padding: 0;
+  border: 0;
+  font-size: 1em;
+  font-weight: 600;
+}
+.records-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45em;
+}
+.records-entry {
+  display: grid;
+  grid-template-columns: 1.8em minmax(0, 1fr) auto;
+  gap: 0.5em;
+  align-items: baseline;
+}
+.records-rank {
+  font-family: var(--font-num);
+  font-weight: 700;
+  color: var(--accent);
+  text-align: center;
+}
+.records-entry:first-child .records-rank {
+  font-size: 1.15em;
+}
+.records-body {
+  min-width: 0;
+}
+.records-name {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.records-sub {
+  display: block;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.records-role {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.records-value {
+  font-family: var(--font-num);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.records-empty {
+  margin: 0;
+  font-size: 0.9em;
+}
+.records-more {
+  margin: 0.7em 0 0;
+  font-size: 0.88em;
+  text-align: right;
+}
+
+/* ──────── 本放送・配信・円盤の尺の違い（/stats/records/format-differences/） ──────── */
+.fmtdiff-count {
+  font-size: 0.7em;
+  font-weight: 400;
+  margin-left: 0.6em;
+}
+.fmtdiff-series {
+  margin: 1.4em 0 0.5em;
+  font-size: 1.02em;
+}
+.fmtdiff-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6em;
+}
+.fmtdiff-row {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6em 0.9em;
+}
+.fmtdiff-ep {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 0.6em;
+  align-items: baseline;
+  margin-bottom: 0.35em;
+}
+.fmtdiff-date {
+  font-size: 0.85em;
+}
+.fmtdiff-parts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25em;
+  font-size: 0.9em;
+}
+.fmtdiff-parts li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 1em;
+  align-items: center;
+}
+.fmtdiff-part {
+  font-weight: 600;
+  min-width: 6em;
+}
+.fmtdiff-src b {
+  font-family: var(--font-num);
+  font-weight: 600;
+}
+.fmtdiff-src i {
+  font-style: normal;
+  font-family: var(--font-num);
+  color: var(--accent);
+}
+.fmtdiff-note {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 0.92em;
+}

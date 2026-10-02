@@ -51,7 +51,9 @@ public sealed class StatsLandingGenerator
         var content = new ContentModel
         {
             SubtitleCoverageLabel = StatsCoverageLabel.BuildSubtitle(latestSubtitle, _ctx.BuildStartedAt),
-            EpisodeCoverageLabel  = StatsCoverageLabel.Build(latestParts)
+            EpisodeCoverageLabel  = StatsCoverageLabel.Build(latestParts),
+            // 歴代記録はパート尺（上の尺軸）とクレジット（サイト共通の収録範囲）の 2 本の基準点を持つ。
+            CreditCoverageLabel   = _ctx.CreditCoverageLabel
         };
         var layout = new LayoutModel
         {
@@ -82,7 +84,9 @@ public sealed class StatsLandingGenerator
     {
         /// <summary>サブタイトル統計カードに添えるカバレッジラベル。</summary>
         public string SubtitleCoverageLabel { get; set; } = "";
-        /// <summary>エピソード尺統計カードに添えるカバレッジラベル。</summary>
+        /// <summary>エピソード尺統計カードに添えるカバレッジラベル。歴代記録カードの尺側にも使う。</summary>
         public string EpisodeCoverageLabel { get; set; } = "";
+        /// <summary>歴代記録カードのクレジット側に添えるカバレッジラベル（本編クレジットの収録範囲）。</summary>
+        public string CreditCoverageLabel { get; set; } = "";
     }
 }

@@ -20,7 +20,8 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///       <item><description>役職詳細：その役職でオープニングのクレジット（TV・映画とも）に出たことがある（メインスタッフ）か、
 ///         1 年間に 4 回以上担当したことがある。続けて担当した期間は 13 週以内の間隔でつなぐ。</description></item>
 ///       <item><description>声の出演：1 年間に 4 回以上出演したことがある。続けて出演した期間は 4 週以内の間隔でつなぐ。</description></item>
-///       <item><description>歌唱・作詞作曲編曲や音楽の役職詳細：ページに載る行をすべて載せる。</description></item>
+///       <item><description>作詞・作曲・編曲の役職詳細：1 年間に 2 曲以上担当したことがある。</description></item>
+///       <item><description>歌唱・音楽の役職詳細：ページに載る行をすべて載せる。</description></item>
 ///     </list>
 ///     載せた行には単発の参加も含めてすべての参加を描く。</description></item>
 ///   <item><description>並びは、最初の参加の日付の早い順。同じ日に始めた行は、団体を先に置き、その中で最後の参加の
@@ -162,6 +163,7 @@ internal sealed class RoleTimelineBuilder
 
         return new RoleTimelineModel
         {
+            // 説明文はページの種類ごとの決まりをそのまま書く（登録状況で変わる出し分けはしない）。
             Note = rules.Note,
             Legend = legend,
             Bands = _bands,
@@ -379,29 +381,40 @@ internal sealed class RoleTimelineBuilder
 /// <param name="IncludeOpeningCredit">オープニングのクレジットに出たことがあれば回数によらず載せるか。</param>
 /// <param name="IncludeAll">決まりによらず候補をすべて載せるか。</param>
 /// <param name="Verb">凡例の動詞（「担当」「出演」「参加」）。</param>
-/// <param name="Note">年表タブの先頭に出す説明文（載せる決まり）。</param>
+/// <param name="Note">
+/// 年表タブの先頭に出す説明文（載せる決まり）。ページの種類ごとに固定で、登録状況（どの人が載ったか・誰がオープニングに
+/// 出ているか）では変えない（例：演出助手もいずれオープニングに出ることがあるので、役職ページはどれも同じ文にする）。
+/// </param>
 internal sealed record RoleTimelineRules(
     int MaxGapDays, int WindowDays, int MinCreditsInWindow, bool IncludeOpeningCredit, bool IncludeAll, string Verb, string Note)
 {
+    /// <summary>全員を載せる決まりのページの説明文。</summary>
+    public const string AllNote = "対象: すべて";
+
     /// <summary>役職詳細：メインスタッフ（オープニングに出た）と、1 年間（52 週）に 4 回以上担当したスタッフ（細線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules Staff = new(
         91, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: true, IncludeAll: false, "担当",
-        "対象: メインスタッフ&1年間で4回以上参加");
+        "対象: メインスタッフまたは1年間4回以上");
 
     /// <summary>声の出演：1 年間（52 週）に 4 回以上出演した声優（細線は 4 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules VoiceCast = new(
         28, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: false, IncludeAll: false, "出演",
-        "対象: 1年間で4回以上出演");
+        "対象: 1年間4回以上");
 
-    /// <summary>作詞・作曲・編曲や音楽の役職詳細：一覧に載る人物・団体すべて（細線は 13 週以内の間隔でつなぐ）。</summary>
+    /// <summary>作詞・作曲・編曲の役職詳細：1 年間（52 週）に 2 曲以上担当した人物（細線は 13 週以内の間隔でつなぐ）。</summary>
+    public static readonly RoleTimelineRules SongWriter = new(
+        91, WindowDays: 364, MinCreditsInWindow: 2, IncludeOpeningCredit: false, IncludeAll: false, "担当",
+        "対象: 1年間2曲以上");
+
+    /// <summary>音楽の役職詳細（演奏など）：一覧に載る人物・団体すべて（細線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules MusicRole = new(
         91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, "担当",
-        "対象: すべて");
+        AllNote);
 
     /// <summary>歌唱：一覧に載る歌手・キャラクターすべて（続けて参加した期間の線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules Singers = new(
         91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, "参加",
-        "対象: すべて");
+        AllNote);
 }
 
 /// <summary>線表に載せる候補 1 つ分（<see cref="RoleTimelineBuilder.Build"/> の入力）。</summary>

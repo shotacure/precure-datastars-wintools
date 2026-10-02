@@ -798,7 +798,7 @@ public sealed class CreatorsGenerator
 
     /// <summary>
     /// 歌系役職 1 種の専用ページ <c>/creators/roles/{code}/</c> を「五十音順 / 担当曲数順」の 2 タブで書き出し、
-    /// 担当した曲を初めて盤に収められた日に置いた線表を年表タブに置く（一覧の全員）。
+    /// 担当した曲を初めて盤に収められた日に置いた線表を年表タブに置く（1 年間に 2 曲以上担当した人）。
     /// </summary>
     private void GenerateSongRoleDetail(Role role, List<SongRoleRow> rows, MusicTimelineDates musicDates)
     {
@@ -820,7 +820,7 @@ public sealed class CreatorsGenerator
             DebutRows = SortSongRowsByDebut(rows),
             CountRows = SortSongRowsByCount(rows),
             Timeline = new RoleTimelineBuilder(_ctx, RoleTimelineBuilder.ExtendToFor(timelineEntities))
-                .Build(timelineEntities, RoleTimelineRules.MusicRole),
+                .Build(timelineEntities, RoleTimelineRules.SongWriter),
             CoverageLabel = MusicCoverageLabel
         };
         var layout = new LayoutModel

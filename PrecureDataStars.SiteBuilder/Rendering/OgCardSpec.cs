@@ -159,6 +159,12 @@ public sealed record OgCardSpec(
     /// </summary>
     public string TitleFontFamily { get; init; } = "";
 
+    /// <summary>
+    /// 見出しを本編のサブタイトルテロップの体裁で描くか。白い字に黒いフチと右下への黒い影を付ける（振り仮名はフチなし）。
+    /// エピソードのサブタイトルに使う。
+    /// </summary>
+    public bool TitleTelopStyle { get; init; }
+
     /// <summary>見出しが空のカードは意味を成さないため、描画対象として妥当かを判定する。</summary>
     public bool IsRenderable => !string.IsNullOrWhiteSpace(Title);
 

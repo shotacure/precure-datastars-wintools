@@ -354,6 +354,36 @@ public sealed class OgCardRenderer : IDisposable
     private const float OutlineWidthRatio = 0.045f;
 
     /// <summary>
+    /// サブタイトルテロップの体裁で文字列を描く。白い字に黒いフチ（字の大きさの <see cref="TelopOutlineRatio"/>）を付け、
+    /// フチごと右下へ <see cref="TelopShadowRatio"/> ずらした黒い影を敷く（本編のサブタイトルテロップの比率に合わせた値）。
+    /// 角は丸める。
+    /// </summary>
+    private void DrawTextTelop(SKCanvas canvas, string text, float x, float baseline, SKTextAlign align, SKFont font)
+    {
+        var shaper = ShaperFor(font);
+        float d = font.Size * TelopShadowRatio;
+        using var stroke = new SKPaint
+        {
+            IsAntialias = true,
+            Color = SKColors.Black,
+            Style = SKPaintStyle.Stroke,
+            // 線は輪郭を中心に引かれるので、見せたいフチの太さの 2 倍にする。
+            StrokeWidth = font.Size * TelopOutlineRatio * 2f,
+            StrokeJoin = SKStrokeJoin.Round,
+            StrokeCap = SKStrokeCap.Round
+        };
+        using var black = new SKPaint { IsAntialias = true, Color = SKColors.Black };
+        using var white = new SKPaint { IsAntialias = true, Color = SKColors.White };
+        // 影（フチの外形ごと右下へずらした黒）→ フチ → 白い字の順に重ねる。
+        shaper.Draw(canvas, text, x + d, baseline + d, align, font, black, stroke);
+        shaper.Draw(canvas, text, x, baseline, align, font, white, stroke);
+    }
+
+    /// <summary>テロップの黒フチの見える太さと、影のずれ（いずれも字の大きさに対する比）。</summary>
+    private const float TelopOutlineRatio = 0.048f;
+    private const float TelopShadowRatio = 0.037f;
+
+    /// <summary>
     /// フォントファイルを読み込む。<paramref name="weight"/> を指定した場合は可変フォントの
     /// <c>wght</c> 軸をその値に固定したインスタンスを取り出す（可変でなければそのまま返る）。
     /// </summary>
@@ -865,7 +895,7 @@ public sealed class OgCardRenderer : IDisposable
                 if (WrapRubyUnits(rubyUnits, baseFont, rubyFont, paint, contentWidth, DenseTitleMaxLines + 1).Count > DenseTitleMaxLines)
                     truncated = true;
             }
-            y = DrawRubyTitle(canvas, paint, rubyUnits, PaddingLeft, y, contentWidth, sizes, DenseTitleMaxLines, fittedTypeface, scaleX);
+            y = DrawRubyTitle(canvas, paint, rubyUnits, PaddingLeft, y, contentWidth, sizes, DenseTitleMaxLines, fittedTypeface, scaleX, spec.TitleTelopStyle);
         }
         else
         {
@@ -878,7 +908,8 @@ public sealed class OgCardRenderer : IDisposable
             foreach (var line in titleLines)
             {
                 y += titleFont.Size;
-                DrawTextOutlined(canvas, line, PaddingLeft, y, SKTextAlign.Left, titleFont, paint);
+                if (spec.TitleTelopStyle) DrawTextTelop(canvas, line, PaddingLeft, y, SKTextAlign.Left, titleFont);
+                else DrawTextOutlined(canvas, line, PaddingLeft, y, SKTextAlign.Left, titleFont, paint);
                 y += titleFont.Size * (TitleLineHeightRatio - 1f);
             }
         }
@@ -1995,7 +2026,8 @@ public sealed class OgCardRenderer : IDisposable
     /// </summary>
     private float DrawRubyTitle(
         SKCanvas canvas, SKPaint paint, IReadOnlyList<RubyUnit> units,
-        float x, float topY, float maxWidth, float[] sizeCandidates, int maxLines, SKTypeface? typeface = null, float scaleX = 1f)
+        float x, float topY, float maxWidth, float[] sizeCandidates, int maxLines, SKTypeface? typeface = null, float scaleX = 1f,
+        bool telop = false)
     {
         using var baseFont = new SKFont(typeface ?? _boldTypeface, sizeCandidates[^1]) { ScaleX = scaleX };
         // 振り仮名は本文の書体で、地の文と同じ率で詰める（占有幅の計算を地の文と揃えるため）。
@@ -2025,8 +2057,15 @@ public sealed class OgCardRenderer : IDisposable
                 // （振り仮名に引きずられて地の文の字間が空かないようにする）。
                 float slot = Measure(baseFont, unit.Base);
 
-                paint.Color = Foreground;
-                DrawTextOutlined(canvas, unit.Base, cursor, y, SKTextAlign.Left, baseFont, paint);
+                if (telop)
+                {
+                    DrawTextTelop(canvas, unit.Base, cursor, y, SKTextAlign.Left, baseFont);
+                }
+                else
+                {
+                    paint.Color = Foreground;
+                    DrawTextOutlined(canvas, unit.Base, cursor, y, SKTextAlign.Left, baseFont, paint);
+                }
 
                 if (unit.Ruby.Length > 0)
                 {
@@ -2037,8 +2076,12 @@ public sealed class OgCardRenderer : IDisposable
                         rubyFont.ScaleX = rubyScale * slot / rubyWidth;
                         rubyWidth = slot;
                     }
+                    float rubyX = cursor + (slot - rubyWidth) / 2f;
+                    // 振り仮名は細かいのでフチを付けない（テロップ体裁でも同じ）。テロップ体裁では、親字の黒フチに
+                    // かからないよう少しだけ上げる。
+                    float rubyBaseline = y - baseFont.Size * (telop ? 1.04f : 0.98f);
                     paint.Color = Muted;
-                    DrawText(canvas, unit.Ruby, cursor + (slot - rubyWidth) / 2f, y - baseFont.Size * 0.98f, SKTextAlign.Left, rubyFont, paint);
+                    DrawText(canvas, unit.Ruby, rubyX, rubyBaseline, SKTextAlign.Left, rubyFont, paint);
                     rubyFont.ScaleX = rubyScale;
                 }
                 cursor += slot;

@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.16.1_add_block_heading.sql
+-- v1.17.0_add_block_heading.sql
 --
 -- クレジットのブロック（credit_role_blocks）の先頭に出す「見出し」を持てるようにする。
 --   heading_series_id  INT NULL           見出しにする作品（series.series_id）。

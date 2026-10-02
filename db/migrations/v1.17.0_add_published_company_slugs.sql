@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.16.1_add_published_company_slugs.sql
+-- v1.17.0_add_published_company_slugs.sql
 --
 -- URL の公開記録 published_entity_slugs で企業の URL も記録できるようにする。
 --

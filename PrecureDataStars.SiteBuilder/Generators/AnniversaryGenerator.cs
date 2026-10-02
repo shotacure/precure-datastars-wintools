@@ -239,18 +239,19 @@ public sealed class AnniversaryGenerator
         _page.RenderAndWrite(url, "anniversary", "anniversary-day.sbn", content, layout);
     }
 
-    /// <summary>日付別ページの meta description。件数の内訳をそのまま述べる。</summary>
+    /// <summary>日付別ページの meta description。「M月D日のプリキュア。出来事の内訳。何のページか。」</summary>
     private static string BuildMetaDescription(string dateLabel, int episodes, int movies, int characterBirthdays, int personBirthdays)
     {
         var parts = new List<string>();
-        if (episodes > 0) parts.Add($"エピソード{episodes}話の放送");
-        if (movies > 0) parts.Add($"映画{movies}本の公開");
-        if (characterBirthdays > 0) parts.Add($"キャラクター{characterBirthdays}人の誕生日");
-        if (personBirthdays > 0) parts.Add($"クリエイター{personBirthdays}人の誕生日");
+        if (episodes > 0) parts.Add($"エピソード {episodes} 話の放送");
+        if (movies > 0) parts.Add($"映画 {movies} 本の公開");
+        if (characterBirthdays > 0) parts.Add($"キャラクター {characterBirthdays} 人の誕生日");
+        if (personBirthdays > 0) parts.Add($"クリエイター {personBirthdays} 人の誕生日");
 
+        const string tail = "歴代の放送日・公開日・誕生日を日付ごとにまとめた記念日カレンダーです。";
         return parts.Count == 0
-            ? $"{dateLabel}にプリキュアで起きた出来事。この日付に該当する記録は現在のところ登録がありません。歴代シリーズの放送日・公開日・誕生日を日付から引ける記念日カレンダーです。"
-            : $"{dateLabel}にプリキュアで起きた出来事。{string.Join("、", parts)}。歴代シリーズの放送日・公開日・誕生日を日付から引ける記念日カレンダーです。";
+            ? $"{dateLabel}のプリキュア。この日の出来事は、いまのところ登録がありません。{tail}"
+            : $"{dateLabel}のプリキュア。{string.Join("、", parts)}。{tail}";
     }
 
     /// <summary>

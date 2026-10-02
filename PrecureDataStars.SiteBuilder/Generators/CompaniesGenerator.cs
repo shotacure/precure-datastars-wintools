@@ -341,60 +341,34 @@ public sealed class CompaniesGenerator
     }
 
     /// <summary>
-    /// 企業・団体詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
-    /// 構成：「{会社名}は、プリキュアシリーズで{役職1}({N作品})・{役職2}({N作品})などを担当した企業・団体。」を骨格に、
-    /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
-    /// 役職は <see cref="InvolvementGroup.Count"/> 降順（担当エピソード数の多い順）で最大 3 件。
-    /// 関与役職が 1 件も無い場合は、定型文「{会社名}のプリキュア関連クレジット一覧です。」にフォールバック。
+    /// 企業・団体詳細の meta description。「〇〇がプリキュアシリーズで担当したクレジットをまとめました。役職（話数・本数）を多い順に 3 つ。
+    /// 作品ごと・役職ごとの一覧と、所属としてクレジットされた方々。」の順で 140 字ほどに収める。
     /// </summary>
     private static string BuildCompanyMetaDescription(
         string displayName,
         IReadOnlyList<InvolvementGroup> involvementGroups)
     {
-        const int targetMaxChars = 140;
+        const int targetMaxChars = 150;
+        string head = $"{displayName}がプリキュアシリーズで担当したクレジットをまとめました。";
+        const string tail = "作品ごと・役職ごとの一覧と、所属としてクレジットされた方々も載せています。";
 
-        if (involvementGroups.Count == 0)
-        {
-            return $"{displayName}のプリキュア関連クレジット一覧です。";
-        }
-
-        // 担当話数の多い順で上位役職を取り出し、最大 3 件まで採用する。
         var ordered = involvementGroups
-            .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.RoleLabel != "(役職未設定)")
+            .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.RoleLabel != "(役職未設定)" && g.Count > 0)
             .OrderByDescending(g => g.Count)
             .Take(3)
             .ToList();
+        if (ordered.Count == 0) return head + tail;
 
-        if (ordered.Count == 0)
-        {
-            return $"{displayName}のプリキュア関連クレジット一覧です。";
-        }
-
-        var sb = new System.Text.StringBuilder();
-        sb.Append(displayName).Append("は、プリキュアシリーズで");
-
-        int appended = 0;
+        var parts = new List<string>();
         foreach (var g in ordered)
         {
-            // TV 系の担当は「話」、映画系の担当は「本」で表記し、両方あれば「N話・M本」併記。
-            if (g.Count <= 0) continue;
-            var fragment = $"{g.RoleLabel}({g.CountLabel.Replace(" ", "")})";
-            // 末尾「などを担当した企業・団体。」(13 字) を残せるかを判定する。
-            int suffixLen = 13;
-            int joinerLen = appended > 0 ? 1 : 0;
-            if (sb.Length + joinerLen + fragment.Length + suffixLen > targetMaxChars) break;
-            if (appended > 0) sb.Append('・');
-            sb.Append(fragment);
-            appended++;
+            // CountLabel は「担当 97 話・2 本」の形なので、「担当」と空白を除いて「97話・2本」にする。
+            string part = $"{g.RoleLabel}（{g.CountLabel.Replace("担当", "").Replace(" ", "")}）";
+            string joined = string.Join("、", parts.Append(part)) + "など。";
+            if (head.Length + joined.Length + tail.Length > targetMaxChars) break;
+            parts.Add(part);
         }
-
-        if (appended == 0)
-        {
-            return $"{displayName}のプリキュア関連クレジット一覧です。";
-        }
-
-        sb.Append("などを担当した企業・団体。");
-        return sb.ToString();
+        return parts.Count == 0 ? head + tail : head + string.Join("、", parts) + "など。" + tail;
     }
 
     /// <summary>

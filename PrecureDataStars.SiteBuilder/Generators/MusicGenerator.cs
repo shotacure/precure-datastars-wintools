@@ -1067,8 +1067,8 @@ public sealed class MusicGenerator
     }
 
     /// <summary>
-    /// 劇伴詳細ページの &lt;meta name="description"&gt; 用説明文を実データから組み立てる。
-    /// 商品詳細と同じ流儀で、先頭に「何の・どれだけ」を置き、残りの字数で中身の手がかりを足す。
+    /// 劇伴詳細の meta description。「『作品』の劇伴（BGM）N 曲 M バージョン（期間）。作曲・編曲：〇〇。
+    /// M ナンバーとメニュータイトル、収録 CD をまとめました。」の順で 140 字ほどに収める。
     /// </summary>
     private static string BuildBgmMetaDescription(
         Series series,
@@ -1076,35 +1076,27 @@ public sealed class MusicGenerator
         string countsLabel,
         IReadOnlyList<BgmStaffGroup> staffGroups)
     {
-        const int targetMaxChars = 140;
+        const int targetMaxChars = 150;
+        const string tail = "M ナンバーとメニュータイトル、収録 CD をまとめました。";
+
         var sb = new System.Text.StringBuilder();
+        sb.Append('『').Append(series.Title).Append("』の劇伴（BGM）").Append(countsLabel);
+        if (!string.IsNullOrWhiteSpace(periodLabel)) sb.Append('（').Append(periodLabel).Append('）');
+        sb.Append('。');
 
-        // ① 『タイトル』の劇伴(BGM) N曲 Mバージョン。
-        sb.Append('『').Append(series.Title).Append("』の劇伴(BGM) ").Append(countsLabel).Append('。');
-
-        // ② 放送・公開期間（あれば）
-        if (!string.IsNullOrWhiteSpace(periodLabel))
-        {
-            var fragment = $"{periodLabel}。";
-            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
-        }
-
-        // ③ 主要な作曲・編曲（入る分だけ）
+        // 作曲・編曲（入る分だけ）。「役職：名前」の表記。
+        var kept = new List<string>();
         foreach (var g in staffGroups)
         {
             string label = string.Join("・", g.Roles.Select(r => r.RoleLabel));
             string names = string.Join("、", g.Members.Select(m => m.Name));
             if (label.Length == 0 || names.Length == 0) continue;
-
-            var fragment = $"{label}:{names}。";
-            if (sb.Length + fragment.Length > targetMaxChars) break;
-            sb.Append(fragment);
+            string joined = string.Join("、", kept.Append($"{label}：{names}")) + "。";
+            if (sb.Length + joined.Length + tail.Length > targetMaxChars) break;
+            kept.Add($"{label}：{names}");
         }
-
-        // ④ 余白があれば、ページで何がたどれるかを 1 文だけ添える。
-        const string tail = "M ナンバー・メニュータイトルと収録 CD をたどれます。";
-        if (sb.Length + tail.Length <= targetMaxChars) sb.Append(tail);
-
+        if (kept.Count > 0) sb.Append(string.Join("、", kept)).Append('。');
+        sb.Append(tail);
         return sb.ToString();
     }
 

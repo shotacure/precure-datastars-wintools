@@ -274,10 +274,10 @@ public sealed class RecordsGenerator
         }
         items.Add(TopCombosItem(EpisodeChiefStaffIndex.DirectorAndAnimationDirector, "combo-director-ad", "多く組んだ演出と作画監督"));
         items.Add(TopCombosItem(EpisodeChiefStaffIndex.ScreenplayDirectorAnimationDirector, "combo-screenplay-director-ad", "多く組んだ脚本・演出・作画監督"));
-        items.Add(TopPersons("voice-episodes", "声の出演が多い声優", "話",
+        items.Add(TopPersons("voice-episodes", "声の出演が多い声優さん", "話",
             stats.Select(kv => (kv.Key, kv.Value.VoiceEpisodes.Count)),
             PathUtil.CreatorsVoiceCastUrl(), "声の出演一覧を見る"));
-        items.Add(TopPersons("voice-characters", "演じた役が多い声優", "役",
+        items.Add(TopPersons("voice-characters", "演じた役が多い声優さん", "役",
             stats.Select(kv => (kv.Key, kv.Value.Characters.Count)),
             PathUtil.CreatorsVoiceCastUrl(), "声の出演一覧を見る"));
 

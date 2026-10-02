@@ -252,7 +252,7 @@
   {{~ else if (array.size MusicSections) == 0 ~}}
   <section id="credits">
     <h2>本編クレジット</h2>
-    <p class="empty-row">この人物のクレジット情報はまだ登録されていません。</p>
+    <p class="empty-row">この方のクレジット情報はまだ登録されていません。</p>
   </section>
   {{~ end ~}}
 

@@ -1,7 +1,7 @@
 <h1>歴代クリエイター</h1>
 
 <p class="lead">
-  プリキュアの歴史を紡いできた人々。
+  プリキュアの歴史を紡いできた方々。
 </p>
 
 {{## 音楽カテゴリランディング（/music/）と同型のカード構成（スタッフ / 声の出演 / 音楽制作 / 歌唱）。
@@ -13,7 +13,7 @@
 <section class="music-categories is-two-col">
   <a class="music-category-card" href="/creators/staff/">
     <h2>スタッフ</h2>
-    <p>プリキュア制作にまつわるたくさんのお仕事と、それに携わった人々の記録。</p>
+    <p>プリキュア制作にまつわるたくさんのお仕事と、それに携わった方々の記録。</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ StaffPersonCount }}</span>
@@ -39,7 +39,7 @@
 
   <a class="music-category-card" href="/creators/music-production/">
     <h2>音楽制作</h2>
-    <p>プリキュアの主題歌・挿入歌・キャラクターソングと劇伴の制作に携わった人々の記録。</p>
+    <p>プリキュアの主題歌・挿入歌・キャラクターソングと劇伴の制作に携わった方々の記録。</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ MusicProductionPersonCount }}</span>
@@ -54,7 +54,7 @@
 
   <a class="music-category-card" href="/creators/singers/">
     <h2>歌唱</h2>
-    <p>プリキュアの主題歌・挿入歌・キャラクターソングを歌った人々の記録。</p>
+    <p>プリキュアの主題歌・挿入歌・キャラクターソングを歌った方々の記録。</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ SingerCount }}</span>

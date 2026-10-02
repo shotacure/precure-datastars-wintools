@@ -1139,46 +1139,35 @@ public sealed class ProductsGenerator
         return lines.ToArray();
     }
 
-    /// <summary>商品詳細ページの &lt;meta name="description"&gt; 用説明文を実データから組み立てる。</summary>
+    /// <summary>
+    /// 商品詳細の meta description。「『商品名』は 2018 年 5 月 23 日発売の種別（2 枚組・4 トラック）。発売元は〇〇。
+    /// 収録曲とクレジット、品番、価格、購入先をまとめました。」の順で 140 字ほどに収める。
+    /// </summary>
     private static string BuildProductMetaDescription(
         Product product,
         string productKindLabel,
         string labelText,
         int totalTracks)
     {
-        const int targetMaxChars = 140;
+        const int targetMaxChars = 150;
+        const string tail = "収録曲とクレジット、品番、価格、購入先をまとめました。";
+
         var sb = new System.Text.StringBuilder();
+        sb.Append('『').Append(product.Title).Append("』は")
+          .Append(product.ReleaseDate.ToString("yyyy年M月d日")).Append("発売の")
+          .Append(string.IsNullOrWhiteSpace(productKindLabel) ? "音楽商品" : productKindLabel);
+        var scale = new List<string>();
+        if (product.DiscCount > 1) scale.Add($"{product.DiscCount}枚組");
+        if (totalTracks > 0) scale.Add($"{totalTracks}トラック");
+        if (scale.Count > 0) sb.Append('（').Append(string.Join("・", scale)).Append('）');
+        sb.Append('。');
 
-        // ① 『タイトル』(YYYY年M月D日発売、{ProductKindLabel})
-        sb.Append('『').Append(product.Title).Append("』(")
-          .Append(product.ReleaseDate.ToString("yyyy年M月d日")).Append("発売");
-        if (!string.IsNullOrWhiteSpace(productKindLabel))
-        {
-            sb.Append('、').Append(productKindLabel);
-        }
-        sb.Append(")。");
-
-        // ② N枚組（複数枚組のときのみ、DiscCount は非 nullable で既定値 1）
-        if (product.DiscCount > 1)
-        {
-            var fragment = $"{product.DiscCount}枚組。";
-            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
-        }
-
-        // ③ 発売元（あれば）
         if (!string.IsNullOrWhiteSpace(labelText))
         {
-            var fragment = $"発売元:{labelText}。";
-            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
+            string fragment = $"発売元は{labelText}。";
+            if (sb.Length + fragment.Length + tail.Length <= targetMaxChars) sb.Append(fragment);
         }
-
-        // ④ 収録曲数（音楽系商品はトラック数を、それ以外でも >0 なら出す）
-        if (totalTracks > 0)
-        {
-            var fragment = $"収録{totalTracks}曲。";
-            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
-        }
-
+        sb.Append(tail);
         return sb.ToString();
     }
 

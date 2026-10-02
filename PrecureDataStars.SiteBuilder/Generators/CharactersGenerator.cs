@@ -567,7 +567,7 @@ public sealed class CharactersGenerator
             var layout = new LayoutModel
             {
                 PageTitle = title,
-                MetaDescription = $"『{series.Title}』に 1 話だけ登場したゲストキャラクター {rows.Count} 名を、登場話ごとに担当声優とあわせて一覧にしました。",
+                MetaDescription = $"『{series.Title}』に 1 話だけ登場したゲストキャラクター {rows.Count} 名を、登場話ごとに担当の声優さんとあわせて一覧にしました。",
                 OgCard = new OgCardSpec(Kicker: series.Title, Title: "ゲストキャラクター")
                 {
                     MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
@@ -677,33 +677,39 @@ public sealed class CharactersGenerator
     }
 
     /// <summary>
-    /// キャラクター詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
-    /// 構成：「{キャラ名}は、プリキュアシリーズに登場する{キャラ種別}。CV:{声優1}、{声優2}など。{N作品}に出演。」を骨格に、
-    /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
-    /// 声優名は <see cref="VoiceCastRow.VoiceActorNames"/>（連名連結）を「、」で割って重複排除し、最大 2 名。
-    /// 出演シリーズ数は <see cref="VoiceCastRow.SeriesTitle"/> の Distinct カウント。
+    /// キャラクター詳細の meta description。「〇〇は、『作品』に登場する種別。声は△△さん。登場した作品と話、名義、家族関係をまとめました。」
+    /// の順で 140 字ほどに収める。
     /// </summary>
     private static string BuildCharacterMetaDescription(
         string characterName,
         string kindLabel,
         IReadOnlyList<VoiceCastRow> voiceRows)
     {
-        const int targetMaxChars = 140;
-        var sb = new System.Text.StringBuilder();
+        const int targetMaxChars = 150;
+        const string tail = "登場した作品と話、名義、家族関係をまとめました。";
 
-        sb.Append(characterName).Append("は、プリキュアシリーズに登場");
-        if (!string.IsNullOrWhiteSpace(kindLabel))
+        // 登場作品（重複を除いて出た順に 2 作品まで）。
+        var seriesTitles = voiceRows
+            .Select(v => v.SeriesTitle)
+            .Where(t => !string.IsNullOrEmpty(t))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var sb = new System.Text.StringBuilder();
+        sb.Append(characterName).Append("は、");
+        if (seriesTitles.Count > 0)
         {
-            sb.Append("する").Append(kindLabel);
+            sb.Append(string.Join("", seriesTitles.Take(2).Select(t => $"『{t}』")));
+            if (seriesTitles.Count > 2) sb.Append("など");
+            sb.Append("に登場する");
         }
         else
         {
-            sb.Append("するキャラクター");
+            sb.Append("プリキュアシリーズに登場する");
         }
-        sb.Append("。");
+        sb.Append(string.IsNullOrWhiteSpace(kindLabel) ? "キャラクター" : kindLabel).Append('。');
 
-        // 声優 CV（最大 2 名）。VoiceActorNames は「、」連結のフリーテキストなので分割する。
-        var allVoiceActors = voiceRows
+        // 声の出演（最大 2 名）。VoiceActorNames は「、」連結のフリーテキストなので分割する。
+        var voices = voiceRows
             .SelectMany(v => string.IsNullOrEmpty(v.VoiceActorNames)
                 ? Array.Empty<string>()
                 : v.VoiceActorNames.Split('、', StringSplitOptions.RemoveEmptyEntries))
@@ -711,27 +717,12 @@ public sealed class CharactersGenerator
             .Where(n => !string.IsNullOrEmpty(n))
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        if (allVoiceActors.Count > 0)
+        if (voices.Count > 0)
         {
-            var pickedVoices = allVoiceActors.Take(2).ToList();
-            var fragment = "CV:" + string.Join("、", pickedVoices);
-            if (allVoiceActors.Count > 2) fragment += "など";
-            fragment += "。";
-            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
+            string fragment = "声は" + string.Join("、", voices.Take(2).Select(n => n + "さん")) + (voices.Count > 2 ? "ほか" : "") + "。";
+            if (sb.Length + fragment.Length + tail.Length <= targetMaxChars) sb.Append(fragment);
         }
-
-        // 出演シリーズ数（VoiceCastRow は声優の交代やシリーズ全体スコープで同じシリーズに複数行あり得るため、シリーズ名の重複を除いて数える）。
-        int seriesCount = voiceRows
-            .Select(v => v.SeriesTitle)
-            .Where(t => !string.IsNullOrEmpty(t))
-            .Distinct(StringComparer.Ordinal)
-            .Count();
-        if (seriesCount > 0)
-        {
-            var fragment = $"{seriesCount}作品に出演。";
-            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
-        }
-
+        sb.Append(tail);
         return sb.ToString();
     }
 

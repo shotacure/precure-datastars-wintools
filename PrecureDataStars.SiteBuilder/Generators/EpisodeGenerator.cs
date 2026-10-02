@@ -673,7 +673,7 @@ public sealed class EpisodeGenerator
         // 単純な定型文「N話のフォーマット表・スタッフ・主題歌情報」だと全エピソードで重複コンテンツ化し、
         // SERP の CTR にも反映されにくいため、放送日・主要スタッフ 2 役職・OP/ED の楽曲名まで含めて
         // 個別性の高い 140 字目安の説明文を作る。
-        var metaDescription = BuildMetaDescription(ep, staffRows, _ctx.Config.SiteName);
+        var metaDescription = BuildMetaDescription(series, ep, staffRows);
 
         // エピソード詳細の構造化データは Schema.org の TVEpisode 型。
         string baseUrl = _ctx.Config.BaseUrl;
@@ -1244,54 +1244,34 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>
-    /// エピソード詳細ページの <c>&lt;meta name="description"&gt;</c> 用の説明文を、実データから組み立てる。
-    /// 構成は下記の優先度で「シリーズ名・話数・サブタイトル・放送日 → 主要スタッフ 2 行 →
-    /// 主題歌 (OP / ED) 2 曲」の順。<c>targetMaxChars</c>（140 字）を超えそうな段で打ち切り、
-    /// 短く済むエピソードは尻切れにならずに自然に終わる設計とする。説明文は OG / Twitter Card にも
-    /// 流用されるため、検索結果と SNS 共有プレビューの両方で読みやすい長さに収める。
-    /// スタッフ抽出は <see cref="BuildStaffRowsAsync"/> の結果をそのまま再利用する（重複クエリを避けるため）。
-    /// 主題歌行は OP / ED のみ採用し、挿入歌は字数節約のため description には含めない。
+    /// エピソード詳細の meta description。「『作品』第N話「サブタイトル」（放送日）。役職：名前（主要 3 役職）。何をまとめたページか。」
+    /// の順で、検索結果に出る 140 字ほどに収める。クレジットは「役職：名前」の表記（敬称略）。
+    /// 主題歌はシリーズ単位で全話共通なので、その話固有の情報ではないため載せない。
     /// </summary>
-    private static string BuildMetaDescription(
-        Episode ep,
-        IReadOnlyList<StaffRow> staffRows,
-        string siteName)
+    private static string BuildMetaDescription(Series series, Episode ep, IReadOnlyList<StaffRow> staffRows)
     {
-        // meta description / og:description / twitter:description は概ね 120〜160 字程度で
-        // 切り詰められるため、保守的に 140 字を目標値に置く（厳密上限ではなく、超えそうな段で
-        // 追加を打ち切るためのガード値）。日本語 1 文字 = 1 char カウントで運用。
-        const int targetMaxChars = 140;
+        const int targetMaxChars = 150;
+        const string tail = "各話スタッフ、主題歌・挿入歌、パート構成をまとめました。";
 
-        // 末尾にサイト名を必ず添える（カードにブランドを出す）。その分の文字数を先に確保し、
-        // 本文（OA日付・通算・スタッフ）はサイト名を除いた予算内で打ち切る。各項目は "/" 区切り。
-        var siteSuffix = string.IsNullOrEmpty(siteName) ? "" : $" — {siteName}";
-        int budget = targetMaxChars - siteSuffix.Length;
+        var sb = new System.Text.StringBuilder();
+        sb.Append('『').Append(series.Title).Append("』第").Append(ep.SeriesEpNo).Append('話');
+        if (!string.IsNullOrWhiteSpace(ep.TitleText)) sb.Append('「').Append(ep.TitleText).Append('」');
+        sb.Append('（').Append(ep.OnAirAt.ToString("yyyy年M月d日")).Append("放送）。");
 
-        // og:title が『シリーズ』第N話「サブタイトル」を持つため、説明文ではそれを繰り返さず、
-        // 放送日（放送:yyyy.M.d）・通算（全プリキュアTV通算の累計値）・主要スタッフでページ固有の情報を出す。
-        var segments = new List<string>
-        {
-            "放送:" + ep.OnAirAt.ToString("yyyy.M.d"),
-        };
-        if (ep.TotalEpNo is int tep) segments.Add($"通算{tep}話");
-        if (ep.TotalOaNo is int toa) segments.Add($"放送{toa}回");
-
-        // 主要スタッフ（最大 3 役職：脚本→絵コンテ・演出系→作画監督…の順。予算内で打ち切る）。
-        // 主題歌はシリーズ単位で全話共通＝そのエピソード固有の情報ではないため載せない。
-        int staffAdded = 0;
+        // 主要スタッフ（最大 3 役職）。末尾の一文を残せる範囲で足す。
+        var credits = new List<string>();
         foreach (var staff in staffRows)
         {
-            if (staffAdded >= 3) break;
+            if (credits.Count >= 3) break;
             if (string.IsNullOrWhiteSpace(staff.NamesLine)) continue;
-            // staff.NamesLine は <a href="..."> でラップされた HTML 断片を含むため、プレーンテキスト化する。
-            var seg = $"{staff.RoleLabel}:{StripHtmlTags(staff.NamesLine)}";
-            // 既存の "/" 連結長 ＋ "/" ＋ seg が予算超過なら採用しない（直前項目で打ち切り）。
-            if (string.Join("/", segments).Length + 1 + seg.Length > budget) break;
-            segments.Add(seg);
-            staffAdded++;
+            string seg = $"{staff.RoleLabel}：{StripHtmlTags(staff.NamesLine)}";
+            string joined = string.Join("、", credits.Append(seg)) + "。";
+            if (sb.Length + joined.Length + tail.Length > targetMaxChars) break;
+            credits.Add(seg);
         }
-
-        return string.Join("/", segments) + siteSuffix;
+        if (credits.Count > 0) sb.Append(string.Join("、", credits)).Append('。');
+        sb.Append(tail);
+        return sb.ToString();
     }
 
     /// <summary>スタッフ行群から「演出」役職の人物名一覧を取り出す。</summary>

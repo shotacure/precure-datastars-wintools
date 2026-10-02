@@ -619,7 +619,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した人物・企業・団体を一覧にしました。初参加順・担当回数順で並べ替えられます。",
+            MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した方々（人物・企業・団体）を一覧にしました。初参加順・担当回数順で並べ替えられます。",
             OgCard = BuildRoleOgCard(role, content.PersonCount, content.CompanyCount, rows, rowSet.TimelineEntities, alternateNames),
             Breadcrumbs = new[]
             {
@@ -821,7 +821,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアの歌で役職「{role.NameJa}」を担当した人物を一覧にしました。初参加順・担当曲数順で並べ替えられます。",
+            MetaDescription = $"歴代プリキュアの歌で役職「{role.NameJa}」を担当した方々を一覧にしました。初参加順・担当曲数順で並べ替えられます。",
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 new[] { new OgCardBadge("人物", $"{rows.Count}人") },
@@ -1326,7 +1326,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアの歌・劇伴・音盤で「{role.NameJa}」を担当した人物・団体を一覧にしました。",
+            MetaDescription = $"歴代プリキュアの歌・劇伴・音盤で「{role.NameJa}」を担当した方々（人物・団体）を一覧にしました。",
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 BuildEntityBadges(persons, companies),

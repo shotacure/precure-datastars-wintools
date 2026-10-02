@@ -813,12 +813,8 @@ public sealed class SongsGenerator
     }
 
     /// <summary>
-    /// 楽曲詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
-    /// 構成：「『{シリーズ}』の{楽曲種別}「{曲名}」。歌唱:{歌手}。作詞:{X}、作曲:{Y}。」を骨格に、
-    /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
-    /// 歌手名は <see cref="RecordingView.SingerName"/>（構造化優先で解決済みの平文）から最大 2 録音分（先頭録音バージョン優先）。
-    /// 作詞・作曲も構造化優先で解決済みの平文を受け取る。
-    /// シリーズタイトルが空のときは「プリキュアシリーズの{楽曲種別}…」にフォールバック。
+    /// 楽曲詳細の meta description。「「曲名」は『作品』の種別。歌：〇〇、作詞：△△、作曲：□□。使われた話、バージョン、収録 CD、クレジットをまとめました。」
+    /// の順で 140 字ほどに収める。クレジットは「役職：名前」の表記（敬称略。歌い手はキャラクター名義のこともあるため）。
     /// </summary>
     private static string BuildSongMetaDescription(
         string songTitle,
@@ -828,50 +824,34 @@ public sealed class SongsGenerator
         string lyricistName,
         string composerName)
     {
-        const int targetMaxChars = 140;
+        const int targetMaxChars = 150;
+        const string tail = "使われた話、バージョン、収録 CD、クレジットをまとめました。";
+
         var sb = new System.Text.StringBuilder();
+        sb.Append('「').Append(songTitle).Append("」は");
+        sb.Append(string.IsNullOrWhiteSpace(seriesTitle) ? "プリキュアシリーズ" : $"『{seriesTitle}』");
+        sb.Append('の').Append(string.IsNullOrWhiteSpace(musicClassLabel) ? "歌" : musicClassLabel).Append('。');
 
-        // ① 基本：(『シリーズ』の|プリキュアシリーズの)(楽曲種別「曲名」|「曲名」)。
-        if (!string.IsNullOrWhiteSpace(seriesTitle))
-        {
-            sb.Append('『').Append(seriesTitle).Append("』の");
-        }
-        else
-        {
-            sb.Append("プリキュアシリーズの");
-        }
-        if (!string.IsNullOrWhiteSpace(musicClassLabel))
-        {
-            sb.Append(musicClassLabel);
-        }
-        sb.Append('「').Append(songTitle).Append("」。");
-
-        // ② 歌唱者（最大 2 名）。録音バージョン横断で重複を排除しつつ先頭から拾う。
-        // SingerName が空の録音はスキップ。連名は 1 録音分の平文をそのまま単一トークン扱い。
+        // 歌い手（録音をまたいで重複を除き 2 つまで）→ 作詞 → 作曲。
+        var credits = new List<string>();
         var singers = recordingViews
             .Select(r => r.SingerName)
-            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct(StringComparer.Ordinal)
             .Take(2)
             .ToList();
-        if (singers.Count > 0)
+        if (singers.Count > 0) credits.Add("歌：" + string.Join("、", singers));
+        if (!string.IsNullOrWhiteSpace(lyricistName)) credits.Add($"作詞：{lyricistName}");
+        if (!string.IsNullOrWhiteSpace(composerName)) credits.Add($"作曲：{composerName}");
+        var kept = new List<string>();
+        foreach (var c in credits)
         {
-            var singersFragment = "歌唱:" + string.Join("、", singers) + "。";
-            if (sb.Length + singersFragment.Length <= targetMaxChars)
-                sb.Append(singersFragment);
+            string joined = string.Join("、", kept.Append(c)) + "。";
+            if (sb.Length + joined.Length + tail.Length > targetMaxChars) break;
+            kept.Add(c);
         }
-
-        // ③ 作詞・作曲（あれば「作詞:{X}、作曲:{Y}。」、片方だけなら片方だけ）。
-        var creditParts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(lyricistName)) creditParts.Add($"作詞:{lyricistName}");
-        if (!string.IsNullOrWhiteSpace(composerName)) creditParts.Add($"作曲:{composerName}");
-        if (creditParts.Count > 0)
-        {
-            var creditsFragment = string.Join("、", creditParts) + "。";
-            if (sb.Length + creditsFragment.Length <= targetMaxChars)
-                sb.Append(creditsFragment);
-        }
-
+        if (kept.Count > 0) sb.Append(string.Join("、", kept)).Append('。');
+        sb.Append(tail);
         return sb.ToString();
     }
 

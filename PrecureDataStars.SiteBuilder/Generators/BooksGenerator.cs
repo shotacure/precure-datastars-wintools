@@ -454,6 +454,7 @@ public sealed class BooksGenerator
         return facts.ToArray();
     }
 
+    /// <summary>書籍詳細の meta description。「『書名』（ジャンル／出版社／発売年月）。判型・ページ数・ISBN・収録シリーズと購入先をまとめました。」</summary>
     private static string BuildDetailDescription(Book book, string publisher, string genreLabel)
     {
         var parts = new List<string>();
@@ -461,8 +462,8 @@ public sealed class BooksGenerator
         if (publisher.Length > 0) parts.Add(publisher);
         parts.Add($"{book.ReleaseDate.Year}年{book.ReleaseDate.Month}月発売");
 
-        return $"『{book.Title}』（{string.Join("／", parts)}）の書誌情報。"
-             + "判型・ページ数・ISBN・収録シリーズと、紙版・Kindle 版の購入先をまとめています。";
+        return $"『{book.Title}』（{string.Join("／", parts)}）。"
+             + "判型・ページ数・ISBN・収録シリーズと、紙版・Kindle 版の購入先をまとめました。";
     }
 }
 

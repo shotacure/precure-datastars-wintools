@@ -197,7 +197,7 @@
   {{~ if (array.size MemberHistory) > 0 ~}}
   <section id="member-history">
     <h2>メンバー履歴</h2>
-    <p class="muted">この企業・団体の屋号を所属としてクレジットされた人物名義の一覧です。</p>
+    <p class="muted">この企業・団体の屋号を所属としてクレジットされた方々の名義の一覧です。</p>
     {{## 屋号 → 人物 → 役職 → 作品（話数）の入れ子。人物は person 単位（名義違いは 1 人に統合、表示は最頻名義）、
          並びは初クレジット順。人物・役職の横に担当回数ピル（📺＝TV 話数 / 🎥＝映画本数。エピソード番号ではなく
          担当した回数）。作品は 1 行ずつ・話数を可視表示（概観できるよう隠さない）。役職は初クレジット順で、
@@ -291,7 +291,7 @@
     {{~ end ~}}
     {{~ if (array.size MusicMemberRoles) > 0 ~}}
     <h3 class="music-credit-group-heading">所属スタッフのクレジット</h3>
-    <p class="muted">この企業・団体を所属としてクレジットされた人物と、関わった歌・劇伴・音盤です。</p>
+    <p class="muted">この企業・団体を所属としてクレジットされた方々と、関わった歌・劇伴・音盤です。</p>
     {{~ for mr in MusicMemberRoles ~}}
     <h4 class="credit-role-heading">
       <span class="credit-role-link">{{ mr.RoleLabel | html.escape }}</span>

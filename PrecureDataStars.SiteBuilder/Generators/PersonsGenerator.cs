@@ -445,64 +445,35 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 人物詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
-    /// 構成：「{人名}は、プリキュアシリーズで{役職1}({N話})・{役職2}({N話})・{役職3}({N話})などを担当。」を骨格に、
-    /// 各セグメント追加前に <c>targetMaxChars=140</c> を超えないかを確認しつつ追記する。
-    /// 役職は <see cref="InvolvementGroup.Count"/> 降順（担当話数の多い順）でソートして
-    /// 上位を採用する。声優役は <see cref="InvolvementGroup.HasCharacterColumn"/> が true なので
-    /// 「演じた役（声優）」を簡略表現で別途付ける手もあるが、本リビジョンでは役職ラベルで統一する。
-    /// 関与役職が 1 件も無い人物（呼ばれない想定だが安全網として）は、定型文「{人名}のプリキュア関連クレジット一覧です。」に
-    /// フォールバックする。
+    /// 人物詳細の meta description。「〇〇さんのプリキュアでのお仕事をまとめました。役職（話数・本数）を多い順に 3 つ。
+    /// 作品ごと・役職ごとのクレジットと初参加の話。」の順で 140 字ほどに収める。
     /// </summary>
     private static string BuildPersonMetaDescription(
         string displayName,
         IReadOnlyList<InvolvementGroup> involvementGroups)
     {
-        const int targetMaxChars = 140;
+        const int targetMaxChars = 150;
+        string head = $"{displayName}さんのプリキュアでのお仕事をまとめました。";
+        const string tail = "作品ごと・役職ごとのクレジットと、初参加の話も分かります。";
 
-        if (involvementGroups.Count == 0)
-        {
-            return $"{displayName}のプリキュア関連クレジット一覧です。";
-        }
-
-        // 担当話数の多い順で上位役職を取り出し、最大 3 件まで採用する。
         var ordered = involvementGroups
-            .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.RoleLabel != "(役職未設定)")
+            .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.RoleLabel != "(役職未設定)" && g.Count > 0)
             .OrderByDescending(g => g.Count)
             .Take(3)
             .ToList();
+        if (ordered.Count == 0) return head + tail;
 
-        if (ordered.Count == 0)
-        {
-            return $"{displayName}のプリキュア関連クレジット一覧です。";
-        }
-
-        var sb = new System.Text.StringBuilder();
-        sb.Append(displayName).Append("は、プリキュアシリーズで");
-
-        int appended = 0;
+        // 「役職（N話・M本）」を多い順に、末尾の一文を残せる範囲で足す。
+        var parts = new List<string>();
         foreach (var g in ordered)
         {
-            // 「役職(N話・M本)」のフラグメントを組む。担当ゼロ（話数 + 本数とも 0）は弾く。
-            // TV 系シリーズへの担当は「話」、映画系シリーズへの担当は「本」で表記し、両方あれば「N話・M本」併記。
-            if (g.Count <= 0) continue;
-            var fragment = $"{g.RoleLabel}({g.CountLabel.Replace(" ", "")})";
-            // 末尾「などを担当。」(7 字) ぶんを残せるかの判定を含めて追加可否を決める。
-            int suffixLen = 7;
-            int joinerLen = appended > 0 ? 1 : 0;
-            if (sb.Length + joinerLen + fragment.Length + suffixLen > targetMaxChars) break;
-            if (appended > 0) sb.Append('・');
-            sb.Append(fragment);
-            appended++;
+            // CountLabel は「担当 97 話・2 本」の形なので、「担当」と空白を除いて「97話・2本」にする。
+            string part = $"{g.RoleLabel}（{g.CountLabel.Replace("担当", "").Replace(" ", "")}）";
+            string joined = string.Join("、", parts.Append(part)) + "など。";
+            if (head.Length + joined.Length + tail.Length > targetMaxChars) break;
+            parts.Add(part);
         }
-
-        if (appended == 0)
-        {
-            return $"{displayName}のプリキュア関連クレジット一覧です。";
-        }
-
-        sb.Append("などを担当。");
-        return sb.ToString();
+        return parts.Count == 0 ? head + tail : head + string.Join("、", parts) + "など。" + tail;
     }
 
     /// <summary>人物の名義群を時系列に並べる（predecessor チェーンを上に辿って root を見つけ、 successor チェーンで下降）。チェーンに含まれなかった alias は末尾に並べる。</summary>

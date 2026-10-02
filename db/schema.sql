@@ -2293,6 +2293,9 @@ CREATE TABLE `credit_card_roles` (
 -- col_count はブロック内エントリを「何カラムで並べるか」の表示意図を保持する列。
 -- 行数はカラム数とエントリ数の従属関係で実行時に決まるため、独立した行数列は持たない。
 -- leading_company_alias_id にはブロック先頭に企業名を出すケースの企業名義を入れる。
+-- heading_series_id / heading_text はブロック先頭の見出し（映画の声の出演の作品ごとのまとまりの頭に出る作品名、
+-- 「特別出演」など）。作品を指すときは heading_series_id、画面の表記が作品の正式タイトルと違うときや
+-- 作品ではない見出しは heading_text に画面どおりの文字を入れる。
 --
 DROP TABLE IF EXISTS `credit_role_blocks`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -2303,6 +2306,8 @@ CREATE TABLE `credit_role_blocks` (
   `block_seq`                 tinyint unsigned NOT NULL,
   `col_count`                 tinyint unsigned NOT NULL DEFAULT '1',
   `leading_company_alias_id`  int             DEFAULT NULL,
+  `heading_series_id`         int             DEFAULT NULL COMMENT 'ブロック先頭の見出しにする作品（series.series_id）。映画の声の出演の作品ごとのまとまりなど',
+  `heading_text`              varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'ブロック先頭の見出しの文字（画面の表記どおり）。NULL なら作品の正式タイトル',
   `notes`                     text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2311,8 +2316,10 @@ CREATE TABLE `credit_role_blocks` (
   PRIMARY KEY (`block_id`),
   UNIQUE KEY `uq_block_card_role_seq` (`card_role_id`,`block_seq`),
   KEY `ix_block_lead_company` (`leading_company_alias_id`),
+  KEY `fk_block_heading_series` (`heading_series_id`),
   CONSTRAINT `fk_block_card_role`    FOREIGN KEY (`card_role_id`)             REFERENCES `credit_card_roles` (`card_role_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_block_lead_company` FOREIGN KEY (`leading_company_alias_id`) REFERENCES `company_aliases`   (`alias_id`)     ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_block_heading_series` FOREIGN KEY (`heading_series_id`)      REFERENCES `series`            (`series_id`)    ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_block_seq_pos`       CHECK ((`block_seq` >= 1)),
   CONSTRAINT `ck_block_col_count_pos` CHECK ((`col_count` >= 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

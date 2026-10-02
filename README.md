@@ -535,6 +535,7 @@ series_title_short,m_no_detail,session_name,section_name,m_no_class,menu_title,c
 - 行頭 `& `（半角アンパサンド + 半角SP）で直前エントリと A/B 併記（保存時に `parallel_with_entry_id` 解決）
 - 行末 ` // 備考` で当該エントリの `notes` 設定
 - `@cols=N` で当該ブロックの `col_count` を明示指定
+- `@heading_series=N` / `@heading=文字` で当該ブロックの先頭に出す見出しを指定（ブロックの最初のエントリより前に書く）。`@heading_series` は見出しにする作品の `series_id`（サイトでは作品ページへのリンクになり、表示文字は作品の正式タイトル）、`@heading` は画面どおりの見出しの文字（作品の正式タイトルと表記が違うときの表示文字、または「特別出演」など作品ではない見出し）。複数の作品のキャラクターが並ぶ映画の声の出演で、作品ごとのまとまりの頭に作品名を出すのに使う
 - `@roll` 単独行で当該カードをロール（流れるクレジット、`credit_cards.presentation='ROLL'`）にする。カード内のどこに書いてもよく、逆翻訳ではカード区切り直後に出す。1 つのクレジットの中でカード → ロール → カードと切り替わる映画の ED は、ロール部分を `@roll` のカード 1 枚で表す
 - `@notes=値` で直近スコープ（Card/Tier/Group/Role/Block のうち最後に開いたもの）の `notes` を設定
 - 修飾子は重ねがけ可（例: `🎬 & 山田 太郎 // 旧名義あり`）
@@ -774,6 +775,7 @@ Role: PRODUCTION 制作 (order 2)
 #### 共通の運用ルール
 
 - **`leading_company_alias_id`** はブロック先頭に企業屋号を出すケースの特殊フィールド。連載や特殊な役職でのみ使う
+- **`heading_series_id` / `heading_text`** はブロック先頭に見出しを出すフィールド。複数の作品のキャラクターが並ぶ映画の声の出演で、作品ごとのまとまりの頭に出る作品名（`heading_series_id` で作品を指し、画面の表記が正式タイトルと違えば `heading_text` に画面どおりの文字）や、「特別出演」のような作品ではない見出し（`heading_text` だけ）を表す。見出しは屋号よりも上に出る
 - **`is_broadcast_only`** はブロック・エントリ単位のフラグ。本放送と円盤・配信でロゴ画像が違う等の差し替えを `is_broadcast_only=0`（既定行）と `=1`（本放送限定行）の 2 行並立で表現
 - **`role_format_kind = 'THEME_SONG'`** の役職にはツリー上で楽曲仮想ノード（📀 Song）が自動表示される。`THEME_SONG_OP` / `THEME_SONG_ED` / `THEME_SONG_OP_COMBINED` / `INSERT_SONG` / `INSERT_SONGS_NONCREDITED` の 5 役職が該当
 - **テンプレ DSL の `{#BLOCKS:first|rest|last}`** はブロックの位置指定ループ。`{#BLOCKS}`（filter なし）は全ブロック

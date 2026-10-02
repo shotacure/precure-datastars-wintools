@@ -33,6 +33,9 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     → 直前エントリと A/B 併記関係（適用フェーズで <c>parallel_with_entry_id</c> 自参照を解決）。</description></item>
 ///   <item><description><c>@cols=N</c>（ブロック先頭の単独行）→ そのブロックの <c>col_count</c> を明示指定。
 ///     省略時は従来どおりタブ数+1 で推測。</description></item>
+///   <item><description><c>@heading=文字</c> / <c>@heading_series=N</c>（ブロックの最初のエントリより前の単独行）→
+///     そのブロックの先頭に出す見出し。<c>@heading_series=N</c> は作品（<c>series_id</c>）を指し、
+///     <c>@heading=文字</c> は画面どおりの見出しの文字（作品の正式タイトルと表記が違うとき、または「特別出演」など作品ではない見出し）。</description></item>
 ///   <item><description><c>@notes=備考</c>（各レベル区切り行直後の単独行）→ 直近で開かれた
 ///     Card / Tier / Group / Role / Block の <c>notes</c> に保存。同一スコープに対する 2 回目の
 ///     <c>@notes=</c> は次のスコープ（Role 直後なら Block）にスライドする。</description></item>
@@ -113,6 +116,11 @@ public static class CreditBulkInputParser
 
     // ディレクティブ行: @cols=N 形式。N は 1 以上の整数。
     private static readonly Regex ColsDirectiveRegex = new(@"^@cols=(?<n>\d+)$", RegexOptions.Compiled);
+
+    // ディレクティブ行: @heading=文字 / @heading_series=N。ブロック先頭の見出し（作品名・「特別出演」など）。
+    // ブロックの最初のエントリより前に書く。@heading_series は作品の series_id、@heading は画面どおりの見出しの文字。
+    private static readonly Regex HeadingDirectiveRegex = new(@"^@heading=(?<value>.+)$", RegexOptions.Compiled);
+    private static readonly Regex HeadingSeriesDirectiveRegex = new(@"^@heading_series=(?<n>\d+)$", RegexOptions.Compiled);
 
     // ディレクティブ行: @affil_layout=suffix|prefix 形式。役職ヘッダ直後に書くと、その役職の
     // 人物所属表記レイアウトを切り替える（PREFIX = 名前左の屋号列、SUFFIX = 名前右の (屋号) 後置）。
@@ -463,6 +471,58 @@ public static class CreditBulkInputParser
                     continue;
                 }
 
+                // @heading=文字 / @heading_series=N : ブロック先頭の見出し。
+                // 役職の中で、ブロックの最初のエントリ（屋号 [[XXX]] を含む）より前にだけ書ける。
+                var headingMatch = HeadingDirectiveRegex.Match(trimmed);
+                var headingSeriesMatch = HeadingSeriesDirectiveRegex.Match(trimmed);
+                if (headingMatch.Success || headingSeriesMatch.Success)
+                {
+                    if (curRole is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @heading= / @heading_series= は役職指定後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    if (curBlock is not null && (curBlock.Rows.Count > 0 || curBlock.LeadingCompanyText is not null))
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @heading= / @heading_series= はブロックの最初のエントリより前に書いてください。"
+                        });
+                        continue;
+                    }
+                    if (curBlock is null)
+                    {
+                        curBlock = new ParsedBlock();
+                        curRole.Blocks.Add(curBlock);
+                    }
+                    if (headingSeriesMatch.Success)
+                    {
+                        if (!int.TryParse(headingSeriesMatch.Groups["n"].Value, out int seriesId) || seriesId < 1)
+                        {
+                            result.Warnings.Add(new ParseWarning
+                            {
+                                Severity = WarningSeverity.Block,
+                                LineNumber = lineNo,
+                                Message = $"{lineNo} 行目: @heading_series= の値は作品 ID（1 以上の整数）で指定してください。"
+                            });
+                            continue;
+                        }
+                        curBlock.HeadingSeriesId = seriesId;
+                    }
+                    else
+                    {
+                        curBlock.HeadingText = headingMatch.Groups["value"].Value.Trim();
+                    }
+                    continue;
+                }
+
                 // @affil_layout=suffix|prefix : 直近の役職に対する所属表記レイアウトの切替。
                 // 役職開始行 "XXX:" の直後（@notes= や @cols= と同じ位置）に書けるよう、
                 // pendingColsForBlock または pendingNotesTarget == Role の状態を「役職セットアップ中」の
@@ -489,7 +549,7 @@ public static class CreditBulkInputParser
                 {
                     Severity = WarningSeverity.Block,
                     LineNumber = lineNo,
-                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= のみサポートします。"
+                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= / @heading= / @heading_series= のみサポートします。"
                 });
                 continue;
             }

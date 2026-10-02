@@ -123,6 +123,12 @@ public sealed class ParsedBlock
 
     /// <summary>ブロックの備考（Notes に保存される。</summary>
     public string? Notes { get; set; }
+
+    /// <summary><c>@heading_series=N</c> で指定されたブロック先頭の見出しにする作品 ID（<c>credit_role_blocks.heading_series_id</c>）。</summary>
+    public int? HeadingSeriesId { get; set; }
+
+    /// <summary><c>@heading=文字</c> で指定されたブロック先頭の見出しの文字（<c>credit_role_blocks.heading_text</c>）。</summary>
+    public string? HeadingText { get; set; }
 }
 
 /// <summary>パース結果における 1 行分のエントリ群。タブ区切りで複数エントリを持つ。</summary>

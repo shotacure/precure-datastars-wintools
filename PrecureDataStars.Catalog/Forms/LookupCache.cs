@@ -39,6 +39,7 @@ internal sealed class LookupCache : ILookupCache
     private readonly Dictionary<int, CharacterAlias?> _characterAliasCache = new();
     private readonly Dictionary<int, SongRecording?> _songRecCache = new();
     private readonly Dictionary<string, Role?> _roleCache = new();
+    private readonly Dictionary<int, string?> _seriesTitleCache = new();
 
     /// <summary>
     /// 「同名 alias 件数」事前展開辞書（CreditBulkInputEncoder の alias_id 明示記法出力判定用）。
@@ -102,6 +103,7 @@ internal sealed class LookupCache : ILookupCache
         _characterAliasCache.Clear();
         _songRecCache.Clear();
         _roleCache.Clear();
+        _seriesTitleCache.Clear();
         _entryPreviewCache.Clear();
         _personAliasNameCountMap = null;
         _characterAliasNameCountMap = null;
@@ -269,6 +271,17 @@ internal sealed class LookupCache : ILookupCache
         if (ResolvePendingCompanyAliasName(aliasId) is string pendingName) return pendingName;
         var ca = await GetCompanyAliasAsync(aliasId);
         return ca?.Name;
+    }
+
+    /// <summary>series_id → 作品の正式タイトル。ブロック先頭の作品見出しの表示に使う。未登録なら null。</summary>
+    public async Task<string?> LookupSeriesTitleAsync(int seriesId)
+    {
+        if (_seriesTitleCache.TryGetValue(seriesId, out var cached)) return cached;
+        await using var conn = await _factory.CreateOpenedAsync();
+        string? title = await conn.ExecuteScalarAsync<string?>(
+            "SELECT title FROM series WHERE series_id = @seriesId;", new { seriesId });
+        _seriesTitleCache[seriesId] = title;
+        return title;
     }
 
     /// <summary>logo_id → "[屋号名]  [CI バージョンラベル]"。未登録なら null。負数なら Pending 経路。</summary>

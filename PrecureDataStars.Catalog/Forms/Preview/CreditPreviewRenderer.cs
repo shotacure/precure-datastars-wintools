@@ -145,6 +145,12 @@ internal sealed class CreditPreviewRenderer
           table.fallback-vc-table tr.cooperation-row > td {
             padding-top: 6px;
           }
+          /* ブロック先頭の見出し（映画の声の出演の作品名、「特別出演」など）。SiteBuilder の td.block-heading と揃える。 */
+          table.fallback-table td.block-heading,
+          table.fallback-vc-table td.block-heading {
+            font-size: 0.9em;
+            color: #666;
+          }
           /* 協力行の「協力」セル。SiteBuilder の .cooperation-row .character-cell と同じく
              右寄せ・太字にして、リンクが無くても見た目を SiteBuilder と揃える。 */
           table.fallback-vc-table tr.cooperation-row td.character-cell {
@@ -1452,6 +1458,22 @@ internal sealed class CreditPreviewRenderer
         return storyboardRole is not null && directorRole is not null;
     }
 
+    /// <summary>
+    /// ブロック先頭の見出し（<see cref="CreditRoleBlock.HeadingSeriesId"/> / <see cref="CreditRoleBlock.HeadingText"/>）を
+    /// HTML エスケープ済みの文字列にする。表示文字は見出しの文字があればそれ、無ければ作品の正式タイトル。
+    /// プレビューはリンクを出さない方針なので文字だけ。見出しが無ければ空文字。
+    /// </summary>
+    private async Task<string> BuildBlockHeadingHtmlAsync(CreditRoleBlock block)
+    {
+        if (!string.IsNullOrEmpty(block.HeadingText)) return Esc(block.HeadingText!);
+        if (block.HeadingSeriesId is int sid)
+        {
+            string? title = await _lookup.LookupSeriesTitleAsync(sid);
+            return Esc(title ?? $"(作品 #{sid})");
+        }
+        return "";
+    }
+
     /// <summary>テンプレ未定義時のフォールバック表示： 役職名を左カラムに固定幅で出し、その右に Block 内の各エントリを <c>col_count</c> で横並びにする。</summary>
     private async Task RenderRoleFallbackAsync(
         string roleName,
@@ -1491,10 +1513,30 @@ internal sealed class CreditPreviewRenderer
             // 最初のブロックには付けない（役職開始直後の余白は role 単位で既に出ているため）。
             bool isFirstRowOfThisBlock = true;
 
+            // ─ ブロック先頭の見出し（作品名・「特別出演」など）。屋号よりも上に 1 行で出す ─
+            string headingHtml = await BuildBlockHeadingHtmlAsync(bs.Block);
+            if (headingHtml.Length > 0)
+            {
+                bool addBreakClass = !isFirstBlock;
+                html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
+                if (firstRow)
+                {
+                    html.Append($"<td class=\"role-name\">{Esc(roleName)}</td>");
+                    firstRow = false;
+                }
+                else
+                {
+                    html.Append("<td class=\"role-name\"></td>");
+                }
+                html.Append($"<td class=\"entry-cell block-heading\" colspan=\"{cols}\">{headingHtml}</td>");
+                html.Append("</tr>");
+                isFirstRowOfThisBlock = false;
+            }
+
             // ─ leading_company がある場合の先頭行（屋号名のみ）─
             if (hasLeading)
             {
-                bool addBreakClass = !isFirstBlock; // 最初のブロックには付けない
+                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock; // 最初のブロックには付けない
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -1610,10 +1652,32 @@ internal sealed class CreditPreviewRenderer
             // ブロック跨ぎの視覚的区切り（VOICE_CAST 表でも同様に block-break クラスで管理）。
             bool isFirstRowOfThisBlock = true;
 
+            // ─ ブロック先頭の見出し（作品ごとのまとまりの頭に出る作品名・「特別出演」など）─
+            // キャラ列 + 声優列を colspan=2 で結合して 1 行で出す。屋号よりも上に置く。
+            string headingHtml = await BuildBlockHeadingHtmlAsync(bs.Block);
+            if (headingHtml.Length > 0)
+            {
+                bool addBreakClass = !isFirstBlock;
+                html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
+                if (firstRow)
+                {
+                    html.Append($"<td class=\"role-name\">{Esc(roleNameForFirstRow)}</td>");
+                    firstRow = false;
+                }
+                else
+                {
+                    html.Append("<td class=\"role-name\"></td>");
+                }
+                html.Append($"<td class=\"character-cell block-heading\" colspan=\"2\">{headingHtml}</td>");
+                html.Append("</tr>");
+                isFirstRowOfThisBlock = false;
+                prevCharLabel = null;
+            }
+
             // ─ leading_company がある場合の先頭行（屋号名のみ）─
             if (hasLeading)
             {
-                bool addBreakClass = !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {

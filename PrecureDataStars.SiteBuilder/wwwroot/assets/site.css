@@ -1749,6 +1749,13 @@ a.series-card-children-title:hover {
 .credit-section table.fallback-vc-table td.character-cell.dim {
   color: #ccc;
 }
+/* まとまりの頭に出る見出し（映画の声の出演で作品ごとに並ぶときの作品名、「特別出演」など）。
+   名前の行と見分けられるよう、少し小さく薄い色で出す。 */
+.credit-section table.fallback-table td.block-heading,
+.credit-section table.fallback-vc-table td.block-heading {
+  font-size: 0.9em;
+  color: #666;
+}
 /* CASTING_COOPERATION 由来の「協力」行。 */
 .credit-section table.fallback-vc-table tr.cooperation-row > td.role-name {
   text-align: right;
@@ -6257,6 +6264,10 @@ a.credit-card-series:focus-visible {
   }
   .credit-section table.fallback-vc-table td.actor-cell {
     grid-column: 3;
+  }
+  /* まとまりの頭の見出しは、キャラ名と声優名の 2 列分の幅を使う。 */
+  .credit-section table.fallback-vc-table td.character-cell.block-heading {
+    grid-column: 2 / span 2;
   }
   /* 協力の行（「キャスティング協力 | 屋号」）は役職に近いので、スマホの幅では見出しを役職名の列に置き、
      屋号はキャラ名と声優名の 2 列分の幅を使う（声優名の列だけでは屋号が途中で折り返す）。 */

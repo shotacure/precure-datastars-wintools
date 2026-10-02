@@ -7753,14 +7753,20 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
 }
+/* タブ・並べ替えボタンのラベル末尾の「順」（「初参加順」「担当回数順」など）。スマホでは隠して「初参加」「担当回数」と短く見せる。 */
+@media (max-width: 768px) {
+  .tab-sfx { display: none; }
+}
 /* 年表タブの「担当（出演・参加）の移り変わり」（線表。役職詳細・声の出演・歌唱）。
-   見出し・説明文・凡例のあとに、名前・年の目盛り付きの線表を全行出す。
-   色は件数バッジにそろえ、TV は青、映画は橙、歌は紫。 */
+   説明文・凡例のあとに、名前・年の目盛り付きの線表を全行出す。
+   色は件数バッジにそろえ、TV は青、映画は橙、歌は紫、劇伴は緑。盤は濃い青の四角（形でも区別する）。 */
 .role-timeline {
   --rtl-tv: #3b82c4;
   --rtl-span: rgba(59, 130, 196, 0.38);
   --rtl-movie: #c8820f;
   --rtl-song: #7e57c2;
+  --rtl-bgm: #4ca36b;
+  --rtl-disc: #2563a8;
   --rtl-band-alt: #f4f5f8;
   --rtl-grid: #e6e7eb;
   --rtl-name-w: 11.5em;
@@ -7768,12 +7774,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
   --rtl-track-x: calc(var(--rtl-name-w) + var(--rtl-gap));
   margin: 0 0 2em;
 }
-/* 年表タブの見出し（タブの中の最初の見出しなので上の余白を詰める）。 */
-.rtl-title {
-  margin-top: 8px;
-}
 .rtl-note {
-  margin: 0 0 6px;
+  margin: 10px 0 6px;
   font-size: 0.85em;
 }
 .rtl-legend {
@@ -7798,6 +7800,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .rtl-key-tv { width: 18px; height: 10px; border-radius: 3px; background: var(--rtl-tv); }
 .rtl-key-movie { width: 9px; height: 9px; border-radius: 50%; background: var(--rtl-movie); }
 .rtl-key-song { width: 9px; height: 9px; border-radius: 50%; background: var(--rtl-song); }
+.rtl-key-bgm { width: 9px; height: 9px; border-radius: 50%; background: var(--rtl-bgm); }
+.rtl-key-disc { width: 9px; height: 9px; border-radius: 2px; background: var(--rtl-disc); }
 .rtl-key-span { width: 18px; height: 2px; border-radius: 1px; background: var(--rtl-span); }
 
 .rtl {
@@ -7948,6 +7952,28 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   margin: -4.5px 0 0 -4.5px;
   border-radius: 50%;
   background: var(--rtl-song);
+  box-shadow: 0 0 0 2px #fff;
+}
+/* 劇伴（録音回の曲が初めて盤に収められた日の点）。 */
+.rtl-bgm {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--rtl-bgm);
+  box-shadow: 0 0 0 2px #fff;
+}
+/* 盤（発売日の四角）。 */
+.rtl-disc {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 2px;
+  background: var(--rtl-disc);
   box-shadow: 0 0 0 2px #fff;
 }
 /* 行にマウスを載せる・帯をタップすると出す、担当期間と作品ごとの担当話（role-timeline.js）。 */

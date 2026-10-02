@@ -21,16 +21,16 @@
     {{## 五十音順タブは読み（kana）データ未整備のため一旦無効化。データが揃ったらこのコメントを外して復活させる。
     <button type="button" class="tab-btn" data-tab="kana"
             role="tab" aria-selected="false" aria-controls="vc-tab-panel-kana">
-      五十音順
+      五十音<span class="tab-sfx">順</span>
     </button>
     ##}}
     <button type="button" class="tab-btn" data-tab="debut"
             role="tab" aria-selected="false" aria-controls="vc-tab-panel-debut">
-      初出演順
+      初出演<span class="tab-sfx">順</span>
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="vc-tab-panel-count">
-      出演回数順
+      出演回数<span class="tab-sfx">順</span>
     </button>
     {{~ if Timeline ~}}
     <button type="button" class="tab-btn" data-tab="timeline"

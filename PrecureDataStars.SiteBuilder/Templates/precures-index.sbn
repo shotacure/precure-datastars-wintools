@@ -14,11 +14,11 @@
   <div class="tabs" role="tablist" aria-label="プリキュア一覧の並べ替え">
     <button type="button" class="tab-btn is-active" data-tab="debut"
             role="tab" aria-selected="true" aria-controls="precures-tab-panel-debut">
-      初登場順
+      初登場<span class="tab-sfx">順</span>
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="precures-tab-panel-count">
-      登場回数順
+      登場回数<span class="tab-sfx">順</span>
     </button>
   </div>
 

@@ -5,12 +5,13 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// 「年表」タブの線表（担当・出演・参加の移り変わり）を組み立てる。役職詳細・声の出演一覧・歌唱一覧で共通に使う。
+/// 「年表」タブの線表（担当・出演・参加の移り変わり）を組み立てる。役職詳細・声の出演一覧・歌唱一覧・音楽制作一覧・
+/// 作詞作曲編曲や音楽の役職詳細で共通に使う。
 /// <list type="bullet">
 ///   <item><description>横軸は時期。最初の TV シリーズの放送開始から、クレジットを収録した最新の TV の話・映画まで
 ///     （歌唱一覧のように、それより後の歌まで描くページでは最後の歌まで伸ばす）。TV シリーズ 1 作を 1 本の帯にし、
 ///     帯の左端に放送開始年の目盛りを置く。</description></item>
-///   <item><description>行は人物・企業/団体・キャラクター。参加（TV の 1 話・映画 1 本・歌 1 曲）を日付順に並べ、
+///   <item><description>行は人物・企業/団体・キャラクター。参加（TV の 1 話・映画 1 本・歌 1 曲・劇伴の録音回 1 回・盤 1 点）を日付順に並べ、
 ///     隣り合う参加の差が <see cref="RoleTimelineRules.MaxGapDays"/> 日以内ならつないで「続けて参加した期間」とする。
 ///     載せる行はページごとの決まり（<see cref="RoleTimelineRules"/>）で決める。「1 年間に 4 回」は、どこでもよい
 ///     連続する <see cref="RoleTimelineRules.WindowDays"/> 日（52 週）のあいだに参加（TV の話数・映画の本数）が 4 件以上あること
@@ -19,14 +20,15 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///       <item><description>役職詳細：その役職でオープニングのクレジット（TV・映画とも）に出たことがある（メインスタッフ）か、
 ///         1 年間に 4 回以上担当したことがある。続けて担当した期間は 13 週以内の間隔でつなぐ。</description></item>
 ///       <item><description>声の出演：1 年間に 4 回以上出演したことがある。続けて出演した期間は 4 週以内の間隔でつなぐ。</description></item>
-///       <item><description>歌唱：ページに載る行をすべて載せる。</description></item>
+///       <item><description>歌唱・作詞作曲編曲や音楽の役職詳細：ページに載る行をすべて載せる。</description></item>
+///       <item><description>音楽制作：1 年間に 4 回以上参加したことがある。</description></item>
 ///     </list>
 ///     載せた行には単発の参加も含めてすべての参加を描く。</description></item>
 ///   <item><description>並びは、最初の参加の日付の早い順、同じなら最後の参加の日付の早い順
 ///     （→ 呼び出し側が渡す並びのキー → 名前）。</description></item>
 ///   <item><description>描くものは、続けて参加した期間（2 件以上つながったものの細線）・TV の話（同じシリーズで話数が
 ///     続く間はひと続きの帯。1 話は放送日から <see cref="EpisodeSpanDays"/> 日の幅）・映画（公開日の点）・
-///     歌（初めて収められた盤の発売日の点）。</description></item>
+///     歌・劇伴（初めて収められた盤の発売日の点。日付の決め方は <see cref="MusicTimelineDates"/>）・盤（発売日の四角）。</description></item>
 /// </list>
 /// 軸は同じ期間のページで共通なので、インスタンスを 1 つ作ってページ（役職）ごとに <see cref="Build"/> を呼ぶ。
 /// </summary>
@@ -151,11 +153,14 @@ internal sealed class RoleTimelineBuilder
             legend.Add(new RoleTimelineLegendItem { Kind = "movie", Label = "映画" });
         if (ordered.Any(r => r.Row.Songs.Count > 0))
             legend.Add(new RoleTimelineLegendItem { Kind = "song", Label = "歌（初めて盤に収められた日）" });
+        if (ordered.Any(r => r.Row.Bgms.Count > 0))
+            legend.Add(new RoleTimelineLegendItem { Kind = "bgm", Label = "劇伴（初めて盤に収められた日）" });
+        if (ordered.Any(r => r.Row.Products.Count > 0))
+            legend.Add(new RoleTimelineLegendItem { Kind = "disc", Label = "盤（発売日）" });
         legend.Add(new RoleTimelineLegendItem { Kind = "span", Label = $"続けて{rules.Verb}した期間" });
 
         return new RoleTimelineModel
         {
-            Title = $"{rules.Verb}の移り変わり",
             Note = rules.Note,
             Legend = legend,
             Bands = _bands,
@@ -172,7 +177,7 @@ internal sealed class RoleTimelineBuilder
     private (RoleTimelineRow Row, DateOnly First, DateOnly Last, long FirstPos)? BuildRow(
         RoleTimelineEntity e, RoleTimelineRules rules)
     {
-        var credits = new List<Credit>(e.Episodes.Count + e.MovieSeriesIds.Count + e.Songs.Count);
+        var credits = new List<Credit>(e.Episodes.Count + e.MovieSeriesIds.Count + e.Songs.Count + e.Bgms.Count + e.Products.Count);
         foreach (var (sid, eid) in e.Episodes)
         {
             // シリーズ全体に付いた TV 系のクレジット（話の無いもの）は日付を持たないので描かない。
@@ -184,10 +189,9 @@ internal sealed class RoleTimelineBuilder
             if (!_ctx.SeriesById.TryGetValue(sid, out var s)) continue;
             credits.Add(new Credit(s.StartDate, CreditKind.Movie, sid, 0, ""));
         }
-        foreach (var song in e.Songs)
-        {
-            credits.Add(new Credit(song.Date, CreditKind.Song, 0, 0, song.Title));
-        }
+        foreach (var p in e.Songs) credits.Add(new Credit(p.Date, CreditKind.Song, 0, 0, p.Title));
+        foreach (var p in e.Bgms) credits.Add(new Credit(p.Date, CreditKind.Bgm, 0, 0, p.Title));
+        foreach (var p in e.Products) credits.Add(new Credit(p.Date, CreditKind.Product, 0, 0, p.Title));
         if (credits.Count == 0) return null;
         credits.Sort((a, b) =>
         {
@@ -214,7 +218,7 @@ internal sealed class RoleTimelineBuilder
         }
         chains.Add(cur);
 
-        // 期間の終わり：最後の参加の放送枠の終わり（映画・歌は日付の翌日）。
+        // 期間の終わり：最後の参加の放送枠の終わり（映画・歌・劇伴・盤は日付の翌日）。
         static DateOnly ChainEnd(List<Credit> chain)
             => chain.Max(c => c.Kind == CreditKind.Tv ? c.Date.AddDays(EpisodeSpanDays) : c.Date.AddDays(1));
         bool include = rules.IncludeAll
@@ -226,6 +230,8 @@ internal sealed class RoleTimelineBuilder
         var segments = new List<RoleTimelineMark>();
         var movies = new List<RoleTimelineMark>();
         var songs = new List<RoleTimelineMark>();
+        var bgms = new List<RoleTimelineMark>();
+        var products = new List<RoleTimelineMark>();
         var periodLabels = new List<string>(chains.Count);
         var tvEpNos = new Dictionary<int, SortedSet<int>>();
         var movieIds = new HashSet<int>();
@@ -264,15 +270,17 @@ internal sealed class RoleTimelineBuilder
                 movies.Add(new RoleTimelineMark { Left = Pct(c.Date) });
                 movieIds.Add(c.SeriesId);
             }
-            // 歌は同じ日に出た曲を 1 つの点にまとめる。
+            // 歌・劇伴・盤は、同じ日のものを 1 つの印にまとめる。
             foreach (var d in chain.Where(c => c.Kind == CreditKind.Song).Select(c => c.Date).Distinct())
-            {
                 songs.Add(new RoleTimelineMark { Left = Pct(d) });
-            }
+            foreach (var d in chain.Where(c => c.Kind == CreditKind.Bgm).Select(c => c.Date).Distinct())
+                bgms.Add(new RoleTimelineMark { Left = Pct(d) });
+            foreach (var d in chain.Where(c => c.Kind == CreditKind.Product).Select(c => c.Date).Distinct())
+                products.Add(new RoleTimelineMark { Left = Pct(d) });
         }
 
         // 内訳：TV・映画はシリーズの放送・公開順に「📺 シリーズ名 #1～49（添え書き）」「🎥 映画名（添え書き）」、
-        // 歌は年ごとに「🎵 2004年 曲名、曲名」で 1 行ずつ。
+        // 歌・劇伴・盤は年ごとに「🎵 2004年 曲名、曲名」「🎼 2004年 作品名（録音回）」「💿 2004年 商品名」で 1 行ずつ。
         var works = new List<(DateOnly Sort, string Text)>();
         foreach (var sid in tvEpNos.Keys.Concat(movieIds).Distinct())
         {
@@ -282,10 +290,14 @@ internal sealed class RoleTimelineBuilder
                 ? $"📺 {s.Title} {EpisodeRangeCompressor.Compress(nos)}{note}"
                 : $"🎥 {s.Title}{note}"));
         }
-        foreach (var byYear in credits.Where(c => c.Kind == CreditKind.Song).GroupBy(c => c.Date.Year))
+        foreach (var (kind, icon, order) in new[] { (CreditKind.Song, "🎵", 0), (CreditKind.Bgm, "🎼", 1), (CreditKind.Product, "💿", 2) })
         {
-            var titles = byYear.Select(c => c.Title).Where(t => t != "").Distinct(StringComparer.Ordinal);
-            works.Add((new DateOnly(byYear.Key, 1, 1), $"🎵 {byYear.Key}年 {string.Join("、", titles)}"));
+            foreach (var byYear in credits.Where(c => c.Kind == kind).GroupBy(c => c.Date.Year))
+            {
+                var titles = byYear.Select(c => c.Title).Where(t => t != "").Distinct(StringComparer.Ordinal);
+                // 同じ年の中では歌 → 劇伴 → 盤の順に並べる。
+                works.Add((new DateOnly(byYear.Key, 1, 1).AddDays(order), $"{icon} {byYear.Key}年 {string.Join("、", titles)}"));
+            }
         }
 
         var row = new RoleTimelineRow
@@ -298,6 +310,8 @@ internal sealed class RoleTimelineBuilder
             Segments = segments,
             Movies = movies,
             Songs = songs,
+            Bgms = bgms,
+            Products = products,
             PeriodLabel = string.Join("、", periodLabels),
             WorksText = string.Join("\n", works.OrderBy(w => w.Sort).Select(w => w.Text))
         };
@@ -319,6 +333,19 @@ internal sealed class RoleTimelineBuilder
         return best;
     }
 
+    /// <summary>
+    /// 歌・劇伴・盤の参加のうち最も遅い日の翌日（軸を伸ばす日。<see cref="RoleTimelineBuilder(BuildContext, DateOnly?)"/> の extendTo に渡す）。
+    /// 歌・劇伴・盤の参加が無ければ null。
+    /// </summary>
+    public static DateOnly? ExtendToFor(IEnumerable<RoleTimelineEntity> entities)
+    {
+        DateOnly? last = null;
+        foreach (var e in entities)
+            foreach (var p in e.Songs.Concat(e.Bgms).Concat(e.Products))
+                if (last is null || p.Date > last) last = p.Date;
+        return last?.AddDays(1);
+    }
+
     /// <summary>参加期間の表記（「2004年2月〜2005年1月」。同じ月なら「2004年2月」）。</summary>
     private static string PeriodLabel(DateOnly first, DateOnly last)
     {
@@ -338,9 +365,9 @@ internal sealed class RoleTimelineBuilder
 
     private static string Num(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
 
-    private enum CreditKind { Tv, Movie, Song }
+    private enum CreditKind { Tv, Movie, Song, Bgm, Product }
 
-    /// <summary>描く単位の参加 1 件（TV の 1 話・映画 1 本・歌 1 曲）。</summary>
+    /// <summary>描く単位の参加 1 件（TV の 1 話・映画 1 本・歌 1 曲・劇伴の録音回 1 回・盤 1 点）。</summary>
     private readonly record struct Credit(DateOnly Date, CreditKind Kind, int SeriesId, int EpNo, string Title);
 }
 
@@ -350,8 +377,8 @@ internal sealed class RoleTimelineBuilder
 /// <param name="MinCreditsInWindow">一定期間（<paramref name="WindowDays"/>）のあいだに要る参加の数の下限。</param>
 /// <param name="IncludeOpeningCredit">オープニングのクレジットに出たことがあれば回数によらず載せるか。</param>
 /// <param name="IncludeAll">決まりによらず候補をすべて載せるか。</param>
-/// <param name="Verb">見出し・凡例の動詞（「担当」「出演」「参加」）。</param>
-/// <param name="Note">見出しの下に出す説明文（載せる決まり）。</param>
+/// <param name="Verb">凡例の動詞（「担当」「出演」「参加」）。</param>
+/// <param name="Note">年表タブの先頭に出す説明文（載せる決まり）。</param>
 internal sealed record RoleTimelineRules(
     int MaxGapDays, int WindowDays, int MinCreditsInWindow, bool IncludeOpeningCredit, bool IncludeAll, string Verb, string Note)
 {
@@ -364,6 +391,16 @@ internal sealed record RoleTimelineRules(
     public static readonly RoleTimelineRules VoiceCast = new(
         28, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: false, IncludeAll: false, "出演",
         "対象: 1年間で4回以上出演");
+
+    /// <summary>音楽制作：1 年間（52 週）に 4 回以上参加した人物・団体（細線は 13 週以内の間隔でつなぐ）。</summary>
+    public static readonly RoleTimelineRules MusicProduction = new(
+        91, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: false, IncludeAll: false, "参加",
+        "対象: 1年間で4回以上参加");
+
+    /// <summary>作詞・作曲・編曲や音楽の役職詳細：一覧に載る人物・団体すべて（細線は 13 週以内の間隔でつなぐ）。</summary>
+    public static readonly RoleTimelineRules MusicRole = new(
+        91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, "担当",
+        "対象: すべて");
 
     /// <summary>歌唱：一覧に載る歌手・キャラクターすべて（続けて参加した期間の線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules Singers = new(
@@ -391,20 +428,22 @@ internal sealed class RoleTimelineEntity
     /// <summary>参加した映画系のシリーズ。</summary>
     public IReadOnlyCollection<int> MovieSeriesIds { get; init; } = Array.Empty<int>();
     /// <summary>参加した歌（初めて盤に収められた日と曲名）。</summary>
-    public IReadOnlyCollection<RoleTimelineSong> Songs { get; init; } = Array.Empty<RoleTimelineSong>();
+    public IReadOnlyCollection<RoleTimelinePoint> Songs { get; init; } = Array.Empty<RoleTimelinePoint>();
+    /// <summary>参加した劇伴の録音回（初めて盤に収められた日と「作品名（録音回）」）。</summary>
+    public IReadOnlyCollection<RoleTimelinePoint> Bgms { get; init; } = Array.Empty<RoleTimelinePoint>();
+    /// <summary>参加した盤（発売日と商品名）。</summary>
+    public IReadOnlyCollection<RoleTimelinePoint> Products { get; init; } = Array.Empty<RoleTimelinePoint>();
     /// <summary>内訳でシリーズ・映画の後ろに括弧で添える文（series_id → 文。声優の演じたキャラなど）。</summary>
     public IReadOnlyDictionary<int, string>? SeriesNotes { get; init; }
 }
 
-/// <summary>線表に描く歌 1 曲（録音が初めて盤に収められた日と曲名）。</summary>
-internal readonly record struct RoleTimelineSong(DateOnly Date, string Title);
+/// <summary>線表に点で描く参加 1 件（歌・劇伴・盤の日付と、内訳に出す名前）。</summary>
+internal readonly record struct RoleTimelinePoint(DateOnly Date, string Title);
 
 /// <summary>線表の表示モデル。位置・幅は軸の左端からの百分率（小数 2 桁の文字列）。</summary>
 internal sealed class RoleTimelineModel
 {
-    /// <summary>年表タブの見出し（「担当の移り変わり」「出演の移り変わり」「参加の移り変わり」）。</summary>
-    public string Title { get; set; } = "";
-    /// <summary>見出しの下に出す説明文（載せる決まり）。</summary>
+    /// <summary>年表タブの先頭に出す説明文（載せる決まり）。</summary>
     public string Note { get; set; } = "";
     /// <summary>凡例（描いた印の種類だけ）。</summary>
     public IReadOnlyList<RoleTimelineLegendItem> Legend { get; set; } = Array.Empty<RoleTimelineLegendItem>();
@@ -418,7 +457,7 @@ internal sealed class RoleTimelineModel
     public IReadOnlyList<RoleTimelineRow> Rows { get; set; } = Array.Empty<RoleTimelineRow>();
 }
 
-/// <summary>凡例 1 項目。Kind は "tv" / "movie" / "song" / "span"（印の見本の CSS クラス）。</summary>
+/// <summary>凡例 1 項目。Kind は "tv" / "movie" / "song" / "bgm" / "disc" / "span"（印の見本の CSS クラス）。</summary>
 internal sealed class RoleTimelineLegendItem
 {
     public string Kind { get; set; } = "";
@@ -464,6 +503,10 @@ internal sealed class RoleTimelineRow
     public IReadOnlyList<RoleTimelineMark> Movies { get; set; } = Array.Empty<RoleTimelineMark>();
     /// <summary>歌の点（同じ日に出た曲は 1 つ。<see cref="RoleTimelineMark.Width"/> は使わない）。</summary>
     public IReadOnlyList<RoleTimelineMark> Songs { get; set; } = Array.Empty<RoleTimelineMark>();
+    /// <summary>劇伴の点（同じ日のものは 1 つ）。</summary>
+    public IReadOnlyList<RoleTimelineMark> Bgms { get; set; } = Array.Empty<RoleTimelineMark>();
+    /// <summary>盤の四角（同じ日のものは 1 つ）。</summary>
+    public IReadOnlyList<RoleTimelineMark> Products { get; set; } = Array.Empty<RoleTimelineMark>();
     /// <summary>内訳の参加期間（「2004年2月〜2005年1月」を「、」でつないだもの）。</summary>
     public string PeriodLabel { get; set; } = "";
     /// <summary>内訳の作品ごとの参加（改行でつないだもの）。</summary>

@@ -20,17 +20,23 @@
          初参加順ボタンの is-active / aria-selected を戻す（または五十音順を既定に戻す）。
     <button type="button" class="tab-btn" data-tab="kana"
             role="tab" aria-selected="false" aria-controls="song-role-tab-panel-kana">
-      五十音順
+      五十音<span class="tab-sfx">順</span>
     </button>
     ##}}
     <button type="button" class="tab-btn is-active" data-tab="debut"
             role="tab" aria-selected="true" aria-controls="song-role-tab-panel-debut">
-      初参加順
+      初参加<span class="tab-sfx">順</span>
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="song-role-tab-panel-count">
-      担当曲数順
+      担当曲数<span class="tab-sfx">順</span>
     </button>
+    {{~ if Timeline ~}}
+    <button type="button" class="tab-btn" data-tab="timeline"
+            role="tab" aria-selected="false" aria-controls="song-role-tab-panel-timeline">
+      年表
+    </button>
+    {{~ end ~}}
   </div>
 
   <div class="list-toolbar">
@@ -94,6 +100,13 @@
     </ul>
     {{~ end ~}}
   </div>
+  {{## ──────── 年表パネル（担当した曲の移り変わりの線表。中身は _role-timeline.sbn） ──────── ##}}
+  {{~ if Timeline ~}}
+  <div class="tab-panel" id="song-role-tab-panel-timeline"
+       data-tab-panel="timeline" role="tabpanel" hidden>
+    {{ include '_role-timeline.sbn' }}
+  </div>
+  {{~ end ~}}
 </div>
 
 <script>

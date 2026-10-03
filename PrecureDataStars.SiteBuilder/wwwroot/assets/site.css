@@ -7951,6 +7951,12 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-size: 0.75em;
   text-align: right;
 }
+/* 狭い画面では 1 行に収まる短い言い回しに切り替える。 */
+.rtl-note-short { display: none; }
+@media (max-width: 640px) {
+  .rtl-note-long { display: none; }
+  .rtl-note-short { display: inline; }
+}
 .rtl-legend {
   list-style: none;
   display: flex;

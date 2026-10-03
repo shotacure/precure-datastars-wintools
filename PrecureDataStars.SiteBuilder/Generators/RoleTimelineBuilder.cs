@@ -166,6 +166,7 @@ internal sealed class RoleTimelineBuilder
         {
             // 説明文はページの種類ごとの決まりをそのまま書く（登録状況で変わる出し分けはしない）。
             Note = rules.Note,
+            NoteShort = rules.NoteShort,
             Legend = legend,
             Bands = _bands,
             Ticks = _ticks,
@@ -418,8 +419,9 @@ internal sealed class RoleTimelineBuilder
 /// 年表タブの先頭に右寄せの小さな字で出す注記（行を絞る決まり）。全員を載せるページは空で、注記を出さない。ページの種類ごとに固定で、登録状況（どの人が載ったか・誰がオープニングに
 /// 出ているか）では変えない（例：演出助手もいずれオープニングに出ることがあるので、役職ページはどれも同じ文にする）。
 /// </param>
+/// <param name="NoteShort">狭い画面（640px 以下）で注記の代わりに出す、1 行に収まる短い言い回し。</param>
 internal sealed record RoleTimelineRules(
-    int MaxGapDays, int WindowDays, int MinCreditsInWindow, bool IncludeOpeningCredit, bool IncludeAll, int ShowAllUpTo, string Verb, string Note)
+    int MaxGapDays, int WindowDays, int MinCreditsInWindow, bool IncludeOpeningCredit, bool IncludeAll, int ShowAllUpTo, string Verb, string Note, string NoteShort)
 {
     /// <summary>全員を載せる決まりのページの説明文（出さない）。</summary>
     public const string AllNote = "";
@@ -430,27 +432,30 @@ internal sealed record RoleTimelineRules(
     /// <summary>役職詳細：メインスタッフ（オープニングに出た）と、1 年間（52 週）に 4 回以上担当したスタッフ（細線は 13 週以内の間隔でつなぐ）。候補が 10 以下なら全員。</summary>
     public static readonly RoleTimelineRules Staff = new(
         91, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: true, IncludeAll: false, DefaultShowAllUpTo, "担当",
-        "10名を超える場合はメインスタッフまたは年間4回以上担当された方のみ");
+        "10名を超える場合はメインスタッフまたは年間4回以上担当された方のみ",
+        "10名超の場合はメインまたは年4回以上担当の方のみ");
 
     /// <summary>声の出演：1 年間（52 週）に 4 回以上出演した声優（細線は 4 週以内の間隔でつなぐ）。候補が 10 以下なら全員。</summary>
     public static readonly RoleTimelineRules VoiceCast = new(
         28, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: false, IncludeAll: false, DefaultShowAllUpTo, "出演",
-        "10名を超える場合は年間4回以上出演された方のみ");
+        "10名を超える場合は年間4回以上出演された方のみ",
+        "10名超の場合は年4回以上出演の方のみ");
 
     /// <summary>作詞・作曲・編曲の役職詳細：1 年間（52 週）に 2 曲以上担当した人物（細線は 13 週以内の間隔でつなぐ）。候補が 10 以下なら全員。</summary>
     public static readonly RoleTimelineRules SongWriter = new(
         91, WindowDays: 364, MinCreditsInWindow: 2, IncludeOpeningCredit: false, IncludeAll: false, DefaultShowAllUpTo, "担当",
-        "10名を超える場合は年間2曲以上担当された方のみ");
+        "10名を超える場合は年間2曲以上担当された方のみ",
+        "10名超の場合は年2曲以上担当の方のみ");
 
     /// <summary>音楽の役職詳細（演奏など）：一覧に載る人物・団体すべて（細線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules MusicRole = new(
         91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, ShowAllUpTo: 0, "担当",
-        AllNote);
+        AllNote, AllNote);
 
     /// <summary>歌唱：一覧に載る歌手・キャラクターすべて（続けて参加した期間の線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules Singers = new(
         91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, ShowAllUpTo: 0, "参加",
-        AllNote);
+        AllNote, AllNote);
 }
 
 /// <summary>線表に載せる候補 1 つ分（<see cref="RoleTimelineBuilder.Build"/> の入力）。</summary>
@@ -493,6 +498,8 @@ internal sealed class RoleTimelineModel
 {
     /// <summary>年表タブの先頭に出す説明文（載せる決まり）。</summary>
     public string Note { get; set; } = "";
+    /// <summary>狭い画面（640px 以下）で <see cref="Note"/> の代わりに出す短い注記。</summary>
+    public string NoteShort { get; set; } = "";
     /// <summary>凡例（描いた印の種類だけ）。</summary>
     public IReadOnlyList<RoleTimelineLegendItem> Legend { get; set; } = Array.Empty<RoleTimelineLegendItem>();
     /// <summary>TV シリーズの帯（交互に薄く塗る）。</summary>

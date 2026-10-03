@@ -2428,12 +2428,121 @@ a.series-card-children-title:hover {
   );
 }
 /* ISRC が登録されているトラックは円バッジに細いドット枠を重ねて「補助情報あり」を視覚化。
-   title="ISRC: ..." 属性のホバー表示と組み合わせて、旧テーブル時代の td.col-no.has-isrc
-   ドット下線と同等の機能を維持する（円バッジ内では下線が機能しないため枠で代替）。 */
+   バッジは <button> で、押すと ISRC ポップアップ（.isrc-popover）が開く。title="ISRC: ..." 属性の
+   ホバー表示も併用する。カード全体に広がるタイトルリンクの透明オーバーレイ（z-index: 1）より
+   上に置かないとホバーも押下もオーバーレイに吸われるため、カード内の他のリンクと同じ z-index: 2 に上げる。
+   button の既定の枠・余白・書体は打ち消し、円バッジの見た目（.products-tracks-card-no）をそのまま使う。 */
 .products-tracks-card-no.has-isrc {
-  cursor: help;
+  position: relative;
+  z-index: 2;
+  -webkit-appearance: none;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  cursor: zoom-in;
   outline: 1px dashed #cbd5e1;
   outline-offset: 2px;
+}
+.products-tracks-card-no.has-isrc:focus-visible {
+  outline: 2px solid var(--accent-blue, #3370aa);
+}
+/* ISRC ポップアップ。HTML の popover で最上位レイヤーに出し、画面中央に置く（スマホでも同じ）。
+   外側を押す・Esc・× で閉じる。popover 非対応ブラウザでは :popover-open の規則ごと無視され、
+   既定の display: none のまま本文に紛れ込まない。 */
+.isrc-popover {
+  display: none;
+}
+.isrc-popover:popover-open {
+  display: block;
+  width: min(30rem, calc(100vw - 32px));
+  max-height: min(70vh, 34rem);
+  overflow: auto;
+  margin: auto;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--fg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  font-family: var(--font-base);
+  font-size: 0.9rem;
+  font-weight: 400;
+  line-height: 1.55;
+  text-align: left;
+  white-space: normal;
+}
+.isrc-popover::backdrop {
+  background: rgba(0, 0, 0, 0.25);
+}
+.isrc-popover-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.isrc-popover-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.isrc-popover-head > .isrc-popover-code {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.isrc-popover-code {
+  font-family: var(--font-num);
+  letter-spacing: 0.02em;
+}
+.isrc-popover-close {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.isrc-popover-close:hover,
+.isrc-popover-close:focus-visible {
+  color: var(--fg);
+}
+.isrc-popover-heading {
+  margin: 12px 0 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.isrc-popover-empty {
+  margin: 0;
+  color: var(--muted);
+}
+.isrc-popover-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.isrc-popover-list > li {
+  padding: 5px 0;
+  border-top: 1px dashed var(--border);
+}
+.isrc-popover-list > li:first-child {
+  border-top: 0;
+}
+.isrc-popover-list a {
+  color: var(--accent-blue, #3370aa);
+  text-decoration: none;
+}
+.isrc-popover-list a:hover,
+.isrc-popover-list a:focus-visible {
+  text-decoration: underline;
+}
+.isrc-popover-meta {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 /* 尺セル：曲尺の表示（mm:ss.f）。tabular-nums で桁を揃え、muted で他要素より少し沈める。
    表組み時代と同じ font-size（1em 据置）。LengthFraction は .micro-fraction で小数点以下を

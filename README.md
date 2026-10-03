@@ -173,7 +173,7 @@ dotnet run --project PrecureDataStars.TitleCharStatsRefresh -- --all            
 >
 > **MCN / ISRC の取得仕様**: MCN（JAN/EAN バーコード）と ISRC は SCSI MMC の READ SUB-CHANNEL (0x42) で取得。ISRC は対象トラック先頭への SEEK(10) を挟む 2 パス取得で、ディスク内に 1 件でも取得できれば「収録盤」と判定し未取得トラックのみ最大 5 回再試行、1 件も無ければ未収録盤として再試行しない（ディスク単位ゲート）。取得値は `discs.mcn`（照合最優先キー）・`tracks.isrc` に格納。
 >
-> **公開サイトでの掲示**: MCN は商品基本情報テーブルに「JAN」行として 1 回表示（CD 含む商品のみ、先頭 CD ディスクの MCN を採用）。各トラックの ISRC はトラック表「No.」セルの `title` ツールチップ。トラック尺は整数部「m:ss」＋小数 2 桁を `.micro-fraction` 縮小表示。商品 JAN が 13 桁数字のとき商品 JSON-LD に schema.org `gtin13` を出力。
+> **公開サイトでの掲示**: MCN は商品基本情報テーブルに「JAN」行として 1 回表示（CD 含む商品のみ、先頭 CD ディスクの MCN を採用）。各トラックの ISRC は、トラック番号の丸にドット枠を付けて示し、ホバーで `title` ツールチップ、押す（タップ）と ISRC ポップアップ（HTML の popover、画面中央）を開く。ポップアップには ISRC、同じ ISRC を持つほかの収録、同じ音源で ISRC が違う収録（歌は録音・サイズ・パート、劇伴は M ナンバーが同じもの。1 トラックに中身が 2 つ以上あるトラックは比べない）を、発売日順に盤名・品番・トラック番号で並べ、各行はその盤のそのトラックへリンクする。トラック尺は整数部「m:ss」＋小数 2 桁を `.micro-fraction` 縮小表示。商品 JAN が 13 桁数字のとき商品 JSON-LD に schema.org `gtin13` を出力。
 >
 > **ジャケット画像と購入リンク**: 商品見出し直下にジャケット画像＋外部リンクを並べる。Amazon リンクは物理パッケージ向けの `amazon_asin_cd`（「Amazon で買う (CD)」）とデジタル音源向けの `amazon_asin_digital`（「Amazon で聴く (デジタル)」）の 2 系統を並列表示（v1.4.2 で Apple Music / Spotify 経路は撤去、Amazon Creators API 一本運用に整理）。画像は `products.cover_image_url` にキャッシュした URL を Amazon CDN へホットリンク（`loading=lazy decoding=async`）。`cover_image_source` は `amazon_cd` / `amazon_digital` の 2 値で、採用優先順位は CD ASIN → デジタル ASIN。取得は SiteBuilder ビルドから分離し、Catalog の「画像取得」ボタン（手動・差分）または `PrecureDataStars.AmazonSync` コンソール（バッチ・鮮度切れ自動判定）で行う。外部リンクはすべて `rel="nofollow sponsored noopener"` ＋ `target=_blank`、`AmazonAssociateTag` が設定されていれば `?tag=` 付与でアフィリエイト計測対象。JSON-LD では `offers` 配列に物理／デジタルそれぞれの Offer を出力。
 

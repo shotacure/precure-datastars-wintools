@@ -209,6 +209,17 @@ public sealed class ProductsGenerator
                 productByCatalogNo[d.ProductCatalogNo].Title, d.Title ?? "", d.DiscNoInSet)))
             .ToList());
 
+        // トラック番号の ISRC ポップアップ用の索引（同じ ISRC の収録・同じ音源で ISRC が違う収録）。
+        // 発売日順に走査して組み、並列レンダリングの前に確定させる。以後は読み取りだけにする。
+        BuildIsrcIndex(allDiscs
+            .Where(d => productByCatalogNo.ContainsKey(d.ProductCatalogNo))
+            .OrderBy(d => productByCatalogNo[d.ProductCatalogNo].ReleaseDate)
+            .ThenBy(d => d.ProductCatalogNo, StringComparer.Ordinal)
+            .ThenBy(d => d.DiscNoInSet ?? 1u)
+            .Select(d => (d.CatalogNo, d.ProductCatalogNo, SongsGenerator.FormatAlbumLabel(
+                productByCatalogNo[d.ProductCatalogNo].Title, d.Title ?? "", d.DiscNoInSet)))
+            .ToList());
+
         // 同じ題名の商品が複数ある（初回盤と再発売盤など）題名の集合。詳細ページの title に品番を添えて見分けられるようにする。
         // 並列レンダリングの前に確定させ、以後は読み取りだけにする。
         _duplicateTitles = allProducts
@@ -1374,6 +1385,141 @@ public sealed class ProductsGenerator
         EnsureArtTrackFallbackIndex();
     }
 
+    /// <summary>ISRC ポップアップに並べる収録 1 件（ある盤のあるトラック）。</summary>
+    private sealed record IsrcPeer(
+        string DiscCatalogNo, byte TrackNo, byte SubOrder, string Isrc, string AlbumLabel, string Url);
+
+    /// <summary>ISRC → その ISRC を持つ収録（発売日順）。</summary>
+    private Dictionary<string, List<IsrcPeer>> _isrcPeersByCode = new(StringComparer.Ordinal);
+
+    /// <summary>歌の音源（録音 × サイズ × パート）→ ISRC を持つ収録（発売日順）。</summary>
+    private Dictionary<(int RecordingId, string Size, string Part), List<IsrcPeer>> _isrcPeersBySongAudio = new();
+
+    /// <summary>劇伴の音源（シリーズ × M 番号）→ ISRC を持つ収録（発売日順）。</summary>
+    private Dictionary<(int SeriesId, string MNoDetail), List<IsrcPeer>> _isrcPeersByBgmCue = new();
+
+    /// <summary>
+    /// ISRC ポップアップ用の索引を組む。ISRC は枝番 0 の行だけが持つ。
+    /// 「同じ音源で ISRC が違う収録」の比較は、1 トラックに中身が 1 つだけのトラックに限る
+    /// （劇伴を編集でつないだトラックやメドレーの後ろに隠しトラックが続くトラックは、音源として別物のため）。
+    /// 引数は発売日の早い順に並べた (ディスク品番, 商品品番, アルバム表記)。
+    /// </summary>
+    private void BuildIsrcIndex(IReadOnlyList<(string DiscCatalogNo, string ProductCatalogNo, string AlbumLabel)> discsByReleaseOrder)
+    {
+        foreach (var (discCatalogNo, productCatalogNo, album) in discsByReleaseOrder)
+        {
+            if (!_ctx.TracksByCatalogNo.TryGetValue(discCatalogNo, out var discTracks)) continue;
+
+            var compoundTrackNos = discTracks.Where(t => t.SubOrder > 0).Select(t => t.TrackNo).ToHashSet();
+            foreach (var t in discTracks)
+            {
+                if (string.IsNullOrEmpty(t.Isrc)) continue;
+
+                var peer = new IsrcPeer(discCatalogNo, t.TrackNo, t.SubOrder, t.Isrc!, album,
+                    $"{PathUtil.ProductUrl(productCatalogNo)}#track-{discCatalogNo}-{t.TrackNo}-{t.SubOrder}");
+                AddPeer(_isrcPeersByCode, t.Isrc!, peer);
+
+                if (compoundTrackNos.Contains(t.TrackNo)) continue;
+                if (t.ContentKindCode == "SONG" && t.SongRecordingId is int recordingId)
+                {
+                    AddPeer(_isrcPeersBySongAudio,
+                        (recordingId, t.SongSizeVariantCode ?? "", t.SongPartVariantCode ?? ""), peer);
+                }
+                else if (t.ContentKindCode == "BGM" && t.BgmSeriesId is int seriesId && !string.IsNullOrEmpty(t.BgmMNoDetail))
+                {
+                    AddPeer(_isrcPeersByBgmCue, (seriesId, t.BgmMNoDetail!), peer);
+                }
+            }
+        }
+
+        static void AddPeer<TKey>(Dictionary<TKey, List<IsrcPeer>> index, TKey key, IsrcPeer peer) where TKey : notnull
+        {
+            if (!index.TryGetValue(key, out var list))
+            {
+                list = new List<IsrcPeer>();
+                index[key] = list;
+            }
+            list.Add(peer);
+        }
+    }
+
+    /// <summary>トラック番号の ISRC ポップアップの要素 id。ページ内で一意になるよう、トラックカードの id と同じ並びにする。</summary>
+    private static string IsrcPopoverId(Track t) => $"isrc-{t.CatalogNo}-{t.TrackNo}-{t.SubOrder}";
+
+    /// <summary>
+    /// トラック番号を押すと開く ISRC ポップアップ（HTML の popover）の中身を組む。
+    /// その ISRC、同じ ISRC を持つほかの収録、同じ音源（歌は録音・サイズ・パート、劇伴は M 番号）で
+    /// ISRC が違う収録を、発売日順に並べる。ISRC の無いトラックは空文字。
+    /// </summary>
+    private string BuildIsrcPopoverHtml(Track t)
+    {
+        if (string.IsNullOrEmpty(t.Isrc)) return "";
+
+        bool IsSelf(IsrcPeer p) => p.DiscCatalogNo == t.CatalogNo && p.TrackNo == t.TrackNo && p.SubOrder == t.SubOrder;
+
+        var sameIsrc = _isrcPeersByCode.TryGetValue(t.Isrc!, out var byCode)
+            ? byCode.Where(p => !IsSelf(p)).ToList()
+            : new List<IsrcPeer>();
+
+        List<IsrcPeer>? audioPeers = null;
+        string differentHeading = "";
+        if (t.ContentKindCode == "SONG" && t.SongRecordingId is int recordingId)
+        {
+            _isrcPeersBySongAudio.TryGetValue((recordingId, t.SongSizeVariantCode ?? "", t.SongPartVariantCode ?? ""), out audioPeers);
+            differentHeading = "同じ録音・サイズ・パートで ISRC が違う収録";
+        }
+        else if (t.ContentKindCode == "BGM" && t.BgmSeriesId is int seriesId && !string.IsNullOrEmpty(t.BgmMNoDetail))
+        {
+            _isrcPeersByBgmCue.TryGetValue((seriesId, t.BgmMNoDetail!), out audioPeers);
+            differentHeading = "同じ M ナンバーで ISRC が違う収録";
+        }
+        var differentIsrc = audioPeers?
+            .Where(p => !IsSelf(p) && !string.Equals(p.Isrc, t.Isrc, StringComparison.Ordinal))
+            .ToList() ?? new List<IsrcPeer>();
+
+        string id = HtmlEscape(IsrcPopoverId(t));
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"<div popover id=\"{id}\" class=\"isrc-popover\" role=\"dialog\" aria-label=\"ISRC {HtmlEscape(t.Isrc!)}\">");
+        sb.Append("<div class=\"isrc-popover-head\">");
+        sb.Append($"<span class=\"isrc-popover-label\">ISRC</span><span class=\"isrc-popover-code\">{HtmlEscape(t.Isrc!)}</span>");
+        sb.Append($"<button type=\"button\" class=\"isrc-popover-close\" popovertarget=\"{id}\" popovertargetaction=\"hide\" aria-label=\"閉じる\">×</button>");
+        sb.Append("</div>");
+
+        sb.Append("<p class=\"isrc-popover-heading\">同じ ISRC の収録</p>");
+        if (sameIsrc.Count == 0)
+        {
+            sb.Append("<p class=\"isrc-popover-empty\">ほかの収録はありません</p>");
+        }
+        else
+        {
+            AppendPeerList(sb, sameIsrc, showIsrc: false);
+        }
+
+        if (differentIsrc.Count > 0)
+        {
+            sb.Append($"<p class=\"isrc-popover-heading\">{HtmlEscape(differentHeading)}</p>");
+            AppendPeerList(sb, differentIsrc, showIsrc: true);
+        }
+
+        sb.Append("</div>");
+        return sb.ToString();
+
+        static void AppendPeerList(System.Text.StringBuilder sb, List<IsrcPeer> peers, bool showIsrc)
+        {
+            sb.Append("<ul class=\"isrc-popover-list\">");
+            foreach (var p in peers)
+            {
+                string trackLabel = p.SubOrder > 0 ? $"Tr.{p.TrackNo}-{p.SubOrder}" : $"Tr.{p.TrackNo}";
+                sb.Append("<li>");
+                sb.Append($"<a href=\"{HtmlEscape(p.Url)}\">{HtmlEscape(p.AlbumLabel)}</a>");
+                sb.Append($"<span class=\"isrc-popover-meta\">{HtmlEscape(p.DiscCatalogNo)} · {trackLabel}");
+                if (showIsrc) sb.Append($" · <span class=\"isrc-popover-code\">{HtmlEscape(p.Isrc)}</span>");
+                sb.Append("</span></li>");
+            }
+            sb.Append("</ul>");
+        }
+    }
+
     /// <summary>
     /// 1 トラックを表示用 DTO に変換する（非同期化＋構造化クレジット解決を内包）。
     /// 表示は ContentKindCode で 3 系統に分岐する：
@@ -1739,6 +1885,8 @@ public sealed class ProductsGenerator
             LengthLabel = lenInt,
             LengthFraction = lenFrac,
             Isrc = t.Isrc ?? "",
+            IsrcPopoverId = string.IsNullOrEmpty(t.Isrc) ? "" : IsrcPopoverId(t),
+            IsrcPopoverHtml = BuildIsrcPopoverHtml(t),
             // 配信音源の動画 ID。自身に割り当てが無いトラックは、同じ音源を収録した別商品の
             // 割り当てを借りる（ResolveArtTrack 参照）。
             ArtTrackId = artTrack.VideoId,
@@ -2138,8 +2286,12 @@ public sealed class ProductsGenerator
         public List<SubPart> SubParts { get; } = new();
         /// <summary>劇伴を編集でつないだトラックの札（「2曲の編集」）。それ以外は空文字。</summary>
         public string EditLabel { get; set; } = "";
-        /// <summary>トラックの ISRC（12 文字英数字）。未取得は空。No. セルのツールチップに使用。</summary>
+        /// <summary>トラックの ISRC（12 文字英数字）。未取得は空。トラック番号のツールチップに使用。</summary>
         public string Isrc { get; set; } = "";
+        /// <summary>ISRC ポップアップの要素 id（トラック番号ボタンの popovertarget）。ISRC が無いトラックは空。</summary>
+        public string IsrcPopoverId { get; set; } = "";
+        /// <summary>トラック番号を押すと開く ISRC ポップアップの HTML。ISRC が無いトラックは空。</summary>
+        public string IsrcPopoverHtml { get; set; } = "";
         /// <summary>
         /// 配信音源（YouTube アートトラック）の動画 ID。空なら再生ボタンを出さない。
         /// 動画 ID が登録済みかつ埋め込み可と確認済みのときだけ値が入る。

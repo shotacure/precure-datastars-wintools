@@ -236,6 +236,28 @@ public sealed class OgTextShaper : IDisposable
     public float Measure(string text, SKFont font, float tracking = 0f) => Shape(text, font.Size, tracking).Width * font.ScaleX;
 
     /// <summary>
+    /// 組んだ文字列の字面（インク）の左端と右端（起点からのピクセル。長体の率を含む）。字面の無い文字列なら (0, 0)。
+    /// <paramref name="tracking"/> は字と字のあいだに足す空き（長体の率をかける前のピクセル）。
+    /// </summary>
+    public (float Left, float Right) InkExtent(string text, SKFont font, float tracking = 0f)
+    {
+        var run = Shape(text, font.Size, tracking);
+        if (run.Glyphs.Length == 0) return (0f, 0f);
+        var widths = new float[run.Glyphs.Length];
+        var bounds = new SKRect[run.Glyphs.Length];
+        font.GetGlyphWidths(run.Glyphs, widths, bounds);
+        float left = float.MaxValue, right = float.MinValue;
+        for (int i = 0; i < run.Glyphs.Length; i++)
+        {
+            if (bounds[i].Width <= 0f) continue;
+            float x = run.Positions[i].X * font.ScaleX;
+            left = Math.Min(left, x + bounds[i].Left);
+            right = Math.Max(right, x + bounds[i].Right);
+        }
+        return left > right ? (0f, 0f) : (left, right);
+    }
+
+    /// <summary>
     /// 組んだ結果を描く。<paramref name="align"/> は幅を測って起点をずらすだけで、
     /// SkiaSharp の文字揃えと同じ意味（Right なら x が右端、Center なら x が中央）。
     /// </summary>

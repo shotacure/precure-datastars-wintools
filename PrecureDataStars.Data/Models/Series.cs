@@ -99,10 +99,13 @@ public sealed class Series
     /// <summary>配信版のイントロ尺（秒）。配信プラットフォーム向けの情報。</summary>
     public ushort? VodIntro { get; set; }
 
-    /// <summary>サブタイトル表示用フォント名（フォント管理基盤整備前の暫定フィールド）。</summary>
+    /// <summary>
+    /// サブタイトル表示用フォント名（<c>series_subtitle_styles.font_subtitle</c>。行が無ければ NULL）。
+    /// これ以下のサブタイトルの組み方も同じテーブルから読み、<c>SeriesRepository</c> の INSERT / UPDATE では書き換えない。
+    /// </summary>
     public string? FontSubtitle { get; set; }
 
-    // ── サブタイトルのテロップ画像の組み方（NULL は既定値で組む。親字の書体は FontSubtitle）──
+    // ── サブタイトルのテロップ画像の組み方（series_subtitle_styles。NULL は既定値で組む。親字の書体は FontSubtitle）──
 
     /// <summary>
     /// 字間の組み方。<c>PROPORTIONAL</c>＝書体の詰め情報（なければ字面）で詰める / <c>MONO</c>＝ベタ組み（字送り幅のまま）。

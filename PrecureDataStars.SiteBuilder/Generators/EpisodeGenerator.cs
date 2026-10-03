@@ -848,7 +848,7 @@ public sealed class EpisodeGenerator
         {
             // サブタイトルはサイト本体と同じくルビ付きで組む（title_rich_html が無い話は素で組まれる）。
             TitleRubyHtml = ep.TitleRichHtml ?? "",
-            // 作品の本編テロップと同じ書体（series.font_subtitle）。無ければ既定の見出し書体。
+            // 作品の本編テロップと同じ書体（series_subtitle_styles.font_subtitle）。無ければ既定の見出し書体。
             TitleFontFamily = series.FontSubtitle ?? "",
             // サブタイトルは本編のテロップと同じく、白い字に黒フチと影で組む。
             TitleTelopStyle = true,

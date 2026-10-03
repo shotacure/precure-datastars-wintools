@@ -109,7 +109,7 @@ public sealed partial class OgCardRenderer
     /// サブタイトルをテロップの体裁で描き、PNG に書き出す。描く字が無ければ何も書かずに null を返す。
     /// </summary>
     /// <param name="rubyHtml">ルビ付きのサブタイトル（<c>title_rich_html</c>）。</param>
-    /// <param name="fontFamily">作品の本編テロップの書体名（<c>series.font_subtitle</c>）。空か見つからなければ既定の見出し書体。</param>
+    /// <param name="fontFamily">作品の本編テロップの書体名（<c>series_subtitle_styles.font_subtitle</c>）。空か見つからなければ既定の見出し書体。</param>
     /// <param name="profile">作品ごとの組み方（字間、振り仮名の書体・斜体・大きさと高さ・はみ出し方、行間）。</param>
     /// <param name="outputFilePath">書き出し先の絶対パス（拡張子 .png）。</param>
     /// <returns>書き出した画像の大きさ（画素）。</returns>
@@ -278,7 +278,12 @@ public sealed partial class OgCardRenderer
         using var black = new SKPaint { IsAntialias = true, Color = SKColors.Black };
         using var white = new SKPaint { IsAntialias = true, Color = SKColors.White };
 
-        var rubies = PlaceTelopRubies(placed.Select(p => (p.Unit.Ruby, p.Font, p.X, p.Slot, p.AfterGap)).ToList(),
+        var rubies = PlaceTelopRubies(placed.Select(p =>
+            {
+                var ink = TelopShaper(p.Font, spacing, continues.Contains(p.Unit))
+                    .InkExtent(p.Unit.Base, p.Font, p.Font.Size * spacing.BaseEm);
+                return (p.Unit.Ruby, p.Font, p.X, p.Slot, p.AfterGap, p.X + ink.Left, p.X + ink.Right);
+            }).ToList(),
             rubyFont, size, scaleX, rubyLayout, spacing);
 
         // 親字と振り仮名をひとまとまりとして、影 → フチ → 白い字の順に重ねる（振り仮名のフチが親字の白い字にかぶらない）。
@@ -312,10 +317,11 @@ public sealed partial class OgCardRenderer
 
     /// <summary>
     /// 1 行の振り仮名の置き場所を決める。<paramref name="placed"/> は行の字の単位（振り仮名・親字のフォント・起点・占有幅・
-    /// 直前が空白か）で、振り仮名の無い単位は空文字を持つ。<paramref name="size"/> は行の親字の大きさ（はみ出しの上限の基準）。
+    /// 直前が空白か・親字の字面の左端と右端）で、振り仮名の無い単位は空文字を持つ。<paramref name="size"/> は行の親字の大きさ（はみ出しの上限の基準）。
+    /// 振り仮名は、字送りの箱ではなく字面（インク）の中心を親字の字面の中心にそろえる（書体によっては字形が箱の中で片寄るため）。
     /// </summary>
     private List<TelopRubyGlyph> PlaceTelopRubies(
-        IReadOnlyList<(string Ruby, SKFont Font, float X, float Slot, bool AfterGap)> placed,
+        IReadOnlyList<(string Ruby, SKFont Font, float X, float Slot, bool AfterGap, float InkLeft, float InkRight)> placed,
         SKFont rubyFont, float size, float scaleX, TelopRubyLayout rubyLayout, TelopSpacing spacing)
     {
         // 振り仮名。親字の幅に収まれば親字の中央に置く。親字より長ければ両隣へはみ出させる。はみ出してよい幅は、
@@ -328,16 +334,16 @@ public sealed partial class OgCardRenderer
         // 均等の組み方では、読みが熟語より短ければ 1 字ずつ熟語の幅に均等に空けて並べる（字の間に 1 つ分、両端に半分ずつ）。
         bool grouped = rubyLayout.Grouping != SubtitleRubyGrouping.Mono;
         bool spread = rubyLayout.Grouping == SubtitleRubyGrouping.Spread;
-        var spans = new List<(string Ruby, SKFont Font, float X, float Slot, bool AfterGap)>();
-        foreach (var (unitRuby, font, ux, slot, gapBefore) in placed)
+        var spans = new List<(string Ruby, SKFont Font, float X, float Slot, bool AfterGap, float InkLeft, float InkRight)>();
+        foreach (var (unitRuby, font, ux, slot, gapBefore, inkLeft, inkRight) in placed)
         {
             if (grouped && unitRuby.Length > 0 && !gapBefore && spans.Count > 0 && spans[^1].Ruby.Length > 0)
             {
                 var prev = spans[^1];
-                spans[^1] = (prev.Ruby + unitRuby, prev.Font, prev.X, ux + slot - prev.X, prev.AfterGap);
+                spans[^1] = (prev.Ruby + unitRuby, prev.Font, prev.X, ux + slot - prev.X, prev.AfterGap, prev.InkLeft, inkRight);
                 continue;
             }
-            spans.Add((unitRuby, font, ux, slot, gapBefore));
+            spans.Add((unitRuby, font, ux, slot, gapBefore, inkLeft, inkRight));
         }
 
         var rubyWidths = new float[spans.Count];
@@ -363,7 +369,7 @@ public sealed partial class OgCardRenderer
         var rubies = new List<TelopRubyGlyph>();
         for (int k = 0; k < spans.Count; k++)
         {
-            var (ruby, font, ux, slot, gapBefore) = spans[k];
+            var (ruby, font, ux, slot, gapBefore, inkLeft, inkRight) = spans[k];
             if (ruby.Length == 0) continue;
             bool gapAfter = k + 1 < spans.Count && spans[k + 1].AfterGap;
             float left = ux - Allowance(k - 1, gapBefore);
@@ -399,7 +405,13 @@ public sealed partial class OgCardRenderer
             }
             else
             {
-                rx = Math.Clamp(ux + (slot - rubyWidth) / 2f, left, right - rubyWidth);
+                // 振り仮名の字面の中心を親字の字面の中心に合わせ、はみ出してよい範囲に収める。
+                rubyFont.Size = rubySize;
+                rubyFont.ScaleX = scaleX;
+                var rubyInk = TelopShaper(rubyFont, spacing).InkExtent(ruby, rubyFont, rubySize * spacing.RubyEm);
+                float center = inkRight > inkLeft ? (inkLeft + inkRight) / 2f : ux + slot / 2f;
+                float rubyInkCenter = rubyInk.Right > rubyInk.Left ? (rubyInk.Left + rubyInk.Right) / 2f : rubyWidth / 2f;
+                rx = Math.Clamp(center - rubyInkCenter, left, right - rubyWidth);
             }
             rubies.Add(new TelopRubyGlyph(ruby, rx, rubyScale, rubySize, font.Size));
         }

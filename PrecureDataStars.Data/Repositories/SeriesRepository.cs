@@ -35,7 +35,7 @@ public sealed class SeriesRepository : RepositoryBase
     {
         const string sql = """
             SELECT
-              series_id        AS SeriesId,
+              series.series_id AS SeriesId,
               kind_code        AS KindCode,
               parent_series_id AS ParentSeriesId,
               relation_to_parent AS RelationToParent,
@@ -59,26 +59,27 @@ public sealed class SeriesRepository : RepositoryBase
               film_rating_no                AS FilmRatingNo,
               film_cj_mark                  AS FilmCjMark,
               vod_intro        AS VodIntro,
-              font_subtitle    AS FontSubtitle,
-              subtitle_kerning              AS SubtitleKerning,
-              subtitle_letter_spacing_em    AS SubtitleLetterSpacingEm,
-              subtitle_ruby_letter_spacing_em AS SubtitleRubyLetterSpacingEm,
-              font_subtitle_ruby            AS FontSubtitleRuby,
-              subtitle_ruby_size_ratio      AS SubtitleRubySizeRatio,
-              subtitle_ruby_raise_ratio     AS SubtitleRubyRaiseRatio,
-              subtitle_ruby_oblique_deg     AS SubtitleRubyObliqueDeg,
-              subtitle_line_gap_ratio       AS SubtitleLineGapRatio,
-              subtitle_line_gap_ratio_3     AS SubtitleLineGapRatio3,
-              subtitle_ruby_overhang_ratio  AS SubtitleRubyOverhangRatio,
-              subtitle_ruby_line_edge       AS SubtitleRubyLineEdge,
-              subtitle_ruby_grouping        AS SubtitleRubyGrouping,
+              sss.font_subtitle    AS FontSubtitle,
+              sss.subtitle_kerning              AS SubtitleKerning,
+              sss.subtitle_letter_spacing_em    AS SubtitleLetterSpacingEm,
+              sss.subtitle_ruby_letter_spacing_em AS SubtitleRubyLetterSpacingEm,
+              sss.font_subtitle_ruby            AS FontSubtitleRuby,
+              sss.subtitle_ruby_size_ratio      AS SubtitleRubySizeRatio,
+              sss.subtitle_ruby_raise_ratio     AS SubtitleRubyRaiseRatio,
+              sss.subtitle_ruby_oblique_deg     AS SubtitleRubyObliqueDeg,
+              sss.subtitle_line_gap_ratio       AS SubtitleLineGapRatio,
+              sss.subtitle_line_gap_ratio_3     AS SubtitleLineGapRatio3,
+              sss.subtitle_ruby_overhang_ratio  AS SubtitleRubyOverhangRatio,
+              sss.subtitle_ruby_line_edge       AS SubtitleRubyLineEdge,
+              sss.subtitle_ruby_grouping        AS SubtitleRubyGrouping,
               hide_storyboard_role  AS HideStoryboardRole,
               created_by       AS CreatedBy,
               updated_by       AS UpdatedBy,
               is_deleted       AS IsDeleted
             FROM series
+            LEFT JOIN series_subtitle_styles sss ON sss.series_id = series.series_id
             WHERE is_deleted = 0
-            ORDER BY start_date, series_id;
+            ORDER BY start_date, series.series_id;
         """;
 
         return await QueryListAsync<Series>(sql, ct: ct).ConfigureAwait(false);
@@ -91,7 +92,7 @@ public sealed class SeriesRepository : RepositoryBase
     {
         const string sql = """
             SELECT
-              series_id        AS SeriesId,
+              series.series_id AS SeriesId,
               kind_code        AS KindCode,
               parent_series_id AS ParentSeriesId,
               relation_to_parent AS RelationToParent,
@@ -115,26 +116,27 @@ public sealed class SeriesRepository : RepositoryBase
               film_rating_no                AS FilmRatingNo,
               film_cj_mark                  AS FilmCjMark,
               vod_intro        AS VodIntro,
-              font_subtitle    AS FontSubtitle,
-              subtitle_kerning              AS SubtitleKerning,
-              subtitle_letter_spacing_em    AS SubtitleLetterSpacingEm,
-              subtitle_ruby_letter_spacing_em AS SubtitleRubyLetterSpacingEm,
-              font_subtitle_ruby            AS FontSubtitleRuby,
-              subtitle_ruby_size_ratio      AS SubtitleRubySizeRatio,
-              subtitle_ruby_raise_ratio     AS SubtitleRubyRaiseRatio,
-              subtitle_ruby_oblique_deg     AS SubtitleRubyObliqueDeg,
-              subtitle_line_gap_ratio       AS SubtitleLineGapRatio,
-              subtitle_line_gap_ratio_3     AS SubtitleLineGapRatio3,
-              subtitle_ruby_overhang_ratio  AS SubtitleRubyOverhangRatio,
-              subtitle_ruby_line_edge       AS SubtitleRubyLineEdge,
-              subtitle_ruby_grouping        AS SubtitleRubyGrouping,
+              sss.font_subtitle    AS FontSubtitle,
+              sss.subtitle_kerning              AS SubtitleKerning,
+              sss.subtitle_letter_spacing_em    AS SubtitleLetterSpacingEm,
+              sss.subtitle_ruby_letter_spacing_em AS SubtitleRubyLetterSpacingEm,
+              sss.font_subtitle_ruby            AS FontSubtitleRuby,
+              sss.subtitle_ruby_size_ratio      AS SubtitleRubySizeRatio,
+              sss.subtitle_ruby_raise_ratio     AS SubtitleRubyRaiseRatio,
+              sss.subtitle_ruby_oblique_deg     AS SubtitleRubyObliqueDeg,
+              sss.subtitle_line_gap_ratio       AS SubtitleLineGapRatio,
+              sss.subtitle_line_gap_ratio_3     AS SubtitleLineGapRatio3,
+              sss.subtitle_ruby_overhang_ratio  AS SubtitleRubyOverhangRatio,
+              sss.subtitle_ruby_line_edge       AS SubtitleRubyLineEdge,
+              sss.subtitle_ruby_grouping        AS SubtitleRubyGrouping,
               hide_storyboard_role  AS HideStoryboardRole,
               created_by       AS CreatedBy,
               updated_by       AS UpdatedBy,
               is_deleted       AS IsDeleted
             FROM series
+            LEFT JOIN series_subtitle_styles sss ON sss.series_id = series.series_id
             WHERE is_deleted = 0 AND kind_code = 'TV'
-            ORDER BY start_date, series_id;
+            ORDER BY start_date, series.series_id;
         """;
 
         return await QueryListAsync<Series>(sql, ct: ct).ConfigureAwait(false);
@@ -148,7 +150,7 @@ public sealed class SeriesRepository : RepositoryBase
     {
         const string sql = """
             SELECT
-              series_id        AS SeriesId,
+              series.series_id AS SeriesId,
               kind_code        AS KindCode,
               parent_series_id AS ParentSeriesId,
               relation_to_parent AS RelationToParent,
@@ -172,25 +174,26 @@ public sealed class SeriesRepository : RepositoryBase
               film_rating_no                AS FilmRatingNo,
               film_cj_mark                  AS FilmCjMark,
               vod_intro        AS VodIntro,
-              font_subtitle    AS FontSubtitle,
-              subtitle_kerning              AS SubtitleKerning,
-              subtitle_letter_spacing_em    AS SubtitleLetterSpacingEm,
-              subtitle_ruby_letter_spacing_em AS SubtitleRubyLetterSpacingEm,
-              font_subtitle_ruby            AS FontSubtitleRuby,
-              subtitle_ruby_size_ratio      AS SubtitleRubySizeRatio,
-              subtitle_ruby_raise_ratio     AS SubtitleRubyRaiseRatio,
-              subtitle_ruby_oblique_deg     AS SubtitleRubyObliqueDeg,
-              subtitle_line_gap_ratio       AS SubtitleLineGapRatio,
-              subtitle_line_gap_ratio_3     AS SubtitleLineGapRatio3,
-              subtitle_ruby_overhang_ratio  AS SubtitleRubyOverhangRatio,
-              subtitle_ruby_line_edge       AS SubtitleRubyLineEdge,
-              subtitle_ruby_grouping        AS SubtitleRubyGrouping,
+              sss.font_subtitle    AS FontSubtitle,
+              sss.subtitle_kerning              AS SubtitleKerning,
+              sss.subtitle_letter_spacing_em    AS SubtitleLetterSpacingEm,
+              sss.subtitle_ruby_letter_spacing_em AS SubtitleRubyLetterSpacingEm,
+              sss.font_subtitle_ruby            AS FontSubtitleRuby,
+              sss.subtitle_ruby_size_ratio      AS SubtitleRubySizeRatio,
+              sss.subtitle_ruby_raise_ratio     AS SubtitleRubyRaiseRatio,
+              sss.subtitle_ruby_oblique_deg     AS SubtitleRubyObliqueDeg,
+              sss.subtitle_line_gap_ratio       AS SubtitleLineGapRatio,
+              sss.subtitle_line_gap_ratio_3     AS SubtitleLineGapRatio3,
+              sss.subtitle_ruby_overhang_ratio  AS SubtitleRubyOverhangRatio,
+              sss.subtitle_ruby_line_edge       AS SubtitleRubyLineEdge,
+              sss.subtitle_ruby_grouping        AS SubtitleRubyGrouping,
               hide_storyboard_role  AS HideStoryboardRole,
               created_by       AS CreatedBy,
               updated_by       AS UpdatedBy,
               is_deleted       AS IsDeleted
             FROM series
-            WHERE series_id = @seriesId
+            LEFT JOIN series_subtitle_styles sss ON sss.series_id = series.series_id
+            WHERE series.series_id = @seriesId
             LIMIT 1;
         """;
 
@@ -217,10 +220,7 @@ public sealed class SeriesRepository : RepositoryBase
               title_en, title_short_en,
               slug, start_date, end_date, episodes, run_time_seconds,
               toei_anim_official_site_url, toei_anim_lineup_url,
-              abc_official_site_url, amazon_prime_video_asin, youtube_trailer_url, film_rating_no, film_cj_mark, vod_intro, font_subtitle,
-              subtitle_kerning, subtitle_letter_spacing_em, subtitle_ruby_letter_spacing_em,
-              font_subtitle_ruby, subtitle_ruby_size_ratio, subtitle_ruby_raise_ratio, subtitle_ruby_oblique_deg,
-              subtitle_line_gap_ratio, subtitle_line_gap_ratio_3, subtitle_ruby_overhang_ratio, subtitle_ruby_line_edge, subtitle_ruby_grouping,
+              abc_official_site_url, amazon_prime_video_asin, youtube_trailer_url, film_rating_no, film_cj_mark, vod_intro,
               hide_storyboard_role,
               created_by, updated_by, is_deleted
             ) VALUES (
@@ -229,10 +229,7 @@ public sealed class SeriesRepository : RepositoryBase
               @TitleEn, @TitleShortEn,
               @Slug, @StartDate, @EndDate, @Episodes, @RunTimeSeconds,
               @ToeiAnimOfficialSiteUrl, @ToeiAnimLineupUrl,
-              @AbcOfficialSiteUrl, @AmazonPrimeVideoAsin, @YoutubeTrailerUrl, @FilmRatingNo, @FilmCjMark, @VodIntro, @FontSubtitle,
-              @SubtitleKerning, @SubtitleLetterSpacingEm, @SubtitleRubyLetterSpacingEm,
-              @FontSubtitleRuby, @SubtitleRubySizeRatio, @SubtitleRubyRaiseRatio, @SubtitleRubyObliqueDeg,
-              @SubtitleLineGapRatio, @SubtitleLineGapRatio3, @SubtitleRubyOverhangRatio, @SubtitleRubyLineEdge, @SubtitleRubyGrouping,
+              @AbcOfficialSiteUrl, @AmazonPrimeVideoAsin, @YoutubeTrailerUrl, @FilmRatingNo, @FilmCjMark, @VodIntro,
               @HideStoryboardRole,
               @CreatedBy, @UpdatedBy, 0
             );
@@ -243,7 +240,10 @@ public sealed class SeriesRepository : RepositoryBase
         return id;
     }
 
-    /// <summary>既存のシリーズを UPDATE する。主キー (<see cref="Series.SeriesId"/>) が一致するレコードを更新する。 論理削除の切り替えは本メソッドの対象外。</summary>
+    /// <summary>
+    /// 既存のシリーズを UPDATE する。主キー (<see cref="Series.SeriesId"/>) が一致するレコードを更新する。 論理削除の切り替えは本メソッドの対象外。
+    /// サブタイトルの書体と組み方（<c>series_subtitle_styles</c>）は書き換えない（SQL で直接入れる）。
+    /// </summary>
     /// <param name="s">更新対象のシリーズ。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <exception cref="ArgumentException">必須項目が未設定、または slug が不正な書式の場合。</exception>
@@ -280,19 +280,6 @@ public sealed class SeriesRepository : RepositoryBase
               film_rating_no = @FilmRatingNo,
               film_cj_mark = @FilmCjMark,
               vod_intro = @VodIntro,
-              font_subtitle = @FontSubtitle,
-              subtitle_kerning = @SubtitleKerning,
-              subtitle_letter_spacing_em = @SubtitleLetterSpacingEm,
-              subtitle_ruby_letter_spacing_em = @SubtitleRubyLetterSpacingEm,
-              font_subtitle_ruby = @FontSubtitleRuby,
-              subtitle_ruby_size_ratio = @SubtitleRubySizeRatio,
-              subtitle_ruby_raise_ratio = @SubtitleRubyRaiseRatio,
-              subtitle_ruby_oblique_deg = @SubtitleRubyObliqueDeg,
-              subtitle_line_gap_ratio = @SubtitleLineGapRatio,
-              subtitle_line_gap_ratio_3 = @SubtitleLineGapRatio3,
-              subtitle_ruby_overhang_ratio = @SubtitleRubyOverhangRatio,
-              subtitle_ruby_line_edge = @SubtitleRubyLineEdge,
-              subtitle_ruby_grouping = @SubtitleRubyGrouping,
               hide_storyboard_role = @HideStoryboardRole,
               updated_by = @UpdatedBy
             WHERE series_id = @SeriesId;

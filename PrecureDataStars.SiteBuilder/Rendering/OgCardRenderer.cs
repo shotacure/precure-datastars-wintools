@@ -2070,7 +2070,7 @@ public sealed partial class OgCardRenderer : IDisposable
         {
             y += baseFont.Size;
             float cursor = x;
-            var telopPlaced = new List<(string Ruby, SKFont Font, float X, float Slot, bool AfterGap)>();
+            var telopPlaced = new List<(string Ruby, SKFont Font, float X, float Slot, bool AfterGap, float InkLeft, float InkRight)>();
             bool afterGap = false;
             foreach (var unit in line)
             {
@@ -2097,7 +2097,8 @@ public sealed partial class OgCardRenderer : IDisposable
                     if (unit.IsGap) afterGap = true;
                     else
                     {
-                        telopPlaced.Add((unit.Ruby, baseFont, cursor, slot, afterGap));
+                        var ink = ShaperFor(baseFont).InkExtent(unit.Base, baseFont);
+                        telopPlaced.Add((unit.Ruby, baseFont, cursor, slot, afterGap, cursor + ink.Left, cursor + ink.Right));
                         afterGap = false;
                     }
                 }

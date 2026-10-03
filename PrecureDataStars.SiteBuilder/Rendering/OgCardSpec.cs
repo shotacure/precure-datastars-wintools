@@ -160,7 +160,7 @@ public sealed record OgCardSpec(
     public float StatScale { get; init; }
 
     /// <summary>
-    /// 見出しに使う書体の名前（<c>series.font_subtitle</c>。「FOT-ハミング ProN B」のように Windows に見える書体名）。
+    /// 見出しに使う書体の名前（<c>series_subtitle_styles.font_subtitle</c>。「FOT-ハミング ProN B」のように Windows に見える書体名）。
     /// エピソードのサブタイトルを、その作品の本編のテロップと同じ書体で組むためのもので、
     /// インストールされていなければ既定の見出し書体で組んで警告を出す。空なら既定の見出し書体。
     /// </summary>

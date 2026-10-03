@@ -3,8 +3,8 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
 /// <summary>
-/// 作品ごとのサブタイトルテロップの組み方。親字の書体は <c>series.font_subtitle</c> で、ここでは字間、振り仮名の書体・斜体・
-/// 大きさと高さ、行間、親字より長い振り仮名の置き方を持つ。値は <c>series</c> の列から作り（<see cref="FromSeries"/>）、
+/// 作品ごとのサブタイトルテロップの組み方。親字の書体は <c>series_subtitle_styles.font_subtitle</c> で、ここでは字間、振り仮名の書体・斜体・
+/// 大きさと高さ、行間、親字より長い振り仮名の置き方を持つ。値は <c>series_subtitle_styles</c> の列から作り（<see cref="FromSeries"/>）、
 /// 列が NULL の項目は既定値で組む。
 /// </summary>
 public sealed record SubtitleTelopProfile

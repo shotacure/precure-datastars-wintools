@@ -4,8 +4,10 @@ using PrecureDataStars.SiteBuilder.Pipeline;
 namespace PrecureDataStars.SiteBuilder;
 
 /// <summary>SiteBuilder のエントリポイント。
-/// 引数なし＝テストモード（テスト用ディレクトリへ、GA4 / AdSense / ads.txt なしで生成）。
-/// <c>--production</c> 指定時のみ本番モード（本番ディレクトリへ全出力込みで生成）。
+/// <c>--test</c> でテストモード（テスト用ディレクトリへ、GA4 / AdSense / ads.txt なしで生成）、
+/// <c>--production</c> で本番モード（本番ディレクトリへ全出力込みで生成）。
+/// どちらも指定しないときは、端末からの対話実行なら 1 回だけテスト／本番を聞く（Enter = テスト）。
+/// スクリプトやパイプ経由（標準入力か標準出力がリダイレクト）なら聞かずにテストモード。
 /// <c>--production --deploy</c> でビルド後に S3 へ差分同期＋CloudFront キャッシュ削除まで実行する。
 /// <c>--dry-run</c> は変更計画のみ表示（無変更）、<c>--yes</c> は削除前確認の省略。
 /// <c>--refresh-telop</c> はサブタイトルのテロップ画像を、<c>--refresh-og</c> は OGP カード画像を、作り置きを使わずに描き直す
@@ -16,9 +18,14 @@ internal static class Program
     {
         try
         {
+            // 出力は常に UTF-8（モードの問い合わせ・ログとも）。ProgressReporter も同じ調整をするが、
+            // 問い合わせはその前に出るのでここでも行う。
+            ProgressReporter.TrySetUtf8Console();
+
             // ビルドモード・デプロイ意図はコマンドライン引数で決める（App.config では決めない）。
             // 既定はテストモード：うっかり普通に起動しても本番ディレクトリ・本番タグには触れない。
             bool isProduction = false;
+            bool isTest = false;
             bool deploy = false;
             bool dryRun = false;
             bool skipConfirm = false;
@@ -36,6 +43,8 @@ internal static class Program
                 }
                 else if (string.Equals(a, "--production", StringComparison.OrdinalIgnoreCase))
                     isProduction = true;
+                else if (string.Equals(a, "--test", StringComparison.OrdinalIgnoreCase))
+                    isTest = true;
                 else if (string.Equals(a, "--deploy", StringComparison.OrdinalIgnoreCase))
                     deploy = true;
                 else if (string.Equals(a, "--dry-run", StringComparison.OrdinalIgnoreCase))
@@ -61,6 +70,17 @@ internal static class Program
                 PrintUsage();
                 return 2;
             }
+            if (isProduction && isTest)
+            {
+                Console.Error.WriteLine("--production と --test は同時に指定できません。");
+                PrintUsage();
+                return 2;
+            }
+
+            // モードを指定しなかったときは、端末からの対話実行に限って 1 回だけ聞く
+            // （--deploy だけ付いているときは下の「--production 必須」のエラーに任せる）。
+            if (!isProduction && !isTest && !deploy)
+                isProduction = AskProductionInteractively();
 
             // デプロイは本番ビルドからのみ許可する（テスト出力を本番バケットへ流す事故を構造的に防ぐ）。
             if (deploy && !isProduction)
@@ -95,11 +115,25 @@ internal static class Program
         }
     }
 
+    /// <summary>
+    /// モード未指定のときの問い合わせ。標準入力・標準出力がどちらも端末（リダイレクトされていない）のときだけ
+    /// 「テスト／本番」を 1 回聞き、本番を選んだら true。Enter だけ・それ以外の入力・端末でない（スクリプトや
+    /// パイプ経由）ときは従来どおりテストモード（false）。うっかり本番ディレクトリへ書かない側に倒す。
+    /// </summary>
+    private static bool AskProductionInteractively()
+    {
+        if (Console.IsInputRedirected || Console.IsOutputRedirected) return false;
+        Console.Write("ビルドのモードを選んでください  [T] テスト（Enter） / [P] 本番 : ");
+        var answer = Console.ReadLine();
+        return string.Equals(answer?.Trim(), "p", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>使い方の表示。引数エラー時に共通で出す。</summary>
     private static void PrintUsage()
     {
-        Console.Error.WriteLine("使い方: PrecureDataStars.SiteBuilder [--production] [--page <path>] [--refresh-telop] [--refresh-og] [--deploy [--dry-run] [--yes]]");
-        Console.Error.WriteLine("  引数なし     : テストモード（SiteOutputDirTest へ、GA4 / AdSense / ads.txt なし）");
+        Console.Error.WriteLine("使い方: PrecureDataStars.SiteBuilder [--test | --production] [--page <path>] [--refresh-telop] [--refresh-og] [--deploy [--dry-run] [--yes]]");
+        Console.Error.WriteLine("  引数なし     : 端末からの対話実行ならテスト／本番を 1 回聞く（Enter = テスト）。スクリプトやパイプ経由ならテストモード");
+        Console.Error.WriteLine("  --test       : テストモード（SiteOutputDirTest へ、GA4 / AdSense / ads.txt なし）。問い合わせを出さない");
         Console.Error.WriteLine("  --production : 本番モード（SiteOutputDir へ、GA4 / AdSense / ads.txt あり）");
         Console.Error.WriteLine("  --page <path>: ピンポイントビルド。URL パスに <path> を含むページだけを生成（例: /privacy/）。");
         Console.Error.WriteLine("                 sitemap / 検索インデックスは再生成せず、--deploy 時も削除は行わない（部分生成の安全策）。");

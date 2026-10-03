@@ -88,7 +88,7 @@ public sealed class ProgressReporter : IDisposable
     /// <see cref="Console.OutputEncoding"/> のみ明示する。例外は握りつぶす（プロセス権限や
     /// 特殊なリダイレクト構成等で API 呼び出しが失敗しても、進捗バー以外の動作には影響させない）。
     /// </summary>
-    private static void TrySetUtf8Console()
+    internal static void TrySetUtf8Console()
     {
         try
         {

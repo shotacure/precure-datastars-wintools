@@ -813,11 +813,15 @@ Role: PRODUCTION 制作 (order 2)
    - `OgCardCacheDir`: OGP カード画像（`/og/`）の作り置きの置き場（空のときは `%LOCALAPPDATA%\PrecureDataStars\SiteBuilder\og-cards`）。テストと本番で共用する。出力ディレクトリの中を指すと起動時に止まる
 4. ビルド & 実行:
    ```bash
-   # テストモード（既定）: SiteOutputDirTest へ生成。GA4 / AdSense / ads.txt は出力しない
-   dotnet run --project PrecureDataStars.SiteBuilder -c Release
+   # テストモード: SiteOutputDirTest へ生成。GA4 / AdSense / ads.txt は出力しない
+   dotnet run --project PrecureDataStars.SiteBuilder -c Release -- --test
 
    # 本番モード: SiteOutputDir へ生成。GA4 / AdSense タグと ads.txt を出力する
    dotnet run --project PrecureDataStars.SiteBuilder -c Release -- --production
+
+   # モードを指定せずに端末から実行すると、テスト／本番を 1 回聞く（Enter = テスト）。
+   # スクリプトやパイプ経由（標準入力か標準出力がリダイレクト）なら聞かずにテストモード
+   dotnet run --project PrecureDataStars.SiteBuilder -c Release
 
    # 1 話だけテロップ画像を作り置きを使わずに描き直して本番へ上げる（--page は URL パスの部分一致）
    dotnet run --project PrecureDataStars.SiteBuilder -c Release -- --production --page /series/2009tv/12/ --refresh-telop --deploy

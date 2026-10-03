@@ -19,7 +19,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// ギャラリーまで巻き込まれて読めなくなるのを避ける。
 /// </para>
 /// <para>
-/// 画像はビルド済みの出力ディレクトリを走査して集める。カード生成は各ジェネレータの中で
+/// 画像はビルド済みの出力ディレクトリを走査して集める（今回の出力として記録されたものだけ）。カード生成は各ジェネレータの中で
 /// ページ書き出しと同時に行われるので、全ページの書き出しが終わったあとに実行する必要がある。
 /// </para>
 /// </summary>
@@ -27,12 +27,14 @@ public sealed class OgGalleryGenerator
 {
     private readonly BuildContext _ctx;
     private readonly BuildConfig _config;
+    private readonly OutputWriter _output;
 
     /// <summary><see cref="OgGalleryGenerator"/> の新しいインスタンスを生成する。</summary>
-    public OgGalleryGenerator(BuildContext ctx, BuildConfig config)
+    public OgGalleryGenerator(BuildContext ctx, BuildConfig config, OutputWriter output)
     {
         _ctx = ctx;
         _config = config;
+        _output = output;
     }
 
     /// <summary>ギャラリーを書き出す。本番モードでは何もしない。</summary>
@@ -45,8 +47,10 @@ public sealed class OgGalleryGenerator
 
         // og/{section}/{slug}.png と og/{slug}.png（ホーム等）の 2 段。
         // セクション名で束ねて、ページ種別ごとに見比べられる並びにする。
+        // 前回の出力の残り（今回は作らなかったカード。出力の掃除で消える）は載せない。
         var groups = Directory
             .EnumerateFiles(ogRoot, "*.png", SearchOption.AllDirectories)
+            .Where(f => _output.IsTracked(f))
             .Select(f => new
             {
                 Path = f,
@@ -90,9 +94,7 @@ public sealed class OgGalleryGenerator
 
         sb.Append("</main></body></html>");
 
-        string outDir = Path.Combine(_config.OutputDirectory, "og-gallery");
-        Directory.CreateDirectory(outDir);
-        File.WriteAllText(Path.Combine(outDir, "index.html"), sb.ToString(), new UTF8Encoding(false));
+        _output.WriteText(Path.Combine(_config.OutputDirectory, "og-gallery", "index.html"), sb.ToString());
 
         _ctx.Logger.Success($"og gallery: {total} 枚 / {groups.Count} 区分（テスト出力のみ）");
     }

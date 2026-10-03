@@ -97,12 +97,21 @@ public sealed class BuildConfig
 
     /// <summary>サブタイトルのテロップ画像の作り置きの置き場所（絶対パス）。App.config の <c>SubtitleTelopCacheDir</c>。
     /// 未設定なら <c>%LOCALAPPDATA%\PrecureDataStars\SiteBuilder\subtitle-telops</c>。
-    /// 出力ディレクトリはビルドのたびに空にするので、その外に置く（テストと本番で共用する）。</summary>
+    /// 出力ディレクトリの中に置くと全体ビルドの最後に孤児として消されるので、その外に置く（テストと本番で共用する）。</summary>
     public string SubtitleTelopCacheDirectory { get; }
 
     /// <summary>サブタイトルのテロップ画像を、作り置きを使わずに描き直すか（<c>--refresh-telop</c> 由来）。
     /// <see cref="PageFilter"/> と組み合わせると、対象のページの画像だけを描き直す。</summary>
     public bool RefreshSubtitleTelops { get; }
+
+    /// <summary>OGP カード画像の作り置きの置き場所（絶対パス）。App.config の <c>OgCardCacheDir</c>。
+    /// 未設定なら <c>%LOCALAPPDATA%\PrecureDataStars\SiteBuilder\og-cards</c>。
+    /// 出力ディレクトリの中に置くと全体ビルドの最後に孤児として消されるので、その外に置く（テストと本番で共用する）。</summary>
+    public string OgCardCacheDirectory { get; }
+
+    /// <summary>OGP カード画像を、作り置きを使わずに描き直すか（<c>--refresh-og</c> 由来）。
+    /// <see cref="PageFilter"/> と組み合わせると、対象のページの画像だけを描き直す。</summary>
+    public bool RefreshOgCards { get; }
 
     private BuildConfig(
         string connectionString,
@@ -127,7 +136,9 @@ public sealed class BuildConfig
         DeployRuntimeOptions deploy,
         string pageFilter,
         string subtitleTelopCacheDirectory,
-        bool refreshSubtitleTelops)
+        bool refreshSubtitleTelops,
+        string ogCardCacheDirectory,
+        bool refreshOgCards)
     {
         ConnectionString = connectionString;
         OutputDirectory = outputDirectory;
@@ -152,6 +163,8 @@ public sealed class BuildConfig
         PageFilter = pageFilter;
         SubtitleTelopCacheDirectory = subtitleTelopCacheDirectory;
         RefreshSubtitleTelops = refreshSubtitleTelops;
+        OgCardCacheDirectory = ogCardCacheDirectory;
+        RefreshOgCards = refreshOgCards;
     }
 
     /// <summary>App.config から設定を読み出して <see cref="BuildConfig"/> を構築する。</summary>
@@ -161,9 +174,10 @@ public sealed class BuildConfig
     /// 未指定なら <see cref="DeployRuntimeOptions.None"/> を渡す。</param>
     /// <param name="pageFilter">ピンポイントビルドのページフィルタ（<c>--page</c> 由来）。空文字なら全ページ。</param>
     /// <param name="refreshSubtitleTelops">サブタイトルのテロップ画像を作り置きを使わずに描き直すか（<c>--refresh-telop</c> 由来）。</param>
+    /// <param name="refreshOgCards">OGP カード画像を作り置きを使わずに描き直すか（<c>--refresh-og</c> 由来）。</param>
     /// <returns>構築済み設定。</returns>
     /// <exception cref="InvalidOperationException">必須項目（接続文字列）が未設定の場合。</exception>
-    public static BuildConfig FromAppConfig(bool isProductionMode, DeployRuntimeOptions deploy, string pageFilter, bool refreshSubtitleTelops = false)
+    public static BuildConfig FromAppConfig(bool isProductionMode, DeployRuntimeOptions deploy, string pageFilter, bool refreshSubtitleTelops = false, bool refreshOgCards = false)
     {
         // 接続文字列は既存ツール群と同じ名前（DbConfig.DefaultConnectionStringName = "DatastarsMySql"）で統一
         var cs = ConfigurationManager.ConnectionStrings[DbConfig.DefaultConnectionStringName]?.ConnectionString
@@ -287,16 +301,23 @@ public sealed class BuildConfig
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToArray();
 
-        // サブタイトルのテロップ画像の作り置きの置き場所。出力ディレクトリの中に置くとビルドのたびに消えてしまうので、
-        // 出力ディレクトリ（とその配下）を指していたら設定ミスとして起動時に止める。
-        var rawTelopCache = (ConfigurationManager.AppSettings["SubtitleTelopCacheDir"] ?? "").Trim();
-        var telopCacheDir = rawTelopCache.Length > 0
-            ? Path.GetFullPath(Environment.ExpandEnvironmentVariables(rawTelopCache))
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "PrecureDataStars", "SiteBuilder", "subtitle-telops");
-        if (IsSameOrUnder(telopCacheDir, outputDir))
-            throw new InvalidOperationException(
-                $"App.config の SubtitleTelopCacheDir が出力ディレクトリの中を指しています（ビルドのたびに消えます）: {telopCacheDir}");
+        // サブタイトルのテロップ画像と OGP カード画像の作り置きの置き場所。出力ディレクトリの中に置くと全体ビルドの最後に
+        // 孤児として消されてしまうので、出力ディレクトリ（とその配下）を指していたら設定ミスとして起動時に止める。
+        var telopCacheDir = ResolveCacheDir("SubtitleTelopCacheDir", "subtitle-telops");
+        var ogCardCacheDir = ResolveCacheDir("OgCardCacheDir", "og-cards");
+
+        string ResolveCacheDir(string key, string defaultLeaf)
+        {
+            var raw = (ConfigurationManager.AppSettings[key] ?? "").Trim();
+            var dir = raw.Length > 0
+                ? Path.GetFullPath(Environment.ExpandEnvironmentVariables(raw))
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "PrecureDataStars", "SiteBuilder", defaultLeaf);
+            if (IsSameOrUnder(dir, outputDir))
+                throw new InvalidOperationException(
+                    $"App.config の {key} が出力ディレクトリの中を指しています（ビルドの最後に消されます）: {dir}");
+            return dir;
+        }
 
         static bool IsSameOrUnder(string path, string root)
         {
@@ -310,6 +331,6 @@ public sealed class BuildConfig
             effectiveGa4, gsv.Trim(), effectiveAds, publishedYear,
             defaultOg, amazonTag, ogFonts, isProductionMode,
             awsBucket, awsRegion, awsProfile, cfDist, protectedPrefixes, deploy,
-            pageFilter ?? "", telopCacheDir, refreshSubtitleTelops);
+            pageFilter ?? "", telopCacheDir, refreshSubtitleTelops, ogCardCacheDir, refreshOgCards);
     }
 }

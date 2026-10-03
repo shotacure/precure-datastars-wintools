@@ -55,15 +55,31 @@ public sealed class PageRenderer
     private readonly Dictionary<string, string> _ogCardGlyphWarnings = new(StringComparer.Ordinal);
     private readonly object _ogCardGlyphLock = new();
 
-    public PageRenderer(ScribanRenderer renderer, BuildConfig config, BuildSummary summary, ProgressReporter? reporter = null, OgCardRenderer? ogCardRenderer = null)
+    /// <summary>出力ディレクトリへの書き出しの窓口（変わらないファイルは書かず、今回の出力に属するファイルを記録する）。</summary>
+    private readonly OutputWriter _output;
+
+    /// <summary>今回のビルドで使った OGP カードの作り置きの鍵。全体ビルドの最後に、使わなかった作り置きを消すのに使う。</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _ogCardKeysUsed = new(StringComparer.Ordinal);
+
+    private int _ogCardsRendered;
+    private int _ogCardsFromCache;
+
+    public PageRenderer(ScribanRenderer renderer, BuildConfig config, BuildSummary summary, OutputWriter output, ProgressReporter? reporter = null, OgCardRenderer? ogCardRenderer = null)
     {
         _renderer = renderer;
         _config = config;
         _summary = summary;
+        _output = output;
         _reporter = reporter;
         _ogCardRenderer = ogCardRenderer;
         _copyrightYears = BuildCopyrightYearsString(config.PublishedYear, DateTime.Now.Year);
     }
+
+    /// <summary>今回のビルドで使った OGP カードの作り置きの鍵（ファイル名から拡張子を除いたもの）。</summary>
+    public IReadOnlySet<string> OgCardCacheKeysUsed => _ogCardKeysUsed.Keys.ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>OGP カードを描いた枚数と、作り置きで済ませた枚数。ビルド後のサマリ用。</summary>
+    public (int Rendered, int FromCache) OgCardCounts => (_ogCardsRendered, _ogCardsFromCache);
 
     /// <summary>ブランド書体で描けなかった文字 → 最初に検出したページ URL。ビルド後の警告出力用。</summary>
     public IReadOnlyDictionary<string, string> OgCardGlyphWarnings
@@ -93,9 +109,14 @@ public sealed class PageRenderer
     }
 
     /// <summary>
-    /// ページ専用の OGP カード画像を書き出し、その絶対 URL を返す。
+    /// ページ専用の OGP カード画像を出力へ置き、その絶対 URL を返す。
     /// 出力パスは canonical パスを畳んだもの（<c>/people/高橋任治/</c> → <c>/og/people/高橋任治.png</c>、
-    /// ルートは <c>/og/home.png</c>）。ページごとに出力先が異なるため並列フェーズから呼んで安全。
+    /// ルートは <c>/og/home.png</c>）。
+    /// 画像は作り置き（<see cref="BuildConfig.OgCardCacheDirectory"/> の <c>{鍵}.png</c>。鍵は
+    /// <see cref="OgCardRenderer.CacheKey"/>）から写し、同じ鍵の作り置きが無いとき（と <c>--refresh-og</c> のとき）だけ
+    /// 描いて作り置きに足す。指定の書体が無く既定の書体で描いたカードは作り置きに入れず出力へ直接置く
+    /// （書体を入れた次のビルドで描き直されるように）。
+    /// 出力先はページごとに異なり、作り置きへは一時ファイルに描いてから置き換えるので、並列フェーズから呼んで安全。
     /// BaseUrl 未設定時は絶対 URL を組めないため何もせず空文字を返す。
     /// </summary>
     private string RenderOgCard(OgCardSpec spec, string canonicalPath)
@@ -104,12 +125,36 @@ public sealed class PageRenderer
 
         var relativePath = OgCardRelativePath(canonicalPath);
         // 名前ベースの canonical（パーセントエンコード済み）はデコードしたファイル名で書き出し、URL はエンコード形のまま返す。
-        var missing = _ogCardRenderer.Render(spec, Path.Combine(_config.OutputDirectory,
-            PathUtil.DecodePath(relativePath).Replace('/', Path.DirectorySeparatorChar)));
-        if (missing is not null)
+        var outputFile = Path.Combine(_config.OutputDirectory,
+            PathUtil.DecodePath(relativePath).Replace('/', Path.DirectorySeparatorChar));
+
+        var key = _ogCardRenderer.CacheKey(spec);
+        _ogCardKeysUsed.TryAdd(key, 0);
+        var cacheFile = Path.Combine(_config.OgCardCacheDirectory, key + ".png");
+        if (_config.RefreshOgCards || !File.Exists(cacheFile))
         {
-            lock (_ogCardGlyphLock) _ogCardGlyphWarnings.TryAdd(missing, canonicalPath);
+            Directory.CreateDirectory(_config.OgCardCacheDirectory);
+            var tempFile = $"{cacheFile}.{Guid.NewGuid():N}.tmp";
+            var missing = _ogCardRenderer.Render(spec, tempFile);
+            Interlocked.Increment(ref _ogCardsRendered);
+            if (missing is not null)
+            {
+                lock (_ogCardGlyphLock) _ogCardGlyphWarnings.TryAdd(missing, canonicalPath);
+            }
+            if (OgCardRenderer.IsTypefaceWarning(missing))
+            {
+                PathUtil.EnsureParentDirectory(outputFile);
+                File.Move(tempFile, outputFile, overwrite: true);
+                _output.Register(outputFile);
+                return $"{_config.BaseUrl}/{relativePath}";
+            }
+            File.Move(tempFile, cacheFile, overwrite: true);
         }
+        else
+        {
+            Interlocked.Increment(ref _ogCardsFromCache);
+        }
+        _output.CopyFrom(cacheFile, outputFile);
         return $"{_config.BaseUrl}/{relativePath}";
     }
 
@@ -120,6 +165,7 @@ public sealed class PageRenderer
     /// 画像は <see cref="OgCardRenderer.TelopPixelRatio"/> 倍の画素で描くので、表示の幅・高さはその分だけ割って返す。
     /// レンダラが無いとき・ピンポイントビルドの対象外のページ・描く字が無いときは null（ページ側は HTML のサブタイトルを出す）。
     /// 出力先はページごとに異なり、作り置きへは一時ファイルに描いてから置き換えるので、並列フェーズから呼んで安全。
+    /// 出力にすでに同じ画像（作り置きと大きさ・更新時刻が同じ）があれば写さない。
     /// </summary>
     /// <param name="request">その話のテロップ画像の材料。</param>
     public SubtitleTelopImage? RenderSubtitleTelop(SubtitleTelopRequest request)
@@ -136,10 +182,10 @@ public sealed class PageRenderer
         }
 
         var outputFile = Path.Combine(_config.OutputDirectory, request.RelativePath.Replace('/', Path.DirectorySeparatorChar));
-        PathUtil.EnsureParentDirectory(outputFile);
-        File.Copy(cacheFile, outputFile, overwrite: true);
+        _output.CopyFrom(cacheFile, outputFile);
 
-        var bytes = File.ReadAllBytes(outputFile);
+        // 寸法と版の印は作り置きから読む（出力へ写さなかったときも中身は同じ）。
+        var bytes = File.ReadAllBytes(cacheFile);
         var (width, height) = ReadPngSize(bytes);
         // 画像のファイル名は話ごとに固定なので、作り直してもブラウザが古い画像を使い続けないよう、
         // CSS・JS（AssetUrl）と同じく中身のハッシュの先頭 10 桁を版の印として URL に付ける。
@@ -257,7 +303,7 @@ public sealed class PageRenderer
         new(@"amazon\.co\.jp/[^""']*[?&]tag=", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>
-    /// レンダリング済みの最終 HTML をファイルへ書き出し、サマリ・進捗・sitemap 記録を更新する。
+    /// レンダリング済みの最終 HTML をファイルへ書き出し（中身が前回と同じなら書かない）、サマリ・進捗・sitemap 記録を更新する。
     /// <see cref="RenderAndWrite"/> の後半（書き出し）だけを切り出したメソッド。
     /// <see cref="_writtenPages"/> 等の共有状態を更新するため、並列実行フェーズからは呼ばず、
     /// 必ず元のページ順での逐次実行コンテキストから呼ぶこと（sitemap.xml の並びが
@@ -266,16 +312,14 @@ public sealed class PageRenderer
     public void WriteRendered(string urlPath, string section, string pageHtml)
     {
         if (!ShouldWrite(urlPath)) return;
-        var outputFile = PathUtil.ToOutputFilePath(_config.OutputDirectory, urlPath);
-        PathUtil.EnsureParentDirectory(outputFile);
-        File.WriteAllText(outputFile, pageHtml);
+        _output.WriteText(PathUtil.ToOutputFilePath(_config.OutputDirectory, urlPath), pageHtml);
 
         RecordWritten(urlPath, section);
     }
 
     /// <summary>
-    /// 通常ページ 1 件分をレンダリングしてファイルへ書き出すところまでを行い、サマリ・進捗・
-    /// sitemap 記録は行わない。書き出し先パスはページごとに互いに異なるため、本メソッドは
+    /// 通常ページ 1 件分をレンダリングしてファイルへ書き出す（中身が前回と同じなら書かない）ところまでを行い、
+    /// サマリ・進捗・sitemap 記録は行わない。書き出し先パスはページごとに互いに異なるため、本メソッドは
     /// ページレンダリングの並列実行フェーズから複数スレッドで同時に呼び出せる
     /// （ファイル作成はウイルススキャン等で 1 件あたりの待ちが意外と大きく、並列化の効果が出る）。
     /// 呼び出し側は全ページ完了後に <see cref="RecordWritten"/> を元のページ順で逐次呼び出して
@@ -289,9 +333,7 @@ public sealed class PageRenderer
     {
         if (!ShouldWrite(urlPath)) return;
         var pageHtml = RenderToHtml(urlPath, contentTemplate, contentModel, layoutMeta);
-        var outputFile = PathUtil.ToOutputFilePath(_config.OutputDirectory, urlPath);
-        PathUtil.EnsureParentDirectory(outputFile);
-        File.WriteAllText(outputFile, pageHtml);
+        _output.WriteText(PathUtil.ToOutputFilePath(_config.OutputDirectory, urlPath), pageHtml);
     }
 
     /// <summary>
@@ -359,9 +401,7 @@ public sealed class PageRenderer
 
         var pageHtml = _renderer.Render("_layout.sbn", layoutMeta);
 
-        var outputFile = Path.Combine(_config.OutputDirectory, outputFileName);
-        PathUtil.EnsureParentDirectory(outputFile);
-        File.WriteAllText(outputFile, pageHtml);
+        _output.WriteText(Path.Combine(_config.OutputDirectory, outputFileName), pageHtml);
 
         _summary.IncrementPage(section);
         _reporter?.PageWritten();

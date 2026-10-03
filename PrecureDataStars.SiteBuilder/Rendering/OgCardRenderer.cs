@@ -1,3 +1,7 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using PrecureDataStars.SiteBuilder.Utilities;
 using SkiaSharp;
 
@@ -45,6 +49,13 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <summary>OGP 推奨サイズ。X / Facebook / LINE が大カードとして扱う 1.91:1 の実寸。</summary>
     public const int CardWidth = 1200;
     public const int CardHeight = 630;
+
+    /// <summary>
+    /// カードの描き方の版。作り置きの鍵（<see cref="CacheKey"/>）に入れる。描画コードの変更は
+    /// <see cref="OgRenderSourceStamp"/>（ビルド時に描画コード一式から求めるハッシュ）が自動で鍵に反映するので、
+    /// 普段は上げなくてよい。コード以外の理由（同梱書体の差し替えなど）で全カードを描き直したいときに 1 上げる。
+    /// </summary>
+    public const int CardRenderVersion = 1;
 
     /// <summary>左端の色帯の幅。種別ごとの色（<see cref="OgCardSpec.BandColorHex"/>）で塗る。</summary>
     private const float BandWidth = 20f;
@@ -247,6 +258,12 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <summary>カード下部に固定で出すサイト名。</summary>
     private readonly string _brandLabel;
 
+    /// <summary>
+    /// 設定で指定された書体の印（ファイル名と斜体の角度）。作り置きの鍵に入れる。書体はファイルの中身ではなく
+    /// 名前で見るので、同じ名前のファイルを差し替えても描き直さない（描き直したいときは <c>--refresh-og</c>）。
+    /// </summary>
+    private readonly string _fontIdentity;
+
     /// <summary>本文書体に適用するウェイト（サイトの本文と同じ Regular）。</summary>
     private const int BodyFontWeight = 400;
 
@@ -263,6 +280,11 @@ public sealed partial class OgCardRenderer : IDisposable
     public OgCardRenderer(string brandLabel, OgCardFontPaths fonts)
     {
         _brandLabel = brandLabel;
+        _fontIdentity = string.Join('|',
+            Path.GetFileName(fonts.Title), Path.GetFileName(fonts.Body), Path.GetFileName(fonts.Emphasis),
+            Path.GetFileName(fonts.Number), Path.GetFileName(fonts.Watermark), Path.GetFileName(fonts.Notice),
+            string.Join(';', fonts.TitleCondensedPaths.Select(Path.GetFileName)),
+            fonts.ObliqueDegrees.ToString(CultureInfo.InvariantCulture));
 
         var fontDir = Path.Combine(AppContext.BaseDirectory, "Fonts");
         _brandTypeface = Own(LoadTypeface(Path.Combine(fontDir, "KiwiMaru-Medium.ttf")));
@@ -483,6 +505,31 @@ public sealed partial class OgCardRenderer : IDisposable
 
         return fontWarning ?? FindMissingBrandGlyphs(_brandLabel);
     }
+
+    /// <summary>
+    /// カードの作り置きの鍵（16 進 32 桁）。描画コードの印（<see cref="OgRenderSourceStamp"/>。描き方のコードを変えると変わる）・
+    /// 描き方の版（<see cref="CardRenderVersion"/>）・サイト名・設定の書体の印（<see cref="_fontIdentity"/>）・カードの材料一式
+    /// （<paramref name="spec"/> を JSON にしたもの。載せる文字・色・年表・使う書体名まで含む）のどれかが変われば変わるので、
+    /// 同じ鍵の画像があれば描き直さずに使ってよい。
+    /// </summary>
+    public string CacheKey(OgCardSpec spec)
+    {
+        var material = string.Join('\n',
+            OgRenderSourceStamp.Value,
+            CardRenderVersion.ToString(CultureInfo.InvariantCulture),
+            _brandLabel,
+            _fontIdentity,
+            JsonSerializer.Serialize(spec));
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material)))[..32].ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// <see cref="Render"/> の戻り値が「指定の書体がこの PC に無く、既定の書体で描いた」警告かどうか
+    /// （ワードマークにブランド書体で描けない文字があった、という情報とは区別する）。
+    /// パイプラインは警告として報告し、<see cref="PageRenderer"/> はそのカードを作り置きに入れない。
+    /// </summary>
+    public static bool IsTypefaceWarning(string? message)
+        => message is not null && message.StartsWith("書体「", StringComparison.Ordinal);
 
     // ════════════════════════════════ 標準レイアウト ════════════════════════════════
 

@@ -22,6 +22,7 @@ precure-datastars-wintools.sln
 ├── PrecureDataStars.Episodes … エピソード管理 GUI（WinForms）
 ├── PrecureDataStars.Catalog … カタログ管理 GUI（WinForms）
 ├── PrecureDataStars.AmazonSync … Creators API 画像一括取得・書籍取り込み（コンソール）
+├── PrecureDataStars.TitleCharStatsRefresh … サブタイトル文字統計の作り直し（内部用コンソール）
 │
 ├── PrecureDataStars.BDAnalyzer … Blu-ray/DVD チャプター解析（WinForms）＋DB 連携
 ├── PrecureDataStars.CDAnalyzer … CD-DA トラック解析（WinForms）＋DB 連携
@@ -53,6 +54,7 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.OaVerifier** | WinForms GUI | 本放送フォーマット検証ツール。地デジ録画 TS（descrambled）を LibVLC で再生し、TOT（PID 0x0014）から放送日を確定して該当エピソードを自動同定、PCR ↔ メディア時刻の写像で番組先頭（`on_air_at`）基準の各境界を頭出しする。確認のため全パートを一覧表示し、`episode_parts.notes` に `【本放送未確認】` を含むパートを薄い赤で強調。再生は「未承認パート通し」「全パート通し」の 2 種で対象パートの開始/終了境界を連続再生（確認幅は境界中心からの「始点」−3.0〜+2.0 秒・「終点」−2.0〜+3.0 秒を 0.5 秒刻みで独立指定し、既定は始点 −2.0／終点 +2.0＝前後 ±2 秒。始点 ＜ 終点 を満たさない設定はコンボを赤表示し再生を中止。手動移動は ±5/15 秒の送り戻しのみ）。フルセグは解像度最大の映像トラックを自動選択（映像/音声トラックは手動切替可）。承認したパートの notes からマーカーを除去し、エピソードエディタでの修正後に「パートデータをリロード」で再取得できる。TS と DB の食い違いは「現在位置を番組先頭に再アンカー」で吸収。 |
 | **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細・人物／企業／プリキュア／キャラクター詳細・クリエイター・楽曲・劇伴・商品・統計の各ページ群を生成する。`CreditInvolvementIndex` 経由で「人物・企業・キャラごとにどのシリーズのどのエピソードに、どの役職で関与したか」を逆引きする。 |
 | **PrecureDataStars.AmazonSync** | コンソール | `products` テーブルから ASIN を持つ商品を抽出し、Creators API GetItems で `cover_image_url` を一括更新するバッチ。鮮度切れ判定（90 日経過 or 未取得）で対象を絞り込み、Creators API レート制限（1 TPS）順守のため各リクエスト間に 1.1 秒スリープを挟む。CLI オプションは `--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--search "キーワード" --index Books`（検索の診断）／`--dry-run`（DB 更新せず表示のみ）／`--target products|books|all`（巡回対象の切替）。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録。書籍については表紙巡回（代表は紙優先）に加えて、`--import-book`（ASIN から書誌・書影・クレジットを組み立てて `books` へ登録）と `--attach-print --book-id N --print-asin X`（Kindle 版だけで登録済みの書籍へ紙版を合流）も担う。 |
+| **PrecureDataStars.TitleCharStatsRefresh** | コンソール（内部用） | 指定したエピソードの `title_text` を Episodes の保存時と同じ `TitleCharStatsBuilder` にかけ、`title_char_stats` を作り直す。サブタイトルを DB 直接で直したあとに使う。引数だけなら DB の統計との違いを表示するのみで、`--apply` を付けたときだけ違いのある話を 1 トランザクションで書き換える（`title_char_stats` 以外の列には触れない）。配布 ZIP には含めない。使い方は「エピソード管理」を参照。 |
 
 ---
 
@@ -86,7 +88,7 @@ mysql -u root -p < db/schema.sql
 
 ### 2. 接続文字列の設定
 
-DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / OaVerifier / SiteBuilder / AmazonSync）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。
+DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / OaVerifier / SiteBuilder / AmazonSync / TitleCharStatsRefresh）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。
 
 ```xml
 <connectionStrings>
@@ -145,6 +147,14 @@ dotnet run --project PrecureDataStars.Catalog
 ### エピソード管理
 
 `PrecureDataStars.Episodes` でシリーズとエピソードの CRUD、サブタイトルのかな・ルビ編集、パート構成（アバン・OP・A/B パート・ED・予告）の編集を行う。新規エピソード追加後はサブタイトル文字統計（`title_char_stats`）と YouTube 予告動画 URL・特別予告（本放送時）URL を必要に応じて補完する。
+
+サブタイトル（`title_text`）を Episodes を通さずに DB で直したときは、`PrecureDataStars.TitleCharStatsRefresh` で文字統計を作り直す。話はシリーズのスラッグと話数（`--episode 2012tv:13`、カンマ区切りで複数可）か `--episode-id` で指定し、`--all` で全話を点検できる（`--all` では違いのある話だけを並べる）。引数だけなら違い（`categories.Punct: 3.0 → 3` のように JSON のパスごと）を表示するだけで、`--apply` を付けたときだけ書き込む。指定した話が 1 つでも見つからなければ何も書かずに止まる（終了コード 2）。
+
+```bash
+dotnet run --project PrecureDataStars.TitleCharStatsRefresh -- --episode 2012tv:13            # 表示のみ
+dotnet run --project PrecureDataStars.TitleCharStatsRefresh -- --episode 2012tv:13 --apply    # 書き込み
+dotnet run --project PrecureDataStars.TitleCharStatsRefresh -- --all                          # 全話の点検
+```
 
 エピソード編集画面の「雑誌サブタイトル掲載」行では、アニメ雑誌でのサブタイトル掲載状態（データなし / 掲載 / 非公開 / 未定）を選択する。横に放送日から自動解決した担当号（「→ 2026年9月号 (2026/8/7発売)」）が読み取り専用で表示され、データなしのときは「サイト非表示」、担当号が確定しない（号マスタの次号未登録）ときは赤字警告になる。「号マスタ...」ボタンで開くダイアログから、アニメ雑誌の号マスタ（年・月・発売日）を一覧編集できる（次号の発売予定日は先行登録する運用）。サブタイトルが未確定（空欄）のまま保存できるのは掲載状態が「非公開」または「未定」のときだけで、それ以外はエディタ・リポジトリ・DB CHECK の三層で弾かれる。
 
@@ -947,7 +957,7 @@ Role: PRODUCTION 制作 (order 2)
 `/series/{slug}/{seriesEpNo}/` には次の情報を 1 ページに集約する:
 
 1. **サブタイトル表示**: `title_rich_html`（ルビ付き HTML）があればそのまま流す。なければ `title_text` をプレーン表示。下に `title_kana` を補助表示。サブタイトル未確定（`title_text` NULL）の話は雑誌掲載状態に応じたプレースホルダ（（サブタイトル「未定」）/（サブタイトル「非公開」））を muted 表示し、h1・ページ `<title>` は鉤括弧の入れ子を避けて「第22話（サブタイトル「未定」）」の形にする（プレースホルダは誌面の案内の引用でネタバレ要素が無いため、サブタイトル解禁ガードは適用しない。一覧系・前後話ナビ・検索インデックスも同じプレースホルダ表示）
-   - **テロップ画像**: 確定したサブタイトルは、本編のサブタイトルテロップの体裁で描いた背景透過の PNG（`/subtitles/{シリーズslug}/{話数}.png`、`OgCardRenderer.RenderSubtitleTelop`）を欄の中央に置いて見せる。書体は `series_subtitle_styles.font_subtitle`（見つからなければ既定の見出し書体）、白い字に黒フチ（字の大きさの 0.048）と右下への黒い影（0.037）で、OGP カードと同じ。改行は `title_rich_html` の `<br>` のとおりで、行ごとに中央揃え。全角の空白は 1 字、半角の空白は半字の空きにし、`<small>` の字は 0.65 倍で組む。親字と振り仮名はひとまとまりとして影 → フチ → 白い字の順に重ねる（振り仮名のフチが親字の白い字にかからない）。振り仮名のフチの太さと影のずれは親字と同じ幅。字間と振り仮名の組み方は作品ごとに `series_subtitle_styles`（`series` と 1 対 1。行が無い作品・NULL の列は括弧内の既定値）の列で持つ。`subtitle_kerning` 親字の組み方（`PROPORTIONAL` ＝書体の詰め情報、なければ字面で詰める。`MONO` ＝ベタ組み）、`subtitle_letter_spacing_em` 親字の字間に足す空き（0）、`subtitle_ruby_letter_spacing_em` 振り仮名の字間に足す空き（0）、`font_subtitle_ruby` 振り仮名の書体（親字と同じ）、`subtitle_ruby_size_ratio` 大きさ（親字の 0.3 倍）、`subtitle_ruby_raise_ratio` ベースラインを上げる高さ（親字の 1.04 倍）、`subtitle_ruby_oblique_deg` 振り仮名だけにかける斜体の角度（0 度）、`subtitle_line_gap_ratio` 行と行のあいだの空き（振り仮名があれば親字の 0.28、なければ 0.22）、`subtitle_line_gap_ratio_3` 3 行以上のときの行間（`subtitle_line_gap_ratio` と同じ）、`subtitle_ruby_overhang_ratio` 親字より長い振り仮名が振り仮名の無い隣の字へはみ出せる幅（振り仮名 1 字分）、`subtitle_ruby_line_edge` 行の端の扱い（行頭は外へ出さず行頭にそろえ、行末は外へはみ出させる。`ALIGN` で両端そろえ、`OVERHANG` で両端はみ出し）、`subtitle_ruby_grouping` 置き方（`MONO` ＝ルビの単位ごとに親字の上、`JUKUGO` ＝振り仮名のある字が続くところの読みをひと続きにして熟語全体の中央、`SPREAD` ＝その読みを熟語の幅に 1 字ずつ均等に並べる。既定は MONO）。振り仮名は字面（インク）の中心を親字の字面の中心にそろえ、親字の幅に収まればそのまま、長ければ両隣へはみ出させ（隣が振り仮名のある字ならその振り仮名の脇の空きまで）、それでも収まらなければその幅まで長体をかける。詰める組み方では、行の途中の単独の「！」「？」（前後に「！」「？」が続かないもの）は全角の幅を取って中央に置き、行末のものは前の字に寄せる。字の大きさは画面上 45px 相当（2 倍の画素で描く）、画像の最大幅は 860px で、収まらない行はその行だけ長体（80% まで）をかけ、それでも収まらなければ全行の字を小さくする。表示は欄の幅まで縮め、スマホ（640px 以下）では字の大きさの上限を 24px（8/15）にする。`alt` はサブタイトルの文字列。ビルドの時点で解禁前の話（ぼかしが効かないため）とサブタイトル未確定の話は画像を作らず、上記の HTML を出す
+   - **テロップ画像**: 確定したサブタイトルは、本編のサブタイトルテロップの体裁で描いた背景透過の PNG（`/subtitles/{シリーズslug}/{話数}.png`、`OgCardRenderer.RenderSubtitleTelop`）を欄の中央に置いて見せる。`<img src>` には CSS・JS と同じく中身のハッシュの先頭 10 桁を `?v=` で付け、画像を作り直したらブラウザが新しい画像を取りに行くようにする。書体は `series_subtitle_styles.font_subtitle`（見つからなければ既定の見出し書体）、白い字に黒フチ（字の大きさの 0.048）と右下への黒い影（0.037）で、OGP カードと同じ。改行は `title_rich_html` の `<br>` のとおりで、行ごとに中央揃え。全角の空白は 1 字、半角の空白は半字の空きにし、`<small>` の字は 0.65 倍で組む。親字と振り仮名はひとまとまりとして影 → フチ → 白い字の順に重ねる（振り仮名のフチが親字の白い字にかからない）。振り仮名のフチの太さと影のずれは親字と同じ幅。字間と振り仮名の組み方は作品ごとに `series_subtitle_styles`（`series` と 1 対 1。行が無い作品・NULL の列は括弧内の既定値）の列で持つ。`subtitle_kerning` 親字の組み方（`PROPORTIONAL` ＝書体の詰め情報、なければ字面で詰める。`MONO` ＝ベタ組み）、`subtitle_letter_spacing_em` 親字の字間に足す空き（0）、`subtitle_ruby_letter_spacing_em` 振り仮名の字間に足す空き（0）、`font_subtitle_ruby` 振り仮名の書体（親字と同じ）、`subtitle_ruby_size_ratio` 大きさ（親字の 0.3 倍）、`subtitle_ruby_raise_ratio` ベースラインを上げる高さ（親字の 1.04 倍）、`subtitle_ruby_oblique_deg` 振り仮名だけにかける斜体の角度（0 度）、`subtitle_line_gap_ratio` 行と行のあいだの空き（上の行の字の下端から下の行の振り仮名の段の上端まで。親字の 0.28）、`subtitle_line_gap_ratio_3` 3 行以上のときの行間（`subtitle_line_gap_ratio` と同じ）、`subtitle_ruby_overhang_ratio` 親字より長い振り仮名が振り仮名の無い隣の字へはみ出せる幅（振り仮名 1 字分）、`subtitle_ruby_line_edge` 行の端の扱い（行頭は外へ出さず行頭にそろえ、行末は外へはみ出させる。`ALIGN` で両端そろえ、`OVERHANG` で両端はみ出し）、`subtitle_ruby_grouping` 置き方（`MONO` ＝ルビの単位ごとに親字の上、`JUKUGO` ＝振り仮名のある字が続くところの読みをひと続きにして熟語全体の中央、`SPREAD` ＝その読みを熟語の幅に 1 字ずつ均等に並べる。既定は MONO）。振り仮名は字面（インク）の中心を親字の字面の中心にそろえ、親字の幅に収まればそのまま、長ければ両隣へはみ出させ（隣が振り仮名のある字ならその振り仮名の脇の空きまで）、それでも収まらなければその幅まで長体をかける。詰める組み方では、行の途中の単独の「！」「？」（前後に「！」「？」が続かないもの）は全角の幅を取って中央に置き、行末のものは前の字に寄せる。行送りは本編と同じく振り仮名の有無で変えず、振り仮名の段（振り仮名の上端から親字の上端まで）を題に振り仮名が無くても行と行のあいだに取る。画像の上端に振り仮名の段を取るのは 1 行目に振り仮名があるときだけ。字の大きさは画面上 45px 相当（2 倍の画素で描く）、画像の最大幅は 860px で、収まらない行はその行だけ長体（80% まで）をかけ、それでも収まらなければ全行の字を小さくする。表示は欄の幅まで縮め、スマホ（640px 以下）では字の大きさの上限を 24px（8/15）にする。`alt` はサブタイトルの文字列。ビルドの時点で解禁前の話（ぼかしが効かないため）とサブタイトル未確定の話は画像を作らず、上記の HTML を出す
 1-2. **歴代記録バッジ**: 基本情報（ファクトタイル）の下に、アバンタイトル・A パート・B パートの OA 尺が歴代 10 位以内（長い側・短い側のどちらも。該当のランキングページへリンク）、またはシリーズ内で最長・最短（同率含む。歴代側のバッジが無いときだけ。同種パートを持つ話が 10 話以上のシリーズに限る）の回にだけ 🏆 のピルを出す。順位は 6 のパート尺偏差値と同じ SQL（短い順の順位 `SeriesRankShortest` / `GlobalRankShortest` も同じ `RANK()`）
 2. **基本情報テーブル**: 放送日時・シリーズ内話数・通算話数・通算放送回・ニチアサ通算放送回、外部 URL（東映あらすじ／ラインナップ）、YouTube 予告埋め込み（`youtube_trailer_url` から ID を抽出して `<iframe>` 化）。特別予告（本放送時）の URL（`youtube_special_trailer_url`）が登録されているエピソードでは、通常予告の直下に h3「特別予告 (本放送時)」見出し付きで特別予告を並べて埋め込む（未登録なら非表示）
 2-2. **スタッフと組み合わせの通算回数**: クレジット階層から脚本／絵コンテ／演出／作画監督／美術を抜き出した主要スタッフ行の下に、「演出と作画監督の組み合わせ」「脚本・演出・作画監督の組み合わせ」が通算何回目かを「通算 N 回目（初回 第a話 / 前回 第b話 / 次回 第c話）」の形で出す（初回は「初めての組み合わせ」。別シリーズの話は『正式タイトル』を前置）。数え方は `Pipeline/EpisodeChiefStaffIndex`（TV 系の全話を放送順に並べ、本放送限定を除く PERSON / TEXT エントリの集合を顔ぶれとし、人物は名義をまたいでまとめる）。収録済みのクレジットの範囲で数えている断りを添える

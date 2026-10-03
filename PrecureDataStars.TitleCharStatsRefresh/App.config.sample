@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <!--
+    PrecureDataStars.TitleCharStatsRefresh の設定サンプル。
+    このファイルを App.config にコピーし、接続文字列を環境に合わせて書き換える。
+    .gitignore は **/App.config を除外しているため、本サンプルだけがリポジトリに残る。
+  -->
+  <connectionStrings>
+    <!-- DB 接続文字列：他ツール（Catalog 等）と同じもの。title_char_stats を書き換えるため UPDATE 権限が要る。 -->
+    <add name="DatastarsMySql"
+         connectionString="Server=127.0.0.1;Port=3306;Database=precure_datastars;User Id=YOUR_USER;Password=YOUR_PASSWORD;Allow User Variables=true;CharSet=utf8mb4;TreatTinyAsBoolean=true" />
+  </connectionStrings>
+</configuration>

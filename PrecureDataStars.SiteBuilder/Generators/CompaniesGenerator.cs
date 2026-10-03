@@ -357,6 +357,9 @@ public sealed class CompaniesGenerator
         var mainInvolvements = allInvolvements.Where(i => i.IsMainCredit).ToList();
         var firstAppearance = FirstAppearanceResolver.Resolve(_ctx, mainInvolvements);
         bool showTimeline = OgCareerCardParts.AppearsInSiteTimeline(_ctx, _roleSuccessorResolver, mainInvolvements, companyUrl);
+        IReadOnlyList<OgCardTimelineSegment> timeline = showTimeline
+            ? OgCareerCardParts.BuildCareerTimeline(_ctx, mainInvolvements, OgCardColors.Staff)
+            : Array.Empty<OgCardTimelineSegment>();
 
         // 下端の事実行：この団体の所属としてクレジットされた人物（担当回数の多い順に 3 人まで）と、初参加。
         var foot = new List<OgCardFactLine>();
@@ -374,13 +377,11 @@ public sealed class CompaniesGenerator
             Badges = badges,
             InlineFacts = roles,
             Watermark = OgCareerCardParts.ResolveMainRoleLabel(_ctx, mainInvolvements),
-            Timeline = showTimeline
-                ? OgCareerCardParts.BuildCareerTimeline(_ctx, mainInvolvements, OgCardColors.Staff)
-                : Array.Empty<OgCardTimelineSegment>(),
+            Timeline = timeline,
             Facts = showTimeline
                 ? Array.Empty<OgCardFactLine>()
                 : OgCareerCardParts.BuildWorksLines(_ctx, mainInvolvements),
-            TimelineEnd = DateOnly.FromDateTime(_ctx.BuildStartedAt.Date),
+            TimelineEnd = OgCareerCardParts.TimelineEndFor(_ctx, timeline),
             FootFacts = foot
         };
     }

@@ -411,6 +411,9 @@ public sealed class PersonsGenerator
         bool voiceOnly = mainInvolvements.Count > 0 && mainInvolvements.All(i => i.IsVoiceCast);
         string bandColor = voiceOnly ? OgCardColors.VoiceActor : OgCardColors.Staff;
         bool showTimeline = OgCareerCardParts.AppearsInSiteTimeline(_ctx, _roleSuccessorResolver, mainInvolvements, personUrl);
+        IReadOnlyList<OgCardTimelineSegment> timeline = showTimeline
+            ? OgCareerCardParts.BuildCareerTimeline(_ctx, mainInvolvements, bandColor)
+            : Array.Empty<OgCardTimelineSegment>();
 
         // 前置きは置かない。「クリエイター」と名乗らせなくても、氏名と担当役職の並びで何者かは伝わる。
         return new OgCardSpec(Kicker: "", Title: displayName)
@@ -422,13 +425,11 @@ public sealed class PersonsGenerator
             InlineFacts = roles,
             BandColorHex = bandColor,
             Watermark = OgCareerCardParts.ResolveMainRoleLabel(_ctx, mainInvolvements),
-            Timeline = showTimeline
-                ? OgCareerCardParts.BuildCareerTimeline(_ctx, mainInvolvements, bandColor)
-                : Array.Empty<OgCardTimelineSegment>(),
+            Timeline = timeline,
             Facts = showTimeline
                 ? Array.Empty<OgCardFactLine>()
                 : OgCareerCardParts.BuildWorksLines(_ctx, mainInvolvements),
-            TimelineEnd = DateOnly.FromDateTime(_ctx.BuildStartedAt.Date),
+            TimelineEnd = OgCareerCardParts.TimelineEndFor(_ctx, timeline),
             FootFacts = firstAppearance is null
                 ? Array.Empty<OgCardFactLine>()
                 : new[] { new OgCardFactLine("初参加", firstAppearance.ToPlainText()) }

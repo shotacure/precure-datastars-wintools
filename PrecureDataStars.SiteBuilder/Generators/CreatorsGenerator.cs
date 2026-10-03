@@ -2529,7 +2529,7 @@ public sealed class CreatorsGenerator
             InlineFacts = facts,
             Watermark = debut is null ? "" : debut.Value.Date.Year.ToString(),
             Timeline = segments.OrderBy(s => s.Start).ToList(),
-            TimelineEnd = DateOnly.FromDateTime(_ctx.BuildStartedAt.Date),
+            TimelineEnd = OgCareerCardParts.TimelineEndFor(_ctx, segments),
             FootFacts = foot
         };
     }

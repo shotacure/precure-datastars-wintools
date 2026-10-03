@@ -588,7 +588,7 @@ partial class CreditMastersEditorForm
         btnNewPerson = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSavePerson = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };
         btnDeletePerson = new Button { Text = "選択行を削除", Location = new Point(620,  82), Size = new Size(140, 28) };
-        // プリキュア以外の代表作（person_notable_works）の編集ダイアログを開く。
+        // 代表作（プリキュアを除く）（person_notable_works）の編集ダイアログを開く。
         btnPersonNotableWorks = new Button { Text = "代表作…",   Location = new Point(620, 130), Size = new Size(140, 28) };
         pnl.Controls.AddRange(new Control[] { btnNewPerson, btnSavePerson, btnDeletePerson, btnPersonNotableWorks });
 

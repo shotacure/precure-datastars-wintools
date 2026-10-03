@@ -29,7 +29,7 @@ public sealed class PersonsGenerator
     /// </summary>
     private readonly SongMusicClassesRepository _songMusicClassesRepo;
 
-    /// <summary>人物のプリキュア以外の代表作（person_notable_works）を読むためのリポジトリ。</summary>
+    /// <summary>人物の代表作（プリキュアを除く）（person_notable_works）を読むためのリポジトリ。</summary>
     private readonly PersonNotableWorksRepository _notableWorksRepo;
 
     private readonly CreditInvolvementIndex _index;
@@ -64,7 +64,7 @@ public sealed class PersonsGenerator
     /// 作詞・作曲・編曲（曲単位の仕事）だけの曲は本索引に乗らず、従来どおり曲の代表録音から出典を解決する。</summary>
     private IReadOnlyDictionary<int, IReadOnlyDictionary<int, SongRecording>>? _sungRecordingByAlias;
 
-    /// <summary>person_id → 「プリキュア以外の代表作」の表示行（並び順どおり）。<c>GenerateAsync</c> で並列レンダリングの前に 1 度だけ詰める。</summary>
+    /// <summary>person_id → 「代表作（プリキュアを除く）」の表示行（並び順どおり）。<c>GenerateAsync</c> で並列レンダリングの前に 1 度だけ詰める。</summary>
     private IReadOnlyDictionary<int, IReadOnlyList<NotableWorkView>>? _notableWorksByPerson;
 
     public PersonsGenerator(
@@ -203,7 +203,7 @@ public sealed class PersonsGenerator
                     g => (IReadOnlyList<SongRecording>)g.OrderBy(r => r.SongRecordingId).ToList());
         }
 
-        // 「プリキュア以外の代表作」も並列レンダリングの前に全件を読み、人物ごとの表示行にしておく。
+        // 「代表作（プリキュアを除く）」も並列レンダリングの前に全件を読み、人物ごとの表示行にしておく。
         if (_notableWorksByPerson is null)
         {
             var allWorks = await _notableWorksRepo.GetAllAsync(ct).ConfigureAwait(false);
@@ -1275,13 +1275,13 @@ public sealed class PersonsGenerator
         public int MusicSongTotal => MusicSections.SelectMany(s => s.SongKeys).Distinct(StringComparer.Ordinal).Count();
         public int MusicBgmTotal => MusicSections.SelectMany(s => s.BgmKeys).Distinct(StringComparer.Ordinal).Count();
         public int MusicDiscTotal => MusicSections.SelectMany(s => s.DiscKeys).Distinct(StringComparer.Ordinal).Count();
-        /// <summary>プリキュア以外の代表作（並び順どおり）。空なら「プリキュア以外の代表作」セクションを出さない。</summary>
+        /// <summary>代表作（プリキュアを除く）（並び順どおり）。空なら「代表作（プリキュアを除く）」セクションを出さない。</summary>
         public IReadOnlyList<NotableWorkView> NotableWorks { get; set; } = Array.Empty<NotableWorkView>();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
 
-    /// <summary>「プリキュア以外の代表作」の 1 行。</summary>
+    /// <summary>「代表作（プリキュアを除く）」の 1 行。</summary>
     private sealed class NotableWorkView
     {
         /// <summary>時期（「2010」「2010–2012」。不明なら空文字）。</summary>

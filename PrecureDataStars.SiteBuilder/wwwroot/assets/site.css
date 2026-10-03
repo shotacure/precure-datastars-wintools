@@ -6191,7 +6191,7 @@ a.credit-card-series:focus-visible {
   color: var(--accent-blue);
 }
 
-/* 人物詳細の「プリキュア以外の代表作」。「年 ｜ 作品 ｜ 役職」の 3 列で、年と役職は折り返さない。
+/* 人物詳細の「代表作（プリキュアを除く）」。「年 ｜ 作品 ｜ 役職」の 3 列で、年と役職は折り返さない。
    作品名は作品の公式サイトへの外部リンク。アーカイブへのリンクには「公式サイトのアーカイブ」の小さな札を添える。 */
 .notable-works-table th.col-year,
 .notable-works-table td.col-year {

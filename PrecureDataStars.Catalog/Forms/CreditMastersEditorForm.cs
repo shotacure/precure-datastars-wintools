@@ -65,7 +65,7 @@ public partial class CreditMastersEditorForm : Form
     private readonly RoleSuccessionsRepository _roleSuccessionsRepo;
     // 団体どうしの関係（団体タブの「関係…」ダイアログで編集）
     private readonly CompanyRelationsRepository _companyRelationsRepo;
-    // 人物のプリキュア以外の代表作（人物タブの「代表作…」ダイアログで編集）
+    // 人物の代表作（プリキュアを除く）（人物タブの「代表作…」ダイアログで編集）
     private readonly PersonNotableWorksRepository _personNotableWorksRepo;
 
     /// <summary>クレジット系マスタ管理フォームを生成する。Program.cs の DI で各リポジトリを受け取る。</summary>
@@ -102,7 +102,7 @@ public partial class CreditMastersEditorForm : Form
         RoleSuccessionsRepository roleSuccessionsRepo,
         // 団体どうしの関係
         CompanyRelationsRepository companyRelationsRepo,
-        // 人物のプリキュア以外の代表作
+        // 人物の代表作（プリキュアを除く）
         PersonNotableWorksRepository personNotableWorksRepo)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
@@ -136,7 +136,7 @@ public partial class CreditMastersEditorForm : Form
         // 団体どうしの関係
         _companyRelationsRepo = companyRelationsRepo ?? throw new ArgumentNullException(nameof(companyRelationsRepo));
 
-        // 人物のプリキュア以外の代表作
+        // 人物の代表作（プリキュアを除く）
         _personNotableWorksRepo = personNotableWorksRepo ?? throw new ArgumentNullException(nameof(personNotableWorksRepo));
 
         InitializeComponent();

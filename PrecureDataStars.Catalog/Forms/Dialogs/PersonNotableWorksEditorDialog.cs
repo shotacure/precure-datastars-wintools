@@ -10,7 +10,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// 人物の「プリキュア以外の代表作」（person_notable_works）の編集ダイアログ。
+/// 人物の「代表作（プリキュアを除く）」（person_notable_works）の編集ダイアログ。
 /// 選んだ人物の代表作を一覧し、作品名・役職・時期・公式サイト・裏取りの出典で追加・更新・削除する。
 /// マスタ編集なので、追加・更新・削除はボタンを押した時点で DB に反映する（保存ボタンは無い）。
 /// <list type="bullet">
@@ -47,7 +47,7 @@ public sealed class PersonNotableWorksEditorDialog : Form
         _worksRepo = worksRepo ?? throw new ArgumentNullException(nameof(worksRepo));
         _personId = personId;
 
-        Text = $"プリキュア以外の代表作の編集：#{personId} {personName}";
+        Text = $"代表作（プリキュアを除く）の編集：#{personId} {personName}";
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(900, 560);
         MinimizeBox = false; MaximizeBox = false;

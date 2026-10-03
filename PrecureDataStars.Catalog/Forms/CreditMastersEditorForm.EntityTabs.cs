@@ -397,7 +397,7 @@ public partial class CreditMastersEditorForm
         catch (Exception ex) { this.ShowError(ex); }
     }
 
-    /// <summary>選択中の人物のプリキュア以外の代表作を編集するダイアログを開く。代表作は人物本体の列を変えないので、閉じた後の再読み込みはしない。</summary>
+    /// <summary>選択中の人物の代表作（プリキュアを除く）を編集するダイアログを開く。代表作は人物本体の列を変えないので、閉じた後の再読み込みはしない。</summary>
     private void OpenPersonNotableWorksEditor()
     {
         try

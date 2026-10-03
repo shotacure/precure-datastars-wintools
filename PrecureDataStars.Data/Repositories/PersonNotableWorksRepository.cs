@@ -3,7 +3,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>person_notable_works テーブル（人物のプリキュア以外の代表作）の CRUD リポジトリ。行は物理削除する。</summary>
+/// <summary>person_notable_works テーブル（人物の代表作（プリキュアを除く））の CRUD リポジトリ。行は物理削除する。</summary>
 public sealed class PersonNotableWorksRepository : RepositoryBase
 {
     public PersonNotableWorksRepository(IConnectionFactory factory) : base(factory) { }

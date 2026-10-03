@@ -362,13 +362,13 @@
   </section>
   {{~ end ~}}
 
-  {{## プリキュア以外の代表作。person_notable_works の行を並び順どおりに「年 ｜ 作品 ｜ 役職」の表で出す。
+  {{## 代表作（プリキュアを除く）。person_notable_works の行を並び順どおりに「年 ｜ 作品 ｜ 役職」の表で出す。
        作品名は作品の公式サイトへの外部リンク。公式サイトが閉鎖済みでアーカイブへリンクする行は、
        リンクの後ろに「公式サイトのアーカイブ」と添えて、リンク先がアーカイブだと分かるようにする。
        行が無い人物には出さない。 ##}}
   {{~ if NotableWorks.size > 0 ~}}
   <section id="notable-works">
-    <h2>プリキュア以外の代表作</h2>
+    <h2>代表作（プリキュアを除く）</h2>
     <table class="notable-works-table">
       <thead>
         <tr><th class="col-year">年</th><th class="col-title">作品</th><th class="col-role">役職</th></tr>

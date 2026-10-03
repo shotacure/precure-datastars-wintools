@@ -151,7 +151,7 @@ public partial class MainForm : Form
         MovieBgmCuesRepository movieBgmCuesRepo,
         // 団体どうしの関係（所属・事業の引き継ぎ）
         CompanyRelationsRepository companyRelationsRepo,
-        // 人物のプリキュア以外の代表作
+        // 人物の代表作（プリキュアを除く）
         PersonNotableWorksRepository personNotableWorksRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
@@ -396,7 +396,7 @@ public partial class MainForm : Form
                 _roleSuccessionsRepo,
                 // 団体どうしの関係
                 _companyRelationsRepo,
-                // 人物のプリキュア以外の代表作
+                // 人物の代表作（プリキュアを除く）
                 _personNotableWorksRepo);
             f.ShowDialog();
         });

@@ -2,7 +2,7 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// person_notable_works テーブルに対応するエンティティモデル（PK: work_id）。
-/// 人物の「プリキュア以外の代表作」1 件（1 人物 × 1 作品 × 1 役職）。
+/// 人物の「代表作（プリキュアを除く）」1 件（1 人物 × 1 作品 × 1 役職）。
 /// 作品はプリキュアシリーズの外のものなので、作品名・役職はテキストで持つ。
 /// </summary>
 public sealed class PersonNotableWork
@@ -19,7 +19,7 @@ public sealed class PersonNotableWork
     /// <summary>作品名。</summary>
     public string WorkTitle { get; set; } = "";
 
-    /// <summary>役職（「監督」「シリーズディレクター」「キャラクターデザイン」「シリーズ構成」「プロデューサー」など）。</summary>
+    /// <summary>役職。公式のスタッフ表の表記どおり（「監督」「シリーズディレクター」「キャラクターデザイン」「キャラクターコンセプトデザイン」「シリーズ構成」「プロデューサー」など）。</summary>
     public string RoleLabel { get; set; } = "";
 
     /// <summary>時期の始まりの年（任意）。</summary>
@@ -55,8 +55,13 @@ public static class PersonNotableWorkRoles
     public static readonly IReadOnlyList<string> Suggestions = new[]
     {
         "監督",
+        "総監督",
+        "シリーズ監督",
         "シリーズディレクター",
+        "チーフディレクター",
         "キャラクターデザイン",
+        "キャラクター原案",
+        "キャラクターコンセプトデザイン",
         "シリーズ構成",
         "プロデューサー",
     };

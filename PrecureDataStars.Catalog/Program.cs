@@ -83,7 +83,7 @@ namespace PrecureDataStars.Catalog
             // 団体どうしの関係（所属・事業の引き継ぎ）。クレジット系マスタ管理の団体タブから編集する。
             var companyRelationsRepo = new CompanyRelationsRepository(factory);
 
-            // 人物のプリキュア以外の代表作。クレジット系マスタ管理の人物タブから編集する。
+            // 人物の代表作（プリキュアを除く）。クレジット系マスタ管理の人物タブから編集する。
             var personNotableWorksRepo = new PersonNotableWorksRepository(factory);
 
             // クレジット本体（カード／役職／ブロック／エントリ）用リポジトリ（5 本）
@@ -150,7 +150,7 @@ namespace PrecureDataStars.Catalog
                 movieBgmCuesRepo,
                 // 団体どうしの関係
                 companyRelationsRepo,
-                // 人物のプリキュア以外の代表作
+                // 人物の代表作（プリキュアを除く）
                 personNotableWorksRepo));
         }
     }

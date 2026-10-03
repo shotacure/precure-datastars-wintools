@@ -20,6 +20,13 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// </summary>
 public sealed partial class OgCardRenderer
 {
+    /// <summary>
+    /// テロップ画像の描き方の版。作り置き（<see cref="SubtitleTelopRequest.CacheKey"/>）の鍵に入る。
+    /// 寸法・フチ・影・字詰め・振り仮名の置き方など、同じサブタイトルと組み方から描ける画像が変わる変更をしたら 1 上げる
+    /// （上げると全話の画像が次のビルドで描き直しになる。上げないと作り置きが使われ続ける）。
+    /// </summary>
+    public const int TelopRenderVersion = 1;
+
     /// <summary>出力の倍率（CSS ピクセル 1 つに対する画素数）。高精細の画面でも字がにじまないよう 2 倍で描く。</summary>
     public const int TelopPixelRatio = 2;
 

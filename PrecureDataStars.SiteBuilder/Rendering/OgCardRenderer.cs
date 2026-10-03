@@ -1700,6 +1700,14 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <summary>この PC の書体ファイルの索引（name テーブルから引く）。初めて要るときに 1 度だけ作る。</summary>
     private static readonly Lazy<InstalledFontIndex> FontIndex = new(InstalledFontIndex.Build, isThreadSafe: true);
 
+    /// <summary>書体名がこの PC で引けるか。描くときと同じ引き方（<see cref="MatchInstalledTypeface"/>）で確かめる。</summary>
+    public static bool IsTypefaceInstalled(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        using var typeface = MatchInstalledTypeface(name);
+        return typeface is not null;
+    }
+
     /// <summary>インストール済み書体を名前で引く。まず書体ファイルの索引（日本語名・英語名とも）、次に Windows の書体一覧。見つからなければ null。</summary>
     private static SKTypeface? MatchInstalledTypeface(string name)
     {

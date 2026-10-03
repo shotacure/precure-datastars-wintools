@@ -7,7 +7,8 @@ namespace PrecureDataStars.SiteBuilder;
 /// 引数なし＝テストモード（テスト用ディレクトリへ、GA4 / AdSense / ads.txt なしで生成）。
 /// <c>--production</c> 指定時のみ本番モード（本番ディレクトリへ全出力込みで生成）。
 /// <c>--production --deploy</c> でビルド後に S3 へ差分同期＋CloudFront キャッシュ削除まで実行する。
-/// <c>--dry-run</c> は変更計画のみ表示（無変更）、<c>--yes</c> は削除前確認の省略。</summary>
+/// <c>--dry-run</c> は変更計画のみ表示（無変更）、<c>--yes</c> は削除前確認の省略。
+/// <c>--refresh-telop</c> はサブタイトルのテロップ画像を作り置きを使わずに描き直す（<c>--page</c> と併用すれば対象の話だけ）。</summary>
 internal static class Program
 {
     private static async Task<int> Main(string[] args)
@@ -20,6 +21,7 @@ internal static class Program
             bool deploy = false;
             bool dryRun = false;
             bool skipConfirm = false;
+            bool refreshTelop = false;
             string pageFilter = "";
             bool expectPageValue = false;
             foreach (var a in args)
@@ -40,6 +42,8 @@ internal static class Program
                     skipConfirm = true;
                 else if (string.Equals(a, "--page", StringComparison.OrdinalIgnoreCase))
                     expectPageValue = true;
+                else if (string.Equals(a, "--refresh-telop", StringComparison.OrdinalIgnoreCase))
+                    refreshTelop = true;
                 else
                 {
                     Console.Error.WriteLine($"不明な引数: {a}");
@@ -73,7 +77,7 @@ internal static class Program
                 ? new DeployRuntimeOptions(Requested: true, DryRun: dryRun, SkipConfirm: skipConfirm)
                 : DeployRuntimeOptions.None;
 
-            var config = BuildConfig.FromAppConfig(isProduction, deployOptions, pageFilter);
+            var config = BuildConfig.FromAppConfig(isProduction, deployOptions, pageFilter, refreshTelop);
             var pipeline = new SiteBuilderPipeline();
             await pipeline.RunAsync(config).ConfigureAwait(false);
             return 0;
@@ -90,11 +94,12 @@ internal static class Program
     /// <summary>使い方の表示。引数エラー時に共通で出す。</summary>
     private static void PrintUsage()
     {
-        Console.Error.WriteLine("使い方: PrecureDataStars.SiteBuilder [--production] [--page <path>] [--deploy [--dry-run] [--yes]]");
+        Console.Error.WriteLine("使い方: PrecureDataStars.SiteBuilder [--production] [--page <path>] [--refresh-telop] [--deploy [--dry-run] [--yes]]");
         Console.Error.WriteLine("  引数なし     : テストモード（SiteOutputDirTest へ、GA4 / AdSense / ads.txt なし）");
         Console.Error.WriteLine("  --production : 本番モード（SiteOutputDir へ、GA4 / AdSense / ads.txt あり）");
         Console.Error.WriteLine("  --page <path>: ピンポイントビルド。URL パスに <path> を含むページだけを生成（例: /privacy/）。");
         Console.Error.WriteLine("                 sitemap / 検索インデックスは再生成せず、--deploy 時も削除は行わない（部分生成の安全策）。");
+        Console.Error.WriteLine("  --refresh-telop : サブタイトルのテロップ画像を作り置きを使わずに描き直す（--page と併用すれば対象の話だけ）");
         Console.Error.WriteLine("  --deploy     : 本番ビルド後に S3 へ差分同期＋CloudFront キャッシュ削除（--production 必須）");
         Console.Error.WriteLine("  --dry-run    : デプロイ計画のみ表示（S3 / CloudFront を変更しない。--deploy と併用）");
         Console.Error.WriteLine("  --yes        : 削除前の確認をスキップ（--deploy と併用）");

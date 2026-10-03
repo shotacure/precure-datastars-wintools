@@ -34,13 +34,6 @@ public sealed class SiteBuilderPipeline
         // （本番のつもりがテストモードのまま、の事故にすぐ気付けるように）。
         logger.Info($"Build mode       : {(config.IsProductionMode ? "production（GA4 / AdSense / ads.txt を出力）" : "test（GA4 / AdSense / ads.txt を出力しない）")}");
 
-        // フルビルドでは出力ルート配下を一掃してから作り直す。生成されなくなったページ（廃止した
-        // 役職詳細など）をローカルに残さないことで、--deploy の orphan 削除（ローカルに無い S3 オブジェクトを
-        // 削除）が正しく効く。クリーンしないと旧ページがローカルに残って S3 と一致し続け、消えなくなる。
-        // ピンポイントビルド（--page）は差分生成なので一掃しない（対象外ページの既存出力を温存する）。
-        CleanOutputDirectory(config, logger);
-        Directory.CreateDirectory(config.OutputDirectory);
-
         // DB 接続。各 Generator は本ファクトリを使い回す。
         // 進捗の事前予想件数算出（COUNT クエリ）でも本ファクトリを使うため、先に確保する。
         var factory = MySqlConnectionFactory.FromConnectionString(config.ConnectionString);
@@ -52,18 +45,24 @@ public sealed class SiteBuilderPipeline
         var expectedCounts = await ComputeExpectedCountsAsync(factory, ct).ConfigureAwait(false);
         reporter.RegisterSections(BuildSectionPlan(expectedCounts, config.IsProductionMode));
 
-        // 静的アセット（site.css 等）を出力ルートにコピー。
-        reporter.BeginSection("static_assets");
-        CopyStaticAssets(config, logger);
-        reporter.PageWritten();
-        reporter.EndSection();
-
         // 共有データロード ＋ クレジット逆引きインデックス／役職系譜／カバレッジラベルの算出までを
         // 1 セクションにまとめる（いずれもページ書き出しではなく前処理のため）。
         reporter.BeginSection("data_load");
 
         // 共有データロード。
         var ctx = await SiteDataLoader.LoadAsync(config, logger, summary, factory, ct).ConfigureAwait(false);
+
+        // サブタイトルのテロップ画像の作り置きを確かめる。描き直しに要る書体がこの PC に無ければここで止まる
+        // （出力ディレクトリを空にする前なので、前回の出力はそのまま残る）。
+        SubtitleTelopPreflight.Run(ctx, config, logger);
+
+        // フルビルドでは出力ルート配下を一掃してから作り直す。生成されなくなったページ（廃止した
+        // 役職詳細など）をローカルに残さないことで、--deploy の orphan 削除（ローカルに無い S3 オブジェクトを
+        // 削除）が正しく効く。クリーンしないと旧ページがローカルに残って S3 と一致し続け、消えなくなる。
+        // ピンポイントビルド（--page）は差分生成なので一掃しない（対象外ページの既存出力を温存する）。
+        // 出力への書き出し（転送表・静的アセット・各ページ）はすべてこの後に行う。
+        CleanOutputDirectory(config, logger);
+        Directory.CreateDirectory(config.OutputDirectory);
 
         // テンプレ → ページ書き出しヘルパー。
         // 進捗バーへのページ書き出し通知も PageRenderer 経由で発火するため、reporter を渡す。
@@ -127,6 +126,12 @@ public sealed class SiteBuilderPipeline
         // 人物の表示名とリンク先を台帳から引くので、EntityUrls の確定後に 1 回だけ作る。
         var chiefStaffIndex = EpisodeChiefStaffIndex.Build(ctx);
 
+        reporter.PageWritten();
+        reporter.EndSection();
+
+        // 静的アセット（site.css 等）を出力ルートにコピー。出力ディレクトリの一掃（データ読み込みの中）より後に行う。
+        reporter.BeginSection("static_assets");
+        CopyStaticAssets(config, logger);
         reporter.PageWritten();
         reporter.EndSection();
 
@@ -364,8 +369,8 @@ public sealed class SiteBuilderPipeline
     {
         int? Get(string key) => expected.TryGetValue(key, out var v) ? v : (int?)null;
 
-        yield return ("static_assets",      "静的アセット",     1);
         yield return ("data_load",          "データ読み込み",   1);
+        yield return ("static_assets",      "静的アセット",     1);
         yield return ("series",             "シリーズ",         Get("series"));
         yield return ("episodes",           "エピソード",       Get("episodes"));
         yield return ("home",               "ホーム",           1);

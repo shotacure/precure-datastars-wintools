@@ -95,6 +95,15 @@ public sealed class BuildConfig
     /// sitemap / 検索インデックスの再生成を抑止し、デプロイ時は orphan 削除も行わない（部分生成の安全策）。</summary>
     public string PageFilter { get; }
 
+    /// <summary>サブタイトルのテロップ画像の作り置きの置き場所（絶対パス）。App.config の <c>SubtitleTelopCacheDir</c>。
+    /// 未設定なら <c>%LOCALAPPDATA%\PrecureDataStars\SiteBuilder\subtitle-telops</c>。
+    /// 出力ディレクトリはビルドのたびに空にするので、その外に置く（テストと本番で共用する）。</summary>
+    public string SubtitleTelopCacheDirectory { get; }
+
+    /// <summary>サブタイトルのテロップ画像を、作り置きを使わずに描き直すか（<c>--refresh-telop</c> 由来）。
+    /// <see cref="PageFilter"/> と組み合わせると、対象のページの画像だけを描き直す。</summary>
+    public bool RefreshSubtitleTelops { get; }
+
     private BuildConfig(
         string connectionString,
         string outputDirectory,
@@ -116,7 +125,9 @@ public sealed class BuildConfig
         string cloudFrontDistributionId,
         IReadOnlyList<string> awsDeployProtectedPrefixes,
         DeployRuntimeOptions deploy,
-        string pageFilter)
+        string pageFilter,
+        string subtitleTelopCacheDirectory,
+        bool refreshSubtitleTelops)
     {
         ConnectionString = connectionString;
         OutputDirectory = outputDirectory;
@@ -139,6 +150,8 @@ public sealed class BuildConfig
         AwsDeployProtectedPrefixes = awsDeployProtectedPrefixes;
         Deploy = deploy;
         PageFilter = pageFilter;
+        SubtitleTelopCacheDirectory = subtitleTelopCacheDirectory;
+        RefreshSubtitleTelops = refreshSubtitleTelops;
     }
 
     /// <summary>App.config から設定を読み出して <see cref="BuildConfig"/> を構築する。</summary>
@@ -146,9 +159,11 @@ public sealed class BuildConfig
     /// 出力先ディレクトリの選択と、計測・広告系（GA4 / AdSense / ads.txt）の出力可否を決める。</param>
     /// <param name="deploy">デプロイ実行時オプション（<c>--deploy</c> / <c>--dry-run</c> / <c>--yes</c> 由来）。
     /// 未指定なら <see cref="DeployRuntimeOptions.None"/> を渡す。</param>
+    /// <param name="pageFilter">ピンポイントビルドのページフィルタ（<c>--page</c> 由来）。空文字なら全ページ。</param>
+    /// <param name="refreshSubtitleTelops">サブタイトルのテロップ画像を作り置きを使わずに描き直すか（<c>--refresh-telop</c> 由来）。</param>
     /// <returns>構築済み設定。</returns>
     /// <exception cref="InvalidOperationException">必須項目（接続文字列）が未設定の場合。</exception>
-    public static BuildConfig FromAppConfig(bool isProductionMode, DeployRuntimeOptions deploy, string pageFilter)
+    public static BuildConfig FromAppConfig(bool isProductionMode, DeployRuntimeOptions deploy, string pageFilter, bool refreshSubtitleTelops = false)
     {
         // 接続文字列は既存ツール群と同じ名前（DbConfig.DefaultConnectionStringName = "DatastarsMySql"）で統一
         var cs = ConfigurationManager.ConnectionStrings[DbConfig.DefaultConnectionStringName]?.ConnectionString
@@ -272,11 +287,29 @@ public sealed class BuildConfig
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToArray();
 
+        // サブタイトルのテロップ画像の作り置きの置き場所。出力ディレクトリの中に置くとビルドのたびに消えてしまうので、
+        // 出力ディレクトリ（とその配下）を指していたら設定ミスとして起動時に止める。
+        var rawTelopCache = (ConfigurationManager.AppSettings["SubtitleTelopCacheDir"] ?? "").Trim();
+        var telopCacheDir = rawTelopCache.Length > 0
+            ? Path.GetFullPath(Environment.ExpandEnvironmentVariables(rawTelopCache))
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "PrecureDataStars", "SiteBuilder", "subtitle-telops");
+        if (IsSameOrUnder(telopCacheDir, outputDir))
+            throw new InvalidOperationException(
+                $"App.config の SubtitleTelopCacheDir が出力ディレクトリの中を指しています（ビルドのたびに消えます）: {telopCacheDir}");
+
+        static bool IsSameOrUnder(string path, string root)
+        {
+            var p = Path.TrimEndingDirectorySeparator(path) + Path.DirectorySeparatorChar;
+            var r = Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar;
+            return p.StartsWith(r, StringComparison.OrdinalIgnoreCase);
+        }
+
         return new BuildConfig(
             cs, outputDir, articlesDir, baseUrl, siteName, siteNameJa,
             effectiveGa4, gsv.Trim(), effectiveAds, publishedYear,
             defaultOg, amazonTag, ogFonts, isProductionMode,
             awsBucket, awsRegion, awsProfile, cfDist, protectedPrefixes, deploy,
-            pageFilter ?? "");
+            pageFilter ?? "", telopCacheDir, refreshSubtitleTelops);
     }
 }

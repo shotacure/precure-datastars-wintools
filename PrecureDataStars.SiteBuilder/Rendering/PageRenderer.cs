@@ -114,30 +114,48 @@ public sealed class PageRenderer
     }
 
     /// <summary>
-    /// エピソードのサブタイトルを本編テロップの体裁の透過 PNG に描いて書き出し、ページに置く画像の情報を返す。
+    /// エピソードのサブタイトルを本編テロップの体裁の透過 PNG にして出力へ置き、ページに置く画像の情報を返す。
+    /// 画像は作り置き（<see cref="BuildConfig.SubtitleTelopCacheDirectory"/> の <c>{鍵}.png</c>）から写し、
+    /// 同じ鍵の作り置きが無いとき（と <c>--refresh-telop</c> のとき）だけ描いて作り置きに足す。
     /// 画像は <see cref="OgCardRenderer.TelopPixelRatio"/> 倍の画素で描くので、表示の幅・高さはその分だけ割って返す。
     /// レンダラが無いとき・ピンポイントビルドの対象外のページ・描く字が無いときは null（ページ側は HTML のサブタイトルを出す）。
-    /// ページごとに出力先が異なるため並列フェーズから呼んで安全。
+    /// 出力先はページごとに異なり、作り置きへは一時ファイルに描いてから置き換えるので、並列フェーズから呼んで安全。
     /// </summary>
-    /// <param name="urlPath">画像を置くページの URL パス（ピンポイントビルドの判定に使う）。</param>
-    /// <param name="relativePath">出力先（サイトルートからの相対パス。例 <c>subtitles/2004tv/42.png</c>）。</param>
-    /// <param name="rubyHtml">ルビ付きのサブタイトル。</param>
-    /// <param name="fontFamily">作品の本編テロップの書体名。</param>
-    /// <param name="profile">作品ごとの組み方。</param>
-    public SubtitleTelopImage? RenderSubtitleTelop(string urlPath, string relativePath, string rubyHtml, string fontFamily, SubtitleTelopProfile profile)
+    /// <param name="request">その話のテロップ画像の材料。</param>
+    public SubtitleTelopImage? RenderSubtitleTelop(SubtitleTelopRequest request)
     {
-        if (_ogCardRenderer is null || !ShouldWrite(urlPath)) return null;
+        if (_ogCardRenderer is null || !ShouldWrite(request.UrlPath)) return null;
 
-        var outputFile = Path.Combine(_config.OutputDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        var size = _ogCardRenderer.RenderSubtitleTelop(rubyHtml, fontFamily, profile, outputFile);
-        if (size is not { } s) return null;
+        var cacheFile = Path.Combine(_config.SubtitleTelopCacheDirectory, request.CacheKey() + ".png");
+        if (_config.RefreshSubtitleTelops || !File.Exists(cacheFile))
+        {
+            Directory.CreateDirectory(_config.SubtitleTelopCacheDirectory);
+            var tempFile = $"{cacheFile}.{Guid.NewGuid():N}.tmp";
+            if (_ogCardRenderer.RenderSubtitleTelop(request.RubyHtml, request.FontFamily, request.Profile, tempFile) is null) return null;
+            File.Move(tempFile, cacheFile, overwrite: true);
+        }
+
+        var outputFile = Path.Combine(_config.OutputDirectory, request.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+        PathUtil.EnsureParentDirectory(outputFile);
+        File.Copy(cacheFile, outputFile, overwrite: true);
+
+        var bytes = File.ReadAllBytes(outputFile);
+        var (width, height) = ReadPngSize(bytes);
         // 画像のファイル名は話ごとに固定なので、作り直してもブラウザが古い画像を使い続けないよう、
         // CSS・JS（AssetUrl）と同じく中身のハッシュの先頭 10 桁を版の印として URL に付ける。
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(outputFile))).ToLowerInvariant();
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
         return new SubtitleTelopImage(
-            $"/{relativePath}?v={hash[..10]}",
-            s.Width / OgCardRenderer.TelopPixelRatio,
-            s.Height / OgCardRenderer.TelopPixelRatio);
+            $"/{request.RelativePath}?v={hash[..10]}",
+            width / OgCardRenderer.TelopPixelRatio,
+            height / OgCardRenderer.TelopPixelRatio);
+    }
+
+    /// <summary>PNG の IHDR から画像の幅と高さ（画素）を読む。</summary>
+    private static (int Width, int Height) ReadPngSize(byte[] png)
+    {
+        if (png.Length < 24) throw new InvalidDataException("PNG の IHDR が読めません。");
+        int ReadInt32(int offset) => (png[offset] << 24) | (png[offset + 1] << 16) | (png[offset + 2] << 8) | png[offset + 3];
+        return (ReadInt32(16), ReadInt32(20));
     }
 
     /// <summary>canonical パスからカード画像の出力パスを導く（<c>/</c> は <c>og/home.png</c>）。</summary>

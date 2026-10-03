@@ -772,14 +772,10 @@ public sealed class EpisodeGenerator
         // サブタイトル欄は、本編のテロップと同じ体裁（作品のテロップ書体・白い字に黒フチと影）の画像で見せる。
         // 解禁前の話は画像にするとぼかしが効かないので、OGP カードと同じく作らずに HTML のサブタイトル（ガード付き）を出す。
         // サブタイトル未確定の話もプレースホルダの HTML のまま。
-        if (!ownEmbargoed && !string.IsNullOrEmpty(ep.TitleText))
+        // 画像にするかの判定と材料は、ビルド冒頭の作り置きの確認と同じ SubtitleTelopRequest で決める。
+        if (SubtitleTelopRequest.For(series, ep, _ctx) is { } telopRequest)
         {
-            var telop = _page.RenderSubtitleTelop(
-                episodeUrl,
-                $"subtitles/{series.Slug}/{ep.SeriesEpNo}.png",
-                string.IsNullOrEmpty(ep.TitleRichHtml) ? HtmlUtil.Escape(ep.TitleText) : ep.TitleRichHtml,
-                series.FontSubtitle ?? "",
-                SubtitleTelopProfile.FromSeries(series));
+            var telop = _page.RenderSubtitleTelop(telopRequest);
             if (telop is not null)
             {
                 content.Episode.SubtitleTelopSrc = telop.Src;

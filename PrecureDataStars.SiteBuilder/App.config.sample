@@ -22,6 +22,14 @@
 		<add key="SiteOutputDirTest" value="" />
 
 		<!--
+			サブタイトルのテロップ画像（/subtitles/）の作り置きの置き場（絶対パス）。テストと本番で共用する。
+			画像は「サブタイトル・書体名・作品ごとの組み方・描き方の版」から作った鍵のファイル名で置き、同じ鍵があれば描かずに使う。
+			出力ディレクトリはビルドのたびに空にするので、その外を指すこと（中を指すと起動時に止まる）。
+			未設定なら %LOCALAPPDATA%\PrecureDataStars\SiteBuilder\subtitle-telops。環境変数は展開される。
+		-->
+		<add key="SubtitleTelopCacheDir" value="" />
+
+		<!--
 			読み物（記事 Markdown）原稿の置き場（絶対パス）。コードと分離したコンテンツ資産で、
 			ビルド時にここを読んで /articles/ を生成する（exe には同梱しない）。
 			リポジトリ直下の content/articles を指す運用を想定。未設定なら記事 0 件として継続。

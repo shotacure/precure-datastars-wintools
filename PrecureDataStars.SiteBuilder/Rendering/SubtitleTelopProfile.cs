@@ -36,8 +36,14 @@ public sealed record SubtitleTelopProfile
     /// </summary>
     public float RubyRaiseRatio { get; init; } = 1.04f;
 
-    /// <summary>行と行のあいだの空き（親字の大きさに対する比）。null なら既定の空きで組む。</summary>
+    /// <summary>下の行に振り仮名があるときの、上の行の字の下端から下の行の振り仮名の段の上端までの空き（親字の大きさに対する比）。null なら既定の空きで組む。</summary>
     public float? LineGapRatio { get; init; }
+
+    /// <summary>
+    /// 下の行に振り仮名が無いときの、上の行の字の下端から下の行の字の上端までの空き（親字の大きさに対する比）。
+    /// null なら <see cref="LineGapRatio"/> に振り仮名の段の高さを足した空き（振り仮名の有無で行送りを変えない）。
+    /// </summary>
+    public float? LineGapRatioPlain { get; init; }
 
     /// <summary>3 行以上の組での行と行のあいだの空き（親字の大きさに対する比）。null なら <see cref="LineGapRatio"/> と同じ。</summary>
     public float? LineGapRatio3 { get; init; }
@@ -69,6 +75,7 @@ public sealed record SubtitleTelopProfile
         RubyRaiseRatio = series.SubtitleRubyRaiseRatio is decimal raise ? (float)raise : Default.RubyRaiseRatio,
         LineGapRatio = series.SubtitleLineGapRatio is decimal gap ? (float)gap : null,
         LineGapRatio3 = series.SubtitleLineGapRatio3 is decimal gap3 ? (float)gap3 : null,
+        LineGapRatioPlain = series.SubtitleLineGapRatioPlain is decimal plain ? (float)plain : null,
         RubyOverhangRatio = series.SubtitleRubyOverhangRatio is decimal overhang ? (float)overhang : null,
         RubyOverhangLineStart = string.Equals(series.SubtitleRubyLineEdge, "OVERHANG", StringComparison.OrdinalIgnoreCase),
         RubyOverhangLineEnd = !string.Equals(series.SubtitleRubyLineEdge, "ALIGN", StringComparison.OrdinalIgnoreCase),

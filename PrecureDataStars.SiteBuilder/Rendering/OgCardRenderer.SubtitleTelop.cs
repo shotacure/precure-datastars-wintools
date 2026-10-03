@@ -44,7 +44,7 @@ public sealed partial class OgCardRenderer
     private const float TelopDescentRatio = 0.12f;
 
     /// <summary>
-    /// 行と行のあいだの空きの既定（作品の組み方に指定が無いとき）。下の行の振り仮名の段とは別に、
+    /// 行と行のあいだの空きの既定（作品の組み方に指定が無いとき）。下の行に振り仮名があるときの、
     /// 上の行の字の下端から下の行の振り仮名の段の上端までに取る空き。
     /// </summary>
     private const float TelopLineGap = 0.28f;
@@ -137,8 +137,8 @@ public sealed partial class OgCardRenderer
         using var rubyFont = new SKFont(rubyTypeface, TelopFontSize * rubyRatio);
 
         // 振り仮名の段（振り仮名の上端から親字の上端までの高さ）と、字の高さ（いずれも字の大きさに対する比）。
-        // 本編のテロップは作品ごとに行の位置が決まっていて、振り仮名の有無で行送りが変わらないので、
-        // 振り仮名の段は題に振り仮名が無くても行と行のあいだに取る。画像の上端に取るのは 1 行目に振り仮名があるときだけ。
+        // 画像の上端に振り仮名の段を取るのは 1 行目に振り仮名があるときだけ。行と行のあいだは、下の行の振り仮名の有無で
+        // 作品ごとの空きを使い分ける（本編は、下の行に振り仮名があると行を広げる作品と、行の位置が変わらない作品がある）。
         float rubyBandRatio = Math.Max(0f, rubyRaise + TelopAscentRatio * rubyRatio - TelopAscentRatio);
         float glyphBlockRatio = TelopAscentRatio + TelopDescentRatio;
         bool firstLineHasRuby = lines[0].Any(u => u.Ruby.Length > 0);
@@ -172,13 +172,22 @@ public sealed partial class OgCardRenderer
         float rubyBand = size * rubyBandRatio;
         float glyphBlock = size * glyphBlockRatio;
         float topBand = firstLineHasRuby ? rubyBand : 0f;
-        // 3 行以上の組では、作品の組み方にその行間があればそれを使う（本編は 3 行のとき行を詰めて組むことが多い）。
-        float? gapRatio = lines.Count >= 3 && profile.LineGapRatio3 is float gap3 ? gap3 : profile.LineGapRatio;
-        float pitch = rubyBand + glyphBlock + size * (gapRatio ?? TelopLineGap);
+        // 下の行に振り仮名があるときの行送り（振り仮名の段＋字の高さ＋空き）と、無いときの行送り（字の高さ＋空き）。
+        // 3 行以上の組では、作品の組み方にその行間があればそれを使い、振り仮名の有無で行送りを変えない
+        // （本編は 3 行のとき行を詰めて組むことが多い）。無いときの空きの指定が無い作品も、振り仮名の有無で行送りを変えない。
+        bool useGap3 = lines.Count >= 3 && profile.LineGapRatio3 is not null;
+        float gapRatio = (useGap3 ? profile.LineGapRatio3 : profile.LineGapRatio) ?? TelopLineGap;
+        float pitchWithRuby = rubyBand + glyphBlock + size * gapRatio;
+        float pitchPlain = !useGap3 && profile.LineGapRatioPlain is float plain ? glyphBlock + size * plain : pitchWithRuby;
+        // 各行の字の上端（画像の上端からの距離）。
+        var lineTops = new float[lines.Count];
+        lineTops[0] = padding + topBand;
+        for (int i = 1; i < lines.Count; i++)
+            lineTops[i] = lineTops[i - 1] + (lines[i].Any(u => u.Ruby.Length > 0) ? pitchWithRuby : pitchPlain);
 
         // 縮めて表示したときに半端な画素が出ないよう、縦横とも倍率の倍数に切り上げる。
         int width = RoundUpToMultiple(widths.Max() + OuterWidth(size), TelopPixelRatio);
-        int height = RoundUpToMultiple(padding * 2f + topBand + pitch * (lines.Count - 1) + glyphBlock, TelopPixelRatio);
+        int height = RoundUpToMultiple(lineTops[^1] + glyphBlock + padding, TelopPixelRatio);
 
         using var surface = SKSurface.Create(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
         var canvas = surface.Canvas;
@@ -186,7 +195,7 @@ public sealed partial class OgCardRenderer
 
         for (int i = 0; i < lines.Count; i++)
         {
-            float baseline = padding + topBand + pitch * i + size * TelopAscentRatio;
+            float baseline = lineTops[i] + size * TelopAscentRatio;
             float x = (width - widths[i]) / 2f;
             DrawTelopLine(canvas, lines[i], x, baseline, baseFont, smallFont, rubyFont, size, scales[i], rubyLayout, spacing);
         }

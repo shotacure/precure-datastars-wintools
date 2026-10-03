@@ -311,6 +311,7 @@ CREATE TABLE `series_subtitle_styles` (
   `subtitle_ruby_oblique_deg` decimal(4,1) DEFAULT NULL COMMENT '振り仮名の斜体の角度（度、NULL は 0）',
   `subtitle_line_gap_ratio` decimal(4,3) DEFAULT NULL COMMENT '行と行のあいだの空き（親字比、NULL は既定）',
   `subtitle_line_gap_ratio_3` decimal(4,3) DEFAULT NULL COMMENT '3 行以上のときの行間（親字比、NULL は subtitle_line_gap_ratio と同じ）',
+  `subtitle_line_gap_ratio_plain` decimal(4,3) DEFAULT NULL COMMENT '下の行に振り仮名が無いときの行間（親字比、NULL は subtitle_line_gap_ratio＋振り仮名の段）',
   `subtitle_ruby_overhang_ratio` decimal(4,3) DEFAULT NULL COMMENT '振り仮名が隣の字へはみ出せる最大幅（片側・親字比、NULL は振り仮名 1 字分）',
   `subtitle_ruby_line_edge` varchar(16) DEFAULT NULL COMMENT '行の端の振り仮名の扱い ALIGN / OVERHANG（NULL は行頭そろえ・行末はみ出し）',
   `subtitle_ruby_grouping` varchar(16) DEFAULT NULL COMMENT '振り仮名の置き方 MONO / JUKUGO / SPREAD（NULL は MONO）',

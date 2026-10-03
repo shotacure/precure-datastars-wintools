@@ -2,6 +2,11 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### 開発中（次回リリース）
+
+- **サイト：サブタイトルのテロップ画像の行送りを、下の行の振り仮名の有無で作品ごとに使い分けるようにした**：本編のテロップには、下の行に振り仮名があると行を広げる作品と、行の位置が変わらない作品がある。行送りを行ごとに決め、下の行に振り仮名があるときは `subtitle_line_gap_ratio`、無いときは新しい列 `subtitle_line_gap_ratio_plain` の空きを使う（NULL なら振り仮名の段を足した空き＝振り仮名の有無で行送りを変えない）。3 行以上の組で `subtitle_line_gap_ratio_3` があるときは、振り仮名の有無で行送りを変えない。
+- **DB：`series_subtitle_styles` に `subtitle_line_gap_ratio_plain` を足した**（`db/migrations/v1.18.2_add_subtitle_line_gap_plain.sql`）：下の行に振り仮名が無いときの、上の行の字の下端から下の行の字の上端までの空き（親字の大きさに対する比）。
+
 ### v1.18.1 (2026-10-03)
 
 - **ツール：サブタイトル文字統計を作り直す内部用コンソール `PrecureDataStars.TitleCharStatsRefresh` を足した**：指定した話（`--episode <slug>:<話数>` / `--episode-id` / `--all`）の `title_text` を Episodes の保存時と同じ `TitleCharStatsBuilder` にかけ、`title_char_stats` との違いを表示する。`--apply` を付けたときだけ、違いのある話の `title_char_stats` だけを 1 トランザクションで書き換える。サブタイトルを DB 直接で直したとき、Episodes で保存し直さずに統計を合わせるためのもの。配布 ZIP には含めない。

@@ -131,8 +131,14 @@ public sealed class Series
     /// <summary>振り仮名にかける斜体の角度（度。右へ倒す）。NULL なら倒さない。</summary>
     public decimal? SubtitleRubyObliqueDeg { get; set; }
 
-    /// <summary>行と行のあいだの空き（親字の大きさに対する比）。NULL なら振り仮名があれば 0.280、なければ 0.220。</summary>
+    /// <summary>下の行に振り仮名があるときの、上の行の字の下端から下の行の振り仮名の段の上端までの空き（親字の大きさに対する比）。NULL なら 0.280。</summary>
     public decimal? SubtitleLineGapRatio { get; set; }
+
+    /// <summary>
+    /// 下の行に振り仮名が無いときの、上の行の字の下端から下の行の字の上端までの空き（親字の大きさに対する比）。
+    /// NULL なら <see cref="SubtitleLineGapRatio"/> に振り仮名の段の高さを足した空き（振り仮名の有無で行送りが変わらない）。
+    /// </summary>
+    public decimal? SubtitleLineGapRatioPlain { get; set; }
 
     /// <summary>3 行以上のときの行と行のあいだの空き（親字の大きさに対する比）。NULL なら <see cref="SubtitleLineGapRatio"/> と同じ。</summary>
     public decimal? SubtitleLineGapRatio3 { get; set; }

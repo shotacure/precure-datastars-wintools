@@ -55,6 +55,13 @@ public sealed record OgCardSpec(
     public string TitleRubyHtml { get; init; } = "";
 
     /// <summary>
+    /// 振り仮名の組み方（作品ごとのサブタイトルテロップと同じもの）。<see cref="TitleTelopStyle"/> のとき、振り仮名を
+    /// この組み方（書体・大きさ・高さ・斜体・はみ出し方・置き方・字間）で、親字と同じ白い字・黒フチ・影で描く。
+    /// null なら本文書体の灰色の振り仮名。
+    /// </summary>
+    public SubtitleTelopProfile? TitleRubyProfile { get; init; }
+
+    /// <summary>
     /// サイトのヒーロー（ホームの大見出し）と同じ声で組むか。
     /// true にすると見出しとタグラインをブランド書体（Kiwi Maru）の濃ピンクで描く。
     /// サイトはこの組み方をホームのヒーローだけに使っているので、カードでもホームに限定する。
@@ -153,7 +160,7 @@ public sealed record OgCardSpec(
     public float StatScale { get; init; }
 
     /// <summary>
-    /// 見出しに使う書体の名前（<c>series.font_subtitle</c>。「FOT-ハミング ProN B」のように Windows に見える書体名）。
+    /// 見出しに使う書体の名前（<c>series_subtitle_styles.font_subtitle</c>。「FOT-ハミング ProN B」のように Windows に見える書体名）。
     /// エピソードのサブタイトルを、その作品の本編のテロップと同じ書体で組むためのもので、
     /// インストールされていなければ既定の見出し書体で組んで警告を出す。空なら既定の見出し書体。
     /// </summary>

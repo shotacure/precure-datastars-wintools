@@ -769,6 +769,25 @@ public sealed class EpisodeGenerator
         if (!ownEmbargoed)
             layout.OgCard = BuildOgCard(series, ep, content);
 
+        // サブタイトル欄は、本編のテロップと同じ体裁（作品のテロップ書体・白い字に黒フチと影）の画像で見せる。
+        // 解禁前の話は画像にするとぼかしが効かないので、OGP カードと同じく作らずに HTML のサブタイトル（ガード付き）を出す。
+        // サブタイトル未確定の話もプレースホルダの HTML のまま。
+        if (!ownEmbargoed && !string.IsNullOrEmpty(ep.TitleText))
+        {
+            var telop = _page.RenderSubtitleTelop(
+                episodeUrl,
+                $"subtitles/{series.Slug}/{ep.SeriesEpNo}.png",
+                string.IsNullOrEmpty(ep.TitleRichHtml) ? HtmlUtil.Escape(ep.TitleText) : ep.TitleRichHtml,
+                series.FontSubtitle ?? "",
+                SubtitleTelopProfile.FromSeries(series));
+            if (telop is not null)
+            {
+                content.Episode.SubtitleTelopSrc = telop.Src;
+                content.Episode.SubtitleTelopWidth = telop.Width;
+                content.Episode.SubtitleTelopHeight = telop.Height;
+            }
+        }
+
         // レンダリングとファイル書き出しまでを並列フェーズ内で実施する。
         // サマリ・sitemap 記録は呼び出し側（GenerateAsync）が元のページ順で逐次実行する。
         _page.RenderAndWriteFile(episodeUrl, "episode-detail.sbn", content, layout);
@@ -829,10 +848,12 @@ public sealed class EpisodeGenerator
         {
             // サブタイトルはサイト本体と同じくルビ付きで組む（title_rich_html が無い話は素で組まれる）。
             TitleRubyHtml = ep.TitleRichHtml ?? "",
-            // 作品の本編テロップと同じ書体（series.font_subtitle）。無ければ既定の見出し書体。
+            // 作品の本編テロップと同じ書体（series_subtitle_styles.font_subtitle）。無ければ既定の見出し書体。
             TitleFontFamily = series.FontSubtitle ?? "",
             // サブタイトルは本編のテロップと同じく、白い字に黒フチと影で組む。
             TitleTelopStyle = true,
+            // 振り仮名はサブタイトルテロップ（エピソード詳細のテロップ画像）と同じ作品ごとの組み方で描く。
+            TitleRubyProfile = SubtitleTelopProfile.FromSeries(series),
             BandColorHex = OgCardColors.Episode,
             Watermark = $"第{ep.SeriesEpNo}話",
             WatermarkAside = series.Title,
@@ -1972,6 +1993,13 @@ public sealed class EpisodeGenerator
         public string SubtitleGuardedH1Html { get; set; } = "";
         /// <summary>subtitle-display ブロックの中身（ガード済み HTML）。</summary>
         public string SubtitleGuardedDisplayHtml { get; set; } = "";
+        /// <summary>
+        /// サブタイトルのテロップ画像（サイトルートからのパス）と表示の幅・高さ（CSS ピクセル）。
+        /// 空なら画像を作らなかった話で、テンプレ側は <see cref="SubtitleGuardedDisplayHtml"/> を出す。
+        /// </summary>
+        public string SubtitleTelopSrc { get; set; } = "";
+        public int SubtitleTelopWidth { get; set; }
+        public int SubtitleTelopHeight { get; set; }
         /// <summary>放送日時を「2004年2月1日 8:30〜9:00」形式で。尺未登録時は終了時刻なし。</summary>
         public string OnAirDateTime { get; set; } = "";
         public string ToeiAnimSummaryUrl { get; set; } = "";

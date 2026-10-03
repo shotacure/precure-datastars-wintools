@@ -99,8 +99,59 @@ public sealed class Series
     /// <summary>配信版のイントロ尺（秒）。配信プラットフォーム向けの情報。</summary>
     public ushort? VodIntro { get; set; }
 
-    /// <summary>サブタイトル表示用フォント名（フォント管理基盤整備前の暫定フィールド）。</summary>
+    /// <summary>
+    /// サブタイトル表示用フォント名（<c>series_subtitle_styles.font_subtitle</c>。行が無ければ NULL）。
+    /// これ以下のサブタイトルの組み方も同じテーブルから読み、<c>SeriesRepository</c> の INSERT / UPDATE では書き換えない。
+    /// </summary>
     public string? FontSubtitle { get; set; }
+
+    // ── サブタイトルのテロップ画像の組み方（series_subtitle_styles。NULL は既定値で組む。親字の書体は FontSubtitle）──
+
+    /// <summary>
+    /// 字間の組み方。<c>PROPORTIONAL</c>＝書体の詰め情報（なければ字面）で詰める / <c>MONO</c>＝ベタ組み（字送り幅のまま）。
+    /// NULL なら PROPORTIONAL。
+    /// </summary>
+    public string? SubtitleKerning { get; set; }
+
+    /// <summary>親字の字と字のあいだに足す空き（字の大きさに対する比、負なら詰める）。NULL なら 0。</summary>
+    public decimal? SubtitleLetterSpacingEm { get; set; }
+
+    /// <summary>振り仮名の字と字のあいだに足す空き（振り仮名の大きさに対する比）。NULL なら 0。</summary>
+    public decimal? SubtitleRubyLetterSpacingEm { get; set; }
+
+    /// <summary>振り仮名の書体名（インストール済み書体の名前）。NULL なら親字と同じ書体。</summary>
+    public string? FontSubtitleRuby { get; set; }
+
+    /// <summary>振り仮名の大きさ（親字の大きさに対する比）。NULL なら 0.300。</summary>
+    public decimal? SubtitleRubySizeRatio { get; set; }
+
+    /// <summary>振り仮名のベースラインを親字のベースラインから上げる高さ（親字の大きさに対する比）。NULL なら 1.040。</summary>
+    public decimal? SubtitleRubyRaiseRatio { get; set; }
+
+    /// <summary>振り仮名にかける斜体の角度（度。右へ倒す）。NULL なら倒さない。</summary>
+    public decimal? SubtitleRubyObliqueDeg { get; set; }
+
+    /// <summary>行と行のあいだの空き（親字の大きさに対する比）。NULL なら振り仮名があれば 0.280、なければ 0.220。</summary>
+    public decimal? SubtitleLineGapRatio { get; set; }
+
+    /// <summary>3 行以上のときの行と行のあいだの空き（親字の大きさに対する比）。NULL なら <see cref="SubtitleLineGapRatio"/> と同じ。</summary>
+    public decimal? SubtitleLineGapRatio3 { get; set; }
+
+    /// <summary>親字より長い振り仮名が、振り仮名の無い隣の字へはみ出してよい最大の幅（片側、親字の大きさに対する比）。NULL なら振り仮名 1 字分（振り仮名の大きさと同じ）。</summary>
+    public decimal? SubtitleRubyOverhangRatio { get; set; }
+
+    /// <summary>
+    /// 行の端の振り仮名の扱い。<c>ALIGN</c>＝行頭・行末とも外へ出さず内側へ寄せる / <c>OVERHANG</c>＝行頭・行末とも外へはみ出させる。
+    /// NULL なら行頭はそろえ、行末ははみ出させる。
+    /// </summary>
+    public string? SubtitleRubyLineEdge { get; set; }
+
+    /// <summary>
+    /// 振り仮名の置き方。<c>MONO</c>＝1 字ずつ（ルビの単位ごとに）親字の上に置く /
+    /// <c>JUKUGO</c>＝振り仮名のある字が続くところの読みをひと続きにして熟語全体の上に置く /
+    /// <c>SPREAD</c>＝その読みを熟語の幅に 1 字ずつ均等に空けて並べる。NULL なら MONO。
+    /// </summary>
+    public string? SubtitleRubyGrouping { get; set; }
 
     /// <summary>
     /// 「絵コンテ」役職を独立表示せず「演出」と融合表示するか。

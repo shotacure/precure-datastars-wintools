@@ -300,7 +300,7 @@ public sealed class SiteBuilderPipeline
         new OgGalleryGenerator(ctx, config).Generate();
 
         // OGP カードの書体に関する報告を、種類ごとに 1 度だけ出す。ブランド書体に無い文字の代替描画は情報として残し、
-        // 指定した書体（series.font_subtitle など）がこの PC に無い場合は、気づかずに別の書体で焼いてデプロイしないよう警告にする。
+        // 指定した書体（series_subtitle_styles.font_subtitle など）がこの PC に無い場合は、気づかずに別の書体で焼いてデプロイしないよう警告にする。
         foreach (var (message, samplePath) in pageRenderer.OgCardGlyphWarnings)
         {
             if (message.StartsWith("書体「", StringComparison.Ordinal))

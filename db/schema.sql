@@ -261,7 +261,6 @@ CREATE TABLE `series` (
   -- タイトルカードに CJ マークが付くか。役職 TITLE のテンプレから {CJ_MARK}（付く作品では「CJ」）で参照する。
   `film_cj_mark` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'タイトルカードに CJ マークが付くか',
   `vod_intro` smallint unsigned DEFAULT NULL,
-  `font_subtitle` varchar(64) DEFAULT NULL,
   -- 絵コンテ役職を独立表示せず演出と融合表示するか（プレビュー描画専用フラグ）。
   -- 初期のプリキュアシリーズで「（絵コンテ・）演出 名前」のような融合表記が慣習的だった
   -- ため、シリーズ単位で ON にすることで CreditPreviewRenderer が STORYBOARD と
@@ -289,6 +288,37 @@ CREATE TABLE `series` (
   CONSTRAINT `ck_seq_segment` CHECK (((`relation_to_parent` <> _utf8mb4'SEGMENT') or ((`seq_in_parent` is not null) and (`seq_in_parent` >= 1)))),
   CONSTRAINT `ck_slug_format` CHECK (regexp_like(`slug`,_utf8mb4'^[a-z0-9-]+$'))
 ) ENGINE=InnoDB AUTO_INCREMENT=70 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `series_subtitle_styles`
+--
+
+DROP TABLE IF EXISTS `series_subtitle_styles`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+-- シリーズごとのサブタイトルの書体と、テロップ画像（エピソード詳細ページ・OGP カード）の組み方。series と 1 対 1。
+-- 行の無いシリーズ・NULL の列は既定値で組む（SiteBuilder の SubtitleTelopProfile）。
+CREATE TABLE `series_subtitle_styles` (
+  `series_id` int NOT NULL,
+  `font_subtitle` varchar(64) DEFAULT NULL COMMENT 'サブタイトルの親字の書体（本編テロップの書体）',
+  `subtitle_kerning` varchar(16) DEFAULT NULL COMMENT '字間の組み方 PROPORTIONAL / MONO（NULL は PROPORTIONAL）',
+  `subtitle_letter_spacing_em` decimal(4,3) DEFAULT NULL COMMENT '親字の字間に足す空き（字の大きさ比、NULL は 0）',
+  `subtitle_ruby_letter_spacing_em` decimal(4,3) DEFAULT NULL COMMENT '振り仮名の字間に足す空き（振り仮名の大きさ比、NULL は 0）',
+  `font_subtitle_ruby` varchar(64) DEFAULT NULL COMMENT 'サブタイトルの振り仮名の書体（NULL は親字と同じ）',
+  `subtitle_ruby_size_ratio` decimal(4,3) DEFAULT NULL COMMENT '振り仮名の大きさ（親字比、NULL は 0.300）',
+  `subtitle_ruby_raise_ratio` decimal(4,3) DEFAULT NULL COMMENT '振り仮名のベースラインの高さ（親字比、NULL は 1.040）',
+  `subtitle_ruby_oblique_deg` decimal(4,1) DEFAULT NULL COMMENT '振り仮名の斜体の角度（度、NULL は 0）',
+  `subtitle_line_gap_ratio` decimal(4,3) DEFAULT NULL COMMENT '行と行のあいだの空き（親字比、NULL は既定）',
+  `subtitle_line_gap_ratio_3` decimal(4,3) DEFAULT NULL COMMENT '3 行以上のときの行間（親字比、NULL は subtitle_line_gap_ratio と同じ）',
+  `subtitle_ruby_overhang_ratio` decimal(4,3) DEFAULT NULL COMMENT '振り仮名が隣の字へはみ出せる最大幅（片側・親字比、NULL は振り仮名 1 字分）',
+  `subtitle_ruby_line_edge` varchar(16) DEFAULT NULL COMMENT '行の端の振り仮名の扱い ALIGN / OVERHANG（NULL は行頭そろえ・行末はみ出し）',
+  `subtitle_ruby_grouping` varchar(16) DEFAULT NULL COMMENT '振り仮名の置き方 MONO / JUKUGO / SPREAD（NULL は MONO）',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`series_id`),
+  CONSTRAINT `fk_sss_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='シリーズごとのサブタイトルの書体とテロップ画像の組み方';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

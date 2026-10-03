@@ -38,7 +38,7 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// これにより PageRenderer の並列レンダリングフェーズからそのまま呼べる。
 /// </para>
 /// </summary>
-public sealed class OgCardRenderer : IDisposable
+public sealed partial class OgCardRenderer : IDisposable
 {
     // ──────── カードの寸法 ────────
 
@@ -895,7 +895,8 @@ public sealed class OgCardRenderer : IDisposable
                 if (WrapRubyUnits(rubyUnits, baseFont, rubyFont, paint, contentWidth, DenseTitleMaxLines + 1).Count > DenseTitleMaxLines)
                     truncated = true;
             }
-            y = DrawRubyTitle(canvas, paint, rubyUnits, PaddingLeft, y, contentWidth, sizes, DenseTitleMaxLines, fittedTypeface, scaleX, spec.TitleTelopStyle);
+            y = DrawRubyTitle(canvas, paint, rubyUnits, PaddingLeft, y, contentWidth, sizes, DenseTitleMaxLines, fittedTypeface, scaleX, spec.TitleTelopStyle,
+                spec.TitleTelopStyle ? spec.TitleRubyProfile : null);
         }
         else
         {
@@ -2023,11 +2024,12 @@ public sealed class OgCardRenderer : IDisposable
     /// ルビ付き見出しを組んで描き、見出しブロックの下端 Y を返す。
     /// 単位ごとに「地の文の幅」と「振り仮名の幅」の広いほうを占有幅として確保し、
     /// 双方をその中央へ置く（振り仮名が地の文より長い漢字でも重ならない）。
+    /// <paramref name="rubyProfile"/> があれば、振り仮名はサブタイトルテロップと同じ組み方・体裁で描く（行の高さは変えない）。
     /// </summary>
     private float DrawRubyTitle(
         SKCanvas canvas, SKPaint paint, IReadOnlyList<RubyUnit> units,
         float x, float topY, float maxWidth, float[] sizeCandidates, int maxLines, SKTypeface? typeface = null, float scaleX = 1f,
-        bool telop = false)
+        bool telop = false, SubtitleTelopProfile? rubyProfile = null)
     {
         using var baseFont = new SKFont(typeface ?? _boldTypeface, sizeCandidates[^1]) { ScaleX = scaleX };
         // 振り仮名は本文の書体で、地の文と同じ率で詰める（占有幅の計算を地の文と揃えるため）。
@@ -2047,17 +2049,40 @@ public sealed class OgCardRenderer : IDisposable
         float lineHeight = baseFont.Size * TitleLineHeightRatio + rubyLead;
         float y = topY + rubyLead;
 
+        // テロップの組み方の振り仮名：書体は作品の指定（無ければ親字と同じ）、字間・置き方はテロップと同じ。
+        SKFont? telopRubyFont = null;
+        TelopRubyLayout? telopLayout = null;
+        TelopSpacing? telopSpacing = null;
+        if (rubyProfile is not null)
+        {
+            var baseTypeface = baseFont.Typeface ?? _boldTypeface;
+            var rubyTypeface = rubyProfile.RubyFontFamily.Length > 0 ? ResolveTypeface(rubyProfile.RubyFontFamily, baseTypeface, out _) : baseTypeface;
+            telopRubyFont = new SKFont(rubyTypeface, baseFont.Size * rubyProfile.RubySizeRatio);
+            telopLayout = new TelopRubyLayout(rubyProfile.RubySizeRatio, rubyProfile.RubyRaiseRatio,
+                (float)Math.Tan(rubyProfile.RubyObliqueDegrees * Math.PI / 180.0),
+                rubyProfile.RubyOverhangRatio ?? rubyProfile.RubySizeRatio, rubyProfile.RubyOverhangLineStart, rubyProfile.RubyOverhangLineEnd,
+                rubyProfile.RubyGrouping);
+            telopSpacing = new TelopSpacing(rubyProfile.Solid, 0f, rubyProfile.RubyLetterSpacingEm);
+        }
+        using var telopRubyFontScope = telopRubyFont;
+
         foreach (var line in lines)
         {
             y += baseFont.Size;
             float cursor = x;
+            var telopPlaced = new List<(string Ruby, SKFont Font, float X, float Slot, bool AfterGap, float InkLeft, float InkRight)>();
+            bool afterGap = false;
             foreach (var unit in line)
             {
                 // 占有幅は地の文の幅。振り仮名のほうが広ければ、振り仮名を地の文の幅まで横に圧縮して載せる
                 // （振り仮名に引きずられて地の文の字間が空かないようにする）。
                 float slot = Measure(baseFont, unit.Base);
 
-                if (telop)
+                if (telopLayout is not null)
+                {
+                    // 振り仮名と層をそろえて重ねるため、親字は行の終わりでまとめて描く。
+                }
+                else if (telop)
                 {
                     DrawTextTelop(canvas, unit.Base, cursor, y, SKTextAlign.Left, baseFont);
                 }
@@ -2067,7 +2092,17 @@ public sealed class OgCardRenderer : IDisposable
                     DrawTextOutlined(canvas, unit.Base, cursor, y, SKTextAlign.Left, baseFont, paint);
                 }
 
-                if (unit.Ruby.Length > 0)
+                if (telopLayout is not null)
+                {
+                    if (unit.IsGap) afterGap = true;
+                    else
+                    {
+                        var ink = ShaperFor(baseFont).InkExtent(unit.Base, baseFont);
+                        telopPlaced.Add((unit.Ruby, baseFont, cursor, slot, afterGap, cursor + ink.Left, cursor + ink.Right));
+                        afterGap = false;
+                    }
+                }
+                else if (unit.Ruby.Length > 0)
                 {
                     float rubyScale = rubyFont.ScaleX;
                     float rubyWidth = Measure(rubyFont, unit.Ruby);
@@ -2085,6 +2120,31 @@ public sealed class OgCardRenderer : IDisposable
                     rubyFont.ScaleX = rubyScale;
                 }
                 cursor += slot;
+            }
+            if (telopLayout is not null && telopRubyFont is not null && telopSpacing is not null)
+            {
+                // 親字と振り仮名をひとまとまりとして、影 → フチ → 白い字の順に重ねる（振り仮名のフチが親字の白い字にかぶらない）。
+                var rubies = PlaceTelopRubies(telopPlaced, telopRubyFont, baseFont.Size, scaleX, telopLayout, telopSpacing);
+                var shaper = ShaperFor(baseFont);
+                float d = baseFont.Size * TelopShadowRatio;
+                using var stroke = new SKPaint
+                {
+                    IsAntialias = true,
+                    Color = SKColors.Black,
+                    Style = SKPaintStyle.Stroke,
+                    StrokeWidth = baseFont.Size * TelopOutlineRatio * 2f,
+                    StrokeJoin = SKStrokeJoin.Round,
+                    StrokeCap = SKStrokeCap.Round
+                };
+                using var black = new SKPaint { IsAntialias = true, Color = SKColors.Black };
+                using var white = new SKPaint { IsAntialias = true, Color = SKColors.White };
+                var bases = line.Where(u => !u.IsGap).Zip(telopPlaced.Select(p => p.X)).ToList();
+                foreach (var (unit, ux) in bases) shaper.Draw(canvas, unit.Base, ux + d, y + d, SKTextAlign.Left, baseFont, black, stroke);
+                DrawTelopRubyPass(canvas, rubies, y, telopRubyFont, telopLayout, telopSpacing, TelopPass.Shadow);
+                foreach (var (unit, ux) in bases) shaper.Draw(canvas, unit.Base, ux, y, SKTextAlign.Left, baseFont, stroke);
+                DrawTelopRubyPass(canvas, rubies, y, telopRubyFont, telopLayout, telopSpacing, TelopPass.Outline);
+                foreach (var (unit, ux) in bases) shaper.Draw(canvas, unit.Base, ux, y, SKTextAlign.Left, baseFont, white);
+                DrawTelopRubyPass(canvas, rubies, y, telopRubyFont, telopLayout, telopSpacing, TelopPass.Fill);
             }
             y += lineHeight - baseFont.Size;
         }
@@ -2276,6 +2336,7 @@ public sealed class OgCardRenderer : IDisposable
     public void Dispose()
     {
         foreach (var shaper in _shapers.Values) shaper.Dispose();
+        foreach (var shaper in _telopShapers.Values.Where(l => l.IsValueCreated)) shaper.Value.Dispose();
         foreach (var typeface in _ownedTypefaces) typeface.Dispose();
     }
 }

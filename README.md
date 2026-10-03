@@ -22,6 +22,7 @@ precure-datastars-wintools.sln
 ├── PrecureDataStars.Episodes … エピソード管理 GUI（WinForms）
 ├── PrecureDataStars.Catalog … カタログ管理 GUI（WinForms）
 ├── PrecureDataStars.AmazonSync … Creators API 画像一括取得・書籍取り込み（コンソール）
+├── PrecureDataStars.TitleCharStatsRefresh … サブタイトル文字統計の作り直し（内部用コンソール）
 │
 ├── PrecureDataStars.BDAnalyzer … Blu-ray/DVD チャプター解析（WinForms）＋DB 連携
 ├── PrecureDataStars.CDAnalyzer … CD-DA トラック解析（WinForms）＋DB 連携
@@ -53,6 +54,7 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.OaVerifier** | WinForms GUI | 本放送フォーマット検証ツール。地デジ録画 TS（descrambled）を LibVLC で再生し、TOT（PID 0x0014）から放送日を確定して該当エピソードを自動同定、PCR ↔ メディア時刻の写像で番組先頭（`on_air_at`）基準の各境界を頭出しする。確認のため全パートを一覧表示し、`episode_parts.notes` に `【本放送未確認】` を含むパートを薄い赤で強調。再生は「未承認パート通し」「全パート通し」の 2 種で対象パートの開始/終了境界を連続再生（確認幅は境界中心からの「始点」−3.0〜+2.0 秒・「終点」−2.0〜+3.0 秒を 0.5 秒刻みで独立指定し、既定は始点 −2.0／終点 +2.0＝前後 ±2 秒。始点 ＜ 終点 を満たさない設定はコンボを赤表示し再生を中止。手動移動は ±5/15 秒の送り戻しのみ）。フルセグは解像度最大の映像トラックを自動選択（映像/音声トラックは手動切替可）。承認したパートの notes からマーカーを除去し、エピソードエディタでの修正後に「パートデータをリロード」で再取得できる。TS と DB の食い違いは「現在位置を番組先頭に再アンカー」で吸収。 |
 | **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細・人物／企業／プリキュア／キャラクター詳細・クリエイター・楽曲・劇伴・商品・統計の各ページ群を生成する。`CreditInvolvementIndex` 経由で「人物・企業・キャラごとにどのシリーズのどのエピソードに、どの役職で関与したか」を逆引きする。 |
 | **PrecureDataStars.AmazonSync** | コンソール | `products` テーブルから ASIN を持つ商品を抽出し、Creators API GetItems で `cover_image_url` を一括更新するバッチ。鮮度切れ判定（90 日経過 or 未取得）で対象を絞り込み、Creators API レート制限（1 TPS）順守のため各リクエスト間に 1.1 秒スリープを挟む。CLI オプションは `--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--search "キーワード" --index Books`（検索の診断）／`--dry-run`（DB 更新せず表示のみ）／`--target products|books|all`（巡回対象の切替）。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録。書籍については表紙巡回（代表は紙優先）に加えて、`--import-book`（ASIN から書誌・書影・クレジットを組み立てて `books` へ登録）と `--attach-print --book-id N --print-asin X`（Kindle 版だけで登録済みの書籍へ紙版を合流）も担う。 |
+| **PrecureDataStars.TitleCharStatsRefresh** | コンソール（内部用） | 指定したエピソードの `title_text` を Episodes の保存時と同じ `TitleCharStatsBuilder` にかけ、`title_char_stats` を作り直す。サブタイトルを DB 直接で直したあとに使う。引数だけなら DB の統計との違いを表示するのみで、`--apply` を付けたときだけ違いのある話を 1 トランザクションで書き換える（`title_char_stats` 以外の列には触れない）。配布 ZIP には含めない。使い方は「エピソード管理」を参照。 |
 
 ---
 
@@ -86,7 +88,7 @@ mysql -u root -p < db/schema.sql
 
 ### 2. 接続文字列の設定
 
-DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / OaVerifier / SiteBuilder / AmazonSync）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。
+DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / OaVerifier / SiteBuilder / AmazonSync / TitleCharStatsRefresh）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。
 
 ```xml
 <connectionStrings>
@@ -145,6 +147,14 @@ dotnet run --project PrecureDataStars.Catalog
 ### エピソード管理
 
 `PrecureDataStars.Episodes` でシリーズとエピソードの CRUD、サブタイトルのかな・ルビ編集、パート構成（アバン・OP・A/B パート・ED・予告）の編集を行う。新規エピソード追加後はサブタイトル文字統計（`title_char_stats`）と YouTube 予告動画 URL・特別予告（本放送時）URL を必要に応じて補完する。
+
+サブタイトル（`title_text`）を Episodes を通さずに DB で直したときは、`PrecureDataStars.TitleCharStatsRefresh` で文字統計を作り直す。話はシリーズのスラッグと話数（`--episode 2012tv:13`、カンマ区切りで複数可）か `--episode-id` で指定し、`--all` で全話を点検できる（`--all` では違いのある話だけを並べる）。引数だけなら違い（`categories.Punct: 3.0 → 3` のように JSON のパスごと）を表示するだけで、`--apply` を付けたときだけ書き込む。指定した話が 1 つでも見つからなければ何も書かずに止まる（終了コード 2）。
+
+```bash
+dotnet run --project PrecureDataStars.TitleCharStatsRefresh -- --episode 2012tv:13            # 表示のみ
+dotnet run --project PrecureDataStars.TitleCharStatsRefresh -- --episode 2012tv:13 --apply    # 書き込み
+dotnet run --project PrecureDataStars.TitleCharStatsRefresh -- --all                          # 全話の点検
+```
 
 エピソード編集画面の「雑誌サブタイトル掲載」行では、アニメ雑誌でのサブタイトル掲載状態（データなし / 掲載 / 非公開 / 未定）を選択する。横に放送日から自動解決した担当号（「→ 2026年9月号 (2026/8/7発売)」）が読み取り専用で表示され、データなしのときは「サイト非表示」、担当号が確定しない（号マスタの次号未登録）ときは赤字警告になる。「号マスタ...」ボタンで開くダイアログから、アニメ雑誌の号マスタ（年・月・発売日）を一覧編集できる（次号の発売予定日は先行登録する運用）。サブタイトルが未確定（空欄）のまま保存できるのは掲載状態が「非公開」または「未定」のときだけで、それ以外はエディタ・リポジトリ・DB CHECK の三層で弾かれる。
 

@@ -1,13 +1,15 @@
 {{## 年表タブの中身（担当・出演・参加の移り変わりの線表）。役職詳細・声の出演一覧・歌唱一覧・音楽制作一覧・
      作詞作曲編曲や音楽の役職詳細の年表タブ（切り替え）のパネルから
      引数なしの include で取り込み、各ページのモデルの Timeline（RoleTimelineModel）を描く。
-     ・説明文（載せる決まり）・凡例のあとに、名前・年の目盛り・印（TV の話の帯 / 映画の点 / 歌の点 / 劇伴の点 /
+     ・注記（行を絞る決まり。右寄せの小さな字、全員を載せるページは出さない）・凡例のあとに、名前・年の目盛り・印（TV の話の帯 / 映画の点 / 歌の点 / 劇伴の点 /
        盤の四角 / 続けて参加した期間の細線）の線表を全行出す。行にマウスを載せる（スマホは帯をタップする）と参加期間と
        作品ごとの参加を出す（role-timeline.js）。
      ・行の data-entity-type は一覧の行と同じ値なので、ページの絞り込み（site.css）がそのまま線表の行にも効く。
      ・横軸は TV シリーズ 1 作を 1 本の帯にし、帯の左端に放送開始年の目盛り（シリーズ詳細へのリンク）を置く。 ##}}
 <div class="role-timeline">
+  {{~ if Timeline.Note != "" ~}}
   <p class="rtl-note muted">{{ Timeline.Note | html.escape }}</p>
+  {{~ end ~}}
   <ul class="rtl-legend" aria-label="凡例">
     {{~ for l in Timeline.Legend ~}}
     <li><span class="rtl-key rtl-key-{{ l.Kind }}"></span>{{ l.Label | html.escape }}</li>

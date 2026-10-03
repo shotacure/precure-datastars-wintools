@@ -7945,9 +7945,11 @@ ins.adsbygoogle[data-ad-status="filled"] {
   --rtl-track-x: calc(var(--rtl-name-w) + var(--rtl-gap));
   margin: 0 0 2em;
 }
+/* 年表の注記（行を絞る決まり）。本文の邪魔にならないよう右寄せの小さな字にする。 */
 .rtl-note {
   margin: 10px 0 6px;
-  font-size: 0.85em;
+  font-size: 0.75em;
+  text-align: right;
 }
 .rtl-legend {
   list-style: none;

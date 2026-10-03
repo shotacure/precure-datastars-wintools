@@ -415,14 +415,14 @@ internal sealed class RoleTimelineBuilder
 /// <param name="ShowAllUpTo">描ける参加のある候補がこの数以下なら、決まりによらずすべて載せる（<paramref name="IncludeAll"/> のページでは使わない）。</param>
 /// <param name="Verb">凡例の動詞（「担当」「出演」「参加」）。</param>
 /// <param name="Note">
-/// 年表タブの先頭に出す説明文（載せる決まり）。ページの種類ごとに固定で、登録状況（どの人が載ったか・誰がオープニングに
+/// 年表タブの先頭に右寄せの小さな字で出す注記（行を絞る決まり）。全員を載せるページは空で、注記を出さない。ページの種類ごとに固定で、登録状況（どの人が載ったか・誰がオープニングに
 /// 出ているか）では変えない（例：演出助手もいずれオープニングに出ることがあるので、役職ページはどれも同じ文にする）。
 /// </param>
 internal sealed record RoleTimelineRules(
     int MaxGapDays, int WindowDays, int MinCreditsInWindow, bool IncludeOpeningCredit, bool IncludeAll, int ShowAllUpTo, string Verb, string Note)
 {
-    /// <summary>全員を載せる決まりのページの説明文。</summary>
-    public const string AllNote = "対象: すべて";
+    /// <summary>全員を載せる決まりのページの説明文（出さない）。</summary>
+    public const string AllNote = "";
 
     /// <summary>決まりで絞るページでも全員を載せる候補の数の上限。</summary>
     public const int DefaultShowAllUpTo = 10;
@@ -430,17 +430,17 @@ internal sealed record RoleTimelineRules(
     /// <summary>役職詳細：メインスタッフ（オープニングに出た）と、1 年間（52 週）に 4 回以上担当したスタッフ（細線は 13 週以内の間隔でつなぐ）。候補が 10 以下なら全員。</summary>
     public static readonly RoleTimelineRules Staff = new(
         91, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: true, IncludeAll: false, DefaultShowAllUpTo, "担当",
-        "対象: すべて（10人を超える場合は、メインスタッフまたは1年間4回以上）");
+        "10名を超える場合はメインスタッフまたは年間4回以上担当された方のみ");
 
     /// <summary>声の出演：1 年間（52 週）に 4 回以上出演した声優（細線は 4 週以内の間隔でつなぐ）。候補が 10 以下なら全員。</summary>
     public static readonly RoleTimelineRules VoiceCast = new(
         28, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: false, IncludeAll: false, DefaultShowAllUpTo, "出演",
-        "対象: すべて（10人を超える場合は、1年間4回以上）");
+        "10名を超える場合は年間4回以上出演された方のみ");
 
     /// <summary>作詞・作曲・編曲の役職詳細：1 年間（52 週）に 2 曲以上担当した人物（細線は 13 週以内の間隔でつなぐ）。候補が 10 以下なら全員。</summary>
     public static readonly RoleTimelineRules SongWriter = new(
         91, WindowDays: 364, MinCreditsInWindow: 2, IncludeOpeningCredit: false, IncludeAll: false, DefaultShowAllUpTo, "担当",
-        "対象: すべて（10人を超える場合は、1年間2曲以上）");
+        "10名を超える場合は年間2曲以上担当された方のみ");
 
     /// <summary>音楽の役職詳細（演奏など）：一覧に載る人物・団体すべて（細線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules MusicRole = new(

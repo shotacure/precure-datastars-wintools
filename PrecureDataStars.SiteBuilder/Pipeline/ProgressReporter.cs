@@ -56,6 +56,18 @@ public sealed class ProgressReporter : IDisposable
 
     public ProgressReporter()
     {
+        // 出力は端末・ファイル・パイプのどれに向いていても常に UTF-8 で出す。
+        // Windows のコマンドプロンプト / PowerShell では既定のコンソール出力エンコーディングが
+        // システム既定（日本語環境では CP932）になっており、本クラスがバー描画に使う Unicode
+        // ブロック文字 U+2588（█）・U+2591（░）は CP932 にマップが無いため "?" に置換されて表示される。
+        // また、出力先で切り替えると「dotnet run 経由（dotnet CLI がコンソールを UTF-8 にする）では UTF-8、
+        // exe 直接のリダイレクトでは CP932」のようにログの文字コードが実行のしかたで変わってしまう。
+        // OS 側コンソールコードページと .NET 側 Console.OutputEncoding の両方を UTF-8 に揃えるため
+        // ここで一度だけ調整を行う。失敗しても描画自体は続行する（最悪バーが "?" のまま表示されるだけで
+        // ビルドの本筋には影響しない）。パイプで受ける PowerShell スクリプト（scripts/deploy.ps1 など）は
+        // 読み取り側も UTF-8（[Console]::OutputEncoding）にそろえる。
+        TrySetUtf8Console();
+
         // ANSI 上書き描画は標準出力が端末で、かつ NO_COLOR 環境変数が未設定の場合のみ有効化する。
         // リダイレクトされた標準出力に上書き制御文字を流すとログファイルに制御コードが残ってしまうため避ける。
         _ansiEnabled = !Console.IsOutputRedirected
@@ -63,14 +75,6 @@ public sealed class ProgressReporter : IDisposable
 
         if (_ansiEnabled)
         {
-            // Windows のコマンドプロンプト / PowerShell では既定のコンソール出力エンコーディングが
-            // システム既定（日本語環境では CP932）になっており、本クラスがバー描画に使う Unicode
-            // ブロック文字 U+2588（█）・U+2591（░）は CP932 にマップが無いため "?" に置換されて表示される。
-            // OS 側コンソールコードページと .NET 側 Console.OutputEncoding の両方を UTF-8 に揃えるため
-            // ここで一度だけ調整を行う。失敗しても描画自体は続行する（最悪バーが "?" のまま表示されるだけで
-            // ビルドの本筋には影響しない）。
-            TrySetUtf8Console();
-
             // 1 秒ごとの定期再描画タイマ。PageWritten が高頻度で来てもこのタイマが間引いて描画する。
             _renderTimer = new Timer(_ => TickRender(), null,
                 TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
@@ -84,7 +88,7 @@ public sealed class ProgressReporter : IDisposable
     /// <see cref="Console.OutputEncoding"/> のみ明示する。例外は握りつぶす（プロセス権限や
     /// 特殊なリダイレクト構成等で API 呼び出しが失敗しても、進捗バー以外の動作には影響させない）。
     /// </summary>
-    private static void TrySetUtf8Console()
+    internal static void TrySetUtf8Console()
     {
         try
         {

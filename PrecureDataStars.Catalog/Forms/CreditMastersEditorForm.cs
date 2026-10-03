@@ -63,6 +63,8 @@ public partial class CreditMastersEditorForm : Form
     // 役職系譜（多対多）を編集するためのリポジトリ。
     // 役職タブの [系譜...] ボタン（Designer.cs 側で正規定義）から本リポジトリを使うダイアログが開く。
     private readonly RoleSuccessionsRepository _roleSuccessionsRepo;
+    // 団体どうしの関係（団体タブの「関係…」ダイアログで編集）
+    private readonly CompanyRelationsRepository _companyRelationsRepo;
 
     /// <summary>クレジット系マスタ管理フォームを生成する。Program.cs の DI で各リポジトリを受け取る。</summary>
     public CreditMastersEditorForm(
@@ -95,7 +97,9 @@ public partial class CreditMastersEditorForm : Form
         CharacterRelationKindsRepository characterRelationKindsRepo,
         CharacterFamilyRelationsRepository characterFamilyRelationsRepo,
         // 役職系譜（多対多）リポジトリ
-        RoleSuccessionsRepository roleSuccessionsRepo)
+        RoleSuccessionsRepository roleSuccessionsRepo,
+        // 団体どうしの関係
+        CompanyRelationsRepository companyRelationsRepo)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
@@ -124,6 +128,9 @@ public partial class CreditMastersEditorForm : Form
 
         // 役職系譜
         _roleSuccessionsRepo = roleSuccessionsRepo ?? throw new ArgumentNullException(nameof(roleSuccessionsRepo));
+
+        // 団体どうしの関係
+        _companyRelationsRepo = companyRelationsRepo ?? throw new ArgumentNullException(nameof(companyRelationsRepo));
 
         InitializeComponent();
 
@@ -180,6 +187,7 @@ public partial class CreditMastersEditorForm : Form
         btnNewCompany.Click += (_, __) => ClearCompanyForm();
         btnSaveCompany.Click += async (_, __) => await SaveCompanyAsync();
         btnDeleteCompany.Click += async (_, __) => await DeleteCompanyAsync();
+        btnCompanyRelations.Click += (_, __) => OpenCompanyRelationsEditor();
 
         btnNewCharacter.Click += (_, __) => ClearCharacterForm();
         btnSaveCharacter.Click += async (_, __) => await SaveCharacterAsync();

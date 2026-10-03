@@ -45,6 +45,26 @@
   </section>
   {{~ end ~}}
 
+  {{## 関係のある団体（前身・後継・所属・傘下）。基本情報と同じファクトタイルで、
+       ラベルにこの団体から見た関係、値に相手の団体へのリンク、下に期間（あれば）を出す。
+       関係が 1 件も無いときはセクションごと省く。 ##}}
+  {{~ if (array.size Relations) > 0 ~}}
+  <section id="related-companies">
+    <h2>関係のある団体</h2>
+    <div class="fact-grid">
+      {{~ for r in Relations ~}}
+      <div class="fact">
+        <span class="fact-label">{{ r.Label | html.escape }}</span>
+        <span class="fact-value is-wrap"><a href="{{ r.CompanyUrl }}">{{ r.CompanyName | html.escape }}</a></span>
+        {{~ if r.Period != "" ~}}
+        <span class="fact-note">{{ r.Period }}</span>
+        {{~ end ~}}
+      </div>
+      {{~ end ~}}
+    </div>
+  </section>
+  {{~ end ~}}
+
   {{## ロゴ一覧（時系列順）。ロゴを 1 つ以上持つ屋号だけを対象にする（ロゴの無い屋号は表示しない）。 ##}}
   {{~ if (array.size LogoAliases) > 0 ~}}
   <section id="logo-types">

@@ -146,9 +146,11 @@ public sealed record OgCardSpec(
     /// </summary>
     public IReadOnlyList<OgCardTimelineSegment> Timeline { get; init; } = Array.Empty<OgCardTimelineSegment>();
 
-    /// <summary>年表の横軸の始まりと終わり。既定はシリーズの始まり（2004 年 2 月 1 日）から今日まで。</summary>
+    /// <summary>年表の横軸の始まりと終わり。始まりの既定はシリーズの始まり（2004 年 2 月 1 日）。終わりは指定が無ければ
+    /// 始まりの 1 年後まで。人物・企業・役職のカードはデータ充足最新話の放送日を指定する（ビルド日は使わない。
+    /// 日が変わるだけでカードが変わらないように）。</summary>
     public DateOnly TimelineStart { get; init; } = new(2004, 2, 1);
-    public DateOnly TimelineEnd { get; init; } = DateOnly.FromDateTime(DateTime.Today);
+    public DateOnly TimelineEnd { get; init; }
 
     /// <summary>
     /// プロフィール組みの下端に据える事実行（初参加・初登場など）。1 行 1 項目。

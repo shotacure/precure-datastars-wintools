@@ -12,6 +12,21 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 internal static class OgCareerCardParts
 {
     /// <summary>
+    /// 年表の横軸の右端。ビルド日ではなく、データ充足最新話（クレジットが登録されている最新の TV の話、
+    /// <see cref="BuildContext.CreditCoverageEpisode"/>）の放送日にする。カードの中身がデータの進み以外で変わらないので、
+    /// 日が変わっても作り置きが効く。クレジットがまだ 1 件も無ければ直近放送の話、それも無ければ未指定
+    /// （描画側が始まりの 1 年後までにする）。区間が右端より先まであれば（放送前の話のクレジットなど）、その終わりまで軸を伸ばす。
+    /// </summary>
+    public static DateOnly TimelineEndFor(BuildContext ctx, IEnumerable<OgCardTimelineSegment> segments)
+    {
+        var episode = ctx.CreditCoverageEpisode?.Episode ?? ctx.LatestAiredTvEpisode?.Episode;
+        var end = episode is null ? default : DateOnly.FromDateTime(episode.OnAirAt);
+        foreach (var segment in segments)
+            if (segment.End > end) end = segment.End;
+        return end;
+    }
+
+    /// <summary>
     /// 透かしに出す主な役職。TV のオープニングにクレジットされた役職（複数なら担当話数の多いもの）を最優先し、
     /// 無ければ映画のオープニングの役職、どちらも無ければ担当話数がいちばん多い役職。
     /// 本編の役職が無く声の出演だけなら「声の出演」。
@@ -77,9 +92,13 @@ internal static class OgCareerCardParts
     /// 単発の点が 1 つ置かれるだけで何を表すのか伝わらないため、年表を出すかどうかをこれで決める。
     /// 本編の役職は役職詳細と同じ決まり（系譜でまとめた役職ごとに、オープニングに出たか・1 年間に 4 回以上か）、
     /// 声の出演は声の出演一覧と同じ決まり（1 年間に 4 回以上）。
+    /// 年表は候補が少ないページでは全員を載せるので、CreatorsGenerator が記録した「年表に載った行」
+    /// （<see cref="BuildContext.SiteTimelineEntityUrls"/>）があればそれで判定し、無いときだけ決まりで判定する。
     /// </summary>
-    public static bool AppearsInSiteTimeline(BuildContext ctx, RoleSuccessorResolver resolver, IReadOnlyList<Involvement> involvements)
+    public static bool AppearsInSiteTimeline(BuildContext ctx, RoleSuccessorResolver resolver, IReadOnlyList<Involvement> involvements, string entityUrl)
     {
+        if (ctx.SiteTimelineEntityUrls is { } recorded) return recorded.Contains(entityUrl);
+
         var byRole = involvements
             .Where(i => !i.IsVoiceCast && !string.IsNullOrEmpty(i.RoleCode))
             .GroupBy(i => resolver.GetRepresentative(i.RoleCode), StringComparer.Ordinal);

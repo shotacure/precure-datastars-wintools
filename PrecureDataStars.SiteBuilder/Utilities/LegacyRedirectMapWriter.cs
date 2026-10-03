@@ -21,14 +21,13 @@ public static class LegacyRedirectMapWriter
     /// <summary>出力ルートからの相対パス。Lambda@Edge 側の読み込みキーと一致させる。</summary>
     public const string RelativePath = "_edge/legacy-redirects.json";
 
-    /// <summary>転送表を書き出す。</summary>
-    public static void Write(string outputRoot, IReadOnlyList<LegacyRedirect> redirects)
+    /// <summary>転送表を書き出す（UTF-8、BOM なし。中身が前回と同じなら書かない）。</summary>
+    public static void Write(OutputWriter output, IReadOnlyList<LegacyRedirect> redirects)
     {
         var map = new SortedDictionary<string, string>(StringComparer.Ordinal);
         foreach (var r in redirects) map[r.FromPath] = r.ToUrl;
 
-        var path = Path.Combine(outputRoot, RelativePath.Replace('/', Path.DirectorySeparatorChar));
-        PathUtil.EnsureParentDirectory(path);
-        File.WriteAllText(path, JsonSerializer.Serialize(map), new UTF8Encoding(false));
+        var path = Path.Combine(output.Root, RelativePath.Replace('/', Path.DirectorySeparatorChar));
+        output.WriteText(path, JsonSerializer.Serialize(map));
     }
 }

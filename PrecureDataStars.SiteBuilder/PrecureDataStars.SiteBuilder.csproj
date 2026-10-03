@@ -85,4 +85,33 @@
     </None>
   </ItemGroup>
 
+  <!--
+    OGP カードとサブタイトルのテロップ画像の「描き方の印」。描画コード一式（OgRenderSource）の内容ハッシュを
+    ビルドのたびに求め、生成する OgRenderSourceStamp.Value（obj 配下、コンパイルに含める）に埋め込む。
+    作り置きの鍵（OgCardRenderer.CacheKey / SubtitleTelopRequest.CacheKey）がこの値を含むので、余白・配色・
+    組み方など描画コードのどこを変えても鍵が変わり、自動的に描き直しになる（版の数字を手で上げ忘れて
+    古い画像が残ることがない）。書体ファイルは含めない（書体は名前で鍵に入る。ファイルの中身を差し替えても
+    描き直さない）。
+  -->
+  <ItemGroup>
+    <OgRenderSource Include="Rendering\OgCard*.cs;Rendering\OgTextShaper.cs;Rendering\SubtitleTelop*.cs;Rendering\InstalledFontIndex.cs" />
+  </ItemGroup>
+  <Target Name="GenerateOgRenderSourceStamp" BeforeTargets="BeforeCompile;CoreCompile">
+    <GetFileHash Files="@(OgRenderSource)" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="_OgRenderSourceHashed" />
+    </GetFileHash>
+    <Hash ItemsToHash="@(_OgRenderSourceHashed->'%(Identity)=%(FileHash)')">
+      <Output TaskParameter="HashResult" PropertyName="_OgRenderSourceStamp" />
+    </Hash>
+    <PropertyGroup>
+      <_OgRenderSourceStampFile>$(IntermediateOutputPath)OgRenderSourceStamp.g.cs</_OgRenderSourceStampFile>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_OgRenderSourceStampFile)" Overwrite="true" WriteOnlyWhenDifferent="true"
+      Lines="// &lt;auto-generated /&gt; PrecureDataStars.SiteBuilder.csproj の GenerateOgRenderSourceStamp が作る。;namespace PrecureDataStars.SiteBuilder.Rendering%3B;/// &lt;summary&gt;OGP カード・テロップ画像の描画コード一式の内容ハッシュ。作り置きの鍵に含める。&lt;/summary&gt;;internal static class OgRenderSourceStamp { public const string Value = &quot;$(_OgRenderSourceStamp)&quot;%3B }" />
+    <ItemGroup>
+      <Compile Include="$(_OgRenderSourceStampFile)" />
+      <FileWrites Include="$(_OgRenderSourceStampFile)" />
+    </ItemGroup>
+  </Target>
+
 </Project>

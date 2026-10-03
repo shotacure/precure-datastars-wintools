@@ -10,7 +10,7 @@ using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Pipeline;
 
-/// <summary>SiteBuilder の全体オーケストレータ。 設定ロード → DB 接続初期化 → 共有データロード → 静的アセットコピー → 各 Generator 起動 → サマリ出力、までを順番に実行する。 例外は呼び出し元（<see cref="Program"/>）にそのまま伝播する。</summary>
+/// <summary>SiteBuilder の全体オーケストレータ。 設定ロード → DB 接続初期化 → 共有データロード → 静的アセットコピー → 各 Generator 起動 → 出力の掃除 → サマリ出力、までを順番に実行する。 例外は呼び出し元（<see cref="Program"/>）にそのまま伝播する。</summary>
 public sealed class SiteBuilderPipeline
 {
     /// <summary>1 回のフルビルドを実行する。</summary>
@@ -34,13 +34,6 @@ public sealed class SiteBuilderPipeline
         // （本番のつもりがテストモードのまま、の事故にすぐ気付けるように）。
         logger.Info($"Build mode       : {(config.IsProductionMode ? "production（GA4 / AdSense / ads.txt を出力）" : "test（GA4 / AdSense / ads.txt を出力しない）")}");
 
-        // フルビルドでは出力ルート配下を一掃してから作り直す。生成されなくなったページ（廃止した
-        // 役職詳細など）をローカルに残さないことで、--deploy の orphan 削除（ローカルに無い S3 オブジェクトを
-        // 削除）が正しく効く。クリーンしないと旧ページがローカルに残って S3 と一致し続け、消えなくなる。
-        // ピンポイントビルド（--page）は差分生成なので一掃しない（対象外ページの既存出力を温存する）。
-        CleanOutputDirectory(config, logger);
-        Directory.CreateDirectory(config.OutputDirectory);
-
         // DB 接続。各 Generator は本ファクトリを使い回す。
         // 進捗の事前予想件数算出（COUNT クエリ）でも本ファクトリを使うため、先に確保する。
         var factory = MySqlConnectionFactory.FromConnectionString(config.ConnectionString);
@@ -52,12 +45,6 @@ public sealed class SiteBuilderPipeline
         var expectedCounts = await ComputeExpectedCountsAsync(factory, ct).ConfigureAwait(false);
         reporter.RegisterSections(BuildSectionPlan(expectedCounts, config.IsProductionMode));
 
-        // 静的アセット（site.css 等）を出力ルートにコピー。
-        reporter.BeginSection("static_assets");
-        CopyStaticAssets(config, logger);
-        reporter.PageWritten();
-        reporter.EndSection();
-
         // 共有データロード ＋ クレジット逆引きインデックス／役職系譜／カバレッジラベルの算出までを
         // 1 セクションにまとめる（いずれもページ書き出しではなく前処理のため）。
         reporter.BeginSection("data_load");
@@ -65,13 +52,26 @@ public sealed class SiteBuilderPipeline
         // 共有データロード。
         var ctx = await SiteDataLoader.LoadAsync(config, logger, summary, factory, ct).ConfigureAwait(false);
 
+        // サブタイトルのテロップ画像の作り置きを確かめる。描き直しに要る書体がこの PC に無ければここで止まる
+        // （出力に手を付ける前なので、前回の出力はそのまま残る）。
+        SubtitleTelopPreflight.Run(ctx, config, logger);
+
+        // 出力は前回のものを残したまま、中身が変わるファイルだけ書く（OutputWriter）。全体ビルドでは最後に
+        // 今回書かなかったファイル（廃止した役職詳細など、生成されなくなったページ）を消すので、出力は
+        // 空にしてから作り直したのと同じ集合になり、--deploy の orphan 削除（ローカルに無い S3 オブジェクトを
+        // 削除）が正しく効く。空にしてから作り直すのに比べて、数千件のファイル作成と一掃が要らない。
+        // ピンポイントビルド（--page）は差分生成なので最後の掃除もしない（対象外ページの既存出力を温存する）。
+        // 出力への書き出し（転送表・静的アセット・各ページ・画像・SEO ファイル）はすべてこの窓口を通す。
+        var output = new OutputWriter(config.OutputDirectory);
+        Directory.CreateDirectory(config.OutputDirectory);
+
         // テンプレ → ページ書き出しヘルパー。
         // 進捗バーへのページ書き出し通知も PageRenderer 経由で発火するため、reporter を渡す。
         // OGP カードのラスタライザは同梱フォントを 1 度だけ読み込んで全ページで使い回す
         // （読み取り専用の SKTypeface だけを共有するため並列レンダリングフェーズからも安全に呼べる）。
         var renderer = new ScribanRenderer();
         using var ogCardRenderer = new OgCardRenderer(config.SiteBrandLabel, config.OgCardFonts);
-        var pageRenderer = new PageRenderer(renderer, config, summary, reporter, ogCardRenderer);
+        var pageRenderer = new PageRenderer(renderer, config, summary, output, reporter, ogCardRenderer);
 
         // スタッフ表示用の人物リンク解決ヘルパ。
         var staffLinkResolver = await StaffNameLinkResolver.CreateAsync(factory, ct).ConfigureAwait(false);
@@ -105,7 +105,7 @@ public sealed class SiteBuilderPipeline
         PathUtil.UseEntityUrls(ctx.EntityUrls);
 
         // 旧 ID URL → 新 URL の転送表を出力へ書き出す（デプロイで S3 に上がり、Lambda@Edge が 301 に使う）。
-        LegacyRedirectMapWriter.Write(config.OutputDirectory, ctx.EntityUrls.LegacyRedirects);
+        LegacyRedirectMapWriter.Write(output, ctx.EntityUrls.LegacyRedirects);
 
         // クレジット横断のカバレッジラベルをここで 1 回だけ算出して BuildContext に詰める。
         // プリキュア・キャラ・人物・企業・団体・シリーズ・エピソードの各詳細／索引ページから参照され、
@@ -127,6 +127,12 @@ public sealed class SiteBuilderPipeline
         // 人物の表示名とリンク先を台帳から引くので、EntityUrls の確定後に 1 回だけ作る。
         var chiefStaffIndex = EpisodeChiefStaffIndex.Build(ctx);
 
+        reporter.PageWritten();
+        reporter.EndSection();
+
+        // 静的アセット（site.css 等）を出力ルートにコピー（変わっていないファイルは写さない）。
+        reporter.BeginSection("static_assets");
+        CopyStaticAssets(output, logger);
         reporter.PageWritten();
         reporter.EndSection();
 
@@ -271,9 +277,16 @@ public sealed class SiteBuilderPipeline
         await new RecordsGenerator(ctx, pageRenderer, factory, involvementIndex, chiefStaffIndex).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
-        // サイト全体の集約物（検索インデックス・sitemap / robots / ads.txt）は、ピンポイントビルド
-        // （--page）では再生成しない。部分生成のため WrittenPages が当該ページのみになり、全件前提の
+        // OGP カード一覧（確認用）。全ページのカード生成が終わったあとに出力ディレクトリを走査するため、
+        // ページ書き出しがすべて済んだこの位置で実行する。テストモードでのみ書き出す。
+        // 出力の掃除より前に書いて、自分自身が掃除で消されないようにする（前回の残りのカードは走査で除く）。
+        new OgGalleryGenerator(ctx, config, output).Generate();
+
+        // サイト全体の集約物（検索インデックス・sitemap / robots / ads.txt）と出力の掃除は、ピンポイントビルド
+        // （--page）では行わない。部分生成のため WrittenPages が当該ページのみになり、全件前提の
         // これらを上書きすると内容が壊れるため、既存ファイルをそのまま残す。
+        int prunedFiles = 0;
+        int staleOgCards = 0;
         if (string.IsNullOrEmpty(config.PageFilter))
         {
             // サイト内検索の静的 JSON インデックス。
@@ -281,7 +294,7 @@ public sealed class SiteBuilderPipeline
             // 本ジェネレータは SeoGenerator の前に走らせる（SEO は最終工程としたいため）。
             // ページ書き出しではないため、ダミーで PageWritten を 1 回呼んで完了扱いにする。
             reporter.BeginSection("search_index");
-            await new SearchIndexGenerator(ctx, config, factory).GenerateAsync(ct).ConfigureAwait(false);
+            await new SearchIndexGenerator(ctx, config, factory, output).GenerateAsync(ct).ConfigureAwait(false);
             reporter.PageWritten();
             reporter.EndSection();
 
@@ -290,14 +303,20 @@ public sealed class SiteBuilderPipeline
             // パイプラインの最後に実行する。ads.txt 出力と robots.txt 強化を追加。
             // こちらも HTML ページ書き出しではないので、ダミーで PageWritten を 1 回呼ぶ。
             reporter.BeginSection("seo");
-            await new SeoGenerator(ctx, config, pageRenderer).GenerateAsync(ct).ConfigureAwait(false);
+            await new SeoGenerator(ctx, config, pageRenderer, output).GenerateAsync(ct).ConfigureAwait(false);
+            reporter.PageWritten();
+            reporter.EndSection();
+
+            // 出力の掃除。今回の出力に属さないファイル（生成されなくなったページや画像）を消して、出力を今回の
+            // 生成物だけにする。あわせて、今回のどのページにも使わなかった OGP カードの作り置き（材料や描き方を
+            // 変える前の古い画像）も消す。全ファイルの書き出しが済んだあと、最後に行う。
+            reporter.BeginSection("prune");
+            prunedFiles = output.PruneOrphans();
+            staleOgCards = PruneOgCardCache(config.OgCardCacheDirectory, pageRenderer.OgCardCacheKeysUsed);
+            logger.Info($"output pruned: {prunedFiles} files removed / stale og cards: {staleOgCards} removed");
             reporter.PageWritten();
             reporter.EndSection();
         }
-
-        // OGP カード一覧（確認用）。全ページのカード生成が終わったあとに出力ディレクトリを走査するため、
-        // ページ書き出しがすべて済んだこの位置で実行する。テストモードでのみ書き出す。
-        new OgGalleryGenerator(ctx, config).Generate();
 
         // OGP カードの書体に関する報告を、種類ごとに 1 度だけ出す。ブランド書体に無い文字の代替描画は情報として残し、
         // 指定した書体（series_subtitle_styles.font_subtitle など）がこの PC に無い場合は、気づかずに別の書体で焼いてデプロイしないよう警告にする。
@@ -332,6 +351,11 @@ public sealed class SiteBuilderPipeline
             }
         }
 
+        // 出力ファイルの書き出し内訳と OGP カードの作り置きの効き。「変わらず」が大半なら差分の小さいビルドで、
+        // デプロイの差分（MD5 比較）もそれに見合って小さくなる。
+        var (ogRendered, ogFromCache) = pageRenderer.OgCardCounts;
+        logger.Info($"Output files     : 書いた {output.WrittenCount} / 変わらず {output.UnchangedCount} / 消した {prunedFiles}");
+        logger.Info($"OGP cards        : 作り置き {ogFromCache} / 描いた {ogRendered} / 使わなくなった作り置き {staleOgCards} を消した");
         logger.Info($"Warnings         : {logger.WarningCount}");
         logger.Info($"Elapsed          : {stopwatch.Elapsed.TotalSeconds:0.0} sec");
 
@@ -364,8 +388,8 @@ public sealed class SiteBuilderPipeline
     {
         int? Get(string key) => expected.TryGetValue(key, out var v) ? v : (int?)null;
 
-        yield return ("static_assets",      "静的アセット",     1);
         yield return ("data_load",          "データ読み込み",   1);
+        yield return ("static_assets",      "静的アセット",     1);
         yield return ("series",             "シリーズ",         Get("series"));
         yield return ("episodes",           "エピソード",       Get("episodes"));
         yield return ("home",               "ホーム",           1);
@@ -395,6 +419,7 @@ public sealed class SiteBuilderPipeline
         yield return ("records",            "歴代記録",         2);
         yield return ("search_index",       "検索索引",         1);
         yield return ("seo",                "SEO ファイル",     1);
+        yield return ("prune",              "出力の掃除",       1);
     }
 
     /// <summary>
@@ -460,36 +485,29 @@ public sealed class SiteBuilderPipeline
         return result;
     }
 
-    /// <summary>フルビルド時に出力ルート配下（サブディレクトリ・ファイル）を一掃する。
-    /// 生成されなくなったページを残さないことで、<c>--deploy</c> の orphan 削除（ローカルに無い
-    /// S3 オブジェクトを削除）が正しく機能する。ピンポイントビルド（<c>--page</c>）は差分生成のため
-    /// 一掃しない（対象外ページの既存出力を温存する必要がある）。
-    /// 出力先はビルド専用ディレクトリ（<see cref="BuildConfig.OutputDirectory"/>）であり、配下は
-    /// すべてビルドで再生成・再コピーされる前提。</summary>
-    private static void CleanOutputDirectory(BuildConfig config, BuildLogger logger)
+    /// <summary>
+    /// OGP カードの作り置きのうち、今回のビルドで使わなかった鍵の画像（材料や描き方を変える前の古い画像）と、
+    /// 描きかけで残った一時ファイルを消す。戻り値は消した画像数。全体ビルドの最後に呼ぶ。
+    /// 作り置きはテストと本番で共用するので、片方でしか作らないカード（読み物はテストのみ）は、もう片方の
+    /// ビルドで消えて次のビルドで描き直されるが、数枚なので構わない。
+    /// </summary>
+    private static int PruneOgCardCache(string cacheDir, IReadOnlySet<string> usedKeys)
     {
-        // ピンポイントビルドは差分生成。既存出力を消すと対象外ページが失われるためクリーンしない。
-        if (!string.IsNullOrEmpty(config.PageFilter)) return;
-
-        var dir = config.OutputDirectory;
-        if (!Directory.Exists(dir)) return;
+        if (!Directory.Exists(cacheDir)) return 0;
 
         int removed = 0;
-        foreach (var sub in Directory.GetDirectories(dir))
+        foreach (var file in Directory.EnumerateFiles(cacheDir, "*.png"))
         {
-            Directory.Delete(sub, recursive: true);
-            removed++;
-        }
-        foreach (var file in Directory.GetFiles(dir))
-        {
+            if (usedKeys.Contains(Path.GetFileNameWithoutExtension(file))) continue;
             File.Delete(file);
             removed++;
         }
-        logger.Info($"output directory cleaned: {dir}（{removed} entries removed）");
+        foreach (var file in Directory.EnumerateFiles(cacheDir, "*.tmp")) File.Delete(file);
+        return removed;
     }
 
-    /// <summary><c>wwwroot/</c> 配下を出力ルートに丸ごとコピーする。</summary>
-    private static void CopyStaticAssets(BuildConfig config, BuildLogger logger)
+    /// <summary><c>wwwroot/</c> 配下を出力ルートに丸ごと写す（大きさと更新時刻が同じファイルは写さない）。</summary>
+    private static void CopyStaticAssets(OutputWriter output, BuildLogger logger)
     {
         var src = Path.Combine(AppContext.BaseDirectory, "wwwroot");
         if (!Directory.Exists(src))
@@ -499,20 +517,14 @@ public sealed class SiteBuilderPipeline
         }
 
         // 単純な再帰コピー。少数のアセットのみ想定なので素朴な実装。
-        foreach (var dir in Directory.GetDirectories(src, "*", SearchOption.AllDirectories))
-        {
-            var rel = Path.GetRelativePath(src, dir);
-            Directory.CreateDirectory(Path.Combine(config.OutputDirectory, rel));
-        }
         var files = Directory.GetFiles(src, "*", SearchOption.AllDirectories);
+        int copied = 0;
         foreach (var file in files)
         {
             var rel = Path.GetRelativePath(src, file);
-            var dst = Path.Combine(config.OutputDirectory, rel);
-            Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
-            File.Copy(file, dst, overwrite: true);
+            if (output.CopyFrom(file, Path.Combine(output.Root, rel))) copied++;
         }
-        logger.Info($"static assets copied: {files.Length} files");
+        logger.Info($"static assets: {files.Length} files（写した {copied} 件）");
     }
 
     /// <summary>役職マスタと役職系譜を読み込んで RoleSuccessorResolver を構築する。</summary>

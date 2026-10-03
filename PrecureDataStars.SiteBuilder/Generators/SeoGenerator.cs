@@ -35,6 +35,7 @@ public sealed class SeoGenerator
     private readonly BuildContext _ctx;
     private readonly BuildConfig _config;
     private readonly PageRenderer _pageRenderer;
+    private readonly OutputWriter _output;
 
     /// <summary>
     /// <c>robots.txt</c> で個別に <c>Disallow: /</c> を当てる外部クローラの User-Agent 一覧。
@@ -86,11 +87,12 @@ public sealed class SeoGenerator
     /// <summary>AdSense の <c>ads.txt</c> に書く Google 公式の関係識別子。 IAB 仕様で固定値の TAG-ID 部分。AdSense のパブリッシャ全員が共通で使う。</summary>
     private const string GoogleAdSenseAdsTxtTagId = "f08c47fec0942fa0";
 
-    public SeoGenerator(BuildContext ctx, BuildConfig config, PageRenderer pageRenderer)
+    public SeoGenerator(BuildContext ctx, BuildConfig config, PageRenderer pageRenderer, OutputWriter output)
     {
         _ctx = ctx;
         _config = config;
         _pageRenderer = pageRenderer;
+        _output = output;
     }
 
     public Task GenerateAsync(CancellationToken ct = default)
@@ -140,9 +142,10 @@ public sealed class SeoGenerator
         };
 
         var outputFile = Path.Combine(_config.OutputDirectory, "sitemap.xml");
-        PathUtil.EnsureParentDirectory(outputFile);
 
-        using var writer = XmlWriter.Create(outputFile, settings);
+        // いったんメモリに組み立ててから書く（中身が前回と同じなら書かない）。
+        using var buffer = new MemoryStream();
+        using var writer = XmlWriter.Create(buffer, settings);
         writer.WriteStartDocument();
         writer.WriteStartElement("urlset", "http://www.sitemaps.org/schemas/sitemap/0.9");
 
@@ -161,6 +164,8 @@ public sealed class SeoGenerator
 
         writer.WriteEndElement(); // </urlset>
         writer.WriteEndDocument();
+        writer.Flush();
+        _output.WriteBytes(outputFile, buffer.ToArray());
     }
 
     /// <summary>セクション種別から changefreq を導出。サイト構成に合わせた控えめな更新頻度を返す。</summary>
@@ -235,9 +240,7 @@ public sealed class SeoGenerator
             sb.AppendLine($"Sitemap: {_config.BaseUrl}/sitemap.xml");
         }
 
-        var outputFile = Path.Combine(_config.OutputDirectory, "robots.txt");
-        PathUtil.EnsureParentDirectory(outputFile);
-        File.WriteAllText(outputFile, sb.ToString());
+        _output.WriteText(Path.Combine(_config.OutputDirectory, "robots.txt"), sb.ToString());
     }
 
     /// <summary>
@@ -277,8 +280,6 @@ public sealed class SeoGenerator
         sb.AppendLine("# precure-datastars ads.txt");
         sb.AppendLine($"google.com, {sellersId}, DIRECT, {GoogleAdSenseAdsTxtTagId}");
 
-        var outputFile = Path.Combine(_config.OutputDirectory, "ads.txt");
-        PathUtil.EnsureParentDirectory(outputFile);
-        File.WriteAllText(outputFile, sb.ToString());
+        _output.WriteText(Path.Combine(_config.OutputDirectory, "ads.txt"), sb.ToString());
     }
 }

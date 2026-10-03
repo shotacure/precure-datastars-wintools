@@ -80,6 +80,9 @@ namespace PrecureDataStars.Catalog
             // 専用社名マスタ。クレジット系の companies / company_aliases とは完全に独立した別系統。
             var productCompaniesRepo = new ProductCompaniesRepository(factory);
 
+            // 団体どうしの関係（所属・事業の引き継ぎ）。クレジット系マスタ管理の団体タブから編集する。
+            var companyRelationsRepo = new CompanyRelationsRepository(factory);
+
             // クレジット本体（カード／役職／ブロック／エントリ）用リポジトリ（5 本）
             var creditsRepo = new CreditsRepository(factory);
             var creditCardsRepo = new CreditCardsRepository(factory);
@@ -141,7 +144,9 @@ namespace PrecureDataStars.Catalog
                 // 商品社名マスタ
                 productCompaniesRepo,
                 // 映画 BGM リスト（movie_bgm_cues）
-                movieBgmCuesRepo));
+                movieBgmCuesRepo,
+                // 団体どうしの関係
+                companyRelationsRepo));
         }
     }
 }

@@ -432,7 +432,7 @@ gtag('config', '{{ Ga4MeasurementId }}');
      data-release-date を持つ要素が無いページでは何もせず終了する。 ##}}
 <script src="{{ asset_url "/assets/release-countdown.js" }}" defer></script>
 {{## 引用ボックスの JS。
-     引用文の閲覧日をビルド日から閲覧日へ差し替え、引用文のコピーとトースト表示を担う。
+     引用文の参照日を仮の表記「YYYY-MM-DD」から閲覧日へ差し替え、引用文のコピーとトースト表示を担う。
      .cite-box が無いページでは何もせず終了する。 ##}}
 <script src="{{ asset_url "/assets/cite-box.js" }}" defer></script>
 </body>

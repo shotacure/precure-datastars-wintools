@@ -471,38 +471,42 @@ namespace PrecureDataStars.CDAnalyzer
         }
 
         /// <summary>
-        /// 指定トラックの ISRC を、トラック先頭への SEEK を挟みつつ最大 <paramref name="maxAttempts"/>
+        /// 指定トラックの ISRC を、トラック内の指定位置への SEEK を挟みつつ最大 <paramref name="maxAttempts"/>
         /// 回までリトライして取得する。
-        /// 各試行は「トラック先頭へ SEEK → <paramref name="delayMs"/> 待機 → READ SUB-CHANNEL →
+        /// 各試行は「<paramref name="seekLba"/> へ SEEK → <paramref name="delayMs"/> 待機 → READ SUB-CHANNEL →
         /// TCVal 確認」の順で行い、有効な ISRC を取得した時点で即座に返す。全試行で TCVal が
-        /// 立たなかった場合は、TCVal を返さない一部ドライブ向けに、引数なし版 
+        /// 立たなかった場合は、TCVal を返さない一部ドライブ向けに、引数なし版
         /// <see cref="ReadIsrcForTrack(SafeFileHandle, byte)"/> のレニエントなフォールバック
         /// 解析を最後に 1 回だけ適用する。
+        /// <paramref name="rejectIsrc"/> を渡したときは、その値が読めても取得できなかったものとして扱う
+        /// （別のトラックの ISRC を拾った読み違いを退けて読み直すため）。
         /// </summary>
         /// <param name="h">光学ドライブのデバイスハンドル。</param>
         /// <param name="trackNumber">対象トラック番号。</param>
-        /// <param name="startLba">対象トラックの開始 LBA（SEEK 先）。</param>
+        /// <param name="seekLba">SEEK 先の LBA（対象トラック内の位置。先頭直後は直前のトラックの ISRC が残ることがあるため、少し中へ入った位置を渡す）。</param>
         /// <param name="maxAttempts">最大試行回数（1 以上）。</param>
         /// <param name="delayMs">各試行で SEEK 後に待機するミリ秒。</param>
+        /// <param name="rejectIsrc">取得結果として認めない ISRC。null なら制限なし。</param>
         /// <returns>取得できた 12 文字 ISRC。最後まで取得できなければ null。</returns>
-        public static string? ReadIsrcForTrack(SafeFileHandle h, byte trackNumber, int startLba, int maxAttempts, int delayMs)
+        public static string? ReadIsrcForTrack(SafeFileHandle h, byte trackNumber, int seekLba, int maxAttempts, int delayMs, string? rejectIsrc = null)
         {
             int attempts = Math.Max(1, maxAttempts);
             for (int i = 0; i < attempts; i++)
             {
-                // トラック先頭へヘッドを移動してからサブチャネルを読む。SEEK 失敗は無視して継続。
-                SeekToLba(h, startLba);
+                // 対象トラック内へヘッドを移動してからサブチャネルを読む。SEEK 失敗は無視して継続。
+                SeekToLba(h, seekLba);
                 if (delayMs > 0)
                     System.Threading.Thread.Sleep(delayMs);
 
                 var isrc = ReadIsrcStrictOnce(h, trackNumber);
-                if (!string.IsNullOrEmpty(isrc))
+                if (!string.IsNullOrEmpty(isrc) && !string.Equals(isrc, rejectIsrc, StringComparison.Ordinal))
                     return isrc;
             }
 
             // 全試行で TCVal が立たなかった場合の最終フォールバック
-            //（バッファ全体走査を含む引数なし版を 1 回だけ実行）。
-            return ReadIsrcForTrack(h, trackNumber);
+            //（バッファ全体走査を含む引数なし版を 1 回だけ実行）。退ける値が返ったときは取得できなかった扱い。
+            var fallback = ReadIsrcForTrack(h, trackNumber);
+            return string.Equals(fallback, rejectIsrc, StringComparison.Ordinal) ? null : fallback;
         }
 
         /// <summary>READ TOC/PMA/ATIP (0x43) Format=0x05 を発行し、CD-Text の生パック列を取得する。</summary>

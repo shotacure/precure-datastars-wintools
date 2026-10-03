@@ -5,7 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>companies テーブル（企業マスタ）の CRUD リポジトリ。 屋号変更や社名変更は <see cref="CompanyAliasesRepository"/> 側で扱い、 本リポジトリは「企業」一意の器を管理する。分社化等で別企業として扱う場合は 新規レコードを立て、屋号側の前後リンクで系譜を辿る運用を想定。</summary>
+/// <summary>companies テーブル（企業マスタ）の CRUD リポジトリ。 屋号変更や社名変更は <see cref="CompanyAliasesRepository"/> 側で扱い、 本リポジトリは「企業」一意の器を管理する。分社化等で別企業として扱う場合は 新規レコードを立て、企業どうしの系譜と所属は <see cref="CompanyRelationsRepository"/> 側で持つ。</summary>
 public sealed class CompaniesRepository : RepositoryBase
 {
     public CompaniesRepository(IConnectionFactory factory) : base(factory) { }

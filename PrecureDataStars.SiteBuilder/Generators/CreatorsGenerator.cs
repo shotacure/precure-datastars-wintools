@@ -110,6 +110,17 @@ public sealed class CreatorsGenerator
 
     /// <summary>各一覧に載せた人物・企業/団体の記録。生成の最後に <see cref="BuildContext.CreatorLists"/> へ差し込む。</summary>
     private readonly CreatorListMembership _lists = new();
+    /// <summary>役職詳細・声の出演一覧の年表に行として載った人物・企業/団体の URL（OGP カードの年表を出すかの判定に渡す）。</summary>
+    private readonly HashSet<string> _siteTimelineEntityUrls = new(StringComparer.Ordinal);
+
+    /// <summary>役職詳細・声の出演一覧の年表に載った行の URL を記録し、年表をそのまま返す。</summary>
+    private RoleTimelineModel? RecordTimelineRows(RoleTimelineModel? timeline)
+    {
+        if (timeline is not null)
+            foreach (var row in timeline.Rows)
+                if (!string.IsNullOrEmpty(row.EntityUrl)) _siteTimelineEntityUrls.Add(row.EntityUrl);
+        return timeline;
+    }
 
     public async Task GenerateAsync(CancellationToken ct = default)
     {
@@ -312,6 +323,8 @@ public sealed class CreatorsGenerator
 
         // 人物・企業詳細のパンくずが「本人が載っている一覧」を経由できるよう、各一覧に載せた顔ぶれを渡す。
         _ctx.CreatorLists = _lists;
+        // 人物・企業詳細の OGP カードが、年表に載った人物・団体にだけ年表を描けるよう渡す。
+        _ctx.SiteTimelineEntityUrls = _siteTimelineEntityUrls;
 
         _ctx.Logger.Success(
             $"creators: {rankableRoles.Count} 役職詳細 + スタッフ + 声の出演 + 音楽制作 + 歌唱 + ランディング");
@@ -610,7 +623,7 @@ public sealed class CreatorsGenerator
             CountRows = SortByCount(rows),
             AlternateNames = alternateNames,
             NameHistory = BuildRoleNameHistory(memberCodes, roleByCode),
-            Timeline = roleTimeline.Build(rowSet.TimelineEntities, RoleTimelineRules.Staff),
+            Timeline = RecordTimelineRows(roleTimeline.Build(rowSet.TimelineEntities, RoleTimelineRules.Staff)),
             CoverageLabel = _ctx.CreditCoverageLabel,
             // 個人と団体が両方そろっているときだけ entity-filter を出すための件数（片方だけの役職では絞り込みが無意味）。
             PersonCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal)),
@@ -1961,7 +1974,7 @@ public sealed class CreatorsGenerator
             DebutSections = debutSections,
             CountRows = countRows,
             // 年表タブの線表（1 年間に 4 回以上出演した声優）。
-            Timeline = timelineBuilder.Build(timelineEntities, RoleTimelineRules.VoiceCast),
+            Timeline = RecordTimelineRows(timelineBuilder.Build(timelineEntities, RoleTimelineRules.VoiceCast)),
             CoverageLabel = _ctx.CreditCoverageLabel
         };
         var layout = new LayoutModel
@@ -2516,7 +2529,7 @@ public sealed class CreatorsGenerator
             InlineFacts = facts,
             Watermark = debut is null ? "" : debut.Value.Date.Year.ToString(),
             Timeline = segments.OrderBy(s => s.Start).ToList(),
-            TimelineEnd = DateOnly.FromDateTime(_ctx.BuildStartedAt.Date),
+            TimelineEnd = OgCareerCardParts.TimelineEndFor(_ctx, segments),
             FootFacts = foot
         };
     }

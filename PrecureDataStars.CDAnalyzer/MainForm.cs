@@ -235,14 +235,30 @@ namespace PrecureDataStars.CDAnalyzer
 
             // --- ISRC: 各トラックの国際標準レコーディングコード (12 文字) ---
             var isrcMap = new Dictionary<int, string?>();
+            // 読み取り位置はトラック先頭ではなく、少し中へ入った位置にする。先頭へ SEEK した直後は、
+            // ドライブによってはサブチャネルにまだ直前のトラックの ISRC が残っていて、それを返すため。
+            // 先頭から 2 秒（150 フレーム）、トラックが短ければ長さの半分の位置で読む。
+            // 2 度目以降の読み直しはトラックの真ん中で読む。
+            var trackEndLba = new Dictionary<int, int>();
+            for (int i = 0; i < tracksOnly.Count; i++)
+            {
+                trackEndLba[tracksOnly[i].TrackNumber] = i + 1 < tracksOnly.Count ? tracksOnly[i + 1].StartLba : leadOutLba;
+            }
+            int IsrcSeekLba(TocTrack t, bool middle)
+            {
+                int length = Math.Max(0, trackEndLba[t.TrackNumber] - t.StartLba);
+                return t.StartLba + (middle ? length / 2 : Math.Min(150, length / 2));
+            }
+
             // 第 1 パス: 各トラックを SEEK 込みで 1 回ずつ読む（高速にディスク全体の傾向を把握）。
             foreach (var t in tracksOnly)
             {
                 ct.ThrowIfCancellationRequested();
-                isrcMap[t.TrackNumber] = ReadIsrcForTrack(h, (byte)t.TrackNumber, t.StartLba, 1, 60);
+                isrcMap[t.TrackNumber] = ReadIsrcForTrack(h, (byte)t.TrackNumber, IsrcSeekLba(t, middle: false), 1, 60);
             }
 
             // ディスクに 1 つでも ISRC が取れたトラックがあれば、そのディスクは ISRC 収録盤と判断し、
+            // 取れなかったトラックだけ読み直す。
             if (isrcMap.Values.Any(v => !string.IsNullOrEmpty(v)))
             {
                 foreach (var t in tracksOnly)
@@ -250,7 +266,29 @@ namespace PrecureDataStars.CDAnalyzer
                     if (!string.IsNullOrEmpty(isrcMap[t.TrackNumber]))
                         continue;
                     ct.ThrowIfCancellationRequested();
-                    isrcMap[t.TrackNumber] = ReadIsrcForTrack(h, (byte)t.TrackNumber, t.StartLba, 5, 120);
+                    isrcMap[t.TrackNumber] = ReadIsrcForTrack(h, (byte)t.TrackNumber, IsrcSeekLba(t, middle: true), 5, 120);
+                }
+
+                // 第 3 パス: 前に出てきたトラックと同じ ISRC が読めたトラックは、別のトラックの ISRC を
+                // 拾った読み違いとみなし、その値を退けてトラックの真ん中で読み直す。
+                // 読み直しても別の値が取れなければ、最初に読めた値のまま残す。
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var t in tracksOnly)
+                {
+                    var isrc = isrcMap[t.TrackNumber];
+                    if (string.IsNullOrEmpty(isrc))
+                        continue;
+                    if (seen.Contains(isrc))
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        var reread = ReadIsrcForTrack(h, (byte)t.TrackNumber, IsrcSeekLba(t, middle: true), 5, 120, rejectIsrc: isrc);
+                        if (!string.IsNullOrEmpty(reread))
+                        {
+                            isrcMap[t.TrackNumber] = reread;
+                            isrc = reread;
+                        }
+                    }
+                    seen.Add(isrc);
                 }
             }
 

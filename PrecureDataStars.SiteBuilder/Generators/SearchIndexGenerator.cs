@@ -41,12 +41,14 @@ public sealed class SearchIndexGenerator
     private readonly BuildContext _ctx;
     private readonly BuildConfig _config;
     private readonly IConnectionFactory _factory;
+    private readonly OutputWriter _output;
 
-    public SearchIndexGenerator(BuildContext ctx, BuildConfig config, IConnectionFactory factory)
+    public SearchIndexGenerator(BuildContext ctx, BuildConfig config, IConnectionFactory factory, OutputWriter output)
     {
         _ctx = ctx;
         _config = config;
         _factory = factory;
+        _output = output;
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -310,9 +312,7 @@ public sealed class SearchIndexGenerator
         };
         var json = JsonSerializer.Serialize(items, jsonOptions);
 
-        var outputFile = Path.Combine(_config.OutputDirectory, "search-index.json");
-        PathUtil.EnsureParentDirectory(outputFile);
-        await File.WriteAllTextAsync(outputFile, json, ct).ConfigureAwait(false);
+        _output.WriteText(Path.Combine(_config.OutputDirectory, "search-index.json"), json);
 
         _ctx.Logger.Success($"search-index.json: {items.Count} 件");
     }

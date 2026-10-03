@@ -51,6 +51,9 @@ param(
 # cmdlet の失敗は即停止。native（dotnet / SiteBuilder.exe）の失敗は $LASTEXITCODE で個別判定する。
 $ErrorActionPreference = 'Stop'
 
+# SiteBuilder（と dotnet CLI）は UTF-8 で出力するので、読み取りも UTF-8 にそろえる（CP932 のままだと化ける）。
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+
 # スクリプトの 1 つ上がリポジトリルート。どこから呼んでもルート基準で動かす。
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot

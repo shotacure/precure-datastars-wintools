@@ -85,6 +85,7 @@ public partial class MainForm : Form
     private readonly ProductCompaniesRepository _productCompaniesRepo;
     // 映画作品の BGM リスト（bgm_cues とは別概念の movie_bgm_cues 用）
     private readonly MovieBgmCuesRepository _movieBgmCuesRepo;
+    private readonly CompanyRelationsRepository _companyRelationsRepo;
 
     /// <summary><see cref="MainForm"/> の新しいインスタンスを生成する。</summary>
     public MainForm(
@@ -146,7 +147,9 @@ public partial class MainForm : Form
         // 商品社名マスタ
         ProductCompaniesRepository productCompaniesRepo,
         // 映画 BGM リスト（movie_bgm_cues）
-        MovieBgmCuesRepository movieBgmCuesRepo)
+        MovieBgmCuesRepository movieBgmCuesRepo,
+        // 団体どうしの関係（所属・事業の引き継ぎ）
+        CompanyRelationsRepository companyRelationsRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -218,6 +221,7 @@ public partial class MainForm : Form
         _productCompaniesRepo          = productCompaniesRepo          ?? throw new ArgumentNullException(nameof(productCompaniesRepo));
         // 映画 BGM リスト
         _movieBgmCuesRepo              = movieBgmCuesRepo              ?? throw new ArgumentNullException(nameof(movieBgmCuesRepo));
+        _companyRelationsRepo          = companyRelationsRepo          ?? throw new ArgumentNullException(nameof(companyRelationsRepo));
 
         InitializeComponent();
     }
@@ -385,7 +389,9 @@ public partial class MainForm : Form
                 _characterRelationKindsRepo,
                 _characterFamilyRelationsRepo,
                 // 役職系譜（多対多）
-                _roleSuccessionsRepo);
+                _roleSuccessionsRepo,
+                // 団体どうしの関係
+                _companyRelationsRepo);
             f.ShowDialog();
         });
 

@@ -43,6 +43,10 @@ param(
 # cmdlet（Test-Path 等）の失敗は即停止。native（dotnet）の失敗は $LASTEXITCODE で個別に判定する。
 $ErrorActionPreference = 'Stop'
 
+# SiteBuilder（と dotnet CLI）は UTF-8 で出力するので、パイプで受けるときの読み取りも UTF-8 にそろえる。
+# 既定の CP932 のままだと、Tee-Object で流す行と変数に取り込んだ行（Plan / Warnings の解析対象）が化ける。
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+
 # スクリプトの 1 つ上がリポジトリルート。どこから呼んでもルート基準で動かす。
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot

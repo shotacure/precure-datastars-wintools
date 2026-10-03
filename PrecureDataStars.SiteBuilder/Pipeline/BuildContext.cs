@@ -281,6 +281,13 @@ public sealed class BuildContext
     public CreatorListMembership CreatorLists { get; set; } = CreatorListMembership.Empty;
 
     /// <summary>
+    /// 役職詳細・声の出演一覧の年表に行として載った人物・企業/団体の詳細ページ URL。
+    /// CreatorsGenerator が人物・企業詳細より前に詰め、人物・企業の OGP カードが「サイトの年表に載る人か」を引く。
+    /// 未構築（null）のときは、OGP カード側が年表の決まりで判定し直す。
+    /// </summary>
+    public IReadOnlySet<string>? SiteTimelineEntityUrls { get; set; }
+
+    /// <summary>
     /// 人物の誕生日を記念日カレンダー（ホームのカレンダー・今日の記念日・記念日の日別ページ）に出すかの判定。
     /// <see cref="CreditInvolvementIndex"/> 構築直後に Pipeline が 1 度だけ詰める（ホームは声の出演一覧より先に作るため）。
     /// 未構築なら全員を出す。

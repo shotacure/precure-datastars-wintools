@@ -139,10 +139,16 @@
           <div class="products-tracks-card-grid{{ if t.ArtTrackId != "" }} has-art-track{{ end }}">
             {{## 1 行目 左セル：トラック番号バッジ（ピンク円、シリーズ一覧 .series-card-no と同型）+
                  タイトル本文 + サイズ/パートバッジ を flex 横並び。番号バッジ内には sub_order > 0 の
-                 ときだけ「-K」枝番付き表記（例「2-1」）を出す。ISRC 持ちトラックは has-isrc 修飾で
-                 円の外周にドット枠を出し、title 属性で ISRC 文字列をホバー表示する。 ##}}
+                 ときだけ「-K」枝番付き表記（例「2-1」）を出す。ISRC 持ちトラックは番号バッジを
+                 has-isrc 修飾の <button> にして円の外周にドット枠を出し、title 属性で ISRC 文字列を
+                 ホバー表示する。押すと ISRC ポップアップ（popover。同じ ISRC の収録・同じ音源で
+                 ISRC が違う収録）が開く。ポップアップは最上位レイヤーに出るので置き場所は見た目に影響しない。 ##}}
             <div class="products-tracks-card-titleline">
-              <span class="products-tracks-card-no{{ if t.Isrc != "" }} has-isrc{{ end }}" data-kind="{{ t.ContentKindCode | html.escape }}"{{ if t.HasBgmAssignments }} data-bgm-assigned="true"{{ end }}{{ if t.Isrc != "" }} title="ISRC: {{ t.Isrc | html.escape }}"{{ end }}>{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</span>
+              {{~ if t.Isrc != "" ~}}
+              <button type="button" class="products-tracks-card-no has-isrc" data-kind="{{ t.ContentKindCode | html.escape }}"{{ if t.HasBgmAssignments }} data-bgm-assigned="true"{{ end }} popovertarget="{{ t.IsrcPopoverId | html.escape }}" title="ISRC: {{ t.Isrc | html.escape }}" aria-label="トラック {{ t.TrackNo }} の ISRC">{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</button>{{ t.IsrcPopoverHtml }}
+              {{~ else ~}}
+              <span class="products-tracks-card-no" data-kind="{{ t.ContentKindCode | html.escape }}"{{ if t.HasBgmAssignments }} data-bgm-assigned="true"{{ end }}>{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</span>
+              {{~ end ~}}
               {{ t.TitleHtml }}
               {{~ if t.KindBadgesHtml != "" ~}}
               <span class="track-title-badges">{{ t.KindBadgesHtml }}</span>

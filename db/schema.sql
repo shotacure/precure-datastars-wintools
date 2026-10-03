@@ -1511,6 +1511,39 @@ CREATE TABLE `persons` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `person_notable_works`
+-- 人物のプリキュア以外の代表作（1 行 = 1 人物 × 1 作品 × 1 役職）。作品名・役職はテキスト。
+-- official_url はサイトでリンクする作品の公式サイト。閉鎖済みでアーカイブに残る公式サイトで確かめたときは
+-- アーカイブの URL を入れて official_url_is_archive = 1。source_url は裏取りに使ったスタッフ表（内部用）。
+--
+DROP TABLE IF EXISTS `person_notable_works`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `person_notable_works` (
+  `work_id`                  int                                                                 NOT NULL AUTO_INCREMENT,
+  `person_id`                int                                                                 NOT NULL,
+  `display_order`            smallint unsigned                                                   NOT NULL DEFAULT 0,
+  `work_title`               varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `role_label`               varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `year_from`                smallint unsigned DEFAULT NULL,
+  `year_to`                  smallint unsigned DEFAULT NULL,
+  `official_url`             varchar(1024) DEFAULT NULL COMMENT '作品の公式サイト（サイトでリンクする先）',
+  `official_url_is_archive`  tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 なら official_url は閉鎖済み公式サイトのアーカイブ',
+  `source_url`               varchar(1024) DEFAULT NULL COMMENT '裏取りに使ったスタッフ表のページ（内部用）',
+  `notes`                    text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`               timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`               timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`               varchar(64) DEFAULT NULL,
+  `updated_by`               varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`work_id`),
+  KEY `ix_person_notable_works_person` (`person_id`, `display_order`),
+  CONSTRAINT `fk_person_notable_works_person` FOREIGN KEY (`person_id`) REFERENCES `persons` (`person_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `ck_person_notable_works_years`  CHECK (`year_to` IS NULL OR (`year_from` IS NOT NULL AND `year_from` <= `year_to`)),
+  CONSTRAINT `ck_person_notable_works_archive` CHECK (`official_url_is_archive` IN (0, 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='人物のプリキュア以外の代表作';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `person_aliases`
 -- 人物の名義（表記）マスタ。改名時は predecessor_alias_id / successor_alias_id で
 -- 前後リンクし、データ的に同一人物の表記履歴を辿れる。

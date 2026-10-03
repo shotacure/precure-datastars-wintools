@@ -29,6 +29,9 @@ public sealed class PersonsGenerator
     /// </summary>
     private readonly SongMusicClassesRepository _songMusicClassesRepo;
 
+    /// <summary>人物のプリキュア以外の代表作（person_notable_works）を読むためのリポジトリ。</summary>
+    private readonly PersonNotableWorksRepository _notableWorksRepo;
+
     private readonly CreditInvolvementIndex _index;
 
     /// <summary>役職系譜の代表コード。カードの年表を出すかどうか（サイトの年表に載る人か）の判定に使う。</summary>
@@ -61,6 +64,9 @@ public sealed class PersonsGenerator
     /// 作詞・作曲・編曲（曲単位の仕事）だけの曲は本索引に乗らず、従来どおり曲の代表録音から出典を解決する。</summary>
     private IReadOnlyDictionary<int, IReadOnlyDictionary<int, SongRecording>>? _sungRecordingByAlias;
 
+    /// <summary>person_id → 「プリキュア以外の代表作」の表示行（並び順どおり）。<c>GenerateAsync</c> で並列レンダリングの前に 1 度だけ詰める。</summary>
+    private IReadOnlyDictionary<int, IReadOnlyList<NotableWorkView>>? _notableWorksByPerson;
+
     public PersonsGenerator(
         BuildContext ctx,
         PageRenderer page,
@@ -80,6 +86,7 @@ public sealed class PersonsGenerator
         _rolesRepo = new RolesRepository(factory);
         _companyAliasesRepo = new CompanyAliasesRepository(factory);
         _songMusicClassesRepo = new SongMusicClassesRepository(factory);
+        _notableWorksRepo = new PersonNotableWorksRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -196,6 +203,17 @@ public sealed class PersonsGenerator
                     g => (IReadOnlyList<SongRecording>)g.OrderBy(r => r.SongRecordingId).ToList());
         }
 
+        // 「プリキュア以外の代表作」も並列レンダリングの前に全件を読み、人物ごとの表示行にしておく。
+        if (_notableWorksByPerson is null)
+        {
+            var allWorks = await _notableWorksRepo.GetAllAsync(ct).ConfigureAwait(false);
+            _notableWorksByPerson = allWorks
+                .GroupBy(w => w.PersonId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (IReadOnlyList<NotableWorkView>)g.Select(ToNotableWorkView).ToList());
+        }
+
         // 人物索引は「クリエイター > スタッフ」（/creators/staff/）に集約。
         // 本ジェネレータは人物単体の詳細ページ（/people/{名前}/）生成に専念する。
 
@@ -309,6 +327,9 @@ public sealed class PersonsGenerator
             CreditEpisodeCountTotal = creditEpisodeCountTotal,
             CreditMovieCountTotal = creditMovieCountTotal,
             MusicSections = musicSections,
+            NotableWorks = _notableWorksByPerson!.TryGetValue(person.PersonId, out var works)
+                ? works
+                : Array.Empty<NotableWorkView>(),
             CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 人物詳細の構造化データは Schema.org の Person 型。
@@ -1220,6 +1241,18 @@ public sealed class PersonsGenerator
     private string? GetCompanyAliasName(int aliasId)
         => _ctx.CompanyAliasById.TryGetValue(aliasId, out var ca) ? ca.Name : null;
 
+    /// <summary>代表作 1 行を表示行にする。時期は「2010」「2010–2012」の形（年が無ければ空文字）。</summary>
+    private static NotableWorkView ToNotableWorkView(PersonNotableWork w) => new()
+    {
+        Period = w.YearFrom is int from
+            ? (w.YearTo is int to && to != from ? $"{from}–{to}" : $"{from}")
+            : "",
+        Title = w.WorkTitle,
+        Role = w.RoleLabel,
+        Url = w.OfficialUrl ?? "",
+        IsArchive = w.OfficialUrlIsArchive && !string.IsNullOrEmpty(w.OfficialUrl)
+    };
+
     // ─── テンプレ用 DTO 群 ───
 
     private sealed class PersonDetailModel
@@ -1242,8 +1275,25 @@ public sealed class PersonsGenerator
         public int MusicSongTotal => MusicSections.SelectMany(s => s.SongKeys).Distinct(StringComparer.Ordinal).Count();
         public int MusicBgmTotal => MusicSections.SelectMany(s => s.BgmKeys).Distinct(StringComparer.Ordinal).Count();
         public int MusicDiscTotal => MusicSections.SelectMany(s => s.DiscKeys).Distinct(StringComparer.Ordinal).Count();
+        /// <summary>プリキュア以外の代表作（並び順どおり）。空なら「プリキュア以外の代表作」セクションを出さない。</summary>
+        public IReadOnlyList<NotableWorkView> NotableWorks { get; set; } = Array.Empty<NotableWorkView>();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
+    }
+
+    /// <summary>「プリキュア以外の代表作」の 1 行。</summary>
+    private sealed class NotableWorkView
+    {
+        /// <summary>時期（「2010」「2010–2012」。不明なら空文字）。</summary>
+        public string Period { get; set; } = "";
+        /// <summary>作品名。</summary>
+        public string Title { get; set; } = "";
+        /// <summary>役職。</summary>
+        public string Role { get; set; } = "";
+        /// <summary>作品名からリンクする公式サイト（無ければ空文字）。</summary>
+        public string Url { get; set; } = "";
+        /// <summary>true なら <see cref="Url"/> は閉鎖済み公式サイトのアーカイブ。リンクの後ろにその旨を添える。</summary>
+        public bool IsArchive { get; set; }
     }
 
     private sealed class PersonView

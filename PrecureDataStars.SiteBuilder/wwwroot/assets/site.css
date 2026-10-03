@@ -6191,6 +6191,39 @@ a.credit-card-series:focus-visible {
   color: var(--accent-blue);
 }
 
+/* 人物詳細の「プリキュア以外の代表作」。「年 ｜ 作品 ｜ 役職」の 3 列で、年と役職は折り返さない。
+   作品名は作品の公式サイトへの外部リンク。アーカイブへのリンクには「公式サイトのアーカイブ」の小さな札を添える。 */
+.notable-works-table th.col-year,
+.notable-works-table td.col-year {
+  width: 7.5em;
+  white-space: nowrap;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.notable-works-table th.col-role,
+.notable-works-table td.col-role {
+  width: 12em;
+}
+.notable-works-table td.col-title a {
+  color: var(--accent-blue);
+}
+.notable-work-archive {
+  display: inline-block;
+  margin-left: 0.5em;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.78em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .notable-works-table th.col-year,
+  .notable-works-table td.col-year { width: auto; }
+  .notable-works-table th.col-role,
+  .notable-works-table td.col-role { width: auto; }
+}
+
 /* 人物・企業・キャラ・商品の各詳細ページ末尾の「外部リンク」セクション。
    .external-links ul はバッジ風に横並びで配置し、各種類は色違いの薄いボーダーで区別する。
    購入リンクの .product-link 群と意匠を揃えつつ、サイズ感はやや小さめに。 */

@@ -397,6 +397,20 @@ public partial class CreditMastersEditorForm
         catch (Exception ex) { this.ShowError(ex); }
     }
 
+    /// <summary>選択中の人物のプリキュア以外の代表作を編集するダイアログを開く。代表作は人物本体の列を変えないので、閉じた後の再読み込みはしない。</summary>
+    private void OpenPersonNotableWorksEditor()
+    {
+        try
+        {
+            if (gridPersons.CurrentRow?.DataBoundItem is not Person p || gridPersons.SelectedRows.Count == 0)
+            { MessageBox.Show(this, "代表作を編集する人物を選択してください。"); return; }
+
+            using var dlg = new Dialogs.PersonNotableWorksEditorDialog(_personNotableWorksRepo, p.PersonId, p.FullName);
+            dlg.ShowDialog(this);
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
     /// <summary>選択中の団体の関係（親・子・前身・後継）を編集するダイアログを開く。関係は団体本体の列を変えないので、閉じた後の再読み込みはしない。</summary>
     private void OpenCompanyRelationsEditor()
     {

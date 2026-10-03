@@ -1,20 +1,33 @@
 {{## 年表タブの中身（担当・出演・参加の移り変わりの線表）。役職詳細・声の出演一覧・歌唱一覧・音楽制作一覧・
      作詞作曲編曲や音楽の役職詳細の年表タブ（切り替え）のパネルから
      引数なしの include で取り込み、各ページのモデルの Timeline（RoleTimelineModel）を描く。
-     ・注記（行を絞る決まり。右寄せの小さな字で、狭い画面では短い言い回しに切り替える。全員を載せるページは出さない）・凡例のあとに、名前・年の目盛り・印（TV の話の帯 / 映画の点 / 歌の点 / 劇伴の点 /
-       盤の四角 / 続けて参加した期間の細線）の線表を全行出す。行にマウスを載せる（スマホは帯をタップする）と参加期間と
+     ・凡例と「主な方のみ」のスイッチ（主な方の条件は ? の吹き出し。横に主な方の数 / 全行の数。候補が 10 以下・全員を載せるページは出さない）のあとに、
+       名前・年の目盛り・印（TV の話の帯 / 映画の点 / 歌の点 / 劇伴の点 /
+       盤の四角 / 続けて参加した期間の細線）の線表を全行出す。主な方でない行（rtl-row-extra）は、スイッチが入っている間
+       （.role-timeline.is-main-only）は隠し、切ると本来の並びの位置に出る。行にマウスを載せる（スマホは帯をタップする）と参加期間と
        作品ごとの参加を出す（role-timeline.js）。
      ・行の data-entity-type は一覧の行と同じ値なので、ページの絞り込み（site.css）がそのまま線表の行にも効く。
      ・横軸は TV シリーズ 1 作を 1 本の帯にし、帯の左端に放送開始年の目盛り（シリーズ詳細へのリンク）を置く。 ##}}
-<div class="role-timeline">
-  {{~ if Timeline.Note != "" ~}}
-  <p class="rtl-note muted"><span class="rtl-note-long">{{ Timeline.Note | html.escape }}</span><span class="rtl-note-short">{{ Timeline.NoteShort | html.escape }}</span></p>
-  {{~ end ~}}
-  <ul class="rtl-legend" aria-label="凡例">
-    {{~ for l in Timeline.Legend ~}}
-    <li><span class="rtl-key rtl-key-{{ l.Kind }}"></span>{{ l.Label | html.escape }}</li>
+<div class="role-timeline{{ if Timeline.IsFilterable }} is-main-only{{ end }}">
+  <div class="rtl-head">
+    <ul class="rtl-legend" aria-label="凡例">
+      {{~ for l in Timeline.Legend ~}}
+      <li><span class="rtl-key rtl-key-{{ l.Kind }}"></span>{{ l.Label | html.escape }}</li>
+      {{~ end ~}}
+    </ul>
+    {{~ if Timeline.IsFilterable ~}}
+    <div class="rtl-filter" data-main="{{ Timeline.MainCount }}" data-total="{{ Timeline.Rows.size }}">
+      <label class="rtl-switch"><input type="checkbox" class="rtl-filter-input" checked><span class="rtl-switch-ui" aria-hidden="true"></span>主な方のみ</label>
+      <button type="button" class="rtl-filter-help" aria-label="主な方の条件" aria-expanded="false">?</button>
+      <span class="rtl-filter-count">{{ Timeline.MainCount }} / {{ Timeline.Rows.size }}名</span>
+      <div class="rtl-filter-tip" role="tooltip" hidden>
+        {{~ for line in Timeline.FilterTip ~}}
+        <div>{{ line | html.escape }}</div>
+        {{~ end ~}}
+      </div>
+    </div>
     {{~ end ~}}
-  </ul>
+  </div>
   <div class="rtl{{ if Timeline.TickDensityClass != "" }} {{ Timeline.TickDensityClass }}{{ end }}">
     <div class="rtl-bands" aria-hidden="true">
       {{~ for b in Timeline.Bands ~}}<span class="rtl-band{{ if b.IsAlt }} rtl-band-alt{{ end }}" style="left:{{ b.Left }}%;width:{{ b.Width }}%"></span>{{~ end ~}}
@@ -30,7 +43,7 @@
     </div>
     <ol class="rtl-rows">
       {{~ for r in Timeline.Rows ~}}
-      <li class="rtl-row" data-entity-type="{{ r.EntityKind }}" data-period="{{ r.PeriodLabel | html.escape }}" data-works="{{ r.WorksText | html.escape }}"{{ if r.EntitySubLabel != "" }} data-sub="{{ r.EntitySubLabel | html.escape }}"{{ end }}>
+      <li class="rtl-row{{ if !r.IsMain }} rtl-row-extra{{ end }}" data-entity-type="{{ r.EntityKind }}" data-period="{{ r.PeriodLabel | html.escape }}" data-works="{{ r.WorksText | html.escape }}"{{ if r.EntitySubLabel != "" }} data-sub="{{ r.EntitySubLabel | html.escape }}"{{ end }}>
         <a class="rtl-name" href="{{ r.EntityUrl }}">
           {{~ if r.EntityKind == "company" ~}}<span class="rtl-badge rtl-badge-company" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" fill-rule="evenodd"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>
           {{~ else if r.EntityKind == "character" ~}}<span class="rtl-badge rtl-badge-character" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M8 1.2l2 4.3 4.7.5-3.5 3.2 1 4.6L8 11.4l-4.2 2.4 1-4.6L1.3 6l4.7-.5z"/></svg></span>

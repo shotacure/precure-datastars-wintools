@@ -7945,24 +7945,21 @@ ins.adsbygoogle[data-ad-status="filled"] {
   --rtl-track-x: calc(var(--rtl-name-w) + var(--rtl-gap));
   margin: 0 0 2em;
 }
-/* 年表の注記（行を絞る決まり）。本文の邪魔にならないよう右寄せの小さな字にする。 */
-.rtl-note {
-  margin: 10px 0 6px;
-  font-size: 0.75em;
-  text-align: right;
-}
-/* 狭い画面では 1 行に収まる短い言い回しに切り替える。 */
-.rtl-note-short { display: none; }
-@media (max-width: 640px) {
-  .rtl-note-long { display: none; }
-  .rtl-note-short { display: inline; }
+/* 凡例（左）と「主な方のみ」のスイッチ（右端）の行。狭い画面ではスイッチが凡例の下の行に回る。 */
+.rtl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 18px;
+  margin: 10px 0 10px;
 }
 .rtl-legend {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
   gap: 4px 18px;
-  margin: 0 0 10px;
+  margin: 0;
   padding: 0;
   font-size: 0.85em;
   color: var(--muted);
@@ -7982,6 +7979,90 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .rtl-key-bgm { width: 9px; height: 9px; border-radius: 50%; background: var(--rtl-bgm); }
 .rtl-key-disc { width: 9px; height: 9px; border-radius: 2px; background: var(--rtl-disc); }
 .rtl-key-span { width: 18px; height: 2px; border-radius: 1px; background: var(--rtl-span); }
+
+/* 「主な方のみ」のスイッチ。入っている間（.is-main-only）は主な方でない行を隠す。 */
+.rtl-filter {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.rtl-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.rtl-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.rtl-switch-ui {
+  position: relative;
+  width: 30px;
+  height: 17px;
+  border-radius: 9px;
+  background: #c4c6cc;
+  transition: background 0.15s;
+}
+.rtl-switch-ui::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s;
+}
+.rtl-switch input:checked + .rtl-switch-ui { background: var(--rtl-tv); }
+.rtl-switch input:checked + .rtl-switch-ui::after { transform: translateX(13px); }
+.rtl-switch input:focus-visible + .rtl-switch-ui { outline: 2px solid var(--rtl-tv); outline-offset: 2px; }
+.rtl-filter-help {
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8em;
+  line-height: 15px;
+  cursor: help;
+}
+.rtl-filter-help:hover,
+.rtl-filter-help[aria-expanded="true"] { border-color: var(--rtl-tv); color: var(--rtl-tv); }
+.rtl-filter-count {
+  color: var(--muted);
+  font-family: var(--font-num);
+  font-size: 0.92em;
+}
+.rtl-filter-tip {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgba(20, 20, 40, 0.14);
+  font-size: 0.92em;
+  line-height: 1.6;
+  white-space: normal;
+}
+.rtl-filter-tip[hidden] { display: none; }
+.role-timeline.is-main-only .rtl-row-extra { display: none; }
 
 .rtl {
   position: relative;

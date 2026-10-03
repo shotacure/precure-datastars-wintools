@@ -90,21 +90,22 @@ internal static class OgCareerCardParts
     /// <summary>
     /// サイトの年表（役職詳細・声の出演一覧の線表）に載る人物・団体か。載らない人にカードの年表を出しても、
     /// 単発の点が 1 つ置かれるだけで何を表すのか伝わらないため、年表を出すかどうかをこれで決める。
-    /// 本編の役職は役職詳細と同じ決まり（系譜でまとめた役職ごとに、オープニングに出たか・1 年間に 4 回以上か）、
+    /// 本編の役職は役職詳細と同じ決まり（役職を問わずオープニングに出たか、系譜でまとめた役職ごとに 1 年間に 4 回以上か）、
     /// 声の出演は声の出演一覧と同じ決まり（1 年間に 4 回以上）。
-    /// 年表は候補が少ないページでは全員を載せるので、CreatorsGenerator が記録した「年表に載った行」
+    /// 年表は候補が少ないページでは全員を、多いページでも決まりに当たる方が 10 名に満たなければ参加の多い方から補って
+    /// 主な方として載せるので、CreatorsGenerator が記録した「年表に主な方として載った行」
     /// （<see cref="BuildContext.SiteTimelineEntityUrls"/>）があればそれで判定し、無いときだけ決まりで判定する。
     /// </summary>
     public static bool AppearsInSiteTimeline(BuildContext ctx, RoleSuccessorResolver resolver, IReadOnlyList<Involvement> involvements, string entityUrl)
     {
         if (ctx.SiteTimelineEntityUrls is { } recorded) return recorded.Contains(entityUrl);
 
+        bool hasOpening = involvements.Any(i => i.IsMainCredit && string.Equals(i.CreditKind, "OP", StringComparison.Ordinal));
         var byRole = involvements
             .Where(i => !i.IsVoiceCast && !string.IsNullOrEmpty(i.RoleCode))
             .GroupBy(i => resolver.GetRepresentative(i.RoleCode), StringComparer.Ordinal);
         foreach (var g in byRole)
         {
-            bool hasOpening = g.Any(i => string.Equals(i.CreditKind, "OP", StringComparison.Ordinal));
             if (RoleTimelineBuilder.Qualifies(ParticipationDates(ctx, g), hasOpening, RoleTimelineRules.Staff)) return true;
         }
 

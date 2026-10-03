@@ -128,11 +128,14 @@ public sealed class PageRenderer
     {
         if (_ogCardRenderer is null || !ShouldWrite(urlPath)) return null;
 
-        var size = _ogCardRenderer.RenderSubtitleTelop(rubyHtml, fontFamily, profile,
-            Path.Combine(_config.OutputDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        var outputFile = Path.Combine(_config.OutputDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        var size = _ogCardRenderer.RenderSubtitleTelop(rubyHtml, fontFamily, profile, outputFile);
         if (size is not { } s) return null;
+        // 画像のファイル名は話ごとに固定なので、作り直してもブラウザが古い画像を使い続けないよう、
+        // CSS・JS（AssetUrl）と同じく中身のハッシュの先頭 10 桁を版の印として URL に付ける。
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(outputFile))).ToLowerInvariant();
         return new SubtitleTelopImage(
-            "/" + relativePath,
+            $"/{relativePath}?v={hash[..10]}",
             s.Width / OgCardRenderer.TelopPixelRatio,
             s.Height / OgCardRenderer.TelopPixelRatio);
     }
@@ -579,5 +582,5 @@ public sealed class WrittenPage
     public string Section { get; set; } = "";
 }
 
-/// <summary>ページに置くサブタイトルのテロップ画像。<see cref="Src"/> はサイトルートからのパス、幅・高さは CSS ピクセル。</summary>
+/// <summary>ページに置くサブタイトルのテロップ画像。<see cref="Src"/> はサイトルートからのパス（版の印 <c>?v=</c> 付き）、幅・高さは CSS ピクセル。</summary>
 public sealed record SubtitleTelopImage(string Src, int Width, int Height);

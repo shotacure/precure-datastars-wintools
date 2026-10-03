@@ -795,6 +795,24 @@ a.series-card-children-title:hover {
   font-size: 0.5em;
   color: var(--muted);
 }
+/* テロップ画像のサブタイトル。画像は字の外形で切ってあるので欄の中央に置き、
+   欄より広い画像は縦横比を保って欄の幅まで縮める。--telop-w は画像の表示幅（字が 45px に見える幅）。 */
+.subtitle-telop {
+  text-align: center;
+  line-height: 0;
+}
+.subtitle-telop img {
+  display: inline-block;
+  width: min(100%, var(--telop-w));
+  height: auto;
+}
+@media (max-width: 640px) {
+  /* スマホでは字の大きさの上限を 24px（PC の 8/15）にする。短い題だけが大きく出て、
+     長い題（欄の幅まで縮む）との差が開きすぎないようにするため。 */
+  .subtitle-telop img {
+    width: min(100%, calc(var(--telop-w) * 8 / 15));
+  }
+}
 .subtitle-kana {
   font-size: 0.85em;
   color: var(--muted);

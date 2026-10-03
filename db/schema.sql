@@ -262,6 +262,15 @@ CREATE TABLE `series` (
   `film_cj_mark` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'タイトルカードに CJ マークが付くか',
   `vod_intro` smallint unsigned DEFAULT NULL,
   `font_subtitle` varchar(64) DEFAULT NULL,
+  -- サブタイトルのテロップ画像（エピソード詳細ページ）の組み方。親字の書体は font_subtitle。NULL の列は既定値で組む。
+  `font_subtitle_ruby` varchar(64) DEFAULT NULL COMMENT 'サブタイトルの振り仮名の書体（NULL は親字と同じ）',
+  `subtitle_ruby_size_ratio` decimal(4,3) DEFAULT NULL COMMENT '振り仮名の大きさ（親字比、NULL は 0.300）',
+  `subtitle_ruby_raise_ratio` decimal(4,3) DEFAULT NULL COMMENT '振り仮名のベースラインの高さ（親字比、NULL は 1.040）',
+  `subtitle_ruby_oblique_deg` decimal(4,1) DEFAULT NULL COMMENT '振り仮名の斜体の角度（度、NULL は 0）',
+  `subtitle_line_gap_ratio` decimal(4,3) DEFAULT NULL COMMENT '行と行のあいだの空き（親字比、NULL は既定）',
+  `subtitle_ruby_overhang_ratio` decimal(4,3) DEFAULT NULL COMMENT '振り仮名が隣の字へはみ出せる最大幅（片側・親字比、NULL は振り仮名 1 字分）',
+  `subtitle_ruby_line_edge` varchar(16) DEFAULT NULL COMMENT '行の端の振り仮名の扱い ALIGN / OVERHANG（NULL は行頭そろえ・行末はみ出し）',
+  `subtitle_ruby_grouping` varchar(16) DEFAULT NULL COMMENT '振り仮名の置き方 MONO / JUKUGO / SPREAD（NULL は MONO）',
   -- 絵コンテ役職を独立表示せず演出と融合表示するか（プレビュー描画専用フラグ）。
   -- 初期のプリキュアシリーズで「（絵コンテ・）演出 名前」のような融合表記が慣習的だった
   -- ため、シリーズ単位で ON にすることで CreditPreviewRenderer が STORYBOARD と

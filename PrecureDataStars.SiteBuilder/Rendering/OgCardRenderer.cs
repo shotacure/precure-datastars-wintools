@@ -38,7 +38,7 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// これにより PageRenderer の並列レンダリングフェーズからそのまま呼べる。
 /// </para>
 /// </summary>
-public sealed class OgCardRenderer : IDisposable
+public sealed partial class OgCardRenderer : IDisposable
 {
     // ──────── カードの寸法 ────────
 

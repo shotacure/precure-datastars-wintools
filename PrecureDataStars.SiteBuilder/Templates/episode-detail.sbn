@@ -97,10 +97,18 @@
   {{## サブタイトル：title_rich_html がある場合はルビ付きをそのまま流す。
        ルビが無い場合だけ補助として title_kana を出す（重複表示を避ける）。
        未解禁のときは C# 側で ep-subtitle-guard span に包まれた状態で渡ってくる
-       （subtitle-embargo.js がぼかし表示・解禁を担う）。 ##}}
+       （subtitle-embargo.js がぼかし表示・解禁を担う）。
+       テロップ画像（本編のテロップの体裁で描いた透過 PNG）がある話は、HTML の代わりに画像を中央に置く。
+       画像は 2 倍の画素で描いてあり、width / height と --telop-w は表示の大きさ。 ##}}
+  {{~ if Episode.SubtitleTelopSrc != "" ~}}
+  <div class="subtitle-display subtitle-telop">
+    <img src="{{ Episode.SubtitleTelopSrc }}" width="{{ Episode.SubtitleTelopWidth }}" height="{{ Episode.SubtitleTelopHeight }}" style="--telop-w: {{ Episode.SubtitleTelopWidth }}px" alt="{{ Episode.TitleText | html.escape }}" decoding="async">
+  </div>
+  {{~ else ~}}
   <div class="subtitle-display">
     {{ Episode.SubtitleGuardedDisplayHtml }}
   </div>
+  {{~ end ~}}
 
   {{## YouTube 予告（見出しなし、基本情報の前に置く） ##}}
   {{~ if Episode.YoutubeId != "" ~}}

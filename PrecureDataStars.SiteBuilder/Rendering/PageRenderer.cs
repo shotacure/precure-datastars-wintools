@@ -113,6 +113,30 @@ public sealed class PageRenderer
         return $"{_config.BaseUrl}/{relativePath}";
     }
 
+    /// <summary>
+    /// エピソードのサブタイトルを本編テロップの体裁の透過 PNG に描いて書き出し、ページに置く画像の情報を返す。
+    /// 画像は <see cref="OgCardRenderer.TelopPixelRatio"/> 倍の画素で描くので、表示の幅・高さはその分だけ割って返す。
+    /// レンダラが無いとき・ピンポイントビルドの対象外のページ・描く字が無いときは null（ページ側は HTML のサブタイトルを出す）。
+    /// ページごとに出力先が異なるため並列フェーズから呼んで安全。
+    /// </summary>
+    /// <param name="urlPath">画像を置くページの URL パス（ピンポイントビルドの判定に使う）。</param>
+    /// <param name="relativePath">出力先（サイトルートからの相対パス。例 <c>subtitles/2004tv/42.png</c>）。</param>
+    /// <param name="rubyHtml">ルビ付きのサブタイトル。</param>
+    /// <param name="fontFamily">作品の本編テロップの書体名。</param>
+    /// <param name="profile">作品ごとの組み方。</param>
+    public SubtitleTelopImage? RenderSubtitleTelop(string urlPath, string relativePath, string rubyHtml, string fontFamily, SubtitleTelopProfile profile)
+    {
+        if (_ogCardRenderer is null || !ShouldWrite(urlPath)) return null;
+
+        var size = _ogCardRenderer.RenderSubtitleTelop(rubyHtml, fontFamily, profile,
+            Path.Combine(_config.OutputDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        if (size is not { } s) return null;
+        return new SubtitleTelopImage(
+            "/" + relativePath,
+            s.Width / OgCardRenderer.TelopPixelRatio,
+            s.Height / OgCardRenderer.TelopPixelRatio);
+    }
+
     /// <summary>canonical パスからカード画像の出力パスを導く（<c>/</c> は <c>og/home.png</c>）。</summary>
     private static string OgCardRelativePath(string canonicalPath)
     {
@@ -554,3 +578,6 @@ public sealed class WrittenPage
     /// sitemap.xml の priority 設定に使う。</summary>
     public string Section { get; set; } = "";
 }
+
+/// <summary>ページに置くサブタイトルのテロップ画像。<see cref="Src"/> はサイトルートからのパス、幅・高さは CSS ピクセル。</summary>
+public sealed record SubtitleTelopImage(string Src, int Width, int Height);

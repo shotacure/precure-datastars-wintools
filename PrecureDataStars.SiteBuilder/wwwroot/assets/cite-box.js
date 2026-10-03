@@ -3,14 +3,14 @@
  *
  * 対象 DOM 構造（_cite-box.sbn 側で生成）：
  *   <aside class="cite-box">
- *     <pre class="cite-box-text" id="citeTextPlain">…, (参照 <span data-cite-date="iso">2026-10-02</span>).</pre>
+ *     <pre class="cite-box-text" id="citeTextPlain">…, (参照 <span data-cite-date="iso">YYYY-MM-DD</span>).</pre>
  *     <button class="cite-box-copy" data-cite-copy="citeTextPlain">…</button>
- *     <pre class="cite-box-text" id="citeTextCiteWeb">… |accessdate=<span data-cite-date="iso">2026-10-02</span> …</pre>
+ *     <pre class="cite-box-text" id="citeTextCiteWeb">… |accessdate=<span data-cite-date="iso">YYYY-MM-DD</span> …</pre>
  *     <button class="cite-box-copy" data-cite-copy="citeTextCiteWeb">…</button>
  *   </aside>
  *
  * 本ファイルの責務：
- *   - 引用文の参照日（data-cite-date）を、ビルド日の既定値から閲覧者の「今日」に差し替える
+ *   - 引用文の参照日（data-cite-date）を、仮の表記「YYYY-MM-DD」から閲覧者の「今日」に差し替える
  *     （"iso" は「2026-10-02」、"ja" は「2026年10月2日」）。
  *   - コピーボタン（data-cite-copy）クリックで、指した <pre> のテキストをクリップボードへ。
  *   - コピー成功時に share-buttons.js と同じ見た目のトースト（.share-toast）を一定時間表示する。

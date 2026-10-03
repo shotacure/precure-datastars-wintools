@@ -77,9 +77,13 @@ internal static class OgCareerCardParts
     /// 単発の点が 1 つ置かれるだけで何を表すのか伝わらないため、年表を出すかどうかをこれで決める。
     /// 本編の役職は役職詳細と同じ決まり（系譜でまとめた役職ごとに、オープニングに出たか・1 年間に 4 回以上か）、
     /// 声の出演は声の出演一覧と同じ決まり（1 年間に 4 回以上）。
+    /// 年表は候補が少ないページでは全員を載せるので、CreatorsGenerator が記録した「年表に載った行」
+    /// （<see cref="BuildContext.SiteTimelineEntityUrls"/>）があればそれで判定し、無いときだけ決まりで判定する。
     /// </summary>
-    public static bool AppearsInSiteTimeline(BuildContext ctx, RoleSuccessorResolver resolver, IReadOnlyList<Involvement> involvements)
+    public static bool AppearsInSiteTimeline(BuildContext ctx, RoleSuccessorResolver resolver, IReadOnlyList<Involvement> involvements, string entityUrl)
     {
+        if (ctx.SiteTimelineEntityUrls is { } recorded) return recorded.Contains(entityUrl);
+
         var byRole = involvements
             .Where(i => !i.IsVoiceCast && !string.IsNullOrEmpty(i.RoleCode))
             .GroupBy(i => resolver.GetRepresentative(i.RoleCode), StringComparer.Ordinal);

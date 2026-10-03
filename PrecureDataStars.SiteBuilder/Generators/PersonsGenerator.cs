@@ -370,7 +370,7 @@ public sealed class PersonsGenerator
             Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForPerson(person.PersonId), displayName),
             OgType = "profile",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(displayName, involvementGroups, allPersonInvolvements, firstAppearance, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(displayName, personUrl, involvementGroups, allPersonInvolvements, firstAppearance, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
         };
 
         _page.RenderAndWriteFile(personUrl, "persons-detail.sbn", content, layout);
@@ -387,6 +387,7 @@ public sealed class PersonsGenerator
     /// </summary>
     private OgCardSpec BuildOgCard(
         string displayName,
+        string personUrl,
         IReadOnlyList<InvolvementGroup> involvementGroups,
         IReadOnlyList<Involvement> mainInvolvements,
         FirstAppearance? firstAppearance,
@@ -409,7 +410,7 @@ public sealed class PersonsGenerator
 
         bool voiceOnly = mainInvolvements.Count > 0 && mainInvolvements.All(i => i.IsVoiceCast);
         string bandColor = voiceOnly ? OgCardColors.VoiceActor : OgCardColors.Staff;
-        bool showTimeline = OgCareerCardParts.AppearsInSiteTimeline(_ctx, _roleSuccessorResolver, mainInvolvements);
+        bool showTimeline = OgCareerCardParts.AppearsInSiteTimeline(_ctx, _roleSuccessorResolver, mainInvolvements, personUrl);
 
         // 前置きは置かない。「クリエイター」と名乗らせなくても、氏名と担当役職の並びで何者かは伝わる。
         return new OgCardSpec(Kicker: "", Title: displayName)

@@ -23,6 +23,8 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///       <item><description>作詞・作曲・編曲の役職詳細：1 年間に 2 曲以上担当したことがある。</description></item>
 ///       <item><description>歌唱・音楽の役職詳細：ページに載る行をすべて載せる。</description></item>
 ///     </list>
+///     役職詳細・声の出演・作詞作曲編曲は、描ける参加のある候補が <see cref="RoleTimelineRules.ShowAllUpTo"/> 以下（10）なら
+///     決まりによらずすべて載せる（決まりは 10 を超えるページで行を絞るためのもの）。
 ///     載せた行には単発の参加も含めてすべての参加を描く。</description></item>
 ///   <item><description>並びは、最初の参加の日付の早い順。同じ日に始めた行は、団体を先に置き、その中で最後の参加の
 ///     日付の早い順（最初に抜けた順）、それも同じなら呼び出し側が渡す並びのキー（役職詳細・声の出演はその話のクレジットで
@@ -132,12 +134,11 @@ internal sealed class RoleTimelineBuilder
     {
         if (_axisDays <= 0) return null;
 
-        var rows = new List<(RoleTimelineRow Row, DateOnly First, DateOnly Last, long FirstPos)>();
-        foreach (var e in entities)
-        {
-            var built = BuildRow(e, rules);
-            if (built is not null) rows.Add(built.Value);
-        }
+        // 描ける参加のある候補がすべて載る組み立てをまず作り、その数が ShowAllUpTo を超えるときだけ決まりで絞り直す。
+        var candidates = entities as IReadOnlyCollection<RoleTimelineEntity> ?? entities.ToList();
+        var rows = BuildRows(candidates, rules, forceInclude: true);
+        if (!rules.IncludeAll && rows.Count > rules.ShowAllUpTo)
+            rows = BuildRows(candidates, rules, forceInclude: false);
         if (rows.Count == 0) return null;
 
         var ordered = rows
@@ -173,12 +174,25 @@ internal sealed class RoleTimelineBuilder
         };
     }
 
+    /// <summary>候補ごとに <see cref="BuildRow"/> を通し、描く行のあるものだけを集める。</summary>
+    private List<(RoleTimelineRow Row, DateOnly First, DateOnly Last, long FirstPos)> BuildRows(
+        IEnumerable<RoleTimelineEntity> entities, RoleTimelineRules rules, bool forceInclude)
+    {
+        var rows = new List<(RoleTimelineRow Row, DateOnly First, DateOnly Last, long FirstPos)>();
+        foreach (var e in entities)
+        {
+            var built = BuildRow(e, rules, forceInclude);
+            if (built is not null) rows.Add(built.Value);
+        }
+        return rows;
+    }
+
     /// <summary>
     /// 1 エンティティの参加を日付順に並べて「続けて参加した期間」に区切り、描く行を作る。
-    /// ページの決まり（<paramref name="rules"/>）で載せないものは null。
+    /// 描ける参加が無いものと、<paramref name="forceInclude"/> が false でページの決まり（<paramref name="rules"/>）を満たさないものは null。
     /// </summary>
     private (RoleTimelineRow Row, DateOnly First, DateOnly Last, long FirstPos)? BuildRow(
-        RoleTimelineEntity e, RoleTimelineRules rules)
+        RoleTimelineEntity e, RoleTimelineRules rules, bool forceInclude)
     {
         var credits = new List<Credit>(e.Episodes.Count + e.MovieSeriesIds.Count + e.Songs.Count + e.Bgms.Count + e.Products.Count);
         foreach (var (sid, eid) in e.Episodes)
@@ -224,7 +238,7 @@ internal sealed class RoleTimelineBuilder
         // 期間の終わり：最後の参加の放送枠の終わり（映画・歌・劇伴・盤は日付の翌日）。
         static DateOnly ChainEnd(List<Credit> chain)
             => chain.Max(c => c.Kind == CreditKind.Tv ? c.Date.AddDays(EpisodeSpanDays) : c.Date.AddDays(1));
-        bool include = rules.IncludeAll
+        bool include = forceInclude || rules.IncludeAll
             || (rules.IncludeOpeningCredit && e.HasOpeningCredit)
             || MaxCreditsInWindow(credits, rules.WindowDays) >= rules.MinCreditsInWindow;
         if (!include) return null;
@@ -398,40 +412,44 @@ internal sealed class RoleTimelineBuilder
 /// <param name="MinCreditsInWindow">一定期間（<paramref name="WindowDays"/>）のあいだに要る参加の数の下限。</param>
 /// <param name="IncludeOpeningCredit">オープニングのクレジットに出たことがあれば回数によらず載せるか。</param>
 /// <param name="IncludeAll">決まりによらず候補をすべて載せるか。</param>
+/// <param name="ShowAllUpTo">描ける参加のある候補がこの数以下なら、決まりによらずすべて載せる（<paramref name="IncludeAll"/> のページでは使わない）。</param>
 /// <param name="Verb">凡例の動詞（「担当」「出演」「参加」）。</param>
 /// <param name="Note">
 /// 年表タブの先頭に出す説明文（載せる決まり）。ページの種類ごとに固定で、登録状況（どの人が載ったか・誰がオープニングに
 /// 出ているか）では変えない（例：演出助手もいずれオープニングに出ることがあるので、役職ページはどれも同じ文にする）。
 /// </param>
 internal sealed record RoleTimelineRules(
-    int MaxGapDays, int WindowDays, int MinCreditsInWindow, bool IncludeOpeningCredit, bool IncludeAll, string Verb, string Note)
+    int MaxGapDays, int WindowDays, int MinCreditsInWindow, bool IncludeOpeningCredit, bool IncludeAll, int ShowAllUpTo, string Verb, string Note)
 {
     /// <summary>全員を載せる決まりのページの説明文。</summary>
     public const string AllNote = "対象: すべて";
 
-    /// <summary>役職詳細：メインスタッフ（オープニングに出た）と、1 年間（52 週）に 4 回以上担当したスタッフ（細線は 13 週以内の間隔でつなぐ）。</summary>
+    /// <summary>決まりで絞るページでも全員を載せる候補の数の上限。</summary>
+    public const int DefaultShowAllUpTo = 10;
+
+    /// <summary>役職詳細：メインスタッフ（オープニングに出た）と、1 年間（52 週）に 4 回以上担当したスタッフ（細線は 13 週以内の間隔でつなぐ）。候補が 10 以下なら全員。</summary>
     public static readonly RoleTimelineRules Staff = new(
-        91, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: true, IncludeAll: false, "担当",
-        "対象: メインスタッフまたは1年間4回以上");
+        91, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: true, IncludeAll: false, DefaultShowAllUpTo, "担当",
+        "対象: すべて（10人を超える場合は、メインスタッフまたは1年間4回以上）");
 
-    /// <summary>声の出演：1 年間（52 週）に 4 回以上出演した声優（細線は 4 週以内の間隔でつなぐ）。</summary>
+    /// <summary>声の出演：1 年間（52 週）に 4 回以上出演した声優（細線は 4 週以内の間隔でつなぐ）。候補が 10 以下なら全員。</summary>
     public static readonly RoleTimelineRules VoiceCast = new(
-        28, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: false, IncludeAll: false, "出演",
-        "対象: 1年間4回以上");
+        28, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: false, IncludeAll: false, DefaultShowAllUpTo, "出演",
+        "対象: すべて（10人を超える場合は、1年間4回以上）");
 
-    /// <summary>作詞・作曲・編曲の役職詳細：1 年間（52 週）に 2 曲以上担当した人物（細線は 13 週以内の間隔でつなぐ）。</summary>
+    /// <summary>作詞・作曲・編曲の役職詳細：1 年間（52 週）に 2 曲以上担当した人物（細線は 13 週以内の間隔でつなぐ）。候補が 10 以下なら全員。</summary>
     public static readonly RoleTimelineRules SongWriter = new(
-        91, WindowDays: 364, MinCreditsInWindow: 2, IncludeOpeningCredit: false, IncludeAll: false, "担当",
-        "対象: 1年間2曲以上");
+        91, WindowDays: 364, MinCreditsInWindow: 2, IncludeOpeningCredit: false, IncludeAll: false, DefaultShowAllUpTo, "担当",
+        "対象: すべて（10人を超える場合は、1年間2曲以上）");
 
     /// <summary>音楽の役職詳細（演奏など）：一覧に載る人物・団体すべて（細線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules MusicRole = new(
-        91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, "担当",
+        91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, ShowAllUpTo: 0, "担当",
         AllNote);
 
     /// <summary>歌唱：一覧に載る歌手・キャラクターすべて（続けて参加した期間の線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules Singers = new(
-        91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, "参加",
+        91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, ShowAllUpTo: 0, "参加",
         AllNote);
 }
 

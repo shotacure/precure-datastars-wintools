@@ -311,7 +311,7 @@ public sealed class CompaniesGenerator
             // 企業ページは website 寄り（プロフィール的でもあるが OGP profile は人物用なので使わない）。
             OgType = "website",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(company.Name, groups, allInvolvements, memberHistory, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(company.Name, companyUrl, groups, allInvolvements, memberHistory, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
         };
 
         _page.RenderAndWrite(
@@ -332,6 +332,7 @@ public sealed class CompaniesGenerator
     /// </summary>
     private OgCardSpec BuildOgCard(
         string displayName,
+        string companyUrl,
         IReadOnlyList<InvolvementGroup> groups,
         IReadOnlyList<Involvement> allInvolvements,
         IReadOnlyList<MemberHistoryAliasSection> memberHistory,
@@ -355,7 +356,7 @@ public sealed class CompaniesGenerator
         // 年表・透かし・初参加は本編のクレジット（主題歌・劇伴経由の関与を除く）から決める。
         var mainInvolvements = allInvolvements.Where(i => i.IsMainCredit).ToList();
         var firstAppearance = FirstAppearanceResolver.Resolve(_ctx, mainInvolvements);
-        bool showTimeline = OgCareerCardParts.AppearsInSiteTimeline(_ctx, _roleSuccessorResolver, mainInvolvements);
+        bool showTimeline = OgCareerCardParts.AppearsInSiteTimeline(_ctx, _roleSuccessorResolver, mainInvolvements, companyUrl);
 
         // 下端の事実行：この団体の所属としてクレジットされた人物（担当回数の多い順に 3 人まで）と、初参加。
         var foot = new List<OgCardFactLine>();

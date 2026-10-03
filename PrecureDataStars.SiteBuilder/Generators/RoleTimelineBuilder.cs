@@ -17,15 +17,17 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     連続する <see cref="RoleTimelineRules.WindowDays"/> 日（52 週）のあいだに参加（TV の話数・映画の本数）が 4 件以上あること
 ///     （シリーズや暦年の区切りによらず、期間をずらして数える）。
 ///     <list type="number">
-///       <item><description>役職詳細：その役職でオープニングのクレジット（TV・映画とも）に出たことがある（メインスタッフ）か、
-///         1 年間に 4 回以上担当したことがある。続けて担当した期間は 13 週以内の間隔でつなぐ。</description></item>
+///       <item><description>役職詳細：役職を問わずオープニングのクレジット（TV・映画とも）に出たことがある（メインスタッフ）か、
+///         その役職を 1 年間に 4 回以上担当したことがある。続けて担当した期間は 13 週以内の間隔でつなぐ。</description></item>
 ///       <item><description>声の出演：1 年間に 4 回以上出演したことがある。続けて出演した期間は 4 週以内の間隔でつなぐ。</description></item>
 ///       <item><description>作詞・作曲・編曲の役職詳細：1 年間に 2 曲以上担当したことがある。</description></item>
 ///       <item><description>歌唱・音楽の役職詳細：ページに載る行をすべて載せる。</description></item>
 ///     </list>
-///     役職詳細・声の出演・作詞作曲編曲は、描ける参加のある候補が <see cref="RoleTimelineRules.ShowAllUpTo"/> 以下（10）なら
-///     決まりによらずすべて載せる（決まりは 10 を超えるページで行を絞るためのもの）。
-///     載せた行には単発の参加も含めてすべての参加を描く。</description></item>
+///     描ける参加のある候補はすべて行にする。役職詳細・声の出演・作詞作曲編曲で候補が <see cref="RoleTimelineRules.ShowAllUpTo"/>（10）を
+///     超えるページは、決まりを満たす行を「主な方」とし、それが 10 に満たなければ残りから参加の多い順（同じ数なら最初の参加の早い順 →
+///     その話のクレジットで先に出ている順）に 10 まで補う。初めは主な方だけを見せ、「主な方のみ」のスイッチを切るとすべての行を
+///     本来の並びの位置に見せる（role-timeline.js）。候補が 10 以下のページはスイッチを出さず全員を見せる。
+///     行には単発の参加も含めてすべての参加を描く。</description></item>
 ///   <item><description>並びは、最初の参加の日付の早い順。同じ日に始めた行は、団体を先に置き、その中で最後の参加の
 ///     日付の早い順（最初に抜けた順）、それも同じなら呼び出し側が渡す並びのキー（役職詳細・声の出演はその話のクレジットで
 ///     上に出ている順）→ 名前。</description></item>
@@ -134,12 +136,34 @@ internal sealed class RoleTimelineBuilder
     {
         if (_axisDays <= 0) return null;
 
-        // 描ける参加のある候補がすべて載る組み立てをまず作り、その数が ShowAllUpTo を超えるときだけ決まりで絞り直す。
-        var candidates = entities as IReadOnlyCollection<RoleTimelineEntity> ?? entities.ToList();
-        var rows = BuildRows(candidates, rules, forceInclude: true);
-        if (!rules.IncludeAll && rows.Count > rules.ShowAllUpTo)
-            rows = BuildRows(candidates, rules, forceInclude: false);
+        // 描ける参加のある候補はすべて行にする。その数が ShowAllUpTo を超えるページでは、決まりを満たす行と、
+        // それが ShowAllUpTo に満たないときに参加の多い順で補った行を「主な方」とし、ほかの行は「主な方のみ」の
+        // スイッチを切ったときだけ見せる。
+        var rows = new List<BuiltRow>();
+        foreach (var e in entities)
+        {
+            var built = BuildRow(e, rules);
+            if (built is not null) rows.Add(built);
+        }
         if (rows.Count == 0) return null;
+
+        bool filterable = !rules.IncludeAll && rows.Count > rules.ShowAllUpTo;
+        if (filterable)
+        {
+            foreach (var r in rows) r.Row.IsMain = r.Qualifies;
+            int lack = rules.ShowAllUpTo - rows.Count(r => r.Qualifies);
+            if (lack > 0)
+            {
+                // 補う順：参加の多い順 → 最初の参加の早い順 → 同じ話ならクレジットで先に出ている順 → 名前。
+                foreach (var r in rows.Where(r => !r.Qualifies)
+                             .OrderByDescending(r => r.CreditCount)
+                             .ThenBy(r => r.First)
+                             .ThenBy(r => r.FirstPos)
+                             .ThenBy(r => r.Row.EntityName, StringComparer.Ordinal)
+                             .Take(lack))
+                    r.Row.IsMain = true;
+            }
+        }
 
         var ordered = rows
             .OrderBy(r => r.First)
@@ -164,9 +188,10 @@ internal sealed class RoleTimelineBuilder
 
         return new RoleTimelineModel
         {
-            // 説明文はページの種類ごとの決まりをそのまま書く（登録状況で変わる出し分けはしない）。
-            Note = rules.Note,
-            NoteShort = rules.NoteShort,
+            // 絞り込みの条件はページの種類ごとの決まりをそのまま書く（登録状況で変わる出し分けはしない）。
+            IsFilterable = filterable,
+            FilterTip = filterable ? rules.FilterTip : Array.Empty<string>(),
+            MainCount = rows.Count(r => r.Row.IsMain),
             Legend = legend,
             Bands = _bands,
             Ticks = _ticks,
@@ -175,25 +200,15 @@ internal sealed class RoleTimelineBuilder
         };
     }
 
-    /// <summary>候補ごとに <see cref="BuildRow"/> を通し、描く行のあるものだけを集める。</summary>
-    private List<(RoleTimelineRow Row, DateOnly First, DateOnly Last, long FirstPos)> BuildRows(
-        IEnumerable<RoleTimelineEntity> entities, RoleTimelineRules rules, bool forceInclude)
-    {
-        var rows = new List<(RoleTimelineRow Row, DateOnly First, DateOnly Last, long FirstPos)>();
-        foreach (var e in entities)
-        {
-            var built = BuildRow(e, rules, forceInclude);
-            if (built is not null) rows.Add(built.Value);
-        }
-        return rows;
-    }
+    /// <summary>組み立てた 1 行と、並び・主な方の選び出しに使う値。</summary>
+    /// <param name="Qualifies">ページの決まり（<see cref="RoleTimelineRules"/>）を満たすか。</param>
+    /// <param name="CreditCount">描ける参加の数（TV の話数・映画の本数・歌の曲数など）。主な方を補う順に使う。</param>
+    private sealed record BuiltRow(RoleTimelineRow Row, DateOnly First, DateOnly Last, long FirstPos, int CreditCount, bool Qualifies);
 
     /// <summary>
-    /// 1 エンティティの参加を日付順に並べて「続けて参加した期間」に区切り、描く行を作る。
-    /// 描ける参加が無いものと、<paramref name="forceInclude"/> が false でページの決まり（<paramref name="rules"/>）を満たさないものは null。
+    /// 1 エンティティの参加を日付順に並べて「続けて参加した期間」に区切り、描く行を作る。描ける参加が無いものは null。
     /// </summary>
-    private (RoleTimelineRow Row, DateOnly First, DateOnly Last, long FirstPos)? BuildRow(
-        RoleTimelineEntity e, RoleTimelineRules rules, bool forceInclude)
+    private BuiltRow? BuildRow(RoleTimelineEntity e, RoleTimelineRules rules)
     {
         var credits = new List<Credit>(e.Episodes.Count + e.MovieSeriesIds.Count + e.Songs.Count + e.Bgms.Count + e.Products.Count);
         foreach (var (sid, eid) in e.Episodes)
@@ -239,10 +254,9 @@ internal sealed class RoleTimelineBuilder
         // 期間の終わり：最後の参加の放送枠の終わり（映画・歌・劇伴・盤は日付の翌日）。
         static DateOnly ChainEnd(List<Credit> chain)
             => chain.Max(c => c.Kind == CreditKind.Tv ? c.Date.AddDays(EpisodeSpanDays) : c.Date.AddDays(1));
-        bool include = forceInclude || rules.IncludeAll
+        bool qualifies = rules.IncludeAll
             || (rules.IncludeOpeningCredit && e.HasOpeningCredit)
             || MaxCreditsInWindow(credits, rules.WindowDays) >= rules.MinCreditsInWindow;
-        if (!include) return null;
 
         var spans = new List<RoleTimelineMark>(chains.Count);
         var segments = new List<RoleTimelineMark>();
@@ -333,7 +347,7 @@ internal sealed class RoleTimelineBuilder
             PeriodLabel = string.Join("、", periodLabels),
             WorksText = string.Join("\n", works.OrderBy(w => w.Sort).Select(w => w.Text))
         };
-        return (row, chains[0][0].Date, chains[^1][^1].Date, e.FirstSortPos);
+        return new BuiltRow(row, chains[0][0].Date, chains[^1][^1].Date, e.FirstSortPos, credits.Count, qualifies);
     }
 
     /// <summary>
@@ -415,47 +429,59 @@ internal sealed class RoleTimelineBuilder
 /// <param name="IncludeAll">決まりによらず候補をすべて載せるか。</param>
 /// <param name="ShowAllUpTo">描ける参加のある候補がこの数以下なら、決まりによらずすべて載せる（<paramref name="IncludeAll"/> のページでは使わない）。</param>
 /// <param name="Verb">凡例の動詞（「担当」「出演」「参加」）。</param>
-/// <param name="Note">
-/// 年表タブの先頭に右寄せの小さな字で出す注記（行を絞る決まり）。全員を載せるページは空で、注記を出さない。ページの種類ごとに固定で、登録状況（どの人が載ったか・誰がオープニングに
-/// 出ているか）では変えない（例：演出助手もいずれオープニングに出ることがあるので、役職ページはどれも同じ文にする）。
+/// <param name="FilterTip">
+/// 「主な方のみ」のスイッチの説明の吹き出しに出す、主な方の条件（1 要素 1 行）。全員を載せるページは空。ページの種類ごとに固定で、
+/// 登録状況（どの人が載ったか・誰がオープニングに出ているか）では変えない。
 /// </param>
-/// <param name="NoteShort">狭い画面（640px 以下）で注記の代わりに出す、1 行に収まる短い言い回し。</param>
 internal sealed record RoleTimelineRules(
-    int MaxGapDays, int WindowDays, int MinCreditsInWindow, bool IncludeOpeningCredit, bool IncludeAll, int ShowAllUpTo, string Verb, string Note, string NoteShort)
+    int MaxGapDays, int WindowDays, int MinCreditsInWindow, bool IncludeOpeningCredit, bool IncludeAll, int ShowAllUpTo, string Verb,
+    IReadOnlyList<string> FilterTip)
 {
-    /// <summary>全員を載せる決まりのページの説明文（出さない）。</summary>
-    public const string AllNote = "";
+    /// <summary>全員を載せる決まりのページの条件（スイッチを出さない）。</summary>
+    private static readonly IReadOnlyList<string> NoFilter = Array.Empty<string>();
 
-    /// <summary>決まりで絞るページでも全員を載せる候補の数の上限。</summary>
+    /// <summary>決まりで絞るページでも全員を載せる候補の数の上限（主な方を補う数でもある）。</summary>
     public const int DefaultShowAllUpTo = 10;
 
-    /// <summary>役職詳細：メインスタッフ（オープニングに出た）と、1 年間（52 週）に 4 回以上担当したスタッフ（細線は 13 週以内の間隔でつなぐ）。候補が 10 以下なら全員。</summary>
+    /// <summary>役職詳細：メインスタッフ（役職を問わずオープニングに出た）と、1 年間（52 週）に 4 回以上担当したスタッフ（細線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules Staff = new(
         91, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: true, IncludeAll: false, DefaultShowAllUpTo, "担当",
-        "10名を超える場合はメインスタッフまたは年間4回以上担当された方のみ",
-        "10名超の場合はメインまたは年4回以上担当の方のみ");
+        new[]
+        {
+            "次のいずれかに当たる方",
+            "・オープニングにクレジットされたことがある",
+            "・52週のあいだに4回以上担当した（TVの話数・映画の本数）",
+            $"{DefaultShowAllUpTo}名に満たないときは担当回数の多い方から補います",
+            "（同じ回数ならクレジットが早い方、同じ話なら先に出ている方）"
+        });
 
-    /// <summary>声の出演：1 年間（52 週）に 4 回以上出演した声優（細線は 4 週以内の間隔でつなぐ）。候補が 10 以下なら全員。</summary>
+    /// <summary>声の出演：1 年間（52 週）に 4 回以上出演した声優（細線は 4 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules VoiceCast = new(
         28, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: false, IncludeAll: false, DefaultShowAllUpTo, "出演",
-        "10名を超える場合は年間4回以上出演された方のみ",
-        "10名超の場合は年4回以上出演の方のみ");
+        new[]
+        {
+            "52週のあいだに4回以上出演した方（TVの話数・映画の本数）",
+            $"{DefaultShowAllUpTo}名に満たないときは出演回数の多い方から補います",
+            "（同じ回数ならクレジットが早い方、同じ話なら先に出ている方）"
+        });
 
-    /// <summary>作詞・作曲・編曲の役職詳細：1 年間（52 週）に 2 曲以上担当した人物（細線は 13 週以内の間隔でつなぐ）。候補が 10 以下なら全員。</summary>
+    /// <summary>作詞・作曲・編曲の役職詳細：1 年間（52 週）に 2 曲以上担当した人物（細線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules SongWriter = new(
         91, WindowDays: 364, MinCreditsInWindow: 2, IncludeOpeningCredit: false, IncludeAll: false, DefaultShowAllUpTo, "担当",
-        "10名を超える場合は年間2曲以上担当された方のみ",
-        "10名超の場合は年2曲以上担当の方のみ");
+        new[]
+        {
+            "52週のあいだに2曲以上担当した方",
+            $"{DefaultShowAllUpTo}名に満たないときは担当曲数の多い方から補います",
+            "（同じ曲数なら担当が早い方）"
+        });
 
     /// <summary>音楽の役職詳細（演奏など）：一覧に載る人物・団体すべて（細線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules MusicRole = new(
-        91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, ShowAllUpTo: 0, "担当",
-        AllNote, AllNote);
+        91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, ShowAllUpTo: 0, "担当", NoFilter);
 
     /// <summary>歌唱：一覧に載る歌手・キャラクターすべて（続けて参加した期間の線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules Singers = new(
-        91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, ShowAllUpTo: 0, "参加",
-        AllNote, AllNote);
+        91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, ShowAllUpTo: 0, "参加", NoFilter);
 }
 
 /// <summary>線表に載せる候補 1 つ分（<see cref="RoleTimelineBuilder.Build"/> の入力）。</summary>
@@ -474,7 +500,7 @@ internal sealed class RoleTimelineEntity
     /// クレジットの位置（その話のクレジットで上に出ている順）、歌唱・作詞作曲編曲は初参加の録音、音楽の役職詳細は最初の担当先の日付。
     /// </summary>
     public long FirstSortPos { get; init; }
-    /// <summary>オープニングのクレジットに出たことがあるか（役職詳細のメインスタッフの判定）。</summary>
+    /// <summary>役職を問わずオープニングのクレジットに出たことがあるか（役職詳細のメインスタッフの判定）。</summary>
     public bool HasOpeningCredit { get; init; }
     /// <summary>参加した TV 系の話 (series_id, episode_id)。</summary>
     public IReadOnlyCollection<(int SeriesId, int EpisodeId)> Episodes { get; init; } = Array.Empty<(int, int)>();
@@ -496,10 +522,12 @@ internal readonly record struct RoleTimelinePoint(DateOnly Date, string Title);
 /// <summary>線表の表示モデル。位置・幅は軸の左端からの百分率（小数 2 桁の文字列）。</summary>
 internal sealed class RoleTimelineModel
 {
-    /// <summary>年表タブの先頭に出す説明文（載せる決まり）。</summary>
-    public string Note { get; set; } = "";
-    /// <summary>狭い画面（640px 以下）で <see cref="Note"/> の代わりに出す短い注記。</summary>
-    public string NoteShort { get; set; } = "";
+    /// <summary>「主な方のみ」のスイッチを出すか（候補が <see cref="RoleTimelineRules.ShowAllUpTo"/> を超える、決まりで絞るページ）。</summary>
+    public bool IsFilterable { get; set; }
+    /// <summary>スイッチの説明の吹き出しに出す、主な方の条件（1 要素 1 行）。</summary>
+    public IReadOnlyList<string> FilterTip { get; set; } = Array.Empty<string>();
+    /// <summary>主な方の行の数（スイッチの横の「14 / 38名」の左。右は <see cref="Rows"/> の数）。</summary>
+    public int MainCount { get; set; }
     /// <summary>凡例（描いた印の種類だけ）。</summary>
     public IReadOnlyList<RoleTimelineLegendItem> Legend { get; set; } = Array.Empty<RoleTimelineLegendItem>();
     /// <summary>TV シリーズの帯（交互に薄く塗る）。</summary>
@@ -550,6 +578,8 @@ internal sealed class RoleTimelineRow
     /// <summary>内訳で名前の下に添える 1 行（無ければ空文字）。</summary>
     public string EntitySubLabel { get; set; } = "";
     public string EntityUrl { get; set; } = "";
+    /// <summary>主な方の行か（「主な方のみ」のスイッチが入っているときに見せる行。スイッチの無いページではすべて true）。</summary>
+    public bool IsMain { get; set; } = true;
     /// <summary>続けて参加した期間（2 件以上つながったもの）の細線。</summary>
     public IReadOnlyList<RoleTimelineMark> Spans { get; set; } = Array.Empty<RoleTimelineMark>();
     /// <summary>TV の話の帯（話数が続く間はひと続き）。</summary>

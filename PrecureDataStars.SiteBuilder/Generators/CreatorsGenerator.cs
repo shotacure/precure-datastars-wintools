@@ -110,15 +110,15 @@ public sealed class CreatorsGenerator
 
     /// <summary>各一覧に載せた人物・企業/団体の記録。生成の最後に <see cref="BuildContext.CreatorLists"/> へ差し込む。</summary>
     private readonly CreatorListMembership _lists = new();
-    /// <summary>役職詳細・声の出演一覧の年表に行として載った人物・企業/団体の URL（OGP カードの年表を出すかの判定に渡す）。</summary>
+    /// <summary>役職詳細・声の出演一覧の年表に主な方の行として載った人物・企業/団体の URL（OGP カードの年表を出すかの判定に渡す）。</summary>
     private readonly HashSet<string> _siteTimelineEntityUrls = new(StringComparer.Ordinal);
 
-    /// <summary>役職詳細・声の出演一覧の年表に載った行の URL を記録し、年表をそのまま返す。</summary>
+    /// <summary>役職詳細・声の出演一覧の年表に主な方として載った行の URL を記録し、年表をそのまま返す。</summary>
     private RoleTimelineModel? RecordTimelineRows(RoleTimelineModel? timeline)
     {
         if (timeline is not null)
             foreach (var row in timeline.Rows)
-                if (!string.IsNullOrEmpty(row.EntityUrl)) _siteTimelineEntityUrls.Add(row.EntityUrl);
+                if (row.IsMain && !string.IsNullOrEmpty(row.EntityUrl)) _siteTimelineEntityUrls.Add(row.EntityUrl);
         return timeline;
     }
 
@@ -2791,7 +2791,7 @@ public sealed class CreatorsGenerator
 
         public HashSet<int> SeriesIds { get; } = new();
 
-        /// <summary>集計対象の関与にオープニングのクレジット（credit_kind = 'OP'。TV・映画とも）のものがあるか。役職詳細の線表で、メインスタッフとして回数によらず載せる判定に使う。</summary>
+        /// <summary>受け取った関与（集計対象かどうか・役職を問わない）にオープニングのクレジット（credit_kind = 'OP'。TV・映画とも）のものがあるか。役職詳細の線表で、メインスタッフとして回数によらず主な方に入れる判定に使う。</summary>
         public bool HasOpeningCredit { get; private set; }
 
         /// <summary>エンティティ全体の最早関与。</summary>
@@ -2812,6 +2812,9 @@ public sealed class CreatorsGenerator
         /// <summary>名義 <paramref name="aliasId"/> の関与を 1 件積む。<paramref name="rep"/> が null の関与は集計対象外として捨てる。</summary>
         public void Offer(int aliasId, Involvement inv, string? rep)
         {
+            // メインスタッフの判定は役職を問わないので、集計対象外の関与もオープニングかどうかだけは見る。
+            if (inv.IsMainCredit && string.Equals(inv.CreditKind, "OP", StringComparison.Ordinal))
+                HasOpeningCredit = true;
             if (rep is null) return;
             bool isMovie = _owner._ctx.IsMovieKindSeries(inv.SeriesId);
             if (isMovie)
@@ -2819,8 +2822,6 @@ public sealed class CreatorsGenerator
             else
                 EpisodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
             SeriesIds.Add(inv.SeriesId);
-            if (inv.IsMainCredit && string.Equals(inv.CreditKind, "OP", StringComparison.Ordinal))
-                HasOpeningCredit = true;
             First.Offer(inv);
             if (!_firstByAlias.TryGetValue(aliasId, out var aliasFirst))
             {

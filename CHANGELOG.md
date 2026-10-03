@@ -2,7 +2,7 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
-### 開発中（次回リリース）
+### v1.18.2 (2026-10-03)
 
 - **ツール：SiteBuilder の OGP カード画像を作り置きにした（無変更の再ビルドが 87 秒 → 11 秒）**：全 4,600 ページのカードを毎回描いていたのをやめ、テロップ画像と同じく出力の外の置き場（App.config の `OgCardCacheDir`）に、カードの材料一式（`OgCardSpec` の JSON）・サイト名・設定の書体のファイル名・描き方の版（`OgCardRenderer.CardRenderVersion`）から作った鍵（`OgCardRenderer.CacheKey`）のファイル名で置き、同じ鍵があれば描かずに出力へ写す。書体はファイルの中身ではなく名前で見る。指定の書体が無く既定の書体で描いたカードは作り置きに入れず出力へ直接置く。全体ビルドの最後に、今回のどのページにも使わなかった作り置きを消す。`--refresh-og` で作り置きを使わずに描き直す（`--page` と併用すれば対象のページだけ）。計測では、カードの描画がビルド時間のほぼ全部（4,599 枚でスレッド合計 670 秒）を占め、DB の読み込みは 0.8 秒だった。
 - **ツール：SiteBuilder の作り置きの鍵に、描画コード一式のハッシュを含めるようにした**：OGP カードとテロップ画像の描き方（余白・配色・組み方など）をコードで変えたとき、版の数字を手で上げなくても鍵が変わって描き直しになる。ハッシュは `PrecureDataStars.SiteBuilder.csproj` の `GenerateOgRenderSourceStamp` がビルドのたびに `Rendering/OgCard*.cs`・`OgTextShaper.cs`・`SubtitleTelop*.cs`・`InstalledFontIndex.cs` から求め、生成する `OgRenderSourceStamp.Value` に埋め込む。

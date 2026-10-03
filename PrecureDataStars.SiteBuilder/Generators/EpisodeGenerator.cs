@@ -852,6 +852,8 @@ public sealed class EpisodeGenerator
             TitleFontFamily = series.FontSubtitle ?? "",
             // サブタイトルは本編のテロップと同じく、白い字に黒フチと影で組む。
             TitleTelopStyle = true,
+            // 振り仮名はサブタイトルテロップ（エピソード詳細のテロップ画像）と同じ作品ごとの組み方で描く。
+            TitleRubyProfile = SubtitleTelopProfile.FromSeries(series),
             BandColorHex = OgCardColors.Episode,
             Watermark = $"第{ep.SeriesEpNo}話",
             WatermarkAside = series.Title,

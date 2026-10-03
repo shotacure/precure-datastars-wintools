@@ -4,8 +4,10 @@
 
 ### 開発中（次回リリース）
 
-- **サイト：エピソード詳細のサブタイトル欄を、本編のサブタイトルテロップの体裁の画像にした**：作品のテロップ書体（`series.font_subtitle`）で、OGP カードと同じ白い字・黒フチ・右下の黒い影を付けた背景透過の PNG（`/subtitles/{シリーズslug}/{話数}.png`）を描き、欄の中央に置く。改行は `title_rich_html` の `<br>` のとおりにし、行ごとに中央揃え。振り仮名はフチと影を親字と同じ幅で付け、書体・大きさ・高さ・斜体・行間・はみ出し方・置き方（1 字ずつ／熟語でひと続き／熟語の幅に均等）を作品ごとに `series` の新しい列で持てるようにした（全作品の値を本編のテロップに合わせて入れた）。親字より長い振り仮名は、振り仮名の無い隣の字の上へはみ出させ、それでも収まらないときだけ長体をかける。幅に収まらない行は長体（80% まで）、それでも入らなければ字を小さくする。字の大きさは PC で 45px、スマホでは欄の幅まで縮め、上限を 24px にする。ビルドの時点で解禁前の話とサブタイトル未確定の話は、これまでどおり HTML で出す。
-- **DB：`series` にサブタイトルのテロップ画像の組み方の列を追加した**（`db/migrations/v1.17.1_add_series_subtitle_telop.sql`）：`font_subtitle_ruby` / `subtitle_ruby_size_ratio` / `subtitle_ruby_raise_ratio` / `subtitle_ruby_oblique_deg` / `subtitle_line_gap_ratio` / `subtitle_ruby_overhang_ratio` / `subtitle_ruby_line_edge` / `subtitle_ruby_grouping`。いずれも NULL 可で、NULL なら既定値で組む。
+- **サイト：エピソード詳細のサブタイトル欄を、本編のサブタイトルテロップの体裁の画像にした**：作品のテロップ書体（`series.font_subtitle`）で、OGP カードと同じ白い字・黒フチ・右下の黒い影を付けた背景透過の PNG（`/subtitles/{シリーズslug}/{話数}.png`）を描き、欄の中央に置く。改行は `title_rich_html` の `<br>` のとおりにし、行ごとに中央揃え。振り仮名はフチと影を親字と同じ幅で付け、書体・大きさ・高さ・斜体・行間・はみ出し方・置き方（1 字ずつ／熟語でひと続き／熟語の幅に均等）を作品ごとに `series` の新しい列で持てるようにした（全作品の値を本編のテロップに合わせて入れた）。親字より長い振り仮名は、振り仮名の無い隣の字の上へはみ出させ、それでも収まらないときだけ長体をかける。親字と振り仮名はひとまとまりとして影・フチ・白い字の順に重ね、振り仮名のフチが親字にかからないようにした。字間も作品ごとに持ち（詰め方・親字と振り仮名の字間に足す空き）、本編のゆるめの字詰めに寄せた。行の途中の単独の「！」「？」は全角の幅で置く。3 行の組には別の行間を持てる。幅に収まらない行は長体（80% まで）、それでも入らなければ字を小さくする。字の大きさは PC で 45px、スマホでは欄の幅まで縮め、上限を 24px にする。ビルドの時点で解禁前の話とサブタイトル未確定の話は、これまでどおり HTML で出す。
+- **サイト：エピソードの OGP カードの振り仮名を、サブタイトルのテロップ画像と同じ組み方にした**：作品ごとの書体・大きさ・高さ・斜体・はみ出し方・置き方・字間で、親字と同じ白い字・黒フチ・影を付けて描く。振り仮名以外（親字・行の高さ・ほかの要素）は変えていない。
+- **サイト：エピソード詳細の歴代記録バッジを、h1 の直下から基本情報の下へ移した**：バッジは回によって出たり出なかったりするので、h1 の直下にあると前後話ナビの位置が回ごとに上下し、続けてクリックしにくかった。
+- **DB：`series` にサブタイトルのテロップ画像の組み方の列を追加した**（`db/migrations/v1.18.0_add_series_subtitle_telop.sql`）：`subtitle_kerning` / `subtitle_letter_spacing_em` / `subtitle_ruby_letter_spacing_em` / `font_subtitle_ruby` / `subtitle_ruby_size_ratio` / `subtitle_ruby_raise_ratio` / `subtitle_ruby_oblique_deg` / `subtitle_line_gap_ratio` / `subtitle_line_gap_ratio_3` / `subtitle_ruby_overhang_ratio` / `subtitle_ruby_line_edge` / `subtitle_ruby_grouping`。いずれも NULL 可で、NULL なら既定値で組む。
 
 ### v1.17.0 (2026-10-03)
 

@@ -9669,13 +9669,13 @@ body.has-art-track-bar {
   color: var(--muted);
 }
 
-/* ──────── 歴代記録バッジ（エピソード詳細の h1 直下） ────────
+/* ──────── 歴代記録バッジ（エピソード詳細の基本情報の下） ────────
    歴代 10 位以内（is-global：金）とシリーズ内の最長・最短（is-series：桃）のピル。 */
 .ep-record-badges {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4em;
-  margin: -0.2em 0 1em;
+  margin: 0.8em 0 0;
 }
 .ep-record-badge {
   display: inline-flex;

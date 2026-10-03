@@ -104,6 +104,18 @@ public sealed class Series
 
     // ── サブタイトルのテロップ画像の組み方（NULL は既定値で組む。親字の書体は FontSubtitle）──
 
+    /// <summary>
+    /// 字間の組み方。<c>PROPORTIONAL</c>＝書体の詰め情報（なければ字面）で詰める / <c>MONO</c>＝ベタ組み（字送り幅のまま）。
+    /// NULL なら PROPORTIONAL。
+    /// </summary>
+    public string? SubtitleKerning { get; set; }
+
+    /// <summary>親字の字と字のあいだに足す空き（字の大きさに対する比、負なら詰める）。NULL なら 0。</summary>
+    public decimal? SubtitleLetterSpacingEm { get; set; }
+
+    /// <summary>振り仮名の字と字のあいだに足す空き（振り仮名の大きさに対する比）。NULL なら 0。</summary>
+    public decimal? SubtitleRubyLetterSpacingEm { get; set; }
+
     /// <summary>振り仮名の書体名（インストール済み書体の名前）。NULL なら親字と同じ書体。</summary>
     public string? FontSubtitleRuby { get; set; }
 
@@ -118,6 +130,9 @@ public sealed class Series
 
     /// <summary>行と行のあいだの空き（親字の大きさに対する比）。NULL なら振り仮名があれば 0.280、なければ 0.220。</summary>
     public decimal? SubtitleLineGapRatio { get; set; }
+
+    /// <summary>3 行以上のときの行と行のあいだの空き（親字の大きさに対する比）。NULL なら <see cref="SubtitleLineGapRatio"/> と同じ。</summary>
+    public decimal? SubtitleLineGapRatio3 { get; set; }
 
     /// <summary>親字より長い振り仮名が、振り仮名の無い隣の字へはみ出してよい最大の幅（片側、親字の大きさに対する比）。NULL なら振り仮名 1 字分（振り仮名の大きさと同じ）。</summary>
     public decimal? SubtitleRubyOverhangRatio { get; set; }

@@ -11,16 +11,6 @@
   <h1>第{{ Episode.SeriesEpNo }}話「{{ Episode.SubtitleGuardedH1Html }}」</h1>
   {{~ end ~}}
 
-  {{## 歴代記録のバッジ。アバンタイトル・A パート・B パートの尺が歴代 10 位以内、またはシリーズ内で
-       最長・最短の回にだけ出す（順位の根拠はパート尺統計セクション、リンク先は該当のランキング）。 ##}}
-  {{~ if (array.size RecordBadges) > 0 ~}}
-  <p class="ep-record-badges" aria-label="歴代記録">
-    {{~ for b in RecordBadges ~}}
-    <a class="ep-record-badge {{ b.Css }}" href="{{ b.Url }}">{{ b.Label | html.escape }}</a>
-    {{~ end ~}}
-  </p>
-  {{~ end ~}}
-
   {{## エピソード詳細では、サブタイトル文字情報・パート尺統計の各セクション末尾に出る
        BuildPointCaption（参照点キャプション）で「いま現在の参照点」を案内する。
        それ以外の要素（基本情報・クレジット・主題歌・使用音声 等）は登録の有無で表示が切り替わるだけで
@@ -164,6 +154,16 @@
       {{~ end ~}}
       {{~ end ~}}
     </div>
+    {{## 歴代記録のバッジ。アバンタイトル・A パート・B パートの尺が歴代 10 位以内、またはシリーズ内で
+         最長・最短の回にだけ出す（順位の根拠はパート尺統計セクション、リンク先は該当のランキング）。
+         回によって出たり出なかったりするので、前後話ナビの位置が回ごとに動かないよう、ページ上部ではなくここに置く。 ##}}
+    {{~ if (array.size RecordBadges) > 0 ~}}
+    <p class="ep-record-badges" aria-label="歴代記録">
+      {{~ for b in RecordBadges ~}}
+      <a class="ep-record-badge {{ b.Css }}" href="{{ b.Url }}">{{ b.Label | html.escape }}</a>
+      {{~ end ~}}
+    </p>
+    {{~ end ~}}
   </section>
 
   {{## スタッフ。

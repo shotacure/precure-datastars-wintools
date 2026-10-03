@@ -3,7 +3,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
 /// <summary>
-/// 作品ごとのサブタイトルテロップの組み方。親字の書体は <c>series.font_subtitle</c> で、ここでは振り仮名の書体・斜体・
+/// 作品ごとのサブタイトルテロップの組み方。親字の書体は <c>series.font_subtitle</c> で、ここでは字間、振り仮名の書体・斜体・
 /// 大きさと高さ、行間、親字より長い振り仮名の置き方を持つ。値は <c>series</c> の列から作り（<see cref="FromSeries"/>）、
 /// 列が NULL の項目は既定値で組む。
 /// </summary>
@@ -11,6 +11,15 @@ public sealed record SubtitleTelopProfile
 {
     /// <summary>すべて既定値の組み方。</summary>
     public static readonly SubtitleTelopProfile Default = new();
+
+    /// <summary>親字・振り仮名をベタ組み（字送り幅のまま、詰めない）にするか。false なら書体の詰め情報（なければ字面）で詰める。</summary>
+    public bool Solid { get; init; }
+
+    /// <summary>親字の字と字のあいだに足す空き（字の大きさに対する比）。負なら詰める。</summary>
+    public float LetterSpacingEm { get; init; }
+
+    /// <summary>振り仮名の字と字のあいだに足す空き（振り仮名の大きさに対する比）。</summary>
+    public float RubyLetterSpacingEm { get; init; }
 
     /// <summary>振り仮名の書体名（インストール済み書体の名前）。空なら親字と同じ書体を使う。</summary>
     public string RubyFontFamily { get; init; } = "";
@@ -30,6 +39,9 @@ public sealed record SubtitleTelopProfile
     /// <summary>行と行のあいだの空き（親字の大きさに対する比）。null なら既定の空きで組む。</summary>
     public float? LineGapRatio { get; init; }
 
+    /// <summary>3 行以上の組での行と行のあいだの空き（親字の大きさに対する比）。null なら <see cref="LineGapRatio"/> と同じ。</summary>
+    public float? LineGapRatio3 { get; init; }
+
     /// <summary>
     /// 親字より長い振り仮名が、振り仮名の無い隣の字へはみ出してよい最大の幅（片側、親字の大きさに対する比）。
     /// null なら振り仮名 1 字分（<see cref="RubySizeRatio"/> と同じ）。
@@ -48,11 +60,15 @@ public sealed record SubtitleTelopProfile
     /// <summary>シリーズの列から組み方を作る。NULL の列は既定値のまま。</summary>
     public static SubtitleTelopProfile FromSeries(Series series) => new()
     {
+        Solid = string.Equals(series.SubtitleKerning, "MONO", StringComparison.OrdinalIgnoreCase),
+        LetterSpacingEm = (float)(series.SubtitleLetterSpacingEm ?? 0m),
+        RubyLetterSpacingEm = (float)(series.SubtitleRubyLetterSpacingEm ?? 0m),
         RubyFontFamily = series.FontSubtitleRuby ?? "",
         RubyObliqueDegrees = (float)(series.SubtitleRubyObliqueDeg ?? 0m),
         RubySizeRatio = series.SubtitleRubySizeRatio is decimal size ? (float)size : Default.RubySizeRatio,
         RubyRaiseRatio = series.SubtitleRubyRaiseRatio is decimal raise ? (float)raise : Default.RubyRaiseRatio,
         LineGapRatio = series.SubtitleLineGapRatio is decimal gap ? (float)gap : null,
+        LineGapRatio3 = series.SubtitleLineGapRatio3 is decimal gap3 ? (float)gap3 : null,
         RubyOverhangRatio = series.SubtitleRubyOverhangRatio is decimal overhang ? (float)overhang : null,
         RubyOverhangLineStart = string.Equals(series.SubtitleRubyLineEdge, "OVERHANG", StringComparison.OrdinalIgnoreCase),
         RubyOverhangLineEnd = !string.Equals(series.SubtitleRubyLineEdge, "ALIGN", StringComparison.OrdinalIgnoreCase),

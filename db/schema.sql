@@ -1603,8 +1603,9 @@ CREATE TABLE `companies` (
 
 --
 -- Table structure for table `company_aliases`
--- 企業の名義（屋号）マスタ。屋号変更や分社化等で前後の屋号を辿れるよう
+-- 企業の名義（屋号）マスタ。同じ企業の屋号変更・社名変更で前後の屋号を辿れるよう
 -- predecessor_alias_id / successor_alias_id を持つ（FK は自テーブルへの自参照）。
+-- 別企業どうしの系譜（分社化・合併など）と所属は company_relations で持つ。
 --
 DROP TABLE IF EXISTS `company_aliases`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1634,6 +1635,37 @@ CREATE TABLE `company_aliases` (
   CONSTRAINT `fk_company_aliases_predecessor` FOREIGN KEY (`predecessor_alias_id`) REFERENCES `company_aliases` (`alias_id`)   ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_company_aliases_successor`   FOREIGN KEY (`successor_alias_id`)   REFERENCES `company_aliases` (`alias_id`)   ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `company_relations`
+-- 企業・団体どうしの関係。PARENT は from が親・to が子（子会社・部署・編集部・雑誌など）、
+-- SUCCESSOR は from の事業を to が引き継いだ（会社分割・合併・事業譲渡など、別法人どうしの系譜）。
+-- 同じ会社の改名は company_aliases の predecessor / successor で持ち、ここには入れない。
+--
+DROP TABLE IF EXISTS `company_relations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `company_relations` (
+  `relation_id`      int                                                                NOT NULL AUTO_INCREMENT,
+  `from_company_id`  int                                                                NOT NULL,
+  `to_company_id`    int                                                                NOT NULL,
+  `relation_kind`    enum('PARENT','SUCCESSOR')                                         NOT NULL,
+  `relation_label`   varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `valid_from`       date DEFAULT NULL,
+  `valid_to`         date DEFAULT NULL,
+  `notes`            text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`       varchar(64) DEFAULT NULL,
+  `updated_by`       varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`relation_id`),
+  UNIQUE KEY `uq_company_relations` (`from_company_id`, `to_company_id`, `relation_kind`, `valid_from`),
+  KEY `ix_company_relations_to` (`to_company_id`),
+  CONSTRAINT `fk_company_relations_from` FOREIGN KEY (`from_company_id`) REFERENCES `companies` (`company_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_company_relations_to`   FOREIGN KEY (`to_company_id`)   REFERENCES `companies` (`company_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `ck_company_relations_period`   CHECK (`valid_from` IS NULL OR `valid_to` IS NULL OR `valid_from` <= `valid_to`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='企業・団体どうしの関係（所属・事業の引き継ぎ）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

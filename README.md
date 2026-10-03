@@ -648,7 +648,7 @@ Card / Tier / Group
 - `{ROLE_LINK:code=MANGA}` は役職コードから役職詳細ページへのリンク化済み HTML を太字付きで埋め込むプレースホルダ。SiteBuilder 側は `<strong><a href="/creators/roles/manga/">漫画</a></strong>`、Catalog 側プレビューは `<strong>漫画</strong>`（リンクなし）を出力。`<strong>` ラップはレンダラ側で一律付与
 - `{ROLE:MANGA.PERSONS}` は兄弟役職参照の構文。同 Group 内で `role_code='MANGA'` の役職を 1 つ探し、その役職配下の Block 群を一巡りして `{PERSONS}` を Block ごとに評価
 - `{ROLE:CODE.PLACEHOLDER}` の 1 段ネスト不可（無限ループ防止）
-- 雑誌名（「なかよし」など）は屋号マスタ `company_aliases` に別エントリとして登録する運用
+- 雑誌名（「なかよし」など）は雑誌ごとの団体（`companies`）の屋号として登録し（誌名と「〜編集部」を同じ団体の屋号に持つ）、出版社とは `company_relations`（`PARENT`）でつなぐ
 - `{COMPANIES:wrap=""}` の wrap オプションは `「」` の括弧文字
 - 漫画家共著の場合は `MANGA` 役職下の Block 内に PERSON エントリを 2 件並べる
 
@@ -893,6 +893,8 @@ Role: PRODUCTION 制作 (order 2)
 主題歌・劇伴スタッフ（`song_credits` / `song_recording_singers` / `bgm_cue_credits` 由来）は曲・録音単位のマスタから `episode_theme_songs` 経由でエピソードに紐づくため、それ自体はクレジット階層上の物理位置を持たない。`CreditInvolvementIndex` は階層走査時に THEME_SONG 形式の役職ブロックへ到達した時点の `CreditSeq` を「(エピソード, 親 credit の kind=OP/ED)」をキーに控え、主題歌スタッフへ `theme_kind`（OP/ED/INSERT）に応じてその位置を継承させる（OP 主題歌→OP クレジット内の主題歌ブロック位置、ED→ED、INSERT 等の親 kind 非対応は同エピソード最初の主題歌ブロック位置にフォールバック、主題歌ブロックが階層に無ければクレジット末尾相当）。劇伴は同エピソードの主題歌ブロック位置→末尾相当の順でフォールバック。
 
 人物詳細は「本編クレジット」と「音楽クレジット」を別のセクションにする。本編クレジットには本編のクレジット階層に載った関与だけを出し（本編の「音楽」の役職はこちら）、主題歌・挿入歌経由の作家・歌唱と劇伴の作曲・編曲は出さない。音楽クレジットは本編クレジットの「役職 → シリーズの枠」と同じ見た目で、区分（作詞・作曲・編曲 / 歌唱 / コーラスのみ / 演奏等 / レコーディング / 音盤製作。歌唱は歌・台詞で参加した曲、コーラスのみは `song_recording_singers` のコーラスだけの曲、演奏等は `music_credits` の演奏・コーラス等）を見出しにし、その下に関わった先（歌 / 劇伴 / 音盤）の枠を既定で閉じて並べる（開閉ボタンに件数。見出しと区分には件数の札 🎵 曲・🎼 劇伴・💿 盤を付け、`MusicCreditCounting` で歌は曲単位・劇伴は録音やシリーズの行単位・音盤は盤単位に重複を除いて数える）。枠の中には曲のカード（担当した区分の役職だけをバッジに持つ）・劇伴の作曲・編曲（`bgm_cue_credits` からシリーズごとの曲数つきの行。本編での使用が登録されていれば使用話数のグループも）・音盤の音楽クレジット（`music_credits` の紐付け先ごとの行）を並べる。`music_credits` は本編の関与索引（`CreditInvolvementIndex`）に入れず、エピソード詳細・スタッフ一覧・役職詳細には出ない。楽曲詳細は曲に共通の分を「演奏・レコーディング」欄に、録音ごとの分を各録音の歌唱者・出典の下に、役職バッジ + 名前のユニットを横に流して並べ（ユニットの中では改行しない。`MusicCreditHtml.RenderUnits`）、別名義のクレジットには本名義を括弧で添える（`MusicCreditViewBuilder.PrimaryNameSuffixHtml`）。人物詳細の音楽クレジットは別名義で参加した分に「〇〇 名義」を添える。劇伴詳細はセッションごとに（既定で閉じた開閉欄）、商品詳細は盤の分を「ディスクスタッフ」セクションに出す。
+
+企業/団体詳細の基本情報の下には「関係のある団体」のセクションを置き、`company_relations` から、その団体から見た前身・後継・所属（親会社・所属先）・傘下（部署・子会社・雑誌など）をファクトタイルで並べて相手の団体へリンクする（期間があれば添える）。関係が無い団体には出さない。
 
 企業/団体詳細も、本編のクレジット・メンバー履歴とは別に「音楽クレジット」のセクションを置く。見た目は本編のクレジット・メンバー履歴とそろえ、見出し・役職・人物に件数の札（🎵 曲・🎼 劇伴・💿 盤）を付け、関わった先（歌 / 劇伴 / 音盤）の枠は既定で閉じて開閉ボタンに件数を添える（歌は曲単位で、同じ曲の曲と録音への紐付けは 1 行にまとめる）。「この会社のクレジット」は会社そのものが `music_credits` に載った行（録音スタジオ・マスタリング・ストリングスなど）を、役職 → 枠（紐付け先 1 つ = 1 行、正式名と違う屋号なら「〇〇 名義」）で並べる。「所属スタッフのクレジット」は会社の屋号を所属（`affiliation_company_alias_id`、`MusicCreditIndex.ByAffiliationCompanyAlias`）として載った人物を、役職 → 人物（盤に載った名義で人物詳細へリンク）→ 枠の入れ子で並べ、誰を通じて何にクレジットされたかを示す。同じ一覧に同じ題名の盤が並ぶときは品番を添える。本編のクレジットが無く音楽クレジットだけの会社には「まだ登録されていません」の節を出さない。
 
@@ -1339,6 +1341,22 @@ series_relation_kinds ──┘    │            │
 | `display_order` | TINYINT UNSIGNED UNIQUE NULL | 表示順序 |
 
 **初期データ**: `VOCAL` / `INST` / `INST_STR` / `INST_GUIDE` / `INST_CHO` / `INST_CHO_GUIDE` / `INST_PART_VO` / `OTHER`。
+
+#### `company_relations` — 企業・団体どうしの関係
+
+クレジット系の企業・団体（`companies`）どうしの関係を「団体 → 団体」の向きと期間つきで持つ。同じ会社の改名（社名変更・屋号変更）はここでは持たず、`company_aliases` の `predecessor_alias_id` / `successor_alias_id` でつなぐ。社内の部署・編集部・雑誌のように、それ自体がクレジットに載る単位は別の団体として立て、親とこのテーブルでつなぐ（同じ団体の屋号には混ぜない）。
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `relation_id` | INT PK AUTO_INCREMENT | 主キー |
+| `from_company_id` | INT NOT NULL FK → `companies` | 関係の起点。`PARENT` なら親、`SUCCESSOR` なら前身 |
+| `to_company_id` | INT NOT NULL FK → `companies` | 関係の終点。`PARENT` なら子、`SUCCESSOR` なら後継 |
+| `relation_kind` | ENUM(`PARENT`,`SUCCESSOR`) | `PARENT`＝所属（持株会社と子会社、会社と部署・編集部・雑誌など）、`SUCCESSOR`＝事業の引き継ぎ（会社分割・合併・事業譲渡など、別法人どうしの系譜） |
+| `relation_label` | VARCHAR(32) NULL | 表示の言い回し（「部署」「子会社」「雑誌」「会社分割」など）。NULL なら種類ごとの既定の言葉 |
+| `valid_from` / `valid_to` | DATE NULL | 関係の期間（分からなければ NULL） |
+| `notes` | TEXT NULL | 備考 |
+
+開始日が終了日より後の行は CHECK 制約で作れない。自分自身を指す行は Catalog の入力画面で作らせない（`from_company_id` / `to_company_id` は外部キーの連動に使うため、MySQL の制約上 CHECK に入れられない）。`(from_company_id, to_company_id, relation_kind, valid_from)` は一意。入力は Catalog の「クレジット系マスタ管理」→ 企業タブ → 「関係…」のダイアログで、選んだ団体から見た「親（所属先）」「子（部署・子会社など）」「前身」「後継」として追加・更新・削除する（その場で DB に反映）。
 
 #### `product_companies` — 商品社名マスタ
 

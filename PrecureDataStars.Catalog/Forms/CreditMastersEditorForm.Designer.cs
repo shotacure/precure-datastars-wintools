@@ -96,6 +96,7 @@ partial class CreditMastersEditorForm
     private Button btnNewCompany = null!;
     private Button btnSaveCompany = null!;
     private Button btnDeleteCompany = null!;
+    private Button btnCompanyRelations = null!;
 
     // ─────────────── キャラクタータブ ───────────────
     private DataGridView gridCharacters = null!;
@@ -630,7 +631,9 @@ partial class CreditMastersEditorForm
         btnNewCompany = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSaveCompany = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };
         btnDeleteCompany = new Button { Text = "選択行を削除", Location = new Point(620,  82), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnNewCompany, btnSaveCompany, btnDeleteCompany });
+        // 選択中の団体の関係（親・子・前身・後継）を編集するダイアログを開く。
+        btnCompanyRelations = new Button { Text = "関係…",       Location = new Point(620, 130), Size = new Size(140, 28) };
+        pnl.Controls.AddRange(new Control[] { btnNewCompany, btnSaveCompany, btnDeleteCompany, btnCompanyRelations });
 
         tabCompanies.Controls.Add(pnl);
         tabCompanies.Controls.Add(gridCompanies);

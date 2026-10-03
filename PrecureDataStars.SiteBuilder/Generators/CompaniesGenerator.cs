@@ -17,6 +17,8 @@ public sealed class CompaniesGenerator
     private readonly CompanyAliasesRepository _aliasesRepo;
     private readonly LogosRepository _logosRepo;
     private readonly RolesRepository _rolesRepo;
+    // 団体どうしの関係（所属・事業の引き継ぎ）。詳細ページの「関係のある団体」に出す。
+    private readonly CompanyRelationsRepository _relationsRepo;
     // メンバー履歴セクションで「人物名義 → person_id 解決」をするために
     // person_alias_persons と person_aliases / persons のリポジトリを参照する。
     private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
@@ -53,6 +55,7 @@ public sealed class CompaniesGenerator
         _aliasesRepo = new CompanyAliasesRepository(factory);
         _logosRepo = new LogosRepository(factory);
         _rolesRepo = new RolesRepository(factory);
+        _relationsRepo = new CompanyRelationsRepository(factory);
         _personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
         _personAliasesRepo = new PersonAliasesRepository(factory);
         _personsRepo = new PersonsRepository(factory);
@@ -99,20 +102,96 @@ public sealed class CompaniesGenerator
         // 企業索引は「クリエイター > スタッフ」（/creators/staff/）に集約。
         // 本ジェネレータは企業・団体単体の詳細ページ（/companies/{id}/）生成に専念する。
 
+        // 団体どうしの関係。両端のどちらかが公開対象（論理削除されていない）でない行は表示に使わない。
+        var companyById = companies.ToDictionary(c => c.CompanyId);
+        var allRelations = await _relationsRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var relationsByCompany = new Dictionary<int, List<CompanyRelation>>();
+        foreach (var r in allRelations)
+        {
+            if (!companyById.ContainsKey(r.FromCompanyId) || !companyById.ContainsKey(r.ToCompanyId)) continue;
+            foreach (var id in new[] { r.FromCompanyId, r.ToCompanyId })
+            {
+                if (!relationsByCompany.TryGetValue(id, out var bucket)) relationsByCompany[id] = bucket = new List<CompanyRelation>();
+                bucket.Add(r);
+            }
+        }
+
         // 詳細ページ。
         foreach (var co in companies)
         {
             var aliases = aliasesByCompany.TryGetValue(co.CompanyId, out var lst) ? lst : new List<CompanyAlias>();
-            await GenerateDetailAsync(co, aliases, logosByAlias, ct).ConfigureAwait(false);
+            var relations = relationsByCompany.TryGetValue(co.CompanyId, out var rl)
+                ? BuildRelationViews(co.CompanyId, rl, companyById)
+                : Array.Empty<CompanyRelationView>();
+            await GenerateDetailAsync(co, aliases, logosByAlias, relations, ct).ConfigureAwait(false);
         }
 
         _ctx.Logger.Success($"companies: {companies.Count} ページ");
+    }
+
+    /// <summary>
+    /// 1 団体から見た関係の表示行を組み立てる。並びは 前身 → 後継 → 所属（親）→ 傘下（子）、
+    /// 同じ並びの中は開始日の昇順（開始日なしは後ろ）→ 相手の正式名称順。
+    /// <list type="bullet">
+    ///   <item>PARENT で自分が子：「所属」。言い回しが「子会社」なら「親会社」、ほかは「所属（部署）」のように言い回しを括弧で添える。</item>
+    ///   <item>PARENT で自分が親：言い回し（「部署」「子会社」「雑誌」など）。無ければ「傘下」。</item>
+    ///   <item>SUCCESSOR で自分が後継：「前身」。自分が前身：「後継」。言い回し（「会社分割」など）は括弧で添える。</item>
+    /// </list>
+    /// </summary>
+    private static IReadOnlyList<CompanyRelationView> BuildRelationViews(
+        int selfId,
+        IReadOnlyList<CompanyRelation> relations,
+        IReadOnlyDictionary<int, Company> companyById)
+    {
+        static string WithLabel(string head, string? label)
+            => string.IsNullOrWhiteSpace(label) ? head : $"{head}（{label}）";
+
+        var rows = new List<(int Order, DateTime? From, string Name, CompanyRelationView View)>();
+        foreach (var r in relations)
+        {
+            bool selfIsFrom = r.FromCompanyId == selfId;
+            int otherId = selfIsFrom ? r.ToCompanyId : r.FromCompanyId;
+            if (otherId == selfId || !companyById.TryGetValue(otherId, out var other)) continue;
+
+            (int order, string label) = (r.RelationKind, selfIsFrom) switch
+            {
+                (CompanyRelationKinds.Successor, false) => (0, WithLabel("前身", r.RelationLabel)),
+                (CompanyRelationKinds.Successor, true) => (1, WithLabel("後継", r.RelationLabel)),
+                (CompanyRelationKinds.Parent, false) => (2, r.RelationLabel == "子会社" ? "親会社" : WithLabel("所属", r.RelationLabel)),
+                _ => (3, string.IsNullOrWhiteSpace(r.RelationLabel) ? "傘下" : r.RelationLabel!)
+            };
+
+            string period = (r.ValidFrom, r.ValidTo) switch
+            {
+                (null, null) => "",
+                (DateTime f, null) => $"{JpDateFormat.DotDate(f)}〜",
+                (null, DateTime t) => $"〜{JpDateFormat.DotDate(t)}",
+                (DateTime f, DateTime t) => $"{JpDateFormat.DotDate(f)}〜{JpDateFormat.DotDate(t)}"
+            };
+
+            rows.Add((order, r.ValidFrom, other.Name, new CompanyRelationView
+            {
+                Label = label,
+                CompanyName = other.Name,
+                CompanyUrl = PathUtil.CompanyUrl(otherId),
+                Period = period
+            }));
+        }
+
+        return rows
+            .OrderBy(x => x.Order)
+            .ThenBy(x => x.From.HasValue ? 0 : 1)
+            .ThenBy(x => x.From)
+            .ThenBy(x => x.Name, StringComparer.Ordinal)
+            .Select(x => x.View)
+            .ToList();
     }
 
     private async Task GenerateDetailAsync(
         Company company,
         IReadOnlyList<CompanyAlias> aliases,
         IReadOnlyDictionary<int, IReadOnlyList<Logo>> logosByAlias,
+        IReadOnlyList<CompanyRelationView> relations,
         CancellationToken ct)
     {
         // 代表屋号
@@ -181,6 +260,7 @@ public sealed class CompaniesGenerator
                 InstagramUrl = company.InstagramUrl ?? "",
                 YoutubeUrl = company.YoutubeUrl ?? ""
             },
+            Relations = relations,
             InvolvementGroups = groups,
             InvolvementSections = involvementSections,
             CreditEpisodeCountTotal = creditEpisodeCountTotal,
@@ -1138,6 +1218,8 @@ public sealed class CompaniesGenerator
         /// <summary>音楽クレジットの基準点ラベル（クレジット確認済みの最新の盤）。</summary>
         public string MusicCoverageLabel { get; set; } = "";
         public CompanyView Company { get; set; } = new();
+        /// <summary>関係のある団体（前身・後継・所属・傘下）。無ければ空（テンプレ側はセクションごと出さない）。</summary>
+        public IReadOnlyList<CompanyRelationView> Relations { get; set; } = Array.Empty<CompanyRelationView>();
         /// <summary>クレジット（フラット）。屋号を横断した役職別グループ → シリーズ行。
         /// <see cref="InvolvementSections"/> が空（クレジットのある屋号が 1 つだけ）のときにテンプレ側が使う。</summary>
         public IReadOnlyList<InvolvementGroup> InvolvementGroups { get; set; } = Array.Empty<InvolvementGroup>();
@@ -1233,6 +1315,19 @@ public sealed class CompaniesGenerator
         public string XUrl { get; set; } = "";
         public string InstagramUrl { get; set; } = "";
         public string YoutubeUrl { get; set; } = "";
+    }
+
+    /// <summary>関係のある団体 1 件分（ファクトタイル 1 枚）。</summary>
+    private sealed class CompanyRelationView
+    {
+        /// <summary>この団体から見た関係の名前（「前身」「所属（部署）」「親会社」「部署」など）。</summary>
+        public string Label { get; set; } = "";
+        /// <summary>相手の団体の正式名称。</summary>
+        public string CompanyName { get; set; } = "";
+        /// <summary>相手の団体の詳細ページ URL。</summary>
+        public string CompanyUrl { get; set; } = "";
+        /// <summary>関係の期間（「1987.8.1〜」など）。期間が無ければ空。</summary>
+        public string Period { get; set; } = "";
     }
 
     private sealed class CompanyAliasView

@@ -1320,6 +1320,14 @@ a.series-card-children-title:hover {
 .fact-value.is-wrap {
   white-space: normal;
 }
+/* 値の下に添える小さな注記（団体の関係の期間など）。 */
+.fact-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.75em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
 
 /* 汎用のボタン状リンク（ピンクのピル。劇伴一覧などの「別ページへ送る」導線に使う）。 */
 .button-link {

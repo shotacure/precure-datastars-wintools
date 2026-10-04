@@ -35,6 +35,15 @@ public sealed class CreditCardRole
     /// 同じ役職コードでも作品ごとに前置 / 後置が変わるため per-instance で持つ。</summary>
     public string AffiliationLayout { get; set; } = "SUFFIX";
 
+    /// <summary>後続の役職と 1 行にまとめて表示するときの役職名の文字（画面の表記どおり。
+    /// 例:「キャラクターデザイン・作画監督」）。まとめる役職のうち先頭の役職に持たせる。
+    /// データは役職ごとに分けて同じエントリを入れ、まとめるのはクレジットの表示だけ。</summary>
+    public string? JoinedLabel { get; set; }
+
+    /// <summary>true なら直前の役職（同じ Group の <see cref="OrderInGroup"/> 一つ前）と 1 行にまとめて表示する。
+    /// まとめる役職のうち 2 つ目以降に立てる。</summary>
+    public bool JoinPrevious { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

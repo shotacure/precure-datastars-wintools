@@ -868,6 +868,10 @@ public sealed class CreditBulkApplyService
         // 所属表記レイアウト（SUFFIX 既定 / PREFIX = 映画の製作・配給などの 2 カラム表記）。
         role.Entity.AffiliationLayout = pr.AffiliationLayout;
 
+        // 1 行にまとめて表示する役職の指定（まとめた行の文字 / 直前の役職とまとめるか）。
+        role.Entity.JoinedLabel = pr.JoinedLabel;
+        role.Entity.JoinPrevious = pr.JoinPrevious;
+
         // 配下 Block を順に追加。
         foreach (var pb in pr.Blocks)
         {
@@ -2369,6 +2373,15 @@ public sealed class CreditBulkApplyService
             draftRole.MarkModified();
         }
 
+        // 1 行にまとめて表示する役職の指定の追従。
+        if (!string.Equals(draftRole.Entity.JoinedLabel, newRole.JoinedLabel, StringComparison.Ordinal)
+            || draftRole.Entity.JoinPrevious != newRole.JoinPrevious)
+        {
+            draftRole.Entity.JoinedLabel = newRole.JoinedLabel;
+            draftRole.Entity.JoinPrevious = newRole.JoinPrevious;
+            draftRole.MarkModified();
+        }
+
         var draftBlocks = draftRole.Blocks
             .Where(b => b.State != DraftState.Deleted)
             .OrderBy(b => b.Entity.BlockSeq)
@@ -2640,7 +2653,9 @@ public sealed class CreditBulkApplyService
         var sb = new System.Text.StringBuilder();
         sb.Append("R|code=").Append(r.ResolvedRoleCode ?? r.DisplayName)
           .Append("|notes=").Append(r.Notes ?? string.Empty)
-          .Append("|affil=").Append(r.AffiliationLayout).Append('\n');
+          .Append("|affil=").Append(r.AffiliationLayout)
+          .Append("|join=").Append(r.JoinedLabel ?? string.Empty)
+          .Append("|joinprev=").Append(r.JoinPrevious ? '1' : '0').Append('\n');
         foreach (var b in r.Blocks) sb.Append(SerializeBlockForCompare(b));
         return sb.ToString();
     }

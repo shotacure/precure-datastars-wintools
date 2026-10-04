@@ -104,6 +104,14 @@ public sealed class ParsedRole
     /// 役職ヘッダ行末尾の <c>@affil_layout=prefix</c> ディレクティブで <c>"PREFIX"</c> になる。
     /// <c>credit_card_roles.affiliation_layout</c> に保存される。</summary>
     public string AffiliationLayout { get; set; } = "SUFFIX";
+
+    /// <summary>後続の役職と 1 行にまとめて表示するときの役職名の文字（<c>credit_card_roles.joined_label</c>）。
+    /// 役職ヘッダ <c>A+B: @join=文字</c> の先頭の役職、または <c>@join=文字</c> 行で設定される。</summary>
+    public string? JoinedLabel { get; set; }
+
+    /// <summary>直前の役職と 1 行にまとめて表示するか（<c>credit_card_roles.join_previous</c>）。
+    /// 役職ヘッダ <c>A+B: @join=文字</c> の 2 つ目以降の役職、または <c>@join_previous</c> 行で設定される。</summary>
+    public bool JoinPrevious { get; set; }
 }
 
 /// <summary>パース結果における 1 ブロック分の塊。 同一役職内で空行を跨ぐと新しいブロックが生まれる。</summary>

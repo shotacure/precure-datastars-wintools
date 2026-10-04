@@ -296,6 +296,8 @@ internal sealed class CreditDraftLoader
         RoleCode = s.RoleCode,
         OrderInGroup = s.OrderInGroup,
         AffiliationLayout = s.AffiliationLayout,
+        JoinedLabel = s.JoinedLabel,
+        JoinPrevious = s.JoinPrevious,
         Notes = s.Notes,
         CreatedBy = s.CreatedBy,
         UpdatedBy = s.UpdatedBy

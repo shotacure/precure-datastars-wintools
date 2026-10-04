@@ -209,8 +209,64 @@ internal static class CreditBulkInputEncoder
             {
                 sb.Append(LineSeparator);
             }
+
+            // 1 行にまとめて表示する役職の組で、エントリ・所属表記レイアウトがそろっていれば
+            // "A+B: @join=文字" の 1 役職ぶんにまとめて書き出す（エントリは 1 回だけ）。
+            int joinedCount = await TryEncodeJoinedRolesAsync(liveRoles, ri, cache, sb, ct);
+            if (joinedCount > 0)
+            {
+                ri += joinedCount - 1;
+                continue;
+            }
             await EncodeRoleBodyAsync(liveRoles[ri], cache, sb, ct);
         }
+    }
+
+    /// <summary>
+    /// <paramref name="startIndex"/> の役職が <c>joined_label</c> を持ち、直後に <c>join_previous</c> の役職が続き、
+    /// それらのエントリ（ブロック群の書き出し結果）・役職備考の有無・所属表記レイアウトがそろっていれば、
+    /// <c>A+B: @join=文字</c> の形でまとめて書き出す。まとめた役職の数を返し、まとめられなければ 0 を返して何も書かない。
+    /// まとめられない組は、各役職を <see cref="EncodeRoleBodyAsync"/> で個別に書き出す（<c>@join=</c> / <c>@join_previous</c> 行付き）。
+    /// </summary>
+    private static async Task<int> TryEncodeJoinedRolesAsync(
+        IReadOnlyList<DraftRole> liveRoles, int startIndex, LookupCache cache, StringBuilder sb, CancellationToken ct)
+    {
+        var lead = liveRoles[startIndex];
+        if (string.IsNullOrWhiteSpace(lead.Entity.JoinedLabel)) return 0;
+
+        var members = new List<DraftRole> { lead };
+        for (int j = startIndex + 1; j < liveRoles.Count && liveRoles[j].Entity.JoinPrevious; j++)
+            members.Add(liveRoles[j]);
+        if (members.Count < 2) return 0;
+
+        // 後続の役職に備考があるとまとめた形では書けないので、個別に書き出す。
+        if (members.Skip(1).Any(m => !string.IsNullOrEmpty(m.Entity.Notes))) return 0;
+        if (members.Any(m => !string.Equals(m.Entity.AffiliationLayout, lead.Entity.AffiliationLayout, StringComparison.Ordinal))) return 0;
+
+        string? leadBody = null;
+        var names = new List<string>();
+        foreach (var m in members)
+        {
+            string? nameJa = await cache.LookupRoleNameJaAsync(m.Entity.RoleCode);
+            // 役職名の解決できない役職や、役職名に区切りの「+」を含む役職はまとめた形で書けない。
+            if (string.IsNullOrEmpty(nameJa) || nameJa.IndexOfAny(new[] { '+', '＋' }) >= 0) return 0;
+            names.Add(nameJa);
+
+            var bodySb = new StringBuilder();
+            await EncodeRoleBlocksAsync(m, cache, bodySb, ct);
+            string body = bodySb.ToString();
+            if (leadBody is null) leadBody = body;
+            else if (!string.Equals(leadBody, body, StringComparison.Ordinal)) return 0;
+        }
+
+        sb.Append(string.Join("+", names)).Append(": @join=").Append(lead.Entity.JoinedLabel).Append(LineSeparator);
+        if (string.Equals(lead.Entity.AffiliationLayout, "PREFIX", StringComparison.Ordinal))
+        {
+            sb.Append("@affil_layout=prefix").Append(LineSeparator);
+        }
+        EmitNotesDirective(lead.Entity.Notes, sb);
+        sb.Append(leadBody);
+        return members.Count;
     }
 
     /// <summary>1 役職分の本体を出力する。 役職名行 → 役職備考 → ブロック群（2 つ目以降のブロックは <c>-</c> 行で明示的に区切る）の順。 役職内のブロック区切りは <c>-</c> 行（導入されたハイフン 1 個区切り）を使う。 空行はロール間の区切りと重なって紛らわしいため、 出力では役職内ブロック区切り＝ <c>-</c>、役職と役職の境目＝空行、と使い分ける。</summary>
@@ -237,9 +293,26 @@ internal static class CreditBulkInputEncoder
             sb.Append(headerName).Append(':').Append(LineSeparator);
         }
 
+        // 1 行にまとめて表示する役職の指定（まとめた形で書き出せなかった組の個別指定）。
+        if (!string.IsNullOrWhiteSpace(role.Entity.JoinedLabel))
+        {
+            sb.Append("@join=").Append(role.Entity.JoinedLabel).Append(LineSeparator);
+        }
+        if (role.Entity.JoinPrevious)
+        {
+            sb.Append("@join_previous").Append(LineSeparator);
+        }
+
         // 役職備考。役職開始行直後に @notes= があれば Role.Notes として復元される。
         EmitNotesDirective(role.Entity.Notes, sb);
 
+        await EncodeRoleBlocksAsync(role, cache, sb, ct);
+    }
+
+    /// <summary>1 役職配下のブロック群を出力する（2 つ目以降のブロックは <c>-</c> 行で区切る）。</summary>
+    private static async Task EncodeRoleBlocksAsync(
+        DraftRole role, LookupCache cache, StringBuilder sb, CancellationToken ct)
+    {
         // 削除マーク済みブロックはエンコード対象外。
         var liveBlocks = role.Blocks.Where(b => b.State != DraftState.Deleted).ToList();
 

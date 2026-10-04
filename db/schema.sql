@@ -2391,6 +2391,12 @@ CREATE TABLE `credit_card_roles` (
   -- PREFIX = 名前左の屋号列（映画の「製作:」「配給:」「宣伝:」の 2 カラム表記）。
   -- 同じ役職コードでも作品ごとに切り替わるため、ロールマスタ側ではなくここに per-instance で持つ。
   `affiliation_layout` enum('SUFFIX','PREFIX')                            NOT NULL DEFAULT 'SUFFIX',
+  -- 画面で 1 行にまとめて出る役職（「キャラクターデザイン・作画監督」など）の表示。
+  -- データは役職ごとに分けて同じエントリを入れ、表示だけをまとめる（集計は役職ごとに分かれたまま）。
+  -- joined_label = まとめた行の役職名の文字（画面どおり）。まとめる先頭の役職に持たせる。
+  -- join_previous = 1 なら直前の役職（同じグループの一つ前）と 1 行にまとめる。2 つ目以降の役職に立てる。
+  `joined_label`   varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `join_previous`  tinyint                                               NOT NULL DEFAULT 0,
   `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

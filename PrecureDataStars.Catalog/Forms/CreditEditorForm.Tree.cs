@@ -143,6 +143,10 @@ public partial class CreditEditorForm
                             if (columns >= 2) roleNote = $"  [横 {columns} カラム表示指定]";
                         }
 
+                        // 1 行にまとめて表示する役職の指定（joined_label / join_previous）をノード名に添えて見えるようにする。
+                        if (!string.IsNullOrWhiteSpace(role.JoinedLabel)) roleNote += $"  [1 行にまとめる: {role.JoinedLabel}]";
+                        if (role.JoinPrevious) roleNote += "  [直前の役職とまとめる]";
+
                         var roleNode = new TreeNode($"📋 Role: {roleName}  (order {roleDisplayIndex}){roleNote}")
                         {
                             Tag = new NodeTag(NodeKind.CardRole, draftRole.CurrentId, draftRole)

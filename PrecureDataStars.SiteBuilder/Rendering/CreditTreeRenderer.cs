@@ -286,10 +286,16 @@ internal sealed class CreditTreeRenderer
                         }
                     }
 
+                    // 1 行にまとめる役職（joined_label / join_previous）の解決。
+                    // 先頭役職の CardRoleId → まとめた行の役職名 HTML と、表示を飛ばす後続役職の集合を得る。
+                    var (joinedLabelHtmlByLeadId, joinedFollowerIds) =
+                        ResolveJoinedRoles(roleSnapshots, roleMap, credit, logger);
+
                     foreach (var crSnap in roleSnapshots)
                     {
                         var cr = crSnap.Role;
                         if (mergedCardRoleIds.Contains(cr.CardRoleId)) continue;
+                        if (joinedFollowerIds.Contains(cr.CardRoleId)) continue;
 
                         // 絵コンテ・演出融合（sb 側 role に到達した時点で融合本体を発火）。
                         // dir 側 role は事前スキャンで mergedCardRoleIds（= storyboardMergedDirIds 起点）に
@@ -347,6 +353,7 @@ internal sealed class CreditTreeRenderer
                             cr.RoleCode, roleMap, resolveSeriesId, snapshots,
                             suppressVoiceCastRoleName, appendThisRole, siblingResolver,
                             affiliationLayout: cr.AffiliationLayout,
+                            roleNameHtmlOverride: joinedLabelHtmlByLeadId.TryGetValue(cr.CardRoleId, out var joinedHtml) ? joinedHtml : null,
                             html, ct).ConfigureAwait(false);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(cr.RoleCode, roleMap)
@@ -361,6 +368,62 @@ internal sealed class CreditTreeRenderer
         }
 
         return html.ToString();
+    }
+
+    /// <summary>
+    /// Group 内で 1 行にまとめて表示する役職の組を解決する（判定は <see cref="RoleJoinComparer"/> と共通）。
+    /// <c>joined_label</c> を持つ役職を先頭に、直後に続く <c>join_previous = 1</c> の役職をまとめる。
+    /// まとめる役職どうしでエントリが一致しないときは、打ち間違いを隠さないよう別々の行のまま出してビルド警告を出す。
+    /// </summary>
+    /// <returns>先頭役職の CardRoleId → まとめた行の役職名 HTML、表示を飛ばす後続役職の CardRoleId 集合。</returns>
+    private static (Dictionary<int, string> LabelHtmlByLeadId, HashSet<int> FollowerIds) ResolveJoinedRoles(
+        IReadOnlyList<CreditCardRoleSnapshot> roleSnapshots,
+        IReadOnlyDictionary<string, Role> roleMap,
+        Credit credit,
+        BuildLogger logger)
+    {
+        var labelHtmlByLeadId = new Dictionary<int, string>();
+        var followerIds = new HashSet<int>();
+        if (!roleSnapshots.Any(rs => rs.Role.JoinPrevious)) return (labelHtmlByLeadId, followerIds);
+
+        var input = roleSnapshots
+            .Select(rs => (rs.Role.JoinedLabel, rs.Role.JoinPrevious, BuildBlockSnapshots(rs)))
+            .ToList();
+        var (joins, mismatches) = RoleJoinComparer.Resolve(input);
+        foreach (var (leadIndex, followerCount, label) in joins)
+        {
+            var codes = new List<string?>();
+            for (int k = leadIndex; k <= leadIndex + followerCount; k++) codes.Add(roleSnapshots[k].Role.RoleCode);
+            labelHtmlByLeadId[roleSnapshots[leadIndex].Role.CardRoleId] = BuildJoinedRoleNameHtml(label, codes, roleMap);
+            for (int k = leadIndex + 1; k <= leadIndex + followerCount; k++) followerIds.Add(roleSnapshots[k].Role.CardRoleId);
+        }
+        foreach (var (_, label) in mismatches)
+        {
+            logger.Warn($"credit_id={credit.CreditId} の「{label}」: まとめる役職どうしでエントリが一致しないため、別々の行で表示します。");
+        }
+        return (labelHtmlByLeadId, followerIds);
+    }
+
+    /// <summary>
+    /// まとめた行の役職名 HTML を組み立てる。<paramref name="label"/>（画面どおりの文字）の中から、
+    /// まとめた各役職の役職名を先頭から順に探し、見つかった部分をその役職の詳細ページへのリンクにする。
+    /// 区切りの「・」など役職名に当たらない部分と、見つからなかった役職はリンクなしの文字のまま出す。
+    /// </summary>
+    private static string BuildJoinedRoleNameHtml(string label, IReadOnlyList<string?> roleCodes, IReadOnlyDictionary<string, Role> roleMap)
+    {
+        var sb = new StringBuilder();
+        int cursor = 0;
+        foreach (var code in roleCodes)
+        {
+            if (string.IsNullOrEmpty(code) || !roleMap.TryGetValue(code!, out var r) || string.IsNullOrEmpty(r.NameJa)) continue;
+            int idx = label.IndexOf(r.NameJa, cursor, StringComparison.Ordinal);
+            if (idx < 0) continue;
+            sb.Append(Esc(label.Substring(cursor, idx - cursor)));
+            sb.Append(BuildRoleNameHtml(code, r.NameJa, roleMap));
+            cursor = idx + r.NameJa.Length;
+        }
+        sb.Append(Esc(label.Substring(cursor)));
+        return sb.ToString();
     }
 
     /// <summary>テンプレ解決用シリーズ ID を決める：SERIES スコープなら credit.SeriesId、 EPISODE スコープなら <see cref="BuildContext.EpisodeById"/> から所属シリーズ ID を逆引き。</summary>
@@ -460,6 +523,8 @@ internal sealed class CreditTreeRenderer
         // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文に使う。null のとき ROLE 参照は空文字に展開される。
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
         string affiliationLayout,
+        // 1 行にまとめた役職の役職名 HTML（joined_label 由来）。非 null のとき役職名セルをこれで置き換える。
+        string? roleNameHtmlOverride,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -564,7 +629,7 @@ internal sealed class CreditTreeRenderer
                     // テンプレ結果が役職名を含まない場合の自動ラップ：fallback-table と同形の 2 列表で囲む。
                     // 役職名カラムは詳細ページにリンクして表示。
                     html.Append("<table class=\"fallback-table\"><tr>");
-                    html.Append($"<td class=\"role-name\">{BuildRoleNameHtml(roleCode, roleName, roleMap)}</td>");
+                    html.Append($"<td class=\"role-name\">{roleNameHtmlOverride ?? BuildRoleNameHtml(roleCode, roleName, roleMap)}</td>");
                     html.Append("<td class=\"entry-cell\">");
                     html.Append(brTransformed);
                     html.Append("</td></tr></table>");
@@ -577,7 +642,8 @@ internal sealed class CreditTreeRenderer
                 // ContentHeaderOverride 設定済みの場合は左カラム役職名を抑止（コンテンツヘッダで既出のため）。
                 string fallbackRoleNameOnError = contentHeaderOverride is not null ? "" : roleName;
                 await RenderRoleFallbackDispatchAsync(roleCode, fallbackRoleNameOnError, blocks, roleMap,
-                    suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct).ConfigureAwait(false);
+                    suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout,
+                    contentHeaderOverride is not null ? null : roleNameHtmlOverride, html, ct).ConfigureAwait(false);
                 html.Append("</div>");
             }
         }
@@ -587,7 +653,8 @@ internal sealed class CreditTreeRenderer
             // 左カラム役職名を抑止する（コンテンツヘッダで既に役職名を出しているため二重ヘッダを防ぐ）。
             string fallbackRoleName = contentHeaderOverride is not null ? "" : roleName;
             await RenderRoleFallbackDispatchAsync(roleCode, fallbackRoleName, blocks, roleMap,
-                suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct).ConfigureAwait(false);
+                suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout,
+                contentHeaderOverride is not null ? null : roleNameHtmlOverride, html, ct).ConfigureAwait(false);
         }
 
         html.Append("</div>"); // .role
@@ -600,13 +667,14 @@ internal sealed class CreditTreeRenderer
         bool suppressVoiceCastRoleName,
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
         string affiliationLayout,
+        string? roleNameHtmlOverride,
         StringBuilder html, CancellationToken ct)
     {
         // PREFIX レイアウトは映画の「製作:」「配給:」のような 2 カラム表示。
         // VOICE_CAST 経路や CASTING_COOPERATION 追記の概念は適用しないため、専用レンダラに直行する。
         if (string.Equals(affiliationLayout, "PREFIX", StringComparison.Ordinal))
         {
-            await RenderRoleFallbackPrefixAsync(roleCode, roleName, blocks, roleMap, html, ct).ConfigureAwait(false);
+            await RenderRoleFallbackPrefixAsync(roleCode, roleName, blocks, roleMap, roleNameHtmlOverride, html, ct).ConfigureAwait(false);
             return;
         }
 
@@ -619,11 +687,11 @@ internal sealed class CreditTreeRenderer
         if (string.Equals(formatKind, "VOICE_CAST", StringComparison.Ordinal))
         {
             await RenderVoiceCastFallbackAsync(roleCode, roleName, blocks, roleMap, suppressVoiceCastRoleName,
-                appendedCooperationEntries, html, ct).ConfigureAwait(false);
+                appendedCooperationEntries, roleNameHtmlOverride, html, ct).ConfigureAwait(false);
         }
         else
         {
-            await RenderRoleFallbackAsync(roleCode, roleName, blocks, roleMap, html, ct).ConfigureAwait(false);
+            await RenderRoleFallbackAsync(roleCode, roleName, blocks, roleMap, roleNameHtmlOverride, html, ct).ConfigureAwait(false);
         }
     }
 
@@ -635,10 +703,12 @@ internal sealed class CreditTreeRenderer
         string roleName,
         IReadOnlyList<BlockSnapshot> blocks,
         IReadOnlyDictionary<string, Role> roleMap,
+        // 1 行にまとめた役職の役職名 HTML。非 null のとき役職名セルをこれで置き換える。
+        string? roleNameHtmlOverride,
         StringBuilder html,
         CancellationToken ct)
     {
-        string roleNameHtml = BuildRoleNameHtml(roleCode, roleName, roleMap);
+        string roleNameHtml = roleNameHtmlOverride ?? BuildRoleNameHtml(roleCode, roleName, roleMap);
 
         if (blocks.Count == 0 || blocks.All(b => b.Entries.Count == 0))
         {
@@ -945,10 +1015,12 @@ internal sealed class CreditTreeRenderer
         string roleName,
         IReadOnlyList<BlockSnapshot> blocks,
         IReadOnlyDictionary<string, Role> roleMap,
+        // 1 行にまとめた役職の役職名 HTML。非 null のとき役職名セルをこれで置き換える。
+        string? roleNameHtmlOverride,
         StringBuilder html,
         CancellationToken ct)
     {
-        string roleNameHtml = BuildRoleNameHtml(roleCode, roleName, roleMap);
+        string roleNameHtml = roleNameHtmlOverride ?? BuildRoleNameHtml(roleCode, roleName, roleMap);
 
         if (blocks.Count == 0 || blocks.All(b => b.Entries.Count == 0))
         {
@@ -1064,11 +1136,13 @@ internal sealed class CreditTreeRenderer
         IReadOnlyDictionary<string, Role> roleMap,
         bool suppressRoleName,
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
+        // 1 行にまとめた役職の役職名 HTML。非 null のとき役職名セルをこれで置き換える。
+        string? roleNameHtmlOverride,
         StringBuilder html,
         CancellationToken ct)
     {
         // suppress フラグが立っている時は 1 行目の役職名カラムも空表示。
-        string roleNameHtmlFirst = suppressRoleName ? "" : BuildRoleNameHtml(roleCode, roleName, roleMap);
+        string roleNameHtmlFirst = suppressRoleName ? "" : (roleNameHtmlOverride ?? BuildRoleNameHtml(roleCode, roleName, roleMap));
 
         if (blocks.Count == 0 || blocks.All(b => b.Entries.Count == 0))
         {

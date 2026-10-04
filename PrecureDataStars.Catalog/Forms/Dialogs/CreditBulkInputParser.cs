@@ -36,6 +36,12 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///   <item><description><c>@heading=文字</c> / <c>@heading_series=N</c>（ブロックの最初のエントリより前の単独行）→
 ///     そのブロックの先頭に出す見出し。<c>@heading_series=N</c> は作品（<c>series_id</c>）を指し、
 ///     <c>@heading=文字</c> は画面どおりの見出しの文字（作品の正式タイトルと表記が違うとき、または「特別出演」など作品ではない見出し）。</description></item>
+///   <item><description><c>A+B: @join=文字</c>（役職ヘッダ）→ 役職 A と B を、同じエントリを持つ別々の役職として作り、
+///     クレジットでは「文字」を役職名にして 1 行にまとめて表示する（例: <c>キャラクターデザイン+作画監督: @join=キャラクターデザイン・作画監督</c>）。
+///     エントリは 1 回だけ書けばよい。区切りは半角 <c>+</c> または全角 <c>＋</c>。3 つ以上もまとめられる。
+///     まとめた役職では強制新規（<c>*X</c> / <c>&lt;*X&gt;</c>）は使えない（役職の数だけ新規作成されてしまうため）。</description></item>
+///   <item><description><c>@join=文字</c> / <c>@join_previous</c>（役職開始行直後の単独行）→ その役職の
+///     <c>joined_label</c> / <c>join_previous</c> を個別に指定する（エントリが食い違う組を書き出すときの形）。</description></item>
 ///   <item><description><c>@notes=備考</c>（各レベル区切り行直後の単独行）→ 直近で開かれた
 ///     Card / Tier / Group / Role / Block の <c>notes</c> に保存。同一スコープに対する 2 回目の
 ///     <c>@notes=</c> は次のスコープ（Role 直後なら Block）にスライドする。</description></item>
@@ -109,6 +115,17 @@ public static class CreditBulkInputParser
     // ディレクティブ行: @notes=備考 形式。値は = の右側全部（trim 済み）。
     // 値が空文字なら notes クリアの意味になる。
     private static readonly Regex NotesDirectiveRegex = new(@"^@notes=(?<value>.*)$", RegexOptions.Compiled);
+
+    // 役職ヘッダ "A+B: @join=文字"。複数の役職を同じエントリで作り、表示は「文字」の 1 行にまとめる。
+    private static readonly Regex RoleHeadInlineJoinRegex =
+        new(@"^(?<name>.+?)[：:]\s*@join=(?<label>.+?)\s*$", RegexOptions.Compiled);
+
+    // ディレクティブ行: @join=文字 / @join_previous。役職単位で joined_label / join_previous を指定する。
+    private static readonly Regex JoinDirectiveRegex = new(@"^@join=(?<label>.+)$", RegexOptions.Compiled);
+    private static readonly Regex JoinPreviousDirectiveRegex = new(@"^@join_previous$", RegexOptions.Compiled);
+
+    // まとめた役職ヘッダの役職名の区切り（半角 / 全角のプラス）。
+    private static readonly char[] JoinedRoleNameSeparators = { '+', '＋' };
 
     // ディレクティブ行: @roll 単独行。そのカードをロール（流れるクレジット）として扱う。
     // カード内のどこに書いてもよい（エンコーダはカード区切り直後に出す）。
@@ -219,6 +236,10 @@ public static class CreditBulkInputParser
 
         // @notes= ディレクティブの割り当て先スコープ。
         NotesTarget pendingNotesTarget = NotesTarget.None;
+
+        // "A+B: @join=文字" で作った役職の組（先頭役職 → 後続役職群）。
+        // エントリは先頭役職にだけ積み、パース末尾で後続役職へ同じブロックを共有させる。
+        var joinedRoleSets = new List<(ParsedRole Lead, List<ParsedRole> Followers)>();
 
         // @cols=N ディレクティブを受け付ける状態か。
         // 役職開始 / ブロック区切り（'-' or 空行）直後の「ブロックセットアップフェーズ」中のみ true。
@@ -544,12 +565,32 @@ public static class CreditBulkInputParser
                     continue;
                 }
 
+                // @join=文字 / @join_previous : 直近の役職の joined_label / join_previous を指定する。
+                var joinMatch = JoinDirectiveRegex.Match(trimmed);
+                bool isJoinPrevious = JoinPreviousDirectiveRegex.IsMatch(trimmed);
+                if (joinMatch.Success || isJoinPrevious)
+                {
+                    if (curRole is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @join= / @join_previous は役職指定後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    if (joinMatch.Success) curRole.JoinedLabel = joinMatch.Groups["label"].Value.Trim();
+                    else curRole.JoinPrevious = true;
+                    continue;
+                }
+
                 // @ で始まるが既知ディレクティブでない → Block 警告。
                 result.Warnings.Add(new ParseWarning
                 {
                     Severity = WarningSeverity.Block,
                     LineNumber = lineNo,
-                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= / @heading= / @heading_series= のみサポートします。"
+                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= / @heading= / @heading_series= / @join= / @join_previous のみサポートします。"
                 });
                 continue;
             }
@@ -558,9 +599,17 @@ public static class CreditBulkInputParser
             // インライン直書きの @affil_layout= ディレクティブ "製作: @affil_layout=prefix" を先に試す。
             // マッチしたらそのまま PREFIX 役職として開始する（別行に @affil_layout= を書くよりタイプ量が少ない）。
             string? inlineAffilLayoutValue = null;
+            string? inlineJoinLabel = null;
+            var roleInlineJoinMatch = RoleHeadInlineJoinRegex.Match(trimmed);
             var roleInlineMatch = RoleHeadInlineAffilLayoutRegex.Match(trimmed);
             Match roleMatch;
-            if (roleInlineMatch.Success && !trimmed.StartsWith("["))
+            if (roleInlineJoinMatch.Success && !trimmed.StartsWith("["))
+            {
+                // "A+B: @join=文字"：まとめる役職名の並びと、まとめた行の文字を取り出す。
+                inlineJoinLabel = roleInlineJoinMatch.Groups["label"].Value.Trim();
+                roleMatch = RoleHeadRegex.Match(roleInlineJoinMatch.Groups["name"].Value.Trim() + ":");
+            }
+            else if (roleInlineMatch.Success && !trimmed.StartsWith("["))
             {
                 inlineAffilLayoutValue = roleInlineMatch.Groups["value"].Value.Trim();
                 // RoleHeadRegex のグループと同名に詰め替えるため、擬似的に役職名だけのトリム済み文字列で再マッチさせる。
@@ -583,10 +632,18 @@ public static class CreditBulkInputParser
                     firstMeaningfulLineSeen = true;
                 }
 
+                string headerName = roleMatch.Groups["name"].Value.Trim();
+                // "A+B: @join=文字" のときは役職名を区切りで分け、先頭を curRole（エントリの受け手）にする。
+                List<string> joinedNames = inlineJoinLabel is not null
+                    ? headerName.Split(JoinedRoleNameSeparators).Select(n => n.Trim()).Where(n => n.Length > 0).ToList()
+                    : new List<string> { headerName };
+                if (joinedNames.Count == 0) joinedNames.Add(headerName);
+
                 curRole = new ParsedRole
                 {
-                    DisplayName = roleMatch.Groups["name"].Value.Trim(),
+                    DisplayName = joinedNames[0],
                     LineNumber = lineNo,
+                    JoinedLabel = inlineJoinLabel,
                 };
                 // インライン @affil_layout= があれば反映。値が suffix/prefix 以外は警告 + SUFFIX 据え置き。
                 if (inlineAffilLayoutValue is not null)
@@ -594,6 +651,22 @@ public static class CreditBulkInputParser
                     ApplyAffilLayoutValue(inlineAffilLayoutValue, lineNo, curRole, result);
                 }
                 curGroup!.Roles.Add(curRole);
+                if (joinedNames.Count > 1)
+                {
+                    var followers = new List<ParsedRole>();
+                    for (int k = 1; k < joinedNames.Count; k++)
+                    {
+                        var follower = new ParsedRole
+                        {
+                            DisplayName = joinedNames[k],
+                            LineNumber = lineNo,
+                            JoinPrevious = true,
+                        };
+                        curGroup.Roles.Add(follower);
+                        followers.Add(follower);
+                    }
+                    joinedRoleSets.Add((curRole, followers));
+                }
                 curBlock = null;
 
                 // 明示的な役職指定があった場合は、自動継承の追跡名を新しい名前で更新する
@@ -848,6 +921,30 @@ public static class CreditBulkInputParser
         //     に対してのみ働くため、明示的に書かれたときだけ機能する形に整理した。
         // 互換性：過去にこのリネーム経由で CASTING_COOPERATION 役職として登録された行は DB 上そのまま残る。
         // 影響を受けるのは「今後の新規パース」だけで、既存データの再解釈は発生しない。
+
+        // "A+B: @join=文字" で作った後続役職に、先頭役職と同じブロック群・所属表記レイアウトを持たせる。
+        // ブロックは同じインスタンスを共有する（適用フェーズはパース結果を読むだけで書き換えないため安全）。
+        foreach (var (lead, followers) in joinedRoleSets)
+        {
+            bool hasForcedNew = lead.Blocks
+                .SelectMany(b => b.Rows)
+                .SelectMany(r => r.Entries)
+                .Any(e => e.IsForcedNewPerson || e.IsForcedNewCharacter);
+            if (hasForcedNew)
+            {
+                result.Warnings.Add(new ParseWarning
+                {
+                    Severity = WarningSeverity.Block,
+                    LineNumber = lead.LineNumber,
+                    Message = $"{lead.LineNumber} 行目: まとめた役職（@join=）では強制新規（*X / <*X>）は使えません。役職の数だけ新規作成されてしまいます。"
+                });
+            }
+            foreach (var f in followers)
+            {
+                f.Blocks.AddRange(lead.Blocks);
+                f.AffiliationLayout = lead.AffiliationLayout;
+            }
+        }
 
         return result;
     }

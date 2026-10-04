@@ -491,10 +491,26 @@ internal sealed class CreditPreviewRenderer
                         }
                     }
 
+                    // 1 行にまとめる役職（joined_label / join_previous）の解決。判定は SiteBuilder と共通。
+                    var joinInput = new List<(string? JoinedLabel, bool JoinPrevious, IReadOnlyList<BlockSnapshot> Blocks)>();
+                    foreach (var jr in cardRoles)
+                    {
+                        IReadOnlyList<BlockSnapshot> jb = !string.IsNullOrEmpty(jr.RoleCode)
+                            && siblingBlocksByRoleCode.TryGetValue(jr.RoleCode!, out var jbCached)
+                                ? jbCached
+                                : Array.Empty<BlockSnapshot>();
+                        joinInput.Add((jr.JoinedLabel, jr.JoinPrevious, jb));
+                    }
+                    var (joinedLabelById, joinedFollowerIds, joinMismatchLeadIds) =
+                        ResolveJoinedRoles(joinInput, i => cardRoles[i].CardRoleId);
+
                     foreach (var cr in cardRoles)
                     {
                         // 融合描画で消費済みの cardRole はスキップ。
                         if (mergedCardRoleIds.Contains(cr.CardRoleId)) continue;
+                        // 1 行にまとめた後続の役職は、先頭の役職の行で出し済み。
+                        if (joinedFollowerIds.Contains(cr.CardRoleId)) continue;
+                        if (joinMismatchLeadIds.Contains(cr.CardRoleId)) AppendJoinMismatchNotice(cr.JoinedLabel, html);
 
                         // 絵コンテ・演出融合：sb 側 role に到達した時点で融合本体を発火。
                         // dir 側 role は事前スキャンで mergedCardRoleIds に入っており、上の continue で既にスキップ済み。
@@ -581,6 +597,7 @@ internal sealed class CreditPreviewRenderer
                             cr.RoleCode, roleMap, resolveSeriesId, snapshots,
                             suppressVoiceCastRoleName, appendThisRole, siblingResolver,
                             affiliationLayout: cr.AffiliationLayout,
+                            joinedLabel: joinedLabelById.TryGetValue(cr.CardRoleId, out var jl) ? jl : null,
                             html, ct);
 
                         // 直前ロール記憶を更新: 当該ロールが VOICE_CAST なら role_code を覚える、
@@ -841,10 +858,26 @@ internal sealed class CreditPreviewRenderer
                         }
                     }
 
+                    // 1 行にまとめる役職（joined_label / join_previous）の解決（Draft 側）。判定は SiteBuilder と共通。
+                    var draftJoinInput = new List<(string? JoinedLabel, bool JoinPrevious, IReadOnlyList<BlockSnapshot> Blocks)>();
+                    foreach (var jr in dRoles)
+                    {
+                        IReadOnlyList<BlockSnapshot> jb = !string.IsNullOrEmpty(jr.Entity.RoleCode)
+                            && siblingBlocksByRoleCode.TryGetValue(jr.Entity.RoleCode!, out var jbCached)
+                                ? jbCached
+                                : Array.Empty<BlockSnapshot>();
+                        draftJoinInput.Add((jr.Entity.JoinedLabel, jr.Entity.JoinPrevious, jb));
+                    }
+                    var (draftJoinedLabelById, draftJoinedFollowerIds, draftJoinMismatchLeadIds) =
+                        ResolveJoinedRoles(draftJoinInput, i => dRoles[i].CurrentId);
+
                     foreach (var dRole in dRoles)
                     {
                         // 融合済み dir 側 role は skip（事前スキャンで決定済み、CurrentId 突合）。
                         if (draftSbMergedDirIds.Contains(dRole.CurrentId)) continue;
+                        // 1 行にまとめた後続の役職は、先頭の役職の行で出し済み（Draft 側）。
+                        if (draftJoinedFollowerIds.Contains(dRole.CurrentId)) continue;
+                        if (draftJoinMismatchLeadIds.Contains(dRole.CurrentId)) AppendJoinMismatchNotice(dRole.Entity.JoinedLabel, html);
 
                         // 絵コンテ・演出融合：sb 側 role に到達した時点で融合本体を発火。
                         if (draftSbMergeBySbId.TryGetValue(dRole.CurrentId, out var draftMergePair))
@@ -932,6 +965,7 @@ internal sealed class CreditPreviewRenderer
                             dRole.Entity.RoleCode, roleMap, resolveSeriesId, snapshots,
                             suppressVoiceCastRoleName, appendThisRole, siblingResolver,
                             affiliationLayout: dRole.Entity.AffiliationLayout,
+                            joinedLabel: draftJoinedLabelById.TryGetValue(dRole.CurrentId, out var djl) ? djl : null,
                             html, ct);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(dRole.Entity.RoleCode, roleMap)
@@ -993,6 +1027,35 @@ internal sealed class CreditPreviewRenderer
         return (aggregated, lastVcRole);
     }
 
+    /// <summary>
+    /// Group 内で 1 行にまとめて表示する役職の組を解決する（DB / Draft 共通、判定は <see cref="RoleJoinComparer"/>）。
+    /// </summary>
+    /// <param name="roles">Group 内の役職（表示順）。</param>
+    /// <param name="idAt">位置 → 役職の ID（DB は card_role_id、Draft は CurrentId）。</param>
+    /// <returns>先頭役職の ID → まとめた行の文字、表示を飛ばす後続役職の ID 集合、エントリが一致せずまとめなかった先頭役職の ID 集合。</returns>
+    private static (Dictionary<int, string> LabelById, HashSet<int> FollowerIds, HashSet<int> MismatchLeadIds) ResolveJoinedRoles(
+        IReadOnlyList<(string? JoinedLabel, bool JoinPrevious, IReadOnlyList<BlockSnapshot> Blocks)> roles,
+        Func<int, int> idAt)
+    {
+        var labelById = new Dictionary<int, string>();
+        var followerIds = new HashSet<int>();
+        var mismatchLeadIds = new HashSet<int>();
+        var (joins, mismatches) = RoleJoinComparer.Resolve(roles);
+        foreach (var (leadIndex, followerCount, label) in joins)
+        {
+            labelById[idAt(leadIndex)] = label;
+            for (int k = leadIndex + 1; k <= leadIndex + followerCount; k++) followerIds.Add(idAt(k));
+        }
+        foreach (var (leadIndex, _) in mismatches) mismatchLeadIds.Add(idAt(leadIndex));
+        return (labelById, followerIds, mismatchLeadIds);
+    }
+
+    /// <summary>まとめる役職どうしでエントリが一致しないときの注記を出す（別々の行で表示していることを編集者に知らせる）。</summary>
+    private static void AppendJoinMismatchNotice(string? joinedLabel, StringBuilder html)
+    {
+        html.Append($"<div class=\"role-rendered\"><span class=\"render-error\">⚠ 「{Esc(joinedLabel ?? "")}」: まとめる役職どうしでエントリが一致しないため、別々の行で表示しています</span></div>");
+    }
+
     // 内部：1 役職の描画（DB / Draft 共通）
 
     /// <summary>1 つの役職を HTML 化する共通ロジック。テンプレが取れれば DSL 展開、無ければフォールバック表に落とす。</summary>
@@ -1017,6 +1080,8 @@ internal sealed class CreditPreviewRenderer
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
         // 人物所属表記レイアウト ("SUFFIX" / "PREFIX")。PREFIX は映画製作・配給などの 2 カラム表示。
         string affiliationLayout,
+        // 1 行にまとめた役職の役職名の文字（joined_label）。非 null のとき役職名をこれで置き換える。
+        string? joinedLabel,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -1035,6 +1100,8 @@ internal sealed class CreditPreviewRenderer
                 roleName = roleCode!;
             }
         }
+        // 1 行にまとめた役職は、まとめた行の文字を役職名として出す（プレビューはリンクなしの文字）。
+        if (joinedLabel is not null) roleName = joinedLabel;
 
         // テンプレを role_templates から解決
         string? template = null;

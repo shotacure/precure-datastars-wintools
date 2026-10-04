@@ -2181,6 +2181,11 @@ a.series-card-children-title:hover {
   margin: 0 0 6px;
   font-size: 0.92em;
 }
+/* 購入リンクの下の、広告である旨の注記。 */
+.product-links-note {
+  margin: 6px 0 0;
+  font-size: 0.82em;
+}
 .product-links-list {
   list-style: none;
   margin: 0;

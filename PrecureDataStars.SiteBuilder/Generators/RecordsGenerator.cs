@@ -344,7 +344,7 @@ public sealed class RecordsGenerator
 
     private string PersonLinkHtml(int personId)
     {
-        string name = _ctx.EntityUrls.PersonDisplayName(personId) ?? "";
+        string name = _ctx.EntityUrls.PersonDisplayLabel(personId) ?? "";
         if (string.IsNullOrEmpty(name)
             && _ctx.AliasIdsByPerson.TryGetValue(personId, out var aliasIds)
             && aliasIds.Count > 0

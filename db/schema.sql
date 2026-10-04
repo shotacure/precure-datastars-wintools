@@ -1492,6 +1492,8 @@ CREATE TABLE `persons` (
   -- 本名義：見出し・URL・一覧の行表記に使う名義。NULL なら公開中の名義 → TV 系のクレジットで最後に使われた名義。
   `primary_alias_id` int                                                                  DEFAULT NULL,
   `name_en`          varchar(128)                                                         DEFAULT NULL,
+  -- 同姓同名の別人を見分ける添え書き（例: 声優 / 背景美術）。サイトの URL と名乗りに「名前 (添え書き)」の形で添える。
+  `disambiguation`   varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks   DEFAULT NULL,
   `birth_year`             smallint unsigned                                              DEFAULT NULL,  -- 生年（西暦。不明は NULL）
   `birth_year_visibility`  varchar(16)                                                    NOT NULL DEFAULT 'PUBLIC',  -- PUBLIC=生成に出す / PRIVATE=出さない（本人スタンス尊重）
   `birth_month`            tinyint unsigned                                               DEFAULT NULL,

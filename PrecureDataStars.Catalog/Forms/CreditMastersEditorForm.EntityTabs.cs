@@ -136,6 +136,7 @@ public partial class CreditMastersEditorForm
             txtPFullName.Text = p.FullName;
             txtPFullNameKana.Text = p.FullNameKana ?? "";
             txtPNameEn.Text = p.NameEn ?? "";
+            txtPDisambiguation.Text = p.Disambiguation ?? "";
             LoadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown, cboPBirthYearVis,
                 cboPBirthMonth, cboPBirthDay,
                 p.BirthYear, p.BirthYearVisibility, p.BirthMonth, p.BirthDay);
@@ -158,6 +159,7 @@ public partial class CreditMastersEditorForm
         txtPFamily.Text = ""; txtPGiven.Text = "";
         txtPFullName.Text = ""; txtPFullNameKana.Text = "";
         txtPNameEn.Text = ""; txtPNotes.Text = "";
+        txtPDisambiguation.Text = "";
         txtPOfficialUrl.Text = ""; txtPAffiliationUrl.Text = ""; txtPXUrl.Text = "";
         txtPInstagramUrl.Text = ""; txtPYoutubeUrl.Text = "";
         txtPWikipediaUrl.Text = "";
@@ -203,6 +205,7 @@ public partial class CreditMastersEditorForm
                 current.FullName = txtPFullName.Text.Trim();
                 current.FullNameKana = NullIfEmpty(txtPFullNameKana.Text);
                 current.NameEn = NullIfEmpty(txtPNameEn.Text);
+                current.Disambiguation = NullIfEmpty(txtPDisambiguation.Text);
                 var pbd = ReadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown,
                     cboPBirthYearVis, cboPBirthMonth, cboPBirthDay);
                 current.BirthYear = pbd.Year;
@@ -234,6 +237,7 @@ public partial class CreditMastersEditorForm
                     FullName = txtPFullName.Text.Trim(),
                     FullNameKana = NullIfEmpty(txtPFullNameKana.Text),
                     NameEn = NullIfEmpty(txtPNameEn.Text),
+                    Disambiguation = NullIfEmpty(txtPDisambiguation.Text),
                     BirthYear = pbd.Year,
                     BirthYearVisibility = pbd.Visibility,
                     BirthMonth = pbd.Month,

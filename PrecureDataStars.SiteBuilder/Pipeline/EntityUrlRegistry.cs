@@ -16,7 +16,9 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 ///     → ② いま公開している名義（published_entity_slugs で最後に記録したスラッグに当たる名義）→ ③ 最新名義
 ///     （<see cref="LatestAliasResolver.LatestPersonAliasIds"/>、TV 系のクレジットで最後に使われた名義）の順に決める。
 ///     いったん公開した人物はクレジットの入力が進んでも名乗りが変わらず、変えるのは本名義を指定したときだけになる。
-///     どれも無い人物は正式名 persons.full_name。人物詳細の見出しもこの名前にそろえる（<see cref="PersonDisplayName"/>）。</description></item>
+///     どれも無い人物は正式名 persons.full_name。人物詳細の見出しもこの名前にそろえる（<see cref="PersonDisplayName"/>）。
+///     同姓同名の別人を見分ける添え書き（persons.disambiguation）のある人物は、URL と見出しに「渡辺 久美子 (声優)」の形で添える
+///     （<see cref="PersonDisplayLabel"/>、URL は <c>/people/渡辺久美子_(声優)/</c>）。</description></item>
 ///   <item><description>人物の URL は本名義を指定すると変わり、キャラの URL はキャラ名を、企業の URL は正式名を変えると変わる。
 ///     本番デプロイで公開した人物・キャラ・企業の URL は台帳 <c>published_entity_slugs</c> に記録しておき（<see cref="RecordPublishedSlugsAsync"/>）、
 ///     いまの URL と違う記録済みの旧 URL は新 URL へ 301 で転送する（<see cref="LegacyRedirects"/> に <c>/people/{旧名}</c>・
@@ -59,6 +61,8 @@ public sealed class EntityUrlRegistry
     private readonly Dictionary<int, string> _personSlugs = new();
     /// <summary>person_id → 見出し名・読み（表示名義。表示名義の無い人物は正式名）。</summary>
     private readonly Dictionary<int, (string Name, string Kana)> _personNames = new();
+    // 同姓同名の別人を見分ける添え書きを付けた名乗り（persons.disambiguation のある人物だけ）。
+    private readonly Dictionary<int, string> _personLabels = new();
     /// <summary>person_id → 表示名義の person_alias_id（本名義 → 公開中の名義 → 最新名義。どれも無い人物は載らない）。</summary>
     private readonly Dictionary<int, int> _displayPersonAliasIds = new();
     private readonly Dictionary<int, string> _companyUrls = new();
@@ -82,6 +86,18 @@ public sealed class EntityUrlRegistry
 
     /// <summary>人物の見出し名（表示名義。表示名義の無い人物は正式名）。台帳に無い ID は null。</summary>
     public string? PersonDisplayName(int personId) => _personNames.TryGetValue(personId, out var n) ? n.Name : null;
+
+    /// <summary>
+    /// 人物の名乗りに、同姓同名の別人を見分ける添え書き（persons.disambiguation）を「渡辺 久美子 (声優)」の形で添えたもの。
+    /// 人物詳細の見出し・ページタイトル・検索・一覧の行表記に使う。添え書きの無い人物は <see cref="PersonDisplayName"/> と同じ。
+    /// 名義との比較（別名義の要否・本名義の添え書きなど）には添え書きの無い <see cref="PersonDisplayName"/> を使う。
+    /// </summary>
+    public string? PersonDisplayLabel(int personId)
+        => _personLabels.TryGetValue(personId, out var l) ? l : PersonDisplayName(personId);
+
+    /// <summary>名前に添え書きを「名前 (添え書き)」の形で添える。添え書きが空なら名前のまま。</summary>
+    private static string WithDisambiguation(string name, string? disambiguation)
+        => string.IsNullOrWhiteSpace(disambiguation) ? name : $"{name} ({disambiguation.Trim()})";
 
     /// <summary>人物の見出し名の読み（表示名義の読み。読み未登録なら空文字）。台帳に無い ID は null。</summary>
     public string? PersonDisplayKana(int personId) => _personNames.TryGetValue(personId, out var n) ? n.Kana : null;
@@ -158,8 +174,9 @@ public sealed class EntityUrlRegistry
             {
                 foreach (var aid in ownAliasIds)
                 {
+                    // 添え書きのある人物は、添え書き付きの名前で公開しているので、それと比べる。
                     if (ctx.PersonAliasById.TryGetValue(aid, out var a)
-                        && string.Equals(UrlSlug.FromName(a.Name), publishedSlug, StringComparison.OrdinalIgnoreCase))
+                        && string.Equals(UrlSlug.FromName(WithDisambiguation(a.Name, p.Disambiguation)), publishedSlug, StringComparison.OrdinalIgnoreCase))
                     {
                         chosen = aid;
                         break;
@@ -186,7 +203,13 @@ public sealed class EntityUrlRegistry
                 reg._personNames[p.PersonId] = (p.FullName, p.FullNameKana ?? "");
             }
         }
-        foreach (var (id, slug) in AssignSlugs("persons", persons.Select(p => (p.PersonId, reg._personNames[p.PersonId].Name)), ctx.Logger))
+        // 同姓同名の別人を見分ける添え書きのある人物は、名乗りに添えたものを URL と見出しに使う。
+        foreach (var p in persons)
+        {
+            if (!string.IsNullOrWhiteSpace(p.Disambiguation))
+                reg._personLabels[p.PersonId] = WithDisambiguation(reg._personNames[p.PersonId].Name, p.Disambiguation);
+        }
+        foreach (var (id, slug) in AssignSlugs("persons", persons.Select(p => (p.PersonId, reg.PersonDisplayLabel(p.PersonId)!)), ctx.Logger))
         {
             reg._personSlugs[id] = slug;
             reg._personUrls[id] = $"/people/{UrlSlug.Encode(slug)}/";

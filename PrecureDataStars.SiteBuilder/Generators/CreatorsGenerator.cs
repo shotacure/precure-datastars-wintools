@@ -793,7 +793,7 @@ public sealed class CreatorsGenerator
                 PersonId = kv.Key,
                 SongIds = kv.Value,
                 // 人物詳細の見出し・URL と同じ表示名義で出す（クレジットの無い人物は正式名）。
-                PersonName = _ctx.EntityUrls.PersonDisplayName(p.PersonId) ?? p.FullName,
+                PersonName = _ctx.EntityUrls.PersonDisplayLabel(p.PersonId) ?? p.FullName,
                 PersonNameKana = _ctx.EntityUrls.PersonDisplayKana(p.PersonId) ?? (p.FullNameKana ?? ""),
                 PersonUrl = PathUtil.PersonUrl(kv.Key),
                 SongCount = kv.Value.Count,
@@ -1375,7 +1375,7 @@ public sealed class CreatorsGenerator
         {
             if (!personById.TryGetValue(key.Id, out var p)) return null;
             return ("person",
-                _ctx.EntityUrls.PersonDisplayName(key.Id) ?? p.FullName,
+                _ctx.EntityUrls.PersonDisplayLabel(key.Id) ?? p.FullName,
                 _ctx.EntityUrls.PersonDisplayKana(key.Id) ?? (p.FullNameKana ?? ""),
                 PathUtil.PersonUrl(key.Id));
         }
@@ -1587,7 +1587,7 @@ public sealed class CreatorsGenerator
             string charName = transformNameByCharacter.TryGetValue(charId, out var transformName)
                 ? transformName
                 : fa is null ? "" : _ctx.CharacterAliasNames.DisplayName(fa);
-            string voiceName = _ctx.EntityUrls.PersonDisplayName(pid) ?? person.FullName;
+            string voiceName = _ctx.EntityUrls.PersonDisplayLabel(pid) ?? person.FullName;
             timelineEntities.Add(new RoleTimelineEntity
             {
                 EntityKind = "character",
@@ -1783,7 +1783,7 @@ public sealed class CreatorsGenerator
             rows.Add(new SongRoleRow
             {
                 PersonId = pid,
-                PersonName = _ctx.EntityUrls.PersonDisplayName(pid) ?? p.FullName,
+                PersonName = _ctx.EntityUrls.PersonDisplayLabel(pid) ?? p.FullName,
                 PersonNameKana = _ctx.EntityUrls.PersonDisplayKana(pid) ?? (p.FullNameKana ?? ""),
                 PersonUrl = PathUtil.PersonUrl(pid),
                 SongCount = v.Songs.Count,
@@ -2162,7 +2162,7 @@ public sealed class CreatorsGenerator
                 var row = new VoiceCastRow
                 {
                     // 人物詳細の見出し・URL と同じ表示名義で出す（クレジットの無い人物は正式名）。
-                    PersonName = _ctx.EntityUrls.PersonDisplayName(p.PersonId) ?? p.FullName,
+                    PersonName = _ctx.EntityUrls.PersonDisplayLabel(p.PersonId) ?? p.FullName,
                     PersonNameKana = _ctx.EntityUrls.PersonDisplayKana(p.PersonId) ?? (p.FullNameKana ?? ""),
                     PersonUrl = PathUtil.PersonUrl(p.PersonId),
                     PersonId = p.PersonId,

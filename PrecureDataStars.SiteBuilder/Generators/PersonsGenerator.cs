@@ -266,6 +266,9 @@ public sealed class PersonsGenerator
         // 表示名義の無い人物は正式名。
         string displayName = _ctx.EntityUrls.PersonDisplayName(person.PersonId) ?? person.FullName;
         string displayNameKana = _ctx.EntityUrls.PersonDisplayKana(person.PersonId) ?? (person.FullNameKana ?? "");
+        // 見出し・ページタイトル・パンくず・OGP カードには、同姓同名の別人を見分ける添え書きを添えた名乗りを使う。
+        // 名義との比較（別名義の欄を出すか等）と本文・JSON-LD には添え書きの無い displayName を使う。
+        string displayLabel = _ctx.EntityUrls.PersonDisplayLabel(person.PersonId) ?? displayName;
 
         // 役職別グループ化された関与一覧を組み立て（フラット、全名義横断）。
         // 本編クレジットの欄には本編のクレジット階層に載った関与だけを出す（主題歌・挿入歌経由の作家・歌唱と
@@ -306,7 +309,7 @@ public sealed class PersonsGenerator
             Person = new PersonView
             {
                 PersonId = person.PersonId,
-                DisplayName = displayName,
+                DisplayName = displayLabel,
                 DisplayNameKana = displayNameKana,
                 FullName = person.FullName,
                 FullNameKana = person.FullNameKana ?? "",
@@ -384,14 +387,14 @@ public sealed class PersonsGenerator
 
         var layout = new LayoutModel
         {
-            PageTitle = displayName,
+            PageTitle = displayLabel,
             MetaDescription = metaDescription,
             // パンくずの中間の段は、本人が載っている一覧（スタッフ → 声の出演 → 歌唱 → 音楽制作 の順で最初のもの）。
             // どの一覧にも載っていなければ中間の段を置かない。
-            Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForPerson(person.PersonId), displayName),
+            Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForPerson(person.PersonId), displayLabel),
             OgType = "profile",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(displayName, personUrl, involvementGroups, allPersonInvolvements, firstAppearance, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(displayLabel, personUrl, involvementGroups, allPersonInvolvements, firstAppearance, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
         };
 
         _page.RenderAndWriteFile(personUrl, "persons-detail.sbn", content, layout);

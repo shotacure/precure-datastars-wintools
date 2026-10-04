@@ -33,6 +33,11 @@ public sealed class Person
     /// <summary>英語表記（任意）。</summary>
     public string? NameEn { get; set; }
 
+    /// <summary>同姓同名の別人を見分ける添え書き（任意。例:「声優」「背景美術」）。
+    /// サイトの URL と名乗り（人物詳細の見出し・検索・一覧の行表記）に「渡辺 久美子 (声優)」の形で添える。
+    /// クレジットの中の名前には付けない。</summary>
+    public string? Disambiguation { get; set; }
+
     /// <summary>生年（西暦、任意）。判明していれば値を保持する（<see cref="BirthYearVisibility"/> が <c>PRIVATE</c> でも値の保持自体は可）。不明なら <c>null</c>。</summary>
     public ushort? BirthYear { get; set; }
 

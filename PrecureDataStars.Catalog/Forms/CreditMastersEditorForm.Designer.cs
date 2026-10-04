@@ -50,6 +50,7 @@ partial class CreditMastersEditorForm
     private TextBox txtPFullName = null!;
     private TextBox txtPFullNameKana = null!;
     private TextBox txtPNameEn = null!;
+    private TextBox txtPDisambiguation = null!;
     /// <summary>本名義（persons.primary_alias_id）の選択。先頭は「指定なし」、続けてその人物の名義。</summary>
     private ComboBox cboPPrimaryAlias = null!;
     private TextBox txtPNotes = null!;
@@ -584,6 +585,10 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "Instagram",       txtPInstagramUrl,   18, 464, inputWidth: 450);
         AddLabeledControl(pnl, "YouTube",         txtPYoutubeUrl,     18, 496, inputWidth: 450);
         AddLabeledControl(pnl, "Wikipedia (内部)", txtPWikipediaUrl,   18, 528, inputWidth: 450);
+
+        // 同姓同名の別人を見分ける添え書き（例: 声優 / 背景美術）。サイトの URL と見出しに「名前 (添え書き)」で添える。
+        txtPDisambiguation = new TextBox();
+        AddLabeledControl(pnl, "添え書き",        txtPDisambiguation, 18, 560, inputWidth: 200);
 
         btnNewPerson = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSavePerson = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };

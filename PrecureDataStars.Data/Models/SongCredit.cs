@@ -51,4 +51,6 @@ public static class SongCreditRoles
     public const string Composition = "COMPOSITION";
     /// <summary>編曲。</summary>
     public const string Arrangement = "ARRANGEMENT";
+    /// <summary>メドレー編曲（メドレーの曲の全体の編曲。編曲とは別に集計する）。</summary>
+    public const string MedleyArrangement = "MEDLEY_ARRANGEMENT";
 }

@@ -176,6 +176,17 @@ public static class SiteDataLoader
             .ToDictionary(g => g.Key, g => (IReadOnlyList<SongCredit>)g.ToList());
         logger.Info($"song_credits: {songCreditsBySong.Count} 曲分");
 
+        // メドレーの中の曲（song_medley_parts）。メドレー → 中の曲（part_seq 順）と、原曲 → 入っているメドレーの 2 方向に引く。
+        var medleyParts = await new SongMedleyPartsRepository(factory).GetAllAsync(ct).ConfigureAwait(false);
+        var medleyPartsByMedley = medleyParts
+            .GroupBy(p => p.MedleySongId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<SongMedleyPart>)g.OrderBy(p => p.PartSeq).ToList());
+        var medleySongIdsBySource = medleyParts
+            .Where(p => p.SourceSongId.HasValue)
+            .GroupBy(p => p.SourceSongId!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<int>)g.Select(p => p.MedleySongId).Distinct().OrderBy(id => id).ToList());
+        logger.Info($"song_medley_parts: {medleyPartsByMedley.Count} メドレー分");
+
         var singersByRecording = (await songRecordingSingersRepo.GetAllAsync(ct).ConfigureAwait(false))
             .GroupBy(s => s.SongRecordingId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<SongRecordingSinger>)g.ToList());
@@ -320,6 +331,8 @@ public static class SiteDataLoader
             EpisodeUsesByEpisode = episodeUsesByEpisode,
             TracksByCatalogNo = tracksByCatalogNo,
             SongCreditsBySong = songCreditsBySong,
+            MedleyPartsByMedley = medleyPartsByMedley,
+            MedleySongIdsBySource = medleySongIdsBySource,
             SingersByRecording = singersByRecording,
             UnitMembersByAlias = unitMembersByAlias,
             BgmCuesBySeries = bgmCuesBySeries,

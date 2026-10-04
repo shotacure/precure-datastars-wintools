@@ -80,6 +80,12 @@ public sealed class BuildContext
     /// </summary>
     public required IReadOnlyDictionary<int, IReadOnlyList<SongCredit>> SongCreditsBySong { get; init; }
 
+    /// <summary>メドレーの曲（song_id）→ その中の曲（<c>song_medley_parts</c>、part_seq 昇順）。</summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<SongMedleyPart>> MedleyPartsByMedley { get; init; }
+
+    /// <summary>原曲（song_id）→ その曲が入っているメドレーの曲の song_id（昇順、重複なし）。</summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<int>> MedleySongIdsBySource { get; init; }
+
     /// <summary>
     /// 全 <c>song_recording_singers</c> 行を song_recording_id 単位で事前グルーピングした辞書。
     /// SongsGenerator と ProductsGenerator の双方で「録音ごとに歌唱者連名を引く」処理が走るため、

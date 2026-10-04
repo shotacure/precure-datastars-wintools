@@ -2972,6 +2972,31 @@ CREATE TABLE `song_credits` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `song_medley_parts`
+-- メドレーの中の曲を順序付きで持つ対応表（1 行 = メドレーの中の 1 曲）。
+-- source_song_id は原曲（版違いは表記どおりの版の曲）。原曲の曲名・作詞・作曲・編曲は原曲（songs / song_credits）から引く。
+--
+DROP TABLE IF EXISTS `song_medley_parts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `song_medley_parts` (
+  `medley_song_id`      int              NOT NULL,
+  `part_seq`            tinyint unsigned NOT NULL,
+  `source_song_id`      int              DEFAULT NULL,
+  `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`          varchar(64)      DEFAULT NULL,
+  `updated_by`          varchar(64)      DEFAULT NULL,
+  PRIMARY KEY (`medley_song_id`, `part_seq`),
+  KEY `ix_song_medley_parts_source` (`source_song_id`),
+  CONSTRAINT `ck_song_medley_parts_seq_pos` CHECK (`part_seq` >= 1),
+  CONSTRAINT `fk_song_medley_parts_medley` FOREIGN KEY (`medley_song_id`) REFERENCES `songs` (`song_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_song_medley_parts_source` FOREIGN KEY (`source_song_id`) REFERENCES `songs` (`song_id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `song_recording_singers`
 -- 歌唱者連名。billing_kind = PERSON / CHARACTER_WITH_CV の 2 値。
 -- 既存 song_recordings.singer_name はフォールバックとして温存。

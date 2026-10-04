@@ -46,6 +46,9 @@
             {{~ if r.CreditMetaHtml != "" ~}}
             {{ r.CreditMetaHtml }}
             {{~ end ~}}
+            {{~ if r.MedleyPartsHtml != "" ~}}
+            {{ r.MedleyPartsHtml }}
+            {{~ end ~}}
           </div>
           <div class="songs-card-badge-cell">
             {{~ if r.MusicClassLabel != "" ~}}

@@ -5408,6 +5408,34 @@ a.credit-card-series:focus-visible {
   line-height: 1.7;
   gap: 4px 10px;
 }
+/* メドレーの曲の中の曲（.medley-parts）。曲詳細の「収録曲」と、楽曲の一覧のカードの開け閉めの枠で共用する。
+   各曲は原曲の曲名（原曲へのリンク）の下に、原曲の作詞・作曲・編曲のバッジの行を置く。 */
+.medley-parts {
+  margin: 6px 0 0;
+  padding-left: 1.6em;
+}
+.medley-parts > li {
+  margin: 0 0 6px;
+}
+.medley-parts .staff-badges-row {
+  margin-top: 2px;
+  font-size: 0.85em;
+}
+/* 楽曲の一覧のカードでは、中の曲を開け閉めの枠に包む。カードの中身はオーバーレイへクリックを素通しにして
+   いるため（.songs-card-grid の pointer-events: none）、枠の見出しと中身だけはクリックを拾うように戻す。 */
+.songs-card-medley {
+  margin-top: 6px;
+  font-size: 0.85em;
+  pointer-events: auto;
+}
+.songs-card-medley > summary {
+  cursor: pointer;
+  color: var(--muted);
+  width: max-content;
+}
+.songs-card-medley .medley-parts .staff-badges-row {
+  font-size: 0.9em;
+}
 .songs-card-badge-cell {
   justify-self: end;
   align-self: start;
@@ -5498,8 +5526,9 @@ a.credit-card-series:focus-visible {
   color: #a17821;
   border-color: rgba(217, 167, 58, 0.45);
 }
-.role-badge[data-role-code="ARRANGEMENT"] {
-  /* 編曲 = 緑系 */
+.role-badge[data-role-code="ARRANGEMENT"],
+.role-badge[data-role-code="MEDLEY_ARRANGEMENT"] {
+  /* 編曲・メドレー編曲 = 緑系 */
   background: rgba(92, 174, 92, 0.16);
   color: #3c823c;
   border-color: rgba(92, 174, 92, 0.45);

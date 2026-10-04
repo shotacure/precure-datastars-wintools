@@ -318,7 +318,9 @@ public partial class MainForm : Form
                 _seriesRepo,
                 // 構造化クレジット用
                 _personAliasesRepo, _songCreditsRepo,
-                _songRecordingSingersRepo, _characterAliasesRepo);
+                _songRecordingSingersRepo, _characterAliasesRepo,
+                // メドレーの中身
+                new SongMedleyPartsRepository(_factory));
             f.ShowDialog();
         });
 

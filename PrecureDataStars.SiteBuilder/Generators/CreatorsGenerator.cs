@@ -79,6 +79,7 @@ public sealed class CreatorsGenerator
         SongCreditRoles.Lyrics,
         SongCreditRoles.Composition,
         SongCreditRoles.Arrangement,
+        SongCreditRoles.MedleyArrangement,
     };
 
     public CreatorsGenerator(

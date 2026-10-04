@@ -216,6 +216,9 @@
         {{~ if t.ArrangementHtml != "" ~}}
         <div class="ts-meta-row"><span class="ts-meta-label">{{ t.ArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ArrangementHtml }}</span></div>
         {{~ end ~}}
+        {{~ if t.MedleyArrangementHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.MedleyArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.MedleyArrangementHtml }}</span></div>
+        {{~ end ~}}
         {{~ if t.Notes != "" ~}}
         <div class="ts-meta-row ts-meta-notes muted">{{ t.Notes | html.escape }}</div>
         {{~ end ~}}

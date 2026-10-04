@@ -299,6 +299,10 @@ public static class RoleTemplateRenderer
                 return currentSong?.ComposerHtml ?? "";
             case "ARRANGER":
                 return currentSong?.ArrangerHtml ?? "";
+            case "MEDLEY_ARRANGER":
+                // 楽曲スコープ：メドレー編曲の連名（リンク化済み HTML）。無い曲は空文字列で、
+                // テンプレ側で {?MEDLEY_ARRANGER}メドレー編曲:{MEDLEY_ARRANGER}{/?MEDLEY_ARRANGER} のように条件展開できる。
+                return currentSong?.MedleyArrangerHtml ?? "";
             case "SINGER":
                 return currentSong?.SingerHtml ?? "";
             case "CHORUS":

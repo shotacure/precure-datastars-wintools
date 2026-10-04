@@ -63,6 +63,10 @@ public sealed class ThemeSongRow
     public string ArrangementHtml { get; set; } = "";
     /// <summary>「編曲」役職ラベル HTML。</summary>
     public string ArrangementRoleLabelHtml { get; set; } = "";
+    /// <summary>メドレー編曲の表示用 HTML（構造化行だけ。無ければ空文字で、テンプレは行を出さない）。</summary>
+    public string MedleyArrangementHtml { get; set; } = "";
+    /// <summary>「メドレー編曲」役職ラベル HTML。</summary>
+    public string MedleyArrangementRoleLabelHtml { get; set; } = "";
     /// <summary>歌唱者の表示用 HTML。</summary>
     public string VocalistsHtml { get; set; } = "";
     /// <summary>「歌」役職ラベル HTML（/creators/roles/VOCALS/ リンク付き、未登録時は固定文字列「歌」）。</summary>
@@ -181,6 +185,8 @@ public sealed class ThemeSongRowBuilder
             string compositionRoleLabelHtml = "";
             string arrangementHtml = "";
             string arrangementRoleLabelHtml = "";
+            string medleyArrangementHtml = "";
+            string medleyArrangementRoleLabelHtml = "";
             if (song is not null)
             {
                 var credits = await GetSongCreditsAsync(song.SongId).ConfigureAwait(false);
@@ -190,6 +196,10 @@ public sealed class ThemeSongRowBuilder
                 lyricsRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Lyrics, roleMap, "作詞");
                 compositionRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Composition, roleMap, "作曲");
                 arrangementRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Arrangement, roleMap, "編曲");
+                // メドレー編曲（メドレーの曲の全体の編曲）は構造化行だけ。無い曲では行を出さない。
+                medleyArrangementHtml = BuildCreditRoleHtml(credits, SongCreditRoles.MedleyArrangement, null, personAliasMap);
+                if (!string.IsNullOrEmpty(medleyArrangementHtml))
+                    medleyArrangementRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.MedleyArrangement, roleMap, "メドレー編曲");
             }
 
             string vocalistsHtml = "";
@@ -241,6 +251,8 @@ public sealed class ThemeSongRowBuilder
                 CompositionRoleLabelHtml = compositionRoleLabelHtml,
                 ArrangementHtml = arrangementHtml,
                 ArrangementRoleLabelHtml = arrangementRoleLabelHtml,
+                MedleyArrangementHtml = medleyArrangementHtml,
+                MedleyArrangementRoleLabelHtml = medleyArrangementRoleLabelHtml,
                 VocalistsHtml = vocalistsHtml,
                 VocalistsRoleLabelHtml = vocalistsRoleLabelHtml,
                 ChorusHtml = chorusHtml,

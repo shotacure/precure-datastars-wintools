@@ -217,6 +217,9 @@ public static class ThemeSongsHandler
                 r.ArrangerHtml = !string.IsNullOrEmpty(arrHtml)
                     ? arrHtml
                     : (string.IsNullOrEmpty(r.ArrangerName) ? "" : System.Net.WebUtility.HtmlEncode(r.ArrangerName));
+
+                // メドレー編曲：構造化行だけ（フリーテキスト列は持たない）。無い曲は空文字列。
+                r.MedleyArrangerHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false) ?? "";
             }
             if (r.SongRecordingId > 0)
             {
@@ -293,6 +296,11 @@ public static class ThemeSongsHandler
             var label = await RoleLabel(SongCreditRoles.Arrangement, "編曲").ConfigureAwait(false);
             sb.Append(label).Append(':').Append(r.ArrangerHtml).Append('\n');
         }
+        if (!string.IsNullOrEmpty(r.MedleyArrangerHtml))
+        {
+            var label = await RoleLabel(SongCreditRoles.MedleyArrangement, "メドレー編曲").ConfigureAwait(false);
+            sb.Append(label).Append(':').Append(r.MedleyArrangerHtml).Append('\n');
+        }
         if (!string.IsNullOrEmpty(r.SingerHtml))
         {
             var label = await RoleLabel(SongRecordingSingerRoles.Vocals, "うた").ConfigureAwait(false);
@@ -336,6 +344,8 @@ public static class ThemeSongsHandler
         public string LyricistHtml { get; set; } = "";
         public string ComposerHtml { get; set; } = "";
         public string ArrangerHtml { get; set; } = "";
+        /// <summary>メドレー編曲（<c>MEDLEY_ARRANGEMENT</c>）連名のリンク化済み HTML。無ければ空文字列。テンプレ側で <c>{MEDLEY_ARRANGER}</c> として参照する。</summary>
+        public string MedleyArrangerHtml { get; set; } = "";
         public string SingerHtml { get; set; } = "";
 
         /// <summary>コーラス（<c>BACKING_VOCALS</c>）連名のリンク化済み HTML。 該当録音にコーラス歌唱者が居なければ空文字列。テンプレ側で <c>{CHORUS}</c> として参照する。</summary>

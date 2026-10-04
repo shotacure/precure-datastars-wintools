@@ -40,7 +40,7 @@ public sealed class SongCreditsRepository : RepositoryBase
             SELECT {SelectColumns}
             FROM song_credits
             WHERE song_id = @songId
-            ORDER BY FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
+            ORDER BY FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT','MEDLEY_ARRANGEMENT'), credit_role, credit_seq;
             """;
 
         return await QueryListAsync<SongCredit>(sql, new { songId }, ct).ConfigureAwait(false);
@@ -52,7 +52,7 @@ public sealed class SongCreditsRepository : RepositoryBase
         string sql = $"""
             SELECT {SelectColumns}
             FROM song_credits
-            ORDER BY song_id, FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
+            ORDER BY song_id, FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT','MEDLEY_ARRANGEMENT'), credit_role, credit_seq;
             """;
 
         return await QueryListAsync<SongCredit>(sql, ct: ct).ConfigureAwait(false);

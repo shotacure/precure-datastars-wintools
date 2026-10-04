@@ -1636,6 +1636,21 @@ series_relation_kinds ──┘    │            │
 
 > `song_recording_singers.role_code` は `VOCALS`（歌）・`BACKING_VOCALS`（コーラス）・`DIALOGUE`（台詞：歌わずに曲中のセリフだけで参加する出演者）の 3 役を持つ。書式は 3 役とも同じ（キャラは「キャラ(CV:声優)」）で、楽曲詳細・商品詳細のトラック行・エピソード／シリーズの主題歌欄に歌 → コーラス → 台詞の順で並ぶ。`/creators/roles/vocals/` の担当曲数に数えるのは `VOCALS` だけ。
 
+#### `song_medley_parts` — メドレーの中の曲
+
+メドレーの曲の中の曲を、順序付きの対応表として 1 行 = メドレーの中の 1 曲で持つ。PK は `(medley_song_id, part_seq)`。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `medley_song_id` | INT FK | メドレーの曲（→ `songs`、ON DELETE CASCADE） |
+| `part_seq` | TINYINT UNSIGNED | メドレーの中で何曲目か（1 始まり）。同じ原曲が何度出てもよい |
+| `source_song_id` | INT FK NULL | 原曲（→ `songs`、ON DELETE SET NULL）。版違いは表記どおりの版の曲を指す。原曲が DB に無いときは NULL |
+| `notes` | TEXT NULL | 備考 |
+
+> 原曲の曲名・作詞・作曲・編曲は原曲（`songs` / `song_credits`）から引くので、この表は原曲への紐付けだけを持つ。メドレー全体の編曲は `song_credits` の役職 `MEDLEY_ARRANGEMENT`「メドレー編曲」で持ち、編曲（`ARRANGEMENT`）とは別の役職として集計する（役職詳細 `/creators/roles/medley_arrangement/` は作詞・作曲・編曲と同じ専用集計）。
+>
+> サイトは、曲詳細の基本情報に「メドレー編曲」のバッジ（色は編曲と同じ緑系）を足し、メドレーの曲には「収録曲」（原曲の曲名（原曲へのリンク）と、原曲の作詞・作曲・編曲のバッジの行を順に並べる。楽曲の一覧のカードでは同じ一覧を開け閉めの枠 `<details class="songs-card-medley">`「収録曲（N 曲）」に包んで添える）、原曲には「このメドレーに入っています」（メドレーへのリンク）の節を出す。原曲の作家はメドレーの作家として数えない。メドレー編曲は、盤のトラックの作家の行、シリーズ・エピソードの主題歌の行、クレジットのテンプレの主題歌（`{MEDLEY_ARRANGER}`、既定の描画では「メドレー編曲:」の行）、OGP カード、人物詳細の音楽クレジット（作詞・作曲・編曲の区分）にも出る。入力は Catalog の「歌管理」の曲の構造化クレジットの「メドレー編曲」（連名）と「メドレーの中身」（`SongMedleyPartsEditDialog`。原曲を行ごとに選び、上下で並べ替え、保存で丸ごと差し替え）
+
 #### `music_credits` — 音盤の音楽クレジット
 
 音盤のブックレットに載る音楽クレジット（演奏・コーラス等 / レコーディング / 音盤製作）を 1 行 = 1 名義で持つ。紐付け先は `target_kind` で次のいずれか 1 つに決まり、対応する列だけを埋める（CHECK `ck_music_credits_target`）。

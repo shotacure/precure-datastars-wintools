@@ -1618,6 +1618,7 @@ public sealed class ProductsGenerator
                     string lyricsHtml = BuildSongCreditNamesHtml(song, "LYRICS");
                     string compositionHtml = BuildSongCreditNamesHtml(song, "COMPOSITION");
                     string arrangementHtml = BuildSongCreditNamesHtml(song, "ARRANGEMENT");
+                    string medleyArrangementHtml = BuildSongCreditNamesHtml(song, SongCreditRoles.MedleyArrangement);
                     string vocalsHtml = BuildRecordingSingersHtml(rec);
                     string chorusHtml = BuildRecordingChorusHtml(rec);
                     string dialogueHtml = _creditHtml!.BuildRecordingDialogueHtml(rec);
@@ -1626,6 +1627,7 @@ public sealed class ProductsGenerator
                         ("LYRICS",         "作詞",   lyricsHtml),
                         ("COMPOSITION",    "作曲",   compositionHtml),
                         ("ARRANGEMENT",    "編曲",   arrangementHtml),
+                        (SongCreditRoles.MedleyArrangement, "メドレー編曲", medleyArrangementHtml),
                         ("VOCALS",         "歌",     vocalsHtml),
                         ("BACKING_VOCALS", "コーラス", chorusHtml),
                         ("DIALOGUE",       "台詞",   dialogueHtml),

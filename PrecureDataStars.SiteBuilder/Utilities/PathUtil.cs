@@ -135,7 +135,8 @@ public static class PathUtil
         => IsSingerRole(roleCode) ? CreatorsSingersUrl()
          : roleCode is PrecureDataStars.Data.Models.SongCreditRoles.Lyrics
              or PrecureDataStars.Data.Models.SongCreditRoles.Composition
-             or PrecureDataStars.Data.Models.SongCreditRoles.Arrangement ? CreatorsRoleUrl(roleCode)
+             or PrecureDataStars.Data.Models.SongCreditRoles.Arrangement
+             or PrecureDataStars.Data.Models.SongCreditRoles.MedleyArrangement ? CreatorsRoleUrl(roleCode)
          : "";
 
     /// <summary>歌唱系の役職（歌・コーラス・台詞）か。これらは役職詳細ページを持たず歌唱ページに集約する。</summary>

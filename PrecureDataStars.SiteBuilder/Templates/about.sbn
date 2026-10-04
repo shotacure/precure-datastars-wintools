@@ -6,37 +6,85 @@
   <h2>{{ SiteBrandLabel | html.escape }}とは</h2>
   <p>
     {{ SiteName }} は、歴代プリキュアシリーズのエピソード・スタッフクレジット・キャラクター・
-    主題歌・劇伴・音楽商品まで横断してまとめた、個人運営の非公式ファンデータベースです。
+    主題歌・劇伴・音楽商品・書籍を横断してまとめた、個人運営の非公式ファンデータベースです。
   </p>
   <p>
-    「こんな情報も集めてほしい」というリクエストがあれば、お気軽にお寄せください。
+    プリキュアを楽しむための基礎資料を整え、集めた知識をファンの皆さんにも作品に関わる方々にも
+    役立ててもらうことが、このサイトの目的です。放送・パッケージソフト・公式刊行物といった一次資料にもとづいて
+    事実を記録し、推測で補いません。
+  </p>
+  <p>
+    「こんな情報も集めてほしい」というご要望は、<a href="/contact/">お問い合わせ</a>からお気軽にお寄せください。
   </p>
 </section>
 
-{{## 運営者（人）の紹介。長年のファン＝運営者の実在・専門性（E-E-A-T）を示しつつ、創作活動を
-     まとめた姉妹サイト SHOWTIME へ文脈リンクする（nofollow を付けずフォロー可＝クロール評価を渡す）。 ##}}
+{{## 運営者がこのサイトを作った理由。本人の言葉として一人称で書く。
+     論旨は「先輩方の研究資料に導かれた原体験 → プリキュアとは大人として向き合ってきた →
+     恩返しとして次の世代へバトンを渡す → 世界中の方々への願い」の順。 ##}}
+<section id="motivation">
+  <h2>このサイトを作った理由</h2>
+  <p>
+    幼いころに夢中になった作品と、大人になってから改めて向き合ったことがあります。
+    そのとき道しるべになったのは、先輩のファンの方々が長い年月をかけて残してくださった、膨大な研究資料でした。
+    資料をたどるほどに作品の見え方は変わり、知らなかった楽しみ方がいくつも開けていきました。
+    研究の蓄積は、作品そのものと並ぶファンの財産なのだと、そのとき知りました。
+  </p>
+  <p>
+    プリキュアが始まった 2004 年、私は 21 歳の学生でした。学生でありながら、もう大人でもあった年齢です。
+    だからこの作品とは最初から、映像や音楽のパッケージ・書籍を自分の手で集め、
+    いわゆる「大きなお友達」の目で向き合ってきました。
+  </p>
+  <p>
+    かつて導いてくださった先輩方への恩返しに、私も自分にできることで誰かの役に立ちたいと思いました。
+    知っていることを分かち合い、新しい楽しみ方を提案して、次の世代へバトンを渡していく。
+    そのための場所として、このサイトを作りました。
+  </p>
+  <p>
+    ここに集めた情報を起点に、世界中のたくさんの方が、年齢も性別も問わず、プリキュアの新しい楽しみ方を見つけてくださること。
+    それが、このサイトの願いです。
+  </p>
+</section>
+
+{{## 運営者の紹介。長年のファンであること、プリキュアでの活動の経歴、X アカウントを示し、
+     創作活動の全体をまとめた姉妹サイト SHOWTIME へ文脈リンクする（nofollow を付けずフォロー可）。
+     経歴は本人の申告にもとづく固定の文字列で、新しいものが上。 ##}}
 <section id="operator">
   <h2>運営者について</h2>
   <p>
-    {{ SiteName }} は、サークル「SHOWTIME」代表・祥太が個人で制作・運営しています。
-    プリキュアが大好きなひとりとして、長年作品を見つめ続けるなかで集めてきた資料や
-    気づきを、同じファンの皆さんに役立つ形で残したい——そんな思いから本データベースを
-    立ち上げました。
+    {{ SiteName }} は、サークル「SHOWTIME」代表の祥太（X：<a href="https://x.com/shota_" target="_blank" rel="noopener noreferrer">@shota_</a>）が個人で制作・運営しています。
+    プリキュアが大好きなひとりとして、長年作品を見つめ続けるなかで集めてきた資料や気づきを、
+    同じファンの皆さんに役立つ形で残すために、このデータベースを運営しています。
   </p>
+  <p>プリキュアでは、このような活動をしてきました。</p>
+  <ul class="about-career-list">
+    <li><time class="about-career-date" datetime="2025-03-23">2025年3月23日</time><a href="https://www.toei-anim.co.jp/tv/mahotsukai_precure2/episode/summary/11/" target="_blank" rel="noopener noreferrer">『魔法つかいプリキュア！！ 〜MIRAI DAYS〜』第11話</a> — レイアウト・ラフ原画</li>
+    <li><time class="about-career-date" datetime="2024-10-28">2024年10月28日</time><a href="https://ddnavi.com/review/1428422/a/" target="_blank" rel="noopener noreferrer">「小説 ドキドキ！プリキュア」PR 記事（全 3 回）</a> — 執筆</li>
+    <li><time class="about-career-date" datetime="2023-12-03">2023年12月3日</time><a href="https://ddnavi.com/review/1215035/a/" target="_blank" rel="noopener noreferrer">「プリキュアコスチュームクロニクル」PR 記事</a> — 執筆</li>
+    <li><time class="about-career-date" datetime="2023-11-29">2023年11月29日</time><a href="https://www.marv.jp/titles/mc/10521/" target="_blank" rel="noopener noreferrer">「プリキュア ボーカルベストBOX 2018-2023」</a> — 選曲協力</li>
+    <li><time class="about-career-date" datetime="2022-09-03">2022年9月3日</time><a href="https://team-max.co.jp/2022/07/08/curemetalnite2022/" target="_blank" rel="noopener noreferrer">「高梨康治 CureMetalNite 2022」</a> — 企画協力、パンフレット構成・編集</li>
+    <li><time class="about-career-date" datetime="2020-01-25">2020年1月25日</time><a href="https://animestyle.jp/shop/archives/1645" target="_blank" rel="noopener noreferrer">「馬越嘉彦 仕事集 第一巻」</a> — 編集協力</li>
+    <li><time class="about-career-date" datetime="2019-09-09">2019年9月9日</time><a href="https://www.mediapal.co.jp/book/3161/" target="_blank" rel="noopener noreferrer">「馬越嘉彦アニメーション原画集 第二巻」</a> — 編集作業補佐</li>
+    <li><time class="about-career-date" datetime="2018-03-28">2018年3月28日</time><a href="https://www.marv.jp/titles/mc/9257/" target="_blank" rel="noopener noreferrer">「プリキュアボーカルベストBOX 2013-2017」</a> — 選曲協力</li>
+    <li><time class="about-career-date" datetime="2016-08-27">2016年8月27日</time><a href="https://team-max.co.jp/2016/08/30/cmn2016/" target="_blank" rel="noopener noreferrer">「高梨康治 -CureMetalNite 2016- The Last」</a> — パンフレット構成・編集</li>
+    <li><time class="about-career-date" datetime="2013-09-04">2013年9月4日</time><a href="https://www.marv.jp/special/precurecdbox/" target="_blank" rel="noopener noreferrer">「プリキュアボーカルベストBOX」</a> — 選曲協力</li>
+  </ul>
   <p>
-    同人活動やイベント出演、（公式を含む）お仕事としての創作活動は、
-    「<a href="https://showtime.precure.tv/" target="_blank" rel="noopener noreferrer">SHOWTIME ―ショウタイム―</a>」
-    にまとめています。
+    同人誌やイベント出演を含む創作活動の全体は、
+    「<a href="https://showtime.precure.tv/" target="_blank" rel="noopener noreferrer">SHOWTIME ―ショウタイム―</a>」にまとめています。
   </p>
 </section>
 
+{{## サイトの方針。実際の運用（一次資料・画面どおりのクレジット・公開情報だけ・あらすじは扱わない・
+     放送画面の画像は載せない・音楽の範囲）をそのまま書く。詳しい出どころは /about/sources/ に委ねる。 ##}}
 <section id="design-policy">
-  <h2>サイトの設計方針</h2>
-  <ul>
-    <li>歴代プリキュアシリーズの情報を一箇所に集め、ファンに役立つデータベースにします。</li>
-    <li>著作物は公式または流通プラットフォームが提供するものを適切に使用します。</li>
-    <li>クレジットは作品を正とします。誤記には注記を付け、表記の揺れはシステムの側で吸収します。</li>
-    <li>音楽は公式商品のほか、アーティストとのタイアップ曲の初出盤やコラボレーション企画も含めます。</li>
+  <h2>サイトの方針</h2>
+  <ul class="about-policy-list">
+    <li><strong>一次資料にもとづきます。</strong>放送・配信・Blu-ray / DVD・CD・公式刊行物・公式サイトから採り、どこから採ったかは<a href="/about/sources/">データの出典</a>で種別ごとに示します。</li>
+    <li><strong>クレジットは画面のとおりに記録します。</strong>名義の表記揺れは同じ方として結び付け、誤記は正しい表記に書き換えず、誤記として注記します。</li>
+    <li><strong>人物の情報は、公開されているものだけを載せます。</strong>読み・誕生日・SNS は、ご本人または所属先が公開している情報から採り、推測で補いません。</li>
+    <li><strong>あらすじと感想は扱いません。</strong>事実の記録に絞り、各話のあらすじは東映アニメーション公式サイトへ案内します。</li>
+    <li><strong>放送画面の画像は載せません。</strong>載せる画像は、Amazon が提供する商品画像の参照と、本編と同様のフォントで当サイトが描いたサブタイトル画像・SNS 共有用のカード画像です。</li>
+    <li><strong>音楽商品は、プリキュアの公式商品を中心に収録します。</strong>主題歌・挿入歌・サウンドトラックの CD のほか、プリキュアの商品ではなくても、タイアップ曲が初めて収録された歌手の方のアルバムや、コラボレーション企画の商品も対象にします。</li>
   </ul>
 </section>
 
@@ -51,8 +99,8 @@
     当サイトは、それら権利者様とは関係のない、個人運営の非公式ファンサイトです。
   </p>
   <p class="muted">
-    対象ごとの権利の整理（著作権と商標権の関係など）は、<a href="/disclaimer/">免責事項</a>の
-    「著作権・知的財産権について」で詳しく説明しています。
+    対象ごとの権利の整理（著作権と商標権の関係など）は、<a href="/disclaimer/#copyright">免責事項</a>の
+    「著作権・知的財産権について」で説明しています。
   </p>
 </section>
 
@@ -60,11 +108,11 @@
      プライバシーポリシー・免責事項・お問い合わせ・データの出典の 4 ページを並べて紹介する。 ##}}
 <section id="operations-info">
   <h2>運営に関するご案内</h2>
-  <p>このサイトの運営方針・情報の取り扱い・お問い合わせ窓口については、以下の各ページをご参照ください。</p>
+  <p>このサイトの運営方針・情報の取り扱い・お問い合わせ窓口は、以下の各ページで説明しています。</p>
   <ul class="about-operations-list">
-    <li><a href="/privacy/">プライバシーポリシー</a> — Cookie、アクセス解析、広告配信に関する取り扱いについて。</li>
-    <li><a href="/disclaimer/">免責事項</a> — 情報の正確性・著作権・外部リンクに関する取り扱いについて。</li>
-    <li><a href="/contact/">お問い合わせ</a> — 誤情報のご指摘・ご意見・取材依頼などの窓口。</li>
+    <li><a href="/privacy/">プライバシーポリシー</a> — Cookie とブラウザへの保存、アクセス解析、広告配信、外部への情報送信、お問い合わせで受け取る情報の取り扱い。</li>
+    <li><a href="/disclaimer/">免責事項</a> — 情報の正確性、著作権と商標、サブタイトル画像とフォント、当サイトの内容の利用、Amazon アソシエイト、準拠法と管轄。</li>
+    <li><a href="/contact/">お問い合わせ</a> — 誤りのご指摘・ご意見・ご本人からの訂正・引用や取材のご依頼の窓口。</li>
     <li><a href="/about/sources/">データの出典</a> — 各データをどこから採ったかと、収録の決まり。</li>
   </ul>
 </section>

@@ -1119,7 +1119,7 @@ public sealed class AboutGenerator
         var layout = new LayoutModel
         {
             PageTitle = "このサイトについて",
-            MetaDescription = $"{_ctx.Config.SiteBrandLabel}について。どんなサイトか、運営者、データの扱い方などの設計方針、権利表記を説明しています。",
+            MetaDescription = $"{_ctx.Config.SiteBrandLabel}について。どんなサイトか、運営者とプリキュアでの活動、データの扱い方の方針、権利表記を説明しています。",
             // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
             SuppressShareButtons = true,
             Breadcrumbs = new[]

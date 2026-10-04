@@ -60,7 +60,7 @@ public sealed class PolicyPagesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "プライバシーポリシー",
-            MetaDescription = $"{_ctx.Config.SiteName} のプライバシーポリシーです。Cookie・アクセス解析・広告配信の取り扱いを説明しています。",
+            MetaDescription = $"{_ctx.Config.SiteName} のプライバシーポリシーです。Cookie とブラウザへの保存、アクセス解析、広告配信、外部への情報送信、お問い合わせで受け取る情報の取り扱いを説明しています。",
             // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
             SuppressShareButtons = true,
             Breadcrumbs = new[]
@@ -83,7 +83,7 @@ public sealed class PolicyPagesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "免責事項",
-            MetaDescription = $"{_ctx.Config.SiteName} の免責事項です。情報の正確性・外部リンク・著作権の取り扱いを説明しています。",
+            MetaDescription = $"{_ctx.Config.SiteName} の免責事項です。情報の正確性、著作権と商標、サブタイトル画像とフォント、当サイトの内容の利用、Amazon アソシエイト、準拠法と管轄を説明しています。",
             // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
             SuppressShareButtons = true,
             Breadcrumbs = new[]
@@ -171,7 +171,7 @@ public sealed class PolicyPagesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "お問い合わせ",
-            MetaDescription = $"{_ctx.Config.SiteName} へのお問い合わせページです。誤情報のご指摘、ご意見、利用に関するご質問はこちらからお寄せください。",
+            MetaDescription = $"{_ctx.Config.SiteName} へのお問い合わせページです。誤りのご指摘、ご意見、ご本人からの訂正、引用や取材のご依頼はこちらからお寄せください。",
             // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
             SuppressShareButtons = true,
             Breadcrumbs = new[]

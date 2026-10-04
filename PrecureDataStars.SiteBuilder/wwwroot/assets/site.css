@@ -7484,6 +7484,37 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   line-height: 1.7;
 }
 
+/* ─────────── 免責事項：使用フォントの一覧 ─────────── */
+/* 「サブタイトル画像について」の折りたたみ。ライセンスごとの小見出し → フォントの箇条書き。
+   各行は「製品名（製品ページへのリンク）＋ Windows の書体名（薄く）」、2 行目に使っている作品。 */
+.subtitle-font-list { margin-top: 10px; }
+.subtitle-font-license {
+  font-size: 0.95em;
+  margin: 12px 0 4px;
+}
+.subtitle-font-list ul {
+  margin: 0;
+  padding-left: 1.3em;
+}
+.subtitle-font-list li {
+  margin: 4px 0;
+  line-height: 1.6;
+}
+.subtitle-font-name {
+  margin-left: 0.4em;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.subtitle-font-usage {
+  display: block;
+  font-size: 0.88em;
+  color: var(--muted);
+}
+.subtitle-font-ruby-note {
+  font-size: 0.9em;
+  color: var(--muted);
+}
+
 /* ─────────── お問い合わせページ：窓口カード ─────────── */
 /* X / メールの 2 窓口をカード全体クリックで開ける形にする（シェアカードと同じ世界観）。 */
 .contact-channel-cards {

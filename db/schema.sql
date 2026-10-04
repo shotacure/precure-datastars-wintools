@@ -323,6 +323,28 @@ CREATE TABLE `series_subtitle_styles` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `subtitle_fonts`
+--
+
+DROP TABLE IF EXISTS `subtitle_fonts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+-- サブタイトルのテロップ画像（エピソード詳細のサブタイトル欄・OGP カードのサブタイトル）に使うフォントのマスタ。
+-- font_name は series_subtitle_styles の font_subtitle / font_subtitle_ruby と同じ Windows の書体名で結び付く。
+-- 免責事項ページの「使用フォントの一覧」の出どころ（行の無い書体は名前だけ・リンク無しで出る）。値は SQL で入れる。
+CREATE TABLE `subtitle_fonts` (
+  `font_name` varchar(64) NOT NULL COMMENT 'Windows の書体名（series_subtitle_styles の font_subtitle / font_subtitle_ruby と同じ文字列）',
+  `license_kind` varchar(16) NOT NULL COMMENT 'ライセンス区分 FONTWORKS_LETS / MORISAWA_FONTS',
+  `display_name` varchar(64) DEFAULT NULL COMMENT '提供元の書き方の製品名（NULL なら font_name をそのまま出す）',
+  `product_url` varchar(1024) DEFAULT NULL COMMENT '提供元の製品ページ（免責事項の使用フォント一覧でリンクする先）',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`font_name`),
+  CONSTRAINT `ck_subtitle_fonts_license` CHECK (`license_kind` IN ('FONTWORKS_LETS', 'MORISAWA_FONTS'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='サブタイトルのテロップ画像に使うフォントのマスタ';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `series_kinds`
 --
 

@@ -62,6 +62,7 @@ public static class SiteDataLoader
         var productsRepo = new ProductsRepository(factory);
         var bgmSessionsRepo = new BgmSessionsRepository(factory);
         var magazineIssuesRepo = new MagazineIssuesRepository(factory);
+        var subtitleFontsRepo = new SubtitleFontsRepository(factory);
 
         // シリーズ：論理削除済を除く全件。GetAllAsync は start_date, series_id 順で返す。
         var seriesAll = await seriesRepo.GetAllAsync(ct).ConfigureAwait(false);
@@ -128,6 +129,12 @@ public static class SiteDataLoader
         // 「アニメ雑誌サブタイトル掲載」セクションで放送日 → 号の解決（MagazineIssueResolver）に使う。
         var magazineIssues = await magazineIssuesRepo.GetAllAsync(ct).ConfigureAwait(false);
         logger.Info($"magazine_issues: {magazineIssues.Count} 号");
+
+        // サブタイトルのテロップ画像に使うフォントのマスタ：免責事項の「使用フォントの一覧」で、
+        // 作品ごとの書体名（series_subtitle_styles）から製品名・製品ページ・ライセンスを引く。
+        var subtitleFonts = await subtitleFontsRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var subtitleFontByName = subtitleFonts.ToDictionary(f => f.FontName, f => f, StringComparer.Ordinal);
+        logger.Info($"subtitle_fonts: {subtitleFonts.Count} 書体");
 
         // サブタイトル解禁時刻の事前計算（DB アクセスなし。前話の on_air_at から算出するだけ）。
         // /series/{slug}/{n}/・/episodes/・ホーム・統計 7 系統・検索インデックスなど、サブタイトルが
@@ -298,6 +305,7 @@ public static class SiteDataLoader
             EpisodesBySeries = episodesBySeries,
             EpisodeById = episodeById,
             MagazineIssues = magazineIssues,
+            SubtitleFontByName = subtitleFontByName,
             PartTypeByCode = partTypeByCode,
             SeriesKindByCode = seriesKindByCode,
             SeriesIdBySlug = seriesIdBySlug,

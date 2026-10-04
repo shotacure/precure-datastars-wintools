@@ -61,6 +61,52 @@
   </p>
 </section>
 
+{{## サブタイトル画像（エピソード詳細のサブタイトル欄と OGP カードのサブタイトル）は、本編のテロップと
+     同様のフォントで当サイトが文字列から描いたもので、放送やパッケージの画面の切り出しではない。
+     本編と同じ見た目のぶん画面の転載と受け取られうるので、作り方とフォントのライセンスを明示する。 ##}}
+<section id="subtitle-images">
+  <h2>サブタイトル画像について</h2>
+  <p>
+    各話ページのサブタイトル欄と、SNS で共有したときに表示されるカード画像（OGP 画像）のサブタイトルは、
+    本編のサブタイトルテロップと同様のフォントを用いて、当サイトがサブタイトルの文字列から描いた画像です。
+    放送やパッケージソフトの画面を切り出したものではありません。
+  </p>
+  <ul>
+    <li>
+      <a href="https://lets.fontworks.co.jp/" target="_blank" rel="noopener noreferrer">フォントワークス LETS</a> および
+      <a href="https://morisawafonts.com/" target="_blank" rel="noopener noreferrer">Morisawa Fonts</a> のライセンスのもとで、
+      当サイトが適正に作成したものです。
+    </li>
+    <li>各フォントに係る権利は、それぞれの提供元に帰属します。</li>
+  </ul>
+  {{~ if SubtitleFontGroups.size > 0 ~}}
+  {{## 使用フォントの一覧。ライセンスごとに分け、1 行 = 1 フォント。製品名を提供元の製品ページへのリンクにし、
+       Windows の書体名を薄く添え、2 行目に使っている作品を並べる（複数作品が並ぶので年を付ける。
+       振り仮名の書体としてだけ使う作品には「（振り仮名）」の注記）。マスタに行の無いフォントは名前だけ（リンク無し）で出る。 ##}}
+  <details class="fmt-details subtitle-font-list">
+    <summary>使用フォントの一覧</summary>
+    {{~ for g in SubtitleFontGroups ~}}
+    <h3 class="subtitle-font-license">{{ if g.LicenseUrl != "" }}<a href="{{ g.LicenseUrl }}" target="_blank" rel="noopener noreferrer">{{ g.LicenseLabel | html.escape }}</a>{{ else }}{{ g.LicenseLabel | html.escape }}{{ end }}</h3>
+    <ul>
+      {{~ for f in g.Fonts ~}}
+      <li>
+        {{ if f.ProductUrl != "" }}<a href="{{ f.ProductUrl }}" target="_blank" rel="noopener noreferrer">{{ f.DisplayName | html.escape }}</a>{{ else }}{{ f.DisplayName | html.escape }}{{ end }}
+        {{~ if f.FontName != f.DisplayName ~}}
+        <span class="subtitle-font-name">{{ f.FontName | html.escape }}</span>
+        {{~ end ~}}
+        <span class="subtitle-font-usage">
+          {{~ for u in f.Usages ~}}
+          <a href="{{ u.SeriesUrl }}">{{ u.SeriesTitle | html.escape }}</a><span class="series-year">({{ u.SeriesStartYearLabel }})</span>{{ if u.IsRuby }}<span class="subtitle-font-ruby-note">（振り仮名）</span>{{ end }}{{ if !for.last }}、{{ end }}
+          {{~ end ~}}
+        </span>
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+  </details>
+  {{~ end ~}}
+</section>
+
 <section id="external-links">
   <h2>外部リンクについて</h2>
   <p>

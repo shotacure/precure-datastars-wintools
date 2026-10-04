@@ -1243,6 +1243,18 @@ series_relation_kinds ──┘    │            │
 
 **複合 PK**: `(issue_year, issue_month)`
 
+#### `subtitle_fonts` — サブタイトルのテロップ画像に使うフォントのマスタ
+
+エピソード詳細のサブタイトル欄と OGP カードのサブタイトルを描くフォントのマスタ。免責事項（`/disclaimer/`）の「サブタイトル画像について」に出す使用フォントの一覧の出どころで、作品ごとの設定（`series_subtitle_styles` の `font_subtitle` / `font_subtitle_ruby`）に出てくる書体名をこのテーブルで引き、製品名・製品ページ・ライセンスを添える（`PolicyPagesGenerator.BuildSubtitleFontGroups`）。一覧はライセンスごとのグループに分け、フォントは最初に使った作品の順、作品は放送開始順で並べる。行の無い書体も一覧には出る（名前だけ・リンク無し。ライセンスは書体名の接頭辞 `FOT-` / `A-SK` / `A P-OTF` から判定し、ビルドログに警告を出す）。値は SQL で入れる（Catalog に編集画面は無い）。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `font_name` | VARCHAR(64) PK | Windows の書体名（「FOT-ハミング ProN B」のように重さまで含む）。`series_subtitle_styles` の書体名と同じ文字列で結び付く |
+| `license_kind` | VARCHAR(16) | ライセンス区分。`FONTWORKS_LETS`（フォントワークス LETS）/ `MORISAWA_FONTS`（Morisawa Fonts。写研の A-SK 書体もこちら） |
+| `display_name` | VARCHAR(64) NULL | 提供元の書き方の製品名（「ハミング B」など）。NULL なら `font_name` をそのまま出す |
+| `product_url` | VARCHAR(1024) NULL | 提供元の製品ページ（一覧でリンクする先）。NULL ならリンクしない |
+| `created_at` / `updated_at` | TIMESTAMP | 作成・更新日時 |
+
 #### `part_types` — パート種別マスタ
 
 エピソードを構成するパートの種別を定義するマスタテーブル。

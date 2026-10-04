@@ -140,6 +140,86 @@ dotnet run --project PrecureDataStars.Catalog
 
 完走後のコンソールに表示される「Next steps」に従って `git tag` → `git push --tags` → GitHub Releases へ `release/*.zip` をアップロードする。
 
+### 5. データベースのバックアップと復元
+
+`scripts/backup-db.ps1` が `precure_datastars` の mysqldump を取り、`scripts/restore-db.ps1` がそれを復元する。`scripts/register-backup-task.ps1` で毎日 1 回の自動実行をタスクスケジューラに登録する。保存先などの機械固有の値はリポジトリに置かず、`%APPDATA%\precure-datastars\` の設定ファイルで指定する。
+
+**仕組み**
+
+- `backup-db.ps1`：稼働中のまま整合性のとれたダンプ（`--single-transaction`）を取って gzip 圧縮し、`precure_datastars_YYYYMMDD-HHmm[_ラベル].sql.gz` の名前で保存先（`backup-settings.json` の `localDir`）に置き、同じものをミラー先（`mirrorDir`。別のドライブやクラウドの同期フォルダ）へ写す。ミラー先のドライブが無いときは警告だけ出し、写せなかった分は次回の実行で写す。ダンプの先頭にはダンプ時点の binlog の座標をコメントで記録し（`--source-data=2`）、同じ瞬間に binlog を切り替える（`--flush-logs`）。あわせて、リポジトリに入れていないローカル専用ファイル（`db/data-fixes/`、各プロジェクトの `App.config`、`CLAUDE.md`、`docs/*.md`、`.claude/settings.local.json`、Claude Code のメモリ）を `local-files_YYYYMMDD-HHmm_<内容ハッシュ>.zip` にまとめる（内容が前回と同じなら作らない）。結果は保存先の `backup.log` に 1 行ずつ追記する。
+- 世代の間引き：ファイル名の日時で判定し、保存先・ミラー先とも同じ規則で消す。直近 30 日（`-KeepAllDays`）はすべて残し、それより前は週に 1 つ（その週で最も古いもの）を 1 年（`-KeepWeeklyDays`）まで、さらに前は月に 1 つ（その月で最も古いもの）を無期限に残す。ラベル付き（手動）のダンプと、種類ごとの最新の 1 つは消さない。`-NoPrune` で間引きをしない。
+- サーバの binlog（`log_bin=ON`、ROW 形式、30 日保持）と組み合わせると、ダンプ以後の任意の時点まで戻せる。binlog は DB と同じディスクにあるので、守れるのは操作ミスまでで、ディスク故障にはダンプのミラーで備える。
+- `restore-db.ps1`：既定では検証用スキーマ `precure_datastars_restore_test` に復元し、本番とテーブルごとの行数と `CHECKSUM TABLE` を突き合わせて表にし、終わったら検証用スキーマを消す（復元の訓練。仕組みを入れたときと月 1 回）。検証用の流し込みは binlog に残さない。`-ToProduction` で本番スキーマそのものを置き換える（直前に `-Label before-restore` の退避を取り、スキーマ名の入力で確認する）。接続は Catalog の `App.config` の root 接続文字列を読んで使う。
+
+**初期設定（1 回だけ）**
+
+1. バックアップ専用ユーザーを作る（root で実行。パスワードは任意の文字列に置き換える）：
+
+```sql
+CREATE USER 'backup_ro'@'localhost' IDENTIFIED BY '<パスワード>';
+GRANT SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES ON precure_datastars.* TO 'backup_ro'@'localhost';
+GRANT RELOAD, REPLICATION CLIENT, SHOW_ROUTINE ON *.* TO 'backup_ro'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+   `RELOAD` は `--flush-logs`、`REPLICATION CLIENT` は binlog の座標の記録、`SHOW_ROUTINE` はストアドルーチンのダンプに要る。
+
+2. 接続情報を `%APPDATA%\precure-datastars\backup.cnf` に置く（スクリプトにも引数にもパスワードを書かない）：
+
+```ini
+[client]
+user=backup_ro
+password=<パスワード>
+host=localhost
+port=3306
+```
+
+3. 保存先などを `%APPDATA%\precure-datastars\backup-settings.json` に置く（`mirrorDir` と `claudeMemoryDir` は無ければ省略。引数 `-LocalDir` などで上書きできる）：
+
+```json
+{
+  "localDir": "<保存先のディレクトリ>",
+  "mirrorDir": "<ミラー先のディレクトリ>",
+  "claudeMemoryDir": "<Claude Code のメモリのディレクトリ>"
+}
+```
+
+4. 毎日の自動実行を登録する（現在のユーザーの「ログオン中だけ実行」のタスク。管理者権限は要らない）：
+
+```powershell
+.\scripts\register-backup-task.ps1            # 毎日 04:00（PC が起きていなければ次に使えるとき）
+.\scripts\register-backup-task.ps1 -At 03:30  # 時刻を変える
+.\scripts\register-backup-task.ps1 -Unregister
+```
+
+**手動で取る**
+
+DB へ書き込む作業（クレジットの投入・欠番詰め・マイグレーション・データ修正）の前に、印をつけて取る：
+
+```powershell
+.\scripts\backup-db.ps1 -Label before-hs12
+```
+
+**復元**
+
+```powershell
+.\scripts\restore-db.ps1                                        # 最新のダンプを検証用スキーマに復元して本番と突き合わせる
+.\scripts\restore-db.ps1 -DumpFile <path>.sql.gz                # ダンプを指定
+.\scripts\restore-db.ps1 -DumpFile <path>.sql.gz -ToProduction  # 本番を置き換える
+```
+
+ダンプ以後の操作を足す（特定の時点への復元）には、ダンプの先頭のコメントに書かれた binlog のファイル名と位置から、戻したい時刻の直前までを `mysqlbinlog` で SQL に起こして流す。binlog は MySQL のデータディレクトリにあり、読むには管理者権限が要る。
+
+```powershell
+# 1. ダンプの先頭の "-- CHANGE REPLICATION SOURCE TO SOURCE_LOG_FILE='...', SOURCE_LOG_POS=...;" を見る
+# 2. そのファイルから、戻したい時刻の直前までを SQL に起こす（以降のファイルがあれば続けて並べる）
+& "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqlbinlog.exe" --database=precure_datastars `
+    --start-position=<位置> --stop-datetime="2026-10-04 12:34:56" `
+    --result-file=replay.sql "<データディレクトリ>\<ファイル名>"
+# 3. 本番に流す
+& "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root -p precure_datastars -e "source replay.sql"
+```
+
 ---
 
 ## 主要ワークフロー

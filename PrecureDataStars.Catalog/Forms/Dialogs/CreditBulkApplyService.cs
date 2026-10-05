@@ -812,6 +812,8 @@ public sealed class CreditBulkApplyService
         // Tier 備考を Draft 実体にコピー。
         ApplyNotesIfChanged(targetTier, pt.Notes, n => targetTier.Entity.Notes = n,
             () => targetTier.Entity.Notes);
+        // 画面の上での位置。
+        ApplyTierPositionIfChanged(targetTier, pt);
 
         for (int gi = 0; gi < pt.Groups.Count; gi++)
         {
@@ -933,6 +935,16 @@ public sealed class CreditBulkApplyService
     }
 
     /// <summary>Draft ノードの Notes プロパティに対して「値が変わっていれば代入 + Modified 化」を行うヘルパ。</summary>
+    /// <summary>ティアの画面の上での位置（position_v / position_h）を、変わったときだけ Draft 実体に写す。</summary>
+    private static void ApplyTierPositionIfChanged(DraftTier tier, ParsedTier pt)
+    {
+        if (string.Equals(tier.Entity.PositionV, pt.PositionV, StringComparison.Ordinal)
+            && string.Equals(tier.Entity.PositionH, pt.PositionH, StringComparison.Ordinal)) return;
+        tier.Entity.PositionV = pt.PositionV;
+        tier.Entity.PositionH = pt.PositionH;
+        if (tier.State == DraftState.Unchanged) tier.MarkModified();
+    }
+
     private static void ApplyNotesIfChanged(DraftBase node, string? newValue,
         Action<string?> setter, Func<string?> getter)
     {
@@ -2232,6 +2244,7 @@ public sealed class CreditBulkApplyService
         ApplyNotesIfChanged(draftTier, newTier.Notes,
             n => draftTier.Entity.Notes = n,
             () => draftTier.Entity.Notes);
+        ApplyTierPositionIfChanged(draftTier, newTier);
 
         var draftGroups = draftTier.Groups
             .Where(g => g.State != DraftState.Deleted)
@@ -2639,7 +2652,8 @@ public sealed class CreditBulkApplyService
     private static string SerializeTierForCompare(ParsedTier t)
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append("T|notes=").Append(t.Notes ?? string.Empty).Append('\n');
+        sb.Append("T|notes=").Append(t.Notes ?? string.Empty)
+          .Append("|pos=").Append(t.PositionV ?? string.Empty).Append(t.PositionH ?? string.Empty).Append('\n');
         foreach (var g in t.Groups) sb.Append(SerializeGroupForCompare(g));
         return sb.ToString();
     }

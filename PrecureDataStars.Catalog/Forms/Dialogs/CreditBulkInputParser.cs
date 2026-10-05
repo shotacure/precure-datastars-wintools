@@ -38,6 +38,8 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     <c>@heading=文字</c> は画面どおりの見出しの文字（作品の正式タイトルと表記が違うとき、または「特別出演」など作品ではない見出し）。</description></item>
 ///   <item><description><c>役職名: @label=文字</c>（役職ヘッダ）/ <c>@label=文字</c>（役職開始行直後の単独行）→
 ///     画面の役職の表記（<c>role_label_text</c>）。役職名と表記（中黒・送り仮名など）が違うときに書く。役職名と同じ文字なら何も入れない。</description></item>
+///   <item><description><c>@pos=XY</c>（単独行）→ いまのティアの画面の上での位置（<c>credit_card_tiers.position_v</c> / <c>position_h</c>）。
+///     X は縦（T=上 / M=中 / B=下）、Y は横（L=左 / C=中央 / R=右）。ティア区切り <c>---</c> の直後（1 つ目のティアはカードの頭）に書く。</description></item>
 ///   <item><description><c>@misprint=文字</c>（役職開始行直後の単独行）→ 画面に出た役職名の誤記（<c>role_misprint_text</c>）。
 ///     役職ヘッダには正しい役職名を書き、画面の誤った文字をこの行に書く。クレジットでは誤記を取り消し線で出し、改行して正しい表記を出す。</description></item>
 ///   <item><description><c>A+B: @join=文字</c>（役職ヘッダ）→ 役職 A と B を、同じエントリを持つ別々の役職として作り、
@@ -140,6 +142,10 @@ public static class CreditBulkInputParser
 
     // ディレクティブ行: @label=文字。直近の役職の画面の表記（role_label_text）を指定する。
     private static readonly Regex LabelDirectiveRegex = new(@"^@label=(?<label>.+)$", RegexOptions.Compiled);
+
+    // ディレクティブ行: @pos=XY。いまのティアの画面の上での位置（X = 縦 T/M/B、Y = 横 L/C/R）。
+    private static readonly Regex PosDirectiveRegex = new(@"^@pos=(?<v>[TMBtmb])(?<h>[LCRlcr])$", RegexOptions.Compiled);
+    private static readonly Regex PosDirectiveAnyRegex = new(@"^@pos=", RegexOptions.Compiled);
 
     // ディレクティブ行: @misprint=文字。直近の役職の、画面に出た役職名の誤記（role_misprint_text）を指定する。
     private static readonly Regex MisprintDirectiveRegex = new(@"^@misprint=(?<text>.+)$", RegexOptions.Compiled);
@@ -603,6 +609,26 @@ public static class CreditBulkInputParser
                     continue;
                 }
 
+                // @pos=XY : いまのティアの画面の上での位置（縦 T/M/B ＋ 横 L/C/R）。
+                if (PosDirectiveAnyRegex.IsMatch(trimmed))
+                {
+                    var posMatch = PosDirectiveRegex.Match(trimmed);
+                    if (!posMatch.Success)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @pos= は縦（T / M / B）と横（L / C / R）の 2 文字で書いてください（例: @pos=TL）。"
+                        });
+                        continue;
+                    }
+                    EnsureScaffold(ref curCard, ref curTier, ref curGroup, result);
+                    curTier!.PositionV = posMatch.Groups["v"].Value.ToUpperInvariant();
+                    curTier.PositionH = posMatch.Groups["h"].Value.ToUpperInvariant();
+                    continue;
+                }
+
                 // @misprint=文字 : 直近の役職の、画面に出た役職名の誤記（role_misprint_text）を指定する。
                 var misprintMatch = MisprintDirectiveRegex.Match(trimmed);
                 if (misprintMatch.Success)
@@ -659,7 +685,7 @@ public static class CreditBulkInputParser
                 {
                     Severity = WarningSeverity.Block,
                     LineNumber = lineNo,
-                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= / @heading= / @heading_series= / @label= / @misprint= / @join= / @join_previous のみサポートします。"
+                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= / @heading= / @heading_series= / @label= / @misprint= / @pos= / @join= / @join_previous のみサポートします。"
                 });
                 continue;
             }

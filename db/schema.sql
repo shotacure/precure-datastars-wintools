@@ -2333,6 +2333,11 @@ CREATE TABLE `credit_card_tiers` (
   `card_tier_id`  int             NOT NULL AUTO_INCREMENT,
   `card_id`       int             NOT NULL,
   `tier_no`       tinyint unsigned NOT NULL,
+  -- 画面の上での位置。ティアは横位置の違うまとまり（左の列・右の列・下の中央など）で、tier_no は並び順だけを表す。
+  -- position_v = 縦（T=上 / M=中 / B=下）、position_h = 横（L=左 / C=中央 / R=右）。NULL は未確認。
+  -- サイトのクレジットはティアを縦に積んで出し、位置は表示に使わない（情報として持つ）。
+  `position_v`    enum('T','M','B') DEFAULT NULL,
+  `position_h`    enum('L','C','R') DEFAULT NULL,
   `notes`         text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

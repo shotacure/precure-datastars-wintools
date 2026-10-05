@@ -67,6 +67,12 @@ public sealed class ParsedTier
 
     /// <summary>Tier の備考（Notes に保存される。</summary>
     public string? Notes { get; set; }
+
+    /// <summary>画面の縦の位置（"T" / "M" / "B"、<c>credit_card_tiers.position_v</c>）。<c>@pos=XY</c> 行で設定される。</summary>
+    public string? PositionV { get; set; }
+
+    /// <summary>画面の横の位置（"L" / "C" / "R"、<c>credit_card_tiers.position_h</c>）。<c>@pos=XY</c> 行で設定される。</summary>
+    public string? PositionH { get; set; }
 }
 
 /// <summary>パース結果における 1 Group 分の塊。 テキスト中の <c>-</c> 単独行で区切られる。</summary>

@@ -84,7 +84,8 @@ public partial class CreditEditorForm
             {
                 var tier = draftTier.Entity;
                 var tierKey = new TierKey(card.CardId, tier.CardTierId, tier.TierNo);
-                var tierNode = new TreeNode($"📐 Tier {tier.TierNo}")
+                // 画面の上での位置（縦＋横、TL / BC など）があればノード名に添える。
+                var tierNode = new TreeNode($"📐 Tier {tier.TierNo}" + (tier.PositionCode is { } pos ? $"  [位置: {pos}]" : ""))
                 {
                     Tag = new NodeTag(NodeKind.Tier, draftTier.CurrentId, draftTier)
                 };

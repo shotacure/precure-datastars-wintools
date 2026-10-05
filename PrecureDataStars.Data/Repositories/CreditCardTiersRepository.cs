@@ -14,6 +14,8 @@ public sealed class CreditCardTiersRepository : RepositoryBase
           card_tier_id   AS CardTierId,
           card_id        AS CardId,
           tier_no        AS TierNo,
+          position_v     AS PositionV,
+          position_h     AS PositionH,
           notes          AS Notes,
           created_at     AS CreatedAt,
           updated_at     AS UpdatedAt,
@@ -52,8 +54,8 @@ public sealed class CreditCardTiersRepository : RepositoryBase
     public async Task<int> InsertAsync(CreditCardTier tier, CancellationToken ct = default)
     {
         const string sqlTier = """
-            INSERT INTO credit_card_tiers (card_id, tier_no, notes, created_by, updated_by)
-            VALUES (@CardId, @TierNo, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_card_tiers (card_id, tier_no, position_v, position_h, notes, created_by, updated_by)
+            VALUES (@CardId, @TierNo, @PositionV, @PositionH, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         const string sqlGroup = """
@@ -84,8 +86,8 @@ public sealed class CreditCardTiersRepository : RepositoryBase
     public async Task<int> InsertWithoutGroupAsync(CreditCardTier tier, CancellationToken ct = default)
     {
         const string sql = """
-            INSERT INTO credit_card_tiers (card_id, tier_no, notes, created_by, updated_by)
-            VALUES (@CardId, @TierNo, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_card_tiers (card_id, tier_no, position_v, position_h, notes, created_by, updated_by)
+            VALUES (@CardId, @TierNo, @PositionV, @PositionH, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await ExecuteScalarAsync<int>(sql, tier, ct).ConfigureAwait(false);
@@ -98,6 +100,8 @@ public sealed class CreditCardTiersRepository : RepositoryBase
             UPDATE credit_card_tiers SET
               card_id    = @CardId,
               tier_no    = @TierNo,
+              position_v = @PositionV,
+              position_h = @PositionH,
               notes      = @Notes,
               updated_by = @UpdatedBy
             WHERE card_tier_id = @CardTierId;

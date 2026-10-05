@@ -19,6 +19,17 @@ public sealed class CreditCardTier
     /// <summary>段組番号（1 始まり、<see cref="MaxTierNo"/> まで）。</summary>
     public byte TierNo { get; set; } = 1;
 
+    /// <summary>画面の縦の位置（"T" = 上 / "M" = 中 / "B" = 下）。null は未確認。
+    /// ティアは横位置の違うまとまりで、<see cref="TierNo"/> は並び順だけを表すため、位置を情報として持つ。
+    /// サイトのクレジットはティアを縦に積んで出し、位置は表示に使わない。</summary>
+    public string? PositionV { get; set; }
+
+    /// <summary>画面の横の位置（"L" = 左 / "C" = 中央 / "R" = 右）。null は未確認。</summary>
+    public string? PositionH { get; set; }
+
+    /// <summary>位置を「TL」「BC」のような 2 文字（縦＋横）で返す。どちらかが未確認なら null。</summary>
+    public string? PositionCode => string.IsNullOrEmpty(PositionV) || string.IsNullOrEmpty(PositionH) ? null : PositionV + PositionH;
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

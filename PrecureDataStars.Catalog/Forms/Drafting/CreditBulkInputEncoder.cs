@@ -168,6 +168,12 @@ internal static class CreditBulkInputEncoder
         DraftTier tier, LookupCache cache, StringBuilder sb,
         bool isFirstTierInOutput, CancellationToken ct)
     {
+        // 画面の上での位置（縦＋横）。ティア区切り（1 つ目はカードの頭）の直後に書く。
+        if (tier.Entity.PositionCode is { } pos)
+        {
+            sb.Append("@pos=").Append(pos).Append(LineSeparator);
+        }
+
         // Tier 備考。
         EmitNotesDirective(tier.Entity.Notes, sb);
 

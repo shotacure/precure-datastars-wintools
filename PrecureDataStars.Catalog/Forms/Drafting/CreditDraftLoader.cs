@@ -274,6 +274,8 @@ internal sealed class CreditDraftLoader
         CardTierId = 0,
         CardId = 0,
         TierNo = s.TierNo,
+        PositionV = s.PositionV,
+        PositionH = s.PositionH,
         Notes = s.Notes,
         CreatedBy = s.CreatedBy,
         UpdatedBy = s.UpdatedBy

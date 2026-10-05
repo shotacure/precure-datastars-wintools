@@ -575,8 +575,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertTierAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardTier t, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_card_tiers (card_id, tier_no, notes, created_by, updated_by)
-            VALUES (@CardId, @TierNo, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_card_tiers (card_id, tier_no, position_v, position_h, notes, created_by, updated_by)
+            VALUES (@CardId, @TierNo, @PositionV, @PositionH, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, t, transaction: tx, cancellationToken: ct));
@@ -697,6 +697,8 @@ internal sealed class CreditSaveService
             UPDATE credit_card_tiers SET
               card_id = @CardId,
               tier_no = @TierNo,
+              position_v = @PositionV,
+              position_h = @PositionH,
               notes = @Notes,
               updated_by = @UpdatedBy
             WHERE card_tier_id = @CardTierId;

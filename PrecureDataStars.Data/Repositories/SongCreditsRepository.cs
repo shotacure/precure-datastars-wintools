@@ -120,6 +120,24 @@ public sealed class SongCreditsRepository : RepositoryBase
     /// <returns>連名の HTML 文字列。0 件のとき空文字。</returns>
     public async Task<string> GetDisplayHtmlAsync(int songId, string role, ILookupCache lookup, CancellationToken ct = default)
     {
+        var parts = await GetDisplayHtmlPartsAsync(songId, role, lookup, ct).ConfigureAwait(false);
+        var sb = new System.Text.StringBuilder();
+        foreach (var (sep, html) in parts)
+        {
+            // セパレータは生 HTML として挿入されることを避けるため、HtmlEncode で安全化する。
+            // 典型値は "、"・"／"・", " など短いテキストで、エスケープ後も視覚的にそのまま読める。
+            sb.Append(System.Net.WebUtility.HtmlEncode(sep)).Append(html);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 連名を、名義ごとの部品（直前との区切り, リンク化済み HTML）の並びで返す（<see cref="GetDisplayHtmlAsync"/> の元）。
+    /// 先頭の部品の区切りは空文字。役職テンプレで区切りを差し替える（<c>{ARRANGER:sep="/"}</c> など）ときに使う。
+    /// 行が無ければ空の並び。
+    /// </summary>
+    public async Task<IReadOnlyList<(string Sep, string Html)>> GetDisplayHtmlPartsAsync(int songId, string role, ILookupCache lookup, CancellationToken ct = default)
+    {
         // 連名行を seq 順で取得し、各行の preceding_separator と person_alias_id を集める。
         // 表示名そのものは lookup 経由で別途引くため、SELECT で取らない（lookup 側でキャッシュ済みを期待）。
         const string sql = """
@@ -136,23 +154,15 @@ public sealed class SongCreditsRepository : RepositoryBase
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<(byte Seq, string? Sep, int PersonAliasId)>(
             new CommandDefinition(sql, new { songId, role }, cancellationToken: ct))).ToList();
-        if (rows.Count == 0) return "";
-
-        var sb = new System.Text.StringBuilder();
+        var parts = new List<(string Sep, string Html)>(rows.Count);
         for (int i = 0; i < rows.Count; i++)
         {
-            if (i > 0)
-            {
-                // セパレータは生 HTML として挿入されることを避けるため、HtmlEncode で安全化する。
-                // 典型値は "、"・"／"・", " など短いテキストで、エスケープ後も視覚的にそのまま読める。
-                sb.Append(System.Net.WebUtility.HtmlEncode(rows[i].Sep ?? ""));
-            }
             // lookup でリンク化済み HTML を取得。未解決時（alias 削除済み等）は空文字を使い、
             // 表示上は連名要素が欠落するが、レイアウト崩壊は避ける。
             var html = await lookup.LookupPersonAliasHtmlAsync(rows[i].PersonAliasId).ConfigureAwait(false);
-            sb.Append(html ?? "");
+            parts.Add((i > 0 ? rows[i].Sep ?? "" : "", html ?? ""));
         }
-        return sb.ToString();
+        return parts;
     }
 
     /// <summary>1 行追加（呼び出し側で credit_seq を採番済みの前提）。</summary>

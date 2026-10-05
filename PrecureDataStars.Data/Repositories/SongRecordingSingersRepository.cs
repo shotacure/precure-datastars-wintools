@@ -245,6 +245,28 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         ILookupCache lookup,
         CancellationToken ct = default)
     {
+        var parts = await GetDisplayHtmlPartsAsync(songRecordingId, roleCode, lookup, ct).ConfigureAwait(false);
+        var sb = new System.Text.StringBuilder();
+        foreach (var (sep, html) in parts)
+        {
+            // 区切り記号は HtmlEncode してから挿入。典型値は短い記号 ("、" "／" ", " 等) で
+            // エンコードしても視覚的にはそのまま読める。
+            sb.Append(System.Net.WebUtility.HtmlEncode(sep)).Append(html);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 連名を、歌唱者ごとの部品（直前との区切り, リンク化済み HTML）の並びで返す（<see cref="GetDisplayHtmlAsync"/> の元）。
+    /// 部品の HTML はスラッシュの相方・(CV:…)・所属まで含む 1 行分。先頭の部品の区切りは空文字。
+    /// 役職テンプレで区切りを差し替える（<c>{SINGER:sep="&lt;br&gt;"}</c> など）ときに使う。行が無ければ空の並び。
+    /// </summary>
+    public async Task<IReadOnlyList<(string Sep, string Html)>> GetDisplayHtmlPartsAsync(
+        int songRecordingId,
+        string? roleCode,
+        ILookupCache lookup,
+        CancellationToken ct = default)
+    {
         string targetRole = roleCode ?? SongRecordingSingerRoles.Vocals;
 
         // 連名行を seq 順で取得。billing_kind と各 alias_id、affiliation_text を集める。
@@ -269,18 +291,11 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<HtmlRow>(
             new CommandDefinition(sql, new { id = songRecordingId, role = targetRole }, cancellationToken: ct))).ToList();
-        if (rows.Count == 0) return "";
-
-        var sb = new System.Text.StringBuilder();
+        var parts = new List<(string Sep, string Html)>(rows.Count);
         for (int i = 0; i < rows.Count; i++)
         {
             var r = rows[i];
-            if (i > 0)
-            {
-                // 区切り記号は HtmlEncode してから挿入。典型値は短い記号 ("、" "／" ", " 等) で
-                // エンコードしても視覚的にはそのまま読める。
-                sb.Append(System.Net.WebUtility.HtmlEncode(r.Sep ?? ""));
-            }
+            var sb = new System.Text.StringBuilder();
 
             if (r.Kind == "PERSON")
             {
@@ -326,8 +341,9 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                 // 半角スペース + HtmlEncode で安全に連結する。
                 sb.Append(' ').Append(System.Net.WebUtility.HtmlEncode(r.Aff));
             }
+            parts.Add((i > 0 ? r.Sep ?? "" : "", sb.ToString()));
         }
-        return sb.ToString();
+        return parts;
     }
 
     /// <summary>HTML 版 GetDisplayHtmlAsync 用の SQL 戻り値受け取り DTO。</summary>

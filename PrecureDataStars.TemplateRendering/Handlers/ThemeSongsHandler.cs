@@ -202,6 +202,11 @@ public static class ThemeSongsHandler
             if (r.SongId > 0)
             {
                 // 作詞：構造化があればリンク化 HTML、なければフリーテキスト HtmlEncode 平文。
+                // 名義ごとの部品（*Parts）も持たせ、テンプレの sep= で区切りを差し替えられるようにする。
+                r.LyricistParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Lyrics, lookup, ct).ConfigureAwait(false);
+                r.ComposerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Composition, lookup, ct).ConfigureAwait(false);
+                r.ArrangerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Arrangement, lookup, ct).ConfigureAwait(false);
+                r.MedleyArrangerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false);
                 string lyrHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.Lyrics, lookup, ct).ConfigureAwait(false);
                 r.LyricistHtml = !string.IsNullOrEmpty(lyrHtml)
                     ? lyrHtml
@@ -224,7 +229,9 @@ public static class ThemeSongsHandler
             }
             if (r.SongRecordingId > 0)
             {
-                // うた：song_recording_singers から VOCALS 役職の連名を HTML 版で取得。
+                // うた：song_recording_singers から VOCALS 役職の連名を HTML 版で取得（部品も持たせる）。
+                r.SingerParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct).ConfigureAwait(false);
+                r.ChorusParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct).ConfigureAwait(false);
                 string singHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct).ConfigureAwait(false);
                 r.SingerHtml = !string.IsNullOrEmpty(singHtml)
                     ? singHtml
@@ -365,5 +372,15 @@ public static class ThemeSongsHandler
 
         /// <summary>コーラス（<c>BACKING_VOCALS</c>）連名のリンク化済み HTML。 該当録音にコーラス歌唱者が居なければ空文字列。テンプレ側で <c>{CHORUS}</c> として参照する。</summary>
         public string ChorusHtml { get; set; } = "";
+
+        // ── 名義ごとの部品（直前との区切り, リンク化済み HTML）──
+        // 構造化クレジットがあるときだけ入る（フリーテキストのときは空）。役職テンプレの {ARRANGER:sep="/"} のように
+        // 区切りを差し替えるときに使い、差し替えないときは上の *Html（DB の区切りでつないだもの）を使う。
+        public IReadOnlyList<(string Sep, string Html)> LyricistParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> ComposerParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> ArrangerParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> MedleyArrangerParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> SingerParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> ChorusParts { get; set; } = Array.Empty<(string, string)>();
     }
 }

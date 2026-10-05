@@ -30,16 +30,35 @@ namespace PrecureDataStars.TemplateRendering;
 /// <list type="bullet">
 ///   <item><description><c>{#BLOCKS[:first|rest|last]}...{/BLOCKS[:filter]}</c> ... ブロック繰り返し</description></item>
 ///   <item><description><c>{?NAME}...{/?NAME}</c> ... プレースホルダ NAME の解決値が非空のときだけ展開</description></item>
+///   <item><description><c>{?!NAME}...{/?!NAME}</c> ... プレースホルダ NAME の解決値が空のときだけ展開（否定の条件）</description></item>
 ///   <item><description><c>{#THEME_SONGS[:kind=OP+ED]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復。
 ///     内側で <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> / <c>{COMPOSER}</c> /
 ///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{CHORUS}</c> / <c>{VARIANT_LABEL}</c> の楽曲スコーププレースホルダが
 ///     解決可能（<c>{CHORUS}</c> は <c>BACKING_VOCALS</c> 役職の連名、不在時は空）。
+///     連名のプレースホルダ（<c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> / <c>{MEDLEY_ARRANGER}</c> /
+///     <c>{SINGER}</c> / <c>{CHORUS}</c>）は <c>sep="…"</c> で名義の間の区切りを差し替えられる（DB の区切りの代わりに
+///     テンプレの文字を HTML のまま入れる。<c>sep="&lt;br&gt;"</c> で改行）。構造化クレジットが無い曲には効かない。
+///     <c>{SAME_COMPOSER_ARRANGER}</c> は作曲と編曲が同じ名義（連名も同じ）なら "1"、違えば空で、
+///     <c>{?SAME_COMPOSER_ARRANGER}</c> / <c>{?!SAME_COMPOSER_ARRANGER}</c> で書き分ける。
 ///     表記（カギ括弧の種類・項目ラベル・改行位置）はテンプレ作者が完全に制御できる。
 ///     旧 <c>{THEME_SONGS}</c> プレースホルダ版（ハードコード書式）も互換のため残置。</description></item>
 /// </list>
 /// </summary>
 public static class RoleTemplateRenderer
 {
+    /// <summary>
+    /// 連名のプレースホルダの値。<c>sep="…"</c> の指定があり、構造化クレジットの名義が 2 つ以上あれば、
+    /// 名義の間をテンプレの文字（HTML のまま。<c>&lt;br&gt;</c> で改行）でつなぐ。指定が無いときや
+    /// フリーテキストのときは、DB の区切りでつないだ <paramref name="joinedHtml"/> を返す。
+    /// </summary>
+    private static string NamesHtml(PlaceholderNode ph, string? joinedHtml,
+        IReadOnlyList<(string Sep, string Html)>? parts)
+    {
+        if (parts is { Count: > 1 } && ph.Options.TryGetValue("sep", out var sep))
+            return string.Join(sep, parts.Select(p => p.Html));
+        return joinedHtml ?? "";
+    }
+
     /// <summary>AST <paramref name="nodes"/> を <paramref name="ctx"/> に対して展開し、整形済み文字列を返す。</summary>
     public static async Task<string> RenderAsync(
         IReadOnlyList<TemplateNode> nodes,
@@ -115,10 +134,12 @@ public static class RoleTemplateRenderer
 
                 case ConditionalNode cond:
                     {
-                        // 条件名を「カレントスコープのプレースホルダ」として一度解決し、非空なら本体を展開
-                        var probe = new PlaceholderNode(cond.Name);
+                        // 条件名を「カレントスコープのプレースホルダ」として一度解決し、非空なら本体を展開。
+                        // 名前の頭に "!" があれば否定（解決値が空のときだけ展開）。
+                        bool negate = cond.Name.StartsWith('!');
+                        var probe = new PlaceholderNode(negate ? cond.Name.Substring(1) : cond.Name);
                         string val = await ResolvePlaceholderAsync(probe, ctx, currentBlock, currentSong, factory, lookup, ct).ConfigureAwait(false);
-                        if (!string.IsNullOrEmpty(val))
+                        if (string.IsNullOrEmpty(val) == negate)
                         {
                             await RenderNodesAsync(cond.Body, ctx, currentBlock, currentSong, factory, lookup, sb, ct).ConfigureAwait(false);
                         }
@@ -299,22 +320,27 @@ public static class RoleTemplateRenderer
                 };
             case "LYRICIST":
                 // stage B-4：構造化クレジットがあればリンク化済み HTML、なければ
-                return currentSong?.LyricistHtml ?? "";
+                return NamesHtml(ph, currentSong?.LyricistHtml, currentSong?.LyricistParts);
             case "COMPOSER":
-                return currentSong?.ComposerHtml ?? "";
+                return NamesHtml(ph, currentSong?.ComposerHtml, currentSong?.ComposerParts);
             case "ARRANGER":
-                return currentSong?.ArrangerHtml ?? "";
+                return NamesHtml(ph, currentSong?.ArrangerHtml, currentSong?.ArrangerParts);
+            case "SAME_COMPOSER_ARRANGER":
+                // 作曲と編曲が同じ名義（連名も同じ）なら "1"。画面で「作曲：」「編曲：」の 2 行に名前を 1 つだけ出す作品用。
+                return currentSong is { ComposerHtml.Length: > 0 } sameCs
+                       && string.Equals(sameCs.ComposerHtml, sameCs.ArrangerHtml, StringComparison.Ordinal)
+                    ? "1" : "";
             case "MEDLEY_ARRANGER":
                 // 楽曲スコープ：メドレー編曲の連名（リンク化済み HTML）。無い曲は空文字列で、
                 // テンプレ側で {?MEDLEY_ARRANGER}メドレー編曲:{MEDLEY_ARRANGER}{/?MEDLEY_ARRANGER} のように条件展開できる。
-                return currentSong?.MedleyArrangerHtml ?? "";
+                return NamesHtml(ph, currentSong?.MedleyArrangerHtml, currentSong?.MedleyArrangerParts);
             case "SINGER":
-                return currentSong?.SingerHtml ?? "";
+                return NamesHtml(ph, currentSong?.SingerHtml, currentSong?.SingerParts);
             case "CHORUS":
                 // 楽曲スコープ：BACKING_VOCALS 役職の連名（リンク化済み HTML）。
                 // 該当録音にコーラスが居ない場合は空文字列を返すため、
                 // テンプレ側で {?CHORUS}コーラス:{CHORUS}{/?CHORUS} のように条件展開できる。
-                return currentSong?.ChorusHtml ?? "";
+                return NamesHtml(ph, currentSong?.ChorusHtml, currentSong?.ChorusParts);
             case "VARIANT_LABEL":
                 return System.Net.WebUtility.HtmlEncode(currentSong?.VariantLabel ?? "");
 

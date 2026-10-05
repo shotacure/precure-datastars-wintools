@@ -1,5 +1,6 @@
 using PrecureDataStars.SiteBuilder.Pipeline;
 using PrecureDataStars.SiteBuilder.Utilities;
+using PrecureDataStars.TemplateRendering;
 
 namespace PrecureDataStars.SiteBuilder.Generators;
 
@@ -183,7 +184,7 @@ internal static class InvolvementRowBuilder
                 // （サブタイトル「未定」）のように自前で括弧を含むため、そのまま続ける。
                 Label = string.IsNullOrEmpty(e.TitleText)
                     ? $"第{e.SeriesEpNo}話{e.TitleDisplayText}"
-                    : $"第{e.SeriesEpNo}話「{e.TitleText}」",
+                    : $"第{e.SeriesEpNo}話「{JapaneseQuotes.InQuotes(e.TitleText)}」",
                 Url = PathUtil.EpisodeUrl(seriesSlug, e.SeriesEpNo),
                 OnAirLabel = JpDateFormat.Date(e.OnAirAt)
             })

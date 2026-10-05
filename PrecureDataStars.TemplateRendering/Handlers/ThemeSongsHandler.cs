@@ -249,7 +249,8 @@ public static class ThemeSongsHandler
     private static async Task<string> RenderSingleSongBlockHtml(ThemeSongRow r, ILookupCache lookup)
     {
         var sb = new System.Text.StringBuilder();
-        var safeTitle = System.Net.WebUtility.HtmlEncode(r.SongTitle ?? "(曲名未登録)");
+        // 「」で囲んで出すので、曲名の中の「」は『』にする。
+        var safeTitle = System.Net.WebUtility.HtmlEncode(JapaneseQuotes.InQuotes(r.SongTitle ?? "(曲名未登録)"));
         sb.Append('「');
         if (r.SongId > 0)
         {

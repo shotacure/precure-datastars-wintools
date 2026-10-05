@@ -75,6 +75,9 @@ public static class RoleTemplateRenderer
                 case PlaceholderNode ph:
                     {
                         string val = await ResolvePlaceholderAsync(ph, ctx, currentBlock, currentSong, factory, lookup, ct).ConfigureAwait(false);
+                        // テンプレの文字の「」の中に差し込む値（「{SONG_TITLE}」など）は、値の中の「」を『』にする。
+                        if ((val.IndexOf('「') >= 0 || val.IndexOf('」') >= 0) && JapaneseQuotes.IsInsideQuotes(sb))
+                            val = JapaneseQuotes.InQuotes(val);
                         sb.Append(val);
                         break;
                     }

@@ -4,6 +4,7 @@ using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Pipeline;
 using PrecureDataStars.SiteBuilder.Rendering;
 using PrecureDataStars.SiteBuilder.Utilities;
+using PrecureDataStars.TemplateRendering;
 
 namespace PrecureDataStars.SiteBuilder.Generators;
 
@@ -418,8 +419,8 @@ public sealed class SongsGenerator
                 singersByRecording.TryGetValue(repRecording.SongRecordingId, out var repSingers) ? repSingers : null,
                 repRecording.SingerName, personAliasMap, characterAliasMap, NoUnitMembers);
         string pageTitle = string.IsNullOrWhiteSpace(titleSingerText)
-            ? $"「{song.Title}」"
-            : $"「{song.Title}」歌: {titleSingerText}";
+            ? $"「{JapaneseQuotes.InQuotes(song.Title)}」"
+            : $"「{JapaneseQuotes.InQuotes(song.Title)}」歌: {titleSingerText}";
 
         var layout = new LayoutModel
         {
@@ -846,7 +847,7 @@ public sealed class SongsGenerator
         const string tail = "使われた話、バージョン、収録 CD、クレジットをまとめました。";
 
         var sb = new System.Text.StringBuilder();
-        sb.Append('「').Append(songTitle).Append("」は");
+        sb.Append('「').Append(JapaneseQuotes.InQuotes(songTitle)).Append("」は");
         sb.Append(string.IsNullOrWhiteSpace(seriesTitle) ? "プリキュアシリーズ" : $"『{seriesTitle}』");
         sb.Append('の').Append(string.IsNullOrWhiteSpace(musicClassLabel) ? "歌" : musicClassLabel).Append('。');
 

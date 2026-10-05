@@ -5,6 +5,7 @@ using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Pipeline;
 using PrecureDataStars.SiteBuilder.Rendering;
 using PrecureDataStars.SiteBuilder.Utilities;
+using PrecureDataStars.TemplateRendering;
 
 namespace PrecureDataStars.SiteBuilder.Generators;
 
@@ -613,8 +614,8 @@ public sealed class EpisodeGenerator
                 TitleText = ep.TitleText,
                 TitleRichHtml = ep.TitleRichHtml ?? "",  // ルビ付き HTML はそのまま流す
                 TitleKana = ep.TitleKana ?? "",
-                // h1「第N話「サブタイトル」」用（プレーンテキストをエスケープしてガード）。
-                SubtitleGuardedH1Html = SubtitleGuardRenderer.GuardPlainText(ep.TitleText, ownRevealAt),
+                // h1「第N話「サブタイトル」」用（プレーンテキストをエスケープしてガード）。「」の中に置くので内側の「」は『』にする。
+                SubtitleGuardedH1Html = SubtitleGuardRenderer.GuardPlainText(JapaneseQuotes.InQuotes(ep.TitleText), ownRevealAt),
                 // サブタイトル未確定話のみ非空。テンプレ側は鉤括弧を出さず「第N話（サブタイトル「未定」）」の形で出す。
                 SubtitlePlaceholder = string.IsNullOrEmpty(ep.TitleText) ? ep.TitleDisplayText : "",
                 // subtitle-display 用（ルビ付き優先、無ければプレーン＋かな）。既存テンプレの分岐を
@@ -741,7 +742,7 @@ public sealed class EpisodeGenerator
         // サブタイトル未確定話は鉤括弧を出さず「第N話（サブタイトル「未定」）」の形にする。
         string fullPageTitle = string.IsNullOrEmpty(ep.TitleText)
             ? $"『{series.Title}』 第{ep.SeriesEpNo}話{ep.TitleDisplayText}"
-            : $"『{series.Title}』 第{ep.SeriesEpNo}話「{ep.TitleText}」";
+            : $"『{series.Title}』 第{ep.SeriesEpNo}話「{JapaneseQuotes.InQuotes(ep.TitleText)}」";
 
         var layout = new LayoutModel
         {
@@ -1282,7 +1283,7 @@ public sealed class EpisodeGenerator
 
         var sb = new System.Text.StringBuilder();
         sb.Append('『').Append(series.Title).Append("』第").Append(ep.SeriesEpNo).Append('話');
-        if (!string.IsNullOrWhiteSpace(ep.TitleText)) sb.Append('「').Append(ep.TitleText).Append('」');
+        if (!string.IsNullOrWhiteSpace(ep.TitleText)) sb.Append('「').Append(JapaneseQuotes.InQuotes(ep.TitleText)).Append('」');
         sb.Append('（').Append(ep.OnAirAt.ToString("yyyy年M月d日")).Append("放送）。");
 
         // 主要スタッフ（最大 3 役職）。末尾の一文を残せる範囲で足す。

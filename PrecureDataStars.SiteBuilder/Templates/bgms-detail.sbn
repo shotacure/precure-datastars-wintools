@@ -157,7 +157,7 @@
               {{~ if r.IsArtTrackSource ~}}<span class="bgm-rec-source-mark" title="この盤の音源を再生します">♪</span>{{~ end ~}}
               <span class="bgm-rec-disc-track">{{ r.DiscTitleShort | html.escape }}-Tr.{{ r.TrackNo }}</span>
               {{~ if r.TrackTitle != "" && c.IsTempMNo == false ~}}
-              <span class="bgm-rec-title">「{{ r.TrackTitle | html.escape }}」</span>
+              <span class="bgm-rec-title">「{{ r.TrackTitle | in_quotes | html.escape }}」</span>
               {{~ end ~}}
             </a>
             {{## 流通元を替えて同じ中身のまま再発売された盤の同じトラック（行には出さない）を、本行と同じ書き方で初回盤の行に添え、

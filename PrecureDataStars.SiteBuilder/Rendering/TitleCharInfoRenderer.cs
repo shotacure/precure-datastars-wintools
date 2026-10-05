@@ -2,6 +2,7 @@ using System.Text;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.SiteBuilder.Pipeline;
 using PrecureDataStars.SiteBuilder.Utilities;
+using PrecureDataStars.TemplateRendering;
 
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
@@ -121,7 +122,7 @@ public sealed class TitleCharInfoRenderer
                 if (!string.IsNullOrEmpty(prev.TitleText))
                 {
                     var prevRevealAt = SubtitleGuardRenderer.RevealAtFor(prev.EpisodeId, _subtitleRevealAtByEpisodeId);
-                    sb.Append("「").Append(SubtitleGuardRenderer.GuardPlainText(prev.TitleText, prevRevealAt)).Append("」");
+                    sb.Append("「").Append(SubtitleGuardRenderer.GuardPlainText(JapaneseQuotes.InQuotes(prev.TitleText), prevRevealAt)).Append("」");
                 }
                 sb.Append("(").Append(prev.OnAirAt.ToString("yyyy.M.d")).Append(")以来</span>");
             }

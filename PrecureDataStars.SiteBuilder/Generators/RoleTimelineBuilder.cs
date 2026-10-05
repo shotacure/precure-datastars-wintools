@@ -487,7 +487,7 @@ internal sealed record RoleTimelineRules(
 /// <summary>線表に載せる候補 1 つ分（<see cref="RoleTimelineBuilder.Build"/> の入力）。</summary>
 internal sealed class RoleTimelineEntity
 {
-    /// <summary>"person" / "company" / "singer" / "character"（行頭のアイコンと、絞り込みの種類）。</summary>
+    /// <summary>"person" / "company" / "singer" / "character" / "unit"（行頭のアイコンと、絞り込みの種類）。</summary>
     public required string EntityKind { get; init; }
     /// <summary>行に出す名前（人物は表示名義、企業は最後に使われた屋号、キャラクターは一覧と同じ名義）。</summary>
     public required string EntityName { get; init; }

@@ -57,11 +57,14 @@ public sealed class StaffNameLinkResolver
     {
         if (string.IsNullOrEmpty(displayText)) return "";
 
-        // alias_id が無い、もしくは中間表に対応行が無い → リンク化せず HTML エスケープのみ。
+        // alias_id が無い、もしくは中間表に対応行が無い → ユニット（人物の行を持たない名義）のページがあればそこへ、
+        // 無ければリンク化せず HTML エスケープのみ。
         if (!personAliasId.HasValue
             || !_personIdsByAliasId.TryGetValue(personAliasId.Value, out var personIds)
             || personIds.Count == 0)
         {
+            if (personAliasId is int aid && PathUtil.UnitUrl(aid) is string unitUrl)
+                return $"<a href=\"{unitUrl}\">{HtmlUtil.Escape(displayText)}</a>";
             return HtmlUtil.Escape(displayText);
         }
 

@@ -8288,6 +8288,7 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .rtl-badge-person { background: var(--accent-pink-weak, #fce7f3); color: var(--accent-pink-strong, #be185d); }
 .rtl-badge-company { background: var(--surface-2, #eef2ff); color: var(--fg, #3730a3); }
 .rtl-badge-character { background: rgba(126, 87, 194, 0.12); color: var(--accent-purple, #7e57c2); }
+.rtl-badge-unit { background: rgba(13, 148, 136, 0.12); color: #0f766e; }
 .rtl-track {
   position: relative;
   flex: 1 1 auto;
@@ -8469,6 +8470,13 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   background: rgba(126, 87, 194, 0.12);
   color: var(--accent-purple, #7e57c2);
 }
+/* 歌唱一覧のユニットの行（2 人の人影のアイコン）。歌手のピンク・キャラクターの紫と見分けられる青緑系。 */
+.entity-badge-unit {
+  background: rgba(13, 148, 136, 0.12);
+  color: #0f766e;
+}
+/* ユニット詳細のメンバー。キャラクターのメンバーに添える「(CV: 声優)」は少し離す。 */
+.unit-member-cv { margin-left: 0.15em; }
 
 /* 担当数・出演数・登場数の絵文字ピルバッジ。「📺 N（話）」「🎥 N（本）」を
    小さな角丸ピルで表す。
@@ -8585,7 +8593,11 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .creators-root[data-entity-filter="person"] [data-entity-type="company"],
 .creators-root[data-entity-filter="company"] [data-entity-type="person"],
 .creators-root[data-entity-filter="singer"] [data-entity-type="character"],
-.creators-root[data-entity-filter="character"] [data-entity-type="singer"] {
+.creators-root[data-entity-filter="character"] [data-entity-type="singer"],
+.creators-root[data-entity-filter="singer"] [data-entity-type="unit"],
+.creators-root[data-entity-filter="character"] [data-entity-type="unit"],
+.creators-root[data-entity-filter="unit"] [data-entity-type="singer"],
+.creators-root[data-entity-filter="unit"] [data-entity-type="character"] {
   display: none;
 }
 

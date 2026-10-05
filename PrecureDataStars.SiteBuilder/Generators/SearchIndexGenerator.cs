@@ -197,6 +197,20 @@ public sealed class SearchIndexGenerator
             });
         }
 
+        // ── ユニット（人物の行を持たない名義。ユニット詳細を持つもの） ──
+        foreach (var unitAliasId in _ctx.EntityUrls.UnitAliasIds)
+        {
+            if (!_ctx.PersonAliasById.TryGetValue(unitAliasId, out var ua)) continue;
+            items.Add(new SearchIndexItem
+            {
+                u = PathUtil.UnitUrl(unitAliasId)!,
+                t = ua.Name,
+                k = "unit",
+                s = "",
+                x = string.Join("|", new[] { ua.NameKana ?? "", ua.Name }.Select(NormalizeForSearch).Where(r => r.Length > 0).Distinct(StringComparer.Ordinal))
+            });
+        }
+
         // ── 企業 ──
         var companiesRepo = new CompaniesRepository(_factory);
         var allCompanies = await companiesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);

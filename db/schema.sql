@@ -3490,20 +3490,23 @@ DROP TABLE IF EXISTS `published_entity_slugs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `published_entity_slugs` (
-  `entity_kind`  varchar(16) NOT NULL COMMENT 'PERSON / CHARACTER / COMPANY',
+  `entity_kind`  varchar(16) NOT NULL COMMENT 'PERSON / CHARACTER / COMPANY / UNIT',
   `slug`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '公開した URL のスラッグ（デコード済み）',
   `person_id`    int DEFAULT NULL COMMENT 'その URL で公開した人物（PERSON の行のみ）',
   `character_id` int DEFAULT NULL COMMENT 'その URL で公開したキャラクター（CHARACTER の行のみ）',
   `company_id`   int DEFAULT NULL COMMENT 'その URL で公開した企業（COMPANY の行のみ）',
+  `person_alias_id` int DEFAULT NULL COMMENT 'その URL で公開したユニットの名義（UNIT の行のみ）',
   `created_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最初に公開を記録した日時',
   `last_published_at` timestamp NULL DEFAULT NULL COMMENT '最後に本番で公開したデプロイの日時（デプロイのたびに更新）',
   PRIMARY KEY (`entity_kind`, `slug`),
   KEY `ix_pes_person` (`person_id`),
   KEY `ix_pes_character` (`character_id`),
   KEY `ix_pes_company` (`company_id`),
+  KEY `ix_pes_person_alias` (`person_alias_id`),
   CONSTRAINT `fk_pes_person` FOREIGN KEY (`person_id`) REFERENCES `persons` (`person_id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_pes_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`character_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_pes_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`company_id`) ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT `fk_pes_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`company_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_pes_person_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='本番に公開した人物・キャラクター・企業 URL の記録（旧名 URL の 301 転送用）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 

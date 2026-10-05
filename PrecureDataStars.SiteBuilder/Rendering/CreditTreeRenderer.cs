@@ -201,6 +201,9 @@ internal sealed class CreditTreeRenderer
             var cooperationContext = CollectCardCastingCooperationContext(cardSnap, roleMap);
             IReadOnlyList<CreditBlockEntry>? cooperationEntriesForCard = cooperationContext?.Entries;
             int? cooperationAppendTargetCardRoleId = cooperationContext?.LastVoiceCastCardRoleId;
+            CastingCooperationAppend? cooperationAppendForCard = cooperationContext is { } coopCtx
+                ? new CastingCooperationAppend(coopCtx.Entries, coopCtx.LabelText)
+                : null;
 
             // 絵コンテ・演出融合のカード横断事前スキャン。
             // STORYBOARD と EPISODE_DIRECTOR がカード内の表示順（tier_no → group_no → order_in_group）で
@@ -342,11 +345,11 @@ internal sealed class CreditTreeRenderer
                             && string.Equals(prevVoiceCastRoleCode, cr.RoleCode, StringComparison.Ordinal)
                             && IsVoiceCastRole(cr.RoleCode, roleMap);
 
-                        IReadOnlyList<CreditBlockEntry>? appendThisRole =
+                        CastingCooperationAppend? appendThisRole =
                             (IsVoiceCastRole(cr.RoleCode, roleMap)
                              && cooperationAppendTargetCardRoleId is int targetId
                              && targetId == cr.CardRoleId)
-                                ? cooperationEntriesForCard
+                                ? cooperationAppendForCard
                                 : null;
 
                         await RenderCardRoleCommonAsync(credit.ScopeKind, credit.EpisodeId, credit.CreditKind,
@@ -443,8 +446,8 @@ internal sealed class CreditTreeRenderer
         return _ctx.SeriesById.TryGetValue(seriesId.Value, out var s) && s.HideStoryboardRole;
     }
 
-    /// <summary>カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の CardRoleId を返す（プレビューと同一仕様）。 探索は <see cref="CreditTreeIndex"/> の事前展開済みスナップショットを辿るだけで完結する。</summary>
-    private static (List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId)? CollectCardCastingCooperationContext(
+    /// <summary>カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の CardRoleId + 「協力」行の表記（CASTING_COOPERATION 役職のうち最初に画面の表記を持つものの <c>role_label_text</c>、無ければ null）を返す（プレビューと同一仕様）。 探索は <see cref="CreditTreeIndex"/> の事前展開済みスナップショットを辿るだけで完結する。</summary>
+    private static (List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId, string? LabelText)? CollectCardCastingCooperationContext(
         CreditCardSnapshot cardSnap,
         IReadOnlyDictionary<string, Role> roleMap)
     {
@@ -471,7 +474,10 @@ internal sealed class CreditTreeRenderer
         {
             aggregated.AddRange(CollectEntriesUnderCardRole(rs));
         }
-        return (aggregated, lastVcCardRoleId.Value);
+        string? labelText = cooperationRoleSnaps
+            .Select(rs => rs.Role.RoleLabelText)
+            .FirstOrDefault(t => !string.IsNullOrEmpty(t));
+        return (aggregated, lastVcCardRoleId.Value, labelText);
     }
 
     /// <summary>指定 CardRole 配下の全エントリ（<c>is_broadcast_only = 0</c> のみ）を block_seq → entry_seq 順で平坦化する。</summary>
@@ -520,7 +526,7 @@ internal sealed class CreditTreeRenderer
         int? resolveSeriesId,
         IReadOnlyList<BlockSnapshot> blocks,
         bool suppressVoiceCastRoleName,
-        IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
+        CastingCooperationAppend? appendedCooperation,
         // 同 Group 内の sibling 役職を role_code で引くコールバック。
         // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文に使う。null のとき ROLE 参照は空文字に展開される。
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
@@ -651,7 +657,7 @@ internal sealed class CreditTreeRenderer
                 // ContentHeaderOverride 設定済みの場合は左カラム役職名を抑止（コンテンツヘッダで既出のため）。
                 string fallbackRoleNameOnError = contentHeaderOverride is not null ? "" : roleName;
                 await RenderRoleFallbackDispatchAsync(roleCode, fallbackRoleNameOnError, blocks, roleMap,
-                    suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout,
+                    suppressVoiceCastRoleName, appendedCooperation, affiliationLayout,
                     contentHeaderOverride is not null ? null : roleNameHtmlOverride, html, ct).ConfigureAwait(false);
                 html.Append("</div>");
             }
@@ -662,7 +668,7 @@ internal sealed class CreditTreeRenderer
             // 左カラム役職名を抑止する（コンテンツヘッダで既に役職名を出しているため二重ヘッダを防ぐ）。
             string fallbackRoleName = contentHeaderOverride is not null ? "" : roleName;
             await RenderRoleFallbackDispatchAsync(roleCode, fallbackRoleName, blocks, roleMap,
-                suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout,
+                suppressVoiceCastRoleName, appendedCooperation, affiliationLayout,
                 contentHeaderOverride is not null ? null : roleNameHtmlOverride, html, ct).ConfigureAwait(false);
         }
 
@@ -674,7 +680,7 @@ internal sealed class CreditTreeRenderer
         IReadOnlyList<BlockSnapshot> blocks,
         IReadOnlyDictionary<string, Role> roleMap,
         bool suppressVoiceCastRoleName,
-        IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
+        CastingCooperationAppend? appendedCooperation,
         string affiliationLayout,
         string? roleNameHtmlOverride,
         StringBuilder html, CancellationToken ct)
@@ -696,7 +702,7 @@ internal sealed class CreditTreeRenderer
         if (string.Equals(formatKind, "VOICE_CAST", StringComparison.Ordinal))
         {
             await RenderVoiceCastFallbackAsync(roleCode, roleName, blocks, roleMap, suppressVoiceCastRoleName,
-                appendedCooperationEntries, roleNameHtmlOverride, html, ct).ConfigureAwait(false);
+                appendedCooperation, roleNameHtmlOverride, html, ct).ConfigureAwait(false);
         }
         else
         {
@@ -1149,7 +1155,7 @@ internal sealed class CreditTreeRenderer
         IReadOnlyList<BlockSnapshot> blocks,
         IReadOnlyDictionary<string, Role> roleMap,
         bool suppressRoleName,
-        IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
+        CastingCooperationAppend? appendedCooperation,
         // 1 行にまとめた役職の役職名 HTML。非 null のとき役職名セルをこれで置き換える。
         string? roleNameHtmlOverride,
         StringBuilder html,
@@ -1350,23 +1356,25 @@ internal sealed class CreditTreeRenderer
         //
         // character-cell に置く「協力」ラベルを
         // BuildRoleNameHtml で /creators/roles/CASTING_COOPERATION/ にリンク化する。
-        // roleMap に CASTING_COOPERATION が登録されていればその NameJa（通常「協力」）+ リンク、
-        // 未登録時は素のフォールバック文字列「協力」となる。
-        if (appendedCooperationEntries is not null && appendedCooperationEntries.Count > 0)
+        // 表記は CASTING_COOPERATION 役職の画面の表記（role_label_text、画面では「協力」）を優先し、
+        // 無ければ roleMap の NameJa、マスタ未登録時は素のフォールバック文字列「協力」となる。
+        if (appendedCooperation is not null && appendedCooperation.Entries.Count > 0)
         {
             var aliasHtmls = new List<string>();
-            foreach (var e in appendedCooperationEntries)
+            foreach (var e in appendedCooperation.Entries)
             {
                 string lbl = await ResolveEntryHtmlAsync(e, ct).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(lbl)) aliasHtmls.Add(lbl);
             }
             if (aliasHtmls.Count > 0)
             {
-                // role マスタから「協力」相当の表示名（NameJa）を引いてリンク化。
-                // マスタ未登録のときはフォールバックで素テキスト「協力」を出す（BuildRoleNameHtml の仕様）。
-                string cooperationRoleName = roleMap.TryGetValue(RoleCodeCastingCooperation, out var coopRole)
-                    ? (string.IsNullOrEmpty(coopRole.NameJa) ? "協力" : coopRole.NameJa)
-                    : "協力";
+                // 画面の表記 → role マスタの表示名（NameJa）の順に引いてリンク化。
+                // どちらも無いときはフォールバックで素テキスト「協力」を出す（BuildRoleNameHtml の仕様）。
+                string cooperationRoleName = !string.IsNullOrEmpty(appendedCooperation.LabelText)
+                    ? appendedCooperation.LabelText!
+                    : roleMap.TryGetValue(RoleCodeCastingCooperation, out var coopRole)
+                        ? (string.IsNullOrEmpty(coopRole.NameJa) ? "協力" : coopRole.NameJa)
+                        : "協力";
                 string cooperationLabelHtml = BuildRoleNameHtml(RoleCodeCastingCooperation, cooperationRoleName, roleMap);
 
                 html.Append("<tr class=\"cooperation-row\">");

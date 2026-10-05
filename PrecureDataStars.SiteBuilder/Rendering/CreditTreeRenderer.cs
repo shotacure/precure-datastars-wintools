@@ -286,7 +286,7 @@ internal sealed class CreditTreeRenderer
                         }
                     }
 
-                    // 1 行にまとめる役職（joined_label / join_previous）の解決。
+                    // 1 行にまとめる役職（join_previous / join_separator）の解決。
                     // 先頭役職の CardRoleId → まとめた行の役職名 HTML と、表示を飛ばす後続役職の集合を得る。
                     var (joinedLabelHtmlByLeadId, joinedFollowerIds) =
                         ResolveJoinedRoles(roleSnapshots, roleMap, credit, logger);
@@ -353,6 +353,7 @@ internal sealed class CreditTreeRenderer
                             cr.RoleCode, roleMap, resolveSeriesId, snapshots,
                             suppressVoiceCastRoleName, appendThisRole, siblingResolver,
                             affiliationLayout: cr.AffiliationLayout,
+                            roleLabelText: cr.RoleLabelText,
                             roleNameHtmlOverride: joinedLabelHtmlByLeadId.TryGetValue(cr.CardRoleId, out var joinedHtml) ? joinedHtml : null,
                             html, ct).ConfigureAwait(false);
 
@@ -372,7 +373,7 @@ internal sealed class CreditTreeRenderer
 
     /// <summary>
     /// Group 内で 1 行にまとめて表示する役職の組を解決する（判定は <see cref="RoleJoinComparer"/> と共通）。
-    /// <c>joined_label</c> を持つ役職を先頭に、直後に続く <c>join_previous = 1</c> の役職をまとめる。
+    /// 役職の直後に <c>join_previous = 1</c> の役職が続いていれば、その役職を先頭に後続をまとめる。
     /// まとめる役職どうしでエントリが一致しないときは、打ち間違いを隠さないよう別々の行のまま出してビルド警告を出す。
     /// </summary>
     /// <returns>先頭役職の CardRoleId → まとめた行の役職名 HTML、表示を飛ばす後続役職の CardRoleId 集合。</returns>
@@ -387,44 +388,45 @@ internal sealed class CreditTreeRenderer
         if (!roleSnapshots.Any(rs => rs.Role.JoinPrevious)) return (labelHtmlByLeadId, followerIds);
 
         var input = roleSnapshots
-            .Select(rs => (rs.Role.JoinedLabel, rs.Role.JoinPrevious, BuildBlockSnapshots(rs)))
+            .Select(rs => (rs.Role.JoinPrevious, BuildBlockSnapshots(rs)))
             .ToList();
         var (joins, mismatches) = RoleJoinComparer.Resolve(input);
-        foreach (var (leadIndex, followerCount, label) in joins)
+        foreach (var (leadIndex, followerCount) in joins)
         {
-            var codes = new List<string?>();
-            for (int k = leadIndex; k <= leadIndex + followerCount; k++) codes.Add(roleSnapshots[k].Role.RoleCode);
-            labelHtmlByLeadId[roleSnapshots[leadIndex].Role.CardRoleId] = BuildJoinedRoleNameHtml(label, codes, roleMap);
-            for (int k = leadIndex + 1; k <= leadIndex + followerCount; k++) followerIds.Add(roleSnapshots[k].Role.CardRoleId);
+            var members = roleSnapshots.Skip(leadIndex).Take(followerCount + 1).Select(rs => rs.Role).ToList();
+            labelHtmlByLeadId[members[0].CardRoleId] = BuildJoinedRoleNameHtml(members, roleMap);
+            for (int k = 1; k < members.Count; k++) followerIds.Add(members[k].CardRoleId);
         }
-        foreach (var (_, label) in mismatches)
+        foreach (var (leadIndex, followerCount) in mismatches)
         {
-            logger.Warn($"credit_id={credit.CreditId} の「{label}」: まとめる役職どうしでエントリが一致しないため、別々の行で表示します。");
+            var members = roleSnapshots.Skip(leadIndex).Take(followerCount + 1).Select(rs => rs.Role).ToList();
+            logger.Warn($"credit_id={credit.CreditId} の「{ComposeJoinedRoleName(members, roleMap)}」: まとめる役職どうしでエントリが一致しないため、別々の行で表示します。");
         }
         return (labelHtmlByLeadId, followerIds);
     }
 
     /// <summary>
-    /// まとめた行の役職名 HTML を組み立てる。<paramref name="label"/>（画面どおりの文字）の中から、
-    /// まとめた各役職の役職名を先頭から順に探し、見つかった部分をその役職の詳細ページへのリンクにする。
-    /// 区切りの「・」など役職名に当たらない部分と、見つからなかった役職はリンクなしの文字のまま出す。
+    /// まとめた行の役職名 HTML を組み立てる。各役職の表記（画面の表記か役職名）をその役職の詳細ページへのリンクにし、
+    /// 2 つ目以降の役職の前に直前との区切り（<c>join_separator</c>）をリンクなしの文字で挟む。
+    /// 役職ごとの文字の範囲はデータで決まっているので、文字列を探して当てはめることはしない。
     /// </summary>
-    private static string BuildJoinedRoleNameHtml(string label, IReadOnlyList<string?> roleCodes, IReadOnlyDictionary<string, Role> roleMap)
+    private static string BuildJoinedRoleNameHtml(IReadOnlyList<CreditCardRole> members, IReadOnlyDictionary<string, Role> roleMap)
     {
         var sb = new StringBuilder();
-        int cursor = 0;
-        foreach (var code in roleCodes)
+        for (int k = 0; k < members.Count; k++)
         {
-            if (string.IsNullOrEmpty(code) || !roleMap.TryGetValue(code!, out var r) || string.IsNullOrEmpty(r.NameJa)) continue;
-            int idx = label.IndexOf(r.NameJa, cursor, StringComparison.Ordinal);
-            if (idx < 0) continue;
-            sb.Append(Esc(label.Substring(cursor, idx - cursor)));
-            sb.Append(BuildRoleNameHtml(code, r.NameJa, roleMap));
-            cursor = idx + r.NameJa.Length;
+            var m = members[k];
+            if (k > 0) sb.Append(Esc(m.JoinSeparator ?? ""));
+            sb.Append(BuildRoleNameHtml(m.RoleCode, CreditRoleLabel.Resolve(m.RoleLabelText, m.RoleCode, roleMap), roleMap));
         }
-        sb.Append(Esc(label.Substring(cursor)));
         return sb.ToString();
     }
+
+    /// <summary>まとめた行の役職名をプレーンテキストで組み立てる（ビルド警告の文面用）。</summary>
+    private static string ComposeJoinedRoleName(IReadOnlyList<CreditCardRole> members, IReadOnlyDictionary<string, Role> roleMap)
+        => RoleJoinComparer.ComposeLabel(members
+            .Select(m => (CreditRoleLabel.Resolve(m.RoleLabelText, m.RoleCode, roleMap), m.JoinSeparator))
+            .ToList());
 
     /// <summary>テンプレ解決用シリーズ ID を決める：SERIES スコープなら credit.SeriesId、 EPISODE スコープなら <see cref="BuildContext.EpisodeById"/> から所属シリーズ ID を逆引き。</summary>
     private int? ResolveTemplateSeriesId(Credit credit)
@@ -523,7 +525,10 @@ internal sealed class CreditTreeRenderer
         // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文に使う。null のとき ROLE 参照は空文字に展開される。
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
         string affiliationLayout,
-        // 1 行にまとめた役職の役職名 HTML（joined_label 由来）。非 null のとき役職名セルをこれで置き換える。
+        // 画面の役職の表記（credit_card_roles.role_label_text）。非空のとき役職名・{ROLE_NAME}・
+        // シリーズ別の見出し上書きの文字をこれで置き換える（リンク先は役職のまま）。
+        string? roleLabelText,
+        // 1 行にまとめた役職の役職名 HTML（join_previous / join_separator から組み立て済み）。非 null のとき役職名セルをこれで置き換える。
         string? roleNameHtmlOverride,
         StringBuilder html,
         CancellationToken ct)
@@ -545,6 +550,8 @@ internal sealed class CreditTreeRenderer
                 roleName = roleCode!;
             }
         }
+        // 画面の役職の表記があれば、役職名をその表記で出す（役職名を出さない役職はそのまま出さない）。
+        if (!string.IsNullOrEmpty(roleLabelText) && roleName.Length > 0) roleName = roleLabelText!;
 
         string? template = null;
         string? contentHeaderOverride = null;
@@ -554,6 +561,8 @@ internal sealed class CreditTreeRenderer
             template = tpl?.FormatTemplate;
             contentHeaderOverride = string.IsNullOrEmpty(tpl?.ContentHeaderOverride) ? null : tpl!.ContentHeaderOverride;
         }
+        // シリーズ別の見出し上書きより、そのクレジットの画面の表記を優先する。
+        if (contentHeaderOverride is not null && !string.IsNullOrEmpty(roleLabelText)) contentHeaderOverride = roleLabelText;
 
         html.Append("<div class=\"role\">");
 
@@ -909,12 +918,17 @@ internal sealed class CreditTreeRenderer
         int totalDir = dirBlocks.Sum(b => b.Count);
         if (totalSb == 0 && totalDir == 0) return;
 
-        string directorRoleName = roleMap.TryGetValue(RoleCodeEpisodeDirector, out var dirR)
-            ? (dirR.NameJa ?? "演出")
-            : "演出";
-        string storyboardRoleName = roleMap.TryGetValue(RoleCodeStoryboard, out var sbR)
-            ? (sbR.NameJa ?? "絵コンテ")
-            : "絵コンテ";
+        // 役職名は画面の役職の表記（role_label_text）を優先し、無ければ役職マスタの名前で出す。
+        string directorRoleName = !string.IsNullOrEmpty(pair.Dir.Role.RoleLabelText)
+            ? pair.Dir.Role.RoleLabelText!
+            : roleMap.TryGetValue(RoleCodeEpisodeDirector, out var dirR)
+                ? (dirR.NameJa ?? "演出")
+                : "演出";
+        string storyboardRoleName = !string.IsNullOrEmpty(pair.Sb.Role.RoleLabelText)
+            ? pair.Sb.Role.RoleLabelText!
+            : roleMap.TryGetValue(RoleCodeStoryboard, out var sbR)
+                ? (sbR.NameJa ?? "絵コンテ")
+                : "絵コンテ";
 
         // 旧コンパクト表記：sb 1 件 / dir 1 件 / 同一人物 → 「(絵コンテ・)演出 | 名前」。
         if (totalSb == 1 && totalDir == 1)

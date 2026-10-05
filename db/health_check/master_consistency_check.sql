@@ -251,6 +251,49 @@ WHERE
  OR (cbe.entry_kind = 'TEXT'            AND cbe.raw_text IS NULL)
 ORDER BY cbe.entry_id;
 
+-- D2: credit_card_roles.role_label_text が役職名（roles.name_ja）と同じ
+--   件数 > 0 の意味: 画面の役職の表記は「役職名と表記が違うときだけ」入れる決まりなのに、
+--   役職名と一字一句同じ文字が入っている。表示は変わらないが、表記揺れの一覧に紛れ込む。
+--   対処: role_label_text を NULL に戻す。
+SELECT 'D2 role_label_text same as name_ja' AS check_name,
+    ccr.card_role_id,
+    ccr.role_code,
+    ccr.role_label_text
+FROM credit_card_roles ccr
+JOIN roles r ON r.role_code = ccr.role_code
+WHERE ccr.role_label_text IS NOT NULL
+  AND CAST(ccr.role_label_text AS BINARY) = CAST(r.name_ja AS BINARY)
+ORDER BY ccr.card_role_id;
+
+-- D3: credit_card_roles.join_separator があるのに join_previous = 0
+--   件数 > 0 の意味: 区切りの文字は「直前の役職と 1 行にまとめる」役職だけが持つのに、
+--   まとめない役職に区切りが残っている（表示には使われない）。
+--   対処: join_separator を NULL に戻すか、まとめるつもりなら join_previous = 1 にする。
+SELECT 'D3 join_separator without join_previous' AS check_name,
+    ccr.card_role_id,
+    ccr.role_code,
+    ccr.join_separator
+FROM credit_card_roles ccr
+WHERE ccr.join_separator IS NOT NULL
+  AND ccr.join_previous = 0
+ORDER BY ccr.card_role_id;
+
+-- D4: join_previous = 1 なのにグループ内で直前の役職がない
+--   件数 > 0 の意味: グループ先頭の役職に「直前の役職とまとめる」が立っている。まとめる相手が無いので
+--   表示上は効かないが、グループの分け方か指定の付け先を間違えている可能性が高い。
+--   対処: クレジットの画面と照らして、グループの区切りか join_previous を直す。
+SELECT 'D4 join_previous without previous role' AS check_name,
+    ccr.card_role_id,
+    ccr.card_group_id,
+    ccr.role_code
+FROM credit_card_roles ccr
+WHERE ccr.join_previous = 1
+  AND NOT EXISTS (
+      SELECT 1 FROM credit_card_roles prev
+       WHERE prev.card_group_id = ccr.card_group_id
+         AND prev.order_in_group < ccr.order_in_group)
+ORDER BY ccr.card_role_id;
+
 
 -- ============================================================================
 -- 全件カウントサマリ（最後に実行すると一覧で異常箇所がわかる）
@@ -289,4 +332,7 @@ UNION ALL SELECT 'D1 entry_kind mismatch',             COUNT(*) FROM credit_bloc
     OR (cbe.entry_kind = 'CHARACTER_VOICE' AND (cbe.person_alias_id IS NULL OR (cbe.character_alias_id IS NULL AND cbe.raw_character_text IS NULL)))
     OR (cbe.entry_kind = 'COMPANY'         AND cbe.company_alias_id IS NULL)
     OR (cbe.entry_kind = 'LOGO'            AND cbe.logo_id IS NULL)
-    OR (cbe.entry_kind = 'TEXT'            AND cbe.raw_text IS NULL);
+    OR (cbe.entry_kind = 'TEXT'            AND cbe.raw_text IS NULL)
+UNION ALL SELECT 'D2 role_label_text same as name_ja', COUNT(*) FROM credit_card_roles ccr JOIN roles r ON r.role_code = ccr.role_code WHERE ccr.role_label_text IS NOT NULL AND CAST(ccr.role_label_text AS BINARY) = CAST(r.name_ja AS BINARY)
+UNION ALL SELECT 'D3 join_separator w/o join_previous', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_separator IS NOT NULL AND ccr.join_previous = 0
+UNION ALL SELECT 'D4 join_previous w/o previous role', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_card_roles prev WHERE prev.card_group_id = ccr.card_group_id AND prev.order_in_group < ccr.order_in_group);

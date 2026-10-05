@@ -35,14 +35,19 @@ public sealed class CreditCardRole
     /// 同じ役職コードでも作品ごとに前置 / 後置が変わるため per-instance で持つ。</summary>
     public string AffiliationLayout { get; set; } = "SUFFIX";
 
-    /// <summary>後続の役職と 1 行にまとめて表示するときの役職名の文字（画面の表記どおり。
-    /// 例:「キャラクターデザイン・作画監督」）。まとめる役職のうち先頭の役職に持たせる。
-    /// データは役職ごとに分けて同じエントリを入れ、まとめるのはクレジットの表示だけ。</summary>
-    public string? JoinedLabel { get; set; }
+    /// <summary>画面の役職の表記（例: 役職名「CGプロダクションマネージャー」に対して「CGプロダクション・マネージャー」）。
+    /// 役職名（roles.name_ja）と表記が違うときだけ入れ、null なら役職名で出す。
+    /// クレジットの表示だけに使い、集計は <see cref="RoleCode"/> のまま。</summary>
+    public string? RoleLabelText { get; set; }
 
     /// <summary>true なら直前の役職（同じ Group の <see cref="OrderInGroup"/> 一つ前）と 1 行にまとめて表示する。
-    /// まとめる役職のうち 2 つ目以降に立てる。</summary>
+    /// まとめる役職のうち 2 つ目以降に立てる。データは役職ごとに分けて同じエントリを入れ、まとめるのはクレジットの表示だけ。</summary>
     public bool JoinPrevious { get; set; }
+
+    /// <summary>1 行にまとめた行での、直前の役職との区切りの文字（「・」「／」など画面どおり）。null は区切りなし。
+    /// <see cref="JoinPrevious"/> が true の役職だけが持つ。まとめた行の役職名は、各役職の表記
+    /// （<see cref="RoleLabelText"/> か役職名）をこの区切りでつないで組み立てる。</summary>
+    public string? JoinSeparator { get; set; }
 
     /// <summary>備考。</summary>
     public string? Notes { get; set; }

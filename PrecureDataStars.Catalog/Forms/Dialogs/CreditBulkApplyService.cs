@@ -868,9 +868,10 @@ public sealed class CreditBulkApplyService
         // 所属表記レイアウト（SUFFIX 既定 / PREFIX = 映画の製作・配給などの 2 カラム表記）。
         role.Entity.AffiliationLayout = pr.AffiliationLayout;
 
-        // 1 行にまとめて表示する役職の指定（まとめた行の文字 / 直前の役職とまとめるか）。
-        role.Entity.JoinedLabel = pr.JoinedLabel;
+        // 画面の役職の表記と、1 行にまとめて表示する役職の指定（直前の役職とまとめるか / 直前との区切り）。
+        role.Entity.RoleLabelText = pr.RoleLabelText;
         role.Entity.JoinPrevious = pr.JoinPrevious;
+        role.Entity.JoinSeparator = pr.JoinSeparator;
 
         // 配下 Block を順に追加。
         foreach (var pb in pr.Blocks)
@@ -2373,12 +2374,14 @@ public sealed class CreditBulkApplyService
             draftRole.MarkModified();
         }
 
-        // 1 行にまとめて表示する役職の指定の追従。
-        if (!string.Equals(draftRole.Entity.JoinedLabel, newRole.JoinedLabel, StringComparison.Ordinal)
-            || draftRole.Entity.JoinPrevious != newRole.JoinPrevious)
+        // 画面の役職の表記と、1 行にまとめて表示する役職の指定の追従。
+        if (!string.Equals(draftRole.Entity.RoleLabelText, newRole.RoleLabelText, StringComparison.Ordinal)
+            || draftRole.Entity.JoinPrevious != newRole.JoinPrevious
+            || !string.Equals(draftRole.Entity.JoinSeparator, newRole.JoinSeparator, StringComparison.Ordinal))
         {
-            draftRole.Entity.JoinedLabel = newRole.JoinedLabel;
+            draftRole.Entity.RoleLabelText = newRole.RoleLabelText;
             draftRole.Entity.JoinPrevious = newRole.JoinPrevious;
+            draftRole.Entity.JoinSeparator = newRole.JoinSeparator;
             draftRole.MarkModified();
         }
 
@@ -2654,8 +2657,9 @@ public sealed class CreditBulkApplyService
         sb.Append("R|code=").Append(r.ResolvedRoleCode ?? r.DisplayName)
           .Append("|notes=").Append(r.Notes ?? string.Empty)
           .Append("|affil=").Append(r.AffiliationLayout)
-          .Append("|join=").Append(r.JoinedLabel ?? string.Empty)
-          .Append("|joinprev=").Append(r.JoinPrevious ? '1' : '0').Append('\n');
+          .Append("|label=").Append(r.RoleLabelText ?? string.Empty)
+          .Append("|joinprev=").Append(r.JoinPrevious ? '1' : '0')
+          .Append("|joinsep=").Append(r.JoinSeparator ?? string.Empty).Append('\n');
         foreach (var b in r.Blocks) sb.Append(SerializeBlockForCompare(b));
         return sb.ToString();
     }

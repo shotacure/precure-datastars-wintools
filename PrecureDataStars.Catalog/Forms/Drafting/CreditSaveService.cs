@@ -595,8 +595,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertRoleAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardRole r, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, joined_label, join_previous, notes, created_by, updated_by)
-            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @JoinedLabel, @JoinPrevious, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, join_previous, join_separator, notes, created_by, updated_by)
+            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @JoinPrevious, @JoinSeparator, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, r, transaction: tx, cancellationToken: ct));
@@ -729,8 +729,9 @@ internal sealed class CreditSaveService
               card_group_id      = @CardGroupId,
               role_code          = @RoleCode,
               affiliation_layout = @AffiliationLayout,
-              joined_label       = @JoinedLabel,
+              role_label_text    = @RoleLabelText,
               join_previous      = @JoinPrevious,
+              join_separator     = @JoinSeparator,
               notes              = @Notes,
               updated_by         = @UpdatedBy
             WHERE card_role_id = @CardRoleId;

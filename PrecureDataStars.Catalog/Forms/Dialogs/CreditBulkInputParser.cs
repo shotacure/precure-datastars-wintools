@@ -36,12 +36,20 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///   <item><description><c>@heading=文字</c> / <c>@heading_series=N</c>（ブロックの最初のエントリより前の単独行）→
 ///     そのブロックの先頭に出す見出し。<c>@heading_series=N</c> は作品（<c>series_id</c>）を指し、
 ///     <c>@heading=文字</c> は画面どおりの見出しの文字（作品の正式タイトルと表記が違うとき、または「特別出演」など作品ではない見出し）。</description></item>
+///   <item><description><c>役職名: @label=文字</c>（役職ヘッダ）/ <c>@label=文字</c>（役職開始行直後の単独行）→
+///     画面の役職の表記（<c>role_label_text</c>）。役職名と表記（中黒・送り仮名など）が違うときに書く。役職名と同じ文字なら何も入れない。</description></item>
 ///   <item><description><c>A+B: @join=文字</c>（役職ヘッダ）→ 役職 A と B を、同じエントリを持つ別々の役職として作り、
-///     クレジットでは「文字」を役職名にして 1 行にまとめて表示する（例: <c>キャラクターデザイン+作画監督: @join=キャラクターデザイン・作画監督</c>）。
+///     クレジットでは「文字」の 1 行にまとめて表示する（例: <c>キャラクターデザイン+作画監督: @join=キャラクターデザイン・作画監督</c>）。
 ///     エントリは 1 回だけ書けばよい。区切りは半角 <c>+</c> または全角 <c>＋</c>。3 つ以上もまとめられる。
+///     「文字」は役職ごとの表記と区切り（<c>join_separator</c>）に分けて保存する（分け方は <see cref="JoinedRoleLabelText"/>）。
+///     画面の表記が役職名と違うときは <c>@join=[キャラクター・デザイン]・[作画監督]</c> のように角括弧で役職の部分を示す。
 ///     まとめた役職では強制新規（<c>*X</c> / <c>&lt;*X&gt;</c>）は使えない（役職の数だけ新規作成されてしまうため）。</description></item>
-///   <item><description><c>@join=文字</c> / <c>@join_previous</c>（役職開始行直後の単独行）→ その役職の
-///     <c>joined_label</c> / <c>join_previous</c> を個別に指定する（エントリが食い違う組を書き出すときの形）。</description></item>
+///   <item><description><c>@join_previous=区切り</c> / <c>@join_previous</c>（役職開始行直後の単独行）→ その役職を
+///     直前の役職と 1 行にまとめ、直前との区切りの文字（<c>join_separator</c>）を指定する（区切りが無ければ <c>=</c> 以降を省く）。
+///     区切りの前後の空白も区切りに含めたいときは <c>@join_previous=[　]</c> のように角括弧で囲む。
+///     役職ごとに書く形で、エントリが食い違う組・1 役職だけを書き出すときに使う。役職の表記は各役職の <c>@label=</c> で書く。</description></item>
+///   <item><description><c>@join=文字</c>（役職開始行直後の単独行）→ 役職ヘッダの <c>A+B: @join=文字</c> と同じく、
+///     まとめた行の文字をこの役職と後続の <c>@join_previous</c> の役職に振り分ける。</description></item>
 ///   <item><description><c>@notes=備考</c>（各レベル区切り行直後の単独行）→ 直近で開かれた
 ///     Card / Tier / Group / Role / Block の <c>notes</c> に保存。同一スコープに対する 2 回目の
 ///     <c>@notes=</c> は次のスコープ（Role 直後なら Block）にスライドする。</description></item>
@@ -120,9 +128,16 @@ public static class CreditBulkInputParser
     private static readonly Regex RoleHeadInlineJoinRegex =
         new(@"^(?<name>.+?)[：:]\s*@join=(?<label>.+?)\s*$", RegexOptions.Compiled);
 
-    // ディレクティブ行: @join=文字 / @join_previous。役職単位で joined_label / join_previous を指定する。
+    // ディレクティブ行: @join=文字 / @join_previous。まとめる先頭の役職にまとめた行の文字を、後続の役職に join_previous を指定する。
     private static readonly Regex JoinDirectiveRegex = new(@"^@join=(?<label>.+)$", RegexOptions.Compiled);
-    private static readonly Regex JoinPreviousDirectiveRegex = new(@"^@join_previous$", RegexOptions.Compiled);
+    private static readonly Regex JoinPreviousDirectiveRegex = new(@"^@join_previous(?:=(?<sep>.*))?$", RegexOptions.Compiled);
+
+    // 役職ヘッダ "役職名: @label=文字"。画面の役職の表記（role_label_text）を役職ヘッダと 1 行で書く。
+    private static readonly Regex RoleHeadInlineLabelRegex =
+        new(@"^(?<name>.+?)[：:]\s*@label=(?<label>.+?)\s*$", RegexOptions.Compiled);
+
+    // ディレクティブ行: @label=文字。直近の役職の画面の表記（role_label_text）を指定する。
+    private static readonly Regex LabelDirectiveRegex = new(@"^@label=(?<label>.+)$", RegexOptions.Compiled);
 
     // まとめた役職ヘッダの役職名の区切り（半角 / 全角のプラス）。
     private static readonly char[] JoinedRoleNameSeparators = { '+', '＋' };
@@ -565,10 +580,28 @@ public static class CreditBulkInputParser
                     continue;
                 }
 
-                // @join=文字 / @join_previous : 直近の役職の joined_label / join_previous を指定する。
+                // @label=文字 : 直近の役職の画面の表記（role_label_text）を指定する。
+                var labelMatch = LabelDirectiveRegex.Match(trimmed);
+                if (labelMatch.Success)
+                {
+                    if (curRole is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @label= は役職指定後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    ApplyRoleLabelText(labelMatch.Groups["label"].Value.Trim(), curRole);
+                    continue;
+                }
+
+                // @join=文字 / @join_previous : まとめる先頭の役職にまとめた行の文字を、後続の役職に join_previous を指定する。
                 var joinMatch = JoinDirectiveRegex.Match(trimmed);
-                bool isJoinPrevious = JoinPreviousDirectiveRegex.IsMatch(trimmed);
-                if (joinMatch.Success || isJoinPrevious)
+                var joinPreviousMatch = JoinPreviousDirectiveRegex.Match(trimmed);
+                if (joinMatch.Success || joinPreviousMatch.Success)
                 {
                     if (curRole is null)
                     {
@@ -580,8 +613,20 @@ public static class CreditBulkInputParser
                         });
                         continue;
                     }
-                    if (joinMatch.Success) curRole.JoinedLabel = joinMatch.Groups["label"].Value.Trim();
-                    else curRole.JoinPrevious = true;
+                    if (joinMatch.Success)
+                    {
+                        curRole.JoinText = joinMatch.Groups["label"].Value.Trim();
+                        curRole.JoinTextLineNumber = lineNo;
+                    }
+                    else
+                    {
+                        curRole.JoinPrevious = true;
+                        if (joinPreviousMatch.Groups["sep"].Success)
+                        {
+                            curRole.JoinSeparator = UnwrapSeparator(joinPreviousMatch.Groups["sep"].Value);
+                            curRole.JoinSeparatorExplicit = true;
+                        }
+                    }
                     continue;
                 }
 
@@ -590,7 +635,7 @@ public static class CreditBulkInputParser
                 {
                     Severity = WarningSeverity.Block,
                     LineNumber = lineNo,
-                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= / @heading= / @heading_series= / @join= / @join_previous のみサポートします。"
+                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= / @heading= / @heading_series= / @label= / @join= / @join_previous のみサポートします。"
                 });
                 continue;
             }
@@ -600,7 +645,9 @@ public static class CreditBulkInputParser
             // マッチしたらそのまま PREFIX 役職として開始する（別行に @affil_layout= を書くよりタイプ量が少ない）。
             string? inlineAffilLayoutValue = null;
             string? inlineJoinLabel = null;
+            string? inlineRoleLabel = null;
             var roleInlineJoinMatch = RoleHeadInlineJoinRegex.Match(trimmed);
+            var roleInlineLabelMatch = RoleHeadInlineLabelRegex.Match(trimmed);
             var roleInlineMatch = RoleHeadInlineAffilLayoutRegex.Match(trimmed);
             Match roleMatch;
             if (roleInlineJoinMatch.Success && !trimmed.StartsWith("["))
@@ -608,6 +655,12 @@ public static class CreditBulkInputParser
                 // "A+B: @join=文字"：まとめる役職名の並びと、まとめた行の文字を取り出す。
                 inlineJoinLabel = roleInlineJoinMatch.Groups["label"].Value.Trim();
                 roleMatch = RoleHeadRegex.Match(roleInlineJoinMatch.Groups["name"].Value.Trim() + ":");
+            }
+            else if (roleInlineLabelMatch.Success && !trimmed.StartsWith("["))
+            {
+                // "役職名: @label=文字"：役職名と、画面の役職の表記を取り出す。
+                inlineRoleLabel = roleInlineLabelMatch.Groups["label"].Value.Trim();
+                roleMatch = RoleHeadRegex.Match(roleInlineLabelMatch.Groups["name"].Value.Trim() + ":");
             }
             else if (roleInlineMatch.Success && !trimmed.StartsWith("["))
             {
@@ -643,8 +696,10 @@ public static class CreditBulkInputParser
                 {
                     DisplayName = joinedNames[0],
                     LineNumber = lineNo,
-                    JoinedLabel = inlineJoinLabel,
+                    JoinText = inlineJoinLabel,
+                    JoinTextLineNumber = inlineJoinLabel is not null ? lineNo : 0,
                 };
+                if (inlineRoleLabel is not null) ApplyRoleLabelText(inlineRoleLabel, curRole);
                 // インライン @affil_layout= があれば反映。値が suffix/prefix 以外は警告 + SUFFIX 据え置き。
                 if (inlineAffilLayoutValue is not null)
                 {
@@ -946,7 +1001,107 @@ public static class CreditBulkInputParser
             }
         }
 
+        // まとめた行の文字（@join=）を、まとめる役職ごとの表記と区切りに振り分ける。
+        foreach (var card in result.Cards)
+            foreach (var tier in card.Tiers)
+                foreach (var group in tier.Groups)
+                    ResolveJoinTexts(group.Roles, result);
+
         return result;
+    }
+
+    /// <summary>
+    /// 画面の役職の表記（<c>@label=</c>）を役職に入れる。役職名と同じ文字なら入れない（null のまま役職名で出す）。
+    /// </summary>
+    private static void ApplyRoleLabelText(string label, ParsedRole role)
+    {
+        role.RoleLabelText = label.Length == 0 || string.Equals(label, role.DisplayName, StringComparison.Ordinal)
+            ? null
+            : label;
+    }
+
+    /// <summary>
+    /// <c>@join_previous=区切り</c> の値を区切りの文字にする。角括弧（半角 <c>[ ]</c> か全角 <c>［ ］</c>）で囲まれていれば
+    /// 中身をそのまま（前後の空白も含めて）使い、囲まれていなければ前後の空白を除く。空なら null。
+    /// </summary>
+    private static string? UnwrapSeparator(string value)
+    {
+        string v = value.Trim();
+        if (v.Length >= 2 && (v[0] == '[' || v[0] == '［') && (v[^1] == ']' || v[^1] == '］'))
+            v = v.Substring(1, v.Length - 2);
+        return v.Length == 0 ? null : v;
+    }
+
+    /// <summary>
+    /// Group 内の役職（表示順）について、<see cref="ParsedRole.JoinText"/> を持つ役職と、その直後に続く
+    /// <see cref="ParsedRole.JoinPrevious"/> の役職を 1 組とし、まとめた行の文字を役職ごとの表記
+    /// （<see cref="ParsedRole.RoleLabelText"/>）と区切り（<see cref="ParsedRole.JoinSeparator"/>）に分ける。
+    /// 分けられないとき、後続の役職が無いとき、<c>@label=</c> / <c>@join_previous=区切り</c> と食い違うときは Block 警告にする。
+    /// <c>@join=</c> の無い組（役職ごとに <c>@label=</c> / <c>@join_previous=区切り</c> で書いた組）はそのまま使う。
+    /// </summary>
+    private static void ResolveJoinTexts(IReadOnlyList<ParsedRole> roles, BulkParseResult result)
+    {
+        for (int i = 0; i < roles.Count; i++)
+        {
+            var lead = roles[i];
+            if (lead.JoinText is null) continue;
+
+            var members = new List<ParsedRole> { lead };
+            for (int j = i + 1; j < roles.Count && roles[j].JoinPrevious; j++) members.Add(roles[j]);
+            int lineNo = lead.JoinTextLineNumber > 0 ? lead.JoinTextLineNumber : lead.LineNumber;
+            if (members.Count < 2)
+            {
+                result.Warnings.Add(new ParseWarning
+                {
+                    Severity = WarningSeverity.Block,
+                    LineNumber = lineNo,
+                    Message = $"{lineNo} 行目: @join= の役職「{lead.DisplayName}」の後ろに、まとめる役職（@join_previous）がありません。"
+                });
+                continue;
+            }
+
+            if (!JoinedRoleLabelText.TrySplit(lead.JoinText, members.Select(m => m.DisplayName).ToList(), out var parts, out var error))
+            {
+                result.Warnings.Add(new ParseWarning
+                {
+                    Severity = WarningSeverity.Block,
+                    LineNumber = lineNo,
+                    Message = $"{lineNo} 行目: {error}"
+                });
+                i += members.Count - 1;
+                continue;
+            }
+
+            for (int k = 0; k < members.Count; k++)
+            {
+                var m = members[k];
+                // @label= と @join= の角括弧の両方で違う表記を書いたときは、どちらが正しいか決められないので止める。
+                if (m.RoleLabelText is not null && !string.Equals(m.RoleLabelText, parts[k].LabelText ?? m.DisplayName, StringComparison.Ordinal))
+                {
+                    result.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Block,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: 役職「{m.DisplayName}」の表記が @label=「{m.RoleLabelText}」と @join=「{parts[k].LabelText ?? m.DisplayName}」で食い違っています。"
+                    });
+                    continue;
+                }
+                // @join_previous=区切り と @join= の文字で区切りが食い違うときも同じく止める。
+                if (k > 0 && m.JoinSeparatorExplicit && !string.Equals(m.JoinSeparator ?? "", parts[k].Separator ?? "", StringComparison.Ordinal))
+                {
+                    result.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Block,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: 役職「{m.DisplayName}」の区切りが @join_previous=「{m.JoinSeparator}」と @join=「{parts[k].Separator}」で食い違っています。"
+                    });
+                    continue;
+                }
+                m.RoleLabelText = parts[k].LabelText;
+                m.JoinSeparator = k == 0 ? null : parts[k].Separator;
+            }
+            i += members.Count - 1;
+        }
     }
 
     /// <summary>

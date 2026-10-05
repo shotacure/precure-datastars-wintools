@@ -25,6 +25,7 @@ public sealed class SeriesThemeSongsRepository : RepositoryBase
           seq                     AS Seq,
           usage_actuality         AS UsageActuality,
           song_recording_id       AS SongRecordingId,
+          title_misprint_text     AS TitleMisprintText,
           notes                   AS Notes,
           created_at              AS CreatedAt,
           updated_at              AS UpdatedAt,
@@ -84,13 +85,15 @@ public sealed class SeriesThemeSongsRepository : RepositoryBase
         const string sql = """
             INSERT INTO series_theme_songs
               (series_id, is_broadcast_only, theme_kind, seq, usage_actuality,
-               song_recording_id, notes, created_by, updated_by)
+               song_recording_id, title_misprint_text, notes, created_by, updated_by)
             VALUES
               (@SeriesId, @IsBroadcastOnly, @ThemeKind, @Seq, @UsageActuality,
-               @SongRecordingId, @Notes, @CreatedBy, @UpdatedBy)
+               @SongRecordingId, @TitleMisprintText, @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               usage_actuality         = VALUES(usage_actuality),
               song_recording_id       = VALUES(song_recording_id),
+              -- 曲名の誤記は入力欄の無い画面からも保存されるので、渡されなかったとき（NULL）は今の誤記を残す
+              title_misprint_text     = COALESCE(VALUES(title_misprint_text), title_misprint_text),
               notes                   = VALUES(notes),
               updated_by              = VALUES(updated_by);
             """;

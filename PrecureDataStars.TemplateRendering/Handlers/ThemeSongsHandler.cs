@@ -163,6 +163,7 @@ public static class ThemeSongsHandler
               s.song_id           AS SongId,
               sr.song_recording_id AS SongRecordingId,
               s.title             AS SongTitle,
+              ets.title_misprint_text AS TitleMisprintText,
               s.lyricist_name     AS LyricistName,
               s.composer_name     AS ComposerName,
               s.arranger_name     AS ArrangerName,
@@ -252,6 +253,8 @@ public static class ThemeSongsHandler
         // 「」で囲んで出すので、曲名の中の「」は『』にする。
         var safeTitle = System.Net.WebUtility.HtmlEncode(JapaneseQuotes.InQuotes(r.SongTitle ?? "(曲名未登録)"));
         sb.Append('「');
+        // 画面に出た曲名の誤記があれば、取り消し線で出してから正しい曲名を続ける。
+        sb.Append(BuildTitleMisprintPrefixHtml(r.TitleMisprintText));
         if (r.SongId > 0)
         {
             sb.Append($"<a href=\"/songs/{r.SongId}/\">{safeTitle}</a>");
@@ -311,6 +314,15 @@ public static class ThemeSongsHandler
     }
 
     /// <summary>
+    /// クレジットの画面に出た曲名の誤記を、正しい曲名の前に置く HTML 断片（取り消し線＋空白）にする。誤記が無ければ空文字。
+    /// 曲名は「」で囲んで出すので、誤記の中の「」も『』にする。
+    /// </summary>
+    internal static string BuildTitleMisprintPrefixHtml(string? misprint)
+        => string.IsNullOrEmpty(misprint)
+            ? ""
+            : $"<del title=\"クレジット時の誤記\">{System.Net.WebUtility.HtmlEncode(JapaneseQuotes.InQuotes(misprint))}</del> ";
+
+    /// <summary>
     /// JOIN 結果を受ける DTO（Dapper マッピング用、内部公開）。
     /// internal 化：新 <c>{#THEME_SONGS}</c> ループ構文の Renderer から
     /// 楽曲スコープのプレースホルダ（{SONG_TITLE} 等）を解決するために、フィールドへ直接アクセスする必要がある。
@@ -327,6 +339,8 @@ public static class ThemeSongsHandler
         /// <summary>録音 ID。</summary>
         public int SongRecordingId { get; set; }
         public string? SongTitle { get; set; }
+        /// <summary>クレジットの画面に出た曲名の誤記（episode_theme_songs / series_theme_songs.title_misprint_text）。null なら誤記なし。</summary>
+        public string? TitleMisprintText { get; set; }
         public string? LyricistName { get; set; }
         public string? ComposerName { get; set; }
         public string? ArrangerName { get; set; }

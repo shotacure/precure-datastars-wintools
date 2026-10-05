@@ -37,6 +37,10 @@ public sealed class EpisodeThemeSong
     /// <summary>歌録音 ID（必須、→ song_recordings.song_recording_id）。</summary>
     public int SongRecordingId { get; set; }
 
+    /// <summary>クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。null なら誤記なし。
+    /// クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名を続ける。</summary>
+    public string? TitleMisprintText { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

@@ -275,11 +275,13 @@ public static class RoleTemplateRenderer
                     var title = currentSong?.SongTitle;
                     if (string.IsNullOrEmpty(title)) return "";
                     var safe = System.Net.WebUtility.HtmlEncode(title);
+                    // 画面に出た曲名の誤記があれば、取り消し線で出してから正しい曲名を続ける。
+                    string misprintPrefix = ThemeSongsHandler.BuildTitleMisprintPrefixHtml(currentSong?.TitleMisprintText);
                     if (currentSong is { SongId: > 0 } cs)
                     {
-                        return $"<a href=\"/songs/{cs.SongId}/\">{safe}</a>";
+                        return $"{misprintPrefix}<a href=\"/songs/{cs.SongId}/\">{safe}</a>";
                     }
-                    return safe;
+                    return misprintPrefix + safe;
                 }
             case "SONG_KIND":
                 // クレジット展開時のコード値（OP / ED / INSERT）をそのまま出すと、

@@ -143,9 +143,10 @@ public partial class CreditEditorForm
                             if (columns >= 2) roleNote = $"  [横 {columns} カラム表示指定]";
                         }
 
-                        // 画面の役職の表記（role_label_text）と、1 行にまとめて表示する役職の指定
+                        // 画面の役職の表記（role_label_text）・役職名の誤記（role_misprint_text）と、1 行にまとめて表示する役職の指定
                         // （join_previous / join_separator）をノード名に添えて見えるようにする。
                         if (!string.IsNullOrEmpty(role.RoleLabelText)) roleNote += $"  [表記: {role.RoleLabelText}]";
+                        if (!string.IsNullOrEmpty(role.RoleMisprintText)) roleNote += $"  [誤記: {role.RoleMisprintText}]";
                         if (role.JoinPrevious) roleNote += $"  [直前の役職とまとめる 区切り「{role.JoinSeparator ?? ""}」]";
 
                         var roleNode = new TreeNode($"📋 Role: {roleName}  (order {roleDisplayIndex}){roleNote}")

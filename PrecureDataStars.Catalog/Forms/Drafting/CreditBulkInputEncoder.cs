@@ -267,8 +267,9 @@ internal static class CreditBulkInputEncoder
         var members = CollectJoinMembers(liveRoles, startIndex);
         if (members.Count < 2) return 0;
 
-        // 後続の役職に備考があるとまとめた形では書けないので、個別に書き出す。
+        // 後続の役職に備考があるとまとめた形では書けないので、個別に書き出す。役職名の誤記も同じ（@misprint= は役職ごとの行）。
         if (members.Skip(1).Any(m => !string.IsNullOrEmpty(m.Entity.Notes))) return 0;
+        if (members.Any(m => !string.IsNullOrEmpty(m.Entity.RoleMisprintText))) return 0;
         if (members.Any(m => !string.Equals(m.Entity.AffiliationLayout, lead.Entity.AffiliationLayout, StringComparison.Ordinal))) return 0;
 
         string? joinText = await BuildJoinTextAsync(members, cache);
@@ -325,6 +326,12 @@ internal static class CreditBulkInputEncoder
         if (!string.IsNullOrEmpty(role.Entity.RoleLabelText))
         {
             sb.Append("@label=").Append(role.Entity.RoleLabelText).Append(LineSeparator);
+        }
+
+        // 画面に出た役職名の誤記。
+        if (!string.IsNullOrEmpty(role.Entity.RoleMisprintText))
+        {
+            sb.Append("@misprint=").Append(role.Entity.RoleMisprintText).Append(LineSeparator);
         }
 
         // 1 行にまとめて表示する役職の指定（まとめた形で書き出せなかった組・1 役職だけの書き出しの個別指定）。

@@ -2396,6 +2396,9 @@ CREATE TABLE `credit_card_roles` (
   -- 画面の役職の表記。役職マスタの name_ja と表記（中黒・送り仮名・長音など）が違うときだけ入れる。
   -- NULL なら name_ja で出す。クレジットの表示だけに使い、集計は role_code のまま。
   `role_label_text` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- 画面に出た役職名の誤記。NULL なら誤記なし。表示は誤記（取り消し線）を 1 行目、正しい表記（role_label_text か name_ja）を
+  -- 2 行目に改行して出す。集計は role_code のまま。
+  `role_misprint_text` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   -- 画面で 1 行にまとめて出る役職（「キャラクターデザイン・作画監督」など）の表示。
   -- データは役職ごとに分けて同じエントリを入れ、表示だけをまとめる（集計は役職ごとに分かれたまま）。
   -- join_previous = 1 なら直前の役職（同じグループの一つ前）と 1 行にまとめる。2 つ目以降の役職に立てる。

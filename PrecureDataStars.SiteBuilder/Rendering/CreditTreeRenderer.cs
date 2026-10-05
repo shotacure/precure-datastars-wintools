@@ -357,6 +357,7 @@ internal sealed class CreditTreeRenderer
                             suppressVoiceCastRoleName, appendThisRole, siblingResolver,
                             affiliationLayout: cr.AffiliationLayout,
                             roleLabelText: cr.RoleLabelText,
+                            roleMisprintText: cr.RoleMisprintText,
                             roleNameHtmlOverride: joinedLabelHtmlByLeadId.TryGetValue(cr.CardRoleId, out var joinedHtml) ? joinedHtml : null,
                             html, ct).ConfigureAwait(false);
 
@@ -412,10 +413,21 @@ internal sealed class CreditTreeRenderer
     /// まとめた行の役職名 HTML を組み立てる。各役職の表記（画面の表記か役職名）をその役職の詳細ページへのリンクにし、
     /// 2 つ目以降の役職の前に直前との区切り（<c>join_separator</c>）をリンクなしの文字で挟む。
     /// 役職ごとの文字の範囲はデータで決まっているので、文字列を探して当てはめることはしない。
+    /// まとめる役職のどれかに役職名の誤記（<c>role_misprint_text</c>）があれば、画面どおりの行（誤記の役職は誤記で）を
+    /// 取り消し線で 1 行目に出し、正しい行を 2 行目に改行して出す。
     /// </summary>
     private static string BuildJoinedRoleNameHtml(IReadOnlyList<CreditCardRole> members, IReadOnlyDictionary<string, Role> roleMap)
     {
         var sb = new StringBuilder();
+        if (members.Any(m => !string.IsNullOrEmpty(m.RoleMisprintText)))
+        {
+            string printed = RoleJoinComparer.ComposeLabel(members
+                .Select(m => (string.IsNullOrEmpty(m.RoleMisprintText)
+                    ? CreditRoleLabel.Resolve(m.RoleLabelText, m.RoleCode, roleMap)
+                    : m.RoleMisprintText!, m.JoinSeparator))
+                .ToList());
+            sb.Append(BuildRoleMisprintPrefixHtml(printed));
+        }
         for (int k = 0; k < members.Count; k++)
         {
             var m = members[k];
@@ -424,6 +436,13 @@ internal sealed class CreditTreeRenderer
         }
         return sb.ToString();
     }
+
+    /// <summary>
+    /// 役職名の誤記を、正しい役職名の前に置く HTML 断片（誤記の取り消し線＋改行）にする。
+    /// 役職名の欄は幅が狭いので、名前の誤記（<see cref="PrependMisprintHtml"/>）のように横に並べず、正誤で改行する。
+    /// </summary>
+    private static string BuildRoleMisprintPrefixHtml(string misprint)
+        => $"<del title=\"クレジット時の誤記\">{Esc(misprint)}</del><br>";
 
     /// <summary>まとめた行の役職名をプレーンテキストで組み立てる（ビルド警告の文面用）。</summary>
     private static string ComposeJoinedRoleName(IReadOnlyList<CreditCardRole> members, IReadOnlyDictionary<string, Role> roleMap)
@@ -534,6 +553,9 @@ internal sealed class CreditTreeRenderer
         // 画面の役職の表記（credit_card_roles.role_label_text）。非空のとき役職名・{ROLE_NAME}・
         // シリーズ別の見出し上書きの文字をこれで置き換える（リンク先は役職のまま）。
         string? roleLabelText,
+        // 画面に出た役職名の誤記（credit_card_roles.role_misprint_text）。非空のとき役職名の欄・見出しの前に
+        // 誤記を取り消し線で置き、改行して正しい表記を出す。
+        string? roleMisprintText,
         // 1 行にまとめた役職の役職名 HTML（join_previous / join_separator から組み立て済み）。非 null のとき役職名セルをこれで置き換える。
         string? roleNameHtmlOverride,
         StringBuilder html,
@@ -570,6 +592,13 @@ internal sealed class CreditTreeRenderer
         // シリーズ別の見出し上書きより、そのクレジットの画面の表記を優先する。
         if (contentHeaderOverride is not null && !string.IsNullOrEmpty(roleLabelText)) contentHeaderOverride = roleLabelText;
 
+        // 役職名の誤記：役職名の欄（まとめた行は組み立て済みなので除く）を「誤記（取り消し線）＋改行＋正しい表記」にする。
+        string roleMisprintPrefixHtml = !string.IsNullOrEmpty(roleMisprintText) && roleName.Length > 0
+            ? BuildRoleMisprintPrefixHtml(roleMisprintText!)
+            : "";
+        if (roleMisprintPrefixHtml.Length > 0 && roleNameHtmlOverride is null)
+            roleNameHtmlOverride = roleMisprintPrefixHtml + BuildRoleNameHtml(roleCode, roleName, roleMap);
+
         html.Append("<div class=\"role\">");
 
         // コンテンツ領域ヘッダ上書き：シリーズ別「役職名の表示テキストだけ変えて、本体は通常描画」
@@ -580,6 +609,7 @@ internal sealed class CreditTreeRenderer
         if (contentHeaderOverride is not null)
         {
             html.Append("<div class=\"role-content-header\"><strong>");
+            html.Append(roleMisprintPrefixHtml);
             html.Append(BuildRoleNameHtml(roleCode, contentHeaderOverride, roleMap));
             html.Append("</strong></div>");
         }

@@ -868,8 +868,9 @@ public sealed class CreditBulkApplyService
         // 所属表記レイアウト（SUFFIX 既定 / PREFIX = 映画の製作・配給などの 2 カラム表記）。
         role.Entity.AffiliationLayout = pr.AffiliationLayout;
 
-        // 画面の役職の表記と、1 行にまとめて表示する役職の指定（直前の役職とまとめるか / 直前との区切り）。
+        // 画面の役職の表記・役職名の誤記と、1 行にまとめて表示する役職の指定（直前の役職とまとめるか / 直前との区切り）。
         role.Entity.RoleLabelText = pr.RoleLabelText;
+        role.Entity.RoleMisprintText = pr.RoleMisprintText;
         role.Entity.JoinPrevious = pr.JoinPrevious;
         role.Entity.JoinSeparator = pr.JoinSeparator;
 
@@ -2374,12 +2375,14 @@ public sealed class CreditBulkApplyService
             draftRole.MarkModified();
         }
 
-        // 画面の役職の表記と、1 行にまとめて表示する役職の指定の追従。
+        // 画面の役職の表記・役職名の誤記と、1 行にまとめて表示する役職の指定の追従。
         if (!string.Equals(draftRole.Entity.RoleLabelText, newRole.RoleLabelText, StringComparison.Ordinal)
+            || !string.Equals(draftRole.Entity.RoleMisprintText, newRole.RoleMisprintText, StringComparison.Ordinal)
             || draftRole.Entity.JoinPrevious != newRole.JoinPrevious
             || !string.Equals(draftRole.Entity.JoinSeparator, newRole.JoinSeparator, StringComparison.Ordinal))
         {
             draftRole.Entity.RoleLabelText = newRole.RoleLabelText;
+            draftRole.Entity.RoleMisprintText = newRole.RoleMisprintText;
             draftRole.Entity.JoinPrevious = newRole.JoinPrevious;
             draftRole.Entity.JoinSeparator = newRole.JoinSeparator;
             draftRole.MarkModified();
@@ -2658,6 +2661,7 @@ public sealed class CreditBulkApplyService
           .Append("|notes=").Append(r.Notes ?? string.Empty)
           .Append("|affil=").Append(r.AffiliationLayout)
           .Append("|label=").Append(r.RoleLabelText ?? string.Empty)
+          .Append("|misprint=").Append(r.RoleMisprintText ?? string.Empty)
           .Append("|joinprev=").Append(r.JoinPrevious ? '1' : '0')
           .Append("|joinsep=").Append(r.JoinSeparator ?? string.Empty).Append('\n');
         foreach (var b in r.Blocks) sb.Append(SerializeBlockForCompare(b));

@@ -109,6 +109,9 @@ public sealed class ParsedRole
     /// <c>役職名: @label=文字</c> / <c>@label=文字</c> 行、または <c>@join=</c> の角括弧の中の文字で設定される。</summary>
     public string? RoleLabelText { get; set; }
 
+    /// <summary>画面に出た役職名の誤記（<c>credit_card_roles.role_misprint_text</c>）。<c>@misprint=文字</c> 行で設定される。</summary>
+    public string? RoleMisprintText { get; set; }
+
     /// <summary>後続の役職と 1 行にまとめて表示するときの、まとめた行の文字（<c>@join=</c> の右側）。
     /// 役職ヘッダ <c>A+B: @join=文字</c> の先頭の役職、または <c>@join=文字</c> 行で設定される。
     /// パースの最後に、まとめる役職ごとの <see cref="RoleLabelText"/> と <see cref="JoinSeparator"/> に分けて振り分ける

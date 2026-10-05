@@ -40,6 +40,10 @@ public sealed class CreditCardRole
     /// クレジットの表示だけに使い、集計は <see cref="RoleCode"/> のまま。</summary>
     public string? RoleLabelText { get; set; }
 
+    /// <summary>画面に出た役職名の誤記（例: 役職「デジタル特殊効果」が画面では「デジタル特種効果」）。null なら誤記なし。
+    /// 正しい表記は <see cref="RoleLabelText"/> か役職名。クレジットでは誤記を取り消し線で 1 行目、正しい表記を 2 行目に出す。</summary>
+    public string? RoleMisprintText { get; set; }
+
     /// <summary>true なら直前の役職（同じ Group の <see cref="OrderInGroup"/> 一つ前）と 1 行にまとめて表示する。
     /// まとめる役職のうち 2 つ目以降に立てる。データは役職ごとに分けて同じエントリを入れ、まとめるのはクレジットの表示だけ。</summary>
     public bool JoinPrevious { get; set; }

@@ -6,7 +6,7 @@ namespace PrecureDataStars.SiteBuilder;
 /// <summary>SiteBuilder のエントリポイント。
 /// <c>--test</c> でテストモード（テスト用ディレクトリへ、GA4 / AdSense / ads.txt なしで生成）、
 /// <c>--production</c> で本番モード（本番ディレクトリへ全出力込みで生成）。
-/// どちらも指定しないときは、端末からの対話実行なら 1 回だけテスト／本番を聞く（Enter = テスト）。
+/// どちらも指定しないときは、端末からの対話実行なら 1 回だけテスト／本番／本番＋デプロイを聞く（Enter = テスト）。
 /// スクリプトやパイプ経由（標準入力か標準出力がリダイレクト）なら聞かずにテストモード。
 /// <c>--production --deploy</c> でビルド後に S3 へ差分同期＋CloudFront キャッシュ削除まで実行する。
 /// <c>--dry-run</c> は変更計画のみ表示（無変更）、<c>--yes</c> は削除前確認の省略。
@@ -79,8 +79,13 @@ internal static class Program
 
             // モードを指定しなかったときは、端末からの対話実行に限って 1 回だけ聞く
             // （--deploy だけ付いているときは下の「--production 必須」のエラーに任せる）。
+            // 「本番＋デプロイ」は --production --deploy と同じ（削除があればデプロイの前に一覧を出して y/N で確かめる）。
             if (!isProduction && !isTest && !deploy)
-                isProduction = AskProductionInteractively();
+            {
+                var mode = AskModeInteractively();
+                isProduction = mode != InteractiveMode.Test;
+                deploy = mode == InteractiveMode.ProductionDeploy;
+            }
 
             // デプロイは本番ビルドからのみ許可する（テスト出力を本番バケットへ流す事故を構造的に防ぐ）。
             if (deploy && !isProduction)
@@ -115,24 +120,39 @@ internal static class Program
         }
     }
 
+    /// <summary>対話実行で選ぶビルドのモード。</summary>
+    private enum InteractiveMode
+    {
+        /// <summary>テストモード（SiteOutputDirTest へ）。</summary>
+        Test,
+        /// <summary>本番ビルドだけ（SiteOutputDir へ書き出し、S3 には上げない）。</summary>
+        Production,
+        /// <summary>本番ビルドのあと S3 へ差分同期＋CloudFront キャッシュ削除（<c>--production --deploy</c> と同じ）。</summary>
+        ProductionDeploy,
+    }
+
     /// <summary>
     /// モード未指定のときの問い合わせ。標準入力・標準出力がどちらも端末（リダイレクトされていない）のときだけ
-    /// 「テスト／本番」を 1 回聞き、本番を選んだら true。Enter だけ・それ以外の入力・端末でない（スクリプトや
-    /// パイプ経由）ときは従来どおりテストモード（false）。うっかり本番ディレクトリへ書かない側に倒す。
+    /// 「テスト／本番／本番＋デプロイ」を 1 回聞く。P なら本番ビルドだけ、D なら本番ビルドのあとデプロイまで。
+    /// Enter だけ・それ以外の入力・端末でない（スクリプトやパイプ経由）ときはテストモード。
+    /// うっかり本番ディレクトリや本番バケットへ書かない側に倒す。
     /// </summary>
-    private static bool AskProductionInteractively()
+    private static InteractiveMode AskModeInteractively()
     {
-        if (Console.IsInputRedirected || Console.IsOutputRedirected) return false;
-        Console.Write("ビルドのモードを選んでください  [T] テスト（Enter） / [P] 本番 : ");
-        var answer = Console.ReadLine();
-        return string.Equals(answer?.Trim(), "p", StringComparison.OrdinalIgnoreCase);
+        if (Console.IsInputRedirected || Console.IsOutputRedirected) return InteractiveMode.Test;
+        Console.Write("ビルドのモードを選んでください  [T] テスト（Enter） / [P] 本番ビルドだけ / [D] 本番ビルド＋デプロイ : ");
+        var answer = Console.ReadLine()?.Trim();
+        if (string.Equals(answer, "p", StringComparison.OrdinalIgnoreCase)) return InteractiveMode.Production;
+        if (string.Equals(answer, "d", StringComparison.OrdinalIgnoreCase)) return InteractiveMode.ProductionDeploy;
+        return InteractiveMode.Test;
     }
 
     /// <summary>使い方の表示。引数エラー時に共通で出す。</summary>
     private static void PrintUsage()
     {
         Console.Error.WriteLine("使い方: PrecureDataStars.SiteBuilder [--test | --production] [--page <path>] [--refresh-telop] [--refresh-og] [--deploy [--dry-run] [--yes]]");
-        Console.Error.WriteLine("  引数なし     : 端末からの対話実行ならテスト／本番を 1 回聞く（Enter = テスト）。スクリプトやパイプ経由ならテストモード");
+        Console.Error.WriteLine("  引数なし     : 端末からの対話実行ならテスト／本番ビルドだけ／本番ビルド＋デプロイを 1 回聞く（Enter = テスト）。");
+        Console.Error.WriteLine("                 デプロイを選ぶと --production --deploy と同じ（削除があれば一覧を出して y/N で確かめる）。スクリプトやパイプ経由ならテストモード");
         Console.Error.WriteLine("  --test       : テストモード（SiteOutputDirTest へ、GA4 / AdSense / ads.txt なし）。問い合わせを出さない");
         Console.Error.WriteLine("  --production : 本番モード（SiteOutputDir へ、GA4 / AdSense / ads.txt あり）");
         Console.Error.WriteLine("  --page <path>: ピンポイントビルド。URL パスに <path> を含むページだけを生成（例: /privacy/）。");

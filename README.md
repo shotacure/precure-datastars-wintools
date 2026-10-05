@@ -911,7 +911,9 @@ Role: PRODUCTION 制作 (order 2)
    # 本番モード: SiteOutputDir へ生成。GA4 / AdSense タグと ads.txt を出力する
    dotnet run --project PrecureDataStars.SiteBuilder -c Release -- --production
 
-   # モードを指定せずに端末から実行すると、テスト／本番を 1 回聞く（Enter = テスト）。
+   # モードを指定せずに端末から実行すると、[T] テスト（Enter）／[P] 本番ビルドだけ／[D] 本番ビルド＋デプロイ を 1 回聞く。
+   # P は SiteOutputDir へ書き出すだけで S3 には上げない。D は --production --deploy と同じで、
+   # 本番ビルドのあと計画（アップロード・削除の件数と削除の一覧）を出し、削除があれば y/N で確かめてから反映する。
    # スクリプトやパイプ経由（標準入力か標準出力がリダイレクト）なら聞かずにテストモード
    dotnet run --project PrecureDataStars.SiteBuilder -c Release
 

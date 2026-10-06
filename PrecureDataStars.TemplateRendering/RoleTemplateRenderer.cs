@@ -280,10 +280,15 @@ public static class RoleTemplateRenderer
                     // を返す。テンプレに商品カタログ番号を焼き込まず、シリーズ × 種別で自動引き当てするため
                     // 1 つのテンプレを全シリーズに使い回せる（映画クレジットの「サウンドトラック」役職など）。
                     // SERIES スコープ以外（EPISODE スコープ）／kind 未指定／該当商品なしのいずれかなら空文字。
+                    // label=... を付けると、リンク先はそのまま表示の文字だけを差し替える（画面の表記が盤の商品名と違う作品用。
+                    // label 内の {SERIES_TITLE} は ROLE_LINK の label と同じく作品の正式タイトルに置き換える）。
                     string kindOpt = ph.GetOption("kind", "");
                     if (string.IsNullOrEmpty(kindOpt)) return "";
                     if (ctx.ScopeSeriesId is not int seriesIdForProd || seriesIdForProd <= 0) return "";
-                    var prodHtml = await lookup.LookupProductHtmlBySeriesAndKindAsync(seriesIdForProd, kindOpt).ConfigureAwait(false);
+                    string prodLabel = ph.GetOption("label", "");
+                    if (prodLabel.Contains("{SERIES_TITLE}", StringComparison.Ordinal))
+                        prodLabel = prodLabel.Replace("{SERIES_TITLE}", ctx.ScopeSeriesTitle ?? "", StringComparison.Ordinal);
+                    var prodHtml = await lookup.LookupProductHtmlBySeriesAndKindAsync(seriesIdForProd, kindOpt, prodLabel).ConfigureAwait(false);
                     return prodHtml ?? "";
                 }
 

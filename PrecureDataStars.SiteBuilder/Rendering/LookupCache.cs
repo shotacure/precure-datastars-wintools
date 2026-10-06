@@ -209,7 +209,7 @@ internal sealed class LookupCache : ILookupCache
         => Task.FromResult(_logoById.TryGetValue(logoId, out var lg) ? lg : null);
 
     /// <summary>シリーズ ID + product_kind から先頭 1 件の商品を引き、商品タイトル + 商品詳細ページへの a タグ HTML を返す。 該当なしは null。</summary>
-    public async Task<string?> LookupProductHtmlBySeriesAndKindAsync(int seriesId, string productKindCode)
+    public async Task<string?> LookupProductHtmlBySeriesAndKindAsync(int seriesId, string productKindCode, string? displayText = null)
     {
         if (seriesId <= 0 || string.IsNullOrEmpty(productKindCode)) return null;
         // EXISTS で discs 側を絞り込む（products × discs の JOIN だと 1 商品が複数ディスクを持つ場合に
@@ -236,6 +236,6 @@ internal sealed class LookupCache : ILookupCache
         if (row is null) return null;
         var (catalogNo, title) = row.Value;
         if (string.IsNullOrEmpty(catalogNo) || string.IsNullOrEmpty(title)) return null;
-        return $"<a href=\"{PathUtil.ProductUrl(catalogNo)}\">{System.Net.WebUtility.HtmlEncode(title)}</a>";
+        return $"<a href=\"{PathUtil.ProductUrl(catalogNo)}\">{System.Net.WebUtility.HtmlEncode(string.IsNullOrEmpty(displayText) ? title : displayText)}</a>";
     }
 }

@@ -885,6 +885,7 @@ Role: PRODUCTION 制作 (order 2)
 - **`role_format_kind = 'THEME_SONG'`** の役職にはツリー上で楽曲仮想ノード（📀 Song）が自動表示される。`THEME_SONG_OP` / `THEME_SONG_ED` / `THEME_SONG_OP_COMBINED` / `INSERT_SONG` / `INSERT_SONGS_NONCREDITED` の 5 役職が該当
 - **テンプレ DSL の連名の区切りの差し替え**：主題歌の連名のプレースホルダ（`{LYRICIST}` / `{COMPOSER}` / `{ARRANGER}` / `{MEDLEY_ARRANGER}` / `{SINGER}` / `{CHORUS}`）は `sep="…"` で名義の間の区切りを差し替えられる（例: `{ARRANGER:sep="/"}`、`{SINGER:sep="<br>with "}`）。DB の区切り（`song_credits` / `song_recording_singers` の `preceding_separator`）の代わりにテンプレの文字を HTML のまま入れ、`<br>` で改行する。構造化クレジットが無い曲（フリーテキスト）には効かない。名義ごとの部品は `SongCreditsRepository` / `SongRecordingSingersRepository` の `GetDisplayHtmlPartsAsync` で取る
 - **テンプレ DSL の作曲・編曲の同一と否定の条件**：`{SAME_COMPOSER_ARRANGER}` は作曲と編曲が同じ名義（連名も同じ）なら "1"、違えば空。`{?!NAME}…{/?!NAME}` は NAME の値が空のときだけ展開する否定の条件で、`{?SAME_COMPOSER_ARRANGER}…{/?SAME_COMPOSER_ARRANGER}` と `{?!SAME_COMPOSER_ARRANGER}…{/?!SAME_COMPOSER_ARRANGER}` で「作曲：」「編曲：」の 2 行に名前を 1 つだけ出す画面と、2 行に分けて出す画面を書き分ける
+- **テンプレ DSL の `{PRODUCT:kind=…}` の表示の差し替え**：`{PRODUCT:kind=OST_MOVIE}` は作品に紐付くその種別の商品を 1 件引いて、商品名で商品詳細へリンクする。`label=…` を付けると、リンク先はそのまま表示の文字だけを差し替える（画面の表記が盤の商品名と違う作品用。`label` 内の `{SERIES_TITLE}` は作品の正式タイトルに置き換わる。例：`{PRODUCT:kind=OST_MOVIE,label=「{SERIES_TITLE}」Music Line オリジナル・サントラ}`）
 - **テンプレ DSL の `{#BLOCKS:first|rest|last}`** はブロックの位置指定ループ。`{#BLOCKS}`（filter なし）は全ブロック
 
 ---

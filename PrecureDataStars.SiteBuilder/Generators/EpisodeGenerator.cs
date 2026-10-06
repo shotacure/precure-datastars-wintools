@@ -969,13 +969,13 @@ public sealed class EpisodeGenerator
                 compositionHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Composition, song.ComposerName, personAliasMap);
                 arrangementHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Arrangement, song.ArrangerName, personAliasMap);
                 // 役職ラベルは roles マスタから引いてリンク化。未登録時はフォールバック固定文字列。
-                lyricsRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Lyrics, roleMap, "作詞");
-                compositionRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Composition, roleMap, "作曲");
-                arrangementRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Arrangement, roleMap, "編曲");
+                lyricsRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Lyrics, roleMap, "作詞", credits);
+                compositionRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Composition, roleMap, "作曲", credits);
+                arrangementRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Arrangement, roleMap, "編曲", credits);
                 // メドレー編曲（メドレーの曲の全体の編曲）は構造化行だけ。無い曲では行を出さない。
                 medleyArrangementHtml = BuildCreditRoleHtml(credits, SongCreditRoles.MedleyArrangement, null, personAliasMap);
                 if (!string.IsNullOrEmpty(medleyArrangementHtml))
-                    medleyArrangementRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.MedleyArrangement, roleMap, "メドレー編曲");
+                    medleyArrangementRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.MedleyArrangement, roleMap, "メドレー編曲", credits);
             }
 
             string vocalistsHtml = "";

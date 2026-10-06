@@ -2972,6 +2972,7 @@ CREATE TABLE `song_credits` (
   `credit_role`         varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `credit_seq`          tinyint unsigned NOT NULL,
   `person_alias_id`     int              NOT NULL,
+  `role_label_text`     varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '盤の役職の表記（役職名と違うときだけ）。役職の連名の先頭行の値を使う',
   `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,

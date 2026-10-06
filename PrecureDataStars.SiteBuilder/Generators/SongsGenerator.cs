@@ -319,10 +319,11 @@ public sealed class SongsGenerator
         string medleyArrangerText = CreditText.SongCreditNames(songCreditRows, SongCreditRoles.MedleyArrangement, null, personAliasMap);
         // 役職ラベル：常に roles マスタの NameJa を採用してリンク化する。マスタに行が無い場合は
         // フォールバックの素朴な日本語ラベル（「作詞」など）を出すが、リンクは付けない。
-        string lyricsRoleLabelHtml = BuildRoleLabelLinkHtml(SongCreditRoles.Lyrics, roleMap, fallbackLabel: "作詞");
-        string compositionRoleLabelHtml = BuildRoleLabelLinkHtml(SongCreditRoles.Composition, roleMap, fallbackLabel: "作曲");
-        string arrangementRoleLabelHtml = BuildRoleLabelLinkHtml(SongCreditRoles.Arrangement, roleMap, fallbackLabel: "編曲");
-        string medleyArrangementRoleLabelHtml = BuildRoleLabelLinkHtml(SongCreditRoles.MedleyArrangement, roleMap, fallbackLabel: "メドレー編曲");
+        // 盤の役職の表記（song_credits.role_label_text、「原詞」など）があればその文字を出す（リンク先は役職のまま）。
+        string lyricsRoleLabelHtml = BuildRoleLabelLinkHtml(SongCreditRoles.Lyrics, roleMap, fallbackLabel: "作詞", SongCreditRoles.LabelTextOf(songCreditRows, SongCreditRoles.Lyrics));
+        string compositionRoleLabelHtml = BuildRoleLabelLinkHtml(SongCreditRoles.Composition, roleMap, fallbackLabel: "作曲", SongCreditRoles.LabelTextOf(songCreditRows, SongCreditRoles.Composition));
+        string arrangementRoleLabelHtml = BuildRoleLabelLinkHtml(SongCreditRoles.Arrangement, roleMap, fallbackLabel: "編曲", SongCreditRoles.LabelTextOf(songCreditRows, SongCreditRoles.Arrangement));
+        string medleyArrangementRoleLabelHtml = BuildRoleLabelLinkHtml(SongCreditRoles.MedleyArrangement, roleMap, fallbackLabel: "メドレー編曲", SongCreditRoles.LabelTextOf(songCreditRows, SongCreditRoles.MedleyArrangement));
         // メドレーの中の曲（原曲の曲名へのリンクと、原曲の作詞・作曲・編曲）と、この曲が原曲として入っているメドレー。
         string medleyPartsHtml = BuildMedleyPartsListHtml(song.SongId, personAliasMap, characterAliasMap);
         var includedInMedleys = BuildIncludedInMedleyViews(song.SongId);
@@ -399,7 +400,9 @@ public sealed class SongsGenerator
             musicClassLabel: musicClassLabel,
             recordingViews: recordingViews,
             lyricistName: lyricistText,
-            composerName: composerText);
+            composerName: composerText,
+            lyricsLabel: SongCreditRoles.LabelTextOf(songCreditRows, SongCreditRoles.Lyrics) ?? "作詞",
+            compositionLabel: SongCreditRoles.LabelTextOf(songCreditRows, SongCreditRoles.Composition) ?? "作曲");
 
         string baseUrl = _ctx.Config.BaseUrl;
         string songUrl = PathUtil.SongUrl(song.SongId);
@@ -435,7 +438,7 @@ public sealed class SongsGenerator
             },
             OgType = "music.song",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(song, lyricistText, composerText, arrangerText, medleyArrangerText, musicClassLabel, repSeriesTitle, recordingViews)
+            OgCard = BuildOgCard(song, songCreditRows, lyricistText, composerText, arrangerText, medleyArrangerText, musicClassLabel, repSeriesTitle, recordingViews)
         };
         _page.RenderAndWriteFile(songUrl, "songs-detail.sbn", content, layout);
         return songUrl;
@@ -448,6 +451,7 @@ public sealed class SongsGenerator
     /// </summary>
     private static OgCardSpec BuildOgCard(
         Song song,
+        IReadOnlyList<SongCredit> songCreditRows,
         string lyricistText,
         string composerText,
         string arrangerText,
@@ -458,12 +462,13 @@ public sealed class SongsGenerator
     {
         // 曲の作り手（作詞・作曲・編曲）と、筆頭バージョン（先頭録音）の歌い手を同じ段に並べる。
         // 項目名の色はサイトの楽曲詳細の役職バッジと同じ。録音の本数やバージョンの列は曲そのものの性格を語らないので出さない。
-        // 名義は構造化優先で解決済みの平文（CreditText）を受け取る。
+        // 名義は構造化優先で解決済みの平文（CreditText）を受け取る。項目名は盤の役職の表記（role_label_text）があればそれ。
+        string LabelOf(string roleCode, string defaultLabel) => SongCreditRoles.LabelTextOf(songCreditRows, roleCode) ?? defaultLabel;
         var credits = new List<OgCardFactLine>();
-        if (!string.IsNullOrWhiteSpace(lyricistText)) credits.Add(new OgCardFactLine("作詞", lyricistText) { LabelColorHex = OgRolePalette.ColorFor("LYRICS") });
-        if (!string.IsNullOrWhiteSpace(composerText)) credits.Add(new OgCardFactLine("作曲", composerText) { LabelColorHex = OgRolePalette.ColorFor("COMPOSITION") });
-        if (!string.IsNullOrWhiteSpace(arrangerText)) credits.Add(new OgCardFactLine("編曲", arrangerText) { LabelColorHex = OgRolePalette.ColorFor("ARRANGEMENT") });
-        if (!string.IsNullOrWhiteSpace(medleyArrangerText)) credits.Add(new OgCardFactLine("メドレー編曲", medleyArrangerText) { LabelColorHex = OgRolePalette.ColorFor(SongCreditRoles.MedleyArrangement) });
+        if (!string.IsNullOrWhiteSpace(lyricistText)) credits.Add(new OgCardFactLine(LabelOf(SongCreditRoles.Lyrics, "作詞"), lyricistText) { LabelColorHex = OgRolePalette.ColorFor("LYRICS") });
+        if (!string.IsNullOrWhiteSpace(composerText)) credits.Add(new OgCardFactLine(LabelOf(SongCreditRoles.Composition, "作曲"), composerText) { LabelColorHex = OgRolePalette.ColorFor("COMPOSITION") });
+        if (!string.IsNullOrWhiteSpace(arrangerText)) credits.Add(new OgCardFactLine(LabelOf(SongCreditRoles.Arrangement, "編曲"), arrangerText) { LabelColorHex = OgRolePalette.ColorFor("ARRANGEMENT") });
+        if (!string.IsNullOrWhiteSpace(medleyArrangerText)) credits.Add(new OgCardFactLine(LabelOf(SongCreditRoles.MedleyArrangement, "メドレー編曲"), medleyArrangerText) { LabelColorHex = OgRolePalette.ColorFor(SongCreditRoles.MedleyArrangement) });
         var rep = recordingViews.FirstOrDefault();
         if (rep is not null && !string.IsNullOrWhiteSpace(rep.SingerName))
             credits.Add(new OgCardFactLine("歌", rep.SingerName) { LabelColorHex = OgRolePalette.ColorFor("VOCALS") });
@@ -841,7 +846,9 @@ public sealed class SongsGenerator
         string musicClassLabel,
         IReadOnlyList<RecordingView> recordingViews,
         string lyricistName,
-        string composerName)
+        string composerName,
+        string lyricsLabel = "作詞",
+        string compositionLabel = "作曲")
     {
         const int targetMaxChars = 150;
         const string tail = "使われた話、バージョン、収録 CD、クレジットをまとめました。";
@@ -860,8 +867,8 @@ public sealed class SongsGenerator
             .Take(2)
             .ToList();
         if (singers.Count > 0) credits.Add("歌：" + string.Join("、", singers));
-        if (!string.IsNullOrWhiteSpace(lyricistName)) credits.Add($"作詞：{lyricistName}");
-        if (!string.IsNullOrWhiteSpace(composerName)) credits.Add($"作曲：{composerName}");
+        if (!string.IsNullOrWhiteSpace(lyricistName)) credits.Add($"{lyricsLabel}：{lyricistName}");
+        if (!string.IsNullOrWhiteSpace(composerName)) credits.Add($"{compositionLabel}：{composerName}");
         var kept = new List<string>();
         foreach (var c in credits)
         {
@@ -881,16 +888,17 @@ public sealed class SongsGenerator
     /// マスタに無い、または NameJa が空のときは <paramref name="fallbackLabel"/> をリンクなしバッジ風 span で返す
     /// （/songs/{song_id}/ の基本情報セクションと録音セクションで .key-staff-line レイアウトに直接流し込むため、
     /// 常に <c>.role-badge.role-badge-sm</c> クラスと <c>data-role-code</c> 属性を付けた要素を返す）。
+    /// <paramref name="labelText"/>（盤の役職の表記）があれば、役職名・フォールバックの代わりにその文字を出す（リンク先は同じ）。
     /// </summary>
-    private string BuildRoleLabelLinkHtml(string roleCode, IReadOnlyDictionary<string, Role> roleMap, string fallbackLabel)
+    private string BuildRoleLabelLinkHtml(string roleCode, IReadOnlyDictionary<string, Role> roleMap, string fallbackLabel, string? labelText = null)
     {
         if (roleMap.TryGetValue(roleCode, out var role) && !string.IsNullOrEmpty(role.NameJa))
         {
             string rep = _roleSuccessorResolver.GetRepresentative(roleCode);
             string href = PathUtil.CreatorsRoleUrl(string.IsNullOrEmpty(rep) ? roleCode : rep);
-            return $"<a class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlUtil.Escape(roleCode)}\" href=\"{HtmlUtil.Escape(href)}\">{HtmlUtil.Escape(role.NameJa)}</a>";
+            return $"<a class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlUtil.Escape(roleCode)}\" href=\"{HtmlUtil.Escape(href)}\">{HtmlUtil.Escape(labelText ?? role.NameJa)}</a>";
         }
-        return $"<span class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlUtil.Escape(roleCode)}\">{HtmlUtil.Escape(fallbackLabel)}</span>";
+        return $"<span class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlUtil.Escape(roleCode)}\">{HtmlUtil.Escape(labelText ?? fallbackLabel)}</span>";
     }
 
     /// <summary>
@@ -947,10 +955,11 @@ public sealed class SongsGenerator
                 groups.Add((new List<(string, string)> { (roleCode, label) }, entry.Html, entry.IsSingle));
             }
         }
-        AddOrMerge(SongCreditRoles.Lyrics, "作詞", lyrics);
-        AddOrMerge(SongCreditRoles.Composition, "作曲", composition);
-        AddOrMerge(SongCreditRoles.Arrangement, "編曲", arrangement);
-        AddOrMerge(SongCreditRoles.MedleyArrangement, "メドレー編曲", medleyArrangement);
+        // バッジの文字は盤の役職の表記（role_label_text）があればそれ、無ければ役職名。
+        AddOrMerge(SongCreditRoles.Lyrics, SongCreditRoles.LabelTextOf(songCreditRows, SongCreditRoles.Lyrics) ?? "作詞", lyrics);
+        AddOrMerge(SongCreditRoles.Composition, SongCreditRoles.LabelTextOf(songCreditRows, SongCreditRoles.Composition) ?? "作曲", composition);
+        AddOrMerge(SongCreditRoles.Arrangement, SongCreditRoles.LabelTextOf(songCreditRows, SongCreditRoles.Arrangement) ?? "編曲", arrangement);
+        AddOrMerge(SongCreditRoles.MedleyArrangement, SongCreditRoles.LabelTextOf(songCreditRows, SongCreditRoles.MedleyArrangement) ?? "メドレー編曲", medleyArrangement);
 
         // 歌は VOCALS グループとして末尾に独立追加。BuildVocalistsHtml は構造化 singers から
         // 人物・キャラへの <a> リンクを含む HTML を返す。VOCALS 行が無いフォールバック単独時は

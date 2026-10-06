@@ -23,6 +23,7 @@ public sealed class SongCreditsRepository : RepositoryBase
           credit_role          AS CreditRole,
           credit_seq           AS CreditSeq,
           person_alias_id      AS PersonAliasId,
+          role_label_text      AS RoleLabelText,
           preceding_separator  AS PrecedingSeparator,
           notes                AS Notes,
           created_at           AS CreatedAt,
@@ -170,9 +171,9 @@ public sealed class SongCreditsRepository : RepositoryBase
     {
         const string sql = """
             INSERT INTO song_credits
-              (song_id, credit_role, credit_seq, person_alias_id, preceding_separator, notes, created_by, updated_by)
+              (song_id, credit_role, credit_seq, person_alias_id, role_label_text, preceding_separator, notes, created_by, updated_by)
             VALUES
-              (@SongId, @CreditRole, @CreditSeq, @PersonAliasId, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
+              (@SongId, @CreditRole, @CreditSeq, @PersonAliasId, @RoleLabelText, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
             """;
 
         await ExecuteAsync(sql, c, ct).ConfigureAwait(false);
@@ -184,6 +185,7 @@ public sealed class SongCreditsRepository : RepositoryBase
         const string sql = """
             UPDATE song_credits SET
               person_alias_id     = @PersonAliasId,
+              role_label_text     = @RoleLabelText,
               preceding_separator = @PrecedingSeparator,
               notes               = @Notes,
               updated_by          = @UpdatedBy
@@ -224,9 +226,9 @@ public sealed class SongCreditsRepository : RepositoryBase
                 await conn.ExecuteAsync(new CommandDefinition(
                     """
                     INSERT INTO song_credits
-                      (song_id, credit_role, credit_seq, person_alias_id, preceding_separator, notes, created_by, updated_by)
+                      (song_id, credit_role, credit_seq, person_alias_id, role_label_text, preceding_separator, notes, created_by, updated_by)
                     VALUES
-                      (@SongId, @Role, @CreditSeq, @PersonAliasId, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
+                      (@SongId, @Role, @CreditSeq, @PersonAliasId, @RoleLabelText, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
                     """,
                     new
                     {
@@ -234,6 +236,8 @@ public sealed class SongCreditsRepository : RepositoryBase
                         Role = role,
                         CreditSeq = seq,
                         c.PersonAliasId,
+                        // 盤の役職の表記は先頭行（seq=1）だけに持たせる
+                        RoleLabelText = seq == 1 && !string.IsNullOrEmpty(c.RoleLabelText) ? c.RoleLabelText : null,
                         // seq=1 では preceding_separator は強制 NULL（CHECK にはしていないが整合性維持のため）
                         PrecedingSeparator = seq == 1 ? null : c.PrecedingSeparator,
                         c.Notes,

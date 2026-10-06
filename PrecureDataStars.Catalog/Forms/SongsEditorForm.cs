@@ -531,10 +531,18 @@ public partial class SongsEditorForm : Form
     {
         try
         {
-            string lyr = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRoles.Lyrics);
-            string cmp = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRoles.Composition);
-            string arr = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRoles.Arrangement);
-            string medleyArr = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRoles.MedleyArrangement);
+            // 盤の役職の表記（role_label_text）がある役職は、連名の前に〔表記〕を添えて見分けられるようにする。
+            var rows = await _songCreditsRepo.GetBySongAsync(songId);
+            async Task<string> DisplayAsync(string role)
+            {
+                string names = await _songCreditsRepo.GetDisplayStringAsync(songId, role);
+                string? label = SongCreditRoles.LabelTextOf(rows, role);
+                return names.Length > 0 && label is not null ? $"〔{label}〕{names}" : names;
+            }
+            string lyr = await DisplayAsync(SongCreditRoles.Lyrics);
+            string cmp = await DisplayAsync(SongCreditRoles.Composition);
+            string arr = await DisplayAsync(SongCreditRoles.Arrangement);
+            string medleyArr = await DisplayAsync(SongCreditRoles.MedleyArrangement);
             var medleyParts = await _songMedleyPartsRepo.GetByMedleyAsync(songId);
             ApplyStructLabel(lblStructLyricistValue, lyr);
             ApplyStructLabel(lblStructComposerValue, cmp);
@@ -611,13 +619,16 @@ public partial class SongsEditorForm : Form
             using var dlg = new PersonAliasCreditsEditDialog(title, initial, _personAliasesRepo);
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
-            // 編集結果を SongCredit モデルに変換し、ReplaceAllByRoleAsync で一括 INSERT
+            // 編集結果を SongCredit モデルに変換し、ReplaceAllByRoleAsync で一括 INSERT。
+            // 盤の役職の表記（role_label_text）はダイアログで扱わないので、既存の値を先頭行に引き継ぐ。
+            string? roleLabelText = SongCreditRoles.LabelTextOf(existing, role);
             var newCredits = dlg.ResultLines.Select((l, i) => new SongCredit
             {
                 SongId = s.SongId,
                 CreditRole = role,
                 CreditSeq = (byte)(i + 1),
                 PersonAliasId = l.AliasId,
+                RoleLabelText = i == 0 ? roleLabelText : null,
                 PrecedingSeparator = i == 0 ? null : l.PrecedingSeparator,
                 Notes = l.Notes
             }).ToList();

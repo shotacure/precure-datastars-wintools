@@ -1654,6 +1654,8 @@ series_relation_kinds ──┘    │            │
 
 > `songs.*_name` / `song_recordings.singer_name` / `bgm_cues.composer_name`・`arranger_name` のフリーテキストは、構造化クレジット（`song_credits` / `song_recording_singers` / `bgm_cue_credits`）がまだ無い曲・録音・劇伴のためのフォールバック。サイトは画面表示だけでなく、meta description・OGP カード・JSON-LD・使用曲リストの副題といった平文の出力先でも、役職ごとに構造化行があればそれだけを使い、1 行も無い役職に限ってフリーテキストを使う（平文化は `CreditText` に集約。書式は画面表示と同じで、キャラ歌唱は「キャラ(CV:声優)」）。
 
+> `song_credits.role_label_text` は、盤に印刷された作家の役職の表記（「原詞」など）。役職名（`roles.name_ja`）と違うときだけ、その役職の連名の先頭行（`credit_seq` がいちばん小さい行）に入れる（`SongCreditRoles.LabelTextOf`）。サイトは楽曲詳細・楽曲一覧のカード・盤のトラック・主題歌の行・OGP カード・meta description の役職の表記をこの文字にし（リンク先は役職のまま）、人物ページ・役職詳細・統計などの集計は役職のまま。Catalog の歌管理は表記のある役職の連名に〔表記〕を添えて見せ、連名を編集し直しても表記を先頭行に引き継ぐ（表記そのものの入力欄は持たない）。
+
 > `song_recording_singers.role_code` は `VOCALS`（歌）・`BACKING_VOCALS`（コーラス）・`DIALOGUE`（台詞：歌わずに曲中のセリフだけで参加する出演者）の 3 役を持つ。書式は 3 役とも同じ（キャラは「キャラ(CV:声優)」）で、楽曲詳細・商品詳細のトラック行・エピソード／シリーズの主題歌欄に歌 → コーラス → 台詞の順で並ぶ。`/creators/roles/vocals/` の担当曲数に数えるのは `VOCALS` だけ。
 
 #### `song_medley_parts` — メドレーの中の曲

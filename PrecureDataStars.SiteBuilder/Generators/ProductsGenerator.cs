@@ -1622,15 +1622,16 @@ public sealed class ProductsGenerator
                     string vocalsHtml = BuildRecordingSingersHtml(rec);
                     string chorusHtml = BuildRecordingChorusHtml(rec);
                     string dialogueHtml = _creditHtml!.BuildRecordingDialogueHtml(rec);
-                    metaLineHtml = _creditHtml!.BuildMergedRoleSegmentsHtml(new[]
+                    // 作詞・作曲・編曲のバッジは、盤の役職の表記（「原詞」など）があればその文字にする。
+                    metaLineHtml = _creditHtml!.BuildMergedRoleSegmentsHtml(new (string, string, string, string?)[]
                     {
-                        ("LYRICS",         "作詞",   lyricsHtml),
-                        ("COMPOSITION",    "作曲",   compositionHtml),
-                        ("ARRANGEMENT",    "編曲",   arrangementHtml),
-                        (SongCreditRoles.MedleyArrangement, "メドレー編曲", medleyArrangementHtml),
-                        ("VOCALS",         "歌",     vocalsHtml),
-                        ("BACKING_VOCALS", "コーラス", chorusHtml),
-                        ("DIALOGUE",       "台詞",   dialogueHtml),
+                        ("LYRICS",         "作詞",   lyricsHtml,       _creditHtml!.SongCreditLabelText(song, "LYRICS")),
+                        ("COMPOSITION",    "作曲",   compositionHtml,  _creditHtml!.SongCreditLabelText(song, "COMPOSITION")),
+                        ("ARRANGEMENT",    "編曲",   arrangementHtml,  _creditHtml!.SongCreditLabelText(song, "ARRANGEMENT")),
+                        (SongCreditRoles.MedleyArrangement, "メドレー編曲", medleyArrangementHtml, _creditHtml!.SongCreditLabelText(song, SongCreditRoles.MedleyArrangement)),
+                        ("VOCALS",         "歌",     vocalsHtml,       null),
+                        ("BACKING_VOCALS", "コーラス", chorusHtml,     null),
+                        ("DIALOGUE",       "台詞",   dialogueHtml,     null),
                     });
 
                     // この録音が「劇伴としても扱う」紐付け（song_recording_bgm_assignments）を
@@ -1847,10 +1848,10 @@ public sealed class ProductsGenerator
 
                     string nextCompositionHtml = BuildSongCreditNamesHtml(nsong, "COMPOSITION");
                     string nextArrangementHtml = BuildSongCreditNamesHtml(nsong, "ARRANGEMENT");
-                    metaLineHtml = _creditHtml!.BuildMergedRoleSegmentsHtml(new[]
+                    metaLineHtml = _creditHtml!.BuildMergedRoleSegmentsHtml(new (string, string, string, string?)[]
                     {
-                        ("COMPOSITION", "作曲", nextCompositionHtml),
-                        ("ARRANGEMENT", "編曲", nextArrangementHtml),
+                        ("COMPOSITION", "作曲", nextCompositionHtml, _creditHtml!.SongCreditLabelText(nsong, "COMPOSITION")),
+                        ("ARRANGEMENT", "編曲", nextArrangementHtml, _creditHtml!.SongCreditLabelText(nsong, "ARRANGEMENT")),
                     });
                 }
                 else

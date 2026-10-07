@@ -164,6 +164,8 @@ public static class CreditBulkInputParser
     // ブロックの最初のエントリより前に書く。@heading_series は作品の series_id、@heading は画面どおりの見出しの文字。
     private static readonly Regex HeadingDirectiveRegex = new(@"^@heading=(?<value>.+)$", RegexOptions.Compiled);
     private static readonly Regex HeadingSeriesDirectiveRegex = new(@"^@heading_series=(?<n>\d+)$", RegexOptions.Compiled);
+    // ディレクティブ行: @heading_italic。そのブロックの見出しを画面どおり斜体で出す（@heading / @heading_series と同じ位置に書く）。
+    private static readonly Regex HeadingItalicDirectiveRegex = new(@"^@heading_italic$", RegexOptions.Compiled);
 
     // ディレクティブ行: @affil_layout=suffix|prefix 形式。役職ヘッダ直後に書くと、その役職の
     // 人物所属表記レイアウトを切り替える（PREFIX = 名前左の屋号列、SUFFIX = 名前右の (屋号) 後置）。
@@ -522,7 +524,8 @@ public static class CreditBulkInputParser
                 // 役職の中で、ブロックの最初のエントリ（屋号 [[XXX]] を含む）より前にだけ書ける。
                 var headingMatch = HeadingDirectiveRegex.Match(trimmed);
                 var headingSeriesMatch = HeadingSeriesDirectiveRegex.Match(trimmed);
-                if (headingMatch.Success || headingSeriesMatch.Success)
+                var headingItalicMatch = HeadingItalicDirectiveRegex.Match(trimmed);
+                if (headingMatch.Success || headingSeriesMatch.Success || headingItalicMatch.Success)
                 {
                     if (curRole is null)
                     {
@@ -549,7 +552,11 @@ public static class CreditBulkInputParser
                         curBlock = new ParsedBlock();
                         curRole.Blocks.Add(curBlock);
                     }
-                    if (headingSeriesMatch.Success)
+                    if (headingItalicMatch.Success)
+                    {
+                        curBlock.HeadingItalic = true;
+                    }
+                    else if (headingSeriesMatch.Success)
                     {
                         if (!int.TryParse(headingSeriesMatch.Groups["n"].Value, out int seriesId) || seriesId < 1)
                         {

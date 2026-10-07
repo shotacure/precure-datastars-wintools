@@ -400,6 +400,10 @@ internal static class CreditBulkInputEncoder
         {
             sb.Append("@heading=").Append(block.Entity.HeadingText).Append(LineSeparator);
         }
+        if (block.Entity.HeadingItalic && block.Entity.HasHeading)
+        {
+            sb.Append("@heading_italic").Append(LineSeparator);
+        }
 
         // ブロック備考。
         EmitNotesDirective(block.Entity.Notes, sb);

@@ -2434,6 +2434,7 @@ CREATE TABLE `credit_card_roles` (
 -- heading_series_id / heading_text はブロック先頭の見出し（映画の声の出演の作品ごとのまとまりの頭に出る作品名、
 -- 「特別出演」など）。作品を指すときは heading_series_id、画面の表記が作品の正式タイトルと違うときや
 -- 作品ではない見出しは heading_text に画面どおりの文字を入れる。
+-- heading_italic は見出しを画面どおり斜体で出すか（プリキュアオールスターズDX の声の出演の作品名など）。
 --
 DROP TABLE IF EXISTS `credit_role_blocks`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -2446,6 +2447,7 @@ CREATE TABLE `credit_role_blocks` (
   `leading_company_alias_id`  int             DEFAULT NULL,
   `heading_series_id`         int             DEFAULT NULL COMMENT 'ブロック先頭の見出しにする作品（series.series_id）。映画の声の出演の作品ごとのまとまりなど',
   `heading_text`              varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'ブロック先頭の見出しの文字（画面の表記どおり）。NULL なら作品の正式タイトル',
+  `heading_italic`            tinyint(1) NOT NULL DEFAULT 0 COMMENT 'ブロック先頭の見出しを斜体で出すか（画面どおり）',
   `notes`                     text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

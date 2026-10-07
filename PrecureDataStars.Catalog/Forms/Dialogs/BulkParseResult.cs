@@ -162,6 +162,9 @@ public sealed class ParsedBlock
 
     /// <summary><c>@heading=文字</c> で指定されたブロック先頭の見出しの文字（<c>credit_role_blocks.heading_text</c>）。</summary>
     public string? HeadingText { get; set; }
+
+    /// <summary><c>@heading_italic</c> で指定された、見出しを斜体で出す印（<c>credit_role_blocks.heading_italic</c>）。</summary>
+    public bool HeadingItalic { get; set; }
 }
 
 /// <summary>パース結果における 1 行分のエントリ群。タブ区切りで複数エントリを持つ。</summary>

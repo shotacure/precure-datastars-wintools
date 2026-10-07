@@ -1793,6 +1793,10 @@ a.series-card-children-title:hover {
   font-size: 0.9em;
   color: #666;
 }
+/* 画面で斜体の見出し（プリキュアオールスターズDX の声の出演の作品名など）。 */
+.credit-section .block-heading-italic {
+  font-style: italic;
+}
 /* CASTING_COOPERATION 由来の「協力」行。 */
 .credit-section table.fallback-vc-table tr.cooperation-row > td.role-name {
   text-align: right;

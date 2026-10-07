@@ -196,6 +196,7 @@ public partial class CreditEditorForm
                                 string? htitle = await _lookupCache.LookupSeriesTitleAsync(hsid);
                                 headingLabel = $"  見出し=「{htitle ?? "作品 #" + hsid}」";
                             }
+                            if (headingLabel.Length > 0 && block.HeadingItalic) headingLabel += "（斜体）";
 
                             var blockNode = new TreeNode(
                                 $"🔵 Block #{blockDisplayIndex}  ({block.ColCount} cols, {entries.Count} entries){headingLabel}{leadingLabel}")

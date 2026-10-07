@@ -143,15 +143,21 @@ internal sealed class CreditTreeRenderer
     /// ブロック先頭の見出し（<see cref="CreditRoleBlock.HeadingSeriesId"/> / <see cref="CreditRoleBlock.HeadingText"/>）の HTML。
     /// 作品を指す見出しは作品ページへのリンクにし、表示文字は見出しの文字（画面の表記どおり）があればそれ、
     /// 無ければ作品の正式タイトル。作品ではない見出し（「特別出演」など）は文字だけを出す。見出しが無ければ空文字。
+    /// <see cref="CreditRoleBlock.HeadingItalic"/> のブロックは、画面どおり見出しを斜体（<c>span.block-heading-italic</c>）で囲む。
     /// </summary>
     private string BuildBlockHeadingHtml(CreditRoleBlock block)
     {
+        string html;
         if (block.HeadingSeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var series))
         {
             string text = string.IsNullOrEmpty(block.HeadingText) ? series.Title : block.HeadingText!;
-            return $"<a href=\"{PathUtil.SeriesUrl(series.Slug)}\">{Esc(text)}</a>";
+            html = $"<a href=\"{PathUtil.SeriesUrl(series.Slug)}\">{Esc(text)}</a>";
         }
-        return string.IsNullOrEmpty(block.HeadingText) ? "" : Esc(block.HeadingText!);
+        else
+        {
+            html = string.IsNullOrEmpty(block.HeadingText) ? "" : Esc(block.HeadingText!);
+        }
+        return block.HeadingItalic && html.Length > 0 ? $"<span class=\"block-heading-italic\">{html}</span>" : html;
     }
 
     /// <summary>ロゴエントリの表示を「屋号名に置換 + 親企業詳細ページへのリンク」に変換する。 CI バージョンラベルは省く方針（屋号単位で集約した方が読み手にとって分かりやすいため）。 解決失敗時はプレースホルダ文字列を返す。</summary>

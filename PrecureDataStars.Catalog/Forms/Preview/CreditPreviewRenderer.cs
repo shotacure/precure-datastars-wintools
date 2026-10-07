@@ -151,6 +151,10 @@ internal sealed class CreditPreviewRenderer
             font-size: 0.9em;
             color: #666;
           }
+          /* 画面で斜体の見出し（heading_italic）。SiteBuilder の .block-heading-italic と揃える。 */
+          .block-heading-italic {
+            font-style: italic;
+          }
           /* 協力行の「協力」セル。SiteBuilder の .cooperation-row .character-cell と同じく
              右寄せ・太字にして、リンクが無くても見た目を SiteBuilder と揃える。 */
           table.fallback-vc-table tr.cooperation-row td.character-cell {
@@ -1611,16 +1615,18 @@ internal sealed class CreditPreviewRenderer
     /// ブロック先頭の見出し（<see cref="CreditRoleBlock.HeadingSeriesId"/> / <see cref="CreditRoleBlock.HeadingText"/>）を
     /// HTML エスケープ済みの文字列にする。表示文字は見出しの文字があればそれ、無ければ作品の正式タイトル。
     /// プレビューはリンクを出さない方針なので文字だけ。見出しが無ければ空文字。
+    /// <see cref="CreditRoleBlock.HeadingItalic"/> のブロックは、SiteBuilder と同じく見出しを斜体（<c>span.block-heading-italic</c>）で囲む。
     /// </summary>
     private async Task<string> BuildBlockHeadingHtmlAsync(CreditRoleBlock block)
     {
-        if (!string.IsNullOrEmpty(block.HeadingText)) return Esc(block.HeadingText!);
-        if (block.HeadingSeriesId is int sid)
+        string html = "";
+        if (!string.IsNullOrEmpty(block.HeadingText)) html = Esc(block.HeadingText!);
+        else if (block.HeadingSeriesId is int sid)
         {
             string? title = await _lookup.LookupSeriesTitleAsync(sid);
-            return Esc(title ?? $"(作品 #{sid})");
+            html = Esc(title ?? $"(作品 #{sid})");
         }
-        return "";
+        return block.HeadingItalic && html.Length > 0 ? $"<span class=\"block-heading-italic\">{html}</span>" : html;
     }
 
     /// <summary>テンプレ未定義時のフォールバック表示： 役職名を左カラムに固定幅で出し、その右に Block 内の各エントリを <c>col_count</c> で横並びにする。</summary>

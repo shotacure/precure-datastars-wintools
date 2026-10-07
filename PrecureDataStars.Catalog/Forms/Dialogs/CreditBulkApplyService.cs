@@ -697,6 +697,7 @@ public sealed class CreditBulkApplyService
                     // ブロック先頭の見出し（作品・文字）。
                     block.Entity.HeadingSeriesId = pb.HeadingSeriesId;
                     block.Entity.HeadingText = pb.HeadingText;
+                    block.Entity.HeadingItalic = pb.HeadingItalic;
 
                     if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
                     {
@@ -903,6 +904,7 @@ public sealed class CreditBulkApplyService
         // ブロック先頭の見出し（作品・文字）。
         block.Entity.HeadingSeriesId = pb.HeadingSeriesId;
         block.Entity.HeadingText = pb.HeadingText;
+        block.Entity.HeadingItalic = pb.HeadingItalic;
 
         // [先頭企業屋号]
         if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
@@ -2464,12 +2466,14 @@ public sealed class CreditBulkApplyService
             draftBlock.MarkModified();
         }
 
-        // ブロック先頭の見出し（作品・文字）比較。
+        // ブロック先頭の見出し（作品・文字・斜体）比較。
         if (draftBlock.Entity.HeadingSeriesId != newBlock.HeadingSeriesId
-            || !string.Equals(draftBlock.Entity.HeadingText, newBlock.HeadingText, StringComparison.Ordinal))
+            || !string.Equals(draftBlock.Entity.HeadingText, newBlock.HeadingText, StringComparison.Ordinal)
+            || draftBlock.Entity.HeadingItalic != newBlock.HeadingItalic)
         {
             draftBlock.Entity.HeadingSeriesId = newBlock.HeadingSeriesId;
             draftBlock.Entity.HeadingText = newBlock.HeadingText;
+            draftBlock.Entity.HeadingItalic = newBlock.HeadingItalic;
             draftBlock.MarkModified();
         }
 
@@ -2690,6 +2694,7 @@ public sealed class CreditBulkApplyService
           .Append("|leading=").Append(b.LeadingCompanyText ?? string.Empty)
           .Append("|hseries=").Append(b.HeadingSeriesId?.ToString() ?? string.Empty)
           .Append("|htext=").Append(b.HeadingText ?? string.Empty)
+          .Append("|hitalic=").Append(b.HeadingItalic ? "1" : "0")
           .Append("|notes=").Append(b.Notes ?? string.Empty).Append('\n');
         foreach (var row in b.Rows)
         {

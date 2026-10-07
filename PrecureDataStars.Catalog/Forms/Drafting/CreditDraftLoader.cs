@@ -316,6 +316,7 @@ internal sealed class CreditDraftLoader
         LeadingCompanyAliasId = s.LeadingCompanyAliasId,
         HeadingSeriesId = s.HeadingSeriesId,
         HeadingText = s.HeadingText,
+        HeadingItalic = s.HeadingItalic,
         Notes = s.Notes,
         CreatedBy = s.CreatedBy,
         UpdatedBy = s.UpdatedBy

@@ -48,6 +48,10 @@
 .PARAMETER AppConfigPath
   接続文字列を読む App.config。既定 PrecureDataStars.Catalog\App.config。
 
+.PARAMETER DataExcludedTables
+  バックアップで中身を取っていないテーブル（backup-db.ps1 の同名の引数と同じ）。既定 track_audio_fingerprints。
+  突き合わせでは行数の違いを不一致に数えず「中身は対象外」と出す。
+
 .PARAMETER MysqlPath
   mysql.exe の場所。既定 C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe。
 
@@ -71,7 +75,8 @@ param(
     [switch]$Yes,
     [switch]$SkipSafetyBackup,
     [string]$AppConfigPath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'PrecureDataStars.Catalog\App.config'),
-    [string]$MysqlPath = 'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe'
+    [string]$MysqlPath = 'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe',
+    [string[]]$DataExcludedTables = @('track_audio_fingerprints')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -289,11 +294,16 @@ try {
         $dstSums = Get-TableChecksums -Db $TargetDatabase -Names $common
 
         $mismatch = 0
+        $excluded = @($DataExcludedTables | Where-Object { $_ })
         $report = foreach ($name in $all) {
             $inBoth = $src[$name] -and $dst[$name]
             $sumState = if (-not $inBoth) { '—' } elseif ($srcSums[$name] -eq $dstSums[$name]) { '一致' } else { '不一致' }
             $rowsSame = $inBoth -and ($srcCounts[$name] -eq $dstCounts[$name])
-            if (-not ($inBoth -and $rowsSame -and $sumState -eq '一致')) { $mismatch++ }
+            if ($inBoth -and $excluded -contains $name) {
+                # バックアップに中身が無いテーブル。表があれば良しとし、行数の違いは数えない
+                $sumState = '中身は対象外'
+            }
+            elseif (-not ($inBoth -and $rowsSame -and $sumState -eq '一致')) { $mismatch++ }
             [pscustomobject]@{
                 'テーブル'  = $name
                 '本番 行数' = if ($src[$name]) { $srcCounts[$name] } else { '(無し)' }

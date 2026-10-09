@@ -14,6 +14,10 @@
   ダンプの先頭には、ダンプ時点の binlog の座標をコメントで記録し（--source-data=2）、同じ瞬間に binlog を
   切り替える（--flush-logs）。サーバ側の binlog（30 日保持）と組み合わせれば、ダンプ以後の任意の時点まで戻せる。
 
+  中身の大きいテーブル（-DataExcludedTables。既定は CD の音の特徴量 track_audio_fingerprints）は、表の定義だけ取って
+  中身は取らない（ダンプの末尾に --no-data のダンプを足す）。元のディスクから取り直せるものなので、毎日のダンプを
+  膨らませない。
+
   あわせて、リポジトリに入れていないローカル専用ファイル（db/data-fixes/ の SQL、各プロジェクトの App.config、
   CLAUDE.md、docs/*.md、.claude/settings.local.json、Claude Code のメモリ）を 1 つの ZIP
   （local-files_YYYYMMDD-HHmm_内容ハッシュ.zip）にまとめる。内容（パス・サイズ・更新時刻）が前回と同じなら作らない。
@@ -74,6 +78,9 @@
 .PARAMETER ClaudeMemoryDir
   Claude Code のメモリのディレクトリ。省略時は設定ファイルの claudeMemoryDir（無ければ飛ばす）。
 
+.PARAMETER DataExcludedTables
+  表の定義だけ取って中身は取らないテーブル。既定 track_audio_fingerprints。空にすれば全テーブルの中身を取る。
+
 .EXAMPLE
   .\scripts\backup-db.ps1
   日次のバックアップ（タスクスケジューラが毎日呼ぶのと同じ）。
@@ -100,7 +107,8 @@ param(
     [string]$Database = 'precure_datastars',
     [string]$CnfPath = (Join-Path $env:APPDATA 'precure-datastars\backup.cnf'),
     [string]$MysqlDumpPath = 'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe',
-    [string]$ClaudeMemoryDir = ''
+    [string]$ClaudeMemoryDir = '',
+    [string[]]$DataExcludedTables = @('track_audio_fingerprints')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -310,6 +318,9 @@ try {
         '--default-character-set=utf8mb4',
         "--result-file=$sqlTmp"             # stdout を経由しない（Windows の改行変換と文字化けを避ける）
     )
+    # 中身を取らないテーブルは本体のダンプから外す（表の定義は後で --no-data のダンプとして足す）
+    $excluded = @($DataExcludedTables | Where-Object { $_ })
+    foreach ($t in $excluded) { $dumpArgs += "--ignore-table=$Database.$t" }
     if (-not $NoBinlogCoordinates) {
         # ダンプ時点の binlog の座標をコメントで記録し、同じ瞬間に binlog を切り替える。
         # ダンプ以後の操作を binlog から足すときは、この座標（＝切り替え後の新しいファイルの先頭）から読む。
@@ -323,6 +334,34 @@ try {
     if ($r.ExitCode -ne 0) { throw "mysqldump が失敗しました (exit $($r.ExitCode)): $stderr" }
     if (-not (Test-DumpCompleted -Path $sqlTmp)) { throw 'ダンプの末尾に "Dump completed" がありません（途中で切れています）' }
     if ($stderr) { Write-Warning "mysqldump: $stderr" }
+
+    # 中身を取らないテーブルの表の定義を、本体の後ろに足す（復元したときに表が無くならないように）
+    if ($excluded.Count -gt 0) {
+        $schemaTmp = "$sqlTmp.schema"
+        $schemaArgs = @(
+            "--defaults-extra-file=$CnfPath",
+            '--no-data', '--skip-triggers', '--no-create-db',
+            '--no-tablespaces',
+            '--set-gtid-purged=OFF',
+            '--default-character-set=utf8mb4',
+            "--result-file=$schemaTmp",
+            $Database
+        ) + $excluded
+        $r = Invoke-Native -Exe $MysqlDumpPath -Arguments $schemaArgs
+        $stderr = ($r.StdErr -split "`r?`n" | Where-Object { $_ }) -join ' / '
+        if ($r.ExitCode -ne 0) { throw "mysqldump（表の定義だけ）が失敗しました (exit $($r.ExitCode)): $stderr" }
+        if (-not (Test-DumpCompleted -Path $schemaTmp)) { throw '表の定義だけのダンプの末尾に "Dump completed" がありません' }
+        if ($stderr) { Write-Warning "mysqldump: $stderr" }
+        $fs = [System.IO.File]::Open($sqlTmp, [System.IO.FileMode]::Append)
+        try {
+            $note = [Text.Encoding]::UTF8.GetBytes("`n--`n-- 中身を取らないテーブル（表の定義だけ）: $($excluded -join ', ')`n--`n`n")
+            $fs.Write($note, 0, $note.Length)
+            $bytes = [System.IO.File]::ReadAllBytes($schemaTmp)
+            $fs.Write($bytes, 0, $bytes.Length)
+        }
+        finally { $fs.Dispose() }
+        Remove-Item -LiteralPath $schemaTmp -Force
+    }
 
     $binlogNote = ''
     if (-not $NoBinlogCoordinates) {

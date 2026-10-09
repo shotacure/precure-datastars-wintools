@@ -18,6 +18,8 @@ namespace PrecureDataStars.BDAnalyzer
     ///   <item><description>1 つのプレイリストに複数の話が続けて入っていてもよい（全話連続）。先頭から走査して話を順に当て、
     ///     次に探す話は直前に当てた話の次の話数を優先する。同じ話を 2 度当てない。複数の話が同じ所に当たるときは候補の数を添える。
     ///     当たった話が 1 つなら EPISODE、2 つ以上なら PLAY_ALL、無ければ null（パート列の 2 倍以上のチャプターがあれば PLAY_ALL の候補）。</description></item>
+    ///   <item><description>映画など作品単位の作品（話を持たない）は <see cref="ProposeFeature"/> で、作品の上映時間（<c>series.run_time_seconds</c>）に
+    ///     いちばん近い尺のプレイリストを本編（FEATURE）とする。</description></item>
     /// </list>
     /// </summary>
     public static class EpisodeLinkMatcher
@@ -34,6 +36,33 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>チャプターの尺と期待する尺の差が許容の範囲か。</summary>
         public static bool IsWithinTolerance(long diffMs) => Math.Abs(diffMs) <= ToleranceMs;
+
+        /// <summary>作品単位の本編を当てるとき、プレイリストの尺と作品の上映時間の差として許す幅（ミリ秒）。上映時間は分単位の公称値なので広めに取る。</summary>
+        public const int FeatureToleranceMs = 90_000;
+
+        /// <summary>
+        /// 作品単位の作品（映画など。話を持たない）の本編のプレイリストを提案する。
+        /// 作品に上映時間があれば、尺の差が <see cref="FeatureToleranceMs"/> 以内でいちばん近いプレイリスト（差も返す）。
+        /// 上映時間が無ければ、いちばん長いプレイリストを候補にする（差は null。人が確かめる前提）。該当が無ければ (null, null)。
+        /// </summary>
+        public static (string? PlaylistFile, long? DiffMs) ProposeFeature(IReadOnlyList<(string PlaylistFile, ulong DurationMs)> playlists, Series series)
+        {
+            if (playlists.Count == 0) return (null, null);
+            if (series.RunTimeSeconds is ushort runTime)
+            {
+                long expected = runTime * 1000L;
+                (string File, long Diff)? best = null;
+                foreach (var (file, duration) in playlists)
+                {
+                    long diff = (long)duration - expected;
+                    if (Math.Abs(diff) > FeatureToleranceMs) continue;
+                    if (best is null || Math.Abs(diff) < Math.Abs(best.Value.Diff)) best = (file, diff);
+                }
+                return best is null ? (null, null) : (best.Value.File, best.Value.Diff);
+            }
+            var longest = playlists.OrderByDescending(p => p.DurationMs).First();
+            return (longest.PlaylistFile, null);
+        }
 
         /// <summary>1 つのプレイリストの当て方の提案。</summary>
         public sealed class PlaylistProposal

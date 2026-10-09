@@ -1,5 +1,6 @@
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.SiteBuilder.Utilities;
+using PrecureDataStars.TemplateRendering;
 
 namespace PrecureDataStars.SiteBuilder.Pipeline;
 
@@ -57,7 +58,7 @@ public sealed class MusicCreditIndex
             .FirstOrDefault();
         CoverageLabel = latestChecked is null
             ? ""
-            : $"「{latestChecked.Title}」({Utilities.StatsCoverageLabel.ShortDate(latestChecked.ReleaseDate)})時点";
+            : $"「{JapaneseQuotes.InQuotes(latestChecked.Title)}」({Utilities.StatsCoverageLabel.ShortDate(latestChecked.ReleaseDate)})時点";
         static IReadOnlyDictionary<TKey, IReadOnlyList<MusicCredit>> Group<TKey>(IEnumerable<MusicCredit> src, Func<MusicCredit, TKey> key)
             where TKey : notnull
             => src.GroupBy(key).ToDictionary(g => g.Key, g => (IReadOnlyList<MusicCredit>)g

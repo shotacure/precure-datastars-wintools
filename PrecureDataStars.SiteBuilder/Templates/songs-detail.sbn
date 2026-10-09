@@ -17,15 +17,34 @@
          （LYRICS/COMPOSITION/ARRANGEMENT/VOCALS は CSS で色相環 4 色のバッジに着色済み）。
        - 備考は名義行とは別に muted 段落で続ける。 ##}}
   {{## 基本情報（作詞・作曲・編曲）。役職ごとに改行せず、役職バッジ + 名前のユニットを横に流して並べる（ユニットの中では改行しない）。 ##}}
-  {{~ if Song.LyricsHtml != "" || Song.CompositionHtml != "" || Song.ArrangementHtml != "" || Song.StringsArrangementHtml != "" ~}}
+  {{~ if Song.LyricsHtml != "" || Song.CompositionHtml != "" || Song.ArrangementHtml != "" || Song.MedleyArrangementHtml != "" || Song.StringsArrangementHtml != "" ~}}
   <section id="basic-info">
     <h2>基本情報</h2>
     <div class="staff-badges-row music-credit-row">
       {{~ if Song.LyricsHtml != "" ~}}<span class="staff-badge-group music-credit-unit">{{ Song.LyricsRoleLabelHtml }}{{ Song.LyricsHtml }}</span>{{~ end ~}}
       {{~ if Song.CompositionHtml != "" ~}}<span class="staff-badge-group music-credit-unit">{{ Song.CompositionRoleLabelHtml }}{{ Song.CompositionHtml }}</span>{{~ end ~}}
       {{~ if Song.ArrangementHtml != "" ~}}<span class="staff-badge-group music-credit-unit">{{ Song.ArrangementRoleLabelHtml }}{{ Song.ArrangementHtml }}</span>{{~ end ~}}
+      {{~ if Song.MedleyArrangementHtml != "" ~}}<span class="staff-badge-group music-credit-unit">{{ Song.MedleyArrangementRoleLabelHtml }}{{ Song.MedleyArrangementHtml }}</span>{{~ end ~}}
       {{~ if Song.StringsArrangementHtml != "" ~}}<span class="staff-badge-group music-credit-unit">{{ Song.StringsArrangementRoleLabelHtml }}{{ Song.StringsArrangementHtml }}</span>{{~ end ~}}
     </div>
+  </section>
+  {{~ end ~}}
+  {{## メドレーの曲の中の曲。原曲の曲名（原曲へのリンク）と、原曲の作詞・作曲・編曲を順に並べる。 ##}}
+  {{~ if Song.MedleyPartsHtml != "" ~}}
+  <section id="medley-parts">
+    <h2>収録曲</h2>
+    {{ Song.MedleyPartsHtml }}
+  </section>
+  {{~ end ~}}
+  {{## この曲が原曲として入っているメドレー。 ##}}
+  {{~ if (array.size Song.IncludedInMedleys) > 0 ~}}
+  <section id="in-medleys">
+    <h2>このメドレーに入っています</h2>
+    <ul class="medley-links">
+      {{~ for m in Song.IncludedInMedleys ~}}
+      <li><a href="{{ m.Url }}">{{ m.Title | html.escape }}</a></li>
+      {{~ end ~}}
+    </ul>
   </section>
   {{~ end ~}}
   {{## 曲に共通の音楽クレジット（伴奏の演奏者・録音側のスタッフ）。基本情報と同じく役職ごとのユニットを横に流す。出典の盤は組み立て済み HTML に含む。 ##}}

@@ -74,6 +74,8 @@ public sealed class ScribanRenderer
         functions.Import("company_url", new Func<int, string>(PathUtil.CompanyUrl));
         // CSS・JS の URL に中身の版の印を付ける（{{ asset_url "/assets/site.css" }}）。
         functions.Import("asset_url", new Func<string, string>(AssetUrl.Versioned));
+        // 「」で囲んで出す文字列の中の「」を『』にする（{{ t.Title | in_quotes | html.escape }}）。
+        functions.Import("in_quotes", new Func<string, string>(s => PrecureDataStars.TemplateRendering.JapaneseQuotes.InQuotes(s)));
         return functions;
     }
 

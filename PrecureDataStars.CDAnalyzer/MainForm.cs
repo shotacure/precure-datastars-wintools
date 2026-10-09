@@ -10,6 +10,7 @@ using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.Catalog.Common.Dialogs;
 using PrecureDataStars.Catalog.Common.Services;
+using PrecureDataStars.AudioFingerprint;
 using static PrecureDataStars.CDAnalyzer.ScsiMmci;
 using static PrecureDataStars.CDAnalyzer.Helpers;
 
@@ -27,9 +28,14 @@ namespace PrecureDataStars.CDAnalyzer
         private readonly SeriesRepository? _seriesRepo;
         // 商品社名マスタ（NewProductDialog の既定社取得・picker 用）
         private readonly ProductCompaniesRepository? _productCompaniesRepo;
+        // トラックの音の特徴量（指紋）
+        private readonly TrackAudioFingerprintsRepository? _fingerprintsRepo;
 
         // 最後に読み取った CD の情報（DB 連携時に照合／登録に使う）
         private LastReadSnapshot? _lastRead;
+
+        // 最後に読み取ったドライブ（音の特徴の記録で同じドライブをもう一度開く）
+        private char? _lastReadDrive;
 
         /// <summary>DB 連携無効モード（従来互換）コンストラクタ。</summary>
         public MainForm()
@@ -48,8 +54,11 @@ namespace PrecureDataStars.CDAnalyzer
             ProductKindsRepository productKindsRepo,
             SeriesRepository seriesRepo,
             // 商品社名マスタ
-            ProductCompaniesRepository productCompaniesRepo)
+            ProductCompaniesRepository productCompaniesRepo,
+            // トラックの音の特徴量（指紋）
+            TrackAudioFingerprintsRepository fingerprintsRepo)
         {
+            _fingerprintsRepo = fingerprintsRepo ?? throw new ArgumentNullException(nameof(fingerprintsRepo));
             _registration = registration ?? throw new ArgumentNullException(nameof(registration));
             _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
             _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
@@ -449,6 +458,7 @@ namespace PrecureDataStars.CDAnalyzer
 
             // DB 連携パネル用に、読み取り結果をスナップショット保存
             _lastRead = BuildSnapshot(tracksOnly, leadOutLba, outcome.McnRaw, isrcMap, catalog);
+            _lastReadDrive = driveLetter;
             SetDbPanelEnabled(_registration is not null, _registration is null ? "DB 接続が設定されていません" : "照合可能");
         }
 
@@ -547,6 +557,14 @@ namespace PrecureDataStars.CDAnalyzer
         {
             btnDbMatch.Enabled = enabled;
             lblDbStatus.Text = status;
+            UpdateFingerprintButton();
+        }
+
+        /// <summary>「音の特徴を記録」は、DB 連携が有効で品番の決まった盤（照合・登録のあと）だけ押せる。</summary>
+        private void UpdateFingerprintButton()
+        {
+            btnFingerprint.Enabled = _fpCts is not null
+                || (btnDbMatch.Enabled && _fingerprintsRepo is not null && !string.IsNullOrEmpty(_lastRead?.Disc.CatalogNo));
         }
 
         /// <summary>読み取り直後のスナップショットから DiscRegistration 用のオブジェクトを組み立てる。</summary>
@@ -756,11 +774,154 @@ namespace PrecureDataStars.CDAnalyzer
                         + $"トラック {_lastRead.Tracks.Count} 件を登録しました。",
                         "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
+                else
+                {
+                    return;
+                }
+
+                // 品番が決まったので、「照合・登録のあと音の特徴も記録」がオンなら続けて音の特徴を記録する
+                // （オフなら何もしない。あとから「音の特徴を記録」でも取れる）
+                UpdateFingerprintButton();
+                if (btnFingerprint.Enabled && chkAutoFingerprint.Checked)
+                {
+                    await RunFingerprintAsync();
+                }
             }
             catch (Exception ex)
             {
                 MessageBox.Show(this, "DB 連携エラー: " + ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        // ===== 音の特徴の記録 =====
+
+        /// <summary>実行中の音の読み取りのキャンセルソース。null のとき走っていない。 実行中は「音の特徴を記録」ボタンが「中止」に切り替わり、クリックで本ソースの Cancel を呼ぶ。</summary>
+        private CancellationTokenSource? _fpCts;
+
+        /// <summary>「音の特徴を記録」ボタン。実行中のクリックは中止の要求として扱う。</summary>
+        private async void btnFingerprint_Click(object? sender, EventArgs e)
+        {
+            if (_fpCts is not null)
+            {
+                _fpCts.Cancel();
+                return;
+            }
+            await RunFingerprintAsync();
+        }
+
+        /// <summary>
+        /// 品番の決まった盤の全オーディオトラックの音を READ CD で読み、トラックごとに指紋（<see cref="LandmarkFingerprinter"/>）と
+        /// PCM の SHA-256 を取って <c>track_audio_fingerprints</c> に入れる（同じトラックの行は置き換える）。
+        /// 1 トラック終わるごとに DB へ入れるので、途中で中止してもそこまでは残る。
+        /// </summary>
+        private async Task RunFingerprintAsync()
+        {
+            if (_fingerprintsRepo is null || _lastRead is null || string.IsNullOrEmpty(_lastRead.Disc.CatalogNo)
+                || _lastReadDrive is not char drive)
+            {
+                return;
+            }
+            if (_readCts is not null || _fpCts is not null) return;
+
+            string catalogNo = _lastRead.Disc.CatalogNo;
+            var targets = _lastRead.Tracks.Where(t => !t.IsDataTrack && t.StartLba is not null && t.LengthFrames is > 0).ToList();
+            if (targets.Count == 0)
+            {
+                MessageBox.Show(this, "音のトラックがありません。", "情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // 実行中の UI 状態へ。ボタンは中止に切替、読み取り・ドライブ変更・DB 連携は封鎖する
+            _fpCts = new CancellationTokenSource();
+            btnFingerprint.Text = "中止";
+            btnDbMatch.Enabled = false;
+            btnLoad.Enabled = false;
+            cboDrives.Enabled = false;
+
+            int done = 0;
+            IProgress<string> progress = new Progress<string>(text => lblDbStatus.Text = text);
+            try
+            {
+                var ct = _fpCts.Token;
+                await Task.Run(async () =>
+                {
+                    using SafeFileHandle h = OpenCdDevice(drive);
+                    foreach (var t in targets)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        int idx = done + 1;
+                        var row = ReadTrackFingerprint(h, t,
+                            pct => progress.Report($"音を読んでいます: トラック {t.TrackNo}（{idx}/{targets.Count}）{pct}%"), ct);
+                        row.CatalogNo = catalogNo;
+                        await _fingerprintsRepo.UpsertAsync(row, ct);
+                        done++;
+                    }
+                }, ct);
+
+                lblDbStatus.Text = $"音の特徴を記録しました: {done} トラック";
+                MessageBox.Show(this, $"ディスク [{catalogNo}] の {done} トラックの音の特徴を記録しました。",
+                    "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (OperationCanceledException)
+            {
+                lblDbStatus.Text = $"音の特徴の記録を中止しました（{done} トラックまで記録済み）";
+            }
+            catch (Exception ex)
+            {
+                lblDbStatus.Text = $"音の特徴の記録に失敗しました（{done} トラックまで記録済み）";
+                MessageBox.Show(this, "音の特徴の記録エラー: " + ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                _fpCts.Dispose();
+                _fpCts = null;
+                btnFingerprint.Text = "音の特徴を記録";
+                btnDbMatch.Enabled = _registration is not null && _lastRead is not null;
+                btnLoad.Enabled = true;
+                cboDrives.Enabled = true;
+                UpdateFingerprintButton();
+            }
+        }
+
+        /// <summary>1 トラックの音を READ CD で読み切り、指紋と PCM の SHA-256 の行を組み立てる（ワーカースレッドで実行。UI には触れない）。</summary>
+        private static TrackAudioFingerprint ReadTrackFingerprint(SafeFileHandle h, Track track, Action<int> onProgress, CancellationToken ct)
+        {
+            var fingerprinter = new LandmarkFingerprinter(channels: 2);
+            int start = (int)track.StartLba!.Value;
+            int total = (int)track.LengthFrames!.Value;
+            var buf = new byte[CdAudioMaxSectorsPerRead * CdAudioSectorBytes];
+            int lastPct = -1;
+            for (int off = 0; off < total;)
+            {
+                ct.ThrowIfCancellationRequested();
+                int want = Math.Min(CdAudioMaxSectorsPerRead, total - off);
+                int got = ReadCdAudio(h, start + off, want, buf);
+                fingerprinter.Append(buf.AsSpan(0, got * CdAudioSectorBytes));
+                off += got;
+                int pct = (int)(off * 100L / total);
+                if (pct != lastPct)
+                {
+                    lastPct = pct;
+                    onProgress(pct);
+                }
+            }
+            var (fp, sha) = fingerprinter.Finish();
+            return new TrackAudioFingerprint
+            {
+                TrackNo = track.TrackNo,
+                SubOrder = 0,
+                MethodVersion = fp.MethodVersion,
+                SampleRateHz = fp.SampleRateHz,
+                FftSize = fp.FftSize,
+                HopSamples = fp.HopSamples,
+                HashCount = fp.HashCount,
+                DurationMs = fp.DurationMs,
+                PcmSha256 = sha,
+                Fingerprint = fp.ToBytes(),
+                ReadAt = DateTime.Now,
+                CreatedBy = Environment.UserName,
+                UpdatedBy = Environment.UserName
+            };
         }
 
         /// <summary>品番入力用の簡易プロンプト（新規商品＋ディスクとして登録するフローで使用）。</summary>

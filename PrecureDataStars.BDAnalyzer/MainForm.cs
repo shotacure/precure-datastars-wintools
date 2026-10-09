@@ -47,6 +47,14 @@ namespace PrecureDataStars.BDAnalyzer
         private readonly ProductCompaniesRepository? _productCompaniesRepo;
         // 追加: BD/DVD チャプターの一括登録用リポジトリ
         private readonly VideoChaptersRepository? _videoChaptersRepo;
+        // Blu-ray の情報（bd_* テーブル群。ディスク ID が鍵で、商品・盤の登録を前提にしない）
+        private readonly BdStructureRepository? _bdRepo;
+        // 話とパートを当てる（作品の話・パートの円盤尺）
+        private readonly EpisodesRepository? _episodesRepo;
+        private readonly EpisodePartsRepository? _episodePartsRepo;
+
+        /// <summary>最後に読んだ Blu-ray の情報（BDMV の管理ファイルから。DVD や単一プレイリストモードでは null）。</summary>
+        private BdStructure? _lastBd;
 
         // 最後に読み込んだディスクのスナップショット（DB 連携時に使用）
         private LastReadSnapshot? _lastRead;
@@ -80,6 +88,8 @@ namespace PrecureDataStars.BDAnalyzer
 
             // DB 連携ボタン（非活性からスタート）
             btnDbMatch.Click += btnDbMatch_Click;
+            btnEpisodeLink.Click += async (_, __) => await OpenEpisodeLinkAsync();
+            btnBdSave.Click += async (_, __) => await SaveBdAsync(confirm: true);
             SetDbPanelEnabled(false, "DB 接続が設定されていません (App.config)");
         }
 
@@ -93,7 +103,12 @@ namespace PrecureDataStars.BDAnalyzer
             SeriesRepository seriesRepo,
             VideoChaptersRepository videoChaptersRepo,
             // 商品社名マスタ
-            ProductCompaniesRepository productCompaniesRepo) : this()
+            ProductCompaniesRepository productCompaniesRepo,
+            // Blu-ray の情報（bd_*）
+            BdStructureRepository bdRepo,
+            // 話とパートを当てる
+            EpisodesRepository episodesRepo,
+            EpisodePartsRepository episodePartsRepo) : this()
         {
             _registration = registration ?? throw new ArgumentNullException(nameof(registration));
             _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -103,6 +118,9 @@ namespace PrecureDataStars.BDAnalyzer
             _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
             _videoChaptersRepo = videoChaptersRepo ?? throw new ArgumentNullException(nameof(videoChaptersRepo));
             _productCompaniesRepo = productCompaniesRepo ?? throw new ArgumentNullException(nameof(productCompaniesRepo));
+            _bdRepo = bdRepo ?? throw new ArgumentNullException(nameof(bdRepo));
+            _episodesRepo = episodesRepo ?? throw new ArgumentNullException(nameof(episodesRepo));
+            _episodePartsRepo = episodePartsRepo ?? throw new ArgumentNullException(nameof(episodePartsRepo));
 
             SetDbPanelEnabled(false, "ディスクを読み込むと有効になります");
         }
@@ -638,6 +656,10 @@ namespace PrecureDataStars.BDAnalyzer
             }
 
             SetDbPanelEnabled(_registration is not null, _registration is null ? "DB 接続が設定されていません" : "照合可能");
+
+            // Blu-ray の情報（bd_*）：BDMV の管理ファイルを読み、作品と話・パートを自動で当てて一覧の「話 / パート」列に出し、確認 1 回で記録する。
+            // 一覧の各行にチャプターを結びつけたあとに行う（列の描き直しがその結びつきを使う）。
+            await LoadAndSaveBdAsync(representativeMplsPath);
         }
 
         /// <summary>
@@ -692,7 +714,8 @@ namespace PrecureDataStars.BDAnalyzer
                 mplsChapters.Add((ch.Start, ch.Length, mplsPlaylistTag));
             }
 
-            // DB 連携用スナップショットを作成（BD 側）
+            // DB 連携用スナップショットを作成（BD 側）。単一プレイリストモードでは bd_* の記録は行わない。
+            _lastBd = null;
             _lastRead = BuildSnapshot(
                 path,
                 mediaFormat: "BD",
@@ -945,7 +968,306 @@ namespace PrecureDataStars.BDAnalyzer
         private void SetDbPanelEnabled(bool enabled, string status)
         {
             btnDbMatch.Enabled = enabled;
+            // Blu-ray の情報の記録と、話とパートを当てるのは、BDMV を読めた Blu-ray だけ。
+            bool bd = enabled && _bdRepo is not null && _lastBd is not null;
+            btnBdSave.Enabled = bd;
+            btnEpisodeLink.Enabled = bd && _episodesRepo is not null;
             lblDbStatus.Text = status;
+        }
+
+        // ===== Blu-ray の情報（bd_*） =====
+
+        /// <summary>
+        /// Blu-ray の読み取り（PLAYLIST フォルダの全走査）に続けて、BDMV の管理ファイルから情報を読み、
+        /// 記録済みの盤なら当て方と品番を引き継ぎ、未記録なら作品を自動で判定して話とパートを当て、
+        /// 要約の確認 1 回で bd_* に記録する。DB 連携が無効なら読むだけ。
+        /// </summary>
+        private async Task LoadAndSaveBdAsync(string mplsPath)
+        {
+            _lastBd = null;
+            _pendingRunTimes.Clear();
+            try
+            {
+                string? playlistDir = Path.GetDirectoryName(mplsPath);
+                string? bdmvRoot = playlistDir is null ? null : Path.GetDirectoryName(playlistDir);
+                if (bdmvRoot is null || !string.Equals(Path.GetFileName(playlistDir), "PLAYLIST", StringComparison.OrdinalIgnoreCase)) return;
+                var bd = await Task.Run(() => BdmvStructureReader.Read(bdmvRoot));
+                if (bd.Playlists.Count == 0 && bd.Clips.Count == 0 && bd.Titles.Count == 0) return;
+                _lastBd = bd;
+
+                if (_bdRepo is null) return;
+                var existing = await _bdRepo.GetDiscAsync(bd.Disc.DiscId);
+                if (existing is not null)
+                {
+                    // 記録済み：作品・品番・最初に読んだ日時と、チャプター・プレイリストの当て方を引き継ぐ。
+                    bd.Disc.SeriesId = existing.SeriesId;
+                    bd.Disc.CatalogNo = existing.CatalogNo;
+                    bd.Disc.FirstReadAt = existing.FirstReadAt ?? existing.LastReadAt;
+                    var oldChapters = await _bdRepo.GetChaptersAsync(bd.Disc.DiscId);
+                    foreach (var ch in bd.Chapters)
+                    {
+                        var old = oldChapters.FirstOrDefault(o => string.Equals(o.PlaylistFile, ch.PlaylistFile, StringComparison.OrdinalIgnoreCase) && o.ChapterNo == ch.ChapterNo);
+                        if (old is null) continue;
+                        ch.ChapterKind = old.ChapterKind; ch.EpisodeId = old.EpisodeId; ch.EpisodeSeq = old.EpisodeSeq; ch.SeriesId = old.SeriesId;
+                    }
+                    var oldPlaylists = await _bdRepo.GetPlaylistsAsync(bd.Disc.DiscId);
+                    foreach (var pl in bd.Playlists)
+                    {
+                        var old = oldPlaylists.FirstOrDefault(o => string.Equals(o.PlaylistFile, pl.PlaylistFile, StringComparison.OrdinalIgnoreCase));
+                        if (old is null) continue;
+                        pl.PlaylistKind = old.PlaylistKind; pl.EpisodeId = old.EpisodeId; pl.SeriesId = old.SeriesId;
+                    }
+                }
+                MarkMenuPlaylists(bd);
+                if (existing is null)
+                {
+                    bd.Disc.FirstReadAt = bd.Disc.LastReadAt;
+                    await AutoDetectSeriesAndLinkAsync(bd);
+                }
+                RefreshEpisodeLinkColumn();
+                await SaveBdAsync(confirm: true, isUpdate: existing is not null);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Blu-ray の情報を読めませんでした: " + ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                SetDbPanelEnabled(_registration is not null, lblDbStatus.Text);
+            }
+        }
+
+        /// <summary>
+        /// 作品を自動で判定し、話とパートを当てる。全 TV 作品について、各プレイリストのチャプターの尺の並びを各話のパートの円盤尺の並びと
+        /// 突き合わせ（<see cref="EpisodeLinkMatcher"/>）、当たった話の数がいちばん多い作品を採る（同数なら候補が複数のものが少ない作品）。
+        /// 1 話も当たらなければ、映画など作品単位の作品（話を持たない）を親の映画と併映のまとまりごとに <see cref="FeatureLinkMatcher"/> で当て、
+        /// 当たるまとまりがただ 1 つならその親を盤の作品にして、当たったプレイリストとチャプターを本編（FEATURE）にする
+        /// （複数なら未判定のまま。「話とパートを当てる...」で選ぶ）。
+        /// </summary>
+        private async Task AutoDetectSeriesAndLinkAsync(BdStructure bd)
+        {
+            if (_seriesRepo is null || _episodesRepo is null || _episodePartsRepo is null) return;
+            var tvSeries = (await _seriesRepo.GetAllAsync()).Where(x => string.Equals(x.KindCode, "TV", StringComparison.Ordinal)).ToList();
+            var allEpisodes = await _episodesRepo.GetAllAsync();
+            var allParts = await _episodePartsRepo.GetAllAsync();
+            var partsByEpisode = allParts.GroupBy(x => x.EpisodeId)
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodePart>)g.OrderBy(x => x.EpisodeSeq).ToList());
+            var inputs = bd.Playlists
+                .Select(pl => (pl.PlaylistFile, (IReadOnlyList<ulong>)bd.Chapters.Where(c => c.PlaylistFile == pl.PlaylistFile).OrderBy(c => c.ChapterNo).Select(c => c.DurationMs).ToList()))
+                .ToList();
+
+            Series? bestSeries = null; List<EpisodeLinkMatcher.PlaylistProposal>? best = null; int bestScore = 0, bestAmbiguous = int.MaxValue;
+            foreach (var series in tvSeries)
+            {
+                var episodes = allEpisodes.Where(e => e.SeriesId == series.SeriesId).OrderBy(e => e.SeriesEpNo).ToList();
+                if (episodes.Count == 0) continue;
+                var proposals = EpisodeLinkMatcher.Propose(inputs, episodes, partsByEpisode);
+                int score = proposals.SelectMany(x => x.Chapters).Where(c => c.EpisodeId is not null).Select(c => c.EpisodeId!.Value).Distinct().Count();
+                int ambiguous = proposals.Count(x => x.CandidateCount > 1);
+                if (score > bestScore || (score == bestScore && score > 0 && ambiguous < bestAmbiguous))
+                {
+                    bestSeries = series; best = proposals; bestScore = score; bestAmbiguous = ambiguous;
+                }
+            }
+            if (bestSeries is null || best is null)
+            {
+                // TV の話が 1 つも当たらない。作品単位の作品（映画など）を、親の映画と併映のまとまりごとに上映時間で当てる
+                var allSeries = await _seriesRepo.GetAllAsync();
+                var featureInputs = bd.Playlists
+                    .Where(pl => pl.PlaylistKind != "MENU")
+                    .Select(pl => (pl.PlaylistFile ?? "", pl.DurationMs,
+                                   (IReadOnlyList<ulong>)bd.Chapters.Where(c => c.PlaylistFile == pl.PlaylistFile).OrderBy(c => c.ChapterNo).Select(c => c.DurationMs).ToList()))
+                    .ToList();
+                var hits = new List<(FeatureLinkMatcher.FeatureGroup Group, List<FeatureLinkMatcher.Proposal> Proposals)>();
+                var seenRoots = new HashSet<int>();
+                foreach (var series in allSeries.Where(x => !string.Equals(x.KindCode, "TV", StringComparison.Ordinal) && x.RunTimeSeconds is not null))
+                {
+                    var group = FeatureLinkMatcher.BuildGroup(series, allSeries);
+                    if (!seenRoots.Add(group.Root.SeriesId)) continue;
+                    var proposals = FeatureLinkMatcher.Propose(featureInputs, group);
+                    if (proposals.Count > 0) hits.Add((group, proposals));
+                }
+                if (hits.Count != 1) return;
+                bd.Disc.SeriesId = hits[0].Group.Root.SeriesId;
+                foreach (var proposal in hits[0].Proposals) ApplyFeatureProposal(bd, proposal);
+                return;
+            }
+
+            bd.Disc.SeriesId = bestSeries.SeriesId;
+            foreach (var proposal in best)
+            {
+                var pl = bd.Playlists.First(x => x.PlaylistFile == proposal.PlaylistFile);
+                pl.PlaylistKind = proposal.Kind; pl.EpisodeId = proposal.EpisodeId;
+                var chapters = bd.Chapters.Where(c => c.PlaylistFile == proposal.PlaylistFile).OrderBy(c => c.ChapterNo).ToList();
+                for (int i = 0; i < chapters.Count && i < proposal.Chapters.Count; i++)
+                {
+                    chapters[i].ChapterKind = proposal.Chapters[i].Kind;
+                    chapters[i].EpisodeId = proposal.Chapters[i].EpisodeId;
+                    chapters[i].EpisodeSeq = proposal.Chapters[i].EpisodeSeq;
+                }
+            }
+        }
+
+        /// <summary>
+        /// トップメニュー（タイトル番号 65535）と最初の再生（タイトル番号 0）から呼ばれるプレイリストを、種別が未判定なら MENU にする。
+        /// メニューの背景ループは短いクリップを何十回もつないで本編と同じくらいの長さになることがあるので、本編の当てから外すため。
+        /// 通常のタイトル（1〜）からも呼ばれているプレイリストは本編のこともあるので触らない。
+        /// </summary>
+        internal static void MarkMenuPlaylists(BdStructure bd)
+        {
+            var fromTitles = bd.Titles.Where(t => t.TitleNo is not 0 and not 65535 && t.PlaylistFile is not null)
+                .Select(t => t.PlaylistFile!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var menus = bd.Titles.Where(t => t.TitleNo is 0 or 65535 && t.PlaylistFile is not null)
+                .Select(t => t.PlaylistFile!).Where(f => !fromTitles.Contains(f)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var pl in bd.Playlists)
+                if (pl.PlaylistKind is null && menus.Contains(pl.PlaylistFile)) pl.PlaylistKind = "MENU";
+        }
+
+        /// <summary>「話とパートを当てる...」で決めた、作品に入れる上映時間（作品 ID → 秒）。「Blu-ray の情報を記録」で書き、書いたら消す。</summary>
+        private readonly Dictionary<int, ushort> _pendingRunTimes = new();
+
+        /// <summary>
+        /// 作品単位の本編の当て方をプレイリストとチャプターに書く（話・パートは持たない）。チャプターの作品が null のものは、
+        /// 繋がって入っている盤の前後の余りなら余白（BLANK）、親のまとまりをプレイリスト全体で当てたとき（全部 null）は作品なしの本編。
+        /// </summary>
+        internal static void ApplyFeatureProposal(BdStructure bd, FeatureLinkMatcher.Proposal proposal)
+        {
+            var pl = bd.Playlists.First(x => string.Equals(x.PlaylistFile, proposal.PlaylistFile, StringComparison.OrdinalIgnoreCase));
+            pl.PlaylistKind = "FEATURE";
+            pl.EpisodeId = null;
+            pl.SeriesId = proposal.SeriesId;
+            bool unsplit = proposal.ChapterSeriesIds.All(id => id is null);
+            var chapters = bd.Chapters.Where(c => string.Equals(c.PlaylistFile, proposal.PlaylistFile, StringComparison.OrdinalIgnoreCase)).OrderBy(c => c.ChapterNo).ToList();
+            for (int i = 0; i < chapters.Count; i++)
+            {
+                int? id = i < proposal.ChapterSeriesIds.Count ? proposal.ChapterSeriesIds[i] : null;
+                chapters[i].ChapterKind = id is not null || unsplit ? "FEATURE" : "BLANK";
+                chapters[i].EpisodeId = null;
+                chapters[i].EpisodeSeq = null;
+                chapters[i].SeriesId = id;
+            }
+        }
+
+        /// <summary>
+        /// Blu-ray の情報を bd_* に記録する。<paramref name="confirm"/> なら要約（ディスク名・ID・各種の数・当てた作品と話）を出して OK を待つ。
+        /// 「Blu-ray の情報を記録」ボタンからも、読み取り直後の自動の流れからも使う。
+        /// </summary>
+        private async Task SaveBdAsync(bool confirm, bool? isUpdate = null)
+        {
+            if (_bdRepo is null || _lastBd is null) return;
+            var bd = _lastBd;
+            try
+            {
+                isUpdate ??= await _bdRepo.GetDiscAsync(bd.Disc.DiscId) is not null;
+                if (confirm)
+                {
+                    var allSeries = _seriesRepo is null ? Array.Empty<Series>() : await _seriesRepo.GetAllAsync();
+                    string TitleOf(int id) => allSeries.FirstOrDefault(x => x.SeriesId == id)?.Title ?? $"series {id}";
+                    string seriesLabel = bd.Disc.SeriesId is int sid ? TitleOf(sid) : "（未判定）";
+                    string nl0 = Environment.NewLine;
+                    var epIds = bd.Chapters.Where(c => c.EpisodeId is not null).Select(c => c.EpisodeId!.Value).Distinct().ToList();
+                    string epLabel = epIds.Count == 0 ? "（当たった話なし）" : $"{epIds.Count} 話";
+                    if (epIds.Count > 0 && _episodesRepo is not null)
+                    {
+                        var nos = (await _episodesRepo.GetAllAsync()).Where(e => epIds.Contains(e.EpisodeId)).Select(e => e.SeriesEpNo).OrderBy(n => n).ToList();
+                        if (nos.Count > 0) epLabel = $"第 {nos[0]}〜{nos[^1]} 話（{nos.Count} 話）";
+                    }
+                    // 作品単位の本編（映画など）はプレイリストと尺と作品で示す（併映と続いているプレイリストは中の作品も並べる）
+                    var features = bd.Playlists.Where(p => p.PlaylistKind == "FEATURE").ToList();
+                    if (epIds.Count == 0 && features.Count > 0)
+                    {
+                        string Describe(BdPlaylist f)
+                        {
+                            var inner = bd.Chapters.Where(c => c.PlaylistFile == f.PlaylistFile && c.SeriesId is not null && c.SeriesId != f.SeriesId)
+                                .Select(c => c.SeriesId!.Value).Distinct().ToList();
+                            string works = f.SeriesId is int fs ? TitleOf(fs) : "作品未設定";
+                            if (inner.Count > 0) works += "：" + string.Join(" → ", bd.Chapters.Where(c => c.PlaylistFile == f.PlaylistFile && c.SeriesId is not null)
+                                .OrderBy(c => c.ChapterNo).Select(c => c.SeriesId!.Value).Distinct().Select(TitleOf));
+                            return $"{f.PlaylistFile}（{f.DurationMs / 60000.0:0.#} 分）{works}";
+                        }
+                        epLabel = nl0 + string.Join(nl0, features.Select(f => "　本編 " + Describe(f)));
+                    }
+                    int unlinkedPlaylists = bd.Playlists.Count(p => p.PlaylistKind is null);
+                    string nl = Environment.NewLine;
+                    string runTimes = string.Concat(_pendingRunTimes.Select(kv => $"上映時間：{TitleOf(kv.Key)} を {kv.Value} 秒（{kv.Value / 60}:{kv.Value % 60:00}）にします" + nl));
+                    string text =
+                        (isUpdate == true ? "記録済みの Blu-ray です。読み直した内容で更新します。" : "この Blu-ray の情報を記録します。") + nl + nl
+                        + $"ディスク名：{bd.Disc.BdmtName ?? "（なし）"}　ラベル：{bd.Disc.VolumeLabel ?? "（なし）"}" + nl
+                        + $"ディスク ID：{bd.Disc.DiscId}{(bd.Disc.DiscIdSource == "HASH" ? "（id.bdmv なし。管理ファイルのハッシュ）" : "")}" + nl
+                        + $"タイトル {bd.Titles.Count}・プレイリスト {bd.Playlists.Count}・チャプター {bd.Chapters.Count}・クリップ {bd.Clips.Count}・マーク {bd.Marks.Count}・命令 {bd.MovieObjectCommands.Count}" + nl
+                        + $"作品：{seriesLabel}　話：{epLabel}" + (unlinkedPlaylists > 0 ? $"　種別未判定のプレイリスト {unlinkedPlaylists}" : "") + nl
+                        + (bd.Disc.CatalogNo is null ? "品番：未設定（「既存ディスクと照合 / 新規登録...」で結びつけられます）" : $"品番：{bd.Disc.CatalogNo}") + nl
+                        + runTimes + nl
+                        + "記録しますか？（当て方は「話とパートを当てる...」で直してから記録し直せます）";
+                    if (MessageBox.Show(this, text, "Blu-ray の情報を記録", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+                }
+                await _bdRepo.ReplaceAllAsync(bd);
+                string runTimeNote = "";
+                if (_pendingRunTimes.Count > 0 && _seriesRepo is not null)
+                {
+                    foreach (var (seriesId, seconds) in _pendingRunTimes) await _seriesRepo.UpdateRunTimeSecondsAsync(seriesId, seconds);
+                    runTimeNote = $"・上映時間を {_pendingRunTimes.Count} 作品に入れました";
+                    _pendingRunTimes.Clear();
+                }
+                lblDbStatus.Text = $"Blu-ray の情報を記録しました（ディスク ID {bd.Disc.DiscId[..8]}…）{runTimeNote}";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Blu-ray の情報を記録できませんでした: " + ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 「話とパートを当てる…」ボタン。読み取ったプレイリストとチャプターに話・パートを当てるダイアログを開き、
+        /// OK なら一覧の「話 / パート」列を描き直す（bd_* への記録は「Blu-ray の情報を記録」で行う）。
+        /// </summary>
+        private async Task OpenEpisodeLinkAsync()
+        {
+            if (_lastBd is null || _seriesRepo is null || _episodesRepo is null || _episodePartsRepo is null) return;
+            try
+            {
+                using var dlg = new EpisodeLinkDialog(_seriesRepo, _episodesRepo, _episodePartsRepo, _lastBd.Chapters, _lastBd.Playlists, _lastBd.Disc.SeriesId);
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                _lastBd.Disc.SeriesId = dlg.SelectedSeriesId ?? _lastBd.Disc.SeriesId;
+                // 作品単位の本編の尺（黒みを引いた秒数）は「Blu-ray の情報を記録」で bd_* と一緒に作品へ入れる
+                _pendingRunTimes.Clear();
+                foreach (var (seriesId, seconds) in dlg.FeatureRunTimes) _pendingRunTimes[seriesId] = seconds;
+                RefreshEpisodeLinkColumn();
+                await Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "話とパートを当てられませんでした: " + ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 一覧の「話 / パート」列を bd_* の当て方で描き直す。一覧の行（MplsParser が短尺や境界の極短チャプターを除いたもの）と
+        /// bd_chapters（Entry マークで区切った生の区間）は同じプレイリストの中で尺の近い順に対応づける。
+        /// </summary>
+        private void RefreshEpisodeLinkColumn()
+        {
+            if (_lastBd is null) return;
+            foreach (var group in listView.Items.Cast<ListViewItem>()
+                         .Where(it => it.Tag is ListRowInfo { Kind: ListRowKind.Chapter, Chapter: not null })
+                         .GroupBy(it => ((ListRowInfo)it.Tag!).PlaylistTag, StringComparer.OrdinalIgnoreCase))
+            {
+                var raw = _lastBd.Chapters.Where(c => string.Equals(c.PlaylistFile, group.Key, StringComparison.OrdinalIgnoreCase)).OrderBy(c => c.ChapterNo).ToList();
+                int cursor = 0;
+                foreach (var item in group)
+                {
+                    var vc = ((ListRowInfo)item.Tag!).Chapter!;
+                    BdChapter? hit = null;
+                    for (int k = cursor; k < raw.Count; k++)
+                    {
+                        if (Math.Abs((long)raw[k].DurationMs - (long)vc.DurationMs) <= 1500) { hit = raw[k]; cursor = k + 1; break; }
+                    }
+                    while (item.SubItems.Count < 5) item.SubItems.Add("");
+                    item.SubItems[4].Text = hit is null ? ""
+                        : hit.EpisodeId is int eid && hit.EpisodeSeq is byte seq ? $"ep {eid} / {seq}"
+                        : (hit.ChapterKind ?? "");
+                }
+            }
         }
 
         /// <summary>読み取り結果から DB 連携用のディスクスナップショットを組み立てる。 BD/DVD では物理トラックは空のまま、代わりに video_chapters 用の章リストを組み立てる。</summary>
@@ -1023,6 +1345,21 @@ namespace PrecureDataStars.BDAnalyzer
             // Track は BD/DVD では使わないので常に空リストで返す。
             return new LastReadSnapshot(disc, new List<Track>(), videoChapters);
         }
+
+        /// <summary>読み取った Blu-ray の情報（bd_*）に盤の品番を結びつける。video_chapters の登録に続けて呼ぶ。未記録なら記録もする。</summary>
+        private async Task LinkBdCatalogAsync(string catalogNo)
+        {
+            if (_bdRepo is null || _lastBd is null) return;
+            _lastBd.Disc.CatalogNo = catalogNo;
+            if (await _bdRepo.GetDiscAsync(_lastBd.Disc.DiscId) is null)
+                await _bdRepo.ReplaceAllAsync(_lastBd);
+            else
+                await _bdRepo.LinkCatalogAsync(_lastBd.Disc.DiscId, catalogNo);
+        }
+
+        /// <summary>完了メッセージに添える、Blu-ray の情報との結びつき（bd_* が無ければ空文字）。</summary>
+        private string BdLinkSummary()
+            => _lastBd is { } bd ? $"、Blu-ray の情報（ディスク ID {bd.Disc.DiscId[..8]}…）に品番を結びつけ" : "";
 
         /// <summary>ListView 行の種別。</summary>
         private enum ListRowKind
@@ -1263,9 +1600,10 @@ namespace PrecureDataStars.BDAnalyzer
                         foreach (var vc in _lastRead.VideoChapters) vc.CatalogNo = disc.CatalogNo;
                         await _videoChaptersRepo.ReplaceAllForDiscAsync(disc.CatalogNo, _lastRead.VideoChapters);
                     }
+                    await LinkBdCatalogAsync(disc.CatalogNo);
 
                     MessageBox.Show(this,
-                        $"ディスク [{disc.CatalogNo}] に BD/DVD 物理情報とチャプター {_lastRead.VideoChapters.Count} 件を反映しました。\n"
+                        $"ディスク [{disc.CatalogNo}] に BD/DVD 物理情報とチャプター {_lastRead.VideoChapters.Count} 件を反映し{BdLinkSummary()}ました。\n"
                         + "（タイトル・種別等の Catalog 情報は保全されます）",
                         "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
@@ -1326,10 +1664,11 @@ namespace PrecureDataStars.BDAnalyzer
                         foreach (var vc in _lastRead.VideoChapters) vc.CatalogNo = disc.CatalogNo;
                         await _videoChaptersRepo.ReplaceAllForDiscAsync(disc.CatalogNo, _lastRead.VideoChapters);
                     }
+                    await LinkBdCatalogAsync(disc.CatalogNo);
 
                     MessageBox.Show(this,
                         $"既存商品 [{product.ProductCatalogNo}] にディスク [{disc.CatalogNo}] を追加し、" +
-                        $"チャプター {_lastRead.VideoChapters.Count} 件を登録しました。\n" +
+                        $"チャプター {_lastRead.VideoChapters.Count} 件を登録し{BdLinkSummary()}ました。\n" +
                         $"商品配下のディスクは品番順に組内番号を再採番済み。",
                         "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
@@ -1365,9 +1704,10 @@ namespace PrecureDataStars.BDAnalyzer
                         foreach (var vc in _lastRead.VideoChapters) vc.CatalogNo = disc.CatalogNo;
                         await _videoChaptersRepo.ReplaceAllForDiscAsync(disc.CatalogNo, _lastRead.VideoChapters);
                     }
+                    await LinkBdCatalogAsync(disc.CatalogNo);
 
                     MessageBox.Show(this,
-                        $"新規商品 [{disc.CatalogNo}] とディスクを作成し、チャプター {_lastRead.VideoChapters.Count} 件を登録しました。\n"
+                        $"新規商品 [{disc.CatalogNo}] とディスクを作成し、チャプター {_lastRead.VideoChapters.Count} 件を登録し{BdLinkSummary()}ました。\n"
                         + "チャプターのタイトル・パート種別は video_chapters テーブル上で NULL なので、Catalog GUI から補完してください。",
                         "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }

@@ -136,6 +136,7 @@ public partial class CreditMastersEditorForm
             txtPFullName.Text = p.FullName;
             txtPFullNameKana.Text = p.FullNameKana ?? "";
             txtPNameEn.Text = p.NameEn ?? "";
+            txtPDisambiguation.Text = p.Disambiguation ?? "";
             LoadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown, cboPBirthYearVis,
                 cboPBirthMonth, cboPBirthDay,
                 p.BirthYear, p.BirthYearVisibility, p.BirthMonth, p.BirthDay);
@@ -158,6 +159,7 @@ public partial class CreditMastersEditorForm
         txtPFamily.Text = ""; txtPGiven.Text = "";
         txtPFullName.Text = ""; txtPFullNameKana.Text = "";
         txtPNameEn.Text = ""; txtPNotes.Text = "";
+        txtPDisambiguation.Text = "";
         txtPOfficialUrl.Text = ""; txtPAffiliationUrl.Text = ""; txtPXUrl.Text = "";
         txtPInstagramUrl.Text = ""; txtPYoutubeUrl.Text = "";
         txtPWikipediaUrl.Text = "";
@@ -203,6 +205,7 @@ public partial class CreditMastersEditorForm
                 current.FullName = txtPFullName.Text.Trim();
                 current.FullNameKana = NullIfEmpty(txtPFullNameKana.Text);
                 current.NameEn = NullIfEmpty(txtPNameEn.Text);
+                current.Disambiguation = NullIfEmpty(txtPDisambiguation.Text);
                 var pbd = ReadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown,
                     cboPBirthYearVis, cboPBirthMonth, cboPBirthDay);
                 current.BirthYear = pbd.Year;
@@ -234,6 +237,7 @@ public partial class CreditMastersEditorForm
                     FullName = txtPFullName.Text.Trim(),
                     FullNameKana = NullIfEmpty(txtPFullNameKana.Text),
                     NameEn = NullIfEmpty(txtPNameEn.Text),
+                    Disambiguation = NullIfEmpty(txtPDisambiguation.Text),
                     BirthYear = pbd.Year,
                     BirthYearVisibility = pbd.Visibility,
                     BirthMonth = pbd.Month,
@@ -393,6 +397,20 @@ public partial class CreditMastersEditorForm
             await _companiesRepo.SoftDeleteAsync(c.CompanyId, Environment.UserName);
             gridCompanies.DataSource = (await _companiesRepo.GetAllAsync()).ToList();
             ClearCompanyForm();
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
+    /// <summary>選択中の人物の代表作（プリキュアを除く）を編集するダイアログを開く。代表作は人物本体の列を変えないので、閉じた後の再読み込みはしない。</summary>
+    private void OpenPersonNotableWorksEditor()
+    {
+        try
+        {
+            if (gridPersons.CurrentRow?.DataBoundItem is not Person p || gridPersons.SelectedRows.Count == 0)
+            { MessageBox.Show(this, "代表作を編集する人物を選択してください。"); return; }
+
+            using var dlg = new Dialogs.PersonNotableWorksEditorDialog(_personNotableWorksRepo, p.PersonId, p.FullName);
+            dlg.ShowDialog(this);
         }
         catch (Exception ex) { this.ShowError(ex); }
     }

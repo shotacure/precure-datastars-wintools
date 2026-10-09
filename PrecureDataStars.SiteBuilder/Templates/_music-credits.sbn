@@ -1,0 +1,106 @@
+  {{## 音楽クレジットの節（人物詳細・ユニット詳細で共用。モデルの MusicSections / MusicSongTotal / MusicBgmTotal / MusicDiscTotal を読む）。
+       本編クレジットとは別セクションにし、本編クレジットの「役職 → シリーズの枠」と同じ見た目で、
+       区分（作詞・作曲・編曲 / 歌唱 / コーラスのみ / 演奏等 / レコーディング / 音盤製作）の見出しの下に、
+       関わった先（歌 / 劇伴 / 音盤）の枠を並べる。枠は既定で閉じ、開閉ボタンに件数を添える。何も無いものは出さない。
+       見出しと区分の札：🎵＝歌の曲数、🎼＝劇伴（録音・シリーズの行）の件数、💿＝盤の枚数（重複を除く）。
+       ・曲のカード：song_credits / song_recording_singers 由来。その区分の役職だけをバッジに持つ。
+       ・劇伴：bgm_cue_credits 由来の作曲・編曲を、シリーズごとの使用話数つきで出す（作詞・作曲・編曲の区分だけ）。
+       ・音盤の音楽クレジット：music_credits 由来。紐付け先（曲・録音・劇伴セッション・商品）ごとに 1 行。 ##}}
+  {{~ if (array.size MusicSections) > 0 ~}}
+  <section id="music-credits">
+    <h2>音楽クレジット
+      <span class="muted role-count"><span class="count-badges">{{~ if MusicSongTotal > 0 ~}}<span class="count-pill count-pill-song">🎵 {{ MusicSongTotal }}</span>{{~ end ~}}{{~ if MusicBgmTotal > 0 ~}}<span class="count-pill count-pill-bgm">🎼 {{ MusicBgmTotal }}</span>{{~ end ~}}{{~ if MusicDiscTotal > 0 ~}}<span class="count-pill count-pill-cd">💿 {{ MusicDiscTotal }}</span>{{~ end ~}}</span></span>
+    </h2>
+    {{~ for ms in MusicSections ~}}
+    <h4 class="credit-role-heading">
+      <span class="credit-role-link">{{ ms.Label | html.escape }}</span>
+      <span class="muted role-count"><span class="count-badges">{{~ if ms.SongCount > 0 ~}}<span class="count-pill count-pill-song">🎵 {{ ms.SongCount }}</span>{{~ end ~}}{{~ if ms.BgmCount > 0 ~}}<span class="count-pill count-pill-bgm">🎼 {{ ms.BgmCount }}</span>{{~ end ~}}{{~ if ms.DiscCount > 0 ~}}<span class="count-pill count-pill-cd">💿 {{ ms.DiscCount }}</span>{{~ end ~}}</span></span>
+    </h4>
+    <ul class="credit-card-list">
+      {{~ for k in ms.Kinds ~}}
+      <li class="credit-card">
+        <details class="credit-card-details">
+          <summary class="credit-card-head"><span class="credit-card-series">{{ k.Label | html.escape }}</span><span class="credit-card-toggle">一覧{{~ if k.CountLabel != "" ~}}（{{ k.CountLabel }}）{{~ end ~}}</span></summary>
+          <div class="music-credit-card-body">
+            {{~ if (array.size k.SongCards) > 0 ~}}
+            <ul class="person-songs-card-list">
+              {{~ for c in k.SongCards ~}}
+              <li class="person-song-card cat-{{ c.BadgeClassSuffix }}">
+                <a class="person-song-card-link" href="{{ c.SongUrl }}">
+                  <div class="person-song-card-head">
+                    <div class="person-song-card-roles">
+                      {{~ for b in c.Roles ~}}
+                      <span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>
+                      {{~ end ~}}
+                    </div>
+                    {{~ if c.BadgeClassSuffix != "" ~}}
+                    <span class="songs-card-badge songs-badge-{{ c.BadgeClassSuffix }} person-song-cat-badge">{{ c.MusicClassLabel | html.escape }}</span>
+                    {{~ end ~}}
+                  </div>
+                  <div class="person-song-card-title">{{ c.Title | html.escape }}</div>
+                  {{~ if c.AliasNote != "" ~}}<div class="person-song-card-alias muted">{{ c.AliasNote | html.escape }}</div>{{~ end ~}}
+                  {{~ if c.SeriesTitle != "" ~}}
+                  <div class="person-song-card-series muted">
+                    {{ c.SeriesTitle | html.escape }}
+                    {{~ if c.SeriesStartYearLabel != "" ~}}<span class="series-year">({{ c.SeriesStartYearLabel }})</span>{{~ end ~}}
+                  </div>
+                  {{~ end ~}}
+                </a>
+              </li>
+              {{~ end ~}}
+            </ul>
+            {{~ end ~}}
+            {{~ if (array.size k.Items) > 0 ~}}
+            <ul class="music-credit-item-list">
+              {{~ for it in k.Items ~}}
+              <li class="music-credit-item">
+                <span class="music-credit-item-roles">{{~ for b in it.Roles ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>
+                <a class="music-credit-item-title" href="{{ it.Url }}">{{ it.Title | html.escape }}</a>
+                {{~ if it.SubLabel != "" ~}}<span class="muted music-credit-item-sub">{{ it.SubLabel | html.escape }}</span>{{~ end ~}}
+                {{~ if it.AliasNote != "" ~}}<span class="muted music-credit-item-sub">（{{ it.AliasNote | html.escape }}）</span>{{~ end ~}}
+              </li>
+              {{~ end ~}}
+            </ul>
+            {{~ end ~}}
+            {{## 劇伴の本編使用（episode_uses）があるときの、シリーズごとの使用話数。 ##}}
+            {{~ for g in k.BgmGroups ~}}
+            <h5 class="credit-role-heading">
+              <span class="credit-role-link">{{ g.RoleLabel | html.escape }}</span>
+              <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}</span></span>
+            </h5>
+            <ul class="credit-card-list">
+              {{~ for r in g.SeriesRows ~}}
+              <li class="credit-card">
+                {{~ capture card_head ~}}
+                    <a class="credit-card-series" href="/series/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>
+                    {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
+                    {{~ if r.IsAllEpisodes ~}}
+                    <span class="credit-card-range muted">(全話)</span>
+                    {{~ else if r.RangeLabel != "" ~}}
+                    <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
+                    {{~ end ~}}
+                {{~ end ~}}
+                {{~ if r.Episodes.size > 0 ~}}
+                <details class="credit-card-details">
+                  <summary class="credit-card-head">{{ card_head }}<span class="credit-card-toggle">各話（{{ r.Episodes.size }}話）</span></summary>
+                  <ul class="credit-card-episodes">
+                    {{~ for ep in r.Episodes ~}}
+                    <li><a href="{{ ep.Url }}">{{ ep.Label | html.escape }}</a><span class="muted">{{ ep.OnAirLabel }}</span></li>
+                    {{~ end ~}}
+                  </ul>
+                </details>
+                {{~ else ~}}
+                <div class="credit-card-head">{{ card_head }}</div>
+                {{~ end ~}}
+              </li>
+              {{~ end ~}}
+            </ul>
+            {{~ end ~}}
+          </div>
+        </details>
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}

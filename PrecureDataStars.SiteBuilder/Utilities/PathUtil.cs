@@ -75,6 +75,10 @@ public static class PathUtil
     /// </summary>
     public static string CharacterUrl(int characterId) => _entityUrls.CharacterUrl(characterId) ?? $"/characters/{characterId}/";
 
+    /// <summary>ユニット詳細ページの URL パス（名前ベース、パーセントエンコード済み。例 <c>/units/ぷりきゅあ5/</c>）。
+    /// 人物の行を持たない名義のうちユニットとしてページを持つものだけ。それ以外の名義は null。</summary>
+    public static string? UnitUrl(int personAliasId) => _entityUrls.UnitUrl(personAliasId);
+
     /// <summary>書籍詳細ページの URL パス（ISBN-13 等のコードベース。例 <c>/books/9784063646545/</c>）。</summary>
     public static string BookUrl(int bookId) => _entityUrls.BookUrl(bookId) ?? $"/books/{bookId}/";
 
@@ -135,7 +139,8 @@ public static class PathUtil
         => IsSingerRole(roleCode) ? CreatorsSingersUrl()
          : roleCode is PrecureDataStars.Data.Models.SongCreditRoles.Lyrics
              or PrecureDataStars.Data.Models.SongCreditRoles.Composition
-             or PrecureDataStars.Data.Models.SongCreditRoles.Arrangement ? CreatorsRoleUrl(roleCode)
+             or PrecureDataStars.Data.Models.SongCreditRoles.Arrangement
+             or PrecureDataStars.Data.Models.SongCreditRoles.MedleyArrangement ? CreatorsRoleUrl(roleCode)
          : "";
 
     /// <summary>歌唱系の役職（歌・コーラス・台詞）か。これらは役職詳細ページを持たず歌唱ページに集約する。</summary>

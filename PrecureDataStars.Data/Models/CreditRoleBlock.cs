@@ -47,6 +47,12 @@ public sealed class CreditRoleBlock
     /// </summary>
     public string? HeadingText { get; set; }
 
+    /// <summary>
+    /// ブロック先頭の見出しを斜体で出すか（画面どおり。プリキュアオールスターズDX の声の出演の作品名など）。
+    /// 見出しが無いブロックでは意味を持たない。
+    /// </summary>
+    public bool HeadingItalic { get; set; }
+
     /// <summary>見出し（作品または文字）を持つか。</summary>
     public bool HasHeading => HeadingSeriesId is not null || !string.IsNullOrEmpty(HeadingText);
 

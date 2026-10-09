@@ -40,6 +40,14 @@ internal sealed class InvolvementGroup
     /// <summary>このグループ内に CharacterNames が設定された行が 1 件以上あるか（声優役判定）。</summary>
     public bool HasCharacterColumn { get; set; }
 
+    /// <summary>
+    /// その役職を初めて担当した回のリンク付き HTML（<see cref="Pipeline.FirstAppearance.ToHtml"/>：「『作品』第N話（放送日）」、
+    /// 映画は「『作品』（公開日公開）」）。人物詳細の本編クレジットで役職の見出しの下に添える。求まらないときは空文字。
+    /// </summary>
+    public string FirstCreditHtml { get; set; } = "";
+    /// <summary><see cref="FirstCreditHtml"/> の前に置く語（「初担当」、声の出演は「初出演」）。</summary>
+    public string FirstCreditLabel { get; set; } = "";
+
     /// <summary>声の出演で複数の役（キャラ）を演じている場合の「役」大くくりサブセクション。
     /// 空のときはテンプレ側が従来の <see cref="SeriesRows"/> 表示にフォールバックする。</summary>
     public IReadOnlyList<CharacterRoleSection> CharacterSections { get; set; } = Array.Empty<CharacterRoleSection>();

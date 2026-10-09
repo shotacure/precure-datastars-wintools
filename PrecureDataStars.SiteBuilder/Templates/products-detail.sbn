@@ -43,6 +43,8 @@
                target="_blank" rel="nofollow sponsored noopener">Amazon で聴く (デジタル)</a></li>
         {{~ end ~}}
       </ul>
+      {{## 購入リンクは Amazon アソシエイトの広告なので、リンクのそばで広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。 ##}}
+      <p class="muted product-links-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
     </div>
     {{~ end ~}}
   </section>

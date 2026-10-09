@@ -18,6 +18,7 @@ precure-datastars-wintools.sln
 ├── PrecureDataStars.Catalog.Common … カタログ GUI 共通（Dialog/Service/CSV Import）
 ├── PrecureDataStars.TemplateRendering … 役職テンプレ DSL 展開エンジン（共通ライブラリ）
 ├── PrecureDataStars.AmazonPaApi … Amazon Creators API クライアントライブラリ
+├── PrecureDataStars.AudioFingerprint … 音の特徴量（ランドマーク指紋）の計算ライブラリ
 │
 ├── PrecureDataStars.Episodes … エピソード管理 GUI（WinForms）
 ├── PrecureDataStars.Catalog … カタログ管理 GUI（WinForms）
@@ -25,7 +26,7 @@ precure-datastars-wintools.sln
 ├── PrecureDataStars.TitleCharStatsRefresh … サブタイトル文字統計の作り直し（内部用コンソール）
 │
 ├── PrecureDataStars.BDAnalyzer … Blu-ray/DVD チャプター解析（WinForms）＋DB 連携
-├── PrecureDataStars.CDAnalyzer … CD-DA トラック解析（WinForms）＋DB 連携
+├── PrecureDataStars.CDAnalyzer … CD-DA トラック解析・音の特徴の記録（WinForms）＋DB 連携
 ├── PrecureDataStars.OaVerifier … 本放送フォーマット検証（WinForms / TS 再生）＋DB 連携
 │
 ├── PrecureDataStars.SiteBuilder … Web 公開用静的サイト生成（コンソール）
@@ -35,7 +36,8 @@ precure-datastars-wintools.sln
     ├── schema.sql … MySQL スキーマ定義（DDL、新規構築用）
     ├── migrations/ … バージョン別差分 SQL（スキーマ変更・マスタ変更のみ、バージョン昇順に適用）
     └── health_check/
-        └── master_consistency_check.sql … マスタ整合性の一括診断（SELECT のみ）
+        ├── master_consistency_check.sql … マスタ整合性の一括診断（SELECT のみ）
+        └── role_label_text_list.sql … クレジットの役職の表記（画面の表記・役職名の誤記・1 行にまとめた役職の区切り）の一覧（SELECT のみ）
 ```
 
 ### プロジェクト詳細
@@ -45,12 +47,13 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.Data** | クラスライブラリ | Model（Episode, Series, Product, Disc, Track, Song, SongRecording, BgmCue, BgmSession, VideoChapter 等）・Dapper ベースの Repository・DB 接続ファクトリを提供。全アプリケーションから参照される共通データ層。 |
 | **PrecureDataStars.Data.TitleCharStatsJson** | クラスライブラリ | サブタイトル文字列を NFKC 正規化し、書記素単位でカテゴリ分類した統計 JSON を生成する `TitleCharStatsBuilder`。 |
 | **PrecureDataStars.Catalog.Common** | クラスライブラリ | CDAnalyzer / BDAnalyzer / Catalog GUI で共有するダイアログ（`DiscMatchDialog`・`NewProductDialog`・`ConfirmAttachDialog`）、`DiscRegistrationService`（ディスク照合 → 登録ビジネスロジック）、歌・劇伴の CSV 取り込みサービス（`SongCsvImportService` / `BgmCueCsvImportService`）、最小 CSV リーダー（`SimpleCsvReader`、UTF-8/カンマ区切り、外部依存なし）を提供。 |
+| **PrecureDataStars.AudioFingerprint** | クラスライブラリ | 音の特徴量（ランドマーク指紋）を取る `LandmarkFingerprinter`（WinForms・DB に依存しない純粋な計算）。16 ビット LE の PCM を受けてモノ化 → 11,025 Hz に間引き（窓付き sinc の FIR ローパス）→ 512 点 FFT（ホップ 256 ≒ 23 ms、Hann 窓）のスペクトログラム → 時間・周波数の局所的なピーク（1 秒あたり上限 24）→ 近くの時刻のピークとの対（1 ピークから 3 つまで、時刻差 2〜63 フレーム、周波数差 ±31 ビン）を「ビン 1（8 ビット）・ビンの差（6 ビット）・時刻の差（6 ビット）」の 20 ビットのハッシュにして、出現したフレーム番号と組にする。1 項目 6 バイト（ハッシュ 3 バイト LE ＋ フレーム 3 バイト LE）の時刻順のバイト列（`LandmarkFingerprint.ToBytes` / `ParseEntries`）。あわせて PCM 全体の SHA-256 を返す。取り方の版は `LandmarkFingerprinter.MethodVersion`（定数を変えたら上げる）。CDAnalyzer が使う。 |
 | **PrecureDataStars.TemplateRendering** | クラスライブラリ | 役職テンプレ DSL の展開エンジン。Catalog 側プレビュー（`CreditPreviewRenderer`）と SiteBuilder 側 HTML 生成（`CreditTreeRenderer`）の双方から参照される。`TemplateContext` / `TemplateNode` / `TemplateParser` / `RoleTemplateRenderer` / `Handlers/ThemeSongsHandler` と、`LookupCache` 抽象化のための `ILookupCache` インターフェースを保持。`net9.0`（Forms 非依存）構成。 |
 | **PrecureDataStars.AmazonPaApi** | クラスライブラリ | Amazon Creators API のクライアントライブラリ。OAuth 2.0 トークン管理（v2.x Cognito / v3.x Login with Amazon の自動切替・キャッシュ）・GetItems・SearchItems・App.config からの Credential ID / Secret / Version 読み出しヘルパを提供。Catalog（商品検索ダイアログと一括画像取得）と AmazonSync コンソールから ProjectReference 経由で参照される。 |
 | **PrecureDataStars.Episodes** | WinForms GUI | シリーズ・エピソードの CRUD、MeCab によるかな/ルビ自動生成、パート構成の DnD 編集、URL 自動提案、文字統計表示、偏差値ランキング。 |
 | **PrecureDataStars.Catalog** | WinForms GUI | 音楽・映像カタログ管理。閲覧専用の「ディスク・トラック閲覧」（翻訳値で一覧表示、ディスク総尺・トラック尺は M:SS.fff 表示、トラック単位で作詞／作曲／編曲を独立表示、劇伴は M 番号・メニュー表記の注釈付き）と、6 つの編集フォーム（商品・ディスク／トラック・歌・劇伴・マスタ類・クレジット系マスタ）をメニューから切り替える。クレジット系マスタは 15 タブ構成の `CreditMastersEditorForm`（プリキュア／人物／人物名義／企業／企業屋号／ロゴ／キャラクター／キャラクター名義／キャラクター続柄／家族関係／役職／役職テンプレート／エピソード主題歌／シリーズ種別／パート種別）。声優キャスティングは `credit_block_entries` の `CHARACTER_VOICE` エントリに一元化。`MusicCreditsMigrationForm` は未マッチング名義一覧 → 人物・名義登録 → 全シリーズ全列での構造化テーブル INSERT までをワンストップで実行（`SongCreditsRepository` / `SongRecordingSingersRepository` / `BgmCueCreditsRepository` を経由）。人物・キャラクターの編集タブには誕生日入力欄（生年 NumericUpDown ＋「不明」チェック／公開可否コンボ／月・日コンボ）、人物タブには没年月日入力欄（没年 NumericUpDown ＋「なし」チェック／月・日コンボ）。かな・英語表記は `KanaRomanizer`（パスポート式、長音符無音・撥音 n・促音は子音重ね）で自動補完候補を提示。 |
 | **PrecureDataStars.BDAnalyzer** | WinForms GUI | Blu-ray (.mpls) / DVD (.IFO) のチャプター情報を解析し、各章の尺・累積時間を表示。ディスク挿入の自動検知対応。DVD は `VIDEO_TS.IFO` 指定でフォルダ全走査モード（多話収録 DVD 対応）。Blu-ray も `BDMV/PLAYLIST` 配下指定時はフォルダ全走査モード。DB 連携パネルで既存ディスクとの照合・新規商品登録が可能。 |
-| **PrecureDataStars.CDAnalyzer** | WinForms GUI | CD-DA ディスクの TOC・MCN・ISRC・CD-Text を SCSI MMC コマンドで直接読み取り。DB 連携パネルで MCN → CDDB-ID → TOC 曖昧の優先順でディスク照合し、既存反映 or 新規商品＋ディスク登録までを 1 画面で実行。メディア挿入時に MMC `GET CONFIGURATION` で Current Profile を確認し、CD 系プロファイル以外（DVD / BD / HD DVD）はハンドルを即クローズ。 |
+| **PrecureDataStars.CDAnalyzer** | WinForms GUI | CD-DA ディスクの TOC・MCN・ISRC・CD-Text を SCSI MMC コマンドで直接読み取り。DB 連携パネルで MCN → CDDB-ID → TOC 曖昧の優先順でディスク照合し、既存反映 or 新規商品＋ディスク登録までを 1 画面で実行。品番の決まった盤は「音の特徴を記録」で全トラックの音を READ CD で読み、トラックごとの指紋（`PrecureDataStars.AudioFingerprint`）と PCM の SHA-256 を `track_audio_fingerprints` に入れる。メディア挿入時に MMC `GET CONFIGURATION` で Current Profile を確認し、CD 系プロファイル以外（DVD / BD / HD DVD）はハンドルを即クローズ。 |
 | **PrecureDataStars.OaVerifier** | WinForms GUI | 本放送フォーマット検証ツール。地デジ録画 TS（descrambled）を LibVLC で再生し、TOT（PID 0x0014）から放送日を確定して該当エピソードを自動同定、PCR ↔ メディア時刻の写像で番組先頭（`on_air_at`）基準の各境界を頭出しする。確認のため全パートを一覧表示し、`episode_parts.notes` に `【本放送未確認】` を含むパートを薄い赤で強調。再生は「未承認パート通し」「全パート通し」の 2 種で対象パートの開始/終了境界を連続再生（確認幅は境界中心からの「始点」−3.0〜+2.0 秒・「終点」−2.0〜+3.0 秒を 0.5 秒刻みで独立指定し、既定は始点 −2.0／終点 +2.0＝前後 ±2 秒。始点 ＜ 終点 を満たさない設定はコンボを赤表示し再生を中止。手動移動は ±5/15 秒の送り戻しのみ）。フルセグは解像度最大の映像トラックを自動選択（映像/音声トラックは手動切替可）。承認したパートの notes からマーカーを除去し、エピソードエディタでの修正後に「パートデータをリロード」で再取得できる。TS と DB の食い違いは「現在位置を番組先頭に再アンカー」で吸収。 |
 | **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細・人物／企業／プリキュア／キャラクター詳細・クリエイター・楽曲・劇伴・商品・統計の各ページ群を生成する。`CreditInvolvementIndex` 経由で「人物・企業・キャラごとにどのシリーズのどのエピソードに、どの役職で関与したか」を逆引きする。 |
 | **PrecureDataStars.AmazonSync** | コンソール | `products` テーブルから ASIN を持つ商品を抽出し、Creators API GetItems で `cover_image_url` を一括更新するバッチ。鮮度切れ判定（90 日経過 or 未取得）で対象を絞り込み、Creators API レート制限（1 TPS）順守のため各リクエスト間に 1.1 秒スリープを挟む。CLI オプションは `--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--search "キーワード" --index Books`（検索の診断）／`--dry-run`（DB 更新せず表示のみ）／`--target products|books|all`（巡回対象の切替）。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録。書籍については表紙巡回（代表は紙優先）に加えて、`--import-book`（ASIN から書誌・書影・クレジットを組み立てて `books` へ登録）と `--attach-print --book-id N --print-asin X`（Kindle 版だけで登録済みの書籍へ紙版を合流）も担う。 |
@@ -140,6 +143,86 @@ dotnet run --project PrecureDataStars.Catalog
 
 完走後のコンソールに表示される「Next steps」に従って `git tag` → `git push --tags` → GitHub Releases へ `release/*.zip` をアップロードする。
 
+### 5. データベースのバックアップと復元
+
+`scripts/backup-db.ps1` が `precure_datastars` の mysqldump を取り、`scripts/restore-db.ps1` がそれを復元する。`scripts/register-backup-task.ps1` で毎日 1 回の自動実行をタスクスケジューラに登録する。保存先などの機械固有の値はリポジトリに置かず、`%APPDATA%\precure-datastars\` の設定ファイルで指定する。
+
+**仕組み**
+
+- `backup-db.ps1`：稼働中のまま整合性のとれたダンプ（`--single-transaction`）を取って gzip 圧縮し、`precure_datastars_YYYYMMDD-HHmm[_ラベル].sql.gz` の名前で保存先（`backup-settings.json` の `localDir`）に置き、同じものをミラー先（`mirrorDir`。別のドライブやクラウドの同期フォルダ）へ写す。ミラー先のドライブが無いときは警告だけ出し、写せなかった分は次回の実行で写す。ダンプの先頭にはダンプ時点の binlog の座標をコメントで記録し（`--source-data=2`）、同じ瞬間に binlog を切り替える（`--flush-logs`）。中身の大きいテーブル（`-DataExcludedTables`。既定は CD の音の特徴量 `track_audio_fingerprints`。元のディスクから取り直せる）は表の定義だけ取って中身は取らず、ダンプの末尾に `--no-data` のダンプとして足す。あわせて、リポジトリに入れていないローカル専用ファイル（`db/data-fixes/`、各プロジェクトの `App.config`、`CLAUDE.md`、`docs/*.md`、`.claude/settings.local.json`、Claude Code のメモリ）を `local-files_YYYYMMDD-HHmm_<内容ハッシュ>.zip` にまとめる（内容が前回と同じなら作らない）。結果は保存先の `backup.log` に 1 行ずつ追記する。
+- 世代の間引き：ファイル名の日時で判定し、保存先・ミラー先とも同じ規則で消す。直近 30 日（`-KeepAllDays`）はすべて残し、それより前は週に 1 つ（その週で最も古いもの）を 1 年（`-KeepWeeklyDays`）まで、さらに前は月に 1 つ（その月で最も古いもの）を無期限に残す。ラベル付き（手動）のダンプと、種類ごとの最新の 1 つは消さない。`-NoPrune` で間引きをしない。
+- サーバの binlog（`log_bin=ON`、ROW 形式、30 日保持）と組み合わせると、ダンプ以後の任意の時点まで戻せる。binlog は DB と同じディスクにあるので、守れるのは操作ミスまでで、ディスク故障にはダンプのミラーで備える。
+- `restore-db.ps1`：既定では検証用スキーマ `precure_datastars_restore_test` に復元し、本番とテーブルごとの行数と `CHECKSUM TABLE` を突き合わせて表にし（バックアップで中身を取っていないテーブルは「中身は対象外」として不一致に数えない）、終わったら検証用スキーマを消す（復元の訓練。仕組みを入れたときと月 1 回）。検証用の流し込みは binlog に残さない。`-ToProduction` で本番スキーマそのものを置き換える（直前に `-Label before-restore` の退避を取り、スキーマ名の入力で確認する）。接続は Catalog の `App.config` の root 接続文字列を読んで使う。
+
+**初期設定（1 回だけ）**
+
+1. バックアップ専用ユーザーを作る（root で実行。パスワードは任意の文字列に置き換える）：
+
+```sql
+CREATE USER 'backup_ro'@'localhost' IDENTIFIED BY '<パスワード>';
+GRANT SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES ON precure_datastars.* TO 'backup_ro'@'localhost';
+GRANT RELOAD, REPLICATION CLIENT, SHOW_ROUTINE ON *.* TO 'backup_ro'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+   `RELOAD` は `--flush-logs`、`REPLICATION CLIENT` は binlog の座標の記録、`SHOW_ROUTINE` はストアドルーチンのダンプに要る。
+
+2. 接続情報を `%APPDATA%\precure-datastars\backup.cnf` に置く（スクリプトにも引数にもパスワードを書かない）：
+
+```ini
+[client]
+user=backup_ro
+password=<パスワード>
+host=localhost
+port=3306
+```
+
+3. 保存先などを `%APPDATA%\precure-datastars\backup-settings.json` に置く（`mirrorDir` と `claudeMemoryDir` は無ければ省略。引数 `-LocalDir` などで上書きできる）：
+
+```json
+{
+  "localDir": "<保存先のディレクトリ>",
+  "mirrorDir": "<ミラー先のディレクトリ>",
+  "claudeMemoryDir": "<Claude Code のメモリのディレクトリ>"
+}
+```
+
+4. 毎日の自動実行を登録する（現在のユーザーの「ログオン中だけ実行」のタスク。管理者権限は要らない）：
+
+```powershell
+.\scripts\register-backup-task.ps1            # 毎日 04:00（PC が起きていなければ次に使えるとき）
+.\scripts\register-backup-task.ps1 -At 03:30  # 時刻を変える
+.\scripts\register-backup-task.ps1 -Unregister
+```
+
+**手動で取る**
+
+DB へ書き込む作業（クレジットの投入・欠番詰め・マイグレーション・データ修正）の前に、印をつけて取る：
+
+```powershell
+.\scripts\backup-db.ps1 -Label before-hs12
+```
+
+**復元**
+
+```powershell
+.\scripts\restore-db.ps1                                        # 最新のダンプを検証用スキーマに復元して本番と突き合わせる
+.\scripts\restore-db.ps1 -DumpFile <path>.sql.gz                # ダンプを指定
+.\scripts\restore-db.ps1 -DumpFile <path>.sql.gz -ToProduction  # 本番を置き換える
+```
+
+ダンプ以後の操作を足す（特定の時点への復元）には、ダンプの先頭のコメントに書かれた binlog のファイル名と位置から、戻したい時刻の直前までを `mysqlbinlog` で SQL に起こして流す。binlog は MySQL のデータディレクトリにあり、読むには管理者権限が要る。
+
+```powershell
+# 1. ダンプの先頭の "-- CHANGE REPLICATION SOURCE TO SOURCE_LOG_FILE='...', SOURCE_LOG_POS=...;" を見る
+# 2. そのファイルから、戻したい時刻の直前までを SQL に起こす（以降のファイルがあれば続けて並べる）
+& "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqlbinlog.exe" --database=precure_datastars `
+    --start-position=<位置> --stop-datetime="2026-10-04 12:34:56" `
+    --result-file=replay.sql "<データディレクトリ>\<ファイル名>"
+# 3. 本番に流す
+& "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root -p precure_datastars -e "source replay.sql"
+```
+
 ---
 
 ## 主要ワークフロー
@@ -168,6 +251,7 @@ dotnet run --project PrecureDataStars.TitleCharStatsRefresh -- --all            
    - **「選択したディスクに反映」**: TOC 一致した既存ディスクの物理情報のみ更新（タイトル等の Catalog 情報は保全）
    - **「選択したディスクの商品に追加」**: 既存の複数枚組商品に新しいディスクを追加するケース。`DiscMatchDialog` のグリッドで対象 BOX のいずれかのディスクを選択した状態で押下する。`ConfirmAttachDialog` で確認・シリーズ継承選択 → 品番候補入りの入力プロンプトで品番確定 → 新ディスクを INSERT。組内番号 (`disc_no_in_set`) は商品配下の全ディスクを品番順に自動再採番、`disc_count` も所属ディスク数 + 1 に自動更新される
    - **「新規商品＋ディスクとして登録」**: 商品もディスクも新規作成。品番入力 → `NewProductDialog` で商品種別・タイトル・シリーズ・発売日等を設定 → ディスク＋トラックを一括登録。`NewProductDialog` で選択したシリーズは Disc 側の `series_id` に適用される
+4. **音の特徴の記録**: DB 連携パネルの「照合・登録のあと音の特徴も記録」をオンにしておくと、照合・登録で品番が決まったら続けて記録を始める（既定はオフ。あとから「音の特徴を記録」ボタンでも取れる。品番の決まった盤だけ押せる）。全オーディオトラック（データトラックは除く）の音を SCSI MMC の READ CD (0xBE) で 2352 バイト／セクタのまま 26 セクタずつ読み（転送量の上限で失敗したらセクタ数を半分にして読み直す）、トラックごとに `LandmarkFingerprinter` で指紋と PCM 全体の SHA-256 を取って `track_audio_fingerprints` に入れる（同じトラックの行は置き換える）。1 トラック終わるごとに DB へ入れるので、「中止」で止めてもそこまでは残る。実行中はステータスにトラックと進み具合（%）を出し、読み取り・ドライブ変更・DB 連携は押せない
 
 > **非 CD メディア投入時の挙動**: DVD / Blu-ray / HD DVD 投入時は MMC `GET CONFIGURATION` の Current Profile 判定で読み取りをスキップしハンドルを即クローズする。自動検知経由はステータスラベル通知のみ、手動「読み取り」時はメディア種別を案内するダイアログを表示。GET CONFIGURATION 非対応の旧ドライブは安全側で従来の TOC 読み取りにフォールバック。
 >
@@ -190,6 +274,11 @@ dotnet run --project PrecureDataStars.TitleCharStatsRefresh -- --all            
    - `title` / `part_type` / `notes` は NULL のまま登録され、Catalog GUI 側で手動補完
    - フォルダ全走査モードでは `chapter_no` はディスク全体で通し番号、`playlist_file` にはタイトル識別子（DVD VMGI モードでは `Title_01` 等、Per-VTS モードでは `VTS_02` 等、Blu-ray は MPLS ファイル名）
    - `start_time_ms` はタイトル単位の相対時刻（各タイトルの先頭 = 0ms）
+4. **Blu-ray の情報の記録（bd_*。品番の登録は要らない）**：`BDMV/PLAYLIST` 配下の MPLS を指定して読んだときは、あわせて BDMV の管理ファイル（`CERTIFICATE/id.bdmv`・`index.bdmv`・`MovieObject.bdmv`・`PLAYLIST/*.mpls`・`CLIPINF/*.clpi`・`META/DL/bdmt_*.xml`・`AUXDATA/sound.bdmv`。いずれも暗号化されていない）から読めるものを片っ端から読み（`BdmvStructureReader`）、ディスク ID を鍵にした `bd_*` テーブル群（下記「Blu-ray の情報」）へ記録する。流れは自動で、読み取り → メニューのプレイリストの判定（トップメニュー〔タイトル番号 65535〕と最初の再生〔0〕から呼ばれ、通常のタイトルからは呼ばれないプレイリストを、種別が未判定なら MENU にする。メニューの背景ループは短いクリップを何十回もつないで本編と同じくらいの長さになることがあるので、本編の当てから外す）→ 作品の自動判定と話・パートの当て → 要約の確認 1 回（OK / キャンセル）→ 記録。記録済みの盤は当て方・作品・品番を引き継いで更新する
+   - **作品の自動判定と話・パートの当て**（`EpisodeLinkMatcher`）：全 TV 作品について、各プレイリストのチャプターの尺の並びを、その作品の各話のパートの円盤尺（`episode_parts.disc_length` を持つパートを `episode_seq` 順に並べたもの）の並びと突き合わせ、当たった話の数がいちばん多い作品を採る。1 つのプレイリストに複数の話が続けて入っている（全話連続）ときは先頭から順に話を当て、次に探す話は直前に当てた話の次の話数を優先する（当たった話が 1 つなら EPISODE、2 つ以上なら PLAY_ALL）。パート列の前後に余ったチャプターは余白（BLANK）、どの話にも合わないプレイリストは特典などの候補。同じ話は 2 つのプレイリストに当てず、複数の話が当たったときは「候補 N 話（要確認）」と添える。1 話も当たらなければ、映画など作品単位の作品（話を持たない）を、親の映画とその併映（`series.parent_series_id` で親にぶら下がる COFEATURE / SEGMENT の作品。上映順は `seq_in_parent`）のまとまりごとに上映時間（`series.run_time_seconds`）で当て（`FeatureLinkMatcher`）、当たるまとまりがただ 1 つなら親を `bd_discs.series_id` に入れ、当たったプレイリストとチャプターを FEATURE にして作品を `bd_playlists.series_id` / `bd_chapters.series_id` に入れる（話・パートは NULL）。併映が**独立して入っている**盤は作品ごとに上映時間にいちばん近い尺のプレイリストを当て、**繋がって入っている**盤（1 本のプレイリストに上映順で続く）はチャプターの尺を先頭から足して各作品の上映時間に合う切れ目でチャプターを振り分ける（すべての作品に上映時間があるときだけ。プレイリストの作品は親、前後の 30 秒以下のチャプター 2 つまでは余白）。許す差は上映時間の 5%（10 秒〜90 秒）。3 本立て（子がすべて SEGMENT）は、プレイリストに親のまとまり、チャプターに各作品を当てる。当たるまとまりが複数か上映時間が無ければ未判定のまま、「話とパートを当てる...」で作品を選ぶ。作品単位の作品を選ぶと、そのまとまりが候補になり、行ごとに「作品」を選ぶ列が出る（プレイリストの行で選んだ作品はそのチャプターに引き継がれ、併映と続いているときはチャプターの行で選び直す。作品を選ぶと種別は FEATURE になる）。「自動で当てる」は上映時間のある作品を当てる。下に作品ごとの尺の表（作品／チャプターの合計／先頭の黒み〔秒、上下ボタン付き、既定 2。本編のプレイリストはクリップの先頭フレームから始まり、先頭の黒みはクリップに焼き込まれているので尺に含まれる〕／末尾の黒み〔秒、既定 1。本編の最後にも黒みが付いている〕／上映時間＝合計 − 先頭の黒み − 末尾の黒み／今の上映時間／上映時間に入れる）を出し、チェックした作品（上映時間の無い作品は既定でオン）を OK → 「Blu-ray の情報を記録」のときに `series.run_time_seconds` へ入れる。作品の尺は、その作品だけが入っているプレイリストを優先して取る
+   - **尺の比べ方**：チャプターの尺は Blu-ray の生の値をそのまま使う。話の最後のチャプター（ユニットの末尾）には 1 秒の余白が付いているので、話の最後のパートだけ DB の円盤尺 + 1 秒を期待し、ほかは円盤尺そのままと比べて ±1 秒を許す（`EpisodeLinkMatcher.ExpectedMs` / `IsWithinTolerance`）。パートの尺は DB（`episode_parts.disc_length`）を正とし、`episode_parts` は書き換えない
+   - **手直し**：「話とパートを当てる...」で作品を選び直し、表で種別・話数・パート順を直せる（パート名には最後のパートに「＋余白 1 秒」と添え、チャプター尺との差が 1 秒を超えると赤）。差が 1 秒を超えるパートは「円盤尺の再計測の候補」として件数を出し、OK のときにも一覧で知らせる。直したら「Blu-ray の情報を記録」で記録し直す（確認 1 回）。一覧の「話 / パート」列に当て方が出る
+   - **品番との結びつき**：「既存ディスクと照合 / 新規登録...」で盤に反映・登録したとき、`bd_discs.catalog_no` にその品番を入れる（未記録なら記録もする）。品番はディスクのデータには無い
 
 ##### Blu-ray PLAYLIST フォルダ全走査の仕様
 
@@ -540,12 +629,21 @@ series_title_short,m_no_detail,session_name,section_name,m_no_class,menu_title,c
 
 - 行末コロン `XXX:` で役職開始、空行で同役職内のブロック区切り、`-` / `--` / `---` / `----` でブロック・グループ・ティア・カード区切り、タブ区切りで `col_count` 並び、`<キャラ>声優` で CHARACTER_VOICE
 - ティアは 1 カードに最大 3 段（`tier_no` 1〜3）。2 列に並んだ役職の左の列・右の列と、その下の中央に置かれた役職のように、横位置の違うまとまりごとに段を分ける。4 段目以降の `---` は適用ブロック警告になる
+- `@pos=XY` 単独行で、いまのティアの画面の上での位置を入れる。X は縦（`T`＝上 / `M`＝中 / `B`＝下）、Y は横（`L`＝左 / `C`＝中央 / `R`＝右）で、ティア区切り `---` の直後（1 つ目のティアはカードの頭）に書く（例: `@pos=TL`）。縦・横の 2 文字以外は適用不可の警告。逆翻訳では位置のあるティアの頭に出す
 - `[屋号#CIバージョン]` で LOGO エントリ（最右の `#` で屋号と CI バージョンに分解、屋号下のロゴから引き当て）
 - 行頭 `🎬`（U+1F3AC、絵文字）で本放送限定エントリ（`is_broadcast_only=1`）
 - 行頭 `& `（半角アンパサンド + 半角SP）で直前エントリと A/B 併記（保存時に `parallel_with_entry_id` 解決）
 - 行末 ` // 備考` で当該エントリの `notes` 設定
 - `@cols=N` で当該ブロックの `col_count` を明示指定
-- `@heading_series=N` / `@heading=文字` で当該ブロックの先頭に出す見出しを指定（ブロックの最初のエントリより前に書く）。`@heading_series` は見出しにする作品の `series_id`（サイトでは作品ページへのリンクになり、表示文字は作品の正式タイトル）、`@heading` は画面どおりの見出しの文字（作品の正式タイトルと表記が違うときの表示文字、または「特別出演」など作品ではない見出し）。複数の作品のキャラクターが並ぶ映画の声の出演で、作品ごとのまとまりの頭に作品名を出すのに使う
+- `@heading_series=N` / `@heading=文字` で当該ブロックの先頭に出す見出しを指定（ブロックの最初のエントリより前に書く）。`@heading_series` は見出しにする作品の `series_id`（サイトでは作品ページへのリンクになり、表示文字は作品の正式タイトル）、`@heading` は画面どおりの見出しの文字（作品の正式タイトルと表記が違うときの表示文字、または「特別出演」など作品ではない見出し）。複数の作品のキャラクターが並ぶ映画の声の出演で、作品ごとのまとまりの頭に作品名を出すのに使う。同じ位置に `@heading_italic` を書くと、その見出しを画面どおり斜体で出す（`credit_role_blocks.heading_italic`。サイトのクレジットと Catalog のプレビューは見出しを `span.block-heading-italic` で囲み、ツリーの見出しのラベルに「（斜体）」を添える）
+- `役職名: @label=文字` の役職ヘッダ（または役職開始行の直後の `@label=文字` 単独行）で、画面の役職の表記を入れる。役職名と表記（中黒・送り仮名・長音など）が違うときに書き（例: `CGプロダクションマネージャー: @label=CGプロダクション・マネージャー`）、クレジットではその表記で出す。役職名と同じ文字を書いたときは何も入れない。逆翻訳では役職ヘッダの次の行に `@label=文字` を出す
+- 役職開始行の直後の `@misprint=文字` 単独行で、画面に出た役職名の誤記を入れる。役職ヘッダには正しい役職名を書き、画面の誤った文字をこの行に書く（例: `デジタル特殊効果:` の次の行に `@misprint=デジタル特種効果`）。クレジットでは誤記を取り消し線で出し、改行して正しい表記を出す。逆翻訳では役職ヘッダの次の行（`@label=` があればその次）に出す。誤記のある役職は `A+B: @join=文字` の形にまとめず、役職ごとに書く形で出す
+- `A+B: @join=文字` の役職ヘッダで、画面で 1 行にまとめて出る役職（「キャラクターデザイン・作画監督」など）を入れる。役職 A・B を同じエントリを持つ別々の役職として作り（エントリは 1 回だけ書けばよい）、クレジットでは 1 行にまとめて出す。区切りは半角 `+` か全角 `＋` で、3 つ以上もまとめられる。まとめた行の文字は `@join=` の右側に画面どおりに書き、アプリが役職ごとの表記と区切りの文字（「・」「／」など）に分けて保存する
+  - 画面の文字が役職名どおりなら、そのまま書く（`キャラクターデザイン+作画監督: @join=キャラクターデザイン・作画監督`）。文字を「役職名 + 区切り + 役職名 …」に分け、区切りに使えるのは文字・数字以外（「・」「／」「＆」・空白など）だけ。分けられないとき、分け方が一通りに決まらないとき（「作画監督」と「作画監督補」のように役職名がほかの役職名に含まれていて、並びが文字と食い違うときなど）は、黙って保存せず適用不可の警告になる
+  - 画面の表記が役職名と違うときは、角括弧で役職の部分を示す（`@join=[キャラクター・デザイン]・[作画監督]`）。括弧の中が役職の表記、括弧の外が区切り。括弧は半角 `[ ]` と全角 `［ ］` のどちらでもよい。括弧の数が役職の数と合わないとき、括弧の中がまとめるほかの役職の名前そのもの（役職の並びと文字の並びが食い違っている）のときは適用不可の警告になる
+  - まとめた役職では強制新規（`*X` / `<*X>`）は使えない（役職の数だけ新規作成されてしまうため、適用不可の警告になる）
+  - 役職ごとに書く形もある：先頭の役職は普通に書き（表記が違えば `@label=`）、後続の役職の役職開始行の直後に `@join_previous=区切り`（区切りが無ければ `@join_previous`）を書く。区切りの前後の空白も区切りに含めたいときは `@join_previous=[　]` のように角括弧で囲む。先頭の役職に `@join=文字` を書いて後続の役職に `@join_previous` を付ける形でもよく、`@label=` や `@join_previous=区切り` と文字が食い違うときは適用不可の警告になる
+  - 逆翻訳では、エントリ・所属表記レイアウトがそろっていて後続の役職に備考が無ければ `A+B: @join=文字` の形に戻し（表記がすべて役職名どおりで一通りに分け直せるときは角括弧なし、それ以外は角括弧あり）、そろわなければ役職ごとに書く形で出す
 - `@roll` 単独行で当該カードをロール（流れるクレジット、`credit_cards.presentation='ROLL'`）にする。カード内のどこに書いてもよく、逆翻訳ではカード区切り直後に出す。1 つのクレジットの中でカード → ロール → カードと切り替わる映画の ED は、ロール部分を `@roll` のカード 1 枚で表す
 - `@notes=値` で直近スコープ（Card/Tier/Group/Role/Block のうち最後に開いたもの）の `notes` を設定
 - 修飾子は重ねがけ可（例: `🎬 & 山田 太郎 // 旧名義あり`）
@@ -786,8 +884,16 @@ Role: PRODUCTION 制作 (order 2)
 
 - **`leading_company_alias_id`** はブロック先頭に企業屋号を出すケースの特殊フィールド。連載や特殊な役職でのみ使う
 - **`heading_series_id` / `heading_text`** はブロック先頭に見出しを出すフィールド。複数の作品のキャラクターが並ぶ映画の声の出演で、作品ごとのまとまりの頭に出る作品名（`heading_series_id` で作品を指し、画面の表記が正式タイトルと違えば `heading_text` に画面どおりの文字）や、「特別出演」のような作品ではない見出し（`heading_text` だけ）を表す。見出しは屋号よりも上に出る
+- **`position_v` / `position_h`**（`credit_card_tiers`）は、ティアの画面の上での位置。縦は `T`（上）/ `M`（中）/ `B`（下）、横は `L`（左）/ `C`（中央）/ `R`（右）で、NULL は未確認。ティアは 1 枚のカードの中で横位置の違うまとまり（左の列・右の列・下の中央など）で、`tier_no` は並び順だけを表すため、画面のどこにあったかを情報として持つ。サイトのクレジットと Catalog のプレビューは今までどおりティアを縦に積んで出し、位置は表示に使わない。ツリーのティアのノードには `[位置: TL]` を添える
+- **`role_label_text`**（`credit_card_roles`）は、画面の役職の表記。役職マスタの名前（`roles.name_ja`）と表記（中黒・送り仮名・長音など）が違うときだけ入れ、NULL なら役職名で出す。役職はクレジットの画面の名前どおりに作るのが原則で、同じ役職の表記だけの揺れ（「CGプロダクションマネージャー」と「CGプロダクション・マネージャー」など）を、役職を分けずにクレジットごとに持つためのフィールド。語が違う・頭に語が付く役職（「CGテクニカルディレクター」と「テクニカルディレクター」など）は別の役職として作る。サイトのクレジット（`CreditTreeRenderer`）と Catalog のプレビュー（`CreditPreviewRenderer`）は、役職名のセル・テンプレの `{ROLE_NAME}`・シリーズ別の見出し上書き（`role_templates.content_header_override`）・絵コンテと演出をまとめた行の役職名・声の出演の末尾に足す「協力」行（`CASTING_COOPERATION` の画面の表記。TV の画面では「協力」）をこの表記で出す（サイトではリンク先は役職の詳細ページのまま）。`hide_role_name_in_credit` の役職は表記があっても役職名を出さない。人物ページ・役職ページ・シリーズ一覧・統計などの集計と表示は役職マスタの名前のまま。表記の決め方は `CreditRoleLabel`（SiteBuilder・Catalog 共通）。入っている表記の一覧は `db/health_check/role_label_text_list.sql` で出せる
+- **`title_misprint_text`**（`episode_theme_songs` / `series_theme_songs`）は、クレジットの画面に出た曲名の誤記（Yes!プリキュア5 の ED「キラキラしちゃって My True Love!」が「きらきらしちゃって MY True Love!」と出たなど。画面の曲名を丸ごと、文字もそのまま）。クレジットの主題歌の行（役職テンプレの `{SONG_TITLE}` と `{THEME_SONGS}` 既定の曲のまとまり）でだけ、誤記を取り消し線（`<del title="クレジット時の誤記">`）で出してから正しい曲名（`songs.title`）を続ける。話のページの主題歌・挿入歌の一覧や曲のページはクレジットの再現ではないので、正しい曲名だけを出す。Catalog の主題歌のコピー（他話から・範囲）と並べ替えは誤記ごと写し、入力欄の無い単発の保存（`UpsertAsync`）では誤記を渡さなければ今の誤記を残す
+- **`role_misprint_text`**（`credit_card_roles`）は、画面に出た役職名の誤記（「デジタル特殊効果」が「デジタル特種効果」と出たなど）。サイトのクレジットと Catalog のプレビューは、役職名の欄（とシリーズ別の見出し上書き）の前に誤記を取り消し線（`<del title="クレジット時の誤記">`）で置き、改行して正しい表記（`role_label_text` か役職名）を出す。役職名の欄は幅が狭いので、名前の誤記のように横に並べず正誤で改行する。1 行にまとめた役職は、画面どおりの行（誤記の役職は誤記で）を取り消し線で 1 行目、正しい行を 2 行目に出す。集計は役職のまま。ツリーの役職ノードには `[誤記: 文字]` を添える
+- **`join_previous` / `join_separator`**（`credit_card_roles`）は、画面で 1 行にまとめて出る役職（「キャラクターデザイン・作画監督　青山 充」など）の表示用フィールド。データは役職ごとに分けて同じエントリを入れ、2 つ目以降の役職に `join_previous = 1` と、直前の役職との区切りの文字 `join_separator`（「・」「／」など画面どおり、区切りが無ければ NULL）を持たせる。サイトのクレジットと Catalog のプレビューは、同じグループで役職の直後に続く `join_previous` の役職を 1 行にまとめ、各役職の表記（`role_label_text` か役職名）を区切りでつないだ文字を役職名として出す。サイトでは各役職の表記の部分を、その役職の詳細ページへのリンクにする（役職ごとの文字の範囲はデータで決まっているので、文字列を探して当てはめることはしない）。まとめる役職どうしでエントリ（ブロックの区切り・並び・参照先・表記）が一致しないときは、打ち間違いを隠さないよう別々の行で出し、SiteBuilder はビルド警告、プレビューは注記を出す（判定は `RoleJoinComparer`）。人物ページ・シリーズ一覧・統計などの集計は役職ごとに分かれたまま数える。ツリーの役職ノードには `[表記: 文字]` / `[直前の役職とまとめる 区切り「文字」]` を添える
 - **`is_broadcast_only`** はブロック・エントリ単位のフラグ。本放送と円盤・配信でロゴ画像が違う等の差し替えを `is_broadcast_only=0`（既定行）と `=1`（本放送限定行）の 2 行並立で表現
 - **`role_format_kind = 'THEME_SONG'`** の役職にはツリー上で楽曲仮想ノード（📀 Song）が自動表示される。`THEME_SONG_OP` / `THEME_SONG_ED` / `THEME_SONG_OP_COMBINED` / `INSERT_SONG` / `INSERT_SONGS_NONCREDITED` の 5 役職が該当
+- **テンプレ DSL の連名の区切りの差し替え**：主題歌の連名のプレースホルダ（`{LYRICIST}` / `{COMPOSER}` / `{ARRANGER}` / `{MEDLEY_ARRANGER}` / `{SINGER}` / `{CHORUS}`）は `sep="…"` で名義の間の区切りを差し替えられる（例: `{ARRANGER:sep="/"}`、`{SINGER:sep="<br>with "}`）。DB の区切り（`song_credits` / `song_recording_singers` の `preceding_separator`）の代わりにテンプレの文字を HTML のまま入れ、`<br>` で改行する。構造化クレジットが無い曲（フリーテキスト）には効かない。名義ごとの部品は `SongCreditsRepository` / `SongRecordingSingersRepository` の `GetDisplayHtmlPartsAsync` で取る
+- **テンプレ DSL の作曲・編曲の同一と否定の条件**：`{SAME_COMPOSER_ARRANGER}` は作曲と編曲が同じ名義（連名も同じ）なら "1"、違えば空。`{?!NAME}…{/?!NAME}` は NAME の値が空のときだけ展開する否定の条件で、`{?SAME_COMPOSER_ARRANGER}…{/?SAME_COMPOSER_ARRANGER}` と `{?!SAME_COMPOSER_ARRANGER}…{/?!SAME_COMPOSER_ARRANGER}` で「作曲：」「編曲：」の 2 行に名前を 1 つだけ出す画面と、2 行に分けて出す画面を書き分ける
+- **テンプレ DSL の `{PRODUCT:kind=…}` の表示の差し替え**：`{PRODUCT:kind=OST_MOVIE}` は作品に紐付くその種別の商品を 1 件引いて、商品名で商品詳細へリンクする。`label=…` を付けると、リンク先はそのまま表示の文字だけを差し替える（画面の表記が盤の商品名と違う作品用。`label` 内の `{SERIES_TITLE}` は作品の正式タイトルに置き換わる。例：`{PRODUCT:kind=OST_MOVIE,label=「{SERIES_TITLE}」Music Line オリジナル・サントラ}`）
 - **テンプレ DSL の `{#BLOCKS:first|rest|last}`** はブロックの位置指定ループ。`{#BLOCKS}`（filter なし）は全ブロック
 
 ---
@@ -819,7 +925,9 @@ Role: PRODUCTION 制作 (order 2)
    # 本番モード: SiteOutputDir へ生成。GA4 / AdSense タグと ads.txt を出力する
    dotnet run --project PrecureDataStars.SiteBuilder -c Release -- --production
 
-   # モードを指定せずに端末から実行すると、テスト／本番を 1 回聞く（Enter = テスト）。
+   # モードを指定せずに端末から実行すると、[T] テスト（Enter）／[P] 本番ビルドだけ／[D] 本番ビルド＋デプロイ を 1 回聞く。
+   # P は SiteOutputDir へ書き出すだけで S3 には上げない。D は --production --deploy と同じで、
+   # 本番ビルドのあと計画（アップロード・削除の件数と削除の一覧）を出し、削除があれば y/N で確かめてから反映する。
    # スクリプトやパイプ経由（標準入力か標準出力がリダイレクト）なら聞かずにテストモード
    dotnet run --project PrecureDataStars.SiteBuilder -c Release
 
@@ -836,8 +944,11 @@ Role: PRODUCTION 制作 (order 2)
 | URL パターン | 内容 |
 |---|---|
 | `/` | サイトトップ。シリーズ一覧をグリッド表示し、本サイトの特徴を紹介 |
-| `/about/` | サイト案内・運営者情報・権利表記 |
+| `/about/` | サイト案内。目的、このサイトを作った理由、運営者（X アカウント・プリキュアでの活動の経歴）、サイトの方針、権利表記、運営情報ページの案内 |
 | `/about/sources/` | データの出典と収録の決まり。エピソード・パート尺・クレジット・主題歌の使用・楽曲・劇伴・音楽商品・書籍・人物・キャラクター・記念日の種別ごとに、どこから採ったかを説明する。各ページ末尾の引用ボックスとサイト案内から案内する |
+| `/privacy/` | プライバシーポリシー。Cookie とブラウザへの保存（localStorage）、アクセス解析（GA4）、広告配信（AdSense）、外部への情報送信の一覧、お問い合わせで受け取る情報、オプトアウト。末尾に改定日 |
+| `/disclaimer/` | 免責事項。情報の正確性、著作権と商標権の整理（根拠は折りたたみ）、サブタイトル画像（本編と同様のフォントで当サイトが描いた画像であること、フォントのライセンス、使用フォントの一覧〔`subtitle_fonts`〕の折りたたみ）、当サイトの内容の利用、外部リンク、Amazon アソシエイトと商品画像、配信音源、準拠法と管轄、運営の変更。末尾に改定日 |
+| `/contact/` | お問い合わせ。X とメールの 2 窓口、誤りの報告の仕方、ご本人・所属先の方への案内（載せている情報の範囲）、引用・取材のご依頼、返信について |
 | `/series/` | 全シリーズ索引。種別・話数併記 |
 | `/series/{slug}/` | シリーズ詳細。基本情報 → 関連作品 → プリキュア → メインスタッフ → 主題歌・挿入歌 → クレジット → BGM リスト → エピソード一覧 → 劇伴 → 外部サイト |
 | `/series/{slug}/{seriesEpNo}/` | エピソード詳細（中核ページ） |
@@ -845,9 +956,10 @@ Role: PRODUCTION 制作 (order 2)
 | `/creators/staff/` | スタッフ一覧。役職順（既定）/ 五十音順 / 初参加順（シリーズ別セクション）/ 参加回数順 の 4 タブ。役職順は「TV シリーズでクレジットされた役職」と「映画でのみクレジットされた役職」の 2 セクションに分ける。役職順以外は人物と企業・団体を 1 リストに混在（個人/団体バッジ＋絞り込みトグル）。一度もクレジットの無い役職は索引にも役職詳細ページにも出さない。主題歌・挿入歌の使用を経由した関与（楽曲の作家・歌唱）は数えず、作詞・作曲・編曲・歌唱系の役職も役職順に載せない（音楽制作・歌唱ページに分ける） |
 | `/creators/roles/{role_code}/` | 役職詳細。当該役職に関わった人物・企業/団体を 1 リストに混在し、五十音順 / 初参加順 / 担当回数順 のタブで切替。最後に年表タブ（担当の移り変わりの線表。下記）を置く |
 | `/creators/music-production/` | 音楽制作一覧。役職（既定。`roles.music_credit_group` の区分ごとに役職を並べ、役職詳細へ送る。歌唱系の役職は歌唱ページが担うので載せない）/ 歌（詞曲）（`song_credits` と曲・録音に付いた `music_credits` の作詞・作曲・編曲）/ 歌（演奏）（曲・録音に付いた `music_credits` の演奏・コーラス等と、歌唱ページの歌手に載らない人の本人名義での歌唱（コーラスだけ・メンバー名を出さないユニットのメンバーだけ）。役職バッジは歌唱者行の役職（歌・コーラス等））/ 劇伴（作編曲）（`bgm_cue_credits` と劇伴セッションに付いた `music_credits` の作詞・作曲・編曲）/ 劇伴（演奏）（劇伴セッションに付いた `music_credits` の演奏・コーラス等）/ 制作（どこに付いたものも含むレコーディング・音盤製作）の 6 タブ。歌は曲単位（🎵）、劇伴と制作は作品単位で TV シリーズ（📺）と映画（🎥）に分けて数える（演奏者はセッション単位でしか関わりが分からないため）。制作のうち盤に付いたクレジットは盤（商品）単位（💿）で数え、作品には重ねない（初参加はディスクに登録されたシリーズで決める）。多い順はこれらの合計で並べる。一覧タブの中は「初参加順 / 多い順」を切り替え、初参加順はスタッフ一覧と同じ「シリーズ名（年）」見出しのシリーズ別セクション（歌は初参加の曲の出典シリーズ、劇伴は作品）。歌唱ページの初参加順・キャラクタータブも同じ見出しにそろえる。盤だけに付くスタッフは歌・劇伴に数えず、役職タブからたどる。作詞・作曲・編曲以外の音楽の役職は役職詳細（`creators-music-role-detail.sbn`）を持つ。役職詳細は担当した人物・団体を 1 行ずつのアコーディオンで並べ、閉じた状態は劇伴の作品数（📺 / 🎥）・歌の曲数（🎵）・盤の点数（💿）のバッジ、開くと担当先を劇伴（1 作品 1 行、担当した録音回を添える）/ 歌（曲・録音ごとに 1 行）/ 盤に分けて出す。並びは「初参加順（初参加の作品ごとの見出し）/ 参加数順（バッジの合計）」を切り替える |
-| `/creators/singers/` | 歌唱一覧（音楽制作・歌唱・作詞作曲編曲や音楽の役職詳細の基準点は、`products.music_credits_checked` が立った盤のうち発売日が最も新しいもので「「商品名」(YYYY.M.D)時点」（日付は発売日）と示す）。録音の歌唱者（`song_recording_singers`）を歌・コーラス・台詞の別なくユニットのメンバーまで展開して集計する。歌手（人物単位。本人名義での参加）とキャラクター（キャラ × 声優の組。「キャラ名(CV: 声優)」で、プリキュアは「変身前 / 変身後」の名義を並べる）の行を 1 つのリストに並べ、行頭のアイコン（歌手 = 人 / キャラクター = 星）で区別する。初参加順（既定。初参加の録音の出典シリーズ別セクション）/ 参加曲数順の 2 タブで、タブの下の「すべて / 歌手のみ / キャラクターのみ」で絞り込む。歌手の行に載るのは、本人名義で歌・台詞を 1 回でも担当した人だけ（メンバーを展開しない（`expand_unit_members` = 0）ユニット名義のメンバーとしての参加は数えない）。その人のコーラスや名前の出ないユニットでの参加も曲数・初参加に数える。これに当たらない人の本人名義での参加（コーラスだけ・DarkSingers のような名前の出ないユニットのメンバーだけ）は歌唱ページに載せず、音楽制作の歌（演奏）に載る。人数は歌手の行の人とキャラクターの行の声優を合わせて数える。歌唱系の役職（歌・コーラス・台詞）は役職詳細ページを持たず、役職リンクはこのページを指す（`PathUtil.IsSingerRole`）。旧 `/creators/roles/vocals/`・`/creators/roles/backing_vocals/` は転送表でここへ 301。最後に年表タブ（参加の移り変わりの線表。下記）を置く |
+| `/creators/singers/` | 歌唱一覧（音楽制作・歌唱・作詞作曲編曲や音楽の役職詳細の基準点は、`products.music_credits_checked` が立った盤のうち発売日が最も新しいもので「「商品名」(YYYY.M.D)時点」（日付は発売日）と示す）。録音の歌唱者（`song_recording_singers`）を歌・コーラス・台詞の別なくユニットのメンバーまで展開して集計する。歌手（人物単位。本人名義での参加）とキャラクター（キャラ × 声優の組。「キャラ名(CV: 声優)」で、プリキュアは「変身前 / 変身後」の名義を並べる）とユニット（歌唱者の行の名義そのもの（主名義・「/」で並べる相方）がユニット名義のもの。下記 `/units/{名前}/`）の行を 1 つのリストに並べ、行頭のアイコン（歌手 = 人 / キャラクター = 星 / ユニット = 2 人の人影）で区別する。初参加順（既定。初参加の録音の出典シリーズ別セクション。同じ録音で初参加した行は歌手 → ユニット → キャラクターの順）/ 参加曲数順の 2 タブで、タブの下の「すべて / 歌手のみ / キャラクターのみ / ユニットのみ」で絞り込む（年表タブの行と件数にも効く）。歌手の行に載るのは、本人名義で歌・台詞を 1 回でも担当した人だけ（メンバーを展開しない（`expand_unit_members` = 0）ユニット名義のメンバーとしての参加は数えない）。その人のコーラスや名前の出ないユニットでの参加も曲数・初参加に数える。これに当たらない人の本人名義での参加（コーラスだけ・DarkSingers のような名前の出ないユニットのメンバーだけ）は歌唱ページに載せず、音楽制作の歌（演奏）に載る。人数は歌手の行の人とキャラクターの行の声優を合わせて数える。歌唱系の役職（歌・コーラス・台詞）は役職詳細ページを持たず、役職リンクはこのページを指す（`PathUtil.IsSingerRole`）。旧 `/creators/roles/vocals/`・`/creators/roles/backing_vocals/` は転送表でここへ 301。最後に年表タブ（参加の移り変わりの線表。下記）を置く |
 | `/creators/voice-cast/` | 声の出演一覧。1 行＝(声優 × シリーズ × キャラ) の粒度。キャラクター順（既定・シリーズ別セクション）/ 五十音順 / 初出演順（シリーズ別セクション）/ 出演回数順 の 4 タブと、最後に年表タブ（出演の移り変わりの線表。下記） |
 | `/people/{名前}/` `/companies/{名前}/` | 人物・企業/団体の個別詳細（直リンク用）。URL は人物は表示名義、企業/団体はマスタの正式名から作る（下記「詳細ページの URL」）。人物の基本情報には初参加の話（本編クレジット・声の出演のいちばん早い話）を出す |
+| `/units/{名前}/` | ユニット詳細。ユニット名義（`person_aliases` に 1 行だけあり、人物の行を持たない名義）のうち、メンバーの登録（`person_alias_members`）があるか、歌唱者の行の名義そのもの（主名義・「/」で並べる相方）に使われたものが持つ。URL は名義の表記から作る（下記「詳細ページの URL」）。基本情報にメンバー（人物は人物詳細へ、キャラクターは「(CV: 声優)」つきでキャラクター詳細へリンク）と備考、本文に人物詳細と同じ「音楽クレジット」の節（テンプレートの部品 `_music-credits.sbn` を共用。ユニットの名義で関わった歌唱・コーラス・作詞・作曲・編曲・演奏など）を置く。パンくずは、歌唱者として参加したユニットは「歴代クリエイター › 歴代プリキュア歌唱」の下、それ以外（編曲・演奏だけのユニット）は「歴代クリエイター」の下。JSON-LD は `MusicGroup`。サイト内でユニット名義を出す所（主題歌欄・楽曲詳細・商品詳細のトラック・クレジットなど、名義をリンクにする所）は、この詳細ページへリンクする（`StaffNameLinkResolver`）。検索にも区分「ユニット」で載る |
 | `/precures/` | プリキュア一覧。初登場順（既定。紐付くシリーズのうち放送開始の最も早いシリーズごとのセクション、見出しは「シリーズ名（年）」）/ 登場回数順 の 2 タブ。各行に登場話数（📺）・登場本数（🎥）のバッジを付ける（キャラクター一覧と同じ数え方） |
 | `/characters/` | キャラクター一覧。初登場順（既定。所属シリーズ → 種別のセクション）/ 登場回数順（個別ページを持つキャラを 1 リストに）の 2 タブ |
 | `/characters/{名前}/` | キャラクター詳細。2 回以上登場したキャラ・プリキュア・歌唱や家族関係のあるキャラだけが持つ。声の出演履歴はシリーズごとに、同じ声優（連名なら同じ組み合わせ）で演じた話ごとに行を分け、担当話数の範囲を添える（声優が途中で交代したキャラは交代前後が別の行になる）。基本情報には初登場の話（声の出演のクレジットのいちばん早い話）を出す。初登場・初参加は `Pipeline/FirstAppearanceResolver` で求め、クレジットの収録範囲（`CreditCoverageEpisode` の放送日時まで）に入るものだけを出す（範囲より後はまだ入っていない作品にもっと早い登場がありうるため） |
@@ -867,6 +979,7 @@ Role: PRODUCTION 制作 (order 2)
 - 描くものは、続けて参加した期間（2 件以上つながったもの）の細線、TV の話の帯（同じシリーズで話数が続く間はひと続き。1 話は放送日から 7 日の幅）、映画の点（公開日）、歌の点（同じ日に出た曲は 1 つ）、劇伴の点、盤の四角（同じ日のものは 1 つ）。色は件数バッジにそろえ、TV は青、映画は橙、歌は紫、劇伴は緑。盤は濃い青の四角で、形でも区別する。
 - 年表タブには凡例（とスイッチ）のあとに目盛り付きの線表を出し、目盛りの段はスクロールしても上に残る。行にマウスを載せると（スマホは帯をタップすると）参加期間（「2004年2月〜2005年1月」）と作品ごとの参加（「📺 シリーズ名 #1～49」「🎥 映画名」「🎵 2004年 曲名、曲名」「🎼 2004年 作品名（録音回）」「💿 2004年 商品名」）を出す。狭い画面（640px 以下）では名前を帯の上の行に置き、帯を表示幅いっぱいに使う。
 - 載せる行が無いページには年表タブを出さない。
+- 役職詳細の年表には、ページの役職と関連（`role_relations`。下記）でつながった役職の担当も重ねる（`RoleRelationIndex.LaneOf`）。関連の種類は、同じ段の役職（並列。演出に対する絵コンテ・助監督）、手前の段の役職（前段階。演出に対する演出助手）、次の段の役職（後段階。演出に対するシリーズディレクター・監督）の 3 つ。色は役職ごとで、種類ごとの色相（前段階が若葉、並列がティール、後段階が藤色）を基準に、同じ種類の役職どうしは役職マスタの表示順に色相を 36°（種類ごとの振れ幅は 72° まで）ずつ回して分ける（`RoleTimelineBuilder.AssignRelatedColors`。いずれも主の青より淡い）。TV の話は主の帯の下に細い帯で、映画は白抜きの輪で描く。主の帯と同じ回は隠れ、主の役職の無い回（絵コンテだけを担当した回など）だけが見える。凡例は役職ごとに 1 項目で、色の見本と役職名（役職詳細へのリンク）を出す（見本の形は、TV の話があれば帯、映画があれば輪、両方あれば並べる）。内訳には主の担当の後ろに「〔絵コンテ〕📺 シリーズ名 #…」の形で役職ごとの担当を足す。関連する役職の担当は、載せる行・主な方の判定・並び・続けて担当した期間には使わない。サイトには「前段階」「並列」「後段階」の語を出さない。
 
 タブと並べ替えボタンのラベル末尾の「順」（「初参加順」「担当回数順」など）は `<span class="tab-sfx">` で包み、768px 以下の幅では隠して「初参加」「担当回数」と短く見せる。
 
@@ -879,17 +992,18 @@ Role: PRODUCTION 制作 (order 2)
 
 ##### 詳細ページの URL（名前・コードベース）
 
-人物・キャラクター・企業/団体の詳細ページ URL は通し番号（ID）を使わず、名前から作る。キャラクター・企業/団体はマスタの正式名（`characters.name` / `companies.name`）、人物は表示名義（① 本名義 `persons.primary_alias_id` → ② いま公開している名義（`published_entity_slugs` で最後に記録したスラッグに当たる名義）→ ③ 最新名義（TV 系シリーズのクレジットで放送日がいちばん新しい回に使われた名義。TV 系のクレジットが無い人物だけ映画系を含めて判定する。複数の人物で共有する共同名義は候補から外す。決め方は `LatestAliasResolver`）の順。どれも無い人物は正式名 `persons.full_name`。`EntityUrlRegistry.DisplayPersonAliasId`）。いったん公開した人物は、クレジットの入力が進んでも名乗りと URL が変わらない。改名した人物の現在の名義を出すなど、名乗りを変えたいときは Catalog の「クレジット系マスタ管理」の人物タブで本名義を指定する（その人物の名義から選ぶ。本名義がその人物の名義でなければビルド警告を出して使わない）。書籍はコードから作る。組み立ては `EntityUrlRegistry`（`CreditInvolvementIndex` 構築直後に 1 度だけ作る台帳）に集約し、`PathUtil.PersonUrl` / `CharacterUrl` / `CompanyUrl` / `BookUrl` とテンプレート関数 `person_url` / `character_url` / `company_url`（ID を渡す）はすべてこの台帳を引く。テンプレートに `/persons/{{ id }}/` のような直書きはしない。
+人物・キャラクター・企業/団体・ユニットの詳細ページ URL は通し番号（ID）を使わず、名前から作る。キャラクター・企業/団体はマスタの正式名（`characters.name` / `companies.name`）、ユニットは名義の表記（`person_aliases.name`）、人物は表示名義（① 本名義 `persons.primary_alias_id` → ② いま公開している名義（`published_entity_slugs` で最後に記録したスラッグに当たる名義）→ ③ 最新名義（TV 系シリーズのクレジットで放送日がいちばん新しい回に使われた名義。TV 系のクレジットが無い人物だけ映画系を含めて判定する。複数の人物で共有する共同名義は候補から外す。決め方は `LatestAliasResolver`）の順。どれも無い人物は正式名 `persons.full_name`。`EntityUrlRegistry.DisplayPersonAliasId`）。いったん公開した人物は、クレジットの入力が進んでも名乗りと URL が変わらない。改名した人物の現在の名義を出すなど、名乗りを変えたいときは Catalog の「クレジット系マスタ管理」の人物タブで本名義を指定する（その人物の名義から選ぶ。本名義がその人物の名義でなければビルド警告を出して使わない）。書籍はコードから作る。組み立ては `EntityUrlRegistry`（`CreditInvolvementIndex` 構築直後に 1 度だけ作る台帳）に集約し、`PathUtil.PersonUrl` / `CharacterUrl` / `CompanyUrl` / `UnitUrl` / `BookUrl` とテンプレート関数 `person_url` / `character_url` / `company_url`（ID を渡す）はすべてこの台帳を引く。テンプレートに `/persons/{{ id }}/` のような直書きはしない。
 
 - 名前の整え方（`UrlSlug.FromName`）：NFC 正規化 → 空白の連なりは前後が両方とも全角文字なら詰め、それ以外は `_`（`高橋 任治` → `高橋任治`、`John Smith` → `John_Smith`）→ `` / \ : * ? " < > | # % + { } ^ ` [ ] ~ `` と制御文字は `_` → `_` の連なりを 1 つに畳み、前後の `_` と `.` を落とす（`キュアブラック / 美墨なぎさ` → `キュアブラック_美墨なぎさ`）。数字だけになる名前は旧 ID URL と区別できないため末尾に `_` を足す
 - href・canonical・sitemap にはパーセントエンコードした形で書き、出力ファイル（と S3 キー）はデコードした名前で書き出す（`PathUtil.ToOutputFilePath`）。S3 の REST オリジンはパスをデコードしてキーを引くため一致する
 - 同じ区分で名前（大文字小文字を区別しない）が衝突したら、キャラクターは全員に出身作品（声の出演で最初に登場した作品の正式タイトル）を添えて `/characters/長老_(ふたりはプリキュア)/` の形で分ける（素の名前で公開済みだった URL は 301 で転送）。それで分けられない組と、人物・企業・書籍の衝突は、ID の若い 1 件が素の名前を持ち、残りに `_2`, `_3` … を付けてビルド警告を出す。付け方は衝突が出た時点で決めて名前側で解消する
+- 同姓同名の別人の人物は、見分ける添え書き `persons.disambiguation`（例「声優」「背景美術」。Catalog の「クレジット系マスタ管理」の人物タブの「添え書き」欄）を入れて分ける。添え書きのある人物は、URL と名乗り（人物詳細の見出し・`<title>`・パンくず・OGP カード、検索の表示名、役職詳細・スタッフ一覧・歌系役職詳細・声の出演一覧・年表・歴代記録の行表記）に `渡辺 久美子 (声優)` の形で添え、URL は `/people/渡辺久美子_(声優)/` になる（`EntityUrlRegistry.PersonDisplayLabel`）。素の名前で公開済みだった URL は、公開済みの台帳から 301 で転送される。クレジットの中の名前と、人物詳細の本文・meta description・JSON-LD の名前には添えない。名義との比較（別名義の欄を出すか・別名義の行に本名義を添えるか）は添え書きの無い名乗り（`PersonDisplayName`）で行う
 - 単発キャラ（プリキュアでなく、クレジット上の登場がちょうど 1 回で、歌唱の記録も家族関係も無いキャラ）は個別ページを持たず、登場シリーズの `/characters/guests/{slug}/` にまとめる。単発キャラへのリンクはその登場話の見出しアンカー（`#ep{話数}`、映画はアンカー無し）を指す。2 回目の登場が入力されると、次のビルドから自動的に個別ページになる。キャラクター一覧では種別サブセクションに並べず、シリーズごとに「ゲストキャラクター」行 1 つでゲストページへ案内する
 - キャラクター詳細の家族関係は、相手のキャラがクレジットに初めて載った順（放送日 → その回のクレジット内の位置。映画はシリーズの開始日）に並べる。クレジットに一度も載っていない家族は後ろに回し、続柄の表示順（`character_relation_kinds.display_order`）→ 関係ごとの表示順（`character_family_relations.display_order`）で並べる
 - 最新名義は本編のクレジットで決め、主題歌・挿入歌の作家・歌唱や劇伴の作曲・編曲は、使われた話に紐付いていても見ない。本編のクレジットが 1 件も無い人物（歌手・作家だけの人物）に限り、それらも含めて同じ順で決める
 - 人物詳細の見出し（h1・読み・`<title>`・パンくず・OGP・JSON-LD）、検索の表示名、役職詳細・スタッフ一覧・歌系役職詳細の行表記も同じ表示名義で出す。検索の読みには正式名と全名義の表記・読みも持たせ、旧名義や正式名でも引ける。役職詳細・スタッフ一覧の「初参加順」で旧名義のまま置いた行には、その旧名義が TV 系の本編クレジットで使われたものに限り、いまの名乗り（表示名義）を括弧書きで添える（人物のみ。映画だけで使われた名義は名義変更ではないので基本は添えないが、映画が初出でラテン文字で書かれた名義（TAP スタッフのアルファベット表記など）は、TV 系に別の名義があれば添える。表示名義の行に旧名義を添えることもしない。企業の屋号は雑誌名・部門名など並立する別名義も多いので添えない）
-- 人物の URL は本名義を指定すると変わる（まだ公開していない人物は、公開までのあいだ最新名義に合わせて変わる）。キャラの URL はキャラ名を、企業/団体の URL は正式名を変えると変わる。本番デプロイ（`--production --deploy`）が成功したとき（差分なしを含む。dry-run・中止・`--page` のピンポイントモードは除く）に、各人物と、個別ページを持つ各キャラと、各企業/団体のいまのスラッグを台帳テーブル `published_entity_slugs`（区分 `PERSON` / `CHARACTER` / `COMPANY`・スラッグ（デコード済み、`utf8mb4_bin` で完全一致）・その URL で公開した人物 `person_id`・キャラ `character_id`・企業 `company_id`。どれも `ON UPDATE CASCADE`、区分に応じて 1 つだけを持つ）へ追記する（`INSERT IGNORE`、記録済みの行は変えない）。記録済みのスラッグのうち、いまの URL と違い、かつ同じ区分の別の実体がいまその名前の URL を使っていないものは、転送表に `/people/{旧名}`・`/characters/{旧名}`・`/companies/{旧名}` → いまの URL として載せ、旧名の URL を 301 で転送する（個別ページを持っていたキャラが単発キャラ扱いに変わったときは、ゲストキャラクターページの登場話へ転送する）。人物・キャラ・企業を統合するときは、削除の前にこの表の `person_id` / `character_id` / `company_id` も統合先へ付け替える
-- 旧 ID URL（`/persons/123/` `/characters/123/` `/companies/123/` `/books/123/`）は 301 で新 URL へ転送する。旧 ID は URL を切り替えた時点で凍結した台帳テーブル `legacy_entity_ids`（区分・旧 ID・いまの実体 ID。実体 ID は `ON UPDATE CASCADE` で振り直しに追従）から引くので、人物・キャラ・企業・書籍の ID を振り直しても旧 URL は元の実体を指し続ける。`FOREIGN_KEY_CHECKS=0` で振り直すスクリプトはこの表も明示的に更新し、実体を統合するときは削除の前に統合先へ付け替える。転送表は毎ビルド作り、サイト出力の `_edge/legacy-redirects.json`（`{"/persons/123": "/people/%E9…/", "/people/旧名": "/people/%E6…/", "/characters/旧名": "/characters/%E6…/", …}`。名前のキーはデコード済み、`LegacyRedirectMapWriter`）に書き出して通常のデプロイで S3 へ上げる。既定ビヘイビアの origin-request に関連付けた Lambda@Edge（`scripts/lambda-edge/legacy-redirect/index.mjs`、Node.js、us-east-1）が「区分 + 数字だけ」のパスと `/people/{名前}`・`/characters/{名前}` のパス（URI をデコードして NFC 正規化してから引く）でこの表を S3 から読み（5 分間メモリに保持）、キーがあれば 301（`Cache-Control: max-age=3600`）を返し、それ以外はそのままオリジンへ通す。表の更新はデプロイだけで反映され、関数の作り直しは要らない。`/_edge/` 配下は viewer-request の CloudFront Function（`scripts/cloudfront/viewer-request.js`）が外部アクセスを 404 にする。人物の区分名は `/people/` で、名前ベース URL を `/persons/{名前}/` で公開していた期間の URL は、同じ Function が `/people/{名前}/` へ 301 で付け替える（数字だけの旧 ID URL は Lambda@Edge 側）。転送表を CloudFront Function に埋め込まないのは、コード上限 10KB に収まらないため。KeyValueStore を使わないのは、ディストリビューションが定額 Free プランで KeyValueStore を使えないため。転送をやめるときは Lambda@Edge の関連付けを外す
+- 人物の URL は本名義を指定すると変わる（まだ公開していない人物は、公開までのあいだ最新名義に合わせて変わる）。キャラの URL はキャラ名を、企業/団体の URL は正式名を、ユニットの URL は名義の表記を変えると変わる。本番デプロイ（`--production --deploy`）が成功したとき（差分なしを含む。dry-run・中止・`--page` のピンポイントモードは除く）に、各人物と、個別ページを持つ各キャラと、各企業/団体と、各ユニットのいまのスラッグを台帳テーブル `published_entity_slugs`（区分 `PERSON` / `CHARACTER` / `COMPANY` / `UNIT`・スラッグ（デコード済み、`utf8mb4_bin` で完全一致）・その URL で公開した人物 `person_id`・キャラ `character_id`・企業 `company_id`・ユニットの名義 `person_alias_id`。どれも `ON UPDATE CASCADE`、区分に応じて 1 つだけを持つ）へ追記する（`INSERT IGNORE`、記録済みの行は変えない）。記録済みのスラッグのうち、いまの URL と違い、かつ同じ区分の別の実体がいまその名前の URL を使っていないものは、転送表に `/people/{旧名}`・`/characters/{旧名}`・`/companies/{旧名}`・`/units/{旧名}` → いまの URL として載せ、旧名の URL を 301 で転送する（個別ページを持っていたキャラが単発キャラ扱いに変わったときは、ゲストキャラクターページの登場話へ転送する）。人物・キャラ・企業を統合するときは、削除の前にこの表の `person_id` / `character_id` / `company_id` も統合先へ付け替える
+- 旧 ID URL（`/persons/123/` `/characters/123/` `/companies/123/` `/books/123/`）は 301 で新 URL へ転送する。旧 ID は URL を切り替えた時点で凍結した台帳テーブル `legacy_entity_ids`（区分・旧 ID・いまの実体 ID。実体 ID は `ON UPDATE CASCADE` で振り直しに追従）から引くので、人物・キャラ・企業・書籍の ID を振り直しても旧 URL は元の実体を指し続ける。`FOREIGN_KEY_CHECKS=0` で振り直すスクリプトはこの表も明示的に更新し、実体を統合するときは削除の前に統合先へ付け替える。転送表は毎ビルド作り、サイト出力の `_edge/legacy-redirects.json`（`{"/persons/123": "/people/%E9…/", "/people/旧名": "/people/%E6…/", "/characters/旧名": "/characters/%E6…/", …}`。名前のキーはデコード済み、`LegacyRedirectMapWriter`）に書き出して通常のデプロイで S3 へ上げる。既定ビヘイビアの origin-request に関連付けた Lambda@Edge（`scripts/lambda-edge/legacy-redirect/index.mjs`、Node.js、us-east-1）が「区分 + 数字だけ」のパスと `/people/{名前}`・`/characters/{名前}`・`/companies/{名前}`・`/units/{名前}`・`/books/{コード}` のパス（URI をデコードして NFC 正規化してから引く）でこの表を S3 から読み（5 分間メモリに保持）、キーがあれば 301（`Cache-Control: max-age=3600`）を返し、それ以外はそのままオリジンへ通す。表の更新はデプロイだけで反映され、関数の作り直しは要らない。`/_edge/` 配下は viewer-request の CloudFront Function（`scripts/cloudfront/viewer-request.js`）が外部アクセスを 404 にする。人物の区分名は `/people/` で、名前ベース URL を `/persons/{名前}/` で公開していた期間の URL は、同じ Function が `/people/{名前}/` へ 301 で付け替える（数字だけの旧 ID URL は Lambda@Edge 側）。転送表を CloudFront Function に埋め込まないのは、コード上限 10KB に収まらないため。KeyValueStore を使わないのは、ディストリビューションが定額 Free プランで KeyValueStore を使えないため。転送をやめるときは Lambda@Edge の関連付けを外す
 
 トップページの DB 統計ボックスでは人物数と企業・団体数を合算した「クリエイター」1 項目（`DbStats.CreatorsCount` = 人物数＋企業・団体数）として表示し、リンク先は `/creators/` ランディング。
 
@@ -904,6 +1018,8 @@ Role: PRODUCTION 制作 (order 2)
 並べ替えの一貫方針として、五十音順以外のすべてのタブでは「同じ話数内では初めてクレジットされた位置の順」を暗黙の副ソートキーとする。`CreditInvolvementIndex` が、クレジット階層を表示順（同一エピソード内の credit レコードを明示順序カラム `credits.credit_seq` 昇順 → credit_id 昇順で並べ、各 credit 内を card_seq → tier_no → group_no → order_in_group → block_seq → entry_seq）でエピソード単位に走査する過程で、各関与に 0 始まりの出現連番 `Involvement.CreditSeq` を採番する。`credits` テーブルはクレジット階層の最上位で、明示順序カラム `credit_seq`（smallint unsigned, 同一スコープ内 1 始まり, `UNIQUE(series_id,credit_seq)` / `UNIQUE(episode_id,credit_seq)`）を持つ。WinTools のクレジット編集画面にはクレジット一覧の ↑↓ 並べ替えボタンがあり、`CreditsRepository.BulkUpdateSeqAsync` で即時 DB 反映する。新規クレジットの `InsertAsync` は同一スコープ内 `MAX(credit_seq)+1` を自動採番。集計側は (シリーズ放送開始日, シリーズ内話数) が同点になった行・役職を、この最小 `CreditSeq` の昇順で並べる。`roles.display_order` はマスタ管理画面のグリッド表示順を決めるだけの値で、公開サイトの並べ替えには用いない。完全同点（同一話・同一クレジット位置で初出）の場合にのみ内部 `role_code` で安定化する。五十音順タブは読み仮名で並びが完全に一意に定まるためこの副キーは挟まない。キャラクター一覧（`/characters/`）も同方針で、大セクションを所属シリーズ（最早登場シリーズ）単位に束ね、その中を種別（character_kind）サブセクションに分けたうえで、種別内のキャラ配列を読み仮名順ではなく「最も早くクレジットされた位置」順に統一する。各キャラの「登場話数」は全作品横断の集計を TV 系シリーズ（`credit_attach_to='EPISODE'`）の話数「N 話」と映画系シリーズ（`credit_attach_to='SERIES'`）の本数「M 本」に分離表記する。所属シリーズが確定しない（クレジット皆無の）キャラは末尾「その他（未登場）」セクションへ送る。
 
 主題歌・劇伴スタッフ（`song_credits` / `song_recording_singers` / `bgm_cue_credits` 由来）は曲・録音単位のマスタから `episode_theme_songs` 経由でエピソードに紐づくため、それ自体はクレジット階層上の物理位置を持たない。`CreditInvolvementIndex` は階層走査時に THEME_SONG 形式の役職ブロックへ到達した時点の `CreditSeq` を「(エピソード, 親 credit の kind=OP/ED)」をキーに控え、主題歌スタッフへ `theme_kind`（OP/ED/INSERT）に応じてその位置を継承させる（OP 主題歌→OP クレジット内の主題歌ブロック位置、ED→ED、INSERT 等の親 kind 非対応は同エピソード最初の主題歌ブロック位置にフォールバック、主題歌ブロックが階層に無ければクレジット末尾相当）。劇伴は同エピソードの主題歌ブロック位置→末尾相当の順でフォールバック。
+
+人物詳細の本編クレジットは役職ごとの見出しの下に、その役職を初めて担当した回を「初担当 『作品』第N話（放送日）」（映画は「『作品』（公開日公開）」、声の出演は「初出演」）の 1 行で添える（`FirstAppearanceResolver` で役職のグループの中のいちばん早い関与を求め、作品と話はそれぞれのページへリンクする。名義別のセクションでは名義ごとの初担当）。
 
 人物詳細は「本編クレジット」と「音楽クレジット」を別のセクションにする。本編クレジットには本編のクレジット階層に載った関与だけを出し（本編の「音楽」の役職はこちら）、主題歌・挿入歌経由の作家・歌唱と劇伴の作曲・編曲は出さない。音楽クレジットは本編クレジットの「役職 → シリーズの枠」と同じ見た目で、区分（作詞・作曲・編曲 / 歌唱 / コーラスのみ / 演奏等 / レコーディング / 音盤製作。歌唱は歌・台詞で参加した曲、コーラスのみは `song_recording_singers` のコーラスだけの曲、演奏等は `music_credits` の演奏・コーラス等）を見出しにし、その下に関わった先（歌 / 劇伴 / 音盤）の枠を既定で閉じて並べる（開閉ボタンに件数。見出しと区分には件数の札 🎵 曲・🎼 劇伴・💿 盤を付け、`MusicCreditCounting` で歌は曲単位・劇伴は録音やシリーズの行単位・音盤は盤単位に重複を除いて数える）。枠の中には曲のカード（担当した区分の役職だけをバッジに持つ）・劇伴の作曲・編曲（`bgm_cue_credits` からシリーズごとの曲数つきの行。本編での使用が登録されていれば使用話数のグループも）・音盤の音楽クレジット（`music_credits` の紐付け先ごとの行）を並べる。`music_credits` は本編の関与索引（`CreditInvolvementIndex`）に入れず、エピソード詳細・スタッフ一覧・役職詳細には出ない。楽曲詳細は曲に共通の分を「演奏・レコーディング」欄に、録音ごとの分を各録音の歌唱者・出典の下に、役職バッジ + 名前のユニットを横に流して並べ（ユニットの中では改行しない。`MusicCreditHtml.RenderUnits`）、別名義のクレジットには本名義を括弧で添える（`MusicCreditViewBuilder.PrimaryNameSuffixHtml`）。人物詳細の音楽クレジットは別名義で参加した分に「〇〇 名義」を添える。劇伴詳細はセッションごとに（既定で閉じた開閉欄）、商品詳細は盤の分を「ディスクスタッフ」セクションに出す。
 
@@ -965,14 +1081,14 @@ Role: PRODUCTION 制作 (order 2)
 
 ##### シリーズ一覧の映画セクション
 
-`/series/` の映画セクションはカード型リスト（`series-card-list`）として親映画（`kind_code ∈ {MOVIE, SPRING}`）を公開日昇順で並べる。秋映画（`MOVIE`）／春映画（`SPRING`）のシーズンバッジ（`.movie-badge-fall` / `.movie-badge-spring`）はメタ行に並ぶ。親映画には公開日と、親＋全子（`MOVIE_SHORT`）の合計上映時間を出す（いずれかが `run_time_seconds` NULL なら空）。親映画にぶら下がる子作品（`MOVIE_SHORT`、`seq_in_parent` 昇順）は親カードの中の小リスト（`<ul class="movie-child-list"><li>…</li></ul>`）として箇条書きで並べる。子作品のタイトルは子作品自身の詳細ページ（`/series/{slug}/`。短編も含め全シリーズが詳細ページを持つ）へリンクする。子単体の上映時間（`RelatedSeriesRow.RuntimeLabel`、`run_time_seconds` NULL なら空）を併記。
+`/series/` の映画セクションはカード型リスト（`series-card-list`）として親映画（`kind_code ∈ {MOVIE, SPRING}`）を公開日昇順で並べる。秋映画（`MOVIE`）／春映画（`SPRING`）のシーズンバッジ（`.movie-badge-fall` / `.movie-badge-spring`）はメタ行に並ぶ。親映画には公開日と上映時間を出す。上映時間は長編（親だけ）の尺で、併映のある映画は同じ行に小さく「(上映総尺 m分ss秒)」（親＋全子〔`MOVIE_SHORT`〕の合計。どれかが `run_time_seconds` NULL なら出さない）を添える。子がすべて SEGMENT の 3 本立ては、親の上映時間（番組全体）か子の合計を出す。尺は「m分ss秒」（秒は 2 桁）。映画のカードは公開日の枠を「2008年11月30日」が収まる幅（8.5em）にして、尺を日付の近くに置く。親映画にぶら下がる子作品（`MOVIE_SHORT`、`seq_in_parent` 昇順）は親カードの中の小リスト（題はスタッフの行より一回り大きく太字）（`<ul class="movie-child-list"><li>…</li></ul>`）として箇条書きで並べる。子作品のタイトルは子作品自身の詳細ページ（`/series/{slug}/`。短編も含め全シリーズが詳細ページを持つ）へリンクする。子単体の上映時間（`RelatedSeriesRow.RuntimeLabel`、`run_time_seconds` NULL なら空）を併記。
 
 #### C. エピソード詳細ページの構成（中核）
 
 `/series/{slug}/{seriesEpNo}/` には次の情報を 1 ページに集約する:
 
 1. **サブタイトル表示**: `title_rich_html`（ルビ付き HTML）があればそのまま流す。なければ `title_text` をプレーン表示。下に `title_kana` を補助表示。サブタイトル未確定（`title_text` NULL）の話は雑誌掲載状態に応じたプレースホルダ（（サブタイトル「未定」）/（サブタイトル「非公開」））を muted 表示し、h1・ページ `<title>` は鉤括弧の入れ子を避けて「第22話（サブタイトル「未定」）」の形にする（プレースホルダは誌面の案内の引用でネタバレ要素が無いため、サブタイトル解禁ガードは適用しない。一覧系・前後話ナビ・検索インデックスも同じプレースホルダ表示）
-   - **テロップ画像**: 確定したサブタイトルは、本編のサブタイトルテロップの体裁で描いた背景透過の PNG（`/subtitles/{シリーズslug}/{話数}.png`、`OgCardRenderer.RenderSubtitleTelop`）を欄の中央に置いて見せる。`<img src>` には CSS・JS と同じく中身のハッシュの先頭 10 桁を `?v=` で付け、画像を作り直したらブラウザが新しい画像を取りに行くようにする。書体は `series_subtitle_styles.font_subtitle`、白い字に黒フチ（字の大きさの 0.048）と右下への黒い影（0.037）で、OGP カードと同じ。改行は `title_rich_html` の `<br>` のとおりで、行ごとに中央揃え。全角の空白は 1 字、半角の空白は半字の空きにし、`<small>` の字は 0.65 倍で組む。親字と振り仮名はひとまとまりとして影 → フチ → 白い字の順に重ねる（振り仮名のフチが親字の白い字にかからない）。振り仮名のフチの太さと影のずれは親字と同じ幅。字間と振り仮名の組み方は作品ごとに `series_subtitle_styles`（`series` と 1 対 1。行が無い作品・NULL の列は括弧内の既定値）の列で持つ。`subtitle_kerning` 親字の組み方（`PROPORTIONAL` ＝書体の詰め情報、なければ字面で詰める。`MONO` ＝ベタ組み）、`subtitle_letter_spacing_em` 親字の字間に足す空き（0）、`subtitle_ruby_letter_spacing_em` 振り仮名の字間に足す空き（0）、`font_subtitle_ruby` 振り仮名の書体（親字と同じ）、`subtitle_ruby_size_ratio` 大きさ（親字の 0.3 倍）、`subtitle_ruby_raise_ratio` ベースラインを上げる高さ（親字の 1.04 倍）、`subtitle_ruby_oblique_deg` 振り仮名だけにかける斜体の角度（0 度）、`subtitle_line_gap_ratio` 下の行に振り仮名があるときの行と行のあいだの空き（上の行の字の下端から下の行の振り仮名の段の上端まで。親字の 0.28）、`subtitle_line_gap_ratio_plain` 下の行に振り仮名が無いときの空き（上の行の字の下端から下の行の字の上端まで。`subtitle_line_gap_ratio` に振り仮名の段を足した空き＝振り仮名の有無で行送りを変えない）、`subtitle_line_gap_ratio_3` 3 行以上のときの行間（`subtitle_line_gap_ratio` と同じ。指定があれば振り仮名の有無で行送りを変えない）、`subtitle_ruby_overhang_ratio` 親字より長い振り仮名が振り仮名の無い隣の字へはみ出せる幅（振り仮名 1 字分）、`subtitle_ruby_line_edge` 行の端の扱い（行頭は外へ出さず行頭にそろえ、行末は外へはみ出させる。`ALIGN` で両端そろえ、`OVERHANG` で両端はみ出し）、`subtitle_ruby_grouping` 置き方（`MONO` ＝ルビの単位ごとに親字の上、`JUKUGO` ＝振り仮名のある字が続くところの読みをひと続きにして熟語全体の中央、`SPREAD` ＝その読みを熟語の幅に 1 字ずつ均等に並べる。既定は MONO）。振り仮名は字面（インク）の中心を親字の字面の中心にそろえ、親字の幅に収まればそのまま、長ければ両隣へはみ出させ（隣が振り仮名のある字ならその振り仮名の脇の空きまで）、それでも収まらなければその幅まで長体をかける。詰める組み方では、行の途中の単独の「！」「？」（前後に「！」「？」が続かないもの）は全角の幅を取って中央に置き、行末のものは前の字に寄せる。行送りは行ごとに、下の行に振り仮名があるかどうかで `subtitle_line_gap_ratio` と `subtitle_line_gap_ratio_plain` を使い分ける（本編は、下の行に振り仮名があると行を広げる作品と、行の位置が変わらない作品がある）。画像の上端に振り仮名の段を取るのは 1 行目に振り仮名があるときだけ。字の大きさは画面上 45px 相当（2 倍の画素で描く）、画像の最大幅は 860px で、収まらない行はその行だけ長体（80% まで）をかけ、それでも収まらなければ全行の字を小さくする。表示は欄の幅まで縮め、スマホ（640px 以下）では字の大きさの上限を 24px（8/15）にする。`alt` はサブタイトルの文字列。ビルドの時点で解禁前の話（ぼかしが効かないため）とサブタイトル未確定の話は画像を作らず、上記の HTML を出す。画像は作り置き（`SubtitleTelopCacheDir`）に、描画コードの印（`OgRenderSourceStamp`。ビルド時に `GenerateOgRenderSourceStamp` が描画コード一式のハッシュを求めて埋め込む）・サブタイトル（`title_rich_html`）・書体名・作品ごとの組み方・描き方の版（`OgCardRenderer.TelopRenderVersion`）から作った鍵（`SubtitleTelopRequest.CacheKey`）のファイル名で置き、同じ鍵があれば描かずに出力へ写す（描画コードを変えると印が変わって全話が描き直しになる。コード以外の理由で描き直したいときは版を 1 上げる。書体はファイルの中身ではなく名前で見る）。ビルドの冒頭、DB の読み込みの後・出力に手を付ける前に `SubtitleTelopPreflight` が作り置きを確かめ、描き直しが要る画像の書体（振り仮名の書体を含む）がこの PC に無ければ、書体名と使う作品を挙げて止まる（作り置きで足りる画像は書体が無くても通る）。全体ビルドでは、今回のどの話にも使わない鍵の作り置きを消す。`--refresh-telop` は作り置きを使わずに描き直す（`--page` と併用すれば対象の話だけ）
+   - **テロップ画像**: 確定したサブタイトルは、本編のサブタイトルテロップの体裁で描いた背景透過の PNG（`/subtitles/{シリーズslug}/{話数}.png`、`OgCardRenderer.RenderSubtitleTelop`）を欄の中央に置いて見せる。`<img src>` には CSS・JS と同じく中身のハッシュの先頭 10 桁を `?v=` で付け、画像を作り直したらブラウザが新しい画像を取りに行くようにする。書体は `series_subtitle_styles.font_subtitle`、白い字に黒フチ（字の大きさの 0.048）と右下への黒い影（0.037）で、OGP カードと同じ。改行は `title_rich_html` の `<br>` のとおりで、行ごとに中央揃え。全角の空白は 1 字、半角の空白は半字の空きにし、`<small>` の字は 0.65 倍で組む。親字と振り仮名はひとまとまりとして影 → フチ → 白い字の順に重ねる（振り仮名のフチが親字の白い字にかからない）。振り仮名のフチの太さと影のずれは親字と同じ幅。字間と振り仮名の組み方は作品ごとに `series_subtitle_styles`（`series` と 1 対 1。行が無い作品・NULL の列は括弧内の既定値）の列で持つ。`subtitle_kerning` 親字の組み方（`PROPORTIONAL` ＝書体の詰め情報、なければ字面で詰める。`MONO` ＝ベタ組み）、`subtitle_letter_spacing_em` 親字の字間に足す空き（0）、`subtitle_ruby_letter_spacing_em` 振り仮名の字間に足す空き（0）、`font_subtitle_ruby` 振り仮名の書体（親字と同じ）、`subtitle_ruby_size_ratio` 大きさ（親字の 0.3 倍）、`subtitle_ruby_raise_ratio` ベースラインを上げる高さ（親字の 1.04 倍）、`subtitle_ruby_oblique_deg` 振り仮名だけにかける斜体の角度（0 度）、`subtitle_line_gap_ratio` 下の行に振り仮名があるときの行と行のあいだの空き（上の行の字の下端から下の行の振り仮名の段の上端まで。親字の 0.28）、`subtitle_line_gap_ratio_plain` 下の行に振り仮名が無いときの空き（上の行の字の下端から下の行の字の上端まで。`subtitle_line_gap_ratio` に振り仮名の段を足した空き＝振り仮名の有無で行送りを変えない）、`subtitle_line_gap_ratio_3` 3 行以上のときの行間（`subtitle_line_gap_ratio` と同じ。指定があれば振り仮名の有無で行送りを変えない）、`subtitle_ruby_overhang_ratio` 親字より長い振り仮名が振り仮名の無い隣の字へはみ出せる幅（振り仮名 1 字分）、`subtitle_ruby_line_edge` 行の端の扱い（行頭は外へ出さず行頭にそろえ、行末は外へはみ出させる。`ALIGN` で両端そろえ、`OVERHANG` で両端はみ出し）、`subtitle_ruby_grouping` 置き方（`MONO` ＝ルビの単位ごとに親字の上、`JUKUGO` ＝振り仮名のある字が続くところの読みをひと続きにして熟語全体の中央、`SPREAD` ＝その読みを熟語の幅に 1 字ずつ均等に並べる。既定は MONO）。振り仮名は字面（インク）の中心を親字の字面の中心にそろえ、親字の幅に収まればそのまま、長ければ両隣へはみ出させ（隣が振り仮名のある字ならその振り仮名の脇の空きまで）、それでも収まらなければその幅まで長体をかける。詰める組み方では、行の途中の単独の「！」「？」（前後に「！」「？」が続かないもの）は全角の幅を取って中央に置き、行末のものは前の字に寄せる。行送りは行ごとに、下の行に振り仮名があるかどうかで `subtitle_line_gap_ratio` と `subtitle_line_gap_ratio_plain` を使い分ける（本編は、下の行に振り仮名があると行を広げる作品と、行の位置が変わらない作品がある）。画像の上端に振り仮名の段を取るのは 1 行目に振り仮名があるときだけ。字の大きさは画面上 45px 相当（2 倍の画素で描く）、画像の最大幅は 860px で、収まらない行はその行だけ長体（80% まで）をかけ、それでも収まらなければ全行の字を小さくする。表示は欄の幅まで縮め、スマホ（640px 以下）では字の大きさの上限を 24px（8/15）にする。`alt` はサブタイトルの文字列。サブタイトル未確定の話は画像を作らず、上記の HTML を出す。ビルドの時点で解禁前の話も画像を描くが、画像はぼかせないので、画像とぼかした HTML の両方を解禁時刻つきの枠（`.subtitle-telop-guard[data-reveal-at]`）に入れ、解禁されるか閲覧者が先の題を見る設定にするまでは画像を隠して HTML を出す（`subtitle-embargo.js` が枠に `is-revealed` を付け外しする。隠している間は読み込まないよう `loading="lazy"`）。解禁前の話の OGP カードは作らない。画像は作り置き（`SubtitleTelopCacheDir`）に、描画コードの印（`OgRenderSourceStamp`。ビルド時に `GenerateOgRenderSourceStamp` が描画コード一式のハッシュを求めて埋め込む）・サブタイトル（`title_rich_html`）・書体名・作品ごとの組み方・描き方の版（`OgCardRenderer.TelopRenderVersion`）から作った鍵（`SubtitleTelopRequest.CacheKey`）のファイル名で置き、同じ鍵があれば描かずに出力へ写す（描画コードを変えると印が変わって全話が描き直しになる。コード以外の理由で描き直したいときは版を 1 上げる。書体はファイルの中身ではなく名前で見る）。ビルドの冒頭、DB の読み込みの後・出力に手を付ける前に `SubtitleTelopPreflight` が作り置きを確かめ、描き直しが要る画像の書体（振り仮名の書体を含む）がこの PC に無ければ、書体名と使う作品を挙げて止まる（作り置きで足りる画像は書体が無くても通る）。全体ビルドでは、今回のどの話にも使わない鍵の作り置きを消す。`--refresh-telop` は作り置きを使わずに描き直す（`--page` と併用すれば対象の話だけ）
 1-2. **歴代記録バッジ**: 基本情報（ファクトタイル）の下に、アバンタイトル・A パート・B パートの OA 尺が歴代 10 位以内（長い側・短い側のどちらも。該当のランキングページへリンク）、またはシリーズ内で最長・最短（同率含む。歴代側のバッジが無いときだけ。同種パートを持つ話が 10 話以上のシリーズに限る）の回にだけ 🏆 のピルを出す。順位は 6 のパート尺偏差値と同じ SQL（短い順の順位 `SeriesRankShortest` / `GlobalRankShortest` も同じ `RANK()`）
 2. **基本情報テーブル**: 放送日時・シリーズ内話数・通算話数・通算放送回・ニチアサ通算放送回、外部 URL（東映あらすじ／ラインナップ）、YouTube 予告埋め込み（`youtube_trailer_url` から ID を抽出して `<iframe>` 化）。特別予告（本放送時）の URL（`youtube_special_trailer_url`）が登録されているエピソードでは、通常予告の直下に h3「特別予告 (本放送時)」見出し付きで特別予告を並べて埋め込む（未登録なら非表示）
 2-2. **スタッフと組み合わせの通算回数**: クレジット階層から脚本／絵コンテ／演出／作画監督／美術を抜き出した主要スタッフ行の下に、「演出と作画監督の組み合わせ」「脚本・演出・作画監督の組み合わせ」が通算何回目かを「通算 N 回目（初回 第a話 / 前回 第b話 / 次回 第c話）」の形で出す（初回は「初めての組み合わせ」。別シリーズの話は『正式タイトル』を前置）。数え方は `Pipeline/EpisodeChiefStaffIndex`（TV 系の全話を放送順に並べ、本放送限定を除く PERSON / TEXT エントリの集合を顔ぶれとし、人物は名義をまたいでまとめる）。収録済みのクレジットの範囲で数えている断りを添える
@@ -999,6 +1115,7 @@ Role: PRODUCTION 制作 (order 2)
 - 共通レイアウト: `_layout.sbn`（ヘッダ・フッタ・パンくず・canonical タグ・OGP メタ等を吸収）
 - レンダリングは 2 段階: 各 Generator が「コンテンツテンプレ」を model でレンダリング → 結果 HTML を `LayoutModel.Content` に詰めて `_layout.sbn` を再レンダリング
 - スタイル: `wwwroot/assets/site.css` 1 ファイル。CSS フレームワーク不採用、最低限の素朴スタイル。CSS 変数で色を管理
+- かぎ括弧の入れ子: 曲名・サブタイトル・トラック名などを「」で囲んで出すとき、中に「」があれば内側を『』にする（例: 曲名「笑うが勝ち!」でGO! →「『笑うが勝ち!』でGO!」）。DB の文字列はそのままで、表示するときだけ変える（`TemplateRendering/JapaneseQuotes.cs`）。Scriban のテンプレートでは関数 `in_quotes`（`{{ t.Title | in_quotes | html.escape }}`）、コードでは `JapaneseQuotes.InQuotes`。役職テンプレ（`role_templates`）は、値を差し込む位置がテンプレの文字の「」の中かどうかを描画時に数え、中なら自動で変える（テンプレ側に指定は要らない）
 - CSS・JS の読み込みはテンプレート関数 `asset_url`（`Utilities/AssetUrl.cs`）を通し、中身のハッシュから作った版の印を付ける（例：`/assets/site.css?v=2fd0d40cfe`）。中身を変えると URL も変わるので、ブラウザや CDN に古いファイルが残っていても新しいファイルが読み込まれる
 - 静的アセットは `wwwroot/` 配下を出力ルートに丸ごと写す（`SiteBuilderPipeline.CopyStaticAssets`。大きさと更新時刻が同じファイルは写さない）
 - 出力の書き出し（`Pipeline/OutputWriter.cs`）: 出力ディレクトリを空にしてから作り直すのではなく、前回の出力を残したまま「中身が変わるファイルだけ書き、今回書かなかったファイルを最後に消す」。HTML・JSON・XML・テキストは同じ場所に同じ中身のファイルがあれば書かない（読んで比べる）。作り置きから写す PNG は大きさと更新時刻が作り置きと一致すれば写さない（写すときは更新時刻を作り置きにそろえる）。出力ディレクトリに置くファイルはすべてこの窓口を通して記録し、全体ビルドの最後（SEO ファイルの後、`prune` セクション）に記録に無いファイルと空になったディレクトリを消すので、出力は空にしてから作り直したのと同じ集合になり、`--deploy` の孤児削除（ローカルに無い S3 オブジェクトの削除）がそのまま効く。`--page` のピンポイントビルドでは消さない。あわせて、今回のどのページにも使わなかった OGP カードの作り置きも消す。ファイルの作成はウイルススキャン等で 1 件ごとの待ちが大きく、変わらない数千件を書かずに済ませるだけでビルドが大きく縮む
@@ -1059,6 +1176,29 @@ Role: PRODUCTION 制作 (order 2)
 | `instagram_url` | Instagram（ピンク） | Instagram のプロフィール |
 | `youtube_url` | YouTube（赤） | YouTube のチャンネル |
 | `wikipedia_url` | （出さない） | 内部メモ。サイト UI からはリンクしない |
+
+##### 代表作（プリキュアを除く）（person_notable_works）
+
+人物がプリキュアシリーズの外で作品の顔になる役職を担当した作品を、1 行 = 1 人物 × 1 作品 × 1 役職で持つ。作品はプリキュアの外のものなので作品マスタにはつながず、作品名・役職をテキストで持つ。
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `work_id` | INT PK AUTO_INCREMENT | 主キー |
+| `person_id` | INT NOT NULL FK → `persons` | 人物（人物を消すと連動して消える） |
+| `display_order` | SMALLINT UNSIGNED | 人物ごとの並び順（小さい順。同じなら `year_from` 順） |
+| `work_title` | VARCHAR(256) | 作品名 |
+| `role_label` | VARCHAR(64) | 役職。公式のスタッフ表の表記どおりに書く（入力画面に候補があり、候補以外も入れられる） |
+| `year_from` / `year_to` | SMALLINT UNSIGNED NULL | 時期（年）。1 年だけなら `year_to` は NULL。`year_to` だけは持てず、`year_from` ≦ `year_to`（CHECK 制約） |
+| `official_url` | VARCHAR(1024) NULL | 作品の公式サイト。サイトで作品名からリンクする先 |
+| `official_url_is_archive` | TINYINT(1) | 1 なら `official_url` は閉鎖済み公式サイトのアーカイブ（Internet Archive） |
+| `source_url` | VARCHAR(1024) NULL | 裏取りに使ったスタッフ表のページ（内部用。サイトには出さない） |
+| `notes` | TEXT NULL | 備考 |
+
+対象の役職は系統で決める。監督の系統（監督・総監督・シリーズ監督・シリーズディレクター・チーフディレクター）、キャラクターデザインの系統（キャラクターデザイン・キャラクター原案・キャラクターコンセプトデザイン）、シリーズ構成、プロデューサー。表記は「キャラクターデザイン」などに言い換えず、公式の表記のまま持つ。載せるのは 1 人 10 作まで。
+
+載せるのは、作品の公式サイトのスタッフ表で確かめられたものだけにする。Wikipedia は候補を見つける手がかりにだけ使い、出典にもリンク先にもしない。公式サイトが閉鎖されていて、Internet Archive に残る公式サイトのスタッフ表で確かめたときは、アーカイブの URL を `official_url` に入れて `official_url_is_archive` を 1 にする。
+
+人物詳細では「音楽クレジット」の後、「外部リンク」の前に「代表作（プリキュアを除く）」のセクションを置き、「年 ｜ 作品 ｜ 役職」の表で並び順どおりに出す（年は「2010」「2010–2012」）。作品名は公式サイトへの外部リンク（`target="_blank" rel="noopener nofollow"`）で、アーカイブへリンクする行はリンクの後ろに「公式サイトのアーカイブ」の札を添える。行の無い人物には出さない。入力は Catalog の「クレジット系マスタ管理」→ 人物タブ → 「代表作…」のダイアログで、選んだ人物の代表作を追加・更新・削除する（その場で DB に反映）。
 
 DDL ファイル: [`db/schema.sql`](db/schema.sql)（新規構築用、全テーブル含む）
 マイグレーション: [`db/migrations/`](db/migrations/) … バージョン別の差分 SQL 群。新規構築では不要。既存環境の更新時に順次適用。各スクリプトは冪等。収録対象はスキーマ変更とマスタ変更のみで、一回限りのデータ修正は含まない。
@@ -1220,6 +1360,18 @@ series_relation_kinds ──┘    │            │
 
 **複合 PK**: `(issue_year, issue_month)`
 
+#### `subtitle_fonts` — サブタイトルのテロップ画像に使うフォントのマスタ
+
+エピソード詳細のサブタイトル欄と OGP カードのサブタイトルを描くフォントのマスタ。免責事項（`/disclaimer/`）の「サブタイトル画像について」に出す使用フォントの一覧の出どころで、作品ごとの設定（`series_subtitle_styles` の `font_subtitle` / `font_subtitle_ruby`）に出てくる書体名をこのテーブルで引き、製品名・製品ページ・ライセンスを添える（`PolicyPagesGenerator.BuildSubtitleFontGroups`）。一覧はライセンスごとのグループに分け、フォントは最初に使った作品の順、作品は放送開始順で並べる。行の無い書体も一覧には出る（名前だけ・リンク無し。ライセンスは書体名の接頭辞 `FOT-` / `A-SK` / `A P-OTF` から判定し、ビルドログに警告を出す）。値は SQL で入れる（Catalog に編集画面は無い）。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `font_name` | VARCHAR(64) PK | Windows の書体名（「FOT-ハミング ProN B」のように重さまで含む）。`series_subtitle_styles` の書体名と同じ文字列で結び付く |
+| `license_kind` | VARCHAR(16) | ライセンス区分。`FONTWORKS_LETS`（フォントワークス LETS）/ `MORISAWA_FONTS`（Morisawa Fonts。写研の A-SK 書体もこちら） |
+| `display_name` | VARCHAR(64) NULL | 提供元の書き方の製品名（「ハミング B」など）。NULL なら `font_name` をそのまま出す |
+| `product_url` | VARCHAR(1024) NULL | 提供元の製品ページ（一覧でリンクする先）。NULL ならリンクしない |
+| `created_at` / `updated_at` | TIMESTAMP | 作成・更新日時 |
+
 #### `part_types` — パート種別マスタ
 
 エピソードを構成するパートの種別を定義するマスタテーブル。
@@ -1372,6 +1524,19 @@ series_relation_kinds ──┘    │            │
 
 開始日が終了日より後の行は CHECK 制約で作れない。自分自身を指す行は Catalog の入力画面で作らせない（`from_company_id` / `to_company_id` は外部キーの連動に使うため、MySQL の制約上 CHECK に入れられない）。`(from_company_id, to_company_id, relation_kind, valid_from)` は一意。入力は Catalog の「クレジット系マスタ管理」→ 企業タブ → 「関係…」のダイアログで、選んだ団体から見た「親（所属先）」「子（部署・子会社など）」「前身」「後継」として追加・更新・削除する（その場で DB に反映）。
 
+#### `role_relations` — 役職どうしの関連
+
+別の役職どうしの関連を持つ。役職の系譜（`role_successions`。同じ役職の名前の移り変わりで、集計を 1 つにまとめる）とは別物で、集計は役職ごとに分けたまま、役職詳細の年表に関連する役職の担当を重ねるのに使う（上記「年表」）。
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `from_role_code` | VARCHAR PK FK → `roles` | 段階なら前段階の役職。並列なら役職コードの小さいほう |
+| `to_role_code` | VARCHAR PK FK → `roles` | 段階なら後段階の役職。並列なら役職コードの大きいほう |
+| `relation_kind` | ENUM(`STEP_UP`,`PARALLEL`) | `STEP_UP`＝段階（演出助手 → 演出、動画 → 原画 など。向きあり）、`PARALLEL`＝並列（同じ段で並んで担う役職。絵コンテ ⇔ 演出 など。向きなし） |
+| `notes` | TEXT NULL | 備考 |
+
+1 組の役職に関係は 1 つ（PK は from / to の組）。並列は `RoleRelationsRepository.UpsertAsync` が役職コードの小さいほうを from にそろえ、自分自身との組・逆向きの段階・同じ組の段階と並列の重複を弾く（自己ループは `role_successions` と同じく、MySQL の制約上 CHECK に入れられないためアプリ側で弾く）。SiteBuilder は両端を系譜の代表へ寄せ、並列でつながった役職を 1 つの段にまとめてから段どうしの段階を引く（`RoleRelationIndex`）。入力は Catalog の「クレジット系マスタ管理」→ 役職タブ → 「関連…」のダイアログで、選んだ役職から見た「前段階」「並列」「後段階」として追加・削除する（その場で DB に反映）。
+
 #### `product_companies` — 商品社名マスタ
 
 商品（`products`）の発売元（label）／販売元（distributor）として紐付ける**クレジット非依存の社名マスタ**。クレジット系の `companies` / `company_aliases` とは完全に独立した別系統で、屋号系譜（前任/後任）の概念は持たない。1 社 = 1 行、和名・かな・英名のみのシンプル構造。
@@ -1495,6 +1660,21 @@ series_relation_kinds ──┘    │            │
 
 **CHECK 制約 / トリガー**: INSERT/UPDATE 時に `trg_tracks_bi_fk_consistency` / `trg_tracks_bu_fk_consistency` トリガーが content_kind 一貫性と sub_order ルールを検証する。BEFORE INSERT のチェックには同一 PK の行が既に存在する場合は SIGNAL をスキップするガードがあり、`INSERT ... ON DUPLICATE KEY UPDATE` で BEFORE INSERT が先に発火する際の不当弾きを防ぐ。整合性の最終判定は後続の `trg_tracks_bu_fk_consistency`（BEFORE UPDATE）が保全後の確定値で行う。
 
+#### `track_audio_fingerprints` — CD のトラックの音の特徴量
+
+CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.AudioFingerprint`）と PCM 全体のハッシュ。1 行 = 物理トラック 1 本（`sub_order` は常に 0）。盤どうしの比較（同じ録音か・ミックス違いか・編集違いか）に使う。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `catalog_no` / `track_no` / `sub_order` | PK FK | トラック（→ `tracks`、CASCADE） |
+| `method_version` | TINYINT UNSIGNED | 特徴量の取り方の版（`LandmarkFingerprinter.MethodVersion`）。版が違う指紋どうしは突き合わせない |
+| `sample_rate_hz` / `fft_size` / `hop_samples` | INT / SMALLINT / SMALLINT UNSIGNED | 解析の条件（11025 / 512 / 256）。フレーム番号 × `hop_samples` ÷ `sample_rate_hz` が秒 |
+| `hash_count` | INT UNSIGNED | 指紋の項目数（1 分あたり 4,000 前後） |
+| `duration_ms` | INT UNSIGNED | 読んだ音の長さ（ミリ秒） |
+| `pcm_sha256` | CHAR(64) | 読んだ PCM 全体（16 ビット LE ステレオ）の SHA-256（16 進小文字）。同じ音源かをビット単位で見分ける |
+| `fingerprint` | LONGBLOB | 指紋のバイト列（1 項目 6 バイト：ハッシュ 3 バイト LE ＋ フレーム番号 3 バイト LE。時刻順。1 分あたり 25 KB 前後） |
+| `read_at` | DATETIME | 音を読んだ日時 |
+
 #### `songs` — 歌マスタ（メロディ + アレンジ単位）
 
 | 列名 | 型 | 説明 |
@@ -1513,7 +1693,24 @@ series_relation_kinds ──┘    │            │
 
 > `songs.*_name` / `song_recordings.singer_name` / `bgm_cues.composer_name`・`arranger_name` のフリーテキストは、構造化クレジット（`song_credits` / `song_recording_singers` / `bgm_cue_credits`）がまだ無い曲・録音・劇伴のためのフォールバック。サイトは画面表示だけでなく、meta description・OGP カード・JSON-LD・使用曲リストの副題といった平文の出力先でも、役職ごとに構造化行があればそれだけを使い、1 行も無い役職に限ってフリーテキストを使う（平文化は `CreditText` に集約。書式は画面表示と同じで、キャラ歌唱は「キャラ(CV:声優)」）。
 
+> `song_credits.role_label_text` は、盤に印刷された作家の役職の表記（「原詞」など）。役職名（`roles.name_ja`）と違うときだけ、その役職の連名の先頭行（`credit_seq` がいちばん小さい行）に入れる（`SongCreditRoles.LabelTextOf`）。サイトは楽曲詳細・楽曲一覧のカード・盤のトラック・主題歌の行・OGP カード・meta description の役職の表記をこの文字にし（リンク先は役職のまま）、人物ページ・役職詳細・統計などの集計は役職のまま。Catalog の歌管理は表記のある役職の連名に〔表記〕を添えて見せ、連名を編集し直しても表記を先頭行に引き継ぐ（表記そのものの入力欄は持たない）。
+
 > `song_recording_singers.role_code` は `VOCALS`（歌）・`BACKING_VOCALS`（コーラス）・`DIALOGUE`（台詞：歌わずに曲中のセリフだけで参加する出演者）の 3 役を持つ。書式は 3 役とも同じ（キャラは「キャラ(CV:声優)」）で、楽曲詳細・商品詳細のトラック行・エピソード／シリーズの主題歌欄に歌 → コーラス → 台詞の順で並ぶ。`/creators/roles/vocals/` の担当曲数に数えるのは `VOCALS` だけ。
+
+#### `song_medley_parts` — メドレーの中の曲
+
+メドレーの曲の中の曲を、順序付きの対応表として 1 行 = メドレーの中の 1 曲で持つ。PK は `(medley_song_id, part_seq)`。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `medley_song_id` | INT FK | メドレーの曲（→ `songs`、ON DELETE CASCADE） |
+| `part_seq` | TINYINT UNSIGNED | メドレーの中で何曲目か（1 始まり）。同じ原曲が何度出てもよい |
+| `source_song_id` | INT FK NULL | 原曲（→ `songs`、ON DELETE SET NULL）。版違いは表記どおりの版の曲を指す。原曲が DB に無いときは NULL |
+| `notes` | TEXT NULL | 備考 |
+
+> 原曲の曲名・作詞・作曲・編曲は原曲（`songs` / `song_credits`）から引くので、この表は原曲への紐付けだけを持つ。メドレー全体の編曲は `song_credits` の役職 `MEDLEY_ARRANGEMENT`「メドレー編曲」で持ち、編曲（`ARRANGEMENT`）とは別の役職として集計する（役職詳細 `/creators/roles/medley_arrangement/` は作詞・作曲・編曲と同じ専用集計）。
+>
+> サイトは、曲詳細の基本情報に「メドレー編曲」のバッジ（色は編曲と同じ緑系）を足し、メドレーの曲には「収録曲」（原曲の曲名（原曲へのリンク）と、原曲の作詞・作曲・編曲のバッジの行を順に並べる。楽曲の一覧のカードでは同じ一覧を開け閉めの枠 `<details class="songs-card-medley">`「収録曲（N 曲）」に包んで添える）、原曲には「このメドレーに入っています」（メドレーへのリンク）の節を出す。原曲の作家はメドレーの作家として数えない。メドレー編曲は、盤のトラックの作家の行、シリーズ・エピソードの主題歌の行、クレジットのテンプレの主題歌（`{MEDLEY_ARRANGER}`、既定の描画では「メドレー編曲:」の行）、OGP カード、人物詳細の音楽クレジット（作詞・作曲・編曲の区分）にも出る。入力は Catalog の「歌管理」の曲の構造化クレジットの「メドレー編曲」（連名）と「メドレーの中身」（`SongMedleyPartsEditDialog`。原曲を行ごとに選び、上下で並べ替え、保存で丸ごと差し替え）
 
 #### `music_credits` — 音盤の音楽クレジット
 
@@ -1673,6 +1870,26 @@ Blu-ray / DVD の物理チャプター情報を格納する表。
 | `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
 
 **インデックス**: `ix_video_chapters_part_type (part_type)`
+
+#### `bd_*` — Blu-ray の情報（ディスク ID が鍵）
+
+Blu-ray の BDMV 管理ファイル（暗号化されていない範囲）から読めるものを片っ端から貯める表。鍵は `CERTIFICATE/id.bdmv` のディスク ID（16 バイトの 16 進。無い盤や 0 で埋まっている盤は `index.bdmv`・`MovieObject.bdmv`・全 `.mpls` の SHA-256 の先頭 16 バイトで代用し `disc_id_source = HASH`）で、商品・盤の登録を前提にしない。品番との結びつきは `bd_discs.catalog_no`（→ `discs`、任意）。BDAnalyzer が盤単位で「全削除 → 置換」で投入し、`bd_discs` を消すと子はすべて消える（上記「B. BD/DVD の登録」4）。時刻はミリ秒、コード値は規格のまま。
+
+| テーブル | キー | 主な列 |
+|---|---|---|
+| `bd_discs` | `disc_id` | `disc_id_source`（ID_BDMV / HASH）・`org_id`・`volume_label`・`bdmt_name` / `bdmt_language` / `bdmt_thumbnail_count`（`META/DL/bdmt_*.xml`。日本語を優先）・`index_video_format` / `index_frame_rate`・`first_playback_kind` / `top_menu_kind`（NONE / HDMV / BDJ）・`title_count` / `playlist_count` / `clip_count` / `m2ts_total_bytes`・`has_aacs`・`has_bdj` / `bdjo_count` / `jar_count`・`sound_effect_count`（`AUXDATA/sound.bdmv`）・`series_id`（当てた作品 → `series`）・`catalog_no`・`first_read_at` / `last_read_at` |
+| `bd_titles` | `disc_id`, `title_no`（0=最初の再生、65535=トップメニュー、1〜） | `object_kind`（HDMV / BDJ）・`access_type`・`playback_type`・`mobj_no`・`bdjo_file`・`playlist_file`（ムービーオブジェクトの最初の PlayPL 系の命令が再生するプレイリスト） |
+| `bd_movie_objects` | `disc_id`, `mobj_no` | `resume_intention`・`menu_call_mask`・`title_search_mask`・`command_count`・`playlist_file` |
+| `bd_movie_object_commands` | `disc_id`, `mobj_no`, `cmd_seq` | `opcode_hex`（命令 4 バイトの 16 進）・`dst_operand`・`src_operand`。命令は解かずに生のまま持つ（PlayPL 系の判定だけ：1 バイト目は上位から「オペランド数 3 ビット・グループ 2 ビット＝0〔分岐〕・副グループ 3 ビット＝2〔再生〕」、2 バイト目の下位 4 ビット≦2〔PlayPL / PlayPLatPlayItem / PlayPLatMark〕。例：PlayPL = `22800000`、JumpTitle = `21810000`） |
+| `bd_playlists` | `disc_id`, `playlist_file`（`00000.mpls`） | `duration_ms`（PlayItem の in/out の合計）・`play_item_count`・`sub_path_count`・`mark_count`・`playback_type`（1=連続、2=ランダム、3=シャッフル）・`uo_mask`（操作禁止マスク 64 ビット）・`playlist_kind`（EPISODE / PLAY_ALL / FEATURE〔作品単位の本編。映画など〕 / BONUS / MENU / OTHER。NULL=未判定）・`episode_id`（本編 1 話のとき）・`series_id`（FEATURE のときの作品。併映と続いているときは親の映画、3 本立ては親のまとまり） |
+| `bd_play_items` | `disc_id`, `playlist_file`, `item_seq` | `clip_file`（`00001.m2ts`）・`codec_id`・`in_time_ms` / `out_time_ms`（クリップ内の再生区間）・`playlist_offset_ms`（プレイリスト時間軸での開始位置）・`connection_condition`（1=通常、5/6=シームレス）・`stc_id` |
+| `bd_playlist_marks` | `disc_id`, `playlist_file`, `mark_seq` | `mark_type`（1=Entry〔チャプター〕、2=Link）・`play_item_ref`・`time_ms`（その PlayItem のクリップ内の時刻）・`entry_es_pid`・`duration_ms`。全マークの生データ |
+| `bd_chapters` | `disc_id`, `playlist_file`, `chapter_no` | `start_time_ms` / `duration_ms`（Entry マークで区切った生の区間。プレイリスト時間軸。話の最後のチャプターには 1 秒の余白が付く）・`chapter_kind`（EPISODE_PART / FEATURE〔作品単位の本編〕 / BLANK / BONUS / OTHER。NULL=未判定）・`series_id`（FEATURE のチャプターが当たる作品。併映と続いているときは本編か併映か）・`episode_id` / `episode_seq`（当てた話のパート → `episode_parts`。削除時 SET NULL） |
+| `bd_sub_paths` | `disc_id`, `playlist_file`, `sub_path_seq` | `sub_path_type`・`is_repeat`・`sub_play_item_count`・`first_clip_file` |
+| `bd_clips` | `disc_id`, `clip_file` | `presentation_start_ms` / `presentation_end_ms`（最初・最後の STC シーケンスの提示時刻）・`ts_recording_rate`（バイト/秒）・`source_packets`（192 バイト単位）・`application_type`・`clip_stream_type`・`file_size_bytes`（`STREAM/xxxxx.m2ts` の大きさ。中身は暗号化されていて読まない） |
+| `bd_clip_streams` | `disc_id`, `clip_file`, `stream_pid` | `stream_kind`（VIDEO / AUDIO / PG / IG / TEXT / OTHER）・`coding_type`（0x1B=H.264、0x02=MPEG-2、0x80=LPCM、0x81=AC-3、0x82=DTS、0x90=PG 字幕、0x91=IG、0x92=テキスト字幕 …）・`video_format`（1=480i、2=576i、3=480p、4=1080i、5=720p、6=1080p、7=576p）・`frame_rate`（1=23.976、2=24、3=25、4=29.97、6=50、7=59.94）・`audio_presentation`（1=モノラル、3=ステレオ、6=マルチチャンネル、12=ステレオ＋マルチ）・`sampling_rate`（1=48 kHz、4=96 kHz、5=192 kHz、12=48/192 kHz、14=48/96 kHz）・`language`（ISO 639-2） |
+
+PlayItem が参照するのに CLIPINF の無いクリップは、`bd_clips` に属性が空の行を立てて外部キーを満たす。同じ PID が複数のプログラムに出るときは 1 行だけ持つ。`CLIPINF` の EP マップ（1 クリップで数千〜数万行）と `BACKUP/` は記録しない。`.m2ts` の中身（映像・音声）は暗号化されていて読まない。
 
 ---
 

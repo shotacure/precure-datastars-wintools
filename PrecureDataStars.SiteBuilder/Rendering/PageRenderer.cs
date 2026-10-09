@@ -222,8 +222,7 @@ public sealed class PageRenderer
     /// 単発（<see cref="RenderAndWrite"/>）・並列（<see cref="RenderAndWriteFile"/>）の双方に効く。
     /// </summary>
     private bool ShouldWrite(string urlPath)
-        => string.IsNullOrEmpty(_config.PageFilter)
-        || urlPath.Contains(_config.PageFilter, StringComparison.Ordinal);
+        => _config.MatchesPageFilter(urlPath);
 
     /// <summary>コンテンツテンプレを <paramref name="contentModel"/> で 1 度レンダリング → レイアウトに包んでファイル保存する。</summary>
     /// <param name="urlPath">サイト内 URL パス（先頭スラッシュ付き、末尾スラッシュ付き）。</param>

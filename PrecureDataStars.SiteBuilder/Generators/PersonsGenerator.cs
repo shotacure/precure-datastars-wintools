@@ -29,6 +29,9 @@ public sealed class PersonsGenerator
     /// </summary>
     private readonly SongMusicClassesRepository _songMusicClassesRepo;
 
+    /// <summary>人物の代表作（プリキュアを除く）（person_notable_works）を読むためのリポジトリ。</summary>
+    private readonly PersonNotableWorksRepository _notableWorksRepo;
+
     private readonly CreditInvolvementIndex _index;
 
     /// <summary>役職系譜の代表コード。カードの年表を出すかどうか（サイトの年表に載る人か）の判定に使う。</summary>
@@ -61,6 +64,9 @@ public sealed class PersonsGenerator
     /// 作詞・作曲・編曲（曲単位の仕事）だけの曲は本索引に乗らず、従来どおり曲の代表録音から出典を解決する。</summary>
     private IReadOnlyDictionary<int, IReadOnlyDictionary<int, SongRecording>>? _sungRecordingByAlias;
 
+    /// <summary>person_id → 「代表作（プリキュアを除く）」の表示行（並び順どおり）。<c>GenerateAsync</c> で並列レンダリングの前に 1 度だけ詰める。</summary>
+    private IReadOnlyDictionary<int, IReadOnlyList<NotableWorkView>>? _notableWorksByPerson;
+
     public PersonsGenerator(
         BuildContext ctx,
         PageRenderer page,
@@ -80,6 +86,7 @@ public sealed class PersonsGenerator
         _rolesRepo = new RolesRepository(factory);
         _companyAliasesRepo = new CompanyAliasesRepository(factory);
         _songMusicClassesRepo = new SongMusicClassesRepository(factory);
+        _notableWorksRepo = new PersonNotableWorksRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -196,6 +203,17 @@ public sealed class PersonsGenerator
                     g => (IReadOnlyList<SongRecording>)g.OrderBy(r => r.SongRecordingId).ToList());
         }
 
+        // 「代表作（プリキュアを除く）」も並列レンダリングの前に全件を読み、人物ごとの表示行にしておく。
+        if (_notableWorksByPerson is null)
+        {
+            var allWorks = await _notableWorksRepo.GetAllAsync(ct).ConfigureAwait(false);
+            _notableWorksByPerson = allWorks
+                .GroupBy(w => w.PersonId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (IReadOnlyList<NotableWorkView>)g.Select(ToNotableWorkView).ToList());
+        }
+
         // 人物索引は「クリエイター > スタッフ」（/creators/staff/）に集約。
         // 本ジェネレータは人物単体の詳細ページ（/people/{名前}/）生成に専念する。
 
@@ -220,6 +238,184 @@ public sealed class PersonsGenerator
         }
 
         _ctx.Logger.Success($"persons: {persons.Count} ページ");
+
+        // ユニット（人物の行を持たない名義）の詳細ページ /units/{名前}/。人物と同じ曲の索引（_songRolesByAlias など）を使う
+        // （ExpandSingerParticipants がユニットの名義自身も参加者として返すので、索引にユニットの名義の曲も載っている）。
+        int unitCount = 0;
+        foreach (var unitAliasId in _ctx.EntityUrls.UnitAliasIds)
+        {
+            if (!aliasById.TryGetValue(unitAliasId, out var unitAlias)) continue;
+            _page.RecordWritten(RenderUnitDetail(unitAlias), "units");
+            unitCount++;
+        }
+        _ctx.Logger.Success($"units: {unitCount} ページ");
+    }
+
+    /// <summary>
+    /// ユニット詳細ページ <c>/units/{名前}/</c> をレンダリングしてファイルへ書き出し、URL パスを返す。
+    /// 見出しはユニットの名義の表記、基本情報にメンバー（人物は人物詳細へ、キャラクターは声優つきでキャラクター詳細へ）、
+    /// 本文に人物詳細と同じ「音楽クレジット」の節（ユニットの名義で関わった歌唱・コーラス・作詞・作曲・編曲・演奏など）を置く。
+    /// </summary>
+    private string RenderUnitDetail(PersonAlias unit)
+    {
+        string url = _ctx.EntityUrls.UnitUrl(unit.AliasId)!;
+        string name = unit.Name;
+        var members = BuildUnitMembers(unit.AliasId);
+        var aliasIds = new[] { unit.AliasId };
+        var songCards = BuildPersonSongCards(aliasIds);
+        foreach (var card in songCards)
+            card.AliasUses = SongAliasUses(card.SongId, aliasIds).ToList();
+        var musicSections = BuildPersonMusicSections(aliasIds, songCards, name);
+        // 歌唱者（歌・コーラス・台詞）として参加したユニットか。歌唱の一覧へ戻るリンクとパンくずを出し分ける。
+        bool isSinger = songCards.Any(c => c.Roles.Any(r => PathUtil.IsSingerRole(r.Code)));
+        string coverageLabel = string.IsNullOrEmpty(_ctx.MusicCredits.CoverageLabel) ? _ctx.CreditCoverageLabel : _ctx.MusicCredits.CoverageLabel;
+
+        var content = new UnitDetailModel
+        {
+            Unit = new UnitView
+            {
+                Name = name,
+                NameKana = unit.NameKana ?? "",
+                Notes = unit.Notes ?? "",
+                Members = members
+            },
+            MusicSections = musicSections,
+            IsSinger = isSinger,
+            CoverageLabel = coverageLabel
+        };
+        int songCount = content.MusicSongTotal;
+
+        // meta description：「{ユニット名}は、プリキュアの歌に参加したユニット。メンバーは…。参加した N 曲と、その曲の作品をまとめました。」
+        var memberNames = members.Select(m => m.PlainName).Where(n => n.Length > 0).ToList();
+        string memberSentence = memberNames.Count > 0 ? $"メンバーは{string.Join("・", memberNames)}。" : "";
+        string metaDescription = $"{name}は、プリキュアの歌に参加したユニット。{memberSentence}参加した{songCount}曲と、その曲の作品をまとめました。";
+
+        // 構造化データは Schema.org の MusicGroup 型（メンバーは名前だけを並べる）。
+        var jsonLdDict = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "MusicGroup",
+            ["name"] = name,
+            ["description"] = metaDescription
+        };
+        if (!string.IsNullOrEmpty(_ctx.Config.BaseUrl)) jsonLdDict["url"] = _ctx.Config.BaseUrl + url;
+        if (memberNames.Count > 0)
+            jsonLdDict["member"] = memberNames.Select(n => new Dictionary<string, object?> { ["@type"] = "Person", ["name"] = n }).ToList();
+
+        var layout = new LayoutModel
+        {
+            PageTitle = name,
+            MetaDescription = metaDescription,
+            // パンくずは、歌唱者として参加したユニットだけ「歴代プリキュア歌唱」を挟む。
+            Breadcrumbs = isSinger
+                ? new[]
+                {
+                    new BreadcrumbItem { Label = "ホーム", Url = "/" },
+                    new BreadcrumbItem { Label = "歴代クリエイター", Url = PathUtil.CreatorsLandingUrl() },
+                    new BreadcrumbItem { Label = "歴代プリキュア歌唱", Url = PathUtil.CreatorsSingersUrl() },
+                    new BreadcrumbItem { Label = name, Url = "" }
+                }
+                : new[]
+                {
+                    new BreadcrumbItem { Label = "ホーム", Url = "/" },
+                    new BreadcrumbItem { Label = "歴代クリエイター", Url = PathUtil.CreatorsLandingUrl() },
+                    new BreadcrumbItem { Label = name, Url = "" }
+                },
+            OgType = "profile",
+            JsonLd = JsonLdBuilder.Serialize(jsonLdDict),
+            OgCard = BuildUnitOgCard(name, memberNames, songCards, songCount, coverageLabel)
+        };
+
+        _page.RenderAndWriteFile(url, "units-detail.sbn", content, layout);
+        return url;
+    }
+
+    /// <summary>
+    /// ユニットのメンバーを表示順（member_seq）に並べる。人物のメンバーは名義の表記で人物詳細へリンクし（人物の行が無い名義は文字だけ）、
+    /// キャラクターのメンバーはキャラクター詳細へのリンクに「(CV: 声優)」を添える（「/」で並べるもう一方の名義があれば続けて出す）。
+    /// </summary>
+    private IReadOnlyList<UnitMemberView> BuildUnitMembers(int unitAliasId)
+    {
+        if (!_ctx.UnitMembersByAlias.TryGetValue(unitAliasId, out var members)) return Array.Empty<UnitMemberView>();
+        var personIdsByAlias = _personIdsByAliasForUnits ??= _ctx.AliasIdsByPerson
+            .SelectMany(kv => kv.Value.Select(aid => (Alias: aid, Person: kv.Key)))
+            .GroupBy(x => x.Alias)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Person).ToList());
+        string PersonAliasHtml(int aliasId, out string plain)
+        {
+            plain = _ctx.PersonAliasById.TryGetValue(aliasId, out var a) ? a.GetDisplayName() : "";
+            if (plain.Length == 0) return "";
+            if (personIdsByAlias.TryGetValue(aliasId, out var pids) && pids.Count == 1)
+                return $"<a href=\"{PathUtil.PersonUrl(pids[0])}\">{HtmlUtil.Escape(plain)}</a>";
+            return HtmlUtil.Escape(plain);
+        }
+        string CharacterAliasHtml(int aliasId, out string plain)
+        {
+            plain = _ctx.CharacterAliasById.TryGetValue(aliasId, out var ca) ? ca.Name : "";
+            if (plain.Length == 0 || ca is null) return HtmlUtil.Escape(plain);
+            return $"<a href=\"{PathUtil.CharacterUrl(ca.CharacterId)}\">{HtmlUtil.Escape(plain)}</a>";
+        }
+
+        var result = new List<UnitMemberView>();
+        foreach (var m in members.OrderBy(x => x.MemberSeq))
+        {
+            if (m.MemberKind == PersonAliasMemberKind.Person && m.MemberPersonAliasId is int paid)
+            {
+                string html = PersonAliasHtml(paid, out var plain);
+                if (plain.Length > 0) result.Add(new UnitMemberView { Html = html, PlainName = plain });
+            }
+            else if (m.MemberCharacterAliasId is int caid)
+            {
+                string html = CharacterAliasHtml(caid, out var plain);
+                if (m.MemberSlashCharacterAliasId is int scaid)
+                {
+                    html += " / " + CharacterAliasHtml(scaid, out var slashPlain);
+                    plain += " / " + slashPlain;
+                }
+                if (m.MemberVoicePersonAliasId is int vpaid)
+                {
+                    string voice = PersonAliasHtml(vpaid, out var voicePlain);
+                    if (voicePlain.Length > 0) html += $"<span class=\"unit-member-cv\">(CV: {voice})</span>";
+                }
+                if (plain.Length > 0) result.Add(new UnitMemberView { Html = html, PlainName = plain });
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// ユニット詳細の OGP カード（プロフィール組み）。「ユニット名 → 曲数 → メンバー → 関わった作品 → 初参加の曲」の順。
+    /// 色帯と透かしは音楽（紫、「ユニット」）。曲数はクレジット確認済みの範囲なので、基準点を右下の注記に明記する。
+    /// </summary>
+    private static OgCardSpec BuildUnitOgCard(string name, IReadOnlyList<string> memberNames, IReadOnlyList<PersonSongCard> songCards, int songCount, string coverageLabel)
+    {
+        var badges = new List<OgCardBadge>();
+        if (songCount > 0) badges.Add(new OgCardBadge("曲", $"{songCount}曲"));
+        var inline = memberNames.Count > 0
+            ? new[] { new OgCardFactLine("メンバー", string.Join("・", memberNames.Take(6)) + (memberNames.Count > 6 ? " ほか" : "")) }
+            : Array.Empty<OgCardFactLine>();
+        // 関わった作品（出典の作品の放送開始順、重複を除いて最大 4 つ）。
+        var works = songCards
+            .Where(c => c.SeriesTitle.Length > 0)
+            .OrderBy(c => c.SeriesStartDateRaw ?? DateOnly.MaxValue)
+            .Select(c => c.SeriesTitle)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var facts = works.Take(4).Select(t => new OgCardFactLine("", t)).ToList();
+        if (works.Count > 4) facts.Add(new OgCardFactLine("", $"ほか {works.Count - 4} 作品"));
+        var first = songCards.OrderBy(c => c.SortRecordingId).ThenBy(c => c.SongId).FirstOrDefault();
+        return new OgCardSpec(Kicker: "", Title: name)
+        {
+            MetaLeft = OgCoverageLabel.Compact(coverageLabel),
+            Badges = badges,
+            InlineFacts = inline,
+            BandColorHex = OgCardColors.Music,
+            Watermark = "ユニット",
+            Facts = facts,
+            FootFacts = first is null
+                ? Array.Empty<OgCardFactLine>()
+                : new[] { new OgCardFactLine("初参加", $"「{PrecureDataStars.TemplateRendering.JapaneseQuotes.InQuotes(first.Title)}」") }
+        };
     }
 
     /// <summary>人物詳細ページ <c>/people/{名前}/</c> をレンダリングしてファイルへ書き出し、URL パスを返す。
@@ -248,6 +444,9 @@ public sealed class PersonsGenerator
         // 表示名義の無い人物は正式名。
         string displayName = _ctx.EntityUrls.PersonDisplayName(person.PersonId) ?? person.FullName;
         string displayNameKana = _ctx.EntityUrls.PersonDisplayKana(person.PersonId) ?? (person.FullNameKana ?? "");
+        // 見出し・ページタイトル・パンくず・OGP カードには、同姓同名の別人を見分ける添え書きを添えた名乗りを使う。
+        // 名義との比較（別名義の欄を出すか等）と本文・JSON-LD には添え書きの無い displayName を使う。
+        string displayLabel = _ctx.EntityUrls.PersonDisplayLabel(person.PersonId) ?? displayName;
 
         // 役職別グループ化された関与一覧を組み立て（フラット、全名義横断）。
         // 本編クレジットの欄には本編のクレジット階層に載った関与だけを出す（主題歌・挿入歌経由の作家・歌唱と
@@ -288,7 +487,7 @@ public sealed class PersonsGenerator
             Person = new PersonView
             {
                 PersonId = person.PersonId,
-                DisplayName = displayName,
+                DisplayName = displayLabel,
                 DisplayNameKana = displayNameKana,
                 FullName = person.FullName,
                 FullNameKana = person.FullNameKana ?? "",
@@ -309,6 +508,9 @@ public sealed class PersonsGenerator
             CreditEpisodeCountTotal = creditEpisodeCountTotal,
             CreditMovieCountTotal = creditMovieCountTotal,
             MusicSections = musicSections,
+            NotableWorks = _notableWorksByPerson!.TryGetValue(person.PersonId, out var works)
+                ? works
+                : Array.Empty<NotableWorkView>(),
             CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 人物詳細の構造化データは Schema.org の Person 型。
@@ -363,14 +565,14 @@ public sealed class PersonsGenerator
 
         var layout = new LayoutModel
         {
-            PageTitle = displayName,
+            PageTitle = displayLabel,
             MetaDescription = metaDescription,
             // パンくずの中間の段は、本人が載っている一覧（スタッフ → 声の出演 → 歌唱 → 音楽制作 の順で最初のもの）。
             // どの一覧にも載っていなければ中間の段を置かない。
-            Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForPerson(person.PersonId), displayName),
+            Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForPerson(person.PersonId), displayLabel),
             OgType = "profile",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(displayName, personUrl, involvementGroups, allPersonInvolvements, firstAppearance, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(displayLabel, personUrl, involvementGroups, allPersonInvolvements, firstAppearance, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
         };
 
         _page.RenderAndWriteFile(personUrl, "persons-detail.sbn", content, layout);
@@ -658,6 +860,11 @@ public sealed class PersonsGenerator
             // テンプレはこちらを優先描画し、各役の配下にシリーズと話数を出す（シリーズや映画をまたぐ役も
             // 1 つのくくりに通算される）。役が 1 つだけなら従来どおりシリーズ行に「— キャラ名」を併記する。
             var characterSections = BuildVoiceCharacterSections(roleGroup);
+            // その役職を初めて担当（声の出演は出演）した回。見出しの下に「初担当 『作品』第N話（放送日）」の 1 行で添える。
+            // 収録範囲より後の関与しか無い役職は求まらないので出さない。
+            var firstCredit = FirstAppearanceResolver.Resolve(_ctx, roleGroup);
+            bool isVoiceCast = _roleMap!.TryGetValue(roleCode, out var firstRoleDef)
+                               && string.Equals(firstRoleDef.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
 
             groups.Add(new InvolvementGroup
             {
@@ -666,6 +873,8 @@ public sealed class PersonsGenerator
                 RoleUrl = roleUrl,
                 SeriesRows = seriesRows,
                 CharacterSections = characterSections,
+                FirstCreditHtml = firstCredit?.ToHtml() ?? "",
+                FirstCreditLabel = isVoiceCast ? "初出演" : "初担当",
                 EpisodeCount = episodeCountTotal,
                 MovieCount = movieCountTotal,
                 HasCharacterColumn = seriesRows.Any(r => !string.IsNullOrEmpty(r.CharacterNames))
@@ -1220,7 +1429,51 @@ public sealed class PersonsGenerator
     private string? GetCompanyAliasName(int aliasId)
         => _ctx.CompanyAliasById.TryGetValue(aliasId, out var ca) ? ca.Name : null;
 
+    /// <summary>代表作 1 行を表示行にする。時期は「2010」「2010–2012」の形（年が無ければ空文字）。</summary>
+    private static NotableWorkView ToNotableWorkView(PersonNotableWork w) => new()
+    {
+        Period = w.YearFrom is int from
+            ? (w.YearTo is int to && to != from ? $"{from}–{to}" : $"{from}")
+            : "",
+        Title = w.WorkTitle,
+        Role = w.RoleLabel,
+        Url = w.OfficialUrl ?? "",
+        IsArchive = w.OfficialUrlIsArchive && !string.IsNullOrEmpty(w.OfficialUrl)
+    };
+
     // ─── テンプレ用 DTO 群 ───
+
+    /// <summary>ユニット詳細で使う alias_id → person_id 群の逆引き（初回のユニットのページで 1 度だけ作る）。</summary>
+    private Dictionary<int, List<int>>? _personIdsByAliasForUnits;
+
+    /// <summary>ユニット詳細ページのモデル。</summary>
+    private sealed class UnitDetailModel
+    {
+        public UnitView Unit { get; set; } = new();
+        /// <summary>音楽クレジットの節（人物詳細と同じ組み立て）。</summary>
+        public IReadOnlyList<PersonMusicSection> MusicSections { get; set; } = Array.Empty<PersonMusicSection>();
+        public int MusicSongTotal => MusicSections.SelectMany(s => s.SongKeys).Distinct(StringComparer.Ordinal).Count();
+        public int MusicBgmTotal => MusicSections.SelectMany(s => s.BgmKeys).Distinct(StringComparer.Ordinal).Count();
+        public int MusicDiscTotal => MusicSections.SelectMany(s => s.DiscKeys).Distinct(StringComparer.Ordinal).Count();
+        /// <summary>歌唱者（歌・コーラス・台詞）として参加したユニットか。</summary>
+        public bool IsSinger { get; set; }
+        public string CoverageLabel { get; set; } = "";
+    }
+
+    private sealed class UnitView
+    {
+        public string Name { get; set; } = "";
+        public string NameKana { get; set; } = "";
+        public string Notes { get; set; } = "";
+        public IReadOnlyList<UnitMemberView> Members { get; set; } = Array.Empty<UnitMemberView>();
+    }
+
+    /// <summary>ユニットのメンバー 1 人分（リンク済み HTML と、meta description・OGP 用の素の名前）。</summary>
+    private sealed class UnitMemberView
+    {
+        public string Html { get; set; } = "";
+        public string PlainName { get; set; } = "";
+    }
 
     private sealed class PersonDetailModel
     {
@@ -1242,8 +1495,25 @@ public sealed class PersonsGenerator
         public int MusicSongTotal => MusicSections.SelectMany(s => s.SongKeys).Distinct(StringComparer.Ordinal).Count();
         public int MusicBgmTotal => MusicSections.SelectMany(s => s.BgmKeys).Distinct(StringComparer.Ordinal).Count();
         public int MusicDiscTotal => MusicSections.SelectMany(s => s.DiscKeys).Distinct(StringComparer.Ordinal).Count();
+        /// <summary>代表作（プリキュアを除く）（並び順どおり）。空なら「代表作（プリキュアを除く）」セクションを出さない。</summary>
+        public IReadOnlyList<NotableWorkView> NotableWorks { get; set; } = Array.Empty<NotableWorkView>();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
+    }
+
+    /// <summary>「代表作（プリキュアを除く）」の 1 行。</summary>
+    private sealed class NotableWorkView
+    {
+        /// <summary>時期（「2010」「2010–2012」。不明なら空文字）。</summary>
+        public string Period { get; set; } = "";
+        /// <summary>作品名。</summary>
+        public string Title { get; set; } = "";
+        /// <summary>役職。</summary>
+        public string Role { get; set; } = "";
+        /// <summary>作品名からリンクする公式サイト（無ければ空文字）。</summary>
+        public string Url { get; set; } = "";
+        /// <summary>true なら <see cref="Url"/> は閉鎖済み公式サイトのアーカイブ。リンクの後ろにその旨を添える。</summary>
+        public bool IsArchive { get; set; }
     }
 
     private sealed class PersonView

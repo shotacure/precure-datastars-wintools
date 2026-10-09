@@ -89,8 +89,19 @@
        未解禁のときは C# 側で ep-subtitle-guard span に包まれた状態で渡ってくる
        （subtitle-embargo.js がぼかし表示・解禁を担う）。
        テロップ画像（本編のテロップの体裁で描いた透過 PNG）がある話は、HTML の代わりに画像を中央に置く。
-       画像は 2 倍の画素で描いてあり、width / height と --telop-w は表示の大きさ。 ##}}
-  {{~ if Episode.SubtitleTelopSrc != "" ~}}
+       画像は 2 倍の画素で描いてあり、width / height と --telop-w は表示の大きさ。
+       解禁前の話は、画像とぼかした HTML の両方を解禁時刻つきの枠に入れ、解禁されるか閲覧者が先の題を見る設定にするまで
+       画像を隠す（subtitle-embargo.js が枠に is-revealed を付け外しする。隠している間は画像を読み込まないよう loading="lazy"）。 ##}}
+  {{~ if Episode.SubtitleTelopSrc != "" && Episode.SubtitleTelopRevealAt != "" ~}}
+  <div class="subtitle-telop-guard" data-reveal-at="{{ Episode.SubtitleTelopRevealAt }}">
+    <div class="subtitle-display subtitle-telop subtitle-telop-image">
+      <img src="{{ Episode.SubtitleTelopSrc }}" width="{{ Episode.SubtitleTelopWidth }}" height="{{ Episode.SubtitleTelopHeight }}" style="--telop-w: {{ Episode.SubtitleTelopWidth }}px" alt="{{ Episode.TitleText | html.escape }}" loading="lazy" decoding="async">
+    </div>
+    <div class="subtitle-display subtitle-telop-fallback">
+      {{ Episode.SubtitleGuardedDisplayHtml }}
+    </div>
+  </div>
+  {{~ else if Episode.SubtitleTelopSrc != "" ~}}
   <div class="subtitle-display subtitle-telop">
     <img src="{{ Episode.SubtitleTelopSrc }}" width="{{ Episode.SubtitleTelopWidth }}" height="{{ Episode.SubtitleTelopHeight }}" style="--telop-w: {{ Episode.SubtitleTelopWidth }}px" alt="{{ Episode.TitleText | html.escape }}" decoding="async">
   </div>
@@ -217,7 +228,7 @@
         {{## 1 行目：[OP/ED/挿入歌バッジ] 「タイトル」 (TV size) (本放送のみ) ##}}
         <div class="ts-headline">
           <span class="ts-kind">{{ t.KindLabel | html.escape }}</span>
-          <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>{{~ else ~}}{{ t.Title | html.escape }}{{~ end ~}}」</span>
+          <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | in_quotes | html.escape }}</a>{{~ else ~}}{{ t.Title | in_quotes | html.escape }}{{~ end ~}}」</span>
           {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
           {{~ if t.ArtTrackId != "" ~}}<button type="button" class="art-track-play ts-play{{ if t.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ t.ArtTrackId | html.escape }}"{{ if t.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }}{{ if t.ArtTrackAltId != "" }} data-art-track-alt-id="{{ t.ArtTrackAltId | html.escape }}" data-art-track-alt-sub="{{ t.ArtTrackAltSourceAlbum | html.escape }}"{{ end }} data-art-track-title="{{ t.Title | html.escape }}" data-art-track-sub="{{ t.ArtTrackSourceAlbum | html.escape }}" aria-label="{{ t.Title | html.escape }} を再生{{ if t.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if t.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>{{~ end ~}}
         </div>
@@ -243,6 +254,9 @@
         {{~ end ~}}
         {{~ if t.ArrangementHtml != "" ~}}
         <div class="ts-meta-row"><span class="ts-meta-label">{{ t.ArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ArrangementHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.MedleyArrangementHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.MedleyArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.MedleyArrangementHtml }}</span></div>
         {{~ end ~}}
         {{~ if t.Notes != "" ~}}
         <div class="ts-meta-row ts-meta-notes muted">{{ t.Notes | html.escape }}</div>

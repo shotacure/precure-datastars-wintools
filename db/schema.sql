@@ -323,6 +323,28 @@ CREATE TABLE `series_subtitle_styles` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `subtitle_fonts`
+--
+
+DROP TABLE IF EXISTS `subtitle_fonts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+-- サブタイトルのテロップ画像（エピソード詳細のサブタイトル欄・OGP カードのサブタイトル）に使うフォントのマスタ。
+-- font_name は series_subtitle_styles の font_subtitle / font_subtitle_ruby と同じ Windows の書体名で結び付く。
+-- 免責事項ページの「使用フォントの一覧」の出どころ（行の無い書体は名前だけ・リンク無しで出る）。値は SQL で入れる。
+CREATE TABLE `subtitle_fonts` (
+  `font_name` varchar(64) NOT NULL COMMENT 'Windows の書体名（series_subtitle_styles の font_subtitle / font_subtitle_ruby と同じ文字列）',
+  `license_kind` varchar(16) NOT NULL COMMENT 'ライセンス区分 FONTWORKS_LETS / MORISAWA_FONTS',
+  `display_name` varchar(64) DEFAULT NULL COMMENT '提供元の書き方の製品名（NULL なら font_name をそのまま出す）',
+  `product_url` varchar(1024) DEFAULT NULL COMMENT '提供元の製品ページ（免責事項の使用フォント一覧でリンクする先）',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`font_name`),
+  CONSTRAINT `ck_subtitle_fonts_license` CHECK (`license_kind` IN ('FONTWORKS_LETS', 'MORISAWA_FONTS'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='サブタイトルのテロップ画像に使うフォントのマスタ';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `series_kinds`
 --
 
@@ -1129,6 +1151,38 @@ CREATE TABLE `tracks` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `track_audio_fingerprints`
+-- CD の各トラックの音から取った特徴量（ランドマーク指紋）と PCM 全体の SHA-256。
+-- CDAnalyzer が READ CD で読んだ音から取る。物理トラック単位なので sub_order は常に 0。
+--
+
+DROP TABLE IF EXISTS `track_audio_fingerprints`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `track_audio_fingerprints` (
+  `catalog_no` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '所属ディスクの品番（→ tracks）',
+  `track_no` tinyint unsigned NOT NULL COMMENT 'トラック番号（→ tracks）',
+  `sub_order` tinyint unsigned NOT NULL DEFAULT '0' COMMENT 'トラック内順序。物理トラック単位なので常に 0',
+  `method_version` tinyint unsigned NOT NULL COMMENT '特徴量の取り方の版（LandmarkFingerprinter.MethodVersion）',
+  `sample_rate_hz` int unsigned NOT NULL COMMENT '解析時のサンプリング周波数（Hz）',
+  `fft_size` smallint unsigned NOT NULL COMMENT 'FFT の点数',
+  `hop_samples` smallint unsigned NOT NULL COMMENT 'フレームの間隔（サンプル数）。フレーム番号 × これ ÷ sample_rate_hz が秒',
+  `hash_count` int unsigned NOT NULL COMMENT '指紋の項目数',
+  `duration_ms` int unsigned NOT NULL COMMENT '読んだ音の長さ（ミリ秒）',
+  `pcm_sha256` char(64) NOT NULL COMMENT '読んだ PCM 全体（16 ビット LE ステレオ）の SHA-256（16 進小文字）',
+  `fingerprint` longblob NOT NULL COMMENT '指紋のバイト列（1 項目 6 バイト：ハッシュ 3 バイト LE ＋ フレーム番号 3 バイト LE。時刻順）',
+  `read_at` datetime NOT NULL COMMENT '音を読んだ日時',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by` varchar(64) DEFAULT NULL,
+  `updated_by` varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`catalog_no`,`track_no`,`sub_order`),
+  KEY `idx_track_audio_fingerprints_sha` (`pcm_sha256`),
+  CONSTRAINT `fk_track_audio_fingerprints_track` FOREIGN KEY (`catalog_no`, `track_no`, `sub_order`) REFERENCES `tracks` (`catalog_no`, `track_no`, `sub_order`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='CD のトラックの音の特徴量（ランドマーク指紋）と PCM のハッシュ';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `video_chapters`
 -- BD/DVD のチャプター情報を格納する物理層テーブル。`tracks` が CD-DA 専用なのと同様に、
 -- `video_chapters` は光学ディスク (discs.media_format IN ('BD','DVD')) のチャプター専用。
@@ -1470,6 +1524,8 @@ CREATE TABLE `persons` (
   -- 本名義：見出し・URL・一覧の行表記に使う名義。NULL なら公開中の名義 → TV 系のクレジットで最後に使われた名義。
   `primary_alias_id` int                                                                  DEFAULT NULL,
   `name_en`          varchar(128)                                                         DEFAULT NULL,
+  -- 同姓同名の別人を見分ける添え書き（例: 声優 / 背景美術）。サイトの URL と名乗りに「名前 (添え書き)」の形で添える。
+  `disambiguation`   varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks   DEFAULT NULL,
   `birth_year`             smallint unsigned                                              DEFAULT NULL,  -- 生年（西暦。不明は NULL）
   `birth_year_visibility`  varchar(16)                                                    NOT NULL DEFAULT 'PUBLIC',  -- PUBLIC=生成に出す / PRIVATE=出さない（本人スタンス尊重）
   `birth_month`            tinyint unsigned                                               DEFAULT NULL,
@@ -1508,6 +1564,39 @@ CREATE TABLE `persons` (
   CONSTRAINT `ck_persons_death_day_needs_month` CHECK (`death_day` IS NULL OR `death_month` IS NOT NULL),
   CONSTRAINT `ck_persons_death_month_needs_year` CHECK (`death_month` IS NULL OR `death_year` IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `person_notable_works`
+-- 人物のプリキュア以外の代表作（1 行 = 1 人物 × 1 作品 × 1 役職）。作品名・役職はテキスト。
+-- official_url はサイトでリンクする作品の公式サイト。閉鎖済みでアーカイブに残る公式サイトで確かめたときは
+-- アーカイブの URL を入れて official_url_is_archive = 1。source_url は裏取りに使ったスタッフ表（内部用）。
+--
+DROP TABLE IF EXISTS `person_notable_works`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `person_notable_works` (
+  `work_id`                  int                                                                 NOT NULL AUTO_INCREMENT,
+  `person_id`                int                                                                 NOT NULL,
+  `display_order`            smallint unsigned                                                   NOT NULL DEFAULT 0,
+  `work_title`               varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `role_label`               varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `year_from`                smallint unsigned DEFAULT NULL,
+  `year_to`                  smallint unsigned DEFAULT NULL,
+  `official_url`             varchar(1024) DEFAULT NULL COMMENT '作品の公式サイト（サイトでリンクする先）',
+  `official_url_is_archive`  tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 なら official_url は閉鎖済み公式サイトのアーカイブ',
+  `source_url`               varchar(1024) DEFAULT NULL COMMENT '裏取りに使ったスタッフ表のページ（内部用）',
+  `notes`                    text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`               timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`               timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`               varchar(64) DEFAULT NULL,
+  `updated_by`               varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`work_id`),
+  KEY `ix_person_notable_works_person` (`person_id`, `display_order`),
+  CONSTRAINT `fk_person_notable_works_person` FOREIGN KEY (`person_id`) REFERENCES `persons` (`person_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `ck_person_notable_works_years`  CHECK (`year_to` IS NULL OR (`year_from` IS NOT NULL AND `year_from` <= `year_to`)),
+  CONSTRAINT `ck_person_notable_works_archive` CHECK (`official_url_is_archive` IN (0, 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='人物のプリキュア以外の代表作';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -2147,6 +2236,36 @@ CREATE TABLE `role_successions` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- 役職どうしの関連（段階・並列）の関係テーブル
+--
+-- 系譜（role_successions）が「同じ役職の名前の移り変わり」なのに対し、こちらは別の役職どうしの関係。
+-- 集計は役職ごとに分けたまま、人物の歩み（演出助手を経て演出を初担当、など）と役職詳細の年表に使う。
+--   STEP_UP  ：段階。from_role_code が前段階、to_role_code が後段階（向きあり）
+--   PARALLEL ：並列。同じ段階で並んで担う役職（向きなし。role_code の小さいほうを from に置く）
+-- 1 組の役職に関係は 1 つ（PK = from / to）。自己ループは role_successions と同じく
+-- アプリ層（RoleRelationsRepository.UpsertAsync）で弾く。
+--
+
+DROP TABLE IF EXISTS `role_relations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `role_relations` (
+  `from_role_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `to_role_code`   varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `relation_kind`  enum('STEP_UP','PARALLEL') NOT NULL,
+  `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`     varchar(64) DEFAULT NULL,
+  `updated_by`     varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`from_role_code`, `to_role_code`),
+  KEY `idx_role_relations_to` (`to_role_code`),
+  CONSTRAINT `fk_role_relations_from` FOREIGN KEY (`from_role_code`) REFERENCES `roles`(`role_code`) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT `fk_role_relations_to`   FOREIGN KEY (`to_role_code`)   REFERENCES `roles`(`role_code`) ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `role_templates`
 -- 役職テンプレート。既定テンプレ（全シリーズ共通）とシリーズ別上書きを単一テーブルで管理する。
 --   - series_id IS NULL ：既定テンプレ（全シリーズ共通）
@@ -2276,6 +2395,11 @@ CREATE TABLE `credit_card_tiers` (
   `card_tier_id`  int             NOT NULL AUTO_INCREMENT,
   `card_id`       int             NOT NULL,
   `tier_no`       tinyint unsigned NOT NULL,
+  -- 画面の上での位置。ティアは横位置の違うまとまり（左の列・右の列・下の中央など）で、tier_no は並び順だけを表す。
+  -- position_v = 縦（T=上 / M=中 / B=下）、position_h = 横（L=左 / C=中央 / R=右）。NULL は未確認。
+  -- サイトのクレジットはティアを縦に積んで出し、位置は表示に使わない（情報として持つ）。
+  `position_v`    enum('T','M','B') DEFAULT NULL,
+  `position_h`    enum('L','C','R') DEFAULT NULL,
   `notes`         text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2336,6 +2460,19 @@ CREATE TABLE `credit_card_roles` (
   -- PREFIX = 名前左の屋号列（映画の「製作:」「配給:」「宣伝:」の 2 カラム表記）。
   -- 同じ役職コードでも作品ごとに切り替わるため、ロールマスタ側ではなくここに per-instance で持つ。
   `affiliation_layout` enum('SUFFIX','PREFIX')                            NOT NULL DEFAULT 'SUFFIX',
+  -- 画面の役職の表記。役職マスタの name_ja と表記（中黒・送り仮名・長音など）が違うときだけ入れる。
+  -- NULL なら name_ja で出す。クレジットの表示だけに使い、集計は role_code のまま。
+  `role_label_text` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- 画面に出た役職名の誤記。NULL なら誤記なし。表示は誤記（取り消し線）を 1 行目、正しい表記（role_label_text か name_ja）を
+  -- 2 行目に改行して出す。集計は role_code のまま。
+  `role_misprint_text` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- 画面で 1 行にまとめて出る役職（「キャラクターデザイン・作画監督」など）の表示。
+  -- データは役職ごとに分けて同じエントリを入れ、表示だけをまとめる（集計は役職ごとに分かれたまま）。
+  -- join_previous = 1 なら直前の役職（同じグループの一つ前）と 1 行にまとめる。2 つ目以降の役職に立てる。
+  -- join_separator = まとめた行での直前の役職との区切りの文字（「・」「／」など画面どおり）。NULL は区切りなし。
+  -- まとめた行の役職名は、各役職の表記（role_label_text か name_ja）を区切りでつないで組み立てる。
+  `join_previous`  tinyint                                               NOT NULL DEFAULT 0,
+  `join_separator` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2359,6 +2496,7 @@ CREATE TABLE `credit_card_roles` (
 -- heading_series_id / heading_text はブロック先頭の見出し（映画の声の出演の作品ごとのまとまりの頭に出る作品名、
 -- 「特別出演」など）。作品を指すときは heading_series_id、画面の表記が作品の正式タイトルと違うときや
 -- 作品ではない見出しは heading_text に画面どおりの文字を入れる。
+-- heading_italic は見出しを画面どおり斜体で出すか（プリキュアオールスターズDX の声の出演の作品名など）。
 --
 DROP TABLE IF EXISTS `credit_role_blocks`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -2371,6 +2509,7 @@ CREATE TABLE `credit_role_blocks` (
   `leading_company_alias_id`  int             DEFAULT NULL,
   `heading_series_id`         int             DEFAULT NULL COMMENT 'ブロック先頭の見出しにする作品（series.series_id）。映画の声の出演の作品ごとのまとまりなど',
   `heading_text`              varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'ブロック先頭の見出しの文字（画面の表記どおり）。NULL なら作品の正式タイトル',
+  `heading_italic`            tinyint(1) NOT NULL DEFAULT 0 COMMENT 'ブロック先頭の見出しを斜体で出すか（画面どおり）',
   `notes`                     text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2486,6 +2625,9 @@ CREATE TABLE `episode_theme_songs` (
   `seq`                     tinyint unsigned                                     NOT NULL DEFAULT '0',
   `usage_actuality`         enum('NORMAL','BROADCAST_NOT_CREDITED','CREDITED_NOT_BROADCAST') NOT NULL DEFAULT 'NORMAL',
   `song_recording_id`       int                                                  NOT NULL,
+  -- クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。NULL なら誤記なし。
+  -- クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名（songs.title）を続ける。
+  `title_misprint_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2515,6 +2657,9 @@ CREATE TABLE `series_theme_songs` (
   `seq`                     tinyint unsigned                                     NOT NULL DEFAULT '0',
   `usage_actuality`         enum('NORMAL','BROADCAST_NOT_CREDITED','CREDITED_NOT_BROADCAST') NOT NULL DEFAULT 'NORMAL',
   `song_recording_id`       int                                                  NOT NULL,
+  -- クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。NULL なら誤記なし。
+  -- クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名（songs.title）を続ける。
+  `title_misprint_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2891,6 +3036,7 @@ CREATE TABLE `song_credits` (
   `credit_role`         varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `credit_seq`          tinyint unsigned NOT NULL,
   `person_alias_id`     int              NOT NULL,
+  `role_label_text`     varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '盤の役職の表記（役職名と違うときだけ）。役職の連名の先頭行の値を使う',
   `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2905,6 +3051,31 @@ CREATE TABLE `song_credits` (
   CONSTRAINT `fk_song_credits_song`  FOREIGN KEY (`song_id`)         REFERENCES `songs`          (`song_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_song_credits_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_song_credits_role`  FOREIGN KEY (`credit_role`)     REFERENCES `roles`          (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `song_medley_parts`
+-- メドレーの中の曲を順序付きで持つ対応表（1 行 = メドレーの中の 1 曲）。
+-- source_song_id は原曲（版違いは表記どおりの版の曲）。原曲の曲名・作詞・作曲・編曲は原曲（songs / song_credits）から引く。
+--
+DROP TABLE IF EXISTS `song_medley_parts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `song_medley_parts` (
+  `medley_song_id`      int              NOT NULL,
+  `part_seq`            tinyint unsigned NOT NULL,
+  `source_song_id`      int              DEFAULT NULL,
+  `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`          varchar(64)      DEFAULT NULL,
+  `updated_by`          varchar(64)      DEFAULT NULL,
+  PRIMARY KEY (`medley_song_id`, `part_seq`),
+  KEY `ix_song_medley_parts_source` (`source_song_id`),
+  CONSTRAINT `ck_song_medley_parts_seq_pos` CHECK (`part_seq` >= 1),
+  CONSTRAINT `fk_song_medley_parts_medley` FOREIGN KEY (`medley_song_id`) REFERENCES `songs` (`song_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_song_medley_parts_source` FOREIGN KEY (`source_song_id`) REFERENCES `songs` (`song_id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -3165,6 +3336,213 @@ INSERT INTO `book_credit_roles` (`role_code`,`name_ja`,`name_en`,`amazon_role_ty
 UNLOCK TABLES;
 
 --
+-- Blu-ray の bd_* テーブル群
+-- BDMV の管理ファイル（暗号化されていない範囲）から読めるものを、ディスクから取れる識別子（CERTIFICATE/id.bdmv のディスク ID。
+-- 無い盤は管理ファイルのハッシュ）だけを鍵にして貯める。商品・盤（products / discs）の登録を前提にせず、品番との結びつきは
+-- bd_discs.catalog_no に後から任意で入れる。BDAnalyzer が盤単位で「全削除 → 置換」で投入する（bd_discs を消すと子はすべて消える）。
+-- 時刻はミリ秒（45 kHz tick を換算）、コード値は規格のまま（読み方は README）。チャプターの尺は生の値で、
+-- 話の最後のチャプターには 1 秒の余白が付く。話とパートの尺は episode_parts.disc_length を正とする。
+--
+
+DROP TABLE IF EXISTS `bd_clip_streams`;
+DROP TABLE IF EXISTS `bd_clips`;
+DROP TABLE IF EXISTS `bd_sub_paths`;
+DROP TABLE IF EXISTS `bd_chapters`;
+DROP TABLE IF EXISTS `bd_playlist_marks`;
+DROP TABLE IF EXISTS `bd_play_items`;
+DROP TABLE IF EXISTS `bd_playlists`;
+DROP TABLE IF EXISTS `bd_movie_object_commands`;
+DROP TABLE IF EXISTS `bd_movie_objects`;
+DROP TABLE IF EXISTS `bd_titles`;
+DROP TABLE IF EXISTS `bd_discs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `bd_discs` (
+  `disc_id`              char(32) NOT NULL COMMENT 'ディスク ID（CERTIFICATE/id.bdmv の 16 バイトの 16 進。無い盤は管理ファイルのハッシュ）',
+  `disc_id_source`       enum('ID_BDMV','HASH') NOT NULL DEFAULT 'ID_BDMV' COMMENT 'disc_id の出どころ',
+  `org_id`               char(8)  DEFAULT NULL COMMENT 'CERTIFICATE/id.bdmv の組織 ID（4 バイトの 16 進）',
+  `volume_label`         varchar(64) DEFAULT NULL COMMENT 'UDF のボリュームラベル',
+  `bdmt_name`            varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'ディスクの表示名（META/DL/bdmt_*.xml の name）',
+  `bdmt_language`        char(3) DEFAULT NULL COMMENT 'ディスク名の言語（bdmt_jpn.xml → jpn）',
+  `bdmt_thumbnail_count` tinyint unsigned DEFAULT NULL COMMENT 'ディスク名に添えられたサムネイル画像の数',
+  `index_video_format`   tinyint unsigned DEFAULT NULL COMMENT 'index.bdmv の映像形式（規格のコード）',
+  `index_frame_rate`     tinyint unsigned DEFAULT NULL COMMENT 'index.bdmv のフレームレート（規格のコード）',
+  `first_playback_kind`  enum('NONE','HDMV','BDJ') DEFAULT NULL COMMENT '最初に再生されるオブジェクトの種別',
+  `top_menu_kind`        enum('NONE','HDMV','BDJ') DEFAULT NULL COMMENT 'トップメニューのオブジェクトの種別',
+  `title_count`          smallint unsigned DEFAULT NULL COMMENT 'index.bdmv のタイトル数',
+  `playlist_count`       smallint unsigned DEFAULT NULL COMMENT 'PLAYLIST の .mpls の数',
+  `clip_count`           smallint unsigned DEFAULT NULL COMMENT 'CLIPINF のクリップ数',
+  `m2ts_total_bytes`     bigint unsigned DEFAULT NULL COMMENT 'STREAM/*.m2ts の合計サイズ（バイト）',
+  `has_aacs`             tinyint NOT NULL DEFAULT 0 COMMENT 'AACS フォルダがあるか',
+  `has_bdj`              tinyint NOT NULL DEFAULT 0 COMMENT 'BD-J オブジェクト（BDJO）があるか',
+  `bdjo_count`           smallint unsigned DEFAULT NULL COMMENT 'BDJO/*.bdjo の数',
+  `jar_count`            smallint unsigned DEFAULT NULL COMMENT 'JAR/*.jar の数',
+  `sound_effect_count`   smallint unsigned DEFAULT NULL COMMENT 'AUXDATA/sound.bdmv のメニュー効果音の数',
+  `series_id`            int DEFAULT NULL COMMENT '当てた作品（→ series。チャプターの尺の並びを各話のパートの円盤尺と突き合わせて決める）',
+  `catalog_no`           varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT '結びつけた盤の品番（→ discs。任意。品番はディスクのデータには無い）',
+  `first_read_at`        datetime DEFAULT NULL COMMENT '最初に読んだ日時',
+  `last_read_at`         datetime DEFAULT NULL COMMENT '最後に読んだ日時',
+  `created_at`           timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`           timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`           varchar(64) DEFAULT NULL,
+  `updated_by`           varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`disc_id`),
+  KEY `ix_bd_discs_catalog` (`catalog_no`),
+  CONSTRAINT `fk_bd_discs_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_bd_discs_disc` FOREIGN KEY (`catalog_no`) REFERENCES `discs` (`catalog_no`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Blu-ray の盤（ディスク ID が鍵。商品・盤の登録を前提にしない）';
+
+CREATE TABLE `bd_titles` (
+  `disc_id`        char(32) NOT NULL,
+  `title_no`       smallint unsigned NOT NULL COMMENT 'タイトル番号（0=最初の再生、65535=トップメニュー、1〜=タイトル）',
+  `object_kind`    enum('HDMV','BDJ') NOT NULL COMMENT 'HDMV のムービーオブジェクトか BD-J オブジェクトか',
+  `access_type`    tinyint unsigned DEFAULT NULL COMMENT 'タイトルのアクセス種別（規格のコード）',
+  `playback_type`  tinyint unsigned DEFAULT NULL COMMENT '再生種別（規格のコード：0=映画、1=対話）',
+  `mobj_no`        smallint unsigned DEFAULT NULL COMMENT 'HDMV のとき：参照するムービーオブジェクトの番号',
+  `bdjo_file`      varchar(16) DEFAULT NULL COMMENT 'BD-J のとき：参照する BDJO のファイル名',
+  `playlist_file`  varchar(16) DEFAULT NULL COMMENT 'HDMV のとき：ムービーオブジェクトが最初に再生するプレイリスト（命令から解いたもの）',
+  `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_by`     varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`disc_id`, `title_no`),
+  CONSTRAINT `fk_bd_titles_disc` FOREIGN KEY (`disc_id`) REFERENCES `bd_discs` (`disc_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='index.bdmv のタイトル一覧';
+
+CREATE TABLE `bd_movie_objects` (
+  `disc_id`            char(32) NOT NULL,
+  `mobj_no`            smallint unsigned NOT NULL COMMENT 'ムービーオブジェクトの番号（0 始まり）',
+  `resume_intention`   tinyint NOT NULL DEFAULT 0 COMMENT '中断からの再開を意図するか',
+  `menu_call_mask`     tinyint NOT NULL DEFAULT 0 COMMENT 'メニュー呼び出しを禁止するか',
+  `title_search_mask`  tinyint NOT NULL DEFAULT 0 COMMENT 'タイトル検索を禁止するか',
+  `command_count`      smallint unsigned NOT NULL COMMENT 'ナビゲーション命令の数',
+  `playlist_file`      varchar(16) DEFAULT NULL COMMENT '最初の PlayPL 系の命令が再生するプレイリスト（命令から解いたもの）',
+  `created_at`         timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_by`         varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`disc_id`, `mobj_no`),
+  CONSTRAINT `fk_bd_movie_objects_disc` FOREIGN KEY (`disc_id`) REFERENCES `bd_discs` (`disc_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='MovieObject.bdmv のムービーオブジェクト';
+
+CREATE TABLE `bd_movie_object_commands` (
+  `disc_id`      char(32) NOT NULL,
+  `mobj_no`      smallint unsigned NOT NULL,
+  `cmd_seq`      smallint unsigned NOT NULL COMMENT '命令の順（1 始まり）',
+  `opcode_hex`   char(8) NOT NULL COMMENT '命令の 4 バイト（16 進 8 桁。生の値）',
+  `dst_operand`  int unsigned NOT NULL COMMENT '第 1 オペランド',
+  `src_operand`  int unsigned NOT NULL COMMENT '第 2 オペランド',
+  PRIMARY KEY (`disc_id`, `mobj_no`, `cmd_seq`),
+  CONSTRAINT `fk_bd_mobj_commands_mobj` FOREIGN KEY (`disc_id`, `mobj_no`) REFERENCES `bd_movie_objects` (`disc_id`, `mobj_no`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='ムービーオブジェクトのナビゲーション命令（生データ）';
+
+CREATE TABLE `bd_playlists` (
+  `disc_id`          char(32) NOT NULL,
+  `playlist_file`    varchar(16) NOT NULL COMMENT 'プレイリストのファイル名（00000.mpls）',
+  `duration_ms`      bigint unsigned NOT NULL COMMENT '総尺（PlayItem の in/out の合計、ミリ秒）',
+  `play_item_count`  smallint unsigned NOT NULL,
+  `sub_path_count`   smallint unsigned NOT NULL DEFAULT 0,
+  `mark_count`       smallint unsigned NOT NULL DEFAULT 0 COMMENT 'PlayListMark の数',
+  `playback_type`    tinyint unsigned DEFAULT NULL COMMENT '再生種別（規格のコード：1=連続、2=ランダム、3=シャッフル）',
+  `uo_mask`          bigint unsigned DEFAULT NULL COMMENT 'ユーザー操作の禁止マスク（規格の 64 ビットをそのまま）',
+  `playlist_kind`    enum('EPISODE','PLAY_ALL','FEATURE','BONUS','MENU','OTHER') DEFAULT NULL COMMENT 'プレイリストの種別（EPISODE=本編 1 話、PLAY_ALL=全話連続、FEATURE=作品単位の本編〔映画など〕、BONUS=特典、MENU、OTHER。NULL=未判定）',
+  `episode_id`       int DEFAULT NULL COMMENT '本編 1 話のプレイリストが収める話（→ episodes）',
+  `series_id`        int DEFAULT NULL COMMENT '作品単位の本編のプレイリストが収める作品（→ series。併映と続いているときは親の映画、3 本立ては親のまとまり）',
+  `created_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_by`       varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`disc_id`, `playlist_file`),
+  KEY `ix_bd_playlists_series` (`series_id`),
+  CONSTRAINT `fk_bd_playlists_disc` FOREIGN KEY (`disc_id`) REFERENCES `bd_discs` (`disc_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_bd_playlists_episode` FOREIGN KEY (`episode_id`) REFERENCES `episodes` (`episode_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_bd_playlists_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Blu-ray のプレイリスト（BDMV/PLAYLIST/*.mpls）';
+
+CREATE TABLE `bd_play_items` (
+  `disc_id`              char(32) NOT NULL,
+  `playlist_file`        varchar(16) NOT NULL,
+  `item_seq`             smallint unsigned NOT NULL COMMENT 'プレイリスト内の並び順（1 始まり）',
+  `clip_file`            varchar(16) NOT NULL COMMENT '参照するクリップ（00001.m2ts）',
+  `codec_id`             varchar(8)  NOT NULL DEFAULT 'M2TS',
+  `in_time_ms`           bigint unsigned NOT NULL COMMENT 'クリップ内の再生開始時刻（ミリ秒）',
+  `out_time_ms`          bigint unsigned NOT NULL COMMENT 'クリップ内の再生終了時刻（ミリ秒）',
+  `playlist_offset_ms`   bigint unsigned NOT NULL COMMENT 'プレイリスト時間軸での、この区間の開始位置（ミリ秒）',
+  `connection_condition` tinyint unsigned NOT NULL DEFAULT 1 COMMENT '前の区間とのつなぎ方（規格のコード：1=通常、5/6=シームレス）',
+  `stc_id`               tinyint unsigned NOT NULL DEFAULT 0 COMMENT '参照する STC シーケンスの番号',
+  PRIMARY KEY (`disc_id`, `playlist_file`, `item_seq`),
+  KEY `ix_bd_play_items_clip` (`disc_id`, `clip_file`),
+  CONSTRAINT `fk_bd_play_items_playlist` FOREIGN KEY (`disc_id`, `playlist_file`) REFERENCES `bd_playlists` (`disc_id`, `playlist_file`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='プレイリストの各区間（PlayItem）';
+
+CREATE TABLE `bd_playlist_marks` (
+  `disc_id`        char(32) NOT NULL,
+  `playlist_file`  varchar(16) NOT NULL,
+  `mark_seq`       smallint unsigned NOT NULL COMMENT 'マークの順（1 始まり）',
+  `mark_type`      tinyint unsigned NOT NULL COMMENT 'マークの種別（規格のコード：1=Entry〔チャプター〕、2=Link）',
+  `play_item_ref`  smallint unsigned NOT NULL COMMENT '参照する PlayItem の番号（0 始まり）',
+  `time_ms`        bigint unsigned NOT NULL COMMENT 'マークの時刻（その PlayItem のクリップ内の時刻、ミリ秒）',
+  `entry_es_pid`   smallint unsigned DEFAULT NULL COMMENT 'マークが指すエレメンタリストリームの PID（無ければ 0）',
+  `duration_ms`    bigint unsigned NOT NULL DEFAULT 0 COMMENT 'マークの尺（ミリ秒。無ければ 0）',
+  PRIMARY KEY (`disc_id`, `playlist_file`, `mark_seq`),
+  CONSTRAINT `fk_bd_playlist_marks_playlist` FOREIGN KEY (`disc_id`, `playlist_file`) REFERENCES `bd_playlists` (`disc_id`, `playlist_file`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='プレイリストの全マーク（PlayListMark）';
+
+CREATE TABLE `bd_chapters` (
+  `disc_id`        char(32) NOT NULL,
+  `playlist_file`  varchar(16) NOT NULL,
+  `chapter_no`     smallint unsigned NOT NULL COMMENT 'プレイリスト内のチャプター番号（1 始まり。Entry マークで区切る）',
+  `start_time_ms`  bigint unsigned NOT NULL COMMENT 'プレイリスト時間軸での開始時刻（ミリ秒。生の値）',
+  `duration_ms`    bigint unsigned NOT NULL COMMENT '尺（ミリ秒。生の値。話の最後のチャプターには 1 秒の余白が付く）',
+  `chapter_kind`   enum('EPISODE_PART','FEATURE','BLANK','BONUS','OTHER') DEFAULT NULL COMMENT 'チャプターの種別（EPISODE_PART=話のパート、FEATURE=作品単位の本編〔映画など〕、BLANK=余白、BONUS、OTHER。NULL=未判定）',
+  `episode_id`     int DEFAULT NULL COMMENT 'チャプターが当たる話（→ episode_parts.episode_id）',
+  `episode_seq`    tinyint unsigned DEFAULT NULL COMMENT 'チャプターが当たるパートの順（→ episode_parts.episode_seq）',
+  `series_id`      int DEFAULT NULL COMMENT '作品単位の本編のチャプターが当たる作品（→ series。併映と続いているときは本編か併映か）',
+  PRIMARY KEY (`disc_id`, `playlist_file`, `chapter_no`),
+  KEY `ix_bd_chapters_episode` (`episode_id`, `episode_seq`),
+  KEY `ix_bd_chapters_series` (`series_id`),
+  CONSTRAINT `fk_bd_chapters_playlist` FOREIGN KEY (`disc_id`, `playlist_file`) REFERENCES `bd_playlists` (`disc_id`, `playlist_file`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_bd_chapters_episode_part` FOREIGN KEY (`episode_id`, `episode_seq`) REFERENCES `episode_parts` (`episode_id`, `episode_seq`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_bd_chapters_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='プレイリストのチャプター（Entry マークで区切った生の区間）と当てた話のパート';
+
+CREATE TABLE `bd_sub_paths` (
+  `disc_id`              char(32) NOT NULL,
+  `playlist_file`        varchar(16) NOT NULL,
+  `sub_path_seq`         smallint unsigned NOT NULL COMMENT 'サブパスの順（1 始まり）',
+  `sub_path_type`        tinyint unsigned NOT NULL COMMENT 'サブパスの種別（規格のコード）',
+  `is_repeat`            tinyint NOT NULL DEFAULT 0,
+  `sub_play_item_count`  smallint unsigned NOT NULL,
+  `first_clip_file`      varchar(16) DEFAULT NULL COMMENT '最初のサブ PlayItem が参照するクリップ',
+  PRIMARY KEY (`disc_id`, `playlist_file`, `sub_path_seq`),
+  CONSTRAINT `fk_bd_sub_paths_playlist` FOREIGN KEY (`disc_id`, `playlist_file`) REFERENCES `bd_playlists` (`disc_id`, `playlist_file`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='プレイリストのサブパス';
+
+CREATE TABLE `bd_clips` (
+  `disc_id`                char(32) NOT NULL,
+  `clip_file`              varchar(16) NOT NULL COMMENT 'クリップのファイル名（00001.m2ts）',
+  `presentation_start_ms`  bigint unsigned DEFAULT NULL COMMENT '提示開始時刻（最初の STC シーケンス、ミリ秒）',
+  `presentation_end_ms`    bigint unsigned DEFAULT NULL COMMENT '提示終了時刻（最後の STC シーケンス、ミリ秒）',
+  `ts_recording_rate`      int unsigned DEFAULT NULL COMMENT 'TS の記録レート（バイト/秒）',
+  `source_packets`         int unsigned DEFAULT NULL COMMENT 'ソースパケット数（192 バイト単位）',
+  `application_type`       tinyint unsigned DEFAULT NULL COMMENT 'クリップの用途種別（規格のコード）',
+  `clip_stream_type`       tinyint unsigned DEFAULT NULL COMMENT 'クリップのストリーム種別（規格のコード）',
+  `file_size_bytes`        bigint unsigned DEFAULT NULL COMMENT 'STREAM/xxxxx.m2ts のファイルサイズ（バイト。中身は暗号化されていて読まない）',
+  PRIMARY KEY (`disc_id`, `clip_file`),
+  CONSTRAINT `fk_bd_clips_disc` FOREIGN KEY (`disc_id`) REFERENCES `bd_discs` (`disc_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Blu-ray のクリップ（BDMV/CLIPINF/*.clpi）';
+
+CREATE TABLE `bd_clip_streams` (
+  `disc_id`             char(32) NOT NULL,
+  `clip_file`           varchar(16) NOT NULL,
+  `stream_pid`          smallint unsigned NOT NULL COMMENT 'ストリームの PID',
+  `stream_kind`         enum('VIDEO','AUDIO','PG','IG','TEXT','OTHER') NOT NULL COMMENT 'ストリームの種別（符号化種別から判定）',
+  `coding_type`         tinyint unsigned NOT NULL COMMENT '符号化種別（規格のコード：0x1B=H.264、0x80=LPCM、0x81=AC-3、0x82=DTS、0x90=PG 字幕 …）',
+  `video_format`        tinyint unsigned DEFAULT NULL COMMENT '映像の形式（規格のコード：4=1080i、6=1080p …）',
+  `frame_rate`          tinyint unsigned DEFAULT NULL COMMENT '映像のフレームレート（規格のコード：1=23.976、4=29.97 …）',
+  `audio_presentation`  tinyint unsigned DEFAULT NULL COMMENT '音声の提示種別（規格のコード：1=モノラル、3=ステレオ、6=マルチチャンネル、12=ステレオ＋マルチ）',
+  `sampling_rate`       tinyint unsigned DEFAULT NULL COMMENT '音声のサンプリング周波数（規格のコード：1=48 kHz、4=96 kHz、5=192 kHz …）',
+  `language`            char(3) DEFAULT NULL COMMENT '言語コード（ISO 639-2。jpn など）',
+  PRIMARY KEY (`disc_id`, `clip_file`, `stream_pid`),
+  CONSTRAINT `fk_bd_clip_streams_clip` FOREIGN KEY (`disc_id`, `clip_file`) REFERENCES `bd_clips` (`disc_id`, `clip_file`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='クリップ内のストリーム（映像・音声・字幕）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `books`
 --
 -- 書籍（紙 / Kindle）。音楽商品（products / discs）とは独立した系統。
@@ -3384,20 +3762,23 @@ DROP TABLE IF EXISTS `published_entity_slugs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `published_entity_slugs` (
-  `entity_kind`  varchar(16) NOT NULL COMMENT 'PERSON / CHARACTER / COMPANY',
+  `entity_kind`  varchar(16) NOT NULL COMMENT 'PERSON / CHARACTER / COMPANY / UNIT',
   `slug`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '公開した URL のスラッグ（デコード済み）',
   `person_id`    int DEFAULT NULL COMMENT 'その URL で公開した人物（PERSON の行のみ）',
   `character_id` int DEFAULT NULL COMMENT 'その URL で公開したキャラクター（CHARACTER の行のみ）',
   `company_id`   int DEFAULT NULL COMMENT 'その URL で公開した企業（COMPANY の行のみ）',
+  `person_alias_id` int DEFAULT NULL COMMENT 'その URL で公開したユニットの名義（UNIT の行のみ）',
   `created_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最初に公開を記録した日時',
   `last_published_at` timestamp NULL DEFAULT NULL COMMENT '最後に本番で公開したデプロイの日時（デプロイのたびに更新）',
   PRIMARY KEY (`entity_kind`, `slug`),
   KEY `ix_pes_person` (`person_id`),
   KEY `ix_pes_character` (`character_id`),
   KEY `ix_pes_company` (`company_id`),
+  KEY `ix_pes_person_alias` (`person_alias_id`),
   CONSTRAINT `fk_pes_person` FOREIGN KEY (`person_id`) REFERENCES `persons` (`person_id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_pes_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`character_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_pes_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`company_id`) ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT `fk_pes_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`company_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_pes_person_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='本番に公開した人物・キャラクター・企業 URL の記録（旧名 URL の 301 転送用）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 

@@ -16,7 +16,9 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 ///     → ② いま公開している名義（published_entity_slugs で最後に記録したスラッグに当たる名義）→ ③ 最新名義
 ///     （<see cref="LatestAliasResolver.LatestPersonAliasIds"/>、TV 系のクレジットで最後に使われた名義）の順に決める。
 ///     いったん公開した人物はクレジットの入力が進んでも名乗りが変わらず、変えるのは本名義を指定したときだけになる。
-///     どれも無い人物は正式名 persons.full_name。人物詳細の見出しもこの名前にそろえる（<see cref="PersonDisplayName"/>）。</description></item>
+///     どれも無い人物は正式名 persons.full_name。人物詳細の見出しもこの名前にそろえる（<see cref="PersonDisplayName"/>）。
+///     同姓同名の別人を見分ける添え書き（persons.disambiguation）のある人物は、URL と見出しに「渡辺 久美子 (声優)」の形で添える
+///     （<see cref="PersonDisplayLabel"/>、URL は <c>/people/渡辺久美子_(声優)/</c>）。</description></item>
 ///   <item><description>人物の URL は本名義を指定すると変わり、キャラの URL はキャラ名を、企業の URL は正式名を変えると変わる。
 ///     本番デプロイで公開した人物・キャラ・企業の URL は台帳 <c>published_entity_slugs</c> に記録しておき（<see cref="RecordPublishedSlugsAsync"/>）、
 ///     いまの URL と違う記録済みの旧 URL は新 URL へ 301 で転送する（<see cref="LegacyRedirects"/> に <c>/people/{旧名}</c>・
@@ -27,6 +29,10 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 ///     人物・企業・書籍の衝突は、ID の若い 1 件が素の名前を持ち、残りは <c>_2</c>, <c>_3</c> … を付けて警告を出す
 ///     （付け方はその都度判断して名前側で解消する前提の仮措置）。
 ///     数字だけの名前は旧 URL（<c>/persons/123/</c>）と区別できないため末尾に <c>_</c> を足す。</description></item>
+///   <item><description>ユニット <c>/units/{名前}/</c>。人物の行を持たない名義（person_alias_persons に対応が無い名義）のうち、
+///     メンバーを持つか、歌唱者として録音に載っているもの（ぷりきゅあ5・ヤング・フレッシュなど）。名前は名義の表記
+///     （person_aliases.name）。人物・キャラ・企業と同じく公開した URL を記録し（entity_kind = UNIT、person_alias_id）、
+///     名前が変わったら旧 URL から 301 で転送する。</description></item>
 ///   <item><description>書籍 <c>/books/{コード}/</c>。コードは ISBN-13 → 定期刊行物コード → Kindle ASIN → 紙の ASIN の
 ///     順に最初にあるもの。どれも無い書籍は書名から作る（警告を出す）。その本が持つほかのコードの URL からも、
 ///     いまの URL へ 301 で転送する（あとから ISBN を入れて URL が変わった本の旧 URL を 404 にしない）。</description></item>
@@ -59,6 +65,8 @@ public sealed class EntityUrlRegistry
     private readonly Dictionary<int, string> _personSlugs = new();
     /// <summary>person_id → 見出し名・読み（表示名義。表示名義の無い人物は正式名）。</summary>
     private readonly Dictionary<int, (string Name, string Kana)> _personNames = new();
+    // 同姓同名の別人を見分ける添え書きを付けた名乗り（persons.disambiguation のある人物だけ）。
+    private readonly Dictionary<int, string> _personLabels = new();
     /// <summary>person_id → 表示名義の person_alias_id（本名義 → 公開中の名義 → 最新名義。どれも無い人物は載らない）。</summary>
     private readonly Dictionary<int, int> _displayPersonAliasIds = new();
     private readonly Dictionary<int, string> _companyUrls = new();
@@ -69,6 +77,10 @@ public sealed class EntityUrlRegistry
     /// 公開記録と旧名転送の突き合わせに使う。</summary>
     private readonly Dictionary<int, string> _characterSlugs = new();
     private readonly Dictionary<int, string> _bookUrls = new();
+    // ユニット（人物の行を持たない名義）：alias_id → URL / スラッグ / 名前。
+    private readonly Dictionary<int, string> _unitUrls = new();
+    private readonly Dictionary<int, string> _unitSlugs = new();
+    private readonly Dictionary<int, string> _unitNames = new();
     private readonly Dictionary<int, GuestPlacement> _guestPlacements = new();
     private readonly List<LegacyRedirect> _legacyRedirects = new();
 
@@ -82,6 +94,18 @@ public sealed class EntityUrlRegistry
 
     /// <summary>人物の見出し名（表示名義。表示名義の無い人物は正式名）。台帳に無い ID は null。</summary>
     public string? PersonDisplayName(int personId) => _personNames.TryGetValue(personId, out var n) ? n.Name : null;
+
+    /// <summary>
+    /// 人物の名乗りに、同姓同名の別人を見分ける添え書き（persons.disambiguation）を「渡辺 久美子 (声優)」の形で添えたもの。
+    /// 人物詳細の見出し・ページタイトル・検索・一覧の行表記に使う。添え書きの無い人物は <see cref="PersonDisplayName"/> と同じ。
+    /// 名義との比較（別名義の要否・本名義の添え書きなど）には添え書きの無い <see cref="PersonDisplayName"/> を使う。
+    /// </summary>
+    public string? PersonDisplayLabel(int personId)
+        => _personLabels.TryGetValue(personId, out var l) ? l : PersonDisplayName(personId);
+
+    /// <summary>名前に添え書きを「名前 (添え書き)」の形で添える。添え書きが空なら名前のまま。</summary>
+    private static string WithDisambiguation(string name, string? disambiguation)
+        => string.IsNullOrWhiteSpace(disambiguation) ? name : $"{name} ({disambiguation.Trim()})";
 
     /// <summary>人物の見出し名の読み（表示名義の読み。読み未登録なら空文字）。台帳に無い ID は null。</summary>
     public string? PersonDisplayKana(int personId) => _personNames.TryGetValue(personId, out var n) ? n.Kana : null;
@@ -100,6 +124,15 @@ public sealed class EntityUrlRegistry
 
     /// <summary>書籍詳細ページの URL（パーセントエンコード済み）。台帳に無い ID は null。</summary>
     public string? BookUrl(int bookId) => _bookUrls.TryGetValue(bookId, out var u) ? u : null;
+
+    /// <summary>ユニットの名義 → ユニット詳細ページの URL（ユニットでない名義は null）。</summary>
+    public string? UnitUrl(int personAliasId) => _unitUrls.TryGetValue(personAliasId, out var u) ? u : null;
+
+    /// <summary>ユニットの名義 → 見出しに出す名前（ユニットでない名義は null）。</summary>
+    public string? UnitDisplayName(int personAliasId) => _unitNames.TryGetValue(personAliasId, out var n) ? n : null;
+
+    /// <summary>ユニット詳細ページを持つ名義の一覧（alias_id 昇順）。</summary>
+    public IReadOnlyList<int> UnitAliasIds => _unitUrls.Keys.OrderBy(id => id).ToList();
 
     /// <summary>単発キャラ（個別ページを作らずゲストキャラクターページにまとめるキャラ）か。</summary>
     public bool IsGuestCharacter(int characterId) => _guestPlacements.ContainsKey(characterId);
@@ -158,8 +191,9 @@ public sealed class EntityUrlRegistry
             {
                 foreach (var aid in ownAliasIds)
                 {
+                    // 添え書きのある人物は、添え書き付きの名前で公開しているので、それと比べる。
                     if (ctx.PersonAliasById.TryGetValue(aid, out var a)
-                        && string.Equals(UrlSlug.FromName(a.Name), publishedSlug, StringComparison.OrdinalIgnoreCase))
+                        && string.Equals(UrlSlug.FromName(WithDisambiguation(a.Name, p.Disambiguation)), publishedSlug, StringComparison.OrdinalIgnoreCase))
                     {
                         chosen = aid;
                         break;
@@ -186,10 +220,34 @@ public sealed class EntityUrlRegistry
                 reg._personNames[p.PersonId] = (p.FullName, p.FullNameKana ?? "");
             }
         }
-        foreach (var (id, slug) in AssignSlugs("persons", persons.Select(p => (p.PersonId, reg._personNames[p.PersonId].Name)), ctx.Logger))
+        // 同姓同名の別人を見分ける添え書きのある人物は、名乗りに添えたものを URL と見出しに使う。
+        foreach (var p in persons)
+        {
+            if (!string.IsNullOrWhiteSpace(p.Disambiguation))
+                reg._personLabels[p.PersonId] = WithDisambiguation(reg._personNames[p.PersonId].Name, p.Disambiguation);
+        }
+        foreach (var (id, slug) in AssignSlugs("persons", persons.Select(p => (p.PersonId, reg.PersonDisplayLabel(p.PersonId)!)), ctx.Logger))
         {
             reg._personSlugs[id] = slug;
             reg._personUrls[id] = $"/people/{UrlSlug.Encode(slug)}/";
+        }
+
+        // ユニット：人物の行を持たない名義のうち、メンバーを持つか、歌唱者として録音に載っているもの。
+        var aliasIdsWithPerson = ctx.AliasIdsByPerson.Values.SelectMany(x => x).ToHashSet();
+        var singingAliasIds = ctx.SingersByRecording.Values.SelectMany(x => x)
+            .SelectMany(s => new[] { s.PersonAliasId, s.SlashPersonAliasId })
+            .OfType<int>()
+            .ToHashSet();
+        var units = ctx.PersonAliasById.Values
+            .Where(a => !a.IsDeleted && !aliasIdsWithPerson.Contains(a.AliasId)
+                        && (ctx.UnitMembersByAlias.ContainsKey(a.AliasId) || singingAliasIds.Contains(a.AliasId)))
+            .OrderBy(a => a.AliasId)
+            .ToList();
+        foreach (var a in units) reg._unitNames[a.AliasId] = a.Name;
+        foreach (var (id, slug) in AssignSlugs("units", units.Select(a => (a.AliasId, a.Name)), ctx.Logger))
+        {
+            reg._unitSlugs[id] = slug;
+            reg._unitUrls[id] = $"/units/{UrlSlug.Encode(slug)}/";
         }
 
         foreach (var (id, slug) in AssignSlugs("companies", companies.Select(c => (c.CompanyId, c.Name)), ctx.Logger))
@@ -260,9 +318,9 @@ public sealed class EntityUrlRegistry
             // いまの URL へ転送する。同じ区分でいま別の実体がその名前の URL を使っている（ページが実在する）ときは転送しない。
             // 転送元のキーはデコード済みのスラッグで持つ（Lambda@Edge 側でリクエスト URI をデコードして引く）。
             const string publishedSql = """
-                SELECT entity_kind AS EntityKind, slug AS Slug, COALESCE(person_id, character_id, company_id) AS EntityId
+                SELECT entity_kind AS EntityKind, slug AS Slug, COALESCE(person_id, character_id, company_id, person_alias_id) AS EntityId
                   FROM published_entity_slugs
-                 WHERE entity_kind IN ('PERSON', 'CHARACTER', 'COMPANY')
+                 WHERE entity_kind IN ('PERSON', 'CHARACTER', 'COMPANY', 'UNIT')
                  ORDER BY entity_kind, slug
                 """;
             var published = await conn.QueryAsync<PublishedSlugRow>(
@@ -270,6 +328,7 @@ public sealed class EntityUrlRegistry
             var livePersonSlugs = new HashSet<string>(reg._personSlugs.Values, StringComparer.OrdinalIgnoreCase);
             var liveCharacterSlugs = new HashSet<string>(reg._characterSlugs.Values, StringComparer.OrdinalIgnoreCase);
             var liveCompanySlugs = new HashSet<string>(reg._companySlugs.Values, StringComparer.OrdinalIgnoreCase);
+            var liveUnitSlugs = new HashSet<string>(reg._unitSlugs.Values, StringComparer.OrdinalIgnoreCase);
             foreach (var row in published)
             {
                 var (section, liveSlugs, urls) = row.EntityKind switch
@@ -277,6 +336,7 @@ public sealed class EntityUrlRegistry
                     "PERSON" => ("people", livePersonSlugs, reg._personUrls),
                     "CHARACTER" => ("characters", liveCharacterSlugs, reg._characterUrls),
                     "COMPANY" => ("companies", liveCompanySlugs, reg._companyUrls),
+                    "UNIT" => ("units", liveUnitSlugs, reg._unitUrls),
                     _ => ("", null, null)
                 };
                 if (liveSlugs is null || urls is null || row.EntityId is not int eid) continue;
@@ -307,7 +367,7 @@ public sealed class EntityUrlRegistry
         }
 
         ctx.Logger.Info($"entity urls: persons {reg._personUrls.Count} / characters {reg._characterUrls.Count}"
-            + $"（うちゲスト {reg._guestPlacements.Count}）/ companies {reg._companyUrls.Count} / books {reg._bookUrls.Count}");
+            + $"（うちゲスト {reg._guestPlacements.Count}）/ companies {reg._companyUrls.Count} / units {reg._unitUrls.Count} / books {reg._bookUrls.Count}");
         return reg;
     }
 
@@ -340,9 +400,10 @@ public sealed class EntityUrlRegistry
     /// （最初に公開した実体を指し続ける）。区分に応じて person_id / character_id / company_id のどれか 1 つだけを埋める。
     /// あわせて、いまの URL の行（同じ実体の行）の last_published_at をこのデプロイの時刻に更新する
     /// （一度別の URL に変わってから元の URL に戻っても、いま公開している URL を正しく引けるように）。
-    /// 戻り値は新たに記録した件数（人物・キャラ・企業）。
+    /// ユニットの URL も同じく記録する（entity_kind = UNIT、person_alias_id）。
+    /// 戻り値は新たに記録した件数（人物・キャラ・企業・ユニット）。
     /// </summary>
-    public async Task<(int Persons, int Characters, int Companies)> RecordPublishedSlugsAsync(IConnectionFactory factory, CancellationToken ct)
+    public async Task<(int Persons, int Characters, int Companies, int Units)> RecordPublishedSlugsAsync(IConnectionFactory factory, CancellationToken ct)
     {
         const string personSql = """
             INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, person_id, last_published_at)
@@ -355,6 +416,10 @@ public sealed class EntityUrlRegistry
         const string companySql = """
             INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, company_id, last_published_at)
             VALUES ('COMPANY', @Slug, @EntityId, @At)
+            """;
+        const string unitSql = """
+            INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, person_alias_id, last_published_at)
+            VALUES ('UNIT', @Slug, @EntityId, @At)
             """;
         // 記録済みの行は、同じ実体の行だけ最後に公開した日時を更新する（別の実体が先に使っていたスラッグは触らない）。
         const string personTouchSql = """
@@ -369,20 +434,27 @@ public sealed class EntityUrlRegistry
             UPDATE published_entity_slugs SET last_published_at = @At
              WHERE entity_kind = 'COMPANY' AND slug = @Slug AND company_id = @EntityId
             """;
+        const string unitTouchSql = """
+            UPDATE published_entity_slugs SET last_published_at = @At
+             WHERE entity_kind = 'UNIT' AND slug = @Slug AND person_alias_id = @EntityId
+            """;
         var at = DateTime.Now;
         var personRows = _personSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
         var characterRows = _characterSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
         var companyRows = _companySlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
+        var unitRows = _unitSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
         await using var conn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         int persons = await conn.ExecuteAsync(new CommandDefinition(personSql, personRows, tx, cancellationToken: ct)).ConfigureAwait(false);
         int characters = await conn.ExecuteAsync(new CommandDefinition(characterSql, characterRows, tx, cancellationToken: ct)).ConfigureAwait(false);
         int companies = await conn.ExecuteAsync(new CommandDefinition(companySql, companyRows, tx, cancellationToken: ct)).ConfigureAwait(false);
+        int units = await conn.ExecuteAsync(new CommandDefinition(unitSql, unitRows, tx, cancellationToken: ct)).ConfigureAwait(false);
         await conn.ExecuteAsync(new CommandDefinition(personTouchSql, personRows, tx, cancellationToken: ct)).ConfigureAwait(false);
         await conn.ExecuteAsync(new CommandDefinition(characterTouchSql, characterRows, tx, cancellationToken: ct)).ConfigureAwait(false);
         await conn.ExecuteAsync(new CommandDefinition(companyTouchSql, companyRows, tx, cancellationToken: ct)).ConfigureAwait(false);
+        await conn.ExecuteAsync(new CommandDefinition(unitTouchSql, unitRows, tx, cancellationToken: ct)).ConfigureAwait(false);
         await tx.CommitAsync(ct).ConfigureAwait(false);
-        return (persons, characters, companies);
+        return (persons, characters, companies, units);
     }
 
     /// <summary>

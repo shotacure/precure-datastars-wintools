@@ -5,6 +5,7 @@ using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Pipeline;
 using PrecureDataStars.SiteBuilder.Rendering;
 using PrecureDataStars.SiteBuilder.Utilities;
+using PrecureDataStars.TemplateRendering;
 
 namespace PrecureDataStars.SiteBuilder.Generators;
 
@@ -613,8 +614,8 @@ public sealed class EpisodeGenerator
                 TitleText = ep.TitleText,
                 TitleRichHtml = ep.TitleRichHtml ?? "",  // ルビ付き HTML はそのまま流す
                 TitleKana = ep.TitleKana ?? "",
-                // h1「第N話「サブタイトル」」用（プレーンテキストをエスケープしてガード）。
-                SubtitleGuardedH1Html = SubtitleGuardRenderer.GuardPlainText(ep.TitleText, ownRevealAt),
+                // h1「第N話「サブタイトル」」用（プレーンテキストをエスケープしてガード）。「」の中に置くので内側の「」は『』にする。
+                SubtitleGuardedH1Html = SubtitleGuardRenderer.GuardPlainText(JapaneseQuotes.InQuotes(ep.TitleText), ownRevealAt),
                 // サブタイトル未確定話のみ非空。テンプレ側は鉤括弧を出さず「第N話（サブタイトル「未定」）」の形で出す。
                 SubtitlePlaceholder = string.IsNullOrEmpty(ep.TitleText) ? ep.TitleDisplayText : "",
                 // subtitle-display 用（ルビ付き優先、無ければプレーン＋かな）。既存テンプレの分岐を
@@ -741,7 +742,7 @@ public sealed class EpisodeGenerator
         // サブタイトル未確定話は鉤括弧を出さず「第N話（サブタイトル「未定」）」の形にする。
         string fullPageTitle = string.IsNullOrEmpty(ep.TitleText)
             ? $"『{series.Title}』 第{ep.SeriesEpNo}話{ep.TitleDisplayText}"
-            : $"『{series.Title}』 第{ep.SeriesEpNo}話「{ep.TitleText}」";
+            : $"『{series.Title}』 第{ep.SeriesEpNo}話「{JapaneseQuotes.InQuotes(ep.TitleText)}」";
 
         var layout = new LayoutModel
         {
@@ -770,8 +771,9 @@ public sealed class EpisodeGenerator
             layout.OgCard = BuildOgCard(series, ep, content);
 
         // サブタイトル欄は、本編のテロップと同じ体裁（作品のテロップ書体・白い字に黒フチと影）の画像で見せる。
-        // 解禁前の話は画像にするとぼかしが効かないので、OGP カードと同じく作らずに HTML のサブタイトル（ガード付き）を出す。
-        // サブタイトル未確定の話もプレースホルダの HTML のまま。
+        // 解禁前の話も画像を描くが、画像はぼかせないので、ページでは解禁時刻を添えて、解禁されるか閲覧者が先の題を見る設定に
+        // するまでは画像を隠し、ぼかした HTML のサブタイトルを出す（subtitle-embargo.js が切り替える）。OGP カードは作らない。
+        // サブタイトル未確定の話はプレースホルダの HTML のまま。
         // 画像にするかの判定と材料は、ビルド冒頭の作り置きの確認と同じ SubtitleTelopRequest で決める。
         if (SubtitleTelopRequest.For(series, ep, _ctx) is { } telopRequest)
         {
@@ -781,6 +783,7 @@ public sealed class EpisodeGenerator
                 content.Episode.SubtitleTelopSrc = telop.Src;
                 content.Episode.SubtitleTelopWidth = telop.Width;
                 content.Episode.SubtitleTelopHeight = telop.Height;
+                content.Episode.SubtitleTelopRevealAt = ownEmbargoed ? SubtitleGuardRenderer.ToRevealAtIso(ownRevealAt!.Value) : "";
             }
         }
 
@@ -959,6 +962,8 @@ public sealed class EpisodeGenerator
             string compositionRoleLabelHtml = "";
             string arrangementHtml = "";
             string arrangementRoleLabelHtml = "";
+            string medleyArrangementHtml = "";
+            string medleyArrangementRoleLabelHtml = "";
             if (song is not null)
             {
                 var credits = await GetSongCreditsAsync(song.SongId).ConfigureAwait(false);
@@ -966,9 +971,13 @@ public sealed class EpisodeGenerator
                 compositionHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Composition, song.ComposerName, personAliasMap);
                 arrangementHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Arrangement, song.ArrangerName, personAliasMap);
                 // 役職ラベルは roles マスタから引いてリンク化。未登録時はフォールバック固定文字列。
-                lyricsRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Lyrics, roleMap, "作詞");
-                compositionRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Composition, roleMap, "作曲");
-                arrangementRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Arrangement, roleMap, "編曲");
+                lyricsRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Lyrics, roleMap, "作詞", credits);
+                compositionRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Composition, roleMap, "作曲", credits);
+                arrangementRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Arrangement, roleMap, "編曲", credits);
+                // メドレー編曲（メドレーの曲の全体の編曲）は構造化行だけ。無い曲では行を出さない。
+                medleyArrangementHtml = BuildCreditRoleHtml(credits, SongCreditRoles.MedleyArrangement, null, personAliasMap);
+                if (!string.IsNullOrEmpty(medleyArrangementHtml))
+                    medleyArrangementRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.MedleyArrangement, roleMap, "メドレー編曲", credits);
             }
 
             string vocalistsHtml = "";
@@ -1026,6 +1035,8 @@ public sealed class EpisodeGenerator
                 CompositionRoleLabelHtml = compositionRoleLabelHtml,
                 ArrangementHtml = arrangementHtml,
                 ArrangementRoleLabelHtml = arrangementRoleLabelHtml,
+                MedleyArrangementHtml = medleyArrangementHtml,
+                MedleyArrangementRoleLabelHtml = medleyArrangementRoleLabelHtml,
                 VocalistsHtml = vocalistsHtml,
                 VocalistsRoleLabelHtml = vocalistsRoleLabelHtml,
                 ChorusHtml = chorusHtml,
@@ -1274,7 +1285,7 @@ public sealed class EpisodeGenerator
 
         var sb = new System.Text.StringBuilder();
         sb.Append('『').Append(series.Title).Append("』第").Append(ep.SeriesEpNo).Append('話');
-        if (!string.IsNullOrWhiteSpace(ep.TitleText)) sb.Append('「').Append(ep.TitleText).Append('」');
+        if (!string.IsNullOrWhiteSpace(ep.TitleText)) sb.Append('「').Append(JapaneseQuotes.InQuotes(ep.TitleText)).Append('」');
         sb.Append('（').Append(ep.OnAirAt.ToString("yyyy年M月d日")).Append("放送）。");
 
         // 主要スタッフ（最大 3 役職）。末尾の一文を残せる範囲で足す。
@@ -1996,6 +2007,11 @@ public sealed class EpisodeGenerator
         public string SubtitleTelopSrc { get; set; } = "";
         public int SubtitleTelopWidth { get; set; }
         public int SubtitleTelopHeight { get; set; }
+        /// <summary>
+        /// ビルドの時点で解禁前の話の解禁時刻（ISO 8601）。空でなければ、テンプレ側は画像と <see cref="SubtitleGuardedDisplayHtml"/> の両方を出し、
+        /// 解禁されるか閲覧者が先の題を見る設定にするまで画像を隠す。
+        /// </summary>
+        public string SubtitleTelopRevealAt { get; set; } = "";
         /// <summary>放送日時を「2004年2月1日 8:30〜9:00」形式で。尺未登録時は終了時刻なし。</summary>
         public string OnAirDateTime { get; set; } = "";
         public string ToeiAnimSummaryUrl { get; set; } = "";
@@ -2085,6 +2101,10 @@ public sealed class EpisodeGenerator
         public string ArrangementHtml { get; set; } = "";
         /// <summary>「編曲」役職ラベル HTML。</summary>
         public string ArrangementRoleLabelHtml { get; set; } = "";
+        /// <summary>メドレー編曲の表示用 HTML（構造化行だけ。無ければ空文字で、テンプレは行を出さない）。</summary>
+        public string MedleyArrangementHtml { get; set; } = "";
+        /// <summary>「メドレー編曲」役職ラベル HTML。</summary>
+        public string MedleyArrangementRoleLabelHtml { get; set; } = "";
         /// <summary>歌唱者の表示用 HTML。</summary>
         public string VocalistsHtml { get; set; } = "";
         /// <summary>「歌」役職ラベル HTML。 他の作詞・作曲・編曲ラベルと同様に <c>/creators/roles/VOCALS/</c> へのリンク付き HTML。 未登録時はフォールバック固定文字列「歌」が入る。</summary>

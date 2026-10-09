@@ -575,8 +575,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertTierAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardTier t, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_card_tiers (card_id, tier_no, notes, created_by, updated_by)
-            VALUES (@CardId, @TierNo, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_card_tiers (card_id, tier_no, position_v, position_h, notes, created_by, updated_by)
+            VALUES (@CardId, @TierNo, @PositionV, @PositionH, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, t, transaction: tx, cancellationToken: ct));
@@ -595,8 +595,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertRoleAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardRole r, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, notes, created_by, updated_by)
-            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, notes, created_by, updated_by)
+            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, r, transaction: tx, cancellationToken: ct));
@@ -605,8 +605,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertBlockAsync(MySqlConnection conn, MySqlTransaction tx, CreditRoleBlock b, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_role_blocks (card_role_id, block_seq, col_count, leading_company_alias_id, heading_series_id, heading_text, notes, created_by, updated_by)
-            VALUES (@CardRoleId, @BlockSeq, @ColCount, @LeadingCompanyAliasId, @HeadingSeriesId, @HeadingText, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_role_blocks (card_role_id, block_seq, col_count, leading_company_alias_id, heading_series_id, heading_text, heading_italic, notes, created_by, updated_by)
+            VALUES (@CardRoleId, @BlockSeq, @ColCount, @LeadingCompanyAliasId, @HeadingSeriesId, @HeadingText, @HeadingItalic, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, b, transaction: tx, cancellationToken: ct));
@@ -697,6 +697,8 @@ internal sealed class CreditSaveService
             UPDATE credit_card_tiers SET
               card_id = @CardId,
               tier_no = @TierNo,
+              position_v = @PositionV,
+              position_h = @PositionH,
               notes = @Notes,
               updated_by = @UpdatedBy
             WHERE card_tier_id = @CardTierId;
@@ -729,6 +731,10 @@ internal sealed class CreditSaveService
               card_group_id      = @CardGroupId,
               role_code          = @RoleCode,
               affiliation_layout = @AffiliationLayout,
+              role_label_text    = @RoleLabelText,
+              role_misprint_text = @RoleMisprintText,
+              join_previous      = @JoinPrevious,
+              join_separator     = @JoinSeparator,
               notes              = @Notes,
               updated_by         = @UpdatedBy
             WHERE card_role_id = @CardRoleId;
@@ -748,6 +754,7 @@ internal sealed class CreditSaveService
               leading_company_alias_id = @LeadingCompanyAliasId,
               heading_series_id = @HeadingSeriesId,
               heading_text = @HeadingText,
+              heading_italic = @HeadingItalic,
               notes = @Notes,
               updated_by = @UpdatedBy
             WHERE block_id = @BlockId;

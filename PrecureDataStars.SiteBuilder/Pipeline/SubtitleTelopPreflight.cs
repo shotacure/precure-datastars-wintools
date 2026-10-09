@@ -27,7 +27,7 @@ public static class SubtitleTelopPreflight
         foreach (var (request, key) in requests)
         {
             // ピンポイントビルドで描かないページの画像は確かめない（PageRenderer の対象判定と同じ）。
-            if (!string.IsNullOrEmpty(config.PageFilter) && !request.UrlPath.Contains(config.PageFilter, StringComparison.Ordinal)) continue;
+            if (!config.MatchesPageFilter(request.UrlPath)) continue;
             if (!config.RefreshSubtitleTelops && File.Exists(Path.Combine(dir, key + ".png"))) cached++;
             else toRender.Add(request);
         }

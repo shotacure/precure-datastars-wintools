@@ -163,6 +163,7 @@ public static class ThemeSongsHandler
               s.song_id           AS SongId,
               sr.song_recording_id AS SongRecordingId,
               s.title             AS SongTitle,
+              ets.title_misprint_text AS TitleMisprintText,
               s.lyricist_name     AS LyricistName,
               s.composer_name     AS ComposerName,
               s.arranger_name     AS ArrangerName,
@@ -201,6 +202,11 @@ public static class ThemeSongsHandler
             if (r.SongId > 0)
             {
                 // 作詞：構造化があればリンク化 HTML、なければフリーテキスト HtmlEncode 平文。
+                // 名義ごとの部品（*Parts）も持たせ、テンプレの sep= で区切りを差し替えられるようにする。
+                r.LyricistParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Lyrics, lookup, ct).ConfigureAwait(false);
+                r.ComposerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Composition, lookup, ct).ConfigureAwait(false);
+                r.ArrangerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Arrangement, lookup, ct).ConfigureAwait(false);
+                r.MedleyArrangerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false);
                 string lyrHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.Lyrics, lookup, ct).ConfigureAwait(false);
                 r.LyricistHtml = !string.IsNullOrEmpty(lyrHtml)
                     ? lyrHtml
@@ -217,10 +223,15 @@ public static class ThemeSongsHandler
                 r.ArrangerHtml = !string.IsNullOrEmpty(arrHtml)
                     ? arrHtml
                     : (string.IsNullOrEmpty(r.ArrangerName) ? "" : System.Net.WebUtility.HtmlEncode(r.ArrangerName));
+
+                // メドレー編曲：構造化行だけ（フリーテキスト列は持たない）。無い曲は空文字列。
+                r.MedleyArrangerHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false) ?? "";
             }
             if (r.SongRecordingId > 0)
             {
-                // うた：song_recording_singers から VOCALS 役職の連名を HTML 版で取得。
+                // うた：song_recording_singers から VOCALS 役職の連名を HTML 版で取得（部品も持たせる）。
+                r.SingerParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct).ConfigureAwait(false);
+                r.ChorusParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct).ConfigureAwait(false);
                 string singHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct).ConfigureAwait(false);
                 r.SingerHtml = !string.IsNullOrEmpty(singHtml)
                     ? singHtml
@@ -246,8 +257,11 @@ public static class ThemeSongsHandler
     private static async Task<string> RenderSingleSongBlockHtml(ThemeSongRow r, ILookupCache lookup)
     {
         var sb = new System.Text.StringBuilder();
-        var safeTitle = System.Net.WebUtility.HtmlEncode(r.SongTitle ?? "(曲名未登録)");
+        // 「」で囲んで出すので、曲名の中の「」は『』にする。
+        var safeTitle = System.Net.WebUtility.HtmlEncode(JapaneseQuotes.InQuotes(r.SongTitle ?? "(曲名未登録)"));
         sb.Append('「');
+        // 画面に出た曲名の誤記があれば、取り消し線で出してから正しい曲名を続ける。
+        sb.Append(BuildTitleMisprintPrefixHtml(r.TitleMisprintText));
         if (r.SongId > 0)
         {
             sb.Append($"<a href=\"/songs/{r.SongId}/\">{safeTitle}</a>");
@@ -293,6 +307,11 @@ public static class ThemeSongsHandler
             var label = await RoleLabel(SongCreditRoles.Arrangement, "編曲").ConfigureAwait(false);
             sb.Append(label).Append(':').Append(r.ArrangerHtml).Append('\n');
         }
+        if (!string.IsNullOrEmpty(r.MedleyArrangerHtml))
+        {
+            var label = await RoleLabel(SongCreditRoles.MedleyArrangement, "メドレー編曲").ConfigureAwait(false);
+            sb.Append(label).Append(':').Append(r.MedleyArrangerHtml).Append('\n');
+        }
         if (!string.IsNullOrEmpty(r.SingerHtml))
         {
             var label = await RoleLabel(SongRecordingSingerRoles.Vocals, "うた").ConfigureAwait(false);
@@ -300,6 +319,15 @@ public static class ThemeSongsHandler
         }
         return sb.ToString().TrimEnd('\n');
     }
+
+    /// <summary>
+    /// クレジットの画面に出た曲名の誤記を、正しい曲名の前に置く HTML 断片（取り消し線＋空白）にする。誤記が無ければ空文字。
+    /// 曲名は「」で囲んで出すので、誤記の中の「」も『』にする。
+    /// </summary>
+    internal static string BuildTitleMisprintPrefixHtml(string? misprint)
+        => string.IsNullOrEmpty(misprint)
+            ? ""
+            : $"<del title=\"クレジット時の誤記\">{System.Net.WebUtility.HtmlEncode(JapaneseQuotes.InQuotes(misprint))}</del> ";
 
     /// <summary>
     /// JOIN 結果を受ける DTO（Dapper マッピング用、内部公開）。
@@ -318,6 +346,8 @@ public static class ThemeSongsHandler
         /// <summary>録音 ID。</summary>
         public int SongRecordingId { get; set; }
         public string? SongTitle { get; set; }
+        /// <summary>クレジットの画面に出た曲名の誤記（episode_theme_songs / series_theme_songs.title_misprint_text）。null なら誤記なし。</summary>
+        public string? TitleMisprintText { get; set; }
         public string? LyricistName { get; set; }
         public string? ComposerName { get; set; }
         public string? ArrangerName { get; set; }
@@ -336,9 +366,21 @@ public static class ThemeSongsHandler
         public string LyricistHtml { get; set; } = "";
         public string ComposerHtml { get; set; } = "";
         public string ArrangerHtml { get; set; } = "";
+        /// <summary>メドレー編曲（<c>MEDLEY_ARRANGEMENT</c>）連名のリンク化済み HTML。無ければ空文字列。テンプレ側で <c>{MEDLEY_ARRANGER}</c> として参照する。</summary>
+        public string MedleyArrangerHtml { get; set; } = "";
         public string SingerHtml { get; set; } = "";
 
         /// <summary>コーラス（<c>BACKING_VOCALS</c>）連名のリンク化済み HTML。 該当録音にコーラス歌唱者が居なければ空文字列。テンプレ側で <c>{CHORUS}</c> として参照する。</summary>
         public string ChorusHtml { get; set; } = "";
+
+        // ── 名義ごとの部品（直前との区切り, リンク化済み HTML）──
+        // 構造化クレジットがあるときだけ入る（フリーテキストのときは空）。役職テンプレの {ARRANGER:sep="/"} のように
+        // 区切りを差し替えるときに使い、差し替えないときは上の *Html（DB の区切りでつないだもの）を使う。
+        public IReadOnlyList<(string Sep, string Html)> LyricistParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> ComposerParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> ArrangerParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> MedleyArrangerParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> SingerParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> ChorusParts { get; set; } = Array.Empty<(string, string)>();
     }
 }

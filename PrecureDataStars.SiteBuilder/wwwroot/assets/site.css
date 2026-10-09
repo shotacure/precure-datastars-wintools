@@ -581,6 +581,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
      本体テキストはこの枠の左端から始まる（枠の右側は件数の押し出し用余白）。 */
   min-width: 17em;
 }
+/* 映画は公開日 1 つだけなので、枠は「2008年11月30日」（最長想定）が収まる幅にして尺を日付の近くに置く
+   （映画のカードどうしでは尺の開始位置がそろう）。 */
+.series-card-list-movie .series-card-period {
+  min-width: 8.5em;
+}
 .series-card-count {
   /* 件数（全 N 話 / 尺）。期間枠のすぐ右に並ぶ。 */
   font-family: var(--font-num);
@@ -597,6 +602,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .series-card-period-main,
 .series-card-count-main {
+  white-space: nowrap;
+}
+/* 併映のある映画の「(上映総尺 m分ss秒)」。長編の尺に続けて同じ行に小さく添える。 */
+.series-card-count-sub {
+  font-size: 0.85em;
   white-space: nowrap;
 }
 /* 「（見込）」注記。本体直下に小さく出す。stack の中央寄せ規律で本体幅中央に収まる。 */
@@ -676,9 +686,12 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   color: var(--muted);
   flex: 0 0 auto;
 }
+/* 併映の題はスタッフの行より一回り大きく太くして、作品名として読めるようにする。 */
 .series-card-children-title {
   min-width: 0;
   overflow-wrap: anywhere;
+  font-size: 1.14em;
+  font-weight: 600;
 }
 a.series-card-children-title {
   pointer-events: auto;
@@ -1793,6 +1806,10 @@ a.series-card-children-title:hover {
   font-size: 0.9em;
   color: #666;
 }
+/* 画面で斜体の見出し（プリキュアオールスターズDX の声の出演の作品名など）。 */
+.credit-section .block-heading-italic {
+  font-style: italic;
+}
 /* CASTING_COOPERATION 由来の「協力」行。 */
 .credit-section table.fallback-vc-table tr.cooperation-row > td.role-name {
   text-align: right;
@@ -2180,6 +2197,11 @@ a.series-card-children-title:hover {
 .product-links-label {
   margin: 0 0 6px;
   font-size: 0.92em;
+}
+/* 購入リンクの下の、広告である旨の注記。 */
+.product-links-note {
+  margin: 6px 0 0;
+  font-size: 0.82em;
 }
 .product-links-list {
   list-style: none;
@@ -3396,6 +3418,17 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 .ep-subtitle-guard.is-revealed rt {
   filter: none;
   user-select: auto;
+}
+/* 解禁前の話のサブタイトル欄。画像はぼかせないので、解禁される（または先の題を見る設定にする）までは画像を隠して
+   ぼかした文字を出し、解禁されたら画像に切り替える。 */
+.subtitle-telop-guard .subtitle-telop-image {
+  display: none;
+}
+.subtitle-telop-guard.is-revealed .subtitle-telop-image {
+  display: block;
+}
+.subtitle-telop-guard.is-revealed .subtitle-telop-fallback {
+  display: none;
 }
 
 /* サブタイトル解禁の初回確認ダイアログ。mobile-nav-overlay と同じ「hidden 属性 + 暗幕 + パネル」
@@ -5403,6 +5436,34 @@ a.credit-card-series:focus-visible {
   line-height: 1.7;
   gap: 4px 10px;
 }
+/* メドレーの曲の中の曲（.medley-parts）。曲詳細の「収録曲」と、楽曲の一覧のカードの開け閉めの枠で共用する。
+   各曲は原曲の曲名（原曲へのリンク）の下に、原曲の作詞・作曲・編曲のバッジの行を置く。 */
+.medley-parts {
+  margin: 6px 0 0;
+  padding-left: 1.6em;
+}
+.medley-parts > li {
+  margin: 0 0 6px;
+}
+.medley-parts .staff-badges-row {
+  margin-top: 2px;
+  font-size: 0.85em;
+}
+/* 楽曲の一覧のカードでは、中の曲を開け閉めの枠に包む。カードの中身はオーバーレイへクリックを素通しにして
+   いるため（.songs-card-grid の pointer-events: none）、枠の見出しと中身だけはクリックを拾うように戻す。 */
+.songs-card-medley {
+  margin-top: 6px;
+  font-size: 0.85em;
+  pointer-events: auto;
+}
+.songs-card-medley > summary {
+  cursor: pointer;
+  color: var(--muted);
+  width: max-content;
+}
+.songs-card-medley .medley-parts .staff-badges-row {
+  font-size: 0.9em;
+}
 .songs-card-badge-cell {
   justify-self: end;
   align-self: start;
@@ -5493,8 +5554,9 @@ a.credit-card-series:focus-visible {
   color: #a17821;
   border-color: rgba(217, 167, 58, 0.45);
 }
-.role-badge[data-role-code="ARRANGEMENT"] {
-  /* 編曲 = 緑系 */
+.role-badge[data-role-code="ARRANGEMENT"],
+.role-badge[data-role-code="MEDLEY_ARRANGEMENT"] {
+  /* 編曲・メドレー編曲 = 緑系 */
   background: rgba(92, 174, 92, 0.16);
   color: #3c823c;
   border-color: rgba(92, 174, 92, 0.45);
@@ -6190,6 +6252,47 @@ a.credit-card-series:focus-visible {
   /* nofollow 外部リンクは少し控えめのアクセント色で */
   color: var(--accent-blue);
 }
+
+/* 人物詳細の「代表作（プリキュアを除く）」。「年 ｜ 作品 ｜ 役職」の 3 列で、年と役職は折り返さない。
+   作品名は作品の公式サイトへの外部リンク。アーカイブへのリンクには「公式サイトのアーカイブ」の小さな札を添える。 */
+.notable-works-table th.col-year,
+.notable-works-table td.col-year {
+  width: 7.5em;
+  white-space: nowrap;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.notable-works-table th.col-role,
+.notable-works-table td.col-role {
+  width: 12em;
+}
+.notable-works-table td.col-title a {
+  color: var(--accent-blue);
+}
+.notable-work-archive {
+  display: inline-block;
+  margin-left: 0.5em;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.78em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .notable-works-table th.col-year,
+  .notable-works-table td.col-year { width: auto; }
+  .notable-works-table th.col-role,
+  .notable-works-table td.col-role { width: auto; }
+}
+
+/* 人物詳細の本編クレジットで、役職の見出しの下に添える「初担当（声の出演は初出演）『作品』第N話（放送日）」の 1 行。 */
+.credit-role-first {
+  margin: -4px 0 8px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.credit-role-first a { color: var(--accent-blue); }
 
 /* 人物・企業・キャラ・商品の各詳細ページ末尾の「外部リンク」セクション。
    .external-links ul はバッジ風に横並びで配置し、各種類は色違いの薄いボーダーで区別する。
@@ -7451,6 +7554,60 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   line-height: 1.7;
 }
 
+/* ─────────── 免責事項：使用フォントの一覧 ─────────── */
+/* 「サブタイトル画像について」の折りたたみ。ライセンスごとの小見出し → フォントの箇条書き。
+   各行は「製品名（製品ページへのリンク）＋ Windows の書体名（薄く）」、2 行目に使っている作品。 */
+.subtitle-font-list { margin-top: 10px; }
+.subtitle-font-license {
+  font-size: 0.95em;
+  margin: 12px 0 4px;
+}
+.subtitle-font-list ul {
+  margin: 0;
+  padding-left: 1.3em;
+}
+.subtitle-font-list li {
+  margin: 4px 0;
+  line-height: 1.6;
+}
+.subtitle-font-name {
+  margin-left: 0.4em;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.subtitle-font-usage {
+  display: block;
+  font-size: 0.88em;
+  color: var(--muted);
+}
+.subtitle-font-ruby-note {
+  font-size: 0.9em;
+  color: var(--muted);
+}
+
+/* ─────────── 運営情報ページ：経歴・改定日・外部送信の一覧・広告の注記 ─────────── */
+/* このサイトについての「公式に関わった主な経歴」。日付を等幅数字で薄く前置きし、1 行 1 件。 */
+.about-career-list li { margin: 4px 0; line-height: 1.7; }
+.about-career-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+  color: var(--muted);
+  margin-right: 0.6em;
+}
+.about-policy-list li { margin: 6px 0; line-height: 1.7; }
+/* 外部への情報送信の一覧（プライバシーポリシー）。1 サービス 1 項目で、送信先を太字で前置き。 */
+.policy-transmission-list li { margin: 6px 0; line-height: 1.7; }
+/* 権利の整理の根拠（免責事項の折りたたみの中身）。 */
+.policy-basis { font-size: 0.95em; margin: 8px 0 0; }
+/* ポリシーページ末尾の改定日。右寄せの薄字。 */
+.policy-revised {
+  margin-top: 28px;
+  text-align: right;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
 /* ─────────── お問い合わせページ：窓口カード ─────────── */
 /* X / メールの 2 窓口をカード全体クリックで開ける形にする（シェアカードと同じ世界観）。 */
 .contact-channel-cards {
@@ -7979,6 +8136,9 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .rtl-key-bgm { width: 9px; height: 9px; border-radius: 50%; background: var(--rtl-bgm); }
 .rtl-key-disc { width: 9px; height: 9px; border-radius: 2px; background: var(--rtl-disc); }
 .rtl-key-span { width: 18px; height: 2px; border-radius: 1px; background: var(--rtl-span); }
+/* 関連する役職の見本（色は役職ごとに --key-c で渡す）。TV の話は細い帯、映画は白抜きの輪。 */
+.rtl-key-rel { width: 18px; height: 6px; border-radius: 3px; background: var(--key-c); }
+.rtl-key-rel-movie { width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; background: #fff; border: 2px solid var(--key-c); }
 
 /* 「主な方のみ」のスイッチ。入っている間（.is-main-only）は主な方でない行を隠す。 */
 .rtl-filter {
@@ -8167,6 +8327,7 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .rtl-badge-person { background: var(--accent-pink-weak, #fce7f3); color: var(--accent-pink-strong, #be185d); }
 .rtl-badge-company { background: var(--surface-2, #eef2ff); color: var(--fg, #3730a3); }
 .rtl-badge-character { background: rgba(126, 87, 194, 0.12); color: var(--accent-purple, #7e57c2); }
+.rtl-badge-unit { background: rgba(13, 148, 136, 0.12); color: #0f766e; }
 .rtl-track {
   position: relative;
   flex: 1 1 auto;
@@ -8223,6 +8384,32 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   margin: -4.5px 0 0 -4.5px;
   border-radius: 50%;
   background: var(--rtl-bgm);
+  box-shadow: 0 0 0 2px #fff;
+}
+/* 関連する役職の担当した TV の話（主の帯の下に細く重ねる。主の帯と同じ回は隠れ、主の役職の無い回だけが見える）。
+   色は役職ごとに --rel-c で渡す（関連の種類ごとの色相（前段階＝若葉・並列＝ティール・後段階＝藤色）を基準に、同じ種類の役職どうしは
+   色相を回して分ける。いずれも主の青より淡い。RoleTimelineBuilder.AssignRelatedColors）。 */
+.rtl-rel {
+  position: absolute;
+  top: 50%;
+  height: 6px;
+  margin-top: -3px;
+  min-width: 2px;
+  border-radius: 3px;
+  background: var(--rel-c);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.85);
+}
+/* 関連する役職の映画（白抜きの輪。主の役職の映画の点と形で分ける）。 */
+.rtl-rel-movie {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: #fff;
+  border: 2px solid var(--rel-c);
   box-shadow: 0 0 0 2px #fff;
 }
 /* 盤（発売日の四角）。 */
@@ -8348,6 +8535,13 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   background: rgba(126, 87, 194, 0.12);
   color: var(--accent-purple, #7e57c2);
 }
+/* 歌唱一覧のユニットの行（2 人の人影のアイコン）。歌手のピンク・キャラクターの紫と見分けられる青緑系。 */
+.entity-badge-unit {
+  background: rgba(13, 148, 136, 0.12);
+  color: #0f766e;
+}
+/* ユニット詳細のメンバー。キャラクターのメンバーに添える「(CV: 声優)」は少し離す。 */
+.unit-member-cv { margin-left: 0.15em; }
 
 /* 担当数・出演数・登場数の絵文字ピルバッジ。「📺 N（話）」「🎥 N（本）」を
    小さな角丸ピルで表す。
@@ -8464,7 +8658,11 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .creators-root[data-entity-filter="person"] [data-entity-type="company"],
 .creators-root[data-entity-filter="company"] [data-entity-type="person"],
 .creators-root[data-entity-filter="singer"] [data-entity-type="character"],
-.creators-root[data-entity-filter="character"] [data-entity-type="singer"] {
+.creators-root[data-entity-filter="character"] [data-entity-type="singer"],
+.creators-root[data-entity-filter="singer"] [data-entity-type="unit"],
+.creators-root[data-entity-filter="character"] [data-entity-type="unit"],
+.creators-root[data-entity-filter="unit"] [data-entity-type="singer"],
+.creators-root[data-entity-filter="unit"] [data-entity-type="character"] {
   display: none;
 }
 

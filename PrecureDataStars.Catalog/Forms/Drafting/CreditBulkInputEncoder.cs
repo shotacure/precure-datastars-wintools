@@ -1,4 +1,5 @@
 using System.Text;
+using PrecureDataStars.Catalog.Forms.Dialogs;
 using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Catalog.Forms.Drafting;
@@ -167,6 +168,12 @@ internal static class CreditBulkInputEncoder
         DraftTier tier, LookupCache cache, StringBuilder sb,
         bool isFirstTierInOutput, CancellationToken ct)
     {
+        // 画面の上での位置（縦＋横）。ティア区切り（1 つ目はカードの頭）の直後に書く。
+        if (tier.Entity.PositionCode is { } pos)
+        {
+            sb.Append("@pos=").Append(pos).Append(LineSeparator);
+        }
+
         // Tier 備考。
         EmitNotesDirective(tier.Entity.Notes, sb);
 
@@ -209,8 +216,92 @@ internal static class CreditBulkInputEncoder
             {
                 sb.Append(LineSeparator);
             }
+
+            // 1 行にまとめて表示する役職の組で、エントリ・所属表記レイアウトがそろっていれば
+            // "A+B: @join=文字" の 1 役職ぶんにまとめて書き出す（エントリは 1 回だけ）。
+            int joinedCount = await TryEncodeJoinedRolesAsync(liveRoles, ri, cache, sb, ct);
+            if (joinedCount > 0)
+            {
+                ri += joinedCount - 1;
+                continue;
+            }
             await EncodeRoleBodyAsync(liveRoles[ri], cache, sb, ct);
         }
+    }
+
+    /// <summary>
+    /// <paramref name="startIndex"/> の役職と、直後に続く <c>join_previous</c> の役職（まとめる組）を返す。
+    /// 直後に <c>join_previous</c> の役職が無ければ先頭の役職 1 つだけのリストになる。
+    /// </summary>
+    private static List<DraftRole> CollectJoinMembers(IReadOnlyList<DraftRole> liveRoles, int startIndex)
+    {
+        var members = new List<DraftRole> { liveRoles[startIndex] };
+        for (int j = startIndex + 1; j < liveRoles.Count && liveRoles[j].Entity.JoinPrevious; j++)
+            members.Add(liveRoles[j]);
+        return members;
+    }
+
+    /// <summary>
+    /// まとめる組（2 役職以上）の <c>@join=</c> の右側の文字を、役職ごとの表記と区切りから作る
+    /// （書き方は <see cref="JoinedRoleLabelText.Format"/>）。まとめる組でない、役職名を解決できない役職がある、
+    /// 役職名に区切りの「+」を含むときは null。
+    /// </summary>
+    private static async Task<string?> BuildJoinTextAsync(IReadOnlyList<DraftRole> members, LookupCache cache)
+    {
+        if (members.Count < 2) return null;
+        var names = new List<string>();
+        foreach (var m in members)
+        {
+            string? nameJa = await cache.LookupRoleNameJaAsync(m.Entity.RoleCode);
+            if (string.IsNullOrEmpty(nameJa) || nameJa.IndexOfAny(new[] { '+', '＋' }) >= 0) return null;
+            names.Add(nameJa);
+        }
+        return JoinedRoleLabelText.Format(names,
+            members.Select((m, k) => (m.Entity.RoleLabelText, k == 0 ? null : m.Entity.JoinSeparator)).ToList());
+    }
+
+    /// <summary>
+    /// <paramref name="startIndex"/> の役職の直後に <c>join_previous</c> の役職が続き、
+    /// それらのエントリ（ブロック群の書き出し結果）・役職備考の有無・所属表記レイアウトがそろっていれば、
+    /// <c>A+B: @join=文字</c> の形でまとめて書き出す。まとめた役職の数を返し、まとめられなければ 0 を返して何も書かない。
+    /// まとめられない組は、各役職を <see cref="EncodeRoleBodyAsync"/> で個別に書き出す（<c>@label=</c> / <c>@join_previous=区切り</c> 行付き）。
+    /// </summary>
+    private static async Task<int> TryEncodeJoinedRolesAsync(
+        IReadOnlyList<DraftRole> liveRoles, int startIndex, LookupCache cache, StringBuilder sb, CancellationToken ct)
+    {
+        var lead = liveRoles[startIndex];
+        var members = CollectJoinMembers(liveRoles, startIndex);
+        if (members.Count < 2) return 0;
+
+        // 後続の役職に備考があるとまとめた形では書けないので、個別に書き出す。役職名の誤記も同じ（@misprint= は役職ごとの行）。
+        if (members.Skip(1).Any(m => !string.IsNullOrEmpty(m.Entity.Notes))) return 0;
+        if (members.Any(m => !string.IsNullOrEmpty(m.Entity.RoleMisprintText))) return 0;
+        if (members.Any(m => !string.Equals(m.Entity.AffiliationLayout, lead.Entity.AffiliationLayout, StringComparison.Ordinal))) return 0;
+
+        string? joinText = await BuildJoinTextAsync(members, cache);
+        if (joinText is null) return 0;
+
+        string? leadBody = null;
+        var names = new List<string>();
+        foreach (var m in members)
+        {
+            names.Add((await cache.LookupRoleNameJaAsync(m.Entity.RoleCode))!);
+
+            var bodySb = new StringBuilder();
+            await EncodeRoleBlocksAsync(m, cache, bodySb, ct);
+            string body = bodySb.ToString();
+            if (leadBody is null) leadBody = body;
+            else if (!string.Equals(leadBody, body, StringComparison.Ordinal)) return 0;
+        }
+
+        sb.Append(string.Join("+", names)).Append(": @join=").Append(joinText).Append(LineSeparator);
+        if (string.Equals(lead.Entity.AffiliationLayout, "PREFIX", StringComparison.Ordinal))
+        {
+            sb.Append("@affil_layout=prefix").Append(LineSeparator);
+        }
+        EmitNotesDirective(lead.Entity.Notes, sb);
+        sb.Append(leadBody);
+        return members.Count;
     }
 
     /// <summary>1 役職分の本体を出力する。 役職名行 → 役職備考 → ブロック群（2 つ目以降のブロックは <c>-</c> 行で明示的に区切る）の順。 役職内のブロック区切りは <c>-</c> 行（導入されたハイフン 1 個区切り）を使う。 空行はロール間の区切りと重なって紛らわしいため、 出力では役職内ブロック区切り＝ <c>-</c>、役職と役職の境目＝空行、と使い分ける。</summary>
@@ -237,9 +328,39 @@ internal static class CreditBulkInputEncoder
             sb.Append(headerName).Append(':').Append(LineSeparator);
         }
 
+        // 画面の役職の表記。
+        if (!string.IsNullOrEmpty(role.Entity.RoleLabelText))
+        {
+            sb.Append("@label=").Append(role.Entity.RoleLabelText).Append(LineSeparator);
+        }
+
+        // 画面に出た役職名の誤記。
+        if (!string.IsNullOrEmpty(role.Entity.RoleMisprintText))
+        {
+            sb.Append("@misprint=").Append(role.Entity.RoleMisprintText).Append(LineSeparator);
+        }
+
+        // 1 行にまとめて表示する役職の指定（まとめた形で書き出せなかった組・1 役職だけの書き出しの個別指定）。
+        // 区切りの前後に空白があるときは、読み込みで落ちないよう角括弧で囲む。
+        if (role.Entity.JoinPrevious)
+        {
+            string sep = role.Entity.JoinSeparator ?? "";
+            if (sep.Length == 0) sb.Append("@join_previous");
+            else if (sep != sep.Trim()) sb.Append("@join_previous=[").Append(sep).Append(']');
+            else sb.Append("@join_previous=").Append(sep);
+            sb.Append(LineSeparator);
+        }
+
         // 役職備考。役職開始行直後に @notes= があれば Role.Notes として復元される。
         EmitNotesDirective(role.Entity.Notes, sb);
 
+        await EncodeRoleBlocksAsync(role, cache, sb, ct);
+    }
+
+    /// <summary>1 役職配下のブロック群を出力する（2 つ目以降のブロックは <c>-</c> 行で区切る）。</summary>
+    private static async Task EncodeRoleBlocksAsync(
+        DraftRole role, LookupCache cache, StringBuilder sb, CancellationToken ct)
+    {
         // 削除マーク済みブロックはエンコード対象外。
         var liveBlocks = role.Blocks.Where(b => b.State != DraftState.Deleted).ToList();
 
@@ -278,6 +399,10 @@ internal static class CreditBulkInputEncoder
         if (!string.IsNullOrEmpty(block.Entity.HeadingText))
         {
             sb.Append("@heading=").Append(block.Entity.HeadingText).Append(LineSeparator);
+        }
+        if (block.Entity.HeadingItalic && block.Entity.HasHeading)
+        {
+            sb.Append("@heading_italic").Append(LineSeparator);
         }
 
         // ブロック備考。

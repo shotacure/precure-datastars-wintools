@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- 音の特徴量（ランドマーク指紋）を取るクラスライブラリ。
+       WinForms・DB に依存しない純粋な計算だけを持ち、CD の読み取りツール（CDAnalyzer）が使う。 -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

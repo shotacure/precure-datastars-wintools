@@ -67,6 +67,12 @@ public sealed class ParsedTier
 
     /// <summary>Tier の備考（Notes に保存される。</summary>
     public string? Notes { get; set; }
+
+    /// <summary>画面の縦の位置（"T" / "M" / "B"、<c>credit_card_tiers.position_v</c>）。<c>@pos=XY</c> 行で設定される。</summary>
+    public string? PositionV { get; set; }
+
+    /// <summary>画面の横の位置（"L" / "C" / "R"、<c>credit_card_tiers.position_h</c>）。<c>@pos=XY</c> 行で設定される。</summary>
+    public string? PositionH { get; set; }
 }
 
 /// <summary>パース結果における 1 Group 分の塊。 テキスト中の <c>-</c> 単独行で区切られる。</summary>
@@ -104,6 +110,33 @@ public sealed class ParsedRole
     /// 役職ヘッダ行末尾の <c>@affil_layout=prefix</c> ディレクティブで <c>"PREFIX"</c> になる。
     /// <c>credit_card_roles.affiliation_layout</c> に保存される。</summary>
     public string AffiliationLayout { get; set; } = "SUFFIX";
+
+    /// <summary>画面の役職の表記（<c>credit_card_roles.role_label_text</c>）。役職名と同じなら null。
+    /// <c>役職名: @label=文字</c> / <c>@label=文字</c> 行、または <c>@join=</c> の角括弧の中の文字で設定される。</summary>
+    public string? RoleLabelText { get; set; }
+
+    /// <summary>画面に出た役職名の誤記（<c>credit_card_roles.role_misprint_text</c>）。<c>@misprint=文字</c> 行で設定される。</summary>
+    public string? RoleMisprintText { get; set; }
+
+    /// <summary>後続の役職と 1 行にまとめて表示するときの、まとめた行の文字（<c>@join=</c> の右側）。
+    /// 役職ヘッダ <c>A+B: @join=文字</c> の先頭の役職、または <c>@join=文字</c> 行で設定される。
+    /// パースの最後に、まとめる役職ごとの <see cref="RoleLabelText"/> と <see cref="JoinSeparator"/> に分けて振り分ける
+    /// （DB にはこの文字そのものは保存しない）。</summary>
+    public string? JoinText { get; set; }
+
+    /// <summary><see cref="JoinText"/> を書いた行の行番号（警告で行番号を出す用）。</summary>
+    public int JoinTextLineNumber { get; set; }
+
+    /// <summary>直前の役職と 1 行にまとめて表示するか（<c>credit_card_roles.join_previous</c>）。
+    /// 役職ヘッダ <c>A+B: @join=文字</c> の 2 つ目以降の役職、または <c>@join_previous</c> / <c>@join_previous=区切り</c> 行で設定される。</summary>
+    public bool JoinPrevious { get; set; }
+
+    /// <summary>まとめた行での直前の役職との区切りの文字（<c>credit_card_roles.join_separator</c>）。空なら null。
+    /// <c>@join_previous=区切り</c> 行、またはパースの最後に先頭の役職の <see cref="JoinText"/> を分けて設定される。</summary>
+    public string? JoinSeparator { get; set; }
+
+    /// <summary><see cref="JoinSeparator"/> を <c>@join_previous=区切り</c> 行で書いたか（<c>@join=</c> の文字との食い違いの検出用）。</summary>
+    public bool JoinSeparatorExplicit { get; set; }
 }
 
 /// <summary>パース結果における 1 ブロック分の塊。 同一役職内で空行を跨ぐと新しいブロックが生まれる。</summary>
@@ -129,6 +162,9 @@ public sealed class ParsedBlock
 
     /// <summary><c>@heading=文字</c> で指定されたブロック先頭の見出しの文字（<c>credit_role_blocks.heading_text</c>）。</summary>
     public string? HeadingText { get; set; }
+
+    /// <summary><c>@heading_italic</c> で指定された、見出しを斜体で出す印（<c>credit_role_blocks.heading_italic</c>）。</summary>
+    public bool HeadingItalic { get; set; }
 }
 
 /// <summary>パース結果における 1 行分のエントリ群。タブ区切りで複数エントリを持つ。</summary>

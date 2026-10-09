@@ -291,6 +291,14 @@ public sealed class SeriesRepository : RepositoryBase
         await ExecuteAsync(sql, s, ct).ConfigureAwait(false);
     }
 
+    /// <summary>作品の上映時間（run_time_seconds）だけを更新する（BDAnalyzer が本編のプレイリストの尺から入れる）。</summary>
+    public async Task UpdateRunTimeSecondsAsync(int seriesId, ushort? runTimeSeconds, string? updatedBy = null, CancellationToken ct = default)
+    {
+        if (seriesId <= 0) throw new ArgumentException("Invalid SeriesId.", nameof(seriesId));
+        const string sql = "UPDATE series SET run_time_seconds = @runTimeSeconds, updated_by = @updatedBy WHERE series_id = @seriesId;";
+        await ExecuteAsync(sql, new { seriesId, runTimeSeconds, updatedBy = updatedBy ?? Environment.UserName }, ct).ConfigureAwait(false);
+    }
+
     //  Dapper TypeHandler（DateOnly / bool? ↔ MySQL）
 
     /// <summary>Dapper 用 TypeHandler: MySQL の DATE/DATETIME 型と .NET の <see cref="DateOnly"/> を相互変換する。</summary>

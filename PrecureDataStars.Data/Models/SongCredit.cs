@@ -28,6 +28,13 @@ public sealed class SongCredit
     /// <summary>名義参照（→ person_aliases.alias_id）。</summary>
     public int PersonAliasId { get; set; }
 
+    /// <summary>
+    /// 盤に印刷された役職の表記（「原詞」など）。役職名（roles.name_ja）と違うときだけ入れる。
+    /// その役職の連名のうち <see cref="CreditSeq"/> がいちばん小さい行の値を使う（<see cref="SongCreditRoles.LabelTextOf"/>）。
+    /// 曲・盤のトラック・主題歌の行など作家を出す所の表記に使い、集計は役職のまま。
+    /// </summary>
+    public string? RoleLabelText { get; set; }
+
     /// <summary>seq>=2 の行で、前の seq との区切り文字。seq=1 では NULL。</summary>
     public string? PrecedingSeparator { get; set; }
 
@@ -51,4 +58,16 @@ public static class SongCreditRoles
     public const string Composition = "COMPOSITION";
     /// <summary>編曲。</summary>
     public const string Arrangement = "ARRANGEMENT";
+    /// <summary>メドレー編曲（メドレーの曲の全体の編曲。編曲とは別に集計する）。</summary>
+    public const string MedleyArrangement = "MEDLEY_ARRANGEMENT";
+
+    /// <summary>
+    /// 曲の連名行から、指定役職の盤の表記（<see cref="SongCredit.RoleLabelText"/>）を返す。
+    /// その役職の行のうち credit_seq がいちばん小さい行の値で、空なら null（呼び出し側で役職名を使う）。
+    /// </summary>
+    public static string? LabelTextOf(IEnumerable<SongCredit> rows, string roleCode)
+        => rows.Where(c => string.Equals(c.CreditRole, roleCode, StringComparison.Ordinal))
+               .OrderBy(c => c.CreditSeq)
+               .Select(c => c.RoleLabelText)
+               .FirstOrDefault() is { Length: > 0 } label ? label : null;
 }

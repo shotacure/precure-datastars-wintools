@@ -95,6 +95,21 @@ public sealed class BuildConfig
     /// sitemap / 検索インデックスの再生成を抑止し、デプロイ時は orphan 削除も行わない（部分生成の安全策）。</summary>
     public string PageFilter { get; }
 
+    /// <summary>
+    /// <paramref name="urlPath"/> がピンポイントビルドの対象か。<see cref="PageFilter"/> が空なら常に true。
+    /// サイト内 URL パスは日本語の部分を % エンコードした形で持つ（<see cref="Utilities.PathUtil"/>）ため、
+    /// エンコードした形とデコードした形の両方に照らし、<c>--page /characters/花咲陽一/</c> のような日本語の指定でも当たるようにする。
+    /// </summary>
+    public bool MatchesPageFilter(string urlPath)
+    {
+        if (string.IsNullOrEmpty(PageFilter)) return true;
+        if (urlPath.Contains(PageFilter, StringComparison.Ordinal)) return true;
+        string decoded;
+        try { decoded = Uri.UnescapeDataString(urlPath); }
+        catch (UriFormatException) { return false; }
+        return decoded.Contains(PageFilter, StringComparison.Ordinal);
+    }
+
     /// <summary>サブタイトルのテロップ画像の作り置きの置き場所（絶対パス）。App.config の <c>SubtitleTelopCacheDir</c>。
     /// 未設定なら <c>%LOCALAPPDATA%\PrecureDataStars\SiteBuilder\subtitle-telops</c>。
     /// 出力ディレクトリの中に置くと全体ビルドの最後に孤児として消されるので、その外に置く（テストと本番で共用する）。</summary>

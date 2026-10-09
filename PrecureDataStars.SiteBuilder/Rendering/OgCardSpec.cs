@@ -313,7 +313,7 @@ public static class OgRolePalette
         // 楽曲の役職（サイトの楽曲詳細のバッジと同じ 4 色）。
         "LYRICS" => "#c0354c",
         "COMPOSITION" => "#a17821",
-        "ARRANGEMENT" => "#3c823c",
+        "ARRANGEMENT" or "MEDLEY_ARRANGEMENT" => "#3c823c",
         "VOCALS" or "BACKING_VOCALS" or "DIALOGUE" => "#3b56b8",
         _ => ""
     };

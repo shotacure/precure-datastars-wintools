@@ -75,6 +75,12 @@ partial class SongsEditorForm
     private Label lblStructArranger = null!;
     private Label lblStructArrangerValue = null!;
     private Button btnEditStructArranger = null!;
+    private Label lblStructMedleyArranger = null!;
+    private Label lblStructMedleyArrangerValue = null!;
+    private Button btnEditStructMedleyArranger = null!;
+    private Label lblStructMedleyParts = null!;
+    private Label lblStructMedleyPartsValue = null!;
+    private Button btnEditStructMedleyParts = null!;
 
     private GroupBox grpRecCreditsStructured = null!;
     private Label lblRecCreditsHint = null!;
@@ -134,6 +140,8 @@ partial class SongsEditorForm
         lblStructLyricist = new Label(); lblStructLyricistValue = new Label(); btnEditStructLyricist = new Button();
         lblStructComposer = new Label(); lblStructComposerValue = new Label(); btnEditStructComposer = new Button();
         lblStructArranger = new Label(); lblStructArrangerValue = new Label(); btnEditStructArranger = new Button();
+        lblStructMedleyArranger = new Label(); lblStructMedleyArrangerValue = new Label(); btnEditStructMedleyArranger = new Button();
+        lblStructMedleyParts = new Label(); lblStructMedleyPartsValue = new Label(); btnEditStructMedleyParts = new Button();
 
         grpRecCreditsStructured = new GroupBox();
         lblRecCreditsHint = new Label();
@@ -213,7 +221,7 @@ partial class SongsEditorForm
         // （song_credits）に行があるとき表示優先される旨を案内する。
         grpSongCreditsStructured.Text = "構造化クレジット（song_credits、ある場合は表示優先）";
         grpSongCreditsStructured.Location = new Point(8, sy + 70);
-        grpSongCreditsStructured.Size = new Size(12 + lw + fw + 90, 144);
+        grpSongCreditsStructured.Size = new Size(12 + lw + fw + 90, 200);
         lblSongCreditsHint.Text = "連名・ユニット表記はこちらで構築します。空のままならフリーテキスト欄が表示に使われます。";
         lblSongCreditsHint.Location = new Point(12, 22); lblSongCreditsHint.Size = new Size(360, 16);
         lblSongCreditsHint.ForeColor = Color.DimGray;
@@ -232,13 +240,25 @@ partial class SongsEditorForm
         lblStructArranger.Text = "編曲:";       lblStructArranger.Location = new Point(sCol1, sRowY + 4); lblStructArranger.Size = new Size(56, 18);
         lblStructArrangerValue.Location = new Point(sCol2, sRowY + 4); lblStructArrangerValue.Size = new Size(216, 18); lblStructArrangerValue.AutoEllipsis = true; lblStructArrangerValue.Text = "(未設定)"; lblStructArrangerValue.ForeColor = Color.DimGray;
         btnEditStructArranger.Text = "編集..."; btnEditStructArranger.Location = new Point(sCol2 + 220, sRowY); btnEditStructArranger.Size = new Size(sBtnW, 24);
+        sRowY += sLnH;
+        // メドレー編曲（メドレーの曲の全体の編曲。編曲とは別の役職）
+        lblStructMedleyArranger.Text = "メドレー編曲:"; lblStructMedleyArranger.Location = new Point(sCol1, sRowY + 4); lblStructMedleyArranger.Size = new Size(68, 18);
+        lblStructMedleyArrangerValue.Location = new Point(sCol2, sRowY + 4); lblStructMedleyArrangerValue.Size = new Size(216, 18); lblStructMedleyArrangerValue.AutoEllipsis = true; lblStructMedleyArrangerValue.Text = "(未設定)"; lblStructMedleyArrangerValue.ForeColor = Color.DimGray;
+        btnEditStructMedleyArranger.Text = "編集..."; btnEditStructMedleyArranger.Location = new Point(sCol2 + 220, sRowY); btnEditStructMedleyArranger.Size = new Size(sBtnW, 24);
+        sRowY += sLnH;
+        // メドレーの中身（song_medley_parts。原曲と冊子の表記を順序付きで持つ）
+        lblStructMedleyParts.Text = "メドレーの中身:"; lblStructMedleyParts.Location = new Point(sCol1, sRowY + 4); lblStructMedleyParts.Size = new Size(68, 18);
+        lblStructMedleyPartsValue.Location = new Point(sCol2, sRowY + 4); lblStructMedleyPartsValue.Size = new Size(216, 18); lblStructMedleyPartsValue.AutoEllipsis = true; lblStructMedleyPartsValue.Text = "(未設定)"; lblStructMedleyPartsValue.ForeColor = Color.DimGray;
+        btnEditStructMedleyParts.Text = "編集..."; btnEditStructMedleyParts.Location = new Point(sCol2 + 220, sRowY); btnEditStructMedleyParts.Size = new Size(sBtnW, 24);
 
         grpSongCreditsStructured.Controls.AddRange(new Control[]
         {
             lblSongCreditsHint,
             lblStructLyricist, lblStructLyricistValue, btnEditStructLyricist,
             lblStructComposer, lblStructComposerValue, btnEditStructComposer,
-            lblStructArranger, lblStructArrangerValue, btnEditStructArranger
+            lblStructArranger, lblStructArrangerValue, btnEditStructArranger,
+            lblStructMedleyArranger, lblStructMedleyArrangerValue, btnEditStructMedleyArranger,
+            lblStructMedleyParts, lblStructMedleyPartsValue, btnEditStructMedleyParts
         });
         pnlSongDetail.Controls.Add(grpSongCreditsStructured);
 

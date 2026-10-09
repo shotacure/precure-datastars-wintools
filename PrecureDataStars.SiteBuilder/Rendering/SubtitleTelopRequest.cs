@@ -24,14 +24,13 @@ public sealed record SubtitleTelopRequest(
     SubtitleTelopProfile Profile)
 {
     /// <summary>
-    /// その話のテロップ画像の材料を返す。サブタイトル未確定の話と、ビルドの時点で解禁前の話は画像にしないので null
-    /// （解禁前の話は画像にするとぼかしが効かないため、HTML のサブタイトル（ガード付き）を出す）。
+    /// その話のテロップ画像の材料を返す。サブタイトル未確定の話は画像にしないので null。
+    /// ビルドの時点で解禁前の話も描く（ページでは、解禁されるか閲覧者が先の題を見る設定にするまで画像を出さず、
+    /// ぼかした HTML のサブタイトルを出す。OGP カードは作らない）。
     /// </summary>
     public static SubtitleTelopRequest? For(Series series, Episode ep, BuildContext ctx)
     {
         if (string.IsNullOrEmpty(ep.TitleText)) return null;
-        var revealAt = SubtitleGuardRenderer.RevealAtFor(ep.EpisodeId, ctx.SubtitleRevealAtByEpisodeId);
-        if (SubtitleGuardRenderer.IsEmbargoedAt(revealAt, ctx.BuildStartedAt)) return null;
 
         return new SubtitleTelopRequest(
             PathUtil.EpisodeUrl(series.Slug, ep.SeriesEpNo),

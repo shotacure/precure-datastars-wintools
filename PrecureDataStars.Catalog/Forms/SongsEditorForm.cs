@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using PrecureDataStars.Catalog.Common.CsvImport;
+using PrecureDataStars.Catalog.Forms.Dialogs;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 
@@ -23,6 +24,7 @@ public partial class SongsEditorForm : Form
     private readonly SongCreditsRepository _songCreditsRepo;
     private readonly SongRecordingSingersRepository _songRecordingSingersRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
+    private readonly SongMedleyPartsRepository _songMedleyPartsRepo;
 
     private List<Song> _allSongs = new();       // 再検索用に全件キャッシュ（シリーズ・フィルタ変更時に再利用）
     private List<Song> _songs = new();          // グリッドに表示中
@@ -39,7 +41,9 @@ public partial class SongsEditorForm : Form
         PersonAliasesRepository personAliasesRepo,
         SongCreditsRepository songCreditsRepo,
         SongRecordingSingersRepository songRecordingSingersRepo,
-        CharacterAliasesRepository characterAliasesRepo)
+        CharacterAliasesRepository characterAliasesRepo,
+        // メドレーの中身（song_medley_parts）用
+        SongMedleyPartsRepository songMedleyPartsRepo)
     {
         _songsRepo = songsRepo;
         _songRecRepo = songRecRepo;
@@ -52,6 +56,7 @@ public partial class SongsEditorForm : Form
         _songCreditsRepo = songCreditsRepo ?? throw new ArgumentNullException(nameof(songCreditsRepo));
         _songRecordingSingersRepo = songRecordingSingersRepo ?? throw new ArgumentNullException(nameof(songRecordingSingersRepo));
         _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
+        _songMedleyPartsRepo = songMedleyPartsRepo ?? throw new ArgumentNullException(nameof(songMedleyPartsRepo));
 
         InitializeComponent();
         Load += async (_, __) => await InitAsync();
@@ -91,6 +96,8 @@ public partial class SongsEditorForm : Form
         btnEditStructLyricist.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRoles.Lyrics);
         btnEditStructComposer.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRoles.Composition);
         btnEditStructArranger.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRoles.Arrangement);
+        btnEditStructMedleyArranger.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRoles.MedleyArrangement);
+        btnEditStructMedleyParts.Click += async (_, __) => await OnEditMedleyPartsAsync();
         btnEditStructSingers.Click += async (_, __) => await OnEditSingersAsync();
     }
 
@@ -524,12 +531,24 @@ public partial class SongsEditorForm : Form
     {
         try
         {
-            string lyr = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRoles.Lyrics);
-            string cmp = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRoles.Composition);
-            string arr = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRoles.Arrangement);
+            // 盤の役職の表記（role_label_text）がある役職は、連名の前に〔表記〕を添えて見分けられるようにする。
+            var rows = await _songCreditsRepo.GetBySongAsync(songId);
+            async Task<string> DisplayAsync(string role)
+            {
+                string names = await _songCreditsRepo.GetDisplayStringAsync(songId, role);
+                string? label = SongCreditRoles.LabelTextOf(rows, role);
+                return names.Length > 0 && label is not null ? $"〔{label}〕{names}" : names;
+            }
+            string lyr = await DisplayAsync(SongCreditRoles.Lyrics);
+            string cmp = await DisplayAsync(SongCreditRoles.Composition);
+            string arr = await DisplayAsync(SongCreditRoles.Arrangement);
+            string medleyArr = await DisplayAsync(SongCreditRoles.MedleyArrangement);
+            var medleyParts = await _songMedleyPartsRepo.GetByMedleyAsync(songId);
             ApplyStructLabel(lblStructLyricistValue, lyr);
             ApplyStructLabel(lblStructComposerValue, cmp);
             ApplyStructLabel(lblStructArrangerValue, arr);
+            ApplyStructLabel(lblStructMedleyArrangerValue, medleyArr);
+            ApplyStructLabel(lblStructMedleyPartsValue, medleyParts.Count == 0 ? "" : $"{medleyParts.Count} 曲");
         }
         catch (Exception ex) { this.ShowError(ex); }
     }
@@ -593,24 +612,45 @@ public partial class SongsEditorForm : Form
                 SongCreditRoles.Lyrics      => $"作詞クレジット編集（song_id={s.SongId}）",
                 SongCreditRoles.Composition => $"作曲クレジット編集（song_id={s.SongId}）",
                 SongCreditRoles.Arrangement => $"編曲クレジット編集（song_id={s.SongId}）",
+                SongCreditRoles.MedleyArrangement => $"メドレー編曲クレジット編集（song_id={s.SongId}）",
                 _                           => $"{role} クレジット編集（song_id={s.SongId}）"
             };
 
             using var dlg = new PersonAliasCreditsEditDialog(title, initial, _personAliasesRepo);
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
-            // 編集結果を SongCredit モデルに変換し、ReplaceAllByRoleAsync で一括 INSERT
+            // 編集結果を SongCredit モデルに変換し、ReplaceAllByRoleAsync で一括 INSERT。
+            // 盤の役職の表記（role_label_text）はダイアログで扱わないので、既存の値を先頭行に引き継ぐ。
+            string? roleLabelText = SongCreditRoles.LabelTextOf(existing, role);
             var newCredits = dlg.ResultLines.Select((l, i) => new SongCredit
             {
                 SongId = s.SongId,
                 CreditRole = role,
                 CreditSeq = (byte)(i + 1),
                 PersonAliasId = l.AliasId,
+                RoleLabelText = i == 0 ? roleLabelText : null,
                 PrecedingSeparator = i == 0 ? null : l.PrecedingSeparator,
                 Notes = l.Notes
             }).ToList();
 
             await _songCreditsRepo.ReplaceAllByRoleAsync(s.SongId, role, newCredits, Environment.UserName);
+            await RefreshSongCreditsLabelsAsync(s.SongId);
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
+    /// <summary>「メドレーの中身」編集ボタンのハンドラ。<see cref="SongMedleyPartsEditDialog"/> を開き、保存されたら表示を更新する。</summary>
+    private async Task OnEditMedleyPartsAsync()
+    {
+        if (gridSongs.CurrentRow?.DataBoundItem is not Song s || s.SongId <= 0)
+        {
+            MessageBox.Show("先に曲を選択してください。", "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        try
+        {
+            using var dlg = new SongMedleyPartsEditDialog(_songMedleyPartsRepo, _songsRepo, s.SongId, s.Title);
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
             await RefreshSongCreditsLabelsAsync(s.SongId);
         }
         catch (Exception ex) { this.ShowError(ex); }

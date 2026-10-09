@@ -173,7 +173,7 @@ public sealed class SearchIndexGenerator
         {
             // 表示名は人物詳細の見出しと同じ表示名義。読みには見出しの読みに加えて、正式名と全名義の表記・読みも
             // 「|」区切りで持たせ、旧名義や正式名で探しても引けるようにする（照合は部分一致なので区切りは跨がない前提）。
-            string displayName = _ctx.EntityUrls.PersonDisplayName(p.PersonId) ?? p.FullName;
+            string displayName = _ctx.EntityUrls.PersonDisplayLabel(p.PersonId) ?? p.FullName;
             string displayKana = _ctx.EntityUrls.PersonDisplayKana(p.PersonId) ?? "";
             var readings = new List<string> { string.IsNullOrEmpty(displayKana) ? displayName : displayKana };
             readings.Add(p.FullNameKana ?? p.FullName);
@@ -194,6 +194,20 @@ public sealed class SearchIndexGenerator
                 k = "person",
                 s = "",
                 x = string.Join("|", readings.Select(NormalizeForSearch).Where(r => r.Length > 0).Distinct(StringComparer.Ordinal))
+            });
+        }
+
+        // ── ユニット（人物の行を持たない名義。ユニット詳細を持つもの） ──
+        foreach (var unitAliasId in _ctx.EntityUrls.UnitAliasIds)
+        {
+            if (!_ctx.PersonAliasById.TryGetValue(unitAliasId, out var ua)) continue;
+            items.Add(new SearchIndexItem
+            {
+                u = PathUtil.UnitUrl(unitAliasId)!,
+                t = ua.Name,
+                k = "unit",
+                s = "",
+                x = string.Join("|", new[] { ua.NameKana ?? "", ua.Name }.Select(NormalizeForSearch).Where(r => r.Length > 0).Distinct(StringComparer.Ordinal))
             });
         }
 

@@ -23,6 +23,7 @@ public sealed class SongCreditsRepository : RepositoryBase
           credit_role          AS CreditRole,
           credit_seq           AS CreditSeq,
           person_alias_id      AS PersonAliasId,
+          role_label_text      AS RoleLabelText,
           preceding_separator  AS PrecedingSeparator,
           notes                AS Notes,
           created_at           AS CreatedAt,
@@ -40,7 +41,7 @@ public sealed class SongCreditsRepository : RepositoryBase
             SELECT {SelectColumns}
             FROM song_credits
             WHERE song_id = @songId
-            ORDER BY FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
+            ORDER BY FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT','MEDLEY_ARRANGEMENT'), credit_role, credit_seq;
             """;
 
         return await QueryListAsync<SongCredit>(sql, new { songId }, ct).ConfigureAwait(false);
@@ -52,7 +53,7 @@ public sealed class SongCreditsRepository : RepositoryBase
         string sql = $"""
             SELECT {SelectColumns}
             FROM song_credits
-            ORDER BY song_id, FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
+            ORDER BY song_id, FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT','MEDLEY_ARRANGEMENT'), credit_role, credit_seq;
             """;
 
         return await QueryListAsync<SongCredit>(sql, ct: ct).ConfigureAwait(false);
@@ -120,6 +121,24 @@ public sealed class SongCreditsRepository : RepositoryBase
     /// <returns>連名の HTML 文字列。0 件のとき空文字。</returns>
     public async Task<string> GetDisplayHtmlAsync(int songId, string role, ILookupCache lookup, CancellationToken ct = default)
     {
+        var parts = await GetDisplayHtmlPartsAsync(songId, role, lookup, ct).ConfigureAwait(false);
+        var sb = new System.Text.StringBuilder();
+        foreach (var (sep, html) in parts)
+        {
+            // セパレータは生 HTML として挿入されることを避けるため、HtmlEncode で安全化する。
+            // 典型値は "、"・"／"・", " など短いテキストで、エスケープ後も視覚的にそのまま読める。
+            sb.Append(System.Net.WebUtility.HtmlEncode(sep)).Append(html);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 連名を、名義ごとの部品（直前との区切り, リンク化済み HTML）の並びで返す（<see cref="GetDisplayHtmlAsync"/> の元）。
+    /// 先頭の部品の区切りは空文字。役職テンプレで区切りを差し替える（<c>{ARRANGER:sep="/"}</c> など）ときに使う。
+    /// 行が無ければ空の並び。
+    /// </summary>
+    public async Task<IReadOnlyList<(string Sep, string Html)>> GetDisplayHtmlPartsAsync(int songId, string role, ILookupCache lookup, CancellationToken ct = default)
+    {
         // 連名行を seq 順で取得し、各行の preceding_separator と person_alias_id を集める。
         // 表示名そのものは lookup 経由で別途引くため、SELECT で取らない（lookup 側でキャッシュ済みを期待）。
         const string sql = """
@@ -136,23 +155,15 @@ public sealed class SongCreditsRepository : RepositoryBase
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<(byte Seq, string? Sep, int PersonAliasId)>(
             new CommandDefinition(sql, new { songId, role }, cancellationToken: ct))).ToList();
-        if (rows.Count == 0) return "";
-
-        var sb = new System.Text.StringBuilder();
+        var parts = new List<(string Sep, string Html)>(rows.Count);
         for (int i = 0; i < rows.Count; i++)
         {
-            if (i > 0)
-            {
-                // セパレータは生 HTML として挿入されることを避けるため、HtmlEncode で安全化する。
-                // 典型値は "、"・"／"・", " など短いテキストで、エスケープ後も視覚的にそのまま読める。
-                sb.Append(System.Net.WebUtility.HtmlEncode(rows[i].Sep ?? ""));
-            }
             // lookup でリンク化済み HTML を取得。未解決時（alias 削除済み等）は空文字を使い、
             // 表示上は連名要素が欠落するが、レイアウト崩壊は避ける。
             var html = await lookup.LookupPersonAliasHtmlAsync(rows[i].PersonAliasId).ConfigureAwait(false);
-            sb.Append(html ?? "");
+            parts.Add((i > 0 ? rows[i].Sep ?? "" : "", html ?? ""));
         }
-        return sb.ToString();
+        return parts;
     }
 
     /// <summary>1 行追加（呼び出し側で credit_seq を採番済みの前提）。</summary>
@@ -160,9 +171,9 @@ public sealed class SongCreditsRepository : RepositoryBase
     {
         const string sql = """
             INSERT INTO song_credits
-              (song_id, credit_role, credit_seq, person_alias_id, preceding_separator, notes, created_by, updated_by)
+              (song_id, credit_role, credit_seq, person_alias_id, role_label_text, preceding_separator, notes, created_by, updated_by)
             VALUES
-              (@SongId, @CreditRole, @CreditSeq, @PersonAliasId, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
+              (@SongId, @CreditRole, @CreditSeq, @PersonAliasId, @RoleLabelText, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
             """;
 
         await ExecuteAsync(sql, c, ct).ConfigureAwait(false);
@@ -174,6 +185,7 @@ public sealed class SongCreditsRepository : RepositoryBase
         const string sql = """
             UPDATE song_credits SET
               person_alias_id     = @PersonAliasId,
+              role_label_text     = @RoleLabelText,
               preceding_separator = @PrecedingSeparator,
               notes               = @Notes,
               updated_by          = @UpdatedBy
@@ -214,9 +226,9 @@ public sealed class SongCreditsRepository : RepositoryBase
                 await conn.ExecuteAsync(new CommandDefinition(
                     """
                     INSERT INTO song_credits
-                      (song_id, credit_role, credit_seq, person_alias_id, preceding_separator, notes, created_by, updated_by)
+                      (song_id, credit_role, credit_seq, person_alias_id, role_label_text, preceding_separator, notes, created_by, updated_by)
                     VALUES
-                      (@SongId, @Role, @CreditSeq, @PersonAliasId, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
+                      (@SongId, @Role, @CreditSeq, @PersonAliasId, @RoleLabelText, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
                     """,
                     new
                     {
@@ -224,6 +236,8 @@ public sealed class SongCreditsRepository : RepositoryBase
                         Role = role,
                         CreditSeq = seq,
                         c.PersonAliasId,
+                        // 盤の役職の表記は先頭行（seq=1）だけに持たせる
+                        RoleLabelText = seq == 1 && !string.IsNullOrEmpty(c.RoleLabelText) ? c.RoleLabelText : null,
                         // seq=1 では preceding_separator は強制 NULL（CHECK にはしていないが整合性維持のため）
                         PrecedingSeparator = seq == 1 ? null : c.PrecedingSeparator,
                         c.Notes,

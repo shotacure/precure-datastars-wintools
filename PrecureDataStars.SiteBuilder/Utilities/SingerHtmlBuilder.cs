@@ -75,14 +75,24 @@ public sealed class SingerHtmlBuilder
 
     /// <summary>役職ラベルを <c>/creators/roles/{rep_role_code}/</c> リンク付き HTML に整形する。 役職マスタに未登録（または和名が空）のときは <paramref name="fallbackLabel"/> のエスケープ平文を返す。</summary>
     public string BuildSongRoleLabelLinkHtml(string roleCode, IReadOnlyDictionary<string, Role> roleMap, string fallbackLabel)
+        => BuildSongRoleLabelLinkHtml(roleCode, roleMap, fallbackLabel, labelText: null);
+
+    /// <summary>
+    /// 曲の作家の役職ラベルを、盤の役職の表記（<see cref="SongCredit.RoleLabelText"/>）を優先して整形する。
+    /// 表記はその曲の連名行 <paramref name="songCredits"/> から引き、無ければ役職名。リンク先は役職のまま。
+    /// </summary>
+    public string BuildSongRoleLabelLinkHtml(string roleCode, IReadOnlyDictionary<string, Role> roleMap, string fallbackLabel, IReadOnlyList<SongCredit> songCredits)
+        => BuildSongRoleLabelLinkHtml(roleCode, roleMap, fallbackLabel, SongCreditRoles.LabelTextOf(songCredits, roleCode));
+
+    private string BuildSongRoleLabelLinkHtml(string roleCode, IReadOnlyDictionary<string, Role> roleMap, string fallbackLabel, string? labelText)
     {
         if (roleMap.TryGetValue(roleCode, out var role) && !string.IsNullOrEmpty(role.NameJa))
         {
             string rep = _roleSuccessorResolver.GetRepresentative(roleCode);
             string href = PathUtil.CreatorsRoleUrl(string.IsNullOrEmpty(rep) ? roleCode : rep);
-            return $"<a href=\"{HtmlUtil.Escape(href)}\">{HtmlUtil.Escape(role.NameJa)}</a>";
+            return $"<a href=\"{HtmlUtil.Escape(href)}\">{HtmlUtil.Escape(labelText ?? role.NameJa)}</a>";
         }
-        return HtmlUtil.Escape(fallbackLabel);
+        return HtmlUtil.Escape(labelText ?? fallbackLabel);
     }
 
     /// <summary>指定 <paramref name="roleCode"/>（VOCALS / BACKING_VOCALS 等）の歌唱者行のみを抽出し連名 HTML を組み立てる内部ヘルパ。</summary>

@@ -3,6 +3,7 @@ using PrecureDataStars.SiteBuilder.Data;
 using PrecureDataStars.SiteBuilder.Pipeline;
 using PrecureDataStars.SiteBuilder.Rendering;
 using PrecureDataStars.SiteBuilder.Utilities;
+using PrecureDataStars.TemplateRendering;
 
 namespace PrecureDataStars.SiteBuilder.Generators;
 
@@ -319,7 +320,7 @@ public sealed class AnniversaryGenerator
     private static string FormatEpisodeDetail(EpisodeRow e, DateTimeOffset now)
         => SubtitleGuardRenderer.IsEmbargoedAt(e.RevealAt, now) || string.IsNullOrWhiteSpace(e.EpisodeTitle)
             ? $"第{e.EpisodeNo}話"
-            : $"第{e.EpisodeNo}話「{e.EpisodeTitle}」";
+            : $"第{e.EpisodeNo}話「{JapaneseQuotes.InQuotes(e.EpisodeTitle)}」";
 
     // ════════════════════ 索引ページ ════════════════════
 

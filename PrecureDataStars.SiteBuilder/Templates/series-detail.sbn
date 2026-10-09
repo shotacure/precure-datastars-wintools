@@ -183,7 +183,7 @@
       <li class="ts-card">
         <div class="ts-headline">
           <span class="ts-kind">{{ t.KindLabel | html.escape }}</span>
-          <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>{{~ else ~}}{{ t.Title | html.escape }}{{~ end ~}}」</span>
+          <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | in_quotes | html.escape }}</a>{{~ else ~}}{{ t.Title | in_quotes | html.escape }}{{~ end ~}}」</span>
           {{~ if t.EpisodeRangeLabel != "" ~}}<span class="ts-range muted">{{ t.EpisodeRangeLabel | html.escape }}</span>{{~ end ~}}
           {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
           {{~ if t.ArtTrackId != "" ~}}<button type="button" class="art-track-play ts-play{{ if t.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ t.ArtTrackId | html.escape }}"{{ if t.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }}{{ if t.ArtTrackAltId != "" }} data-art-track-alt-id="{{ t.ArtTrackAltId | html.escape }}" data-art-track-alt-sub="{{ t.ArtTrackAltSourceAlbum | html.escape }}"{{ end }} data-art-track-title="{{ t.Title | html.escape }}" data-art-track-sub="{{ t.ArtTrackSourceAlbum | html.escape }}" aria-label="{{ t.Title | html.escape }} を再生{{ if t.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if t.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>{{~ end ~}}
@@ -215,6 +215,9 @@
         {{~ end ~}}
         {{~ if t.ArrangementHtml != "" ~}}
         <div class="ts-meta-row"><span class="ts-meta-label">{{ t.ArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ArrangementHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.MedleyArrangementHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.MedleyArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.MedleyArrangementHtml }}</span></div>
         {{~ end ~}}
         {{~ if t.Notes != "" ~}}
         <div class="ts-meta-row ts-meta-notes muted">{{ t.Notes | html.escape }}</div>

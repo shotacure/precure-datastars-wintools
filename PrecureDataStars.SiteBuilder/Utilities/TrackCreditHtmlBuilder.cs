@@ -84,10 +84,11 @@ public sealed class TrackCreditHtmlBuilder
     /// 楽曲の作家・歌唱系の役職は役職詳細・歌唱ページへのリンクにする（<see cref="PathUtil.SongRoleBadgeUrl"/>）。
     /// 劇伴の作曲・編曲はリンク先が楽曲の作家の一覧になるので、<paramref name="linkable"/>=false で素のバッジにする。
     /// </summary>
-    public string BuildRoleBadgeHtml(string roleCode, string fallbackLabel, bool linkable = true)
+    /// <param name="labelText">盤の役職の表記（<see cref="SongCredit.RoleLabelText"/>）。あれば役職名の代わりに出す（リンク先は同じ）。</param>
+    public string BuildRoleBadgeHtml(string roleCode, string fallbackLabel, bool linkable = true, string? labelText = null)
     {
-        string label = (_roleMap.TryGetValue(roleCode, out var r) && !string.IsNullOrEmpty(r.NameJa))
-            ? r.NameJa : fallbackLabel;
+        string label = labelText
+            ?? ((_roleMap.TryGetValue(roleCode, out var r) && !string.IsNullOrEmpty(r.NameJa)) ? r.NameJa : fallbackLabel);
         string href = linkable ? PathUtil.SongRoleBadgeUrl(roleCode) : "";
         return href.Length > 0
             ? $"<a class=\"role-badge role-badge-sm\" data-role-code=\"{Escape(roleCode)}\" href=\"{Escape(href)}\">{Escape(label)}</a>"
@@ -124,21 +125,29 @@ public sealed class TrackCreditHtmlBuilder
     /// </summary>
     public string BuildMergedRoleSegmentsHtml(
         IReadOnlyList<(string RoleCode, string FallbackLabel, string NamesHtml)> entries)
+        => BuildMergedRoleSegmentsHtml(entries.Select(e => (e.RoleCode, e.FallbackLabel, e.NamesHtml, (string?)null)).ToList());
+
+    /// <summary>
+    /// 役職ごとに盤の役職の表記（<c>LabelText</c>、無ければ null）を添えられる版。表記はバッジの文字にだけ使い、
+    /// 名義の隣接マージの判定には関わらない。
+    /// </summary>
+    public string BuildMergedRoleSegmentsHtml(
+        IReadOnlyList<(string RoleCode, string FallbackLabel, string NamesHtml, string? LabelText)> entries)
     {
         // 空文字エントリを除外（=その役職に名義が無いケース）。
         var nonEmpty = entries.Where(e => !string.IsNullOrEmpty(e.NamesHtml)).ToList();
         if (nonEmpty.Count == 0) return "";
 
         // 隣接マージ：直前マージグループの名義 HTML が完全一致するエントリを統合する。
-        var merged = new List<(List<(string RoleCode, string FallbackLabel)> Roles, string NamesHtml)>();
+        var merged = new List<(List<(string RoleCode, string FallbackLabel, string? LabelText)> Roles, string NamesHtml)>();
         foreach (var e in nonEmpty)
         {
             if (merged.Count > 0 && string.Equals(merged[^1].NamesHtml, e.NamesHtml, StringComparison.Ordinal))
             {
-                merged[^1].Roles.Add((e.RoleCode, e.FallbackLabel));
+                merged[^1].Roles.Add((e.RoleCode, e.FallbackLabel, e.LabelText));
                 continue;
             }
-            merged.Add((new List<(string, string)> { (e.RoleCode, e.FallbackLabel) }, e.NamesHtml));
+            merged.Add((new List<(string, string, string?)> { (e.RoleCode, e.FallbackLabel, e.LabelText) }, e.NamesHtml));
         }
 
         // HTML へ変換。
@@ -146,9 +155,9 @@ public sealed class TrackCreditHtmlBuilder
         foreach (var mg in merged)
         {
             sb.Append("<span class=\"track-credit-segment\">");
-            foreach (var (rc, fb) in mg.Roles)
+            foreach (var (rc, fb, lt) in mg.Roles)
             {
-                sb.Append(BuildRoleBadgeHtml(rc, fb));
+                sb.Append(BuildRoleBadgeHtml(rc, fb, labelText: lt));
             }
             sb.Append("<span class=\"track-credit-names\">").Append(mg.NamesHtml).Append("</span>");
             sb.Append("</span>");
@@ -190,6 +199,10 @@ public sealed class TrackCreditHtmlBuilder
     /// 構造化・フリーテキストともに空ならば空文字を返す（呼び出し側はセグメント自体を出さない判定に使える）。
     /// </para>
     /// </summary>
+    /// <summary>曲の指定役職の、盤の役職の表記（<see cref="SongCredit.RoleLabelText"/>）。無ければ null。</summary>
+    public string? SongCreditLabelText(Song song, string roleCode)
+        => _songCreditsBySong.TryGetValue(song.SongId, out var rows) ? SongCreditRoles.LabelTextOf(rows, roleCode) : null;
+
     public string BuildSongCreditNamesHtml(Song song, string roleCode)
     {
         // 事前展開済み辞書から (曲, 役職) で絞り込む。SongCreditsBySong は LYRICS → COMPOSITION →

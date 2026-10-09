@@ -407,7 +407,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>シリーズ ID + product_kind から先頭 1 件の商品を引き、商品タイトル + 商品詳細ページへの a タグ HTML を返す。 該当なしは null。テンプレ DSL の <c>{PRODUCT:kind=OST_MOVIE}</c> を Catalog プレビューで描画するための実装。 プレビューでもリンクを出して見え方を実サイトと揃える。</summary>
-    public async Task<string?> LookupProductHtmlBySeriesAndKindAsync(int seriesId, string productKindCode)
+    public async Task<string?> LookupProductHtmlBySeriesAndKindAsync(int seriesId, string productKindCode, string? displayText = null)
     {
         if (seriesId <= 0 || string.IsNullOrEmpty(productKindCode)) return null;
         // EXISTS で discs 側を絞り込む（products × discs の JOIN だと 1 商品が複数ディスクを持つ場合に
@@ -435,7 +435,7 @@ internal sealed class LookupCache : ILookupCache
         var (catalogNo, title) = row.Value;
         if (string.IsNullOrEmpty(catalogNo) || string.IsNullOrEmpty(title)) return null;
         var url = $"/products/{System.Uri.EscapeDataString(catalogNo)}/";
-        return $"<a href=\"{url}\">{System.Net.WebUtility.HtmlEncode(title)}</a>";
+        return $"<a href=\"{url}\">{System.Net.WebUtility.HtmlEncode(string.IsNullOrEmpty(displayText) ? title : displayText)}</a>";
     }
 
     /// <summary>logo_id → (屋号 alias_id, 屋号名, CI バージョンラベル) を分解した形で返す。 <see cref="Drafting.CreditBulkInputEncoder"/> が <c>[屋号#CIバージョン]</c> ないし <c>[屋号#alias_id#CIバージョン]</c> 構文を組み立てるために使用する。 未登録の logo_id（または屋号 alias）が指定された場合は null を返す。</summary>

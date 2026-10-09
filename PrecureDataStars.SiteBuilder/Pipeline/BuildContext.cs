@@ -44,6 +44,13 @@ public sealed class BuildContext
     /// </summary>
     public required IReadOnlyList<MagazineIssue> MagazineIssues { get; init; }
 
+    /// <summary>
+    /// サブタイトルのテロップ画像に使うフォントのマスタ（Windows の書体名 → モデル）。
+    /// 免責事項の「使用フォントの一覧」で、作品ごとの書体名（<see cref="Series.FontSubtitle"/> /
+    /// <see cref="Series.FontSubtitleRuby"/>）から製品名・製品ページ・ライセンスを引く。行の無い書体は名前だけで出る。
+    /// </summary>
+    public required IReadOnlyDictionary<string, SubtitleFont> SubtitleFontByName { get; init; }
+
     /// <summary>パート種別マスタ（part_type → モデル）。</summary>
     public required IReadOnlyDictionary<string, PartType> PartTypeByCode { get; init; }
 
@@ -72,6 +79,12 @@ public sealed class BuildContext
     /// 並びは LYRICS → COMPOSITION → ARRANGEMENT → その他 role_code 昇順、同役内は credit_seq 昇順。
     /// </summary>
     public required IReadOnlyDictionary<int, IReadOnlyList<SongCredit>> SongCreditsBySong { get; init; }
+
+    /// <summary>メドレーの曲（song_id）→ その中の曲（<c>song_medley_parts</c>、part_seq 昇順）。</summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<SongMedleyPart>> MedleyPartsByMedley { get; init; }
+
+    /// <summary>原曲（song_id）→ その曲が入っているメドレーの曲の song_id（昇順、重複なし）。</summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<int>> MedleySongIdsBySource { get; init; }
 
     /// <summary>
     /// 全 <c>song_recording_singers</c> 行を song_recording_id 単位で事前グルーピングした辞書。

@@ -116,8 +116,8 @@
       var main = 0, total = 0;
       rows.forEach(function (r) {
         var t = r.getAttribute('data-entity-type');
-        if (filter === 'person' && t === 'company') return;
-        if (filter === 'company' && t === 'person') return;
+        // 絞り込み中（all 以外）は、その種類の行だけを数える（個人・団体、歌手・キャラクター・ユニット）。
+        if (filter && filter !== 'all' && t !== filter) return;
         total++;
         if (!r.classList.contains('rtl-row-extra')) main++;
       });

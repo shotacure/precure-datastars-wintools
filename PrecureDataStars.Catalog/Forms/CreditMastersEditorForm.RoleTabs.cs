@@ -30,6 +30,35 @@ public partial class CreditMastersEditorForm
             // 編集対象の更新。タグに現在行の役職コード／名称を入れる。
             btnEditRoleSuccessions.Tag = (RoleCode: r.RoleCode, RoleNameJa: r.NameJa);
             btnEditRoleSuccessions.Enabled = !string.IsNullOrWhiteSpace(r.RoleCode);
+            // [関連…] ボタンも同じく現在行の役職を編集対象にする。
+            btnEditRoleRelations.Tag = (RoleCode: r.RoleCode, RoleNameJa: r.NameJa);
+            btnEditRoleRelations.Enabled = !string.IsNullOrWhiteSpace(r.RoleCode);
+        }
+    }
+
+    /// <summary>[関連…] ボタン（Designer.cs 側で正規定義）のクリックハンドラ。役職どうしの関連（段階・並列）の編集ダイアログを開く。</summary>
+    private async Task OnEditRoleRelationsClickAsync()
+    {
+        if (btnEditRoleRelations.Tag is not ValueTuple<string, string> tagTuple)
+        {
+            if (gridRoles.CurrentRow?.DataBoundItem is not Role r) return;
+            tagTuple = (r.RoleCode, r.NameJa);
+        }
+
+        var (roleCode, roleNameJa) = tagTuple;
+        if (string.IsNullOrWhiteSpace(roleCode)) return;
+
+        try
+        {
+            using var dlg = new Forms.Dialogs.RoleRelationsEditorDialog(
+                _rolesRepo, _roleRelationsRepo, roleCode, roleNameJa);
+            dlg.ShowDialog(this);
+            // 関連は roles 本体には影響しないのでグリッド再描画は不要。
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            this.ShowError(ex);
         }
     }
 

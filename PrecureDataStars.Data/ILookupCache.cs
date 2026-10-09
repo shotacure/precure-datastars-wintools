@@ -98,5 +98,6 @@ public interface ILookupCache
     /// </summary>
     /// <param name="seriesId">シリーズ ID（テンプレ展開時の SERIES スコープ ID）。</param>
     /// <param name="productKindCode">商品種別コード（例 <c>OST_MOVIE</c>、<c>THEME_SINGLE_MOVIE</c>）。</param>
-    Task<string?> LookupProductHtmlBySeriesAndKindAsync(int seriesId, string productKindCode);
+    /// <param name="displayText">リンクの表示文字。空なら商品タイトル（画面の表記が盤の表記と違うときに、テンプレの <c>label=</c> で渡す）。</param>
+    Task<string?> LookupProductHtmlBySeriesAndKindAsync(int seriesId, string productKindCode, string? displayText = null);
 }

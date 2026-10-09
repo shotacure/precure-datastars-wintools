@@ -80,7 +80,7 @@
             <span class="movie-badge {{ m.SeasonBadgeClass }}">{{ m.SeasonBadgeLabel | html.escape }}</span>
             {{~ end ~}}
             <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ m.Period }}</span></span></span>
-            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ m.RuntimeLabel }}</span></span></span>
+            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ m.RuntimeLabel }}{{ if m.RuntimeSubLabel != "" }} <span class="series-card-count-sub muted">{{ m.RuntimeSubLabel }}</span>{{ end }}</span></span></span>
           </div>
         </div>
         {{~ if (array.size m.KeyStaffSummary) > 0 ~}}

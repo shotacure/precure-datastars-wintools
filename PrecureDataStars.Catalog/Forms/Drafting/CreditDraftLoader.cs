@@ -274,6 +274,8 @@ internal sealed class CreditDraftLoader
         CardTierId = 0,
         CardId = 0,
         TierNo = s.TierNo,
+        PositionV = s.PositionV,
+        PositionH = s.PositionH,
         Notes = s.Notes,
         CreatedBy = s.CreatedBy,
         UpdatedBy = s.UpdatedBy
@@ -296,6 +298,10 @@ internal sealed class CreditDraftLoader
         RoleCode = s.RoleCode,
         OrderInGroup = s.OrderInGroup,
         AffiliationLayout = s.AffiliationLayout,
+        RoleLabelText = s.RoleLabelText,
+        RoleMisprintText = s.RoleMisprintText,
+        JoinPrevious = s.JoinPrevious,
+        JoinSeparator = s.JoinSeparator,
         Notes = s.Notes,
         CreatedBy = s.CreatedBy,
         UpdatedBy = s.UpdatedBy
@@ -310,6 +316,7 @@ internal sealed class CreditDraftLoader
         LeadingCompanyAliasId = s.LeadingCompanyAliasId,
         HeadingSeriesId = s.HeadingSeriesId,
         HeadingText = s.HeadingText,
+        HeadingItalic = s.HeadingItalic,
         Notes = s.Notes,
         CreatedBy = s.CreatedBy,
         UpdatedBy = s.UpdatedBy

@@ -1,0 +1,52 @@
+<article>
+  {{## 歌唱者として参加したユニットだけ、歌唱の一覧へ戻るリンクを置く。 ##}}
+  {{~ if IsSinger ~}}
+  <p class="muted">
+    <a href="/creators/singers/">歌唱の一覧</a>
+  </p>
+  {{~ end ~}}
+
+  <h1>{{ Unit.Name | html.escape }}</h1>
+
+  {{~ if Unit.NameKana != "" ~}}
+  <p class="muted">{{ Unit.NameKana | html.escape }}</p>
+  {{~ end ~}}
+
+  {{## 音楽系ページの基準点（クレジット確認済みの盤のうち最新のもの）。空のときは段落自体を出さない。 ##}}
+  {{~ if CoverageLabel != "" ~}}
+  <p class="muted stats-coverage">{{ CoverageLabel }}</p>
+  {{~ end ~}}
+
+  {{## ユニットの基本情報：メンバー（人物は人物詳細へ、キャラクターは声優つきでキャラクター詳細へ）と備考。
+       メンバーの登録が無く備考も無いユニットはセクションを出さない。 ##}}
+  {{~ if (array.size Unit.Members) > 0 || Unit.Notes != "" ~}}
+  <section id="basic-info">
+    <h2>基本情報</h2>
+    <div class="fact-grid">
+      {{~ if (array.size Unit.Members) > 0 ~}}
+      <div class="fact">
+        <span class="fact-label">メンバー</span>
+        <span class="fact-value is-wrap">{{~ for m in Unit.Members ~}}{{~ if !for.first ~}}<span class="unit-member-sep">、</span>{{~ end ~}}<span class="unit-member">{{ m.Html }}</span>{{~ end ~}}</span>
+      </div>
+      {{~ end ~}}
+      {{~ if Unit.Notes != "" ~}}
+      <div class="fact">
+        <span class="fact-label">備考</span>
+        <span class="fact-value is-wrap">{{ Unit.Notes | html.escape }}</span>
+      </div>
+      {{~ end ~}}
+    </div>
+  </section>
+  {{~ end ~}}
+
+  {{## 音楽クレジット：ユニットの名義で関わった曲・劇伴・盤（歌唱・コーラスに加え、作詞・作曲・編曲や演奏など）。
+       人物詳細と同じ節を使う。何も無いユニットは空の案内だけを出す。 ##}}
+  {{~ if (array.size MusicSections) > 0 ~}}
+{{ include '_music-credits.sbn' ~}}
+  {{~ else ~}}
+  <section id="music-credits">
+    <h2>音楽クレジット</h2>
+    <p class="empty-row">このユニットのクレジット情報はまだ登録されていません。</p>
+  </section>
+  {{~ end ~}}
+</article>

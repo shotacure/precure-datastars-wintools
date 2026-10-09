@@ -697,6 +697,7 @@ public sealed class CreditBulkApplyService
                     // ブロック先頭の見出し（作品・文字）。
                     block.Entity.HeadingSeriesId = pb.HeadingSeriesId;
                     block.Entity.HeadingText = pb.HeadingText;
+                    block.Entity.HeadingItalic = pb.HeadingItalic;
 
                     if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
                     {
@@ -812,6 +813,8 @@ public sealed class CreditBulkApplyService
         // Tier 備考を Draft 実体にコピー。
         ApplyNotesIfChanged(targetTier, pt.Notes, n => targetTier.Entity.Notes = n,
             () => targetTier.Entity.Notes);
+        // 画面の上での位置。
+        ApplyTierPositionIfChanged(targetTier, pt);
 
         for (int gi = 0; gi < pt.Groups.Count; gi++)
         {
@@ -868,6 +871,12 @@ public sealed class CreditBulkApplyService
         // 所属表記レイアウト（SUFFIX 既定 / PREFIX = 映画の製作・配給などの 2 カラム表記）。
         role.Entity.AffiliationLayout = pr.AffiliationLayout;
 
+        // 画面の役職の表記・役職名の誤記と、1 行にまとめて表示する役職の指定（直前の役職とまとめるか / 直前との区切り）。
+        role.Entity.RoleLabelText = pr.RoleLabelText;
+        role.Entity.RoleMisprintText = pr.RoleMisprintText;
+        role.Entity.JoinPrevious = pr.JoinPrevious;
+        role.Entity.JoinSeparator = pr.JoinSeparator;
+
         // 配下 Block を順に追加。
         foreach (var pb in pr.Blocks)
         {
@@ -895,6 +904,7 @@ public sealed class CreditBulkApplyService
         // ブロック先頭の見出し（作品・文字）。
         block.Entity.HeadingSeriesId = pb.HeadingSeriesId;
         block.Entity.HeadingText = pb.HeadingText;
+        block.Entity.HeadingItalic = pb.HeadingItalic;
 
         // [先頭企業屋号]
         if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
@@ -927,6 +937,16 @@ public sealed class CreditBulkApplyService
     }
 
     /// <summary>Draft ノードの Notes プロパティに対して「値が変わっていれば代入 + Modified 化」を行うヘルパ。</summary>
+    /// <summary>ティアの画面の上での位置（position_v / position_h）を、変わったときだけ Draft 実体に写す。</summary>
+    private static void ApplyTierPositionIfChanged(DraftTier tier, ParsedTier pt)
+    {
+        if (string.Equals(tier.Entity.PositionV, pt.PositionV, StringComparison.Ordinal)
+            && string.Equals(tier.Entity.PositionH, pt.PositionH, StringComparison.Ordinal)) return;
+        tier.Entity.PositionV = pt.PositionV;
+        tier.Entity.PositionH = pt.PositionH;
+        if (tier.State == DraftState.Unchanged) tier.MarkModified();
+    }
+
     private static void ApplyNotesIfChanged(DraftBase node, string? newValue,
         Action<string?> setter, Func<string?> getter)
     {
@@ -2226,6 +2246,7 @@ public sealed class CreditBulkApplyService
         ApplyNotesIfChanged(draftTier, newTier.Notes,
             n => draftTier.Entity.Notes = n,
             () => draftTier.Entity.Notes);
+        ApplyTierPositionIfChanged(draftTier, newTier);
 
         var draftGroups = draftTier.Groups
             .Where(g => g.State != DraftState.Deleted)
@@ -2369,6 +2390,19 @@ public sealed class CreditBulkApplyService
             draftRole.MarkModified();
         }
 
+        // 画面の役職の表記・役職名の誤記と、1 行にまとめて表示する役職の指定の追従。
+        if (!string.Equals(draftRole.Entity.RoleLabelText, newRole.RoleLabelText, StringComparison.Ordinal)
+            || !string.Equals(draftRole.Entity.RoleMisprintText, newRole.RoleMisprintText, StringComparison.Ordinal)
+            || draftRole.Entity.JoinPrevious != newRole.JoinPrevious
+            || !string.Equals(draftRole.Entity.JoinSeparator, newRole.JoinSeparator, StringComparison.Ordinal))
+        {
+            draftRole.Entity.RoleLabelText = newRole.RoleLabelText;
+            draftRole.Entity.RoleMisprintText = newRole.RoleMisprintText;
+            draftRole.Entity.JoinPrevious = newRole.JoinPrevious;
+            draftRole.Entity.JoinSeparator = newRole.JoinSeparator;
+            draftRole.MarkModified();
+        }
+
         var draftBlocks = draftRole.Blocks
             .Where(b => b.State != DraftState.Deleted)
             .OrderBy(b => b.Entity.BlockSeq)
@@ -2432,12 +2466,14 @@ public sealed class CreditBulkApplyService
             draftBlock.MarkModified();
         }
 
-        // ブロック先頭の見出し（作品・文字）比較。
+        // ブロック先頭の見出し（作品・文字・斜体）比較。
         if (draftBlock.Entity.HeadingSeriesId != newBlock.HeadingSeriesId
-            || !string.Equals(draftBlock.Entity.HeadingText, newBlock.HeadingText, StringComparison.Ordinal))
+            || !string.Equals(draftBlock.Entity.HeadingText, newBlock.HeadingText, StringComparison.Ordinal)
+            || draftBlock.Entity.HeadingItalic != newBlock.HeadingItalic)
         {
             draftBlock.Entity.HeadingSeriesId = newBlock.HeadingSeriesId;
             draftBlock.Entity.HeadingText = newBlock.HeadingText;
+            draftBlock.Entity.HeadingItalic = newBlock.HeadingItalic;
             draftBlock.MarkModified();
         }
 
@@ -2620,7 +2656,8 @@ public sealed class CreditBulkApplyService
     private static string SerializeTierForCompare(ParsedTier t)
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append("T|notes=").Append(t.Notes ?? string.Empty).Append('\n');
+        sb.Append("T|notes=").Append(t.Notes ?? string.Empty)
+          .Append("|pos=").Append(t.PositionV ?? string.Empty).Append(t.PositionH ?? string.Empty).Append('\n');
         foreach (var g in t.Groups) sb.Append(SerializeGroupForCompare(g));
         return sb.ToString();
     }
@@ -2640,7 +2677,11 @@ public sealed class CreditBulkApplyService
         var sb = new System.Text.StringBuilder();
         sb.Append("R|code=").Append(r.ResolvedRoleCode ?? r.DisplayName)
           .Append("|notes=").Append(r.Notes ?? string.Empty)
-          .Append("|affil=").Append(r.AffiliationLayout).Append('\n');
+          .Append("|affil=").Append(r.AffiliationLayout)
+          .Append("|label=").Append(r.RoleLabelText ?? string.Empty)
+          .Append("|misprint=").Append(r.RoleMisprintText ?? string.Empty)
+          .Append("|joinprev=").Append(r.JoinPrevious ? '1' : '0')
+          .Append("|joinsep=").Append(r.JoinSeparator ?? string.Empty).Append('\n');
         foreach (var b in r.Blocks) sb.Append(SerializeBlockForCompare(b));
         return sb.ToString();
     }
@@ -2653,6 +2694,7 @@ public sealed class CreditBulkApplyService
           .Append("|leading=").Append(b.LeadingCompanyText ?? string.Empty)
           .Append("|hseries=").Append(b.HeadingSeriesId?.ToString() ?? string.Empty)
           .Append("|htext=").Append(b.HeadingText ?? string.Empty)
+          .Append("|hitalic=").Append(b.HeadingItalic ? "1" : "0")
           .Append("|notes=").Append(b.Notes ?? string.Empty).Append('\n');
         foreach (var row in b.Rows)
         {

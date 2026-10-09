@@ -50,6 +50,7 @@ partial class CreditMastersEditorForm
     private TextBox txtPFullName = null!;
     private TextBox txtPFullNameKana = null!;
     private TextBox txtPNameEn = null!;
+    private TextBox txtPDisambiguation = null!;
     /// <summary>本名義（persons.primary_alias_id）の選択。先頭は「指定なし」、続けてその人物の名義。</summary>
     private ComboBox cboPPrimaryAlias = null!;
     private TextBox txtPNotes = null!;
@@ -76,6 +77,7 @@ partial class CreditMastersEditorForm
     private Button btnNewPerson = null!;
     private Button btnSavePerson = null!;
     private Button btnDeletePerson = null!;
+    private Button btnPersonNotableWorks = null!;
 
     // ─────────────── 企業タブ ───────────────
     private DataGridView gridCompanies = null!;
@@ -143,6 +145,7 @@ partial class CreditMastersEditorForm
     // 役職系譜（多対多）編集ダイアログを開くためのボタン。
     // クリックハンドラはコードビハインド (CreditMastersEditorForm.cs) のコンストラクタで購読する。
     private Button btnEditRoleSuccessions = null!;
+    private Button btnEditRoleRelations = null!;
 
     // ─────────────── 役職テンプレートタブ ───────────────
     private ComboBox cboOvSeries = null!;          // 上部の役職フィルタコンボ（フィールド名は転用）
@@ -584,10 +587,16 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "YouTube",         txtPYoutubeUrl,     18, 496, inputWidth: 450);
         AddLabeledControl(pnl, "Wikipedia (内部)", txtPWikipediaUrl,   18, 528, inputWidth: 450);
 
+        // 同姓同名の別人を見分ける添え書き（例: 声優 / 背景美術）。サイトの URL と見出しに「名前 (添え書き)」で添える。
+        txtPDisambiguation = new TextBox();
+        AddLabeledControl(pnl, "添え書き",        txtPDisambiguation, 18, 560, inputWidth: 200);
+
         btnNewPerson = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSavePerson = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };
         btnDeletePerson = new Button { Text = "選択行を削除", Location = new Point(620,  82), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnNewPerson, btnSavePerson, btnDeletePerson });
+        // 代表作（プリキュアを除く）（person_notable_works）の編集ダイアログを開く。
+        btnPersonNotableWorks = new Button { Text = "代表作…",   Location = new Point(620, 130), Size = new Size(140, 28) };
+        pnl.Controls.AddRange(new Control[] { btnNewPerson, btnSavePerson, btnDeletePerson, btnPersonNotableWorks });
 
         tabPersons.Controls.Add(pnl);
         tabPersons.Controls.Add(gridPersons);
@@ -733,7 +742,9 @@ partial class CreditMastersEditorForm
         // 役職系譜編集ダイアログ起動ボタン。
         // 役職を選んでから押す前提なので、初期状態は非活性。OnRoleRowSelected で活性化する。
         btnEditRoleSuccessions = new Button { Text = "系譜…", Location = new Point(620, 82), Size = new Size(140, 28), Enabled = false };
-        pnl.Controls.AddRange(new Control[] { btnSaveRole, btnDeleteRole, btnEditRoleSuccessions });
+        // 役職どうしの関連（段階・並列）の編集ダイアログ起動ボタン。系譜…と同じく役職を選ぶまでは非活性。
+        btnEditRoleRelations = new Button { Text = "関連…", Location = new Point(620, 114), Size = new Size(140, 28), Enabled = false };
+        pnl.Controls.AddRange(new Control[] { btnSaveRole, btnDeleteRole, btnEditRoleSuccessions, btnEditRoleRelations });
 
         tabRoles.Controls.Add(pnl);
         tabRoles.Controls.Add(gridRoles);

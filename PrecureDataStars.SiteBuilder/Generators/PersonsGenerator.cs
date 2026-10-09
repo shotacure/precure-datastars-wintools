@@ -860,6 +860,11 @@ public sealed class PersonsGenerator
             // テンプレはこちらを優先描画し、各役の配下にシリーズと話数を出す（シリーズや映画をまたぐ役も
             // 1 つのくくりに通算される）。役が 1 つだけなら従来どおりシリーズ行に「— キャラ名」を併記する。
             var characterSections = BuildVoiceCharacterSections(roleGroup);
+            // その役職を初めて担当（声の出演は出演）した回。見出しの下に「初担当 『作品』第N話（放送日）」の 1 行で添える。
+            // 収録範囲より後の関与しか無い役職は求まらないので出さない。
+            var firstCredit = FirstAppearanceResolver.Resolve(_ctx, roleGroup);
+            bool isVoiceCast = _roleMap!.TryGetValue(roleCode, out var firstRoleDef)
+                               && string.Equals(firstRoleDef.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
 
             groups.Add(new InvolvementGroup
             {
@@ -868,6 +873,8 @@ public sealed class PersonsGenerator
                 RoleUrl = roleUrl,
                 SeriesRows = seriesRows,
                 CharacterSections = characterSections,
+                FirstCreditHtml = firstCredit?.ToHtml() ?? "",
+                FirstCreditLabel = isVoiceCast ? "初出演" : "初担当",
                 EpisodeCount = episodeCountTotal,
                 MovieCount = movieCountTotal,
                 HasCharacterColumn = seriesRows.Any(r => !string.IsNullOrEmpty(r.CharacterNames))

@@ -79,6 +79,9 @@
       {{~ end ~}}
       <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}</span></span>
     </h4>
+    {{~ if g.FirstCreditHtml != "" ~}}
+    <p class="credit-role-first">{{ g.FirstCreditLabel }} {{ g.FirstCreditHtml }}</p>
+    {{~ end ~}}
     {{~ if (array.size g.CharacterSections) > 0 ~}}
     {{~ for cs in g.CharacterSections ~}}
     <h5 class="voice-character-heading"><a href="{{ cs.CharacterUrl }}">{{ cs.CharacterLabel | html.escape }}</a><span class="muted"> 役</span></h5>
@@ -166,6 +169,9 @@
       {{~ end ~}}
       <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}</span></span>
     </h3>
+    {{~ if g.FirstCreditHtml != "" ~}}
+    <p class="credit-role-first">{{ g.FirstCreditLabel }} {{ g.FirstCreditHtml }}</p>
+    {{~ end ~}}
     {{~ if (array.size g.CharacterSections) > 0 ~}}
     {{## 声の出演で複数の役を演じている場合は「役（キャラ）」を大くくりにして、
          その配下にシリーズと話数を出す（シリーズ・映画をまたぐ役も 1 くくりに通算）。 ##}}

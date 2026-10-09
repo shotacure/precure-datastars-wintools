@@ -6262,6 +6262,14 @@ a.credit-card-series:focus-visible {
   .notable-works-table td.col-role { width: auto; }
 }
 
+/* 人物詳細の本編クレジットで、役職の見出しの下に添える「初担当（声の出演は初出演）『作品』第N話（放送日）」の 1 行。 */
+.credit-role-first {
+  margin: -4px 0 8px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.credit-role-first a { color: var(--accent-blue); }
+
 /* 人物・企業・キャラ・商品の各詳細ページ末尾の「外部リンク」セクション。
    .external-links ul はバッジ風に横並びで配置し、各種類は色違いの薄いボーダーで区別する。
    購入リンクの .product-link 群と意匠を揃えつつ、サイズ感はやや小さめに。 */

@@ -1513,6 +1513,19 @@ series_relation_kinds ──┘    │            │
 
 開始日が終了日より後の行は CHECK 制約で作れない。自分自身を指す行は Catalog の入力画面で作らせない（`from_company_id` / `to_company_id` は外部キーの連動に使うため、MySQL の制約上 CHECK に入れられない）。`(from_company_id, to_company_id, relation_kind, valid_from)` は一意。入力は Catalog の「クレジット系マスタ管理」→ 企業タブ → 「関係…」のダイアログで、選んだ団体から見た「親（所属先）」「子（部署・子会社など）」「前身」「後継」として追加・更新・削除する（その場で DB に反映）。
 
+#### `role_relations` — 役職どうしの関連
+
+別の役職どうしの関連を持つ。役職の系譜（`role_successions`。同じ役職の名前の移り変わりで、集計を 1 つにまとめる）とは別物で、集計は役職ごとに分けたまま、役職詳細の年表に関連する役職の担当を重ねるのに使う（上記「年表」）。
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `from_role_code` | VARCHAR PK FK → `roles` | 段階なら前段階の役職。並列なら役職コードの小さいほう |
+| `to_role_code` | VARCHAR PK FK → `roles` | 段階なら後段階の役職。並列なら役職コードの大きいほう |
+| `relation_kind` | ENUM(`STEP_UP`,`PARALLEL`) | `STEP_UP`＝段階（演出助手 → 演出、動画 → 原画 など。向きあり）、`PARALLEL`＝並列（同じ段で並んで担う役職。絵コンテ ⇔ 演出 など。向きなし） |
+| `notes` | TEXT NULL | 備考 |
+
+1 組の役職に関係は 1 つ（PK は from / to の組）。並列は `RoleRelationsRepository.UpsertAsync` が役職コードの小さいほうを from にそろえ、自分自身との組・逆向きの段階・同じ組の段階と並列の重複を弾く（自己ループは `role_successions` と同じく、MySQL の制約上 CHECK に入れられないためアプリ側で弾く）。SiteBuilder は両端を系譜の代表へ寄せ、並列でつながった役職を 1 つの段にまとめてから段どうしの段階を引く（`RoleRelationIndex`）。入力は Catalog の「クレジット系マスタ管理」→ 役職タブ → 「関連…」のダイアログで、選んだ役職から見た「前段階」「並列」「後段階」として追加・削除する（その場で DB に反映）。
+
 #### `product_companies` — 商品社名マスタ
 
 商品（`products`）の発売元（label）／販売元（distributor）として紐付ける**クレジット非依存の社名マスタ**。クレジット系の `companies` / `company_aliases` とは完全に独立した別系統で、屋号系譜（前任/後任）の概念は持たない。1 社 = 1 行、和名・かな・英名のみのシンプル構造。

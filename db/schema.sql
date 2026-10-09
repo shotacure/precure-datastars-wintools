@@ -2204,6 +2204,36 @@ CREATE TABLE `role_successions` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- 役職どうしの関連（段階・並列）の関係テーブル
+--
+-- 系譜（role_successions）が「同じ役職の名前の移り変わり」なのに対し、こちらは別の役職どうしの関係。
+-- 集計は役職ごとに分けたまま、人物の歩み（演出助手を経て演出を初担当、など）と役職詳細の年表に使う。
+--   STEP_UP  ：段階。from_role_code が前段階、to_role_code が後段階（向きあり）
+--   PARALLEL ：並列。同じ段階で並んで担う役職（向きなし。role_code の小さいほうを from に置く）
+-- 1 組の役職に関係は 1 つ（PK = from / to）。自己ループは role_successions と同じく
+-- アプリ層（RoleRelationsRepository.UpsertAsync）で弾く。
+--
+
+DROP TABLE IF EXISTS `role_relations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `role_relations` (
+  `from_role_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `to_role_code`   varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `relation_kind`  enum('STEP_UP','PARALLEL') NOT NULL,
+  `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`     varchar(64) DEFAULT NULL,
+  `updated_by`     varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`from_role_code`, `to_role_code`),
+  KEY `idx_role_relations_to` (`to_role_code`),
+  CONSTRAINT `fk_role_relations_from` FOREIGN KEY (`from_role_code`) REFERENCES `roles`(`role_code`) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT `fk_role_relations_to`   FOREIGN KEY (`to_role_code`)   REFERENCES `roles`(`role_code`) ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `role_templates`
 -- 役職テンプレート。既定テンプレ（全シリーズ共通）とシリーズ別上書きを単一テーブルで管理する。
 --   - series_id IS NULL ：既定テンプレ（全シリーズ共通）

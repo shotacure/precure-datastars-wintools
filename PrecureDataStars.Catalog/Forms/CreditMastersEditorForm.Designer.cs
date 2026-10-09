@@ -145,6 +145,7 @@ partial class CreditMastersEditorForm
     // 役職系譜（多対多）編集ダイアログを開くためのボタン。
     // クリックハンドラはコードビハインド (CreditMastersEditorForm.cs) のコンストラクタで購読する。
     private Button btnEditRoleSuccessions = null!;
+    private Button btnEditRoleRelations = null!;
 
     // ─────────────── 役職テンプレートタブ ───────────────
     private ComboBox cboOvSeries = null!;          // 上部の役職フィルタコンボ（フィールド名は転用）
@@ -741,7 +742,9 @@ partial class CreditMastersEditorForm
         // 役職系譜編集ダイアログ起動ボタン。
         // 役職を選んでから押す前提なので、初期状態は非活性。OnRoleRowSelected で活性化する。
         btnEditRoleSuccessions = new Button { Text = "系譜…", Location = new Point(620, 82), Size = new Size(140, 28), Enabled = false };
-        pnl.Controls.AddRange(new Control[] { btnSaveRole, btnDeleteRole, btnEditRoleSuccessions });
+        // 役職どうしの関連（段階・並列）の編集ダイアログ起動ボタン。系譜…と同じく役職を選ぶまでは非活性。
+        btnEditRoleRelations = new Button { Text = "関連…", Location = new Point(620, 114), Size = new Size(140, 28), Enabled = false };
+        pnl.Controls.AddRange(new Control[] { btnSaveRole, btnDeleteRole, btnEditRoleSuccessions, btnEditRoleRelations });
 
         tabRoles.Controls.Add(pnl);
         tabRoles.Controls.Add(gridRoles);

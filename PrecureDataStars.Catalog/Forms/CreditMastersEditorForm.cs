@@ -67,6 +67,8 @@ public partial class CreditMastersEditorForm : Form
     private readonly CompanyRelationsRepository _companyRelationsRepo;
     // 人物の代表作（プリキュアを除く）（人物タブの「代表作…」ダイアログで編集）
     private readonly PersonNotableWorksRepository _personNotableWorksRepo;
+    // 役職どうしの関連（段階・並列）（役職タブの「関連…」ダイアログで編集）
+    private readonly RoleRelationsRepository _roleRelationsRepo;
 
     /// <summary>クレジット系マスタ管理フォームを生成する。Program.cs の DI で各リポジトリを受け取る。</summary>
     public CreditMastersEditorForm(
@@ -103,7 +105,9 @@ public partial class CreditMastersEditorForm : Form
         // 団体どうしの関係
         CompanyRelationsRepository companyRelationsRepo,
         // 人物の代表作（プリキュアを除く）
-        PersonNotableWorksRepository personNotableWorksRepo)
+        PersonNotableWorksRepository personNotableWorksRepo,
+        // 役職どうしの関連（段階・並列）
+        RoleRelationsRepository roleRelationsRepo)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
@@ -138,6 +142,9 @@ public partial class CreditMastersEditorForm : Form
 
         // 人物の代表作（プリキュアを除く）
         _personNotableWorksRepo = personNotableWorksRepo ?? throw new ArgumentNullException(nameof(personNotableWorksRepo));
+
+        // 役職どうしの関連（段階・並列）
+        _roleRelationsRepo = roleRelationsRepo ?? throw new ArgumentNullException(nameof(roleRelationsRepo));
 
         InitializeComponent();
 
@@ -317,6 +324,7 @@ public partial class CreditMastersEditorForm : Form
         // [系譜…] ボタン（Designer.cs 側で正規定義）の Click ハンドラを購読。
         // ボタン自体の生成は Designer.cs 側で行われているので、ここではイベント購読のみ。
         btnEditRoleSuccessions.Click += async (_, _) => await OnEditRoleSuccessionsClickAsync();
+        btnEditRoleRelations.Click += async (_, _) => await OnEditRoleRelationsClickAsync();
     }
 
     /// <summary>全タブの初期データを 1 度に読み込む。コンボの選択肢初期化もここで行う。</summary>

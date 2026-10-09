@@ -34,6 +34,10 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description>描くものは、続けて参加した期間（2 件以上つながったものの細線）・TV の話（同じシリーズで話数が
 ///     続く間はひと続きの帯。1 話は放送日から <see cref="EpisodeSpanDays"/> 日の幅）・映画（公開日の点）・
 ///     歌・劇伴（初めて収められた盤の発売日の点。日付の決め方は <see cref="MusicTimelineDates"/>）・盤（発売日の四角）。</description></item>
+///   <item><description>役職詳細では、ページの役職と関連（段階・並列）でつながった役職の担当（<see cref="RoleTimelineEntity.RelatedRoles"/>）も、
+///     主の帯の下に細い帯（映画は白抜きの輪）で重ねる。色は役職ごとで、関連の種類（前段階・並列・後段階）の色相を基準に、
+///     同じ種類の役職どうしは色相を回して分ける（<see cref="AssignRelatedColors"/>）。主の帯と同じ回は隠れ、主の役職の無い回だけが
+///     見える。凡例は色と役職名（役職詳細へのリンク）だけを出す。関連する役職の担当は、行の並び・主な方の判定・続けて参加した期間には使わない。</description></item>
 /// </list>
 /// 軸は同じ期間のページで共通なので、インスタンスを 1 つ作ってページ（役職）ごとに <see cref="Build"/> を呼ぶ。
 /// </summary>
@@ -139,10 +143,12 @@ internal sealed class RoleTimelineBuilder
         // 描ける参加のある候補はすべて行にする。その数が ShowAllUpTo を超えるページでは、決まりを満たす行と、
         // それが ShowAllUpTo に満たないときに参加の多い順で補った行を「主な方」とし、ほかの行は「主な方のみ」の
         // スイッチを切ったときだけ見せる。
+        var entityList = entities.ToList();
+        var relatedColors = AssignRelatedColors(entityList);
         var rows = new List<BuiltRow>();
-        foreach (var e in entities)
+        foreach (var e in entityList)
         {
-            var built = BuildRow(e, rules);
+            var built = BuildRow(e, rules, relatedColors);
             if (built is not null) rows.Add(built);
         }
         if (rows.Count == 0) return null;
@@ -184,6 +190,27 @@ internal sealed class RoleTimelineBuilder
             legend.Add(new RoleTimelineLegendItem { Kind = "bgm", Label = "劇伴（初めて盤に収められた日）" });
         if (ordered.Any(r => r.Row.Products.Count > 0))
             legend.Add(new RoleTimelineLegendItem { Kind = "disc", Label = "盤（発売日）" });
+        // 関連する役職は、前段階 → 並列 → 後段階の順、同じ種類の中は役職マスタの表示順に、役職ごとの色と役職名だけを出す。
+        // 見本の形は描いた印に合わせる（TV の話があれば細い帯、映画があれば白抜きの輪。両方あれば並べる）。
+        foreach (var g in ordered
+                     .SelectMany(r => r.RelatedRoles)
+                     .GroupBy(x => x.RoleCode, StringComparer.Ordinal)
+                     .Select(g => (Role: g.First(), Items: g.ToList()))
+                     .OrderBy(x => x.Role.Lane)
+                     .ThenBy(x => x.Role.SortOrder)
+                     .ThenBy(x => x.Role.RoleCode, StringComparer.Ordinal))
+        {
+            bool hasTv = g.Items.Any(x => x.Episodes.Any(ep => ep.EpisodeId != 0));
+            bool hasMovie = g.Items.Any(x => x.MovieSeriesIds.Count > 0);
+            legend.Add(new RoleTimelineLegendItem
+            {
+                Kind = hasTv ? "rel" : "rel-movie",
+                ExtraKind = hasTv && hasMovie ? "rel-movie" : "",
+                Color = relatedColors.TryGetValue(g.Role.RoleCode, out var c) ? c : "",
+                Label = g.Role.RoleName,
+                Url = PathUtil.CreatorsRoleUrl(g.Role.RoleCode)
+            });
+        }
         legend.Add(new RoleTimelineLegendItem { Kind = "span", Label = $"続けて{rules.Verb}した期間" });
 
         return new RoleTimelineModel
@@ -203,12 +230,57 @@ internal sealed class RoleTimelineBuilder
     /// <summary>組み立てた 1 行と、並び・主な方の選び出しに使う値。</summary>
     /// <param name="Qualifies">ページの決まり（<see cref="RoleTimelineRules"/>）を満たすか。</param>
     /// <param name="CreditCount">描ける参加の数（TV の話数・映画の本数・歌の曲数など）。主な方を補う順に使う。</param>
-    private sealed record BuiltRow(RoleTimelineRow Row, DateOnly First, DateOnly Last, long FirstPos, int CreditCount, bool Qualifies);
+    /// <param name="RelatedRoles">行に重ねた関連する役職（凡例に出す分）。</param>
+    private sealed record BuiltRow(RoleTimelineRow Row, DateOnly First, DateOnly Last, long FirstPos, int CreditCount, bool Qualifies,
+        IReadOnlyList<RoleTimelineRelatedRole> RelatedRoles);
+
+    /// <summary>
+    /// 関連する役職の色を、ページに出る役職ごとに決める（role_code → CSS の色）。関連の種類ごとの基準の色（前段階＝若葉、並列＝ティール、
+    /// 後段階＝藤色。いずれも主の青より淡い）から、同じ種類の役職どうしは色相を <see cref="RelatedHueStep"/> 度ずつ回して分ける
+    /// （役職マスタの表示順に並べ、基準の色相を中心に左右へ振る。種類ごとの振れ幅は <see cref="RelatedHueSpread"/> 度まで）。
+    /// 描ける担当（話の付いた TV の担当か映画）の無い役職には色を割り当てない。
+    /// </summary>
+    private Dictionary<string, string> AssignRelatedColors(IEnumerable<RoleTimelineEntity> entities)
+    {
+        var colors = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var byLane in entities
+                     .SelectMany(e => e.RelatedRoles)
+                     .Where(x => x.Episodes.Any(ep => ep.EpisodeId != 0) || x.MovieSeriesIds.Count > 0)
+                     .GroupBy(x => x.Lane))
+        {
+            var roles = byLane
+                .GroupBy(x => x.RoleCode, StringComparer.Ordinal)
+                .Select(g => g.First())
+                .OrderBy(x => x.SortOrder)
+                .ThenBy(x => x.RoleCode, StringComparer.Ordinal)
+                .ToList();
+            var (hue, sat, light) = byLane.Key switch
+            {
+                RoleRelationLane.Before => (86.0, 50, 72),
+                RoleRelationLane.Parallel => (182.0, 45, 70),
+                _ => (262.0, 50, 80)
+            };
+            double step = roles.Count > 1 ? Math.Min(RelatedHueStep, RelatedHueSpread / (roles.Count - 1)) : 0;
+            for (int i = 0; i < roles.Count; i++)
+            {
+                double h = hue + (i - (roles.Count - 1) / 2.0) * step;
+                colors[roles[i].RoleCode] = FormattableString.Invariant($"hsl({Math.Round((h % 360 + 360) % 360)}, {sat}%, {light}%)");
+            }
+        }
+        return colors;
+    }
+
+    /// <summary>同じ種類の関連する役職どうしの色相の差（度）。</summary>
+    private const double RelatedHueStep = 36;
+
+    /// <summary>同じ種類の関連する役職の色相の振れ幅の上限（度）。ほかの種類の色相に届かないようにする。</summary>
+    private const double RelatedHueSpread = 72;
 
     /// <summary>
     /// 1 エンティティの参加を日付順に並べて「続けて参加した期間」に区切り、描く行を作る。描ける参加が無いものは null。
     /// </summary>
-    private BuiltRow? BuildRow(RoleTimelineEntity e, RoleTimelineRules rules)
+    /// <param name="relatedColors">関連する役職の色（<see cref="AssignRelatedColors"/>）。</param>
+    private BuiltRow? BuildRow(RoleTimelineEntity e, RoleTimelineRules rules, IReadOnlyDictionary<string, string> relatedColors)
     {
         var credits = new List<Credit>(e.Episodes.Count + e.MovieSeriesIds.Count + e.Songs.Count + e.Bgms.Count + e.Products.Count);
         foreach (var (sid, eid) in e.Episodes)
@@ -332,6 +404,57 @@ internal sealed class RoleTimelineBuilder
             }
         }
 
+        // 関連する役職の担当：役職ごとに、TV の話は同じシリーズで話数が続く間をひと続きの細い帯に、映画は白抜きの輪にする（色は役職ごと）。
+        // 内訳には主の担当の後ろに「〔役職名〕📺 シリーズ名 #…」「〔役職名〕🎥 映画名」を役職ごとに足す。
+        var related = new List<RoleTimelineRelatedMark>();
+        var drawnRelated = new List<RoleTimelineRelatedRole>();
+        var relatedWorks = new List<string>();
+        foreach (var rel in e.RelatedRoles
+                     .OrderBy(x => x.Lane)
+                     .ThenBy(x => x.SortOrder)
+                     .ThenBy(x => x.RoleCode, StringComparer.Ordinal))
+        {
+            if (!relatedColors.TryGetValue(rel.RoleCode, out var color)) continue;
+            var relEps = new Dictionary<int, SortedDictionary<int, DateOnly>>();
+            foreach (var (sid, eid) in rel.Episodes)
+            {
+                if (eid == 0 || !_ctx.EpisodeById.TryGetValue(eid, out var ep)) continue;
+                if (!relEps.TryGetValue(sid, out var bySeries))
+                {
+                    bySeries = new SortedDictionary<int, DateOnly>();
+                    relEps[sid] = bySeries;
+                }
+                bySeries[ep.SeriesEpNo] = ep.OnAirDate;
+            }
+            var relMovies = rel.MovieSeriesIds.Where(_ctx.SeriesById.ContainsKey).ToList();
+            if (relEps.Count == 0 && relMovies.Count == 0) continue;
+            drawnRelated.Add(rel);
+
+            var relLines = new List<(DateOnly Sort, string Text)>();
+            foreach (var (sid, bySeries) in relEps)
+            {
+                var eps = bySeries.ToList();
+                int runStart = 0;
+                for (int i = 1; i <= eps.Count; i++)
+                {
+                    if (i < eps.Count && eps[i].Key == eps[i - 1].Key + 1) continue;
+                    var segStart = eps[runStart].Value;
+                    var segEnd = eps[i - 1].Value.AddDays(EpisodeSpanDays);
+                    related.Add(new RoleTimelineRelatedMark { Color = color, Left = Pct(segStart), Width = PctWidth(segStart, segEnd) });
+                    runStart = i;
+                }
+                if (_ctx.SeriesById.TryGetValue(sid, out var s))
+                    relLines.Add((s.StartDate, $"〔{rel.RoleName}〕📺 {s.Title} {EpisodeRangeCompressor.Compress(bySeries.Keys)}"));
+            }
+            foreach (var sid in relMovies)
+            {
+                var s = _ctx.SeriesById[sid];
+                related.Add(new RoleTimelineRelatedMark { Color = color, Left = Pct(s.StartDate), IsMovie = true });
+                relLines.Add((s.StartDate, $"〔{rel.RoleName}〕🎥 {s.Title}"));
+            }
+            relatedWorks.AddRange(relLines.OrderBy(l => l.Sort).Select(l => l.Text));
+        }
+
         var row = new RoleTimelineRow
         {
             EntityKind = e.EntityKind,
@@ -344,10 +467,11 @@ internal sealed class RoleTimelineBuilder
             Songs = songs,
             Bgms = bgms,
             Products = products,
+            Related = related,
             PeriodLabel = string.Join("、", periodLabels),
-            WorksText = string.Join("\n", works.OrderBy(w => w.Sort).Select(w => w.Text))
+            WorksText = string.Join("\n", works.OrderBy(w => w.Sort).Select(w => w.Text).Concat(relatedWorks))
         };
-        return new BuiltRow(row, chains[0][0].Date, chains[^1][^1].Date, e.FirstSortPos, credits.Count, qualifies);
+        return new BuiltRow(row, chains[0][0].Date, chains[^1][^1].Date, e.FirstSortPos, credits.Count, qualifies, drawnRelated);
     }
 
     /// <summary>
@@ -514,6 +638,28 @@ internal sealed class RoleTimelineEntity
     public IReadOnlyCollection<RoleTimelinePoint> Products { get; init; } = Array.Empty<RoleTimelinePoint>();
     /// <summary>内訳でシリーズ・映画の後ろに括弧で添える文（series_id → 文。声優の演じたキャラなど）。</summary>
     public IReadOnlyDictionary<int, string>? SeriesNotes { get; init; }
+    /// <summary>
+    /// 役職詳細で、ページの役職と関連（段階・並列）でつながった役職の担当。主の帯の下に重ねて描くだけで、
+    /// 行の並び・主な方の判定には使わない。役職詳細以外のページでは空。
+    /// </summary>
+    public IReadOnlyList<RoleTimelineRelatedRole> RelatedRoles { get; init; } = Array.Empty<RoleTimelineRelatedRole>();
+}
+
+/// <summary>線表の行に重ねる関連する役職 1 つの担当（<see cref="RoleTimelineEntity.RelatedRoles"/>）。</summary>
+internal sealed class RoleTimelineRelatedRole
+{
+    /// <summary>ページの役職から見た関連の種類（帯の色相の基準）。</summary>
+    public RoleRelationLane Lane { get; init; }
+    /// <summary>役職（系譜の代表 role_code）。凡例のリンク先に使う。</summary>
+    public required string RoleCode { get; init; }
+    /// <summary>役職名（凡例と内訳に出す）。</summary>
+    public required string RoleName { get; init; }
+    /// <summary>役職マスタの表示順（凡例・内訳・色の割り当てで同じ種類の役職を並べる順）。</summary>
+    public int SortOrder { get; init; }
+    /// <summary>担当した TV 系の話 (series_id, episode_id)。</summary>
+    public IReadOnlyCollection<(int SeriesId, int EpisodeId)> Episodes { get; init; } = Array.Empty<(int, int)>();
+    /// <summary>担当した映画系のシリーズ。</summary>
+    public IReadOnlyCollection<int> MovieSeriesIds { get; init; } = Array.Empty<int>();
 }
 
 /// <summary>線表に点で描く参加 1 件（歌・劇伴・盤の日付と、内訳に出す名前）。</summary>
@@ -540,11 +686,23 @@ internal sealed class RoleTimelineModel
     public IReadOnlyList<RoleTimelineRow> Rows { get; set; } = Array.Empty<RoleTimelineRow>();
 }
 
-/// <summary>凡例 1 項目。Kind は "tv" / "movie" / "song" / "bgm" / "disc" / "span"（印の見本の CSS クラス）。</summary>
+/// <summary>
+/// 凡例 1 項目。Kind は "tv" / "movie" / "song" / "bgm" / "disc" / "span"、関連する役職は "rel"（TV の話の細い帯）か
+/// "rel-movie"（映画の白抜きの輪）（印の見本の CSS クラス）。関連する役職の見本の色は <see cref="Color"/>。
+/// </summary>
 internal sealed class RoleTimelineLegendItem
 {
     public string Kind { get; set; } = "";
+    /// <summary>
+    /// 2 つ目の見本の CSS クラスの接尾（関連する役職で TV の話と映画の両方を描いたとき、帯の見本に続けて映画の輪の見本
+    /// "rel-movie" を並べる）。無ければ空文字。
+    /// </summary>
+    public string ExtraKind { get; set; } = "";
     public string Label { get; set; } = "";
+    /// <summary>関連する役職の見本の色（CSS の色）。それ以外の項目では空文字。</summary>
+    public string Color { get; set; } = "";
+    /// <summary>ラベルのリンク先（関連する役職の役職詳細）。無ければ空文字。</summary>
+    public string Url { get; set; } = "";
 }
 
 /// <summary>線表の TV シリーズの帯 1 本。</summary>
@@ -592,6 +750,8 @@ internal sealed class RoleTimelineRow
     public IReadOnlyList<RoleTimelineMark> Bgms { get; set; } = Array.Empty<RoleTimelineMark>();
     /// <summary>盤の四角（同じ日のものは 1 つ）。</summary>
     public IReadOnlyList<RoleTimelineMark> Products { get; set; } = Array.Empty<RoleTimelineMark>();
+    /// <summary>関連する役職の担当（主の帯の下に重ねる細い帯・白抜きの輪）。</summary>
+    public IReadOnlyList<RoleTimelineRelatedMark> Related { get; set; } = Array.Empty<RoleTimelineRelatedMark>();
     /// <summary>内訳の参加期間（「2004年2月〜2005年1月」を「、」でつないだもの）。</summary>
     public string PeriodLabel { get; set; } = "";
     /// <summary>内訳の作品ごとの参加（改行でつないだもの）。</summary>
@@ -603,4 +763,16 @@ internal sealed class RoleTimelineMark
 {
     public string Left { get; set; } = "";
     public string Width { get; set; } = "";
+}
+
+/// <summary>関連する役職の担当の印 1 つ（TV の話の細い帯、または映画の白抜きの輪）。</summary>
+internal sealed class RoleTimelineRelatedMark
+{
+    /// <summary>役職の色（CSS の色。<see cref="RoleTimelineBuilder"/> が役職ごとに割り当てる）。</summary>
+    public string Color { get; set; } = "";
+    public string Left { get; set; } = "";
+    /// <summary>帯の幅（映画の輪では使わない）。</summary>
+    public string Width { get; set; } = "";
+    /// <summary>映画の輪か。</summary>
+    public bool IsMovie { get; set; }
 }

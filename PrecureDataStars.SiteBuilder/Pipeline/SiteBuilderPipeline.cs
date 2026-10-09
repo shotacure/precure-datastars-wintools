@@ -97,6 +97,9 @@ public sealed class SiteBuilderPipeline
         var roleSuccessorResolver = await BuildRoleSuccessorResolverAsync(factory, ct).ConfigureAwait(false);
         // 役職詳細ページへのリンク（PathUtil.CreatorsRoleUrl）も系譜の代表へ向ける。
         PathUtil.UseRoleRepresentatives(roleSuccessorResolver);
+        // 役職どうしの関連（role_relations：段階・並列）。系譜の代表へ寄せて引くので Resolver の後に 1 度だけ作る。
+        // CreatorsGenerator が役職詳細の年表に関連する役職の担当を重ねるのに使う。
+        var roleRelationIndex = await BuildRoleRelationIndexAsync(factory, roleSuccessorResolver, ct).ConfigureAwait(false);
 
         // 人物・キャラクター・企業の詳細ページ URL（名前ベース）と単発キャラの判定を 1 度だけ確定させる。
         // 単発キャラの判定にクレジット関与を使うため CreditInvolvementIndex 構築後、かつ全ページ生成より前。
@@ -200,7 +203,7 @@ public sealed class SiteBuilderPipeline
         // 各一覧に載せた人物・企業/団体を ctx.CreatorLists に記録し、続く人物・企業詳細のパンくずが
         // 本人の載っている一覧を経由するのに使うので、人物・企業詳細より前に走らせる。
         reporter.BeginSection("creators");
-        await new CreatorsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
+        await new CreatorsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver, roleRelationIndex).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
         reporter.BeginSection("persons");
@@ -537,5 +540,16 @@ public sealed class SiteBuilderPipeline
         var roles = await rolesRepo.GetAllAsync(ct).ConfigureAwait(false);
         var successions = await successionsRepo.GetAllAsync(ct).ConfigureAwait(false);
         return new RoleSuccessorResolver(roles, successions);
+    }
+
+    /// <summary>役職マスタと役職どうしの関連を読み込んで RoleRelationIndex を構築する。</summary>
+    private static async Task<RoleRelationIndex> BuildRoleRelationIndexAsync(
+        IConnectionFactory factory,
+        RoleSuccessorResolver resolver,
+        CancellationToken ct)
+    {
+        var roles = await new RolesRepository(factory).GetAllAsync(ct).ConfigureAwait(false);
+        var relations = await new RoleRelationsRepository(factory).GetAllAsync(ct).ConfigureAwait(false);
+        return new RoleRelationIndex(roles, relations, resolver);
     }
 }

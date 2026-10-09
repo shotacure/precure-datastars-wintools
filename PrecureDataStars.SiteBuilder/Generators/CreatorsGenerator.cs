@@ -41,6 +41,9 @@ public sealed class CreatorsGenerator
     private readonly CreditInvolvementIndex _index;
     private readonly RoleSuccessorResolver _resolver;
 
+    /// <summary>役職どうしの関連（段階・並列）。役職詳細の年表に関連する役職の担当を重ねるのに使う。</summary>
+    private readonly RoleRelationIndex _roleRelations;
+
     private readonly RolesRepository _rolesRepo;
     private readonly PersonsRepository _personsRepo;
     private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
@@ -87,12 +90,14 @@ public sealed class CreatorsGenerator
         PageRenderer page,
         IConnectionFactory factory,
         CreditInvolvementIndex index,
-        RoleSuccessorResolver resolver)
+        RoleSuccessorResolver resolver,
+        RoleRelationIndex roleRelations)
     {
         _ctx = ctx;
         _page = page;
         _index = index;
         _resolver = resolver;
+        _roleRelations = roleRelations;
 
         _rolesRepo = new RolesRepository(factory);
         _personsRepo = new PersonsRepository(factory);
@@ -348,7 +353,21 @@ public sealed class CreatorsGenerator
             inv => memberCodes.Contains(inv.RoleCode) ? inv.RoleCode : null,
             aliasIdsByPersonId, allPersons, companyAliasesByCompany, logosByCompanyAlias,
             allCompanies, companyAliasById, repNameMap: null, withWorksTooltip: true,
-            roleUsageNote: agg => BuildRoleUsageNote(agg, pageRoleCode, roleByCode));
+            roleUsageNote: agg => BuildRoleUsageNote(agg, pageRoleCode, roleByCode),
+            related: inv => RelatedRoleOf(pageRoleCode, inv, roleByCode));
+
+    /// <summary>
+    /// 役職詳細の年表に重ねる関連する役職の判定。本編のクレジットで、ページの役職と関連（段階・並列）でつながった
+    /// 役職の関与なら、その種類と役職（系譜の代表）を返す。それ以外は null。
+    /// </summary>
+    private RelatedRoleKey? RelatedRoleOf(string pageRoleCode, Involvement inv, IReadOnlyDictionary<string, Role> roleByCode)
+    {
+        if (!inv.IsMainCredit || string.IsNullOrEmpty(inv.RoleCode)) return null;
+        if (_roleRelations.LaneOf(pageRoleCode, inv.RoleCode) is not RoleRelationLane lane) return null;
+        string rep = _resolver.GetRepresentative(inv.RoleCode);
+        string name = roleByCode.TryGetValue(rep, out var r) ? r.NameJa : rep;
+        return new RelatedRoleKey(lane, rep, name, r?.DisplayOrder ?? ushort.MaxValue);
+    }
 
     /// <summary>
     /// 役職詳細の行に添える「表記ごとの担当数」（例：「デジタル撮影監督 1・撮影監督 1」）。系譜でつながった役職の
@@ -391,9 +410,18 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<int, CompanyAlias> companyAliasById,
         IReadOnlyDictionary<string, string>? repNameMap,
         bool withWorksTooltip,
-        Func<EntityAggregate, string>? roleUsageNote = null)
+        Func<EntityAggregate, string>? roleUsageNote = null,
+        Func<Involvement, RelatedRoleKey?>? related = null)
     {
         var set = new EntityRowSet();
+
+        // 集計対象の関与は担当として、集計対象外でも関連する役職の関与（役職詳細の年表に重ねる分）は関連として積む。
+        void Offer(EntityAggregate agg, int aid, Involvement inv)
+        {
+            string? rep = accept(inv);
+            agg.Offer(aid, inv, rep);
+            if (rep is null && related?.Invoke(inv) is RelatedRoleKey key) agg.OfferRelated(key, inv);
+        }
 
         // 人物。
         foreach (var p in allPersons)
@@ -404,7 +432,7 @@ public sealed class CreatorsGenerator
             foreach (var aid in aliasIds)
             {
                 if (!_index.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
-                foreach (var inv in invs) agg.Offer(aid, inv, accept(inv));
+                foreach (var inv in invs) Offer(agg, aid, inv);
             }
             if (agg.IsEmpty) continue;
 
@@ -447,14 +475,14 @@ public sealed class CreatorsGenerator
             {
                 if (_index.ByCompanyAlias.TryGetValue(aid, out var invs))
                 {
-                    foreach (var inv in invs) agg.Offer(aid, inv, accept(inv));
+                    foreach (var inv in invs) Offer(agg, aid, inv);
                 }
                 if (logosByCompanyAlias.TryGetValue(aid, out var logoIds))
                 {
                     foreach (var logoId in logoIds)
                     {
                         if (!_index.ByLogo.TryGetValue(logoId, out var logoInvs)) continue;
-                        foreach (var inv in logoInvs) agg.Offer(aid, inv, accept(inv));
+                        foreach (var inv in logoInvs) Offer(agg, aid, inv);
                     }
                 }
             }
@@ -504,7 +532,18 @@ public sealed class CreatorsGenerator
             FirstSortPos = countRow.FirstSortPos,
             HasOpeningCredit = agg.HasOpeningCredit,
             Episodes = agg.EpisodeKeys,
-            MovieSeriesIds = agg.MovieSeriesIds
+            MovieSeriesIds = agg.MovieSeriesIds,
+            RelatedRoles = agg.RelatedRoles
+                .Select(kv => new RoleTimelineRelatedRole
+                {
+                    Lane = kv.Key.Lane,
+                    RoleCode = kv.Key.RoleCode,
+                    RoleName = kv.Key.RoleName,
+                    SortOrder = kv.Key.SortOrder,
+                    Episodes = kv.Value.Episodes,
+                    MovieSeriesIds = kv.Value.Movies
+                })
+                .ToList()
         });
 
         foreach (var (aid, first) in agg.FirstByAlias)
@@ -2847,6 +2886,11 @@ public sealed class CreatorsGenerator
         /// <summary>クレジットされた表記（系譜でまとめる前の role_code）ごとの担当数と最早位置。役職詳細の行の添え書き用。</summary>
         public Dictionary<string, RoleCodeUsage> UsageByRoleCode { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>
+        /// 役職詳細の年表に重ねる関連する役職の担当（関連の種類と役職 → TV の話・映画）。担当の集計（話数・並び・載せる決まり）には使わない。
+        /// </summary>
+        public Dictionary<RelatedRoleKey, (HashSet<(int SeriesId, int EpisodeId)> Episodes, HashSet<int> Movies)> RelatedRoles { get; } = new();
+
         /// <summary>集計対象の関与を 1 件でも持った名義ごとの最早関与（名義を初めて受け取った順）。</summary>
         public IEnumerable<(int AliasId, FirstCreditAccumulator First)> FirstByAlias
             => _aliasOrder.Select(aid => (aid, _firstByAlias[aid]));
@@ -2882,7 +2926,24 @@ public sealed class CreatorsGenerator
             }
             usage.Offer(inv, _owner._ctx.IsMovieKindSeries(inv.SeriesId), _owner.CreditOrderKey(inv));
         }
+
+        /// <summary>関連する役職（<paramref name="key"/>）の関与を 1 件積む（年表に重ねるだけで、担当の集計には入れない）。</summary>
+        public void OfferRelated(RelatedRoleKey key, Involvement inv)
+        {
+            if (!RelatedRoles.TryGetValue(key, out var bucket))
+            {
+                bucket = (new HashSet<(int, int)>(), new HashSet<int>());
+                RelatedRoles[key] = bucket;
+            }
+            if (_owner._ctx.IsMovieKindSeries(inv.SeriesId))
+                bucket.Movies.Add(inv.SeriesId);
+            else
+                bucket.Episodes.Add((inv.SeriesId, inv.EpisodeId ?? 0));
+        }
     }
+
+    /// <summary>役職詳細の年表に重ねる関連する役職 1 つ（ページの役職から見た関連の種類・系譜の代表 role_code・役職名・役職マスタの表示順）。</summary>
+    private readonly record struct RelatedRoleKey(RoleRelationLane Lane, string RoleCode, string RoleName, int SortOrder);
 
     /// <summary>1 つの表記（role_code）での担当数（TV 系は話、映画系は本で重複排除）と、最も早くクレジットされた位置。</summary>
     private sealed class RoleCodeUsage

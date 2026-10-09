@@ -8104,6 +8104,9 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .rtl-key-bgm { width: 9px; height: 9px; border-radius: 50%; background: var(--rtl-bgm); }
 .rtl-key-disc { width: 9px; height: 9px; border-radius: 2px; background: var(--rtl-disc); }
 .rtl-key-span { width: 18px; height: 2px; border-radius: 1px; background: var(--rtl-span); }
+/* 関連する役職の見本（色は役職ごとに --key-c で渡す）。TV の話は細い帯、映画は白抜きの輪。 */
+.rtl-key-rel { width: 18px; height: 6px; border-radius: 3px; background: var(--key-c); }
+.rtl-key-rel-movie { width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; background: #fff; border: 2px solid var(--key-c); }
 
 /* 「主な方のみ」のスイッチ。入っている間（.is-main-only）は主な方でない行を隠す。 */
 .rtl-filter {
@@ -8349,6 +8352,32 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   margin: -4.5px 0 0 -4.5px;
   border-radius: 50%;
   background: var(--rtl-bgm);
+  box-shadow: 0 0 0 2px #fff;
+}
+/* 関連する役職の担当した TV の話（主の帯の下に細く重ねる。主の帯と同じ回は隠れ、主の役職の無い回だけが見える）。
+   色は役職ごとに --rel-c で渡す（関連の種類ごとの色相（前段階＝若葉・並列＝ティール・後段階＝藤色）を基準に、同じ種類の役職どうしは
+   色相を回して分ける。いずれも主の青より淡い。RoleTimelineBuilder.AssignRelatedColors）。 */
+.rtl-rel {
+  position: absolute;
+  top: 50%;
+  height: 6px;
+  margin-top: -3px;
+  min-width: 2px;
+  border-radius: 3px;
+  background: var(--rel-c);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.85);
+}
+/* 関連する役職の映画（白抜きの輪。主の役職の映画の点と形で分ける）。 */
+.rtl-rel-movie {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: #fff;
+  border: 2px solid var(--rel-c);
   box-shadow: 0 0 0 2px #fff;
 }
 /* 盤（発売日の四角）。 */

@@ -3443,11 +3443,14 @@ CREATE TABLE `bd_playlists` (
   `uo_mask`          bigint unsigned DEFAULT NULL COMMENT 'ユーザー操作の禁止マスク（規格の 64 ビットをそのまま）',
   `playlist_kind`    enum('EPISODE','PLAY_ALL','FEATURE','BONUS','MENU','OTHER') DEFAULT NULL COMMENT 'プレイリストの種別（EPISODE=本編 1 話、PLAY_ALL=全話連続、FEATURE=作品単位の本編〔映画など〕、BONUS=特典、MENU、OTHER。NULL=未判定）',
   `episode_id`       int DEFAULT NULL COMMENT '本編 1 話のプレイリストが収める話（→ episodes）',
+  `series_id`        int DEFAULT NULL COMMENT '作品単位の本編のプレイリストが収める作品（→ series。併映と続いているときは親の映画、3 本立ては親のまとまり）',
   `created_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `created_by`       varchar(64) DEFAULT NULL,
   PRIMARY KEY (`disc_id`, `playlist_file`),
+  KEY `ix_bd_playlists_series` (`series_id`),
   CONSTRAINT `fk_bd_playlists_disc` FOREIGN KEY (`disc_id`) REFERENCES `bd_discs` (`disc_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_bd_playlists_episode` FOREIGN KEY (`episode_id`) REFERENCES `episodes` (`episode_id`) ON DELETE SET NULL ON UPDATE CASCADE
+  CONSTRAINT `fk_bd_playlists_episode` FOREIGN KEY (`episode_id`) REFERENCES `episodes` (`episode_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_bd_playlists_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Blu-ray のプレイリスト（BDMV/PLAYLIST/*.mpls）';
 
 CREATE TABLE `bd_play_items` (
@@ -3488,10 +3491,13 @@ CREATE TABLE `bd_chapters` (
   `chapter_kind`   enum('EPISODE_PART','FEATURE','BLANK','BONUS','OTHER') DEFAULT NULL COMMENT 'チャプターの種別（EPISODE_PART=話のパート、FEATURE=作品単位の本編〔映画など〕、BLANK=余白、BONUS、OTHER。NULL=未判定）',
   `episode_id`     int DEFAULT NULL COMMENT 'チャプターが当たる話（→ episode_parts.episode_id）',
   `episode_seq`    tinyint unsigned DEFAULT NULL COMMENT 'チャプターが当たるパートの順（→ episode_parts.episode_seq）',
+  `series_id`      int DEFAULT NULL COMMENT '作品単位の本編のチャプターが当たる作品（→ series。併映と続いているときは本編か併映か）',
   PRIMARY KEY (`disc_id`, `playlist_file`, `chapter_no`),
   KEY `ix_bd_chapters_episode` (`episode_id`, `episode_seq`),
+  KEY `ix_bd_chapters_series` (`series_id`),
   CONSTRAINT `fk_bd_chapters_playlist` FOREIGN KEY (`disc_id`, `playlist_file`) REFERENCES `bd_playlists` (`disc_id`, `playlist_file`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_bd_chapters_episode_part` FOREIGN KEY (`episode_id`, `episode_seq`) REFERENCES `episode_parts` (`episode_id`, `episode_seq`) ON DELETE SET NULL ON UPDATE CASCADE
+  CONSTRAINT `fk_bd_chapters_episode_part` FOREIGN KEY (`episode_id`, `episode_seq`) REFERENCES `episode_parts` (`episode_id`, `episode_seq`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_bd_chapters_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='プレイリストのチャプター（Entry マークで区切った生の区間）と当てた話のパート';
 
 CREATE TABLE `bd_sub_paths` (

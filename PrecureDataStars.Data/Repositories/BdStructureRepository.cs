@@ -27,22 +27,23 @@ public sealed class BdStructureRepository : RepositoryBase
         return rows.Count > 0 ? rows[0] : null;
     }
 
-    /// <summary>ディスク ID の盤の、記録済みのチャプターの当て方（種別・話・パート）。再読み取りで引き継ぐ。</summary>
+    /// <summary>ディスク ID の盤の、記録済みのチャプターの当て方（種別・話・パート・作品）。再読み取りで引き継ぐ。</summary>
     public async Task<IReadOnlyList<BdChapter>> GetChaptersAsync(string discId, CancellationToken ct = default)
     {
         const string sql = """
             SELECT disc_id AS DiscId, playlist_file AS PlaylistFile, chapter_no AS ChapterNo, start_time_ms AS StartTimeMs,
-                   duration_ms AS DurationMs, chapter_kind AS ChapterKind, episode_id AS EpisodeId, episode_seq AS EpisodeSeq
+                   duration_ms AS DurationMs, chapter_kind AS ChapterKind, episode_id AS EpisodeId, episode_seq AS EpisodeSeq, series_id AS SeriesId
               FROM bd_chapters WHERE disc_id = @discId ORDER BY playlist_file, chapter_no;
             """;
         return await QueryListAsync<BdChapter>(sql, new { discId }, ct).ConfigureAwait(false);
     }
 
-    /// <summary>ディスク ID の盤の、記録済みのプレイリストの種別と話。再読み取りで引き継ぐ。</summary>
+    /// <summary>ディスク ID の盤の、記録済みのプレイリストの種別・話・作品。再読み取りで引き継ぐ。</summary>
     public async Task<IReadOnlyList<BdPlaylist>> GetPlaylistsAsync(string discId, CancellationToken ct = default)
     {
         const string sql = """
-            SELECT disc_id AS DiscId, playlist_file AS PlaylistFile, duration_ms AS DurationMs, playlist_kind AS PlaylistKind, episode_id AS EpisodeId
+            SELECT disc_id AS DiscId, playlist_file AS PlaylistFile, duration_ms AS DurationMs, playlist_kind AS PlaylistKind, episode_id AS EpisodeId,
+                   series_id AS SeriesId
               FROM bd_playlists WHERE disc_id = @discId ORDER BY playlist_file;
             """;
         return await QueryListAsync<BdPlaylist>(sql, new { discId }, ct).ConfigureAwait(false);
@@ -104,8 +105,8 @@ public sealed class BdStructureRepository : RepositoryBase
                 VALUES (@DiscId, @MobjNo, @CmdSeq, @OpcodeHex, @DstOperand, @SrcOperand);
                 """);
             await InsertAsync(structure.Playlists, """
-                INSERT INTO bd_playlists (disc_id, playlist_file, duration_ms, play_item_count, sub_path_count, mark_count, playback_type, uo_mask, playlist_kind, episode_id, created_by)
-                VALUES (@DiscId, @PlaylistFile, @DurationMs, @PlayItemCount, @SubPathCount, @MarkCount, @PlaybackType, @UoMask, @PlaylistKind, @EpisodeId, @CreatedBy);
+                INSERT INTO bd_playlists (disc_id, playlist_file, duration_ms, play_item_count, sub_path_count, mark_count, playback_type, uo_mask, playlist_kind, episode_id, series_id, created_by)
+                VALUES (@DiscId, @PlaylistFile, @DurationMs, @PlayItemCount, @SubPathCount, @MarkCount, @PlaybackType, @UoMask, @PlaylistKind, @EpisodeId, @SeriesId, @CreatedBy);
                 """);
             await InsertAsync(structure.PlayItems, """
                 INSERT INTO bd_play_items (disc_id, playlist_file, item_seq, clip_file, codec_id, in_time_ms, out_time_ms, playlist_offset_ms, connection_condition, stc_id)
@@ -116,8 +117,8 @@ public sealed class BdStructureRepository : RepositoryBase
                 VALUES (@DiscId, @PlaylistFile, @MarkSeq, @MarkType, @PlayItemRef, @TimeMs, @EntryEsPid, @DurationMs);
                 """);
             await InsertAsync(structure.Chapters, """
-                INSERT INTO bd_chapters (disc_id, playlist_file, chapter_no, start_time_ms, duration_ms, chapter_kind, episode_id, episode_seq)
-                VALUES (@DiscId, @PlaylistFile, @ChapterNo, @StartTimeMs, @DurationMs, @ChapterKind, @EpisodeId, @EpisodeSeq);
+                INSERT INTO bd_chapters (disc_id, playlist_file, chapter_no, start_time_ms, duration_ms, chapter_kind, episode_id, episode_seq, series_id)
+                VALUES (@DiscId, @PlaylistFile, @ChapterNo, @StartTimeMs, @DurationMs, @ChapterKind, @EpisodeId, @EpisodeSeq, @SeriesId);
                 """);
             await InsertAsync(structure.SubPaths, """
                 INSERT INTO bd_sub_paths (disc_id, playlist_file, sub_path_seq, sub_path_type, is_repeat, sub_play_item_count, first_clip_file)

@@ -122,9 +122,11 @@ public sealed class BdPlaylist
     public ushort MarkCount { get; set; }
     public byte? PlaybackType { get; set; }
     public ulong? UoMask { get; set; }
-    /// <summary>EPISODE / PLAY_ALL / BONUS / MENU / OTHER。NULL=未判定。</summary>
+    /// <summary>EPISODE / PLAY_ALL / FEATURE / BONUS / MENU / OTHER。NULL=未判定。</summary>
     public string? PlaylistKind { get; set; }
     public int? EpisodeId { get; set; }
+    /// <summary>作品単位の本編（FEATURE）のプレイリストが収める作品。併映と続いているときは親の映画、3 本立ては親のまとまり。</summary>
+    public int? SeriesId { get; set; }
     public string? CreatedBy { get; set; }
 }
 
@@ -166,10 +168,12 @@ public sealed class BdChapter
     public ulong StartTimeMs { get; set; }
     /// <summary>尺（ミリ秒。生の値。話の最後のチャプターには 1 秒の余白が付く）。</summary>
     public ulong DurationMs { get; set; }
-    /// <summary>EPISODE_PART / BLANK / BONUS / OTHER。NULL=未判定。</summary>
+    /// <summary>EPISODE_PART / FEATURE / BLANK / BONUS / OTHER。NULL=未判定。</summary>
     public string? ChapterKind { get; set; }
     public int? EpisodeId { get; set; }
     public byte? EpisodeSeq { get; set; }
+    /// <summary>作品単位の本編（FEATURE）のチャプターが当たる作品。併映と続いているときは、チャプターごとに本編か併映か。</summary>
+    public int? SeriesId { get; set; }
 }
 
 /// <summary>bd_sub_paths の 1 行。</summary>

@@ -7,9 +7,13 @@
   したうえで CloudFront を invalidation する。実行は 2 段階：
 
     1. まず --dry-run で差分プラン（upload / delete / unchanged）とビルド警告数を取得し、安全ゲートを通す。
-         - delete（既存 S3 オブジェクトの消去）が 1 件以上 … 既定では中止する（意図的な orphan 掃除なら -Force）。
+         - delete（既存 S3 オブジェクトの消去）のうち、決まって起きる削除を除いたものが 1 件以上 … 既定では中止する
+           （意図的な orphan 掃除なら -Force）。決まって起きる削除として通すのは次の 2 種類（件数と中身はログに出す）：
+             ・OGP カード（og/ の下。ページの改名・削除に伴って消える）
+             ・転送表（ビルド出力の _edge/legacy-redirects.json）に載っている旧ページ
+               （people / characters / companies / units / books の {名前}/index.html。改名した旧 URL は 301 で転送される）
          - ビルド警告（Warnings）が 1 件以上 … 品質ゲートとして既定で中止する（-Force で続行）。
-    2. ゲートを通過（delete=0 かつ Warnings=0、または -Force）した場合のみ、本番反映（--yes）を実行する。
+    2. ゲートを通過（決まって起きる削除以外の delete=0 かつ Warnings=0、または -Force）した場合のみ、本番反映（--yes）を実行する。
 
   非対話実行のため本番反映は常に --yes（削除確認の y/N 省略）で走る。安全性は事前ドライランの
   「delete=0」ゲートで担保する。バケット名・Distribution ID・AWS プロファイル等の実値は App.config
@@ -85,6 +89,54 @@ $warnDisplay = if ($warnCount -lt 0) { '不明' } else { "$warnCount" }
 Write-Host ""
 Write-Host ("  差分: upload {0} / delete {1} / unchanged {2} / 警告 {3}" -f $uploadCount, $deleteCount, $unchangedCount, $warnDisplay) -ForegroundColor Cyan
 
+# --- 削除の仕分け ---
+# ドライランの「Delete (orphan) targets:」に続く「  - {S3 キー}」の行を読み、決まって起きる削除（OGP カードと、
+# 転送表に載っている旧ページ）と、それ以外（ゲートで止める削除）に分ける。
+$deleteKeys = @()
+$inDeleteList = $false
+foreach ($line in $dryOutput) {
+    $text = "$line"
+    if ($text -match 'Delete \(orphan\) targets:') { $inDeleteList = $true; continue }
+    if ($inDeleteList) {
+        if ($text -match '^\s*-\s+(.+?)\s*$') { $deleteKeys += $Matches[1] } else { $inDeleteList = $false }
+    }
+}
+
+# 転送表はビルド出力（App.config の SiteOutputDir）の _edge/legacy-redirects.json。キーは「/people/旧名」の形。
+$redirectKeys = @{}
+try {
+    $appConfig = [xml](Get-Content -Raw -Encoding UTF8 (Join-Path $repoRoot "$project/App.config"))
+    $outDir = ($appConfig.configuration.appSettings.add | Where-Object { $_.key -eq 'SiteOutputDir' }).value
+    $mapPath = Join-Path $outDir '_edge/legacy-redirects.json'
+    if (Test-Path $mapPath) {
+        $map = Get-Content -Raw -Encoding UTF8 $mapPath | ConvertFrom-Json
+        foreach ($prop in $map.PSObject.Properties) { $redirectKeys[$prop.Name] = $true }
+    }
+} catch {
+    Write-Host "  転送表を読めませんでした（旧ページの削除はゲートで止めます）: $($_.Exception.Message)" -ForegroundColor DarkYellow
+}
+
+$expectedDeletes = @()
+$unexpectedDeletes = @()
+foreach ($key in $deleteKeys) {
+    if ($key -like 'og/*') { $expectedDeletes += "$key（OGP カード）"; continue }
+    if ($key -match '^(people|characters|companies|units|books)/([^/]+)/index\.html$' -and $redirectKeys.ContainsKey("/$($Matches[1])/$($Matches[2])")) {
+        $expectedDeletes += "$key（旧 URL は転送表で 301）"
+        continue
+    }
+    $unexpectedDeletes += $key
+}
+# 一覧の行数が Plan の件数と合わないとき（出力の形が変わったなど）は、仕分けを信用せず全件をゲートの対象にする。
+if ($deleteKeys.Count -ne $deleteCount) {
+    $unexpectedDeletes = @("（削除の一覧を読み取れませんでした：Plan $deleteCount 件 / 一覧 $($deleteKeys.Count) 件）")
+    $expectedDeletes = @()
+}
+if ($expectedDeletes.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  決まって起きる削除 $($expectedDeletes.Count) 件（ゲートで止めない）:" -ForegroundColor DarkCyan
+    $expectedDeletes | ForEach-Object { Write-Host "    - $_" -ForegroundColor DarkCyan }
+}
+
 if ($DryRunOnly) {
     Write-Host ""
     Write-Host "  -DryRunOnly のため、反映は行いません。" -ForegroundColor DarkGray
@@ -100,7 +152,9 @@ if ($uploadCount -eq 0 -and $deleteCount -eq 0) {
 
 # --- 安全ゲート ---
 $blockReasons = @()
-if ($deleteCount -gt 0) { $blockReasons += "削除 $deleteCount 件（既存オブジェクトの消去）" }
+if ($unexpectedDeletes.Count -gt 0) {
+    $blockReasons += "削除 $($unexpectedDeletes.Count) 件（既存オブジェクトの消去）: $($unexpectedDeletes -join ', ')"
+}
 if ($warnCount -gt 0)   { $blockReasons += "ビルド警告 $warnCount 件" }
 
 if ($blockReasons.Count -gt 0 -and -not $Force) {

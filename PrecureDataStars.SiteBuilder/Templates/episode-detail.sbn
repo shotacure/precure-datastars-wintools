@@ -89,8 +89,19 @@
        未解禁のときは C# 側で ep-subtitle-guard span に包まれた状態で渡ってくる
        （subtitle-embargo.js がぼかし表示・解禁を担う）。
        テロップ画像（本編のテロップの体裁で描いた透過 PNG）がある話は、HTML の代わりに画像を中央に置く。
-       画像は 2 倍の画素で描いてあり、width / height と --telop-w は表示の大きさ。 ##}}
-  {{~ if Episode.SubtitleTelopSrc != "" ~}}
+       画像は 2 倍の画素で描いてあり、width / height と --telop-w は表示の大きさ。
+       解禁前の話は、画像とぼかした HTML の両方を解禁時刻つきの枠に入れ、解禁されるか閲覧者が先の題を見る設定にするまで
+       画像を隠す（subtitle-embargo.js が枠に is-revealed を付け外しする。隠している間は画像を読み込まないよう loading="lazy"）。 ##}}
+  {{~ if Episode.SubtitleTelopSrc != "" && Episode.SubtitleTelopRevealAt != "" ~}}
+  <div class="subtitle-telop-guard" data-reveal-at="{{ Episode.SubtitleTelopRevealAt }}">
+    <div class="subtitle-display subtitle-telop subtitle-telop-image">
+      <img src="{{ Episode.SubtitleTelopSrc }}" width="{{ Episode.SubtitleTelopWidth }}" height="{{ Episode.SubtitleTelopHeight }}" style="--telop-w: {{ Episode.SubtitleTelopWidth }}px" alt="{{ Episode.TitleText | html.escape }}" loading="lazy" decoding="async">
+    </div>
+    <div class="subtitle-display subtitle-telop-fallback">
+      {{ Episode.SubtitleGuardedDisplayHtml }}
+    </div>
+  </div>
+  {{~ else if Episode.SubtitleTelopSrc != "" ~}}
   <div class="subtitle-display subtitle-telop">
     <img src="{{ Episode.SubtitleTelopSrc }}" width="{{ Episode.SubtitleTelopWidth }}" height="{{ Episode.SubtitleTelopHeight }}" style="--telop-w: {{ Episode.SubtitleTelopWidth }}px" alt="{{ Episode.TitleText | html.escape }}" decoding="async">
   </div>

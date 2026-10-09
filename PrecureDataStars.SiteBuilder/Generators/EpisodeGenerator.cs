@@ -771,8 +771,9 @@ public sealed class EpisodeGenerator
             layout.OgCard = BuildOgCard(series, ep, content);
 
         // サブタイトル欄は、本編のテロップと同じ体裁（作品のテロップ書体・白い字に黒フチと影）の画像で見せる。
-        // 解禁前の話は画像にするとぼかしが効かないので、OGP カードと同じく作らずに HTML のサブタイトル（ガード付き）を出す。
-        // サブタイトル未確定の話もプレースホルダの HTML のまま。
+        // 解禁前の話も画像を描くが、画像はぼかせないので、ページでは解禁時刻を添えて、解禁されるか閲覧者が先の題を見る設定に
+        // するまでは画像を隠し、ぼかした HTML のサブタイトルを出す（subtitle-embargo.js が切り替える）。OGP カードは作らない。
+        // サブタイトル未確定の話はプレースホルダの HTML のまま。
         // 画像にするかの判定と材料は、ビルド冒頭の作り置きの確認と同じ SubtitleTelopRequest で決める。
         if (SubtitleTelopRequest.For(series, ep, _ctx) is { } telopRequest)
         {
@@ -782,6 +783,7 @@ public sealed class EpisodeGenerator
                 content.Episode.SubtitleTelopSrc = telop.Src;
                 content.Episode.SubtitleTelopWidth = telop.Width;
                 content.Episode.SubtitleTelopHeight = telop.Height;
+                content.Episode.SubtitleTelopRevealAt = ownEmbargoed ? SubtitleGuardRenderer.ToRevealAtIso(ownRevealAt!.Value) : "";
             }
         }
 
@@ -2005,6 +2007,11 @@ public sealed class EpisodeGenerator
         public string SubtitleTelopSrc { get; set; } = "";
         public int SubtitleTelopWidth { get; set; }
         public int SubtitleTelopHeight { get; set; }
+        /// <summary>
+        /// ビルドの時点で解禁前の話の解禁時刻（ISO 8601）。空でなければ、テンプレ側は画像と <see cref="SubtitleGuardedDisplayHtml"/> の両方を出し、
+        /// 解禁されるか閲覧者が先の題を見る設定にするまで画像を隠す。
+        /// </summary>
+        public string SubtitleTelopRevealAt { get; set; } = "";
         /// <summary>放送日時を「2004年2月1日 8:30〜9:00」形式で。尺未登録時は終了時刻なし。</summary>
         public string OnAirDateTime { get; set; } = "";
         public string ToeiAnimSummaryUrl { get; set; } = "";

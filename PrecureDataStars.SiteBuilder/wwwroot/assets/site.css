@@ -3406,6 +3406,17 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   filter: none;
   user-select: auto;
 }
+/* 解禁前の話のサブタイトル欄。画像はぼかせないので、解禁される（または先の題を見る設定にする）までは画像を隠して
+   ぼかした文字を出し、解禁されたら画像に切り替える。 */
+.subtitle-telop-guard .subtitle-telop-image {
+  display: none;
+}
+.subtitle-telop-guard.is-revealed .subtitle-telop-image {
+  display: block;
+}
+.subtitle-telop-guard.is-revealed .subtitle-telop-fallback {
+  display: none;
+}
 
 /* サブタイトル解禁の初回確認ダイアログ。mobile-nav-overlay と同じ「hidden 属性 + 暗幕 + パネル」
    構成だが、こちらは中央配置の確認モーダルのため display:flex を明示指定する必要がある

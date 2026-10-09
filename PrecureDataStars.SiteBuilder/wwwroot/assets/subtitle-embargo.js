@@ -27,7 +27,8 @@
   'use strict';
 
   var STORAGE_KEY = 'pcds-subtitle-embargo-pref';
-  var GUARD_SELECTOR = '.ep-subtitle-guard[data-reveal-at]';
+  // サブタイトルのぼかしと、解禁前の話のテロップ画像の枠（解禁されるまで画像を隠す）
+  var GUARD_SELECTOR = '.ep-subtitle-guard[data-reveal-at], .subtitle-telop-guard[data-reveal-at]';
 
   /** 保存済みの閲覧者設定を返す（'reveal' | 'hide' | null＝未設定）。 */
   function getPreference() {

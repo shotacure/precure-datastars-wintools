@@ -1,0 +1,30 @@
+{{## /series/ の TV シリーズのカード（種類順・年度順で共用）。呼び出し側で変数 tv に TvSeriesRow を入れてから include する。
+     本体（番号・タイトル・放送期間・話数）の下に、プリキュアのバッジとスタッフのバッジ（任意）。 ##}}
+<div class="series-card">
+  <a class="bgms-card-link" href="/series/{{ tv.Slug }}/" aria-label="{{ tv.Title | html.escape }}"></a>
+  <div class="series-card-head">
+    <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ tv.Title | html.escape }}</h3>
+    <div class="series-card-meta muted">
+      <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ tv.Period }}</span>{{~ if tv.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ tv.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
+      <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ tv.EpisodesLabel }}</span>{{~ if tv.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ tv.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
+    </div>
+  </div>
+  {{~ if (array.size tv.PrecureBadges) > 0 || (array.size tv.KeyStaffSummary) > 0 ~}}
+  <div class="series-card-sub">
+    {{~ if (array.size tv.PrecureBadges) > 0 ~}}
+    <div class="precure-badges-row">
+      {{~ for p in tv.PrecureBadges ~}}
+      <a class="precure-badge" href="{{ character_url p.CharacterId }}"{{~ if p.BackgroundColor != "" ~}} style="background:{{ p.BackgroundColor }};color:{{ p.TextColor }};border-color:{{ p.BorderColor }}"{{~ end ~}}>{{ p.Label | html.escape }}</a>
+      {{~ end ~}}
+    </div>
+    {{~ end ~}}
+    {{~ if (array.size tv.KeyStaffSummary) > 0 ~}}
+    <div class="staff-badges-row">
+      {{~ for g in tv.KeyStaffSummary ~}}
+      <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for m in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url m.PersonId }}">{{ m.DisplayName | html.escape }}</a>{{~ if m.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ m.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+      {{~ end ~}}
+    </div>
+    {{~ end ~}}
+  </div>
+  {{~ end ~}}
+</div>

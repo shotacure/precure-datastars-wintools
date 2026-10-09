@@ -212,16 +212,19 @@ public sealed class SeriesGenerator
     /// 解決には <c>precures</c> / <c>character_aliases</c> / <c>persons</c> の 3 マスタを使う。
     /// 各 alias / person の名前を最初に Dictionary 化して、紐付け 1 件ごとの引きを O(1) で済ませる。
     /// 並び順は <c>display_order ASC, precure_id ASC</c> でタイブレーク。
+    /// <para>
+    /// <c>series_precures</c> に行の無い作品単位の作品（映画など。<c>credit_attach_to='SERIES'</c>）は、その作品のクレジットの
+    /// 声の出演（CHARACTER_VOICE）のうち、キャラの名義がプリキュアの名義（変身前・変身後・変身後 2・別形態）に当たるものを
+    /// その作品に出たプリキュアとする。親の TV シリーズ（<c>parent_series_id</c> が TV の作品）に紐付くプリキュアを先に
+    /// 今までどおりの表記（変身前 / 変身後 (CV)）で出し、続けてそれ以外（客演。親の TV シリーズが無い作品は全員）を略記
+    /// （変身後の名前から「キュア」を除いたもの）で出す。
+    /// どちらもクレジットに出てくる順（OP → ED → そのほか、カード・ティア・グループ・役職・ブロック・エントリの順で最初に出た所）。
+    /// </para>
     /// </summary>
     private async Task BuildPrecureRowsBySeriesCacheAsync(CancellationToken ct)
     {
         // マスタ群を 1 度だけ取得して in-memory にバインド。
         var allPairs = await _seriesPrecuresRepo.GetAllAsync(ct).ConfigureAwait(false);
-        if (allPairs.Count == 0)
-        {
-            _precureRowsBySeriesCache = new Dictionary<int, IReadOnlyList<SeriesPrecureDisplay>>();
-            return;
-        }
         var allPrecures = await _precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
         var allAliases = await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
         // characters は表記の第一候補（characters.name 優先）に使う。alias から character_id を辿って引く。
@@ -240,7 +243,92 @@ public sealed class SeriesGenerator
         foreach (var sp in allPairs)
         {
             if (!precureById.TryGetValue(sp.PrecureId, out var precure)) continue;
+            var row = MakeRow(precure);
+            if (!dict.TryGetValue(sp.SeriesId, out var list))
+            {
+                list = new List<SeriesPrecureDisplay>();
+                dict[sp.SeriesId] = list;
+            }
+            list.Add(row);
+        }
 
+        // プリキュアが所属する TV シリーズ（放送開始順）。略記を作品ごとの行にまとめるのに使う。
+        var seriesStartById = _ctx.Series.ToDictionary(x => x.SeriesId, x => x.StartDate);
+        var seriesOfPrecure = allPairs
+            .Where(sp => seriesStartById.ContainsKey(sp.SeriesId))
+            .GroupBy(sp => sp.PrecureId)
+            .ToDictionary(g => g.Key, g => g.Select(sp => sp.SeriesId).OrderBy(id => seriesStartById[id]).ToList());
+        // 映画の公開の時点で、そのプリキュアが最後に所属していた TV シリーズ（無印とMH なら MH、Yes!5 と GoGo! なら GoGo!）。
+        // 公開より後の TV しか無ければ最初の TV。
+        int HomeSeriesAt(int precureId, DateOnly at)
+        {
+            if (!seriesOfPrecure.TryGetValue(precureId, out var list) || list.Count == 0) return 0;
+            var before = list.Where(id => seriesStartById[id] <= at).ToList();
+            return before.Count > 0 ? before[^1] : list[0];
+        }
+
+        // 作品単位の作品（映画など）で series_precures に行の無いものは、クレジットの声の出演から出たプリキュアを引く。
+        var precureByAlias = new Dictionary<int, Precure>();
+        foreach (var p in allPrecures.OrderBy(p => p.PrecureId))
+        {
+            foreach (var aliasId in new int?[] { p.PreTransformAliasId, p.TransformAliasId, p.Transform2AliasId, p.AltFormAliasId })
+                if (aliasId is int a) precureByAlias.TryAdd(a, p);
+        }
+        foreach (var series in _ctx.Series)
+        {
+            if (dict.ContainsKey(series.SeriesId)) continue;
+            if (!_ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var kind)
+                || !string.Equals(kind.CreditAttachTo, "SERIES", StringComparison.Ordinal)) continue;
+            if (!_ctx.CreditsBySeries.TryGetValue(series.SeriesId, out var credits)) continue;
+            // クレジットに出てくる順（最初に出た所）で集める
+            var found = new List<Precure>();
+            var seen = new HashSet<int>();
+            foreach (var credit in credits
+                         .OrderBy(c => c.CreditKind == "OP" ? 0 : c.CreditKind == "ED" ? 1 : 2)
+                         .ThenBy(c => c.CreditSeq).ThenBy(c => c.CreditId))
+            {
+                if (!_ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cards)) continue;
+                foreach (var entry in cards.SelectMany(c => c.Tiers).SelectMany(t => t.Groups).SelectMany(g => g.Roles)
+                             .SelectMany(r => r.Blocks).SelectMany(b => b.Entries))
+                {
+                    if (!string.Equals(entry.EntryKind, "CHARACTER_VOICE", StringComparison.Ordinal)) continue;
+                    if (entry.CharacterAliasId is int ca && precureByAlias.TryGetValue(ca, out var hit) && seen.Add(hit.PrecureId))
+                        found.Add(hit);
+                }
+            }
+            if (found.Count == 0) continue;
+            // 親の TV シリーズに紐付くプリキュアは今までどおりの表記で先に、それ以外は略記で続ける
+            var ownIds = new HashSet<int>();
+            if (series.ParentSeriesId is int parentId
+                && _ctx.Series.FirstOrDefault(x => x.SeriesId == parentId) is { } parent
+                && string.Equals(parent.KindCode, "TV", StringComparison.Ordinal))
+            {
+                foreach (var sp in allPairs.Where(x => x.SeriesId == parentId)) ownIds.Add(sp.PrecureId);
+            }
+            var rows = found.Where(p => ownIds.Contains(p.PrecureId)).Select(MakeRow).ToList();
+            // 略記は所属の TV シリーズ（公開の時点で最後に所属していたもの）ごとにまとめる
+            // （作品の順はクレジットに最初に出た順、作品の中はクレジット順）
+            var abbreviated = found.Where(p => !ownIds.Contains(p.PrecureId)).ToList();
+            var homeOf = abbreviated.ToDictionary(p => p.PrecureId, p => HomeSeriesAt(p.PrecureId, series.StartDate));
+            foreach (var home in abbreviated.Select(p => homeOf[p.PrecureId]).Distinct().ToList())
+            {
+                foreach (var p in abbreviated.Where(p => homeOf[p.PrecureId] == home))
+                {
+                    var r = MakeRow(p);
+                    r.Abbreviated = true;
+                    r.HomeSeriesId = home;
+                    rows.Add(r);
+                }
+            }
+            dict[series.SeriesId] = rows;
+        }
+
+        _precureRowsBySeriesCache = dict.ToDictionary(
+            kv => kv.Key,
+            kv => (IReadOnlyList<SeriesPrecureDisplay>)kv.Value);
+
+        SeriesPrecureDisplay MakeRow(Precure precure)
+        {
             string transformName = aliasById.TryGetValue(precure.TransformAliasId, out var trans)
                 ? trans.Name : "";
             string preTransformName = aliasById.TryGetValue(precure.PreTransformAliasId, out var pre)
@@ -256,7 +344,7 @@ public sealed class SeriesGenerator
             if (trans is not null && characterById.TryGetValue(trans.CharacterId, out var ch))
                 characterName = ch.Name ?? "";
 
-            var row = new SeriesPrecureDisplay
+            return new SeriesPrecureDisplay
             {
                 PrecureId = precure.PrecureId,
                 // バッジ／プリキュア行のリンク先となる character_id。プリキュア詳細ページは
@@ -272,18 +360,7 @@ public sealed class SeriesGenerator
                 // バッジ地色（#RRGGBB）。未設定/不正値は後段でフォールバックバッジにする。
                 KeyColor = precure.KeyColor ?? ""
             };
-
-            if (!dict.TryGetValue(sp.SeriesId, out var list))
-            {
-                list = new List<SeriesPrecureDisplay>();
-                dict[sp.SeriesId] = list;
-            }
-            list.Add(row);
         }
-
-        _precureRowsBySeriesCache = dict.ToDictionary(
-            kv => kv.Key,
-            kv => (IReadOnlyList<SeriesPrecureDisplay>)kv.Value);
     }
 
     /// <summary>指定シリーズに紐付くプリキュア表示行リストを返す （無ければ空リスト）。</summary>
@@ -437,6 +514,8 @@ public sealed class SeriesGenerator
                     int sortEpNo = int.MaxValue;
                     int sortCreditSeq = int.MaxValue;
                     int sortCreditSubSeq = int.MaxValue;
+                    // この作品のこの役職でクレジットされた名義と、それぞれが最初に出た所（名乗りは当時の名義で出す）
+                    var creditedAliases = new Dictionary<int, (int Ep, int Seq, int Sub)>();
                     foreach (var aid in aliasIds)
                     {
                         if (!_involvementIndex.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
@@ -450,6 +529,7 @@ public sealed class SeriesGenerator
                                 // 映画は SERIES スコープのみ集計対象。EpisodeId が非 null（=エピソード残骸）の
                                 // 場合はスキップ（基本的に映画系列にエピソードは無いが念のため）。
                                 if (inv.EpisodeId is not null) continue;
+                                NoteCreditedAlias(creditedAliases, aid, (0, inv.CreditSeq, inv.CreditSubSeq));
                                 // EpisodeNo は仮想 0 に固定し、CreditSeq → CreditSubSeq で lex min を更新。
                                 if (0 < sortEpNo
                                     || (0 == sortEpNo && inv.CreditSeq < sortCreditSeq)
@@ -462,6 +542,7 @@ public sealed class SeriesGenerator
                             }
                             else if (inv.EpisodeId is int eid && epNoByEpId!.TryGetValue(eid, out var n))
                             {
+                                NoteCreditedAlias(creditedAliases, aid, (n, inv.CreditSeq, inv.CreditSubSeq));
                                 // TV：エピソードスコープのみクレジット順ソート対象。
                                 if (n < sortEpNo
                                     || (n == sortEpNo && inv.CreditSeq < sortCreditSeq)
@@ -494,10 +575,12 @@ public sealed class SeriesGenerator
                             affiliationLabel = nm;
                     }
 
+                    var (creditedNames, currentNote) = CreditedAliasLabel(creditedAliases, p.PersonId, p.FullName);
                     members.Add(new KeyStaffMember
                     {
                         PersonId = p.PersonId,
-                        DisplayName = p.FullName ?? "",
+                        DisplayName = creditedNames,
+                        CurrentNameNote = currentNote,
                         AffiliationLabel = affiliationLabel,
                         SortEpNo = sortEpNo,
                         SortCreditSeq = sortCreditSeq,
@@ -643,6 +726,34 @@ public sealed class SeriesGenerator
     /// （CSS 既定の淡色フォールバックで描画される）。
     /// 0 件のときは空リストを返す（テンプレ側でプリキュア欄を出さない判定に使う）。
     /// </summary>
+    /// <summary>
+    /// 映画のカード用：プリキュアのバッジを行のまとまりにする。今までどおりの表記のバッジは 1 つのまとまり（普通に折り返す）、
+    /// 略記のバッジは出身の TV シリーズごとに 1 つのまとまり（作品の切れ目でだけ改行する）。
+    /// </summary>
+    private static IReadOnlyList<PrecureBadgeLine> BuildPrecureBadgeLines(IReadOnlyList<SeriesPrecureDisplay> rows)
+    {
+        var lines = new List<PrecureBadgeLine>();
+        var full = rows.Where(r => !r.Abbreviated).ToList();
+        if (full.Count > 0) lines.Add(new PrecureBadgeLine { Abbreviated = false, Badges = BuildPrecureBadges(full) });
+        foreach (var g in rows.Where(r => r.Abbreviated).GroupBy(r => r.HomeSeriesId))
+            lines.Add(new PrecureBadgeLine { Abbreviated = true, Badges = BuildPrecureBadges(g.ToList()) });
+        return lines;
+    }
+
+    /// <summary>「キュア」で始まらないプリキュアの略記（変身後の名前 → 略記）。</summary>
+    private static readonly IReadOnlyDictionary<string, string> NonCurePrecureShortNames = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["シャイニールミナス"] = "ルミナス",
+        ["ミルキィローズ"] = "ローズ",
+    };
+
+    /// <summary>映画の客演のプリキュアの略記：変身後の名前の頭の「キュア」を除く（「キュア」で始まらない名前は <see cref="NonCurePrecureShortNames"/>）。</summary>
+    private static string AbbreviatePrecureName(string transformName)
+    {
+        if (transformName.StartsWith("キュア", StringComparison.Ordinal) && transformName.Length > 3) return transformName[3..];
+        return NonCurePrecureShortNames.TryGetValue(transformName, out var shortName) ? shortName : transformName;
+    }
+
     private static IReadOnlyList<PrecureBadge> BuildPrecureBadges(IReadOnlyList<SeriesPrecureDisplay> rows)
     {
         if (rows.Count == 0) return Array.Empty<PrecureBadge>();
@@ -655,9 +766,12 @@ public sealed class SeriesGenerator
             string baseName = PrecureNaming.JoinAliasNames(
                 r.PreTransformName, r.TransformName, r.Transform2Name);
             if (string.IsNullOrEmpty(baseName)) baseName = r.TransformName;
-            string label = string.IsNullOrEmpty(r.VoiceActorName)
-                ? baseName
-                : $"{baseName} (CV: {r.VoiceActorName})";
+            // 略記（映画の客演のプリキュア）は変身後の名前から「キュア」を除いたもの
+            string label = r.Abbreviated && !string.IsNullOrEmpty(r.TransformName)
+                ? AbbreviatePrecureName(r.TransformName)
+                : string.IsNullOrEmpty(r.VoiceActorName)
+                    ? baseName
+                    : $"{baseName} (CV: {r.VoiceActorName})";
 
             // 地色 → 文字色・ボーダー色を解決。未設定/不正値は空文字（テンプレ側で無装飾バッジ）。
             var (bg, fg, border) = KeyColorBadge.Resolve(r.KeyColor);
@@ -684,6 +798,48 @@ public sealed class SeriesGenerator
     /// </list>
     /// シリーズ基本情報の「1 話あたりの尺」セルと、合同盤親映画の子作品行 RuntimeLabel で共通利用する。
     /// </summary>
+    /// <summary>
+    /// 年度順タブの段を組む。プリキュアの年度は TV シリーズの放送開始から次の TV シリーズの放送開始の前日まで（2 月〜翌 1 月）なので、
+    /// 各作品を「放送開始・公開日がその日以降で最後の TV シリーズ」の年度に入れる（最初の TV より前の作品は最初の年度）。
+    /// 年度の名前は TV シリーズの放送開始の年（「2004年度」）。段の中は放送開始・公開日の順（同じ日なら TV → 映画 → そのほか）。
+    /// 項目の区分（<see cref="SeriesYearItem.Group"/>）は年度順タブの ON/OFF ボタンの単位で、tv / movie（秋映画）/ spring（春映画）/ spinoff（大人向け・ショート・イベント・スピンオフ）。
+    /// </summary>
+    private IReadOnlyList<SeriesYearGroup> BuildYearGroups(
+        IReadOnlyList<TvSeriesRow> tvRows, IReadOnlyList<MovieSeriesRow> movieRows,
+        IReadOnlyList<TvSeriesRow> otonaRows, IReadOnlyList<TvSeriesRow> shortRows,
+        IReadOnlyList<TvSeriesRow> eventRows, IReadOnlyList<TvSeriesRow> spinOffRows)
+    {
+        var bySlug = _ctx.Series.GroupBy(s => s.Slug, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var tvStarts = _ctx.Series.Where(s => string.Equals(s.KindCode, "TV", StringComparison.Ordinal))
+            .OrderBy(s => s.StartDate).ThenBy(s => s.SeriesId).ToList();
+        if (tvStarts.Count == 0) return Array.Empty<SeriesYearGroup>();
+
+        var items = new List<(DateOnly Date, int Order, SeriesYearItem Item)>();
+        void Add(string slug, int order, SeriesYearItem item)
+        {
+            if (bySlug.TryGetValue(slug, out var s)) items.Add((s.StartDate, order, item));
+        }
+        foreach (var r in tvRows) Add(r.Slug, 0, new SeriesYearItem { Group = "tv", Tv = r });
+        foreach (var r in movieRows)
+            Add(r.Slug, 1, new SeriesYearItem { Group = r.SeasonBadgeClass == "movie-badge-spring" ? "spring" : "movie", Movie = r });
+        foreach (var r in otonaRows.Concat(shortRows).Concat(eventRows).Concat(spinOffRows))
+            Add(r.Slug, 2, new SeriesYearItem { Group = "spinoff", Simple = r });
+
+        var groups = new List<SeriesYearGroup>();
+        foreach (var g in items
+            .GroupBy(x => tvStarts.LastOrDefault(t => t.StartDate <= x.Date) ?? tvStarts[0])
+            .OrderBy(g => g.Key.StartDate))
+        {
+            groups.Add(new SeriesYearGroup
+            {
+                YearLabel = $"{g.Key.StartDate.Year}年度",
+                Anchor = $"year-{g.Key.StartDate.Year}",
+                Items = g.OrderBy(x => x.Date).ThenBy(x => x.Order).Select(x => x.Item).ToList()
+            });
+        }
+        return groups;
+    }
+
     /// <summary>
     /// 映画カードの上映時間の表示（本体と、同じ行に続けて添える補足）。
     /// 本体は長編（親の映画だけ）の尺「m分ss秒」。併映のある映画は、補足に「(上映総尺 m分ss秒)」（長編＋全併映）を添える
@@ -782,6 +938,8 @@ public sealed class SeriesGenerator
                     SeasonBadgeLabel = GetSeasonBadgeLabel(m.KindCode),
                     RuntimeLabel = runtimeLabel,
                     RuntimeSubLabel = runtimeSubLabel,
+                    // その映画に出たプリキュア（クレジットの声の出演から）。TV のカードと同じバッジで、略記は作品ごとに 1 行。
+                    PrecureLines = BuildPrecureBadgeLines(GetPrecureRows(m.SeriesId)),
                     // 親映画のメインスタッフサマリ。子作品（MOVIE_SHORT）のスタッフは親カードに混ぜず、
                     // 子作品の行に子作品自身の SERIES-attached クレジットから集計したものを出す。
                     KeyStaffSummary = GetKeyStaffSummary(m.SeriesId),
@@ -796,6 +954,10 @@ public sealed class SeriesGenerator
                             // 子作品単体の尺を親と同じ尺カラム位置に出す。
                             // run_time_seconds 未登録（NULL）の子は空文字でセル空表示。
                             RuntimeLabel = FormatRuntimeSeconds(c.RunTimeSeconds),
+                            // 行の頭の札：併映（COFEATURE）は「併映」、3 本立ての各作品（SEGMENT）は「同時上映」
+                            RelationBadgeLabel = string.Equals(c.RelationToParent, "SEGMENT", StringComparison.Ordinal) ? "同時上映" : "併映",
+                            // 子作品（併映短編）に出たプリキュア（クレジットの声の出演から。親が TV ではないので略記）
+                            PrecureLines = BuildPrecureBadgeLines(GetPrecureRows(c.SeriesId)),
                             // 子作品（併映短編）自身のメインスタッフ。親映画と同じ役職セットで集計する。
                             KeyStaffSummary = GetKeyStaffSummary(c.SeriesId)
                         })
@@ -814,8 +976,12 @@ public sealed class SeriesGenerator
         var eventRows    = BuildSimpleRowsByKind("EVENT");
         var spinOffRows  = BuildSimpleRowsByKind("SPIN-OFF");
 
+        // 年度順タブ：同じ年度（TV シリーズの放送開始〜次の TV シリーズの放送開始の前日）の作品を 1 段にまとめる。
+        var yearGroups = BuildYearGroups(tvRows, movieRows, otonaRows, shortRows, eventRows, spinOffRows);
+
         var content = new SeriesIndexModel
         {
+            YearGroups = yearGroups,
             TvSeries = tvRows,
             MovieSeries = movieRows,
             OtonaSeries = otonaRows,
@@ -1278,14 +1444,48 @@ public sealed class SeriesGenerator
         _page.RenderAndWrite(seriesUrl, "series", "series-detail.sbn", content, layout);
     }
 
+    /// <summary>名義が最初に出た所（話数・クレジット順・サブ順）を、より前なら更新する。</summary>
+    private static void NoteCreditedAlias(Dictionary<int, (int Ep, int Seq, int Sub)> credited, int aliasId, (int Ep, int Seq, int Sub) at)
+    {
+        if (!credited.TryGetValue(aliasId, out var cur) || at.CompareTo(cur) < 0) credited[aliasId] = at;
+    }
+
+    /// <summary>
+    /// メインスタッフの名乗り：その作品のその役職でクレジットされた名義（最初に出た順。作品の途中で改名していれば「 / 」でつなぐ）と、
+    /// サイトでの今の名乗り（表示名義）と違うときの今の名乗り（「上野 ケン (玖遠 らぎ)」の括弧の中。同じなら空）。
+    /// 改名でも名義の使い分けでも添える（同じ人物だと分かるように）。名義が引けなければ今の名乗りだけ。
+    /// </summary>
+    private (string Names, string CurrentNote) CreditedAliasLabel(Dictionary<int, (int Ep, int Seq, int Sub)> credited, int personId, string? fallbackFullName)
+    {
+        string current = _ctx.EntityUrls.PersonDisplayLabel(personId) ?? fallbackFullName ?? "";
+        var names = credited.OrderBy(kv => kv.Value).Select(kv => _ctx.PersonAliasById.TryGetValue(kv.Key, out var a) ? a.GetDisplayName() : null)
+            .Where(n => !string.IsNullOrEmpty(n)).Distinct(StringComparer.Ordinal).ToList();
+        if (names.Count == 0) return (current, "");
+        string creditedNames = string.Join(" / ", names);
+        // クレジットの名義に今の名乗りが含まれていれば括弧は要らない（空白・中黒の違いだけの表記の揺れも同じとみなす）
+        string currentKey = NameKeyIgnoringSeparators(current);
+        if (current.Length == 0 || names.Any(n => NameKeyIgnoringSeparators(n!) == currentKey)) return (creditedNames, "");
+        return (creditedNames, current);
+    }
+
+    /// <summary>空白（半角・全角）と中黒（・／･）を除いた名前（表記の揺れだけの違いを同じとみなすため）。</summary>
+    private static string NameKeyIgnoringSeparators(string name)
+    {
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (var ch in name)
+            if (ch is not (' ' or '　' or '・' or '･')) sb.Append(ch);
+        return sb.ToString();
+    }
+
     /// <summary>
     /// カードに載せるスタッフ 1 名の表記。所属屋号があれば括弧で添える
     /// （サイト本体の主要スタッフ表と同じ「氏名（所属）」の形）。
     /// </summary>
     private static string FormatStaffMember(MainStaffRow member)
-        => string.IsNullOrWhiteSpace(member.AffiliationLabel)
-            ? member.FullName
-            : $"{member.FullName}（{member.AffiliationLabel}）";
+    {
+        string name = member.CurrentNameNote.Length > 0 ? $"{member.FullName} ({member.CurrentNameNote})" : member.FullName;
+        return string.IsNullOrWhiteSpace(member.AffiliationLabel) ? name : $"{name}（{member.AffiliationLabel}）";
+    }
 
     /// <summary>
     /// シリーズ詳細ページの OGP カードを組み立てる。
@@ -1604,6 +1804,8 @@ public sealed class SeriesGenerator
                 int sortCreditSubSeq = int.MaxValue;
                 // 映画系で 1 件でも該当 Involvement が見つかったか（episodeNos に頼らない判定）。
                 bool foundMovieInvolvement = false;
+                // この作品のこの役職でクレジットされた名義と、それぞれが最初に出た所（名乗りは当時の名義で出す）
+                var creditedAliases = new Dictionary<int, (int Ep, int Seq, int Sub)>();
                 foreach (var aid in aliasIds)
                 {
                     if (!_involvementIndex.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
@@ -1617,6 +1819,7 @@ public sealed class SeriesGenerator
                             // 映画は SERIES スコープのみ集計。EpisodeId が非 null の残骸はスキップ。
                             if (inv.EpisodeId is not null) continue;
                             foundMovieInvolvement = true;
+                            NoteCreditedAlias(creditedAliases, aid, (0, inv.CreditSeq, inv.CreditSubSeq));
                             if (0 < sortEpNo
                                 || (0 == sortEpNo && inv.CreditSeq < sortCreditSeq)
                                 || (0 == sortEpNo && inv.CreditSeq == sortCreditSeq && inv.CreditSubSeq < sortCreditSubSeq))
@@ -1630,6 +1833,7 @@ public sealed class SeriesGenerator
                             && epNoByEpId.TryGetValue(eid, out var epNo))
                         {
                             episodeNos.Add(epNo);
+                            NoteCreditedAlias(creditedAliases, aid, (epNo, inv.CreditSeq, inv.CreditSubSeq));
                             // (EpisodeNo, CreditSeq, CreditSubSeq) の辞書順比較で lex min を更新。
                             if (epNo < sortEpNo
                                 || (epNo == sortEpNo && inv.CreditSeq < sortCreditSeq)
@@ -1674,11 +1878,13 @@ public sealed class SeriesGenerator
                         affiliationLabel = nm;
                 }
 
+                var credited = CreditedAliasLabel(creditedAliases, p.PersonId, p.FullName);
                 rows.Add(new MainStaffRow
                 {
                     PersonId = p.PersonId,
-                    // Person.FullName は string? 型のため空文字へフォールバック（NULL 警告の抑制）。
-                    FullName = p.FullName ?? "",
+                    // 名乗りはこの作品でクレジットされた名義（改名した方も当時の名前で出す）。今の名乗りと違えば CurrentNameNote に今の名乗り。
+                    FullName = credited.Names,
+                    CurrentNameNote = credited.CurrentNote,
                     RangeLabel = rangeLabel,
                     AffiliationLabel = affiliationLabel,
                     SortEpNo = sortEpNo,
@@ -1724,6 +1930,8 @@ public sealed class SeriesGenerator
 
     private sealed class SeriesIndexModel
     {
+        /// <summary>年度順タブの段（年度ごとの作品。放送開始・公開日の順）。</summary>
+        public IReadOnlyList<SeriesYearGroup> YearGroups { get; set; } = Array.Empty<SeriesYearGroup>();
         public IReadOnlyList<TvSeriesRow> TvSeries { get; set; } = Array.Empty<TvSeriesRow>();
         /// <summary>映画セクション用：親映画 + ぶら下がる子作品 + シーズンバッジ情報。 映画セクションは親子配置に対応した <see cref="MovieSeriesRow"/> のリストで渡す。</summary>
         public IReadOnlyList<MovieSeriesRow> MovieSeries { get; set; } = Array.Empty<MovieSeriesRow>();
@@ -1739,6 +1947,26 @@ public sealed class SeriesGenerator
         /// <summary>全作品数のうち同時上映の短編（MOVIE_SHORT）の本数。トップの作品数（短編を親映画に含めて数える）と
         /// 食い違って見えないよう、リード文で「（同時上映の短編 N 本を含む）」と添える。</summary>
         public int MovieShortCount { get; set; }
+    }
+
+    /// <summary>年度順タブの 1 段（1 年度ぶんの作品）。</summary>
+    private sealed class SeriesYearGroup
+    {
+        /// <summary>「2004年度」。</summary>
+        public string YearLabel { get; set; } = "";
+        /// <summary>段の id（「year-2004」）。</summary>
+        public string Anchor { get; set; } = "";
+        public IReadOnlyList<SeriesYearItem> Items { get; set; } = Array.Empty<SeriesYearItem>();
+    }
+
+    /// <summary>年度順タブの 1 作品。区分に応じて Tv / Movie / Simple のどれか 1 つが入る。</summary>
+    private sealed class SeriesYearItem
+    {
+        /// <summary>ON/OFF ボタンの単位：tv / movie（秋映画）/ spring（春映画）/ spinoff（大人向け・ショート・イベント・スピンオフ）。</summary>
+        public string Group { get; set; } = "";
+        public TvSeriesRow? Tv { get; set; }
+        public MovieSeriesRow? Movie { get; set; }
+        public TvSeriesRow? Simple { get; set; }
     }
 
     /// <summary>TV シリーズ／スピンオフ一覧の 1 行分。連番付きの表形式で描画される。 <c>Children</c> プロパティは持たない（TV の下に子作品を字下げ表示しないため）。</summary>
@@ -1777,8 +2005,10 @@ public sealed class SeriesGenerator
     private sealed class KeyStaffMember
     {
         public int PersonId { get; set; }
-        /// <summary>表示用人物名（<c>persons.full_name</c>）。</summary>
+        /// <summary>表示用人物名（この作品のこの役職でクレジットされた名義）。</summary>
         public string DisplayName { get; set; } = "";
+        /// <summary>クレジットの名義が今の名乗りと違うときの今の名乗り（括弧で少し小さく添える）。同じなら空。</summary>
+        public string CurrentNameNote { get; set; } = "";
         /// <summary>所属屋号の表示ラベル（当該シリーズ内最頻、<c>company_aliases.name</c> をそのまま使用）。 屋号未指定なら空文字でテンプレ側はカッコ含めて出さない。</summary>
         public string AffiliationLabel { get; set; } = "";
         /// <summary>クレジット順ソートキー第 1：当該シリーズ・役職での最小エピソード番号（テンプレでは未表示）。</summary>
@@ -1805,9 +2035,20 @@ public sealed class SeriesGenerator
         public int? VoiceActorPersonId { get; set; }
         /// <summary>シリーズ一覧プリキュアバッジの地色（<c>#RRGGBB</c>。未設定または不正値は空文字）。</summary>
         public string KeyColor { get; set; } = "";
+        /// <summary>略記（変身後の名前から「キュア」を除いたもの。変身前の名前と CV を出さない）。映画の客演（親の TV シリーズが無い作品は全員）。</summary>
+        public bool Abbreviated { get; set; }
+        /// <summary>略記のとき、映画の公開の時点で最後に所属していた TV シリーズ（略記はこの単位で 1 行にまとめる）。</summary>
+        public int HomeSeriesId { get; set; }
     }
 
     /// <summary>シリーズ一覧 TV サブ行用：プリキュア 1 体分のバッジ表示データ。</summary>
+    /// <summary>映画のカードのプリキュアのバッジの 1 まとまり。略記のまとまりは 1 作品ぶんで、作品の切れ目でだけ改行する。</summary>
+    private sealed class PrecureBadgeLine
+    {
+        public bool Abbreviated { get; set; }
+        public IReadOnlyList<PrecureBadge> Badges { get; set; } = Array.Empty<PrecureBadge>();
+    }
+
     private sealed class PrecureBadge
     {
         /// <summary>キャラクター詳細 <c>/characters/{id}/</c> へのリンク用 ID（プリキュア詳細を兼ねる）。</summary>
@@ -1836,6 +2077,8 @@ public sealed class SeriesGenerator
         public string RuntimeLabel { get; set; } = "";
         /// <summary>上映時間に続けて同じ行に添える補足。併映のある映画の「(上映総尺 m分ss秒)」（長編＋全併映）。無ければ空。</summary>
         public string RuntimeSubLabel { get; set; } = "";
+        /// <summary>その映画に出たプリキュアのバッジ（クレジットの声の出演から）のまとまり。</summary>
+        public IReadOnlyList<PrecureBadgeLine> PrecureLines { get; set; } = Array.Empty<PrecureBadgeLine>();
         /// <summary>親映画にぶら下がる子作品（'MOVIE_SHORT' のみ、seq_in_parent 昇順）。タイトルは子作品の詳細ページへリンクする。</summary>
         public IReadOnlyList<RelatedSeriesRow> Children { get; set; } = Array.Empty<RelatedSeriesRow>();
         /// <summary>
@@ -1856,6 +2099,10 @@ public sealed class SeriesGenerator
         public string RuntimeLabel { get; set; } = "";
         /// <summary>子作品（併映短編）自身のメインスタッフサマリ（映画カードの子作品行に出す）。クレジットが無ければ空。</summary>
         public IReadOnlyList<KeyStaffRoleGroup> KeyStaffSummary { get; set; } = Array.Empty<KeyStaffRoleGroup>();
+        /// <summary>シリーズ一覧の映画カードの子作品行の頭の札（「併映」「同時上映」）。</summary>
+        public string RelationBadgeLabel { get; set; } = "";
+        /// <summary>子作品（併映短編）に出たプリキュアのバッジのまとまり（映画カードの子作品行に出す）。</summary>
+        public IReadOnlyList<PrecureBadgeLine> PrecureLines { get; set; } = Array.Empty<PrecureBadgeLine>();
         /// <summary>親に対する関係種別コード。</summary>
         public string RelationCode { get; set; } = "";
         /// <summary>
@@ -1961,7 +2208,10 @@ public sealed class SeriesGenerator
     private sealed class MainStaffRow
     {
         public int PersonId { get; set; }
+        /// <summary>この作品のこの役職でクレジットされた名義。</summary>
         public string FullName { get; set; } = "";
+        /// <summary>クレジットの名義が今の名乗りと違うときの今の名乗り（括弧で少し小さく添える）。同じなら空。</summary>
+        public string CurrentNameNote { get; set; } = "";
         public string RangeLabel { get; set; } = "";
         /// <summary>所属屋号の表示ラベル（当該シリーズ・役職内最頻、<c>company_aliases.name</c> をそのまま使用）。 屋号未指定なら空文字でテンプレ側はカッコ含めて出さない。</summary>
         public string AffiliationLabel { get; set; } = "";

@@ -2,7 +2,29 @@
 
 <p class="lead">
   初代から最新作まで、TV シリーズ・映画・スピンオフを合わせた全 {{ TotalCount }} 作品{{ if MovieShortCount > 0 }}（同時上映の短編 {{ MovieShortCount }} 本を含む）{{ end }}を、放送・公開順に並べました。歴代プリキュアの“全作品マップ”です。
+  <br><span class="muted">映画の登場プリキュアは、クレジットに名前のあるプリキュアに限っています。</span>
 </p>
+
+{{## ──────── 並べ方のタブ ────────
+     種類順（TV シリーズ・映画・スピンオフなどの区分ごと。今までの並べ方）と年度順（TV シリーズの年度ごとに、
+     その年の TV・映画・スピンオフを 1 段にまとめる）を切り替える。年度順では、区分ごとの ON/OFF ボタンで出す作品を選べる
+     （ルートの data-hide-* 属性を CSS が解決し、作品が 1 つも出ない年度は JS が段ごと隠す）。
+     切り替えの作りはクリエイターの一覧（creators-staff.sbn）と同じインライン JS。カードの中身は種類順と年度順で共用の部品
+     （_series-card-tv.sbn / _series-card-movie.sbn / _series-card-simple.sbn）。 ##}}
+<div class="series-index-root products-tabs" data-active-tab="kind">
+  <div class="tabs" role="tablist" aria-label="シリーズ一覧の並べ方">
+    <button type="button" class="tab-btn is-active" data-tab="kind" role="tab" aria-selected="true" aria-controls="series-tab-panel-kind">種類<span class="tab-sfx">順</span></button>
+    <button type="button" class="tab-btn" data-tab="year" role="tab" aria-selected="false" aria-controls="series-tab-panel-year">年度<span class="tab-sfx">順</span></button>
+  </div>
+  {{## 区分の ON/OFF は年表の「主な方のみ」と同じトグルスイッチ（.rtl-switch）。 ##}}
+  <div class="series-kind-toggles" role="group" aria-label="出す作品の区分">
+    <label class="rtl-switch"><input type="checkbox" data-kind-toggle="tv" checked><span class="rtl-switch-ui" aria-hidden="true"></span>TV シリーズ</label>
+    <label class="rtl-switch"><input type="checkbox" data-kind-toggle="movie" checked><span class="rtl-switch-ui" aria-hidden="true"></span>秋映画</label>
+    <label class="rtl-switch"><input type="checkbox" data-kind-toggle="spring" checked><span class="rtl-switch-ui" aria-hidden="true"></span>春映画</label>
+    <label class="rtl-switch"><input type="checkbox" data-kind-toggle="spinoff" checked><span class="rtl-switch-ui" aria-hidden="true"></span>スピンオフ・イベント</label>
+  </div>
+
+<div class="tab-panel is-active" id="series-tab-panel-kind" data-tab-panel="kind" role="tabpanel">
 
 {{## ──────── 共通カード語彙について ────────
      /series/ のセクション群（TV シリーズ・映画・大人向け・ショート・イベント・スピンオフ）は
@@ -25,34 +47,7 @@
   <ul class="series-card-list series-card-list-tv">
     {{~ for tv in TvSeries ~}}
     <li>
-      <div class="series-card">
-        <a class="bgms-card-link" href="/series/{{ tv.Slug }}/" aria-label="{{ tv.Title | html.escape }}"></a>
-        <div class="series-card-head">
-          <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ tv.Title | html.escape }}</h3>
-          <div class="series-card-meta muted">
-            <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ tv.Period }}</span>{{~ if tv.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ tv.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
-            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ tv.EpisodesLabel }}</span>{{~ if tv.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ tv.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
-          </div>
-        </div>
-        {{~ if (array.size tv.PrecureBadges) > 0 || (array.size tv.KeyStaffSummary) > 0 ~}}
-        <div class="series-card-sub">
-          {{~ if (array.size tv.PrecureBadges) > 0 ~}}
-          <div class="precure-badges-row">
-            {{~ for p in tv.PrecureBadges ~}}
-            <a class="precure-badge" href="{{ character_url p.CharacterId }}"{{~ if p.BackgroundColor != "" ~}} style="background:{{ p.BackgroundColor }};color:{{ p.TextColor }};border-color:{{ p.BorderColor }}"{{~ end ~}}>{{ p.Label | html.escape }}</a>
-            {{~ end ~}}
-          </div>
-          {{~ end ~}}
-          {{~ if (array.size tv.KeyStaffSummary) > 0 ~}}
-          <div class="staff-badges-row">
-            {{~ for g in tv.KeyStaffSummary ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for m in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url m.PersonId }}">{{ m.DisplayName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
-            {{~ end ~}}
-          </div>
-          {{~ end ~}}
-        </div>
-        {{~ end ~}}
-      </div>
+      {{ include '_series-card-tv.sbn' }}
     </li>
     {{~ end ~}}
   </ul>
@@ -71,51 +66,7 @@
   <ul class="series-card-list series-card-list-movie">
     {{~ for m in MovieSeries ~}}
     <li>
-      <div class="series-card">
-        <a class="bgms-card-link" href="/series/{{ m.Slug }}/" aria-label="{{ m.Title | html.escape }}"></a>
-        <div class="series-card-head">
-          <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ m.Title | html.escape }}</h3>
-          <div class="series-card-meta muted">
-            {{~ if m.SeasonBadgeClass != "" ~}}
-            <span class="movie-badge {{ m.SeasonBadgeClass }}">{{ m.SeasonBadgeLabel | html.escape }}</span>
-            {{~ end ~}}
-            <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ m.Period }}</span></span></span>
-            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ m.RuntimeLabel }}{{ if m.RuntimeSubLabel != "" }} <span class="series-card-count-sub muted">{{ m.RuntimeSubLabel }}</span>{{ end }}</span></span></span>
-          </div>
-        </div>
-        {{~ if (array.size m.KeyStaffSummary) > 0 ~}}
-        {{## メインスタッフサマリ（映画カード）。TV カードと同じ staff-badges-row 意匠を流用。
-             バッジ色は CSS の data-role-code group selector で TV 同等役職と共有：
-               プロデューサー = 紫、脚本 = 青、監督 = ピンク、キャラクターデザイン / 作画監督 = 緑、
-               美術監督 = 黄。映画は SERIES-attached クレジットから集計するため
-               「(範囲)」表記は無し。所属屋号は最頻 1 件を併記。 ##}}
-        <div class="series-card-sub">
-          <div class="staff-badges-row">
-            {{~ for g in m.KeyStaffSummary ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url mem.PersonId }}">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
-            {{~ end ~}}
-          </div>
-        </div>
-        {{~ end ~}}
-        {{~ if (array.size m.Children) > 0 ~}}
-        <ul class="series-card-children movie-child-list">
-          {{~ for c in m.Children ~}}
-          <li>
-            <a class="series-card-children-title" href="/series/{{ c.Slug }}/">{{ c.Title | html.escape }}</a>
-            <span class="series-card-children-meta muted">{{ c.RuntimeLabel }}</span>
-            {{~ if (array.size c.KeyStaffSummary) > 0 ~}}
-            {{## 併映短編自身のメインスタッフ。親映画の行と同じ staff-badges-row 意匠。 ##}}
-            <div class="series-card-children-staff staff-badges-row">
-              {{~ for g in c.KeyStaffSummary ~}}
-              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url mem.PersonId }}">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
-              {{~ end ~}}
-            </div>
-            {{~ end ~}}
-          </li>
-          {{~ end ~}}
-        </ul>
-        {{~ end ~}}
-      </div>
+      {{ include '_series-card-movie.sbn' }}
     </li>
     {{~ end ~}}
   </ul>
@@ -138,16 +89,7 @@
   <ul class="series-card-list series-card-list-spinoff">
     {{~ for s in OtonaSeries ~}}
     <li>
-      <div class="series-card">
-        <a class="bgms-card-link" href="/series/{{ s.Slug }}/" aria-label="{{ s.Title | html.escape }}"></a>
-        <div class="series-card-head">
-          <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ s.Title | html.escape }}</h3>
-          <div class="series-card-meta muted">
-            <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ s.Period }}</span>{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
-            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ s.EpisodesLabel }}</span>{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
-          </div>
-        </div>
-      </div>
+      {{ include '_series-card-simple.sbn' }}
     </li>
     {{~ end ~}}
   </ul>
@@ -160,16 +102,7 @@
   <ul class="series-card-list series-card-list-spinoff">
     {{~ for s in ShortSeries ~}}
     <li>
-      <div class="series-card">
-        <a class="bgms-card-link" href="/series/{{ s.Slug }}/" aria-label="{{ s.Title | html.escape }}"></a>
-        <div class="series-card-head">
-          <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ s.Title | html.escape }}</h3>
-          <div class="series-card-meta muted">
-            <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ s.Period }}</span>{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
-            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ s.EpisodesLabel }}</span>{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
-          </div>
-        </div>
-      </div>
+      {{ include '_series-card-simple.sbn' }}
     </li>
     {{~ end ~}}
   </ul>
@@ -182,16 +115,7 @@
   <ul class="series-card-list series-card-list-spinoff">
     {{~ for s in EventSeries ~}}
     <li>
-      <div class="series-card">
-        <a class="bgms-card-link" href="/series/{{ s.Slug }}/" aria-label="{{ s.Title | html.escape }}"></a>
-        <div class="series-card-head">
-          <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ s.Title | html.escape }}</h3>
-          <div class="series-card-meta muted">
-            <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ s.Period }}</span>{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
-            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ s.EpisodesLabel }}</span>{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
-          </div>
-        </div>
-      </div>
+      {{ include '_series-card-simple.sbn' }}
     </li>
     {{~ end ~}}
   </ul>
@@ -204,18 +128,85 @@
   <ul class="series-card-list series-card-list-spinoff">
     {{~ for s in SpinOffSeries ~}}
     <li>
-      <div class="series-card">
-        <a class="bgms-card-link" href="/series/{{ s.Slug }}/" aria-label="{{ s.Title | html.escape }}"></a>
-        <div class="series-card-head">
-          <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ s.Title | html.escape }}</h3>
-          <div class="series-card-meta muted">
-            <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ s.Period }}</span>{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
-            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ s.EpisodesLabel }}</span>{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
-          </div>
-        </div>
-      </div>
+      {{ include '_series-card-simple.sbn' }}
     </li>
     {{~ end ~}}
   </ul>
 </section>
 {{~ end ~}}
+
+</div>
+
+{{## ──────── 年度順 ────────
+     1 年度 1 段。段の見出しは年度、中は放送開始・公開日の順に TV・映画・スピンオフのカードを並べる。
+     年度順では区分が混ざるので、連番は出さずに区分の札（TV / 秋映画 / 春映画 / スピンオフ・イベント）を添える。 ##}}
+<div class="tab-panel" id="series-tab-panel-year" data-tab-panel="year" role="tabpanel" hidden>
+  {{~ for y in YearGroups ~}}
+  <section class="series-year" id="{{ y.Anchor }}">
+    <h2>{{ y.YearLabel }}</h2>
+    <ul class="series-card-list series-year-list">
+      {{~ for it in y.Items ~}}
+      <li data-kind-group="{{ it.Group }}">
+        {{~ if it.Tv ~}}
+        {{~ tv = it.Tv ~}}
+        {{ include '_series-card-tv.sbn' }}
+        {{~ else if it.Movie ~}}
+        {{~ m = it.Movie ~}}
+        {{ include '_series-card-movie.sbn' }}
+        {{~ else if it.Simple ~}}
+        {{~ s = it.Simple ~}}
+        {{ include '_series-card-simple.sbn' }}
+        {{~ end ~}}
+      </li>
+      {{~ end ~}}
+    </ul>
+  </section>
+  {{~ end ~}}
+</div>
+</div>
+
+{{## タブの切り替えと、年度順の区分の ON/OFF（インライン、外部 JS を増やさない）。
+     ON/OFF（トグルスイッチ）はルートの data-hide-{区分} 属性を付け外しするだけで、カードの出し分けは site.css が解決する。
+     作品が 1 つも出なくなった年度は、段ごと hidden にする。 ##}}
+<script>
+(function () {
+  var root = document.querySelector('.series-index-root');
+  if (!root) return;
+
+  var tabs = root.querySelectorAll('.tab-btn');
+  var panels = root.querySelectorAll('.tab-panel');
+  tabs.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-tab');
+      root.setAttribute('data-active-tab', key);
+      tabs.forEach(function (b) {
+        var active = b.getAttribute('data-tab') === key;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach(function (p) {
+        var active = p.getAttribute('data-tab-panel') === key;
+        p.classList.toggle('is-active', active);
+        if (active) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
+      });
+    });
+  });
+
+  function updateYears() {
+    root.querySelectorAll('.series-year').forEach(function (sec) {
+      var any = false;
+      sec.querySelectorAll('li[data-kind-group]').forEach(function (li) {
+        if (!root.hasAttribute('data-hide-' + li.getAttribute('data-kind-group'))) any = true;
+      });
+      if (any) { sec.removeAttribute('hidden'); } else { sec.setAttribute('hidden', ''); }
+    });
+  }
+  root.querySelectorAll('input[data-kind-toggle]').forEach(function (input) {
+    input.addEventListener('change', function () {
+      var group = input.getAttribute('data-kind-toggle');
+      if (input.checked) { root.removeAttribute('data-hide-' + group); } else { root.setAttribute('data-hide-' + group, ''); }
+      updateYears();
+    });
+  });
+})();
+</script>

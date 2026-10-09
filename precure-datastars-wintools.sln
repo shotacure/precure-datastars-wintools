@@ -5,6 +5,8 @@ VisualStudioVersion = 17.14.36408.4
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrecureDataStars.Data", "PrecureDataStars.Data\PrecureDataStars.Data.csproj", "{3C1ED6BF-6794-4166-B8EF-D58C4EB740B0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrecureDataStars.AudioFingerprint", "PrecureDataStars.AudioFingerprint\PrecureDataStars.AudioFingerprint.csproj", "{5A7C1F3E-8D42-4B6A-9E10-2C3D4E5F6A7B}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrecureDataStars.Episodes", "PrecureDataStars.Episodes\PrecureDataStars.Episodes.csproj", "{7BCE751F-B880-468D-8B44-BA0BA0BD4B9D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrecureDataStars.Data.TitleCharStatsJson", "PrecureDataStars.Data.TitleCharStatsJson\PrecureDataStars.Data.TitleCharStatsJson.csproj", "{E92D0EB9-99C3-49FE-8BE3-1FF0AAF247A4}"
@@ -51,6 +53,18 @@ Global
 		{3C1ED6BF-6794-4166-B8EF-D58C4EB740B0}.Release|x64.Build.0 = Release|Any CPU
 		{3C1ED6BF-6794-4166-B8EF-D58C4EB740B0}.Release|x86.ActiveCfg = Release|Any CPU
 		{3C1ED6BF-6794-4166-B8EF-D58C4EB740B0}.Release|x86.Build.0 = Release|Any CPU
+		{5A7C1F3E-8D42-4B6A-9E10-2C3D4E5F6A7B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5A7C1F3E-8D42-4B6A-9E10-2C3D4E5F6A7B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5A7C1F3E-8D42-4B6A-9E10-2C3D4E5F6A7B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{5A7C1F3E-8D42-4B6A-9E10-2C3D4E5F6A7B}.Debug|x64.Build.0 = Debug|Any CPU
+		{5A7C1F3E-8D42-4B6A-9E10-2C3D4E5F6A7B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{5A7C1F3E-8D42-4B6A-9E10-2C3D4E5F6A7B}.Debug|x86.Build.0 = Debug|Any CPU
+		{5A7C1F3E-8D42-4B6A-9E10-2C3D4E5F6A7B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5A7C1F3E-8D42-4B6A-9E10-2C3D4E5F6A7B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5A7C1F3E-8D42-4B6A-9E10-2C3D4E5F6A7B}.Release|x64.ActiveCfg = Release|Any CPU
+		{5A7C1F3E-8D42-4B6A-9E10-2C3D4E5F6A7B}.Release|x64.Build.0 = Release|Any CPU
+		{5A7C1F3E-8D42-4B6A-9E10-2C3D4E5F6A7B}.Release|x86.ActiveCfg = Release|Any CPU
+		{5A7C1F3E-8D42-4B6A-9E10-2C3D4E5F6A7B}.Release|x86.Build.0 = Release|Any CPU
 		{7BCE751F-B880-468D-8B44-BA0BA0BD4B9D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{7BCE751F-B880-468D-8B44-BA0BA0BD4B9D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7BCE751F-B880-468D-8B44-BA0BA0BD4B9D}.Debug|x64.ActiveCfg = Debug|Any CPU

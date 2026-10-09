@@ -18,6 +18,7 @@ precure-datastars-wintools.sln
 ├── PrecureDataStars.Catalog.Common … カタログ GUI 共通（Dialog/Service/CSV Import）
 ├── PrecureDataStars.TemplateRendering … 役職テンプレ DSL 展開エンジン（共通ライブラリ）
 ├── PrecureDataStars.AmazonPaApi … Amazon Creators API クライアントライブラリ
+├── PrecureDataStars.AudioFingerprint … 音の特徴量（ランドマーク指紋）の計算ライブラリ
 │
 ├── PrecureDataStars.Episodes … エピソード管理 GUI（WinForms）
 ├── PrecureDataStars.Catalog … カタログ管理 GUI（WinForms）
@@ -46,6 +47,7 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.Data** | クラスライブラリ | Model（Episode, Series, Product, Disc, Track, Song, SongRecording, BgmCue, BgmSession, VideoChapter 等）・Dapper ベースの Repository・DB 接続ファクトリを提供。全アプリケーションから参照される共通データ層。 |
 | **PrecureDataStars.Data.TitleCharStatsJson** | クラスライブラリ | サブタイトル文字列を NFKC 正規化し、書記素単位でカテゴリ分類した統計 JSON を生成する `TitleCharStatsBuilder`。 |
 | **PrecureDataStars.Catalog.Common** | クラスライブラリ | CDAnalyzer / BDAnalyzer / Catalog GUI で共有するダイアログ（`DiscMatchDialog`・`NewProductDialog`・`ConfirmAttachDialog`）、`DiscRegistrationService`（ディスク照合 → 登録ビジネスロジック）、歌・劇伴の CSV 取り込みサービス（`SongCsvImportService` / `BgmCueCsvImportService`）、最小 CSV リーダー（`SimpleCsvReader`、UTF-8/カンマ区切り、外部依存なし）を提供。 |
+| **PrecureDataStars.AudioFingerprint** | クラスライブラリ | 音の特徴量（ランドマーク指紋）を取る `LandmarkFingerprinter`（WinForms・DB に依存しない純粋な計算）。16 ビット LE の PCM を受けてモノ化 → 11,025 Hz に間引き（窓付き sinc の FIR ローパス）→ 512 点 FFT（ホップ 256 ≒ 23 ms、Hann 窓）のスペクトログラム → 時間・周波数の局所的なピーク（1 秒あたり上限 24）→ 近くの時刻のピークとの対（1 ピークから 3 つまで、時刻差 2〜63 フレーム、周波数差 ±31 ビン）を「ビン 1（8 ビット）・ビンの差（6 ビット）・時刻の差（6 ビット）」の 20 ビットのハッシュにして、出現したフレーム番号と組にする。1 項目 6 バイト（ハッシュ 3 バイト LE ＋ フレーム 3 バイト LE）の時刻順のバイト列（`LandmarkFingerprint.ToBytes` / `ParseEntries`）。あわせて PCM 全体の SHA-256 を返す。取り方の版は `LandmarkFingerprinter.MethodVersion`（定数を変えたら上げる）。CDAnalyzer のほか、音どうしを突き合わせる側のツールからも同じアルゴリズムで使う。 |
 | **PrecureDataStars.TemplateRendering** | クラスライブラリ | 役職テンプレ DSL の展開エンジン。Catalog 側プレビュー（`CreditPreviewRenderer`）と SiteBuilder 側 HTML 生成（`CreditTreeRenderer`）の双方から参照される。`TemplateContext` / `TemplateNode` / `TemplateParser` / `RoleTemplateRenderer` / `Handlers/ThemeSongsHandler` と、`LookupCache` 抽象化のための `ILookupCache` インターフェースを保持。`net9.0`（Forms 非依存）構成。 |
 | **PrecureDataStars.AmazonPaApi** | クラスライブラリ | Amazon Creators API のクライアントライブラリ。OAuth 2.0 トークン管理（v2.x Cognito / v3.x Login with Amazon の自動切替・キャッシュ）・GetItems・SearchItems・App.config からの Credential ID / Secret / Version 読み出しヘルパを提供。Catalog（商品検索ダイアログと一括画像取得）と AmazonSync コンソールから ProjectReference 経由で参照される。 |
 | **PrecureDataStars.Episodes** | WinForms GUI | シリーズ・エピソードの CRUD、MeCab によるかな/ルビ自動生成、パート構成の DnD 編集、URL 自動提案、文字統計表示、偏差値ランキング。 |
@@ -1656,6 +1658,21 @@ series_relation_kinds ──┘    │            │
 **劇伴参照は 2 列複合 FK**: `(bgm_series_id, bgm_m_no_detail) → bgm_cues(series_id, m_no_detail)`。
 
 **CHECK 制約 / トリガー**: INSERT/UPDATE 時に `trg_tracks_bi_fk_consistency` / `trg_tracks_bu_fk_consistency` トリガーが content_kind 一貫性と sub_order ルールを検証する。BEFORE INSERT のチェックには同一 PK の行が既に存在する場合は SIGNAL をスキップするガードがあり、`INSERT ... ON DUPLICATE KEY UPDATE` で BEFORE INSERT が先に発火する際の不当弾きを防ぐ。整合性の最終判定は後続の `trg_tracks_bu_fk_consistency`（BEFORE UPDATE）が保全後の確定値で行う。
+
+#### `track_audio_fingerprints` — CD のトラックの音の特徴量
+
+CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.AudioFingerprint`）と PCM 全体のハッシュ。1 行 = 物理トラック 1 本（`sub_order` は常に 0）。音どうしの突き合わせ（盤どうしの比較や、ほかの音声に含まれる曲の検出）に使う。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `catalog_no` / `track_no` / `sub_order` | PK FK | トラック（→ `tracks`、CASCADE） |
+| `method_version` | TINYINT UNSIGNED | 特徴量の取り方の版（`LandmarkFingerprinter.MethodVersion`）。版が違う指紋どうしは突き合わせない |
+| `sample_rate_hz` / `fft_size` / `hop_samples` | INT / SMALLINT / SMALLINT UNSIGNED | 解析の条件（11025 / 512 / 256）。フレーム番号 × `hop_samples` ÷ `sample_rate_hz` が秒 |
+| `hash_count` | INT UNSIGNED | 指紋の項目数（1 分あたり 4,000 前後） |
+| `duration_ms` | INT UNSIGNED | 読んだ音の長さ（ミリ秒） |
+| `pcm_sha256` | CHAR(64) | 読んだ PCM 全体（16 ビット LE ステレオ）の SHA-256（16 進小文字）。同じ音源かをビット単位で見分ける |
+| `fingerprint` | LONGBLOB | 指紋のバイト列（1 項目 6 バイト：ハッシュ 3 バイト LE ＋ フレーム番号 3 バイト LE。時刻順。1 分あたり 25 KB 前後） |
+| `read_at` | DATETIME | 音を読んだ日時 |
 
 #### `songs` — 歌マスタ（メロディ + アレンジ単位）
 

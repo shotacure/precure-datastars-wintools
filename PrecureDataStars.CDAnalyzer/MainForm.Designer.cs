@@ -21,6 +21,7 @@ namespace PrecureDataStars.CDAnalyzer
         // DB 連携 UI
         private Panel pnlDb;
         private Label lblDbTitle;
+        private CheckBox chkAutoFingerprint;
         private Button btnDbMatch;
         private Button btnFingerprint;
         private Label lblDbStatus;
@@ -48,6 +49,7 @@ namespace PrecureDataStars.CDAnalyzer
             btnCopyTsv = new Button();
             pnlDb = new Panel();
             lblDbTitle = new Label();
+            chkAutoFingerprint = new CheckBox();
             btnDbMatch = new Button();
             btnFingerprint = new Button();
             lblDbStatus = new Label();
@@ -133,6 +135,11 @@ namespace PrecureDataStars.CDAnalyzer
             lblDbTitle.Text = "DB 連携";
             lblDbTitle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
 
+            // オンのときだけ、照合・登録で品番が決まったら続けて音の特徴を記録する（聞かずに始める）
+            chkAutoFingerprint.Location = new Point(150, 5);
+            chkAutoFingerprint.AutoSize = true;
+            chkAutoFingerprint.Text = "照合・登録のあと音の特徴も記録";
+
             btnDbMatch.Location = new Point(8, 32);
             btnDbMatch.Size = new Size(356, 38);
             btnDbMatch.Text = "既存ディスクと照合 / 新規登録...";
@@ -149,6 +156,7 @@ namespace PrecureDataStars.CDAnalyzer
             lblDbStatus.Text = "";
 
             pnlDb.Controls.Add(lblDbTitle);
+            pnlDb.Controls.Add(chkAutoFingerprint);
             pnlDb.Controls.Add(btnDbMatch);
             pnlDb.Controls.Add(btnFingerprint);
             pnlDb.Controls.Add(lblDbStatus);

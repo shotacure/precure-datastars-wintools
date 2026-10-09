@@ -779,13 +779,10 @@ namespace PrecureDataStars.CDAnalyzer
                     return;
                 }
 
-                // 品番が決まったので、続けて音の特徴を記録するか聞く（あとから「音の特徴を記録」でも取れる）
+                // 品番が決まったので、「照合・登録のあと音の特徴も記録」がオンなら続けて音の特徴を記録する
+                // （オフなら何もしない。あとから「音の特徴を記録」でも取れる）
                 UpdateFingerprintButton();
-                if (btnFingerprint.Enabled
-                    && MessageBox.Show(this,
-                        $"ディスク [{_lastRead.Disc.CatalogNo}] の音を読んで、各トラックの音の特徴を記録しますか？\n"
-                        + "（全トラックの音を読むので数分かかります。あとから「音の特徴を記録」でも取れます）",
-                        "音の特徴の記録", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                if (btnFingerprint.Enabled && chkAutoFingerprint.Checked)
                 {
                     await RunFingerprintAsync();
                 }

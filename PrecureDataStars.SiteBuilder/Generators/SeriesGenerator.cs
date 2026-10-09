@@ -684,6 +684,31 @@ public sealed class SeriesGenerator
     /// </list>
     /// シリーズ基本情報の「1 話あたりの尺」セルと、合同盤親映画の子作品行 RuntimeLabel で共通利用する。
     /// </summary>
+    /// <summary>
+    /// 映画カードの上映時間の表示（本体と、同じ行に続けて添える補足）。
+    /// 本体は長編（親の映画だけ）の尺「m分ss秒」。併映のある映画は、補足に「(上映総尺 m分ss秒)」（長編＋全併映）を添える
+    /// （併映の尺が未登録なら補足なし）。
+    /// 子がすべて SEGMENT の 3 本立て（親が自分の本編を持たないまとまり）は、親の上映時間（番組全体）か子の合計を本体にし、補足は出さない。
+    /// </summary>
+    private static (string Main, string Sub) BuildMovieRuntimeLabels(Series parent, IReadOnlyList<Series> children)
+    {
+        string Fmt(int sec) => FormatRuntimeSeconds((uint)sec);
+        if (children.Count == 0)
+            return (FormatRuntimeSeconds(parent.RunTimeSeconds), "");
+
+        bool childrenKnown = children.All(c => c.RunTimeSeconds.HasValue);
+        int childrenSum = childrenKnown ? children.Sum(c => (int)c.RunTimeSeconds!.Value) : 0;
+        bool umbrella = children.All(c => string.Equals(c.RelationToParent, "SEGMENT", StringComparison.Ordinal));
+        if (umbrella)
+        {
+            int? total = parent.RunTimeSeconds is ushort whole ? (int)whole : childrenKnown ? childrenSum : null;
+            return (total is int t ? Fmt(t) : "", "");
+        }
+        if (parent.RunTimeSeconds is not ushort main) return ("", "");
+        if (!childrenKnown) return (Fmt((int)main), "");
+        return (Fmt((int)main), $"(上映総尺 {Fmt((int)main + childrenSum)})");
+    }
+
     private static string FormatRuntimeSeconds(uint? sec)
     {
         if (!sec.HasValue || sec.Value == 0) return "";
@@ -744,18 +769,9 @@ public sealed class SeriesGenerator
                     ? kids
                     : new List<Series>();
 
-                // 親 + 全 子（MOVIE_SHORT）の run_time_seconds 合計を「m分ss秒」で表示する。
-                string runtimeLabel = "";
-                bool anyNull = !m.RunTimeSeconds.HasValue
-                    || children.Any(c => !c.RunTimeSeconds.HasValue);
-                if (!anyNull)
-                {
-                    int totalSec = (int)m.RunTimeSeconds!.Value
-                        + children.Sum(c => (int)c.RunTimeSeconds!.Value);
-                    int min = totalSec / 60;
-                    int sec = totalSec % 60;
-                    runtimeLabel = $"{min}分{sec}秒";
-                }
+                // 上映時間。長編（親の映画だけ）の尺を出し、併映のある映画は続けて「(上映総尺 …)」（長編＋全併映。どれかが未登録なら出さない）を添える。
+                // 子がすべて SEGMENT の 3 本立ては、親に入れた上映時間（番組全体）か子の合計を尺として出す。
+                var (runtimeLabel, runtimeSubLabel) = BuildMovieRuntimeLabels(m, children);
 
                 return new MovieSeriesRow
                 {
@@ -765,6 +781,7 @@ public sealed class SeriesGenerator
                     SeasonBadgeClass = GetSeasonBadgeClass(m.KindCode),
                     SeasonBadgeLabel = GetSeasonBadgeLabel(m.KindCode),
                     RuntimeLabel = runtimeLabel,
+                    RuntimeSubLabel = runtimeSubLabel,
                     // 親映画のメインスタッフサマリ。子作品（MOVIE_SHORT）のスタッフは親カードに混ぜず、
                     // 子作品の行に子作品自身の SERIES-attached クレジットから集計したものを出す。
                     KeyStaffSummary = GetKeyStaffSummary(m.SeriesId),
@@ -1815,8 +1832,10 @@ public sealed class SeriesGenerator
         public string SeasonBadgeClass { get; set; } = "";
         /// <summary>シーズンバッジに表示するラベル文字列（「秋映画」「春映画」）。</summary>
         public string SeasonBadgeLabel { get; set; } = "";
-        /// <summary>親 + 子（MOVIE_SHORT）合計の上映時間ラベル（「m分ss秒」形式）。</summary>
+        /// <summary>上映時間の表示。長編（親の映画だけ）の尺「m分ss秒」。3 本立ては番組全体の尺。</summary>
         public string RuntimeLabel { get; set; } = "";
+        /// <summary>上映時間に続けて同じ行に添える補足。併映のある映画の「(上映総尺 m分ss秒)」（長編＋全併映）。無ければ空。</summary>
+        public string RuntimeSubLabel { get; set; } = "";
         /// <summary>親映画にぶら下がる子作品（'MOVIE_SHORT' のみ、seq_in_parent 昇順）。タイトルは子作品の詳細ページへリンクする。</summary>
         public IReadOnlyList<RelatedSeriesRow> Children { get; set; } = Array.Empty<RelatedSeriesRow>();
         /// <summary>

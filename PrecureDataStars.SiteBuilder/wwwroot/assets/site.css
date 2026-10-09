@@ -581,6 +581,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
      本体テキストはこの枠の左端から始まる（枠の右側は件数の押し出し用余白）。 */
   min-width: 17em;
 }
+/* 映画は公開日 1 つだけなので、枠は「2008年11月30日」（最長想定）が収まる幅にして尺を日付の近くに置く
+   （映画のカードどうしでは尺の開始位置がそろう）。 */
+.series-card-list-movie .series-card-period {
+  min-width: 8.5em;
+}
 .series-card-count {
   /* 件数（全 N 話 / 尺）。期間枠のすぐ右に並ぶ。 */
   font-family: var(--font-num);
@@ -597,6 +602,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .series-card-period-main,
 .series-card-count-main {
+  white-space: nowrap;
+}
+/* 併映のある映画の「(上映総尺 m分ss秒)」。長編の尺に続けて同じ行に小さく添える。 */
+.series-card-count-sub {
+  font-size: 0.85em;
   white-space: nowrap;
 }
 /* 「（見込）」注記。本体直下に小さく出す。stack の中央寄せ規律で本体幅中央に収まる。 */
@@ -676,9 +686,12 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   color: var(--muted);
   flex: 0 0 auto;
 }
+/* 併映の題はスタッフの行より一回り大きく太くして、作品名として読めるようにする。 */
 .series-card-children-title {
   min-width: 0;
   overflow-wrap: anywhere;
+  font-size: 1.14em;
+  font-weight: 600;
 }
 a.series-card-children-title {
   pointer-events: auto;

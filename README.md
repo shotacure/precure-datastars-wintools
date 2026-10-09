@@ -47,7 +47,7 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.Data** | クラスライブラリ | Model（Episode, Series, Product, Disc, Track, Song, SongRecording, BgmCue, BgmSession, VideoChapter 等）・Dapper ベースの Repository・DB 接続ファクトリを提供。全アプリケーションから参照される共通データ層。 |
 | **PrecureDataStars.Data.TitleCharStatsJson** | クラスライブラリ | サブタイトル文字列を NFKC 正規化し、書記素単位でカテゴリ分類した統計 JSON を生成する `TitleCharStatsBuilder`。 |
 | **PrecureDataStars.Catalog.Common** | クラスライブラリ | CDAnalyzer / BDAnalyzer / Catalog GUI で共有するダイアログ（`DiscMatchDialog`・`NewProductDialog`・`ConfirmAttachDialog`）、`DiscRegistrationService`（ディスク照合 → 登録ビジネスロジック）、歌・劇伴の CSV 取り込みサービス（`SongCsvImportService` / `BgmCueCsvImportService`）、最小 CSV リーダー（`SimpleCsvReader`、UTF-8/カンマ区切り、外部依存なし）を提供。 |
-| **PrecureDataStars.AudioFingerprint** | クラスライブラリ | 音の特徴量（ランドマーク指紋）を取る `LandmarkFingerprinter`（WinForms・DB に依存しない純粋な計算）。16 ビット LE の PCM を受けてモノ化 → 11,025 Hz に間引き（窓付き sinc の FIR ローパス）→ 512 点 FFT（ホップ 256 ≒ 23 ms、Hann 窓）のスペクトログラム → 時間・周波数の局所的なピーク（1 秒あたり上限 24）→ 近くの時刻のピークとの対（1 ピークから 3 つまで、時刻差 2〜63 フレーム、周波数差 ±31 ビン）を「ビン 1（8 ビット）・ビンの差（6 ビット）・時刻の差（6 ビット）」の 20 ビットのハッシュにして、出現したフレーム番号と組にする。1 項目 6 バイト（ハッシュ 3 バイト LE ＋ フレーム 3 バイト LE）の時刻順のバイト列（`LandmarkFingerprint.ToBytes` / `ParseEntries`）。あわせて PCM 全体の SHA-256 を返す。取り方の版は `LandmarkFingerprinter.MethodVersion`（定数を変えたら上げる）。CDAnalyzer のほか、音どうしを突き合わせる側のツールからも同じアルゴリズムで使う。 |
+| **PrecureDataStars.AudioFingerprint** | クラスライブラリ | 音の特徴量（ランドマーク指紋）を取る `LandmarkFingerprinter`（WinForms・DB に依存しない純粋な計算）。16 ビット LE の PCM を受けてモノ化 → 11,025 Hz に間引き（窓付き sinc の FIR ローパス）→ 512 点 FFT（ホップ 256 ≒ 23 ms、Hann 窓）のスペクトログラム → 時間・周波数の局所的なピーク（1 秒あたり上限 24）→ 近くの時刻のピークとの対（1 ピークから 3 つまで、時刻差 2〜63 フレーム、周波数差 ±31 ビン）を「ビン 1（8 ビット）・ビンの差（6 ビット）・時刻の差（6 ビット）」の 20 ビットのハッシュにして、出現したフレーム番号と組にする。1 項目 6 バイト（ハッシュ 3 バイト LE ＋ フレーム 3 バイト LE）の時刻順のバイト列（`LandmarkFingerprint.ToBytes` / `ParseEntries`）。あわせて PCM 全体の SHA-256 を返す。取り方の版は `LandmarkFingerprinter.MethodVersion`（定数を変えたら上げる）。CDAnalyzer が使う。 |
 | **PrecureDataStars.TemplateRendering** | クラスライブラリ | 役職テンプレ DSL の展開エンジン。Catalog 側プレビュー（`CreditPreviewRenderer`）と SiteBuilder 側 HTML 生成（`CreditTreeRenderer`）の双方から参照される。`TemplateContext` / `TemplateNode` / `TemplateParser` / `RoleTemplateRenderer` / `Handlers/ThemeSongsHandler` と、`LookupCache` 抽象化のための `ILookupCache` インターフェースを保持。`net9.0`（Forms 非依存）構成。 |
 | **PrecureDataStars.AmazonPaApi** | クラスライブラリ | Amazon Creators API のクライアントライブラリ。OAuth 2.0 トークン管理（v2.x Cognito / v3.x Login with Amazon の自動切替・キャッシュ）・GetItems・SearchItems・App.config からの Credential ID / Secret / Version 読み出しヘルパを提供。Catalog（商品検索ダイアログと一括画像取得）と AmazonSync コンソールから ProjectReference 経由で参照される。 |
 | **PrecureDataStars.Episodes** | WinForms GUI | シリーズ・エピソードの CRUD、MeCab によるかな/ルビ自動生成、パート構成の DnD 編集、URL 自動提案、文字統計表示、偏差値ランキング。 |
@@ -1662,7 +1662,7 @@ series_relation_kinds ──┘    │            │
 
 #### `track_audio_fingerprints` — CD のトラックの音の特徴量
 
-CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.AudioFingerprint`）と PCM 全体のハッシュ。1 行 = 物理トラック 1 本（`sub_order` は常に 0）。音どうしの突き合わせ（盤どうしの比較や、ほかの音声に含まれる曲の検出）に使う。
+CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.AudioFingerprint`）と PCM 全体のハッシュ。1 行 = 物理トラック 1 本（`sub_order` は常に 0）。盤どうしの比較（同じ録音か・ミックス違いか・編集違いか）に使う。
 
 | 列名 | 型 | 説明 |
 |---|---|---|

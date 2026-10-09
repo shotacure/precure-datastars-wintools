@@ -271,6 +271,11 @@ dotnet run --project PrecureDataStars.TitleCharStatsRefresh -- --all            
    - `title` / `part_type` / `notes` は NULL のまま登録され、Catalog GUI 側で手動補完
    - フォルダ全走査モードでは `chapter_no` はディスク全体で通し番号、`playlist_file` にはタイトル識別子（DVD VMGI モードでは `Title_01` 等、Per-VTS モードでは `VTS_02` 等、Blu-ray は MPLS ファイル名）
    - `start_time_ms` はタイトル単位の相対時刻（各タイトルの先頭 = 0ms）
+4. **Blu-ray の情報の記録（bd_*。品番の登録は要らない）**：`BDMV/PLAYLIST` 配下の MPLS を指定して読んだときは、あわせて BDMV の管理ファイル（`CERTIFICATE/id.bdmv`・`index.bdmv`・`MovieObject.bdmv`・`PLAYLIST/*.mpls`・`CLIPINF/*.clpi`・`META/DL/bdmt_*.xml`・`AUXDATA/sound.bdmv`。いずれも暗号化されていない）から読めるものを片っ端から読み（`BdmvStructureReader`）、ディスク ID を鍵にした `bd_*` テーブル群（下記「Blu-ray の情報」）へ記録する。流れは自動で、読み取り → 作品の自動判定と話・パートの当て → 要約の確認 1 回（OK / キャンセル）→ 記録。記録済みの盤は当て方・作品・品番を引き継いで更新する
+   - **作品の自動判定と話・パートの当て**（`EpisodeLinkMatcher`）：全 TV 作品について、各プレイリストのチャプターの尺の並びを、その作品の各話のパートの円盤尺（`episode_parts.disc_length` を持つパートを `episode_seq` 順に並べたもの）の並びと突き合わせ、当たった話の数がいちばん多い作品を採る。1 つのプレイリストに複数の話が続けて入っている（全話連続）ときは先頭から順に話を当て、次に探す話は直前に当てた話の次の話数を優先する（当たった話が 1 つなら EPISODE、2 つ以上なら PLAY_ALL）。パート列の前後に余ったチャプターは余白（BLANK）、どの話にも合わないプレイリストは特典などの候補。同じ話は 2 つのプレイリストに当てず、複数の話が当たったときは「候補 N 話（要確認）」と添える
+   - **尺の比べ方**：チャプターの尺は Blu-ray の生の値をそのまま使う。話の最後のチャプター（ユニットの末尾）には 1 秒の余白が付いているので、話の最後のパートだけ DB の円盤尺 + 1 秒を期待し、ほかは円盤尺そのままと比べて ±1 秒を許す（`EpisodeLinkMatcher.ExpectedMs` / `IsWithinTolerance`）。パートの尺は DB（`episode_parts.disc_length`）を正とし、`episode_parts` は書き換えない
+   - **手直し**：「話とパートを当てる...」で作品を選び直し、表で種別・話数・パート順を直せる（パート名には最後のパートに「＋余白 1 秒」と添え、チャプター尺との差が 1 秒を超えると赤）。差が 1 秒を超えるパートは「円盤尺の再計測の候補」として件数を出し、OK のときにも一覧で知らせる。直したら「Blu-ray の情報を記録」で記録し直す（確認 1 回）。一覧の「話 / パート」列に当て方が出る
+   - **品番との結びつき**：「既存ディスクと照合 / 新規登録...」で盤に反映・登録したとき、`bd_discs.catalog_no` にその品番を入れる（未記録なら記録もする）。品番はディスクのデータには無い
 
 ##### Blu-ray PLAYLIST フォルダ全走査の仕様
 
@@ -1847,6 +1852,26 @@ Blu-ray / DVD の物理チャプター情報を格納する表。
 | `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
 
 **インデックス**: `ix_video_chapters_part_type (part_type)`
+
+#### `bd_*` — Blu-ray の情報（ディスク ID が鍵）
+
+Blu-ray の BDMV 管理ファイル（暗号化されていない範囲）から読めるものを片っ端から貯める表。鍵は `CERTIFICATE/id.bdmv` のディスク ID（16 バイトの 16 進。無い盤や 0 で埋まっている盤は `index.bdmv`・`MovieObject.bdmv`・全 `.mpls` の SHA-256 の先頭 16 バイトで代用し `disc_id_source = HASH`）で、商品・盤の登録を前提にしない。品番との結びつきは `bd_discs.catalog_no`（→ `discs`、任意）。BDAnalyzer が盤単位で「全削除 → 置換」で投入し、`bd_discs` を消すと子はすべて消える（上記「B. BD/DVD の登録」4）。時刻はミリ秒、コード値は規格のまま。
+
+| テーブル | キー | 主な列 |
+|---|---|---|
+| `bd_discs` | `disc_id` | `disc_id_source`（ID_BDMV / HASH）・`org_id`・`volume_label`・`bdmt_name` / `bdmt_language` / `bdmt_thumbnail_count`（`META/DL/bdmt_*.xml`。日本語を優先）・`index_video_format` / `index_frame_rate`・`first_playback_kind` / `top_menu_kind`（NONE / HDMV / BDJ）・`title_count` / `playlist_count` / `clip_count` / `m2ts_total_bytes`・`has_aacs`・`has_bdj` / `bdjo_count` / `jar_count`・`sound_effect_count`（`AUXDATA/sound.bdmv`）・`series_id`（当てた作品 → `series`）・`catalog_no`・`first_read_at` / `last_read_at` |
+| `bd_titles` | `disc_id`, `title_no`（0=最初の再生、65535=トップメニュー、1〜） | `object_kind`（HDMV / BDJ）・`access_type`・`playback_type`・`mobj_no`・`bdjo_file`・`playlist_file`（ムービーオブジェクトの最初の PlayPL 系の命令が再生するプレイリスト） |
+| `bd_movie_objects` | `disc_id`, `mobj_no` | `resume_intention`・`menu_call_mask`・`title_search_mask`・`command_count`・`playlist_file` |
+| `bd_movie_object_commands` | `disc_id`, `mobj_no`, `cmd_seq` | `opcode_hex`（命令 4 バイトの 16 進）・`dst_operand`・`src_operand`。命令は解かずに生のまま持つ（PlayPL 系の判定だけ：1 バイト目は上位から「オペランド数 3 ビット・グループ 2 ビット＝0〔分岐〕・副グループ 3 ビット＝2〔再生〕」、2 バイト目の下位 4 ビット≦2〔PlayPL / PlayPLatPlayItem / PlayPLatMark〕。例：PlayPL = `22800000`、JumpTitle = `21810000`） |
+| `bd_playlists` | `disc_id`, `playlist_file`（`00000.mpls`） | `duration_ms`（PlayItem の in/out の合計）・`play_item_count`・`sub_path_count`・`mark_count`・`playback_type`（1=連続、2=ランダム、3=シャッフル）・`uo_mask`（操作禁止マスク 64 ビット）・`playlist_kind`（EPISODE / PLAY_ALL / BONUS / MENU / OTHER。NULL=未判定）・`episode_id`（本編 1 話のとき） |
+| `bd_play_items` | `disc_id`, `playlist_file`, `item_seq` | `clip_file`（`00001.m2ts`）・`codec_id`・`in_time_ms` / `out_time_ms`（クリップ内の再生区間）・`playlist_offset_ms`（プレイリスト時間軸での開始位置）・`connection_condition`（1=通常、5/6=シームレス）・`stc_id` |
+| `bd_playlist_marks` | `disc_id`, `playlist_file`, `mark_seq` | `mark_type`（1=Entry〔チャプター〕、2=Link）・`play_item_ref`・`time_ms`（その PlayItem のクリップ内の時刻）・`entry_es_pid`・`duration_ms`。全マークの生データ |
+| `bd_chapters` | `disc_id`, `playlist_file`, `chapter_no` | `start_time_ms` / `duration_ms`（Entry マークで区切った生の区間。プレイリスト時間軸。話の最後のチャプターには 1 秒の余白が付く）・`chapter_kind`（EPISODE_PART / BLANK / BONUS / OTHER。NULL=未判定）・`episode_id` / `episode_seq`（当てた話のパート → `episode_parts`。削除時 SET NULL） |
+| `bd_sub_paths` | `disc_id`, `playlist_file`, `sub_path_seq` | `sub_path_type`・`is_repeat`・`sub_play_item_count`・`first_clip_file` |
+| `bd_clips` | `disc_id`, `clip_file` | `presentation_start_ms` / `presentation_end_ms`（最初・最後の STC シーケンスの提示時刻）・`ts_recording_rate`（バイト/秒）・`source_packets`（192 バイト単位）・`application_type`・`clip_stream_type`・`file_size_bytes`（`STREAM/xxxxx.m2ts` の大きさ。中身は暗号化されていて読まない） |
+| `bd_clip_streams` | `disc_id`, `clip_file`, `stream_pid` | `stream_kind`（VIDEO / AUDIO / PG / IG / TEXT / OTHER）・`coding_type`（0x1B=H.264、0x02=MPEG-2、0x80=LPCM、0x81=AC-3、0x82=DTS、0x90=PG 字幕、0x91=IG、0x92=テキスト字幕 …）・`video_format`（1=480i、2=576i、3=480p、4=1080i、5=720p、6=1080p、7=576p）・`frame_rate`（1=23.976、2=24、3=25、4=29.97、6=50、7=59.94）・`audio_presentation`（1=モノラル、3=ステレオ、6=マルチチャンネル、12=ステレオ＋マルチ）・`sampling_rate`（1=48 kHz、4=96 kHz、5=192 kHz、12=48/192 kHz、14=48/96 kHz）・`language`（ISO 639-2） |
+
+PlayItem が参照するのに CLIPINF の無いクリップは、`bd_clips` に属性が空の行を立てて外部キーを満たす。同じ PID が複数のプログラムに出るときは 1 行だけ持つ。`CLIPINF` の EP マップ（1 クリップで数千〜数万行）と `BACKUP/` は記録しない。`.m2ts` の中身（映像・音声）は暗号化されていて読まない。
 
 ---
 

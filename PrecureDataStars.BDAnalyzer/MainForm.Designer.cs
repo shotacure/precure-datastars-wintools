@@ -15,6 +15,9 @@ namespace PrecureDataStars.BDAnalyzer
         private Button btnLoadDefault = null!;
         // DB 連携パネル
         private Button btnDbMatch = null!;
+        private Button btnEpisodeLink = null!;
+        private Button btnBdSave = null!;
+        private ColumnHeader colLink = null!;
         private Label lblDbStatus = null!;
 
         private ListView listView = null!;
@@ -40,12 +43,15 @@ namespace PrecureDataStars.BDAnalyzer
             btnCopyTsv = new Button();
             btnLoadDefault = new Button();
             btnDbMatch = new Button();
+            btnEpisodeLink = new Button();
+            btnBdSave = new Button();
             lblDbStatus = new Label();
             listView = new ListView();
             colIdx = new ColumnHeader();
             colLen = new ColumnHeader();
             colAccum = new ColumnHeader();
             colSec = new ColumnHeader();
+            colLink = new ColumnHeader();
             panelTop.SuspendLayout();
             panelRight.SuspendLayout();
             SuspendLayout();
@@ -59,7 +65,7 @@ namespace PrecureDataStars.BDAnalyzer
             panelTop.Margin = new Padding(3, 4, 3, 4);
             panelTop.Name = "panelTop";
             panelTop.Padding = new Padding(9, 11, 9, 11);
-            panelTop.Size = new Size(1029, 107);
+            panelTop.Size = new Size(1029, 147);
             panelTop.TabIndex = 0;
             // 
             // lblInfo
@@ -77,13 +83,15 @@ namespace PrecureDataStars.BDAnalyzer
             panelRight.Controls.Add(btnLoadDefault);
             // DB 連携ボタンと状態ラベルを同じ右パネルに追加
             panelRight.Controls.Add(btnDbMatch);
+            panelRight.Controls.Add(btnEpisodeLink);
+            panelRight.Controls.Add(btnBdSave);
             panelRight.Controls.Add(lblDbStatus);
             panelRight.Dock = DockStyle.Right;
             panelRight.Location = new Point(444, 11);
             panelRight.Margin = new Padding(3, 4, 3, 4);
             panelRight.Name = "panelRight";
             panelRight.Padding = new Padding(9, 11, 9, 11);
-            panelRight.Size = new Size(576, 85);
+            panelRight.Size = new Size(576, 125);
             panelRight.TabIndex = 1;
             // 
             // btnCopyTsv
@@ -115,6 +123,28 @@ namespace PrecureDataStars.BDAnalyzer
             btnDbMatch.TabIndex = 3;
             btnDbMatch.Text = "既存ディスクと照合 / 新規登録...";
             btnDbMatch.UseVisualStyleBackColor = true;
+            //
+            // btnEpisodeLink（話とパートを当てる。Blu-ray の読み取り後に有効）
+            //
+            btnEpisodeLink.Location = new Point(12, 84);
+            btnEpisodeLink.Margin = new Padding(3, 7, 3, 4);
+            btnEpisodeLink.Name = "btnEpisodeLink";
+            btnEpisodeLink.Size = new Size(250, 31);
+            btnEpisodeLink.TabIndex = 5;
+            btnEpisodeLink.Text = "話とパートを当てる...";
+            btnEpisodeLink.UseVisualStyleBackColor = true;
+            btnEpisodeLink.Enabled = false;
+            //
+            // btnBdSave（Blu-ray の情報を bd_* に記録。読み取り直後に自動で記録するが、当て方を直したあとに押し直す）
+            //
+            btnBdSave.Location = new Point(269, 84);
+            btnBdSave.Margin = new Padding(3, 7, 3, 4);
+            btnBdSave.Name = "btnBdSave";
+            btnBdSave.Size = new Size(250, 31);
+            btnBdSave.TabIndex = 6;
+            btnBdSave.Text = "Blu-ray の情報を記録";
+            btnBdSave.UseVisualStyleBackColor = true;
+            btnBdSave.Enabled = false;
             // 
             // lblDbStatus
             // 
@@ -127,12 +157,12 @@ namespace PrecureDataStars.BDAnalyzer
             // 
             // listView
             // 
-            listView.Columns.AddRange(new ColumnHeader[] { colIdx, colLen, colAccum, colSec });
+            listView.Columns.AddRange(new ColumnHeader[] { colIdx, colLen, colAccum, colSec, colLink });
             listView.Dock = DockStyle.Fill;
             listView.FullRowSelect = true;
             listView.GridLines = true;
             listView.HeaderStyle = ColumnHeaderStyle.Nonclickable;
-            listView.Location = new Point(0, 107);
+            listView.Location = new Point(0, 147);
             listView.Margin = new Padding(3, 4, 3, 4);
             listView.Name = "listView";
             listView.ShowGroups = false;
@@ -161,6 +191,11 @@ namespace PrecureDataStars.BDAnalyzer
             colSec.Text = "Seconds";
             colSec.TextAlign = HorizontalAlignment.Right;
             colSec.Width = 140;
+            //
+            // colLink（話とパートを当てた結果）
+            //
+            colLink.Text = "話 / パート";
+            colLink.Width = 160;
             // 
             // MainForm
             // 

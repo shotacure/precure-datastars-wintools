@@ -45,8 +45,10 @@ namespace PrecureDataStars.CDAnalyzer
                 var seriesRepo = new SeriesRepository(factory);
                 // 商品社名マスタ（NewProductDialog の既定社取得用）
                 var productCompaniesRepo = new ProductCompaniesRepository(factory);
+                // トラックの音の特徴量（指紋）
+                var fingerprintsRepo = new TrackAudioFingerprintsRepository(factory);
                 var service = new DiscRegistrationService(discsRepo, productsRepo, tracksRepo);
-                form = new MainForm(service, discsRepo, productsRepo, tracksRepo, productKindsRepo, seriesRepo, productCompaniesRepo);
+                form = new MainForm(service, discsRepo, productsRepo, tracksRepo, productKindsRepo, seriesRepo, productCompaniesRepo, fingerprintsRepo);
             }
 
             Application.Run(form);

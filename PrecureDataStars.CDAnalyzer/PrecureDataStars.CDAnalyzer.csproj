@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\PrecureDataStars.Data\PrecureDataStars.Data.csproj" />
     <ProjectReference Include="..\PrecureDataStars.Catalog.Common\PrecureDataStars.Catalog.Common.csproj" />
+    <ProjectReference Include="..\PrecureDataStars.AudioFingerprint\PrecureDataStars.AudioFingerprint.csproj" />
   </ItemGroup>
 
   <ItemGroup>

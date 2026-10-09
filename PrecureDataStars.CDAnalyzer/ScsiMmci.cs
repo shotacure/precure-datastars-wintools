@@ -336,6 +336,56 @@ namespace PrecureDataStars.CDAnalyzer
             return list;
         }
 
+        /// <summary>CD-DA の 1 セクタの音のバイト数（16 ビット LE ステレオ 588 サンプル）。</summary>
+        public const int CdAudioSectorBytes = 2352;
+
+        /// <summary>READ CD (0xBE) で 1 回に読むセクタ数の上限。パススルーの転送上限（多くは 64 KB）に収める。</summary>
+        public const int CdAudioMaxSectorsPerRead = 26;
+
+        /// <summary>
+        /// READ CD (0xBE) で CD-DA の音（ユーザーデータ 2352 バイト／セクタ）を <paramref name="lba"/> から
+        /// <paramref name="sectors"/> セクタぶん <paramref name="data"/> の先頭へ読む。
+        /// 転送量がドライブ側の上限を超えて失敗したときはセクタ数を半分にして読み直し、実際に読めたセクタ数を返す。
+        /// </summary>
+        public static int ReadCdAudio(SafeFileHandle h, int lba, int sectors, Span<byte> data)
+        {
+            int n = Math.Max(1, Math.Min(sectors, data.Length / CdAudioSectorBytes));
+            while (true)
+            {
+                // READ CD の CDB 構成（MMC 仕様）:
+                //   byte0    : オペコード 0xBE
+                //   byte1    : bit2-4 = Expected Sector Type（001 = CD-DA）
+                //   byte2-5  : 開始 LBA（ビッグエンディアン）
+                //   byte6-8  : 転送セクタ数（ビッグエンディアン）
+                //   byte9    : bit4 = User Data（CD-DA では 2352 バイトの音そのもの）
+                //   byte10   : サブチャネルは取らない
+                var cdb = new byte[12];
+                cdb[0] = 0xBE;
+                cdb[1] = 0x04;
+                cdb[2] = (byte)((lba >> 24) & 0xFF);
+                cdb[3] = (byte)((lba >> 16) & 0xFF);
+                cdb[4] = (byte)((lba >> 8) & 0xFF);
+                cdb[5] = (byte)(lba & 0xFF);
+                cdb[6] = (byte)((n >> 16) & 0xFF);
+                cdb[7] = (byte)((n >> 8) & 0xFF);
+                cdb[8] = (byte)(n & 0xFF);
+                cdb[9] = 0x10;
+
+                bool ok = false;
+                try
+                {
+                    ok = ScsiCommand(h, cdb, data.Slice(0, n * CdAudioSectorBytes), dataIn: true, timeoutSeconds: 30, out byte status) && status == 0;
+                }
+                catch (Win32Exception) when (n > 1)
+                {
+                    // 転送量の上限超えなどで IOCTL 自体が失敗。セクタ数を減らして読み直す
+                }
+                if (ok) return n;
+                if (n == 1) throw new IOException($"READ CD failed at LBA {lba}.");
+                n /= 2;
+            }
+        }
+
         /// <summary>READ SUB-CHANNEL (0x42) DataFormat=0x02 を発行し、メディアカタログ番号 (MCN/EAN) を取得する。</summary>
         public static string? ReadMediaCatalogNumber(SafeFileHandle h)
         {

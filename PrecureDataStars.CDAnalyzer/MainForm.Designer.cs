@@ -22,6 +22,7 @@ namespace PrecureDataStars.CDAnalyzer
         private Panel pnlDb;
         private Label lblDbTitle;
         private Button btnDbMatch;
+        private Button btnFingerprint;
         private Label lblDbStatus;
 
         protected override void Dispose(bool disposing)
@@ -48,6 +49,7 @@ namespace PrecureDataStars.CDAnalyzer
             pnlDb = new Panel();
             lblDbTitle = new Label();
             btnDbMatch = new Button();
+            btnFingerprint = new Button();
             lblDbStatus = new Label();
 
             SuspendLayout();
@@ -136,12 +138,19 @@ namespace PrecureDataStars.CDAnalyzer
             btnDbMatch.Text = "既存ディスクと照合 / 新規登録...";
             btnDbMatch.Click += btnDbMatch_Click;
 
-            lblDbStatus.Location = new Point(8, 80);
-            lblDbStatus.Size = new Size(356, 70);
+            // 品番の決まった盤の音を読んで特徴量（指紋）を記録する。実行中は「中止」に切り替わる
+            btnFingerprint.Location = new Point(8, 74);
+            btnFingerprint.Size = new Size(356, 30);
+            btnFingerprint.Text = "音の特徴を記録";
+            btnFingerprint.Click += btnFingerprint_Click;
+
+            lblDbStatus.Location = new Point(8, 108);
+            lblDbStatus.Size = new Size(356, 48);
             lblDbStatus.Text = "";
 
             pnlDb.Controls.Add(lblDbTitle);
             pnlDb.Controls.Add(btnDbMatch);
+            pnlDb.Controls.Add(btnFingerprint);
             pnlDb.Controls.Add(lblDbStatus);
 
             // Form

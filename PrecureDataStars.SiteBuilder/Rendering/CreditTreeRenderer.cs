@@ -1603,7 +1603,8 @@ internal sealed class CreditTreeRenderer
                 }
 
             case "TEXT":
-                return Esc(e.RawText ?? "");
+                // 末尾の敬称（「ちゃん」「くん」）は画面どおり小さく組む。
+                return TextEntryHtml.Format(e.RawText);
 
             default:
                 return Esc($"({e.EntryKind})");

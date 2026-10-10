@@ -206,6 +206,10 @@ internal sealed class CreditPreviewRenderer
             min-width: 8em;
             vertical-align: top;
           }
+          /* テキストだけの行の末尾の敬称（「ちゃん」「くん」）。SiteBuilder の .credit-honorific と同じく 80%。 */
+          .credit-honorific {
+            font-size: 80%;
+          }
           /* 名前 (所属) 表記の所属括弧部分。SiteBuilder の .staff-affiliation と同じ意匠で
              80% 縮小フォント + muted。インライン / 別行どちらのレイアウトでも適用される。 */
           .staff-affiliation {

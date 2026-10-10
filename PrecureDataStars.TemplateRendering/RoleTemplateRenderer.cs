@@ -441,7 +441,8 @@ public static class RoleTemplateRenderer
                     string sep = ph.GetOption("sep", " ");
                     // HTML 出力経路のため、TEXT エントリも HTML エスケープを通す。
                     // raw_text が HTML 特殊文字（< > &）を含むケースで XSS や表示崩れを防ぐ。
-                    var escapedTexts = texts.Select(t => System.Net.WebUtility.HtmlEncode(t));
+                    // 末尾の敬称（「ちゃん」「くん」）は画面どおり小さく組む（TextEntryHtml）。
+                    var escapedTexts = texts.Select(TextEntryHtml.Format);
                     return string.Join(sep, escapedTexts);
                 }
 

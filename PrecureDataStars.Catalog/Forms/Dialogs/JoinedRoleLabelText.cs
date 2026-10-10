@@ -14,10 +14,21 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     括弧の中が役職の表記、括弧の外が区切り。画面の表記が役職名と違う（揺れている）ときはこちらで書く。
 ///     括弧は半角 <c>[ ]</c> と全角 <c>［ ］</c> のどちらでもよい。</description></item>
 /// </list>
+/// 役職名を上下 2 段に重ねて出す画面（区切りが改行）は、改行を <c>\n</c>（バックスラッシュと n）と書く
+/// （例: <c>キャラクターデザイン\n作画監督</c>）。
 /// </para>
 /// </summary>
 public static class JoinedRoleLabelText
 {
+    /// <summary>一括入力で区切りの改行を表す書き方。</summary>
+    public const string LineBreakToken = "\\n";
+
+    /// <summary>一括入力の文字の <c>\n</c> を改行に戻す。</summary>
+    public static string DecodeLineBreaks(string text) => text.Replace(LineBreakToken, "\n");
+
+    /// <summary>区切りの改行を一括入力の <c>\n</c> にする。</summary>
+    public static string EncodeLineBreaks(string text) => text.Replace("\n", LineBreakToken);
+
     private static readonly char[] OpenBrackets = { '[', '［' };
     private static readonly char[] CloseBrackets = { ']', '］' };
 
@@ -85,9 +96,9 @@ public static class JoinedRoleLabelText
             && TrySplit(plain.ToString(), names, out var back, out _)
             && back.Select(b => b.Separator ?? "").SequenceEqual(parts.Select((p, k) => k == 0 ? "" : p.Separator ?? "")))
         {
-            return plain.ToString();
+            return EncodeLineBreaks(plain.ToString());
         }
-        return bracketed.ToString();
+        return EncodeLineBreaks(bracketed.ToString());
     }
 
     /// <summary>角括弧ありの形を分ける。括弧の外の先頭・末尾に文字があるとき、括弧の数が役職の数と違うときは失敗。</summary>

@@ -675,7 +675,7 @@ public static class CreditBulkInputParser
                     }
                     if (joinMatch.Success)
                     {
-                        curRole.JoinText = joinMatch.Groups["label"].Value.Trim();
+                        curRole.JoinText = JoinedRoleLabelText.DecodeLineBreaks(joinMatch.Groups["label"].Value.Trim());
                         curRole.JoinTextLineNumber = lineNo;
                     }
                     else
@@ -730,7 +730,7 @@ public static class CreditBulkInputParser
             if (roleInlineJoinMatch.Success && !trimmed.StartsWith("["))
             {
                 // "A+B: @join=文字"：まとめる役職名の並びと、まとめた行の文字を取り出す。
-                inlineJoinLabel = roleInlineJoinMatch.Groups["label"].Value.Trim();
+                inlineJoinLabel = JoinedRoleLabelText.DecodeLineBreaks(roleInlineJoinMatch.Groups["label"].Value.Trim());
                 roleMatch = RoleHeadRegex.Match(roleInlineJoinMatch.Groups["name"].Value.Trim() + ":");
             }
             else if (roleInlineLabelMatch.Success && !trimmed.StartsWith("["))
@@ -1103,13 +1103,15 @@ public static class CreditBulkInputParser
 
     /// <summary>
     /// <c>@join_previous=区切り</c> の値を区切りの文字にする。角括弧（半角 <c>[ ]</c> か全角 <c>［ ］</c>）で囲まれていれば
-    /// 中身をそのまま（前後の空白も含めて）使い、囲まれていなければ前後の空白を除く。空なら null。
+    /// 中身をそのまま（前後の空白も含めて）使い、囲まれていなければ前後の空白を除く。<c>\n</c> は改行にする。空なら null。
     /// </summary>
     private static string? UnwrapSeparator(string value)
     {
         string v = value.Trim();
         if (v.Length >= 2 && (v[0] == '[' || v[0] == '［') && (v[^1] == ']' || v[^1] == '］'))
             v = v.Substring(1, v.Length - 2);
+        // 改行の区切りは \n と書く。
+        v = JoinedRoleLabelText.DecodeLineBreaks(v);
         return v.Length == 0 ? null : v;
     }
 

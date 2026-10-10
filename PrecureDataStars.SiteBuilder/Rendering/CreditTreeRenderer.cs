@@ -421,7 +421,7 @@ internal sealed class CreditTreeRenderer
 
     /// <summary>
     /// まとめた行の役職名 HTML を組み立てる。各役職の表記（画面の表記か役職名）をその役職の詳細ページへのリンクにし、
-    /// 2 つ目以降の役職の前に直前との区切り（<c>join_separator</c>）をリンクなしの文字で挟む。
+    /// 2 つ目以降の役職の前に直前との区切り（<c>join_separator</c>）をリンクなしの文字で挟む（区切りが改行なら <c>&lt;br&gt;</c>）。
     /// 役職ごとの文字の範囲はデータで決まっているので、文字列を探して当てはめることはしない。
     /// まとめる役職のどれかに役職名の誤記（<c>role_misprint_text</c>）があれば、画面どおりの行（誤記の役職は誤記で）を
     /// 取り消し線で 1 行目に出し、正しい行を 2 行目に改行して出す。
@@ -441,7 +441,8 @@ internal sealed class CreditTreeRenderer
         for (int k = 0; k < members.Count; k++)
         {
             var m = members[k];
-            if (k > 0) sb.Append(Esc(m.JoinSeparator ?? ""));
+            // 区切りの改行は、役職名を上下 2 段に重ねる画面なので <br> にする。
+            if (k > 0) sb.Append(Esc(m.JoinSeparator ?? "").Replace("\n", "<br>"));
             sb.Append(BuildRoleNameHtml(m.RoleCode, CreditRoleLabel.Resolve(m.RoleLabelText, m.RoleCode, roleMap), roleMap));
         }
         return sb.ToString();
@@ -452,7 +453,7 @@ internal sealed class CreditTreeRenderer
     /// 役職名の欄は幅が狭いので、名前の誤記（<see cref="PrependMisprintHtml"/>）のように横に並べず、正誤で改行する。
     /// </summary>
     private static string BuildRoleMisprintPrefixHtml(string misprint)
-        => $"<del title=\"クレジット時の誤記\">{Esc(misprint)}</del><br>";
+        => $"<del title=\"クレジット時の誤記\">{Esc(misprint).Replace("\n", "<br>")}</del><br>";
 
     /// <summary>まとめた行の役職名をプレーンテキストで組み立てる（ビルド警告の文面用）。</summary>
     private static string ComposeJoinedRoleName(IReadOnlyList<CreditCardRole> members, IReadOnlyDictionary<string, Role> roleMap)

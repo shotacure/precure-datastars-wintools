@@ -148,7 +148,7 @@ public partial class CreditEditorForm
                         // （join_previous / join_separator）をノード名に添えて見えるようにする。
                         if (!string.IsNullOrEmpty(role.RoleLabelText)) roleNote += $"  [表記: {role.RoleLabelText}]";
                         if (!string.IsNullOrEmpty(role.RoleMisprintText)) roleNote += $"  [誤記: {role.RoleMisprintText}]";
-                        if (role.JoinPrevious) roleNote += $"  [直前の役職とまとめる 区切り「{role.JoinSeparator ?? ""}」]";
+                        if (role.JoinPrevious) roleNote += $"  [直前の役職とまとめる 区切り「{Dialogs.JoinedRoleLabelText.EncodeLineBreaks(role.JoinSeparator ?? "")}」]";
                         if (role.HideRoleLabel) roleNote += "  [役職名を出さない]";
 
                         var roleNode = new TreeNode($"📋 Role: {roleName}  (order {roleDisplayIndex}){roleNote}")

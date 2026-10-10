@@ -1110,14 +1110,18 @@ internal sealed class CreditPreviewRenderer
             string label = Compose(leadIndex, followerCount, printed: false);
             bool hasMisprint = Enumerable.Range(leadIndex, followerCount + 1).Any(k => !string.IsNullOrEmpty(partAt(k).Misprint));
             labelById[idAt(leadIndex)] = label;
+            // 区切りの改行（役職名を上下 2 段に重ねる画面）は <br> にする。
             labelHtmlById[idAt(leadIndex)] = hasMisprint
-                ? $"<del title=\"クレジット時の誤記\">{Esc(Compose(leadIndex, followerCount, printed: true))}</del><br>{Esc(label)}"
-                : Esc(label);
+                ? $"<del title=\"クレジット時の誤記\">{EscBr(Compose(leadIndex, followerCount, printed: true))}</del><br>{EscBr(label)}"
+                : EscBr(label);
             for (int k = leadIndex + 1; k <= leadIndex + followerCount; k++) followerIds.Add(idAt(k));
         }
         foreach (var (leadIndex, followerCount) in mismatches) mismatchLabelById[idAt(leadIndex)] = Compose(leadIndex, followerCount, printed: false);
         return (labelById, labelHtmlById, followerIds, mismatchLabelById);
     }
+
+    /// <summary>HTML エスケープし、改行を <c>&lt;br&gt;</c> にする。</summary>
+    private static string EscBr(string s) => Esc(s).Replace("\n", "<br>");
 
     /// <summary>まとめる役職どうしでエントリが一致しないときの注記を出す（別々の行で表示していることを編集者に知らせる）。</summary>
     private static void AppendJoinMismatchNotice(string joinedLabel, StringBuilder html)

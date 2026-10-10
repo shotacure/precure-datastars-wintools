@@ -350,7 +350,8 @@ internal static class CreditBulkInputEncoder
         // 区切りの前後に空白があるときは、読み込みで落ちないよう角括弧で囲む。
         if (role.Entity.JoinPrevious)
         {
-            string sep = role.Entity.JoinSeparator ?? "";
+            // 改行の区切りは \n と書く。
+            string sep = JoinedRoleLabelText.EncodeLineBreaks(role.Entity.JoinSeparator ?? "");
             if (sep.Length == 0) sb.Append("@join_previous");
             else if (sep != sep.Trim()) sb.Append("@join_previous=[").Append(sep).Append(']');
             else sb.Append("@join_previous=").Append(sep);

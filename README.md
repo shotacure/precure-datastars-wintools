@@ -1706,7 +1706,7 @@ CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.
 
 > `song_credits.role_label_text` は、盤に印刷された作家の役職の表記（「原詞」など）。役職名（`roles.name_ja`）と違うときだけ、その役職の連名の先頭行（`credit_seq` がいちばん小さい行）に入れる（`SongCreditRoles.LabelTextOf`）。サイトは楽曲詳細・楽曲一覧のカード・盤のトラック・主題歌の行・OGP カード・meta description の役職の表記をこの文字にし（リンク先は役職のまま）、人物ページ・役職詳細・統計などの集計は役職のまま。Catalog の歌管理は表記のある役職の連名に〔表記〕を添えて見せ、連名を編集し直しても表記を先頭行に引き継ぐ（表記そのものの入力欄は持たない）。
 
-> `song_recording_singers.role_code` は `VOCALS`（歌）・`BACKING_VOCALS`（コーラス）・`DIALOGUE`（台詞：歌わずに曲中のセリフだけで参加する出演者）の 3 役を持つ。書式は 3 役とも同じ（キャラは「キャラ(CV:声優)」）で、楽曲詳細・商品詳細のトラック行・エピソード／シリーズの主題歌欄に歌 → コーラス → 台詞の順で並ぶ。`/creators/roles/vocals/` の担当曲数に数えるのは `VOCALS` だけ。
+> `song_recording_singers.role_code` は `VOCALS`（歌）・`BACKING_VOCALS`（コーラス）・`DIALOGUE`（台詞：歌わずに曲中のセリフだけで参加する出演者）の 3 役を持つ。書式は 3 役とも同じ（キャラは「キャラ(CV:声優)」。ただし同じ役の連名にその声優が人物として名前で出ているときは「(CV:声優)」を省き、「工藤 真由 with フェアリートーン」のように出す。データの声優はそのまま持つ。`SongRecordingSingerDisplay.OmitCv`）で、楽曲詳細・商品詳細のトラック行・エピソード／シリーズの主題歌欄に歌 → コーラス → 台詞の順で並ぶ。`/creators/roles/vocals/` の担当曲数に数えるのは `VOCALS` だけ。
 
 #### `song_medley_parts` — メドレーの中の曲
 

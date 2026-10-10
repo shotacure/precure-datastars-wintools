@@ -166,7 +166,10 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
               ca.name                                                     AS CharacterName,
               COALESCE(NULLIF(pav.display_text_override, ''), pav.name)   AS VoiceName,
               COALESCE(NULLIF(spa.display_text_override, ''), spa.name)   AS SlashPersonName,
-              sca.name                                                    AS SlashCharacterName
+              sca.name                                                    AS SlashCharacterName,
+              srs.person_alias_id                                         AS PersonAliasId,
+              srs.voice_person_alias_id                                   AS VoicePersonAliasId,
+              srs.slash_person_alias_id                                   AS SlashPersonAliasId
             FROM song_recording_singers srs
             LEFT JOIN person_aliases    pa  ON pa.alias_id  = srs.person_alias_id
             LEFT JOIN character_aliases ca  ON ca.alias_id  = srs.character_alias_id
@@ -201,7 +204,8 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                 sb.Append(r.CharacterName ?? "");
                 if (!string.IsNullOrEmpty(r.SlashCharacterName))
                     sb.Append(" / ").Append(r.SlashCharacterName);
-                if (!string.IsNullOrEmpty(r.VoiceName))
+                // 同じ連名に声優が人物として出ているときは「(CV:声優)」を省く（SongRecordingSingerDisplay.OmitCv と同じ決まり）。
+                if (!string.IsNullOrEmpty(r.VoiceName) && !VoiceAppearsAsPerson(r.VoicePersonAliasId, rows.Select(x => (x.Kind, x.PersonAliasId, x.SlashPersonAliasId))))
                     sb.Append("(CV:").Append(r.VoiceName).Append(')');
             }
 
@@ -222,7 +226,17 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         public string? VoiceName { get; set; }
         public string? SlashPersonName { get; set; }
         public string? SlashCharacterName { get; set; }
+        public int? PersonAliasId { get; set; }
+        public int? VoicePersonAliasId { get; set; }
+        public int? SlashPersonAliasId { get; set; }
     }
+
+    /// <summary>
+    /// キャラ歌唱の声優が、同じ連名の人物の行（主名義かスラッシュの相方）に名前で出ているかを返す。
+    /// 出ているときは「(CV:声優)」を省く（<see cref="SongRecordingSingerDisplay.OmitCv"/> と同じ決まり）。
+    /// </summary>
+    private static bool VoiceAppearsAsPerson(int? voiceAliasId, IEnumerable<(string Kind, int? PersonAliasId, int? SlashPersonAliasId)> rows)
+        => voiceAliasId is int v && rows.Any(x => x.Kind == "PERSON" && (x.PersonAliasId == v || x.SlashPersonAliasId == v));
 
     /// <summary>
     /// 指定録音・指定役職の連名行を表示 HTML 文字列に整形して返す。
@@ -325,7 +339,9 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                     var html = await lookup.LookupCharacterAliasHtmlAsync(scid).ConfigureAwait(false);
                     sb.Append(html ?? "");
                 }
-                if (r.VoicePersonAliasId is int vpid)
+                // 同じ連名に声優が人物として出ているときは「(CV:声優)」を省く。
+                if (r.VoicePersonAliasId is int vpid
+                    && !VoiceAppearsAsPerson(vpid, rows.Select(x => (x.Kind, x.PersonAliasId, x.SlashPersonAliasId))))
                 {
                     // 「(CV:◯◯)」の形式。CV 名義は person_alias なので人物リンク化を使う。
                     sb.Append("(CV:");

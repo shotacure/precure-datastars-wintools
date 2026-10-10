@@ -1,0 +1,77 @@
+{{## /series/ の映画のカード（種類順・年度順で共用）。呼び出し側で変数 m に MovieSeriesRow を入れてから include する。
+     本体（シーズンのバッジ・公開日・尺）・出たプリキュア（クレジットの声の出演から）・メインスタッフ・併映の子作品。 ##}}
+<div class="series-card">
+  <a class="bgms-card-link" href="/series/{{ m.Slug }}/" aria-label="{{ m.Title | html.escape }}"></a>
+  <div class="series-card-head">
+    <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ m.Title | html.escape }}</h3>
+    <div class="series-card-meta muted">
+      {{~ if m.SeasonBadgeClass != "" ~}}
+      <span class="movie-badge {{ m.SeasonBadgeClass }}">{{ m.SeasonBadgeLabel | html.escape }}</span>
+      {{~ end ~}}
+      <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ m.Period }}</span></span></span>
+      <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ m.RuntimeLabel }}{{ if m.RuntimeSubLabel != "" }} <span class="series-card-count-sub muted">{{ m.RuntimeSubLabel }}</span>{{ end }}</span></span></span>
+    </div>
+  </div>
+  {{~ if (array.size m.PrecureLines) > 0 || (array.size m.KeyStaffSummary) > 0 ~}}
+  {{## メインスタッフサマリ（映画カード）。TV カードと同じ staff-badges-row 意匠を流用。
+       バッジ色は CSS の data-role-code group selector で TV 同等役職と共有：
+         プロデューサー = 紫、脚本 = 青、監督 = ピンク、キャラクターデザイン / 作画監督 = 緑、
+         美術監督 = 黄。映画は SERIES-attached クレジットから集計するため
+         「(範囲)」表記は無し。所属屋号は最頻 1 件を併記。 ##}}
+  <div class="series-card-sub">
+    {{~ if (array.size m.PrecureLines) > 0 ~}}
+    {{## プリキュア：親の TV シリーズのプリキュアは TV と同じ表記で普通に折り返し、客演・春映画の略記は出身の作品ごとに 1 行（作品の切れ目でだけ改行）。 ##}}
+    <div class="precure-badges-row">
+      {{~ for line in m.PrecureLines ~}}
+      {{~ if line.Abbreviated ~}}
+      <span class="precure-badge-line">{{~ for p in line.Badges ~}}{{ include '_precure-badge.sbn' }}{{~ end ~}}</span>
+      {{~ else ~}}
+      {{~ for p in line.Badges ~}}{{ include '_precure-badge.sbn' }}{{~ end ~}}
+      {{~ end ~}}
+      {{~ end ~}}
+    </div>
+    {{~ end ~}}
+    {{~ if (array.size m.KeyStaffSummary) > 0 ~}}
+    <div class="staff-badges-row">
+      {{~ for g in m.KeyStaffSummary ~}}
+      <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url mem.PersonId }}">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ mem.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+      {{~ end ~}}
+    </div>
+    {{~ end ~}}
+  </div>
+  {{~ end ~}}
+  {{~ if (array.size m.Children) > 0 ~}}
+  <ul class="series-card-children movie-child-list">
+    {{~ for c in m.Children ~}}
+    <li>
+      {{~ if c.RelationBadgeLabel != "" ~}}<span class="movie-badge movie-badge-cofeature">{{ c.RelationBadgeLabel }}</span>{{~ end ~}}
+      <a class="series-card-children-title" href="/series/{{ c.Slug }}/">{{ c.Title | html.escape }}</a>
+      <span class="series-card-children-meta muted">{{ c.RuntimeLabel }}</span>
+      {{~ if (array.size c.PrecureLines) > 0 || (array.size c.KeyStaffSummary) > 0 ~}}
+      {{## 併映の作品のプリキュアとメインスタッフ。親の映画と同じ組み方（デスクトップではプリキュアを左、スタッフを右）。 ##}}
+      <div class="series-card-sub series-card-children-sub">
+        {{~ if (array.size c.PrecureLines) > 0 ~}}
+        <div class="precure-badges-row">
+      {{~ for line in c.PrecureLines ~}}
+      {{~ if line.Abbreviated ~}}
+      <span class="precure-badge-line">{{~ for p in line.Badges ~}}{{ include '_precure-badge.sbn' }}{{~ end ~}}</span>
+      {{~ else ~}}
+      {{~ for p in line.Badges ~}}{{ include '_precure-badge.sbn' }}{{~ end ~}}
+      {{~ end ~}}
+      {{~ end ~}}
+        </div>
+        {{~ end ~}}
+        {{~ if (array.size c.KeyStaffSummary) > 0 ~}}
+        <div class="staff-badges-row">
+      {{~ for g in c.KeyStaffSummary ~}}
+      <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url mem.PersonId }}">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ mem.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+      {{~ end ~}}
+        </div>
+        {{~ end ~}}
+      </div>
+      {{~ end ~}}
+    </li>
+    {{~ end ~}}
+  </ul>
+  {{~ end ~}}
+</div>

@@ -206,6 +206,10 @@ internal sealed class CreditPreviewRenderer
             min-width: 8em;
             vertical-align: top;
           }
+          /* テキストだけの行の末尾の敬称（「ちゃん」「くん」）。SiteBuilder の .credit-honorific と同じく 80%。 */
+          .credit-honorific {
+            font-size: 80%;
+          }
           /* 名前 (所属) 表記の所属括弧部分。SiteBuilder の .staff-affiliation と同じ意匠で
              80% 縮小フォント + muted。インライン / 別行どちらのレイアウトでも適用される。 */
           .staff-affiliation {
@@ -612,6 +616,7 @@ internal sealed class CreditPreviewRenderer
                             roleMisprintText: cr.RoleMisprintText,
                             joinedLabel: joinedLabelById.TryGetValue(cr.CardRoleId, out var jl) ? jl : null,
                             joinedLabelHtml: joinedLabelHtmlById.TryGetValue(cr.CardRoleId, out var jlh) ? jlh : null,
+                            hideRoleLabel: cr.HideRoleLabel,
                             html, ct);
 
                         // 直前ロール記憶を更新: 当該ロールが VOICE_CAST なら role_code を覚える、
@@ -995,6 +1000,7 @@ internal sealed class CreditPreviewRenderer
                             roleMisprintText: dRole.Entity.RoleMisprintText,
                             joinedLabel: draftJoinedLabelById.TryGetValue(dRole.CurrentId, out var djl) ? djl : null,
                             joinedLabelHtml: draftJoinedLabelHtmlById.TryGetValue(dRole.CurrentId, out var djlh) ? djlh : null,
+                            hideRoleLabel: dRole.Entity.HideRoleLabel,
                             html, ct);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(dRole.Entity.RoleCode, roleMap)
@@ -1104,14 +1110,18 @@ internal sealed class CreditPreviewRenderer
             string label = Compose(leadIndex, followerCount, printed: false);
             bool hasMisprint = Enumerable.Range(leadIndex, followerCount + 1).Any(k => !string.IsNullOrEmpty(partAt(k).Misprint));
             labelById[idAt(leadIndex)] = label;
+            // 区切りの改行（役職名を上下 2 段に重ねる画面）は <br> にする。
             labelHtmlById[idAt(leadIndex)] = hasMisprint
-                ? $"<del title=\"クレジット時の誤記\">{Esc(Compose(leadIndex, followerCount, printed: true))}</del><br>{Esc(label)}"
-                : Esc(label);
+                ? $"<del title=\"クレジット時の誤記\">{EscBr(Compose(leadIndex, followerCount, printed: true))}</del><br>{EscBr(label)}"
+                : EscBr(label);
             for (int k = leadIndex + 1; k <= leadIndex + followerCount; k++) followerIds.Add(idAt(k));
         }
         foreach (var (leadIndex, followerCount) in mismatches) mismatchLabelById[idAt(leadIndex)] = Compose(leadIndex, followerCount, printed: false);
         return (labelById, labelHtmlById, followerIds, mismatchLabelById);
     }
+
+    /// <summary>HTML エスケープし、改行を <c>&lt;br&gt;</c> にする。</summary>
+    private static string EscBr(string s) => Esc(s).Replace("\n", "<br>");
 
     /// <summary>まとめる役職どうしでエントリが一致しないときの注記を出す（別々の行で表示していることを編集者に知らせる）。</summary>
     private static void AppendJoinMismatchNotice(string joinedLabel, StringBuilder html)
@@ -1153,6 +1163,8 @@ internal sealed class CreditPreviewRenderer
         string? joinedLabel,
         // 1 行にまとめた役職の役職名の欄の HTML（誤記があれば取り消し線と改行を含む）。joinedLabel と組で渡す。
         string? joinedLabelHtml,
+        // その行だけ役職名を出さない（credit_card_roles.hide_role_label）。true なら役職名の欄を空にする。
+        bool hideRoleLabel,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -1175,6 +1187,13 @@ internal sealed class CreditPreviewRenderer
         if (!string.IsNullOrEmpty(roleLabelText) && roleName.Length > 0) roleName = roleLabelText!;
         // 1 行にまとめた役職は、まとめた行の文字を役職名として出す（プレビューはリンクなしの文字）。
         if (joinedLabel is not null) roleName = joinedLabel;
+        // その行だけ役職名を出さない印が立っていれば、役職名の欄を空にする（同じ見出しの下に 2 社目が続くときなど）。
+        if (hideRoleLabel)
+        {
+            roleName = "";
+            joinedLabel = null;
+            joinedLabelHtml = null;
+        }
 
         // 役職名の欄の HTML。役職名の誤記があれば「誤記（取り消し線）＋改行＋正しい表記」にする（まとめた行は組み立て済み）。
         string roleMisprintPrefixHtml = !string.IsNullOrEmpty(roleMisprintText) && roleName.Length > 0
@@ -1392,7 +1411,10 @@ internal sealed class CreditPreviewRenderer
                 {
                     if (curAffilAliasId is int affId)
                     {
-                        string? affName = await _lookup.LookupCompanyAliasNameAsync(affId);
+                        // 屋号名義とその場の表記（affiliation_text）を両方持つ行は、表記の文字を出す。
+                        string? affName = !string.IsNullOrEmpty(curAffilText)
+                            ? curAffilText
+                            : await _lookup.LookupCompanyAliasNameAsync(affId);
                         affilHtml = !string.IsNullOrEmpty(affName) ? Esc(affName) : $"alias#{affId}";
                     }
                     else if (!string.IsNullOrEmpty(curAffilText))

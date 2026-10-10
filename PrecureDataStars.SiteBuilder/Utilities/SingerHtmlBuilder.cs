@@ -118,7 +118,7 @@ public sealed class SingerHtmlBuilder
                 // 区切り文字も HTML エスケープしてから出力する。
                 sb.Append(HtmlUtil.Escape(s.PrecedingSeparator ?? ""));
             }
-            sb.Append(RenderSingerEntry(s, personAliasMap, characterAliasMap, showHiddenUnitMembers));
+            sb.Append(RenderSingerEntry(s, personAliasMap, characterAliasMap, showHiddenUnitMembers, SongRecordingSingerDisplay.OmitCv(s, rows)));
             if (!string.IsNullOrEmpty(s.AffiliationText))
             {
                 sb.Append(' ').Append(HtmlUtil.Escape(s.AffiliationText));
@@ -132,7 +132,8 @@ public sealed class SingerHtmlBuilder
         SongRecordingSinger s,
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap,
-        bool showHiddenUnitMembers)
+        bool showHiddenUnitMembers,
+        bool omitCv = false)
     {
         if (s.BillingKind == SingerBillingKind.Person)
         {
@@ -152,6 +153,7 @@ public sealed class SingerHtmlBuilder
         else
         {
             // CHARACTER_WITH_CV：「キャラ(CV:声優)」、相方ありなら「キャラ/相方キャラ(CV:声優)」。
+            // 同じ連名に声優が人物として出ているとき（omitCv）は「(CV:声優)」を省く。
             string mainChar = ResolveCharacterAliasLink(s.CharacterAliasId, characterAliasMap);
             string charPart = mainChar;
             if (s.SlashCharacterAliasId.HasValue)
@@ -159,6 +161,7 @@ public sealed class SingerHtmlBuilder
                 string slashChar = ResolveCharacterAliasLink(s.SlashCharacterAliasId, characterAliasMap);
                 charPart = $"{mainChar}/{slashChar}";
             }
+            if (omitCv) return charPart;
             string cv = ResolvePersonAliasLink(s.VoicePersonAliasId, personAliasMap);
             return $"{charPart}(CV:{cv})";
         }

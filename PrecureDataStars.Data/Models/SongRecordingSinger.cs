@@ -100,3 +100,23 @@ public static class SongRecordingSingerRoles
     /// <summary>台詞。曲中のセリフ担当（歌わずに台詞だけで参加する出演者）。<c>roles</c> マスタ上の役職コードは <c>DIALOGUE</c>（表示名「台詞」）。</summary>
     public const string Dialogue = "DIALOGUE";
 }
+
+/// <summary>
+/// 歌唱者の連名の表示の決まり。サイト（曲・録音・盤のトラック・主題歌）と Catalog の表示で共有する。
+/// </summary>
+public static class SongRecordingSingerDisplay
+{
+    /// <summary>
+    /// キャラ歌唱の行で「(CV:声優)」を省くかを返す。同じ連名（同じ役職の行）に、その声優が人物として名前で出ているときは
+    /// 省く（「工藤 真由 with フェアリートーン」のように、声優を重ねて「(CV:工藤 真由)」と出さない）。データの声優はそのまま持つ。
+    /// </summary>
+    /// <param name="row">表示するキャラ歌唱の行。</param>
+    /// <param name="sameRoleRows">同じ録音・同じ役職の歌唱者行（<paramref name="row"/> を含んでよい）。</param>
+    public static bool OmitCv(SongRecordingSinger row, IEnumerable<SongRecordingSinger> sameRoleRows)
+    {
+        if (row.BillingKind != SingerBillingKind.CharacterWithCv || row.VoicePersonAliasId is not int voice) return false;
+        return sameRoleRows.Any(r => r.BillingKind == SingerBillingKind.Person
+            && string.Equals(r.RoleCode, row.RoleCode, StringComparison.Ordinal)
+            && (r.PersonAliasId == voice || r.SlashPersonAliasId == voice));
+    }
+}

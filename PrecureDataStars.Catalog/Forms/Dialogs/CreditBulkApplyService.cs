@@ -876,6 +876,8 @@ public sealed class CreditBulkApplyService
         role.Entity.RoleMisprintText = pr.RoleMisprintText;
         role.Entity.JoinPrevious = pr.JoinPrevious;
         role.Entity.JoinSeparator = pr.JoinSeparator;
+        // その行だけ役職名を出さないか（同じ見出しの下に 2 社目が続くときなど）。
+        role.Entity.HideRoleLabel = pr.HideRoleLabel;
 
         // 配下 Block を順に追加。
         foreach (var pb in pr.Blocks)
@@ -2394,12 +2396,14 @@ public sealed class CreditBulkApplyService
         if (!string.Equals(draftRole.Entity.RoleLabelText, newRole.RoleLabelText, StringComparison.Ordinal)
             || !string.Equals(draftRole.Entity.RoleMisprintText, newRole.RoleMisprintText, StringComparison.Ordinal)
             || draftRole.Entity.JoinPrevious != newRole.JoinPrevious
-            || !string.Equals(draftRole.Entity.JoinSeparator, newRole.JoinSeparator, StringComparison.Ordinal))
+            || !string.Equals(draftRole.Entity.JoinSeparator, newRole.JoinSeparator, StringComparison.Ordinal)
+            || draftRole.Entity.HideRoleLabel != newRole.HideRoleLabel)
         {
             draftRole.Entity.RoleLabelText = newRole.RoleLabelText;
             draftRole.Entity.RoleMisprintText = newRole.RoleMisprintText;
             draftRole.Entity.JoinPrevious = newRole.JoinPrevious;
             draftRole.Entity.JoinSeparator = newRole.JoinSeparator;
+            draftRole.Entity.HideRoleLabel = newRole.HideRoleLabel;
             draftRole.MarkModified();
         }
 
@@ -2681,7 +2685,8 @@ public sealed class CreditBulkApplyService
           .Append("|label=").Append(r.RoleLabelText ?? string.Empty)
           .Append("|misprint=").Append(r.RoleMisprintText ?? string.Empty)
           .Append("|joinprev=").Append(r.JoinPrevious ? '1' : '0')
-          .Append("|joinsep=").Append(r.JoinSeparator ?? string.Empty).Append('\n');
+          .Append("|joinsep=").Append(r.JoinSeparator ?? string.Empty)
+          .Append("|hidelabel=").Append(r.HideRoleLabel ? '1' : '0').Append('\n');
         foreach (var b in r.Blocks) sb.Append(SerializeBlockForCompare(b));
         return sb.ToString();
     }

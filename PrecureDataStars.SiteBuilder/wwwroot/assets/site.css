@@ -569,7 +569,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .series-card-meta {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  /* 期間（本文の書体）と件数（数字の等幅書体）で字の高さが違うので、上端ではなくベースラインでそろえる */
+  align-items: baseline;
   gap: 4px 12px;
   font-size: 0.88em;
 }
@@ -580,6 +581,61 @@ table tr:nth-child(even) td { background: #fcfcfc; }
      min-width: 17em は「2025年12月10日 〜 2026年1月25日」（最長想定）が 1 行に収まる目安。
      本体テキストはこの枠の左端から始まる（枠の右側は件数の押し出し用余白）。 */
   min-width: 17em;
+}
+/* /series/ の並べ方のタブ。区分の ON/OFF ボタンは年度順のときだけ出す。 */
+.series-index-root .series-kind-toggles {
+  display: none;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 6px 0 14px;
+  font-size: 0.9em;
+  /* トグルスイッチ（.rtl-switch）のオンの色。年表の外で使うので色をここで決める。 */
+  --rtl-tv: #3b82c4;
+}
+.series-index-root[data-active-tab="year"] .series-kind-toggles {
+  display: flex;
+}
+/* 映画のカードの略記のプリキュア：出身の作品ごとに 1 行にまとめ、作品の切れ目でだけ改行する（スマホでは行の中でも折り返す）。 */
+.precure-badge-line {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 4px 6px;
+}
+/* 略記のプリキュアはスタッフの行くらいの字にする（今までどおりの表記のバッジより一回り小さく）。 */
+.precure-badge-line .precure-badge {
+  font-size: 0.72em;
+  padding: 0 6px;
+}
+@media (max-width: 640px) {
+  .precure-badge-line {
+    flex-wrap: wrap;
+  }
+}
+/* 併映の行のプリキュアとスタッフ：題の下に、少し字下げして、親の映画と同じ組み方で出す
+   （字の大きさも親と同じにするため、併映の小リストの 0.88em を打ち消す）。 */
+.series-card-children-sub {
+  flex: 1 0 100%;
+  padding-left: 1em;
+  font-size: 1em;
+  margin-top: 2px;
+}
+/* 年度順で OFF にした区分のカードを隠す（作品が 1 つも出ない年度の段は JS が隠す）。 */
+.series-index-root[data-hide-tv] [data-kind-group="tv"],
+.series-index-root[data-hide-movie] [data-kind-group="movie"],
+.series-index-root[data-hide-spring] [data-kind-group="spring"],
+.series-index-root[data-hide-spinoff] [data-kind-group="spinoff"] {
+  display: none;
+}
+/* 年度順では区分が混ざるので連番を出さない。 */
+.series-year-list .series-card-no {
+  display: none;
+}
+/* 年度順の映画カードの公開日の枠は、種類順の映画カードと同じ幅にする。 */
+.series-year-list [data-kind-group="movie"] .series-card-period,
+.series-year-list [data-kind-group="spring"] .series-card-period {
+  min-width: 8.5em;
 }
 /* 映画は公開日 1 つだけなので、枠は「2008年11月30日」（最長想定）が収まる幅にして尺を日付の近くに置く
    （映画のカードどうしでは尺の開始位置がそろう）。 */
@@ -649,6 +705,20 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .series-card-sub a.role-badge {
   pointer-events: auto;
 }
+/* スタッフの行はエピソード一覧（/episodes/）のスタッフと同じ字の大きさ（本文の 0.7 倍＝ 0.88em × 0.8）にする。 */
+.series-card-sub .staff-badges-row {
+  font-size: 0.8em;
+}
+/* デスクトップでは、プリキュアを左の列、スタッフを右の列に並べ、それぞれの列の中で折り返す
+   （プリキュアの無い映画のカードはスタッフが全幅）。スマホでは今までどおり縦に積む。 */
+@media (min-width: 900px) {
+  .series-card-sub:has(> .precure-badges-row) {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    column-gap: 16px;
+    align-items: start;
+  }
+}
 /* プリキュアバッジ行は薄いピンクの枠に収め、下のスタッフ行（役職バッジ + 人名）と見分けられるようにする。
    地色はカードのホバー色（#fff7fb）より一段濃くして、ホバー中も枠が見えるようにする。 */
 .series-card-sub .precure-badges-row {
@@ -681,10 +751,10 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   gap: 4px 12px;
   /* 中黒スタイルの目印は CSS marker ではなく ::before で出すと擬似要素の余白制御が容易。 */
 }
-.series-card-children > li::before {
-  content: "・";
-  color: var(--muted);
+/* 行の頭は「・」ではなく、秋映画・春映画と同じ形の札（併映・同時上映）で示す。 */
+.series-card-children > li .movie-badge {
   flex: 0 0 auto;
+  align-self: baseline;
 }
 /* 併映の題はスタッフの行より一回り大きく太くして、作品名として読めるようにする。 */
 .series-card-children-title {
@@ -712,6 +782,8 @@ a.series-card-children-title:hover {
   flex: 1 0 100%;
   padding-left: 1em;
   line-height: 1.7;
+  /* 親の映画のスタッフと同じ大きさ（本文の 0.7 倍＝ 0.88em × 0.8） */
+  font-size: 0.8em;
 }
 .series-card-children-staff a.staff-name,
 .series-card-children-staff a.role-badge {
@@ -1744,6 +1816,10 @@ a.series-card-children-title:hover {
 }
 .credit-section table.fallback-table td.entry-cell {
   padding-right: 24px;
+}
+/* テキストだけの行の末尾の敬称（「ちゃん」「くん」）。画面で名前より小さく組まれているのに合わせて 80% にする。 */
+.credit-section .credit-honorific {
+  font-size: 80%;
 }
 /* PREFIX レイアウト（映画の製作・配給など）の屋号セル。80% 縮小フォント + muted で、
    左の人名カラムを引き立てる 2 カラム表記。直前行と屋号が同じ場合は空セル化されて圧縮される。 */
@@ -5693,6 +5769,13 @@ a.credit-card-series:focus-visible {
   border: 1px solid rgba(70, 130, 180, 0.55);
 }
 
+/* 併映・同時上映の札（シリーズ一覧の映画カードの子作品行）：薄紫（パステル）。 */
+.movie-badge-cofeature {
+  background: rgba(186, 160, 230, 0.35);
+  color: #5b3f8c;
+  border: 1px solid rgba(140, 110, 200, 0.5);
+}
+
 /* 春映画バッジ：薄ピンク（パステル）。 */
 .movie-badge-spring {
   background: rgba(255, 192, 203, 0.55);
@@ -7144,6 +7227,10 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 .staff-affiliation {
   font-size: 0.8em;
   color: var(--muted);
+}
+/* クレジットの名義が今の名乗りと違うときに添える今の名乗り（「上野 ケン (玖遠 らぎ)」の括弧）。所属屋号（0.8em）ほどではなく少し小さく。 */
+.staff-current-name {
+  font-size: 0.9em;
 }
 /* 声優などを伏せてクレジットされた行（「？」）の後ろに添える、正名義の括弧部分。 */
 .staff-masked-actual {

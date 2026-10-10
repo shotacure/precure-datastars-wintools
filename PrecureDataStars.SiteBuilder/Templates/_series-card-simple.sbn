@@ -1,0 +1,12 @@
+{{## /series/ の大人向けスピンオフ・ショート・イベント・スピンオフのカード（種類順・年度順で共用）。
+     呼び出し側で変数 s に TvSeriesRow を入れてから include する。本体（番号・タイトル・期間・話数）だけ。 ##}}
+<div class="series-card">
+  <a class="bgms-card-link" href="/series/{{ s.Slug }}/" aria-label="{{ s.Title | html.escape }}"></a>
+  <div class="series-card-head">
+    <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ s.Title | html.escape }}</h3>
+    <div class="series-card-meta muted">
+      <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ s.Period }}</span>{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
+      <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ s.EpisodesLabel }}</span>{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
+    </div>
+  </div>
+</div>

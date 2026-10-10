@@ -101,6 +101,9 @@ internal sealed class CreditTreeRenderer
         // どちらの URL も PathUtil に集約し、本レンダラ内に文字列リテラルでパスを持たない。
         bool isVoiceCast = r != null
                            && string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
+        // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）はプレーンテキストで出す。
+        if (!isVoiceCast && !PathUtil.HasRolePage(roleCode!))
+            return Esc(roleName);
         string url = isVoiceCast ? PathUtil.CreatorsVoiceCastUrl() : PathUtil.CreatorsRoleUrl(roleCode!);
         return $"<a href=\"{url}\">{Esc(roleName)}</a>";
     }
@@ -365,6 +368,7 @@ internal sealed class CreditTreeRenderer
                             roleLabelText: cr.RoleLabelText,
                             roleMisprintText: cr.RoleMisprintText,
                             roleNameHtmlOverride: joinedLabelHtmlByLeadId.TryGetValue(cr.CardRoleId, out var joinedHtml) ? joinedHtml : null,
+                            hideRoleLabel: cr.HideRoleLabel,
                             html, ct).ConfigureAwait(false);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(cr.RoleCode, roleMap)
@@ -417,7 +421,7 @@ internal sealed class CreditTreeRenderer
 
     /// <summary>
     /// まとめた行の役職名 HTML を組み立てる。各役職の表記（画面の表記か役職名）をその役職の詳細ページへのリンクにし、
-    /// 2 つ目以降の役職の前に直前との区切り（<c>join_separator</c>）をリンクなしの文字で挟む。
+    /// 2 つ目以降の役職の前に直前との区切り（<c>join_separator</c>）をリンクなしの文字で挟む（区切りが改行なら <c>&lt;br&gt;</c>）。
     /// 役職ごとの文字の範囲はデータで決まっているので、文字列を探して当てはめることはしない。
     /// まとめる役職のどれかに役職名の誤記（<c>role_misprint_text</c>）があれば、画面どおりの行（誤記の役職は誤記で）を
     /// 取り消し線で 1 行目に出し、正しい行を 2 行目に改行して出す。
@@ -437,7 +441,8 @@ internal sealed class CreditTreeRenderer
         for (int k = 0; k < members.Count; k++)
         {
             var m = members[k];
-            if (k > 0) sb.Append(Esc(m.JoinSeparator ?? ""));
+            // 区切りの改行は、役職名を上下 2 段に重ねる画面なので <br> にする。
+            if (k > 0) sb.Append(Esc(m.JoinSeparator ?? "").Replace("\n", "<br>"));
             sb.Append(BuildRoleNameHtml(m.RoleCode, CreditRoleLabel.Resolve(m.RoleLabelText, m.RoleCode, roleMap), roleMap));
         }
         return sb.ToString();
@@ -448,7 +453,7 @@ internal sealed class CreditTreeRenderer
     /// 役職名の欄は幅が狭いので、名前の誤記（<see cref="PrependMisprintHtml"/>）のように横に並べず、正誤で改行する。
     /// </summary>
     private static string BuildRoleMisprintPrefixHtml(string misprint)
-        => $"<del title=\"クレジット時の誤記\">{Esc(misprint)}</del><br>";
+        => $"<del title=\"クレジット時の誤記\">{Esc(misprint).Replace("\n", "<br>")}</del><br>";
 
     /// <summary>まとめた行の役職名をプレーンテキストで組み立てる（ビルド警告の文面用）。</summary>
     private static string ComposeJoinedRoleName(IReadOnlyList<CreditCardRole> members, IReadOnlyDictionary<string, Role> roleMap)
@@ -564,6 +569,8 @@ internal sealed class CreditTreeRenderer
         string? roleMisprintText,
         // 1 行にまとめた役職の役職名 HTML（join_previous / join_separator から組み立て済み）。非 null のとき役職名セルをこれで置き換える。
         string? roleNameHtmlOverride,
+        // その行だけ役職名を出さない（credit_card_roles.hide_role_label）。true なら役職名の欄を空にして中身だけ出す。
+        bool hideRoleLabel,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -586,6 +593,12 @@ internal sealed class CreditTreeRenderer
         }
         // 画面の役職の表記があれば、役職名をその表記で出す（役職名を出さない役職はそのまま出さない）。
         if (!string.IsNullOrEmpty(roleLabelText) && roleName.Length > 0) roleName = roleLabelText!;
+        // その行だけ役職名を出さない印が立っていれば、役職名の欄を空にする（同じ見出しの下に 2 社目が続くときなど）。
+        if (hideRoleLabel)
+        {
+            roleName = "";
+            roleNameHtmlOverride = null;
+        }
 
         string? template = null;
         string? contentHeaderOverride = null;
@@ -810,7 +823,10 @@ internal sealed class CreditTreeRenderer
                 {
                     if (curAffilAliasId is int affId)
                     {
-                        string? affName = await _lookup.LookupCompanyAliasNameAsync(affId).ConfigureAwait(false);
+                        // 屋号名義とその場の表記（affiliation_text）を両方持つ行は、屋号へリンクしたまま表記の文字を出す。
+                        string? affName = !string.IsNullOrEmpty(curAffilText)
+                            ? curAffilText
+                            : await _lookup.LookupCompanyAliasNameAsync(affId).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(affName))
                         {
                             affilHtml = await BuildCompanyAliasHtmlAsync(affId, affName).ConfigureAwait(false);
@@ -1588,7 +1604,8 @@ internal sealed class CreditTreeRenderer
                 }
 
             case "TEXT":
-                return Esc(e.RawText ?? "");
+                // 末尾の敬称（「ちゃん」「くん」）は画面どおり小さく組む。
+                return TextEntryHtml.Format(e.RawText);
 
             default:
                 return Esc($"({e.EntryKind})");

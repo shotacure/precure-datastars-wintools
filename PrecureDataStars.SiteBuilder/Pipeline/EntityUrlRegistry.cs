@@ -53,11 +53,17 @@ public sealed class EntityUrlRegistry
     /// <summary>
     /// 廃止したページの転送表（末尾スラッシュ無しの旧パス → 転送先 URL）。<see cref="LegacyRedirects"/> に毎ビルド載せる。
     /// 歌唱系の役職詳細（歌・コーラス）は歌唱ページ <c>/creators/singers/</c> に集約した。
+    /// 映画の現像所の「コーディネーター」（FILM_LAB_COORDINATOR）は「テクニカルコーディネーター」に統合した
+    /// （クレジットの表記は役職の行の role_label_text で「コーディネーター」のまま）。
+    /// 映画の「美術設定」（ART_SETTING）は「美術デザイン」に統合した（表記は role_label_text で「美術設定」のまま）。
+    /// 転送先の役職ページは系譜の代表で決まるので、使うたびに組み立てる（系譜の読み込みより前に作らない）。
     /// </summary>
-    private static readonly (string From, string To)[] RetiredPageRedirects =
+    private static (string From, string To)[] RetiredPageRedirects => new[]
     {
         ("/creators/roles/vocals", PathUtil.CreatorsSingersUrl()),
         ("/creators/roles/backing_vocals", PathUtil.CreatorsSingersUrl()),
+        ("/creators/roles/film_lab_coordinator", PathUtil.CreatorsRoleUrl("TECHNICAL_COORDINATOR")),
+        ("/creators/roles/art_setting", PathUtil.CreatorsRoleUrl("ART_DESIGN")),
     };
 
     private readonly Dictionary<int, string> _personUrls = new();

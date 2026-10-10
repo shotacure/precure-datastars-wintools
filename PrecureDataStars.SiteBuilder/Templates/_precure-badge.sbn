@@ -1,0 +1,2 @@
+{{## プリキュアのバッジ 1 つ（シリーズ一覧の映画のカードで使う）。呼び出し側で変数 p に PrecureBadge を入れてから include する。 ##}}
+<a class="precure-badge" href="{{ character_url p.CharacterId }}"{{~ if p.BackgroundColor != "" ~}} style="background:{{ p.BackgroundColor }};color:{{ p.TextColor }};border-color:{{ p.BorderColor }}"{{~ end ~}}>{{ p.Label | html.escape }}</a>

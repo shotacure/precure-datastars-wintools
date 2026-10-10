@@ -137,6 +137,10 @@ public sealed class ParsedRole
 
     /// <summary><see cref="JoinSeparator"/> を <c>@join_previous=区切り</c> 行で書いたか（<c>@join=</c> の文字との食い違いの検出用）。</summary>
     public bool JoinSeparatorExplicit { get; set; }
+
+    /// <summary>その行だけ役職名を出さないか（<c>credit_card_roles.hide_role_label</c>）。<c>@hide_label</c> 行で設定される。
+    /// 同じ見出しの下に 2 社目のスタッフが続くとき、2 社目の見出しの役職に立てる。</summary>
+    public bool HideRoleLabel { get; set; }
 }
 
 /// <summary>パース結果における 1 ブロック分の塊。 同一役職内で空行を跨ぐと新しいブロックが生まれる。</summary>

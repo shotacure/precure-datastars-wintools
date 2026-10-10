@@ -51,7 +51,7 @@ namespace PrecureDataStars.BDAnalyzer
         };
         // 作品単位の作品：作品ごとの尺と上映時間に入れるか
         private readonly GroupBox _grpWorks = new() { Text = "作品ごとの尺（チャプターの合計 − 先頭の黒み − 末尾の黒み）", Dock = DockStyle.Bottom, Height = 140, Visible = false, Padding = new Padding(8) };
-        private readonly TableLayoutPanel _tblWorks = new() { Dock = DockStyle.Fill, AutoScroll = true, ColumnCount = 7 };
+        private readonly TableLayoutPanel _tblWorks = new() { Dock = DockStyle.Fill, AutoScroll = true, ColumnCount = 7, Padding = new Padding(0, 0, 20, 0) };
 
         /// <summary>OK のときの作品（bd_discs.series_id に入れる）。作品単位の作品では親の映画（3 本立ては親のまとまり）。</summary>
         public int? SelectedSeriesId { get; private set; }
@@ -389,12 +389,12 @@ namespace PrecureDataStars.BDAnalyzer
                     // 本編の最後にも 1 秒の黒みが付いている（TV の話の末尾の余白と同じ）
                     TailBlack = new NumericUpDown { Minimum = 0, Maximum = 60, DecimalPlaces = 1, Increment = 0.1m, Value = 1, Width = 64 },
                     RunTime = new Label { AutoSize = true, Margin = new Padding(4, 6, 12, 0) },
-                    // 上映時間の無い作品は入れる前提、ある作品は見比べてから入れる
-                    Apply = new CheckBox { Text = "上映時間に入れる", AutoSize = true, Checked = s.RunTimeSeconds is null, Margin = new Padding(4, 4, 0, 0) },
+                    // 盤で測った尺を正とするので、既定で入れる（今の値がある作品は「今と ±N 秒」を見て外せる）
+                    Apply = new CheckBox { Text = "上映時間に入れる", AutoSize = true, Checked = true, Margin = new Padding(4, 4, 0, 0) },
                 };
                 row.Black.ValueChanged += (_, _) => UpdateWorkRows();
                 row.TailBlack.ValueChanged += (_, _) => UpdateWorkRows();
-                _tblWorks.Controls.Add(new Label { Text = s.Title, AutoSize = true, MaximumSize = new Size(420, 0), Margin = new Padding(4, 6, 12, 0) }, 0, i + 1);
+                _tblWorks.Controls.Add(new Label { Text = s.Title, AutoSize = true, MaximumSize = new Size(300, 0), Margin = new Padding(4, 6, 12, 0) }, 0, i + 1);
                 _tblWorks.Controls.Add(row.Span, 1, i + 1);
                 _tblWorks.Controls.Add(row.Black, 2, i + 1);
                 _tblWorks.Controls.Add(row.TailBlack, 3, i + 1);
@@ -403,7 +403,8 @@ namespace PrecureDataStars.BDAnalyzer
                 _tblWorks.Controls.Add(row.Apply, 6, i + 1);
                 _workRows.Add(row);
             }
-            _grpWorks.Height = Math.Min(260, 64 + works.Count * 30);
+            // 枠の見出し・表の見出し行・作品の行（題が 2 行に折れても収まる高さ）・横の余白ぶん
+            _grpWorks.Height = Math.Min(320, 80 + works.Count * 48);
             _tblWorks.ResumeLayout();
             UpdateWorkRows();
         }

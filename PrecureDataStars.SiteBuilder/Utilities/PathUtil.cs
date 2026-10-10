@@ -24,6 +24,28 @@ public static class PathUtil
     /// <summary>役職の系譜の解決を差し込む（ページ生成より前に 1 度だけ呼ぶ）。</summary>
     public static void UseRoleRepresentatives(RoleSuccessorResolver resolver) => _roleRepresentative = resolver.GetRepresentative;
 
+    /// <summary>
+    /// 役職詳細ページを持たない役職（系譜の代表の role_code）。単発のイベント映像・スピンオフだけで使う役職が当たる
+    /// （<see cref="Pipeline.CreatorListScope.RolesWithoutPage"/>）。<see cref="UseRolesWithoutPage"/> で差し込み、以降は読み取り専用。
+    /// 未設定のあいだは空（すべての役職がページを持つ扱い）。
+    /// </summary>
+    private static IReadOnlySet<string> _rolesWithoutPage = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>役職詳細ページを持たない役職の集合を差し込む（ページ生成より前に 1 度だけ呼ぶ）。</summary>
+    public static void UseRolesWithoutPage(IReadOnlySet<string> roleCodes) => _rolesWithoutPage = roleCodes;
+
+    /// <summary>
+    /// 役職名を役職詳細ページ（<see cref="CreatorsRoleUrl"/>）へのリンクにしてよいか。系譜の代表で判定する。
+    /// 歌唱系の役職は歌唱ページを指すので常に true。役職名を出す側は false のとき文字だけで出す。
+    /// </summary>
+    public static bool HasRolePage(string roleCode)
+    {
+        if (IsSingerRole(roleCode)) return true;
+        string rep = _roleRepresentative(roleCode);
+        if (string.IsNullOrEmpty(rep)) rep = roleCode;
+        return !_rolesWithoutPage.Contains(rep);
+    }
+
     /// <summary>「URL パス」（先頭スラッシュ付き、末尾スラッシュ付き）を「出力ファイルパス」に変換する。 末尾は <c>index.html</c> を付与。</summary>
     /// <param name="outputRoot">出力ルートディレクトリ。</param>
     /// <param name="urlPath">URL パス（例 "/series/precure/"）。先頭スラッシュは必須。パーセントエンコードされたセグメントはデコードしたファイル名で書き出す。</param>

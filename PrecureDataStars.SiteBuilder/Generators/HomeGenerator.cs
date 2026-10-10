@@ -188,9 +188,10 @@ public sealed class HomeGenerator
 
         var layout = new LayoutModel
         {
-            // SEO：ホームの <title>・og:title / twitter:title に載せるキャッチ。
-            // <title> は "{PageTitle} | {SiteBrandLabel}" 形式で組まれる。
-            PageTitle = "プリキュアまるごとデータベース",
+            // ホームの <title>・og:title / twitter:title はサイト名（SiteBrandLabel）だけにする。
+            // サイト名「プリキュアデータベース「precure-datastars」」が検索語を含むので、前置きは付けない
+            // （PageTitle が空なら <title> は SiteBrandLabel だけで組まれる）。
+            PageTitle = "",
             MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優さん、キャラクターまで。「好き」を深掘りするための情報を、ファンの手で集めた個人運営の非公式データベースです。",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",

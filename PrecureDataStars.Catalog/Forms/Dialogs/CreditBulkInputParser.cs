@@ -136,6 +136,9 @@ public static class CreditBulkInputParser
     private static readonly Regex JoinDirectiveRegex = new(@"^@join=(?<label>.+)$", RegexOptions.Compiled);
     private static readonly Regex JoinPreviousDirectiveRegex = new(@"^@join_previous(?:=(?<sep>.*))?$", RegexOptions.Compiled);
 
+    // ディレクティブ行: @hide_label。直前の役職の行だけ役職名を出さない（credit_card_roles.hide_role_label）。
+    private static readonly Regex HideLabelDirectiveRegex = new(@"^@hide_label$", RegexOptions.Compiled);
+
     // 役職ヘッダ "役職名: @label=文字"。画面の役職の表記（role_label_text）を役職ヘッダと 1 行で書く。
     private static readonly Regex RoleHeadInlineLabelRegex =
         new(@"^(?<name>.+?)[：:]\s*@label=(?<label>.+?)\s*$", RegexOptions.Compiled);
@@ -672,7 +675,7 @@ public static class CreditBulkInputParser
                     }
                     if (joinMatch.Success)
                     {
-                        curRole.JoinText = joinMatch.Groups["label"].Value.Trim();
+                        curRole.JoinText = JoinedRoleLabelText.DecodeLineBreaks(joinMatch.Groups["label"].Value.Trim());
                         curRole.JoinTextLineNumber = lineNo;
                     }
                     else
@@ -684,6 +687,23 @@ public static class CreditBulkInputParser
                             curRole.JoinSeparatorExplicit = true;
                         }
                     }
+                    continue;
+                }
+
+                // @hide_label : 直前の役職の行だけ役職名を出さない。
+                if (HideLabelDirectiveRegex.IsMatch(trimmed))
+                {
+                    if (curRole is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @hide_label は役職指定後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    curRole.HideRoleLabel = true;
                     continue;
                 }
 
@@ -710,7 +730,7 @@ public static class CreditBulkInputParser
             if (roleInlineJoinMatch.Success && !trimmed.StartsWith("["))
             {
                 // "A+B: @join=文字"：まとめる役職名の並びと、まとめた行の文字を取り出す。
-                inlineJoinLabel = roleInlineJoinMatch.Groups["label"].Value.Trim();
+                inlineJoinLabel = JoinedRoleLabelText.DecodeLineBreaks(roleInlineJoinMatch.Groups["label"].Value.Trim());
                 roleMatch = RoleHeadRegex.Match(roleInlineJoinMatch.Groups["name"].Value.Trim() + ":");
             }
             else if (roleInlineLabelMatch.Success && !trimmed.StartsWith("["))
@@ -970,9 +990,13 @@ public static class CreditBulkInputParser
                 {
                     if (!string.IsNullOrEmpty(affilRaw))
                     {
-                        // 既存の所属解決経路（AffiliationRawText）を再利用。CreditBulkApplyService 側で
-                        // 屋号マスタ引き当て → affiliation_company_alias_id への変換が走る。
-                        entry.AffiliationRawText = affilRaw;
+                        // 左セルは SUFFIX の括弧内と同じ 3 形式（屋号 / "テキスト" / 屋号 / "テキスト"）を受け付ける。
+                        // CreditBulkApplyService 側で屋号マスタ引き当て → affiliation_company_alias_id への変換が走る。
+                        var (paRaw, paOver, paForce, paPerson) = ParseAffiliationContent(affilRaw);
+                        entry.AffiliationRawText = paRaw;
+                        entry.AffiliationOverrideText = paOver;
+                        entry.AffiliationForceText = paForce;
+                        entry.AffiliationPersonAliasId = paPerson;
                     }
                     row.Entries.Add(entry);
                 }
@@ -1079,13 +1103,15 @@ public static class CreditBulkInputParser
 
     /// <summary>
     /// <c>@join_previous=区切り</c> の値を区切りの文字にする。角括弧（半角 <c>[ ]</c> か全角 <c>［ ］</c>）で囲まれていれば
-    /// 中身をそのまま（前後の空白も含めて）使い、囲まれていなければ前後の空白を除く。空なら null。
+    /// 中身をそのまま（前後の空白も含めて）使い、囲まれていなければ前後の空白を除く。<c>\n</c> は改行にする。空なら null。
     /// </summary>
     private static string? UnwrapSeparator(string value)
     {
         string v = value.Trim();
         if (v.Length >= 2 && (v[0] == '[' || v[0] == '［') && (v[^1] == ']' || v[^1] == '］'))
             v = v.Substring(1, v.Length - 2);
+        // 改行の区切りは \n と書く。
+        v = JoinedRoleLabelText.DecodeLineBreaks(v);
         return v.Length == 0 ? null : v;
     }
 

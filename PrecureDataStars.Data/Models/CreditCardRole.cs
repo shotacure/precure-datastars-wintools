@@ -53,6 +53,10 @@ public sealed class CreditCardRole
     /// （<see cref="RoleLabelText"/> か役職名）をこの区切りでつないで組み立てる。</summary>
     public string? JoinSeparator { get; set; }
 
+    /// <summary>true ならクレジットの表示でこの行の役職名を出さず、中身（会社・人物）だけを出す。集計・関与は <see cref="RoleCode"/> のまま。
+    /// 画面で 1 つの見出しの下に会社ごとのスタッフが続くとき（例：「CG制作協力」の下に 2 社）、2 社目の見出しの行に立てる。</summary>
+    public bool HideRoleLabel { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

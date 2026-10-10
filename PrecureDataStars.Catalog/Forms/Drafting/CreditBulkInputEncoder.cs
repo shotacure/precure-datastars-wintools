@@ -340,11 +340,18 @@ internal static class CreditBulkInputEncoder
             sb.Append("@misprint=").Append(role.Entity.RoleMisprintText).Append(LineSeparator);
         }
 
+        // その行だけ役職名を出さない（同じ見出しの下に 2 社目が続くときなど）。
+        if (role.Entity.HideRoleLabel)
+        {
+            sb.Append("@hide_label").Append(LineSeparator);
+        }
+
         // 1 行にまとめて表示する役職の指定（まとめた形で書き出せなかった組・1 役職だけの書き出しの個別指定）。
         // 区切りの前後に空白があるときは、読み込みで落ちないよう角括弧で囲む。
         if (role.Entity.JoinPrevious)
         {
-            string sep = role.Entity.JoinSeparator ?? "";
+            // 改行の区切りは \n と書く。
+            string sep = JoinedRoleLabelText.EncodeLineBreaks(role.Entity.JoinSeparator ?? "");
             if (sep.Length == 0) sb.Append("@join_previous");
             else if (sep != sep.Trim()) sb.Append("@join_previous=[").Append(sep).Append(']');
             else sb.Append("@join_previous=").Append(sep);
@@ -425,6 +432,7 @@ internal static class CreditBulkInputEncoder
 
         // PREFIX レイアウトの場合は「屋号TAB名前」形式で 1 行 1 エントリ。
         // 屋号は affiliation_company_alias_id（マスタ）優先、無ければ affiliation_text（フリーテキスト）。
+        // 両方あるときは SUFFIX の括弧内と同じ「屋号 / "テキスト"」で左セルに書く（屋号へ紐付けつつ表記を残す）。
         // どちらも空なら屋号セル省略（タブも出さず、名前のみ）。
         bool isPrefix = string.Equals(block.Parent.Entity.AffiliationLayout, "PREFIX", StringComparison.Ordinal);
         if (isPrefix)
@@ -444,6 +452,8 @@ internal static class CreditBulkInputEncoder
                 {
                     string? affName = await cache.LookupCompanyAliasNameAsync(affAliasId);
                     affilLabel = !string.IsNullOrEmpty(affName) ? affName : $"alias#{affAliasId}";
+                    if (!string.IsNullOrEmpty(entry.Entity.AffiliationText))
+                        affilLabel = $"{affilLabel} / \"{entry.Entity.AffiliationText}\"";
                 }
                 else if (!string.IsNullOrEmpty(entry.Entity.AffiliationText))
                 {

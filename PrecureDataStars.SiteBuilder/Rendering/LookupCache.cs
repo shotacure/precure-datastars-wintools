@@ -180,6 +180,9 @@ internal sealed class LookupCache : ILookupCache
         // リンク化すると死リンクになる。プレーンテキストで返す（曲そのものは {THEME_SONGS} で別途リンク表示される）。
         if (string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
             return Task.FromResult<string?>(escapedName);
+        // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）も平文で返す。
+        if (!PathUtil.HasRolePage(roleCode))
+            return Task.FromResult<string?>(escapedName);
         return Task.FromResult<string?>($"<a href=\"{PathUtil.CreatorsRoleUrl(roleCode)}\">{escapedName}</a>");
     }
 
@@ -200,6 +203,9 @@ internal sealed class LookupCache : ILookupCache
         }
         // 主題歌・挿入歌（THEME_SONG 形式）は役職詳細ページを生成しないため、リンクなしの平文で返す。
         if (string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
+            return Task.FromResult<string?>(escapedLabel);
+        // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）も平文で返す。
+        if (!PathUtil.HasRolePage(roleCode))
             return Task.FromResult<string?>(escapedLabel);
         return Task.FromResult<string?>($"<a href=\"{PathUtil.CreatorsRoleUrl(roleCode)}\">{escapedLabel}</a>");
     }

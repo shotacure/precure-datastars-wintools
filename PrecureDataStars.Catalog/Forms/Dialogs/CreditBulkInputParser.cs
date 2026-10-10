@@ -136,6 +136,9 @@ public static class CreditBulkInputParser
     private static readonly Regex JoinDirectiveRegex = new(@"^@join=(?<label>.+)$", RegexOptions.Compiled);
     private static readonly Regex JoinPreviousDirectiveRegex = new(@"^@join_previous(?:=(?<sep>.*))?$", RegexOptions.Compiled);
 
+    // ディレクティブ行: @hide_label。直前の役職の行だけ役職名を出さない（credit_card_roles.hide_role_label）。
+    private static readonly Regex HideLabelDirectiveRegex = new(@"^@hide_label$", RegexOptions.Compiled);
+
     // 役職ヘッダ "役職名: @label=文字"。画面の役職の表記（role_label_text）を役職ヘッダと 1 行で書く。
     private static readonly Regex RoleHeadInlineLabelRegex =
         new(@"^(?<name>.+?)[：:]\s*@label=(?<label>.+?)\s*$", RegexOptions.Compiled);
@@ -687,6 +690,23 @@ public static class CreditBulkInputParser
                     continue;
                 }
 
+                // @hide_label : 直前の役職の行だけ役職名を出さない。
+                if (HideLabelDirectiveRegex.IsMatch(trimmed))
+                {
+                    if (curRole is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @hide_label は役職指定後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    curRole.HideRoleLabel = true;
+                    continue;
+                }
+
                 // @ で始まるが既知ディレクティブでない → Block 警告。
                 result.Warnings.Add(new ParseWarning
                 {
@@ -970,9 +990,13 @@ public static class CreditBulkInputParser
                 {
                     if (!string.IsNullOrEmpty(affilRaw))
                     {
-                        // 既存の所属解決経路（AffiliationRawText）を再利用。CreditBulkApplyService 側で
-                        // 屋号マスタ引き当て → affiliation_company_alias_id への変換が走る。
-                        entry.AffiliationRawText = affilRaw;
+                        // 左セルは SUFFIX の括弧内と同じ 3 形式（屋号 / "テキスト" / 屋号 / "テキスト"）を受け付ける。
+                        // CreditBulkApplyService 側で屋号マスタ引き当て → affiliation_company_alias_id への変換が走る。
+                        var (paRaw, paOver, paForce, paPerson) = ParseAffiliationContent(affilRaw);
+                        entry.AffiliationRawText = paRaw;
+                        entry.AffiliationOverrideText = paOver;
+                        entry.AffiliationForceText = paForce;
+                        entry.AffiliationPersonAliasId = paPerson;
                     }
                     row.Entries.Add(entry);
                 }

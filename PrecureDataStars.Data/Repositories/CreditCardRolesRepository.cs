@@ -28,6 +28,7 @@ public sealed class CreditCardRolesRepository : RepositoryBase
           role_misprint_text  AS RoleMisprintText,
           join_previous       AS JoinPrevious,
           join_separator      AS JoinSeparator,
+          hide_role_label     AS HideRoleLabel,
           notes               AS Notes,
           created_at          AS CreatedAt,
           updated_at          AS UpdatedAt,
@@ -87,6 +88,7 @@ public sealed class CreditCardRolesRepository : RepositoryBase
               r.role_misprint_text  AS RoleMisprintText,
               r.join_previous       AS JoinPrevious,
               r.join_separator      AS JoinSeparator,
+              r.hide_role_label     AS HideRoleLabel,
               r.notes               AS Notes,
               r.created_at          AS CreatedAt,
               r.updated_at          AS UpdatedAt,
@@ -106,9 +108,9 @@ public sealed class CreditCardRolesRepository : RepositoryBase
     {
         const string sqlRole = """
             INSERT INTO credit_card_roles
-              (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, notes, created_by, updated_by)
+              (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, notes, created_by, updated_by)
             VALUES
-              (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @Notes, @CreatedBy, @UpdatedBy);
+              (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         // col_count のみ既定 1 で投入する（row_count 列は持たない設計）。
@@ -143,9 +145,9 @@ public sealed class CreditCardRolesRepository : RepositoryBase
     {
         const string sql = """
             INSERT INTO credit_card_roles
-              (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, notes, created_by, updated_by)
+              (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, notes, created_by, updated_by)
             VALUES
-              (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @Notes, @CreatedBy, @UpdatedBy);
+              (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await ExecuteScalarAsync<int>(sql, role, ct).ConfigureAwait(false);
@@ -164,6 +166,7 @@ public sealed class CreditCardRolesRepository : RepositoryBase
               role_misprint_text = @RoleMisprintText,
               join_previous      = @JoinPrevious,
               join_separator     = @JoinSeparator,
+              hide_role_label    = @HideRoleLabel,
               notes              = @Notes,
               updated_by         = @UpdatedBy
             WHERE card_role_id = @CardRoleId;

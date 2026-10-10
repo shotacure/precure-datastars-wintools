@@ -1135,7 +1135,8 @@ public sealed class CompaniesGenerator
                 {
                     "THEME_SONG" => "",
                     "VOICE_CAST" => PathUtil.CreatorsVoiceCastUrl(),
-                    _ => PathUtil.CreatorsRoleUrl(roleCode)
+                    // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）はリンクなし。
+                    _ => PathUtil.HasRolePage(roleCode) ? PathUtil.CreatorsRoleUrl(roleCode) : ""
                 };
             }
 

@@ -717,6 +717,24 @@ public sealed class CreditInvolvementIndex
             logoIdx.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<Involvement>)kv.Value),
             characterIdx.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<Involvement>)kv.Value));
     }
+
+    /// <summary>
+    /// 指定したシリーズの関与だけを残したインデックスの写しを返す（元のインデックスは変えない）。
+    /// 関与が 1 件も残らない名義・ロゴのキーは写しに含めない。
+    /// クリエイターの一覧（役職・スタッフ・声の出演）を本編（TV と映画）の関与だけで集計するのに使う。
+    /// </summary>
+    /// <param name="keepSeries">関与を残すシリーズか（series_id を受け取る）。</param>
+    public CreditInvolvementIndex RestrictToSeries(Func<int, bool> keepSeries)
+    {
+        IReadOnlyDictionary<int, IReadOnlyList<Involvement>> Filter(IReadOnlyDictionary<int, IReadOnlyList<Involvement>> source)
+            => source
+                .Select(kv => (kv.Key, List: (IReadOnlyList<Involvement>)kv.Value.Where(i => keepSeries(i.SeriesId)).ToList()))
+                .Where(x => x.List.Count > 0)
+                .ToDictionary(x => x.Key, x => x.List);
+
+        return new CreditInvolvementIndex(
+            Filter(ByPersonAlias), Filter(ByCompanyAlias), Filter(ByLogo), Filter(ByCharacterAlias));
+    }
 }
 
 /// <summary>関与レコード 1 件（人物・企業共用）。 クレジット階層上の 1 つの参照点に対応する。</summary>

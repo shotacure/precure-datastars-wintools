@@ -302,6 +302,7 @@ internal sealed class CreditDraftLoader
         RoleMisprintText = s.RoleMisprintText,
         JoinPrevious = s.JoinPrevious,
         JoinSeparator = s.JoinSeparator,
+        HideRoleLabel = s.HideRoleLabel,
         Notes = s.Notes,
         CreatedBy = s.CreatedBy,
         UpdatedBy = s.UpdatedBy

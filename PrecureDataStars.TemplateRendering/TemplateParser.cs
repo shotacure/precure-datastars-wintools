@@ -106,6 +106,14 @@ public static class TemplateParser
                 ConsumeTerminator(template, ref pos, closeTag);
                 result.Add(new ThemeSongsLoopNode(opts, body));
             }
+            else if (raw.StartsWith("#MEDLEY_PARTS"))
+            {
+                // {#MEDLEY_PARTS}...{/MEDLEY_PARTS}（{#THEME_SONGS} の中で、メドレーの元の曲を反復する）
+                const string closeTag = "{/MEDLEY_PARTS}";
+                var body = ParseUntil(template, ref pos, closeTag);
+                ConsumeTerminator(template, ref pos, closeTag);
+                result.Add(new MedleyPartsLoopNode(body));
+            }
             else if (raw.StartsWith("?"))
             {
                 // {?NAME} ... {/?NAME}

@@ -29,6 +29,7 @@ namespace PrecureDataStars.TemplateRendering;
 /// サポートする構文：
 /// <list type="bullet">
 ///   <item><description><c>{#BLOCKS[:first|rest|last]}...{/BLOCKS[:filter]}</c> ... ブロック繰り返し</description></item>
+///   <item><description><c>{#MEDLEY_PARTS}...{/MEDLEY_PARTS}</c> ... <c>{#THEME_SONGS}</c> の中で、メドレーの元の曲（song_medley_parts）を順に曲スコープにして反復。中では元の曲の {SONG_TITLE} / {LYRICIST} / {COMPOSER} / {ARRANGER} が使える。</description></item>
 ///   <item><description><c>{?NAME}...{/?NAME}</c> ... プレースホルダ NAME の解決値が非空のときだけ展開</description></item>
 ///   <item><description><c>{?!NAME}...{/?!NAME}</c> ... プレースホルダ NAME の解決値が空のときだけ展開（否定の条件）</description></item>
 ///   <item><description><c>{#THEME_SONGS[:kind=OP+ED]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復。
@@ -128,6 +129,18 @@ public static class RoleTemplateRenderer
                         {
                             // THEME_SONGS ループ内では currentBlock は持ち越さない
                             await RenderNodesAsync(tsLoop.Body, ctx, currentBlock: null, currentSong: song, factory, lookup, sb, ct).ConfigureAwait(false);
+                        }
+                        break;
+                    }
+
+                case MedleyPartsLoopNode medleyLoop:
+                    {
+                        // {#MEDLEY_PARTS}...{/MEDLEY_PARTS}：いまの曲がメドレーなら元の曲を順に曲スコープにして展開する。
+                        if (currentSong is null || currentSong.SongId <= 0) break;
+                        var parts = await ThemeSongsHandler.FetchMedleyPartsAsync(factory, currentSong.SongId, lookup, ct).ConfigureAwait(false);
+                        foreach (var part in parts)
+                        {
+                            await RenderNodesAsync(medleyLoop.Body, ctx, currentBlock: null, currentSong: part, factory, lookup, sb, ct).ConfigureAwait(false);
                         }
                         break;
                     }

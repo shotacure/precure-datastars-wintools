@@ -5,10 +5,10 @@ public sealed class CreditCardTier
 {
     /// <summary>
     /// 1 カード内で使える段組番号の上限（DB の ck_card_tier_no と同じ値）。
-    /// 2 列に並んだ役職の左の列・右の列と、その下の中央に置かれた役職のように、
-    /// 横位置の違う 3 つのまとまりを持つカードがあるため 3 段まで持てる。
+    /// 2 列に並んだ役職の左の列・右の列と、その下の中央に置かれた役職のように、横位置の違うまとまりごとに段を分ける。
+    /// 流れるクレジット（ROLL）は 1 枚の中で横位置が何度も変わるので、9 段まで持てる。
     /// </summary>
-    public const byte MaxTierNo = 3;
+    public const byte MaxTierNo = 9;
 
     /// <summary>Tier の主キー（AUTO_INCREMENT）。</summary>
     public int CardTierId { get; set; }

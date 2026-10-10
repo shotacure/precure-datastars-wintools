@@ -851,7 +851,8 @@ public sealed class PersonsGenerator
                 {
                     "THEME_SONG" => "",
                     "VOICE_CAST" => PathUtil.CreatorsVoiceCastUrl(),
-                    _ => PathUtil.CreatorsRoleUrl(roleCode)
+                    // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）はリンクなし。
+                    _ => PathUtil.HasRolePage(roleCode) ? PathUtil.CreatorsRoleUrl(roleCode) : ""
                 };
                 // 劇伴の作曲・編曲はリンクしない（作曲・編曲の役職詳細は楽曲の作家の一覧のため）。
                 if (string.Equals(categoryPrefix, "BGM", StringComparison.Ordinal)) roleUrl = "";

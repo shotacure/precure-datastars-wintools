@@ -23,6 +23,9 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// </list>
 /// 集計の骨格：
 /// <list type="bullet">
+///   <item><description>役職詳細・スタッフ一覧・声の出演一覧は、レギュラーの TV シリーズと映画（秋映画・春映画・併映の短編）の
+///     クレジットだけで集計する（<see cref="CreatorListScope"/>）。単発のイベント映像とスピンオフは含めない。
+///     歌唱・音楽制作は作品の種類によらず全楽曲・全音楽クレジットを集計する。</description></item>
 ///   <item><description>役職詳細：(エンティティ × RoleCluster × EpisodeId) で重複排除。
 ///     RoleCluster は系譜（<c>role_successions</c>）でまとまる役職群を 1 単位とする。
 ///     同一エピソードで同一役職に OP / ED 両方クレジットされていても 1 回扱い。</description></item>
@@ -38,7 +41,17 @@ public sealed class CreatorsGenerator
 {
     private readonly BuildContext _ctx;
     private readonly PageRenderer _page;
+
+    /// <summary>
+    /// 役職詳細・スタッフ一覧・声の出演一覧の集計に使う関与インデックス。
+    /// 本編（<see cref="CreatorListScope"/> の範囲のシリーズ）の関与だけを残した写しで、
+    /// 単発のイベント映像とスピンオフのクレジットはこれらの一覧に入れない（作品詳細・人物・企業のページには出る）。
+    /// </summary>
     private readonly CreditInvolvementIndex _index;
+
+    /// <summary>絞り込む前の関与インデックス。企業の最新屋号など、サイト全体でそろえる値を決めるのに使う。</summary>
+    private readonly CreditInvolvementIndex _fullIndex;
+
     private readonly RoleSuccessorResolver _resolver;
 
     /// <summary>役職どうしの関連（段階・並列）。役職詳細の年表に関連する役職の担当を重ねるのに使う。</summary>
@@ -95,7 +108,8 @@ public sealed class CreatorsGenerator
     {
         _ctx = ctx;
         _page = page;
-        _index = index;
+        _fullIndex = index;
+        _index = index.RestrictToSeries(sid => CreatorListScope.Includes(ctx, sid));
         _resolver = resolver;
         _roleRelations = roleRelations;
 
@@ -583,9 +597,10 @@ public sealed class CreatorsGenerator
                 var key = CreditOrderKey(inv);
                 if (bestAid is null || key.CompareTo(best) > 0) { best = key; bestAid = aid; }
             }
+            // 屋号はサイト全体でそろえるので、一覧の絞り込み前の関与（イベント・スピンオフを含む）から決める。
             foreach (var aid in kv.Value)
             {
-                if (_index.ByCompanyAlias.TryGetValue(aid, out var invs))
+                if (_fullIndex.ByCompanyAlias.TryGetValue(aid, out var invs))
                 {
                     foreach (var inv in invs) Offer(aid, inv);
                 }
@@ -593,7 +608,7 @@ public sealed class CreatorsGenerator
                 {
                     foreach (var logoId in logoIds)
                     {
-                        if (!_index.ByLogo.TryGetValue(logoId, out var logoInvs)) continue;
+                        if (!_fullIndex.ByLogo.TryGetValue(logoId, out var logoInvs)) continue;
                         foreach (var inv in logoInvs) Offer(aid, inv);
                     }
                 }

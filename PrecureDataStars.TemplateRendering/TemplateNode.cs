@@ -131,3 +131,20 @@ public sealed class ThemeSongsLoopNode : TemplateNode
         return Options.TryGetValue(key, out var v) ? v : defaultValue;
     }
 }
+
+/// <summary>
+/// メドレーの中身の繰り返しノード <c>{#MEDLEY_PARTS}...{/MEDLEY_PARTS}</c>。
+/// <c>{#THEME_SONGS}</c> の中で使い、いまの曲がメドレーなら <c>song_medley_parts</c> の元の曲を
+/// <c>part_seq</c> 順に反復して <see cref="Body"/> を展開する。<see cref="Body"/> の中では元の曲が曲スコープになり、
+/// <c>{SONG_TITLE}</c> / <c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> が元の曲の値に解決される
+/// （録音を持たないので <c>{SINGER}</c> / <c>{CHORUS}</c> は空）。メドレーでない曲・曲スコープの外では何も出さない。
+/// </summary>
+public sealed class MedleyPartsLoopNode : TemplateNode
+{
+    public IReadOnlyList<TemplateNode> Body { get; }
+
+    public MedleyPartsLoopNode(IReadOnlyList<TemplateNode> body)
+    {
+        Body = body ?? Array.Empty<TemplateNode>();
+    }
+}

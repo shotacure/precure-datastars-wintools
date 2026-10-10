@@ -201,31 +201,7 @@ public static class ThemeSongsHandler
         {
             if (r.SongId > 0)
             {
-                // 作詞：構造化があればリンク化 HTML、なければフリーテキスト HtmlEncode 平文。
-                // 名義ごとの部品（*Parts）も持たせ、テンプレの sep= で区切りを差し替えられるようにする。
-                r.LyricistParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Lyrics, lookup, ct).ConfigureAwait(false);
-                r.ComposerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Composition, lookup, ct).ConfigureAwait(false);
-                r.ArrangerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Arrangement, lookup, ct).ConfigureAwait(false);
-                r.MedleyArrangerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false);
-                string lyrHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.Lyrics, lookup, ct).ConfigureAwait(false);
-                r.LyricistHtml = !string.IsNullOrEmpty(lyrHtml)
-                    ? lyrHtml
-                    : (string.IsNullOrEmpty(r.LyricistName) ? "" : System.Net.WebUtility.HtmlEncode(r.LyricistName));
-
-                // 作曲：同様。
-                string cmpHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.Composition, lookup, ct).ConfigureAwait(false);
-                r.ComposerHtml = !string.IsNullOrEmpty(cmpHtml)
-                    ? cmpHtml
-                    : (string.IsNullOrEmpty(r.ComposerName) ? "" : System.Net.WebUtility.HtmlEncode(r.ComposerName));
-
-                // 編曲：同様。
-                string arrHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.Arrangement, lookup, ct).ConfigureAwait(false);
-                r.ArrangerHtml = !string.IsNullOrEmpty(arrHtml)
-                    ? arrHtml
-                    : (string.IsNullOrEmpty(r.ArrangerName) ? "" : System.Net.WebUtility.HtmlEncode(r.ArrangerName));
-
-                // メドレー編曲：構造化行だけ（フリーテキスト列は持たない）。無い曲は空文字列。
-                r.MedleyArrangerHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false) ?? "";
+                await FillSongCreditsAsync(r, songCredits, lookup, ct).ConfigureAwait(false);
             }
             if (r.SongRecordingId > 0)
             {
@@ -243,6 +219,70 @@ public static class ThemeSongsHandler
             }
         }
 
+        return rows;
+    }
+
+    /// <summary>
+    /// 曲の作詞・作曲・編曲・メドレー編曲を、構造化クレジット（song_credits）があればリンク化済み HTML で、
+    /// なければフリーテキスト列（songs.lyricist_name 等）を HtmlEncode した平文で <paramref name="r"/> に詰める。
+    /// </summary>
+    private static async Task FillSongCreditsAsync(ThemeSongRow r, SongCreditsRepository songCredits, ILookupCache lookup, CancellationToken ct)
+    {
+        // 作詞：構造化があればリンク化 HTML、なければフリーテキスト HtmlEncode 平文。
+        // 名義ごとの部品（*Parts）も持たせ、テンプレの sep= で区切りを差し替えられるようにする。
+        r.LyricistParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Lyrics, lookup, ct).ConfigureAwait(false);
+        r.ComposerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Composition, lookup, ct).ConfigureAwait(false);
+        r.ArrangerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Arrangement, lookup, ct).ConfigureAwait(false);
+        r.MedleyArrangerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false);
+        string lyrHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.Lyrics, lookup, ct).ConfigureAwait(false);
+        r.LyricistHtml = !string.IsNullOrEmpty(lyrHtml)
+            ? lyrHtml
+            : (string.IsNullOrEmpty(r.LyricistName) ? "" : System.Net.WebUtility.HtmlEncode(r.LyricistName));
+
+        // 作曲：同様。
+        string cmpHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.Composition, lookup, ct).ConfigureAwait(false);
+        r.ComposerHtml = !string.IsNullOrEmpty(cmpHtml)
+            ? cmpHtml
+            : (string.IsNullOrEmpty(r.ComposerName) ? "" : System.Net.WebUtility.HtmlEncode(r.ComposerName));
+
+        // 編曲：同様。
+        string arrHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.Arrangement, lookup, ct).ConfigureAwait(false);
+        r.ArrangerHtml = !string.IsNullOrEmpty(arrHtml)
+            ? arrHtml
+            : (string.IsNullOrEmpty(r.ArrangerName) ? "" : System.Net.WebUtility.HtmlEncode(r.ArrangerName));
+
+        // メドレー編曲：構造化行だけ（フリーテキスト列は持たない）。無い曲は空文字列。
+        r.MedleyArrangerHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false) ?? "";
+    }
+
+    /// <summary>
+    /// メドレーの曲 <paramref name="medleySongId"/> の中身（song_medley_parts）を part_seq 順に、元の曲の行として返す。
+    /// 各行は元の曲の曲名・作詞・作曲・編曲を持ち、録音は持たない（歌唱は空）。<c>{#MEDLEY_PARTS}</c> の曲スコープに使う。
+    /// 元の曲が未登録（source_song_id が NULL）の行は飛ばす。メドレーでなければ空。
+    /// </summary>
+    internal static async Task<IReadOnlyList<ThemeSongRow>> FetchMedleyPartsAsync(
+        IConnectionFactory factory,
+        int medleySongId,
+        ILookupCache lookup,
+        CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT
+              s.song_id       AS SongId,
+              s.title         AS SongTitle,
+              s.lyricist_name AS LyricistName,
+              s.composer_name AS ComposerName,
+              s.arranger_name AS ArrangerName
+            FROM song_medley_parts mp
+            JOIN songs s ON s.song_id = mp.source_song_id
+            WHERE mp.medley_song_id = @medleySongId
+            ORDER BY mp.part_seq;
+            """;
+        await using var conn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = (await conn.QueryAsync<ThemeSongRow>(new CommandDefinition(
+            sql, new { medleySongId }, cancellationToken: ct))).ToList();
+        var songCredits = new SongCreditsRepository(factory);
+        foreach (var r in rows) await FillSongCreditsAsync(r, songCredits, lookup, ct).ConfigureAwait(false);
         return rows;
     }
 

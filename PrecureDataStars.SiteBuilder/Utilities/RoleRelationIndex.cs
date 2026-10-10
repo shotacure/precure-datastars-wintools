@@ -8,7 +8,8 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 ///   <item><description>関係の両端は <see cref="RoleSuccessorResolver.GetRepresentative"/> で系譜の代表へ寄せる
 ///     （撮影監督 → デジタル撮影監督 のように系譜でまとめた役職は、代表 1 つとして扱う）。</description></item>
 ///   <item><description>並列でつながった代表どうし（連結成分）を 1 つの「段」にまとめる。段は並列の相手がいない代表なら自分 1 つだけ。</description></item>
-///   <item><description>段階は段どうしの有向辺として持つ（同じ段の中の段階は捨てる）。</description></item>
+///   <item><description>段階は段どうしの有向辺として持つ（同じ段の中の段階は捨てる）。前段階・後段階は隣の段だけでなく、
+///     辺をたどって届く先の段すべて（演出助手から見た シリーズディレクター・監督 のように 2 段以上先も含む）。</description></item>
 /// </list>
 /// 用途は役職詳細の年表に重ねる関連する役職（前段階・並列・後段階）の判定。
 /// 構築後は読み取り専用で、並列のページ生成から同時に引いてよい。
@@ -18,10 +19,10 @@ public sealed class RoleRelationIndex
     /// <summary>代表 role_code → 段の ID（段の中で display_order 最小の代表）。</summary>
     private readonly Dictionary<string, string> _stageOf = new(StringComparer.Ordinal);
 
-    /// <summary>段の ID → 後段階の段の ID。</summary>
+    /// <summary>段の ID → 後段階の段の ID（隣の段だけでなく、段階の辺をたどって届く先の段すべて）。</summary>
     private readonly Dictionary<string, HashSet<string>> _nextStages = new(StringComparer.Ordinal);
 
-    /// <summary>段の ID → 前段階の段の ID。</summary>
+    /// <summary>段の ID → 前段階の段の ID（隣の段だけでなく、段階の辺を逆にたどって届く先の段すべて）。</summary>
     private readonly Dictionary<string, HashSet<string>> _prevStages = new(StringComparer.Ordinal);
 
     private readonly RoleSuccessorResolver _resolver;
@@ -82,6 +83,27 @@ public sealed class RoleRelationIndex
             if (string.Equals(sf, st, StringComparison.Ordinal)) continue;
             Add(_nextStages, sf, st);
             Add(_prevStages, st, sf);
+        }
+
+        // 隣の段だけでなく、たどって届く先の段すべてを前段階・後段階にする（2 段以上先も年表に重ねる）。
+        Close(_nextStages);
+        Close(_prevStages);
+
+        static void Close(Dictionary<string, HashSet<string>> map)
+        {
+            foreach (var key in map.Keys.ToList())
+            {
+                var reached = new HashSet<string>(StringComparer.Ordinal);
+                var queue = new Queue<string>(map[key]);
+                while (queue.Count > 0)
+                {
+                    string stage = queue.Dequeue();
+                    if (string.Equals(stage, key, StringComparison.Ordinal) || !reached.Add(stage)) continue;
+                    if (map.TryGetValue(stage, out var further))
+                        foreach (var f in further) queue.Enqueue(f);
+                }
+                map[key] = reached;
+            }
         }
 
         static void Add(Dictionary<string, HashSet<string>> map, string key, string value)

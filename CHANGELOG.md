@@ -2,6 +2,10 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### 開発中（次回リリース）
+
+- **SiteBuilder：他のサイト（precure.news）の OGP カードを、このサイトと同じ描き方・同じ書体で描く起動方法 `--og-cards <一覧.json> <出力先>` を足した**（`Pipeline/OgCardBatch.cs`）：カードの一覧（JSON。出力先からの相対パスと `OgCardSpec`）を読んで PNG を書き出し、一覧に無い PNG は消す。`episode`（例 "2026tv/37"）を持つカードは DB からその話を引き、補助行（『作品名』第N話）とエピソードのカードと同じ組み方のサブタイトル（本編テロップの書体・ルビ）を足す（感想記事）。DB を使うのはこのカードがあるときだけ。書体は App.config の `OgCard*Font` を読む（`BuildConfig.ReadOgCardFonts` に切り出した）。`OgCardSpec` に、見出しの最大行数（`TitleMaxLines`）、流し込みの事実行の書体・平体・文章としての組み（`InlineFactsFontFamily` / `InlineFactsVerticalScale` / `InlineFactsProse`。1 字ずつ折り、入り切らなければ「…」で切る）、前置きの字の大きさ（`KickerFontSize`）、補助行の下のサブタイトル（`EpisodeTitleRubyHtml` ほか）を足した。どれも既定値のときは JSON に出さないので、このサイトのカードの作り置きの鍵は変わらない。
+
 ### v1.18.5 (2026-10-11)
 
 - **サイト・Catalog：キャラ歌唱の「(CV:声優)」を、同じ連名にその声優が人物として出ているときは省くようにした**：「工藤真由 with フェアリートーン」のように、歌手本人と、その人が声をあてるキャラが並ぶ連名で「フェアリートーン(CV:工藤 真由)」と同じ名前が重なっていた。データの声優はそのまま持ち（キャラ詳細・歌唱の集計は変わらない）、表示だけ省く。判定は `SongRecordingSingerDisplay.OmitCv`（同じ役の連名に、声優と同じ名義の人物の行（主名義かスラッシュの相方）があるか）で、楽曲詳細・商品詳細のトラック・平文（`CreditText`）・主題歌のテンプレ（`SongRecordingSingersRepository`）に効く。

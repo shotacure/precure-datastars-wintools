@@ -182,6 +182,57 @@ public sealed class BuildConfig
         RefreshOgCards = refreshOgCards;
     }
 
+    /// <summary>
+    /// App.config の OGP カードの書体（<c>OgCard*Font</c>）を読む。<see cref="FromAppConfig"/> と、
+    /// カードだけを描く起動方法（<c>--og-cards</c>。DB を使わない）の両方から使う。
+    /// </summary>
+    public static Rendering.OgCardFontPaths ReadOgCardFonts()
+    {
+        // OGP カードの書体。商用書体はリポジトリに同梱できないので、インストール済みファイルのパスを
+        // ローカルの App.config で指す。空なら同梱の Noto Sans JP。指定があるのにファイルが無ければ
+        // 設定ミスなので起動時に止める（気づかずに Noto で焼いてデプロイしないため）。
+        return new Rendering.OgCardFontPaths(
+            Title: ReadFontPath("OgCardTitleFont"),
+            Body: ReadFontPath("OgCardBodyFont"),
+            Emphasis: ReadFontPath("OgCardEmphasisFont"),
+            Number: ReadFontPath("OgCardNumberFont"),
+            Watermark: ReadFontPath("OgCardWatermarkFont"),
+            TitleCondensed: ReadFontPaths("OgCardTitleCondensedFonts"),
+            Notice: ReadFontPath("OgCardNoticeFont"),
+            ObliqueDegrees: ReadDegrees("OgCardObliqueDegrees"));
+
+        // 斜体の角度（度）。未設定・不正なら 0（立てたまま）。
+        static float ReadDegrees(string key)
+        {
+            var raw = (ConfigurationManager.AppSettings[key] ?? "").Trim();
+            return float.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0f;
+        }
+
+        static string ReadFontPath(string key)
+        {
+            var raw = (ConfigurationManager.AppSettings[key] ?? "").Trim();
+            if (raw.Length == 0) return "";
+            return ResolveFontPath(key, raw);
+        }
+
+        // 「;」区切りで複数のファイルを指す設定（見出しのコンデンス版）。
+        static IReadOnlyList<string> ReadFontPaths(string key)
+        {
+            var raw = (ConfigurationManager.AppSettings[key] ?? "").Trim();
+            return raw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(part => ResolveFontPath(key, part))
+                .ToList();
+        }
+
+        static string ResolveFontPath(string key, string raw)
+        {
+            var full = Path.GetFullPath(Environment.ExpandEnvironmentVariables(raw));
+            if (!File.Exists(full))
+                throw new InvalidOperationException($"App.config の {key} が指すフォントが見つかりません: {full}");
+            return full;
+        }
+    }
+
     /// <summary>App.config から設定を読み出して <see cref="BuildConfig"/> を構築する。</summary>
     /// <param name="isProductionMode">本番モードかどうか（コマンドライン引数 <c>--production</c> 由来）。
     /// 出力先ディレクトリの選択と、計測・広告系（GA4 / AdSense / ads.txt）の出力可否を決める。</param>
@@ -254,49 +305,7 @@ public sealed class BuildConfig
         // 商品詳細の Amazon リンクは tag なしで出力する（リンク自体は出す）。
         var amazonTag = (ConfigurationManager.AppSettings["AmazonAssociateTag"] ?? "").Trim();
 
-        // OGP カードの書体。商用書体はリポジトリに同梱できないので、インストール済みファイルのパスを
-        // ローカルの App.config で指す。空なら同梱の Noto Sans JP。指定があるのにファイルが無ければ
-        // 設定ミスなので起動時に止める（気づかずに Noto で焼いてデプロイしないため）。
-        var ogFonts = new Rendering.OgCardFontPaths(
-            Title: ReadFontPath("OgCardTitleFont"),
-            Body: ReadFontPath("OgCardBodyFont"),
-            Emphasis: ReadFontPath("OgCardEmphasisFont"),
-            Number: ReadFontPath("OgCardNumberFont"),
-            Watermark: ReadFontPath("OgCardWatermarkFont"),
-            TitleCondensed: ReadFontPaths("OgCardTitleCondensedFonts"),
-            Notice: ReadFontPath("OgCardNoticeFont"),
-            ObliqueDegrees: ReadDegrees("OgCardObliqueDegrees"));
-
-        // 斜体の角度（度）。未設定・不正なら 0（立てたまま）。
-        static float ReadDegrees(string key)
-        {
-            var raw = (ConfigurationManager.AppSettings[key] ?? "").Trim();
-            return float.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0f;
-        }
-
-        static string ReadFontPath(string key)
-        {
-            var raw = (ConfigurationManager.AppSettings[key] ?? "").Trim();
-            if (raw.Length == 0) return "";
-            return ResolveFontPath(key, raw);
-        }
-
-        // 「;」区切りで複数のファイルを指す設定（見出しのコンデンス版）。
-        static IReadOnlyList<string> ReadFontPaths(string key)
-        {
-            var raw = (ConfigurationManager.AppSettings[key] ?? "").Trim();
-            return raw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(part => ResolveFontPath(key, part))
-                .ToList();
-        }
-
-        static string ResolveFontPath(string key, string raw)
-        {
-            var full = Path.GetFullPath(Environment.ExpandEnvironmentVariables(raw));
-            if (!File.Exists(full))
-                throw new InvalidOperationException($"App.config の {key} が指すフォントが見つかりません: {full}");
-            return full;
-        }
+        var ogFonts = ReadOgCardFonts();
 
         // テストモードでは GA4 / AdSense の ID を空に正規化して、タグ・ads.txt の出力経路ごと止める。
         // ID は App.config に常設したまま運用できる（公開ビルドのたびに値をよける必要がない）。

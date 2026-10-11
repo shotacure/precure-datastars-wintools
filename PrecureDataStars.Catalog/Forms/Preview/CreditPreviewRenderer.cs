@@ -161,6 +161,22 @@ internal sealed class CreditPreviewRenderer
             text-align: right;
             font-weight: bold;
           }
+          /* 画面にはクレジットされていない行（not_on_screen）。SiteBuilder の .role.not-on-screen /
+             tr.cooperation-row.not-on-screen と同じく、役職名から中身までを括弧で包んで薄い色で出す。 */
+          .role.not-on-screen,
+          tr.cooperation-row.not-on-screen > td {
+            color: #888;
+          }
+          .role.not-on-screen table tr:first-child > td.role-name::before,
+          .role.not-on-screen .role-rendered::before,
+          tr.cooperation-row.not-on-screen > td.character-cell::before {
+            content: "（";
+          }
+          .role.not-on-screen table tr:last-child > td:last-child::after,
+          .role.not-on-screen .role-rendered::after,
+          tr.cooperation-row.not-on-screen > td.actor-cell::after {
+            content: "）";
+          }
           /* テンプレ展開結果ブロック：エスケープせず素通しで <b> 等を効かせる。
              white-space: pre-wrap は指定しない。レンダラ側で改行コードを完全に正規化したうえで
              <br> に変換する方式に統一しているため、CSS 側で pre-wrap を指定すると \r 残留により
@@ -387,7 +403,7 @@ internal sealed class CreditPreviewRenderer
             IReadOnlyList<CreditBlockEntry>? cooperationEntriesForCard = cooperationContext?.Entries;
             int? cooperationAppendTargetCardRoleId = cooperationContext?.LastVoiceCastCardRoleId;
             CastingCooperationAppend? cooperationAppendForCard = cooperationContext is { } coopCtx
-                ? CooperationAppendFor(coopCtx.Entries, coopCtx.LabelText, roleMap)
+                ? CooperationAppendFor(coopCtx.Entries, coopCtx.LabelText, coopCtx.NotOnScreen, roleMap)
                 : null;
 
             // 絵コンテ・演出融合のカード横断事前スキャン。
@@ -617,6 +633,7 @@ internal sealed class CreditPreviewRenderer
                             joinedLabel: joinedLabelById.TryGetValue(cr.CardRoleId, out var jl) ? jl : null,
                             joinedLabelHtml: joinedLabelHtmlById.TryGetValue(cr.CardRoleId, out var jlh) ? jlh : null,
                             hideRoleLabel: cr.HideRoleLabel,
+                            notOnScreen: cr.NotOnScreen,
                             html, ct);
 
                         // 直前ロール記憶を更新: 当該ロールが VOICE_CAST なら role_code を覚える、
@@ -644,7 +661,7 @@ internal sealed class CreditPreviewRenderer
     /// 「最後の」判定は描画順序と一致させる必要があるので、Tier の TierNo 昇順 → Group の GroupNo 昇順 →
     /// CardRole の OrderInGroup 昇順で走査して、見つかった VOICE_CAST 役職のうち最後のものを採用する。
     /// </summary>
-    private async Task<(List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId, string? LabelText)?> CollectCardCastingCooperationContextAsync(
+    private async Task<(List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId, string? LabelText, bool NotOnScreen)?> CollectCardCastingCooperationContextAsync(
         int cardId,
         IReadOnlyList<CreditCardTier> tiersInCard,
         IReadOnlyDictionary<string, Role> roleMap,
@@ -654,6 +671,8 @@ internal sealed class CreditPreviewRenderer
         var cooperationCardRoleIds = new List<int>();
         // 「協力」行の表記。CASTING_COOPERATION 役職のうち最初に画面の表記（role_label_text）を持つもの。
         string? cooperationLabelText = null;
+        // CASTING_COOPERATION 役職のいずれかが画面にはクレジットされていない（not_on_screen）なら「協力」行を括弧で示す。
+        bool cooperationNotOnScreen = false;
         foreach (var tier in tiersInCard.OrderBy(t => t.TierNo))
         {
             var groups = (await _groupsRepo.GetByTierAsync(tier.CardTierId, ct))
@@ -669,6 +688,7 @@ internal sealed class CreditPreviewRenderer
                     {
                         cooperationCardRoleIds.Add(cr.CardRoleId);
                         if (cooperationLabelText is null && !string.IsNullOrEmpty(cr.RoleLabelText)) cooperationLabelText = cr.RoleLabelText;
+                        if (cr.NotOnScreen) cooperationNotOnScreen = true;
                     }
                 }
             }
@@ -684,7 +704,7 @@ internal sealed class CreditPreviewRenderer
             var entries = await CollectEntriesUnderCardRoleAsync(crId, ct);
             aggregated.AddRange(entries);
         }
-        return (aggregated, lastVcCardRoleId.Value, cooperationLabelText);
+        return (aggregated, lastVcCardRoleId.Value, cooperationLabelText, cooperationNotOnScreen);
     }
 
     /// <summary>指定 cardRoleId 配下の全ブロック・全エントリ（is_broadcast_only 除外）を 1 つのフラットリストに集める （絵コンテ・演出融合判定用ヘルパ）。</summary>
@@ -767,7 +787,7 @@ internal sealed class CreditPreviewRenderer
             var draftCooperationContext = CollectDraftCardCastingCooperationContext(dCard, roleMap);
             IReadOnlyList<CreditBlockEntry>? cooperationEntriesForCard = draftCooperationContext?.Entries;
             CastingCooperationAppend? cooperationAppendForCard = draftCooperationContext is { } draftCoopCtx
-                ? CooperationAppendFor(draftCoopCtx.Entries, draftCoopCtx.LabelText, roleMap)
+                ? CooperationAppendFor(draftCoopCtx.Entries, draftCoopCtx.LabelText, draftCoopCtx.NotOnScreen, roleMap)
                 : null;
             DraftRole? cooperationAppendTargetRole = draftCooperationContext?.LastVoiceCastRole;
 
@@ -1001,6 +1021,7 @@ internal sealed class CreditPreviewRenderer
                             joinedLabel: draftJoinedLabelById.TryGetValue(dRole.CurrentId, out var djl) ? djl : null,
                             joinedLabelHtml: draftJoinedLabelHtmlById.TryGetValue(dRole.CurrentId, out var djlh) ? djlh : null,
                             hideRoleLabel: dRole.Entity.HideRoleLabel,
+                            notOnScreen: dRole.Entity.NotOnScreen,
                             html, ct);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(dRole.Entity.RoleCode, roleMap)
@@ -1021,23 +1042,24 @@ internal sealed class CreditPreviewRenderer
     /// <summary>
     /// 声の出演の末尾に足す「協力」行の情報を組み立てる。「協力」の文字は SiteBuilder と同じく、
     /// 画面の表記（<paramref name="labelText"/>）→ 役職マスタの CASTING_COOPERATION の名前の順に決める（どちらも無ければ null）。
+    /// <paramref name="notOnScreen"/> が true なら「協力」行は画面にはクレジットされていないものとして括弧で示す。
     /// </summary>
     private static CastingCooperationAppend CooperationAppendFor(
-        IReadOnlyList<CreditBlockEntry> entries, string? labelText, IReadOnlyDictionary<string, Role> roleMap)
+        IReadOnlyList<CreditBlockEntry> entries, string? labelText, bool notOnScreen, IReadOnlyDictionary<string, Role> roleMap)
     {
         string? text = !string.IsNullOrEmpty(labelText)
             ? labelText
             : roleMap.TryGetValue(RoleCodeCastingCooperation, out var coopRole) && !string.IsNullOrEmpty(coopRole.NameJa)
                 ? coopRole.NameJa
                 : null;
-        return new CastingCooperationAppend(entries, text);
+        return new CastingCooperationAppend(entries, text, notOnScreen);
     }
 
     /// <summary>
     /// Draft セッション上の指定カード内で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」が両方 存在するかを判定し
-    /// 、両方ある場合のみ CASTING_COOPERATION 役職配下の全エントリ （複数ロール・複数ブロック横断）と「カード内で最後に登場する VOICE_CAST 役職の DraftRole 参照」 を返す。あわせて「協力」行の表記（CASTING_COOPERATION 役職のうち最初に画面の表記を持つものの role_label_text、無ければ null）も返す。
+    /// 、両方ある場合のみ CASTING_COOPERATION 役職配下の全エントリ （複数ロール・複数ブロック横断）と「カード内で最後に登場する VOICE_CAST 役職の DraftRole 参照」 を返す。あわせて「協力」行の表記（CASTING_COOPERATION 役職のうち最初に画面の表記を持つものの role_label_text、無ければ null）と、画面に無い印（いずれかが not_on_screen）も返す。
     /// </summary>
-    private (List<CreditBlockEntry> Entries, DraftRole LastVoiceCastRole, string? LabelText)? CollectDraftCardCastingCooperationContext(
+    private (List<CreditBlockEntry> Entries, DraftRole LastVoiceCastRole, string? LabelText, bool NotOnScreen)? CollectDraftCardCastingCooperationContext(
         DraftCard dCard,
         IReadOnlyDictionary<string, Role> roleMap)
     {
@@ -1078,7 +1100,9 @@ internal sealed class CreditPreviewRenderer
         string? labelText = cooperationRoles
             .Select(r => r.Entity.RoleLabelText)
             .FirstOrDefault(t => !string.IsNullOrEmpty(t));
-        return (aggregated, lastVcRole, labelText);
+        // CASTING_COOPERATION 役職のいずれかが画面にはクレジットされていない（not_on_screen）なら「協力」行を括弧で示す。
+        bool notOnScreen = cooperationRoles.Any(r => r.Entity.NotOnScreen);
+        return (aggregated, lastVcRole, labelText, notOnScreen);
     }
 
     /// <summary>
@@ -1165,6 +1189,9 @@ internal sealed class CreditPreviewRenderer
         string? joinedLabelHtml,
         // その行だけ役職名を出さない（credit_card_roles.hide_role_label）。true なら役職名の欄を空にする。
         bool hideRoleLabel,
+        // 画面にはクレジットされていない行（credit_card_roles.not_on_screen）。true なら役職ラッパに not-on-screen を付け、
+        // 役職名から中身までを括弧で包んで薄い色で出す（SiteBuilder と同じ）。
+        bool notOnScreen,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -1213,7 +1240,9 @@ internal sealed class CreditPreviewRenderer
         // シリーズ別の見出し上書きより、そのクレジットの画面の表記を優先する。
         if (contentHeaderOverride is not null && !string.IsNullOrEmpty(roleLabelText)) contentHeaderOverride = roleLabelText;
 
-        html.Append("<div class=\"role\">");
+        html.Append(notOnScreen
+            ? "<div class=\"role not-on-screen\" title=\"画面にはクレジットされていない\">"
+            : "<div class=\"role\">");
 
         // コンテンツ領域ヘッダ上書き：シリーズ別「役職名の表示テキストだけ変えて、本体は通常描画」用途。
         // 非 NULL のとき役職ラッパ直下に <strong> + 役職詳細リンクを出し、後段のフォールバック描画では
@@ -2029,7 +2058,10 @@ internal sealed class CreditPreviewRenderer
                 string cooperationRoleName = !string.IsNullOrEmpty(appendedCooperation.LabelText)
                     ? appendedCooperation.LabelText!
                     : "協力";
-                html.Append("<tr class=\"cooperation-row\">");
+                // 画面に無い「協力」は not-on-screen を付け、「協力」から屋号までを括弧で包んで薄い色で出す（SiteBuilder と同じ）。
+                html.Append(appendedCooperation.NotOnScreen
+                    ? "<tr class=\"cooperation-row not-on-screen\" title=\"画面にはクレジットされていない\">"
+                    : "<tr class=\"cooperation-row\">");
                 html.Append("<td class=\"role-name\"></td>");
                 html.Append($"<td class=\"character-cell\">{Esc(cooperationRoleName)}</td>");
                 html.Append("<td class=\"actor-cell\">");

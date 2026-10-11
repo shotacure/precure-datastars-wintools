@@ -6531,6 +6531,26 @@ a.credit-card-series:focus-visible {
   padding-right: 16px;
   white-space: nowrap;
 }
+/* 画面にはクレジットされていない行（credit_card_roles.not_on_screen）。データとしては数えたうえで、
+   役職名から中身までを全角の括弧で包み、薄い色で出す（マウスを載せると title で理由が出る）。
+   役職の表は先頭行の役職名セルの前に「（」、最終行の最後のセルの後に「）」を置く。テンプレ展開の役職は本文の前後に置く。
+   声の出演の末尾に足す「協力」行は、「協力」のセルの前と屋号のセルの後に置く。 */
+.credit-section .role.not-on-screen,
+.credit-section .role.not-on-screen a,
+.credit-section tr.cooperation-row.not-on-screen > td,
+.credit-section tr.cooperation-row.not-on-screen > td a {
+  color: var(--muted);
+}
+.credit-section .role.not-on-screen table tr:first-child > td.role-name::before,
+.credit-section .role.not-on-screen .role-rendered::before,
+.credit-section tr.cooperation-row.not-on-screen > td.character-cell::before {
+  content: "（";
+}
+.credit-section .role.not-on-screen table tr:last-child > td:last-child::after,
+.credit-section .role.not-on-screen .role-rendered::after,
+.credit-section tr.cooperation-row.not-on-screen > td.actor-cell::after {
+  content: "）";
+}
 /* ──────────────────── クレジットの表：スマホの幅 ────────────────────
    クレジットの表（役職名 | 中身）は、パソコンの幅では役職名の列を credit-align.js がページ内でそろえた幅
    （--credit-role-name-w。最も長い役職名に合わせる）で並べる。スマホの幅ではその幅と各列の最低幅の合計が画面を

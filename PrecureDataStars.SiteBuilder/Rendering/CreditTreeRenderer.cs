@@ -211,7 +211,7 @@ internal sealed class CreditTreeRenderer
             IReadOnlyList<CreditBlockEntry>? cooperationEntriesForCard = cooperationContext?.Entries;
             int? cooperationAppendTargetCardRoleId = cooperationContext?.LastVoiceCastCardRoleId;
             CastingCooperationAppend? cooperationAppendForCard = cooperationContext is { } coopCtx
-                ? new CastingCooperationAppend(coopCtx.Entries, coopCtx.LabelText)
+                ? new CastingCooperationAppend(coopCtx.Entries, coopCtx.LabelText, coopCtx.NotOnScreen)
                 : null;
 
             // 絵コンテ・演出融合のカード横断事前スキャン。
@@ -369,6 +369,7 @@ internal sealed class CreditTreeRenderer
                             roleMisprintText: cr.RoleMisprintText,
                             roleNameHtmlOverride: joinedLabelHtmlByLeadId.TryGetValue(cr.CardRoleId, out var joinedHtml) ? joinedHtml : null,
                             hideRoleLabel: cr.HideRoleLabel,
+                            notOnScreen: cr.NotOnScreen,
                             html, ct).ConfigureAwait(false);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(cr.RoleCode, roleMap)
@@ -476,8 +477,8 @@ internal sealed class CreditTreeRenderer
         return _ctx.SeriesById.TryGetValue(seriesId.Value, out var s) && s.HideStoryboardRole;
     }
 
-    /// <summary>カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の CardRoleId + 「協力」行の表記（CASTING_COOPERATION 役職のうち最初に画面の表記を持つものの <c>role_label_text</c>、無ければ null）を返す（プレビューと同一仕様）。 探索は <see cref="CreditTreeIndex"/> の事前展開済みスナップショットを辿るだけで完結する。</summary>
-    private static (List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId, string? LabelText)? CollectCardCastingCooperationContext(
+    /// <summary>カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の CardRoleId + 「協力」行の表記（CASTING_COOPERATION 役職のうち最初に画面の表記を持つものの <c>role_label_text</c>、無ければ null）+ 画面に無い印（CASTING_COOPERATION 役職のいずれかが <c>not_on_screen</c>）を返す（プレビューと同一仕様）。 探索は <see cref="CreditTreeIndex"/> の事前展開済みスナップショットを辿るだけで完結する。</summary>
+    private static (List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId, string? LabelText, bool NotOnScreen)? CollectCardCastingCooperationContext(
         CreditCardSnapshot cardSnap,
         IReadOnlyDictionary<string, Role> roleMap)
     {
@@ -507,7 +508,8 @@ internal sealed class CreditTreeRenderer
         string? labelText = cooperationRoleSnaps
             .Select(rs => rs.Role.RoleLabelText)
             .FirstOrDefault(t => !string.IsNullOrEmpty(t));
-        return (aggregated, lastVcCardRoleId.Value, labelText);
+        bool notOnScreen = cooperationRoleSnaps.Any(rs => rs.Role.NotOnScreen);
+        return (aggregated, lastVcCardRoleId.Value, labelText, notOnScreen);
     }
 
     /// <summary>指定 CardRole 配下の全エントリ（<c>is_broadcast_only = 0</c> のみ）を block_seq → entry_seq 順で平坦化する。</summary>
@@ -571,6 +573,9 @@ internal sealed class CreditTreeRenderer
         string? roleNameHtmlOverride,
         // その行だけ役職名を出さない（credit_card_roles.hide_role_label）。true なら役職名の欄を空にして中身だけ出す。
         bool hideRoleLabel,
+        // 画面にはクレジットされていない行（credit_card_roles.not_on_screen）。true なら役職ラッパに not-on-screen を付け、
+        // CSS で役職名から中身までを括弧で包んで薄い色で出す。データとしては通常どおり数える。
+        bool notOnScreen,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -618,7 +623,9 @@ internal sealed class CreditTreeRenderer
         if (roleMisprintPrefixHtml.Length > 0 && roleNameHtmlOverride is null)
             roleNameHtmlOverride = roleMisprintPrefixHtml + BuildRoleNameHtml(roleCode, roleName, roleMap);
 
-        html.Append("<div class=\"role\">");
+        html.Append(notOnScreen
+            ? "<div class=\"role not-on-screen\" title=\"画面にはクレジットされていない\">"
+            : "<div class=\"role\">");
 
         // コンテンツ領域ヘッダ上書き：シリーズ別「役職名の表示テキストだけ変えて、本体は通常描画」
         // 用途。非 NULL のとき役職ラッパ直下に <strong>+ 役職詳細リンクを出し、後段のフォールバック
@@ -1429,7 +1436,10 @@ internal sealed class CreditTreeRenderer
                         : "協力";
                 string cooperationLabelHtml = BuildRoleNameHtml(RoleCodeCastingCooperation, cooperationRoleName, roleMap);
 
-                html.Append("<tr class=\"cooperation-row\">");
+                // 画面に無い「協力」は not-on-screen を付け、CSS で「協力」から屋号までを括弧で包んで薄い色で出す。
+                html.Append(appendedCooperation.NotOnScreen
+                    ? "<tr class=\"cooperation-row not-on-screen\" title=\"画面にはクレジットされていない\">"
+                    : "<tr class=\"cooperation-row\">");
                 // 1 段目（役職名カラム）は空。声の出演ブロックの 2 行目以降と同じ「役職名抑止」状態。
                 html.Append("<td class=\"role-name\"></td>");
                 // 2 段目（キャラ名カラム）に「協力」を置く。CSS .cooperation-row .character-cell で

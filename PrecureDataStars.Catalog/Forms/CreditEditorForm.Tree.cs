@@ -150,6 +150,7 @@ public partial class CreditEditorForm
                         if (!string.IsNullOrEmpty(role.RoleMisprintText)) roleNote += $"  [誤記: {role.RoleMisprintText}]";
                         if (role.JoinPrevious) roleNote += $"  [直前の役職とまとめる 区切り「{Dialogs.JoinedRoleLabelText.EncodeLineBreaks(role.JoinSeparator ?? "")}」]";
                         if (role.HideRoleLabel) roleNote += "  [役職名を出さない]";
+                        if (role.NotOnScreen) roleNote += "  [画面に無い]";
 
                         var roleNode = new TreeNode($"📋 Role: {roleName}  (order {roleDisplayIndex}){roleNote}")
                         {

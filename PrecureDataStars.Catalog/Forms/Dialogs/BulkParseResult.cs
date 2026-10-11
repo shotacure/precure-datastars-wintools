@@ -141,6 +141,10 @@ public sealed class ParsedRole
     /// <summary>その行だけ役職名を出さないか（<c>credit_card_roles.hide_role_label</c>）。<c>@hide_label</c> 行で設定される。
     /// 同じ見出しの下に 2 社目のスタッフが続くとき、2 社目の見出しの役職に立てる。</summary>
     public bool HideRoleLabel { get; set; }
+
+    /// <summary>その行が画面にはクレジットされていないか（<c>credit_card_roles.not_on_screen</c>）。<c>@not_on_screen</c> 行で設定される。
+    /// 毎回出る役職がその回だけ画面から抜けているとき（クレジット漏れ）に立てる。データは入れて、表示だけ括弧で示す。</summary>
+    public bool NotOnScreen { get; set; }
 }
 
 /// <summary>パース結果における 1 ブロック分の塊。 同一役職内で空行を跨ぐと新しいブロックが生まれる。</summary>

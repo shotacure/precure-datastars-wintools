@@ -2476,6 +2476,8 @@ CREATE TABLE `credit_card_roles` (
   -- 1 ならクレジットの表示でこの行の役職名を出さず、中身（会社・人物）だけを出す。集計・関与は role_code のまま。
   -- 画面で 1 つの見出しの下に会社ごとのスタッフが続くとき、2 社目の見出しの行に立てて見出しが 2 度出ないようにする。
   `hide_role_label` tinyint                                              NOT NULL DEFAULT 0,
+  -- 1 ならこの行は画面にはクレジットされていない（クレジット漏れ）。データは入れて集計・関与に数え、表示だけ括弧で包んで示す。
+  `not_on_screen`  tinyint                                               NOT NULL DEFAULT 0,
   `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

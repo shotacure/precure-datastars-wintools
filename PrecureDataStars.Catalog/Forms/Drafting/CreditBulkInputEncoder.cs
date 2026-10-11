@@ -346,6 +346,12 @@ internal static class CreditBulkInputEncoder
             sb.Append("@hide_label").Append(LineSeparator);
         }
 
+        // その行は画面にはクレジットされていない（クレジット漏れ）。
+        if (role.Entity.NotOnScreen)
+        {
+            sb.Append("@not_on_screen").Append(LineSeparator);
+        }
+
         // 1 行にまとめて表示する役職の指定（まとめた形で書き出せなかった組・1 役職だけの書き出しの個別指定）。
         // 区切りの前後に空白があるときは、読み込みで落ちないよう角括弧で囲む。
         if (role.Entity.JoinPrevious)

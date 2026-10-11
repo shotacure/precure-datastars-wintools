@@ -81,28 +81,24 @@ public sealed partial class OgCardRenderer : IDisposable
     // ──────── 配色（サイトの CSS 変数と対応させる） ────────
 
     /// <summary>
-    /// 地色。サイトの <c>.hero.hero-gradient</c>（180deg 淡ピンク→クリーム）と同値。
+    /// 地色（<see cref="OgCardTheme.Background"/>）。既定はサイトの <c>.hero.hero-gradient</c>（180deg 淡ピンク→クリーム）と同値。
     /// カードはページ本文ではなく「ページの顔」なので、通常ページの白地ではなくヒーローの地を使う。
+    /// 色の位置は <see cref="BackgroundStops"/> の 3 点。
     /// </summary>
-    private static readonly SKColor[] BackgroundColors =
-    {
-        SKColor.Parse("#fff1f6"),
-        SKColor.Parse("#fde7ef"),
-        SKColor.Parse("#fff8f0")
-    };
+    private readonly SKColor[] BackgroundColors;
     private static readonly float[] BackgroundStops = { 0f, 0.45f, 1f };
-    /// <summary>アクセント（--accent-pink）。見出し下の罫と数字に使う。</summary>
-    private static readonly SKColor AccentPink = SKColor.Parse("#e91e63");
+    /// <summary>アクセント（<see cref="OgCardTheme.Accent"/>。既定は --accent-pink）。見出し下の罫と数字に使う。</summary>
+    private readonly SKColor AccentPink;
     /// <summary>本文色（--fg）。</summary>
     private static readonly SKColor Foreground = SKColor.Parse("#1a1a1a");
-    /// <summary>ヒーロー見出しの色（サイトの <c>.hero.hero-gradient h1</c>）。</summary>
-    private static readonly SKColor HeroTitleColor = SKColor.Parse("#be185d");
-    /// <summary>ヒーローのタグラインの色（サイトの <c>.hero.hero-gradient .lead</c>）。</summary>
-    private static readonly SKColor HeroLeadColor = SKColor.Parse("#9d174d");
+    /// <summary>ヒーロー見出しの色（<see cref="OgCardTheme.HeroTitle"/>。既定はサイトの <c>.hero.hero-gradient h1</c>）。</summary>
+    private readonly SKColor HeroTitleColor;
+    /// <summary>ヒーローのタグラインの色（<see cref="OgCardTheme.HeroLead"/>。既定はサイトの <c>.hero.hero-gradient .lead</c>）。</summary>
+    private readonly SKColor HeroLeadColor;
     /// <summary>補助色（--muted）。</summary>
     private static readonly SKColor Muted = SKColor.Parse("#666666");
-    /// <summary>罫線。フッタの区切りと帯グラフの外枠に使う。ピンク寄りの地に馴染む薄色。</summary>
-    private static readonly SKColor Hairline = SKColor.Parse("#e7c8d4");
+    /// <summary>罫線（<see cref="OgCardTheme.Hairline"/>）。フッタの区切りと帯グラフの外枠に使う。地に馴染む薄色。</summary>
+    private readonly SKColor Hairline;
     /// <summary>帯グラフ区画の仕切り。隣り合う淡色を分離する。</summary>
     private static readonly SKColor BarDivider = SKColor.Parse("#ffffff");
     /// <summary>ハッチ（CM 枠）の斜線色。</summary>
@@ -313,6 +309,9 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <summary>カード下部に固定で出すサイト名。</summary>
     private readonly string _brandLabel;
 
+    /// <summary>配色（<see cref="OgCardTheme"/>）。作り置きの鍵にも含める。</summary>
+    private readonly OgCardTheme _theme;
+
     /// <summary>
     /// 設定で指定された書体の印（ファイル名と斜体の角度）。作り置きの鍵に入れる。書体はファイルの中身ではなく
     /// 名前で見るので、同じ名前のファイルを差し替えても描き直さない（描き直したいときは <c>--refresh-og</c>）。
@@ -325,16 +324,32 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <summary>見出し書体に適用するウェイト（サイトの h1・h2 と同じ Bold）。</summary>
     private const int HeadingFontWeight = 700;
 
+    /// <summary>配色の 1 色（<c>"#rrggbb"</c>）を読む。欠けているか読めなければ、項目名を添えて止める。</summary>
+    private static SKColor ParseThemeColor(string? value, string name)
+        => SKColor.TryParse(value ?? "", out var c)
+            ? c
+            : throw new ArgumentException($"配色の {name} の色を読めませんでした: \"{value}\"", "theme");
+
     /// <summary>
     /// 書体を読み込んでレンダラを構築する。設定（<paramref name="fonts"/>）で指定された書体はそのファイルを、
     /// 空のものは同梱フォントを使う。
     /// </summary>
     /// <param name="brandLabel">カード下部に出すサイト名（可視ブランド表記）。</param>
     /// <param name="fonts">見出し・本文・数字・透かしの書体ファイル。</param>
+    /// <param name="theme">配色。null なら precure.tv の配色（<see cref="OgCardTheme.Default"/>）。</param>
     /// <exception cref="FileNotFoundException">フォントが見つからない場合。</exception>
-    public OgCardRenderer(string brandLabel, OgCardFontPaths fonts)
+    /// <exception cref="ArgumentException">配色の色が欠けているか読めない場合、地色が 3 色でない場合。</exception>
+    public OgCardRenderer(string brandLabel, OgCardFontPaths fonts, OgCardTheme? theme = null)
     {
         _brandLabel = brandLabel;
+        _theme = theme ?? OgCardTheme.Default;
+        if (_theme.Background is null || _theme.Background.Count != BackgroundStops.Length)
+            throw new ArgumentException($"配色の地色（background）は {BackgroundStops.Length} 色で指定してください。", nameof(theme));
+        BackgroundColors = _theme.Background.Select(c => ParseThemeColor(c, "background")).ToArray();
+        AccentPink = ParseThemeColor(_theme.Accent, "accent");
+        HeroTitleColor = ParseThemeColor(_theme.HeroTitle, "heroTitle");
+        HeroLeadColor = ParseThemeColor(_theme.HeroLead, "heroLead");
+        Hairline = ParseThemeColor(_theme.Hairline, "hairline");
         _fontIdentity = string.Join('|',
             Path.GetFileName(fonts.Title), Path.GetFileName(fonts.Body), Path.GetFileName(fonts.Emphasis),
             Path.GetFileName(fonts.Number), Path.GetFileName(fonts.Watermark), Path.GetFileName(fonts.Notice),
@@ -578,7 +593,7 @@ public sealed partial class OgCardRenderer : IDisposable
             CardRenderVersion.ToString(CultureInfo.InvariantCulture),
             _brandLabel,
             _fontIdentity,
-            JsonSerializer.Serialize(spec));
+            ReferenceEquals(_theme, OgCardTheme.Default) ? JsonSerializer.Serialize(spec) : JsonSerializer.Serialize(spec) + "\n" + JsonSerializer.Serialize(_theme));
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material)))[..32].ToLowerInvariant();
     }
 
@@ -1121,7 +1136,7 @@ public sealed partial class OgCardRenderer : IDisposable
     /// 見出しの下に太いピンクの罫を引き、その下端 Y を返す。
     /// サイトの <c>h1</c> と同じ「1 本の罫でタイトル行を締める」規律をカードにも通す。
     /// </summary>
-    private static float DrawTitleRule(SKCanvas canvas, SKPaint paint, float titleBottom, float contentWidth)
+    private float DrawTitleRule(SKCanvas canvas, SKPaint paint, float titleBottom, float contentWidth)
     {
         float ruleTop = titleBottom + TitleRuleGap;
         paint.Color = AccentPink;
@@ -1751,11 +1766,11 @@ public sealed partial class OgCardRenderer : IDisposable
     private const float WatermarkTop = 14f;
 
     /// <summary>種別の色（<see cref="OgCardSpec.BandColorHex"/>）。指定が無いか読めなければアクセントのピンク。</summary>
-    private static SKColor BandColor(OgCardSpec spec)
+    private SKColor BandColor(OgCardSpec spec)
         => SKColor.TryParse(spec.BandColorHex, out var c) ? c : AccentPink;
 
     /// <summary>左端の色帯。カードの種別を色で見分けるための帯で、全カードに描く。</summary>
-    private static void DrawBand(SKCanvas canvas, OgCardSpec spec)
+    private void DrawBand(SKCanvas canvas, OgCardSpec spec)
     {
         using var paint = new SKPaint { Color = BandColor(spec) };
         canvas.DrawRect(SKRect.Create(0f, 0f, BandWidth, CardHeight), paint);
@@ -2346,7 +2361,7 @@ public sealed partial class OgCardRenderer : IDisposable
     }
 
     /// <summary>背景の縦グラデーションを敷く。</summary>
-    private static void DrawBackground(SKCanvas canvas)
+    private void DrawBackground(SKCanvas canvas)
     {
         using var shader = SKShader.CreateLinearGradient(
             new SKPoint(0, 0),

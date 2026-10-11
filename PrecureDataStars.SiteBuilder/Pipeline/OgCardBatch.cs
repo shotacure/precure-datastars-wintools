@@ -13,7 +13,8 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// 他のサイト（precure.news など）の OGP カードを、このサイトと同じ描き方・同じ書体で描く起動方法（<c>--og-cards</c>）。
 /// カードの一覧（JSON）を読んで PNG を書き出す。書体は App.config の <c>OgCard*Font</c> を使う。
 /// <para>
-/// 一覧の形：<c>{ "brand": "フッタのサイト名", "cards": [ { "path": "2026/01/11/slug.png", "spec": { …OgCardSpec… } } ] }</c>。
+/// 一覧の形：<c>{ "brand": "フッタのサイト名", "theme": { …OgCardTheme… }, "cards": [ { "path": "2026/01/11/slug.png", "spec": { …OgCardSpec… } } ] }</c>。
+/// <c>theme</c>（配色）は省けば precure.tv の配色。
 /// <c>path</c> は出力先フォルダからの相対パス、<c>spec</c> は <see cref="OgCardSpec"/> を JSON にしたもの（名前の大文字小文字は問わない）。
 /// </para>
 /// <c>episode</c>（precure.tv のエピソードの URL のうち /series/ の後ろ。例 "2026tv/37"）を持つカードは、
@@ -24,7 +25,7 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// </summary>
 internal static class OgCardBatch
 {
-    private sealed record Manifest(string Brand, IReadOnlyList<ManifestCard> Cards);
+    private sealed record Manifest(string Brand, IReadOnlyList<ManifestCard> Cards, OgCardTheme? Theme = null);
 
     private sealed record ManifestCard(string Path, OgCardSpec Spec, string? Episode = null);
 
@@ -39,7 +40,7 @@ internal static class OgCardBatch
             ?? throw new InvalidOperationException($"カードの一覧を読めませんでした: {manifestPath}");
         var outRoot = Path.GetFullPath(outputDirectory);
 
-        using var renderer = new OgCardRenderer(manifest.Brand, BuildConfig.ReadOgCardFonts());
+        using var renderer = new OgCardRenderer(manifest.Brand, BuildConfig.ReadOgCardFonts(), manifest.Theme);
         var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         EpisodeLookup? episodes = null;
         int warnings = 0;

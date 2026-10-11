@@ -7434,18 +7434,23 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   font-family: var(--font-brand);
 }
 
-/* 姉妹サイト「いえるかなクイズ」バナーカード（ホーム上部）。
+/* 姉妹サイトのカード（ホーム上部。precure.news のホームも同じクラスで precure.tv へのカードを置く）。
    1920×640(3:1) の不透明バナーをカード全域に敷き、角丸でクリップして
    淡い境界線＋影で「クリックできる 1 枚」に見せる。ホバー/フォーカスでわずかにリフトして
-   クリック可能性を示す。img は width:100%/height:auto でレスポンシブに縮む。 */
+   クリック可能性を示す。img は width:100%/height:auto でレスポンシブに縮む。
+   複数枚は中央寄せで横に並べ、2 枚が入らない幅では折り返して縦に積む。 */
 .sister-site {
   margin: 1.4em 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
 }
 .sister-site-link {
   display: block;
-  /* 本文幅いっぱいだと主役級に大きくなりすぎるため、控えめな callout サイズに抑えて中央寄せ。 */
-  max-width: 500px;
-  margin: 0 auto;
+  /* 本文幅いっぱいだと主役級に大きくなりすぎるため、控えめな callout サイズに抑える。 */
+  flex: 0 1 340px;
+  min-width: 0;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid #f4c6dd;
@@ -7464,6 +7469,49 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   display: block;
   width: 100%;
   height: auto;
+}
+/* バナー画像の無い姉妹サイトの文字のカード。バナーと同じ 3:1 の枠に、
+   ホームの見出しの枠と同じグラデーションを敷き、ヘッダのワードマークと同じく
+   肩書き（日本語）を小さく、固有名詞（英字）を主役に組む。下に一行の紹介を添える。 */
+.sister-site-text-card {
+  aspect-ratio: 3 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 12px;
+  background: linear-gradient(180deg, #fff1f6 0%, #fde7ef 45%, #fff8f0 100%);
+  font-family: var(--font-brand);
+  text-align: center;
+  line-height: 1.3;
+}
+.sister-site-text-card-ja {
+  font-size: 0.8em;
+  color: var(--muted);
+}
+.sister-site-text-card-en {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: #be185d;
+}
+.sister-site-text-card-lead {
+  font-size: 0.75em;
+  color: var(--fg);
+}
+/* precure.news へのカードは news のキーカラー（#6699ff）の青系で組む。
+   文字は同じ色相で白地 4.5:1 を満たす濃さ（#2a56c6）、ホバーの縁は #3366cc。 */
+.sister-site-text-card-news {
+  --accent-pink: #3366cc;
+  border-color: #c2d6ff;
+  background: linear-gradient(180deg, #f0f5ff 0%, #e3ecff 45%, #f8fbff 100%);
+}
+.sister-site-text-card-news:hover,
+.sister-site-text-card-news:focus-visible {
+  box-shadow: 0 4px 14px rgba(51, 102, 204, 0.16);
+}
+.sister-site-text-card-news .sister-site-text-card-en {
+  color: #2a56c6;
 }
 
 /* SNS シェアボタン群 _share-buttons.sbn が main の末尾に挿入する <aside class="share-buttons">。

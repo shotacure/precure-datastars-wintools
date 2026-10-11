@@ -62,6 +62,21 @@ namespace PrecureDataStars.BDAnalyzer
         /// <summary>ListView の Checked プロパティをコード側から一括設定する際、 <see cref="listView_ItemChecked"/> による連動ロジックの再帰発火を抑制するためのフラグ。 ListView アイテム投入時やプログラム的な一括更新の周辺で true にし、終わったら false に戻す。</summary>
         private bool _suppressItemCheckCascade = false;
 
+        /// <summary>
+        /// m2ts を切り出せる盤の BDMV フォルダ（PLAYLIST / CLIPINF / STREAM の親）。BDMV/PLAYLIST のフォルダ全走査で読んだときだけ入り、
+        /// DVD・単一プレイリストモード・取り外し後は null（単一プレイリストモードはチャプターが隣のプレイリストの値に差し替わることがあり、位置がずれるため）。
+        /// </summary>
+        private string? _cutBdmvRoot;
+
+        /// <summary>m2ts の切り出し中フラグ。切り出し中はボタンが「中止」になり、読み込みを受け付けない。</summary>
+        private bool _cutting;
+
+        /// <summary>切り出しの中止用。</summary>
+        private CancellationTokenSource? _cutCts;
+
+        /// <summary>前回選んだ切り出しの保存先（起動中だけ覚える）。</summary>
+        private string? _lastCutFolder;
+
         /// <summary>DB 連携無効モード（従来互換）コンストラクタ。</summary>
         public MainForm()
         {
@@ -90,6 +105,8 @@ namespace PrecureDataStars.BDAnalyzer
             btnDbMatch.Click += btnDbMatch_Click;
             btnEpisodeLink.Click += async (_, __) => await OpenEpisodeLinkAsync();
             btnBdSave.Click += async (_, __) => await SaveBdAsync(confirm: true);
+            // チェックしたチャプターの m2ts 切り出し（DB は使わないので DB 連携の有無に関係なく使える）
+            btnCutM2ts.Click += async (_, __) => await CutCheckedChaptersAsync();
             SetDbPanelEnabled(false, "DB 接続が設定されていません (App.config)");
         }
 
@@ -133,7 +150,8 @@ namespace PrecureDataStars.BDAnalyzer
         private async Task LoadPathAsync(string path)
         {
             // 読み込み中の再入は抑止（自動トリガ・ボタン連打の双方をここで一元的に弾く）。
-            if (_loading) return;
+            // m2ts の切り出し中も、一覧を差し替えないよう受け付けない。
+            if (_loading || _cutting) return;
 
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             {
@@ -143,6 +161,9 @@ namespace PrecureDataStars.BDAnalyzer
 
             _loading = true;
             btnLoadDefault.Enabled = false;
+            // 切り出せるのはフォルダ全走査で読み終えた盤だけ（LoadMplsFolderScanAsync が入れ直す）
+            _cutBdmvRoot = null;
+            UpdateCutButton();
             lblInfo.Text = $"{Path.GetFileName(path)} を読み込み中...";
             try
             {
@@ -597,7 +618,15 @@ namespace PrecureDataStars.BDAnalyzer
                     chap.SubItems.Add(FormatTs(dur));
                     chap.SubItems.Add(FormatTs(accumInTitle));
                     chap.SubItems.Add(Math.Ceiling(dur.TotalSeconds).ToString(CultureInfo.InvariantCulture));
-                    chap.Tag = new ListRowInfo { Kind = ListRowKind.Chapter, PlaylistTag = t.PlaylistFile };
+                    // m2ts の切り出し用に、プレイリスト時間軸での開始時刻と尺、タイトル内のチャプター番号も持たせる
+                    chap.Tag = new ListRowInfo
+                    {
+                        Kind = ListRowKind.Chapter,
+                        PlaylistTag = t.PlaylistFile,
+                        PlaylistStart = i < t.ChapterPlaylistStarts.Count ? t.ChapterPlaylistStarts[i] : null,
+                        Length = dur,
+                        ChapterNoInTitle = i + 1,
+                    };
                     chap.Checked = isDefaultChecked;
                     listView.Items.Add(chap);
                 }
@@ -656,6 +685,10 @@ namespace PrecureDataStars.BDAnalyzer
             }
 
             SetDbPanelEnabled(_registration is not null, _registration is null ? "DB 接続が設定されていません" : "照合可能");
+
+            // チェックしたチャプターを m2ts で切り出せるようにする（BDMV = PLAYLIST フォルダの親）
+            _cutBdmvRoot = Path.GetDirectoryName(playlistFolder);
+            UpdateCutButton();
 
             // Blu-ray の情報（bd_*）：BDMV の管理ファイルを読み、作品と話・パートを自動で当てて一覧の「話 / パート」列に出し、確認 1 回で記録する。
             // 一覧の各行にチャプターを結びつけたあとに行う（列の描き直しがその結びつきを使う）。
@@ -888,7 +921,7 @@ namespace PrecureDataStars.BDAnalyzer
         /// <summary>「Load DISC」ボタンクリック時に光学ドライブを探索し、見つかれば自動ロードする。 ドライブ探索（光学ディスクのスピンアップ待ちを伴い得る）もワーカースレッドで実行する。</summary>
         private async void btnLoadDefault_Click(object? sender, EventArgs e)
         {
-            if (_loading) return; // 読み込み中の連打は無視
+            if (_loading || _cutting) return; // 読み込み中の連打・切り出し中は無視
 
             btnLoadDefault.Enabled = false;
             lblInfo.Text = "光学ドライブを探索中...";
@@ -938,6 +971,8 @@ namespace PrecureDataStars.BDAnalyzer
                     lblInfo.Text = "";
                     SetDbPanelEnabled(false, "ディスクが取り外されました");
                     _lastRead = null;
+                    _cutBdmvRoot = null;
+                    UpdateCutButton();
                 }
             }
             base.WndProc(ref m);
@@ -1382,6 +1417,12 @@ namespace PrecureDataStars.BDAnalyzer
             public string PlaylistTag { get; init; } = "";
             /// <summary>Chapter 行のみ: 対応する <see cref="VideoChapter"/>（登録時の絞り込みに使用）。</summary>
             public VideoChapter? Chapter { get; set; }
+            /// <summary>Blu-ray のフォルダ全走査の Chapter 行のみ: プレイリスト時間軸での開始時刻（m2ts の切り出しに使用）。それ以外は null。</summary>
+            public TimeSpan? PlaylistStart { get; init; }
+            /// <summary>Blu-ray のフォルダ全走査の Chapter 行のみ: チャプターの尺（m2ts の切り出しとビットレートの計算に使用）。</summary>
+            public TimeSpan? Length { get; init; }
+            /// <summary>Blu-ray のフォルダ全走査の Chapter 行のみ: タイトル内のチャプター番号（1 始まり。切り出したファイルの名前に使う）。</summary>
+            public int ChapterNoInTitle { get; init; }
         }
 
         /// <summary>ListView のチェック連動ハンドラ。</summary>
@@ -1717,6 +1758,159 @@ namespace PrecureDataStars.BDAnalyzer
                 MessageBox.Show(this, "DB 連携エラー: " + ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        // ===== m2ts の切り出し（チャプターごとのファイルサイズ・ビットレートの計測用） =====
+
+        /// <summary>切り出しボタンの表示を今の状態に合わせる（切り出し中は「中止」、切り出せる盤が無ければ無効）。</summary>
+        private void UpdateCutButton()
+        {
+            btnCutM2ts.Text = _cutting ? "中止" : "チェックしたチャプターを m2ts で切り出し...";
+            btnCutM2ts.Enabled = _cutting || _cutBdmvRoot is not null;
+        }
+
+        /// <summary>
+        /// 「チェックしたチャプターを m2ts で切り出し...」ボタン。チャプターごとのファイルサイズ・ビットレートを計測するための機能で、
+        /// チェックしたチャプター行を 1 本ずつ別の m2ts（<c>{プレイリスト名}_ch{タイトル内のチャプター番号}.m2ts</c>）に書き出す。
+        /// 位置は <see cref="M2tsChapterCutter"/> がエントリポイント単位で決め、中身はクリップのバイトをそのまま写す（再エンコードしない）。
+        /// 書き終えたら、各ファイルのバイト数と、チャプターの尺で割った平均ビットレートを一覧で出す。切り出し中にもう一度押すと中止する
+        /// （書き終えたファイルは残し、書きかけのファイルは消す）。DB は読み書きしない。
+        /// </summary>
+        private async Task CutCheckedChaptersAsync()
+        {
+            if (_cutting) { _cutCts?.Cancel(); return; }
+            string? bdmvRoot = _cutBdmvRoot;
+            if (bdmvRoot is null) return;
+
+            var targets = listView.Items.Cast<ListViewItem>()
+                .Where(it => it.Checked)
+                .Select(it => it.Tag as ListRowInfo)
+                .Where(info => info is { Kind: ListRowKind.Chapter, PlaylistStart: not null, Length: not null })
+                .Select(info => info!)
+                .ToList();
+            if (targets.Count == 0)
+            {
+                MessageBox.Show(this, "切り出すチャプターが 1 つもチェックされていません。", "m2ts の切り出し",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (var fbd = new FolderBrowserDialog
+            {
+                Description = "切り出した m2ts の保存先を選んでください",
+                UseDescriptionForTitle = true,
+                InitialDirectory = _lastCutFolder ?? "",
+            })
+            {
+                if (fbd.ShowDialog(this) != DialogResult.OK) return;
+                _lastCutFolder = fbd.SelectedPath;
+            }
+            string folder = _lastCutFolder;
+
+            _cutting = true;
+            _cutCts = new CancellationTokenSource();
+            var ct = _cutCts.Token;
+            UpdateCutButton();
+            btnLoadDefault.Enabled = false;
+            var results = new List<(string Name, long Bytes, TimeSpan Length)>();
+            try
+            {
+                // 位置の引き当て（ディスク上の .mpls / .clpi を読むのでワーカースレッドで）
+                lblDbStatus.Text = "切り出す位置を調べています...";
+                var cache = new M2tsChapterCutter.Cache();
+                var plans = await Task.Run(() => targets.Select(info =>
+                {
+                    string name = $"{Path.GetFileNameWithoutExtension(info.PlaylistTag)}_ch{info.ChapterNoInTitle:00}.m2ts";
+                    var segments = M2tsChapterCutter.PlanChapter(bdmvRoot, info.PlaylistTag, info.PlaylistStart!.Value, info.Length!.Value, cache);
+                    return (Info: info, Name: name, Path: Path.Combine(folder, name), Segments: segments);
+                }).ToList());
+
+                var unresolved = plans.Where(p => p.Segments.Count == 0).Select(p => p.Name).ToList();
+                if (unresolved.Count > 0)
+                {
+                    MessageBox.Show(this, "m2ts の中の位置を引けなかったチャプターがあるので、切り出しをやめました。\n\n" + string.Join("\n", unresolved),
+                        "m2ts の切り出し", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    lblDbStatus.Text = "切り出しをやめました";
+                    return;
+                }
+
+                long totalBytes = plans.Sum(p => p.Segments.Sum(s => s.Length));
+                long? freeBytes = null;
+                try
+                {
+                    var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(folder))!);
+                    if (drive.IsReady) freeBytes = drive.AvailableFreeSpace;
+                }
+                catch { /* 空き容量を調べられない保存先（ネットワーク等）は調べずに進める */ }
+                if (freeBytes is long free && free < totalBytes)
+                {
+                    MessageBox.Show(this, $"保存先の空き容量が足りません（必要 {totalBytes / 1_000_000_000.0:0.00} GB、空き {free / 1_000_000_000.0:0.00} GB）。",
+                        "m2ts の切り出し", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    lblDbStatus.Text = "切り出しをやめました";
+                    return;
+                }
+
+                var existing = plans.Where(p => File.Exists(p.Path)).Select(p => p.Name).ToList();
+                if (existing.Count > 0
+                    && MessageBox.Show(this, $"保存先に同じ名前のファイルが {existing.Count} 本あります。上書きしますか？\n\n" + string.Join("\n", existing),
+                        "m2ts の切り出し", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                {
+                    lblDbStatus.Text = "切り出しをやめました";
+                    return;
+                }
+
+                long doneBytes = 0;
+                for (int i = 0; i < plans.Count; i++)
+                {
+                    var plan = plans[i];
+                    int no = i + 1;
+                    long baseDone = doneBytes;
+                    var progress = new Progress<long>(w =>
+                    {
+                        // 書き終えたあとに遅れて届いた通知で、終わりの表示を上書きしない
+                        if (!_cutting) return;
+                        lblDbStatus.Text = $"切り出し中 {no}/{plans.Count} 本目（{plan.Name}）・全体 {(baseDone + w) * 100 / Math.Max(1, totalBytes)}%";
+                    });
+                    await M2tsChapterCutter.WriteAsync(plan.Segments, plan.Path, progress, ct);
+                    long bytes = plan.Segments.Sum(s => s.Length);
+                    doneBytes += bytes;
+                    results.Add((plan.Name, bytes, plan.Info.Length!.Value));
+                }
+
+                _cutting = false;
+                lblDbStatus.Text = $"{results.Count} 本を切り出しました（{folder}）";
+                MessageBox.Show(this, $"{results.Count} 本を切り出しました。\n保存先：{folder}\n\n" + DescribeCutResults(results)
+                    + "\n\n平均ビットレートは m2ts のバイト数をチャプターの尺で割った値です。",
+                    "m2ts の切り出し", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (OperationCanceledException)
+            {
+                _cutting = false;
+                lblDbStatus.Text = $"切り出しを中止しました（書き終えた {results.Count} 本は残しています）";
+            }
+            catch (Exception ex)
+            {
+                _cutting = false;
+                lblDbStatus.Text = $"切り出しに失敗しました（書き終えた {results.Count} 本は残しています）";
+                MessageBox.Show(this, "m2ts を切り出せませんでした: " + ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                _cutting = false;
+                _cutCts?.Dispose();
+                _cutCts = null;
+                UpdateCutButton();
+                btnLoadDefault.Enabled = !_loading;
+            }
+        }
+
+        /// <summary>切り出したファイルの一覧（名前・バイト数・チャプターの尺・平均ビットレート）を 1 行 1 本の文字列にする。</summary>
+        private static string DescribeCutResults(IEnumerable<(string Name, long Bytes, TimeSpan Length)> results)
+            => string.Join("\n", results.Select(r =>
+            {
+                double sec = r.Length.TotalSeconds;
+                string rate = sec > 0 ? $"{r.Bytes * 8 / sec / 1_000_000:0.00} Mbps" : "-";
+                return $"{r.Name}　{r.Bytes:#,0} バイト　{FormatTs(r.Length)}　平均 {rate}";
+            }));
 
         /// <summary>品番入力用の簡易プロンプト（新規商品＋ディスクとして登録するフローで使用）。</summary>
         private string? PromptCatalogNo()

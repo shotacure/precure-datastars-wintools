@@ -33,7 +33,14 @@ namespace PrecureDataStars.BDAnalyzer
             TimeSpan PlaylistDuration,
             int PlayItemCount,
             int MarkCount
-        );
+        )
+        {
+            /// <summary>
+            /// <see cref="Chapter.Start"/> の原点。PlayItem が 1 つのプレイリストでは Start がクリップの時刻（PlayItem の IN を含む）なので、
+            /// その IN が入る。PlayItem が複数なら Start はプレイリスト時間軸なので 0。Start からこれを引くとプレイリスト時間軸の開始時刻になる。
+            /// </summary>
+            public TimeSpan StartOrigin { get; init; }
+        }
 
         /// <summary>BDMV/PLAYLIST フォルダ全走査時に 1 つの MPLS から得られた個別タイトルの情報。 DVD 側の <c>IfoParser.TitleInfo</c> に相当する Blu-ray 版。</summary>
         public sealed class MplsTitleInfo
@@ -44,6 +51,12 @@ namespace PrecureDataStars.BDAnalyzer
             public TimeSpan TotalDuration { get; init; }
             /// <summary>フィルタ後のチャプターリスト（タイトル先頭からの相対 Start を保持）。</summary>
             public List<Chapter> Chapters { get; init; } = new();
+            /// <summary>
+            /// <see cref="Chapters"/> と同じ並びで、各チャプターのプレイリスト時間軸での開始時刻（フィルタ前の絶対位置）。
+            /// 先頭の極短チャプターを除くと <see cref="Chapter.Start"/>（タイトル先頭からの相対時刻）とずれるため別に持つ。
+            /// m2ts の切り出し（<see cref="M2tsChapterCutter"/>）で、チャプターがクリップのどこに当たるかを引くのに使う。
+            /// </summary>
+            public List<TimeSpan> ChapterPlaylistStarts { get; init; } = new();
             /// <summary>解析時の PlayItem 数（メタ情報。デバッグ用ラベル等に使用）。</summary>
             public int PlayItemCount { get; init; }
             /// <summary>解析時のマーク数（フィルタ前。重複検出キーの一部としても使う）。</summary>
@@ -251,7 +264,11 @@ namespace PrecureDataStars.BDAnalyzer
                 chapters.Add(new Chapter(startTs, lenTs, secsRounded));
             }
 
-            return new ParseResult(chapters, playlistDuration, items.Count, markCount);
+            return new ParseResult(chapters, playlistDuration, items.Count, markCount)
+            {
+                // PlayItem が 1 つのときは上でマークの時刻をそのまま Start にしているので、その原点（IN）を添える
+                StartOrigin = items.Count == 1 ? TimeSpan.FromSeconds(items[0].In / (double)TicksPerSecond) : TimeSpan.Zero,
+            };
         }
 
         /// <summary>
@@ -392,6 +409,7 @@ namespace PrecureDataStars.BDAnalyzer
                     PlaylistFile = Path.GetFileName(mplsPath),
                     TotalDuration = accum,
                     Chapters = chaptersWithRelativeStart,
+                    ChapterPlaylistStarts = filtered.Select(c => c.Start - r.StartOrigin).ToList(),
                     PlayItemCount = r.PlayItemCount,
                     MarkCount = r.MarkCount,
                 });

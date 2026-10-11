@@ -95,8 +95,8 @@ public sealed class LayoutModel
 
     /// <summary>
     /// ビルド時点でサブタイトル解禁前の各話ページの解禁時刻（ISO 8601）。空でないページは、
-    /// SNS のカード用のメタ（og:* / twitter:*）を出さず、解禁時刻と解禁後のタイトル・共有文を
-    /// &lt;meta&gt; で渡す。subtitle-embargo.js が解禁時刻を過ぎてから、タブのタイトルと共有ボタンの文を差し替える。
+    /// 解禁時刻と解禁後のタイトル・共有文を &lt;meta&gt; で渡し、共有ボタンの欄を隠して出す。
+    /// subtitle-embargo.js が解禁時刻を過ぎてから、タブのタイトルと共有ボタンの文を差し替え、共有ボタンの欄を出す。
     /// </summary>
     public string SubtitleRevealAt { get; set; } = "";
 

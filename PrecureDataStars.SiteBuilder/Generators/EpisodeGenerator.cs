@@ -434,9 +434,9 @@ public sealed class EpisodeGenerator
             ? $"『{series.TitleShort}』"
             : $"『{series.Title}』";
 
-        // ビルド時点でサブタイトル解禁前の話か。ページタイトル・OGP・JSON-LD・共有文は
-        // ぼかしの外に出る（タブ・SNS のカード・ページのソースで読める）ため、解禁前は題名を載せずに作る。
-        // サブタイトル分析の節は作っておき、解禁されるまでは subtitle-embargo.js が隠す。
+        // ビルド時点でサブタイトル解禁前の話か。ページタイトル・JSON-LD・共有文は、タブや共有先で
+        // ぼかしの外に出るため、解禁前は題名を載せずに作り、解禁時刻を過ぎたら subtitle-embargo.js が差し替える。
+        // サブタイトル分析の節と共有ボタンは作っておき、解禁時刻までは subtitle-embargo.js が隠す。
         bool ownEmbargoed = SubtitleGuardRenderer.IsEmbargoedAt(ownRevealAt, _ctx.BuildStartedAt);
         string ownRevealAtIso = ownEmbargoed ? SubtitleGuardRenderer.ToRevealAtIso(ownRevealAt!.Value) : "";
 
@@ -764,16 +764,14 @@ public sealed class EpisodeGenerator
             JsonLd = jsonLd
         };
 
-        // サブタイトル解禁前の話は専用カードを作らない。カードは画像なのでサイト側のガード
-        // （ぼかし＋解禁時刻での自動解除）を効かせられず、SNS のプレビューに題名がそのまま出てしまう。
-        // 解禁前のページは SNS のカード用のメタ自体を出さない（_layout.sbn が SubtitleRevealAt を見て抑止する）。
-        // 解禁後のビルドで自動的に専用カードが付く。
-        if (!ownEmbargoed)
-            layout.OgCard = BuildOgCard(series, ep, content);
+        // 専用カードは解禁前の話も題名入りで作る。カードは画像なのでサイト側のガード（ぼかし＋解禁時刻での自動解除）を
+        // 効かせられないため、解禁前の話は解禁時刻までページの共有ボタンを隠し（subtitle-embargo.js）、
+        // サイトから共有させないことで題名入りのカードが広まるのを抑える。
+        layout.OgCard = BuildOgCard(series, ep, content);
 
         // サブタイトル欄は、本編のテロップと同じ体裁（作品のテロップ書体・白い字に黒フチと影）の画像で見せる。
         // 解禁前の話も画像を描くが、画像はぼかせないので、ページでは解禁時刻を添えて、解禁されるか閲覧者が先の題を見る設定に
-        // するまでは画像を隠し、ぼかした HTML のサブタイトルを出す（subtitle-embargo.js が切り替える）。OGP カードは作らない。
+        // するまでは画像を隠し、ぼかした HTML のサブタイトルを出す（subtitle-embargo.js が切り替える）。
         // サブタイトル未確定の話はプレースホルダの HTML のまま。
         // 画像にするかの判定と材料は、ビルド冒頭の作り置きの確認と同じ SubtitleTelopRequest で決める。
         if (SubtitleTelopRequest.For(series, ep, _ctx) is { } telopRequest)

@@ -14,6 +14,8 @@
  * で解禁時刻と解禁後の値を渡す。本スクリプトは、タブのタイトルを本文のぼかしと同じ条件（解禁時刻を過ぎた、
  * または早期表示に同意済み）で差し替え、共有ボタンの文は解禁時刻を過ぎたときだけ差し替える
  * （共有はほかの人に題名を見せることになるため、閲覧者の同意だけでは差し替えない）。
+ * 同じ理由で、こうしたページの共有ボタンの欄（.share-buttons[data-share-reveal-at]）は hidden で出力され、
+ * 本スクリプトが解禁時刻を過ぎたときだけ hidden を外す（OGP カードは題名入りなので、解禁前にサイトから共有させない）。
  * 解禁前の話のサブタイトル分析の節も、ぼかしと同じ条件で出し入れする（GUARD_SELECTOR）。
  *
  * 同意状態は localStorage に保存し、次回以降は確認ダイアログを出さず記憶した設定に従う。
@@ -72,6 +74,14 @@
   var originalTitle = null;
   var shareTextApplied = false;
 
+  /** 解禁前の話の共有ボタンの欄を、解禁時刻を過ぎていれば出す（閲覧者の同意では出さない）。 */
+  function applyShareButtons() {
+    var asides = document.querySelectorAll('.share-buttons[data-share-reveal-at]');
+    for (var i = 0; i < asides.length; i++) {
+      if (isPastReveal(asides[i].getAttribute('data-share-reveal-at'))) asides[i].hidden = false;
+    }
+  }
+
   /** ビルド時点で解禁前だった各話ページの、タブのタイトルと共有ボタンの文を判定結果に合わせる。 */
   function applyPageTitle() {
     var revealAt = metaContent('pcds-subtitle-reveal-at');
@@ -117,6 +127,7 @@
       if (!revealed) hasActiveEmbargo = true;
     }
     applyPageTitle();
+    applyShareButtons();
     updateToggleUi();
     return hasActiveEmbargo;
   }

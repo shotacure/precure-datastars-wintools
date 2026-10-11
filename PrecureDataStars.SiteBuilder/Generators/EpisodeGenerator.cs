@@ -434,18 +434,18 @@ public sealed class EpisodeGenerator
             ? $"『{series.TitleShort}』"
             : $"『{series.Title}』";
 
-        // ビルド時点でサブタイトル解禁前の話か。ページタイトル・OGP・JSON-LD・共有文・サブタイトル分析は
+        // ビルド時点でサブタイトル解禁前の話か。ページタイトル・OGP・JSON-LD・共有文は
         // ぼかしの外に出る（タブ・SNS のカード・ページのソースで読める）ため、解禁前は題名を載せずに作る。
-        // 解禁後の表示には、解禁時刻を過ぎてからの再ビルドが要る。
+        // サブタイトル分析の節は作っておき、解禁されるまでは subtitle-embargo.js が隠す。
         bool ownEmbargoed = SubtitleGuardRenderer.IsEmbargoedAt(ownRevealAt, _ctx.BuildStartedAt);
+        string ownRevealAtIso = ownEmbargoed ? SubtitleGuardRenderer.ToRevealAtIso(ownRevealAt!.Value) : "";
 
         // 文字情報 HTML を作る（既存 BuildTitleInformationPerCharAsync の移植）。
-        // 解禁前の話は、題名の文字そのものが並ぶので節ごと出さない。
+        // 解禁前の話も作り、題名の文字そのものが並ぶので、テンプレ側で解禁時刻つきの枠に入れて隠す。
         string titleCharInfoHtml = "";
         if (!string.IsNullOrEmpty(ep.TitleCharStats))
         {
-            if (!ownEmbargoed)
-                titleCharInfoHtml = await _titleCharInfo.RenderAsync(ep, ct).ConfigureAwait(false);
+            titleCharInfoHtml = await _titleCharInfo.RenderAsync(ep, ct).ConfigureAwait(false);
         }
         else if (!string.IsNullOrEmpty(ep.TitleText))
         {
@@ -635,6 +635,7 @@ public sealed class EpisodeGenerator
             },
             FormatTable = formatTable,
             TitleCharInfoHtml = titleCharInfoHtml,
+            TitleCharInfoRevealAt = ownRevealAtIso,
             PartLengthStats = partLengthStatRows,
             SeriesTitleShortQuoted = seriesTitleShortQuoted,
             SeriesScopeShortQuoted = seriesScopeShortQuoted,
@@ -749,7 +750,7 @@ public sealed class EpisodeGenerator
             // 解禁前の話は「第N話」だけにする（共有文もここから作られる）。題名入りのタイトルは
             // RevealedPageTitle で渡し、解禁後に subtitle-embargo.js がタブのタイトルと共有文を差し替える。
             PageTitle = ownEmbargoed ? $"『{series.Title}』 第{ep.SeriesEpNo}話" : fullPageTitle,
-            SubtitleRevealAt = ownEmbargoed ? SubtitleGuardRenderer.ToRevealAtIso(ownRevealAt!.Value) : "",
+            SubtitleRevealAt = ownRevealAtIso,
             RevealedPageTitle = ownEmbargoed ? fullPageTitle : "",
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
@@ -783,7 +784,7 @@ public sealed class EpisodeGenerator
                 content.Episode.SubtitleTelopSrc = telop.Src;
                 content.Episode.SubtitleTelopWidth = telop.Width;
                 content.Episode.SubtitleTelopHeight = telop.Height;
-                content.Episode.SubtitleTelopRevealAt = ownEmbargoed ? SubtitleGuardRenderer.ToRevealAtIso(ownRevealAt!.Value) : "";
+                content.Episode.SubtitleTelopRevealAt = ownRevealAtIso;
             }
         }
 
@@ -1837,6 +1838,11 @@ public sealed class EpisodeGenerator
         public EpisodeView Episode { get; set; } = new();
         public FormatTableModel FormatTable { get; set; } = new();
         public string TitleCharInfoHtml { get; set; } = "";
+        /// <summary>
+        /// ビルドの時点で解禁前の話の解禁時刻（ISO 8601）。空でなければ、テンプレ側はサブタイトル分析の節に解禁時刻を付け、
+        /// 解禁されるか閲覧者が先の題を見る設定にするまで節ごと隠す（subtitle-embargo.js が切り替える）。
+        /// </summary>
+        public string TitleCharInfoRevealAt { get; set; } = "";
         public IReadOnlyList<PartLengthStatRow> PartLengthStats { get; set; } = Array.Empty<PartLengthStatRow>();
         /// <summary>パート尺統計表のヘッダで使う「『○○プリキュア』」（引用符込み）。 テンプレ側で 2 段ヘッダの上段ラベルとして展開する。</summary>
         public string SeriesTitleShortQuoted { get; set; } = "";

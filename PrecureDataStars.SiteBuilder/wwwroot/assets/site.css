@@ -3506,6 +3506,10 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 .subtitle-telop-guard.is-revealed .subtitle-telop-fallback {
   display: none;
 }
+/* 解禁前の話のサブタイトル分析の節。題名の文字そのものが並ぶので、解禁される（または先の題を見る設定にする）までは節ごと隠す。 */
+.subtitle-char-info-guard:not(.is-revealed) {
+  display: none;
+}
 
 /* サブタイトル解禁の初回確認ダイアログ。mobile-nav-overlay と同じ「hidden 属性 + 暗幕 + パネル」
    構成だが、こちらは中央配置の確認モーダルのため display:flex を明示指定する必要がある

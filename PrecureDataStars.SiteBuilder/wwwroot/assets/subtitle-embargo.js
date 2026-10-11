@@ -14,6 +14,7 @@
  * で解禁時刻と解禁後の値を渡す。本スクリプトは、タブのタイトルを本文のぼかしと同じ条件（解禁時刻を過ぎた、
  * または早期表示に同意済み）で差し替え、共有ボタンの文は解禁時刻を過ぎたときだけ差し替える
  * （共有はほかの人に題名を見せることになるため、閲覧者の同意だけでは差し替えない）。
+ * 解禁前の話のサブタイトル分析の節も、ぼかしと同じ条件で出し入れする（GUARD_SELECTOR）。
  *
  * 同意状態は localStorage に保存し、次回以降は確認ダイアログを出さず記憶した設定に従う。
  * フッターの運営情報リンク列に常設のトグルスイッチ（#subtitle-embargo-toggle、checkbox）を置き、
@@ -27,8 +28,8 @@
   'use strict';
 
   var STORAGE_KEY = 'pcds-subtitle-embargo-pref';
-  // サブタイトルのぼかしと、解禁前の話のテロップ画像の枠（解禁されるまで画像を隠す）
-  var GUARD_SELECTOR = '.ep-subtitle-guard[data-reveal-at], .subtitle-telop-guard[data-reveal-at]';
+  // サブタイトルのぼかしと、解禁前の話のテロップ画像の枠（解禁されるまで画像を隠す）・サブタイトル分析の節（解禁されるまで節ごと隠す）
+  var GUARD_SELECTOR = '.ep-subtitle-guard[data-reveal-at], .subtitle-telop-guard[data-reveal-at], .subtitle-char-info-guard[data-reveal-at]';
 
   /** 保存済みの閲覧者設定を返す（'reveal' | 'hide' | null＝未設定）。 */
   function getPreference() {

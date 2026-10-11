@@ -342,9 +342,11 @@
        「いま現在の参照点」注記はエリア右下に小さく出す
        （カバレッジが結果に直接効くセクションなので参照点表記を維持する）。
        中身は TitleCharInfoRenderer が生成する <li class="charinfo-item"> 列
-       （グリフのボックス＋初出/唯一/N年ぶりバッジ＋復活詳細）。 ##}}
+       （グリフのボックス＋初出/唯一/N年ぶりバッジ＋復活詳細）。
+       解禁前の話は題名の文字そのものが並ぶので、節に解禁時刻を付け、解禁されるか閲覧者が先の題を見る設定にするまで
+       節ごと隠す（subtitle-embargo.js が is-revealed を付け外しする）。 ##}}
   {{~ if TitleCharInfoHtml != "" ~}}
-  <section id="subtitle-char-info">
+  <section id="subtitle-char-info"{{ if TitleCharInfoRevealAt != "" }} class="subtitle-char-info-guard" data-reveal-at="{{ TitleCharInfoRevealAt }}"{{ end }}>
     <h2>サブタイトル分析<span class="help-tip" tabindex="0">?<span class="help-tip-text">サブタイトルに使われている文字を 1 文字ずつ取り出して、プリキュアシリーズの中で「初登場の文字」「ここでしか使われていない文字」「久しぶりに登場した文字」を見つけ出します。</span></span></h2>
     <ul class="charinfo-list">
 {{ TitleCharInfoHtml }}

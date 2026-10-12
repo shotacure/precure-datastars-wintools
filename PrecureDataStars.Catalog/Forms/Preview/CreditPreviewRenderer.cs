@@ -1,6 +1,6 @@
 using System.Net;
 using System.Text;
-// GetHideStoryboardRoleAsync で CommandDefinition / ExecuteScalarAsync 拡張メソッドを使うため Dapper を参照する。
+// GetStoryboardDisplayAsync で CommandDefinition / ExecuteScalarAsync 拡張メソッドを使うため Dapper を参照する。
 using Dapper;
 using PrecureDataStars.Catalog.Forms.Drafting;
 using PrecureDataStars.TemplateRendering;
@@ -377,8 +377,8 @@ internal sealed class CreditPreviewRenderer
         var roleMap = allRoles.ToDictionary(r => r.RoleCode);
         int? resolveSeriesId = await ResolveTemplateSeriesIdAsync(credit, ct);
 
-        // シリーズの「絵コンテ・演出融合表示」フラグを取得。
-        bool hideStoryboardRole = await GetHideStoryboardRoleAsync(resolveSeriesId, ct);
+        // シリーズの「絵コンテと演出の出し方」（SEPARATE / MERGE / MERGE_SAME_PERSON）を取得。
+        string storyboardDisplay = await GetStoryboardDisplayAsync(resolveSeriesId, ct);
 
         // 直前にレンダリングした VOICE_CAST 役職の role_code を覚えておく。
         // 同じ role_code が連続して登場した場合、フォールバック描画では役職名カラムを空表示にし、
@@ -415,9 +415,10 @@ internal sealed class CreditPreviewRenderer
             // STORYBOARD と EPISODE_DIRECTOR がカード内の表示順（tier_no → group_no → order_in_group）で
             // 隣接していれば、Group を跨いでいても融合表示する（テキスト入力 `--` で Group 区切りされたパターンも捕捉）。
             // 戻り値：(sb の CardRoleId → ペア情報の辞書, dir の CardRoleId 集合)。
+            // MERGE_SAME_PERSON の作品では、絵コンテと演出が同じ人のときだけ融合する（違う人なら独立描画）。
             var sbMergeBySbId = new Dictionary<int, (CreditCardRole Sb, CreditCardRole Dir, bool SameGroup)>();
             var sbMergedDirIds = new HashSet<int>();
-            if (hideStoryboardRole)
+            if (storyboardDisplay != Series.StoryboardDisplaySeparate)
             {
                 var orderedRoles = new List<(int GroupId, CreditCardRole Role)>();
                 foreach (var pt in tiers)
@@ -437,7 +438,11 @@ internal sealed class CreditPreviewRenderer
                     var (gid2, r2) = orderedRoles[i + 1];
                     bool isSb = string.Equals(r1.RoleCode, RoleCodeStoryboard, StringComparison.Ordinal);
                     bool isDir = string.Equals(r2.RoleCode, RoleCodeEpisodeDirector, StringComparison.Ordinal);
-                    if (isSb && isDir)
+                    if (isSb && isDir
+                        && (storyboardDisplay != Series.StoryboardDisplayMergeSamePerson
+                            || IsSamePersonStoryboardDirector(
+                                await CollectEntriesUnderCardRoleAsync(r1.CardRoleId, ct),
+                                await CollectEntriesUnderCardRoleAsync(r2.CardRoleId, ct))))
                     {
                         sbMergeBySbId[r1.CardRoleId] = (r1, r2, gid1 == gid2);
                         sbMergedDirIds.Add(r2.CardRoleId);
@@ -776,8 +781,8 @@ internal sealed class CreditPreviewRenderer
             return html.ToString();
         }
 
-        // シリーズの「絵コンテ・演出融合表示」フラグを取得（DB 描画側と同じ仕様）。
-        bool hideStoryboardRole = await GetHideStoryboardRoleAsync(resolveSeriesId, ct);
+        // シリーズの「絵コンテと演出の出し方」を取得（DB 描画側と同じ仕様）。
+        string storyboardDisplay = await GetStoryboardDisplayAsync(resolveSeriesId, ct);
 
         // 直前 VOICE_CAST 役職コード追跡（DB 描画側と同じ仕様）。
         string? prevVoiceCastRoleCode = null;
@@ -800,9 +805,10 @@ internal sealed class CreditPreviewRenderer
             // 表示順（tier_no → group_no → order_in_group）で STORYBOARD と EPISODE_DIRECTOR が
             // 隣接しているペアを検出する。Group を跨いでいても OK（テキスト入力 `--` 越えも捕捉）。
             // 参照同一性で照合するため、key には DraftRole の CurrentId（負数 ID を含む）を使う。
+            // MERGE_SAME_PERSON の作品では、絵コンテと演出が同じ人のときだけ融合する（違う人なら独立描画）。
             var draftSbMergeBySbId = new Dictionary<int, (DraftRole Sb, DraftRole Dir, bool SameGroup)>();
             var draftSbMergedDirIds = new HashSet<int>();
-            if (hideStoryboardRole)
+            if (storyboardDisplay != Series.StoryboardDisplaySeparate)
             {
                 var orderedRoles = new List<(int GroupId, DraftRole Role)>();
                 foreach (var dt in dCard.Tiers.Where(t => t.State != DraftState.Deleted).OrderBy(t => t.Entity.TierNo))
@@ -821,7 +827,9 @@ internal sealed class CreditPreviewRenderer
                     var (gid2, r2) = orderedRoles[i + 1];
                     bool isSb = string.Equals(r1.Entity.RoleCode, RoleCodeStoryboard, StringComparison.Ordinal);
                     bool isDir = string.Equals(r2.Entity.RoleCode, RoleCodeEpisodeDirector, StringComparison.Ordinal);
-                    if (isSb && isDir)
+                    if (isSb && isDir
+                        && (storyboardDisplay != Series.StoryboardDisplayMergeSamePerson
+                            || IsSamePersonStoryboardDirector(CollectDraftEntries(r1), CollectDraftEntries(r2))))
                     {
                         draftSbMergeBySbId[r1.CurrentId] = (r1, r2, gid1 == gid2);
                         draftSbMergedDirIds.Add(r2.CurrentId);
@@ -1492,22 +1500,50 @@ internal sealed class CreditPreviewRenderer
     }
 
     /// <summary>
-    /// 指定 series_id の <c>hide_storyboard_role</c> フラグを軽量 SQL で取得する。
+    /// 指定 series_id の <c>storyboard_display</c>（絵コンテと演出の出し方）を軽量 SQL で取得する。
     /// SeriesRepository を依存に追加するとコンストラクタの引数増加で呼び出し側まで波及するため、
     /// レンダラ内では <c>_factory</c> を直接使って単一値を取りに行く方針。値はクエリ単位の
     /// 計算量が小さく、キャッシュは導入していない（クレジット 1 件あたり 1 SELECT で十分軽量）。
-    /// series_id が null（クレジットがどのシリーズに属するか解決できない）の場合は false を返す
-    /// 安全側の動作とする。row が見つからない場合も同様に false（融合表示しない＝従来挙動）。
+    /// series_id が null（クレジットがどのシリーズに属するか解決できない）の場合は <c>SEPARATE</c> を返す
+    /// 安全側の動作とする。row が見つからない場合も同様に <c>SEPARATE</c>（融合表示しない）。
     /// </summary>
-    private async Task<bool> GetHideStoryboardRoleAsync(int? seriesId, CancellationToken ct)
+    private async Task<string> GetStoryboardDisplayAsync(int? seriesId, CancellationToken ct)
     {
-        if (!seriesId.HasValue) return false;
+        if (!seriesId.HasValue) return Series.StoryboardDisplaySeparate;
         await using var conn = await _factory.CreateOpenedAsync(ct);
-        var raw = await conn.ExecuteScalarAsync<int?>(new CommandDefinition(
-            "SELECT hide_storyboard_role FROM series WHERE series_id = @id AND is_deleted = 0;",
+        var raw = await conn.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT storyboard_display FROM series WHERE series_id = @id AND is_deleted = 0;",
             new { id = seriesId.Value }, cancellationToken: ct));
-        return raw.GetValueOrDefault() != 0;
+        return string.IsNullOrEmpty(raw) ? Series.StoryboardDisplaySeparate : raw;
     }
+
+    /// <summary>
+    /// 絵コンテ役職と演出役職のエントリ（<c>is_broadcast_only</c> 除外済み）が 1 件ずつで、同じ人かを判定する
+    /// （<c>MERGE_SAME_PERSON</c> の作品で融合するかの判定。サイト側 CreditTreeRenderer と同じ仕様）。
+    /// 両方が名義を持てば <c>person_alias_id</c> の一致、どちらも名義を持たなければ <c>raw_text</c> の一致で見る。
+    /// </summary>
+    private static bool IsSamePersonStoryboardDirector(
+        IReadOnlyList<CreditBlockEntry> storyboardEntries, IReadOnlyList<CreditBlockEntry> directorEntries)
+    {
+        if (storyboardEntries.Count != 1 || directorEntries.Count != 1) return false;
+        var s = storyboardEntries[0];
+        var d = directorEntries[0];
+        if (s.PersonAliasId.HasValue && d.PersonAliasId.HasValue)
+            return s.PersonAliasId.Value == d.PersonAliasId.Value;
+        if (s.PersonAliasId.HasValue || d.PersonAliasId.HasValue) return false;
+        return !string.IsNullOrEmpty(s.RawText) && string.Equals(s.RawText, d.RawText, StringComparison.Ordinal);
+    }
+
+    /// <summary>Draft 役職配下の全ブロック・全エントリ（削除済み・is_broadcast_only 除外）を 1 つのフラットリストに集める （絵コンテ・演出融合判定用ヘルパ）。</summary>
+    private static List<CreditBlockEntry> CollectDraftEntries(DraftRole role) =>
+        role.Blocks
+            .Where(b => b.State != DraftState.Deleted)
+            .OrderBy(b => b.Entity.BlockSeq)
+            .SelectMany(b => b.Entries
+                .Where(e => e.State != DraftState.Deleted && !e.Entity.IsBroadcastOnly)
+                .OrderBy(e => e.Entity.EntrySeq)
+                .Select(e => e.Entity))
+            .ToList();
 
     /// <summary>指定 series_id の <c>series.title</c>、映倫審査番号 <c>series.film_rating_no</c>、CJ マークの有無 <c>series.film_cj_mark</c> を軽量 SQL で取得する。 テンプレ DSL の <c>{SERIES_TITLE}</c> / <c>{FILM_RATING_NO}</c> / <c>{CJ_MARK}</c> プレースホルダ展開に使う。 series_id が null・行未存在・論理削除済み・未登録は空文字（CJ マークは false）を返す（テンプレ側では空に展開される）。</summary>
     private async Task<(string Title, string FilmRatingNo, bool FilmCjMark)> GetSeriesTitleAndFilmRatingAsync(int? seriesId, CancellationToken ct)
@@ -1531,7 +1567,7 @@ internal sealed class CreditPreviewRenderer
 
     /// <summary>
     /// 融合可能な「絵コンテ・演出」ペアを 1 つのテーブルに描画する。
-    /// 仕様（hide_storyboard_role が ON のシリーズで起動）:
+    /// 仕様（storyboard_display が MERGE / MERGE_SAME_PERSON のシリーズで起動）:
     /// <list type="bullet">
     ///   <item><description>同名（絵コンテと演出が同じ person_alias_id、または同じ raw_text）→
     ///     役職名 = 「（絵コンテ・）演出」、エントリ = その人物名 1 行</description></item>

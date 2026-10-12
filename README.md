@@ -1319,7 +1319,7 @@ series_relation_kinds ──┘    │            │
 | `film_cj_mark` | TINYINT(1) NOT NULL DEFAULT 0 | タイトルカードに CJ マークが付くか（役職 `TITLE` のテンプレで `{CJ_MARK}` として出す。付く作品では「CJ」、付かない作品では空） |
 | `vod_intro` | SMALLINT UNSIGNED NULL | 配信版の東映動画タイトル尺（秒） |
 | `font_subtitle` | VARCHAR(64) NULL | サブタイトル表示用フォント名（暫定フィールド） |
-| `hide_storyboard_role` | TINYINT(1) NOT NULL DEFAULT 0 | 「絵コンテ」役職を独立表示せず「演出」と融合表示するか（プレビュー描画専用フラグ） |
+| `storyboard_display` | ENUM(`SEPARATE`,`MERGE`,`MERGE_SAME_PERSON`) NOT NULL DEFAULT `SEPARATE` | 絵コンテ（`STORYBOARD`）と演出（`EPISODE_DIRECTOR`）のクレジットの出し方（サイトのクレジットと Catalog のプレビューで効く。カード内で隣接する 2 役職が対象）。`SEPARATE`＝それぞれの役職名で出す（映画など）。`MERGE`＝いつも「演出」にまとめる。同じ人なら「(絵コンテ・)演出 ｜ 名前」の 1 行、違う人なら「演出」の欄に「A (絵コンテ)」「B (演出)」の 2 行（TV の『ふたりはプリキュア』〜『ドキドキ！プリキュア』）。`MERGE_SAME_PERSON`＝同じ人のときだけ「(絵コンテ・)演出 ｜ 名前」にまとめ、違う人ならそれぞれの役職名で出す（TV の『ハピネスチャージプリキュア！』以降。分業の回は画面で「絵コンテ」「演出」が別々の役職名で出る）。同じ人の判定は、両役職のエントリが 1 件ずつで名義（名義が無ければ表記）が同じこと。エピソード管理アプリ（Episodes）の作品の編集画面で 3 択から選ぶ |
 | `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
 | `created_at` / `updated_at` | TIMESTAMP | 作成・更新日時 |
 | `created_by` / `updated_by` | VARCHAR(64) | 作成・更新ユーザー |

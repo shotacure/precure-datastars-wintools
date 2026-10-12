@@ -261,11 +261,13 @@ CREATE TABLE `series` (
   -- タイトルカードに CJ マークが付くか。役職 TITLE のテンプレから {CJ_MARK}（付く作品では「CJ」）で参照する。
   `film_cj_mark` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'タイトルカードに CJ マークが付くか',
   `vod_intro` smallint unsigned DEFAULT NULL,
-  -- 絵コンテ役職を独立表示せず演出と融合表示するか（プレビュー描画専用フラグ）。
-  -- 初期のプリキュアシリーズで「（絵コンテ・）演出 名前」のような融合表記が慣習的だった
-  -- ため、シリーズ単位で ON にすることで CreditPreviewRenderer が STORYBOARD と
-  -- EPISODE_DIRECTOR を突き合わせて融合描画する。
-  `hide_storyboard_role` tinyint(1) NOT NULL DEFAULT '0',
+  -- 絵コンテ（STORYBOARD）と演出（EPISODE_DIRECTOR）のクレジットの出し方（サイトのクレジットと Catalog のプレビューで効く）。
+  --   SEPARATE           それぞれの役職名で出す（映画など）
+  --   MERGE              いつも「演出」にまとめる。同じ人なら「(絵コンテ・)演出 ｜ 名前」、違う人なら
+  --                      「演出」の欄に「A (絵コンテ)」「B (演出)」と並べる（TV の無印〜ドキドキ!）
+  --   MERGE_SAME_PERSON  同じ人のときだけ「(絵コンテ・)演出 ｜ 名前」にまとめ、違う人ならそれぞれの役職名で出す
+  --                      （TV のハピネスチャージ以降）
+  `storyboard_display` enum('SEPARATE','MERGE','MERGE_SAME_PERSON') NOT NULL DEFAULT 'SEPARATE' COMMENT '絵コンテと演出の出し方（SEPARATE=役職名ごと / MERGE=いつも演出にまとめる / MERGE_SAME_PERSON=同じ人のときだけまとめる）',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,

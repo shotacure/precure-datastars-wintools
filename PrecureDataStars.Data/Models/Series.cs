@@ -160,20 +160,33 @@ public sealed class Series
     public string? SubtitleRubyGrouping { get; set; }
 
     /// <summary>
-    /// 「絵コンテ」役職を独立表示せず「演出」と融合表示するか。
-    /// 一部のプリキュアシリーズ（『ふたりはプリキュア』〜『スマイルプリキュア！』が対象想定）の
-    /// エンディングクレジットでは絵コンテと演出を区別表示せず、両者を 1 行にまとめて
-    /// クレジットしていた。本フラグが true のとき、プレビューレンダラは
-    /// <c>STORYBOARD</c>（絵コンテ）役職と <c>EPISODE_DIRECTOR</c>（演出）役職を
+    /// 「絵コンテ」役職と「演出」役職のクレジットの出し方（<c>series.storyboard_display</c>）。
+    /// TV シリーズのエンディングクレジットでは、作品によって絵コンテと演出を区別表示せず、
+    /// 両者を「演出」の 1 欄にまとめてクレジットしていた。サイトのクレジットと Catalog のプレビューは、
+    /// 本値に従って <c>STORYBOARD</c>（絵コンテ）役職と <c>EPISODE_DIRECTOR</c>（演出）役職を
     /// 突き合わせて融合描画する：
     /// <list type="bullet">
-    ///   <item><description>同名（同一 person_alias_id かつ表記一致）→「（絵コンテ・）演出　名前」と 1 行に集約</description></item>
-    ///   <item><description>異名 → 「演出　名前A （絵コンテ）」「　　　名前B （演出）」と 2 行で並列表示</description></item>
+    ///   <item><description><see cref="StoryboardDisplaySeparate"/>（<c>SEPARATE</c>）：融合せず、それぞれの役職名で出す（映画など）</description></item>
+    ///   <item><description><see cref="StoryboardDisplayMerge"/>（<c>MERGE</c>）：いつも融合する（『ふたりはプリキュア』〜『ドキドキ！プリキュア』）。
+    ///     同名（同一 person_alias_id かつ表記一致）→「（絵コンテ・）演出　名前」と 1 行に集約、
+    ///     異名 → 「演出　名前A （絵コンテ）」「　　　名前B （演出）」と 2 行で並列表示</description></item>
+    ///   <item><description><see cref="StoryboardDisplayMergeSamePerson"/>（<c>MERGE_SAME_PERSON</c>）：同名のときだけ
+    ///     「（絵コンテ・）演出　名前」に集約し、異名ならそれぞれの役職名で出す（『ハピネスチャージプリキュア！』以降。
+    ///     分業の回は画面で「絵コンテ」「演出」が別々の役職名で出る）</description></item>
     /// </list>
-    /// 本フラグはあくまでプレビュー描画上の融合スイッチであり、データ層では
+    /// 本値はあくまで描画上の融合スイッチであり、データ層では
     /// 絵コンテと演出は別々の役職エントリとして保存される。
     /// </summary>
-    public bool HideStoryboardRole { get; set; }
+    public string StoryboardDisplay { get; set; } = StoryboardDisplaySeparate;
+
+    /// <summary><see cref="StoryboardDisplay"/> の値：絵コンテと演出をそれぞれの役職名で出す。</summary>
+    public const string StoryboardDisplaySeparate = "SEPARATE";
+
+    /// <summary><see cref="StoryboardDisplay"/> の値：絵コンテと演出をいつも「演出」にまとめる。</summary>
+    public const string StoryboardDisplayMerge = "MERGE";
+
+    /// <summary><see cref="StoryboardDisplay"/> の値：絵コンテと演出が同じ人のときだけ「演出」にまとめる。</summary>
+    public const string StoryboardDisplayMergeSamePerson = "MERGE_SAME_PERSON";
 
     // ── 監査・論理削除 ──
 

@@ -104,6 +104,17 @@ public partial class SeriesEditorForm : Form
         cmbRelation.DisplayMember = nameof(ComboOption<string?>.Text);
         cmbRelation.ValueMember = nameof(ComboOption<string?>.Value);
         cmbRelation.DataSource = relOptions;
+
+        // 絵コンテと演出の出し方（series.storyboard_display）：固定の 3 択
+        var storyboardOptions = new List<ComboOption<string>>
+        {
+            new() { Value = Series.StoryboardDisplaySeparate, Text = "それぞれの役職名で出す" },
+            new() { Value = Series.StoryboardDisplayMerge, Text = "いつも「演出」にまとめる（違う人なら「演出」の欄に並べる）" },
+            new() { Value = Series.StoryboardDisplayMergeSamePerson, Text = "同じ人のときだけ「(絵コンテ・)演出」にまとめる" },
+        };
+        cmbStoryboardDisplay.DisplayMember = nameof(ComboOption<string>.Text);
+        cmbStoryboardDisplay.ValueMember = nameof(ComboOption<string>.Value);
+        cmbStoryboardDisplay.DataSource = storyboardOptions;
     }
 
     /// <summary>親シリーズ ComboBox を構築する（自分自身は除外）。</summary>
@@ -178,8 +189,8 @@ public partial class SeriesEditorForm : Form
             txtYoutubeTrailer.Text = "";
             txtFilmRatingNo.Text = "";
             chkFilmCjMark.Checked = false;
-            // 追加: 融合表示フラグも初期状態に戻す。
-            chkHideStoryboardRole.Checked = false;
+            // 絵コンテと演出の出し方も初期状態（それぞれの役職名で出す）に戻す。
+            cmbStoryboardDisplay.SelectedValue = Series.StoryboardDisplaySeparate;
             return;
         }
 
@@ -246,8 +257,8 @@ public partial class SeriesEditorForm : Form
         txtYoutubeTrailer.Text = _current.YoutubeTrailerUrl ?? "";
         txtFilmRatingNo.Text = _current.FilmRatingNo ?? "";
         chkFilmCjMark.Checked = _current.FilmCjMark;
-        // 追加: 「絵コンテ」融合表示フラグの読み込み。
-        chkHideStoryboardRole.Checked = _current.HideStoryboardRole;
+        // 絵コンテと演出の出し方の読み込み。
+        cmbStoryboardDisplay.SelectedValue = _current.StoryboardDisplay;
     }
 
     /// <summary>右ペインの編集内容を Series モデルに反映し、DB へ UPDATE する。</summary>
@@ -298,8 +309,8 @@ public partial class SeriesEditorForm : Form
         _current.YoutubeTrailerUrl = string.IsNullOrWhiteSpace(txtYoutubeTrailer.Text) ? null : txtYoutubeTrailer.Text.Trim();
         _current.FilmRatingNo = string.IsNullOrWhiteSpace(txtFilmRatingNo.Text) ? null : txtFilmRatingNo.Text.Trim();
         _current.FilmCjMark = chkFilmCjMark.Checked;
-        // 追加: 「絵コンテ」融合表示フラグの保存。
-        _current.HideStoryboardRole = chkHideStoryboardRole.Checked;
+        // 絵コンテと演出の出し方の保存。
+        _current.StoryboardDisplay = cmbStoryboardDisplay.SelectedValue as string ?? Series.StoryboardDisplaySeparate;
 
         _current.UpdatedBy = AuditUser;
 

@@ -73,7 +73,7 @@ public sealed class SeriesRepository : RepositoryBase
               sss.subtitle_ruby_overhang_ratio  AS SubtitleRubyOverhangRatio,
               sss.subtitle_ruby_line_edge       AS SubtitleRubyLineEdge,
               sss.subtitle_ruby_grouping        AS SubtitleRubyGrouping,
-              hide_storyboard_role  AS HideStoryboardRole,
+              storyboard_display    AS StoryboardDisplay,
               created_by       AS CreatedBy,
               updated_by       AS UpdatedBy,
               is_deleted       AS IsDeleted
@@ -131,7 +131,7 @@ public sealed class SeriesRepository : RepositoryBase
               sss.subtitle_ruby_overhang_ratio  AS SubtitleRubyOverhangRatio,
               sss.subtitle_ruby_line_edge       AS SubtitleRubyLineEdge,
               sss.subtitle_ruby_grouping        AS SubtitleRubyGrouping,
-              hide_storyboard_role  AS HideStoryboardRole,
+              storyboard_display    AS StoryboardDisplay,
               created_by       AS CreatedBy,
               updated_by       AS UpdatedBy,
               is_deleted       AS IsDeleted
@@ -190,7 +190,7 @@ public sealed class SeriesRepository : RepositoryBase
               sss.subtitle_ruby_overhang_ratio  AS SubtitleRubyOverhangRatio,
               sss.subtitle_ruby_line_edge       AS SubtitleRubyLineEdge,
               sss.subtitle_ruby_grouping        AS SubtitleRubyGrouping,
-              hide_storyboard_role  AS HideStoryboardRole,
+              storyboard_display    AS StoryboardDisplay,
               created_by       AS CreatedBy,
               updated_by       AS UpdatedBy,
               is_deleted       AS IsDeleted
@@ -224,7 +224,7 @@ public sealed class SeriesRepository : RepositoryBase
               slug, start_date, end_date, episodes, run_time_seconds,
               toei_anim_official_site_url, toei_anim_lineup_url,
               abc_official_site_url, amazon_prime_video_asin, youtube_trailer_url, film_rating_no, film_cj_mark, vod_intro,
-              hide_storyboard_role,
+              storyboard_display,
               created_by, updated_by, is_deleted
             ) VALUES (
               @KindCode, @ParentSeriesId, @RelationToParent, @SeqInParent,
@@ -233,7 +233,7 @@ public sealed class SeriesRepository : RepositoryBase
               @Slug, @StartDate, @EndDate, @Episodes, @RunTimeSeconds,
               @ToeiAnimOfficialSiteUrl, @ToeiAnimLineupUrl,
               @AbcOfficialSiteUrl, @AmazonPrimeVideoAsin, @YoutubeTrailerUrl, @FilmRatingNo, @FilmCjMark, @VodIntro,
-              @HideStoryboardRole,
+              @StoryboardDisplay,
               @CreatedBy, @UpdatedBy, 0
             );
             SELECT LAST_INSERT_ID();
@@ -283,7 +283,7 @@ public sealed class SeriesRepository : RepositoryBase
               film_rating_no = @FilmRatingNo,
               film_cj_mark = @FilmCjMark,
               vod_intro = @VodIntro,
-              hide_storyboard_role = @HideStoryboardRole,
+              storyboard_display = @StoryboardDisplay,
               updated_by = @UpdatedBy
             WHERE series_id = @SeriesId;
         """;

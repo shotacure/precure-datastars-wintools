@@ -59,7 +59,8 @@ namespace PrecureDataStars.Episodes.Forms
 
         // 追加: 「絵コンテ」役職を独立表示せず「演出」と融合表示するシリーズか
         // （プレビューレンダラ専用フラグ）。
-        private System.Windows.Forms.CheckBox chkHideStoryboardRole = null!;
+        private System.Windows.Forms.Label lblStoryboardDisplay = null!;
+        private System.Windows.Forms.ComboBox cmbStoryboardDisplay = null!;
 
         protected override void Dispose(bool disposing)
         {
@@ -114,7 +115,8 @@ namespace PrecureDataStars.Episodes.Forms
             txtFilmRatingNo = new TextBox();
             chkFilmCjMark = new CheckBox();
             // 追加: 絵コンテ・演出融合表示フラグ用 CheckBox。
-            chkHideStoryboardRole = new CheckBox();
+            lblStoryboardDisplay = new Label();
+            cmbStoryboardDisplay = new ComboBox();
             btnAdd = new Button();
             btnSave = new Button();
             ((System.ComponentModel.ISupportInitialize)numSeqInParent).BeginInit();
@@ -504,17 +506,25 @@ namespace PrecureDataStars.Episodes.Forms
             chkFilmCjMark.Text = "CJ マークあり";
             chkFilmCjMark.UseVisualStyleBackColor = true;
             //
-            // chkHideStoryboardRole
-            //   絵コンテ役職を独立表示せず演出と融合表示するシリーズかを切り替えるチェックボックス。
-            //   映倫番号欄の直下に配置。AutoSize でテキストに合わせて幅を自動調整する。
+            // lblStoryboardDisplay
             //
-            chkHideStoryboardRole.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            chkHideStoryboardRole.AutoSize = true;
-            chkHideStoryboardRole.Location = new Point(900, 772);
-            chkHideStoryboardRole.Name = "chkHideStoryboardRole";
-            chkHideStoryboardRole.TabIndex = 39;
-            chkHideStoryboardRole.Text = "「絵コンテ」役職を独立表示せず「演出」と融合表示する（プレビュー専用）";
-            chkHideStoryboardRole.UseVisualStyleBackColor = true;
+            lblStoryboardDisplay.AutoSize = true;
+            lblStoryboardDisplay.Location = new Point(664, 772);
+            lblStoryboardDisplay.Name = "lblStoryboardDisplay";
+            lblStoryboardDisplay.Size = new Size(110, 20);
+            lblStoryboardDisplay.TabIndex = 44;
+            lblStoryboardDisplay.Text = "絵コンテ・演出";
+            //
+            // cmbStoryboardDisplay
+            //   絵コンテ役職と演出役職のクレジットの出し方（series.storyboard_display）を 3 択で選ぶ。
+            //   サイトのクレジットと Catalog のプレビューで効く。映倫番号欄の直下に配置。
+            //
+            cmbStoryboardDisplay.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            cmbStoryboardDisplay.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbStoryboardDisplay.Location = new Point(900, 769);
+            cmbStoryboardDisplay.Name = "cmbStoryboardDisplay";
+            cmbStoryboardDisplay.Size = new Size(520, 28);
+            cmbStoryboardDisplay.TabIndex = 39;
             // 
             // btnAdd
             // 
@@ -585,7 +595,8 @@ namespace PrecureDataStars.Episodes.Forms
             Controls.Add(txtFilmRatingNo);
             Controls.Add(chkFilmCjMark);
             // 追加: 絵コンテ・演出融合表示フラグ。
-            Controls.Add(chkHideStoryboardRole);
+            Controls.Add(lblStoryboardDisplay);
+            Controls.Add(cmbStoryboardDisplay);
             Controls.Add(btnAdd);
             Controls.Add(btnSave);
             MinimumSize = new Size(1200, 780);

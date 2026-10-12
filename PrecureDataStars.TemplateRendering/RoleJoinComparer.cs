@@ -32,6 +32,7 @@ public static class RoleJoinComparer
                   .Append(':').Append(e.RawText)
                   .Append(':').Append(e.AffiliationCompanyAliasId)
                   .Append(':').Append(e.AffiliationPersonAliasId)
+                  .Append(':').Append(e.AffiliationLogoId)
                   .Append(':').Append(e.AffiliationText)
                   .Append(':').Append(e.PersonMisprintText)
                   .Append(':').Append(e.PersonMaskedText)

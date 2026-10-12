@@ -2576,6 +2576,8 @@ CREATE TABLE `credit_block_entries` (
   -- 人物名義（ユニット等）への所属参照。affiliation_company_alias_id と排他（トリガで担保）。
   -- 表示はテキスト同様（リンクなし）だが、構造的にマスタを指すことで正規化・逆引きを可能にする。
   `affiliation_person_alias_id`    int             DEFAULT NULL,
+  -- 所属がロゴで出ているときのロゴの版（任意）。TV の「（ABC）」「（ADK）」など。表示は所属の会社名のまま変えない。
+  `affiliation_logo_id`            int             DEFAULT NULL,
   `affiliation_text`               varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   -- 所属表記のインライン (1=名前 (所属)) / 別行 (0=名前\n(所属)) レイアウトフラグ。
   -- 入力時の表現を round-trip 保持するための表示ヒント。
@@ -2598,6 +2600,7 @@ CREATE TABLE `credit_block_entries` (
   KEY `ix_be_logo`           (`logo_id`),
   KEY `ix_be_aff_company`    (`affiliation_company_alias_id`),
   KEY `ix_be_aff_person`     (`affiliation_person_alias_id`),
+  KEY `ix_be_aff_logo`       (`affiliation_logo_id`),
   KEY `ix_be_parallel`       (`parallel_with_entry_id`),
   CONSTRAINT `fk_be_block`             FOREIGN KEY (`block_id`)                     REFERENCES `credit_role_blocks`   (`block_id`)          ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_be_person_alias`      FOREIGN KEY (`person_alias_id`)              REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
@@ -2606,6 +2609,7 @@ CREATE TABLE `credit_block_entries` (
   CONSTRAINT `fk_be_logo`              FOREIGN KEY (`logo_id`)                      REFERENCES `logos`                (`logo_id`)           ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_aff_company_alias` FOREIGN KEY (`affiliation_company_alias_id`) REFERENCES `company_aliases`      (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_aff_person_alias`  FOREIGN KEY (`affiliation_person_alias_id`)  REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_aff_logo`          FOREIGN KEY (`affiliation_logo_id`)          REFERENCES `logos`                (`logo_id`)           ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_parallel`          FOREIGN KEY (`parallel_with_entry_id`)       REFERENCES `credit_block_entries` (`entry_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_be_seq_pos` CHECK ((`entry_seq` >= 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

@@ -778,6 +778,9 @@ internal static class CreditBulkInputEncoder
                         ?? $"alias#{e.AffiliationCompanyAliasId.Value}";
         }
 
+        // 所属のロゴの版（affiliation_logo_id）は屋号名の後ろに #lg<id> で添える。
+        if (hasAlias && e.AffiliationLogoId.HasValue) aliasName = $"{aliasName}#lg{e.AffiliationLogoId.Value}";
+
         if (hasAlias && hasText)
         {
             // 両持ち: (屋号名 / "テキスト")

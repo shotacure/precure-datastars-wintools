@@ -244,6 +244,12 @@ public sealed class ParsedEntry
     /// <c>affiliation_company_alias_id</c> とは排他。</summary>
     public int? AffiliationPersonAliasId { get; set; }
 
+    /// <summary>所属表記が「屋号#lg&lt;id&gt;」のロゴの版の記法で書かれた場合の logos.logo_id。
+    /// 所属が各社のロゴで出ている画面（TV の「（ABC）」など）で、どの版のロゴかを持つ。適用時は
+    /// <c>affiliation_logo_id</c> へ直行する（屋号部は今までどおり <c>affiliation_company_alias_id</c> へ引き当てる）。
+    /// 例：<c>多田 香奈子 (ABC#lg16)</c>。</summary>
+    public int? AffiliationLogoId { get; set; }
+
     /// <summary>所属表記のインライン (true=「名前 (所属)」) / 別行 (false=「名前 / (所属)」) レイアウトフラグ。
     /// 入力時の表現を round-trip 保持するための表示ヒント。
     /// パーサ：インライン <c>名前 (所属)</c> → true、別行 <c>(所属)</c> 単独行吸収 → false。

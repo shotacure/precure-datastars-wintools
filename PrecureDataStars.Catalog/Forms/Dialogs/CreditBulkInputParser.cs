@@ -119,6 +119,10 @@ public static class CreditBulkInputParser
     // 企業屋号ではなく人物名義へ構造的に引き当てる）。名前部は可読 / 往復用で、引き当ては id を正とする。
     private static readonly Regex AffiliationPersonRefRegex = new(@"^(?<name>.*?)#p(?<pid>\d+)\s*$", RegexOptions.Compiled);
 
+    // 所属のロゴの版の記法 "屋号#lg<logo_id>"。所属が各社のロゴで出ている画面（TV の「（ABC）」など）で、どの版のロゴかを
+    // logos.logo_id で持つ。屋号部は今までどおり company_aliases へ引き当て、ロゴの版は表示に使わない。
+    private static readonly Regex AffiliationLogoRefRegex = new(@"#lg(?<lid>\d+)", RegexOptions.Compiled);
+
     // "(...)" だけで構成される行（前後 SP 許容、半角/全角括弧いずれも）。
     // 映画クレジット資料のパンフレット表記でよくある「人物名の次の行に所属だけを括弧書き」フォーマットを
     // 直前 PERSON / CHARACTER_VOICE エントリの所属として吸収するためのマッチャ。
@@ -970,11 +974,12 @@ public static class CreditBulkInputParser
                 }
                 // 既に所属が設定されていれば後勝ちで上書き。3 形式を解析して該当フィールドに充てる。
                 // 別行で書かれているので AffiliationInline = false（描画も別行で行う）。
-                var (paRaw, paOver, paForce, paPerson) = ParseAffiliationContent(inside);
+                var (paRaw, paOver, paForce, paPerson, paLogo) = ParseAffiliationContent(inside);
                 target.AffiliationRawText = paRaw;
                 target.AffiliationOverrideText = paOver;
                 target.AffiliationForceText = paForce;
                 target.AffiliationPersonAliasId = paPerson;
+                target.AffiliationLogoId = paLogo;
                 target.AffiliationInline = false;
                 continue;
             }
@@ -1012,11 +1017,12 @@ public static class CreditBulkInputParser
                     {
                         // 左セルは SUFFIX の括弧内と同じ 3 形式（屋号 / "テキスト" / 屋号 / "テキスト"）を受け付ける。
                         // CreditBulkApplyService 側で屋号マスタ引き当て → affiliation_company_alias_id への変換が走る。
-                        var (paRaw, paOver, paForce, paPerson) = ParseAffiliationContent(affilRaw);
+                        var (paRaw, paOver, paForce, paPerson, paLogo) = ParseAffiliationContent(affilRaw);
                         entry.AffiliationRawText = paRaw;
                         entry.AffiliationOverrideText = paOver;
                         entry.AffiliationForceText = paForce;
                         entry.AffiliationPersonAliasId = paPerson;
+                        entry.AffiliationLogoId = paLogo;
                     }
                     row.Entries.Add(entry);
                 }
@@ -1533,7 +1539,7 @@ public static class CreditBulkInputParser
             }
 
             // 声優名から所属 (xxx) を切り出す。所属は (屋号) / ("テキスト") / (屋号 / "テキスト") の 3 形式。
-            var (personName, affRaw, affOverrideText, affForceText, affPersonAliasId) = SplitAffiliation(actor);
+            var (personName, affRaw, affOverrideText, affForceText, affPersonAliasId, affLogoId) = SplitAffiliation(actor);
 
             // 声優側の先頭 "*" 強制新規マーカーを剥がす（PERSON 構文 *X と同じ流儀）。
             var (personAfterAster, isForcedNewPerson) = SplitForcedNewMarker(personName);
@@ -1582,6 +1588,7 @@ public static class CreditBulkInputParser
                 AffiliationOverrideText = affOverrideText,
                 AffiliationForceText = affForceText,
                 AffiliationPersonAliasId = affPersonAliasId,
+                AffiliationLogoId = affLogoId,
                 LineNumber = lineNo,
             };
 
@@ -1618,7 +1625,7 @@ public static class CreditBulkInputParser
             if (forcedChar is not null)
             {
                 // <*X> 流用: 「別個の新規 X」+「このセルが声優名」のペアエントリ
-                var (personName, affRaw2, affOverrideText2, affForceText2, affPersonAliasId2) = SplitAffiliation(cell);
+                var (personName, affRaw2, affOverrideText2, affForceText2, affPersonAliasId2, affLogoId2) = SplitAffiliation(cell);
                 // 声優側の先頭 "*" 強制新規マーカーを剥がす。
                 var (personAfterAster, isForcedNewPerson) = SplitForcedNewMarker(personName);
                 // 声優名側に "名義 × 誤記" 記法を先に適用してから "旧 => 新" を適用する。
@@ -1642,6 +1649,7 @@ public static class CreditBulkInputParser
                     AffiliationOverrideText = affOverrideText2,
                     AffiliationForceText = affForceText2,
                     AffiliationPersonAliasId = affPersonAliasId2,
+                    AffiliationLogoId = affLogoId2,
                     LineNumber = lineNo,
                 });
             }
@@ -1674,7 +1682,7 @@ public static class CreditBulkInputParser
             // 所属括弧の中身に "*" が偶然含まれていても、それは強制新規マーカーではないため）。
             var (cellAfterAster, isForcedNewPerson) = SplitForcedNewMarker(cell);
 
-            var (personName, affRaw3, affOverrideText3, affForceText3, affPersonAliasId3) = SplitAffiliation(cellAfterAster);
+            var (personName, affRaw3, affOverrideText3, affForceText3, affPersonAliasId3, affLogoId3) = SplitAffiliation(cellAfterAster);
 
             // 人物名側に "名義 × 誤記" 記法を先に適用してから "旧 => 新" を適用する。
             // 所属 "(...)" は SplitAffiliation で既に剥がれているため、× の左右は純粋に人物名表記に限られる。
@@ -1702,6 +1710,7 @@ public static class CreditBulkInputParser
                 AffiliationOverrideText = affOverrideText3,
                 AffiliationForceText = affForceText3,
                 AffiliationPersonAliasId = affPersonAliasId3,
+                AffiliationLogoId = affLogoId3,
                 LineNumber = lineNo,
             });
         }
@@ -1772,15 +1781,15 @@ public static class CreditBulkInputParser
     ///   <item>強制テキスト <c>("テキスト")</c> → (name, null, "テキスト", true)</item>
     ///   <item>両持ち <c>(屋号 / "テキスト")</c> → (name, "屋号", "テキスト", false)</item>
     /// </list></summary>
-    private static (string Name, string? AffRaw, string? AffOverrideText, bool AffForceText, int? AffPersonAliasId)
+    private static (string Name, string? AffRaw, string? AffOverrideText, bool AffForceText, int? AffPersonAliasId, int? AffLogoId)
         SplitAffiliation(string text)
     {
         var m = AffiliationRegex.Match(text);
-        if (!m.Success) return (text, null, null, false, null);
+        if (!m.Success) return (text, null, null, false, null, null);
         string name = m.Groups["name"].Value.Trim();
         string inside = m.Groups["aff"].Value.Trim();
-        var (raw, over, force, person) = ParseAffiliationContent(inside);
-        return (name, raw, over, force, person);
+        var (raw, over, force, person, logo) = ParseAffiliationContent(inside);
+        return (name, raw, over, force, person, logo);
     }
 
     /// <summary>「(...)」の中身の文字列を解析して、ID 屋号 / 強制テキスト / 両持ち の 3 種に分類する。
@@ -1788,17 +1797,26 @@ public static class CreditBulkInputParser
     /// <c>("テキスト")</c> → (null, テキスト, true)、
     /// <c>(屋号 / "テキスト")</c> → (屋号, テキスト, false)。
     /// クオートは半角 <c>"</c> / 全角 <c>"</c><c>"</c> / 全角 <c>""</c> を受け付ける（出力時は内部表現で剥がす）。</summary>
-    private static (string? AffRaw, string? AffOverrideText, bool AffForceText, int? AffPersonAliasId)
+    private static (string? AffRaw, string? AffOverrideText, bool AffForceText, int? AffPersonAliasId, int? AffLogoId)
         ParseAffiliationContent(string inside)
     {
-        if (string.IsNullOrWhiteSpace(inside)) return (null, null, false, null);
+        if (string.IsNullOrWhiteSpace(inside)) return (null, null, false, null, null);
+
+        // 所属のロゴの版 "屋号#lg<logo_id>" を先に剥がす（屋号部は以降の 3 形式の解析に回す）。
+        int? logoId = null;
+        var logoRef = AffiliationLogoRefRegex.Match(inside);
+        if (logoRef.Success && int.TryParse(logoRef.Groups["lid"].Value, out int lid))
+        {
+            logoId = lid;
+            inside = AffiliationLogoRefRegex.Replace(inside, "", 1).Trim();
+        }
 
         // 人物名義参照 "名前#p<id>"（ユニット等の所属を構造的に person_aliases へ引き当て）。id を正とする。
         // 企業屋号の `(屋号)` は `#p` を持たないため衝突しない。
         var personRef = AffiliationPersonRefRegex.Match(inside);
         if (personRef.Success && int.TryParse(personRef.Groups["pid"].Value, out int paid))
         {
-            return (null, null, false, paid);
+            return (null, null, false, paid, null);
         }
 
         // (屋号 / "テキスト") 両持ち記法を試す。スラッシュは半角 / で前後 SP 許容。
@@ -1809,18 +1827,18 @@ public static class CreditBulkInputParser
             string rightRaw = inside.Substring(slashIdx + 1).Trim();
             if (TryUnquote(rightRaw, out string overText) && leftRaw.Length > 0)
             {
-                return (leftRaw, overText, false, null);
+                return (leftRaw, overText, false, null, logoId);
             }
         }
 
         // 単独 ("テキスト") の強制テキスト記法。
         if (TryUnquote(inside, out string forceText))
         {
-            return (null, forceText, true, null);
+            return (null, forceText, true, null, null);
         }
 
         // それ以外は ID 屋号扱い（マスタ引き当ての対象）。
-        return (inside, null, false, null);
+        return (inside, null, false, null, logoId);
     }
 
     /// <summary>文字列が <c>"..."</c>（半角）、<c>"..."</c>（U+201C/U+201D）、または <c>""..."</c>（U+FF02 全角）で

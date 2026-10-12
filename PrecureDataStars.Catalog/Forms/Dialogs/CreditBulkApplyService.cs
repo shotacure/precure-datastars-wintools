@@ -983,6 +983,9 @@ public sealed class CreditBulkApplyService
             if (pe.PersonMisprintText is not null) last.Entity.PersonMisprintText = pe.PersonMisprintText;
             if (pe.CharacterMisprintText is not null) last.Entity.CharacterMisprintText = pe.CharacterMisprintText;
             if (pe.CompanyMisprintText is not null) last.Entity.CompanyMisprintText = pe.CompanyMisprintText;
+            // 所属のロゴの版（屋号#lg<id>）。所属の会社名義が付いたときだけ持たせる（ロゴは会社の所属の版を表すため）。
+            if (pe.AffiliationLogoId is not null && last.Entity.AffiliationCompanyAliasId is not null)
+                last.Entity.AffiliationLogoId = pe.AffiliationLogoId;
             // A/B 併記フラグは保存フェーズで実 ID 解決のために使う一時情報。
             // ブロック先頭エントリ（直前エントリが無い）の場合は Block 警告級だが、ここでは
             // 適用フェーズなので緩く InfoMessages に積むだけにする（パーサ側で警告するのが本筋）。

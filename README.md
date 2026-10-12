@@ -1758,6 +1758,7 @@ CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.
 | `role_label_text` | VARCHAR(64) NULL | 盤の役職の印刷表記（Guiter / Condu / レコーディングコーディネイト 等）。役職そのものは 1 つにまとめ、表記の違いをここに残す（記録用で、サイトには出さない） |
 | `ensemble_note` | VARCHAR(64) NULL | 編成の注記（Tp.3 / 86443 / ×8 / 302st.304st. 等）。サイトでは役職名に括弧で添える。演奏系の役職（楽器・指揮など）のバッジは役職名の前に絵文字を付ける（`MusicCreditViewBuilder.BadgeLabel`。専用の絵文字が無い楽器は、金管は 🎺、木管は 🪈、ハープは 🎻 で代用） |
 | `affiliation_company_alias_id` / `affiliation_text` | NULL | 所属（屋号が名義マスタにあれば前者、無ければ後者） |
+| `affiliation_logo_id` | NULL | 所属がロゴで出ているときのロゴの版（`logos.logo_id`）。TV の OP・ED の「（ABC）」「（ADK）」など。所属の会社は `affiliation_company_alias_id` で持ち、サイトのクレジットと Catalog のプレビューは今までどおり会社名のテキストリンクで出す（ロゴの版は表示に使わない）。一括入力では屋号の後ろに `#lg<logo_id>` を付けて `(ABC#lg16)` と書く |
 | `preceding_separator` | VARCHAR(8) NULL | 直前の名義との区切り（／ , & 等）。無ければ「、」で出す |
 | `source_product_catalog_no` | VARCHAR(32) NULL FK | このクレジットの根拠にした盤（→ `products`）。サイトでは「出典：」として添える |
 

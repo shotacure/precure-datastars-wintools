@@ -8281,6 +8281,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
   --rtl-name-w: 11.5em;
   --rtl-gap: 12px;
   --rtl-track-x: calc(var(--rtl-name-w) + var(--rtl-gap));
+  --rtl-group-bg: #f1f4fa;
+  --rtl-group-line: #c3cad8;
   margin: 0 0 2em;
 }
 /* 凡例（左）と「主な方のみ」のスイッチ（右端）の行。狭い画面ではスイッチが凡例の下の行に回る。 */
@@ -8465,6 +8467,8 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 
 .rtl-rows {
   position: relative;
+  display: flex;
+  flex-direction: column;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -8494,6 +8498,52 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   white-space: nowrap;
 }
 .rtl-name:hover { text-decoration: none; }
+/* 役職詳細で「すべて」を見せているときの、会社とその所属の人のまとまり（ゾーン）。名前の欄に地色を敷き、
+   会社の行の上に区切り線、所属の人は字下げして左に縦線を引く。帯の部分はシリーズの縞と重なるので地色を敷かない。
+   個人・団体で絞り込んだときは、まとめる前の並び（--rtl-flat）に戻し、地色・字下げもしない。 */
+.creators-root[data-entity-filter="all"] .rtl-row-group-head { border-top: 1px solid var(--rtl-group-line); }
+.creators-root[data-entity-filter="all"] .rtl-row-group-head .rtl-name,
+.creators-root[data-entity-filter="all"] .rtl-row-member .rtl-name {
+  align-self: stretch;
+  margin-bottom: -1px; /* 行の下の罫線の 1px まで地色を伸ばし、ゾーンを切れ目なく見せる */
+  background: var(--rtl-group-bg);
+}
+.creators-root[data-entity-filter="all"] .rtl-row-member .rtl-name {
+  position: relative;
+  padding-left: 22px;
+}
+.creators-root[data-entity-filter="all"] .rtl-row-member .rtl-name::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--rtl-group-line);
+}
+.creators-root:not([data-entity-filter="all"]) .rtl-row { order: var(--rtl-flat, 0); }
+/* 年表の「TV・映画 / TVのみ / 映画のみ」（ボタンの見た目は個人・団体の絞り込みと共通）。ページのルートの data-media に合わせて、
+   TV の話・映画を描いていない行を隠す。会社の行は、「すべて」のときは所属の人に見える行があれば見出しとして残し、
+   個人・団体で絞り込んだときは自分の担当だけで決める。
+   ボタンはタブの下の段に置き、年表タブを開いているときだけ見せる。個人・団体の絞り込みの右に並ぶときは細い縦線で区切る。 */
+.rtl-media {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.products-tabs:not([data-active-tab="timeline"]) .rtl-media { display: none; }
+.list-toolbar > .entity-filter + .rtl-media {
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+.products-tabs[data-active-tab="timeline"] .list-toolbar:has(> .rtl-media) { display: flex; }
+[data-media="tv"] .rtl-row:not([data-tv]):not(.rtl-row-group-head),
+[data-media="movie"] .rtl-row:not([data-movie]):not(.rtl-row-group-head),
+[data-media="tv"] .rtl-row-group-head:not([data-tv]):not([data-zone-tv]),
+[data-media="movie"] .rtl-row-group-head:not([data-movie]):not([data-zone-movie]),
+.creators-root[data-media="tv"]:not([data-entity-filter="all"]) .rtl-row-group-head:not([data-tv]),
+.creators-root[data-media="movie"]:not([data-entity-filter="all"]) .rtl-row-group-head:not([data-movie]) {
+  display: none;
+}
 .rtl-row:hover .rtl-name-text,
 .rtl-name:focus-visible .rtl-name-text { text-decoration: underline; }
 .rtl-badge {
@@ -8813,7 +8863,8 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .creators-root[data-active-tab="roles"] .entity-filter {
   display: none;
 }
-.entity-filter-btn {
+.entity-filter-btn,
+.rtl-media-btn {
   appearance: none;
   border: 1px solid var(--border);
   background: transparent;
@@ -8823,14 +8874,17 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   font-size: 0.88em;
   cursor: pointer;
 }
-.entity-filter-btn:hover:not(.is-active) {
+.entity-filter-btn:hover:not(.is-active),
+.rtl-media-btn:hover:not(.is-active) {
   background: var(--surface-2, rgba(0, 0, 0, 0.04));
 }
-.entity-filter-btn.is-active {
+.entity-filter-btn.is-active,
+.rtl-media-btn.is-active {
   color: var(--fg);
   border-color: var(--fg);
 }
-.entity-filter-btn:focus-visible {
+.entity-filter-btn:focus-visible,
+.rtl-media-btn:focus-visible {
   outline: 2px solid var(--accent-pink, #ec4899);
   outline-offset: 2px;
 }

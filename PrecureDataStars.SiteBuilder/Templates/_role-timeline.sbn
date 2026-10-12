@@ -7,6 +7,13 @@
        （.role-timeline.is-main-only）は隠し、切ると本来の並びの位置に出る。行にマウスを載せる（スマホは帯をタップする）と参加期間と
        作品ごとの参加を出す（role-timeline.js）。
      ・行の data-entity-type は一覧の行と同じ値なので、ページの絞り込み（site.css）がそのまま線表の行にも効く。
+     ・役職詳細で会社とその所属の人をまとめるとき（Timeline.HasGroups）は、行をまとめた並び（会社の行 rtl-row-group-head の
+       すぐ下に所属の人の行 rtl-row-member）で出し、「すべて」のときだけ字下げと地色でひとまとめに見せる。
+       個人・団体で絞り込んだときは、行の --rtl-flat（まとめる前の並びの位置）の順に並べ直す（site.css）。
+     ・TV の行と映画の行が両方あるとき（Timeline.HasMediaFilter）は、ページのタブの下の段に「TV・映画 / TVのみ / 映画のみ」の
+       ボタン（_role-timeline-media.sbn）を置き、行の data-tv / data-movie（その行に TV の話の帯・映画の点を描いたか。関連する
+       役職の担当は数えない）で、ページのルートの data-media に合わせて行を隠す（site.css。切り替えは role-timeline.js）。
+       会社の行は、所属の人の中に見える行があれば（data-zone-tv / data-zone-movie）見出しとして残す。
      ・横軸は TV シリーズ 1 作を 1 本の帯にし、帯の左端に放送開始年の目盛り（シリーズ詳細へのリンク）を置く。
      ・役職詳細では、ページの役職と関連でつながった役職の担当（r.Related）を、主の印より先に描いて下に重ねる
        （細い帯と白抜きの輪。色は役職ごとに RoleTimelineBuilder が決めて --rel-c / --key-c で渡す）。凡例は役職ごとに 1 項目で、
@@ -46,7 +53,7 @@
     </div>
     <ol class="rtl-rows">
       {{~ for r in Timeline.Rows ~}}
-      <li class="rtl-row{{ if !r.IsMain }} rtl-row-extra{{ end }}" data-entity-type="{{ r.EntityKind }}" data-period="{{ r.PeriodLabel | html.escape }}" data-works="{{ r.WorksText | html.escape }}"{{ if r.EntitySubLabel != "" }} data-sub="{{ r.EntitySubLabel | html.escape }}"{{ end }}>
+      <li class="rtl-row{{ if !r.IsMain }} rtl-row-extra{{ end }}{{ if r.IsGroupHead }} rtl-row-group-head{{ end }}{{ if r.IsGroupMember }} rtl-row-member{{ end }}"{{ if Timeline.HasGroups }} style="--rtl-flat:{{ r.FlatOrder }}"{{ end }}{{ if Timeline.HasMediaFilter }}{{ if r.HasTv }} data-tv{{ end }}{{ if r.HasMovie }} data-movie{{ end }}{{ if r.ZoneHasTv }} data-zone-tv{{ end }}{{ if r.ZoneHasMovie }} data-zone-movie{{ end }}{{ end }} data-entity-type="{{ r.EntityKind }}" data-period="{{ r.PeriodLabel | html.escape }}" data-works="{{ r.WorksText | html.escape }}"{{ if r.EntitySubLabel != "" }} data-sub="{{ r.EntitySubLabel | html.escape }}"{{ end }}>
         <a class="rtl-name" href="{{ r.EntityUrl }}">
           {{~ if r.EntityKind == "company" ~}}<span class="rtl-badge rtl-badge-company" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" fill-rule="evenodd"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>
           {{~ else if r.EntityKind == "unit" ~}}<span class="rtl-badge rtl-badge-unit" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><circle cx="5.2" cy="5.4" r="2.4"/><circle cx="10.8" cy="5.4" r="2.4"/><path d="M0.6 14a4.6 4.6 0 0 1 9.2 0z"/><path d="M6.2 14a4.6 4.6 0 0 1 9.2 0z"/></svg></span>

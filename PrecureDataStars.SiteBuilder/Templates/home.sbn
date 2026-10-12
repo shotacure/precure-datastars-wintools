@@ -4,8 +4,12 @@
   <h1>{{ SiteBrandLabel | html.escape }}</h1>
   {{## タグラインは「プリキュアまるごとブック」へのオマージュ。OG 既定画像（og-default.svg）の
        文言とも一致させている。変更時は両方をセットで見直すこと。 ##}}
-  <p class="lead">プリキュアまるごとデータベース。</p>
-  <p class="muted home-build-info">{{ BuildLabel }}</p>
+  {{## リードと「〇〇第N話(日付)時点」を 1 行に並べる入れ物（PC は時点を右寄せ、スマホは時点をリードの下へ）。
+       並びは site.css の .home-lead-row。充足率の行は入れ物の外で、常にこの下に出る。 ##}}
+  <div class="home-lead-row">
+    <p class="lead">プリキュアまるごとデータベース。</p>
+    <p class="muted home-build-info">{{ BuildLabel }}</p>
+  </div>
   {{~ if DataSufficiencyLabel != "" ~}}
   {{## キャラクター・クリエイターのデータ充足率（暫定表記・赤字）。追いついたら除去する。 ##}}
   <p class="home-data-sufficiency">{{ DataSufficiencyLabel }}</p>

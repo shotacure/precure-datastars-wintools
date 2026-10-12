@@ -4709,6 +4709,22 @@ body.subtitle-embargo-dialog-open {
   font-family: var(--font-accent-dot);
 }
 
+/* hero のリードと時点表記の入れ物。
+   PC ではリードの行の右端に時点表記を置き、スマホ幅ではリードの下に回す。 */
+@media (min-width: 641px) {
+  .home-lead-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1em;
+  }
+  .home-lead-row .home-build-info {
+    flex: none;
+    margin: 0;
+    white-space: nowrap;
+  }
+}
+
 /* ホーム統計のコンパクト表示。横並び 1 行（または 2 行）で件数だけを並べる。 */
 .home-db-stats.home-db-stats-compact {
   display: flex;

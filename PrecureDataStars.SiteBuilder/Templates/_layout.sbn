@@ -97,6 +97,9 @@
      再生ボタンのあるページでしか読まない art-track-player.js とは分けて全ページで読み込む。
      描画のちらつきを避けるため、再生系より先に当たるよう head 側に置く。 ##}}
 <script src="{{ asset_url "/assets/art-track-pref.js" }}" defer></script>
+{{## タブ・絞り込み・スイッチの状態を URL の # に残す（リロード・共有で同じ状態に開く）。
+     各ページのタブ処理より後に動く必要があるので、スクリプトの中で DOMContentLoaded を待つ。 ##}}
+<script src="{{ asset_url "/assets/view-state.js" }}" defer></script>
 
 {{## ──────── JSON-LD（Schema.org 構造化データ） ────────
      Generator 側で組み立てた JSON 文字列をそのまま埋め込む。空文字なら出力しない。 ##}}

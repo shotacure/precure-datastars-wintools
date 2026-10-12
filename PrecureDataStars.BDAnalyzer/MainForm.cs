@@ -1076,8 +1076,10 @@ namespace PrecureDataStars.BDAnalyzer
         /// 作品を自動で判定し、話とパートを当てる。全 TV 作品について、各プレイリストのチャプターの尺の並びを各話のパートの円盤尺の並びと
         /// 突き合わせ（<see cref="EpisodeLinkMatcher"/>）、当たった話の数がいちばん多い作品を採る（同数なら候補が複数のものが少ない作品）。
         /// 1 話も当たらなければ、映画など作品単位の作品（話を持たない）を親の映画と併映のまとまりごとに <see cref="FeatureLinkMatcher"/> で当て、
-        /// 当たるまとまりがただ 1 つならその親を盤の作品にして、当たったプレイリストとチャプターを本編（FEATURE）にする
-        /// （複数なら未判定のまま。「話とパートを当てる...」で選ぶ）。
+        /// 当たるまとまりがただ 1 つならその親を盤の作品にして、当たったプレイリストとチャプターを本編（FEATURE）にする。
+        /// 当たるまとまりが複数なら、ディスク名で決められる作品（<see cref="SeriesNameMatcher"/>）がその中にあればそれを採る。
+        /// 尺でどれにも当たらなければ、ディスク名で決められる作品を盤の作品にする（話・本編の当ては人が「話とパートを当てる...」で行う）。
+        /// ディスク名で決めるときは、円盤尺を持つ TV 作品（尺で当たらなかったと分かっている作品）を外す。どれでも決まらなければ未判定のまま。
         /// </summary>
         private async Task AutoDetectSeriesAndLinkAsync(BdStructure bd)
         {
@@ -1108,6 +1110,12 @@ namespace PrecureDataStars.BDAnalyzer
             {
                 // TV の話が 1 つも当たらない。作品単位の作品（映画など）を、親の映画と併映のまとまりごとに上映時間で当てる
                 var allSeries = await _seriesRepo.GetAllAsync();
+                // ディスク名で決められる作品。円盤尺を持つ TV 作品は尺で当たらなかったので候補から外す
+                var testedTvIds = allEpisodes.Where(e => partsByEpisode.TryGetValue(e.EpisodeId, out var ps) && ps.Any(x => x.DiscLength is not null))
+                    .Select(e => e.SeriesId).Where(id => tvSeries.Any(t => t.SeriesId == id)).ToHashSet();
+                int? nameGuess = SeriesNameMatcher.PickConfident(
+                    SeriesNameMatcher.Rank(bd.Disc.BdmtName ?? bd.Disc.VolumeLabel, allSeries),
+                    s => !testedTvIds.Contains(s.SeriesId));
                 var featureInputs = bd.Playlists
                     .Where(pl => pl.PlaylistKind != "MENU")
                     .Select(pl => (pl.PlaylistFile ?? "", pl.DurationMs,
@@ -1122,9 +1130,16 @@ namespace PrecureDataStars.BDAnalyzer
                     var proposals = FeatureLinkMatcher.Propose(featureInputs, group);
                     if (proposals.Count > 0) hits.Add((group, proposals));
                 }
-                if (hits.Count != 1) return;
-                bd.Disc.SeriesId = hits[0].Group.Root.SeriesId;
-                foreach (var proposal in hits[0].Proposals) ApplyFeatureProposal(bd, proposal);
+                if (hits.Count > 1) hits = hits.Where(h => h.Group.Root.SeriesId == nameGuess).ToList();
+                if (hits.Count == 1)
+                {
+                    bd.Disc.SeriesId = hits[0].Group.Root.SeriesId;
+                    foreach (var proposal in hits[0].Proposals) ApplyFeatureProposal(bd, proposal);
+                }
+                else if (hits.Count == 0 && nameGuess is int guessed)
+                {
+                    bd.Disc.SeriesId = guessed;
+                }
                 return;
             }
 
@@ -1261,14 +1276,20 @@ namespace PrecureDataStars.BDAnalyzer
             if (_lastBd is null || _seriesRepo is null || _episodesRepo is null || _episodePartsRepo is null) return;
             try
             {
-                using var dlg = new EpisodeLinkDialog(_seriesRepo, _episodesRepo, _episodePartsRepo, _lastBd.Chapters, _lastBd.Playlists, _lastBd.Disc.SeriesId);
+                // 作品が未判定なら、ディスク名にいちばん近い作品を選んだ状態で開く
+                int? defaultSeriesId = _lastBd.Disc.SeriesId;
+                if (defaultSeriesId is null)
+                {
+                    var ranked = SeriesNameMatcher.Rank(_lastBd.Disc.BdmtName ?? _lastBd.Disc.VolumeLabel, await _seriesRepo.GetAllAsync());
+                    if (ranked.Count > 0 && ranked[0].Score > 0) defaultSeriesId = ranked[0].Series.SeriesId;
+                }
+                using var dlg = new EpisodeLinkDialog(_seriesRepo, _episodesRepo, _episodePartsRepo, _lastBd.Chapters, _lastBd.Playlists, defaultSeriesId);
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 _lastBd.Disc.SeriesId = dlg.SelectedSeriesId ?? _lastBd.Disc.SeriesId;
                 // 作品単位の本編の尺（黒みを引いた秒数）は「Blu-ray の情報を記録」で bd_* と一緒に作品へ入れる
                 _pendingRunTimes.Clear();
                 foreach (var (seriesId, seconds) in dlg.FeatureRunTimes) _pendingRunTimes[seriesId] = seconds;
                 RefreshEpisodeLinkColumn();
-                await Task.CompletedTask;
             }
             catch (Exception ex)
             {

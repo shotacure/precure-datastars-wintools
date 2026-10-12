@@ -56,6 +56,16 @@ public sealed class CreditRoleBlock
     /// <summary>見出し（作品または文字）を持つか。</summary>
     public bool HasHeading => HeadingSeriesId is not null || !string.IsNullOrEmpty(HeadingText);
 
+    /// <summary>
+    /// 見出しが区切りの記号だけ（「＊」「●」など、文字・数字を含まない）か。
+    /// 画面で名前のまとまりのあいだに中央へ置かれた区切りの記号を表し、表示では見出しを中央にそろえる。
+    /// 作品を指す見出しは区切りに当たらない。
+    /// </summary>
+    public bool IsMarkHeading =>
+        HeadingSeriesId is null
+        && !string.IsNullOrWhiteSpace(HeadingText)
+        && HeadingText.All(ch => char.IsWhiteSpace(ch) || !char.IsLetterOrDigit(ch));
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

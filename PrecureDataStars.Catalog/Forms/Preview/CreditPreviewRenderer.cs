@@ -151,6 +151,11 @@ internal sealed class CreditPreviewRenderer
             font-size: 0.9em;
             color: #666;
           }
+          /* 区切りの記号だけの見出し（「＊」「●」など）。SiteBuilder の td.block-heading-mark と揃えて中央にそろえる。 */
+          table.fallback-table td.block-heading-mark,
+          table.fallback-vc-table td.block-heading-mark {
+            text-align: center;
+          }
           /* 画面で斜体の見出し（heading_italic）。SiteBuilder の .block-heading-italic と揃える。 */
           .block-heading-italic {
             font-style: italic;
@@ -1734,7 +1739,9 @@ internal sealed class CreditPreviewRenderer
                 {
                     html.Append("<td class=\"role-name\"></td>");
                 }
-                html.Append($"<td class=\"entry-cell block-heading\" colspan=\"{cols}\">{headingHtml}</td>");
+                // 区切りの記号だけの見出し（「＊」「●」など）は、画面どおり中央にそろえる
+                string markClass = bs.Block.IsMarkHeading ? " block-heading-mark" : "";
+                html.Append($"<td class=\"entry-cell block-heading{markClass}\" colspan=\"{cols}\">{headingHtml}</td>");
                 html.Append("</tr>");
                 isFirstRowOfThisBlock = false;
             }
@@ -1874,7 +1881,9 @@ internal sealed class CreditPreviewRenderer
                 {
                     html.Append("<td class=\"role-name\"></td>");
                 }
-                html.Append($"<td class=\"character-cell block-heading\" colspan=\"2\">{headingHtml}</td>");
+                // 区切りの記号だけの見出し（「＊」「●」など）は、画面どおりキャラ名と声優名の 2 列の中央にそろえる
+                string markClass = bs.Block.IsMarkHeading ? " block-heading-mark" : "";
+                html.Append($"<td class=\"character-cell block-heading{markClass}\" colspan=\"2\">{headingHtml}</td>");
                 html.Append("</tr>");
                 isFirstRowOfThisBlock = false;
                 prevCharLabel = null;

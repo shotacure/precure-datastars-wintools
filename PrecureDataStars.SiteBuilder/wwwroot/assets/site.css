@@ -1882,6 +1882,12 @@ a.series-card-children-title:hover {
   font-size: 0.9em;
   color: #666;
 }
+/* 区切りの記号だけの見出し（名前のまとまりのあいだに画面で中央に置かれた「＊」「●」など）。
+   画面どおり、見出しのセル（声の出演ではキャラ名と声優名の 2 列ぶん）の中央にそろえる。 */
+.credit-section table.fallback-table td.block-heading-mark,
+.credit-section table.fallback-vc-table td.block-heading-mark {
+  text-align: center;
+}
 /* 画面で斜体の見出し（プリキュアオールスターズDX の声の出演の作品名など）。 */
 .credit-section .block-heading-italic {
   font-style: italic;

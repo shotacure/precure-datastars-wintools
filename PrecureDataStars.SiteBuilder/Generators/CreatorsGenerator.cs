@@ -432,8 +432,8 @@ public sealed class CreatorsGenerator
     {
         var set = new EntityRowSet();
         var memberOf = groupMembers
-            ? BuildMemberOf(accept, aliasIdsByPersonId, companyAliasesByCompany)
-            : new Dictionary<int, int>();
+            ? BuildMemberOf(accept, aliasIdsByPersonId, companyAliasesByCompany, companyAliasById)
+            : new Dictionary<int, PersonMembership>();
 
         // 集計対象の関与は担当として、集計対象外でも関連する役職の関与（役職詳細の年表に重ねる分）は関連として積む。
         void Offer(EntityAggregate agg, int aid, Involvement inv)
@@ -483,7 +483,8 @@ public sealed class CreatorsGenerator
             }
             AppendEntityRows(set, agg, "person", p.PersonId, PathUtil.PersonUrl(p.PersonId),
                 latest, AliasLabel, NoteCurrentName, repNameMap, withWorksTooltip, roleUsageNote,
-                memberOf: memberOf.TryGetValue(p.PersonId, out var memberCompanyId) ? CompanyGroupKey(memberCompanyId) : "");
+                memberOf: memberOf.TryGetValue(p.PersonId, out var membership) ? CompanyGroupKey(membership.CompanyId) : "",
+                affiliations: membership?.Affiliations);
         }
 
         // 企業・団体。
@@ -530,21 +531,26 @@ public sealed class CreatorsGenerator
     private static string CompanyGroupKey(int companyId)
         => "company:" + companyId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>年表で人物をまとめる所属先の企業と、企業ごとの所属としてクレジットされた担当（<see cref="BuildMemberOf"/>）。</summary>
+    private sealed record PersonMembership(int CompanyId, IReadOnlyList<RoleTimelineAffiliation> Affiliations);
+
     /// <summary>
-    /// 人物 → 所属先の企業（person_id → company_id）。集計対象の関与（<paramref name="accept"/>）のうち、企業の所属として
-    /// クレジットされたもの（所属屋号付きのエントリと、先頭企業ブロックの配下のエントリ。いずれも企業側の Member 関与）を数え、
-    /// 2 社以上に所属したことがある人は所属の回数の多い企業（同じ数なら先にクレジットされた企業）にする。
+    /// 人物 → 所属（person_id → 所属先の企業と企業ごとの所属の担当）。集計対象の関与（<paramref name="accept"/>）のうち、企業の所属として
+    /// クレジットされたもの（所属屋号付きのエントリと、先頭企業ブロックの配下のエントリ。いずれも企業側の Member 関与）を企業ごとに集め、
+    /// 年表でまとめる企業は、2 社以上に所属したことがある人なら所属の回数の多い企業（同じ数なら先にクレジットされた企業）にする。
+    /// 企業ごとの担当（TV の話・映画）は、年表の所属線と内訳の「所属：」の行に使う。企業名は全クレジット横断で最後に使われた屋号。
     /// </summary>
-    private Dictionary<int, int> BuildMemberOf(
+    private Dictionary<int, PersonMembership> BuildMemberOf(
         Func<Involvement, string?> accept,
         IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
-        IReadOnlyDictionary<int, List<int>> companyAliasesByCompany)
+        IReadOnlyDictionary<int, List<int>> companyAliasesByCompany,
+        IReadOnlyDictionary<int, CompanyAlias> companyAliasById)
     {
         var personByAlias = new Dictionary<int, int>();
         foreach (var kv in aliasIdsByPersonId)
             foreach (var aid in kv.Value) personByAlias.TryAdd(aid, kv.Key);
 
-        var tally = new Dictionary<(int PersonId, int CompanyId), (int Count, (long Start, int EpNo, long Pos) First)>();
+        var tally = new Dictionary<(int PersonId, int CompanyId), MemberTally>();
         foreach (var kv in companyAliasesByCompany)
         {
             foreach (var caid in kv.Value)
@@ -555,22 +561,48 @@ public sealed class CreatorsGenerator
                     if (inv.Kind != InvolvementKind.Member || inv.PersonAliasId is not int paid) continue;
                     if (!personByAlias.TryGetValue(paid, out var personId) || accept(inv) is null) continue;
                     var key = (personId, kv.Key);
+                    if (!tally.TryGetValue(key, out var t))
+                    {
+                        t = new MemberTally();
+                        tally[key] = t;
+                    }
+                    t.Count++;
                     var order = CreditOrderKey(inv);
-                    tally[key] = tally.TryGetValue(key, out var t)
-                        ? (t.Count + 1, order.CompareTo(t.First) < 0 ? order : t.First)
-                        : (1, order);
+                    if (t.Count == 1 || order.CompareTo(t.First) < 0) t.First = order;
+                    if (_ctx.IsMovieKindSeries(inv.SeriesId)) t.Movies.Add(inv.SeriesId);
+                    else t.Episodes.Add((inv.SeriesId, inv.EpisodeId ?? 0));
                 }
             }
         }
+
+        string CompanyName(int companyId)
+            => _latestCompanyAliasId.TryGetValue(companyId, out var aid) && companyAliasById.TryGetValue(aid, out var a) ? a.Name : "";
 
         return tally
             .GroupBy(kv => kv.Key.PersonId)
             .ToDictionary(
                 g => g.Key,
-                g => g.OrderByDescending(kv => kv.Value.Count)
-                      .ThenBy(kv => kv.Value.First)
-                      .ThenBy(kv => kv.Key.CompanyId)
-                      .First().Key.CompanyId);
+                g => new PersonMembership(
+                    g.OrderByDescending(kv => kv.Value.Count)
+                     .ThenBy(kv => kv.Value.First)
+                     .ThenBy(kv => kv.Key.CompanyId)
+                     .First().Key.CompanyId,
+                    g.Select(kv => new RoleTimelineAffiliation
+                    {
+                        GroupKey = CompanyGroupKey(kv.Key.CompanyId),
+                        CompanyName = CompanyName(kv.Key.CompanyId),
+                        Episodes = kv.Value.Episodes,
+                        MovieSeriesIds = kv.Value.Movies
+                    }).ToList()));
+    }
+
+    /// <summary><see cref="BuildMemberOf"/> の (人物, 企業) ごとの集計。</summary>
+    private sealed class MemberTally
+    {
+        public int Count;
+        public (long Start, int EpNo, long Pos) First;
+        public HashSet<(int SeriesId, int EpisodeId)> Episodes { get; } = new();
+        public HashSet<int> Movies { get; } = new();
     }
 
     /// <summary>
@@ -579,13 +611,15 @@ public sealed class CreatorsGenerator
     /// </summary>
     /// <param name="groupKey">年表で所属の人をまとめる見出しの鍵（企業の行。まとめないなら空文字）。</param>
     /// <param name="memberOf">年表で所属先としてまとめる企業の鍵（人物の行。所属していなければ空文字）。</param>
+    /// <param name="affiliations">年表の所属線に描く、企業ごとの所属としてクレジットされた担当（人物の行。無ければ null）。</param>
     private void AppendEntityRows(
         EntityRowSet set, EntityAggregate agg, string entityKind, int entityId, string url,
         (string Name, string Kana) latest, Func<int, (string Name, string Kana)> aliasLabel,
         Func<int, bool> noteCurrentName,
         IReadOnlyDictionary<string, string>? repNameMap, bool withWorksTooltip,
         Func<EntityAggregate, string>? roleUsageNote,
-        string groupKey = "", string memberOf = "")
+        string groupKey = "", string memberOf = "",
+        IReadOnlyList<RoleTimelineAffiliation>? affiliations = null)
     {
         string tooltip = withWorksTooltip ? BuildWorksTooltip(agg.EpisodeKeys, agg.MovieSeriesIds) : "";
         string rolesLabel = repNameMap is null ? "" : BuildRolesLabel(agg.EarliestByRep, repNameMap);
@@ -605,6 +639,7 @@ public sealed class CreatorsGenerator
             HasOpeningCredit = agg.HasOpeningCredit,
             GroupKey = groupKey,
             MemberOf = memberOf,
+            Affiliations = affiliations ?? Array.Empty<RoleTimelineAffiliation>(),
             Episodes = agg.EpisodeKeys,
             MovieSeriesIds = agg.MovieSeriesIds,
             RelatedRoles = agg.RelatedRoles

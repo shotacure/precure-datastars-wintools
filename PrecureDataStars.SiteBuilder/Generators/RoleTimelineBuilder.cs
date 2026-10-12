@@ -522,7 +522,48 @@ internal sealed class RoleTimelineBuilder
             PeriodLabel = string.Join("、", periodLabels),
             WorksText = string.Join("\n", works.OrderBy(w => w.Sort).Select(w => w.Text).Concat(relatedWorks))
         };
+        BuildAffiliationLines(e, row, rules);
         return new BuiltRow(e, row, chains[0][0].Date, chains[^1][^1].Date, e.FirstSortPos, credits.Count, qualifies, drawnRelated);
+    }
+
+    /// <summary>
+    /// 所属線と内訳の「所属：」の行を組む。企業ごとに、所属としてクレジットされた担当（TV の話・映画）を日付順に並べ、
+    /// 続けて参加した期間と同じ間隔（<see cref="RoleTimelineRules.MaxGapDays"/>）以内ならつないで 1 本の線にする
+    /// （映画の個人名だけのクレジットなど、所属の出ていない回が挟まっても切れない）。1 件だけの期間も、TV の 1 話ぶんの幅で引く。
+    /// まとめた企業（<see cref="RoleTimelineEntity.MemberOf"/>）以外の企業の線は点線にする。企業の並びは最初の所属の早い順。
+    /// </summary>
+    private void BuildAffiliationLines(RoleTimelineEntity e, RoleTimelineRow row, RoleTimelineRules rules)
+    {
+        if (e.Affiliations.Count == 0) return;
+        var marks = new List<RoleTimelineAffiliationMark>();
+        var texts = new List<(DateOnly First, string Text)>();
+        foreach (var aff in e.Affiliations)
+        {
+            var dates = new List<DateOnly>();
+            foreach (var (_, eid) in aff.Episodes)
+                if (eid != 0 && _ctx.EpisodeById.TryGetValue(eid, out var ep)) dates.Add(ep.OnAirDate);
+            foreach (var sid in aff.MovieSeriesIds)
+                if (_ctx.SeriesById.TryGetValue(sid, out var s)) dates.Add(s.StartDate);
+            if (dates.Count == 0) continue;
+            dates.Sort();
+
+            bool isOther = !string.Equals(aff.GroupKey, e.MemberOf, StringComparison.Ordinal);
+            var labels = new List<string>();
+            int start = 0;
+            for (int i = 1; i <= dates.Count; i++)
+            {
+                if (i < dates.Count && dates[i].DayNumber - dates[i - 1].DayNumber <= rules.MaxGapDays) continue;
+                var from = dates[start];
+                var to = dates[i - 1].AddDays(EpisodeSpanDays);
+                marks.Add(new RoleTimelineAffiliationMark { Left = Pct(from), Width = PctWidth(from, to), IsOther = isOther });
+                labels.Add(PeriodLabel(from, dates[i - 1]));
+                start = i;
+            }
+            if (aff.CompanyName != "")
+                texts.Add((dates[0], $"所属：{aff.CompanyName}（{string.Join("、", labels)}）"));
+        }
+        row.Affiliations = marks;
+        row.AffiliationText = string.Join("\n", texts.OrderBy(t => t.First).Select(t => t.Text));
     }
 
     /// <summary>
@@ -695,6 +736,11 @@ internal sealed class RoleTimelineEntity
     /// 「すべて」を見せているときは会社の行のすぐ下に字下げして置く。所属していなければ空文字。
     /// </summary>
     public string MemberOf { get; init; } = "";
+    /// <summary>
+    /// 企業の所属としてクレジットされた担当（企業ごと）。行の帯の下に所属線を引き、内訳に「所属：企業名（期間）」を添える。
+    /// まとめた企業（<see cref="MemberOf"/>）の線は実線、ほかの企業の線は点線。役職詳細以外のページでは空。
+    /// </summary>
+    public IReadOnlyList<RoleTimelineAffiliation> Affiliations { get; init; } = Array.Empty<RoleTimelineAffiliation>();
     /// <summary>参加した TV 系の話 (series_id, episode_id)。</summary>
     public IReadOnlyCollection<(int SeriesId, int EpisodeId)> Episodes { get; init; } = Array.Empty<(int, int)>();
     /// <summary>参加した映画系のシリーズ。</summary>
@@ -712,6 +758,19 @@ internal sealed class RoleTimelineEntity
     /// 行の並び・主な方の判定には使わない。役職詳細以外のページでは空。
     /// </summary>
     public IReadOnlyList<RoleTimelineRelatedRole> RelatedRoles { get; init; } = Array.Empty<RoleTimelineRelatedRole>();
+}
+
+/// <summary>人物が 1 つの企業の所属としてクレジットされた担当（<see cref="RoleTimelineEntity.Affiliations"/>）。</summary>
+internal sealed class RoleTimelineAffiliation
+{
+    /// <summary>企業の鍵（<see cref="RoleTimelineEntity.GroupKey"/> と同じ形）。</summary>
+    public required string GroupKey { get; init; }
+    /// <summary>内訳に出す企業名。</summary>
+    public required string CompanyName { get; init; }
+    /// <summary>所属としてクレジットされた TV 系の話 (series_id, episode_id)。</summary>
+    public IReadOnlyCollection<(int SeriesId, int EpisodeId)> Episodes { get; init; } = Array.Empty<(int, int)>();
+    /// <summary>所属としてクレジットされた映画系のシリーズ。</summary>
+    public IReadOnlyCollection<int> MovieSeriesIds { get; init; } = Array.Empty<int>();
 }
 
 /// <summary>線表の行に重ねる関連する役職 1 つの担当（<see cref="RoleTimelineEntity.RelatedRoles"/>）。</summary>
@@ -804,6 +863,15 @@ internal sealed class RoleTimelineTick
     public bool IsMinor { get; set; }
 }
 
+/// <summary>所属線 1 本（企業の所属としてクレジットされていた 1 つの期間）。</summary>
+internal sealed class RoleTimelineAffiliationMark
+{
+    public string Left { get; set; } = "0";
+    public string Width { get; set; } = "0";
+    /// <summary>年表でまとめた企業とは別の企業の所属か（点線で引く）。</summary>
+    public bool IsOther { get; set; }
+}
+
 /// <summary>線表の 1 行（人物・企業/団体・キャラクター 1 つ）。</summary>
 internal sealed class RoleTimelineRow
 {
@@ -842,6 +910,10 @@ internal sealed class RoleTimelineRow
     public IReadOnlyList<RoleTimelineMark> Products { get; set; } = Array.Empty<RoleTimelineMark>();
     /// <summary>関連する役職の担当（主の帯の下に重ねる細い帯・白抜きの輪）。</summary>
     public IReadOnlyList<RoleTimelineRelatedMark> Related { get; set; } = Array.Empty<RoleTimelineRelatedMark>();
+    /// <summary>所属線（企業の所属としてクレジットされていた期間。帯の下に引く）。</summary>
+    public IReadOnlyList<RoleTimelineAffiliationMark> Affiliations { get; set; } = Array.Empty<RoleTimelineAffiliationMark>();
+    /// <summary>内訳の「所属：企業名（期間）」（企業ごとに改行でつないだもの。無ければ空文字）。</summary>
+    public string AffiliationText { get; set; } = "";
     /// <summary>内訳の参加期間（「2004年2月〜2005年1月」を「、」でつないだもの）。</summary>
     public string PeriodLabel { get; set; } = "";
     /// <summary>内訳の作品ごとの参加（改行でつないだもの）。</summary>

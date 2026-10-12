@@ -8283,6 +8283,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
   --rtl-track-x: calc(var(--rtl-name-w) + var(--rtl-gap));
   --rtl-group-bg: #f1f4fa;
   --rtl-group-line: #c3cad8;
+  --rtl-aff: #8e9ab3;
   margin: 0 0 2em;
 }
 /* 凡例（左）と「主な方のみ」のスイッチ（右端）の行。狭い画面ではスイッチが凡例の下の行に回る。 */
@@ -8564,6 +8565,14 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   flex: 1 1 auto;
   align-self: stretch;
 }
+/* 所属線：会社の所属としてクレジットされていた期間を、帯の下に細い線で引く（まとめた会社は実線、ほかの会社は点線）。 */
+.rtl-aff {
+  position: absolute;
+  bottom: 2px;
+  height: 0;
+  border-top: 2px solid var(--rtl-aff);
+}
+.rtl-aff-other { border-top-style: dotted; }
 /* 続けて担当した期間（13 週以内の間隔でつながる担当の始まりから終わりまで）の細線。 */
 .rtl-span {
   position: absolute;
@@ -8671,6 +8680,7 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .rtl-tip[hidden] { display: none; }
 .rtl-tip-name { font-weight: 700; }
 .rtl-tip-sub { color: var(--muted); }
+.rtl-tip-aff { color: var(--muted); }
 .rtl-tip-period {
   margin-bottom: 4px;
   color: var(--muted);

@@ -44,6 +44,14 @@
       period.className = 'rtl-tip-period';
       period.textContent = row.getAttribute('data-period') || '';
       tip.appendChild(period);
+      // 会社の所属としてクレジットされていた期間（会社ごとに 1 行）。
+      (row.getAttribute('data-aff') || '').split('\n').forEach(function (a) {
+        if (!a) return;
+        var aff = document.createElement('div');
+        aff.className = 'rtl-tip-aff';
+        aff.textContent = a;
+        tip.appendChild(aff);
+      });
       var ul = document.createElement('ul');
       ul.className = 'rtl-tip-works';
       (row.getAttribute('data-works') || '').split('\n').forEach(function (w) {

@@ -310,8 +310,21 @@ public sealed class CreatorsGenerator
         // ── 声の出演（/creators/voice-cast/） ──
         var allCharacters = (await _charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allCharacterAliases = (await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+        var allPrecures = (await _precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+        // プリキュアのマスタに入っているキャラ（変身前・変身後・2 段目の変身・別形態の名義のキャラ）。
+        // 歴代プリキュア声優の「プリキュアを演じた方のみ」で、このキャラを演じた方を見分けるのに使う。
+        // 値はプリキュアのマスタの順（precure_id 順の 1 始まり）で、年表の「プリキュアを演じた方のみ」の並びに使う。
+        var precureOrderByCharacter = new Dictionary<int, int>();
+        int precureOrder = 0;
+        foreach (var pc in allPrecures.OrderBy(p => p.PrecureId))
+        {
+            precureOrder++;
+            foreach (int? aliasId in new int?[] { pc.PreTransformAliasId, pc.TransformAliasId, pc.Transform2AliasId, pc.AltFormAliasId })
+                if (aliasId is int a && _ctx.CharacterAliasById.TryGetValue(a, out var ca))
+                    precureOrderByCharacter.TryAdd(ca.CharacterId, precureOrder);
+        }
         GenerateVoiceCast(aliasIdsByPersonId, allPersons, allCharacters, allCharacterAliases, roleTimeline,
-            out int voiceCastCount);
+            precureOrderByCharacter, out int voiceCastCount);
 
         // ── 音楽制作（/creators/music-production/）・歌唱（/creators/singers/） ──
         musicRoleEntries = musicRoleEntries
@@ -325,7 +338,7 @@ public sealed class CreatorsGenerator
         var characterById = allCharacters.ToDictionary(c => c.CharacterId);
         // 変身するキャラ（プリキュア）は歌唱ページのキャラクタータブで「変身前 / 変身後」の名義を並べる。
         var transformNameByCharacter = new Dictionary<int, string>();
-        foreach (var pc in await _precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false))
+        foreach (var pc in allPrecures)
         {
             if (_ctx.CharacterAliasById.TryGetValue(pc.PreTransformAliasId, out var pre)
                 && _ctx.CharacterAliasById.TryGetValue(pc.TransformAliasId, out var post)
@@ -2088,6 +2101,7 @@ public sealed class CreatorsGenerator
         IReadOnlyList<Character> allCharacters,
         IReadOnlyList<CharacterAlias> allCharacterAliases,
         RoleTimelineBuilder timelineBuilder,
+        IReadOnlyDictionary<int, int> precureOrderByCharacter,
         out int voiceCastCount)
     {
         var characterById = allCharacters.ToDictionary(c => c.CharacterId);
@@ -2159,6 +2173,28 @@ public sealed class CreatorsGenerator
             .ToList();
         foreach (var r in countRows) _lists.VoiceCastPersons.Add(r.PersonId);
 
+        // 「プリキュアを演じた方のみ」：プリキュアのマスタのキャラを演じたことがある方を、全タブの行に印を付ける
+        // （キャラクター別タブでも、その方が演じたほかのキャラの行を含めて残す）。
+        // 年表は絞り込み中だけプリキュアのマスタの順に並べ直す（複数のプリキュアを演じた方はいちばん前の順）。
+        var precureOrderByPerson = rows
+            .Where(r => precureOrderByCharacter.ContainsKey(r.CharacterId))
+            .GroupBy(r => r.PersonId)
+            .ToDictionary(g => g.Key, g => g.Min(r => precureOrderByCharacter[r.CharacterId]));
+        foreach (var r in charSections.SelectMany(s => s.Members).Concat(debutSections.SelectMany(s => s.Members)).Concat(countRows))
+            r.IsPrecureCast = precureOrderByPerson.ContainsKey(r.PersonId);
+        var precureOrderByUrl = rows
+            .Where(r => precureOrderByPerson.ContainsKey(r.PersonId))
+            .GroupBy(r => r.PersonUrl, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => precureOrderByPerson[g.First().PersonId], StringComparer.Ordinal);
+        var timeline = RecordTimelineRows(timelineBuilder.Build(timelineEntities, RoleTimelineRules.VoiceCast));
+        if (timeline is not null)
+            foreach (var row in timeline.Rows)
+                if (precureOrderByUrl.TryGetValue(row.EntityUrl, out int order))
+                {
+                    row.IsPrecureCast = true;
+                    row.PrecureOrder = order;
+                }
+
         var content = new VoiceCastModel
         {
             CharacterSections = charSections,
@@ -2167,8 +2203,9 @@ public sealed class CreatorsGenerator
             DebutSections = debutSections,
             CountRows = countRows,
             // 年表タブの線表（1 年間に 4 回以上出演した声優）。
-            Timeline = RecordTimelineRows(timelineBuilder.Build(timelineEntities, RoleTimelineRules.VoiceCast)),
-            CoverageLabel = _ctx.CreditCoverageLabel
+            Timeline = timeline,
+            CoverageLabel = _ctx.CreditCoverageLabel,
+            PrecureCount = precureOrderByCharacter.Values.Distinct().Count()
         };
         var layout = new LayoutModel
         {
@@ -2445,6 +2482,7 @@ public sealed class CreatorsGenerator
                 PersonName = debutSource.PersonName,
                 PersonNameKana = debutSource.PersonNameKana,
                 PersonUrl = debutSource.PersonUrl,
+                PersonId = debutSource.PersonId,
                 SeriesTitle = debutSource.SeriesTitle,
                 SeriesUrl = debutSource.SeriesUrl,
                 SeriesYearLabel = debutSource.SeriesYearLabel,
@@ -3440,6 +3478,8 @@ public sealed class CreatorsGenerator
         /// <summary>年表タブの線表。載せる声優が居ないときは null（年表タブを出さない）。</summary>
         public RoleTimelineModel? Timeline { get; set; }
         public string CoverageLabel { get; set; } = "";
+        /// <summary>プリキュアのマスタのプリキュアの人数（「プリキュアを演じた方のみ」の ? の説明に出す）。</summary>
+        public int PrecureCount { get; set; }
     }
 
     /// <summary>声の出演のシリーズ別セクション（キャラクター順・初出演順タブで使用）。 シリーズ名・年は見出しに集約し、配下行からはシリーズ情報を出さない。</summary>
@@ -3450,6 +3490,8 @@ public sealed class CreatorsGenerator
         public string SeriesHeadingLabel { get; set; } = "";
         public long SortStart { get; set; }
         public IReadOnlyList<VoiceCastRow> Members { get; set; } = Array.Empty<VoiceCastRow>();
+        /// <summary>プリキュアを演じた方の行を含むか（「プリキュアを演じた方のみ」のときもセクションを残すか）。</summary>
+        public bool HasPrecureCast => Members.Any(m => m.IsPrecureCast);
     }
 
     /// <summary>(声優 × シリーズ × キャラ) 1 組分の表示行。別シリーズ・別キャラはそれぞれ別行になり、 その都度キャラ名・シリーズ名が出る。</summary>
@@ -3486,5 +3528,7 @@ public sealed class CreatorsGenerator
         /// <summary>出演回数順タブ（声優単位の集約行）専用：代表キャラ以外にも演じたキャラが
         /// 居るとき true。テンプレ側で「（キャラ 役 他）」の「他」を付ける。</summary>
         public bool HasOtherCharacters { get; set; }
+        /// <summary>この行の声優がプリキュア（プリキュアのマスタのキャラ）を演じたことがあるか。「プリキュアを演じた方のみ」の絞り込みに使う。</summary>
+        public bool IsPrecureCast { get; set; }
     }
 }

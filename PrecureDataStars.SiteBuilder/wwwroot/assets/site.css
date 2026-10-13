@@ -8407,6 +8407,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
 }
 .rtl-filter-tip[hidden] { display: none; }
 .role-timeline.is-main-only .rtl-row-extra { display: none; }
+/* 「プリキュアを演じた方のみ」を入れている間は「主な方のみ」を強制で切って触れなくする（薄く出す）。 */
+.rtl-switch:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
 
 .rtl {
   position: relative;
@@ -10158,13 +10160,35 @@ body.has-art-track-bar {
   margin-left: auto;
 }
 /* 並べ替えボタンだけの段で、ボタンが隠れているタブ（初参加順など）では段ごと詰める。 */
-.list-toolbar:not(:has(> .entity-filter, > .sort-toggle, > .count-sort-btn:not([hidden]))) {
+.list-toolbar:not(:has(> .entity-filter, > .sort-toggle, > .precure-only, > .count-sort-btn:not([hidden]))) {
   display: none;
 }
 /* 件数バッジでの並べ替えボタン（count-sort.js が中身を描く）。バッジと同じ絵文字・色に ⬇ / ⬆ を添える。 */
 .count-sort-btn {
   appearance: none;
   border: 0;
+/* 歴代プリキュア声優の「プリキュアを演じた方のみ」（全タブに効くスイッチ）。入れるとページのルートの data-precure-only で、
+   プリキュアを演じたことがある方（data-precure-cast）の行と、その行を含むセクションだけを出す。
+   スイッチは段の右端に置き、件数での並べ替えボタンが出るとき（出演回数順）はその左に少しあけて並べる。 */
+.precure-only {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85em;
+  margin-left: auto;
+  white-space: nowrap;
+  /* トグルスイッチ（.rtl-switch）のオンの色。年表の外で使うので色をここで決める。 */
+  --rtl-tv: #3b82c4;
+}
+.list-toolbar > .precure-only ~ .count-sort-btn { margin-left: 8px; }
+[data-precure-only] .entity-row:not([data-precure-cast]),
+[data-precure-only] .creators-series-section:not([data-precure-cast]),
+[data-precure-only] .rtl-row:not([data-precure-cast]) {
+  display: none;
+}
+/* 年表は「プリキュアを演じた方のみ」の間、最終出演などに関係なくプリキュアのマスタの順に並べる。 */
+[data-precure-only] .rtl-row { order: var(--rtl-precure-order, 0); }
   background: transparent;
   padding: 0;
   cursor: pointer;

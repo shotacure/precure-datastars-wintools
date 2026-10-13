@@ -911,6 +911,16 @@ internal sealed class RoleTimelineRow
     /// <summary>関連する役職の担当（主の帯の下に重ねる細い帯・白抜きの輪）。</summary>
     public IReadOnlyList<RoleTimelineRelatedMark> Related { get; set; } = Array.Empty<RoleTimelineRelatedMark>();
     /// <summary>所属線（企業の所属としてクレジットされていた期間。帯の下に引く）。</summary>
+    /// <summary>
+    /// プリキュア（プリキュアのマスタのキャラ）を演じた方の行か。歴代プリキュア声優の「プリキュアを演じた方のみ」の絞り込みに使う
+    /// （行の data-precure-cast。ほかのページでは常に false）。
+    /// </summary>
+    public bool IsPrecureCast { get; set; }
+    /// <summary>
+    /// 「プリキュアを演じた方のみ」のときの並び順（演じたプリキュアのプリキュアのマスタの順。1 始まり、プリキュアを演じていない行は 0）。
+    /// 行の --rtl-precure-order で渡し、site.css が絞り込み中だけ並べ替えに使う。
+    /// </summary>
+    public int PrecureOrder { get; set; }
     public IReadOnlyList<RoleTimelineAffiliationMark> Affiliations { get; set; } = Array.Empty<RoleTimelineAffiliationMark>();
     /// <summary>内訳の「所属：企業名（期間）」（企業ごとに改行でつないだもの。無ければ空文字）。</summary>
     public string AffiliationText { get; set; } = "";

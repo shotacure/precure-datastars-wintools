@@ -10,7 +10,8 @@
  *   filter=<data-entity-filter-set> 個人のみ・団体のみなどの絞り込み（.entity-filter-btn）
  *   sort=<data-sort>               並べ替え・表示の切り替え（.sort-toggle-btn。見えている切り替えのもの）
  *   media=<data-media-set>         年表の「TVのみ・映画のみ」（.rtl-media-btn）
- *   main=all                       年表の「主な方のみ」を切った（.rtl-filter-input）
+ *   main=all                       年表の「主な方のみ」を切った（.rtl-filter-input。「プリキュアを演じた方のみ」を入れている間は書かない）
+ *   precure=1                      歴代プリキュア声優の「プリキュアを演じた方のみ」を入れた（.precure-only-input）
  *   hide=movie,spring              /series/ の年度順で OFF にした区分（input[data-kind-toggle]）
  *   例：#tab=timeline&filter=person&main=all
  *
@@ -43,9 +44,10 @@
     var filterButtons = qsa('.entity-filter-btn[data-entity-filter-set]');
     var mediaButtons = qsa('.rtl-media-btn[data-media-set]');
     var mainInputs = qsa('.rtl-filter-input');
+    var precureInputs = qsa('.precure-only-input');
     var kindInputs = qsa('input[data-kind-toggle]');
     var sortToggles = qsa('.sort-toggle');
-    if (!tabButtons.length && !filterButtons.length && !mediaButtons.length && !mainInputs.length && !kindInputs.length && !sortToggles.length) return;
+    if (!tabButtons.length && !filterButtons.length && !mediaButtons.length && !mainInputs.length && !precureInputs.length && !kindInputs.length && !sortToggles.length) return;
 
     // 初期状態（テンプレが is-active・checked を付けた状態）を覚えておき、それと違う項目だけを # に書く。
     var defaultTab = activeKey(tabButtons, 'data-tab');
@@ -94,6 +96,7 @@
       }
       if (params.media) clickKey(mediaButtons, 'data-media-set', params.media);
       if (params.main === 'all') mainInputs.forEach(function (input) { setChecked(input, false); });
+      if (params.precure === '1') precureInputs.forEach(function (input) { setChecked(input, true); });
       if (params.hide) {
         var hidden = params.hide.split(',');
         kindInputs.forEach(function (input) {
@@ -127,7 +130,10 @@
         var sort = activeKey(qsa('.sort-toggle-btn', sortToggles[si]), 'data-sort');
         if (sort && sort !== defaultSorts[si]) parts.push('sort=' + encodeURIComponent(sort));
       }
-      if (mainInputs.some(function (input) { return !input.checked; })) parts.push('main=all');
+      // 「プリキュアを演じた方のみ」の間は「主な方のみ」が強制で切れているので、主な方の状態は書かない。
+      var precureOn = precureInputs.some(function (input) { return input.checked; });
+      if (!precureOn && mainInputs.some(function (input) { return !input.checked; })) parts.push('main=all');
+      if (precureOn) parts.push('precure=1');
       var hide = kindInputs
         .filter(function (input) { return !input.checked; })
         .map(function (input) { return input.getAttribute('data-kind-toggle'); });
@@ -146,7 +152,7 @@
       if (ev.target.closest('.tab-btn, .entity-filter-btn, .rtl-media-btn, .sort-toggle-btn')) write();
     });
     document.addEventListener('change', function (ev) {
-      if (ev.target.matches('.rtl-filter-input, input[data-kind-toggle]')) write();
+      if (ev.target.matches('.rtl-filter-input, .precure-only-input, input[data-kind-toggle]')) write();
     });
   }
 

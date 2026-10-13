@@ -338,19 +338,20 @@ h1 {
 }
 /* 見出し（h1）の「〇〇第N話(日付)時点」。h1 のピンクの下線のすぐ下に右寄せで小さく添える（クリエイター・キャラクター・統計の
    各一覧）。人物・キャラ・企業などの詳細は、読みと同じ行（.page-subline）の右に置く。 */
-h1:has(+ .page-coverage) { margin-bottom: 4px; }
+h1:has(+ .page-coverage),
+h1:has(+ .page-subline) { margin-bottom: 4px; }
 .page-coverage {
   margin: 0 0 12px;
   text-align: right;
   font-size: 0.85em;
 }
-/* 詳細ページの h1 の下の 1 行。読みを左（いつもの位置）に、時点を右寄せで同じ行に並べる。狭い画面で入りきらなければ時点は次の行の右へ。 */
+/* 詳細ページの h1 の下の 1 行。読みを左に、時点を右寄せで同じ行に並べる。一覧の .page-coverage と同じく h1 の下線のすぐ下に置く。狭い画面で入りきらなければ時点は次の行の右へ。 */
 .page-subline {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 16px;
-  margin: 1em 0;
+  margin: 0 0 12px;
 }
 .page-subline > p { margin: 0; }
 .page-subline > .page-coverage { margin-left: auto; }

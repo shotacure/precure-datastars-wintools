@@ -8784,6 +8784,16 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   min-width: 0;
   font-size: 0.9em;
 }
+/* 歴代プリキュア声優の初出演順で、役名の右に少しあけて添える初出演の話（「第N話「サブタイトル」」）。 */
+.entity-row-sub .entity-row-debut {
+  margin-left: 0.8em;
+  font-size: 0.85em;
+}
+/* 同じ話が続く行では先頭だけに見せる。全員のときは debut-all、「プリキュアを演じた方のみ」のときは debut-precure の行。 */
+.products-tabs:not([data-precure-only]) .entity-row-debut:not(.debut-all),
+[data-precure-only] .entity-row-debut:not(.debut-precure) {
+  display: none;
+}
 .entity-row-count {
   margin-left: auto;
   font-family: var(--font-num);

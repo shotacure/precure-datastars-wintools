@@ -120,13 +120,16 @@
         {{~ else ~}}{{ s.SeriesHeadingLabel | html.escape }}{{~ end ~}}
       </h2>
       {{## 初出演順は声優名を主役に置き、演じたキャラを「(○○ 役)」のカッコ書きで添える。
-           行全体クリックは人物詳細へ、キャラ名だけは個別リンクでキャラ詳細へ。 ##}}
+           行全体クリックは人物詳細へ、キャラ名だけは個別リンクでキャラ詳細へ。
+           役名の右に少しあけて、初めて出演した話「第N話「サブタイトル」」を小さく添え、エピソード詳細へリンクする
+           （同じ話で初出演した方が続くときは先頭の行だけ。「プリキュアを演じた方のみ」のときは、見えている行の中の先頭だけ
+           ＝ debut-all / debut-precure のクラスで出し分ける。映画など話数の無い出演には添えない）。 ##}}
       <ul class="entity-list">
         {{~ for r in s.Members ~}}
         <li class="entity-row"{{ if r.IsPrecureCast }} data-precure-cast{{ end }}>
           <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
           <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
-          <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役)</span>
+          <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役){{ if r.DebutEpisodeLabel != "" }}<a class="entity-row-debut{{ if r.DebutShowAll }} debut-all{{ end }}{{ if r.DebutShowPrecure }} debut-precure{{ end }}" href="{{ r.DebutEpisodeUrl }}">{{ r.DebutEpisodeLabel | html.escape }}</a>{{ end }}</span>
           <span class="entity-row-count">{{~ if r.EpisodeCount > 0 || r.MovieCount > 0 ~}}<span class="count-badges">{{~ if r.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ r.EpisodeCount }}</span>{{~ end ~}}{{~ if r.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCount }}</span>{{~ end ~}}</span>{{~ else ~}}<span class="muted">—</span>{{~ end ~}}</span>
         </li>
         {{~ end ~}}

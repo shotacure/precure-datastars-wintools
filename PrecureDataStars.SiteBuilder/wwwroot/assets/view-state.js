@@ -12,12 +12,14 @@
  *   media=<data-media-set>         年表の「TVのみ・映画のみ」（.rtl-media-btn）
  *   main=all                       年表の「主な方のみ」を切った（.rtl-filter-input。「プリキュアを演じた方のみ」を入れている間は書かない）
  *   precure=1                      歴代プリキュア声優の「プリキュアを演じた方のみ」を入れた（.precure-only-input）
+ *   csort=<data-count-sort-state>  件数バッジでの並べ替え（.count-sort-btn。見えているボタンのもの。例：movie-desc）
  *   hide=movie,spring              /series/ の年度順で OFF にした区分（input[data-kind-toggle]）
  *   例：#tab=timeline&filter=person&main=all
  *
  * # が「=」を含まない（セクションナビ・ページ内リンクの #セクションid）ときは、その要素を含むタブを開いてそこへ移る。
  * 書き換えは history.replaceState で行い、ブラウザの履歴は増やさない。
- * 件数バッジでの並べ替え（count-sort.js）は押すたびに順に切り替わる一時的な並べ替えなので残さない。
+ * 件数バッジでの並べ替え（count-sort.js）は、開いたときに見えているボタンを状態が合うまで押して戻す
+ * （count-sort.js の準備が済んでから行うため、ほかの項目を戻した後に回す）。
  */
 (function () {
   'use strict';
@@ -47,7 +49,8 @@
     var precureInputs = qsa('.precure-only-input');
     var kindInputs = qsa('input[data-kind-toggle]');
     var sortToggles = qsa('.sort-toggle');
-    if (!tabButtons.length && !filterButtons.length && !mediaButtons.length && !mainInputs.length && !precureInputs.length && !kindInputs.length && !sortToggles.length) return;
+    var countSortButtons = qsa('.count-sort-btn');
+    if (!countSortButtons.length && !tabButtons.length && !filterButtons.length && !mediaButtons.length && !mainInputs.length && !precureInputs.length && !kindInputs.length && !sortToggles.length) return;
 
     // 初期状態（テンプレが is-active・checked を付けた状態）を覚えておき、それと違う項目だけを # に書く。
     var defaultTab = activeKey(tabButtons, 'data-tab');
@@ -70,6 +73,15 @@
         }
       }
       return false;
+    }
+
+    // 見えている件数並べ替えボタン（タブで隠れていないもの）。
+    function visibleCountSort() {
+      for (var i = 0; i < countSortButtons.length; i++) {
+        var b = countSortButtons[i];
+        if (!b.hidden && !isInHiddenPanel(b) && b.hasAttribute('data-count-sort-state')) return b;
+      }
+      return null;
     }
 
     function setChecked(input, checked) {
@@ -97,6 +109,17 @@
       if (params.media) clickKey(mediaButtons, 'data-media-set', params.media);
       if (params.main === 'all') mainInputs.forEach(function (input) { setChecked(input, false); });
       if (params.precure === '1') precureInputs.forEach(function (input) { setChecked(input, true); });
+      if (params.csort) {
+        // count-sort.js の準備（data-count-sort-state）が済み、タブの切り替えで見えるボタンが決まってから合わせる。
+        var wanted = params.csort;
+        setTimeout(function () {
+          applying = true;
+          var b = visibleCountSort();
+          for (var n = 0; b && n < 32 && b.getAttribute('data-count-sort-state') !== wanted; n++) b.click();
+          applying = false;
+          write();
+        }, 0);
+      }
       if (params.hide) {
         var hidden = params.hide.split(',');
         kindInputs.forEach(function (input) {
@@ -134,6 +157,10 @@
       var precureOn = precureInputs.some(function (input) { return input.checked; });
       if (!precureOn && mainInputs.some(function (input) { return !input.checked; })) parts.push('main=all');
       if (precureOn) parts.push('precure=1');
+      var cb = visibleCountSort();
+      if (cb && cb.getAttribute('data-count-sort-state') !== cb.getAttribute('data-count-sort-default')) {
+        parts.push('csort=' + encodeURIComponent(cb.getAttribute('data-count-sort-state')));
+      }
       var hide = kindInputs
         .filter(function (input) { return !input.checked; })
         .map(function (input) { return input.getAttribute('data-kind-toggle'); });
@@ -151,6 +178,9 @@
     document.addEventListener('click', function (ev) {
       if (ev.target.closest('.tab-btn, .entity-filter-btn, .rtl-media-btn, .sort-toggle-btn')) write();
     });
+    // 件数並べ替えボタンは押すと中身（押した span）を描き直すので、document で受けると押した要素がもうボタンの中に無い。
+    // ボタンに直接付ける（count-sort.js のリスナーの後に付くので、並べ替えが済んでから書く）。
+    countSortButtons.forEach(function (b) { b.addEventListener('click', write); });
     document.addEventListener('change', function (ev) {
       if (ev.target.matches('.rtl-filter-input, .precure-only-input, input[data-kind-toggle]')) write();
     });

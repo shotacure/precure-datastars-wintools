@@ -2182,6 +2182,40 @@ public sealed class CreatorsGenerator
             .ToDictionary(g => g.Key, g => g.Min(r => precureOrderByCharacter[r.CharacterId]));
         foreach (var r in charSections.SelectMany(s => s.Members).Concat(debutSections.SelectMany(s => s.Members)).Concat(countRows))
             r.IsPrecureCast = precureOrderByPerson.ContainsKey(r.PersonId);
+        // 初出演順の行に、初めて出演した話（「第N話「サブタイトル」」）を添える。同じセクションで直前の行と同じ話なら
+        // 先頭の行だけに見せる（同じ話で初出演した方が続くときに繰り返さない）。映画など話数の無い出演には添えない。
+        // 「プリキュアを演じた方のみ」で行が隠れると「直前の行」が変わるので、全員のときの先頭（DebutShowAll）と、
+        // プリキュアを演じた方だけのときの先頭（DebutShowPrecure）を別々に決め、テンプレのクラスで出し分ける（site.css）。
+        foreach (var sec in debutSections)
+        {
+            int prevAll = 0, prevPrecure = 0;
+            foreach (var r in sec.Members)
+            {
+                if (r.EarliestEpNo <= 0)
+                {
+                    prevAll = 0;
+                    if (r.IsPrecureCast) prevPrecure = 0;
+                    continue;
+                }
+                bool showAll = r.EarliestEpNo != prevAll;
+                prevAll = r.EarliestEpNo;
+                bool showPrecure = false;
+                if (r.IsPrecureCast)
+                {
+                    showPrecure = r.EarliestEpNo != prevPrecure;
+                    prevPrecure = r.EarliestEpNo;
+                }
+                if (!showAll && !showPrecure) continue;
+                if (!_ctx.EpisodesBySeries.TryGetValue(r.SeriesId, out var seriesEpisodes)
+                    || !_ctx.SeriesById.TryGetValue(r.SeriesId, out var debutSeries)) continue;
+                var ep = seriesEpisodes.FirstOrDefault(e => e.SeriesEpNo == r.EarliestEpNo);
+                if (ep is null) continue;
+                r.DebutEpisodeLabel = $"第{ep.SeriesEpNo}話「{PrecureDataStars.TemplateRendering.JapaneseQuotes.InQuotes(ep.TitleText)}」";
+                r.DebutEpisodeUrl = PathUtil.EpisodeUrl(debutSeries.Slug, ep.SeriesEpNo);
+                r.DebutShowAll = showAll;
+                r.DebutShowPrecure = showPrecure;
+            }
+        }
         var precureOrderByUrl = rows
             .Where(r => precureOrderByPerson.ContainsKey(r.PersonId))
             .GroupBy(r => r.PersonUrl, StringComparer.Ordinal)
@@ -2483,6 +2517,7 @@ public sealed class CreatorsGenerator
                 PersonNameKana = debutSource.PersonNameKana,
                 PersonUrl = debutSource.PersonUrl,
                 PersonId = debutSource.PersonId,
+                SeriesId = debutSource.SeriesId,
                 SeriesTitle = debutSource.SeriesTitle,
                 SeriesUrl = debutSource.SeriesUrl,
                 SeriesYearLabel = debutSource.SeriesYearLabel,
@@ -3530,5 +3565,13 @@ public sealed class CreatorsGenerator
         public bool HasOtherCharacters { get; set; }
         /// <summary>この行の声優がプリキュア（プリキュアのマスタのキャラ）を演じたことがあるか。「プリキュアを演じた方のみ」の絞り込みに使う。</summary>
         public bool IsPrecureCast { get; set; }
+        /// <summary>初出演順タブ専用：初めて出演した話（「第N話「サブタイトル」」）。同じセクションで直前の行と同じ話なら空。</summary>
+        public string DebutEpisodeLabel { get; set; } = "";
+        /// <summary>初出演順タブ専用：<see cref="DebutEpisodeLabel"/> の話のエピソード詳細の URL。</summary>
+        public string DebutEpisodeUrl { get; set; } = "";
+        /// <summary>初出演順タブ専用：全員を見せているとき、この行に初出演の話を見せるか（セクションで同じ話が続く先頭か）。</summary>
+        public bool DebutShowAll { get; set; }
+        /// <summary>初出演順タブ専用：「プリキュアを演じた方のみ」のとき、この行に初出演の話を見せるか。</summary>
+        public bool DebutShowPrecure { get; set; }
     }
 }

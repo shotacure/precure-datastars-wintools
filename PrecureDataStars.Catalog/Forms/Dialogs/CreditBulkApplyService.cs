@@ -698,6 +698,7 @@ public sealed class CreditBulkApplyService
                     block.Entity.HeadingSeriesId = pb.HeadingSeriesId;
                     block.Entity.HeadingText = pb.HeadingText;
                     block.Entity.HeadingItalic = pb.HeadingItalic;
+                    block.Entity.LeadingCompanyNotOnScreen = pb.LeadingCompanyNotOnScreen;
 
                     if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
                     {
@@ -909,6 +910,7 @@ public sealed class CreditBulkApplyService
         block.Entity.HeadingSeriesId = pb.HeadingSeriesId;
         block.Entity.HeadingText = pb.HeadingText;
         block.Entity.HeadingItalic = pb.HeadingItalic;
+        block.Entity.LeadingCompanyNotOnScreen = pb.LeadingCompanyNotOnScreen;
 
         // [先頭企業屋号]
         if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
@@ -2488,6 +2490,13 @@ public sealed class CreditBulkApplyService
             draftBlock.MarkModified();
         }
 
+        // 筆頭の会社が画面に出ていない印の比較。
+        if (draftBlock.Entity.LeadingCompanyNotOnScreen != newBlock.LeadingCompanyNotOnScreen)
+        {
+            draftBlock.Entity.LeadingCompanyNotOnScreen = newBlock.LeadingCompanyNotOnScreen;
+            draftBlock.MarkModified();
+        }
+
         // leading_company_alias_id 比較（旧/新の LeadingCompanyText 文字列が違うときだけ再解決）。
         if (!string.Equals(oldBlock.LeadingCompanyText, newBlock.LeadingCompanyText, StringComparison.Ordinal))
         {
@@ -2708,6 +2717,7 @@ public sealed class CreditBulkApplyService
           .Append("|hseries=").Append(b.HeadingSeriesId?.ToString() ?? string.Empty)
           .Append("|htext=").Append(b.HeadingText ?? string.Empty)
           .Append("|hitalic=").Append(b.HeadingItalic ? "1" : "0")
+          .Append("|leadnos=").Append(b.LeadingCompanyNotOnScreen ? "1" : "0")
           .Append("|notes=").Append(b.Notes ?? string.Empty).Append('\n');
         foreach (var row in b.Rows)
         {

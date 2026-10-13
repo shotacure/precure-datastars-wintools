@@ -1752,6 +1752,9 @@ internal sealed class CreditPreviewRenderer
             if (bs.Block.LeadingCompanyAliasId is int leadId)
             {
                 leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId);
+                // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、SiteBuilder と同じく括弧で包む。
+                if (bs.Block.LeadingCompanyNotOnScreen && !string.IsNullOrEmpty(leadingCompanyName))
+                    leadingCompanyName = $"（{leadingCompanyName}）";
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 
@@ -1895,6 +1898,9 @@ internal sealed class CreditPreviewRenderer
             if (bs.Block.LeadingCompanyAliasId is int leadId)
             {
                 leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId);
+                // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、SiteBuilder と同じく括弧で包む。
+                if (bs.Block.LeadingCompanyNotOnScreen && !string.IsNullOrEmpty(leadingCompanyName))
+                    leadingCompanyName = $"（{leadingCompanyName}）";
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 

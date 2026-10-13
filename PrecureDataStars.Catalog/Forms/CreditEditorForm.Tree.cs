@@ -185,6 +185,7 @@ public partial class CreditEditorForm
                                 string? lname = await _lookupCache.LookupCompanyAliasNameAsync(lcid);
                                 if (!string.IsNullOrEmpty(lname)) leadingLabel = $"  先頭=「{lname}」";
                                 else leadingLabel = $"  先頭=#{lcid}";
+                                if (block.LeadingCompanyNotOnScreen) leadingLabel += " [画面に無い]";
                             }
 
                             // ブロック先頭の見出し（作品名・「特別出演」など）があればラベルに併記する。

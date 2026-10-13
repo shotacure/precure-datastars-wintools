@@ -430,6 +430,11 @@ internal static class CreditBulkInputEncoder
                 ? aliasName
                 : $"alias#{leadingId}";
             sb.Append("[[").Append(nameOrFallback).Append("]]").Append(LineSeparator);
+            // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、[[XXX]] のすぐ後に印を書く。
+            if (block.Entity.LeadingCompanyNotOnScreen)
+            {
+                sb.Append("@leading_not_on_screen").Append(LineSeparator);
+            }
         }
 
         // エントリ群を ColCount で行に分割しながらタブ結合で出力する。

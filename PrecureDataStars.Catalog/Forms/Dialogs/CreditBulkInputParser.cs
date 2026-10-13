@@ -146,6 +146,10 @@ public static class CreditBulkInputParser
     // ディレクティブ行: @not_on_screen。直前の役職の行は画面にはクレジットされていない（credit_card_roles.not_on_screen）。
     private static readonly Regex NotOnScreenDirectiveRegex = new(@"^@not_on_screen$", RegexOptions.Compiled);
 
+    // ディレクティブ行: @leading_not_on_screen。直前の筆頭の会社 [[XXX]] は画面にはクレジットされていない
+    // （credit_role_blocks.leading_company_not_on_screen）。[[XXX]] の行のすぐ後、エントリより前に書く。
+    private static readonly Regex LeadingNotOnScreenDirectiveRegex = new(@"^@leading_not_on_screen$", RegexOptions.Compiled);
+
     // 役職ヘッダ "役職名: @label=文字"。画面の役職の表記（role_label_text）を役職ヘッダと 1 行で書く。
     private static readonly Regex RoleHeadInlineLabelRegex =
         new(@"^(?<name>.+?)[：:]\s*@label=(?<label>.+?)\s*$", RegexOptions.Compiled);
@@ -728,6 +732,23 @@ public static class CreditBulkInputParser
                         continue;
                     }
                     curRole.NotOnScreen = true;
+                    continue;
+                }
+
+                // @leading_not_on_screen : 直前の筆頭の会社 [[XXX]] は画面にはクレジットされていない（クレジット漏れ）。
+                if (LeadingNotOnScreenDirectiveRegex.IsMatch(trimmed))
+                {
+                    if (curBlock?.LeadingCompanyText is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @leading_not_on_screen は筆頭の会社 [[XXX]] の行の後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    curBlock.LeadingCompanyNotOnScreen = true;
                     continue;
                 }
 

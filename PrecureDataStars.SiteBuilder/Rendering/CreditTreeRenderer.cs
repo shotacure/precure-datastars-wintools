@@ -144,6 +144,13 @@ internal sealed class CreditTreeRenderer
     }
 
     /// <summary>
+    /// 画面にはクレジットされていない筆頭の会社（<see cref="CreditRoleBlock.LeadingCompanyNotOnScreen"/>）の HTML。
+    /// 「（三晃プロダクション）」と括弧で包み、役職の行の not-on-screen と同じ薄い色で出す。
+    /// </summary>
+    private static string LeadingNotOnScreenHtml(string companyHtml)
+        => $"<span class=\"leading-not-on-screen\" title=\"画面にはクレジットされていない\">（{companyHtml}）</span>";
+
+    /// <summary>
     /// ブロック先頭の見出し（<see cref="CreditRoleBlock.HeadingSeriesId"/> / <see cref="CreditRoleBlock.HeadingText"/>）の HTML。
     /// 作品を指す見出しは作品ページへのリンクにし、表示文字は見出しの文字（画面の表記どおり）があればそれ、
     /// 無ければ作品の正式タイトル。作品ではない見出し（「特別出演」など）は文字だけを出す。見出しが無ければ空文字。
@@ -1148,6 +1155,8 @@ internal sealed class CreditTreeRenderer
                 if (!string.IsNullOrEmpty(leadingCompanyName))
                 {
                     leadingCompanyHtml = await BuildCompanyAliasHtmlAsync(leadId, leadingCompanyName).ConfigureAwait(false);
+                    // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、括弧で包んで薄い色で示す。
+                    if (bs.Block.LeadingCompanyNotOnScreen) leadingCompanyHtml = LeadingNotOnScreenHtml(leadingCompanyHtml);
                 }
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
@@ -1273,6 +1282,8 @@ internal sealed class CreditTreeRenderer
                 if (!string.IsNullOrEmpty(leadingCompanyName))
                 {
                     leadingCompanyHtml = await BuildCompanyAliasHtmlAsync(leadId, leadingCompanyName).ConfigureAwait(false);
+                    // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、括弧で包んで薄い色で示す。
+                    if (bs.Block.LeadingCompanyNotOnScreen) leadingCompanyHtml = LeadingNotOnScreenHtml(leadingCompanyHtml);
                 }
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);

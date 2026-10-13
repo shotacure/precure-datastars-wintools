@@ -6557,6 +6557,9 @@ a.credit-card-series:focus-visible {
    役職名から中身までを全角の括弧で包み、薄い色で出す（マウスを載せると title で理由が出る）。
    役職の表は先頭行の役職名セルの前に「（」、最終行の最後のセルの後に「）」を置く。テンプレ展開の役職は本文の前後に置く。
    声の出演の末尾に足す「協力」行は、「協力」のセルの前と屋号のセルの後に置く。 */
+/* 画面にはクレジットされていない筆頭の会社（credit_role_blocks.leading_company_not_on_screen）。括弧は HTML 側で付ける。 */
+.credit-section .leading-not-on-screen,
+.credit-section .leading-not-on-screen a,
 .credit-section .role.not-on-screen,
 .credit-section .role.not-on-screen a,
 .credit-section tr.cooperation-row.not-on-screen > td,

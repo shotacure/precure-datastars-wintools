@@ -173,6 +173,9 @@ public sealed class ParsedBlock
 
     /// <summary><c>@heading_italic</c> で指定された、見出しを斜体で出す印（<c>credit_role_blocks.heading_italic</c>）。</summary>
     public bool HeadingItalic { get; set; }
+
+    /// <summary><c>@leading_not_on_screen</c> で指定された、筆頭の会社が画面に出ていない印（<c>credit_role_blocks.leading_company_not_on_screen</c>）。</summary>
+    public bool LeadingCompanyNotOnScreen { get; set; }
 }
 
 /// <summary>パース結果における 1 行分のエントリ群。タブ区切りで複数エントリを持つ。</summary>

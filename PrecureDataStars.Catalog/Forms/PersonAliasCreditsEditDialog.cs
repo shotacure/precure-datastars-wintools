@@ -17,10 +17,13 @@ namespace PrecureDataStars.Catalog.Forms;
 /// in-memory で編集し、OK 押下時に <see cref="ResultLines"/> プロパティ経由で
 /// 呼び出し側に返す。リポジトリ呼び出しは行わない（呼び出し側が
 /// <c>ReplaceAllByRoleAsync</c> 等でまとめて保存する）。
+/// 会社名義のリポジトリを渡したとき（歌の作家連名）だけ、名義ごとの所属（会社名義または自由記述）の欄を出す。
 /// </summary>
 public partial class PersonAliasCreditsEditDialog : Form
 {
     private readonly PersonAliasesRepository _personAliasesRepo;
+    /// <summary>所属の会社名義 picker 用。null のときは所属の欄を出さない（劇伴の作家連名など）。</summary>
+    private readonly CompanyAliasesRepository? _companyAliasesRepo;
     private readonly BindingList<LineRow> _lines = new();
 
     /// <summary>編集確定時の連名行リスト（OK で閉じたとき有効）。</summary>
@@ -30,15 +33,24 @@ public partial class PersonAliasCreditsEditDialog : Form
     /// <param name="title">タイトル文字列（例: "作詞クレジット編集"）。</param>
     /// <param name="initialLines">初期表示する連名行（読み取り専用）。空でもよい。</param>
     /// <param name="personAliasesRepo">名義 picker 用リポジトリ。</param>
+    /// <param name="companyAliasesRepo">所属の会社名義 picker 用リポジトリ。渡したときだけ所属の欄を出す。</param>
     public PersonAliasCreditsEditDialog(
         string title,
         IReadOnlyList<LineDto> initialLines,
-        PersonAliasesRepository personAliasesRepo)
+        PersonAliasesRepository personAliasesRepo,
+        CompanyAliasesRepository? companyAliasesRepo = null)
     {
         _personAliasesRepo = personAliasesRepo ?? throw new ArgumentNullException(nameof(personAliasesRepo));
+        _companyAliasesRepo = companyAliasesRepo;
 
         InitializeComponent();
         Text = title;
+
+        // 所属の欄は歌の作家連名のときだけ使う
+        bool withAffiliation = _companyAliasesRepo is not null;
+        lblAffiliation.Visible = txtAffiliationCompany.Visible = btnPickAffiliation.Visible = btnClearAffiliation.Visible = withAffiliation;
+        lblAffiliationText.Visible = txtAffiliationText.Visible = withAffiliation;
+        gridLines.Columns["colAffiliation"]!.Visible = withAffiliation;
 
         // バインド：BindingList を DataSource として直接バインド
         gridLines.DataSource = _lines;
@@ -53,6 +65,9 @@ public partial class PersonAliasCreditsEditDialog : Form
                 AliasId = l.AliasId,
                 AliasDisplay = l.AliasDisplay,
                 Separator = l.PrecedingSeparator,
+                AffiliationCompanyAliasId = l.AffiliationCompanyAliasId,
+                AffiliationCompanyDisplay = l.AffiliationCompanyDisplay,
+                AffiliationText = l.AffiliationText,
                 Notes = l.Notes
             });
         }
@@ -60,6 +75,8 @@ public partial class PersonAliasCreditsEditDialog : Form
         // イベント
         gridLines.SelectionChanged += (_, __) => OnGridSelectionChanged();
         btnPickAlias.Click += async (_, __) => await OnPickAliasAsync();
+        btnPickAffiliation.Click += async (_, __) => await OnPickAffiliationAsync();
+        btnClearAffiliation.Click += (_, __) => SetAffiliationCompany(null, "");
         btnAdd.Click += (_, __) => OnAddNewLine();
         btnApply.Click += (_, __) => OnApplyLine();
         btnDelete.Click += (_, __) => OnDeleteLine();
@@ -83,6 +100,8 @@ public partial class PersonAliasCreditsEditDialog : Form
             txtAliasDisplay.Tag = row.AliasId;
             txtSeparator.Text = row.Separator ?? "";
             txtSeparator.Enabled = row.Seq >= 2;
+            SetAffiliationCompany(row.AffiliationCompanyAliasId, row.AffiliationCompanyDisplay ?? "");
+            txtAffiliationText.Text = row.AffiliationText ?? "";
             txtNotes.Text = row.Notes ?? "";
         }
         else
@@ -93,9 +112,34 @@ public partial class PersonAliasCreditsEditDialog : Form
             txtAliasDisplay.Tag = null;
             txtSeparator.Text = "";
             txtSeparator.Enabled = true;
+            SetAffiliationCompany(null, "");
+            txtAffiliationText.Text = "";
             txtNotes.Text = "";
         }
     }
+
+    /// <summary>詳細パネルの所属の会社名義を設定する（null で未設定）。</summary>
+    private void SetAffiliationCompany(int? aliasId, string display)
+    {
+        txtAffiliationCompany.Tag = aliasId;
+        txtAffiliationCompany.Text = aliasId is null ? "" : display;
+    }
+
+    /// <summary>所属の会社名義 picker を開いて詳細パネルに反映する（まだリストには戻していない）。</summary>
+    private async Task OnPickAffiliationAsync()
+    {
+        if (_companyAliasesRepo is null) return;
+        using var dlg = new CompanyAliasPickerDialog(_companyAliasesRepo);
+        if (dlg.ShowDialog(this) != DialogResult.OK || dlg.SelectedId is null) return;
+
+        var alias = await _companyAliasesRepo.GetByIdAsync(dlg.SelectedId.Value);
+        if (alias is null) return;
+        SetAffiliationCompany(alias.AliasId, alias.Name);
+    }
+
+    /// <summary>詳細パネルの所属の自由記述（空なら null）。</summary>
+    private string? AffiliationTextInput()
+        => string.IsNullOrWhiteSpace(txtAffiliationText.Text) ? null : txtAffiliationText.Text.Trim();
 
     /// <summary>名義 picker を開いて選択結果を詳細パネルに反映する（まだリストには戻していない）。</summary>
     private async Task OnPickAliasAsync()
@@ -128,6 +172,9 @@ public partial class PersonAliasCreditsEditDialog : Form
             AliasDisplay = txtAliasDisplay.Text,
             // seq=1 では区切りは無効化されているが、念のため強制 NULL
             Separator = newSeq >= 2 ? (string.IsNullOrWhiteSpace(txtSeparator.Text) ? null : txtSeparator.Text) : null,
+            AffiliationCompanyAliasId = txtAffiliationCompany.Tag as int?,
+            AffiliationCompanyDisplay = txtAffiliationCompany.Tag is int ? txtAffiliationCompany.Text : null,
+            AffiliationText = AffiliationTextInput(),
             Notes = string.IsNullOrWhiteSpace(txtNotes.Text) ? null : txtNotes.Text
         };
         _lines.Add(row);
@@ -151,6 +198,9 @@ public partial class PersonAliasCreditsEditDialog : Form
         row.Separator = row.Seq >= 2
             ? (string.IsNullOrWhiteSpace(txtSeparator.Text) ? null : txtSeparator.Text)
             : null;
+        row.AffiliationCompanyAliasId = txtAffiliationCompany.Tag as int?;
+        row.AffiliationCompanyDisplay = txtAffiliationCompany.Tag is int ? txtAffiliationCompany.Text : null;
+        row.AffiliationText = AffiliationTextInput();
         row.Notes = string.IsNullOrWhiteSpace(txtNotes.Text) ? null : txtNotes.Text;
         _lines.ResetItem(_lines.IndexOf(row));
     }
@@ -197,6 +247,9 @@ public partial class PersonAliasCreditsEditDialog : Form
             AliasId = l.AliasId,
             AliasDisplay = l.AliasDisplay ?? "",
             PrecedingSeparator = l.Separator,
+            AffiliationCompanyAliasId = l.AffiliationCompanyAliasId,
+            AffiliationCompanyDisplay = l.AffiliationCompanyDisplay,
+            AffiliationText = l.AffiliationText,
             Notes = l.Notes
         }).ToList();
     }
@@ -208,6 +261,12 @@ public partial class PersonAliasCreditsEditDialog : Form
         public string AliasDisplay { get; set; } = "";
         /// <summary>seq>=2 のとき有効。seq=1 では NULL を呼び出し側で扱う。</summary>
         public string? PrecedingSeparator { get; set; }
+        /// <summary>所属の会社名義（→ company_aliases.alias_id）。所属の欄を出すときだけ使う。</summary>
+        public int? AffiliationCompanyAliasId { get; set; }
+        /// <summary>所属の会社名義の表示名（グリッド・詳細パネル表示用）。</summary>
+        public string? AffiliationCompanyDisplay { get; set; }
+        /// <summary>会社マスタに無い所属の自由記述。</summary>
+        public string? AffiliationText { get; set; }
         public string? Notes { get; set; }
     }
 
@@ -218,6 +277,11 @@ public partial class PersonAliasCreditsEditDialog : Form
         public int AliasId { get; set; }
         public string? AliasDisplay { get; set; }
         public string? Separator { get; set; }
+        public int? AffiliationCompanyAliasId { get; set; }
+        public string? AffiliationCompanyDisplay { get; set; }
+        public string? AffiliationText { get; set; }
+        /// <summary>グリッドの「所属」列の表示（会社名義を優先し、無ければ自由記述）。</summary>
+        public string AffiliationDisplay => AffiliationCompanyAliasId is not null ? AffiliationCompanyDisplay ?? "" : AffiliationText ?? "";
         public string? Notes { get; set; }
     }
 }

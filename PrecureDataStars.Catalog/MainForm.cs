@@ -324,7 +324,9 @@ public partial class MainForm : Form
                 _personAliasesRepo, _songCreditsRepo,
                 _songRecordingSingersRepo, _characterAliasesRepo,
                 // メドレーの中身
-                new SongMedleyPartsRepository(_factory));
+                new SongMedleyPartsRepository(_factory),
+                // 作家連名の所属
+                _companyAliasesRepo);
             f.ShowDialog();
         });
 

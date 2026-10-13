@@ -313,10 +313,10 @@ public sealed class SongsGenerator
         string medleyArrangementHtml = BuildCreditRoleHtml(songCreditRows, SongCreditRoles.MedleyArrangement, null, roleMap, personAliasMap);
         // 同じ名義の平文（meta description / OGP カード / JSON-LD 用）。HTML と同じく構造化行を優先し、
         // 1 行も無い役職に限って songs のフリーテキスト列を使う。
-        string lyricistText = CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap);
-        string composerText = CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Composition, song.ComposerName, personAliasMap);
-        string arrangerText = CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Arrangement, song.ArrangerName, personAliasMap);
-        string medleyArrangerText = CreditText.SongCreditNames(songCreditRows, SongCreditRoles.MedleyArrangement, null, personAliasMap);
+        string lyricistText = CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap, _ctx.CompanyAliasById);
+        string composerText = CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Composition, song.ComposerName, personAliasMap, _ctx.CompanyAliasById);
+        string arrangerText = CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Arrangement, song.ArrangerName, personAliasMap, _ctx.CompanyAliasById);
+        string medleyArrangerText = CreditText.SongCreditNames(songCreditRows, SongCreditRoles.MedleyArrangement, null, personAliasMap, _ctx.CompanyAliasById);
         // 役職ラベル：常に roles マスタの NameJa を採用してリンク化する。マスタに行が無い場合は
         // フォールバックの素朴な日本語ラベル（「作詞」など）を出すが、リンクは付けない。
         // 盤の役職の表記（song_credits.role_label_text、「原詞」など）があればその文字を出す（リンク先は役職のまま）。
@@ -1059,6 +1059,7 @@ public sealed class SongsGenerator
                 ? alias.GetDisplayName()
                 : "[alias#" + row.PersonAliasId + "]";
             sb.Append(_staffLinkResolver.ResolveAsHtml(row.PersonAliasId, displayName));
+            sb.Append(SongCreditAffiliation.SuffixHtml(roleRows, i, _ctx.CompanyAliasById));
         }
         sb.Append("</span>");
         return (sb.ToString(), roleRows.Count == 1);
@@ -1122,6 +1123,8 @@ public sealed class SongsGenerator
                 // alias が見つからない（FK 整合性想定外）：ID を平文で出す。
                 sb.Append("[alias#").Append(row.PersonAliasId).Append("]");
             }
+            // 盤に印刷された所属（例：岡部 啓一（MONACA））。
+            sb.Append(SongCreditAffiliation.SuffixHtml(roleRows, i, _ctx.CompanyAliasById));
         }
         return sb.ToString();
     }

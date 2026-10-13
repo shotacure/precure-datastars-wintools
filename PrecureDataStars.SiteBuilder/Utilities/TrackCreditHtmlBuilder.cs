@@ -38,6 +38,8 @@ public sealed class TrackCreditHtmlBuilder
 {
     private readonly IReadOnlyDictionary<int, PersonAlias> _personAliasMap;
     private readonly IReadOnlyDictionary<int, CharacterAlias> _characterAliasMap;
+    /// <summary>歌の作家連名の所属（会社名義）の解決用。</summary>
+    private readonly IReadOnlyDictionary<int, CompanyAlias> _companyAliasMap;
     /// <summary>名義 → 人物詳細リンクの解決（共有名義の添字付き複数リンクを含め、他ページと同じ規則）。</summary>
     private readonly StaffNameLinkResolver _staffLinkResolver;
     /// <summary>歌唱者・コーラスの連名 HTML（楽曲詳細・主題歌欄と同じ書式）。</summary>
@@ -56,6 +58,7 @@ public sealed class TrackCreditHtmlBuilder
     public TrackCreditHtmlBuilder(
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap,
+        IReadOnlyDictionary<int, CompanyAlias> companyAliasMap,
         StaffNameLinkResolver staffLinkResolver,
         SingerHtmlBuilder singerHtml,
         IReadOnlyDictionary<string, Role> roleMap,
@@ -65,6 +68,7 @@ public sealed class TrackCreditHtmlBuilder
     {
         _personAliasMap = personAliasMap ?? throw new ArgumentNullException(nameof(personAliasMap));
         _characterAliasMap = characterAliasMap ?? throw new ArgumentNullException(nameof(characterAliasMap));
+        _companyAliasMap = companyAliasMap ?? throw new ArgumentNullException(nameof(companyAliasMap));
         _staffLinkResolver = staffLinkResolver ?? throw new ArgumentNullException(nameof(staffLinkResolver));
         _singerHtml = singerHtml ?? throw new ArgumentNullException(nameof(singerHtml));
         _roleMap = roleMap ?? throw new ArgumentNullException(nameof(roleMap));
@@ -223,6 +227,8 @@ public sealed class TrackCreditHtmlBuilder
                     sb.Append(Escape(sep));
                 }
                 sb.Append(BuildPersonAliasLinkHtml(c.PersonAliasId));
+                // 盤に印刷された所属（例：岡部 啓一（MONACA））。
+                sb.Append(SongCreditAffiliation.SuffixHtml(credits, i, _companyAliasMap));
             }
             return sb.ToString();
         }

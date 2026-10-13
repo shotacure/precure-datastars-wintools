@@ -25,6 +25,8 @@ public sealed class SongCreditsRepository : RepositoryBase
           person_alias_id      AS PersonAliasId,
           role_label_text      AS RoleLabelText,
           preceding_separator  AS PrecedingSeparator,
+          affiliation_company_alias_id AS AffiliationCompanyAliasId,
+          affiliation_text     AS AffiliationText,
           notes                AS Notes,
           created_at           AS CreatedAt,
           updated_at           AS UpdatedAt,
@@ -72,33 +74,39 @@ public sealed class SongCreditsRepository : RepositoryBase
         return await QueryListAsync<SongCredit>(sql, new { songId, role }, ct).ConfigureAwait(false);
     }
 
-    /// <summary>指定曲・役の表示文字列を返す。</summary>
+    /// <summary>指定曲・役の表示文字列を返す（所属があれば名義のあとに「（所属）」を添える）。</summary>
     public async Task<string> GetDisplayStringAsync(int songId, string role, CancellationToken ct = default)
     {
-        // 連名と alias 表示名（display_text_override 優先）を 1 ショットで JOIN 取得する。
+        // 連名と alias 表示名（display_text_override 優先）、所属（会社名義を優先し、無ければ自由記述）を 1 ショットで JOIN 取得する。
         const string sql = """
             SELECT
               sc.credit_seq                                              AS Seq,
               sc.preceding_separator                                     AS Sep,
-              COALESCE(NULLIF(pa.display_text_override, ''), pa.name)    AS DisplayName
+              COALESCE(NULLIF(pa.display_text_override, ''), pa.name)    AS DisplayName,
+              COALESCE(ca.name, NULLIF(sc.affiliation_text, ''))         AS Affiliation
             FROM song_credits sc
             JOIN person_aliases pa ON pa.alias_id = sc.person_alias_id
+            LEFT JOIN company_aliases ca ON ca.alias_id = sc.affiliation_company_alias_id
             WHERE sc.song_id = @songId
               AND sc.credit_role = @role
             ORDER BY sc.credit_seq;
             """;
 
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = (await conn.QueryAsync<(byte Seq, string? Sep, string DisplayName)>(
+        var rows = (await conn.QueryAsync<(byte Seq, string? Sep, string DisplayName, string? Affiliation)>(
             new CommandDefinition(sql, new { songId, role }, cancellationToken: ct))).ToList();
         if (rows.Count == 0) return "";
 
         // seq=1 は区切りなしで先頭、それ以降は preceding_separator + 名前を連結。
+        // 所属は、次の名義と同じ所属が続くときは最後の名義のあとにだけ添える（盤スタッフの所属と同じ畳み方）。
         var sb = new System.Text.StringBuilder();
         for (int i = 0; i < rows.Count; i++)
         {
             if (i > 0) sb.Append(rows[i].Sep ?? "");
             sb.Append(rows[i].DisplayName);
+            string aff = rows[i].Affiliation ?? "";
+            string nextAff = i + 1 < rows.Count ? rows[i + 1].Affiliation ?? "" : "";
+            if (aff.Length > 0 && !string.Equals(aff, nextAff, StringComparison.Ordinal)) sb.Append('（').Append(aff).Append('）');
         }
         return sb.ToString();
     }
@@ -136,6 +144,7 @@ public sealed class SongCreditsRepository : RepositoryBase
     /// 連名を、名義ごとの部品（直前との区切り, リンク化済み HTML）の並びで返す（<see cref="GetDisplayHtmlAsync"/> の元）。
     /// 先頭の部品の区切りは空文字。役職テンプレで区切りを差し替える（<c>{ARRANGER:sep="/"}</c> など）ときに使う。
     /// 行が無ければ空の並び。
+    /// 役職テンプレ（各話のクレジット画面の主題歌カード）で使うので、所属は添えない（画面の表記どおりにするため）。
     /// </summary>
     public async Task<IReadOnlyList<(string Sep, string Html)>> GetDisplayHtmlPartsAsync(int songId, string role, ILookupCache lookup, CancellationToken ct = default)
     {
@@ -171,9 +180,11 @@ public sealed class SongCreditsRepository : RepositoryBase
     {
         const string sql = """
             INSERT INTO song_credits
-              (song_id, credit_role, credit_seq, person_alias_id, role_label_text, preceding_separator, notes, created_by, updated_by)
+              (song_id, credit_role, credit_seq, person_alias_id, role_label_text, preceding_separator,
+               affiliation_company_alias_id, affiliation_text, notes, created_by, updated_by)
             VALUES
-              (@SongId, @CreditRole, @CreditSeq, @PersonAliasId, @RoleLabelText, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
+              (@SongId, @CreditRole, @CreditSeq, @PersonAliasId, @RoleLabelText, @PrecedingSeparator,
+               @AffiliationCompanyAliasId, @AffiliationText, @Notes, @CreatedBy, @UpdatedBy);
             """;
 
         await ExecuteAsync(sql, c, ct).ConfigureAwait(false);
@@ -187,6 +198,8 @@ public sealed class SongCreditsRepository : RepositoryBase
               person_alias_id     = @PersonAliasId,
               role_label_text     = @RoleLabelText,
               preceding_separator = @PrecedingSeparator,
+              affiliation_company_alias_id = @AffiliationCompanyAliasId,
+              affiliation_text    = @AffiliationText,
               notes               = @Notes,
               updated_by          = @UpdatedBy
             WHERE song_id     = @SongId
@@ -226,9 +239,11 @@ public sealed class SongCreditsRepository : RepositoryBase
                 await conn.ExecuteAsync(new CommandDefinition(
                     """
                     INSERT INTO song_credits
-                      (song_id, credit_role, credit_seq, person_alias_id, role_label_text, preceding_separator, notes, created_by, updated_by)
+                      (song_id, credit_role, credit_seq, person_alias_id, role_label_text, preceding_separator,
+                       affiliation_company_alias_id, affiliation_text, notes, created_by, updated_by)
                     VALUES
-                      (@SongId, @Role, @CreditSeq, @PersonAliasId, @RoleLabelText, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
+                      (@SongId, @Role, @CreditSeq, @PersonAliasId, @RoleLabelText, @PrecedingSeparator,
+                       @AffiliationCompanyAliasId, @AffiliationText, @Notes, @CreatedBy, @UpdatedBy);
                     """,
                     new
                     {
@@ -240,6 +255,8 @@ public sealed class SongCreditsRepository : RepositoryBase
                         RoleLabelText = seq == 1 && !string.IsNullOrEmpty(c.RoleLabelText) ? c.RoleLabelText : null,
                         // seq=1 では preceding_separator は強制 NULL（CHECK にはしていないが整合性維持のため）
                         PrecedingSeparator = seq == 1 ? null : c.PrecedingSeparator,
+                        c.AffiliationCompanyAliasId,
+                        AffiliationText = string.IsNullOrWhiteSpace(c.AffiliationText) ? null : c.AffiliationText,
                         c.Notes,
                         CreatedBy = updatedBy,
                         UpdatedBy = updatedBy

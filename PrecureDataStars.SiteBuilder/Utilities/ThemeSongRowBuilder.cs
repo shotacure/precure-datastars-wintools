@@ -302,6 +302,8 @@ public sealed class ThemeSongRowBuilder
             {
                 sb.Append("[alias#").Append(row.PersonAliasId).Append("]");
             }
+            // 盤に印刷された所属（例：岡部 啓一（MONACA））。
+            sb.Append(SongCreditAffiliation.SuffixHtml(roleRows, i, _ctx.CompanyAliasById));
         }
         return sb.ToString();
     }

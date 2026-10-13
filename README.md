@@ -1713,9 +1713,11 @@ CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.
 
 > 音楽種別 `music_class_code` は `song_recordings` 側で保持する設計。同一曲のカバーやアレンジが「主題歌→キャラソン」のように文脈で種別を変えるケースを表現するため、種別を録音単位で管理する。
 
-> `songs.*_name` / `song_recordings.singer_name` / `bgm_cues.composer_name`・`arranger_name` のフリーテキストは、構造化クレジット（`song_credits` / `song_recording_singers` / `bgm_cue_credits`）がまだ無い曲・録音・劇伴のためのフォールバック。サイトは画面表示だけでなく、meta description・OGP カード・JSON-LD・使用曲リストの副題といった平文の出力先でも、役職ごとに構造化行があればそれだけを使い、1 行も無い役職に限ってフリーテキストを使う（平文化は `CreditText` に集約。書式は画面表示と同じで、キャラ歌唱は「キャラ(CV:声優)」）。
+> `songs.*_name` / `song_recordings.singer_name` / `bgm_cues.composer_name`・`arranger_name` のフリーテキストは、構造化クレジット（`song_credits` / `song_recording_singers` / `bgm_cue_credits`）がまだ無い曲・録音・劇伴のためのフォールバック。サイトは画面表示だけでなく、meta description・OGP カード・JSON-LD・使用曲リストの副題といった平文の出力先でも、役職ごとに構造化行があればそれだけを使い、1 行も無い役職に限ってフリーテキストを使う（平文化は `CreditText` に集約。書式は画面表示と同じで、キャラ歌唱は「キャラ(CV:声優)」）。曲・録音の作詞・作曲・編曲（メドレー編曲を含む）・歌唱は、構造化した役職のフリーテキスト（名前と読み）を空にする（読みは名義の `name_kana` に移す）。劇伴のフリーテキストは商品ページが直接使うので残す。
 
 > `song_credits.role_label_text` は、盤に印刷された作家の役職の表記（「原詞」など）。役職名（`roles.name_ja`）と違うときだけ、その役職の連名の先頭行（`credit_seq` がいちばん小さい行）に入れる（`SongCreditRoles.LabelTextOf`）。サイトは楽曲詳細・楽曲一覧のカード・盤のトラック・主題歌の行・OGP カード・meta description の役職の表記をこの文字にし（リンク先は役職のまま）、人物ページ・役職詳細・統計などの集計は役職のまま。Catalog の歌管理は表記のある役職の連名に〔表記〕を添えて見せ、連名を編集し直しても表記を先頭行に引き継ぐ（表記そのものの入力欄は持たない）。
+
+> `song_credits.affiliation_company_alias_id` / `affiliation_text` は、盤に印刷された作家の所属（「岡部啓一(MONACA)」の MONACA）。会社マスタの名義（`company_aliases`）に紐付けるのを基本とし、マスタに無い所属だけ自由記述に入れる。サイトは楽曲詳細・楽曲一覧のカード・盤のトラック・エピソードや作品の主題歌の行で名義のあとに「（MONACA）」を薄字で添え（盤スタッフの所属と同じ `music-credit-affiliation`。会社名義なら企業詳細へリンク）、同じ所属が続く連名は最後の名義のあとにだけ添える（`SongCreditAffiliation`）。meta description・OGP カードの平文にも添える。各話のクレジット画面の主題歌カード（役職テンプレ）には添えない（画面の表記どおりにするため）。企業詳細の「所属スタッフのクレジット」には、その会社を所属とする作家を歌として載せる（根拠の盤はその曲の録音が最初に入った商品）。Catalog の歌管理の作詞・作曲・編曲・メドレー編曲の編集ダイアログで、名義ごとに所属（会社名義の選択か自由記述）を入れる。
 
 > `song_recording_singers.role_code` は `VOCALS`（歌）・`BACKING_VOCALS`（コーラス）・`DIALOGUE`（台詞：歌わずに曲中のセリフだけで参加する出演者）の 3 役を持つ。書式は 3 役とも同じ（キャラは「キャラ(CV:声優)」。ただし同じ役の連名にその声優が人物として名前で出ているときは「(CV:声優)」を省き、「工藤 真由 with フェアリートーン」のように出す。データの声優はそのまま持つ。`SongRecordingSingerDisplay.OmitCv`）で、楽曲詳細・商品詳細のトラック行・エピソード／シリーズの主題歌欄に歌 → コーラス → 台詞の順で並ぶ。`/creators/roles/vocals/` の担当曲数に数えるのは `VOCALS` だけ。
 

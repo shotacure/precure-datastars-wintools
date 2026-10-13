@@ -17,16 +17,21 @@ public static class CreditText
     /// <summary>
     /// 歌の指定役職（作詞 / 作曲 / 編曲）の名義を、<c>preceding_separator</c> で連結した平文で返す。
     /// 構造化行が無ければ <paramref name="fallbackText"/>（songs の *_name 列）を返す。
+    /// <paramref name="companyAliasMap"/> を渡すと、盤に印刷された所属を名義のあとに「（MONACA）」の形で添える
+    /// （<see cref="SongCreditAffiliation"/>）。
     /// </summary>
     public static string SongCreditNames(
         IReadOnlyList<SongCredit>? credits,
         string roleCode,
         string? fallbackText,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap)
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CompanyAlias>? companyAliasMap = null)
     {
         var rows = SongCreditRows(credits, roleCode);
         if (rows.Count == 0) return fallbackText?.Trim() ?? "";
-        return JoinNames(rows.Select(r => (r.PrecedingSeparator, PersonName(r.PersonAliasId, personAliasMap))));
+        return JoinNames(rows.Select((r, i) => (r.PrecedingSeparator,
+            PersonName(r.PersonAliasId, personAliasMap)
+            + (companyAliasMap is null ? "" : SongCreditAffiliation.SuffixText(rows, i, companyAliasMap)))));
     }
 
     /// <summary>

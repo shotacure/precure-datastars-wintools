@@ -25,6 +25,8 @@ public partial class SongsEditorForm : Form
     private readonly SongRecordingSingersRepository _songRecordingSingersRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     private readonly SongMedleyPartsRepository _songMedleyPartsRepo;
+    /// <summary>作家連名の所属（会社名義）の picker・表示名の解決用。</summary>
+    private readonly CompanyAliasesRepository _companyAliasesRepo;
 
     private List<Song> _allSongs = new();       // 再検索用に全件キャッシュ（シリーズ・フィルタ変更時に再利用）
     private List<Song> _songs = new();          // グリッドに表示中
@@ -43,7 +45,9 @@ public partial class SongsEditorForm : Form
         SongRecordingSingersRepository songRecordingSingersRepo,
         CharacterAliasesRepository characterAliasesRepo,
         // メドレーの中身（song_medley_parts）用
-        SongMedleyPartsRepository songMedleyPartsRepo)
+        SongMedleyPartsRepository songMedleyPartsRepo,
+        // 作家連名の所属（会社名義）用
+        CompanyAliasesRepository companyAliasesRepo)
     {
         _songsRepo = songsRepo;
         _songRecRepo = songRecRepo;
@@ -57,6 +61,7 @@ public partial class SongsEditorForm : Form
         _songRecordingSingersRepo = songRecordingSingersRepo ?? throw new ArgumentNullException(nameof(songRecordingSingersRepo));
         _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
         _songMedleyPartsRepo = songMedleyPartsRepo ?? throw new ArgumentNullException(nameof(songMedleyPartsRepo));
+        _companyAliasesRepo = companyAliasesRepo ?? throw new ArgumentNullException(nameof(companyAliasesRepo));
 
         InitializeComponent();
         Load += async (_, __) => await InitAsync();
@@ -596,11 +601,17 @@ public partial class SongsEditorForm : Form
             foreach (var c in existing)
             {
                 string display = await _personAliasesRepo.GetDisplayNameAsync(c.PersonAliasId);
+                string? affDisplay = c.AffiliationCompanyAliasId is int affId
+                    ? (await _companyAliasesRepo.GetByIdAsync(affId))?.Name
+                    : null;
                 initial.Add(new PersonAliasCreditsEditDialog.LineDto
                 {
                     AliasId = c.PersonAliasId,
                     AliasDisplay = display,
                     PrecedingSeparator = c.PrecedingSeparator,
+                    AffiliationCompanyAliasId = c.AffiliationCompanyAliasId,
+                    AffiliationCompanyDisplay = affDisplay,
+                    AffiliationText = c.AffiliationText,
                     Notes = c.Notes
                 });
             }
@@ -616,7 +627,7 @@ public partial class SongsEditorForm : Form
                 _                           => $"{role} クレジット編集（song_id={s.SongId}）"
             };
 
-            using var dlg = new PersonAliasCreditsEditDialog(title, initial, _personAliasesRepo);
+            using var dlg = new PersonAliasCreditsEditDialog(title, initial, _personAliasesRepo, _companyAliasesRepo);
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
             // 編集結果を SongCredit モデルに変換し、ReplaceAllByRoleAsync で一括 INSERT。
@@ -630,6 +641,8 @@ public partial class SongsEditorForm : Form
                 PersonAliasId = l.AliasId,
                 RoleLabelText = i == 0 ? roleLabelText : null,
                 PrecedingSeparator = i == 0 ? null : l.PrecedingSeparator,
+                AffiliationCompanyAliasId = l.AffiliationCompanyAliasId,
+                AffiliationText = l.AffiliationText,
                 Notes = l.Notes
             }).ToList();
 

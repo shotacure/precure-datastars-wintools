@@ -146,7 +146,7 @@ public sealed class ProductsGenerator
         // 事前展開した BuildContext の辞書を直接受け取り、本クラス／ヘルパーは生成中に DB を叩かない。
         // 人物リンクと歌唱者表記は他ページと同じ StaffNameLinkResolver / SingerHtmlBuilder を使う。
         _creditHtml = new TrackCreditHtmlBuilder(
-            personAliasMap, characterAliasMap, _staffLinkResolver,
+            personAliasMap, characterAliasMap, _ctx.CompanyAliasById, _staffLinkResolver,
             new SingerHtmlBuilder(_staffLinkResolver, _roleSuccessorResolver, _ctx.UnitMembersByAlias), roleMap,
             _ctx.SongCreditsBySong, _ctx.SingersByRecording, _ctx.BgmCueCreditsByCue);
 

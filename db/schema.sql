@@ -3038,6 +3038,7 @@ DELIMITER ;
 -- Table structure for table `song_credits`
 -- 歌の作家連名（作詞 / 作曲 / 編曲）を順序付きで保持。
 -- 既存 songs.{lyricist|composer|arranger}_name はフォールバックとして温存。
+-- 盤に作家の所属が印刷されているとき（「岡部啓一(MONACA)」など）は affiliation_company_alias_id / affiliation_text に持つ。
 --
 DROP TABLE IF EXISTS `song_credits`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -3049,6 +3050,8 @@ CREATE TABLE `song_credits` (
   `person_alias_id`     int              NOT NULL,
   `role_label_text`     varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '盤の役職の表記（役職名と違うときだけ）。役職の連名の先頭行の値を使う',
   `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `affiliation_company_alias_id` int DEFAULT NULL COMMENT '名義に添える所属の会社名義（company_aliases.alias_id）',
+  `affiliation_text`    varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '会社マスタに無い所属の自由記述（会社名義があればそちらを使う）',
   `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -3056,12 +3059,14 @@ CREATE TABLE `song_credits` (
   `updated_by`          varchar(64)      DEFAULT NULL,
   PRIMARY KEY (`song_id`, `credit_role`, `credit_seq`),
   KEY `ix_song_credits_alias` (`person_alias_id`),
+  KEY `ix_song_credits_aff_company` (`affiliation_company_alias_id`),
   KEY `ix_song_credits_role` (`credit_role`),
   KEY `ix_song_credits_song` (`song_id`),
   CONSTRAINT `ck_song_credits_seq_pos` CHECK (`credit_seq` >= 1),
   CONSTRAINT `fk_song_credits_song`  FOREIGN KEY (`song_id`)         REFERENCES `songs`          (`song_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_song_credits_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `fk_song_credits_role`  FOREIGN KEY (`credit_role`)     REFERENCES `roles`          (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_song_credits_role`  FOREIGN KEY (`credit_role`)     REFERENCES `roles`          (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_song_credits_aff_company` FOREIGN KEY (`affiliation_company_alias_id`) REFERENCES `company_aliases` (`alias_id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

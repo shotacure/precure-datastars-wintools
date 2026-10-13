@@ -88,6 +88,7 @@ public partial class MainForm : Form
     private readonly CompanyRelationsRepository _companyRelationsRepo;
     private readonly PersonNotableWorksRepository _personNotableWorksRepo;
     private readonly RoleRelationsRepository _roleRelationsRepo;
+    private readonly PersonPositionsRepository _personPositionsRepo;
 
     /// <summary><see cref="MainForm"/> の新しいインスタンスを生成する。</summary>
     public MainForm(
@@ -155,7 +156,9 @@ public partial class MainForm : Form
         // 人物の代表作（プリキュアを除く）
         PersonNotableWorksRepository personNotableWorksRepo,
         // 役職どうしの関連（段階・並列）
-        RoleRelationsRepository roleRelationsRepo)
+        RoleRelationsRepository roleRelationsRepo,
+        // 人物の役職履歴
+        PersonPositionsRepository personPositionsRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -230,6 +233,7 @@ public partial class MainForm : Form
         _companyRelationsRepo          = companyRelationsRepo          ?? throw new ArgumentNullException(nameof(companyRelationsRepo));
         _personNotableWorksRepo        = personNotableWorksRepo        ?? throw new ArgumentNullException(nameof(personNotableWorksRepo));
         _roleRelationsRepo             = roleRelationsRepo             ?? throw new ArgumentNullException(nameof(roleRelationsRepo));
+        _personPositionsRepo           = personPositionsRepo           ?? throw new ArgumentNullException(nameof(personPositionsRepo));
 
         InitializeComponent();
     }
@@ -407,7 +411,9 @@ public partial class MainForm : Form
                 // 人物の代表作（プリキュアを除く）
                 _personNotableWorksRepo,
                 // 役職どうしの関連（段階・並列）
-                _roleRelationsRepo);
+                _roleRelationsRepo,
+                // 人物の役職履歴
+                _personPositionsRepo);
             f.ShowDialog();
         });
 

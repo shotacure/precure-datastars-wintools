@@ -31,6 +31,9 @@ public sealed class PersonsGenerator
 
     /// <summary>人物の代表作（プリキュアを除く）（person_notable_works）を読むためのリポジトリ。</summary>
     private readonly PersonNotableWorksRepository _notableWorksRepo;
+    private readonly PersonPositionsRepository _positionsRepo;
+    /// <summary>役職履歴の見出しに添える会社名を引く（並列レンダリングの前に 1 度だけ）。</summary>
+    private readonly CompaniesRepository _companiesRepo;
 
     private readonly CreditInvolvementIndex _index;
 
@@ -66,6 +69,8 @@ public sealed class PersonsGenerator
 
     /// <summary>person_id → 「代表作（プリキュアを除く）」の表示行（並び順どおり）。<c>GenerateAsync</c> で並列レンダリングの前に 1 度だけ詰める。</summary>
     private IReadOnlyDictionary<int, IReadOnlyList<NotableWorkView>>? _notableWorksByPerson;
+    /// <summary>人物 → 役職履歴の会社ごとのまとまり（並列レンダリングの前に全件から作る）。</summary>
+    private IReadOnlyDictionary<int, IReadOnlyList<PositionGroupView>>? _positionGroupsByPerson;
 
     public PersonsGenerator(
         BuildContext ctx,
@@ -87,6 +92,8 @@ public sealed class PersonsGenerator
         _companyAliasesRepo = new CompanyAliasesRepository(factory);
         _songMusicClassesRepo = new SongMusicClassesRepository(factory);
         _notableWorksRepo = new PersonNotableWorksRepository(factory);
+        _positionsRepo = new PersonPositionsRepository(factory);
+        _companiesRepo = new CompaniesRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -212,6 +219,19 @@ public sealed class PersonsGenerator
                 .ToDictionary(
                     g => g.Key,
                     g => (IReadOnlyList<NotableWorkView>)g.Select(ToNotableWorkView).ToList());
+        }
+
+        // 「役職履歴」も並列レンダリングの前に全件を読み、人物ごとに会社のまとまり（並び順で同じ会社が続く行）にしておく。
+        if (_positionGroupsByPerson is null)
+        {
+            var allPositions = await _positionsRepo.GetAllAsync(ct).ConfigureAwait(false);
+            // 見出しに添える会社名（役職履歴に出る会社だけ引く）。
+            var companyNames = new Dictionary<int, string>();
+            foreach (int cid in allPositions.Where(p => p.CompanyId.HasValue).Select(p => p.CompanyId!.Value).Distinct())
+                if (await _companiesRepo.GetByIdAsync(cid, ct).ConfigureAwait(false) is { } company) companyNames[cid] = company.Name;
+            _positionGroupsByPerson = allPositions
+                .GroupBy(p => p.PersonId)
+                .ToDictionary(g => g.Key, g => BuildPositionGroups(g.ToList(), companyNames));
         }
 
         // 人物索引は「クリエイター > スタッフ」（/creators/staff/）に集約。
@@ -511,6 +531,9 @@ public sealed class PersonsGenerator
             NotableWorks = _notableWorksByPerson!.TryGetValue(person.PersonId, out var works)
                 ? works
                 : Array.Empty<NotableWorkView>(),
+            PositionGroups = _positionGroupsByPerson!.TryGetValue(person.PersonId, out var positionGroups)
+                ? positionGroups
+                : Array.Empty<PositionGroupView>(),
             CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 人物詳細の構造化データは Schema.org の Person 型。
@@ -1442,6 +1465,39 @@ public sealed class PersonsGenerator
         IsArchive = w.OfficialUrlIsArchive && !string.IsNullOrEmpty(w.OfficialUrl)
     };
 
+    /// <summary>
+    /// 人物の役職履歴（並び順どおり）を、同じ会社が続く行ごとのまとまりにする。
+    /// 見出しは「役職履歴（会社名）」で、クレジットの役職と紛れないよう会社名を添える。会社の無い行は「役職履歴」だけ。
+    /// 異動日は「平成27(2015)/06/01付」の形、日付不明は「？」。
+    /// </summary>
+    private static IReadOnlyList<PositionGroupView> BuildPositionGroups(IReadOnlyList<PersonPosition> rows, IReadOnlyDictionary<int, string> companyNames)
+    {
+        var groups = new List<PositionGroupView>();
+        foreach (var r in rows)
+        {
+            var row = new PositionRowView
+            {
+                DateLabel = r.EffectiveDate is DateTime d ? WarekiDate.EffectiveLabel(d) : "？",
+                Position = r.PositionText
+            };
+            if (groups.Count > 0 && groups[^1].CompanyId == r.CompanyId)
+            {
+                groups[^1].Rows.Add(row);
+                continue;
+            }
+            string name = "", url = "";
+            if (r.CompanyId is int cid && companyNames.TryGetValue(cid, out var companyName))
+            {
+                name = companyName;
+                url = PathUtil.CompanyUrl(cid);
+            }
+            var group = new PositionGroupView { CompanyId = r.CompanyId, CompanyName = name, CompanyUrl = url };
+            group.Rows.Add(row);
+            groups.Add(group);
+        }
+        return groups;
+    }
+
     // ─── テンプレ用 DTO 群 ───
 
     /// <summary>ユニット詳細で使う alias_id → person_id 群の逆引き（初回のユニットのページで 1 度だけ作る）。</summary>
@@ -1498,8 +1554,30 @@ public sealed class PersonsGenerator
         public int MusicDiscTotal => MusicSections.SelectMany(s => s.DiscKeys).Distinct(StringComparer.Ordinal).Count();
         /// <summary>代表作（プリキュアを除く）（並び順どおり）。空なら「代表作（プリキュアを除く）」セクションを出さない。</summary>
         public IReadOnlyList<NotableWorkView> NotableWorks { get; set; } = Array.Empty<NotableWorkView>();
+        /// <summary>役職履歴（会社ごとのまとまり。並び順どおり）。空なら「役職履歴」セクションを出さない。</summary>
+        public IReadOnlyList<PositionGroupView> PositionGroups { get; set; } = Array.Empty<PositionGroupView>();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
+    }
+
+    /// <summary>役職履歴の、同じ会社が続く行のまとまり（見出し「役職履歴（会社名）」と表 1 つ）。</summary>
+    private sealed class PositionGroupView
+    {
+        public int? CompanyId { get; set; }
+        /// <summary>会社の正式名（会社の無い行は空文字）。</summary>
+        public string CompanyName { get; set; } = "";
+        /// <summary>企業詳細の URL（会社の無い行は空文字）。</summary>
+        public string CompanyUrl { get; set; } = "";
+        public List<PositionRowView> Rows { get; } = new();
+    }
+
+    /// <summary>役職履歴の 1 行。</summary>
+    private sealed class PositionRowView
+    {
+        /// <summary>異動日（「平成27(2015)/06/01付」。日付不明は「？」）。</summary>
+        public string DateLabel { get; set; } = "";
+        /// <summary>役職（発表の表記どおり）。</summary>
+        public string Position { get; set; } = "";
     }
 
     /// <summary>「代表作（プリキュアを除く）」の 1 行。</summary>

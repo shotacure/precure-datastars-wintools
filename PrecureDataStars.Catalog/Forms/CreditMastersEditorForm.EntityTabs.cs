@@ -415,6 +415,20 @@ public partial class CreditMastersEditorForm
         catch (Exception ex) { this.ShowError(ex); }
     }
 
+    /// <summary>選択中の人物の役職履歴を編集するダイアログを開く。役職履歴は人物本体の列を変えないので、閉じた後の再読み込みはしない。</summary>
+    private void OpenPersonPositionsEditor()
+    {
+        try
+        {
+            if (gridPersons.CurrentRow?.DataBoundItem is not Person p || gridPersons.SelectedRows.Count == 0)
+            { MessageBox.Show(this, "役職履歴を編集する人物を選択してください。"); return; }
+
+            using var dlg = new Dialogs.PersonPositionsEditorDialog(_personPositionsRepo, _companiesRepo, p.PersonId, p.FullName);
+            dlg.ShowDialog(this);
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
     /// <summary>選択中の団体の関係（親・子・前身・後継）を編集するダイアログを開く。関係は団体本体の列を変えないので、閉じた後の再読み込みはしない。</summary>
     private void OpenCompanyRelationsEditor()
     {

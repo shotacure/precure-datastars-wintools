@@ -6395,6 +6395,24 @@ a.credit-card-series:focus-visible {
   .notable-works-table td.col-role { width: auto; }
 }
 
+/* 人物詳細の「役職履歴（会社名）」。「異動日 ｜ 役職」の 2 列で、異動日は折り返さない。見出しの会社名は少し小さく添える。 */
+.person-positions-company {
+  font-size: 0.8em;
+  font-weight: normal;
+}
+.person-positions-company a { color: var(--accent-blue); }
+.person-positions-table th.col-date,
+.person-positions-table td.col-date {
+  width: 11.5em;
+  white-space: nowrap;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 640px) {
+  .person-positions-table th.col-date,
+  .person-positions-table td.col-date { width: auto; white-space: normal; }
+}
+
 /* 人物詳細の本編クレジットで、役職の見出しの下に添える「初担当（声の出演は初出演）『作品』第N話（放送日）」の 1 行。 */
 .credit-role-first {
   margin: -4px 0 8px;

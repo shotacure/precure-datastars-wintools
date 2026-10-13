@@ -67,6 +67,8 @@ public partial class CreditMastersEditorForm : Form
     private readonly CompanyRelationsRepository _companyRelationsRepo;
     // 人物の代表作（プリキュアを除く）（人物タブの「代表作…」ダイアログで編集）
     private readonly PersonNotableWorksRepository _personNotableWorksRepo;
+    // 人物の役職履歴（人物タブの「役職履歴…」ダイアログで編集）
+    private readonly PersonPositionsRepository _personPositionsRepo;
     // 役職どうしの関連（段階・並列）（役職タブの「関連…」ダイアログで編集）
     private readonly RoleRelationsRepository _roleRelationsRepo;
 
@@ -107,7 +109,9 @@ public partial class CreditMastersEditorForm : Form
         // 人物の代表作（プリキュアを除く）
         PersonNotableWorksRepository personNotableWorksRepo,
         // 役職どうしの関連（段階・並列）
-        RoleRelationsRepository roleRelationsRepo)
+        RoleRelationsRepository roleRelationsRepo,
+        // 人物の役職履歴
+        PersonPositionsRepository personPositionsRepo)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
@@ -142,6 +146,9 @@ public partial class CreditMastersEditorForm : Form
 
         // 人物の代表作（プリキュアを除く）
         _personNotableWorksRepo = personNotableWorksRepo ?? throw new ArgumentNullException(nameof(personNotableWorksRepo));
+
+        // 人物の役職履歴
+        _personPositionsRepo = personPositionsRepo ?? throw new ArgumentNullException(nameof(personPositionsRepo));
 
         // 役職どうしの関連（段階・並列）
         _roleRelationsRepo = roleRelationsRepo ?? throw new ArgumentNullException(nameof(roleRelationsRepo));
@@ -198,6 +205,7 @@ public partial class CreditMastersEditorForm : Form
         btnSavePerson.Click += async (_, __) => await SavePersonAsync();
         btnDeletePerson.Click += async (_, __) => await DeletePersonAsync();
         btnPersonNotableWorks.Click += (_, __) => OpenPersonNotableWorksEditor();
+        btnPersonPositions.Click += (_, __) => OpenPersonPositionsEditor();
 
         btnNewCompany.Click += (_, __) => ClearCompanyForm();
         btnSaveCompany.Click += async (_, __) => await SaveCompanyAsync();

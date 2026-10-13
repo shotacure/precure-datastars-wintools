@@ -78,6 +78,7 @@ partial class CreditMastersEditorForm
     private Button btnSavePerson = null!;
     private Button btnDeletePerson = null!;
     private Button btnPersonNotableWorks = null!;
+    private Button btnPersonPositions = null!;
 
     // ─────────────── 企業タブ ───────────────
     private DataGridView gridCompanies = null!;
@@ -596,7 +597,9 @@ partial class CreditMastersEditorForm
         btnDeletePerson = new Button { Text = "選択行を削除", Location = new Point(620,  82), Size = new Size(140, 28) };
         // 代表作（プリキュアを除く）（person_notable_works）の編集ダイアログを開く。
         btnPersonNotableWorks = new Button { Text = "代表作…",   Location = new Point(620, 130), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnNewPerson, btnSavePerson, btnDeletePerson, btnPersonNotableWorks });
+        // 役職履歴（person_positions）の編集ダイアログを開く。
+        btnPersonPositions = new Button { Text = "役職履歴…", Location = new Point(620, 162), Size = new Size(140, 28) };
+        pnl.Controls.AddRange(new Control[] { btnNewPerson, btnSavePerson, btnDeletePerson, btnPersonNotableWorks, btnPersonPositions });
 
         tabPersons.Controls.Add(pnl);
         tabPersons.Controls.Add(gridPersons);

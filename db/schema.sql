@@ -1602,6 +1602,38 @@ CREATE TABLE `person_notable_works` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `person_positions`
+-- 人物の役職履歴（会社での役職の移り変わり）。1 行 = 1 回の異動。effective_date が NULL なら日付不明（サイトは「？」）。
+-- company_id はその役職の会社（任意。サイトの見出しに会社名を添える）。source_url は裏取りに使った発表のページ（内部用）。
+--
+DROP TABLE IF EXISTS `person_positions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE。再実行しても副作用は無い。
+-- =====================================================================
+
+CREATE TABLE `person_positions` (
+  `position_id`     int                                                                 NOT NULL AUTO_INCREMENT,
+  `person_id`       int                                                                 NOT NULL,
+  `company_id`      int                                                                 DEFAULT NULL COMMENT 'その役職の会社（companies.company_id）',
+  `display_order`   smallint unsigned                                                   NOT NULL DEFAULT 0,
+  `effective_date`  date                                                                DEFAULT NULL COMMENT '異動日。NULL は日付不明',
+  `position_text`   varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL COMMENT '役職（発表の表記どおり）',
+  `source_url`      varchar(1024) DEFAULT NULL COMMENT '裏取りに使った発表のページ（内部用）',
+  `notes`           text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`      varchar(64) DEFAULT NULL,
+  `updated_by`      varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`position_id`),
+  KEY `ix_person_positions_person` (`person_id`, `display_order`),
+  KEY `ix_person_positions_company` (`company_id`),
+  CONSTRAINT `fk_person_positions_person`  FOREIGN KEY (`person_id`)  REFERENCES `persons`   (`person_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_person_positions_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`company_id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='人物の役職履歴（会社での役職の移り変わり）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `person_aliases`
 -- 人物の名義（表記）マスタ。改名時は predecessor_alias_id / successor_alias_id で
 -- 前後リンクし、データ的に同一人物の表記履歴を辿れる。

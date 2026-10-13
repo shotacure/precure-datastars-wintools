@@ -48,12 +48,12 @@ internal sealed class RoleTimelineBuilder
     private const int EpisodeSpanDays = 7;
 
     /// <summary>
-    /// 年の目盛りの文字を、5 の倍数の年以外も出せる帯の数の上限。
-    /// これを超えると狭い画面（768px 以下）で 5 の倍数の年だけに、<see cref="AllTickBandsMaxWide"/> を超えると常に 5 の倍数の年だけにする。
+    /// 年の目盛りを 4 桁で出せる帯の数の上限。
+    /// これを超えると狭い画面（768px 以下）で年を下 2 桁にし、<see cref="AllTickBandsMaxWide"/> を超えると常に下 2 桁にする。
     /// </summary>
     private const int AllTickBandsMaxNarrow = 10;
 
-    /// <summary>広い画面でも年の目盛りの文字を全部出せる帯の数の上限。</summary>
+    /// <summary>広い画面でも年の目盛りを 4 桁で出せる帯の数の上限。</summary>
     private const int AllTickBandsMaxWide = 22;
 
     private readonly BuildContext _ctx;
@@ -121,8 +121,7 @@ internal sealed class RoleTimelineBuilder
                 YearLabel = s.StartDate.Year.ToString(CultureInfo.InvariantCulture),
                 SeriesTitle = s.Title,
                 SeriesUrl = PathUtil.SeriesUrl(s.Slug),
-                ShowLabel = showLabel,
-                IsMinor = manyBands && s.StartDate.Year % 5 != 0
+                ShowLabel = showLabel
             });
         }
         _bands = bands;
@@ -808,7 +807,7 @@ internal sealed class RoleTimelineModel
     public IReadOnlyList<RoleTimelineBand> Bands { get; set; } = Array.Empty<RoleTimelineBand>();
     /// <summary>年の目盛り（帯ごとに 1 つ）。</summary>
     public IReadOnlyList<RoleTimelineTick> Ticks { get; set; } = Array.Empty<RoleTimelineTick>();
-    /// <summary>帯が多いときに目盛りの文字を間引く CSS クラス（"rtl-ticks-medium" / "rtl-ticks-sparse" / 空）。</summary>
+    /// <summary>帯が多いときに目盛りの年を下 2 桁にする CSS クラス（"rtl-ticks-medium" は狭い画面だけ / "rtl-ticks-sparse" は常に / 空）。</summary>
     public string TickDensityClass { get; set; } = "";
     /// <summary>行（並びは参加の始まり → 終わりの早い順）。</summary>
     public IReadOnlyList<RoleTimelineRow> Rows { get; set; } = Array.Empty<RoleTimelineRow>();
@@ -859,8 +858,6 @@ internal sealed class RoleTimelineTick
     public string SeriesUrl { get; set; } = "";
     /// <summary>年の文字を出すか（帯の幅が足りない軸の右端では出さない）。</summary>
     public bool ShowLabel { get; set; }
-    /// <summary>帯が多いとき、狭い画面で文字を間引く年（5 の倍数以外）か。</summary>
-    public bool IsMinor { get; set; }
 }
 
 /// <summary>所属線 1 本（企業の所属としてクレジットされていた 1 つの期間）。</summary>
@@ -924,6 +921,16 @@ internal sealed class RoleTimelineRow
     public IReadOnlyList<RoleTimelineAffiliationMark> Affiliations { get; set; } = Array.Empty<RoleTimelineAffiliationMark>();
     /// <summary>内訳の「所属：企業名（期間）」（企業ごとに改行でつないだもの。無ければ空文字）。</summary>
     public string AffiliationText { get; set; } = "";
+    /// <summary>
+    /// プリキュア（プリキュアのマスタのキャラ）を演じた方の行か。歴代プリキュア声優の「プリキュアを演じた方のみ」の絞り込みに使う
+    /// （行の data-precure-cast。ほかのページでは常に false）。
+    /// </summary>
+    public bool IsPrecureCast { get; set; }
+    /// <summary>
+    /// 「プリキュアを演じた方のみ」のときの並び順（演じたプリキュアのプリキュアのマスタの順。1 始まり、プリキュアを演じていない行は 0）。
+    /// 行の --rtl-precure-order で渡し、site.css が絞り込み中だけ並べ替えに使う。
+    /// </summary>
+    public int PrecureOrder { get; set; }
     /// <summary>内訳の参加期間（「2004年2月〜2005年1月」を「、」でつないだもの）。</summary>
     public string PeriodLabel { get; set; } = "";
     /// <summary>内訳の作品ごとの参加（改行でつないだもの）。</summary>

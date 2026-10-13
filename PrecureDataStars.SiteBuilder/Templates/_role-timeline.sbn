@@ -50,7 +50,7 @@
     <div class="rtl-axis">
       <div class="rtl-axis-track">
         {{~ for t in Timeline.Ticks ~}}
-        {{~ if t.ShowLabel ~}}<a class="rtl-tick{{ if t.IsMinor }} rtl-tick-minor{{ end }}" style="left:{{ t.Left }}%" href="{{ t.SeriesUrl }}" title="{{ t.SeriesTitle | html.escape }}">{{ t.YearLabel }}</a>
+        {{~ if t.ShowLabel ~}}<a class="rtl-tick" style="left:{{ t.Left }}%" href="{{ t.SeriesUrl }}" title="{{ t.SeriesTitle | html.escape }}"><span class="rtl-tick-cc">{{ t.YearLabel | string.slice 0 2 }}</span>{{ t.YearLabel | string.slice 2 }}</a>
         {{~ else ~}}<span class="rtl-tick" style="left:{{ t.Left }}%" aria-hidden="true"></span>
         {{~ end ~}}
         {{~ end ~}}

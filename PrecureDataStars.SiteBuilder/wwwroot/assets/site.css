@@ -8432,7 +8432,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
 }
 .rtl-band-alt { background: var(--rtl-band-alt); }
 /* 年の目盛り。帯の左端に放送開始年を置き、シリーズ詳細へリンクする（title にシリーズの正式タイトル）。
-   帯が多いときは 5 の倍数の年だけ文字を残す（rtl-ticks-medium は狭い画面だけ、rtl-ticks-sparse は常に）。 */
+   帯が多いときは、すべての年を下 2 桁（04 05 …）で出す（上 2 桁の .rtl-tick-cc を隠す。rtl-ticks-medium は狭い画面だけ、
+   rtl-ticks-sparse は常に）。 */
 .rtl-axis {
   position: sticky;
   top: 95px;
@@ -8466,7 +8467,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
   border-left: 1px solid #b9bcc4;
 }
 a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
-.rtl-ticks-sparse .rtl-tick-minor { font-size: 0; }
+.rtl-ticks-sparse .rtl-tick-cc { display: none; }
 
 .rtl-rows {
   position: relative;
@@ -8696,11 +8697,14 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 
 @media (max-width: 768px) {
   .rtl-axis { top: 0; }
-  .rtl-ticks-medium .rtl-tick-minor { font-size: 0; }
+  .rtl-ticks-medium .rtl-tick-cc { display: none; }
 }
 /* 狭い画面では名前を帯の上の行に置き、帯を表示幅いっぱいに使う（横軸は全期間のまま）。 */
 @media (max-width: 640px) {
   .role-timeline { --rtl-name-w: 0px; --rtl-gap: 0px; }
+  /* 下 2 桁の年を毎年並べるとき、帯が細くても重ならないよう文字と左の空きを詰める。 */
+  .rtl-ticks-medium .rtl-tick,
+  .rtl-ticks-sparse .rtl-tick { padding-left: 3px; font-size: 10px; }
   .rtl-row {
     flex-wrap: wrap;
     height: auto;
@@ -10163,6 +10167,28 @@ body.has-art-track-bar {
 .list-toolbar:not(:has(> .entity-filter, > .sort-toggle, > .precure-only, > .count-sort-btn:not([hidden]))) {
   display: none;
 }
+/* 歴代プリキュア声優の「プリキュアを演じた方のみ」（全タブに効くスイッチ）。入れるとページのルートの data-precure-only で、
+   プリキュアを演じたことがある方（data-precure-cast）の行と、その行を含むセクションだけを出す。
+   スイッチは段の右端に置き、件数での並べ替えボタンが出るとき（出演回数順）はその左に少しあけて並べる。 */
+.precure-only {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85em;
+  margin-left: auto;
+  white-space: nowrap;
+  /* トグルスイッチ（.rtl-switch）のオンの色。年表の外で使うので色をここで決める。 */
+  --rtl-tv: #3b82c4;
+}
+.list-toolbar > .precure-only ~ .count-sort-btn { margin-left: 8px; }
+[data-precure-only] .entity-row:not([data-precure-cast]),
+[data-precure-only] .creators-series-section:not([data-precure-cast]),
+[data-precure-only] .rtl-row:not([data-precure-cast]) {
+  display: none;
+}
+/* 年表は「プリキュアを演じた方のみ」の間、最終出演などに関係なくプリキュアのマスタの順に並べる。 */
+[data-precure-only] .rtl-row { order: var(--rtl-precure-order, 0); }
 /* 件数バッジでの並べ替えボタン（count-sort.js が中身を描く）。バッジと同じ絵文字・色に ⬇ / ⬆ を添える。 */
 .count-sort-btn {
   appearance: none;

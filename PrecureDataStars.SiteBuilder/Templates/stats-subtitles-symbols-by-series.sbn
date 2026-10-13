@@ -1,7 +1,7 @@
 <section>
   <h1>シリーズ別 記号 {{ SymbolCount }} 種出現回数</h1>
-  <p class="lead">プリキュア全シリーズのサブタイトルに現れた記号・句読点 {{ SymbolCount }} 種を、初出順に列で並べた集計表です（長音「ー」はカタカナに数えるので含めません）。出現回数が 0 のセルは空欄にしています。<br>
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
+  <p class="muted page-coverage">{{ CoverageLabel }}</p>
+  <p class="lead">プリキュア全シリーズのサブタイトルに現れた記号・句読点 {{ SymbolCount }} 種を、初出順に列で並べた集計表です（長音「ー」はカタカナに数えるので含めません）。出現回数が 0 のセルは空欄にしています。</p>
 </section>
 
 {{## 列ヘッダと本体セルを動的描画に変更。

@@ -1,7 +1,7 @@
 <section>
   <h1>アバンタイトルスキップ回</h1>
-  <p class="lead">プリキュア全シリーズで本編アバンタイトル（OP 前の導入パート）がない回を放映順に並べた全件リストです。<br>
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
+  <p class="muted page-coverage">{{ CoverageLabel }}</p>
+  <p class="lead">プリキュア全シリーズで本編アバンタイトル（OP 前の導入パート）がない回を放映順に並べた全件リストです。</p>
 </section>
 
 <section>

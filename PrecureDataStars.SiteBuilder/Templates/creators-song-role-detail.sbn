@@ -3,10 +3,7 @@
 </p>
 
 <h1>{{ RoleNameJa | html.escape }}</h1>
-
-<p class="lead">
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
-</p>
+<p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 {{## 楽曲スタッフは個人のみ（song_credits.person_alias_id / song_recording_singers の
      person_alias_id 系統で集計）。本編クレジット階層の役職詳細とは別ルートで、

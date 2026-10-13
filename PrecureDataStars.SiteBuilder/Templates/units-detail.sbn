@@ -7,15 +7,16 @@
   {{~ end ~}}
 
   <h1>{{ Unit.Name | html.escape }}</h1>
-
-  {{~ if Unit.NameKana != "" ~}}
-  <p class="muted">{{ Unit.NameKana | html.escape }}</p>
-  {{~ end ~}}
-
-  {{## 音楽系ページの基準点（クレジット確認済みの盤のうち最新のもの）。空のときは段落自体を出さない。 ##}}
-  {{~ if CoverageLabel != "" ~}}
-  <p class="muted stats-coverage">{{ CoverageLabel }}</p>
-  {{~ end ~}}
+  {{## h1 の下の 1 行。読みを左に、「〇〇第N話(日付)時点」を右寄せで並べる（.page-subline。読みが無ければ時点だけ右に）。 ##}}
+  <div class="page-subline">
+    {{~ if Unit.NameKana != "" ~}}
+    <p class="muted">{{ Unit.NameKana | html.escape }}</p>
+    {{~ end ~}}
+    {{## 音楽系ページの基準点（クレジット確認済みの盤のうち最新のもの）。空のときは段落自体を出さない。 ##}}
+    {{~ if CoverageLabel != "" ~}}
+    <p class="muted page-coverage">{{ CoverageLabel }}</p>
+    {{~ end ~}}
+  </div>
 
   {{## ユニットの基本情報：メンバー（人物は人物詳細へ、キャラクターは声優つきでキャラクター詳細へ）と備考。
        メンバーの登録が無く備考も無いユニットはセクションを出さない。 ##}}

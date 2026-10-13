@@ -4,16 +4,17 @@
   </p>
 
   <h1>{{ Company.Name | html.escape }}</h1>
-
-  {{~ if Company.NameKana != "" ~}}
-  <p class="muted">{{ Company.NameKana | html.escape }}</p>
-  {{~ end ~}}
-
-  {{## サイト全体のクレジット横断カバレッジ宣言。
-       ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
-  {{~ if CoverageLabel != "" ~}}
-  <p class="muted stats-coverage">{{ CoverageLabel }}</p>
-  {{~ end ~}}
+  {{## h1 の下の 1 行。読みを左に、「〇〇第N話(日付)時点」を右寄せで並べる（.page-subline。読みが無ければ時点だけ右に）。 ##}}
+  <div class="page-subline">
+    {{~ if Company.NameKana != "" ~}}
+    <p class="muted">{{ Company.NameKana | html.escape }}</p>
+    {{~ end ~}}
+    {{## サイト全体のクレジット横断カバレッジ宣言。
+         ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
+    {{~ if CoverageLabel != "" ~}}
+    <p class="muted page-coverage">{{ CoverageLabel }}</p>
+    {{~ end ~}}
+  </div>
 
   {{## 基本情報はファクトタイル表現（エピソード・シリーズ詳細と共通の意匠）。
        正式名称（Company.Name）と読み（NameKana）は h1・直下の読み行に出しているため、

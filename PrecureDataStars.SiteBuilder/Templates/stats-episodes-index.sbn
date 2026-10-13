@@ -1,7 +1,7 @@
 <section>
   <h1>歴代エピソード尺統計</h1>
-  <p class="lead">プリキュア全シリーズの本編パート尺・中 CM 入り時刻を集計しています。<br>
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
+  <p class="muted page-coverage">{{ CoverageLabel }}</p>
+  <p class="lead">プリキュア全シリーズの本編パート尺・中 CM 入り時刻を集計しています。</p>
 </section>
 
 {{## 1 ページ 1 ランキング厳守の方針で詳細 10 ページ + 索引 1 ページ。

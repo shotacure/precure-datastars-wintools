@@ -3,10 +3,7 @@
 </p>
 
 <h1>{{ RoleNameJa | html.escape }}</h1>
-
-<p class="lead">
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
-</p>
+<p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 {{## 系譜でまとめた役職の「役職名の変遷」。実際にクレジットされた表記が 2 つ以上あるときは、表記ごとに
      初めてクレジットされた順に、担当数とクレジットされた作品（TV 系は話数の範囲つき）を並べる。

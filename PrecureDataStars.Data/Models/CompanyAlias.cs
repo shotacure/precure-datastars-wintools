@@ -24,6 +24,12 @@ public sealed class CompanyAlias
     /// <summary>屋号の英語表記。英文クレジット出力で使用。</summary>
     public string? NameEn { get; set; }
 
+    /// <summary>
+    /// 正式名（社名）の名義か。名義はクレジットの表記なので通称・略称も混ざる。正式名の名義だけに印を付け、
+    /// 有効期間と前身・後継でたどって企業詳細の「商号履歴」に出す。クレジットに出ていない昔の正式名もこの印で持つ。
+    /// </summary>
+    public bool IsOfficialName { get; set; }
+
     /// <summary>前任名義 ID（屋号変更前の名義を指す自参照、任意）。</summary>
     public int? PredecessorAliasId { get; set; }
 

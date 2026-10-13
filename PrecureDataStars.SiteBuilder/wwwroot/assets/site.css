@@ -6395,6 +6395,15 @@ a.credit-card-series:focus-visible {
   .notable-works-table td.col-role { width: auto; }
 }
 
+/* 企業詳細の「商号履歴」。「期間 ｜ 商号」の 2 列で、期間は折り返さない。 */
+.official-names-table th.col-period,
+.official-names-table td.col-period {
+  width: 12em;
+  white-space: nowrap;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
 /* 人物詳細の「役職履歴（会社名）」。「異動日 ｜ 役職」の 2 列で、異動日は折り返さない。見出しの会社名は少し小さく添える。 */
 .person-positions-company {
   font-size: 0.8em;

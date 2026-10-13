@@ -1729,6 +1729,7 @@ CREATE TABLE `companies` (
 -- 企業の名義（屋号）マスタ。同じ企業の屋号変更・社名変更で前後の屋号を辿れるよう
 -- predecessor_alias_id / successor_alias_id を持つ（FK は自テーブルへの自参照）。
 -- 別企業どうしの系譜（分社化・合併など）と所属は company_relations で持つ。
+-- is_official_name = 1 は正式名（社名）の名義。前身・後継と有効期間でたどって企業詳細の「商号履歴」に出す。
 --
 DROP TABLE IF EXISTS `company_aliases`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1739,6 +1740,7 @@ CREATE TABLE `company_aliases` (
   `name`                  varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
   `name_kana`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `name_en`               varchar(128) DEFAULT NULL,
+  `is_official_name`      tinyint NOT NULL DEFAULT 0 COMMENT '1 なら正式名（社名）の名義。企業詳細の商号履歴に出す',
   `predecessor_alias_id`  int          DEFAULT NULL,
   `successor_alias_id`    int          DEFAULT NULL,
   `valid_from`            date         DEFAULT NULL,

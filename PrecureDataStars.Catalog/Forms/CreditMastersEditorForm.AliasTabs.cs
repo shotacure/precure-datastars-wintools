@@ -274,6 +274,7 @@ public partial class CreditMastersEditorForm
             txtCaName.Text = a.Name;
             txtCaNameKana.Text = a.NameKana ?? "";
             txtCaNameEn.Text = a.NameEn ?? "";
+            chkCaOfficialName.Checked = a.IsOfficialName;
             numCaPredecessor.Value = a.PredecessorAliasId ?? 0;
             numCaSuccessor.Value = a.SuccessorAliasId ?? 0;
             SetDateOrNull(dtCaFrom, chkCaFromNull, a.ValidFrom);
@@ -286,6 +287,7 @@ public partial class CreditMastersEditorForm
     {
         gridCompanyAliases.ClearSelection();
         txtCaName.Text = ""; txtCaNameKana.Text = ""; txtCaNameEn.Text = "";
+        chkCaOfficialName.Checked = false;
         numCaPredecessor.Value = 0; numCaSuccessor.Value = 0;
         chkCaFromNull.Checked = true; chkCaToNull.Checked = true;
         txtCaNotes.Text = "";
@@ -342,6 +344,7 @@ public partial class CreditMastersEditorForm
                 current.Name = txtCaName.Text.Trim();
                 current.NameKana = NullIfEmpty(txtCaNameKana.Text);
                 current.NameEn = NullIfEmpty(txtCaNameEn.Text);
+                current.IsOfficialName = chkCaOfficialName.Checked;
                 current.PredecessorAliasId = pred;
                 current.SuccessorAliasId = succ;
                 current.ValidFrom = chkCaFromNull.Checked ? null : dtCaFrom.Value.Date;
@@ -358,6 +361,7 @@ public partial class CreditMastersEditorForm
                     Name = txtCaName.Text.Trim(),
                     NameKana = NullIfEmpty(txtCaNameKana.Text),
                     NameEn = NullIfEmpty(txtCaNameEn.Text),
+                    IsOfficialName = chkCaOfficialName.Checked,
                     PredecessorAliasId = pred,
                     SuccessorAliasId = succ,
                     ValidFrom = chkCaFromNull.Checked ? null : dtCaFrom.Value.Date,

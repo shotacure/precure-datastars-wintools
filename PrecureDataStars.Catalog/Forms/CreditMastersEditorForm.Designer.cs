@@ -228,6 +228,7 @@ partial class CreditMastersEditorForm
     private TextBox txtCaName = null!;
     private TextBox txtCaNameKana = null!;
     private TextBox txtCaNameEn = null!;
+    private CheckBox chkCaOfficialName = null!;  // 正式名（社名）の名義（商号履歴に出す）
     private NumericUpDown numCaPredecessor = null!;  // 前任屋号 ID（自参照、改名・分社化前リンク）
     private NumericUpDown numCaSuccessor = null!;    // 後任屋号 ID（自参照、改名・分社化後リンク）
     private DateTimePicker dtCaFrom = null!;
@@ -1275,6 +1276,9 @@ partial class CreditMastersEditorForm
         txtCaNotes = new TextBox { Multiline = true };
 
         AddLabeledControl(pnl, "屋号名",        txtCaName,        18,  18, inputWidth: 320);
+        // 正式名（社名）の名義の印。企業詳細の「商号履歴」には印の付いた名義だけを出す。
+        chkCaOfficialName = new CheckBox { Text = "正式名（社名）", Location = new Point(460, 19), Size = new Size(130, 22) };
+        pnl.Controls.Add(chkCaOfficialName);
         AddLabeledControl(pnl, "屋号名(かな)",  txtCaNameKana,    18,  50, inputWidth: 320);
         AddLabeledControl(pnl, "英語表記",      txtCaNameEn,      18,  82, inputWidth: 320);
         AddLabeledControl(pnl, "前任屋号 ID",   numCaPredecessor, 18, 114, inputWidth: 110);

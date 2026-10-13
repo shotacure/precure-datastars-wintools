@@ -1549,6 +1549,12 @@ series_relation_kinds ──┘    │            │
 
 **初期データ**: `VOCAL` / `INST` / `INST_STR` / `INST_GUIDE` / `INST_CHO` / `INST_CHO_GUIDE` / `INST_PART_VO` / `OTHER`。
 
+#### `company_aliases.is_official_name` — 正式名（社名）の名義と商号履歴
+
+企業の名義（`company_aliases`）はクレジットの表記なので、正式名（「株式会社マーベラスAQL」）と通称（「マーベラスAQL」）・略称（「MMV」）が混ざる。`is_official_name` = 1 の名義が正式名（社名）で、クレジットに一度も出ていない昔の正式名もこの印の名義として持つ。正式名の名義は有効期間（`valid_from` / `valid_to`）と前身・後継（`predecessor_alias_id` / `successor_alias_id`）でつなぐ。`companies.name` は、そのつながりのいちばん新しい正式名にそろえる（運用で合わせる。変えると企業詳細の URL が変わり、公開済みの旧 URL は 301 で転送される）。
+
+企業詳細では基本情報の下に「商号履歴」のセクションを置き、正式名の名義を前身・後継のつながりの順（つながりが複数なら開始日の早い順）に「期間 ｜ 商号」の表で出す（期間は「1997.6.25〜2011.9.30」の形）。正式名の名義が 2 つ以上ある企業だけに出す。Catalog の企業名義タブの「正式名（社名）」のチェックで付ける。
+
 #### `company_relations` — 企業・団体どうしの関係
 
 クレジット系の企業・団体（`companies`）どうしの関係を「団体 → 団体」の向きと期間つきで持つ。同じ会社の改名（社名変更・屋号変更）はここでは持たず、`company_aliases` の `predecessor_alias_id` / `successor_alias_id` でつなぐ。社内の部署・編集部・雑誌のように、それ自体がクレジットに載る単位は別の団体として立て、親とこのテーブルでつなぐ（同じ団体の屋号には混ぜない）。

@@ -45,6 +45,27 @@
   </section>
   {{~ end ~}}
 
+  {{## 商号履歴。正式名（社名）の名義（company_aliases.is_official_name）を古い順に「期間 ｜ 商号」の表で出す。
+       基本情報の下に置き、正式名の名義が 2 つ以上あるときだけ出す。 ##}}
+  {{~ if (array.size OfficialNames) > 0 ~}}
+  <section id="official-names">
+    <h2>商号履歴</h2>
+    <table class="official-names-table">
+      <thead>
+        <tr><th class="col-period">期間</th><th class="col-name">商号</th></tr>
+      </thead>
+      <tbody>
+        {{~ for n in OfficialNames ~}}
+        <tr>
+          <td class="col-period">{{ n.Period }}</td>
+          <td class="col-name">{{ n.Name | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
   {{## 関係のある団体（前身・後継・所属・傘下）。基本情報と同じファクトタイルで、
        ラベルにこの団体から見た関係、値に相手の団体へのリンク、下に期間（あれば）を出す。
        関係が 1 件も無いときはセクションごと省く。 ##}}

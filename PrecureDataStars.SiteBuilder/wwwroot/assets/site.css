@@ -10096,6 +10096,14 @@ body.has-art-track-bar {
 .hide-premium-art-tracks .song-recording-play:has(.art-track-play.is-premium-only:not([data-art-track-alt-id])) {
   display: none;
 }
+/* 再生できなかったときの確認ダイアログ。説明・「YouTube Music で開く」・問いかけの 3 段落を
+   ひと続きに読ませるため、段落の間を詰める（ボタンの前だけ既定の広い空きを残す）。 */
+#art-track-premium-dialog .subtitle-embargo-dialog-body:not(:last-of-type) {
+  margin-bottom: 10px;
+}
+#art-track-premium-dialog-music {
+  font-weight: 700;
+}
 
 /* ── 音楽クレジット（人物詳細の「音楽クレジット」欄、楽曲・劇伴・商品詳細の演奏・レコーディング・ディスクスタッフ） ── */
 /* 区分（作詞・作曲・編曲 / 演奏・コーラス等 / レコーディング / 音盤製作）の小見出し。 */

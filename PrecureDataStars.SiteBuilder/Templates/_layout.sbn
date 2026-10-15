@@ -221,7 +221,9 @@ gtag('config', '{{ Ga4MeasurementId }}');
      押して初めて分かるのは煩わしいので、再生できなかったことを検知した時点で一度だけ
      「以後はこの種の再生ボタンを隠すか」を尋ねる。選択は localStorage に記憶し、
      フッターの切替スイッチでいつでも変更できる（ネタバレ隠しと同じ流儀）。
-     背景クリック・Escape で閉じた場合は未決定のまま＝次回また出る。 ##}}
+     背景クリック・Escape で閉じた場合は未決定のまま＝次回また出る。
+     会員でもブラウザによっては埋め込みで再生できない（ログイン状態がプレイヤーに渡らない）ため、
+     その曲を YouTube Music で直接開くリンクも添える（href は art-track-pref.js が開くときに入れる）。 ##}}
 <div id="art-track-premium-dialog" class="subtitle-embargo-dialog" hidden role="dialog" aria-modal="true"
      aria-labelledby="art-track-premium-dialog-title">
   <div class="subtitle-embargo-dialog-backdrop" data-art-track-premium-dismiss></div>
@@ -231,6 +233,13 @@ gtag('config', '{{ Ga4MeasurementId }}');
     </p>
     <p class="subtitle-embargo-dialog-body">
       配信音源の一部は、権利者の設定により YouTube Music Premium 会員限定で配信されています。
+      会員の方でも、iPhone・iPad や Safari などのブラウザでは、このページの中では再生できません。
+      その場合は YouTube Music で開いてお聴きください。
+    </p>
+    <p id="art-track-premium-dialog-music-row" class="subtitle-embargo-dialog-body" hidden>
+      <a id="art-track-premium-dialog-music" href="https://music.youtube.com/" target="_blank" rel="noopener">YouTube Music で開く</a>
+    </p>
+    <p class="subtitle-embargo-dialog-body">
       この種の曲の再生ボタンを、今後は表示しないようにしますか？
       （設定はフッターの切替スイッチでいつでも変更できます）
     </p>

@@ -90,6 +90,7 @@ public sealed class ArticlesGenerator
                 DateIso = a.DateIso,
                 Tags = a.Tags ?? Array.Empty<string>(),
                 BodyHtml = a.BodyHtml,
+                HasTweet = a.BodyHtml.Contains("twitter-tweet", StringComparison.Ordinal),
                 // 並びは新しい順なので、1 つ後ろが古い記事（前の記事）、1 つ前が新しい記事（次の記事）。
                 Prev = i + 1 < articles.Count ? ToLink(articles[i + 1]) : null,
                 Next = i > 0 ? ToLink(articles[i - 1]) : null,
@@ -138,7 +139,7 @@ public sealed class ArticlesGenerator
                 Badges = new[] { new OgCardBadge("記事", $"{articles.Count}本") }
             },
             MetaDescription =
-                "プリキュアのコラム。歴代シリーズの音楽・映像・制作の仕組みを、データと一次資料から解き明かします。" +
+                "プリキュアのコラム。precure.tv を運営する祥太が、歴代プリキュアを多種多様なアプローチで読み解きます。" +
                 "毎週土曜朝 8:30 更新。",
             Breadcrumbs = new[]
             {
@@ -249,6 +250,8 @@ public sealed class ArticlesGenerator
         public IReadOnlyList<string> Tags { get; set; } = Array.Empty<string>();
         /// <summary>Markdig で HTML 化済みの本文。テンプレ側でそのまま（raw）出力する。</summary>
         public string BodyHtml { get; set; } = "";
+        /// <summary>本文に X の埋め込み（blockquote.twitter-tweet）があるか。あれば X の読み込みスクリプトを置く。</summary>
+        public bool HasTweet { get; set; }
         /// <summary>1 つ古い記事（「← 前の記事」）。最も古い記事では null。</summary>
         public ArticleLink? Prev { get; set; }
         /// <summary>1 つ新しい記事（「次の記事 →」）。最新の記事では null。</summary>

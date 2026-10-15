@@ -44,3 +44,7 @@
     {{~ end ~}}
   </nav>
 </article>
+{{~ if HasTweet ~}}
+{{## 本文に X の埋め込み（blockquote.twitter-tweet）がある記事だけ、X の読み込みスクリプトを置く。 ##}}
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+{{~ end ~}}

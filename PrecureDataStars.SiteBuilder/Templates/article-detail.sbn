@@ -1,15 +1,15 @@
-{{## /articles/{slug}/ — 読み物の記事詳細。ArticlesGenerator から ArticleContentModel で渡る。
+{{## /articles/{slug}/ — コラムの記事詳細。ArticlesGenerator から ArticleContentModel で渡る。
      BodyHtml は Markdig で HTML 化済みのため、_layout の Content と同様そのまま（raw）出力する。 ##}}
 <article class="article">
-  <h1>{{ Title }}</h1>
+  <h1>{{ Title | html.escape }}</h1>
   <div class="article-meta">
     {{~ if DateLabel != "" ~}}
-    <time class="article-date">{{ DateLabel }}</time>
+    <time class="article-date"{{ if DateIso != "" }} datetime="{{ DateIso }}"{{ end }}>{{ DateLabel }}</time>
     {{~ end ~}}
     {{~ if (array.size Tags) > 0 ~}}
     <span class="article-tags">
       {{~ for t in Tags ~}}
-      <span class="article-tag">{{ t }}</span>
+      <span class="article-tag">{{ t | html.escape }}</span>
       {{~ end ~}}
     </span>
     {{~ end ~}}
@@ -17,4 +17,30 @@
   <div class="article-body">
     {{ BodyHtml }}
   </div>
+  {{## 前後の記事。前後話カードと同じ形で、左が古い記事、右が新しい記事（precure.news の記事ページと同じ）。
+       無い側（最初／最新の記事）は文言を置かず枠だけ薄く出す。 ##}}
+  <nav class="ep-prev-next-cards ep-prev-next-cards-bottom" aria-label="前後の記事">
+    {{~ if Prev ~}}
+    <a class="ep-prev-next-card ep-prev-next-card-prev" href="{{ Prev.Url }}" rel="prev">
+      <span class="ep-prev-next-direction">← 前の記事</span>
+      <span class="ep-prev-next-label">{{ Prev.Title | html.escape }}</span>
+    </a>
+    {{~ else ~}}
+    <span class="ep-prev-next-card ep-prev-next-card-prev disabled" aria-disabled="true">
+      <span class="ep-prev-next-direction">← 前の記事</span>
+      <span class="ep-prev-next-label"></span>
+    </span>
+    {{~ end ~}}
+    {{~ if Next ~}}
+    <a class="ep-prev-next-card ep-prev-next-card-next" href="{{ Next.Url }}" rel="next">
+      <span class="ep-prev-next-direction">次の記事 →</span>
+      <span class="ep-prev-next-label">{{ Next.Title | html.escape }}</span>
+    </a>
+    {{~ else ~}}
+    <span class="ep-prev-next-card ep-prev-next-card-next disabled" aria-disabled="true">
+      <span class="ep-prev-next-direction">次の記事 →</span>
+      <span class="ep-prev-next-label"></span>
+    </span>
+    {{~ end ~}}
+  </nav>
 </article>

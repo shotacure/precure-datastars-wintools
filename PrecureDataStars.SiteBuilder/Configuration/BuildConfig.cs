@@ -12,7 +12,7 @@ public sealed class BuildConfig
     /// <summary>出力先ディレクトリの絶対パス。</summary>
     public string OutputDirectory { get; }
 
-    /// <summary>読み物（記事 Markdown）原稿ディレクトリの絶対パス。App.config の <c>ArticlesContentDir</c>。
+    /// <summary>コラム（記事 Markdown）原稿ディレクトリの絶対パス。App.config の <c>ArticlesContentDir</c>。
     /// コードと分離した「コンテンツ資産」の置き場で、ビルド時にここを読んで <c>/articles/</c> を生成する
     /// （exe にはバンドルしない）。空文字なら記事 0 件として継続する。</summary>
     public string ArticlesContentDir { get; }
@@ -261,7 +261,7 @@ public sealed class BuildConfig
             ? Path.Combine(AppContext.BaseDirectory, "out", isProductionMode ? "site" : "site-test")
             : Path.GetFullPath(rawOutput);
 
-        // 読み物原稿ディレクトリ。コードと分離した外部の置き場（リポジトリ直下 content/articles 等）を
+        // コラム原稿ディレクトリ。コードと分離した外部の置き場（リポジトリ直下 content/articles 等）を
         // 絶対パスで指す。未設定なら空文字＝記事 0 件として継続する（ArticlesGenerator 側で警告）。
         var rawArticles = ConfigurationManager.AppSettings["ArticlesContentDir"];
         var articlesDir = string.IsNullOrWhiteSpace(rawArticles) ? "" : Path.GetFullPath(rawArticles);

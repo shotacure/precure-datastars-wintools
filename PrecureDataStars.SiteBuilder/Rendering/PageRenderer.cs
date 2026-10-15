@@ -490,18 +490,8 @@ public sealed class PageRenderer
         ("書籍", "/books/"),
         ("クリエイター", "/creators/"),
         ("統計", "/stats/"),
-        ("読み物", "/articles/"),
+        ("コラム", "/articles/"),
         ("このサイトについて", "/about/"),
-    };
-
-    /// <summary>
-    /// 本番モードのときだけグローバルナビから外す URL の集合。読み物は本番では
-    /// 生成自体を行わない（<see cref="Pipeline.SiteBuilderPipeline"/> 側でスキップ）ため、ナビからも外す。
-    /// テストモードでは全項目を出す。
-    /// </summary>
-    private static readonly HashSet<string> ProductionHiddenNavUrls = new(StringComparer.Ordinal)
-    {
-        "/articles/",
     };
 
     /// <summary>
@@ -509,7 +499,6 @@ public sealed class PageRenderer
     /// 所属の解決はナビに出ていない URL も配下として扱う：楽曲・商品・劇伴は「音楽」、
     /// 人物・企業は「クリエイター」、エピソード詳細はシリーズ配下なので「シリーズ」。
     /// どのセクションにも属さないページ（ホーム・運営情報など）は全項目非アクティブ。
-    /// 本番モードでは <see cref="ProductionHiddenNavUrls"/> の項目をナビから除外する。
     /// </summary>
     private IReadOnlyList<NavItem> BuildNavItems(string urlPath)
     {
@@ -531,12 +520,7 @@ public sealed class PageRenderer
 
         var items = new List<NavItem>(GlobalNavDefinition.Length);
         foreach (var (label, url) in GlobalNavDefinition)
-        {
-            // 本番モードでは暫定非表示セクションをナビから外す（テストでは全部出す）。
-            if (_config.IsProductionMode && ProductionHiddenNavUrls.Contains(url))
-                continue;
             items.Add(new NavItem { Label = label, Url = url, IsActive = url == activeUrl });
-        }
         return items;
     }
 

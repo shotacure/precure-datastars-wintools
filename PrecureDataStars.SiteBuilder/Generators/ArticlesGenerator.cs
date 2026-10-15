@@ -6,11 +6,16 @@ using PrecureDataStars.SiteBuilder.Rendering;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// <c>content/articles/*.md</c>（Markdown ＋ front-matter）から読み物記事を生成するジェネレータ。
+/// <c>content/articles/*.md</c>（Markdown ＋ front-matter）からコラムを生成するジェネレータ。
 /// DB に依存せず、ビルド出力へコピーされた Markdown を読み、<c>/articles/{slug}/</c> と
 /// 一覧 <c>/articles/</c> を出力する。本文は Markdig で HTML 化し、既存レイアウト
 /// （ヘッダ／フッタ／ナビ／シェア／AdSense）に流し込む。記事は運営情報ページと違い
 /// シェア対象なので <see cref="LayoutModel.SuppressShareButtons"/> は立てない。
+/// <para>
+/// 本番モードでは、下書き（front-matter の <c>draft: true</c>）と、公開日時（<c>date</c>）がビルド時点より
+/// 後の原稿を出さない。公開日時を迎えた後の本番ビルドで初めて出る（土曜 8:30 の定時ビルドがこれを拾う）。
+/// テストモードでは、原稿を書いている途中に読めるよう、下書きも公開前の原稿も出す。
+/// </para>
 /// </summary>
 public sealed class ArticlesGenerator
 {
@@ -38,7 +43,7 @@ public sealed class ArticlesGenerator
         var articles = new List<Article>();
         if (string.IsNullOrEmpty(dir))
         {
-            _ctx.Logger.Warn("ArticlesContentDir が未設定のため、読み物は 0 件として継続します。");
+            _ctx.Logger.Warn("ArticlesContentDir が未設定のため、コラムは 0 件として継続します。");
         }
         else if (!Directory.Exists(dir))
         {
@@ -46,11 +51,24 @@ public sealed class ArticlesGenerator
         }
         else
         {
+            // 公開日時の判定はビルド開始時点の 1 回の現在時刻で行い、ページごとに判定がずれないようにする。
+            var now = DateTimeOffset.Now;
+            int held = 0;
             foreach (var path in Directory.EnumerateFiles(dir, "*.md", SearchOption.TopDirectoryOnly))
             {
                 var article = ParseArticle(path);
-                if (article is not null) articles.Add(article);
+                if (article is null) continue;
+
+                // 本番では下書きと公開日時前の原稿を出さない（テストでは出す）。
+                if (_ctx.Config.IsProductionMode && (article.IsDraft || article.PublishAt > now))
+                {
+                    held++;
+                    continue;
+                }
+                articles.Add(article);
             }
+            if (held > 0)
+                _ctx.Logger.Info($"下書き・公開日時前のコラム {held} 本は本番に出しません。");
         }
 
         // 公開日降順（同日はタイトル昇順）で並べる。
@@ -61,22 +79,27 @@ public sealed class ArticlesGenerator
         });
 
         // 各記事詳細。
-        foreach (var a in articles)
+        for (int i = 0; i < articles.Count; i++)
         {
+            var a = articles[i];
             var content = new ArticleContentModel
             {
                 Title = a.Title,
                 // 記事メタは読み込み元で欠けている可能性があるため、表示側の非 null 前提に合わせて丸める。
                 DateLabel = a.DateLabel ?? "",
+                DateIso = a.DateIso,
                 Tags = a.Tags ?? Array.Empty<string>(),
                 BodyHtml = a.BodyHtml,
+                // 並びは新しい順なので、1 つ後ろが古い記事（前の記事）、1 つ前が新しい記事（次の記事）。
+                Prev = i + 1 < articles.Count ? ToLink(articles[i + 1]) : null,
+                Next = i > 0 ? ToLink(articles[i - 1]) : null,
             };
             var layout = new LayoutModel
             {
                 PageTitle = a.Title,
                 MetaDescription = a.Description,
                 // 記事は本文の量を数で語れないので、種別と日付・タグで識別できるようにする。
-                OgCard = new OgCardSpec(Kicker: "読み物", Title: a.Title)
+                OgCard = new OgCardSpec(Kicker: "コラム", Title: a.Title)
                 {
                     KickerRight = a.DateLabel ?? "",
                     Facts = (a.Tags ?? Array.Empty<string>())
@@ -87,7 +110,7 @@ public sealed class ArticlesGenerator
                 Breadcrumbs = new[]
                 {
                     new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                    new BreadcrumbItem { Label = "読み物", Url = "/articles/" },
+                    new BreadcrumbItem { Label = "コラム", Url = "/articles/" },
                     new BreadcrumbItem { Label = a.Title, Url = "" },
                 },
             };
@@ -103,29 +126,33 @@ public sealed class ArticlesGenerator
                 Description = a.Description,
                 Url = $"/articles/{a.Slug}/",
                 DateLabel = a.DateLabel,
+                DateIso = a.DateIso,
                 Tags = a.Tags,
             }).ToList(),
         };
         var indexLayout = new LayoutModel
         {
-            PageTitle = "読み物",
-            OgCard = new OgCardSpec(Kicker: "", Title: "読み物")
+            PageTitle = "コラム",
+            OgCard = new OgCardSpec(Kicker: "", Title: "コラム")
             {
                 Badges = new[] { new OgCardBadge("記事", $"{articles.Count}本") }
             },
             MetaDescription =
-                "プリキュアをもっと楽しむための記事・コラム。視聴ガイドやデータで見るプリキュアなど、" +
-                "歴代シリーズを別の角度から掘り下げます。",
+                "プリキュアのコラム。歴代シリーズの音楽・映像・制作の仕組みを、データと一次資料から解き明かします。" +
+                "毎週土曜朝 8:30 更新。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "読み物", Url = "" },
+                new BreadcrumbItem { Label = "コラム", Url = "" },
             },
         };
         _page.RenderAndWrite("/articles/", "articles", "articles-index.sbn", indexModel, indexLayout);
 
         _ctx.Logger.Success($"/articles/（{articles.Count} 記事）");
     }
+
+    /// <summary>前後の記事カードに出す 1 件分を作る。</summary>
+    private static ArticleLink ToLink(Article a) => new() { Title = a.Title, Url = $"/articles/{a.Slug}/" };
 
     /// <summary>front-matter をパースし、本文を Markdig で HTML 化して <see cref="Article"/> を返す。
     /// タイトル欠落時は警告して null（スキップ）。</summary>
@@ -171,15 +198,28 @@ public sealed class ArticlesGenerator
         var fmSlug = meta.GetValueOrDefault("slug", "").Trim();
         if (!string.IsNullOrEmpty(fmSlug)) slug = fmSlug;
 
-        // 公開日。未指定／不正は最小値（並びは末尾）＆ラベル空。
+        // 公開日時。"2026-10-17T08:30:00+09:00" のように時刻・時差つきで書く（日付だけならその日の 0:00）。
+        // 時差を省いたときはビルドする PC の時刻（日本時間）として読む。表示の日付も日本時間にそろえる。
+        // 未指定／不正は最小値（並びは末尾・公開日時の判定では公開済み扱い）＆ラベル空。
+        DateTimeOffset publishAt = DateTimeOffset.MinValue;
         DateTime date = DateTime.MinValue;
         string dateLabel = "";
+        string dateIso = "";
         var rawDate = meta.GetValueOrDefault("date", "").Trim();
-        if (DateTime.TryParse(rawDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+        if (DateTimeOffset.TryParse(rawDate, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var parsed))
         {
-            date = parsed;
-            dateLabel = $"{parsed.Year}年{parsed.Month}月{parsed.Day}日";
+            publishAt = parsed;
+            date = parsed.LocalDateTime;
+            dateLabel = $"{date.Year}年{date.Month}月{date.Day}日";
+            dateIso = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         }
+        else if (!string.IsNullOrEmpty(rawDate))
+        {
+            _ctx.Logger.Warn($"コラムの date を読めません（{rawDate}）: {Path.GetFileName(path)}");
+        }
+
+        // 下書き。"draft: true" のときだけ下書き扱い（本番に出さない）。
+        var isDraft = string.Equals(meta.GetValueOrDefault("draft", "").Trim(), "true", StringComparison.OrdinalIgnoreCase);
 
         // タグ（カンマ区切り）。
         var tags = meta.GetValueOrDefault("tags", "")
@@ -187,12 +227,15 @@ public sealed class ArticlesGenerator
 
         var bodyHtml = Markdown.ToHtml(body, MarkdownPipeline);
 
-        return new Article(slug, title, description, date, dateLabel, tags, bodyHtml);
+        return new Article(slug, title, description, date, dateLabel, dateIso, tags, bodyHtml, isDraft, publishAt);
     }
 
+    /// <summary>原稿 1 本。<paramref name="IsDraft"/> と <paramref name="PublishAt"/> は本番に出すかどうかの判定に使う。
+    /// <paramref name="DateIso"/> は time 要素の datetime 属性に入れる "yyyy-MM-dd"（日付が無ければ空）。</summary>
     private sealed record Article(
         string Slug, string Title, string Description,
-        DateTime Date, string DateLabel, IReadOnlyList<string> Tags, string BodyHtml);
+        DateTime Date, string DateLabel, string DateIso, IReadOnlyList<string> Tags, string BodyHtml,
+        bool IsDraft, DateTimeOffset PublishAt);
 
     // ── テンプレに渡すモデル ──
 
@@ -201,9 +244,22 @@ public sealed class ArticlesGenerator
     {
         public string Title { get; set; } = "";
         public string DateLabel { get; set; } = "";
+        /// <summary>time 要素の datetime 属性（"yyyy-MM-dd"、日付が無ければ空）。</summary>
+        public string DateIso { get; set; } = "";
         public IReadOnlyList<string> Tags { get; set; } = Array.Empty<string>();
         /// <summary>Markdig で HTML 化済みの本文。テンプレ側でそのまま（raw）出力する。</summary>
         public string BodyHtml { get; set; } = "";
+        /// <summary>1 つ古い記事（「← 前の記事」）。最も古い記事では null。</summary>
+        public ArticleLink? Prev { get; set; }
+        /// <summary>1 つ新しい記事（「次の記事 →」）。最新の記事では null。</summary>
+        public ArticleLink? Next { get; set; }
+    }
+
+    /// <summary>前後の記事カードの 1 件分。</summary>
+    private sealed class ArticleLink
+    {
+        public string Title { get; set; } = "";
+        public string Url { get; set; } = "";
     }
 
     /// <summary>一覧テンプレ（articles-index.sbn）に渡すモデル。</summary>
@@ -219,6 +275,8 @@ public sealed class ArticlesGenerator
         public string Description { get; set; } = "";
         public string Url { get; set; } = "";
         public string DateLabel { get; set; } = "";
+        /// <summary>time 要素の datetime 属性（"yyyy-MM-dd"、日付が無ければ空）。</summary>
+        public string DateIso { get; set; } = "";
         public IReadOnlyList<string> Tags { get; set; } = Array.Empty<string>();
     }
 }

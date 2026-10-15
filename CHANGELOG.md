@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：「このサイトについて」の目的の段落を、一次資料にもとづいた事実の集積を最優先とする旨の文に改めた**（`about.sbn`）。
 - **サイト：「読み物」を「コラム」に改題し、本番でも公開するようにした**：ナビ・パンくず・一覧の見出し・SNS カードの表記を「コラム」に改めた（URL は `/articles/` のまま）。本番で `/articles/` を作らずナビからも外していた暫定の出し分け（`PageRenderer.ProductionHiddenNavUrls` と `SiteBuilderPipeline` の本番での生成の省略）を外した。代わりに、本番ビルドでは原稿の `draft: true` と、`date`（公開日時）がビルド時点より後の原稿を出さないようにした（`ArticlesGenerator`）。テストビルドでは下書きも公開日時前の原稿も出す。`date` は時刻と時差まで読む（`2026-10-17T08:30:00+09:00`）。記事ページの下に precure.news の記事ページと同じ「← 前の記事／次の記事 →」のカードを足し、日付に機械が読める日付（`datetime`）を付けた。題名・説明・タグは文字としてそのまま出す（`<` などで崩れない）。本文に precure.news の記事と同じ書き方で、動画の埋め込み（`.video-embed`）・リンクカード（`.embed-card`）・X の埋め込み（`blockquote.twitter-tweet`。ある記事だけ X の読み込みスクリプトを置く）・画像とキャプション（`figure` / `figcaption`）を使えるようにした（`site.css`）。一覧のリードと meta description を、運営者が多様な切り口で歴代プリキュアを読み解くコラムである旨に改めた。
 - **スクリプト：precure.tv の定時の本番デプロイを足した**（`scripts/scheduled-deploy.ps1`・`scripts/register-deploy-task.ps1`）：毎週土曜 8:30 にタスクスケジューラから、コミット済みの `develop` を git worktree で一時フォルダに取り出して `deploy.ps1` を流す（未コミットの変更は公開しない）。経過は `%LOCALAPPDATA%\precure-datastars\scheduled-deploy.log` に残し、安全ゲートで止まったときは公開しない。`-DryRunOnly` で試せる。あわせて `deploy.ps1` に、手動と定時のデプロイが同時に走らないための名前付き mutex を入れた。
 

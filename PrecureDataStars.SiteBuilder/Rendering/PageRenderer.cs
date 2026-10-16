@@ -313,6 +313,18 @@ public sealed class PageRenderer
     }
 
     /// <summary>
+    /// ページに添えるファイル（コラムの図など）を、ページと同じディレクトリへ写す。<paramref name="pageUrlPath"/> はページの URL
+    /// （<c>/articles/x/</c>）、<paramref name="relativePath"/> はページからの相対パス。大きさと更新時刻が同じなら写さない。
+    /// ピンポイントビルドでそのページが対象外なら写さない。
+    /// </summary>
+    public void CopyPageAsset(string pageUrlPath, string sourcePath, string relativePath)
+    {
+        if (!ShouldWrite(pageUrlPath)) return;
+        var pageDir = Path.GetDirectoryName(PathUtil.ToOutputFilePath(_config.OutputDirectory, pageUrlPath)) ?? _config.OutputDirectory;
+        _output.CopyFrom(sourcePath, Path.Combine(pageDir, relativePath));
+    }
+
+    /// <summary>
     /// 通常ページ 1 件分をレンダリングしてファイルへ書き出す（中身が前回と同じなら書かない）ところまでを行い、
     /// サマリ・進捗・sitemap 記録は行わない。書き出し先パスはページごとに互いに異なるため、本メソッドは
     /// ページレンダリングの並列実行フェーズから複数スレッドで同時に呼び出せる

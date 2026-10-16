@@ -16,6 +16,11 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// 後の原稿を出さない。公開日時を迎えた後の本番ビルドで初めて出る（土曜 8:30 の定時ビルドがこれを拾う）。
 /// テストモードでは、原稿を書いている途中に読めるよう、下書きも公開前の原稿も出す。
 /// </para>
+/// <para>
+/// 原稿と同じ名前のフォルダ（<c>articles/{原稿のファイル名}/</c>）に置いた図などの素材は、出すコラムについてだけ
+/// 記事のページと同じ場所（<c>/articles/{slug}/</c>）へ写す。原稿からは相対パス（<c>![説明](size-chart.svg)</c>）で参照する。
+/// 名前が「.」で始まるファイル・フォルダと、記事のページそのものと同名の <c>index.html</c> は写さない。
+/// </para>
 /// </summary>
 public sealed class ArticlesGenerator
 {
@@ -116,6 +121,7 @@ public sealed class ArticlesGenerator
                 },
             };
             _page.RenderAndWrite($"/articles/{a.Slug}/", "articles", "article-detail.sbn", content, layout);
+            CopyAssets(a);
         }
 
         // 一覧ページ。
@@ -150,6 +156,30 @@ public sealed class ArticlesGenerator
         _page.RenderAndWrite("/articles/", "articles", "articles-index.sbn", indexModel, indexLayout);
 
         _ctx.Logger.Success($"/articles/（{articles.Count} 記事）");
+    }
+
+    /// <summary>
+    /// 原稿と同じ名前のフォルダの中身（図などの素材）を、記事のページと同じ場所へ写す。フォルダが無ければ何もしない。
+    /// </summary>
+    private void CopyAssets(Article a)
+    {
+        if (!Directory.Exists(a.AssetDir)) return;
+        var pageUrl = $"/articles/{a.Slug}/";
+        int copied = 0;
+        foreach (var file in Directory.EnumerateFiles(a.AssetDir, "*", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(a.AssetDir, file);
+            var parts = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (parts.Any(p => p.StartsWith('.'))) continue;
+            if (string.Equals(rel, "index.html", StringComparison.OrdinalIgnoreCase))
+            {
+                _ctx.Logger.Warn($"コラムの素材に index.html があります（記事のページと重なるので写しません）: {a.Slug}");
+                continue;
+            }
+            _page.CopyPageAsset(pageUrl, file, rel);
+            copied++;
+        }
+        if (copied > 0) _ctx.Logger.Info($"コラム {a.Slug} の素材 {copied} 件を写しました。");
     }
 
     /// <summary>前後の記事カードに出す 1 件分を作る。</summary>
@@ -228,15 +258,19 @@ public sealed class ArticlesGenerator
 
         var bodyHtml = Markdown.ToHtml(body, MarkdownPipeline);
 
-        return new Article(slug, title, description, date, dateLabel, dateIso, tags, bodyHtml, isDraft, publishAt);
+        // 素材のフォルダは原稿のファイル名に合わせる（front-matter で slug を変えても、置き場は原稿の隣のまま）。
+        var assetDir = Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path));
+
+        return new Article(slug, title, description, date, dateLabel, dateIso, tags, bodyHtml, isDraft, publishAt, assetDir);
     }
 
     /// <summary>原稿 1 本。<paramref name="IsDraft"/> と <paramref name="PublishAt"/> は本番に出すかどうかの判定に使う。
-    /// <paramref name="DateIso"/> は time 要素の datetime 属性に入れる "yyyy-MM-dd"（日付が無ければ空）。</summary>
+    /// <paramref name="DateIso"/> は time 要素の datetime 属性に入れる "yyyy-MM-dd"（日付が無ければ空）。
+    /// <paramref name="AssetDir"/> は図などの素材を置くフォルダ（原稿と同じ名前。無くてもよい）。</summary>
     private sealed record Article(
         string Slug, string Title, string Description,
         DateTime Date, string DateLabel, string DateIso, IReadOnlyList<string> Tags, string BodyHtml,
-        bool IsDraft, DateTimeOffset PublishAt);
+        bool IsDraft, DateTimeOffset PublishAt, string AssetDir);
 
     // ── テンプレに渡すモデル ──
 

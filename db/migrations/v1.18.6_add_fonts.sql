@@ -11,7 +11,7 @@
 --   series_font_usages  作品のどこにどの書体を使ったか。1 行 = 作品 × 使う場所 × 時期（× 本放送だけの範囲）。
 --                       使う場所は OP クレジット／OP 歌詞／OP 歌詞のルビ／サブタイトル／サブタイトルのルビ／
 --                       ED クレジット／ED 歌詞／ED 歌詞のルビ。字の大きさは画面の高さ 1080 換算の px（仮想ボディ）で、
---                       クレジットは人名（size_px）と役職名（role_size_px）を分けて持ち、人名を割り付ける幅（name_span_em。五字取りなら 5）も持つ。
+--                       クレジットは人名（size_px）と役職名（role_size_px）を分けて持ち、人名を割り付ける幅（name_span_em。五字取りなら 5）と、役職名の組み（字取り・人名との空き・ベースラインのずれ・揃え）も持つ。
 --
 -- 移し替え：
 --   1. subtitle_fonts の各行を fonts に写す（書体名・ウェイトの整理はデータ側で行う）。
@@ -58,6 +58,10 @@ CREATE TABLE IF NOT EXISTS `series_font_usages` (
   `size_px`            decimal(5,1)      DEFAULT NULL COMMENT '字の大きさ（画面の高さ 1080 換算の px、仮想ボディ）。クレジットは人名',
   `role_size_px`       decimal(5,1)      DEFAULT NULL COMMENT 'クレジットの役職名の大きさ（同上）',
   `name_span_em`       decimal(3,2)      DEFAULT NULL COMMENT 'クレジットの人名を割り付ける幅（字の大きさを 1 とした字数。五字取りなら 5.00）',
+  `role_span_em`            decimal(3,2)      DEFAULT NULL COMMENT 'クレジットの役職名を割り付ける幅（役職名の字の大きさを 1 とした字数）',
+  `role_name_gap_em`        decimal(4,2)      DEFAULT NULL COMMENT '役職名の右端から人名の左端までの空き（人名の字の大きさを 1 とした値）',
+  `role_baseline_offset_em` decimal(4,2)      DEFAULT NULL COMMENT '役職名のベースラインの人名のベースラインからの高さ（上を正、人名の字の大きさを 1 とした値）',
+  `role_align`              varchar(16)       DEFAULT NULL COMMENT '役職名の揃え RIGHT / LEFT / CENTER / JUSTIFY（縦に並ぶ役職名のどこがそろうか。役職が 1 つだけなら NULL）',
   `display_note`       varchar(255)      DEFAULT NULL COMMENT 'サイトに添える注記',
   `notes`              text              COMMENT '内部メモ（サイトに出さない）',
   `created_at`         timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -67,6 +71,7 @@ CREATE TABLE IF NOT EXISTS `series_font_usages` (
   KEY `ix_sfu_font` (`font_id`),
   CONSTRAINT `fk_sfu_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_sfu_font`   FOREIGN KEY (`font_id`)   REFERENCES `fonts`  (`font_id`)   ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `ck_sfu_role_align` CHECK (`role_align` IS NULL OR `role_align` IN ('RIGHT', 'LEFT', 'CENTER', 'JUSTIFY')),
   CONSTRAINT `ck_sfu_usage_kind` CHECK (`usage_kind` IN ('OP_CREDIT', 'OP_LYRICS', 'OP_LYRICS_RUBY', 'SUBTITLE', 'SUBTITLE_RUBY', 'ED_CREDIT', 'ED_LYRICS', 'ED_LYRICS_RUBY'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='作品のどこにどの書体を使ったか';
 
@@ -91,6 +96,19 @@ BEGIN
   ) THEN
     ALTER TABLE `series_font_usages`
       ADD COLUMN `name_span_em` decimal(3,2) DEFAULT NULL COMMENT 'クレジットの人名を割り付ける幅（字の大きさを 1 とした字数。五字取りなら 5.00）' AFTER `role_size_px`;
+  END IF;
+
+  -- 0c. 先にこのマイグレーションで series_font_usages を作った DB には、あとから足した役職名の組みの 4 列を足す。
+  IF NOT EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'series_font_usages' AND COLUMN_NAME = 'role_span_em'
+  ) THEN
+    ALTER TABLE `series_font_usages`
+      ADD COLUMN `role_span_em` decimal(3,2) DEFAULT NULL COMMENT 'クレジットの役職名を割り付ける幅（役職名の字の大きさを 1 とした字数）' AFTER `name_span_em`,
+      ADD COLUMN `role_name_gap_em` decimal(4,2) DEFAULT NULL COMMENT '役職名の右端から人名の左端までの空き（人名の字の大きさを 1 とした値）' AFTER `role_span_em`,
+      ADD COLUMN `role_baseline_offset_em` decimal(4,2) DEFAULT NULL COMMENT '役職名のベースラインの人名のベースラインからの高さ（上を正、人名の字の大きさを 1 とした値）' AFTER `role_name_gap_em`,
+      ADD COLUMN `role_align` varchar(16) DEFAULT NULL COMMENT '役職名の揃え RIGHT / LEFT / CENTER / JUSTIFY（縦に並ぶ役職名のどこがそろうか。役職が 1 つだけなら NULL）' AFTER `role_baseline_offset_em`,
+      ADD CONSTRAINT `ck_sfu_role_align` CHECK (`role_align` IS NULL OR `role_align` IN ('RIGHT', 'LEFT', 'CENTER', 'JUSTIFY'));
   END IF;
 
   -- 1. subtitle_fonts の行を fonts に写す（同じ描く書体の行がまだ無いものだけ）。

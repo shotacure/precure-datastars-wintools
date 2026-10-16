@@ -49,11 +49,41 @@ public sealed class SeriesFontUsage
     /// </summary>
     public decimal? NameSpanEm { get; set; }
 
+    // ── クレジットの役職名の組み（書体とウェイトは人名と同じ。データとして持つだけで、サイトには出さない）──
+
+    /// <summary>役職名を割り付ける幅（役職名の字の大きさを 1 とした字数。「編　集」が 3 字分なら 3）。</summary>
+    public decimal? RoleSpanEm { get; set; }
+
+    /// <summary>役職名の右端から人名の左端までの空き（人名の字の大きさを 1 とした値）。</summary>
+    public decimal? RoleNameGapEm { get; set; }
+
+    /// <summary>役職名のベースラインの、人名のベースラインからの高さ（上を正、人名の字の大きさを 1 とした値）。</summary>
+    public decimal? RoleBaselineOffsetEm { get; set; }
+
+    /// <summary>役職名の揃え（<see cref="FontRoleAligns"/>）。役職が 1 つだけで決められなければ NULL。</summary>
+    public string? RoleAlign { get; set; }
+
     /// <summary>サイトに添える注記。</summary>
     public string? DisplayNote { get; set; }
 
     /// <summary>内部メモ（サイトに出さない）。</summary>
     public string? Notes { get; set; }
+}
+
+/// <summary>series_font_usages.role_align（縦に並ぶ役職名のどこがそろうか）のコード定数。</summary>
+public static class FontRoleAligns
+{
+    /// <summary>右揃え。</summary>
+    public const string Right = "RIGHT";
+
+    /// <summary>左揃え。</summary>
+    public const string Left = "LEFT";
+
+    /// <summary>中央揃え。</summary>
+    public const string Center = "CENTER";
+
+    /// <summary>均等割り（字数の違う役職名を同じ幅に割り付ける）。</summary>
+    public const string Justify = "JUSTIFY";
 }
 
 /// <summary>series_font_usages.usage_kind（書体を使う場所）のコード定数と、サイトでの並び・名前。</summary>

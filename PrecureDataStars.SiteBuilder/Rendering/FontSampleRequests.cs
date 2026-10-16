@@ -10,7 +10,7 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// （<see cref="SeriesFontUsage"/>）ごとに 1 枚描く。ルビの行は親字の見本の中に描くので、ルビの行だけの画像は作らない。
 /// <list type="bullet">
 ///   <item>サブタイトル：その作品の第 1 話のサブタイトルを、作品のテロップの組み方のまま描く（各話ページの画像と同じ作り置きを使う）。</item>
-///   <item>歌詞：「みなぎる勇気　あふれる希望」で統一し、同じ時期の歌詞のルビの行があれば「勇気」「希望」にその書体でルビを振る。</item>
+///   <item>歌詞：「女の子だって　暴れたい！」で統一し、同じ時期の歌詞のルビの行があれば「女」「子」「暴」にその書体でルビを振る。</item>
 ///   <item>クレジット：OP は「原作　東堂いづみ」、ED は「原画」と 3 人の人名。</item>
 /// </list>
 /// 描く書体（<c>fonts.render_font_name</c>）の無い書体は見本を描かない。
@@ -18,10 +18,10 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 public static class FontSampleRequests
 {
     /// <summary>歌詞の見本の文（ルビ付き）。</summary>
-    private const string LyricsSampleRubyHtml = "みなぎる<ruby>勇気<rt>ゆうき</rt></ruby>　あふれる<ruby>希望<rt>きぼう</rt></ruby>";
+    private const string LyricsSampleRubyHtml = "<ruby>女<rt>おんな</rt></ruby>の<ruby>子<rt>こ</rt></ruby>だって　<ruby>暴<rt>あば</rt></ruby>れたい！";
 
     /// <summary>歌詞の見本の文（ルビの行が無い作品）。</summary>
-    private const string LyricsSamplePlain = "みなぎる勇気　あふれる希望";
+    private const string LyricsSamplePlain = "女の子だって　暴れたい！";
 
     /// <summary>OP クレジットの見本の文。</summary>
     private const string OpCreditSample = "原作　東堂いづみ";

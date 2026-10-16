@@ -55,6 +55,10 @@ public sealed class FontsRepository : RepositoryBase
               size_px           AS SizePx,
               role_size_px      AS RoleSizePx,
               name_span_em      AS NameSpanEm,
+              role_span_em      AS RoleSpanEm,
+              role_name_gap_em  AS RoleNameGapEm,
+              role_baseline_offset_em AS RoleBaselineOffsetEm,
+              role_align        AS RoleAlign,
               display_note      AS DisplayNote,
               notes             AS Notes
             FROM series_font_usages

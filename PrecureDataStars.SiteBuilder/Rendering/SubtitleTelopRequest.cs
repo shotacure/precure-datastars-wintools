@@ -8,13 +8,15 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
 /// <summary>
-/// 1 話ぶんのサブタイトルのテロップ画像を描くための材料（置くページ・出力先・サブタイトル・書体・組み方）。
-/// エピソード詳細の生成と、ビルド冒頭の作り置きの確認（<see cref="SubtitleTelopPreflight"/>）が同じものを使う。
+/// テロップの体裁で描く画像 1 枚の材料（置くページ・出力先・文字列・書体・組み方）。1 話ぶんのサブタイトルのほか、
+/// フォントのページの書体の見本（<see cref="FontSampleRequests"/>）も同じ材料で描く。
+/// エピソード詳細・フォントのページの生成と、ビルド冒頭の作り置きの確認（<see cref="SubtitleTelopPreflight"/>）が同じものを使う。
 /// </summary>
 /// <param name="UrlPath">画像を置くページの URL パス（ピンポイントビルドの判定に使う）。</param>
-/// <param name="RelativePath">出力先（サイトルートからの相対パス。例 <c>subtitles/2004tv/42.png</c>）。</param>
-/// <param name="RubyHtml">ルビ付きのサブタイトル（<c>title_rich_html</c>、無ければ <c>title_text</c> をエスケープしたもの）。</param>
-/// <param name="FontFamily">作品の本編テロップの書体名（<c>series_subtitle_styles.font_subtitle</c>）。</param>
+/// <param name="RelativePath">出力先（サイトルートからの相対パス。例 <c>subtitles/2004tv/42.png</c>・<c>font-samples/2004tv/12.png</c>。
+/// 2 つ目の区切りは作品の slug）。</param>
+/// <param name="RubyHtml">ルビ付きの文字列（サブタイトルは <c>title_rich_html</c>、無ければ <c>title_text</c> をエスケープしたもの）。</param>
+/// <param name="FontFamily">描く書体名（作品の書体の表が指す <c>fonts.render_font_name</c>）。</param>
 /// <param name="Profile">作品ごとの組み方。</param>
 public sealed record SubtitleTelopRequest(
     string UrlPath,
@@ -40,7 +42,10 @@ public sealed record SubtitleTelopRequest(
             SubtitleTelopProfile.FromSeries(series));
     }
 
-    /// <summary>エピソード詳細を作る全話（シリーズ順 → 話数順）のうち、テロップ画像を描く話の材料を列挙する。</summary>
+    /// <summary>
+    /// エピソード詳細を作る全話（シリーズ順 → 話数順）のうちテロップ画像を描く話の材料と、
+    /// フォントのページの書体の見本の材料（<see cref="FontSampleRequests.EnumerateAll"/>）を列挙する。
+    /// </summary>
     public static IEnumerable<SubtitleTelopRequest> EnumerateAll(BuildContext ctx)
     {
         foreach (var series in ctx.Series)
@@ -51,6 +56,7 @@ public sealed record SubtitleTelopRequest(
                 if (For(series, ep, ctx) is { } request) yield return request;
             }
         }
+        foreach (var sample in FontSampleRequests.EnumerateAll(ctx)) yield return sample;
     }
 
     /// <summary>

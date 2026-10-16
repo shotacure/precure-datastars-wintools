@@ -172,6 +172,16 @@ public sealed class SiteBuilderPipeline
         new ArticlesGenerator(ctx, pageRenderer).Generate();
         reporter.EndSection();
 
+        // フォントのページ（/fonts/ ＋ /fonts/{書体}/）。作品の書体の表と書体のマスタ（BuildContext 由来）だけで作り、
+        // 書体の見本はサブタイトルのテロップ画像と同じ作り置きで描く。書体のデータがそろうまで本番では作らない
+        // （ナビからも PageRenderer.ProductionHiddenNavUrls で外す）。
+        if (!config.IsProductionMode)
+        {
+            reporter.BeginSection("fonts");
+            new FontsGenerator(ctx, pageRenderer).Generate();
+            reporter.EndSection();
+        }
+
         // 法律・運営情報系の補助ページ群。
         // プライバシーポリシー・免責事項・お問い合わせの 3 ページを生成し、
         // ヘッダナビ／フッタからのリンク導線で各ページに到達できるようにする。
@@ -321,7 +331,7 @@ public sealed class SiteBuilderPipeline
         }
 
         // OGP カードの書体に関する報告を、種類ごとに 1 度だけ出す。ブランド書体に無い文字の代替描画は情報として残し、
-        // 指定した書体（series_subtitle_styles.font_subtitle など）がこの PC に無い場合は、気づかずに別の書体で焼いてデプロイしないよう警告にする。
+        // 指定した書体（作品の書体の表が指す fonts.render_font_name など）がこの PC に無い場合は、気づかずに別の書体で焼いてデプロイしないよう警告にする。
         foreach (var (message, samplePath) in pageRenderer.OgCardGlyphWarnings)
         {
             if (message.StartsWith("書体「", StringComparison.Ordinal))

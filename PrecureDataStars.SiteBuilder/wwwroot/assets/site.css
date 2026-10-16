@@ -133,12 +133,31 @@ a:hover { text-decoration: underline; }
   color: var(--accent-pink);
   text-decoration: none;
 }
+/* データベースの項目とコラムの区切り。前の項目との間を広げ、細い縦線を置く。 */
+.site-nav a.nav-sep-before {
+  margin-left: 32px;
+  position: relative;
+}
+.site-nav a.nav-sep-before::before {
+  content: "";
+  position: absolute;
+  left: -17px;
+  top: 0.2em;
+  bottom: 0.2em;
+  border-left: 1px solid var(--border);
+}
 /* 現在地ハイライト。PageRenderer が URL パスから所属セクションを解決して is-active を立てる。 */
 .site-nav a.is-active {
   color: var(--accent-pink);
   font-weight: 600;
   border-bottom: 2px solid var(--accent-pink);
   padding-bottom: 2px;
+}
+/* モバイルオーバーレイ側の区切り（コラムの前に線を引いて間を空ける）。 */
+.mobile-nav-overlay-list li.nav-sep-before {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
 }
 /* モバイルオーバーレイ側の現在地ハイライト。 */
 .mobile-nav-overlay-list a.is-active {
@@ -7785,8 +7804,8 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 }
 
 /* ─────────── 免責事項：使用フォントの一覧 ─────────── */
-/* 「サブタイトル画像について」の折りたたみ。ライセンスごとの小見出し → フォントの箇条書き。
-   各行は「製品名（製品ページへのリンク）＋ Windows の書体名（薄く）」、2 行目に使っている作品。 */
+/* 「サブタイトル画像と書体の見本について」の折りたたみ。ライセンスごとの小見出し → フォントの箇条書き。
+   各行は「製品名（製品ページへのリンク）＋ Windows の書体名（薄く）」、2 行目に使っている作品と、その作品で使っている場所の注記。 */
 .subtitle-font-list { margin-top: 10px; }
 .subtitle-font-license {
   font-size: 0.95em;
@@ -7812,6 +7831,80 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 }
 .subtitle-font-ruby-note {
   font-size: 0.9em;
+  color: var(--muted);
+}
+
+/* ─────────── フォントのページ（/fonts/・/fonts/{書体}/） ─────────── */
+/* 書体の一覧：作り手ごとの小見出し → 書体のチップ（書体名＋使った作品の数）。 */
+.fonts-foundry-heading {
+  font-size: 1em;
+  margin: 14px 0 6px;
+}
+.fonts-chip-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.fonts-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  text-decoration: none;
+}
+.fonts-chip:hover { border-color: var(--accent-pink); text-decoration: none; }
+.fonts-chip-count {
+  font-size: 0.8em;
+  color: var(--muted);
+}
+/* 使う場所 ｜ 書体 ｜（字の大きさ）｜ 見本 の表。狭い画面では横にスクロールする。 */
+.fonts-table-wrap { overflow-x: auto; }
+.fonts-usage-table { width: 100%; }
+.fonts-usage-table td { vertical-align: middle; }
+.fonts-usage-place,
+.fonts-usage-size { white-space: nowrap; }
+.fonts-usage-table tr.is-ruby .fonts-usage-place { color: var(--muted); }
+.fonts-note {
+  margin-left: 0.2em;
+  font-size: 0.88em;
+  color: var(--muted);
+}
+.fonts-display-note {
+  display: block;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+/* 見本：テロップの体裁（白い字・黒いフチ）の透過画像。サブタイトル欄と同じ薄い地に、字が 22.5px に見える大きさで置く。 */
+.fonts-usage-sample { min-width: 12em; }
+.fonts-sample {
+  display: inline-block;
+  padding: 6px 10px;
+  background: #fafafa;
+  border-radius: 6px;
+  line-height: 0;
+}
+.fonts-sample img {
+  display: inline-block;
+  width: min(100%, calc(var(--telop-w) / 2));
+  height: auto;
+}
+.fonts-substitute-note,
+.fonts-no-sample {
+  display: block;
+  font-size: 0.82em;
+  color: var(--muted);
+}
+.fonts-sample-credit-note {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.fonts-substitute-lead {
+  font-size: 0.92em;
   color: var(--muted);
 }
 

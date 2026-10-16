@@ -299,15 +299,14 @@ CREATE TABLE `series` (
 DROP TABLE IF EXISTS `series_subtitle_styles`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
--- シリーズごとのサブタイトルの書体と、テロップ画像（エピソード詳細ページ・OGP カード）の組み方。series と 1 対 1。
+-- シリーズごとのサブタイトルのテロップ画像（エピソード詳細ページ・OGP カード）の組み方。series と 1 対 1。
+-- 書体はここには持たず、series_font_usages のサブタイトル・サブタイトルのルビの行（→ fonts.render_font_name）で引く。
 -- 行の無いシリーズ・NULL の列は既定値で組む（SiteBuilder の SubtitleTelopProfile）。
 CREATE TABLE `series_subtitle_styles` (
   `series_id` int NOT NULL,
-  `font_subtitle` varchar(64) DEFAULT NULL COMMENT 'サブタイトルの親字の書体（本編テロップの書体）',
   `subtitle_kerning` varchar(16) DEFAULT NULL COMMENT '字間の組み方 PROPORTIONAL / MONO（NULL は PROPORTIONAL）',
   `subtitle_letter_spacing_em` decimal(4,3) DEFAULT NULL COMMENT '親字の字間に足す空き（字の大きさ比、NULL は 0）',
   `subtitle_ruby_letter_spacing_em` decimal(4,3) DEFAULT NULL COMMENT '振り仮名の字間に足す空き（振り仮名の大きさ比、NULL は 0）',
-  `font_subtitle_ruby` varchar(64) DEFAULT NULL COMMENT 'サブタイトルの振り仮名の書体（NULL は親字と同じ）',
   `subtitle_ruby_size_ratio` decimal(4,3) DEFAULT NULL COMMENT '振り仮名の大きさ（親字比、NULL は 0.300）',
   `subtitle_ruby_raise_ratio` decimal(4,3) DEFAULT NULL COMMENT '振り仮名のベースラインの高さ（親字比、NULL は 1.040）',
   `subtitle_ruby_oblique_deg` decimal(4,1) DEFAULT NULL COMMENT '振り仮名の斜体の角度（度、NULL は 0）',
@@ -321,29 +320,76 @@ CREATE TABLE `series_subtitle_styles` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`series_id`),
   CONSTRAINT `fk_sss_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='シリーズごとのサブタイトルの書体とテロップ画像の組み方';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='シリーズごとのサブタイトルのテロップ画像の組み方';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `subtitle_fonts`
+-- Table structure for table `fonts`
 --
 
-DROP TABLE IF EXISTS `subtitle_fonts`;
+DROP TABLE IF EXISTS `fonts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
--- サブタイトルのテロップ画像（エピソード詳細のサブタイトル欄・OGP カードのサブタイトル）に使うフォントのマスタ。
--- font_name は series_subtitle_styles の font_subtitle / font_subtitle_ruby と同じ Windows の書体名で結び付く。
--- 免責事項ページの「使用フォントの一覧」の出どころ（行の無い書体は名前だけ・リンク無しで出る）。値は SQL で入れる。
-CREATE TABLE `subtitle_fonts` (
-  `font_name` varchar(64) NOT NULL COMMENT 'Windows の書体名（series_subtitle_styles の font_subtitle / font_subtitle_ruby と同じ文字列）',
-  `license_kind` varchar(16) NOT NULL COMMENT 'ライセンス区分 FONTWORKS_LETS / MORISAWA_FONTS',
-  `display_name` varchar(64) DEFAULT NULL COMMENT '提供元の書き方の製品名（NULL なら font_name をそのまま出す）',
-  `product_url` varchar(1024) DEFAULT NULL COMMENT '提供元の製品ページ（免責事項の使用フォント一覧でリンクする先）',
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`font_name`),
-  CONSTRAINT `ck_subtitle_fonts_license` CHECK (`license_kind` IN ('FONTWORKS_LETS', 'MORISAWA_FONTS'))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='サブタイトルのテロップ画像に使うフォントのマスタ';
+-- 作品で使われた書体のマスタ。1 行 = 放送で使われた書体 1 つ（書体名＋ウェイト）。書体の情報（フォントのページ・見本・
+-- サブタイトルのテロップ画像・免責事項の使用フォント一覧）はすべてここから引く。見本とテロップ画像は render_font_name（手元の書体）で描き、
+-- render_family_name・render_weight が放送の書体と違えば代用としてサイトに明記する（改刻版など代用でない描き方は render_note の文を添える）。
+-- 手元に無い書体は render_font_name を NULL にする。値は SQL で入れる。
+CREATE TABLE `fonts` (
+  `font_id`           int           NOT NULL AUTO_INCREMENT,
+  `foundry`           varchar(16)   NOT NULL COMMENT '書体の作り手 SHAKEN（写研）/ MORISAWA（モリサワ）/ FONTWORKS（フォントワークス）',
+  `family_name`       varchar(64)   NOT NULL COMMENT '書体名（提供元の書き方。「ファン蘭」「UD丸ゴ_ラージ」）',
+  `weight`            varchar(16)   DEFAULT NULL COMMENT 'ウェイト（「B」「DB」。ウェイトの無い書体・ウェイトの分からない書体は NULL）',
+  `render_font_name`  varchar(64)   DEFAULT NULL COMMENT '見本・テロップ画像を描く手元の書体（Windows の書体名）。NULL なら描かない',
+  `render_family_name` varchar(64)   DEFAULT NULL COMMENT '見本を描く書体の名前（NULL なら family_name と同じ）',
+  `render_weight`     varchar(16)   DEFAULT NULL COMMENT '描く書体のウェイト。書体名かウェイトが放送の書体と違えば代用としてサイトに明記する',
+  `render_note`       varchar(128)  DEFAULT NULL COMMENT '見本に添える注記（NULL なら、書体名かウェイトが違うときに「代用」の文を自動で出す）',
+  `license_kind`      varchar(16)   DEFAULT NULL COMMENT '描く書体のライセンス FONTWORKS_LETS / MORISAWA_FONTS',
+  `product_url`       varchar(1024) DEFAULT NULL COMMENT '提供元の製品ページ（モリサワ・フォントワークス）',
+  `archive_url`       varchar(1024) DEFAULT NULL COMMENT '写研アーカイブの書体のページ',
+  `notes`             text          COMMENT '内部メモ（サイトに出さない）',
+  `created_at`        timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`        timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`font_id`),
+  UNIQUE KEY `uq_fonts_family_weight` (`foundry`, `family_name`, `weight`),
+  CONSTRAINT `ck_fonts_foundry` CHECK (`foundry` IN ('SHAKEN', 'MORISAWA', 'FONTWORKS')),
+  CONSTRAINT `ck_fonts_license` CHECK (`license_kind` IS NULL OR `license_kind` IN ('FONTWORKS_LETS', 'MORISAWA_FONTS'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='作品で使われた書体のマスタ';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `series_font_usages`
+--
+
+DROP TABLE IF EXISTS `series_font_usages`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+-- 作品のどこにどの書体を使ったか。1 行 = 作品 × 使う場所 × 時期（× 本放送だけの範囲）。字の大きさは画面の高さ 1080 換算の px（仮想ボディ）、
+-- クレジットは人名（size_px）と役職名（role_size_px）。サブタイトルのテロップ画像の書体もここのサブタイトルの行から引く。値は SQL で入れる。
+CREATE TABLE `series_font_usages` (
+  `usage_id`           int               NOT NULL AUTO_INCREMENT,
+  `series_id`          int               NOT NULL,
+  `usage_kind`         varchar(24)       NOT NULL COMMENT '使う場所 OP_CREDIT / OP_LYRICS / OP_LYRICS_RUBY / SUBTITLE / SUBTITLE_RUBY / ED_CREDIT / ED_LYRICS / ED_LYRICS_RUBY',
+  `period_no`          tinyint unsigned  NOT NULL DEFAULT 1 COMMENT '時期（1 = 前期・通期、2 = 後期 …）',
+  `is_broadcast_only`  tinyint(1)        NOT NULL DEFAULT 0 COMMENT '本放送だけの書体なら 1（BD などは通常の書体）',
+  `first_episode_no`   smallint unsigned DEFAULT NULL COMMENT '使った最初の話（NULL は時期の全話）',
+  `last_episode_no`    smallint unsigned DEFAULT NULL COMMENT '使った最後の話（NULL は時期の全話）',
+  `font_id`            int               NOT NULL,
+  `is_weight_unknown`  tinyint(1)        NOT NULL DEFAULT 0 COMMENT 'ウェイトが決めきれていなければ 1（サイトに「ウェイト不明」と出す）',
+  `modification_note`  varchar(64)       DEFAULT NULL COMMENT '書体に手を加えた旨（「太め加工」など。サイトに出す）',
+  `size_px`            decimal(5,1)      DEFAULT NULL COMMENT '字の大きさ（画面の高さ 1080 換算の px、仮想ボディ）。クレジットは人名',
+  `role_size_px`       decimal(5,1)      DEFAULT NULL COMMENT 'クレジットの役職名の大きさ（同上）',
+  `name_span_em`       decimal(3,2)      DEFAULT NULL COMMENT 'クレジットの人名を割り付ける幅（字の大きさを 1 とした字数。五字取りなら 5.00）',
+  `display_note`       varchar(255)      DEFAULT NULL COMMENT 'サイトに添える注記',
+  `notes`              text              COMMENT '内部メモ（サイトに出さない）',
+  `created_at`         timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`         timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`usage_id`),
+  KEY `ix_sfu_series` (`series_id`, `usage_kind`, `period_no`),
+  KEY `ix_sfu_font` (`font_id`),
+  CONSTRAINT `fk_sfu_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_sfu_font`   FOREIGN KEY (`font_id`)   REFERENCES `fonts`  (`font_id`)   ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `ck_sfu_usage_kind` CHECK (`usage_kind` IN ('OP_CREDIT', 'OP_LYRICS', 'OP_LYRICS_RUBY', 'SUBTITLE', 'SUBTITLE_RUBY', 'ED_CREDIT', 'ED_LYRICS', 'ED_LYRICS_RUBY'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='作品のどこにどの書体を使ったか';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

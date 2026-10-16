@@ -162,7 +162,7 @@ public sealed record OgCardSpec(
     public float StatScale { get; init; }
 
     /// <summary>
-    /// 見出しに使う書体の名前（<c>series_subtitle_styles.font_subtitle</c>。「FOT-ハミング ProN B」のように Windows に見える書体名）。
+    /// 見出しに使う書体の名前（<c>series_font_usages</c> のサブタイトルの行が指す <c>fonts.render_font_name</c>。「FOT-ハミング ProN B」のように Windows に見える書体名）。
     /// エピソードのサブタイトルを、その作品の本編のテロップと同じ書体で組むためのもので、
     /// インストールされていなければ既定の見出し書体で組んで警告を出す。空なら既定の見出し書体。
     /// </summary>
@@ -220,7 +220,7 @@ public sealed record OgCardSpec(
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public string EpisodeTitleRubyHtml { get; init; } = "";
 
-    /// <summary><see cref="EpisodeTitleRubyHtml"/> を組む書体の名前（<c>series_subtitle_styles.font_subtitle</c>）。空なら既定の見出し書体。</summary>
+    /// <summary><see cref="EpisodeTitleRubyHtml"/> を組む書体の名前（<c>series_font_usages</c> のサブタイトルの行が指す <c>fonts.render_font_name</c>）。空なら既定の見出し書体。</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public string EpisodeTitleFontFamily { get; init; } = "";
 

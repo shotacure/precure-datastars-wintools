@@ -118,7 +118,7 @@ public sealed partial class OgCardRenderer
     /// サブタイトルをテロップの体裁で描き、PNG に書き出す。描く字が無ければ何も書かずに null を返す。
     /// </summary>
     /// <param name="rubyHtml">ルビ付きのサブタイトル（<c>title_rich_html</c>）。</param>
-    /// <param name="fontFamily">作品の本編テロップの書体名（<c>series_subtitle_styles.font_subtitle</c>）。空か見つからなければ既定の見出し書体。</param>
+    /// <param name="fontFamily">作品の本編テロップの書体名（<c>series_font_usages</c> のサブタイトルの行が指す <c>fonts.render_font_name</c>）。空か見つからなければ既定の見出し書体。</param>
     /// <param name="profile">作品ごとの組み方（字間、振り仮名の書体・斜体・大きさと高さ・はみ出し方、行間）。</param>
     /// <param name="outputFilePath">書き出し先の絶対パス（拡張子 .png）。</param>
     /// <returns>書き出した画像の大きさ（画素）。</returns>

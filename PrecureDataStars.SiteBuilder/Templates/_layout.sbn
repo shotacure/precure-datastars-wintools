@@ -174,7 +174,7 @@ gtag('config', '{{ Ga4MeasurementId }}');
     <ul class="mobile-nav-overlay-list">
       <li><a href="/">ホーム</a></li>
       {{~ for n in NavItems ~}}
-      <li><a href="{{ n.Url }}"{{ if n.IsActive }} class="is-active" aria-current="page"{{ end }}>{{ n.Label | html.escape }}</a></li>
+      <li{{ if n.IsSeparatedBefore }} class="nav-sep-before"{{ end }}><a href="{{ n.Url }}"{{ if n.IsActive }} class="is-active" aria-current="page"{{ end }}>{{ n.Label | html.escape }}</a></li>
       {{~ end ~}}
     </ul>
     {{## このページのセクション一覧（モバイル用）。
@@ -279,10 +279,11 @@ gtag('config', '{{ Ga4MeasurementId }}');
          ランディング経由で誘導（人物・企業・団体・声優・役職を作り手として一箇所に集約）。
          人物詳細 /people/{名前}/ ・企業詳細 /companies/{名前}/ の内部URLは変えない。 ##}}
   {{## 項目列は LayoutModel.NavItems。現在ページの所属セクション（楽曲・商品は「音楽」、
-       人物・企業は「クリエイター」等の配下解決込み）に is-active が立ち、CSS が現在地を示す。 ##}}
+       人物・企業は「クリエイター」等の配下解決込み）に is-active が立ち、CSS が現在地を示す。
+       IsSeparatedBefore の項目（コラム）は nav-sep-before で前に区切りを入れる。 ##}}
   <nav class="container site-header-bottom site-nav" aria-label="グローバルナビ">
     {{~ for n in NavItems ~}}
-    <a href="{{ n.Url }}"{{ if n.IsActive }} class="is-active" aria-current="page"{{ end }}>{{ n.Label | html.escape }}</a>
+    <a href="{{ n.Url }}"{{ if n.IsActive || n.IsSeparatedBefore }} class="{{ if n.IsActive }}is-active{{ end }}{{ if n.IsActive && n.IsSeparatedBefore }} {{ end }}{{ if n.IsSeparatedBefore }}nav-sep-before{{ end }}"{{ end }}{{ if n.IsActive }} aria-current="page"{{ end }}>{{ n.Label | html.escape }}</a>
     {{~ end ~}}
   </nav>
 </header>

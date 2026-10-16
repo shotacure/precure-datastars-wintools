@@ -62,7 +62,7 @@ public static class SiteDataLoader
         var productsRepo = new ProductsRepository(factory);
         var bgmSessionsRepo = new BgmSessionsRepository(factory);
         var magazineIssuesRepo = new MagazineIssuesRepository(factory);
-        var subtitleFontsRepo = new SubtitleFontsRepository(factory);
+        var fontsRepo = new FontsRepository(factory);
 
         // シリーズ：論理削除済を除く全件。GetAllAsync は start_date, series_id 順で返す。
         var seriesAll = await seriesRepo.GetAllAsync(ct).ConfigureAwait(false);
@@ -130,11 +130,12 @@ public static class SiteDataLoader
         var magazineIssues = await magazineIssuesRepo.GetAllAsync(ct).ConfigureAwait(false);
         logger.Info($"magazine_issues: {magazineIssues.Count} 号");
 
-        // サブタイトルのテロップ画像に使うフォントのマスタ：免責事項の「使用フォントの一覧」で、
-        // 作品ごとの書体名（series_subtitle_styles）から製品名・製品ページ・ライセンスを引く。
-        var subtitleFonts = await subtitleFontsRepo.GetAllAsync(ct).ConfigureAwait(false);
-        var subtitleFontByName = subtitleFonts.ToDictionary(f => f.FontName, f => f, StringComparer.Ordinal);
-        logger.Info($"subtitle_fonts: {subtitleFonts.Count} 書体");
+        // 作品で使われた書体のマスタと、作品のどこにどの書体を使ったか：書体のページ・見本の画像・
+        // 免責事項の「使用フォントの一覧」がここから引く（サブタイトルのテロップ画像の書体は SeriesRepository が同じ表から引く）。
+        var fonts = await fontsRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var fontById = fonts.ToDictionary(f => f.FontId);
+        var fontUsages = await fontsRepo.GetAllUsagesAsync(ct).ConfigureAwait(false);
+        logger.Info($"fonts: {fonts.Count} 書体 / series_font_usages: {fontUsages.Count} 行");
 
         // サブタイトル解禁時刻の事前計算（DB アクセスなし。前話の on_air_at から算出するだけ）。
         // /series/{slug}/{n}/・/episodes/・ホーム・統計 7 系統・検索インデックスなど、サブタイトルが
@@ -343,7 +344,8 @@ public static class SiteDataLoader
             EpisodesBySeries = episodesBySeries,
             EpisodeById = episodeById,
             MagazineIssues = magazineIssues,
-            SubtitleFontByName = subtitleFontByName,
+            FontById = fontById,
+            FontUsages = fontUsages,
             PartTypeByCode = partTypeByCode,
             SeriesKindByCode = seriesKindByCode,
             SeriesIdBySlug = seriesIdBySlug,

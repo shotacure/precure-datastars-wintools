@@ -100,8 +100,9 @@ public sealed class Series
     public ushort? VodIntro { get; set; }
 
     /// <summary>
-    /// サブタイトル表示用フォント名（<c>series_subtitle_styles.font_subtitle</c>。行が無ければ NULL）。
-    /// これ以下のサブタイトルの組み方も同じテーブルから読み、<c>SeriesRepository</c> の INSERT / UPDATE では書き換えない。
+    /// サブタイトルを描く書体名（作品の書体の表 <c>series_font_usages</c> のサブタイトルの行が指す
+    /// <c>fonts.render_font_name</c>。行が無ければ NULL）。
+    /// これ以下のサブタイトルの組み方は <c>series_subtitle_styles</c> から読み、<c>SeriesRepository</c> の INSERT / UPDATE では書き換えない。
     /// </summary>
     public string? FontSubtitle { get; set; }
 
@@ -119,7 +120,10 @@ public sealed class Series
     /// <summary>振り仮名の字と字のあいだに足す空き（振り仮名の大きさに対する比）。NULL なら 0。</summary>
     public decimal? SubtitleRubyLetterSpacingEm { get; set; }
 
-    /// <summary>振り仮名の書体名（インストール済み書体の名前）。NULL なら親字と同じ書体。</summary>
+    /// <summary>
+    /// 振り仮名を描く書体名（<c>series_font_usages</c> のサブタイトルのルビの行が指す <c>fonts.render_font_name</c>）。
+    /// 親字と同じ書体か行が無ければ NULL（親字と同じ書体で描く）。
+    /// </summary>
     public string? FontSubtitleRuby { get; set; }
 
     /// <summary>振り仮名の大きさ（親字の大きさに対する比）。NULL なら 0.300。</summary>

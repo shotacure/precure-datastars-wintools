@@ -45,11 +45,16 @@ public sealed class BuildContext
     public required IReadOnlyList<MagazineIssue> MagazineIssues { get; init; }
 
     /// <summary>
-    /// サブタイトルのテロップ画像に使うフォントのマスタ（Windows の書体名 → モデル）。
-    /// 免責事項の「使用フォントの一覧」で、作品ごとの書体名（<see cref="Series.FontSubtitle"/> /
-    /// <see cref="Series.FontSubtitleRuby"/>）から製品名・製品ページ・ライセンスを引く。行の無い書体は名前だけで出る。
+    /// 作品で使われた書体のマスタ（font_id → モデル）。書体のページ・見本の画像・免責事項の「使用フォントの一覧」が引く。
     /// </summary>
-    public required IReadOnlyDictionary<string, SubtitleFont> SubtitleFontByName { get; init; }
+    public required IReadOnlyDictionary<int, FontFace> FontById { get; init; }
+
+    /// <summary>
+    /// 作品のどこにどの書体を使ったか（全行。作品・時期・本放送だけかどうか・最初の話の順）。
+    /// サブタイトルのテロップ画像の書体は <see cref="Series.FontSubtitle"/> / <see cref="Series.FontSubtitleRuby"/> に
+    /// 同じ表から解決済みで入っている。
+    /// </summary>
+    public required IReadOnlyList<SeriesFontUsage> FontUsages { get; init; }
 
     /// <summary>パート種別マスタ（part_type → モデル）。</summary>
     public required IReadOnlyDictionary<string, PartType> PartTypeByCode { get; init; }

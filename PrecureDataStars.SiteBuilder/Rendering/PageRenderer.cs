@@ -480,18 +480,32 @@ public sealed class PageRenderer
             layoutMeta.NavItems = BuildNavItems(canonicalPath);
     }
 
-    /// <summary>グローバルナビの定義（ラベルと URL の並び）。ヘッダ・モバイルオーバーレイ共通。</summary>
-    private static readonly (string Label, string Url)[] GlobalNavDefinition =
+    /// <summary>
+    /// グローバルナビの定義（ラベル・URL・前に区切りを入れるか）。ヘッダ・モバイルオーバーレイ共通。
+    /// ラベルはナビ用の短い呼び名（キャラクター → キャラ、書籍 → 本）。データベースの項目のあとに区切りを入れてコラムを置く。
+    /// </summary>
+    private static readonly (string Label, string Url, bool SeparatedBefore)[] GlobalNavDefinition =
     {
-        ("シリーズ", "/series/"),
-        ("プリキュア", "/precures/"),
-        ("キャラクター", "/characters/"),
-        ("音楽", "/music/"),
-        ("書籍", "/books/"),
-        ("クリエイター", "/creators/"),
-        ("統計", "/stats/"),
-        ("コラム", "/articles/"),
-        ("このサイトについて", "/about/"),
+        ("シリーズ", "/series/", false),
+        ("プリキュア", "/precures/", false),
+        ("キャラ", "/characters/", false),
+        ("音楽", "/music/", false),
+        ("本", "/books/", false),
+        ("クリエイター", "/creators/", false),
+        ("統計", "/stats/", false),
+        ("フォント", "/fonts/", false),
+        ("このサイトについて", "/about/", false),
+        ("コラム", "/articles/", true),
+    };
+
+    /// <summary>
+    /// 本番モードのときだけグローバルナビから外す URL の集合。フォントのページは書体のデータがそろうまで、
+    /// 本番では生成自体を行わない（<see cref="Pipeline.SiteBuilderPipeline"/> 側でスキップ）ため、ナビからも外す。
+    /// テストモードでは全項目を出す。
+    /// </summary>
+    private static readonly HashSet<string> ProductionHiddenNavUrls = new(StringComparer.Ordinal)
+    {
+        "/fonts/",
     };
 
     /// <summary>
@@ -515,12 +529,18 @@ public sealed class PageRenderer
               || urlPath.StartsWith("/people/", StringComparison.Ordinal)
               || urlPath.StartsWith("/companies/", StringComparison.Ordinal)) activeUrl = "/creators/";
         else if (urlPath.StartsWith("/stats/", StringComparison.Ordinal)) activeUrl = "/stats/";
+        else if (urlPath.StartsWith("/fonts/", StringComparison.Ordinal)) activeUrl = "/fonts/";
         else if (urlPath.StartsWith("/articles/", StringComparison.Ordinal)) activeUrl = "/articles/";
         else if (urlPath.StartsWith("/about/", StringComparison.Ordinal)) activeUrl = "/about/";
 
         var items = new List<NavItem>(GlobalNavDefinition.Length);
-        foreach (var (label, url) in GlobalNavDefinition)
-            items.Add(new NavItem { Label = label, Url = url, IsActive = url == activeUrl });
+        foreach (var (label, url, separatedBefore) in GlobalNavDefinition)
+        {
+            // 本番モードでは暫定非表示セクションをナビから外す（テストでは全部出す）。
+            if (_config.IsProductionMode && ProductionHiddenNavUrls.Contains(url))
+                continue;
+            items.Add(new NavItem { Label = label, Url = url, IsActive = url == activeUrl, IsSeparatedBefore = separatedBefore });
+        }
         return items;
     }
 

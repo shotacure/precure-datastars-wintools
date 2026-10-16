@@ -59,11 +59,21 @@ public sealed class SeriesRepository : RepositoryBase
               film_rating_no                AS FilmRatingNo,
               film_cj_mark                  AS FilmCjMark,
               vod_intro        AS VodIntro,
-              sss.font_subtitle    AS FontSubtitle,
+              -- サブタイトルの書体は作品の書体の表（series_font_usages）から、描く手元の書体（fonts.render_font_name）で引く。
+              (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE' AND u.is_broadcast_only = 0
+                ORDER BY u.period_no, u.usage_id LIMIT 1) AS FontSubtitle,
               sss.subtitle_kerning              AS SubtitleKerning,
               sss.subtitle_letter_spacing_em    AS SubtitleLetterSpacingEm,
               sss.subtitle_ruby_letter_spacing_em AS SubtitleRubyLetterSpacingEm,
-              sss.font_subtitle_ruby            AS FontSubtitleRuby,
+              -- 振り仮名の書体は、親字と同じなら NULL（親字の書体で描く）。
+              NULLIF(
+                (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                  WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE_RUBY' AND u.is_broadcast_only = 0
+                  ORDER BY u.period_no, u.usage_id LIMIT 1),
+                (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                  WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE' AND u.is_broadcast_only = 0
+                  ORDER BY u.period_no, u.usage_id LIMIT 1)) AS FontSubtitleRuby,
               sss.subtitle_ruby_size_ratio      AS SubtitleRubySizeRatio,
               sss.subtitle_ruby_raise_ratio     AS SubtitleRubyRaiseRatio,
               sss.subtitle_ruby_oblique_deg     AS SubtitleRubyObliqueDeg,
@@ -117,11 +127,21 @@ public sealed class SeriesRepository : RepositoryBase
               film_rating_no                AS FilmRatingNo,
               film_cj_mark                  AS FilmCjMark,
               vod_intro        AS VodIntro,
-              sss.font_subtitle    AS FontSubtitle,
+              -- サブタイトルの書体は作品の書体の表（series_font_usages）から、描く手元の書体（fonts.render_font_name）で引く。
+              (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE' AND u.is_broadcast_only = 0
+                ORDER BY u.period_no, u.usage_id LIMIT 1) AS FontSubtitle,
               sss.subtitle_kerning              AS SubtitleKerning,
               sss.subtitle_letter_spacing_em    AS SubtitleLetterSpacingEm,
               sss.subtitle_ruby_letter_spacing_em AS SubtitleRubyLetterSpacingEm,
-              sss.font_subtitle_ruby            AS FontSubtitleRuby,
+              -- 振り仮名の書体は、親字と同じなら NULL（親字の書体で描く）。
+              NULLIF(
+                (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                  WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE_RUBY' AND u.is_broadcast_only = 0
+                  ORDER BY u.period_no, u.usage_id LIMIT 1),
+                (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                  WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE' AND u.is_broadcast_only = 0
+                  ORDER BY u.period_no, u.usage_id LIMIT 1)) AS FontSubtitleRuby,
               sss.subtitle_ruby_size_ratio      AS SubtitleRubySizeRatio,
               sss.subtitle_ruby_raise_ratio     AS SubtitleRubyRaiseRatio,
               sss.subtitle_ruby_oblique_deg     AS SubtitleRubyObliqueDeg,
@@ -176,11 +196,21 @@ public sealed class SeriesRepository : RepositoryBase
               film_rating_no                AS FilmRatingNo,
               film_cj_mark                  AS FilmCjMark,
               vod_intro        AS VodIntro,
-              sss.font_subtitle    AS FontSubtitle,
+              -- サブタイトルの書体は作品の書体の表（series_font_usages）から、描く手元の書体（fonts.render_font_name）で引く。
+              (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE' AND u.is_broadcast_only = 0
+                ORDER BY u.period_no, u.usage_id LIMIT 1) AS FontSubtitle,
               sss.subtitle_kerning              AS SubtitleKerning,
               sss.subtitle_letter_spacing_em    AS SubtitleLetterSpacingEm,
               sss.subtitle_ruby_letter_spacing_em AS SubtitleRubyLetterSpacingEm,
-              sss.font_subtitle_ruby            AS FontSubtitleRuby,
+              -- 振り仮名の書体は、親字と同じなら NULL（親字の書体で描く）。
+              NULLIF(
+                (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                  WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE_RUBY' AND u.is_broadcast_only = 0
+                  ORDER BY u.period_no, u.usage_id LIMIT 1),
+                (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                  WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE' AND u.is_broadcast_only = 0
+                  ORDER BY u.period_no, u.usage_id LIMIT 1)) AS FontSubtitleRuby,
               sss.subtitle_ruby_size_ratio      AS SubtitleRubySizeRatio,
               sss.subtitle_ruby_raise_ratio     AS SubtitleRubyRaiseRatio,
               sss.subtitle_ruby_oblique_deg     AS SubtitleRubyObliqueDeg,

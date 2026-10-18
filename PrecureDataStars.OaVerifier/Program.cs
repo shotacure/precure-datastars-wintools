@@ -32,7 +32,8 @@ internal static class Program
         var seriesRepo = new SeriesRepository(factory);
         var episodesRepo = new EpisodesRepository(factory);
         var partsRepo = new EpisodePartsRepository(factory);
+        var partTypesRepo = new PartTypesRepository(factory);
 
-        Application.Run(new MainForm(seriesRepo, episodesRepo, partsRepo));
+        Application.Run(new MainForm(seriesRepo, episodesRepo, partsRepo, partTypesRepo));
     }
 }

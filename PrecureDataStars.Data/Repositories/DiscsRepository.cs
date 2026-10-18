@@ -144,28 +144,6 @@ public sealed class DiscsRepository : RepositoryBase
         return await QueryListAsync<Disc>(sql, new { cddbId }, ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// CD-DA 用の TOC 曖昧照合。総トラック数完全一致 + 総尺 ±tolerance フレーム。
-    /// MCN や DiscID が取れないケースのフォールバックとして使用する。対象は media_format が
-    /// 'CD' または 'CD_ROM' の行のみ（BD/DVD は total_tracks / total_length_frames が NULL のため自動的に除外）。
-    /// CD 用は本メソッド <c>FindByTocFuzzyForCdAsync</c>、動画メディア用は
-    /// <see cref="FindByTocFuzzyForVideoAsync"/> が担う。
-    /// </summary>
-    public async Task<IReadOnlyList<Disc>> FindByTocFuzzyForCdAsync(byte totalTracks, uint totalLengthFrames, uint tolerance, CancellationToken ct = default)
-    {
-        string sql = $"""
-            SELECT {SelectColumns}
-            FROM discs
-            WHERE is_deleted = 0
-              AND total_tracks = @totalTracks
-              AND total_length_frames BETWEEN @lo AND @hi;
-            """;
-        uint lo = totalLengthFrames > tolerance ? totalLengthFrames - tolerance : 0;
-        uint hi = totalLengthFrames + tolerance;
-
-        return await QueryListAsync<Disc>(sql, new { totalTracks, lo, hi }, ct).ConfigureAwait(false);
-    }
-
     /// <summary>BD/DVD 用の TOC 曖昧照合。チャプター数完全一致 + 総尺 ±tolerance ミリ秒。 BD/DVD は MCN / CDDB-ID が取れないためフォールバックとしてのみ使う照合手段。 対象は media_format が 'BD' または 'DVD' の行のみ（CD は num_chapters / total_length_ms が NULL のため自動的に除外）。</summary>
     public async Task<IReadOnlyList<Disc>> FindByTocFuzzyForVideoAsync(ushort numChapters, ulong totalLengthMs, ulong tolerance, CancellationToken ct = default)
     {

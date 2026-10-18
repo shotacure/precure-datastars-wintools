@@ -11,7 +11,8 @@
 --   series_font_usages  作品のどこにどの書体を使ったか。1 行 = 作品 × 使う場所 × 時期（× 本放送だけの範囲）。
 --                       使う場所は OP クレジット／OP 歌詞／OP 歌詞のルビ／サブタイトル／サブタイトルのルビ／
 --                       ED クレジット／ED 歌詞／ED 歌詞のルビ。字の大きさは画面の高さ 1080 換算の px（仮想ボディ）で、
---                       クレジットは人名（size_px）と役職名（role_size_px）を分けて持ち、人名を割り付ける幅（name_span_em。五字取りなら 5）と、役職名の組み（字取り・人名との空き・ベースラインのずれ・揃え）も持つ。
+--                       クレジットは人名（size_px）と役職名（role_size_px）を分けて持ち、組み方（画面の中の位置・役職名と人名の並び・人名の字取りと行送り・
+--                       声の出演の組み）を JSON 1 列（layout）で持つ。
 --
 -- 移し替え：
 --   1. subtitle_fonts の各行を fonts に写す（書体名・ウェイトの整理はデータ側で行う）。
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS `fonts` (
   `font_id`           int           NOT NULL AUTO_INCREMENT,
   `foundry`           varchar(16)   NOT NULL COMMENT '書体の作り手 SHAKEN（写研）/ MORISAWA（モリサワ）/ FONTWORKS（フォントワークス）',
   `family_name`       varchar(64)   NOT NULL COMMENT '書体名（提供元の書き方。「ファン蘭」「UD丸ゴ_ラージ」）',
+  `family_group`      varchar(64)   DEFAULT NULL COMMENT '同じページにまとめる書体の名前（写研の「石井中太ゴシック」「石井太ゴシック」を「石井ゴシック」に。NULL なら family_name）',
   `weight`            varchar(16)   DEFAULT NULL COMMENT 'ウェイト（「B」「DB」。ウェイトの無い書体・ウェイトの分からない書体は NULL）',
   `render_font_name`  varchar(64)   DEFAULT NULL COMMENT '見本・テロップ画像を描く手元の書体（Windows の書体名）。NULL なら描かない',
   `render_family_name` varchar(64)   DEFAULT NULL COMMENT '見本を描く書体の名前（NULL なら family_name と同じ）',
@@ -49,6 +51,8 @@ CREATE TABLE IF NOT EXISTS `series_font_usages` (
   `series_id`          int               NOT NULL,
   `usage_kind`         varchar(24)       NOT NULL COMMENT '使う場所 OP_CREDIT / OP_LYRICS / OP_LYRICS_RUBY / SUBTITLE / SUBTITLE_RUBY / ED_CREDIT / ED_LYRICS / ED_LYRICS_RUBY',
   `period_no`          tinyint unsigned  NOT NULL DEFAULT 1 COMMENT '時期（1 = 前期・通期、2 = 後期 …）',
+  `variant_no`         tinyint unsigned  NOT NULL DEFAULT 1 COMMENT '色違いの番号（同じ場所・時期で体裁の色だけが違うもの。1 から）',
+  `variant_label`      varchar(32)       DEFAULT NULL COMMENT '色違いの呼び名（「ピンク」「水色」など。サイトに出す）',
   `is_broadcast_only`  tinyint(1)        NOT NULL DEFAULT 0 COMMENT '本放送だけの書体なら 1（BD などは通常の書体）',
   `first_episode_no`   smallint unsigned DEFAULT NULL COMMENT '使った最初の話（NULL は時期の全話）',
   `last_episode_no`    smallint unsigned DEFAULT NULL COMMENT '使った最後の話（NULL は時期の全話）',
@@ -56,12 +60,13 @@ CREATE TABLE IF NOT EXISTS `series_font_usages` (
   `is_weight_unknown`  tinyint(1)        NOT NULL DEFAULT 0 COMMENT 'ウェイトが決めきれていなければ 1（サイトに「ウェイト不明」と出す）',
   `modification_note`  varchar(64)       DEFAULT NULL COMMENT '書体に手を加えた旨（「太め加工」など。サイトに出す）',
   `size_px`            decimal(5,1)      DEFAULT NULL COMMENT '字の大きさ（画面の高さ 1080 換算の px、仮想ボディ）。クレジットは人名',
+  `oblique_deg`        decimal(3,1)      DEFAULT NULL COMMENT '斜体の角度（度、右に倒す。NULL は 0）',
+  `ruby_raise_em`          decimal(4,3)      DEFAULT NULL COMMENT 'ルビのベースラインの、親字のベースラインからの高さ（親字の大きさに対する比）',
+  `ruby_letter_spacing_em` decimal(4,3)      DEFAULT NULL COMMENT 'ルビの字と字の間に足す空き（ルビの大きさに対する比）',
+  `ruby_grouping`          varchar(8)        DEFAULT NULL COMMENT 'ルビの置き方 MONO / JUKUGO / SPREAD',
   `role_size_px`       decimal(5,1)      DEFAULT NULL COMMENT 'クレジットの役職名の大きさ（同上）',
-  `name_span_em`       decimal(3,2)      DEFAULT NULL COMMENT 'クレジットの人名を割り付ける幅（字の大きさを 1 とした字数。五字取りなら 5.00）',
-  `role_span_em`            decimal(3,2)      DEFAULT NULL COMMENT 'クレジットの役職名を割り付ける幅（役職名の字の大きさを 1 とした字数）',
-  `role_name_gap_em`        decimal(4,2)      DEFAULT NULL COMMENT '役職名の右端から人名の左端までの空き（人名の字の大きさを 1 とした値）',
-  `role_baseline_offset_em` decimal(4,2)      DEFAULT NULL COMMENT '役職名のベースラインの人名のベースラインからの高さ（上を正、人名の字の大きさを 1 とした値）',
-  `role_align`              varchar(16)       DEFAULT NULL COMMENT '役職名の揃え RIGHT / LEFT / CENTER / JUSTIFY（縦に並ぶ役職名のどこがそろうか。役職が 1 つだけなら NULL）',
+  `layout`             json              DEFAULT NULL COMMENT 'クレジットの組み方（画面の中の位置・役職名と人名の並び・人名の字取りと行送り・声の出演の組み。{version, screen, role, name, cast}。値は人名の字の大きさに対する比、画面の位置は画面の幅・高さに対する比）',
+  `decoration`         json              DEFAULT NULL COMMENT '装飾（字の色・フチ・影・光彩。{version, fill, join, layers:[下から重ねる層]}。値は字の大きさに対する比。NULL はテロップの既定の体裁）',
   `display_note`       varchar(255)      DEFAULT NULL COMMENT 'サイトに添える注記',
   `notes`              text              COMMENT '内部メモ（サイトに出さない）',
   `created_at`         timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -71,7 +76,9 @@ CREATE TABLE IF NOT EXISTS `series_font_usages` (
   KEY `ix_sfu_font` (`font_id`),
   CONSTRAINT `fk_sfu_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_sfu_font`   FOREIGN KEY (`font_id`)   REFERENCES `fonts`  (`font_id`)   ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `ck_sfu_role_align` CHECK (`role_align` IS NULL OR `role_align` IN ('RIGHT', 'LEFT', 'CENTER', 'JUSTIFY')),
+  CONSTRAINT `ck_sfu_layout` CHECK (`layout` IS NULL OR json_valid(`layout`)),
+  CONSTRAINT `ck_sfu_decoration` CHECK (`decoration` IS NULL OR json_valid(`decoration`)),
+  CONSTRAINT `ck_sfu_ruby_grouping` CHECK (`ruby_grouping` IS NULL OR `ruby_grouping` IN ('MONO', 'JUKUGO', 'SPREAD')),
   CONSTRAINT `ck_sfu_usage_kind` CHECK (`usage_kind` IN ('OP_CREDIT', 'OP_LYRICS', 'OP_LYRICS_RUBY', 'SUBTITLE', 'SUBTITLE_RUBY', 'ED_CREDIT', 'ED_LYRICS', 'ED_LYRICS_RUBY'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='作品のどこにどの書体を使ったか';
 
@@ -89,26 +96,76 @@ BEGIN
       ADD COLUMN `render_note` varchar(128) DEFAULT NULL COMMENT '見本に添える注記（NULL なら、書体名かウェイトが違うときに「代用」の文を自動で出す）' AFTER `render_weight`;
   END IF;
 
-  -- 0b. 先にこのマイグレーションで series_font_usages を作った DB には、あとから足した人名の字取りの列を足す。
+  -- 0d. 先にこのマイグレーションで series_font_usages を作った DB には、あとから足した斜体の角度の列を足す。
   IF NOT EXISTS (
     SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'series_font_usages' AND COLUMN_NAME = 'name_span_em'
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'series_font_usages' AND COLUMN_NAME = 'oblique_deg'
   ) THEN
     ALTER TABLE `series_font_usages`
-      ADD COLUMN `name_span_em` decimal(3,2) DEFAULT NULL COMMENT 'クレジットの人名を割り付ける幅（字の大きさを 1 とした字数。五字取りなら 5.00）' AFTER `role_size_px`;
+      ADD COLUMN `oblique_deg` decimal(3,1) DEFAULT NULL COMMENT '斜体の角度（度、右に倒す。NULL は 0）' AFTER `size_px`;
   END IF;
 
-  -- 0c. 先にこのマイグレーションで series_font_usages を作った DB には、あとから足した役職名の組みの 4 列を足す。
+  -- 0e. 先にこのマイグレーションで series_font_usages を作った DB には、あとから足した装飾の列を足す。
   IF NOT EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'series_font_usages' AND COLUMN_NAME = 'decoration'
+  ) THEN
+    ALTER TABLE `series_font_usages`
+      ADD COLUMN `decoration` json DEFAULT NULL COMMENT '装飾（字の色・フチ・影・光彩。{version, fill, join, layers:[下から重ねる層]}。値は字の大きさに対する比。NULL はテロップの既定の体裁）' AFTER `role_size_px`,
+      ADD CONSTRAINT `ck_sfu_decoration` CHECK (`decoration` IS NULL OR json_valid(`decoration`));
+  END IF;
+
+  -- 0f. 先にこのマイグレーションで series_font_usages を作った DB には、あとから足したルビの置き方の列を足す。
+  IF NOT EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'series_font_usages' AND COLUMN_NAME = 'ruby_raise_em'
+  ) THEN
+    ALTER TABLE `series_font_usages`
+      ADD COLUMN `ruby_raise_em` decimal(4,3) DEFAULT NULL COMMENT 'ルビのベースラインの、親字のベースラインからの高さ（親字の大きさに対する比）' AFTER `oblique_deg`,
+      ADD COLUMN `ruby_letter_spacing_em` decimal(4,3) DEFAULT NULL COMMENT 'ルビの字と字の間に足す空き（ルビの大きさに対する比）' AFTER `ruby_raise_em`,
+      ADD COLUMN `ruby_grouping` varchar(8) DEFAULT NULL COMMENT 'ルビの置き方 MONO / JUKUGO / SPREAD' AFTER `ruby_letter_spacing_em`,
+      ADD CONSTRAINT `ck_sfu_ruby_grouping` CHECK (`ruby_grouping` IS NULL OR `ruby_grouping` IN ('MONO', 'JUKUGO', 'SPREAD'));
+  END IF;
+
+  -- 0g. 先にこのマイグレーションで series_font_usages を作った DB には、あとから足した色違いの列を足す。
+  IF NOT EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'series_font_usages' AND COLUMN_NAME = 'variant_no'
+  ) THEN
+    ALTER TABLE `series_font_usages`
+      ADD COLUMN `variant_no` tinyint unsigned NOT NULL DEFAULT 1 COMMENT '色違いの番号（同じ場所・時期で体裁の色だけが違うもの。1 から）' AFTER `period_no`,
+      ADD COLUMN `variant_label` varchar(32) DEFAULT NULL COMMENT '色違いの呼び名（「ピンク」「水色」など。サイトに出す）' AFTER `variant_no`;
+  END IF;
+
+  -- 0h. 先にこのマイグレーションで series_font_usages を作った DB では、役職名・人名の組みの 5 列を外し、組み方の JSON 1 列にまとめる。
+  IF EXISTS (
     SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'series_font_usages' AND COLUMN_NAME = 'role_span_em'
   ) THEN
     ALTER TABLE `series_font_usages`
-      ADD COLUMN `role_span_em` decimal(3,2) DEFAULT NULL COMMENT 'クレジットの役職名を割り付ける幅（役職名の字の大きさを 1 とした字数）' AFTER `name_span_em`,
-      ADD COLUMN `role_name_gap_em` decimal(4,2) DEFAULT NULL COMMENT '役職名の右端から人名の左端までの空き（人名の字の大きさを 1 とした値）' AFTER `role_span_em`,
-      ADD COLUMN `role_baseline_offset_em` decimal(4,2) DEFAULT NULL COMMENT '役職名のベースラインの人名のベースラインからの高さ（上を正、人名の字の大きさを 1 とした値）' AFTER `role_name_gap_em`,
-      ADD COLUMN `role_align` varchar(16) DEFAULT NULL COMMENT '役職名の揃え RIGHT / LEFT / CENTER / JUSTIFY（縦に並ぶ役職名のどこがそろうか。役職が 1 つだけなら NULL）' AFTER `role_baseline_offset_em`,
-      ADD CONSTRAINT `ck_sfu_role_align` CHECK (`role_align` IS NULL OR `role_align` IN ('RIGHT', 'LEFT', 'CENTER', 'JUSTIFY'));
+      DROP CHECK `ck_sfu_role_align`,
+      DROP COLUMN `name_span_em`,
+      DROP COLUMN `role_span_em`,
+      DROP COLUMN `role_name_gap_em`,
+      DROP COLUMN `role_baseline_offset_em`,
+      DROP COLUMN `role_align`;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'series_font_usages' AND COLUMN_NAME = 'layout'
+  ) THEN
+    ALTER TABLE `series_font_usages`
+      ADD COLUMN `layout` json DEFAULT NULL COMMENT 'クレジットの組み方（画面の中の位置・役職名と人名の並び・人名の字取りと行送り・声の出演の組み。{version, screen, role, name, cast}。値は人名の字の大きさに対する比、画面の位置は画面の幅・高さに対する比）' AFTER `role_size_px`,
+      ADD CONSTRAINT `ck_sfu_layout` CHECK (`layout` IS NULL OR json_valid(`layout`));
+  END IF;
+
+  -- 0i. 先にこのマイグレーションで fonts を作った DB には、あとから足した書体名のまとめの列を足す。
+  IF NOT EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'fonts' AND COLUMN_NAME = 'family_group'
+  ) THEN
+    ALTER TABLE `fonts`
+      ADD COLUMN `family_group` varchar(64) DEFAULT NULL COMMENT '同じページにまとめる書体の名前（写研の「石井中太ゴシック」「石井太ゴシック」を「石井ゴシック」に。NULL なら family_name）' AFTER `family_name`;
   END IF;
 
   -- 1. subtitle_fonts の行を fonts に写す（同じ描く書体の行がまだ無いものだけ）。

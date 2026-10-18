@@ -177,7 +177,10 @@ public sealed class PageRenderer
         {
             Directory.CreateDirectory(_config.SubtitleTelopCacheDirectory);
             var tempFile = $"{cacheFile}.{Guid.NewGuid():N}.tmp";
-            if (_ogCardRenderer.RenderSubtitleTelop(request.RubyHtml, request.FontFamily, request.Profile, tempFile) is null) return null;
+            var drawn = request.Scene is { } scene ? _ogCardRenderer.RenderFontScene(scene, tempFile)
+                : request.Specimen is { } sp ? _ogCardRenderer.RenderFontSpecimen(request.FontFamily, sp.TopRight, sp.BottomLeft, tempFile)
+                : _ogCardRenderer.RenderSubtitleTelop(request.RubyHtml, request.FontFamily, request.Profile, tempFile);
+            if (drawn is null) return null;
             File.Move(tempFile, cacheFile, overwrite: true);
         }
 

@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using PrecureDataStars.Data.Models;
@@ -26,6 +26,16 @@ public sealed record SubtitleTelopRequest(
     SubtitleTelopProfile Profile)
 {
     /// <summary>
+    /// 場面の画像の材料（フォントのページの OP・ED の画面）。あれば <see cref="RubyHtml"/>・<see cref="FontFamily"/>・<see cref="Profile"/> は使わず、
+    /// この場面を描く。
+    /// </summary>
+    public FontScene? Scene { get; init; }
+
+    /// <summary>
+    /// 書体見本の字の並び（右上・左下の 16 字ずつ）。あれば <see cref="FontFamily"/> の書体見本を描く。
+    /// </summary>
+    public (string TopRight, string BottomLeft)? Specimen { get; init; }
+    /// <summary>
     /// その話のテロップ画像の材料を返す。サブタイトル未確定の話は画像にしないので null。
     /// ビルドの時点で解禁前の話も描く（ページでは、解禁されるか閲覧者が先の題を見る設定にするまで画像を出さず、
     /// ぼかした HTML のサブタイトルを出す。OGP カードは作らない）。
@@ -39,7 +49,30 @@ public sealed record SubtitleTelopRequest(
             $"subtitles/{series.Slug}/{ep.SeriesEpNo}.png",
             string.IsNullOrEmpty(ep.TitleRichHtml) ? HtmlUtil.Escape(ep.TitleText) : ep.TitleRichHtml,
             series.FontSubtitle ?? "",
-            SubtitleTelopProfile.FromSeries(series));
+            WithSubtitleStyle(SubtitleTelopProfile.FromSeries(series), series, ctx));
+    }
+
+    /// <summary>
+    /// 作品の書体の表のサブタイトルの行（通常の時期の最初の行）の装飾・長体の下限を組み方に重ねる。装飾があれば、放送の画面と比べて
+    /// 測ったときと同じ計算（画素で重ねる描き方）で、字の大きさに対する比のまま描く。行が無ければ既定の体裁のまま。
+    /// </summary>
+    public static SubtitleTelopProfile WithSubtitleStyle(SubtitleTelopProfile profile, Series series, BuildContext ctx)
+    {
+        var usage = ctx.FontUsages.FirstOrDefault(u => u.SeriesId == series.SeriesId && u.UsageKind == FontUsageKinds.Subtitle
+                                                      && !u.IsBroadcastOnly && u.VariantNo == 1);
+        if (usage is null) return profile;
+        var decoration = TelopDecoration.Parse(usage.Decoration);
+        var layout = TelopLayout.Parse(usage.Layout);
+        return profile with
+        {
+            Decoration = decoration ?? profile.Decoration,
+            RasterDecoration = decoration is not null,
+            CondenseMin = layout?.Subtitle?.CondenseMin ?? profile.CondenseMin,
+            // 行の最大幅（画面の幅に対する比）を、測った字の大きさに対する比に直す（4:3 の作品は幅 1440 の画面）
+            LineMaxEm = layout?.Subtitle?.MaxWidth is float mw && usage.SizePx is decimal sz && sz > 0
+                ? mw * (layout.Screen?.Aspect == "4:3" ? 1440f : 1920f) / (float)sz
+                : null
+        };
     }
 
     /// <summary>
@@ -71,13 +104,24 @@ public sealed record SubtitleTelopRequest(
             OgCardRenderer.TelopRenderVersion.ToString(System.Globalization.CultureInfo.InvariantCulture),
             FontFamily,
             JsonSerializer.Serialize(Profile),
-            RubyHtml);
+            RubyHtml,
+            Scene is null ? "" : JsonSerializer.Serialize(Scene),
+            Specimen is { } sp ? $"{sp.TopRight}|{sp.BottomLeft}" : "");
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material)))[..32].ToLowerInvariant();
     }
 
     /// <summary>この画像を描くのに要る書体名（親字の書体と、指定があれば振り仮名の書体）。</summary>
     public IEnumerable<string> RequiredFontFamilies()
     {
+        if (Scene is not null)
+        {
+            foreach (var piece in Scene.Pieces)
+            {
+                if (piece.FontFamily.Length > 0) yield return piece.FontFamily;
+                if (piece.Profile.RubyFontFamily.Length > 0) yield return piece.Profile.RubyFontFamily;
+            }
+            yield break;
+        }
         if (FontFamily.Length > 0) yield return FontFamily;
         if (Profile.RubyFontFamily.Length > 0) yield return Profile.RubyFontFamily;
     }

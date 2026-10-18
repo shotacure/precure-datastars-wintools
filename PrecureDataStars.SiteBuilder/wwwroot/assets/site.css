@@ -7834,6 +7834,213 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   color: var(--muted);
 }
 
+/* ─────────── フォントのページ（/fonts/・/fonts/{書体名}/） ─────────── */
+/* 作品ごとの節（h2）→ 場面のカード（h3・見本・使われた書体）を並べる。 */
+.fonts-series-section { margin-top: 28px; }
+.fonts-series-heading { font-size: 1.15em; }
+.fonts-scene-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px 16px;
+  margin-top: 8px;
+}
+/* 広い画面：カードを 1 列に並べ、見本を左・場面の名前と書体を右にした横長のカードにする。 */
+@media (min-width: 761px) {
+  .fonts-scene-grid { grid-template-columns: 1fr; }
+  .fonts-scene-card {
+    display: grid;
+    grid-template-columns: minmax(0, 480px) 1fr;
+    grid-template-rows: auto 1fr;
+    column-gap: 18px;
+    align-items: start;
+  }
+  .fonts-scene-card > .fonts-scene { grid-column: 1; grid-row: 1 / span 3; }
+  .fonts-scene-card > :not(.fonts-scene) { grid-column: 2; }
+  .fonts-scene-card > .fonts-scene-fonts { margin-top: 2px; }
+}
+.fonts-scene-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 10px 8px;
+  background: var(--surface, #fff);
+}
+.fonts-scene-title {
+  font-size: 0.95em;
+  margin: 0 0 6px;
+}
+.fonts-scene-place {
+  margin: -2px 0 6px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+/* 見本：放送の画面を模した画像。16:9 の枠に高さをそろえて置き、4:3 の作品は放送と同じく左右に黒い帯を出す。押すと大きく重ねて出す。 */
+.fonts-scene {
+  display: flex;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.fonts-scene img {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+}
+.fonts-scene-fonts {
+  margin: 8px 0 0;
+  font-size: 0.9em;
+}
+.fonts-scene-fonts > div {
+  display: grid;
+  grid-template-columns: 6.5em 1fr;
+  gap: 2px 6px;
+  margin: 2px 0;
+}
+.fonts-scene-fonts dt { color: var(--muted); }
+.fonts-scene-fonts dd { margin: 0; }
+/* 書体名の後ろのベンダー名（「(写研・モリサワ)」）。書体名より小さく薄く。 */
+.fonts-vendor {
+  font-size: 0.78em;
+  color: var(--muted);
+}
+/* ルビの書体の行（親字と違う書体のときだけ）。親字の書体より一段小さく。 */
+.fonts-ruby-font {
+  display: block;
+  font-size: 0.82em;
+}
+.fonts-note {
+  margin-left: 0.2em;
+  font-size: 0.88em;
+  color: var(--muted);
+}
+.fonts-substitute-note,
+.fonts-no-sample {
+  display: block;
+  font-size: 0.82em;
+  color: var(--muted);
+}
+/* 書体名のページ：ウェイトごとの節。書体見本（正方形）と外部リンクを横に並べ、狭い画面では縦に積む。 */
+.fonts-weight-section { margin-top: 28px; }
+.fonts-weight-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: flex-start;
+}
+.fonts-specimen {
+  display: block;
+  width: min(100%, 300px);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.fonts-specimen img { display: block; width: 100%; height: auto; }
+.fonts-weight-info { flex: 1 1 220px; }
+/* 一覧の見出しの下のリード文（見本の作り方とお借りしたお名前の断り）。 */
+.fonts-lead {
+  margin: 0 0 24px;
+  font-size: 0.9em;
+  color: var(--muted);
+  line-height: 1.8;
+}
+/* 書体のページの末尾の注意書き。 */
+.fonts-notes {
+  margin-top: 32px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.fonts-notes p { margin: 4px 0; }
+/* 見本を大きく重ねて出す枠（<dialog>）。画面に収まる大きさで画像を出す。 */
+.fonts-viewer {
+  padding: 0;
+  border: none;
+  background: transparent;
+  max-width: 96vw;
+  max-height: 96vh;
+}
+.fonts-viewer::backdrop { background: rgba(0, 0, 0, 0.8); }
+.fonts-viewer img {
+  display: block;
+  max-width: 96vw;
+  max-height: 92vh;
+  width: auto;
+  height: auto;
+}
+.fonts-viewer-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* ─────────── 運営情報ページ共通：要点ボックス ─────────── */
+/* プライバシーポリシー冒頭などで「現状の取り扱い」を 3 行で要約する淡ピンクのカード。 */
+.policy-summary {
+  margin: 14px 0 6px;
+  padding: 12px 16px;
+  border: 1px solid #fce7f3;
+  border-left: 4px solid var(--accent-pink);
+  border-radius: 8px;
+  background: #fff7fb;
+}
+.policy-summary-title {
+  margin: 0 0 6px;
+  font-size: 0.92em;
+  font-weight: 600;
+  color: #9d174d;
+}
+.policy-summary ul {
+  margin: 0;
+  padding-left: 1.3em;
+}
+.policy-summary li {
+  margin: 3px 0;
+  line-height: 1.7;
+}
+
+/* ─────────── 免責事項：使用フォントの一覧 ─────────── */
+/* 「サブタイトル画像と書体の見本について」の折りたたみ。ライセンスごとの小見出し → フォントの箇条書き。
+   各行は「製品名（製品ページへのリンク）＋ Windows の書体名（薄く）」、2 行目に使っている作品と、その作品で使っている場所の注記。 */
+.subtitle-font-list { margin-top: 10px; }
+.subtitle-font-license {
+  font-size: 0.95em;
+  margin: 12px 0 4px;
+}
+.subtitle-font-list ul {
+  margin: 0;
+  padding-left: 1.3em;
+}
+.subtitle-font-list li {
+  margin: 4px 0;
+  line-height: 1.6;
+}
+.subtitle-font-name {
+  margin-left: 0.4em;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.subtitle-font-usage {
+  display: block;
+  font-size: 0.88em;
+  color: var(--muted);
+}
+.subtitle-font-ruby-note {
+  font-size: 0.9em;
+  color: var(--muted);
+}
+
 /* ─────────── フォントのページ（/fonts/・/fonts/{書体}/） ─────────── */
 /* 書体の一覧：作り手ごとの小見出し → 書体のチップ（書体名＋使った作品の数）。 */
 .fonts-foundry-heading {

@@ -19,6 +19,12 @@ public sealed class SeriesFontUsage
     /// <summary>時期（1 = 前期・通期、2 = 後期 …）。</summary>
     public byte PeriodNo { get; set; } = 1;
 
+    /// <summary>色違いの番号（同じ場所・時期で装飾の色だけが違う行。1 から）。</summary>
+    public byte VariantNo { get; set; } = 1;
+
+    /// <summary>色違いの呼び名（「ピンク」「水色」など）。色違いの無い場所は NULL。</summary>
+    public string? VariantLabel { get; set; }
+
     /// <summary>本放送だけの書体なら true（BD などは通常の書体）。</summary>
     public bool IsBroadcastOnly { get; set; }
 
@@ -40,50 +46,38 @@ public sealed class SeriesFontUsage
     /// <summary>字の大きさ（画面の高さ 1080 換算の px、仮想ボディ）。クレジットは人名。</summary>
     public decimal? SizePx { get; set; }
 
+    /// <summary>斜体の角度（度、右に倒す）。NULL は 0（斜体でない）。書体の見本もこの角度で傾けて描く。</summary>
+    public decimal? ObliqueDeg { get; set; }
+
+    /// <summary>ルビのベースラインの、親字のベースラインからの高さ（親字の大きさに対する比）。ルビの行で持つ。</summary>
+    public decimal? RubyRaiseEm { get; set; }
+
+    /// <summary>ルビの字と字の間に足す空き（ルビの大きさに対する比）。ルビの行で持つ。</summary>
+    public decimal? RubyLetterSpacingEm { get; set; }
+
+    /// <summary>ルビの置き方（MONO＝1 字ずつ / JUKUGO＝熟語全体の上にひと続き / SPREAD＝熟語の幅に均等）。ルビの行で持つ。</summary>
+    public string? RubyGrouping { get; set; }
+
     /// <summary>クレジットの役職名の大きさ（画面の高さ 1080 換算の px、仮想ボディ）。</summary>
     public decimal? RoleSizePx { get; set; }
 
     /// <summary>
-    /// クレジットの人名を割り付ける幅（字の大きさを 1 とした字数）。四字の名前を五字分に広げる「五字取り」なら 5。
-    /// 測った値をそのまま持つ（データとして持つだけで、サイトには出さない）。
+    /// クレジットの組み方の JSON（<see cref="TelopLayout"/> の形）。画面の中の位置・役職名と人名の並び・人名の字取りと行送り・
+    /// 声の出演の組みを持つ。値は人名の字の大きさに対する比（画面の位置は画面の幅・高さに対する比）。NULL なら組み方を測っていない。
     /// </summary>
-    public decimal? NameSpanEm { get; set; }
+    public string? Layout { get; set; }
 
-    // ── クレジットの役職名の組み（書体とウェイトは人名と同じ。データとして持つだけで、サイトには出さない）──
-
-    /// <summary>役職名を割り付ける幅（役職名の字の大きさを 1 とした字数。「編　集」が 3 字分なら 3）。</summary>
-    public decimal? RoleSpanEm { get; set; }
-
-    /// <summary>役職名の右端から人名の左端までの空き（人名の字の大きさを 1 とした値）。</summary>
-    public decimal? RoleNameGapEm { get; set; }
-
-    /// <summary>役職名のベースラインの、人名のベースラインからの高さ（上を正、人名の字の大きさを 1 とした値）。</summary>
-    public decimal? RoleBaselineOffsetEm { get; set; }
-
-    /// <summary>役職名の揃え（<see cref="FontRoleAligns"/>）。役職が 1 つだけで決められなければ NULL。</summary>
-    public string? RoleAlign { get; set; }
+    /// <summary>
+    /// 装飾（字の色・フチ・影・光彩）の JSON（<see cref="TelopDecoration"/> の形）。書体の見本をこの体裁で描く。
+    /// NULL ならテロップの既定の体裁（白い字・黒い丸フチ・右下の黒い影）。
+    /// </summary>
+    public string? Decoration { get; set; }
 
     /// <summary>サイトに添える注記。</summary>
     public string? DisplayNote { get; set; }
 
     /// <summary>内部メモ（サイトに出さない）。</summary>
     public string? Notes { get; set; }
-}
-
-/// <summary>series_font_usages.role_align（縦に並ぶ役職名のどこがそろうか）のコード定数。</summary>
-public static class FontRoleAligns
-{
-    /// <summary>右揃え。</summary>
-    public const string Right = "RIGHT";
-
-    /// <summary>左揃え。</summary>
-    public const string Left = "LEFT";
-
-    /// <summary>中央揃え。</summary>
-    public const string Center = "CENTER";
-
-    /// <summary>均等割り（字数の違う役職名を同じ幅に割り付ける）。</summary>
-    public const string Justify = "JUSTIFY";
 }
 
 /// <summary>series_font_usages.usage_kind（書体を使う場所）のコード定数と、サイトでの並び・名前。</summary>

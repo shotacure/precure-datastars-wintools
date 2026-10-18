@@ -22,6 +22,15 @@ public sealed class FontFace
     /// <summary>書体名（提供元の書き方。「ファン蘭」「UD丸ゴ_ラージ」）。</summary>
     public string FamilyName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// 同じページにまとめる書体の名前（写研の「石井中太ゴシック」「石井太ゴシック」のように、ウェイトが書体名に入っている書体を
+    /// 「石井ゴシック」の 1 ページにまとめる）。NULL なら <see cref="FamilyName"/>。
+    /// </summary>
+    public string? FamilyGroup { get; set; }
+
+    /// <summary>書体名のページの名前（<see cref="FamilyGroup"/>、無ければ <see cref="FamilyName"/>）。</summary>
+    public string PageFamilyName => string.IsNullOrEmpty(FamilyGroup) ? FamilyName : FamilyGroup;
+
     /// <summary>ウェイト（「B」「DB」）。ウェイトの無い書体・ウェイトの分からない書体は NULL。</summary>
     public string? Weight { get; set; }
 

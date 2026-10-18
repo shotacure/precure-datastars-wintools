@@ -1,67 +1,40 @@
-{{## フォントのページ /fonts/。FontsGenerator から FontsIndexModel { FoundryGroups, SeriesSections, FontCount, SeriesCount } で渡る。
-     上に作り手（写研・モリサワ・フォントワークス）ごとの書体の一覧（書体のページへのリンクと、使った作品の数）、
-     下に作品ごと（放送開始順）の「使う場所 ｜ 書体 ｜ 見本」の表を置く。見本はテロップの体裁で当サイトが描いた画像で、
-     ルビの行は親字の行の見本に含まれるので見本を持たない。字の大きさは、その作品に値のある行があるときだけ列を出す。 ##}}
-<h1>フォント</h1>
+{{## フォントのページ /fonts/。FontsGenerator から FontsIndexModel { SeriesSections } で渡る。
+     作品ごと（放送開始順、見出しは h2）に、場面（オープニング・エンディング・サブタイトル。見出しは h3）のカードを並べる。
+     カードは放送の画面を模した見本（押すと大きな画像を重ねて出す）と、その場面で使われた書体（書体のページへのリンクとベンダー名）。
+     ルビの書体は親字と違うときだけ添える。見出しの下のリード文に、見本の作り方と、お借りしたお名前・歌詞についての断りを置く。 ##}}
+<h1>歴代タイトル字幕フォント</h1>
+<p class="fonts-lead">サンプル画像は公式と同じ写研・フォントワークス・モリサワ各社の書体を正規のライセンス契約下で使用し、当サイトで作成しました。OPクレジットは東堂いづみ先生、EDクレジットは東映動画の黎明期を支えたレジェンド原画家である大工原様、森様、大塚様、中村様、楠部様、奥山様のお名前をお借りさせていただきました。歌詞およびサブタイトルは、『ふたりはプリキュア』企画書のキャッチフレーズをアレンジして使用しています。</p>
 
-<p class="lead">
-  歴代プリキュアの OP・ED のクレジットと歌詞、サブタイトルに使われた書体 {{ FontCount }} 種を、{{ SeriesCount }} 作品ごとにまとめました。
-  見本は、同じ書体を使って当サイトが描いたものです。
-</p>
-
-{{~ if HasEdCreditSample ~}}
-{{## ED クレジットの見本（原画）の人名は、東映動画の黎明期の原画の方々のお名前を見本としてお借りしている旨の断り書き。 ##}}
-<p class="fonts-sample-credit-note">ED クレジットの見本は、サンプルとして東映動画黎明期を支えたレジェンドの方々のお名前をお借りしています。</p>
+{{~ for s in SeriesSections ~}}
+<section class="fonts-series-section" id="{{ s.Anchor }}">
+  <h2 class="fonts-series-heading"><a href="{{ s.SeriesUrl }}">{{ s.SeriesTitle | html.escape }}</a><span class="series-year">({{ s.StartYearLabel }})</span></h2>
+  <div class="fonts-scene-grid">
+    {{~ for c in s.Cards ~}}
+    <article class="fonts-scene-card">
+      <h3 class="fonts-scene-title">{{ c.Label | html.escape }}</h3>
+      {{~ if c.ImageSrc != "" ~}}
+      <a class="fonts-scene" href="{{ c.ImageSrc }}" data-fonts-viewer>
+        <img src="{{ c.ImageSrc }}" width="{{ c.ImageWidth }}" height="{{ c.ImageHeight }}" alt="{{ c.ImageAlt | html.escape }}" loading="lazy" decoding="async">
+      </a>
+      {{~ end ~}}
+      <dl class="fonts-scene-fonts">
+        {{~ for l in c.Lines ~}}
+        <div>
+          <dt>{{ l.Place | html.escape }}</dt>
+          <dd>
+            <a href="{{ l.Chip.Url }}">{{ l.Chip.Name | html.escape }}</a> <span class="fonts-vendor">({{ l.Chip.Vendor | html.escape }})</span>
+            {{~ if l.Chip.WeightUnknown ~}}<span class="fonts-note">（ウェイト不明）</span>{{~ end ~}}
+            {{~ if l.Chip.ModificationNote != "" ~}}<span class="fonts-note">（{{ l.Chip.ModificationNote | html.escape }}）</span>{{~ end ~}}
+            {{~ if l.RubyFont ~}}<span class="fonts-ruby-font">ルビ：<a href="{{ l.RubyFont.Url }}">{{ l.RubyFont.Name | html.escape }}</a> <span class="fonts-vendor">({{ l.RubyFont.Vendor | html.escape }})</span></span>{{~ end ~}}
+            {{~ if l.Chip.SubstituteNote != "" ~}}<span class="fonts-substitute-note">{{ l.Chip.SubstituteNote | html.escape }}</span>{{~ end ~}}
+          </dd>
+        </div>
+        {{~ end ~}}
+      </dl>
+    </article>
+    {{~ end ~}}
+  </div>
+</section>
 {{~ end ~}}
 
-<section id="font-list">
-  <h2>書体の一覧</h2>
-  {{~ for g in FoundryGroups ~}}
-  <h3 class="fonts-foundry-heading">{{ g.Label | html.escape }}</h3>
-  <ul class="fonts-chip-list">
-    {{~ for f in g.Fonts ~}}
-    <li><a class="fonts-chip" href="{{ f.Url }}">{{ f.Name | html.escape }}<span class="fonts-chip-count">{{ f.SeriesCount }}作品</span></a></li>
-    {{~ end ~}}
-  </ul>
-  {{~ end ~}}
-</section>
-
-<section id="fonts-by-series">
-  <h2>作品ごとの書体</h2>
-  {{~ for s in SeriesSections ~}}
-  <section class="creators-series-section fonts-series-section">
-    <h3 class="creators-series-heading"><a href="{{ s.SeriesUrl }}">{{ s.SeriesTitle | html.escape }}</a><span class="series-year">({{ s.StartYearLabel }})</span></h3>
-    <div class="fonts-table-wrap">
-    <table class="fonts-usage-table">
-      <thead>
-        <tr><th>使う場所</th><th>書体</th>{{ if s.HasSize }}<th>字の大きさ</th>{{ end }}<th>見本</th></tr>
-      </thead>
-      <tbody>
-        {{~ for r in s.Rows ~}}
-        <tr{{ if r.IsRuby }} class="is-ruby"{{ end }}>
-          <td class="fonts-usage-place">{{ r.UsageLabel | html.escape }}</td>
-          <td class="fonts-usage-font">
-            <a href="{{ r.FontUrl }}">{{ r.FontName | html.escape }}</a>
-            {{~ if r.WeightUnknown ~}}<span class="fonts-note">（ウェイト不明）</span>{{~ end ~}}
-            {{~ if r.ModificationNote != "" ~}}<span class="fonts-note">（{{ r.ModificationNote | html.escape }}）</span>{{~ end ~}}
-            {{~ if r.DisplayNote != "" ~}}<span class="fonts-display-note">{{ r.DisplayNote | html.escape }}</span>{{~ end ~}}
-          </td>
-          {{~ if s.HasSize ~}}<td class="fonts-usage-size">{{ r.SizeLabel | html.escape }}</td>{{~ end ~}}
-          <td class="fonts-usage-sample">
-            {{~ if r.SampleSrc != "" ~}}
-            <span class="fonts-sample"><img src="{{ r.SampleSrc }}" width="{{ r.SampleWidth }}" height="{{ r.SampleHeight }}" style="--telop-w: {{ r.SampleWidth }}px" alt="{{ r.SampleAlt | html.escape }}" loading="lazy" decoding="async"></span>
-            {{~ if r.SubstituteNote != "" ~}}<span class="fonts-substitute-note">{{ r.SubstituteNote | html.escape }}</span>{{~ end ~}}
-            {{~ else if r.IsRuby ~}}
-            <span class="fonts-no-sample">親字の見本に含む</span>
-            {{~ else ~}}
-            <span class="fonts-no-sample">見本なし</span>
-            {{~ end ~}}
-          </td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
-    </div>
-  </section>
-  {{~ end ~}}
-</section>
+{{ include "_fonts-viewer.sbn" }}

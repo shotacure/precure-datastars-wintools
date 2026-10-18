@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using PrecureDataStars.Data.Models;
 using PrecureDataStars.SiteBuilder.Utilities;
 using SkiaSharp;
 
@@ -2312,12 +2313,14 @@ public sealed partial class OgCardRenderer : IDisposable
                 using var black = new SKPaint { IsAntialias = true, Color = SKColors.Black };
                 using var white = new SKPaint { IsAntialias = true, Color = SKColors.White };
                 var bases = line.Where(u => !u.IsGap).Zip(telopPlaced.Select(p => p.X)).ToList();
+                // 振り仮名の層は既定の体裁（影 → フチ → 字）で重ねる。
+                var telopStyle = TelopStyle.From(TelopDecoration.Default);
                 foreach (var (unit, ux) in bases) shaper.Draw(canvas, unit.Base, ux + d, y + d, SKTextAlign.Left, baseFont, black, stroke);
-                DrawTelopRubyPass(canvas, rubies, y, telopRubyFont, telopLayout, telopSpacing, TelopPass.Shadow);
+                DrawTelopRubyPass(canvas, rubies, y, telopRubyFont, telopLayout, telopSpacing, telopStyle, telopStyle.Layers.First(l => l.IsShadow));
                 foreach (var (unit, ux) in bases) shaper.Draw(canvas, unit.Base, ux, y, SKTextAlign.Left, baseFont, stroke);
-                DrawTelopRubyPass(canvas, rubies, y, telopRubyFont, telopLayout, telopSpacing, TelopPass.Outline);
+                DrawTelopRubyPass(canvas, rubies, y, telopRubyFont, telopLayout, telopSpacing, telopStyle, telopStyle.Layers.First(l => !l.IsShadow));
                 foreach (var (unit, ux) in bases) shaper.Draw(canvas, unit.Base, ux, y, SKTextAlign.Left, baseFont, white);
-                DrawTelopRubyPass(canvas, rubies, y, telopRubyFont, telopLayout, telopSpacing, TelopPass.Fill);
+                DrawTelopRubyPass(canvas, rubies, y, telopRubyFont, telopLayout, telopSpacing, telopStyle, null);
             }
             y += lineHeight - baseFont.Size;
         }

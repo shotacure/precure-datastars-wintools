@@ -1,71 +1,49 @@
-{{## 書体のページ /fonts/{書体}/。FontsGenerator から FontDetailModel で渡る。
-     見出しの下に作り手、見本を別のウェイトで描く旨（あれば）、その書体を使った「作品 ｜ 使う場所 ｜ 見本」の表、
-     末尾に外部リンク（写研アーカイブ・提供元の製品ページ）を置く。手元に無い書体は見本が無い旨を出す。 ##}}
+{{## 書体名のページ /fonts/{書体名}/。FontsGenerator から FontFamilyModel { Name, FoundryLabel, Weights, SeriesCount } で渡る。
+     ウェイトごとの節（見出しは h2）に、書体見本（愛・永とサブタイトルで多く使われた字）、代用の旨、外部リンク、
+     その書体が使われた場面の見本（同じ作品で見た目のほとんど同じ場面はまとめてある）を並べる。 ##}}
 <h1>{{ Name | html.escape }}</h1>
 <p class="muted page-subline">{{ FoundryLabel | html.escape }}の書体</p>
 
-<p class="lead">
-  {{ Name | html.escape }}が使われた歴代プリキュアの {{ SeriesCount }} 作品と、その場所の一覧です。
-  {{~ if HasSample ~}}
-  見本は、同じ書体を使って当サイトが描いたものです。
-  {{~ else ~}}
-  この書体は当サイトの手元に無いため、見本はありません。
-  {{~ end ~}}
-</p>
-{{~ if SubstituteNote != "" ~}}
-<p class="fonts-substitute-lead">{{ SubstituteNote | html.escape }}</p>
-{{~ end ~}}
-
-{{~ if HasEdCreditSample ~}}
-{{## ED クレジットの見本（原画）の人名は、東映動画の黎明期の原画の方々のお名前を見本としてお借りしている旨の断り書き。 ##}}
-<p class="fonts-sample-credit-note">ED クレジットの見本は、サンプルとして東映動画黎明期を支えたレジェンドの方々のお名前をお借りしています。</p>
-{{~ end ~}}
-
-<section id="font-usages">
-  <h2>使われた作品</h2>
-  <div class="fonts-table-wrap">
-  <table class="fonts-usage-table">
-    <thead>
-      <tr><th>作品</th><th>使う場所</th>{{ if HasSize }}<th>字の大きさ</th>{{ end }}<th>見本</th></tr>
-    </thead>
-    <tbody>
-      {{~ for r in Rows ~}}
-      <tr{{ if r.IsRuby }} class="is-ruby"{{ end }}>
-        <td class="fonts-usage-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a><span class="series-year">({{ r.StartYearLabel }})</span></td>
-        <td class="fonts-usage-place">
-          {{ r.UsageLabel | html.escape }}
-          {{~ if r.WeightUnknown ~}}<span class="fonts-note">（ウェイト不明）</span>{{~ end ~}}
-          {{~ if r.ModificationNote != "" ~}}<span class="fonts-note">（{{ r.ModificationNote | html.escape }}）</span>{{~ end ~}}
-          {{~ if r.DisplayNote != "" ~}}<span class="fonts-display-note">{{ r.DisplayNote | html.escape }}</span>{{~ end ~}}
-        </td>
-        {{~ if HasSize ~}}<td class="fonts-usage-size">{{ r.SizeLabel | html.escape }}</td>{{~ end ~}}
-        <td class="fonts-usage-sample">
-          {{~ if r.SampleSrc != "" ~}}
-          <span class="fonts-sample"><img src="{{ r.SampleSrc }}" width="{{ r.SampleWidth }}" height="{{ r.SampleHeight }}" style="--telop-w: {{ r.SampleWidth }}px" alt="{{ r.SampleAlt | html.escape }}" loading="lazy" decoding="async"></span>
-          {{~ else if r.IsRuby ~}}
-          <span class="fonts-no-sample">親字の見本に含む</span>
-          {{~ else ~}}
-          <span class="fonts-no-sample">見本なし</span>
-          {{~ end ~}}
-        </td>
-      </tr>
+{{~ for w in Weights ~}}
+<section class="fonts-weight-section" id="{{ w.Anchor }}">
+  <h2>{{ w.Name | html.escape }}</h2>
+  <div class="fonts-weight-head">
+    {{~ if w.SpecimenSrc != "" ~}}
+    <a class="fonts-specimen" href="{{ w.SpecimenSrc }}" data-fonts-viewer>
+      <img src="{{ w.SpecimenSrc }}" width="{{ w.SpecimenWidth }}" height="{{ w.SpecimenHeight }}" alt="{{ w.Name | html.escape }}の書体見本" loading="lazy" decoding="async">
+    </a>
+    {{~ else ~}}
+    <p class="fonts-no-sample">この書体は当サイトの手元に無いため、見本はありません。</p>
+    {{~ end ~}}
+    <div class="fonts-weight-info">
+      {{~ if w.SubstituteNote != "" ~}}<p class="fonts-substitute-note">{{ w.SubstituteNote | html.escape }}</p>{{~ end ~}}
+      {{~ if w.ArchiveUrl != "" || w.ProductUrl != "" ~}}
+      <ul class="external-links">
+        {{~ if w.ArchiveUrl != "" ~}}
+        <li><a class="external-link external-link-official" href="{{ w.ArchiveUrl }}" target="_blank" rel="noopener nofollow">写研アーカイブ</a></li>
+        {{~ end ~}}
+        {{~ if w.ProductUrl != "" ~}}
+        <li><a class="external-link external-link-official" href="{{ w.ProductUrl }}" target="_blank" rel="noopener nofollow">{{ w.ProductLabel | html.escape }}</a></li>
+        {{~ end ~}}
+      </ul>
       {{~ end ~}}
-    </tbody>
-  </table>
+    </div>
+  </div>
+
+  <div class="fonts-scene-grid">
+    {{~ for sc in w.Scenes ~}}
+    <article class="fonts-scene-card">
+      <h3 class="fonts-scene-title"><a href="{{ sc.IndexUrl }}">{{ sc.SeriesTitle | html.escape }}</a><span class="series-year">({{ sc.StartYearLabel }})</span></h3>
+      <p class="fonts-scene-place">{{ sc.Labels | array.join "・" | html.escape }}の{{ sc.Place | html.escape }}</p>
+      {{~ if sc.ImageSrc != "" ~}}
+      <a class="fonts-scene" href="{{ sc.ImageSrc }}" data-fonts-viewer>
+        <img src="{{ sc.ImageSrc }}" width="{{ sc.ImageWidth }}" height="{{ sc.ImageHeight }}" alt="{{ sc.ImageAlt | html.escape }}" loading="lazy" decoding="async">
+      </a>
+      {{~ end ~}}
+    </article>
+    {{~ end ~}}
   </div>
 </section>
-
-{{## 外部リンク。写研の書体は写研アーカイブとモリサワの製品ページの両方、ほかは提供元の製品ページ。 ##}}
-{{~ if ArchiveUrl != "" || ProductUrl != "" ~}}
-<section id="external-links">
-  <h2>外部リンク</h2>
-  <ul class="external-links">
-    {{~ if ArchiveUrl != "" ~}}
-    <li><a class="external-link external-link-official" href="{{ ArchiveUrl }}" target="_blank" rel="noopener nofollow">写研アーカイブ</a></li>
-    {{~ end ~}}
-    {{~ if ProductUrl != "" ~}}
-    <li><a class="external-link external-link-official" href="{{ ProductUrl }}" target="_blank" rel="noopener nofollow">{{ ProductLabel | html.escape }}</a></li>
-    {{~ end ~}}
-  </ul>
-</section>
 {{~ end ~}}
+
+{{ include "_fonts-notes.sbn" }}

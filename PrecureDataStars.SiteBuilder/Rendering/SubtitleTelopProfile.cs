@@ -1,4 +1,4 @@
-using PrecureDataStars.Data.Models;
+﻿using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
@@ -24,7 +24,43 @@ public sealed record SubtitleTelopProfile
     /// <summary>振り仮名の書体名（インストール済み書体の名前）。空なら親字と同じ書体を使う。</summary>
     public string RubyFontFamily { get; init; } = "";
 
-    /// <summary>振り仮名にかける機械的な斜体の角度（度。右に倒す）。0 なら倒さない。親字は倒さない。</summary>
+    /// <summary>
+    /// 親字にかける機械的な斜体の角度（度。右に倒す）。0 なら倒さない。サブタイトルでは使わず、書体の見本で
+    /// 斜体のクレジット（作品の書体の表の <c>oblique_deg</c>）を描くときに使う。振り仮名は <see cref="RubyObliqueDegrees"/>。
+    /// </summary>
+    public float BaseObliqueDegrees { get; init; }
+
+    /// <summary>
+    /// 装飾（字の色・フチ・影・光彩）。サブタイトルは既定の体裁（白い字・黒い丸フチ・右下の黒い影）で、
+    /// 書体の見本では作品の書体の表の <c>decoration</c> を使う。
+    /// </summary>
+    public TelopDecoration Decoration { get; init; } = TelopDecoration.Default;
+
+    /// <summary>
+    /// 装飾を画素で重ねて描くか（<see cref="TelopRaster"/>）。書体の見本は、放送の画面と比べて体裁を測ったときと同じ計算で描くので true。
+    /// サブタイトルは輪郭の線で描く（false）。
+    /// </summary>
+    public bool RasterDecoration { get; init; }
+
+    /// <summary>長体の下限（行が最大幅に収まらないとき、横に縮める率の最小）。これでも収まらなければ全行の字を小さくする。</summary>
+    public float CondenseMin { get; init; } = 0.8f;
+
+    /// <summary>
+    /// 字の大きさを決めて描く（場面の見本）ときの行の最大幅（画素）。超える行はその行だけ、この幅に収まるまで長体をかける
+    /// （長体の下限は見ない）。null なら長体をかけない。
+    /// </summary>
+    public float? LineMaxWidth { get; init; }
+
+    /// <summary>
+    /// 行の最大幅（字の大きさに対する比）。本編のいちばん長い行の幅を字の大きさで割った値で、各話のテロップ画像はこれを超える行を
+    /// その幅まで長体で詰める（放送と同じく字を小さくせずに横だけ縮める）。null なら画像の最大幅だけで決める。
+    /// </summary>
+    public float? LineMaxEm { get; init; }
+
+    /// <summary>行の中の空白（全角・半角とも、続く空白のまとまり 1 つ）の空き（字の大きさに対する比）。null なら全角 1 字・半角半字。</summary>
+    public float? SpaceEm { get; init; }
+
+    /// <summary>振り仮名にかける機械的な斜体の角度（度。右に倒す）。0 なら倒さない。親字は <see cref="BaseObliqueDegrees"/>。</summary>
     public float RubyObliqueDegrees { get; init; }
 
     /// <summary>振り仮名の大きさ（親字の大きさに対する比）。</summary>

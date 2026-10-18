@@ -1,0 +1,6 @@
+{{## 見本を大きく見せる重ね表示（<dialog>）。fonts-viewer.js が動かす。 ##}}
+<dialog class="fonts-viewer" aria-label="見本を大きく表示">
+  <button type="button" class="fonts-viewer-close" aria-label="閉じる">×</button>
+  <img alt="">
+</dialog>
+<script src="{{ asset_url "/assets/fonts-viewer.js" }}" defer></script>

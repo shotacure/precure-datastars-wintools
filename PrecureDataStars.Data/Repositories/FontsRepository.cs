@@ -21,6 +21,7 @@ public sealed class FontsRepository : RepositoryBase
               font_id          AS FontId,
               foundry          AS Foundry,
               family_name      AS FamilyName,
+              family_group     AS FamilyGroup,
               weight           AS Weight,
               render_font_name AS RenderFontName,
               render_family_name AS RenderFamilyName,
@@ -46,6 +47,8 @@ public sealed class FontsRepository : RepositoryBase
               series_id         AS SeriesId,
               usage_kind        AS UsageKind,
               period_no         AS PeriodNo,
+              variant_no        AS VariantNo,
+              variant_label     AS VariantLabel,
               is_broadcast_only AS IsBroadcastOnly,
               first_episode_no  AS FirstEpisodeNo,
               last_episode_no   AS LastEpisodeNo,
@@ -53,16 +56,17 @@ public sealed class FontsRepository : RepositoryBase
               is_weight_unknown AS IsWeightUnknown,
               modification_note AS ModificationNote,
               size_px           AS SizePx,
+              oblique_deg       AS ObliqueDeg,
+              ruby_raise_em     AS RubyRaiseEm,
+              ruby_letter_spacing_em AS RubyLetterSpacingEm,
+              ruby_grouping     AS RubyGrouping,
               role_size_px      AS RoleSizePx,
-              name_span_em      AS NameSpanEm,
-              role_span_em      AS RoleSpanEm,
-              role_name_gap_em  AS RoleNameGapEm,
-              role_baseline_offset_em AS RoleBaselineOffsetEm,
-              role_align        AS RoleAlign,
+              layout            AS Layout,
+              decoration        AS Decoration,
               display_note      AS DisplayNote,
               notes             AS Notes
             FROM series_font_usages
-            ORDER BY series_id, period_no, is_broadcast_only, first_episode_no, usage_id;
+            ORDER BY series_id, period_no, is_broadcast_only, first_episode_no, variant_no, usage_id;
         """;
 
         return await QueryListAsync<SeriesFontUsage>(sql, ct: ct).ConfigureAwait(false);

@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **テンプレ DSL：主題歌・挿入歌の繰り返しの中で、曲の作品名を出す `{SONG_SERIES_TITLE}` を足した**（`ThemeSongsHandler`・`RoleTemplateRenderer`）：録音の作品の正式タイトルで、クレジットの作品と同じ作品の曲なら空。オールスターズ映画の劇中歌で、他の作品の曲にだけ作品名の見出しを付けるために使う。
+
 - **OaVerifier：録画 TS の ARIB 字幕を全編抽出し、台詞の確認用に TSV で書き出せるようにした**（`Ts/Arib/AribCaptionExtractor`・`AribCaptionDecoder`・`AribCharTables`、`Forms/CaptionExportWriter`）：左下に「字幕を全編抽出（TSV に書き出し）」ボタンを足した。TS を先頭から順に読み、フルセグの字幕 ES（component_tag 0x30〜0x37）の PES を、再生と同じ PCR の物差しのメディア時刻に直して 8 単位符号を解読する。ドキュメントフォルダに `{TS名}.captions.tsv` を書き出し、1 行 1 字幕の行のあいだに、パートの始まりと番組の終わりごとの「境目」の行（番組内・ファイル・放送の時刻とパートの尺）を時刻順に挟む。白以外の文字色は〈黄〉のような印で残し、振り仮名は除き、局独自の外字は 〓 にする。抽出中は進み具合を状態表示に出し、同じ TS は再抽出せずにいまのアンカー・パートで書き出し直す。文字集合の対応表は libaribcaption の表を機械変換して同梱した。あわせて `TsTimebase` に `PcrPid` と `WallClockForMediaMs` を足し、パケット解析の補助関数をアセンブリ内で共用できるようにした。
 
 - **サイト：コラムの更新を毎週水曜・土曜の朝 8:30 とし、一覧のリードと meta description の更新日の記載を改めた**（`articles-index.sbn`・`ArticlesGenerator`）。

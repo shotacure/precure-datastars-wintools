@@ -1,7 +1,7 @@
 {{## /articles/ — コラムの一覧。ArticlesGenerator から ArticlesIndexModel で渡る。
      記事カードはカード全体が 1 つのリンク（内部に別リンクを持たないためオーバーレイ不要）。 ##}}
 <h1>コラム</h1>
-<p class="articles-lead muted">precure.tvを運営する祥太による、歴代プリキュアを多種多様なアプローチで読み解いていくコラムです。毎週土曜朝 8:30 に更新します。</p>
+<p class="articles-lead muted">precure.tvを運営する祥太による、歴代プリキュアを多種多様なアプローチで読み解いていくコラムです。毎週水曜・土曜の朝 8:30 に更新します。</p>
 
 {{~ if (array.size Articles) == 0 ~}}
 <p class="empty-state">コラムはまだありません。</p>

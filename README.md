@@ -953,10 +953,11 @@ Role: PRODUCTION 制作 (order 2)
    ```
 5. 出力先に静的 HTML 一式と `assets/site.css` が生成される。ビルドログ先頭に現在のモードと出力先が明示される。出力は前回のものを残したまま、中身が変わるファイルだけ書き、全体ビルドの最後に今回の出力に属さないファイルを消す（下記「出力の書き出し」参照）。Build Summary に「書いた / 変わらず / 消した」の件数と OGP カードの作り置きの効きが出る
 6. 本番への反映は `scripts/deploy.ps1`（ドライランで差分と警告を確かめ、安全なら反映）。2 つのデプロイが同時に走らないよう、名前付きの mutex（`Global\precure-tv-deploy`）で 1 つずつにし、後から来たほうは先のデプロイが終わるまで最大 2 時間待つ
-7. 定時の本番デプロイ：`scripts/scheduled-deploy.ps1` が、コミット済みの `develop` を git worktree で一時フォルダに取り出し（作業中の未コミットの変更は公開しない）、リポジトリの `App.config` を写して `deploy.ps1` を流し、一時フォルダを片付ける。経過は `%LOCALAPPDATA%\precure-datastars\scheduled-deploy.log` に追記する。安全ゲートで止まったときや失敗したときは公開しない。`-DryRunOnly` で差分の確認までを試せる。`scripts/register-deploy-task.ps1` で毎週土曜 8:30（コラムの公開時刻）に動くタスクをタスクスケジューラに登録する（スリープなら起こし、動けなかったときは次に使えるとき）。サイト全体を作り直すので、その時点の DB の内容も一緒に公開される
+7. 定時の本番デプロイ：`scripts/scheduled-deploy.ps1` が、コミット済みの `develop` を git worktree で一時フォルダに取り出し（作業中の未コミットの変更は公開しない）、リポジトリの `App.config` を写して `deploy.ps1` を流し、一時フォルダを片付ける。経過は `%LOCALAPPDATA%\precure-datastars\scheduled-deploy.log` に追記する。安全ゲートで止まったときや失敗したときは公開しない。`-DryRunOnly` で差分の確認までを試せる。`scripts/register-deploy-task.ps1` で毎週水曜・土曜の 8:00 と 8:30（コラムの公開時刻）に動くタスクをタスクスケジューラに登録する（スリープなら起こし、動けなかったときは次に使えるとき）。8:00 の回は下準備で、前回からのコードの変更と DB の更新を先に流しておく（コードを変えた後の最初のビルドは OGP カードの描き直しで数分かかる。公開日時 8:30 のコラムはまだ出ない）。8:30 の回は差分がほぼコラムだけになるので短時間で終わる。8:00 の回が 8:30 を過ぎても動いていれば、8:30 の回は終わるのを待ってから動く。サイト全体を作り直すので、その時点の DB の内容も一緒に公開される。公開できなかったとき（安全ゲートで止まった・失敗した）は Windows の通知を出す。8:00 の回で止まれば、8:30 までに直すか判断できる
    ```powershell
    .\scripts\scheduled-deploy.ps1 -DryRunOnly   # 本番に出さずに試す
-   .\scripts\register-deploy-task.ps1           # 毎週土曜 08:30 に登録
+   .\scripts\scheduled-deploy.ps1 -TestNotification   # 公開できなかったときの通知だけを出す
+   .\scripts\register-deploy-task.ps1           # 毎週水曜・土曜の 08:00 と 08:30 に登録
    .\scripts\register-deploy-task.ps1 -Unregister
    ```
 

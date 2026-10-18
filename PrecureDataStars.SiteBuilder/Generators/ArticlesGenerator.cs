@@ -13,7 +13,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// シェア対象なので <see cref="LayoutModel.SuppressShareButtons"/> は立てない。
 /// <para>
 /// 本番モードでは、下書き（front-matter の <c>draft: true</c>）と、公開日時（<c>date</c>）がビルド時点より
-/// 後の原稿を出さない。公開日時を迎えた後の本番ビルドで初めて出る（土曜 8:30 の定時ビルドがこれを拾う）。
+/// 後の原稿を出さない。公開日時を迎えた後の本番ビルドで初めて出る（水曜・土曜 8:30 の定時ビルドがこれを拾う）。
 /// テストモードでは、原稿を書いている途中に読めるよう、下書きも公開前の原稿も出す。
 /// </para>
 /// <para>
@@ -146,7 +146,7 @@ public sealed class ArticlesGenerator
             },
             MetaDescription =
                 "プリキュアのコラム。precure.tv を運営する祥太が、歴代プリキュアを多種多様なアプローチで読み解きます。" +
-                "毎週土曜朝 8:30 更新。",
+                "毎週水曜・土曜の朝 8:30 更新。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

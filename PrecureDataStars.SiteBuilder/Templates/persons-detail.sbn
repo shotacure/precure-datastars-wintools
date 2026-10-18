@@ -343,4 +343,7 @@
     </ul>
   </section>
   {{~ end ~}}
+  {{## 本編クレジット・音楽クレジットの枠を、はじめから開いておくかどうか決める（音楽クレジット以外でページが 1 画面に満たない、
+       または開いたときの中身が画面の半分に満たない枠を開く）。 ##}}
+  <script src="{{ asset_url "/assets/credit-card-open.js" }}" defer></script>
 </article>

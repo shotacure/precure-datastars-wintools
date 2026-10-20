@@ -35,6 +35,12 @@ public sealed class CreditRoleBlock
     public int? LeadingCompanyAliasId { get; set; }
 
     /// <summary>
+    /// 筆頭の会社（<see cref="LeadingCompanyAliasId"/>）が画面にはクレジットされていない（クレジット漏れ）か。
+    /// 会社はデータとして入れて所属・集計に数え、表示だけ「（三晃プロダクション）」と括弧で包んで薄い色で示す。
+    /// </summary>
+    public bool LeadingCompanyNotOnScreen { get; set; }
+
+    /// <summary>
     /// ブロック先頭の見出しにする作品 ID（→ series.series_id、任意）。
     /// 複数の作品のキャラクターが並ぶ映画の声の出演で、作品ごとのまとまりの頭に出る作品名を表す。
     /// 表示文字は <see cref="HeadingText"/> があればそれ、無ければ作品の正式タイトル。
@@ -55,6 +61,16 @@ public sealed class CreditRoleBlock
 
     /// <summary>見出し（作品または文字）を持つか。</summary>
     public bool HasHeading => HeadingSeriesId is not null || !string.IsNullOrEmpty(HeadingText);
+
+    /// <summary>
+    /// 見出しが区切りの記号だけ（「＊」「●」など、文字・数字を含まない）か。
+    /// 画面で名前のまとまりのあいだに中央へ置かれた区切りの記号を表し、表示では見出しを中央にそろえる。
+    /// 作品を指す見出しは区切りに当たらない。
+    /// </summary>
+    public bool IsMarkHeading =>
+        HeadingSeriesId is null
+        && !string.IsNullOrWhiteSpace(HeadingText)
+        && HeadingText.All(ch => char.IsWhiteSpace(ch) || !char.IsLetterOrDigit(ch));
 
     /// <summary>備考。</summary>
     public string? Notes { get; set; }

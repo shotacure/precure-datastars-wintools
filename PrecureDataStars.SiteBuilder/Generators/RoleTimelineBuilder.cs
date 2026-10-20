@@ -18,7 +18,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     （シリーズや暦年の区切りによらず、期間をずらして数える）。
 ///     <list type="number">
 ///       <item><description>役職詳細：役職を問わずオープニングのクレジット（TV・映画とも）に出たことがある（メインスタッフ）か、
-///         その役職を 1 年間に 4 回以上担当したことがある。続けて担当した期間は 13 週以内の間隔でつなぐ。</description></item>
+///         その役職を 1 年間に 4 回以上か、映画で通算 3 本以上担当したことがある。続けて担当した期間は 13 週以内の間隔でつなぐ。</description></item>
 ///       <item><description>声の出演：1 年間に 4 回以上出演したことがある。続けて出演した期間は 4 週以内の間隔でつなぐ。</description></item>
 ///       <item><description>作詞・作曲・編曲の役職詳細：1 年間に 2 曲以上担当したことがある。</description></item>
 ///       <item><description>歌唱・音楽の役職詳細：ページに載る行をすべて載せる。</description></item>
@@ -30,7 +30,8 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     行には単発の参加も含めてすべての参加を描く。</description></item>
 ///   <item><description>並びは、最初の参加の日付の早い順。同じ日に始めた行は、団体を先に置き、その中で最後の参加の
 ///     日付の早い順（最初に抜けた順）、それも同じなら呼び出し側が渡す並びのキー（役職詳細・声の出演はその話のクレジットで
-///     上に出ている順）→ 名前。</description></item>
+///     上に出ている順）→ 名前。役職詳細で「すべて」を見せているときは、その役職を会社の所属としてクレジットされたことのある
+///     人物を、会社の行のすぐ下に（同じ並びの順で）字下げしてまとめる（<see cref="RoleTimelineEntity.MemberOf"/>）。</description></item>
 ///   <item><description>描くものは、続けて参加した期間（2 件以上つながったものの細線）・TV の話（同じシリーズで話数が
 ///     続く間はひと続きの帯。1 話は放送日から <see cref="EpisodeSpanDays"/> 日の幅）・映画（公開日の点）・
 ///     歌・劇伴（初めて収められた盤の発売日の点。日付の決め方は <see cref="MusicTimelineDates"/>）・盤（発売日の四角）。</description></item>
@@ -47,12 +48,12 @@ internal sealed class RoleTimelineBuilder
     private const int EpisodeSpanDays = 7;
 
     /// <summary>
-    /// 年の目盛りの文字を、5 の倍数の年以外も出せる帯の数の上限。
-    /// これを超えると狭い画面（768px 以下）で 5 の倍数の年だけに、<see cref="AllTickBandsMaxWide"/> を超えると常に 5 の倍数の年だけにする。
+    /// 年の目盛りを 4 桁で出せる帯の数の上限。
+    /// これを超えると狭い画面（768px 以下）で年を下 2 桁にし、<see cref="AllTickBandsMaxWide"/> を超えると常に下 2 桁にする。
     /// </summary>
     private const int AllTickBandsMaxNarrow = 10;
 
-    /// <summary>広い画面でも年の目盛りの文字を全部出せる帯の数の上限。</summary>
+    /// <summary>広い画面でも年の目盛りを 4 桁で出せる帯の数の上限。</summary>
     private const int AllTickBandsMaxWide = 22;
 
     private readonly BuildContext _ctx;
@@ -120,8 +121,7 @@ internal sealed class RoleTimelineBuilder
                 YearLabel = s.StartDate.Year.ToString(CultureInfo.InvariantCulture),
                 SeriesTitle = s.Title,
                 SeriesUrl = PathUtil.SeriesUrl(s.Slug),
-                ShowLabel = showLabel,
-                IsMinor = manyBands && s.StartDate.Year % 5 != 0
+                ShowLabel = showLabel
             });
         }
         _bands = bands;
@@ -178,6 +178,7 @@ internal sealed class RoleTimelineBuilder
             .ThenBy(r => r.FirstPos)
             .ThenBy(r => r.Row.EntityName, StringComparer.Ordinal)
             .ToList();
+        bool grouped = GroupMembers(ordered, filterable);
 
         var legend = new List<RoleTimelineLegendItem>();
         if (ordered.Any(r => r.Row.Segments.Count > 0))
@@ -223,15 +224,63 @@ internal sealed class RoleTimelineBuilder
             Bands = _bands,
             Ticks = _ticks,
             TickDensityClass = _tickDensityClass,
+            HasGroups = grouped,
+            // TV の行と映画の行が両方あるページだけ「TV・映画 / TVのみ / 映画のみ」の絞り込みを出す。
+            HasMediaFilter = ordered.Any(r => r.Row.HasTv) && ordered.Any(r => r.Row.HasMovie),
             Rows = ordered.Select(r => r.Row).ToList()
         };
+    }
+
+    /// <summary>
+    /// 会社とその所属の人を、「すべて」を見せているときのひとまとめ（ゾーン）にする。会社の外（会社と、どこにも
+    /// 所属していない人）は <paramref name="ordered"/> の並びのまま置き、会社の行のすぐ下に所属の人を同じ並びの順で続ける。
+    /// <paramref name="ordered"/> はその並び（ゾーンの並び）に組み替え、行ごとに <see cref="RoleTimelineRow.FlatOrder"/>
+    /// （個人・団体で絞り込んだときの元の並びの位置）を書き込む。所属先の会社が行に無い人は会社の外に置く。
+    /// 主な方を選び分けるページでは、所属の人に主な方がいれば会社の行も主な方にする（見出しの会社の無いまま所属の人を見せない）。
+    /// まとめる会社が 1 つも無ければ何もせず false。
+    /// </summary>
+    private static bool GroupMembers(List<BuiltRow> ordered, bool filterable)
+    {
+        var heads = ordered
+            .Where(r => r.Entity.GroupKey != "")
+            .GroupBy(r => r.Entity.GroupKey, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var membersByHead = ordered
+            .Where(r => r.Entity.MemberOf != "" && heads.ContainsKey(r.Entity.MemberOf))
+            .GroupBy(r => r.Entity.MemberOf, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+        if (membersByHead.Count == 0) return false;
+
+        for (int i = 0; i < ordered.Count; i++) ordered[i].Row.FlatOrder = i;
+
+        var zoned = new List<BuiltRow>(ordered.Count);
+        foreach (var r in ordered)
+        {
+            if (r.Entity.MemberOf != "" && membersByHead.ContainsKey(r.Entity.MemberOf)) continue;
+            zoned.Add(r);
+            if (r.Entity.GroupKey == "" || !membersByHead.TryGetValue(r.Entity.GroupKey, out var members)) continue;
+            r.Row.IsGroupHead = true;
+            if (filterable && members.Any(m => m.Row.IsMain)) r.Row.IsMain = true;
+            foreach (var m in members)
+            {
+                m.Row.IsGroupMember = true;
+                zoned.Add(m);
+            }
+            // TV のみ・映画のみで絞り込んだときも、所属の人が見えていれば見出しの会社の行を残す。
+            r.Row.ZoneHasTv = members.Any(m => m.Row.HasTv);
+            r.Row.ZoneHasMovie = members.Any(m => m.Row.HasMovie);
+        }
+        ordered.Clear();
+        ordered.AddRange(zoned);
+        return true;
     }
 
     /// <summary>組み立てた 1 行と、並び・主な方の選び出しに使う値。</summary>
     /// <param name="Qualifies">ページの決まり（<see cref="RoleTimelineRules"/>）を満たすか。</param>
     /// <param name="CreditCount">描ける参加の数（TV の話数・映画の本数・歌の曲数など）。主な方を補う順に使う。</param>
+    /// <param name="Entity">行の元にした候補（会社とその所属の人のまとめに使う）。</param>
     /// <param name="RelatedRoles">行に重ねた関連する役職（凡例に出す分）。</param>
-    private sealed record BuiltRow(RoleTimelineRow Row, DateOnly First, DateOnly Last, long FirstPos, int CreditCount, bool Qualifies,
+    private sealed record BuiltRow(RoleTimelineEntity Entity, RoleTimelineRow Row, DateOnly First, DateOnly Last, long FirstPos, int CreditCount, bool Qualifies,
         IReadOnlyList<RoleTimelineRelatedRole> RelatedRoles);
 
     /// <summary>
@@ -328,7 +377,8 @@ internal sealed class RoleTimelineBuilder
             => chain.Max(c => c.Kind == CreditKind.Tv ? c.Date.AddDays(EpisodeSpanDays) : c.Date.AddDays(1));
         bool qualifies = rules.IncludeAll
             || (rules.IncludeOpeningCredit && e.HasOpeningCredit)
-            || MaxCreditsInWindow(credits, rules.WindowDays) >= rules.MinCreditsInWindow;
+            || MaxCreditsInWindow(credits, rules.WindowDays) >= rules.MinCreditsInWindow
+            || (rules.MinMovies > 0 && credits.Count(c => c.Kind == CreditKind.Movie) >= rules.MinMovies);
 
         var spans = new List<RoleTimelineMark>(chains.Count);
         var segments = new List<RoleTimelineMark>();
@@ -471,7 +521,48 @@ internal sealed class RoleTimelineBuilder
             PeriodLabel = string.Join("、", periodLabels),
             WorksText = string.Join("\n", works.OrderBy(w => w.Sort).Select(w => w.Text).Concat(relatedWorks))
         };
-        return new BuiltRow(row, chains[0][0].Date, chains[^1][^1].Date, e.FirstSortPos, credits.Count, qualifies, drawnRelated);
+        BuildAffiliationLines(e, row, rules);
+        return new BuiltRow(e, row, chains[0][0].Date, chains[^1][^1].Date, e.FirstSortPos, credits.Count, qualifies, drawnRelated);
+    }
+
+    /// <summary>
+    /// 所属線と内訳の「所属：」の行を組む。企業ごとに、所属としてクレジットされた担当（TV の話・映画）を日付順に並べ、
+    /// 続けて参加した期間と同じ間隔（<see cref="RoleTimelineRules.MaxGapDays"/>）以内ならつないで 1 本の線にする
+    /// （映画の個人名だけのクレジットなど、所属の出ていない回が挟まっても切れない）。1 件だけの期間も、TV の 1 話ぶんの幅で引く。
+    /// まとめた企業（<see cref="RoleTimelineEntity.MemberOf"/>）以外の企業の線は点線にする。企業の並びは最初の所属の早い順。
+    /// </summary>
+    private void BuildAffiliationLines(RoleTimelineEntity e, RoleTimelineRow row, RoleTimelineRules rules)
+    {
+        if (e.Affiliations.Count == 0) return;
+        var marks = new List<RoleTimelineAffiliationMark>();
+        var texts = new List<(DateOnly First, string Text)>();
+        foreach (var aff in e.Affiliations)
+        {
+            var dates = new List<DateOnly>();
+            foreach (var (_, eid) in aff.Episodes)
+                if (eid != 0 && _ctx.EpisodeById.TryGetValue(eid, out var ep)) dates.Add(ep.OnAirDate);
+            foreach (var sid in aff.MovieSeriesIds)
+                if (_ctx.SeriesById.TryGetValue(sid, out var s)) dates.Add(s.StartDate);
+            if (dates.Count == 0) continue;
+            dates.Sort();
+
+            bool isOther = !string.Equals(aff.GroupKey, e.MemberOf, StringComparison.Ordinal);
+            var labels = new List<string>();
+            int start = 0;
+            for (int i = 1; i <= dates.Count; i++)
+            {
+                if (i < dates.Count && dates[i].DayNumber - dates[i - 1].DayNumber <= rules.MaxGapDays) continue;
+                var from = dates[start];
+                var to = dates[i - 1].AddDays(EpisodeSpanDays);
+                marks.Add(new RoleTimelineAffiliationMark { Left = Pct(from), Width = PctWidth(from, to), IsOther = isOther });
+                labels.Add(PeriodLabel(from, dates[i - 1]));
+                start = i;
+            }
+            if (aff.CompanyName != "")
+                texts.Add((dates[0], $"所属：{aff.CompanyName}（{string.Join("、", labels)}）"));
+        }
+        row.Affiliations = marks;
+        row.AffiliationText = string.Join("\n", texts.OrderBy(t => t.First).Select(t => t.Text));
     }
 
     /// <summary>
@@ -482,10 +573,11 @@ internal sealed class RoleTimelineBuilder
     /// 参加の日付の並びが、線表に載せる決まり（<paramref name="rules"/>）を満たすか。<see cref="BuildRow"/> の判定と同じ。
     /// OGP カードのように線表そのものは組まず、「サイトの年表に載る人か」だけを知りたいときに使う。
     /// </summary>
-    public static bool Qualifies(IEnumerable<DateOnly> dates, bool hasOpeningCredit, RoleTimelineRules rules)
+    public static bool Qualifies(IEnumerable<DateOnly> dates, bool hasOpeningCredit, int movieCount, RoleTimelineRules rules)
     {
         if (rules.IncludeAll) return true;
         if (rules.IncludeOpeningCredit && hasOpeningCredit) return true;
+        if (rules.MinMovies > 0 && movieCount >= rules.MinMovies) return true;
         var sorted = dates.OrderBy(d => d.DayNumber).ToList();
         int best = 0;
         for (int i = 0, j = 0; i < sorted.Count; i++)
@@ -561,13 +653,19 @@ internal sealed record RoleTimelineRules(
     int MaxGapDays, int WindowDays, int MinCreditsInWindow, bool IncludeOpeningCredit, bool IncludeAll, int ShowAllUpTo, string Verb,
     IReadOnlyList<string> FilterTip)
 {
+    /// <summary>
+    /// 映画の本数（通算）がこの数以上なら回数・期間によらず載せる（0 なら使わない）。映画は年に 1〜2 本しかなく
+    /// 「一定期間に何回」の決まりに届かないので、映画で続けて担当している方を拾うために使う。
+    /// </summary>
+    public int MinMovies { get; init; }
+
     /// <summary>全員を載せる決まりのページの条件（スイッチを出さない）。</summary>
     private static readonly IReadOnlyList<string> NoFilter = Array.Empty<string>();
 
     /// <summary>決まりで絞るページでも全員を載せる候補の数の上限（主な方を補う数でもある）。</summary>
     public const int DefaultShowAllUpTo = 10;
 
-    /// <summary>役職詳細：メインスタッフ（役職を問わずオープニングに出た）と、1 年間（52 週）に 4 回以上担当したスタッフ（細線は 13 週以内の間隔でつなぐ）。</summary>
+    /// <summary>役職詳細：メインスタッフ（役職を問わずオープニングに出た）と、1 年間（52 週）に 4 回以上担当したスタッフと、映画を 3 本以上担当したスタッフ（細線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules Staff = new(
         91, WindowDays: 364, MinCreditsInWindow: 4, IncludeOpeningCredit: true, IncludeAll: false, DefaultShowAllUpTo, "担当",
         new[]
@@ -575,9 +673,11 @@ internal sealed record RoleTimelineRules(
             "次のいずれかに当たる方",
             "・オープニングにクレジットされたことがある",
             "・52週のあいだに4回以上担当した（TVの話数・映画の本数）",
+            "・映画を3本以上担当した",
             $"{DefaultShowAllUpTo}名に満たないときは担当回数の多い方から補います",
             "（同じ回数ならクレジットが早い方、同じ話なら先に出ている方）"
-        });
+        })
+    { MinMovies = 3 };
 
     /// <summary>声の出演：1 年間（52 週）に 4 回以上出演した声優（細線は 4 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules VoiceCast = new(
@@ -626,6 +726,20 @@ internal sealed class RoleTimelineEntity
     public long FirstSortPos { get; init; }
     /// <summary>役職を問わずオープニングのクレジットに出たことがあるか（役職詳細のメインスタッフの判定）。</summary>
     public bool HasOpeningCredit { get; init; }
+    /// <summary>
+    /// 所属の人をまとめる見出しになる行の鍵（役職詳細の企業の行。"company:{company_id}"）。まとめないものは空文字。
+    /// </summary>
+    public string GroupKey { get; init; } = "";
+    /// <summary>
+    /// 所属先の会社の <see cref="GroupKey"/>（役職詳細で、その役職を会社の所属としてクレジットされたことのある人物）。
+    /// 「すべて」を見せているときは会社の行のすぐ下に字下げして置く。所属していなければ空文字。
+    /// </summary>
+    public string MemberOf { get; init; } = "";
+    /// <summary>
+    /// 企業の所属としてクレジットされた担当（企業ごと）。行の帯の下に所属線を引き、内訳に「所属：企業名（期間）」を添える。
+    /// まとめた企業（<see cref="MemberOf"/>）の線は実線、ほかの企業の線は点線。役職詳細以外のページでは空。
+    /// </summary>
+    public IReadOnlyList<RoleTimelineAffiliation> Affiliations { get; init; } = Array.Empty<RoleTimelineAffiliation>();
     /// <summary>参加した TV 系の話 (series_id, episode_id)。</summary>
     public IReadOnlyCollection<(int SeriesId, int EpisodeId)> Episodes { get; init; } = Array.Empty<(int, int)>();
     /// <summary>参加した映画系のシリーズ。</summary>
@@ -643,6 +757,19 @@ internal sealed class RoleTimelineEntity
     /// 行の並び・主な方の判定には使わない。役職詳細以外のページでは空。
     /// </summary>
     public IReadOnlyList<RoleTimelineRelatedRole> RelatedRoles { get; init; } = Array.Empty<RoleTimelineRelatedRole>();
+}
+
+/// <summary>人物が 1 つの企業の所属としてクレジットされた担当（<see cref="RoleTimelineEntity.Affiliations"/>）。</summary>
+internal sealed class RoleTimelineAffiliation
+{
+    /// <summary>企業の鍵（<see cref="RoleTimelineEntity.GroupKey"/> と同じ形）。</summary>
+    public required string GroupKey { get; init; }
+    /// <summary>内訳に出す企業名。</summary>
+    public required string CompanyName { get; init; }
+    /// <summary>所属としてクレジットされた TV 系の話 (series_id, episode_id)。</summary>
+    public IReadOnlyCollection<(int SeriesId, int EpisodeId)> Episodes { get; init; } = Array.Empty<(int, int)>();
+    /// <summary>所属としてクレジットされた映画系のシリーズ。</summary>
+    public IReadOnlyCollection<int> MovieSeriesIds { get; init; } = Array.Empty<int>();
 }
 
 /// <summary>線表の行に重ねる関連する役職 1 つの担当（<see cref="RoleTimelineEntity.RelatedRoles"/>）。</summary>
@@ -680,10 +807,17 @@ internal sealed class RoleTimelineModel
     public IReadOnlyList<RoleTimelineBand> Bands { get; set; } = Array.Empty<RoleTimelineBand>();
     /// <summary>年の目盛り（帯ごとに 1 つ）。</summary>
     public IReadOnlyList<RoleTimelineTick> Ticks { get; set; } = Array.Empty<RoleTimelineTick>();
-    /// <summary>帯が多いときに目盛りの文字を間引く CSS クラス（"rtl-ticks-medium" / "rtl-ticks-sparse" / 空）。</summary>
+    /// <summary>帯が多いときに目盛りの年を下 2 桁にする CSS クラス（"rtl-ticks-medium" は狭い画面だけ / "rtl-ticks-sparse" は常に / 空）。</summary>
     public string TickDensityClass { get; set; } = "";
     /// <summary>行（並びは参加の始まり → 終わりの早い順）。</summary>
     public IReadOnlyList<RoleTimelineRow> Rows { get; set; } = Array.Empty<RoleTimelineRow>();
+    /// <summary>
+    /// 会社とその所属の人をまとめた行があるか。あるときの <see cref="Rows"/> はまとめた並び（「すべて」のとき）で、
+    /// 個人・団体で絞り込んだときは各行の <see cref="RoleTimelineRow.FlatOrder"/> の順に見せる（site.css）。
+    /// </summary>
+    public bool HasGroups { get; set; }
+    /// <summary>「TV・映画 / TVのみ / 映画のみ」の絞り込みを出すか（TV の話の帯を持つ行と映画の点を持つ行が両方あるとき）。</summary>
+    public bool HasMediaFilter { get; set; }
 }
 
 /// <summary>
@@ -724,8 +858,15 @@ internal sealed class RoleTimelineTick
     public string SeriesUrl { get; set; } = "";
     /// <summary>年の文字を出すか（帯の幅が足りない軸の右端では出さない）。</summary>
     public bool ShowLabel { get; set; }
-    /// <summary>帯が多いとき、狭い画面で文字を間引く年（5 の倍数以外）か。</summary>
-    public bool IsMinor { get; set; }
+}
+
+/// <summary>所属線 1 本（企業の所属としてクレジットされていた 1 つの期間）。</summary>
+internal sealed class RoleTimelineAffiliationMark
+{
+    public string Left { get; set; } = "0";
+    public string Width { get; set; } = "0";
+    /// <summary>年表でまとめた企業とは別の企業の所属か（点線で引く）。</summary>
+    public bool IsOther { get; set; }
 }
 
 /// <summary>線表の 1 行（人物・企業/団体・キャラクター 1 つ）。</summary>
@@ -738,6 +879,20 @@ internal sealed class RoleTimelineRow
     public string EntityUrl { get; set; } = "";
     /// <summary>主な方の行か（「主な方のみ」のスイッチが入っているときに見せる行。スイッチの無いページではすべて true）。</summary>
     public bool IsMain { get; set; } = true;
+    /// <summary>所属の人をまとめた会社の行か（「すべて」のときのゾーンの見出し）。</summary>
+    public bool IsGroupHead { get; set; }
+    /// <summary>会社の行の下にまとめた所属の人の行か（「すべて」のときは字下げする）。</summary>
+    public bool IsGroupMember { get; set; }
+    /// <summary>まとめる前の並びでの位置（個人・団体で絞り込んだときの並び。<see cref="RoleTimelineModel.HasGroups"/> のときだけ使う）。</summary>
+    public int FlatOrder { get; set; }
+    /// <summary>TV の話を描いた行か（「TVのみ」で見せる行。関連する役職の担当は数えない）。</summary>
+    public bool HasTv => Segments.Count > 0;
+    /// <summary>映画を描いた行か（「映画のみ」で見せる行。関連する役職の担当は数えない）。</summary>
+    public bool HasMovie => Movies.Count > 0;
+    /// <summary>会社の行（<see cref="IsGroupHead"/>）の下にまとめた所属の人に、TV の話を描いた行があるか。</summary>
+    public bool ZoneHasTv { get; set; }
+    /// <summary>会社の行（<see cref="IsGroupHead"/>）の下にまとめた所属の人に、映画を描いた行があるか。</summary>
+    public bool ZoneHasMovie { get; set; }
     /// <summary>続けて参加した期間（2 件以上つながったもの）の細線。</summary>
     public IReadOnlyList<RoleTimelineMark> Spans { get; set; } = Array.Empty<RoleTimelineMark>();
     /// <summary>TV の話の帯（話数が続く間はひと続き）。</summary>
@@ -752,6 +907,20 @@ internal sealed class RoleTimelineRow
     public IReadOnlyList<RoleTimelineMark> Products { get; set; } = Array.Empty<RoleTimelineMark>();
     /// <summary>関連する役職の担当（主の帯の下に重ねる細い帯・白抜きの輪）。</summary>
     public IReadOnlyList<RoleTimelineRelatedMark> Related { get; set; } = Array.Empty<RoleTimelineRelatedMark>();
+    /// <summary>所属線（企業の所属としてクレジットされていた期間。帯の下に引く）。</summary>
+    public IReadOnlyList<RoleTimelineAffiliationMark> Affiliations { get; set; } = Array.Empty<RoleTimelineAffiliationMark>();
+    /// <summary>内訳の「所属：企業名（期間）」（企業ごとに改行でつないだもの。無ければ空文字）。</summary>
+    public string AffiliationText { get; set; } = "";
+    /// <summary>
+    /// プリキュア（プリキュアのマスタのキャラ）を演じた方の行か。歴代プリキュア声優の「プリキュアを演じた方のみ」の絞り込みに使う
+    /// （行の data-precure-cast。ほかのページでは常に false）。
+    /// </summary>
+    public bool IsPrecureCast { get; set; }
+    /// <summary>
+    /// 「プリキュアを演じた方のみ」のときの並び順（演じたプリキュアのプリキュアのマスタの順。1 始まり、プリキュアを演じていない行は 0）。
+    /// 行の --rtl-precure-order で渡し、site.css が絞り込み中だけ並べ替えに使う。
+    /// </summary>
+    public int PrecureOrder { get; set; }
     /// <summary>内訳の参加期間（「2004年2月〜2005年1月」を「、」でつないだもの）。</summary>
     public string PeriodLabel { get; set; } = "";
     /// <summary>内訳の作品ごとの参加（改行でつないだもの）。</summary>

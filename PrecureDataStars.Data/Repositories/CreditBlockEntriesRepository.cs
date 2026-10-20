@@ -34,6 +34,7 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
           raw_text                       AS RawText,
           affiliation_company_alias_id   AS AffiliationCompanyAliasId,
           affiliation_person_alias_id    AS AffiliationPersonAliasId,
+          affiliation_logo_id            AS AffiliationLogoId,
           affiliation_text               AS AffiliationText,
           affiliation_inline             AS AffiliationInline,
           parallel_with_entry_id         AS ParallelWithEntryId,
@@ -91,14 +92,14 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
                person_alias_id, character_alias_id, raw_character_text,
                person_misprint_text, character_misprint_text, company_misprint_text, person_masked_text,
                company_alias_id, logo_id, raw_text,
-               affiliation_company_alias_id, affiliation_person_alias_id, affiliation_text, affiliation_inline,
+               affiliation_company_alias_id, affiliation_person_alias_id, affiliation_logo_id, affiliation_text, affiliation_inline,
                parallel_with_entry_id, notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
                @PersonMisprintText, @CharacterMisprintText, @CompanyMisprintText, @PersonMaskedText,
                @CompanyAliasId, @LogoId, @RawText,
-               @AffiliationCompanyAliasId, @AffiliationPersonAliasId, @AffiliationText, @AffiliationInline,
+               @AffiliationCompanyAliasId, @AffiliationPersonAliasId, @AffiliationLogoId, @AffiliationText, @AffiliationInline,
                @ParallelWithEntryId, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -127,6 +128,7 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
               raw_text                      = @RawText,
               affiliation_company_alias_id  = @AffiliationCompanyAliasId,
               affiliation_person_alias_id   = @AffiliationPersonAliasId,
+              affiliation_logo_id           = @AffiliationLogoId,
               affiliation_text              = @AffiliationText,
               affiliation_inline            = @AffiliationInline,
               parallel_with_entry_id        = @ParallelWithEntryId,

@@ -1,8 +1,5 @@
 <h1>歴代プリキュア音楽制作</h1>
-
-<p class="lead">
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
-</p>
+<p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 {{## 音楽制作。
      ・役職タブ：音楽クレジットの区分ごとに役職を並べ、役職詳細（/creators/roles/{code}/）へ送る（人数・団体数つき）。

@@ -4,16 +4,17 @@
   </p>
 
   <h1>{{ Company.Name | html.escape }}</h1>
-
-  {{~ if Company.NameKana != "" ~}}
-  <p class="muted">{{ Company.NameKana | html.escape }}</p>
-  {{~ end ~}}
-
-  {{## サイト全体のクレジット横断カバレッジ宣言。
-       ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
-  {{~ if CoverageLabel != "" ~}}
-  <p class="muted stats-coverage">{{ CoverageLabel }}</p>
-  {{~ end ~}}
+  {{## h1 の下の 1 行。読みを左に、「〇〇第N話(日付)時点」を右寄せで並べる（.page-subline。読みが無ければ時点だけ右に）。 ##}}
+  <div class="page-subline">
+    {{~ if Company.NameKana != "" ~}}
+    <p class="muted">{{ Company.NameKana | html.escape }}</p>
+    {{~ end ~}}
+    {{## サイト全体のクレジット横断カバレッジ宣言。
+         ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
+    {{~ if CoverageLabel != "" ~}}
+    <p class="muted page-coverage">{{ CoverageLabel }}</p>
+    {{~ end ~}}
+  </div>
 
   {{## 基本情報はファクトタイル表現（エピソード・シリーズ詳細と共通の意匠）。
        正式名称（Company.Name）と読み（NameKana）は h1・直下の読み行に出しているため、
@@ -42,6 +43,27 @@
       </div>
       {{~ end ~}}
     </div>
+  </section>
+  {{~ end ~}}
+
+  {{## 商号履歴。正式名（社名）の名義（company_aliases.is_official_name）を古い順に「期間 ｜ 商号」の表で出す。
+       基本情報の下に置き、正式名の名義が 2 つ以上あるときだけ出す。 ##}}
+  {{~ if (array.size OfficialNames) > 0 ~}}
+  <section id="official-names">
+    <h2>商号履歴</h2>
+    <table class="official-names-table">
+      <thead>
+        <tr><th class="col-period">期間</th><th class="col-name">商号</th></tr>
+      </thead>
+      <tbody>
+        {{~ for n in OfficialNames ~}}
+        <tr>
+          <td class="col-period">{{ n.Period }}</td>
+          <td class="col-name">{{ n.Name | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
   </section>
   {{~ end ~}}
 

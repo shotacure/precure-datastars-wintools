@@ -87,6 +87,11 @@ public sealed class CreditBlockEntry
     /// マスタを指すことで正規化・逆引きを可能にする。例：「清水 佐紀(Berryz工房)」の Berryz工房 をユニット名義に紐付ける。</summary>
     public int? AffiliationPersonAliasId { get; set; }
 
+    /// <summary>補助所属がロゴで出ているときのロゴの版（→ logos.logo_id、任意）。
+    /// TV の OP・ED の「（ABC）」「（ADK）」のように所属が各社のロゴで出ている画面で、どの版のロゴかを持つ。
+    /// 所属の会社は <see cref="AffiliationCompanyAliasId"/> で持ち、表示も会社名のまま（ロゴの版は表示に使わない）。</summary>
+    public int? AffiliationLogoId { get; set; }
+
     /// <summary>補助所属（フリーテキスト、任意）。</summary>
     public string? AffiliationText { get; set; }
 

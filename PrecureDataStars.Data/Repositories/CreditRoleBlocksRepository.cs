@@ -16,6 +16,7 @@ public sealed class CreditRoleBlocksRepository : RepositoryBase
           block_seq                  AS BlockSeq,
           col_count                  AS ColCount,
           leading_company_alias_id   AS LeadingCompanyAliasId,
+          leading_company_not_on_screen AS LeadingCompanyNotOnScreen,
           heading_series_id          AS HeadingSeriesId,
           heading_text               AS HeadingText,
           heading_italic             AS HeadingItalic,
@@ -69,11 +70,11 @@ public sealed class CreditRoleBlocksRepository : RepositoryBase
     {
         const string sql = """
             INSERT INTO credit_role_blocks
-              (card_role_id, block_seq, col_count, leading_company_alias_id,
+              (card_role_id, block_seq, col_count, leading_company_alias_id, leading_company_not_on_screen,
                heading_series_id, heading_text, heading_italic,
                notes, created_by, updated_by)
             VALUES
-              (@CardRoleId, @BlockSeq, @ColCount, @LeadingCompanyAliasId,
+              (@CardRoleId, @BlockSeq, @ColCount, @LeadingCompanyAliasId, @LeadingCompanyNotOnScreen,
                @HeadingSeriesId, @HeadingText, @HeadingItalic,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
@@ -91,6 +92,7 @@ public sealed class CreditRoleBlocksRepository : RepositoryBase
               block_seq                 = @BlockSeq,
               col_count                 = @ColCount,
               leading_company_alias_id  = @LeadingCompanyAliasId,
+              leading_company_not_on_screen = @LeadingCompanyNotOnScreen,
               heading_series_id         = @HeadingSeriesId,
               heading_text              = @HeadingText,
               heading_italic            = @HeadingItalic,

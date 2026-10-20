@@ -15,9 +15,13 @@
      各ボタンのブランドロゴは simple-icons（CC0）のパスデータをインライン SVG で埋め込む
      （外部リクエストなし・fill は currentColor でピルの文字色に追従）。
      URL コピーは share-buttons.js 側でクリップボード API を使う。
-     URL エンコードには Scriban 標準フィルタ html.url_encode を使い、RFC 3986 準拠で安全に処理する。 ##}}
+     URL エンコードには Scriban 標準フィルタ html.url_encode を使い、RFC 3986 準拠で安全に処理する。
+
+     ビルド時点でサブタイトル解禁前の各話ページ（SubtitleRevealAt が非空）は、題名入りの OGP カードが
+     共有先に出てしまうので、欄を hidden で出して解禁時刻を添える。subtitle-embargo.js が解禁時刻を過ぎたときだけ
+     hidden を外す（閲覧者が先の題を見る設定にしていても出さない。JavaScript が動かない環境では出ない）。 ##}}
 {{~ if ShareUrl != "" ~}}
-<aside class="share-buttons" aria-label="このページをシェア">
+<aside class="share-buttons" aria-label="このページをシェア"{{ if SubtitleRevealAt != "" }} data-share-reveal-at="{{ SubtitleRevealAt }}" hidden{{ end }}>
   <h2 class="share-buttons-heading">
     {{## 見出し用の汎用シェアアイコン（ノード 3 つを線で結ぶ定番モチーフ）。装飾なので aria-hidden。 ##}}
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12.5" cy="3" r="1.9"/><circle cx="3.5" cy="8" r="1.9"/><circle cx="12.5" cy="13" r="1.9"/><path d="M5.2 7.1l5.6-3.2M5.2 8.9l5.6 3.2"/></svg>

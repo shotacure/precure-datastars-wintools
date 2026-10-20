@@ -310,8 +310,21 @@ public sealed class CreatorsGenerator
         // ── 声の出演（/creators/voice-cast/） ──
         var allCharacters = (await _charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allCharacterAliases = (await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+        var allPrecures = (await _precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+        // プリキュアのマスタに入っているキャラ（変身前・変身後・2 段目の変身・別形態の名義のキャラ）。
+        // 歴代プリキュア声優の「プリキュアを演じた方のみ」で、このキャラを演じた方を見分けるのに使う。
+        // 値はプリキュアのマスタの順（precure_id 順の 1 始まり）で、年表の「プリキュアを演じた方のみ」の並びに使う。
+        var precureOrderByCharacter = new Dictionary<int, int>();
+        int precureOrder = 0;
+        foreach (var pc in allPrecures.OrderBy(p => p.PrecureId))
+        {
+            precureOrder++;
+            foreach (int? aliasId in new int?[] { pc.PreTransformAliasId, pc.TransformAliasId, pc.Transform2AliasId, pc.AltFormAliasId })
+                if (aliasId is int a && _ctx.CharacterAliasById.TryGetValue(a, out var ca))
+                    precureOrderByCharacter.TryAdd(ca.CharacterId, precureOrder);
+        }
         GenerateVoiceCast(aliasIdsByPersonId, allPersons, allCharacters, allCharacterAliases, roleTimeline,
-            out int voiceCastCount);
+            precureOrderByCharacter, out int voiceCastCount);
 
         // ── 音楽制作（/creators/music-production/）・歌唱（/creators/singers/） ──
         musicRoleEntries = musicRoleEntries
@@ -325,7 +338,7 @@ public sealed class CreatorsGenerator
         var characterById = allCharacters.ToDictionary(c => c.CharacterId);
         // 変身するキャラ（プリキュア）は歌唱ページのキャラクタータブで「変身前 / 変身後」の名義を並べる。
         var transformNameByCharacter = new Dictionary<int, string>();
-        foreach (var pc in await _precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false))
+        foreach (var pc in allPrecures)
         {
             if (_ctx.CharacterAliasById.TryGetValue(pc.PreTransformAliasId, out var pre)
                 && _ctx.CharacterAliasById.TryGetValue(pc.TransformAliasId, out var post)
@@ -368,7 +381,8 @@ public sealed class CreatorsGenerator
             aliasIdsByPersonId, allPersons, companyAliasesByCompany, logosByCompanyAlias,
             allCompanies, companyAliasById, repNameMap: null, withWorksTooltip: true,
             roleUsageNote: agg => BuildRoleUsageNote(agg, pageRoleCode, roleByCode),
-            related: inv => RelatedRoleOf(pageRoleCode, inv, roleByCode));
+            related: inv => RelatedRoleOf(pageRoleCode, inv, roleByCode),
+            groupMembers: true);
 
     /// <summary>
     /// 役職詳細の年表に重ねる関連する役職の判定。本編のクレジットで、ページの役職と関連（段階・並列）でつながった
@@ -414,6 +428,7 @@ public sealed class CreatorsGenerator
     /// <param name="accept">関与を集計対象にするかの判定。対象なら役職ラベル用の代表 role_code、対象外なら null。</param>
     /// <param name="repNameMap">役職ラベル（スタッフ一覧用）を作るときの「代表 role_code → 役職名」。null なら役職ラベルを作らない。</param>
     /// <param name="withWorksTooltip">行リンクに担当作品一覧の tooltip を付けるか（役職詳細用）。</param>
+    /// <param name="groupMembers">年表で会社とその所属の人をまとめるか（役職詳細用。所属は <see cref="BuildMemberOf"/>）。</param>
     private EntityRowSet BuildEntityRowSet(
         Func<Involvement, string?> accept,
         IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
@@ -425,9 +440,13 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<string, string>? repNameMap,
         bool withWorksTooltip,
         Func<EntityAggregate, string>? roleUsageNote = null,
-        Func<Involvement, RelatedRoleKey?>? related = null)
+        Func<Involvement, RelatedRoleKey?>? related = null,
+        bool groupMembers = false)
     {
         var set = new EntityRowSet();
+        var memberOf = groupMembers
+            ? BuildMemberOf(accept, aliasIdsByPersonId, companyAliasesByCompany, companyAliasById)
+            : new Dictionary<int, PersonMembership>();
 
         // 集計対象の関与は担当として、集計対象外でも関連する役職の関与（役職詳細の年表に重ねる分）は関連として積む。
         void Offer(EntityAggregate agg, int aid, Involvement inv)
@@ -476,7 +495,9 @@ public sealed class CreatorsGenerator
                 return _ctx.IsMovieKindSeries(first.SeriesId);
             }
             AppendEntityRows(set, agg, "person", p.PersonId, PathUtil.PersonUrl(p.PersonId),
-                latest, AliasLabel, NoteCurrentName, repNameMap, withWorksTooltip, roleUsageNote);
+                latest, AliasLabel, NoteCurrentName, repNameMap, withWorksTooltip, roleUsageNote,
+                memberOf: memberOf.TryGetValue(p.PersonId, out var membership) ? CompanyGroupKey(membership.CompanyId) : "",
+                affiliations: membership?.Affiliations);
         }
 
         // 企業・団体。
@@ -512,22 +533,106 @@ public sealed class CreatorsGenerator
                 : (c.Name, c.NameKana ?? "");
             // 企業の屋号は改名に限らず、雑誌名・部門名など並立する別名義も多いので、初参加行に最新屋号は添えない。
             AppendEntityRows(set, agg, "company", c.CompanyId, PathUtil.CompanyUrl(c.CompanyId),
-                latest, AliasLabel, _ => false, repNameMap, withWorksTooltip, roleUsageNote);
+                latest, AliasLabel, _ => false, repNameMap, withWorksTooltip, roleUsageNote,
+                groupKey: groupMembers ? CompanyGroupKey(c.CompanyId) : "");
         }
 
         return set;
+    }
+
+    /// <summary>年表で企業の行と所属の人の行を結ぶ鍵（<see cref="RoleTimelineEntity.GroupKey"/> / <see cref="RoleTimelineEntity.MemberOf"/>）。</summary>
+    private static string CompanyGroupKey(int companyId)
+        => "company:" + companyId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>年表で人物をまとめる所属先の企業と、企業ごとの所属としてクレジットされた担当（<see cref="BuildMemberOf"/>）。</summary>
+    private sealed record PersonMembership(int CompanyId, IReadOnlyList<RoleTimelineAffiliation> Affiliations);
+
+    /// <summary>
+    /// 人物 → 所属（person_id → 所属先の企業と企業ごとの所属の担当）。集計対象の関与（<paramref name="accept"/>）のうち、企業の所属として
+    /// クレジットされたもの（所属屋号付きのエントリと、先頭企業ブロックの配下のエントリ。いずれも企業側の Member 関与）を企業ごとに集め、
+    /// 年表でまとめる企業は、2 社以上に所属したことがある人なら所属の回数の多い企業（同じ数なら先にクレジットされた企業）にする。
+    /// 企業ごとの担当（TV の話・映画）は、年表の所属線と内訳の「所属：」の行に使う。企業名は全クレジット横断で最後に使われた屋号。
+    /// </summary>
+    private Dictionary<int, PersonMembership> BuildMemberOf(
+        Func<Involvement, string?> accept,
+        IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
+        IReadOnlyDictionary<int, List<int>> companyAliasesByCompany,
+        IReadOnlyDictionary<int, CompanyAlias> companyAliasById)
+    {
+        var personByAlias = new Dictionary<int, int>();
+        foreach (var kv in aliasIdsByPersonId)
+            foreach (var aid in kv.Value) personByAlias.TryAdd(aid, kv.Key);
+
+        var tally = new Dictionary<(int PersonId, int CompanyId), MemberTally>();
+        foreach (var kv in companyAliasesByCompany)
+        {
+            foreach (var caid in kv.Value)
+            {
+                if (!_index.ByCompanyAlias.TryGetValue(caid, out var invs)) continue;
+                foreach (var inv in invs)
+                {
+                    if (inv.Kind != InvolvementKind.Member || inv.PersonAliasId is not int paid) continue;
+                    if (!personByAlias.TryGetValue(paid, out var personId) || accept(inv) is null) continue;
+                    var key = (personId, kv.Key);
+                    if (!tally.TryGetValue(key, out var t))
+                    {
+                        t = new MemberTally();
+                        tally[key] = t;
+                    }
+                    t.Count++;
+                    var order = CreditOrderKey(inv);
+                    if (t.Count == 1 || order.CompareTo(t.First) < 0) t.First = order;
+                    if (_ctx.IsMovieKindSeries(inv.SeriesId)) t.Movies.Add(inv.SeriesId);
+                    else t.Episodes.Add((inv.SeriesId, inv.EpisodeId ?? 0));
+                }
+            }
+        }
+
+        string CompanyName(int companyId)
+            => _latestCompanyAliasId.TryGetValue(companyId, out var aid) && companyAliasById.TryGetValue(aid, out var a) ? a.Name : "";
+
+        return tally
+            .GroupBy(kv => kv.Key.PersonId)
+            .ToDictionary(
+                g => g.Key,
+                g => new PersonMembership(
+                    g.OrderByDescending(kv => kv.Value.Count)
+                     .ThenBy(kv => kv.Value.First)
+                     .ThenBy(kv => kv.Key.CompanyId)
+                     .First().Key.CompanyId,
+                    g.Select(kv => new RoleTimelineAffiliation
+                    {
+                        GroupKey = CompanyGroupKey(kv.Key.CompanyId),
+                        CompanyName = CompanyName(kv.Key.CompanyId),
+                        Episodes = kv.Value.Episodes,
+                        MovieSeriesIds = kv.Value.Movies
+                    }).ToList()));
+    }
+
+    /// <summary><see cref="BuildMemberOf"/> の (人物, 企業) ごとの集計。</summary>
+    private sealed class MemberTally
+    {
+        public int Count;
+        public (long Start, int EpNo, long Pos) First;
+        public HashSet<(int SeriesId, int EpisodeId)> Episodes { get; } = new();
+        public HashSet<int> Movies { get; } = new();
     }
 
     /// <summary>
     /// 1 エンティティ分の集計結果から、担当回数順用の 1 行と、初参加順用の名義ごとの行を
     /// <paramref name="set"/> に積む。担当量・tooltip・役職ラベルは全行でエンティティ合算値を共有する。
     /// </summary>
+    /// <param name="groupKey">年表で所属の人をまとめる見出しの鍵（企業の行。まとめないなら空文字）。</param>
+    /// <param name="memberOf">年表で所属先としてまとめる企業の鍵（人物の行。所属していなければ空文字）。</param>
+    /// <param name="affiliations">年表の所属線に描く、企業ごとの所属としてクレジットされた担当（人物の行。無ければ null）。</param>
     private void AppendEntityRows(
         EntityRowSet set, EntityAggregate agg, string entityKind, int entityId, string url,
         (string Name, string Kana) latest, Func<int, (string Name, string Kana)> aliasLabel,
         Func<int, bool> noteCurrentName,
         IReadOnlyDictionary<string, string>? repNameMap, bool withWorksTooltip,
-        Func<EntityAggregate, string>? roleUsageNote)
+        Func<EntityAggregate, string>? roleUsageNote,
+        string groupKey = "", string memberOf = "",
+        IReadOnlyList<RoleTimelineAffiliation>? affiliations = null)
     {
         string tooltip = withWorksTooltip ? BuildWorksTooltip(agg.EpisodeKeys, agg.MovieSeriesIds) : "";
         string rolesLabel = repNameMap is null ? "" : BuildRolesLabel(agg.EarliestByRep, repNameMap);
@@ -545,6 +650,9 @@ public sealed class CreatorsGenerator
             EntityUrl = url,
             FirstSortPos = countRow.FirstSortPos,
             HasOpeningCredit = agg.HasOpeningCredit,
+            GroupKey = groupKey,
+            MemberOf = memberOf,
+            Affiliations = affiliations ?? Array.Empty<RoleTimelineAffiliation>(),
             Episodes = agg.EpisodeKeys,
             MovieSeriesIds = agg.MovieSeriesIds,
             RelatedRoles = agg.RelatedRoles
@@ -1993,6 +2101,7 @@ public sealed class CreatorsGenerator
         IReadOnlyList<Character> allCharacters,
         IReadOnlyList<CharacterAlias> allCharacterAliases,
         RoleTimelineBuilder timelineBuilder,
+        IReadOnlyDictionary<int, int> precureOrderByCharacter,
         out int voiceCastCount)
     {
         var characterById = allCharacters.ToDictionary(c => c.CharacterId);
@@ -2064,6 +2173,62 @@ public sealed class CreatorsGenerator
             .ToList();
         foreach (var r in countRows) _lists.VoiceCastPersons.Add(r.PersonId);
 
+        // 「プリキュアを演じた方のみ」：プリキュアのマスタのキャラを演じたことがある方を、全タブの行に印を付ける
+        // （キャラクター別タブでも、その方が演じたほかのキャラの行を含めて残す）。
+        // 年表は絞り込み中だけプリキュアのマスタの順に並べ直す（複数のプリキュアを演じた方はいちばん前の順）。
+        var precureOrderByPerson = rows
+            .Where(r => precureOrderByCharacter.ContainsKey(r.CharacterId))
+            .GroupBy(r => r.PersonId)
+            .ToDictionary(g => g.Key, g => g.Min(r => precureOrderByCharacter[r.CharacterId]));
+        foreach (var r in charSections.SelectMany(s => s.Members).Concat(debutSections.SelectMany(s => s.Members)).Concat(countRows))
+            r.IsPrecureCast = precureOrderByPerson.ContainsKey(r.PersonId);
+        // 初出演順の行に、初めて出演した話（「第N話「サブタイトル」」）を添える。同じセクションで直前の行と同じ話なら
+        // 先頭の行だけに見せる（同じ話で初出演した方が続くときに繰り返さない）。映画など話数の無い出演には添えない。
+        // 「プリキュアを演じた方のみ」で行が隠れると「直前の行」が変わるので、全員のときの先頭（DebutShowAll）と、
+        // プリキュアを演じた方だけのときの先頭（DebutShowPrecure）を別々に決め、テンプレのクラスで出し分ける（site.css）。
+        foreach (var sec in debutSections)
+        {
+            int prevAll = 0, prevPrecure = 0;
+            foreach (var r in sec.Members)
+            {
+                if (r.EarliestEpNo <= 0)
+                {
+                    prevAll = 0;
+                    if (r.IsPrecureCast) prevPrecure = 0;
+                    continue;
+                }
+                bool showAll = r.EarliestEpNo != prevAll;
+                prevAll = r.EarliestEpNo;
+                bool showPrecure = false;
+                if (r.IsPrecureCast)
+                {
+                    showPrecure = r.EarliestEpNo != prevPrecure;
+                    prevPrecure = r.EarliestEpNo;
+                }
+                if (!showAll && !showPrecure) continue;
+                if (!_ctx.EpisodesBySeries.TryGetValue(r.SeriesId, out var seriesEpisodes)
+                    || !_ctx.SeriesById.TryGetValue(r.SeriesId, out var debutSeries)) continue;
+                var ep = seriesEpisodes.FirstOrDefault(e => e.SeriesEpNo == r.EarliestEpNo);
+                if (ep is null) continue;
+                r.DebutEpisodeLabel = $"第{ep.SeriesEpNo}話「{PrecureDataStars.TemplateRendering.JapaneseQuotes.InQuotes(ep.TitleText)}」";
+                r.DebutEpisodeUrl = PathUtil.EpisodeUrl(debutSeries.Slug, ep.SeriesEpNo);
+                r.DebutShowAll = showAll;
+                r.DebutShowPrecure = showPrecure;
+            }
+        }
+        var precureOrderByUrl = rows
+            .Where(r => precureOrderByPerson.ContainsKey(r.PersonId))
+            .GroupBy(r => r.PersonUrl, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => precureOrderByPerson[g.First().PersonId], StringComparer.Ordinal);
+        var timeline = RecordTimelineRows(timelineBuilder.Build(timelineEntities, RoleTimelineRules.VoiceCast));
+        if (timeline is not null)
+            foreach (var row in timeline.Rows)
+                if (precureOrderByUrl.TryGetValue(row.EntityUrl, out int order))
+                {
+                    row.IsPrecureCast = true;
+                    row.PrecureOrder = order;
+                }
+
         var content = new VoiceCastModel
         {
             CharacterSections = charSections,
@@ -2072,8 +2237,9 @@ public sealed class CreatorsGenerator
             DebutSections = debutSections,
             CountRows = countRows,
             // 年表タブの線表（1 年間に 4 回以上出演した声優）。
-            Timeline = RecordTimelineRows(timelineBuilder.Build(timelineEntities, RoleTimelineRules.VoiceCast)),
-            CoverageLabel = _ctx.CreditCoverageLabel
+            Timeline = timeline,
+            CoverageLabel = _ctx.CreditCoverageLabel,
+            PrecureCount = precureOrderByCharacter.Values.Distinct().Count()
         };
         var layout = new LayoutModel
         {
@@ -2350,6 +2516,8 @@ public sealed class CreatorsGenerator
                 PersonName = debutSource.PersonName,
                 PersonNameKana = debutSource.PersonNameKana,
                 PersonUrl = debutSource.PersonUrl,
+                PersonId = debutSource.PersonId,
+                SeriesId = debutSource.SeriesId,
                 SeriesTitle = debutSource.SeriesTitle,
                 SeriesUrl = debutSource.SeriesUrl,
                 SeriesYearLabel = debutSource.SeriesYearLabel,
@@ -3345,6 +3513,8 @@ public sealed class CreatorsGenerator
         /// <summary>年表タブの線表。載せる声優が居ないときは null（年表タブを出さない）。</summary>
         public RoleTimelineModel? Timeline { get; set; }
         public string CoverageLabel { get; set; } = "";
+        /// <summary>プリキュアのマスタのプリキュアの人数（「プリキュアを演じた方のみ」の ? の説明に出す）。</summary>
+        public int PrecureCount { get; set; }
     }
 
     /// <summary>声の出演のシリーズ別セクション（キャラクター順・初出演順タブで使用）。 シリーズ名・年は見出しに集約し、配下行からはシリーズ情報を出さない。</summary>
@@ -3355,6 +3525,8 @@ public sealed class CreatorsGenerator
         public string SeriesHeadingLabel { get; set; } = "";
         public long SortStart { get; set; }
         public IReadOnlyList<VoiceCastRow> Members { get; set; } = Array.Empty<VoiceCastRow>();
+        /// <summary>プリキュアを演じた方の行を含むか（「プリキュアを演じた方のみ」のときもセクションを残すか）。</summary>
+        public bool HasPrecureCast => Members.Any(m => m.IsPrecureCast);
     }
 
     /// <summary>(声優 × シリーズ × キャラ) 1 組分の表示行。別シリーズ・別キャラはそれぞれ別行になり、 その都度キャラ名・シリーズ名が出る。</summary>
@@ -3391,5 +3563,15 @@ public sealed class CreatorsGenerator
         /// <summary>出演回数順タブ（声優単位の集約行）専用：代表キャラ以外にも演じたキャラが
         /// 居るとき true。テンプレ側で「（キャラ 役 他）」の「他」を付ける。</summary>
         public bool HasOtherCharacters { get; set; }
+        /// <summary>この行の声優がプリキュア（プリキュアのマスタのキャラ）を演じたことがあるか。「プリキュアを演じた方のみ」の絞り込みに使う。</summary>
+        public bool IsPrecureCast { get; set; }
+        /// <summary>初出演順タブ専用：初めて出演した話（「第N話「サブタイトル」」）。同じセクションで直前の行と同じ話なら空。</summary>
+        public string DebutEpisodeLabel { get; set; } = "";
+        /// <summary>初出演順タブ専用：<see cref="DebutEpisodeLabel"/> の話のエピソード詳細の URL。</summary>
+        public string DebutEpisodeUrl { get; set; } = "";
+        /// <summary>初出演順タブ専用：全員を見せているとき、この行に初出演の話を見せるか（セクションで同じ話が続く先頭か）。</summary>
+        public bool DebutShowAll { get; set; }
+        /// <summary>初出演順タブ専用：「プリキュアを演じた方のみ」のとき、この行に初出演の話を見せるか。</summary>
+        public bool DebutShowPrecure { get; set; }
     }
 }

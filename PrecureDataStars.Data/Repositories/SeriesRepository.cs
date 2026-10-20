@@ -59,11 +59,21 @@ public sealed class SeriesRepository : RepositoryBase
               film_rating_no                AS FilmRatingNo,
               film_cj_mark                  AS FilmCjMark,
               vod_intro        AS VodIntro,
-              sss.font_subtitle    AS FontSubtitle,
+              -- サブタイトルの書体は作品の書体の表（series_font_usages）から、描く手元の書体（fonts.render_font_name）で引く。
+              (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE' AND u.is_broadcast_only = 0
+                ORDER BY u.period_no, u.usage_id LIMIT 1) AS FontSubtitle,
               sss.subtitle_kerning              AS SubtitleKerning,
               sss.subtitle_letter_spacing_em    AS SubtitleLetterSpacingEm,
               sss.subtitle_ruby_letter_spacing_em AS SubtitleRubyLetterSpacingEm,
-              sss.font_subtitle_ruby            AS FontSubtitleRuby,
+              -- 振り仮名の書体は、親字と同じなら NULL（親字の書体で描く）。
+              NULLIF(
+                (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                  WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE_RUBY' AND u.is_broadcast_only = 0
+                  ORDER BY u.period_no, u.usage_id LIMIT 1),
+                (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                  WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE' AND u.is_broadcast_only = 0
+                  ORDER BY u.period_no, u.usage_id LIMIT 1)) AS FontSubtitleRuby,
               sss.subtitle_ruby_size_ratio      AS SubtitleRubySizeRatio,
               sss.subtitle_ruby_raise_ratio     AS SubtitleRubyRaiseRatio,
               sss.subtitle_ruby_oblique_deg     AS SubtitleRubyObliqueDeg,
@@ -73,7 +83,7 @@ public sealed class SeriesRepository : RepositoryBase
               sss.subtitle_ruby_overhang_ratio  AS SubtitleRubyOverhangRatio,
               sss.subtitle_ruby_line_edge       AS SubtitleRubyLineEdge,
               sss.subtitle_ruby_grouping        AS SubtitleRubyGrouping,
-              hide_storyboard_role  AS HideStoryboardRole,
+              storyboard_display    AS StoryboardDisplay,
               created_by       AS CreatedBy,
               updated_by       AS UpdatedBy,
               is_deleted       AS IsDeleted
@@ -117,11 +127,21 @@ public sealed class SeriesRepository : RepositoryBase
               film_rating_no                AS FilmRatingNo,
               film_cj_mark                  AS FilmCjMark,
               vod_intro        AS VodIntro,
-              sss.font_subtitle    AS FontSubtitle,
+              -- サブタイトルの書体は作品の書体の表（series_font_usages）から、描く手元の書体（fonts.render_font_name）で引く。
+              (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE' AND u.is_broadcast_only = 0
+                ORDER BY u.period_no, u.usage_id LIMIT 1) AS FontSubtitle,
               sss.subtitle_kerning              AS SubtitleKerning,
               sss.subtitle_letter_spacing_em    AS SubtitleLetterSpacingEm,
               sss.subtitle_ruby_letter_spacing_em AS SubtitleRubyLetterSpacingEm,
-              sss.font_subtitle_ruby            AS FontSubtitleRuby,
+              -- 振り仮名の書体は、親字と同じなら NULL（親字の書体で描く）。
+              NULLIF(
+                (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                  WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE_RUBY' AND u.is_broadcast_only = 0
+                  ORDER BY u.period_no, u.usage_id LIMIT 1),
+                (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                  WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE' AND u.is_broadcast_only = 0
+                  ORDER BY u.period_no, u.usage_id LIMIT 1)) AS FontSubtitleRuby,
               sss.subtitle_ruby_size_ratio      AS SubtitleRubySizeRatio,
               sss.subtitle_ruby_raise_ratio     AS SubtitleRubyRaiseRatio,
               sss.subtitle_ruby_oblique_deg     AS SubtitleRubyObliqueDeg,
@@ -131,7 +151,7 @@ public sealed class SeriesRepository : RepositoryBase
               sss.subtitle_ruby_overhang_ratio  AS SubtitleRubyOverhangRatio,
               sss.subtitle_ruby_line_edge       AS SubtitleRubyLineEdge,
               sss.subtitle_ruby_grouping        AS SubtitleRubyGrouping,
-              hide_storyboard_role  AS HideStoryboardRole,
+              storyboard_display    AS StoryboardDisplay,
               created_by       AS CreatedBy,
               updated_by       AS UpdatedBy,
               is_deleted       AS IsDeleted
@@ -176,11 +196,21 @@ public sealed class SeriesRepository : RepositoryBase
               film_rating_no                AS FilmRatingNo,
               film_cj_mark                  AS FilmCjMark,
               vod_intro        AS VodIntro,
-              sss.font_subtitle    AS FontSubtitle,
+              -- サブタイトルの書体は作品の書体の表（series_font_usages）から、描く手元の書体（fonts.render_font_name）で引く。
+              (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE' AND u.is_broadcast_only = 0
+                ORDER BY u.period_no, u.usage_id LIMIT 1) AS FontSubtitle,
               sss.subtitle_kerning              AS SubtitleKerning,
               sss.subtitle_letter_spacing_em    AS SubtitleLetterSpacingEm,
               sss.subtitle_ruby_letter_spacing_em AS SubtitleRubyLetterSpacingEm,
-              sss.font_subtitle_ruby            AS FontSubtitleRuby,
+              -- 振り仮名の書体は、親字と同じなら NULL（親字の書体で描く）。
+              NULLIF(
+                (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                  WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE_RUBY' AND u.is_broadcast_only = 0
+                  ORDER BY u.period_no, u.usage_id LIMIT 1),
+                (SELECT f.render_font_name FROM series_font_usages u JOIN fonts f ON f.font_id = u.font_id
+                  WHERE u.series_id = series.series_id AND u.usage_kind = 'SUBTITLE' AND u.is_broadcast_only = 0
+                  ORDER BY u.period_no, u.usage_id LIMIT 1)) AS FontSubtitleRuby,
               sss.subtitle_ruby_size_ratio      AS SubtitleRubySizeRatio,
               sss.subtitle_ruby_raise_ratio     AS SubtitleRubyRaiseRatio,
               sss.subtitle_ruby_oblique_deg     AS SubtitleRubyObliqueDeg,
@@ -190,7 +220,7 @@ public sealed class SeriesRepository : RepositoryBase
               sss.subtitle_ruby_overhang_ratio  AS SubtitleRubyOverhangRatio,
               sss.subtitle_ruby_line_edge       AS SubtitleRubyLineEdge,
               sss.subtitle_ruby_grouping        AS SubtitleRubyGrouping,
-              hide_storyboard_role  AS HideStoryboardRole,
+              storyboard_display    AS StoryboardDisplay,
               created_by       AS CreatedBy,
               updated_by       AS UpdatedBy,
               is_deleted       AS IsDeleted
@@ -224,7 +254,7 @@ public sealed class SeriesRepository : RepositoryBase
               slug, start_date, end_date, episodes, run_time_seconds,
               toei_anim_official_site_url, toei_anim_lineup_url,
               abc_official_site_url, amazon_prime_video_asin, youtube_trailer_url, film_rating_no, film_cj_mark, vod_intro,
-              hide_storyboard_role,
+              storyboard_display,
               created_by, updated_by, is_deleted
             ) VALUES (
               @KindCode, @ParentSeriesId, @RelationToParent, @SeqInParent,
@@ -233,7 +263,7 @@ public sealed class SeriesRepository : RepositoryBase
               @Slug, @StartDate, @EndDate, @Episodes, @RunTimeSeconds,
               @ToeiAnimOfficialSiteUrl, @ToeiAnimLineupUrl,
               @AbcOfficialSiteUrl, @AmazonPrimeVideoAsin, @YoutubeTrailerUrl, @FilmRatingNo, @FilmCjMark, @VodIntro,
-              @HideStoryboardRole,
+              @StoryboardDisplay,
               @CreatedBy, @UpdatedBy, 0
             );
             SELECT LAST_INSERT_ID();
@@ -283,7 +313,7 @@ public sealed class SeriesRepository : RepositoryBase
               film_rating_no = @FilmRatingNo,
               film_cj_mark = @FilmCjMark,
               vod_intro = @VodIntro,
-              hide_storyboard_role = @HideStoryboardRole,
+              storyboard_display = @StoryboardDisplay,
               updated_by = @UpdatedBy
             WHERE series_id = @SeriesId;
         """;

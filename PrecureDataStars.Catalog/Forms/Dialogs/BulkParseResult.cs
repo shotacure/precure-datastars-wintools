@@ -141,6 +141,10 @@ public sealed class ParsedRole
     /// <summary>その行だけ役職名を出さないか（<c>credit_card_roles.hide_role_label</c>）。<c>@hide_label</c> 行で設定される。
     /// 同じ見出しの下に 2 社目のスタッフが続くとき、2 社目の見出しの役職に立てる。</summary>
     public bool HideRoleLabel { get; set; }
+
+    /// <summary>その行が画面にはクレジットされていないか（<c>credit_card_roles.not_on_screen</c>）。<c>@not_on_screen</c> 行で設定される。
+    /// 毎回出る役職がその回だけ画面から抜けているとき（クレジット漏れ）に立てる。データは入れて、表示だけ括弧で示す。</summary>
+    public bool NotOnScreen { get; set; }
 }
 
 /// <summary>パース結果における 1 ブロック分の塊。 同一役職内で空行を跨ぐと新しいブロックが生まれる。</summary>
@@ -169,6 +173,9 @@ public sealed class ParsedBlock
 
     /// <summary><c>@heading_italic</c> で指定された、見出しを斜体で出す印（<c>credit_role_blocks.heading_italic</c>）。</summary>
     public bool HeadingItalic { get; set; }
+
+    /// <summary><c>@leading_not_on_screen</c> で指定された、筆頭の会社が画面に出ていない印（<c>credit_role_blocks.leading_company_not_on_screen</c>）。</summary>
+    public bool LeadingCompanyNotOnScreen { get; set; }
 }
 
 /// <summary>パース結果における 1 行分のエントリ群。タブ区切りで複数エントリを持つ。</summary>
@@ -239,6 +246,12 @@ public sealed class ParsedEntry
     /// 適用時は <c>affiliation_person_alias_id</c> へ直行（マスタ引き当て不要）。例：<c>清水 佐紀(Berryz工房#p524)</c>。
     /// <c>affiliation_company_alias_id</c> とは排他。</summary>
     public int? AffiliationPersonAliasId { get; set; }
+
+    /// <summary>所属表記が「屋号#lg&lt;id&gt;」のロゴの版の記法で書かれた場合の logos.logo_id。
+    /// 所属が各社のロゴで出ている画面（TV の「（ABC）」など）で、どの版のロゴかを持つ。適用時は
+    /// <c>affiliation_logo_id</c> へ直行する（屋号部は今までどおり <c>affiliation_company_alias_id</c> へ引き当てる）。
+    /// 例：<c>多田 香奈子 (ABC#lg16)</c>。</summary>
+    public int? AffiliationLogoId { get; set; }
 
     /// <summary>所属表記のインライン (true=「名前 (所属)」) / 別行 (false=「名前 / (所属)」) レイアウトフラグ。
     /// 入力時の表現を round-trip 保持するための表示ヒント。

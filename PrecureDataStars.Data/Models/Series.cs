@@ -100,8 +100,9 @@ public sealed class Series
     public ushort? VodIntro { get; set; }
 
     /// <summary>
-    /// サブタイトル表示用フォント名（<c>series_subtitle_styles.font_subtitle</c>。行が無ければ NULL）。
-    /// これ以下のサブタイトルの組み方も同じテーブルから読み、<c>SeriesRepository</c> の INSERT / UPDATE では書き換えない。
+    /// サブタイトルを描く書体名（作品の書体の表 <c>series_font_usages</c> のサブタイトルの行が指す
+    /// <c>fonts.render_font_name</c>。行が無ければ NULL）。
+    /// これ以下のサブタイトルの組み方は <c>series_subtitle_styles</c> から読み、<c>SeriesRepository</c> の INSERT / UPDATE では書き換えない。
     /// </summary>
     public string? FontSubtitle { get; set; }
 
@@ -119,7 +120,10 @@ public sealed class Series
     /// <summary>振り仮名の字と字のあいだに足す空き（振り仮名の大きさに対する比）。NULL なら 0。</summary>
     public decimal? SubtitleRubyLetterSpacingEm { get; set; }
 
-    /// <summary>振り仮名の書体名（インストール済み書体の名前）。NULL なら親字と同じ書体。</summary>
+    /// <summary>
+    /// 振り仮名を描く書体名（<c>series_font_usages</c> のサブタイトルのルビの行が指す <c>fonts.render_font_name</c>）。
+    /// 親字と同じ書体か行が無ければ NULL（親字と同じ書体で描く）。
+    /// </summary>
     public string? FontSubtitleRuby { get; set; }
 
     /// <summary>振り仮名の大きさ（親字の大きさに対する比）。NULL なら 0.300。</summary>
@@ -160,20 +164,33 @@ public sealed class Series
     public string? SubtitleRubyGrouping { get; set; }
 
     /// <summary>
-    /// 「絵コンテ」役職を独立表示せず「演出」と融合表示するか。
-    /// 一部のプリキュアシリーズ（『ふたりはプリキュア』〜『スマイルプリキュア！』が対象想定）の
-    /// エンディングクレジットでは絵コンテと演出を区別表示せず、両者を 1 行にまとめて
-    /// クレジットしていた。本フラグが true のとき、プレビューレンダラは
-    /// <c>STORYBOARD</c>（絵コンテ）役職と <c>EPISODE_DIRECTOR</c>（演出）役職を
+    /// 「絵コンテ」役職と「演出」役職のクレジットの出し方（<c>series.storyboard_display</c>）。
+    /// TV シリーズのエンディングクレジットでは、作品によって絵コンテと演出を区別表示せず、
+    /// 両者を「演出」の 1 欄にまとめてクレジットしていた。サイトのクレジットと Catalog のプレビューは、
+    /// 本値に従って <c>STORYBOARD</c>（絵コンテ）役職と <c>EPISODE_DIRECTOR</c>（演出）役職を
     /// 突き合わせて融合描画する：
     /// <list type="bullet">
-    ///   <item><description>同名（同一 person_alias_id かつ表記一致）→「（絵コンテ・）演出　名前」と 1 行に集約</description></item>
-    ///   <item><description>異名 → 「演出　名前A （絵コンテ）」「　　　名前B （演出）」と 2 行で並列表示</description></item>
+    ///   <item><description><see cref="StoryboardDisplaySeparate"/>（<c>SEPARATE</c>）：融合せず、それぞれの役職名で出す（映画など）</description></item>
+    ///   <item><description><see cref="StoryboardDisplayMerge"/>（<c>MERGE</c>）：いつも融合する（『ふたりはプリキュア』〜『ドキドキ！プリキュア』）。
+    ///     同名（同一 person_alias_id かつ表記一致）→「（絵コンテ・）演出　名前」と 1 行に集約、
+    ///     異名 → 「演出　名前A （絵コンテ）」「　　　名前B （演出）」と 2 行で並列表示</description></item>
+    ///   <item><description><see cref="StoryboardDisplayMergeSamePerson"/>（<c>MERGE_SAME_PERSON</c>）：同名のときだけ
+    ///     「（絵コンテ・）演出　名前」に集約し、異名ならそれぞれの役職名で出す（『ハピネスチャージプリキュア！』以降。
+    ///     分業の回は画面で「絵コンテ」「演出」が別々の役職名で出る）</description></item>
     /// </list>
-    /// 本フラグはあくまでプレビュー描画上の融合スイッチであり、データ層では
+    /// 本値はあくまで描画上の融合スイッチであり、データ層では
     /// 絵コンテと演出は別々の役職エントリとして保存される。
     /// </summary>
-    public bool HideStoryboardRole { get; set; }
+    public string StoryboardDisplay { get; set; } = StoryboardDisplaySeparate;
+
+    /// <summary><see cref="StoryboardDisplay"/> の値：絵コンテと演出をそれぞれの役職名で出す。</summary>
+    public const string StoryboardDisplaySeparate = "SEPARATE";
+
+    /// <summary><see cref="StoryboardDisplay"/> の値：絵コンテと演出をいつも「演出」にまとめる。</summary>
+    public const string StoryboardDisplayMerge = "MERGE";
+
+    /// <summary><see cref="StoryboardDisplay"/> の値：絵コンテと演出が同じ人のときだけ「演出」にまとめる。</summary>
+    public const string StoryboardDisplayMergeSamePerson = "MERGE_SAME_PERSON";
 
     // ── 監査・論理削除 ──
 

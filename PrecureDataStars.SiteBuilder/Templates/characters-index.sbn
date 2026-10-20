@@ -1,9 +1,8 @@
 <h1>歴代キャラクター</h1>
+<p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 <p class="lead">
   プリキュアたちはもちろん、妖精や敵キャラ、ゲストまで——歴代シリーズに登場する全 {{ TotalCount }} 名を、作品ごとにまとめました。「このキャラ、誰が演じてたっけ？」も、ここから調べられます。
-<br>
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
 {{## 2 タブ（初登場順＝既定 / 登場回数順）。タブ切替はスタッフ一覧と同じインライン JS（外部 JS を増やさない）。 ##}}

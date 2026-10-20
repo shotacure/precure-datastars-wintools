@@ -39,6 +39,10 @@ public sealed class TsTimebase
     /// LibVLC に <c>:program=</c> で渡し、ワンセグ（H.264 低レート）でなくフルセグを再生・時刻基準にするために使う。</summary>
     public int? FullsegProgramNumber { get; private set; }
 
+    /// <summary>時刻基準に採用した PCR の PID（取れなければ -1）。メディア時刻 0 はこの PID の最初の PCR。
+    /// 字幕抽出（<see cref="Arib.AribCaptionExtractor"/>）が同じ物差しで時刻を求めるために使う。</summary>
+    public int PcrPid => _pcrPid;
+
     /// <summary>「メディア時刻↔バイト位置」索引で有効なシークが可能か。</summary>
     public bool HasByteIndex => _index.MediaMs.Length >= 2 && FileLength > 0;
 
@@ -94,6 +98,13 @@ public sealed class TsTimebase
     {
         if (!HasMapping) throw new InvalidOperationException("時刻写像が未確立です。");
         return (long)Math.Round((jst - WallClockAtMediaZero).TotalMilliseconds / _clockRate);
+    }
+
+    /// <summary>指定したメディア時刻（ミリ秒、ファイル先頭=0）に対応する壁時計（JST）を返す。<see cref="MediaMsForWallClock"/> の逆写像。</summary>
+    public DateTime WallClockForMediaMs(long ms)
+    {
+        if (!HasMapping) throw new InvalidOperationException("時刻写像が未確立です。");
+        return WallClockAtMediaZero.AddMilliseconds(ms * _clockRate);
     }
 
     /// <summary>指定メディア時刻（ms）に対応するファイルバイト割合（0–1）を返す。索引が無ければ -1。
@@ -401,7 +412,7 @@ public sealed class TsTimebase
     // ── パケット解析ヘルパ ──
 
     /// <summary>指定パケット位置からアダプテーションフィールドの PCR を取り出す（PID と AF 不連続インジケータも返す）。</summary>
-    private static bool TryExtractPcr(byte[] buf, long pos, out int pid, out long pcr27, out bool discontinuity)
+    internal static bool TryExtractPcr(byte[] buf, long pos, out int pid, out long pcr27, out bool discontinuity)
     {
         pid = ((buf[pos + 1] & 0x1F) << 8) | buf[pos + 2];
         pcr27 = -1; discontinuity = false;
@@ -506,7 +517,7 @@ public sealed class TsTimebase
     }
 
     /// <summary>PAT セクションから program_number → PMT PID の辞書を作る（network_PID は除く）。</summary>
-    private static Dictionary<int, int> ParsePat(byte[] buf, long sec, long len)
+    internal static Dictionary<int, int> ParsePat(byte[] buf, long sec, long len)
     {
         var map = new Dictionary<int, int>();
         int sectionLength = ((buf[sec + 1] & 0x0F) << 8) | buf[sec + 2];
@@ -563,7 +574,7 @@ public sealed class TsTimebase
 
     private static int FromBcd(int b) => ((b >> 4) & 0x0F) * 10 + (b & 0x0F);
 
-    private static int ReadFull(FileStream fs, byte[] buf, int count)
+    internal static int ReadFull(FileStream fs, byte[] buf, int count)
     {
         int total = 0;
         while (total < count)
@@ -575,7 +586,7 @@ public sealed class TsTimebase
         return total;
     }
 
-    private static bool TryFindSync(byte[] buf, int len, out int firstSync, out int stride)
+    internal static bool TryFindSync(byte[] buf, int len, out int firstSync, out int stride)
     {
         firstSync = -1; stride = TsPacketLen;
         int limit = Math.Min(len, 200_000);
@@ -590,7 +601,7 @@ public sealed class TsTimebase
         return false;
     }
 
-    private static long FindNextSync(byte[] buf, long from, long len, int stride)
+    internal static long FindNextSync(byte[] buf, long from, long len, int stride)
     {
         for (long i = from + 1; i + 2 * stride < len; i++)
             if (buf[i] == 0x47 && buf[i + stride] == 0x47) return i;

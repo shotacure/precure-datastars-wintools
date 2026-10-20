@@ -6,8 +6,8 @@
      「パート名  本放送 m:ss  配信 m:ss (+差)  円盤 m:ss (+差)  備考」。差は本放送を基準にした符号付き。 ##}}
 <section>
   <h1>本放送・配信・円盤の尺の違い</h1>
-  <p class="lead">同じ話でも、本放送と配信（Amazon Prime Video）、Blu-ray / DVD でパートの長さが違うことがあります。本放送を基準に、長さの違うパートがある話を歴代プリキュア全シリーズから並べました。差は本放送より長ければ「+」、短ければ「−」で示します。本放送で実測できていないパートは比べていません。<br>
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
+  <p class="muted page-coverage">{{ CoverageLabel }}</p>
+  <p class="lead">同じ話でも、本放送と配信（Amazon Prime Video）、Blu-ray / DVD でパートの長さが違うことがあります。本放送を基準に、長さの違うパートがある話を歴代プリキュア全シリーズから並べました。差は本放送より長ければ「+」、短ければ「−」で示します。本放送で実測できていないパートは比べていません。</p>
   <div class="fact-grid">
     <div class="fact">
       <span class="fact-label">比べた話</span>

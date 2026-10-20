@@ -34,11 +34,12 @@ namespace PrecureDataStars.TemplateRendering;
 ///   <item><description><c>{?!NAME}...{/?!NAME}</c> ... プレースホルダ NAME の解決値が空のときだけ展開（否定の条件）</description></item>
 ///   <item><description><c>{#THEME_SONGS[:kind=OP+ED]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復。
 ///     内側で <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> / <c>{COMPOSER}</c> /
-///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{CHORUS}</c> / <c>{VARIANT_LABEL}</c> の楽曲スコーププレースホルダが
+///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{CHORUS}</c> / <c>{VARIANT_LABEL}</c> / <c>{SONG_SERIES_TITLE}</c> の楽曲スコーププレースホルダが
 ///     解決可能（<c>{CHORUS}</c> は <c>BACKING_VOCALS</c> 役職の連名、不在時は空）。
 ///     連名のプレースホルダ（<c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> / <c>{MEDLEY_ARRANGER}</c> /
 ///     <c>{SINGER}</c> / <c>{CHORUS}</c>）は <c>sep="…"</c> で名義の間の区切りを差し替えられる（DB の区切りの代わりに
 ///     テンプレの文字を HTML のまま入れる。<c>sep="&lt;br&gt;"</c> で改行）。構造化クレジットが無い曲には効かない。
+///     <c>{SONG_SERIES_TITLE}</c> は曲の作品（録音の作品）の正式タイトルで、クレジットの作品と同じ作品の曲なら空。
 ///     <c>{SAME_COMPOSER_ARRANGER}</c> は作曲と編曲が同じ名義（連名も同じ）なら "1"、違えば空で、
 ///     <c>{?SAME_COMPOSER_ARRANGER}</c> / <c>{?!SAME_COMPOSER_ARRANGER}</c> で書き分ける。
 ///     表記（カギ括弧の種類・項目ラベル・改行位置）はテンプレ作者が完全に制御できる。
@@ -361,6 +362,11 @@ public static class RoleTemplateRenderer
                 return NamesHtml(ph, currentSong?.ChorusHtml, currentSong?.ChorusParts);
             case "VARIANT_LABEL":
                 return System.Net.WebUtility.HtmlEncode(currentSong?.VariantLabel ?? "");
+            case "SONG_SERIES_TITLE":
+                // 楽曲スコープ：曲の作品の正式タイトル。クレジットの作品と同じ作品の曲なら空文字なので、
+                // オールスターズ映画の劇中歌のように、他作品の曲にだけ作品名の見出しを付けるときに
+                // {?SONG_SERIES_TITLE}{SONG_SERIES_TITLE}<br>{/?SONG_SERIES_TITLE} のように書く。
+                return System.Net.WebUtility.HtmlEncode(currentSong?.SongSeriesTitle ?? "");
 
             case "THEME_SONGS":
                 {

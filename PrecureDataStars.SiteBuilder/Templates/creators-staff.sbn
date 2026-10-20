@@ -1,8 +1,5 @@
 <h1>歴代プリキュアスタッフ</h1>
-
-<p class="lead">
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
-</p>
+<p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 {{## スタッフ一覧。
      ・役職順タブ：役職名 + その役職に関わった人物数・企業/団体数の索引。各役職名から

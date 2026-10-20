@@ -9,4 +9,6 @@ namespace PrecureDataStars.TemplateRendering;
 /// <param name="Entries">CASTING_COOPERATION 役職配下のエントリ（表示順）。</param>
 /// <param name="LabelText">「協力」行の役職の表記（CASTING_COOPERATION 役職の <c>role_label_text</c>）。
 /// 無ければ null で、役職マスタの名前で出す。</param>
-public sealed record CastingCooperationAppend(IReadOnlyList<CreditBlockEntry> Entries, string? LabelText);
+/// <param name="NotOnScreen">true なら「協力」行は画面にはクレジットされていない（CASTING_COOPERATION 役職のいずれかが
+/// <c>not_on_screen</c>）。行ごと括弧で包み、薄い色で出す。</param>
+public sealed record CastingCooperationAppend(IReadOnlyList<CreditBlockEntry> Entries, string? LabelText, bool NotOnScreen = false);

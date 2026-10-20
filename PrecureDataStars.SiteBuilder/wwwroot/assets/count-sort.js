@@ -12,6 +12,8 @@
  * ・同じ数の行はもともとの並び順を保つ。種類ごとの並べ替えでは、その種類が 0 の行を向きにかかわらず末尾に置く。
  * ・ボタンは対象リストが画面に出ているときだけ表示する（タブや初参加順／多い順の切り替えに合わせて、クリックのたびに判定し直す）。
  * ・ページ出力は増やさず、並べ替えはこのスクリプトの中だけで行う（外部ライブラリなし）。
+ * ・今の並べ替えをボタンの data-count-sort-state に「tv-desc」「tv_movie-asc」「none」の形で書き、最初の状態を
+ *   data-count-sort-default に控える。URL の # に残すのは view-state.js（押して状態を合わせる）。
  */
 (function () {
   'use strict';
@@ -109,8 +111,13 @@
       render();
     }
 
+    function stateKey(st) {
+      return st.keys ? st.keys.join('_') + (st.desc ? '-desc' : '-asc') : 'none';
+    }
+
     function render() {
       var st = states[pos];
+      btn.setAttribute('data-count-sort-state', stateKey(st));
       var html, title;
       if (!st.keys) {
         html = '<span class="count-pill count-sort-pill count-sort-pill-none">⇅</span>';
@@ -141,6 +148,7 @@
       apply();
     });
     if (initialNone) { render(); } else { apply(); }
+    btn.setAttribute('data-count-sort-default', stateKey(states[pos]));
     return refreshVisibility;
   }
 

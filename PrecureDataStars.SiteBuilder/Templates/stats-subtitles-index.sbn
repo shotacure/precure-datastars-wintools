@@ -1,7 +1,7 @@
 <section>
   <h1>歴代サブタイトル統計</h1>
-  <p class="lead">プリキュア全シリーズのサブタイトルから文字種別・文字数・漢字率・記号率などを集計した統計です。<br>
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
+  <p class="muted page-coverage">{{ CoverageLabel }}</p>
+  <p class="lead">プリキュア全シリーズのサブタイトルから文字種別・文字数・漢字率・記号率などを集計した統計です。</p>
 </section>
 
 {{## 1 ページ 1 ランキング厳守の方針で詳細 16 ページ + 索引 1 ページ。

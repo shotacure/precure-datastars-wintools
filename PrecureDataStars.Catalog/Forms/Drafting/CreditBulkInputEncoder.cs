@@ -346,6 +346,12 @@ internal static class CreditBulkInputEncoder
             sb.Append("@hide_label").Append(LineSeparator);
         }
 
+        // その行は画面にはクレジットされていない（クレジット漏れ）。
+        if (role.Entity.NotOnScreen)
+        {
+            sb.Append("@not_on_screen").Append(LineSeparator);
+        }
+
         // 1 行にまとめて表示する役職の指定（まとめた形で書き出せなかった組・1 役職だけの書き出しの個別指定）。
         // 区切りの前後に空白があるときは、読み込みで落ちないよう角括弧で囲む。
         if (role.Entity.JoinPrevious)
@@ -424,6 +430,11 @@ internal static class CreditBulkInputEncoder
                 ? aliasName
                 : $"alias#{leadingId}";
             sb.Append("[[").Append(nameOrFallback).Append("]]").Append(LineSeparator);
+            // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、[[XXX]] のすぐ後に印を書く。
+            if (block.Entity.LeadingCompanyNotOnScreen)
+            {
+                sb.Append("@leading_not_on_screen").Append(LineSeparator);
+            }
         }
 
         // エントリ群を ColCount で行に分割しながらタブ結合で出力する。
@@ -771,6 +782,9 @@ internal static class CreditBulkInputEncoder
             aliasName = await cache.LookupCompanyAliasNameAsync(e.AffiliationCompanyAliasId!.Value)
                         ?? $"alias#{e.AffiliationCompanyAliasId.Value}";
         }
+
+        // 所属のロゴの版（affiliation_logo_id）は屋号名の後ろに #lg<id> で添える。
+        if (hasAlias && e.AffiliationLogoId.HasValue) aliasName = $"{aliasName}#lg{e.AffiliationLogoId.Value}";
 
         if (hasAlias && hasText)
         {

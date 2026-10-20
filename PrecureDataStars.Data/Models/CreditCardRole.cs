@@ -57,6 +57,10 @@ public sealed class CreditCardRole
     /// 画面で 1 つの見出しの下に会社ごとのスタッフが続くとき（例：「CG制作協力」の下に 2 社）、2 社目の見出しの行に立てる。</summary>
     public bool HideRoleLabel { get; set; }
 
+    /// <summary>true ならこの行は画面にはクレジットされていない（毎回出る役職がその回だけ抜けているクレジット漏れ）。
+    /// データは入れて集計・関与は <see cref="RoleCode"/> のまま数え、クレジットの表示だけ括弧で包んで薄くし、画面に無かったことを示す。</summary>
+    public bool NotOnScreen { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

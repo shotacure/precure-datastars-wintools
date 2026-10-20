@@ -150,6 +150,7 @@ public partial class CreditEditorForm
                         if (!string.IsNullOrEmpty(role.RoleMisprintText)) roleNote += $"  [誤記: {role.RoleMisprintText}]";
                         if (role.JoinPrevious) roleNote += $"  [直前の役職とまとめる 区切り「{Dialogs.JoinedRoleLabelText.EncodeLineBreaks(role.JoinSeparator ?? "")}」]";
                         if (role.HideRoleLabel) roleNote += "  [役職名を出さない]";
+                        if (role.NotOnScreen) roleNote += "  [画面に無い]";
 
                         var roleNode = new TreeNode($"📋 Role: {roleName}  (order {roleDisplayIndex}){roleNote}")
                         {
@@ -184,6 +185,7 @@ public partial class CreditEditorForm
                                 string? lname = await _lookupCache.LookupCompanyAliasNameAsync(lcid);
                                 if (!string.IsNullOrEmpty(lname)) leadingLabel = $"  先頭=「{lname}」";
                                 else leadingLabel = $"  先頭=#{lcid}";
+                                if (block.LeadingCompanyNotOnScreen) leadingLabel += " [画面に無い]";
                             }
 
                             // ブロック先頭の見出し（作品名・「特別出演」など）があればラベルに併記する。

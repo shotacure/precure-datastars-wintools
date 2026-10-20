@@ -1,0 +1,11 @@
+{{## 年表の「TV・映画 / TVのみ / 映画のみ」の絞り込み。役職詳細・声の出演のタブの下の段（.list-toolbar）に、個人・団体の
+     絞り込みと同じ行で置き、年表タブを開いているときだけ見せる（ルートの data-active-tab を site.css が見る）。
+     TV の行と映画の行が両方ある年表（Timeline.HasMediaFilter）のときだけ出す。押すとルートの data-media を替え、
+     年表の行を出し分ける（role-timeline.js・site.css）。 ##}}
+{{~ if Timeline && Timeline.HasMediaFilter ~}}
+<div class="rtl-media" role="group" aria-label="TV・映画で絞り込み">
+  <button type="button" class="rtl-media-btn is-active" data-media-set="all">TV・映画</button>
+  <button type="button" class="rtl-media-btn" data-media-set="tv">TVのみ</button>
+  <button type="button" class="rtl-media-btn" data-media-set="movie">映画のみ</button>
+</div>
+{{~ end ~}}

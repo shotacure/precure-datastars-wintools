@@ -158,6 +158,11 @@ public static class ThemeSongsHandler
             scopeFilter = "ets.series_id = @scopeId";
             queryParams = new { scopeId = seriesId!.Value, kinds = effectiveKinds };
         }
+        // 曲の作品名（{SONG_SERIES_TITLE}）は、録音の作品（song_recordings.series_id）がクレジットの作品と違うときだけ入れる。
+        // エピソードのスコープでは、そのエピソードの作品と比べる。
+        string scopeSeriesExpr = hasEpisode
+            ? "(SELECT e.series_id FROM episodes e WHERE e.episode_id = ets.episode_id)"
+            : "ets.series_id";
         string sql = $$"""
             SELECT
               s.song_id           AS SongId,
@@ -169,6 +174,7 @@ public static class ThemeSongsHandler
               s.arranger_name     AS ArrangerName,
               sr.singer_name      AS SingerName,
               sr.variant_label    AS VariantLabel,
+              CASE WHEN sr.series_id = {{scopeSeriesExpr}} THEN NULL ELSE se.title END AS SongSeriesTitle,
               ets.theme_kind      AS ThemeKind,
               ets.seq             AS Seq,
               ets.is_broadcast_only AS IsBroadcastOnly,
@@ -176,6 +182,7 @@ public static class ThemeSongsHandler
             FROM {{sourceTable}} ets
             JOIN song_recordings sr ON sr.song_recording_id = ets.song_recording_id
             JOIN songs           s  ON s.song_id           = sr.song_id
+            LEFT JOIN series     se ON se.series_id        = sr.series_id
             WHERE {{scopeFilter}}
               AND ets.theme_kind IN @kinds
               AND ets.usage_actuality <> 'BROADCAST_NOT_CREDITED'
@@ -393,6 +400,8 @@ public static class ThemeSongsHandler
         public string? ArrangerName { get; set; }
         public string? SingerName { get; set; }
         public string? VariantLabel { get; set; }
+        /// <summary>曲の作品の正式タイトル（song_recordings.series_id の series.title）。クレジットの作品と同じ作品の曲なら null。</summary>
+        public string? SongSeriesTitle { get; set; }
         public string? ThemeKind { get; set; }
         public byte? Seq { get; set; }
         public byte IsBroadcastOnly { get; set; }

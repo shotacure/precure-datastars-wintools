@@ -1,8 +1,5 @@
 <h1>歴代プリキュア声優</h1>
-
-<p class="lead">
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
-</p>
+<p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 {{## 声の出演一覧。4 タブ（キャラクター順＝既定 / 五十音順 / 初出演順 / 出演回数順）と年表タブ（出演の移り変わりの線表）。
      スタッフ一覧が役職順を筆頭にしているのに合わせ、声の出演はキャラクター順を筆頭・既定にする。
@@ -41,6 +38,17 @@
   </div>
 
   <div class="list-toolbar">
+  {{ include '_role-timeline-media.sbn' }}
+  {{## 「プリキュアを演じた方のみ」のスイッチ。全タブに効く。入れるとルート（.products-tabs）に data-precure-only を付け、
+       プリキュアを演じたことがある方（行・セクションの data-precure-cast）だけを出す（site.css）。
+       プリキュアはプリキュアのマスタに入っているキャラ。年表では入れている間「主な方のみ」を切って触れなくし、
+       外すと元に戻す（下のインライン JS）。? は対象の範囲の吹き出し。
+       段の右端に置き、出演回数順で件数の並べ替えボタンが出るときはその左に並べる（site.css）。 ##}}
+  <div class="precure-only">
+    <label class="rtl-switch"><input type="checkbox" class="precure-only-input"><span class="rtl-switch-ui" aria-hidden="true"></span>プリキュアを演じた方のみ</label>
+    <button type="button" class="rtl-filter-help precure-only-help" aria-label="プリキュアを演じた方の範囲" aria-expanded="false">?</button>
+    <div class="rtl-filter-tip precure-only-tip" role="tooltip" hidden>プリキュアを演じたことがある声優さんだけを出します。ここでいう「プリキュア」は、TVシリーズのレギュラープリキュア（シャイニールミナスおよびミルキィローズを含むプリキュアオールスターズ）ならびにキュアエコーとキュアモフルンの{{ PrecureCount }}名です。</div>
+  </div>
   {{## 件数での並べ替えボタン（count-sort.js）。data-count-sort-for のリストの行を、件数バッジの種類ごとに多い順／少ない順で並べ替える。対象リストが出ているときだけ表示される。 ##}}
   <button type="button" class="count-sort-btn" data-count-sort-for="vc-count-list" hidden></button>
   </div>
@@ -52,7 +60,7 @@
     <p class="empty-row">声の出演がまだ登録されていません。</p>
     {{~ else ~}}
     {{~ for s in CharacterSections ~}}
-    <section class="creators-series-section">
+    <section class="creators-series-section"{{ if s.HasPrecureCast }} data-precure-cast{{ end }}>
       <h2 class="creators-series-heading">
         {{~ if s.SeriesUrl != "" ~}}
         <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
@@ -63,7 +71,7 @@
            行全体クリックはキャラ詳細へ、CV の声優名だけは個別リンクで人物詳細へ。 ##}}
       <ul class="entity-list">
         {{~ for r in s.Members ~}}
-        <li class="entity-row">
+        <li class="entity-row"{{ if r.IsPrecureCast }} data-precure-cast{{ end }}>
           <a class="entity-row-link" href="{{ r.CharacterUrl }}" aria-label="{{ r.CharacterName | html.escape }}"></a>
           <a class="entity-row-name" href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a>
           <span class="entity-row-sub muted">(CV: <a href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>{{ if r.HasOtherPersons }} 他{{ end }})</span>
@@ -86,7 +94,7 @@
     {{## 読みがなは並べ替えキーとしてのみ使い、行には表示しない（一覧の方針）。 ##}}
     <ul class="entity-list">
       {{~ for r in KanaRows ~}}
-      <li class="entity-row">
+      <li class="entity-row"{{ if r.IsPrecureCast }} data-precure-cast{{ end }}>
         <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
         <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
         <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役)</span>
@@ -105,20 +113,23 @@
     <p class="empty-row">声の出演がまだ登録されていません。</p>
     {{~ else ~}}
     {{~ for s in DebutSections ~}}
-    <section class="creators-series-section">
+    <section class="creators-series-section"{{ if s.HasPrecureCast }} data-precure-cast{{ end }}>
       <h2 class="creators-series-heading">
         {{~ if s.SeriesUrl != "" ~}}
         <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
         {{~ else ~}}{{ s.SeriesHeadingLabel | html.escape }}{{~ end ~}}
       </h2>
       {{## 初出演順は声優名を主役に置き、演じたキャラを「(○○ 役)」のカッコ書きで添える。
-           行全体クリックは人物詳細へ、キャラ名だけは個別リンクでキャラ詳細へ。 ##}}
+           行全体クリックは人物詳細へ、キャラ名だけは個別リンクでキャラ詳細へ。
+           役名の右に少しあけて、初めて出演した話「第N話「サブタイトル」」を小さく添え、エピソード詳細へリンクする
+           （同じ話で初出演した方が続くときは先頭の行だけ。「プリキュアを演じた方のみ」のときは、見えている行の中の先頭だけ
+           ＝ debut-all / debut-precure のクラスで出し分ける。映画など話数の無い出演には添えない）。 ##}}
       <ul class="entity-list">
         {{~ for r in s.Members ~}}
-        <li class="entity-row">
+        <li class="entity-row"{{ if r.IsPrecureCast }} data-precure-cast{{ end }}>
           <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
           <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
-          <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役)</span>
+          <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役){{ if r.DebutEpisodeLabel != "" }}<a class="entity-row-debut{{ if r.DebutShowAll }} debut-all{{ end }}{{ if r.DebutShowPrecure }} debut-precure{{ end }}" href="{{ r.DebutEpisodeUrl }}">{{ r.DebutEpisodeLabel | html.escape }}</a>{{ end }}</span>
           <span class="entity-row-count">{{~ if r.EpisodeCount > 0 || r.MovieCount > 0 ~}}<span class="count-badges">{{~ if r.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ r.EpisodeCount }}</span>{{~ end ~}}{{~ if r.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCount }}</span>{{~ end ~}}</span>{{~ else ~}}<span class="muted">—</span>{{~ end ~}}</span>
         </li>
         {{~ end ~}}
@@ -136,7 +147,7 @@
     {{~ else ~}}
     <ul class="entity-list" id="vc-count-list">
       {{~ for r in CountRows ~}}
-      <li class="entity-row">
+      <li class="entity-row"{{ if r.IsPrecureCast }} data-precure-cast{{ end }}>
         <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
         <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
         <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役{{ if r.HasOtherCharacters }} 他{{ end }})</span>
@@ -165,6 +176,8 @@
   buttons.forEach(function (btn) {
     btn.addEventListener('click', function () {
       var key = btn.getAttribute('data-tab');
+      // 年表タブだけで見せる段の部品（TV・映画の絞り込み）の出し分けに使う。
+      root.setAttribute('data-active-tab', key);
       buttons.forEach(function (b) {
         var active = b.getAttribute('data-tab') === key;
         b.classList.toggle('is-active', active);
@@ -176,6 +189,55 @@
         if (active) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
       });
     });
+  });
+
+  // 「プリキュアを演じた方のみ」：ルートの data-precure-only を切り替える。年表の「主な方のみ」は、入れている間は切って触れなくし
+  // （プリキュアを演じた方を全員見せる）、外すと入れる前の状態に戻す。年表の横の数は role-timeline.js が数え直す（rtl-recount）。
+  var box = root.querySelector('.precure-only');
+  if (!box) return;
+  var input = box.querySelector('.precure-only-input');
+  var mains = root.querySelectorAll('.rtl-filter-input');
+  var saved = [];
+  function setMain(m, checked) {
+    if (m.checked === checked) return;
+    m.checked = checked;
+    m.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  input.addEventListener('change', function () {
+    var on = input.checked;
+    if (on) { root.setAttribute('data-precure-only', ''); } else { root.removeAttribute('data-precure-only'); }
+    mains.forEach(function (m, i) {
+      if (on) {
+        saved[i] = m.checked;
+        setMain(m, false);
+        m.disabled = true;
+      } else {
+        m.disabled = false;
+        setMain(m, saved[i] !== false);
+      }
+    });
+    document.dispatchEvent(new CustomEvent('rtl-recount'));
+  });
+
+  // 吹き出し：マウスは ? に載せている間、タップ・クリックは開閉、キーボードはフォーカスの間（年表の「主な方のみ」の ? と同じ）。
+  var help = box.querySelector('.precure-only-help');
+  var tip = box.querySelector('.precure-only-tip');
+  var pinned = false;
+  function show() { tip.hidden = false; help.setAttribute('aria-expanded', 'true'); }
+  function hide() { tip.hidden = true; help.setAttribute('aria-expanded', 'false'); }
+  help.addEventListener('pointerenter', function (ev) { if (ev.pointerType !== 'touch') show(); });
+  help.addEventListener('pointerleave', function (ev) { if (ev.pointerType !== 'touch' && !pinned) hide(); });
+  help.addEventListener('focus', show);
+  help.addEventListener('blur', function () { pinned = false; hide(); });
+  help.addEventListener('click', function () {
+    pinned = !pinned;
+    if (pinned) show(); else hide();
+  });
+  document.addEventListener('click', function (ev) {
+    if (!box.contains(ev.target)) { pinned = false; hide(); }
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { pinned = false; hide(); }
   });
 })();
 </script>

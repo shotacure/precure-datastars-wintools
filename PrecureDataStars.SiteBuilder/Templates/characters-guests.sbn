@@ -3,11 +3,10 @@
 </p>
 
 <h1>『{{ SeriesTitle | html.escape }}』のゲストキャラクター</h1>
+<p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 <p class="lead">
   <a href="{{ SeriesUrl }}">{{ SeriesTitle | html.escape }}</a><span class="muted series-year">({{ SeriesStartYearLabel }})</span>に 1 話だけ登場したキャラクター {{ GuestCount }} 名を、登場話ごとにまとめました。
-<br>
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
 {{## 単発キャラ（登場 1 回・歌唱なし・家族関係なしのプリキュア以外）は個別ページを持たず、ここに集約する。

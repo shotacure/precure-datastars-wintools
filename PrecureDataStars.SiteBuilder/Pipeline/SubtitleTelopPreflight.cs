@@ -4,12 +4,12 @@ using PrecureDataStars.SiteBuilder.Rendering;
 namespace PrecureDataStars.SiteBuilder.Pipeline;
 
 /// <summary>
-/// ビルドの冒頭（出力に手を付ける前）に、サブタイトルのテロップ画像の作り置きを確かめる。
+/// ビルドの冒頭（出力に手を付ける前）に、サブタイトルのテロップ画像と書体の見本の画像（どちらもテロップの体裁）の作り置きを確かめる。
 /// <list type="bullet">
 /// <item>今回のビルドで描き直しが要る画像（同じ鍵の作り置きが無い、または <c>--refresh-telop</c>）について、
 /// 描くのに要る書体がこの PC にあるかを描くときと同じ引き方で確かめ、1 つでも無ければ例外で止める
 /// （既定の書体に差し替えて描いたり、出力に手を付けてから止まったりしないため）。作り置きで足りる画像は書体が無くても通る。</item>
-/// <item>全体ビルド（<c>--page</c> なし）では、今回のどの話にも使わない鍵の作り置きを消す（サブタイトルや組み方を変える前の古い画像）。</item>
+/// <item>全体ビルド（<c>--page</c> なし）では、今回のどの話・どの見本にも使わない鍵の作り置きを消す（サブタイトルや組み方を変える前の古い画像）。</item>
 /// </list>
 /// </summary>
 public static class SubtitleTelopPreflight
@@ -41,12 +41,12 @@ public static class SubtitleTelopPreflight
         {
             var lines = missing.Select(g =>
             {
-                // 出力先 subtitles/{シリーズ slug}/{話数}.png から作品を拾う。
+                // 出力先 subtitles/{シリーズ slug}/{話数}.png・font-samples/{シリーズ slug}/{行 ID}.png から作品を拾う。
                 var slugs = g.Select(x => x.Request.RelativePath.Split('/')[1]).Distinct().ToList();
-                return $"  書体「{g.Key}」（{string.Join("・", slugs)} の {g.Count()} 話）";
+                return $"  書体「{g.Key}」（{string.Join("・", slugs)} の {g.Count()} 枚）";
             });
             throw new InvalidOperationException(
-                "サブタイトルのテロップ画像を描き直すのに要る書体が、この PC に見つかりません。出力には手を付けずに止めます。\n"
+                "サブタイトルのテロップ画像・書体の見本を描き直すのに要る書体が、この PC に見つかりません。出力には手を付けずに止めます。\n"
                 + string.Join("\n", lines));
         }
 

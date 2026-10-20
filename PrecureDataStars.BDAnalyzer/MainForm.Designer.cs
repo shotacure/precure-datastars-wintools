@@ -17,6 +17,8 @@ namespace PrecureDataStars.BDAnalyzer
         private Button btnDbMatch = null!;
         private Button btnEpisodeLink = null!;
         private Button btnBdSave = null!;
+        // チェックしたチャプターの m2ts 切り出し（ファイルサイズ・ビットレートの計測用）
+        private Button btnCutM2ts = null!;
         private ColumnHeader colLink = null!;
         private Label lblDbStatus = null!;
 
@@ -45,6 +47,7 @@ namespace PrecureDataStars.BDAnalyzer
             btnDbMatch = new Button();
             btnEpisodeLink = new Button();
             btnBdSave = new Button();
+            btnCutM2ts = new Button();
             lblDbStatus = new Label();
             listView = new ListView();
             colIdx = new ColumnHeader();
@@ -65,7 +68,7 @@ namespace PrecureDataStars.BDAnalyzer
             panelTop.Margin = new Padding(3, 4, 3, 4);
             panelTop.Name = "panelTop";
             panelTop.Padding = new Padding(9, 11, 9, 11);
-            panelTop.Size = new Size(1029, 147);
+            panelTop.Size = new Size(1029, 195);
             panelTop.TabIndex = 0;
             // 
             // lblInfo
@@ -74,7 +77,7 @@ namespace PrecureDataStars.BDAnalyzer
             lblInfo.Dock = DockStyle.Fill;
             lblInfo.Location = new Point(9, 11);
             lblInfo.Name = "lblInfo";
-            lblInfo.Size = new Size(435, 85);
+            lblInfo.Size = new Size(435, 173);
             lblInfo.TabIndex = 0;
             // 
             // panelRight
@@ -86,12 +89,13 @@ namespace PrecureDataStars.BDAnalyzer
             panelRight.Controls.Add(btnEpisodeLink);
             panelRight.Controls.Add(btnBdSave);
             panelRight.Controls.Add(lblDbStatus);
+            panelRight.Controls.Add(btnCutM2ts);
             panelRight.Dock = DockStyle.Right;
             panelRight.Location = new Point(444, 11);
             panelRight.Margin = new Padding(3, 4, 3, 4);
             panelRight.Name = "panelRight";
             panelRight.Padding = new Padding(9, 11, 9, 11);
-            panelRight.Size = new Size(576, 125);
+            panelRight.Size = new Size(576, 173);
             panelRight.TabIndex = 1;
             // 
             // btnCopyTsv
@@ -145,6 +149,17 @@ namespace PrecureDataStars.BDAnalyzer
             btnBdSave.Text = "Blu-ray の情報を記録";
             btnBdSave.UseVisualStyleBackColor = true;
             btnBdSave.Enabled = false;
+            //
+            // btnCutM2ts（チェックしたチャプターを 1 本ずつ m2ts に切り出す。BDMV/PLAYLIST のフォルダ全走査で読んだときだけ有効）
+            //
+            btnCutM2ts.Location = new Point(12, 126);
+            btnCutM2ts.Margin = new Padding(3, 7, 3, 4);
+            btnCutM2ts.Name = "btnCutM2ts";
+            btnCutM2ts.Size = new Size(507, 31);
+            btnCutM2ts.TabIndex = 7;
+            btnCutM2ts.Text = "チェックしたチャプターを m2ts で切り出し...";
+            btnCutM2ts.UseVisualStyleBackColor = true;
+            btnCutM2ts.Enabled = false;
             // 
             // lblDbStatus
             // 
@@ -162,11 +177,11 @@ namespace PrecureDataStars.BDAnalyzer
             listView.FullRowSelect = true;
             listView.GridLines = true;
             listView.HeaderStyle = ColumnHeaderStyle.Nonclickable;
-            listView.Location = new Point(0, 147);
+            listView.Location = new Point(0, 195);
             listView.Margin = new Padding(3, 4, 3, 4);
             listView.Name = "listView";
             listView.ShowGroups = false;
-            listView.Size = new Size(1029, 971);
+            listView.Size = new Size(1029, 883);
             listView.TabIndex = 1;
             listView.UseCompatibleStateImageBehavior = false;
             listView.View = View.Details;

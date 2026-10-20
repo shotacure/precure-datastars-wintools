@@ -94,7 +94,7 @@
     描き直さない）。
   -->
   <ItemGroup>
-    <OgRenderSource Include="Rendering\OgCard*.cs;Rendering\OgTextShaper.cs;Rendering\SubtitleTelop*.cs;Rendering\InstalledFontIndex.cs" />
+    <OgRenderSource Include="Rendering\OgCard*.cs;Rendering\OgTextShaper.cs;Rendering\SubtitleTelop*.cs;Rendering\TelopRaster.cs;Rendering\InstalledFontIndex.cs" />
   </ItemGroup>
   <Target Name="GenerateOgRenderSourceStamp" BeforeTargets="BeforeCompile;CoreCompile">
     <GetFileHash Files="@(OgRenderSource)" Algorithm="SHA256">

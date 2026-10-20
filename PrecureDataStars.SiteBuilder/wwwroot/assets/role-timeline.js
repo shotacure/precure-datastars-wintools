@@ -3,13 +3,19 @@
    内訳は行の data-sub（名前の下に添える 1 行。キャラクターの CV など）・data-period（参加期間）・
    data-works（作品ごとの参加。改行区切り）から組み立てる。名前にキーボードのフォーカスが来たときも行の下に出す。
    「主な方のみ」のスイッチ（.rtl-filter）は、切ると主な方でない行（.rtl-row-extra）も見せ、横の数を
-   「主な方 / 全員」で出す（個人・団体の絞り込みで隠れている行は数えない）。? はマウスを載せる・タップする・
-   フォーカスすると主な方の条件の吹き出しを出す。 */
+   「主な方 / 全員」で出す（個人・団体の絞り込みと TV・映画の絞り込みで隠れている行は数えない）。? はマウスを載せる・タップする・
+   フォーカスすると主な方の条件の吹き出しを出す。
+   「TV・映画 / TVのみ / 映画のみ」のボタン（.rtl-media-btn。ページのタブの下の段に置く）は、ページのルート（.products-tabs）の
+   data-media を切り替える（行の出し分けは site.css）。
+   歴代プリキュア声優の「プリキュアを演じた方のみ」（ページのルートの data-precure-only）で隠れている行も数えない。ページから
+   rtl-recount のイベントが来たら横の数を数え直す。 */
 (function () {
+  var countUpdaters = [];
   document.querySelectorAll('.role-timeline').forEach(function (sec) {
     var tl = sec.querySelector('.rtl');
     if (!tl) return;
-    setupFilter(sec);
+    var updateCount = setupFilter(sec);
+    if (updateCount) countUpdaters.push(updateCount);
 
     var tip = document.createElement('div');
     tip.className = 'rtl-tip';
@@ -40,6 +46,14 @@
       period.className = 'rtl-tip-period';
       period.textContent = row.getAttribute('data-period') || '';
       tip.appendChild(period);
+      // 会社の所属としてクレジットされていた期間（会社ごとに 1 行）。
+      (row.getAttribute('data-aff') || '').split('\n').forEach(function (a) {
+        if (!a) return;
+        var aff = document.createElement('div');
+        aff.className = 'rtl-tip-aff';
+        aff.textContent = a;
+        tip.appendChild(aff);
+      });
       var ul = document.createElement('ul');
       ul.className = 'rtl-tip-works';
       (row.getAttribute('data-works') || '').split('\n').forEach(function (w) {
@@ -100,9 +114,28 @@
     tl.addEventListener('focusout', function () { hide(); });
   });
 
+  // ページ側の絞り込み（歴代プリキュア声優の「プリキュアを演じた方のみ」など）が変わったら、横の数を数え直す。
+  document.addEventListener('rtl-recount', function () {
+    countUpdaters.forEach(function (f) { f(); });
+  });
+
+  // TV・映画の絞り込み。ボタンを押すとページのルートの data-media を替え、横の数を数え直す。
+  document.querySelectorAll('.rtl-media').forEach(function (group) {
+    var buttons = group.querySelectorAll('.rtl-media-btn');
+    var root = group.closest('.products-tabs') || document.body;
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        root.setAttribute('data-media', btn.getAttribute('data-media-set'));
+        buttons.forEach(function (b) { b.classList.toggle('is-active', b === btn); });
+        countUpdaters.forEach(function (f) { f(); });
+      });
+    });
+  });
+
+  // 「主な方のみ」のスイッチ。横の数を数え直す関数を返す（スイッチが無ければ null）。
   function setupFilter(sec) {
     var box = sec.querySelector('.rtl-filter');
-    if (!box) return;
+    if (!box) return null;
     var input = box.querySelector('.rtl-filter-input');
     var help = box.querySelector('.rtl-filter-help');
     var tip = box.querySelector('.rtl-filter-tip');
@@ -113,11 +146,18 @@
     function updateCount() {
       var root = sec.closest('[data-entity-filter]');
       var filter = root ? root.getAttribute('data-entity-filter') : '';
+      var mediaRoot = sec.closest('[data-media]');
+      var media = mediaRoot ? mediaRoot.getAttribute('data-media') : 'all';
+      var precureOnly = !!sec.closest('[data-precure-only]');
       var main = 0, total = 0;
       rows.forEach(function (r) {
         var t = r.getAttribute('data-entity-type');
         // 絞り込み中（all 以外）は、その種類の行だけを数える（個人・団体、歌手・キャラクター・ユニット）。
         if (filter && filter !== 'all' && t !== filter) return;
+        // TV のみ・映画のみでは、その担当を描いた行だけを数える（見出しとして残した会社の行も、自分の担当で決める）。
+        if (media !== 'all' && !r.hasAttribute('data-' + media)) return;
+        // 「プリキュアを演じた方のみ」では、その方の行だけを数える。
+        if (precureOnly && !r.hasAttribute('data-precure-cast')) return;
         total++;
         if (!r.classList.contains('rtl-row-extra')) main++;
       });
@@ -151,5 +191,6 @@
     document.addEventListener('keydown', function (ev) {
       if (ev.key === 'Escape') { pinned = false; hide(); }
     });
+    return updateCount;
   }
 })();

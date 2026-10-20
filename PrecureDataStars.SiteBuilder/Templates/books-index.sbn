@@ -17,7 +17,7 @@
 
      カード 1 行 = 1 冊で、左に表紙サムネ、中央に書名と meta 行
      （発売日／版構成（紙・Kindle）／ページ数／価格をパイプ区切り）、右端に代表ジャンルのバッジ。 ##}}
-<div class="books-tabs">
+<div class="books-tabs products-tabs">
   <div class="tabs" role="tablist" aria-label="書籍一覧の並べ替え">
     <button type="button" class="tab-btn is-active" data-tab="release"
             role="tab" aria-selected="true" aria-controls="books-tab-panel-release">

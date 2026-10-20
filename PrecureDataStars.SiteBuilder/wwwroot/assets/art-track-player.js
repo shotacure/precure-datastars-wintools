@@ -64,6 +64,9 @@
   var barEl = null;
   var titleEl = null;
   var subEl = null;
+  // 会員限定の音源を鳴らしているときだけ出す「YouTube Music で開く」の行とそのリンク。
+  var musicLinkRowEl = null;
+  var musicLinkEl = null;
 
   // 現在再生中のボタン（ハイライト解除に使う）。
   var activeButton = null;
@@ -290,11 +293,27 @@
     // （会員でない環境では再生できず、プレイヤーにその旨の画面が出る）。
     var source = resolveSource(btn);
     var sub = source.sub;
-    if (btn.getAttribute('data-art-track-premium') === '1'
-        && source.id === btn.getAttribute('data-art-track-id')) {
+    var premiumSource = btn.getAttribute('data-art-track-premium') === '1'
+      && source.id === btn.getAttribute('data-art-track-id');
+    if (premiumSource) {
       sub = sub ? sub + '（YouTube Music Premium 会員限定）' : 'YouTube Music Premium 会員限定';
     }
     subEl.textContent = sub;
+
+    // 会員限定の音源は、会員でも埋め込みプレイヤーでは再生できない環境がある
+    // （iPhone・iPad のブラウザや Safari などは、埋め込み先の YouTube に閲覧者のログイン状態を渡さない）。
+    // YouTube Music で直接開けば会員として再生できるので、その導線を添える。
+    if (premiumSource) {
+      musicLinkEl.href = musicUrl(source.id);
+      musicLinkRowEl.removeAttribute('hidden');
+    } else {
+      musicLinkRowEl.setAttribute('hidden', '');
+    }
+  }
+
+  /** 動画 ID から YouTube Music の再生ページの URL を作る（スマホではアプリが入っていればアプリで開く）。 */
+  function musicUrl(videoId) {
+    return 'https://music.youtube.com/watch?v=' + encodeURIComponent(videoId);
   }
 
   /**
@@ -346,8 +365,20 @@
     link.textContent = '配信音源の掲載について';
     noteLink.appendChild(link);
 
+    // 会員限定の音源を鳴らすときだけ見せる行（updateMeta で出し分ける）。
+    // スマホ幅で注記本文を畳んでも残るよう、リンク行と同じクラスを持たせる。
+    musicLinkRowEl = document.createElement('p');
+    musicLinkRowEl.className = 'art-track-note art-track-note-link art-track-open-music';
+    musicLinkRowEl.setAttribute('hidden', '');
+    musicLinkEl = document.createElement('a');
+    musicLinkEl.target = '_blank';
+    musicLinkEl.rel = 'noopener';
+    musicLinkEl.textContent = 'YouTube Music で開く';
+    musicLinkRowEl.appendChild(musicLinkEl);
+
     meta.appendChild(titleEl);
     meta.appendChild(subEl);
+    meta.appendChild(musicLinkRowEl);
     meta.appendChild(note);
     meta.appendChild(noteLink);
 
@@ -385,8 +416,9 @@
       var state = (player && typeof player.getPlayerState === 'function') ? player.getPlayerState() : -1;
       if (state === window.YT.PlayerState.PLAYING) return;
 
+      // 確認ダイアログにも YouTube Music で開く導線を出すため、再生しようとした URL を渡す。
       if (window.PCDS && window.PCDS.artTrackPremium) {
-        window.PCDS.artTrackPremium.notifyBlocked();
+        window.PCDS.artTrackPremium.notifyBlocked(musicUrl(btn.getAttribute('data-art-track-id') || ''));
       }
     }, 5000);
   }

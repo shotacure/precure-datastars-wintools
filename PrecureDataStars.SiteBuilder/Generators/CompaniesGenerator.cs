@@ -243,8 +243,13 @@ public sealed class CompaniesGenerator
         musicTotal.AddRange(musicOwnRoles.Select(r => r.Counts));
         musicTotal.AddRange(musicMemberRoles.Select(r => r.Counts));
 
+        // 商号履歴：正式名（社名）の名義を有効期間の古い順に並べる（期間の無い名義は前身・後継のつながりの順で前に置く）。
+        // 正式名の名義が 2 つ以上あるときだけ出す（1 つなら見出しの名前と同じなので出さない）。
+        var officialNames = BuildOfficialNameHistory(aliases);
+
         var content = new CompanyDetailModel
         {
+            OfficialNames = officialNames,
             Company = new CompanyView
             {
                 CompanyId = company.CompanyId,
@@ -1223,6 +1228,8 @@ public sealed class CompaniesGenerator
         public CompanyView Company { get; set; } = new();
         /// <summary>関係のある団体（前身・後継・所属・傘下）。無ければ空（テンプレ側はセクションごと出さない）。</summary>
         public IReadOnlyList<CompanyRelationView> Relations { get; set; } = Array.Empty<CompanyRelationView>();
+        /// <summary>商号履歴（正式名の名義の移り変わり。古い順）。空なら「商号履歴」セクションを出さない。</summary>
+        public IReadOnlyList<OfficialNameView> OfficialNames { get; set; } = Array.Empty<OfficialNameView>();
         /// <summary>クレジット（フラット）。屋号を横断した役職別グループ → シリーズ行。
         /// <see cref="InvolvementSections"/> が空（クレジットのある屋号が 1 つだけ）のときにテンプレ側が使う。</summary>
         public IReadOnlyList<InvolvementGroup> InvolvementGroups { get; set; } = Array.Empty<InvolvementGroup>();
@@ -1318,6 +1325,55 @@ public sealed class CompaniesGenerator
         public string XUrl { get; set; } = "";
         public string InstagramUrl { get; set; } = "";
         public string YoutubeUrl { get; set; } = "";
+    }
+
+    /// <summary>
+    /// 正式名（社名）の名義（<see cref="CompanyAlias.IsOfficialName"/>）を古い順に並べて商号履歴の行にする。
+    /// 並びは前身・後継のつながりをたどった順（つながりの先頭は、前身が正式名の名義の中に無いもの）。つながりが複数あるときは
+    /// 開始日の早い順（開始日の無いつながりは前）。正式名の名義が 2 つ未満なら空。
+    /// </summary>
+    private static IReadOnlyList<OfficialNameView> BuildOfficialNameHistory(IReadOnlyList<CompanyAlias> aliases)
+    {
+        var official = aliases.Where(a => a.IsOfficialName && !a.IsDeleted).ToDictionary(a => a.AliasId);
+        if (official.Count < 2) return Array.Empty<OfficialNameView>();
+
+        var heads = official.Values
+            .Where(a => a.PredecessorAliasId is not int p || !official.ContainsKey(p))
+            .OrderBy(a => a.ValidFrom ?? DateTime.MinValue)
+            .ThenBy(a => a.AliasId);
+        var ordered = new List<CompanyAlias>();
+        var seen = new HashSet<int>();
+        foreach (var head in heads)
+        {
+            for (var cur = head; cur is not null && seen.Add(cur.AliasId);
+                 cur = cur.SuccessorAliasId is int s && official.TryGetValue(s, out var next) ? next : null)
+            {
+                ordered.Add(cur);
+            }
+        }
+        // つながりから外れた名義（前身・後継が環になっているなど）は最後に開始日順で足す。
+        ordered.AddRange(official.Values.Where(a => !seen.Contains(a.AliasId)).OrderBy(a => a.ValidFrom ?? DateTime.MinValue));
+
+        return ordered.Select(a => new OfficialNameView
+        {
+            Name = a.Name,
+            Period = (a.ValidFrom, a.ValidTo) switch
+            {
+                (null, null) => "",
+                (DateTime f, null) => $"{JpDateFormat.DotDate(f)}〜",
+                (null, DateTime t) => $"〜{JpDateFormat.DotDate(t)}",
+                (DateTime f, DateTime t) => $"{JpDateFormat.DotDate(f)}〜{JpDateFormat.DotDate(t)}"
+            }
+        }).ToList();
+    }
+
+    /// <summary>商号履歴の 1 行（正式名の名義と、その名義の期間）。</summary>
+    private sealed class OfficialNameView
+    {
+        /// <summary>期間（「2011.10.1〜2014.6.30」など。日付が無ければ空）。</summary>
+        public string Period { get; set; } = "";
+        /// <summary>正式名。</summary>
+        public string Name { get; set; } = "";
     }
 
     /// <summary>関係のある団体 1 件分（ファクトタイル 1 枚）。</summary>

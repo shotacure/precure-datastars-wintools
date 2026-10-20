@@ -1,0 +1,51 @@
+{{## 書体のウェイトごとのページ /fonts/{書体名とウェイト}/。FontsGenerator から FontFamilyModel { Name, FoundryLabel, Weights（1 つ）, SeriesCount, OtherWeights } で渡る。
+     見出しの下に同じ書体のほかのウェイトへのリンク、書体の節に書体見本（愛・永とサブタイトルで多く使われた字）、代用の旨、外部リンク、
+     その書体が使われた場面の見本（同じ作品で見た目のほとんど同じ場面はまとめてある）を並べる。 ##}}
+<h1>{{ Name | html.escape }}</h1>
+<p class="muted page-subline">{{ FoundryLabel | html.escape }}</p>
+{{~ if OtherWeights.size > 0 ~}}
+<p class="fonts-other-weights">ほかのウェイト：{{~ for o in OtherWeights ~}}{{ if !for.first }}・{{ end }}<a href="{{ o.Url }}">{{ o.Name | html.escape }}</a>{{~ end ~}}</p>
+{{~ end ~}}
+
+{{~ for w in Weights ~}}
+<section class="fonts-weight-section">
+  <div class="fonts-weight-head">
+    {{~ if w.SpecimenSrc != "" ~}}
+    <a class="fonts-specimen" href="{{ w.SpecimenSrc }}" data-fonts-viewer>
+      <img src="{{ w.SpecimenSrc }}" width="{{ w.SpecimenWidth }}" height="{{ w.SpecimenHeight }}" alt="{{ w.Name | html.escape }}の書体見本" loading="lazy" decoding="async">
+    </a>
+    {{~ else ~}}
+    <p class="fonts-no-sample">この書体は当サイトの手元に無いため、見本はありません。</p>
+    {{~ end ~}}
+    <div class="fonts-weight-info">
+      {{~ if w.SubstituteNote != "" ~}}<p class="fonts-substitute-note">{{ w.SubstituteNote | html.escape }}</p>{{~ end ~}}
+      {{~ if w.ArchiveUrl != "" || w.ProductUrl != "" ~}}
+      <ul class="external-links">
+        {{~ if w.ArchiveUrl != "" ~}}
+        <li><a class="external-link external-link-official" href="{{ w.ArchiveUrl }}" target="_blank" rel="noopener nofollow">写研アーカイブ</a></li>
+        {{~ end ~}}
+        {{~ if w.ProductUrl != "" ~}}
+        <li><a class="external-link external-link-official" href="{{ w.ProductUrl }}" target="_blank" rel="noopener nofollow">{{ w.ProductLabel | html.escape }}</a></li>
+        {{~ end ~}}
+      </ul>
+      {{~ end ~}}
+    </div>
+  </div>
+
+  <div class="fonts-scene-grid">
+    {{~ for sc in w.Scenes ~}}
+    <article class="fonts-scene-card">
+      <h3 class="fonts-scene-title"><a href="{{ sc.IndexUrl }}">{{ sc.SeriesTitle | html.escape }}</a><span class="series-year">({{ sc.StartYearLabel }})</span></h3>
+      <p class="fonts-scene-place">{{ sc.Labels | array.join "・" | html.escape }}の{{ sc.Place | html.escape }}</p>
+      {{~ if sc.ImageSrc != "" ~}}
+      <a class="fonts-scene" href="{{ sc.ImageSrc }}" data-fonts-viewer>
+        <img src="{{ sc.ImageSrc }}" width="{{ sc.ImageWidth }}" height="{{ sc.ImageHeight }}" alt="{{ sc.ImageAlt | html.escape }}" loading="lazy" decoding="async">
+      </a>
+      {{~ end ~}}
+    </article>
+    {{~ end ~}}
+  </div>
+</section>
+{{~ end ~}}
+
+{{ include "_fonts-notes.sbn" }}

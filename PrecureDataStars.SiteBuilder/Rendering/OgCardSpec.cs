@@ -162,7 +162,7 @@ public sealed record OgCardSpec(
     public float StatScale { get; init; }
 
     /// <summary>
-    /// 見出しに使う書体の名前（<c>series_subtitle_styles.font_subtitle</c>。「FOT-ハミング ProN B」のように Windows に見える書体名）。
+    /// 見出しに使う書体の名前（<c>series_font_usages</c> のサブタイトルの行が指す <c>fonts.render_font_name</c>。「FOT-ハミング ProN B」のように Windows に見える書体名）。
     /// エピソードのサブタイトルを、その作品の本編のテロップと同じ書体で組むためのもので、
     /// インストールされていなければ既定の見出し書体で組んで警告を出す。空なら既定の見出し書体。
     /// </summary>
@@ -173,6 +173,68 @@ public sealed record OgCardSpec(
     /// エピソードのサブタイトルに使う。
     /// </summary>
     public bool TitleTelopStyle { get; init; }
+
+    /// <summary>
+    /// 見出しの最大行数。0 なら既定（2 行）。precure.news の記事のように見出しが長いカードで 3 行まで許すために使う
+    /// （既定の 2 行に収まらない見出しは、どの大きさでも「切れた」扱いになって最小の組みに落ちるため）。
+    /// 既定値のときは JSON に出さず、既存のカードの作り置きの鍵を変えない。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public int TitleMaxLines { get; init; }
+
+    /// <summary>
+    /// 流し込みの事実行（<see cref="InlineFacts"/>）の値を組む書体の名前（「FOT-筑紫新聞明朝 Pr6N L」のように Windows に見える書体名）。
+    /// precure.news の記事のカードで、要約を新聞の本文の書体で組むために使う。空なら本文の書体。見つからなければ本文の書体で描き、警告になる。
+    /// 既定値のときは JSON に出さず、既存のカードの作り置きの鍵を変えない。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public string InlineFactsFontFamily { get; init; } = "";
+
+    /// <summary>
+    /// 流し込みの事実行の値の平体の率（字の高さ ÷ 幅。0.8 なら 80% の平体）。字幅は変えずに高さだけ縮める。
+    /// 0 なら平体にしない。既定値のときは JSON に出さない。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public float InlineFactsVerticalScale { get; init; }
+
+    /// <summary>
+    /// 流し込みの事実行を文章として組むか（precure.news の記事の要約）。true なら値を語に割らず 1 字ずつ折り（行頭禁則は守る）、
+    /// 入り切らなければ最後の行を「…」で切る（その場合も「切れた」扱いにせず、字を小さくして詰め込まない）。
+    /// 既定値のときは JSON に出さない。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool InlineFactsProse { get; init; }
+
+    /// <summary>
+    /// 前置き（<see cref="Kicker"/>）の字の大きさ。0 なら既定（31px）。precure.news の記事で、前置きに置く日付を大きく見せるために使う。
+    /// 既定値のときは JSON に出さない。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public float KickerFontSize { get; init; }
+
+    /// <summary>
+    /// 補助行（<see cref="Subtitle"/>）の下に、エピソードのカードの見出しと同じ組み方（本編テロップの書体・ルビ・白い字に黒フチと影）で
+    /// 置くサブタイトル（<c>episodes.title_rich_html</c> の形。ルビの無い話は素の文字列）。改行は空きとして扱い、1 行に詰める。
+    /// precure.news の感想記事のカードで使う。疎な組みでのみ描く。空なら描かない。既定値のときは JSON に出さない。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public string EpisodeTitleRubyHtml { get; init; } = "";
+
+    /// <summary><see cref="EpisodeTitleRubyHtml"/> を組む書体の名前（<c>series_font_usages</c> のサブタイトルの行が指す <c>fonts.render_font_name</c>）。空なら既定の見出し書体。</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public string EpisodeTitleFontFamily { get; init; } = "";
+
+    /// <summary><see cref="EpisodeTitleRubyHtml"/> の振り仮名の組み方（作品ごとのサブタイトルテロップと同じもの）。</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public SubtitleTelopProfile? EpisodeTitleRubyProfile { get; init; }
+
+    /// <summary>
+    /// 書体見本（書体のページのカード）。あれば見本を装飾なしで左右いっぱいにフッタの上へ並べ（左に大きな 2 字、
+    /// 右にその 4 分の 1 の大きさの字の行）、その上に見出しとピンク罫を置く。<see cref="Subtitle"/> は見出しの右に一回り小さく添える。
+    /// null なら描かない。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public OgCardSpecimen? Specimen { get; init; }
 
     /// <summary>見出しが空のカードは意味を成さないため、描画対象として妥当かを判定する。</summary>
     public bool IsRenderable => !string.IsNullOrWhiteSpace(Title);
@@ -199,6 +261,15 @@ public sealed record OgCardSpec(
         || !string.IsNullOrWhiteSpace(Watermark) || !string.IsNullOrWhiteSpace(TitleFontFamily)
         || HeroVoice || !string.IsNullOrWhiteSpace(Statement);
 }
+
+/// <summary>
+/// カードに載せる書体見本。<paramref name="Big"/> の字（2 字）を左に大きく横に並べ、その右に <paramref name="Rows"/> の行を
+/// 大きな字の 4 分の 1 の大きさで、字間・行間ゼロ（仮想ボディどうしが接する）で上から並べる。
+/// </summary>
+/// <param name="FontFamily">描く書体名。</param>
+/// <param name="Big">大きく描く字（「愛永」）。</param>
+/// <param name="Rows">右に並べる行（ひらがな 1 行・カタカナ 1 行・漢字 2 行。4 行まで、1 行 8 字まで）。</param>
+public sealed record OgCardSpecimen(string FontFamily, string Big, IReadOnlyList<string> Rows);
 
 /// <summary>
 /// 年表の区間 1 つ。<paramref name="Start"/> と <paramref name="End"/> が同じなら点（映画など）として描く。

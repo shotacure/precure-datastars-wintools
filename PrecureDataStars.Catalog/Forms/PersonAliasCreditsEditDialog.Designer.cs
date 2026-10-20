@@ -20,6 +20,12 @@ partial class PersonAliasCreditsEditDialog
     private Label lblSeparator = null!;
     private TextBox txtSeparator = null!;
     private Label lblSepHint = null!;
+    private Label lblAffiliation = null!;
+    private TextBox txtAffiliationCompany = null!;
+    private Button btnPickAffiliation = null!;
+    private Button btnClearAffiliation = null!;
+    private Label lblAffiliationText = null!;
+    private TextBox txtAffiliationText = null!;
     private Label lblNotes = null!;
     private TextBox txtNotes = null!;
 
@@ -43,9 +49,9 @@ partial class PersonAliasCreditsEditDialog
 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(880, 560);
+        ClientSize = new Size(880, 592);
         StartPosition = FormStartPosition.CenterParent;
-        MinimumSize = new Size(700, 480);
+        MinimumSize = new Size(700, 512);
         Name = "PersonAliasCreditsEditDialog";
         Text = "作家クレジット編集";
 
@@ -81,6 +87,7 @@ partial class PersonAliasCreditsEditDialog
             new DataGridViewTextBoxColumn { Name = "colSeq",      HeaderText = "Seq",         Width = 60,  DataPropertyName = "Seq" },
             new DataGridViewTextBoxColumn { Name = "colAlias",    HeaderText = "名義",         Width = 360, DataPropertyName = "AliasDisplay" },
             new DataGridViewTextBoxColumn { Name = "colSep",      HeaderText = "区切り",       Width = 100, DataPropertyName = "Separator" },
+            new DataGridViewTextBoxColumn { Name = "colAffiliation", HeaderText = "所属",      Width = 140, DataPropertyName = "AffiliationDisplay" },
             new DataGridViewTextBoxColumn { Name = "colNotes",    HeaderText = "備考",         Width = 220, DataPropertyName = "Notes" },
             new DataGridViewTextBoxColumn { Name = "colAliasId",  HeaderText = "alias_id",     Width = 80,  DataPropertyName = "AliasId", Visible = false }
         });
@@ -90,7 +97,7 @@ partial class PersonAliasCreditsEditDialog
         {
             Text = "選択行の詳細",
             Location = new Point(8, 336),
-            Size = new Size(864, 156),
+            Size = new Size(864, 188),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
         };
 
@@ -117,10 +124,24 @@ partial class PersonAliasCreditsEditDialog
             ForeColor = Color.DimGray
         };
 
-        lblNotes = new Label { Text = "備考:", Location = new Point(12, 96), AutoSize = true };
-        txtNotes = new TextBox
+        // 所属（歌の作家連名のときだけ表示。会社名義を選ぶか、マスタに無いときは自由記述）
+        lblAffiliation = new Label { Text = "所属(会社):", Location = new Point(12, 96), AutoSize = true };
+        txtAffiliationCompany = new TextBox
         {
             Location = new Point(120, 92),
+            Size = new Size(200, 23),
+            ReadOnly = true,
+            BackColor = SystemColors.Window
+        };
+        btnPickAffiliation  = new Button { Text = "選択...", Location = new Point(326, 91), Size = new Size(64, 25) };
+        btnClearAffiliation = new Button { Text = "解除",   Location = new Point(394, 91), Size = new Size(48, 25) };
+        lblAffiliationText = new Label { Text = "自由記述:", Location = new Point(452, 96), AutoSize = true };
+        txtAffiliationText = new TextBox { Location = new Point(520, 92), Size = new Size(160, 23), MaxLength = 64 };
+
+        lblNotes = new Label { Text = "備考:", Location = new Point(12, 128), AutoSize = true };
+        txtNotes = new TextBox
+        {
+            Location = new Point(120, 124),
             Size = new Size(560, 23),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
@@ -136,12 +157,14 @@ partial class PersonAliasCreditsEditDialog
             lblSelectedSeq, lblSeqValue,
             lblAlias, txtAliasDisplay, btnPickAlias,
             lblSeparator, txtSeparator, lblSepHint,
+            lblAffiliation, txtAffiliationCompany, btnPickAffiliation, btnClearAffiliation,
+            lblAffiliationText, txtAffiliationText,
             lblNotes, txtNotes,
             btnAdd, btnApply, btnDelete, btnUp, btnDown
         });
 
-        btnOk     = new Button { Text = "OK",     Location = new Point(704, 504), Size = new Size(80, 28), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.OK };
-        btnCancel = new Button { Text = "キャンセル", Location = new Point(792, 504), Size = new Size(80, 28), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.Cancel };
+        btnOk     = new Button { Text = "OK",     Location = new Point(704, 536), Size = new Size(80, 28), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.OK };
+        btnCancel = new Button { Text = "キャンセル", Location = new Point(792, 536), Size = new Size(80, 28), Anchor = AnchorStyles.Bottom | AnchorStyles.Right, DialogResult = DialogResult.Cancel };
 
         Controls.Add(lblHeader);
         Controls.Add(gridLines);

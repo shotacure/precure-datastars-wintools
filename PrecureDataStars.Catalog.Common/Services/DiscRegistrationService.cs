@@ -5,7 +5,7 @@ namespace PrecureDataStars.Catalog.Common.Services;
 
 /// <summary>
 /// CDAnalyzer / BDAnalyzer から共通利用される、ディスク登録・照合ビジネスロジック。
-/// MCN・CDDB-ID・TOC 曖昧一致の優先順位でディスクを検索し、
+/// CD-DA は TOC 完全一致、BD/DVD は TOC 曖昧一致でディスクを検索し、
 /// 見つかれば反映、見つからなければ商品選択 or 新規作成を案内する。
 /// <b>同期の原則</b>: CDAnalyzer / BDAnalyzer は「ディスクから直接読み取れる物理情報」のみを
 /// 提供するツールであり、Catalog 側で磨いたタイトル・種別・SONG/BGM 紐付け等を上書きしてはならない。
@@ -42,57 +42,68 @@ public sealed class DiscRegistrationService
         public string MatchedBy { get; init; } = "";
     }
 
-    /// <summary>CD-DA 用: 優先順位（MCN → CDDB-ID → TOC 曖昧）で既存ディスクを検索する。 動画メディア (BD/DVD) の照合は別メソッド <see cref="FindCandidatesForVideoAsync"/> が担当する。</summary>
+    /// <summary>CD-DA 用: TOC（総尺と全トラックの開始 LBA）の完全一致で既存ディスクを検索する。 CDDB Disc ID の一致で候補を絞ってから TOC を突き合わせる。動画メディア (BD/DVD) の照合は別メソッド <see cref="FindCandidatesForVideoAsync"/> が担当する。</summary>
     /// <param name="mcn">MCN（無ければ null）。</param>
     /// <param name="cddbDiscId">freedb 互換 Disc ID（無ければ null）。</param>
-    /// <param name="totalTracks">総トラック数（TOC 曖昧照合用）。</param>
-    /// <param name="totalLengthFrames">総尺フレーム数（TOC 曖昧照合用、1/75 秒単位）。</param>
+    /// <param name="trackStartLbas">読み取った各トラックの開始 LBA（トラック番号順、データトラックも含む）。</param>
+    /// <param name="totalLengthFrames">総尺フレーム数（リードアウトの LBA、1/75 秒単位）。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task<MatchResult> FindCandidatesForCdAsync(
         string? mcn,
         string? cddbDiscId,
-        byte totalTracks,
+        IReadOnlyList<uint> trackStartLbas,
         uint totalLengthFrames,
         CancellationToken ct = default)
     {
         // 複数枚組（BOX）は全ディスクが同一 MCN（商品バーコード）を共有するため、MCN 一致では
-        // Disc 2 を Disc 1 に誤マッチさせる危険がある。よって CD-DA の照合では MCN を用いず、
-        // CDDB Disc ID 完全一致を最優先とし、未登録分の安全網として TOC 曖昧一致のみを使う。
+        // Disc 2 を Disc 1 に誤マッチさせる危険がある。よって CD-DA の照合では MCN を用いない。
         // 引数 mcn は呼び出し側シグネチャ互換のため受け取るが、照合キーには使用しない。
         _ = mcn;
 
-        // 1. CDDB Disc ID 完全一致
-        if (!string.IsNullOrWhiteSpace(cddbDiscId))
+        if (string.IsNullOrWhiteSpace(cddbDiscId) || trackStartLbas.Count == 0 || totalLengthFrames == 0)
         {
-            var byCddb = await _discsRepo.FindByCddbIdAsync(cddbDiscId, ct).ConfigureAwait(false);
-            if (byCddb.Count > 0)
-            {
-                return new MatchResult
-                {
-                    Candidates = byCddb,
-                    UniqueMatch = byCddb.Count == 1 ? byCddb[0] : null,
-                    MatchedBy = "CDDB"
-                };
-            }
+            return new MatchResult();
         }
 
-        // 2. TOC 曖昧一致（トラック数完全一致 + 総尺 ±75 フレーム ≒ ±1 秒）
-        if (totalTracks > 0 && totalLengthFrames > 0)
+        // CDDB Disc ID は「トラック開始秒の各桁の和 % 255・総秒数・トラック数」を詰めた索引にすぎず、
+        // 中身の違う盤でも一致することがある（例: 4 曲入りで総尺が同じ秒数の別シングル）。
+        // そこで ID の一致は候補の絞り込みにだけ使い、TOC（総尺と全トラックの開始 LBA）が
+        // 1 フレームも違わない盤だけを候補に残す。TOC はディスクに記録されたデータで読むたびに
+        // 変わらないため、ずれは許容しない。初回盤と通常盤のように同じマスターからプレスされ
+        // TOC まで同一の盤は TOC では区別できないので、複数候補として返して利用者に選ばせる。
+        var byCddb = await _discsRepo.FindByCddbIdAsync(cddbDiscId, ct).ConfigureAwait(false);
+        var matched = new List<Disc>(byCddb.Count);
+        foreach (var disc in byCddb)
         {
-            var byToc = await _discsRepo.FindByTocFuzzyForCdAsync(totalTracks, totalLengthFrames, 75u, ct).ConfigureAwait(false);
-            if (byToc.Count > 0)
+            if (disc.TotalLengthFrames != totalLengthFrames) continue;
+
+            var registeredLbas = (await _tracksRepo.GetByCatalogNoAsync(disc.CatalogNo, ct).ConfigureAwait(false))
+                .Where(t => t.SubOrder == 0)
+                .OrderBy(t => t.TrackNo)
+                .Select(t => t.StartLba)
+                .ToList();
+            if (registeredLbas.Count != trackStartLbas.Count) continue;
+
+            bool same = true;
+            for (int i = 0; i < registeredLbas.Count; i++)
             {
-                return new MatchResult
-                {
-                    Candidates = byToc,
-                    UniqueMatch = byToc.Count == 1 ? byToc[0] : null,
-                    MatchedBy = "TOC"
-                };
+                if (registeredLbas[i] != trackStartLbas[i]) { same = false; break; }
             }
+            if (same) matched.Add(disc);
         }
 
-        // 未該当
-        return new MatchResult();
+        if (matched.Count == 0)
+        {
+            // 未該当
+            return new MatchResult();
+        }
+
+        return new MatchResult
+        {
+            Candidates = matched,
+            UniqueMatch = matched.Count == 1 ? matched[0] : null,
+            MatchedBy = "TOC"
+        };
     }
 
     /// <summary>BD/DVD 用: TOC 曖昧（チャプター数 + 総尺 ms）のみで既存ディスクを検索する。 動画メディアは MCN・CDDB-ID が取得できないため、TOC 曖昧照合のみがフォールバックとなる。</summary>

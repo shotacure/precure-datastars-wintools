@@ -1,8 +1,8 @@
 <section>
   <h1>シリーズ × パート別 平均/最短/最長</h1>
+  <p class="muted page-coverage">{{ CoverageLabel }}</p>
   <p class="lead">プリキュア各シリーズのパート種別（アバン / A / B / 予告 等）ごとに、平均・最短・最長尺を集計しています。
-  平均値の小数部分はフォントサイズ 80% で縮小表示します（例 <span class="micro-fraction">.222</span>）。<br>
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
+  平均値の小数部分はフォントサイズ 80% で縮小表示します（例 <span class="micro-fraction">.222</span>）。</p>
 </section>
 
 {{## 旧 stats-episodes-by-series.sbn を引き継いで series-summary.sbn にリネーム。

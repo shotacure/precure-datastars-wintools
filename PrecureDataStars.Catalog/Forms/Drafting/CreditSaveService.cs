@@ -595,8 +595,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertRoleAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardRole r, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, notes, created_by, updated_by)
-            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, not_on_screen, notes, created_by, updated_by)
+            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @NotOnScreen, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, r, transaction: tx, cancellationToken: ct));
@@ -605,8 +605,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertBlockAsync(MySqlConnection conn, MySqlTransaction tx, CreditRoleBlock b, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_role_blocks (card_role_id, block_seq, col_count, leading_company_alias_id, heading_series_id, heading_text, heading_italic, notes, created_by, updated_by)
-            VALUES (@CardRoleId, @BlockSeq, @ColCount, @LeadingCompanyAliasId, @HeadingSeriesId, @HeadingText, @HeadingItalic, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_role_blocks (card_role_id, block_seq, col_count, leading_company_alias_id, leading_company_not_on_screen, heading_series_id, heading_text, heading_italic, notes, created_by, updated_by)
+            VALUES (@CardRoleId, @BlockSeq, @ColCount, @LeadingCompanyAliasId, @LeadingCompanyNotOnScreen, @HeadingSeriesId, @HeadingText, @HeadingItalic, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, b, transaction: tx, cancellationToken: ct));
@@ -620,14 +620,14 @@ internal sealed class CreditSaveService
                person_alias_id, character_alias_id, raw_character_text,
                person_misprint_text, character_misprint_text, company_misprint_text, person_masked_text,
                company_alias_id, logo_id, raw_text,
-               affiliation_company_alias_id, affiliation_text, affiliation_inline,
+               affiliation_company_alias_id, affiliation_person_alias_id, affiliation_logo_id, affiliation_text, affiliation_inline,
                parallel_with_entry_id, notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
                @PersonMisprintText, @CharacterMisprintText, @CompanyMisprintText, @PersonMaskedText,
                @CompanyAliasId, @LogoId, @RawText,
-               @AffiliationCompanyAliasId, @AffiliationText, @AffiliationInline,
+               @AffiliationCompanyAliasId, @AffiliationPersonAliasId, @AffiliationLogoId, @AffiliationText, @AffiliationInline,
                @ParallelWithEntryId, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -736,6 +736,7 @@ internal sealed class CreditSaveService
               join_previous      = @JoinPrevious,
               join_separator     = @JoinSeparator,
               hide_role_label    = @HideRoleLabel,
+              not_on_screen      = @NotOnScreen,
               notes              = @Notes,
               updated_by         = @UpdatedBy
             WHERE card_role_id = @CardRoleId;
@@ -753,6 +754,7 @@ internal sealed class CreditSaveService
               card_role_id = @CardRoleId,
               col_count = @ColCount,
               leading_company_alias_id = @LeadingCompanyAliasId,
+              leading_company_not_on_screen = @LeadingCompanyNotOnScreen,
               heading_series_id = @HeadingSeriesId,
               heading_text = @HeadingText,
               heading_italic = @HeadingItalic,
@@ -785,6 +787,8 @@ internal sealed class CreditSaveService
               logo_id = @LogoId,
               raw_text = @RawText,
               affiliation_company_alias_id = @AffiliationCompanyAliasId,
+              affiliation_person_alias_id = @AffiliationPersonAliasId,
+              affiliation_logo_id = @AffiliationLogoId,
               affiliation_text = @AffiliationText,
               affiliation_inline = @AffiliationInline,
               parallel_with_entry_id = @ParallelWithEntryId,

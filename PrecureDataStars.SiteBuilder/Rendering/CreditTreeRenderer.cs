@@ -25,9 +25,10 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 ///     直前行と同キャラ名なら dim 空セル、<c>leading_company</c> 字下げ対応）。</description></item>
 ///   <item><description>CASTING_COOPERATION 役職を VOICE_CAST テーブル末尾に「協力」行として追記。
 ///     役職名カラム（右寄せ）に「協力」を置き、屋号一覧は声優名カラムに置く 3 セル構成。</description></item>
-///   <item><description>絵コンテ・演出融合表示（<c>series.hide_storyboard_role = 1</c> + 同 Group 内に
-///     STORYBOARD と EPISODE_DIRECTOR が 1 件ずつ + 各エントリ 1 件）→
-///     同名なら役職名「（絵コンテ・）演出」の 1 行、異名なら役職名「演出」+ 2 行（絵コンテ→演出）。</description></item>
+///   <item><description>絵コンテ・演出融合表示（<c>series.storyboard_display</c> が <c>MERGE</c> / <c>MERGE_SAME_PERSON</c>
+///     + カード内で STORYBOARD と EPISODE_DIRECTOR が隣接）→
+///     同名なら役職名「（絵コンテ・）演出」の 1 行、異名なら役職名「演出」+ 2 行（絵コンテ→演出）。
+///     <c>MERGE_SAME_PERSON</c> は同名のときだけ融合し、異名ならそれぞれの役職名で独立描画する。</description></item>
 ///   <item><description>VOICE_CAST 役職名のカード/Tier/Group 跨ぎ抑止
 ///     （直前ロールが同一 role_code の VOICE_CAST なら役職名カラムを空表示）。</description></item>
 ///   <item><description><c>is_broadcast_only=1</c> エントリは描画対象外。</description></item>
@@ -143,6 +144,13 @@ internal sealed class CreditTreeRenderer
     }
 
     /// <summary>
+    /// 画面にはクレジットされていない筆頭の会社（<see cref="CreditRoleBlock.LeadingCompanyNotOnScreen"/>）の HTML。
+    /// 「（三晃プロダクション）」と括弧で包み、役職の行の not-on-screen と同じ薄い色で出す。
+    /// </summary>
+    private static string LeadingNotOnScreenHtml(string companyHtml)
+        => $"<span class=\"leading-not-on-screen\" title=\"画面にはクレジットされていない\">（{companyHtml}）</span>";
+
+    /// <summary>
     /// ブロック先頭の見出し（<see cref="CreditRoleBlock.HeadingSeriesId"/> / <see cref="CreditRoleBlock.HeadingText"/>）の HTML。
     /// 作品を指す見出しは作品ページへのリンクにし、表示文字は見出しの文字（画面の表記どおり）があればそれ、
     /// 無ければ作品の正式タイトル。作品ではない見出し（「特別出演」など）は文字だけを出す。見出しが無ければ空文字。
@@ -195,7 +203,7 @@ internal sealed class CreditTreeRenderer
         var roleMap = _ctx.RoleByCode;
         int? resolveSeriesId = ResolveTemplateSeriesId(credit);
 
-        bool hideStoryboardRole = GetHideStoryboardRole(resolveSeriesId);
+        string storyboardDisplay = GetStoryboardDisplay(resolveSeriesId);
         string? prevVoiceCastRoleCode = null;
 
         foreach (var cardSnap in cardSnapshots)
@@ -211,7 +219,7 @@ internal sealed class CreditTreeRenderer
             IReadOnlyList<CreditBlockEntry>? cooperationEntriesForCard = cooperationContext?.Entries;
             int? cooperationAppendTargetCardRoleId = cooperationContext?.LastVoiceCastCardRoleId;
             CastingCooperationAppend? cooperationAppendForCard = cooperationContext is { } coopCtx
-                ? new CastingCooperationAppend(coopCtx.Entries, coopCtx.LabelText)
+                ? new CastingCooperationAppend(coopCtx.Entries, coopCtx.LabelText, coopCtx.NotOnScreen)
                 : null;
 
             // 絵コンテ・演出融合のカード横断事前スキャン。
@@ -219,9 +227,11 @@ internal sealed class CreditTreeRenderer
             // 隣接していれば、Group を跨いでいても融合表示する（クレジット表記上「絵コンテ・演出」を
             // 分けない作品で、ユーザーが `--` で Group を分けて入力するパターンも捕捉）。
             // 隣接していなければ通常の独立描画にフォールバック。
+            // MERGE_SAME_PERSON の作品では、絵コンテと演出が同じ人のときだけ融合する（違う人なら独立描画）。
             var (storyboardMergeBySbId, storyboardMergedDirIds) =
-                hideStoryboardRole
-                    ? DetectStoryboardDirectorMerges(cardSnap)
+                storyboardDisplay != Series.StoryboardDisplaySeparate
+                    ? DetectStoryboardDirectorMerges(cardSnap,
+                        samePersonOnly: storyboardDisplay == Series.StoryboardDisplayMergeSamePerson)
                     : (new Dictionary<int, StoryboardDirectorMerge>(), new HashSet<int>());
 
             foreach (var tierSnap in tierSnapshots)
@@ -369,6 +379,7 @@ internal sealed class CreditTreeRenderer
                             roleMisprintText: cr.RoleMisprintText,
                             roleNameHtmlOverride: joinedLabelHtmlByLeadId.TryGetValue(cr.CardRoleId, out var joinedHtml) ? joinedHtml : null,
                             hideRoleLabel: cr.HideRoleLabel,
+                            notOnScreen: cr.NotOnScreen,
                             html, ct).ConfigureAwait(false);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(cr.RoleCode, roleMap)
@@ -469,15 +480,17 @@ internal sealed class CreditTreeRenderer
         return _ctx.EpisodeById.TryGetValue(eid, out var ep) ? ep.SeriesId : (int?)null;
     }
 
-    /// <summary><c>series.hide_storyboard_role</c> フラグを <see cref="BuildContext.SeriesById"/> から引く。 SiteDataLoader は <c>is_deleted = 0</c> のシリーズのみロードしているため、削除済みシリーズは辞書に存在せず false 扱いになる。</summary>
-    private bool GetHideStoryboardRole(int? seriesId)
+    /// <summary><c>series.storyboard_display</c>（絵コンテと演出の出し方）を <see cref="BuildContext.SeriesById"/> から引く。 SiteDataLoader は <c>is_deleted = 0</c> のシリーズのみロードしているため、削除済みシリーズは辞書に存在せず <c>SEPARATE</c> 扱いになる。</summary>
+    private string GetStoryboardDisplay(int? seriesId)
     {
-        if (!seriesId.HasValue) return false;
-        return _ctx.SeriesById.TryGetValue(seriesId.Value, out var s) && s.HideStoryboardRole;
+        if (!seriesId.HasValue) return Series.StoryboardDisplaySeparate;
+        return _ctx.SeriesById.TryGetValue(seriesId.Value, out var s)
+            ? s.StoryboardDisplay
+            : Series.StoryboardDisplaySeparate;
     }
 
-    /// <summary>カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の CardRoleId + 「協力」行の表記（CASTING_COOPERATION 役職のうち最初に画面の表記を持つものの <c>role_label_text</c>、無ければ null）を返す（プレビューと同一仕様）。 探索は <see cref="CreditTreeIndex"/> の事前展開済みスナップショットを辿るだけで完結する。</summary>
-    private static (List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId, string? LabelText)? CollectCardCastingCooperationContext(
+    /// <summary>カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の CardRoleId + 「協力」行の表記（CASTING_COOPERATION 役職のうち最初に画面の表記を持つものの <c>role_label_text</c>、無ければ null）+ 画面に無い印（CASTING_COOPERATION 役職のいずれかが <c>not_on_screen</c>）を返す（プレビューと同一仕様）。 探索は <see cref="CreditTreeIndex"/> の事前展開済みスナップショットを辿るだけで完結する。</summary>
+    private static (List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId, string? LabelText, bool NotOnScreen)? CollectCardCastingCooperationContext(
         CreditCardSnapshot cardSnap,
         IReadOnlyDictionary<string, Role> roleMap)
     {
@@ -507,7 +520,8 @@ internal sealed class CreditTreeRenderer
         string? labelText = cooperationRoleSnaps
             .Select(rs => rs.Role.RoleLabelText)
             .FirstOrDefault(t => !string.IsNullOrEmpty(t));
-        return (aggregated, lastVcCardRoleId.Value, labelText);
+        bool notOnScreen = cooperationRoleSnaps.Any(rs => rs.Role.NotOnScreen);
+        return (aggregated, lastVcCardRoleId.Value, labelText, notOnScreen);
     }
 
     /// <summary>指定 CardRole 配下の全エントリ（<c>is_broadcast_only = 0</c> のみ）を block_seq → entry_seq 順で平坦化する。</summary>
@@ -571,6 +585,9 @@ internal sealed class CreditTreeRenderer
         string? roleNameHtmlOverride,
         // その行だけ役職名を出さない（credit_card_roles.hide_role_label）。true なら役職名の欄を空にして中身だけ出す。
         bool hideRoleLabel,
+        // 画面にはクレジットされていない行（credit_card_roles.not_on_screen）。true なら役職ラッパに not-on-screen を付け、
+        // CSS で役職名から中身までを括弧で包んで薄い色で出す。データとしては通常どおり数える。
+        bool notOnScreen,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -618,7 +635,9 @@ internal sealed class CreditTreeRenderer
         if (roleMisprintPrefixHtml.Length > 0 && roleNameHtmlOverride is null)
             roleNameHtmlOverride = roleMisprintPrefixHtml + BuildRoleNameHtml(roleCode, roleName, roleMap);
 
-        html.Append("<div class=\"role\">");
+        html.Append(notOnScreen
+            ? "<div class=\"role not-on-screen\" title=\"画面にはクレジットされていない\">"
+            : "<div class=\"role\">");
 
         // コンテンツ領域ヘッダ上書き：シリーズ別「役職名の表示テキストだけ変えて、本体は通常描画」
         // 用途。非 NULL のとき役職ラッパ直下に <strong>+ 役職詳細リンクを出し、後段のフォールバック
@@ -908,9 +927,11 @@ internal sealed class CreditTreeRenderer
     /// 戻り値：(sb の CardRoleId → ペア情報の辞書, dir の CardRoleId 集合)。
     /// 隣接ペアが見つかった次の組（i+1）はスキップして i+2 から再開する（dir を二重に sb として
     /// 拾わない、3 連続 sb/dir/sb のような異常入力の暴走防止）。
+    /// <paramref name="samePersonOnly"/> が true（<c>MERGE_SAME_PERSON</c> の作品）なら、絵コンテと演出が
+    /// 1 人ずつで同じ人のペアだけを融合の対象にする（違う人なら両役職とも通常の独立描画）。
     /// </summary>
     private static (Dictionary<int, StoryboardDirectorMerge> BySbId, HashSet<int> DirIds)
-        DetectStoryboardDirectorMerges(CreditCardSnapshot cardSnap)
+        DetectStoryboardDirectorMerges(CreditCardSnapshot cardSnap, bool samePersonOnly)
     {
         var ordered = new List<(int GroupId, CreditCardRoleSnapshot Snap)>();
         foreach (var t in cardSnap.Tiers.OrderBy(x => x.Tier.TierNo))
@@ -932,7 +953,7 @@ internal sealed class CreditTreeRenderer
             var (gid2, snap2) = ordered[i + 1];
             bool isSb = string.Equals(snap1.Role.RoleCode, RoleCodeStoryboard, StringComparison.Ordinal);
             bool isDir = string.Equals(snap2.Role.RoleCode, RoleCodeEpisodeDirector, StringComparison.Ordinal);
-            if (isSb && isDir)
+            if (isSb && isDir && (!samePersonOnly || IsSamePersonStoryboardDirector(snap1, snap2)))
             {
                 bySbId[snap1.Role.CardRoleId] = new StoryboardDirectorMerge
                 {
@@ -945,6 +966,23 @@ internal sealed class CreditTreeRenderer
             }
         }
         return (bySbId, dirIds);
+    }
+
+    /// <summary>
+    /// 絵コンテ役職と演出役職のエントリ（<c>is_broadcast_only</c> を除く）が 1 件ずつで、同じ人かを判定する。
+    /// 両方が名義を持てば <c>person_alias_id</c> の一致、どちらも名義を持たなければ <c>raw_text</c> の一致で見る。
+    /// </summary>
+    private static bool IsSamePersonStoryboardDirector(CreditCardRoleSnapshot sb, CreditCardRoleSnapshot dir)
+    {
+        var sbEntries = sb.Blocks.SelectMany(b => b.Entries).Where(e => !e.IsBroadcastOnly).ToList();
+        var dirEntries = dir.Blocks.SelectMany(b => b.Entries).Where(e => !e.IsBroadcastOnly).ToList();
+        if (sbEntries.Count != 1 || dirEntries.Count != 1) return false;
+        var s = sbEntries[0];
+        var d = dirEntries[0];
+        if (s.PersonAliasId.HasValue && d.PersonAliasId.HasValue)
+            return s.PersonAliasId.Value == d.PersonAliasId.Value;
+        if (s.PersonAliasId.HasValue || d.PersonAliasId.HasValue) return false;
+        return !string.IsNullOrEmpty(s.RawText) && string.Equals(s.RawText, d.RawText, StringComparison.Ordinal);
     }
 
     /// <summary>絵コンテ・演出融合表示（N:M 対応）。
@@ -1117,6 +1155,8 @@ internal sealed class CreditTreeRenderer
                 if (!string.IsNullOrEmpty(leadingCompanyName))
                 {
                     leadingCompanyHtml = await BuildCompanyAliasHtmlAsync(leadId, leadingCompanyName).ConfigureAwait(false);
+                    // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、括弧で包んで薄い色で示す。
+                    if (bs.Block.LeadingCompanyNotOnScreen) leadingCompanyHtml = LeadingNotOnScreenHtml(leadingCompanyHtml);
                 }
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
@@ -1138,7 +1178,9 @@ internal sealed class CreditTreeRenderer
                 {
                     html.Append("<td class=\"role-name\"></td>");
                 }
-                html.Append($"<td class=\"entry-cell block-heading\" colspan=\"{cols}\">{headingHtml}</td>");
+                // 区切りの記号だけの見出し（「＊」「●」など）は、画面どおり中央にそろえる
+                string markClass = bs.Block.IsMarkHeading ? " block-heading-mark" : "";
+                html.Append($"<td class=\"entry-cell block-heading{markClass}\" colspan=\"{cols}\">{headingHtml}</td>");
                 html.Append("</tr>");
                 isFirstRowOfThisBlock = false;
             }
@@ -1240,6 +1282,8 @@ internal sealed class CreditTreeRenderer
                 if (!string.IsNullOrEmpty(leadingCompanyName))
                 {
                     leadingCompanyHtml = await BuildCompanyAliasHtmlAsync(leadId, leadingCompanyName).ConfigureAwait(false);
+                    // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、括弧で包んで薄い色で示す。
+                    if (bs.Block.LeadingCompanyNotOnScreen) leadingCompanyHtml = LeadingNotOnScreenHtml(leadingCompanyHtml);
                 }
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
@@ -1262,7 +1306,9 @@ internal sealed class CreditTreeRenderer
                 {
                     html.Append("<td class=\"role-name\"></td>");
                 }
-                html.Append($"<td class=\"character-cell block-heading\" colspan=\"2\">{headingHtml}</td>");
+                // 区切りの記号だけの見出し（「＊」「●」など）は、画面どおりキャラ名と声優名の 2 列の中央にそろえる
+                string markClass = bs.Block.IsMarkHeading ? " block-heading-mark" : "";
+                html.Append($"<td class=\"character-cell block-heading{markClass}\" colspan=\"2\">{headingHtml}</td>");
                 html.Append("</tr>");
                 isFirstRowOfThisBlock = false;
                 prevCharLabel = null;
@@ -1429,7 +1475,10 @@ internal sealed class CreditTreeRenderer
                         : "協力";
                 string cooperationLabelHtml = BuildRoleNameHtml(RoleCodeCastingCooperation, cooperationRoleName, roleMap);
 
-                html.Append("<tr class=\"cooperation-row\">");
+                // 画面に無い「協力」は not-on-screen を付け、CSS で「協力」から屋号までを括弧で包んで薄い色で出す。
+                html.Append(appendedCooperation.NotOnScreen
+                    ? "<tr class=\"cooperation-row not-on-screen\" title=\"画面にはクレジットされていない\">"
+                    : "<tr class=\"cooperation-row\">");
                 // 1 段目（役職名カラム）は空。声の出演ブロックの 2 行目以降と同じ「役職名抑止」状態。
                 html.Append("<td class=\"role-name\"></td>");
                 // 2 段目（キャラ名カラム）に「協力」を置く。CSS .cooperation-row .character-cell で

@@ -3,10 +3,7 @@
 </p>
 
 <h1>{{ RoleNameJa | html.escape }}</h1>
-
-<p class="lead">
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
-</p>
+<p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 {{## 音楽クレジット（music_credits、ストリングス編曲は song_credits）の役職 1 つ分。
      ・1 行 = 人物または団体のアコーディオン（details）。閉じた状態は名前と件数（劇伴の TV 作品数 📺・映画本数 🎥、歌の曲数 🎵、盤の点数 💿）。

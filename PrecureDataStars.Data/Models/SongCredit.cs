@@ -38,6 +38,15 @@ public sealed class SongCredit
     /// <summary>seq>=2 の行で、前の seq との区切り文字。seq=1 では NULL。</summary>
     public string? PrecedingSeparator { get; set; }
 
+    /// <summary>
+    /// 名義に添える所属の会社名義（→ company_aliases.alias_id）。盤に「岡部啓一(MONACA)」のように
+    /// 作家の所属が印刷されているときに持つ。サイトでは名義のあとに「（MONACA）」の形で添え、企業詳細へリンクする。
+    /// </summary>
+    public int? AffiliationCompanyAliasId { get; set; }
+
+    /// <summary>会社マスタに無い所属の自由記述。<see cref="AffiliationCompanyAliasId"/> があればそちらを使う。</summary>
+    public string? AffiliationText { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

@@ -11,7 +11,8 @@ namespace PrecureDataStars.SiteBuilder;
 /// <c>--production --deploy</c> でビルド後に S3 へ差分同期＋CloudFront キャッシュ削除まで実行する。
 /// <c>--dry-run</c> は変更計画のみ表示（無変更）、<c>--yes</c> は削除前確認の省略。
 /// <c>--refresh-telop</c> はサブタイトルのテロップ画像を、<c>--refresh-og</c> は OGP カード画像を、作り置きを使わずに描き直す
-/// （<c>--page</c> と併用すれば対象のページだけ）。</summary>
+/// （<c>--page</c> と併用すれば対象のページだけ）。
+/// <c>--og-cards &lt;一覧.json&gt; &lt;出力先&gt;</c> は、DB を使わずに一覧のカードだけを同じ描き方で描く（precure.news 用。<see cref="OgCardBatch"/>）。</summary>
 internal static class Program
 {
     private static async Task<int> Main(string[] args)
@@ -21,6 +22,17 @@ internal static class Program
             // 出力は常に UTF-8（モードの問い合わせ・ログとも）。ProgressReporter も同じ調整をするが、
             // 問い合わせはその前に出るのでここでも行う。
             ProgressReporter.TrySetUtf8Console();
+
+            // 他のサイトの OGP カードだけを描く起動方法。ビルドの引数とは混ぜない。
+            if (args.Length > 0 && string.Equals(args[0], "--og-cards", StringComparison.OrdinalIgnoreCase))
+            {
+                if (args.Length != 3)
+                {
+                    PrintUsage();
+                    return 2;
+                }
+                return OgCardBatch.Run(args[1], args[2]);
+            }
 
             // ビルドモード・デプロイ意図はコマンドライン引数で決める（App.config では決めない）。
             // 既定はテストモード：うっかり普通に起動しても本番ディレクトリ・本番タグには触れない。
@@ -162,5 +174,7 @@ internal static class Program
         Console.Error.WriteLine("  --deploy     : 本番ビルド後に S3 へ差分同期＋CloudFront キャッシュ削除（--production 必須）");
         Console.Error.WriteLine("  --dry-run    : デプロイ計画のみ表示（S3 / CloudFront を変更しない。--deploy と併用）");
         Console.Error.WriteLine("  --yes        : 削除前の確認をスキップ（--deploy と併用）");
+        Console.Error.WriteLine("別の使い方: PrecureDataStars.SiteBuilder --og-cards <一覧.json> <出力先>");
+        Console.Error.WriteLine("  一覧のカードだけを、このサイトと同じ描き方・書体で PNG にする（DB を使わない。precure.news 用）");
     }
 }

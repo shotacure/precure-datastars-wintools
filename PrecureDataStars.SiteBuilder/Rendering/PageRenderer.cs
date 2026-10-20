@@ -177,7 +177,10 @@ public sealed class PageRenderer
         {
             Directory.CreateDirectory(_config.SubtitleTelopCacheDirectory);
             var tempFile = $"{cacheFile}.{Guid.NewGuid():N}.tmp";
-            if (_ogCardRenderer.RenderSubtitleTelop(request.RubyHtml, request.FontFamily, request.Profile, tempFile) is null) return null;
+            var drawn = request.Scene is { } scene ? _ogCardRenderer.RenderFontScene(scene, tempFile)
+                : request.Specimen is { } sp ? _ogCardRenderer.RenderFontSpecimen(request.FontFamily, sp.TopRight, sp.BottomLeft, tempFile)
+                : _ogCardRenderer.RenderSubtitleTelop(request.RubyHtml, request.FontFamily, request.Profile, tempFile);
+            if (drawn is null) return null;
             File.Move(tempFile, cacheFile, overwrite: true);
         }
 
@@ -310,6 +313,18 @@ public sealed class PageRenderer
         _output.WriteText(PathUtil.ToOutputFilePath(_config.OutputDirectory, urlPath), pageHtml);
 
         RecordWritten(urlPath, section);
+    }
+
+    /// <summary>
+    /// ページに添えるファイル（コラムの図など）を、ページと同じディレクトリへ写す。<paramref name="pageUrlPath"/> はページの URL
+    /// （<c>/articles/x/</c>）、<paramref name="relativePath"/> はページからの相対パス。大きさと更新時刻が同じなら写さない。
+    /// ピンポイントビルドでそのページが対象外なら写さない。
+    /// </summary>
+    public void CopyPageAsset(string pageUrlPath, string sourcePath, string relativePath)
+    {
+        if (!ShouldWrite(pageUrlPath)) return;
+        var pageDir = Path.GetDirectoryName(PathUtil.ToOutputFilePath(_config.OutputDirectory, pageUrlPath)) ?? _config.OutputDirectory;
+        _output.CopyFrom(sourcePath, Path.Combine(pageDir, relativePath));
     }
 
     /// <summary>
@@ -480,28 +495,32 @@ public sealed class PageRenderer
             layoutMeta.NavItems = BuildNavItems(canonicalPath);
     }
 
-    /// <summary>グローバルナビの定義（ラベルと URL の並び）。ヘッダ・モバイルオーバーレイ共通。</summary>
-    private static readonly (string Label, string Url)[] GlobalNavDefinition =
+    /// <summary>
+    /// グローバルナビの定義（ラベル・URL・前に区切りを入れるか）。ヘッダ・モバイルオーバーレイ共通。
+    /// ラベルはナビ用の短い呼び名（キャラクター → キャラ、書籍 → 本）。データベースの項目のあとに区切りを入れてコラムを置く。
+    /// </summary>
+    private static readonly (string Label, string Url, bool SeparatedBefore)[] GlobalNavDefinition =
     {
-        ("シリーズ", "/series/"),
-        ("プリキュア", "/precures/"),
-        ("キャラクター", "/characters/"),
-        ("音楽", "/music/"),
-        ("書籍", "/books/"),
-        ("クリエイター", "/creators/"),
-        ("統計", "/stats/"),
-        ("読み物", "/articles/"),
-        ("このサイトについて", "/about/"),
+        ("シリーズ", "/series/", false),
+        ("プリキュア", "/precures/", false),
+        ("キャラ", "/characters/", false),
+        ("音楽", "/music/", false),
+        ("本", "/books/", false),
+        ("クリエイター", "/creators/", false),
+        ("統計", "/stats/", false),
+        ("フォント", "/fonts/", false),
+        ("このサイトについて", "/about/", false),
+        ("コラム", "/articles/", true),
     };
 
     /// <summary>
-    /// 本番モードのときだけグローバルナビから外す URL の集合。読み物は本番では
-    /// 生成自体を行わない（<see cref="Pipeline.SiteBuilderPipeline"/> 側でスキップ）ため、ナビからも外す。
+    /// 本番モードのときだけグローバルナビから外す URL の集合。フォントのページは書体のデータがそろうまで、
+    /// 本番では生成自体を行わない（<see cref="Pipeline.SiteBuilderPipeline"/> 側でスキップ）ため、ナビからも外す。
     /// テストモードでは全項目を出す。
     /// </summary>
     private static readonly HashSet<string> ProductionHiddenNavUrls = new(StringComparer.Ordinal)
     {
-        "/articles/",
+        "/fonts/",
     };
 
     /// <summary>
@@ -509,7 +528,6 @@ public sealed class PageRenderer
     /// 所属の解決はナビに出ていない URL も配下として扱う：楽曲・商品・劇伴は「音楽」、
     /// 人物・企業は「クリエイター」、エピソード詳細はシリーズ配下なので「シリーズ」。
     /// どのセクションにも属さないページ（ホーム・運営情報など）は全項目非アクティブ。
-    /// 本番モードでは <see cref="ProductionHiddenNavUrls"/> の項目をナビから除外する。
     /// </summary>
     private IReadOnlyList<NavItem> BuildNavItems(string urlPath)
     {
@@ -526,16 +544,17 @@ public sealed class PageRenderer
               || urlPath.StartsWith("/people/", StringComparison.Ordinal)
               || urlPath.StartsWith("/companies/", StringComparison.Ordinal)) activeUrl = "/creators/";
         else if (urlPath.StartsWith("/stats/", StringComparison.Ordinal)) activeUrl = "/stats/";
+        else if (urlPath.StartsWith("/fonts/", StringComparison.Ordinal)) activeUrl = "/fonts/";
         else if (urlPath.StartsWith("/articles/", StringComparison.Ordinal)) activeUrl = "/articles/";
         else if (urlPath.StartsWith("/about/", StringComparison.Ordinal)) activeUrl = "/about/";
 
         var items = new List<NavItem>(GlobalNavDefinition.Length);
-        foreach (var (label, url) in GlobalNavDefinition)
+        foreach (var (label, url, separatedBefore) in GlobalNavDefinition)
         {
             // 本番モードでは暫定非表示セクションをナビから外す（テストでは全部出す）。
             if (_config.IsProductionMode && ProductionHiddenNavUrls.Contains(url))
                 continue;
-            items.Add(new NavItem { Label = label, Url = url, IsActive = url == activeUrl });
+            items.Add(new NavItem { Label = label, Url = url, IsActive = url == activeUrl, IsSeparatedBefore = separatedBefore });
         }
         return items;
     }

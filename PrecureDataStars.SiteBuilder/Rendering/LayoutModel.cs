@@ -95,8 +95,8 @@ public sealed class LayoutModel
 
     /// <summary>
     /// ビルド時点でサブタイトル解禁前の各話ページの解禁時刻（ISO 8601）。空でないページは、
-    /// SNS のカード用のメタ（og:* / twitter:*）を出さず、解禁時刻と解禁後のタイトル・共有文を
-    /// &lt;meta&gt; で渡す。subtitle-embargo.js が解禁時刻を過ぎてから、タブのタイトルと共有ボタンの文を差し替える。
+    /// 解禁時刻と解禁後のタイトル・共有文を &lt;meta&gt; で渡し、共有ボタンの欄を隠して出す。
+    /// subtitle-embargo.js が解禁時刻を過ぎてから、タブのタイトルと共有ボタンの文を差し替え、共有ボタンの欄を出す。
     /// </summary>
     public string SubtitleRevealAt { get; set; } = "";
 
@@ -152,6 +152,9 @@ public sealed class NavItem
 
     /// <summary>現在ページがこの項目のセクション配下なら true（現在地ハイライト用）。</summary>
     public bool IsActive { get; set; }
+
+    /// <summary>この項目の前に区切りを入れるなら true（データベースの項目とコラムを分ける）。</summary>
+    public bool IsSeparatedBefore { get; set; }
 }
 
 /// <summary>パンくずの 1 項目。</summary>

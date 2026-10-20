@@ -78,6 +78,7 @@ partial class CreditMastersEditorForm
     private Button btnSavePerson = null!;
     private Button btnDeletePerson = null!;
     private Button btnPersonNotableWorks = null!;
+    private Button btnPersonPositions = null!;
 
     // ─────────────── 企業タブ ───────────────
     private DataGridView gridCompanies = null!;
@@ -227,6 +228,7 @@ partial class CreditMastersEditorForm
     private TextBox txtCaName = null!;
     private TextBox txtCaNameKana = null!;
     private TextBox txtCaNameEn = null!;
+    private CheckBox chkCaOfficialName = null!;  // 正式名（社名）の名義（商号履歴に出す）
     private NumericUpDown numCaPredecessor = null!;  // 前任屋号 ID（自参照、改名・分社化前リンク）
     private NumericUpDown numCaSuccessor = null!;    // 後任屋号 ID（自参照、改名・分社化後リンク）
     private DateTimePicker dtCaFrom = null!;
@@ -596,7 +598,9 @@ partial class CreditMastersEditorForm
         btnDeletePerson = new Button { Text = "選択行を削除", Location = new Point(620,  82), Size = new Size(140, 28) };
         // 代表作（プリキュアを除く）（person_notable_works）の編集ダイアログを開く。
         btnPersonNotableWorks = new Button { Text = "代表作…",   Location = new Point(620, 130), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnNewPerson, btnSavePerson, btnDeletePerson, btnPersonNotableWorks });
+        // 役職履歴（person_positions）の編集ダイアログを開く。
+        btnPersonPositions = new Button { Text = "役職履歴…", Location = new Point(620, 162), Size = new Size(140, 28) };
+        pnl.Controls.AddRange(new Control[] { btnNewPerson, btnSavePerson, btnDeletePerson, btnPersonNotableWorks, btnPersonPositions });
 
         tabPersons.Controls.Add(pnl);
         tabPersons.Controls.Add(gridPersons);
@@ -1272,6 +1276,9 @@ partial class CreditMastersEditorForm
         txtCaNotes = new TextBox { Multiline = true };
 
         AddLabeledControl(pnl, "屋号名",        txtCaName,        18,  18, inputWidth: 320);
+        // 正式名（社名）の名義の印。企業詳細の「商号履歴」には印の付いた名義だけを出す。
+        chkCaOfficialName = new CheckBox { Text = "正式名（社名）", Location = new Point(460, 19), Size = new Size(130, 22) };
+        pnl.Controls.Add(chkCaOfficialName);
         AddLabeledControl(pnl, "屋号名(かな)",  txtCaNameKana,    18,  50, inputWidth: 320);
         AddLabeledControl(pnl, "英語表記",      txtCaNameEn,      18,  82, inputWidth: 320);
         AddLabeledControl(pnl, "前任屋号 ID",   numCaPredecessor, 18, 114, inputWidth: 110);

@@ -4,16 +4,17 @@
   </p>
 
   <h1>{{ Person.DisplayName | html.escape }}</h1>
-
-  {{~ if Person.DisplayNameKana != "" ~}}
-  <p class="muted">{{ Person.DisplayNameKana | html.escape }}</p>
-  {{~ end ~}}
-
-  {{## サイト全体のクレジット横断カバレッジ宣言。
-       ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
-  {{~ if CoverageLabel != "" ~}}
-  <p class="muted stats-coverage">{{ CoverageLabel }}</p>
-  {{~ end ~}}
+  {{## h1 の下の 1 行。読みを左に、「〇〇第N話(日付)時点」を右寄せで並べる（.page-subline。読みが無ければ時点だけ右に）。 ##}}
+  <div class="page-subline">
+    {{~ if Person.DisplayNameKana != "" ~}}
+    <p class="muted">{{ Person.DisplayNameKana | html.escape }}</p>
+    {{~ end ~}}
+    {{## サイト全体のクレジット横断カバレッジ宣言。
+         ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
+    {{~ if CoverageLabel != "" ~}}
+    <p class="muted page-coverage">{{ CoverageLabel }}</p>
+    {{~ end ~}}
+  </div>
 
   {{## 基本情報セクションは h1 + 直下 muted（よみ）に内容がない情報だけを出す。
        氏名・よみは上ですでに出ているので table 行に再出ししない。
@@ -295,6 +296,28 @@
   </section>
   {{~ end ~}}
 
+  {{## 役職履歴。person_positions の行を並び順どおりに、同じ会社が続く行ごとに「役職履歴（会社名）」の見出しと
+       「異動日 ｜ 役職」の表で出す。見出しの会社名は企業詳細へのリンク。異動日は「平成27(2015)/06/01付」、日付不明は「？」。
+       行が無い人物には出さない。 ##}}
+  {{~ for g in PositionGroups ~}}
+  <section class="person-positions"{{ if for.first }} id="positions"{{ end }}>
+    <h2>役職履歴{{ if g.CompanyName != "" }}<span class="person-positions-company">（{{ if g.CompanyUrl != "" }}<a href="{{ g.CompanyUrl }}">{{ g.CompanyName | html.escape }}</a>{{ else }}{{ g.CompanyName | html.escape }}{{ end }}）</span>{{ end }}</h2>
+    <table class="person-positions-table">
+      <thead>
+        <tr><th class="col-date">異動日</th><th class="col-position">役職</th></tr>
+      </thead>
+      <tbody>
+        {{~ for r in g.Rows ~}}
+        <tr>
+          <td class="col-date">{{ r.DateLabel }}</td>
+          <td class="col-position">{{ r.Position | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
   {{## 外部リンクセクション。詳細ページの末尾に置く。Person.OfficialUrl / AffiliationUrl / XUrl / InstagramUrl / YoutubeUrl が
        一つでもあれば表示。公式ページは本人の公式サイト、所属先は事務所・会社・楽団などのサイトにある本人のプロフィール。
        Wikipedia は内部値として保持のみ、UI からは出さない方針なのでここでは扱わない。 ##}}
@@ -320,4 +343,7 @@
     </ul>
   </section>
   {{~ end ~}}
+  {{## 本編クレジット・音楽クレジットの枠を、はじめから開いておくかどうか決める（音楽クレジット以外でページが 1 画面に満たない、
+       または開いたときの中身が画面の半分に満たない枠を開く）。 ##}}
+  <script src="{{ asset_url "/assets/credit-card-open.js" }}" defer></script>
 </article>

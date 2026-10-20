@@ -4,8 +4,12 @@
   <h1>{{ SiteBrandLabel | html.escape }}</h1>
   {{## タグラインは「プリキュアまるごとブック」へのオマージュ。OG 既定画像（og-default.svg）の
        文言とも一致させている。変更時は両方をセットで見直すこと。 ##}}
-  <p class="lead">プリキュアまるごとデータベース。</p>
-  <p class="muted home-build-info">{{ BuildLabel }}</p>
+  {{## リードと「〇〇第N話(日付)時点」を 1 行に並べる入れ物（PC は時点を右寄せ、スマホは時点をリードの下へ）。
+       並びは site.css の .home-lead-row。充足率の行は入れ物の外で、常にこの下に出る。 ##}}
+  <div class="home-lead-row">
+    <p class="lead">プリキュアまるごとデータベース。</p>
+    <p class="muted home-build-info">{{ BuildLabel }}</p>
+  </div>
   {{~ if DataSufficiencyLabel != "" ~}}
   {{## キャラクター・クリエイターのデータ充足率（暫定表記・赤字）。追いついたら除去する。 ##}}
   <p class="home-data-sufficiency">{{ DataSufficiencyLabel }}</p>
@@ -48,11 +52,19 @@
   </ul>
 </section>
 
-{{## 姉妹サイト「いえるかなクイズ」への動線（データベース統計の下・今日の記念日の上、テスト/本番とも表示）。
-     固定ツイートの飛び先がデータベースへ移ったため、姉妹サイト（クイズ）への導線をここに常設する。
-     バナーはカード全域クリックの外部リンク（別タブ）。1920×640(3:1)・不透明 webp を四隅まで敷き、
-     カード側で角丸クリップ＋淡い境界線/影・控えめサイズ（中央寄せ）にする。width/height でアスペクト比を予約し CLS を防ぐ。 ##}}
+{{## 姉妹サイトへの動線（データベース統計の下・今日の記念日の上、テスト/本番とも表示）。
+     左が「プリキュアニュース」（precure.news）、右が「いえるかなクイズ」。どちらもカード全域クリックの外部リンク（別タブ）で、
+     同じ大きさ（3:1）のカードを横に並べ、狭い画面では縦に積む。
+     ニュースはバナー画像の代わりに文字のカード（.sister-site-text-card）で、news のキーカラーの青系（-news）で組む。
+     同じ枠にバナーの img を入れれば差し替えられる。
+     ニュースのリンクは自分のサイトどうしの流入を測るため noreferrer を付けない。
+     クイズのバナーは 1920×640(3:1)・不透明 webp を四隅まで敷き、width/height でアスペクト比を予約し CLS を防ぐ。 ##}}
 <aside class="sister-site" aria-label="姉妹サイト">
+  <a class="sister-site-link sister-site-text-card sister-site-text-card-news" href="https://precure.news/" target="_blank" rel="noopener">
+    <span class="sister-site-text-card-ja">プリキュアニュース</span>
+    <span class="sister-site-text-card-en">precure-news-stage</span>
+    <span class="sister-site-text-card-lead">プリキュアの最新情報と感想・イベントなどのレポート</span>
+  </a>
   <a class="sister-site-link" href="https://all-stars.precure.tv/" target="_blank" rel="noopener noreferrer">
     <img class="sister-site-banner" src="/assets/all-stars-banner.webp" width="1920" height="640"
          alt="プリキュアオールスターズ いえるかなクイズ ― いまプリキュアは何人？ あなたは何人言えるかな？（姉妹サイト）"

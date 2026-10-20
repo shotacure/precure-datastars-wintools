@@ -1,8 +1,5 @@
 <h1>歴代プリキュア歌唱</h1>
-
-<p class="lead">
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
-</p>
+<p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 {{## 歌唱。録音の歌唱者（song_recording_singers）を、歌・コーラス・台詞の別なくユニットのメンバーまで展開して集計した一覧。
      ・歌手（人物単位。本人名義での参加）とキャラクター（キャラ × 声優の組）の行を 1 つのリストに並べ、

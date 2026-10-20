@@ -1,0 +1,40 @@
+{{## フォントのページ /fonts/。FontsGenerator から FontsIndexModel { SeriesSections } で渡る。
+     作品ごと（放送開始順、見出しは h2）に、場面（オープニング・エンディング・サブタイトル。見出しは h3）のカードを並べる。
+     カードは放送の画面を模した見本（押すと大きな画像を重ねて出す）と、その場面で使われた書体（書体のページへのリンクとベンダー名）。
+     ルビの書体は親字と違うときだけ添える。見出しの下のリード文に、見本の作り方と、お借りしたお名前・歌詞についての断りを置く。 ##}}
+<h1>歴代タイトル字幕フォント</h1>
+<p class="fonts-lead">サンプル画像は公式と同じ写研・フォントワークス・モリサワ各社の書体を正規のライセンス契約下で使用し、当サイトで作成しました。OPクレジットは東堂いづみ先生、EDクレジットは東映動画の黎明期を支えたレジェンドアニメーター諸氏のお名前をお借りしています。歌詞およびサブタイトルは、『ふたりはプリキュア』企画書のキャッチフレーズをアレンジして使用しています。</p>
+
+{{~ for s in SeriesSections ~}}
+<section class="fonts-series-section" id="{{ s.Anchor }}">
+  <h2 class="fonts-series-heading"><a href="{{ s.SeriesUrl }}">{{ s.SeriesTitle | html.escape }}</a><span class="series-year">({{ s.StartYearLabel }})</span></h2>
+  <div class="fonts-scene-grid">
+    {{~ for c in s.Cards ~}}
+    <article class="fonts-scene-card">
+      <h3 class="fonts-scene-title">{{ c.Label | html.escape }}</h3>
+      {{~ if c.ImageSrc != "" ~}}
+      <a class="fonts-scene" href="{{ c.ImageSrc }}" data-fonts-viewer>
+        <img src="{{ c.ImageSrc }}" width="{{ c.ImageWidth }}" height="{{ c.ImageHeight }}" alt="{{ c.ImageAlt | html.escape }}" loading="lazy" decoding="async">
+      </a>
+      {{~ end ~}}
+      <dl class="fonts-scene-fonts">
+        {{~ for l in c.Lines ~}}
+        <div>
+          <dt>{{ l.Place | html.escape }}</dt>
+          <dd>
+            <a href="{{ l.Chip.Url }}">{{ l.Chip.Name | html.escape }}</a> <span class="fonts-vendor">({{ l.Chip.Vendor | html.escape }})</span>
+            {{~ if l.Chip.WeightUnknown ~}}<span class="fonts-note">（ウェイト不明）</span>{{~ end ~}}
+            {{~ if l.Chip.ModificationNote != "" ~}}<span class="fonts-note">（{{ l.Chip.ModificationNote | html.escape }}）</span>{{~ end ~}}
+            {{~ if l.RubyFont ~}}<span class="fonts-ruby-font">ルビ：<a href="{{ l.RubyFont.Url }}">{{ l.RubyFont.Name | html.escape }}</a> <span class="fonts-vendor">({{ l.RubyFont.Vendor | html.escape }})</span></span>{{~ end ~}}
+            {{~ if l.Chip.SubstituteNote != "" ~}}<span class="fonts-substitute-note">{{ l.Chip.SubstituteNote | html.escape }}</span>{{~ end ~}}
+          </dd>
+        </div>
+        {{~ end ~}}
+      </dl>
+    </article>
+    {{~ end ~}}
+  </div>
+</section>
+{{~ end ~}}
+
+{{ include "_fonts-viewer.sbn" }}

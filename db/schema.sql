@@ -261,11 +261,13 @@ CREATE TABLE `series` (
   -- タイトルカードに CJ マークが付くか。役職 TITLE のテンプレから {CJ_MARK}（付く作品では「CJ」）で参照する。
   `film_cj_mark` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'タイトルカードに CJ マークが付くか',
   `vod_intro` smallint unsigned DEFAULT NULL,
-  -- 絵コンテ役職を独立表示せず演出と融合表示するか（プレビュー描画専用フラグ）。
-  -- 初期のプリキュアシリーズで「（絵コンテ・）演出 名前」のような融合表記が慣習的だった
-  -- ため、シリーズ単位で ON にすることで CreditPreviewRenderer が STORYBOARD と
-  -- EPISODE_DIRECTOR を突き合わせて融合描画する。
-  `hide_storyboard_role` tinyint(1) NOT NULL DEFAULT '0',
+  -- 絵コンテ（STORYBOARD）と演出（EPISODE_DIRECTOR）のクレジットの出し方（サイトのクレジットと Catalog のプレビューで効く）。
+  --   SEPARATE           それぞれの役職名で出す（映画など）
+  --   MERGE              いつも「演出」にまとめる。同じ人なら「(絵コンテ・)演出 ｜ 名前」、違う人なら
+  --                      「演出」の欄に「A (絵コンテ)」「B (演出)」と並べる（TV の無印〜ドキドキ!）
+  --   MERGE_SAME_PERSON  同じ人のときだけ「(絵コンテ・)演出 ｜ 名前」にまとめ、違う人ならそれぞれの役職名で出す
+  --                      （TV のハピネスチャージ以降）
+  `storyboard_display` enum('SEPARATE','MERGE','MERGE_SAME_PERSON') NOT NULL DEFAULT 'SEPARATE' COMMENT '絵コンテと演出の出し方（SEPARATE=役職名ごと / MERGE=いつも演出にまとめる / MERGE_SAME_PERSON=同じ人のときだけまとめる）',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
@@ -297,15 +299,14 @@ CREATE TABLE `series` (
 DROP TABLE IF EXISTS `series_subtitle_styles`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
--- シリーズごとのサブタイトルの書体と、テロップ画像（エピソード詳細ページ・OGP カード）の組み方。series と 1 対 1。
+-- シリーズごとのサブタイトルのテロップ画像（エピソード詳細ページ・OGP カード）の組み方。series と 1 対 1。
+-- 書体はここには持たず、series_font_usages のサブタイトル・サブタイトルのルビの行（→ fonts.render_font_name）で引く。
 -- 行の無いシリーズ・NULL の列は既定値で組む（SiteBuilder の SubtitleTelopProfile）。
 CREATE TABLE `series_subtitle_styles` (
   `series_id` int NOT NULL,
-  `font_subtitle` varchar(64) DEFAULT NULL COMMENT 'サブタイトルの親字の書体（本編テロップの書体）',
   `subtitle_kerning` varchar(16) DEFAULT NULL COMMENT '字間の組み方 PROPORTIONAL / MONO（NULL は PROPORTIONAL）',
   `subtitle_letter_spacing_em` decimal(4,3) DEFAULT NULL COMMENT '親字の字間に足す空き（字の大きさ比、NULL は 0）',
   `subtitle_ruby_letter_spacing_em` decimal(4,3) DEFAULT NULL COMMENT '振り仮名の字間に足す空き（振り仮名の大きさ比、NULL は 0）',
-  `font_subtitle_ruby` varchar(64) DEFAULT NULL COMMENT 'サブタイトルの振り仮名の書体（NULL は親字と同じ）',
   `subtitle_ruby_size_ratio` decimal(4,3) DEFAULT NULL COMMENT '振り仮名の大きさ（親字比、NULL は 0.300）',
   `subtitle_ruby_raise_ratio` decimal(4,3) DEFAULT NULL COMMENT '振り仮名のベースラインの高さ（親字比、NULL は 1.040）',
   `subtitle_ruby_oblique_deg` decimal(4,1) DEFAULT NULL COMMENT '振り仮名の斜体の角度（度、NULL は 0）',
@@ -319,29 +320,87 @@ CREATE TABLE `series_subtitle_styles` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`series_id`),
   CONSTRAINT `fk_sss_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='シリーズごとのサブタイトルの書体とテロップ画像の組み方';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='シリーズごとのサブタイトルのテロップ画像の組み方';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `subtitle_fonts`
+-- Table structure for table `fonts`
 --
 
-DROP TABLE IF EXISTS `subtitle_fonts`;
+DROP TABLE IF EXISTS `fonts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
--- サブタイトルのテロップ画像（エピソード詳細のサブタイトル欄・OGP カードのサブタイトル）に使うフォントのマスタ。
--- font_name は series_subtitle_styles の font_subtitle / font_subtitle_ruby と同じ Windows の書体名で結び付く。
--- 免責事項ページの「使用フォントの一覧」の出どころ（行の無い書体は名前だけ・リンク無しで出る）。値は SQL で入れる。
-CREATE TABLE `subtitle_fonts` (
-  `font_name` varchar(64) NOT NULL COMMENT 'Windows の書体名（series_subtitle_styles の font_subtitle / font_subtitle_ruby と同じ文字列）',
-  `license_kind` varchar(16) NOT NULL COMMENT 'ライセンス区分 FONTWORKS_LETS / MORISAWA_FONTS',
-  `display_name` varchar(64) DEFAULT NULL COMMENT '提供元の書き方の製品名（NULL なら font_name をそのまま出す）',
-  `product_url` varchar(1024) DEFAULT NULL COMMENT '提供元の製品ページ（免責事項の使用フォント一覧でリンクする先）',
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`font_name`),
-  CONSTRAINT `ck_subtitle_fonts_license` CHECK (`license_kind` IN ('FONTWORKS_LETS', 'MORISAWA_FONTS'))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='サブタイトルのテロップ画像に使うフォントのマスタ';
+-- 作品で使われた書体のマスタ。1 行 = 放送で使われた書体 1 つ（書体名＋ウェイト）。書体の情報（フォントのページ・見本・
+-- サブタイトルのテロップ画像・免責事項の使用フォント一覧）はすべてここから引く。見本とテロップ画像は render_font_name（手元の書体）で描き、
+-- render_family_name・render_weight が放送の書体と違えば代用としてサイトに明記する（改刻版など代用でない描き方は render_note の文を添える）。
+-- 手元に無い書体は render_font_name を NULL にする。値は SQL で入れる。
+CREATE TABLE `fonts` (
+  `font_id`           int           NOT NULL AUTO_INCREMENT,
+  `foundry`           varchar(16)   NOT NULL COMMENT '書体の作り手 SHAKEN（写研）/ MORISAWA（モリサワ）/ FONTWORKS（フォントワークス）',
+  `family_name`       varchar(64)   NOT NULL COMMENT '書体名（提供元の書き方。「ファン蘭」「UD丸ゴ_ラージ」）',
+  `family_group`      varchar(64)   DEFAULT NULL COMMENT '同じページにまとめる書体の名前（写研の「石井中太ゴシック」「石井太ゴシック」を「石井ゴシック」に。NULL なら family_name）',
+  `weight`            varchar(16)   DEFAULT NULL COMMENT 'ウェイト（「B」「DB」。ウェイトの無い書体・ウェイトの分からない書体は NULL）',
+  `render_font_name`  varchar(64)   DEFAULT NULL COMMENT '見本・テロップ画像を描く手元の書体（Windows の書体名）。NULL なら描かない',
+  `render_family_name` varchar(64)   DEFAULT NULL COMMENT '見本を描く書体の名前（NULL なら family_name と同じ）',
+  `render_weight`     varchar(16)   DEFAULT NULL COMMENT '描く書体のウェイト。書体名かウェイトが放送の書体と違えば代用としてサイトに明記する',
+  `render_note`       varchar(128)  DEFAULT NULL COMMENT '見本に添える注記（NULL なら、書体名かウェイトが違うときに「代用」の文を自動で出す）',
+  `license_kind`      varchar(16)   DEFAULT NULL COMMENT '描く書体のライセンス FONTWORKS_LETS / MORISAWA_FONTS',
+  `product_url`       varchar(1024) DEFAULT NULL COMMENT '提供元の製品ページ（モリサワ・フォントワークス）',
+  `archive_url`       varchar(1024) DEFAULT NULL COMMENT '写研アーカイブの書体のページ',
+  `notes`             text          COMMENT '内部メモ（サイトに出さない）',
+  `created_at`        timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`        timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`font_id`),
+  UNIQUE KEY `uq_fonts_family_weight` (`foundry`, `family_name`, `weight`),
+  CONSTRAINT `ck_fonts_foundry` CHECK (`foundry` IN ('SHAKEN', 'MORISAWA', 'FONTWORKS')),
+  CONSTRAINT `ck_fonts_license` CHECK (`license_kind` IS NULL OR `license_kind` IN ('FONTWORKS_LETS', 'MORISAWA_FONTS'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='作品で使われた書体のマスタ';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `series_font_usages`
+--
+
+DROP TABLE IF EXISTS `series_font_usages`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+-- 作品のどこにどの書体を使ったか。1 行 = 作品 × 使う場所 × 時期（× 本放送だけの範囲）。字の大きさは画面の高さ 1080 換算の px（仮想ボディ）、
+-- クレジットは人名（size_px）と役職名（role_size_px）。サブタイトルのテロップ画像の書体もここのサブタイトルの行から引く。値は SQL で入れる。
+CREATE TABLE `series_font_usages` (
+  `usage_id`           int               NOT NULL AUTO_INCREMENT,
+  `series_id`          int               NOT NULL,
+  `usage_kind`         varchar(24)       NOT NULL COMMENT '使う場所 OP_CREDIT / OP_LYRICS / OP_LYRICS_RUBY / SUBTITLE / SUBTITLE_RUBY / ED_CREDIT / ED_LYRICS / ED_LYRICS_RUBY',
+  `period_no`          tinyint unsigned  NOT NULL DEFAULT 1 COMMENT '時期（1 = 前期・通期、2 = 後期 …）',
+  `variant_no`         tinyint unsigned  NOT NULL DEFAULT 1 COMMENT '色違いの番号（同じ場所・時期で体裁の色だけが違うもの。1 から）',
+  `variant_label`      varchar(32)       DEFAULT NULL COMMENT '色違いの呼び名（「ピンク」「水色」など。サイトに出す）',
+  `is_broadcast_only`  tinyint(1)        NOT NULL DEFAULT 0 COMMENT '本放送だけの書体なら 1（BD などは通常の書体）',
+  `first_episode_no`   smallint unsigned DEFAULT NULL COMMENT '使った最初の話（NULL は時期の全話）',
+  `last_episode_no`    smallint unsigned DEFAULT NULL COMMENT '使った最後の話（NULL は時期の全話）',
+  `font_id`            int               NOT NULL,
+  `is_weight_unknown`  tinyint(1)        NOT NULL DEFAULT 0 COMMENT 'ウェイトが決めきれていなければ 1（サイトに「ウェイト不明」と出す）',
+  `modification_note`  varchar(64)       DEFAULT NULL COMMENT '書体に手を加えた旨（「太め加工」など。サイトに出す）',
+  `size_px`            decimal(5,1)      DEFAULT NULL COMMENT '字の大きさ（画面の高さ 1080 換算の px、仮想ボディ）。クレジットは人名',
+  `oblique_deg`        decimal(3,1)      DEFAULT NULL COMMENT '斜体の角度（度、右に倒す。NULL は 0）',
+  `ruby_raise_em`          decimal(4,3)      DEFAULT NULL COMMENT 'ルビのベースラインの、親字のベースラインからの高さ（親字の大きさに対する比）',
+  `ruby_letter_spacing_em` decimal(4,3)      DEFAULT NULL COMMENT 'ルビの字と字の間に足す空き（ルビの大きさに対する比）',
+  `ruby_grouping`          varchar(8)        DEFAULT NULL COMMENT 'ルビの置き方 MONO / JUKUGO / SPREAD',
+  `role_size_px`       decimal(5,1)      DEFAULT NULL COMMENT 'クレジットの役職名の大きさ（同上）',
+  `layout`             json              DEFAULT NULL COMMENT 'クレジットの組み方（画面の中の位置・役職名と人名の並び・人名の字取りと行送り・声の出演の組み。{version, screen, role, name, cast}。値は人名の字の大きさに対する比、画面の位置は画面の幅・高さに対する比）',
+  `decoration`         json              DEFAULT NULL COMMENT '装飾（字の色・フチ・影・光彩。{version, fill, join, layers:[下から重ねる層]}。値は字の大きさに対する比。NULL はテロップの既定の体裁）',
+  `display_note`       varchar(255)      DEFAULT NULL COMMENT 'サイトに添える注記',
+  `notes`              text              COMMENT '内部メモ（サイトに出さない）',
+  `created_at`         timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`         timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`usage_id`),
+  KEY `ix_sfu_series` (`series_id`, `usage_kind`, `period_no`),
+  KEY `ix_sfu_font` (`font_id`),
+  CONSTRAINT `fk_sfu_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_sfu_font`   FOREIGN KEY (`font_id`)   REFERENCES `fonts`  (`font_id`)   ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `ck_sfu_layout` CHECK (`layout` IS NULL OR json_valid(`layout`)),
+  CONSTRAINT `ck_sfu_decoration` CHECK (`decoration` IS NULL OR json_valid(`decoration`)),
+  CONSTRAINT `ck_sfu_ruby_grouping` CHECK (`ruby_grouping` IS NULL OR `ruby_grouping` IN ('MONO', 'JUKUGO', 'SPREAD')),
+  CONSTRAINT `ck_sfu_usage_kind` CHECK (`usage_kind` IN ('OP_CREDIT', 'OP_LYRICS', 'OP_LYRICS_RUBY', 'SUBTITLE', 'SUBTITLE_RUBY', 'ED_CREDIT', 'ED_LYRICS', 'ED_LYRICS_RUBY'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='作品のどこにどの書体を使ったか';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1600,6 +1659,38 @@ CREATE TABLE `person_notable_works` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `person_positions`
+-- 人物の役職履歴（会社での役職の移り変わり）。1 行 = 1 回の異動。effective_date が NULL なら日付不明（サイトは「？」）。
+-- company_id はその役職の会社（任意。サイトの見出しに会社名を添える）。source_url は裏取りに使った発表のページ（内部用）。
+--
+DROP TABLE IF EXISTS `person_positions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE。再実行しても副作用は無い。
+-- =====================================================================
+
+CREATE TABLE `person_positions` (
+  `position_id`     int                                                                 NOT NULL AUTO_INCREMENT,
+  `person_id`       int                                                                 NOT NULL,
+  `company_id`      int                                                                 DEFAULT NULL COMMENT 'その役職の会社（companies.company_id）',
+  `display_order`   smallint unsigned                                                   NOT NULL DEFAULT 0,
+  `effective_date`  date                                                                DEFAULT NULL COMMENT '異動日。NULL は日付不明',
+  `position_text`   varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL COMMENT '役職（発表の表記どおり）',
+  `source_url`      varchar(1024) DEFAULT NULL COMMENT '裏取りに使った発表のページ（内部用）',
+  `notes`           text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`      varchar(64) DEFAULT NULL,
+  `updated_by`      varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`position_id`),
+  KEY `ix_person_positions_person` (`person_id`, `display_order`),
+  KEY `ix_person_positions_company` (`company_id`),
+  CONSTRAINT `fk_person_positions_person`  FOREIGN KEY (`person_id`)  REFERENCES `persons`   (`person_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_person_positions_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`company_id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='人物の役職履歴（会社での役職の移り変わり）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `person_aliases`
 -- 人物の名義（表記）マスタ。改名時は predecessor_alias_id / successor_alias_id で
 -- 前後リンクし、データ的に同一人物の表記履歴を辿れる。
@@ -1695,6 +1786,7 @@ CREATE TABLE `companies` (
 -- 企業の名義（屋号）マスタ。同じ企業の屋号変更・社名変更で前後の屋号を辿れるよう
 -- predecessor_alias_id / successor_alias_id を持つ（FK は自テーブルへの自参照）。
 -- 別企業どうしの系譜（分社化・合併など）と所属は company_relations で持つ。
+-- is_official_name = 1 は正式名（社名）の名義。前身・後継と有効期間でたどって企業詳細の「商号履歴」に出す。
 --
 DROP TABLE IF EXISTS `company_aliases`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1705,6 +1797,7 @@ CREATE TABLE `company_aliases` (
   `name`                  varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
   `name_kana`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `name_en`               varchar(128) DEFAULT NULL,
+  `is_official_name`      tinyint NOT NULL DEFAULT 0 COMMENT '1 なら正式名（社名）の名義。企業詳細の商号履歴に出す',
   `predecessor_alias_id`  int          DEFAULT NULL,
   `successor_alias_id`    int          DEFAULT NULL,
   `valid_from`            date         DEFAULT NULL,
@@ -2476,6 +2569,8 @@ CREATE TABLE `credit_card_roles` (
   -- 1 ならクレジットの表示でこの行の役職名を出さず、中身（会社・人物）だけを出す。集計・関与は role_code のまま。
   -- 画面で 1 つの見出しの下に会社ごとのスタッフが続くとき、2 社目の見出しの行に立てて見出しが 2 度出ないようにする。
   `hide_role_label` tinyint                                              NOT NULL DEFAULT 0,
+  -- 1 ならこの行は画面にはクレジットされていない（クレジット漏れ）。データは入れて集計・関与に数え、表示だけ括弧で包んで示す。
+  `not_on_screen`  tinyint                                               NOT NULL DEFAULT 0,
   `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2510,6 +2605,7 @@ CREATE TABLE `credit_role_blocks` (
   `block_seq`                 tinyint unsigned NOT NULL,
   `col_count`                 tinyint unsigned NOT NULL DEFAULT '1',
   `leading_company_alias_id`  int             DEFAULT NULL,
+  `leading_company_not_on_screen` tinyint      NOT NULL DEFAULT 0 COMMENT '1 なら筆頭の会社は画面にはクレジットされていない（クレジット漏れ）。表示だけ括弧で包む',
   `heading_series_id`         int             DEFAULT NULL COMMENT 'ブロック先頭の見出しにする作品（series.series_id）。映画の声の出演の作品ごとのまとまりなど',
   `heading_text`              varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'ブロック先頭の見出しの文字（画面の表記どおり）。NULL なら作品の正式タイトル',
   `heading_italic`            tinyint(1) NOT NULL DEFAULT 0 COMMENT 'ブロック先頭の見出しを斜体で出すか（画面どおり）',
@@ -2572,6 +2668,8 @@ CREATE TABLE `credit_block_entries` (
   -- 人物名義（ユニット等）への所属参照。affiliation_company_alias_id と排他（トリガで担保）。
   -- 表示はテキスト同様（リンクなし）だが、構造的にマスタを指すことで正規化・逆引きを可能にする。
   `affiliation_person_alias_id`    int             DEFAULT NULL,
+  -- 所属がロゴで出ているときのロゴの版（任意）。TV の「（ABC）」「（ADK）」など。表示は所属の会社名のまま変えない。
+  `affiliation_logo_id`            int             DEFAULT NULL,
   `affiliation_text`               varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   -- 所属表記のインライン (1=名前 (所属)) / 別行 (0=名前\n(所属)) レイアウトフラグ。
   -- 入力時の表現を round-trip 保持するための表示ヒント。
@@ -2594,6 +2692,7 @@ CREATE TABLE `credit_block_entries` (
   KEY `ix_be_logo`           (`logo_id`),
   KEY `ix_be_aff_company`    (`affiliation_company_alias_id`),
   KEY `ix_be_aff_person`     (`affiliation_person_alias_id`),
+  KEY `ix_be_aff_logo`       (`affiliation_logo_id`),
   KEY `ix_be_parallel`       (`parallel_with_entry_id`),
   CONSTRAINT `fk_be_block`             FOREIGN KEY (`block_id`)                     REFERENCES `credit_role_blocks`   (`block_id`)          ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_be_person_alias`      FOREIGN KEY (`person_alias_id`)              REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
@@ -2602,6 +2701,7 @@ CREATE TABLE `credit_block_entries` (
   CONSTRAINT `fk_be_logo`              FOREIGN KEY (`logo_id`)                      REFERENCES `logos`                (`logo_id`)           ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_aff_company_alias` FOREIGN KEY (`affiliation_company_alias_id`) REFERENCES `company_aliases`      (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_aff_person_alias`  FOREIGN KEY (`affiliation_person_alias_id`)  REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_aff_logo`          FOREIGN KEY (`affiliation_logo_id`)          REFERENCES `logos`                (`logo_id`)           ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_parallel`          FOREIGN KEY (`parallel_with_entry_id`)       REFERENCES `credit_block_entries` (`entry_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_be_seq_pos` CHECK ((`entry_seq` >= 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -3030,6 +3130,7 @@ DELIMITER ;
 -- Table structure for table `song_credits`
 -- 歌の作家連名（作詞 / 作曲 / 編曲）を順序付きで保持。
 -- 既存 songs.{lyricist|composer|arranger}_name はフォールバックとして温存。
+-- 盤に作家の所属が印刷されているとき（「岡部啓一(MONACA)」など）は affiliation_company_alias_id / affiliation_text に持つ。
 --
 DROP TABLE IF EXISTS `song_credits`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -3041,6 +3142,8 @@ CREATE TABLE `song_credits` (
   `person_alias_id`     int              NOT NULL,
   `role_label_text`     varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '盤の役職の表記（役職名と違うときだけ）。役職の連名の先頭行の値を使う',
   `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `affiliation_company_alias_id` int DEFAULT NULL COMMENT '名義に添える所属の会社名義（company_aliases.alias_id）',
+  `affiliation_text`    varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '会社マスタに無い所属の自由記述（会社名義があればそちらを使う）',
   `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -3048,12 +3151,14 @@ CREATE TABLE `song_credits` (
   `updated_by`          varchar(64)      DEFAULT NULL,
   PRIMARY KEY (`song_id`, `credit_role`, `credit_seq`),
   KEY `ix_song_credits_alias` (`person_alias_id`),
+  KEY `ix_song_credits_aff_company` (`affiliation_company_alias_id`),
   KEY `ix_song_credits_role` (`credit_role`),
   KEY `ix_song_credits_song` (`song_id`),
   CONSTRAINT `ck_song_credits_seq_pos` CHECK (`credit_seq` >= 1),
   CONSTRAINT `fk_song_credits_song`  FOREIGN KEY (`song_id`)         REFERENCES `songs`          (`song_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_song_credits_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `fk_song_credits_role`  FOREIGN KEY (`credit_role`)     REFERENCES `roles`          (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_song_credits_role`  FOREIGN KEY (`credit_role`)     REFERENCES `roles`          (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_song_credits_aff_company` FOREIGN KEY (`affiliation_company_alias_id`) REFERENCES `company_aliases` (`alias_id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

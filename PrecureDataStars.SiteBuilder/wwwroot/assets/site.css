@@ -133,12 +133,31 @@ a:hover { text-decoration: underline; }
   color: var(--accent-pink);
   text-decoration: none;
 }
+/* データベースの項目とコラムの区切り。前の項目との間を広げ、細い縦線を置く。 */
+.site-nav a.nav-sep-before {
+  margin-left: 32px;
+  position: relative;
+}
+.site-nav a.nav-sep-before::before {
+  content: "";
+  position: absolute;
+  left: -17px;
+  top: 0.2em;
+  bottom: 0.2em;
+  border-left: 1px solid var(--border);
+}
 /* 現在地ハイライト。PageRenderer が URL パスから所属セクションを解決して is-active を立てる。 */
 .site-nav a.is-active {
   color: var(--accent-pink);
   font-weight: 600;
   border-bottom: 2px solid var(--accent-pink);
   padding-bottom: 2px;
+}
+/* モバイルオーバーレイ側の区切り（コラムの前に線を引いて間を空ける）。 */
+.mobile-nav-overlay-list li.nav-sep-before {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
 }
 /* モバイルオーバーレイ側の現在地ハイライト。 */
 .mobile-nav-overlay-list a.is-active {
@@ -336,6 +355,25 @@ h1 {
   border-bottom: 3px solid var(--accent-pink);
   padding-bottom: 6px;
 }
+/* 見出し（h1）の「〇〇第N話(日付)時点」。h1 のピンクの下線のすぐ下に右寄せで小さく添える（クリエイター・キャラクター・統計の
+   各一覧）。人物・キャラ・企業などの詳細は、読みと同じ行（.page-subline）の右に置く。 */
+h1:has(+ .page-coverage),
+h1:has(+ .page-subline) { margin-bottom: 4px; }
+.page-coverage {
+  margin: 0 0 12px;
+  text-align: right;
+  font-size: 0.85em;
+}
+/* 詳細ページの h1 の下の 1 行。読みを左に、時点を右寄せで同じ行に並べる。一覧の .page-coverage と同じく h1 の下線のすぐ下に置く。狭い画面で入りきらなければ時点は次の行の右へ。 */
+.page-subline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 16px;
+  margin: 0 0 12px;
+}
+.page-subline > p { margin: 0; }
+.page-subline > .page-coverage { margin-left: auto; }
 h2 {
   font-size: 1.25em;
   margin-top: 32px;
@@ -1881,6 +1919,12 @@ a.series-card-children-title:hover {
 .credit-section table.fallback-vc-table td.block-heading {
   font-size: 0.9em;
   color: #666;
+}
+/* 区切りの記号だけの見出し（名前のまとまりのあいだに画面で中央に置かれた「＊」「●」など）。
+   画面どおり、見出しのセル（声の出演ではキャラ名と声優名の 2 列ぶん）の中央にそろえる。 */
+.credit-section table.fallback-table td.block-heading-mark,
+.credit-section table.fallback-vc-table td.block-heading-mark {
+  text-align: center;
 }
 /* 画面で斜体の見出し（プリキュアオールスターズDX の声の出演の作品名など）。 */
 .credit-section .block-heading-italic {
@@ -3506,6 +3550,10 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 .subtitle-telop-guard.is-revealed .subtitle-telop-fallback {
   display: none;
 }
+/* 解禁前の話のサブタイトル分析の節。題名の文字そのものが並ぶので、解禁される（または先の題を見る設定にする）までは節ごと隠す。 */
+.subtitle-char-info-guard:not(.is-revealed) {
+  display: none;
+}
 
 /* サブタイトル解禁の初回確認ダイアログ。mobile-nav-overlay と同じ「hidden 属性 + 暗幕 + パネル」
    構成だが、こちらは中央配置の確認モーダルのため display:flex を明示指定する必要がある
@@ -4703,6 +4751,22 @@ body.subtitle-embargo-dialog-open {
   margin-top: 4px;
   /* ビルド情報スタンプはドット/デジタル系（DotGothic16）で「データ端末の刻印」風アクセント。 */
   font-family: var(--font-accent-dot);
+}
+
+/* hero のリードと時点表記の入れ物。
+   PC ではリードの行の右端に時点表記を置き、スマホ幅ではリードの下に回す。 */
+@media (min-width: 641px) {
+  .home-lead-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1em;
+  }
+  .home-lead-row .home-build-info {
+    flex: none;
+    margin: 0;
+    white-space: nowrap;
+  }
 }
 
 /* ホーム統計のコンパクト表示。横並び 1 行（または 2 行）で件数だけを並べる。 */
@@ -6369,6 +6433,33 @@ a.credit-card-series:focus-visible {
   .notable-works-table td.col-role { width: auto; }
 }
 
+/* 企業詳細の「商号履歴」。「期間 ｜ 商号」の 2 列で、期間は折り返さない。 */
+.official-names-table th.col-period,
+.official-names-table td.col-period {
+  width: 12em;
+  white-space: nowrap;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 人物詳細の「役職履歴（会社名）」。「異動日 ｜ 役職」の 2 列で、異動日は折り返さない。見出しの会社名は少し小さく添える。 */
+.person-positions-company {
+  font-size: 0.8em;
+  font-weight: normal;
+}
+.person-positions-company a { color: var(--accent-blue); }
+.person-positions-table th.col-date,
+.person-positions-table td.col-date {
+  width: 11.5em;
+  white-space: nowrap;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 640px) {
+  .person-positions-table th.col-date,
+  .person-positions-table td.col-date { width: auto; white-space: normal; }
+}
+
 /* 人物詳細の本編クレジットで、役職の見出しの下に添える「初担当（声の出演は初出演）『作品』第N話（放送日）」の 1 行。 */
 .credit-role-first {
   margin: -4px 0 8px;
@@ -6526,6 +6617,29 @@ a.credit-card-series:focus-visible {
   font-weight: bold;
   padding-right: 16px;
   white-space: nowrap;
+}
+/* 画面にはクレジットされていない行（credit_card_roles.not_on_screen）。データとしては数えたうえで、
+   役職名から中身までを全角の括弧で包み、薄い色で出す（マウスを載せると title で理由が出る）。
+   役職の表は先頭行の役職名セルの前に「（」、最終行の最後のセルの後に「）」を置く。テンプレ展開の役職は本文の前後に置く。
+   声の出演の末尾に足す「協力」行は、「協力」のセルの前と屋号のセルの後に置く。 */
+/* 画面にはクレジットされていない筆頭の会社（credit_role_blocks.leading_company_not_on_screen）。括弧は HTML 側で付ける。 */
+.credit-section .leading-not-on-screen,
+.credit-section .leading-not-on-screen a,
+.credit-section .role.not-on-screen,
+.credit-section .role.not-on-screen a,
+.credit-section tr.cooperation-row.not-on-screen > td,
+.credit-section tr.cooperation-row.not-on-screen > td a {
+  color: var(--muted);
+}
+.credit-section .role.not-on-screen table tr:first-child > td.role-name::before,
+.credit-section .role.not-on-screen .role-rendered::before,
+.credit-section tr.cooperation-row.not-on-screen > td.character-cell::before {
+  content: "（";
+}
+.credit-section .role.not-on-screen table tr:last-child > td:last-child::after,
+.credit-section .role.not-on-screen .role-rendered::after,
+.credit-section tr.cooperation-row.not-on-screen > td.actor-cell::after {
+  content: "）";
 }
 /* ──────────────────── クレジットの表：スマホの幅 ────────────────────
    クレジットの表（役職名 | 中身）は、パソコンの幅では役職名の列を credit-align.js がページ内でそろえた幅
@@ -7430,18 +7544,23 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   font-family: var(--font-brand);
 }
 
-/* 姉妹サイト「いえるかなクイズ」バナーカード（ホーム上部）。
+/* 姉妹サイトのカード（ホーム上部。precure.news のホームも同じクラスで precure.tv へのカードを置く）。
    1920×640(3:1) の不透明バナーをカード全域に敷き、角丸でクリップして
    淡い境界線＋影で「クリックできる 1 枚」に見せる。ホバー/フォーカスでわずかにリフトして
-   クリック可能性を示す。img は width:100%/height:auto でレスポンシブに縮む。 */
+   クリック可能性を示す。img は width:100%/height:auto でレスポンシブに縮む。
+   複数枚は中央寄せで横に並べ、2 枚が入らない幅では折り返して縦に積む。 */
 .sister-site {
   margin: 1.4em 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
 }
 .sister-site-link {
   display: block;
-  /* 本文幅いっぱいだと主役級に大きくなりすぎるため、控えめな callout サイズに抑えて中央寄せ。 */
-  max-width: 500px;
-  margin: 0 auto;
+  /* 本文幅いっぱいだと主役級に大きくなりすぎるため、控えめな callout サイズに抑える。 */
+  flex: 0 1 340px;
+  min-width: 0;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid #f4c6dd;
@@ -7460,6 +7579,49 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   display: block;
   width: 100%;
   height: auto;
+}
+/* バナー画像の無い姉妹サイトの文字のカード。バナーと同じ 3:1 の枠に、
+   ホームの見出しの枠と同じグラデーションを敷き、ヘッダのワードマークと同じく
+   肩書き（日本語）を小さく、固有名詞（英字）を主役に組む。下に一行の紹介を添える。 */
+.sister-site-text-card {
+  aspect-ratio: 3 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 12px;
+  background: linear-gradient(180deg, #fff1f6 0%, #fde7ef 45%, #fff8f0 100%);
+  font-family: var(--font-brand);
+  text-align: center;
+  line-height: 1.3;
+}
+.sister-site-text-card-ja {
+  font-size: 0.8em;
+  color: var(--muted);
+}
+.sister-site-text-card-en {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: #be185d;
+}
+.sister-site-text-card-lead {
+  font-size: 0.75em;
+  color: var(--fg);
+}
+/* precure.news へのカードは news のキーカラー（#6699ff）の青系で組む。
+   文字は同じ色相で白地 4.5:1 を満たす濃さ（#2a56c6）、ホバーの縁は #3366cc。 */
+.sister-site-text-card-news {
+  --accent-pink: #3366cc;
+  border-color: #c2d6ff;
+  background: linear-gradient(180deg, #f0f5ff 0%, #e3ecff 45%, #f8fbff 100%);
+}
+.sister-site-text-card-news:hover,
+.sister-site-text-card-news:focus-visible {
+  box-shadow: 0 4px 14px rgba(51, 102, 204, 0.16);
+}
+.sister-site-text-card-news .sister-site-text-card-en {
+  color: #2a56c6;
 }
 
 /* SNS シェアボタン群 _share-buttons.sbn が main の末尾に挿入する <aside class="share-buttons">。
@@ -7642,8 +7804,8 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 }
 
 /* ─────────── 免責事項：使用フォントの一覧 ─────────── */
-/* 「サブタイトル画像について」の折りたたみ。ライセンスごとの小見出し → フォントの箇条書き。
-   各行は「製品名（製品ページへのリンク）＋ Windows の書体名（薄く）」、2 行目に使っている作品。 */
+/* 「サブタイトル画像と書体の見本について」の折りたたみ。ライセンスごとの小見出し → フォントの箇条書き。
+   各行は「製品名（製品ページへのリンク）＋ Windows の書体名（薄く）」、2 行目に使っている作品と、その作品で使っている場所の注記。 */
 .subtitle-font-list { margin-top: 10px; }
 .subtitle-font-license {
   font-size: 0.95em;
@@ -7669,6 +7831,287 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 }
 .subtitle-font-ruby-note {
   font-size: 0.9em;
+  color: var(--muted);
+}
+
+/* ─────────── フォントのページ（/fonts/・/fonts/{書体名}/） ─────────── */
+/* 作品ごとの節（h2）→ 場面のカード（h3・見本・使われた書体）を並べる。 */
+.fonts-series-section { margin-top: 28px; }
+.fonts-series-heading { font-size: 1.15em; }
+.fonts-scene-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px 16px;
+  margin-top: 8px;
+}
+/* 広い画面：カードを 1 列に並べ、見本を左・場面の名前と書体を右にした横長のカードにする。 */
+@media (min-width: 761px) {
+  .fonts-scene-grid { grid-template-columns: 1fr; }
+  .fonts-scene-card {
+    display: grid;
+    grid-template-columns: minmax(0, 480px) 1fr;
+    grid-template-rows: auto 1fr;
+    column-gap: 18px;
+    align-items: start;
+  }
+  .fonts-scene-card > .fonts-scene { grid-column: 1; grid-row: 1 / span 3; }
+  .fonts-scene-card > :not(.fonts-scene) { grid-column: 2; }
+  .fonts-scene-card > .fonts-scene-fonts { margin-top: 2px; }
+}
+.fonts-scene-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 10px 8px;
+  background: var(--surface, #fff);
+}
+.fonts-scene-title {
+  font-size: 0.95em;
+  margin: 0 0 6px;
+}
+.fonts-scene-place {
+  margin: -2px 0 6px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+/* 見本：放送の画面を模した画像。16:9 の枠に高さをそろえて置き、4:3 の作品は放送と同じく左右に黒い帯を出す。押すと大きく重ねて出す。 */
+.fonts-scene {
+  display: flex;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.fonts-scene img {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+}
+.fonts-scene-fonts {
+  margin: 8px 0 0;
+  font-size: 0.9em;
+}
+.fonts-scene-fonts > div {
+  display: grid;
+  grid-template-columns: 6.5em 1fr;
+  gap: 2px 6px;
+  margin: 2px 0;
+}
+.fonts-scene-fonts dt { color: var(--muted); }
+.fonts-scene-fonts dd { margin: 0; }
+/* 書体名の後ろのベンダー名（「(写研・モリサワ)」）。書体名より小さく薄く。 */
+.fonts-vendor {
+  font-size: 0.78em;
+  color: var(--muted);
+}
+/* ルビの書体の行（親字と違う書体のときだけ）。親字の書体より一段小さく。 */
+.fonts-ruby-font {
+  display: block;
+  font-size: 0.82em;
+}
+.fonts-note {
+  margin-left: 0.2em;
+  font-size: 0.88em;
+  color: var(--muted);
+}
+.fonts-substitute-note,
+.fonts-no-sample {
+  display: block;
+  font-size: 0.82em;
+  color: var(--muted);
+}
+/* 書体名のページ：ウェイトごとの節。書体見本（正方形）と外部リンクを横に並べ、狭い画面では縦に積む。 */
+.fonts-weight-section { margin-top: 28px; }
+.fonts-weight-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: flex-start;
+}
+.fonts-specimen {
+  display: block;
+  width: min(100%, 300px);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.fonts-specimen img { display: block; width: 100%; height: auto; }
+.fonts-weight-info { flex: 1 1 220px; }
+/* 一覧の見出しの下のリード文（見本の作り方とお借りしたお名前の断り）。 */
+.fonts-lead {
+  margin: 0 0 24px;
+  font-size: 0.9em;
+  color: var(--muted);
+  line-height: 1.8;
+}
+/* 書体のページの末尾の注意書き。 */
+.fonts-notes {
+  margin-top: 32px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.fonts-notes p { margin: 4px 0; }
+/* 見本を大きく重ねて出す枠（<dialog>）。画面に収まる大きさで画像を出す。 */
+.fonts-viewer {
+  padding: 0;
+  border: none;
+  background: transparent;
+  max-width: 96vw;
+  max-height: 96vh;
+}
+.fonts-viewer::backdrop { background: rgba(0, 0, 0, 0.8); }
+.fonts-viewer img {
+  display: block;
+  max-width: 96vw;
+  max-height: 92vh;
+  width: auto;
+  height: auto;
+}
+.fonts-viewer-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* ─────────── 運営情報ページ共通：要点ボックス ─────────── */
+/* プライバシーポリシー冒頭などで「現状の取り扱い」を 3 行で要約する淡ピンクのカード。 */
+.policy-summary {
+  margin: 14px 0 6px;
+  padding: 12px 16px;
+  border: 1px solid #fce7f3;
+  border-left: 4px solid var(--accent-pink);
+  border-radius: 8px;
+  background: #fff7fb;
+}
+.policy-summary-title {
+  margin: 0 0 6px;
+  font-size: 0.92em;
+  font-weight: 600;
+  color: #9d174d;
+}
+.policy-summary ul {
+  margin: 0;
+  padding-left: 1.3em;
+}
+.policy-summary li {
+  margin: 3px 0;
+  line-height: 1.7;
+}
+
+/* ─────────── 免責事項：使用フォントの一覧 ─────────── */
+/* 「サブタイトル画像と書体の見本について」の折りたたみ。ライセンスごとの小見出し → フォントの箇条書き。
+   各行は「製品名（製品ページへのリンク）＋ Windows の書体名（薄く）」、2 行目に使っている作品と、その作品で使っている場所の注記。 */
+.subtitle-font-list { margin-top: 10px; }
+.subtitle-font-license {
+  font-size: 0.95em;
+  margin: 12px 0 4px;
+}
+.subtitle-font-list ul {
+  margin: 0;
+  padding-left: 1.3em;
+}
+.subtitle-font-list li {
+  margin: 4px 0;
+  line-height: 1.6;
+}
+.subtitle-font-name {
+  margin-left: 0.4em;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.subtitle-font-usage {
+  display: block;
+  font-size: 0.88em;
+  color: var(--muted);
+}
+.subtitle-font-ruby-note {
+  font-size: 0.9em;
+  color: var(--muted);
+}
+
+/* ─────────── フォントのページ（/fonts/・/fonts/{書体}/） ─────────── */
+/* 書体の一覧：作り手ごとの小見出し → 書体のチップ（書体名＋使った作品の数）。 */
+.fonts-foundry-heading {
+  font-size: 1em;
+  margin: 14px 0 6px;
+}
+.fonts-chip-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.fonts-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  text-decoration: none;
+}
+.fonts-chip:hover { border-color: var(--accent-pink); text-decoration: none; }
+.fonts-chip-count {
+  font-size: 0.8em;
+  color: var(--muted);
+}
+/* 使う場所 ｜ 書体 ｜（字の大きさ）｜ 見本 の表。狭い画面では横にスクロールする。 */
+.fonts-table-wrap { overflow-x: auto; }
+.fonts-usage-table { width: 100%; }
+.fonts-usage-table td { vertical-align: middle; }
+.fonts-usage-place,
+.fonts-usage-size { white-space: nowrap; }
+.fonts-usage-table tr.is-ruby .fonts-usage-place { color: var(--muted); }
+.fonts-note {
+  margin-left: 0.2em;
+  font-size: 0.88em;
+  color: var(--muted);
+}
+.fonts-display-note {
+  display: block;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+/* 見本：テロップの体裁（白い字・黒いフチ）の透過画像。サブタイトル欄と同じ薄い地に、字が 22.5px に見える大きさで置く。 */
+.fonts-usage-sample { min-width: 12em; }
+.fonts-sample {
+  display: inline-block;
+  padding: 6px 10px;
+  background: #fafafa;
+  border-radius: 6px;
+  line-height: 0;
+}
+.fonts-sample img {
+  display: inline-block;
+  width: min(100%, calc(var(--telop-w) / 2));
+  height: auto;
+}
+.fonts-substitute-note,
+.fonts-no-sample {
+  display: block;
+  font-size: 0.82em;
+  color: var(--muted);
+}
+.fonts-sample-credit-note {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.fonts-substitute-lead {
+  font-size: 0.92em;
   color: var(--muted);
 }
 
@@ -8187,6 +8630,9 @@ ins.adsbygoogle[data-ad-status="filled"] {
   --rtl-name-w: 11.5em;
   --rtl-gap: 12px;
   --rtl-track-x: calc(var(--rtl-name-w) + var(--rtl-gap));
+  --rtl-group-bg: #f1f4fa;
+  --rtl-group-line: #c3cad8;
+  --rtl-aff: #8e9ab3;
   margin: 0 0 2em;
 }
 /* 凡例（左）と「主な方のみ」のスイッチ（右端）の行。狭い画面ではスイッチが凡例の下の行に回る。 */
@@ -8310,6 +8756,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
 }
 .rtl-filter-tip[hidden] { display: none; }
 .role-timeline.is-main-only .rtl-row-extra { display: none; }
+/* 「プリキュアを演じた方のみ」を入れている間は「主な方のみ」を強制で切って触れなくする（薄く出す）。 */
+.rtl-switch:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
 
 .rtl {
   position: relative;
@@ -8333,7 +8781,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
 }
 .rtl-band-alt { background: var(--rtl-band-alt); }
 /* 年の目盛り。帯の左端に放送開始年を置き、シリーズ詳細へリンクする（title にシリーズの正式タイトル）。
-   帯が多いときは 5 の倍数の年だけ文字を残す（rtl-ticks-medium は狭い画面だけ、rtl-ticks-sparse は常に）。 */
+   帯が多いときは、すべての年を下 2 桁（04 05 …）で出す（上 2 桁の .rtl-tick-cc を隠す。rtl-ticks-medium は狭い画面だけ、
+   rtl-ticks-sparse は常に）。 */
 .rtl-axis {
   position: sticky;
   top: 95px;
@@ -8367,10 +8816,12 @@ ins.adsbygoogle[data-ad-status="filled"] {
   border-left: 1px solid #b9bcc4;
 }
 a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
-.rtl-ticks-sparse .rtl-tick-minor { font-size: 0; }
+.rtl-ticks-sparse .rtl-tick-cc { display: none; }
 
 .rtl-rows {
   position: relative;
+  display: flex;
+  flex-direction: column;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -8400,6 +8851,52 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   white-space: nowrap;
 }
 .rtl-name:hover { text-decoration: none; }
+/* 役職詳細で「すべて」を見せているときの、会社とその所属の人のまとまり（ゾーン）。名前の欄に地色を敷き、
+   会社の行の上に区切り線、所属の人は字下げして左に縦線を引く。帯の部分はシリーズの縞と重なるので地色を敷かない。
+   個人・団体で絞り込んだときは、まとめる前の並び（--rtl-flat）に戻し、地色・字下げもしない。 */
+.creators-root[data-entity-filter="all"] .rtl-row-group-head { border-top: 1px solid var(--rtl-group-line); }
+.creators-root[data-entity-filter="all"] .rtl-row-group-head .rtl-name,
+.creators-root[data-entity-filter="all"] .rtl-row-member .rtl-name {
+  align-self: stretch;
+  margin-bottom: -1px; /* 行の下の罫線の 1px まで地色を伸ばし、ゾーンを切れ目なく見せる */
+  background: var(--rtl-group-bg);
+}
+.creators-root[data-entity-filter="all"] .rtl-row-member .rtl-name {
+  position: relative;
+  padding-left: 22px;
+}
+.creators-root[data-entity-filter="all"] .rtl-row-member .rtl-name::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--rtl-group-line);
+}
+.creators-root:not([data-entity-filter="all"]) .rtl-row { order: var(--rtl-flat, 0); }
+/* 年表の「TV・映画 / TVのみ / 映画のみ」（ボタンの見た目は個人・団体の絞り込みと共通）。ページのルートの data-media に合わせて、
+   TV の話・映画を描いていない行を隠す。会社の行は、「すべて」のときは所属の人に見える行があれば見出しとして残し、
+   個人・団体で絞り込んだときは自分の担当だけで決める。
+   ボタンはタブの下の段に置き、年表タブを開いているときだけ見せる。個人・団体の絞り込みの右に並ぶときは細い縦線で区切る。 */
+.rtl-media {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.products-tabs:not([data-active-tab="timeline"]) .rtl-media { display: none; }
+.list-toolbar > .entity-filter + .rtl-media {
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+.products-tabs[data-active-tab="timeline"] .list-toolbar:has(> .rtl-media) { display: flex; }
+[data-media="tv"] .rtl-row:not([data-tv]):not(.rtl-row-group-head),
+[data-media="movie"] .rtl-row:not([data-movie]):not(.rtl-row-group-head),
+[data-media="tv"] .rtl-row-group-head:not([data-tv]):not([data-zone-tv]),
+[data-media="movie"] .rtl-row-group-head:not([data-movie]):not([data-zone-movie]),
+.creators-root[data-media="tv"]:not([data-entity-filter="all"]) .rtl-row-group-head:not([data-tv]),
+.creators-root[data-media="movie"]:not([data-entity-filter="all"]) .rtl-row-group-head:not([data-movie]) {
+  display: none;
+}
 .rtl-row:hover .rtl-name-text,
 .rtl-name:focus-visible .rtl-name-text { text-decoration: underline; }
 .rtl-badge {
@@ -8420,6 +8917,14 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   flex: 1 1 auto;
   align-self: stretch;
 }
+/* 所属線：会社の所属としてクレジットされていた期間を、帯の下に細い線で引く（まとめた会社は実線、ほかの会社は点線）。 */
+.rtl-aff {
+  position: absolute;
+  bottom: 2px;
+  height: 0;
+  border-top: 2px solid var(--rtl-aff);
+}
+.rtl-aff-other { border-top-style: dotted; }
 /* 続けて担当した期間（13 週以内の間隔でつながる担当の始まりから終わりまで）の細線。 */
 .rtl-span {
   position: absolute;
@@ -8527,6 +9032,7 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .rtl-tip[hidden] { display: none; }
 .rtl-tip-name { font-weight: 700; }
 .rtl-tip-sub { color: var(--muted); }
+.rtl-tip-aff { color: var(--muted); }
 .rtl-tip-period {
   margin-bottom: 4px;
   color: var(--muted);
@@ -8540,11 +9046,14 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 
 @media (max-width: 768px) {
   .rtl-axis { top: 0; }
-  .rtl-ticks-medium .rtl-tick-minor { font-size: 0; }
+  .rtl-ticks-medium .rtl-tick-cc { display: none; }
 }
 /* 狭い画面では名前を帯の上の行に置き、帯を表示幅いっぱいに使う（横軸は全期間のまま）。 */
 @media (max-width: 640px) {
   .role-timeline { --rtl-name-w: 0px; --rtl-gap: 0px; }
+  /* 下 2 桁の年を毎年並べるとき、帯が細くても重ならないよう文字と左の空きを詰める。 */
+  .rtl-ticks-medium .rtl-tick,
+  .rtl-ticks-sparse .rtl-tick { padding-left: 3px; font-size: 10px; }
   .rtl-row {
     flex-wrap: wrap;
     height: auto;
@@ -8574,6 +9083,16 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   flex: 1 1 auto;
   min-width: 0;
   font-size: 0.9em;
+}
+/* 歴代プリキュア声優の初出演順で、役名の右に少しあけて添える初出演の話（「第N話「サブタイトル」」）。 */
+.entity-row-sub .entity-row-debut {
+  margin-left: 0.8em;
+  font-size: 0.85em;
+}
+/* 同じ話が続く行では先頭だけに見せる。全員のときは debut-all、「プリキュアを演じた方のみ」のときは debut-precure の行。 */
+.products-tabs:not([data-precure-only]) .entity-row-debut:not(.debut-all),
+[data-precure-only] .entity-row-debut:not(.debut-precure) {
+  display: none;
 }
 .entity-row-count {
   margin-left: auto;
@@ -8719,7 +9238,8 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .creators-root[data-active-tab="roles"] .entity-filter {
   display: none;
 }
-.entity-filter-btn {
+.entity-filter-btn,
+.rtl-media-btn {
   appearance: none;
   border: 1px solid var(--border);
   background: transparent;
@@ -8729,14 +9249,17 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   font-size: 0.88em;
   cursor: pointer;
 }
-.entity-filter-btn:hover:not(.is-active) {
+.entity-filter-btn:hover:not(.is-active),
+.rtl-media-btn:hover:not(.is-active) {
   background: var(--surface-2, rgba(0, 0, 0, 0.04));
 }
-.entity-filter-btn.is-active {
+.entity-filter-btn.is-active,
+.rtl-media-btn.is-active {
   color: var(--fg);
   border-color: var(--fg);
 }
-.entity-filter-btn:focus-visible {
+.entity-filter-btn:focus-visible,
+.rtl-media-btn:focus-visible {
   outline: 2px solid var(--accent-pink, #ec4899);
   outline-offset: 2px;
 }
@@ -9134,6 +9657,23 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .article-body table { border-collapse: collapse; margin: 1.2em 0; font-size: 0.92em; }
 .article-body th, .article-body td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
 .article-body th { background: var(--th-bg); }
+/* 本文に埋め込む部品（precure.news の記事と同じ書き方で使える。news もこの CSS を読み込む）。
+   埋め込み動画は横幅いっぱいの 16:9。 */
+.article-body .video-embed { position: relative; aspect-ratio: 16 / 9; margin: 0 0 1.2em; }
+.article-body .video-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 6px; }
+/* 埋め込みの代わりのリンク（自サイトの記事・外部のページ）。 */
+.article-body .embed-card a {
+  display: block; padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px;
+  text-decoration: none; color: var(--fg); line-height: 1.6; word-break: break-all;
+}
+.article-body .embed-card a:hover { border-color: var(--accent-pink); }
+/* X の埋め込みが読み込まれるまでの見た目。 */
+.article-body blockquote.twitter-tweet { margin: 0 0 1.2em; }
+/* 画像とキャプション。 */
+.article-body figure { margin: 0 0 1.2em; }
+.article-body figcaption { font-size: 0.85em; color: var(--muted); margin-top: 0.3em; }
+/* 記事の分類をリンクにしたときは下線を出さない。 */
+a.article-tag { text-decoration: none; }
 
 /* ホームの「データ充足率」暫定表記（赤字）。BuildLabel 直下に小さく出す。追いついたら除去する。 */
 .home-data-sufficiency {
@@ -9873,6 +10413,14 @@ body.has-art-track-bar {
 .hide-premium-art-tracks .song-recording-play:has(.art-track-play.is-premium-only:not([data-art-track-alt-id])) {
   display: none;
 }
+/* 再生できなかったときの確認ダイアログ。説明・「YouTube Music で開く」・問いかけの 3 段落を
+   ひと続きに読ませるため、段落の間を詰める（ボタンの前だけ既定の広い空きを残す）。 */
+#art-track-premium-dialog .subtitle-embargo-dialog-body:not(:last-of-type) {
+  margin-bottom: 10px;
+}
+#art-track-premium-dialog-music {
+  font-weight: 700;
+}
 
 /* ── 音楽クレジット（人物詳細の「音楽クレジット」欄、楽曲・劇伴・商品詳細の演奏・レコーディング・ディスクスタッフ） ── */
 /* 区分（作詞・作曲・編曲 / 演奏・コーラス等 / レコーディング / 音盤製作）の小見出し。 */
@@ -10000,9 +10548,31 @@ body.has-art-track-bar {
   margin-left: auto;
 }
 /* 並べ替えボタンだけの段で、ボタンが隠れているタブ（初参加順など）では段ごと詰める。 */
-.list-toolbar:not(:has(> .entity-filter, > .sort-toggle, > .count-sort-btn:not([hidden]))) {
+.list-toolbar:not(:has(> .entity-filter, > .sort-toggle, > .precure-only, > .count-sort-btn:not([hidden]))) {
   display: none;
 }
+/* 歴代プリキュア声優の「プリキュアを演じた方のみ」（全タブに効くスイッチ）。入れるとページのルートの data-precure-only で、
+   プリキュアを演じたことがある方（data-precure-cast）の行と、その行を含むセクションだけを出す。
+   スイッチは段の右端に置き、件数での並べ替えボタンが出るとき（出演回数順）はその左に少しあけて並べる。 */
+.precure-only {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85em;
+  margin-left: auto;
+  white-space: nowrap;
+  /* トグルスイッチ（.rtl-switch）のオンの色。年表の外で使うので色をここで決める。 */
+  --rtl-tv: #3b82c4;
+}
+.list-toolbar > .precure-only ~ .count-sort-btn { margin-left: 8px; }
+[data-precure-only] .entity-row:not([data-precure-cast]),
+[data-precure-only] .creators-series-section:not([data-precure-cast]),
+[data-precure-only] .rtl-row:not([data-precure-cast]) {
+  display: none;
+}
+/* 年表は「プリキュアを演じた方のみ」の間、最終出演などに関係なくプリキュアのマスタの順に並べる。 */
+[data-precure-only] .rtl-row { order: var(--rtl-precure-order, 0); }
 /* 件数バッジでの並べ替えボタン（count-sort.js が中身を描く）。バッジと同じ絵文字・色に ⬇ / ⬆ を添える。 */
 .count-sort-btn {
   appearance: none;

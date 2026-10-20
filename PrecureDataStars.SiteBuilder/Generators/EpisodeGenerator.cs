@@ -434,18 +434,18 @@ public sealed class EpisodeGenerator
             ? $"『{series.TitleShort}』"
             : $"『{series.Title}』";
 
-        // ビルド時点でサブタイトル解禁前の話か。ページタイトル・OGP・JSON-LD・共有文・サブタイトル分析は
-        // ぼかしの外に出る（タブ・SNS のカード・ページのソースで読める）ため、解禁前は題名を載せずに作る。
-        // 解禁後の表示には、解禁時刻を過ぎてからの再ビルドが要る。
+        // ビルド時点でサブタイトル解禁前の話か。ページタイトル・JSON-LD・共有文は、タブや共有先で
+        // ぼかしの外に出るため、解禁前は題名を載せずに作り、解禁時刻を過ぎたら subtitle-embargo.js が差し替える。
+        // サブタイトル分析の節と共有ボタンは作っておき、解禁時刻までは subtitle-embargo.js が隠す。
         bool ownEmbargoed = SubtitleGuardRenderer.IsEmbargoedAt(ownRevealAt, _ctx.BuildStartedAt);
+        string ownRevealAtIso = ownEmbargoed ? SubtitleGuardRenderer.ToRevealAtIso(ownRevealAt!.Value) : "";
 
         // 文字情報 HTML を作る（既存 BuildTitleInformationPerCharAsync の移植）。
-        // 解禁前の話は、題名の文字そのものが並ぶので節ごと出さない。
+        // 解禁前の話も作り、題名の文字そのものが並ぶので、テンプレ側で解禁時刻つきの枠に入れて隠す。
         string titleCharInfoHtml = "";
         if (!string.IsNullOrEmpty(ep.TitleCharStats))
         {
-            if (!ownEmbargoed)
-                titleCharInfoHtml = await _titleCharInfo.RenderAsync(ep, ct).ConfigureAwait(false);
+            titleCharInfoHtml = await _titleCharInfo.RenderAsync(ep, ct).ConfigureAwait(false);
         }
         else if (!string.IsNullOrEmpty(ep.TitleText))
         {
@@ -635,6 +635,7 @@ public sealed class EpisodeGenerator
             },
             FormatTable = formatTable,
             TitleCharInfoHtml = titleCharInfoHtml,
+            TitleCharInfoRevealAt = ownRevealAtIso,
             PartLengthStats = partLengthStatRows,
             SeriesTitleShortQuoted = seriesTitleShortQuoted,
             SeriesScopeShortQuoted = seriesScopeShortQuoted,
@@ -749,7 +750,7 @@ public sealed class EpisodeGenerator
             // 解禁前の話は「第N話」だけにする（共有文もここから作られる）。題名入りのタイトルは
             // RevealedPageTitle で渡し、解禁後に subtitle-embargo.js がタブのタイトルと共有文を差し替える。
             PageTitle = ownEmbargoed ? $"『{series.Title}』 第{ep.SeriesEpNo}話" : fullPageTitle,
-            SubtitleRevealAt = ownEmbargoed ? SubtitleGuardRenderer.ToRevealAtIso(ownRevealAt!.Value) : "",
+            SubtitleRevealAt = ownRevealAtIso,
             RevealedPageTitle = ownEmbargoed ? fullPageTitle : "",
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
@@ -763,16 +764,14 @@ public sealed class EpisodeGenerator
             JsonLd = jsonLd
         };
 
-        // サブタイトル解禁前の話は専用カードを作らない。カードは画像なのでサイト側のガード
-        // （ぼかし＋解禁時刻での自動解除）を効かせられず、SNS のプレビューに題名がそのまま出てしまう。
-        // 解禁前のページは SNS のカード用のメタ自体を出さない（_layout.sbn が SubtitleRevealAt を見て抑止する）。
-        // 解禁後のビルドで自動的に専用カードが付く。
-        if (!ownEmbargoed)
-            layout.OgCard = BuildOgCard(series, ep, content);
+        // 専用カードは解禁前の話も題名入りで作る。カードは画像なのでサイト側のガード（ぼかし＋解禁時刻での自動解除）を
+        // 効かせられないため、解禁前の話は解禁時刻までページの共有ボタンを隠し（subtitle-embargo.js）、
+        // サイトから共有させないことで題名入りのカードが広まるのを抑える。
+        layout.OgCard = BuildOgCard(series, ep, content);
 
         // サブタイトル欄は、本編のテロップと同じ体裁（作品のテロップ書体・白い字に黒フチと影）の画像で見せる。
         // 解禁前の話も画像を描くが、画像はぼかせないので、ページでは解禁時刻を添えて、解禁されるか閲覧者が先の題を見る設定に
-        // するまでは画像を隠し、ぼかした HTML のサブタイトルを出す（subtitle-embargo.js が切り替える）。OGP カードは作らない。
+        // するまでは画像を隠し、ぼかした HTML のサブタイトルを出す（subtitle-embargo.js が切り替える）。
         // サブタイトル未確定の話はプレースホルダの HTML のまま。
         // 画像にするかの判定と材料は、ビルド冒頭の作り置きの確認と同じ SubtitleTelopRequest で決める。
         if (SubtitleTelopRequest.For(series, ep, _ctx) is { } telopRequest)
@@ -783,7 +782,7 @@ public sealed class EpisodeGenerator
                 content.Episode.SubtitleTelopSrc = telop.Src;
                 content.Episode.SubtitleTelopWidth = telop.Width;
                 content.Episode.SubtitleTelopHeight = telop.Height;
-                content.Episode.SubtitleTelopRevealAt = ownEmbargoed ? SubtitleGuardRenderer.ToRevealAtIso(ownRevealAt!.Value) : "";
+                content.Episode.SubtitleTelopRevealAt = ownRevealAtIso;
             }
         }
 
@@ -822,7 +821,7 @@ public sealed class EpisodeGenerator
     /// 載せるのは「話数・作品名（右上の透かし）→ サブタイトル（その作品の本編テロップの書体）→ 放送日 → 各話スタッフ」だけ。
     /// 通算話数や尺構成はカードでは読まれない情報なので載せず、見出しとスタッフを大きく組む。
     /// </summary>
-    private static OgCardSpec BuildOgCard(Series series, Episode ep, EpisodeContentModel content)
+    private OgCardSpec BuildOgCard(Series series, Episode ep, EpisodeContentModel content)
     {
         // メインスタッフは役職と担当者の対で流し込む（カード側でラベルと値を色分けして表示する）。
         var staff = content.Staff
@@ -847,12 +846,13 @@ public sealed class EpisodeGenerator
         {
             // サブタイトルはサイト本体と同じくルビ付きで組む（title_rich_html が無い話は素で組まれる）。
             TitleRubyHtml = ep.TitleRichHtml ?? "",
-            // 作品の本編テロップと同じ書体（series_subtitle_styles.font_subtitle）。無ければ既定の見出し書体。
+            // 作品の本編テロップと同じ書体（作品の書体の表のサブタイトルの行が指す fonts.render_font_name）。無ければ既定の見出し書体。
             TitleFontFamily = series.FontSubtitle ?? "",
-            // サブタイトルは本編のテロップと同じく、白い字に黒フチと影で組む。
+            // サブタイトルは本編のテロップの体裁で組む。作品の書体の表に装飾があれば、エピソード詳細のテロップ画像と同じ装飾
+            // （カード用に 1 行にし、外へ広く広がる光を狭める）で描き、無ければ白い字に黒フチと影で組む。
             TitleTelopStyle = true,
-            // 振り仮名はサブタイトルテロップ（エピソード詳細のテロップ画像）と同じ作品ごとの組み方で描く。
-            TitleRubyProfile = SubtitleTelopProfile.FromSeries(series),
+            // 振り仮名と装飾はサブタイトルテロップ（エピソード詳細のテロップ画像）と同じ作品ごと・回ごとの組み方で描く。
+            TitleRubyProfile = SubtitleTelopRequest.For(series, ep, _ctx)?.Profile ?? SubtitleTelopProfile.FromSeries(series),
             BandColorHex = OgCardColors.Episode,
             Watermark = $"第{ep.SeriesEpNo}話",
             WatermarkAside = series.Title,
@@ -1083,6 +1083,8 @@ public sealed class EpisodeGenerator
             {
                 sb.Append("[alias#").Append(row.PersonAliasId).Append("]");
             }
+            // 盤に印刷された所属（例：岡部 啓一（MONACA））。
+            sb.Append(SongCreditAffiliation.SuffixHtml(roleRows, i, _ctx.CompanyAliasById));
         }
         return sb.ToString();
     }
@@ -1837,6 +1839,11 @@ public sealed class EpisodeGenerator
         public EpisodeView Episode { get; set; } = new();
         public FormatTableModel FormatTable { get; set; } = new();
         public string TitleCharInfoHtml { get; set; } = "";
+        /// <summary>
+        /// ビルドの時点で解禁前の話の解禁時刻（ISO 8601）。空でなければ、テンプレ側はサブタイトル分析の節に解禁時刻を付け、
+        /// 解禁されるか閲覧者が先の題を見る設定にするまで節ごと隠す（subtitle-embargo.js が切り替える）。
+        /// </summary>
+        public string TitleCharInfoRevealAt { get; set; } = "";
         public IReadOnlyList<PartLengthStatRow> PartLengthStats { get; set; } = Array.Empty<PartLengthStatRow>();
         /// <summary>パート尺統計表のヘッダで使う「『○○プリキュア』」（引用符込み）。 テンプレ側で 2 段ヘッダの上段ラベルとして展開する。</summary>
         public string SeriesTitleShortQuoted { get; set; } = "";

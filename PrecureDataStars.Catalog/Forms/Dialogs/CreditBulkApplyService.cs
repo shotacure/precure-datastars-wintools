@@ -698,6 +698,7 @@ public sealed class CreditBulkApplyService
                     block.Entity.HeadingSeriesId = pb.HeadingSeriesId;
                     block.Entity.HeadingText = pb.HeadingText;
                     block.Entity.HeadingItalic = pb.HeadingItalic;
+                    block.Entity.LeadingCompanyNotOnScreen = pb.LeadingCompanyNotOnScreen;
 
                     if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
                     {
@@ -878,6 +879,8 @@ public sealed class CreditBulkApplyService
         role.Entity.JoinSeparator = pr.JoinSeparator;
         // その行だけ役職名を出さないか（同じ見出しの下に 2 社目が続くときなど）。
         role.Entity.HideRoleLabel = pr.HideRoleLabel;
+        // その行は画面にはクレジットされていないか（クレジット漏れ）。
+        role.Entity.NotOnScreen = pr.NotOnScreen;
 
         // 配下 Block を順に追加。
         foreach (var pb in pr.Blocks)
@@ -907,6 +910,7 @@ public sealed class CreditBulkApplyService
         block.Entity.HeadingSeriesId = pb.HeadingSeriesId;
         block.Entity.HeadingText = pb.HeadingText;
         block.Entity.HeadingItalic = pb.HeadingItalic;
+        block.Entity.LeadingCompanyNotOnScreen = pb.LeadingCompanyNotOnScreen;
 
         // [先頭企業屋号]
         if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
@@ -981,6 +985,9 @@ public sealed class CreditBulkApplyService
             if (pe.PersonMisprintText is not null) last.Entity.PersonMisprintText = pe.PersonMisprintText;
             if (pe.CharacterMisprintText is not null) last.Entity.CharacterMisprintText = pe.CharacterMisprintText;
             if (pe.CompanyMisprintText is not null) last.Entity.CompanyMisprintText = pe.CompanyMisprintText;
+            // 所属のロゴの版（屋号#lg<id>）。所属の会社名義が付いたときだけ持たせる（ロゴは会社の所属の版を表すため）。
+            if (pe.AffiliationLogoId is not null && last.Entity.AffiliationCompanyAliasId is not null)
+                last.Entity.AffiliationLogoId = pe.AffiliationLogoId;
             // A/B 併記フラグは保存フェーズで実 ID 解決のために使う一時情報。
             // ブロック先頭エントリ（直前エントリが無い）の場合は Block 警告級だが、ここでは
             // 適用フェーズなので緩く InfoMessages に積むだけにする（パーサ側で警告するのが本筋）。
@@ -2397,13 +2404,15 @@ public sealed class CreditBulkApplyService
             || !string.Equals(draftRole.Entity.RoleMisprintText, newRole.RoleMisprintText, StringComparison.Ordinal)
             || draftRole.Entity.JoinPrevious != newRole.JoinPrevious
             || !string.Equals(draftRole.Entity.JoinSeparator, newRole.JoinSeparator, StringComparison.Ordinal)
-            || draftRole.Entity.HideRoleLabel != newRole.HideRoleLabel)
+            || draftRole.Entity.HideRoleLabel != newRole.HideRoleLabel
+            || draftRole.Entity.NotOnScreen != newRole.NotOnScreen)
         {
             draftRole.Entity.RoleLabelText = newRole.RoleLabelText;
             draftRole.Entity.RoleMisprintText = newRole.RoleMisprintText;
             draftRole.Entity.JoinPrevious = newRole.JoinPrevious;
             draftRole.Entity.JoinSeparator = newRole.JoinSeparator;
             draftRole.Entity.HideRoleLabel = newRole.HideRoleLabel;
+            draftRole.Entity.NotOnScreen = newRole.NotOnScreen;
             draftRole.MarkModified();
         }
 
@@ -2478,6 +2487,13 @@ public sealed class CreditBulkApplyService
             draftBlock.Entity.HeadingSeriesId = newBlock.HeadingSeriesId;
             draftBlock.Entity.HeadingText = newBlock.HeadingText;
             draftBlock.Entity.HeadingItalic = newBlock.HeadingItalic;
+            draftBlock.MarkModified();
+        }
+
+        // 筆頭の会社が画面に出ていない印の比較。
+        if (draftBlock.Entity.LeadingCompanyNotOnScreen != newBlock.LeadingCompanyNotOnScreen)
+        {
+            draftBlock.Entity.LeadingCompanyNotOnScreen = newBlock.LeadingCompanyNotOnScreen;
             draftBlock.MarkModified();
         }
 
@@ -2686,7 +2702,8 @@ public sealed class CreditBulkApplyService
           .Append("|misprint=").Append(r.RoleMisprintText ?? string.Empty)
           .Append("|joinprev=").Append(r.JoinPrevious ? '1' : '0')
           .Append("|joinsep=").Append(r.JoinSeparator ?? string.Empty)
-          .Append("|hidelabel=").Append(r.HideRoleLabel ? '1' : '0').Append('\n');
+          .Append("|hidelabel=").Append(r.HideRoleLabel ? '1' : '0')
+          .Append("|notonscreen=").Append(r.NotOnScreen ? '1' : '0').Append('\n');
         foreach (var b in r.Blocks) sb.Append(SerializeBlockForCompare(b));
         return sb.ToString();
     }
@@ -2700,6 +2717,7 @@ public sealed class CreditBulkApplyService
           .Append("|hseries=").Append(b.HeadingSeriesId?.ToString() ?? string.Empty)
           .Append("|htext=").Append(b.HeadingText ?? string.Empty)
           .Append("|hitalic=").Append(b.HeadingItalic ? "1" : "0")
+          .Append("|leadnos=").Append(b.LeadingCompanyNotOnScreen ? "1" : "0")
           .Append("|notes=").Append(b.Notes ?? string.Empty).Append('\n');
         foreach (var row in b.Rows)
         {

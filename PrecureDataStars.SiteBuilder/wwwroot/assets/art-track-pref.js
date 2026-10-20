@@ -125,9 +125,21 @@
      * Premium 限定の音源が再生できなかったことを再生側から知らせる。
      * まだ一度も意思表示していないときだけ確認ダイアログを出す
      * （「表示する」を選んだ人に毎回尋ねない）。
+     * musicUrl はその曲の YouTube Music の再生ページで、ダイアログの「YouTube Music で開く」に使う
+     * （会員でも埋め込みでは再生できない環境があるため）。無ければリンクの行を隠す。
      */
-    notifyBlocked: function () {
+    notifyBlocked: function (musicUrl) {
       if (getPreference() !== null) return;
+      var row = document.getElementById('art-track-premium-dialog-music-row');
+      var link = document.getElementById('art-track-premium-dialog-music');
+      if (row && link) {
+        if (musicUrl) {
+          link.href = musicUrl;
+          row.hidden = false;
+        } else {
+          row.hidden = true;
+        }
+      }
       openDialog();
     }
   };

@@ -213,11 +213,12 @@ public sealed class SeriesGenerator
     /// 各 alias / person の名前を最初に Dictionary 化して、紐付け 1 件ごとの引きを O(1) で済ませる。
     /// 並び順は <c>display_order ASC, precure_id ASC</c> でタイブレーク。
     /// <para>
-    /// <c>series_precures</c> に行の無い作品単位の作品（映画など。<c>credit_attach_to='SERIES'</c>）は、その作品のクレジットの
+    /// 作品単位の作品（映画など。<c>credit_attach_to='SERIES'</c>）は、その作品のクレジットの
     /// 声の出演（CHARACTER_VOICE）のうち、キャラの名義がプリキュアの名義（変身前・変身後・変身後 2・別形態）に当たるものを
-    /// その作品に出たプリキュアとする。親の TV シリーズ（<c>parent_series_id</c> が TV の作品）に紐付くプリキュアを先に
-    /// 今までどおりの表記（変身前 / 変身後 (CV)）で出し、続けてそれ以外（客演。親の TV シリーズが無い作品は全員）を略記
-    /// （変身後の名前から「キュア」を除いたもの）で出す。
+    /// その作品に出たプリキュアとする。その作品自身か親の TV シリーズ（<c>parent_series_id</c> が TV の作品）の
+    /// <c>series_precures</c> に紐付くプリキュアを先に今までどおりの表記（変身前 / 変身後 (CV)）で出し、続けてそれ以外
+    /// （客演）を略記（変身後の名前から「キュア」を除いたもの）で出す。クレジットが無い（プリキュアが 1 人も出ていない）
+    /// 作品は、<c>series_precures</c> に行があっても出さない。
     /// どちらもクレジットに出てくる順（OP → ED → そのほか、カード・ティア・グループ・役職・ブロック・エントリの順で最初に出た所）。
     /// </para>
     /// </summary>
@@ -267,7 +268,8 @@ public sealed class SeriesGenerator
             return before.Count > 0 ? before[^1] : list[0];
         }
 
-        // 作品単位の作品（映画など）で series_precures に行の無いものは、クレジットの声の出演から出たプリキュアを引く。
+        // 作品単位の作品（映画など）は、クレジットの声の出演から出たプリキュアを引く
+        // （series_precures に行がある作品も、行はクレジットの表記を略さないかどうかの判定に使う）。
         var precureByAlias = new Dictionary<int, Precure>();
         foreach (var p in allPrecures.OrderBy(p => p.PrecureId))
         {
@@ -276,9 +278,10 @@ public sealed class SeriesGenerator
         }
         foreach (var series in _ctx.Series)
         {
-            if (dict.ContainsKey(series.SeriesId)) continue;
             if (!_ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var kind)
                 || !string.Equals(kind.CreditAttachTo, "SERIES", StringComparison.Ordinal)) continue;
+            // 作品単位の作品は、クレジットに出たプリキュアだけを出す（クレジットが無ければ出さない）
+            dict.Remove(series.SeriesId);
             if (!_ctx.CreditsBySeries.TryGetValue(series.SeriesId, out var credits)) continue;
             // クレジットに出てくる順（最初に出た所）で集める
             var found = new List<Precure>();
@@ -297,8 +300,8 @@ public sealed class SeriesGenerator
                 }
             }
             if (found.Count == 0) continue;
-            // 親の TV シリーズに紐付くプリキュアは今までどおりの表記で先に、それ以外は略記で続ける
-            var ownIds = new HashSet<int>();
+            // その作品か親の TV シリーズに紐付くプリキュアは今までどおりの表記で先に、それ以外は略記で続ける
+            var ownIds = new HashSet<int>(allPairs.Where(x => x.SeriesId == series.SeriesId).Select(x => x.PrecureId));
             if (series.ParentSeriesId is int parentId
                 && _ctx.Series.FirstOrDefault(x => x.SeriesId == parentId) is { } parent
                 && string.Equals(parent.KindCode, "TV", StringComparison.Ordinal))

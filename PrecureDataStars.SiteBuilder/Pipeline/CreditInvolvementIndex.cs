@@ -230,6 +230,10 @@ public sealed class CreditInvolvementIndex
                                     });
                                 }
 
+                                // ブロックの途中に TOEI ANIMATION PHILS. の屋号が置かれたとき、その後ろ（次の屋号・ロゴの手前まで）に
+                                // 続く漢字を含まない名前（現地スタッフのカタカナ・ローマ字の名前）は、TAP を筆頭にしたブロックの配下と
+                                // 同じく TAP のメンバーとして数える。クレジットの体裁は変えない。
+                                int? inlineTapAliasId = null;
                                 var entries = blockSnap.Entries.OrderBy(e => e.EntrySeq);
                                 foreach (var e in entries)
                                 {
@@ -366,6 +370,37 @@ public sealed class CreditInvolvementIndex
                                             CreditSeq = entrySeq
                                         });
                                     }
+
+                                    // ブロックの途中の TAP の後ろに続く現地スタッフを TAP のメンバーとして数える
+                                    // （筆頭の屋号や明示の所属があるときは、それぞれの経路で数え済みなので除く）。
+                                    if (inlineTapAliasId is int tapId
+                                        && e.PersonAliasId is int tapMemberPaid
+                                        && e.AffiliationCompanyAliasId is null
+                                        && b.LeadingCompanyAliasId is null
+                                        && ctx.PersonAliasById.TryGetValue(tapMemberPaid, out var tapMemberAlias)
+                                        && !ContainsKanji(tapMemberAlias.Name))
+                                    {
+                                        AddCompany(tapId, new Involvement
+                                        {
+                                            SeriesId = seriesIdForCredit,
+                                            EpisodeId = scopeEpisodeId,
+                                            CreditKind = credit.CreditKind,
+                                            RoleCode = roleCode,
+                                            Kind = InvolvementKind.Member,
+                                            EntryKind = e.EntryKind,
+                                            PersonAliasId = tapMemberPaid,
+                                            CharacterAliasId = e.CharacterAliasId,
+                                            AffiliationCompanyAliasId = tapId,
+                                            IsBroadcastOnly = e.IsBroadcastOnly,
+                                            CreditSeq = entrySeq
+                                        });
+                                    }
+
+                                    // 屋号・ロゴのエントリで、ブロックの途中の TAP の範囲を始める・終える。
+                                    if (e.CompanyAliasId is int seenCompanyAliasId)
+                                        inlineTapAliasId = IsTapCompanyAlias(ctx, seenCompanyAliasId) ? seenCompanyAliasId : null;
+                                    else if (e.LogoId is not null)
+                                        inlineTapAliasId = null;
                                 }
                             }
                         }
@@ -716,6 +751,25 @@ public sealed class CreditInvolvementIndex
             companyIdx.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<Involvement>)kv.Value),
             logoIdx.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<Involvement>)kv.Value),
             characterIdx.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<Involvement>)kv.Value));
+    }
+
+    /// <summary>TOEI ANIMATION PHILS., INC.（Toei Phils.・TAP）の会社 ID。</summary>
+    private const int TapCompanyId = 11;
+
+    /// <summary>屋号名義が TOEI ANIMATION PHILS., INC. の名義か。</summary>
+    private static bool IsTapCompanyAlias(BuildContext ctx, int companyAliasId)
+        => ctx.CompanyAliasById.TryGetValue(companyAliasId, out var ca) && ca.CompanyId == TapCompanyId;
+
+    /// <summary>名前に漢字（CJK 統合漢字・拡張・互換漢字）が含まれるか。</summary>
+    private static bool ContainsKanji(string name)
+    {
+        foreach (var r in name.EnumerateRunes())
+        {
+            int v = r.Value;
+            if ((v >= 0x4E00 && v <= 0x9FFF) || (v >= 0x3400 && v <= 0x4DBF) || (v >= 0xF900 && v <= 0xFAFF) || (v >= 0x20000 && v <= 0x3134F))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

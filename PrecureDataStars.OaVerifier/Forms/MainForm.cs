@@ -4,6 +4,7 @@ using LibVLCSharp.WinForms;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.OaVerifier.Ts;
+using PrecureDataStars.OaVerifier.Ts.Arib;
 
 namespace PrecureDataStars.OaVerifier.Forms;
 
@@ -71,6 +72,7 @@ internal sealed class MainForm : Form
     private readonly SeriesRepository _seriesRepo;
     private readonly EpisodesRepository _episodesRepo;
     private readonly EpisodePartsRepository _partsRepo;
+    private readonly PartTypesRepository _partTypesRepo;
 
     // ── 再生 ──
     private readonly LibVLC _libvlc;
@@ -88,6 +90,7 @@ internal sealed class MainForm : Form
     private CancellationTokenSource? _sweepCts; // 進行中の通し再生（キャンセルで停止/差し替え）
     private CancellationTokenSource? _indexCts; // 進行中の背景バイト索引ビルド（新ファイル/終了でキャンセル）
     private CancellationTokenSource? _silenceCts; // 進行中の予告無音プローブ（新ファイル/エピソード切替/終了でキャンセル）
+    private CancellationTokenSource? _captionCts; // 進行中の字幕全編抽出（新ファイル/終了でキャンセル）
     private const long SeekSettleMs = 400;      // シーク着地ぶんの上乗せ滞在時間
     private const int SeekVerifyDelayMs = 350;  // シーク後 TimeChanged の新しい実時刻を拾うまでの待ち（VLC は ~250ms 周期で発火）
     private const long SeekToleranceMs = 4000;  // 着地がこの幅を超えて要求位置から外れたら「外れ」と判定し時刻シークへ切替
@@ -103,6 +106,10 @@ internal sealed class MainForm : Form
     private readonly BindingList<PartRow> _partRows = new();
     private Dictionary<int, Series> _seriesById = new();
     private List<Episode> _allEpisodes = new();
+    private Dictionary<string, string> _partTypeNames = new(); // part_type → 日本語名（字幕の書き出しの見出しに使う）
+
+    /// <summary>直近に抽出した字幕（TS パスと結果）。同じ TS なら再抽出せず、現在のアンカー・パートで書き出し直す。</summary>
+    private (string Path, AribCaptionExtractor.Result Result)? _captionCache;
     private long _programStartMediaMs;   // 番組先頭（オフセット0）のメディア時刻
     private bool _anchorIsManual;        // 番組先頭を手動再アンカー済みか
     private bool _suppressEpisodeComboEvent;
@@ -121,6 +128,7 @@ internal sealed class MainForm : Form
     private readonly Button _sweepAllButton = new();
     private readonly Button _approveButton = new();
     private readonly Button _approveAllButton = new();
+    private readonly Button _captionButton = new();
     private readonly Label _remainLabel = new();
     private readonly Label _timeLabel = new();
     private readonly ComboBox _videoCombo = new();
@@ -133,11 +141,13 @@ internal sealed class MainForm : Form
     private readonly StatusStrip _statusStrip = new();
     private readonly ToolStripStatusLabel _statusLabel = new();
 
-    public MainForm(SeriesRepository seriesRepo, EpisodesRepository episodesRepo, EpisodePartsRepository partsRepo)
+    public MainForm(SeriesRepository seriesRepo, EpisodesRepository episodesRepo, EpisodePartsRepository partsRepo,
+                    PartTypesRepository partTypesRepo)
     {
         _seriesRepo = seriesRepo;
         _episodesRepo = episodesRepo;
         _partsRepo = partsRepo;
+        _partTypesRepo = partTypesRepo;
 
         _libvlc = new LibVLC();
         _player = new MediaPlayer(_libvlc) { EnableKeyInput = false, EnableMouseInput = false };
@@ -257,8 +267,8 @@ internal sealed class MainForm : Form
         _grid.CellFormatting += Grid_CellFormatting;
         _grid.CellDoubleClick += Grid_CellDoubleClick;
 
-        // 操作ボタン群（通し 2 種 ＋ 承認 2 種）
-        var buttons = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 104, ColumnCount = 2, RowCount = 3, Padding = new Padding(4) };
+        // 操作ボタン群（通し 2 種 ＋ 承認 2 種 ＋ 字幕の全編抽出）
+        var buttons = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 138, ColumnCount = 2, RowCount = 4, Padding = new Padding(4) };
         buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         _sweepUnconfirmedButton.Text = "▶ 未承認パート通し";
@@ -282,6 +292,12 @@ internal sealed class MainForm : Form
         buttons.Controls.Add(_approveAllButton, 1, 1);
         buttons.Controls.Add(_remainLabel, 0, 2);
         buttons.SetColumnSpan(_remainLabel, 2);
+        // 字幕の全編抽出。ドキュメントフォルダに TSV を書き出す（パートの境目ごとに時刻の行を挟む）。
+        _captionButton.Text = "字幕を全編抽出（TSV に書き出し）";
+        _captionButton.Dock = DockStyle.Fill;
+        _captionButton.Click += async (_, _) => await ExtractCaptionsAsync();
+        buttons.Controls.Add(_captionButton, 0, 3);
+        buttons.SetColumnSpan(_captionButton, 2);
 
         host.Controls.Add(_grid);
         host.Controls.Add(buttons);
@@ -446,6 +462,7 @@ internal sealed class MainForm : Form
             SetStatus("マスタ読込中…");
             _seriesById = (await _seriesRepo.GetAllAsync()).ToDictionary(s => s.SeriesId);
             _allEpisodes = (await _episodesRepo.GetAllAsync()).OrderBy(x => x.OnAirAt).ToList();
+            _partTypeNames = (await _partTypesRepo.GetAllAsync()).ToDictionary(p => p.PartTypeCode, p => p.NameJa);
             PopulateEpisodeCombo();
             SetStatus("準備完了。TS を開いてください。");
         }
@@ -479,6 +496,7 @@ internal sealed class MainForm : Form
         StopSweep();
         try { _indexCts?.Cancel(); _indexCts?.Dispose(); } catch { }
         try { _silenceCts?.Cancel(); _silenceCts?.Dispose(); } catch { }
+        try { _captionCts?.Cancel(); _captionCts?.Dispose(); } catch { }
         _player.Playing -= Player_Playing;
         _player.TimeChanged -= Player_TimeChanged;
         _player.LengthChanged -= Player_LengthChanged;
@@ -517,6 +535,8 @@ internal sealed class MainForm : Form
         try
         {
             _currentPath = path;
+            CancelCaptionExtraction(); // 前の TS の字幕抽出は打ち切り、抽出結果も持ち越さない
+            _captionCache = null;
             _fileLabel.Text = path;
             _fileLabel.ForeColor = Color.Black;
             SetStatus("TS を解析中（TOT / PCR）…");
@@ -679,6 +699,83 @@ internal sealed class MainForm : Form
         string s = _timebase?.Diagnostics ?? "";
         if (!string.IsNullOrEmpty(_silenceDiag)) s += "　｜　" + _silenceDiag;
         _diagLabel.Text = s;
+    }
+
+    // ── 字幕の全編抽出 ──
+
+    /// <summary>開いている TS の字幕を全編抽出し、ドキュメントフォルダに <c>{TS名}.captions.tsv</c> を書き出す。
+    /// 抽出（全編の順読み）は背景で行い、進み具合を状態表示に出す。同じ TS で抽出済みなら読み直さず、
+    /// いまのエピソード・パート・番組先頭アンカーで書き出し直す（アンカーを詰めた後の再出力が一瞬で済む）。</summary>
+    private async Task ExtractCaptionsAsync()
+    {
+        if (_timebase is null || string.IsNullOrEmpty(_currentPath)) { SetStatus("先に TS を開いてください。"); return; }
+        if (_captionCts != null) { SetStatus("字幕を抽出中です。終わるまでお待ちください。"); return; }
+
+        string path = _currentPath;
+        var tb = _timebase;
+        AribCaptionExtractor.Result result;
+        if (_captionCache is { } cache && cache.Path == path)
+        {
+            result = cache.Result;
+        }
+        else
+        {
+            var cts = new CancellationTokenSource();
+            _captionCts = cts;
+            _captionButton.Enabled = false;
+            SetStatus("字幕を抽出中…");
+            var progress = new Progress<double>(f => { if (ReferenceEquals(_captionCts, cts)) SetStatus($"字幕を抽出中… {f:P0}"); });
+            try
+            {
+                result = await Task.Run(() => AribCaptionExtractor.Extract(path, tb.FullsegProgramNumber, tb.PcrPid, progress, cts.Token));
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex)
+            {
+                if (ReferenceEquals(_captionCts, cts))
+                    MessageBox.Show(this, "字幕の抽出に失敗しました。\n" + ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            finally
+            {
+                if (ReferenceEquals(_captionCts, cts)) { _captionCts = null; _captionButton.Enabled = true; }
+                cts.Dispose();
+            }
+            if (path != _currentPath) return; // 抽出中に別の TS を開いた
+            _captionCache = (path, result);
+        }
+
+        if (result.Cues.Count == 0) { SetStatus(result.Diagnostics); return; }
+        try
+        {
+            string file = CaptionExportWriter.Write(BuildCaptionExportContext(path, tb), result.Cues);
+            SetStatus($"字幕 {result.Cues.Count} 件を書き出しました（{file}）。{result.Diagnostics}");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "字幕の書き出しに失敗しました。\n" + ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>進行中の字幕抽出を打ち切る（新しい TS を開いたとき）。</summary>
+    private void CancelCaptionExtraction()
+    {
+        var cts = _captionCts;
+        _captionCts = null;
+        _captionButton.Enabled = true;
+        try { cts?.Cancel(); } catch { }
+    }
+
+    /// <summary>書き出しの前提を、いまのエピソード・パート一覧・番組先頭アンカーから組み立てる。</summary>
+    private CaptionExportContext BuildCaptionExportContext(string path, TsTimebase tb)
+    {
+        var parts = _partRows.OrderBy(r => r.EpisodeSeq)
+            .Select(r => new CaptionExportPart(
+                r.EpisodeSeq, r.PartType,
+                _partTypeNames.TryGetValue(r.PartType, out var name) ? name : r.PartType,
+                r.StartOffsetSec, r.EndOffsetSec, StartMsOf(r), EndMsOf(r)))
+            .ToList();
+        return new CaptionExportContext(path, _programStartMediaMs, tb, parts);
     }
 
     // ── 再生イベント（VLC スレッド）──

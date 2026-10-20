@@ -79,6 +79,8 @@ public sealed class PolicyPagesGenerator
         {
             SiteName = _ctx.Config.SiteName,
             SubtitleFontGroups = BuildSubtitleFontGroups(),
+            // フォントのページは書体のデータがそろうまで本番では作らないので、本番ではそのページに触れない。
+            ShowFontsPage = !_ctx.Config.IsProductionMode,
         };
         var layout = new LayoutModel
         {
@@ -95,69 +97,73 @@ public sealed class PolicyPagesGenerator
         _page.RenderAndWrite("/disclaimer/", "policy", "disclaimer.sbn", content, layout);
     }
 
-    // ════════════════════ 使用フォントの一覧（免責事項「サブタイトル画像について」） ════════════════════
+    // ════════════════════ 使用フォントの一覧（免責事項「サブタイトル画像と書体の見本について」） ════════════════════
 
     /// <summary>
-    /// サブタイトルのテロップ画像に使っているフォントを、ライセンス（フォントワークス LETS / Morisawa Fonts）ごとにまとめる。
-    /// 使っているフォントは作品ごとの設定（<c>series_subtitle_styles</c> の親字・振り仮名の書体）から拾い、
-    /// 製品名・製品ページ・ライセンスはマスタ <c>subtitle_fonts</c>（<see cref="BuildContext.SubtitleFontByName"/>）で引く。
-    /// マスタに行の無いフォントは書体名の接頭辞（FOT- / A-SK / A P-OTF）でライセンスを判定し、名前だけ（リンク無し）で出して警告を出す。
-    /// フォントの並びは最初に使った作品の順（放送開始の早い順）、作品の並びも放送開始順。空のグループは出さない。
+    /// サブタイトルのテロップ画像と書体の見本の画像を描くのに使っている手元のフォントを、ライセンス
+    /// （フォントワークス LETS / Morisawa Fonts）ごとにまとめる。作品の書体の表（<see cref="BuildContext.FontUsages"/>）の
+    /// 各行が指す書体（<see cref="BuildContext.FontById"/>）のうち、描く書体（<c>render_font_name</c>）のあるものを拾い、
+    /// 描く書体ごとに 1 行にする（放送の書体を別のウェイトや改刻版で描いているときは、描く書体として数える）。
+    /// フォントの並びは最初に使った作品の順（放送開始の早い順）、作品の並びも放送開始順で、作品には使っている場所を添える。
+    /// ライセンスの無い書体は末尾の「その他」へ回して警告を出す。空のグループは出さない。
     /// </summary>
     private List<SubtitleFontGroupRow> BuildSubtitleFontGroups()
     {
-        // 書体名 → 使っている作品（出現順）。_ctx.Series は start_date, series_id 順で並んでいる。
-        var usagesByFont = new Dictionary<string, List<SubtitleFontUsageRow>>(StringComparer.Ordinal);
+        // 描く書体名 → (書体, 作品 ID → 使う場所)。作品は放送開始順に回す。
+        var byRenderName = new Dictionary<string, (FontFace Font, Dictionary<int, SortedSet<int>> KindsBySeries)>(StringComparer.Ordinal);
         var fontOrder = new List<string>();
-
-        void AddUsage(string? fontName, Series series, bool isRuby)
-        {
-            if (string.IsNullOrWhiteSpace(fontName)) return;
-            if (!usagesByFont.TryGetValue(fontName, out var usages))
-            {
-                usages = new List<SubtitleFontUsageRow>();
-                usagesByFont[fontName] = usages;
-                fontOrder.Add(fontName);
-            }
-            usages.Add(new SubtitleFontUsageRow
-            {
-                SeriesTitle = series.Title,
-                SeriesUrl = $"/series/{series.Slug}/",
-                SeriesStartYearLabel = series.StartDate.Year.ToString(),
-                IsRuby = isRuby,
-            });
-        }
-
+        var usagesBySeries = _ctx.FontUsages.ToLookup(u => u.SeriesId);
         foreach (var series in _ctx.Series)
         {
-            AddUsage(series.FontSubtitle, series, isRuby: false);
-            // 振り仮名の書体は、親字と違うときだけ別に数える（NULL は親字と同じ書体）。
-            if (!string.Equals(series.FontSubtitleRuby, series.FontSubtitle, StringComparison.Ordinal))
-                AddUsage(series.FontSubtitleRuby, series, isRuby: true);
+            foreach (var usage in usagesBySeries[series.SeriesId])
+            {
+                if (!_ctx.FontById.TryGetValue(usage.FontId, out var font) || string.IsNullOrWhiteSpace(font.RenderFontName)) continue;
+                if (!byRenderName.TryGetValue(font.RenderFontName, out var entry))
+                {
+                    entry = (font, new Dictionary<int, SortedSet<int>>());
+                    byRenderName[font.RenderFontName] = entry;
+                    fontOrder.Add(font.RenderFontName);
+                }
+                if (!entry.KindsBySeries.TryGetValue(series.SeriesId, out var kinds))
+                {
+                    kinds = new SortedSet<int>();
+                    entry.KindsBySeries[series.SeriesId] = kinds;
+                }
+                kinds.Add(FontUsageKinds.OrderOf(usage.UsageKind));
+            }
         }
 
         // グループはライセンスごとに固定の順。どちらにも当たらない書体は末尾の「その他」へ。
         var groups = new List<SubtitleFontGroupRow>
         {
-            new() { LicenseKind = SubtitleFontLicenseKinds.FontworksLets, LicenseLabel = "フォントワークス LETS", LicenseUrl = "https://lets.fontworks.co.jp/" },
-            new() { LicenseKind = SubtitleFontLicenseKinds.MorisawaFonts, LicenseLabel = "Morisawa Fonts", LicenseUrl = "https://morisawafonts.com/" },
+            new() { LicenseKind = FontLicenseKinds.FontworksLets, LicenseLabel = "フォントワークス LETS", LicenseUrl = "https://lets.fontworks.co.jp/" },
+            new() { LicenseKind = FontLicenseKinds.MorisawaFonts, LicenseLabel = "Morisawa Fonts", LicenseUrl = "https://morisawafonts.com/" },
             new() { LicenseKind = "", LicenseLabel = "その他", LicenseUrl = "" },
         };
 
-        foreach (var fontName in fontOrder)
+        foreach (var renderName in fontOrder)
         {
-            _ctx.SubtitleFontByName.TryGetValue(fontName, out var master);
-            if (master is null)
-                _ctx.Logger.Warn($"subtitle_fonts に行の無い書体: {fontName}（免責事項の使用フォント一覧では名前だけで出す）");
+            var (font, kindsBySeries) = byRenderName[renderName];
+            if (string.IsNullOrEmpty(font.LicenseKind))
+                _ctx.Logger.Warn($"fonts のライセンスが空の書体: {renderName}（免責事項の使用フォント一覧では「その他」に出す）");
 
-            var licenseKind = master?.LicenseKind ?? SubtitleFontLicenseKinds.GuessFromFontName(fontName) ?? "";
-            var group = groups.FirstOrDefault(g => g.LicenseKind == licenseKind) ?? groups[^1];
+            var group = groups.FirstOrDefault(g => g.LicenseKind == (font.LicenseKind ?? "")) ?? groups[^1];
             group.Fonts.Add(new SubtitleFontRow
             {
-                FontName = fontName,
-                DisplayName = string.IsNullOrWhiteSpace(master?.DisplayName) ? fontName : master!.DisplayName!,
-                ProductUrl = master?.ProductUrl ?? "",
-                Usages = usagesByFont[fontName],
+                FontName = renderName,
+                DisplayName = font.RenderDisplayName,
+                ProductUrl = font.ProductUrl ?? "",
+                Usages = kindsBySeries
+                    .Select(kv => _ctx.SeriesById[kv.Key])
+                    .OrderBy(s => s.StartDate).ThenBy(s => s.SeriesId)
+                    .Select(s => new SubtitleFontUsageRow
+                    {
+                        SeriesTitle = s.Title,
+                        SeriesUrl = $"/series/{s.Slug}/",
+                        SeriesStartYearLabel = s.StartDate.Year.ToString(),
+                        UsageNote = string.Join("・", kindsBySeries[s.SeriesId].Select(i => FontUsageKinds.Label(FontUsageKinds.Ordered[i]))),
+                    })
+                    .ToList(),
             });
         }
 
@@ -195,14 +201,17 @@ public sealed class PolicyPagesGenerator
     {
         public string SiteName { get; set; } = "";
 
-        /// <summary>「サブタイトル画像について」の使用フォント一覧（ライセンスごとのグループ。空なら折りたたみ自体を出さない）。</summary>
+        /// <summary>フォントのページ（書体の見本）に触れるか（本番ではページを作らないので false）。</summary>
+        public bool ShowFontsPage { get; set; }
+
+        /// <summary>「サブタイトル画像と書体の見本について」の使用フォント一覧（ライセンスごとのグループ。空なら折りたたみ自体を出さない）。</summary>
         public List<SubtitleFontGroupRow> SubtitleFontGroups { get; set; } = new();
     }
 
-    /// <summary>免責事項「サブタイトル画像について」の使用フォント一覧の 1 グループ（ライセンスごと）。</summary>
+    /// <summary>免責事項「サブタイトル画像と書体の見本について」の使用フォント一覧の 1 グループ（ライセンスごと）。</summary>
     private sealed class SubtitleFontGroupRow
     {
-        /// <summary>ライセンス区分のコード（<see cref="SubtitleFontLicenseKinds"/>）。「その他」は空文字。グループの振り分けにだけ使う。</summary>
+        /// <summary>ライセンス区分のコード（<see cref="FontLicenseKinds"/>）。「その他」は空文字。グループの振り分けにだけ使う。</summary>
         public string LicenseKind { get; set; } = "";
 
         /// <summary>見出し（「フォントワークス LETS」「Morisawa Fonts」）。</summary>
@@ -218,7 +227,7 @@ public sealed class PolicyPagesGenerator
     /// <summary>使用フォント一覧の 1 行（1 フォント）。</summary>
     private sealed class SubtitleFontRow
     {
-        /// <summary>見せる名前。マスタの製品名（「ハミング B」など）、無ければ書体名。</summary>
+        /// <summary>見せる名前（描く書体の書体名＋ウェイト。「ハミング B」など）。</summary>
         public string DisplayName { get; set; } = "";
 
         /// <summary>Windows の書体名（「FOT-ハミング ProN B」）。<see cref="DisplayName"/> と違うときだけ薄く添える。</summary>
@@ -243,8 +252,8 @@ public sealed class PolicyPagesGenerator
         /// <summary>放送開始年（複数作品が並ぶので薄く添える）。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
 
-        /// <summary>振り仮名の書体としてだけ使っている作品なら true（「（振り仮名）」の注記を添える）。</summary>
-        public bool IsRuby { get; set; }
+        /// <summary>その作品でこのフォントを使っている場所（「サブタイトル・ED 歌詞」）。</summary>
+        public string UsageNote { get; set; } = "";
     }
 
     /// <summary>お問い合わせページに渡すコンテンツモデル。</summary>

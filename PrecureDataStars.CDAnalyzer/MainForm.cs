@@ -664,7 +664,7 @@ namespace PrecureDataStars.CDAnalyzer
                 var match = await _registration.FindCandidatesForCdAsync(
                     _lastRead.Disc.Mcn,
                     _lastRead.Disc.CddbDiscId,
-                    _lastRead.Disc.TotalTracks ?? 0,
+                    _lastRead.Tracks.Select(t => t.StartLba ?? 0u).ToList(),
                     _lastRead.Disc.TotalLengthFrames ?? 0);
 
                 // 2. ダイアログ表示

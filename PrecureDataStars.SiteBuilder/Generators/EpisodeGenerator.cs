@@ -821,7 +821,7 @@ public sealed class EpisodeGenerator
     /// 載せるのは「話数・作品名（右上の透かし）→ サブタイトル（その作品の本編テロップの書体）→ 放送日 → 各話スタッフ」だけ。
     /// 通算話数や尺構成はカードでは読まれない情報なので載せず、見出しとスタッフを大きく組む。
     /// </summary>
-    private static OgCardSpec BuildOgCard(Series series, Episode ep, EpisodeContentModel content)
+    private OgCardSpec BuildOgCard(Series series, Episode ep, EpisodeContentModel content)
     {
         // メインスタッフは役職と担当者の対で流し込む（カード側でラベルと値を色分けして表示する）。
         var staff = content.Staff
@@ -848,10 +848,11 @@ public sealed class EpisodeGenerator
             TitleRubyHtml = ep.TitleRichHtml ?? "",
             // 作品の本編テロップと同じ書体（作品の書体の表のサブタイトルの行が指す fonts.render_font_name）。無ければ既定の見出し書体。
             TitleFontFamily = series.FontSubtitle ?? "",
-            // サブタイトルは本編のテロップと同じく、白い字に黒フチと影で組む。
+            // サブタイトルは本編のテロップの体裁で組む。作品の書体の表に装飾があれば、エピソード詳細のテロップ画像と同じ装飾
+            // （カード用に 1 行にし、外へ広く広がる光を狭める）で描き、無ければ白い字に黒フチと影で組む。
             TitleTelopStyle = true,
-            // 振り仮名はサブタイトルテロップ（エピソード詳細のテロップ画像）と同じ作品ごとの組み方で描く。
-            TitleRubyProfile = SubtitleTelopProfile.FromSeries(series),
+            // 振り仮名と装飾はサブタイトルテロップ（エピソード詳細のテロップ画像）と同じ作品ごと・回ごとの組み方で描く。
+            TitleRubyProfile = SubtitleTelopRequest.For(series, ep, _ctx)?.Profile ?? SubtitleTelopProfile.FromSeries(series),
             BandColorHex = OgCardColors.Episode,
             Watermark = $"第{ep.SeriesEpNo}話",
             WatermarkAside = series.Title,

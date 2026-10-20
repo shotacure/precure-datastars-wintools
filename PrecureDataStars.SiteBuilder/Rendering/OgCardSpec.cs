@@ -228,6 +228,14 @@ public sealed record OgCardSpec(
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public SubtitleTelopProfile? EpisodeTitleRubyProfile { get; init; }
 
+    /// <summary>
+    /// 書体見本（書体のページのカード）。あれば見本を装飾なしで左右いっぱいにフッタの上へ並べ（左に大きな 2 字、
+    /// 右にその 4 分の 1 の大きさの字の行）、その上に見出しとピンク罫を置く。<see cref="Subtitle"/> は見出しの右に一回り小さく添える。
+    /// null なら描かない。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public OgCardSpecimen? Specimen { get; init; }
+
     /// <summary>見出しが空のカードは意味を成さないため、描画対象として妥当かを判定する。</summary>
     public bool IsRenderable => !string.IsNullOrWhiteSpace(Title);
 
@@ -253,6 +261,15 @@ public sealed record OgCardSpec(
         || !string.IsNullOrWhiteSpace(Watermark) || !string.IsNullOrWhiteSpace(TitleFontFamily)
         || HeroVoice || !string.IsNullOrWhiteSpace(Statement);
 }
+
+/// <summary>
+/// カードに載せる書体見本。<paramref name="Big"/> の字（2 字）を左に大きく横に並べ、その右に <paramref name="Rows"/> の行を
+/// 大きな字の 4 分の 1 の大きさで、字間・行間ゼロ（仮想ボディどうしが接する）で上から並べる。
+/// </summary>
+/// <param name="FontFamily">描く書体名。</param>
+/// <param name="Big">大きく描く字（「愛永」）。</param>
+/// <param name="Rows">右に並べる行（ひらがな 1 行・カタカナ 1 行・漢字 2 行。4 行まで、1 行 8 字まで）。</param>
+public sealed record OgCardSpecimen(string FontFamily, string Big, IReadOnlyList<string> Rows);
 
 /// <summary>
 /// 年表の区間 1 つ。<paramref name="Start"/> と <paramref name="End"/> が同じなら点（映画など）として描く。

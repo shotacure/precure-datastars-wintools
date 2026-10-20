@@ -532,11 +532,20 @@ public sealed partial class OgCardRenderer : IDisposable
         fontWarning ??= inlineFactsWarning;
         ResolveTypeface(spec.EpisodeTitleFontFamily, _boldTypeface, out string? episodeTitleWarning);
         fontWarning ??= episodeTitleWarning;
+        if (spec.Specimen is not null)
+        {
+            ResolveTypeface(spec.Specimen.FontFamily, _boldTypeface, out string? specimenWarning);
+            fontWarning ??= specimenWarning;
+        }
 
         using var paint = new SKPaint { IsAntialias = true };
         float contentWidth = CardWidth - PaddingLeft - PaddingRight;
 
-        if (spec.IsProfile)
+        if (spec.Specimen is not null)
+        {
+            DrawSpecimenBody(canvas, paint, spec, spec.Specimen, contentWidth);
+        }
+        else if (spec.IsProfile)
         {
             DrawProfileBody(canvas, paint, spec, contentWidth, watermarkBottom);
         }
@@ -668,6 +677,149 @@ public sealed partial class OgCardRenderer : IDisposable
             }
         }
 
+    }
+
+    // ════════════════════════════════ 装飾つきのサブタイトル ════════════════════════════════
+
+    /// <summary>カードの見出しで、外へ広く広がる光とみなす層のぼかし（字の大きさに対する比）。これ以上の層は広がりを半分にする。</summary>
+    private const float CardSpreadingBlur = 0.03f;
+
+    /// <summary>カードのエピソードのサブタイトルの字の大きさ（固定。どの回も仮想ボディの高さをそろえ、長い題は長体で収める）。</summary>
+    private const float DecoratedTitleSize = 80f;
+
+    /// <summary>
+    /// エピソードのサブタイトルを、各話のテロップ画像と同じ描き方（作品の書体・装飾・振り仮名の組み方、倍で重ねて縮める。装飾が無ければ白い字に黒フチと影）で、
+    /// 決まった字の大きさ（<see cref="DecoratedTitleSize"/>）の 1 行に描き、左端を本文の左端にそろえて置く。放送の改行はせず、
+    /// 行と行のあいだは字の大きさの 4 分の 1 空ける。装飾の太さ・ずれ・ぼかしは字の大きさに対する比なので、字の大きさに合わせて変わる。
+    /// 外へ広く広がる光（光彩と、ぼかしの大きいフチ・影）は広がりを半分にする。行ごとに色の組を持つグラデーション（<c>lineColors</c>）は、
+    /// 放送の行ごとに描き分けて、その行の色の組をかける。全体が本文の幅を超えるときは横に縮めて収める。見出しの下端 Y を返す。
+    /// </summary>
+    private float DrawDecoratedTitle(SKCanvas canvas, OgCardSpec spec, SubtitleTelopProfile profile, float y, float contentWidth)
+    {
+        const float size = DecoratedTitleSize;
+        string html = string.IsNullOrWhiteSpace(spec.TitleRubyHtml) ? System.Net.WebUtility.HtmlEncode(spec.Title) : spec.TitleRubyHtml;
+        var lines = System.Text.RegularExpressions.Regex.Split(html, @"<br\s*/?>", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            .Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+        if (lines.Count == 0) return y;
+        static TelopDecoration Narrow(TelopDecoration d) => d with
+        {
+            Glow = d.Glow is null ? null : d.Glow with { Width = d.Glow.Width * 0.5f, Blur = d.Glow.Blur * 0.5f },
+            Layers = d.Layers.Select(l => l.Blur >= CardSpreadingBlur && l.Kind != TelopDecorationLayer.KindBevel
+                ? l with { Blur = l.Blur * 0.5f, Width = l.Width * 0.5f, Spread = l.Spread * 0.5f, SpreadX = l.SpreadX * 0.5f }
+                : l).ToList(),
+            Ruby = d.Ruby is null ? null : Narrow(d.Ruby)
+        };
+        // 行ごとの色の組を、放送の i 行目の組だけにする
+        static TelopGradient? LineGradient(TelopGradient? g, int i) =>
+            g?.LineColors is { Count: > 1 } lc ? g with { LineColors = new[] { lc[i % lc.Count] } } : g;
+        static TelopDecoration ForLine(TelopDecoration d, int i) => d with
+        {
+            FillGradient = LineGradient(d.FillGradient, i),
+            Layers = d.Layers.Select(l => l with { Gradient = LineGradient(l.Gradient, i) }).ToList(),
+            Ruby = d.Ruby is null ? null : ForLine(d.Ruby, i)
+        };
+        static bool HasLineColors(TelopDecoration d) =>
+            d.FillGradient?.LineColors is { Count: > 1 } || d.Layers.Any(l => l.Gradient?.LineColors is { Count: > 1 })
+            || d.Ruby is not null && HasLineColors(d.Ruby);
+        var cardProfile = profile with
+        {
+            LineScales = null, LineOffsets = null, RubyRaiseOffsets = null, LineMaxWidth = null, LineMaxEm = null,
+            Decoration = Narrow(profile.Decoration)
+        };
+        // 行ごとの色の組が無ければ、行を空白でつないで 1 つに描く
+        var pieces = HasLineColors(cardProfile.Decoration) && lines.Count > 1
+            ? lines.Select((l, i) => (Html: l, Profile: cardProfile with { Decoration = ForLine(cardProfile.Decoration, i) })).ToList()
+            : new List<(string Html, SubtitleTelopProfile Profile)> { (string.Join(" ", lines), cardProfile) };
+        float gap = size * 0.25f;
+
+        List<TelopImage> Draw(float k)
+        {
+            var list = new List<TelopImage>();
+            foreach (var (h, p) in pieces)
+            {
+                var img = DrawTelopImage(h, spec.TitleFontFamily, k < 1f ? p with { LineScales = new[] { k } } : p, size);
+                if (img is not null) list.Add(img);
+            }
+            return list;
+        }
+        var drawn = Draw(1f);
+        if (drawn.Count == 0) return y;
+        float total = drawn.Sum(d => d.LineWidth) + gap * (drawn.Count - 1);
+        float scale = 1f;
+        if (total > contentWidth)
+        {
+            scale = contentWidth / total;
+            foreach (var d in drawn) d.Image.Dispose();
+            drawn = Draw(scale);
+            if (drawn.Count == 0) return y;
+        }
+        bool hasRuby = html.Contains("<rt>", StringComparison.OrdinalIgnoreCase);
+        float baseline = y + size * 0.88f + (hasRuby ? size * profile.RubySizeRatio * 1.3f : 0f);
+        float x = PaddingLeft;
+        var sampling = new SKSamplingOptions(SKFilterMode.Linear);
+        foreach (var d in drawn)
+        {
+            using (var image = d.Image)
+                canvas.DrawImage(image, x - d.Left, baseline - d.Baseline, sampling, null);
+            x += d.LineWidth + gap * scale;
+        }
+        return baseline + size * 0.2f;
+    }
+
+    // ════════════════════════════════ 書体見本のレイアウト ════════════════════════════════
+
+    /// <summary>
+    /// 書体のページのカード：書体見本を装飾なしで、仮想ボディどうしが接するように（字間・行間ゼロ）左右いっぱいに並べてフッタの上に据え、
+    /// その上の残りに見出し（書体名と、その右に小さくメーカー名）とピンク罫を置く。
+    /// 見本は左に大きな 2 字、右にその 4 分の 1 の大きさの字を 1 行 8 字で上から並べるので、幅は大きな字 4 つぶん、高さは大きな字 1 つぶん。
+    /// </summary>
+    private void DrawSpecimenBody(SKCanvas canvas, SKPaint paint, OgCardSpec spec, OgCardSpecimen specimen, float contentWidth)
+    {
+        const int rowChars = 8;
+        float floor = FooterLineY - FooterClearance;
+        float big = contentWidth / (2f + rowChars / 4f);
+        float specimenTop = floor - big;
+
+        // 見出し：罫の下端が見本の上 24px に来るよう、下から積み上げて置く。書体名とメーカー名が 1 行に収まらなければ、
+        // 書体名を長体の書体（無ければ横に縮めた字）に切り替える
+        float ruleTop = specimenTop - 24f - TitleRuleHeight;
+        using var titleFont = new SKFont(_boldTypeface, TitleSizeCandidates[0]);
+        using var asideFont = new SKFont(_bodyTypeface, 40f);
+        float asideWidth = string.IsNullOrWhiteSpace(spec.Subtitle) ? 0f : Measure(asideFont, spec.Subtitle) + 24f;
+        CondenseToFit(titleFont, () => Measure(titleFont, spec.Title) + asideWidth <= contentWidth);
+        float baseline = ruleTop - TitleRuleGap - titleFont.Size * (TitleLineHeightRatio - 1f);
+        paint.Color = Foreground;
+        string title = Ellipsize(spec.Title, titleFont, paint, contentWidth - asideWidth);
+        DrawTextOutlined(canvas, title, PaddingLeft, baseline, SKTextAlign.Left, titleFont, paint);
+        if (asideWidth > 0f)
+        {
+            paint.Color = Muted;
+            DrawText(canvas, spec.Subtitle, PaddingLeft + Measure(titleFont, title) + 24f, baseline, SKTextAlign.Left, asideFont, paint);
+        }
+        DrawTitleRule(canvas, paint, ruleTop - TitleRuleGap, contentWidth);
+
+        var typeface = ResolveTypeface(specimen.FontFamily, _boldTypeface, out _);
+        paint.Color = Foreground;
+        // 字を、仮想ボディ（幅は字の大きさの正方形、ベースラインは上端から 0.88）の左上を (x, y) に合わせて、横は字送りを中央に置く
+        void DrawInBody(string ch, float x, float y0, float size)
+        {
+            using var font = new SKFont(typeface, size);
+            float w = font.MeasureText(ch);
+            canvas.DrawText(ch, x + (size - w) / 2f, y0 + size * 0.88f, SKTextAlign.Left, font, paint);
+        }
+        var bigChars = specimen.Big.EnumerateRunes().Select(r => r.ToString()).Take(2).ToList();
+        for (int i = 0; i < bigChars.Count; i++) DrawInBody(bigChars[i], PaddingLeft + big * i, specimenTop, big);
+        float cell = big / 4f, x0 = PaddingLeft + big * 2f;
+        for (int row = 0; row < Math.Min(4, specimen.Rows.Count); row++)
+        {
+            int k = 0;
+            foreach (var rune in specimen.Rows[row].EnumerateRunes())
+            {
+                if (k >= rowChars) break;
+                DrawInBody(rune.ToString(), x0 + cell * k, specimenTop + cell * row, cell);
+                k++;
+            }
+        }
     }
 
     // ════════════════════════════════ 高密度レイアウト ════════════════════════════════
@@ -1003,7 +1155,13 @@ public sealed partial class OgCardRenderer : IDisposable
         var sizes = new[] { titleSize };
 
         y += 22f;
-        if (rubyUnits.Count > 0)
+        if (spec.TitleTelopStyle && spec.TitleRubyProfile is { } telopProfile)
+        {
+            // エピソードのサブタイトル：テロップ画像と同じ描き方（作品の装飾が無ければ白い字に黒フチと影）で、
+            // 決まった字の大きさの 1 行に描いて置く（どの回も仮想ボディの高さをそろえ、長い題は長体で収める）
+            y = DrawDecoratedTitle(canvas, spec, telopProfile, y, contentWidth);
+        }
+        else if (rubyUnits.Count > 0)
         {
             // 詰めた結果の書体（コンデンス版に差し替わることがある）と長体の率を、描画側へ渡す。
             SKTypeface fittedTypeface = titleTypeface;

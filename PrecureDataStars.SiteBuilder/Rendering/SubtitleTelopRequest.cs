@@ -44,19 +44,24 @@ public sealed record SubtitleTelopRequest(
     {
         if (string.IsNullOrEmpty(ep.TitleText)) return null;
 
+        var profile = WithSubtitleStyle(SubtitleTelopProfile.FromSeries(series), series, ctx, ep.SeriesEpNo);
+        // 字を傾ける回が決まっている作品は、一覧に無い回では傾けない
+        if (profile.Decoration.CharTilt is { Episodes: { } tiltEpisodes } && !tiltEpisodes.Contains(ep.SeriesEpNo))
+            profile = profile with { Decoration = profile.Decoration with { CharTilt = null } };
         return new SubtitleTelopRequest(
             PathUtil.EpisodeUrl(series.Slug, ep.SeriesEpNo),
             $"subtitles/{series.Slug}/{ep.SeriesEpNo}.png",
             string.IsNullOrEmpty(ep.TitleRichHtml) ? HtmlUtil.Escape(ep.TitleText) : ep.TitleRichHtml,
             series.FontSubtitle ?? "",
-            WithSubtitleStyle(SubtitleTelopProfile.FromSeries(series), series, ctx));
+            profile);
     }
 
     /// <summary>
     /// 作品の書体の表のサブタイトルの行（通常の時期の最初の行）の装飾・長体の下限を組み方に重ねる。装飾があれば、放送の画面と比べて
     /// 測ったときと同じ計算（画素で重ねる描き方）で、字の大きさに対する比のまま描く。行が無ければ既定の体裁のまま。
+    /// <paramref name="episodeNo"/> があれば、その回の行ごとの横の倍率（<c>subtitle.episodeLineScales</c>）も重ねる。
     /// </summary>
-    public static SubtitleTelopProfile WithSubtitleStyle(SubtitleTelopProfile profile, Series series, BuildContext ctx)
+    public static SubtitleTelopProfile WithSubtitleStyle(SubtitleTelopProfile profile, Series series, BuildContext ctx, int? episodeNo = null)
     {
         var usage = ctx.FontUsages.FirstOrDefault(u => u.SeriesId == series.SeriesId && u.UsageKind == FontUsageKinds.Subtitle
                                                       && !u.IsBroadcastOnly && u.VariantNo == 1);
@@ -68,6 +73,19 @@ public sealed record SubtitleTelopRequest(
             Decoration = decoration ?? profile.Decoration,
             RasterDecoration = decoration is not null,
             CondenseMin = layout?.Subtitle?.CondenseMin ?? profile.CondenseMin,
+            RubyKeepWidth = layout?.Subtitle?.RubyKeepWidth ?? false,
+            LineScales = episodeNo is int no && layout?.Subtitle?.EpisodeLineScales is { } perEpisode
+                         && perEpisode.TryGetValue(no.ToString(System.Globalization.CultureInfo.InvariantCulture), out var lineScales)
+                ? lineScales
+                : null,
+            RubyRaiseOffsets = episodeNo is int no2 && layout?.Subtitle?.EpisodeRubyOffsets is { } rubyPerEpisode
+                         && rubyPerEpisode.TryGetValue(no2.ToString(System.Globalization.CultureInfo.InvariantCulture), out var rubyOffsets)
+                ? rubyOffsets
+                : null,
+            LineOffsets = episodeNo is int no3 && layout?.Subtitle?.EpisodeLineOffsets is { } linePerEpisode
+                         && linePerEpisode.TryGetValue(no3.ToString(System.Globalization.CultureInfo.InvariantCulture), out var lineOffsets)
+                ? lineOffsets
+                : null,
             // 行の最大幅（画面の幅に対する比）を、測った字の大きさに対する比に直す（4:3 の作品は幅 1440 の画面）
             LineMaxEm = layout?.Subtitle?.MaxWidth is float mw && usage.SizePx is decimal sz && sz > 0
                 ? mw * (layout.Screen?.Aspect == "4:3" ? 1440f : 1920f) / (float)sz
@@ -105,7 +123,7 @@ public sealed record SubtitleTelopRequest(
             FontFamily,
             JsonSerializer.Serialize(Profile),
             RubyHtml,
-            Scene is null ? "" : JsonSerializer.Serialize(Scene),
+            (Scene is null ? "" : JsonSerializer.Serialize(Scene) + (OgCardRenderer.SceneTransparent ? "|transparent" : "")) + (OgCardRenderer.SceneGlyphOnly ? "|glyph" : ""),
             Specimen is { } sp ? $"{sp.TopRight}|{sp.BottomLeft}" : "");
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material)))[..32].ToLowerInvariant();
     }

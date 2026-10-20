@@ -47,6 +47,30 @@ public sealed record TelopLayout
     /// <summary>歌詞の空白のアキ（前の字の字送りの箱の右端から、後の字の箱の左端まで。歌詞の字の大きさに対する比）。歌詞の行で持つ。</summary>
     public float? Space { get; init; }
 
+    /// <summary>歌詞をベタ組み（書体の詰め情報を使わない）で組むか。歌詞の行で持つ。null なら詰める。</summary>
+    public bool? Solid { get; init; }
+
+    /// <summary>歌詞の字と字のあいだに足す空き（歌詞の字の大きさに対する比）。歌詞の行で持つ。null なら 0。</summary>
+    public float? LetterSpacing { get; init; }
+
+    /// <summary>
+    /// ベタ組みの歌詞で、全角の約物（括弧・「！」「？」・句読点など）だけを書体の詰め情報（palt）で半分の幅に詰めるか（約物半角）。
+    /// 歌詞の行で持つ。null なら詰めない。
+    /// </summary>
+    public bool? PunctHalf { get; init; }
+
+    /// <summary>
+    /// 歌詞の欧文（英数字と半角の記号）と約物のあとに、<see cref="LetterSpacing"/> に加えて足す空き（歌詞の字の大きさに対する比）。
+    /// 行の最後の字のあとには足さず、欧文・約物のすぐあとの空白のあとにも足す（欧文の範囲にだけ字間を付けた組み）。歌詞の行で持つ。null なら 0。
+    /// </summary>
+    public float? LatinSpacing { get; init; }
+
+    /// <summary>
+    /// ベタ組みの歌詞で、小書きの仮名（「っ」「ゃ」など）にかける詰め（palt）の割合（0〜1。1 で書体の palt のとおり）。
+    /// 歌詞の行で持つ。null なら詰めない。
+    /// </summary>
+    public float? SmallKana { get; init; }
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -110,11 +134,22 @@ public sealed record TelopNameLayout
     /// <summary>割り付ける幅に収まらない長い名前を、長体で詰めて幅に収めるか。</summary>
     public bool? Condense { get; init; }
 
-    /// <summary>人名を並べる列の数（null なら 1 列）。2 列なら、上から順に左の列を埋めてから右の列に移る。</summary>
+    /// <summary>人名を並べる列の数（null なら 1 列）。2 列なら、行ごとに左の列から右の列へ並べ、右端まで埋めたら次の行に移る。</summary>
     public int? Columns { get; init; }
 
     /// <summary>列と列の間隔（左の列の左端から右の列の左端までの横の差）。</summary>
     public float? ColumnPitch { get; init; }
+
+    /// <summary>
+    /// 列ごとの人名を割り付ける幅（左の列から順。字数）。放送で列によって字取りが違うときに持つ。足りない列と null は <see cref="Span"/>。
+    /// </summary>
+    public IReadOnlyList<float>? ColumnSpans { get; init; }
+
+    /// <summary>
+    /// 人名をベタ組み（字送り幅のまま）にするか。null なら true。false なら書体の詰め情報（なければ字面）で詰めてから字取りの幅に割り付ける
+    /// （かなを詰めて組む作品）。
+    /// </summary>
+    public bool? Solid { get; init; }
 }
 
 /// <summary>声の出演の組み。値は声優名の字の大きさに対する比。</summary>
@@ -154,6 +189,27 @@ public sealed record TelopSubtitleLayout
     /// <summary>行の最大幅（画面の幅に対する比）。超える行は長体で詰める。</summary>
     public float? MaxWidth { get; init; }
 
-    /// <summary>長体の下限（横の縮めの率の最小）。これでも収まらない行は、全行の字を小さくする。</summary>
+    /// <summary>長体の下限の目安（横の縮めの率）。各話のテロップ画像は字の大きさを変えず、収まらない行はこれより縮めて収めるので、描き方には使わない。</summary>
     public float? CondenseMin { get; init; }
+
+    /// <summary>親字の行に長体をかけても、振り仮名は細くしない（放送で振り仮名の幅が変わらない作品）か。</summary>
+    public bool? RubyKeepWidth { get; init; }
+
+    /// <summary>
+    /// 回ごとの行の横の倍率（シリーズ内話数の文字列 → 行の順の倍率）。放送が回ごとに手で長体の率を決めている作品で、
+    /// 作品の組み方で描いた行の横幅に、さらに掛ける（1 なら変えない）。各話のテロップ画像だけに効く。
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<float>>? EpisodeLineScales { get; init; }
+
+    /// <summary>
+    /// 回ごとの行の振り仮名の高さのずれ（シリーズ内話数の文字列 → 行の順のずれ。親字の大きさに対する比、上を正）。
+    /// 放送が回ごとに手で振り仮名の高さを決めている作品で、作品の振り仮名の高さに足す。各話のテロップ画像だけに効く。
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<float>>? EpisodeRubyOffsets { get; init; }
+
+    /// <summary>
+    /// 回ごとの行の位置のずれ（シリーズ内話数の文字列 → 行の順の [横, 縦]。親字の大きさに対する比、右・下を正）。
+    /// 放送が回ごとに手で行を置いている作品で、作品の組み方で決まった位置からずらす。各話のテロップ画像だけに効く。
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyList<float>>>? EpisodeLineOffsets { get; init; }
 }

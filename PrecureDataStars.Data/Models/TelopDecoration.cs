@@ -50,8 +50,17 @@ public sealed record TelopDecoration
     /// </summary>
     public IReadOnlyList<string>? FillChars { get; init; }
 
-    /// <summary>字の塗りを太らせる幅（字の輪郭から外へ）。描く書体の字が放送より細いときに使う。0 なら太らせない。</summary>
+    /// <summary>
+    /// 字の塗りを太らせる幅（字の輪郭から外へ）。描く書体の字が放送より細いときに使う。0 なら太らせない。
+    /// 負の値なら塗りをその幅だけ内側へ細らせ、フチを字の輪郭より内側まで見せる（フチが白い字に食い込む体裁）。
+    /// </summary>
     public float FillGrow { get; init; }
+
+    /// <summary>
+    /// テロップ全体のやわらかさ（ガウスぼかしの標準偏差、字の大きさに対する比）。層と塗りを重ね終えた色と濃さをまとめてぼかす。
+    /// 放送の字は縁がわずかにぼけている（映像の解像の甘さ）ので、その分を描き足す。0 ならぼかさない。
+    /// </summary>
+    public float Blur { get; init; }
 
     /// <summary>字の内側の光（字の輪郭から内側へにじむ色）。null なら無し。</summary>
     public TelopInnerGlow? InnerGlow { get; init; }
@@ -59,8 +68,21 @@ public sealed record TelopDecoration
     /// <summary>字の塗りの上の斜線の模様。null なら無し。</summary>
     public TelopStripes? Stripes { get; init; }
 
+    /// <summary>字の塗りの上に散らすキラキラ（4 つの角の星）。null なら無し。</summary>
+    public TelopSparkles? Sparkles { get; init; }
+
+    /// <summary>字の塗りに混ぜるまだら模様（色の濃淡のむら）。null なら無し。</summary>
+    public TelopMottle? Mottle { get; init; }
+
     /// <summary>振り仮名だけの塗りの色（#RRGGBB）。null なら親字と同じ塗り。</summary>
     public string? RubyFill { get; init; }
+
+    /// <summary>
+    /// 振り仮名だけの装飾。あれば振り仮名はこの装飾（塗り・層・太らせ・全体のやわらかさ）で描き、親字の装飾は親字だけにかける
+    /// （装飾の形は同じでも太さ・ずれ・ぼかしが親字と違うサブタイトル用）。値は親字の大きさに対する比。画素で重ねる描き方でだけ効く。
+    /// null なら振り仮名も親字の装飾で描く。
+    /// </summary>
+    public TelopDecoration? Ruby { get; init; }
 
     /// <summary>
     /// クレジットの役職名だけの塗りの色（#RRGGBB）。役職名と人名で字の色の違うクレジットに使う（フチ・影などの装飾は共通）。
@@ -94,6 +116,12 @@ public sealed record TelopDecoration
 
     /// <summary>区切りの末尾の単独の「！」「？」の中心の、前の字の送りの端からの距離（字の大きさに対する比）。null なら <see cref="PunctFirstCenter"/>。</summary>
     public float? PunctLoneCenter { get; init; }
+
+    /// <summary>
+    /// 行の途中の単独の「！」「？」も、行末の単独の記号と同じ詰め方（<see cref="PunctLoneCenter"/>・<see cref="PunctRunAdvance"/>）で置くか。
+    /// false なら行の途中のものは全角の幅を取って中央に置く。
+    /// </summary>
+    public bool PunctMidLone { get; init; }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -131,15 +159,23 @@ public sealed record TelopDecoration
     public TelopDecoration ScaledBy(float k) => this with
     {
         FillGrow = FillGrow * k,
-        FillGradient = FillGradient is null ? null : FillGradient with { Period = FillGradient.Period * k },
+        Blur = Blur * k,
+        FillGradient = FillGradient is null ? null : FillGradient with { Period = FillGradient.Period * k, Offset = FillGradient.Offset * k },
         InnerGlow = InnerGlow is null ? null : InnerGlow with { Blur = InnerGlow.Blur * k },
-        Stripes = Stripes is null ? null : Stripes with { Period = Stripes.Period * k, Width = Stripes.Width * k, Offset = Stripes.Offset * k },
+        Stripes = Stripes is null ? null : Stripes with
+        {
+            Period = Stripes.Period * k, Width = Stripes.Width * k, Offset = Stripes.Offset * k,
+            Bands = Stripes.Bands is null ? null : Stripes.Bands with { Period = Stripes.Bands.Period * k, Width = Stripes.Bands.Width * k, Offset = Stripes.Bands.Offset * k }
+        },
         Glow = Glow is null ? null : Glow with { Width = Glow.Width * k, Blur = Glow.Blur * k },
+        Sparkles = Sparkles is null ? null : Sparkles with { Size = Sparkles.Size * k, Period = Sparkles.Period * k },
+        Mottle = Mottle is null ? null : Mottle with { Scale = Mottle.Scale * k },
         CharTilt = CharTilt is null ? null : CharTilt with { Dx = CharTilt.Dx * k, Dy = CharTilt.Dy * k },
+        Ruby = Ruby?.ScaledBy(k),
         Layers = Layers.Select(l => l with
         {
-            Width = l.Width * k, Dx = l.Dx * k, Dy = l.Dy * k, Blur = l.Blur * k, Spread = l.Spread * k,
-            Gradient = l.Gradient is null ? null : l.Gradient with { Period = l.Gradient.Period * k }
+            Width = l.Width * k, Dx = l.Dx * k, Dy = l.Dy * k, Blur = l.Blur * k, Spread = l.Spread * k, SpreadX = l.SpreadX * k, Ring = l.Ring * k, Noise = l.Noise * k, NoiseScale = l.NoiseScale * k,
+            Gradient = l.Gradient is null ? null : l.Gradient with { Period = l.Gradient.Period * k, Offset = l.Gradient.Offset * k }
         }).ToList()
     };
 
@@ -166,7 +202,7 @@ public sealed record TelopDecoration
             || (Glow is null) != (other.Glow is null) || (RubyFill is null) != (other.RubyFill is null)
             || !Near(RoleFill, other.RoleFill, colorTolerance) || (RoleFillChars is null) != (other.RoleFillChars is null)
             || (CharTilt is null) != (other.CharTilt is null) || PunctRunAdvance != other.PunctRunAdvance || PunctFirstCenter != other.PunctFirstCenter
-            || PunctLoneCenter != other.PunctLoneCenter) return false;
+            || PunctLoneCenter != other.PunctLoneCenter || PunctMidLone != other.PunctMidLone) return false;
         for (int i = 0; i < Layers.Count; i++)
         {
             var (a, b) = (Layers[i], other.Layers[i]);
@@ -182,8 +218,8 @@ public sealed record TelopDecoration
     /// </summary>
     [JsonIgnore]
     public bool NeedsRaster =>
-        FillGradient is not null || FillChars is { Count: > 0 } || FillGrow > 0f || InnerGlow is not null || Stripes is not null
-        || RubyFill is not null || Glow is not null
+        FillGradient is not null || FillChars is { Count: > 0 } || FillGrow != 0f || Blur > 0f || InnerGlow is not null || Stripes is not null || Sparkles is not null || Mottle is not null
+        || RubyFill is not null || Glow is not null || Ruby is not null
         || Layers.Any(l => l.Kind == TelopDecorationLayer.KindBevel || l.InnerColor is not null || l.Gradient is not null);
 }
 
@@ -213,8 +249,41 @@ public sealed record TelopGradient
     /// </summary>
     public float Period { get; init; }
 
-    /// <summary>縦（<c>v</c>）のとき、行ごとに親字の上端から下端までで色を移すか。false なら全行の字の範囲いっぱいに 1 度だけ。</summary>
+    /// <summary>
+    /// 色を移す軸の向き（度。0 が右、90 が下）。あれば <see cref="Axis"/> に代えて、字のある範囲の左上の角からこの向きへの射影で色を移し、
+    /// <see cref="Period"/>（0 より大きいこと）ごとに繰り返す。色の境目はこの向きに直交する線になる（行・字をまたぐ斜めの縞のグラデーション）。
+    /// null なら <see cref="Axis"/> の向き。
+    /// </summary>
+    public float? Angle { get; init; }
+
+    /// <summary><see cref="Angle"/> の繰り返しを、色の並びを行って戻る形（三角の波）にするか。false なら端で最初の色に戻る（のこぎりの波）。</summary>
+    public bool Mirror { get; init; }
+
+    /// <summary><see cref="Angle"/> の繰り返しの始まりのずらし（字の大きさに対する比）。</summary>
+    public float Offset { get; init; }
+
+    /// <summary>
+    /// 行ごとに色を移すか。縦（<c>v</c>）なら行ごとに親字の上端から下端まで、横（<c>h</c>、繰り返しなし）なら行ごとに親字の左端から右端まで。
+    /// false なら全行の字の範囲いっぱいに 1 度だけ。
+    /// </summary>
     public bool PerLine { get; init; }
+
+    /// <summary>
+    /// 行ごとの色（<see cref="PerLine"/> のとき。1 行目から順の色の並びで、行の数より少なければ繰り返す）。あれば行ごとに
+    /// <see cref="Colors"/> に代えてこの色で移す（行によって色の組が違う作品用。色の位置は <see cref="Positions"/> を共通に使う）。
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<string>>? LineColors { get; init; }
+
+    /// <summary>
+    /// 画面全体にかかるグラデーションの始点と終点（x0, y0, x1, y1。画面の幅・高さに対する比）。あれば <see cref="Axis"/> などに代えて、
+    /// この線分への射影で色を移す（クレジットのまとまり全体に 1 つのグラデーションがかかる作品用。フォントのページの場面の画像だけに効く）。
+    /// </summary>
+    public IReadOnlyList<float>? SceneLine { get; init; }
+
+    /// <summary>
+    /// <see cref="SceneLine"/> を、描く画像の画素の座標に直したもの（x0, y0, x1, y1）。場面の画像を描くときに、置く位置から求めて入れる。
+    /// </summary>
+    public IReadOnlyList<float>? Line { get; init; }
 }
 
 /// <summary>字の内側の光。字の形をぼかし、輪郭に近いところほど濃く色を載せる。</summary>
@@ -244,6 +313,98 @@ public sealed record TelopStripes
 
     /// <summary>線の位置のずらし。</summary>
     public float Offset { get; init; }
+
+    /// <summary>直交する向き（<see cref="Angle"/> ＋ 90 度）にも同じ線を引いて格子にするか。</summary>
+    public bool Cross { get; init; }
+
+    /// <summary>
+    /// 線の下に敷く半透明の帯（チェック模様）。線と同じ向き（格子なら両方の向き）に帯を並べ、帯の重なる所はさらに濃くなる。
+    /// null なら帯は無い。
+    /// </summary>
+    public TelopStripeBands? Bands { get; init; }
+}
+
+/// <summary>
+/// 字の塗りの上に散らすキラキラ。4 つの角の星（アステロイド形）を決まった間隔の格子に置き、星ごとに決まった種でずらす。
+/// 長さは字の大きさに対する比。
+/// </summary>
+public sealed record TelopSparkles
+{
+    /// <summary>星の色（#RRGGBB）。</summary>
+    public string Color { get; init; } = "#FFFFFF";
+
+    /// <summary>星の濃さ（0〜1）。</summary>
+    public float Opacity { get; init; } = 1f;
+
+    /// <summary>星の高さ（縦の端から端まで）。</summary>
+    public float Size { get; init; }
+
+    /// <summary>星の幅と高さの比（1 で正方、1 より小さければ縦長）。</summary>
+    public float Aspect { get; init; } = 1f;
+
+    /// <summary>星の傾き（度。正なら上が右へ、負なら左へ倒れる）。</summary>
+    public float Angle { get; init; }
+
+    /// <summary>星を置く格子の間隔。</summary>
+    public float Period { get; init; }
+
+    /// <summary>星を格子の点からずらす幅（格子の間隔に対する比、0〜0.5）。</summary>
+    public float Jitter { get; init; } = 0.3f;
+
+    /// <summary>星の大きさのばらつき（0〜1。0 ならすべて同じ大きさ）。</summary>
+    public float SizeJitter { get; init; } = 0.4f;
+
+    /// <summary>
+    /// 星を置く縦の範囲（行の親字の上端を 0、下端を 1 とした from・to）。範囲の外に中心の来る星は置かない。null なら行のどこにでも置く。
+    /// </summary>
+    public IReadOnlyList<float>? VerticalRange { get; init; }
+
+    /// <summary>格子の点に星を置く割合（0〜1。決まった種で間引く）。1 ならすべての点に置く。</summary>
+    public float Density { get; init; } = 1f;
+
+    /// <summary>星ごとの幅のばらつき（0〜1。<see cref="Aspect"/> に掛ける倍率を 1 ± この値の範囲で決まった種で変える）。0 ならそろえる。</summary>
+    public float AspectJitter { get; init; }
+
+    /// <summary>星ごとの傾きのばらつき（度。<see cref="Angle"/> に ± この値の範囲で決まった種で足す）。0 ならそろえる。</summary>
+    public float AngleJitter { get; init; }
+}
+
+/// <summary>
+/// 字の塗りに混ぜるまだら模様。決まった種の乱れを格子の点に置いてなめらかにつないだ濃淡（粗い粒と細かい粒の 2 段）で、
+/// 塗りの色に <see cref="Color"/> を混ぜる。長さは字の大きさに対する比。
+/// </summary>
+public sealed record TelopMottle
+{
+    /// <summary>混ぜる色（#RRGGBB）。</summary>
+    public string Color { get; init; } = "#000000";
+
+    /// <summary>いちばん濃い所で混ぜる割合（0〜1）。</summary>
+    public float Opacity { get; init; } = 0.3f;
+
+    /// <summary>粗い粒の大きさ（格子の間隔）。細かい粒はその半分。</summary>
+    public float Scale { get; init; }
+
+    /// <summary>濃淡のコントラスト（1 でそのまま、大きいほど濃い所と薄い所の差がはっきりする）。</summary>
+    public float Contrast { get; init; } = 1f;
+}
+
+/// <summary>斜線の下に敷く半透明の帯（チェック模様）。値は字の大きさに対する比。</summary>
+public sealed record TelopStripeBands
+{
+    /// <summary>帯の色（#RRGGBB）。</summary>
+    public string Color { get; init; } = "#000000";
+
+    /// <summary>帯の濃さ（0〜1）。2 つの向きの帯が重なる所は 2 回重ねる。</summary>
+    public float Opacity { get; init; } = 0.5f;
+
+    /// <summary>帯の間隔（帯に直交する向きの周期）。</summary>
+    public float Period { get; init; }
+
+    /// <summary>帯の太さ。</summary>
+    public float Width { get; init; }
+
+    /// <summary>帯の位置のずらし。</summary>
+    public float Offset { get; init; }
 }
 
 /// <summary>
@@ -255,8 +416,20 @@ public sealed record TelopCharTilt
     /// <summary>傾ける字（この文字列に含まれる字）。</summary>
     public string Chars { get; init; } = "！？!?";
 
-    /// <summary>傾ける角度（度、右回り＝上が右へ倒れるのを正）。</summary>
+    /// <summary>傾ける角度（度、右回り＝上が右へ倒れるのを正）。「！」「？」が続くところ（まとまり）の字はこの角度。</summary>
     public float Angle { get; init; }
+
+    /// <summary>単独の字（前後に傾ける字が続かないもの）の角度。null なら <see cref="Angle"/>。</summary>
+    public float? LoneAngle { get; init; }
+
+    /// <summary>「？」が混ざるまとまり（「！？」など）の字の角度。null なら <see cref="Angle"/>。</summary>
+    public float? QuestionRunAngle { get; init; }
+
+    /// <summary>
+    /// 傾ける回（シリーズ内話数）の一覧。null ならすべての回とフォントのページの見本。一覧があれば、載っていない回の各話のテロップ画像は
+    /// 字を傾けない（見本は傾ける）。
+    /// </summary>
+    public IReadOnlyList<int>? Episodes { get; init; }
 
     /// <summary>横のずれ（字の大きさに対する比、右を正）。</summary>
     public float Dx { get; init; }
@@ -332,6 +505,27 @@ public sealed record TelopDecorationLayer
     /// </summary>
     public float? Spread { get; init; }
 
+    /// <summary>影の形を、<see cref="Spread"/> に加えて左右だけ余分に広げる幅（字の大きさに対する比）。横に長い影・帯に使う。null なら広げない。</summary>
+    public float? SpreadX { get; init; }
+
+    /// <summary>
+    /// 影の形を外周の輪だけにする幅（字の大きさに対する比）。影の層だけ。影の形から、それをこの幅だけ細らせた形を抜いて残る縁だけを塗る。
+    /// 半透明の帯の外周に暗い縁を引くときに使う（塗りつぶした暗い影を帯の下に敷くと、半透明の帯の中に透けてしまうため）。null なら輪にしない。
+    /// </summary>
+    public float? Ring { get; init; }
+
+    /// <summary>面取りの暗い側だけの濃さ（0〜1）。null なら <see cref="Opacity"/>。0 なら明るい側（光沢）だけを描く。</summary>
+    public float? ShadeOpacity { get; init; }
+
+    /// <summary>
+    /// 面取りの面のでこぼこの強さ（面取りの山に足す乱れの大きさ。字の大きさに対する比）。null・0 なら平らな面。
+    /// 乱れの模様は字の位置によらず決まった種から作るので、同じ画像は何度描いても同じになる。
+    /// </summary>
+    public float? Noise { get; init; }
+
+    /// <summary>面取りの面のでこぼこの細かさ（乱れをぼかす標準偏差。字の大きさに対する比）。null なら 0.02。</summary>
+    public float? NoiseScale { get; init; }
+
     /// <summary>フチの内側の色（#RRGGBB）。フチの層だけ。あれば、字の輪郭のこの色からフチの外の縁の <see cref="Color"/> へ色を移す。</summary>
     public string? InnerColor { get; init; }
 
@@ -349,6 +543,24 @@ public sealed record TelopDecorationLayer
 
     /// <summary>面取りの強さ（傾きを明暗の濃さに変える倍率）。面取りの層だけ。</summary>
     public float Strength { get; init; } = 1f;
+
+    /// <summary>
+    /// 面取りの暗い側を、決まった色（<see cref="Shade"/>）ではなく、下の塗りの色をこの割合だけ暗くした色にする（0〜1。字の上の面取りだけ）。
+    /// 塗りにグラデーションがあれば、側面もその色に沿って暗くなる。null なら <see cref="Shade"/> の色。
+    /// </summary>
+    public float? ShadeFromFill { get; init; }
+
+    /// <summary>
+    /// 明るい側を、色を混ぜずに光として足す（加算。字の上の面取りだけ）。色のついた光を別の向きから当てる（右下から青い光など）ときに使う。
+    /// false なら明るい側の色を濃さの割合で混ぜる。
+    /// </summary>
+    public bool Additive { get; init; }
+
+    /// <summary>
+    /// 面取りの断面を台形にするか。true なら縁から <see cref="Width"/> まで一定の傾きで上がり、その内側は平ら（斜面は輪郭に沿った帯で、向きごとに明るさが一様）。
+    /// false なら外形をぼかした山（丸い断面）。面取りの層だけ。
+    /// </summary>
+    public bool Chamfer { get; init; }
 
     /// <summary>true なら面取りを字の上に重ねる（字そのものの浮き彫り）。false なら字＋フチの外形に、字の下で重ねる。</summary>
     public bool OverFill { get; init; }

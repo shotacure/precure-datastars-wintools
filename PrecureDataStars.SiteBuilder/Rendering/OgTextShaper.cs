@@ -31,15 +31,32 @@ public sealed class OgTextShaper : IDisposable
         new(Tag.Parse("calt"))
     };
 
-    /// <summary>ベタ組みで効かせる OpenType 機能。詰め（kern・palt）を外し、合字だけ。</summary>
+    /// <summary>
+    /// ベタ組みで効かせる OpenType 機能。詰め（kern・palt）を外し、合字だけ。HarfBuzz は kern を既定で効かせるので、
+    /// 0 を指定して明示的に切る（切らないと、かなどうしのペアカーニングを持つ書体で字送りが詰まる）。
+    /// </summary>
     private static readonly Feature[] SolidFeatures =
     {
+        new(Tag.Parse("kern"), 0u),
+        new(Tag.Parse("palt"), 0u),
         new(Tag.Parse("liga")),
         new(Tag.Parse("calt"))
     };
 
     /// <summary>ベタ組み（字送り幅のまま並べ、詰めない）か。</summary>
     private readonly bool _solid;
+
+    /// <summary>ベタ組みで、全角の約物（<see cref="IsFullWidthPunct"/>）だけに palt をかけて半分の幅に詰めるか（約物半角）。</summary>
+    private readonly bool _punctHalf;
+
+    /// <summary>欧文と約物（<see cref="IsLatinSpaced"/>）のあとに足す空き（em に対する比）。文字列の最後の字のあとには足さない。</summary>
+    private readonly float _latinTrackingEm;
+
+    /// <summary>ベタ組みで、小書きの仮名（<see cref="IsSmallKana"/>）にかける palt の割合（0〜1）。</summary>
+    private readonly float _smallKanaPalt;
+
+    /// <summary>小書きの仮名ごとの、palt で組んだときのベタとの (字送りの差, 字の位置のずれ)（フォント単位）。</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<char, (int Advance, int Offset)> _smallKanaAdjust = new();
 
     /// <summary>
     /// 単独の全角の「！」「？」（前後に「！」「？」が続かないもの）を詰めずに全角のまま置くか。
@@ -75,7 +92,11 @@ public sealed class OgTextShaper : IDisposable
     /// <param name="opticalTightening">字面詰めを使うか。null なら書体の OpenType 機能から自動判定する。</param>
     /// <param name="solid">ベタ組みにするか。true なら詰め（kern・palt・字面詰め）を一切かけず、字送り幅のまま並べる。</param>
     /// <param name="keepLonePunctuation">字面詰めで、単独の全角の「！」「？」を詰めずに全角のまま置くか（テロップの組み方）。</param>
-    public OgTextShaper(SKTypeface typeface, bool? opticalTightening = null, bool solid = false, bool keepLonePunctuation = false)
+    /// <param name="punctHalf">ベタ組みで、全角の約物だけを palt で半分の幅に詰めるか（約物半角）。</param>
+    /// <param name="latinTrackingEm">欧文と約物のあとに足す空き（em に対する比）。</param>
+    /// <param name="smallKanaPalt">ベタ組みで、小書きの仮名にかける palt の割合（0〜1）。</param>
+    public OgTextShaper(SKTypeface typeface, bool? opticalTightening = null, bool solid = false, bool keepLonePunctuation = false,
+        bool punctHalf = false, float latinTrackingEm = 0f, float smallKanaPalt = 0f)
     {
         _stream = typeface.OpenStream(out int ttcIndex);
         _blob = _stream.ToHarfBuzzBlob();
@@ -88,6 +109,9 @@ public sealed class OgTextShaper : IDisposable
         _typeface = typeface;
         _solid = solid;
         _keepLonePunctuation = keepLonePunctuation;
+        _punctHalf = solid && punctHalf;
+        _latinTrackingEm = latinTrackingEm;
+        _smallKanaPalt = solid ? smallKanaPalt : 0f;
         UsesOpticalTightening = !solid && (opticalTightening ?? !(HasGposFeature(typeface, "kern") && HasGposFeature(typeface, "palt")));
     }
 
@@ -130,21 +154,72 @@ public sealed class OgTextShaper : IDisposable
     private ShapedRun ShapeCore(string text, float fontSize)
     {
         if (string.IsNullOrEmpty(text)) return new ShapedRun(Array.Empty<ushort>(), Array.Empty<SKPoint>(), 0f);
+        var run = ShapeGlyphs(text, fontSize, out var clusters);
+        return _latinTrackingEm == 0f ? run : WithLatinTracking(run, text, clusters, fontSize * _latinTrackingEm);
+    }
 
+    /// <summary>
+    /// 欧文と約物の字形のあとに <paramref name="tracking"/>（ピクセル）を足す。最後の字形のあとには足さない。
+    /// <paramref name="clusters"/> は字形ごとの、元の文字列の位置（UTF-16 の位置）。
+    /// </summary>
+    private static ShapedRun WithLatinTracking(ShapedRun run, string text, int[] clusters, float tracking)
+    {
+        int count = run.Glyphs.Length;
+        if (count < 2) return run;
+        var points = new SKPoint[count];
+        float shift = 0f;
+        for (int i = 0; i < count; i++)
+        {
+            points[i] = new SKPoint(run.Positions[i].X + shift, run.Positions[i].Y);
+            // 同じ字の字形（合字・結合文字）のあいだには足さない
+            bool clusterEnd = i + 1 < count && clusters[i + 1] != clusters[i];
+            if (clusterEnd && clusters[i] < text.Length && IsLatinSpaced(text[clusters[i]])) shift += tracking;
+        }
+        return new ShapedRun(run.Glyphs, points, run.Width + shift);
+    }
+
+    /// <summary>
+    /// 全角の約物（句読点・括弧・「！」「？」などの全角の記号）か。約物半角（<c>punctHalf</c>）で半分の幅に詰める字。
+    /// </summary>
+    public static bool IsFullWidthPunct(char c) =>
+        c is '、' or '。' || (c >= '〈' && c <= '〟')
+        || (c >= '！' && c <= '／') || (c >= '：' && c <= '＠')
+        || (c >= '［' && c <= '｀') || (c >= '｛' && c <= '･');
+
+    /// <summary>
+    /// 欧文の字間（<c>latinTrackingEm</c>）を足す字か。欧文（英数字・半角の記号・欧文の引用符など。和文の書体で全角に組む
+    /// 記号類（矢印・図形・音符など U+2190〜U+2BFF）と「…」「‥」「※」「―」は除く）、全角の英数字、全角の約物（<see cref="IsFullWidthPunct"/>）。
+    /// </summary>
+    public static bool IsLatinSpaced(char c)
+    {
+        if (char.IsWhiteSpace(c)) return false;
+        if (IsFullWidthPunct(c)) return true;
+        if ((c >= '０' && c <= '９') || (c >= 'Ａ' && c <= 'Ｚ') || (c >= 'ａ' && c <= 'ｚ')) return true;
+        if (c is '―' or '‥' or '…' or '※') return false;
+        return c < '←' || (c > '⯿' && c < '⺀');
+    }
+
+    private ShapedRun ShapeGlyphs(string text, float fontSize, out int[] clusters)
+    {
         float scale = fontSize / _unitsPerEm;
         lock (_lock)
         {
             using var buffer = new HbBuffer();
             buffer.AddUtf16(text);
             buffer.GuessSegmentProperties();
-            _font.Shape(buffer, _solid ? SolidFeatures : Features);
+            _font.Shape(buffer, _punctHalf ? PunctHalfFeatures(text) : _solid ? SolidFeatures : Features);
 
             var infos = buffer.GlyphInfos;
             var positions = buffer.GlyphPositions;
             int count = infos.Length;
             var glyphs = new ushort[count];
             var points = new SKPoint[count];
-            for (int i = 0; i < count; i++) glyphs[i] = (ushort)infos[i].Codepoint;
+            clusters = new int[count];
+            for (int i = 0; i < count; i++)
+            {
+                glyphs[i] = (ushort)infos[i].Codepoint;
+                clusters[i] = (int)infos[i].Cluster;
+            }
 
             var keep = new bool[count];
             if (_keepLonePunctuation)
@@ -157,6 +232,20 @@ public sealed class OgTextShaper : IDisposable
             }
             if (UsesOpticalTightening)
                 return TightenByInk(glyphs, positions, fontSize, scale, keep);
+            // 小書きの仮名は、palt の字送りの差と位置のずれを割合だけ効かせる
+            var smallAdjust = new (float Advance, float Offset)[count];
+            if (_smallKanaPalt > 0f)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    int c = clusters[i];
+                    if (c < text.Length && IsSmallKana(text[c]))
+                    {
+                        var (da, dofs) = SmallKanaAdjust(text[c]);
+                        smallAdjust[i] = (da * scale * _smallKanaPalt, dofs * scale * _smallKanaPalt);
+                    }
+                }
+            }
 
             // 単独の「！」「？」は、詰め（palt）で狭まった字送りを全角に戻し、字形をその中央に置く。
             float x = 0f;
@@ -169,11 +258,46 @@ public sealed class OgTextShaper : IDisposable
                     shift = (fontSize - advance) / 2f;
                     advance = fontSize;
                 }
-                points[i] = new SKPoint(x + shift + positions[i].XOffset * scale, -positions[i].YOffset * scale);
-                x += advance;
+                points[i] = new SKPoint(x + shift + smallAdjust[i].Offset + positions[i].XOffset * scale, -positions[i].YOffset * scale);
+                x += advance + smallAdjust[i].Advance;
             }
             return new ShapedRun(glyphs, points, x);
         }
+    }
+
+    /// <summary>小書きの仮名（ぁぃぅぇぉっゃゅょゎゕゖ と片仮名の同じ字、片仮名の小書きの拡張 U+31F0〜U+31FF）か。</summary>
+    public static bool IsSmallKana(char c) =>
+        "ぁぃぅぇぉっゃゅょゎゕゖァィゥェォッャュョヮヵヶ".IndexOf(c) >= 0 || (c >= '\u31F0' && c <= '\u31FF');
+
+    /// <summary>
+    /// 小書きの仮名 1 字を palt で組んだときの、ベタとの字送りの差と位置のずれ（フォント単位）。
+    /// 組版のロックの中（<see cref="ShapeGlyphs"/>）から呼ぶ。
+    /// </summary>
+    private (int Advance, int Offset) SmallKanaAdjust(char c) => _smallKanaAdjust.GetOrAdd(c, ch =>
+    {
+        int Shape1(bool palt, out int offset)
+        {
+            using var b = new HbBuffer();
+            b.AddUtf16(ch.ToString());
+            b.GuessSegmentProperties();
+            _font.Shape(b, new[] { new Feature(Tag.Parse("kern"), 0u), new Feature(Tag.Parse("palt"), palt ? 1u : 0u) });
+            offset = b.GlyphPositions.Length > 0 ? b.GlyphPositions[0].XOffset : 0;
+            return b.GlyphPositions.Length > 0 ? b.GlyphPositions[0].XAdvance : 0;
+        }
+        int a0 = Shape1(false, out int o0), a1 = Shape1(true, out int o1);
+        return (a1 - a0, o1 - o0);
+    });
+
+    /// <summary>
+    /// 約物半角のベタ組みの OpenType 機能。kern を切り、合字と、全角の約物の字の範囲だけの palt
+    /// （<see cref="SolidFeatures"/> の文字列全体の palt の打ち消しは、範囲の指定とぶつかるので入れない。palt は既定では効かない）。
+    /// </summary>
+    private static Feature[] PunctHalfFeatures(string text)
+    {
+        var features = new List<Feature> { new(Tag.Parse("kern"), 0u), new(Tag.Parse("liga")), new(Tag.Parse("calt")) };
+        for (int i = 0; i < text.Length; i++)
+            if (IsFullWidthPunct(text[i])) features.Add(new Feature(Tag.Parse("palt"), 1u, (uint)i, (uint)i + 1));
+        return features.ToArray();
     }
 
     /// <summary>text[index] が、前後に「！」「？」の続かない全角の「！」「？」か。</summary>

@@ -10431,18 +10431,15 @@ body.has-art-track-bar {
 .music-credit-block .music-credit-group-heading:first-child {
   margin-top: 8px;
 }
-/* 楽曲・劇伴・商品詳細のクレジット欄：役職バッジ + 名前の 1 ユニットの中では改行しない。
-   狭い画面で 1 ユニットが画面幅を超えるときだけ折り返しを許す（横スクロールを出さないため）。 */
+/* 楽曲・劇伴・商品詳細のクレジット欄：役職バッジ + 名前の 1 ユニットを行（flex の折り返し）の 1 項目として並べる。
+   ユニットは収まる限り分かれずに次の行へ送られ、ユニット自体が行幅を超えるとき（連名の長いスペシャルサンクスなど）
+   だけ、ユニットの中で折り返す（横にはみ出さないため）。 */
 .music-credit-row {
   margin: 6px 0 10px;
 }
 .music-credit-unit {
-  white-space: nowrap;
-}
-@media (max-width: 640px) {
-  .music-credit-unit {
-    white-space: normal;
-  }
+  min-width: 0;
+  max-width: 100%;
 }
 /* 区分の中の小見出し（歌 / 劇伴 / 音盤）。 */
 .music-credit-sub-heading {

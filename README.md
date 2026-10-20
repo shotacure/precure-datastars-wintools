@@ -1429,7 +1429,7 @@ series_relation_kinds ──┘    │            │
 | `render_font_name` | VARCHAR(64) NULL | 見本・テロップ画像を描く手元の書体（Windows の書体名。「A-SK ファン蘭 Min2 E」） |
 | `render_family_name` | VARCHAR(64) NULL | 見本を描く書体の名前（「石井ゴシック」）。NULL なら `family_name` と同じ |
 | `render_weight` | VARCHAR(16) NULL | 描く書体のウェイト。書体名かウェイトが放送の書体と違えば代用 |
-| `render_note` | VARCHAR(128) NULL | 見本に添える注記（「見本は改刻版の石井ゴシック B で描いています」）。NULL なら、代用のときだけ「見本は ○○ で代用（放送は △△）」を自動で出す |
+| `render_note` | VARCHAR(128) NULL | 見本に添える注記の述部（「改刻版の石井ゴシック B で描いています」）。主語はサイトが付ける（一覧は「組見本は」、書体のページは「書体見本と組見本は」）。NULL なら、代用のときだけ「組見本は「○○」で代用（作品中では「△△」）」を自動で出す |
 | `license_kind` | VARCHAR(16) NULL | 描く書体のライセンス。`FONTWORKS_LETS`（フォントワークス LETS）/ `MORISAWA_FONTS`（Morisawa Fonts。写研の A-SK 書体もこちら） |
 | `product_url` | VARCHAR(1024) NULL | 提供元の製品ページ（モリサワ・フォントワークス） |
 | `archive_url` | VARCHAR(1024) NULL | 写研アーカイブの書体のページ |

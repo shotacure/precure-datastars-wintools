@@ -145,7 +145,7 @@ public sealed class FontsGenerator
         Vendor = VendorLabel(font),
         WeightUnknown = usage.IsWeightUnknown,
         ModificationNote = usage.ModificationNote ?? "",
-        SubstituteNote = SubstituteNote(font, usage.IsWeightUnknown)
+        SubstituteNote = SubstituteNote(font, usage.IsWeightUnknown, IndexSampleSubject)
     };
 
     // ════════════════════ /fonts/{書体名とウェイト}/ ════════════════════
@@ -243,7 +243,7 @@ public sealed class FontsGenerator
             SpecimenSrc = specimen?.Src ?? "",
             SpecimenWidth = specimen?.Width ?? 0,
             SpecimenHeight = specimen?.Height ?? 0,
-            SubstituteNote = SubstituteNote(font, weightUnknown: false),
+            SubstituteNote = SubstituteNote(font, weightUnknown: false, DetailSampleSubject),
             ArchiveUrl = font.ArchiveUrl ?? "",
             ProductUrl = font.ProductUrl ?? "",
             // ボタンは「書体見本（フォントワークス）」のように、何のページかと提供元を書く。見本を代用で描く書体は、
@@ -276,23 +276,30 @@ public sealed class FontsGenerator
         null or "" => 0, "L" => 1, "R" => 2, "M" => 3, "D" => 4, "DB" => 5, "B" => 6, "EB" => 7, "E" => 8, "H" => 9, "U" => 10, "UB" => 11, _ => 12
     };
 
+    /// <summary>一覧（/fonts/）の注記の主語。一覧に並ぶのは場面の組見本だけ。</summary>
+    private const string IndexSampleSubject = "組見本";
+
+    /// <summary>書体のページの注記の主語。書体のページには書体見本と場面の組見本の両方が並ぶ。</summary>
+    private const string DetailSampleSubject = "書体見本と組見本";
+
     /// <summary>
-    /// 見本に添える注記。書体に注記（<see cref="FontFace.RenderNote"/>。改刻版で描くときなど）があればそれ、
-    /// ウェイトの分からない行は「ウェイト不明。サンプルは「○○」で作成」、放送と別のウェイト・書体名で描くときは
-    /// 「サンプルは別ウェイトの「○○」で代用（作品中では「△△」）」。どれでもなければ空文字。
+    /// 見本に添える注記。主語（<paramref name="subject"/>。一覧は「組見本」、書体のページは「書体見本と組見本」）に続けて、
+    /// 書体に注記（<see cref="FontFace.RenderNote"/>。改刻版で描くときなど。主語を除いた述部）があれば「組見本は改刻版の○○で描いています」、
+    /// ウェイトの分からない行は「ウェイト不明。組見本は「○○」で作成」、放送と別のウェイト・書体名で描くときは
+    /// 「組見本は別ウェイトの「○○」で代用（作品中では「△△」）」。どれでもなければ空文字。
     /// </summary>
-    private static string SubstituteNote(FontFace font, bool weightUnknown)
+    private static string SubstituteNote(FontFace font, bool weightUnknown, string subject)
     {
         if (string.IsNullOrWhiteSpace(font.RenderFontName)) return "";
-        if (!string.IsNullOrWhiteSpace(font.RenderNote)) return font.RenderNote;
+        if (!string.IsNullOrWhiteSpace(font.RenderNote)) return $"{subject}は{font.RenderNote}";
         string renderName = font.RenderDisplayName;
         if (weightUnknown)
-            return renderName != font.FamilyName ? $"ウェイト不明。サンプルは「{renderName}」で作成" : "";
+            return renderName != font.FamilyName ? $"ウェイト不明。{subject}は「{renderName}」で作成" : "";
         if (!font.IsRenderSubstitute) return "";
         bool sameFamily = string.Equals(font.EffectiveRenderFamilyName, font.FamilyName, StringComparison.Ordinal);
         return sameFamily
-            ? $"サンプルは別ウェイトの「{renderName}」で代用（作品中では「{font.DisplayName}」）"
-            : $"サンプルは「{renderName}」で代用（作品中では「{font.DisplayName}」）";
+            ? $"{subject}は別ウェイトの「{renderName}」で代用（作品中では「{font.DisplayName}」）"
+            : $"{subject}は「{renderName}」で代用（作品中では「{font.DisplayName}」）";
     }
 
     /// <summary>製品ページの提供元の名前（リンクの名前の括弧の中）。</summary>

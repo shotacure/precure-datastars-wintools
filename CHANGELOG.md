@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：フォントのページの「サンプル」を「見本」にそろえた**（`FontsGenerator`・`fonts-index.sbn`・`_fonts-notes.sbn`）：一覧（`/fonts/`）のリード文と書体の注記は「組見本」、書体のページの末尾の注意書きと注記は「書体見本と組見本」を主語にする。`fonts.render_note` は主語を除いた述部を持ち、主語はページに合わせてサイトが付ける（`db/migrations/v1.19.1_fonts_render_note_predicate.sql` で列の説明を更新）。
 - **サイト：フォントのページを本番でも作り、ナビに「フォント」を出すようにした**（`SiteBuilderPipeline`・`PageRenderer`・`PolicyPagesGenerator`・`disclaimer.sbn`）：本番ビルドでフォントのページを作らずナビからも外していた分岐を外した。免責事項は本番でも「サブタイトル画像と書体の見本について」を出し、最終改定日を 2026年10月20日にした。
 
 ### v1.19.0 (2026-10-20)

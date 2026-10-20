@@ -343,7 +343,7 @@ CREATE TABLE `fonts` (
   `render_font_name`  varchar(64)   DEFAULT NULL COMMENT '見本・テロップ画像を描く手元の書体（Windows の書体名）。NULL なら描かない',
   `render_family_name` varchar(64)   DEFAULT NULL COMMENT '見本を描く書体の名前（NULL なら family_name と同じ）',
   `render_weight`     varchar(16)   DEFAULT NULL COMMENT '描く書体のウェイト。書体名かウェイトが放送の書体と違えば代用としてサイトに明記する',
-  `render_note`       varchar(128)  DEFAULT NULL COMMENT '見本に添える注記（NULL なら、書体名かウェイトが違うときに「代用」の文を自動で出す）',
+  `render_note`       varchar(128)  DEFAULT NULL COMMENT '見本に添える注記の述部（主語「組見本は」「書体見本と組見本は」はサイトが付ける。NULL なら、書体名かウェイトが違うときに「代用」の文を自動で出す）',
   `license_kind`      varchar(16)   DEFAULT NULL COMMENT '描く書体のライセンス FONTWORKS_LETS / MORISAWA_FONTS',
   `product_url`       varchar(1024) DEFAULT NULL COMMENT '提供元の製品ページ（モリサワ・フォントワークス）',
   `archive_url`       varchar(1024) DEFAULT NULL COMMENT '写研アーカイブの書体のページ',

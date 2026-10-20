@@ -192,16 +192,55 @@
       <span class="staff-badge-group">{{~ if (array.size s.SubRoleLinks) > 0 ~}}{{## 統合行「絵コンテ・演出」：バッジを 2 つ並べる ##}}{{~ for sr in s.SubRoleLinks ~}}{{~ if sr.Url != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ sr.Code }}" href="{{ sr.Url }}">{{ sr.Label | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ sr.Code }}">{{ sr.Label | html.escape }}</span>{{~ end ~}}{{~ end ~}}{{~ else if s.RoleUrl != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ s.RoleCode }}" href="{{ s.RoleUrl }}">{{ s.RoleLabel | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ s.RoleCode }}">{{ s.RoleLabel | html.escape }}</span>{{~ end ~}}{{ s.NamesLine }}</span>
     </div>
     {{~ end ~}}
-    {{## チーフの組み合わせの通算回数。演出と作画監督 / 脚本・演出・作画監督の 2 行で、
-         構成役職が揃わない回は行ごと出ない。Html はリンク化済みの断片なので html.escape はかけない。
-         数えているのは収録済みのクレジットの範囲なので、その断りを添える。 ##}}
+    {{## チーフの組み合わせの通算回数（絵コンテと演出 / 演出と作画監督 / 脚本・演出・作画監督）。構成役職が揃わない組み合わせは出ない。
+         閉じた状態（summary）は 1 組 1 かたまりで「[札]×[札] N 回目」（初回は「初顔合わせ」、兼任は札を並べて「兼任」）。
+         開くと組み合わせごとのカード：札と「M 回中 N 回目」、顔ぶれ、放送順の玉の列（各話へのリンク。今回を大きく）、
+         前回・次回のミニカード（ページ上部の前後話カードの小型版）。数え方の断りは開いたときだけ「閉じる」の行の左に出す。
+         NamesHtml はリンク化済みの断片なので html.escape はかけない。 ##}}
     {{~ if (array.size StaffCombos) > 0 ~}}
-    <ul class="staff-combo-list">
-      {{~ for c in StaffCombos ~}}
-      <li><span class="staff-combo-label">{{ c.Label | html.escape }}の組み合わせ</span><span class="staff-combo-value">{{ c.Html }}</span></li>
-      {{~ end ~}}
-    </ul>
-    <p class="section-refpoint staff-combo-note">（収録済みのクレジットの範囲で数えています）</p>
+    <details class="staff-combos">
+      <summary>
+        <ul class="staff-combo-minis">
+          {{~ for c in StaffCombos ~}}
+          <li class="staff-combo-mini" aria-label="{{ c.Label | html.escape }}"><span class="staff-combo-mini-roles">{{~ for b in c.Badges ~}}{{~ if !for.first && !c.IsSolo ~}}<span class="staff-combo-x">×</span>{{~ end ~}}<span class="role-badge role-badge-xs" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}{{~ if c.IsSolo ~}}<span class="staff-combo-solo">兼任</span>{{~ end ~}}</span>{{~ if c.IsFirst ~}}<span class="staff-combo-first">初顔合わせ</span>{{~ else ~}}<span class="staff-combo-count"><b>{{ c.Ordinal }}</b> 回目</span>{{~ end ~}}</li>
+          {{~ end ~}}
+        </ul>
+        <span class="section-refpoint staff-combo-note">（収録済みのクレジットの範囲で数えています）</span>
+        <span class="staff-combos-toggle"><span class="is-closed-label">くわしく</span><span class="is-open-label">閉じる</span></span>
+      </summary>
+      <div class="staff-combo-cards">
+        {{~ for c in StaffCombos ~}}
+        <article class="staff-combo-card" aria-label="{{ c.Label | html.escape }}">
+          <div class="staff-combo-head">
+            <div class="staff-combo-roles">{{~ for b in c.Badges ~}}{{~ if !for.first && !c.IsSolo ~}}<span class="staff-combo-x">×</span>{{~ end ~}}{{~ if b.Url != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ b.Code }}" href="{{ b.Url }}">{{ b.Label | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}{{~ end ~}}</div>
+            <div class="staff-combo-ordinal">{{~ if c.Total > 1 ~}}<span class="staff-combo-total">{{ c.Total }} 回中</span>{{~ end ~}}{{~ if c.IsFirst ~}}<span class="staff-combo-first-big">初顔合わせ</span>{{~ else ~}}<b>{{ c.Ordinal }}</b><span class="staff-combo-unit">回目</span>{{~ end ~}}</div>
+          </div>
+          <p class="staff-combo-names">{{ c.NamesHtml }}</p>
+          <ol class="staff-combo-beads{{ if c.IsDense }} is-dense{{ end }}">
+            {{~ for bd in c.Beads ~}}
+            {{~ if bd.IsGap ~}}
+            <li class="is-gap" aria-hidden="true">…</li>
+            {{~ else ~}}
+            <li class="{{ bd.State }}"><a href="{{ bd.Url }}" title="{{ bd.Label | html.escape }}" aria-label="{{ bd.Label | html.escape }}"{{ if bd.State == "is-current" }} aria-current="page"{{ end }}></a>{{~ if bd.YearLabel != "" ~}}<span class="staff-combo-year">{{ bd.YearLabel }}</span>{{~ end ~}}</li>
+            {{~ end ~}}
+            {{~ end ~}}
+          </ol>
+          <div class="staff-combo-nav">
+            {{~ if c.Prev ~}}
+            <a class="staff-combo-nav-card is-prev" href="{{ c.Prev.Url }}" title="{{ c.Prev.Title | html.escape }}"><span class="staff-combo-nav-dir">← 前回</span>{{~ if c.Prev.SeriesTitle != "" ~}}<span class="staff-combo-nav-series">{{ c.Prev.SeriesTitle | html.escape }}</span>{{~ end ~}}<span class="staff-combo-nav-ep">{{ c.Prev.EpisodeLabel }}</span></a>
+            {{~ else ~}}
+            <span class="staff-combo-nav-card is-prev disabled" aria-disabled="true"><span class="staff-combo-nav-dir">← 前回</span><span class="staff-combo-nav-ep">―</span></span>
+            {{~ end ~}}
+            {{~ if c.Next ~}}
+            <a class="staff-combo-nav-card is-next" href="{{ c.Next.Url }}" title="{{ c.Next.Title | html.escape }}"><span class="staff-combo-nav-dir">次回 →</span>{{~ if c.Next.SeriesTitle != "" ~}}<span class="staff-combo-nav-series">{{ c.Next.SeriesTitle | html.escape }}</span>{{~ end ~}}<span class="staff-combo-nav-ep">{{ c.Next.EpisodeLabel }}</span></a>
+            {{~ else ~}}
+            <span class="staff-combo-nav-card is-next disabled" aria-disabled="true"><span class="staff-combo-nav-dir">次回 →</span><span class="staff-combo-nav-ep">―</span></span>
+            {{~ end ~}}
+          </div>
+        </article>
+        {{~ end ~}}
+      </div>
+    </details>
     {{~ end ~}}
   </section>
   {{~ end ~}}

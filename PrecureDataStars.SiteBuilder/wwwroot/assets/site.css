@@ -10768,33 +10768,382 @@ body.has-art-track-bar {
 }
 
 /* ──────── チーフの組み合わせの通算回数（エピソード詳細のスタッフセクション） ────────
-   #staff は flex（セットを横に並べる）なので、リストと注記は全幅の子にして下に回す。 */
-#staff .staff-combo-list {
+   #staff は flex（セットを横に並べる）なので、開閉の枠は全幅の子にして下に回す。
+   閉じた状態は 1 組 1 かたまり（小さな札 × 札・「N 回目」）を区切り線で横に流し、右端に「くわしく」。
+   開くとかたまりは隠れ、「閉じる」の行の左に数え方の断り、その下に組み合わせごとのカード。 */
+#staff .staff-combos {
   flex-basis: 100%;
-  list-style: none;
+  /* スマホ幅で #staff が縦並び・左寄せ（align-items: flex-start）になっても、枠は全幅に伸ばす。 */
+  align-self: stretch;
   margin: 0.4em 0 0;
   padding: 0.6em 0 0;
   border-top: 1px dashed var(--border);
-  font-size: 0.9em;
-  display: grid;
-  gap: 0.25em;
-}
-#staff .staff-combo-list li {
   white-space: normal;
 }
-.staff-combo-label {
-  color: var(--muted);
-  margin-right: 0.5em;
+.staff-combos > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 2px;
+  border-radius: 6px;
 }
-.staff-combo-label::after {
-  content: "：";
+.staff-combos > summary::-webkit-details-marker {
+  display: none;
 }
-.staff-combo-value b {
-  font-weight: 700;
+.staff-combos > summary:focus-visible {
+  outline: 2px solid var(--accent-purple);
+  outline-offset: 2px;
 }
-#staff .staff-combo-note {
-  flex-basis: 100%;
+.staff-combo-minis {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.staff-combos[open] .staff-combo-minis {
+  display: none;
+}
+.staff-combo-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 0.9em;
+}
+.staff-combo-mini + .staff-combo-mini::before {
+  content: "";
+  align-self: stretch;
+  width: 1px;
+  background: var(--border);
+  margin: 3px 6px 3px 0;
+}
+/* スマホ幅：折り返した行の頭に区切り線が残らないよう、1 組 1 行に縦に並べて区切り線を出さない。 */
+@media (max-width: 640px) {
+  .staff-combo-minis {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .staff-combo-mini + .staff-combo-mini::before {
+    display: none;
+  }
+}
+.staff-combo-mini-roles {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+/* 閉じた状態の札は、スタッフ行の札よりさらに一回り小さく。 */
+.role-badge-xs {
+  font-size: 0.66em;
+  padding: 0 4px;
+  line-height: 1.5;
+  border-radius: 7px;
+}
+.staff-combo-x {
+  color: var(--muted);
+  font-size: 0.7em;
+  margin: 0 1px;
+}
+.staff-combo-solo {
+  color: var(--muted);
+  font-size: 0.72em;
+  margin-left: 3px;
+}
+.staff-combo-count {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.staff-combo-count b {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-pink);
+  font-size: 1.15em;
+}
+.staff-combo-first {
+  font-size: 0.78em;
+  font-weight: 700;
+  color: var(--accent-pink);
+}
+/* 数え方の断りは開いたときだけ、「閉じる」の行の左に出す（「閉じる」1 語だけの空いた行にしない）。 */
+.staff-combos .staff-combo-note {
+  display: none;
+  margin: 0;
+  min-width: 0;
+  text-align: left;
+}
+.staff-combos[open] .staff-combo-note {
+  display: inline;
+}
+.staff-combos-toggle {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 0.8em;
+  color: var(--muted);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.staff-combos-toggle::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+}
+.staff-combos[open] .staff-combos-toggle::after {
+  transform: rotate(-135deg) translate(-1px, -1px);
+}
+.staff-combos > summary:hover .staff-combos-toggle {
+  color: var(--accent-pink);
+}
+.staff-combos .is-open-label,
+.staff-combos[open] .is-closed-label {
+  display: none;
+}
+.staff-combos[open] .is-open-label {
+  display: inline;
+}
+
+/* 開いた状態：組み合わせごとのカード（広い画面は横に並べ、狭い画面は 1 列）。 */
+.staff-combo-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+.staff-combo-card {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+/* 札の並びは 1 行のまま崩さず、回数と並べて収まらないときは回数のほうを次の行の右端に回す。 */
+.staff-combo-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 8px;
+}
+.staff-combo-roles {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.staff-combo-head .staff-combo-ordinal {
+  margin-left: auto;
+}
+.staff-combo-roles .staff-combo-x {
+  font-size: 0.8em;
+}
+/* 通算：1 行で「11 回中 9 回目」。数字だけ等幅で大きくピンク、ほかは小さく、ベースラインをそろえる。 */
+.staff-combo-ordinal {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.staff-combo-total {
+  font-size: 0.72em;
+  color: var(--muted);
+  margin-right: 3px;
+}
+.staff-combo-ordinal b {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.75em;
+  font-weight: 700;
+  color: var(--accent-pink);
+  letter-spacing: -0.02em;
+}
+.staff-combo-unit {
+  font-size: 0.78em;
+  font-weight: 600;
+}
+.staff-combo-first-big {
+  font-size: 0.95em;
+  font-weight: 700;
+  color: var(--accent-pink);
+}
+.staff-combo-names {
+  margin: -2px 0 0;
+  font-weight: 600;
+  font-size: 0.95em;
+  overflow-wrap: anywhere;
+}
+.staff-combo-names .staff-combo-x {
+  font-size: 0.85em;
+  font-weight: 400;
+  margin: 0 4px;
+}
+.staff-combo-both {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.88em;
+}
+
+/* 放送順の玉の列。等間隔に並べ、年が変わる玉の下に年を出す。今回だけ大きくピンク、前は塗り、後は白抜き。
+   玉の高さを今回の玉にそろえて、年の札の高さを一定にする。 */
+.staff-combo-beads {
+  --bead: #b6aecb;
+  --bead-line: #e2deea;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 16px 4px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+}
+.staff-combo-beads::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--bead-line);
+  border-radius: 1px;
+}
+.staff-combo-beads li {
+  position: relative;
+  flex: 0 0 auto;
+  height: 16px;
+  display: grid;
+  place-items: center;
+}
+/* 1 回きりの組み合わせ（初顔合わせ）は、玉を列の中央に置く。 */
+.staff-combo-beads li:only-child {
+  margin: 0 auto;
+}
+.staff-combo-beads a {
+  display: block;
+  width: var(--d, 11px);
+  height: var(--d, 11px);
+  border-radius: 50%;
+  background: var(--bead);
+  border: 2px solid var(--bead);
+  transition: transform 0.12s;
+}
+.staff-combo-beads a:hover {
+  transform: scale(1.25);
+}
+.staff-combo-beads li.is-future a {
+  background: var(--bg);
+}
+.staff-combo-beads li.is-current a {
+  --d: 16px;
+  background: var(--accent-pink);
+  border-color: var(--accent-pink);
+  box-shadow: 0 0 0 4px rgba(216, 27, 96, 0.18);
+}
+.staff-combo-beads li.is-current::before {
+  content: "今回";
+  position: absolute;
+  bottom: calc(100% + 4px);
+  font-size: 0.68em;
+  font-weight: 700;
+  color: var(--accent-pink);
+  white-space: nowrap;
+}
+.staff-combo-beads li.is-gap {
+  font-size: 0.7em;
+  color: var(--muted);
+  background: var(--bg);
+  padding: 0 1px;
+}
+.staff-combo-year {
+  position: absolute;
+  top: calc(100% + 3px);
+  font-family: var(--font-num);
+  font-size: 0.66em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.staff-combo-beads.is-dense a {
+  --d: 7px;
+  border-width: 1px;
+}
+.staff-combo-beads.is-dense li.is-current a {
+  --d: 13px;
+}
+
+/* 前回・次回：ページ上部の前後話カード（.ep-prev-next-card）のミニ版。
+   向き → （別の作品の話だけ作品名を 1 行に省略して）→ 話数。 */
+.staff-combo-nav {
+  display: flex;
+  gap: 8px;
+}
+.staff-combo-nav-card {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 9px 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--fg);
+  line-height: 1.35;
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+a.staff-combo-nav-card:hover {
+  border-color: var(--accent-pink);
+  box-shadow: 0 2px 6px rgba(233, 30, 99, 0.12);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.staff-combo-nav-card.is-next {
+  text-align: right;
+}
+.staff-combo-nav-card.disabled {
+  background: #fafafa;
+  border-color: #ececec;
+  color: var(--border);
+}
+.staff-combo-nav-dir {
+  font-size: 0.68em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.staff-combo-nav-card.disabled .staff-combo-nav-dir {
+  color: var(--border);
+}
+.staff-combo-nav-series {
+  font-size: 0.68em;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.staff-combo-nav-ep {
+  font-size: 0.85em;
+  font-weight: 600;
+  white-space: nowrap;
+  margin-top: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .staff-combo-beads a,
+  .staff-combo-nav-card {
+    transition: none;
+  }
 }
 
 /* ──────── 歴代記録（/stats/records/） ────────

@@ -172,15 +172,11 @@ public sealed class SiteBuilderPipeline
         new ArticlesGenerator(ctx, pageRenderer).Generate();
         reporter.EndSection();
 
-        // フォントのページ（/fonts/ ＋ /fonts/{書体}/）。作品の書体の表と書体のマスタ（BuildContext 由来）だけで作り、
-        // 書体の見本はサブタイトルのテロップ画像と同じ作り置きで描く。書体のデータがそろうまで本番では作らない
-        // （ナビからも PageRenderer.ProductionHiddenNavUrls で外す）。
-        if (!config.IsProductionMode)
-        {
-            reporter.BeginSection("fonts");
-            new FontsGenerator(ctx, pageRenderer).Generate();
-            reporter.EndSection();
-        }
+        // フォントのページ（/fonts/ ＋ /fonts/{書体とウェイト}/）。作品の書体の表と書体のマスタ（BuildContext 由来）だけで作り、
+        // 書体の見本はサブタイトルのテロップ画像と同じ作り置きで描く。
+        reporter.BeginSection("fonts");
+        new FontsGenerator(ctx, pageRenderer).Generate();
+        reporter.EndSection();
 
         // 法律・運営情報系の補助ページ群。
         // プライバシーポリシー・免責事項・お問い合わせの 3 ページを生成し、

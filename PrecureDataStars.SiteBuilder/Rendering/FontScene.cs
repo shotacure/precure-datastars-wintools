@@ -3,7 +3,7 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// <summary>
 /// フォントのページの場面の画像（OP・ED の画面を模したもの）の材料。画面の大きさは放送の画面のまま
 /// （<paramref name="Width"/>：16:9 なら 1920、4:3 なら 1440。高さはどちらも 1080）で、
-/// 中間の灰色の地にクレジットと歌詞のテロップ（<paramref name="Pieces"/>）を測った位置・大きさで置く。
+/// 灰色の市松模様の地にクレジットと歌詞のテロップ（<paramref name="Pieces"/>）を測った位置・大きさで置く。
 /// </summary>
 public sealed record FontScene(int Width, IReadOnlyList<FontScenePiece> Pieces)
 {

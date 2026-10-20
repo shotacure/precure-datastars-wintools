@@ -7,14 +7,14 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// フォントのページ（<c>/fonts/</c>）と書体名ごとのページ（<c>/fonts/{書体名}/</c>）を生成する。
+/// フォントのページ（<c>/fonts/</c>）と書体のウェイトごとのページ（<c>/fonts/{書体名とウェイト}/</c>）を生成する。
 /// 材料は作品で使われた書体のマスタ（<see cref="BuildContext.FontById"/>）と、作品のどこにどの書体を使ったか
 /// （<see cref="BuildContext.FontUsages"/>）。DB には触れない。
 /// <list type="bullet">
 ///   <item><c>/fonts/</c>：作品ごと（放送開始順）に、本編に流れる順（OP・サブタイトル・ED の時期ごと）の場面の見本と、その下に使われた書体（リンク）を並べる。
 ///     見本を押すと大きな画像を重ねて出す。</item>
-///   <item><c>/fonts/{書体名}/</c>：ウェイトごとの節に、書体見本・外部リンク・その書体が使われた場面の見本を並べる。同じ作品の場面で
-///     装飾の見た目がほとんど同じものは 1 つにまとめる。</item>
+///   <item><c>/fonts/{書体名とウェイト}/</c>：1 ウェイト 1 ページ。見出しの下に同じ書体のほかのウェイトへのリンク、書体見本・外部リンク・
+///     その書体が使われた場面の見本を並べる。同じ作品の場面で装飾の見た目がほとんど同じものは 1 つにまとめる。</item>
 /// </list>
 /// 本放送だけの行は、装飾の値がそろうまで出さない。ルビの書体は親字と違うときだけ添える。
 /// </summary>
@@ -48,11 +48,14 @@ public sealed class FontsGenerator
 
         GenerateIndex(sections);
         var families = usages.Select(u => _ctx.FontById[u.FontId]).DistinctBy(f => f.FontId)
-            .GroupBy(f => f.PageFamilyName, StringComparer.Ordinal).ToList();
+            .GroupBy(f => f.PageFamilyName, StringComparer.Ordinal)
+            .Select(g => g.OrderBy(f => WeightOrder(f.Weight)).ThenBy(f => FamilyWeightOrder(f.FamilyName)).ToList()).ToList();
         foreach (var family in families)
-            GenerateFamily(family.OrderBy(f => WeightOrder(f.Weight)).ThenBy(f => FamilyWeightOrder(f.FamilyName)).ToList(), sections);
+            foreach (var font in family)
+                GenerateFont(font, family, sections);
 
-        _ctx.Logger.Success($"fonts: {1 + families.Count} ページ（作品 {sections.Count}・書体名 {families.Count}）");
+        int fontCount = families.Sum(f => f.Count);
+        _ctx.Logger.Success($"fonts: {1 + fontCount} ページ（作品 {sections.Count}・書体 {fontCount}）");
     }
 
     // ════════════════════ /fonts/ ════════════════════
@@ -63,11 +66,9 @@ public sealed class FontsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代タイトル字幕フォント",
-            OgCard = new OgCardSpec(Kicker: "", Title: "歴代タイトル字幕フォント")
-            {
-                Subtitle = "OP・ED のクレジットと歌詞、サブタイトルに使われた書体を、作品ごとに見本つきでまとめました。",
-                Badges = new[] { new OgCardBadge("作品", $"{content.SeriesSections.Count}") }
-            },
+            // カードは見出しを大きく組む標準の組み方（数は載せず、リード文で中身を伝える。リード文は文の切れ目で改行する）
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代タイトル字幕フォント",
+                Subtitle: "歴代プリキュアTVシリーズのOP・EDのクレジットと歌詞、\nサブタイトルの字幕フォントの一覧です。\n書体見本のほか、公式と同じフォントを使用した組見本もあります。"),
             MetaDescription = $"歴代プリキュアのタイトル字幕フォント一覧。OP・ED のクレジットと歌詞、サブタイトルに使われた書体を、{content.SeriesSections.Count} 作品ごとに放送の画面を模した見本つきでまとめました。",
             Breadcrumbs = new[]
             {
@@ -147,36 +148,47 @@ public sealed class FontsGenerator
         SubstituteNote = SubstituteNote(font, usage.IsWeightUnknown)
     };
 
-    // ════════════════════ /fonts/{書体名}/ ════════════════════
+    // ════════════════════ /fonts/{書体名とウェイト}/ ════════════════════
 
-    private void GenerateFamily(IReadOnlyList<FontFace> weights, IReadOnlyList<FontSeriesSection> sections)
+    /// <summary>書体のウェイト 1 つのページ。<paramref name="family"/> は同じ書体名（まとめる名前）のウェイトの並び（自分を含む）。</summary>
+    private void GenerateFont(FontFace first, IReadOnlyList<FontFace> family, IReadOnlyList<FontSeriesSection> sections)
     {
-        var first = weights[0];
-        string url = FontSampleRequests.FamilyUrl(first);
-        var weightSections = weights.Select(font => BuildWeightSection(font, sections)).ToList();
+        string url = FontSampleRequests.FontUrl(first);
+        var weightSections = new List<FontWeightSection> { BuildWeightSection(first, sections) };
         string foundry = FontFoundries.Label(first.Foundry);
         int seriesCount = weightSections.SelectMany(w => w.Scenes).SelectMany(s => s.SeriesIds).Distinct().Count();
         var content = new FontFamilyModel
         {
-            Name = first.PageFamilyName,
+            Name = first.DisplayName,
             FoundryLabel = foundry,
             Weights = weightSections,
-            SeriesCount = seriesCount
+            SeriesCount = seriesCount,
+            OtherWeights = family.Where(f => f.FontId != first.FontId)
+                .Select(f => new FontChip { Name = f.DisplayName, Url = FontSampleRequests.FontUrl(f) }).ToList()
         };
         var layout = new LayoutModel
         {
-            PageTitle = $"{first.PageFamilyName}（フォント）",
-            OgCard = new OgCardSpec(Kicker: "フォント", Title: first.PageFamilyName)
+            PageTitle = $"{first.DisplayName}（フォント）",
+            // カードは右上の透かしに「フォント」、見出しに見本を描いた書体名とウェイト（代用で描く書体は代用の書体。作品で使われた書体名と代用の旨はページに出す）、
+            // その右にメーカー名（写研の書体は「写研・モリサワ」）、その下に書体見本と同じ字をその書体で装飾なしで並べる
+            // （左に「愛」「永」、右にひらがな・カタカナ・漢字 2 行）。描く書体の無い書体は見出しと説明文だけ
+            OgCard = new OgCardSpec(Kicker: "", Title: string.IsNullOrWhiteSpace(first.RenderFontName) ? first.DisplayName : first.RenderDisplayName,
+                Subtitle: string.IsNullOrWhiteSpace(first.RenderFontName) ? $"{foundry}の書体。歴代プリキュアで使われた作品と場所を、見本つきでまとめました。" : VendorLabel(first))
             {
-                Subtitle = $"{foundry}の書体。歴代プリキュアで使われた作品と場所を、見本つきでまとめました。",
-                Badges = new[] { new OgCardBadge("作品", $"{seriesCount}") }
+                Watermark = "フォント",
+                Specimen = string.IsNullOrWhiteSpace(first.RenderFontName) ? null : new OgCardSpecimen(first.RenderFontName, "愛永",
+                    new[]
+                    {
+                        FontSampleRequests.SpecimenTopRight[..8], FontSampleRequests.SpecimenTopRight[8..],
+                        FontSampleRequests.SpecimenBottomLeft[..8], FontSampleRequests.SpecimenBottomLeft[8..]
+                    })
             },
-            MetaDescription = $"{first.PageFamilyName}（{foundry}）が使われた歴代プリキュアの作品と場所（OP・ED のクレジットと歌詞、サブタイトル）を、書体見本と放送の画面を模した見本つきでまとめました。",
+            MetaDescription = $"{first.DisplayName}（{foundry}）が使われた歴代プリキュアの作品と場所（OP・ED のクレジットと歌詞、サブタイトル）を、書体見本と放送の画面を模した見本つきでまとめました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "フォント", Url = "/fonts/" },
-                new BreadcrumbItem { Label = first.PageFamilyName, Url = "" }
+                new BreadcrumbItem { Label = first.DisplayName, Url = "" }
             }
         };
         _page.RenderAndWrite(url, "fonts", "fonts-detail.sbn", content, layout);
@@ -228,17 +240,17 @@ public sealed class FontsGenerator
         return new FontWeightSection
         {
             Name = font.DisplayName,
-            Anchor = FontSampleRequests.WeightAnchor(font),
             SpecimenSrc = specimen?.Src ?? "",
             SpecimenWidth = specimen?.Width ?? 0,
             SpecimenHeight = specimen?.Height ?? 0,
             SubstituteNote = SubstituteNote(font, weightUnknown: false),
             ArchiveUrl = font.ArchiveUrl ?? "",
             ProductUrl = font.ProductUrl ?? "",
-            // 見本を代用で描く書体は、製品ページが代用の書体のものなので、どの書体のページかが分かるよう「モリサワ（ゴナ DB）」と書く。
+            // ボタンは「書体見本（フォントワークス）」のように、何のページかと提供元を書く。見本を代用で描く書体は、
+            // 製品ページが代用の書体のものなので、どの書体のページかが分かるよう「書体見本（モリサワ・ゴナ DB）」と書く。
             // 注記のある書体（改刻版で描くもの）は代用ではないので、提供元の名前だけ
             ProductLabel = productLabel == "" ? "" : font.IsRenderSubstitute && string.IsNullOrWhiteSpace(font.RenderNote)
-                ? $"{productLabel}（{font.RenderDisplayName}）" : productLabel,
+                ? $"書体見本（{productLabel}・{font.RenderDisplayName}）" : $"書体見本（{productLabel}）",
             Scenes = scenes
         };
     }
@@ -283,7 +295,7 @@ public sealed class FontsGenerator
             : $"サンプルは「{renderName}」で代用（作品中では「{font.DisplayName}」）";
     }
 
-    /// <summary>製品ページのリンクの名前（提供元）。</summary>
+    /// <summary>製品ページの提供元の名前（リンクの名前の括弧の中）。</summary>
     private static string ProductLabel(string? url)
     {
         if (string.IsNullOrEmpty(url)) return "";
@@ -354,13 +366,15 @@ public sealed class FontsGenerator
         public string Name { get; set; } = "";
         public string FoundryLabel { get; set; } = "";
         public int SeriesCount { get; set; }
+        /// <summary>このページの書体の節（1 つ）。</summary>
         public List<FontWeightSection> Weights { get; set; } = new();
+        /// <summary>同じ書体名のほかのウェイト（名前とページ）。</summary>
+        public List<FontChip> OtherWeights { get; set; } = new();
     }
 
     private sealed class FontWeightSection
     {
         public string Name { get; set; } = "";
-        public string Anchor { get; set; } = "";
         public string SpecimenSrc { get; set; } = "";
         public int SpecimenWidth { get; set; }
         public int SpecimenHeight { get; set; }

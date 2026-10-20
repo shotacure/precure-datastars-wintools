@@ -1,12 +1,14 @@
-{{## 書体名のページ /fonts/{書体名}/。FontsGenerator から FontFamilyModel { Name, FoundryLabel, Weights, SeriesCount } で渡る。
-     ウェイトごとの節（見出しは h2）に、書体見本（愛・永とサブタイトルで多く使われた字）、代用の旨、外部リンク、
+{{## 書体のウェイトごとのページ /fonts/{書体名とウェイト}/。FontsGenerator から FontFamilyModel { Name, FoundryLabel, Weights（1 つ）, SeriesCount, OtherWeights } で渡る。
+     見出しの下に同じ書体のほかのウェイトへのリンク、書体の節に書体見本（愛・永とサブタイトルで多く使われた字）、代用の旨、外部リンク、
      その書体が使われた場面の見本（同じ作品で見た目のほとんど同じ場面はまとめてある）を並べる。 ##}}
 <h1>{{ Name | html.escape }}</h1>
-<p class="muted page-subline">{{ FoundryLabel | html.escape }}の書体</p>
+<p class="muted page-subline">{{ FoundryLabel | html.escape }}</p>
+{{~ if OtherWeights.size > 0 ~}}
+<p class="fonts-other-weights">ほかのウェイト：{{~ for o in OtherWeights ~}}{{ if !for.first }}・{{ end }}<a href="{{ o.Url }}">{{ o.Name | html.escape }}</a>{{~ end ~}}</p>
+{{~ end ~}}
 
 {{~ for w in Weights ~}}
-<section class="fonts-weight-section" id="{{ w.Anchor }}">
-  <h2>{{ w.Name | html.escape }}</h2>
+<section class="fonts-weight-section">
   <div class="fonts-weight-head">
     {{~ if w.SpecimenSrc != "" ~}}
     <a class="fonts-specimen" href="{{ w.SpecimenSrc }}" data-fonts-viewer>

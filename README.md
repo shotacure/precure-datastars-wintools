@@ -1316,7 +1316,7 @@ series_relation_kinds ──┘    │            │
 | `name_en` | VARCHAR(64) | 英語名 |
 | `credit_attach_to` | ENUM('SERIES','EPISODE') | クレジット付与単位の宣言（既定 `EPISODE`） |
 
-初期投入は 6 種：`TV`（TVシリーズ）/ `MOVIE`（秋映画）/ `MOVIE_SHORT`（秋映画 併映）/ `SPRING`（春映画）/ `SPIN-OFF`（スピンオフ）/ `EVENT`（イベント＝3D シアター上映等の特設枠）。`credit_attach_to` は `TV` / `SPIN-OFF` が `EPISODE`、映画系 3 種と `EVENT` が `SERIES`（`EVENT` はエピソード概念を持たずシリーズ単位でクレジットを保持）。
+初期投入は 6 種：`TV`（TVシリーズ）/ `MOVIE`（秋映画）/ `MOVIE_SHORT`（秋映画 併映）/ `SPRING`（春映画）/ `SPIN-OFF`（スピンオフ）/ `EVENT`（イベント＝3D シアター上映等の特設枠）。`credit_attach_to` は `TV` / `SPIN-OFF` が `EPISODE`、映画系 3 種と `EVENT` が `SERIES`（`EVENT` はエピソード概念を持たずシリーズ単位でクレジットを保持）。サイトの種別欄と OGP カードの見出しは `name_ja` を出すが、`MOVIE_SHORT` のうち親との関係が `SEGMENT`（3 本立ての各作品）のものは、短編とは限らないので「秋映画(同時上映)」（`MOVIE` の `name_ja` に「(同時上映)」を添える）と出す（`SeriesGenerator.LookupKindLabel`）。
 
 #### `series_relation_kinds` — シリーズ関係種別マスタ
 

@@ -1729,10 +1729,18 @@ public sealed class SeriesGenerator
     /// シリーズの種別の表示用ラベル（series_kinds.name_ja）。映画の種別は公開の季節で呼び分けているので、
     /// 季節と公開月がずれた作品には実際の公開の季節を添える（延期などで公開時期が動いた作品のため）。
     /// 秋映画（併映を含む）が 9〜12 月以外の公開なら「（春公開）」、春映画が 6〜12 月の公開なら「（秋公開）」。
+    /// 3 本立ての各作品（MOVIE_SHORT のうち親との関係が SEGMENT のもの）は短編とは限らないので、
+    /// 「併映」ではなく、秋映画の名前に「(同時上映)」を添えて「秋映画(同時上映)」と呼ぶ。
     /// </summary>
     private string LookupKindLabel(Series series)
     {
         string label = _ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var kind) ? kind.NameJa : series.KindCode;
+        if (series.KindCode == "MOVIE_SHORT"
+            && string.Equals(series.RelationToParent, "SEGMENT", StringComparison.Ordinal))
+        {
+            string movieName = _ctx.SeriesKindByCode.TryGetValue("MOVIE", out var movieKind) ? movieKind.NameJa : "秋映画";
+            label = movieName + "(同時上映)";
+        }
         int month = series.StartDate.Month;
         if (series.KindCode is "MOVIE" or "MOVIE_SHORT" && month is < 9)
             return label + "（春公開）";

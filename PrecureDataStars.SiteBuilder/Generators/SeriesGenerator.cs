@@ -1373,7 +1373,9 @@ public sealed class SeriesGenerator
             RelatedWorks = relatedWorks,
             Parent = parent,
             KeyStaffSections = keyStaffSections,
-            Precures = precureRows,
+            // プリキュアの欄は TV 系（話を持つ作品）だけに出す。映画系はクレジットの声の出演で足りるので欄を出さない
+            // （一覧は説明文と構造化データの出演者には使う）。
+            Precures = hasEpisodes ? precureRows : Array.Empty<SeriesPrecureRow>(),
             MovieBgmCues = movieBgmRows,
             ThemeSongs = themeRows,
             CreditBlocks = creditBlocks,

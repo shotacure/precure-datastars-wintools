@@ -105,13 +105,18 @@ public sealed class ArticlesGenerator
                 PageTitle = a.Title,
                 MetaDescription = a.Description,
                 // 記事は本文の量を数で語れないので、種別と日付・タグで識別できるようにする。
+                // 見出しの下に前置き（description）を文章として流し込み、入り切らなければ最後の行を「…」で切る。
+                // タグは要約に高さを回すため「音楽・データ」のように 1 行にまとめて下に置く。
                 OgCard = new OgCardSpec(Kicker: "コラム", Title: a.Title)
                 {
                     KickerRight = a.DateLabel ?? "",
-                    Facts = (a.Tags ?? Array.Empty<string>())
-                        .Take(3)
-                        .Select(t => new OgCardFactLine("", t))
-                        .ToArray()
+                    InlineFacts = string.IsNullOrWhiteSpace(a.Description)
+                        ? Array.Empty<OgCardFactLine>()
+                        : new[] { new OgCardFactLine("", a.Description.Trim()) },
+                    InlineFactsProse = true,
+                    Facts = a.Tags is { Count: > 0 } tags
+                        ? new[] { new OgCardFactLine("", string.Join("・", tags.Take(3))) }
+                        : Array.Empty<OgCardFactLine>()
                 },
                 Breadcrumbs = new[]
                 {

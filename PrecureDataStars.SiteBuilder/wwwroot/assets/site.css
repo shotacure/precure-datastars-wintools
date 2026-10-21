@@ -1795,7 +1795,8 @@ a.series-card-children-title:hover {
   margin: 0;
   padding: 0;
 }
-/* 映画のタイトルカード：タイトルと同じ幅の透明な箱に、左下へ CJ マークの印、右下へ映倫審査番号を寄せる。 */
+/* 映画のタイトルカード：タイトルと同じ幅の透明な箱に、CJ マークの印と映倫審査番号を画面どおりの側へ寄せる。
+   既定は右下に並べる（CJ マークが映倫審査番号のすぐ左）。marks-split は CJ マークを左下、映倫審査番号を右下に分ける。 */
 .credit-section .film-title-card {
   display: inline-flex;
   flex-direction: column;
@@ -1803,9 +1804,20 @@ a.series-card-children-title:hover {
 .credit-section .film-title-marks {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  gap: 0.4em;
 }
-.credit-section .film-title-marks .film-rating {
-  margin-left: auto;
+.credit-section .film-title-marks.marks-split {
+  justify-content: space-between;
+}
+/* 映画の最後の画面：© の行と同じ幅の透明な箱に、CJ マークの印を © の上の行の右端へ寄せる。 */
+.credit-section .film-end-card {
+  display: inline-flex;
+  flex-direction: column;
+}
+.credit-section .film-end-marks {
+  display: flex;
+  justify-content: flex-end;
 }
 /* CJ マークの印（小さく丸囲みで出す）。 */
 .credit-section .cj-mark {

@@ -46,6 +46,12 @@ public sealed class Character
     /// <summary>Wikipedia 記事 URL（任意・内部メモ）。 サイト UI からはリンクしない方針で、将来 JSON-LD の sameAs 等での裏付け用途に温存する。</summary>
     public string? WikipediaUrl { get; set; }
 
+    /// <summary>
+    /// 個別ページを持つか（has_own_page）。<c>true</c> なら /characters/{名前}/ を持ち、
+    /// <c>false</c> なら最初に登場した作品の「その他のキャラクター」のページにまとめる。サイトはこの印だけで決める。
+    /// </summary>
+    public bool HasOwnPage { get; set; } = true;
+
     // ── 監査 ──
 
     public DateTime? CreatedAt { get; set; }

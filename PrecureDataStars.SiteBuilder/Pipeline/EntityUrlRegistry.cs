@@ -567,16 +567,17 @@ public sealed class EntityUrlRegistry
     }
 
     /// <summary>
-    /// 単発キャラを判定する。条件はすべて満たすこと：
-    /// プリキュア（character_kind='PRECURE'）でない / クレジット上の登場がちょうど 1 回
-    /// （TV 系は 1 話、映画系は 1 本）/ 歌唱の記録が無い / 家族関係を持たない（どちら向きでも）。
+    /// 単発キャラ（個別ページを持たず「その他のキャラクター」のページにまとめるキャラ）を決める。
+    /// キャラの印 <c>characters.has_own_page = 0</c> だけで決め、種別・歌唱・家族関係・登場回数は見ない。
+    /// 置き場所は声の出演での最初の登場（作品の開始日 → 話数の順。映画系は作品単位）。
+    /// 声の出演での登場が 1 つも無いキャラは、置き場所が無いので印にかかわらず個別ページのままにする。
     /// </summary>
     private static IEnumerable<(int CharacterId, GuestPlacement Placement)> DetectGuestCharacters(
         BuildContext ctx, CreditInvolvementIndex index, IReadOnlyList<Character> characters)
     {
         // character_id → そのキャラの名義で集まった登場（TV は (series, episode)、映画は (series, null)）。
         var appearances = new Dictionary<int, HashSet<(int SeriesId, int? EpisodeId)>>();
-        // 登場は声の出演のクレジットだけで数える（主題歌・挿入歌の歌唱は下の「歌唱の記録」で別に見る）。
+        // 登場は声の出演のクレジットだけで数える。
         foreach (var (aliasId, invs) in index.VoiceCastByCharacterAlias)
         {
             if (!ctx.CharacterAliasById.TryGetValue(aliasId, out var alias)) continue;
@@ -593,38 +594,20 @@ public sealed class EntityUrlRegistry
             }
         }
 
-        // 歌唱の記録があるキャラ（ユニットのキャラメンバーも含めて展開）。
-        var singers = new HashSet<int>();
-        foreach (var (_, recSingers) in ctx.SingersByRecording)
-        {
-            foreach (var s in recSingers)
-            {
-                foreach (var p in ctx.ExpandSingerParticipants(s))
-                {
-                    if (p.CharacterAliasId is int caId && ctx.CharacterAliasById.TryGetValue(caId, out var ca))
-                        singers.Add(ca.CharacterId);
-                }
-            }
-        }
-
-        // 家族関係を持つキャラ（関係の起点・相手のどちらでも）。
-        var withFamily = new HashSet<int>();
-        foreach (var (characterId, rels) in ctx.FamilyRelationsByCharacter)
-        {
-            if (rels.Count == 0) continue;
-            withFamily.Add(characterId);
-            foreach (var r in rels) withFamily.Add(r.RelatedCharacterId);
-        }
-
         foreach (var c in characters)
         {
-            if (string.Equals(c.CharacterKind, "PRECURE", StringComparison.Ordinal)) continue;
-            if (singers.Contains(c.CharacterId) || withFamily.Contains(c.CharacterId)) continue;
-            if (!appearances.TryGetValue(c.CharacterId, out var set) || set.Count != 1) continue;
+            if (c.HasOwnPage) continue;
+            if (!appearances.TryGetValue(c.CharacterId, out var set) || set.Count == 0) continue;
 
-            var (seriesId, episodeId) = set.First();
-            int? epNo = episodeId is int eid ? ctx.LookupEpisode(seriesId, eid)?.SeriesEpNo : null;
-            yield return (c.CharacterId, new GuestPlacement(seriesId, episodeId, epNo));
+            // 最初の登場：作品の開始日 → 話数（映画系は 0）→ 作品 ID の順で最も早いもの。
+            var first = set
+                .Select(a => (a.SeriesId, a.EpisodeId,
+                              EpNo: a.EpisodeId is int eid ? ctx.LookupEpisode(a.SeriesId, eid)?.SeriesEpNo : null))
+                .OrderBy(a => ctx.SeriesById[a.SeriesId].StartDate)
+                .ThenBy(a => a.EpNo ?? 0)
+                .ThenBy(a => a.SeriesId)
+                .First();
+            yield return (c.CharacterId, new GuestPlacement(first.SeriesId, first.EpisodeId, first.EpNo));
         }
     }
 }
@@ -645,7 +628,7 @@ internal sealed class PublishedSlugRow
     public int? EntityId { get; set; }
 }
 
-/// <summary>単発キャラの唯一の登場位置（映画系は EpisodeId / SeriesEpNo が null）。</summary>
+/// <summary>単発キャラを置く登場位置（声の出演での最初の登場。映画系は EpisodeId / SeriesEpNo が null）。</summary>
 public sealed record GuestPlacement(int SeriesId, int? EpisodeId, int? SeriesEpNo);
 
 /// <summary>旧 URL（末尾スラッシュ無しのパス。例 <c>/persons/123</c>、旧名の人物・キャラ・企業は <c>/people/{デコード済みスラッグ}</c>・<c>/characters/{デコード済みスラッグ}</c>・<c>/companies/{デコード済みスラッグ}</c>）→ 新 URL（パーセントエンコード済み、アンカー付きもあり）。</summary>

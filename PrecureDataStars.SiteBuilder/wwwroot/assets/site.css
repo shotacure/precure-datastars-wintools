@@ -8462,7 +8462,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
   white-space: nowrap;
 }
 
-/* キャラクター種別バッジ（ゲストキャラクター一覧の行で、名前の後ろに種別を出す）。
+/* キャラクター種別バッジ（作品ごとの「その他のキャラクター」の一覧の行で、名前の後ろに種別を出す）。
    関連作品バッジと同じ形で、種別ごとに色を分ける（プリキュア＝ピンク / 味方＝青 / 敵＝紫 / とりまく人々＝グレー）。 */
 .character-kind-badge {
   display: inline-block;

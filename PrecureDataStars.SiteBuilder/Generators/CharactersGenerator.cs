@@ -328,7 +328,7 @@ public sealed class CharactersGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代キャラクター")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "プリキュアから妖精、敵、ゲストまで、歴代のキャラクターを担当の声優さんと登場エピソードとともに作品ごとに一覧にしました。",
+                Subtitle = "プリキュアから妖精、敵、その他のキャラクターまで、歴代のキャラクターを担当の声優さんと登場エピソードとともに作品ごとに一覧にしました。",
                 MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                 Badges = new[]
                 {
@@ -336,7 +336,7 @@ public sealed class CharactersGenerator
                     new OgCardBadge("作品", $"{sections.Count}作")
                 }
             },
-            MetaDescription = $"歴代プリキュアのキャラクター {characters.Count} 名の一覧。プリキュアから妖精・敵・ゲストまで、作品ごとに担当の声優さんと登場エピソードをまとめました。",
+            MetaDescription = $"歴代プリキュアのキャラクター {characters.Count} 名の一覧。プリキュアから妖精・敵・その他のキャラクターまで、作品ごとに担当の声優さんと登場エピソードをまとめました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -563,12 +563,12 @@ public sealed class CharactersGenerator
                 Groups = groups,
                 CoverageLabel = _ctx.CreditCoverageLabel
             };
-            string title = $"『{series.Title}』のゲストキャラクター";
+            string title = $"『{series.Title}』のその他のキャラクター";
             var layout = new LayoutModel
             {
                 PageTitle = title,
-                MetaDescription = $"『{series.Title}』に 1 話だけ登場したゲストキャラクター {rows.Count} 名を、登場話ごとに担当の声優さんとあわせて一覧にしました。",
-                OgCard = new OgCardSpec(Kicker: series.Title, Title: "ゲストキャラクター")
+                MetaDescription = $"『{series.Title}』のその他のキャラクター {rows.Count} 名を、登場話ごとに担当の声優さんとあわせて一覧にしました。",
+                OgCard = new OgCardSpec(Kicker: series.Title, Title: "その他のキャラクター")
                 {
                     MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                     Badges = new[] { new OgCardBadge("登場", $"{rows.Count}名") }

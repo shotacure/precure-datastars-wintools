@@ -504,6 +504,7 @@ public partial class CreditMastersEditorForm
             txtChNotes.Text = c.Notes ?? "";
             txtChOfficialUrl.Text = c.OfficialUrl ?? "";
             txtChWikipediaUrl.Text = c.WikipediaUrl ?? "";
+            chkChHasOwnPage.Checked = c.HasOwnPage;
         }
     }
 
@@ -517,6 +518,7 @@ public partial class CreditMastersEditorForm
             cboChBirthMonth, cboChBirthDay, null, "PUBLIC", null, null);
         txtChNotes.Text = "";
         txtChOfficialUrl.Text = ""; txtChWikipediaUrl.Text = "";
+        chkChHasOwnPage.Checked = true;
     }
 
     private async Task SaveCharacterAsync()
@@ -562,6 +564,7 @@ public partial class CreditMastersEditorForm
                 current.Notes = NullIfEmpty(txtChNotes.Text);
                 current.OfficialUrl = NullIfEmpty(txtChOfficialUrl.Text);
                 current.WikipediaUrl = NullIfEmpty(txtChWikipediaUrl.Text);
+                current.HasOwnPage = chkChHasOwnPage.Checked;
                 current.UpdatedBy = Environment.UserName;
                 await _charactersRepo.UpdateAsync(current);
             }
@@ -582,6 +585,7 @@ public partial class CreditMastersEditorForm
                     Notes = NullIfEmpty(txtChNotes.Text),
                     OfficialUrl = NullIfEmpty(txtChOfficialUrl.Text),
                     WikipediaUrl = NullIfEmpty(txtChWikipediaUrl.Text),
+                    HasOwnPage = chkChHasOwnPage.Checked,
                     CreatedBy = Environment.UserName,
                     UpdatedBy = Environment.UserName
                 };

@@ -1938,6 +1938,9 @@ CREATE TABLE `characters` (
   -- wikipedia_url は内部メモとして保持するだけで、サイト UI からはリンクしない。
   `official_url`    varchar(1024) DEFAULT NULL,
   `wikipedia_url`   varchar(1024) DEFAULT NULL,
+  -- 個別ページを持つか。1 = /characters/{名前}/ を持つ、0 = 最初に登場した作品の「その他のキャラクター」のページ
+  -- （/characters/guests/{作品}/）にまとめる。サイトはこの印だけで決める。
+  `has_own_page`    tinyint(1) NOT NULL DEFAULT 1,
   `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`      varchar(64)  DEFAULT NULL,

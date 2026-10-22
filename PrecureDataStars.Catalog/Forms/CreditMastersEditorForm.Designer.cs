@@ -111,6 +111,7 @@ partial class CreditMastersEditorForm
     // 外部リンク 2 列（公式 / Wikipedia）。キャラ運用は SNS を持たない方針なので人物・企業より絞っている。
     private TextBox txtChOfficialUrl = null!;
     private TextBox txtChWikipediaUrl = null!;
+    private CheckBox chkChHasOwnPage = null!;
     // 誕生日入力欄（生年 NUD ＋「不明」チェック・公開可否コンボ・月／日コンボ）。
     private NumericUpDown nudChBirthYear = null!;
     private CheckBox chkChBirthYearUnknown = null!;
@@ -679,6 +680,15 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "名前(かな)", txtChNameKana, 18,  50, inputWidth: 320);
         AddLabeledControl(pnl, "英語表記", txtChNameEn,   18,  82, inputWidth: 320);
         AddLabeledControl(pnl, "区分",     cboChKind,    18, 114, inputWidth: 160);
+        // 個別ページを持つか（characters.has_own_page）。外すとサイトでは作品ごとの「その他のキャラクター」にまとめる。
+        chkChHasOwnPage = new CheckBox
+        {
+            Text = "個別ページを持つ（外すと「その他」にまとめる）",
+            Location = new Point(310, 115),
+            AutoSize = true,
+            Checked = true,
+        };
+        pnl.Controls.Add(chkChHasOwnPage);
 
         AddBirthdayRow(pnl, 18, 146,
             out nudChBirthYear, out chkChBirthYearUnknown, out cboChBirthYearVis,

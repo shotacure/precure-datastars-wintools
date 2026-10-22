@@ -23,6 +23,7 @@ public sealed class CharactersRepository : RepositoryBase
           notes           AS Notes,
           official_url    AS OfficialUrl,
           wikipedia_url   AS WikipediaUrl,
+          has_own_page    AS HasOwnPage,
           created_at      AS CreatedAt,
           updated_at      AS UpdatedAt,
           created_by      AS CreatedBy,
@@ -81,11 +82,11 @@ public sealed class CharactersRepository : RepositoryBase
             INSERT INTO characters
               (name, name_kana, name_en, character_kind,
                birth_year, birth_year_visibility, birth_month, birth_day,
-               notes, official_url, wikipedia_url, created_by, updated_by)
+               notes, official_url, wikipedia_url, has_own_page, created_by, updated_by)
             VALUES
               (@Name, @NameKana, @NameEn, @CharacterKind,
                @BirthYear, @BirthYearVisibility, @BirthMonth, @BirthDay,
-               @Notes, @OfficialUrl, @WikipediaUrl, @CreatedBy, @UpdatedBy);
+               @Notes, @OfficialUrl, @WikipediaUrl, @HasOwnPage, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
 
@@ -109,6 +110,7 @@ public sealed class CharactersRepository : RepositoryBase
               notes           = @Notes,
               official_url    = @OfficialUrl,
               wikipedia_url   = @WikipediaUrl,
+              has_own_page    = @HasOwnPage,
               updated_by      = @UpdatedBy,
               is_deleted      = @IsDeleted
             WHERE character_id = @CharacterId;

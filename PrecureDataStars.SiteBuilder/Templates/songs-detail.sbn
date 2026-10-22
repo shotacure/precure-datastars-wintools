@@ -17,7 +17,7 @@
          （LYRICS/COMPOSITION/ARRANGEMENT/VOCALS は CSS で色相環 4 色のバッジに着色済み）。
        - 備考は名義行とは別に muted 段落で続ける。 ##}}
   {{## 基本情報（作詞・作曲・編曲）。役職ごとに改行せず、役職バッジ + 名前のユニットを横に流して並べる（ユニットの中では改行しない）。 ##}}
-  {{~ if Song.LyricsHtml != "" || Song.CompositionHtml != "" || Song.ArrangementHtml != "" || Song.MedleyArrangementHtml != "" || Song.StringsArrangementHtml != "" ~}}
+  {{~ if Song.LyricsHtml != "" || Song.CompositionHtml != "" || Song.ArrangementHtml != "" || Song.MedleyArrangementHtml != "" || Song.ExtraArrangementUnitsHtml != "" ~}}
   <section id="basic-info">
     <h2>基本情報</h2>
     <div class="staff-badges-row music-credit-row">
@@ -25,7 +25,7 @@
       {{~ if Song.CompositionHtml != "" ~}}<span class="staff-badge-group music-credit-unit">{{ Song.CompositionRoleLabelHtml }}{{ Song.CompositionHtml }}</span>{{~ end ~}}
       {{~ if Song.ArrangementHtml != "" ~}}<span class="staff-badge-group music-credit-unit">{{ Song.ArrangementRoleLabelHtml }}{{ Song.ArrangementHtml }}</span>{{~ end ~}}
       {{~ if Song.MedleyArrangementHtml != "" ~}}<span class="staff-badge-group music-credit-unit">{{ Song.MedleyArrangementRoleLabelHtml }}{{ Song.MedleyArrangementHtml }}</span>{{~ end ~}}
-      {{~ if Song.StringsArrangementHtml != "" ~}}<span class="staff-badge-group music-credit-unit">{{ Song.StringsArrangementRoleLabelHtml }}{{ Song.StringsArrangementHtml }}</span>{{~ end ~}}
+      {{ Song.ExtraArrangementUnitsHtml }}
     </div>
   </section>
   {{~ end ~}}

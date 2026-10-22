@@ -1842,7 +1842,7 @@ CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.
 | `preceding_separator` | VARCHAR(8) NULL | 直前の名義との区切り（／ , & 等）。無ければ「、」で出す |
 | `source_product_catalog_no` | VARCHAR(32) NULL FK | このクレジットの根拠にした盤（→ `products`）。サイトでは「出典：」として添える |
 
-> `roles.music_credit_group` は音楽クレジットの区分（`WRITING`=作詞・作曲・編曲 / `PERFORMANCE`=演奏・コーラス等 / `RECORDING`=レコーディング / `RELEASE`=音盤製作）。NULL は本編クレジットだけで使う役職。作詞・作曲・編曲（`song_credits` / `bgm_cue_credits`）と歌唱（`song_recording_singers`）の役職もこの区分を持ち、サイトの音楽クレジット欄はこの区分で小見出しを分ける。ストリングス編曲（`STRINGS_ARRANGEMENT`）は作家なので `song_credits` に作詞・作曲・編曲と並べて持つ。曲の見出しに出るコーラス（「コーラス／ぷりきゅあ5」など）は `song_recording_singers` のまま、ブックレットのミュージシャン欄のコーラスは `music_credits` に入れる。
+> `roles.music_credit_group` は音楽クレジットの区分（`WRITING`=作詞・作曲・編曲 / `PERFORMANCE`=演奏・コーラス等 / `RECORDING`=レコーディング / `RELEASE`=音盤製作）。NULL は本編クレジットだけで使う役職。作詞・作曲・編曲（`song_credits` / `bgm_cue_credits`）と歌唱（`song_recording_singers`）の役職もこの区分を持ち、サイトの音楽クレジット欄はこの区分で小見出しを分ける。ストリングス編曲（`STRINGS_ARRANGEMENT`）とオーケストラ編曲（`ORCHESTRA_ARRANGEMENT`）は作家なので `song_credits` に作詞・作曲・編曲と並べて持ち、楽曲詳細の基本情報で編曲の後ろにこの順で出す（役職詳細ページは無いので役職名はリンクしない）。曲の見出しに出るコーラス（「コーラス／ぷりきゅあ5」など）は `song_recording_singers` のまま、ブックレットのミュージシャン欄のコーラスは `music_credits` に入れる。
 
 #### `song_recordings` — 歌の歌唱者バージョン
 

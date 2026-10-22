@@ -327,10 +327,19 @@ public sealed class SongsGenerator
         // メドレーの中の曲（原曲の曲名へのリンクと、原曲の作詞・作曲・編曲）と、この曲が原曲として入っているメドレー。
         string medleyPartsHtml = BuildMedleyPartsListHtml(song.SongId, personAliasMap, characterAliasMap);
         var includedInMedleys = BuildIncludedInMedleyViews(song.SongId);
-        // ストリングス編曲は構造化行だけ（フリーテキスト列は持たない）。役職詳細ページは無いのでラベルはリンクしない。
-        string stringsArrangementHtml = BuildCreditRoleHtml(songCreditRows, StringsArrangementRole, null, roleMap, personAliasMap);
-        string stringsArrangementRoleLabelHtml =
-            $"<span class=\"role-badge role-badge-sm\" data-role-code=\"{StringsArrangementRole}\">{HtmlUtil.Escape(MusicCreditViewBuilder.RoleName(_ctx, StringsArrangementRole))}</span>";
+        // 追加の編曲（ストリングス編曲・オーケストラ編曲）は構造化行だけ（フリーテキスト列は持たない）。
+        // 役職詳細ページは無いのでラベルはリンクしない。役職ごとに「バッジ + 名前」のユニットを、編曲の後ろへ並べる順に連ねる。
+        var extraArrangementUnits = new System.Text.StringBuilder();
+        foreach (var extraRole in ExtraArrangementRoles)
+        {
+            string namesHtml = BuildCreditRoleHtml(songCreditRows, extraRole, null, roleMap, personAliasMap);
+            if (namesHtml == "") continue;
+            extraArrangementUnits.Append("<span class=\"staff-badge-group music-credit-unit\">")
+                .Append($"<span class=\"role-badge role-badge-sm\" data-role-code=\"{extraRole}\">{HtmlUtil.Escape(MusicCreditViewBuilder.RoleName(_ctx, extraRole))}</span>")
+                .Append(namesHtml)
+                .Append("</span>");
+        }
+        string extraArrangementUnitsHtml = extraArrangementUnits.ToString();
         // 曲に共通の音楽クレジット（伴奏の演奏者・録音側スタッフなど。music_credits の SONG 紐付け）。
         // 「演奏・レコーディング」の欄に、役職ごとのユニットを横に流して並べる。
         string songMusicCreditsHtml = _ctx.MusicCredits.BySong.TryGetValue(song.SongId, out var songMusicRows)
@@ -382,8 +391,7 @@ public sealed class SongsGenerator
                 MedleyArrangementRoleLabelHtml = medleyArrangementRoleLabelHtml,
                 MedleyPartsHtml = medleyPartsHtml,
                 IncludedInMedleys = includedInMedleys,
-                StringsArrangementHtml = stringsArrangementHtml,
-                StringsArrangementRoleLabelHtml = stringsArrangementRoleLabelHtml,
+                ExtraArrangementUnitsHtml = extraArrangementUnitsHtml,
                 MusicCreditsHtml = songMusicCreditsHtml,
                 Notes = song.Notes ?? ""
             },
@@ -1318,8 +1326,8 @@ public sealed class SongsGenerator
         public string MedleyPartsHtml { get; set; } = "";
     }
 
-    /// <summary>ストリングス編曲の役職コード（song_credits で作詞・作曲・編曲と並べて持つ）。</summary>
-    private const string StringsArrangementRole = "STRINGS_ARRANGEMENT";
+    /// <summary>追加の編曲の役職コード（song_credits で作詞・作曲・編曲と並べて持つ）。基本情報で編曲の後ろにこの順で並べる。</summary>
+    private static readonly string[] ExtraArrangementRoles = { "STRINGS_ARRANGEMENT", "ORCHESTRA_ARRANGEMENT" };
 
     private sealed class SongDetailModel
     {
@@ -1353,10 +1361,8 @@ public sealed class SongsGenerator
         public string CompositionRoleLabelHtml { get; set; } = "";
         /// <summary>「編曲」役職ラベル HTML（仕様は <see cref="LyricsRoleLabelHtml"/> と同様）。</summary>
         public string ArrangementRoleLabelHtml { get; set; } = "";
-        /// <summary>ストリングス編曲の表示用 HTML（構造化行が無ければ空文字）。</summary>
-        public string StringsArrangementHtml { get; set; } = "";
-        /// <summary>「ストリングス編曲」役職ラベル HTML（役職詳細ページが無いのでリンクしない）。</summary>
-        public string StringsArrangementRoleLabelHtml { get; set; } = "";
+        /// <summary>追加の編曲（ストリングス編曲・オーケストラ編曲）の「役職バッジ + 名前」のユニットを連ねた HTML（構造化行が無ければ空文字）。役職詳細ページが無いので役職はリンクしない。</summary>
+        public string ExtraArrangementUnitsHtml { get; set; } = "";
         /// <summary>メドレー編曲（song_credits の MEDLEY_ARRANGEMENT）の名義 HTML。無ければ空文字。</summary>
         public string MedleyArrangementHtml { get; set; } = "";
         /// <summary>メドレー編曲の役職バッジ HTML。</summary>

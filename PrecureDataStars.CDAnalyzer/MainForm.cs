@@ -91,6 +91,9 @@ namespace PrecureDataStars.CDAnalyzer
         /// <summary>読み直すまでの待ち時間。</summary>
         private static readonly TimeSpan ReadRetryInterval = TimeSpan.FromSeconds(1);
 
+        /// <summary>入っている盤を読み終えたら true。取り外しの通知で false に戻る。true の間の挿入の通知では読まない（1 回の挿入で重なって届く通知による多重読み込みを防ぐ）。</summary>
+        private bool _readSinceInsert;
+
         /// <summary>照合・登録や音の特徴の記録の途中に CD が入れられ、終わってから読む必要があるとき true。</summary>
         private bool _pendingAutoRead;
 
@@ -215,6 +218,8 @@ namespace PrecureDataStars.CDAnalyzer
                         if (outcome is not null)
                         {
                             loaded = ApplyReadOutcome(driveLetter, outcome, silent);
+                            // 読めた盤（DVD / BD と分かった盤を含む）は、取り外しの通知が来るまで挿入の通知で読み直さない
+                            if (isVideo || readOk) _readSinceInsert = true;
                         }
                         else if (error is not null)
                         {
@@ -547,9 +552,14 @@ namespace PrecureDataStars.CDAnalyzer
                 int wparam = m.WParam.ToInt32();
                 // 選んでいるドライブ以外（USB 機器・ほかのドライブ）の通知は無視する。
                 // ドライブが 1 台も選ばれていないときは、光学ドライブがつながった可能性があるので一覧を作り直す
+                // 挿入 1 回につき読み込みは 1 回：入っている盤を読み終えたあとの挿入の通知（重なって届く分）は、
+                // 取り外しの通知（トレイを開けた）が来るまで無視する
                 if ((wparam == DBT_DEVICEARRIVAL || wparam == DBT_DEVICEREMOVECOMPLETE)
-                    && (cboDrives.SelectedItem is null || IsVolumeEventFor(m.LParam, cboDrives.SelectedItem.ToString()![0])))
+                    && (cboDrives.SelectedItem is null || IsVolumeEventFor(m.LParam, cboDrives.SelectedItem.ToString()![0]))
+                    && !(wparam == DBT_DEVICEARRIVAL && _readSinceInsert))
                 {
+                    if (wparam == DBT_DEVICEREMOVECOMPLETE) _readSinceInsert = false;
+
                     // 現在の選択を記憶してからドライブリストを再構築
                     var prev = cboDrives.SelectedItem?.ToString();
                     RefreshDriveList();
@@ -793,7 +803,7 @@ namespace PrecureDataStars.CDAnalyzer
                     }
                     else if (match.Candidates.Count >= 2)
                     {
-                        (picked, reason) = await PickSameDayEditionAsync(match.Candidates, snap.Disc.Mcn);
+                        (picked, reason) = await PickSameDayEditionAsync(match.Candidates, snap.Disc.Mcn, snap.Tracks);
                     }
 
                     if (picked is not null)
@@ -976,14 +986,15 @@ namespace PrecureDataStars.CDAnalyzer
         /// TOC の一致した候補が、同じ発売日の別々の商品の版（初回盤と通常盤など）だけのとき、決まりに従って 1 点に決める。
         /// <list type="number">
         /// <item>読んだ CD の MCN があれば、別の MCN をすでに持っている候補を除く。1 点に絞れたらそれに決める（同じ版の読み直しで別の版へ行かない）</item>
-        /// <item>残りを品番の若い順に並べ、<see cref="RecentReadWindow"/> 以内に読まれていない最初の 1 点に決める（版を続けて読むと若い方から順に埋まる）</item>
+        /// <item>読んだ CD の ISRC と DB の ISRC が食い違うトラックのある候補を除く（両方に ISRC があるトラックだけを比べる）。1 点に絞れたらそれに決める（カラオケの ISRC が版ごとに違う盤など）</item>
+        /// <item>残りを品番の若い順に並べ、<see cref="RecentReadWindow"/> 以内に読まれていない最初の 1 点に決める（版を続けて読むと若い方から順に埋まる。ISRC が DB にまだ無い盤や、版どうしで ISRC が同じ盤のため）</item>
         /// </list>
         /// 同じ商品の中の候補・発売日の違う候補が混ざるとき、商品が引けないとき、全部が直前に読まれているときは決めない（照合ダイアログで選ぶ）。
         /// </summary>
         /// <returns>決めた盤と、ステータス欄に出す決め方の説明。決めないときは (null, "")。</returns>
-        private async Task<(Disc? Disc, string Reason)> PickSameDayEditionAsync(IReadOnlyList<Disc> candidates, string? mcn)
+        private async Task<(Disc? Disc, string Reason)> PickSameDayEditionAsync(IReadOnlyList<Disc> candidates, string? mcn, IReadOnlyList<Track> readTracks)
         {
-            if (_productsRepo is null) return (null, "");
+            if (_productsRepo is null || _tracksRepo is null) return (null, "");
             if (candidates.Select(d => d.ProductCatalogNo).Distinct(StringComparer.Ordinal).Count() != candidates.Count) return (null, "");
 
             var releaseDates = new HashSet<DateTime>();
@@ -1002,6 +1013,24 @@ namespace PrecureDataStars.CDAnalyzer
                 remaining = remaining.Where(d => string.IsNullOrEmpty(d.Mcn) || d.Mcn == mcn).ToList();
                 if (remaining.Count == 0) return (null, "");
                 if (remaining.Count == 1) return (remaining[0], prefix + "MCN で絞り込めた");
+            }
+
+            var readIsrcs = readTracks
+                .Where(t => !string.IsNullOrEmpty(t.Isrc))
+                .ToDictionary(t => t.TrackNo, t => t.Isrc!);
+            if (readIsrcs.Count > 0)
+            {
+                var consistent = new List<Disc>(remaining.Count);
+                foreach (var d in remaining)
+                {
+                    var registered = await _tracksRepo.GetByCatalogNoAsync(d.CatalogNo);
+                    bool conflict = registered.Any(t => t.SubOrder == 0 && !string.IsNullOrEmpty(t.Isrc)
+                        && readIsrcs.TryGetValue(t.TrackNo, out var read) && !string.Equals(read, t.Isrc, StringComparison.OrdinalIgnoreCase));
+                    if (!conflict) consistent.Add(d);
+                }
+                remaining = consistent;
+                if (remaining.Count == 0) return (null, "");
+                if (remaining.Count == 1) return (remaining[0], prefix + "ISRC で絞り込めた");
             }
 
             var now = DateTime.Now;

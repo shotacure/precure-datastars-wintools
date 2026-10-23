@@ -69,7 +69,7 @@ namespace PrecureDataStars.CDAnalyzer
 
             // lblSummary
             lblSummary.Location = new Point(394, 16);
-            lblSummary.Size = new Size(540, 20);
+            lblSummary.Size = new Size(916, 20);
             lblSummary.Text = "";
             // 横リサイズに追従して読み取りサマリの表示幅を広げる。
             lblSummary.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -99,7 +99,7 @@ namespace PrecureDataStars.CDAnalyzer
 
             // gridTracks
             gridTracks.Location = new Point(12, 97);
-            gridTracks.Size = new Size(920, 280);
+            gridTracks.Size = new Size(1296, 280);
             gridTracks.AllowUserToAddRows = false;
             gridTracks.AllowUserToDeleteRows = false;
             gridTracks.ReadOnly = true;
@@ -116,7 +116,7 @@ namespace PrecureDataStars.CDAnalyzer
 
             // gridAlbum
             gridAlbum.Location = new Point(12, 407);
-            gridAlbum.Size = new Size(540, 140);
+            gridAlbum.Size = new Size(916, 140);
             gridAlbum.AllowUserToAddRows = false;
             gridAlbum.AllowUserToDeleteRows = false;
             gridAlbum.ReadOnly = true;
@@ -125,18 +125,19 @@ namespace PrecureDataStars.CDAnalyzer
             gridAlbum.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
             // DB 連携パネル
-            pnlDb.Location = new Point(560, 385);
+            pnlDb.Location = new Point(936, 385);
             pnlDb.Size = new Size(372, 162);
             pnlDb.BorderStyle = BorderStyle.FixedSingle;
             pnlDb.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
 
+            // 見出しは文字の幅だけにして、右隣のチェックボックスにかぶせない
             lblDbTitle.Location = new Point(8, 6);
-            lblDbTitle.Size = new Size(200, 20);
+            lblDbTitle.AutoSize = true;
             lblDbTitle.Text = "DB 連携";
             lblDbTitle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
 
             // オンのときだけ、照合・登録で品番が決まったら続けて音の特徴を記録する（聞かずに始める）。既定はオフ
-            chkAutoFingerprint.Location = new Point(150, 5);
+            chkAutoFingerprint.Location = new Point(90, 5);
             chkAutoFingerprint.AutoSize = true;
             chkAutoFingerprint.Text = "照合・登録のあと音の特徴も記録";
 
@@ -162,7 +163,7 @@ namespace PrecureDataStars.CDAnalyzer
             pnlDb.Controls.Add(lblDbStatus);
 
             // Form
-            ClientSize = new Size(944, 559);
+            ClientSize = new Size(1320, 559);
             // 極端に縮められて上段の固定配置コントロール（ドライブ選択 / MCN / TSV コピー）が
             // 欠けるのを防ぐ下限。グリッド 2 つと DB 連携パネルはアンカーで追従する。
             MinimumSize = new Size(640, 480);

@@ -135,7 +135,7 @@ namespace PrecureDataStars.CDAnalyzer
             lblDbTitle.Text = "DB 連携";
             lblDbTitle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
 
-            // オンのときだけ、照合・登録で品番が決まったら続けて音の特徴を記録する（聞かずに始める）
+            // オンのときだけ、照合・登録で品番が決まったら続けて音の特徴を記録する（聞かずに始める）。既定はオフ
             chkAutoFingerprint.Location = new Point(150, 5);
             chkAutoFingerprint.AutoSize = true;
             chkAutoFingerprint.Text = "照合・登録のあと音の特徴も記録";

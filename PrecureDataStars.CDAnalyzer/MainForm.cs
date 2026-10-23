@@ -550,49 +550,92 @@ namespace PrecureDataStars.CDAnalyzer
             if (m.Msg == WM_DEVICECHANGE)
             {
                 int wparam = m.WParam.ToInt32();
-                // 選んでいるドライブ以外（USB 機器・ほかのドライブ）の通知は無視する。
-                // ドライブが 1 台も選ばれていないときは、光学ドライブがつながった可能性があるので一覧を作り直す
-                // 挿入 1 回につき読み込みは 1 回：入っている盤を読み終えたあとの挿入の通知（重なって届く分）は、
-                // 取り外しの通知（トレイを開けた）が来るまで無視する
-                if ((wparam == DBT_DEVICEARRIVAL || wparam == DBT_DEVICEREMOVECOMPLETE)
-                    && (cboDrives.SelectedItem is null || IsVolumeEventFor(m.LParam, cboDrives.SelectedItem.ToString()![0]))
-                    && !(wparam == DBT_DEVICEARRIVAL && _readSinceInsert))
+                if (wparam == DBT_DEVICEARRIVAL || wparam == DBT_DEVICEREMOVECOMPLETE)
                 {
-                    if (wparam == DBT_DEVICEREMOVECOMPLETE) _readSinceInsert = false;
-
-                    // 現在の選択を記憶してからドライブリストを再構築
-                    var prev = cboDrives.SelectedItem?.ToString();
-                    RefreshDriveList();
-                    if (!string.IsNullOrEmpty(prev))
+                    if (cboDrives.SelectedItem is null)
                     {
-                        int idx = -1;
-                        for (int i = 0; i < cboDrives.Items.Count; i++)
-                            if (Equals(cboDrives.Items[i]!.ToString(), prev)) { idx = i; break; }
-                        if (idx >= 0)
+                        // 光学ドライブが 1 台も選ばれていない：つながった可能性があるので一覧を作り直し、挿入なら読む
+                        RefreshDriveList();
+                        if (wparam == DBT_DEVICEARRIVAL && cboDrives.SelectedItem is not null) _ = LoadAllAsync(silent: true);
+                    }
+                    else
+                    {
+                        // 選んでいるドライブ以外（USB 機器・ほかのドライブ）の通知は無視する。
+                        // 選んでいるドライブの通知でもドライブの一覧は作り直さない（画面の読み取り結果を消さない）
+                        char letter = cboDrives.SelectedItem.ToString()![0];
+                        if (IsVolumeEventFor(m.LParam, letter))
                         {
-                            cboDrives.SelectedIndex = idx;
-                            // 自動トリガでは silent=true 指定で LoadAllAsync を呼ぶ（fire-and-forget。
-                            // 読み取り実行中なら LoadAllAsync 側の再入抑止で何もしない）。
-                            // 非 CD メディア（DVD/BD）が挿入された場合や読み取りエラー時に
-                            // メッセージボックスを抑止し、同時起動中の BDAnalyzer の操作を妨げない。
-                            if (wparam == DBT_DEVICEARRIVAL) _ = LoadAllAsync(silent: true); // 挿入時は自動読み取り
+                            if (wparam == DBT_DEVICEARRIVAL)
+                            {
+                                // 挿入 1 回につき読み込みは 1 回：入っている盤を読み終えたあとの挿入の通知（重なって届く分）は、
+                                // 本当に取り出されるまで無視する。
+                                // 自動トリガでは silent=true 指定で LoadAllAsync を呼ぶ（fire-and-forget。
+                                // 読み取り実行中なら LoadAllAsync 側の再入抑止で何もしない）。
+                                // 非 CD メディア（DVD/BD）が挿入された場合や読み取りエラー時に
+                                // メッセージボックスを抑止し、同時起動中の BDAnalyzer の操作を妨げない。
+                                if (!_readSinceInsert) _ = LoadAllAsync(silent: true);
+                            }
                             else
                             {
-                                // メディア取り外し：実行中の読み取りの 1 回分を中断して読み直しへ回す
-                                // （入れ直されればそのまま読める。読み直しの上限で止まる）。
-                                // 照合ダイアログで待っていれば閉じ、途中で入れられた CD の読み込みの予約も消す。
-                                _attemptCts?.Cancel();
-                                _openMatchDialog?.Close();
-                                _pendingAutoRead = false;
-                                gridTracks.DataSource = null;
-                                gridAlbum.DataSource = null;
-                                txtMcn.Text = "";
+                                _ = HandleRemovalNoticeAsync(letter);
                             }
                         }
                     }
                 }
             }
             base.WndProc(ref m);
+        }
+
+        /// <summary>
+        /// 選んでいるドライブの取り外しの通知を受けたときの処理。こちらがドライブを読みに行ったことなどで、
+        /// 盤が入ったままでも取り外しと挿入の通知が届くことがあるため、GET CONFIGURATION で盤がまだ入っているかを確かめ、
+        /// 入っていれば何もしない。盤が無い（Current Profile が 0）か確かめられなかったときは取り出されたとみなし、
+        /// 実行中の読み取りの 1 回分を中断して読み直しへ回し（入れ直されればそのまま読める。読み直しの上限で止まる）、
+        /// 照合ダイアログで待っていれば閉じ、途中で入れられた CD の読み込みの予約も消して、画面を未読み取りの状態に戻す。
+        /// </summary>
+        private async Task HandleRemovalNoticeAsync(char driveLetter)
+        {
+            bool? present = await Task.Run(() =>
+            {
+                try
+                {
+                    using SafeFileHandle h = OpenCdDevice(driveLetter);
+                    var (profile, _) = GetCurrentProfile(h);
+                    return profile switch
+                    {
+                        MediaProfile.None => false,
+                        MediaProfile.Other => (bool?)null,
+                        _ => true
+                    };
+                }
+                catch
+                {
+                    return (bool?)null;
+                }
+            });
+            if (present == true) return;
+
+            _readSinceInsert = false;
+            _attemptCts?.Cancel();
+            _openMatchDialog?.Close();
+            _pendingAutoRead = false;
+
+            // ドライブそのものが外れた（USB ドライブなど）なら一覧を作り直す
+            if (!DriveInfo.GetDrives().Any(d => d.DriveType == DriveType.CDRom && char.ToUpperInvariant(d.Name[0]) == char.ToUpperInvariant(driveLetter)))
+            {
+                RefreshDriveList();
+                return;
+            }
+            gridTracks.DataSource = null;
+            gridAlbum.DataSource = null;
+            txtMcn.Text = "";
+            btnCopyTsv.Enabled = false;
+            if (_readCts is null && !_matchRunning && _fpCts is null)
+            {
+                _lastRead = null;
+                SetDbPanelEnabled(false, _registration is null ? "DB 接続が設定されていません" : "CD を読み込むと有効になります");
+                lblSummary.Text = $"Drive {driveLetter}: 取り出されました";
+            }
         }
 
         /// <summary>WM_DEVICECHANGE の lParam が、指定したドライブ文字のボリュームの通知かを判定する（DEV_BROADCAST_VOLUME の unitmask を見る）。</summary>
@@ -777,6 +820,17 @@ namespace PrecureDataStars.CDAnalyzer
             // 照合中は読み取り・ドライブ変更を封鎖する。ドライブの通知で _lastRead が消されても続けられるよう、
             // 読み取り結果は手元に持って使う
             var snap = _lastRead;
+
+            // 直前に反映した盤と TOC・ISRC がまったく同じ盤を DuplicateReadWindow 以内にまた読んだときは、
+            // 盤を入れ替えられる間隔ではないので同じ盤の読み直しとみなし、自動では反映しない（別の版の行に書かないため）
+            string signature = BuildDiscSignature(snap);
+            if (autoApplyUnique && _lastCommit is { } last && last.Signature == signature
+                && DateTime.Now - last.At < DuplicateReadWindow)
+            {
+                lblDbStatus.Text = $"直前（{(int)(DateTime.Now - last.At).TotalSeconds} 秒前）に [{last.CatalogNo}] へ反映した盤と同じ内容なので、同じ盤の読み直しとみなして反映しませんでした";
+                return;
+            }
+
             _matchRunning = true;
             btnLoad.Enabled = false;
             cboDrives.Enabled = false;
@@ -813,6 +867,7 @@ namespace PrecureDataStars.CDAnalyzer
                         foreach (var t in snap.Tracks) t.CatalogNo = target.CatalogNo;
                         await _registration.SyncPhysicalInfoAsync(target, snap.Tracks);
 
+                        _lastCommit = (signature, target.CatalogNo, DateTime.Now);
                         lblDbStatus.Text = $"{reason} [{target.CatalogNo}] に CD 物理情報を反映しました（トラック {snap.Tracks.Count} 件）";
                         await RunFingerprintIfOptedAsync();
                         return;
@@ -944,6 +999,7 @@ namespace PrecureDataStars.CDAnalyzer
                     return;
                 }
 
+                _lastCommit = (signature, snap.Disc.CatalogNo, DateTime.Now);
                 lblDbStatus.Text = $"ディスク [{snap.Disc.CatalogNo}] に反映・登録しました";
                 await RunFingerprintIfOptedAsync();
             }
@@ -977,6 +1033,18 @@ namespace PrecureDataStars.CDAnalyzer
             TopMost = true;
             TopMost = false;
             Activate();
+        }
+
+        /// <summary>同じ内容の盤をこの幅の中でまた読んだら、盤を入れ替えたのではなく同じ盤の読み直しとみなす。</summary>
+        private static readonly TimeSpan DuplicateReadWindow = TimeSpan.FromSeconds(5);
+
+        /// <summary>最後に DB へ反映・登録した盤の内容（<see cref="BuildDiscSignature"/>）・品番・時刻。まだ無ければ null。</summary>
+        private (string Signature, string CatalogNo, DateTime At)? _lastCommit;
+
+        /// <summary>読み取った盤の内容を比べるための文字列（総尺・各トラックの開始 LBA と ISRC）を作る。</summary>
+        private static string BuildDiscSignature(LastReadSnapshot snap)
+        {
+            return snap.Disc.TotalLengthFrames + "|" + string.Join(",", snap.Tracks.Select(t => $"{t.StartLba}:{t.Isrc}"));
         }
 
         /// <summary>直前に読んだ版とみなす <c>last_read_at</c> の幅。</summary>

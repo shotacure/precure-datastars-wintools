@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：映画のカードのプリキュアを、台帳と違う名義でクレジットされていても同じキャラなら拾うようにした**（`SeriesGenerator`）：声の出演のキャラの名義が台帳（`precures`）の名義に当たらなくても、そのキャラが台帳のプリキュアのキャラなら、その作品に出たプリキュアとして出す。声の出演が「リコ」の名義で入っている映画で、キュアマジカルが抜けていた。
 - **クレジット：役職テンプレに作詞・作曲・編曲の同一の条件・英訳の名義・曲の番号の絞り込みを足した**（`RoleTemplateRenderer`・`ThemeSongsHandler`・`SongCreditRoles`）：曲のループで、作詞・作曲・編曲の 3 つが同じ名義かを返す `{SAME_LYRICIST_COMPOSER_ARRANGER}` と、英訳（役職 `LYRICS_TRANSLATION`）の連名 `{LYRICS_TRANSLATOR}` を使えるようにした。「作詞・作曲・編曲：」を 1 行にまとめる画面と、「英訳詞：」の項目がある画面用。曲のループ `{#THEME_SONGS}` に `seq=N` / `seq=N-M` を足し、番号が範囲に入る曲だけを出せるようにした（同じ挿入歌の区分の曲を「テーマソング」と「挿入歌」の欄に分けて出す画面用）。
 - **クレジット・スキーマ：主題歌・挿入歌をその回だけインストゥルメンタルで使ったことを持てるようにし、テンプレで書き分けられるようにした**（`EpisodeThemeSong`・`SeriesThemeSong`・`EpisodeThemeSongsRepository`・`SeriesThemeSongsRepository`・`ThemeSongsHandler`・`RoleTemplateRenderer`・`EpisodeGenerator`・`episode-detail.sbn`・Catalog の主題歌のコピー）：`episode_theme_songs` と `series_theme_songs` に `is_instrumental`（既定 0）を足した（マイグレーション `v1.19.1_add_theme_song_instrumental.sql`）。紐付ける録音は元の歌の録音のまま。役職テンプレの曲のループで `{INSTRUMENTAL}`（インストで使った曲なら "1"）を使えるようにし、`{?INSTRUMENTAL}` / `{?!INSTRUMENTAL}` で曲名の添え書き・「作曲・編曲」の 1 行・「オリジナルボーカル曲」の見出しを書き分ける。テンプレの無い既定の曲のまとまりと、話のページの主題歌・挿入歌の一覧では、曲名の後ろ（カギ括弧の内側）に「（インストゥルメンタル）」を添える。Catalog の主題歌のコピー（他話から・範囲）と並べ替えは印ごと写し、入力欄の無い単発の保存では印を渡さなければ今の印を残す。
 - **CDAnalyzer：初期のウィンドウの幅を広げ、DB 連携パネルのチェックボックスが見出しに隠れていたのを直した**（`MainForm.Designer`）：中身の幅を 944px から 1320px にした（読み取りサマリ・トラック一覧・アルバム情報が広がり、DB 連携パネルは右に寄る）。見出し「DB 連携」のラベルが幅 200px で「照合・登録のあと音の特徴も記録」のチェックの四角と頭の字にかぶり、押せなかったため、ラベルを文字の幅にしてチェックボックスを左に寄せた。

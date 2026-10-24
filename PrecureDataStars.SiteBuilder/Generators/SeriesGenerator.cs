@@ -214,7 +214,7 @@ public sealed class SeriesGenerator
     /// 並び順は <c>display_order ASC, precure_id ASC</c> でタイブレーク。
     /// <para>
     /// 作品単位の作品（映画など。<c>credit_attach_to='SERIES'</c>）は、その作品のクレジットの
-    /// 声の出演（CHARACTER_VOICE）のうち、キャラの名義がプリキュアの名義（変身前・変身後・変身後 2・別形態）に当たるものを
+    /// 声の出演（CHARACTER_VOICE）のうち、キャラの名義がプリキュアの名義（変身前・変身後・変身後 2・別形態）か、それらと同じキャラの名義に当たるものを
     /// その作品に出たプリキュアとする。その作品自身か親の TV シリーズ（<c>parent_series_id</c> が TV の作品）の
     /// <c>series_precures</c> に紐付くプリキュアを先に今までどおりの表記（変身前 / 変身後 (CV)）で出し、続けてそれ以外
     /// （客演）を略記（変身後の名前から「キュア」を除いたもの）で出す。クレジットが無い（プリキュアが 1 人も出ていない）
@@ -271,10 +271,16 @@ public sealed class SeriesGenerator
         // 作品単位の作品（映画など）は、クレジットの声の出演から出たプリキュアを引く
         // （series_precures に行がある作品も、行はクレジットの表記を略さないかどうかの判定に使う）。
         var precureByAlias = new Dictionary<int, Precure>();
+        // 台帳の名義と同じキャラの別の名義（「十六夜リコ」に対する「リコ」など）でクレジットされたときも拾えるよう、キャラでも引く
+        var precureByCharacter = new Dictionary<int, Precure>();
         foreach (var p in allPrecures.OrderBy(p => p.PrecureId))
         {
             foreach (var aliasId in new int?[] { p.PreTransformAliasId, p.TransformAliasId, p.Transform2AliasId, p.AltFormAliasId })
-                if (aliasId is int a) precureByAlias.TryAdd(a, p);
+            {
+                if (aliasId is not int a) continue;
+                precureByAlias.TryAdd(a, p);
+                if (aliasById.TryGetValue(a, out var precureAlias)) precureByCharacter.TryAdd(precureAlias.CharacterId, p);
+            }
         }
         foreach (var series in _ctx.Series)
         {
@@ -295,8 +301,11 @@ public sealed class SeriesGenerator
                              .SelectMany(r => r.Blocks).SelectMany(b => b.Entries))
                 {
                     if (!string.Equals(entry.EntryKind, "CHARACTER_VOICE", StringComparison.Ordinal)) continue;
-                    if (entry.CharacterAliasId is int ca && precureByAlias.TryGetValue(ca, out var hit) && seen.Add(hit.PrecureId))
-                        found.Add(hit);
+                    if (entry.CharacterAliasId is not int ca) continue;
+                    if (!precureByAlias.TryGetValue(ca, out var hit)
+                        && !(aliasById.TryGetValue(ca, out var creditedAlias) && precureByCharacter.TryGetValue(creditedAlias.CharacterId, out hit)))
+                        continue;
+                    if (seen.Add(hit!.PrecureId)) found.Add(hit);
                 }
             }
             if (found.Count == 0) continue;

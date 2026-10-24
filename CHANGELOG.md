@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **DB：健全性チェックに、音楽クレジットの紐付け先が出典の盤に載っているかの点検（E1）を足した**（`db/health_check/master_consistency_check.sql`）：`music_credits` の曲（`SONG`）・録音（`SONG_RECORDING`）・劇伴セッション（`BGM_SESSION`）の行が、出典の盤（`source_product_catalog_no`）のトラックに無い曲・録音・セッションを指していないかを数える。曲 ID の列に録音 ID を入れるような取り違えを見つけるため。
 - **スキーマ・サイト・Catalog：劇伴の曲に歌い手（スキャットなど）を持てるようにした**（`bgm_cue_singers`・役職 `SCAT`・`BgmCueSinger`・`BgmCueSingersRepository`・`SiteDataLoader`・`TrackCreditHtmlBuilder`・`SingerHtmlBuilder`・`ProductsGenerator`・`MusicGenerator`・`PersonsGenerator`・`CharactersGenerator`・`bgms-detail.sbn`・`characters-detail.sbn`・Catalog の `BgmCuesEditorForm`・`db/migrations/v1.19.1_add_bgm_cue_singers.sql`・健全性チェック）：サントラに「スキャット：キュアミラクル(CV:高橋李依)、…」と載る劇伴の歌い手を、歌の録音の歌唱者と同じ列（人物 / キャラ＋声優・相方・区切り・所属・ユニットの展開）で持つ表を足した。商品詳細のトラック行と劇伴詳細の曲のカードに作曲・編曲に続けて出し、人物・ユニット詳細の音楽クレジットの「歌唱」（コーラスだけなら「コーラスのみ」）に劇伴の枠で、キャラクター詳細の「歌」に劇伴のカードで出す。歌唱一覧・歌唱系の役職詳細・話数ごとの関与には数えない。Catalog の「劇伴管理」に、役職を選んで歌唱者の編集ダイアログで連名を入れる「歌い手」の行を足した。
 - **データ：曲の作家・歌唱者・劇伴の作家の読み込みで、並びに無い役職が先頭に来ていたのを直した**（`SongCreditsRepository`・`SongRecordingSingersRepository`・`BgmCueCreditsRepository`）：役職の慣習順を `FIELD()` で並べていたが、`FIELD()` は並びに無い値を 0 として返すため、英訳・オーケストラ編曲・ストリングス編曲や台詞などがコメントの「末尾」と逆に先頭に並んでいた。0 かどうかを先に並べて末尾に回すようにした。歌唱者の並びは実在しない役職コード `CHORUS` を見ていたので、コーラスの役職コード `BACKING_VOCALS` にした。
 

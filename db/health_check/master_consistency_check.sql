@@ -300,6 +300,27 @@ WHERE ccr.join_previous = 1
 ORDER BY ccr.card_role_id;
 
 
+-- E1: 音楽クレジットの紐付け先が出典の盤に載っていない
+--   件数 > 0 の意味: 「music_credits の曲・録音・劇伴セッションの行が、出典の盤（source_product_catalog_no）の
+--   トラックに無い曲・録音・セッションを指している」状態。曲 ID と録音 ID の取り違え（曲 ID の列に録音 ID を入れる）が典型。
+--   SONG は出典の盤のトラックの録音の曲、SONG_RECORDING は出典の盤のトラックの録音、
+--   BGM_SESSION は出典の盤のトラックの劇伴のセッションと照らす。
+SELECT 'E1 music_credits target not on source disc' AS check_name, m.music_credit_id, m.target_kind, m.source_product_catalog_no,
+       m.song_id, m.song_recording_id, m.bgm_series_id, m.bgm_session_no, m.role_code
+FROM music_credits m
+WHERE (m.target_kind = 'SONG' AND NOT EXISTS (
+         SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no JOIN song_recordings r ON r.song_recording_id = t.song_recording_id
+         WHERE d.product_catalog_no = m.source_product_catalog_no AND r.song_id = m.song_id))
+   OR (m.target_kind = 'SONG_RECORDING' AND NOT EXISTS (
+         SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no
+         WHERE d.product_catalog_no = m.source_product_catalog_no AND t.song_recording_id = m.song_recording_id))
+   OR (m.target_kind = 'BGM_SESSION' AND NOT EXISTS (
+         SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no
+         JOIN bgm_cues bc ON bc.series_id = t.bgm_series_id AND bc.m_no_detail = t.bgm_m_no_detail
+         WHERE d.product_catalog_no = m.source_product_catalog_no AND bc.series_id = m.bgm_series_id AND bc.session_no = m.bgm_session_no))
+ORDER BY m.music_credit_id;
+
+
 -- ============================================================================
 -- 全件カウントサマリ（最後に実行すると一覧で異常箇所がわかる）
 -- ============================================================================
@@ -342,4 +363,8 @@ UNION ALL SELECT 'D1 entry_kind mismatch',             COUNT(*) FROM credit_bloc
     OR (cbe.entry_kind = 'TEXT'            AND cbe.raw_text IS NULL)
 UNION ALL SELECT 'D2 role_label_text same as name_ja', COUNT(*) FROM credit_card_roles ccr JOIN roles r ON r.role_code = ccr.role_code WHERE ccr.role_label_text IS NOT NULL AND CAST(ccr.role_label_text AS BINARY) = CAST(r.name_ja AS BINARY)
 UNION ALL SELECT 'D3 join_separator w/o join_previous', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_separator IS NOT NULL AND ccr.join_previous = 0
-UNION ALL SELECT 'D4 join_previous w/o previous role', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_card_roles prev WHERE prev.card_group_id = ccr.card_group_id AND prev.order_in_group < ccr.order_in_group);
+UNION ALL SELECT 'D4 join_previous w/o previous role', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_card_roles prev WHERE prev.card_group_id = ccr.card_group_id AND prev.order_in_group < ccr.order_in_group)
+UNION ALL SELECT 'E1 music_credits target not on source disc', COUNT(*) FROM music_credits m
+    WHERE (m.target_kind = 'SONG' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no JOIN song_recordings r ON r.song_recording_id = t.song_recording_id WHERE d.product_catalog_no = m.source_product_catalog_no AND r.song_id = m.song_id))
+       OR (m.target_kind = 'SONG_RECORDING' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no WHERE d.product_catalog_no = m.source_product_catalog_no AND t.song_recording_id = m.song_recording_id))
+       OR (m.target_kind = 'BGM_SESSION' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no JOIN bgm_cues bc ON bc.series_id = t.bgm_series_id AND bc.m_no_detail = t.bgm_m_no_detail WHERE d.product_catalog_no = m.source_product_catalog_no AND bc.series_id = m.bgm_series_id AND bc.session_no = m.bgm_session_no));

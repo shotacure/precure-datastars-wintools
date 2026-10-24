@@ -1879,8 +1879,8 @@ CREATE TABLE `company_relations` (
   PRIMARY KEY (`relation_id`),
   UNIQUE KEY `uq_company_relations` (`from_company_id`, `to_company_id`, `relation_kind`, `valid_from`),
   KEY `ix_company_relations_to` (`to_company_id`),
-  CONSTRAINT `fk_company_relations_from` FOREIGN KEY (`from_company_id`) REFERENCES `companies` (`company_id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
-  CONSTRAINT `fk_company_relations_to`   FOREIGN KEY (`to_company_id`)   REFERENCES `companies` (`company_id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_company_relations_from` FOREIGN KEY (`from_company_id`) REFERENCES `companies` (`company_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_company_relations_to`   FOREIGN KEY (`to_company_id`)   REFERENCES `companies` (`company_id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `ck_company_relations_period`   CHECK (`valid_from` IS NULL OR `valid_to` IS NULL OR `valid_from` <= `valid_to`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='企業・団体どうしの関係（所属・事業の引き継ぎ）';
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -3990,7 +3990,7 @@ CREATE TABLE `published_entity_slugs` (
   KEY `ix_pes_person_alias` (`person_alias_id`),
   CONSTRAINT `fk_pes_person` FOREIGN KEY (`person_id`) REFERENCES `persons` (`person_id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_pes_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`character_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_pes_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`company_id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_pes_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`company_id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_pes_person_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='本番に公開した人物・キャラクター・企業 URL の記録（旧名 URL の 301 転送用）';
 /*!40101 SET character_set_client = @saved_cs_client */;

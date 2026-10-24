@@ -373,9 +373,9 @@
   </section>
   {{~ end ~}}
 
-  {{## 外部リンクセクション。詳細ページの末尾に置く。Company.OfficialUrl / XUrl / InstagramUrl / YoutubeUrl が
-       一つでもあれば表示。Wikipedia は内部値として保持のみ、UI からは出さない方針なのでここでは扱わない。 ##}}
-  {{~ if Company.OfficialUrl != "" || Company.XUrl != "" || Company.InstagramUrl != "" || Company.YoutubeUrl != "" ~}}
+  {{## 外部リンクセクション。詳細ページの末尾に置く。Company.OfficialUrl / XUrl / InstagramUrl / YoutubeUrl / WikipediaUrl が
+       一つでもあれば表示。Wikipedia は企業の記事で、並びの最後に置く。 ##}}
+  {{~ if Company.OfficialUrl != "" || Company.XUrl != "" || Company.InstagramUrl != "" || Company.YoutubeUrl != "" || Company.WikipediaUrl != "" ~}}
   <section id="external-links">
     <h2>外部リンク</h2>
     <ul class="external-links">
@@ -390,6 +390,9 @@
       {{~ end ~}}
       {{~ if Company.YoutubeUrl != "" ~}}
       <li><a class="external-link external-link-youtube" href="{{ Company.YoutubeUrl }}" target="_blank" rel="noopener nofollow">YouTube</a></li>
+      {{~ end ~}}
+      {{~ if Company.WikipediaUrl != "" ~}}
+      <li><a class="external-link external-link-wikipedia" href="{{ Company.WikipediaUrl }}" target="_blank" rel="noopener nofollow">Wikipedia</a></li>
       {{~ end ~}}
     </ul>
   </section>

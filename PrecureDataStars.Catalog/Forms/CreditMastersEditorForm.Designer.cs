@@ -588,7 +588,7 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "X (Twitter)",     txtPXUrl,           18, 432, inputWidth: 450);
         AddLabeledControl(pnl, "Instagram",       txtPInstagramUrl,   18, 464, inputWidth: 450);
         AddLabeledControl(pnl, "YouTube",         txtPYoutubeUrl,     18, 496, inputWidth: 450);
-        AddLabeledControl(pnl, "Wikipedia (内部)", txtPWikipediaUrl,   18, 528, inputWidth: 450);
+        AddLabeledControl(pnl, "Wikipedia", txtPWikipediaUrl,         18, 528, inputWidth: 450);
 
         // 同姓同名の別人を見分ける添え書き（例: 声優 / 背景美術）。サイトの URL と見出しに「名前 (添え書き)」で添える。
         txtPDisambiguation = new TextBox();
@@ -640,7 +640,7 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "X (Twitter)",     txtCXUrl,         18, 300, inputWidth: 450);
         AddLabeledControl(pnl, "Instagram",       txtCInstagramUrl, 18, 332, inputWidth: 450);
         AddLabeledControl(pnl, "YouTube",         txtCYoutubeUrl,   18, 364, inputWidth: 450);
-        AddLabeledControl(pnl, "Wikipedia (内部)", txtCWikipediaUrl, 18, 396, inputWidth: 450);
+        AddLabeledControl(pnl, "Wikipedia", txtCWikipediaUrl,        18, 396, inputWidth: 450);
 
         btnNewCompany = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSaveCompany = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };

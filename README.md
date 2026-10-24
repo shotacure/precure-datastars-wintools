@@ -1215,7 +1215,7 @@ Role: PRODUCTION 制作 (order 2)
 | `x_url` | X (Twitter)（黒） | X のプロフィール |
 | `instagram_url` | Instagram（ピンク） | Instagram のプロフィール |
 | `youtube_url` | YouTube（赤） | YouTube のチャンネル |
-| `wikipedia_url` | （出さない） | 内部メモ。サイト UI からはリンクしない |
+| `wikipedia_url` | Wikipedia（薄いグレー） | 本人の Wikipedia 記事。並びの最後に出す |
 
 ##### 代表作（プリキュアを除く）（person_notable_works）
 

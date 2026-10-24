@@ -318,10 +318,10 @@
   </section>
   {{~ end ~}}
 
-  {{## 外部リンクセクション。詳細ページの末尾に置く。Person.OfficialUrl / AffiliationUrl / XUrl / InstagramUrl / YoutubeUrl が
+  {{## 外部リンクセクション。詳細ページの末尾に置く。Person.OfficialUrl / AffiliationUrl / XUrl / InstagramUrl / YoutubeUrl / WikipediaUrl が
        一つでもあれば表示。公式ページは本人の公式サイト、所属先は事務所・会社・楽団などのサイトにある本人のプロフィール。
-       Wikipedia は内部値として保持のみ、UI からは出さない方針なのでここでは扱わない。 ##}}
-  {{~ if Person.OfficialUrl != "" || Person.AffiliationUrl != "" || Person.XUrl != "" || Person.InstagramUrl != "" || Person.YoutubeUrl != "" ~}}
+       Wikipedia は本人の記事で、並びの最後に置く。 ##}}
+  {{~ if Person.OfficialUrl != "" || Person.AffiliationUrl != "" || Person.XUrl != "" || Person.InstagramUrl != "" || Person.YoutubeUrl != "" || Person.WikipediaUrl != "" ~}}
   <section id="external-links">
     <h2>外部リンク</h2>
     <ul class="external-links">
@@ -339,6 +339,9 @@
       {{~ end ~}}
       {{~ if Person.YoutubeUrl != "" ~}}
       <li><a class="external-link external-link-youtube" href="{{ Person.YoutubeUrl }}" target="_blank" rel="noopener nofollow">YouTube</a></li>
+      {{~ end ~}}
+      {{~ if Person.WikipediaUrl != "" ~}}
+      <li><a class="external-link external-link-wikipedia" href="{{ Person.WikipediaUrl }}" target="_blank" rel="noopener nofollow">Wikipedia</a></li>
       {{~ end ~}}
     </ul>
   </section>

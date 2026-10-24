@@ -6520,6 +6520,7 @@ a.credit-card-series:focus-visible {
 .external-link-x         { border-color: #0f172a; }
 .external-link-instagram { border-color: #d6249f; }
 .external-link-youtube   { border-color: #ff0000; }
+.external-link-wikipedia { border-color: #a2a9b1; }
 
 /* スタッフ表：役職ラベルリンク エピソード詳細のスタッフセクション（staff-table）で、役職ラベル（脚本／絵コンテ／演出 等）を 役職統計詳細ページにリンクできるようになった。 */
 .staff-table th a {

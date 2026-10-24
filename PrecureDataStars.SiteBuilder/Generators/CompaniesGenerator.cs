@@ -263,7 +263,8 @@ public sealed class CompaniesGenerator
                 OfficialUrl = company.OfficialUrl ?? "",
                 XUrl = company.XUrl ?? "",
                 InstagramUrl = company.InstagramUrl ?? "",
-                YoutubeUrl = company.YoutubeUrl ?? ""
+                YoutubeUrl = company.YoutubeUrl ?? "",
+                WikipediaUrl = company.WikipediaUrl ?? ""
             },
             Relations = relations,
             InvolvementGroups = groups,
@@ -1320,11 +1321,13 @@ public sealed class CompaniesGenerator
         public string FoundedDate { get; set; } = "";
         public string DissolvedDate { get; set; } = "";
         public string Notes { get; set; } = "";
-        /// <summary>公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
+        /// <summary>公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。</summary>
         public string OfficialUrl { get; set; } = "";
         public string XUrl { get; set; } = "";
         public string InstagramUrl { get; set; } = "";
         public string YoutubeUrl { get; set; } = "";
+        /// <summary>企業の Wikipedia 記事 URL。「外部リンク」セクションの最後に「Wikipedia」として出す。</summary>
+        public string WikipediaUrl { get; set; } = "";
     }
 
     /// <summary>

@@ -521,7 +521,8 @@ public sealed class PersonsGenerator
                 AffiliationUrl = person.AffiliationUrl ?? "",
                 XUrl = person.XUrl ?? "",
                 InstagramUrl = person.InstagramUrl ?? "",
-                YoutubeUrl = person.YoutubeUrl ?? ""
+                YoutubeUrl = person.YoutubeUrl ?? "",
+                WikipediaUrl = person.WikipediaUrl ?? ""
             },
             InvolvementGroups = involvementGroups,
             InvolvementSections = involvementSections,
@@ -1613,13 +1614,15 @@ public sealed class PersonsGenerator
         public string DeathDateLabel { get; set; } = "";
         /// <summary>初参加の話（リンク付き HTML、<see cref="FirstAppearanceResolver"/>）。収録範囲外・該当なしは空文字。</summary>
         public string FirstAppearanceHtml { get; set; } = "";
-        /// <summary>本人の公式サイト URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
+        /// <summary>本人の公式サイト URL。詳細ページ末尾「外部リンク」セクションに出す。</summary>
         public string OfficialUrl { get; set; } = "";
         /// <summary>所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL。「外部リンク」セクションに「所属先」として、公式ページの次に出す。</summary>
         public string AffiliationUrl { get; set; } = "";
         public string XUrl { get; set; } = "";
         public string InstagramUrl { get; set; } = "";
         public string YoutubeUrl { get; set; } = "";
+        /// <summary>本人の Wikipedia 記事 URL。「外部リンク」セクションの最後に「Wikipedia」として出す。</summary>
+        public string WikipediaUrl { get; set; } = "";
     }
 
     /// <summary>音楽クレジットの大見出し 1 つ分（関わった先：歌 / 劇伴 / 音盤）。</summary>

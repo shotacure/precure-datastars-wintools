@@ -17,8 +17,8 @@ public static class CreditText
     /// <summary>
     /// 歌の指定役職（作詞 / 作曲 / 編曲）の名義を、<c>preceding_separator</c> で連結した平文で返す。
     /// 構造化行が無ければ <paramref name="fallbackText"/>（songs の *_name 列）を返す。
-    /// <paramref name="companyAliasMap"/> を渡すと、盤に印刷された所属を名義のあとに「（MONACA）」の形で添える
-    /// （<see cref="SongCreditAffiliation"/>）。
+    /// <paramref name="companyAliasMap"/> を渡すと、盤に印刷された所属を出し方に従って添える
+    /// （名義のあとに「（MONACA）」、所属の会社名だけ、名義だけ。<see cref="SongCreditAffiliation"/>）。
     /// </summary>
     public static string SongCreditNames(
         IReadOnlyList<SongCredit>? credits,
@@ -29,30 +29,34 @@ public static class CreditText
     {
         var rows = SongCreditRows(credits, roleCode);
         if (rows.Count == 0) return fallbackText?.Trim() ?? "";
-        return JoinNames(rows.Select((r, i) => (r.PrecedingSeparator,
-            PersonName(r.PersonAliasId, personAliasMap)
-            + (companyAliasMap is null ? "" : SongCreditAffiliation.SuffixText(rows, i, companyAliasMap)))));
+        if (companyAliasMap is null) return JoinNames(rows.Select(r => (r.PrecedingSeparator, PersonName(r.PersonAliasId, personAliasMap))));
+        return SongCreditAffiliation.BuildNamesText(rows, companyAliasMap, r => PersonName(r.PersonAliasId, personAliasMap));
     }
 
     /// <summary>
-    /// 歌の指定役職の名義を 1 名義 1 要素のリストで返す（JSON-LD の Person ノード列用）。
-    /// 構造化行が無ければ、空でないフリーテキストを 1 要素として返す。
+    /// 歌の指定役職の名義を 1 名義 1 要素のリストで返す（JSON-LD の Person / Organization ノード列用）。
+    /// 所属の会社名だけを出す行は会社名を Organization として返し、同じ会社名だけの行が続くときは 1 つにする。
+    /// 構造化行が無ければ、空でないフリーテキストを 1 要素（Person）として返す。
     /// </summary>
-    public static IReadOnlyList<string> SongCreditNameList(
+    public static IReadOnlyList<(string Name, bool IsOrganization)> SongCreditNameList(
         IReadOnlyList<SongCredit>? credits,
         string roleCode,
         string? fallbackText,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap)
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CompanyAlias> companyAliasMap)
     {
         var rows = SongCreditRows(credits, roleCode);
         if (rows.Count > 0)
         {
-            return rows.Select(r => PersonName(r.PersonAliasId, personAliasMap))
-                .Where(n => n.Length > 0)
+            return SongCreditAffiliation.VisibleRows(rows, companyAliasMap)
+                .Select(v => v.CompanyOnly
+                    ? (SongCreditAffiliation.Name(rows[v.Index], companyAliasMap), true)
+                    : (PersonName(rows[v.Index].PersonAliasId, personAliasMap), false))
+                .Where(n => n.Item1.Length > 0)
                 .ToList();
         }
         string fb = fallbackText?.Trim() ?? "";
-        return fb.Length == 0 ? Array.Empty<string>() : new[] { fb };
+        return fb.Length == 0 ? Array.Empty<(string, bool)>() : new[] { (fb, false) };
     }
 
     /// <summary>

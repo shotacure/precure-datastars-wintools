@@ -47,6 +47,14 @@ public sealed class SongCredit
     /// <summary>会社マスタに無い所属の自由記述。<see cref="AffiliationCompanyAliasId"/> があればそちらを使う。</summary>
     public string? AffiliationText { get; set; }
 
+    /// <summary>
+    /// 所属の出し方（<see cref="SongCreditAffiliationDisplay"/> の値）。既定は名義のあとに所属を添える <c>NAME_WITH_COMPANY</c>。
+    /// <c>COMPANY_ONLY</c> は名義を出さず所属の会社名だけ（盤に「Nostalgic Orchestra」とだけ載っているとき）、
+    /// <c>NAME_ONLY</c> は所属を持ったまま名義だけ（盤には名前だけだが実質はその団体の仕事のとき）。
+    /// どれもデータは人物＋所属で持ち、人物の集計・企業詳細の所属スタッフは同じに効く。
+    /// </summary>
+    public string AffiliationDisplay { get; set; } = SongCreditAffiliationDisplay.NameWithCompany;
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 
@@ -56,6 +64,17 @@ public sealed class SongCredit
     public DateTime? UpdatedAt { get; set; }
     public string? CreatedBy { get; set; }
     public string? UpdatedBy { get; set; }
+}
+
+/// <summary>song_credits.affiliation_display の値（所属の出し方）。</summary>
+public static class SongCreditAffiliationDisplay
+{
+    /// <summary>名義のあとに所属を添える（「藤本 記子（Nostalgic Orchestra）」。既定）。</summary>
+    public const string NameWithCompany = "NAME_WITH_COMPANY";
+    /// <summary>名義を出さず所属の会社名だけを出す（「Nostalgic Orchestra」）。所属が無い行は名義に戻す。</summary>
+    public const string CompanyOnly = "COMPANY_ONLY";
+    /// <summary>所属を持ったまま名義だけを出す（「藤本 記子」）。</summary>
+    public const string NameOnly = "NAME_ONLY";
 }
 
 /// <summary>song_credits.credit_role の典型値を表す定数群。 credit_role は roles マスタの任意の role_code を受け入れる <c>string</c> 型。 本クラスはコード上で文字列リテラル "LYRICS" 等を散在させないための定数提供場所。</summary>

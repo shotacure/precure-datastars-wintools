@@ -289,23 +289,11 @@ public sealed class ThemeSongRowBuilder
         {
             return string.IsNullOrEmpty(fallbackText) ? "" : HtmlUtil.Escape(fallbackText);
         }
-        var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < roleRows.Count; i++)
-        {
-            var row = roleRows[i];
-            if (i > 0) sb.Append(HtmlUtil.Escape(row.PrecedingSeparator ?? ""));
-            if (personAliasMap.TryGetValue(row.PersonAliasId, out var alias))
-            {
-                sb.Append(_staffLinkResolver.ResolveAsHtml(row.PersonAliasId, alias.GetDisplayName()));
-            }
-            else
-            {
-                sb.Append("[alias#").Append(row.PersonAliasId).Append("]");
-            }
-            // 盤に印刷された所属（例：岡部 啓一（MONACA））。
-            sb.Append(SongCreditAffiliation.SuffixHtml(roleRows, i, _ctx.CompanyAliasById));
-        }
-        return sb.ToString();
+        // 名義と盤に印刷された所属（例：岡部 啓一（MONACA）、所属の会社名だけ、名義だけ）。
+        return SongCreditAffiliation.BuildNamesHtml(roleRows, _ctx.CompanyAliasById, row =>
+            personAliasMap.TryGetValue(row.PersonAliasId, out var alias)
+                ? _staffLinkResolver.ResolveAsHtml(row.PersonAliasId, alias.GetDisplayName())
+                : "[alias#" + row.PersonAliasId + "]");
     }
 
 }

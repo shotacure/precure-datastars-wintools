@@ -612,6 +612,7 @@ public partial class SongsEditorForm : Form
                     AffiliationCompanyAliasId = c.AffiliationCompanyAliasId,
                     AffiliationCompanyDisplay = affDisplay,
                     AffiliationText = c.AffiliationText,
+                    AffiliationMode = c.AffiliationDisplay,
                     Notes = c.Notes
                 });
             }
@@ -643,6 +644,7 @@ public partial class SongsEditorForm : Form
                 PrecedingSeparator = i == 0 ? null : l.PrecedingSeparator,
                 AffiliationCompanyAliasId = l.AffiliationCompanyAliasId,
                 AffiliationText = l.AffiliationText,
+                AffiliationDisplay = l.AffiliationMode ?? SongCreditAffiliationDisplay.NameWithCompany,
                 Notes = l.Notes
             }).ToList();
 

@@ -50,6 +50,10 @@ public partial class PersonAliasCreditsEditDialog : Form
         bool withAffiliation = _companyAliasesRepo is not null;
         lblAffiliation.Visible = txtAffiliationCompany.Visible = btnPickAffiliation.Visible = btnClearAffiliation.Visible = withAffiliation;
         lblAffiliationText.Visible = txtAffiliationText.Visible = withAffiliation;
+        lblAffiliationMode.Visible = cboAffiliationMode.Visible = withAffiliation;
+        cboAffiliationMode.DisplayMember = nameof(AffiliationModeItem.Label);
+        cboAffiliationMode.ValueMember = nameof(AffiliationModeItem.Code);
+        cboAffiliationMode.DataSource = AffiliationModeItems;
         gridLines.Columns["colAffiliation"]!.Visible = withAffiliation;
 
         // バインド：BindingList を DataSource として直接バインド
@@ -68,6 +72,7 @@ public partial class PersonAliasCreditsEditDialog : Form
                 AffiliationCompanyAliasId = l.AffiliationCompanyAliasId,
                 AffiliationCompanyDisplay = l.AffiliationCompanyDisplay,
                 AffiliationText = l.AffiliationText,
+                AffiliationMode = l.AffiliationMode,
                 Notes = l.Notes
             });
         }
@@ -102,6 +107,7 @@ public partial class PersonAliasCreditsEditDialog : Form
             txtSeparator.Enabled = row.Seq >= 2;
             SetAffiliationCompany(row.AffiliationCompanyAliasId, row.AffiliationCompanyDisplay ?? "");
             txtAffiliationText.Text = row.AffiliationText ?? "";
+            cboAffiliationMode.SelectedValue = row.AffiliationMode ?? SongCreditAffiliationDisplay.NameWithCompany;
             txtNotes.Text = row.Notes ?? "";
         }
         else
@@ -114,6 +120,7 @@ public partial class PersonAliasCreditsEditDialog : Form
             txtSeparator.Enabled = true;
             SetAffiliationCompany(null, "");
             txtAffiliationText.Text = "";
+            cboAffiliationMode.SelectedValue = SongCreditAffiliationDisplay.NameWithCompany;
             txtNotes.Text = "";
         }
     }
@@ -140,6 +147,10 @@ public partial class PersonAliasCreditsEditDialog : Form
     /// <summary>詳細パネルの所属の自由記述（空なら null）。</summary>
     private string? AffiliationTextInput()
         => string.IsNullOrWhiteSpace(txtAffiliationText.Text) ? null : txtAffiliationText.Text.Trim();
+
+    /// <summary>詳細パネルで選んでいる所属の出し方（未選択なら既定の名義＋所属）。</summary>
+    private string AffiliationModeInput()
+        => cboAffiliationMode.SelectedValue as string ?? SongCreditAffiliationDisplay.NameWithCompany;
 
     /// <summary>名義 picker を開いて選択結果を詳細パネルに反映する（まだリストには戻していない）。</summary>
     private async Task OnPickAliasAsync()
@@ -175,6 +186,7 @@ public partial class PersonAliasCreditsEditDialog : Form
             AffiliationCompanyAliasId = txtAffiliationCompany.Tag as int?,
             AffiliationCompanyDisplay = txtAffiliationCompany.Tag is int ? txtAffiliationCompany.Text : null,
             AffiliationText = AffiliationTextInput(),
+            AffiliationMode = AffiliationModeInput(),
             Notes = string.IsNullOrWhiteSpace(txtNotes.Text) ? null : txtNotes.Text
         };
         _lines.Add(row);
@@ -201,6 +213,7 @@ public partial class PersonAliasCreditsEditDialog : Form
         row.AffiliationCompanyAliasId = txtAffiliationCompany.Tag as int?;
         row.AffiliationCompanyDisplay = txtAffiliationCompany.Tag is int ? txtAffiliationCompany.Text : null;
         row.AffiliationText = AffiliationTextInput();
+        row.AffiliationMode = AffiliationModeInput();
         row.Notes = string.IsNullOrWhiteSpace(txtNotes.Text) ? null : txtNotes.Text;
         _lines.ResetItem(_lines.IndexOf(row));
     }
@@ -250,9 +263,21 @@ public partial class PersonAliasCreditsEditDialog : Form
             AffiliationCompanyAliasId = l.AffiliationCompanyAliasId,
             AffiliationCompanyDisplay = l.AffiliationCompanyDisplay,
             AffiliationText = l.AffiliationText,
+            AffiliationMode = l.AffiliationMode,
             Notes = l.Notes
         }).ToList();
     }
+
+    /// <summary>所属の出し方の選択肢（song_credits.affiliation_display の値と表示名）。</summary>
+    private static readonly List<AffiliationModeItem> AffiliationModeItems = new()
+    {
+        new(SongCreditAffiliationDisplay.NameWithCompany, "名義＋所属（既定）"),
+        new(SongCreditAffiliationDisplay.CompanyOnly, "所属の会社名だけ"),
+        new(SongCreditAffiliationDisplay.NameOnly, "名義だけ（所属は持つ）"),
+    };
+
+    /// <summary>所属の出し方のコンボ表示用。</summary>
+    private sealed record AffiliationModeItem(string Code, string Label);
 
     /// <summary>呼び出し側との受け渡し用 DTO。</summary>
     public sealed class LineDto
@@ -267,6 +292,8 @@ public partial class PersonAliasCreditsEditDialog : Form
         public string? AffiliationCompanyDisplay { get; set; }
         /// <summary>会社マスタに無い所属の自由記述。</summary>
         public string? AffiliationText { get; set; }
+        /// <summary>所属の出し方（song_credits.affiliation_display の値。null は既定の名義＋所属）。</summary>
+        public string? AffiliationMode { get; set; }
         public string? Notes { get; set; }
     }
 
@@ -280,8 +307,22 @@ public partial class PersonAliasCreditsEditDialog : Form
         public int? AffiliationCompanyAliasId { get; set; }
         public string? AffiliationCompanyDisplay { get; set; }
         public string? AffiliationText { get; set; }
-        /// <summary>グリッドの「所属」列の表示（会社名義を優先し、無ければ自由記述）。</summary>
-        public string AffiliationDisplay => AffiliationCompanyAliasId is not null ? AffiliationCompanyDisplay ?? "" : AffiliationText ?? "";
+        /// <summary>所属の出し方（song_credits.affiliation_display の値。null は既定の名義＋所属）。</summary>
+        public string? AffiliationMode { get; set; }
+        /// <summary>グリッドの「所属」列の表示（会社名義を優先し、無ければ自由記述）。出し方が既定でなければ〔会社名だけ〕〔名義だけ〕を添える。</summary>
+        public string AffiliationDisplay
+        {
+            get
+            {
+                string aff = AffiliationCompanyAliasId is not null ? AffiliationCompanyDisplay ?? "" : AffiliationText ?? "";
+                return AffiliationMode switch
+                {
+                    SongCreditAffiliationDisplay.CompanyOnly => aff + "〔会社名だけ〕",
+                    SongCreditAffiliationDisplay.NameOnly => aff + "〔名義だけ〕",
+                    _ => aff
+                };
+            }
+        }
         public string? Notes { get; set; }
     }
 }

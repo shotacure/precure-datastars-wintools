@@ -221,20 +221,8 @@ public sealed class TrackCreditHtmlBuilder
             : new List<SongCredit>();
         if (credits.Count > 0)
         {
-            var sb = new StringBuilder();
-            for (int i = 0; i < credits.Count; i++)
-            {
-                var c = credits[i];
-                if (i > 0)
-                {
-                    string sep = string.IsNullOrEmpty(c.PrecedingSeparator) ? "、" : c.PrecedingSeparator!;
-                    sb.Append(Escape(sep));
-                }
-                sb.Append(BuildPersonAliasLinkHtml(c.PersonAliasId));
-                // 盤に印刷された所属（例：岡部 啓一（MONACA））。
-                sb.Append(SongCreditAffiliation.SuffixHtml(credits, i, _companyAliasMap));
-            }
-            return sb.ToString();
+            // 名義と盤に印刷された所属（例：岡部 啓一（MONACA）、所属の会社名だけ、名義だけ）。区切りが空なら「、」。
+            return SongCreditAffiliation.BuildNamesHtml(credits, _companyAliasMap, c => BuildPersonAliasLinkHtml(c.PersonAliasId), "、");
         }
 
         // フォールバック：構造化クレジットが無いので、Song のフリーテキストを役職コードに応じて拾う。

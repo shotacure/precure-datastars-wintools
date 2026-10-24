@@ -3153,6 +3153,10 @@ CREATE TABLE `song_credits` (
   `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `affiliation_company_alias_id` int DEFAULT NULL COMMENT '名義に添える所属の会社名義（company_aliases.alias_id）',
   `affiliation_text`    varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '会社マスタに無い所属の自由記述（会社名義があればそちらを使う）',
+  -- 所属の出し方。NAME_WITH_COMPANY = 名義のあとに所属を添える（既定）、COMPANY_ONLY = 名義を出さず所属の会社名だけ
+  -- （盤に団体名だけが載っているとき）、NAME_ONLY = 所属を持ったまま名義だけ（盤には名前だけだが実質はその団体の仕事のとき）。
+  -- どれもデータは人物＋所属で持つ。COMPANY_ONLY で所属が無い行は名義に戻して出す。
+  `affiliation_display` enum('NAME_WITH_COMPANY','COMPANY_ONLY','NAME_ONLY') NOT NULL DEFAULT 'NAME_WITH_COMPANY' COMMENT '所属の出し方（名義＋所属 / 所属の会社名だけ / 名義だけ）',
   `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

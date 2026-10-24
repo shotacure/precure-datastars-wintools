@@ -416,8 +416,8 @@ public sealed class SongsGenerator
         string songUrl = PathUtil.SongUrl(song.SongId);
         var jsonLd = BuildSongJsonLd(
             song, metaDescription, baseUrl, songUrl,
-            CreditText.SongCreditNameList(songCreditRows, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap),
-            CreditText.SongCreditNameList(songCreditRows, SongCreditRoles.Composition, song.ComposerName, personAliasMap));
+            CreditText.SongCreditNameList(songCreditRows, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap, _ctx.CompanyAliasById),
+            CreditText.SongCreditNameList(songCreditRows, SongCreditRoles.Composition, song.ComposerName, personAliasMap, _ctx.CompanyAliasById));
 
         // PageTitle（<title>・og:title・シェア文の見出し）は検索で「曲名＋歌い手」に当たるよう、
         // 先頭録音の歌唱者を添えて「「曲名」歌: {歌唱者}」の形にする。
@@ -807,10 +807,10 @@ public sealed class SongsGenerator
     /// <summary>楽曲詳細ページ用の Schema.org MusicComposition JSON-LD 文字列を組み立てる。</summary>
     private static string BuildSongJsonLd(
         Song song, string metaDescription, string baseUrl, string songUrl,
-        IReadOnlyList<string> lyricistNames, IReadOnlyList<string> composerNames)
+        IReadOnlyList<(string Name, bool IsOrganization)> lyricistNames, IReadOnlyList<(string Name, bool IsOrganization)> composerNames)
     {
         // 楽曲詳細の構造化データは Schema.org の MusicComposition 型。
-        // 作詞・作曲は lyricist / composer の Person ノードとして埋め込む。名義は構造化優先で解決済みの
+        // 作詞・作曲は lyricist / composer の Person ノード（所属の会社名だけを出す行は Organization ノード）として埋め込む。名義は構造化優先で解決済みの
         // 1 名義 1 要素リスト（CreditText.SongCreditNameList）を受け取り、1 名なら単独ノード、連名なら配列にする。
         // description と genre を追加して、リッチスニペットの候補要素を増やす。
         var jsonLdDict = new Dictionary<string, object?>
@@ -829,11 +829,11 @@ public sealed class SongsGenerator
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + songUrl;
         return JsonLdBuilder.Serialize(jsonLdDict);
 
-        // 名義列を Person ノードへ。0 名は null（キー自体を出さない）、1 名は単独ノード、2 名以上は配列。
-        static object? PersonNodes(IReadOnlyList<string> names)
+        // 名義列を Person ノードへ（所属の会社名だけを出す行は Organization）。0 名は null（キー自体を出さない）、1 名は単独ノード、2 名以上は配列。
+        static object? PersonNodes(IReadOnlyList<(string Name, bool IsOrganization)> names)
         {
             var nodes = names
-                .Select(n => new Dictionary<string, object?> { ["@type"] = "Person", ["name"] = n })
+                .Select(n => new Dictionary<string, object?> { ["@type"] = n.IsOrganization ? "Organization" : "Person", ["name"] = n.Name })
                 .ToList();
             return nodes.Count switch
             {
@@ -1057,20 +1057,15 @@ public sealed class SongsGenerator
             return ($"<span class=\"staff-name\">{HtmlUtil.Escape(fallbackText)}</span>", single);
         }
 
-        var sb = new System.Text.StringBuilder();
-        sb.Append("<span class=\"staff-name\">");
-        for (int i = 0; i < roleRows.Count; i++)
+        // 名義と所属（出し方に従う）。同じ会社名だけの行が続く連名は 1 つに見えるので、単独判定は表示の数で決める。
+        string names = SongCreditAffiliation.BuildNamesHtml(roleRows, _ctx.CompanyAliasById, row =>
         {
-            var row = roleRows[i];
-            if (i > 0) sb.Append(HtmlUtil.Escape(row.PrecedingSeparator ?? ""));
             string displayName = personAliasMap.TryGetValue(row.PersonAliasId, out var alias)
                 ? alias.GetDisplayName()
                 : "[alias#" + row.PersonAliasId + "]";
-            sb.Append(_staffLinkResolver.ResolveAsHtml(row.PersonAliasId, displayName));
-            sb.Append(SongCreditAffiliation.SuffixHtml(roleRows, i, _ctx.CompanyAliasById));
-        }
-        sb.Append("</span>");
-        return (sb.ToString(), roleRows.Count == 1);
+            return _staffLinkResolver.ResolveAsHtml(row.PersonAliasId, displayName);
+        });
+        return ($"<span class=\"staff-name\">{names}</span>", SongCreditAffiliation.VisibleRows(roleRows, _ctx.CompanyAliasById).Count == 1);
     }
 
     /// <summary>区切り記号（連名を示すもの）を含むか判定する。</summary>
@@ -1108,33 +1103,18 @@ public sealed class SongsGenerator
             return string.IsNullOrEmpty(fallbackText) ? "" : HtmlUtil.Escape(fallbackText);
         }
 
-        // 各 seq 行を「PrecedingSeparator + 名義リンク」の形で連結。
-        // seq=1 は PrecedingSeparator が NULL なので素直に先頭に置く。
-        var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < roleRows.Count; i++)
+        // 各行を「PrecedingSeparator + 名義リンク + 所属」の形で連結（所属は出し方に従い、会社名だけの行は会社名に置き換える）。
+        return SongCreditAffiliation.BuildNamesHtml(roleRows, _ctx.CompanyAliasById, row =>
         {
-            var row = roleRows[i];
-            if (i > 0)
-            {
-                // 区切り文字も HTML エスケープしてから出力する。
-                sb.Append(HtmlUtil.Escape(row.PrecedingSeparator ?? ""));
-            }
             if (personAliasMap.TryGetValue(row.PersonAliasId, out var alias))
             {
-                string display = alias.GetDisplayName();
-                sb.Append(_staffLinkResolver.ResolveAsHtml(row.PersonAliasId, display));
                 // 別名義なら本名義を括弧で添える（例：仲弓 香乃（ゆかな））。
-                sb.Append(MusicCreditViewBuilder.PrimaryNameSuffixHtml(_ctx, row.PersonAliasId));
+                return _staffLinkResolver.ResolveAsHtml(row.PersonAliasId, alias.GetDisplayName())
+                     + MusicCreditViewBuilder.PrimaryNameSuffixHtml(_ctx, row.PersonAliasId);
             }
-            else
-            {
-                // alias が見つからない（FK 整合性想定外）：ID を平文で出す。
-                sb.Append("[alias#").Append(row.PersonAliasId).Append("]");
-            }
-            // 盤に印刷された所属（例：岡部 啓一（MONACA））。
-            sb.Append(SongCreditAffiliation.SuffixHtml(roleRows, i, _ctx.CompanyAliasById));
-        }
-        return sb.ToString();
+            // alias が見つからない（FK 整合性想定外）：ID を平文で出す。
+            return "[alias#" + row.PersonAliasId + "]";
+        });
     }
 
     /// <summary>

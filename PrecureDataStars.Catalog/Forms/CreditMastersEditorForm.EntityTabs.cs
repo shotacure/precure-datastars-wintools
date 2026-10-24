@@ -429,6 +429,34 @@ public partial class CreditMastersEditorForm
         catch (Exception ex) { this.ShowError(ex); }
     }
 
+    /// <summary>選択中の人物のプロフィールの出典を編集するダイアログを開く。出典は人物本体の列を変えないので、閉じた後の再読み込みはしない。</summary>
+    private void OpenPersonSourcesEditor()
+    {
+        try
+        {
+            if (gridPersons.CurrentRow?.DataBoundItem is not Person p || gridPersons.SelectedRows.Count == 0)
+            { MessageBox.Show(this, "出典を編集する人物を選択してください。"); return; }
+
+            using var dlg = Dialogs.EntitySourcesEditorDialog.ForPerson(_entitySourcesRepo, p.PersonId, p.FullName);
+            dlg.ShowDialog(this);
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
+    /// <summary>選択中の団体のプロフィールの出典を編集するダイアログを開く。出典は団体本体の列を変えないので、閉じた後の再読み込みはしない。</summary>
+    private void OpenCompanySourcesEditor()
+    {
+        try
+        {
+            if (gridCompanies.CurrentRow?.DataBoundItem is not Company c || gridCompanies.SelectedRows.Count == 0)
+            { MessageBox.Show(this, "出典を編集する団体を選択してください。"); return; }
+
+            using var dlg = Dialogs.EntitySourcesEditorDialog.ForCompany(_entitySourcesRepo, c.CompanyId, c.Name);
+            dlg.ShowDialog(this);
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
     /// <summary>選択中の団体の関係（親・子・前身・後継）を編集するダイアログを開く。関係は団体本体の列を変えないので、閉じた後の再読み込みはしない。</summary>
     private void OpenCompanyRelationsEditor()
     {

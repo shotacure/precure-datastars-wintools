@@ -1,0 +1,14 @@
+  {{## 脚注（出典）の節（人物詳細・企業詳細で共用。モデルの Sources（EntitySourceFootnotes）を読む）。ページの一番下に置く。
+       本文の項目（読み・誕生日・没年・設立・解散・メンバー）に付けた番号 [N] の飛び先。1 件 1〜2 行の小さい字で、
+       ページタイトル（<title> のまま）・欄の見出し（あれば「＞」でつなぐ）・発行者・URL・確認日を出す。URL は文字のまま見せてリンクにする。
+       脚注が無ければ出さない。 ##}}
+  {{~ if (array.size Sources.Notes) > 0 ~}}
+  <section id="footnotes" class="footnotes">
+    <h2>出典</h2>
+    <ol class="footnote-list">
+      {{~ for n in Sources.Notes ~}}
+      <li id="{{ n.Anchor }}" class="footnote"><span class="footnote-no">[{{ n.Number }}]</span> 「{{ n.PageTitle | html.escape }}」{{ if n.SectionTitle != "" }}＞{{ n.SectionTitle | html.escape }}{{ end }} {{ n.Publisher | html.escape }} <a class="footnote-url" href="{{ n.Url | html.escape }}" target="_blank" rel="noopener nofollow">{{ n.Url | html.escape }}</a>（{{ n.CheckedOn }}確認）</li>
+      {{~ end ~}}
+    </ol>
+  </section>
+  {{~ end ~}}

@@ -6412,6 +6412,50 @@ a.credit-card-series:focus-visible {
   color: var(--accent-blue);
 }
 
+/* 人物・企業詳細の脚注（出典）。本文の項目（読み・誕生日など）に上付きの番号 [N] を付け、ページの一番下に
+   小さい字で番号つきの出典（ページタイトル・見出し・発行者・URL・確認日）を並べる。URL は長くても途中で折る。 */
+.fn-ref {
+  font-size: 0.72em;
+  line-height: 0;
+  margin-left: 1px;
+}
+.fn-ref a {
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+.footnotes {
+  margin-top: 32px;
+  padding-top: 8px;
+  border-top: 1px dotted var(--border);
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.footnotes h2 {
+  font-size: 1em;
+}
+.footnote-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.footnote {
+  margin: 0 0 4px;
+  padding-left: 2.6em;
+  text-indent: -2.6em;
+}
+.footnote:target {
+  background: rgba(255, 220, 120, 0.25);
+}
+.footnote-no {
+  display: inline-block;
+  min-width: 2.4em;
+  font-family: var(--font-num);
+}
+.footnote-url {
+  color: var(--accent-blue);
+  overflow-wrap: anywhere;
+}
+
 /* 人物詳細の「代表作（プリキュアを除く）」。「年 ｜ 作品 ｜ 役職」の 3 列で、年と役職は折り返さない。
    作品名は作品の公式サイトへの外部リンク。アーカイブへのリンクには「公式サイトのアーカイブ」の小さな札を添える。 */
 .notable-works-table th.col-year,

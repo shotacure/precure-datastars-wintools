@@ -78,6 +78,7 @@ partial class CreditMastersEditorForm
     private Button btnSavePerson = null!;
     private Button btnDeletePerson = null!;
     private Button btnPersonNotableWorks = null!;
+    private Button btnPersonSources = null!;
     private Button btnPersonPositions = null!;
 
     // ─────────────── 企業タブ ───────────────
@@ -100,6 +101,7 @@ partial class CreditMastersEditorForm
     private Button btnSaveCompany = null!;
     private Button btnDeleteCompany = null!;
     private Button btnCompanyRelations = null!;
+    private Button btnCompanySources = null!;
 
     // ─────────────── キャラクタータブ ───────────────
     private DataGridView gridCharacters = null!;
@@ -601,7 +603,9 @@ partial class CreditMastersEditorForm
         btnPersonNotableWorks = new Button { Text = "代表作…",   Location = new Point(620, 130), Size = new Size(140, 28) };
         // 役職履歴（person_positions）の編集ダイアログを開く。
         btnPersonPositions = new Button { Text = "役職履歴…", Location = new Point(620, 162), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnNewPerson, btnSavePerson, btnDeletePerson, btnPersonNotableWorks, btnPersonPositions });
+        // プロフィールの出典（entity_sources）の編集ダイアログを開く。
+        btnPersonSources = new Button { Text = "出典…",     Location = new Point(620, 194), Size = new Size(140, 28) };
+        pnl.Controls.AddRange(new Control[] { btnNewPerson, btnSavePerson, btnDeletePerson, btnPersonNotableWorks, btnPersonPositions, btnPersonSources });
 
         tabPersons.Controls.Add(pnl);
         tabPersons.Controls.Add(gridPersons);
@@ -647,7 +651,9 @@ partial class CreditMastersEditorForm
         btnDeleteCompany = new Button { Text = "選択行を削除", Location = new Point(620,  82), Size = new Size(140, 28) };
         // 選択中の団体の関係（親・子・前身・後継）を編集するダイアログを開く。
         btnCompanyRelations = new Button { Text = "関係…",       Location = new Point(620, 130), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnNewCompany, btnSaveCompany, btnDeleteCompany, btnCompanyRelations });
+        // プロフィールの出典（entity_sources）の編集ダイアログを開く。
+        btnCompanySources = new Button { Text = "出典…",         Location = new Point(620, 162), Size = new Size(140, 28) };
+        pnl.Controls.AddRange(new Control[] { btnNewCompany, btnSaveCompany, btnDeleteCompany, btnCompanyRelations, btnCompanySources });
 
         tabCompanies.Controls.Add(pnl);
         tabCompanies.Controls.Add(gridCompanies);

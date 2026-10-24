@@ -69,6 +69,8 @@ public partial class CreditMastersEditorForm : Form
     private readonly PersonNotableWorksRepository _personNotableWorksRepo;
     // 人物の役職履歴（人物タブの「役職履歴…」ダイアログで編集）
     private readonly PersonPositionsRepository _personPositionsRepo;
+    // 人物・企業のプロフィールの出典（人物タブ・団体タブの「出典…」ダイアログで編集）
+    private readonly EntitySourcesRepository _entitySourcesRepo;
     // 役職どうしの関連（段階・並列）（役職タブの「関連…」ダイアログで編集）
     private readonly RoleRelationsRepository _roleRelationsRepo;
 
@@ -111,7 +113,9 @@ public partial class CreditMastersEditorForm : Form
         // 役職どうしの関連（段階・並列）
         RoleRelationsRepository roleRelationsRepo,
         // 人物の役職履歴
-        PersonPositionsRepository personPositionsRepo)
+        PersonPositionsRepository personPositionsRepo,
+        // 人物・企業のプロフィールの出典
+        EntitySourcesRepository entitySourcesRepo)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
@@ -149,6 +153,9 @@ public partial class CreditMastersEditorForm : Form
 
         // 人物の役職履歴
         _personPositionsRepo = personPositionsRepo ?? throw new ArgumentNullException(nameof(personPositionsRepo));
+
+        // 人物・企業のプロフィールの出典
+        _entitySourcesRepo = entitySourcesRepo ?? throw new ArgumentNullException(nameof(entitySourcesRepo));
 
         // 役職どうしの関連（段階・並列）
         _roleRelationsRepo = roleRelationsRepo ?? throw new ArgumentNullException(nameof(roleRelationsRepo));
@@ -206,11 +213,13 @@ public partial class CreditMastersEditorForm : Form
         btnDeletePerson.Click += async (_, __) => await DeletePersonAsync();
         btnPersonNotableWorks.Click += (_, __) => OpenPersonNotableWorksEditor();
         btnPersonPositions.Click += (_, __) => OpenPersonPositionsEditor();
+        btnPersonSources.Click += (_, __) => OpenPersonSourcesEditor();
 
         btnNewCompany.Click += (_, __) => ClearCompanyForm();
         btnSaveCompany.Click += async (_, __) => await SaveCompanyAsync();
         btnDeleteCompany.Click += async (_, __) => await DeleteCompanyAsync();
         btnCompanyRelations.Click += (_, __) => OpenCompanyRelationsEditor();
+        btnCompanySources.Click += (_, __) => OpenCompanySourcesEditor();
 
         btnNewCharacter.Click += (_, __) => ClearCharacterForm();
         btnSaveCharacter.Click += async (_, __) => await SaveCharacterAsync();

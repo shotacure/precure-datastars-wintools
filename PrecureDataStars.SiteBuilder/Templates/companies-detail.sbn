@@ -7,7 +7,7 @@
   {{## h1 の下の 1 行。読みを左に、「〇〇第N話(日付)時点」を右寄せで並べる（.page-subline。読みが無ければ時点だけ右に）。 ##}}
   <div class="page-subline">
     {{~ if Company.NameKana != "" ~}}
-    <p class="muted">{{ Company.NameKana | html.escape }}</p>
+    <p class="muted">{{ Company.NameKana | html.escape }}{{ Sources.Refs.Kana }}</p>
     {{~ end ~}}
     {{## サイト全体のクレジット横断カバレッジ宣言。
          ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
@@ -27,13 +27,13 @@
       {{~ if Company.FoundedDate != "" ~}}
       <div class="fact">
         <span class="fact-label">設立</span>
-        <span class="fact-value">{{ Company.FoundedDate }}</span>
+        <span class="fact-value">{{ Company.FoundedDate }}{{ Sources.Refs.Founded }}</span>
       </div>
       {{~ end ~}}
       {{~ if Company.DissolvedDate != "" ~}}
       <div class="fact">
         <span class="fact-label">解散</span>
-        <span class="fact-value">{{ Company.DissolvedDate }}</span>
+        <span class="fact-value">{{ Company.DissolvedDate }}{{ Sources.Refs.Dissolved }}</span>
       </div>
       {{~ end ~}}
       {{~ if Company.Notes != "" ~}}
@@ -238,7 +238,7 @@
        0 件のときはセクション自体を非表示にする。 ##}}
   {{~ if (array.size MemberHistory) > 0 ~}}
   <section id="member-history">
-    <h2>メンバー履歴</h2>
+    <h2>メンバー履歴{{ Sources.Refs.Members }}</h2>
     <p class="muted">この企業・団体の屋号を所属としてクレジットされた方々の名義の一覧です。</p>
     {{## 屋号 → 人物 → 役職 → 作品（話数）の入れ子。人物は person 単位（名義違いは 1 人に統合、表示は最頻名義）、
          並びは初クレジット順。人物・役職の横に担当回数ピル（📺＝TV 話数 / 🎥＝映画本数。エピソード番号ではなく
@@ -332,7 +332,7 @@
     {{~ end ~}}
     {{~ end ~}}
     {{~ if (array.size MusicMemberRoles) > 0 ~}}
-    <h3 class="music-credit-group-heading">所属スタッフのクレジット</h3>
+    <h3 class="music-credit-group-heading">所属スタッフのクレジット{{ Sources.Refs.Members }}</h3>
     <p class="muted">この企業・団体を所属としてクレジットされた方々と、関わった歌・劇伴・音盤です。</p>
     {{~ for mr in MusicMemberRoles ~}}
     <h4 class="credit-role-heading">
@@ -397,4 +397,5 @@
     </ul>
   </section>
   {{~ end ~}}
+{{ include '_entity-sources.sbn' ~}}
 </article>

@@ -31,6 +31,8 @@ public sealed class PersonsGenerator
 
     /// <summary>人物の代表作（プリキュアを除く）（person_notable_works）を読むためのリポジトリ。</summary>
     private readonly PersonNotableWorksRepository _notableWorksRepo;
+    /// <summary>人物のプロフィールの出典（entity_sources）を読むためのリポジトリ。</summary>
+    private readonly EntitySourcesRepository _sourcesRepo;
     private readonly PersonPositionsRepository _positionsRepo;
     /// <summary>役職履歴の見出しに添える会社名を引く（並列レンダリングの前に 1 度だけ）。</summary>
     private readonly CompaniesRepository _companiesRepo;
@@ -69,6 +71,8 @@ public sealed class PersonsGenerator
 
     /// <summary>person_id → 「代表作（プリキュアを除く）」の表示行（並び順どおり）。<c>GenerateAsync</c> で並列レンダリングの前に 1 度だけ詰める。</summary>
     private IReadOnlyDictionary<int, IReadOnlyList<NotableWorkView>>? _notableWorksByPerson;
+    /// <summary>person_id → 脚注（出典）と本文の番号。<c>GenerateAsync</c> で並列レンダリングの前に 1 度だけ詰める。</summary>
+    private IReadOnlyDictionary<int, EntitySourceFootnotes>? _sourcesByPerson;
     /// <summary>人物 → 役職履歴の会社ごとのまとまり（並列レンダリングの前に全件から作る）。</summary>
     private IReadOnlyDictionary<int, IReadOnlyList<PositionGroupView>>? _positionGroupsByPerson;
 
@@ -92,6 +96,7 @@ public sealed class PersonsGenerator
         _companyAliasesRepo = new CompanyAliasesRepository(factory);
         _songMusicClassesRepo = new SongMusicClassesRepository(factory);
         _notableWorksRepo = new PersonNotableWorksRepository(factory);
+        _sourcesRepo = new EntitySourcesRepository(factory);
         _positionsRepo = new PersonPositionsRepository(factory);
         _companiesRepo = new CompaniesRepository(factory);
     }
@@ -220,6 +225,9 @@ public sealed class PersonsGenerator
                     g => g.Key,
                     g => (IReadOnlyList<NotableWorkView>)g.Select(ToNotableWorkView).ToList());
         }
+
+        // 出典も並列レンダリングの前に全件を読み、人物ごとの脚注と本文の番号にしておく。
+        _sourcesByPerson ??= EntitySourceFootnotes.ByPerson(await _sourcesRepo.GetAllAsync(ct).ConfigureAwait(false));
 
         // 「役職履歴」も並列レンダリングの前に全件を読み、人物ごとに会社のまとまり（並び順で同じ会社が続く行）にしておく。
         if (_positionGroupsByPerson is null)
@@ -535,6 +543,9 @@ public sealed class PersonsGenerator
             PositionGroups = _positionGroupsByPerson!.TryGetValue(person.PersonId, out var positionGroups)
                 ? positionGroups
                 : Array.Empty<PositionGroupView>(),
+            Sources = _sourcesByPerson!.TryGetValue(person.PersonId, out var sources)
+                ? sources
+                : EntitySourceFootnotes.Empty,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 人物詳細の構造化データは Schema.org の Person 型。
@@ -1617,6 +1628,8 @@ public sealed class PersonsGenerator
         public IReadOnlyList<NotableWorkView> NotableWorks { get; set; } = Array.Empty<NotableWorkView>();
         /// <summary>役職履歴（会社ごとのまとまり。並び順どおり）。空なら「役職履歴」セクションを出さない。</summary>
         public IReadOnlyList<PositionGroupView> PositionGroups { get; set; } = Array.Empty<PositionGroupView>();
+        /// <summary>プロフィールの出典（ページの一番下の脚注と、本文の項目に付ける番号）。脚注が無ければ脚注の欄を出さない。</summary>
+        public EntitySourceFootnotes Sources { get; set; } = EntitySourceFootnotes.Empty;
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }

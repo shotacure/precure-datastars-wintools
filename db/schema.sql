@@ -1626,6 +1626,41 @@ CREATE TABLE `persons` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `entity_sources`
+-- 人物・企業のプロフィール（読み・誕生日など）の出典（1 行 = 1 人物または 1 企業 × 1 ページ）。
+-- person_id / company_id のどちらか一方だけを持つ。supports はこの出典で裏付ける項目（本文の脚注の番号を付ける所）、
+-- page_title はページの <title> のまま、section_title は情報が載っている欄の見出し、publisher は著作権表記の名前、
+-- checked_on はそのページで確かめた日。
+--
+DROP TABLE IF EXISTS `entity_sources`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `entity_sources` (
+  `source_id`      int                                                                 NOT NULL AUTO_INCREMENT,
+  `person_id`      int                                                                 DEFAULT NULL,
+  `company_id`     int                                                                 DEFAULT NULL,
+  `display_order`  smallint unsigned                                                   NOT NULL DEFAULT 0,
+  `supports`       set('KANA','BIRTH','DEATH','FOUNDED','DISSOLVED','MEMBERS')         NOT NULL DEFAULT '' COMMENT 'この出典で裏付ける項目（本文の脚注の番号を付ける所）',
+  `page_title`     varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL COMMENT 'ページタイトル（<title> のまま）',
+  `section_title`  varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '情報が載っている欄の見出し（表記どおり）',
+  `publisher`      varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL COMMENT '発行者（著作権表記の名前どおり）',
+  `url`            varchar(1024)                                                       NOT NULL,
+  `checked_on`     date                                                                NOT NULL COMMENT 'そのページで確かめた日',
+  `notes`          text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`     varchar(64) DEFAULT NULL,
+  `updated_by`     varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`source_id`),
+  KEY `ix_entity_sources_person`  (`person_id`, `display_order`),
+  KEY `ix_entity_sources_company` (`company_id`, `display_order`),
+  CONSTRAINT `fk_entity_sources_person`  FOREIGN KEY (`person_id`)  REFERENCES `persons`   (`person_id`)  ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_entity_sources_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`company_id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `ck_entity_sources_target`  CHECK ((`person_id` IS NULL) <> (`company_id` IS NULL))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='人物・企業のプロフィールの出典';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `person_notable_works`
 -- 人物のプリキュア以外の代表作（1 行 = 1 人物 × 1 作品 × 1 役職）。作品名・役職はテキスト。
 -- official_url はサイトでリンクする作品の公式サイト。閉鎖済みでアーカイブに残る公式サイトで確かめたときは
@@ -1844,8 +1879,8 @@ CREATE TABLE `company_relations` (
   PRIMARY KEY (`relation_id`),
   UNIQUE KEY `uq_company_relations` (`from_company_id`, `to_company_id`, `relation_kind`, `valid_from`),
   KEY `ix_company_relations_to` (`to_company_id`),
-  CONSTRAINT `fk_company_relations_from` FOREIGN KEY (`from_company_id`) REFERENCES `companies` (`company_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_company_relations_to`   FOREIGN KEY (`to_company_id`)   REFERENCES `companies` (`company_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_company_relations_from` FOREIGN KEY (`from_company_id`) REFERENCES `companies` (`company_id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_company_relations_to`   FOREIGN KEY (`to_company_id`)   REFERENCES `companies` (`company_id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `ck_company_relations_period`   CHECK (`valid_from` IS NULL OR `valid_to` IS NULL OR `valid_from` <= `valid_to`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='企業・団体どうしの関係（所属・事業の引き継ぎ）';
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -3955,7 +3990,7 @@ CREATE TABLE `published_entity_slugs` (
   KEY `ix_pes_person_alias` (`person_alias_id`),
   CONSTRAINT `fk_pes_person` FOREIGN KEY (`person_id`) REFERENCES `persons` (`person_id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_pes_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`character_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_pes_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`company_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_pes_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`company_id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `fk_pes_person_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='本番に公開した人物・キャラクター・企業 URL の記録（旧名 URL の 301 転送用）';
 /*!40101 SET character_set_client = @saved_cs_client */;

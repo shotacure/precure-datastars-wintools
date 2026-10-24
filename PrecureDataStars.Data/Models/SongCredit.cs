@@ -69,6 +69,8 @@ public static class SongCreditRoles
     public const string Arrangement = "ARRANGEMENT";
     /// <summary>メドレー編曲（メドレーの曲の全体の編曲。編曲とは別に集計する）。</summary>
     public const string MedleyArrangement = "MEDLEY_ARRANGEMENT";
+    /// <summary>英訳（日本語の詞を英語に訳した人。画面では「英訳詞」と出ることがある）。</summary>
+    public const string LyricsTranslation = "LYRICS_TRANSLATION";
 
     /// <summary>
     /// 曲の連名行から、指定役職の盤の表記（<see cref="SongCredit.RoleLabelText"/>）を返す。

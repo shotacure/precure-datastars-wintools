@@ -261,6 +261,10 @@ public static class ThemeSongsHandler
 
         // メドレー編曲：構造化行だけ（フリーテキスト列は持たない）。無い曲は空文字列。
         r.MedleyArrangerHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false) ?? "";
+
+        // 英訳：構造化行だけ（フリーテキスト列は持たない）。無い曲は空文字列。
+        r.LyricsTranslatorParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.LyricsTranslation, lookup, ct).ConfigureAwait(false);
+        r.LyricsTranslatorHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.LyricsTranslation, lookup, ct).ConfigureAwait(false) ?? "";
     }
 
     /// <summary>
@@ -422,6 +426,8 @@ public static class ThemeSongsHandler
         public string ArrangerHtml { get; set; } = "";
         /// <summary>メドレー編曲（<c>MEDLEY_ARRANGEMENT</c>）連名のリンク化済み HTML。無ければ空文字列。テンプレ側で <c>{MEDLEY_ARRANGER}</c> として参照する。</summary>
         public string MedleyArrangerHtml { get; set; } = "";
+        /// <summary>英訳（<c>LYRICS_TRANSLATION</c>）連名のリンク化済み HTML。無ければ空文字列。テンプレ側で <c>{LYRICS_TRANSLATOR}</c> として参照する。</summary>
+        public string LyricsTranslatorHtml { get; set; } = "";
         public string SingerHtml { get; set; } = "";
 
         /// <summary>コーラス（<c>BACKING_VOCALS</c>）連名のリンク化済み HTML。 該当録音にコーラス歌唱者が居なければ空文字列。テンプレ側で <c>{CHORUS}</c> として参照する。</summary>
@@ -434,6 +440,7 @@ public static class ThemeSongsHandler
         public IReadOnlyList<(string Sep, string Html)> ComposerParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> ArrangerParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> MedleyArrangerParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> LyricsTranslatorParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> SingerParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> ChorusParts { get; set; } = Array.Empty<(string, string)>();
     }

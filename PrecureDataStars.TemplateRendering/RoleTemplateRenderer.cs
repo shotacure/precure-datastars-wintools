@@ -32,7 +32,8 @@ namespace PrecureDataStars.TemplateRendering;
 ///   <item><description><c>{#MEDLEY_PARTS}...{/MEDLEY_PARTS}</c> ... <c>{#THEME_SONGS}</c> の中で、メドレーの元の曲（song_medley_parts）を順に曲スコープにして反復。中では元の曲の {SONG_TITLE} / {LYRICIST} / {COMPOSER} / {ARRANGER} が使える。</description></item>
 ///   <item><description><c>{?NAME}...{/?NAME}</c> ... プレースホルダ NAME の解決値が非空のときだけ展開</description></item>
 ///   <item><description><c>{?!NAME}...{/?!NAME}</c> ... プレースホルダ NAME の解決値が空のときだけ展開（否定の条件）</description></item>
-///   <item><description><c>{#THEME_SONGS[:kind=OP+ED]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復。
+///   <item><description><c>{#THEME_SONGS[:kind=OP+ED][,seq=N|N-M]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復。
+///     <c>seq</c> を書くと、番号（seq）がその値・範囲に入る曲だけに絞る。
 ///     内側で <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> / <c>{COMPOSER}</c> /
 ///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{CHORUS}</c> / <c>{VARIANT_LABEL}</c> / <c>{SONG_SERIES_TITLE}</c> の楽曲スコーププレースホルダが
 ///     解決可能（<c>{CHORUS}</c> は <c>BACKING_VOCALS</c> 役職の連名、不在時は空）。
@@ -42,6 +43,8 @@ namespace PrecureDataStars.TemplateRendering;
 ///     <c>{SONG_SERIES_TITLE}</c> は曲の作品（録音の作品）の正式タイトルで、クレジットの作品と同じ作品の曲なら空。
 ///     <c>{SAME_COMPOSER_ARRANGER}</c> は作曲と編曲が同じ名義（連名も同じ）なら "1"、違えば空で、
 ///     <c>{?SAME_COMPOSER_ARRANGER}</c> / <c>{?!SAME_COMPOSER_ARRANGER}</c> で書き分ける。
+///     <c>{SAME_LYRICIST_COMPOSER_ARRANGER}</c> は作詞・作曲・編曲の 3 つが同じ名義なら "1"、違えば空。
+///     <c>{LYRICS_TRANSLATOR}</c> は英訳（<c>LYRICS_TRANSLATION</c> 役職）の連名で、無い曲は空。
 ///     <c>{INSTRUMENTAL}</c> はその回（その映画）ではインストゥルメンタルで使った曲なら "1"、違えば空で、
 ///     <c>{?INSTRUMENTAL}</c> / <c>{?!INSTRUMENTAL}</c> で曲名の添え書きや「オリジナルボーカル曲」の見出しを書き分ける。
 ///     表記（カギ括弧の種類・項目ラベル・改行位置）はテンプレ作者が完全に制御できる。
@@ -61,6 +64,18 @@ public static class RoleTemplateRenderer
         if (parts is { Count: > 1 } && ph.Options.TryGetValue("sep", out var sep))
             return string.Join(sep, parts.Select(p => p.Html));
         return joinedHtml ?? "";
+    }
+
+    /// <summary>
+    /// <c>{#THEME_SONGS}</c> の <c>seq</c> オプション（"N" または "N-M"）を読む。空・読めない値なら false（絞り込まない）。
+    /// </summary>
+    private static bool TryParseSeqRange(string raw, out int from, out int to)
+    {
+        from = 0; to = 0;
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        var parts = raw.Split('-', StringSplitOptions.TrimEntries);
+        if (parts.Length == 1 && int.TryParse(parts[0], out from)) { to = from; return true; }
+        return parts.Length == 2 && int.TryParse(parts[0], out from) && int.TryParse(parts[1], out to) && from <= to;
     }
 
     /// <summary>AST <paramref name="nodes"/> を <paramref name="ctx"/> に対して展開し、整形済み文字列を返す。</summary>
@@ -128,6 +143,10 @@ public static class RoleTemplateRenderer
                                            .ToArray();
                         }
                         var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, lookup, ct).ConfigureAwait(false);
+                        // seq=N / seq=N-M：同じ区分の中で番号（episode_theme_songs / series_theme_songs.seq）が範囲に入る曲だけを出す。
+                        // 「テーマソング」と「挿入歌」のように、同じ挿入歌の区分の曲を別々の役職の欄に分けて出す画面用。
+                        if (TryParseSeqRange(tsLoop.GetOption("seq", ""), out int seqFrom, out int seqTo))
+                            rows = rows.Where(r => r.Seq is byte s && s >= seqFrom && s <= seqTo).ToList();
                         foreach (var song in rows)
                         {
                             // THEME_SONGS ループ内では currentBlock は持ち越さない
@@ -351,6 +370,16 @@ public static class RoleTemplateRenderer
                 return currentSong is { ComposerHtml.Length: > 0 } sameCs
                        && string.Equals(sameCs.ComposerHtml, sameCs.ArrangerHtml, StringComparison.Ordinal)
                     ? "1" : "";
+            case "SAME_LYRICIST_COMPOSER_ARRANGER":
+                // 作詞・作曲・編曲の 3 つが同じ名義（連名も同じ）なら "1"。画面で「作詞・作曲・編曲：」の 1 行にまとめる作品用。
+                return currentSong is { LyricistHtml.Length: > 0 } sameAll
+                       && string.Equals(sameAll.LyricistHtml, sameAll.ComposerHtml, StringComparison.Ordinal)
+                       && string.Equals(sameAll.ComposerHtml, sameAll.ArrangerHtml, StringComparison.Ordinal)
+                    ? "1" : "";
+            case "LYRICS_TRANSLATOR":
+                // 楽曲スコープ：英訳（LYRICS_TRANSLATION）の連名（リンク化済み HTML）。無い曲は空文字列で、
+                // テンプレ側で {?LYRICS_TRANSLATOR}英訳詞：{LYRICS_TRANSLATOR}{/?LYRICS_TRANSLATOR} のように条件展開できる。
+                return NamesHtml(ph, currentSong?.LyricsTranslatorHtml, currentSong?.LyricsTranslatorParts);
             case "INSTRUMENTAL":
                 // その回（その映画）ではインストゥルメンタルで使った曲なら "1"。
                 // 画面が曲名に「（インストゥルメンタル）」を添え、「作曲・編曲」を 1 行にして

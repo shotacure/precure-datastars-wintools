@@ -38,12 +38,12 @@ public sealed class SongCreditsRepository : RepositoryBase
     public async Task<IReadOnlyList<SongCredit>> GetBySongAsync(int songId, CancellationToken ct = default)
     {
         // 主題歌系の慣習順（作詞 → 作曲 → 編曲）を FIELD でソートに乗せる。
-        // 並びに無い役職（運用者が新規定義した役職など）は末尾に来る（FIELD は未マッチで 0 を返すため）。
+        // 並びに無い役職（運用者が新規定義した役職など）は末尾に来る（FIELD は未マッチで 0 を返すので、0 かどうかを先に並べる）。
         string sql = $"""
             SELECT {SelectColumns}
             FROM song_credits
             WHERE song_id = @songId
-            ORDER BY FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT','MEDLEY_ARRANGEMENT'), credit_role, credit_seq;
+            ORDER BY FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT','MEDLEY_ARRANGEMENT') = 0, FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT','MEDLEY_ARRANGEMENT'), credit_role, credit_seq;
             """;
 
         return await QueryListAsync<SongCredit>(sql, new { songId }, ct).ConfigureAwait(false);
@@ -55,7 +55,7 @@ public sealed class SongCreditsRepository : RepositoryBase
         string sql = $"""
             SELECT {SelectColumns}
             FROM song_credits
-            ORDER BY song_id, FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT','MEDLEY_ARRANGEMENT'), credit_role, credit_seq;
+            ORDER BY song_id, FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT','MEDLEY_ARRANGEMENT') = 0, FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT','MEDLEY_ARRANGEMENT'), credit_role, credit_seq;
             """;
 
         return await QueryListAsync<SongCredit>(sql, ct: ct).ConfigureAwait(false);

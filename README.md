@@ -1800,7 +1800,7 @@ CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.
 
 > `song_credits.affiliation_company_alias_id` / `affiliation_text` は、盤に印刷された作家の所属（「岡部啓一(MONACA)」の MONACA）。会社マスタの名義（`company_aliases`）に紐付けるのを基本とし、マスタに無い所属だけ自由記述に入れる。サイトは楽曲詳細・楽曲一覧のカード・盤のトラック・エピソードや作品の主題歌の行で名義のあとに「（MONACA）」を薄字で添え（盤スタッフの所属と同じ `music-credit-affiliation`。会社名義なら企業詳細へリンク）、同じ所属が続く連名は最後の名義のあとにだけ添える（`SongCreditAffiliation`）。meta description・OGP カードの平文にも添える。各話のクレジット画面の主題歌カード（役職テンプレ）には添えない（画面の表記どおりにするため）。企業詳細の「所属スタッフのクレジット」には、その会社を所属とする作家を歌として載せる（根拠の盤はその曲の録音が最初に入った商品）。Catalog の歌管理の作詞・作曲・編曲・メドレー編曲の編集ダイアログで、名義ごとに所属（会社名義の選択か自由記述）を入れる。
 
-> `song_recording_singers.role_code` は `VOCALS`（歌）・`BACKING_VOCALS`（コーラス）・`DIALOGUE`（台詞：歌わずに曲中のセリフだけで参加する出演者）の 3 役を持つ。書式は 3 役とも同じ（キャラは「キャラ(CV:声優)」。ただし同じ役の連名にその声優が人物として名前で出ているときは「(CV:声優)」を省き、「工藤 真由 with フェアリートーン」のように出す。データの声優はそのまま持つ。`SongRecordingSingerDisplay.OmitCv`）で、楽曲詳細・商品詳細のトラック行・エピソード／シリーズの主題歌欄に歌 → コーラス → 台詞の順で並ぶ。`/creators/roles/vocals/` の担当曲数に数えるのは `VOCALS` だけ。
+> `song_recording_singers.role_code` は `VOCALS`（歌）・`BACKING_VOCALS`（コーラス）・`DIALOGUE`（台詞：歌わずに曲中のセリフだけで参加する出演者）の 3 役を持つ。書式は 3 役とも同じ（キャラは「キャラ(CV:声優)」。ただし同じ役の連名にその声優が人物として名前で出ているときは「(CV:声優)」を省き、「工藤 真由 with フェアリートーン」のように出す。データの声優はそのまま持つ。`SongRecordingSingerDisplay.OmitCv`）で、楽曲詳細・商品詳細のトラック行・エピソード／シリーズの主題歌欄に歌 → コーラス → 台詞の順で並ぶ（リポジトリの読み込みも歌 → コーラス → そのほかの役職の順）。`/creators/roles/vocals/` の担当曲数に数えるのは `VOCALS` だけ。
 
 #### `song_medley_parts` — メドレーの中の曲
 

@@ -95,7 +95,7 @@ public sealed class BuildContext
     /// 全 <c>song_recording_singers</c> 行を song_recording_id 単位で事前グルーピングした辞書。
     /// SongsGenerator と ProductsGenerator の双方で「録音ごとに歌唱者連名を引く」処理が走るため、
     /// 両方が同じソースを参照できるよう SiteDataLoader でロードして共有する。
-    /// 並びは VOCALS → CHORUS → その他 role_code 昇順、同役内は singer_seq 昇順。
+    /// 並びは VOCALS → BACKING_VOCALS → その他 role_code 昇順、同役内は singer_seq 昇順。
     /// </summary>
     public required IReadOnlyDictionary<int, IReadOnlyList<SongRecordingSinger>> SingersByRecording { get; init; }
 

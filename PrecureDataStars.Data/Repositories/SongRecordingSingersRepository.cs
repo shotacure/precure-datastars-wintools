@@ -93,15 +93,15 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         _ => throw new ArgumentOutOfRangeException(nameof(k))
     };
 
-    /// <summary>指定録音の全歌唱者行を (role_code, seq) 順で取得する。 役の並び順は VOCALS → CHORUS を優先（歌唱の慣習順）、それ以外は role_code 昇順。</summary>
+    /// <summary>指定録音の全歌唱者行を (role_code, seq) 順で取得する。 役の並び順は VOCALS → BACKING_VOCALS（コーラス）を優先（歌唱の慣習順）、それ以外は role_code 昇順。</summary>
     public async Task<IReadOnlyList<SongRecordingSinger>> GetByRecordingAsync(int songRecordingId, CancellationToken ct = default)
     {
-        // VOCALS が先、CHORUS が次、その他は末尾の慣習順。
+        // VOCALS が先、BACKING_VOCALS（コーラス）が次、その他は末尾の慣習順（FIELD は未マッチで 0 を返すので、0 かどうかを先に並べる）。
         string sql = $"""
             SELECT {SelectColumns}
             FROM song_recording_singers
             WHERE song_recording_id = @id
-            ORDER BY FIELD(role_code,'VOCALS','CHORUS'), role_code, singer_seq;
+            ORDER BY FIELD(role_code,'VOCALS','BACKING_VOCALS') = 0, FIELD(role_code,'VOCALS','BACKING_VOCALS'), role_code, singer_seq;
             """;
 
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -109,13 +109,13 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         return rows.Select(r => r.ToModel()).ToList();
     }
 
-    /// <summary>song_recording_singers テーブルの全行を取得する。 SiteBuilder の SongsGenerator 起動時に「録音ごとに <see cref="GetByRecordingAsync"/> を 順次呼ぶ」N+1 パターンを排除するため、1 度の SQL で全件メモリに載せて、呼び出し側で song_recording_id 単位にグルーピングする用途で使う。 並びは <see cref="GetByRecordingAsync"/> と同じ慣習順（VOCALS → CHORUS → その他 role_code 昇順）を維持する。</summary>
+    /// <summary>song_recording_singers テーブルの全行を取得する。 SiteBuilder の SongsGenerator 起動時に「録音ごとに <see cref="GetByRecordingAsync"/> を 順次呼ぶ」N+1 パターンを排除するため、1 度の SQL で全件メモリに載せて、呼び出し側で song_recording_id 単位にグルーピングする用途で使う。 並びは <see cref="GetByRecordingAsync"/> と同じ慣習順（VOCALS → BACKING_VOCALS → その他 role_code 昇順）を維持する。</summary>
     public async Task<IReadOnlyList<SongRecordingSinger>> GetAllAsync(CancellationToken ct = default)
     {
         string sql = $"""
             SELECT {SelectColumns}
             FROM song_recording_singers
-            ORDER BY song_recording_id, FIELD(role_code,'VOCALS','CHORUS'), role_code, singer_seq;
+            ORDER BY song_recording_id, FIELD(role_code,'VOCALS','BACKING_VOCALS') = 0, FIELD(role_code,'VOCALS','BACKING_VOCALS'), role_code, singer_seq;
             """;
 
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);

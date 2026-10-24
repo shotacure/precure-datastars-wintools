@@ -1045,6 +1045,7 @@ public sealed class EpisodeGenerator
                 DialogueRoleLabelHtml = dialogueRoleLabelHtml,
                 Notes = t.Notes ?? "",
                 IsBroadcastOnly = t.IsBroadcastOnly,
+                IsInstrumental = t.IsInstrumental == true,
                 ArtTrackId = artTrack?.ArtTrackId ?? "",
                 ArtTrackPremiumOnly = artTrack?.PremiumOnly ?? false,
                 ArtTrackSourceAlbum = artTrack?.SourceAlbum ?? "",
@@ -2231,6 +2232,8 @@ public sealed class EpisodeGenerator
         public string Notes { get; set; } = "";
         /// <summary>本放送限定フラグ（「（本放送のみ）」を末尾に併記する）。</summary>
         public bool IsBroadcastOnly { get; set; }
+        /// <summary>この回ではインストゥルメンタルで使った印（曲名の後ろ、カギ括弧の内側に「（インストゥルメンタル）」を添える）。</summary>
+        public bool IsInstrumental { get; set; }
         /// <summary>再生ボタンで鳴らす配信音源（<see cref="BuildContext.ThemeArtTracks"/> が選んだもの）。無ければ空文字でボタンを出さない。</summary>
         public string ArtTrackId { get; set; } = "";
         /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>

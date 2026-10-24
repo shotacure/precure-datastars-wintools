@@ -42,6 +42,8 @@ namespace PrecureDataStars.TemplateRendering;
 ///     <c>{SONG_SERIES_TITLE}</c> は曲の作品（録音の作品）の正式タイトルで、クレジットの作品と同じ作品の曲なら空。
 ///     <c>{SAME_COMPOSER_ARRANGER}</c> は作曲と編曲が同じ名義（連名も同じ）なら "1"、違えば空で、
 ///     <c>{?SAME_COMPOSER_ARRANGER}</c> / <c>{?!SAME_COMPOSER_ARRANGER}</c> で書き分ける。
+///     <c>{INSTRUMENTAL}</c> はその回（その映画）ではインストゥルメンタルで使った曲なら "1"、違えば空で、
+///     <c>{?INSTRUMENTAL}</c> / <c>{?!INSTRUMENTAL}</c> で曲名の添え書きや「オリジナルボーカル曲」の見出しを書き分ける。
 ///     表記（カギ括弧の種類・項目ラベル・改行位置）はテンプレ作者が完全に制御できる。
 ///     旧 <c>{THEME_SONGS}</c> プレースホルダ版（ハードコード書式）も互換のため残置。</description></item>
 /// </list>
@@ -349,6 +351,11 @@ public static class RoleTemplateRenderer
                 return currentSong is { ComposerHtml.Length: > 0 } sameCs
                        && string.Equals(sameCs.ComposerHtml, sameCs.ArrangerHtml, StringComparison.Ordinal)
                     ? "1" : "";
+            case "INSTRUMENTAL":
+                // その回（その映画）ではインストゥルメンタルで使った曲なら "1"。
+                // 画面が曲名に「（インストゥルメンタル）」を添え、「作曲・編曲」を 1 行にして
+                // 「オリジナルボーカル曲」の見出しの下に元の歌の歌手を出す作品用。
+                return currentSong is { IsInstrumental: true } ? "1" : "";
             case "MEDLEY_ARRANGER":
                 // 楽曲スコープ：メドレー編曲の連名（リンク化済み HTML）。無い曲は空文字列で、
                 // テンプレ側で {?MEDLEY_ARRANGER}メドレー編曲:{MEDLEY_ARRANGER}{/?MEDLEY_ARRANGER} のように条件展開できる。

@@ -33,6 +33,11 @@ public sealed class SeriesThemeSong
     /// クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名を続ける。</summary>
     public string? TitleMisprintText { get; set; }
 
+    /// <summary>その回（その映画）ではインストゥルメンタルで使った印。紐付ける録音は元の歌の録音のまま。
+    /// クレジットの曲名に「（インストゥルメンタル）」を添え、テンプレでは {?INSTRUMENTAL} で書き分ける。
+    /// 読み出した行では必ず値が入る。保存で null を渡すと今の印を残す（入力欄の無い画面からの保存用）。</summary>
+    public bool? IsInstrumental { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

@@ -2734,6 +2734,9 @@ CREATE TABLE `episode_theme_songs` (
   -- クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。NULL なら誤記なし。
   -- クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名（songs.title）を続ける。
   `title_misprint_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- その回（その映画）ではインストゥルメンタルで使った印。紐付ける録音は元の歌の録音のまま。
+  -- クレジットの曲名に「（インストゥルメンタル）」を添え、テンプレでは {?INSTRUMENTAL} で書き分ける。
+  `is_instrumental`         tinyint(1) NOT NULL DEFAULT 0,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2766,6 +2769,9 @@ CREATE TABLE `series_theme_songs` (
   -- クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。NULL なら誤記なし。
   -- クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名（songs.title）を続ける。
   `title_misprint_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- その回（その映画）ではインストゥルメンタルで使った印。紐付ける録音は元の歌の録音のまま。
+  -- クレジットの曲名に「（インストゥルメンタル）」を添え、テンプレでは {?INSTRUMENTAL} で書き分ける。
+  `is_instrumental`         tinyint(1) NOT NULL DEFAULT 0,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

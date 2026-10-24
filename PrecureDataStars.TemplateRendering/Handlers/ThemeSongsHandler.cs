@@ -169,6 +169,7 @@ public static class ThemeSongsHandler
               sr.song_recording_id AS SongRecordingId,
               s.title             AS SongTitle,
               ets.title_misprint_text AS TitleMisprintText,
+              ets.is_instrumental AS IsInstrumental,
               s.lyricist_name     AS LyricistName,
               s.composer_name     AS ComposerName,
               s.arranger_name     AS ArrangerName,
@@ -317,6 +318,8 @@ public static class ThemeSongsHandler
         {
             sb.Append(safeTitle);
         }
+        // その回ではインストゥルメンタルで使った曲は、曲名の後ろ（カギ括弧の内側）に添える。
+        if (r.IsInstrumental) sb.Append("（インストゥルメンタル）");
         sb.Append('」');
         if (!string.IsNullOrEmpty(r.VariantLabel))
         {
@@ -395,6 +398,8 @@ public static class ThemeSongsHandler
         public string? SongTitle { get; set; }
         /// <summary>クレジットの画面に出た曲名の誤記（episode_theme_songs / series_theme_songs.title_misprint_text）。null なら誤記なし。</summary>
         public string? TitleMisprintText { get; set; }
+        /// <summary>その回（その映画）ではインストゥルメンタルで使った印（episode_theme_songs / series_theme_songs.is_instrumental）。</summary>
+        public bool IsInstrumental { get; set; }
         public string? LyricistName { get; set; }
         public string? ComposerName { get; set; }
         public string? ArrangerName { get; set; }

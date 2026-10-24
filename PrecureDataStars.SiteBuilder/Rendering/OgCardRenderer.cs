@@ -1425,7 +1425,14 @@ public sealed partial class OgCardRenderer : IDisposable
     }
 
     /// <summary>描画の最小単位。行に流し込んだあと、行ごとに左から順に描く。</summary>
-    private sealed record FactPiece(string Text, SKColor Color, bool IsLabel, float TrailingGap);
+    /// <summary>流し込みの 1 断片。<paramref name="IsNote"/> はクレジットに無い補足（<see cref="OgCardNote"/>）で、小さい字で描く。</summary>
+    private sealed record FactPiece(string Text, SKColor Color, bool IsLabel, float TrailingGap, bool IsNote = false);
+
+    /// <summary>流し込みの補足の字の大きさ（値の字に対する比）。</summary>
+    private const float InlineFactNoteScale = 0.72f;
+
+    /// <summary>流し込みの補足の前に空ける間（拡大率 1 のとき）。</summary>
+    private const float InlineFactNoteGap = 6f;
 
     /// <summary>
     /// ラベルと値の組を流し込んで描き、ブロックの上端・下端の Y と、収まり切らず末尾を落としたかを返す。
@@ -1448,8 +1455,12 @@ public sealed partial class OgCardRenderer : IDisposable
         using var labelFont = new SKFont(_emphasisTypeface, (FactFontSize - 4f) * scale);
         // 平体は、字の大きさを率だけ下げて横方向を同じ率で広げる（字幅はそのまま、高さだけ縮む）。
         using var valueFont = new SKFont(valueTypeface ?? _bodyTypeface, FactFontSize * scale * verticalScale) { ScaleX = 1f / verticalScale };
+        // クレジットに無い補足（「（藤本 記子）」）は、値より小さい字で間を空けて描く。
+        using var noteFont = new SKFont(valueTypeface ?? _bodyTypeface, FactFontSize * scale * verticalScale * InlineFactNoteScale) { ScaleX = 1f / verticalScale };
+        float noteGap = InlineFactNoteGap * scale;
         float lineHeight = FactLineHeight * scale;
         float gap = InlineFactGap * scale;
+        float RunWidth((string Text, bool IsNote) run) => run.IsNote ? noteGap + Measure(noteFont, run.Text) : Measure(valueFont, run.Text);
 
         var lines = new List<List<FactPiece>> { new() };
         float used = 0f;
@@ -1488,11 +1499,18 @@ public sealed partial class OgCardRenderer : IDisposable
 
             // 項目（役職と担当者）は行をまたがない。1 行に入る項目はひとかたまりとして扱い、
             // 行末に入らなければ項目ごと次の行へ送る。1 行に入らないほど長い項目だけ、区切りで中を折る。
-            float valueWidth = Measure(valueFont, fact.Text);
+            // 値は本文と補足（クレジットに無い括弧）の断片に分けて測り、補足は割らずに 1 語として扱う。
+            var runs = OgCardNote.Split(fact.Text);
+            float valueWidth = runs.Sum(RunWidth);
             bool atomic = labelWidth + valueWidth <= maxWidth;
             // 文章は語に割らず、1 字ずつ折る（下の「1 語が行幅を超える」と同じ折り方）。
-            var tokens = atomic || prose ? new List<string> { fact.Text } : SplitFactTokens(fact.Text);
-            float firstTokenWidth = tokens.Count > 0 ? Measure(valueFont, tokens[0]) : 0f;
+            var tokens = new List<(string Text, bool IsNote)>();
+            foreach (var run in runs)
+            {
+                if (run.IsNote || atomic || prose) tokens.Add(run);
+                else tokens.AddRange(SplitFactTokens(run.Text).Select(t => (t, false)));
+            }
+            float firstTokenWidth = tokens.Count > 0 ? RunWidth(tokens[0]) : 0f;
 
             // ラベルと最初の語（ひとかたまりの項目なら全体）が今の行に載らなければ、項目ごと次の行へ。
             if (used > 0f && used + gap + labelWidth + firstTokenWidth > maxWidth)
@@ -1512,9 +1530,26 @@ public sealed partial class OgCardRenderer : IDisposable
             used += labelWidth;
 
             bool stop = false;
-            foreach (var rawToken in tokens)
+            foreach (var (rawToken, isNote) in tokens)
             {
                 string token = rawToken;
+                if (isNote)
+                {
+                    // 補足は行頭でなければ間を空けて小さい字で続ける。入らなければ次の行の頭へ。
+                    float noteWidth = Measure(noteFont, token);
+                    if (used > 0f && used + noteGap + noteWidth > maxWidth)
+                    {
+                        if (!NewLine()) { truncated = true; stop = true; break; }
+                    }
+                    if (used > 0f && lines[^1].Count > 0)
+                    {
+                        lines[^1][^1] = lines[^1][^1] with { TrailingGap = lines[^1][^1].TrailingGap + noteGap };
+                        used += noteGap;
+                    }
+                    lines[^1].Add(new FactPiece(token, Muted, false, 0f, IsNote: true));
+                    used += noteWidth;
+                    continue;
+                }
                 float width = Measure(valueFont, token);
                 if (used > 0f && used + width > maxWidth && width <= maxWidth)
                 {
@@ -1536,7 +1571,7 @@ public sealed partial class OgCardRenderer : IDisposable
                             if (prose)
                             {
                                 // 文章は最後の行の末尾を「…」に替えて切る（字を小さくして詰め込むより読める）。
-                                EllipsizeLastLine(lines[^1], labelFont, valueFont, paint, maxWidth);
+                                EllipsizeLastLine(lines[^1], labelFont, valueFont, noteFont, paint, maxWidth);
                                 stop = true;
                                 break;
                             }
@@ -1555,18 +1590,18 @@ public sealed partial class OgCardRenderer : IDisposable
             if (stop) break;
         }
 
-        var (top, bottom) = FinishInlineFacts(canvas, paint, lines, labelFont, valueFont, x, anchor, anchorToTop, lineHeight);
+        var (top, bottom) = FinishInlineFacts(canvas, paint, lines, labelFont, valueFont, noteFont, x, anchor, anchorToTop, lineHeight);
         return (top, bottom, truncated);
     }
 
     /// <summary>文章の流し込みで、最後の行の末尾を「…」に替える（「…」が入るまで末尾の字を落とす）。</summary>
-    private void EllipsizeLastLine(List<FactPiece> line, SKFont labelFont, SKFont valueFont, SKPaint paint, float maxWidth)
+    private void EllipsizeLastLine(List<FactPiece> line, SKFont labelFont, SKFont valueFont, SKFont noteFont, SKPaint paint, float maxWidth)
     {
-        int last = line.FindLastIndex(p => !p.IsLabel);
+        int last = line.FindLastIndex(p => !p.IsLabel && !p.IsNote);
         if (last < 0) return;
         float others = 0f;
         for (int i = 0; i < line.Count; i++)
-            if (i != last) others += Measure(line[i].IsLabel ? labelFont : valueFont, line[i].Text) + line[i].TrailingGap;
+            if (i != last) others += Measure(line[i].IsLabel ? labelFont : line[i].IsNote ? noteFont : valueFont, line[i].Text) + line[i].TrailingGap;
         string text = line[last].Text.TrimEnd('…', ' ');
         while (text.Length > 0 && others + Measure(valueFont, text + "…") > maxWidth) text = text[..^1];
         line[last] = line[last] with { Text = text + "…" };
@@ -1613,7 +1648,7 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <summary>流し込み済みの行を描き、ブロック上端の Y を返す。</summary>
     private (float Top, float Bottom) FinishInlineFacts(
         SKCanvas canvas, SKPaint paint, List<List<FactPiece>> lines,
-        SKFont labelFont, SKFont valueFont, float x, float anchor, bool anchorToTop, float lineHeight)
+        SKFont labelFont, SKFont valueFont, SKFont noteFont, float x, float anchor, bool anchorToTop, float lineHeight)
     {
         if (lines.Count > 0 && lines[^1].Count == 0) lines.RemoveAt(lines.Count - 1);
         if (lines.Count == 0) return (anchor, anchor);
@@ -1625,7 +1660,7 @@ public sealed partial class OgCardRenderer : IDisposable
             float cursor = x;
             foreach (var piece in lines[i])
             {
-                var font = piece.IsLabel ? labelFont : valueFont;
+                var font = piece.IsLabel ? labelFont : piece.IsNote ? noteFont : valueFont;
                 paint.Color = piece.Color;
                 DrawText(canvas, piece.Text, cursor, baseline, SKTextAlign.Left, font, paint);
                 cursor += Measure(font, piece.Text) + piece.TrailingGap;
@@ -1669,7 +1704,7 @@ public sealed partial class OgCardRenderer : IDisposable
         {
             // 値はラベルの右に流し、入りきらない分は値の左端へ揃えて折り返す。
             // 折り返しは項目の区切り（読点・スラッシュ・空白）でのみ起こすので、氏名や社名が途中で割れない。
-            var valueLines = WrapFactValue(fact.Text, valueFont, paint, CardWidth - PaddingRight - (x + indent));
+            var valueLines = WrapFactValue(OgCardNote.Strip(fact.Text), valueFont, paint, CardWidth - PaddingRight - (x + indent));
             var subLines = string.IsNullOrWhiteSpace(fact.SubText)
                 ? new List<string>()
                 : WrapFactValue(fact.SubText, subFont, paint, CardWidth - PaddingRight - (x + continuationIndent));

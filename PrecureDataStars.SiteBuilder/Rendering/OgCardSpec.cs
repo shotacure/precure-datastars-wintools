@@ -319,7 +319,9 @@ public sealed record OgCardBarSegment(int Seconds, string Label, string ColorHex
 /// <paramref name="Text"/> を本文色で続けて描く。
 /// </summary>
 /// <param name="Label">項目名（"脚本" / "作画監督" など）。空なら本文のみを描く。</param>
-/// <param name="Text">値。1 行に収まらない場合は末尾を省略記号で切り詰める。</param>
+/// <param name="Text">値。1 行に収まらない場合は末尾を省略記号で切り詰める。
+/// <see cref="OgCardNote.Wrap"/> で包んだ部分は、クレジットに無い補足（「Nostalgic Orchestra（藤本 記子）」の括弧）として
+/// 流し込み（<see cref="OgCardSpec.InlineFacts"/>）では小さい補助色の字で間を空けて描く。</param>
 public sealed record OgCardFactLine(string Label, string Text)
 {
     /// <summary>
@@ -343,6 +345,46 @@ public sealed record OgCardFactLine(string Label, string Text)
     /// 2 段に分けて全部見せるための枠。1 行 1 項目で積む <see cref="OgCardSpec.Facts"/> でのみ使う。
     /// </summary>
     public string SubText { get; init; } = "";
+}
+
+/// <summary>
+/// 事実行の値の中の、クレジットに無い補足の印。<see cref="Wrap"/> で包んだ部分を、流し込みの描画が
+/// 本文と分けて小さい補助色の字で描く（印の文字は私用領域なのでデータの文字とぶつからない）。
+/// </summary>
+public static class OgCardNote
+{
+    /// <summary>補足の始まりの印。</summary>
+    public const char Open = '\uE000';
+    /// <summary>補足の終わりの印。</summary>
+    public const char Close = '\uE001';
+
+    /// <summary>補足として包む。</summary>
+    public static string Wrap(string text) => Open + text + Close;
+
+    /// <summary>印を外した文字列（補足も本文と同じに描く所で使う）。</summary>
+    public static string Strip(string text) => text.Replace(Open.ToString(), "").Replace(Close.ToString(), "");
+
+    /// <summary>値を本文と補足の断片に分ける（出てきた順。空の断片は除く）。</summary>
+    public static IReadOnlyList<(string Text, bool IsNote)> Split(string text)
+    {
+        var runs = new List<(string, bool)>();
+        if (string.IsNullOrEmpty(text)) return runs;
+        var sb = new System.Text.StringBuilder();
+        bool note = false;
+        foreach (char ch in text)
+        {
+            if (ch == Open || ch == Close)
+            {
+                if (sb.Length > 0) runs.Add((sb.ToString(), note));
+                sb.Clear();
+                note = ch == Open;
+                continue;
+            }
+            sb.Append(ch);
+        }
+        if (sb.Length > 0) runs.Add((sb.ToString(), note));
+        return runs;
+    }
 }
 
 /// <summary>

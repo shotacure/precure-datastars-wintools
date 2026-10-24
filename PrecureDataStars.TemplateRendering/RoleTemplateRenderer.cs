@@ -44,6 +44,10 @@ namespace PrecureDataStars.TemplateRendering;
 ///     <c>{SAME_COMPOSER_ARRANGER}</c> は作曲と編曲が同じ名義（連名も同じ）なら "1"、違えば空で、
 ///     <c>{?SAME_COMPOSER_ARRANGER}</c> / <c>{?!SAME_COMPOSER_ARRANGER}</c> で書き分ける。
 ///     <c>{SAME_LYRICIST_COMPOSER_ARRANGER}</c> は作詞・作曲・編曲の 3 つが同じ名義なら "1"、違えば空。
+///     所属の会社名だけを出す行（「Nostalgic Orchestra」）は会社名どうしで同じと見る。
+///     <c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> は、会社名だけの行なら会社名のあとに実際の人物を小さい括弧で添え、
+///     <c>{?SAME_LYRICIST_COMPOSER_ARRANGER}</c> / <c>{?SAME_COMPOSER_ARRANGER}</c> の中では、まとめた役職ぶんの人物を
+///     役職つきで並べる（「作詞・作曲・編曲：Nostalgic Orchestra（作詞・作曲：藤本 記子、編曲：福富 雅之）」）。
 ///     <c>{LYRICS_TRANSLATOR}</c> は英訳（<c>LYRICS_TRANSLATION</c> 役職）の連名で、無い曲は空。
 ///     <c>{INSTRUMENTAL}</c> はその回（その映画）ではインストゥルメンタルで使った曲なら "1"、違えば空で、
 ///     <c>{?INSTRUMENTAL}</c> / <c>{?!INSTRUMENTAL}</c> で曲名の添え書きや「オリジナルボーカル曲」の見出しを書き分ける。
@@ -65,6 +69,17 @@ public static class RoleTemplateRenderer
             return string.Join(sep, parts.Select(p => p.Html));
         return joinedHtml ?? "";
     }
+
+    /// <summary>
+    /// 1 行にまとめる条件の名前 → その行にまとめた役職の並び。
+    /// <c>SAME_LYRICIST_COMPOSER_ARRANGER</c> は作詞・作曲・編曲、<c>SAME_COMPOSER_ARRANGER</c> は作曲・編曲。それ以外は null。
+    /// </summary>
+    private static IReadOnlyList<string>? MergedRolesOf(string conditionName) => conditionName switch
+    {
+        "SAME_LYRICIST_COMPOSER_ARRANGER" => new[] { SongCreditRoles.Lyrics, SongCreditRoles.Composition, SongCreditRoles.Arrangement },
+        "SAME_COMPOSER_ARRANGER" => new[] { SongCreditRoles.Composition, SongCreditRoles.Arrangement },
+        _ => null,
+    };
 
     /// <summary>
     /// <c>{#THEME_SONGS}</c> の <c>seq</c> オプション（"N" または "N-M"）を読む。空・読めない値なら false（絞り込まない）。
@@ -176,7 +191,19 @@ public static class RoleTemplateRenderer
                         string val = await ResolvePlaceholderAsync(probe, ctx, currentBlock, currentSong, factory, lookup, ct).ConfigureAwait(false);
                         if (string.IsNullOrEmpty(val) == negate)
                         {
-                            await RenderNodesAsync(cond.Body, ctx, currentBlock, currentSong, factory, lookup, sb, ct).ConfigureAwait(false);
+                            // 「作詞・作曲・編曲：」「作曲・編曲：」の 1 行にまとめる条件の中では、まとめた役職を曲に覚えさせ、
+                            // 会社名だけの行の人物の括弧に役職を添えられるようにする（抜けたら元に戻す）。
+                            var merged = !negate && currentSong is not null ? MergedRolesOf(cond.Name) : null;
+                            var saved = currentSong?.MergedCreditRoles;
+                            if (merged is not null) currentSong!.MergedCreditRoles = merged;
+                            try
+                            {
+                                await RenderNodesAsync(cond.Body, ctx, currentBlock, currentSong, factory, lookup, sb, ct).ConfigureAwait(false);
+                            }
+                            finally
+                            {
+                                if (merged is not null) currentSong!.MergedCreditRoles = saved;
+                            }
                         }
                         break;
                     }
@@ -360,11 +387,15 @@ public static class RoleTemplateRenderer
                 };
             case "LYRICIST":
                 // stage B-4：構造化クレジットがあればリンク化済み HTML、なければ
-                return NamesHtml(ph, currentSong?.LyricistHtml, currentSong?.LyricistParts);
+                // 会社名だけの行（「Nostalgic Orchestra」）には、実際の人物の括弧を添える。
+                return NamesHtml(ph, currentSong?.LyricistHtml, currentSong?.LyricistParts)
+                     + ThemeSongsHandler.CompanyOnlyPeopleSuffixHtml(currentSong, SongCreditRoles.Lyrics);
             case "COMPOSER":
-                return NamesHtml(ph, currentSong?.ComposerHtml, currentSong?.ComposerParts);
+                return NamesHtml(ph, currentSong?.ComposerHtml, currentSong?.ComposerParts)
+                     + ThemeSongsHandler.CompanyOnlyPeopleSuffixHtml(currentSong, SongCreditRoles.Composition);
             case "ARRANGER":
-                return NamesHtml(ph, currentSong?.ArrangerHtml, currentSong?.ArrangerParts);
+                return NamesHtml(ph, currentSong?.ArrangerHtml, currentSong?.ArrangerParts)
+                     + ThemeSongsHandler.CompanyOnlyPeopleSuffixHtml(currentSong, SongCreditRoles.Arrangement);
             case "SAME_COMPOSER_ARRANGER":
                 // 作曲と編曲が同じ名義（連名も同じ）なら "1"。画面で「作曲：」「編曲：」の 2 行に名前を 1 つだけ出す作品用。
                 return currentSong is { ComposerHtml.Length: > 0 } sameCs

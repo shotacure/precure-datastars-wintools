@@ -222,7 +222,11 @@ public sealed class TrackCreditHtmlBuilder
         if (credits.Count > 0)
         {
             // 名義と盤に印刷された所属（例：岡部 啓一（MONACA）、所属の会社名だけ、名義だけ）。区切りが空なら「、」。
-            return SongCreditAffiliation.BuildNamesHtml(credits, _companyAliasMap, c => BuildPersonAliasLinkHtml(c.PersonAliasId), "、");
+            return SongCreditAffiliation.BuildNamesHtml(credits, _companyAliasMap,
+                c => BuildPersonAliasLinkHtml(c.PersonAliasId),
+                c => ResolvePersonAliasDisplayLabel(c.PersonAliasId),
+                (c, text) => _staffLinkResolver.ResolveAsHtml(c.PersonAliasId, text),
+                "、");
         }
 
         // フォールバック：構造化クレジットが無いので、Song のフリーテキストを役職コードに応じて拾う。

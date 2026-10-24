@@ -446,7 +446,13 @@ public sealed class SongsGenerator
             },
             OgType = "music.song",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(song, songCreditRows, lyricistText, composerText, arrangerText, medleyArrangerText, musicClassLabel, repSeriesTitle, recordingViews)
+            // OGP カードは、会社名だけの行に添える人物の括弧を小さい字で描き分けるため、補足の印を付けた平文で組む。
+            OgCard = BuildOgCard(song, songCreditRows,
+                CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap, _ctx.CompanyAliasById, OgCardNote.Wrap),
+                CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Composition, song.ComposerName, personAliasMap, _ctx.CompanyAliasById, OgCardNote.Wrap),
+                CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Arrangement, song.ArrangerName, personAliasMap, _ctx.CompanyAliasById, OgCardNote.Wrap),
+                CreditText.SongCreditNames(songCreditRows, SongCreditRoles.MedleyArrangement, null, personAliasMap, _ctx.CompanyAliasById, OgCardNote.Wrap),
+                musicClassLabel, repSeriesTitle, recordingViews)
         };
         _page.RenderAndWriteFile(songUrl, "songs-detail.sbn", content, layout);
         return songUrl;
@@ -1073,7 +1079,7 @@ public sealed class SongsGenerator
                 ? alias.GetDisplayName()
                 : "[alias#" + row.PersonAliasId + "]";
             return _staffLinkResolver.ResolveAsHtml(row.PersonAliasId, displayName);
-        });
+        }, row => SongCreditAffiliation.PersonDisplayName(personAliasMap, row.PersonAliasId), (row, text) => _staffLinkResolver.ResolveAsHtml(row.PersonAliasId, text));
         return ($"<span class=\"staff-name\">{names}</span>", SongCreditAffiliation.VisibleRows(roleRows, _ctx.CompanyAliasById).Count == 1);
     }
 
@@ -1123,7 +1129,7 @@ public sealed class SongsGenerator
             }
             // alias が見つからない（FK 整合性想定外）：ID を平文で出す。
             return "[alias#" + row.PersonAliasId + "]";
-        });
+        }, row => SongCreditAffiliation.PersonDisplayName(personAliasMap, row.PersonAliasId), (row, text) => _staffLinkResolver.ResolveAsHtml(row.PersonAliasId, text));
     }
 
     /// <summary>

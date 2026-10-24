@@ -304,10 +304,12 @@ public sealed class ThemeSongRowBuilder
             return string.IsNullOrEmpty(fallbackText) ? "" : HtmlUtil.Escape(fallbackText);
         }
         // 名義と盤に印刷された所属（例：岡部 啓一（MONACA）、所属の会社名だけ、名義だけ）。
-        return SongCreditAffiliation.BuildNamesHtml(roleRows, _ctx.CompanyAliasById, row =>
-            personAliasMap.TryGetValue(row.PersonAliasId, out var alias)
+        return SongCreditAffiliation.BuildNamesHtml(roleRows, _ctx.CompanyAliasById,
+            row => personAliasMap.TryGetValue(row.PersonAliasId, out var alias)
                 ? _staffLinkResolver.ResolveAsHtml(row.PersonAliasId, alias.GetDisplayName())
-                : "[alias#" + row.PersonAliasId + "]");
+                : "[alias#" + row.PersonAliasId + "]",
+            row => SongCreditAffiliation.PersonDisplayName(personAliasMap, row.PersonAliasId),
+            (row, text) => _staffLinkResolver.ResolveAsHtml(row.PersonAliasId, text));
     }
 
 }

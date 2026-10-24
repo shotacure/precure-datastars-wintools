@@ -165,6 +165,7 @@ public sealed class SongCreditsRepository : RepositoryBase
     /// 役職テンプレ（各話のクレジット画面の主題歌カード）で使うので、所属は添えない（画面の表記どおりにするため）。
     /// ただし所属の出し方が「会社名だけ」（COMPANY_ONLY）の行は、名義の代わりに所属の会社名義を出す
     /// （画面も会社名だけの表記のため。同じ会社名だけの行が続くときは 1 回だけ）。
+    /// 会社名のあとに添える実際の人物は <see cref="GetCompanyOnlyPeopleHtmlAsync"/> で別に引く。
     /// </summary>
     public async Task<IReadOnlyList<(string Sep, string Html)>> GetDisplayHtmlPartsAsync(int songId, string role, ILookupCache lookup, CancellationToken ct = default)
     {
@@ -206,6 +207,41 @@ public sealed class SongCreditsRepository : RepositoryBase
             parts.Add((parts.Count > 0 ? rows[i].Sep ?? "" : "", html ?? ""));
         }
         return parts;
+    }
+
+    /// <summary>
+    /// 所属の出し方が「会社名だけ」（COMPANY_ONLY）の行の実際の人物を、役職ごとに（credit_seq 順、リンク化済み HTML で）返す。
+    /// 役職テンプレで会社名のあとに「（作詞・作曲：藤本 記子、編曲：福富 雅之）」のような括弧を添えるのに使う。
+    /// 所属の会社名義が無い行は会社名だけにならないので含めない。該当行が無ければ空の辞書。
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, IReadOnlyList<(int PersonAliasId, string Html)>>> GetCompanyOnlyPeopleHtmlAsync(
+        int songId, ILookupCache lookup, CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT
+              sc.credit_role     AS Role,
+              sc.person_alias_id AS PersonAliasId
+            FROM song_credits sc
+            WHERE sc.song_id = @songId
+              AND sc.affiliation_display = 'COMPANY_ONLY'
+              AND sc.affiliation_company_alias_id IS NOT NULL
+            ORDER BY sc.credit_role, sc.credit_seq;
+            """;
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = (await conn.QueryAsync<(string Role, int PersonAliasId)>(
+            new CommandDefinition(sql, new { songId }, cancellationToken: ct))).ToList();
+        var result = new Dictionary<string, IReadOnlyList<(int, string)>>(StringComparer.Ordinal);
+        foreach (var g in rows.GroupBy(r => r.Role))
+        {
+            var list = new List<(int, string)>();
+            foreach (var r in g)
+            {
+                var html = await lookup.LookupPersonAliasHtmlAsync(r.PersonAliasId).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(html)) list.Add((r.PersonAliasId, html!));
+            }
+            if (list.Count > 0) result[g.Key] = list;
+        }
+        return result;
     }
 
     /// <summary>1 行追加（呼び出し側で credit_seq を採番済みの前提）。</summary>

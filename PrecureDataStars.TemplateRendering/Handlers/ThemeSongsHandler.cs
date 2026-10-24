@@ -262,6 +262,9 @@ public static class ThemeSongsHandler
         // メドレー編曲：構造化行だけ（フリーテキスト列は持たない）。無い曲は空文字列。
         r.MedleyArrangerHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false) ?? "";
 
+        // 会社名だけを出す行の実際の人物（役職ごと）。会社名のあとの括弧に使う。
+        r.CompanyOnlyPeople = await songCredits.GetCompanyOnlyPeopleHtmlAsync(r.SongId, lookup, ct).ConfigureAwait(false);
+
         // 英訳：構造化行だけ（フリーテキスト列は持たない）。無い曲は空文字列。
         r.LyricsTranslatorParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.LyricsTranslation, lookup, ct).ConfigureAwait(false);
         r.LyricsTranslatorHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.LyricsTranslation, lookup, ct).ConfigureAwait(false) ?? "";
@@ -296,6 +299,44 @@ public static class ThemeSongsHandler
         var songCredits = new SongCreditsRepository(factory);
         foreach (var r in rows) await FillSongCreditsAsync(r, songCredits, lookup, ct).ConfigureAwait(false);
         return rows;
+    }
+
+    /// <summary>作詞・作曲・編曲の役職コード → 括弧に添える役職名。</summary>
+    private static readonly IReadOnlyDictionary<string, string> WriterRoleLabels = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [SongCreditRoles.Lyrics] = "作詞",
+        [SongCreditRoles.Composition] = "作曲",
+        [SongCreditRoles.Arrangement] = "編曲",
+    };
+
+    /// <summary>
+    /// 会社名だけの行（所属の出し方が COMPANY_ONLY）の会社名のあとに添える、実際の人物の小さい括弧の HTML。
+    /// 1 行にまとめた役職の中にいるとき（<see cref="ThemeSongRow.MergedCreditRoles"/>）は、まとめた役職ぶんの人物を並べ、
+    /// 役職ごとに人が分かれるなら役職を添える（「（作詞・作曲：藤本 記子、編曲：福富 雅之）」。同じ人の役職は「・」でまとめ、人の間は「、」）。
+    /// 人物が 1 人だけ、または役職が 1 つだけのときは名前だけを「・」で並べる（「（藤本 記子）」）。
+    /// 名前はリンク化済み HTML（人物詳細へ）。会社名だけの行が無ければ空文字。
+    /// </summary>
+    internal static string CompanyOnlyPeopleSuffixHtml(ThemeSongRow? song, string role)
+    {
+        if (song is null || song.CompanyOnlyPeople.Count == 0) return "";
+        IReadOnlyList<string> roles = song.MergedCreditRoles is { } merged && merged.Contains(role) ? merged : new[] { role };
+        var people = new List<(int Id, string Html, List<string> Roles)>();
+        foreach (var r in roles)
+        {
+            if (!song.CompanyOnlyPeople.TryGetValue(r, out var list)) continue;
+            foreach (var (id, html) in list)
+            {
+                int at = people.FindIndex(p => p.Id == id);
+                if (at < 0) people.Add((id, html, new List<string> { r }));
+                else if (!people[at].Roles.Contains(r)) people[at].Roles.Add(r);
+            }
+        }
+        if (people.Count == 0) return "";
+        string inner = people.Count == 1 || roles.Count == 1
+            ? string.Join("・", people.Select(p => p.Html))
+            : string.Join("、", people.Select(p =>
+                string.Join("・", p.Roles.Select(r => WriterRoleLabels.TryGetValue(r, out var l) ? l : r)) + "：" + p.Html));
+        return $"<span class=\"staff-primary-name muted\">（{inner}）</span>";
     }
 
     /// <summary>
@@ -349,17 +390,17 @@ public static class ThemeSongsHandler
         if (!string.IsNullOrEmpty(r.LyricistHtml))
         {
             var label = await RoleLabel(SongCreditRoles.Lyrics, "作詞").ConfigureAwait(false);
-            sb.Append(label).Append(':').Append(r.LyricistHtml).Append('\n');
+            sb.Append(label).Append(':').Append(r.LyricistHtml).Append(CompanyOnlyPeopleSuffixHtml(r, SongCreditRoles.Lyrics)).Append('\n');
         }
         if (!string.IsNullOrEmpty(r.ComposerHtml))
         {
             var label = await RoleLabel(SongCreditRoles.Composition, "作曲").ConfigureAwait(false);
-            sb.Append(label).Append(':').Append(r.ComposerHtml).Append('\n');
+            sb.Append(label).Append(':').Append(r.ComposerHtml).Append(CompanyOnlyPeopleSuffixHtml(r, SongCreditRoles.Composition)).Append('\n');
         }
         if (!string.IsNullOrEmpty(r.ArrangerHtml))
         {
             var label = await RoleLabel(SongCreditRoles.Arrangement, "編曲").ConfigureAwait(false);
-            sb.Append(label).Append(':').Append(r.ArrangerHtml).Append('\n');
+            sb.Append(label).Append(':').Append(r.ArrangerHtml).Append(CompanyOnlyPeopleSuffixHtml(r, SongCreditRoles.Arrangement)).Append('\n');
         }
         if (!string.IsNullOrEmpty(r.MedleyArrangerHtml))
         {
@@ -443,5 +484,18 @@ public static class ThemeSongsHandler
         public IReadOnlyList<(string Sep, string Html)> LyricsTranslatorParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> SingerParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> ChorusParts { get; set; } = Array.Empty<(string, string)>();
+
+        /// <summary>
+        /// 所属の出し方が「会社名だけ」の行の実際の人物（役職コード → (名義 ID, リンク化済み HTML) の並び）。
+        /// 役職テンプレの {LYRICIST} 等で、会社名のあとに人物の括弧を添えるのに使う。該当行が無い曲は空。
+        /// </summary>
+        public IReadOnlyDictionary<string, IReadOnlyList<(int PersonAliasId, string Html)>> CompanyOnlyPeople { get; set; }
+            = new Dictionary<string, IReadOnlyList<(int, string)>>();
+
+        /// <summary>
+        /// テンプレの展開中だけ使う：いま <c>{?SAME_LYRICIST_COMPOSER_ARRANGER}</c> / <c>{?SAME_COMPOSER_ARRANGER}</c> の中にいるとき、
+        /// その 1 行にまとめた役職の並び。外では null。人物の括弧に役職を添えるかの判断に使う。
+        /// </summary>
+        public IReadOnlyList<string>? MergedCreditRoles { get; set; }
     }
 }

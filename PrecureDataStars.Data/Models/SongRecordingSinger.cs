@@ -99,6 +99,8 @@ public static class SongRecordingSingerRoles
     public const string Chorus = "BACKING_VOCALS";
     /// <summary>台詞。曲中のセリフ担当（歌わずに台詞だけで参加する出演者）。<c>roles</c> マスタ上の役職コードは <c>DIALOGUE</c>（表示名「台詞」）。</summary>
     public const string Dialogue = "DIALOGUE";
+    /// <summary>語り。曲中の語り（盤に「語り：」と載る）。<c>roles</c> マスタ上の役職コードは <c>SPOKEN_WORD</c>（表示名「語り」）。書式・並びは台詞と同じで、台詞の次に出す。</summary>
+    public const string SpokenWord = "SPOKEN_WORD";
     /// <summary>スキャット。主に劇伴の歌い手（bgm_cue_singers）で使う。<c>roles</c> マスタ上の役職コードは <c>SCAT</c>（表示名「スキャット」）。</summary>
     public const string Scat = "SCAT";
 }

@@ -131,7 +131,7 @@
       {{~ end ~}}
     </div>
     {{~ end ~}}
-    {{~ if r.VocalistsHtml != "" || r.ChorusHtml != "" || r.DialogueHtml != "" || r.SeriesTitle != "" ~}}
+    {{~ if r.VocalistsHtml != "" || r.ChorusHtml != "" || r.DialogueHtml != "" || r.SpokenWordHtml != "" || r.SeriesTitle != "" ~}}
     <div class="song-credits song-recording-vocalists-credits">
       {{~ if r.VocalistsHtml != "" ~}}
       <div class="key-staff-line">
@@ -149,6 +149,12 @@
       <div class="key-staff-line">
         <a class="role-badge role-badge-sm" data-role-code="DIALOGUE" href="/creators/singers/">台詞</a>
         <span class="key-staff-names">{{ r.DialogueHtml }}</span>
+      </div>
+      {{~ end ~}}
+      {{~ if r.SpokenWordHtml != "" ~}}
+      <div class="key-staff-line">
+        <a class="role-badge role-badge-sm" data-role-code="SPOKEN_WORD" href="/creators/singers/">語り</a>
+        <span class="key-staff-names">{{ r.SpokenWordHtml }}</span>
       </div>
       {{~ end ~}}
       {{~ if r.SeriesTitle != "" ~}}

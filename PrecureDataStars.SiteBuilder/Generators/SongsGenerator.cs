@@ -759,6 +759,7 @@ public sealed class SongsGenerator
             showHiddenUnitMembers: true);
         string chorusHtml = _singerHtml.BuildChorusHtml(recordingSingers, personAliasMap, characterAliasMap);
         string dialogueHtml = _singerHtml.BuildDialogueHtml(recordingSingers, personAliasMap, characterAliasMap);
+        string spokenWordHtml = _singerHtml.BuildSpokenWordHtml(recordingSingers, personAliasMap, characterAliasMap);
 
         // 表示タイトル（曲名 + 半角SP + variant_label 接尾辞）と録音単位の音楽種別ラベル。
         string recDisplayTitle = SongDisplayTitle.Build(song.Title, r.VariantLabel);
@@ -799,6 +800,7 @@ public sealed class SongsGenerator
             VocalistsHtml = vocalistsHtml,
             ChorusHtml = chorusHtml,
             DialogueHtml = dialogueHtml,
+            SpokenWordHtml = spokenWordHtml,
             Tracks = tracksRows,
             ThemeUsages = themeRows
         };
@@ -995,6 +997,13 @@ public sealed class SongsGenerator
         if (!string.IsNullOrEmpty(dialogueHtml))
         {
             groups.Add((new List<(string, string)> { ("DIALOGUE", "台詞") }, dialogueHtml, false));
+        }
+
+        // 語り（SPOKEN_WORD）も台詞と同じく構造化 singers のみから、台詞の後ろに独立追加する。
+        string spokenWordHtml = _singerHtml.BuildSpokenWordHtml(singers, personAliasMap, characterAliasMap);
+        if (!string.IsNullOrEmpty(spokenWordHtml))
+        {
+            groups.Add((new List<(string, string)> { (SongRecordingSingerRoles.SpokenWord, "語り") }, spokenWordHtml, false));
         }
 
         if (groups.Count == 0) return "";
@@ -1448,6 +1457,8 @@ public sealed class SongsGenerator
         public string ChorusHtml { get; set; } = "";
         /// <summary>台詞（DIALOGUE）の表示用 HTML。 該当録音に台詞の担当が居なければ空文字列。空でなければ songs-detail で「台詞」バッジ + 名義を 1 行表示する。</summary>
         public string DialogueHtml { get; set; } = "";
+        /// <summary>語り（SPOKEN_WORD）の表示用 HTML。 該当録音に語りの担当が居なければ空文字列。空でなければ songs-detail で「語り」バッジ + 名義を 1 行表示する。</summary>
+        public string SpokenWordHtml { get; set; } = "";
         public IReadOnlyList<RecordingTrackRow> Tracks { get; set; } = Array.Empty<RecordingTrackRow>();
         public IReadOnlyList<RecordingThemeRow> ThemeUsages { get; set; } = Array.Empty<RecordingThemeRow>();
     }

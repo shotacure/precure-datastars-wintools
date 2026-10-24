@@ -541,7 +541,8 @@ public sealed class CreditInvolvementIndex
                 "VOCALS" => 4,
                 "BACKING_VOCALS" => 5,
                 "DIALOGUE" => 6,
-                _ => 7
+                "SPOKEN_WORD" => 7,
+                _ => 8
             };
             return roleOrder * ConnoteStride + singerSeq;
         }

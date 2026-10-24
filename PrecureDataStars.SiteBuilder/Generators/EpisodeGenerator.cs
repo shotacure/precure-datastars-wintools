@@ -995,6 +995,8 @@ public sealed class EpisodeGenerator
             // 台詞（DIALOGUE 役）もコーラスと同じ扱いで併出する。該当行が無ければ空文字列のまま。
             string dialogueHtml = "";
             string dialogueRoleLabelHtml = "";
+            string spokenWordHtml = "";
+            string spokenWordRoleLabelHtml = "";
             if (rec is not null)
             {
                 var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
@@ -1010,6 +1012,12 @@ public sealed class EpisodeGenerator
                 if (!string.IsNullOrEmpty(dialogueHtml))
                 {
                     dialogueRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Dialogue, roleMap, "台詞");
+                }
+                // 語り（SPOKEN_WORD 役）も台詞と同じ扱いで併出する。該当行が無ければ空のまま。
+                spokenWordHtml = _singerHtml.BuildSpokenWordHtml(singers, personAliasMap, characterAliasMap);
+                if (!string.IsNullOrEmpty(spokenWordHtml))
+                {
+                    spokenWordRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.SpokenWord, roleMap, "語り");
                 }
             }
 
@@ -1043,6 +1051,8 @@ public sealed class EpisodeGenerator
                 ChorusRoleLabelHtml = chorusRoleLabelHtml,
                 DialogueHtml = dialogueHtml,
                 DialogueRoleLabelHtml = dialogueRoleLabelHtml,
+                SpokenWordHtml = spokenWordHtml,
+                SpokenWordRoleLabelHtml = spokenWordRoleLabelHtml,
                 Notes = t.Notes ?? "",
                 IsBroadcastOnly = t.IsBroadcastOnly,
                 IsInstrumental = t.IsInstrumental == true,
@@ -2262,6 +2272,10 @@ public sealed class EpisodeGenerator
         public string DialogueHtml { get; set; } = "";
         /// <summary>「台詞」役職ラベル HTML。 <see cref="DialogueHtml"/> が非空のときだけセットされる（<c>/creators/roles/DIALOGUE/</c> へのリンク化済み HTML、未登録時はフォールバック固定文字列「台詞」）。</summary>
         public string DialogueRoleLabelHtml { get; set; } = "";
+        /// <summary>語り（SPOKEN_WORD 役）連名の表示用 HTML。 該当録音に語りの行が無ければ空文字列（テンプレ側で行ごと出さない）。</summary>
+        public string SpokenWordHtml { get; set; } = "";
+        /// <summary>「語り」役職ラベル HTML。 <see cref="SpokenWordHtml"/> が非空のときだけセットされる。</summary>
+        public string SpokenWordRoleLabelHtml { get; set; } = "";
     }
 
     private sealed class CreditBlockView

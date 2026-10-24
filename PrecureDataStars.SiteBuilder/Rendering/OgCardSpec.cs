@@ -385,7 +385,7 @@ public static class OgRolePalette
         "LYRICS" => "#c0354c",
         "COMPOSITION" => "#a17821",
         "ARRANGEMENT" or "MEDLEY_ARRANGEMENT" => "#3c823c",
-        "VOCALS" or "BACKING_VOCALS" or "DIALOGUE" => "#3b56b8",
+        "VOCALS" or "BACKING_VOCALS" or "DIALOGUE" or "SPOKEN_WORD" => "#3b56b8",
         _ => ""
     };
 }

@@ -208,6 +208,9 @@
         {{~ if t.DialogueHtml != "" ~}}
         <div class="ts-meta-row ts-meta-dialogue"><span class="ts-meta-label">{{ t.DialogueRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.DialogueHtml }}</span></div>
         {{~ end ~}}
+        {{~ if t.SpokenWordHtml != "" ~}}
+        <div class="ts-meta-row ts-meta-dialogue"><span class="ts-meta-label">{{ t.SpokenWordRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.SpokenWordHtml }}</span></div>
+        {{~ end ~}}
         {{~ if t.LyricsHtml != "" ~}}
         <div class="ts-meta-row"><span class="ts-meta-label">{{ t.LyricsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.LyricsHtml }}</span></div>
         {{~ end ~}}

@@ -73,6 +73,13 @@ public sealed class SingerHtmlBuilder
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
         => BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Dialogue, personAliasMap, characterAliasMap);
 
+    /// <summary>SPOKEN_WORD（語り）役の連名 HTML を返す。 書式は台詞と同一。該当行が無ければ空文字列（フリーテキストのフォールバックは無い）。</summary>
+    public string BuildSpokenWordHtml(
+        IReadOnlyList<SongRecordingSinger> singers,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+        => BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.SpokenWord, personAliasMap, characterAliasMap);
+
     /// <summary>
     /// 指定役職（SCAT など）の歌い手の連名 HTML を返す。書式は歌・コーラスと同一。
     /// 劇伴の歌い手（bgm_cue_singers を歌唱者行の形に写したもの）の表示に使う。該当行が無ければ空文字列。

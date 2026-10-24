@@ -1261,7 +1261,7 @@ public sealed class PersonsGenerator
         //   歌唱       … 曲のカードのうち、歌・台詞で参加した曲（同じ曲でコーラスもしていればバッジに並べる）
         //   コーラスのみ … 曲のカードのうち、歌唱者行のコーラスだけで参加した曲
         //   演奏等     … 音盤の音楽クレジットの演奏・コーラス等（ミュージシャン欄のコーラスもここ）
-        bool IsSingerVoice(string code) => code is SongRecordingSingerRoles.Vocals or SongRecordingSingerRoles.Dialogue;
+        bool IsSingerVoice(string code) => code is SongRecordingSingerRoles.Vocals or SongRecordingSingerRoles.Dialogue or SongRecordingSingerRoles.SpokenWord;
         var buckets = new (string Label, Func<PersonSongCard, IReadOnlyList<RoleBadgeView>> CardRoles, string? RowGroup)[]
         {
             ("作詞・作曲・編曲",

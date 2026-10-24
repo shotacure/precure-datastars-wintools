@@ -1622,6 +1622,7 @@ public sealed class ProductsGenerator
                     string vocalsHtml = BuildRecordingSingersHtml(rec);
                     string chorusHtml = BuildRecordingChorusHtml(rec);
                     string dialogueHtml = _creditHtml!.BuildRecordingDialogueHtml(rec);
+                    string spokenWordHtml = _creditHtml!.BuildRecordingSpokenWordHtml(rec);
                     // 作詞・作曲・編曲のバッジは、盤の役職の表記（「原詞」など）があればその文字にする。
                     metaLineHtml = _creditHtml!.BuildMergedRoleSegmentsHtml(new (string, string, string, string?)[]
                     {
@@ -1632,6 +1633,7 @@ public sealed class ProductsGenerator
                         ("VOCALS",         "歌",     vocalsHtml,       null),
                         ("BACKING_VOCALS", "コーラス", chorusHtml,     null),
                         ("DIALOGUE",       "台詞",   dialogueHtml,     null),
+                        (SongRecordingSingerRoles.SpokenWord, "語り", spokenWordHtml, null),
                     });
 
                     // この録音が「劇伴としても扱う」紐付け（song_recording_bgm_assignments）を

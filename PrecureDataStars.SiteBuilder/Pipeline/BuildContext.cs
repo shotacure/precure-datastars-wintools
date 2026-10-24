@@ -122,6 +122,15 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<BgmCueCredit>>
         BgmCueCreditsByCue { get; init; }
 
+    /// <summary>
+    /// 全 <c>bgm_cue_singers</c> 行（劇伴の歌い手。スキャットなど）を (series_id, m_no_detail) 単位で事前グルーピングした辞書。
+    /// 表示（<see cref="Utilities.SingerHtmlBuilder"/>）と参加者の展開（<see cref="BuildContextLookupExtensions.ExpandSingerParticipants(BuildContext, SongRecordingSinger)"/>）を
+    /// 歌の録音の歌唱者と共通にするため、値は歌唱者行（<see cref="SongRecordingSinger"/>、録音 ID は 0）の形に写してある。
+    /// 並びは VOCALS → SCAT → BACKING_VOCALS → その他 role_code 昇順、同役内は singer_seq 昇順。
+    /// </summary>
+    public required IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<SongRecordingSinger>>
+        BgmCueSingersByCue { get; init; }
+
     /// <summary>person_alias_id → <see cref="PersonAlias"/> の全件辞書。 旧 <see cref="Rendering.LookupCache"/> および各 Generator が per-id <c>GetByIdAsync</c> で 初回 DB 引きしていた経路を完全に撲滅するため、SiteDataLoader でビルド開始時に 1 度だけロードして共有する。</summary>
     public required IReadOnlyDictionary<int, PersonAlias> PersonAliasById { get; init; }
 

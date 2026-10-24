@@ -65,6 +65,10 @@ partial class BgmCuesEditorForm
     private Label lblStructArranger = null!;
     private Label lblStructArrangerValue = null!;
     private Button btnEditStructArranger = null!;
+    private Label lblStructSinger = null!;
+    private ComboBox cboStructSingerRole = null!;
+    private Label lblStructSingerValue = null!;
+    private Button btnEditStructSinger = null!;
 
     protected override void Dispose(bool disposing)
     {
@@ -214,10 +218,11 @@ partial class BgmCuesEditorForm
         lblStructHint = new Label();
         lblStructComposer = new Label(); lblStructComposerValue = new Label(); btnEditStructComposer = new Button();
         lblStructArranger = new Label(); lblStructArrangerValue = new Label(); btnEditStructArranger = new Button();
+        lblStructSinger = new Label(); cboStructSingerRole = new ComboBox(); lblStructSingerValue = new Label(); btnEditStructSinger = new Button();
 
         grpStructCredits.Text = "構造化クレジット（bgm_cue_credits、ある場合は表示優先）";
         grpStructCredits.Location = new Point(8, y + 70);
-        grpStructCredits.Size = new Size(12 + lw + fw + 8, 116);
+        grpStructCredits.Size = new Size(12 + lw + fw + 8, 144);
         lblStructHint.Text = "連名表記はこちらで構築します。空のままならフリーテキスト欄が表示に使われます。";
         lblStructHint.Location = new Point(12, 22); lblStructHint.Size = new Size(360, 16);
         lblStructHint.ForeColor = Color.DimGray;
@@ -235,12 +240,22 @@ partial class BgmCuesEditorForm
         lblStructArrangerValue.Location = new Point(sCol2, sRowY + 4); lblStructArrangerValue.Size = new Size(216, 18);
         lblStructArrangerValue.AutoEllipsis = true; lblStructArrangerValue.Text = "(未設定)"; lblStructArrangerValue.ForeColor = Color.DimGray;
         btnEditStructArranger.Text = "編集..."; btnEditStructArranger.Location = new Point(sCol2 + 220, sRowY); btnEditStructArranger.Size = new Size(sBtnW, 24);
+        sRowY += sLnH;
+        // 歌い手（bgm_cue_singers）：役職を選んでから「編集...」でその役職の連名を編集する。表示は全役職をまとめて出す。
+        lblStructSinger.Text = "歌い手:";
+        lblStructSinger.Location = new Point(sCol1, sRowY + 4); lblStructSinger.Size = new Size(56, 18);
+        cboStructSingerRole.DropDownStyle = ComboBoxStyle.DropDownList;
+        cboStructSingerRole.Location = new Point(sCol2, sRowY); cboStructSingerRole.Size = new Size(88, 24);
+        lblStructSingerValue.Location = new Point(sCol2 + 92, sRowY + 4); lblStructSingerValue.Size = new Size(124, 18);
+        lblStructSingerValue.AutoEllipsis = true; lblStructSingerValue.Text = "(未設定)"; lblStructSingerValue.ForeColor = Color.DimGray;
+        btnEditStructSinger.Text = "編集..."; btnEditStructSinger.Location = new Point(sCol2 + 220, sRowY); btnEditStructSinger.Size = new Size(sBtnW, 24);
 
         grpStructCredits.Controls.AddRange(new Control[]
         {
             lblStructHint,
             lblStructComposer, lblStructComposerValue, btnEditStructComposer,
-            lblStructArranger, lblStructArrangerValue, btnEditStructArranger
+            lblStructArranger, lblStructArrangerValue, btnEditStructArranger,
+            lblStructSinger, cboStructSingerRole, lblStructSingerValue, btnEditStructSinger
         });
         pnlCueDetail.Controls.Add(grpStructCredits);
 

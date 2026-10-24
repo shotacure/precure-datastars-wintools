@@ -30,6 +30,9 @@ public partial class BgmCuesEditorForm : Form
     // 構造化クレジット（bgm_cue_credits）と picker 用リポジトリ
     private readonly PersonAliasesRepository _personAliasesRepo;
     private readonly BgmCueCreditsRepository _bgmCueCreditsRepo;
+    // 歌い手（bgm_cue_singers。スキャットなど）と、その編集ダイアログのキャラ名義 picker 用リポジトリ
+    private readonly CharacterAliasesRepository _characterAliasesRepo;
+    private readonly BgmCueSingersRepository _bgmCueSingersRepo;
 
     // グリッド表示中の cue リスト（フィルタ適用後）
     private List<BgmCue> _cues = new();
@@ -46,7 +49,10 @@ public partial class BgmCuesEditorForm : Form
         SeriesRepository seriesRepo,
         // 構造化クレジット用
         PersonAliasesRepository personAliasesRepo,
-        BgmCueCreditsRepository bgmCueCreditsRepo)
+        BgmCueCreditsRepository bgmCueCreditsRepo,
+        // 歌い手用
+        CharacterAliasesRepository characterAliasesRepo,
+        BgmCueSingersRepository bgmCueSingersRepo)
     {
         _bgmCuesRepo = bgmCuesRepo;
         _bgmSessionsRepo = bgmSessionsRepo;
@@ -57,8 +63,20 @@ public partial class BgmCuesEditorForm : Form
         // 追加分の保持
         _personAliasesRepo = personAliasesRepo ?? throw new ArgumentNullException(nameof(personAliasesRepo));
         _bgmCueCreditsRepo = bgmCueCreditsRepo ?? throw new ArgumentNullException(nameof(bgmCueCreditsRepo));
+        _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
+        _bgmCueSingersRepo = bgmCueSingersRepo ?? throw new ArgumentNullException(nameof(bgmCueSingersRepo));
 
         InitializeComponent();
+
+        // 歌い手の役職（編集する連名の役職）。劇伴の歌い手は主にスキャット。
+        cboStructSingerRole.DisplayMember = nameof(SingerRoleItem.Label);
+        cboStructSingerRole.ValueMember = nameof(SingerRoleItem.Code);
+        cboStructSingerRole.DataSource = new List<SingerRoleItem>
+        {
+            new(SongRecordingSingerRoles.Scat, "スキャット"),
+            new(SongRecordingSingerRoles.Vocals, "歌"),
+            new(SongRecordingSingerRoles.Chorus, "コーラス"),
+        };
         Load += async (_, __) => await InitAsync();
 
         // SplitterDistance は Designer 設定値が既定フォームサイズ基準で評価される既知ピットフォール対策として、
@@ -98,6 +116,7 @@ public partial class BgmCuesEditorForm : Form
         // 構造化クレジット編集ボタン
         btnEditStructComposer.Click += async (_, __) => await OnEditCueCreditsAsync(BgmCueCreditRoles.Composition);
         btnEditStructArranger.Click += async (_, __) => await OnEditCueCreditsAsync(BgmCueCreditRoles.Arrangement);
+        btnEditStructSinger.Click += async (_, __) => await OnEditCueSingersAsync();
     }
 
     /// <summary>初期化：シリーズコンボ、セッションコンボ、一覧をロードする。</summary>
@@ -266,6 +285,7 @@ public partial class BgmCuesEditorForm : Form
             // 構造化クレジットラベルもクリア
             ApplyStructLabel(lblStructComposerValue, "");
             ApplyStructLabel(lblStructArrangerValue, "");
+            ApplyStructLabel(lblStructSingerValue, "");
             return;
         }
 
@@ -317,6 +337,7 @@ public partial class BgmCuesEditorForm : Form
         // 構造化クレジット表示も初期化
         ApplyStructLabel(lblStructComposerValue, "");
         ApplyStructLabel(lblStructArrangerValue, "");
+        ApplyStructLabel(lblStructSingerValue, "");
     }
 
     private async Task SaveCueAsync()
@@ -453,15 +474,17 @@ public partial class BgmCuesEditorForm : Form
 
     //  構造化クレジット（bgm_cue_credits）連携
 
-    /// <summary>選択中 cue の構造化クレジット（作曲 / 編曲）の連結表示を更新する。</summary>
+    /// <summary>選択中 cue の構造化クレジット（作曲 / 編曲）と歌い手の連結表示を更新する。</summary>
     private async Task RefreshCueCreditsLabelsAsync(int seriesId, string mNoDetail)
     {
         try
         {
             string cmp = await _bgmCueCreditsRepo.GetDisplayStringAsync(seriesId, mNoDetail, BgmCueCreditRoles.Composition);
             string arr = await _bgmCueCreditsRepo.GetDisplayStringAsync(seriesId, mNoDetail, BgmCueCreditRoles.Arrangement);
+            string sng = await _bgmCueSingersRepo.GetDisplayStringAsync(seriesId, mNoDetail);
             ApplyStructLabel(lblStructComposerValue, cmp);
             ApplyStructLabel(lblStructArrangerValue, arr);
+            ApplyStructLabel(lblStructSingerValue, sng);
         }
         catch (Exception ex) { this.ShowError(ex); }
     }
@@ -534,6 +557,80 @@ public partial class BgmCuesEditorForm : Form
         }
         catch (Exception ex) { this.ShowError(ex); }
     }
+
+    /// <summary>
+    /// 「歌い手」編集ボタンのハンドラ。役職コンボで選んだ役職（スキャット / 歌 / コーラス）の連名を、
+    /// 歌の録音と同じ歌唱者の編集ダイアログで編集し、その役職の行だけを差し替える。
+    /// </summary>
+    private async Task OnEditCueSingersAsync()
+    {
+        if (gridCues.CurrentRow?.DataBoundItem is not BgmCue c)
+        {
+            MessageBox.Show("先に劇伴を選択してください。", "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (cboStructSingerRole.SelectedValue is not string role) return;
+
+        try
+        {
+            // 既存の歌い手行（選んだ役職の分）を取得し、関連する 5 種の alias 表示名を解決して詰め直す
+            var existing = (await _bgmCueSingersRepo.GetByCueAsync(c.SeriesId, c.MNoDetail))
+                .Where(s => string.Equals(s.RoleCode, role, StringComparison.Ordinal))
+                .ToList();
+            var initial = new List<SongRecordingSingersEditDialog.LineDto>();
+            foreach (var s in existing)
+            {
+                initial.Add(new SongRecordingSingersEditDialog.LineDto
+                {
+                    BillingKind = s.BillingKind,
+                    PersonAliasId = s.PersonAliasId,
+                    PersonDisplay = s.PersonAliasId.HasValue ? await _personAliasesRepo.GetDisplayNameAsync(s.PersonAliasId.Value) : null,
+                    CharacterAliasId = s.CharacterAliasId,
+                    CharacterDisplay = s.CharacterAliasId.HasValue ? (await _characterAliasesRepo.GetByIdAsync(s.CharacterAliasId.Value))?.Name : null,
+                    VoicePersonAliasId = s.VoicePersonAliasId,
+                    VoiceDisplay = s.VoicePersonAliasId.HasValue ? await _personAliasesRepo.GetDisplayNameAsync(s.VoicePersonAliasId.Value) : null,
+                    SlashPersonAliasId = s.SlashPersonAliasId,
+                    SlashPersonDisplay = s.SlashPersonAliasId.HasValue ? await _personAliasesRepo.GetDisplayNameAsync(s.SlashPersonAliasId.Value) : null,
+                    SlashCharacterAliasId = s.SlashCharacterAliasId,
+                    SlashCharacterDisplay = s.SlashCharacterAliasId.HasValue ? (await _characterAliasesRepo.GetByIdAsync(s.SlashCharacterAliasId.Value))?.Name : null,
+                    PrecedingSeparator = s.PrecedingSeparator,
+                    AffiliationText = s.AffiliationText,
+                    ExpandUnitMembers = s.ExpandUnitMembers,
+                    Notes = s.Notes
+                });
+            }
+
+            string roleLabel = (cboStructSingerRole.SelectedItem as SingerRoleItem)?.Label ?? role;
+            using var dlg = new SongRecordingSingersEditDialog(initial, _personAliasesRepo, _characterAliasesRepo);
+            dlg.Text = $"BGM 歌い手（{roleLabel}）編集（{c.SeriesId}/{c.MNoDetail}）";
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            var newSingers = dlg.ResultLines.Select((l, i) => new BgmCueSinger
+            {
+                SeriesId = c.SeriesId,
+                MNoDetail = c.MNoDetail,
+                RoleCode = role,
+                SingerSeq = (byte)(i + 1),
+                BillingKind = l.BillingKind,
+                PersonAliasId = l.PersonAliasId,
+                CharacterAliasId = l.CharacterAliasId,
+                VoicePersonAliasId = l.VoicePersonAliasId,
+                SlashPersonAliasId = l.SlashPersonAliasId,
+                SlashCharacterAliasId = l.SlashCharacterAliasId,
+                PrecedingSeparator = i == 0 ? null : l.PrecedingSeparator,
+                AffiliationText = l.AffiliationText,
+                ExpandUnitMembers = l.BillingKind == SingerBillingKind.Person && l.ExpandUnitMembers,
+                Notes = l.Notes
+            }).ToList();
+
+            await _bgmCueSingersRepo.ReplaceAllByRoleAsync(c.SeriesId, c.MNoDetail, role, newSingers, Environment.UserName);
+            await RefreshCueCreditsLabelsAsync(c.SeriesId, c.MNoDetail);
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
+    /// <summary>歌い手の役職コンボ表示用。</summary>
+    private sealed record SingerRoleItem(string Code, string Label);
 
     /// <summary>シリーズコンボ表示用。</summary>
     private sealed record SeriesItem(int? Id, string Label);

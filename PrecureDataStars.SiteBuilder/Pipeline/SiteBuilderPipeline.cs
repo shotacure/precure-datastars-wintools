@@ -251,7 +251,7 @@ public sealed class SiteBuilderPipeline
         // 音楽カテゴリのランディング + 劇伴ページ群。
         // /songs/（楽曲）の生成後に走らせて、/music/ ランディングから両方へ誘導できるようにする。
         reporter.BeginSection("music");
-        await new MusicGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
+        await new MusicGenerator(ctx, pageRenderer, factory, staffLinkResolver, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
         // 日付別の記念日ページ（366 日）+ 索引。

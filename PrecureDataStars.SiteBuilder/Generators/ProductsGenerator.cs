@@ -148,7 +148,7 @@ public sealed class ProductsGenerator
         _creditHtml = new TrackCreditHtmlBuilder(
             personAliasMap, characterAliasMap, _ctx.CompanyAliasById, _staffLinkResolver,
             new SingerHtmlBuilder(_staffLinkResolver, _roleSuccessorResolver, _ctx.UnitMembersByAlias), roleMap,
-            _ctx.SongCreditsBySong, _ctx.SingersByRecording, _ctx.BgmCueCreditsByCue);
+            _ctx.SongCreditsBySong, _ctx.SingersByRecording, _ctx.BgmCueCreditsByCue, _ctx.BgmCueSingersByCue);
 
         var discsByProduct = allDiscs
             .GroupBy(d => d.ProductCatalogNo)
@@ -1794,6 +1794,8 @@ public sealed class ProductsGenerator
                     {
                         bgmCreditsHtml = BuildBgmFreetextCreditsHtml(cue);
                     }
+                    // 劇伴の歌い手（スキャットなど）は作曲・編曲の後ろに同じ並びで続ける。
+                    bgmCreditsHtml += _creditHtml!.BuildBgmCueSingersSegmentsHtml(cue.SeriesId, cue.MNoDetail);
                     if (!string.IsNullOrEmpty(bgmCreditsHtml))
                     {
                         metaSb.Append(" <span class=\"track-credit-list\">").Append(bgmCreditsHtml).Append("</span>");

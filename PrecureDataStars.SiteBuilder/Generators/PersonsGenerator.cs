@@ -1231,6 +1231,7 @@ public sealed class PersonsGenerator
     ///   <item><description>曲のカード（song_credits / song_recording_singers）は、担当した役職の区分ごとに振り分ける
     ///     （作詞と歌の両方を担当した曲は、それぞれの区分に役職を分けて出る）。</description></item>
     ///   <item><description>劇伴の作曲・編曲（bgm_cue_credits）は「作詞・作曲・編曲」に、シリーズごとの使用話数つきで出す。</description></item>
+    ///   <item><description>劇伴の歌い手（bgm_cue_singers。スキャットなど）は「歌唱」（コーラスだけなら「コーラスのみ」）の劇伴の枠に、シリーズごとの 1 行で出す。</description></item>
     ///   <item><description>音盤の音楽クレジット（music_credits）は、紐付け先（曲・録音・劇伴セッション・商品）ごとに 1 行で出す。</description></item>
     /// </list>
     /// 何も無い区分は出さない。
@@ -1251,6 +1252,8 @@ public sealed class PersonsGenerator
         var sessionRows = musicRows.Where(r => r.TargetKind == MusicCreditTargetKinds.BgmSession).ToList();
         var productRows = musicRows.Where(r => r.TargetKind == MusicCreditTargetKinds.Product).ToList();
         var bgmCueItems = BuildBgmCueCreditItems(aliasIds);
+        var bgmSingerItems = BuildBgmCueSingerItems(aliasIds, chorusOnly: false);
+        var bgmChorusItems = BuildBgmCueSingerItems(aliasIds, chorusOnly: true);
 
         var sections = new List<PersonMusicSection>();
 
@@ -1301,6 +1304,10 @@ public sealed class PersonsGenerator
             var groupBgm = isWriting ? bgmGroups : Array.Empty<InvolvementGroup>();
             if (isWriting)
                 bgmItems = bgmCueItems.Concat(bgmItems).ToList();
+            else if (label == "歌唱")
+                bgmItems = bgmSingerItems.Concat(bgmItems).ToList();
+            else if (label == "コーラスのみ")
+                bgmItems = bgmChorusItems.Concat(bgmItems).ToList();
 
             var discItems = BuildMusicCreditItems(productRows.Where(r => InGroup(r.RoleCode)), displayName);
 
@@ -1351,6 +1358,59 @@ public sealed class PersonsGenerator
                 acc.Cues.Add(kv.Key.MNoDetail);
                 acc.Roles.Add(c.CreditRole);
             }
+        }
+        return bySeries
+            .Where(kv => _ctx.SeriesById.ContainsKey(kv.Key))
+            .OrderBy(kv => _ctx.SeriesStartDate(kv.Key))
+            .Select(kv =>
+            {
+                var series = _ctx.SeriesById[kv.Key];
+                return new PersonMusicCreditItem
+                {
+                    Title = series.Title,
+                    Url = PathUtil.BgmsForSeriesUrl(series.Slug),
+                    SubLabel = $"劇伴 {kv.Value.Cues.Count}曲",
+                    Roles = kv.Value.Roles
+                        .Select(code => new RoleBadgeView
+                        {
+                            Code = code,
+                            Label = MusicCreditViewBuilder.RoleName(_ctx, code),
+                            Url = "",
+                            DisplayOrder = _roleMap!.TryGetValue(code, out var role) ? role.DisplayOrder ?? 0 : 0
+                        })
+                        .OrderBy(b => b.DisplayOrder)
+                        .ToList()
+                };
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// 劇伴の歌い手（bgm_cue_singers）を、シリーズごとの 1 行（担当した役職のバッジ + 曲数）に束ねる。
+    /// 歌唱者行は歌の録音と同じく参加者へ展開して照らすので、キャラ歌唱の声優・ユニットのメンバーの名義でも拾う。
+    /// <paramref name="chorusOnly"/> が false なら歌・スキャットなどコーラス以外の役職で参加した曲を、
+    /// true ならコーラスだけで参加した曲を数える。並びはシリーズの放送開始日順。
+    /// </summary>
+    private IReadOnlyList<PersonMusicCreditItem> BuildBgmCueSingerItems(IReadOnlyList<int> aliasIds, bool chorusOnly)
+    {
+        var aliasSet = aliasIds.ToHashSet();
+        var bySeries = new Dictionary<int, (HashSet<string> Cues, HashSet<string> Roles)>();
+        foreach (var kv in _ctx.BgmCueSingersByCue)
+        {
+            var roles = kv.Value
+                .Where(s => _ctx.ExpandSingerParticipants(s).Any(p => p.PersonAliasId is int pid && aliasSet.Contains(pid)))
+                .Select(s => s.RoleCode)
+                .ToHashSet(StringComparer.Ordinal);
+            if (roles.Count == 0) continue;
+            bool onlyChorus = roles.All(r => r == SongRecordingSingerRoles.Chorus);
+            if (onlyChorus != chorusOnly) continue;
+            if (!bySeries.TryGetValue(kv.Key.SeriesId, out var acc))
+            {
+                acc = (new HashSet<string>(StringComparer.Ordinal), new HashSet<string>(StringComparer.Ordinal));
+                bySeries[kv.Key.SeriesId] = acc;
+            }
+            acc.Cues.Add(kv.Key.MNoDetail);
+            acc.Roles.UnionWith(roles);
         }
         return bySeries
             .Where(kv => _ctx.SeriesById.ContainsKey(kv.Key))

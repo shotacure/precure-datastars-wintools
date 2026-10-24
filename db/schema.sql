@@ -3365,6 +3365,63 @@ CREATE TABLE `bgm_cue_credits` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `bgm_cue_singers`
+-- 劇伴の曲の歌い手（スキャットなど）の連名。列は song_recording_singers と同じ（billing_kind = PERSON / CHARACTER_WITH_CV）。
+-- bgm_cues は (series_id, m_no_detail) 複合 PK。M 番号の付け替え・削除には bgm_cue_credits と同じく CASCADE で付いていく。
+--
+DROP TABLE IF EXISTS `bgm_cue_singers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `bgm_cue_singers` (
+  `series_id`                 int              NOT NULL,
+  `m_no_detail`               varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `role_code`                 varchar(64)      NOT NULL DEFAULT 'VOCALS',
+  `singer_seq`                tinyint unsigned NOT NULL,
+  `billing_kind`              enum('PERSON','CHARACTER_WITH_CV') NOT NULL,
+  `person_alias_id`           int              DEFAULT NULL,
+  `character_alias_id`        int              DEFAULT NULL,
+  `voice_person_alias_id`     int              DEFAULT NULL,
+  `slash_person_alias_id`     int              DEFAULT NULL,
+  `slash_character_alias_id`  int              DEFAULT NULL,
+  `preceding_separator`       varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `affiliation_text`          varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `expand_unit_members`       tinyint(1)       NOT NULL DEFAULT 0,
+  `notes`                     text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`                varchar(64)      DEFAULT NULL,
+  `updated_by`                varchar(64)      DEFAULT NULL,
+  PRIMARY KEY (`series_id`, `m_no_detail`, `role_code`, `singer_seq`),
+  KEY `ix_bcs_role`            (`role_code`),
+  KEY `ix_bcs_person`          (`person_alias_id`),
+  KEY `ix_bcs_character`       (`character_alias_id`),
+  KEY `ix_bcs_voice`           (`voice_person_alias_id`),
+  KEY `ix_bcs_slash_person`    (`slash_person_alias_id`),
+  KEY `ix_bcs_slash_character` (`slash_character_alias_id`),
+  CONSTRAINT `ck_bcs_seq_pos` CHECK (`singer_seq` >= 1),
+  CONSTRAINT `ck_bcs_kind_columns` CHECK (
+       (`billing_kind` = 'PERSON'
+          AND `person_alias_id`       IS NOT NULL
+          AND `character_alias_id`    IS NULL
+          AND `voice_person_alias_id` IS NULL
+          AND `slash_character_alias_id` IS NULL)
+    OR (`billing_kind` = 'CHARACTER_WITH_CV'
+          AND `character_alias_id`    IS NOT NULL
+          AND `voice_person_alias_id` IS NOT NULL
+          AND `person_alias_id`       IS NULL
+          AND `slash_person_alias_id` IS NULL)
+  ),
+  CONSTRAINT `fk_bcs_cue`              FOREIGN KEY (`series_id`, `m_no_detail`)  REFERENCES `bgm_cues`          (`series_id`, `m_no_detail`) ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_bcs_role`             FOREIGN KEY (`role_code`)                REFERENCES `roles`             (`role_code`)         ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_bcs_person`           FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_bcs_character`        FOREIGN KEY (`character_alias_id`)       REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_bcs_voice`            FOREIGN KEY (`voice_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_bcs_slash_person`     FOREIGN KEY (`slash_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_bcs_slash_character`  FOREIGN KEY (`slash_character_alias_id`) REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `book_genres`
 --
 -- 書籍ジャンルマスタ。product_kinds と同じ流儀（コード PK + 和名 / 英名 / 表示順）。

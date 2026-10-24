@@ -24,12 +24,20 @@ public sealed class MusicGenerator
     private readonly SongRecordingsRepository _recRepo;
     /// <summary>商品件数（/music/ ランディングの「音楽商品」カードの「N点 M枚」点数側）取得用。</summary>
     private readonly ProductsRepository _productsRepo;
+    /// <summary>劇伴の歌い手（スキャットなど）の連名 HTML（歌の歌唱者と同じ書式・同じリンク規則）。</summary>
+    private readonly SingerHtmlBuilder _singerHtml;
 
-    public MusicGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
+    public MusicGenerator(
+        BuildContext ctx,
+        PageRenderer page,
+        IConnectionFactory factory,
+        StaffNameLinkResolver staffLinkResolver,
+        RoleSuccessorResolver roleSuccessorResolver)
     {
         _ctx = ctx;
         _page = page;
         _factory = factory;
+        _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver, ctx.UnitMembersByAlias);
         _cuesRepo = new BgmCuesRepository(factory);
         _sessionsRepo = new BgmSessionsRepository(factory);
         _sectionsRepo = new BgmSectionsRepository(factory);
@@ -1009,6 +1017,7 @@ public sealed class MusicGenerator
                     MenuTitle = menuCell,
                     MenuFallbackTitle = menuFallback,
                     StaffGroups = staffGroups,
+                    SingersHtml = BuildCueSingersHtml(c),
                     LengthLabel = lengthLabel,
                     ArtTrackId = artTrackSource?.ArtTrackId ?? "",
                     ArtTrackPremiumOnly = artTrackSource?.ArtTrackPremiumOnly ?? false,
@@ -1427,6 +1436,28 @@ public sealed class MusicGenerator
         public IReadOnlyList<BgmCueRow> Cues { get; set; } = Array.Empty<BgmCueRow>();
     }
 
+    /// <summary>
+    /// cue の歌い手（bgm_cue_singers）を、役職ごとに <c>span.staff-badge-group</c>（役職バッジ + 連名）の HTML にする。
+    /// 作曲・編曲のスタッフバッジと同じ行に並べる。歌い手が無ければ空文字。
+    /// </summary>
+    private string BuildCueSingersHtml(BgmCue cue)
+    {
+        if (!_ctx.BgmCueSingersByCue.TryGetValue((cue.SeriesId, cue.MNoDetail), out var singers) || singers.Count == 0)
+            return "";
+        var sb = new System.Text.StringBuilder();
+        foreach (var roleCode in singers.Select(s => s.RoleCode).Distinct(StringComparer.Ordinal))
+        {
+            string names = _singerHtml.BuildRoleSingersHtml(singers, roleCode, _ctx.PersonAliasById, _ctx.CharacterAliasById);
+            if (names.Length == 0) continue;
+            string label = _ctx.RoleByCode.TryGetValue(roleCode, out var role) && !string.IsNullOrEmpty(role.NameJa) ? role.NameJa : roleCode;
+            sb.Append("<span class=\"staff-badge-group\">")
+              .Append($"<span class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlUtil.Escape(roleCode)}\">{HtmlUtil.Escape(label)}</span>")
+              .Append($"<span class=\"staff-name\">{names}</span>")
+              .Append("</span>");
+        }
+        return sb.ToString();
+    }
+
     private sealed class BgmCueRow
     {
         /// <summary>M 番号セルの表示値。仮 M 番号 cue の場合は空文字。</summary>
@@ -1447,6 +1478,11 @@ public sealed class MusicGenerator
         /// 名義（PersonId 解決済み）を優先、フリーテキストフォールバックも含む。作曲・編曲の名義集合が
         /// 完全一致する cue ではバッジ 2 つを連続で出す統合グループになる。</summary>
         public IReadOnlyList<BgmStaffGroup> StaffGroups { get; set; } = Array.Empty<BgmStaffGroup>();
+        /// <summary>
+        /// 当該 cue の歌い手（bgm_cue_singers。スキャットなど）を、役職ごとに「役職バッジ + 連名」の塊にした HTML。
+        /// 連名は歌の歌唱者と同じ書式（キャラ(CV:声優)）でリンク化済み。歌い手が無ければ空文字。
+        /// </summary>
+        public string SingersHtml { get; set; } = "";
         /// <summary>カードヘッダに出す「尺」（M:SS 形式）。 初出盤（recs[0]、発売日昇順で最古）の当該トラック
         /// length_seconds を 75 frames/sec から逆算して整形済み。収録盤無し or length_frames NULL のときは空文字。</summary>
         public string LengthLabel { get; set; } = "";

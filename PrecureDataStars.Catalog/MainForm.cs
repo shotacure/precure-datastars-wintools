@@ -334,14 +334,16 @@ public partial class MainForm : Form
             f.ShowDialog();
         });
 
-    /// <summary>「劇伴管理」メニュー：BgmCuesEditorForm を開く（構造化クレジット用 2 リポジトリを追加注入）。</summary>
+    /// <summary>「劇伴管理」メニュー：BgmCuesEditorForm を開く（構造化クレジット用 2 リポジトリと、歌い手用 2 リポジトリを追加注入）。</summary>
     private void mnuBgm_Click(object? sender, EventArgs e)
         => RunChildModal(() =>
         {
             using var f = new BgmCuesEditorForm(
                 _bgmCuesRepo, _bgmSessionsRepo, _bgmSectionsRepo, _tracksRepo, _seriesRepo,
                 // 構造化クレジット用
-                _personAliasesRepo, _bgmCueCreditsRepo);
+                _personAliasesRepo, _bgmCueCreditsRepo,
+                // 歌い手（スキャットなど）用
+                _characterAliasesRepo, new BgmCueSingersRepository(_factory));
             f.ShowDialog();
         });
 

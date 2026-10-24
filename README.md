@@ -1924,6 +1924,20 @@ CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.
 - `ix_bgm_cues_session (series_id, session_no)`
 - `ix_bgm_cues_section (series_id, session_no, section_no)`
 
+#### `bgm_cue_singers` — 劇伴の歌い手
+
+劇伴の曲（`bgm_cues`）の中で声を出す人・キャラ（サントラに「スキャット：キュアミラクル(CV:高橋李依)、…」のように載る歌い手）の連名。列の意味は歌の録音の歌唱者 `song_recording_singers` と同じで、`billing_kind` = `PERSON`（人物・ユニットの名義）/ `CHARACTER_WITH_CV`（キャラ ＋ 声優）、スラッシュの相方・区切り・所属・ユニットのメンバー展開を持つ。役職（`role_code`）は主に `SCAT`（スキャット）で、`VOCALS`（歌）・`BACKING_VOCALS`（コーラス）も入れられる。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `series_id` | INT PK(1) | 所属シリーズ |
+| `m_no_detail` | VARCHAR(255) PK(2) | M 番号。`(series_id, m_no_detail)` の複合 FK で → `bgm_cues`（ON DELETE CASCADE / ON UPDATE CASCADE。M 番号の付け替えに付いていく） |
+| `role_code` | VARCHAR(64) PK(3) FK | 役職（→ `roles`） |
+| `singer_seq` | TINYINT UNSIGNED PK(4) | 役職ごとの連名の順（1 始まり） |
+| `billing_kind` ほか | | `song_recording_singers` と同じ（`person_alias_id` / `character_alias_id` / `voice_person_alias_id` / `slash_person_alias_id` / `slash_character_alias_id` / `preceding_separator` / `affiliation_text` / `expand_unit_members` / `notes`。種別ごとの必須列は同じ CHECK 制約） |
+
+サイトは、商品詳細のトラック行で劇伴の作曲・編曲の後ろに「[スキャット] キャラ(CV:声優)」の形で並べ、劇伴詳細（`/bgms/{作品}/`）ではその曲のカードのスタッフの行に作曲・編曲に続けて出す（表記と名義のリンクは歌の歌唱者と同じ `SingerHtmlBuilder`。バッジはリンクしない）。人物・ユニット詳細の音楽クレジットでは「歌唱」（コーラスだけなら「コーラスのみ」）の区分の劇伴の枠に、シリーズごとの 1 行（役職のバッジ ＋「劇伴 N曲」、劇伴詳細へリンク）で出し、キャラ歌唱の声優・ユニットのメンバーの名義でも拾う。キャラクター詳細では「歌」のセクションの曲のカードに続けて、劇伴のカード（メニュー・シリーズ・M 番号。劇伴詳細のその曲へリンク）を並べる。歌唱一覧（`/creators/singers/`）・歌唱系の役職詳細の担当曲数と、話数ごとの関与には数えない（歌の曲・録音の単位で数えるため）。Catalog の「劇伴管理」では、構造化クレジットの欄の「歌い手」で役職（スキャット / 歌 / コーラス）を選んで「編集...」を押し、歌の歌唱者と同じダイアログで連名を入れる。
+
 #### `song_recording_bgm_assignments` — SONG ↔ BGM 両性紐付け中間テーブル
 
 1 つの `song_recordings`（特定のアレンジ・テイク・歌唱者構成での録音）が「歌として収録された」のと同時に「劇伴としても扱う」二重性質を持つ場合に、当該録音と劇伴 cue（`bgm_cues`）の N:M 関係を表現する。`tracks.content_kind_code` は `'SONG'` / `'BGM'` を排他選択する仕様（`trg_tracks_bi/bu_fk_consistency` で強制）のまま据置で、SONG なのに BGM 性も併せ持つ追加の関係をこの中間テーブルで表現する。

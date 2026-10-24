@@ -40,6 +40,7 @@ public static class SiteDataLoader
         var personAliasMembersRepo = new PersonAliasMembersRepository(factory);
         var bgmCuesRepo = new BgmCuesRepository(factory);
         var bgmCueCreditsRepo = new BgmCueCreditsRepository(factory);
+        var bgmCueSingersRepo = new BgmCueSingersRepository(factory);
         var creditsRepo = new CreditsRepository(factory);
         var creditCardsRepo = new CreditCardsRepository(factory);
         var creditCardTiersRepo = new CreditCardTiersRepository(factory);
@@ -208,6 +209,12 @@ public static class SiteDataLoader
             .ToDictionary(g => g.Key, g => (IReadOnlyList<BgmCueCredit>)g.ToList());
         logger.Info($"bgm_cue_credits: {bgmCueCreditsByCue.Count} cue 分");
 
+        // 劇伴の歌い手は、表示・参加者の展開を歌の録音の歌唱者と共通の処理に通すため、歌唱者行の形に写して持つ。
+        var bgmCueSingersByCue = (await bgmCueSingersRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(s => (s.SeriesId, s.MNoDetail))
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<SongRecordingSinger>)g.Select(s => s.ToSingerRow()).ToList());
+        logger.Info($"bgm_cue_singers: {bgmCueSingersByCue.Count} cue 分");
+
         // クレジット階層 6 段を 1 度だけ全件取得し、credit_id 単位でネスト化したスナップショットを構築。
         // CreditTreeRenderer がページ生成中に階層別の GetBy*Async を発火しないようにするため、本処理を
         // ビルド開始時に 1 度だけ走らせて BuildContext 経由で全 Generator から参照できるようにする。
@@ -366,6 +373,7 @@ public static class SiteDataLoader
             UnitMembersByAlias = unitMembersByAlias,
             BgmCuesBySeries = bgmCuesBySeries,
             BgmCueCreditsByCue = bgmCueCreditsByCue,
+            BgmCueSingersByCue = bgmCueSingersByCue,
             CreditTree = creditTreeIndex,
             CreditsByEpisode = creditsByEpisode,
             CreditsBySeries = creditsBySeries,

@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：コラムの本文で、半角の ~ で挟んだ文字が下付き文字になっていたのを直した**（`ArticlesGenerator`）：Markdown の強調の拡張を打ち消し線（`~~文字~~`）だけにし、単独の `~` による下付き（と `^` による上付き）をやめた。曲名・盤名の「~光の章~」のような副題がそのまま出る。表・自動リンクなどほかの拡張はそのまま。
 - **サイト：歌の一覧のカードに配信音源の再生ボタンを置いた**（`ThemeArtTrackIndex`・`SiteDataLoader`・`BuildContext.SongListArtTracks`・`SongsGenerator`・`songs-index.sbn`・`site.css`）：作品ページの主題歌と同じボタンを、カードの種別の札の横に置く。押した 1 曲だけを鳴らす。鳴らす音源は録音ごとに主題歌と同じ索引で選ぶが、曲を通して聴く用にフルサイズを優先する（フルサイズとサイズ未設定 → そのほか → TV サイズ・映画サイズ）。
 - **サイト：楽曲の OGP カードに表のクレジットをすべて載せ、カードの長い項目の折り返しを値の位置にそろえるようにした**（`SongsGenerator.BuildOgFrontCredits`・`CreditText.SingerRoleNames`・`OgRolePalette`・`OgCardRenderer`）：楽曲のカードに、作詞・作曲・編曲・メドレー編曲・歌に加えて、英訳詞・ストリングス編曲・オーケストラ編曲と、筆頭バージョンのコーラス・台詞・語りを、楽曲詳細の基本情報と同じ順に載せる（演奏・エンジニアなどの裏方は載せない）。カードの流し込みでは、1 行に入る項目は補足の括弧まで含めてひとかたまりで次の行へ送り、1 行に入らない長い項目は行頭から始めて 2 行目以降を役職名の下まで戻さず値の始まりにそろえる。
 - **スキーマ・サイト・Catalog：人物・企業のプロフィールの出典を持ち、詳細ページに脚注で出すようにした**（`entity_sources`・`EntitySource`・`EntitySourceFields`・`EntitySourcesRepository`・`EntitySourceFootnotes`・`PersonsGenerator`・`CompaniesGenerator`・`_entity-sources.sbn`・`persons-detail.sbn`・`companies-detail.sbn`・`site.css`・Catalog の `EntitySourcesEditorDialog`・`CreditMastersEditorForm`・`db/migrations/v1.19.1_add_entity_sources.sql`）：読み・誕生日などを確かめたページを、裏付ける項目・ページタイトル（`<title>` のまま）・見出し・発行者（著作権表記の名前）・URL・確認日で持つ表を足した。人物・企業の詳細ページでは、本文の項目のすぐ後ろに上付きの番号を付け、ページの一番下に「出典」として番号つきで並べる。Catalog の「クレジット系マスタ管理」の人物タブ・団体タブに「出典…」を足した。

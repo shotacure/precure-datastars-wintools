@@ -29,8 +29,13 @@ public sealed class ArticlesGenerator
 
     // Markdig パイプライン。テーブル・自動リンク等の一般的な拡張を有効化する
     // （入力は内製の信頼ソースのため、サニタイズは行わない＝既存テンプレと同じ前提）。
+    // 強調の拡張は打ち消し線（~~文字~~）だけにする。曲名・盤名は「~光の章~」のように半角の ~ で副題を挟むので、
+    // 単独の ~ を下付き文字にしない。先に登録した拡張が優先され、UseAdvancedExtensions の既定（下付き・上付きなど全部）は入らない。
     private static readonly MarkdownPipeline MarkdownPipeline =
-        new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+        new MarkdownPipelineBuilder()
+            .UseEmphasisExtras(Markdig.Extensions.EmphasisExtras.EmphasisExtraOptions.Strikethrough)
+            .UseAdvancedExtensions()
+            .Build();
 
     public ArticlesGenerator(BuildContext ctx, PageRenderer page)
     {

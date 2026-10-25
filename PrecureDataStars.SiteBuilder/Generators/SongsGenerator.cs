@@ -446,13 +446,9 @@ public sealed class SongsGenerator
             },
             OgType = "music.song",
             JsonLd = jsonLd,
-            // OGP カードは、会社名だけの行に添える人物の括弧を小さい字で描き分けるため、補足の印を付けた平文で組む。
-            OgCard = BuildOgCard(song, songCreditRows,
-                CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap, _ctx.CompanyAliasById, OgCardNote.Wrap),
-                CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Composition, song.ComposerName, personAliasMap, _ctx.CompanyAliasById, OgCardNote.Wrap),
-                CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Arrangement, song.ArrangerName, personAliasMap, _ctx.CompanyAliasById, OgCardNote.Wrap),
-                CreditText.SongCreditNames(songCreditRows, SongCreditRoles.MedleyArrangement, null, personAliasMap, _ctx.CompanyAliasById, OgCardNote.Wrap),
-                musicClassLabel, repSeriesTitle, recordingViews)
+            OgCard = BuildOgCard(song, BuildOgFrontCredits(song, songCreditRows, personAliasMap, characterAliasMap,
+                repRecording, repRecording is not null && singersByRecording.TryGetValue(repRecording.SongRecordingId, out var ogSingers) ? ogSingers : null),
+                musicClassLabel, repSeriesTitle)
         };
         _page.RenderAndWriteFile(songUrl, "songs-detail.sbn", content, layout);
         return songUrl;
@@ -460,32 +456,67 @@ public sealed class SongsGenerator
 
     /// <summary>
     /// 楽曲詳細ページの OGP カードを組み立てる。
-    /// 「音楽種別 → 曲名 → 録音規模のバッジ → 作詞・作曲・編曲・歌」の順に置き、
+    /// 「音楽種別 → 曲名 → 表のクレジット（作家・歌い手）」の順に置き、
     /// 曲名だけでは分からない担い手をカード内で読み切れるようにする。
     /// </summary>
     private static OgCardSpec BuildOgCard(
         Song song,
+    /// <summary>
+    /// OGP カードに載せる「表のクレジット」（曲の作家と、筆頭バージョン（先頭録音）の歌い手）を、楽曲詳細の基本情報と同じ順に組む：
+    /// 作詞 → 英訳詞 → 作曲 → 編曲 → ストリングス編曲・オーケストラ編曲 → メドレー編曲 → 歌 → コーラス → 台詞 → 語り。
+    /// 演奏・エンジニアなどの裏方（音楽クレジット）は載せない。無い役職は飛ばす。
+    /// 名義は構造化優先の平文（CreditText）で、会社名だけの行に添える人物の括弧は補足の印（<see cref="OgCardNote"/>）で包み、カードで小さい字に描き分ける。
+    /// 項目名は盤の役職の表記（role_label_text）があればそれ、無ければ役職名。色はサイトの楽曲詳細の役職バッジと同じ。
+    /// </summary>
+    private List<OgCardFactLine> BuildOgFrontCredits(
+        Song song,
         IReadOnlyList<SongCredit> songCreditRows,
-        string lyricistText,
-        string composerText,
-        string arrangerText,
-        string medleyArrangerText,
-        string musicClassLabel,
-        string repSeriesTitle,
-        IReadOnlyList<RecordingView> recordingViews)
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap,
+        SongRecording? repRecording,
+        IReadOnlyList<SongRecordingSinger>? repSingers)
     {
-        // 曲の作り手（作詞・作曲・編曲）と、筆頭バージョン（先頭録音）の歌い手を同じ段に並べる。
-        // 項目名の色はサイトの楽曲詳細の役職バッジと同じ。録音の本数やバージョンの列は曲そのものの性格を語らないので出さない。
-        // 名義は構造化優先で解決済みの平文（CreditText）を受け取る。項目名は盤の役職の表記（role_label_text）があればそれ。
-        string LabelOf(string roleCode, string defaultLabel) => SongCreditRoles.LabelTextOf(songCreditRows, roleCode) ?? defaultLabel;
         var credits = new List<OgCardFactLine>();
-        if (!string.IsNullOrWhiteSpace(lyricistText)) credits.Add(new OgCardFactLine(LabelOf(SongCreditRoles.Lyrics, "作詞"), lyricistText) { LabelColorHex = OgRolePalette.ColorFor("LYRICS") });
-        if (!string.IsNullOrWhiteSpace(composerText)) credits.Add(new OgCardFactLine(LabelOf(SongCreditRoles.Composition, "作曲"), composerText) { LabelColorHex = OgRolePalette.ColorFor("COMPOSITION") });
-        if (!string.IsNullOrWhiteSpace(arrangerText)) credits.Add(new OgCardFactLine(LabelOf(SongCreditRoles.Arrangement, "編曲"), arrangerText) { LabelColorHex = OgRolePalette.ColorFor("ARRANGEMENT") });
-        if (!string.IsNullOrWhiteSpace(medleyArrangerText)) credits.Add(new OgCardFactLine(LabelOf(SongCreditRoles.MedleyArrangement, "メドレー編曲"), medleyArrangerText) { LabelColorHex = OgRolePalette.ColorFor(SongCreditRoles.MedleyArrangement) });
-        var rep = recordingViews.FirstOrDefault();
-        if (rep is not null && !string.IsNullOrWhiteSpace(rep.SingerName))
-            credits.Add(new OgCardFactLine("歌", rep.SingerName) { LabelColorHex = OgRolePalette.ColorFor("VOCALS") });
+        void Add(string roleCode, string label, string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            credits.Add(new OgCardFactLine(label, text) { LabelColorHex = OgRolePalette.ColorFor(roleCode) });
+        }
+        void AddWriter(string roleCode, string defaultLabel, string? fallbackText)
+            => Add(roleCode, SongCreditRoles.LabelTextOf(songCreditRows, roleCode) ?? defaultLabel,
+                   CreditText.SongCreditNames(songCreditRows, roleCode, fallbackText, personAliasMap, _ctx.CompanyAliasById, OgCardNote.Wrap));
+
+        AddWriter(SongCreditRoles.Lyrics, "作詞", song.LyricistName);
+        AddWriter(SongCreditRoles.LyricsTranslation, MusicCreditViewBuilder.RoleName(_ctx, SongCreditRoles.LyricsTranslation), null);
+        AddWriter(SongCreditRoles.Composition, "作曲", song.ComposerName);
+        AddWriter(SongCreditRoles.Arrangement, "編曲", song.ArrangerName);
+        foreach (var extraRole in ExtraArrangementRoles)
+            AddWriter(extraRole, MusicCreditViewBuilder.RoleName(_ctx, extraRole), null);
+        AddWriter(SongCreditRoles.MedleyArrangement, "メドレー編曲", null);
+
+        if (repRecording is not null)
+        {
+            Add(SongRecordingSingerRoles.Vocals, "歌",
+                CreditText.Vocalists(repSingers, repRecording.SingerName, personAliasMap, characterAliasMap, _ctx.UnitMembersByAlias));
+            foreach (var (roleCode, label) in OgSingerExtraRoles)
+                Add(roleCode, label, CreditText.SingerRoleNames(repSingers, roleCode, null, personAliasMap, characterAliasMap, _ctx.UnitMembersByAlias));
+        }
+        return credits;
+    }
+
+    /// <summary>OGP カードで歌の後ろに並べる歌い手の役職（楽曲詳細の基本情報と同じ順）。</summary>
+    private static readonly (string RoleCode, string Label)[] OgSingerExtraRoles =
+    {
+        (SongRecordingSingerRoles.Chorus, "コーラス"),
+        (SongRecordingSingerRoles.Dialogue, "台詞"),
+        (SongRecordingSingerRoles.SpokenWord, "語り"),
+    };
+
+        IReadOnlyList<OgCardFactLine> credits,
+        string musicClassLabel,
+        string repSeriesTitle)
+    {
+        // 録音の本数やバージョンの列は曲そのものの性格を語らないので出さない。
 
         return new OgCardSpec(
             Kicker: string.IsNullOrWhiteSpace(musicClassLabel) ? "歌" : musicClassLabel,

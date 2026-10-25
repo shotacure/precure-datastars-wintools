@@ -424,9 +424,9 @@ public static class OgRolePalette
         "CHARACTER_DESIGN" or "ANIMATION_DIRECTOR" => "#4ca36b",
         "ART_DESIGN" or "ART_DIRECTOR" or "ART_DIRECTOR_TV" => "#d4a017",
         // 楽曲の役職（サイトの楽曲詳細のバッジと同じ 4 色）。
-        "LYRICS" => "#c0354c",
+        "LYRICS" or "LYRICS_TRANSLATION" => "#c0354c",
         "COMPOSITION" => "#a17821",
-        "ARRANGEMENT" or "MEDLEY_ARRANGEMENT" => "#3c823c",
+        "ARRANGEMENT" or "MEDLEY_ARRANGEMENT" or "STRINGS_ARRANGEMENT" or "ORCHESTRA_ARRANGEMENT" => "#3c823c",
         "VOCALS" or "BACKING_VOCALS" or "DIALOGUE" or "SPOKEN_WORD" => "#3b56b8",
         _ => ""
     };

@@ -73,9 +73,22 @@ public static class CreditText
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap,
         IReadOnlyDictionary<int, IReadOnlyList<PersonAliasMember>> unitMembersByAlias)
+        => SingerRoleNames(singers, SongRecordingSingerRoles.Vocals, fallbackText, personAliasMap, characterAliasMap, unitMembersByAlias);
+
+    /// <summary>
+    /// 録音の歌唱者のうち、指定の役職（歌・コーラス・台詞・語りなど）の連名を平文で返す。書式は <see cref="Vocalists"/> と同じ。
+    /// 構造化行が無ければ <paramref name="fallbackText"/>（歌以外はフリーテキストを持たないので null）を返す。
+    /// </summary>
+    public static string SingerRoleNames(
+        IReadOnlyList<SongRecordingSinger>? singers,
+        string roleCode,
+        string? fallbackText,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap,
+        IReadOnlyDictionary<int, IReadOnlyList<PersonAliasMember>> unitMembersByAlias)
     {
         var rows = (singers ?? Array.Empty<SongRecordingSinger>())
-            .Where(s => string.Equals(s.RoleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal))
+            .Where(s => string.Equals(s.RoleCode, roleCode, StringComparison.Ordinal))
             .OrderBy(s => s.SingerSeq)
             .ToList();
         if (rows.Count == 0) return fallbackText?.Trim() ?? "";

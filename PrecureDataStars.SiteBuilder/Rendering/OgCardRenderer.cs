@@ -1463,15 +1463,18 @@ public sealed partial class OgCardRenderer : IDisposable
         float RunWidth((string Text, bool IsNote) run) => run.IsNote ? noteGap + Measure(noteFont, run.Text) : Measure(valueFont, run.Text);
 
         var lines = new List<List<FactPiece>> { new() };
+        // 行ごとの字下げ（1 行に入らない長い項目の 2 行目以降は、役職名の下まで戻さず値の始まりにそろえる）。
+        var indents = new List<float> { 0f };
         float used = 0f;
         bool truncated = false;
         int limit = Math.Max(1, maxLines);
 
-        bool NewLine()
+        bool NewLine(float indent = 0f)
         {
             if (lines.Count >= limit) return false;
             lines.Add(new List<FactPiece>());
-            used = 0f;
+            indents.Add(indent);
+            used = indent;
             return true;
         }
 
@@ -1510,10 +1513,17 @@ public sealed partial class OgCardRenderer : IDisposable
                 if (run.IsNote || atomic || prose) tokens.Add(run);
                 else tokens.AddRange(SplitFactTokens(run.Text).Select(t => (t, false)));
             }
-            float firstTokenWidth = tokens.Count > 0 ? RunWidth(tokens[0]) : 0f;
+            // 1 行に入る項目は補足まで含めてひとかたまりなので、項目全体の幅で次の行へ送るかを決める。
+            float firstTokenWidth = atomic ? valueWidth : (tokens.Count > 0 ? RunWidth(tokens[0]) : 0f);
 
+            // 1 行に入らない長い項目（文章を除く）は行頭から始め、項目の中で折るときは値の始まり（ラベルの幅）へ字下げする。
+            float hang = atomic || prose ? 0f : labelWidth;
+            if (!atomic && !prose && used > 0f)
+            {
+                if (!NewLine()) { truncated = true; break; }
+            }
             // ラベルと最初の語（ひとかたまりの項目なら全体）が今の行に載らなければ、項目ごと次の行へ。
-            if (used > 0f && used + gap + labelWidth + firstTokenWidth > maxWidth)
+            else if (used > 0f && used + gap + labelWidth + firstTokenWidth > maxWidth)
             {
                 if (!NewLine()) { truncated = true; break; }
             }
@@ -1535,11 +1545,11 @@ public sealed partial class OgCardRenderer : IDisposable
                 string token = rawToken;
                 if (isNote)
                 {
-                    // 補足は行頭でなければ間を空けて小さい字で続ける。入らなければ次の行の頭へ。
+                    // 補足は行頭でなければ間を空けて小さい字で続ける。1 行に入らない長い項目のときだけ、入らなければ次の行の頭へ。
                     float noteWidth = Measure(noteFont, token);
-                    if (used > 0f && used + noteGap + noteWidth > maxWidth)
+                    if (!atomic && used > 0f && used + noteGap + noteWidth > maxWidth)
                     {
-                        if (!NewLine()) { truncated = true; stop = true; break; }
+                        if (!NewLine(hang)) { truncated = true; stop = true; break; }
                     }
                     if (used > 0f && lines[^1].Count > 0)
                     {
@@ -1551,14 +1561,14 @@ public sealed partial class OgCardRenderer : IDisposable
                     continue;
                 }
                 float width = Measure(valueFont, token);
-                if (used > 0f && used + width > maxWidth && width <= maxWidth)
+                if (used > 0f && used + width > maxWidth && width <= maxWidth - hang)
                 {
-                    if (!NewLine()) { truncated = true; stop = true; break; }
+                    if (!NewLine(hang)) { truncated = true; stop = true; break; }
                     // 区切りの直後に続く空白（「, 」の空白など）は行頭に残さない。
                     token = token.TrimStart(' ');
                     width = Measure(valueFont, token);
                 }
-                if (width > maxWidth || (prose && used + width > maxWidth))
+                if (width > maxWidth - hang || (prose && used + width > maxWidth))
                 {
                     // 区切りの無い 1 語が行幅を超える（か、文章）。文字単位で折るしかない。
                     string remaining = token;
@@ -1567,7 +1577,7 @@ public sealed partial class OgCardRenderer : IDisposable
                         string chunk = TakeFittingPrefix(remaining, valueFont, paint, maxWidth - used);
                         if (chunk.Length == 0)
                         {
-                            if (NewLine()) continue;
+                            if (NewLine(hang)) continue;
                             if (prose)
                             {
                                 // 文章は最後の行の末尾を「…」に替えて切る（字を小さくして詰め込むより読める）。
@@ -1590,7 +1600,7 @@ public sealed partial class OgCardRenderer : IDisposable
             if (stop) break;
         }
 
-        var (top, bottom) = FinishInlineFacts(canvas, paint, lines, labelFont, valueFont, noteFont, x, anchor, anchorToTop, lineHeight);
+        var (top, bottom) = FinishInlineFacts(canvas, paint, lines, indents, labelFont, valueFont, noteFont, x, anchor, anchorToTop, lineHeight);
         return (top, bottom, truncated);
     }
 
@@ -1647,17 +1657,17 @@ public sealed partial class OgCardRenderer : IDisposable
 
     /// <summary>流し込み済みの行を描き、ブロック上端の Y を返す。</summary>
     private (float Top, float Bottom) FinishInlineFacts(
-        SKCanvas canvas, SKPaint paint, List<List<FactPiece>> lines,
+        SKCanvas canvas, SKPaint paint, List<List<FactPiece>> lines, List<float> indents,
         SKFont labelFont, SKFont valueFont, SKFont noteFont, float x, float anchor, bool anchorToTop, float lineHeight)
     {
-        if (lines.Count > 0 && lines[^1].Count == 0) lines.RemoveAt(lines.Count - 1);
+        if (lines.Count > 0 && lines[^1].Count == 0) { lines.RemoveAt(lines.Count - 1); indents.RemoveAt(indents.Count - 1); }
         if (lines.Count == 0) return (anchor, anchor);
 
         float firstBaseline = anchorToTop ? anchor : anchor - (lines.Count - 1) * lineHeight;
         for (int i = 0; i < lines.Count; i++)
         {
             float baseline = firstBaseline + i * lineHeight;
-            float cursor = x;
+            float cursor = x + indents[i];
             foreach (var piece in lines[i])
             {
                 var font = piece.IsLabel ? labelFont : piece.IsNote ? noteFont : valueFont;

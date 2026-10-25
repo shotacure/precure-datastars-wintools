@@ -5620,6 +5620,13 @@ a.credit-card-series:focus-visible {
   justify-self: end;
   align-self: start;
   padding-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* 歌の一覧のカードの再生ボタン。カードの中身はクリックを透過する（pointer-events: none）ので、ボタンだけ拾う。 */
+.songs-card-play {
+  pointer-events: auto;
 }
 .songs-card-badge {
   display: inline-block;

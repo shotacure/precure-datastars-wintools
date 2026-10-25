@@ -338,6 +338,8 @@ public static class SiteDataLoader
             songCreditAffiliationRows);
         // 主題歌の再生ボタン用に、録音ごとに鳴らす配信音源を選んでおく。
         var themeArtTracks = new ThemeArtTrackIndex(tracksByCatalogNo, allDiscs.ToList(), allProducts.ToList());
+        // 歌の一覧の再生ボタン用は、曲を通して聴けるようフルサイズを優先して選ぶ。
+        var songListArtTracks = new ThemeArtTrackIndex(tracksByCatalogNo, allDiscs.ToList(), allProducts.ToList(), preferFullSize: true);
         logger.Info($"theme art tracks: {themeArtTracks.ByRecording.Count} 録音分");
         logger.Info($"music_credits: {musicCredits.Count} 行");
         logger.Info($"family={familyRelationsByCharacter.Count} char / alias_persons={aliasIdsByPerson.Count} person");
@@ -391,7 +393,8 @@ public static class SiteDataLoader
             AliasIdsByPerson = aliasIdsByPerson,
             PersonIdByAlias = personIdByAlias,
             MusicCredits = musicCredits,
-            ThemeArtTracks = themeArtTracks
+            ThemeArtTracks = themeArtTracks,
+            SongListArtTracks = songListArtTracks
         };
     }
 }

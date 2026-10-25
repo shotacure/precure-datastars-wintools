@@ -189,6 +189,9 @@ public sealed class BuildContext
     /// <summary>主題歌の再生ボタン用に、録音ごとに鳴らす配信音源を選んだ索引（シリーズ詳細・エピソード詳細で使う）。</summary>
     public required ThemeArtTrackIndex ThemeArtTracks { get; init; }
 
+    /// <summary>歌の一覧（/songs/）のカードに置く再生ボタン用に、録音ごとに鳴らす配信音源を選んだ索引（フルサイズ優先）。</summary>
+    public required ThemeArtTrackIndex SongListArtTracks { get; init; }
+
     /// <summary>
     /// episode_id → そのエピソードに紐付くクレジット（scope=EPISODE）一覧の事前展開辞書。
     /// 旧 SeriesGenerator / EpisodeGenerator はページごとに <c>CreditsRepository.GetByEpisodeAsync</c> を

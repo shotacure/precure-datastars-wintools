@@ -200,9 +200,16 @@ public sealed class SongsGenerator
                 string medleyPartsHtml = medleyListHtml.Length == 0 ? ""
                     : $"<details class=\"songs-card-medley\"><summary>収録曲（{_ctx.MedleyPartsByMedley[song.SongId].Count} 曲）</summary>{medleyListHtml}</details>";
 
+                // カードの再生ボタンで鳴らす配信音源（フルサイズ優先）。無い録音にはボタンを出さない。
+                var artTrack = _ctx.SongListArtTracks.ByRecording.TryGetValue(r.SongRecordingId, out var at) ? at : null;
                 allRows.Add((seriesId, new SongRecordingIndexRow
                 {
                     SongRecordingId = r.SongRecordingId,
+                    ArtTrackId = artTrack?.ArtTrackId ?? "",
+                    ArtTrackPremiumOnly = artTrack?.PremiumOnly ?? false,
+                    ArtTrackSourceAlbum = artTrack?.SourceAlbum ?? "",
+                    ArtTrackAltId = artTrack?.AltArtTrackId ?? "",
+                    ArtTrackAltSourceAlbum = artTrack?.AltSourceAlbum ?? "",
                     SongId = song.SongId,
                     // 録音単位のアンカー URL（筆頭録音はページ先頭、それ以外は #recording-N）。
                     Url = _ctx.SongLinkForRecording(r.SongRecordingId, song.SongId),
@@ -455,13 +462,6 @@ public sealed class SongsGenerator
     }
 
     /// <summary>
-    /// 楽曲詳細ページの OGP カードを組み立てる。
-    /// 「音楽種別 → 曲名 → 表のクレジット（作家・歌い手）」の順に置き、
-    /// 曲名だけでは分からない担い手をカード内で読み切れるようにする。
-    /// </summary>
-    private static OgCardSpec BuildOgCard(
-        Song song,
-    /// <summary>
     /// OGP カードに載せる「表のクレジット」（曲の作家と、筆頭バージョン（先頭録音）の歌い手）を、楽曲詳細の基本情報と同じ順に組む：
     /// 作詞 → 英訳詞 → 作曲 → 編曲 → ストリングス編曲・オーケストラ編曲 → メドレー編曲 → 歌 → コーラス → 台詞 → 語り。
     /// 演奏・エンジニアなどの裏方（音楽クレジット）は載せない。無い役職は飛ばす。
@@ -512,6 +512,13 @@ public sealed class SongsGenerator
         (SongRecordingSingerRoles.SpokenWord, "語り"),
     };
 
+    /// <summary>
+    /// 楽曲詳細ページの OGP カードを組み立てる。
+    /// 「音楽種別 → 曲名 → 表のクレジット（作家・歌い手）」の順に置き、
+    /// 曲名だけでは分からない担い手をカード内で読み切れるようにする。
+    /// </summary>
+    private static OgCardSpec BuildOgCard(
+        Song song,
         IReadOnlyList<OgCardFactLine> credits,
         string musicClassLabel,
         string repSeriesTitle)
@@ -1336,6 +1343,17 @@ public sealed class SongsGenerator
     /// </summary>
     private sealed class SongRecordingIndexRow
     {
+        /// <summary>カードの再生ボタンで鳴らす配信音源（<see cref="BuildContext.SongListArtTracks"/> が選んだもの）。無ければ空文字でボタンを出さない。</summary>
+        public string ArtTrackId { get; set; } = "";
+        /// <summary>鳴らす音源が YouTube Music Premium 会員限定か。</summary>
+        public bool ArtTrackPremiumOnly { get; set; }
+        /// <summary>鳴らす音源が入っている盤の表記（プレイヤーの副題）。</summary>
+        public string ArtTrackSourceAlbum { get; set; } = "";
+        /// <summary>会員限定のときの代わり（誰でも再生できる同じサイズの音源）。無ければ空文字。</summary>
+        public string ArtTrackAltId { get; set; } = "";
+        /// <summary>代わりの音源が入っている盤の表記。</summary>
+        public string ArtTrackAltSourceAlbum { get; set; } = "";
+
         public int SongRecordingId { get; set; }
         public int SongId { get; set; }
         /// <summary>この録音行のリンク先 URL。筆頭録音は /songs/{SongId}/、それ以外は /songs/{SongId}/#recording-N。</summary>

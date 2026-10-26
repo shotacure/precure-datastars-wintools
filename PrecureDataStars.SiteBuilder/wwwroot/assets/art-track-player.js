@@ -14,7 +14,8 @@
  *
  * 会員限定の音源には、誰でも再生できる同一音源が別の盤にあれば
  * data-art-track-alt-id / data-art-track-alt-sub が併記される。
- * 「会員限定を表示しない」設定の閲覧者にはそちらを鳴らす（下記 resolveSource）。
+ * 「会員限定を表示しない」設定の閲覧者と、そのページで会員限定の音源が再生できなかった閲覧者には
+ * そちらを鳴らす（下記 resolveSource・armPremiumWatchdog）。
  *   <ul data-art-track-list data-art-track-mode="single">       ← 劇伴の cue リスト
  *
  * mode の意味：
@@ -57,6 +58,23 @@
   // 再生できなかったと判断する（Premium の壁はエラーではなく案内画面として出るため、
   // onError だけに頼れない）。
   var premiumWatchdog = null;
+  // 見張り中に BUFFERING（読み込み中）を一度でも経たか。経ていれば壁ではなく回線が遅いだけの
+  // 見込みが高いので、判定を待つ時間を延ばす（armPremiumWatchdog）。
+  var premiumWatchdogBuffered = false;
+
+  // 会員限定の壁の判定に待つ時間（ミリ秒）。読み込み中にすらならなければ短い方、
+  // 読み込み中にはなったがまだ鳴らなければ長い方まで待つ。
+  var PREMIUM_WALL_WAIT_MS = 2500;
+  var PREMIUM_SLOW_LOAD_WAIT_MS = 5000;
+
+  // このページで会員限定の音源が再生できなかったか。一度でも当たったら、以後は誰でも再生できる
+  // 同一音源がある曲を最初からそちらで鳴らす（同じ壁で毎回待たせないため）。
+  // 閲覧者の設定ではないので保存せず、ページを離れれば忘れる。
+  var premiumBlockedHere = false;
+
+  // いま流している再生要求。連続再生で次のトラックへ移ったときの動画 ID → ボタンの対応付けと、
+  // 会員限定の見張りの仕掛け直しに使う。
+  var currentRequest = null;
 
   // プレイヤー生成直後はまだ再生要求を受け付けられないため、onReady まで保留する処理を入れておく。
   var pendingPlayRequest = null;
@@ -70,8 +88,6 @@
 
   // 現在再生中のボタン（ハイライト解除に使う）。
   var activeButton = null;
-  // continuous モードで再生中のリスト（動画 ID → ボタンの対応付けに使う）。
-  var activeButtons = [];
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -112,35 +128,39 @@
       return;
     }
 
+    var request = buildRequest(btn);
+    ensurePlayer(function () { startPlayback(request); });
+  }
+
+  /**
+   * ボタン 1 つから再生要求を組み立てる。鳴らす音源はボタンごとに resolveSource で決める。
+   * continuous モードのリストでは、リスト内の再生可能なボタンを DOM 順に集め、押された位置を開始インデックスにする。
+   */
+  function buildRequest(btn) {
     var list = btn.closest('[data-art-track-list]');
     var mode = list ? list.getAttribute('data-art-track-mode') : 'single';
 
-    var request;
     if (mode === 'continuous' && list) {
-      // リスト内の再生可能なボタンを DOM 順に集め、押された位置を開始インデックスにする。
       var siblings = Array.prototype.slice.call(list.querySelectorAll('.art-track-play'))
         .filter(function (b) { return resolveSource(b).id; });
       var index = siblings.indexOf(btn);
-      request = {
+      return {
         mode: 'continuous',
         buttons: siblings,
         ids: siblings.map(function (b) { return resolveSource(b).id; }),
         index: index < 0 ? 0 : index,
         button: btn
       };
-    } else {
-      request = { mode: 'single', buttons: [btn], ids: [videoId], index: 0, button: btn };
     }
-
-    ensurePlayer(function () { startPlayback(request); });
+    return { mode: 'single', buttons: [btn], ids: [resolveSource(btn).id], index: 0, button: btn };
   }
 
   /**
    * ボタンから「実際に鳴らす音源」を決める。
    * 既定は data-art-track-id（アルバム詳細ならその盤、楽曲・劇伴詳細なら初出）。
-   * ただし「会員限定を表示しない」設定の閲覧者に対しては、その音源が会員限定で、
-   * かつ誰でも再生できる同一音源が別の盤にあるときに限り、そちらへ振り替える。
-   * 会員はどちらも鳴らせるので、設定を変えていない閲覧者には既定のまま返す。
+   * ただし「会員限定を表示しない」設定の閲覧者と、このページで会員限定の音源が再生できなかった閲覧者に対しては、
+   * その音源が会員限定で、かつ誰でも再生できる同一音源が別の盤にあるときに限り、そちらへ振り替える。
+   * 会員はどちらも鳴らせるので、それ以外の閲覧者には既定のまま返す。
    */
   function resolveSource(btn) {
     var id = btn.getAttribute('data-art-track-id') || '';
@@ -149,7 +169,7 @@
 
     var pref = (window.PCDS && window.PCDS.artTrackPremium)
       ? window.PCDS.artTrackPremium.getPreference() : null;
-    if (pref !== 'hide') return { id: id, sub: sub };
+    if (pref !== 'hide' && !premiumBlockedHere) return { id: id, sub: sub };
 
     var altId = btn.getAttribute('data-art-track-alt-id') || '';
     if (!altId) return { id: id, sub: sub };
@@ -218,8 +238,8 @@
   }
 
   function startPlayback(request) {
+    currentRequest = request;
     armPremiumWatchdog(request.button);
-    activeButtons = request.buttons;
     setActiveButton(request.button);
     updateMeta(request.button);
     showBar();
@@ -227,8 +247,8 @@
     if (request.mode === 'continuous') {
       // プレイリスト ID ではなく動画 ID の配列を渡す。実行時に YouTube 側の並び順へ依存しないため、
       // 複数枚組のフラット化の有無や将来の曲追加があっても壊れない。
-      // 連続再生は 1 つのホストで通す。Premium 限定の曲がリストに混ざっていると
-      // そこだけ再生できない画面になるが、その曲のボタンを直接押せば適切なホストで開き直る。
+      // 連続再生は 1 つのホストで通す。Premium 限定の曲がリストに混ざっていて会員でない環境なら、
+      // その曲に移ったところで見張りが当たり、誰でも再生できる同一音源で組み直す（onPlayerStateChange）。
       player.loadPlaylist({ playlist: request.ids, index: request.index });
     } else {
       player.loadVideoById(request.ids[0]);
@@ -249,6 +269,19 @@
       return;
     }
 
+    if (ev.data === YTState.UNSTARTED && currentRequest && currentRequest.mode === 'continuous'
+        && typeof player.getPlaylistIndex === 'function') {
+      // 連続再生で次のトラックの読み込みが始まった。その曲が会員限定なら見張りを仕掛け直す。
+      var next = currentRequest.buttons[player.getPlaylistIndex()];
+      if (next && next !== currentRequest.button) armPremiumWatchdog(next);
+      return;
+    }
+
+    if (ev.data === YTState.BUFFERING && premiumWatchdog !== null) {
+      premiumWatchdogBuffered = true;
+      return;
+    }
+
     if (ev.data === YTState.PLAYING) {
       // 鳴り出したので再生できなかった疑いは晴れた。
       clearPremiumWatchdog();
@@ -257,16 +290,20 @@
     }
   }
 
-  /** 実際に再生中の動画 ID から、対応するボタンを探してハイライト・曲名表示を合わせる。 */
+  /**
+   * 実際に再生中の動画 ID から、対応するボタンを探してハイライト・曲名表示を合わせる。
+   * 別の盤の同一音源に振り替えて鳴らしている曲もあるので、ボタンの属性ではなく
+   * 再生要求に積んだ動画 ID（resolveSource の結果）で突き合わせる。
+   */
   function syncActiveFromPlayer() {
-    if (!player || typeof player.getVideoData !== 'function') return;
+    if (!player || !currentRequest || typeof player.getVideoData !== 'function') return;
     var data = player.getVideoData();
     if (!data || !data.video_id) return;
 
-    for (var i = 0; i < activeButtons.length; i++) {
-      if (activeButtons[i].getAttribute('data-art-track-id') === data.video_id) {
-        setActiveButton(activeButtons[i]);
-        updateMeta(activeButtons[i]);
+    for (var i = 0; i < currentRequest.ids.length; i++) {
+      if (currentRequest.ids[i] === data.video_id) {
+        setActiveButton(currentRequest.buttons[i]);
+        updateMeta(currentRequest.buttons[i]);
         return;
       }
     }
@@ -403,24 +440,53 @@
   }
 
   /**
-   * Premium 限定の音源に対して「再生できなかったら知らせる」見張りを仕掛ける。
-   * 限定でない音源では何もしない。
+   * Premium 限定の音源に対して「再生できなかったら手当てする」見張りを仕掛ける。
+   * 限定でない音源と、誰でも再生できる同一音源へ振り替えて鳴らしている曲では何もしない。
+   *
+   * 再生できなかったときは、このページでは会員限定の音源が鳴らないと覚え（premiumBlockedHere）、
+   * 誰でも再生できる同一音源が別の盤にあれば、同じ曲・同じ並びのままそちらで鳴らし直す。
+   * 振り替え先が無いときだけ、YouTube Music で開く導線と「今後は隠すか」の確認を出す。
+   *
+   * 会員限定の壁に当たった動画は読み込み中（BUFFERING）にもならずに止まるので、
+   * PREMIUM_WALL_WAIT_MS のうちに読み込み中にすらならなければ壁と判断する。
+   * 読み込み中にはなったがまだ鳴らないときは回線が遅いだけの見込みが高いので、
+   * PREMIUM_SLOW_LOAD_WAIT_MS まで待ってから判断する。
    */
   function armPremiumWatchdog(btn) {
     clearPremiumWatchdog();
     if (!btn || btn.getAttribute('data-art-track-premium') !== '1') return;
+    var premiumId = btn.getAttribute('data-art-track-id') || '';
+    if (resolveSource(btn).id !== premiumId) return;
 
+    premiumWatchdogBuffered = false;
     premiumWatchdog = window.setTimeout(function () {
-      premiumWatchdog = null;
-      // この時点でまだ再生が始まっていなければ、会員限定の壁に当たったと判断する。
-      var state = (player && typeof player.getPlayerState === 'function') ? player.getPlayerState() : -1;
-      if (state === window.YT.PlayerState.PLAYING) return;
+      if (isPlaying()) { premiumWatchdog = null; return; }
+      if (!premiumWatchdogBuffered) { premiumWatchdog = null; onPremiumBlocked(btn, premiumId); return; }
 
-      // 確認ダイアログにも YouTube Music で開く導線を出すため、再生しようとした URL を渡す。
-      if (window.PCDS && window.PCDS.artTrackPremium) {
-        window.PCDS.artTrackPremium.notifyBlocked(musicUrl(btn.getAttribute('data-art-track-id') || ''));
-      }
-    }, 5000);
+      premiumWatchdog = window.setTimeout(function () {
+        premiumWatchdog = null;
+        if (!isPlaying()) onPremiumBlocked(btn, premiumId);
+      }, PREMIUM_SLOW_LOAD_WAIT_MS - PREMIUM_WALL_WAIT_MS);
+    }, PREMIUM_WALL_WAIT_MS);
+  }
+
+  function isPlaying() {
+    var state = (player && typeof player.getPlayerState === 'function') ? player.getPlayerState() : -1;
+    return state === window.YT.PlayerState.PLAYING;
+  }
+
+  /** 会員限定の音源が再生できなかったときの手当て（armPremiumWatchdog の説明を参照）。 */
+  function onPremiumBlocked(btn, premiumId) {
+    premiumBlockedHere = true;
+    if (resolveSource(btn).id !== premiumId) {
+      startPlayback(buildRequest(btn));
+      return;
+    }
+
+    // 確認ダイアログにも YouTube Music で開く導線を出すため、再生しようとした URL を渡す。
+    if (window.PCDS && window.PCDS.artTrackPremium) {
+      window.PCDS.artTrackPremium.notifyBlocked(musicUrl(premiumId));
+    }
   }
 
   function clearPremiumWatchdog() {

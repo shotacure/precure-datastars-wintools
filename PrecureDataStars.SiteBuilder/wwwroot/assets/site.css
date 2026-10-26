@@ -9673,10 +9673,13 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   background: var(--bg);
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
-.article-card:hover {
+.article-card:hover,
+.article-card:focus-visible {
   border-color: var(--accent-pink);
   box-shadow: 0 4px 14px rgba(233, 30, 99, 0.10);
   transform: translateY(-2px);
+  /* グローバル a:hover { text-decoration: underline } をカード全域で抑止。 */
+  text-decoration: none;
 }
 .article-card-title { margin: 0 0 0.4em; font-size: 1.1em; line-height: 1.4; color: var(--fg); }
 .article-card-date { margin: 0 0 0.5em; font-size: 0.8em; color: var(--muted); }

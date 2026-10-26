@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    PrecureDataStars.ArtTrackRefresh
+      割り当て済みの配信音源（YouTube アートトラック）を YouTube Data API で確かめ直す内部用コンソール。
+      YouTube API Services Developer Policies III.E.4 が求める「保存した API データを 30 日以内に取り直す」を満たすため、
+      本番デプロイ（scripts/deploy.ps1）の最初に流す。配布 ZIP には含めない。
+      処理は Catalog と共有の ArtTrackRefreshService（Catalog.Common）にあり、Catalog.Common が Windows 向けのため
+      ターゲットも net9.0-windows にそろえる。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <RootNamespace>PrecureDataStars.ArtTrackRefresh</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PrecureDataStars.Data\PrecureDataStars.Data.csproj" />
+    <ProjectReference Include="..\PrecureDataStars.Catalog.Common\PrecureDataStars.Catalog.Common.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- App.config から接続文字列と API キーを読み出すため。 -->
+    <PackageReference Include="System.Configuration.ConfigurationManager" />
+  </ItemGroup>
+
+</Project>

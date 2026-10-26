@@ -10,7 +10,7 @@
 
   作業中のファイル（未コミットの変更）を公開しないよう、リポジトリの作業ツリーではなく、
   コミット済みの develop を git worktree で一時フォルダに取り出してビルドする。
-  App.config は git に入れていないので、リポジトリの SiteBuilder のものを写して使う。
+  App.config は git に入れていないので、リポジトリの SiteBuilder と ArtTrackRefresh のものを写して使う。
   出力先・キャッシュは App.config の絶対パスなので、手動のデプロイと共用になる。
 
   安全ゲート（決まって起きる以外の削除・ビルド警告）で止まったときや失敗したときは公開しない。
@@ -97,9 +97,12 @@ try {
     & git -C $repoRoot worktree add --detach $worktree $Branch | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "一時作業ツリーを作れませんでした。" }
 
-    $appConfig = Join-Path $repoRoot 'PrecureDataStars.SiteBuilder/App.config'
-    if (-not (Test-Path -LiteralPath $appConfig)) { throw "App.config がありません: PrecureDataStars.SiteBuilder/App.config" }
-    Copy-Item -LiteralPath $appConfig -Destination (Join-Path $worktree 'PrecureDataStars.SiteBuilder/App.config')
+    # deploy.ps1 が動かす 2 つのプロジェクト（配信音源の再確認とサイトのビルド）の App.config を写す。
+    foreach ($configProject in 'PrecureDataStars.ArtTrackRefresh', 'PrecureDataStars.SiteBuilder') {
+        $appConfig = Join-Path $repoRoot "$configProject/App.config"
+        if (-not (Test-Path -LiteralPath $appConfig)) { throw "App.config がありません: $configProject/App.config" }
+        Copy-Item -LiteralPath $appConfig -Destination (Join-Path $worktree "$configProject/App.config")
+    }
 
     # deploy.ps1 の出力はすべてログにも残す（ゲートで止まった理由・差分の件数を後から読めるように）。
     $deployArgs = @{}

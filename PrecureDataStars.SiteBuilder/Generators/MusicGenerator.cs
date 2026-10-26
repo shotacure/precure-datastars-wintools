@@ -144,7 +144,8 @@ public sealed class MusicGenerator
                    t.length_frames     AS LengthFrames,
                    t.youtube_art_track_id AS YoutubeArtTrackId,
                    t.youtube_embeddable   AS YoutubeEmbeddable,
-                   t.youtube_playability  AS YoutubePlayability
+                   t.youtube_playability  AS YoutubePlayability,
+                   t.youtube_checked_at   AS YoutubeCheckedAt
               FROM tracks t
               JOIN discs d    ON d.catalog_no = t.catalog_no
               JOIN products p ON p.product_catalog_no = d.product_catalog_no
@@ -169,7 +170,8 @@ public sealed class MusicGenerator
                    t.length_frames     AS LengthFrames,
                    t.youtube_art_track_id AS YoutubeArtTrackId,
                    t.youtube_embeddable   AS YoutubeEmbeddable,
-                   t.youtube_playability  AS YoutubePlayability
+                   t.youtube_playability  AS YoutubePlayability,
+                   t.youtube_checked_at   AS YoutubeCheckedAt
               FROM song_recording_bgm_assignments a
               JOIN tracks   t ON t.song_recording_id = a.song_recording_id
                               -- パート・サイズとも完全一致でのみマッチ。'_ANY' は sentinel で全パート／全サイズを
@@ -193,6 +195,7 @@ public sealed class MusicGenerator
             new CommandDefinition(sql, cancellationToken: ct)).ConfigureAwait(false)).ToList();
 
         var dict = new Dictionary<(int SeriesId, string MNoDetail), List<BgmCueRecording>>();
+        var now = DateTime.Now;
         foreach (var r in rows)
         {
             var key = (r.SeriesId, r.MNoDetail);
@@ -226,9 +229,11 @@ public sealed class MusicGenerator
                 TrackTitle = r.TrackTitle,
                 LengthSeconds = lengthSeconds,
                 LengthFrames = (r.LengthFrames is uint f && f > 0) ? f : null,
-                // 配信音源は「埋め込み可と確認済み」のときだけ通す。未確認（NULL）と不可（false）は
-                // どちらも再生対象外に倒す。どの盤を実際に鳴らすかは cue 組み立て側で決める。
-                ArtTrackId = r.YoutubeEmbeddable == true ? (r.YoutubeArtTrackId ?? "") : "",
+                // 配信音源は「埋め込み可と確認済み・日本で再生できる・確認が新しい」ときだけ通す
+                // （SiteDataLoader が tracks に掛けるのと同じ ArtTrackPlayability.IsPublishable）。
+                // 未確認（NULL）と不可（false）はどちらも再生対象外に倒す。どの盤を実際に鳴らすかは cue 組み立て側で決める。
+                ArtTrackId = ArtTrackPlayability.IsPublishable(r.YoutubeEmbeddable, r.YoutubePlayability, r.YoutubeCheckedAt, now)
+                    ? (r.YoutubeArtTrackId ?? "") : "",
                 ArtTrackPremiumOnly = string.Equals(r.YoutubePlayability, "PREMIUM_ONLY", StringComparison.Ordinal)
             });
         }
@@ -1585,5 +1590,7 @@ public sealed class MusicGenerator
         public bool? YoutubeEmbeddable { get; set; }
         /// <summary>tracks.youtube_playability。未確認は NULL。</summary>
         public string? YoutubePlayability { get; set; }
+        /// <summary>tracks.youtube_checked_at。埋め込み可否の最終確認時刻。</summary>
+        public DateTime? YoutubeCheckedAt { get; set; }
     }
 }

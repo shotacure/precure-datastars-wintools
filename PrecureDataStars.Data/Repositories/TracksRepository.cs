@@ -503,6 +503,43 @@ public sealed class TracksRepository : RepositoryBase
 
         await ExecuteAsync(sql, rows, ct).ConfigureAwait(false);
     }
+
+    /// <summary>動画 ID が割り当て済みの全トラックを、定期の再確認の対象として取得する。 論理削除した商品のトラックも含める（API から取ったデータを保存している以上、確かめ直す対象になるため）。</summary>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task<IReadOnlyList<ArtTrackRefreshRow>> GetArtTrackRefreshRowsAsync(CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT t.catalog_no           AS CatalogNo,
+                   t.track_no             AS TrackNo,
+                   t.sub_order            AS SubOrder,
+                   d.product_catalog_no   AS ProductCatalogNo,
+                   t.youtube_art_track_id AS YoutubeArtTrackId,
+                   t.youtube_embeddable   AS YoutubeEmbeddable,
+                   t.youtube_playability  AS YoutubePlayability
+              FROM tracks t
+              JOIN discs d ON d.catalog_no = t.catalog_no
+             WHERE t.youtube_art_track_id IS NOT NULL
+               AND t.youtube_art_track_id <> ''
+             ORDER BY d.product_catalog_no, t.catalog_no, t.track_no, t.sub_order;
+            """;
+
+        return await QueryListAsync<ArtTrackRefreshRow>(sql, ct: ct).ConfigureAwait(false);
+    }
+}
+
+/// <summary>定期の再確認の対象となるトラック 1 行。</summary>
+public sealed class ArtTrackRefreshRow
+{
+    public string CatalogNo { get; set; } = "";
+    public byte TrackNo { get; set; }
+    public byte SubOrder { get; set; }
+
+    /// <summary>トラックが属する商品の代表品番。動画が消えていたときに商品を要確認へ戻すのに使う。</summary>
+    public string ProductCatalogNo { get; set; } = "";
+
+    public string YoutubeArtTrackId { get; set; } = "";
+    public bool? YoutubeEmbeddable { get; set; }
+    public string? YoutubePlayability { get; set; }
 }
 
 /// <summary>配信音源の照合に使うトラック 1 行。商品内の全ディスクを通し順に平坦化した並びで返る。</summary>

@@ -280,6 +280,25 @@ public sealed class ProductsRepository : RepositoryBase
         }, ct).ConfigureAwait(false);
     }
 
+    /// <summary>配信音源の取り込み状態だけを <c>AMBIGUOUS</c>（あとで人が確認する目印）にする。 定期の再確認で、割り当て済みの動画が消えていた・再生できなくなっていた商品に付ける。 プレイリスト ID と取り込み時刻には触れない。</summary>
+    /// <param name="productCatalogNos">対象商品の代表品番。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task MarkArtTrackAmbiguousAsync(
+        IEnumerable<string> productCatalogNos, CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE products SET youtube_art_track_status = 'AMBIGUOUS'
+            WHERE product_catalog_no = @ProductCatalogNo;
+            """;
+
+        var rows = productCatalogNos.Distinct(StringComparer.Ordinal)
+            .Select(no => new { ProductCatalogNo = no })
+            .ToList();
+        if (rows.Count == 0) return;
+
+        await ExecuteAsync(sql, rows, ct).ConfigureAwait(false);
+    }
+
     /// <summary>論理削除（is_deleted=1）。</summary>
     public async Task SoftDeleteAsync(string productCatalogNo, string? updatedBy, CancellationToken ct = default)
     {

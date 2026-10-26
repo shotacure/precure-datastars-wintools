@@ -24,6 +24,7 @@ precure-datastars-wintools.sln
 ├── PrecureDataStars.Catalog … カタログ管理 GUI（WinForms）
 ├── PrecureDataStars.AmazonSync … Creators API 画像一括取得・書籍取り込み（コンソール）
 ├── PrecureDataStars.TitleCharStatsRefresh … サブタイトル文字統計の作り直し（内部用コンソール）
+├── PrecureDataStars.ArtTrackRefresh … 配信音源（YouTube アートトラック）の定期の再確認（内部用コンソール）
 │
 ├── PrecureDataStars.BDAnalyzer … Blu-ray/DVD チャプター解析（WinForms）＋DB 連携
 ├── PrecureDataStars.CDAnalyzer … CD-DA トラック解析・音の特徴の記録（WinForms）＋DB 連携
@@ -58,6 +59,7 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細・人物／企業／プリキュア／キャラクター詳細・クリエイター・楽曲・劇伴・商品・統計の各ページ群を生成する。`CreditInvolvementIndex` 経由で「人物・企業・キャラごとにどのシリーズのどのエピソードに、どの役職で関与したか」を逆引きする。 |
 | **PrecureDataStars.AmazonSync** | コンソール | `products` テーブルから ASIN を持つ商品を抽出し、Creators API GetItems で `cover_image_url` を一括更新するバッチ。鮮度切れ判定（90 日経過 or 未取得）で対象を絞り込み、Creators API レート制限（1 TPS）順守のため各リクエスト間に 1.1 秒スリープを挟む。CLI オプションは `--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--search "キーワード" --index Books`（検索の診断）／`--dry-run`（DB 更新せず表示のみ）／`--target products|books|all`（巡回対象の切替）。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録。書籍については表紙巡回（代表は紙優先）に加えて、`--import-book`（ASIN から書誌・書影・クレジットを組み立てて `books` へ登録）と `--attach-print --book-id N --print-asin X`（Kindle 版だけで登録済みの書籍へ紙版を合流）も担う。 |
 | **PrecureDataStars.TitleCharStatsRefresh** | コンソール（内部用） | 指定したエピソードの `title_text` を Episodes の保存時と同じ `TitleCharStatsBuilder` にかけ、`title_char_stats` を作り直す。サブタイトルを DB 直接で直したあとに使う。引数だけなら DB の統計との違いを表示するのみで、`--apply` を付けたときだけ違いのある話を 1 トランザクションで書き換える（`title_char_stats` 以外の列には触れない）。配布 ZIP には含めない。使い方は「エピソード管理」を参照。 |
+| **PrecureDataStars.ArtTrackRefresh** | コンソール（内部用） | 割り当て済みの配信音源（YouTube アートトラック）を YouTube Data API で確かめ直し、埋め込み可否・地域制限・確認時刻を更新する。消えた動画は割り当てを外し、変化のあった商品は取り込み状態を `AMBIGUOUS` に戻す。`scripts/deploy.ps1` が本番デプロイの最初に流す。配布 ZIP には含めない。使い方は「商品・ディスク管理画面」の「配信音源の取り込みと再確認」を参照。 |
 
 ---
 
@@ -91,7 +93,7 @@ mysql -u root -p < db/schema.sql
 
 ### 2. 接続文字列の設定
 
-DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / OaVerifier / SiteBuilder / AmazonSync / TitleCharStatsRefresh）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。
+DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / OaVerifier / SiteBuilder / AmazonSync / TitleCharStatsRefresh / ArtTrackRefresh）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。Catalog と ArtTrackRefresh は、配信音源を扱うための YouTube Data API v3 の API キー（`appSettings` の `YouTube.ApiKey`）も設定する。
 
 ```xml
 <connectionStrings>
@@ -386,6 +388,13 @@ UDF ハードリンクの検出は、`VTS_*_1.VOB` のバイト数が全て同�
 
 - **取り込み**：商品エディタにアルバムのプレイリスト ID（`OLAK5uy_...`、プレイリストの URL を貼ってもよい）を入れて「展開...」を押すと、プレイリストを展開し、DB のトラックと並び順を保ったまま対応付けた確認ダイアログを出す。埋め込み可否（`status.embeddable`）と地域制限（`contentDetails.regionRestriction`。日本で再生できない動画は「日本で再生不可」）もこのとき API で取る。対応表を確かめて「書き込む」で `tracks.youtube_art_track_id` / `youtube_embeddable` / `youtube_playability` / `youtube_checked_at` を書く。「配信音源の一括取り込み」は対応表を見ずにまとめて書き、タイトルの合わない行が残った商品を `AMBIGUOUS` にする。
 - **会員限定かどうか**：YouTube Music Premium 会員限定かどうかは Data API のどの項目にも現れないので、人が YouTube でその盤の曲を 1 つ開いて確かめ、確認ダイアログの「この盤は YouTube Music Premium 会員限定」で盤ごとに決める（会員限定かどうかはアルバム単位の配信条件で決まり、1 枚の中で混在しない）。チェック欄の初期値は前回の判断で、無ければ外れている。一括取り込みは前回の判断を引き継ぎ、無ければ未確認のまま書く。サイトは未確認を誰でも再生できる音源と同じに扱い、会員限定で再生できなかったときはプレイヤーがその場で検知する。
+- **再確認**：Developer Policies III.E.4 は、保存した API データを 30 日以内に取り直すか消すかを求めている。`PrecureDataStars.ArtTrackRefresh` が割り当て済みの全動画を `videos.list` で問い合わせ直し（50 件 1 ユニット。全件で 70 ユニットほど）、埋め込み可否・地域制限・確認時刻を更新する。応答に無い動画（削除・非公開）は割り当てを外す。動画が消えた・埋め込めなくなった・日本で再生できなくなった商品は取り込み状態を `AMBIGUOUS` に戻すので、商品エディタの「展開...」で取り込み直す。人が決めた会員限定かどうかには触れない（地域制限が外れた音源は未確認に戻る）。API の不調で大量の動画が消えたように見えたときに割り当てをまとめて失わないよう、消える動画が 20 件か全体の 5% の多い方を超えたら書き込まずに止まる（終了コード 1）。`scripts/deploy.ps1` が本番デプロイの最初に流すので、ふだん手で動かすことはない。サイトは確認から 30 日を過ぎた音源に再生ボタンを出さず、その件数をビルド警告に出す。
+
+```bash
+dotnet run --project PrecureDataStars.ArtTrackRefresh -- --dry-run              # 書き込まずに結果だけ表示
+dotnet run --project PrecureDataStars.ArtTrackRefresh                            # 確かめ直して書き込む
+dotnet run --project PrecureDataStars.ArtTrackRefresh -- --allow-mass-removal   # 消えた動画が多くて止まったとき、中身を確かめたうえで通す
+```
 
 #### B'. 既存商品への追加ディスク登録フロー
 
@@ -962,7 +971,7 @@ Role: PRODUCTION 制作 (order 2)
    dotnet run --project PrecureDataStars.SiteBuilder -c Release -- --refresh-og
    ```
 5. 出力先に静的 HTML 一式と `assets/site.css` が生成される。ビルドログ先頭に現在のモードと出力先が明示される。出力は前回のものを残したまま、中身が変わるファイルだけ書き、全体ビルドの最後に今回の出力に属さないファイルを消す（下記「出力の書き出し」参照）。Build Summary に「書いた / 変わらず / 消した」の件数と OGP カードの作り置きの効きが出る
-6. 本番への反映は `scripts/deploy.ps1`（ドライランで差分と警告を確かめ、安全なら反映）。2 つのデプロイが同時に走らないよう、名前付きの mutex（`Global\precure-tv-deploy`）で 1 つずつにし、後から来たほうは先のデプロイが終わるまで最大 2 時間待つ
+6. 本番への反映は `scripts/deploy.ps1`（ドライランで差分と警告を確かめ、安全なら反映）。ビルドの前に `PrecureDataStars.ArtTrackRefresh` で配信音源を確かめ直し（「商品・ディスク管理画面」の「配信音源の取り込みと再確認」）、失敗したときは反映しない。`-DryRunOnly` でも確かめ直しは流す。2 つのデプロイが同時に走らないよう、名前付きの mutex（`Global\precure-tv-deploy`）で 1 つずつにし、後から来たほうは先のデプロイが終わるまで最大 2 時間待つ
 7. 定時の本番デプロイ：`scripts/scheduled-deploy.ps1` が、コミット済みの `develop` を git worktree で一時フォルダに取り出し（作業中の未コミットの変更は公開しない）、リポジトリの `App.config` を写して `deploy.ps1` を流し、一時フォルダを片付ける。経過は `%LOCALAPPDATA%\precure-datastars\scheduled-deploy.log` に追記する。安全ゲートで止まったときや失敗したときは公開しない。`-DryRunOnly` で差分の確認までを試せる。`scripts/register-deploy-task.ps1` で毎週水曜・土曜の 8:00 と 8:30（コラムの公開時刻）に動くタスクをタスクスケジューラに登録する（スリープなら起こし、動けなかったときは次に使えるとき）。8:00 の回は下準備で、前回からのコードの変更と DB の更新を先に流しておく（コードを変えた後の最初のビルドは OGP カードの描き直しで数分かかる。公開日時 8:30 のコラムはまだ出ない）。8:30 の回は差分がほぼコラムだけになるので短時間で終わる。8:00 の回が 8:30 を過ぎても動いていれば、8:30 の回は終わるのを待ってから動く。サイト全体を作り直すので、その時点の DB の内容も一緒に公開される。公開できなかったとき（安全ゲートで止まった・失敗した）は Windows の通知を出す。8:00 の回で止まれば、8:30 までに直すか判断できる
    ```powershell
    .\scripts\scheduled-deploy.ps1 -DryRunOnly   # 本番に出さずに試す

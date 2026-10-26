@@ -173,6 +173,26 @@ public static class SiteDataLoader
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Track>)g.ToList(), StringComparer.Ordinal);
         logger.Info($"tracks: {tracksByCatalogNo.Count} catalog_no 分");
 
+        // 配信音源は、埋め込み可と確認済みで、日本で再生でき、確認から一定日数以内のものだけをサイトに出す
+        // （ArtTrackPlayability.IsPublishable）。外れた音源は埋め込み可否を未確認に倒し、
+        // 「埋め込み可と確認済み」だけを通す各ジェネレータ・索引から見えなくする。
+        // 確認切れは本番デプロイ前の ArtTrackRefresh の流し忘れなので、警告にして気づけるようにする。
+        var artTrackNow = DateTime.Now;
+        int artTrackStale = 0, artTrackUnplayable = 0;
+        foreach (var t in tracksByCatalogNo.Values.SelectMany(list => list))
+        {
+            if (t.YoutubeEmbeddable != true || string.IsNullOrEmpty(t.YoutubeArtTrackId)) continue;
+            if (ArtTrackPlayability.IsPublishable(t.YoutubeEmbeddable, t.YoutubePlayability, t.YoutubeCheckedAt, artTrackNow)) continue;
+
+            if (!ArtTrackPlayability.IsFresh(t.YoutubeCheckedAt, artTrackNow)) artTrackStale++;
+            else artTrackUnplayable++;
+            t.YoutubeEmbeddable = null;
+        }
+        if (artTrackStale > 0)
+            logger.Warn($"配信音源 {artTrackStale} 件は確認から {ArtTrackPlayability.RecheckDays} 日を過ぎているため再生ボタンを出しません。PrecureDataStars.ArtTrackRefresh で確かめ直してください。");
+        if (artTrackUnplayable > 0)
+            logger.Info($"配信音源 {artTrackUnplayable} 件は日本で再生できないため再生ボタンを出しません。");
+
         var songCreditsBySong = (await songCreditsRepo.GetAllAsync(ct).ConfigureAwait(false))
             .GroupBy(c => c.SongId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<SongCredit>)g.ToList());

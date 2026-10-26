@@ -4,7 +4,15 @@
 
 .DESCRIPTION
   PrecureDataStars.SiteBuilder を本番モード（--production --deploy）でビルドし、生成物を S3 へ差分同期
-  したうえで CloudFront を invalidation する。実行は 2 段階：
+  したうえで CloudFront を invalidation する。
+
+  ビルドの前に PrecureDataStars.ArtTrackRefresh を流し、割り当て済みの配信音源（YouTube アートトラック）を
+  YouTube Data API で確かめ直す（YouTube API Services Developer Policies III.E.4 の 30 日以内の取り直し）。
+  サイトは確認から 30 日を過ぎた音源に再生ボタンを出さず、ビルド警告にもなるため、ここで毎回新しくしておく。
+  再確認に失敗したとき（API キー・接続の不備、消えた動画が多すぎて止めたときなど）はデプロイしない。
+  -DryRunOnly でも再確認は流す（ドライランの差分を、本番反映と同じ状態の DB で見るため）。
+
+  実行は 2 段階：
 
     1. まず --dry-run で差分プラン（upload / delete / unchanged）とビルド警告数を取得し、安全ゲートを通す。
          - delete（既存 S3 オブジェクトの消去）のうち、決まって起きる削除を除いたものが 1 件以上 … 既定では中止する
@@ -75,6 +83,15 @@ try {
 }
 
 try {
+
+    # --- 準備: 配信音源の再確認 ---
+    # 出力はそのままコンソールへ流す（変化のあった音源・AMBIGUOUS に戻した商品を後から読めるように）。
+    Write-Host "[準備] 配信音源の再確認" -ForegroundColor Yellow
+    & dotnet run --project 'PrecureDataStars.ArtTrackRefresh'
+    if ($LASTEXITCODE -ne 0) {
+        throw "配信音源の再確認が失敗しました (exit $LASTEXITCODE)。上のログを確認してください。"
+    }
+    Write-Host ""
 
     # --- フェーズ 1: ドライラン（差分プレビュー） ---
     # stdout を Tee-Object で変数にも取り込みつつコンソールへ流す（2>&1 は使わない＝

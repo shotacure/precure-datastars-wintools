@@ -313,6 +313,27 @@ a:hover { text-decoration: underline; }
   width: 200px;
   height: auto;
 }
+/* バナー画像の無い姉妹サイト（precure.tv ⇔ precure.news）は、ホーム上部の文字のカード
+   （.sister-site-text-card）をバナーと同じ 200px 幅・3:1 に縮めて置く。
+   この幅では一行の紹介が入らないので、肩書きとワードマークだけを組む。 */
+.footer-sister-link.sister-site-text-card {
+  width: 200px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  font-size: 13px;
+  gap: 0;
+  text-decoration: none;
+}
+.footer-sister-link.sister-site-text-card .sister-site-text-card-ja { font-size: 0.85em; }
+.footer-sister-link.sister-site-text-card .sister-site-text-card-en { font-size: 1.3em; }
+.footer-sister-link.sister-site-text-card-news {
+  border-color: #c2d6ff;
+}
+.footer-sister-link.sister-site-text-card-news:hover,
+.footer-sister-link.sister-site-text-card-news:focus-visible {
+  border-color: #3366cc;
+  box-shadow: 0 2px 8px rgba(51, 102, 204, 0.16);
+}
 .footer-legal {
   margin-top: 22px;
   padding-top: 14px;

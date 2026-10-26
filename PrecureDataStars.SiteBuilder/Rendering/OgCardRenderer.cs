@@ -140,12 +140,16 @@ public sealed partial class OgCardRenderer : IDisposable
     private const float EpisodeTitleFontSize = 52f;
 
     /// <summary>
-    /// <see cref="OgCardSpec.EpisodeTitleRubyHtml"/> を、エピソードのカードの見出しと同じ組み方（本編テロップの書体・ルビ・白い字に黒フチと影）で
-    /// 左寄せに描き、下端 Y を返す。改行は空きとして扱い、まず 1 行に収まるよう詰める（詰め切れなければ 2 行）。空なら <paramref name="y"/> を返す。
+    /// <see cref="OgCardSpec.EpisodeTitleRubyHtml"/> を、エピソードのカードの見出しと同じ組み方（本編テロップの書体・ルビ・作品の書体の表の装飾）で
+    /// 左寄せに描き、下端 Y を返す。<see cref="OgCardSpec.EpisodeTitleRubyProfile"/> があれば <see cref="DrawDecoratedTitle"/> で 1 行に描き、
+    /// 無ければ白い字に黒フチと影で、改行は空きとして扱い、まず 1 行に収まるよう詰める（詰め切れなければ 2 行）。空なら <paramref name="y"/> を返す。
     /// </summary>
     private float DrawEpisodeTitle(SKCanvas canvas, SKPaint paint, OgCardSpec spec, float y, float contentWidth)
     {
         if (string.IsNullOrWhiteSpace(spec.EpisodeTitleRubyHtml)) return y;
+        // 組み方があれば、エピソードのカードの見出しと同じ描き方（作品の書体の表の装飾。無ければ白い字に黒フチと影）で 1 行に描く
+        if (spec.EpisodeTitleRubyProfile is { } profile)
+            return DrawDecoratedTitle(canvas, spec.EpisodeTitleRubyHtml, spec.EpisodeTitleFontFamily, profile, y + 14f, contentWidth, EpisodeTitleFontSize);
         var units = ParseRubyUnits(spec.EpisodeTitleRubyHtml);
         while (units.Count > 0 && units[0].IsGap) units.RemoveAt(0);
         while (units.Count > 0 && units[^1].IsGap) units.RemoveAt(units.Count - 1);
@@ -689,15 +693,16 @@ public sealed partial class OgCardRenderer : IDisposable
 
     /// <summary>
     /// エピソードのサブタイトルを、各話のテロップ画像と同じ描き方（作品の書体・装飾・振り仮名の組み方、倍で重ねて縮める。装飾が無ければ白い字に黒フチと影）で、
-    /// 決まった字の大きさ（<see cref="DecoratedTitleSize"/>）の 1 行に描き、左端を本文の左端にそろえて置く。放送の改行はせず、
+    /// 決まった字の大きさ（<paramref name="size"/>）の 1 行に描き、左端を本文の左端にそろえて置く。放送の改行はせず、
     /// 行と行のあいだは字の大きさの 4 分の 1 空ける。装飾の太さ・ずれ・ぼかしは字の大きさに対する比なので、字の大きさに合わせて変わる。
     /// 外へ広く広がる光（光彩と、ぼかしの大きいフチ・影）は広がりを半分にする。行ごとに色の組を持つグラデーション（<c>lineColors</c>）は、
     /// 放送の行ごとに描き分けて、その行の色の組をかける。全体が本文の幅を超えるときは横に縮めて収める。見出しの下端 Y を返す。
     /// </summary>
-    private float DrawDecoratedTitle(SKCanvas canvas, OgCardSpec spec, SubtitleTelopProfile profile, float y, float contentWidth)
+    /// <param name="html">ルビ付きのサブタイトル（放送の改行は <c>&lt;br&gt;</c>）。</param>
+    /// <param name="fontFamily">本編テロップの書体名。</param>
+    /// <param name="size">字の大きさ（エピソードのカードは <see cref="DecoratedTitleSize"/>、感想記事のカードは <see cref="EpisodeTitleFontSize"/>）。</param>
+    private float DrawDecoratedTitle(SKCanvas canvas, string html, string fontFamily, SubtitleTelopProfile profile, float y, float contentWidth, float size)
     {
-        const float size = DecoratedTitleSize;
-        string html = string.IsNullOrWhiteSpace(spec.TitleRubyHtml) ? System.Net.WebUtility.HtmlEncode(spec.Title) : spec.TitleRubyHtml;
         var lines = System.Text.RegularExpressions.Regex.Split(html, @"<br\s*/?>", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
             .Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
         if (lines.Count == 0) return y;
@@ -737,7 +742,7 @@ public sealed partial class OgCardRenderer : IDisposable
             var list = new List<TelopImage>();
             foreach (var (h, p) in pieces)
             {
-                var img = DrawTelopImage(h, spec.TitleFontFamily, k < 1f ? p with { LineScales = new[] { k } } : p, size);
+                var img = DrawTelopImage(h, fontFamily, k < 1f ? p with { LineScales = new[] { k } } : p, size);
                 if (img is not null) list.Add(img);
             }
             return list;
@@ -1159,7 +1164,8 @@ public sealed partial class OgCardRenderer : IDisposable
         {
             // エピソードのサブタイトル：テロップ画像と同じ描き方（作品の装飾が無ければ白い字に黒フチと影）で、
             // 決まった字の大きさの 1 行に描いて置く（どの回も仮想ボディの高さをそろえ、長い題は長体で収める）
-            y = DrawDecoratedTitle(canvas, spec, telopProfile, y, contentWidth);
+            string html = string.IsNullOrWhiteSpace(spec.TitleRubyHtml) ? System.Net.WebUtility.HtmlEncode(spec.Title) : spec.TitleRubyHtml;
+            y = DrawDecoratedTitle(canvas, html, spec.TitleFontFamily, telopProfile, y, contentWidth, DecoratedTitleSize);
         }
         else if (rubyUnits.Count > 0)
         {

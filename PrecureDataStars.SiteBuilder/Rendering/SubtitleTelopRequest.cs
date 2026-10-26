@@ -44,16 +44,25 @@ public sealed record SubtitleTelopRequest(
     {
         if (string.IsNullOrEmpty(ep.TitleText)) return null;
 
-        var profile = WithSubtitleStyle(SubtitleTelopProfile.FromSeries(series), series, ctx, ep.SeriesEpNo);
-        // 字を傾ける回が決まっている作品は、一覧に無い回では傾けない
-        if (profile.Decoration.CharTilt is { Episodes: { } tiltEpisodes } && !tiltEpisodes.Contains(ep.SeriesEpNo))
-            profile = profile with { Decoration = profile.Decoration with { CharTilt = null } };
         return new SubtitleTelopRequest(
             PathUtil.EpisodeUrl(series.Slug, ep.SeriesEpNo),
             $"subtitles/{series.Slug}/{ep.SeriesEpNo}.png",
             string.IsNullOrEmpty(ep.TitleRichHtml) ? HtmlUtil.Escape(ep.TitleText) : ep.TitleRichHtml,
             series.FontSubtitle ?? "",
-            profile);
+            ProfileFor(series, ep, ctx.FontUsages));
+    }
+
+    /// <summary>
+    /// その話のサブタイトルの組み方（作品の書体の表の装飾・長体の下限・その回の行ごとの倍率を重ねたもの）。
+    /// エピソード詳細のテロップ画像と、他のサイトの OGP カード（<see cref="OgCardBatch"/>）が同じものを使う。
+    /// </summary>
+    public static SubtitleTelopProfile ProfileFor(Series series, Episode ep, IReadOnlyList<SeriesFontUsage> fontUsages)
+    {
+        var profile = WithSubtitleStyle(SubtitleTelopProfile.FromSeries(series), series, fontUsages, ep.SeriesEpNo);
+        // 字を傾ける回が決まっている作品は、一覧に無い回では傾けない
+        if (profile.Decoration.CharTilt is { Episodes: { } tiltEpisodes } && !tiltEpisodes.Contains(ep.SeriesEpNo))
+            profile = profile with { Decoration = profile.Decoration with { CharTilt = null } };
+        return profile;
     }
 
     /// <summary>
@@ -62,8 +71,12 @@ public sealed record SubtitleTelopRequest(
     /// <paramref name="episodeNo"/> があれば、その回の行ごとの横の倍率（<c>subtitle.episodeLineScales</c>）も重ねる。
     /// </summary>
     public static SubtitleTelopProfile WithSubtitleStyle(SubtitleTelopProfile profile, Series series, BuildContext ctx, int? episodeNo = null)
+        => WithSubtitleStyle(profile, series, ctx.FontUsages, episodeNo);
+
+    /// <inheritdoc cref="WithSubtitleStyle(SubtitleTelopProfile, Series, BuildContext, int?)"/>
+    public static SubtitleTelopProfile WithSubtitleStyle(SubtitleTelopProfile profile, Series series, IReadOnlyList<SeriesFontUsage> fontUsages, int? episodeNo = null)
     {
-        var usage = ctx.FontUsages.FirstOrDefault(u => u.SeriesId == series.SeriesId && u.UsageKind == FontUsageKinds.Subtitle
+        var usage = fontUsages.FirstOrDefault(u => u.SeriesId == series.SeriesId && u.UsageKind == FontUsageKinds.Subtitle
                                                       && !u.IsBroadcastOnly && u.VariantNo == 1);
         if (usage is null) return profile;
         var decoration = TelopDecoration.Parse(usage.Decoration);

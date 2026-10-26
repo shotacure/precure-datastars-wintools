@@ -64,7 +64,8 @@ internal static class OgCardBatch
                             ? hit.Episode.TitleRichHtml
                             : WebUtility.HtmlEncode(hit.Episode.TitleDisplayText),
                         EpisodeTitleFontFamily = hit.Series.FontSubtitle ?? "",
-                        EpisodeTitleRubyProfile = SubtitleTelopProfile.FromSeries(hit.Series)
+                        // 作品の書体の表の装飾も重ねる（エピソード詳細のテロップ画像・エピソードのカードと同じ組み方）
+                        EpisodeTitleRubyProfile = SubtitleTelopRequest.ProfileFor(hit.Series, hit.Episode, episodes.FontUsages)
                     };
                 }
                 else
@@ -108,7 +109,14 @@ internal static class OgCardBatch
     {
         private readonly Dictionary<string, (Series Series, Episode Episode)> _byKey;
 
-        private EpisodeLookup(Dictionary<string, (Series Series, Episode Episode)> byKey) => _byKey = byKey;
+        private EpisodeLookup(Dictionary<string, (Series Series, Episode Episode)> byKey, IReadOnlyList<SeriesFontUsage> fontUsages)
+        {
+            _byKey = byKey;
+            FontUsages = fontUsages;
+        }
+
+        /// <summary>作品の書体の表（サブタイトルの装飾を引く）。</summary>
+        public IReadOnlyList<SeriesFontUsage> FontUsages { get; }
 
         /// <summary>"2026tv/37" の形で引く。無ければ null。</summary>
         public (Series Series, Episode Episode)? Find(string key) => _byKey.TryGetValue(key, out var hit) ? hit : null;
@@ -120,6 +128,7 @@ internal static class OgCardBatch
             var factory = MySqlConnectionFactory.FromConnectionString(cs);
             var seriesList = new SeriesRepository(factory).GetAllAsync().GetAwaiter().GetResult();
             var episodes = new EpisodesRepository(factory).GetAllAsync().GetAwaiter().GetResult();
+            var fontUsages = new FontsRepository(factory).GetAllUsagesAsync().GetAwaiter().GetResult();
             var seriesById = seriesList.ToDictionary(s => s.SeriesId);
             var byKey = new Dictionary<string, (Series Series, Episode Episode)>(StringComparer.OrdinalIgnoreCase);
             foreach (var ep in episodes)
@@ -127,7 +136,7 @@ internal static class OgCardBatch
                 if (!seriesById.TryGetValue(ep.SeriesId, out var series)) continue;
                 byKey[$"{series.Slug}/{ep.SeriesEpNo}"] = (series, ep);
             }
-            return new EpisodeLookup(byKey);
+            return new EpisodeLookup(byKey, fontUsages);
         }
     }
 }

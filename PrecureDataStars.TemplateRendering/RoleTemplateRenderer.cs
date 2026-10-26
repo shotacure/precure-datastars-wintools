@@ -34,6 +34,7 @@ namespace PrecureDataStars.TemplateRendering;
 ///   <item><description><c>{?!NAME}...{/?!NAME}</c> ... プレースホルダ NAME の解決値が空のときだけ展開（否定の条件）</description></item>
 ///   <item><description><c>{#THEME_SONGS[:kind=OP+ED][,seq=N|N-M]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復。
 ///     <c>seq</c> を書くと、番号（seq）がその値・範囲に入る曲だけに絞る。
+///     <c>merge_same_song=1</c> を書くと、同じ曲の録音が続く行を 1 曲にまとめる（歌唱は歌い手を改行で並べ、版の名前は出さない）。
 ///     内側で <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> / <c>{COMPOSER}</c> /
 ///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{CHORUS}</c> / <c>{VARIANT_LABEL}</c> / <c>{SONG_SERIES_TITLE}</c> の楽曲スコーププレースホルダが
 ///     解決可能（<c>{CHORUS}</c> は <c>BACKING_VOCALS</c> 役職の連名、不在時は空）。
@@ -91,6 +92,32 @@ public static class RoleTemplateRenderer
         var parts = raw.Split('-', StringSplitOptions.TrimEntries);
         if (parts.Length == 1 && int.TryParse(parts[0], out from)) { to = from; return true; }
         return parts.Length == 2 && int.TryParse(parts[0], out from) && int.TryParse(parts[1], out to) && from <= to;
+    }
+
+    /// <summary>
+    /// <c>{#THEME_SONGS}</c> の <c>merge_same_song=1</c>：並びの中で同じ曲（song_id）の録音が続く行を 1 行にまとめる。
+    /// まとめた行は先頭の行を元にし、歌唱（<c>{SINGER}</c>）は各録音の歌い手を改行（&lt;br&gt;）でつなぎ、
+    /// 版の名前（<c>{VARIANT_LABEL}</c>）は空にする。作詞・作曲・編曲は曲が同じなので先頭の行のまま。
+    /// </summary>
+    private static List<ThemeSongsHandler.ThemeSongRow> MergeSameSongRows(IReadOnlyList<ThemeSongsHandler.ThemeSongRow> rows)
+    {
+        var result = new List<ThemeSongsHandler.ThemeSongRow>();
+        foreach (var row in rows)
+        {
+            var prev = result.Count > 0 ? result[^1] : null;
+            if (prev is null || prev.SongId <= 0 || prev.SongId != row.SongId)
+            {
+                result.Add(row);
+                continue;
+            }
+            // 続く録音の歌い手を、前の行の歌唱に改行でつなぐ（区切りの差し替え sep= にも効くよう、部品の並びにも足す）
+            prev.SingerHtml = string.IsNullOrEmpty(prev.SingerHtml) ? row.SingerHtml
+                            : string.IsNullOrEmpty(row.SingerHtml) ? prev.SingerHtml
+                            : prev.SingerHtml + "<br>" + row.SingerHtml;
+            prev.SingerParts = prev.SingerParts.Concat(row.SingerParts.Select((p, i) => i == 0 ? ("<br>", p.Html) : p)).ToList();
+            prev.VariantLabel = null;
+        }
+        return result;
     }
 
     /// <summary>AST <paramref name="nodes"/> を <paramref name="ctx"/> に対して展開し、整形済み文字列を返す。</summary>
@@ -162,6 +189,9 @@ public static class RoleTemplateRenderer
                         // 「テーマソング」と「挿入歌」のように、同じ挿入歌の区分の曲を別々の役職の欄に分けて出す画面用。
                         if (TryParseSeqRange(tsLoop.GetOption("seq", ""), out int seqFrom, out int seqTo))
                             rows = rows.Where(r => r.Seq is byte s && s >= seqFrom && s <= seqTo).ToList();
+                        // merge_same_song=1：同じ曲の録音が続く行を 1 曲にまとめる（画面が 1 曲の下に歌い手を並べる作品用）。
+                        if (tsLoop.GetOption("merge_same_song", "") == "1")
+                            rows = MergeSameSongRows(rows);
                         foreach (var song in rows)
                         {
                             // THEME_SONGS ループ内では currentBlock は持ち越さない

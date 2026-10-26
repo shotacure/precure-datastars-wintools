@@ -15,7 +15,7 @@ namespace PrecureDataStars.Catalog.Common.Services;
 /// 2 つの読み取り操作だけを扱う。
 /// <list type="bullet">
 ///   <item><see cref="GetPlaylistItemsAsync"/>：アルバムのプレイリストを全件展開する（50 件 1 ユニット）。</item>
-///   <item><see cref="GetVideoDetailsAsync"/>：動画の埋め込み可否と再生時間を取得する（50 件 1 ユニット）。</item>
+///   <item><see cref="GetVideoDetailsAsync"/>：動画の埋め込み可否・地域制限・再生時間を取得する（50 件 1 ユニット）。</item>
 /// </list>
 /// <para>
 /// 高コストな <c>search.list</c>（1 回 100 ユニット）は使わない。自動生成のアルバムプレイリスト
@@ -92,7 +92,7 @@ public sealed class YouTubeDataApiClient : IDisposable
         return results.OrderBy(v => v.Position).ToList();
     }
 
-    /// <summary>動画の埋め込み可否（<c>status.embeddable</c>）と再生時間（<c>contentDetails.duration</c>）を まとめて取得する。埋め込み可否は権利者が外部サイトでの再生を許可していない音源を掲載しない判定に、 再生時間はトラックとの対応付けに使う。応答に含まれない動画 ID（削除・非公開など）は戻り値に現れない。</summary>
+    /// <summary>動画の埋め込み可否（<c>status.embeddable</c>）と再生時間（<c>contentDetails.duration</c>）を まとめて取得する。埋め込み可否は権利者が外部サイトでの再生を許可していない音源を掲載しない判定に、 再生時間はトラックとの対応付けに使う。地域制限は日本で再生できない音源を見分けるのに使う。 応答に含まれない動画 ID（削除・非公開など）は戻り値に現れない。</summary>
     /// <param name="videoIds">対象の動画 ID。50 件ずつに分割して問い合わせる。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task<IReadOnlyDictionary<string, YouTubeVideoDetail>> GetVideoDetailsAsync(
@@ -119,18 +119,45 @@ public sealed class YouTubeDataApiClient : IDisposable
                     && st.TryGetProperty("embeddable", out var em)
                     && em.ValueKind == JsonValueKind.True;
 
+                // 処理が終わっていない・却下された動画は、応答には現れても再生できない。
+                bool processed = !(item.TryGetProperty("status", out var st2)
+                    && st2.TryGetProperty("uploadStatus", out var us)
+                    && !string.Equals(us.GetString(), "processed", StringComparison.Ordinal));
+
                 int? seconds = null;
-                if (item.TryGetProperty("contentDetails", out var cd)
-                    && cd.TryGetProperty("duration", out var du))
+                bool blockedInJapan = false;
+                if (item.TryGetProperty("contentDetails", out var cd))
                 {
-                    seconds = ParseIso8601Seconds(du.GetString());
+                    if (cd.TryGetProperty("duration", out var du))
+                        seconds = ParseIso8601Seconds(du.GetString());
+                    if (cd.TryGetProperty("regionRestriction", out var rr))
+                        blockedInJapan = IsBlockedIn(rr, RegionJapan);
                 }
 
-                map[id] = new YouTubeVideoDetail { Embeddable = embeddable, DurationSeconds = seconds };
+                map[id] = new YouTubeVideoDetail
+                {
+                    Embeddable = embeddable,
+                    DurationSeconds = seconds,
+                    BlockedInJapan = blockedInJapan,
+                    Processed = processed
+                };
             }
         }
 
         return map;
+    }
+
+    /// <summary>サイトの閲覧者がいる地域（ISO 3166-1 alpha-2）。地域制限はこの地域で再生できるかだけを見る。</summary>
+    private const string RegionJapan = "JP";
+
+    /// <summary><c>contentDetails.regionRestriction</c> が指定地域での再生を止めているか。 <c>allowed</c>（許可リスト）があればそこに無い地域が、<c>blocked</c>（拒否リスト）があればそこに載る地域が 再生できない。どちらも無ければ制限なし。</summary>
+    internal static bool IsBlockedIn(JsonElement regionRestriction, string region)
+    {
+        if (regionRestriction.TryGetProperty("allowed", out var allowed) && allowed.ValueKind == JsonValueKind.Array)
+            return !allowed.EnumerateArray().Any(e => string.Equals(e.GetString(), region, StringComparison.OrdinalIgnoreCase));
+        if (regionRestriction.TryGetProperty("blocked", out var blocked) && blocked.ValueKind == JsonValueKind.Array)
+            return blocked.EnumerateArray().Any(e => string.Equals(e.GetString(), region, StringComparison.OrdinalIgnoreCase));
+        return false;
     }
 
     /// <summary>ISO 8601 の期間表記（<c>PT4M13S</c> 形式）を秒に直す。 アートトラックは時間単位に達しないが、念のため時・分・秒の 3 単位を読む。 解釈できない値は null を返し、対応付けでは尺を使わない扱いにする。</summary>
@@ -197,6 +224,12 @@ public sealed class YouTubeVideoDetail
 
     /// <summary>再生時間（秒）。取得できなければ null。</summary>
     public int? DurationSeconds { get; set; }
+
+    /// <summary>地域制限で日本では再生できないか。</summary>
+    public bool BlockedInJapan { get; set; }
+
+    /// <summary>アップロードの処理が済んでいるか（<c>status.uploadStatus = processed</c>）。 却下・処理中などの動画は応答に現れても再生できない。</summary>
+    public bool Processed { get; set; } = true;
 }
 
 /// <summary>YouTube Data API がエラー応答を返したことを表す例外。</summary>

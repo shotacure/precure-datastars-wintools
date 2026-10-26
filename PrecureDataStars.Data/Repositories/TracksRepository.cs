@@ -451,6 +451,7 @@ public sealed class TracksRepository : RepositoryBase
                           THEN '' ELSE CONCAT('(', pv.name_ja, ')') END
                    )              AS DisplayTitle,
                    t.youtube_art_track_id AS CurrentArtTrackId,
+                   t.youtube_playability  AS CurrentPlayability,
                    -- CD は 75 frames = 1 秒。配信側の再生時間と突き合わせる比較キーにする。
                    CASE WHEN t.length_frames IS NULL OR t.length_frames = 0
                         THEN NULL ELSE ROUND(t.length_frames / 75) END AS LengthSeconds
@@ -516,6 +517,9 @@ public sealed class ArtTrackMatchRow
 
     /// <summary>既に割り当て済みの動画 ID（未割り当ては NULL）。再取り込み時の差分表示に使う。</summary>
     public string? CurrentArtTrackId { get; set; }
+
+    /// <summary>今の再生可否（<c>tracks.youtube_playability</c>）。再取り込みで、人が決めた 会員限定かどうかを引き継ぐのに使う。</summary>
+    public string? CurrentPlayability { get; set; }
 
     /// <summary>トラックの再生時間（秒）。<c>length_frames</c> 未取得なら NULL。
     /// タイトルの表記が揺れても尺が合えば同じ曲とみなせるので、対応付けの手がかりに使う。</summary>

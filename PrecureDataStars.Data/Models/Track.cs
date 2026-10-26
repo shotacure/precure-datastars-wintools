@@ -104,12 +104,14 @@ public sealed class Track
     /// 再生可否（<c>OK</c> / <c>PREMIUM_ONLY</c> / <c>UNPLAYABLE</c>）。NULL は未確認。
     /// 埋め込み可でも YouTube Music Premium 会員限定のことがあり、それは Data API では
     /// 判別できないため <see cref="YoutubeEmbeddable"/> とは別軸で保持する。
+    /// 値の出どころと意味は <see cref="ArtTrackPlayability"/> を参照。
     /// </summary>
     public string? YoutubePlayability { get; set; }
 
     /// <summary>
     /// 埋め込み可否の最終確認時刻。配信移管でアートトラックが消えることがあるため、
-    /// 定期的に再確認してこの値を更新する。
+    /// 定期的に再確認してこの値を更新する。確認から <see cref="ArtTrackPlayability.RecheckDays"/> 日を
+    /// 過ぎた音源はサイトに出さない。
     /// </summary>
     public DateTime? YoutubeCheckedAt { get; set; }
 

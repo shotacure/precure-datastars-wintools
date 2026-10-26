@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **Catalog：配信音源の会員限定かどうかを、動画ページを読んで調べるのをやめ、人が盤ごとに決めるようにした**（`ArtTrackImportService`・`ArtTrackImportPreview.PremiumOnly`・`YouTubeDataApiClient`・`ArtTrackPlayability`・`TracksRepository.GetArtTrackMatchRowsAsync`・Catalog の `ArtTrackImportPreviewDialog`・`ProductDiscsEditorForm`・`ArtTrackBulkImportForm`。`YouTubePlayabilityProbe` は削除）：YouTube の利用規約と YouTube API Services Developer Policies III.E.6 は、YouTube を機械的に読むこと（スクレイピング）を禁じている。YouTube とのやりとりを Data API だけにし、確認ダイアログに「この盤は YouTube Music Premium 会員限定」のチェック欄を置いた（初期値は DB にある前回の判断、無ければ外れている）。一括取り込みは前回の判断を引き継ぎ、無ければ未確認のまま書く。日本で再生できない音源は `contentDetails.regionRestriction` で見分けて `UNPLAYABLE` にする。処理の済んでいない・却下された動画（`status.uploadStatus` が `processed` でない）は埋め込み不可として扱う。
 - **サイト：フッタの姉妹サイトの列の先頭に、precure.news への文字のカードを置いた**（`_layout.sbn`・`site.css`）：ホームの姉妹サイトの枠の文字のカード（`.sister-site-text-card`）を、フッタのバナーと同じ 200px 幅・3:1 に縮めて置く。肩書き「プリキュアニュース」とワードマーク「precure-news-stage」だけを組み、一行の紹介は省く。precure.news のフッタも同じクラスで precure.tv へのカードを置く。
 - **サイト：コラムの一覧のカードにマウスを乗せると、カードの中の字すべてに下線が付いていたのを直した**（`site.css`）：リンク全般のホバーの下線が `.article-card` の指定より優先されていた。カードのホバーとキーボードでの選択で下線を出さない。同じ CSS を使う precure.news の記事の一覧も直る。
 - **クレジット：役職テンプレの曲のループに、同じ曲の録音を 1 曲にまとめる指定を足した**（`RoleTemplateRenderer`）：`{#THEME_SONGS:kind=INSERT,merge_same_song=1}` と書くと、並びの中で同じ曲の録音が続く行を 1 曲にまとめ、歌唱は各録音の歌い手を改行で並べ、版の名前は出さない。1 曲の下に 2 つの版の歌い手を並べる画面（キラキラ☆プリキュアアラモード #3 の「Soul Believer」）用。指定の無いテンプレの出力は変わらない。

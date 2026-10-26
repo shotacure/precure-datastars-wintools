@@ -775,10 +775,7 @@ public partial class ProductDiscsEditorForm : Form
             try { preview = await service.PreviewAsync(catalogNo, playlistId); }
             finally { UseWaitCursor = false; }
 
-            // 再生可否の確認はダイアログを開いたあとに走らせる（窓が出る前に待たされないように）。
-            using var dlg = new ArtTrackImportPreviewDialog(
-                preview, txtTitle.Text.Trim(),
-                (progress, token) => service.ProbePlayabilityAsync(preview, progress, token));
+            using var dlg = new ArtTrackImportPreviewDialog(preview, txtTitle.Text.Trim());
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
             UseWaitCursor = true;

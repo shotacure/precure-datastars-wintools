@@ -41,6 +41,7 @@ namespace PrecureDataStars.Episodes.Forms
         private System.Windows.Forms.ComboBox cmbRelation = null!;
         private System.Windows.Forms.NumericUpDown numSeqInParent = null!;
         private System.Windows.Forms.DateTimePicker dtStart = null!;
+        private System.Windows.Forms.ComboBox cmbStartDatePrecision = null!;
         private System.Windows.Forms.DateTimePicker dtEnd = null!;
         private System.Windows.Forms.NumericUpDown numEpisodes = null!;
         private System.Windows.Forms.NumericUpDown numRunTimeSeconds = null!;
@@ -85,6 +86,7 @@ namespace PrecureDataStars.Episodes.Forms
             numSeqInParent = new NumericUpDown();
             lblStart = new Label();
             dtStart = new DateTimePicker();
+            cmbStartDatePrecision = new ComboBox();
             lblEnd = new Label();
             dtEnd = new DateTimePicker();
             lblEpisodes = new Label();
@@ -252,6 +254,14 @@ namespace PrecureDataStars.Episodes.Forms
             dtStart.Name = "dtStart";
             dtStart.Size = new Size(160, 27);
             dtStart.TabIndex = 14;
+            // 
+            // cmbStartDatePrecision
+            // 
+            cmbStartDatePrecision.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbStartDatePrecision.Location = new Point(1070, 228);
+            cmbStartDatePrecision.Name = "cmbStartDatePrecision";
+            cmbStartDatePrecision.Size = new Size(350, 28);
+            cmbStartDatePrecision.TabIndex = 45;
             // 
             // lblEnd
             // 
@@ -565,6 +575,7 @@ namespace PrecureDataStars.Episodes.Forms
             Controls.Add(numSeqInParent);
             Controls.Add(lblStart);
             Controls.Add(dtStart);
+            Controls.Add(cmbStartDatePrecision);
             Controls.Add(lblEnd);
             Controls.Add(dtEnd);
             Controls.Add(lblEpisodes);

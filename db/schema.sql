@@ -243,6 +243,7 @@ CREATE TABLE `series` (
   `title_short_en` varchar(128) DEFAULT NULL,
   `slug` varchar(128) NOT NULL,
   `start_date` date NOT NULL,
+  `start_date_precision` enum('DAY','MONTH','YEAR') NOT NULL DEFAULT 'DAY' COMMENT '開始日の確かさ（DAY=日付まで / MONTH=年月まで、日は仮 / YEAR=年まで、月日は仮）',
   `end_date` date DEFAULT NULL,
   `episodes` smallint unsigned DEFAULT NULL,
   `run_time_seconds` smallint unsigned DEFAULT NULL,

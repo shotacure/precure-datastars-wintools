@@ -567,9 +567,7 @@ public sealed class MusicGenerator
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
                 // credit_attach_to=EPISODE のシリーズは継続中なら「〜」止め、SERIES は両端 or 単独。
-                SeriesPeriod = SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode)
-                    ? JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate)
-                    : JpDateFormat.Period(s.StartDate, s.EndDate),
+                SeriesPeriod = JpDateFormat.SeriesPeriod(s, SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode)),
                 SeriesStartYearLabel = s.StartDate.Year.ToString(),
                 SongCount = songCount,
                 CueCount = cueCount,
@@ -1087,9 +1085,7 @@ public sealed class MusicGenerator
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
                 // credit_attach_to=EPISODE のシリーズは継続中なら「〜」止め、SERIES は両端 or 単独。
-                SeriesPeriod = SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode)
-                    ? JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate)
-                    : JpDateFormat.Period(s.StartDate, s.EndDate),
+                SeriesPeriod = JpDateFormat.SeriesPeriod(s, SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode)),
                 Sessions = sessionGroups,
                 CountsLabel = countsLabel
             };

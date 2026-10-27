@@ -1,3 +1,5 @@
+using PrecureDataStars.Data.Models;
+
 namespace PrecureDataStars.SiteBuilder.Utilities;
 
 /// <summary>
@@ -50,6 +52,35 @@ public static class JpDateFormat
         }
         // 終了日未確定のシリーズ：開始日のあとに「〜」を付けて継続中を示す。
         return $"{startStr} 〜";
+    }
+
+    /// <summary>
+    /// 作品の放送・公開期間を、開始日の確かさ（<see cref="Series.StartDatePrecision"/>）に合わせて返す。
+    /// 日付まで確かな作品は <paramref name="ongoing"/> が真なら <see cref="PeriodOrOngoing"/>、偽なら <see cref="Period(DateOnly, DateOnly?)"/>。
+    /// 年や年月までしか確かでない作品は <see cref="PlannedStart"/> の「2027年放送予定」「2027年7月公開予定」。
+    /// <paramref name="ongoing"/> には、継続中があり得る EPISODE 系の作品か（<see cref="SeriesClassifier.IsEpisodeAttaching"/>）を渡す。
+    /// </summary>
+    public static string SeriesPeriod(Series s, bool ongoing)
+    {
+        if (!s.IsStartDateExact) return PlannedStart(s, ongoing);
+        return ongoing ? PeriodOrOngoing(s.StartDate, s.EndDate) : Period(s.StartDate, s.EndDate);
+    }
+
+    /// <summary>
+    /// 開始日が年や年月までしか確かでない作品の予定表記。年だけなら「2027年」、年月なら「2027年7月」に、
+    /// EPISODE 系（<paramref name="broadcast"/> が真）は「放送予定」、映画などは「公開予定」を続ける。
+    /// 日付まで確かな作品に使ったときも、年月日の「2027年2月7日放送予定」を返す。
+    /// </summary>
+    public static string PlannedStart(Series s, bool broadcast)
+    {
+        var d = s.StartDate;
+        string when = s.StartDatePrecision switch
+        {
+            Series.StartDatePrecisionYear => $"{d.Year}年",
+            Series.StartDatePrecisionMonth => $"{d.Year}年{d.Month}月",
+            _ => $"{d.Year}年{d.Month}月{d.Day}日",
+        };
+        return when + (broadcast ? "放送予定" : "公開予定");
     }
 
     /// <summary>「2024.2.4」形式（ドット区切り・0 詰めなし）。 スタッフ段との同居など、密表示を要する文脈で使う。</summary>

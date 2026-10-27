@@ -115,6 +115,18 @@ public partial class SeriesEditorForm : Form
         cmbStoryboardDisplay.DisplayMember = nameof(ComboOption<string>.Text);
         cmbStoryboardDisplay.ValueMember = nameof(ComboOption<string>.Value);
         cmbStoryboardDisplay.DataSource = storyboardOptions;
+
+        // 開始日の確かさ（series.start_date_precision）：固定の 3 択。年や年月までしか発表されていない作品は、
+        // 開始日に仮の日付を入れてここで確かな範囲を選ぶ（サイトは「2027年放送予定」のように出す）
+        var precisionOptions = new List<ComboOption<string>>
+        {
+            new() { Value = Series.StartDatePrecisionDay, Text = "日付まで確か" },
+            new() { Value = Series.StartDatePrecisionMonth, Text = "年月まで確か（日は仮）" },
+            new() { Value = Series.StartDatePrecisionYear, Text = "年まで確か（月日は仮）" },
+        };
+        cmbStartDatePrecision.DisplayMember = nameof(ComboOption<string>.Text);
+        cmbStartDatePrecision.ValueMember = nameof(ComboOption<string>.Value);
+        cmbStartDatePrecision.DataSource = precisionOptions;
     }
 
     /// <summary>親シリーズ ComboBox を構築する（自分自身は除外）。</summary>
@@ -191,6 +203,8 @@ public partial class SeriesEditorForm : Form
             chkFilmCjMark.Checked = false;
             // 絵コンテと演出の出し方も初期状態（それぞれの役職名で出す）に戻す。
             cmbStoryboardDisplay.SelectedValue = Series.StoryboardDisplaySeparate;
+            // 開始日の確かさも初期状態（日付まで確か）に戻す。
+            cmbStartDatePrecision.SelectedValue = Series.StartDatePrecisionDay;
             return;
         }
 
@@ -226,6 +240,7 @@ public partial class SeriesEditorForm : Form
 
         // dates
         dtStart.Value = _current.StartDate.ToDateTime(TimeOnly.MinValue);
+        cmbStartDatePrecision.SelectedValue = _current.StartDatePrecision;
         if (_current.EndDate is { } ed)
         {
             dtEnd.Checked = true;
@@ -290,6 +305,7 @@ public partial class SeriesEditorForm : Form
 
         // 日付
         _current.StartDate = DateOnly.FromDateTime(dtStart.Value.Date);
+        _current.StartDatePrecision = cmbStartDatePrecision.SelectedValue as string ?? Series.StartDatePrecisionDay;
         _current.EndDate = dtEnd.Checked ? DateOnly.FromDateTime(dtEnd.Value.Date) : null;
 
         // 数値

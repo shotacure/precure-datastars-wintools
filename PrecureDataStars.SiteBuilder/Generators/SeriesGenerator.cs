@@ -674,9 +674,7 @@ public sealed class SeriesGenerator
             .Select(s =>
             {
                 var precureRows = GetPrecureRows(s.SeriesId);
-                string period = episodeAttaching
-                    ? JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate)
-                    : JpDateFormat.Period(s.StartDate, s.EndDate);
+                string period = JpDateFormat.SeriesPeriod(s, episodeAttaching);
                 bool estimated = episodeAttaching && IsEpisodesEstimated(s);
                 return new TvSeriesRow
                 {
@@ -723,9 +721,7 @@ public sealed class SeriesGenerator
     /// </summary>
     private string FormatRelatedPeriod(Series s)
     {
-        return SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode)
-            ? JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate)
-            : JpDateFormat.Period(s.StartDate, s.EndDate);
+        return JpDateFormat.SeriesPeriod(s, SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode));
     }
 
     /// <summary>
@@ -945,7 +941,7 @@ public sealed class SeriesGenerator
                 {
                     Slug = m.Slug,
                     Title = m.Title,
-                    Period = JpDateFormat.Period(m.StartDate, m.EndDate),
+                    Period = JpDateFormat.SeriesPeriod(m, ongoing: false),
                     SeasonBadgeClass = GetSeasonBadgeClass(m.KindCode),
                     SeasonBadgeLabel = GetSeasonBadgeLabel(m.KindCode),
                     RuntimeLabel = runtimeLabel,
@@ -1178,9 +1174,7 @@ public sealed class SeriesGenerator
         // credit_attach_to=EPISODE（TV/SPIN-OFF/OTONA/SHORT）は終了日未確定なら「〜」止め期間表記、
         // credit_attach_to=SERIES（MOVIE/MOVIE_SHORT/SPRING/EVENT）は開始日単独 or 両端表記。
         bool episodeAttaching = SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode);
-        string seriesPeriod = episodeAttaching
-            ? JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate)
-            : JpDateFormat.Period(s.StartDate, s.EndDate);
+        string seriesPeriod = JpDateFormat.SeriesPeriod(s, episodeAttaching);
         // 「期間」見出しラベルもクレジット添付方針で切り替え：エピソード単位なら「期間」、
         // シリーズ単位（映画系・イベント）なら単一時点なので「公開」とだけ出す。
         string periodLabel = episodeAttaching ? "期間" : "公開";
@@ -1414,10 +1408,11 @@ public sealed class SeriesGenerator
             ["@type"] = s.KindCode == "MOVIE" ? "Movie" : "TVSeries",
             ["name"] = s.Title,
             ["description"] = metaDescription,
-            ["startDate"] = s.StartDate.ToString("yyyy-MM-dd"),
             ["inLanguage"] = "ja",
             ["genre"] = "アニメ"
         };
+        // 開始日が年や年月までしか確かでない作品（月日が仮）は startDate を出さない。
+        if (s.IsStartDateExact) jsonLdDict["startDate"] = s.StartDate.ToString("yyyy-MM-dd");
         if (s.EndDate.HasValue) jsonLdDict["endDate"] = s.EndDate.Value.ToString("yyyy-MM-dd");
         if (s.Episodes.HasValue) jsonLdDict["numberOfEpisodes"] = s.Episodes.Value;
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + seriesUrl;
@@ -1577,6 +1572,13 @@ public sealed class SeriesGenerator
 
         var sb = new System.Text.StringBuilder();
         sb.Append('『').Append(s.Title).Append("』は");
+        if (!s.IsStartDateExact)
+        {
+            // 開始日が年や年月までしか確かでない作品：「2027年放送予定の TV シリーズ。」「2027年7月公開予定の映画。」
+            sb.Append(JpDateFormat.PlannedStart(s, broadcast: !isMovie)).Append(isMovie ? "の映画。" : "の TV シリーズ。");
+            sb.Append(tail);
+            return sb.ToString();
+        }
         sb.Append(s.StartDate.Year).Append('年').Append(s.StartDate.Month).Append('月');
         if (isMovie)
         {
@@ -1752,6 +1754,8 @@ public sealed class SeriesGenerator
             string movieName = _ctx.SeriesKindByCode.TryGetValue("MOVIE", out var movieKind) ? movieKind.NameJa : "秋映画";
             label = movieName + "(同時上映)";
         }
+        // 公開の季節は月で決めるので、年だけが確かな作品（月が仮）では付けない。
+        if (series.StartDatePrecision == Series.StartDatePrecisionYear) return label;
         int month = series.StartDate.Month;
         if (series.KindCode is "MOVIE" or "MOVIE_SHORT" && month is < 9)
             return label + "（春公開）";

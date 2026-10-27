@@ -104,7 +104,7 @@ public sealed class EpisodesIndexGenerator
                 SeriesTitle = s.Title,
                 // 後段：シリーズ summary 行に薄色括弧で添える西暦 4 桁。
                 SeriesStartYearLabel = s.StartDate.Year.ToString(),
-                Period = JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate),
+                Period = JpDateFormat.SeriesPeriod(s, ongoing: true),
                 PeriodEstimateNote = (estimated && s.EndDate.HasValue) ? "（見込）" : "",
                 TotalEpisodesLabel = totalLabel,
                 TotalEpisodesEstimateNote = (estimated && s.Episodes.HasValue) ? "（見込）" : "",

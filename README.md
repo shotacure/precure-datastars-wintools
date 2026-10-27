@@ -1381,6 +1381,7 @@ series_relation_kinds ──┘    │            │
 | `title_short_en` | VARCHAR(128) NULL | 英語略称 |
 | `slug` | VARCHAR(128) UNIQUE | URL 用スラッグ（CHECK: `^[a-z0-9-]+$`） |
 | `start_date` | DATE | 放送/公開開始日 |
+| `start_date_precision` | ENUM(`DAY`,`MONTH`,`YEAR`) NOT NULL DEFAULT `DAY` | 開始日の確かさ。`DAY`＝日付まで確か。`MONTH`＝年月まで（日は仮）。`YEAR`＝年まで（月日は仮）。放送・公開の時期が年や年月までしか発表されていない作品は、`start_date` に仮の日付を入れてここで確かな範囲を選ぶ。サイトは `DAY` 以外の作品の期間を「2027年放送予定」「2027年7月公開予定」（EPISODE 系は放送、映画などは公開）と出し、構造化データの `startDate` を出さず、meta description も同じ書き方にする。今日は何の日（映画の公開日）には積まず、年だけの映画には「（春公開）」などの季節も付けない。エピソード管理アプリ（Episodes）の作品の編集画面で、開始日の横の 3 択から選ぶ |
 | `end_date` | DATE NULL | 放送終了日（CHECK: `start_date ≤ end_date`） |
 | `episodes` | SMALLINT UNSIGNED NULL | 話数 |
 | `run_time_seconds` | SMALLINT UNSIGNED NULL | 1 話あたりの標準尺（秒） |

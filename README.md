@@ -57,7 +57,7 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.CDAnalyzer** | WinForms GUI | CD-DA ディスクの TOC・MCN・ISRC・CD-Text を SCSI MMC コマンドで直接読み取り。DB 連携パネルで TOC（総尺と全トラックの開始 LBA）の完全一致でディスク照合し、既存反映 or 新規商品＋ディスク登録までを 1 画面で実行。品番の決まった盤は「音の特徴を記録」で全トラックの音を READ CD で読み、トラックごとの指紋（`PrecureDataStars.AudioFingerprint`）と PCM の SHA-256 を `track_audio_fingerprints` に入れる。メディア挿入時に MMC `GET CONFIGURATION` で Current Profile を確認し、CD 系プロファイル以外（DVD / BD / HD DVD）はハンドルを即クローズ。 |
 | **PrecureDataStars.OaVerifier** | WinForms GUI | 本放送フォーマット検証ツール。地デジ録画 TS（descrambled）を LibVLC で再生し、TOT（PID 0x0014）から放送日を確定して該当エピソードを自動同定、PCR ↔ メディア時刻の写像で番組先頭（`on_air_at`）基準の各境界を頭出しする。確認のため全パートを一覧表示し、`episode_parts.notes` に `【本放送未確認】` を含むパートを薄い赤で強調。再生は「未承認パート通し」「全パート通し」の 2 種で対象パートの開始/終了境界を連続再生（確認幅は境界中心からの「始点」−3.0〜+2.0 秒・「終点」−2.0〜+3.0 秒を 0.5 秒刻みで独立指定し、既定は始点 −2.0／終点 +2.0＝前後 ±2 秒。始点 ＜ 終点 を満たさない設定はコンボを赤表示し再生を中止。手動移動は ±5/15 秒の送り戻しのみ）。フルセグは解像度最大の映像トラックを自動選択（映像/音声トラックは手動切替可）。承認したパートの notes からマーカーを除去し、エピソードエディタでの修正後に「パートデータをリロード」で再取得できる。TS と DB の食い違いは「現在位置を番組先頭に再アンカー」で吸収。「字幕を全編抽出（TSV に書き出し）」は、録画 TS の ARIB 字幕（フルセグ・日本語）を全編読み、ドキュメントフォルダに `{TS名}.captions.tsv`（UTF-8・BOM 付き）を書き出す。列は「種別・パート・パート内・番組内・ファイル・放送（日本時間）・表示秒・本文・外字」で、行は時刻順に、パートの始まりと番組の終わりごとの「境目」の行（その時刻とパートの尺）と、1 行 1 字幕の「字幕」の行が並ぶ。字幕の所属パートは表示開始時刻で決め、番組先頭はその時点のアンカーに従う。本文は画面の行を「 / 」でつなぎ、白以外の文字色（話者の区別）は〈黄〉のような印で残し、振り仮名は除き、局独自の外字（DRCS）と Unicode に無い追加記号は 〓 にする。和文の記号（ー。「」、・）は中型文字でも全角で出す。同じ TS で抽出済みなら読み直さず、アンカーやエピソードを変えた後に押し直すとその条件で書き出し直す。字幕の流れが無い録画では状態表示にその旨を出す。文字集合の対応表（`Ts/Arib/AribCharTables.cs`）は libaribcaption の表を機械変換したもので、同ファイルに原著作者の許諾表示を同梱している。 |
 | **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細・人物／企業／プリキュア／キャラクター詳細・クリエイター・楽曲・劇伴・商品・統計の各ページ群を生成する。`CreditInvolvementIndex` 経由で「人物・企業・キャラごとにどのシリーズのどのエピソードに、どの役職で関与したか」を逆引きする。 |
-| **PrecureDataStars.AmazonSync** | コンソール | `products` テーブルから ASIN を持つ商品を抽出し、Creators API GetItems で `cover_image_url` を一括更新するバッチ。鮮度切れ判定（90 日経過 or 未取得）で対象を絞り込み、Creators API レート制限（1 TPS）順守のため各リクエスト間に 1.1 秒スリープを挟む。CLI オプションは `--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--search "キーワード" --index Books`（検索の診断）／`--dry-run`（DB 更新せず表示のみ）／`--target products|books|all`（巡回対象の切替）。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録。書籍については表紙巡回（代表は紙優先）に加えて、`--import-book`（ASIN から書誌・書影・クレジットを組み立てて `books` へ登録）と `--attach-print --book-id N --print-asin X`（Kindle 版だけで登録済みの書籍へ紙版を合流）も担う。 |
+| **PrecureDataStars.AmazonSync** | コンソール | `products` テーブルから ASIN を持つ商品を抽出し、Creators API GetItems で `cover_image_url` を一括更新するバッチ。鮮度切れ判定（取得から 20 時間経過 or 未取得）で対象を絞り込み（Amazon アソシエイトの Creators API 使用要件で、画像のリンクの保存は最長 24 時間。本番デプロイの `scripts/deploy.ps1` がビルドの前に `--target all` で流し、毎日の定時デプロイで全件を取り直す。Amazon が答えたうえで画像が無かった側は保存していた URL を空にし、通信・応答の失敗があったものは書き換えずに次の巡回で取り直す）、Creators API レート制限（1 TPS）順守のため各リクエスト間に 1.1 秒スリープを挟む。CLI オプションは `--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--search "キーワード" --index Books`（検索の診断）／`--dry-run`（DB 更新せず表示のみ）／`--target products|books|all`（巡回対象の切替）。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録。書籍については表紙巡回（代表は紙優先）に加えて、`--import-book`（ASIN から書誌・書影・クレジットを組み立てて `books` へ登録）と `--attach-print --book-id N --print-asin X`（Kindle 版だけで登録済みの書籍へ紙版を合流）も担う。 |
 | **PrecureDataStars.TitleCharStatsRefresh** | コンソール（内部用） | 指定したエピソードの `title_text` を Episodes の保存時と同じ `TitleCharStatsBuilder` にかけ、`title_char_stats` を作り直す。サブタイトルを DB 直接で直したあとに使う。引数だけなら DB の統計との違いを表示するのみで、`--apply` を付けたときだけ違いのある話を 1 トランザクションで書き換える（`title_char_stats` 以外の列には触れない）。配布 ZIP には含めない。使い方は「エピソード管理」を参照。 |
 | **PrecureDataStars.ArtTrackRefresh** | コンソール（内部用） | 割り当て済みの配信音源（YouTube アートトラック）を YouTube Data API で確かめ直し、埋め込み可否・地域制限・確認時刻を更新する。消えた動画は割り当てを外し、変化のあった商品は取り込み状態を `AMBIGUOUS` に戻す。`scripts/deploy.ps1` が本番デプロイの最初に流す。配布 ZIP には含めない。使い方は「商品・ディスク管理画面」の「配信音源の取り込みと再確認」を参照。 |
 
@@ -972,11 +972,11 @@ Role: PRODUCTION 制作 (order 2)
    ```
 5. 出力先に静的 HTML 一式と `assets/site.css` が生成される。ビルドログ先頭に現在のモードと出力先が明示される。出力は前回のものを残したまま、中身が変わるファイルだけ書き、全体ビルドの最後に今回の出力に属さないファイルを消す（下記「出力の書き出し」参照）。Build Summary に「書いた / 変わらず / 消した」の件数と OGP カードの作り置きの効きが出る
 6. 本番への反映は `scripts/deploy.ps1`（ドライランで差分と警告を確かめ、安全なら反映）。ビルドの前に `PrecureDataStars.ArtTrackRefresh` で配信音源を確かめ直し（「商品・ディスク管理画面」の「配信音源の取り込みと再確認」）、失敗したときは反映しない。`-DryRunOnly` でも確かめ直しは流す。2 つのデプロイが同時に走らないよう、名前付きの mutex（`Global\precure-tv-deploy`）で 1 つずつにし、後から来たほうは先のデプロイが終わるまで最大 2 時間待つ
-7. 定時の本番デプロイ：`scripts/scheduled-deploy.ps1` が、コミット済みの `develop` を git worktree で一時フォルダに取り出し（作業中の未コミットの変更は公開しない）、リポジトリの `App.config` を写して `deploy.ps1` を流し、一時フォルダを片付ける。経過は `%LOCALAPPDATA%\precure-datastars\scheduled-deploy.log` に追記する。安全ゲートで止まったときや失敗したときは公開しない。`-DryRunOnly` で差分の確認までを試せる。`scripts/register-deploy-task.ps1` で毎週水曜・土曜の 8:00 と 8:30（コラムの公開時刻）に動くタスクをタスクスケジューラに登録する（スリープなら起こし、動けなかったときは次に使えるとき）。8:00 の回は下準備で、前回からのコードの変更と DB の更新を先に流しておく（コードを変えた後の最初のビルドは OGP カードの描き直しで数分かかる。公開日時 8:30 のコラムはまだ出ない）。8:30 の回は差分がほぼコラムだけになるので短時間で終わる。8:00 の回が 8:30 を過ぎても動いていれば、8:30 の回は終わるのを待ってから動く。サイト全体を作り直すので、その時点の DB の内容も一緒に公開される。公開できなかったとき（安全ゲートで止まった・失敗した）は Windows の通知を出す。8:00 の回で止まれば、8:30 までに直すか判断できる
+7. 定時の本番デプロイ：`scripts/scheduled-deploy.ps1` が、コミット済みの `develop` を git worktree で一時フォルダに取り出し（作業中の未コミットの変更は公開しない）、リポジトリの `App.config` を写して `deploy.ps1` を流し、一時フォルダを片付ける。経過は `%LOCALAPPDATA%\precure-datastars\scheduled-deploy.log` に追記する。安全ゲートで止まったときや失敗したときは公開しない。`-DryRunOnly` で差分の確認までを試せる。`scripts/register-deploy-task.ps1` で毎日 8:00 と毎週水曜・土曜の 8:30（コラムの公開時刻）に動くタスクをタスクスケジューラに登録する（スリープなら起こし、動けなかったときは次に使えるとき）。8:00 の回は毎日動き、Amazon の画像 URL を取り直して公開し直す（画像のリンクの保存は最長 24 時間）。水曜・土曜の 8:00 の回はコラムの下準備も兼ね、前回からのコードの変更と DB の更新を先に流しておく（コードを変えた後の最初のビルドは OGP カードの描き直しで数分かかる。公開日時 8:30 のコラムはまだ出ない）。8:30 の回は差分がほぼコラムだけになるので短時間で終わる。8:00 の回が 8:30 を過ぎても動いていれば、8:30 の回は終わるのを待ってから動く。サイト全体を作り直すので、その時点の DB の内容も一緒に公開される。公開できなかったとき（安全ゲートで止まった・失敗した）は Windows の通知を出す。8:00 の回で止まれば、8:30 までに直すか判断できる
    ```powershell
    .\scripts\scheduled-deploy.ps1 -DryRunOnly   # 本番に出さずに試す
    .\scripts\scheduled-deploy.ps1 -TestNotification   # 公開できなかったときの通知だけを出す
-   .\scripts\register-deploy-task.ps1           # 毎週水曜・土曜の 08:00 と 08:30 に登録
+   .\scripts\register-deploy-task.ps1           # 毎日 08:00 と毎週水曜・土曜の 08:30 に登録
    .\scripts\register-deploy-task.ps1 -Unregister
    ```
 
@@ -1723,7 +1723,7 @@ series_relation_kinds ──┘    │            │
 | `amazon_asin_digital` | VARCHAR(16) NULL | Amazon ASIN（デジタル音源向け：Amazon Music の MP3 アルバム） |
 | `cover_image_url` | VARCHAR(512) NULL | ジャケット画像 URL（Amazon CDN を直接参照するホットリンク。実体は保存しない） |
 | `cover_image_source` | VARCHAR(16) NULL | 画像の取得元コード。`amazon_cd`（Creators API・CD ASIN 由来）／`amazon_digital`（Creators API・デジタル ASIN 由来）の 2 値 |
-| `cover_image_fetched_at` | DATETIME NULL | 画像 URL の取得日時（鮮度判定用。AmazonSync は 90 日経過で再取得） |
+| `cover_image_fetched_at` | DATETIME NULL | 画像 URL の取得日時（鮮度判定用。AmazonSync は 20 時間経過で再取得） |
 | `notes` | TEXT NULL | 備考 |
 | `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
 | `created_at` / `updated_at` | TIMESTAMP | 作成・更新日時 |
@@ -2100,7 +2100,7 @@ PlayItem が参照するのに CLIPINF の無いクリップは、`bd_clips` に
 | `cover_image_url_print` / `cover_image_url_kindle` | VARCHAR(512) NULL | 表紙画像 URL（Amazon CDN ホットリンク、実体は保存しない） |
 | `cover_image_source` | VARCHAR(16) NULL | 表示採用ソース（`amazon_print` / `amazon_kindle`）。既定は Kindle 優先（電子は事業者アップの正規画像が確実で、紙は絶版書で出品者の撮影画像が混ざりうる） |
 | `cover_image_show_both` | TINYINT(1) | 詳細ページで両方の書影を並べるか |
-| `cover_image_fetched_at` | DATETIME NULL | 表紙取得日時（鮮度判定用） |
+| `cover_image_fetched_at` | DATETIME NULL | 表紙取得日時（鮮度判定用。AmazonSync は 20 時間経過で再取得） |
 | `official_url` | VARCHAR(1024) NULL | 公式ページ URL |
 | `notes` | TEXT NULL | 備考 |
 | `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |

@@ -3,14 +3,15 @@
   precure.tv の定時の本番デプロイ。コミット済みの develop を一時作業ツリーに取り出し、deploy.ps1 を流す。
 
 .DESCRIPTION
-  毎週水曜・土曜の 8:00（下準備）と 8:30 にタスクスケジューラから動かす（登録は register-deploy-task.ps1）。
+  毎日 8:00 と、毎週水曜・土曜の 8:30 にタスクスケジューラから動かす（登録は register-deploy-task.ps1）。
+  8:00 の回は毎日、Amazon の画像 URL を取り直して公開し直す（画像のリンクの保存は最長 24 時間）。
   コラムは公開日時（原稿の date）を過ぎた後の本番ビルドで初めて出るので、8:30 の回で水曜・土曜 8:30 のコラムが公開される。
   8:00 の回でそれまでの変更を流しておくので、8:30 の回は差分がほぼコラムだけになる。
   サイト全体を作り直すため、その時点の DB の内容（その週に入れたクレジットなど）も一緒に公開される。
 
   作業中のファイル（未コミットの変更）を公開しないよう、リポジトリの作業ツリーではなく、
   コミット済みの develop を git worktree で一時フォルダに取り出してビルドする。
-  App.config は git に入れていないので、リポジトリの SiteBuilder と ArtTrackRefresh のものを写して使う。
+  App.config は git に入れていないので、リポジトリの SiteBuilder・ArtTrackRefresh・AmazonSync のものを写して使う。
   出力先・キャッシュは App.config の絶対パスなので、手動のデプロイと共用になる。
 
   安全ゲート（決まって起きる以外の削除・ビルド警告）で止まったときや失敗したときは公開しない。
@@ -97,8 +98,8 @@ try {
     & git -C $repoRoot worktree add --detach $worktree $Branch | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "一時作業ツリーを作れませんでした。" }
 
-    # deploy.ps1 が動かす 2 つのプロジェクト（配信音源の再確認とサイトのビルド）の App.config を写す。
-    foreach ($configProject in 'PrecureDataStars.ArtTrackRefresh', 'PrecureDataStars.SiteBuilder') {
+    # deploy.ps1 が動かす 3 つのプロジェクト（配信音源の再確認・Amazon の画像の取り直し・サイトのビルド）の App.config を写す。
+    foreach ($configProject in 'PrecureDataStars.ArtTrackRefresh', 'PrecureDataStars.AmazonSync', 'PrecureDataStars.SiteBuilder') {
         $appConfig = Join-Path $repoRoot "$configProject/App.config"
         if (-not (Test-Path -LiteralPath $appConfig)) { throw "App.config がありません: $configProject/App.config" }
         Copy-Item -LiteralPath $appConfig -Destination (Join-Path $worktree "$configProject/App.config")

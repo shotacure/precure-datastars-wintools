@@ -12,6 +12,10 @@
   再確認に失敗したとき（API キー・接続の不備、消えた動画が多すぎて止めたときなど）はデプロイしない。
   -DryRunOnly でも再確認は流す（ドライランの差分を、本番反映と同じ状態の DB で見るため）。
 
+  続けて PrecureDataStars.AmazonSync（--target all）を流し、取得から 20 時間を過ぎた商品・書籍の画像 URL を
+  Creators API で取り直す（Amazon アソシエイトの Creators API 使用要件で、画像のリンクの保存は最長 24 時間）。
+  失敗したとき（キー・接続文字列の不備など）はデプロイしない。-DryRunOnly でも流す。
+
   実行は 2 段階：
 
     1. まず --dry-run で差分プラン（upload / delete / unchanged）とビルド警告数を取得し、安全ゲートを通す。
@@ -90,6 +94,16 @@ try {
     & dotnet run --project 'PrecureDataStars.ArtTrackRefresh'
     if ($LASTEXITCODE -ne 0) {
         throw "配信音源の再確認が失敗しました (exit $LASTEXITCODE)。上のログを確認してください。"
+    }
+    Write-Host ""
+
+    # --- 準備: Amazon の画像の取り直し ---
+    # Creators API 使用要件は画像のリンクの保存を最長 24 時間に限るので、取得から 20 時間を過ぎた
+    # 商品・書籍の画像 URL を取り直してからビルドする（毎日の定時デプロイで全件が入れ替わる）。
+    Write-Host "[準備] Amazon の画像の取り直し" -ForegroundColor Yellow
+    & dotnet run --project 'PrecureDataStars.AmazonSync' -- --target all
+    if ($LASTEXITCODE -ne 0) {
+        throw "Amazon の画像の取り直しが失敗しました (exit $LASTEXITCODE)。上のログを確認してください。"
     }
     Write-Host ""
 

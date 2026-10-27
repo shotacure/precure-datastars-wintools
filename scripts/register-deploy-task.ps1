@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  scheduled-deploy.ps1（precure.tv の定時の本番デプロイ）を毎週水曜・土曜の 8:00 と 8:30 に動かすタスクをタスクスケジューラに登録（または解除）する。
+  scheduled-deploy.ps1（precure.tv の定時の本番デプロイ）を毎日 8:00 と毎週水曜・土曜の 8:30 に動かすタスクをタスクスケジューラに登録（または解除）する。
 
 .DESCRIPTION
   現在のユーザーの「ログオン中だけ実行」のタスクとして登録する（管理者権限もパスワードの保存も要らない）。
@@ -9,7 +9,9 @@
   画面には出さず（-WindowStyle Hidden）、結果は %LOCALAPPDATA%\precure-datastars\scheduled-deploy.log に残る。
   同じ名前のタスクがあれば置き換える。
 
-  8:00 の回は下準備で、前回のデプロイからのコードの変更・DB の更新をあらかじめ本番に流しておく
+  8:00 の回は毎日動く。Amazon の画像 URL を取り直して公開し直し（Creators API 使用要件で、画像のリンクの保存は
+  最長 24 時間）、その時点のコミット済みのコードと DB の内容も公開する。
+  水曜・土曜の 8:00 の回はコラムの公開の下準備も兼ね、前回のデプロイからのコードの変更・DB の更新をあらかじめ本番に流しておく
   （コードを変えた後の最初のビルドは OGP カードを描き直すので数分かかる）。公開日時が 8:30 のコラムは
   まだ出ない。8:30 の回はその作り置きを使うので、差分がほぼコラムだけになり短時間で終わる。
   8:00 の回が安全ゲートなどで止まったときは通知が出るので、8:30 までに直すか判断できる。
@@ -19,13 +21,14 @@
   タスク名。既定「precure-datastars scheduled deploy」。
 
 .PARAMETER DaysOfWeek
-  実行する曜日。既定は水曜と土曜（コラムの公開日）。
+  コラムを公開する回（At）を動かす曜日。既定は水曜と土曜（コラムの公開日）。
 
 .PARAMETER At
   コラムを公開する回の実行時刻。既定 08:30（コラムの公開時刻）。
 
 .PARAMETER PrepareAt
-  下準備の回の実行時刻。既定 08:00。空文字にすると下準備の回を登録しない。
+  毎日動く下準備の回の実行時刻。既定 08:00。空文字にすると下準備の回を登録しない
+  （その場合 Amazon の画像は 24 時間以内に取り直されなくなる）。
 
 .PARAMETER Unregister
   タスクを解除する。
@@ -69,25 +72,25 @@ $action = New-ScheduledTaskAction -Execute $shell `
     -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script`"" `
     -WorkingDirectory $repoRoot
 $triggers = @()
-if ($PrepareAt) { $triggers += New-ScheduledTaskTrigger -Weekly -DaysOfWeek $DaysOfWeek -At $PrepareAt }
+if ($PrepareAt) { $triggers += New-ScheduledTaskTrigger -Daily -At $PrepareAt }
 $triggers += New-ScheduledTaskTrigger -Weekly -DaysOfWeek $DaysOfWeek -At $At
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
     -ExecutionTimeLimit (New-TimeSpan -Hours 2) -MultipleInstances Queue
 # 表示用の曜日名（日本語）
 $dayNames = @{ Sunday = '日曜'; Monday = '月曜'; Tuesday = '火曜'; Wednesday = '水曜'; Thursday = '木曜'; Friday = '金曜'; Saturday = '土曜' }
 $daysLabel = ($DaysOfWeek | Sort-Object | ForEach-Object { $dayNames[$_.ToString()] }) -join '・'
-$timesLabel = if ($PrepareAt) { "$PrepareAt（下準備）と $At" } else { $At }
+$timesLabel = if ($PrepareAt) { "毎日 $PrepareAt（下準備・Amazon の画像の取り直し）と毎週$daysLabel $At" } else { "毎週$daysLabel $At" }
 $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
     -LogonType Interactive -RunLevel Limited
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings -Principal $principal `
-    -Description "precure.tv の定時の本番デプロイ。$daysLabel $timesLabel に動き、$At 公開のコラムをこれで出す（scripts/scheduled-deploy.ps1）" `
+    -Description "precure.tv の定時の本番デプロイ。$timesLabel に動き、$At 公開のコラムをこれで出す（scripts/scheduled-deploy.ps1）" `
     -Force | Out-Null
 
 $info = Get-ScheduledTaskInfo -TaskName $TaskName
 Write-Host "登録しました: $TaskName" -ForegroundColor Green
 Write-Host "  実行      : $shell -File `"$script`""
-Write-Host "  時刻      : 毎週$daysLabel $timesLabel（スリープなら起こす。動けなかったときは次に使えるとき）"
+Write-Host "  時刻      : $timesLabel（スリープなら起こす。動けなかったときは次に使えるとき）"
 Write-Host "  次回      : $($info.NextRunTime)"
 Write-Host "  記録      : $(Join-Path $env:LOCALAPPDATA 'precure-datastars\scheduled-deploy.log')"
 

@@ -43,7 +43,6 @@ public sealed class BooksRepository : RepositoryBase
           trim_size                     AS TrimSize,
           price_ex_tax                  AS PriceExTax,
           price_inc_tax                 AS PriceIncTax,
-          price_kindle_inc_tax          AS PriceKindleIncTax,
           has_print                     AS HasPrint,
           has_kindle                    AS HasKindle,
           amazon_asin_print             AS AmazonAsinPrint,
@@ -148,7 +147,7 @@ public sealed class BooksRepository : RepositoryBase
               (title, title_kana, title_en, publisher_product_company_id,
                release_date, release_date_kindle, isbn13, c_code, magazine_code, periodical_code, page_count,
                binding_text, trim_size,
-               price_ex_tax, price_inc_tax, price_kindle_inc_tax,
+               price_ex_tax, price_inc_tax,
                has_print, has_kindle,
                amazon_asin_print, amazon_asin_kindle,
                notes, official_url, created_by, updated_by)
@@ -156,7 +155,7 @@ public sealed class BooksRepository : RepositoryBase
               (@Title, @TitleKana, @TitleEn, @PublisherProductCompanyId,
                @ReleaseDate, @ReleaseDateKindle, @Isbn13, @CCode, @MagazineCode, @PeriodicalCode, @PageCount,
                @BindingText, @TrimSize,
-               @PriceExTax, @PriceIncTax, @PriceKindleIncTax,
+               @PriceExTax, @PriceIncTax,
                @HasPrint, @HasKindle,
                @AmazonAsinPrint, @AmazonAsinKindle,
                @Notes, @OfficialUrl, @CreatedBy, @UpdatedBy);
@@ -188,7 +187,6 @@ public sealed class BooksRepository : RepositoryBase
               trim_size                    = @TrimSize,
               price_ex_tax                 = @PriceExTax,
               price_inc_tax                = @PriceIncTax,
-              price_kindle_inc_tax         = @PriceKindleIncTax,
               has_print                    = @HasPrint,
               has_kindle                   = @HasKindle,
               amazon_asin_print            = @AmazonAsinPrint,

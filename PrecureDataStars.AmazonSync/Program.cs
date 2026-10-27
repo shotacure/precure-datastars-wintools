@@ -521,7 +521,6 @@ public static class Program
         Console.WriteLine($"  装丁        : {book.BindingText ?? "(不明)"}");
         Console.WriteLine($"  版          : 紙={book.HasPrint} / Kindle={book.HasKindle}");
         Console.WriteLine($"  ASIN        : 紙={book.AmazonAsinPrint ?? "-"} / Kindle={book.AmazonAsinKindle ?? "-"}");
-        Console.WriteLine($"  価格        : 紙={(book.PriceIncTax?.ToString() ?? "-")} / Kindle={(book.PriceKindleIncTax?.ToString() ?? "-")}");
         Console.WriteLine($"  表紙        : {book.CoverImageUrl ?? "(なし)"}");
 
         if (plan.Credits.Count > 0)

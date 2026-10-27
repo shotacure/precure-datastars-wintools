@@ -209,7 +209,6 @@ public sealed class BooksGenerator
             Url = PathUtil.BookUrl(book.BookId),
             CoverImageUrl = book.CoverImageUrl ?? "",
             ReleaseDateShort = FormatDateShort(book.ReleaseDate),
-            PriceLabel = FormatPriceLabel(book),
             PageCountLabel = book.PageCount.HasValue ? $"{book.PageCount} ページ" : "",
             EditionLabel = FormatEditionLabel(book),
             PrimaryGenreLabel = primaryLabel,
@@ -304,8 +303,6 @@ public sealed class BooksGenerator
                 PageCountLabel = book.PageCount.HasValue ? $"{book.PageCount} ページ" : "",
                 // 判型は人手で整えた trim_size を優先し、無ければ Amazon 由来の装丁表記で代替する。
                 FormatLabel = !string.IsNullOrEmpty(book.TrimSize) ? book.TrimSize! : (book.BindingText ?? ""),
-                PriceLabel = FormatPriceLabel(book),
-                PriceKindleLabel = book.PriceKindleIncTax.HasValue ? $"{book.PriceKindleIncTax:#,0} 円（税込）" : "",
                 EditionLabel = FormatEditionLabel(book),
                 Notes = book.Notes ?? "",
                 OfficialUrl = book.OfficialUrl ?? ""
@@ -410,16 +407,6 @@ public sealed class BooksGenerator
     /// <summary>詳細ページ用の日付表記（2004年2月1日）。</summary>
     private static string FormatDateLong(DateTime date) => $"{date.Year}年{date.Month}月{date.Day}日";
 
-    /// <summary>紙版の価格表記。税込を主、税抜を従で併記する。どちらも無ければ空文字。</summary>
-    private static string FormatPriceLabel(Book book)
-    {
-        if (book.PriceIncTax.HasValue && book.PriceExTax.HasValue)
-            return $"{book.PriceIncTax:#,0} 円（税込）／ {book.PriceExTax:#,0} 円（税抜）";
-        if (book.PriceIncTax.HasValue) return $"{book.PriceIncTax:#,0} 円（税込）";
-        if (book.PriceExTax.HasValue) return $"{book.PriceExTax:#,0} 円（税抜）";
-        return "";
-    }
-
     /// <summary>「紙 / Kindle」の版構成ラベル。両方あれば併記、片方だけならその名前だけ。</summary>
     private static string FormatEditionLabel(Book book)
     {
@@ -429,12 +416,11 @@ public sealed class BooksGenerator
     }
 
     /// <summary>詳細ページの meta description。書名・ジャンル・出版社・発売日を 1 文に畳む。</summary>
-    /// <summary>書籍カードの数バッジ。ページ数・価格・Kindle の有無など、数として語れるものだけを置く。</summary>
+    /// <summary>書籍カードの数バッジ。ページ数・判型・Kindle の有無など、数として語れるものだけを置く（価格は出さない）。</summary>
     private static OgCardBadge[] BuildBookOgBadges(Book book)
     {
         var badges = new List<OgCardBadge>();
         if (book.PageCount is ushort pages && pages > 0) badges.Add(new OgCardBadge("ページ", $"{pages}"));
-        if (book.PriceIncTax is int price && price > 0) badges.Add(new OgCardBadge("価格", $"{price:#,0}円"));
         if (!string.IsNullOrWhiteSpace(book.TrimSize)) badges.Add(new OgCardBadge("判型", book.TrimSize!));
         if (book.ReleaseDateKindle.HasValue) badges.Add(new OgCardBadge("電子", "Kindle あり"));
         return badges.ToArray();
@@ -518,9 +504,6 @@ public sealed class BookIndexRow
 
     /// <summary>短い発売日表記（2004.2.1）。</summary>
     public string ReleaseDateShort { get; set; } = "";
-
-    /// <summary>価格表記（未登録なら空文字）。</summary>
-    public string PriceLabel { get; set; } = "";
 
     /// <summary>ページ数表記（未登録なら空文字）。</summary>
     public string PageCountLabel { get; set; } = "";
@@ -613,12 +596,6 @@ public sealed class BookDetailView
 
     /// <summary>判型・装丁の表記。</summary>
     public string FormatLabel { get; set; } = "";
-
-    /// <summary>紙版の価格表記。</summary>
-    public string PriceLabel { get; set; } = "";
-
-    /// <summary>Kindle 版の価格表記。</summary>
-    public string PriceKindleLabel { get; set; } = "";
 
     /// <summary>版構成ラベル（紙・Kindle / 紙 / Kindle）。</summary>
     public string EditionLabel { get; set; } = "";

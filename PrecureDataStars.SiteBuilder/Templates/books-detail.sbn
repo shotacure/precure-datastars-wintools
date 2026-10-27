@@ -74,12 +74,6 @@
         {{~ if Book.PageCountLabel != "" ~}}
         <tr><th>ページ数</th><td>{{ Book.PageCountLabel | html.escape }}</td></tr>
         {{~ end ~}}
-        {{~ if Book.PriceLabel != "" ~}}
-        <tr><th>価格</th><td>{{ Book.PriceLabel | html.escape }}</td></tr>
-        {{~ end ~}}
-        {{~ if Book.PriceKindleLabel != "" ~}}
-        <tr><th>Kindle 版価格</th><td>{{ Book.PriceKindleLabel | html.escape }}</td></tr>
-        {{~ end ~}}
         {{~ if Book.Isbn13 != "" ~}}
         <tr><th>ISBN</th><td><code>{{ Book.Isbn13 | html.escape }}</code></td></tr>
         {{~ end ~}}

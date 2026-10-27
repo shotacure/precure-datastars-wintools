@@ -10134,10 +10134,9 @@ a.cal-leap-label:focus-visible {
 .books-card-meta-sep {
   opacity: 0.6;
 }
-/* 数字系（発売日・ページ数・価格）は等幅で桁を揃える。 */
+/* 数字系（発売日・ページ数）は等幅で桁を揃える。 */
 .books-card-meta-release,
-.books-card-meta-pages,
-.books-card-meta-price {
+.books-card-meta-pages {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
 }

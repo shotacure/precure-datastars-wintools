@@ -266,7 +266,6 @@ public partial class BooksEditorForm : Form
             txtBindingText.Text = b.BindingText ?? "";
             numPriceExTax.Value = b.PriceExTax ?? 0;
             numPriceIncTax.Value = b.PriceIncTax ?? 0;
-            numPriceKindle.Value = b.PriceKindleIncTax ?? 0;
             chkHasPrint.Checked = b.HasPrint;
             chkHasKindle.Checked = b.HasKindle;
             txtAsinPrint.Text = b.AmazonAsinPrint ?? "";
@@ -315,7 +314,6 @@ public partial class BooksEditorForm : Form
         txtBindingText.Text = "";
         numPriceExTax.Value = 0;
         numPriceIncTax.Value = 0;
-        numPriceKindle.Value = 0;
         chkHasPrint.Checked = true;
         chkHasKindle.Checked = false;
         txtAsinPrint.Text = "";
@@ -414,7 +412,6 @@ public partial class BooksEditorForm : Form
                 BindingText = FormHelpers.NullIfEmpty(txtBindingText.Text),
                 PriceExTax = numPriceExTax.Value > 0 ? (int)numPriceExTax.Value : null,
                 PriceIncTax = numPriceIncTax.Value > 0 ? (int)numPriceIncTax.Value : null,
-                PriceKindleIncTax = numPriceKindle.Value > 0 ? (int)numPriceKindle.Value : null,
                 HasPrint = chkHasPrint.Checked,
                 HasKindle = chkHasKindle.Checked,
                 AmazonAsinPrint = FormHelpers.NullIfEmpty(txtAsinPrint.Text),

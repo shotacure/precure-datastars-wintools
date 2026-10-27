@@ -71,8 +71,6 @@ public sealed class Book
     /// <summary>紙版の税込価格（円）。</summary>
     public int? PriceIncTax { get; set; }
 
-    /// <summary>Kindle 版の税込価格（円）。</summary>
-    public int? PriceKindleIncTax { get; set; }
 
     /// <summary>紙版が存在するか。ASIN 未取得でも版の有無は事実として持てるので独立したフラグにする。</summary>
     public bool HasPrint { get; set; } = true;

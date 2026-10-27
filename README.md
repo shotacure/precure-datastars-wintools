@@ -2093,8 +2093,7 @@ PlayItem が参照するのに CLIPINF の無いクリップは、`bd_clips` に
 | `page_count` | SMALLINT UNSIGNED NULL | ページ数 |
 | `binding_text` | VARCHAR(64) NULL | 装丁の生表記（ムック / 大型本 / 単行本（ソフトカバー）等） |
 | `trim_size` | VARCHAR(32) NULL | 判型（A4 / B5 / 新書判 等） |
-| `price_ex_tax` / `price_inc_tax` | INT NULL | 紙の定価（税抜 / 税込）。Amazon からは取り込まず人手で入れる |
-| `price_kindle_inc_tax` | INT NULL | Kindle 版価格（税込） |
+| `price_ex_tax` / `price_inc_tax` | INT NULL | 紙の定価（税抜 / 税込）。Amazon からは取り込まず人手で入れる。サイトには価格として出さない（税抜は書籍 JAN の 2 段目を導くのに使う） |
 | `has_print` / `has_kindle` | TINYINT(1) | 版の存在フラグ。少なくとも一方が 1（CHECK） |
 | `amazon_asin_print` / `amazon_asin_kindle` | VARCHAR(16) NULL | 紙 / Kindle の ASIN |
 | `cover_image_url_print` / `cover_image_url_kindle` | VARCHAR(512) NULL | 表紙画像 URL（Amazon CDN ホットリンク、実体は保存しない） |
@@ -2125,7 +2124,7 @@ PlayItem が参照するのに CLIPINF の無いクリップは、`bd_clips` に
 
 **運用 UI**: メインメニュー「書籍管理...」から CRUD（`BooksEditorForm`）。左が書籍一覧（書名・ISBN・雑誌コード・定期刊行物コードの絞り込み付き）、右がタブ 3 枚（基本情報 / シリーズ・ジャンル / クレジット）。シリーズとジャンルはチェックリストで多対多を編集し、代表ジャンルはチェック済みの中から選ぶ。「Amazon 検索...」ボタンは `AmazonProductSearchDialog` を書籍モード（紙 / Kindle の 2 系統、代表書影は Kindle 優先）で開き、選んだ ASIN を欄へ反映する。書影は保存済みの書籍に限りその場で画像列だけを更新する（他項目は保存ボタンまで書き込まない）。紙の定価は Amazon から取り込まない方針のため、本フォームが唯一の入力口になる。Cコード（`C` + 4 桁）・雑誌コード（5 桁-月号 2 桁）・定期刊行物コード（`491` 始まり 18 桁、空白・ハイフンは除いて保存）は保存時に書式を確かめる。
 
-**Amazon から取り込める属性**: Creators API の拡張リソースで、寄与者（ロール付き全件）・出版社・ページ数・装丁・出版日・ISBN・カテゴリが取れる。ISBN-13 は `externalIds.eans` から採り、接頭辞 978 / 979 を持つものだけを受け入れる（ムック等では書籍 JAN が返るため）。**紙の価格は取り込まない**：`offersV2` が返すのは現在の出品価格であって定価ではなく、絶版書ではマーケットプレイスの中古値が乗る。Kindle 価格は常に正価が返るので取り込む。
+**Amazon から取り込める属性**: Creators API の拡張リソースで、寄与者（ロール付き全件）・出版社・ページ数・装丁・出版日・ISBN・カテゴリが取れる。ISBN-13 は `externalIds.eans` から採り、接頭辞 978 / 979 を持つものだけを受け入れる（ムック等では書籍 JAN が返るため）。**紙の価格は取り込まない**：`offersV2` が返すのは現在の出品価格であって定価ではなく、絶版書ではマーケットプレイスの中古値が乗る。Kindle の価格も取り込まない：Amazon の売値で、Creators API 使用要件は画像でない内容の保存を最長 24 時間に限り、表示するなら取得時刻と免責の文を隣に出すよう求める。サイトは書籍の価格（紙・Kindle とも）を詳細ページ・一覧・ホームのカード・OGP カードのどこにも出さない。
 
 ---
 

@@ -3797,7 +3797,6 @@ CREATE TABLE `books` (
   `trim_size`                    varchar(32) DEFAULT NULL COMMENT '判型（A4 / B5 / 新書判 等）',
   `price_ex_tax`                 int DEFAULT NULL,
   `price_inc_tax`                int DEFAULT NULL,
-  `price_kindle_inc_tax`         int DEFAULT NULL,
   -- 版の存在フラグ。ASIN 未取得でも「電子版は出ていない」は事実として持てるので独立させる。
   `has_print`                    tinyint(1) NOT NULL DEFAULT '1',
   `has_kindle`                   tinyint(1) NOT NULL DEFAULT '0',
@@ -3829,8 +3828,7 @@ CREATE TABLE `books` (
   CONSTRAINT `fk_books_publisher_pc` FOREIGN KEY (`publisher_product_company_id`) REFERENCES `product_companies` (`product_company_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_books_has_any_edition`     CHECK (((`has_print` = 1) or (`has_kindle` = 1))),
   CONSTRAINT `ck_books_price_ex_nonneg`     CHECK (((`price_ex_tax` is null) or (`price_ex_tax` >= 0))),
-  CONSTRAINT `ck_books_price_inc_nonneg`    CHECK (((`price_inc_tax` is null) or (`price_inc_tax` >= 0))),
-  CONSTRAINT `ck_books_price_kindle_nonneg` CHECK (((`price_kindle_inc_tax` is null) or (`price_kindle_inc_tax` >= 0)))
+  CONSTRAINT `ck_books_price_inc_nonneg`    CHECK (((`price_inc_tax` is null) or (`price_inc_tax` >= 0)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='書籍（紙 / Kindle）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 

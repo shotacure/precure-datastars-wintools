@@ -42,6 +42,10 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     X は縦（T=上 / M=中 / B=下）、Y は横（L=左 / C=中央 / R=右）。ティア区切り <c>---</c> の直後（1 つ目のティアはカードの頭）に書く。</description></item>
 ///   <item><description><c>@misprint=文字</c>（役職開始行直後の単独行）→ 画面に出た役職名の誤記（<c>role_misprint_text</c>）。
 ///     役職ヘッダには正しい役職名を書き、画面の誤った文字をこの行に書く。クレジットでは誤記を取り消し線で出し、改行して正しい表記を出す。</description></item>
+///   <item><description><c>@theme_song_seq=N</c> / <c>@theme_song_seq=N-M</c>（役職開始行直後の単独行）→ その役職の行で主題歌ループ
+///     （<c>{#THEME_SONGS}</c>）が出す曲を、劇中順（<c>episode_theme_songs.seq</c> / <c>series_theme_songs.seq</c>）が N の曲、
+///     または N 以上 M 以下の曲だけに絞る（<c>credit_card_roles.theme_song_seq</c>）。主題歌のカードが 2 枚に分かれ、
+///     挿入歌がカードごとに分かれて出るときに書く。</description></item>
 ///   <item><description><c>A+B: @join=文字</c>（役職ヘッダ）→ 役職 A と B を、同じエントリを持つ別々の役職として作り、
 ///     クレジットでは「文字」の 1 行にまとめて表示する（例: <c>キャラクターデザイン+作画監督: @join=キャラクターデザイン・作画監督</c>）。
 ///     エントリは 1 回だけ書けばよい。区切りは半角 <c>+</c> または全角 <c>＋</c>。3 つ以上もまとめられる。
@@ -145,6 +149,11 @@ public static class CreditBulkInputParser
 
     // ディレクティブ行: @not_on_screen。直前の役職の行は画面にはクレジットされていない（credit_card_roles.not_on_screen）。
     private static readonly Regex NotOnScreenDirectiveRegex = new(@"^@not_on_screen$", RegexOptions.Compiled);
+
+    // ディレクティブ行: @theme_song_seq=N / @theme_song_seq=N-M。直前の役職の行で主題歌ループが出す曲を劇中順の範囲で絞る
+    // （credit_card_roles.theme_song_seq）。値の形（半角数字の N か N-M）は ThemeSongSeqValueRegex で確かめる。
+    private static readonly Regex ThemeSongSeqDirectiveRegex = new(@"^@theme_song_seq=(?<value>.*)$", RegexOptions.Compiled);
+    private static readonly Regex ThemeSongSeqValueRegex = new(@"^(?<from>[0-9]+)(?:-(?<to>[0-9]+))?$", RegexOptions.Compiled);
 
     // ディレクティブ行: @leading_not_on_screen。直前の筆頭の会社 [[XXX]] は画面にはクレジットされていない
     // （credit_role_blocks.leading_company_not_on_screen）。[[XXX]] の行のすぐ後、エントリより前に書く。
@@ -732,6 +741,45 @@ public static class CreditBulkInputParser
                         continue;
                     }
                     curRole.NotOnScreen = true;
+                    continue;
+                }
+
+                // @theme_song_seq=N / @theme_song_seq=N-M : 直前の役職の行で主題歌ループが出す曲を劇中順の範囲で絞る。値が空なら絞らない。
+                var themeSongSeqMatch = ThemeSongSeqDirectiveRegex.Match(trimmed);
+                if (themeSongSeqMatch.Success)
+                {
+                    if (curRole is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @theme_song_seq は役職指定後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    string seqValue = themeSongSeqMatch.Groups["value"].Value.Trim();
+                    if (seqValue.Length == 0)
+                    {
+                        curRole.ThemeSongSeq = null;
+                        continue;
+                    }
+                    var seqValueMatch = ThemeSongSeqValueRegex.Match(seqValue);
+                    bool seqValid = seqValueMatch.Success
+                        && int.TryParse(seqValueMatch.Groups["from"].Value, out int seqFrom)
+                        && (!seqValueMatch.Groups["to"].Success
+                            || (int.TryParse(seqValueMatch.Groups["to"].Value, out int seqTo) && seqFrom <= seqTo));
+                    if (!seqValid)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @theme_song_seq の値は「N」か「N-M」（半角数字、N ≦ M）で書いてください。"
+                        });
+                        continue;
+                    }
+                    curRole.ThemeSongSeq = seqValue;
                     continue;
                 }
 

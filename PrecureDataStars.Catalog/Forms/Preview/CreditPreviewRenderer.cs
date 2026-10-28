@@ -644,6 +644,7 @@ internal sealed class CreditPreviewRenderer
                             joinedLabelHtml: joinedLabelHtmlById.TryGetValue(cr.CardRoleId, out var jlh) ? jlh : null,
                             hideRoleLabel: cr.HideRoleLabel,
                             notOnScreen: cr.NotOnScreen,
+                            themeSongSeq: cr.ThemeSongSeq,
                             html, ct);
 
                         // 直前ロール記憶を更新: 当該ロールが VOICE_CAST なら role_code を覚える、
@@ -1035,6 +1036,7 @@ internal sealed class CreditPreviewRenderer
                             joinedLabelHtml: draftJoinedLabelHtmlById.TryGetValue(dRole.CurrentId, out var djlh) ? djlh : null,
                             hideRoleLabel: dRole.Entity.HideRoleLabel,
                             notOnScreen: dRole.Entity.NotOnScreen,
+                            themeSongSeq: dRole.Entity.ThemeSongSeq,
                             html, ct);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(dRole.Entity.RoleCode, roleMap)
@@ -1205,6 +1207,9 @@ internal sealed class CreditPreviewRenderer
         // 画面にはクレジットされていない行（credit_card_roles.not_on_screen）。true なら役職ラッパに not-on-screen を付け、
         // 役職名から中身までを括弧で包んで薄い色で出す（SiteBuilder と同じ）。
         bool notOnScreen,
+        // 主題歌ループが出す曲を絞る劇中順の範囲（credit_card_roles.theme_song_seq。"N" か "N-M"）。null なら絞らない。
+        // テンプレの展開コンテキストに渡し、主題歌のカードが分かれて挿入歌を振り分ける回でカードごとの曲だけを出す。
+        string? themeSongSeq,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -1286,7 +1291,8 @@ internal sealed class CreditPreviewRenderer
                     visitedRoleCodes: null,
                     scopeSeriesTitle: scopeSeriesTitleForCtx,
                     scopeFilmRatingNo: scopeFilmRatingNoForCtx,
-                    scopeFilmCjMark: scopeFilmCjMarkForCtx);
+                    scopeFilmCjMark: scopeFilmCjMarkForCtx,
+                    themeSongSeq: themeSongSeq);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct);
 
                 // 改行コード正規化。

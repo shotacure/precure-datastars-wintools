@@ -34,6 +34,9 @@ namespace PrecureDataStars.TemplateRendering;
 ///   <item><description><c>{?!NAME}...{/?!NAME}</c> ... プレースホルダ NAME の解決値が空のときだけ展開（否定の条件）</description></item>
 ///   <item><description><c>{#THEME_SONGS[:kind=OP+ED][,seq=N|N-M]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復。
 ///     <c>seq</c> を書くと、番号（seq）がその値・範囲に入る曲だけに絞る。
+///     役職の行の <c>theme_song_seq</c>（<see cref="TemplateContext.ThemeSongSeq"/>）があれば、さらにその範囲の曲だけに絞る
+///     （旧 <c>{THEME_SONGS}</c> プレースホルダにも効く）。
+///     曲名（<c>{SONG_TITLE}</c>）は、画面の表記（<c>title_credited_text</c>）があれば文字だけその表記で出す（誤記があるときは使わない）。
 ///     <c>merge_same_song=1</c> を書くと、同じ曲の録音が続く行を 1 曲にまとめる（歌唱は歌い手を改行で並べ、版の名前は出さない）。
 ///     内側で <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> / <c>{COMPOSER}</c> /
 ///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{CHORUS}</c> / <c>{VARIANT_LABEL}</c> / <c>{SONG_SERIES_TITLE}</c> の楽曲スコーププレースホルダが
@@ -83,7 +86,8 @@ public static class RoleTemplateRenderer
     };
 
     /// <summary>
-    /// <c>{#THEME_SONGS}</c> の <c>seq</c> オプション（"N" または "N-M"）を読む。空・読めない値なら false（絞り込まない）。
+    /// <c>{#THEME_SONGS}</c> の <c>seq</c> オプション、および役職の行の <c>theme_song_seq</c>（<see cref="TemplateContext.ThemeSongSeq"/>）
+    /// の値（"N" または "N-M"）を読む。空・読めない値なら false（絞り込まない）。
     /// </summary>
     private static bool TryParseSeqRange(string raw, out int from, out int to)
     {
@@ -189,6 +193,10 @@ public static class RoleTemplateRenderer
                         // 「テーマソング」と「挿入歌」のように、同じ挿入歌の区分の曲を別々の役職の欄に分けて出す画面用。
                         if (TryParseSeqRange(tsLoop.GetOption("seq", ""), out int seqFrom, out int seqTo))
                             rows = rows.Where(r => r.Seq is byte s && s >= seqFrom && s <= seqTo).ToList();
+                        // 役職の行の theme_song_seq：主題歌のカードが 2 枚に分かれ、挿入歌がカードごとに分かれて出る回用。
+                        // テンプレは役職ごとに共通なので、カードごとの範囲は役職の行で持つ（テンプレの seq= と両方あれば両方を満たす曲だけ）。
+                        if (TryParseSeqRange(ctx.ThemeSongSeq ?? "", out int roleSeqFrom, out int roleSeqTo))
+                            rows = rows.Where(r => r.Seq is byte s && s >= roleSeqFrom && s <= roleSeqTo).ToList();
                         // merge_same_song=1：同じ曲の録音が続く行を 1 曲にまとめる（画面が 1 曲の下に歌い手を並べる作品用）。
                         if (tsLoop.GetOption("merge_same_song", "") == "1")
                             rows = MergeSameSongRows(rows);
@@ -392,7 +400,8 @@ public static class RoleTemplateRenderer
                     // SongId が有効（>0）なら <a href="/songs/{id}/">タイトル</a>、無効ならエスケープしたタイトルのみ。
                     var title = currentSong?.SongTitle;
                     if (string.IsNullOrEmpty(title)) return "";
-                    var safe = System.Net.WebUtility.HtmlEncode(title);
+                    // クレジットの画面の曲名の表記（誤記ではない表記違い）があれば、文字だけその表記にする（リンク先は曲のまま）。
+                    var safe = System.Net.WebUtility.HtmlEncode(ThemeSongsHandler.CreditedTitleOf(currentSong!));
                     // 画面に出た曲名の誤記があれば、取り消し線で出してから正しい曲名を続ける。
                     string misprintPrefix = ThemeSongsHandler.BuildTitleMisprintPrefixHtml(currentSong?.TitleMisprintText);
                     if (currentSong is { SongId: > 0 } cs)
@@ -478,7 +487,10 @@ public static class RoleTemplateRenderer
                                        .Select(s => s.ToUpperInvariant())
                                        .ToArray();
                     }
-                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, cols, lookup, ct).ConfigureAwait(false);
+                    // 役職の行の theme_song_seq があれば、その劇中順の範囲の曲だけを出す。
+                    int? phSeqFrom = null, phSeqTo = null;
+                    if (TryParseSeqRange(ctx.ThemeSongSeq ?? "", out int roleFrom, out int roleTo)) { phSeqFrom = roleFrom; phSeqTo = roleTo; }
+                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, cols, lookup, ct, phSeqFrom, phSeqTo).ConfigureAwait(false);
                 }
 
             case "LEADING_COMPANY":

@@ -145,6 +145,10 @@ public sealed class ParsedRole
     /// <summary>その行が画面にはクレジットされていないか（<c>credit_card_roles.not_on_screen</c>）。<c>@not_on_screen</c> 行で設定される。
     /// 毎回出る役職がその回だけ画面から抜けているとき（クレジット漏れ）に立てる。データは入れて、表示だけ括弧で示す。</summary>
     public bool NotOnScreen { get; set; }
+
+    /// <summary>その行で主題歌ループが出す曲を絞る劇中順の範囲（<c>credit_card_roles.theme_song_seq</c>）。<c>"N"</c> か <c>"N-M"</c>。
+    /// <c>@theme_song_seq=N</c> / <c>@theme_song_seq=N-M</c> 行で設定される。主題歌のカードが分かれて挿入歌を振り分けるときに使う。</summary>
+    public string? ThemeSongSeq { get; set; }
 }
 
 /// <summary>パース結果における 1 ブロック分の塊。 同一役職内で空行を跨ぐと新しいブロックが生まれる。</summary>

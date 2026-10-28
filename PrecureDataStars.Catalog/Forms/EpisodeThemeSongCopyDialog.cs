@@ -213,6 +213,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
                         Seq = src.Seq,
                         SongRecordingId = src.SongRecordingId,
                         TitleMisprintText = src.TitleMisprintText,
+                        TitleCreditedText = src.TitleCreditedText,
                         IsInstrumental = src.IsInstrumental,
                         // レーベル社名はクレジット側で COMPANY エントリとして保持する。
                         Notes = src.Notes,

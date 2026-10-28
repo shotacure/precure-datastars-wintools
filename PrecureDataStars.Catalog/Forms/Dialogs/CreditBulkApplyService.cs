@@ -881,6 +881,8 @@ public sealed class CreditBulkApplyService
         role.Entity.HideRoleLabel = pr.HideRoleLabel;
         // その行は画面にはクレジットされていないか（クレジット漏れ）。
         role.Entity.NotOnScreen = pr.NotOnScreen;
+        // 主題歌ループが出す曲を絞る劇中順の範囲。
+        role.Entity.ThemeSongSeq = pr.ThemeSongSeq;
 
         // 配下 Block を順に追加。
         foreach (var pb in pr.Blocks)
@@ -2405,7 +2407,8 @@ public sealed class CreditBulkApplyService
             || draftRole.Entity.JoinPrevious != newRole.JoinPrevious
             || !string.Equals(draftRole.Entity.JoinSeparator, newRole.JoinSeparator, StringComparison.Ordinal)
             || draftRole.Entity.HideRoleLabel != newRole.HideRoleLabel
-            || draftRole.Entity.NotOnScreen != newRole.NotOnScreen)
+            || draftRole.Entity.NotOnScreen != newRole.NotOnScreen
+            || !string.Equals(draftRole.Entity.ThemeSongSeq, newRole.ThemeSongSeq, StringComparison.Ordinal))
         {
             draftRole.Entity.RoleLabelText = newRole.RoleLabelText;
             draftRole.Entity.RoleMisprintText = newRole.RoleMisprintText;
@@ -2413,6 +2416,7 @@ public sealed class CreditBulkApplyService
             draftRole.Entity.JoinSeparator = newRole.JoinSeparator;
             draftRole.Entity.HideRoleLabel = newRole.HideRoleLabel;
             draftRole.Entity.NotOnScreen = newRole.NotOnScreen;
+            draftRole.Entity.ThemeSongSeq = newRole.ThemeSongSeq;
             draftRole.MarkModified();
         }
 
@@ -2703,7 +2707,8 @@ public sealed class CreditBulkApplyService
           .Append("|joinprev=").Append(r.JoinPrevious ? '1' : '0')
           .Append("|joinsep=").Append(r.JoinSeparator ?? string.Empty)
           .Append("|hidelabel=").Append(r.HideRoleLabel ? '1' : '0')
-          .Append("|notonscreen=").Append(r.NotOnScreen ? '1' : '0').Append('\n');
+          .Append("|notonscreen=").Append(r.NotOnScreen ? '1' : '0')
+          .Append("|themesongseq=").Append(r.ThemeSongSeq ?? string.Empty).Append('\n');
         foreach (var b in r.Blocks) sb.Append(SerializeBlockForCompare(b));
         return sb.ToString();
     }

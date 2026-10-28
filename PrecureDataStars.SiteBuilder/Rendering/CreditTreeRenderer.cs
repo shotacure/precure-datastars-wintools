@@ -380,6 +380,7 @@ internal sealed class CreditTreeRenderer
                             roleNameHtmlOverride: joinedLabelHtmlByLeadId.TryGetValue(cr.CardRoleId, out var joinedHtml) ? joinedHtml : null,
                             hideRoleLabel: cr.HideRoleLabel,
                             notOnScreen: cr.NotOnScreen,
+                            themeSongSeq: cr.ThemeSongSeq,
                             html, ct).ConfigureAwait(false);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(cr.RoleCode, roleMap)
@@ -588,6 +589,9 @@ internal sealed class CreditTreeRenderer
         // 画面にはクレジットされていない行（credit_card_roles.not_on_screen）。true なら役職ラッパに not-on-screen を付け、
         // CSS で役職名から中身までを括弧で包んで薄い色で出す。データとしては通常どおり数える。
         bool notOnScreen,
+        // 主題歌ループが出す曲を絞る劇中順の範囲（credit_card_roles.theme_song_seq。"N" か "N-M"）。null なら絞らない。
+        // テンプレの展開コンテキストに渡し、主題歌のカードが分かれて挿入歌を振り分ける回でカードごとの曲だけを出す。
+        string? themeSongSeq,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -671,7 +675,8 @@ internal sealed class CreditTreeRenderer
                     visitedRoleCodes: null,
                     scopeSeriesTitle: seriesForCtx?.Title,
                     scopeFilmRatingNo: seriesForCtx?.FilmRatingNo,
-                    scopeFilmCjMark: seriesForCtx?.FilmCjMark ?? false);
+                    scopeFilmCjMark: seriesForCtx?.FilmCjMark ?? false,
+                    themeSongSeq: themeSongSeq);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
 
                 string normalized = rendered.Replace("\r\n", "\n").Replace("\r", "\n");

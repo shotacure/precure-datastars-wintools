@@ -304,6 +304,7 @@ internal sealed class CreditDraftLoader
         JoinSeparator = s.JoinSeparator,
         HideRoleLabel = s.HideRoleLabel,
         NotOnScreen = s.NotOnScreen,
+        ThemeSongSeq = s.ThemeSongSeq,
         Notes = s.Notes,
         CreatedBy = s.CreatedBy,
         UpdatedBy = s.UpdatedBy

@@ -43,6 +43,9 @@ public static class ThemeSongsHandler
     /// <param name="columns">横並びカラム数（既定 1=縦並び）。<c>columns=2</c> なら 2 曲を横並びにする。</param>
     /// <param name="lookup">名義・役職 ID をリンク化済み HTML へ解決するインターフェース。</param>
     /// <param name="ct">キャンセルトークン。</param>
+    /// <param name="seqFrom">劇中順（seq）の絞り込みの下限。<paramref name="seqTo"/> と両方あるときだけ、seq がその範囲に入る曲だけを出す
+    /// （役職の行の <c>credit_card_roles.theme_song_seq</c>）。</param>
+    /// <param name="seqTo">劇中順（seq）の絞り込みの上限。</param>
     public static async Task<string> RenderAsync(
         IConnectionFactory factory,
         int? episodeId,
@@ -50,7 +53,9 @@ public static class ThemeSongsHandler
         IReadOnlyList<string>? kinds,
         int columns,
         ILookupCache lookup,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        int? seqFrom = null,
+        int? seqTo = null)
     {
         // どちらか一方が指定されていれば描画対象あり。両方 null（スコープ未確定）なら空文字。
         bool hasEpisode = episodeId.HasValue && episodeId.Value > 0;
@@ -59,6 +64,8 @@ public static class ThemeSongsHandler
         if (columns < 1) columns = 1;
 
         var rows = await FetchAsync(factory, episodeId, seriesId, kinds, lookup, ct).ConfigureAwait(false);
+        if (seqFrom is int from && seqTo is int to)
+            rows = rows.Where(r => r.Seq is byte s && s >= from && s <= to).ToList();
         if (rows.Count == 0) return "";
 
         // stage B-4：各曲のブロック文字列を HTML 出力モードで作る。
@@ -169,6 +176,7 @@ public static class ThemeSongsHandler
               sr.song_recording_id AS SongRecordingId,
               s.title             AS SongTitle,
               ets.title_misprint_text AS TitleMisprintText,
+              ets.title_credited_text AS TitleCreditedText,
               ets.is_instrumental AS IsInstrumental,
               s.lyricist_name     AS LyricistName,
               s.composer_name     AS ComposerName,
@@ -351,7 +359,8 @@ public static class ThemeSongsHandler
     {
         var sb = new System.Text.StringBuilder();
         // 「」で囲んで出すので、曲名の中の「」は『』にする。
-        var safeTitle = System.Net.WebUtility.HtmlEncode(JapaneseQuotes.InQuotes(r.SongTitle ?? "(曲名未登録)"));
+        // クレジットの画面の曲名の表記（誤記ではない表記違い）があれば、文字だけその表記にする（リンク先は曲のまま）。
+        var safeTitle = System.Net.WebUtility.HtmlEncode(JapaneseQuotes.InQuotes(r.SongTitle is null ? "(曲名未登録)" : CreditedTitleOf(r)));
         sb.Append('「');
         // 画面に出た曲名の誤記があれば、取り消し線で出してから正しい曲名を続ける。
         sb.Append(BuildTitleMisprintPrefixHtml(r.TitleMisprintText));
@@ -425,6 +434,15 @@ public static class ThemeSongsHandler
             : $"<del title=\"クレジット時の誤記\">{System.Net.WebUtility.HtmlEncode(JapaneseQuotes.InQuotes(misprint))}</del> ";
 
     /// <summary>
+    /// クレジットの行に出す曲名の文字。画面の表記（<see cref="ThemeSongRow.TitleCreditedText"/>）があればそれ、無ければ曲名（songs.title）。
+    /// 誤記（<see cref="ThemeSongRow.TitleMisprintText"/>）があるときは、取り消し線の後ろに出すのは正しい曲名なので、表記は使わず曲名のまま。
+    /// </summary>
+    internal static string CreditedTitleOf(ThemeSongRow r)
+        => string.IsNullOrEmpty(r.TitleMisprintText) && !string.IsNullOrEmpty(r.TitleCreditedText)
+            ? r.TitleCreditedText!
+            : r.SongTitle ?? "";
+
+    /// <summary>
     /// JOIN 結果を受ける DTO（Dapper マッピング用、内部公開）。
     /// internal 化：新 <c>{#THEME_SONGS}</c> ループ構文の Renderer から
     /// 楽曲スコープのプレースホルダ（{SONG_TITLE} 等）を解決するために、フィールドへ直接アクセスする必要がある。
@@ -443,6 +461,9 @@ public static class ThemeSongsHandler
         public string? SongTitle { get; set; }
         /// <summary>クレジットの画面に出た曲名の誤記（episode_theme_songs / series_theme_songs.title_misprint_text）。null なら誤記なし。</summary>
         public string? TitleMisprintText { get; set; }
+        /// <summary>クレジットの画面に出た曲名の表記（誤記ではない表記違い。episode_theme_songs / series_theme_songs.title_credited_text）。
+        /// null なら曲名（<see cref="SongTitle"/>）で出す。誤記と両方あるときは誤記を優先し、この表記は使わない。</summary>
+        public string? TitleCreditedText { get; set; }
         /// <summary>その回（その映画）ではインストゥルメンタルで使った印（episode_theme_songs / series_theme_songs.is_instrumental）。</summary>
         public bool IsInstrumental { get; set; }
         public string? LyricistName { get; set; }

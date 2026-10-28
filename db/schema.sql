@@ -2610,6 +2610,11 @@ CREATE TABLE `credit_card_roles` (
   `hide_role_label` tinyint                                              NOT NULL DEFAULT 0,
   -- 1 ならこの行は画面にはクレジットされていない（クレジット漏れ）。データは入れて集計・関与に数え、表示だけ括弧で包んで示す。
   `not_on_screen`  tinyint                                               NOT NULL DEFAULT 0,
+  -- 主題歌ループが出す曲を絞る劇中順の範囲（"N" か "N-M"。episode_theme_songs.seq / series_theme_songs.seq）。NULL なら絞らない。
+  -- その役職の行で役職テンプレートの {#THEME_SONGS} ループ（旧 {THEME_SONGS} も）が出す曲を、この範囲の曲だけにする
+  -- （テンプレート側の seq= と両方あれば両方を満たす曲だけ）。主題歌の形式（roles.role_format_kind='THEME_SONG'）の役職でだけ意味を持つ。
+  -- 主題歌のカードが 2 枚に分かれ、挿入歌がカードごとに分かれて出る回で、カードごとの曲を役職の行で指定する。
+  `theme_song_seq` varchar(16)                                           DEFAULT NULL COMMENT '主題歌ループが出す曲の劇中順の範囲（"N" か "N-M"）。NULL なら絞らない',
   `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2770,6 +2775,9 @@ CREATE TABLE `episode_theme_songs` (
   -- クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。NULL なら誤記なし。
   -- クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名（songs.title）を続ける。
   `title_misprint_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- クレジットの画面に出た曲名の表記（誤記ではない表記違い）。入っていればクレジットの主題歌の行の曲名をこの表記で出す
+  -- （打ち消し線なし、リンク先は曲のまま）。NULL なら songs.title。title_misprint_text と両方あるときは誤記を優先し、この表記は使わない。
+  `title_credited_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'クレジットの画面に出た曲名の表記（誤記ではない表記違い）。入っていればクレジットの行の曲名をこの表記で出す（打ち消し線なし、リンク先は曲のまま）',
   -- その回（その映画）ではインストゥルメンタルで使った印。紐付ける録音は元の歌の録音のまま。
   -- クレジットの曲名に「（インストゥルメンタル）」を添え、テンプレでは {?INSTRUMENTAL} で書き分ける。
   `is_instrumental`         tinyint(1) NOT NULL DEFAULT 0,
@@ -2805,6 +2813,9 @@ CREATE TABLE `series_theme_songs` (
   -- クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。NULL なら誤記なし。
   -- クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名（songs.title）を続ける。
   `title_misprint_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- クレジットの画面に出た曲名の表記（誤記ではない表記違い）。入っていればクレジットの主題歌の行の曲名をこの表記で出す
+  -- （打ち消し線なし、リンク先は曲のまま）。NULL なら songs.title。title_misprint_text と両方あるときは誤記を優先し、この表記は使わない。
+  `title_credited_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'クレジットの画面に出た曲名の表記（誤記ではない表記違い）。入っていればクレジットの行の曲名をこの表記で出す（打ち消し線なし、リンク先は曲のまま）',
   -- その回（その映画）ではインストゥルメンタルで使った印。紐付ける録音は元の歌の録音のまま。
   -- クレジットの曲名に「（インストゥルメンタル）」を添え、テンプレでは {?INSTRUMENTAL} で書き分ける。
   `is_instrumental`         tinyint(1) NOT NULL DEFAULT 0,

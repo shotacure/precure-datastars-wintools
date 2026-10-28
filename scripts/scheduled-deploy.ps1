@@ -14,7 +14,7 @@
   App.config は git に入れていないので、リポジトリの SiteBuilder・ArtTrackRefresh・AmazonSync のものを写して使う。
   出力先・キャッシュは App.config の絶対パスなので、手動のデプロイと共用になる。
 
-  安全ゲート（決まって起きる以外の削除・ビルド警告）で止まったときや失敗したときは公開しない。
+  安全ゲート（大量の削除・ビルド警告）で止まったときや失敗したときは公開しない。
   経過はすべてログ（%LOCALAPPDATA%\precure-datastars\scheduled-deploy.log）に追記する。
   公開できなかったときは Windows の通知（トースト）を出す。通知は Windows PowerShell 5.1 の WinRT で出すので、
   PowerShell 7 から動かしても出る。通知を出せなかったときはログに書くだけで、デプロイの結果は変えない。

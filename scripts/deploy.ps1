@@ -19,28 +19,26 @@
   実行は 2 段階：
 
     1. まず --dry-run で差分プラン（upload / delete / unchanged）とビルド警告数を取得し、安全ゲートを通す。
-         - delete（既存 S3 オブジェクトの消去）のうち、決まって起きる削除を除いたものが 1 件以上 … 既定では中止する
-           （意図的な orphan 掃除なら -Force）。決まって起きる削除として通すのは次の 2 種類（件数と中身はログに出す）：
-             ・OGP カード（og/ の下。ページの改名・削除に伴って消える）
-             ・転送表（ビルド出力の _edge/legacy-redirects.json）に載っている旧ページ
-               （people / characters / companies / units / books の {名前}/index.html。改名した旧 URL は 301 で転送される）
+         - delete（既存 S3 オブジェクトの消去）は、DB で消した・改名したものに伴う削除として通し、件数と中身をログに出す。
+           止めるのは、OGP カード（og/ の下）を除いた削除が 100 件（$MassDeleteLimit）を超えたときだけ（DB の読み込みの空振りや
+           生成の不具合で、ページがまとめて消えた出力を本番に流さないため）。意図した大量の削除なら -Force。
          - ビルド警告（Warnings）が 1 件以上 … 品質ゲートとして既定で中止する（-Force で続行）。
-    2. ゲートを通過（決まって起きる削除以外の delete=0 かつ Warnings=0、または -Force）した場合のみ、本番反映（--yes）を実行する。
+    2. ゲートを通過（大量の削除が無く Warnings=0、または -Force）した場合のみ、本番反映（--yes）を実行する。
 
   非対話実行のため本番反映は常に --yes（削除確認の y/N 省略）で走る。安全性は事前ドライランの
-  「delete=0」ゲートで担保する。バケット名・Distribution ID・AWS プロファイル等の実値は App.config
+  ゲートで担保する。バケット名・Distribution ID・AWS プロファイル等の実値は App.config
   （gitignore 済）から読まれる。
 
 .PARAMETER DryRunOnly
   ドライラン（差分プレビュー）のみ実行し、本番反映は行わない。
 
 .PARAMETER Force
-  安全ゲート（delete>0 / Warnings>0）を無視して反映を強行する。既存オブジェクトの削除を伴う
-  変更（orphan 掃除など、ドライランで内容を確認済みの場合）を意図的に流すときだけ使う。
+  安全ゲート（大量の削除 / Warnings>0）を無視して反映を強行する。ドライランで内容を確認済みの
+  大量の削除（orphan のまとめての掃除など）を意図的に流すときだけ使う。
 
 .EXAMPLE
   .\scripts\deploy.ps1
-  ドライランで差分を確認し、安全（削除0・警告0）なら本番反映まで実行する。
+  ドライランで差分を確認し、安全（大量の削除なし・警告0）なら本番反映まで実行する。
 
 .EXAMPLE
   .\scripts\deploy.ps1 -DryRunOnly
@@ -48,7 +46,7 @@
 
 .EXAMPLE
   .\scripts\deploy.ps1 -Force
-  削除を伴う差分でも反映する（内容を確認済みの orphan 掃除など）。
+  大量の削除を伴う差分でも反映する（内容を確認済みの orphan のまとめての掃除など）。
 #>
 [CmdletBinding()]
 param(
@@ -68,6 +66,9 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
 $project = 'PrecureDataStars.SiteBuilder'
+
+# OGP カードを除いた削除がこの件数を超えたら、生成の不具合を疑って反映を止める。
+$MassDeleteLimit = 100
 
 Write-Host ""
 Write-Host "=== precure.tv 本番デプロイ ===" -ForegroundColor Cyan
@@ -135,9 +136,9 @@ try {
     Write-Host ""
     Write-Host ("  差分: upload {0} / delete {1} / unchanged {2} / 警告 {3}" -f $uploadCount, $deleteCount, $unchangedCount, $warnDisplay) -ForegroundColor Cyan
 
-    # --- 削除の仕分け ---
-    # ドライランの「Delete (orphan) targets:」に続く「  - {S3 キー}」の行を読み、決まって起きる削除（OGP カードと、
-    # 転送表に載っている旧ページ）と、それ以外（ゲートで止める削除）に分ける。
+    # --- 削除の数え上げ ---
+    # ドライランの「Delete (orphan) targets:」に続く「  - {S3 キー}」の行を読み、OGP カード（og/ の下。ページに
+    # 伴って消える）を除いた件数を、大量の削除のゲートに使う。
     $deleteKeys = @()
     $inDeleteList = $false
     foreach ($line in $dryOutput) {
@@ -148,39 +149,15 @@ try {
         }
     }
 
-    # 転送表はビルド出力（App.config の SiteOutputDir）の _edge/legacy-redirects.json。キーは「/people/旧名」の形。
-    $redirectKeys = @{}
-    try {
-        $appConfig = [xml](Get-Content -Raw -Encoding UTF8 (Join-Path $repoRoot "$project/App.config"))
-        $outDir = ($appConfig.configuration.appSettings.add | Where-Object { $_.key -eq 'SiteOutputDir' }).value
-        $mapPath = Join-Path $outDir '_edge/legacy-redirects.json'
-        if (Test-Path $mapPath) {
-            $map = Get-Content -Raw -Encoding UTF8 $mapPath | ConvertFrom-Json
-            foreach ($prop in $map.PSObject.Properties) { $redirectKeys[$prop.Name] = $true }
-        }
-    } catch {
-        Write-Host "  転送表を読めませんでした（旧ページの削除はゲートで止めます）: $($_.Exception.Message)" -ForegroundColor DarkYellow
-    }
-
-    $expectedDeletes = @()
-    $unexpectedDeletes = @()
-    foreach ($key in $deleteKeys) {
-        if ($key -like 'og/*') { $expectedDeletes += "$key（OGP カード）"; continue }
-        if ($key -match '^(people|characters|companies|units|books)/([^/]+)/index\.html$' -and $redirectKeys.ContainsKey("/$($Matches[1])/$($Matches[2])")) {
-            $expectedDeletes += "$key（旧 URL は転送表で 301）"
-            continue
-        }
-        $unexpectedDeletes += $key
-    }
-    # 一覧の行数が Plan の件数と合わないとき（出力の形が変わったなど）は、仕分けを信用せず全件をゲートの対象にする。
+    $pageDeleteCount = @($deleteKeys | Where-Object { $_ -notlike 'og/*' }).Count
+    # 一覧の行数が Plan の件数と合わないとき（出力の形が変わったなど）は、OGP カードを除かず Plan の件数で数える。
     if ($deleteKeys.Count -ne $deleteCount) {
-        $unexpectedDeletes = @("（削除の一覧を読み取れませんでした：Plan $deleteCount 件 / 一覧 $($deleteKeys.Count) 件）")
-        $expectedDeletes = @()
+        Write-Host "  削除の一覧を読み取れませんでした（Plan $deleteCount 件 / 一覧 $($deleteKeys.Count) 件）。Plan の件数でゲートを判定します。" -ForegroundColor DarkYellow
+        $pageDeleteCount = $deleteCount
     }
-    if ($expectedDeletes.Count -gt 0) {
+    if ($deleteCount -gt 0) {
         Write-Host ""
-        Write-Host "  決まって起きる削除 $($expectedDeletes.Count) 件（ゲートで止めない）:" -ForegroundColor DarkCyan
-        $expectedDeletes | ForEach-Object { Write-Host "    - $_" -ForegroundColor DarkCyan }
+        Write-Host "  削除 $deleteCount 件（うち OGP カード以外 $pageDeleteCount 件。$MassDeleteLimit 件までは止めない）" -ForegroundColor DarkCyan
     }
 
     if ($DryRunOnly) {
@@ -198,8 +175,8 @@ try {
 
     # --- 安全ゲート ---
     $blockReasons = @()
-    if ($unexpectedDeletes.Count -gt 0) {
-        $blockReasons += "削除 $($unexpectedDeletes.Count) 件（既存オブジェクトの消去）: $($unexpectedDeletes -join ', ')"
+    if ($pageDeleteCount -gt $MassDeleteLimit) {
+        $blockReasons += "大量の削除 $pageDeleteCount 件（OGP カード以外。上限 $MassDeleteLimit 件。生成の不具合でページがまとめて消えていないか確認）"
     }
     if ($warnCount -gt 0)   { $blockReasons += "ビルド警告 $warnCount 件" }
 

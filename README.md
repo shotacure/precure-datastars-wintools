@@ -1640,6 +1640,10 @@ series_relation_kinds ──┘    │            │
 
 **初期データ**: `VOCAL` / `INST` / `INST_STR` / `INST_GUIDE` / `INST_CHO` / `INST_CHO_GUIDE` / `INST_PART_VO` / `OTHER`。
 
+#### `persons` / `person_aliases` の名前の照合順序
+
+人物の姓・名・氏名（`persons.family_name` / `given_name` / `full_name`）と、名義の名前・表示用の上書き表記（`person_aliases.name` / `display_text_override`）は、文字コードどおりに比べる照合順序 `utf8mb4_0900_bin` で持つ。画面の字形どおりに異体字セレクタ（例：「真」U+771F＋U+E0100〜）を付けた名義を、付けない名義と別の名前として扱うため（日本語用の `utf8mb4_ja_0900_as_cs_ks` は異体字セレクタを比べるときに無視する）。読み・英語名・備考はほかの表と同じ照合順序のまま。
+
 #### `company_aliases.is_official_name` — 正式名（社名）の名義と商号履歴
 
 企業の名義（`company_aliases`）はクレジットの表記なので、正式名（「株式会社マーベラスAQL」）と通称（「マーベラスAQL」）・略称（「MMV」）が混ざる。`is_official_name` = 1 の名義が正式名（社名）で、クレジットに一度も出ていない昔の正式名もこの印の名義として持つ。正式名の名義は有効期間（`valid_from` / `valid_to`）と前身・後継（`predecessor_alias_id` / `successor_alias_id`）でつなぐ。`companies.name` は、そのつながりのいちばん新しい正式名にそろえる（運用で合わせる。変えると企業詳細の URL が変わり、公開済みの旧 URL は 301 で転送される）。

@@ -1577,9 +1577,9 @@ DROP TABLE IF EXISTS `persons`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `persons` (
   `person_id`        int                                                                  NOT NULL AUTO_INCREMENT,
-  `family_name`      varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks   DEFAULT NULL,
-  `given_name`       varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks   DEFAULT NULL,
-  `full_name`        varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  NOT NULL,
+  `family_name`      varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin   DEFAULT NULL,
+  `given_name`       varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin   DEFAULT NULL,
+  `full_name`        varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin  NOT NULL,
   `full_name_kana`   varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  DEFAULT NULL,
   -- 本名義：見出し・URL・一覧の行表記に使う名義。NULL なら公開中の名義 → TV 系のクレジットで最後に使われた名義。
   `primary_alias_id` int                                                                  DEFAULT NULL,
@@ -1736,12 +1736,12 @@ DROP TABLE IF EXISTS `person_aliases`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `person_aliases` (
   `alias_id`              int                                                                 NOT NULL AUTO_INCREMENT,
-  `name`                  varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `name`                  varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
   `name_kana`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `name_en`               varchar(128) DEFAULT NULL,
   -- 表示用上書き文字列。ユニット名義などで定形外の長い表記が必要なケース用。
   -- 非 NULL のときアプリ側の表示ロジックは name より優先してこの値を使う。
-  `display_text_override` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `display_text_override` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
   `predecessor_alias_id`  int          DEFAULT NULL,
   `successor_alias_id`    int          DEFAULT NULL,
   `valid_from`            date         DEFAULT NULL,

@@ -58,6 +58,8 @@ public sealed class EntityUrlRegistry
     /// 映画の「美術設定」（ART_SETTING）は「美術デザイン」に統合した（表記は role_label_text で「美術設定」のまま）。
     /// 3D の「システム管理」（SYSTEM_ADMINISTRATION_3D）は役職コードを CG_TECHNICAL_SUPPORT（CGテクニカルサポート）に改めた
     /// （「システム管理」と出ていた作品の表記は role_label_text で残している）。
+    /// 3D の「アニメーションスーパーバイザー」（ANIMATION_SUPERVISOR_3D）は役職コードを CG_ANIMATION_SUPERVISOR
+    /// （CGアニメーションスーパーバイザー）に改めた（「アニメーションスーパーバイザー」と出ていた作品の表記は role_label_text で残している）。
     /// 転送先の役職ページは系譜の代表で決まるので、使うたびに組み立てる（系譜の読み込みより前に作らない）。
     /// </summary>
     private static (string From, string To)[] RetiredPageRedirects => new[]
@@ -67,6 +69,7 @@ public sealed class EntityUrlRegistry
         ("/creators/roles/film_lab_coordinator", PathUtil.CreatorsRoleUrl("TECHNICAL_COORDINATOR")),
         ("/creators/roles/art_setting", PathUtil.CreatorsRoleUrl("ART_DESIGN")),
         ("/creators/roles/system_administration_3d", PathUtil.CreatorsRoleUrl("CG_TECHNICAL_SUPPORT")),
+        ("/creators/roles/animation_supervisor_3d", PathUtil.CreatorsRoleUrl("CG_ANIMATION_SUPERVISOR")),
     };
 
     private readonly Dictionary<int, string> _personUrls = new();

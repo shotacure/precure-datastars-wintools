@@ -219,6 +219,8 @@ public sealed class SeriesGenerator
     /// <c>series_precures</c> に紐付くプリキュアを先に今までどおりの表記（変身前 / 変身後 (CV)）で出し、続けてそれ以外
     /// （客演）を略記（変身後の名前から「キュア」を除いたもの）で出す。クレジットが無い（プリキュアが 1 人も出ていない）
     /// 作品は、<c>series_precures</c> に行があっても出さない。
+    /// <c>precures.counts_only_when_transformed</c> が 1 のプリキュア（キュアモフルン）は、その作品自身の <c>series_precures</c> に
+    /// 行がある作品（変身した作品）でだけ数える。
     /// どちらもクレジットに出てくる順（OP → ED → そのほか、カード・ティア・グループ・役職・ブロック・エントリの順で最初に出た所）。
     /// </para>
     /// </summary>
@@ -282,6 +284,8 @@ public sealed class SeriesGenerator
                 if (aliasById.TryGetValue(a, out var precureAlias)) precureByCharacter.TryAdd(precureAlias.CharacterId, p);
             }
         }
+        // 変身した作品だけ数えるプリキュア（キュアモフルン）。その作品自身の series_precures に行がある作品（＝変身した作品）でだけ数える
+        var countsOnlyWhenTransformedIds = new HashSet<int>(allPrecures.Where(p => p.CountsOnlyWhenTransformed).Select(p => p.PrecureId));
         foreach (var series in _ctx.Series)
         {
             if (!_ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var kind)
@@ -289,6 +293,7 @@ public sealed class SeriesGenerator
             // 作品単位の作品は、クレジットに出たプリキュアだけを出す（クレジットが無ければ出さない）
             dict.Remove(series.SeriesId);
             if (!_ctx.CreditsBySeries.TryGetValue(series.SeriesId, out var credits)) continue;
+            var linkedIds = new HashSet<int>(allPairs.Where(x => x.SeriesId == series.SeriesId).Select(x => x.PrecureId));
             // クレジットに出てくる順（最初に出た所）で集める
             var found = new List<Precure>();
             var seen = new HashSet<int>();
@@ -305,12 +310,13 @@ public sealed class SeriesGenerator
                     if (!precureByAlias.TryGetValue(ca, out var hit)
                         && !(aliasById.TryGetValue(ca, out var creditedAlias) && precureByCharacter.TryGetValue(creditedAlias.CharacterId, out hit)))
                         continue;
-                    if (seen.Add(hit!.PrecureId)) found.Add(hit);
+                    if (countsOnlyWhenTransformedIds.Contains(hit!.PrecureId) && !linkedIds.Contains(hit.PrecureId)) continue;
+                    if (seen.Add(hit.PrecureId)) found.Add(hit);
                 }
             }
             if (found.Count == 0) continue;
             // その作品か親の TV シリーズに紐付くプリキュアは今までどおりの表記で先に、それ以外は略記で続ける
-            var ownIds = new HashSet<int>(allPairs.Where(x => x.SeriesId == series.SeriesId).Select(x => x.PrecureId));
+            var ownIds = new HashSet<int>(linkedIds);
             if (series.ParentSeriesId is int parentId
                 && _ctx.Series.FirstOrDefault(x => x.SeriesId == parentId) is { } parent
                 && string.Equals(parent.KindCode, "TV", StringComparison.Ordinal))

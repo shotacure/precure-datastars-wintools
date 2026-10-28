@@ -2155,6 +2155,7 @@ CREATE TABLE `precures` (
   `transform_alias_id`     int                NOT NULL,
   `transform2_alias_id`    int                DEFAULT NULL,
   `alt_form_alias_id`      int                DEFAULT NULL,
+  `counts_only_when_transformed` tinyint(1)   NOT NULL DEFAULT '0',  -- 1=作品単位の作品のプリキュアの欄で、その作品の series_precures に行がある作品（変身した作品）でだけ数える（キュアモフルン）
   `voice_actor_person_id`  int                DEFAULT NULL,
   `key_color`              char(7)            DEFAULT NULL,  -- シリーズ一覧プリキュアバッジの地色（#RRGGBB、NULL=未設定）
   `skin_color_h`           smallint unsigned  DEFAULT NULL,

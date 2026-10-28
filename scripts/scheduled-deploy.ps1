@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  precure.tv の定時の本番デプロイ。コミット済みの develop を一時作業ツリーに取り出し、deploy.ps1 を流す。
+  precure.tv の定時の本番デプロイ。リポジトリの作業フォルダで deploy.ps1 を流す。
 
 .DESCRIPTION
   毎日 8:00 と、毎週水曜・土曜の 8:30 にタスクスケジューラから動かす（登録は register-deploy-task.ps1）。
@@ -9,18 +9,13 @@
   8:00 の回でそれまでの変更を流しておくので、8:30 の回は差分がほぼコラムだけになる。
   サイト全体を作り直すため、その時点の DB の内容（その週に入れたクレジットなど）も一緒に公開される。
 
-  作業中のファイル（未コミットの変更）を公開しないよう、リポジトリの作業ツリーではなく、
-  コミット済みの develop を git worktree で一時フォルダに取り出してビルドする。
-  App.config は git に入れていないので、リポジトリの SiteBuilder・ArtTrackRefresh・AmazonSync のものを写して使う。
-  出力先・キャッシュは App.config の絶対パスなので、手動のデプロイと共用になる。
+  手動のデプロイ（deploy.ps1 を作業フォルダで流す）とまったく同じことをする。コードはその時点の作業フォルダのもの
+  （未コミットの変更も含む）、App.config・出力先・作り置き（OGP カード・テロップ画像）も手動のデプロイと同じものを使う。
 
   安全ゲート（大量の削除・ビルド警告）で止まったときや失敗したときは公開しない。
   経過はすべてログ（%LOCALAPPDATA%\precure-datastars\scheduled-deploy.log）に追記する。
   公開できなかったときは Windows の通知（トースト）を出す。通知は Windows PowerShell 5.1 の WinRT で出すので、
   PowerShell 7 から動かしても出る。通知を出せなかったときはログに書くだけで、デプロイの結果は変えない。
-
-.PARAMETER Branch
-  取り出すブランチ。既定 develop。
 
 .PARAMETER DryRunOnly
   差分の確認（deploy.ps1 -DryRunOnly）だけを行い、本番には反映しない。仕組みの動作確認に使う。
@@ -32,11 +27,10 @@
   .\scripts\scheduled-deploy.ps1
 .EXAMPLE
   .\scripts\scheduled-deploy.ps1 -DryRunOnly
-  本番に出さずに、一時作業ツリーでのビルドと差分の確認までを試す。
+  本番に出さずに、ビルドと差分の確認までを試す。
 #>
 [CmdletBinding()]
 param(
-    [string]$Branch = 'develop',
     [switch]$DryRunOnly,
     [switch]$TestNotification
 )
@@ -86,29 +80,18 @@ if ($TestNotification) {
     return
 }
 
-$worktree = Join-Path ([IO.Path]::GetTempPath()) ("precure-tv-deploy-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 $succeeded = $false
 $failureReason = ''
-Write-Log "=== 定時デプロイを始めます（$Branch）==="
+Write-Log "=== 定時デプロイを始めます ==="
 try {
-    $commit = (& git -C $repoRoot rev-parse --short $Branch).Trim()
-    if ($LASTEXITCODE -ne 0) { throw "ブランチ $Branch を読めません。" }
-    Write-Log "コミット $commit を一時作業ツリーに取り出します。"
-
-    & git -C $repoRoot worktree add --detach $worktree $Branch | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "一時作業ツリーを作れませんでした。" }
-
-    # deploy.ps1 が動かす 3 つのプロジェクト（配信音源の再確認・Amazon の画像の取り直し・サイトのビルド）の App.config を写す。
-    foreach ($configProject in 'PrecureDataStars.ArtTrackRefresh', 'PrecureDataStars.AmazonSync', 'PrecureDataStars.SiteBuilder') {
-        $appConfig = Join-Path $repoRoot "$configProject/App.config"
-        if (-not (Test-Path -LiteralPath $appConfig)) { throw "App.config がありません: $configProject/App.config" }
-        Copy-Item -LiteralPath $appConfig -Destination (Join-Path $worktree "$configProject/App.config")
-    }
+    $commit = (& git -C $repoRoot rev-parse --short HEAD).Trim()
+    $dirty = @(& git -C $repoRoot status --porcelain).Count
+    Write-Log "作業フォルダ（コミット $commit、未コミットの変更 $dirty 件）でビルドします。"
 
     # deploy.ps1 の出力はすべてログにも残す（ゲートで止まった理由・差分の件数を後から読めるように）。
     $deployArgs = @{}
     if ($DryRunOnly) { $deployArgs['DryRunOnly'] = $true; Write-Log "差分の確認だけを行います（-DryRunOnly）。" }
-    & (Join-Path $worktree 'scripts/deploy.ps1') @deployArgs *>&1 | ForEach-Object {
+    & (Join-Path $repoRoot 'scripts/deploy.ps1') @deployArgs *>&1 | ForEach-Object {
         Add-Content -LiteralPath $logPath -Value "    $_" -Encoding UTF8
         $_
     }
@@ -119,11 +102,6 @@ catch {
     Write-Log "失敗しました：$failureReason"
 }
 finally {
-    if (Test-Path -LiteralPath $worktree) {
-        & git -C $repoRoot worktree remove --force $worktree 2>&1 | Out-Null
-        if (Test-Path -LiteralPath $worktree) { Remove-Item -LiteralPath $worktree -Recurse -Force -ErrorAction SilentlyContinue }
-        & git -C $repoRoot worktree prune 2>&1 | Out-Null
-    }
     Write-Log ("=== 定時デプロイを終えました：{0} ===" -f ($(if ($succeeded) { '成功' } else { '公開していません' })))
 }
 

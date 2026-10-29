@@ -25,6 +25,7 @@ precure-datastars-wintools.sln
 ├── PrecureDataStars.AmazonSync … Creators API 画像一括取得・書籍取り込み（コンソール）
 ├── PrecureDataStars.TitleCharStatsRefresh … サブタイトル文字統計の作り直し（内部用コンソール）
 ├── PrecureDataStars.ArtTrackRefresh … 配信音源（YouTube アートトラック）の定期の再確認（内部用コンソール）
+├── PrecureDataStars.DeezerIsrcSync … 配信版の ISRC の取り込み（内部用コンソール）
 │
 ├── PrecureDataStars.BDAnalyzer … Blu-ray/DVD チャプター解析（WinForms）＋DB 連携
 ├── PrecureDataStars.CDAnalyzer … CD-DA トラック解析・音の特徴の記録（WinForms）＋DB 連携
@@ -58,6 +59,7 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.AmazonSync** | コンソール | `products` テーブルから ASIN を持つ商品を抽出し、Creators API GetItems で `cover_image_url` を一括更新するバッチ。鮮度切れ判定（取得から 20 時間経過 or 未取得）で対象を絞り込み（Amazon アソシエイトの Creators API 使用要件で、画像のリンクの保存は最長 24 時間。本番デプロイの `scripts/deploy.ps1` がビルドの前に `--target all` で流し、毎日の定時デプロイで全件を取り直す。Amazon が答えたうえで画像が無かった側は保存していた URL を空にし、通信・応答の失敗があったものは書き換えずに次の巡回で取り直す）、Creators API レート制限（1 TPS）順守のため各リクエスト間に 1.1 秒スリープを挟む。CLI オプションは `--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--search "キーワード" --index Books`（検索の診断）／`--dry-run`（DB 更新せず表示のみ）／`--target products|books|all`（巡回対象の切替）。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録。書籍については表紙巡回（代表は紙優先）に加えて、`--import-book`（ASIN から書誌・書影・クレジットを組み立てて `books` へ登録）と `--attach-print --book-id N --print-asin X`（Kindle 版だけで登録済みの書籍へ紙版を合流）も担う。 |
 | **PrecureDataStars.TitleCharStatsRefresh** | コンソール（内部用） | 指定したエピソードの `title_text` を Episodes の保存時と同じ `TitleCharStatsBuilder` にかけ、`title_char_stats` を作り直す。サブタイトルを DB 直接で直したあとに使う。引数だけなら DB の統計との違いを表示するのみで、`--apply` を付けたときだけ違いのある話を 1 トランザクションで書き換える（`title_char_stats` 以外の列には触れない）。配布 ZIP には含めない。使い方は「エピソード管理」を参照。 |
 | **PrecureDataStars.ArtTrackRefresh** | コンソール（内部用） | 割り当て済みの配信音源（YouTube アートトラック）を YouTube Data API で確かめ直し、埋め込み可否・地域制限・確認時刻を更新する。消えた動画は割り当てを外し、変化のあった商品は取り込み状態を `AMBIGUOUS` に戻す。`scripts/deploy.ps1` が本番デプロイの最初に流す。配布 ZIP には含めない。使い方は「商品・ディスク管理画面」の「配信音源の取り込みと再確認」を参照。 |
+| **PrecureDataStars.DeezerIsrcSync** | コンソール（内部用） | CD のトラックに、配信版の ISRC（`tracks.digital_isrc`）を Deezer の公開 API（認証なし）から取り込む。商品ごとに配信のアルバムを特定し（`products.deezer_album_id`）、「何枚目・何曲目」で突き合わせる。定時デプロイには組み込まず手で回す。配布 ZIP には含めない。使い方は「商品・ディスク管理画面」の「配信版の ISRC」を参照。 |
 
 ---
 
@@ -91,7 +93,7 @@ mysql -u root -p < db/schema.sql
 
 ### 2. 接続文字列の設定
 
-DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / SiteBuilder / AmazonSync / TitleCharStatsRefresh / ArtTrackRefresh）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。Catalog と ArtTrackRefresh は、配信音源を扱うための YouTube Data API v3 の API キー（`appSettings` の `YouTube.ApiKey`）も設定する。
+DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / SiteBuilder / AmazonSync / TitleCharStatsRefresh / ArtTrackRefresh / DeezerIsrcSync）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。Catalog と ArtTrackRefresh は、配信音源を扱うための YouTube Data API v3 の API キー（`appSettings` の `YouTube.ApiKey`）も設定する。
 
 ```xml
 <connectionStrings>
@@ -392,6 +394,18 @@ UDF ハードリンクの検出は、`VTS_*_1.VOB` のバイト数が全て同�
 dotnet run --project PrecureDataStars.ArtTrackRefresh -- --dry-run              # 書き込まずに結果だけ表示
 dotnet run --project PrecureDataStars.ArtTrackRefresh                            # 確かめ直して書き込む
 dotnet run --project PrecureDataStars.ArtTrackRefresh -- --allow-mass-removal   # 消えた動画が多くて止まったとき、中身を確かめたうえで通す
+```
+
+**配信版の ISRC**: 同じ盤でも、配信では ISRC が CD と違う番号に振り直されていることがある（CD で別の盤と番号が重なっていた盤が、配信では直されているなど）。`PrecureDataStars.DeezerIsrcSync` が Deezer の公開 API（`https://api.deezer.com/`。認証なし、5 秒あたり 50 リクエストに収めて送る）から配信版の ISRC を取り、CD のトラック（媒体が CD のディスクの `sub_order=0` の親行。データトラックは除く）の `tracks.digital_isrc` と確認時刻 `digital_isrc_checked_at` に書く。CD と同じ値でも入れ、確認時刻が NULL のトラックは未確認。照らしたアルバムの id は `products.deezer_album_id` に残す。配信にだけある曲・配信限定の盤は、CD のトラックが無いので表せない。
+
+- **アルバムの候補**：前回照らしたアルバム、品番から組んだ JAN（マーベラスの品番 `MJxx-NNNNN` は JAN が `4535506`＋数字 5 桁＋チェックデジット）で `/album/upc:` を引いたもの、CD の ISRC を 3 曲（先頭・中ほど・末尾）`/track/isrc:` で引いたときにその曲が入っているアルバム、の 3 つ。ISRC から引くのは、前の 2 つに「曲の並びが CD と同じで、CD の ISRC の半分以上が入っている」アルバムが無いときだけ。
+- **決め方**：何枚目ごとの曲数が CD と同じで、曲の並びが入れ替わっていない（番号の違う位置に CD の別の位置の番号が来ていない）候補だけを採り、CD の ISRC との重なりがいちばん多いものに決める。重なりが同じなら前回のアルバム → JAN → ISRC の順に先にする（配信で番号が振り直された盤は、CD の ISRC からはそのアルバムに届かないことがあるため）。番号が CD と違う曲があっても採り、その曲も配信の番号で書く。ただし ISRC から引いて決めたアルバムに CD と違う番号があり、そのアルバムがほかの盤のもの（同じ回で CD と全曲同じ番号で決まった盤か、前回そのアルバムに決まった盤）なら書かない（CD+DVD 盤に、カラオケの番号だけが違う通常盤のアルバムが当たるため）。トラックは「何枚目（CD のディスクの並び）・何曲目（データトラックを除いた並び）」で突き合わせる。
+- **書き込まない盤**：候補が無い（見つからない）、曲数か並びが CD と同じ候補が無い（配信ではカラオケが無いなど）、ISRC から引いたアルバムがほかの盤のもの（ほかの盤のアルバム）、ISRC から引いた候補どうしで中身が割れた（候補が割れた）盤は書かずに一覧に出す。一致した盤のうち配信版の ISRC が CD と違うものは、曲ごとに並べる。
+
+```bash
+dotnet run --project PrecureDataStars.DeezerIsrcSync -- --dry-run                       # 書き込まずに結果だけ表示
+dotnet run --project PrecureDataStars.DeezerIsrcSync                                    # 照らして書き込む
+dotnet run --project PrecureDataStars.DeezerIsrcSync -- --dry-run --product MJSA-01373  # 商品 1 点だけ
 ```
 
 #### B'. 既存商品への追加ディスク登録フロー

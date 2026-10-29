@@ -31,6 +31,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrecureDataStars.TitleCharS
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrecureDataStars.ArtTrackRefresh", "PrecureDataStars.ArtTrackRefresh\PrecureDataStars.ArtTrackRefresh.csproj", "{BE6A1A78-7ECB-4EED-A414-3387B0F84CFF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrecureDataStars.DeezerIsrcSync", "PrecureDataStars.DeezerIsrcSync\PrecureDataStars.DeezerIsrcSync.csproj", "{CFA5E6F2-43D1-4F3C-B4AB-D17D136692F5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -209,6 +211,18 @@ Global
 		{BE6A1A78-7ECB-4EED-A414-3387B0F84CFF}.Release|x64.Build.0 = Release|Any CPU
 		{BE6A1A78-7ECB-4EED-A414-3387B0F84CFF}.Release|x86.ActiveCfg = Release|Any CPU
 		{BE6A1A78-7ECB-4EED-A414-3387B0F84CFF}.Release|x86.Build.0 = Release|Any CPU
+		{CFA5E6F2-43D1-4F3C-B4AB-D17D136692F5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CFA5E6F2-43D1-4F3C-B4AB-D17D136692F5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CFA5E6F2-43D1-4F3C-B4AB-D17D136692F5}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{CFA5E6F2-43D1-4F3C-B4AB-D17D136692F5}.Debug|x64.Build.0 = Debug|Any CPU
+		{CFA5E6F2-43D1-4F3C-B4AB-D17D136692F5}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{CFA5E6F2-43D1-4F3C-B4AB-D17D136692F5}.Debug|x86.Build.0 = Debug|Any CPU
+		{CFA5E6F2-43D1-4F3C-B4AB-D17D136692F5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CFA5E6F2-43D1-4F3C-B4AB-D17D136692F5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CFA5E6F2-43D1-4F3C-B4AB-D17D136692F5}.Release|x64.ActiveCfg = Release|Any CPU
+		{CFA5E6F2-43D1-4F3C-B4AB-D17D136692F5}.Release|x64.Build.0 = Release|Any CPU
+		{CFA5E6F2-43D1-4F3C-B4AB-D17D136692F5}.Release|x86.ActiveCfg = Release|Any CPU
+		{CFA5E6F2-43D1-4F3C-B4AB-D17D136692F5}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

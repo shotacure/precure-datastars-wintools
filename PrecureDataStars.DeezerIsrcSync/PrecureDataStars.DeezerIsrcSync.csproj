@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    PrecureDataStars.DeezerIsrcSync
+      CD のトラックに、配信版の ISRC（tracks.digital_isrc）を Deezer の公開 API（認証なし）から取り込む内部用コンソール。
+      商品ごとに配信のアルバムを特定し（products.deezer_album_id）、「何枚目・何曲目」でトラックと突き合わせる。
+      配信の番号はほとんど変わらないため、定時デプロイには組み込まず手で回す。配布 ZIP には含めない。
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>PrecureDataStars.DeezerIsrcSync</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PrecureDataStars.Data\PrecureDataStars.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- App.config から接続文字列を読み出すため。 -->
+    <PackageReference Include="System.Configuration.ConfigurationManager" />
+  </ItemGroup>
+
+</Project>

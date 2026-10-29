@@ -59,6 +59,7 @@ public sealed class ProductsRepository : RepositoryBase
           youtube_art_track_playlist_id  AS YoutubeArtTrackPlaylistId,
           youtube_art_track_status       AS YoutubeArtTrackStatus,
           youtube_art_track_checked_at   AS YoutubeArtTrackCheckedAt,
+          deezer_album_id                AS DeezerAlbumId,
           created_at                     AS CreatedAt,
           updated_at                     AS UpdatedAt,
           created_by                     AS CreatedBy,
@@ -278,6 +279,21 @@ public sealed class ProductsRepository : RepositoryBase
             Status = status,
             CheckedAt = checkedAt
         }, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>配信版の ISRC を照らした Deezer の album id を書き込む。DeezerIsrcSync の書き戻し経路で、商品の他項目には触れない。</summary>
+    /// <param name="productCatalogNo">対象商品の代表品番。</param>
+    /// <param name="deezerAlbumId">Deezer の album id。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task UpdateDeezerAlbumIdAsync(
+        string productCatalogNo, long deezerAlbumId, CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE products SET deezer_album_id = @DeezerAlbumId
+            WHERE product_catalog_no = @ProductCatalogNo;
+            """;
+
+        await ExecuteAsync(sql, new { ProductCatalogNo = productCatalogNo, DeezerAlbumId = deezerAlbumId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>配信音源の取り込み状態だけを <c>AMBIGUOUS</c>（あとで人が確認する目印）にする。 定期の再確認で、割り当て済みの動画が消えていた・再生できなくなっていた商品に付ける。 プレイリスト ID と取り込み時刻には触れない。</summary>

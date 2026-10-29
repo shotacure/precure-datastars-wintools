@@ -791,6 +791,8 @@ CREATE TABLE `products` (
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションに公式ページとして出す。
   `official_url` varchar(1024) DEFAULT NULL,
+  -- 配信版の ISRC を照らした Deezer の album id（DeezerIsrcSync が書く）。照合できなかった商品は NULL。
+  `deezer_album_id` bigint DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
@@ -1189,6 +1191,10 @@ CREATE TABLE `tracks` (
   `cd_text_title` varchar(255) DEFAULT NULL,
   `cd_text_performer` varchar(255) DEFAULT NULL,
   `notes` varchar(1024) DEFAULT NULL,
+  -- 配信版の ISRC（DeezerIsrcSync が Deezer の公開 API から書く）。sub_order = 0 の親行にだけ持つ。
+  -- CD と同じ値でも入れ、digital_isrc_checked_at が NULL なら未確認。
+  `digital_isrc` char(12) DEFAULT NULL,
+  `digital_isrc_checked_at` datetime DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,

@@ -115,6 +115,18 @@ public sealed class Track
     /// </summary>
     public DateTime? YoutubeCheckedAt { get; set; }
 
+    // ── 配信版の ISRC ──
+
+    /// <summary>
+    /// 配信版の ISRC（12 文字）。Deezer の公開 API から DeezerIsrcSync が取り込む。
+    /// 配信では CD と違う番号に振り直されていることがあるため、<see cref="Isrc"/> とは別に持つ。
+    /// CD と同じ値でも入れる。<c>sub_order=0</c> の親行にだけ持つ。
+    /// </summary>
+    public string? DigitalIsrc { get; set; }
+
+    /// <summary>配信版の ISRC を確かめた時刻。NULL は未確認（「確かめて CD と同じ」と区別する）。</summary>
+    public DateTime? DigitalIsrcCheckedAt { get; set; }
+
     // ── 監査 ──
 
     /// <summary>作成日時。</summary>

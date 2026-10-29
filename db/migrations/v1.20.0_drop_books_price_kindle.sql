@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.19.1_drop_books_price_kindle.sql
+-- v1.20.0_drop_books_price_kindle.sql
 --
 -- books から Kindle 版の税込価格 price_kindle_inc_tax と、その CHECK 制約
 -- ck_books_price_kindle_nonneg を外す。

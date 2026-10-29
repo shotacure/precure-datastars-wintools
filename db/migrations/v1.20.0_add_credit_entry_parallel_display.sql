@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.19.1_add_credit_entry_parallel_display.sql
+-- v1.20.0_add_credit_entry_parallel_display.sql
 --
 -- クレジットの併記（parallel_with_entry_id）の描き方を、画面どおりに持てるようにする。
 --
@@ -56,4 +56,4 @@ DELIMITER ;
 CALL _v1191_add_credit_entry_parallel_display();
 DROP PROCEDURE IF EXISTS _v1191_add_credit_entry_parallel_display;
 
-SELECT 'v1.19.1 migration completed: credit_block_entries += parallel_prefix / parallel_suffix / parallel_small' AS final_status;
+SELECT 'v1.20.0 migration completed: credit_block_entries += parallel_prefix / parallel_suffix / parallel_small' AS final_status;

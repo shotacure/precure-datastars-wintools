@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.19.1_add_song_credit_affiliation_display.sql
+-- v1.20.0_add_song_credit_affiliation_display.sql
 --
 -- 歌の作家連名（song_credits）の所属の出し方を、行ごとに選べるようにする。
 --   affiliation_display  ENUM('NAME_WITH_COMPANY','COMPANY_ONLY','NAME_ONLY') NOT NULL DEFAULT 'NAME_WITH_COMPANY'

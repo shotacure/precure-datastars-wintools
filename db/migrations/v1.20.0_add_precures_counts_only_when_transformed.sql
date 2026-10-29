@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.19.1_add_precures_counts_only_when_transformed.sql
+-- v1.20.0_add_precures_counts_only_when_transformed.sql
 --
 -- 作品単位の作品（映画など）のプリキュアの欄で、変身した作品だけプリキュアとして数えるプリキュアを示せるようにする。
 --

@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.19.1_add_song_recording_singers_slash_voice.sql
+-- v1.20.0_add_song_recording_singers_slash_voice.sql
 --
 -- 歌唱者連名（song_recording_singers）のキャラ歌唱の行（CHARACTER_WITH_CV）に、
 -- 2 人目の声優を持たせる。1 つのキャラを姿によって 2 人の声優が演じる歌唱
@@ -86,4 +86,4 @@ DELIMITER ;
 CALL _v1191_add_srs_slash_voice();
 DROP PROCEDURE IF EXISTS _v1191_add_srs_slash_voice;
 
-SELECT 'v1.19.1 migration completed: song_recording_singers.slash_voice_person_alias_id' AS final_status;
+SELECT 'v1.20.0 migration completed: song_recording_singers.slash_voice_person_alias_id' AS final_status;

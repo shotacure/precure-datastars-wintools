@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.19.1_add_theme_song_instrumental.sql
+-- v1.20.0_add_theme_song_instrumental.sql
 --
 -- 主題歌・挿入歌の紐付け（episode_theme_songs / series_theme_songs）に、その回（その映画）では
 -- インストゥルメンタルで使ったことを示す印を持てるようにする。

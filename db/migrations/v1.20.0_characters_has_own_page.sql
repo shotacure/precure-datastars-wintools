@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.19.1_characters_has_own_page.sql
+-- v1.20.0_characters_has_own_page.sql
 --
 -- characters に「個別ページを持つか」の印 has_own_page を足す。
 --   1 = 個別ページ（/characters/{名前}/）を持つ

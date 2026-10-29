@@ -1,5 +1,5 @@
 -- =====================================================================
--- v1.19.1_add_credit_entry_kind_blank.sql
+-- v1.20.0_add_credit_entry_kind_blank.sql
 --
 -- credit_block_entries.entry_kind に BLANK（空きの升）を足す。
 --
@@ -29,4 +29,4 @@ SET @stmt = IF(@needs_enum = 1,
   "SELECT 'credit_block_entries.entry_kind already has BLANK, skipping ALTER' AS msg");
 PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
 
-SELECT 'v1.19.1 migration completed: credit_block_entries.entry_kind += BLANK' AS final_status;
+SELECT 'v1.20.0 migration completed: credit_block_entries.entry_kind += BLANK' AS final_status;

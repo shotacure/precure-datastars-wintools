@@ -310,6 +310,15 @@ public sealed class ParsedEntry
     /// <summary>A/B 併記の継続行フラグ。</summary>
     public bool IsParallelContinuation { get; set; }
 
+    /// <summary>併記のエントリの名前の前に付く字（<c>&amp;{前|後|small} </c> の 1 つ目の欄）。null は何も付けない。</summary>
+    public string? ParallelPrefix { get; set; }
+
+    /// <summary>併記のエントリの名前の後ろに付く字（同 2 つ目の欄）。null は何も付けない。</summary>
+    public string? ParallelSuffix { get; set; }
+
+    /// <summary>併記のエントリを小さい字で描く（同 3 つ目の欄が <c>small</c>）。</summary>
+    public bool ParallelSmall { get; set; }
+
     /// <summary>エントリ単位の備考。</summary>
     public string? Notes { get; set; }
 

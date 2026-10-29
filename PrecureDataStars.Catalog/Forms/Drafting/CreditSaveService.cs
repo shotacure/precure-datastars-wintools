@@ -621,14 +621,16 @@ internal sealed class CreditSaveService
                person_misprint_text, character_misprint_text, company_misprint_text, person_masked_text,
                company_alias_id, logo_id, raw_text,
                affiliation_company_alias_id, affiliation_person_alias_id, affiliation_logo_id, affiliation_text, affiliation_inline,
-               parallel_with_entry_id, notes, created_by, updated_by)
+               parallel_with_entry_id, parallel_prefix, parallel_suffix, parallel_small,
+               notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
                @PersonMisprintText, @CharacterMisprintText, @CompanyMisprintText, @PersonMaskedText,
                @CompanyAliasId, @LogoId, @RawText,
                @AffiliationCompanyAliasId, @AffiliationPersonAliasId, @AffiliationLogoId, @AffiliationText, @AffiliationInline,
-               @ParallelWithEntryId, @Notes, @CreatedBy, @UpdatedBy);
+               @ParallelWithEntryId, @ParallelPrefix, @ParallelSuffix, @ParallelSmall,
+               @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, e, transaction: tx, cancellationToken: ct));
@@ -793,6 +795,9 @@ internal sealed class CreditSaveService
               affiliation_text = @AffiliationText,
               affiliation_inline = @AffiliationInline,
               parallel_with_entry_id = @ParallelWithEntryId,
+              parallel_prefix = @ParallelPrefix,
+              parallel_suffix = @ParallelSuffix,
+              parallel_small = @ParallelSmall,
               notes = @Notes,
               updated_by = @UpdatedBy
             WHERE entry_id = @EntryId;

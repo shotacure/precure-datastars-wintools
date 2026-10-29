@@ -348,6 +348,9 @@ internal sealed class CreditDraftLoader
         AffiliationLogoId = s.AffiliationLogoId,
         AffiliationText = s.AffiliationText,
         AffiliationInline = s.AffiliationInline,
+        ParallelPrefix = s.ParallelPrefix,
+        ParallelSuffix = s.ParallelSuffix,
+        ParallelSmall = s.ParallelSmall,
         Notes = s.Notes,
         CreatedBy = s.CreatedBy,
         UpdatedBy = s.UpdatedBy

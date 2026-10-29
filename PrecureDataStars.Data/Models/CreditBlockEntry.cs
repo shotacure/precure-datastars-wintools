@@ -102,8 +102,19 @@ public sealed class CreditBlockEntry
     /// 既定値は true（インライン）。所属を持たない（両カラム NULL）エントリでは意味を持たない。</summary>
     public bool AffiliationInline { get; set; } = true;
 
-    /// <summary>「A / B」併記の相手 entry_id への自参照（任意）。</summary>
+    /// <summary>「A / B」併記の相手 entry_id への自参照（任意）。
+    /// 値のあるエントリは独立した行にならず、相手（同じブロックの前のエントリ）の行に並べて描く。</summary>
     public int? ParallelWithEntryId { get; set; }
+
+    /// <summary>併記のエントリの名前の前に付く字（「ダークマター／クマタ」の「／」、「野乃はな（キュアエール）」の「（」など）。
+    /// NULL は何も付けない。<see cref="ParallelWithEntryId"/> のあるエントリでだけ意味を持つ。</summary>
+    public string? ParallelPrefix { get; set; }
+
+    /// <summary>併記のエントリの名前の後ろに付く字（「（キュアエール）」の「）」など）。NULL は何も付けない。</summary>
+    public string? ParallelSuffix { get; set; }
+
+    /// <summary>true なら併記のエントリ（前後の字を含む）を小さい字で描く。</summary>
+    public bool ParallelSmall { get; set; }
 
     /// <summary>備考。</summary>
     public string? Notes { get; set; }

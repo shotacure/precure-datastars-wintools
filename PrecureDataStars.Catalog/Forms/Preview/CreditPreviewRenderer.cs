@@ -1960,19 +1960,33 @@ internal sealed class CreditPreviewRenderer
                 prevCharLabel = null;
             }
 
+            // 併記の CHARACTER_VOICE エントリは独立した行にせず、相手の行の役名の升に並べる（SiteBuilder と同じ）。
+            var rowEntries = FoldParallelCharacterEntries(bs.Entries, out var parallelFollowers);
+
             // 各エントリの表示要素を先に解決し、隣接 CHARACTER_VOICE 行で actor 表示 HTML が一致する
             // 連続区間（n 役連続）を rowspan で結合する事前計算を行う。actor の同一性判定は
             // 「最終的に表示される actor-cell の HTML 文字列」で行うため、所属（affiliation）や
             // スラッシュ配偶名義の違いがあれば自動的に別グループとして扱われる。
-            int entryCount = bs.Entries.Count;
+            // 併記で畳んだエントリは行を持たないので、この計算にも入らない。
+            int entryCount = rowEntries.Count;
             var resolved = new (bool IsCharVoice, string CharLabel, string CharHtml, string ActorHtml, string EntryHtml)[entryCount];
             for (int i = 0; i < entryCount; i++)
             {
-                var ent = bs.Entries[i];
+                var ent = rowEntries[i];
                 if (ent.EntryKind == "CHARACTER_VOICE")
                 {
                     string lbl = await ResolveCharacterLabelAsync(ent, ct);
                     string chh = await ResolveCharacterLabelHtmlAsync(ent, ct);
+                    if (parallelFollowers.TryGetValue(i, out var followers))
+                    {
+                        // 併記の役名を前後の字つきで後ろに並べる。同じ役名の続きの判定にも含める。
+                        foreach (var f in followers)
+                        {
+                            lbl += (f.ParallelPrefix ?? "") + await ResolveCharacterLabelAsync(f, ct) + (f.ParallelSuffix ?? "");
+                            string inner = Esc(f.ParallelPrefix ?? "") + await ResolveCharacterLabelHtmlAsync(f, ct) + Esc(f.ParallelSuffix ?? "");
+                            chh += f.ParallelSmall ? $"<small>{inner}</small>" : inner;
+                        }
+                    }
                     string ahh = await ResolvePersonWithAffiliationHtmlAsync(ent, ct);
                     resolved[i] = (true, lbl, chh, ahh, "");
                 }
@@ -2008,7 +2022,6 @@ internal sealed class CreditPreviewRenderer
 
             for (int i = 0; i < entryCount; i++)
             {
-                var e = bs.Entries[i];
                 var slot = resolved[i];
                 bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
@@ -2131,6 +2144,49 @@ internal sealed class CreditPreviewRenderer
         }
 
         html.Append("</table>");
+    }
+
+    /// <summary>
+    /// 声の出演のブロックのエントリから、併記の CHARACTER_VOICE エントリを取り除いた「行になるエントリ」の並びを返す。
+    /// 取り除いたエントリは、相手の行の位置（戻り値の添字）ごとに <paramref name="followers"/> に並び順のまま集める。
+    /// 併記と見なすのは、<see cref="CreditBlockEntry.ParallelWithEntryId"/> が同じブロックの前のエントリを指すもの
+    /// （保存済み）と、未保存（entry_id が 0）で前後の字・小さい字の指定（<c>&amp;{前|後|small} </c>）を持つもの
+    /// （一括入力から入れた直後。直前の行に並べる）。相手の無い併記のエントリは普通の行として残す。
+    /// </summary>
+    private static List<CreditBlockEntry> FoldParallelCharacterEntries(
+        IReadOnlyList<CreditBlockEntry> entries,
+        out Dictionary<int, List<CreditBlockEntry>> followers)
+    {
+        followers = new Dictionary<int, List<CreditBlockEntry>>();
+        var rows = new List<CreditBlockEntry>(entries.Count);
+        // entry_id → その行の添字（併記の併記は先頭の行にまとめる）
+        var rowIndexOf = new Dictionary<int, int>();
+        foreach (var e in entries)
+        {
+            int? head = null;
+            if (e.EntryKind == "CHARACTER_VOICE" && rows.Count > 0)
+            {
+                if (e.ParallelWithEntryId is int target && target != 0 && rowIndexOf.TryGetValue(target, out int idx))
+                    head = idx;
+                else if (e.EntryId == 0 && (e.ParallelPrefix is not null || e.ParallelSuffix is not null || e.ParallelSmall)
+                         && rows[^1].EntryKind == "CHARACTER_VOICE")
+                    head = rows.Count - 1;
+            }
+            if (head is int h)
+            {
+                if (!followers.TryGetValue(h, out var list))
+                {
+                    list = new List<CreditBlockEntry>();
+                    followers[h] = list;
+                }
+                list.Add(e);
+                if (e.EntryId != 0) rowIndexOf[e.EntryId] = h;
+                continue;
+            }
+            rows.Add(e);
+            if (e.EntryId != 0) rowIndexOf[e.EntryId] = rows.Count - 1;
+        }
+        return rows;
     }
 
     /// <summary>CHARACTER_VOICE エントリのキャラ名義表示文字列（プレーンテキスト）を返す。 character_alias_id があればそれを優先し、無ければ raw_character_text を、 それも無ければ "(キャラ未指定)" を返す。 ※ 同一キャラ判定（dim 化）の比較キーとしても使うため、誤記マークアップは含めない。</summary>

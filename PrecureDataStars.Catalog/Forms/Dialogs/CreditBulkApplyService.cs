@@ -1003,6 +1003,10 @@ public sealed class CreditBulkApplyService
                 else
                 {
                     last.RequestParallelWithPrevious = true;
+                    // 併記の描き方（前後に付く字・小さい字）はエントリ自身の列なので、そのまま持たせる。
+                    last.Entity.ParallelPrefix = pe.ParallelPrefix;
+                    last.Entity.ParallelSuffix = pe.ParallelSuffix;
+                    last.Entity.ParallelSmall = pe.ParallelSmall;
                 }
             }
         }
@@ -2770,6 +2774,9 @@ public sealed class CreditBulkApplyService
         sb.Append(e.AffiliationInline ? '1' : '0').Append('|');
         sb.Append(e.IsBroadcastOnly ? '1' : '0').Append('|');
         sb.Append(e.IsParallelContinuation ? '1' : '0').Append('|');
+        sb.Append(e.ParallelPrefix ?? string.Empty).Append('|');
+        sb.Append(e.ParallelSuffix ?? string.Empty).Append('|');
+        sb.Append(e.ParallelSmall ? '1' : '0').Append('|');
         sb.Append(e.Notes ?? string.Empty).Append('|');
         // 誤記もシリアライズに含めて差分検出の対象にする
         // （誤記の追加・削除・修正をエントリ差分として認識させるため）。

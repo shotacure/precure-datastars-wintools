@@ -31,6 +31,10 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     → そのエントリの <c>notes</c> に保存。<c>//</c> 自身を備考に含めたい場合は未対応（実用稀のため）。</description></item>
 ///   <item><description>エントリ行頭の <c>&amp; </c>（半角アンパサンド + スペース）プレフィクス
 ///     → 直前エントリと A/B 併記関係（適用フェーズで <c>parallel_with_entry_id</c> 自参照を解決）。</description></item>
+///   <item><description>エントリ行頭の <c>&amp;{前|後|small} </c> プレフィクス → 併記に加えて、名前の前・後ろに付く字
+///     （<c>parallel_prefix</c> / <c>parallel_suffix</c>）と小さい字で描く指定（<c>parallel_small</c>）。
+///     後ろの字と <c>small</c> は省略可。例: <c>&amp;{／} &lt;クマタ&gt;声優</c>（ダークマター／クマタ）、
+///     <c>&amp;{（|）|small} &lt;キュアエール&gt;声優</c>（野乃はな（キュアエール））。</description></item>
 ///   <item><description><c>@cols=N</c>（ブロック先頭の単独行）→ そのブロックの <c>col_count</c> を明示指定。
 ///     省略時は従来どおりタブ数+1 で推測。</description></item>
 ///   <item><description><c>@blank</c>（セル全体）→ 空きの升（<c>entry_kind = BLANK</c>）。複数列のブロックで、画面の並びの途中に
@@ -214,6 +218,15 @@ public static class CreditBulkInputParser
     // スペース必須としているのは、人物名が偶然 "&" で始まる稀なケース（"AB&CD"等の単語混合）と
     // 衝突しないようにするため。"&山田" は通常の人物名扱い。
     private const string ParallelContinuationMarker = "& ";
+
+    /// <summary>前後に付く字と小さい字の指定つきの併記マーカー <c>&amp;{前|後|small} </c> の開き。</summary>
+    private const string ParallelDisplayMarkerOpen = "&{";
+
+    /// <summary>同マーカーの閉じ（閉じ括弧の後ろに半角スペース）。</summary>
+    private const string ParallelDisplayMarkerClose = "} ";
+
+    /// <summary>同マーカーの 3 つ目の欄で、小さい字で描く指定。</summary>
+    private const string ParallelSmallKeyword = "small";
 
     // 行末の備考コメント区切り: 半角スペース + スラッシュ 2 個 + 半角スペース。
     // 例: "山田 太郎 // 旧名義あり" → 名前部分 "山田 太郎" + 備考 "旧名義あり"。
@@ -1452,6 +1465,9 @@ public static class CreditBulkInputParser
     /// <list type="bullet">
     ///   <item><description>行頭 <c>🎬</c>（U+1F3AC）→ <see cref="ParsedEntry.IsBroadcastOnly"/> = true</description></item>
     ///   <item><description>行頭 <c>&amp; </c> → <see cref="ParsedEntry.IsParallelContinuation"/> = true</description></item>
+    ///   <item><description>行頭 <c>&amp;{前|後|small} </c> → 併記に加えて、名前の前・後ろに付く字と小さい字の指定
+    ///     （<see cref="ParsedEntry.ParallelPrefix"/> / <see cref="ParsedEntry.ParallelSuffix"/> / <see cref="ParsedEntry.ParallelSmall"/>）。
+    ///     後ろの字と <c>small</c> は省略可（<c>&amp;{／} </c>、<c>&amp;{（|）|small} </c>）</description></item>
     ///   <item><description>行末 <c> // 備考</c> → <see cref="ParsedEntry.Notes"/> に値をセット</description></item>
     /// </list>
     /// これらは順序を問わず重ねて指定可能（例: <c>🎬 &amp; 山田 // 備考</c>）。
@@ -1489,6 +1505,9 @@ public static class CreditBulkInputParser
         //    両方付いていた場合は両方有効。重複（"🎬 🎬 山田"）も認める（後者はそのまま name に残す形）。
         bool isBroadcastOnly = false;
         bool isParallelContinuation = false;
+        string? parallelPrefix = null;
+        string? parallelSuffix = null;
+        bool parallelSmall = false;
         // 何度かループして、剥がせるだけ剥がす（順序問わず）。
         bool stripped;
         do
@@ -1508,6 +1527,21 @@ public static class CreditBulkInputParser
                 cell = cell.Substring(ParallelContinuationMarker.Length).TrimStart();
                 stripped = true;
             }
+            // &{前|後|small} マーカー（閉じ括弧の後ろに半角スペース必須）。前後に付く字と小さい字の指定つきの併記。
+            else if (cell.StartsWith(ParallelDisplayMarkerOpen, StringComparison.Ordinal))
+            {
+                int close = cell.IndexOf(ParallelDisplayMarkerClose, ParallelDisplayMarkerOpen.Length, StringComparison.Ordinal);
+                if (close > 0)
+                {
+                    var parts = cell.Substring(ParallelDisplayMarkerOpen.Length, close - ParallelDisplayMarkerOpen.Length).Split('|');
+                    isParallelContinuation = true;
+                    parallelPrefix = parts.Length >= 1 && parts[0].Length > 0 ? parts[0] : null;
+                    parallelSuffix = parts.Length >= 2 && parts[1].Length > 0 ? parts[1] : null;
+                    parallelSmall = parts.Length >= 3 && string.Equals(parts[2].Trim(), ParallelSmallKeyword, StringComparison.OrdinalIgnoreCase);
+                    cell = cell.Substring(close + ParallelDisplayMarkerClose.Length).TrimStart();
+                    stripped = true;
+                }
+            }
         } while (stripped);
 
         if (cell.Length == 0)
@@ -1526,6 +1560,9 @@ public static class CreditBulkInputParser
         {
             if (isBroadcastOnly) e.IsBroadcastOnly = true;
             if (isParallelContinuation) e.IsParallelContinuation = true;
+            if (parallelPrefix is not null) e.ParallelPrefix = parallelPrefix;
+            if (parallelSuffix is not null) e.ParallelSuffix = parallelSuffix;
+            if (parallelSmall) e.ParallelSmall = true;
             if (entryNotes is not null) e.Notes = entryNotes;
             return e;
         }

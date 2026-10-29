@@ -2691,6 +2691,8 @@ CREATE TABLE `credit_role_blocks` (
 -- entry_kind と各参照列の整合性は trigger trg_credit_block_entries_* で担保する。
 -- affiliation_company_alias_id / affiliation_text は人物名義の小カッコ所属用。
 -- parallel_with_entry_id は「A / B」併記の相手 entry を自参照する任意フィールド。
+-- 併記のエントリは独立した行にならず、相手（同じブロックの前のエントリ）の行に並べて描く。
+-- 前後に付く字は parallel_prefix / parallel_suffix、小さい字で描くかは parallel_small。
 --
 DROP TABLE IF EXISTS `credit_block_entries`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -2728,6 +2730,11 @@ CREATE TABLE `credit_block_entries` (
   -- パース時はインライン記法なら 1、別行 `(所属)` 単独行を直前エントリに吸収するときは 0 になる。
   `affiliation_inline`             tinyint(1)      NOT NULL DEFAULT 1,
   `parallel_with_entry_id`         int             DEFAULT NULL,
+  -- 併記のエントリの名前の前・後ろに付く字（「ダークマター／クマタ」の「／」、「野乃はな（キュアエール）」の「（」「）」）。NULL は何も付けない。
+  `parallel_prefix`                varchar(8)   CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `parallel_suffix`                varchar(8)   CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- 1 なら併記のエントリ（前後の字を含む）を小さい字で描く。
+  `parallel_small`                 tinyint(1)      NOT NULL DEFAULT 0,
   `notes`                          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`                     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`                     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

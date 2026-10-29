@@ -1339,19 +1339,35 @@ internal sealed class CreditTreeRenderer
                 prevCharLabel = null;
             }
 
+            // 併記（parallel_with_entry_id）の CHARACTER_VOICE エントリは独立した行にせず、
+            // 相手（同じブロックの前のエントリ）の行の役名の升に並べる。声優は相手の行の 1 人だけ出す。
+            // 相手が同じブロックに見つからないときは、普通の行として描く。
+            var rowEntries = FoldParallelCharacterEntries(bs.Entries, out var parallelFollowers);
+
             // 各エントリの表示要素を先に解決し、隣接 CHARACTER_VOICE 行で actor 表示 HTML が一致する
             // 連続区間（n 役連続）を rowspan で結合する事前計算を行う。actor の同一性判定は
             // 「最終的に表示される actor-cell の HTML 文字列」で行うため、所属（affiliation）や
             // スラッシュ配偶名義の違いがあれば自動的に別グループとして扱われる。
-            int entryCount = bs.Entries.Count;
+            // 併記で畳んだエントリは行を持たないので、この計算にも入らない。
+            int entryCount = rowEntries.Count;
             var resolved = new (bool IsCharVoice, string CharLabel, string CharHtml, string ActorHtml, string EntryHtml)[entryCount];
             for (int i = 0; i < entryCount; i++)
             {
-                var ent = bs.Entries[i];
+                var ent = rowEntries[i];
                 if (ent.EntryKind == "CHARACTER_VOICE")
                 {
                     string lbl = await ResolveCharacterLabelAsync(ent, ct).ConfigureAwait(false);
                     string chh = await ResolveCharacterLabelHtmlAsync(ent, ct).ConfigureAwait(false);
+                    if (parallelFollowers.TryGetValue(ent.EntryId, out var followers))
+                    {
+                        // 併記の相手の役名を、前後の字（parallel_prefix / parallel_suffix）つきで後ろに並べる。
+                        // 同じ役名の続きの判定（sameAsPrev）にも併記の役名を含める。
+                        foreach (var f in followers)
+                        {
+                            lbl += (f.ParallelPrefix ?? "") + await ResolveCharacterLabelAsync(f, ct).ConfigureAwait(false) + (f.ParallelSuffix ?? "");
+                            chh += await BuildParallelCharacterHtmlAsync(f, ct).ConfigureAwait(false);
+                        }
+                    }
                     string ahh = await ResolvePersonWithAffiliationHtmlAsync(ent, ct).ConfigureAwait(false);
                     resolved[i] = (true, lbl, chh, ahh, "");
                 }
@@ -1387,7 +1403,6 @@ internal sealed class CreditTreeRenderer
 
             for (int i = 0; i < entryCount; i++)
             {
-                var e = bs.Entries[i];
                 var slot = resolved[i];
                 bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
@@ -1500,6 +1515,55 @@ internal sealed class CreditTreeRenderer
         }
 
         html.Append("</table>");
+    }
+
+    /// <summary>
+    /// 声の出演のブロックのエントリから、併記（<see cref="CreditBlockEntry.ParallelWithEntryId"/>）の
+    /// CHARACTER_VOICE エントリを取り除いた「行になるエントリ」の並びを返す。
+    /// 取り除いたエントリは、相手（同じブロックの前にある行のエントリ）の entry_id ごとに
+    /// <paramref name="followers"/> に並び順のまま集める。併記の併記（A／B／C）は先頭の A の行にまとめる。
+    /// 相手が同じブロックの前に無いエントリは、取り除かずに普通の行として残す。
+    /// </summary>
+    private static List<CreditBlockEntry> FoldParallelCharacterEntries(
+        IReadOnlyList<CreditBlockEntry> entries,
+        out Dictionary<int, List<CreditBlockEntry>> followers)
+    {
+        followers = new Dictionary<int, List<CreditBlockEntry>>();
+        var rows = new List<CreditBlockEntry>(entries.Count);
+        // entry_id → その行の先頭のエントリの entry_id（併記の併記をたどって先頭にまとめる）
+        var headOf = new Dictionary<int, int>();
+        foreach (var e in entries)
+        {
+            if (e.EntryKind == "CHARACTER_VOICE"
+                && e.ParallelWithEntryId is int target
+                && headOf.TryGetValue(target, out int head))
+            {
+                if (!followers.TryGetValue(head, out var list))
+                {
+                    list = new List<CreditBlockEntry>();
+                    followers[head] = list;
+                }
+                list.Add(e);
+                headOf[e.EntryId] = head;
+                continue;
+            }
+            rows.Add(e);
+            headOf[e.EntryId] = e.EntryId;
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// 併記のエントリの役名を、前後の字（<see cref="CreditBlockEntry.ParallelPrefix"/> /
+    /// <see cref="CreditBlockEntry.ParallelSuffix"/>）つきの HTML 断片にする。
+    /// 役名はキャラのページへのリンク。<see cref="CreditBlockEntry.ParallelSmall"/> なら前後の字ごと &lt;small&gt; で包む。
+    /// </summary>
+    private async Task<string> BuildParallelCharacterHtmlAsync(CreditBlockEntry e, CancellationToken ct)
+    {
+        string inner = Esc(e.ParallelPrefix ?? "")
+            + await ResolveCharacterLabelHtmlAsync(e, ct).ConfigureAwait(false)
+            + Esc(e.ParallelSuffix ?? "");
+        return e.ParallelSmall ? $"<small class=\"parallel-small\">{inner}</small>" : inner;
     }
 
     private async Task<string> ResolveCharacterLabelAsync(CreditBlockEntry e, CancellationToken ct)

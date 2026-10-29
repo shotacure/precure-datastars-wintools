@@ -597,7 +597,18 @@ internal static class CreditBulkInputEncoder
         }
         if (isParallelWithPrevious)
         {
-            sb.Append(ParallelContinuationMarker);
+            // 前後に付く字・小さい字の指定があれば &{前|後|small} の形、無ければ従来の "& "。
+            if (e.ParallelPrefix is not null || e.ParallelSuffix is not null || e.ParallelSmall)
+            {
+                sb.Append("&{").Append(e.ParallelPrefix ?? "");
+                if (e.ParallelSuffix is not null || e.ParallelSmall) sb.Append('|').Append(e.ParallelSuffix ?? "");
+                if (e.ParallelSmall) sb.Append("|small");
+                sb.Append("} ");
+            }
+            else
+            {
+                sb.Append(ParallelContinuationMarker);
+            }
         }
 
         sb.Append(body);

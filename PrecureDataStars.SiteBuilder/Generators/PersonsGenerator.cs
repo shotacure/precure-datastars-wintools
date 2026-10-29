@@ -156,7 +156,7 @@ public sealed class PersonsGenerator
             // 歌唱は 3 系統の人物名義を、いずれも当該人物の担当として記録する：
             //   (1) 主名義（PERSON 歌唱）               … PersonAliasId
             //   (2) スラッシュ並列の相方（PERSON 側）     … SlashPersonAliasId
-            //   (3) キャラ歌唱(CHARACTER_WITH_CV)の声優   … VoicePersonAliasId
+            //   (3) キャラ歌唱(CHARACTER_WITH_CV)の声優   … VoicePersonAliasId（2 人目の声優 SlashVoicePersonAliasId も同じ扱い）
             // PersonAliasId だけ見ると、声優が「キャラ名義として歌った曲」を取りこぼす。
             // さらに名義がユニットなら、そのメンバー（PERSON メンバー / CHARACTER メンバーの声優）にも展開する
             // （展開は ExpandSingerParticipants に一本化）。

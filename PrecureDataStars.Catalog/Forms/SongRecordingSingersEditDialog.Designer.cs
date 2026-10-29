@@ -34,6 +34,10 @@ partial class SongRecordingSingersEditDialog
     private Label lblVoice = null!;
     private TextBox txtVoiceDisplay = null!;
     private Button btnPickVoice = null!;
+    private Label lblSlashVoice = null!;
+    private TextBox txtSlashVoiceDisplay = null!;
+    private Button btnPickSlashVoice = null!;
+    private Button btnClearSlashVoice = null!;
     private Label lblSlashCharacter = null!;
     private TextBox txtSlashCharacterDisplay = null!;
     private Button btnPickSlashCharacter = null!;
@@ -83,7 +87,7 @@ partial class SongRecordingSingersEditDialog
             Size = new Size(944, 36),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             Text = "歌唱者を seq=1 から順に並べてください。billing_kind が PERSON のときは「主名義」と任意のスラッシュ相方（人物）、" +
-                   "CHARACTER_WITH_CV のときは「主キャラ」と「CV」（必須）と任意のスラッシュ相方（キャラ）を指定します。",
+                   "CHARACTER_WITH_CV のときは「主キャラ」と「CV」（必須）と、任意の「2人目のCV」（1 つのキャラを 2 人の声優が演じるとき）とスラッシュ相方（キャラ）を指定します。",
             ForeColor = Color.DimGray
         };
 
@@ -151,18 +155,24 @@ partial class SongRecordingSingersEditDialog
         txtVoiceDisplay = new TextBox { Location = new Point(160, 172), Size = new Size(440, 23), ReadOnly = true, BackColor = SystemColors.Window };
         btnPickVoice = new Button { Text = "選択...", Location = new Point(608, 171), Size = new Size(72, 25) };
 
-        lblSlashCharacter = new Label { Text = "スラッシュ相方:", Location = new Point(12, 208), AutoSize = true };
-        txtSlashCharacterDisplay = new TextBox { Location = new Point(160, 204), Size = new Size(440, 23), ReadOnly = true, BackColor = SystemColors.Window };
-        btnPickSlashCharacter = new Button { Text = "選択...", Location = new Point(608, 203), Size = new Size(72, 25) };
-        btnClearSlashCharacter = new Button { Text = "クリア", Location = new Point(688, 203), Size = new Size(64, 25) };
+        // 2 人目の声優（任意）。1 つのキャラを姿によって 2 人の声優が演じるとき、「キャラ(CV:声優1 / 声優2)」の声優2 を選ぶ。
+        lblSlashVoice = new Label { Text = "2人目のCV:", Location = new Point(12, 208), AutoSize = true };
+        txtSlashVoiceDisplay = new TextBox { Location = new Point(160, 204), Size = new Size(440, 23), ReadOnly = true, BackColor = SystemColors.Window };
+        btnPickSlashVoice = new Button { Text = "選択...", Location = new Point(608, 203), Size = new Size(72, 25) };
+        btnClearSlashVoice = new Button { Text = "クリア", Location = new Point(688, 203), Size = new Size(64, 25) };
+
+        lblSlashCharacter = new Label { Text = "スラッシュ相方:", Location = new Point(12, 240), AutoSize = true };
+        txtSlashCharacterDisplay = new TextBox { Location = new Point(160, 236), Size = new Size(440, 23), ReadOnly = true, BackColor = SystemColors.Window };
+        btnPickSlashCharacter = new Button { Text = "選択...", Location = new Point(608, 235), Size = new Size(72, 25) };
+        btnClearSlashCharacter = new Button { Text = "クリア", Location = new Point(688, 235), Size = new Size(64, 25) };
 
         // 共通
-        lblSeparator = new Label { Text = "区切り(seq>=2):", Location = new Point(12, 248), AutoSize = true };
-        txtSeparator = new TextBox { Location = new Point(160, 244), Size = new Size(80, 23), MaxLength = 8 };
+        lblSeparator = new Label { Text = "区切り(seq>=2):", Location = new Point(12, 280), AutoSize = true };
+        txtSeparator = new TextBox { Location = new Point(160, 276), Size = new Size(80, 23), MaxLength = 8 };
         lblSepHint   = new Label
         {
             Text = "例:  ＆   、   ` with `（前後のSPは表記通り）",
-            Location = new Point(248, 248),
+            Location = new Point(248, 280),
             AutoSize = true,
             ForeColor = Color.DimGray
         };
@@ -171,24 +181,24 @@ partial class SongRecordingSingersEditDialog
         chkExpandUnit = new CheckBox
         {
             Text = "ユニットのメンバーを展開して表示",
-            Location = new Point(608, 246),
+            Location = new Point(608, 278),
             AutoSize = true
         };
 
-        lblAffiliation = new Label { Text = "所属表記:", Location = new Point(12, 280), AutoSize = true };
-        txtAffiliation = new TextBox { Location = new Point(160, 276), Size = new Size(440, 23), MaxLength = 64 };
+        lblAffiliation = new Label { Text = "所属表記:", Location = new Point(12, 312), AutoSize = true };
+        txtAffiliation = new TextBox { Location = new Point(160, 308), Size = new Size(440, 23), MaxLength = 64 };
         lblAffHint = new Label
         {
             Text = "例: 「with ヤング・フレッシュ」など、CV/スラッシュ枠で表現できない補助テキスト",
-            Location = new Point(608, 280),
+            Location = new Point(608, 312),
             AutoSize = true,
             ForeColor = Color.DimGray
         };
 
-        lblNotes = new Label { Text = "備考:", Location = new Point(12, 312), AutoSize = true };
+        lblNotes = new Label { Text = "備考:", Location = new Point(12, 344), AutoSize = true };
         txtNotes = new TextBox
         {
-            Location = new Point(160, 308),
+            Location = new Point(160, 340),
             Size = new Size(672, 23),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
@@ -207,6 +217,7 @@ partial class SongRecordingSingersEditDialog
             lblSlashPerson, txtSlashPersonDisplay, btnPickSlashPerson, btnClearSlashPerson,
             lblCharacter, txtCharacterDisplay, btnPickCharacter,
             lblVoice, txtVoiceDisplay, btnPickVoice,
+            lblSlashVoice, txtSlashVoiceDisplay, btnPickSlashVoice, btnClearSlashVoice,
             lblSlashCharacter, txtSlashCharacterDisplay, btnPickSlashCharacter, btnClearSlashCharacter,
             lblSeparator, txtSeparator, lblSepHint, chkExpandUnit,
             lblAffiliation, txtAffiliation, lblAffHint,

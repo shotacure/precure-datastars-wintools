@@ -125,9 +125,9 @@ public sealed class CharactersGenerator
                 foreach (var s in singers)
                 {
                     // ユニット名義（PERSON 行）で歌唱された録音も、CHARACTER メンバーのキャラへ展開して拾う。
-                    foreach (var p in _ctx.ExpandSingerParticipants(s))
+                    // 2 人目の声優がいる行では同じキャラが声優ごとに参加者として返るので、キャラは行ごとに 1 回だけ積む。
+                    foreach (var caId in _ctx.ExpandSingerParticipants(s).Select(p => p.CharacterAliasId).OfType<int>().Distinct())
                     {
-                        if (p.CharacterAliasId is not int caId) continue;
                         AddCharRole(caId, rec.SongId, s.RoleCode);
                         AddCharRec(caId, rec);
                     }

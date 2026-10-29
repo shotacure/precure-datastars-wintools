@@ -37,6 +37,8 @@ public sealed class SingerHtmlBuilder
     ///     CV 名義 /people/{名前}/ で構成する「キャラ名(CV:声優)」形式で出す。</item>
     ///   <item>スラッシュ並列（<see cref="SongRecordingSinger.SlashCharacterAliasId"/> 等）は
     ///     主名義側と同じ書式で「/」連結して出す。</item>
+    ///   <item>2 人目の声優（<see cref="SongRecordingSinger.SlashVoicePersonAliasId"/>）は「キャラ(CV:声優1 / 声優2)」と
+    ///     「 / 」で並べ、1 人目と同じく /people/{名前}/ へリンクする。</item>
     ///   <item>PERSON 行の名義がユニット名義で <see cref="SongRecordingSinger.ExpandUnitMembers"/> が立っていれば、
     ///     ユニット名の後ろにメンバーを「（メンバー1、メンバー2…）」と括弧書きで展開する。キャラメンバーは
     ///     「キャラ/相方キャラ(CV:声優)」、人物メンバーは人物リンクで出す。</item>
@@ -171,6 +173,7 @@ public sealed class SingerHtmlBuilder
         else
         {
             // CHARACTER_WITH_CV：「キャラ(CV:声優)」、相方ありなら「キャラ/相方キャラ(CV:声優)」。
+            // 2 人目の声優がいれば「キャラ(CV:声優1 / 声優2)」。
             // 同じ連名に声優が人物として出ているとき（omitCv）は「(CV:声優)」を省く。
             string mainChar = ResolveCharacterAliasLink(s.CharacterAliasId, characterAliasMap);
             string charPart = mainChar;
@@ -181,6 +184,8 @@ public sealed class SingerHtmlBuilder
             }
             if (omitCv) return charPart;
             string cv = ResolvePersonAliasLink(s.VoicePersonAliasId, personAliasMap);
+            if (s.SlashVoicePersonAliasId.HasValue)
+                cv += " / " + ResolvePersonAliasLink(s.SlashVoicePersonAliasId, personAliasMap);
             return $"{charPart}(CV:{cv})";
         }
     }

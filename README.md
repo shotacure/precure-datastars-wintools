@@ -1859,6 +1859,8 @@ CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.
 
 > `song_recording_singers.role_code` は `VOCALS`（歌）・`BACKING_VOCALS`（コーラス）・`DIALOGUE`（台詞：歌わずに曲中のセリフだけで参加する出演者）・`SPOKEN_WORD`（語り：盤に「語り：」と載る担当）の 4 役を持つ。書式は 3 役とも同じ（キャラは「キャラ(CV:声優)」。ただし同じ役の連名にその声優が人物として名前で出ているときは「(CV:声優)」を省き、「工藤 真由 with フェアリートーン」のように出す。データの声優はそのまま持つ。`SongRecordingSingerDisplay.OmitCv`）で、楽曲詳細・商品詳細のトラック行・エピソード／シリーズの主題歌欄に歌 → コーラス → 台詞 → 語りの順で並ぶ（リポジトリの読み込みも歌 → コーラス → そのほかの役職の順）。`/creators/roles/vocals/` の担当曲数に数えるのは `VOCALS` だけ。
 
+> `song_recording_singers.slash_voice_person_alias_id` は、キャラ歌唱（`CHARACTER_WITH_CV`）の行の 2 人目の声優（→ `person_aliases`、任意）。1 つのキャラを姿によって 2 人の声優が演じる歌唱（「ハリハム・ハリー(CV:野田順子／福島 潤)」）で、1 人目を `voice_person_alias_id`、2 人目をこの列に入れる。`PERSON` の行では NULL（CHECK `ck_srs_kind_columns`）。サイトは楽曲詳細・商品詳細のトラック行・主題歌の行・OGP カード・meta description で「キャラ(CV:声優1 / 声優2)」と半角空白つきの「 / 」で並べ、2 人目も人物詳細へリンクする。人物詳細の音楽クレジット・歌唱一覧（`/creators/singers/`。キャラ × 声優の組ごとの行）・`/creators/roles/vocals/` の担当曲数・クレジットの逆引き（`CreditInvolvementIndex`）では、2 人目の声優も 1 人目と同じに数える。「(CV:…)」を省く決まり（`SongRecordingSingerDisplay.OmitCv`）は、2 人とも同じ連名に人物として名前で出ているときだけ省く。Catalog の歌マスタ管理の歌唱者クレジット編集では、「CV(声優)」の下の「2人目のCV」の欄で選ぶ（「クリア」で外す）。劇伴の歌い手（`bgm_cue_singers`）とユニットのメンバー（`person_alias_members`）は 2 人目の声優を持たない。
+
 #### `song_medley_parts` — メドレーの中の曲
 
 メドレーの曲の中の曲を、順序付きの対応表として 1 行 = メドレーの中の 1 曲で持つ。PK は `(medley_song_id, part_seq)`。
@@ -1991,11 +1993,9 @@ CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.
 | `m_no_detail` | VARCHAR(255) PK(2) | M 番号。`(series_id, m_no_detail)` の複合 FK で → `bgm_cues`（ON DELETE CASCADE / ON UPDATE CASCADE。M 番号の付け替えに付いていく） |
 | `role_code` | VARCHAR(64) PK(3) FK | 役職（→ `roles`） |
 | `singer_seq` | TINYINT UNSIGNED PK(4) | 役職ごとの連名の順（1 始まり） |
-| `billing_kind` ほか | | `song_recording_singers` と同じ（`person_alias_id` / `character_alias_id` / `voice_person_alias_id` / `slash_person_alias_id` / `slash_character_alias_id` / `preceding_separator` / `affiliation_text` / `expand_unit_members` / `notes`。種別ごとの必須列は同じ CHECK 制約） |
+| `billing_kind` ほか | | `song_recording_singers` と同じ（`person_alias_id` / `character_alias_id` / `voice_person_alias_id` / `slash_person_alias_id` / `slash_character_alias_id` / `preceding_separator` / `affiliation_text` / `expand_unit_members` / `notes`。種別ごとの必須列は同じ CHECK 制約）。2 人目の声優（`slash_voice_person_alias_id`）は持たない |
 
 サイトは、商品詳細のトラック行で劇伴の作曲・編曲の後ろに「[スキャット] キャラ(CV:声優)」の形で並べ、劇伴詳細（`/bgms/{作品}/`）ではその曲のカードのスタッフの行に作曲・編曲に続けて出す（表記と名義のリンクは歌の歌唱者と同じ `SingerHtmlBuilder`。バッジはリンクしない）。人物・ユニット詳細の音楽クレジットでは「歌唱」（コーラスだけなら「コーラスのみ」）の区分の劇伴の枠に、シリーズごとの 1 行（役職のバッジ ＋「劇伴 N曲」、劇伴詳細へリンク）で出し、キャラ歌唱の声優・ユニットのメンバーの名義でも拾う。キャラクター詳細では「歌」のセクションの曲のカードに続けて、劇伴のカード（メニュー・シリーズ・M 番号。劇伴詳細のその曲へリンク）を並べる。歌唱一覧（`/creators/singers/`）・歌唱系の役職詳細の担当曲数と、話数ごとの関与には数えない（歌の曲・録音の単位で数えるため）。Catalog の「劇伴管理」では、構造化クレジットの欄の「歌い手」で役職（スキャット / 歌 / コーラス）を選んで「編集...」を押し、歌の歌唱者と同じダイアログで連名を入れる。
-
-#### `song_recording_bgm_assignments` — SONG ↔ BGM 両性紐付け中間テーブル
 
 #### `musical_works` — 曲（著作物）
 
@@ -2041,6 +2041,8 @@ CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.
 > 曲名・作家は参照先（歌は `songs` / `song_credits`、曲（著作物）は `musical_works` / `musical_work_credits`）から引くので、この表は参照だけを持つ。使われている歌・曲（著作物）は、ここから参照されている間は消せない（MySQL では CHECK に使う列の外部キーに CASCADE / SET NULL を付けられないため RESTRICT）。
 >
 > サイトは、劇伴詳細（`/bgms/{作品}/`）のその曲のカードと、商品詳細のその劇伴のトラックの枠（編集でつないだ枝番の曲も同じ）に、開け閉めの枠「使われている曲（N 曲）」（既定は閉じる）を置き、流れる順の番号付きリストで曲名と作家を並べる（`BgmCueSourcePartsHtmlBuilder`）。歌は曲名を曲詳細へリンクし、作詞・作曲・編曲のバッジの行を商品詳細の歌のトラックと同じ組み立てで出す。曲（著作物）は単独のページを持たないので、曲名はリンクせず、作家のバッジの行（名義は人物詳細へリンク、バッジは劇伴の作曲・編曲と同じくリンクしない）をその場に出す。歌の曲詳細には「この劇伴に使われています」の節を出し、劇伴の曲の表記（M 番号とメニュー。仮 M 番号の曲はメニュー、それも無ければ収録盤のトラック名）を劇伴詳細のその曲のカードへリンクして、シリーズ名を薄色で添える（開始年は複数のシリーズが並ぶときだけ）。人物・ユニット詳細の音楽クレジットでは、曲（著作物）の作家を「作詞・作曲・編曲」の区分の劇伴の枠に、曲ごとの 1 行（役職のバッジ ＋ 曲名 ＋「〇〇の劇伴で使用」、劇伴詳細のその曲のカードへリンク）で出す。役職詳細（`/creators/roles/{lyrics,composition,arrangement}/`）の担当曲数には数えない（歌の曲だけを数えるため）。Catalog に編集画面は無く、データは SQL で入れる。
+
+#### `song_recording_bgm_assignments` — SONG ↔ BGM 両性紐付け中間テーブル
 
 1 つの `song_recordings`（特定のアレンジ・テイク・歌唱者構成での録音）が「歌として収録された」のと同時に「劇伴としても扱う」二重性質を持つ場合に、当該録音と劇伴 cue（`bgm_cues`）の N:M 関係を表現する。`tracks.content_kind_code` は `'SONG'` / `'BGM'` を排他選択する仕様（`trg_tracks_bi/bu_fk_consistency` で強制）のまま据置で、SONG なのに BGM 性も併せ持つ追加の関係をこの中間テーブルで表現する。
 

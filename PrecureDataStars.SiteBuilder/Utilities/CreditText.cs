@@ -122,8 +122,14 @@ public static class CreditText
                 if (s.SlashCharacterAliasId.HasValue)
                     sb.Append('/').Append(CharacterName(s.SlashCharacterAliasId, characterAliasMap));
                 // 同じ連名に声優が人物として出ているときは「(CV:声優)」を省く。
+                // 2 人目の声優がいれば「(CV:声優1 / 声優2)」と並べる。
                 if (!SongRecordingSingerDisplay.OmitCv(s, rows))
-                    sb.Append("(CV:").Append(PersonName(s.VoicePersonAliasId, personAliasMap)).Append(')');
+                {
+                    sb.Append("(CV:").Append(PersonName(s.VoicePersonAliasId, personAliasMap));
+                    if (s.SlashVoicePersonAliasId.HasValue)
+                        sb.Append(" / ").Append(PersonName(s.SlashVoicePersonAliasId, personAliasMap));
+                    sb.Append(')');
+                }
             }
             if (!string.IsNullOrEmpty(s.AffiliationText)) sb.Append(' ').Append(s.AffiliationText);
         }

@@ -74,12 +74,13 @@ public static class BuildContextLookupExtensions
     public static DateOnly RecordingSeriesStart(this BuildContext ctx, SongRecording rec)
         => rec.SeriesId is int sid && ctx.SeriesById.TryGetValue(sid, out var s) ? s.StartDate : DateOnly.MaxValue;
 
-    /// <summary><see cref="ExpandSingerParticipants(BuildContext, bool, int?, int?, int?, int?, int?)"/> の <see cref="SongRecordingSinger"/> 版。</summary>
+    /// <summary><see cref="ExpandSingerParticipants(BuildContext, bool, int?, int?, int?, int?, int?, int?)"/> の <see cref="SongRecordingSinger"/> 版。</summary>
     public static IReadOnlyList<SingerParticipant> ExpandSingerParticipants(this BuildContext ctx, SongRecordingSinger s)
         => ctx.ExpandSingerParticipants(
             s.BillingKind == SingerBillingKind.Person,
             s.PersonAliasId, s.SlashPersonAliasId,
-            s.CharacterAliasId, s.SlashCharacterAliasId, s.VoicePersonAliasId);
+            s.CharacterAliasId, s.SlashCharacterAliasId, s.VoicePersonAliasId,
+            s.SlashVoicePersonAliasId);
 
     /// <summary>
     /// 歌唱者 1 行（song_recording_singers）を「実際に歌唱した参加者」の列へ展開する。
@@ -91,7 +92,9 @@ public static class BuildContextLookupExtensions
     ///     メンバーも返す。PERSON メンバーは人物参加者、CHARACTER メンバーはキャラ参加者
     ///     （声優名義が紐付いていれば声優も同じ参加者に載せる。「/」で並べるもう一方の名義があれば、
     ///     それも同じ声優付きのキャラ参加者として返す）。</item>
-    ///   <item>CHARACTER_WITH_CV 行：主キャラ・スラッシュ相方キャラを、いずれも同じ声優付きのキャラ参加者として返す。</item>
+    ///   <item>CHARACTER_WITH_CV 行：主キャラ・スラッシュ相方キャラを、いずれも同じ声優付きのキャラ参加者として返す。
+    ///     2 人目の声優（<paramref name="slashVoicePersonAliasId"/>）がいれば、各キャラについて 1 人目の声優付き・2 人目の声優付きの
+    ///     参加者をこの順に返す（2 人目の声優も 1 人目と同じに歌唱関与として数える）。</item>
     /// </list>
     /// 返却順は「行の並び → ユニットのメンバー順」。同一の (人物, キャラ) 組は 1 回だけ返す。
     /// </summary>
@@ -102,7 +105,8 @@ public static class BuildContextLookupExtensions
         int? slashPersonAliasId,
         int? characterAliasId,
         int? slashCharacterAliasId,
-        int? voicePersonAliasId)
+        int? voicePersonAliasId,
+        int? slashVoicePersonAliasId = null)
     {
         var result = new List<SingerParticipant>(4);
         var seen = new HashSet<(int?, int?)>();
@@ -135,7 +139,12 @@ public static class BuildContextLookupExtensions
         else
         {
             Add(voicePersonAliasId, characterAliasId);
-            if (slashCharacterAliasId is int sca) Add(voicePersonAliasId, sca);
+            if (slashVoicePersonAliasId is int svp) Add(svp, characterAliasId);
+            if (slashCharacterAliasId is int sca)
+            {
+                Add(voicePersonAliasId, sca);
+                if (slashVoicePersonAliasId is int svp2) Add(svp2, sca);
+            }
         }
         return result;
     }

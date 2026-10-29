@@ -3273,6 +3273,9 @@ CREATE TABLE `song_recording_singers` (
   `voice_person_alias_id`     int              DEFAULT NULL,
   `slash_person_alias_id`     int              DEFAULT NULL,
   `slash_character_alias_id`  int              DEFAULT NULL,
+  -- CHARACTER_WITH_CV の行の 2 人目の声優の名義（→ person_aliases.alias_id）。任意。
+  -- 1 つのキャラを姿によって 2 人の声優が演じる歌唱を「キャラ(CV:声優1 / 声優2)」と出す。PERSON の行では常に NULL（CHECK で担保）。
+  `slash_voice_person_alias_id` int            DEFAULT NULL,
   `preceding_separator`       varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `affiliation_text`          varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   -- PERSON 行の名義がユニット名義のとき、表示でユニット名の後ろにメンバーを括弧書きで展開するか（1=展開）。
@@ -3290,13 +3293,15 @@ CREATE TABLE `song_recording_singers` (
   KEY `ix_srs_voice`           (`voice_person_alias_id`),
   KEY `ix_srs_slash_person`    (`slash_person_alias_id`),
   KEY `ix_srs_slash_character` (`slash_character_alias_id`),
+  KEY `ix_srs_slash_voice`     (`slash_voice_person_alias_id`),
   CONSTRAINT `ck_srs_seq_pos` CHECK (`singer_seq` >= 1),
   CONSTRAINT `ck_srs_kind_columns` CHECK (
        (`billing_kind` = 'PERSON'
           AND `person_alias_id`       IS NOT NULL
           AND `character_alias_id`    IS NULL
           AND `voice_person_alias_id` IS NULL
-          AND `slash_character_alias_id` IS NULL)
+          AND `slash_character_alias_id` IS NULL
+          AND `slash_voice_person_alias_id` IS NULL)
     OR (`billing_kind` = 'CHARACTER_WITH_CV'
           AND `character_alias_id`    IS NOT NULL
           AND `voice_person_alias_id` IS NOT NULL
@@ -3309,7 +3314,8 @@ CREATE TABLE `song_recording_singers` (
   CONSTRAINT `fk_srs_character`        FOREIGN KEY (`character_alias_id`)       REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
   CONSTRAINT `fk_srs_voice`            FOREIGN KEY (`voice_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
   CONSTRAINT `fk_srs_slash_person`     FOREIGN KEY (`slash_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
-  CONSTRAINT `fk_srs_slash_character`  FOREIGN KEY (`slash_character_alias_id`) REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION
+  CONSTRAINT `fk_srs_slash_character`  FOREIGN KEY (`slash_character_alias_id`) REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_srs_slash_voice`      FOREIGN KEY (`slash_voice_person_alias_id`) REFERENCES `person_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -3481,12 +3487,6 @@ CREATE TABLE `bgm_cue_singers` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `book_genres`
---
--- 書籍ジャンルマスタ。product_kinds と同じ流儀（コード PK + 和名 / 英名 / 表示順）。
--- 1 冊が複数ジャンルを持てるため、書籍との対応は book_genre_links（多対多）側で表現する。
---
---
 -- Table structure for table `musical_works`
 -- 曲（著作物）。歌でも劇伴でもない、JASRAC に登録された曲だけを入れる
 -- （例：メドレーの劇伴の中にだけ出てくる曲で、どの盤にも単独では入っていないもの）。
@@ -3578,6 +3578,12 @@ CREATE TABLE `bgm_cue_source_parts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
+--
+-- Table structure for table `book_genres`
+--
+-- 書籍ジャンルマスタ。product_kinds と同じ流儀（コード PK + 和名 / 英名 / 表示順）。
+-- 1 冊が複数ジャンルを持てるため、書籍との対応は book_genre_links（多対多）側で表現する。
+--
 
 DROP TABLE IF EXISTS `book_genres`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

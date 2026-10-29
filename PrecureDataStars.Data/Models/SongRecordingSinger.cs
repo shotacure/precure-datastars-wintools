@@ -19,6 +19,7 @@ namespace PrecureDataStars.Data.Models;
 /// 「キュアブラック / 美墨なぎさ (CV: 本名 陽子)」のような同 CV のスラッシュ並列は、
 /// <see cref="SlashCharacterAliasId"/>（または PERSON 行なら <see cref="SlashPersonAliasId"/>）
 /// で表現する。スラッシュ並列は最大 1 個（2-way）まで。
+/// 1 つのキャラに声優が 2 人付く「キャラ(CV:声優1 / 声優2)」は、2 人目を <see cref="SlashVoicePersonAliasId"/> で表現する。
 /// <see cref="PrecedingSeparator"/> は seq>=2 の行で前 seq との区切り文字を保持する。
 /// 例: "&amp;" "、" " with "。初出盤の表記をそのまま再現する目的。
 /// <see cref="RoleCode"/> プロパティを持つ。
@@ -55,6 +56,13 @@ public sealed class SongRecordingSinger
 
     /// <summary>スラッシュ並列の相方（CHARACTER_WITH_CV 主名義側）。最大 1 個。 例: 主＝キュアブラック / 相方＝美墨なぎさ、CV は両者共通。</summary>
     public int? SlashCharacterAliasId { get; set; }
+
+    /// <summary>
+    /// 2 人目の声優の人物名義参照（CHARACTER_WITH_CV 行でだけ使う。任意、最大 1 人）。
+    /// 1 つのキャラを姿によって 2 人の声優が演じる歌唱（例: 「ハリハム・ハリー(CV:野田順子 / 福島 潤)」）で、
+    /// <see cref="VoicePersonAliasId"/> の後ろに「 / 」で並べて出す。PERSON 行では常に NULL（CHECK で担保）。
+    /// </summary>
+    public int? SlashVoicePersonAliasId { get; set; }
 
     /// <summary>seq>=2 の行で、前の seq との区切り文字。seq=1 では NULL。</summary>
     public string? PrecedingSeparator { get; set; }
@@ -113,14 +121,16 @@ public static class SongRecordingSingerDisplay
     /// <summary>
     /// キャラ歌唱の行で「(CV:声優)」を省くかを返す。同じ連名（同じ役職の行）に、その声優が人物として名前で出ているときは
     /// 省く（「工藤 真由 with フェアリートーン」のように、声優を重ねて「(CV:工藤 真由)」と出さない）。データの声優はそのまま持つ。
+    /// 2 人目の声優（<see cref="SongRecordingSinger.SlashVoicePersonAliasId"/>）がいる行は、2 人とも人物として出ているときだけ省く。
     /// </summary>
     /// <param name="row">表示するキャラ歌唱の行。</param>
     /// <param name="sameRoleRows">同じ録音・同じ役職の歌唱者行（<paramref name="row"/> を含んでよい）。</param>
     public static bool OmitCv(SongRecordingSinger row, IEnumerable<SongRecordingSinger> sameRoleRows)
     {
         if (row.BillingKind != SingerBillingKind.CharacterWithCv || row.VoicePersonAliasId is not int voice) return false;
-        return sameRoleRows.Any(r => r.BillingKind == SingerBillingKind.Person
-            && string.Equals(r.RoleCode, row.RoleCode, StringComparison.Ordinal)
-            && (r.PersonAliasId == voice || r.SlashPersonAliasId == voice));
+        var persons = sameRoleRows.Where(r => r.BillingKind == SingerBillingKind.Person
+            && string.Equals(r.RoleCode, row.RoleCode, StringComparison.Ordinal)).ToList();
+        bool Appears(int v) => persons.Any(r => r.PersonAliasId == v || r.SlashPersonAliasId == v);
+        return Appears(voice) && (row.SlashVoicePersonAliasId is not int slashVoice || Appears(slashVoice));
     }
 }

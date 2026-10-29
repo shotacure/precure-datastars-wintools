@@ -33,6 +33,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
           voice_person_alias_id      AS VoicePersonAliasId,
           slash_person_alias_id      AS SlashPersonAliasId,
           slash_character_alias_id   AS SlashCharacterAliasId,
+          slash_voice_person_alias_id AS SlashVoicePersonAliasId,
           preceding_separator        AS PrecedingSeparator,
           affiliation_text           AS AffiliationText,
           expand_unit_members        AS ExpandUnitMembers,
@@ -55,6 +56,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         public int? VoicePersonAliasId { get; set; }
         public int? SlashPersonAliasId { get; set; }
         public int? SlashCharacterAliasId { get; set; }
+        public int? SlashVoicePersonAliasId { get; set; }
         public string? PrecedingSeparator { get; set; }
         public string? AffiliationText { get; set; }
         public bool ExpandUnitMembers { get; set; }
@@ -75,6 +77,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
             VoicePersonAliasId = VoicePersonAliasId,
             SlashPersonAliasId = SlashPersonAliasId,
             SlashCharacterAliasId = SlashCharacterAliasId,
+            SlashVoicePersonAliasId = SlashVoicePersonAliasId,
             PrecedingSeparator = PrecedingSeparator,
             AffiliationText = AffiliationText,
             ExpandUnitMembers = ExpandUnitMembers,
@@ -143,7 +146,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
     /// 行が無ければ空文字。各行ごとに以下の規則で組み立て、行間は preceding_separator で連結する:
     /// <list type="bullet">
     ///   <item>PERSON: 「主名義 ／ 相方名義」（スラッシュ相方があれば「 / 」連結）</item>
-    ///   <item>CHARACTER_WITH_CV: 「キャラ ／ 相方キャラ (CV: 声優)」</item>
+    ///   <item>CHARACTER_WITH_CV: 「キャラ ／ 相方キャラ (CV: 声優)」。2 人目の声優がいれば「(CV:声優1 / 声優2)」</item>
     /// </list>
     /// 表示名は person_aliases.display_text_override が非空ならそちらを優先する。
     /// role_code 引数で特定の役職（VOCALS / CHORUS 等）
@@ -155,7 +158,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         // role_code 未指定時は VOCALS（既定の歌役職）を対象にする。
         string targetRole = roleCode ?? SongRecordingSingerRoles.Vocals;
 
-        // 必要な alias 表示名 5 種を LEFT JOIN で同時取得：
+        // 必要な alias 表示名 6 種を LEFT JOIN で同時取得：
         const string sql = """
             SELECT
               srs.singer_seq                                              AS Seq,
@@ -167,15 +170,18 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
               COALESCE(NULLIF(pav.display_text_override, ''), pav.name)   AS VoiceName,
               COALESCE(NULLIF(spa.display_text_override, ''), spa.name)   AS SlashPersonName,
               sca.name                                                    AS SlashCharacterName,
+              COALESCE(NULLIF(svp.display_text_override, ''), svp.name)   AS SlashVoiceName,
               srs.person_alias_id                                         AS PersonAliasId,
               srs.voice_person_alias_id                                   AS VoicePersonAliasId,
-              srs.slash_person_alias_id                                   AS SlashPersonAliasId
+              srs.slash_person_alias_id                                   AS SlashPersonAliasId,
+              srs.slash_voice_person_alias_id                             AS SlashVoicePersonAliasId
             FROM song_recording_singers srs
             LEFT JOIN person_aliases    pa  ON pa.alias_id  = srs.person_alias_id
             LEFT JOIN character_aliases ca  ON ca.alias_id  = srs.character_alias_id
             LEFT JOIN person_aliases    pav ON pav.alias_id = srs.voice_person_alias_id
             LEFT JOIN person_aliases    spa ON spa.alias_id = srs.slash_person_alias_id
             LEFT JOIN character_aliases sca ON sca.alias_id = srs.slash_character_alias_id
+            LEFT JOIN person_aliases    svp ON svp.alias_id = srs.slash_voice_person_alias_id
             WHERE srs.song_recording_id = @id
               AND srs.role_code         = @role
             ORDER BY srs.singer_seq;
@@ -205,8 +211,17 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                 if (!string.IsNullOrEmpty(r.SlashCharacterName))
                     sb.Append(" / ").Append(r.SlashCharacterName);
                 // 同じ連名に声優が人物として出ているときは「(CV:声優)」を省く（SongRecordingSingerDisplay.OmitCv と同じ決まり）。
-                if (!string.IsNullOrEmpty(r.VoiceName) && !VoiceAppearsAsPerson(r.VoicePersonAliasId, rows.Select(x => (x.Kind, x.PersonAliasId, x.SlashPersonAliasId))))
-                    sb.Append("(CV:").Append(r.VoiceName).Append(')');
+                // 2 人目の声優がいれば「(CV:声優1 / 声優2)」と並べる。
+                var personRows = rows.Select(x => (x.Kind, x.PersonAliasId, x.SlashPersonAliasId)).ToList();
+                if (!string.IsNullOrEmpty(r.VoiceName)
+                    && !(VoiceAppearsAsPerson(r.VoicePersonAliasId, personRows)
+                         && (r.SlashVoicePersonAliasId is null || VoiceAppearsAsPerson(r.SlashVoicePersonAliasId, personRows))))
+                {
+                    sb.Append("(CV:").Append(r.VoiceName);
+                    if (!string.IsNullOrEmpty(r.SlashVoiceName))
+                        sb.Append(" / ").Append(r.SlashVoiceName);
+                    sb.Append(')');
+                }
             }
 
             if (!string.IsNullOrEmpty(r.Aff))
@@ -226,9 +241,11 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         public string? VoiceName { get; set; }
         public string? SlashPersonName { get; set; }
         public string? SlashCharacterName { get; set; }
+        public string? SlashVoiceName { get; set; }
         public int? PersonAliasId { get; set; }
         public int? VoicePersonAliasId { get; set; }
         public int? SlashPersonAliasId { get; set; }
+        public int? SlashVoicePersonAliasId { get; set; }
     }
 
     /// <summary>
@@ -295,7 +312,8 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
               srs.character_alias_id       AS CharacterAliasId,
               srs.voice_person_alias_id    AS VoicePersonAliasId,
               srs.slash_person_alias_id    AS SlashPersonAliasId,
-              srs.slash_character_alias_id AS SlashCharacterAliasId
+              srs.slash_character_alias_id AS SlashCharacterAliasId,
+              srs.slash_voice_person_alias_id AS SlashVoicePersonAliasId
             FROM song_recording_singers srs
             WHERE srs.song_recording_id = @id
               AND srs.role_code         = @role
@@ -339,14 +357,23 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                     var html = await lookup.LookupCharacterAliasHtmlAsync(scid).ConfigureAwait(false);
                     sb.Append(html ?? "");
                 }
-                // 同じ連名に声優が人物として出ているときは「(CV:声優)」を省く。
+                // 同じ連名に声優が人物として出ているときは「(CV:声優)」を省く（2 人目の声優がいれば、2 人とも出ているときだけ）。
+                var personRows = rows.Select(x => (x.Kind, x.PersonAliasId, x.SlashPersonAliasId)).ToList();
                 if (r.VoicePersonAliasId is int vpid
-                    && !VoiceAppearsAsPerson(vpid, rows.Select(x => (x.Kind, x.PersonAliasId, x.SlashPersonAliasId))))
+                    && !(VoiceAppearsAsPerson(vpid, personRows)
+                         && (r.SlashVoicePersonAliasId is null || VoiceAppearsAsPerson(r.SlashVoicePersonAliasId, personRows))))
                 {
                     // 「(CV:◯◯)」の形式。CV 名義は person_alias なので人物リンク化を使う。
+                    // 2 人目の声優がいれば「(CV:◯◯ / △△)」と並べ、2 人目も人物リンク化する。
                     sb.Append("(CV:");
                     var html = await lookup.LookupPersonAliasHtmlAsync(vpid).ConfigureAwait(false);
                     sb.Append(html ?? "");
+                    if (r.SlashVoicePersonAliasId is int svpid)
+                    {
+                        sb.Append(" / ");
+                        var slashHtml = await lookup.LookupPersonAliasHtmlAsync(svpid).ConfigureAwait(false);
+                        sb.Append(slashHtml ?? "");
+                    }
                     sb.Append(')');
                 }
             }
@@ -374,6 +401,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         public int? VoicePersonAliasId { get; set; }
         public int? SlashPersonAliasId { get; set; }
         public int? SlashCharacterAliasId { get; set; }
+        public int? SlashVoicePersonAliasId { get; set; }
     }
 
     /// <summary>1 行追加（呼び出し側で role_code と singer_seq を採番済みの前提）。</summary>
@@ -383,13 +411,13 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
             INSERT INTO song_recording_singers
               (song_recording_id, role_code, singer_seq, billing_kind,
                person_alias_id, character_alias_id, voice_person_alias_id,
-               slash_person_alias_id, slash_character_alias_id,
+               slash_person_alias_id, slash_character_alias_id, slash_voice_person_alias_id,
                preceding_separator, affiliation_text, expand_unit_members, notes,
                created_by, updated_by)
             VALUES
               (@SongRecordingId, @RoleCode, @SingerSeq, @KindStr,
                @PersonAliasId, @CharacterAliasId, @VoicePersonAliasId,
-               @SlashPersonAliasId, @SlashCharacterAliasId,
+               @SlashPersonAliasId, @SlashCharacterAliasId, @SlashVoicePersonAliasId,
                @PrecedingSeparator, @AffiliationText, @ExpandUnitMembers, @Notes,
                @CreatedBy, @UpdatedBy);
             """;
@@ -405,6 +433,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
             s.VoicePersonAliasId,
             s.SlashPersonAliasId,
             s.SlashCharacterAliasId,
+            s.SlashVoicePersonAliasId,
             s.PrecedingSeparator,
             s.AffiliationText,
             s.ExpandUnitMembers,
@@ -425,6 +454,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
               voice_person_alias_id    = @VoicePersonAliasId,
               slash_person_alias_id    = @SlashPersonAliasId,
               slash_character_alias_id = @SlashCharacterAliasId,
+              slash_voice_person_alias_id = @SlashVoicePersonAliasId,
               preceding_separator      = @PrecedingSeparator,
               affiliation_text         = @AffiliationText,
               expand_unit_members      = @ExpandUnitMembers,
@@ -446,6 +476,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
             s.VoicePersonAliasId,
             s.SlashPersonAliasId,
             s.SlashCharacterAliasId,
+            s.SlashVoicePersonAliasId,
             s.PrecedingSeparator,
             s.AffiliationText,
             s.ExpandUnitMembers,
@@ -484,13 +515,13 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                     INSERT INTO song_recording_singers
                       (song_recording_id, role_code, singer_seq, billing_kind,
                        person_alias_id, character_alias_id, voice_person_alias_id,
-                       slash_person_alias_id, slash_character_alias_id,
+                       slash_person_alias_id, slash_character_alias_id, slash_voice_person_alias_id,
                        preceding_separator, affiliation_text, expand_unit_members, notes,
                        created_by, updated_by)
                     VALUES
                       (@SongRecordingId, @RoleCode, @SingerSeq, @KindStr,
                        @PersonAliasId, @CharacterAliasId, @VoicePersonAliasId,
-                       @SlashPersonAliasId, @SlashCharacterAliasId,
+                       @SlashPersonAliasId, @SlashCharacterAliasId, @SlashVoicePersonAliasId,
                        @PrecedingSeparator, @AffiliationText, @ExpandUnitMembers, @Notes,
                        @CreatedBy, @UpdatedBy);
                     """,
@@ -505,6 +536,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                         s.VoicePersonAliasId,
                         s.SlashPersonAliasId,
                         s.SlashCharacterAliasId,
+                        s.SlashVoicePersonAliasId,
                         // seq=1 では区切りなし
                         PrecedingSeparator = seq == 1 ? null : s.PrecedingSeparator,
                         s.AffiliationText,

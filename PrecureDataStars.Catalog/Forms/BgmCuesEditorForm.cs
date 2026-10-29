@@ -601,7 +601,8 @@ public partial class BgmCuesEditorForm : Form
             }
 
             string roleLabel = (cboStructSingerRole.SelectedItem as SingerRoleItem)?.Label ?? role;
-            using var dlg = new SongRecordingSingersEditDialog(initial, _personAliasesRepo, _characterAliasesRepo);
+            // 劇伴の歌い手（bgm_cue_singers）は 2 人目の声優の列を持たないので、「2人目のCV」の欄は隠す。
+            using var dlg = new SongRecordingSingersEditDialog(initial, _personAliasesRepo, _characterAliasesRepo, slashVoiceEnabled: false);
             dlg.Text = $"BGM 歌い手（{roleLabel}）編集（{c.SeriesId}/{c.MNoDetail}）";
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 

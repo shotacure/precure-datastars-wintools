@@ -492,6 +492,7 @@ internal sealed class LookupCache : ILookupCache
             "COMPANY"         => await BuildCompanyPreviewAsync(e),
             "LOGO"            => await BuildLogoPreviewAsync(e),
             "TEXT"            => $"\"{e.RawText ?? ""}\"",
+            "BLANK"           => "（空き）",
             _                 => $"(未対応の EntryKind: {e.EntryKind})"
         };
         // 本放送限定マーク：is_broadcast_only=1 の行は本放送だけで表示される行であることを明示

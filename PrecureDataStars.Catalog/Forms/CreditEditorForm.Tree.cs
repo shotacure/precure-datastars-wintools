@@ -229,6 +229,7 @@ public partial class CreditEditorForm
                                     "COMPANY"         => "🟠 [COMPANY]        ",
                                     "LOGO"            => "🟡 [LOGO]           ",
                                     "TEXT"            => "⚪ [TEXT]            ",
+                                    "BLANK"           => "⬜ [BLANK]           ",
                                     _                 => "❓ [UNKNOWN]        "
                                 };
                                 var entryNode = new TreeNode($"{prefix} #{displayIndex}  {preview}")

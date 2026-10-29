@@ -581,6 +581,8 @@ internal static class CreditBulkInputEncoder
             "COMPANY" => await BuildCompanyCellAsync(e, cache),
             "LOGO" => await BuildLogoCellAsync(e, cache),
             "TEXT" => e.RawText ?? "",
+            // 空きの升は CreditBulkInputParser の @blank セルに戻す。
+            "BLANK" => "@blank",
             _ => $"<unknown_kind:{e.EntryKind}>",
         };
 

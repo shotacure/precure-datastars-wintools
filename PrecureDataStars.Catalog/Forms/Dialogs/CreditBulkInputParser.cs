@@ -33,6 +33,9 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     → 直前エントリと A/B 併記関係（適用フェーズで <c>parallel_with_entry_id</c> 自参照を解決）。</description></item>
 ///   <item><description><c>@cols=N</c>（ブロック先頭の単独行）→ そのブロックの <c>col_count</c> を明示指定。
 ///     省略時は従来どおりタブ数+1 で推測。</description></item>
+///   <item><description><c>@blank</c>（セル全体）→ 空きの升（<c>entry_kind = BLANK</c>）。複数列のブロックで、画面の並びの途中に
+///     何も書かれていない升の位置を埋めて、後ろのエントリの列をそろえる（例: <c>@blank&lt;TAB&gt;山田 太郎</c>）。
+///     タブの間を空けただけのセルは従来どおり読み飛ばす。行頭のセルが <c>@blank</c> の行はディレクティブ行ではなくエントリ行として読む。</description></item>
 ///   <item><description><c>@heading=文字</c> / <c>@heading_series=N</c>（ブロックの最初のエントリより前の単独行）→
 ///     そのブロックの先頭に出す見出し。<c>@heading_series=N</c> は作品（<c>series_id</c>）を指し、
 ///     <c>@heading=文字</c> は画面どおりの見出しの文字（作品の正式タイトルと表記が違うとき、または「特別出演」など作品ではない見出し）。</description></item>
@@ -216,6 +219,9 @@ public static class CreditBulkInputParser
     // 例: "山田 太郎 // 旧名義あり" → 名前部分 "山田 太郎" + 備考 "旧名義あり"。
     // 区切り自体に半角スペースを前後に含めることで、URL 等の "https://" との誤マッチを避ける。
     private const string EntryNotesSeparator = " // ";
+
+    // 空きの升のセル: セル全体（前後の空白を除く）がこの文字のとき BLANK エントリにする。
+    private const string BlankCellMarker = "@blank";
 
     /// <summary>
     /// 「旧名義 =&gt; 新名義」記法のセパレータ。
@@ -439,7 +445,9 @@ public static class CreditBulkInputParser
             //   - @notes= は pendingNotesTarget == None のときに来た場合、Block 警告を出す
             //     （直前にスコープを開いていない、または既に消費済みのため）
             //   - @cols=  は pendingColsForBlock == false のとき Block 警告を出す
-            if (trimmed.StartsWith("@", StringComparison.Ordinal))
+            // 行頭のセルが空きの升（@blank）の行はエントリ行なので、ディレクティブとしては扱わない。
+            if (trimmed.StartsWith("@", StringComparison.Ordinal)
+                && !string.Equals(trimmed.Split('\t')[0].Trim(), BlankCellMarker, StringComparison.Ordinal))
             {
                 var notesMatch = NotesDirectiveRegex.Match(trimmed);
                 if (notesMatch.Success)
@@ -1520,6 +1528,16 @@ public static class CreditBulkInputParser
             if (isParallelContinuation) e.IsParallelContinuation = true;
             if (entryNotes is not null) e.Notes = entryNotes;
             return e;
+        }
+
+        // ─── @blank → 空きの升（BLANK）。名前も会社も持たない。 ───
+        if (string.Equals(cell, BlankCellMarker, StringComparison.Ordinal))
+        {
+            return AttachModifiers(new ParsedEntry
+            {
+                Kind = ParsedEntryKind.Blank,
+                LineNumber = lineNo,
+            });
         }
 
         // ─── [XXX] / [XXX#aliasid] / [XXX#CIバージョン] / [XXX#aliasid#CIバージョン] 形式

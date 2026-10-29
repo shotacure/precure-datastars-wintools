@@ -8,7 +8,7 @@ namespace PrecureDataStars.Data.Repositories;
 /// <summary>
 /// credit_block_entries テーブル（ブロック内のエントリ）の CRUD リポジトリ。
 /// entry_kind に応じて参照先カラムが切り替わる（PERSON / CHARACTER_VOICE / COMPANY /
-/// LOGO / SONG / TEXT）。整合性は DB 側トリガー
+/// LOGO / SONG / TEXT / BLANK）。整合性は DB 側トリガー
 /// <c>trg_credit_block_entries_b{i,u}_consistency</c> で保証される。
 /// 不正な組み合わせの INSERT/UPDATE は SQLSTATE 45000 で弾かれる。
 /// </summary>

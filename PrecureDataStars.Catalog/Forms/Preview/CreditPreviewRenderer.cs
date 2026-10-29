@@ -1836,7 +1836,8 @@ internal sealed class CreditPreviewRenderer
                         string labelHtml = await ResolveEntryLabelHtmlAsync(e, ct);
                         // leading_company があるブロックの中身は全角SP 1 個分
                         // 字下げする（カラムごとに字下げを付与）。屋号配下であることを視覚化する。
-                        if (hasLeading)
+                        // 空きの升（BLANK）は中身が無いので字下げも付けず、空の升のまま出す。
+                        if (hasLeading && labelHtml.Length > 0)
                         {
                             html.Append("　"); // 全角SP 1 個分の字下げ
                         }
@@ -2311,6 +2312,9 @@ internal sealed class CreditPreviewRenderer
                 }
             case "TEXT":
                 return e.RawText ?? "";
+            case "BLANK":
+                // 空きの升。表では空の升のまま出す。
+                return "";
             default:
                 return $"({e.EntryKind})";
         }

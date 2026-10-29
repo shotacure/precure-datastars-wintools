@@ -1107,6 +1107,14 @@ public sealed class CreditBulkApplyService
                 return;
             }
 
+            case ParsedEntryKind.Blank:
+            {
+                // 空きの升。参照先を持たないので、引き当ても新規作成もせずにそのまま置く。
+                AppendBlankEntry(session, block);
+                ApplyEntryModifiersToLast();
+                return;
+            }
+
             case ParsedEntryKind.Person:
             default:
             {
@@ -1884,6 +1892,16 @@ public sealed class CreditBulkApplyService
             EntryKind = "TEXT",
             EntrySeq = (ushort)(parent.Entries.Count + 1),
             RawText = raw,
+        });
+    }
+
+    /// <summary>ブロック末尾に BLANK エントリ（空きの升。参照列はすべて NULL）を 1 件追加する。</summary>
+    private static void AppendBlankEntry(CreditDraftSession session, DraftBlock parent)
+    {
+        AppendEntry(session, parent, new CreditBlockEntry
+        {
+            EntryKind = "BLANK",
+            EntrySeq = (ushort)(parent.Entries.Count + 1),
         });
     }
 

@@ -27,6 +27,8 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     → そのエントリは直前エントリと A/B 併記関係（<see cref="ParsedEntry.IsParallelContinuation"/> が true）。</description></item>
 ///   <item><description>ブロック先頭の <c>@cols=N</c> 単独行 → そのブロックの
 ///     <see cref="ParsedBlock.ColCount"/> を明示指定（<see cref="ParsedBlock.ColCountExplicit"/> も true）。</description></item>
+///   <item><description>セル全体が <c>@blank</c> → 空きの升（<see cref="ParsedEntryKind.Blank"/>）。
+///     複数列のブロックで、画面の並びの途中に何も書かれていない升の位置を埋める。</description></item>
 ///   <item><description>各レベル区切り行の直後の <c>@notes=備考</c> 単独行
 ///     → 直近で開かれた Card / Tier / Group / Role / Block の <c>Notes</c> に保存。</description></item>
 /// </list>
@@ -331,7 +333,10 @@ public enum ParsedEntryKind
     Logo,
 
     /// <summary>マスタ未登録時の退避テキスト（TEXT）。</summary>
-    Text
+    Text,
+
+    /// <summary>空きの升（BLANK）。名前も会社も持たず、複数列のブロックで後ろのエントリの列をそろえる。</summary>
+    Blank
 }
 
 /// <summary>パース時に検出された警告 1 件。</summary>

@@ -2685,6 +2685,7 @@ CREATE TABLE `credit_role_blocks` (
 --   COMPANY         → company_alias_id
 --   LOGO            → logo_id
 --   TEXT            → raw_text (マスタ未登録のフリーテキスト)
+--   BLANK           → 参照列はすべて NULL（複数列のブロックで、画面の並びの途中に何も書かれていない升。後ろのエントリの列をそろえる）
 -- 主題歌の楽曲は episode_theme_songs が真実の源泉となり、クレジット側では
 -- 役職レベルで episode_theme_songs を JOIN したテンプレ展開で表示する。
 -- entry_kind と各参照列の整合性は trigger trg_credit_block_entries_* で担保する。
@@ -2699,7 +2700,7 @@ CREATE TABLE `credit_block_entries` (
   `block_id`                       int             NOT NULL,
   `is_broadcast_only`              tinyint(1)      NOT NULL DEFAULT 0,
   `entry_seq`                      smallint unsigned NOT NULL,
-  `entry_kind`                     enum('PERSON','CHARACTER_VOICE','COMPANY','LOGO','TEXT') NOT NULL,
+  `entry_kind`                     enum('PERSON','CHARACTER_VOICE','COMPANY','LOGO','TEXT','BLANK') NOT NULL,
   `person_alias_id`                int             DEFAULT NULL,
   `character_alias_id`             int             DEFAULT NULL,
   `raw_character_text`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,

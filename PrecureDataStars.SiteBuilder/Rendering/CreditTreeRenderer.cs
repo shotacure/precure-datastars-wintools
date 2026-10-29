@@ -1229,7 +1229,8 @@ internal sealed class CreditTreeRenderer
                     {
                         var e = bs.Entries[i + j];
                         string entryHtml = await ResolveEntryHtmlAsync(e, ct).ConfigureAwait(false);
-                        if (hasLeading) html.Append("　"); // 全角SP 1 個分の字下げ
+                        // 空きの升（BLANK）は中身が無いので字下げも付けず、空の升のまま出す。
+                        if (hasLeading && entryHtml.Length > 0) html.Append("　"); // 全角SP 1 個分の字下げ
                         html.Append(entryHtml);
                     }
                     html.Append("</td>");
@@ -1440,7 +1441,8 @@ internal sealed class CreditTreeRenderer
                 {
                     // CHARACTER_VOICE 以外（PERSON / COMPANY / LOGO / TEXT 等）は声優名カラム側に表示。
                     html.Append("<td class=\"character-cell\"></td>");
-                    string actorPrefix = hasLeading ? "　" : "";
+                    // 空きの升（BLANK）は中身が無いので字下げを付けない。
+                    string actorPrefix = hasLeading && slot.EntryHtml.Length > 0 ? "　" : "";
                     html.Append($"<td class=\"actor-cell\">{actorPrefix}{slot.EntryHtml}</td>");
                     prevCharLabel = null;
                 }
@@ -1615,7 +1617,7 @@ internal sealed class CreditTreeRenderer
         return PrependMisprintHtml(nameHtml, e.PersonMisprintText);
     }
 
-    /// <summary>1 エントリ分の表示を「リンク済み HTML 断片」として返す。 PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT の 5 種に対応。 各種別ごとにクレジット時の誤記（Person / Character / Company）を左側に前置する。</summary>
+    /// <summary>1 エントリ分の表示を「リンク済み HTML 断片」として返す。 PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT / BLANK の 6 種に対応（BLANK は空文字）。 各種別ごとにクレジット時の誤記（Person / Character / Company）を左側に前置する。</summary>
     private async Task<string> ResolveEntryHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         switch (e.EntryKind)
@@ -1660,6 +1662,10 @@ internal sealed class CreditTreeRenderer
             case "TEXT":
                 // 末尾の敬称（「ちゃん」「くん」）は画面どおり小さく組む。
                 return TextEntryHtml.Format(e.RawText);
+
+            case "BLANK":
+                // 空きの升。画面の並びの途中に何も書かれていない升で、表では空の升のまま出す。
+                return "";
 
             default:
                 return Esc($"({e.EntryKind})");

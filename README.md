@@ -666,6 +666,7 @@ series_title_short,m_no_detail,session_name,section_name,m_no_class,menu_title,c
 - 行頭 `& `（半角アンパサンド + 半角SP）で直前エントリと A/B 併記（保存時に `parallel_with_entry_id` 解決）
 - 行末 ` // 備考` で当該エントリの `notes` 設定
 - `@cols=N` で当該ブロックの `col_count` を明示指定
+- セル全体を `@blank` と書くと空きの升（`entry_kind = 'BLANK'`）。複数列のブロックで、画面の並びの途中に何も書かれていない升の位置に置く（例: 2 列のブロックの 2 行目の左だけが空いているなら `@blank<TAB>ディノ・サントス`）。タブの間を空けただけのセルは読み飛ばすので、空きの升は必ず `@blank` で書く。行頭のセルが `@blank` の行はディレクティブ行ではなくエントリ行として読む。逆翻訳でも空きの升は `@blank` で書き出す。ツリーでは `⬜ [BLANK]`「（空き）」と出す
 - `@heading_series=N` / `@heading=文字` で当該ブロックの先頭に出す見出しを指定（ブロックの最初のエントリより前に書く）。`@heading_series` は見出しにする作品の `series_id`（サイトでは作品ページへのリンクになり、表示文字は作品の正式タイトル）、`@heading` は画面どおりの見出しの文字（作品の正式タイトルと表記が違うときの表示文字、または「特別出演」など作品ではない見出し）。複数の作品のキャラクターが並ぶ映画の声の出演で、作品ごとのまとまりの頭に作品名を出すのに使う。同じ位置に `@heading_italic` を書くと、その見出しを画面どおり斜体で出す（`credit_role_blocks.heading_italic`。サイトのクレジットと Catalog のプレビューは見出しを `span.block-heading-italic` で囲み、ツリーの見出しのラベルに「（斜体）」を添える）
 - `[[屋号]]` の行のすぐ後の `@leading_not_on_screen` で、その筆頭の会社が画面にはクレジットされていない（クレジット漏れ）ことを示す（`credit_role_blocks.leading_company_not_on_screen`）。表示は括弧で包む
 - `役職名: @label=文字` の役職ヘッダ（または役職開始行の直後の `@label=文字` 単独行）で、画面の役職の表記を入れる。役職名と表記（中黒・送り仮名・長音など）が違うときに書き（例: `CGプロダクションマネージャー: @label=CGプロダクション・マネージャー`）、クレジットではその表記で出す。役職名と同じ文字を書いたときは何も入れない。逆翻訳では役職ヘッダの次の行に `@label=文字` を出す
@@ -1170,12 +1171,13 @@ Role: PRODUCTION 制作 (order 2)
 5. **サブタイトル文字統計**: `episodes.title_char_stats` JSON の `length`（書記素数・コードポイント数・ユニーク書記素数・空白数）と `categories`（漢字 / ひらがな / カタカナ / 英字 / 数字 / 記号 / 句読点 / 絵文字 / その他）をテーブル化。JSON が NULL / 異常値のときは黙ってフォールバック
 6. **パート尺偏差値**: `EpisodePartsRepository.GetPartLengthStatsAsync` を直接呼び出し、AVANT / PART_A / PART_B のシリーズ内および全シリーズ横断（歴代）の順位・偏差値を表示。Episodes エディタと同じ計算ロジック（MySQL のウィンドウ関数 `RANK / AVG / STDDEV_POP`）
 7. **主題歌**: `episode_theme_songs` から OP / ED / 挿入歌（最大 OP 1 + ED 1 + INSERT 複数）を取り出し、`song_recordings` → `songs` を JOIN で引いて表示。並びは劇中順を表す `seq` の昇順が第 1 キーで、同じ枠が本放送と円盤・配信で差し替えられている（`is_broadcast_only=0` / `=1` の 2 行並立）ときは先に流れた本放送限定行を先に置く。`is_broadcast_only=1` 行は「（本放送のみ）」マーカー付きで併記
-8. **クレジット階層**: `credits.scope_kind = 'EPISODE'` のクレジット（OP / ED）について、`Card → Tier → Group → Role → Block → Entry` の階層を構造保持で HTML 化。Entry は 5 種別（PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT）に対応:
+8. **クレジット階層**: `credits.scope_kind = 'EPISODE'` のクレジット（OP / ED）について、`Card → Tier → Group → Role → Block → Entry` の階層を構造保持で HTML 化。Entry は 6 種別（PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT / BLANK）に対応:
    - `PERSON`: `person_aliases.display_text_override` 優先、なければ `name`
    - `CHARACTER_VOICE`: 「キャラ名義（CV: 声優名義）」形式
    - `COMPANY`: 屋号
    - `LOGO`: `[屋号#CIバージョン]` のテキスト表現
    - `TEXT`: フリーテキスト退避口
+   - `BLANK`: 空きの升（参照列はすべて NULL）。複数列のブロックで、画面の並びの途中に何も書かれていない升（2 列の左の列だけが 1 行長く、右の列の同じ高さが空いているときなど）の位置を埋めて、後ろのエントリの列を画面どおりにそろえる。表では空の升として描き（筆頭の会社の下の字下げも付けない）、人物・会社・役職の関わりや主要スタッフの集計には数えない。役職テンプレートの `{PERSONS}` などの名前の並びにも出ない
    - `affiliation_company_alias_id` / `affiliation_text` は小カッコ所属表記。両方あるときは屋号へリンクしたまま `affiliation_text` の文字を出す（正式な屋号名義に紐付けつつ、その画面だけの表記を残す。例：所属 ABC・表記「ABCアナウンサー」）。名前の前に屋号を置く組み方（`affiliation_layout = PREFIX`）でも同じで、一括入力では `(屋号 / "テキスト")`、PREFIX の左セルでは `屋号 / "テキスト"` と書く
    - `is_broadcast_only=1` のエントリは「（本放送のみ）」マーカー付き
    - `credit_role_blocks.col_count` は CSS Grid `grid-template-columns: repeat(N, ...)` でカラム数として反映

@@ -612,6 +612,7 @@ public partial class SongsEditorForm : Form
                     AffiliationCompanyAliasId = c.AffiliationCompanyAliasId,
                     AffiliationCompanyDisplay = affDisplay,
                     AffiliationText = c.AffiliationText,
+                    AffiliationMode = c.AffiliationDisplay,
                     Notes = c.Notes
                 });
             }
@@ -643,6 +644,7 @@ public partial class SongsEditorForm : Form
                 PrecedingSeparator = i == 0 ? null : l.PrecedingSeparator,
                 AffiliationCompanyAliasId = l.AffiliationCompanyAliasId,
                 AffiliationText = l.AffiliationText,
+                AffiliationDisplay = l.AffiliationMode ?? SongCreditAffiliationDisplay.NameWithCompany,
                 Notes = l.Notes
             }).ToList();
 
@@ -680,7 +682,7 @@ public partial class SongsEditorForm : Form
 
         try
         {
-            // 既存歌唱者行を取得し、関連する 5 種の alias 表示名を解決して詰め直す
+            // 既存歌唱者行を取得し、関連する 6 種の alias 表示名を解決して詰め直す
             var existing = await _songRecordingSingersRepo.GetByRecordingAsync(r.SongRecordingId);
             var initial = new List<SongRecordingSingersEditDialog.LineDto>();
             foreach (var s in existing)
@@ -698,6 +700,8 @@ public partial class SongsEditorForm : Form
                     SlashPersonDisplay = s.SlashPersonAliasId.HasValue ? await _personAliasesRepo.GetDisplayNameAsync(s.SlashPersonAliasId.Value) : null,
                     SlashCharacterAliasId = s.SlashCharacterAliasId,
                     SlashCharacterDisplay = s.SlashCharacterAliasId.HasValue ? (await _characterAliasesRepo.GetByIdAsync(s.SlashCharacterAliasId.Value))?.Name : null,
+                    SlashVoicePersonAliasId = s.SlashVoicePersonAliasId,
+                    SlashVoiceDisplay = s.SlashVoicePersonAliasId.HasValue ? await _personAliasesRepo.GetDisplayNameAsync(s.SlashVoicePersonAliasId.Value) : null,
                     PrecedingSeparator = s.PrecedingSeparator,
                     AffiliationText = s.AffiliationText,
                     ExpandUnitMembers = s.ExpandUnitMembers,
@@ -722,6 +726,7 @@ public partial class SongsEditorForm : Form
                 VoicePersonAliasId = l.VoicePersonAliasId,
                 SlashPersonAliasId = l.SlashPersonAliasId,
                 SlashCharacterAliasId = l.SlashCharacterAliasId,
+                SlashVoicePersonAliasId = l.BillingKind == SingerBillingKind.CharacterWithCv ? l.SlashVoicePersonAliasId : null,
                 PrecedingSeparator = i == 0 ? null : l.PrecedingSeparator,
                 AffiliationText = l.AffiliationText,
                 ExpandUnitMembers = l.BillingKind == SingerBillingKind.Person && l.ExpandUnitMembers,

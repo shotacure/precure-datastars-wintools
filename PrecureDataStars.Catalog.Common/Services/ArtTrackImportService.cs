@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Common.Services;
@@ -27,12 +28,15 @@ namespace PrecureDataStars.Catalog.Common.Services;
 /// 複数枚組は YouTube 側で 1 本のプレイリストに平坦化されるため、DB 側も
 /// 「ディスク番号 → トラック番号」の通し順に平坦化して突き合わせる。
 /// </para>
+/// <para>
+/// YouTube とのやりとりは Data API だけで行う。YouTube Music Premium 会員限定かどうかは
+/// Data API のどの項目にも現れないので、機械では調べず、確認ダイアログで人が盤ごとに決める
+/// （<see cref="ArtTrackImportPreview.PremiumOnly"/>）。
+/// </para>
 /// </summary>
 public sealed class ArtTrackImportService
 {
     private readonly YouTubeDataApiClient _api;
-    /// <summary>再生可否の判定。Data API では Premium 限定かどうかが取れないための補助。</summary>
-    private readonly YouTubePlayabilityProbe _probe = new();
     private readonly TracksRepository _tracksRepo;
     private readonly ProductsRepository _productsRepo;
 
@@ -56,7 +60,7 @@ public sealed class ArtTrackImportService
         return m.Success ? m.Groups[1].Value : s;
     }
 
-    /// <summary>取り込み結果をプレビューする（DB へは書き込まない）。 プレイリストを展開し、商品の全トラックと並び順を保ったまま対応付けて返す。 配信されていないトラックは相手なしのまま残る。埋め込み可否もこの段階で取得する。 再生可否（Premium 限定かどうか）はここでは調べない。動画 1 件ずつページを見る必要があって 曲数に比例して待たされるため、先に対応表を見せてから <see cref="ProbePlayabilityAsync"/> で 進捗を出しつつ追いかける。</summary>
+    /// <summary>取り込み結果をプレビューする（DB へは書き込まない）。 プレイリストを展開し、商品の全トラックと並び順を保ったまま対応付けて返す。 配信されていないトラックは相手なしのまま残る。埋め込み可否と地域制限もこの段階で取得する。 会員限定かどうかは、いま DB にある人の判断（その商品の割り当て済みトラックの再生可否）を引き継いで 初期値にする。</summary>
     /// <param name="productCatalogNo">対象商品の代表品番。</param>
     /// <param name="playlistIdOrUrl">プレイリスト ID または URL。</param>
     /// <param name="ct">キャンセルトークン。</param>
@@ -73,42 +77,28 @@ public sealed class ArtTrackImportService
 
         var rows = BuildAlignedRows(dbRows, videos, details);
 
-
         return new ArtTrackImportPreview
         {
             ProductCatalogNo = productCatalogNo,
             PlaylistId = playlistId,
             DbTrackCount = dbRows.Count,
             PlaylistItemCount = videos.Count,
-            Rows = rows
+            Rows = rows,
+            PremiumOnly = CurrentPremiumOnly(dbRows)
         };
     }
 
-    /// <summary>プレビュー結果に再生可否（Premium 限定かどうか）を埋める。
-    /// <para>
-    /// 対応が付いた動画だけを対象に、動画ページの playabilityStatus を 1 件ずつ確認する。
-    /// 埋め込み可でも YouTube Music Premium 会員限定のことがあり、それは Data API では
-    /// 分からないため。1 件ごとに短い間隔を空ける都合で曲数に比例した時間がかかるので、
-    /// 対応表を表示したあとに進捗を見せながら走らせる想定。
-    /// </para>
-    /// </summary>
-    /// <param name="preview">対象のプレビュー結果。行の Playability が埋まる。</param>
-    /// <param name="progress">1 件終わるごとに (完了数, 総数) を通知する。</param>
-    /// <param name="ct">キャンセルトークン。</param>
-    public async Task ProbePlayabilityAsync(
-        ArtTrackImportPreview preview,
-        IProgress<(int Done, int Total)>? progress = null,
-        CancellationToken ct = default)
+    /// <summary>いま DB にある、その商品が会員限定かどうかの人の判断。 割り当て済みのトラックに <c>PREMIUM_ONLY</c> が 1 件でもあれば会員限定、<c>OK</c> だけなら会員限定ではない、 どちらも無ければ未確認（null）とする。</summary>
+    private static bool? CurrentPremiumOnly(IReadOnlyList<ArtTrackMatchRow> dbRows)
     {
-        var targets = preview.Rows.Where(r => r.VideoId.Length > 0).Select(r => r.VideoId).ToList();
-        if (targets.Count == 0) return;
+        var current = dbRows
+            .Where(r => !string.IsNullOrEmpty(r.CurrentArtTrackId))
+            .Select(r => r.CurrentPlayability)
+            .ToList();
 
-        var playable = await _probe.GetPlayabilityAsync(targets, progress, ct).ConfigureAwait(false);
-        foreach (var r in preview.Rows)
-        {
-            if (r.VideoId.Length > 0 && playable.TryGetValue(r.VideoId, out var status))
-                r.Playability = status;
-        }
+        if (current.Contains(ArtTrackPlayability.PremiumOnly)) return true;
+        if (current.Contains(ArtTrackPlayability.Ok)) return false;
+        return null;
     }
 
     /// <summary>プレビュー結果を DB へ反映する。 対応が付いた行は動画 ID を書き込み、対応が付かなかった DB トラックは動画 ID を消す。 消すのは、以前の取り込みで付いた誤った割り当てを残さないため（配信されていないトラックは 動画 ID を持たない状態が正しく、サイト側でも再生ボタンが出なくなる）。</summary>
@@ -345,7 +335,8 @@ public sealed class ArtTrackImportService
             YouTubeTitle = video.Title,
             VideoId = video.VideoId,
             VideoLengthSeconds = videoSeconds,
-            Embeddable = detail?.Embeddable ?? false,
+            Embeddable = IsEmbeddable(detail),
+            BlockedInJapan = detail?.BlockedInJapan ?? false,
             TitleMatches = TitlesEquivalent(db.DisplayTitle, video.Title),
             DurationMatches = DurationSimilarity(db.LengthSeconds, videoSeconds) >= 1.0
         };
@@ -370,9 +361,14 @@ public sealed class ArtTrackImportService
             YouTubeTitle = video.Title,
             VideoId = video.VideoId,
             VideoLengthSeconds = detail?.DurationSeconds,
-            Embeddable = detail?.Embeddable ?? false
+            Embeddable = IsEmbeddable(detail),
+            BlockedInJapan = detail?.BlockedInJapan ?? false
         };
     }
+
+    /// <summary>埋め込んで鳴らせる動画か。権利者が埋め込みを許可していて、アップロードの処理が済んでいるもの。 詳細が取れなかった動画（削除・非公開）は不可とする。</summary>
+    internal static bool IsEmbeddable(YouTubeVideoDetail? detail)
+        => detail is not null && detail.Embeddable && detail.Processed;
 
     /// <summary>2 つのタイトルが実質同じかを判定する。 全角半角・大小文字・波ダッシュの字種違い、および空白と一部の記号の有無は同一とみなす。 DB 側とプレイリスト側で表記の揺れが出るのはこれらに限られることを実データで確認している。</summary>
     public static bool TitlesEquivalent(string a, string b)
@@ -409,13 +405,33 @@ public sealed class ArtTrackImportPreview
 
     public IReadOnlyList<ArtTrackImportRow> Rows { get; set; } = Array.Empty<ArtTrackImportRow>();
 
+    private bool? _premiumOnly;
+
+    /// <summary>この盤が YouTube Music Premium 会員限定か。null は未確認。
+    /// <para>
+    /// 会員限定かどうかはアルバム単位の配信条件で決まり、1 枚の中で混在することは実質ない。
+    /// Data API では分からないため、人が YouTube で 1 曲開いて確かめ、確認ダイアログで盤ごとに決める。
+    /// 設定すると全行の <see cref="ArtTrackImportRow.AlbumPremiumOnly"/> にも同じ値を入れる
+    /// （ずらし操作や手編集で行の動画が入れ替わっても、盤の性質は行に付いたまま残る）。
+    /// </para>
+    /// </summary>
+    public bool? PremiumOnly
+    {
+        get => _premiumOnly;
+        set
+        {
+            _premiumOnly = value;
+            foreach (var r in Rows) r.AlbumPremiumOnly = value;
+        }
+    }
+
     /// <summary>対応が付いた行数。</summary>
     public int PairedCount => Rows.Count(r => r.VideoId.Length > 0 && r.CatalogNo.Length > 0);
 
     /// <summary>対応が付いた行のうち、タイトルか尺のどちらかが合っている行数。</summary>
     public int TitleMatchedCount => Rows.Count(r => r.LooksCorrect);
 
-    /// <summary>YouTube Music Premium 会員限定と判定された行数。再生ボタンは出すが警告色にする。</summary>
+    /// <summary>YouTube Music Premium 会員限定の行数。再生ボタンは出すが警告色にする。</summary>
     public int PremiumOnlyCount => Rows.Count(r => r.IsPremiumOnly);
 
     /// <summary>埋め込み不可と判定された行数。再生ボタンが出ないトラックになる。</summary>
@@ -470,12 +486,26 @@ public sealed class ArtTrackImportRow
     /// <summary>埋め込み再生が許可されているか。</summary>
     public bool Embeddable { get; set; }
 
-    /// <summary>再生可否（OK / PREMIUM_ONLY / UNPLAYABLE）。未確認は null。 埋め込み可でも Premium 会員限定のことがあるため <see cref="Embeddable"/> とは別軸。</summary>
-    public string? Playability { get; set; }
+    /// <summary>地域制限で日本では再生できない動画か（Data API の <c>regionRestriction</c>）。動画に付く性質。</summary>
+    public bool BlockedInJapan { get; set; }
+
+    /// <summary>盤が YouTube Music Premium 会員限定か（人の判断、null は未確認）。 <see cref="ArtTrackImportPreview.PremiumOnly"/> から入る、盤に付く性質。</summary>
+    public bool? AlbumPremiumOnly { get; set; }
+
+    /// <summary>書き込む再生可否（<see cref="ArtTrackPlayability"/> の値。未確認は null）。 地域制限が最優先で、次に盤が会員限定かどうかの人の判断で決まる。 埋め込み可でも会員限定のことがあるため <see cref="Embeddable"/> とは別軸。</summary>
+    public string? Playability
+        => VideoId.Length == 0 ? null
+         : BlockedInJapan ? ArtTrackPlayability.Unplayable
+         : AlbumPremiumOnly switch
+         {
+             true => ArtTrackPlayability.PremiumOnly,
+             false => ArtTrackPlayability.Ok,
+             null => null
+         };
 
     /// <summary>YouTube Music Premium 会員でないと再生できない音源か。</summary>
     public bool IsPremiumOnly
-        => string.Equals(Playability, YouTubePlayabilityProbe.StatusPremiumOnly, StringComparison.Ordinal);
+        => string.Equals(Playability, ArtTrackPlayability.PremiumOnly, StringComparison.Ordinal);
 
     /// <summary>タイトルが実質一致したか。対応付けはタイトルと尺の両方で決めており、ここは確認用の印。</summary>
     public bool TitleMatches { get; set; }
@@ -499,7 +529,7 @@ public sealed class ArtTrackImportRow
          : CatalogNo.Length == 0 ? "DB トラックなし"
          : !Embeddable ? "埋め込み不可"
          : IsPremiumOnly ? "Premium限定"
-         : string.Equals(Playability, YouTubePlayabilityProbe.StatusUnplayable, StringComparison.Ordinal) ? "再生不可"
+         : BlockedInJapan ? "日本で再生不可"
          : ManuallyEdited ? "手動指定"
          : TitleMatches && DurationMatches ? "一致"
          : DurationMatches ? "一致(尺)"

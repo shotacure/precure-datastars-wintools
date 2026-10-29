@@ -26,6 +26,8 @@ partial class PersonAliasCreditsEditDialog
     private Button btnClearAffiliation = null!;
     private Label lblAffiliationText = null!;
     private TextBox txtAffiliationText = null!;
+    private Label lblAffiliationMode = null!;
+    private ComboBox cboAffiliationMode = null!;
     private Label lblNotes = null!;
     private TextBox txtNotes = null!;
 
@@ -138,6 +140,10 @@ partial class PersonAliasCreditsEditDialog
         lblAffiliationText = new Label { Text = "自由記述:", Location = new Point(452, 96), AutoSize = true };
         txtAffiliationText = new TextBox { Location = new Point(520, 92), Size = new Size(160, 23), MaxLength = 64 };
 
+        // 所属の出し方（名義＋所属 / 所属の会社名だけ / 名義だけ）。歌の作家連名のときだけ表示
+        lblAffiliationMode = new Label { Text = "所属の出し方:", Location = new Point(12, 160), AutoSize = true };
+        cboAffiliationMode = new ComboBox { Location = new Point(120, 156), Size = new Size(240, 23), DropDownStyle = ComboBoxStyle.DropDownList };
+
         lblNotes = new Label { Text = "備考:", Location = new Point(12, 128), AutoSize = true };
         txtNotes = new TextBox
         {
@@ -159,6 +165,7 @@ partial class PersonAliasCreditsEditDialog
             lblSeparator, txtSeparator, lblSepHint,
             lblAffiliation, txtAffiliationCompany, btnPickAffiliation, btnClearAffiliation,
             lblAffiliationText, txtAffiliationText,
+            lblAffiliationMode, cboAffiliationMode,
             lblNotes, txtNotes,
             btnAdd, btnApply, btnDelete, btnUp, btnDown
         });

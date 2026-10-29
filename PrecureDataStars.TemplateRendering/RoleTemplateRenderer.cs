@@ -32,7 +32,12 @@ namespace PrecureDataStars.TemplateRendering;
 ///   <item><description><c>{#MEDLEY_PARTS}...{/MEDLEY_PARTS}</c> ... <c>{#THEME_SONGS}</c> の中で、メドレーの元の曲（song_medley_parts）を順に曲スコープにして反復。中では元の曲の {SONG_TITLE} / {LYRICIST} / {COMPOSER} / {ARRANGER} が使える。</description></item>
 ///   <item><description><c>{?NAME}...{/?NAME}</c> ... プレースホルダ NAME の解決値が非空のときだけ展開</description></item>
 ///   <item><description><c>{?!NAME}...{/?!NAME}</c> ... プレースホルダ NAME の解決値が空のときだけ展開（否定の条件）</description></item>
-///   <item><description><c>{#THEME_SONGS[:kind=OP+ED]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復。
+///   <item><description><c>{#THEME_SONGS[:kind=OP+ED][,seq=N|N-M]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復。
+///     <c>seq</c> を書くと、番号（seq）がその値・範囲に入る曲だけに絞る。
+///     役職の行の <c>theme_song_seq</c>（<see cref="TemplateContext.ThemeSongSeq"/>）があれば、さらにその範囲の曲だけに絞る
+///     （旧 <c>{THEME_SONGS}</c> プレースホルダにも効く）。
+///     曲名（<c>{SONG_TITLE}</c>）は、画面の表記（<c>title_credited_text</c>）があれば文字だけその表記で出す（誤記があるときは使わない）。
+///     <c>merge_same_song=1</c> を書くと、同じ曲の録音が続く行を 1 曲にまとめる（歌唱は歌い手を改行で並べ、版の名前は出さない）。
 ///     内側で <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> / <c>{COMPOSER}</c> /
 ///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{CHORUS}</c> / <c>{VARIANT_LABEL}</c> / <c>{SONG_SERIES_TITLE}</c> の楽曲スコーププレースホルダが
 ///     解決可能（<c>{CHORUS}</c> は <c>BACKING_VOCALS</c> 役職の連名、不在時は空）。
@@ -42,6 +47,14 @@ namespace PrecureDataStars.TemplateRendering;
 ///     <c>{SONG_SERIES_TITLE}</c> は曲の作品（録音の作品）の正式タイトルで、クレジットの作品と同じ作品の曲なら空。
 ///     <c>{SAME_COMPOSER_ARRANGER}</c> は作曲と編曲が同じ名義（連名も同じ）なら "1"、違えば空で、
 ///     <c>{?SAME_COMPOSER_ARRANGER}</c> / <c>{?!SAME_COMPOSER_ARRANGER}</c> で書き分ける。
+///     <c>{SAME_LYRICIST_COMPOSER_ARRANGER}</c> は作詞・作曲・編曲の 3 つが同じ名義なら "1"、違えば空。
+///     所属の会社名だけを出す行（「Nostalgic Orchestra」）は会社名どうしで同じと見る。
+///     <c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> は、会社名だけの行なら会社名のあとに実際の人物を小さい括弧で添え、
+///     <c>{?SAME_LYRICIST_COMPOSER_ARRANGER}</c> / <c>{?SAME_COMPOSER_ARRANGER}</c> の中では、まとめた役職ぶんの人物を
+///     役職つきで並べる（「作詞・作曲・編曲：Nostalgic Orchestra（作詞・作曲：藤本 記子、編曲：福富 雅之）」）。
+///     <c>{LYRICS_TRANSLATOR}</c> は英訳（<c>LYRICS_TRANSLATION</c> 役職）の連名で、無い曲は空。
+///     <c>{INSTRUMENTAL}</c> はその回（その映画）ではインストゥルメンタルで使った曲なら "1"、違えば空で、
+///     <c>{?INSTRUMENTAL}</c> / <c>{?!INSTRUMENTAL}</c> で曲名の添え書きや「オリジナルボーカル曲」の見出しを書き分ける。
 ///     表記（カギ括弧の種類・項目ラベル・改行位置）はテンプレ作者が完全に制御できる。
 ///     旧 <c>{THEME_SONGS}</c> プレースホルダ版（ハードコード書式）も互換のため残置。</description></item>
 /// </list>
@@ -59,6 +72,56 @@ public static class RoleTemplateRenderer
         if (parts is { Count: > 1 } && ph.Options.TryGetValue("sep", out var sep))
             return string.Join(sep, parts.Select(p => p.Html));
         return joinedHtml ?? "";
+    }
+
+    /// <summary>
+    /// 1 行にまとめる条件の名前 → その行にまとめた役職の並び。
+    /// <c>SAME_LYRICIST_COMPOSER_ARRANGER</c> は作詞・作曲・編曲、<c>SAME_COMPOSER_ARRANGER</c> は作曲・編曲。それ以外は null。
+    /// </summary>
+    private static IReadOnlyList<string>? MergedRolesOf(string conditionName) => conditionName switch
+    {
+        "SAME_LYRICIST_COMPOSER_ARRANGER" => new[] { SongCreditRoles.Lyrics, SongCreditRoles.Composition, SongCreditRoles.Arrangement },
+        "SAME_COMPOSER_ARRANGER" => new[] { SongCreditRoles.Composition, SongCreditRoles.Arrangement },
+        _ => null,
+    };
+
+    /// <summary>
+    /// <c>{#THEME_SONGS}</c> の <c>seq</c> オプション、および役職の行の <c>theme_song_seq</c>（<see cref="TemplateContext.ThemeSongSeq"/>）
+    /// の値（"N" または "N-M"）を読む。空・読めない値なら false（絞り込まない）。
+    /// </summary>
+    private static bool TryParseSeqRange(string raw, out int from, out int to)
+    {
+        from = 0; to = 0;
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        var parts = raw.Split('-', StringSplitOptions.TrimEntries);
+        if (parts.Length == 1 && int.TryParse(parts[0], out from)) { to = from; return true; }
+        return parts.Length == 2 && int.TryParse(parts[0], out from) && int.TryParse(parts[1], out to) && from <= to;
+    }
+
+    /// <summary>
+    /// <c>{#THEME_SONGS}</c> の <c>merge_same_song=1</c>：並びの中で同じ曲（song_id）の録音が続く行を 1 行にまとめる。
+    /// まとめた行は先頭の行を元にし、歌唱（<c>{SINGER}</c>）は各録音の歌い手を改行（&lt;br&gt;）でつなぎ、
+    /// 版の名前（<c>{VARIANT_LABEL}</c>）は空にする。作詞・作曲・編曲は曲が同じなので先頭の行のまま。
+    /// </summary>
+    private static List<ThemeSongsHandler.ThemeSongRow> MergeSameSongRows(IReadOnlyList<ThemeSongsHandler.ThemeSongRow> rows)
+    {
+        var result = new List<ThemeSongsHandler.ThemeSongRow>();
+        foreach (var row in rows)
+        {
+            var prev = result.Count > 0 ? result[^1] : null;
+            if (prev is null || prev.SongId <= 0 || prev.SongId != row.SongId)
+            {
+                result.Add(row);
+                continue;
+            }
+            // 続く録音の歌い手を、前の行の歌唱に改行でつなぐ（区切りの差し替え sep= にも効くよう、部品の並びにも足す）
+            prev.SingerHtml = string.IsNullOrEmpty(prev.SingerHtml) ? row.SingerHtml
+                            : string.IsNullOrEmpty(row.SingerHtml) ? prev.SingerHtml
+                            : prev.SingerHtml + "<br>" + row.SingerHtml;
+            prev.SingerParts = prev.SingerParts.Concat(row.SingerParts.Select((p, i) => i == 0 ? ("<br>", p.Html) : p)).ToList();
+            prev.VariantLabel = null;
+        }
+        return result;
     }
 
     /// <summary>AST <paramref name="nodes"/> を <paramref name="ctx"/> に対して展開し、整形済み文字列を返す。</summary>
@@ -126,6 +189,17 @@ public static class RoleTemplateRenderer
                                            .ToArray();
                         }
                         var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, lookup, ct).ConfigureAwait(false);
+                        // seq=N / seq=N-M：同じ区分の中で番号（episode_theme_songs / series_theme_songs.seq）が範囲に入る曲だけを出す。
+                        // 「テーマソング」と「挿入歌」のように、同じ挿入歌の区分の曲を別々の役職の欄に分けて出す画面用。
+                        if (TryParseSeqRange(tsLoop.GetOption("seq", ""), out int seqFrom, out int seqTo))
+                            rows = rows.Where(r => r.Seq is byte s && s >= seqFrom && s <= seqTo).ToList();
+                        // 役職の行の theme_song_seq：主題歌のカードが 2 枚に分かれ、挿入歌がカードごとに分かれて出る回用。
+                        // テンプレは役職ごとに共通なので、カードごとの範囲は役職の行で持つ（テンプレの seq= と両方あれば両方を満たす曲だけ）。
+                        if (TryParseSeqRange(ctx.ThemeSongSeq ?? "", out int roleSeqFrom, out int roleSeqTo))
+                            rows = rows.Where(r => r.Seq is byte s && s >= roleSeqFrom && s <= roleSeqTo).ToList();
+                        // merge_same_song=1：同じ曲の録音が続く行を 1 曲にまとめる（画面が 1 曲の下に歌い手を並べる作品用）。
+                        if (tsLoop.GetOption("merge_same_song", "") == "1")
+                            rows = MergeSameSongRows(rows);
                         foreach (var song in rows)
                         {
                             // THEME_SONGS ループ内では currentBlock は持ち越さない
@@ -155,7 +229,19 @@ public static class RoleTemplateRenderer
                         string val = await ResolvePlaceholderAsync(probe, ctx, currentBlock, currentSong, factory, lookup, ct).ConfigureAwait(false);
                         if (string.IsNullOrEmpty(val) == negate)
                         {
-                            await RenderNodesAsync(cond.Body, ctx, currentBlock, currentSong, factory, lookup, sb, ct).ConfigureAwait(false);
+                            // 「作詞・作曲・編曲：」「作曲・編曲：」の 1 行にまとめる条件の中では、まとめた役職を曲に覚えさせ、
+                            // 会社名だけの行の人物の括弧に役職を添えられるようにする（抜けたら元に戻す）。
+                            var merged = !negate && currentSong is not null ? MergedRolesOf(cond.Name) : null;
+                            var saved = currentSong?.MergedCreditRoles;
+                            if (merged is not null) currentSong!.MergedCreditRoles = merged;
+                            try
+                            {
+                                await RenderNodesAsync(cond.Body, ctx, currentBlock, currentSong, factory, lookup, sb, ct).ConfigureAwait(false);
+                            }
+                            finally
+                            {
+                                if (merged is not null) currentSong!.MergedCreditRoles = saved;
+                            }
                         }
                         break;
                     }
@@ -314,7 +400,8 @@ public static class RoleTemplateRenderer
                     // SongId が有効（>0）なら <a href="/songs/{id}/">タイトル</a>、無効ならエスケープしたタイトルのみ。
                     var title = currentSong?.SongTitle;
                     if (string.IsNullOrEmpty(title)) return "";
-                    var safe = System.Net.WebUtility.HtmlEncode(title);
+                    // クレジットの画面の曲名の表記（誤記ではない表記違い）があれば、文字だけその表記にする（リンク先は曲のまま）。
+                    var safe = System.Net.WebUtility.HtmlEncode(ThemeSongsHandler.CreditedTitleOf(currentSong!));
                     // 画面に出た曲名の誤記があれば、取り消し線で出してから正しい曲名を続ける。
                     string misprintPrefix = ThemeSongsHandler.BuildTitleMisprintPrefixHtml(currentSong?.TitleMisprintText);
                     if (currentSong is { SongId: > 0 } cs)
@@ -339,16 +426,35 @@ public static class RoleTemplateRenderer
                 };
             case "LYRICIST":
                 // stage B-4：構造化クレジットがあればリンク化済み HTML、なければ
-                return NamesHtml(ph, currentSong?.LyricistHtml, currentSong?.LyricistParts);
+                // 会社名だけの行（「Nostalgic Orchestra」）には、実際の人物の括弧を添える。
+                return NamesHtml(ph, currentSong?.LyricistHtml, currentSong?.LyricistParts)
+                     + ThemeSongsHandler.CompanyOnlyPeopleSuffixHtml(currentSong, SongCreditRoles.Lyrics);
             case "COMPOSER":
-                return NamesHtml(ph, currentSong?.ComposerHtml, currentSong?.ComposerParts);
+                return NamesHtml(ph, currentSong?.ComposerHtml, currentSong?.ComposerParts)
+                     + ThemeSongsHandler.CompanyOnlyPeopleSuffixHtml(currentSong, SongCreditRoles.Composition);
             case "ARRANGER":
-                return NamesHtml(ph, currentSong?.ArrangerHtml, currentSong?.ArrangerParts);
+                return NamesHtml(ph, currentSong?.ArrangerHtml, currentSong?.ArrangerParts)
+                     + ThemeSongsHandler.CompanyOnlyPeopleSuffixHtml(currentSong, SongCreditRoles.Arrangement);
             case "SAME_COMPOSER_ARRANGER":
                 // 作曲と編曲が同じ名義（連名も同じ）なら "1"。画面で「作曲：」「編曲：」の 2 行に名前を 1 つだけ出す作品用。
                 return currentSong is { ComposerHtml.Length: > 0 } sameCs
                        && string.Equals(sameCs.ComposerHtml, sameCs.ArrangerHtml, StringComparison.Ordinal)
                     ? "1" : "";
+            case "SAME_LYRICIST_COMPOSER_ARRANGER":
+                // 作詞・作曲・編曲の 3 つが同じ名義（連名も同じ）なら "1"。画面で「作詞・作曲・編曲：」の 1 行にまとめる作品用。
+                return currentSong is { LyricistHtml.Length: > 0 } sameAll
+                       && string.Equals(sameAll.LyricistHtml, sameAll.ComposerHtml, StringComparison.Ordinal)
+                       && string.Equals(sameAll.ComposerHtml, sameAll.ArrangerHtml, StringComparison.Ordinal)
+                    ? "1" : "";
+            case "LYRICS_TRANSLATOR":
+                // 楽曲スコープ：英訳（LYRICS_TRANSLATION）の連名（リンク化済み HTML）。無い曲は空文字列で、
+                // テンプレ側で {?LYRICS_TRANSLATOR}英訳詞：{LYRICS_TRANSLATOR}{/?LYRICS_TRANSLATOR} のように条件展開できる。
+                return NamesHtml(ph, currentSong?.LyricsTranslatorHtml, currentSong?.LyricsTranslatorParts);
+            case "INSTRUMENTAL":
+                // その回（その映画）ではインストゥルメンタルで使った曲なら "1"。
+                // 画面が曲名に「（インストゥルメンタル）」を添え、「作曲・編曲」を 1 行にして
+                // 「オリジナルボーカル曲」の見出しの下に元の歌の歌手を出す作品用。
+                return currentSong is { IsInstrumental: true } ? "1" : "";
             case "MEDLEY_ARRANGER":
                 // 楽曲スコープ：メドレー編曲の連名（リンク化済み HTML）。無い曲は空文字列で、
                 // テンプレ側で {?MEDLEY_ARRANGER}メドレー編曲:{MEDLEY_ARRANGER}{/?MEDLEY_ARRANGER} のように条件展開できる。
@@ -381,7 +487,10 @@ public static class RoleTemplateRenderer
                                        .Select(s => s.ToUpperInvariant())
                                        .ToArray();
                     }
-                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, cols, lookup, ct).ConfigureAwait(false);
+                    // 役職の行の theme_song_seq があれば、その劇中順の範囲の曲だけを出す。
+                    int? phSeqFrom = null, phSeqTo = null;
+                    if (TryParseSeqRange(ctx.ThemeSongSeq ?? "", out int roleFrom, out int roleTo)) { phSeqFrom = roleFrom; phSeqTo = roleTo; }
+                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, cols, lookup, ct, phSeqFrom, phSeqTo).ConfigureAwait(false);
                 }
 
             case "LEADING_COMPANY":

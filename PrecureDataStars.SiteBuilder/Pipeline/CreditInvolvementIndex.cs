@@ -541,7 +541,8 @@ public sealed class CreditInvolvementIndex
                 "VOCALS" => 4,
                 "BACKING_VOCALS" => 5,
                 "DIALOGUE" => 6,
-                _ => 7
+                "SPOKEN_WORD" => 7,
+                _ => 8
             };
             return roleOrder * ConnoteStride + singerSeq;
         }
@@ -633,7 +634,8 @@ public sealed class CreditInvolvementIndex
               srs.character_alias_id      AS CharacterAliasId,
               srs.voice_person_alias_id   AS VoicePersonAliasId,
               srs.slash_person_alias_id   AS SlashPersonAliasId,
-              srs.slash_character_alias_id AS SlashCharacterAliasId
+              srs.slash_character_alias_id AS SlashCharacterAliasId,
+              srs.slash_voice_person_alias_id AS SlashVoicePersonAliasId
             FROM song_recording_singers srs
             JOIN episode_theme_songs ets ON ets.song_recording_id = srs.song_recording_id
             JOIN episodes ep ON ep.episode_id = ets.episode_id
@@ -655,10 +657,14 @@ public sealed class CreditInvolvementIndex
                 //                            （CHARACTER_VOICE 系と同じ運用）。同じ声優が 1 行内で複数キャラを兼ねる
                 //                            スラッシュ並列では、声優側は最初の 1 回だけ積み、キャラ側は各キャラに積む。
                 //                            声優未紐付けのユニットのキャラメンバーは、キャラ側だけに積む。
+                //                            2 人目の声優がいる行では、2 人目も声優側に 1 回積み、キャラ側は各キャラに 1 回だけ積む
+                //                            （キャラの関与は 1 人目の声優付きの参加者で積む）。
                 var personsAddedInRow = new HashSet<int>();
+                var charactersAddedInRow = new HashSet<int>();
                 foreach (var p in ctx.ExpandSingerParticipants(
                     isPerson, r.PersonAliasId, r.SlashPersonAliasId,
-                    r.CharacterAliasId, r.SlashCharacterAliasId, r.VoicePersonAliasId))
+                    r.CharacterAliasId, r.SlashCharacterAliasId, r.VoicePersonAliasId,
+                    r.SlashVoicePersonAliasId))
                 {
                     var inv = new Involvement
                     {
@@ -682,7 +688,7 @@ public sealed class CreditInvolvementIndex
                         AddPerson(paid, inv);
                         added = true;
                     }
-                    if (p.CharacterAliasId is int chaId)
+                    if (p.CharacterAliasId is int chaId && charactersAddedInRow.Add(chaId))
                     {
                         AddCharacter(chaId, inv);
                         added = true;
@@ -955,6 +961,8 @@ internal sealed class SingerInvRow
     public int? VoicePersonAliasId { get; set; }
     public int? SlashPersonAliasId { get; set; }
     public int? SlashCharacterAliasId { get; set; }
+    /// <summary>CHARACTER_WITH_CV 行の 2 人目の声優の人物名義（任意）。</summary>
+    public int? SlashVoicePersonAliasId { get; set; }
     /// <summary>主題歌種別（OP / ED / INSERT）。 歌唱クレジット（VOCALS / CHORUS）も主題歌のテーマ種別ごとに分類できるよう、 episode_theme_songs.theme_kind を伝達する。</summary>
     public string ThemeKind { get; set; } = "";
 }

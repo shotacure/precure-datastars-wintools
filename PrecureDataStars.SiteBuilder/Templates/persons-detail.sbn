@@ -7,7 +7,7 @@
   {{## h1 の下の 1 行。読みを左に、「〇〇第N話(日付)時点」を右寄せで並べる（.page-subline。読みが無ければ時点だけ右に）。 ##}}
   <div class="page-subline">
     {{~ if Person.DisplayNameKana != "" ~}}
-    <p class="muted">{{ Person.DisplayNameKana | html.escape }}</p>
+    <p class="muted">{{ Person.DisplayNameKana | html.escape }}{{ Sources.Refs.Kana }}</p>
     {{~ end ~}}
     {{## サイト全体のクレジット横断カバレッジ宣言。
          ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
@@ -26,14 +26,14 @@
       {{~ if Person.Birthday != "" ~}}
       <div class="fact">
         <span class="fact-label">誕生日</span>
-        <span class="fact-value">{{ Person.Birthday | html.escape }}</span>
+        <span class="fact-value">{{ Person.Birthday | html.escape }}{{ Sources.Refs.Birth }}</span>
       </div>
       {{~ end ~}}
       {{## 没年月日は分かっている所まで（年だけなら見出しは「没年」）。 ##}}
       {{~ if Person.DeathDate != "" ~}}
       <div class="fact">
         <span class="fact-label">{{ Person.DeathDateLabel }}</span>
-        <span class="fact-value">{{ Person.DeathDate | html.escape }}</span>
+        <span class="fact-value">{{ Person.DeathDate | html.escape }}{{ Sources.Refs.Death }}</span>
       </div>
       {{~ end ~}}
       {{## 初参加は本編クレジット（声の出演を含む）から求めた話（クレジットの収録範囲内で確定したものだけ。リンク済み HTML）。 ##}}
@@ -318,10 +318,10 @@
   </section>
   {{~ end ~}}
 
-  {{## 外部リンクセクション。詳細ページの末尾に置く。Person.OfficialUrl / AffiliationUrl / XUrl / InstagramUrl / YoutubeUrl が
+  {{## 外部リンクセクション。詳細ページの末尾に置く。Person.OfficialUrl / AffiliationUrl / XUrl / InstagramUrl / YoutubeUrl / WikipediaUrl が
        一つでもあれば表示。公式ページは本人の公式サイト、所属先は事務所・会社・楽団などのサイトにある本人のプロフィール。
-       Wikipedia は内部値として保持のみ、UI からは出さない方針なのでここでは扱わない。 ##}}
-  {{~ if Person.OfficialUrl != "" || Person.AffiliationUrl != "" || Person.XUrl != "" || Person.InstagramUrl != "" || Person.YoutubeUrl != "" ~}}
+       Wikipedia は本人の記事で、並びの最後に置く。 ##}}
+  {{~ if Person.OfficialUrl != "" || Person.AffiliationUrl != "" || Person.XUrl != "" || Person.InstagramUrl != "" || Person.YoutubeUrl != "" || Person.WikipediaUrl != "" ~}}
   <section id="external-links">
     <h2>外部リンク</h2>
     <ul class="external-links">
@@ -340,9 +340,13 @@
       {{~ if Person.YoutubeUrl != "" ~}}
       <li><a class="external-link external-link-youtube" href="{{ Person.YoutubeUrl }}" target="_blank" rel="noopener nofollow">YouTube</a></li>
       {{~ end ~}}
+      {{~ if Person.WikipediaUrl != "" ~}}
+      <li><a class="external-link external-link-wikipedia" href="{{ Person.WikipediaUrl }}" target="_blank" rel="noopener nofollow">Wikipedia</a></li>
+      {{~ end ~}}
     </ul>
   </section>
   {{~ end ~}}
+{{ include '_entity-sources.sbn' ~}}
   {{## 本編クレジット・音楽クレジットの枠を、はじめから開いておくかどうか決める（音楽クレジット以外でページが 1 画面に満たない、
        または開いたときの中身が画面の半分に満たない枠を開く）。 ##}}
   <script src="{{ asset_url "/assets/credit-card-open.js" }}" defer></script>

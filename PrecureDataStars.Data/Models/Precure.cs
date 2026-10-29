@@ -30,6 +30,14 @@ public sealed class Precure
     /// <summary>別形態の名前（→ character_aliases.alias_id、任意）。</summary>
     public int? AltFormAliasId { get; set; }
 
+    /// <summary>
+    /// 作品単位の作品（映画など）のプリキュアの欄で、変身した作品（その作品自身の series_precures に行がある作品）でだけ
+    /// プリキュアとして数えるか。TV のレギュラーで、ある映画でだけ変身するプリキュア（キュアモフルン）が true。
+    /// false ならクレジットに出た作品すべてで数える（キュアエコーなど）。
+    /// 入力用のデスクトップアプリ（Catalog）の保存では書き換えない。
+    /// </summary>
+    public bool CountsOnlyWhenTransformed { get; set; }
+
     /// <summary>標準担当声優の人物 ID（→ persons.person_id、任意）。</summary>
     public int? VoiceActorPersonId { get; set; }
 

@@ -31,11 +31,16 @@ public sealed class PersonsGenerator
 
     /// <summary>人物の代表作（プリキュアを除く）（person_notable_works）を読むためのリポジトリ。</summary>
     private readonly PersonNotableWorksRepository _notableWorksRepo;
+    /// <summary>人物のプロフィールの出典（entity_sources）を読むためのリポジトリ。</summary>
+    private readonly EntitySourcesRepository _sourcesRepo;
     private readonly PersonPositionsRepository _positionsRepo;
     /// <summary>役職履歴の見出しに添える会社名を引く（並列レンダリングの前に 1 度だけ）。</summary>
     private readonly CompaniesRepository _companiesRepo;
 
     private readonly CreditInvolvementIndex _index;
+
+    /// <summary>曲（著作物）の作家の行で、その曲を使っている劇伴の曲の表記とリンク先を引く。</summary>
+    private readonly BgmCueRefResolver _bgmCueRefs;
 
     /// <summary>役職系譜の代表コード。カードの年表を出すかどうか（サイトの年表に載る人か）の判定に使う。</summary>
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
@@ -69,6 +74,8 @@ public sealed class PersonsGenerator
 
     /// <summary>person_id → 「代表作（プリキュアを除く）」の表示行（並び順どおり）。<c>GenerateAsync</c> で並列レンダリングの前に 1 度だけ詰める。</summary>
     private IReadOnlyDictionary<int, IReadOnlyList<NotableWorkView>>? _notableWorksByPerson;
+    /// <summary>person_id → 脚注（出典）と本文の番号。<c>GenerateAsync</c> で並列レンダリングの前に 1 度だけ詰める。</summary>
+    private IReadOnlyDictionary<int, EntitySourceFootnotes>? _sourcesByPerson;
     /// <summary>人物 → 役職履歴の会社ごとのまとまり（並列レンダリングの前に全件から作る）。</summary>
     private IReadOnlyDictionary<int, IReadOnlyList<PositionGroupView>>? _positionGroupsByPerson;
 
@@ -83,6 +90,7 @@ public sealed class PersonsGenerator
         _page = page;
         _index = index;
         _roleSuccessorResolver = roleSuccessorResolver;
+        _bgmCueRefs = new BgmCueRefResolver(ctx);
 
         _personsRepo = new PersonsRepository(factory);
         _aliasesRepo = new PersonAliasesRepository(factory);
@@ -92,6 +100,7 @@ public sealed class PersonsGenerator
         _companyAliasesRepo = new CompanyAliasesRepository(factory);
         _songMusicClassesRepo = new SongMusicClassesRepository(factory);
         _notableWorksRepo = new PersonNotableWorksRepository(factory);
+        _sourcesRepo = new EntitySourcesRepository(factory);
         _positionsRepo = new PersonPositionsRepository(factory);
         _companiesRepo = new CompaniesRepository(factory);
     }
@@ -147,7 +156,7 @@ public sealed class PersonsGenerator
             // 歌唱は 3 系統の人物名義を、いずれも当該人物の担当として記録する：
             //   (1) 主名義（PERSON 歌唱）               … PersonAliasId
             //   (2) スラッシュ並列の相方（PERSON 側）     … SlashPersonAliasId
-            //   (3) キャラ歌唱(CHARACTER_WITH_CV)の声優   … VoicePersonAliasId
+            //   (3) キャラ歌唱(CHARACTER_WITH_CV)の声優   … VoicePersonAliasId（2 人目の声優 SlashVoicePersonAliasId も同じ扱い）
             // PersonAliasId だけ見ると、声優が「キャラ名義として歌った曲」を取りこぼす。
             // さらに名義がユニットなら、そのメンバー（PERSON メンバー / CHARACTER メンバーの声優）にも展開する
             // （展開は ExpandSingerParticipants に一本化）。
@@ -220,6 +229,9 @@ public sealed class PersonsGenerator
                     g => g.Key,
                     g => (IReadOnlyList<NotableWorkView>)g.Select(ToNotableWorkView).ToList());
         }
+
+        // 出典も並列レンダリングの前に全件を読み、人物ごとの脚注と本文の番号にしておく。
+        _sourcesByPerson ??= EntitySourceFootnotes.ByPerson(await _sourcesRepo.GetAllAsync(ct).ConfigureAwait(false));
 
         // 「役職履歴」も並列レンダリングの前に全件を読み、人物ごとに会社のまとまり（並び順で同じ会社が続く行）にしておく。
         if (_positionGroupsByPerson is null)
@@ -521,7 +533,8 @@ public sealed class PersonsGenerator
                 AffiliationUrl = person.AffiliationUrl ?? "",
                 XUrl = person.XUrl ?? "",
                 InstagramUrl = person.InstagramUrl ?? "",
-                YoutubeUrl = person.YoutubeUrl ?? ""
+                YoutubeUrl = person.YoutubeUrl ?? "",
+                WikipediaUrl = person.WikipediaUrl ?? ""
             },
             InvolvementGroups = involvementGroups,
             InvolvementSections = involvementSections,
@@ -534,6 +547,9 @@ public sealed class PersonsGenerator
             PositionGroups = _positionGroupsByPerson!.TryGetValue(person.PersonId, out var positionGroups)
                 ? positionGroups
                 : Array.Empty<PositionGroupView>(),
+            Sources = _sourcesByPerson!.TryGetValue(person.PersonId, out var sources)
+                ? sources
+                : EntitySourceFootnotes.Empty,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 人物詳細の構造化データは Schema.org の Person 型。
@@ -1230,6 +1246,8 @@ public sealed class PersonsGenerator
     ///   <item><description>曲のカード（song_credits / song_recording_singers）は、担当した役職の区分ごとに振り分ける
     ///     （作詞と歌の両方を担当した曲は、それぞれの区分に役職を分けて出る）。</description></item>
     ///   <item><description>劇伴の作曲・編曲（bgm_cue_credits）は「作詞・作曲・編曲」に、シリーズごとの使用話数つきで出す。</description></item>
+    ///   <item><description>劇伴の中で使われた曲（著作物）の作家（musical_work_credits）は「作詞・作曲・編曲」の劇伴の枠に、曲ごとの 1 行で出す。</description></item>
+    ///   <item><description>劇伴の歌い手（bgm_cue_singers。スキャットなど）は「歌唱」（コーラスだけなら「コーラスのみ」）の劇伴の枠に、シリーズごとの 1 行で出す。</description></item>
     ///   <item><description>音盤の音楽クレジット（music_credits）は、紐付け先（曲・録音・劇伴セッション・商品）ごとに 1 行で出す。</description></item>
     /// </list>
     /// 何も無い区分は出さない。
@@ -1250,6 +1268,9 @@ public sealed class PersonsGenerator
         var sessionRows = musicRows.Where(r => r.TargetKind == MusicCreditTargetKinds.BgmSession).ToList();
         var productRows = musicRows.Where(r => r.TargetKind == MusicCreditTargetKinds.Product).ToList();
         var bgmCueItems = BuildBgmCueCreditItems(aliasIds);
+        var musicalWorkItems = BuildMusicalWorkCreditItems(aliasIds);
+        var bgmSingerItems = BuildBgmCueSingerItems(aliasIds, chorusOnly: false);
+        var bgmChorusItems = BuildBgmCueSingerItems(aliasIds, chorusOnly: true);
 
         var sections = new List<PersonMusicSection>();
 
@@ -1257,7 +1278,7 @@ public sealed class PersonsGenerator
         //   歌唱       … 曲のカードのうち、歌・台詞で参加した曲（同じ曲でコーラスもしていればバッジに並べる）
         //   コーラスのみ … 曲のカードのうち、歌唱者行のコーラスだけで参加した曲
         //   演奏等     … 音盤の音楽クレジットの演奏・コーラス等（ミュージシャン欄のコーラスもここ）
-        bool IsSingerVoice(string code) => code is SongRecordingSingerRoles.Vocals or SongRecordingSingerRoles.Dialogue;
+        bool IsSingerVoice(string code) => code is SongRecordingSingerRoles.Vocals or SongRecordingSingerRoles.Dialogue or SongRecordingSingerRoles.SpokenWord;
         var buckets = new (string Label, Func<PersonSongCard, IReadOnlyList<RoleBadgeView>> CardRoles, string? RowGroup)[]
         {
             ("作詞・作曲・編曲",
@@ -1299,7 +1320,11 @@ public sealed class PersonsGenerator
             bool isWriting = rowGroup == MusicCreditGroups.Writing;
             var groupBgm = isWriting ? bgmGroups : Array.Empty<InvolvementGroup>();
             if (isWriting)
-                bgmItems = bgmCueItems.Concat(bgmItems).ToList();
+                bgmItems = bgmCueItems.Concat(musicalWorkItems).Concat(bgmItems).ToList();
+            else if (label == "歌唱")
+                bgmItems = bgmSingerItems.Concat(bgmItems).ToList();
+            else if (label == "コーラスのみ")
+                bgmItems = bgmChorusItems.Concat(bgmItems).ToList();
 
             var discItems = BuildMusicCreditItems(productRows.Where(r => InGroup(r.RoleCode)), displayName);
 
@@ -1350,6 +1375,111 @@ public sealed class PersonsGenerator
                 acc.Cues.Add(kv.Key.MNoDetail);
                 acc.Roles.Add(c.CreditRole);
             }
+        }
+        return bySeries
+            .Where(kv => _ctx.SeriesById.ContainsKey(kv.Key))
+            .OrderBy(kv => _ctx.SeriesStartDate(kv.Key))
+            .Select(kv =>
+            {
+                var series = _ctx.SeriesById[kv.Key];
+                return new PersonMusicCreditItem
+                {
+                    Title = series.Title,
+                    Url = PathUtil.BgmsForSeriesUrl(series.Slug),
+                    SubLabel = $"劇伴 {kv.Value.Cues.Count}曲",
+                    Roles = kv.Value.Roles
+                        .Select(code => new RoleBadgeView
+                        {
+                            Code = code,
+                            Label = MusicCreditViewBuilder.RoleName(_ctx, code),
+                            Url = "",
+                            DisplayOrder = _roleMap!.TryGetValue(code, out var role) ? role.DisplayOrder ?? 0 : 0
+                        })
+                        .OrderBy(b => b.DisplayOrder)
+                        .ToList()
+                };
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// 劇伴の中で使われた曲（著作物。musical_works）の作家（musical_work_credits）を、曲ごとの 1 行
+    /// （担当した役職のバッジ + 曲名 + 「〇〇の劇伴で使用」）に束ねる。曲（著作物）は単独のページを持たないので、
+    /// 行のリンク先はその曲を使っている劇伴の曲のカード（シリーズの放送開始日順で最初のもの）にする。
+    /// どの劇伴の曲にも使われていない曲（著作物）は出さない。並びは最初に使われたシリーズの放送開始日順 → 曲名順。
+    /// </summary>
+    private IReadOnlyList<PersonMusicCreditItem> BuildMusicalWorkCreditItems(IReadOnlyList<int> aliasIds)
+    {
+        var aliasSet = aliasIds.ToHashSet();
+        var items = new List<(DateOnly Sort, PersonMusicCreditItem Item)>();
+        foreach (var (workId, credits) in _ctx.MusicalWorkCreditsByWork)
+        {
+            var roles = credits
+                .Where(c => aliasSet.Contains(c.PersonAliasId))
+                .Select(c => c.CreditRole)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (roles.Count == 0) continue;
+            if (!_ctx.MusicalWorkById.TryGetValue(workId, out var work)) continue;
+            if (!_ctx.BgmCuesBySourceWork.TryGetValue(workId, out var cueKeys)) continue;
+            var refs = cueKeys
+                .Select(k => _bgmCueRefs.Describe(k.SeriesId, k.MNoDetail))
+                .OfType<BgmCueRef>()
+                .OrderBy(r => _ctx.SeriesStartDate(r.SeriesId))
+                .ThenBy(r => r.CueLabel, StringComparer.Ordinal)
+                .ToList();
+            if (refs.Count == 0) continue;
+            string seriesTitles = string.Join("、", refs.Select(r => r.SeriesTitle).Distinct(StringComparer.Ordinal));
+            items.Add((_ctx.SeriesStartDate(refs[0].SeriesId), new PersonMusicCreditItem
+            {
+                Title = work.Title,
+                Url = refs[0].Url,
+                SubLabel = $"{seriesTitles}の劇伴で使用",
+                Roles = roles
+                    .Select(code => new RoleBadgeView
+                    {
+                        Code = code,
+                        Label = MusicCreditViewBuilder.RoleName(_ctx, code),
+                        Url = "",
+                        DisplayOrder = _roleMap!.TryGetValue(code, out var role) ? role.DisplayOrder ?? 0 : 0
+                    })
+                    .OrderBy(b => b.DisplayOrder)
+                    .ToList()
+            }));
+        }
+        return items
+            .OrderBy(x => x.Sort)
+            .ThenBy(x => x.Item.Title, StringComparer.Ordinal)
+            .Select(x => x.Item)
+            .ToList();
+    }
+
+    /// <summary>
+    /// 劇伴の歌い手（bgm_cue_singers）を、シリーズごとの 1 行（担当した役職のバッジ + 曲数）に束ねる。
+    /// 歌唱者行は歌の録音と同じく参加者へ展開して照らすので、キャラ歌唱の声優・ユニットのメンバーの名義でも拾う。
+    /// <paramref name="chorusOnly"/> が false なら歌・スキャットなどコーラス以外の役職で参加した曲を、
+    /// true ならコーラスだけで参加した曲を数える。並びはシリーズの放送開始日順。
+    /// </summary>
+    private IReadOnlyList<PersonMusicCreditItem> BuildBgmCueSingerItems(IReadOnlyList<int> aliasIds, bool chorusOnly)
+    {
+        var aliasSet = aliasIds.ToHashSet();
+        var bySeries = new Dictionary<int, (HashSet<string> Cues, HashSet<string> Roles)>();
+        foreach (var kv in _ctx.BgmCueSingersByCue)
+        {
+            var roles = kv.Value
+                .Where(s => _ctx.ExpandSingerParticipants(s).Any(p => p.PersonAliasId is int pid && aliasSet.Contains(pid)))
+                .Select(s => s.RoleCode)
+                .ToHashSet(StringComparer.Ordinal);
+            if (roles.Count == 0) continue;
+            bool onlyChorus = roles.All(r => r == SongRecordingSingerRoles.Chorus);
+            if (onlyChorus != chorusOnly) continue;
+            if (!bySeries.TryGetValue(kv.Key.SeriesId, out var acc))
+            {
+                acc = (new HashSet<string>(StringComparer.Ordinal), new HashSet<string>(StringComparer.Ordinal));
+                bySeries[kv.Key.SeriesId] = acc;
+            }
+            acc.Cues.Add(kv.Key.MNoDetail);
+            acc.Roles.UnionWith(roles);
         }
         return bySeries
             .Where(kv => _ctx.SeriesById.ContainsKey(kv.Key))
@@ -1556,6 +1686,8 @@ public sealed class PersonsGenerator
         public IReadOnlyList<NotableWorkView> NotableWorks { get; set; } = Array.Empty<NotableWorkView>();
         /// <summary>役職履歴（会社ごとのまとまり。並び順どおり）。空なら「役職履歴」セクションを出さない。</summary>
         public IReadOnlyList<PositionGroupView> PositionGroups { get; set; } = Array.Empty<PositionGroupView>();
+        /// <summary>プロフィールの出典（ページの一番下の脚注と、本文の項目に付ける番号）。脚注が無ければ脚注の欄を出さない。</summary>
+        public EntitySourceFootnotes Sources { get; set; } = EntitySourceFootnotes.Empty;
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
@@ -1613,13 +1745,15 @@ public sealed class PersonsGenerator
         public string DeathDateLabel { get; set; } = "";
         /// <summary>初参加の話（リンク付き HTML、<see cref="FirstAppearanceResolver"/>）。収録範囲外・該当なしは空文字。</summary>
         public string FirstAppearanceHtml { get; set; } = "";
-        /// <summary>本人の公式サイト URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
+        /// <summary>本人の公式サイト URL。詳細ページ末尾「外部リンク」セクションに出す。</summary>
         public string OfficialUrl { get; set; } = "";
         /// <summary>所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL。「外部リンク」セクションに「所属先」として、公式ページの次に出す。</summary>
         public string AffiliationUrl { get; set; } = "";
         public string XUrl { get; set; } = "";
         public string InstagramUrl { get; set; } = "";
         public string YoutubeUrl { get; set; } = "";
+        /// <summary>本人の Wikipedia 記事 URL。「外部リンク」セクションの最後に「Wikipedia」として出す。</summary>
+        public string WikipediaUrl { get; set; } = "";
     }
 
     /// <summary>音楽クレジットの大見出し 1 つ分（関わった先：歌 / 劇伴 / 音盤）。</summary>

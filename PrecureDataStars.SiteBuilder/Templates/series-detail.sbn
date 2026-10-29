@@ -118,6 +118,7 @@
   {{## プリキュアセクション。
        series_precures テーブルから取得した当該シリーズ所属プリキュア一覧（display_order 昇順、
        同値時 precure_id 昇順）。紐付けが 0 件のシリーズ（クリーンDB等）ではセクション自体を非表示。
+       映画系（話を持たない作品）には一覧を渡さないので、欄は TV 系だけに出る。
        表示は声の出演一覧と同じ行リスト：「変身前名 / 変身後名」を主役（行全体クリックでキャラクター詳細へ）、
        「(CV: 声優)」を添え書きにする。CV の声優名だけは個別リンクで人物詳細へ。 ##}}
   {{~ if (array.size Precures) > 0 ~}}
@@ -206,6 +207,9 @@
         {{~ end ~}}
         {{~ if t.DialogueHtml != "" ~}}
         <div class="ts-meta-row ts-meta-dialogue"><span class="ts-meta-label">{{ t.DialogueRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.DialogueHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.SpokenWordHtml != "" ~}}
+        <div class="ts-meta-row ts-meta-dialogue"><span class="ts-meta-label">{{ t.SpokenWordRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.SpokenWordHtml }}</span></div>
         {{~ end ~}}
         {{~ if t.LyricsHtml != "" ~}}
         <div class="ts-meta-row"><span class="ts-meta-label">{{ t.LyricsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.LyricsHtml }}</span></div>

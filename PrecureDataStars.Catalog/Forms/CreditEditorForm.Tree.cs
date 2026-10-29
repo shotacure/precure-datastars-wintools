@@ -151,6 +151,8 @@ public partial class CreditEditorForm
                         if (role.JoinPrevious) roleNote += $"  [直前の役職とまとめる 区切り「{Dialogs.JoinedRoleLabelText.EncodeLineBreaks(role.JoinSeparator ?? "")}」]";
                         if (role.HideRoleLabel) roleNote += "  [役職名を出さない]";
                         if (role.NotOnScreen) roleNote += "  [画面に無い]";
+                        // 主題歌ループが出す曲を劇中順の範囲で絞る指定（theme_song_seq）。
+                        if (!string.IsNullOrEmpty(role.ThemeSongSeq)) roleNote += $"  [曲 {role.ThemeSongSeq}]";
 
                         var roleNode = new TreeNode($"📋 Role: {roleName}  (order {roleDisplayIndex}){roleNote}")
                         {
@@ -161,7 +163,7 @@ public partial class CreditEditorForm
                         // 主題歌役職の場合：episode_theme_songs から楽曲情報を引いて、楽曲サブノードを差し込む。
                         if (isThemeSongRole && _currentCredit?.ScopeKind == "EPISODE" && _currentCredit.EpisodeId is int epId)
                         {
-                            await AddThemeSongVirtualNodesAsync(roleNode, epId, role.RoleCode ?? "");
+                            await AddThemeSongVirtualNodesAsync(roleNode, epId, role.RoleCode ?? "", role.ThemeSongSeq);
                         }
 
                         int blockDisplayIndex = 1;
@@ -227,6 +229,7 @@ public partial class CreditEditorForm
                                     "COMPANY"         => "🟠 [COMPANY]        ",
                                     "LOGO"            => "🟡 [LOGO]           ",
                                     "TEXT"            => "⚪ [TEXT]            ",
+                                    "BLANK"           => "⬜ [BLANK]           ",
                                     _                 => "❓ [UNKNOWN]        "
                                 };
                                 var entryNode = new TreeNode($"{prefix} #{displayIndex}  {preview}")
@@ -319,8 +322,9 @@ public partial class CreditEditorForm
     /// 対応する <c>episode_theme_songs</c> 由来の楽曲サブノードを差し込む。
     /// 仮想ノード（<see cref="NodeKind.ThemeSongVirtual"/>）として作るため、Tag.Id には
     /// song_recording_id を入れるが、削除・並べ替え対象には含めない（UpdateButtonStates で抑止）。
+    /// <paramref name="themeSongSeq"/>（役職の行の theme_song_seq、"N" か "N-M"）があれば、劇中順がその範囲の曲だけを出す（クレジットの描画と同じ）。
     /// </summary>
-    private async Task AddThemeSongVirtualNodesAsync(TreeNode roleNode, int episodeId, string roleCode)
+    private async Task AddThemeSongVirtualNodesAsync(TreeNode roleNode, int episodeId, string roleCode, string? themeSongSeq = null)
     {
         // 役職コードに応じて、ツリーに表示する theme_kind を決める。
         // これは「その役職に紐付く楽曲だけを楽曲ノードとして表示する」ためのフィルタで、
@@ -373,6 +377,18 @@ public partial class CreditEditorForm
         await using var conn = await _lookupCache.Factory.CreateOpenedAsync(default);
         var rows = (await Dapper.SqlMapper.QueryAsync<ThemeSongRowForTree>(
             conn, sql, new { episodeId, kinds })).ToList();
+
+        // 役職の行の theme_song_seq があれば、劇中順がその範囲の曲だけに絞る。
+        if (!string.IsNullOrWhiteSpace(themeSongSeq))
+        {
+            var seqParts = themeSongSeq.Split('-', StringSplitOptions.TrimEntries);
+            if (int.TryParse(seqParts[0], out int seqFrom))
+            {
+                int seqTo = seqFrom;
+                if (seqParts.Length == 1 || (seqParts.Length == 2 && int.TryParse(seqParts[1], out seqTo)))
+                    rows = rows.Where(r => r.Seq is byte s && s >= seqFrom && s <= seqTo).ToList();
+            }
+        }
 
         // 構造化クレジット（song_credits / song_recording_singers）が
         // 存在する曲・録音は、それを優先表示文字列に展開してフリーテキスト列を上書きする。

@@ -24,12 +24,27 @@ public sealed class MusicGenerator
     private readonly SongRecordingsRepository _recRepo;
     /// <summary>商品件数（/music/ ランディングの「音楽商品」カードの「N点 M枚」点数側）取得用。</summary>
     private readonly ProductsRepository _productsRepo;
+    /// <summary>劇伴の歌い手（スキャットなど）の連名 HTML（歌の歌唱者と同じ書式・同じリンク規則）。</summary>
+    private readonly SingerHtmlBuilder _singerHtml;
+    /// <summary>劇伴の曲が使っている曲（歌・曲（著作物））の一覧 HTML（商品詳細のトラックの枠と同じもの）。</summary>
+    private readonly BgmCueSourcePartsHtmlBuilder _sourcePartsHtml;
 
-    public MusicGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
+    public MusicGenerator(
+        BuildContext ctx,
+        PageRenderer page,
+        IConnectionFactory factory,
+        StaffNameLinkResolver staffLinkResolver,
+        RoleSuccessorResolver roleSuccessorResolver)
     {
         _ctx = ctx;
         _page = page;
         _factory = factory;
+        _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver, ctx.UnitMembersByAlias);
+        // 使われている曲の作家の行は商品詳細と同じ組み立て器で出す（名義のリンク・役職バッジの表記をそろえるため）。
+        _sourcePartsHtml = new BgmCueSourcePartsHtmlBuilder(ctx, new TrackCreditHtmlBuilder(
+            ctx.PersonAliasById, ctx.CharacterAliasById, ctx.CompanyAliasById, staffLinkResolver,
+            _singerHtml, ctx.RoleByCode,
+            ctx.SongCreditsBySong, ctx.SingersByRecording, ctx.BgmCueCreditsByCue, ctx.BgmCueSingersByCue));
         _cuesRepo = new BgmCuesRepository(factory);
         _sessionsRepo = new BgmSessionsRepository(factory);
         _sectionsRepo = new BgmSectionsRepository(factory);
@@ -136,7 +151,8 @@ public sealed class MusicGenerator
                    t.length_frames     AS LengthFrames,
                    t.youtube_art_track_id AS YoutubeArtTrackId,
                    t.youtube_embeddable   AS YoutubeEmbeddable,
-                   t.youtube_playability  AS YoutubePlayability
+                   t.youtube_playability  AS YoutubePlayability,
+                   t.youtube_checked_at   AS YoutubeCheckedAt
               FROM tracks t
               JOIN discs d    ON d.catalog_no = t.catalog_no
               JOIN products p ON p.product_catalog_no = d.product_catalog_no
@@ -161,7 +177,8 @@ public sealed class MusicGenerator
                    t.length_frames     AS LengthFrames,
                    t.youtube_art_track_id AS YoutubeArtTrackId,
                    t.youtube_embeddable   AS YoutubeEmbeddable,
-                   t.youtube_playability  AS YoutubePlayability
+                   t.youtube_playability  AS YoutubePlayability,
+                   t.youtube_checked_at   AS YoutubeCheckedAt
               FROM song_recording_bgm_assignments a
               JOIN tracks   t ON t.song_recording_id = a.song_recording_id
                               -- パート・サイズとも完全一致でのみマッチ。'_ANY' は sentinel で全パート／全サイズを
@@ -185,6 +202,7 @@ public sealed class MusicGenerator
             new CommandDefinition(sql, cancellationToken: ct)).ConfigureAwait(false)).ToList();
 
         var dict = new Dictionary<(int SeriesId, string MNoDetail), List<BgmCueRecording>>();
+        var now = DateTime.Now;
         foreach (var r in rows)
         {
             var key = (r.SeriesId, r.MNoDetail);
@@ -218,9 +236,11 @@ public sealed class MusicGenerator
                 TrackTitle = r.TrackTitle,
                 LengthSeconds = lengthSeconds,
                 LengthFrames = (r.LengthFrames is uint f && f > 0) ? f : null,
-                // 配信音源は「埋め込み可と確認済み」のときだけ通す。未確認（NULL）と不可（false）は
-                // どちらも再生対象外に倒す。どの盤を実際に鳴らすかは cue 組み立て側で決める。
-                ArtTrackId = r.YoutubeEmbeddable == true ? (r.YoutubeArtTrackId ?? "") : "",
+                // 配信音源は「埋め込み可と確認済み・日本で再生できる・確認が新しい」ときだけ通す
+                // （SiteDataLoader が tracks に掛けるのと同じ ArtTrackPlayability.IsPublishable）。
+                // 未確認（NULL）と不可（false）はどちらも再生対象外に倒す。どの盤を実際に鳴らすかは cue 組み立て側で決める。
+                ArtTrackId = ArtTrackPlayability.IsPublishable(r.YoutubeEmbeddable, r.YoutubePlayability, r.YoutubeCheckedAt, now)
+                    ? (r.YoutubeArtTrackId ?? "") : "",
                 ArtTrackPremiumOnly = string.Equals(r.YoutubePlayability, "PREMIUM_ONLY", StringComparison.Ordinal)
             });
         }
@@ -554,9 +574,7 @@ public sealed class MusicGenerator
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
                 // credit_attach_to=EPISODE のシリーズは継続中なら「〜」止め、SERIES は両端 or 単独。
-                SeriesPeriod = SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode)
-                    ? JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate)
-                    : JpDateFormat.Period(s.StartDate, s.EndDate),
+                SeriesPeriod = JpDateFormat.SeriesPeriod(s, SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode)),
                 SeriesStartYearLabel = s.StartDate.Year.ToString(),
                 SongCount = songCount,
                 CueCount = cueCount,
@@ -1009,6 +1027,8 @@ public sealed class MusicGenerator
                     MenuTitle = menuCell,
                     MenuFallbackTitle = menuFallback,
                     StaffGroups = staffGroups,
+                    SingersHtml = BuildCueSingersHtml(c),
+                    SourcesHtml = _sourcePartsHtml.BuildHtml(c.SeriesId, c.MNoDetail),
                     LengthLabel = lengthLabel,
                     ArtTrackId = artTrackSource?.ArtTrackId ?? "",
                     ArtTrackPremiumOnly = artTrackSource?.ArtTrackPremiumOnly ?? false,
@@ -1073,9 +1093,7 @@ public sealed class MusicGenerator
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
                 // credit_attach_to=EPISODE のシリーズは継続中なら「〜」止め、SERIES は両端 or 単独。
-                SeriesPeriod = SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode)
-                    ? JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate)
-                    : JpDateFormat.Period(s.StartDate, s.EndDate),
+                SeriesPeriod = JpDateFormat.SeriesPeriod(s, SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode)),
                 Sessions = sessionGroups,
                 CountsLabel = countsLabel
             };
@@ -1427,6 +1445,28 @@ public sealed class MusicGenerator
         public IReadOnlyList<BgmCueRow> Cues { get; set; } = Array.Empty<BgmCueRow>();
     }
 
+    /// <summary>
+    /// cue の歌い手（bgm_cue_singers）を、役職ごとに <c>span.staff-badge-group</c>（役職バッジ + 連名）の HTML にする。
+    /// 作曲・編曲のスタッフバッジと同じ行に並べる。歌い手が無ければ空文字。
+    /// </summary>
+    private string BuildCueSingersHtml(BgmCue cue)
+    {
+        if (!_ctx.BgmCueSingersByCue.TryGetValue((cue.SeriesId, cue.MNoDetail), out var singers) || singers.Count == 0)
+            return "";
+        var sb = new System.Text.StringBuilder();
+        foreach (var roleCode in singers.Select(s => s.RoleCode).Distinct(StringComparer.Ordinal))
+        {
+            string names = _singerHtml.BuildRoleSingersHtml(singers, roleCode, _ctx.PersonAliasById, _ctx.CharacterAliasById);
+            if (names.Length == 0) continue;
+            string label = _ctx.RoleByCode.TryGetValue(roleCode, out var role) && !string.IsNullOrEmpty(role.NameJa) ? role.NameJa : roleCode;
+            sb.Append("<span class=\"staff-badge-group\">")
+              .Append($"<span class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlUtil.Escape(roleCode)}\">{HtmlUtil.Escape(label)}</span>")
+              .Append($"<span class=\"staff-name\">{names}</span>")
+              .Append("</span>");
+        }
+        return sb.ToString();
+    }
+
     private sealed class BgmCueRow
     {
         /// <summary>M 番号セルの表示値。仮 M 番号 cue の場合は空文字。</summary>
@@ -1447,6 +1487,16 @@ public sealed class MusicGenerator
         /// 名義（PersonId 解決済み）を優先、フリーテキストフォールバックも含む。作曲・編曲の名義集合が
         /// 完全一致する cue ではバッジ 2 つを連続で出す統合グループになる。</summary>
         public IReadOnlyList<BgmStaffGroup> StaffGroups { get; set; } = Array.Empty<BgmStaffGroup>();
+        /// <summary>
+        /// 当該 cue の歌い手（bgm_cue_singers。スキャットなど）を、役職ごとに「役職バッジ + 連名」の塊にした HTML。
+        /// 連名は歌の歌唱者と同じ書式（キャラ(CV:声優)）でリンク化済み。歌い手が無ければ空文字。
+        /// </summary>
+        public string SingersHtml { get; set; } = "";
+        /// <summary>
+        /// 当該 cue が使っている曲（bgm_cue_source_parts。歌・曲（著作物））の一覧 HTML（開け閉めの枠ごと。
+        /// <see cref="BgmCueSourcePartsHtmlBuilder"/>）。使われている曲が無ければ空文字。
+        /// </summary>
+        public string SourcesHtml { get; set; } = "";
         /// <summary>カードヘッダに出す「尺」（M:SS 形式）。 初出盤（recs[0]、発売日昇順で最古）の当該トラック
         /// length_seconds を 75 frames/sec から逆算して整形済み。収録盤無し or length_frames NULL のときは空文字。</summary>
         public string LengthLabel { get; set; } = "";
@@ -1549,5 +1599,7 @@ public sealed class MusicGenerator
         public bool? YoutubeEmbeddable { get; set; }
         /// <summary>tracks.youtube_playability。未確認は NULL。</summary>
         public string? YoutubePlayability { get; set; }
+        /// <summary>tracks.youtube_checked_at。埋め込み可否の最終確認時刻。</summary>
+        public DateTime? YoutubeCheckedAt { get; set; }
     }
 }

@@ -276,6 +276,8 @@ internal static class CreditBulkInputEncoder
         // 後続の役職に備考があるとまとめた形では書けないので、個別に書き出す。役職名の誤記も同じ（@misprint= は役職ごとの行）。
         if (members.Skip(1).Any(m => !string.IsNullOrEmpty(m.Entity.Notes))) return 0;
         if (members.Any(m => !string.IsNullOrEmpty(m.Entity.RoleMisprintText))) return 0;
+        // 主題歌の曲の絞り込み（@theme_song_seq=）も役職ごとの行なので、持つ役職があれば個別に書き出す。
+        if (members.Any(m => !string.IsNullOrEmpty(m.Entity.ThemeSongSeq))) return 0;
         if (members.Any(m => !string.Equals(m.Entity.AffiliationLayout, lead.Entity.AffiliationLayout, StringComparison.Ordinal))) return 0;
 
         string? joinText = await BuildJoinTextAsync(members, cache);
@@ -350,6 +352,12 @@ internal static class CreditBulkInputEncoder
         if (role.Entity.NotOnScreen)
         {
             sb.Append("@not_on_screen").Append(LineSeparator);
+        }
+
+        // 主題歌ループが出す曲を劇中順の範囲で絞る（主題歌のカードが分かれて挿入歌を振り分けるとき）。
+        if (!string.IsNullOrEmpty(role.Entity.ThemeSongSeq))
+        {
+            sb.Append("@theme_song_seq=").Append(role.Entity.ThemeSongSeq).Append(LineSeparator);
         }
 
         // 1 行にまとめて表示する役職の指定（まとめた形で書き出せなかった組・1 役職だけの書き出しの個別指定）。
@@ -573,6 +581,8 @@ internal static class CreditBulkInputEncoder
             "COMPANY" => await BuildCompanyCellAsync(e, cache),
             "LOGO" => await BuildLogoCellAsync(e, cache),
             "TEXT" => e.RawText ?? "",
+            // 空きの升は CreditBulkInputParser の @blank セルに戻す。
+            "BLANK" => "@blank",
             _ => $"<unknown_kind:{e.EntryKind}>",
         };
 
@@ -587,7 +597,18 @@ internal static class CreditBulkInputEncoder
         }
         if (isParallelWithPrevious)
         {
-            sb.Append(ParallelContinuationMarker);
+            // 前後に付く字・小さい字の指定があれば &{前|後|small} の形、無ければ従来の "& "。
+            if (e.ParallelPrefix is not null || e.ParallelSuffix is not null || e.ParallelSmall)
+            {
+                sb.Append("&{").Append(e.ParallelPrefix ?? "");
+                if (e.ParallelSuffix is not null || e.ParallelSmall) sb.Append('|').Append(e.ParallelSuffix ?? "");
+                if (e.ParallelSmall) sb.Append("|small");
+                sb.Append("} ");
+            }
+            else
+            {
+                sb.Append(ParallelContinuationMarker);
+            }
         }
 
         sb.Append(body);

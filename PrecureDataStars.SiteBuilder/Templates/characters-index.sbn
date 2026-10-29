@@ -2,7 +2,7 @@
 <p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 <p class="lead">
-  プリキュアたちはもちろん、妖精や敵キャラ、ゲストまで——歴代シリーズに登場する全 {{ TotalCount }} 名を、作品ごとにまとめました。「このキャラ、誰が演じてたっけ？」も、ここから調べられます。
+  プリキュアたちはもちろん、妖精や敵キャラ、その他のキャラクターまで——歴代シリーズに登場する全 {{ TotalCount }} 名を、作品ごとにまとめました。「このキャラ、誰が演じてたっけ？」も、ここから調べられます。
 </p>
 
 {{## 2 タブ（初登場順＝既定 / 登場回数順）。タブ切替はスタッフ一覧と同じインライン JS（外部 JS を増やさない）。 ##}}
@@ -69,14 +69,14 @@
   </ul>
   {{~ end ~}}
   {{~ end ~}}
-  {{## 1 話だけ登場した単発キャラは個別ページを持たないため、種別サブセクションには並べず
-       シリーズごとのゲストキャラクターページへのリンク 1 行にまとめる。 ##}}
+  {{## 個別ページを持たない単発キャラ（has_own_page = 0）は種別サブセクションには並べず、
+       シリーズごとの「その他のキャラクター」のページへのリンク 1 行にまとめる。 ##}}
   {{~ if s.GuestPageUrl != "" ~}}
-  <h3>ゲストキャラクター</h3>
+  <h3>その他</h3>
   <ul class="entity-list entity-list-grid">
     <li class="entity-row">
-      <a class="entity-row-link" href="{{ s.GuestPageUrl }}" aria-label="ゲストキャラクター"></a>
-      <a class="entity-row-name" href="{{ s.GuestPageUrl }}">1 話だけ登場したキャラクター</a>
+      <a class="entity-row-link" href="{{ s.GuestPageUrl }}" aria-label="その他のキャラクター"></a>
+      <a class="entity-row-name" href="{{ s.GuestPageUrl }}">その他のキャラクター</a>
       <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-person" title="人数"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg>{{ s.GuestCount }}</span></span></span>
     </li>
   </ul>

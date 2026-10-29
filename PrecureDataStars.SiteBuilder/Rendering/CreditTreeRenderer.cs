@@ -380,6 +380,7 @@ internal sealed class CreditTreeRenderer
                             roleNameHtmlOverride: joinedLabelHtmlByLeadId.TryGetValue(cr.CardRoleId, out var joinedHtml) ? joinedHtml : null,
                             hideRoleLabel: cr.HideRoleLabel,
                             notOnScreen: cr.NotOnScreen,
+                            themeSongSeq: cr.ThemeSongSeq,
                             html, ct).ConfigureAwait(false);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(cr.RoleCode, roleMap)
@@ -588,6 +589,9 @@ internal sealed class CreditTreeRenderer
         // 画面にはクレジットされていない行（credit_card_roles.not_on_screen）。true なら役職ラッパに not-on-screen を付け、
         // CSS で役職名から中身までを括弧で包んで薄い色で出す。データとしては通常どおり数える。
         bool notOnScreen,
+        // 主題歌ループが出す曲を絞る劇中順の範囲（credit_card_roles.theme_song_seq。"N" か "N-M"）。null なら絞らない。
+        // テンプレの展開コンテキストに渡し、主題歌のカードが分かれて挿入歌を振り分ける回でカードごとの曲だけを出す。
+        string? themeSongSeq,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -671,7 +675,8 @@ internal sealed class CreditTreeRenderer
                     visitedRoleCodes: null,
                     scopeSeriesTitle: seriesForCtx?.Title,
                     scopeFilmRatingNo: seriesForCtx?.FilmRatingNo,
-                    scopeFilmCjMark: seriesForCtx?.FilmCjMark ?? false);
+                    scopeFilmCjMark: seriesForCtx?.FilmCjMark ?? false,
+                    themeSongSeq: themeSongSeq);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
 
                 string normalized = rendered.Replace("\r\n", "\n").Replace("\r", "\n");
@@ -1224,7 +1229,8 @@ internal sealed class CreditTreeRenderer
                     {
                         var e = bs.Entries[i + j];
                         string entryHtml = await ResolveEntryHtmlAsync(e, ct).ConfigureAwait(false);
-                        if (hasLeading) html.Append("　"); // 全角SP 1 個分の字下げ
+                        // 空きの升（BLANK）は中身が無いので字下げも付けず、空の升のまま出す。
+                        if (hasLeading && entryHtml.Length > 0) html.Append("　"); // 全角SP 1 個分の字下げ
                         html.Append(entryHtml);
                     }
                     html.Append("</td>");
@@ -1333,19 +1339,35 @@ internal sealed class CreditTreeRenderer
                 prevCharLabel = null;
             }
 
+            // 併記（parallel_with_entry_id）の CHARACTER_VOICE エントリは独立した行にせず、
+            // 相手（同じブロックの前のエントリ）の行の役名の升に並べる。声優は相手の行の 1 人だけ出す。
+            // 相手が同じブロックに見つからないときは、普通の行として描く。
+            var rowEntries = FoldParallelCharacterEntries(bs.Entries, out var parallelFollowers);
+
             // 各エントリの表示要素を先に解決し、隣接 CHARACTER_VOICE 行で actor 表示 HTML が一致する
             // 連続区間（n 役連続）を rowspan で結合する事前計算を行う。actor の同一性判定は
             // 「最終的に表示される actor-cell の HTML 文字列」で行うため、所属（affiliation）や
             // スラッシュ配偶名義の違いがあれば自動的に別グループとして扱われる。
-            int entryCount = bs.Entries.Count;
+            // 併記で畳んだエントリは行を持たないので、この計算にも入らない。
+            int entryCount = rowEntries.Count;
             var resolved = new (bool IsCharVoice, string CharLabel, string CharHtml, string ActorHtml, string EntryHtml)[entryCount];
             for (int i = 0; i < entryCount; i++)
             {
-                var ent = bs.Entries[i];
+                var ent = rowEntries[i];
                 if (ent.EntryKind == "CHARACTER_VOICE")
                 {
                     string lbl = await ResolveCharacterLabelAsync(ent, ct).ConfigureAwait(false);
                     string chh = await ResolveCharacterLabelHtmlAsync(ent, ct).ConfigureAwait(false);
+                    if (parallelFollowers.TryGetValue(ent.EntryId, out var followers))
+                    {
+                        // 併記の相手の役名を、前後の字（parallel_prefix / parallel_suffix）つきで後ろに並べる。
+                        // 同じ役名の続きの判定（sameAsPrev）にも併記の役名を含める。
+                        foreach (var f in followers)
+                        {
+                            lbl += (f.ParallelPrefix ?? "") + await ResolveCharacterLabelAsync(f, ct).ConfigureAwait(false) + (f.ParallelSuffix ?? "");
+                            chh += await BuildParallelCharacterHtmlAsync(f, ct).ConfigureAwait(false);
+                        }
+                    }
                     string ahh = await ResolvePersonWithAffiliationHtmlAsync(ent, ct).ConfigureAwait(false);
                     resolved[i] = (true, lbl, chh, ahh, "");
                 }
@@ -1381,7 +1403,6 @@ internal sealed class CreditTreeRenderer
 
             for (int i = 0; i < entryCount; i++)
             {
-                var e = bs.Entries[i];
                 var slot = resolved[i];
                 bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
@@ -1435,7 +1456,8 @@ internal sealed class CreditTreeRenderer
                 {
                     // CHARACTER_VOICE 以外（PERSON / COMPANY / LOGO / TEXT 等）は声優名カラム側に表示。
                     html.Append("<td class=\"character-cell\"></td>");
-                    string actorPrefix = hasLeading ? "　" : "";
+                    // 空きの升（BLANK）は中身が無いので字下げを付けない。
+                    string actorPrefix = hasLeading && slot.EntryHtml.Length > 0 ? "　" : "";
                     html.Append($"<td class=\"actor-cell\">{actorPrefix}{slot.EntryHtml}</td>");
                     prevCharLabel = null;
                 }
@@ -1493,6 +1515,55 @@ internal sealed class CreditTreeRenderer
         }
 
         html.Append("</table>");
+    }
+
+    /// <summary>
+    /// 声の出演のブロックのエントリから、併記（<see cref="CreditBlockEntry.ParallelWithEntryId"/>）の
+    /// CHARACTER_VOICE エントリを取り除いた「行になるエントリ」の並びを返す。
+    /// 取り除いたエントリは、相手（同じブロックの前にある行のエントリ）の entry_id ごとに
+    /// <paramref name="followers"/> に並び順のまま集める。併記の併記（A／B／C）は先頭の A の行にまとめる。
+    /// 相手が同じブロックの前に無いエントリは、取り除かずに普通の行として残す。
+    /// </summary>
+    private static List<CreditBlockEntry> FoldParallelCharacterEntries(
+        IReadOnlyList<CreditBlockEntry> entries,
+        out Dictionary<int, List<CreditBlockEntry>> followers)
+    {
+        followers = new Dictionary<int, List<CreditBlockEntry>>();
+        var rows = new List<CreditBlockEntry>(entries.Count);
+        // entry_id → その行の先頭のエントリの entry_id（併記の併記をたどって先頭にまとめる）
+        var headOf = new Dictionary<int, int>();
+        foreach (var e in entries)
+        {
+            if (e.EntryKind == "CHARACTER_VOICE"
+                && e.ParallelWithEntryId is int target
+                && headOf.TryGetValue(target, out int head))
+            {
+                if (!followers.TryGetValue(head, out var list))
+                {
+                    list = new List<CreditBlockEntry>();
+                    followers[head] = list;
+                }
+                list.Add(e);
+                headOf[e.EntryId] = head;
+                continue;
+            }
+            rows.Add(e);
+            headOf[e.EntryId] = e.EntryId;
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// 併記のエントリの役名を、前後の字（<see cref="CreditBlockEntry.ParallelPrefix"/> /
+    /// <see cref="CreditBlockEntry.ParallelSuffix"/>）つきの HTML 断片にする。
+    /// 役名はキャラのページへのリンク。<see cref="CreditBlockEntry.ParallelSmall"/> なら前後の字ごと &lt;small&gt; で包む。
+    /// </summary>
+    private async Task<string> BuildParallelCharacterHtmlAsync(CreditBlockEntry e, CancellationToken ct)
+    {
+        string inner = Esc(e.ParallelPrefix ?? "")
+            + await ResolveCharacterLabelHtmlAsync(e, ct).ConfigureAwait(false)
+            + Esc(e.ParallelSuffix ?? "");
+        return e.ParallelSmall ? $"<small class=\"parallel-small\">{inner}</small>" : inner;
     }
 
     private async Task<string> ResolveCharacterLabelAsync(CreditBlockEntry e, CancellationToken ct)
@@ -1610,7 +1681,7 @@ internal sealed class CreditTreeRenderer
         return PrependMisprintHtml(nameHtml, e.PersonMisprintText);
     }
 
-    /// <summary>1 エントリ分の表示を「リンク済み HTML 断片」として返す。 PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT の 5 種に対応。 各種別ごとにクレジット時の誤記（Person / Character / Company）を左側に前置する。</summary>
+    /// <summary>1 エントリ分の表示を「リンク済み HTML 断片」として返す。 PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT / BLANK の 6 種に対応（BLANK は空文字）。 各種別ごとにクレジット時の誤記（Person / Character / Company）を左側に前置する。</summary>
     private async Task<string> ResolveEntryHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         switch (e.EntryKind)
@@ -1655,6 +1726,10 @@ internal sealed class CreditTreeRenderer
             case "TEXT":
                 // 末尾の敬称（「ちゃん」「くん」）は画面どおり小さく組む。
                 return TextEntryHtml.Format(e.RawText);
+
+            case "BLANK":
+                // 空きの升。画面の並びの途中に何も書かれていない升で、表では空の升のまま出す。
+                return "";
 
             default:
                 return Esc($"({e.EntryKind})");

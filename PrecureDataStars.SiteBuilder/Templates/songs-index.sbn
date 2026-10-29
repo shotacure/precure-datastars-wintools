@@ -30,7 +30,9 @@
     {{~ end ~}}
     <span class="count-badges"><span class="count-pill count-pill-mic">🎤 {{ array.size s.Recordings }}</span></span>
   </h2>
-  <ul class="songs-card-list">
+  {{~ has_play = false ~}}
+  {{~ for r in s.Recordings ~}}{{~ if r.ArtTrackId != "" ~}}{{~ has_play = true ~}}{{~ end ~}}{{~ end ~}}
+  <ul class="songs-card-list"{{~ if has_play ~}} data-art-track-list data-art-track-mode="single"{{~ end ~}}>
     {{~ for r in s.Recordings ~}}
     <li>
       {{## カード自身は <div>。カード全体クリック（/songs/{id}/ への遷移）は内側に絶対配置した
@@ -54,6 +56,8 @@
             {{~ if r.MusicClassLabel != "" ~}}
             <span class="songs-card-badge songs-badge-{{ r.BadgeClassSuffix }}">{{ r.MusicClassLabel | html.escape }}</span>
             {{~ end ~}}
+            {{## 配信音源の再生ボタン（フルサイズ優先で選んだ音源。押した 1 曲だけを鳴らす）。カードのリンクより上に重ねて、押しても曲の詳細へは飛ばない。 ##}}
+            {{~ if r.ArtTrackId != "" ~}}<button type="button" class="art-track-play songs-card-play{{ if r.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ r.ArtTrackId | html.escape }}"{{ if r.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }}{{ if r.ArtTrackAltId != "" }} data-art-track-alt-id="{{ r.ArtTrackAltId | html.escape }}" data-art-track-alt-sub="{{ r.ArtTrackAltSourceAlbum | html.escape }}"{{ end }} data-art-track-title="{{ r.DisplayTitle | html.escape }}" data-art-track-sub="{{ r.ArtTrackSourceAlbum | html.escape }}" aria-label="{{ r.DisplayTitle | html.escape }} を再生{{ if r.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if r.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>{{~ end ~}}
           </div>
         </div>
       </div>
@@ -62,3 +66,5 @@
   </ul>
 </section>
 {{~ end ~}}
+{{## 再生ボタンのある一覧だけ、配信音源のプレイヤーを読み込む（押されるまで外部への通信は無い）。 ##}}
+<script src="{{ asset_url "/assets/art-track-player.js" }}" defer></script>

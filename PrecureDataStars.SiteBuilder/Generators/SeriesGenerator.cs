@@ -214,11 +214,13 @@ public sealed class SeriesGenerator
     /// 並び順は <c>display_order ASC, precure_id ASC</c> でタイブレーク。
     /// <para>
     /// 作品単位の作品（映画など。<c>credit_attach_to='SERIES'</c>）は、その作品のクレジットの
-    /// 声の出演（CHARACTER_VOICE）のうち、キャラの名義がプリキュアの名義（変身前・変身後・変身後 2・別形態）に当たるものを
+    /// 声の出演（CHARACTER_VOICE）のうち、キャラの名義がプリキュアの名義（変身前・変身後・変身後 2・別形態）か、それらと同じキャラの名義に当たるものを
     /// その作品に出たプリキュアとする。その作品自身か親の TV シリーズ（<c>parent_series_id</c> が TV の作品）の
     /// <c>series_precures</c> に紐付くプリキュアを先に今までどおりの表記（変身前 / 変身後 (CV)）で出し、続けてそれ以外
     /// （客演）を略記（変身後の名前から「キュア」を除いたもの）で出す。クレジットが無い（プリキュアが 1 人も出ていない）
     /// 作品は、<c>series_precures</c> に行があっても出さない。
+    /// <c>precures.counts_only_when_transformed</c> が 1 のプリキュア（キュアモフルン）は、その作品自身の <c>series_precures</c> に
+    /// 行がある作品（変身した作品）でだけ数える。
     /// どちらもクレジットに出てくる順（OP → ED → そのほか、カード・ティア・グループ・役職・ブロック・エントリの順で最初に出た所）。
     /// </para>
     /// </summary>
@@ -271,11 +273,19 @@ public sealed class SeriesGenerator
         // 作品単位の作品（映画など）は、クレジットの声の出演から出たプリキュアを引く
         // （series_precures に行がある作品も、行はクレジットの表記を略さないかどうかの判定に使う）。
         var precureByAlias = new Dictionary<int, Precure>();
+        // 台帳の名義と同じキャラの別の名義（「十六夜リコ」に対する「リコ」など）でクレジットされたときも拾えるよう、キャラでも引く
+        var precureByCharacter = new Dictionary<int, Precure>();
         foreach (var p in allPrecures.OrderBy(p => p.PrecureId))
         {
             foreach (var aliasId in new int?[] { p.PreTransformAliasId, p.TransformAliasId, p.Transform2AliasId, p.AltFormAliasId })
-                if (aliasId is int a) precureByAlias.TryAdd(a, p);
+            {
+                if (aliasId is not int a) continue;
+                precureByAlias.TryAdd(a, p);
+                if (aliasById.TryGetValue(a, out var precureAlias)) precureByCharacter.TryAdd(precureAlias.CharacterId, p);
+            }
         }
+        // 変身した作品だけ数えるプリキュア（キュアモフルン）。その作品自身の series_precures に行がある作品（＝変身した作品）でだけ数える
+        var countsOnlyWhenTransformedIds = new HashSet<int>(allPrecures.Where(p => p.CountsOnlyWhenTransformed).Select(p => p.PrecureId));
         foreach (var series in _ctx.Series)
         {
             if (!_ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var kind)
@@ -283,6 +293,7 @@ public sealed class SeriesGenerator
             // 作品単位の作品は、クレジットに出たプリキュアだけを出す（クレジットが無ければ出さない）
             dict.Remove(series.SeriesId);
             if (!_ctx.CreditsBySeries.TryGetValue(series.SeriesId, out var credits)) continue;
+            var linkedIds = new HashSet<int>(allPairs.Where(x => x.SeriesId == series.SeriesId).Select(x => x.PrecureId));
             // クレジットに出てくる順（最初に出た所）で集める
             var found = new List<Precure>();
             var seen = new HashSet<int>();
@@ -295,13 +306,17 @@ public sealed class SeriesGenerator
                              .SelectMany(r => r.Blocks).SelectMany(b => b.Entries))
                 {
                     if (!string.Equals(entry.EntryKind, "CHARACTER_VOICE", StringComparison.Ordinal)) continue;
-                    if (entry.CharacterAliasId is int ca && precureByAlias.TryGetValue(ca, out var hit) && seen.Add(hit.PrecureId))
-                        found.Add(hit);
+                    if (entry.CharacterAliasId is not int ca) continue;
+                    if (!precureByAlias.TryGetValue(ca, out var hit)
+                        && !(aliasById.TryGetValue(ca, out var creditedAlias) && precureByCharacter.TryGetValue(creditedAlias.CharacterId, out hit)))
+                        continue;
+                    if (countsOnlyWhenTransformedIds.Contains(hit!.PrecureId) && !linkedIds.Contains(hit.PrecureId)) continue;
+                    if (seen.Add(hit.PrecureId)) found.Add(hit);
                 }
             }
             if (found.Count == 0) continue;
             // その作品か親の TV シリーズに紐付くプリキュアは今までどおりの表記で先に、それ以外は略記で続ける
-            var ownIds = new HashSet<int>(allPairs.Where(x => x.SeriesId == series.SeriesId).Select(x => x.PrecureId));
+            var ownIds = new HashSet<int>(linkedIds);
             if (series.ParentSeriesId is int parentId
                 && _ctx.Series.FirstOrDefault(x => x.SeriesId == parentId) is { } parent
                 && string.Equals(parent.KindCode, "TV", StringComparison.Ordinal))
@@ -665,9 +680,7 @@ public sealed class SeriesGenerator
             .Select(s =>
             {
                 var precureRows = GetPrecureRows(s.SeriesId);
-                string period = episodeAttaching
-                    ? JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate)
-                    : JpDateFormat.Period(s.StartDate, s.EndDate);
+                string period = JpDateFormat.SeriesPeriod(s, episodeAttaching);
                 bool estimated = episodeAttaching && IsEpisodesEstimated(s);
                 return new TvSeriesRow
                 {
@@ -714,9 +727,7 @@ public sealed class SeriesGenerator
     /// </summary>
     private string FormatRelatedPeriod(Series s)
     {
-        return SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode)
-            ? JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate)
-            : JpDateFormat.Period(s.StartDate, s.EndDate);
+        return JpDateFormat.SeriesPeriod(s, SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode));
     }
 
     /// <summary>
@@ -936,7 +947,7 @@ public sealed class SeriesGenerator
                 {
                     Slug = m.Slug,
                     Title = m.Title,
-                    Period = JpDateFormat.Period(m.StartDate, m.EndDate),
+                    Period = JpDateFormat.SeriesPeriod(m, ongoing: false),
                     SeasonBadgeClass = GetSeasonBadgeClass(m.KindCode),
                     SeasonBadgeLabel = GetSeasonBadgeLabel(m.KindCode),
                     RuntimeLabel = runtimeLabel,
@@ -1169,9 +1180,7 @@ public sealed class SeriesGenerator
         // credit_attach_to=EPISODE（TV/SPIN-OFF/OTONA/SHORT）は終了日未確定なら「〜」止め期間表記、
         // credit_attach_to=SERIES（MOVIE/MOVIE_SHORT/SPRING/EVENT）は開始日単独 or 両端表記。
         bool episodeAttaching = SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode);
-        string seriesPeriod = episodeAttaching
-            ? JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate)
-            : JpDateFormat.Period(s.StartDate, s.EndDate);
+        string seriesPeriod = JpDateFormat.SeriesPeriod(s, episodeAttaching);
         // 「期間」見出しラベルもクレジット添付方針で切り替え：エピソード単位なら「期間」、
         // シリーズ単位（映画系・イベント）なら単一時点なので「公開」とだけ出す。
         string periodLabel = episodeAttaching ? "期間" : "公開";
@@ -1373,7 +1382,9 @@ public sealed class SeriesGenerator
             RelatedWorks = relatedWorks,
             Parent = parent,
             KeyStaffSections = keyStaffSections,
-            Precures = precureRows,
+            // プリキュアの欄は TV 系（話を持つ作品）だけに出す。映画系はクレジットの声の出演で足りるので欄を出さない
+            // （一覧は説明文と構造化データの出演者には使う）。
+            Precures = hasEpisodes ? precureRows : Array.Empty<SeriesPrecureRow>(),
             MovieBgmCues = movieBgmRows,
             ThemeSongs = themeRows,
             CreditBlocks = creditBlocks,
@@ -1403,10 +1414,11 @@ public sealed class SeriesGenerator
             ["@type"] = s.KindCode == "MOVIE" ? "Movie" : "TVSeries",
             ["name"] = s.Title,
             ["description"] = metaDescription,
-            ["startDate"] = s.StartDate.ToString("yyyy-MM-dd"),
             ["inLanguage"] = "ja",
             ["genre"] = "アニメ"
         };
+        // 開始日が年や年月までしか確かでない作品（月日が仮）は startDate を出さない。
+        if (s.IsStartDateExact) jsonLdDict["startDate"] = s.StartDate.ToString("yyyy-MM-dd");
         if (s.EndDate.HasValue) jsonLdDict["endDate"] = s.EndDate.Value.ToString("yyyy-MM-dd");
         if (s.Episodes.HasValue) jsonLdDict["numberOfEpisodes"] = s.Episodes.Value;
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + seriesUrl;
@@ -1566,6 +1578,13 @@ public sealed class SeriesGenerator
 
         var sb = new System.Text.StringBuilder();
         sb.Append('『').Append(s.Title).Append("』は");
+        if (!s.IsStartDateExact)
+        {
+            // 開始日が年や年月までしか確かでない作品：「2027年放送予定の TV シリーズ。」「2027年7月公開予定の映画。」
+            sb.Append(JpDateFormat.PlannedStart(s, broadcast: !isMovie)).Append(isMovie ? "の映画。" : "の TV シリーズ。");
+            sb.Append(tail);
+            return sb.ToString();
+        }
         sb.Append(s.StartDate.Year).Append('年').Append(s.StartDate.Month).Append('月');
         if (isMovie)
         {
@@ -1729,10 +1748,20 @@ public sealed class SeriesGenerator
     /// シリーズの種別の表示用ラベル（series_kinds.name_ja）。映画の種別は公開の季節で呼び分けているので、
     /// 季節と公開月がずれた作品には実際の公開の季節を添える（延期などで公開時期が動いた作品のため）。
     /// 秋映画（併映を含む）が 9〜12 月以外の公開なら「（春公開）」、春映画が 6〜12 月の公開なら「（秋公開）」。
+    /// 3 本立ての各作品（MOVIE_SHORT のうち親との関係が SEGMENT のもの）は短編とは限らないので、
+    /// 「併映」ではなく、秋映画の名前に「(同時上映)」を添えて「秋映画(同時上映)」と呼ぶ。
     /// </summary>
     private string LookupKindLabel(Series series)
     {
         string label = _ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var kind) ? kind.NameJa : series.KindCode;
+        if (series.KindCode == "MOVIE_SHORT"
+            && string.Equals(series.RelationToParent, "SEGMENT", StringComparison.Ordinal))
+        {
+            string movieName = _ctx.SeriesKindByCode.TryGetValue("MOVIE", out var movieKind) ? movieKind.NameJa : "秋映画";
+            label = movieName + "(同時上映)";
+        }
+        // 公開の季節は月で決めるので、年だけが確かな作品（月が仮）では付けない。
+        if (series.StartDatePrecision == Series.StartDatePrecisionYear) return label;
         int month = series.StartDate.Month;
         if (series.KindCode is "MOVIE" or "MOVIE_SHORT" && month is < 9)
             return label + "（春公開）";

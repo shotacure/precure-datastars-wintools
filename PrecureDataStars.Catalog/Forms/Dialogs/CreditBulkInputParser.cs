@@ -31,8 +31,15 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     → そのエントリの <c>notes</c> に保存。<c>//</c> 自身を備考に含めたい場合は未対応（実用稀のため）。</description></item>
 ///   <item><description>エントリ行頭の <c>&amp; </c>（半角アンパサンド + スペース）プレフィクス
 ///     → 直前エントリと A/B 併記関係（適用フェーズで <c>parallel_with_entry_id</c> 自参照を解決）。</description></item>
+///   <item><description>エントリ行頭の <c>&amp;{前|後|small} </c> プレフィクス → 併記に加えて、名前の前・後ろに付く字
+///     （<c>parallel_prefix</c> / <c>parallel_suffix</c>）と小さい字で描く指定（<c>parallel_small</c>）。
+///     後ろの字と <c>small</c> は省略可。例: <c>&amp;{／} &lt;クマタ&gt;声優</c>（ダークマター／クマタ）、
+///     <c>&amp;{（|）|small} &lt;キュアエール&gt;声優</c>（野乃はな（キュアエール））。</description></item>
 ///   <item><description><c>@cols=N</c>（ブロック先頭の単独行）→ そのブロックの <c>col_count</c> を明示指定。
 ///     省略時は従来どおりタブ数+1 で推測。</description></item>
+///   <item><description><c>@blank</c>（セル全体）→ 空きの升（<c>entry_kind = BLANK</c>）。複数列のブロックで、画面の並びの途中に
+///     何も書かれていない升の位置を埋めて、後ろのエントリの列をそろえる（例: <c>@blank&lt;TAB&gt;山田 太郎</c>）。
+///     タブの間を空けただけのセルは従来どおり読み飛ばす。行頭のセルが <c>@blank</c> の行はディレクティブ行ではなくエントリ行として読む。</description></item>
 ///   <item><description><c>@heading=文字</c> / <c>@heading_series=N</c>（ブロックの最初のエントリより前の単独行）→
 ///     そのブロックの先頭に出す見出し。<c>@heading_series=N</c> は作品（<c>series_id</c>）を指し、
 ///     <c>@heading=文字</c> は画面どおりの見出しの文字（作品の正式タイトルと表記が違うとき、または「特別出演」など作品ではない見出し）。</description></item>
@@ -42,6 +49,10 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     X は縦（T=上 / M=中 / B=下）、Y は横（L=左 / C=中央 / R=右）。ティア区切り <c>---</c> の直後（1 つ目のティアはカードの頭）に書く。</description></item>
 ///   <item><description><c>@misprint=文字</c>（役職開始行直後の単独行）→ 画面に出た役職名の誤記（<c>role_misprint_text</c>）。
 ///     役職ヘッダには正しい役職名を書き、画面の誤った文字をこの行に書く。クレジットでは誤記を取り消し線で出し、改行して正しい表記を出す。</description></item>
+///   <item><description><c>@theme_song_seq=N</c> / <c>@theme_song_seq=N-M</c>（役職開始行直後の単独行）→ その役職の行で主題歌ループ
+///     （<c>{#THEME_SONGS}</c>）が出す曲を、劇中順（<c>episode_theme_songs.seq</c> / <c>series_theme_songs.seq</c>）が N の曲、
+///     または N 以上 M 以下の曲だけに絞る（<c>credit_card_roles.theme_song_seq</c>）。主題歌のカードが 2 枚に分かれ、
+///     挿入歌がカードごとに分かれて出るときに書く。</description></item>
 ///   <item><description><c>A+B: @join=文字</c>（役職ヘッダ）→ 役職 A と B を、同じエントリを持つ別々の役職として作り、
 ///     クレジットでは「文字」の 1 行にまとめて表示する（例: <c>キャラクターデザイン+作画監督: @join=キャラクターデザイン・作画監督</c>）。
 ///     エントリは 1 回だけ書けばよい。区切りは半角 <c>+</c> または全角 <c>＋</c>。3 つ以上もまとめられる。
@@ -146,6 +157,11 @@ public static class CreditBulkInputParser
     // ディレクティブ行: @not_on_screen。直前の役職の行は画面にはクレジットされていない（credit_card_roles.not_on_screen）。
     private static readonly Regex NotOnScreenDirectiveRegex = new(@"^@not_on_screen$", RegexOptions.Compiled);
 
+    // ディレクティブ行: @theme_song_seq=N / @theme_song_seq=N-M。直前の役職の行で主題歌ループが出す曲を劇中順の範囲で絞る
+    // （credit_card_roles.theme_song_seq）。値の形（半角数字の N か N-M）は ThemeSongSeqValueRegex で確かめる。
+    private static readonly Regex ThemeSongSeqDirectiveRegex = new(@"^@theme_song_seq=(?<value>.*)$", RegexOptions.Compiled);
+    private static readonly Regex ThemeSongSeqValueRegex = new(@"^(?<from>[0-9]+)(?:-(?<to>[0-9]+))?$", RegexOptions.Compiled);
+
     // ディレクティブ行: @leading_not_on_screen。直前の筆頭の会社 [[XXX]] は画面にはクレジットされていない
     // （credit_role_blocks.leading_company_not_on_screen）。[[XXX]] の行のすぐ後、エントリより前に書く。
     private static readonly Regex LeadingNotOnScreenDirectiveRegex = new(@"^@leading_not_on_screen$", RegexOptions.Compiled);
@@ -203,10 +219,22 @@ public static class CreditBulkInputParser
     // 衝突しないようにするため。"&山田" は通常の人物名扱い。
     private const string ParallelContinuationMarker = "& ";
 
+    /// <summary>前後に付く字と小さい字の指定つきの併記マーカー <c>&amp;{前|後|small} </c> の開き。</summary>
+    private const string ParallelDisplayMarkerOpen = "&{";
+
+    /// <summary>同マーカーの閉じ（閉じ括弧の後ろに半角スペース）。</summary>
+    private const string ParallelDisplayMarkerClose = "} ";
+
+    /// <summary>同マーカーの 3 つ目の欄で、小さい字で描く指定。</summary>
+    private const string ParallelSmallKeyword = "small";
+
     // 行末の備考コメント区切り: 半角スペース + スラッシュ 2 個 + 半角スペース。
     // 例: "山田 太郎 // 旧名義あり" → 名前部分 "山田 太郎" + 備考 "旧名義あり"。
     // 区切り自体に半角スペースを前後に含めることで、URL 等の "https://" との誤マッチを避ける。
     private const string EntryNotesSeparator = " // ";
+
+    // 空きの升のセル: セル全体（前後の空白を除く）がこの文字のとき BLANK エントリにする。
+    private const string BlankCellMarker = "@blank";
 
     /// <summary>
     /// 「旧名義 =&gt; 新名義」記法のセパレータ。
@@ -430,7 +458,9 @@ public static class CreditBulkInputParser
             //   - @notes= は pendingNotesTarget == None のときに来た場合、Block 警告を出す
             //     （直前にスコープを開いていない、または既に消費済みのため）
             //   - @cols=  は pendingColsForBlock == false のとき Block 警告を出す
-            if (trimmed.StartsWith("@", StringComparison.Ordinal))
+            // 行頭のセルが空きの升（@blank）の行はエントリ行なので、ディレクティブとしては扱わない。
+            if (trimmed.StartsWith("@", StringComparison.Ordinal)
+                && !string.Equals(trimmed.Split('\t')[0].Trim(), BlankCellMarker, StringComparison.Ordinal))
             {
                 var notesMatch = NotesDirectiveRegex.Match(trimmed);
                 if (notesMatch.Success)
@@ -732,6 +762,45 @@ public static class CreditBulkInputParser
                         continue;
                     }
                     curRole.NotOnScreen = true;
+                    continue;
+                }
+
+                // @theme_song_seq=N / @theme_song_seq=N-M : 直前の役職の行で主題歌ループが出す曲を劇中順の範囲で絞る。値が空なら絞らない。
+                var themeSongSeqMatch = ThemeSongSeqDirectiveRegex.Match(trimmed);
+                if (themeSongSeqMatch.Success)
+                {
+                    if (curRole is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @theme_song_seq は役職指定後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    string seqValue = themeSongSeqMatch.Groups["value"].Value.Trim();
+                    if (seqValue.Length == 0)
+                    {
+                        curRole.ThemeSongSeq = null;
+                        continue;
+                    }
+                    var seqValueMatch = ThemeSongSeqValueRegex.Match(seqValue);
+                    bool seqValid = seqValueMatch.Success
+                        && int.TryParse(seqValueMatch.Groups["from"].Value, out int seqFrom)
+                        && (!seqValueMatch.Groups["to"].Success
+                            || (int.TryParse(seqValueMatch.Groups["to"].Value, out int seqTo) && seqFrom <= seqTo));
+                    if (!seqValid)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @theme_song_seq の値は「N」か「N-M」（半角数字、N ≦ M）で書いてください。"
+                        });
+                        continue;
+                    }
+                    curRole.ThemeSongSeq = seqValue;
                     continue;
                 }
 
@@ -1396,6 +1465,9 @@ public static class CreditBulkInputParser
     /// <list type="bullet">
     ///   <item><description>行頭 <c>🎬</c>（U+1F3AC）→ <see cref="ParsedEntry.IsBroadcastOnly"/> = true</description></item>
     ///   <item><description>行頭 <c>&amp; </c> → <see cref="ParsedEntry.IsParallelContinuation"/> = true</description></item>
+    ///   <item><description>行頭 <c>&amp;{前|後|small} </c> → 併記に加えて、名前の前・後ろに付く字と小さい字の指定
+    ///     （<see cref="ParsedEntry.ParallelPrefix"/> / <see cref="ParsedEntry.ParallelSuffix"/> / <see cref="ParsedEntry.ParallelSmall"/>）。
+    ///     後ろの字と <c>small</c> は省略可（<c>&amp;{／} </c>、<c>&amp;{（|）|small} </c>）</description></item>
     ///   <item><description>行末 <c> // 備考</c> → <see cref="ParsedEntry.Notes"/> に値をセット</description></item>
     /// </list>
     /// これらは順序を問わず重ねて指定可能（例: <c>🎬 &amp; 山田 // 備考</c>）。
@@ -1433,6 +1505,9 @@ public static class CreditBulkInputParser
         //    両方付いていた場合は両方有効。重複（"🎬 🎬 山田"）も認める（後者はそのまま name に残す形）。
         bool isBroadcastOnly = false;
         bool isParallelContinuation = false;
+        string? parallelPrefix = null;
+        string? parallelSuffix = null;
+        bool parallelSmall = false;
         // 何度かループして、剥がせるだけ剥がす（順序問わず）。
         bool stripped;
         do
@@ -1452,6 +1527,21 @@ public static class CreditBulkInputParser
                 cell = cell.Substring(ParallelContinuationMarker.Length).TrimStart();
                 stripped = true;
             }
+            // &{前|後|small} マーカー（閉じ括弧の後ろに半角スペース必須）。前後に付く字と小さい字の指定つきの併記。
+            else if (cell.StartsWith(ParallelDisplayMarkerOpen, StringComparison.Ordinal))
+            {
+                int close = cell.IndexOf(ParallelDisplayMarkerClose, ParallelDisplayMarkerOpen.Length, StringComparison.Ordinal);
+                if (close > 0)
+                {
+                    var parts = cell.Substring(ParallelDisplayMarkerOpen.Length, close - ParallelDisplayMarkerOpen.Length).Split('|');
+                    isParallelContinuation = true;
+                    parallelPrefix = parts.Length >= 1 && parts[0].Length > 0 ? parts[0] : null;
+                    parallelSuffix = parts.Length >= 2 && parts[1].Length > 0 ? parts[1] : null;
+                    parallelSmall = parts.Length >= 3 && string.Equals(parts[2].Trim(), ParallelSmallKeyword, StringComparison.OrdinalIgnoreCase);
+                    cell = cell.Substring(close + ParallelDisplayMarkerClose.Length).TrimStart();
+                    stripped = true;
+                }
+            }
         } while (stripped);
 
         if (cell.Length == 0)
@@ -1470,8 +1560,21 @@ public static class CreditBulkInputParser
         {
             if (isBroadcastOnly) e.IsBroadcastOnly = true;
             if (isParallelContinuation) e.IsParallelContinuation = true;
+            if (parallelPrefix is not null) e.ParallelPrefix = parallelPrefix;
+            if (parallelSuffix is not null) e.ParallelSuffix = parallelSuffix;
+            if (parallelSmall) e.ParallelSmall = true;
             if (entryNotes is not null) e.Notes = entryNotes;
             return e;
+        }
+
+        // ─── @blank → 空きの升（BLANK）。名前も会社も持たない。 ───
+        if (string.Equals(cell, BlankCellMarker, StringComparison.Ordinal))
+        {
+            return AttachModifiers(new ParsedEntry
+            {
+                Kind = ParsedEntryKind.Blank,
+                LineNumber = lineNo,
+            });
         }
 
         // ─── [XXX] / [XXX#aliasid] / [XXX#CIバージョン] / [XXX#aliasid#CIバージョン] 形式

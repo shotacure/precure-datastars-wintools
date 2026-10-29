@@ -61,10 +61,6 @@
                 <span class="books-card-meta-sep" aria-hidden="true">／</span>
                 <span class="books-card-meta-pages">{{ b.PageCountLabel | html.escape }}</span>
                 {{~ end ~}}
-                {{~ if b.PriceLabel != "" ~}}
-                <span class="books-card-meta-sep" aria-hidden="true">／</span>
-                <span class="books-card-meta-price">{{ b.PriceLabel | html.escape }}</span>
-                {{~ end ~}}
               </div>
             </div>
             <div class="books-card-badge-cell">
@@ -115,10 +111,6 @@
                   {{~ if b.PageCountLabel != "" ~}}
                   <span class="books-card-meta-sep" aria-hidden="true">／</span>
                   <span class="books-card-meta-pages">{{ b.PageCountLabel | html.escape }}</span>
-                  {{~ end ~}}
-                  {{~ if b.PriceLabel != "" ~}}
-                  <span class="books-card-meta-sep" aria-hidden="true">／</span>
-                  <span class="books-card-meta-price">{{ b.PriceLabel | html.escape }}</span>
                   {{~ end ~}}
                 </div>
               </div>
@@ -180,10 +172,6 @@
                   {{~ if b.PageCountLabel != "" ~}}
                   <span class="books-card-meta-sep" aria-hidden="true">／</span>
                   <span class="books-card-meta-pages">{{ b.PageCountLabel | html.escape }}</span>
-                  {{~ end ~}}
-                  {{~ if b.PriceLabel != "" ~}}
-                  <span class="books-card-meta-sep" aria-hidden="true">／</span>
-                  <span class="books-card-meta-price">{{ b.PriceLabel | html.escape }}</span>
                   {{~ end ~}}
                 </div>
               </div>

@@ -595,8 +595,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertRoleAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardRole r, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, not_on_screen, notes, created_by, updated_by)
-            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @NotOnScreen, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, not_on_screen, theme_song_seq, notes, created_by, updated_by)
+            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @NotOnScreen, @ThemeSongSeq, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, r, transaction: tx, cancellationToken: ct));
@@ -621,14 +621,16 @@ internal sealed class CreditSaveService
                person_misprint_text, character_misprint_text, company_misprint_text, person_masked_text,
                company_alias_id, logo_id, raw_text,
                affiliation_company_alias_id, affiliation_person_alias_id, affiliation_logo_id, affiliation_text, affiliation_inline,
-               parallel_with_entry_id, notes, created_by, updated_by)
+               parallel_with_entry_id, parallel_prefix, parallel_suffix, parallel_small,
+               notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
                @PersonMisprintText, @CharacterMisprintText, @CompanyMisprintText, @PersonMaskedText,
                @CompanyAliasId, @LogoId, @RawText,
                @AffiliationCompanyAliasId, @AffiliationPersonAliasId, @AffiliationLogoId, @AffiliationText, @AffiliationInline,
-               @ParallelWithEntryId, @Notes, @CreatedBy, @UpdatedBy);
+               @ParallelWithEntryId, @ParallelPrefix, @ParallelSuffix, @ParallelSmall,
+               @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, e, transaction: tx, cancellationToken: ct));
@@ -737,6 +739,7 @@ internal sealed class CreditSaveService
               join_separator     = @JoinSeparator,
               hide_role_label    = @HideRoleLabel,
               not_on_screen      = @NotOnScreen,
+              theme_song_seq     = @ThemeSongSeq,
               notes              = @Notes,
               updated_by         = @UpdatedBy
             WHERE card_role_id = @CardRoleId;
@@ -792,6 +795,9 @@ internal sealed class CreditSaveService
               affiliation_text = @AffiliationText,
               affiliation_inline = @AffiliationInline,
               parallel_with_entry_id = @ParallelWithEntryId,
+              parallel_prefix = @ParallelPrefix,
+              parallel_suffix = @ParallelSuffix,
+              parallel_small = @ParallelSmall,
               notes = @Notes,
               updated_by = @UpdatedBy
             WHERE entry_id = @EntryId;

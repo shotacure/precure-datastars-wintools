@@ -313,6 +313,27 @@ a:hover { text-decoration: underline; }
   width: 200px;
   height: auto;
 }
+/* バナー画像の無い姉妹サイト（precure.tv ⇔ precure.news）は、ホーム上部の文字のカード
+   （.sister-site-text-card）をバナーと同じ 200px 幅・3:1 に縮めて置く。
+   この幅では一行の紹介が入らないので、肩書きとワードマークだけを組む。 */
+.footer-sister-link.sister-site-text-card {
+  width: 200px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  font-size: 13px;
+  gap: 0;
+  text-decoration: none;
+}
+.footer-sister-link.sister-site-text-card .sister-site-text-card-ja { font-size: 0.85em; }
+.footer-sister-link.sister-site-text-card .sister-site-text-card-en { font-size: 1.3em; }
+.footer-sister-link.sister-site-text-card-news {
+  border-color: #c2d6ff;
+}
+.footer-sister-link.sister-site-text-card-news:hover,
+.footer-sister-link.sister-site-text-card-news:focus-visible {
+  border-color: #3366cc;
+  box-shadow: 0 2px 8px rgba(51, 102, 204, 0.16);
+}
 .footer-legal {
   margin-top: 22px;
   padding-top: 14px;
@@ -1795,7 +1816,8 @@ a.series-card-children-title:hover {
   margin: 0;
   padding: 0;
 }
-/* 映画のタイトルカード：タイトルと同じ幅の透明な箱に、左下へ CJ マークの印、右下へ映倫審査番号を寄せる。 */
+/* 映画のタイトルカード：タイトルと同じ幅の透明な箱に、CJ マークの印と映倫審査番号を画面どおりの側へ寄せる。
+   既定は右下に並べる（CJ マークが映倫審査番号のすぐ左）。marks-split は CJ マークを左下、映倫審査番号を右下に分ける。 */
 .credit-section .film-title-card {
   display: inline-flex;
   flex-direction: column;
@@ -1803,9 +1825,20 @@ a.series-card-children-title:hover {
 .credit-section .film-title-marks {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  gap: 0.4em;
 }
-.credit-section .film-title-marks .film-rating {
-  margin-left: auto;
+.credit-section .film-title-marks.marks-split {
+  justify-content: space-between;
+}
+/* 映画の最後の画面：© の行と同じ幅の透明な箱に、CJ マークの印を © の上の行の右端へ寄せる。 */
+.credit-section .film-end-card {
+  display: inline-flex;
+  flex-direction: column;
+}
+.credit-section .film-end-marks {
+  display: flex;
+  justify-content: flex-end;
 }
 /* CJ マークの印（小さく丸囲みで出す）。 */
 .credit-section .cj-mark {
@@ -5604,10 +5637,46 @@ a.credit-card-series:focus-visible {
 .songs-card-medley .medley-parts .staff-badges-row {
   font-size: 0.9em;
 }
+/* 劇伴の曲が使っている曲（.bgm-cue-sources）。劇伴詳細の曲のカードと商品詳細のトラックの枠で共用する開け閉めの枠。
+   中の番号付きリストはメドレーの「収録曲」（.medley-parts）と同じ見た目にし、各曲の作家の行は
+   商品詳細のトラックのクレジットの行（.track-meta-line）と同じ組み立てを使う。 */
+.bgm-cue-sources {
+  margin-top: 6px;
+  font-size: 0.88em;
+  line-height: 1.6;
+}
+.bgm-cue-sources > summary {
+  cursor: pointer;
+  color: var(--muted);
+  width: max-content;
+}
+.bgm-cue-sources .medley-parts > li {
+  margin-bottom: 4px;
+}
+.bgm-cue-sources .track-meta-line {
+  margin-top: 1px;
+  font-size: 0.92em;
+}
+/* 商品詳細のトラックの枠では grid の全幅に置き、カード全域の透明オーバーレイより上に持ち上げて、
+   枠の開け閉めと中のリンクを押せるようにする。 */
+.products-tracks-card-grid > .bgm-cue-sources {
+  grid-column: 1 / -1;
+}
+.products-tracks-card .bgm-cue-sources {
+  position: relative;
+  z-index: 2;
+}
 .songs-card-badge-cell {
   justify-self: end;
   align-self: start;
   padding-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* 歌の一覧のカードの再生ボタン。カードの中身はクリックを透過する（pointer-events: none）ので、ボタンだけ拾う。 */
+.songs-card-play {
+  pointer-events: auto;
 }
 .songs-card-badge {
   display: inline-block;
@@ -6400,6 +6469,50 @@ a.credit-card-series:focus-visible {
   color: var(--accent-blue);
 }
 
+/* 人物・企業詳細の脚注（出典）。本文の項目（読み・誕生日など）に上付きの番号 [N] を付け、ページの一番下に
+   小さい字で番号つきの出典（ページタイトル・見出し・発行者・URL・確認日）を並べる。URL は長くても途中で折る。 */
+.fn-ref {
+  font-size: 0.72em;
+  line-height: 0;
+  margin-left: 1px;
+}
+.fn-ref a {
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+.footnotes {
+  margin-top: 32px;
+  padding-top: 8px;
+  border-top: 1px dotted var(--border);
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.footnotes h2 {
+  font-size: 1em;
+}
+.footnote-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.footnote {
+  margin: 0 0 4px;
+  padding-left: 2.6em;
+  text-indent: -2.6em;
+}
+.footnote:target {
+  background: rgba(255, 220, 120, 0.25);
+}
+.footnote-no {
+  display: inline-block;
+  min-width: 2.4em;
+  font-family: var(--font-num);
+}
+.footnote-url {
+  color: var(--accent-blue);
+  overflow-wrap: anywhere;
+}
+
 /* 人物詳細の「代表作（プリキュアを除く）」。「年 ｜ 作品 ｜ 役職」の 3 列で、年と役職は折り返さない。
    作品名は作品の公式サイトへの外部リンク。アーカイブへのリンクには「公式サイトのアーカイブ」の小さな札を添える。 */
 .notable-works-table th.col-year,
@@ -6508,6 +6621,7 @@ a.credit-card-series:focus-visible {
 .external-link-x         { border-color: #0f172a; }
 .external-link-instagram { border-color: #d6249f; }
 .external-link-youtube   { border-color: #ff0000; }
+.external-link-wikipedia { border-color: #a2a9b1; }
 
 /* スタッフ表：役職ラベルリンク エピソード詳細のスタッフセクション（staff-table）で、役職ラベル（脚本／絵コンテ／演出 等）を 役職統計詳細ページにリンクできるようになった。 */
 .staff-table th a {
@@ -8450,7 +8564,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
   white-space: nowrap;
 }
 
-/* キャラクター種別バッジ（ゲストキャラクター一覧の行で、名前の後ろに種別を出す）。
+/* キャラクター種別バッジ（作品ごとの「その他のキャラクター」の一覧の行で、名前の後ろに種別を出す）。
    関連作品バッジと同じ形で、種別ごとに色を分ける（プリキュア＝ピンク / 味方＝青 / 敵＝紫 / とりまく人々＝グレー）。 */
 .character-kind-badge {
   display: inline-block;
@@ -9609,10 +9723,13 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   background: var(--bg);
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
-.article-card:hover {
+.article-card:hover,
+.article-card:focus-visible {
   border-color: var(--accent-pink);
   box-shadow: 0 4px 14px rgba(233, 30, 99, 0.10);
   transform: translateY(-2px);
+  /* グローバル a:hover { text-decoration: underline } をカード全域で抑止。 */
+  text-decoration: none;
 }
 .article-card-title { margin: 0 0 0.4em; font-size: 1.1em; line-height: 1.4; color: var(--fg); }
 .article-card-date { margin: 0 0 0.5em; font-size: 0.8em; color: var(--muted); }
@@ -10046,10 +10163,9 @@ a.cal-leap-label:focus-visible {
 .books-card-meta-sep {
   opacity: 0.6;
 }
-/* 数字系（発売日・ページ数・価格）は等幅で桁を揃える。 */
+/* 数字系（発売日・ページ数）は等幅で桁を揃える。 */
 .books-card-meta-release,
-.books-card-meta-pages,
-.books-card-meta-price {
+.books-card-meta-pages {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
 }
@@ -10431,18 +10547,15 @@ body.has-art-track-bar {
 .music-credit-block .music-credit-group-heading:first-child {
   margin-top: 8px;
 }
-/* 楽曲・劇伴・商品詳細のクレジット欄：役職バッジ + 名前の 1 ユニットの中では改行しない。
-   狭い画面で 1 ユニットが画面幅を超えるときだけ折り返しを許す（横スクロールを出さないため）。 */
+/* 楽曲・劇伴・商品詳細のクレジット欄：役職バッジ + 名前の 1 ユニットを行（flex の折り返し）の 1 項目として並べる。
+   ユニットは収まる限り分かれずに次の行へ送られ、ユニット自体が行幅を超えるとき（連名の長いスペシャルサンクスなど）
+   だけ、ユニットの中で折り返す（横にはみ出さないため）。 */
 .music-credit-row {
   margin: 6px 0 10px;
 }
 .music-credit-unit {
-  white-space: nowrap;
-}
-@media (max-width: 640px) {
-  .music-credit-unit {
-    white-space: normal;
-  }
+  min-width: 0;
+  max-width: 100%;
 }
 /* 区分の中の小見出し（歌 / 劇伴 / 音盤）。 */
 .music-credit-sub-heading {
@@ -10771,33 +10884,382 @@ body.has-art-track-bar {
 }
 
 /* ──────── チーフの組み合わせの通算回数（エピソード詳細のスタッフセクション） ────────
-   #staff は flex（セットを横に並べる）なので、リストと注記は全幅の子にして下に回す。 */
-#staff .staff-combo-list {
+   #staff は flex（セットを横に並べる）なので、開閉の枠は全幅の子にして下に回す。
+   閉じた状態は 1 組 1 かたまり（小さな札 × 札・「N 回目」）を区切り線で横に流し、右端に「くわしく」。
+   開くとかたまりは隠れ、「閉じる」の行の左に数え方の断り、その下に組み合わせごとのカード。 */
+#staff .staff-combos {
   flex-basis: 100%;
-  list-style: none;
+  /* スマホ幅で #staff が縦並び・左寄せ（align-items: flex-start）になっても、枠は全幅に伸ばす。 */
+  align-self: stretch;
   margin: 0.4em 0 0;
   padding: 0.6em 0 0;
   border-top: 1px dashed var(--border);
-  font-size: 0.9em;
-  display: grid;
-  gap: 0.25em;
-}
-#staff .staff-combo-list li {
   white-space: normal;
 }
-.staff-combo-label {
-  color: var(--muted);
-  margin-right: 0.5em;
+.staff-combos > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 2px;
+  border-radius: 6px;
 }
-.staff-combo-label::after {
-  content: "：";
+.staff-combos > summary::-webkit-details-marker {
+  display: none;
 }
-.staff-combo-value b {
-  font-weight: 700;
+.staff-combos > summary:focus-visible {
+  outline: 2px solid var(--accent-purple);
+  outline-offset: 2px;
 }
-#staff .staff-combo-note {
-  flex-basis: 100%;
+.staff-combo-minis {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.staff-combos[open] .staff-combo-minis {
+  display: none;
+}
+.staff-combo-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 0.9em;
+}
+.staff-combo-mini + .staff-combo-mini::before {
+  content: "";
+  align-self: stretch;
+  width: 1px;
+  background: var(--border);
+  margin: 3px 6px 3px 0;
+}
+/* スマホ幅：折り返した行の頭に区切り線が残らないよう、1 組 1 行に縦に並べて区切り線を出さない。 */
+@media (max-width: 640px) {
+  .staff-combo-minis {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .staff-combo-mini + .staff-combo-mini::before {
+    display: none;
+  }
+}
+.staff-combo-mini-roles {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+/* 閉じた状態の札は、スタッフ行の札よりさらに一回り小さく。 */
+.role-badge-xs {
+  font-size: 0.66em;
+  padding: 0 4px;
+  line-height: 1.5;
+  border-radius: 7px;
+}
+.staff-combo-x {
+  color: var(--muted);
+  font-size: 0.7em;
+  margin: 0 1px;
+}
+.staff-combo-solo {
+  color: var(--muted);
+  font-size: 0.72em;
+  margin-left: 3px;
+}
+.staff-combo-count {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.staff-combo-count b {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-pink);
+  font-size: 1.15em;
+}
+.staff-combo-first {
+  font-size: 0.78em;
+  font-weight: 700;
+  color: var(--accent-pink);
+}
+/* 数え方の断りは開いたときだけ、「閉じる」の行の左に出す（「閉じる」1 語だけの空いた行にしない）。 */
+.staff-combos .staff-combo-note {
+  display: none;
+  margin: 0;
+  min-width: 0;
+  text-align: left;
+}
+.staff-combos[open] .staff-combo-note {
+  display: inline;
+}
+.staff-combos-toggle {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 0.8em;
+  color: var(--muted);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.staff-combos-toggle::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+}
+.staff-combos[open] .staff-combos-toggle::after {
+  transform: rotate(-135deg) translate(-1px, -1px);
+}
+.staff-combos > summary:hover .staff-combos-toggle {
+  color: var(--accent-pink);
+}
+.staff-combos .is-open-label,
+.staff-combos[open] .is-closed-label {
+  display: none;
+}
+.staff-combos[open] .is-open-label {
+  display: inline;
+}
+
+/* 開いた状態：組み合わせごとのカード（広い画面は横に並べ、狭い画面は 1 列）。 */
+.staff-combo-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+.staff-combo-card {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+/* 札の並びは 1 行のまま崩さず、回数と並べて収まらないときは回数のほうを次の行の右端に回す。 */
+.staff-combo-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 8px;
+}
+.staff-combo-roles {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.staff-combo-head .staff-combo-ordinal {
+  margin-left: auto;
+}
+.staff-combo-roles .staff-combo-x {
+  font-size: 0.8em;
+}
+/* 通算：1 行で「11 回中 9 回目」。数字だけ等幅で大きくピンク、ほかは小さく、ベースラインをそろえる。 */
+.staff-combo-ordinal {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.staff-combo-total {
+  font-size: 0.72em;
+  color: var(--muted);
+  margin-right: 3px;
+}
+.staff-combo-ordinal b {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.75em;
+  font-weight: 700;
+  color: var(--accent-pink);
+  letter-spacing: -0.02em;
+}
+.staff-combo-unit {
+  font-size: 0.78em;
+  font-weight: 600;
+}
+.staff-combo-first-big {
+  font-size: 0.95em;
+  font-weight: 700;
+  color: var(--accent-pink);
+}
+.staff-combo-names {
+  margin: -2px 0 0;
+  font-weight: 600;
+  font-size: 0.95em;
+  overflow-wrap: anywhere;
+}
+.staff-combo-names .staff-combo-x {
+  font-size: 0.85em;
+  font-weight: 400;
+  margin: 0 4px;
+}
+.staff-combo-both {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.88em;
+}
+
+/* 放送順の玉の列。等間隔に並べ、年が変わる玉の下に年を出す。今回だけ大きくピンク、前は塗り、後は白抜き。
+   玉の高さを今回の玉にそろえて、年の札の高さを一定にする。 */
+.staff-combo-beads {
+  --bead: #b6aecb;
+  --bead-line: #e2deea;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 16px 4px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+}
+.staff-combo-beads::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--bead-line);
+  border-radius: 1px;
+}
+.staff-combo-beads li {
+  position: relative;
+  flex: 0 0 auto;
+  height: 16px;
+  display: grid;
+  place-items: center;
+}
+/* 1 回きりの組み合わせ（初顔合わせ）は、玉を列の中央に置く。 */
+.staff-combo-beads li:only-child {
+  margin: 0 auto;
+}
+.staff-combo-beads a {
+  display: block;
+  width: var(--d, 11px);
+  height: var(--d, 11px);
+  border-radius: 50%;
+  background: var(--bead);
+  border: 2px solid var(--bead);
+  transition: transform 0.12s;
+}
+.staff-combo-beads a:hover {
+  transform: scale(1.25);
+}
+.staff-combo-beads li.is-future a {
+  background: var(--bg);
+}
+.staff-combo-beads li.is-current a {
+  --d: 16px;
+  background: var(--accent-pink);
+  border-color: var(--accent-pink);
+  box-shadow: 0 0 0 4px rgba(216, 27, 96, 0.18);
+}
+.staff-combo-beads li.is-current::before {
+  content: "今回";
+  position: absolute;
+  bottom: calc(100% + 4px);
+  font-size: 0.68em;
+  font-weight: 700;
+  color: var(--accent-pink);
+  white-space: nowrap;
+}
+.staff-combo-beads li.is-gap {
+  font-size: 0.7em;
+  color: var(--muted);
+  background: var(--bg);
+  padding: 0 1px;
+}
+.staff-combo-year {
+  position: absolute;
+  top: calc(100% + 3px);
+  font-family: var(--font-num);
+  font-size: 0.66em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.staff-combo-beads.is-dense a {
+  --d: 7px;
+  border-width: 1px;
+}
+.staff-combo-beads.is-dense li.is-current a {
+  --d: 13px;
+}
+
+/* 前回・次回：ページ上部の前後話カード（.ep-prev-next-card）のミニ版。
+   向き → （別の作品の話だけ作品名を 1 行に省略して）→ 話数。 */
+.staff-combo-nav {
+  display: flex;
+  gap: 8px;
+}
+.staff-combo-nav-card {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 9px 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--fg);
+  line-height: 1.35;
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+a.staff-combo-nav-card:hover {
+  border-color: var(--accent-pink);
+  box-shadow: 0 2px 6px rgba(233, 30, 99, 0.12);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.staff-combo-nav-card.is-next {
+  text-align: right;
+}
+.staff-combo-nav-card.disabled {
+  background: #fafafa;
+  border-color: #ececec;
+  color: var(--border);
+}
+.staff-combo-nav-dir {
+  font-size: 0.68em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.staff-combo-nav-card.disabled .staff-combo-nav-dir {
+  color: var(--border);
+}
+.staff-combo-nav-series {
+  font-size: 0.68em;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.staff-combo-nav-ep {
+  font-size: 0.85em;
+  font-weight: 600;
+  white-space: nowrap;
+  margin-top: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .staff-combo-beads a,
+  .staff-combo-nav-card {
+    transition: none;
+  }
 }
 
 /* ──────── 歴代記録（/stats/records/） ────────

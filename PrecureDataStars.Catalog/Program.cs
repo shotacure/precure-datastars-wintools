@@ -89,6 +89,9 @@ namespace PrecureDataStars.Catalog
             // 人物の役職履歴。クレジット系マスタ管理の人物タブから編集する。
             var personPositionsRepo = new PersonPositionsRepository(factory);
 
+            // 人物・企業のプロフィールの出典。クレジット系マスタ管理の人物・団体タブから編集する。
+            var entitySourcesRepo = new EntitySourcesRepository(factory);
+
             // 役職どうしの関連（段階・並列）。クレジット系マスタ管理の役職タブから編集する。
             var roleRelationsRepo = new RoleRelationsRepository(factory);
 
@@ -161,7 +164,9 @@ namespace PrecureDataStars.Catalog
                 // 役職どうしの関連（段階・並列）
                 roleRelationsRepo,
                 // 人物の役職履歴
-                personPositionsRepo));
+                personPositionsRepo,
+                // 人物・企業のプロフィールの出典
+                entitySourcesRepo));
         }
     }
 }

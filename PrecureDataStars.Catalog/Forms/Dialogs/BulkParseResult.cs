@@ -27,6 +27,8 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     → そのエントリは直前エントリと A/B 併記関係（<see cref="ParsedEntry.IsParallelContinuation"/> が true）。</description></item>
 ///   <item><description>ブロック先頭の <c>@cols=N</c> 単独行 → そのブロックの
 ///     <see cref="ParsedBlock.ColCount"/> を明示指定（<see cref="ParsedBlock.ColCountExplicit"/> も true）。</description></item>
+///   <item><description>セル全体が <c>@blank</c> → 空きの升（<see cref="ParsedEntryKind.Blank"/>）。
+///     複数列のブロックで、画面の並びの途中に何も書かれていない升の位置を埋める。</description></item>
 ///   <item><description>各レベル区切り行の直後の <c>@notes=備考</c> 単独行
 ///     → 直近で開かれた Card / Tier / Group / Role / Block の <c>Notes</c> に保存。</description></item>
 /// </list>
@@ -145,6 +147,10 @@ public sealed class ParsedRole
     /// <summary>その行が画面にはクレジットされていないか（<c>credit_card_roles.not_on_screen</c>）。<c>@not_on_screen</c> 行で設定される。
     /// 毎回出る役職がその回だけ画面から抜けているとき（クレジット漏れ）に立てる。データは入れて、表示だけ括弧で示す。</summary>
     public bool NotOnScreen { get; set; }
+
+    /// <summary>その行で主題歌ループが出す曲を絞る劇中順の範囲（<c>credit_card_roles.theme_song_seq</c>）。<c>"N"</c> か <c>"N-M"</c>。
+    /// <c>@theme_song_seq=N</c> / <c>@theme_song_seq=N-M</c> 行で設定される。主題歌のカードが分かれて挿入歌を振り分けるときに使う。</summary>
+    public string? ThemeSongSeq { get; set; }
 }
 
 /// <summary>パース結果における 1 ブロック分の塊。 同一役職内で空行を跨ぐと新しいブロックが生まれる。</summary>
@@ -304,6 +310,15 @@ public sealed class ParsedEntry
     /// <summary>A/B 併記の継続行フラグ。</summary>
     public bool IsParallelContinuation { get; set; }
 
+    /// <summary>併記のエントリの名前の前に付く字（<c>&amp;{前|後|small} </c> の 1 つ目の欄）。null は何も付けない。</summary>
+    public string? ParallelPrefix { get; set; }
+
+    /// <summary>併記のエントリの名前の後ろに付く字（同 2 つ目の欄）。null は何も付けない。</summary>
+    public string? ParallelSuffix { get; set; }
+
+    /// <summary>併記のエントリを小さい字で描く（同 3 つ目の欄が <c>small</c>）。</summary>
+    public bool ParallelSmall { get; set; }
+
     /// <summary>エントリ単位の備考。</summary>
     public string? Notes { get; set; }
 
@@ -327,7 +342,10 @@ public enum ParsedEntryKind
     Logo,
 
     /// <summary>マスタ未登録時の退避テキスト（TEXT）。</summary>
-    Text
+    Text,
+
+    /// <summary>空きの升（BLANK）。名前も会社も持たず、複数列のブロックで後ろのエントリの列をそろえる。</summary>
+    Blank
 }
 
 /// <summary>パース時に検出された警告 1 件。</summary>

@@ -104,7 +104,7 @@ public sealed class RoleReferenceNode : TemplateNode
 /// <c>episode_theme_songs</c> + <c>song_recordings</c> + <c>songs</c> を JOIN して取得した楽曲行を
 /// 順に反復し、内側の <see cref="Body"/> を曲ごとに展開する。<see cref="Body"/> 内では曲スコープの
 /// プレースホルダ <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> /
-/// <c>{COMPOSER}</c> / <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{VARIANT_LABEL}</c> が解決可能。
+/// <c>{COMPOSER}</c> / <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{VARIANT_LABEL}</c> / <c>{INSTRUMENTAL}</c> が解決可能。
 /// オプション：
 /// <list type="bullet">
 ///   <item><description><c>kind</c> = <c>OP</c> / <c>ED</c> / <c>INSERT</c> / <c>OP+ED</c> / <c>ALL</c> など。

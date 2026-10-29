@@ -61,6 +61,12 @@ public sealed class CreditCardRole
     /// データは入れて集計・関与は <see cref="RoleCode"/> のまま数え、クレジットの表示だけ括弧で包んで薄くし、画面に無かったことを示す。</summary>
     public bool NotOnScreen { get; set; }
 
+    /// <summary>この役職の行で主題歌ループ（<c>{#THEME_SONGS}</c>）が出す曲を絞る劇中順の範囲。
+    /// <c>"N"</c>（seq=N の 1 曲）か <c>"N-M"</c>（seq が N 以上 M 以下）で、episode_theme_songs.seq / series_theme_songs.seq を指す。
+    /// null なら絞らない。主題歌の形式（roles.role_format_kind='THEME_SONG'）の役職でだけ意味を持ち、
+    /// 主題歌のカードが 2 枚に分かれて挿入歌を振り分けるときに使う。テンプレ側の <c>seq=</c> と両方あれば両方を満たす曲だけ出す。</summary>
+    public string? ThemeSongSeq { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

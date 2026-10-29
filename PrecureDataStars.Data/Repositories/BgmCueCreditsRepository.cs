@@ -33,12 +33,12 @@ public sealed class BgmCueCreditsRepository : RepositoryBase
     /// <summary>指定 cue の全クレジット行を (role, seq) 順で取得する。 役の並び順は COMPOSITION → ARRANGEMENT を優先（劇伴の慣習順）、それ以外は role_code 昇順。</summary>
     public async Task<IReadOnlyList<BgmCueCredit>> GetByCueAsync(int seriesId, string mNoDetail, CancellationToken ct = default)
     {
-        // 劇伴の慣習順を FIELD でソートに乗せる。並びに無い役職は末尾。
+        // 劇伴の慣習順を FIELD でソートに乗せる。並びに無い役職は末尾（FIELD は未マッチで 0 を返すので、0 かどうかを先に並べる）。
         string sql = $"""
             SELECT {SelectColumns}
             FROM bgm_cue_credits
             WHERE series_id = @seriesId AND m_no_detail = @m
-            ORDER BY FIELD(credit_role,'COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
+            ORDER BY FIELD(credit_role,'COMPOSITION','ARRANGEMENT') = 0, FIELD(credit_role,'COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
             """;
 
         return await QueryListAsync<BgmCueCredit>(sql, new { seriesId, m = mNoDetail }, ct).ConfigureAwait(false);
@@ -50,7 +50,7 @@ public sealed class BgmCueCreditsRepository : RepositoryBase
         string sql = $"""
             SELECT {SelectColumns}
             FROM bgm_cue_credits
-            ORDER BY series_id, m_no_detail, FIELD(credit_role,'COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
+            ORDER BY series_id, m_no_detail, FIELD(credit_role,'COMPOSITION','ARRANGEMENT') = 0, FIELD(credit_role,'COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
             """;
 
         return await QueryListAsync<BgmCueCredit>(sql, ct: ct).ConfigureAwait(false);

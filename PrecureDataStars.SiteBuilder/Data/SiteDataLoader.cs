@@ -40,6 +40,7 @@ public static class SiteDataLoader
         var personAliasMembersRepo = new PersonAliasMembersRepository(factory);
         var bgmCuesRepo = new BgmCuesRepository(factory);
         var bgmCueCreditsRepo = new BgmCueCreditsRepository(factory);
+        var bgmCueSingersRepo = new BgmCueSingersRepository(factory);
         var creditsRepo = new CreditsRepository(factory);
         var creditCardsRepo = new CreditCardsRepository(factory);
         var creditCardTiersRepo = new CreditCardTiersRepository(factory);
@@ -172,6 +173,26 @@ public static class SiteDataLoader
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Track>)g.ToList(), StringComparer.Ordinal);
         logger.Info($"tracks: {tracksByCatalogNo.Count} catalog_no 分");
 
+        // 配信音源は、埋め込み可と確認済みで、日本で再生でき、確認から一定日数以内のものだけをサイトに出す
+        // （ArtTrackPlayability.IsPublishable）。外れた音源は埋め込み可否を未確認に倒し、
+        // 「埋め込み可と確認済み」だけを通す各ジェネレータ・索引から見えなくする。
+        // 確認切れは本番デプロイ前の ArtTrackRefresh の流し忘れなので、警告にして気づけるようにする。
+        var artTrackNow = DateTime.Now;
+        int artTrackStale = 0, artTrackUnplayable = 0;
+        foreach (var t in tracksByCatalogNo.Values.SelectMany(list => list))
+        {
+            if (t.YoutubeEmbeddable != true || string.IsNullOrEmpty(t.YoutubeArtTrackId)) continue;
+            if (ArtTrackPlayability.IsPublishable(t.YoutubeEmbeddable, t.YoutubePlayability, t.YoutubeCheckedAt, artTrackNow)) continue;
+
+            if (!ArtTrackPlayability.IsFresh(t.YoutubeCheckedAt, artTrackNow)) artTrackStale++;
+            else artTrackUnplayable++;
+            t.YoutubeEmbeddable = null;
+        }
+        if (artTrackStale > 0)
+            logger.Warn($"配信音源 {artTrackStale} 件は確認から {ArtTrackPlayability.RecheckDays} 日を過ぎているため再生ボタンを出しません。PrecureDataStars.ArtTrackRefresh で確かめ直してください。");
+        if (artTrackUnplayable > 0)
+            logger.Info($"配信音源 {artTrackUnplayable} 件は日本で再生できないため再生ボタンを出しません。");
+
         var songCreditsBySong = (await songCreditsRepo.GetAllAsync(ct).ConfigureAwait(false))
             .GroupBy(c => c.SongId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<SongCredit>)g.ToList());
@@ -207,6 +228,44 @@ public static class SiteDataLoader
             .GroupBy(c => (c.SeriesId, c.MNoDetail))
             .ToDictionary(g => g.Key, g => (IReadOnlyList<BgmCueCredit>)g.ToList());
         logger.Info($"bgm_cue_credits: {bgmCueCreditsByCue.Count} cue 分");
+
+        // 劇伴の歌い手は、表示・参加者の展開を歌の録音の歌唱者と共通の処理に通すため、歌唱者行の形に写して持つ。
+        var bgmCueSingersByCue = (await bgmCueSingersRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(s => (s.SeriesId, s.MNoDetail))
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<SongRecordingSinger>)g.Select(s => s.ToSingerRow()).ToList());
+        logger.Info($"bgm_cue_singers: {bgmCueSingersByCue.Count} cue 分");
+
+        // 劇伴の曲が使っている曲（bgm_cue_source_parts）と、その中の曲（著作物）（musical_works / musical_work_credits）。
+        // 劇伴の曲 → 使っている曲（part_seq 順）と、歌・曲（著作物）→ 使っている劇伴の曲の 3 方向に引く。
+        // 論理削除された劇伴の曲（bgm_cues に載らない）の行は捨てる。
+        var liveCueKeys = bgmCuesBySeries.Values
+            .SelectMany(list => list)
+            .Select(c => (c.SeriesId, c.MNoDetail))
+            .ToHashSet();
+        var bgmCueSourceParts = (await new BgmCueSourcePartsRepository(factory).GetAllAsync(ct).ConfigureAwait(false))
+            .Where(p => liveCueKeys.Contains((p.SeriesId, p.MNoDetail)))
+            .ToList();
+        var bgmCueSourcePartsByCue = bgmCueSourceParts
+            .GroupBy(p => (p.SeriesId, p.MNoDetail))
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<BgmCueSourcePart>)g.OrderBy(p => p.PartSeq).ToList());
+        var bgmCuesBySourceSong = bgmCueSourceParts
+            .Where(p => p.SourceSongId.HasValue)
+            .GroupBy(p => p.SourceSongId!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<(int SeriesId, string MNoDetail)>)g
+                .Select(p => (p.SeriesId, p.MNoDetail)).Distinct()
+                .OrderBy(k => k.SeriesId).ThenBy(k => k.MNoDetail, StringComparer.Ordinal).ToList());
+        var bgmCuesBySourceWork = bgmCueSourceParts
+            .Where(p => p.SourceWorkId.HasValue)
+            .GroupBy(p => p.SourceWorkId!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<(int SeriesId, string MNoDetail)>)g
+                .Select(p => (p.SeriesId, p.MNoDetail)).Distinct()
+                .OrderBy(k => k.SeriesId).ThenBy(k => k.MNoDetail, StringComparer.Ordinal).ToList());
+        var musicalWorkById = (await new MusicalWorksRepository(factory).GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false))
+            .ToDictionary(w => w.WorkId);
+        var musicalWorkCreditsByWork = (await new MusicalWorkCreditsRepository(factory).GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(c => c.WorkId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<MusicalWorkCredit>)g.ToList());
+        logger.Info($"bgm_cue_source_parts: {bgmCueSourcePartsByCue.Count} cue 分, musical_works: {musicalWorkById.Count} 曲");
 
         // クレジット階層 6 段を 1 度だけ全件取得し、credit_id 単位でネスト化したスナップショットを構築。
         // CreditTreeRenderer がページ生成中に階層別の GetBy*Async を発火しないようにするため、本処理を
@@ -331,6 +390,8 @@ public static class SiteDataLoader
             songCreditAffiliationRows);
         // 主題歌の再生ボタン用に、録音ごとに鳴らす配信音源を選んでおく。
         var themeArtTracks = new ThemeArtTrackIndex(tracksByCatalogNo, allDiscs.ToList(), allProducts.ToList());
+        // 歌の一覧の再生ボタン用は、曲を通して聴けるようフルサイズを優先して選ぶ。
+        var songListArtTracks = new ThemeArtTrackIndex(tracksByCatalogNo, allDiscs.ToList(), allProducts.ToList(), preferFullSize: true);
         logger.Info($"theme art tracks: {themeArtTracks.ByRecording.Count} 録音分");
         logger.Info($"music_credits: {musicCredits.Count} 行");
         logger.Info($"family={familyRelationsByCharacter.Count} char / alias_persons={aliasIdsByPerson.Count} person");
@@ -366,6 +427,12 @@ public static class SiteDataLoader
             UnitMembersByAlias = unitMembersByAlias,
             BgmCuesBySeries = bgmCuesBySeries,
             BgmCueCreditsByCue = bgmCueCreditsByCue,
+            BgmCueSingersByCue = bgmCueSingersByCue,
+            BgmCueSourcePartsByCue = bgmCueSourcePartsByCue,
+            BgmCuesBySourceSong = bgmCuesBySourceSong,
+            BgmCuesBySourceWork = bgmCuesBySourceWork,
+            MusicalWorkById = musicalWorkById,
+            MusicalWorkCreditsByWork = musicalWorkCreditsByWork,
             CreditTree = creditTreeIndex,
             CreditsByEpisode = creditsByEpisode,
             CreditsBySeries = creditsBySeries,
@@ -383,7 +450,8 @@ public static class SiteDataLoader
             AliasIdsByPerson = aliasIdsByPerson,
             PersonIdByAlias = personIdByAlias,
             MusicCredits = musicCredits,
-            ThemeArtTracks = themeArtTracks
+            ThemeArtTracks = themeArtTracks,
+            SongListArtTracks = songListArtTracks
         };
     }
 }

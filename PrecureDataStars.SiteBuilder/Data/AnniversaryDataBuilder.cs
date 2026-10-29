@@ -89,12 +89,13 @@ public static class AnniversaryDataBuilder
         }
     }
 
-    /// <summary>映画（MOVIE / SPRING）の公開日を積む。</summary>
+    /// <summary>映画（MOVIE / SPRING）の公開日を積む。公開日が日付まで確かな作品だけ（年や年月までの作品の月日は仮なので積まない）。</summary>
     private static void AddMovies(BuildContext ctx, List<AnniversaryEntry> entries)
     {
         foreach (var s in ctx.Series
-                     .Where(s => string.Equals(s.KindCode, "MOVIE", StringComparison.Ordinal)
+                     .Where(s => (string.Equals(s.KindCode, "MOVIE", StringComparison.Ordinal)
                               || string.Equals(s.KindCode, "SPRING", StringComparison.Ordinal))
+                              && s.IsStartDateExact)
                      .OrderBy(s => s.StartDate))
         {
             entries.Add(new AnniversaryEntry

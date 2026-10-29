@@ -6,6 +6,7 @@
        見出しと区分の札：🎵＝歌の曲数、🎼＝劇伴（録音・シリーズの行）の件数、💿＝盤の枚数（重複を除く）。
        ・曲のカード：song_credits / song_recording_singers 由来。その区分の役職だけをバッジに持つ。
        ・劇伴：bgm_cue_credits 由来の作曲・編曲を、シリーズごとの使用話数つきで出す（作詞・作曲・編曲の区分だけ）。
+         劇伴の中で使われた曲（著作物）の作家（musical_work_credits）も同じ枠に、曲ごとの 1 行（劇伴詳細のその曲のカードへリンク）で出す。
        ・音盤の音楽クレジット：music_credits 由来。紐付け先（曲・録音・劇伴セッション・商品）ごとに 1 行。 ##}}
   {{~ if (array.size MusicSections) > 0 ~}}
   <section id="music-credits">

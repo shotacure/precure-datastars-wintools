@@ -43,6 +43,9 @@ public static class ThemeSongsHandler
     /// <param name="columns">横並びカラム数（既定 1=縦並び）。<c>columns=2</c> なら 2 曲を横並びにする。</param>
     /// <param name="lookup">名義・役職 ID をリンク化済み HTML へ解決するインターフェース。</param>
     /// <param name="ct">キャンセルトークン。</param>
+    /// <param name="seqFrom">劇中順（seq）の絞り込みの下限。<paramref name="seqTo"/> と両方あるときだけ、seq がその範囲に入る曲だけを出す
+    /// （役職の行の <c>credit_card_roles.theme_song_seq</c>）。</param>
+    /// <param name="seqTo">劇中順（seq）の絞り込みの上限。</param>
     public static async Task<string> RenderAsync(
         IConnectionFactory factory,
         int? episodeId,
@@ -50,7 +53,9 @@ public static class ThemeSongsHandler
         IReadOnlyList<string>? kinds,
         int columns,
         ILookupCache lookup,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        int? seqFrom = null,
+        int? seqTo = null)
     {
         // どちらか一方が指定されていれば描画対象あり。両方 null（スコープ未確定）なら空文字。
         bool hasEpisode = episodeId.HasValue && episodeId.Value > 0;
@@ -59,6 +64,8 @@ public static class ThemeSongsHandler
         if (columns < 1) columns = 1;
 
         var rows = await FetchAsync(factory, episodeId, seriesId, kinds, lookup, ct).ConfigureAwait(false);
+        if (seqFrom is int from && seqTo is int to)
+            rows = rows.Where(r => r.Seq is byte s && s >= from && s <= to).ToList();
         if (rows.Count == 0) return "";
 
         // stage B-4：各曲のブロック文字列を HTML 出力モードで作る。
@@ -169,6 +176,8 @@ public static class ThemeSongsHandler
               sr.song_recording_id AS SongRecordingId,
               s.title             AS SongTitle,
               ets.title_misprint_text AS TitleMisprintText,
+              ets.title_credited_text AS TitleCreditedText,
+              ets.is_instrumental AS IsInstrumental,
               s.lyricist_name     AS LyricistName,
               s.composer_name     AS ComposerName,
               s.arranger_name     AS ArrangerName,
@@ -260,6 +269,13 @@ public static class ThemeSongsHandler
 
         // メドレー編曲：構造化行だけ（フリーテキスト列は持たない）。無い曲は空文字列。
         r.MedleyArrangerHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false) ?? "";
+
+        // 会社名だけを出す行の実際の人物（役職ごと）。会社名のあとの括弧に使う。
+        r.CompanyOnlyPeople = await songCredits.GetCompanyOnlyPeopleHtmlAsync(r.SongId, lookup, ct).ConfigureAwait(false);
+
+        // 英訳：構造化行だけ（フリーテキスト列は持たない）。無い曲は空文字列。
+        r.LyricsTranslatorParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.LyricsTranslation, lookup, ct).ConfigureAwait(false);
+        r.LyricsTranslatorHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.LyricsTranslation, lookup, ct).ConfigureAwait(false) ?? "";
     }
 
     /// <summary>
@@ -293,6 +309,44 @@ public static class ThemeSongsHandler
         return rows;
     }
 
+    /// <summary>作詞・作曲・編曲の役職コード → 括弧に添える役職名。</summary>
+    private static readonly IReadOnlyDictionary<string, string> WriterRoleLabels = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [SongCreditRoles.Lyrics] = "作詞",
+        [SongCreditRoles.Composition] = "作曲",
+        [SongCreditRoles.Arrangement] = "編曲",
+    };
+
+    /// <summary>
+    /// 会社名だけの行（所属の出し方が COMPANY_ONLY）の会社名のあとに添える、実際の人物の小さい括弧の HTML。
+    /// 1 行にまとめた役職の中にいるとき（<see cref="ThemeSongRow.MergedCreditRoles"/>）は、まとめた役職ぶんの人物を並べ、
+    /// 役職ごとに人が分かれるなら役職を添える（「（作詞・作曲：藤本 記子、編曲：福富 雅之）」。同じ人の役職は「・」でまとめ、人の間は「、」）。
+    /// 人物が 1 人だけ、または役職が 1 つだけのときは名前だけを「・」で並べる（「（藤本 記子）」）。
+    /// 名前はリンク化済み HTML（人物詳細へ）。会社名だけの行が無ければ空文字。
+    /// </summary>
+    internal static string CompanyOnlyPeopleSuffixHtml(ThemeSongRow? song, string role)
+    {
+        if (song is null || song.CompanyOnlyPeople.Count == 0) return "";
+        IReadOnlyList<string> roles = song.MergedCreditRoles is { } merged && merged.Contains(role) ? merged : new[] { role };
+        var people = new List<(int Id, string Html, List<string> Roles)>();
+        foreach (var r in roles)
+        {
+            if (!song.CompanyOnlyPeople.TryGetValue(r, out var list)) continue;
+            foreach (var (id, html) in list)
+            {
+                int at = people.FindIndex(p => p.Id == id);
+                if (at < 0) people.Add((id, html, new List<string> { r }));
+                else if (!people[at].Roles.Contains(r)) people[at].Roles.Add(r);
+            }
+        }
+        if (people.Count == 0) return "";
+        string inner = people.Count == 1 || roles.Count == 1
+            ? string.Join("・", people.Select(p => p.Html))
+            : string.Join("、", people.Select(p =>
+                string.Join("・", p.Roles.Select(r => WriterRoleLabels.TryGetValue(r, out var l) ? l : r)) + "：" + p.Html));
+        return $"<span class=\"staff-primary-name muted\">（{inner}）</span>";
+    }
+
     /// <summary>
     /// 1 曲分のブロック文字列を HTML 出力モードで組み立てる。
     /// 曲タイトルは <c>/songs/{song_id}/</c> へのリンク、変種ラベルは HTML エスケープのみ。
@@ -305,7 +359,8 @@ public static class ThemeSongsHandler
     {
         var sb = new System.Text.StringBuilder();
         // 「」で囲んで出すので、曲名の中の「」は『』にする。
-        var safeTitle = System.Net.WebUtility.HtmlEncode(JapaneseQuotes.InQuotes(r.SongTitle ?? "(曲名未登録)"));
+        // クレジットの画面の曲名の表記（誤記ではない表記違い）があれば、文字だけその表記にする（リンク先は曲のまま）。
+        var safeTitle = System.Net.WebUtility.HtmlEncode(JapaneseQuotes.InQuotes(r.SongTitle is null ? "(曲名未登録)" : CreditedTitleOf(r)));
         sb.Append('「');
         // 画面に出た曲名の誤記があれば、取り消し線で出してから正しい曲名を続ける。
         sb.Append(BuildTitleMisprintPrefixHtml(r.TitleMisprintText));
@@ -317,6 +372,8 @@ public static class ThemeSongsHandler
         {
             sb.Append(safeTitle);
         }
+        // その回ではインストゥルメンタルで使った曲は、曲名の後ろ（カギ括弧の内側）に添える。
+        if (r.IsInstrumental) sb.Append("（インストゥルメンタル）");
         sb.Append('」');
         if (!string.IsNullOrEmpty(r.VariantLabel))
         {
@@ -342,17 +399,17 @@ public static class ThemeSongsHandler
         if (!string.IsNullOrEmpty(r.LyricistHtml))
         {
             var label = await RoleLabel(SongCreditRoles.Lyrics, "作詞").ConfigureAwait(false);
-            sb.Append(label).Append(':').Append(r.LyricistHtml).Append('\n');
+            sb.Append(label).Append(':').Append(r.LyricistHtml).Append(CompanyOnlyPeopleSuffixHtml(r, SongCreditRoles.Lyrics)).Append('\n');
         }
         if (!string.IsNullOrEmpty(r.ComposerHtml))
         {
             var label = await RoleLabel(SongCreditRoles.Composition, "作曲").ConfigureAwait(false);
-            sb.Append(label).Append(':').Append(r.ComposerHtml).Append('\n');
+            sb.Append(label).Append(':').Append(r.ComposerHtml).Append(CompanyOnlyPeopleSuffixHtml(r, SongCreditRoles.Composition)).Append('\n');
         }
         if (!string.IsNullOrEmpty(r.ArrangerHtml))
         {
             var label = await RoleLabel(SongCreditRoles.Arrangement, "編曲").ConfigureAwait(false);
-            sb.Append(label).Append(':').Append(r.ArrangerHtml).Append('\n');
+            sb.Append(label).Append(':').Append(r.ArrangerHtml).Append(CompanyOnlyPeopleSuffixHtml(r, SongCreditRoles.Arrangement)).Append('\n');
         }
         if (!string.IsNullOrEmpty(r.MedleyArrangerHtml))
         {
@@ -377,6 +434,15 @@ public static class ThemeSongsHandler
             : $"<del title=\"クレジット時の誤記\">{System.Net.WebUtility.HtmlEncode(JapaneseQuotes.InQuotes(misprint))}</del> ";
 
     /// <summary>
+    /// クレジットの行に出す曲名の文字。画面の表記（<see cref="ThemeSongRow.TitleCreditedText"/>）があればそれ、無ければ曲名（songs.title）。
+    /// 誤記（<see cref="ThemeSongRow.TitleMisprintText"/>）があるときは、取り消し線の後ろに出すのは正しい曲名なので、表記は使わず曲名のまま。
+    /// </summary>
+    internal static string CreditedTitleOf(ThemeSongRow r)
+        => string.IsNullOrEmpty(r.TitleMisprintText) && !string.IsNullOrEmpty(r.TitleCreditedText)
+            ? r.TitleCreditedText!
+            : r.SongTitle ?? "";
+
+    /// <summary>
     /// JOIN 結果を受ける DTO（Dapper マッピング用、内部公開）。
     /// internal 化：新 <c>{#THEME_SONGS}</c> ループ構文の Renderer から
     /// 楽曲スコープのプレースホルダ（{SONG_TITLE} 等）を解決するために、フィールドへ直接アクセスする必要がある。
@@ -395,6 +461,11 @@ public static class ThemeSongsHandler
         public string? SongTitle { get; set; }
         /// <summary>クレジットの画面に出た曲名の誤記（episode_theme_songs / series_theme_songs.title_misprint_text）。null なら誤記なし。</summary>
         public string? TitleMisprintText { get; set; }
+        /// <summary>クレジットの画面に出た曲名の表記（誤記ではない表記違い。episode_theme_songs / series_theme_songs.title_credited_text）。
+        /// null なら曲名（<see cref="SongTitle"/>）で出す。誤記と両方あるときは誤記を優先し、この表記は使わない。</summary>
+        public string? TitleCreditedText { get; set; }
+        /// <summary>その回（その映画）ではインストゥルメンタルで使った印（episode_theme_songs / series_theme_songs.is_instrumental）。</summary>
+        public bool IsInstrumental { get; set; }
         public string? LyricistName { get; set; }
         public string? ComposerName { get; set; }
         public string? ArrangerName { get; set; }
@@ -417,6 +488,8 @@ public static class ThemeSongsHandler
         public string ArrangerHtml { get; set; } = "";
         /// <summary>メドレー編曲（<c>MEDLEY_ARRANGEMENT</c>）連名のリンク化済み HTML。無ければ空文字列。テンプレ側で <c>{MEDLEY_ARRANGER}</c> として参照する。</summary>
         public string MedleyArrangerHtml { get; set; } = "";
+        /// <summary>英訳（<c>LYRICS_TRANSLATION</c>）連名のリンク化済み HTML。無ければ空文字列。テンプレ側で <c>{LYRICS_TRANSLATOR}</c> として参照する。</summary>
+        public string LyricsTranslatorHtml { get; set; } = "";
         public string SingerHtml { get; set; } = "";
 
         /// <summary>コーラス（<c>BACKING_VOCALS</c>）連名のリンク化済み HTML。 該当録音にコーラス歌唱者が居なければ空文字列。テンプレ側で <c>{CHORUS}</c> として参照する。</summary>
@@ -429,7 +502,21 @@ public static class ThemeSongsHandler
         public IReadOnlyList<(string Sep, string Html)> ComposerParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> ArrangerParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> MedleyArrangerParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> LyricsTranslatorParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> SingerParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> ChorusParts { get; set; } = Array.Empty<(string, string)>();
+
+        /// <summary>
+        /// 所属の出し方が「会社名だけ」の行の実際の人物（役職コード → (名義 ID, リンク化済み HTML) の並び）。
+        /// 役職テンプレの {LYRICIST} 等で、会社名のあとに人物の括弧を添えるのに使う。該当行が無い曲は空。
+        /// </summary>
+        public IReadOnlyDictionary<string, IReadOnlyList<(int PersonAliasId, string Html)>> CompanyOnlyPeople { get; set; }
+            = new Dictionary<string, IReadOnlyList<(int, string)>>();
+
+        /// <summary>
+        /// テンプレの展開中だけ使う：いま <c>{?SAME_LYRICIST_COMPOSER_ARRANGER}</c> / <c>{?SAME_COMPOSER_ARRANGER}</c> の中にいるとき、
+        /// その 1 行にまとめた役職の並び。外では null。人物の括弧に役職を添えるかの判断に使う。
+        /// </summary>
+        public IReadOnlyList<string>? MergedCreditRoles { get; set; }
     }
 }

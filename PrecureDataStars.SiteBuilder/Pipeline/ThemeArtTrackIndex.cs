@@ -9,7 +9,8 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// <list type="bullet">
 ///   <item><description>歌入り（パート未設定・<c>VOCAL</c>・<c>_ANY</c>）のトラックだけを候補にする。カラオケしか無い録音にはボタンを出さない。
 ///     次回予告（サイズ <c>NEXT</c>）も候補にしない。</description></item>
-///   <item><description>本編で流れるサイズ（TV サイズ系・映画サイズ）を優先し、無ければ他のサイズ（フルサイズなど）を使う。</description></item>
+///   <item><description>本編で流れるサイズ（TV サイズ系・映画サイズ）を優先し、無ければ他のサイズ（フルサイズなど）を使う。
+///     歌の一覧の再生ボタン用（<paramref name="preferFullSize"/>）は逆に、フルサイズ（とサイズ未設定）→ そのほか → TV サイズ・映画サイズの順。</description></item>
 ///   <item><description>同じ優先度の中では発売の早い盤（初出）を採る。それが YouTube Music Premium 会員限定なら、
 ///     同じサイズで誰でも再生できる盤の音源を代わりとして併せ持つ（どちらを鳴らすかは閲覧者の設定でページ側が決める。歌の詳細と同じ）。</description></item>
 ///   <item><description>埋め込み可と確認済み（<c>youtube_embeddable = 1</c>）の音源だけを使う。</description></item>
@@ -23,10 +24,12 @@ public sealed class ThemeArtTrackIndex
     /// <summary>song_recording_id → 鳴らす配信音源。</summary>
     public IReadOnlyDictionary<int, ThemeArtTrack> ByRecording { get; }
 
+    /// <param name="preferFullSize">true なら曲を通して聴く用（歌の一覧）に、フルサイズを優先して選ぶ。</param>
     public ThemeArtTrackIndex(
         IReadOnlyDictionary<string, IReadOnlyList<Track>> tracksByCatalogNo,
         IReadOnlyList<Disc> discs,
-        IReadOnlyList<Product> products)
+        IReadOnlyList<Product> products,
+        bool preferFullSize = false)
     {
         var discByCatalogNo = discs.GroupBy(d => d.CatalogNo, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         var productByCatalogNo = products.GroupBy(p => p.ProductCatalogNo, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
@@ -41,7 +44,9 @@ public sealed class ThemeArtTrackIndex
             if (size == "NEXT") continue;
             if (!discByCatalogNo.TryGetValue(t.CatalogNo, out var disc)) continue;
             if (!productByCatalogNo.TryGetValue(disc.ProductCatalogNo, out var product)) continue;
-            int priority = IsBroadcastSize(size) ? 0 : 1;
+            int priority = preferFullSize
+                ? (size.Length == 0 || size == "FULL" ? 0 : IsBroadcastSize(size) ? 2 : 1)
+                : (IsBroadcastSize(size) ? 0 : 1);
             candidates.Add((recId, priority, product.ReleaseDate, t.CatalogNo, t.TrackNo, size, t, disc, product));
         }
 

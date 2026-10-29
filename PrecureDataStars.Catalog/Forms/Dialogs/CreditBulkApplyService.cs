@@ -881,6 +881,8 @@ public sealed class CreditBulkApplyService
         role.Entity.HideRoleLabel = pr.HideRoleLabel;
         // その行は画面にはクレジットされていないか（クレジット漏れ）。
         role.Entity.NotOnScreen = pr.NotOnScreen;
+        // 主題歌ループが出す曲を絞る劇中順の範囲。
+        role.Entity.ThemeSongSeq = pr.ThemeSongSeq;
 
         // 配下 Block を順に追加。
         foreach (var pb in pr.Blocks)
@@ -1001,6 +1003,10 @@ public sealed class CreditBulkApplyService
                 else
                 {
                     last.RequestParallelWithPrevious = true;
+                    // 併記の描き方（前後に付く字・小さい字）はエントリ自身の列なので、そのまま持たせる。
+                    last.Entity.ParallelPrefix = pe.ParallelPrefix;
+                    last.Entity.ParallelSuffix = pe.ParallelSuffix;
+                    last.Entity.ParallelSmall = pe.ParallelSmall;
                 }
             }
         }
@@ -1101,6 +1107,14 @@ public sealed class CreditBulkApplyService
                     return;
                 }
                 AppendCompanyEntry(session, block, companyAliasId.Value);
+                ApplyEntryModifiersToLast();
+                return;
+            }
+
+            case ParsedEntryKind.Blank:
+            {
+                // 空きの升。参照先を持たないので、引き当ても新規作成もせずにそのまま置く。
+                AppendBlankEntry(session, block);
                 ApplyEntryModifiersToLast();
                 return;
             }
@@ -1885,6 +1899,16 @@ public sealed class CreditBulkApplyService
         });
     }
 
+    /// <summary>ブロック末尾に BLANK エントリ（空きの升。参照列はすべて NULL）を 1 件追加する。</summary>
+    private static void AppendBlankEntry(CreditDraftSession session, DraftBlock parent)
+    {
+        AppendEntry(session, parent, new CreditBlockEntry
+        {
+            EntryKind = "BLANK",
+            EntrySeq = (ushort)(parent.Entries.Count + 1),
+        });
+    }
+
     /// <summary>共通：ブロックに <see cref="CreditBlockEntry"/> を 1 件 append する。</summary>
     private static void AppendEntry(CreditDraftSession session, DraftBlock parent, CreditBlockEntry entity)
     {
@@ -2405,7 +2429,8 @@ public sealed class CreditBulkApplyService
             || draftRole.Entity.JoinPrevious != newRole.JoinPrevious
             || !string.Equals(draftRole.Entity.JoinSeparator, newRole.JoinSeparator, StringComparison.Ordinal)
             || draftRole.Entity.HideRoleLabel != newRole.HideRoleLabel
-            || draftRole.Entity.NotOnScreen != newRole.NotOnScreen)
+            || draftRole.Entity.NotOnScreen != newRole.NotOnScreen
+            || !string.Equals(draftRole.Entity.ThemeSongSeq, newRole.ThemeSongSeq, StringComparison.Ordinal))
         {
             draftRole.Entity.RoleLabelText = newRole.RoleLabelText;
             draftRole.Entity.RoleMisprintText = newRole.RoleMisprintText;
@@ -2413,6 +2438,7 @@ public sealed class CreditBulkApplyService
             draftRole.Entity.JoinSeparator = newRole.JoinSeparator;
             draftRole.Entity.HideRoleLabel = newRole.HideRoleLabel;
             draftRole.Entity.NotOnScreen = newRole.NotOnScreen;
+            draftRole.Entity.ThemeSongSeq = newRole.ThemeSongSeq;
             draftRole.MarkModified();
         }
 
@@ -2703,7 +2729,8 @@ public sealed class CreditBulkApplyService
           .Append("|joinprev=").Append(r.JoinPrevious ? '1' : '0')
           .Append("|joinsep=").Append(r.JoinSeparator ?? string.Empty)
           .Append("|hidelabel=").Append(r.HideRoleLabel ? '1' : '0')
-          .Append("|notonscreen=").Append(r.NotOnScreen ? '1' : '0').Append('\n');
+          .Append("|notonscreen=").Append(r.NotOnScreen ? '1' : '0')
+          .Append("|themesongseq=").Append(r.ThemeSongSeq ?? string.Empty).Append('\n');
         foreach (var b in r.Blocks) sb.Append(SerializeBlockForCompare(b));
         return sb.ToString();
     }
@@ -2747,6 +2774,9 @@ public sealed class CreditBulkApplyService
         sb.Append(e.AffiliationInline ? '1' : '0').Append('|');
         sb.Append(e.IsBroadcastOnly ? '1' : '0').Append('|');
         sb.Append(e.IsParallelContinuation ? '1' : '0').Append('|');
+        sb.Append(e.ParallelPrefix ?? string.Empty).Append('|');
+        sb.Append(e.ParallelSuffix ?? string.Empty).Append('|');
+        sb.Append(e.ParallelSmall ? '1' : '0').Append('|');
         sb.Append(e.Notes ?? string.Empty).Append('|');
         // 誤記もシリアライズに含めて差分検出の対象にする
         // （誤記の追加・削除・修正をエントリ差分として認識させるため）。

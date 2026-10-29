@@ -1,6 +1,4 @@
 using System;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
@@ -21,15 +19,14 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 /// ずれが連続している場合に 1 件ずつ直すのは現実的でないので、選択行から下の割り当てをまとめて
 /// 上下にずらすボタンも置いてある。
 /// </para>
+/// <para>
+/// YouTube Music Premium 会員限定かどうかは Data API では分からないので、人が YouTube で
+/// その盤の曲を 1 つ開いて確かめ、下段のチェック欄で盤ごとに決める。
+/// </para>
 /// </summary>
 public sealed class ArtTrackImportPreviewDialog : Form
 {
     private readonly ArtTrackImportPreview _preview;
-    /// <summary>再生可否を確かめる処理。ダイアログを開いたあとに進捗を見せながら走らせる。</summary>
-    private readonly Func<IProgress<(int Done, int Total)>, CancellationToken, Task>? _probePlayability;
-    private CancellationTokenSource? _probeCts;
-    private Button _btnApply = null!;
-    private string _probeStatus = "";
     private DataGridView _grid = null!;
     private Label _lblHead = null!;
     private readonly string _productTitle;
@@ -47,14 +44,14 @@ public sealed class ArtTrackImportPreviewDialog : Form
     /// <summary><see cref="ArtTrackImportPreviewDialog"/> の新しいインスタンスを生成する。</summary>
     /// <param name="preview">表示する取り込みプレビュー。</param>
     /// <param name="productTitle">確認しやすいよう見出しに出す商品名。</param>
-    /// <param name="probePlayability">再生可否の確認処理。null なら確認しない（一括取り込みなど）。</param>
-    public ArtTrackImportPreviewDialog(
-        ArtTrackImportPreview preview, string productTitle,
-        Func<IProgress<(int Done, int Total)>, CancellationToken, Task>? probePlayability = null)
+    public ArtTrackImportPreviewDialog(ArtTrackImportPreview preview, string productTitle)
     {
         _preview = preview;
         _productTitle = productTitle;
-        _probePlayability = probePlayability;
+
+        // 人が対応表を見て書き込む経路なので、会員限定かどうかも未確認のままにせず決めて書く。
+        // 既定は DB にある前回の判断で、無ければ「会員限定ではない」。
+        _preview.PremiumOnly ??= false;
 
         Text = "配信音源の取り込み確認";
         StartPosition = FormStartPosition.CenterParent;
@@ -97,56 +94,16 @@ public sealed class ArtTrackImportPreviewDialog : Form
 
         AcceptButton = btnApply;
         CancelButton = btnCancel;
-
-        // 再生可否の確認は対応表を見せたあとに走らせる。曲数に比例して待たされる処理なので、
-        // 先に窓を出して進捗が見える状態にしてから始める。
-        Shown += async (_, __) => await RunPlayabilityProbeAsync();
-        FormClosing += (_, __) => _probeCts?.Cancel();
     }
 
-    /// <summary>再生可否の確認を走らせ、進捗を見出しに出す。 確認中は結果が確定していないので「書き込む」を押せなくし、終わったら表示を作り直す。</summary>
-    private async Task RunPlayabilityProbeAsync()
-    {
-        if (_probePlayability is null) return;
-
-        _probeCts = new CancellationTokenSource();
-        _btnApply.Enabled = false;
-        var progress = new Progress<(int Done, int Total)>(v =>
-        {
-            _probeStatus = $"再生可否を確認中… {v.Done} / {v.Total}";
-            UpdateHead();
-        });
-
-        try
-        {
-            await _probePlayability(progress, _probeCts.Token);
-            _probeStatus = "";
-            FillGrid();
-        }
-        catch (OperationCanceledException) { /* 窓を閉じた場合。表示は作り直さない */ }
-        catch (Exception ex)
-        {
-            // 確認できなくても対応表は使えるので、続行できる形で知らせるに留める。
-            _probeStatus = "再生可否の確認に失敗しました：" + ex.Message;
-            UpdateHead();
-        }
-        finally
-        {
-            _probeCts?.Dispose();
-            _probeCts = null;
-            if (!IsDisposed) _btnApply.Enabled = _preview.PairedCount > 0;
-        }
-    }
-
-    /// <summary>見出しの文言を組み立て直す。確認中はその進捗を 1 行足す。</summary>
+    /// <summary>見出しの文言を組み立て直す。</summary>
     private void UpdateHead()
     {
         if (_lblHead is null) return;
-        _lblHead.Text = _productTitle + Environment.NewLine + _preview.SummaryText
-            + (_probeStatus.Length > 0 ? Environment.NewLine + _probeStatus : "");
+        _lblHead.Text = _productTitle + Environment.NewLine + _preview.SummaryText;
     }
 
-    /// <summary>下段のボタン列。左にずらし操作、右に確定・取り消しを置く。</summary>
+    /// <summary>下段のボタン列。左に会員限定のチェック欄とずらし操作、右に確定・取り消しを置く。</summary>
     private FlowLayoutPanel BuildButtonRow(out Button btnApply, out Button btnCancel)
     {
         var pnl = new FlowLayoutPanel
@@ -173,7 +130,6 @@ public sealed class ArtTrackImportPreviewDialog : Form
             Margin = new Padding(6, 0, 0, 0)
         };
         btnApply = apply;
-        _btnApply = apply;
 
         // ずらし操作。選択行から下の動画割り当てを 1 つ分だけ動かす。
         // 自動の対応付けが途中から丸ごとずれたときのリカバリ手段。
@@ -185,11 +141,28 @@ public sealed class ArtTrackImportPreviewDialog : Form
         btnShiftDown.Click += (_, __) => ShiftAssignments(+1);
         btnClear.Click += (_, __) => ClearSelectedAssignment();
 
+        // 会員限定かどうかは盤ごとの配信条件なので、行ごとではなく盤に 1 つのチェック欄で決める。
+        var chkPremium = new CheckBox
+        {
+            Text = "この盤は YouTube Music Premium 会員限定",
+            AutoSize = true,
+            Checked = _preview.PremiumOnly == true,
+            Margin = new Padding(6, 6, 40, 0)
+        };
+        new ToolTip().SetToolTip(chkPremium,
+            "YouTube でこの盤の曲を 1 つ開き、「Music Premium のメンバーのみ」と出たらチェックします。");
+        chkPremium.CheckedChanged += (_, __) =>
+        {
+            _preview.PremiumOnly = chkPremium.Checked;
+            FillGrid();
+        };
+
         pnl.Controls.Add(btnCancel);
         pnl.Controls.Add(apply);
         pnl.Controls.Add(btnShiftDown);
         pnl.Controls.Add(btnShiftUp);
         pnl.Controls.Add(btnClear);
+        pnl.Controls.Add(chkPremium);
         return pnl;
     }
 
@@ -313,11 +286,11 @@ public sealed class ArtTrackImportPreviewDialog : Form
 
         row.VideoId = entered;
         row.ManuallyEdited = true;
-        // 手で貼り替えた動画の尺・埋め込み可否は取得していないので、判定印は落として
+        // 手で貼り替えた動画の尺・埋め込み可否・地域制限は取得していないので、判定印は落として
         // 「手動指定」として扱う。埋め込み可否は不明のままでは再生ボタンが出ないため、
-        // 人が指定した以上は再生対象として通す。
+        // 人が指定した以上は再生対象として通す（どちらも次の定期の再確認で API の値に直る）。
         row.VideoLengthSeconds = null;
-        row.Playability = null;
+        row.BlockedInJapan = false;
         row.TitleMatches = false;
         row.DurationMatches = false;
         row.Embeddable = entered.Length > 0;
@@ -332,12 +305,12 @@ public sealed class ArtTrackImportPreviewDialog : Form
         if (from < 0) { MessageBox.Show(this, "ずらす開始行を選択してください。"); return; }
 
         var rows = _preview.Rows;
-        var videoSide = rows.Select(r => (r.VideoId, r.YouTubeTitle, r.VideoLengthSeconds, r.Embeddable)).ToList();
+        var videoSide = rows.Select(r => (r.VideoId, r.YouTubeTitle, r.VideoLengthSeconds, r.Embeddable, r.BlockedInJapan)).ToList();
 
         if (delta > 0)
         {
             // 選択行に空きを差し込み、以降を 1 つ後ろへ。末尾の 1 件は押し出されて消える。
-            videoSide.Insert(from, ("", "", null, false));
+            videoSide.Insert(from, ("", "", null, false, false));
             videoSide.RemoveAt(videoSide.Count - 1);
         }
         else
@@ -345,16 +318,17 @@ public sealed class ArtTrackImportPreviewDialog : Form
             // 選択行の 1 つ前を捨てて、以降を 1 つ前へ詰める。末尾には空きができる。
             if (from == 0) { MessageBox.Show(this, "先頭行より前には詰められません。"); return; }
             videoSide.RemoveAt(from - 1);
-            videoSide.Add(("", "", null, false));
+            videoSide.Add(("", "", null, false, false));
         }
 
         for (int i = 0; i < rows.Count; i++)
         {
-            var (id, title, len, emb) = videoSide[i];
+            var (id, title, len, emb, blocked) = videoSide[i];
             rows[i].VideoId = id;
             rows[i].YouTubeTitle = title;
             rows[i].VideoLengthSeconds = len;
             rows[i].Embeddable = emb;
+            rows[i].BlockedInJapan = blocked;
             rows[i].ManuallyEdited = true;
             rows[i].TitleMatches = ArtTrackImportService.TitlesEquivalent(rows[i].DbTitle, title);
             rows[i].DurationMatches = false;
@@ -374,6 +348,7 @@ public sealed class ArtTrackImportPreviewDialog : Form
         row.YouTubeTitle = "";
         row.VideoLengthSeconds = null;
         row.Embeddable = false;
+        row.BlockedInJapan = false;
         row.TitleMatches = false;
         row.DurationMatches = false;
         row.ManuallyEdited = true;

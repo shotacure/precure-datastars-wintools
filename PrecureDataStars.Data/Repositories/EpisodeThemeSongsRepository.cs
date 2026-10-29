@@ -31,6 +31,8 @@ public sealed class EpisodeThemeSongsRepository : RepositoryBase
           usage_actuality         AS UsageActuality,
           song_recording_id       AS SongRecordingId,
           title_misprint_text     AS TitleMisprintText,
+          title_credited_text     AS TitleCreditedText,
+          is_instrumental         AS IsInstrumental,
           notes                   AS Notes,
           created_at              AS CreatedAt,
           updated_at              AS UpdatedAt,
@@ -109,15 +111,19 @@ public sealed class EpisodeThemeSongsRepository : RepositoryBase
         const string sql = """
             INSERT INTO episode_theme_songs
               (episode_id, is_broadcast_only, theme_kind, seq, usage_actuality,
-               song_recording_id, title_misprint_text, notes, created_by, updated_by)
+               song_recording_id, title_misprint_text, title_credited_text, is_instrumental, notes, created_by, updated_by)
             VALUES
               (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @Seq, @UsageActuality,
-               @SongRecordingId, @TitleMisprintText, @Notes, @CreatedBy, @UpdatedBy)
+               @SongRecordingId, @TitleMisprintText, @TitleCreditedText, COALESCE(@IsInstrumental, 0), @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               usage_actuality         = VALUES(usage_actuality),
               song_recording_id       = VALUES(song_recording_id),
               -- 曲名の誤記は入力欄の無い画面からも保存されるので、渡されなかったとき（NULL）は今の誤記を残す
               title_misprint_text     = COALESCE(VALUES(title_misprint_text), title_misprint_text),
+              -- 曲名の表記も同じく、渡されなかったとき（NULL）は今の表記を残す
+              title_credited_text     = COALESCE(VALUES(title_credited_text), title_credited_text),
+              -- インストの印も同じく、渡されなかったとき（NULL）は今の印を残す
+              is_instrumental         = COALESCE(@IsInstrumental, is_instrumental),
               notes                   = VALUES(notes),
               updated_by              = VALUES(updated_by);
             """;
@@ -141,14 +147,16 @@ public sealed class EpisodeThemeSongsRepository : RepositoryBase
         const string sql = """
             INSERT INTO episode_theme_songs
               (episode_id, is_broadcast_only, theme_kind, seq, usage_actuality,
-               song_recording_id, title_misprint_text, notes, created_by, updated_by)
+               song_recording_id, title_misprint_text, title_credited_text, is_instrumental, notes, created_by, updated_by)
             VALUES
               (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @Seq, @UsageActuality,
-               @SongRecordingId, @TitleMisprintText, @Notes, @CreatedBy, @UpdatedBy)
+               @SongRecordingId, @TitleMisprintText, @TitleCreditedText, COALESCE(@IsInstrumental, 0), @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               usage_actuality         = VALUES(usage_actuality),
               song_recording_id       = VALUES(song_recording_id),
               title_misprint_text     = VALUES(title_misprint_text),
+              title_credited_text     = VALUES(title_credited_text),
+              is_instrumental         = VALUES(is_instrumental),
               notes                   = VALUES(notes),
               updated_by              = VALUES(updated_by);
             """;
@@ -242,10 +250,10 @@ public sealed class EpisodeThemeSongsRepository : RepositoryBase
         const string sqlInsert = """
             INSERT INTO episode_theme_songs
               (episode_id, is_broadcast_only, theme_kind, seq, usage_actuality,
-               song_recording_id, title_misprint_text, notes, created_by, updated_by)
+               song_recording_id, title_misprint_text, title_credited_text, is_instrumental, notes, created_by, updated_by)
             VALUES
               (@EpisodeId, @Flag, @ThemeKind, @Seq, @UsageActuality,
-               @SongRecordingId, @TitleMisprintText, @Notes, @CreatedBy, @UpdatedBy);
+               @SongRecordingId, @TitleMisprintText, @TitleCreditedText, COALESCE(@IsInstrumental, 0), @Notes, @CreatedBy, @UpdatedBy);
             """;
 
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -276,6 +284,8 @@ public sealed class EpisodeThemeSongsRepository : RepositoryBase
                             : r.UsageActuality,
                         SongRecordingId = r.SongRecordingId,
                         TitleMisprintText = r.TitleMisprintText,
+                        TitleCreditedText = r.TitleCreditedText,
+                        IsInstrumental = r.IsInstrumental,
                         Notes = r.Notes,
                         CreatedBy = r.CreatedBy,
                         UpdatedBy = Environment.UserName

@@ -7,7 +7,7 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// 各話のチーフ（脚本・絵コンテ・演出・作画監督・美術。区分は <see cref="EpisodeChiefRoles"/>）の顔ぶれを
 /// TV 系の全話分まとめた索引と、「この組み合わせは通算何回目か」の数え上げ。
 /// <para>
-/// エピソード詳細のスタッフ欄（「演出と作画監督のこの組み合わせは通算 3 回目」）と、
+/// エピソード詳細のスタッフ欄（「絵コンテ×演出 通算 3 回目」と、その組み合わせが現れた全話の玉の列）と、
 /// 歴代記録ページ（最も多く組んだ演出と作画監督）が同じ数え方を使う。
 /// 数えるのは本編クレジット（<see cref="BuildContext.CreditsByEpisode"/>）に PERSON / TEXT エントリとして
 /// 現れた顔ぶれで、本放送限定（<see cref="CreditBlockEntry.IsBroadcastOnly"/>）のエントリは
@@ -25,6 +25,10 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// </summary>
 public sealed class EpisodeChiefStaffIndex
 {
+    /// <summary>絵コンテと演出の組み合わせ。同じ方が兼ねた回は、その方 1 人の顔ぶれとして数える（兼任）。</summary>
+    public static readonly ChiefCombo StoryboardAndDirector =
+        new("storyboard-director", "絵コンテと演出", new[] { EpisodeChiefRoles.Storyboard, EpisodeChiefRoles.EpisodeDirector });
+
     /// <summary>演出と作画監督の組み合わせ。</summary>
     public static readonly ChiefCombo DirectorAndAnimationDirector =
         new("director-ad", "演出と作画監督", new[] { EpisodeChiefRoles.EpisodeDirector, EpisodeChiefRoles.AnimationDirector });
@@ -34,7 +38,7 @@ public sealed class EpisodeChiefStaffIndex
         new("screenplay-director-ad", "脚本・演出・作画監督", new[] { EpisodeChiefRoles.Screenplay, EpisodeChiefRoles.EpisodeDirector, EpisodeChiefRoles.AnimationDirector });
 
     /// <summary>数える組み合わせの一覧（表示順）。</summary>
-    public static IReadOnlyList<ChiefCombo> Combos { get; } = new[] { DirectorAndAnimationDirector, ScreenplayDirectorAnimationDirector };
+    public static IReadOnlyList<ChiefCombo> Combos { get; } = new[] { StoryboardAndDirector, DirectorAndAnimationDirector, ScreenplayDirectorAnimationDirector };
 
     /// <summary>エピソード ID → 区分（1〜5）→ 顔ぶれキーの昇順リスト。区分にエントリが無ければキー自体を持たない。</summary>
     private readonly IReadOnlyDictionary<int, IReadOnlyDictionary<int, IReadOnlyList<string>>> _chiefsByEpisode;
@@ -183,7 +187,9 @@ public sealed class EpisodeChiefStaffIndex
             Total: list.Count,
             FirstEpisodeId: list[0],
             PreviousEpisodeId: index > 0 ? list[index - 1] : null,
-            NextEpisodeId: index + 1 < list.Count ? list[index + 1] : null);
+            NextEpisodeId: index + 1 < list.Count ? list[index + 1] : null,
+            EpisodeIds: list,
+            Members: MembersOf(combo, signature));
     }
 
     /// <summary>
@@ -287,7 +293,11 @@ public sealed record ChiefCombo(string Code, string Label, IReadOnlyList<int> Ch
 /// <param name="FirstEpisodeId">初回の話。</param>
 /// <param name="PreviousEpisodeId">前回の話（初回なら null）。</param>
 /// <param name="NextEpisodeId">次回の話（最新なら null）。</param>
-public sealed record ChiefComboOccurrence(int Ordinal, int Total, int FirstEpisodeId, int? PreviousEpisodeId, int? NextEpisodeId);
+/// <param name="EpisodeIds">この顔ぶれで作られた話の ID（放送順。収録済みの範囲の全件）。</param>
+/// <param name="Members">役職ごとの顔ぶれ（組み合わせの役職の順）。</param>
+public sealed record ChiefComboOccurrence(
+    int Ordinal, int Total, int FirstEpisodeId, int? PreviousEpisodeId, int? NextEpisodeId,
+    IReadOnlyList<int> EpisodeIds, IReadOnlyList<ChiefComboMember> Members);
 
 /// <summary>組み合わせの登場回数ランキングの 1 行。</summary>
 public sealed record ChiefComboRanking(int Rank, int Count, IReadOnlyList<ChiefComboMember> Members, IReadOnlyList<int> EpisodeIds);

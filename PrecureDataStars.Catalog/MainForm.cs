@@ -89,6 +89,7 @@ public partial class MainForm : Form
     private readonly PersonNotableWorksRepository _personNotableWorksRepo;
     private readonly RoleRelationsRepository _roleRelationsRepo;
     private readonly PersonPositionsRepository _personPositionsRepo;
+    private readonly EntitySourcesRepository _entitySourcesRepo;
 
     /// <summary><see cref="MainForm"/> の新しいインスタンスを生成する。</summary>
     public MainForm(
@@ -158,7 +159,9 @@ public partial class MainForm : Form
         // 役職どうしの関連（段階・並列）
         RoleRelationsRepository roleRelationsRepo,
         // 人物の役職履歴
-        PersonPositionsRepository personPositionsRepo)
+        PersonPositionsRepository personPositionsRepo,
+        // 人物・企業のプロフィールの出典
+        EntitySourcesRepository entitySourcesRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -234,6 +237,7 @@ public partial class MainForm : Form
         _personNotableWorksRepo        = personNotableWorksRepo        ?? throw new ArgumentNullException(nameof(personNotableWorksRepo));
         _roleRelationsRepo             = roleRelationsRepo             ?? throw new ArgumentNullException(nameof(roleRelationsRepo));
         _personPositionsRepo           = personPositionsRepo           ?? throw new ArgumentNullException(nameof(personPositionsRepo));
+        _entitySourcesRepo             = entitySourcesRepo             ?? throw new ArgumentNullException(nameof(entitySourcesRepo));
 
         InitializeComponent();
     }
@@ -334,14 +338,16 @@ public partial class MainForm : Form
             f.ShowDialog();
         });
 
-    /// <summary>「劇伴管理」メニュー：BgmCuesEditorForm を開く（構造化クレジット用 2 リポジトリを追加注入）。</summary>
+    /// <summary>「劇伴管理」メニュー：BgmCuesEditorForm を開く（構造化クレジット用 2 リポジトリと、歌い手用 2 リポジトリを追加注入）。</summary>
     private void mnuBgm_Click(object? sender, EventArgs e)
         => RunChildModal(() =>
         {
             using var f = new BgmCuesEditorForm(
                 _bgmCuesRepo, _bgmSessionsRepo, _bgmSectionsRepo, _tracksRepo, _seriesRepo,
                 // 構造化クレジット用
-                _personAliasesRepo, _bgmCueCreditsRepo);
+                _personAliasesRepo, _bgmCueCreditsRepo,
+                // 歌い手（スキャットなど）用
+                _characterAliasesRepo, new BgmCueSingersRepository(_factory));
             f.ShowDialog();
         });
 
@@ -413,7 +419,9 @@ public partial class MainForm : Form
                 // 役職どうしの関連（段階・並列）
                 _roleRelationsRepo,
                 // 人物の役職履歴
-                _personPositionsRepo);
+                _personPositionsRepo,
+                // 人物・企業のプロフィールの出典
+                _entitySourcesRepo);
             f.ShowDialog();
         });
 

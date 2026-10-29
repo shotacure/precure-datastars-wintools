@@ -19,7 +19,8 @@ namespace PrecureDataStars.AmazonSync;
 /// <para>
 /// 紙の価格は取り込まない。Creators API の <c>offersV2</c> が返すのは「現在の出品価格」であって
 /// 定価ではなく、絶版書ではマーケットプレイスの中古値が乗るため。紙の定価は人手で入れる。
-/// Kindle 価格は常に正価が返るので取り込む。
+/// Kindle 価格も取り込まない。Amazon の売値で、Creators API 使用要件は画像でない内容の保存を最長 24 時間に限り、
+/// 表示するなら取得時刻と免責の文を隣に出すよう求めるため（サイトは書籍の価格を出さない）。
 /// </para>
 /// <para>
 /// クレジットは <c>contributors[]</c> を役職マスタの <c>amazon_role_type</c> で突き合わせて役職を決め、
@@ -134,8 +135,7 @@ public sealed class BookImportService
             BindingText = print?.Binding ?? kindle?.Binding,
             // 紙の価格は Amazon から取り込まない。offersV2 が返すのは「現在の出品価格」であって
             // 定価ではなく、絶版書ではマーケットプレイスの中古値が乗って定価と大きくずれるため。
-            // 紙の定価は人手で入れる運用とする。Kindle は常に正価が返るのでそのまま採る。
-            PriceKindleIncTax = kindle?.PriceAmount,
+            // 紙の定価は人手で入れる運用とする。Kindle の売値も保存しない（クラス冒頭の説明を参照）。
             HasPrint = print != null,
             HasKindle = kindle != null,
             AmazonAsinPrint = print?.Asin,

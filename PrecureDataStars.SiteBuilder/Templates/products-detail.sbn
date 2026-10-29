@@ -183,6 +183,9 @@
             {{~ if t.MetaLineHtml != "" ~}}
             <div class="track-meta-line">{{ t.MetaLineHtml }}</div>
             {{~ end ~}}
+            {{## 劇伴トラックの曲が使っている曲（歌・曲（著作物））。メタ行の下に開け閉めの枠「使われている曲（N 曲）」で添える
+                 （BgmSourcesHtml は組み立て済みの HTML。劇伴以外・使われている曲が無いときは空）。 ##}}
+            {{~ if t.BgmSourcesHtml != "" ~}}{{ t.BgmSourcesHtml }}{{~ end ~}}
             {{## 同じトラックに続く枝番（編集でつないだ 2 つ目以降の劇伴、メドレーの後ろの隠しトラックなど）。別の枠にせず、
                  頭に「＋」を付けて枠の中に続ける。劇伴は「M 番号 [メニュー] 作曲・編曲」の行だけ、歌は曲名の行とクレジットの行。
                  劇伴・歌の詳細からのリンクがここに着地するよう、枝番つきの id を付ける。 ##}}
@@ -194,6 +197,7 @@
               {{~ if sp.MetaLineHtml != "" ~}}
               <div class="track-meta-line">{{~ if sp.TitleHtml == "" ~}}<span class="track-sub-plus" aria-hidden="true">＋</span>{{~ end ~}}{{ sp.MetaLineHtml }}</div>
               {{~ end ~}}
+              {{~ if sp.BgmSourcesHtml != "" ~}}{{ sp.BgmSourcesHtml }}{{~ end ~}}
             </div>
             {{~ end ~}}
             {{~ if t.BgmAssignmentMetaLineHtml != "" ~}}

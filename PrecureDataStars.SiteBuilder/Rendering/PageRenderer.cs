@@ -514,14 +514,10 @@ public sealed class PageRenderer
     };
 
     /// <summary>
-    /// 本番モードのときだけグローバルナビから外す URL の集合。フォントのページは書体のデータがそろうまで、
-    /// 本番では生成自体を行わない（<see cref="Pipeline.SiteBuilderPipeline"/> 側でスキップ）ため、ナビからも外す。
+    /// 本番モードのときだけグローバルナビから外す URL の集合（本番ではまだ作らないセクション用）。いまは無い。
     /// テストモードでは全項目を出す。
     /// </summary>
-    private static readonly HashSet<string> ProductionHiddenNavUrls = new(StringComparer.Ordinal)
-    {
-        "/fonts/",
-    };
+    private static readonly HashSet<string> ProductionHiddenNavUrls = new(StringComparer.Ordinal);
 
     /// <summary>
     /// 現在ページの URL パスからグローバルナビ項目列を組み立て、所属セクションの項目に IsActive を立てる。

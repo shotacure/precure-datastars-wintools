@@ -19,6 +19,9 @@ public sealed class CompaniesGenerator
     private readonly RolesRepository _rolesRepo;
     // 団体どうしの関係（所属・事業の引き継ぎ）。詳細ページの「関係のある団体」に出す。
     private readonly CompanyRelationsRepository _relationsRepo;
+    // 企業のプロフィールの出典（entity_sources）。詳細ページの「出典」に出す。
+    private readonly EntitySourcesRepository _sourcesRepo;
+    private IReadOnlyDictionary<int, EntitySourceFootnotes> _sourcesByCompany = new Dictionary<int, EntitySourceFootnotes>();
     // メンバー履歴セクションで「人物名義 → person_id 解決」をするために
     // person_alias_persons と person_aliases / persons のリポジトリを参照する。
     private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
@@ -56,6 +59,7 @@ public sealed class CompaniesGenerator
         _logosRepo = new LogosRepository(factory);
         _rolesRepo = new RolesRepository(factory);
         _relationsRepo = new CompanyRelationsRepository(factory);
+        _sourcesRepo = new EntitySourcesRepository(factory);
         _personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
         _personAliasesRepo = new PersonAliasesRepository(factory);
         _personsRepo = new PersonsRepository(factory);
@@ -101,6 +105,9 @@ public sealed class CompaniesGenerator
 
         // 企業索引は「クリエイター > スタッフ」（/creators/staff/）に集約。
         // 本ジェネレータは企業・団体単体の詳細ページ（/companies/{id}/）生成に専念する。
+
+        // 出典は全件を読み、企業ごとの脚注と本文の番号にしておく。
+        _sourcesByCompany = EntitySourceFootnotes.ByCompany(await _sourcesRepo.GetAllAsync(ct).ConfigureAwait(false));
 
         // 団体どうしの関係。両端のどちらかが公開対象（論理削除されていない）でない行は表示に使わない。
         var companyById = companies.ToDictionary(c => c.CompanyId);
@@ -263,7 +270,8 @@ public sealed class CompaniesGenerator
                 OfficialUrl = company.OfficialUrl ?? "",
                 XUrl = company.XUrl ?? "",
                 InstagramUrl = company.InstagramUrl ?? "",
-                YoutubeUrl = company.YoutubeUrl ?? ""
+                YoutubeUrl = company.YoutubeUrl ?? "",
+                WikipediaUrl = company.WikipediaUrl ?? ""
             },
             Relations = relations,
             InvolvementGroups = groups,
@@ -276,6 +284,7 @@ public sealed class CompaniesGenerator
             MusicMemberRoles = musicMemberRoles,
             MusicTotal = musicTotal,
             MusicCoverageLabel = _ctx.MusicCredits.CoverageLabel,
+            Sources = _sourcesByCompany.TryGetValue(company.CompanyId, out var sources) ? sources : EntitySourceFootnotes.Empty,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 企業詳細の構造化データは Schema.org の Organization 型。
@@ -1245,6 +1254,8 @@ public sealed class CompaniesGenerator
         public IReadOnlyList<CompanyAliasView> LogoAliases { get; set; } = Array.Empty<CompanyAliasView>();
         /// <summary>メンバー履歴。 当該企業の屋号を所属としてクレジットされた人物名義の一覧を 屋号 → 役職 → 人物 → 作品 の入れ子で持つ。 屋号セクションはその屋号での最初の関与日昇順。 0 件の場合はテンプレ側でセクション自体を非表示にする。</summary>
         public IReadOnlyList<MemberHistoryAliasSection> MemberHistory { get; set; } = Array.Empty<MemberHistoryAliasSection>();
+        /// <summary>プロフィールの出典（ページの一番下の脚注と、本文の項目に付ける番号）。脚注が無ければ脚注の欄を出さない。</summary>
+        public EntitySourceFootnotes Sources { get; set; } = EntitySourceFootnotes.Empty;
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
@@ -1320,11 +1331,13 @@ public sealed class CompaniesGenerator
         public string FoundedDate { get; set; } = "";
         public string DissolvedDate { get; set; } = "";
         public string Notes { get; set; } = "";
-        /// <summary>公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
+        /// <summary>公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。</summary>
         public string OfficialUrl { get; set; } = "";
         public string XUrl { get; set; } = "";
         public string InstagramUrl { get; set; } = "";
         public string YoutubeUrl { get; set; } = "";
+        /// <summary>企業の Wikipedia 記事 URL。「外部リンク」セクションの最後に「Wikipedia」として出す。</summary>
+        public string WikipediaUrl { get; set; } = "";
     }
 
     /// <summary>

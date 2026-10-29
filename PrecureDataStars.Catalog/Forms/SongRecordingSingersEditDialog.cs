@@ -17,19 +17,31 @@ public partial class SongRecordingSingersEditDialog : Form
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     private readonly BindingList<LineRow> _lines = new();
 
+    /// <summary>「2人目のCV」の欄を使うか。2 人目の声優の列を持つ表（song_recording_singers）の編集でだけ true。</summary>
+    private readonly bool _slashVoiceEnabled;
+
     /// <summary>編集確定時の連名行リスト（OK で閉じたとき有効）。</summary>
     public IReadOnlyList<LineDto> ResultLines { get; private set; } = Array.Empty<LineDto>();
 
+    /// <param name="initialLines">編集前の連名行。</param>
+    /// <param name="personAliasesRepo">人物名義の選択に使うリポジトリ。</param>
+    /// <param name="characterAliasesRepo">キャラ名義の選択に使うリポジトリ。</param>
+    /// <param name="slashVoiceEnabled">
+    /// 「2人目のCV」の欄を出すか。2 人目の声優の列を持たない表（劇伴の歌い手 bgm_cue_singers）の編集では false にして欄を隠す。
+    /// </param>
     public SongRecordingSingersEditDialog(
         IReadOnlyList<LineDto> initialLines,
         PersonAliasesRepository personAliasesRepo,
-        CharacterAliasesRepository characterAliasesRepo)
+        CharacterAliasesRepository characterAliasesRepo,
+        bool slashVoiceEnabled = true)
     {
         _personAliasesRepo = personAliasesRepo ?? throw new ArgumentNullException(nameof(personAliasesRepo));
         _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
+        _slashVoiceEnabled = slashVoiceEnabled;
 
         InitializeComponent();
         gridLines.DataSource = _lines;
+        lblSlashVoice.Visible = txtSlashVoiceDisplay.Visible = btnPickSlashVoice.Visible = btnClearSlashVoice.Visible = _slashVoiceEnabled;
 
         byte seq = 1;
         foreach (var l in initialLines)
@@ -48,6 +60,8 @@ public partial class SongRecordingSingersEditDialog : Form
                 SlashPersonDisplay = l.SlashPersonDisplay,
                 SlashCharacterAliasId = l.SlashCharacterAliasId,
                 SlashCharacterDisplay = l.SlashCharacterDisplay,
+                SlashVoicePersonAliasId = l.SlashVoicePersonAliasId,
+                SlashVoiceDisplay = l.SlashVoiceDisplay,
                 Separator = l.PrecedingSeparator,
                 AffiliationText = l.AffiliationText,
                 ExpandUnitMembers = l.ExpandUnitMembers,
@@ -64,6 +78,8 @@ public partial class SongRecordingSingersEditDialog : Form
         btnClearSlashPerson.Click += (_, __) => { txtSlashPersonDisplay.Text = ""; txtSlashPersonDisplay.Tag = null; };
         btnPickCharacter.Click += async (_, __) => await OnPickAliasAsync(txtCharacterDisplay, isPerson: false);
         btnPickVoice.Click += async (_, __) => await OnPickAliasAsync(txtVoiceDisplay, isPerson: true);
+        btnPickSlashVoice.Click += async (_, __) => await OnPickAliasAsync(txtSlashVoiceDisplay, isPerson: true);
+        btnClearSlashVoice.Click += (_, __) => { txtSlashVoiceDisplay.Text = ""; txtSlashVoiceDisplay.Tag = null; };
         btnPickSlashCharacter.Click += async (_, __) => await OnPickAliasAsync(txtSlashCharacterDisplay, isPerson: false);
         btnClearSlashCharacter.Click += (_, __) => { txtSlashCharacterDisplay.Text = ""; txtSlashCharacterDisplay.Tag = null; };
         btnAdd.Click += (_, __) => OnAddNewLine();
@@ -109,6 +125,7 @@ public partial class SongRecordingSingersEditDialog : Form
         txtSlashPersonDisplay.Enabled = btnPickSlashPerson.Enabled = btnClearSlashPerson.Enabled = isPerson;
         txtCharacterDisplay.Enabled = btnPickCharacter.Enabled = !isPerson;
         txtVoiceDisplay.Enabled = btnPickVoice.Enabled = !isPerson;
+        txtSlashVoiceDisplay.Enabled = btnPickSlashVoice.Enabled = btnClearSlashVoice.Enabled = !isPerson && _slashVoiceEnabled;
         txtSlashCharacterDisplay.Enabled = btnPickSlashCharacter.Enabled = btnClearSlashCharacter.Enabled = !isPerson;
         // メンバー展開はユニット名義（PERSON 主名義）の行だけで意味を持つ。
         chkExpandUnit.Enabled = isPerson;
@@ -129,6 +146,8 @@ public partial class SongRecordingSingersEditDialog : Form
             txtCharacterDisplay.Tag = row.CharacterAliasId;
             txtVoiceDisplay.Text = row.VoiceDisplay ?? "";
             txtVoiceDisplay.Tag = row.VoicePersonAliasId;
+            txtSlashVoiceDisplay.Text = row.SlashVoiceDisplay ?? "";
+            txtSlashVoiceDisplay.Tag = row.SlashVoicePersonAliasId;
 
             txtSlashPersonDisplay.Text = row.SlashPersonDisplay ?? "";
             txtSlashPersonDisplay.Tag = row.SlashPersonAliasId;
@@ -148,6 +167,7 @@ public partial class SongRecordingSingersEditDialog : Form
             txtPersonDisplay.Text = ""; txtPersonDisplay.Tag = null;
             txtCharacterDisplay.Text = ""; txtCharacterDisplay.Tag = null;
             txtVoiceDisplay.Text = ""; txtVoiceDisplay.Tag = null;
+            txtSlashVoiceDisplay.Text = ""; txtSlashVoiceDisplay.Tag = null;
             txtSlashPersonDisplay.Text = ""; txtSlashPersonDisplay.Tag = null;
             txtSlashCharacterDisplay.Text = ""; txtSlashCharacterDisplay.Tag = null;
             txtSeparator.Text = "";
@@ -184,6 +204,7 @@ public partial class SongRecordingSingersEditDialog : Form
         row.VoicePersonAliasId = updated.VoicePersonAliasId; row.VoiceDisplay = updated.VoiceDisplay;
         row.SlashPersonAliasId = updated.SlashPersonAliasId; row.SlashPersonDisplay = updated.SlashPersonDisplay;
         row.SlashCharacterAliasId = updated.SlashCharacterAliasId; row.SlashCharacterDisplay = updated.SlashCharacterDisplay;
+        row.SlashVoicePersonAliasId = updated.SlashVoicePersonAliasId; row.SlashVoiceDisplay = updated.SlashVoiceDisplay;
         row.Separator = row.Seq >= 2 ? updated.Separator : null;
         row.AffiliationText = updated.AffiliationText;
         row.ExpandUnitMembers = updated.ExpandUnitMembers;
@@ -231,6 +252,17 @@ public partial class SongRecordingSingersEditDialog : Form
             line.VoiceDisplay = txtVoiceDisplay.Text;
             line.SlashCharacterAliasId = txtSlashCharacterDisplay.Tag as int?;
             line.SlashCharacterDisplay = string.IsNullOrEmpty(txtSlashCharacterDisplay.Text) ? null : txtSlashCharacterDisplay.Text;
+            // 2 人目の声優（任意）。1 人目と同じ名義は持たない。
+            if (_slashVoiceEnabled && txtSlashVoiceDisplay.Tag is int svid)
+            {
+                if (svid == vid)
+                {
+                    ShowInfo("2人目のCV が 1 人目の CV と同じ名義です。別の声優を選ぶか、クリアしてください。");
+                    return false;
+                }
+                line.SlashVoicePersonAliasId = svid;
+                line.SlashVoiceDisplay = txtSlashVoiceDisplay.Text;
+            }
         }
 
         line.Separator = string.IsNullOrWhiteSpace(txtSeparator.Text) ? null : txtSeparator.Text;
@@ -284,6 +316,8 @@ public partial class SongRecordingSingersEditDialog : Form
             SlashPersonDisplay = l.SlashPersonDisplay,
             SlashCharacterAliasId = l.SlashCharacterAliasId,
             SlashCharacterDisplay = l.SlashCharacterDisplay,
+            SlashVoicePersonAliasId = l.SlashVoicePersonAliasId,
+            SlashVoiceDisplay = l.SlashVoiceDisplay,
             PrecedingSeparator = l.Separator,
             AffiliationText = l.AffiliationText,
             ExpandUnitMembers = l.ExpandUnitMembers,
@@ -308,6 +342,9 @@ public partial class SongRecordingSingersEditDialog : Form
         public string? SlashPersonDisplay { get; set; }
         public int? SlashCharacterAliasId { get; set; }
         public string? SlashCharacterDisplay { get; set; }
+        /// <summary>CHARACTER_WITH_CV 行の 2 人目の声優の名義（任意）。</summary>
+        public int? SlashVoicePersonAliasId { get; set; }
+        public string? SlashVoiceDisplay { get; set; }
         public string? PrecedingSeparator { get; set; }
         public string? AffiliationText { get; set; }
         /// <summary>PERSON 主名義がユニット名義のとき、表示でメンバーを展開するか。</summary>
@@ -330,6 +367,8 @@ public partial class SongRecordingSingersEditDialog : Form
         public string? SlashPersonDisplay { get; set; }
         public int? SlashCharacterAliasId { get; set; }
         public string? SlashCharacterDisplay { get; set; }
+        public int? SlashVoicePersonAliasId { get; set; }
+        public string? SlashVoiceDisplay { get; set; }
         public string? Separator { get; set; }
         public string? AffiliationText { get; set; }
         public bool ExpandUnitMembers { get; set; }
@@ -355,7 +394,13 @@ public partial class SongRecordingSingersEditDialog : Form
             {
                 sb.Append(CharacterDisplay ?? "");
                 if (!string.IsNullOrEmpty(SlashCharacterDisplay)) sb.Append(" / ").Append(SlashCharacterDisplay);
-                if (!string.IsNullOrEmpty(VoiceDisplay)) sb.Append("(CV:").Append(VoiceDisplay).Append(')');
+                if (!string.IsNullOrEmpty(VoiceDisplay))
+                {
+                    // 2 人目の声優がいれば「(CV:声優1 / 声優2)」。
+                    sb.Append("(CV:").Append(VoiceDisplay);
+                    if (!string.IsNullOrEmpty(SlashVoiceDisplay)) sb.Append(" / ").Append(SlashVoiceDisplay);
+                    sb.Append(')');
+                }
             }
             if (!string.IsNullOrEmpty(AffiliationText)) sb.Append(' ').Append(AffiliationText);
             FullDisplay = sb.ToString();

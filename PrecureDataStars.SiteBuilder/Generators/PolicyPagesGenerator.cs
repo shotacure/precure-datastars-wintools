@@ -79,8 +79,6 @@ public sealed class PolicyPagesGenerator
         {
             SiteName = _ctx.Config.SiteName,
             SubtitleFontGroups = BuildSubtitleFontGroups(),
-            // フォントのページは書体のデータがそろうまで本番では作らないので、本番ではそのページに触れない。
-            ShowFontsPage = !_ctx.Config.IsProductionMode,
         };
         var layout = new LayoutModel
         {
@@ -200,9 +198,6 @@ public sealed class PolicyPagesGenerator
     private sealed class DisclaimerContentModel
     {
         public string SiteName { get; set; } = "";
-
-        /// <summary>フォントのページ（書体の見本）に触れるか（本番ではページを作らないので false）。</summary>
-        public bool ShowFontsPage { get; set; }
 
         /// <summary>「サブタイトル画像と書体の見本について」の使用フォント一覧（ライセンスごとのグループ。空なら折りたたみ自体を出さない）。</summary>
         public List<SubtitleFontGroupRow> SubtitleFontGroups { get; set; } = new();

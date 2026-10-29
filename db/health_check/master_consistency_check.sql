@@ -41,7 +41,7 @@ ORDER BY p.person_id;
 -- A2: person_alias がどこからも参照されていない孤立 alias
 --   件数 > 0 の意味: 「person_aliases 行はあるが、person_alias_persons /
 --   credit_block_entries / song_credits / song_recording_singers /
---   bgm_cue_credits からも参照されていない」状態。
+--   bgm_cue_credits / bgm_cue_singers / musical_work_credits からも参照されていない」状態。
 --   ただし「後で使う目的で先行登録した名義」は意図的に温存されているため、
 --   この結果に出てくるすべてが異常とは限らない。マスタ管理画面で確認して、
 --   不要なら削除、温存意図があればそのまま。
@@ -53,8 +53,13 @@ WHERE pa.is_deleted = 0
   AND NOT EXISTS (SELECT 1 FROM song_credits           p WHERE p.person_alias_id       = pa.alias_id)
   AND NOT EXISTS (SELECT 1 FROM song_recording_singers p WHERE p.person_alias_id       = pa.alias_id
                                                             OR p.voice_person_alias_id = pa.alias_id
-                                                            OR p.slash_person_alias_id = pa.alias_id)
+                                                            OR p.slash_person_alias_id = pa.alias_id
+                                                            OR p.slash_voice_person_alias_id = pa.alias_id)
   AND NOT EXISTS (SELECT 1 FROM bgm_cue_credits        p WHERE p.person_alias_id       = pa.alias_id)
+  AND NOT EXISTS (SELECT 1 FROM bgm_cue_singers        p WHERE p.person_alias_id       = pa.alias_id
+                                                            OR p.voice_person_alias_id = pa.alias_id
+                                                            OR p.slash_person_alias_id = pa.alias_id)
+  AND NOT EXISTS (SELECT 1 FROM musical_work_credits   p WHERE p.person_alias_id       = pa.alias_id)
   AND NOT EXISTS (SELECT 1 FROM person_alias_members   p WHERE p.parent_alias_id       = pa.alias_id
                                                             OR p.member_person_alias_id = pa.alias_id)
 ORDER BY pa.alias_id;
@@ -72,13 +77,15 @@ ORDER BY c.character_id;
 
 -- A4: character_alias がどこからも参照されていない孤立 alias
 --   件数 > 0 の意味: 「character_aliases 行はあるが、credit_block_entries /
---   song_recording_singers / precures / person_alias_members からも
+--   song_recording_singers / bgm_cue_singers / precures / person_alias_members からも
 --   参照されていない」状態。マスタ汚染の典型パターン。
 SELECT 'A4 orphan character_aliases' AS check_name, ca.alias_id, ca.character_id, ca.name
 FROM character_aliases ca
 WHERE ca.is_deleted = 0
   AND NOT EXISTS (SELECT 1 FROM credit_block_entries   p WHERE p.character_alias_id        = ca.alias_id)
   AND NOT EXISTS (SELECT 1 FROM song_recording_singers p WHERE p.character_alias_id        = ca.alias_id
+                                                            OR p.slash_character_alias_id  = ca.alias_id)
+  AND NOT EXISTS (SELECT 1 FROM bgm_cue_singers        p WHERE p.character_alias_id        = ca.alias_id
                                                             OR p.slash_character_alias_id  = ca.alias_id)
   AND NOT EXISTS (SELECT 1 FROM precures               p WHERE p.pre_transform_alias_id    = ca.alias_id
                                                             OR p.transform_alias_id        = ca.alias_id
@@ -295,6 +302,36 @@ WHERE ccr.join_previous = 1
 ORDER BY ccr.card_role_id;
 
 
+-- E1: 音楽クレジットの紐付け先が出典の盤に載っていない
+--   件数 > 0 の意味: 「music_credits の曲・録音・劇伴セッションの行が、出典の盤（source_product_catalog_no）の
+--   トラックに無い曲・録音・セッションを指している」状態。曲 ID と録音 ID の取り違え（曲 ID の列に録音 ID を入れる）が典型。
+--   SONG は出典の盤のトラックの録音の曲、SONG_RECORDING は出典の盤のトラックの録音、
+--   BGM_SESSION は出典の盤のトラックの劇伴のセッションと照らす。
+SELECT 'E1 music_credits target not on source disc' AS check_name, m.music_credit_id, m.target_kind, m.source_product_catalog_no,
+       m.song_id, m.song_recording_id, m.bgm_series_id, m.bgm_session_no, m.role_code
+FROM music_credits m
+WHERE (m.target_kind = 'SONG' AND NOT EXISTS (
+         SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no JOIN song_recordings r ON r.song_recording_id = t.song_recording_id
+         WHERE d.product_catalog_no = m.source_product_catalog_no AND r.song_id = m.song_id))
+   OR (m.target_kind = 'SONG_RECORDING' AND NOT EXISTS (
+         SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no
+         WHERE d.product_catalog_no = m.source_product_catalog_no AND t.song_recording_id = m.song_recording_id))
+   OR (m.target_kind = 'BGM_SESSION' AND NOT EXISTS (
+         SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no
+         JOIN bgm_cues bc ON bc.series_id = t.bgm_series_id AND bc.m_no_detail = t.bgm_m_no_detail
+         WHERE d.product_catalog_no = m.source_product_catalog_no AND bc.series_id = m.bgm_series_id AND bc.session_no = m.bgm_session_no))
+ORDER BY m.music_credit_id;
+
+
+-- E2: 所属の会社名だけを出す作家の行に、所属が無い
+--   件数 > 0 の意味: 「song_credits.affiliation_display = 'COMPANY_ONLY' なのに、所属の会社名義も自由記述も無い」状態。
+--   表示は名義に戻るが、盤の表記（団体名だけ）と違ってしまう。会社名義が消えて SET NULL になったときなどに起きる。
+SELECT 'E2 song_credits company-only w/o affiliation' AS check_name, sc.song_id, sc.credit_role, sc.credit_seq, sc.person_alias_id
+FROM song_credits sc
+WHERE sc.affiliation_display = 'COMPANY_ONLY' AND sc.affiliation_company_alias_id IS NULL AND (sc.affiliation_text IS NULL OR sc.affiliation_text = '')
+ORDER BY sc.song_id, sc.credit_role, sc.credit_seq;
+
+
 -- ============================================================================
 -- 全件カウントサマリ（最後に実行すると一覧で異常箇所がわかる）
 -- ============================================================================
@@ -305,14 +342,17 @@ UNION ALL SELECT 'A2 orphan person_aliases',           COUNT(*) FROM person_alia
       AND NOT EXISTS (SELECT 1 FROM person_alias_persons   p WHERE p.alias_id              = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM credit_block_entries   p WHERE p.person_alias_id       = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM song_credits           p WHERE p.person_alias_id       = pa.alias_id)
-      AND NOT EXISTS (SELECT 1 FROM song_recording_singers p WHERE p.person_alias_id       = pa.alias_id OR p.voice_person_alias_id = pa.alias_id OR p.slash_person_alias_id = pa.alias_id)
+      AND NOT EXISTS (SELECT 1 FROM song_recording_singers p WHERE p.person_alias_id       = pa.alias_id OR p.voice_person_alias_id = pa.alias_id OR p.slash_person_alias_id = pa.alias_id OR p.slash_voice_person_alias_id = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM bgm_cue_credits        p WHERE p.person_alias_id       = pa.alias_id)
+      AND NOT EXISTS (SELECT 1 FROM bgm_cue_singers        p WHERE p.person_alias_id       = pa.alias_id OR p.voice_person_alias_id = pa.alias_id OR p.slash_person_alias_id = pa.alias_id)
+      AND NOT EXISTS (SELECT 1 FROM musical_work_credits   p WHERE p.person_alias_id       = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM person_alias_members   p WHERE p.parent_alias_id       = pa.alias_id OR p.member_person_alias_id = pa.alias_id)
 UNION ALL SELECT 'A3 orphan characters',               COUNT(*) FROM characters c LEFT JOIN character_aliases ca ON ca.character_id = c.character_id AND ca.is_deleted = 0 WHERE c.is_deleted = 0 AND ca.alias_id IS NULL
 UNION ALL SELECT 'A4 orphan character_aliases',        COUNT(*) FROM character_aliases ca
     WHERE ca.is_deleted = 0
       AND NOT EXISTS (SELECT 1 FROM credit_block_entries   p WHERE p.character_alias_id        = ca.alias_id)
       AND NOT EXISTS (SELECT 1 FROM song_recording_singers p WHERE p.character_alias_id        = ca.alias_id OR p.slash_character_alias_id = ca.alias_id)
+      AND NOT EXISTS (SELECT 1 FROM bgm_cue_singers        p WHERE p.character_alias_id        = ca.alias_id OR p.slash_character_alias_id = ca.alias_id)
       AND NOT EXISTS (SELECT 1 FROM precures               p WHERE p.pre_transform_alias_id    = ca.alias_id OR p.transform_alias_id = ca.alias_id OR p.transform2_alias_id = ca.alias_id OR p.alt_form_alias_id = ca.alias_id)
       AND NOT EXISTS (SELECT 1 FROM person_alias_members   p WHERE p.member_character_alias_id = ca.alias_id)
 UNION ALL SELECT 'A5 orphan companies',                COUNT(*) FROM companies c LEFT JOIN company_aliases ca ON ca.company_id = c.company_id AND ca.is_deleted = 0 WHERE c.is_deleted = 0 AND ca.alias_id IS NULL
@@ -335,4 +375,10 @@ UNION ALL SELECT 'D1 entry_kind mismatch',             COUNT(*) FROM credit_bloc
     OR (cbe.entry_kind = 'TEXT'            AND cbe.raw_text IS NULL)
 UNION ALL SELECT 'D2 role_label_text same as name_ja', COUNT(*) FROM credit_card_roles ccr JOIN roles r ON r.role_code = ccr.role_code WHERE ccr.role_label_text IS NOT NULL AND CAST(ccr.role_label_text AS BINARY) = CAST(r.name_ja AS BINARY)
 UNION ALL SELECT 'D3 join_separator w/o join_previous', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_separator IS NOT NULL AND ccr.join_previous = 0
-UNION ALL SELECT 'D4 join_previous w/o previous role', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_card_roles prev WHERE prev.card_group_id = ccr.card_group_id AND prev.order_in_group < ccr.order_in_group);
+UNION ALL SELECT 'D4 join_previous w/o previous role', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_card_roles prev WHERE prev.card_group_id = ccr.card_group_id AND prev.order_in_group < ccr.order_in_group)
+UNION ALL SELECT 'E1 music_credits target not on source disc', COUNT(*) FROM music_credits m
+    WHERE (m.target_kind = 'SONG' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no JOIN song_recordings r ON r.song_recording_id = t.song_recording_id WHERE d.product_catalog_no = m.source_product_catalog_no AND r.song_id = m.song_id))
+       OR (m.target_kind = 'SONG_RECORDING' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no WHERE d.product_catalog_no = m.source_product_catalog_no AND t.song_recording_id = m.song_recording_id))
+       OR (m.target_kind = 'BGM_SESSION' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no JOIN bgm_cues bc ON bc.series_id = t.bgm_series_id AND bc.m_no_detail = t.bgm_m_no_detail WHERE d.product_catalog_no = m.source_product_catalog_no AND bc.series_id = m.bgm_series_id AND bc.session_no = m.bgm_session_no))
+UNION ALL SELECT 'E2 song_credits company-only w/o affiliation', COUNT(*) FROM song_credits sc
+    WHERE sc.affiliation_display = 'COMPANY_ONLY' AND sc.affiliation_company_alias_id IS NULL AND (sc.affiliation_text IS NULL OR sc.affiliation_text = '');

@@ -37,6 +37,8 @@ public sealed class SingerHtmlBuilder
     ///     CV 名義 /people/{名前}/ で構成する「キャラ名(CV:声優)」形式で出す。</item>
     ///   <item>スラッシュ並列（<see cref="SongRecordingSinger.SlashCharacterAliasId"/> 等）は
     ///     主名義側と同じ書式で「/」連結して出す。</item>
+    ///   <item>2 人目の声優（<see cref="SongRecordingSinger.SlashVoicePersonAliasId"/>）は「キャラ(CV:声優1 / 声優2)」と
+    ///     「 / 」で並べ、1 人目と同じく /people/{名前}/ へリンクする。</item>
     ///   <item>PERSON 行の名義がユニット名義で <see cref="SongRecordingSinger.ExpandUnitMembers"/> が立っていれば、
     ///     ユニット名の後ろにメンバーを「（メンバー1、メンバー2…）」と括弧書きで展開する。キャラメンバーは
     ///     「キャラ/相方キャラ(CV:声優)」、人物メンバーは人物リンクで出す。</item>
@@ -72,6 +74,24 @@ public sealed class SingerHtmlBuilder
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
         => BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Dialogue, personAliasMap, characterAliasMap);
+
+    /// <summary>SPOKEN_WORD（語り）役の連名 HTML を返す。 書式は台詞と同一。該当行が無ければ空文字列（フリーテキストのフォールバックは無い）。</summary>
+    public string BuildSpokenWordHtml(
+        IReadOnlyList<SongRecordingSinger> singers,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+        => BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.SpokenWord, personAliasMap, characterAliasMap);
+
+    /// <summary>
+    /// 指定役職（SCAT など）の歌い手の連名 HTML を返す。書式は歌・コーラスと同一。
+    /// 劇伴の歌い手（bgm_cue_singers を歌唱者行の形に写したもの）の表示に使う。該当行が無ければ空文字列。
+    /// </summary>
+    public string BuildRoleSingersHtml(
+        IReadOnlyList<SongRecordingSinger> singers,
+        string roleCode,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+        => BuildSingersByRoleHtml(singers, roleCode, personAliasMap, characterAliasMap);
 
     /// <summary>役職ラベルを <c>/creators/roles/{rep_role_code}/</c> リンク付き HTML に整形する。 役職マスタに未登録（または和名が空）のときは <paramref name="fallbackLabel"/> のエスケープ平文を返す。</summary>
     public string BuildSongRoleLabelLinkHtml(string roleCode, IReadOnlyDictionary<string, Role> roleMap, string fallbackLabel)
@@ -153,6 +173,7 @@ public sealed class SingerHtmlBuilder
         else
         {
             // CHARACTER_WITH_CV：「キャラ(CV:声優)」、相方ありなら「キャラ/相方キャラ(CV:声優)」。
+            // 2 人目の声優がいれば「キャラ(CV:声優1 / 声優2)」。
             // 同じ連名に声優が人物として出ているとき（omitCv）は「(CV:声優)」を省く。
             string mainChar = ResolveCharacterAliasLink(s.CharacterAliasId, characterAliasMap);
             string charPart = mainChar;
@@ -163,6 +184,8 @@ public sealed class SingerHtmlBuilder
             }
             if (omitCv) return charPart;
             string cv = ResolvePersonAliasLink(s.VoicePersonAliasId, personAliasMap);
+            if (s.SlashVoicePersonAliasId.HasValue)
+                cv += " / " + ResolvePersonAliasLink(s.SlashVoicePersonAliasId, personAliasMap);
             return $"{charPart}(CV:{cv})";
         }
     }

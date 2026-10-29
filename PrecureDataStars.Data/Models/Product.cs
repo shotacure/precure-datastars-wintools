@@ -130,6 +130,12 @@ public sealed class Product
     /// <summary>アートトラック取り込み・照合の最終実行時刻。未実行は NULL。</summary>
     public DateTime? YoutubeArtTrackCheckedAt { get; set; }
 
+    /// <summary>
+    /// 配信版の ISRC（<see cref="Track.DigitalIsrc"/>）を照らした Deezer の album id。
+    /// DeezerIsrcSync が書く。照合できなかった商品は NULL。
+    /// </summary>
+    public long? DeezerAlbumId { get; set; }
+
     // ── 監査 ──
 
     /// <summary>作成日時。</summary>

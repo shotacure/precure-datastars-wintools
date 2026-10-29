@@ -60,6 +60,31 @@ public sealed class Series
     /// <summary>放送／公開開始日（NOT NULL）。</summary>
     public DateOnly StartDate { get; set; }
 
+    /// <summary>
+    /// 開始日の確かさ（<c>series.start_date_precision</c>）。放送・公開の時期が年や年月までしか
+    /// 発表されていない作品は、<see cref="StartDate"/> に仮の日付を入れ、本値で確かな範囲を示す：
+    /// <list type="bullet">
+    ///   <item><description><see cref="StartDatePrecisionDay"/>（<c>DAY</c>）：日付まで確か</description></item>
+    ///   <item><description><see cref="StartDatePrecisionMonth"/>（<c>MONTH</c>）：年と月だけが確か（日は仮）</description></item>
+    ///   <item><description><see cref="StartDatePrecisionYear"/>（<c>YEAR</c>）：年だけが確か（月日は仮）</description></item>
+    /// </list>
+    /// サイトは DAY 以外の作品の開始日を「2027年放送予定」「2027年7月公開予定」のように確かな範囲だけで出し、
+    /// 周年などの日付の計算には使わない。
+    /// </summary>
+    public string StartDatePrecision { get; set; } = StartDatePrecisionDay;
+
+    /// <summary><see cref="StartDatePrecision"/> の値：日付まで確か。</summary>
+    public const string StartDatePrecisionDay = "DAY";
+
+    /// <summary><see cref="StartDatePrecision"/> の値：年と月だけが確か。</summary>
+    public const string StartDatePrecisionMonth = "MONTH";
+
+    /// <summary><see cref="StartDatePrecision"/> の値：年だけが確か。</summary>
+    public const string StartDatePrecisionYear = "YEAR";
+
+    /// <summary>開始日が日付まで確かか（<see cref="StartDatePrecision"/> が DAY）。</summary>
+    public bool IsStartDateExact => StartDatePrecision == StartDatePrecisionDay;
+
     /// <summary>放送／公開終了日（NULL は放送中を示す）。start_date 以降でなければならない。</summary>
     public DateOnly? EndDate { get; set; }
 

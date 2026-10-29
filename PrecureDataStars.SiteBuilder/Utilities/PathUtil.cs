@@ -165,11 +165,12 @@ public static class PathUtil
              or PrecureDataStars.Data.Models.SongCreditRoles.MedleyArrangement ? CreatorsRoleUrl(roleCode)
          : "";
 
-    /// <summary>歌唱系の役職（歌・コーラス・台詞）か。これらは役職詳細ページを持たず歌唱ページに集約する。</summary>
+    /// <summary>歌唱系の役職（歌・コーラス・台詞・語り）か。これらは役職詳細ページを持たず歌唱ページに集約する。</summary>
     public static bool IsSingerRole(string roleCode)
         => roleCode is PrecureDataStars.Data.Models.SongRecordingSingerRoles.Vocals
             or PrecureDataStars.Data.Models.SongRecordingSingerRoles.Chorus
-            or PrecureDataStars.Data.Models.SongRecordingSingerRoles.Dialogue;
+            or PrecureDataStars.Data.Models.SongRecordingSingerRoles.Dialogue
+            or PrecureDataStars.Data.Models.SongRecordingSingerRoles.SpokenWord;
 
     /// <summary>クリエイターのトップ（ランディング）ページ URL（<c>/creators/</c>）。</summary>
     /// <summary>記念日インデックス（月日一覧）の URL パス。</summary>

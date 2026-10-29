@@ -125,9 +125,9 @@ public sealed class CharactersGenerator
                 foreach (var s in singers)
                 {
                     // ユニット名義（PERSON 行）で歌唱された録音も、CHARACTER メンバーのキャラへ展開して拾う。
-                    foreach (var p in _ctx.ExpandSingerParticipants(s))
+                    // 2 人目の声優がいる行では同じキャラが声優ごとに参加者として返るので、キャラは行ごとに 1 回だけ積む。
+                    foreach (var caId in _ctx.ExpandSingerParticipants(s).Select(p => p.CharacterAliasId).OfType<int>().Distinct())
                     {
-                        if (p.CharacterAliasId is not int caId) continue;
                         AddCharRole(caId, rec.SongId, s.RoleCode);
                         AddCharRec(caId, rec);
                     }
@@ -328,7 +328,7 @@ public sealed class CharactersGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代キャラクター")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "プリキュアから妖精、敵、ゲストまで、歴代のキャラクターを担当の声優さんと登場エピソードとともに作品ごとに一覧にしました。",
+                Subtitle = "プリキュアから妖精、敵、その他のキャラクターまで、歴代のキャラクターを担当の声優さんと登場エピソードとともに作品ごとに一覧にしました。",
                 MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                 Badges = new[]
                 {
@@ -336,7 +336,7 @@ public sealed class CharactersGenerator
                     new OgCardBadge("作品", $"{sections.Count}作")
                 }
             },
-            MetaDescription = $"歴代プリキュアのキャラクター {characters.Count} 名の一覧。プリキュアから妖精・敵・ゲストまで、作品ごとに担当の声優さんと登場エピソードをまとめました。",
+            MetaDescription = $"歴代プリキュアのキャラクター {characters.Count} 名の一覧。プリキュアから妖精・敵・その他のキャラクターまで、作品ごとに担当の声優さんと登場エピソードをまとめました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -444,6 +444,8 @@ public sealed class CharactersGenerator
             VoiceCastRows = voiceRows,
             // このキャラが CHARACTER_WITH_CV で歌った楽曲（録音単位で出典・版を正確に解決）。
             SongCards = BuildCharacterSongCards(aliasIds),
+            // このキャラが劇伴で声を出した曲（bgm_cue_singers。スキャットなど）。
+            BgmCards = BuildCharacterBgmCards(aliasIds),
             PrecureProfile = precureProfile,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
@@ -563,12 +565,12 @@ public sealed class CharactersGenerator
                 Groups = groups,
                 CoverageLabel = _ctx.CreditCoverageLabel
             };
-            string title = $"『{series.Title}』のゲストキャラクター";
+            string title = $"『{series.Title}』のその他のキャラクター";
             var layout = new LayoutModel
             {
                 PageTitle = title,
-                MetaDescription = $"『{series.Title}』に 1 話だけ登場したゲストキャラクター {rows.Count} 名を、登場話ごとに担当の声優さんとあわせて一覧にしました。",
-                OgCard = new OgCardSpec(Kicker: series.Title, Title: "ゲストキャラクター")
+                MetaDescription = $"『{series.Title}』のその他のキャラクター {rows.Count} 名を、登場話ごとに担当の声優さんとあわせて一覧にしました。",
+                OgCard = new OgCardSpec(Kicker: series.Title, Title: "その他のキャラクター")
                 {
                     MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                     Badges = new[] { new OgCardBadge("登場", $"{rows.Count}名") }
@@ -839,6 +841,53 @@ public sealed class CharactersGenerator
         return cards
             .OrderBy(c => c.SortRecordingId)
             .ThenBy(c => c.Title, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>
+    /// キャラが劇伴の歌い手（bgm_cue_singers。スキャットなど）として参加した劇伴を 1 曲 = 1 カードに集約する。
+    /// 歌唱者行は参加者へ展開して照らすので、ユニット名義の CHARACTER メンバーとしての参加も拾う。
+    /// カードは劇伴のページのその曲へリンクし、題はメニュー、出典はその劇伴のシリーズ（＋M 番号）。
+    /// 並びは「シリーズ開始日昇順 → M 番号昇順」。
+    /// </summary>
+    private IReadOnlyList<CharacterBgmCard> BuildCharacterBgmCards(IReadOnlyList<int> aliasIds)
+    {
+        if (aliasIds.Count == 0) return Array.Empty<CharacterBgmCard>();
+        var aliasSet = aliasIds.ToHashSet();
+        var cards = new List<(DateOnly Start, CharacterBgmCard Card)>();
+        foreach (var ((seriesId, mNo), singers) in _ctx.BgmCueSingersByCue)
+        {
+            var roleCodes = singers
+                .Where(s => _ctx.ExpandSingerParticipants(s).Any(p => p.CharacterAliasId is int ca && aliasSet.Contains(ca)))
+                .Select(s => s.RoleCode)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (roleCodes.Count == 0 || !_ctx.SeriesById.TryGetValue(seriesId, out var series)) continue;
+            var cue = _ctx.BgmCuesBySeries.TryGetValue(seriesId, out var cues)
+                ? cues.FirstOrDefault(c => string.Equals(c.MNoDetail, mNo, StringComparison.Ordinal))
+                : null;
+            cards.Add((series.StartDate, new CharacterBgmCard
+            {
+                Url = PathUtil.BgmCueAnchorUrl(series.Slug, mNo),
+                Title = string.IsNullOrEmpty(cue?.MenuTitle) ? mNo : cue!.MenuTitle!,
+                MNoDetail = cue is { IsTempMNo: true } ? "" : mNo,
+                SeriesTitle = series.Title,
+                SeriesStartYearLabel = _ctx.StartYearLabel(seriesId),
+                Roles = roleCodes
+                    .Select(code => new SongRoleBadge
+                    {
+                        Code = code,
+                        Label = _ctx.RoleByCode.TryGetValue(code, out var role) && !string.IsNullOrEmpty(role.NameJa) ? role.NameJa : code,
+                        DisplayOrder = _ctx.RoleByCode.TryGetValue(code, out var r2) ? r2.DisplayOrder ?? 0 : 0
+                    })
+                    .OrderBy(b => b.DisplayOrder)
+                    .ToList()
+            }));
+        }
+        return cards
+            .OrderBy(x => x.Start)
+            .ThenBy(x => x.Card.MNoDetail, StringComparer.Ordinal)
+            .Select(x => x.Card)
             .ToList();
     }
 
@@ -1120,6 +1169,8 @@ public sealed class CharactersGenerator
         public IReadOnlyList<VoiceCastRow> VoiceCastRows { get; set; } = Array.Empty<VoiceCastRow>();
         /// <summary>このキャラが CHARACTER_WITH_CV で歌った楽曲（1 曲 = 1 カード、出典・版は歌った録音から解決）。 0 件のときはテンプレ側でセクションごと非表示。</summary>
         public IReadOnlyList<CharacterSongCard> SongCards { get; set; } = Array.Empty<CharacterSongCard>();
+        /// <summary>このキャラが歌い手（スキャットなど）として参加した劇伴（1 曲 = 1 カード）。歌の楽曲と同じ「歌」のセクションに続けて出す。</summary>
+        public IReadOnlyList<CharacterBgmCard> BgmCards { get; set; } = Array.Empty<CharacterBgmCard>();
         /// <summary>PRECURE 種別かつ precures レコードに紐付くキャラのみ詰まる。 それ以外は null（テンプレ側でプリキュア情報セクションごと非表示）。</summary>
         public PrecureProfileView? PrecureProfile { get; set; }
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
@@ -1142,6 +1193,19 @@ public sealed class CharactersGenerator
         public string MusicClassLabel { get; set; } = "";
         /// <summary>楽曲種別バッジ用クラス末尾（"op" / "movie-ed" 等。CSS の .songs-badge-{ここ} / .cat-{ここ} に対応。未設定なら空文字）。</summary>
         public string BadgeClassSuffix { get; set; } = "";
+        public IReadOnlyList<SongRoleBadge> Roles { get; set; } = Array.Empty<SongRoleBadge>();
+    }
+
+    /// <summary>キャラが歌い手として参加した劇伴のカード。リンク先は劇伴のページのその曲。</summary>
+    private sealed class CharacterBgmCard
+    {
+        public string Url { get; set; } = "";
+        /// <summary>劇伴のメニュー（無ければ M 番号）。</summary>
+        public string Title { get; set; } = "";
+        /// <summary>M 番号（仮 M 番号の曲では空文字）。</summary>
+        public string MNoDetail { get; set; } = "";
+        public string SeriesTitle { get; set; } = "";
+        public string SeriesStartYearLabel { get; set; } = "";
         public IReadOnlyList<SongRoleBadge> Roles { get; set; } = Array.Empty<SongRoleBadge>();
     }
 

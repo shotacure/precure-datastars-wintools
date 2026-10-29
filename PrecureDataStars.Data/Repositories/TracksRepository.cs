@@ -45,6 +45,8 @@ public sealed class TracksRepository : RepositoryBase
           youtube_embeddable       AS YoutubeEmbeddable,
           youtube_playability      AS YoutubePlayability,
           youtube_checked_at       AS YoutubeCheckedAt,
+          digital_isrc             AS DigitalIsrc,
+          digital_isrc_checked_at  AS DigitalIsrcCheckedAt,
           created_at               AS CreatedAt,
           updated_at               AS UpdatedAt,
           created_by               AS CreatedBy,
@@ -451,6 +453,7 @@ public sealed class TracksRepository : RepositoryBase
                           THEN '' ELSE CONCAT('(', pv.name_ja, ')') END
                    )              AS DisplayTitle,
                    t.youtube_art_track_id AS CurrentArtTrackId,
+                   t.youtube_playability  AS CurrentPlayability,
                    -- CD は 75 frames = 1 秒。配信側の再生時間と突き合わせる比較キーにする。
                    CASE WHEN t.length_frames IS NULL OR t.length_frames = 0
                         THEN NULL ELSE ROUND(t.length_frames / 75) END AS LengthSeconds
@@ -502,6 +505,135 @@ public sealed class TracksRepository : RepositoryBase
 
         await ExecuteAsync(sql, rows, ct).ConfigureAwait(false);
     }
+
+    /// <summary>動画 ID が割り当て済みの全トラックを、定期の再確認の対象として取得する。 論理削除した商品のトラックも含める（API から取ったデータを保存している以上、確かめ直す対象になるため）。</summary>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task<IReadOnlyList<ArtTrackRefreshRow>> GetArtTrackRefreshRowsAsync(CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT t.catalog_no           AS CatalogNo,
+                   t.track_no             AS TrackNo,
+                   t.sub_order            AS SubOrder,
+                   d.product_catalog_no   AS ProductCatalogNo,
+                   t.youtube_art_track_id AS YoutubeArtTrackId,
+                   t.youtube_embeddable   AS YoutubeEmbeddable,
+                   t.youtube_playability  AS YoutubePlayability
+              FROM tracks t
+              JOIN discs d ON d.catalog_no = t.catalog_no
+             WHERE t.youtube_art_track_id IS NOT NULL
+               AND t.youtube_art_track_id <> ''
+             ORDER BY d.product_catalog_no, t.catalog_no, t.track_no, t.sub_order;
+            """;
+
+        return await QueryListAsync<ArtTrackRefreshRow>(sql, ct: ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 配信版の ISRC の照合に使う、CD のトラックを取得する。論理削除していない商品の、媒体が CD のディスクの
+    /// <c>sub_order=0</c> の親行だけで、データトラックは除く（配信のアルバムには入らないため）。
+    /// 並びは「商品 → ディスク番号 → ディスク品番 → トラック番号」で、配信のアルバムの「何枚目・何曲目」と対応する。
+    /// </summary>
+    /// <param name="productCatalogNo">対象商品の代表品番。null なら全商品。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task<IReadOnlyList<DigitalIsrcMatchRow>> GetDigitalIsrcMatchRowsAsync(
+        string? productCatalogNo = null, CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT d.product_catalog_no AS ProductCatalogNo,
+                   p.title              AS ProductTitle,
+                   p.deezer_album_id    AS DeezerAlbumId,
+                   t.catalog_no         AS CatalogNo,
+                   d.disc_no_in_set     AS DiscNoInSet,
+                   t.track_no           AS TrackNo,
+                   t.isrc               AS Isrc,
+                   t.digital_isrc       AS DigitalIsrc
+              FROM tracks t
+              JOIN discs d    ON d.catalog_no = t.catalog_no
+              JOIN products p ON p.product_catalog_no = d.product_catalog_no
+             WHERE p.is_deleted = 0
+               AND d.is_deleted = 0
+               AND d.media_format = 'CD'
+               AND t.sub_order = 0
+               AND t.is_data_track = 0
+               AND (@productCatalogNo IS NULL OR d.product_catalog_no = @productCatalogNo)
+             ORDER BY d.product_catalog_no, COALESCE(d.disc_no_in_set, 0), d.catalog_no, t.track_no;
+            """;
+
+        return await QueryListAsync<DigitalIsrcMatchRow>(sql, new { productCatalogNo }, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 配信版の ISRC と確認時刻を書き込む。DeezerIsrcSync が商品 1 点分をまとめて書き戻す経路で、
+    /// トラックの他項目には触れない。<paramref name="assignments"/> は (catalog_no, track_no) で
+    /// <c>sub_order=0</c> の既存行を指す前提で、該当行が無ければその要素は 0 件更新になる。
+    /// </summary>
+    /// <param name="assignments">書き込む値。</param>
+    /// <param name="checkedAt">確認時刻。全要素に同じ値を入れる。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task UpdateDigitalIsrcsAsync(
+        IEnumerable<DigitalIsrcAssignment> assignments,
+        DateTime checkedAt,
+        CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE tracks SET
+              digital_isrc            = @DigitalIsrc,
+              digital_isrc_checked_at = @CheckedAt
+            WHERE catalog_no = @CatalogNo
+              AND track_no   = @TrackNo
+              AND sub_order  = 0;
+            """;
+
+        var rows = assignments
+            .Select(a => new { a.CatalogNo, a.TrackNo, a.DigitalIsrc, CheckedAt = checkedAt })
+            .ToList();
+        if (rows.Count == 0) return;
+
+        await ExecuteAsync(sql, rows, ct).ConfigureAwait(false);
+    }
+}
+
+/// <summary>配信版の ISRC の照合に使う CD のトラック 1 行（<c>sub_order=0</c> の親行）。</summary>
+public sealed class DigitalIsrcMatchRow
+{
+    public string ProductCatalogNo { get; set; } = "";
+    public string ProductTitle { get; set; } = "";
+
+    /// <summary>前回照らした Deezer の album id（<c>products.deezer_album_id</c>）。未照合は NULL。</summary>
+    public long? DeezerAlbumId { get; set; }
+
+    public string CatalogNo { get; set; } = "";
+    public uint? DiscNoInSet { get; set; }
+    public byte TrackNo { get; set; }
+
+    /// <summary>CD の ISRC。</summary>
+    public string? Isrc { get; set; }
+
+    /// <summary>今入っている配信版の ISRC。差分の表示に使う。</summary>
+    public string? DigitalIsrc { get; set; }
+}
+
+/// <summary>1 トラックに書き込む配信版の ISRC。</summary>
+public sealed class DigitalIsrcAssignment
+{
+    public string CatalogNo { get; set; } = "";
+    public byte TrackNo { get; set; }
+    public string DigitalIsrc { get; set; } = "";
+}
+
+/// <summary>定期の再確認の対象となるトラック 1 行。</summary>
+public sealed class ArtTrackRefreshRow
+{
+    public string CatalogNo { get; set; } = "";
+    public byte TrackNo { get; set; }
+    public byte SubOrder { get; set; }
+
+    /// <summary>トラックが属する商品の代表品番。動画が消えていたときに商品を要確認へ戻すのに使う。</summary>
+    public string ProductCatalogNo { get; set; } = "";
+
+    public string YoutubeArtTrackId { get; set; } = "";
+    public bool? YoutubeEmbeddable { get; set; }
+    public string? YoutubePlayability { get; set; }
 }
 
 /// <summary>配信音源の照合に使うトラック 1 行。商品内の全ディスクを通し順に平坦化した並びで返る。</summary>
@@ -516,6 +648,9 @@ public sealed class ArtTrackMatchRow
 
     /// <summary>既に割り当て済みの動画 ID（未割り当ては NULL）。再取り込み時の差分表示に使う。</summary>
     public string? CurrentArtTrackId { get; set; }
+
+    /// <summary>今の再生可否（<c>tracks.youtube_playability</c>）。再取り込みで、人が決めた 会員限定かどうかを引き継ぐのに使う。</summary>
+    public string? CurrentPlayability { get; set; }
 
     /// <summary>トラックの再生時間（秒）。<c>length_frames</c> 未取得なら NULL。
     /// タイトルの表記が揺れても尺が合えば同じ曲とみなせるので、対応付けの手がかりに使う。</summary>

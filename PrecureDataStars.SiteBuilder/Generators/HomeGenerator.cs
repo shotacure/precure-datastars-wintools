@@ -613,9 +613,6 @@ WHERE e.is_deleted = 0
             if (amazonTag.Length > 0) kindleUrl += "?tag=" + Uri.EscapeDataString(amazonTag);
         }
 
-        // 価格は紙を主に出し、紙が無い（電子のみの）書籍では Kindle 価格を出す。
-        int? price = b.PriceIncTax ?? b.PriceKindleIncTax;
-
         var releaseDateOnly = DateOnly.FromDateTime(b.ReleaseDate);
         int diffDays = releaseDateOnly.DayNumber - today.DayNumber;
         string releaseStatusLabel = "";
@@ -642,7 +639,6 @@ WHERE e.is_deleted = 0
             CoverImageUrl = b.CoverImageUrl ?? "",
             AmazonPrintUrl = printUrl,
             AmazonKindleUrl = kindleUrl,
-            PriceIncTax = price.HasValue ? price.Value.ToString("#,0") : "",
             ReleaseStatusLabel = releaseStatusLabel,
             DaysUntilLabel = daysUntilLabel
         };
@@ -1058,8 +1054,6 @@ WHERE e.is_deleted = 0
         public string AmazonPrintUrl { get; set; } = "";
         /// <summary>Amazon 商品リンク（Kindle 版。アソシエイトタグ付き。ASIN 未設定なら空）。</summary>
         public string AmazonKindleUrl { get; set; } = "";
-        /// <summary>税込価格の表示文字列（紙が無ければ Kindle 価格）。未設定なら空。</summary>
-        public string PriceIncTax { get; set; } = "";
         /// <summary>状態バッジ表記（「予約受付中」「本日発売」「発売中」、または空）。ビルド日基準の初期表示で、閲覧時に release-countdown.js が閲覧日基準に更新する。</summary>
         public string ReleaseStatusLabel { get; set; } = "";
         /// <summary>発売予定の書籍にだけ立つ「発売まで N 日」文字列。ビルド日基準の初期表示で、閲覧時に release-countdown.js が閲覧日基準に更新する。</summary>

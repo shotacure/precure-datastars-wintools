@@ -181,8 +181,9 @@
 
   {{## 楽曲。このキャラが CHARACTER_WITH_CV で歌った曲を 1 曲 = 1 カードで並べる。出典シリーズ・タイトルは
        「歌った録音」から解決済み。人物詳細の person-song-card マークアップ／CSS を共用する。
-       0 件のキャラはセクションごと省略する。 ##}}
-  {{~ if (array.size SongCards) > 0 ~}}
+       続けて、歌い手（スキャットなど）として参加した劇伴を同じカードで並べる（リンク先は劇伴のページのその曲）。
+       どちらも 0 件のキャラはセクションごと省略する。 ##}}
+  {{~ if (array.size SongCards) > 0 || (array.size BgmCards) > 0 ~}}
   <section id="songs">
     <h2>歌</h2>
     <ul class="person-songs-card-list">
@@ -206,6 +207,26 @@
             {{~ if c.SeriesStartYearLabel != "" ~}}<span class="series-year">({{ c.SeriesStartYearLabel }})</span>{{~ end ~}}
           </div>
           {{~ end ~}}
+        </a>
+      </li>
+      {{~ end ~}}
+      {{~ for c in BgmCards ~}}
+      <li class="person-song-card">
+        <a class="person-song-card-link" href="{{ c.Url }}">
+          <div class="person-song-card-head">
+            <div class="person-song-card-roles">
+              {{~ for b in c.Roles ~}}
+              <span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>
+              {{~ end ~}}
+            </div>
+            <span class="songs-card-badge person-song-cat-badge">劇伴</span>
+          </div>
+          <div class="person-song-card-title">{{ c.Title | html.escape }}</div>
+          <div class="person-song-card-series muted">
+            {{ c.SeriesTitle | html.escape }}
+            {{~ if c.SeriesStartYearLabel != "" ~}}<span class="series-year">({{ c.SeriesStartYearLabel }})</span>{{~ end ~}}
+            {{~ if c.MNoDetail != "" ~}} <span class="mono">{{ c.MNoDetail | html.escape }}</span>{{~ end ~}}
+          </div>
         </a>
       </li>
       {{~ end ~}}

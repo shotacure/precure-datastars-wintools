@@ -505,7 +505,7 @@ public sealed class EpisodeGenerator
         // クレジットセクションとは別に「主要スタッフ」セクションとして上部基本情報の近くに出す。
         var staffRows = BuildStaffRows(credits);
 
-        // チーフの組み合わせの通算回数（演出と作画監督 / 脚本・演出・作画監督）。スタッフ行の下に添える。
+        // チーフの組み合わせの通算回数（絵コンテと演出 / 演出と作画監督 / 脚本・演出・作画監督）。スタッフ行の下に開閉の枠で添える。
         var staffCombos = BuildStaffCombos(series, ep);
 
         // 使用音声（episode_uses）セクションをパート別に構築。
@@ -995,6 +995,8 @@ public sealed class EpisodeGenerator
             // 台詞（DIALOGUE 役）もコーラスと同じ扱いで併出する。該当行が無ければ空文字列のまま。
             string dialogueHtml = "";
             string dialogueRoleLabelHtml = "";
+            string spokenWordHtml = "";
+            string spokenWordRoleLabelHtml = "";
             if (rec is not null)
             {
                 var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
@@ -1010,6 +1012,12 @@ public sealed class EpisodeGenerator
                 if (!string.IsNullOrEmpty(dialogueHtml))
                 {
                     dialogueRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Dialogue, roleMap, "台詞");
+                }
+                // 語り（SPOKEN_WORD 役）も台詞と同じ扱いで併出する。該当行が無ければ空のまま。
+                spokenWordHtml = _singerHtml.BuildSpokenWordHtml(singers, personAliasMap, characterAliasMap);
+                if (!string.IsNullOrEmpty(spokenWordHtml))
+                {
+                    spokenWordRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.SpokenWord, roleMap, "語り");
                 }
             }
 
@@ -1043,8 +1051,11 @@ public sealed class EpisodeGenerator
                 ChorusRoleLabelHtml = chorusRoleLabelHtml,
                 DialogueHtml = dialogueHtml,
                 DialogueRoleLabelHtml = dialogueRoleLabelHtml,
+                SpokenWordHtml = spokenWordHtml,
+                SpokenWordRoleLabelHtml = spokenWordRoleLabelHtml,
                 Notes = t.Notes ?? "",
                 IsBroadcastOnly = t.IsBroadcastOnly,
+                IsInstrumental = t.IsInstrumental == true,
                 ArtTrackId = artTrack?.ArtTrackId ?? "",
                 ArtTrackPremiumOnly = artTrack?.PremiumOnly ?? false,
                 ArtTrackSourceAlbum = artTrack?.SourceAlbum ?? "",
@@ -1070,23 +1081,13 @@ public sealed class EpisodeGenerator
         {
             return string.IsNullOrEmpty(fallbackText) ? "" : HtmlUtil.Escape(fallbackText);
         }
-        var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < roleRows.Count; i++)
-        {
-            var row = roleRows[i];
-            if (i > 0) sb.Append(HtmlUtil.Escape(row.PrecedingSeparator ?? ""));
-            if (personAliasMap.TryGetValue(row.PersonAliasId, out var alias))
-            {
-                sb.Append(_staffLinkResolver.ResolveAsHtml(row.PersonAliasId, alias.GetDisplayName()));
-            }
-            else
-            {
-                sb.Append("[alias#").Append(row.PersonAliasId).Append("]");
-            }
-            // 盤に印刷された所属（例：岡部 啓一（MONACA））。
-            sb.Append(SongCreditAffiliation.SuffixHtml(roleRows, i, _ctx.CompanyAliasById));
-        }
-        return sb.ToString();
+        // 名義と盤に印刷された所属（例：岡部 啓一（MONACA）、所属の会社名だけ、名義だけ）。
+        return SongCreditAffiliation.BuildNamesHtml(roleRows, _ctx.CompanyAliasById,
+            row => personAliasMap.TryGetValue(row.PersonAliasId, out var alias)
+                ? _staffLinkResolver.ResolveAsHtml(row.PersonAliasId, alias.GetDisplayName())
+                : "[alias#" + row.PersonAliasId + "]",
+            row => SongCreditAffiliation.PersonDisplayName(personAliasMap, row.PersonAliasId),
+            (row, text) => _staffLinkResolver.ResolveAsHtml(row.PersonAliasId, text));
     }
 
     /// <summary>当該エピソードの episode_uses 行群をパート別にグルーピングして表示用 DTO に変換する。</summary>
@@ -1424,12 +1425,21 @@ public sealed class EpisodeGenerator
         return badges;
     }
 
+    /// <summary>組み合わせの玉の列に全部の話を並べる上限。超えると、最初・今回の前後・最後の玉だけを出して間を「…」にする。</summary>
+    private const int ComboBeadsMax = 30;
+
+    /// <summary>上限を超えた組み合わせで、今回の前後に出す玉の数（片側）。</summary>
+    private const int ComboBeadsWindow = 15;
+
+    /// <summary>玉を小さく描く（is-dense）しきいの数。</summary>
+    private const int ComboBeadsDense = 16;
+
     /// <summary>
-    /// スタッフセクションに添える「チーフの組み合わせの通算回数」の行を組み立てる。
-    /// 組み合わせごとに <see cref="EpisodeChiefStaffIndex.Lookup"/> で通算情報を引き、
-    /// 「通算 N 回目（初回 第a話 / 前回 第b話 / 次回 第c話）」の形にする。初回は「初めての組み合わせ」。
-    /// 他シリーズの話を参照するときは『正式タイトル』を前置する（単一の参照なので年度は付けない）。
-    /// 構成役職のどれかが無い回（未収録・該当役職なし）は行を出さない。
+    /// スタッフセクションに添える「チーフの組み合わせの通算回数」を組み立てる。
+    /// 組み合わせごとに <see cref="EpisodeChiefStaffIndex.Lookup"/> で通算情報を引き、閉じた状態の 1 かたまり
+    /// （役職の札と「通算 N 回目」。初回は「初顔合わせ」）と、開いた状態のカード（顔ぶれ・放送順の玉の列・
+    /// 前回と次回のミニカード）の材料にする。構成役職のどれかが無い回（未収録・該当役職なし）は出さない。
+    /// 絵コンテと演出を同じ方が兼ねた回は「兼任」として、顔ぶれを「名前 (絵コンテ・演出兼任)」と書く。
     /// </summary>
     private IReadOnlyList<StaffComboRow> BuildStaffCombos(Series series, Episode ep)
     {
@@ -1439,37 +1449,122 @@ public sealed class EpisodeGenerator
             var occurrence = _chiefIndex.Lookup(combo, ep.EpisodeId);
             if (occurrence is null) continue;
 
-            string head = occurrence.Ordinal == 1
-                ? "初めての組み合わせ"
-                : $"通算 <b>{occurrence.Ordinal}</b> 回目";
+            // 兼任：組み合わせの役職がすべて同じ顔ぶれ（絵コンテと演出を同じ方が担当）。
+            bool isSolo = occurrence.Members.Count > 1
+                && occurrence.Members.All(m => m.Persons.Select(p => p.Key)
+                    .SequenceEqual(occurrence.Members[0].Persons.Select(p => p.Key)));
 
-            var refs = new List<string>();
-            if (occurrence.Ordinal > 2)
-                refs.Add("初回 " + EpisodeRefHtml(series, occurrence.FirstEpisodeId));
-            if (occurrence.PreviousEpisodeId is int prevId)
-                refs.Add("前回 " + EpisodeRefHtml(series, prevId));
-            if (occurrence.NextEpisodeId is int nextId)
-                refs.Add("次回 " + EpisodeRefHtml(series, nextId));
+            var badges = combo.ChiefRoles
+                .Select(r => (Code: ChiefRoleCode(r), Label: EpisodeChiefRoles.Label(r)))
+                .Select(r => new StaffComboBadge { Code = r.Code, Label = r.Label, Url = CreatorsRoleUrlFor(r.Code, r.Label) ?? "" })
+                .ToList();
 
+            string NamesOf(ChiefComboMember m) => string.Join("、", m.Persons.Select(p => string.IsNullOrEmpty(p.Url)
+                ? $"<span class=\"staff-name\">{HtmlUtil.Escape(p.Name)}</span>"
+                : $"<a class=\"staff-name\" href=\"{p.Url}\">{HtmlUtil.Escape(p.Name)}</a>"));
+            string namesHtml = isSolo
+                ? $"{NamesOf(occurrence.Members[0])} <span class=\"staff-combo-both\">({string.Join("・", badges.Select(b => b.Label))}兼任)</span>"
+                : string.Join("<span class=\"staff-combo-x\">×</span>", occurrence.Members.Select(NamesOf));
+
+            int current = occurrence.Ordinal - 1;
             rows.Add(new StaffComboRow
             {
                 Label = combo.Label,
-                Html = refs.Count > 0 ? $"{head}（{string.Join(" / ", refs)}）" : head
+                Badges = badges,
+                IsSolo = isSolo,
+                Ordinal = occurrence.Ordinal,
+                Total = occurrence.Total,
+                NamesHtml = namesHtml,
+                Beads = BuildComboBeads(occurrence.EpisodeIds, current),
+                IsDense = Math.Min(occurrence.Total, ComboBeadsMax) > ComboBeadsDense,
+                Prev = occurrence.PreviousEpisodeId is int prevId ? ComboNavOf(series, prevId) : null,
+                Next = occurrence.NextEpisodeId is int nextId ? ComboNavOf(series, nextId) : null
             });
         }
         return rows;
     }
 
-    /// <summary>話へのリンク。同じシリーズなら「第N話」、別シリーズなら「『正式タイトル』 第N話」。</summary>
-    private string EpisodeRefHtml(Series current, int episodeId)
+    /// <summary>チーフの区分 → 役職の札の色とリンク先に使う役職コード（スタッフ行の札と同じ）。</summary>
+    private static string ChiefRoleCode(int chiefRole) => chiefRole switch
     {
-        if (!_ctx.EpisodeById.TryGetValue(episodeId, out var target)) return "";
-        if (!_ctx.SeriesById.TryGetValue(target.SeriesId, out var owner)) return "";
-        string url = PathUtil.EpisodeUrl(owner.Slug, target.SeriesEpNo);
-        string label = owner.SeriesId == current.SeriesId
-            ? $"第{target.SeriesEpNo}話"
-            : $"『{HtmlUtil.Escape(owner.Title)}』 第{target.SeriesEpNo}話";
-        return $"<a href=\"{url}\">{label}</a>";
+        EpisodeChiefRoles.Screenplay => "SCREENPLAY",
+        EpisodeChiefRoles.Storyboard => "STORYBOARD",
+        EpisodeChiefRoles.EpisodeDirector => "EPISODE_DIRECTOR",
+        EpisodeChiefRoles.AnimationDirector => "ANIMATION_DIRECTOR",
+        EpisodeChiefRoles.ArtDirector => "ART_DIRECTOR_TV",
+        _ => ""
+    };
+
+    /// <summary>
+    /// 放送順の玉の列。今回より前は is-past、今回は is-current、後は is-future。年が前の玉から変わる玉に年を添える。
+    /// 話が <see cref="ComboBeadsMax"/> を超えるときは、最初の玉・今回の前後 <see cref="ComboBeadsWindow"/> 個・最後の玉だけを出し、
+    /// 間を「…」（<see cref="ComboBead.IsGap"/>）にする。
+    /// 年の札は、出す玉が 7〜16 個で札が隣り合う列は下 2 けた（「05」）にする。玉を小さく描く列（<see cref="ComboBeadsDense"/> 個超）は、
+    /// 前の札から出す玉の数 ÷ 8 個以上離れた玉にだけ付けて間引くので、札は詰まらず 4 けたのまま。
+    /// </summary>
+    private List<ComboBead> BuildComboBeads(IReadOnlyList<int> episodeIds, int current)
+    {
+        var shown = new List<int>();
+        if (episodeIds.Count <= ComboBeadsMax)
+        {
+            for (int i = 0; i < episodeIds.Count; i++) shown.Add(i);
+        }
+        else
+        {
+            int lo = Math.Max(0, current - ComboBeadsWindow);
+            int hi = Math.Min(episodeIds.Count - 1, current + ComboBeadsWindow);
+            if (lo > 0) shown.Add(0);
+            if (lo > 1) shown.Add(-1);
+            for (int i = lo; i <= hi; i++) shown.Add(i);
+            if (hi < episodeIds.Count - 2) shown.Add(-1);
+            if (hi < episodeIds.Count - 1) shown.Add(episodeIds.Count - 1);
+        }
+
+        int beadCount = shown.Count(i => i >= 0);
+        bool dense = beadCount > ComboBeadsDense;
+        bool shortYear = beadCount > 6 && !dense;
+        int labelGapMin = dense ? (beadCount + 7) / 8 : 1;
+
+        var beads = new List<ComboBead>();
+        int prevYear = 0;
+        int lastLabelPos = int.MinValue / 2;
+        foreach (int i in shown)
+        {
+            if (i < 0)
+            {
+                beads.Add(new ComboBead { IsGap = true });
+                continue;
+            }
+            if (!_ctx.EpisodeById.TryGetValue(episodeIds[i], out var target)) continue;
+            if (!_ctx.SeriesById.TryGetValue(target.SeriesId, out var owner)) continue;
+            int year = target.OnAirAt.Year;
+            int pos = beads.Count;
+            bool showYear = year != prevYear && pos - lastLabelPos >= labelGapMin;
+            if (showYear) lastLabelPos = pos;
+            beads.Add(new ComboBead
+            {
+                Url = PathUtil.EpisodeUrl(owner.Slug, target.SeriesEpNo),
+                Label = $"{i + 1} 回目：『{owner.Title}』 第{target.SeriesEpNo}話（{target.OnAirAt:yyyy年M月d日}）",
+                State = i < current ? "is-past" : i == current ? "is-current" : "is-future",
+                YearLabel = !showYear ? "" : shortYear ? (year % 100).ToString("00") : year.ToString()
+            });
+            prevYear = year;
+        }
+        return beads;
+    }
+
+    /// <summary>前回・次回のミニカード。同じシリーズなら話数だけ、別シリーズなら作品名を添える。</summary>
+    private ComboNav? ComboNavOf(Series current, int episodeId)
+    {
+        if (!_ctx.EpisodeById.TryGetValue(episodeId, out var target)) return null;
+        if (!_ctx.SeriesById.TryGetValue(target.SeriesId, out var owner)) return null;
+        return new ComboNav
+        {
+            Url = PathUtil.EpisodeUrl(owner.Slug, target.SeriesEpNo),
+            EpisodeLabel = $"第{target.SeriesEpNo}話",
+            SeriesTitle = owner.SeriesId == current.SeriesId ? "" : owner.Title,
+            Title = $"『{owner.Title}』 第{target.SeriesEpNo}話（{target.OnAirAt:yyyy年M月d日}）"
+        };
     }
 
     /// <summary>主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。</summary>
@@ -1853,7 +1948,7 @@ public sealed class EpisodeGenerator
         public IReadOnlyList<CreditBlockView> CreditBlocks { get; set; } = Array.Empty<CreditBlockView>();
         /// <summary>主要スタッフ情報（脚本／絵コンテ／演出／作画監督／美術）。クレジット階層から抽出した抜粋。</summary>
         public IReadOnlyList<StaffRow> Staff { get; set; } = Array.Empty<StaffRow>();
-        /// <summary>チーフの組み合わせの通算回数（演出と作画監督 / 脚本・演出・作画監督）。構成役職が揃わない回は空。</summary>
+        /// <summary>チーフの組み合わせの通算回数（絵コンテと演出 / 演出と作画監督 / 脚本・演出・作画監督）。構成役職が揃わない組み合わせは入らない。</summary>
         public IReadOnlyList<StaffComboRow> StaffCombos { get; set; } = Array.Empty<StaffComboRow>();
         /// <summary>h1 直下の歴代記録バッジ。歴代 10 位以内、またはシリーズ内で最長・最短の尺を持つ回だけ非空。</summary>
         public IReadOnlyList<RecordBadge> RecordBadges { get; set; } = Array.Empty<RecordBadge>();
@@ -1949,13 +2044,66 @@ public sealed class EpisodeGenerator
         public string Url { get; set; } = "";
     }
 
-    /// <summary>チーフの組み合わせの通算回数 1 行（「演出と作画監督の組み合わせ：通算 3 回目（前回 第12話 / 次回 第20話）」）。</summary>
+    /// <summary>
+    /// チーフの組み合わせの通算回数 1 件。閉じた状態は「[絵コンテ]×[演出] 2 回目」、開いた状態はカード
+    /// （「3 回中 2 回目」・顔ぶれ・放送順の玉の列・前回と次回のミニカード）。
+    /// </summary>
     private sealed class StaffComboRow
     {
-        /// <summary>組み合わせの名前（「演出と作画監督」「脚本・演出・作画監督」）。</summary>
+        /// <summary>組み合わせの名前（「絵コンテと演出」「演出と作画監督」「脚本・演出・作画監督」）。読み上げ用。</summary>
         public string Label { get; set; } = "";
-        /// <summary>通算回数と前後の話への参照（リンク化済み HTML 断片）。</summary>
-        public string Html { get; set; } = "";
+        /// <summary>組み合わせの役職の札（組み合わせの役職の順）。</summary>
+        public IReadOnlyList<StaffComboBadge> Badges { get; set; } = Array.Empty<StaffComboBadge>();
+        /// <summary>絵コンテと演出を同じ方が兼ねた回か。札を × でつながず「兼任」と添える。</summary>
+        public bool IsSolo { get; set; }
+        /// <summary>この話が何回目か（1 始まり）。</summary>
+        public int Ordinal { get; set; }
+        /// <summary>収録済みの範囲での登場回数。</summary>
+        public int Total { get; set; }
+        /// <summary>初めての組み合わせ（「初顔合わせ」）か。</summary>
+        public bool IsFirst => Ordinal == 1;
+        /// <summary>顔ぶれ（人物ページへのリンク済み HTML 断片。兼任は「名前 (絵コンテ・演出兼任)」）。</summary>
+        public string NamesHtml { get; set; } = "";
+        /// <summary>放送順の玉の列。</summary>
+        public IReadOnlyList<ComboBead> Beads { get; set; } = Array.Empty<ComboBead>();
+        /// <summary>玉を小さく描くか（玉が多い列）。</summary>
+        public bool IsDense { get; set; }
+        /// <summary>前回（初回なら null）。</summary>
+        public ComboNav? Prev { get; set; }
+        /// <summary>次回（最新なら null）。</summary>
+        public ComboNav? Next { get; set; }
+    }
+
+    /// <summary>組み合わせの役職の札 1 つ。<see cref="Code"/> は札の色（data-role-code）、<see cref="Url"/> は役職のページ（空ならリンクしない）。</summary>
+    private sealed class StaffComboBadge
+    {
+        public string Code { get; set; } = "";
+        public string Label { get; set; } = "";
+        public string Url { get; set; } = "";
+    }
+
+    /// <summary>放送順の玉 1 つ（その話へのリンク）。<see cref="IsGap"/> なら玉ではなく省略の「…」。</summary>
+    private sealed class ComboBead
+    {
+        public bool IsGap { get; set; }
+        public string Url { get; set; } = "";
+        /// <summary>触れたときと読み上げの文（「9 回目：『ハピネスチャージプリキュア！』 第25話（2014年7月20日）」）。</summary>
+        public string Label { get; set; } = "";
+        /// <summary>is-past / is-current / is-future。</summary>
+        public string State { get; set; } = "";
+        /// <summary>玉の下に添える年（年が変わる玉だけ。間引いた玉と年が変わらない玉は空）。</summary>
+        public string YearLabel { get; set; } = "";
+    }
+
+    /// <summary>前回・次回のミニカード。<see cref="SeriesTitle"/> は別の作品の話のときだけ入る。</summary>
+    private sealed class ComboNav
+    {
+        public string Url { get; set; } = "";
+        /// <summary>「第42話」。</summary>
+        public string EpisodeLabel { get; set; } = "";
+        public string SeriesTitle { get; set; } = "";
+        /// <summary>触れたときの文（作品名・話数・放送日）。</summary>
+        public string Title { get; set; } = "";
     }
 
     /// <summary>h1 直下の歴代記録バッジ 1 件（「Aパート 歴代 2 位の長さ」など）。</summary>
@@ -2084,6 +2232,8 @@ public sealed class EpisodeGenerator
         public string Notes { get; set; } = "";
         /// <summary>本放送限定フラグ（「（本放送のみ）」を末尾に併記する）。</summary>
         public bool IsBroadcastOnly { get; set; }
+        /// <summary>この回ではインストゥルメンタルで使った印（曲名の後ろ、カギ括弧の内側に「（インストゥルメンタル）」を添える）。</summary>
+        public bool IsInstrumental { get; set; }
         /// <summary>再生ボタンで鳴らす配信音源（<see cref="BuildContext.ThemeArtTracks"/> が選んだもの）。無ければ空文字でボタンを出さない。</summary>
         public string ArtTrackId { get; set; } = "";
         /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>
@@ -2124,6 +2274,10 @@ public sealed class EpisodeGenerator
         public string DialogueHtml { get; set; } = "";
         /// <summary>「台詞」役職ラベル HTML。 <see cref="DialogueHtml"/> が非空のときだけセットされる（<c>/creators/roles/DIALOGUE/</c> へのリンク化済み HTML、未登録時はフォールバック固定文字列「台詞」）。</summary>
         public string DialogueRoleLabelHtml { get; set; } = "";
+        /// <summary>語り（SPOKEN_WORD 役）連名の表示用 HTML。 該当録音に語りの行が無ければ空文字列（テンプレ側で行ごと出さない）。</summary>
+        public string SpokenWordHtml { get; set; } = "";
+        /// <summary>「語り」役職ラベル HTML。 <see cref="SpokenWordHtml"/> が非空のときだけセットされる。</summary>
+        public string SpokenWordRoleLabelHtml { get; set; } = "";
     }
 
     private sealed class CreditBlockView

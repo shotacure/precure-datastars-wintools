@@ -364,9 +364,6 @@
             <span class="home-product-card-date">{{ b.ReleaseDate }}</span>
             <span class="home-product-card-countdown">{{ b.DaysUntilLabel | html.escape }}</span>
           </p>
-          {{~ if b.PriceIncTax != "" ~}}
-          <p class="home-product-card-price">{{ b.PriceIncTax }} 円（税込）</p>
-          {{~ end ~}}
         </div>
       </a>
       {{~ if b.AmazonPrintUrl != "" || b.AmazonKindleUrl != "" ~}}
@@ -409,9 +406,6 @@
             <span class="home-product-card-date">{{ b.ReleaseDate }}</span>
             <span class="home-product-card-countdown"></span>
           </p>
-          {{~ if b.PriceIncTax != "" ~}}
-          <p class="home-product-card-price">{{ b.PriceIncTax }} 円（税込）</p>
-          {{~ end ~}}
         </div>
       </a>
       {{~ if b.AmazonPrintUrl != "" || b.AmazonKindleUrl != "" ~}}

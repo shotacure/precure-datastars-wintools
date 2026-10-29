@@ -41,6 +41,16 @@ public sealed class EpisodeThemeSong
     /// クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名を続ける。</summary>
     public string? TitleMisprintText { get; set; }
 
+    /// <summary>クレジットの画面に出た曲名の表記（誤記ではない表記違い。例: 曲名「IGNITION」が画面では「Ignition」）。null なら曲名で出す。
+    /// クレジットの主題歌の行でだけ、曲名の文字をこの表記にする（打ち消し線なし、リンク先は曲のまま）。<see cref="TitleMisprintText"/> と両方あるときは誤記を優先する。
+    /// 入力欄は無く SQL で入れる。保存で null を渡すと今の表記を残す（入力欄の無い画面からの保存用）。</summary>
+    public string? TitleCreditedText { get; set; }
+
+    /// <summary>その回（その映画）ではインストゥルメンタルで使った印。紐付ける録音は元の歌の録音のまま。
+    /// クレジットの曲名に「（インストゥルメンタル）」を添え、テンプレでは {?INSTRUMENTAL} で書き分ける。
+    /// 読み出した行では必ず値が入る。保存で null を渡すと今の印を残す（入力欄の無い画面からの保存用）。</summary>
+    public bool? IsInstrumental { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

@@ -79,6 +79,10 @@ public sealed class ThemeSongRow
     public string DialogueHtml { get; set; } = "";
     /// <summary>「台詞」役職ラベル HTML（/creators/roles/DIALOGUE/ リンク付き、未登録時は固定文字列「台詞」）。 <see cref="DialogueHtml"/> が非空のときだけセットされる。</summary>
     public string DialogueRoleLabelHtml { get; set; } = "";
+    /// <summary>語り（SPOKEN_WORD 役）連名の表示用 HTML。 該当録音に語りの行が無ければ空文字列。</summary>
+    public string SpokenWordHtml { get; set; } = "";
+    /// <summary>「語り」役職ラベル HTML。 <see cref="SpokenWordHtml"/> が非空のときだけセットされる。</summary>
+    public string SpokenWordRoleLabelHtml { get; set; } = "";
 }
 
 /// <summary>主題歌行の入力ソース 1 件分（EPISODE / SERIES どちらの主題歌テーブルからでも来る共通形）。
@@ -210,6 +214,8 @@ public sealed class ThemeSongRowBuilder
             string chorusRoleLabelHtml = "";
             string dialogueHtml = "";
             string dialogueRoleLabelHtml = "";
+            string spokenWordHtml = "";
+            string spokenWordRoleLabelHtml = "";
             if (rec is not null)
             {
                 var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
@@ -227,6 +233,12 @@ public sealed class ThemeSongRowBuilder
                 if (!string.IsNullOrEmpty(dialogueHtml))
                 {
                     dialogueRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Dialogue, roleMap, "台詞");
+                }
+                // 語り（SPOKEN_WORD 役）も台詞と同じ扱いで併出する。該当行が無ければ空のまま。
+                spokenWordHtml = _singerHtml.BuildSpokenWordHtml(singers, personAliasMap, characterAliasMap);
+                if (!string.IsNullOrEmpty(spokenWordHtml))
+                {
+                    spokenWordRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.SpokenWord, roleMap, "語り");
                 }
             }
 
@@ -259,6 +271,8 @@ public sealed class ThemeSongRowBuilder
                 ChorusRoleLabelHtml = chorusRoleLabelHtml,
                 DialogueHtml = dialogueHtml,
                 DialogueRoleLabelHtml = dialogueRoleLabelHtml,
+                SpokenWordHtml = spokenWordHtml,
+                SpokenWordRoleLabelHtml = spokenWordRoleLabelHtml,
                 Notes = d.Notes ?? "",
                 IsBroadcastOnly = d.IsBroadcastOnly,
                 EpisodeRangeLabel = d.EpisodeRangeLabel ?? "",
@@ -289,23 +303,13 @@ public sealed class ThemeSongRowBuilder
         {
             return string.IsNullOrEmpty(fallbackText) ? "" : HtmlUtil.Escape(fallbackText);
         }
-        var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < roleRows.Count; i++)
-        {
-            var row = roleRows[i];
-            if (i > 0) sb.Append(HtmlUtil.Escape(row.PrecedingSeparator ?? ""));
-            if (personAliasMap.TryGetValue(row.PersonAliasId, out var alias))
-            {
-                sb.Append(_staffLinkResolver.ResolveAsHtml(row.PersonAliasId, alias.GetDisplayName()));
-            }
-            else
-            {
-                sb.Append("[alias#").Append(row.PersonAliasId).Append("]");
-            }
-            // 盤に印刷された所属（例：岡部 啓一（MONACA））。
-            sb.Append(SongCreditAffiliation.SuffixHtml(roleRows, i, _ctx.CompanyAliasById));
-        }
-        return sb.ToString();
+        // 名義と盤に印刷された所属（例：岡部 啓一（MONACA）、所属の会社名だけ、名義だけ）。
+        return SongCreditAffiliation.BuildNamesHtml(roleRows, _ctx.CompanyAliasById,
+            row => personAliasMap.TryGetValue(row.PersonAliasId, out var alias)
+                ? _staffLinkResolver.ResolveAsHtml(row.PersonAliasId, alias.GetDisplayName())
+                : "[alias#" + row.PersonAliasId + "]",
+            row => SongCreditAffiliation.PersonDisplayName(personAliasMap, row.PersonAliasId),
+            (row, text) => _staffLinkResolver.ResolveAsHtml(row.PersonAliasId, text));
     }
 
 }

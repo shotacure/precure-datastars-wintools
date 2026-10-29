@@ -78,6 +78,7 @@ partial class CreditMastersEditorForm
     private Button btnSavePerson = null!;
     private Button btnDeletePerson = null!;
     private Button btnPersonNotableWorks = null!;
+    private Button btnPersonSources = null!;
     private Button btnPersonPositions = null!;
 
     // ─────────────── 企業タブ ───────────────
@@ -100,6 +101,7 @@ partial class CreditMastersEditorForm
     private Button btnSaveCompany = null!;
     private Button btnDeleteCompany = null!;
     private Button btnCompanyRelations = null!;
+    private Button btnCompanySources = null!;
 
     // ─────────────── キャラクタータブ ───────────────
     private DataGridView gridCharacters = null!;
@@ -111,6 +113,7 @@ partial class CreditMastersEditorForm
     // 外部リンク 2 列（公式 / Wikipedia）。キャラ運用は SNS を持たない方針なので人物・企業より絞っている。
     private TextBox txtChOfficialUrl = null!;
     private TextBox txtChWikipediaUrl = null!;
+    private CheckBox chkChHasOwnPage = null!;
     // 誕生日入力欄（生年 NUD ＋「不明」チェック・公開可否コンボ・月／日コンボ）。
     private NumericUpDown nudChBirthYear = null!;
     private CheckBox chkChBirthYearUnknown = null!;
@@ -587,7 +590,7 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "X (Twitter)",     txtPXUrl,           18, 432, inputWidth: 450);
         AddLabeledControl(pnl, "Instagram",       txtPInstagramUrl,   18, 464, inputWidth: 450);
         AddLabeledControl(pnl, "YouTube",         txtPYoutubeUrl,     18, 496, inputWidth: 450);
-        AddLabeledControl(pnl, "Wikipedia (内部)", txtPWikipediaUrl,   18, 528, inputWidth: 450);
+        AddLabeledControl(pnl, "Wikipedia", txtPWikipediaUrl,         18, 528, inputWidth: 450);
 
         // 同姓同名の別人を見分ける添え書き（例: 声優 / 背景美術）。サイトの URL と見出しに「名前 (添え書き)」で添える。
         txtPDisambiguation = new TextBox();
@@ -600,7 +603,9 @@ partial class CreditMastersEditorForm
         btnPersonNotableWorks = new Button { Text = "代表作…",   Location = new Point(620, 130), Size = new Size(140, 28) };
         // 役職履歴（person_positions）の編集ダイアログを開く。
         btnPersonPositions = new Button { Text = "役職履歴…", Location = new Point(620, 162), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnNewPerson, btnSavePerson, btnDeletePerson, btnPersonNotableWorks, btnPersonPositions });
+        // プロフィールの出典（entity_sources）の編集ダイアログを開く。
+        btnPersonSources = new Button { Text = "出典…",     Location = new Point(620, 194), Size = new Size(140, 28) };
+        pnl.Controls.AddRange(new Control[] { btnNewPerson, btnSavePerson, btnDeletePerson, btnPersonNotableWorks, btnPersonPositions, btnPersonSources });
 
         tabPersons.Controls.Add(pnl);
         tabPersons.Controls.Add(gridPersons);
@@ -639,14 +644,16 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "X (Twitter)",     txtCXUrl,         18, 300, inputWidth: 450);
         AddLabeledControl(pnl, "Instagram",       txtCInstagramUrl, 18, 332, inputWidth: 450);
         AddLabeledControl(pnl, "YouTube",         txtCYoutubeUrl,   18, 364, inputWidth: 450);
-        AddLabeledControl(pnl, "Wikipedia (内部)", txtCWikipediaUrl, 18, 396, inputWidth: 450);
+        AddLabeledControl(pnl, "Wikipedia", txtCWikipediaUrl,        18, 396, inputWidth: 450);
 
         btnNewCompany = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSaveCompany = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };
         btnDeleteCompany = new Button { Text = "選択行を削除", Location = new Point(620,  82), Size = new Size(140, 28) };
         // 選択中の団体の関係（親・子・前身・後継）を編集するダイアログを開く。
         btnCompanyRelations = new Button { Text = "関係…",       Location = new Point(620, 130), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnNewCompany, btnSaveCompany, btnDeleteCompany, btnCompanyRelations });
+        // プロフィールの出典（entity_sources）の編集ダイアログを開く。
+        btnCompanySources = new Button { Text = "出典…",         Location = new Point(620, 162), Size = new Size(140, 28) };
+        pnl.Controls.AddRange(new Control[] { btnNewCompany, btnSaveCompany, btnDeleteCompany, btnCompanyRelations, btnCompanySources });
 
         tabCompanies.Controls.Add(pnl);
         tabCompanies.Controls.Add(gridCompanies);
@@ -679,6 +686,15 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "名前(かな)", txtChNameKana, 18,  50, inputWidth: 320);
         AddLabeledControl(pnl, "英語表記", txtChNameEn,   18,  82, inputWidth: 320);
         AddLabeledControl(pnl, "区分",     cboChKind,    18, 114, inputWidth: 160);
+        // 個別ページを持つか（characters.has_own_page）。外すとサイトでは作品ごとの「その他のキャラクター」にまとめる。
+        chkChHasOwnPage = new CheckBox
+        {
+            Text = "個別ページを持つ（外すと「その他」にまとめる）",
+            Location = new Point(310, 115),
+            AutoSize = true,
+            Checked = true,
+        };
+        pnl.Controls.Add(chkChHasOwnPage);
 
         AddBirthdayRow(pnl, 18, 146,
             out nudChBirthYear, out chkChBirthYearUnknown, out cboChBirthYearVis,

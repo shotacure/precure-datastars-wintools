@@ -243,6 +243,7 @@ CREATE TABLE `series` (
   `title_short_en` varchar(128) DEFAULT NULL,
   `slug` varchar(128) NOT NULL,
   `start_date` date NOT NULL,
+  `start_date_precision` enum('DAY','MONTH','YEAR') NOT NULL DEFAULT 'DAY' COMMENT '開始日の確かさ（DAY=日付まで / MONTH=年月まで、日は仮 / YEAR=年まで、月日は仮）',
   `end_date` date DEFAULT NULL,
   `episodes` smallint unsigned DEFAULT NULL,
   `run_time_seconds` smallint unsigned DEFAULT NULL,
@@ -343,7 +344,7 @@ CREATE TABLE `fonts` (
   `render_font_name`  varchar(64)   DEFAULT NULL COMMENT '見本・テロップ画像を描く手元の書体（Windows の書体名）。NULL なら描かない',
   `render_family_name` varchar(64)   DEFAULT NULL COMMENT '見本を描く書体の名前（NULL なら family_name と同じ）',
   `render_weight`     varchar(16)   DEFAULT NULL COMMENT '描く書体のウェイト。書体名かウェイトが放送の書体と違えば代用としてサイトに明記する',
-  `render_note`       varchar(128)  DEFAULT NULL COMMENT '見本に添える注記（NULL なら、書体名かウェイトが違うときに「代用」の文を自動で出す）',
+  `render_note`       varchar(128)  DEFAULT NULL COMMENT '見本に添える注記の述部（主語「組見本は」「書体見本と組見本は」はサイトが付ける。NULL なら、書体名かウェイトが違うときに「代用」の文を自動で出す）',
   `license_kind`      varchar(16)   DEFAULT NULL COMMENT '描く書体のライセンス FONTWORKS_LETS / MORISAWA_FONTS',
   `product_url`       varchar(1024) DEFAULT NULL COMMENT '提供元の製品ページ（モリサワ・フォントワークス）',
   `archive_url`       varchar(1024) DEFAULT NULL COMMENT '写研アーカイブの書体のページ',
@@ -790,6 +791,8 @@ CREATE TABLE `products` (
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションに公式ページとして出す。
   `official_url` varchar(1024) DEFAULT NULL,
+  -- 配信版の ISRC を照らした Deezer の album id（DeezerIsrcSync が書く）。照合できなかった商品は NULL。
+  `deezer_album_id` bigint DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
@@ -1188,6 +1191,10 @@ CREATE TABLE `tracks` (
   `cd_text_title` varchar(255) DEFAULT NULL,
   `cd_text_performer` varchar(255) DEFAULT NULL,
   `notes` varchar(1024) DEFAULT NULL,
+  -- 配信版の ISRC（DeezerIsrcSync が Deezer の公開 API から書く）。sub_order = 0 の親行にだけ持つ。
+  -- CD と同じ値でも入れ、digital_isrc_checked_at が NULL なら未確認。
+  `digital_isrc` char(12) DEFAULT NULL,
+  `digital_isrc_checked_at` datetime DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
@@ -1576,9 +1583,9 @@ DROP TABLE IF EXISTS `persons`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `persons` (
   `person_id`        int                                                                  NOT NULL AUTO_INCREMENT,
-  `family_name`      varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks   DEFAULT NULL,
-  `given_name`       varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks   DEFAULT NULL,
-  `full_name`        varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  NOT NULL,
+  `family_name`      varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin   DEFAULT NULL,
+  `given_name`       varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin   DEFAULT NULL,
+  `full_name`        varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin  NOT NULL,
   `full_name_kana`   varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  DEFAULT NULL,
   -- 本名義：見出し・URL・一覧の行表記に使う名義。NULL なら公開中の名義 → TV 系のクレジットで最後に使われた名義。
   `primary_alias_id` int                                                                  DEFAULT NULL,
@@ -1597,7 +1604,7 @@ CREATE TABLE `persons` (
   `notes`            text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションにアイコン付きで並ぶ。
   -- official_url は本人の公式サイト、affiliation_url は所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ。
-  -- wikipedia_url は内部メモとして保持するだけで、サイト UI からはリンクしない。
+  -- wikipedia_url は本人の Wikipedia 記事で、外部リンクの最後に出す。
   `official_url`     varchar(1024) DEFAULT NULL COMMENT '本人の公式サイト URL（詳細ページに外部リンクとして表示）',
   `affiliation_url`  varchar(1024) DEFAULT NULL COMMENT '所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL',
   `x_url`            varchar(1024) DEFAULT NULL,
@@ -1623,6 +1630,41 @@ CREATE TABLE `persons` (
   CONSTRAINT `ck_persons_death_day_needs_month` CHECK (`death_day` IS NULL OR `death_month` IS NOT NULL),
   CONSTRAINT `ck_persons_death_month_needs_year` CHECK (`death_month` IS NULL OR `death_year` IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `entity_sources`
+-- 人物・企業のプロフィール（読み・誕生日など）の出典（1 行 = 1 人物または 1 企業 × 1 ページ）。
+-- person_id / company_id のどちらか一方だけを持つ。supports はこの出典で裏付ける項目（本文の脚注の番号を付ける所）、
+-- page_title はページの <title> のまま、section_title は情報が載っている欄の見出し、publisher は著作権表記の名前、
+-- checked_on はそのページで確かめた日。
+--
+DROP TABLE IF EXISTS `entity_sources`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `entity_sources` (
+  `source_id`      int                                                                 NOT NULL AUTO_INCREMENT,
+  `person_id`      int                                                                 DEFAULT NULL,
+  `company_id`     int                                                                 DEFAULT NULL,
+  `display_order`  smallint unsigned                                                   NOT NULL DEFAULT 0,
+  `supports`       set('KANA','BIRTH','DEATH','FOUNDED','DISSOLVED','MEMBERS')         NOT NULL DEFAULT '' COMMENT 'この出典で裏付ける項目（本文の脚注の番号を付ける所）',
+  `page_title`     varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL COMMENT 'ページタイトル（<title> のまま）',
+  `section_title`  varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '情報が載っている欄の見出し（表記どおり）',
+  `publisher`      varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL COMMENT '発行者（著作権表記の名前どおり）',
+  `url`            varchar(1024)                                                       NOT NULL,
+  `checked_on`     date                                                                NOT NULL COMMENT 'そのページで確かめた日',
+  `notes`          text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`     varchar(64) DEFAULT NULL,
+  `updated_by`     varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`source_id`),
+  KEY `ix_entity_sources_person`  (`person_id`, `display_order`),
+  KEY `ix_entity_sources_company` (`company_id`, `display_order`),
+  CONSTRAINT `fk_entity_sources_person`  FOREIGN KEY (`person_id`)  REFERENCES `persons`   (`person_id`)  ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_entity_sources_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`company_id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `ck_entity_sources_target`  CHECK ((`person_id` IS NULL) <> (`company_id` IS NULL))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='人物・企業のプロフィールの出典';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1700,12 +1742,12 @@ DROP TABLE IF EXISTS `person_aliases`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `person_aliases` (
   `alias_id`              int                                                                 NOT NULL AUTO_INCREMENT,
-  `name`                  varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `name`                  varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
   `name_kana`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `name_en`               varchar(128) DEFAULT NULL,
   -- 表示用上書き文字列。ユニット名義などで定形外の長い表記が必要なケース用。
   -- 非 NULL のときアプリ側の表示ロジックは name より優先してこの値を使う。
-  `display_text_override` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `display_text_override` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
   `predecessor_alias_id`  int          DEFAULT NULL,
   `successor_alias_id`    int          DEFAULT NULL,
   `valid_from`            date         DEFAULT NULL,
@@ -1764,7 +1806,7 @@ CREATE TABLE `companies` (
   `dissolved_date`  date         DEFAULT NULL,
   `notes`           text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションにアイコン付きで並ぶ。
-  -- wikipedia_url は内部メモとして保持するだけで、サイト UI からはリンクしない。
+  -- wikipedia_url は企業の Wikipedia 記事で、外部リンクの最後に出す。
   `official_url`    varchar(1024) DEFAULT NULL,
   `x_url`           varchar(1024) DEFAULT NULL,
   `instagram_url`   varchar(1024) DEFAULT NULL,
@@ -1938,6 +1980,9 @@ CREATE TABLE `characters` (
   -- wikipedia_url は内部メモとして保持するだけで、サイト UI からはリンクしない。
   `official_url`    varchar(1024) DEFAULT NULL,
   `wikipedia_url`   varchar(1024) DEFAULT NULL,
+  -- 個別ページを持つか。1 = /characters/{名前}/ を持つ、0 = 最初に登場した作品の「その他のキャラクター」のページ
+  -- （/characters/guests/{作品}/）にまとめる。サイトはこの印だけで決める。
+  `has_own_page`    tinyint(1) NOT NULL DEFAULT 1,
   `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`      varchar(64)  DEFAULT NULL,
@@ -2116,6 +2161,7 @@ CREATE TABLE `precures` (
   `transform_alias_id`     int                NOT NULL,
   `transform2_alias_id`    int                DEFAULT NULL,
   `alt_form_alias_id`      int                DEFAULT NULL,
+  `counts_only_when_transformed` tinyint(1)   NOT NULL DEFAULT '0',  -- 1=作品単位の作品のプリキュアの欄で、その作品の series_precures に行がある作品（変身した作品）でだけ数える（キュアモフルン）
   `voice_actor_person_id`  int                DEFAULT NULL,
   `key_color`              char(7)            DEFAULT NULL,  -- シリーズ一覧プリキュアバッジの地色（#RRGGBB、NULL=未設定）
   `skin_color_h`           smallint unsigned  DEFAULT NULL,
@@ -2571,6 +2617,11 @@ CREATE TABLE `credit_card_roles` (
   `hide_role_label` tinyint                                              NOT NULL DEFAULT 0,
   -- 1 ならこの行は画面にはクレジットされていない（クレジット漏れ）。データは入れて集計・関与に数え、表示だけ括弧で包んで示す。
   `not_on_screen`  tinyint                                               NOT NULL DEFAULT 0,
+  -- 主題歌ループが出す曲を絞る劇中順の範囲（"N" か "N-M"。episode_theme_songs.seq / series_theme_songs.seq）。NULL なら絞らない。
+  -- その役職の行で役職テンプレートの {#THEME_SONGS} ループ（旧 {THEME_SONGS} も）が出す曲を、この範囲の曲だけにする
+  -- （テンプレート側の seq= と両方あれば両方を満たす曲だけ）。主題歌の形式（roles.role_format_kind='THEME_SONG'）の役職でだけ意味を持つ。
+  -- 主題歌のカードが 2 枚に分かれ、挿入歌がカードごとに分かれて出る回で、カードごとの曲を役職の行で指定する。
+  `theme_song_seq` varchar(16)                                           DEFAULT NULL COMMENT '主題歌ループが出す曲の劇中順の範囲（"N" か "N-M"）。NULL なら絞らない',
   `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2634,11 +2685,14 @@ CREATE TABLE `credit_role_blocks` (
 --   COMPANY         → company_alias_id
 --   LOGO            → logo_id
 --   TEXT            → raw_text (マスタ未登録のフリーテキスト)
+--   BLANK           → 参照列はすべて NULL（複数列のブロックで、画面の並びの途中に何も書かれていない升。後ろのエントリの列をそろえる）
 -- 主題歌の楽曲は episode_theme_songs が真実の源泉となり、クレジット側では
 -- 役職レベルで episode_theme_songs を JOIN したテンプレ展開で表示する。
 -- entry_kind と各参照列の整合性は trigger trg_credit_block_entries_* で担保する。
 -- affiliation_company_alias_id / affiliation_text は人物名義の小カッコ所属用。
 -- parallel_with_entry_id は「A / B」併記の相手 entry を自参照する任意フィールド。
+-- 併記のエントリは独立した行にならず、相手（同じブロックの前のエントリ）の行に並べて描く。
+-- 前後に付く字は parallel_prefix / parallel_suffix、小さい字で描くかは parallel_small。
 --
 DROP TABLE IF EXISTS `credit_block_entries`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -2648,7 +2702,7 @@ CREATE TABLE `credit_block_entries` (
   `block_id`                       int             NOT NULL,
   `is_broadcast_only`              tinyint(1)      NOT NULL DEFAULT 0,
   `entry_seq`                      smallint unsigned NOT NULL,
-  `entry_kind`                     enum('PERSON','CHARACTER_VOICE','COMPANY','LOGO','TEXT') NOT NULL,
+  `entry_kind`                     enum('PERSON','CHARACTER_VOICE','COMPANY','LOGO','TEXT','BLANK') NOT NULL,
   `person_alias_id`                int             DEFAULT NULL,
   `character_alias_id`             int             DEFAULT NULL,
   `raw_character_text`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -2676,6 +2730,11 @@ CREATE TABLE `credit_block_entries` (
   -- パース時はインライン記法なら 1、別行 `(所属)` 単独行を直前エントリに吸収するときは 0 になる。
   `affiliation_inline`             tinyint(1)      NOT NULL DEFAULT 1,
   `parallel_with_entry_id`         int             DEFAULT NULL,
+  -- 併記のエントリの名前の前・後ろに付く字（「ダークマター／クマタ」の「／」、「野乃はな（キュアエール）」の「（」「）」）。NULL は何も付けない。
+  `parallel_prefix`                varchar(8)   CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `parallel_suffix`                varchar(8)   CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- 1 なら併記のエントリ（前後の字を含む）を小さい字で描く。
+  `parallel_small`                 tinyint(1)      NOT NULL DEFAULT 0,
   `notes`                          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`                     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`                     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2731,6 +2790,12 @@ CREATE TABLE `episode_theme_songs` (
   -- クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。NULL なら誤記なし。
   -- クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名（songs.title）を続ける。
   `title_misprint_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- クレジットの画面に出た曲名の表記（誤記ではない表記違い）。入っていればクレジットの主題歌の行の曲名をこの表記で出す
+  -- （打ち消し線なし、リンク先は曲のまま）。NULL なら songs.title。title_misprint_text と両方あるときは誤記を優先し、この表記は使わない。
+  `title_credited_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'クレジットの画面に出た曲名の表記（誤記ではない表記違い）。入っていればクレジットの行の曲名をこの表記で出す（打ち消し線なし、リンク先は曲のまま）',
+  -- その回（その映画）ではインストゥルメンタルで使った印。紐付ける録音は元の歌の録音のまま。
+  -- クレジットの曲名に「（インストゥルメンタル）」を添え、テンプレでは {?INSTRUMENTAL} で書き分ける。
+  `is_instrumental`         tinyint(1) NOT NULL DEFAULT 0,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2763,6 +2828,12 @@ CREATE TABLE `series_theme_songs` (
   -- クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。NULL なら誤記なし。
   -- クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名（songs.title）を続ける。
   `title_misprint_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- クレジットの画面に出た曲名の表記（誤記ではない表記違い）。入っていればクレジットの主題歌の行の曲名をこの表記で出す
+  -- （打ち消し線なし、リンク先は曲のまま）。NULL なら songs.title。title_misprint_text と両方あるときは誤記を優先し、この表記は使わない。
+  `title_credited_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'クレジットの画面に出た曲名の表記（誤記ではない表記違い）。入っていればクレジットの行の曲名をこの表記で出す（打ち消し線なし、リンク先は曲のまま）',
+  -- その回（その映画）ではインストゥルメンタルで使った印。紐付ける録音は元の歌の録音のまま。
+  -- クレジットの曲名に「（インストゥルメンタル）」を添え、テンプレでは {?INSTRUMENTAL} で書き分ける。
+  `is_instrumental`         tinyint(1) NOT NULL DEFAULT 0,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -3144,6 +3215,10 @@ CREATE TABLE `song_credits` (
   `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `affiliation_company_alias_id` int DEFAULT NULL COMMENT '名義に添える所属の会社名義（company_aliases.alias_id）',
   `affiliation_text`    varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '会社マスタに無い所属の自由記述（会社名義があればそちらを使う）',
+  -- 所属の出し方。NAME_WITH_COMPANY = 名義のあとに所属を添える（既定）、COMPANY_ONLY = 名義を出さず所属の会社名だけ
+  -- （盤に団体名だけが載っているとき）、NAME_ONLY = 所属を持ったまま名義だけ（盤には名前だけだが実質はその団体の仕事のとき）。
+  -- どれもデータは人物＋所属で持つ。COMPANY_ONLY で所属が無い行は名義に戻して出す。
+  `affiliation_display` enum('NAME_WITH_COMPANY','COMPANY_ONLY','NAME_ONLY') NOT NULL DEFAULT 'NAME_WITH_COMPANY' COMMENT '所属の出し方（名義＋所属 / 所属の会社名だけ / 名義だけ）',
   `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -3205,6 +3280,9 @@ CREATE TABLE `song_recording_singers` (
   `voice_person_alias_id`     int              DEFAULT NULL,
   `slash_person_alias_id`     int              DEFAULT NULL,
   `slash_character_alias_id`  int              DEFAULT NULL,
+  -- CHARACTER_WITH_CV の行の 2 人目の声優の名義（→ person_aliases.alias_id）。任意。
+  -- 1 つのキャラを姿によって 2 人の声優が演じる歌唱を「キャラ(CV:声優1 / 声優2)」と出す。PERSON の行では常に NULL（CHECK で担保）。
+  `slash_voice_person_alias_id` int            DEFAULT NULL,
   `preceding_separator`       varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `affiliation_text`          varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   -- PERSON 行の名義がユニット名義のとき、表示でユニット名の後ろにメンバーを括弧書きで展開するか（1=展開）。
@@ -3222,13 +3300,15 @@ CREATE TABLE `song_recording_singers` (
   KEY `ix_srs_voice`           (`voice_person_alias_id`),
   KEY `ix_srs_slash_person`    (`slash_person_alias_id`),
   KEY `ix_srs_slash_character` (`slash_character_alias_id`),
+  KEY `ix_srs_slash_voice`     (`slash_voice_person_alias_id`),
   CONSTRAINT `ck_srs_seq_pos` CHECK (`singer_seq` >= 1),
   CONSTRAINT `ck_srs_kind_columns` CHECK (
        (`billing_kind` = 'PERSON'
           AND `person_alias_id`       IS NOT NULL
           AND `character_alias_id`    IS NULL
           AND `voice_person_alias_id` IS NULL
-          AND `slash_character_alias_id` IS NULL)
+          AND `slash_character_alias_id` IS NULL
+          AND `slash_voice_person_alias_id` IS NULL)
     OR (`billing_kind` = 'CHARACTER_WITH_CV'
           AND `character_alias_id`    IS NOT NULL
           AND `voice_person_alias_id` IS NOT NULL
@@ -3241,7 +3321,8 @@ CREATE TABLE `song_recording_singers` (
   CONSTRAINT `fk_srs_character`        FOREIGN KEY (`character_alias_id`)       REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
   CONSTRAINT `fk_srs_voice`            FOREIGN KEY (`voice_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
   CONSTRAINT `fk_srs_slash_person`     FOREIGN KEY (`slash_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
-  CONSTRAINT `fk_srs_slash_character`  FOREIGN KEY (`slash_character_alias_id`) REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION
+  CONSTRAINT `fk_srs_slash_character`  FOREIGN KEY (`slash_character_alias_id`) REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_srs_slash_voice`      FOREIGN KEY (`slash_voice_person_alias_id`) REFERENCES `person_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -3352,6 +3433,155 @@ CREATE TABLE `bgm_cue_credits` (
   CONSTRAINT `fk_bgm_cue_credits_cue`   FOREIGN KEY (`series_id`, `m_no_detail`) REFERENCES `bgm_cues` (`series_id`, `m_no_detail`) ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_bgm_cue_credits_alias` FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases` (`alias_id`)            ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_bgm_cue_credits_role`  FOREIGN KEY (`credit_role`)              REFERENCES `roles`          (`role_code`)           ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `bgm_cue_singers`
+-- 劇伴の曲の歌い手（スキャットなど）の連名。列は song_recording_singers と同じ（billing_kind = PERSON / CHARACTER_WITH_CV）。
+-- bgm_cues は (series_id, m_no_detail) 複合 PK。M 番号の付け替え・削除には bgm_cue_credits と同じく CASCADE で付いていく。
+--
+DROP TABLE IF EXISTS `bgm_cue_singers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `bgm_cue_singers` (
+  `series_id`                 int              NOT NULL,
+  `m_no_detail`               varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `role_code`                 varchar(64)      NOT NULL DEFAULT 'VOCALS',
+  `singer_seq`                tinyint unsigned NOT NULL,
+  `billing_kind`              enum('PERSON','CHARACTER_WITH_CV') NOT NULL,
+  `person_alias_id`           int              DEFAULT NULL,
+  `character_alias_id`        int              DEFAULT NULL,
+  `voice_person_alias_id`     int              DEFAULT NULL,
+  `slash_person_alias_id`     int              DEFAULT NULL,
+  `slash_character_alias_id`  int              DEFAULT NULL,
+  `preceding_separator`       varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `affiliation_text`          varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `expand_unit_members`       tinyint(1)       NOT NULL DEFAULT 0,
+  `notes`                     text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`                varchar(64)      DEFAULT NULL,
+  `updated_by`                varchar(64)      DEFAULT NULL,
+  PRIMARY KEY (`series_id`, `m_no_detail`, `role_code`, `singer_seq`),
+  KEY `ix_bcs_role`            (`role_code`),
+  KEY `ix_bcs_person`          (`person_alias_id`),
+  KEY `ix_bcs_character`       (`character_alias_id`),
+  KEY `ix_bcs_voice`           (`voice_person_alias_id`),
+  KEY `ix_bcs_slash_person`    (`slash_person_alias_id`),
+  KEY `ix_bcs_slash_character` (`slash_character_alias_id`),
+  CONSTRAINT `ck_bcs_seq_pos` CHECK (`singer_seq` >= 1),
+  CONSTRAINT `ck_bcs_kind_columns` CHECK (
+       (`billing_kind` = 'PERSON'
+          AND `person_alias_id`       IS NOT NULL
+          AND `character_alias_id`    IS NULL
+          AND `voice_person_alias_id` IS NULL
+          AND `slash_character_alias_id` IS NULL)
+    OR (`billing_kind` = 'CHARACTER_WITH_CV'
+          AND `character_alias_id`    IS NOT NULL
+          AND `voice_person_alias_id` IS NOT NULL
+          AND `person_alias_id`       IS NULL
+          AND `slash_person_alias_id` IS NULL)
+  ),
+  CONSTRAINT `fk_bcs_cue`              FOREIGN KEY (`series_id`, `m_no_detail`)  REFERENCES `bgm_cues`          (`series_id`, `m_no_detail`) ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_bcs_role`             FOREIGN KEY (`role_code`)                REFERENCES `roles`             (`role_code`)         ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_bcs_person`           FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_bcs_character`        FOREIGN KEY (`character_alias_id`)       REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_bcs_voice`            FOREIGN KEY (`voice_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_bcs_slash_person`     FOREIGN KEY (`slash_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_bcs_slash_character`  FOREIGN KEY (`slash_character_alias_id`) REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `musical_works`
+-- 曲（著作物）。歌でも劇伴でもない、JASRAC に登録された曲だけを入れる
+-- （例：メドレーの劇伴の中にだけ出てくる曲で、どの盤にも単独では入っていないもの）。
+-- 歌は songs、劇伴は bgm_cues で持ち、ここには入れない。劇伴の曲からは bgm_cue_source_parts で参照する。
+--
+DROP TABLE IF EXISTS `musical_works`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `musical_works` (
+  `work_id`             int              NOT NULL AUTO_INCREMENT,
+  `title`               varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `title_kana`          varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `jasrac_work_code`    varchar(16)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'JASRAC の作品コード（例 242-0576-1）',
+  `iswc`                varchar(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'ISWC（例 T-927.548.991-3）',
+  `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`          varchar(64)      DEFAULT NULL,
+  `updated_by`          varchar(64)      DEFAULT NULL,
+  `is_deleted`          tinyint          NOT NULL DEFAULT '0',
+  PRIMARY KEY (`work_id`),
+  UNIQUE KEY `uq_musical_works_jasrac` (`jasrac_work_code`),
+  UNIQUE KEY `uq_musical_works_iswc` (`iswc`),
+  KEY `ix_musical_works_title` (`title`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `musical_work_credits`
+-- 曲（著作物）の作家の連名。列は bgm_cue_credits と同じ流儀で、役職は song_credits と同じ役職コード
+-- （LYRICS / COMPOSITION / ARRANGEMENT など）。曲（著作物）の削除には CASCADE で付いていく。
+--
+DROP TABLE IF EXISTS `musical_work_credits`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `musical_work_credits` (
+  `work_id`             int              NOT NULL,
+  `credit_role`         varchar(64)      NOT NULL,
+  `credit_seq`          tinyint unsigned NOT NULL,
+  `person_alias_id`     int              NOT NULL,
+  `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`          varchar(64)      DEFAULT NULL,
+  `updated_by`          varchar(64)      DEFAULT NULL,
+  PRIMARY KEY (`work_id`, `credit_role`, `credit_seq`),
+  KEY `ix_musical_work_credits_alias` (`person_alias_id`),
+  KEY `ix_musical_work_credits_role` (`credit_role`),
+  CONSTRAINT `ck_musical_work_credits_seq_pos` CHECK (`credit_seq` >= 1),
+  CONSTRAINT `fk_musical_work_credits_work`  FOREIGN KEY (`work_id`)         REFERENCES `musical_works`  (`work_id`)   ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_musical_work_credits_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases` (`alias_id`)  ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_musical_work_credits_role`  FOREIGN KEY (`credit_role`)     REFERENCES `roles`          (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `bgm_cue_source_parts`
+-- 劇伴の曲（bgm_cues）が使っている曲を、曲の中で流れる順に持つ対応表（1 行 = 使われている 1 曲）。
+-- source_song_id（歌）と source_work_id（曲（著作物））のどちらか一方だけを入れる（CHECK）。
+-- M 番号の付け替え・劇伴の曲の削除には bgm_cue_credits と同じく CASCADE で付いていく。
+-- 使われている歌・曲（著作物）は参照されている間は消せない（CHECK に使う列の外部キーは CASCADE / SET NULL にできないため RESTRICT）。
+--
+DROP TABLE IF EXISTS `bgm_cue_source_parts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `bgm_cue_source_parts` (
+  `series_id`           int              NOT NULL,
+  `m_no_detail`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `part_seq`            tinyint unsigned NOT NULL,
+  `source_song_id`      int              DEFAULT NULL,
+  `source_work_id`      int              DEFAULT NULL,
+  `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`          varchar(64)      DEFAULT NULL,
+  `updated_by`          varchar(64)      DEFAULT NULL,
+  PRIMARY KEY (`series_id`, `m_no_detail`, `part_seq`),
+  KEY `ix_bgm_cue_source_parts_song` (`source_song_id`),
+  KEY `ix_bgm_cue_source_parts_work` (`source_work_id`),
+  CONSTRAINT `ck_bgm_cue_source_parts_seq_pos` CHECK (`part_seq` >= 1),
+  CONSTRAINT `ck_bgm_cue_source_parts_one_source` CHECK (
+       (`source_song_id` IS NOT NULL AND `source_work_id` IS NULL)
+    OR (`source_song_id` IS NULL     AND `source_work_id` IS NOT NULL)
+  ),
+  CONSTRAINT `fk_bgm_cue_source_parts_cue`  FOREIGN KEY (`series_id`, `m_no_detail`) REFERENCES `bgm_cues`      (`series_id`, `m_no_detail`) ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_bgm_cue_source_parts_song` FOREIGN KEY (`source_song_id`)           REFERENCES `songs`         (`song_id`)                  ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_bgm_cue_source_parts_work` FOREIGN KEY (`source_work_id`)           REFERENCES `musical_works` (`work_id`)                  ON DELETE RESTRICT ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -3692,7 +3922,6 @@ CREATE TABLE `books` (
   `trim_size`                    varchar(32) DEFAULT NULL COMMENT '判型（A4 / B5 / 新書判 等）',
   `price_ex_tax`                 int DEFAULT NULL,
   `price_inc_tax`                int DEFAULT NULL,
-  `price_kindle_inc_tax`         int DEFAULT NULL,
   -- 版の存在フラグ。ASIN 未取得でも「電子版は出ていない」は事実として持てるので独立させる。
   `has_print`                    tinyint(1) NOT NULL DEFAULT '1',
   `has_kindle`                   tinyint(1) NOT NULL DEFAULT '0',
@@ -3724,8 +3953,7 @@ CREATE TABLE `books` (
   CONSTRAINT `fk_books_publisher_pc` FOREIGN KEY (`publisher_product_company_id`) REFERENCES `product_companies` (`product_company_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_books_has_any_edition`     CHECK (((`has_print` = 1) or (`has_kindle` = 1))),
   CONSTRAINT `ck_books_price_ex_nonneg`     CHECK (((`price_ex_tax` is null) or (`price_ex_tax` >= 0))),
-  CONSTRAINT `ck_books_price_inc_nonneg`    CHECK (((`price_inc_tax` is null) or (`price_inc_tax` >= 0))),
-  CONSTRAINT `ck_books_price_kindle_nonneg` CHECK (((`price_kindle_inc_tax` is null) or (`price_kindle_inc_tax` >= 0)))
+  CONSTRAINT `ck_books_price_inc_nonneg`    CHECK (((`price_inc_tax` is null) or (`price_inc_tax` >= 0)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='書籍（紙 / Kindle）';
 /*!40101 SET character_set_client = @saved_cs_client */;
 

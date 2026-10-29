@@ -42,7 +42,6 @@ partial class BooksEditorForm
     private TextBox txtBindingText = null!;
     private NumericUpDown numPriceExTax = null!;
     private NumericUpDown numPriceIncTax = null!;
-    private NumericUpDown numPriceKindle = null!;
     private CheckBox chkHasPrint = null!;
     private CheckBox chkHasKindle = null!;
     private TextBox txtAsinPrint = null!;
@@ -117,7 +116,6 @@ partial class BooksEditorForm
         txtBindingText = new TextBox();
         numPriceExTax = new NumericUpDown();
         numPriceIncTax = new NumericUpDown();
-        numPriceKindle = new NumericUpDown();
         chkHasPrint = new CheckBox();
         chkHasKindle = new CheckBox();
         txtAsinPrint = new TextBox();
@@ -244,13 +242,11 @@ partial class BooksEditorForm
         AddRow(pnlBasic, "装丁(Amazon)", txtBindingText, y, labelW, fieldW); y += rowH;
         txtBindingText.MaxLength = 64;
 
-        // 価格は 3 種。紙の定価は Amazon から取り込まない方針なので、ここが唯一の入力口になる。
+        // 価格は紙の定価（税抜・税込）だけ。Amazon から取り込まない方針なので、ここが唯一の入力口になる。
         AddRow(pnlBasic, "紙 税抜", numPriceExTax, y, labelW, 120); y += rowH;
         numPriceExTax.Minimum = 0; numPriceExTax.Maximum = 1000000;
         AddRow(pnlBasic, "紙 税込", numPriceIncTax, y, labelW, 120); y += rowH;
         numPriceIncTax.Minimum = 0; numPriceIncTax.Maximum = 1000000;
-        AddRow(pnlBasic, "Kindle 税込", numPriceKindle, y, labelW, 120); y += rowH;
-        numPriceKindle.Minimum = 0; numPriceKindle.Maximum = 1000000;
 
         chkHasPrint.Text = "紙版あり";
         chkHasPrint.Location = new Point(fieldX, y + 4);

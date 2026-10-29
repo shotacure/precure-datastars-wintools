@@ -17,6 +17,7 @@ public sealed class PrecuresRepository : RepositoryBase
           transform_alias_id      AS TransformAliasId,
           transform2_alias_id     AS Transform2AliasId,
           alt_form_alias_id       AS AltFormAliasId,
+          counts_only_when_transformed AS CountsOnlyWhenTransformed,
           voice_actor_person_id   AS VoiceActorPersonId,
           key_color               AS KeyColor,
           skin_color_h            AS SkinColorH,

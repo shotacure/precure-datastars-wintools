@@ -33,15 +33,22 @@ namespace PrecureDataStars.AmazonSync;
 ///         ページ数・価格・書影を合流させる（電子だけで登録した書籍に紙版を足す用途）</item>
 ///   <item><c>--target products|books|all</c>: 巡回対象（既定 products。books は書籍の表紙のみ、all は両方）</item>
 ///   <item><c>--dry-run</c>: DB 更新せず取得結果だけ表示</item>
-///   <item>引数なし: 鮮度切れ（未取得 or 90 日以上前）のみ取得</item>
+///   <item>引数なし: 鮮度切れ（未取得 or 20 時間以上前）のみ取得</item>
 /// </list>
 /// </para>
 /// Creators API のレート制限（1 TPS）を順守するため、各リクエストの間に 1100 ms の sleep を入れる。
+/// Amazon アソシエイトの Creators API 使用要件は、画像のリンクを最長 24 時間までしか保存させないので、
+/// 本番デプロイ（scripts/deploy.ps1）が毎回これを流し、毎日の定時デプロイで全件が 24 時間以内に取り直される。
+/// Amazon が答えたうえで画像が無かった側（ASIN が無効になった・画像が載っていない）は保存していた URL を空にし、
+/// 通信・応答の失敗があった商品・書籍は書き換えずに次の巡回で取り直す。
 /// </summary>
 public static class Program
 {
-    /// <summary>鮮度判定の閾値（日数）。これより古い／未取得を再取得対象とする。</summary>
-    private const int StaleDays = 90;
+    /// <summary>
+    /// 鮮度判定の閾値（時間）。これより古い／未取得を再取得対象とする。
+    /// 画像のリンクの保存は最長 24 時間なので、毎日 1 回の巡回で前日の取得分が必ず対象に入るよう、24 時間より短くしてある。
+    /// </summary>
+    private const int StaleHours = 20;
 
     /// <summary>Creators API レート制限（1 TPS）順守のためのリクエスト間隔ミリ秒。</summary>
     private const int RateLimitDelayMs = 1100;
@@ -209,7 +216,7 @@ public static class Program
             var all_products = await repo.GetAllAsync();
 
             // 対象抽出。
-            var threshold = DateTime.Now.AddDays(-StaleDays);
+            var threshold = DateTime.Now.AddHours(-StaleHours);
             List<Product> targets;
             string modeLabel;
             if (upgradeCdToDigital)
@@ -243,7 +250,7 @@ public static class Program
                             || p.CoverImageFetchedAt < threshold;
                     })
                     .ToList();
-                modeLabel = all ? "全件強制" : $"未取得・鮮度切れ {StaleDays} 日以上";
+                modeLabel = all ? "全件強制" : $"未取得・鮮度切れ {StaleHours} 時間以上";
             }
 
             Console.WriteLine($"対象商品: {targets.Count} 件 ({modeLabel})");
@@ -258,8 +265,11 @@ public static class Program
 
                 // CD・デジタル両系統を取得して両列に保存する（CD とデジタルでジャケットが
                 // 異なる場合があるため、片方を採用しても両方を保持して後から切り替えられるようにする）。
+                // 片方でも通信・応答の失敗があった商品は書き換えずに次の巡回へ回す（取得日時も古いまま残る）。
+                // Amazon が答えたうえで画像が無かった側（ASIN が無効になった・画像が載っていない）は URL を空にする。
                 string? digitalUrl = null;
                 string? cdUrl = null;
+                bool requestFailed = false;
 
                 if (!string.IsNullOrWhiteSpace(prod.AmazonAsinDigital))
                 {
@@ -270,6 +280,7 @@ public static class Program
                     }
                     catch (Exception ex)
                     {
+                        requestFailed = true;
                         Console.WriteLine($"  ! Digital ASIN 取得失敗: {ex.Message}");
                     }
                     await Task.Delay(RateLimitDelayMs);
@@ -283,12 +294,18 @@ public static class Program
                     }
                     catch (Exception ex)
                     {
+                        requestFailed = true;
                         Console.WriteLine($"  ! CD ASIN 取得失敗: {ex.Message}");
                     }
                     await Task.Delay(RateLimitDelayMs);
                 }
 
-                if (digitalUrl != null || cdUrl != null)
+                if (requestFailed)
+                {
+                    miss++;
+                    Console.WriteLine("取得失敗（今の画像を残し、次の巡回で取り直す）");
+                }
+                else if (digitalUrl != null || cdUrl != null)
                 {
                     // 採用ソース決定：upgrade モードはデジタルへ格上げ、それ以外は既存の明示選択を尊重しつつ
                     // 未選択／選択先が空ならデジタル→CD の既定優先（DecideCoverSource 参照）。
@@ -303,7 +320,12 @@ public static class Program
                 else
                 {
                     miss++;
-                    Console.WriteLine("該当画像なし");
+                    bool hadCover = !string.IsNullOrWhiteSpace(prod.CoverImageUrlCd) || !string.IsNullOrWhiteSpace(prod.CoverImageUrlDigital);
+                    if (hadCover && !dryRun)
+                    {
+                        await repo.UpdateCoverImagesAsync(prod.ProductCatalogNo, null, null, null, DateTime.Now);
+                    }
+                    Console.WriteLine(hadCover ? "該当画像なし（保存していた画像 URL を消した）" : "該当画像なし");
                 }
             }
 
@@ -361,7 +383,7 @@ public static class Program
     {
         var booksRepo = new BooksRepository(factory);
         var books = await booksRepo.GetAllAsync();
-        var threshold = DateTime.Now.AddDays(-StaleDays);
+        var threshold = DateTime.Now.AddHours(-StaleHours);
 
         var targets = books
             .Where(b =>
@@ -379,7 +401,7 @@ public static class Program
             })
             .ToList();
 
-        Console.WriteLine($"対象書籍: {targets.Count} 件 ({(all ? "全件強制" : $"未取得・鮮度切れ {StaleDays} 日以上")})");
+        Console.WriteLine($"対象書籍: {targets.Count} 件 ({(all ? "全件強制" : $"未取得・鮮度切れ {StaleHours} 時間以上")})");
         if (dryRun) Console.WriteLine("(dry-run モード：DB 更新は行いません)");
 
         int ok = 0, miss = 0, idx = 0;
@@ -388,8 +410,10 @@ public static class Program
             idx++;
             Console.Write($"[{idx}/{targets.Count}] book_id={book.BookId,-5} ... ");
 
+            // 失敗の扱いは音楽商品と同じ：通信・応答の失敗があれば書き換えず、答えたうえで画像が無かった側は空にする。
             string? printUrl = null;
             string? kindleUrl = null;
+            bool requestFailed = false;
 
             if (!string.IsNullOrWhiteSpace(book.AmazonAsinPrint))
             {
@@ -398,7 +422,7 @@ public static class Program
                     var item = await paApi.GetItemAsync(book.AmazonAsinPrint!, CancellationToken.None);
                     if (item?.LargeImageUrl is { Length: > 0 } u) printUrl = u;
                 }
-                catch (Exception ex) { Console.WriteLine($"  ! 紙 ASIN 取得失敗: {ex.Message}"); }
+                catch (Exception ex) { requestFailed = true; Console.WriteLine($"  ! 紙 ASIN 取得失敗: {ex.Message}"); }
                 await Task.Delay(RateLimitDelayMs);
             }
             if (!string.IsNullOrWhiteSpace(book.AmazonAsinKindle))
@@ -408,11 +432,16 @@ public static class Program
                     var item = await paApi.GetItemAsync(book.AmazonAsinKindle!, CancellationToken.None);
                     if (item?.LargeImageUrl is { Length: > 0 } u) kindleUrl = u;
                 }
-                catch (Exception ex) { Console.WriteLine($"  ! Kindle ASIN 取得失敗: {ex.Message}"); }
+                catch (Exception ex) { requestFailed = true; Console.WriteLine($"  ! Kindle ASIN 取得失敗: {ex.Message}"); }
                 await Task.Delay(RateLimitDelayMs);
             }
 
-            if (printUrl != null || kindleUrl != null)
+            if (requestFailed)
+            {
+                miss++;
+                Console.WriteLine("取得失敗（今の画像を残し、次の巡回で取り直す）");
+            }
+            else if (printUrl != null || kindleUrl != null)
             {
                 string? source = DecideBookCoverSource(book.CoverImageSource, printUrl, kindleUrl);
                 if (!dryRun)
@@ -425,7 +454,12 @@ public static class Program
             else
             {
                 miss++;
-                Console.WriteLine("該当画像なし");
+                bool hadCover = !string.IsNullOrWhiteSpace(book.CoverImageUrlPrint) || !string.IsNullOrWhiteSpace(book.CoverImageUrlKindle);
+                if (hadCover && !dryRun)
+                {
+                    await booksRepo.UpdateCoverImagesAsync(book.BookId, null, null, null, DateTime.Now);
+                }
+                Console.WriteLine(hadCover ? "該当画像なし（保存していた画像 URL を消した）" : "該当画像なし");
             }
         }
 
@@ -487,7 +521,6 @@ public static class Program
         Console.WriteLine($"  装丁        : {book.BindingText ?? "(不明)"}");
         Console.WriteLine($"  版          : 紙={book.HasPrint} / Kindle={book.HasKindle}");
         Console.WriteLine($"  ASIN        : 紙={book.AmazonAsinPrint ?? "-"} / Kindle={book.AmazonAsinKindle ?? "-"}");
-        Console.WriteLine($"  価格        : 紙={(book.PriceIncTax?.ToString() ?? "-")} / Kindle={(book.PriceKindleIncTax?.ToString() ?? "-")}");
         Console.WriteLine($"  表紙        : {book.CoverImageUrl ?? "(なし)"}");
 
         if (plan.Credits.Count > 0)

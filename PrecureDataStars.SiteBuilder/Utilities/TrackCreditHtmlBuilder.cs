@@ -49,11 +49,13 @@ public sealed class TrackCreditHtmlBuilder
     private readonly IReadOnlyDictionary<int, IReadOnlyList<SongCredit>> _songCreditsBySong;
     private readonly IReadOnlyDictionary<int, IReadOnlyList<SongRecordingSinger>> _singersByRecording;
     private readonly IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<BgmCueCredit>> _bgmCueCreditsByCue;
+    /// <summary>劇伴の歌い手（bgm_cue_singers を歌唱者行の形に写したもの）。</summary>
+    private readonly IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<SongRecordingSinger>> _bgmCueSingersByCue;
 
     /// <summary>
     /// ヘルパーを構築する。事前ロード済みのマスタマップと、SiteDataLoader が <see cref="Pipeline.BuildContext"/>
     /// 経由で共有する取引データ辞書（<c>song_credits</c> / <c>song_recording_singers</c> /
-    /// <c>bgm_cue_credits</c> を ID 単位でグルーピング済み）を受け取る。
+    /// <c>bgm_cue_credits</c> / <c>bgm_cue_singers</c> を ID 単位でグルーピング済み）を受け取る。
     /// </summary>
     public TrackCreditHtmlBuilder(
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
@@ -64,7 +66,8 @@ public sealed class TrackCreditHtmlBuilder
         IReadOnlyDictionary<string, Role> roleMap,
         IReadOnlyDictionary<int, IReadOnlyList<SongCredit>> songCreditsBySong,
         IReadOnlyDictionary<int, IReadOnlyList<SongRecordingSinger>> singersByRecording,
-        IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<BgmCueCredit>> bgmCueCreditsByCue)
+        IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<BgmCueCredit>> bgmCueCreditsByCue,
+        IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<SongRecordingSinger>> bgmCueSingersByCue)
     {
         _personAliasMap = personAliasMap ?? throw new ArgumentNullException(nameof(personAliasMap));
         _characterAliasMap = characterAliasMap ?? throw new ArgumentNullException(nameof(characterAliasMap));
@@ -75,6 +78,7 @@ public sealed class TrackCreditHtmlBuilder
         _songCreditsBySong = songCreditsBySong ?? throw new ArgumentNullException(nameof(songCreditsBySong));
         _singersByRecording = singersByRecording ?? throw new ArgumentNullException(nameof(singersByRecording));
         _bgmCueCreditsByCue = bgmCueCreditsByCue ?? throw new ArgumentNullException(nameof(bgmCueCreditsByCue));
+        _bgmCueSingersByCue = bgmCueSingersByCue ?? throw new ArgumentNullException(nameof(bgmCueSingersByCue));
     }
 
     /// <summary>HTML エスケープ（&amp;, &lt;, &gt;, "" など）。 ヘルパーが組み立てる HTML は全て本メソッドを通したテキストを使う。</summary>
@@ -134,9 +138,11 @@ public sealed class TrackCreditHtmlBuilder
     /// <summary>
     /// 役職ごとに盤の役職の表記（<c>LabelText</c>、無ければ null）を添えられる版。表記はバッジの文字にだけ使い、
     /// 名義の隣接マージの判定には関わらない。
+    /// <paramref name="linkable"/>=false なら役職バッジをリンクにしない（役職詳細の担当曲数に数えない曲（著作物）の作家など）。
     /// </summary>
     public string BuildMergedRoleSegmentsHtml(
-        IReadOnlyList<(string RoleCode, string FallbackLabel, string NamesHtml, string? LabelText)> entries)
+        IReadOnlyList<(string RoleCode, string FallbackLabel, string NamesHtml, string? LabelText)> entries,
+        bool linkable = true)
     {
         // 空文字エントリを除外（=その役職に名義が無いケース）。
         var nonEmpty = entries.Where(e => !string.IsNullOrEmpty(e.NamesHtml)).ToList();
@@ -161,7 +167,7 @@ public sealed class TrackCreditHtmlBuilder
             sb.Append("<span class=\"track-credit-segment\">");
             foreach (var (rc, fb, lt) in mg.Roles)
             {
-                sb.Append(BuildRoleBadgeHtml(rc, fb, labelText: lt));
+                sb.Append(BuildRoleBadgeHtml(rc, fb, linkable, labelText: lt));
             }
             sb.Append("<span class=\"track-credit-names\">").Append(mg.NamesHtml).Append("</span>");
             sb.Append("</span>");
@@ -217,20 +223,12 @@ public sealed class TrackCreditHtmlBuilder
             : new List<SongCredit>();
         if (credits.Count > 0)
         {
-            var sb = new StringBuilder();
-            for (int i = 0; i < credits.Count; i++)
-            {
-                var c = credits[i];
-                if (i > 0)
-                {
-                    string sep = string.IsNullOrEmpty(c.PrecedingSeparator) ? "、" : c.PrecedingSeparator!;
-                    sb.Append(Escape(sep));
-                }
-                sb.Append(BuildPersonAliasLinkHtml(c.PersonAliasId));
-                // 盤に印刷された所属（例：岡部 啓一（MONACA））。
-                sb.Append(SongCreditAffiliation.SuffixHtml(credits, i, _companyAliasMap));
-            }
-            return sb.ToString();
+            // 名義と盤に印刷された所属（例：岡部 啓一（MONACA）、所属の会社名だけ、名義だけ）。区切りが空なら「、」。
+            return SongCreditAffiliation.BuildNamesHtml(credits, _companyAliasMap,
+                c => BuildPersonAliasLinkHtml(c.PersonAliasId),
+                c => ResolvePersonAliasDisplayLabel(c.PersonAliasId),
+                (c, text) => _staffLinkResolver.ResolveAsHtml(c.PersonAliasId, text),
+                "、");
         }
 
         // フォールバック：構造化クレジットが無いので、Song のフリーテキストを役職コードに応じて拾う。
@@ -262,6 +260,10 @@ public sealed class TrackCreditHtmlBuilder
     /// <summary>録音の台詞（DIALOGUE 役）連名 HTML を組み立てる（書式は <see cref="SingerHtmlBuilder.BuildDialogueHtml"/> と同一）。 該当行が無ければ空文字列。</summary>
     public string BuildRecordingDialogueHtml(SongRecording rec)
         => _singerHtml.BuildDialogueHtml(SingersOf(rec), _personAliasMap, _characterAliasMap);
+
+    /// <summary>録音の語り（SPOKEN_WORD 役）連名 HTML を組み立てる（書式は台詞と同一）。 該当行が無ければ空文字列。</summary>
+    public string BuildRecordingSpokenWordHtml(SongRecording rec)
+        => _singerHtml.BuildSpokenWordHtml(SingersOf(rec), _personAliasMap, _characterAliasMap);
 
     private IReadOnlyList<SongRecordingSinger> SingersOf(SongRecording rec)
         => _singersByRecording.TryGetValue(rec.SongRecordingId, out var list) ? list : Array.Empty<SongRecordingSinger>();
@@ -353,5 +355,30 @@ public sealed class TrackCreditHtmlBuilder
                 + "</span>");
         }
         return string.Join("", segments);
+    }
+
+    /// <summary>
+    /// 劇伴の歌い手（<c>bgm_cue_singers</c>）から「役職バッジ + 連名」セグメントの列 HTML を組み立てる。
+    /// 役職（スキャット・歌など）ごとに 1 セグメントで、並びは辞書の並び（VOCALS → SCAT → BACKING_VOCALS → その他）。
+    /// 連名の書式は歌の歌唱者と同じ（キャラ歌唱は「キャラ(CV:声優)」、区切りは preceding_separator）。
+    /// バッジは劇伴の作曲・編曲と同じくリンクしない（歌唱の一覧は歌の曲だけを数えるため）。
+    /// 該当 cue に歌い手が無ければ空文字を返す。
+    /// </summary>
+    public string BuildBgmCueSingersSegmentsHtml(int seriesId, string mNoDetail)
+    {
+        if (!_bgmCueSingersByCue.TryGetValue((seriesId, mNoDetail), out var singers) || singers.Count == 0)
+            return "";
+
+        var sb = new StringBuilder();
+        foreach (var roleCode in singers.Select(s => s.RoleCode).Distinct(StringComparer.Ordinal))
+        {
+            string namesHtml = _singerHtml.BuildRoleSingersHtml(singers, roleCode, _personAliasMap, _characterAliasMap);
+            if (namesHtml.Length == 0) continue;
+            sb.Append("<span class=\"track-credit-segment\">")
+              .Append(BuildRoleBadgeHtml(roleCode, roleCode, linkable: false))
+              .Append($"<span class=\"track-credit-names\">{namesHtml}</span>")
+              .Append("</span>");
+        }
+        return sb.ToString();
     }
 }

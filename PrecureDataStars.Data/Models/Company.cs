@@ -38,7 +38,7 @@ public sealed class Company
     /// <summary>YouTube チャンネル URL（任意）。詳細ページにアイコン付きで表示。</summary>
     public string? YoutubeUrl { get; set; }
 
-    /// <summary>Wikipedia 記事 URL（任意・内部メモ）。 サイト UI からはリンクしない方針で、将来 JSON-LD の sameAs 等での裏付け用途に温存する。</summary>
+    /// <summary>Wikipedia 記事 URL（任意）。企業の記事。詳細ページの「外部リンク」の最後に出す。</summary>
     public string? WikipediaUrl { get; set; }
 
     // ── 監査 ──

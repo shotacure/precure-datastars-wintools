@@ -8,7 +8,8 @@ namespace PrecureDataStars.Data.Models;
 /// "CHARACTER_VOICE" → <see cref="PersonAliasId"/>（声優側）+ <see cref="CharacterAliasId"/> または <see cref="RawCharacterText"/> / 
 /// "COMPANY"         → <see cref="CompanyAliasId"/> / 
 /// "LOGO"            → <see cref="LogoId"/> / 
-/// "TEXT"            → <see cref="RawText"/>（マスタ未登録のフリーテキスト退避口）。
+/// "TEXT"            → <see cref="RawText"/>（マスタ未登録のフリーテキスト退避口） / 
+/// "BLANK"           → 参照列はすべて NULL（複数列のブロックで、画面の並びの途中に何も書かれていない升。後ろのエントリの列をそろえる。表では空の升として描き、集計では数えない）。
 /// SONG 種別を物理削除。主題歌の楽曲指定は episode_theme_songs を真実の源泉とし、
 /// クレジット側では役職レベルでテンプレ展開時に episode_theme_songs を JOIN する運用に切り替え。
 /// 整合性は DB トリガー <c>trg_credit_block_entries_b{ins,up}</c> で担保され、
@@ -31,7 +32,7 @@ public sealed class CreditBlockEntry
     /// <summary>ブロック内の表示順（1 始まり）。</summary>
     public ushort EntrySeq { get; set; }
 
-    /// <summary>エントリ種別（"PERSON"/"CHARACTER_VOICE"/"COMPANY"/"LOGO"/"TEXT"）。SONG を撤廃。</summary>
+    /// <summary>エントリ種別（"PERSON"/"CHARACTER_VOICE"/"COMPANY"/"LOGO"/"TEXT"/"BLANK"）。SONG を撤廃。</summary>
     public string EntryKind { get; set; } = "PERSON";
 
     /// <summary>人物名義 ID（→ person_aliases.alias_id）。EntryKind が PERSON / CHARACTER_VOICE の場合に必須。</summary>
@@ -101,8 +102,19 @@ public sealed class CreditBlockEntry
     /// 既定値は true（インライン）。所属を持たない（両カラム NULL）エントリでは意味を持たない。</summary>
     public bool AffiliationInline { get; set; } = true;
 
-    /// <summary>「A / B」併記の相手 entry_id への自参照（任意）。</summary>
+    /// <summary>「A / B」併記の相手 entry_id への自参照（任意）。
+    /// 値のあるエントリは独立した行にならず、相手（同じブロックの前のエントリ）の行に並べて描く。</summary>
     public int? ParallelWithEntryId { get; set; }
+
+    /// <summary>併記のエントリの名前の前に付く字（「ダークマター／クマタ」の「／」、「野乃はな（キュアエール）」の「（」など）。
+    /// NULL は何も付けない。<see cref="ParallelWithEntryId"/> のあるエントリでだけ意味を持つ。</summary>
+    public string? ParallelPrefix { get; set; }
+
+    /// <summary>併記のエントリの名前の後ろに付く字（「（キュアエール）」の「）」など）。NULL は何も付けない。</summary>
+    public string? ParallelSuffix { get; set; }
+
+    /// <summary>true なら併記のエントリ（前後の字を含む）を小さい字で描く。</summary>
+    public bool ParallelSmall { get; set; }
 
     /// <summary>備考。</summary>
     public string? Notes { get; set; }

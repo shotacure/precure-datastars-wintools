@@ -881,7 +881,7 @@ public sealed class CreatorsGenerator
     /// LYRICS / COMPOSITION / ARRANGEMENT は <c>song_credits</c> 由来、
     /// VOCALS は <c>song_recording_singers</c> 由来。
     /// VOCALS は主歌唱者 (person_alias_id) / スラッシュ並列の相方 (slash_person_alias_id) /
-    /// CHARACTER_WITH_CV の声優 (voice_person_alias_id) の 3 系統を合算する
+    /// CHARACTER_WITH_CV の声優 (voice_person_alias_id、2 人目の声優 slash_voice_person_alias_id も含む) の 3 系統を合算する
     /// （いずれも person_alias_id 系統で、character_alias は集計対象外。
     /// キャラ側の歌唱履歴はキャラクター詳細ページ側で扱う想定）。
     /// 集計は person_id 単位（person_aliases 経由）で重複排除する。

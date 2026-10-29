@@ -5637,6 +5637,35 @@ a.credit-card-series:focus-visible {
 .songs-card-medley .medley-parts .staff-badges-row {
   font-size: 0.9em;
 }
+/* 劇伴の曲が使っている曲（.bgm-cue-sources）。劇伴詳細の曲のカードと商品詳細のトラックの枠で共用する開け閉めの枠。
+   中の番号付きリストはメドレーの「収録曲」（.medley-parts）と同じ見た目にし、各曲の作家の行は
+   商品詳細のトラックのクレジットの行（.track-meta-line）と同じ組み立てを使う。 */
+.bgm-cue-sources {
+  margin-top: 6px;
+  font-size: 0.88em;
+  line-height: 1.6;
+}
+.bgm-cue-sources > summary {
+  cursor: pointer;
+  color: var(--muted);
+  width: max-content;
+}
+.bgm-cue-sources .medley-parts > li {
+  margin-bottom: 4px;
+}
+.bgm-cue-sources .track-meta-line {
+  margin-top: 1px;
+  font-size: 0.92em;
+}
+/* 商品詳細のトラックの枠では grid の全幅に置き、カード全域の透明オーバーレイより上に持ち上げて、
+   枠の開け閉めと中のリンクを押せるようにする。 */
+.products-tracks-card-grid > .bgm-cue-sources {
+  grid-column: 1 / -1;
+}
+.products-tracks-card .bgm-cue-sources {
+  position: relative;
+  z-index: 2;
+}
 .songs-card-badge-cell {
   justify-self: end;
   align-self: start;

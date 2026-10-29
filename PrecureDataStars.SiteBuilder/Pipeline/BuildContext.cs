@@ -131,6 +131,28 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<SongRecordingSinger>>
         BgmCueSingersByCue { get; init; }
 
+    /// <summary>
+    /// 劇伴の曲が使っている曲（<c>bgm_cue_source_parts</c>）を (series_id, m_no_detail) 単位でまとめた辞書（part_seq 昇順）。
+    /// 論理削除された劇伴の曲の行は含まない。各行は歌（<see cref="BgmCueSourcePart.SourceSongId"/>）か
+    /// 曲（著作物）（<see cref="BgmCueSourcePart.SourceWorkId"/>）のどちらか一方を持つ。
+    /// </summary>
+    public required IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<BgmCueSourcePart>>
+        BgmCueSourcePartsByCue { get; init; }
+
+    /// <summary>歌（song_id）→ その歌を使っている劇伴の曲（<see cref="BgmCueSourcePartsByCue"/> のキー。重複なし、series_id → m_no_detail 順）。</summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<(int SeriesId, string MNoDetail)>>
+        BgmCuesBySourceSong { get; init; }
+
+    /// <summary>曲（著作物）（work_id）→ その曲を使っている劇伴の曲（重複なし、series_id → m_no_detail 順）。</summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<(int SeriesId, string MNoDetail)>>
+        BgmCuesBySourceWork { get; init; }
+
+    /// <summary>work_id → 曲（著作物）（<c>musical_works</c>、論理削除を除く）。</summary>
+    public required IReadOnlyDictionary<int, MusicalWork> MusicalWorkById { get; init; }
+
+    /// <summary>work_id → 曲（著作物）の作家（<c>musical_work_credits</c>）。並びは LYRICS → COMPOSITION → ARRANGEMENT → その他 role_code 昇順、同役内は credit_seq 昇順。</summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<MusicalWorkCredit>> MusicalWorkCreditsByWork { get; init; }
+
     /// <summary>person_alias_id → <see cref="PersonAlias"/> の全件辞書。 旧 <see cref="Rendering.LookupCache"/> および各 Generator が per-id <c>GetByIdAsync</c> で 初回 DB 引きしていた経路を完全に撲滅するため、SiteDataLoader でビルド開始時に 1 度だけロードして共有する。</summary>
     public required IReadOnlyDictionary<int, PersonAlias> PersonAliasById { get; init; }
 

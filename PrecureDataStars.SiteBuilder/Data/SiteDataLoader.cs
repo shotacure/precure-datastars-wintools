@@ -235,6 +235,38 @@ public static class SiteDataLoader
             .ToDictionary(g => g.Key, g => (IReadOnlyList<SongRecordingSinger>)g.Select(s => s.ToSingerRow()).ToList());
         logger.Info($"bgm_cue_singers: {bgmCueSingersByCue.Count} cue 分");
 
+        // 劇伴の曲が使っている曲（bgm_cue_source_parts）と、その中の曲（著作物）（musical_works / musical_work_credits）。
+        // 劇伴の曲 → 使っている曲（part_seq 順）と、歌・曲（著作物）→ 使っている劇伴の曲の 3 方向に引く。
+        // 論理削除された劇伴の曲（bgm_cues に載らない）の行は捨てる。
+        var liveCueKeys = bgmCuesBySeries.Values
+            .SelectMany(list => list)
+            .Select(c => (c.SeriesId, c.MNoDetail))
+            .ToHashSet();
+        var bgmCueSourceParts = (await new BgmCueSourcePartsRepository(factory).GetAllAsync(ct).ConfigureAwait(false))
+            .Where(p => liveCueKeys.Contains((p.SeriesId, p.MNoDetail)))
+            .ToList();
+        var bgmCueSourcePartsByCue = bgmCueSourceParts
+            .GroupBy(p => (p.SeriesId, p.MNoDetail))
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<BgmCueSourcePart>)g.OrderBy(p => p.PartSeq).ToList());
+        var bgmCuesBySourceSong = bgmCueSourceParts
+            .Where(p => p.SourceSongId.HasValue)
+            .GroupBy(p => p.SourceSongId!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<(int SeriesId, string MNoDetail)>)g
+                .Select(p => (p.SeriesId, p.MNoDetail)).Distinct()
+                .OrderBy(k => k.SeriesId).ThenBy(k => k.MNoDetail, StringComparer.Ordinal).ToList());
+        var bgmCuesBySourceWork = bgmCueSourceParts
+            .Where(p => p.SourceWorkId.HasValue)
+            .GroupBy(p => p.SourceWorkId!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<(int SeriesId, string MNoDetail)>)g
+                .Select(p => (p.SeriesId, p.MNoDetail)).Distinct()
+                .OrderBy(k => k.SeriesId).ThenBy(k => k.MNoDetail, StringComparer.Ordinal).ToList());
+        var musicalWorkById = (await new MusicalWorksRepository(factory).GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false))
+            .ToDictionary(w => w.WorkId);
+        var musicalWorkCreditsByWork = (await new MusicalWorkCreditsRepository(factory).GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(c => c.WorkId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<MusicalWorkCredit>)g.ToList());
+        logger.Info($"bgm_cue_source_parts: {bgmCueSourcePartsByCue.Count} cue 分, musical_works: {musicalWorkById.Count} 曲");
+
         // クレジット階層 6 段を 1 度だけ全件取得し、credit_id 単位でネスト化したスナップショットを構築。
         // CreditTreeRenderer がページ生成中に階層別の GetBy*Async を発火しないようにするため、本処理を
         // ビルド開始時に 1 度だけ走らせて BuildContext 経由で全 Generator から参照できるようにする。
@@ -396,6 +428,11 @@ public static class SiteDataLoader
             BgmCuesBySeries = bgmCuesBySeries,
             BgmCueCreditsByCue = bgmCueCreditsByCue,
             BgmCueSingersByCue = bgmCueSingersByCue,
+            BgmCueSourcePartsByCue = bgmCueSourcePartsByCue,
+            BgmCuesBySourceSong = bgmCuesBySourceSong,
+            BgmCuesBySourceWork = bgmCuesBySourceWork,
+            MusicalWorkById = musicalWorkById,
+            MusicalWorkCreditsByWork = musicalWorkCreditsByWork,
             CreditTree = creditTreeIndex,
             CreditsByEpisode = creditsByEpisode,
             CreditsBySeries = creditsBySeries,

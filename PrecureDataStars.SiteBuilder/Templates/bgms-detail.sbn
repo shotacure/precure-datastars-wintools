@@ -139,6 +139,9 @@
           {{~ if c.SingersHtml != "" ~}}{{ c.SingersHtml }}{{~ end ~}}
         </div>
         {{~ end ~}}
+        {{## この曲が使っている曲（歌・曲（著作物））。開け閉めの枠「使われている曲（N 曲）」に、流れる順の番号付きリストで
+             曲名と作家を並べる（SourcesHtml は組み立て済みの HTML。歌は曲詳細へリンク、曲（著作物）は曲名と作家だけ）。 ##}}
+        {{~ if c.SourcesHtml != "" ~}}{{ c.SourcesHtml }}{{~ end ~}}
         {{## 収録盤リスト。フォーマットは
               {disc.title_short}-Tr.{N} 「{track_title}」
             で、行全体を 1 つのリンク <a> としてラップする。リンク先は商品詳細ページの

@@ -39,6 +39,9 @@ public sealed class PersonsGenerator
 
     private readonly CreditInvolvementIndex _index;
 
+    /// <summary>曲（著作物）の作家の行で、その曲を使っている劇伴の曲の表記とリンク先を引く。</summary>
+    private readonly BgmCueRefResolver _bgmCueRefs;
+
     /// <summary>役職系譜の代表コード。カードの年表を出すかどうか（サイトの年表に載る人か）の判定に使う。</summary>
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
 
@@ -87,6 +90,7 @@ public sealed class PersonsGenerator
         _page = page;
         _index = index;
         _roleSuccessorResolver = roleSuccessorResolver;
+        _bgmCueRefs = new BgmCueRefResolver(ctx);
 
         _personsRepo = new PersonsRepository(factory);
         _aliasesRepo = new PersonAliasesRepository(factory);
@@ -1242,6 +1246,7 @@ public sealed class PersonsGenerator
     ///   <item><description>曲のカード（song_credits / song_recording_singers）は、担当した役職の区分ごとに振り分ける
     ///     （作詞と歌の両方を担当した曲は、それぞれの区分に役職を分けて出る）。</description></item>
     ///   <item><description>劇伴の作曲・編曲（bgm_cue_credits）は「作詞・作曲・編曲」に、シリーズごとの使用話数つきで出す。</description></item>
+    ///   <item><description>劇伴の中で使われた曲（著作物）の作家（musical_work_credits）は「作詞・作曲・編曲」の劇伴の枠に、曲ごとの 1 行で出す。</description></item>
     ///   <item><description>劇伴の歌い手（bgm_cue_singers。スキャットなど）は「歌唱」（コーラスだけなら「コーラスのみ」）の劇伴の枠に、シリーズごとの 1 行で出す。</description></item>
     ///   <item><description>音盤の音楽クレジット（music_credits）は、紐付け先（曲・録音・劇伴セッション・商品）ごとに 1 行で出す。</description></item>
     /// </list>
@@ -1263,6 +1268,7 @@ public sealed class PersonsGenerator
         var sessionRows = musicRows.Where(r => r.TargetKind == MusicCreditTargetKinds.BgmSession).ToList();
         var productRows = musicRows.Where(r => r.TargetKind == MusicCreditTargetKinds.Product).ToList();
         var bgmCueItems = BuildBgmCueCreditItems(aliasIds);
+        var musicalWorkItems = BuildMusicalWorkCreditItems(aliasIds);
         var bgmSingerItems = BuildBgmCueSingerItems(aliasIds, chorusOnly: false);
         var bgmChorusItems = BuildBgmCueSingerItems(aliasIds, chorusOnly: true);
 
@@ -1314,7 +1320,7 @@ public sealed class PersonsGenerator
             bool isWriting = rowGroup == MusicCreditGroups.Writing;
             var groupBgm = isWriting ? bgmGroups : Array.Empty<InvolvementGroup>();
             if (isWriting)
-                bgmItems = bgmCueItems.Concat(bgmItems).ToList();
+                bgmItems = bgmCueItems.Concat(musicalWorkItems).Concat(bgmItems).ToList();
             else if (label == "歌唱")
                 bgmItems = bgmSingerItems.Concat(bgmItems).ToList();
             else if (label == "コーラスのみ")
@@ -1393,6 +1399,58 @@ public sealed class PersonsGenerator
                         .ToList()
                 };
             })
+            .ToList();
+    }
+
+    /// <summary>
+    /// 劇伴の中で使われた曲（著作物。musical_works）の作家（musical_work_credits）を、曲ごとの 1 行
+    /// （担当した役職のバッジ + 曲名 + 「〇〇の劇伴で使用」）に束ねる。曲（著作物）は単独のページを持たないので、
+    /// 行のリンク先はその曲を使っている劇伴の曲のカード（シリーズの放送開始日順で最初のもの）にする。
+    /// どの劇伴の曲にも使われていない曲（著作物）は出さない。並びは最初に使われたシリーズの放送開始日順 → 曲名順。
+    /// </summary>
+    private IReadOnlyList<PersonMusicCreditItem> BuildMusicalWorkCreditItems(IReadOnlyList<int> aliasIds)
+    {
+        var aliasSet = aliasIds.ToHashSet();
+        var items = new List<(DateOnly Sort, PersonMusicCreditItem Item)>();
+        foreach (var (workId, credits) in _ctx.MusicalWorkCreditsByWork)
+        {
+            var roles = credits
+                .Where(c => aliasSet.Contains(c.PersonAliasId))
+                .Select(c => c.CreditRole)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (roles.Count == 0) continue;
+            if (!_ctx.MusicalWorkById.TryGetValue(workId, out var work)) continue;
+            if (!_ctx.BgmCuesBySourceWork.TryGetValue(workId, out var cueKeys)) continue;
+            var refs = cueKeys
+                .Select(k => _bgmCueRefs.Describe(k.SeriesId, k.MNoDetail))
+                .OfType<BgmCueRef>()
+                .OrderBy(r => _ctx.SeriesStartDate(r.SeriesId))
+                .ThenBy(r => r.CueLabel, StringComparer.Ordinal)
+                .ToList();
+            if (refs.Count == 0) continue;
+            string seriesTitles = string.Join("、", refs.Select(r => r.SeriesTitle).Distinct(StringComparer.Ordinal));
+            items.Add((_ctx.SeriesStartDate(refs[0].SeriesId), new PersonMusicCreditItem
+            {
+                Title = work.Title,
+                Url = refs[0].Url,
+                SubLabel = $"{seriesTitles}の劇伴で使用",
+                Roles = roles
+                    .Select(code => new RoleBadgeView
+                    {
+                        Code = code,
+                        Label = MusicCreditViewBuilder.RoleName(_ctx, code),
+                        Url = "",
+                        DisplayOrder = _roleMap!.TryGetValue(code, out var role) ? role.DisplayOrder ?? 0 : 0
+                    })
+                    .OrderBy(b => b.DisplayOrder)
+                    .ToList()
+            }));
+        }
+        return items
+            .OrderBy(x => x.Sort)
+            .ThenBy(x => x.Item.Title, StringComparer.Ordinal)
+            .Select(x => x.Item)
             .ToList();
     }
 

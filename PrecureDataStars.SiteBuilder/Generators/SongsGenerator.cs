@@ -42,6 +42,8 @@ public sealed class SongsGenerator
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
     // 歌唱者連名の HTML 化（3 ジェネレータ共通ビルダ）。
     private readonly SingerHtmlBuilder _singerHtml;
+    // 「この劇伴に使われています」で劇伴の曲の表記とリンク先を引く（使われている曲を持つ劇伴の曲だけを事前に表引き）。
+    private readonly BgmCueRefResolver _bgmCueRefs;
     // 歌唱者の平文をユニットのメンバー展開なしで組むときに渡す空の辞書（ページタイトル用）。
     private static readonly IReadOnlyDictionary<int, IReadOnlyList<PersonAliasMember>> NoUnitMembers =
         new Dictionary<int, IReadOnlyList<PersonAliasMember>>();
@@ -74,6 +76,7 @@ public sealed class SongsGenerator
         _staffLinkResolver = staffLinkResolver;
         _roleSuccessorResolver = roleSuccessorResolver;
         _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver, ctx.UnitMembersByAlias);
+        _bgmCueRefs = new BgmCueRefResolver(ctx);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -334,6 +337,8 @@ public sealed class SongsGenerator
         // メドレーの中の曲（原曲の曲名へのリンクと、原曲の作詞・作曲・編曲）と、この曲が原曲として入っているメドレー。
         string medleyPartsHtml = BuildMedleyPartsListHtml(song.SongId, personAliasMap, characterAliasMap);
         var includedInMedleys = BuildIncludedInMedleyViews(song.SongId);
+        // この曲を使っている劇伴の曲（メドレーの劇伴など。bgm_cue_source_parts の逆引き）。
+        var usedInBgmCues = BuildUsedInBgmCueViews(song.SongId);
         // 追加の編曲（ストリングス編曲・オーケストラ編曲）は構造化行だけ（フリーテキスト列は持たない）。
         // 役職詳細ページは無いのでラベルはリンクしない。役職ごとに「バッジ + 名前」のユニットを、編曲の後ろへ並べる順に連ねる。
         var extraArrangementUnits = new System.Text.StringBuilder();
@@ -398,6 +403,7 @@ public sealed class SongsGenerator
                 MedleyArrangementRoleLabelHtml = medleyArrangementRoleLabelHtml,
                 MedleyPartsHtml = medleyPartsHtml,
                 IncludedInMedleys = includedInMedleys,
+                UsedInBgmCues = usedInBgmCues,
                 ExtraArrangementUnitsHtml = extraArrangementUnitsHtml,
                 MusicCreditsHtml = songMusicCreditsHtml,
                 Notes = song.Notes ?? ""
@@ -1415,6 +1421,8 @@ public sealed class SongsGenerator
         public string MedleyPartsHtml { get; set; } = "";
         /// <summary>この曲が原曲として入っているメドレー（song_id 昇順）。</summary>
         public IReadOnlyList<MedleyLinkView> IncludedInMedleys { get; set; } = Array.Empty<MedleyLinkView>();
+        /// <summary>この曲を使っている劇伴の曲（シリーズの放送開始日順 → M 番号順）。</summary>
+        public IReadOnlyList<BgmCueLinkView> UsedInBgmCues { get; set; } = Array.Empty<BgmCueLinkView>();
         /// <summary>曲に共通の音楽クレジット（演奏・コーラス等 / レコーディング 等）の組み立て済み HTML（出典の段落込み）。無ければ空文字。</summary>
         public string MusicCreditsHtml { get; set; } = "";
         public string Notes { get; set; } = "";
@@ -1459,6 +1467,43 @@ public sealed class SongsGenerator
         }
         sb.Append("</ol>");
         return sb.ToString();
+    }
+
+    /// <summary>この曲を使っている劇伴の曲へのリンク（劇伴詳細のその曲のカードへ）。</summary>
+    private sealed class BgmCueLinkView
+    {
+        /// <summary>シリーズの正式タイトル。</summary>
+        public string SeriesTitle { get; set; } = "";
+        /// <summary>シリーズの開始年。複数のシリーズが並ぶときだけ入れる（1 シリーズだけなら空文字）。</summary>
+        public string SeriesStartYearLabel { get; set; } = "";
+        /// <summary>劇伴の曲の表記（「M 番号 メニュー」など。<see cref="BgmCueRefResolver"/> 参照）。</summary>
+        public string CueLabel { get; set; } = "";
+        public string Url { get; set; } = "";
+    }
+
+    /// <summary>
+    /// この曲を使っている劇伴の曲へのリンクを、シリーズの放送開始日順 → M 番号順に並べる。
+    /// シリーズの開始年は、複数のシリーズが並ぶときだけ添える。
+    /// </summary>
+    private IReadOnlyList<BgmCueLinkView> BuildUsedInBgmCueViews(int songId)
+    {
+        if (!_ctx.BgmCuesBySourceSong.TryGetValue(songId, out var cueKeys)) return Array.Empty<BgmCueLinkView>();
+        var refs = cueKeys
+            .Select(k => _bgmCueRefs.Describe(k.SeriesId, k.MNoDetail))
+            .OfType<BgmCueRef>()
+            .OrderBy(r => _ctx.SeriesStartDate(r.SeriesId))
+            .ThenBy(r => r.CueLabel, StringComparer.Ordinal)
+            .ToList();
+        bool multiSeries = refs.Select(r => r.SeriesId).Distinct().Count() > 1;
+        return refs
+            .Select(r => new BgmCueLinkView
+            {
+                SeriesTitle = r.SeriesTitle,
+                SeriesStartYearLabel = multiSeries ? _ctx.StartYearLabel(r.SeriesId) : "",
+                CueLabel = r.CueLabel,
+                Url = r.Url
+            })
+            .ToList();
     }
 
     /// <summary>この曲が原曲として入っているメドレーへのリンクを並べる。</summary>

@@ -47,6 +47,18 @@
     </ul>
   </section>
   {{~ end ~}}
+  {{## この曲を使っている劇伴の曲（メドレーの劇伴など）。劇伴の曲の表記（劇伴詳細のその曲のカードへのリンク）に、
+       シリーズ名を薄色で添える。開始年は複数のシリーズが並ぶときだけ Generator が入れる。 ##}}
+  {{~ if (array.size Song.UsedInBgmCues) > 0 ~}}
+  <section id="in-bgm-cues">
+    <h2>この劇伴に使われています</h2>
+    <ul class="medley-links">
+      {{~ for b in Song.UsedInBgmCues ~}}
+      <li><a href="{{ b.Url }}">{{ b.CueLabel | html.escape }}</a> <span class="muted">{{ b.SeriesTitle | html.escape }}{{~ if b.SeriesStartYearLabel != "" ~}}<span class="series-year">({{ b.SeriesStartYearLabel }})</span>{{~ end ~}}</span></li>
+      {{~ end ~}}
+    </ul>
+  </section>
+  {{~ end ~}}
   {{## 曲に共通の音楽クレジット（伴奏の演奏者・録音側のスタッフ）。基本情報と同じく役職ごとのユニットを横に流す。出典の盤は組み立て済み HTML に含む。 ##}}
   {{~ if Song.MusicCreditsHtml != "" ~}}
   <section id="music-credits">

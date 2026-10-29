@@ -64,6 +64,8 @@ public sealed class ProductsGenerator
     // 共通クレジット HTML 組立ヘルパー（GenerateAsync 冒頭でマスタを引いた直後に初期化される）。
     // null 許容なのは「初期化前にトラック行生成が走らない」設計だが、念のためアクセス時 ! を付ける。
     private TrackCreditHtmlBuilder? _creditHtml;
+    // 劇伴の曲が使っている曲（歌・曲（著作物））の一覧 HTML 組立ヘルパー（_creditHtml と同時に初期化される）。
+    private BgmCueSourcePartsHtmlBuilder? _sourcePartsHtml;
 
     // 人物リンクの解決と歌系役職の系譜代表解決（他ジェネレータと共有するインスタンス）。
     private readonly StaffNameLinkResolver _staffLinkResolver;
@@ -149,6 +151,7 @@ public sealed class ProductsGenerator
             personAliasMap, characterAliasMap, _ctx.CompanyAliasById, _staffLinkResolver,
             new SingerHtmlBuilder(_staffLinkResolver, _roleSuccessorResolver, _ctx.UnitMembersByAlias), roleMap,
             _ctx.SongCreditsBySong, _ctx.SingersByRecording, _ctx.BgmCueCreditsByCue, _ctx.BgmCueSingersByCue);
+        _sourcePartsHtml = new BgmCueSourcePartsHtmlBuilder(_ctx, _creditHtml);
 
         var discsByProduct = allDiscs
             .GroupBy(d => d.ProductCatalogNo)
@@ -1561,6 +1564,8 @@ public sealed class ProductsGenerator
         string bgmAssignmentMetaLineHtml = "";
         // NEXT トラックの「原曲: 元曲タイトル」行。NEXT 以外は空。
         string originalSongMetaLineHtml = "";
+        // 劇伴トラックの曲が使っている曲（歌・曲（著作物））の開け閉めの枠。劇伴以外・使われている曲が無い劇伴は空。
+        string bgmSourcesHtml = "";
         string songLink = "";
         string partVariantLabel = "";
 
@@ -1803,6 +1808,8 @@ public sealed class ProductsGenerator
                         metaSb.Append(" <span class=\"track-credit-list\">").Append(bgmCreditsHtml).Append("</span>");
                     }
                     metaLineHtml = metaSb.ToString();
+                    // この劇伴が使っている曲（メドレーの劇伴の中の歌など）。メタ行の下に開け閉めの枠で添える。
+                    bgmSourcesHtml = _sourcePartsHtml!.BuildHtml(cue.SeriesId, cue.MNoDetail);
                 }
                 else
                 {
@@ -1889,6 +1896,7 @@ public sealed class ProductsGenerator
             MetaLineHtml = metaLineHtml,
             BgmAssignmentMetaLineHtml = bgmAssignmentMetaLineHtml,
             OriginalSongMetaLineHtml = originalSongMetaLineHtml,
+            BgmSourcesHtml = bgmSourcesHtml,
             LengthLabel = lenInt,
             LengthFraction = lenFrac,
             Isrc = t.Isrc ?? "",
@@ -2261,7 +2269,8 @@ public sealed class ProductsGenerator
                         : $"<span class=\"track-title-text\">{HtmlEscape(row.Title)}</span>")
                     : "",
                 KindBadgesHtml = isSong ? row.KindBadgesHtml : "",
-                MetaLineHtml = row.MetaLineHtml
+                MetaLineHtml = row.MetaLineHtml,
+                BgmSourcesHtml = row.BgmSourcesHtml
             });
         }
         foreach (var row in merged)
@@ -2283,6 +2292,8 @@ public sealed class ProductsGenerator
         public string KindBadgesHtml { get; set; } = "";
         /// <summary>劇伴は「M 番号 [メニュー] 作曲・編曲」、歌はクレジットの行の HTML（親の行と同じ組み立て）。</summary>
         public string MetaLineHtml { get; set; } = "";
+        /// <summary>劇伴の枝番の曲が使っている曲の開け閉めの枠（<see cref="TrackRow.BgmSourcesHtml"/> と同じ組み立て）。無ければ空文字。</summary>
+        public string BgmSourcesHtml { get; set; } = "";
     }
 
     private sealed class TrackRow
@@ -2373,6 +2384,12 @@ public sealed class ProductsGenerator
         /// NEXT 以外のトラックや、recording 解決に失敗した NEXT トラックでは空文字。
         /// </summary>
         public string OriginalSongMetaLineHtml { get; set; } = "";
+        /// <summary>
+        /// 劇伴トラックの曲が使っている曲（bgm_cue_source_parts。歌・曲（著作物））の一覧 HTML
+        /// （開け閉めの枠「使われている曲（N 曲）」ごと。<see cref="BgmCueSourcePartsHtmlBuilder"/>）。
+        /// テンプレ側でメタ行の下に grid 全幅で置く。劇伴以外や、使われている曲が無い劇伴では空文字。
+        /// </summary>
+        public string BgmSourcesHtml { get; set; } = "";
         public string LengthLabel { get; set; } = "";
         /// <summary>尺の小数部「.ff」（2 桁、micro-fraction 表記用）。尺なしは空。</summary>
         public string LengthFraction { get; set; } = "";

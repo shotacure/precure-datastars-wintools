@@ -41,7 +41,7 @@ ORDER BY p.person_id;
 -- A2: person_alias がどこからも参照されていない孤立 alias
 --   件数 > 0 の意味: 「person_aliases 行はあるが、person_alias_persons /
 --   credit_block_entries / song_credits / song_recording_singers /
---   bgm_cue_credits / bgm_cue_singers からも参照されていない」状態。
+--   bgm_cue_credits / bgm_cue_singers / musical_work_credits からも参照されていない」状態。
 --   ただし「後で使う目的で先行登録した名義」は意図的に温存されているため、
 --   この結果に出てくるすべてが異常とは限らない。マスタ管理画面で確認して、
 --   不要なら削除、温存意図があればそのまま。
@@ -59,6 +59,7 @@ WHERE pa.is_deleted = 0
                                                             OR p.voice_person_alias_id = pa.alias_id
                                                             OR p.slash_person_alias_id = pa.alias_id)
   AND NOT EXISTS (SELECT 1 FROM person_alias_members   p WHERE p.parent_alias_id       = pa.alias_id
+  AND NOT EXISTS (SELECT 1 FROM musical_work_credits   p WHERE p.person_alias_id       = pa.alias_id)
                                                             OR p.member_person_alias_id = pa.alias_id)
 ORDER BY pa.alias_id;
 
@@ -344,6 +345,7 @@ UNION ALL SELECT 'A2 orphan person_aliases',           COUNT(*) FROM person_alia
       AND NOT EXISTS (SELECT 1 FROM bgm_cue_credits        p WHERE p.person_alias_id       = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM bgm_cue_singers        p WHERE p.person_alias_id       = pa.alias_id OR p.voice_person_alias_id = pa.alias_id OR p.slash_person_alias_id = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM person_alias_members   p WHERE p.parent_alias_id       = pa.alias_id OR p.member_person_alias_id = pa.alias_id)
+      AND NOT EXISTS (SELECT 1 FROM musical_work_credits   p WHERE p.person_alias_id       = pa.alias_id)
 UNION ALL SELECT 'A3 orphan characters',               COUNT(*) FROM characters c LEFT JOIN character_aliases ca ON ca.character_id = c.character_id AND ca.is_deleted = 0 WHERE c.is_deleted = 0 AND ca.alias_id IS NULL
 UNION ALL SELECT 'A4 orphan character_aliases',        COUNT(*) FROM character_aliases ca
     WHERE ca.is_deleted = 0

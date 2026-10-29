@@ -26,6 +26,8 @@ public sealed class MusicGenerator
     private readonly ProductsRepository _productsRepo;
     /// <summary>劇伴の歌い手（スキャットなど）の連名 HTML（歌の歌唱者と同じ書式・同じリンク規則）。</summary>
     private readonly SingerHtmlBuilder _singerHtml;
+    /// <summary>劇伴の曲が使っている曲（歌・曲（著作物））の一覧 HTML（商品詳細のトラックの枠と同じもの）。</summary>
+    private readonly BgmCueSourcePartsHtmlBuilder _sourcePartsHtml;
 
     public MusicGenerator(
         BuildContext ctx,
@@ -38,6 +40,11 @@ public sealed class MusicGenerator
         _page = page;
         _factory = factory;
         _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver, ctx.UnitMembersByAlias);
+        // 使われている曲の作家の行は商品詳細と同じ組み立て器で出す（名義のリンク・役職バッジの表記をそろえるため）。
+        _sourcePartsHtml = new BgmCueSourcePartsHtmlBuilder(ctx, new TrackCreditHtmlBuilder(
+            ctx.PersonAliasById, ctx.CharacterAliasById, ctx.CompanyAliasById, staffLinkResolver,
+            _singerHtml, ctx.RoleByCode,
+            ctx.SongCreditsBySong, ctx.SingersByRecording, ctx.BgmCueCreditsByCue, ctx.BgmCueSingersByCue));
         _cuesRepo = new BgmCuesRepository(factory);
         _sessionsRepo = new BgmSessionsRepository(factory);
         _sectionsRepo = new BgmSectionsRepository(factory);
@@ -1021,6 +1028,7 @@ public sealed class MusicGenerator
                     MenuFallbackTitle = menuFallback,
                     StaffGroups = staffGroups,
                     SingersHtml = BuildCueSingersHtml(c),
+                    SourcesHtml = _sourcePartsHtml.BuildHtml(c.SeriesId, c.MNoDetail),
                     LengthLabel = lengthLabel,
                     ArtTrackId = artTrackSource?.ArtTrackId ?? "",
                     ArtTrackPremiumOnly = artTrackSource?.ArtTrackPremiumOnly ?? false,
@@ -1484,6 +1492,11 @@ public sealed class MusicGenerator
         /// 連名は歌の歌唱者と同じ書式（キャラ(CV:声優)）でリンク化済み。歌い手が無ければ空文字。
         /// </summary>
         public string SingersHtml { get; set; } = "";
+        /// <summary>
+        /// 当該 cue が使っている曲（bgm_cue_source_parts。歌・曲（著作物））の一覧 HTML（開け閉めの枠ごと。
+        /// <see cref="BgmCueSourcePartsHtmlBuilder"/>）。使われている曲が無ければ空文字。
+        /// </summary>
+        public string SourcesHtml { get; set; } = "";
         /// <summary>カードヘッダに出す「尺」（M:SS 形式）。 初出盤（recs[0]、発売日昇順で最古）の当該トラック
         /// length_seconds を 75 frames/sec から逆算して整形済み。収録盤無し or length_frames NULL のときは空文字。</summary>
         public string LengthLabel { get; set; } = "";

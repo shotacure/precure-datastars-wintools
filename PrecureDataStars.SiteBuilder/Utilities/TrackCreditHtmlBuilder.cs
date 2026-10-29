@@ -138,9 +138,11 @@ public sealed class TrackCreditHtmlBuilder
     /// <summary>
     /// 役職ごとに盤の役職の表記（<c>LabelText</c>、無ければ null）を添えられる版。表記はバッジの文字にだけ使い、
     /// 名義の隣接マージの判定には関わらない。
+    /// <paramref name="linkable"/>=false なら役職バッジをリンクにしない（役職詳細の担当曲数に数えない曲（著作物）の作家など）。
     /// </summary>
     public string BuildMergedRoleSegmentsHtml(
-        IReadOnlyList<(string RoleCode, string FallbackLabel, string NamesHtml, string? LabelText)> entries)
+        IReadOnlyList<(string RoleCode, string FallbackLabel, string NamesHtml, string? LabelText)> entries,
+        bool linkable = true)
     {
         // 空文字エントリを除外（=その役職に名義が無いケース）。
         var nonEmpty = entries.Where(e => !string.IsNullOrEmpty(e.NamesHtml)).ToList();
@@ -165,7 +167,7 @@ public sealed class TrackCreditHtmlBuilder
             sb.Append("<span class=\"track-credit-segment\">");
             foreach (var (rc, fb, lt) in mg.Roles)
             {
-                sb.Append(BuildRoleBadgeHtml(rc, fb, labelText: lt));
+                sb.Append(BuildRoleBadgeHtml(rc, fb, linkable, labelText: lt));
             }
             sb.Append("<span class=\"track-credit-names\">").Append(mg.NamesHtml).Append("</span>");
             sb.Append("</span>");

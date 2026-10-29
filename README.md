@@ -1997,6 +1997,51 @@ CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.
 
 #### `song_recording_bgm_assignments` — SONG ↔ BGM 両性紐付け中間テーブル
 
+#### `musical_works` — 曲（著作物）
+
+歌でも劇伴でもない、JASRAC に登録された曲だけを入れる表（例：メドレーの劇伴の中にだけ出てくる曲で、どの盤にも単独では入っていないもの）。歌は `songs`、劇伴は `bgm_cues` で持ち、ここには入れない。劇伴の曲からは `bgm_cue_source_parts` で参照する。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `work_id` | INT PK AUTO_INCREMENT | 曲（著作物）の ID |
+| `title` | VARCHAR(255) NOT NULL | 曲名 |
+| `title_kana` | VARCHAR(255) NULL | 曲名の読み |
+| `jasrac_work_code` | VARCHAR(16) NULL UNIQUE | JASRAC の作品コード（例 `242-0576-1`） |
+| `iswc` | VARCHAR(20) NULL UNIQUE | ISWC（例 `T-927.548.991-3`） |
+| `notes` | TEXT NULL | 備考 |
+| `created_at` / `updated_at` / `created_by` / `updated_by` | 監査列 | |
+| `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
+
+#### `musical_work_credits` — 曲（著作物）の作家
+
+曲（著作物）の作家の連名。列は `bgm_cue_credits` と同じ流儀で、役職は歌の作家（`song_credits`）と同じ役職コード。PK は `(work_id, credit_role, credit_seq)`。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `work_id` | INT PK(1) FK | 曲（著作物）（→ `musical_works`、ON DELETE CASCADE） |
+| `credit_role` | VARCHAR(32) PK(2) FK | 役職（→ `roles`。`LYRICS` / `COMPOSITION` / `ARRANGEMENT` など） |
+| `credit_seq` | TINYINT UNSIGNED PK(3) | 役職ごとの連名の順（1 始まり） |
+| `person_alias_id` | INT FK NOT NULL | 名義（→ `person_aliases`） |
+| `preceding_separator` | VARCHAR(8) NULL | 前の名義との区切り（2 人目以降。空なら「、」） |
+| `notes` | TEXT NULL | 備考 |
+
+#### `bgm_cue_source_parts` — 劇伴の曲が使っている曲
+
+劇伴の曲（`bgm_cues`）が使っている曲を、曲の中で流れる順に持つ対応表（1 行 = 使われている 1 曲。例：歴代の主題歌をつないだメドレーの劇伴）。使われている曲は歌（`source_song_id`）か曲（著作物）（`source_work_id`）のどちらか一方だけを入れる（CHECK `ck_bgm_cue_source_parts_one_source`）。PK は `(series_id, m_no_detail, part_seq)`。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `series_id` | INT PK(1) | 劇伴の曲のシリーズ |
+| `m_no_detail` | VARCHAR(255) PK(2) | M 番号。`(series_id, m_no_detail)` の複合 FK で → `bgm_cues`（ON DELETE CASCADE / ON UPDATE CASCADE。M 番号の付け替えに付いていく） |
+| `part_seq` | TINYINT UNSIGNED PK(3) | 劇伴の曲の中で何曲目に流れるか（1 始まり）。同じ曲が何度出てもよい |
+| `source_song_id` | INT FK NULL | 使われている歌（→ `songs`、ON DELETE RESTRICT） |
+| `source_work_id` | INT FK NULL | 使われている曲（著作物）（→ `musical_works`、ON DELETE RESTRICT） |
+| `notes` | TEXT NULL | 備考 |
+
+> 曲名・作家は参照先（歌は `songs` / `song_credits`、曲（著作物）は `musical_works` / `musical_work_credits`）から引くので、この表は参照だけを持つ。使われている歌・曲（著作物）は、ここから参照されている間は消せない（MySQL では CHECK に使う列の外部キーに CASCADE / SET NULL を付けられないため RESTRICT）。
+>
+> サイトは、劇伴詳細（`/bgms/{作品}/`）のその曲のカードと、商品詳細のその劇伴のトラックの枠（編集でつないだ枝番の曲も同じ）に、開け閉めの枠「使われている曲（N 曲）」（既定は閉じる）を置き、流れる順の番号付きリストで曲名と作家を並べる（`BgmCueSourcePartsHtmlBuilder`）。歌は曲名を曲詳細へリンクし、作詞・作曲・編曲のバッジの行を商品詳細の歌のトラックと同じ組み立てで出す。曲（著作物）は単独のページを持たないので、曲名はリンクせず、作家のバッジの行（名義は人物詳細へリンク、バッジは劇伴の作曲・編曲と同じくリンクしない）をその場に出す。歌の曲詳細には「この劇伴に使われています」の節を出し、劇伴の曲の表記（M 番号とメニュー。仮 M 番号の曲はメニュー、それも無ければ収録盤のトラック名）を劇伴詳細のその曲のカードへリンクして、シリーズ名を薄色で添える（開始年は複数のシリーズが並ぶときだけ）。人物・ユニット詳細の音楽クレジットでは、曲（著作物）の作家を「作詞・作曲・編曲」の区分の劇伴の枠に、曲ごとの 1 行（役職のバッジ ＋ 曲名 ＋「〇〇の劇伴で使用」、劇伴詳細のその曲のカードへリンク）で出す。役職詳細（`/creators/roles/{lyrics,composition,arrangement}/`）の担当曲数には数えない（歌の曲だけを数えるため）。Catalog に編集画面は無く、データは SQL で入れる。
+
 1 つの `song_recordings`（特定のアレンジ・テイク・歌唱者構成での録音）が「歌として収録された」のと同時に「劇伴としても扱う」二重性質を持つ場合に、当該録音と劇伴 cue（`bgm_cues`）の N:M 関係を表現する。`tracks.content_kind_code` は `'SONG'` / `'BGM'` を排他選択する仕様（`trg_tracks_bi/bu_fk_consistency` で強制）のまま据置で、SONG なのに BGM 性も併せ持つ追加の関係をこの中間テーブルで表現する。
 
 | 列名 | 型 | 説明 |

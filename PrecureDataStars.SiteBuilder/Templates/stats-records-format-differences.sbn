@@ -7,7 +7,7 @@
 <section>
   <h1>本放送・配信・円盤の尺の違い</h1>
   <p class="muted page-coverage">{{ CoverageLabel }}</p>
-  <p class="lead">同じ話でも、本放送と配信（Amazon Prime Video）、Blu-ray / DVD でパートの長さが違うことがあります。本放送を基準に、違いのある話と、どの版が本放送と同じ長さかを確かめられます。</p>
+  <p class="lead">同じ話でも、本放送と配信（Amazon Prime Video）、Blu-ray / DVD でパートの長さが違うことがあります。本放送を基準に、違いのある話を版ごとの差とともに並べています。</p>
   <p class="muted stats-note">差は本放送より長ければ「+」、短ければ「−」で示します。本放送で実測できていないパートは比べていません。</p>
   <div class="fact-grid">
     <div class="fact">

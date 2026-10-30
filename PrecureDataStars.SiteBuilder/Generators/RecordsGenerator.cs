@@ -556,7 +556,7 @@ public sealed class RecordsGenerator
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（stats-records-format-differences.sbn の .lead）と同じ文。
-                Subtitle = "同じ話でも、本放送と配信・Blu-ray / DVD でパートの長さが違うことがあります。本放送を基準に、違いのある話と、どの版が本放送と同じ長さかを確かめられます。",
+                Subtitle = "同じ話でも、本放送と配信・Blu-ray / DVD でパートの長さが違うことがあります。本放送を基準に、違いのある話を版ごとの差とともに並べています。",
                 MetaLeft = OgCoverageLabel.Compact(content.CoverageLabel),
                 Badges = new[]
                 {

@@ -1862,7 +1862,7 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("ユニット", $"{unitCount}組")
                 },
                 Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
-                "主題歌・挿入歌・キャラクターソングを歌った方々とキャラクターを、初めて歌った曲と曲数とともにまとめています。歌った曲と収録 CD を確かめられます。"),
+                "主題歌・挿入歌・キャラクターソングを歌った方々とキャラクターを、初めて歌った曲と曲数とともにまとめています。名前から、歌った曲と収録 CD までひと続きに載せています。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2252,7 +2252,7 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("声優", $"{countRows.Count}人")
                 },
                 Array.Empty<OgCardFactLine>(), null,
-                "キャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。あのキャラの声も、その方が演じたほかの役も確かめられます。"),
+                "キャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。あのキャラの声の主も、その方のほかの役も、同じページに並びます。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2687,7 +2687,7 @@ public sealed class CreatorsGenerator
                 },
                 Array.Empty<OgCardFactLine>(), null,
                 // ページの冒頭文（creators-landing.sbn の .lead）と同じ文。
-                "スタッフ、声優さん、歌を作り歌った方々を、役職と作品ごとにまとめています。名前ひとつから、その方が関わった作品と話をまとめて確かめられます。"),
+                "スタッフ、声優さん、歌を作り歌った方々を、役職と作品ごとにまとめています。名前ひとつで、その方が関わった作品と話がひとまとまりに出てきます。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

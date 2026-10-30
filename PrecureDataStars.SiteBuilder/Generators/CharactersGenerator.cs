@@ -329,7 +329,7 @@ public sealed class CharactersGenerator
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（characters-index.sbn の .lead）と同じ文。数だけはページ側で添える。
-                Subtitle = "プリキュアから妖精・敵・ゲストまで、歴代のキャラクターを作品ごとに並べ、演じた声優さんと登場した話を添えています。一度きりの出番も確かめられます。",
+                Subtitle = "プリキュアから妖精・敵・ゲストまで、歴代のキャラクターを作品ごとに並べ、演じた声優さんと登場した話を添えています。一度きりの出番も同じ扱いで載せています。",
                 MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                 Badges = new[]
                 {

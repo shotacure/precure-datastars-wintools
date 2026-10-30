@@ -84,9 +84,9 @@ public sealed class EpisodePartStatsGenerator
             {
                 MetaLeft = _coverageLabel,
                 // ページの冒頭文（stats-episodes-index.sbn の .lead）と同じ文。
-                Subtitle = "アバンタイトル・A パート・B パートの長さと、中 CM に入る時刻を、本放送から全話ぶん計っています。長い回と短い回、作品ごとの構成の違いを見比べられます。"
+                Subtitle = "アバンタイトル・A パート・B パートの長さと、中 CM に入る時刻を、本放送から全話ぶん計っています。長い回と短い回、作品ごとの構成の違いが数字で並びます。"
             },
-            MetaDescription = "歴代プリキュア全話の本編の尺の統計。アバンタイトルの長さ、A パート・B パートの尺、中 CM の入り時刻を全シリーズで集計しました。長い回と短い回、作品ごとの構成の違いを見比べられます。",
+            MetaDescription = "歴代プリキュア全話の本編の尺の統計。アバンタイトルの長さ、A パート・B パートの尺、中 CM の入り時刻を全シリーズで集計しました。長い回と短い回、作品ごとの構成の違いが数字で並びます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

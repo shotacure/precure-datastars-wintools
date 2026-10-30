@@ -602,7 +602,7 @@ public sealed class MusicGenerator
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（bgms-index.sbn の .lead）と同じ文。
-                Subtitle = "変身の曲も名場面の一曲も、作品ごとの劇伴（BGM）に M ナンバー・曲名・作曲者・収録 CD を添えています。題名の分からないあの曲が入ったサントラを突き止められます。",
+                Subtitle = "変身の曲も名場面の一曲も、作品ごとの劇伴（BGM）に M ナンバー・曲名・作曲者・収録 CD を添えています。題名の分からないあの曲も、収録サントラの何曲目かまで分かります。",
                 Badges = BuildBgmCountBadges(Array.Empty<OgCardBadge>(), totalSongs, totalCues, sources)
             },
             Breadcrumbs = new[]

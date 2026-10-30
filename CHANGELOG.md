@@ -2,6 +2,10 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### 開発中（次回リリース）
+
+- **依存：MySqlConnector を 2.5.0 から 2.6.1 に上げた**（`Directory.Packages.props`）：SslMode を VerifyCA／VerifyFull にして SslCa を指定しない接続で、証明書を確かめる前に平文のパスワードを送ることがある脆弱性（GHSA-473q-m89c-ghf8）を塞ぐ。
+
 ### v1.20.0 (2026-10-30)
 
 - **スキーマ・サイト・Catalog：声の出演で 1 人の声優に役名が 2 つ並ぶ「ダークマター／クマタ」「野乃はな（キュアエール）」を、名義を分けたまま画面どおりに描けるようにした**（`db/migrations/v1.20.0_add_credit_entry_parallel_display.sql`・`db/schema.sql`・`CreditBlockEntry`・`CreditBlockEntriesRepository`・`CreditTreeRenderer`・`CreditPreviewRenderer`・`CreditBulkInputParser`・`BulkParseResult`・`CreditBulkApplyService`・`CreditBulkInputEncoder`・`CreditSaveService`・`CreditDraftLoader`）：役名が 2 つ並ぶ行を「A/B」の 1 つの名義で持つと、キャラのページや集計が画面に無い名前になっていた。`credit_block_entries` に、併記の名前の前・後ろに付く字（`parallel_prefix` / `parallel_suffix`）と小さい字で描く指定（`parallel_small`）を足し、既存の併記（`parallel_with_entry_id`）と組み合わせて、2 つ目の役名を同じ声優の別のエントリとして持つ。サイトのクレジットの表と Catalog のプレビューでは、併記のエントリを独立した行にせず、相手の行の役名の升に前後の字つきで並べ（小さい字の指定は `<small>`）、声優は 1 人だけ出す。役名はそれぞれのキャラのページにリンクし、集計は両方のキャラに数える。同じ声優が続く行の升の縦のつなぎは、併記を除いた行で数える。一括入力では、従来の `& ` に加えて `&{前|後|small} ` と書ける（`&{／} `、`&{（|）|small} `）。逆翻訳でも、前後の字か小さい字の指定があればこの形で書き出す

@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：記念日カレンダーとホームで、大人向けスピンオフ（種別 OTONA）の放送に 🌙 を付けるようにした**（`AnniversaryEntry.IsOtona`・`.cal-chip-otona`・埋め込み JSON の `o`）：カレンダーのチップは 📺 の代わりに 🌙 で藍の配色、記念日カレンダーの凡例には大人向けスピンオフの放送が 1 件でもあるときだけ「🌙 大人向け放送」を足す。ホームの「最新エピソード」「今後の放送予定」の見出し、「今日の記念日」のカード、日付ごとの記念日ページの年表では、作品名の前に 🌙 を添える。
 - **サイト：人物・企業詳細の担当量の札を TV（📺 話）・映画（🎥 本）・大人向け（🌙 話）の 3 つに分けた**（`InvolvementRowBuilder.BuildSeriesRows`・`InvolvementGroup.OtonaEpisodeCount`・`.count-pill-otona`、判定は `SeriesClassifier.IsOtona` / `BuildContextLookupExtensions.IsOtonaSeries`）：大人向けは種別が大人向けスピンオフ（kind_code='OTONA'）の作品（オトナプリキュア'23・魔法つかいプリキュア！！・デュアルシャドウ）。クレジットの見出し・名義・役職・企業のメンバー履歴の札に 🌙 を足し、OGP カードはバッジと役職の行に文字で「大人向け N話」を出す。それ以外のスピンオフ（ショート・スピンオフ）は作品の行には出すが、どの札にも数えない。
 
 - **サイト：本線の数・集計の母集合を本線の TV（kind_code='TV'）に絞り、スピンオフ（大人向け・ショート・スピンオフ）の話を混ぜないようにした**（判定は `BuildContextLookupExtensions.IsMainlineTvSeries` / `IsSpinOffSeries`）：尺の統計（`EpisodePartStatsRepository` の全クエリ）、サブタイトルの統計（`SubtitleStatsRepository` の全 14 クエリ）、各話の尺の歴代の順位・偏差値（`EpisodePartsRepository` の歴代は本線の TV とスピンオフで母集合を分ける）と歴代の分布、ホームのエピソード数と本放送フォーマットの調査完了率、記録（担当話数・声の出演話数・作品数・本放送と配信・円盤の尺の違い）、組み合わせの通算 N 回目（`EpisodeChiefStaffIndex`）、キャラの 📺 登場話数（`CharacterAppearanceCounter`）、誕生日をカレンダーに出す基準の話数、人物・企業の OGP カードの透かしの主な役職。スピンオフの各話ページには、尺の偏差値表・歴代の記録バッジ・サブタイトル分析を出さない。いまはスピンオフの話が無いので、出力は変わらない（回帰確認で全ページ同一）。

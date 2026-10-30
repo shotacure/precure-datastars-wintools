@@ -26,7 +26,7 @@
         <div class="home-anniversary-card-meta">
           <span class="home-anniversary-label">{{ t.Year }}年</span>
           {{~ if t.Kind == "ep" ~}}
-          <span class="home-anniversary-series">{{ t.SeriesTitle | html.escape }}</span>
+          <span class="home-anniversary-series">{{ if t.IsOtona }}🌙 {{ end }}{{ t.SeriesTitle | html.escape }}</span>
           {{~ else ~}}
           <span class="home-anniversary-label anniv-label-movie">劇場公開</span>
           {{~ end ~}}

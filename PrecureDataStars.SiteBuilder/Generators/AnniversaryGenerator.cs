@@ -111,7 +111,9 @@ public sealed class AnniversaryGenerator
             });
         }
 
-        RenderIndexPage(monthSections, entries.Count, displayYear);
+        // 凡例の 🌙 は大人向けスピンオフの放送が 1 件でもあるときだけ出す（升目に出ない記号を凡例に並べない）。
+        bool hasOtonaEpisodes = entries.Any(e => e.Kind == "ep" && e.IsOtona);
+        RenderIndexPage(monthSections, entries.Count, displayYear, hasOtonaEpisodes);
         _ctx.Logger.Success($"anniversary: {writtenDays} 日 + 索引 1 ページ");
     }
 
@@ -154,6 +156,7 @@ public sealed class AnniversaryGenerator
                 EpisodeUrl = e.EpisodeUrl,
                 IsFirstEpisode = e.IsFirstEpisode,
                 IsLastEpisode = e.IsLastEpisode,
+                IsOtona = e.IsOtona,
                 RevealAt = e.RevealAt,
                 // ページ本文は他のエピソード一覧と同じくガード span で包み、解禁判定は
                 // subtitle-embargo.js に委ねる（静的ページでも解禁時刻を過ぎれば自動で現れる）。
@@ -199,7 +202,8 @@ public sealed class AnniversaryGenerator
                 EpisodeNo = e.EpisodeNo,
                 TitleGuardedHtml = e.TitleGuardedHtml,
                 IsFirstEpisode = e.IsFirstEpisode,
-                IsLastEpisode = e.IsLastEpisode
+                IsLastEpisode = e.IsLastEpisode,
+                IsOtona = e.IsOtona
             })
             .Concat(content.Movies.Select(m => new TimelineRow
             {
@@ -323,9 +327,9 @@ public sealed class AnniversaryGenerator
     // ════════════════════ 索引ページ ════════════════════
 
     /// <summary>月別に全日を並べた索引を書き出す。</summary>
-    private void RenderIndexPage(IReadOnlyList<MonthSection> months, int totalEntries, int displayYear)
+    private void RenderIndexPage(IReadOnlyList<MonthSection> months, int totalEntries, int displayYear, bool hasOtonaEpisodes)
     {
-        var content = new IndexContentModel { Months = months, TotalEntries = totalEntries, DisplayYear = displayYear };
+        var content = new IndexContentModel { Months = months, TotalEntries = totalEntries, DisplayYear = displayYear, HasOtonaEpisodes = hasOtonaEpisodes };
         var layout = new LayoutModel
         {
             PageTitle = "プリキュア記念日カレンダー",
@@ -412,12 +416,12 @@ public sealed class AnniversaryGenerator
     }
 
     /// <summary>
-    /// TV 放送のチップ。第 1 話・最終話は強調クラスを足す。
+    /// TV 放送のチップ。第 1 話・最終話は強調クラスを足す。大人向けスピンオフの話は 📺 の代わりに 🌙 を付け、藍の配色にする。
     /// ツールチップはネイティブ表示のため CSS でぼかせない。未解禁の話はサブタイトルを含めない。
     /// </summary>
     private static DayChip BuildEpisodeChip(AnniversaryEntry e, DateTimeOffset now)
     {
-        string cls = "cal-chip cal-chip-ep";
+        string cls = e.IsOtona ? "cal-chip cal-chip-otona" : "cal-chip cal-chip-ep";
         if (e.IsFirstEpisode) cls += " cal-chip-ep-first";
         if (e.IsLastEpisode) cls += " cal-chip-ep-last";
 
@@ -429,7 +433,7 @@ public sealed class AnniversaryGenerator
         return new DayChip
         {
             CssClass = cls,
-            Emoji = "📺",
+            Emoji = e.IsOtona ? "🌙" : "📺",
             Label = $"{e.SeriesTitleShort}#{e.EpisodeNo}",
             LabelFull = $"{e.SeriesTitle}#{e.EpisodeNo}",
             Url = e.EpisodeUrl,
@@ -466,6 +470,8 @@ public sealed class AnniversaryGenerator
         public string EpisodeUrl { get; set; } = "";
         public bool IsFirstEpisode { get; set; }
         public bool IsLastEpisode { get; set; }
+        /// <summary>大人向けスピンオフ（種別 OTONA）の話か。作品名の前に 🌙 を添える。</summary>
+        public bool IsOtona { get; set; }
         /// <summary>
         /// サブタイトルが解禁前かどうか。true の話は題名を出さない。
         /// サイト本体は解禁時刻で自動解除されるぼかしを掛けているが、記念日ページは過去年と
@@ -499,6 +505,8 @@ public sealed class AnniversaryGenerator
         public string TitleGuardedHtml { get; set; } = "";
         public bool IsFirstEpisode { get; set; }
         public bool IsLastEpisode { get; set; }
+        /// <summary>大人向けスピンオフ（種別 OTONA）の話か。作品名の前に 🌙 を添える。</summary>
+        public bool IsOtona { get; set; }
     }
 
     private sealed class MovieRow
@@ -527,6 +535,8 @@ public sealed class AnniversaryGenerator
         public int TotalEntries { get; set; }
         /// <summary>カレンダーの升目を組んだ年。曜日の並びはこの年のもの。</summary>
         public int DisplayYear { get; set; }
+        /// <summary>大人向けスピンオフの放送が 1 件でもあるか（凡例に 🌙 を出すかの判定）。</summary>
+        public bool HasOtonaEpisodes { get; set; }
     }
 
     private sealed class MonthSection

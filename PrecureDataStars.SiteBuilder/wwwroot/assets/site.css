@@ -9590,6 +9590,17 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   border-color: #a8cea8;
   font-weight: 700;
 }
+/* 大人向けスピンオフの放送（🌙）= 人物・企業詳細の 🌙 の札と同じ夜空の藍。第 1 話・最終話は同じ考え方で濃くする。 */
+.cal-chip-otona {
+  background: #eceefa;
+  color: #3f4a9e;
+  border-color: #c9cdec;
+}
+.cal-chip-otona.cal-chip-ep-first,
+.cal-chip-otona.cal-chip-ep-last {
+  background: #d9ddf4;
+  border-color: #a9b0de;
+}
 /* 平年の 2/28 セル末尾に併記する「(2/29)」ブロック。
    セルを増やさずに 1 セル内へ収めるため、上に細い区切り線と小さなラベルを付ける。 */
 .cal-leap-section {

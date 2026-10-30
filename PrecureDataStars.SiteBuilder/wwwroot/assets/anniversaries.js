@@ -268,7 +268,8 @@
     // /episodes/ ランディングと同一の「2024.2.4」形式（DotDate同形、月日は 0 詰めしない）。
     var dateStr = it.y + '.' + it.m + '.' + it.d;
     // メタ行：「N年前」ラベル + シリーズ名 + (放送年度)。
-    var seriesMeta = '<span class="home-anniversary-series">' + escapeHtml(it.st) + '</span>';
+    // 大人向けスピンオフの話（o）は作品名の前に 🌙 を添える。
+    var seriesMeta = '<span class="home-anniversary-series">' + (it.o ? '🌙 ' : '') + escapeHtml(it.st) + '</span>';
     if (it.sy) {
       seriesMeta += ' <span class="series-year muted">(' + escapeHtml(String(it.sy)) + ')</span>';
     }

@@ -83,6 +83,7 @@ public static class AnniversaryDataBuilder
                 EpisodeUrl = PathUtil.EpisodeUrl(series.Slug, episode.SeriesEpNo),
                 IsFirstEpisode = episode.SeriesEpNo == 1,
                 IsLastEpisode = isLast,
+                IsOtona = SeriesClassifier.IsOtona(series),
                 RevealAtIso = revealAt is { } at ? SubtitleGuardRenderer.ToRevealAtIso(at) : "",
                 RevealAt = revealAt
             });

@@ -535,6 +535,7 @@ WHERE e.is_deleted = 0
             SeriesSlug = series.Slug,
             SeriesTitle = series.Title,
             SeriesStartYearLabel = series.StartDate.Year.ToString(),
+            IsOtona = SeriesClassifier.IsOtona(series),
             // セクション並べ替え用キー：呼び出し側で並び確定済みの先頭行の放送日。
             // 「最新」では降順グループの先頭=そのシリーズ最大放送日、
             // 「今後」では昇順グループの先頭=そのシリーズ最小放送日になる。
@@ -792,6 +793,8 @@ WHERE e.is_deleted = 0
                         // 1 話／最終話のみフラグを立てる（false のときは JSON へ書き出さない）。
                         ef = e.IsFirstEpisode ? (bool?)true : null,
                         el = e.IsLastEpisode ? (bool?)true : null,
+                        // 大人向けスピンオフの話だけ印を立てる（チップは 🌙、カードは作品名の前に 🌙）。
+                        o = e.IsOtona ? (bool?)true : null,
                         // サブタイトル解禁時刻（未解禁の話のみ）。無ければ JSON へ書き出さない。
                         ra = string.IsNullOrEmpty(e.RevealAtIso) ? null : e.RevealAtIso
                     });
@@ -999,6 +1002,8 @@ WHERE e.is_deleted = 0
         public string SeriesTitle { get; set; } = "";
         /// <summary>シリーズ開始年の西暦 4 桁（見出しに薄色括弧で添える）。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
+        /// <summary>大人向けスピンオフ（種別 OTONA）の作品か。見出しの作品名の前に 🌙 を添える。</summary>
+        public bool IsOtona { get; set; }
         /// <summary>セクション（シリーズ）の並べ替え用キー。呼び出し側で並び確定済みの 先頭エピソード放送日の Ticks。最新=降順／今後=昇順でそのまま使う。 テンプレには出さない内部用。</summary>
         public long SortKeyTicks { get; set; }
         public IReadOnlyList<HomeEpisodeRow> Episodes { get; set; } = Array.Empty<HomeEpisodeRow>();

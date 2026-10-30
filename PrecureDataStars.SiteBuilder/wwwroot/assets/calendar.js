@@ -14,7 +14,7 @@
  *
  * JSON は anniversaries.js と共有。各要素は種別タグ k を持つ：
  *   ep … エピソード放送日（ts=シリーズ略称, en=話数, eu=URL,
- *         ef=1 話フラグ任意, el=最終話フラグ任意,
+ *         ef=1 話フラグ任意, el=最終話フラグ任意, o=大人向けスピンオフの話フラグ任意,
  *         ra=サブタイトル解禁時刻任意。未解禁ならチップの title 属性からサブタイトルを外す）
  *   mv … 映画公開日（ts=シリーズ略称, su=シリーズ URL）
  *   cb … キャラクター誕生日（pn=変身前名義/表示名, cu=URL, kc/kf/kb=バッジ色）
@@ -368,11 +368,11 @@
         + '" title="' + escapeAttr(it.pn) + '">'
         + '<span class="cal-chip-emoji">🎂</span>' + escapeHtml(it.pn) + '</a>';
     }
-    // ep（TV 放送）：テレビ絵文字 + シリーズ名 + #話数。
+    // ep（TV 放送）：テレビ絵文字 + シリーズ名 + #話数。大人向けスピンオフの話（o）は 🌙 と藍の配色。
     var epTitle = useFullName ? it.st : it.ts;
     var label = escapeHtml(epTitle) + '#' + escapeHtml(String(it.en));
     // 1 話（ef）／最終話（el）には強調用の追加クラスを付与する。
-    var epCls = 'cal-chip cal-chip-ep';
+    var epCls = it.o ? 'cal-chip cal-chip-otona' : 'cal-chip cal-chip-ep';
     if (it.ef) epCls += ' cal-chip-ep-first';
     if (it.el) epCls += ' cal-chip-ep-last';
     // title 属性はネイティブのホバーツールチップで CSS でぼかせないため、
@@ -382,7 +382,7 @@
     var epSubtitle = revealed ? (it.et || '') : '';
     return '<a class="' + epCls + '" href="' + escapeAttr(it.eu)
       + '" title="' + escapeAttr(it.st + ' 第' + it.en + '話 ' + epSubtitle) + '">'
-      + '<span class="cal-chip-emoji">📺</span>' + label + '</a>';
+      + '<span class="cal-chip-emoji">' + (it.o ? '🌙' : '📺') + '</span>' + label + '</a>';
   }
 
   function escapeHtml(s) {

@@ -136,7 +136,7 @@
        id・data-section-nav-* を持たせず、見た目（episodes-index-section）だけ流用する。 ##}}
   <section class="episodes-index-section">
     <h2 class="episodes-index-heading">
-      <a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
+      {{ if sec.IsOtona }}🌙 {{ end }}<a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
       {{~ if sec.SeriesStartYearLabel != "" ~}}
       <span class="muted series-year">({{ sec.SeriesStartYearLabel }})</span>
       {{~ end ~}}
@@ -196,7 +196,7 @@
        理由は今後の放送予定側と同じ。見た目だけ episodes-index-section を流用する。 ##}}
   <section class="episodes-index-section">
     <h2 class="episodes-index-heading">
-      <a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
+      {{ if sec.IsOtona }}🌙 {{ end }}<a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
       {{~ if sec.SeriesStartYearLabel != "" ~}}
       <span class="muted series-year">({{ sec.SeriesStartYearLabel }})</span>
       {{~ end ~}}

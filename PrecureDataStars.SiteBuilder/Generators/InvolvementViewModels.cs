@@ -17,25 +17,25 @@ internal sealed class InvolvementGroup
     public int EpisodeCount { get; set; }
     /// <summary>映画系シリーズ（series_kinds.credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）での担当本数（1 シリーズ = 1 本）。</summary>
     public int MovieCount { get; set; }
-    /// <summary>担当の総量（<see cref="EpisodeCount"/> + <see cref="MovieCount"/>）。降順ソートのキーとして使う。</summary>
-    public int Count => EpisodeCount + MovieCount;
-    /// <summary>"担当 N 話・M 本" などの動詞つき単位表記。両方ゼロなら空文字。
+    /// <summary>大人向けシリーズ（オトナプリキュアなど）での担当エピソード合計数（🌙 ピル）。ショートのスピンオフは含めない。</summary>
+    public int AdultEpisodeCount { get; set; }
+    /// <summary>担当の総量（<see cref="EpisodeCount"/> + <see cref="MovieCount"/> + <see cref="AdultEpisodeCount"/>）。降順ソートのキーとして使う。</summary>
+    public int Count => EpisodeCount + MovieCount + AdultEpisodeCount;
+    /// <summary>"担当 N 話・M 本・大人向け K 話" などの動詞つき単位表記。すべてゼロなら空文字。
     /// 声優役グループ（<see cref="HasCharacterColumn"/>）は「出演」、それ以外は「担当」を冠して、
     /// エピソードの話数（#N・第N話）と数量の「N 話」を読み分けられるようにする。</summary>
     public string CountLabel
     {
         get
         {
-            return (EpisodeCount, MovieCount) switch
-            {
-                ( > 0, > 0) => $"{CountVerb} {EpisodeCount} 話・{MovieCount} 本",
-                ( > 0, 0)   => $"{CountVerb} {EpisodeCount} 話",
-                (0,   > 0) => $"{CountVerb} {MovieCount} 本",
-                _           => ""
-            };
+            var parts = new List<string>(3);
+            if (EpisodeCount > 0) parts.Add($"{EpisodeCount} 話");
+            if (MovieCount > 0) parts.Add($"{MovieCount} 本");
+            if (AdultEpisodeCount > 0) parts.Add($"大人向け {AdultEpisodeCount} 話");
+            return parts.Count == 0 ? "" : $"{CountVerb} {string.Join("・", parts)}";
         }
     }
-    /// <summary>担当数バッジ（📺話・🎥本のピル）の前に冠する動詞。 声優役グループ（<see cref="HasCharacterColumn"/>）は「出演」、それ以外は「担当」。</summary>
+    /// <summary>担当数バッジ（📺話・🎥本・🌙話のピル）の前に冠する動詞。 声優役グループ（<see cref="HasCharacterColumn"/>）は「出演」、それ以外は「担当」。</summary>
     public string CountVerb => HasCharacterColumn ? "出演" : "担当";
     /// <summary>このグループ内に CharacterNames が設定された行が 1 件以上あるか（声優役判定）。</summary>
     public bool HasCharacterColumn { get; set; }
@@ -68,6 +68,8 @@ internal sealed class AliasInvolvementSection
     public int EpisodeCount { get; set; }
     /// <summary>名義見出し横に出す合計担当本数（<see cref="Groups"/> 内映画系シリーズ横断の合算）。</summary>
     public int MovieCount { get; set; }
+    /// <summary>名義見出し横に出す大人向けの合計担当話数（<see cref="Groups"/> 内大人向けシリーズ横断の合算）。</summary>
+    public int AdultEpisodeCount { get; set; }
 }
 
 /// <summary>声の出演の「役（キャラクター）」大くくりサブセクション 1 件。</summary>

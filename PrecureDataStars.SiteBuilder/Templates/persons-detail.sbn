@@ -64,12 +64,12 @@
   {{~ if (array.size InvolvementSections) > 0 || (array.size InvolvementGroups) > 0 ~}}
   <section id="credits">
     <h2>本編クレジット
-      <span class="muted role-count"><span class="count-badges">{{~ if CreditEpisodeCountTotal > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ CreditEpisodeCountTotal }}</span>{{~ end ~}}{{~ if CreditMovieCountTotal > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ CreditMovieCountTotal }}</span>{{~ end ~}}</span></span>
+      <span class="muted role-count"><span class="count-badges">{{~ if CreditEpisodeCountTotal > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ CreditEpisodeCountTotal }}</span>{{~ end ~}}{{~ if CreditMovieCountTotal > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ CreditMovieCountTotal }}</span>{{~ end ~}}{{~ if CreditAdultEpisodeCountTotal > 0 ~}}<span class="count-pill count-pill-adult">🌙 {{ CreditAdultEpisodeCountTotal }}</span>{{~ end ~}}</span></span>
     </h2>
     {{~ if (array.size InvolvementSections) > 0 ~}}
     {{~ for s in InvolvementSections ~}}
     <h3 class="alias-section-heading">{{ s.AliasName | html.escape }}<span class="muted alias-section-note"> 名義</span>
-      <span class="muted role-count"><span class="count-badges">{{~ if s.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ s.EpisodeCount }}</span>{{~ end ~}}{{~ if s.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ s.MovieCount }}</span>{{~ end ~}}</span></span>
+      <span class="muted role-count"><span class="count-badges">{{~ if s.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ s.EpisodeCount }}</span>{{~ end ~}}{{~ if s.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ s.MovieCount }}</span>{{~ end ~}}{{~ if s.AdultEpisodeCount > 0 ~}}<span class="count-pill count-pill-adult">🌙 {{ s.AdultEpisodeCount }}</span>{{~ end ~}}</span></span>
     </h3>
     {{~ for g in s.Groups ~}}
     <h4 class="credit-role-heading">
@@ -78,7 +78,7 @@
       {{~ else ~}}
       <span class="credit-role-link">{{ g.RoleLabel | html.escape }}</span>
       {{~ end ~}}
-      <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}</span></span>
+      <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}{{~ if g.AdultEpisodeCount > 0 ~}}<span class="count-pill count-pill-adult">🌙 {{ g.AdultEpisodeCount }}</span>{{~ end ~}}</span></span>
     </h4>
     {{~ if g.FirstCreditHtml != "" ~}}
     <p class="credit-role-first">{{ g.FirstCreditLabel }} {{ g.FirstCreditHtml }}</p>
@@ -168,7 +168,7 @@
       {{~ else ~}}
       <span class="credit-role-link">{{ g.RoleLabel | html.escape }}</span>
       {{~ end ~}}
-      <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}</span></span>
+      <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}{{~ if g.AdultEpisodeCount > 0 ~}}<span class="count-pill count-pill-adult">🌙 {{ g.AdultEpisodeCount }}</span>{{~ end ~}}</span></span>
     </h3>
     {{~ if g.FirstCreditHtml != "" ~}}
     <p class="credit-role-first">{{ g.FirstCreditLabel }} {{ g.FirstCreditHtml }}</p>

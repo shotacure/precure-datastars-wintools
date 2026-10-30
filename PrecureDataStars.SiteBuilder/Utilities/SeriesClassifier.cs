@@ -24,6 +24,14 @@ public static class SeriesClassifier
         => s.KindCode is "OTONA" or "SHORT" or "SPIN-OFF";
 
     /// <summary>
+    /// 大人向けか：<c>'OTONA' / 'SPIN-OFF'</c> が該当する（オトナプリキュア'23・魔法つかいプリキュア！！・デュアルシャドウ）。
+    /// スピンオフのうちショート（<c>'SHORT'</c>、ぷちきゅあ）を除いたもの。人物・企業のページで、大人向けの参加話数を
+    /// 🌙 の札で TV・映画と分けて数えるのに使う。
+    /// </summary>
+    public static bool IsAdult(Series s)
+        => s.KindCode is "OTONA" or "SPIN-OFF";
+
+    /// <summary>
     /// シリーズ種別の <c>series_kinds.credit_attach_to</c> が <c>EPISODE</c>（= TV / SPIN-OFF /
     /// OTONA / SHORT。エピソード単位でクレジットが付くシリーズ）かを判定する。
     /// EPISODE 系シリーズは end_date 未確定なら「継続中」を示す「〜」止め期間表記

@@ -496,7 +496,7 @@ public sealed class PersonsGenerator
         // 通してシリーズ単位で distinct 集計する（CompaniesGenerator と同じ規律）。
         var allPersonInvolvements = aliasIds.Where(_index.ByPersonAlias.ContainsKey).SelectMany(id => _index.ByPersonAlias[id])
             .Where(IsMainInvolvement).ToList();
-        var (_, creditEpisodeCountTotal, creditMovieCountTotal) = InvolvementRowBuilder.BuildSeriesRows(_ctx, allPersonInvolvements);
+        var (_, creditEpisodeCountTotal, creditMovieCountTotal, creditAdultEpisodeCountTotal) = InvolvementRowBuilder.BuildSeriesRows(_ctx, allPersonInvolvements);
 
         // 「音楽クレジット」セクション（作詞・作曲・編曲 / 演奏・コーラス等 / レコーディング / 音盤製作）。
         var songCards = BuildPersonSongCards(aliasIds);
@@ -540,6 +540,7 @@ public sealed class PersonsGenerator
             InvolvementSections = involvementSections,
             CreditEpisodeCountTotal = creditEpisodeCountTotal,
             CreditMovieCountTotal = creditMovieCountTotal,
+            CreditAdultEpisodeCountTotal = creditAdultEpisodeCountTotal,
             MusicSections = musicSections,
             NotableWorks = _notableWorksByPerson!.TryGetValue(person.PersonId, out var works)
                 ? works
@@ -611,7 +612,7 @@ public sealed class PersonsGenerator
             Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForPerson(person.PersonId), displayLabel),
             OgType = "profile",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(displayLabel, personUrl, involvementGroups, allPersonInvolvements, firstAppearance, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(displayLabel, personUrl, involvementGroups, allPersonInvolvements, firstAppearance, creditEpisodeCountTotal, creditMovieCountTotal, creditAdultEpisodeCountTotal, _ctx.CreditCoverageLabel)
         };
 
         _page.RenderAndWriteFile(personUrl, "persons-detail.sbn", content, layout);
@@ -634,12 +635,14 @@ public sealed class PersonsGenerator
         FirstAppearance? firstAppearance,
         int creditEpisodeCountTotal,
         int creditMovieCountTotal,
+        int creditAdultEpisodeCountTotal,
         string coverageLabel)
     {
-        // TV と映画はどちらも「担当した量」なので、片方だけを「担当」と呼ばず媒体名で対等に並べる。
+        // TV・映画・大人向けはどれも「担当した量」なので、片方だけを「担当」と呼ばず媒体名で対等に並べる。
         var badges = new List<OgCardBadge>();
         if (creditEpisodeCountTotal > 0) badges.Add(new OgCardBadge("TV", $"{creditEpisodeCountTotal}話"));
         if (creditMovieCountTotal > 0) badges.Add(new OgCardBadge("映画", $"{creditMovieCountTotal}本"));
+        if (creditAdultEpisodeCountTotal > 0) badges.Add(new OgCardBadge("大人向け", $"{creditAdultEpisodeCountTotal}話"));
 
         // 役職は担当規模の多い順に上位 4 件。
         var roles = involvementGroups
@@ -676,8 +679,12 @@ public sealed class PersonsGenerator
     /// </summary>
     private static string FormatInvolvementCount(InvolvementGroup group)
     {
-        if (group.EpisodeCount > 0 && group.MovieCount > 0) return $"{group.EpisodeCount}話 / {group.MovieCount}本";
-        return group.MovieCount > 0 ? $"{group.MovieCount}本" : $"{group.EpisodeCount}話";
+        // TV の話数・映画の本数・大人向けの話数のうち、0 でないものを「 / 」で並べる。
+        var parts = new List<string>(3);
+        if (group.EpisodeCount > 0) parts.Add($"{group.EpisodeCount}話");
+        if (group.MovieCount > 0) parts.Add($"{group.MovieCount}本");
+        if (group.AdultEpisodeCount > 0) parts.Add($"大人向け {group.AdultEpisodeCount}話");
+        return string.Join(" / ", parts);
     }
 
     /// <summary>
@@ -935,7 +942,7 @@ public sealed class PersonsGenerator
             // 役職グループ内をさらにシリーズ単位で集約。共通骨格（映画系判定 → 話数集合の収集 →
             // 全話判定 → 話数圧縮表記 → シリーズ全体スコープ行 → 行構築）は InvolvementRowBuilder に
             // 集約し、人物詳細固有の付加情報（演じたキャラ名・所属屋号ラベル）はフックで差し込む。
-            var (seriesRows, episodeCountTotal, movieCountTotal) =
+            var (seriesRows, episodeCountTotal, movieCountTotal, adultEpisodeCountTotal) =
                 InvolvementRowBuilder.BuildSeriesRows(_ctx, roleGroup, ResolveSeriesRowExtras);
 
             if (seriesRows.Count == 0) continue;
@@ -982,6 +989,7 @@ public sealed class PersonsGenerator
                 FirstCreditLabel = isVoiceCast ? "初出演" : "初担当",
                 EpisodeCount = episodeCountTotal,
                 MovieCount = movieCountTotal,
+                AdultEpisodeCount = adultEpisodeCountTotal,
                 HasCharacterColumn = seriesRows.Any(r => !string.IsNullOrEmpty(r.CharacterNames))
             });
         }
@@ -1028,14 +1036,15 @@ public sealed class PersonsGenerator
             if (string.IsNullOrEmpty(aliasName)) continue;
 
             // 名義見出しの合計バッジも role 別 EpisodeCount の単純合算ではなく distinct 集計にする。
-            var (_, aliasEpisodeCount, aliasMovieCount) = InvolvementRowBuilder.BuildSeriesRows(_ctx, _index.ByPersonAlias[aliasId].Where(IsMainInvolvement).ToList());
+            var (_, aliasEpisodeCount, aliasMovieCount, aliasAdultEpisodeCount) = InvolvementRowBuilder.BuildSeriesRows(_ctx, _index.ByPersonAlias[aliasId].Where(IsMainInvolvement).ToList());
 
             sections.Add((firstAt, new AliasInvolvementSection
             {
                 AliasName = aliasName,
                 Groups = groups,
                 EpisodeCount = aliasEpisodeCount,
-                MovieCount = aliasMovieCount
+                MovieCount = aliasMovieCount,
+                AdultEpisodeCount = aliasAdultEpisodeCount
             }));
         }
         // 名義が 1 つだけのときも、入口の判定（見出しの名前と違う）を通っていればセクションを出す。
@@ -1741,6 +1750,8 @@ public sealed class PersonsGenerator
         public int CreditEpisodeCountTotal { get; set; }
         /// <summary>クレジットセクション見出し横に出す合計担当本数（映画系シリーズ横断）。</summary>
         public int CreditMovieCountTotal { get; set; }
+        /// <summary>クレジットセクション見出し横に出す合計担当話数（大人向けシリーズ横断、🌙 ピル）。</summary>
+        public int CreditAdultEpisodeCountTotal { get; set; }
         /// <summary>音楽クレジット（区分ごと。何も無い区分は含まない）。</summary>
         public IReadOnlyList<PersonMusicSection> MusicSections { get; set; } = Array.Empty<PersonMusicSection>();
         /// <summary>音楽クレジットの見出しの札（全区分を通して重複を除いた曲数・劇伴の件数・盤数）。</summary>

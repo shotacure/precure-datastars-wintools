@@ -236,7 +236,7 @@ public sealed class CompaniesGenerator
         // 同一屋号が同じ話数に複数役職（例：プロデューサー兼制作）でクレジットされている場合、
         // role ごとの EpisodeCount を合算すると同じ話数を二重に数えてしまうため、
         // 全関与を再度 InvolvementRowBuilder に通してシリーズ単位で distinct 集計する。
-        var (_, creditEpisodeCountTotal, creditMovieCountTotal) = InvolvementRowBuilder.BuildSeriesRows(_ctx, allInvolvements);
+        var (_, creditEpisodeCountTotal, creditMovieCountTotal, creditAdultEpisodeCountTotal) = InvolvementRowBuilder.BuildSeriesRows(_ctx, allInvolvements);
 
         // メンバー履歴セクションのデータを組み立てる。
         // 当該企業の全屋号を所属としてクレジットされた人物 Involvement を集め、
@@ -278,6 +278,7 @@ public sealed class CompaniesGenerator
             InvolvementSections = involvementSections,
             CreditEpisodeCountTotal = creditEpisodeCountTotal,
             CreditMovieCountTotal = creditMovieCountTotal,
+            CreditAdultEpisodeCountTotal = creditAdultEpisodeCountTotal,
             LogoAliases = logoAliases,
             MemberHistory = memberHistory,
             MusicOwnRoles = musicOwnRoles,
@@ -325,7 +326,7 @@ public sealed class CompaniesGenerator
             // 企業ページは website 寄り（プロフィール的でもあるが OGP profile は人物用なので使わない）。
             OgType = "website",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(company.Name, companyUrl, groups, allInvolvements, memberHistory, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(company.Name, companyUrl, groups, allInvolvements, memberHistory, creditEpisodeCountTotal, creditMovieCountTotal, creditAdultEpisodeCountTotal, _ctx.CreditCoverageLabel)
         };
 
         _page.RenderAndWrite(
@@ -352,12 +353,14 @@ public sealed class CompaniesGenerator
         IReadOnlyList<MemberHistoryAliasSection> memberHistory,
         int creditEpisodeCountTotal,
         int creditMovieCountTotal,
+        int creditAdultEpisodeCountTotal,
         string coverageLabel)
     {
-        // TV と映画はどちらも「担当した量」なので、片方だけを「担当」と呼ばず媒体名で対等に並べる。
+        // TV・映画・大人向けはどれも「担当した量」なので、片方だけを「担当」と呼ばず媒体名で対等に並べる。
         var badges = new List<OgCardBadge>();
         if (creditEpisodeCountTotal > 0) badges.Add(new OgCardBadge("TV", $"{creditEpisodeCountTotal}話"));
         if (creditMovieCountTotal > 0) badges.Add(new OgCardBadge("映画", $"{creditMovieCountTotal}本"));
+        if (creditAdultEpisodeCountTotal > 0) badges.Add(new OgCardBadge("大人向け", $"{creditAdultEpisodeCountTotal}話"));
 
         // 役職は担当規模の多い順に上位 4 件（人物と同じ）。
         var roles = groups
@@ -395,7 +398,7 @@ public sealed class CompaniesGenerator
 
     /// <summary>
     /// カード下端に出す所属の人物の要約。「○○、△△、□□ ほか n 人」の形で、担当回数（TV の話数と映画の本数の和）の多い順に
-    /// 3 人まで名前を出す。名義違いは人物単位に畳む。所属の人物がいなければ空。
+    /// 3 人まで名前を出す。担当回数には大人向けの話数も含める。名義違いは人物単位に畳む。所属の人物がいなければ空。
     /// </summary>
     private static string FormatMemberSummary(IReadOnlyList<MemberHistoryAliasSection> memberHistory)
     {
@@ -404,7 +407,7 @@ public sealed class CompaniesGenerator
         {
             foreach (var row in section.Persons)
             {
-                int count = row.EpisodeCount + row.MovieCount;
+                int count = row.EpisodeCount + row.MovieCount + row.AdultEpisodeCount;
                 if (byPerson.TryGetValue(row.PersonId, out var cur))
                     byPerson[row.PersonId] = (cur.Name, cur.Count + count);
                 else
@@ -425,8 +428,12 @@ public sealed class CompaniesGenerator
     /// </summary>
     private static string FormatInvolvementCount(InvolvementGroup group)
     {
-        if (group.EpisodeCount > 0 && group.MovieCount > 0) return $"{group.EpisodeCount}話 / {group.MovieCount}本";
-        return group.MovieCount > 0 ? $"{group.MovieCount}本" : $"{group.EpisodeCount}話";
+        // TV の話数・映画の本数・大人向けの話数のうち、0 でないものを「 / 」で並べる。
+        var parts = new List<string>(3);
+        if (group.EpisodeCount > 0) parts.Add($"{group.EpisodeCount}話");
+        if (group.MovieCount > 0) parts.Add($"{group.MovieCount}本");
+        if (group.AdultEpisodeCount > 0) parts.Add($"大人向け {group.AdultEpisodeCount}話");
+        return string.Join(" / ", parts);
     }
 
     /// <summary>
@@ -874,11 +881,14 @@ public sealed class CompaniesGenerator
                                 .Where(w => w is not null)
                                 .Select(w => w!)
                                 .ToList();
-                            // 役職の担当回数：TV＝その役職での distinct 話数合計、映画＝本数。
-                            int roleEp = 0, roleMv = 0;
+                            // 役職の担当回数：TV＝その役職での distinct 話数合計、映画＝本数、大人向け＝話数合計。
+                            // ショートのスピンオフはどの札にも数えない（InvolvementRowBuilder と同じ分け方）。
+                            int roleEp = 0, roleMv = 0, roleAdult = 0;
                             foreach (var kv in rb.WorksBySeries)
                             {
-                                if (_ctx.IsMovieKindSeries(kv.Key)) roleMv++;
+                                if (_ctx.IsAdultSeries(kv.Key)) roleAdult += kv.Value.EpNos.Count;
+                                else if (_ctx.IsSpinOffSeries(kv.Key)) continue;
+                                else if (_ctx.IsMovieKindSeries(kv.Key)) roleMv++;
                                 else roleEp += kv.Value.EpNos.Count;
                             }
                             return (rb.EarliestCreditKey, Group: new MemberHistoryRoleGroup
@@ -886,20 +896,19 @@ public sealed class CompaniesGenerator
                                 RoleNameJa = rb.RoleNameJa,
                                 EpisodeCount = roleEp,
                                 MovieCount = roleMv,
+                                AdultEpisodeCount = roleAdult,
                                 Works = works
                             });
                         })
                         .ToList();
 
-                    // 人物の総担当回数：全役職を横断した distinct（シリーズ×話数）と映画本数。
+                    // 人物の総担当回数：全役職を横断した distinct（シリーズ×話数）と映画本数、大人向けの distinct（シリーズ×話数）。
                     var tvEps = new HashSet<(int SeriesId, int EpNo)>();
                     var mvSeries = new HashSet<int>();
+                    var adultEps = new HashSet<(int SeriesId, int EpNo)>();
                     foreach (var rb in pb.Roles.Values)
                         foreach (var kv in rb.WorksBySeries)
-                        {
-                            if (_ctx.IsMovieKindSeries(kv.Key)) mvSeries.Add(kv.Key);
-                            else foreach (var no in kv.Value.EpNos) tvEps.Add((kv.Key, no));
-                        }
+                            AddMemberHistoryCounts(kv.Key, kv.Value.EpNos, tvEps, mvSeries, adultEps);
 
                     // 代表名義＝クレジット実績（話数）最多の名義。同数は alias_id の小さい方（登録が早い方）。
                     int repPaid = pb.AliasWeights
@@ -919,6 +928,7 @@ public sealed class CompaniesGenerator
                         PersonName = repName,
                         EpisodeCount = tvEps.Count,
                         MovieCount = mvSeries.Count,
+                        AdultEpisodeCount = adultEps.Count,
                         Roles = roleGroups.Select(x => x.Group).ToList()
                     });
                 })
@@ -931,24 +941,53 @@ public sealed class CompaniesGenerator
             // 複数人物・複数役職が同じ話数を担当していても二重に数えない。
             var aliasTvEps = new HashSet<(int SeriesId, int EpNo)>();
             var aliasMvSeries = new HashSet<int>();
+            var aliasAdultEps = new HashSet<(int SeriesId, int EpNo)>();
             foreach (var pb in aliasBucket.Persons.Values)
                 foreach (var rb in pb.Roles.Values)
                     foreach (var kv in rb.WorksBySeries)
-                    {
-                        if (_ctx.IsMovieKindSeries(kv.Key)) aliasMvSeries.Add(kv.Key);
-                        else foreach (var no in kv.Value.EpNos) aliasTvEps.Add((kv.Key, no));
-                    }
+                        AddMemberHistoryCounts(kv.Key, kv.Value.EpNos, aliasTvEps, aliasMvSeries, aliasAdultEps);
 
             sections.Add((aliasBucket.FirstAt, new MemberHistoryAliasSection
             {
                 AliasName = aliasBucket.AliasName,
                 Persons = persons,
                 EpisodeCount = aliasTvEps.Count,
-                MovieCount = aliasMvSeries.Count
+                MovieCount = aliasMvSeries.Count,
+                AdultEpisodeCount = aliasAdultEps.Count
             }));
         }
 
         return sections.OrderBy(s => s.FirstAt).Select(s => s.Section).ToList();
+    }
+
+    /// <summary>
+    /// メンバー履歴の担当回数の集計に、1 シリーズ分の担当を加える。TV は（シリーズ×話数）、映画はシリーズ（1 本）、
+    /// 大人向けは（シリーズ×話数）を集合に足すので、複数の人物・役職が同じ話を担当していても二重に数えない。
+    /// ショートのスピンオフはどの札にも数えない（<see cref="InvolvementRowBuilder"/> と同じ分け方）。
+    /// </summary>
+    private void AddMemberHistoryCounts(
+        int seriesId,
+        HashSet<int> epNos,
+        HashSet<(int SeriesId, int EpNo)> tvEps,
+        HashSet<int> mvSeries,
+        HashSet<(int SeriesId, int EpNo)> adultEps)
+    {
+        if (_ctx.IsAdultSeries(seriesId))
+        {
+            foreach (var no in epNos) adultEps.Add((seriesId, no));
+        }
+        else if (_ctx.IsSpinOffSeries(seriesId))
+        {
+            // ショートのスピンオフは数えない。
+        }
+        else if (_ctx.IsMovieKindSeries(seriesId))
+        {
+            mvSeries.Add(seriesId);
+        }
+        else
+        {
+            foreach (var no in epNos) tvEps.Add((seriesId, no));
+        }
     }
 
     /// <summary>メンバー履歴の作品 1 行（シリーズ単位でマージ済み）を表示用 DTO に変換する。
@@ -1068,14 +1107,15 @@ public sealed class CompaniesGenerator
 
             // 名義見出しの合計バッジも role 別 EpisodeCount の単純合算ではなく distinct 集計にする
             // （同一名義が同じ話数に複数役職でクレジットされているケースの二重計上を避ける）。
-            var (_, aliasEpisodeCount, aliasMovieCount) = InvolvementRowBuilder.BuildSeriesRows(_ctx, invs);
+            var (_, aliasEpisodeCount, aliasMovieCount, aliasAdultEpisodeCount) = InvolvementRowBuilder.BuildSeriesRows(_ctx, invs);
 
             sections.Add((firstAt, new AliasInvolvementSection
             {
                 AliasName = a.Name,
                 Groups = aliasGroups,
                 EpisodeCount = aliasEpisodeCount,
-                MovieCount = aliasMovieCount
+                MovieCount = aliasMovieCount,
+                AdultEpisodeCount = aliasAdultEpisodeCount
             }));
         }
         return sections.OrderBy(s => s.FirstAt).Select(s => s.Section).ToList();
@@ -1149,7 +1189,7 @@ public sealed class CompaniesGenerator
 
             // 役職グループ内をさらにシリーズ単位で集約。共通骨格は InvolvementRowBuilder に委譲する。
             // 企業詳細は付加情報フックを渡さないため、各行の CharacterNames / AffiliationsLabel は常に空文字になる。
-            var (seriesRows, episodeCountTotal, movieCountTotal) =
+            var (seriesRows, episodeCountTotal, movieCountTotal, adultEpisodeCountTotal) =
                 InvolvementRowBuilder.BuildSeriesRows(_ctx, roleGroup);
 
             if (seriesRows.Count == 0) continue;
@@ -1162,6 +1202,7 @@ public sealed class CompaniesGenerator
                 SeriesRows = seriesRows,
                 EpisodeCount = episodeCountTotal,
                 MovieCount = movieCountTotal,
+                AdultEpisodeCount = adultEpisodeCountTotal,
                 HasCharacterColumn = false
             });
         }
@@ -1243,6 +1284,8 @@ public sealed class CompaniesGenerator
         public int CreditEpisodeCountTotal { get; set; }
         /// <summary>クレジットセクション見出し横に出す合計担当本数（映画系シリーズ横断）。</summary>
         public int CreditMovieCountTotal { get; set; }
+        /// <summary>クレジットセクション見出し横に出す合計担当話数（大人向けシリーズ横断、🌙 ピル）。</summary>
+        public int CreditAdultEpisodeCountTotal { get; set; }
         /// <summary>ロゴタイプ。ロゴを 1 つ以上持つ屋号だけに絞った時系列順の一覧（ロゴの無い屋号は含めない）。</summary>
         public IReadOnlyList<CompanyAliasView> LogoAliases { get; set; } = Array.Empty<CompanyAliasView>();
         /// <summary>メンバー履歴。 当該企業の屋号を所属としてクレジットされた人物名義の一覧を 屋号 → 役職 → 人物 → 作品 の入れ子で持つ。 屋号セクションはその屋号での最初の関与日昇順。 0 件の場合はテンプレ側でセクション自体を非表示にする。</summary>
@@ -1264,6 +1307,8 @@ public sealed class CompaniesGenerator
         public int EpisodeCount { get; set; }
         /// <summary>屋号見出し横に出す合計担当本数（配下の全人物・全役職を横断した distinct 本数）。</summary>
         public int MovieCount { get; set; }
+        /// <summary>屋号見出し横に出す大人向けの合計担当話数（配下の全人物・全役職を横断した distinct 話数、🌙 ピル）。</summary>
+        public int AdultEpisodeCount { get; set; }
     }
 
     /// <summary>メンバー履歴：屋号内の人物 1 名分のブロック。見出し＝代表名義＋担当回数ピル、配下に役職別グループ。</summary>
@@ -1277,6 +1322,8 @@ public sealed class CompaniesGenerator
         public int EpisodeCount { get; set; }
         /// <summary>この屋号での総担当本数（映画系シリーズの distinct 本数、🎥 ピル）。</summary>
         public int MovieCount { get; set; }
+        /// <summary>この屋号での大人向けの総担当話数（役職横断の distinct 話数、🌙 ピル）。</summary>
+        public int AdultEpisodeCount { get; set; }
         /// <summary>この人物が当該屋号で担当した役職グループ（初クレジット順＝出世・変遷順）。</summary>
         public IReadOnlyList<MemberHistoryRoleGroup> Roles { get; set; } = Array.Empty<MemberHistoryRoleGroup>();
     }
@@ -1290,6 +1337,8 @@ public sealed class CompaniesGenerator
         public int EpisodeCount { get; set; }
         /// <summary>この役職での担当本数（映画系シリーズの distinct 本数、🎥 ピル）。</summary>
         public int MovieCount { get; set; }
+        /// <summary>この役職での大人向けの担当話数（distinct 話数、🌙 ピル）。</summary>
+        public int AdultEpisodeCount { get; set; }
         /// <summary>この役職の担当作品（シリーズ放送開始日昇順。1 行ずつ・話数を可視表示）。</summary>
         public IReadOnlyList<MemberHistoryWork> Works { get; set; } = Array.Empty<MemberHistoryWork>();
     }

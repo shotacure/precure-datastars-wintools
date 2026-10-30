@@ -27,7 +27,7 @@ internal readonly record struct InvolvementSeriesRowExtras(
 /// （<see cref="InvolvementSeriesRow"/>）構築の共通骨格。
 /// PersonsGenerator / CompaniesGenerator が「映画系判定 → 話数集合の収集 → 全話判定（SetEquals）→
 /// 話数圧縮表記（<see cref="EpisodeRangeCompressor"/>）→ シリーズ全体スコープ行 → 行構築 →
-/// 担当量（TV 話数・映画本数）カウント」という同一実装を重複保持していたため一本化した。
+/// 担当量（TV 話数・映画本数・大人向け話数）カウント」という同一実装を重複保持していたため一本化した。
 /// 差分（人物詳細だけが持つ「演じたキャラ名」「所属屋号ラベル」の併記）は
 /// <c>extrasResolver</c> フックで呼び出し側から差し込む。
 /// 依存は読み取り専用の <see cref="BuildContext"/> 辞書と引数のみで、
@@ -37,7 +37,7 @@ internal static class InvolvementRowBuilder
 {
     /// <summary>
     /// 役職グループ 1 件分の関与群をシリーズ単位（放送開始日昇順）に集約し、
-    /// 話数圧縮表記つきの行群と担当量（TV 話数・映画本数）を組み立てる。
+    /// 話数圧縮表記つきの行群と担当量（TV 話数・映画本数・大人向け話数）を組み立てる。
     /// 各シリーズにつき「シリーズ全体スコープの 1 行（あれば先）」と「エピソード単位の集約 1 行（話数があれば）」の
     /// 最大 2 行を出す。全話担当のときは話数表記を省略し <see cref="InvolvementSeriesRow.IsAllEpisodes"/> を立てる。
     /// </summary>
@@ -45,7 +45,7 @@ internal static class InvolvementRowBuilder
     /// <param name="roleGroup">同一役職グループに属する関与群。</param>
     /// <param name="extrasResolver">シリーズ単位の関与群から行併記の付加情報（演じたキャラ名・所属屋号ラベル）を
     /// 解決するフック。未指定（null）なら全フィールド空文字の <see cref="InvolvementSeriesRowExtras.Empty"/> を使う。</param>
-    internal static (List<InvolvementSeriesRow> SeriesRows, int EpisodeCountTotal, int MovieCountTotal) BuildSeriesRows(
+    internal static (List<InvolvementSeriesRow> SeriesRows, int EpisodeCountTotal, int MovieCountTotal, int AdultEpisodeCountTotal) BuildSeriesRows(
         BuildContext ctx,
         IEnumerable<Involvement> roleGroup,
         Func<IEnumerable<Involvement>, InvolvementSeriesRowExtras>? extrasResolver = null)
@@ -53,6 +53,7 @@ internal static class InvolvementRowBuilder
         var seriesRows = new List<InvolvementSeriesRow>();
         int episodeCountTotal = 0;
         int movieCountTotal = 0;
+        int adultEpisodeCountTotal = 0;
 
         foreach (var bySeries in roleGroup
             .GroupBy(i => i.SeriesId)
@@ -140,7 +141,18 @@ internal static class InvolvementRowBuilder
             //   （映画 1 本に OP / ED / INSERT / SOUND_TRACK が同一カードに同居しても 1 本扱い）。
             // TV 系（credit_attach_to='EPISODE'）：エピソード単位の関与話数を加算（重複話数は HashSet で排除済み）。
             // SERIES スコープのみで episode 関与が無い TV 系（稀ケース）は本カウントには寄与せず 0 計上。
-            if (isMovieKindSeries)
+            // 大人向け（オトナプリキュア・デュアルシャドウなど）は 🌙 の札の話数として TV と分けて数える。
+            // ショートのスピンオフ（ぷちきゅあ）は話を持たないので、行には出すがどの札にも数えない。
+            // 種別の判定は映画系より先に行う（ショートは作品単位でクレジットを持つため、映画系の判定にも当たる）。
+            if (ctx.IsAdultSeries(bySeries.Key))
+            {
+                adultEpisodeCountTotal += episodeNos.Count;
+            }
+            else if (ctx.IsSpinOffSeries(bySeries.Key))
+            {
+                // ショートのスピンオフは数えない。
+            }
+            else if (isMovieKindSeries)
             {
                 if (hasSeriesScope || episodeNos.Count > 0) movieCountTotal += 1;
             }
@@ -150,7 +162,7 @@ internal static class InvolvementRowBuilder
             }
         }
 
-        return (seriesRows, episodeCountTotal, movieCountTotal);
+        return (seriesRows, episodeCountTotal, movieCountTotal, adultEpisodeCountTotal);
     }
 
     /// <summary>

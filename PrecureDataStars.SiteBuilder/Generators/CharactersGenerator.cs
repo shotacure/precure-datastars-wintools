@@ -167,10 +167,11 @@ public sealed class CharactersGenerator
         // 名義（alias）跨ぎの重複は (SeriesId, EpisodeNo) / SeriesId 単位で排除する。
         // TV 系（series_kinds.credit_attach_to='EPISODE'）：登場話数を加算。
         // 映画系（'SERIES'：MOVIE / MOVIE_SHORT / SPRING / EVENT）：当該シリーズに関与が 1 件以上で 1 本。
-        (int Episode, int Movie) CountAppearances(int characterId)
+        // 大人向けスピンオフ（OTONA）：登場話数を TV と分けて加算（🌙）。
+        (int Episode, int Movie, int OtonaEpisode) CountAppearances(int characterId)
             => aliasesByCharacter.TryGetValue(characterId, out var aliases)
                 ? CharacterAppearanceCounter.Count(_ctx, _index, aliases.Select(a => a.AliasId))
-                : (0, 0);
+                : (0, 0, 0);
 
         // クレジットに 1 件でも登場するか（リンクの下線シグナル分け用）。
         bool HasAnyInvolvement(int characterId) =>
@@ -219,8 +220,8 @@ public sealed class CharactersGenerator
         var entries = characters
             .Select(c =>
             {
-                var (ep, mv) = CountAppearances(c.CharacterId);
-                return (Ch: c, Key: FirstCreditKey(c.CharacterId), Ep: ep, Mv: mv, Has: HasAnyInvolvement(c.CharacterId));
+                var (ep, mv, ot) = CountAppearances(c.CharacterId);
+                return (Ch: c, Key: FirstCreditKey(c.CharacterId), Ep: ep, Mv: mv, Ot: ot, Has: HasAnyInvolvement(c.CharacterId));
             })
             .ToList();
 
@@ -267,6 +268,7 @@ public sealed class CharactersGenerator
                                 NameKana = x.Ch.NameKana ?? "",
                                 EpisodeCount = x.Ep,
                                 MovieCount = x.Mv,
+                                OtonaEpisodeCount = x.Ot,
                                 HasInvolvement = x.Has
                             })
                             .ToList()
@@ -295,10 +297,10 @@ public sealed class CharactersGenerator
             .ToList();
 
         // 登場回数順タブ：個別ページを持つキャラ（単発のゲストは除く）のうち登場のあるものを 1 リストに、
-        // 登場話数と登場本数の合計が多い順に並べる。同数は初登場の早い順（クレジット順）。
+        // 登場話数・登場本数・大人向けスピンオフの登場話数の合計が多い順に並べる。同数は初登場の早い順（クレジット順）。
         var countRows = entries
-            .Where(e => !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId) && (e.Ep + e.Mv) > 0)
-            .OrderByDescending(e => e.Ep + e.Mv)
+            .Where(e => !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId) && (e.Ep + e.Mv + e.Ot) > 0)
+            .OrderByDescending(e => e.Ep + e.Mv + e.Ot)
             .ThenBy(e => e.Key.Start)
             .ThenBy(e => e.Key.EpNo)
             .ThenBy(e => e.Key.Seq)
@@ -310,6 +312,7 @@ public sealed class CharactersGenerator
                 NameKana = e.Ch.NameKana ?? "",
                 EpisodeCount = e.Ep,
                 MovieCount = e.Mv,
+                OtonaEpisodeCount = e.Ot,
                 HasInvolvement = e.Has
             })
             .ToList();
@@ -614,10 +617,11 @@ public sealed class CharactersGenerator
             .ToArray();
 
         // 登場の量は声の出演のクレジットだけで数える（キャラクター一覧のバッジと同じ数え方）。
-        var (episodeCount, movieCount) = CharacterAppearanceCounter.Count(_ctx, _index, aliasIds);
+        var (episodeCount, movieCount, otonaEpisodeCount) = CharacterAppearanceCounter.Count(_ctx, _index, aliasIds);
         var badges = new List<OgCardBadge>();
         if (episodeCount > 0) badges.Add(new OgCardBadge("TV", $"{episodeCount}話"));
         if (movieCount > 0) badges.Add(new OgCardBadge("映画", $"{movieCount}本"));
+        if (otonaEpisodeCount > 0) badges.Add(new OgCardBadge("大人向け", $"{otonaEpisodeCount}話"));
 
         // 学校は作品を観れば分かる設定で、カードの限られた面積を割く価値が薄いので出さない。
         var facts = new List<OgCardFactLine>();
@@ -1148,16 +1152,22 @@ public sealed class CharactersGenerator
         public int EpisodeCount { get; set; }
         /// <summary>映画系シリーズ（credit_attach_to='SERIES'）での登場本数（1 シリーズ = 1 本、全作品横断）。</summary>
         public int MovieCount { get; set; }
-        /// <summary>"登場 N 話・M 本" などの動詞つき単位表記。両方ゼロなら空文字。
+        /// <summary>大人向けスピンオフ（種別 OTONA）での登場話数合計（🌙 ピル）。</summary>
+        public int OtonaEpisodeCount { get; set; }
+        /// <summary>"登場 N 話・M 本・大人向け K 話" などの動詞つき単位表記。すべてゼロなら空文字。
         /// 「登場」を冠して、エピソードの話数（#N・第N話）と数量の「N 話」を読み分けられるようにする。</summary>
-        public string CountLabel => (EpisodeCount, MovieCount) switch
+        public string CountLabel
         {
-            ( > 0, > 0) => $"登場 {EpisodeCount} 話・{MovieCount} 本",
-            ( > 0, 0)   => $"登場 {EpisodeCount} 話",
-            (0,   > 0) => $"登場 {MovieCount} 本",
-            _           => ""
-        };
-        /// <summary>登場数バッジ（📺話・🎥本のピル）の前に冠する動詞。キャラクター索引では常に「登場」。</summary>
+            get
+            {
+                var parts = new List<string>(3);
+                if (EpisodeCount > 0) parts.Add($"{EpisodeCount} 話");
+                if (MovieCount > 0) parts.Add($"{MovieCount} 本");
+                if (OtonaEpisodeCount > 0) parts.Add($"大人向け {OtonaEpisodeCount} 話");
+                return parts.Count == 0 ? "" : $"登場 {string.Join("・", parts)}";
+            }
+        }
+        /// <summary>登場数バッジ（📺話・🎥本・🌙話のピル）の前に冠する動詞。キャラクター索引では常に「登場」。</summary>
         public string CountVerb => "登場";
         public bool HasInvolvement { get; set; }
     }

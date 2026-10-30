@@ -2,7 +2,7 @@
  * 件数バッジでの並べ替えボタン（.count-sort-btn）。
  *
  * ボタンの data-count-sort-for に並べ替え対象のリスト（<ul>）の id を空白区切りで書く。
- * 対象リストの各行（直下の <li>）が持つ件数バッジ（.count-pill-tv / -movie / -song / -cd / -book / -mic / -person / -company）の
+ * 対象リストの各行（直下の <li>）が持つ件数バッジ（.count-pill-tv / -movie / -otona / -song / -cd / -book / -mic / -person / -company）の
  * 数字を読み取り、押すたびに次の順で並べ替える：
  *   バッジの種類ごとに「多い順 ⬇ → 少ない順 ⬆」を、リストに現れる種類の並び順どおりにたどり、
  *   種類が 2 つ以上あるときは最後に全種類の合計（📺🎥 など）で「⬇ → ⬆」、そして最初に戻る。
@@ -24,6 +24,7 @@
   var KINDS = [
     { key: 'tv', icon: '📺', label: 'TV' },
     { key: 'movie', icon: '🎥', label: '映画' },
+    { key: 'otona', icon: '🌙', label: '大人向け' },
     { key: 'song', icon: '🎵', label: '曲' },
     { key: 'cd', icon: '💿', label: '音盤' },
     { key: 'book', icon: '📚', label: '書籍' },

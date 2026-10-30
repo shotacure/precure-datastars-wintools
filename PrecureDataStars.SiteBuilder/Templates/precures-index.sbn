@@ -42,7 +42,7 @@
           <a class="entity-row-link" href="{{ character_url p.CharacterId }}" aria-label="{{ p.TransformName | html.escape }}"></a>
           <a class="entity-row-name" href="{{ character_url p.CharacterId }}">{{ p.TransformName | html.escape }}</a>
           <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }}{{~ if p.VoiceActorName != "" ~}} (CV: {{~ if p.VoiceActorPersonId ~}}<a href="{{ person_url p.VoiceActorPersonId }}">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}}){{~ end ~}}</span>
-          <span class="entity-row-count">{{~ if p.EpisodeCount > 0 || p.MovieCount > 0 ~}}<span class="count-badges">{{~ if p.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ p.EpisodeCount }}</span>{{~ end ~}}{{~ if p.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ p.MovieCount }}</span>{{~ end ~}}</span>{{~ end ~}}</span>
+          <span class="entity-row-count">{{~ if p.EpisodeCount > 0 || p.MovieCount > 0 || p.OtonaEpisodeCount > 0 ~}}<span class="count-badges">{{~ if p.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ p.EpisodeCount }}</span>{{~ end ~}}{{~ if p.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ p.MovieCount }}</span>{{~ end ~}}{{~ if p.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ p.OtonaEpisodeCount }}</span>{{~ end ~}}</span>{{~ end ~}}</span>
         </li>
         {{~ end ~}}
       </ul>
@@ -59,7 +59,7 @@
         <a class="entity-row-link" href="{{ character_url p.CharacterId }}" aria-label="{{ p.TransformName | html.escape }}"></a>
         <a class="entity-row-name" href="{{ character_url p.CharacterId }}">{{ p.TransformName | html.escape }}</a>
         <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }}{{~ if p.VoiceActorName != "" ~}} (CV: {{~ if p.VoiceActorPersonId ~}}<a href="{{ person_url p.VoiceActorPersonId }}">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}}){{~ end ~}}</span>
-        <span class="entity-row-count">{{~ if p.EpisodeCount > 0 || p.MovieCount > 0 ~}}<span class="count-badges">{{~ if p.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ p.EpisodeCount }}</span>{{~ end ~}}{{~ if p.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ p.MovieCount }}</span>{{~ end ~}}</span>{{~ else ~}}<span class="muted">—</span>{{~ end ~}}</span>
+        <span class="entity-row-count">{{~ if p.EpisodeCount > 0 || p.MovieCount > 0 || p.OtonaEpisodeCount > 0 ~}}<span class="count-badges">{{~ if p.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ p.EpisodeCount }}</span>{{~ end ~}}{{~ if p.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ p.MovieCount }}</span>{{~ end ~}}{{~ if p.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ p.OtonaEpisodeCount }}</span>{{~ end ~}}</span>{{~ else ~}}<span class="muted">—</span>{{~ end ~}}</span>
       </li>
       {{~ end ~}}
     </ul>

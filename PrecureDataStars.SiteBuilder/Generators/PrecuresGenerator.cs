@@ -93,9 +93,9 @@ public sealed class PrecuresGenerator
             {
                 // 詳細リンク先となる character_id は変身後名義から解決する。
                 int characterId = aliasById.TryGetValue(p.TransformAliasId, out var trAlias) ? trAlias.CharacterId : 0;
-                var (ep, mv) = aliasIdsByCharacter.TryGetValue(characterId, out var aliasIds)
+                var (ep, mv, ot) = aliasIdsByCharacter.TryGetValue(characterId, out var aliasIds)
                     ? CharacterAppearanceCounter.Count(_ctx, _index, aliasIds)
-                    : (0, 0);
+                    : (0, 0, 0);
                 return new PrecureIndexRow
                 {
                     PrecureId = p.PrecureId,
@@ -107,6 +107,7 @@ public sealed class PrecuresGenerator
                     VoiceActorPersonId = p.VoiceActorPersonId,
                     EpisodeCount = ep,
                     MovieCount = mv,
+                    OtonaEpisodeCount = ot,
                     DebutSeriesId = debutSeriesByPrecure.TryGetValue(p.PrecureId, out var sid) ? sid : null,
                     Order = order
                 };
@@ -130,9 +131,9 @@ public sealed class PrecuresGenerator
             })
             .ToList();
 
-        // 登場回数順タブ：登場話数と登場本数の合計が多い順、同数は登場順。
+        // 登場回数順タブ：登場話数・登場本数・大人向けスピンオフの登場話数の合計が多い順、同数は登場順。
         var countRows = rows
-            .OrderByDescending(r => r.EpisodeCount + r.MovieCount)
+            .OrderByDescending(r => r.EpisodeCount + r.MovieCount + r.OtonaEpisodeCount)
             .ThenBy(r => r.Order)
             .ToList();
 
@@ -193,6 +194,8 @@ public sealed class PrecuresGenerator
         public int EpisodeCount { get; set; }
         /// <summary>映画系シリーズでの登場本数（1 シリーズ = 1 本）。</summary>
         public int MovieCount { get; set; }
+        /// <summary>大人向けスピンオフ（種別 OTONA）での登場話数（🌙 ピル）。</summary>
+        public int OtonaEpisodeCount { get; set; }
         /// <summary>初登場シリーズの ID（紐付くシリーズが無ければ null）。</summary>
         public int? DebutSeriesId { get; set; }
         /// <summary>登場順（precure_id 昇順での並び位置）。同数の並べ替えの安定化に使う。</summary>

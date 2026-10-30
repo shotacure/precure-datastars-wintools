@@ -370,7 +370,8 @@ public sealed class RecordsGenerator
         foreach (var c in characters)
         {
             if (!aliasesByCharacter.TryGetValue(c.CharacterId, out var aliasIds)) continue;
-            var (episodes, movies) = CharacterAppearanceCounter.Count(_ctx, _involvements, aliasIds);
+            // 記録は本線の TV と映画だけで数える（大人向けスピンオフの話数は使わない）。
+            var (episodes, movies, _) = CharacterAppearanceCounter.Count(_ctx, _involvements, aliasIds);
             if (episodes == 0 && movies == 0) continue;
 
             // 登場作品数：声の出演のクレジットがあるシリーズを 1 作品と数える。併映の短編は親映画に含める。

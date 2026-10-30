@@ -42,6 +42,7 @@ public sealed class NotFoundGenerator
         var layout = new LayoutModel
         {
             PageTitle = "ページが見つかりませんでした",
+            OgLead = "お探しのページは、移動したか削除されたようです。トップページかサイト内検索から探し直せます。",
             // 404 はどの URL でも返るので、canonical・og:url で正規の URL を主張しない。
             SuppressCanonical = true,
             // 404 ページは検索インデックス対象外で、SNS シェア対象でもない。ただし

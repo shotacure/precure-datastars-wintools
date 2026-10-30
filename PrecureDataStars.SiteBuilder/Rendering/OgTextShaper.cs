@@ -65,6 +65,16 @@ public sealed class OgTextShaper : IDisposable
     private readonly bool _keepLonePunctuation;
 
     private readonly SKTypeface _typeface;
+
+    /// <summary>欧文の部分を組む組版器（<see cref="UseSubstitutes"/>）。null なら差し替えない。</summary>
+    private OgTextShaper? _latin;
+
+    /// <summary>この書体に字形が無い字を組む組版器（<see cref="UseSubstitutes"/>）。null なら補わない。</summary>
+    private OgTextShaper? _fallback;
+
+    /// <summary>絵文字を組む組版器（<see cref="UseSubstitutes"/>。色つきの絵文字の書体）。null なら絵文字もこの書体のまま。</summary>
+    private OgTextShaper? _emoji;
+
     private readonly SKStreamAsset _stream;
     private readonly Blob _blob;
     private readonly Face _face;
@@ -114,6 +124,104 @@ public sealed class OgTextShaper : IDisposable
         _smallKanaPalt = solid ? smallKanaPalt : 0f;
         UsesOpticalTightening = !solid && (opticalTightening ?? !(HasGposFeature(typeface, "kern") && HasGposFeature(typeface, "palt")));
     }
+
+    /// <summary>
+    /// 文字列の一部を別の書体で組むように指定する。<paramref name="latin"/> は欧文（<see cref="IsLatinRun"/>）の部分を、
+    /// <paramref name="fallback"/> はこの書体に字形が無い字を、<paramref name="emoji"/> は絵文字（<see cref="IsEmoji"/>）を組む。
+    /// いずれも、差し替え先に字形が無い字はこの書体のまま組む。
+    /// 指定すると <see cref="Measure"/>・<see cref="InkExtent"/>・<see cref="Draw(SKCanvas, string, float, float, SKTextAlign, SKFont, SKPaint, SKPaint?, float)"/>
+    /// が文字列を書体ごとの断片に切り分けて組み、続けて並べる（<see cref="Shape"/> はこの書体だけで組む）。
+    /// </summary>
+    public void UseSubstitutes(OgTextShaper? latin, OgTextShaper? fallback, OgTextShaper? emoji = null)
+    {
+        _latin = latin;
+        _fallback = fallback;
+        _emoji = emoji;
+    }
+
+    private bool HasSubstitutes => _latin is not null || _fallback is not null || _emoji is not null;
+
+    /// <summary>
+    /// 絵文字か（絵文字の面 U+1F000〜U+1FAFF、記号・装飾記号 U+2600〜U+27BF）。絵文字の異体字セレクタ（U+FE0F）と
+    /// ゼロ幅接合子（U+200D）は、直前の絵文字と同じ断片に入れる（<see cref="Segment"/>）。
+    /// </summary>
+    private static bool IsEmoji(int codePoint) =>
+        (codePoint >= 0x1F000 && codePoint <= 0x1FAFF) || (codePoint >= 0x2600 && codePoint <= 0x27BF);
+
+    /// <summary>字ごとの、この書体が字形を持つかの控え（並列のページ生成から引くので並行用の辞書）。</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> _hasGlyph = new();
+
+    /// <summary>この書体が字形を持つか（SKFont はスレッド安全ではないので、問い合わせのたびに使い捨てる）。</summary>
+    private bool HasGlyph(int codePoint) => _hasGlyph.GetOrAdd(codePoint, cp =>
+    {
+        using var probe = new SKFont(_typeface);
+        return probe.ContainsGlyph(cp);
+    });
+
+    /// <summary>
+    /// 欧文の書体で組む字か。半角の英数字と記号、ラテン文字の拡張（アクセント付きの字など）。
+    /// 欧文の引用符（‘ ’ “ ”）は、隣が半角の英数字のときだけ欧文として扱う（和文の中の “ ” は和文の書体のまま）。
+    /// </summary>
+    private static bool IsLatinRun(string text, int index, int codePoint)
+    {
+        if ((codePoint >= 0x21 && codePoint <= 0x7E) || (codePoint >= 0xA1 && codePoint <= 0x24F)) return true;
+        if (codePoint is not (0x2018 or 0x2019 or 0x201C or 0x201D)) return false;
+        static bool IsAsciiWord(char c) => char.IsAsciiLetterOrDigit(c);
+        return (index > 0 && IsAsciiWord(text[index - 1])) || (index + 1 < text.Length && IsAsciiWord(text[index + 1]));
+    }
+
+    /// <summary>
+    /// 文字列を、組む組版器ごとの断片に切り分ける（出てきた順）。空白は直前の断片に含める（文字列の頭の空白は次の断片へ）。
+    /// 欧文の断片の半角のアポストロフィ（'）は「’」に置き換える。
+    /// </summary>
+    private List<(OgTextShaper Shaper, string Text)> Segment(string text)
+    {
+        var segments = new List<(OgTextShaper Shaper, string Text)>();
+        var current = new System.Text.StringBuilder();
+        OgTextShaper? currentShaper = null;
+        for (int i = 0; i < text.Length;)
+        {
+            // 1 字ずつ積んで測る呼び出し（折り返し）では、サロゲートペアの前半だけが末尾に来ることがある。
+            // 対になっていないサロゲートはその 1 単位を 1 字として扱う（どの書体にも字形が無いので、この書体のまま組む）。
+            int length = char.IsSurrogatePair(text, i) ? 2 : 1;
+            int codePoint = length == 2 ? char.ConvertToUtf32(text, i) : text[i];
+            OgTextShaper shaper;
+            if (char.IsWhiteSpace(text[i]))
+                shaper = currentShaper ?? this;
+            else if (_emoji is not null && currentShaper == _emoji && codePoint is 0xFE0F or 0x200D)
+                shaper = _emoji;
+            else if (_emoji is not null && IsEmoji(codePoint) && _emoji.HasGlyph(codePoint))
+                shaper = _emoji;
+            else if (_latin is not null && IsLatinRun(text, i, codePoint) && _latin.HasGlyph(codePoint == '\'' ? 0x2019 : codePoint))
+                shaper = _latin;
+            else if (!HasGlyph(codePoint) && _fallback is not null && _fallback.HasGlyph(codePoint))
+                shaper = _fallback;
+            else
+                shaper = this;
+
+            if (currentShaper is not null && shaper != currentShaper && current.Length > 0)
+            {
+                segments.Add((currentShaper, current.ToString()));
+                current.Clear();
+            }
+            currentShaper = shaper;
+            if (shaper == _latin && text[i] == '\'') current.Append('’');
+            else current.Append(text, i, length);
+            i += length;
+        }
+        if (currentShaper is not null && current.Length > 0) segments.Add((currentShaper, current.ToString()));
+        return segments;
+    }
+
+    /// <summary><paramref name="font"/> と同じ大きさ・長体・斜体で、この組版器の書体を使うフォント。</summary>
+    private SKFont FontLike(SKFont font) => new(_typeface, font.Size, font.ScaleX, font.SkewX)
+    {
+        Edging = font.Edging,
+        Subpixel = font.Subpixel,
+        Hinting = font.Hinting,
+        LinearMetrics = font.LinearMetrics,
+        Embolden = font.Embolden
+    };
 
     /// <summary>書体の GPOS テーブルに指定の機能タグがあるか（FeatureList の FeatureRecord を直接読む）。</summary>
     private static bool HasGposFeature(SKTypeface typeface, string tag)
@@ -357,13 +465,48 @@ public sealed class OgTextShaper : IDisposable
     /// 組んだ幅（ピクセル）。フォントの横方向の拡大率（<see cref="SKFont.ScaleX"/>＝長体）を含む。
     /// <paramref name="tracking"/> は字と字のあいだに足す空き（長体の率をかける前のピクセル）。
     /// </summary>
-    public float Measure(string text, SKFont font, float tracking = 0f) => Shape(text, font.Size, tracking).Width * font.ScaleX;
+    public float Measure(string text, SKFont font, float tracking = 0f)
+    {
+        if (!HasSubstitutes) return Shape(text, font.Size, tracking).Width * font.ScaleX;
+        // 断片ごとに組んだ幅の和。断片の切れ目にも字と字のあいだと同じ空きを足す。
+        var segments = Segment(text);
+        float width = 0f;
+        for (int i = 0; i < segments.Count; i++)
+        {
+            width += segments[i].Shaper.Shape(segments[i].Text, font.Size, tracking).Width;
+            if (i + 1 < segments.Count) width += tracking;
+        }
+        return width * font.ScaleX;
+    }
 
     /// <summary>
     /// 組んだ文字列の字面（インク）の左端と右端（起点からのピクセル。長体の率を含む）。字面の無い文字列なら (0, 0)。
     /// <paramref name="tracking"/> は字と字のあいだに足す空き（長体の率をかける前のピクセル）。
     /// </summary>
     public (float Left, float Right) InkExtent(string text, SKFont font, float tracking = 0f)
+    {
+        if (HasSubstitutes)
+        {
+            // 断片ごとの字面を、断片の起点（それまでの断片の幅）だけずらして合わせる。
+            float origin = 0f, inkLeft = float.MaxValue, inkRight = float.MinValue;
+            foreach (var (shaper, part) in Segment(text))
+            {
+                using var partFont = shaper.FontLike(font);
+                var (l, r) = shaper.InkExtentSingle(part, partFont, tracking);
+                if (r > l)
+                {
+                    inkLeft = Math.Min(inkLeft, origin + l);
+                    inkRight = Math.Max(inkRight, origin + r);
+                }
+                origin += (shaper.Shape(part, font.Size, tracking).Width + tracking) * font.ScaleX;
+            }
+            return inkLeft > inkRight ? (0f, 0f) : (inkLeft, inkRight);
+        }
+        return InkExtentSingle(text, font, tracking);
+    }
+
+    /// <summary><see cref="InkExtent"/> の、この書体だけで組む場合。</summary>
+    private (float Left, float Right) InkExtentSingle(string text, SKFont font, float tracking)
     {
         var run = Shape(text, font.Size, tracking);
         if (run.Glyphs.Length == 0) return (0f, 0f);
@@ -396,6 +539,40 @@ public sealed class OgTextShaper : IDisposable
     /// </summary>
     public void Draw(SKCanvas canvas, string text, float x, float baseline, SKTextAlign align, SKFont font, SKPaint paint, SKPaint? outline,
         float tracking = 0f)
+    {
+        if (!HasSubstitutes)
+        {
+            DrawSingle(canvas, text, x, baseline, align, font, paint, outline, tracking);
+            return;
+        }
+
+        // 書体ごとの断片を左から続けて描く。揃えは全体の幅で決める。縁取りは全部の断片ぶんを先に描いてから塗る
+        // （断片ごとに縁取りと塗りを続けると、あとの断片の縁取りが前の断片の字にかぶる）。
+        float width = Measure(text, font, tracking);
+        float start = align switch
+        {
+            SKTextAlign.Right => x - width,
+            SKTextAlign.Center => x - width / 2f,
+            _ => x
+        };
+        var segments = Segment(text);
+        void DrawPass(SKPaint pass)
+        {
+            float cursor = start;
+            foreach (var (shaper, part) in segments)
+            {
+                using var partFont = shaper.FontLike(font);
+                shaper.DrawSingle(canvas, part, cursor, baseline, SKTextAlign.Left, partFont, pass, null, tracking);
+                cursor += (shaper.Shape(part, font.Size, tracking).Width + tracking) * font.ScaleX;
+            }
+        }
+        if (outline is not null) DrawPass(outline);
+        DrawPass(paint);
+    }
+
+    /// <summary><see cref="Draw(SKCanvas, string, float, float, SKTextAlign, SKFont, SKPaint, SKPaint?, float)"/> の、この書体だけで組む場合。</summary>
+    private void DrawSingle(SKCanvas canvas, string text, float x, float baseline, SKTextAlign align, SKFont font, SKPaint paint, SKPaint? outline,
+        float tracking)
     {
         var run = Shape(text, font.Size, tracking);
         if (run.Glyphs.Length == 0) return;

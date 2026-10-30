@@ -271,16 +271,12 @@ public sealed class ProductsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア音楽商品(CD/配信)",
-            // 本文リード行と同じ母数をカードにも置く。
+            // 数は商品の点数と、ディスクの媒体ごとの枚数。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア音楽商品(CD/配信)")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "サウンドトラックから主題歌シングルまで、プリキュアの音楽商品を発売日・収録曲・購入先とともに一覧にしました。",
-                Badges = new[]
-                {
-                    new OgCardBadge("商品", $"{products.Count}点"),
-                    new OgCardBadge("ディスク", $"{discsByProduct.Values.Sum(d => d.Count)}枚")
-                }
+                Subtitle = "プリキュアの音楽 CD に、発売日・収録曲・購入先を載せています。欲しい曲が入った盤や、買い逃した CD を探せます。",
+                Badges = BuildIndexOgBadges(products.Count, discsByProduct.Values.SelectMany(d => d).ToList())
             },
             MetaDescription = $"歴代プリキュアの音楽商品（CD・配信）{products.Count} 点 {discsByProduct.Values.Sum(d => d.Count)} 枚の一覧。サウンドトラックや主題歌シングルの発売日・収録曲・購入先をまとめました。",
             Breadcrumbs = new[]
@@ -961,6 +957,21 @@ public sealed class ProductsGenerator
         return productUrl;
     }
 
+    /// <summary>
+    /// 一覧のカードの数。商品の点数と、ディスクの枚数を媒体ごと（CD・DVD・Blu-ray）に分けて並べる。
+    /// 枚数が 0 の媒体は出さない。CD-ROM は CD に数え、配信（DL）とその他は枚数に入れない。
+    /// </summary>
+    private static OgCardBadge[] BuildIndexOgBadges(int productCount, IReadOnlyList<Disc> discs)
+    {
+        var badges = new List<OgCardBadge> { new("商品", $"{productCount}点") };
+        int cd = discs.Count(d => d.MediaFormat is "CD" or "CD_ROM");
+        int dvd = discs.Count(d => d.MediaFormat == "DVD");
+        int bd = discs.Count(d => d.MediaFormat == "BD");
+        if (cd > 0) badges.Add(new OgCardBadge("CD", $"{cd}枚"));
+        if (dvd > 0) badges.Add(new OgCardBadge("DVD", $"{dvd}枚"));
+        if (bd > 0) badges.Add(new OgCardBadge("Blu-ray", $"{bd}枚"));
+        return badges.ToArray();
+    }
     /// <summary>
     /// 商品詳細ページの OGP カードを組み立てる。
     /// 「商品種別 → 商品名 → 量のバッジ（枚数・トラック数・収録時間・初出の曲数）→ 発売日・品番・価格 → 作曲者・収録内容の内訳」の順に置き、

@@ -1005,22 +1005,25 @@ public sealed class SeriesGenerator
             TotalCount = _ctx.Series.Count,
             MovieShortCount = _ctx.Series.Count(SeriesClassifier.IsMovieShortChild)
         };
+        // meta description の作品数は公開の単位で数える（同時上映の短編は親の映画と 1 つに数え、重ねない）。
+        int releaseCount = _ctx.Series.Count - _ctx.Series.Count(SeriesClassifier.IsMovieShortChild);
+        int spinOffCount = _ctx.Series.Count(SeriesClassifier.IsSpinOff);
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアシリーズ",
-            // 本文リード行と同じ母数をカードにも置く。内訳は区分ごとの行数から採る。
+            // カードの数は区分ごと（TV・映画・スピンオフ）に出し、合計は出さない。数は区分ごとの行数から採る。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアシリーズ")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "歴代プリキュアを放送・公開の順に、話数や放送期間、主要スタッフとともに一覧にしました。",
+                Subtitle = "全作品を放送・公開の順に並べ、話数・放送期間・主要スタッフを載せています。作品どうしの規模やスタッフの顔ぶれを見比べられます。",
                 Badges = new[]
                 {
-                    new OgCardBadge("全", $"{_ctx.Series.Count}作"),
                     new OgCardBadge("TV", $"{tvRows.Count}作"),
-                    new OgCardBadge("映画", $"{movieRows.Count}作")
+                    new OgCardBadge("映画", $"{movieRows.Count}作"),
+                    new OgCardBadge("スピンオフ", $"{spinOffCount}作")
                 }
             },
-            MetaDescription = $"歴代プリキュア {_ctx.Series.Count} 作品（TV {tvRows.Count} 作・映画 {movieRows.Count} 作ほか）の一覧。放送・公開の順に、各作品の話数・放送期間・主要スタッフをまとめました。",
+            MetaDescription = $"歴代プリキュア {releaseCount} 作品（TV {tvRows.Count} 作・映画 {movieRows.Count} 作ほか）の一覧。放送・公開の順に、各作品の話数・放送期間・主要スタッフをまとめました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1453,7 +1456,7 @@ public sealed class SeriesGenerator
             },
             OgType = s.KindCode == "MOVIE" ? "video.movie" : "video.tv_show",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(content, s.StartDate.Year)
+            OgCard = BuildOgCard(content, s.StartDate.Year, s.RunTimeSeconds)
         };
 
         _page.RenderAndWrite(seriesUrl, "series", "series-detail.sbn", content, layout);
@@ -1504,28 +1507,25 @@ public sealed class SeriesGenerator
 
     /// <summary>
     /// シリーズ詳細ページの OGP カードを組み立てる。
-    /// 「作品種別 → 作品名 → 規模のバッジ（話数・プリキュア人数）→ 主要スタッフ」の順に置き、
+    /// 「作品種別 → 作品名 → 放送期間と話数（映画は公開日と上映時間）の 1 行 → 主要スタッフ」の順に置き、
     /// 作品名だけでは分からない規模と座組がカード内で読み取れるようにする。
+    /// 話数は大きな数にせず期間の行に添える（数に 1 段使うと、主要スタッフが入り切らずに欠ける）。
     /// </summary>
-    private static OgCardSpec BuildOgCard(SeriesDetailModel content, int startYear)
+    private static OgCardSpec BuildOgCard(SeriesDetailModel content, int startYear, ushort? runTimeSeconds)
     {
         var view = content.Series;
 
-        // バッジには値そのものを載せる（PeriodLabel / RunTimeLabel は見出し語なので使わない）。
         // 話数を持たない作品（映画など）は、TV の各話カードと同じ組み（題名・公開日・主要スタッフだけを大きく）にする。
-        // 尺や数のバッジは持たない。
         bool isMovieLike = string.IsNullOrWhiteSpace(view.Episodes);
-        var badges = new List<OgCardBadge>();
-        if (!isMovieLike)
-        {
-            badges.Add(new OgCardBadge("全", $"{view.Episodes}話"));
-            if (!string.IsNullOrWhiteSpace(view.RunTimeSeconds)) badges.Add(new OgCardBadge("1話", view.RunTimeSeconds));
-        }
+        // 上映時間は分の単位で足りる（秒まで出すとカードの 1 行が重くなる）。
+        string runTimeMinutes = runTimeSeconds is ushort sec && sec > 0 ? $"{(int)Math.Round(sec / 60.0)}分" : "";
+        string periodLine = isMovieLike
+            ? string.Join("・", new[] { view.Period.Length > 0 ? $"{view.Period}公開" : "", runTimeMinutes }.Where(x => x.Length > 0))
+            : $"{view.Period}　全{view.Episodes}話";
 
         // 主要スタッフは役職ごとに全員を出す。連名を落とすと「誰が作ったか」の答えが変わってしまう。
         // 役職名の色はエピソードカードと同じくサイトの役職バッジの配色に揃える。
-        // 1 行 1 役職で積む（横に流さない）。行頭が必ず役職になり、連名が折り返しても
-        // 氏名や社名が行をまたいで割れない。
+        // 役職と担当者を 1 組にして横に流し込む（1 行 1 役職で積むとカードの高さに入り切らない）。
         var staff = content.KeyStaffSections
             .Where(s => s.Members.Count > 0 && !string.IsNullOrWhiteSpace(s.RoleLabel))
             .Select(s => new OgCardFactLine(s.RoleLabel, string.Join("、", s.Members.Select(FormatStaffMember)))
@@ -1541,7 +1541,7 @@ public sealed class SeriesGenerator
                 Kicker: string.IsNullOrWhiteSpace(view.KindLabel) ? "映画" : view.KindLabel,
                 Title: view.Title)
             {
-                Subtitle = view.Period,
+                Subtitle = periodLine,
                 InlineFacts = staff,
                 BandColorHex = OgCardColors.Episode,
                 Watermark = startYear.ToString()
@@ -1552,10 +1552,9 @@ public sealed class SeriesGenerator
             Kicker: string.IsNullOrWhiteSpace(view.KindLabel) ? "シリーズ" : view.KindLabel,
             Title: view.Title)
         {
-            // 放送期間は見出しの下の補助行に置く（右上は透かしの放送開始年に譲る）。
-            Subtitle = view.Period,
-            Badges = badges,
-            Facts = staff,
+            // 放送期間と話数は見出しの下の補助行に置く（右上は透かしの放送開始年に譲る）。
+            Subtitle = periodLine,
+            InlineFacts = staff,
             BandColorHex = OgCardColors.Episode,
             // 透かしは放送開始年。23 年続くシリーズのどこかが、縮小表示でも分かる。
             Watermark = startYear.ToString()

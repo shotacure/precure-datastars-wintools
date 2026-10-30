@@ -244,6 +244,10 @@ public static class MusicCreditViewBuilder
         ["CHORUS_DIRECTION"] = "🎶",
     };
 
+    /// <summary>演奏系の役職の絵文字（<see cref="RoleEmojiByCode"/>）。無い役職は空文字。OGP カードの役職名にも同じものを付ける。</summary>
+    public static string RoleEmoji(string roleCode)
+        => RoleEmojiByCode.TryGetValue(roleCode, out var emoji) ? emoji : "";
+
     /// <summary>バッジに出す役職名（演奏系の役職は絵文字 + 半角スペース + 役職名、それ以外は役職名）。</summary>
     public static string BadgeLabel(BuildContext ctx, string roleCode)
         => RoleEmojiByCode.TryGetValue(roleCode, out var emoji) ? $"{emoji} {RoleName(ctx, roleCode)}" : RoleName(ctx, roleCode);

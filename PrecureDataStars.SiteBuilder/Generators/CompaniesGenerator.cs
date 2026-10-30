@@ -367,13 +367,9 @@ public sealed class CompaniesGenerator
             .Select(g => new OgCardFactLine(g.RoleLabel, FormatInvolvementCount(g)))
             .ToArray();
 
-        // 年表・透かし・初参加は本編のクレジット（主題歌・劇伴経由の関与を除く）から決める。
+        // 関わった作品・透かし・初参加は本編のクレジット（主題歌・劇伴経由の関与を除く）から決める。
         var mainInvolvements = allInvolvements.Where(i => i.IsMainCredit).ToList();
         var firstAppearance = FirstAppearanceResolver.Resolve(_ctx, mainInvolvements);
-        bool showTimeline = OgCareerCardParts.AppearsInSiteTimeline(_ctx, _roleSuccessorResolver, mainInvolvements, companyUrl);
-        IReadOnlyList<OgCardTimelineSegment> timeline = showTimeline
-            ? OgCareerCardParts.BuildCareerTimeline(_ctx, mainInvolvements, OgCardColors.Staff)
-            : Array.Empty<OgCardTimelineSegment>();
 
         // 下端の事実行：この団体の所属としてクレジットされた人物（担当回数の多い順に 3 人まで）と、初参加。
         var foot = new List<OgCardFactLine>();
@@ -391,11 +387,8 @@ public sealed class CompaniesGenerator
             Badges = badges,
             InlineFacts = roles,
             Watermark = OgCareerCardParts.ResolveMainRoleLabel(_ctx, mainInvolvements),
-            Timeline = timeline,
-            Facts = showTimeline
-                ? Array.Empty<OgCardFactLine>()
-                : OgCareerCardParts.BuildWorksLines(_ctx, mainInvolvements),
-            TimelineEnd = OgCareerCardParts.TimelineEndFor(_ctx, timeline),
+            // 関わった作品を 1 行 1 作品で並べる（年表の棒は何を読めばよいかが伝わらないので出さない）。
+            Facts = OgCareerCardParts.BuildWorksLines(_ctx, mainInvolvements),
             FootFacts = foot
         };
     }

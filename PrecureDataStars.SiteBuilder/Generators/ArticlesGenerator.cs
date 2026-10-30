@@ -27,6 +27,9 @@ public sealed class ArticlesGenerator
     private readonly BuildContext _ctx;
     private readonly PageRenderer _page;
 
+    /// <summary>一覧のカードに題名を並べる、新しい記事の本数。</summary>
+    private const int LatestArticlesOnCard = 4;
+
     // Markdig パイプライン。テーブル・自動リンク等の一般的な拡張を有効化する
     // （入力は内製の信頼ソースのため、サニタイズは行わない＝既存テンプレと同じ前提）。
     // 強調の拡張は打ち消し線（~~文字~~）だけにする。曲名・盤名は「~光の章~」のように半角の ~ で副題を挟むので、
@@ -150,9 +153,12 @@ public sealed class ArticlesGenerator
         var indexLayout = new LayoutModel
         {
             PageTitle = "コラム",
+            // 記事の本数ではなく、新しい記事の題名を日付つきで 1 行ずつ並べる（何が読めるかがシェア先で分かるように）。
             OgCard = new OgCardSpec(Kicker: "", Title: "コラム")
             {
-                Badges = new[] { new OgCardBadge("記事", $"{articles.Count}本") }
+                Facts = articles.Take(LatestArticlesOnCard)
+                    .Select(a => new OgCardFactLine(a.DateLabel ?? "", a.Title))
+                    .ToList()
             },
             MetaDescription =
                 "プリキュアのコラム。precure.tv を運営する祥太が、歴代プリキュアを多種多様なアプローチで読み解きます。" +

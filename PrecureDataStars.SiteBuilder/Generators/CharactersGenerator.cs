@@ -328,11 +328,11 @@ public sealed class CharactersGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代キャラクター")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "プリキュアから妖精、敵、その他のキャラクターまで、歴代のキャラクターを担当の声優さんと登場エピソードとともに作品ごとに一覧にしました。",
+                Subtitle = "歴代のキャラクターを作品ごとに並べ、演じた声優さんと登場した話を載せています。ゲストキャラの声優さんや出番も確かめられます。",
                 MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                 Badges = new[]
                 {
-                    new OgCardBadge("登場", $"{characters.Count}名"),
+                    new OgCardBadge("キャラクター", $"{characters.Count}人"),
                     new OgCardBadge("作品", $"{sections.Count}作")
                 }
             },
@@ -573,7 +573,7 @@ public sealed class CharactersGenerator
                 OgCard = new OgCardSpec(Kicker: series.Title, Title: "その他のキャラクター")
                 {
                     MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
-                    Badges = new[] { new OgCardBadge("登場", $"{rows.Count}名") }
+                    Badges = new[] { new OgCardBadge("キャラクター", $"{rows.Count}人") }
                 },
                 Breadcrumbs = new[]
                 {

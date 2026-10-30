@@ -262,19 +262,19 @@ public sealed class SongsGenerator
             SeriesSections = seriesSections,
             TotalCount = allRows.Count
         };
+        // 録音を 1 つ以上持つ曲の数（一覧に行が出る曲）。
+        int songCount = recordingsBySong.Count(kv => kv.Value.Count > 0 && songById.ContainsKey(kv.Key));
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアソング(歌)",
-            // 本文リード行と同じ母数をカードにも置く。
+            // 数は曲（作品としての歌）の数と、バージョン（録音）の数。バージョン数は曲数と食い違うときだけ出す。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアソング(歌)")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "オープニングからキャラクターソングまで、プリキュアの歌を作詞・作曲・歌手と収録 CD とともに一覧にしました。",
-                Badges = new[]
-                {
-                    new OgCardBadge("収録", $"{allRows.Count}曲"),
-                    new OgCardBadge("作品", $"{seriesSections.Count}作")
-                }
+                Subtitle = "歌ごとに、作詞・作曲・編曲・歌唱のクレジットと収録 CD を載せています。聴きたい曲が入った CD や、作家ごとの作品がすぐ分かります。",
+                Badges = songCount == allRows.Count
+                    ? new[] { new OgCardBadge("", $"{songCount}曲") }
+                    : new[] { new OgCardBadge("", $"{songCount}曲"), new OgCardBadge("", $"{allRows.Count}ver.") }
             },
             MetaDescription = $"歴代プリキュアの歌 {allRows.Count} 曲の一覧。オープニング・エンディングから挿入歌・キャラクターソングまで、作詞・作曲・歌手と収録 CD をまとめました。",
             Breadcrumbs = new[]
@@ -461,7 +461,7 @@ public sealed class SongsGenerator
             JsonLd = jsonLd,
             OgCard = BuildOgCard(song, BuildOgFrontCredits(song, songCreditRows, personAliasMap, characterAliasMap,
                 repRecording, repRecording is not null && singersByRecording.TryGetValue(repRecording.SongRecordingId, out var ogSingers) ? ogSingers : null),
-                musicClassLabel, repSeriesTitle)
+                BuildOgMusicCredits(song, repRecording), musicClassLabel, repSeriesTitle)
         };
         _page.RenderAndWriteFile(songUrl, "songs-detail.sbn", content, layout);
         return songUrl;
@@ -470,7 +470,7 @@ public sealed class SongsGenerator
     /// <summary>
     /// OGP カードに載せる「表のクレジット」（曲の作家と、筆頭バージョン（先頭録音）の歌い手）を、楽曲詳細の基本情報と同じ順に組む：
     /// 作詞 → 英訳詞 → 作曲 → 編曲 → ストリングス編曲・オーケストラ編曲 → メドレー編曲 → 歌 → コーラス → 台詞 → 語り。
-    /// 演奏・エンジニアなどの裏方（音楽クレジット）は載せない。無い役職は飛ばす。
+    /// 演奏・エンジニアなどの裏方（音楽クレジット）はここには入れず、空きがあるときだけ <see cref="BuildOgMusicCredits"/> で続ける。無い役職は飛ばす。
     /// 名義は構造化優先の平文（CreditText）で、会社名だけの行に添える人物の括弧は補足の印（<see cref="OgCardNote"/>）で包み、カードで小さい字に描き分ける。
     /// 項目名は盤の役職の表記（role_label_text）があればそれ、無ければ役職名。色はサイトの楽曲詳細の役職バッジと同じ。
     /// </summary>
@@ -510,6 +510,31 @@ public sealed class SongsGenerator
         return credits;
     }
 
+    /// <summary>
+    /// OGP カードに空きがあるときだけ載せる音楽クレジット（演奏・エンジニアなど）。曲に付いたもの（楽曲詳細の基本情報の
+    /// 音楽クレジット）に、筆頭バージョン（先頭録音）に付いたものを続ける。楽曲詳細と同じ並び・同じ役職表記（盤の表記があればそれ）で、名義は平文にする。
+    /// </summary>
+    private IReadOnlyList<OgCardFactLine>? BuildOgMusicCredits(Song song, SongRecording? repRecording)
+    {
+        var rows = new List<MusicCredit>();
+        if (_ctx.MusicCredits.BySong.TryGetValue(song.SongId, out var songRows)) rows.AddRange(songRows);
+        if (repRecording is not null && _ctx.MusicCredits.ByRecording.TryGetValue(repRecording.SongRecordingId, out var recordingRows)) rows.AddRange(recordingRows);
+        if (rows.Count == 0) return null;
+        var facts = MusicCreditViewBuilder.Build(_ctx, rows).Groups
+            .SelectMany(g => g.Lines)
+            .Select(line => new OgCardFactLine(
+                // 演奏系の役職は、楽曲詳細の役職バッジと同じ絵文字を頭に付ける。
+                (MusicCreditViewBuilder.RoleEmoji(line.RoleCode) is { Length: > 0 } emoji ? emoji + " " : "")
+                    + (string.IsNullOrWhiteSpace(line.PrintedRoleLabel) ? line.RoleLabel : line.PrintedRoleLabel),
+                System.Net.WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(line.NamesHtml, "<[^>]+>", "")).Trim())
+            {
+                LabelColorHex = OgRolePalette.ColorFor(line.RoleCode)
+            })
+            .Where(f => f.Text.Length > 0)
+            .ToList();
+        return facts.Count > 0 ? facts : null;
+    }
+
     /// <summary>OGP カードで歌の後ろに並べる歌い手の役職（楽曲詳細の基本情報と同じ順）。</summary>
     private static readonly (string RoleCode, string Label)[] OgSingerExtraRoles =
     {
@@ -526,6 +551,7 @@ public sealed class SongsGenerator
     private static OgCardSpec BuildOgCard(
         Song song,
         IReadOnlyList<OgCardFactLine> credits,
+        IReadOnlyList<OgCardFactLine>? musicCredits,
         string musicClassLabel,
         string repSeriesTitle)
     {
@@ -538,7 +564,9 @@ public sealed class SongsGenerator
             // 出典作品は右上の透かしで見せる。
             Watermark = repSeriesTitle ?? "",
             BandColorHex = OgCardColors.Music,
-            InlineFacts = credits
+            InlineFacts = credits,
+            // 演奏・エンジニアなどは、表のクレジットのあとに空きがあるだけ続ける。
+            SupplementalFacts = musicCredits
         };
     }
 

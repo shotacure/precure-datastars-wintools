@@ -1168,7 +1168,7 @@ public sealed class CreatorsGenerator
                 "歴代プリキュア音楽制作",
                 BuildEntityBadges(personCount, companyCount),
                 Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
-                "作詞・作曲・編曲から演奏・エンジニアまで、プリキュアの歌と劇伴、音盤を作った方々を一覧にしました。"),
+                "作詞・作曲・編曲から演奏・録音まで、歌・劇伴・CD を手がけた方々を役割ごとにまとめています。好きな曲の作家が手がけたほかの曲も探せます。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1862,7 +1862,7 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("ユニット", $"{unitCount}組")
                 },
                 Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
-                "主題歌からキャラクターソングまで、プリキュアの歌を歌った方々とキャラクターを一覧にしました。"),
+                "プリキュアの歌を歌った方々とキャラクターをまとめています。歌った曲と収録 CD を確かめられます。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2071,7 +2071,7 @@ public sealed class CreatorsGenerator
                 "歴代プリキュアスタッフ",
                 BuildEntityBadges(content.PersonCount, content.CompanyCount),
                 Array.Empty<OgCardFactLine>(), null,
-                "脚本・演出・作画から制作会社まで、プリキュアを支えてきた方々（人物・企業・団体）を役職ごとに一覧にしました。"),
+                "脚本・演出・作画から制作会社まで、携わった方々と企業・団体を役職ごとにまとめています。好きな回の演出家が担当したほかの回も探せます。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2252,7 +2252,7 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("声優", $"{countRows.Count}人")
                 },
                 Array.Empty<OgCardFactLine>(), null,
-                "あのキャラの声は誰？ プリキュアのキャラクターを演じた声優さんを、作品ごと・役ごとに一覧にしました。"),
+                "キャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。あのキャラの声優さんや、その方が演じたほかの役を確かめられます。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2686,7 +2686,7 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("歌唱", $"{singerCount}人")
                 },
                 Array.Empty<OgCardFactLine>(), null,
-                "脚本・演出・作画から制作会社、声優さん、作詞・作曲・歌手の方々まで、プリキュアを作り上げた方々をまとめて一覧にしました。"),
+                "スタッフ・声優さん・音楽制作・歌唱の方々の入口です。名前から、その方が関わった作品と話をまとめて確かめられます。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2709,8 +2709,8 @@ public sealed class CreatorsGenerator
     /// <summary>
     /// 役職詳細の OGP カード（人物・企業と同じプロフィール組み）。
     /// 「役職名 → 人物数・団体数と、この役職がクレジットされた TV の話数・映画の本数 → 担当の多い順の顔ぶれ →
-    /// この役職が置かれていた期間の年表 → 別称・初出」の順に置く。透かしは初出の年。
-    /// 役職名と人数だけでは「いつからある役職で、誰の仕事か」が伝わらないため、顔ぶれと期間で役職の輪郭を示す。
+    /// 別称・初出」の順に置く。透かしは初出の年。
+    /// 役職名と人数だけでは「いつからある役職で、誰の仕事か」が伝わらないため、顔ぶれと初出で役職の輪郭を示す。
     /// </summary>
     private OgCardSpec BuildRoleOgCard(
         Role role, int personCount, int companyCount,
@@ -2747,26 +2747,6 @@ public sealed class CreatorsGenerator
             }))));
         }
 
-        // この役職が置かれていた期間：作品ごとに、クレジットされた最初の話から最後の話まで（映画は公開日の点）。
-        var segments = new List<OgCardTimelineSegment>();
-        foreach (var g in episodes.GroupBy(k => k.SeriesId))
-        {
-            DateOnly? first = null, last = null;
-            foreach (var (sid, eid) in g)
-            {
-                if (!_ctx.EpisodeById.TryGetValue(eid, out var ep)) continue;
-                if (first is null || ep.OnAirDate < first) first = ep.OnAirDate;
-                if (last is null || ep.OnAirDate > last) last = ep.OnAirDate;
-            }
-            if (first is DateOnly f && last is DateOnly l)
-                segments.Add(new OgCardTimelineSegment(f, l.AddDays(7), OgCardColors.Staff));
-        }
-        foreach (var sid in movies)
-        {
-            if (_ctx.SeriesById.TryGetValue(sid, out var mv))
-                segments.Add(new OgCardTimelineSegment(mv.StartDate, mv.StartDate, OgCardColors.Staff));
-        }
-
         // 初出：この役職が最初にクレジットされた話（映画なら公開日）。透かしはその年。
         (DateOnly Date, string Text)? debut = null;
         foreach (var (sid, eid) in episodes)
@@ -2794,8 +2774,6 @@ public sealed class CreatorsGenerator
             Badges = badges,
             InlineFacts = facts,
             Watermark = debut is null ? "" : debut.Value.Date.Year.ToString(),
-            Timeline = segments.OrderBy(s => s.Start).ToList(),
-            TimelineEnd = OgCareerCardParts.TimelineEndFor(_ctx, segments),
             FootFacts = foot
         };
     }

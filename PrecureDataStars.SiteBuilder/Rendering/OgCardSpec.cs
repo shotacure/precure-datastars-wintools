@@ -69,8 +69,8 @@ public sealed record OgCardSpec(
     public bool HeroVoice { get; init; }
 
     /// <summary>
-    /// ヒーロー調のカードで、見出しの下に大きく組む言葉（タグライン）。改行は "\n" で指定する。
-    /// <see cref="StatementFontFamily"/> の書体（無ければ透かしの書体）を機械的な斜体にして、数を並べる代わりに置く。
+    /// ヒーロー調のカードで、見出しのすぐ下（罫の上）に小さく添える言葉（タグライン）。1 行で組む。
+    /// <see cref="StatementFontFamily"/> の書体（無ければ透かしの書体）を立てたまま濃ピンクで描く。
     /// </summary>
     public string Statement { get; init; } = "";
 
@@ -116,6 +116,14 @@ public sealed record OgCardSpec(
     public IReadOnlyList<OgCardFactLine> InlineFacts { get; init; } = Array.Empty<OgCardFactLine>();
 
     /// <summary>
+    /// 流し込みの事実行（<see cref="InlineFacts"/>）の後ろに、空きがあるときだけ続けて載せる事実行（歌の演奏・エンジニアなど）。
+    /// 疎の組みで、標準の字の大きさのまま下端に収まる分だけを先頭から載せる（入れるために字を小さくしない）。
+    /// null なら無し。null のときは JSON に出さず、既存のカードの作り置きの鍵を変えない。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<OgCardFactLine>? SupplementalFacts { get; init; }
+
+    /// <summary>
     /// 1 行 1 項目で積むファクト行。<see cref="InlineFacts"/> と違い項目ごとに改行する。
     /// 値が長くて 1 行に流し込めない種類の情報に使う。
     /// </summary>
@@ -158,7 +166,7 @@ public sealed record OgCardSpec(
     /// </summary>
     public IReadOnlyList<OgCardFactLine> FootFacts { get; init; } = Array.Empty<OgCardFactLine>();
 
-    /// <summary>プロフィール組みでの数の拡大率。0 なら既定（1.8 倍）。</summary>
+    /// <summary>プロフィール組みでの数の拡大率。0 なら既定（等倍）。</summary>
     public float StatScale { get; init; }
 
     /// <summary>

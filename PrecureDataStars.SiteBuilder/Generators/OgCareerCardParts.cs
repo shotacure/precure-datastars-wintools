@@ -6,26 +6,11 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// 人物・企業の OGP カード（プロフィール組み）で共通に使う部品。
-/// 関与の一覧（<see cref="Involvement"/>）から、透かしに出す主な役職と、関わった期間の年表を組み立てる。
+/// 関与の一覧（<see cref="Involvement"/>）から、透かしに出す主な役職と、関わった作品の行を組み立てる。
 /// 人物にも企業・団体にも同じ決め方を使うので、どちらのカードでも「何をしてきたか」が同じ読み方で伝わる。
 /// </summary>
 internal static class OgCareerCardParts
 {
-    /// <summary>
-    /// 年表の横軸の右端。ビルド日ではなく、データ充足最新話（クレジットが登録されている最新の TV の話、
-    /// <see cref="BuildContext.CreditCoverageEpisode"/>）の放送日にする。カードの中身がデータの進み以外で変わらないので、
-    /// 日が変わっても作り置きが効く。クレジットがまだ 1 件も無ければ直近放送の話、それも無ければ未指定
-    /// （描画側が始まりの 1 年後までにする）。区間が右端より先まであれば（放送前の話のクレジットなど）、その終わりまで軸を伸ばす。
-    /// </summary>
-    public static DateOnly TimelineEndFor(BuildContext ctx, IEnumerable<OgCardTimelineSegment> segments)
-    {
-        var episode = ctx.CreditCoverageEpisode?.Episode ?? ctx.LatestAiredTvEpisode?.Episode;
-        var end = episode is null ? default : DateOnly.FromDateTime(episode.OnAirAt);
-        foreach (var segment in segments)
-            if (segment.End > end) end = segment.End;
-        return end;
-    }
-
     /// <summary>
     /// 透かしに出す主な役職。TV のオープニングにクレジットされた役職（複数なら担当話数の多いもの）を最優先し、
     /// 無ければ映画のオープニングの役職、どちらも無ければ担当話数がいちばん多い役職。
@@ -51,67 +36,6 @@ internal static class OgCareerCardParts
         if (pick is not null)
             return ctx.RoleByCode.TryGetValue(pick.Code, out var role) ? role.NameJa : pick.Code;
         return involvements.Any(i => i.IsVoiceCast) ? "声の出演" : "";
-    }
-
-    /// <summary>
-    /// 関わった期間の年表。作品ごとに、クレジットされた最初の話から最後の話までを 1 区間にし、
-    /// その作品でいちばん多い役職の色（役職バッジと同じ）で塗る。映画は公開日の点。
-    /// </summary>
-    public static IReadOnlyList<OgCardTimelineSegment> BuildCareerTimeline(BuildContext ctx, IReadOnlyList<Involvement> involvements, string fallbackColor)
-    {
-        var segments = new List<OgCardTimelineSegment>();
-        foreach (var g in involvements.GroupBy(i => i.SeriesId))
-        {
-            if (!ctx.SeriesById.TryGetValue(g.Key, out var series)) continue;
-            string color = DominantRoleColor(g, fallbackColor);
-
-            if (ctx.IsMovieKindSeries(g.Key))
-            {
-                segments.Add(new OgCardTimelineSegment(series.StartDate, series.StartDate, color));
-                continue;
-            }
-
-            DateTime? first = null, last = null;
-            foreach (var inv in g)
-            {
-                if (inv.EpisodeId is not int episodeId) continue;
-                var ep = ctx.LookupEpisode(g.Key, episodeId);
-                if (ep is null) continue;
-                if (first is null || ep.OnAirAt < first) first = ep.OnAirAt;
-                if (last is null || ep.OnAirAt > last) last = ep.OnAirAt;
-            }
-            if (first is null || last is null) continue;
-            // 終わりは最後の話の放送週いっぱいまで伸ばす（1 話だけでも点ではなく短い帯になる）。
-            segments.Add(new OgCardTimelineSegment(DateOnly.FromDateTime(first.Value), DateOnly.FromDateTime(last.Value).AddDays(7), color));
-        }
-        return segments.OrderBy(s => s.Start).ToList();
-    }
-
-    /// <summary>
-    /// サイトの年表（役職詳細・声の出演一覧の線表）に載る人物・団体か。載らない人にカードの年表を出しても、
-    /// 単発の点が 1 つ置かれるだけで何を表すのか伝わらないため、年表を出すかどうかをこれで決める。
-    /// 本編の役職は役職詳細と同じ決まり（役職を問わずオープニングに出たか、系譜でまとめた役職ごとに 1 年間に 4 回以上か映画 3 本以上か）、
-    /// 声の出演は声の出演一覧と同じ決まり（1 年間に 4 回以上）。
-    /// 年表は候補が少ないページでは全員を、多いページでも決まりに当たる方が 10 名に満たなければ参加の多い方から補って
-    /// 主な方として載せるので、CreatorsGenerator が記録した「年表に主な方として載った行」
-    /// （<see cref="BuildContext.SiteTimelineEntityUrls"/>）があればそれで判定し、無いときだけ決まりで判定する。
-    /// </summary>
-    public static bool AppearsInSiteTimeline(BuildContext ctx, RoleSuccessorResolver resolver, IReadOnlyList<Involvement> involvements, string entityUrl)
-    {
-        if (ctx.SiteTimelineEntityUrls is { } recorded) return recorded.Contains(entityUrl);
-
-        bool hasOpening = involvements.Any(i => i.IsMainCredit && string.Equals(i.CreditKind, "OP", StringComparison.Ordinal));
-        var byRole = involvements
-            .Where(i => !i.IsVoiceCast && !string.IsNullOrEmpty(i.RoleCode))
-            .GroupBy(i => resolver.GetRepresentative(i.RoleCode), StringComparer.Ordinal);
-        foreach (var g in byRole)
-        {
-            int movies = g.Where(i => ctx.IsMovieKindSeries(i.SeriesId)).Select(i => i.SeriesId).Distinct().Count();
-            if (RoleTimelineBuilder.Qualifies(ParticipationDates(ctx, g), hasOpening, movies, RoleTimelineRules.Staff)) return true;
-        }
-
-        var voice = involvements.Where(i => i.IsVoiceCast).ToList();
-        return voice.Count > 0 && RoleTimelineBuilder.Qualifies(ParticipationDates(ctx, voice), false, 0, RoleTimelineRules.VoiceCast);
     }
 
     /// <summary>カードに並べる作品行の上限。これを超える分は「ほか n 作品」の 1 行にまとめる。</summary>
@@ -167,36 +91,5 @@ internal static class OgCareerCardParts
         if (works.Count > shown.Count)
             lines.Add(new OgCardFactLine("", $"ほか{works.Count - shown.Count}作品"));
         return lines;
-    }
-
-    /// <summary>参加の日付（TV の話は放送日、映画は公開日）。同じ話・同じ映画は 1 件に畳む。</summary>
-    private static IEnumerable<DateOnly> ParticipationDates(BuildContext ctx, IEnumerable<Involvement> involvements)
-    {
-        var seen = new HashSet<(int SeriesId, int EpisodeId)>();
-        foreach (var inv in involvements)
-        {
-            if (ctx.IsMovieKindSeries(inv.SeriesId))
-            {
-                if (seen.Add((inv.SeriesId, 0)) && ctx.SeriesById.TryGetValue(inv.SeriesId, out var series))
-                    yield return series.StartDate;
-                continue;
-            }
-            if (inv.EpisodeId is not int episodeId || !seen.Add((inv.SeriesId, episodeId))) continue;
-            var ep = ctx.LookupEpisode(inv.SeriesId, episodeId);
-            if (ep is not null) yield return ep.OnAirDate;
-        }
-    }
-
-    /// <summary>作品の中でいちばん多い役職の色。役職バッジに色の無い役職や声の出演だけの作品は、声優なら緑、それ以外は色帯の色。</summary>
-    public static string DominantRoleColor(IEnumerable<Involvement> involvements, string fallbackColor)
-    {
-        var top = involvements
-            .Where(i => !i.IsVoiceCast && !string.IsNullOrEmpty(i.RoleCode))
-            .GroupBy(i => i.RoleCode, StringComparer.Ordinal)
-            .OrderByDescending(g => g.Count())
-            .FirstOrDefault();
-        if (top is null) return involvements.Any(i => i.IsVoiceCast) ? OgCardColors.VoiceActor : fallbackColor;
-        string color = OgRolePalette.ColorFor(top.Key);
-        return string.IsNullOrEmpty(color) ? fallbackColor : color;
     }
 }

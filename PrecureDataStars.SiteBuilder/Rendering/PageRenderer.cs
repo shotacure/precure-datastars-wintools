@@ -89,7 +89,7 @@ public sealed class PageRenderer
 
     /// <summary>
     /// Generator がカードを指定しなかったページ向けの既定 OGP カードを組み立てる。
-    /// ページ名を見出しに、パンくず経路をその上に、meta description を本文に充てる
+    /// ページ名を見出しに、パンくず経路をその上に、カード用のリード文（無ければ meta description）を本文に充てる
     /// （索引・統計・規約ページなど、詳細ページのような構造化データを持たない面が対象）。
     /// ページ名を持たないページ（ホーム相当）は Generator 側で明示的に組む前提のため何も返さない。
     /// </summary>
@@ -105,7 +105,8 @@ public sealed class PageRenderer
             .Select(b => b.Label)
             .Where(l => !string.IsNullOrWhiteSpace(l)));
 
-        return new OgCardSpec(trail, layoutMeta.PageTitle, Subtitle: layoutMeta.MetaDescription);
+        return new OgCardSpec(trail, layoutMeta.PageTitle,
+            Subtitle: string.IsNullOrWhiteSpace(layoutMeta.OgLead) ? layoutMeta.MetaDescription : layoutMeta.OgLead);
     }
 
     /// <summary>

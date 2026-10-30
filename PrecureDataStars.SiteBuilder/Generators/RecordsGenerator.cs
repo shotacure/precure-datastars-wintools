@@ -105,7 +105,7 @@ public sealed class RecordsGenerator
             OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代記録")
             {
                 MetaLeft = OgCoverageLabel.Compact(partsCoverage),
-                Subtitle = "いちばん長いアバンタイトルは？ いちばん多く脚本を書いた方は？ 歴代プリキュアの「いちばん」を集めました。"
+                Subtitle = "いちばん長いアバンタイトル、いちばん多く脚本を書いた方など、歴代の「いちばん」を全話のデータから集めています。記録の確かめや話のタネに使えます。"
             },
             MetaDescription = "歴代プリキュアの記録集。いちばん長いアバンタイトル、いちばん多く脚本を書いた方、いちばん多くの話に登場したキャラクターなど、全シリーズ・全話のデータから「いちばん」を集めました。",
             Breadcrumbs = new[]
@@ -554,7 +554,7 @@ public sealed class RecordsGenerator
             OgCard = new OgCardSpec(Kicker: "歴代記録", Title: "本放送・配信・円盤の尺の違い")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "同じ話でも、本放送と配信・Blu-ray / DVD でパートの長さが違うことがあります。本放送を基準に、違いのある話を集めました。",
+                Subtitle = "本放送と配信・Blu-ray / DVD で、パートの長さが違う話を集めています。どの版なら本放送と同じ長さで見られるかを確かめられます。",
                 MetaLeft = OgCoverageLabel.Compact(content.CoverageLabel),
                 Badges = new[]
                 {

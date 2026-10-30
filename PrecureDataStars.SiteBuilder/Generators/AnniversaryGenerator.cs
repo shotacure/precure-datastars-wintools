@@ -257,7 +257,8 @@ public sealed class AnniversaryGenerator
 
     /// <summary>
     /// 日付別ページの OGP カード。
-    /// 出来事そのものを年代順に並べる。件数のバッジは置かない——この日付で読み手が知りたいのは
+    /// 出来事そのものを、ページのカレンダーと同じ順（キャラクターの誕生日 → 映画の公開 → クリエイターの誕生日 → TV の放送、
+    /// 種別の中は年代順）に並べる。件数のバッジは置かない——この日付で読み手が知りたいのは
     /// 「何件あったか」ではなく「何があったか」なので、限られた面積は出来事の中身に使う。
     /// 収まりきらない場合は最後の行を「ほか n件」に替えて、省いた事実があることを明示する。
     /// </summary>
@@ -269,47 +270,44 @@ public sealed class AnniversaryGenerator
         IReadOnlyList<BirthdayRow> personBirthdays,
         DateTimeOffset now)
     {
-        // 出来事を年代順に 1 本の列へまとめる（誕生日は年を持たないので末尾へ回す）。
+        // 出来事を、ページのカレンダー（BuildDayChips）と同じ種別の順に 1 本の列へまとめる。
+        // 行数に入り切らないときは後ろが「ほか n件」に回るので、誕生日が先に残る。
         var timeline = new List<OgCardFactLine>();
-        timeline.AddRange(episodes
-            .Concat<object>(movies)
-            .Select(x => x switch
-            {
-                // TV エピソードは「作品名」と「話数・サブタイトル」を 2 段に割る。
-                // 1 行に押し込むと長いサブタイトルが必ず切れるため。
-                EpisodeRow e => (Year: e.Year, Line: new OgCardFactLine($"{e.Year}年", $"『{e.SeriesTitle}』")
-                {
-                    SubText = FormatEpisodeDetail(e, now)
-                }),
-                // 映画は作品名だけで公開だと分かるので「公開」は書かない。
-                MovieRow m => (Year: m.Year, Line: new OgCardFactLine($"{m.Year}年", $"『{m.Title}』")),
-                _ => (Year: 0, Line: new OgCardFactLine("", ""))
-            })
-            .OrderBy(x => x.Year)
-            .Select(x => x.Line));
-
         foreach (var b in characterBirthdays)
             timeline.Add(new OgCardFactLine("誕生日", string.IsNullOrWhiteSpace(b.SeriesTitle) ? b.Name : $"{b.Name}（{b.SeriesTitle}）"));
+        // 映画は作品名だけで公開だと分かるので「公開」は書かない。
+        foreach (var m in movies.OrderBy(m => m.Year))
+            timeline.Add(new OgCardFactLine($"{m.Year}年", $"『{m.Title}』"));
         foreach (var b in personBirthdays)
             timeline.Add(new OgCardFactLine("誕生日", b.Name));
+        // TV エピソードは作品名に続けて話数・サブタイトルを 1 行に置く（2 段に割ると 1 件で 2 行を使い、入る件数が半分になる）。
+        // 幅に入り切らなければ値の左端にそろえて折り返す。
+        foreach (var e in episodes.OrderBy(e => e.Year))
+            timeline.Add(new OgCardFactLine($"{e.Year}年", $"『{e.SeriesTitle}』{FormatEpisodeDetail(e, now)}"));
 
-        // カードに積める行数はレンダラが余白から決めるが、生成側でも上限を設けて
-        // 「その日の主だった出来事」に絞る。溢れる場合は残件数の行に替えて、隠した事実の存在を伝える。
-        const int maxLines = 7;
-        var facts = timeline.Count <= maxLines
-            ? timeline
-            : timeline.Take(maxLines - 1)
-                .Append(new OgCardFactLine("", $"ほか {timeline.Count - (maxLines - 1)} 件"))
-                .ToList();
+        // 「その日の主だった出来事」を、カードに等倍の字で入る行数までに絞る（1 件 1 行で数える。折り返した項目が
+        // 高さを超えるときはレンダラが字を小さくする）。溢れる場合は残件数の行に替えて、隠した事実の存在を伝える。
+        const int maxLines = 9;
+        var facts = new List<OgCardFactLine>();
+        int used = 0;
+        for (int i = 0; i < timeline.Count; i++)
+        {
+            int need = string.IsNullOrEmpty(timeline[i].SubText) ? 1 : 2;
+            int reserve = i + 1 < timeline.Count ? 1 : 0;
+            if (used + need + reserve > maxLines)
+            {
+                facts.Add(new OgCardFactLine("", $"ほか {timeline.Count - i} 件"));
+                break;
+            }
+            facts.Add(timeline[i]);
+            used += need;
+        }
 
-        // 主役は日付。「◯月◯日のプリキュア」と言い換えず、日付を大きく置いて
-        // 何があった日かは下の年表そのものに語らせる。
-        // 透かしは月日（「2/1」）。日付のカードであることが縮小表示でも分かる。
-        var md = System.Text.RegularExpressions.Regex.Match(dateLabel, @"(\d+)月(\d+)日");
+        // 主役は日付。「◯月◯日のプリキュア」と言い換えず、日付を見出しに置いて
+        // 何があった日かは下の年表そのものに語らせる。見出しと同じ月日になる透かしは置かない（見出しを下へ押し、年表の高さを削る）。
         return new OgCardSpec(Kicker: "", Title: dateLabel, Subtitle: "プリキュアのできごと")
         {
-            Facts = facts,
-            Watermark = md.Success ? $"{md.Groups[1].Value}/{md.Groups[2].Value}" : ""
+            Facts = facts
         };
     }
 
@@ -337,10 +335,10 @@ public sealed class AnniversaryGenerator
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "記念日", Url = "" }
             },
+            // 収録件数はサイト側の都合の数なのでカードには出さず、どんなページかをリード文で示す。
             OgCard = new OgCardSpec(Kicker: "", Title: "プリキュア記念日カレンダー")
             {
-                Subtitle = "放送日・公開日・誕生日を、1 年 366 日の日付ごとに並べました。今日は、プリキュアの何の日でしょう。",
-                Badges = new[] { new OgCardBadge("収録", $"{totalEntries}件") }
+                Subtitle = "放送日・映画の公開日・キャラクターとクリエイターの方々の誕生日を、12 か月のカレンダーに書き込んでいます。今日の記念日や、推しの誕生日を確かめられます。"
             }
         };
 

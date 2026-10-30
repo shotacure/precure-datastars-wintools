@@ -436,7 +436,7 @@ public sealed class MusicGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア音楽")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "主題歌・挿入歌・劇伴から音楽商品まで、プリキュアの音楽をまとめて案内します。",
+                Subtitle = "歌・劇伴（BGM）・音楽 CD の目録の入口です。曲名・作家・CD のどこからでも、プリキュアの音楽を探せます。",
                 Badges = new[]
                 {
                     new OgCardBadge("歌", $"{recordingsCount}件"),
@@ -600,10 +600,8 @@ public sealed class MusicGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア劇伴音楽(BGM)")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "作品ごとの劇伴（BGM）を、M ナンバー・作曲者・収録盤とともに一覧にしました。あの場面の曲も見つかります。",
-                Badges = BuildBgmCountBadges(
-                    new[] { new OgCardBadge("作品", $"{rows.Count}作") },
-                    totalSongs, totalCues, sources)
+                Subtitle = "作品ごとの劇伴に、M ナンバー・曲名・作曲者・収録 CD を載せています。気になった BGM が入ったサントラを確かめられます。",
+                Badges = BuildBgmCountBadges(Array.Empty<OgCardBadge>(), totalSongs, totalCues, sources)
             },
             Breadcrumbs = new[]
             {
@@ -1287,7 +1285,7 @@ public sealed class MusicGenerator
 
     /// <summary>
     /// 劇伴カードの数の並びを組み立てる。1 行目に「記録している曲数・バージョン数」、
-    /// 2 行目に括弧でくくって「音源が存在する分の曲数・バージョン数と総再生時間」を置く。
+    /// 2 行目に「収録」として「音源が存在する分の曲数・バージョン数と総再生時間」を置く。
     /// 2 行に割るのは、同じ単位の数が 2 組並ぶため、行を分けないとどちらの組かを読み違えるから。
     /// 音源が 1 つも無いシリーズでは 2 行目を出さない。
     /// </summary>
@@ -1306,10 +1304,11 @@ public sealed class MusicGenerator
         var (timeLabel, timeFraction) = FormatTotalLengthFrames(sources.TotalFrames);
         if (timeLabel.Length == 0) return badges.ToArray();
 
-        // 音源のある分は、曲数が記録と同じなら収録時間だけ、少なければ「収録 n曲」を添えて引き比べられるようにする。
-        if (sources.SongCount < songCount)
-            badges.Add(new OgCardBadge("収録", $"{sources.SongCount}曲") { NewLine = true });
-        badges.Add(new OgCardBadge(sources.SongCount < songCount ? "" : "収録", timeLabel) { Fraction = timeFraction, NewLine = sources.SongCount >= songCount });
+        // 音源のある分は 1 行目と同じ並び（曲数・バージョン数）に総再生時間を続け、記録と引き比べられるようにする。
+        // バージョン数の出し方も 1 行目と同じ（曲数と食い違うときだけ）。
+        badges.Add(new OgCardBadge("収録", $"{sources.SongCount}曲") { NewLine = true });
+        if (sources.VersionCount != sources.SongCount) badges.Add(new OgCardBadge("", $"{sources.VersionCount}ver."));
+        badges.Add(new OgCardBadge("", timeLabel) { Fraction = timeFraction });
 
         return badges.ToArray();
     }

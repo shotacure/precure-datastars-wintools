@@ -841,8 +841,10 @@ public sealed class EpisodeGenerator
             Kicker: "",
             // サブタイトル未確定話は誌面文言のプレースホルダをそのまま主題に据える。
             Title: string.IsNullOrEmpty(ep.TitleText) ? ep.TitleDisplayText : ep.TitleText,
-            // 放送「日」まで。時刻はカード上で読ませたい情報ではないので落とす。
-            Subtitle: JpDateFormat.Date(ep.OnAirAt))
+            // 放送日と放送枠（「2004年2月1日 8:30〜9:00」）。枠の長さ（episodes.duration_minutes）が無い話は開始の時刻だけ。
+            Subtitle: ep.DurationMinutes is byte minutes && minutes > 0
+                ? $"{JpDateFormat.Date(ep.OnAirAt)} {ep.OnAirAt:H:mm}〜{ep.OnAirAt.AddMinutes(minutes):H:mm}"
+                : $"{JpDateFormat.Date(ep.OnAirAt)} {ep.OnAirAt:H:mm}")
         {
             // サブタイトルはサイト本体と同じくルビ付きで組む（title_rich_html が無い話は素で組まれる）。
             TitleRubyHtml = ep.TitleRichHtml ?? "",

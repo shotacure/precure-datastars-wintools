@@ -83,7 +83,7 @@ public sealed class EpisodePartStatsGenerator
             OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代エピソード尺統計")
             {
                 MetaLeft = _coverageLabel,
-                Subtitle = "アバンタイトルの長さ、A パート・B パートの尺、中 CM の入り時刻まで、本編の“尺”を全話ぶん集計しました。"
+                Subtitle = "アバンタイトル・A パート・B パートの長さと中 CM の入り時刻を、全話ぶん計っています。長い回・短い回や、作品ごとの構成の違いが分かります。"
             },
             MetaDescription = "歴代プリキュア全話の本編の尺の統計。アバンタイトルの長さ、A パート・B パートの尺、中 CM の入り時刻を全シリーズで集計しました。長い回・短い回がひと目で分かります。",
             Breadcrumbs = new[]

@@ -17,6 +17,13 @@ public static class SeriesClassifier
         => string.Equals(s.KindCode, "MOVIE_SHORT", StringComparison.Ordinal);
 
     /// <summary>
+    /// スピンオフか：<c>'OTONA' / 'SHORT' / 'SPIN-OFF'</c> が該当する（オトナプリキュア・ぷちきゅあ・デュアルシャドウなど）。
+    /// イベント映像（<c>'EVENT'</c>）は作品として数えない。ホームの統計タイルと作品一覧のカードで「スピンオフ」の作品数を数えるのに使う。
+    /// </summary>
+    public static bool IsSpinOff(Series s)
+        => s.KindCode is "OTONA" or "SHORT" or "SPIN-OFF";
+
+    /// <summary>
     /// シリーズ種別の <c>series_kinds.credit_attach_to</c> が <c>EPISODE</c>（= TV / SPIN-OFF /
     /// OTONA / SHORT。エピソード単位でクレジットが付くシリーズ）かを判定する。
     /// EPISODE 系シリーズは end_date 未確定なら「継続中」を示す「〜」止め期間表記

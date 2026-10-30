@@ -46,29 +46,35 @@ public sealed class FontsGenerator
             .OrderBy(s => s.StartDate).ThenBy(s => s.SeriesId).ToList();
         var sections = seriesList.Select(BuildSeriesSection).ToList();
 
-        GenerateIndex(sections);
         var families = usages.Select(u => _ctx.FontById[u.FontId]).DistinctBy(f => f.FontId)
             .GroupBy(f => f.PageFamilyName, StringComparer.Ordinal)
             .Select(g => g.OrderBy(f => WeightOrder(f.Weight)).ThenBy(f => FamilyWeightOrder(f.FamilyName)).ToList()).ToList();
+        int fontCount = families.Sum(f => f.Count);
+
+        GenerateIndex(sections, families.Count, fontCount);
         foreach (var family in families)
             foreach (var font in family)
                 GenerateFont(font, family, sections);
 
-        int fontCount = families.Sum(f => f.Count);
         _ctx.Logger.Success($"fonts: {1 + fontCount} ページ（作品 {sections.Count}・書体 {fontCount}）");
     }
 
     // ════════════════════ /fonts/ ════════════════════
 
-    private void GenerateIndex(IReadOnlyList<FontSeriesSection> sections)
+    /// <param name="familyCount">載せる書体（ファミリー）の数。</param>
+    /// <param name="fontCount">載せる書体のウェイト（ファミリーとウェイトの組）の数。</param>
+    private void GenerateIndex(IReadOnlyList<FontSeriesSection> sections, int familyCount, int fontCount)
     {
         var content = new FontsIndexModel { SeriesSections = sections.Where(s => s.Cards.Count > 0).ToList() };
         var layout = new LayoutModel
         {
             PageTitle = "歴代タイトル字幕フォント",
-            // カードは見出しを大きく組む標準の組み方（数は載せず、リード文で中身を伝える。リード文は文の切れ目で改行する）
+            // カードは書体（ファミリー）とウェイトの数を出し、その下にリード文で中身を伝える（リード文は文の切れ目で改行する）。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代タイトル字幕フォント",
-                Subtitle: "歴代プリキュアTVシリーズのOP・EDのクレジットと歌詞、\nサブタイトルの字幕フォントの一覧です。\n書体見本のほか、公式と同じフォントを使用した組見本もあります。"),
+                Subtitle: "歴代プリキュアTVシリーズのOP・EDのクレジットと歌詞、\nサブタイトルの字幕フォントの一覧です。\n書体見本のほか、公式と同じフォントを使用した組見本もあります。")
+            {
+                Badges = new[] { new OgCardBadge("書体", $"{familyCount}ファミリー"), new OgCardBadge("", $"{fontCount}ウェイト") }
+            },
             MetaDescription = $"歴代プリキュアのタイトル字幕フォント一覧。OP・ED のクレジットと歌詞、サブタイトルに使われた書体を、{content.SeriesSections.Count} 作品ごとに放送の画面を模した見本つきでまとめました。",
             Breadcrumbs = new[]
             {

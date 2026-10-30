@@ -196,23 +196,31 @@ public sealed class HomeGenerator
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",
             JsonLd = jsonLd,
-            // ホームのカードは収録規模そのものを名刺にする。作品数・話数・楽曲数を数として並べ、
+            // ホームのカードは収録規模そのものを名刺にする。作品数・話数・楽曲数などを数として大きく並べ、
             // 「どれだけのデータが載っているサイトか」がシェア先で一目で伝わる状態にする。
-            // 見出しはサイト名ではなくタグラインを置く（サイト名はカード下部に常時出るため重複させない）。
-            // ホームのカードはサイトトップのヒーローをそのまま持ち込む。
-            // 見出しはサイト名（ヒーローの h1 と同じ）、その下にタグライン、
-            // 数はトップの統計タイルと同じ並び・同じ単位で置く。
             // ホームのカードはサイトトップのヒーローをそのまま持ち込む。
             // ヘッダのワードマークと同じく、肩書き（「プリキュアデータベース」）を小さく前に添え、固有名詞（「precure-datastars」）を
-            // 見出しにする。その下にタグライン、いずれもブランド書体の濃ピンク（.hero.hero-gradient と同値）。
-            // 数を誇る代わりに、タグライン「プリキュアまるごとデータベース。」をマティスえれがんとの斜体で大きく組む。
+            // 見出しにする。いずれもブランド書体の濃ピンク（.hero.hero-gradient と同値）。
+            // 見出しのすぐ下に、タグライン「プリキュアまるごとデータベース。」をマティスえれがんとで小さく添える。
+            // 数はトップの統計タイルから、作品（TV・映画）とエピソードを 1 段目、プリキュア・キャラクター・歌を 2 段目、
+            // クリエイター（人物と企業・団体を分けて）を 3 段目に置く。
             // ホームには透かしを置かない（サイト名そのものが主役で、添える属性が無い）。
             OgCard = new OgCardSpec(Kicker: _ctx.Config.SiteNameJa, Title: _ctx.Config.SiteName)
             {
                 HeroVoice = true,
-                // 2 行に割って、幅いっぱいまで大きく組む。
-                Statement = "プリキュアまるごと\nデータベース。",
-                StatementFontFamily = "FOT-マティスえれがんと Pro EB"
+                Statement = "プリキュアまるごとデータベース。",
+                StatementFontFamily = "FOT-マティスえれがんと Pro EB",
+                Badges = new[]
+                {
+                    new OgCardBadge("TV", $"{dbStats.TvSeriesCount}作"),
+                    new OgCardBadge("映画", $"{dbStats.MovieSeriesCount}作"),
+                    new OgCardBadge("エピソード", $"{dbStats.EpisodeCount}話"),
+                    new OgCardBadge("プリキュア", $"{dbStats.PrecuresCount}人") { NewLine = true },
+                    new OgCardBadge("キャラクター", $"{dbStats.CharactersCount}人"),
+                    new OgCardBadge("歌", $"{dbStats.SongWorksCount}曲"),
+                    new OgCardBadge("クリエイター", $"{dbStats.PersonsCount}人") { NewLine = true },
+                    new OgCardBadge("", $"{dbStats.CompaniesCount}団体")
+                }
             }
         };
 
@@ -685,7 +693,9 @@ WHERE e.is_deleted = 0
         int companiesCount = (await companiesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
         int charactersCount = (await charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
         int precuresCount = (await precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
-        int songsCount = (await songRecordingsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
+        var songRecordings = await songRecordingsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        int songsCount = songRecordings.Count;
+        int songWorksCount = songRecordings.Select(r => r.SongId).Distinct().Count();
         int productsCount = (await productsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
 
         // bgm_cues / discs は Repository に GetAllAsync が無いため SQL で直接 COUNT(*)。
@@ -713,11 +723,7 @@ WHERE e.is_deleted = 0
         int movieSeriesCount = _ctx.Series.Count(s =>
             string.Equals(s.KindCode, "MOVIE",  StringComparison.Ordinal)
          || string.Equals(s.KindCode, "SPRING", StringComparison.Ordinal));
-        int spinOffSeriesCount = _ctx.Series.Count(s =>
-            string.Equals(s.KindCode, "OTONA",    StringComparison.Ordinal)
-         || string.Equals(s.KindCode, "SHORT",    StringComparison.Ordinal)
-         || string.Equals(s.KindCode, "EVENT",    StringComparison.Ordinal)
-         || string.Equals(s.KindCode, "SPIN-OFF", StringComparison.Ordinal));
+        int spinOffSeriesCount = _ctx.Series.Count(SeriesClassifier.IsSpinOff);
 
         return new DbStatsModel
         {
@@ -728,6 +734,7 @@ WHERE e.is_deleted = 0
             PrecuresCount = precuresCount,
             CharactersCount = charactersCount,
             SongsCount = songsCount,
+            SongWorksCount = songWorksCount,
             BgmsCount = bgmsCount,
             // 「N 点 M 枚」をホームの DB 統計セル内で他の統計セル（曲・劇伴 等）と同じ「数値＋ラベル」
             // ペアの並びとして見せたいので、点数（products）と枚数（discs）はそれぞれ独立した
@@ -1080,6 +1087,8 @@ WHERE e.is_deleted = 0
         public int PrecuresCount { get; set; }
         public int CharactersCount { get; set; }
         public int SongsCount { get; set; }
+        /// <summary>歌の曲数（録音を 1 つ以上持つ <c>songs</c> の数。<see cref="SongsCount"/> は録音＝バージョンの数）。OGP カードの「歌 N曲」に使う。</summary>
+        public int SongWorksCount { get; set; }
         public int BgmsCount { get; set; }
         /// <summary>音楽商品の点数（<c>products</c> 件数）。ホーム DB 統計セルでは「点」ラベルと組で表示する。</summary>
         public int MusicProductsCount { get; set; }
@@ -1114,6 +1123,7 @@ public sealed class AboutGenerator
         var layout = new LayoutModel
         {
             PageTitle = "このサイトについて",
+            OgLead = "運営者のこと、データの集め方と扱い方の方針、権利表記を説明しています。",
             MetaDescription = $"{_ctx.Config.SiteBrandLabel}について。どんなサイトか、運営者とプリキュアでの活動、データの扱い方の方針、権利表記を説明しています。",
             // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
             SuppressShareButtons = true,

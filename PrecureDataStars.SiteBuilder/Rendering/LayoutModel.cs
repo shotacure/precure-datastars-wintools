@@ -40,6 +40,13 @@ public sealed class LayoutModel
     /// <summary>meta description。空なら出力しない。</summary>
     public string MetaDescription { get; set; } = "";
 
+    /// <summary>
+    /// 既定の OGP カード（<see cref="OgCard"/> を指定しないページのカード）に載せるリード文。
+    /// 空なら <see cref="MetaDescription"/> を載せる。検索結果向けの説明文はサイト名で始めるなど
+    /// カードの中では重複する書き方になるので、カード用の短い文を別に持たせるときに使う。
+    /// </summary>
+    public string OgLead { get; set; } = "";
+
     /// <summary>パンくずリスト。空なら出力しない。</summary>
     public IReadOnlyList<BreadcrumbItem> Breadcrumbs { get; set; } = Array.Empty<BreadcrumbItem>();
 

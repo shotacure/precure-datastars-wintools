@@ -128,6 +128,10 @@
 			                              空なら長体（字形を横に縮める）で詰める
 			  OgCardNoticeFont    : 注意書き系のページ（規約・About など）の本文（空なら本文と同じ）。機械的な斜体で組む
 			  OgCardObliqueDegrees : 機械的な斜体の角度（度。右に倒す）。ホームの特徴の言葉と注意書きの本文に使う。空なら 0
+			  OgCardLatinFont     : 見出し・強調・透かしの欧文（英数字と欧文の記号）だけを差し替えて組む書体（空なら差し替えない）。
+			                        半角のアポストロフィはこの書体の「’」で組む。本文・数字・注意書きを別の書体にしたときは、その書体の欧文のまま
+			  OgCardFallbackFont  : 和文の書体に無い字を補う書体（空なら補わない）
+			  OgCardEmojiFont     : 絵文字（楽器の役職名の頭の 🎸 など）を組む色つきの書体（空なら地の書体のまま）
 			カーニングと詰め（kern / palt）は HarfBuzz で効かせる。
 		-->
 		<add key="OgCardTitleFont" value="" />
@@ -138,6 +142,9 @@
 		<add key="OgCardTitleCondensedFonts" value="" />
 		<add key="OgCardNoticeFont" value="" />
 		<add key="OgCardObliqueDegrees" value="" />
+		<add key="OgCardLatinFont" value="" />
+		<add key="OgCardFallbackFont" value="" />
+		<add key="OgCardEmojiFont" value="" />
 
 		<!--
 			Amazon アソシエイトのトラッキング ID。

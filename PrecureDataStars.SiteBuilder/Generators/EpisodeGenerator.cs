@@ -278,6 +278,8 @@ public sealed class EpisodeGenerator
                 }
                 sList.Add(sum);
 
+                // 歴代の分布は本線の TV の話だけで作る（スピンオフの話はその作品の中の分布にだけ入れる）
+                if (!_ctx.IsMainlineTvSeries(ep.SeriesId)) continue;
                 if (!globalValues.TryGetValue(grp.Key, out var gList))
                 {
                     globalValues[grp.Key] = gList = new List<int>();
@@ -385,7 +387,9 @@ public sealed class EpisodeGenerator
         // 全エピソード分の偏差値は SiteDataLoader でビルド開始時に 1 度だけ算出して
         // BuildContext に詰めてあるので、本ループでは episode_id 経由の辞書参照に切り替える
         // （per-page で全件 CTE 集計を繰り返さないため）。
-        var partLengthStats = _ctx.PartLengthStatsByEpisode.TryGetValue(ep.EpisodeId, out var cachedPartStats)
+        // スピンオフの話は本線の歴代の順位・偏差値の母集合に入らないので、尺の偏差値表と記録バッジを出さない。
+        bool isMainlineEpisode = _ctx.IsMainlineTvSeries(series.SeriesId);
+        var partLengthStats = isMainlineEpisode && _ctx.PartLengthStatsByEpisode.TryGetValue(ep.EpisodeId, out var cachedPartStats)
             ? cachedPartStats
             : (IReadOnlyList<EpisodePartsRepository.PartLengthStat>)Array.Empty<EpisodePartsRepository.PartLengthStat>();
         // カード見出しに出す「この回の実尺」。統計の母集団と同じく OA 尺をパート種別ごとに合算する
@@ -442,12 +446,13 @@ public sealed class EpisodeGenerator
 
         // 文字情報 HTML を作る（既存 BuildTitleInformationPerCharAsync の移植）。
         // 解禁前の話も作り、題名の文字そのものが並ぶので、テンプレ側で解禁時刻つきの枠に入れて隠す。
+        // サブタイトル分析（初登場の文字・ここだけの文字など）は本線の TV の話を母集合にするので、スピンオフの話には出さない。
         string titleCharInfoHtml = "";
-        if (!string.IsNullOrEmpty(ep.TitleCharStats))
+        if (isMainlineEpisode && !string.IsNullOrEmpty(ep.TitleCharStats))
         {
             titleCharInfoHtml = await _titleCharInfo.RenderAsync(ep, ct).ConfigureAwait(false);
         }
-        else if (!string.IsNullOrEmpty(ep.TitleText))
+        else if (isMainlineEpisode && !string.IsNullOrEmpty(ep.TitleText))
         {
             // サブタイトル未確定（誌面で未定 / 非公開）の話は統計対象が存在しないため警告しない。
             // 統計を作れるはずなのに欠けている話だけを警告に残す。

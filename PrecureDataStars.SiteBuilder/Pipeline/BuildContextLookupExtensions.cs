@@ -1,4 +1,5 @@
 using PrecureDataStars.Data.Models;
+using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Pipeline;
 
@@ -69,6 +70,20 @@ public static class BuildContextLookupExtensions
         => ctx.SeriesById.TryGetValue(seriesId, out var s)
            && ctx.SeriesKindByCode.TryGetValue(s.KindCode, out var sk)
            && string.Equals(sk.CreditAttachTo, "SERIES", StringComparison.Ordinal);
+
+    /// <summary>
+    /// 本線の TV シリーズ（kind_code='TV'）かを判定する。通算・記録・統計・ホームの数・📺 の話数など、
+    /// 本線の数・集計の母集合はこれで絞る（スピンオフの話を混ぜない）。未登録シリーズは <c>false</c>。
+    /// </summary>
+    public static bool IsMainlineTvSeries(this BuildContext ctx, int seriesId)
+        => ctx.SeriesById.TryGetValue(seriesId, out var s) && string.Equals(s.KindCode, "TV", StringComparison.Ordinal);
+
+    /// <summary>
+    /// スピンオフ（<see cref="SeriesClassifier.IsSpinOff"/>：大人向け・ショート・スピンオフ）かを判定する。
+    /// 人物・企業のページでスピンオフの参加を 🌙 で別に数えるのに使う。未登録シリーズは <c>false</c>。
+    /// </summary>
+    public static bool IsSpinOffSeries(this BuildContext ctx, int seriesId)
+        => ctx.SeriesById.TryGetValue(seriesId, out var s) && SeriesClassifier.IsSpinOff(s);
 
     /// <summary>録音の出典シリーズ開始日を引く。出典が無い録音は末尾扱い（<see cref="DateOnly.MaxValue"/>）。 「歌った録音」の選択（複数あれば出典シリーズが最も早いものを採る）に使う。</summary>
     public static DateOnly RecordingSeriesStart(this BuildContext ctx, SongRecording rec)

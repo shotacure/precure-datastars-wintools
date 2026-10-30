@@ -228,7 +228,8 @@ public sealed class RecordsGenerator
                 foreach (var inv in invs)
                 {
                     if (inv.EpisodeId is not int episodeId) continue;
-                    if (_ctx.IsMovieKindSeries(inv.SeriesId)) continue;
+                    // 記録は本線の TV の話だけで数える（映画系・スピンオフは入れない）
+                    if (!_ctx.IsMainlineTvSeries(inv.SeriesId)) continue;
                     if (inv.IsVoiceCast)
                     {
                         st.VoiceEpisodes.Add(episodeId);
@@ -380,6 +381,8 @@ public sealed class RecordsGenerator
                 foreach (var inv in invs)
                 {
                     if (!_ctx.SeriesById.TryGetValue(inv.SeriesId, out var series)) continue;
+                    // 記録の作品数は本線（TV・映画）だけで数える
+                    if (SeriesClassifier.IsSpinOff(series)) continue;
                     works.Add(SeriesClassifier.IsMovieShortChild(series) && series.ParentSeriesId is int parentId ? parentId : series.SeriesId);
                 }
             }
@@ -465,7 +468,7 @@ public sealed class RecordsGenerator
         int compared = 0;
         var episodesWithDifference = new HashSet<int>();
 
-        foreach (var series in _ctx.Series.Where(s => !_ctx.IsMovieKindSeries(s.SeriesId)).OrderBy(s => s.StartDate).ThenBy(s => s.SeriesId))
+        foreach (var series in _ctx.Series.Where(s => _ctx.IsMainlineTvSeries(s.SeriesId)).OrderBy(s => s.StartDate).ThenBy(s => s.SeriesId))
         {
             if (!_ctx.EpisodesBySeries.TryGetValue(series.SeriesId, out var episodes)) continue;
             var rowsBySection = sections.ToDictionary(s => s.Id, _ => new List<FormatDiffRow>(), StringComparer.Ordinal);

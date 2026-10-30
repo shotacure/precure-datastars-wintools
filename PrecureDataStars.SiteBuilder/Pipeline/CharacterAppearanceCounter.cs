@@ -26,7 +26,8 @@ public static class CharacterAppearanceCounter
                 {
                     movieSeries.Add(inv.SeriesId);
                 }
-                else if (inv.EpisodeId is int eid)
+                // TV の話数は本線の TV だけを数える（スピンオフの話は入れない）
+                else if (ctx.IsMainlineTvSeries(inv.SeriesId) && inv.EpisodeId is int eid)
                 {
                     var ep = ctx.LookupEpisode(inv.SeriesId, eid);
                     if (ep is not null) tvEpisodes.Add((inv.SeriesId, ep.SeriesEpNo));

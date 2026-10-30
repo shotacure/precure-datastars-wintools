@@ -145,8 +145,9 @@ public sealed class HomeGenerator
         var upcomingProducts = BuildUpcomingProducts(allProducts, productKindMap, discsByProductCatalogNo, _ctx.SeriesById, amazonTag, todayDate);
         var latestBooks = BuildLatestBooks(allBooks, primaryGenreLabelByBook, amazonTag, todayDate);
         var upcomingBooks = BuildUpcomingBooks(allBooks, primaryGenreLabelByBook, amazonTag, todayDate);
-        // エピソード数は、作った時点で放送済みの話だけを数える（「第N話時点の情報を表示しています」・充足率の分母とそろえる）。
-        var dbStats = await BuildDbStatsAsync(allEpisodes.Count(x => x.Episode.OnAirAt <= buildAt), ct).ConfigureAwait(false);
+        // エピソード数は、作った時点で放送済みの本線の TV の話だけを数える（「第N話時点の情報を表示しています」・充足率の分母・
+        // /episodes/ の話数とそろえる）。スピンオフの話は最新話・今後の放送には出すが、この数には入れない。
+        var dbStats = await BuildDbStatsAsync(allEpisodes.Count(x => x.Episode.OnAirAt <= buildAt && _ctx.IsMainlineTvSeries(x.Series.SeriesId)), ct).ConfigureAwait(false);
 
         // キャラクター・クリエイターのデータ充足率（暫定表記。テスト・本番とも表示）。
         var dataSufficiencyLabel = await BuildDataSufficiencyLabelAsync(ct).ConfigureAwait(false);
@@ -363,6 +364,7 @@ WHERE s.kind_code = 'TV' AND e.is_deleted = 0 AND e.total_ep_no IS NOT NULL
     /// </summary>
     private async Task<string> BuildBroadcastFormatLabelAsync(CancellationToken ct)
     {
+        // 本線の TV の話だけを数える（スピンオフは本放送フォーマットの調査の対象外）。
         // パートが入力されている話の総数（分母）と、そのうち「【本放送未確認】」マーカーを
         // 含むパートを 1 つでも持つ話（＝調査中表記が出る話）の数を 1 クエリで集計する。
         // BIGINT で受けるため SIGNED に明示キャストする。
@@ -374,6 +376,7 @@ SELECT
                 THEN 1 ELSE 0 END) AS SIGNED) AS UnderInvestigation
 FROM episodes e
 WHERE e.is_deleted = 0
+  AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
   AND EXISTS(SELECT 1 FROM episode_parts p WHERE p.episode_id = e.episode_id);";
 
         // 調査中（【本放送未確認】を含む）話のうち、放送日が最も古い 1 件と最も新しい 1 件。
@@ -381,6 +384,7 @@ WHERE e.is_deleted = 0
 SELECT s.title AS Title, e.series_ep_no AS Ep, e.on_air_at AS OnAirAt
 FROM episodes e JOIN series s ON s.series_id = e.series_id
 WHERE e.is_deleted = 0
+  AND s.kind_code = 'TV'
   AND EXISTS(SELECT 1 FROM episode_parts p
              WHERE p.episode_id = e.episode_id AND p.notes LIKE '%【本放送未確認】%')
 ORDER BY e.on_air_at {0}, e.episode_id {0}
@@ -395,6 +399,7 @@ SELECT
                 THEN 1 ELSE 0 END) AS SIGNED) AS UnderInvestigation
 FROM episodes e
 WHERE e.is_deleted = 0
+  AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
   AND e.on_air_at BETWEEN @from AND @to
   AND EXISTS(SELECT 1 FROM episode_parts p WHERE p.episode_id = e.episode_id);";
 

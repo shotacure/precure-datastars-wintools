@@ -24,7 +24,7 @@ internal static class OgCareerCardParts
             .Select(g => new
             {
                 Code = g.Key,
-                TvOp = g.Count(i => string.Equals(i.CreditKind, "OP", StringComparison.Ordinal) && !ctx.IsMovieKindSeries(i.SeriesId)),
+                TvOp = g.Count(i => string.Equals(i.CreditKind, "OP", StringComparison.Ordinal) && ctx.IsMainlineTvSeries(i.SeriesId)),
                 MovieOp = g.Count(i => string.Equals(i.CreditKind, "OP", StringComparison.Ordinal) && ctx.IsMovieKindSeries(i.SeriesId)),
                 Total = g.Count()
             })

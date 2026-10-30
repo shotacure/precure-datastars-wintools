@@ -67,7 +67,8 @@ public sealed class BirthdayCalendarEligibility
                     {
                         if (ctx.IsMovieKindSeries(inv.SeriesId))
                             creditMovieSeries.Add(inv.SeriesId);
-                        else if (inv.EpisodeId is int ceid && ctx.LookupEpisode(inv.SeriesId, ceid) is { } cep)
+                        // 話数は本線の TV だけで数える（スピンオフの話は閾値に入れない）
+                        else if (ctx.IsMainlineTvSeries(inv.SeriesId) && inv.EpisodeId is int ceid && ctx.LookupEpisode(inv.SeriesId, ceid) is { } cep)
                             creditEpisodeKeys.Add((inv.SeriesId, cep.SeriesEpNo));
                     }
 
@@ -75,7 +76,7 @@ public sealed class BirthdayCalendarEligibility
                     {
                         if (inv.CharacterAliasId is not int caId || !ctx.CharacterAliasById.ContainsKey(caId)) continue;
                         if (!ctx.SeriesById.ContainsKey(inv.SeriesId)) continue;
-                        if (inv.EpisodeId is int eid && ctx.LookupEpisode(inv.SeriesId, eid) is { } ep)
+                        if (ctx.IsMainlineTvSeries(inv.SeriesId) && inv.EpisodeId is int eid && ctx.LookupEpisode(inv.SeriesId, eid) is { } ep)
                             episodeKeys.Add((inv.SeriesId, ep.SeriesEpNo));
                         if (ctx.IsMovieKindSeries(inv.SeriesId))
                             movieSeries.Add(inv.SeriesId);

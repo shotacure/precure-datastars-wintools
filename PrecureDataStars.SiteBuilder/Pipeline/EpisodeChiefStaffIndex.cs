@@ -80,11 +80,11 @@ public sealed class EpisodeChiefStaffIndex
         var people = new Dictionary<string, ChiefPerson>(StringComparer.Ordinal);
         var chiefsByEpisode = new Dictionary<int, IReadOnlyDictionary<int, IReadOnlyList<string>>>();
 
-        // 放送順に並べた TV 系の全話。映画系（SERIES 単位のクレジット）は「話」の数え上げに入れない。
+        // 放送順に並べた本線の TV の全話。映画系（SERIES 単位のクレジット）とスピンオフの話は「話」の数え上げに入れない。
         var episodes = new List<(Series Series, Episode Episode)>();
         foreach (var s in ctx.Series)
         {
-            if (ctx.IsMovieKindSeries(s.SeriesId)) continue;
+            if (!ctx.IsMainlineTvSeries(s.SeriesId)) continue;
             if (!ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)) continue;
             foreach (var e in eps) episodes.Add((s, e));
         }

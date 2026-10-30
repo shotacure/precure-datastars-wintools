@@ -44,7 +44,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                      JSON_KEYS(e.title_char_stats, '$.chars'),
                      '$[*]' COLUMNS (ch VARCHAR(191) PATH '$')
                    ) AS k
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
             ),
             grouped AS (
               SELECT
@@ -88,7 +88,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                      JSON_KEYS(e.title_char_stats, '$.chars'),
                      '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')
                    ) jt
-              WHERE e.is_deleted = 0 AND jt.ch REGEXP '\\p{Han}|[々]'
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV') AND jt.ch REGEXP '\\p{Han}|[々]'
             ),
             grouped AS (
               SELECT ch AS `Char`, SUM(cnt) AS TotalCount, MIN(episode_id) AS FirstEpisodeId
@@ -128,7 +128,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               FROM episodes e
               LEFT JOIN series s ON s.series_id = e.series_id
               -- サブタイトル未確定（title_text NULL）の話はランキング母集団から除外する
-              WHERE e.is_deleted = 0 AND e.title_text IS NOT NULL
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV') AND e.title_text IS NOT NULL
             ),
             ranked AS (
               SELECT
@@ -160,7 +160,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
               FROM episodes e
               LEFT JOIN series s ON s.series_id = e.series_id
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
             ),
             valid AS (
               SELECT EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
@@ -205,7 +205,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               JOIN series   s ON s.series_id = e.series_id
               JOIN JSON_TABLE(JSON_KEYS(e.title_char_stats, '$.categories'),
                               '$[*]' COLUMNS (k VARCHAR(20) PATH '$')) AS jt
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
                 AND jt.k IN ('Kanji','Hiragana','Katakana','Latin','Digits','Punct','Symbols','Emoji','Other')
             )
             SELECT
@@ -260,7 +260,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                    JSON_KEYS(e.title_char_stats, '$.chars'),
                    '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')
                  ) jt
-            WHERE e.is_deleted = 0
+            WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
               -- 記号判定：漢字でもひらがなでもカタカナでも英字でも数字でも空白でもない（句読点・絵文字等を含む）。
               -- 長音「ー」は Unicode ではカタカナでなくひらがな・カタカナ共通の文字なので、明示してカタカナ側に入れる
               -- （記号率・文字種別の集計に使う title_char_stats.categories もカタカナに数えている）
@@ -291,7 +291,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               JOIN series   s ON s.series_id = e.series_id
               JOIN JSON_TABLE(JSON_KEYS(e.title_char_stats, '$.chars'),
                               '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')) jt
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
             ),
             ranked AS (
               SELECT
@@ -329,7 +329,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               JOIN series   s ON s.series_id = e.series_id
               JOIN JSON_TABLE(JSON_KEYS(e.title_char_stats, '$.chars'),
                               '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')) jt
-              WHERE e.is_deleted = 0 AND jt.ch REGEXP '\\p{Han}|[々]'
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV') AND jt.ch REGEXP '\\p{Han}|[々]'
             ),
             ranked AS (
               SELECT
@@ -453,7 +453,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', '')) AS Len
               FROM episodes e
               JOIN series s ON s.series_id = e.series_id
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
                 AND s.kind_code = 'TV'
                 -- サブタイトル未確定（title_text NULL）の話は集計の母集団から除外する
                 AND e.title_text IS NOT NULL
@@ -501,7 +501,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
               FROM episodes e
               LEFT JOIN series s ON s.series_id = e.series_id
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
             ),
             valid AS (
               SELECT EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
@@ -538,7 +538,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
               FROM episodes e
               JOIN series s ON s.series_id = e.series_id
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
                 AND s.kind_code = 'TV'
                 -- サブタイトル未確定（title_text NULL）の話は集計の母集団から除外する
                 AND e.title_text IS NOT NULL
@@ -594,7 +594,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
               FROM episodes e
               LEFT JOIN series s ON s.series_id = e.series_id
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
             ),
             valid AS (
               SELECT EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
@@ -637,7 +637,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', '')) AS TotalCount
               FROM episodes e
               JOIN series s ON s.series_id = e.series_id
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
                 AND s.kind_code = 'TV'
                 -- サブタイトル未確定（title_text NULL）の話は集計の母集団から除外する
                 AND e.title_text IS NOT NULL
@@ -693,7 +693,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                      JSON_KEYS(e.title_char_stats, '$.chars'),
                      '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')
                    ) jt
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
                 -- 記号判定：漢字でもひらがなでもカタカナでも英字でも数字でも空白でもない。
                 -- 長音「ー」は Unicode ではカタカナでないので、明示してカタカナ側に入れる
                 AND jt.ch NOT REGEXP '\\p{Han}|[々]|\\p{Hiragana}|\\p{Katakana}|[ー]|[A-Za-z]|[0-9]|[ 　]'

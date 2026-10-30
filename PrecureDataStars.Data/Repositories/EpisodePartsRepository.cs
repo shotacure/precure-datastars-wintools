@@ -357,6 +357,7 @@ WITH parts AS (
         e.episode_id,
         e.series_id,
         sr.title_short,
+        (sr.kind_code = 'TV') AS is_tv,
         ep.part_type,
         SUM(ep.oa_length) AS seconds
     FROM episodes e
@@ -366,7 +367,7 @@ WITH parts AS (
       ON e.series_id = sr.series_id
     WHERE ep.part_type IN ('AVANT','PART_A','PART_B')
       AND e.is_deleted = 0
-    GROUP BY e.episode_id, e.series_id, ep.part_type
+    GROUP BY e.episode_id, e.series_id, sr.title_short, sr.kind_code, ep.part_type
 ),
 series_stats AS (
     SELECT
@@ -392,25 +393,26 @@ series_stats AS (
     FROM parts p
 ),
 global_stats AS (
+    -- 歴代の順位・偏差値は本線の TV の話だけを母集合にする（スピンオフの話はスピンオフどうしで別に数え、各話ページでは出さない）
     SELECT
         p.episode_id,
         p.part_type,
         RANK() OVER (
-            PARTITION BY p.part_type
+            PARTITION BY p.is_tv, p.part_type
             ORDER BY p.seconds DESC
         ) AS global_rank,
         RANK() OVER (
-            PARTITION BY p.part_type
+            PARTITION BY p.is_tv, p.part_type
             ORDER BY p.seconds ASC
         ) AS global_rank_shortest,
         COUNT(*) OVER (
-            PARTITION BY p.part_type
+            PARTITION BY p.is_tv, p.part_type
         ) AS global_total,
         AVG(p.seconds) OVER (
-            PARTITION BY p.part_type
+            PARTITION BY p.is_tv, p.part_type
         ) AS global_avg,
         STDDEV_POP(p.seconds) OVER (
-            PARTITION BY p.part_type
+            PARTITION BY p.is_tv, p.part_type
         ) AS global_std
     FROM parts p
 )

@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：本線の数・集計の母集合を本線の TV（kind_code='TV'）に絞り、スピンオフ（大人向け・ショート・スピンオフ）の話を混ぜないようにした**（判定は `BuildContextLookupExtensions.IsMainlineTvSeries` / `IsSpinOffSeries`）：尺の統計（`EpisodePartStatsRepository` の全クエリ）、サブタイトルの統計（`SubtitleStatsRepository` の全 14 クエリ）、各話の尺の歴代の順位・偏差値（`EpisodePartsRepository` の歴代は本線の TV とスピンオフで母集合を分ける）と歴代の分布、ホームのエピソード数と本放送フォーマットの調査完了率、記録（担当話数・声の出演話数・作品数・本放送と配信・円盤の尺の違い）、組み合わせの通算 N 回目（`EpisodeChiefStaffIndex`）、キャラの 📺 登場話数（`CharacterAppearanceCounter`）、誕生日をカレンダーに出す基準の話数、人物・企業の OGP カードの透かしの主な役職。スピンオフの各話ページには、尺の偏差値表・歴代の記録バッジ・サブタイトル分析を出さない。いまはスピンオフの話が無いので、出力は変わらない（回帰確認で全ページ同一）。
+
 - **DB：エピソードの ID を、全作品（TV・スピンオフ）を通した放送順の連番として扱う決まりにし、振り直しの道具 `db/tools/renumber_episodes.sql` を足した**：放送日時 → 作品の開始日 → series_id → 作品の中の話数の順に 1 から振り、ずれている話だけを動かす。参照する 5 表（credits・episode_parts・episode_theme_songs・episode_uses・bd_playlists）は外部キーの ON UPDATE CASCADE で追従し、外部キーの無い bd_chapters は同じトランザクションで書き換える。振り直しの前後で 6 表とエピソードの行を「作品・話数・行の主キー」で照合し、件数か照合値が違えば ROLLBACK する。通算話数・通算放送回は専用の列（total_ep_no ほか）が持ち、スピンオフの話は空にする。
 
 - **道具：サイトの文章の点検 `scripts/check-site-copy.ps1` を足し、`deploy.ps1` がドライランの後に回すようにした**：一覧・入口の冒頭文で同じ結びが 3 本以上の別々の文にあるもの、冒頭文・meta description の問いかけ・ダッシュ・飾りの引用符・誘いの言い回し、内部用語（本名義・表示名義・最新名義・系譜の代表。HTML・JS・CSS）を数えて知らせる（止めない）。初回の点検で見つかった、統計の順位表 10 ページの meta description の飾りの引用符（本編の“尺”）と、配信する CSS のコメントの内部用語を直した。

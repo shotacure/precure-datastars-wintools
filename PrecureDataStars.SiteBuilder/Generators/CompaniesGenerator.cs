@@ -438,8 +438,8 @@ public sealed class CompaniesGenerator
         IReadOnlyList<InvolvementGroup> involvementGroups)
     {
         const int targetMaxChars = 150;
-        string head = $"{displayName}がプリキュアシリーズで担当したクレジットをまとめました。";
-        const string tail = "作品ごと・役職ごとの一覧と、所属としてクレジットされた方々も載せています。";
+        string head = $"{displayName}がプリキュアシリーズで担当したクレジットをまとめています。";
+        const string tail = "作品ごと・役職ごとの一覧に、所属としてクレジットされた方々を添えています。";
 
         var ordered = involvementGroups
             .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.RoleLabel != "(役職未設定)" && g.Count > 0)

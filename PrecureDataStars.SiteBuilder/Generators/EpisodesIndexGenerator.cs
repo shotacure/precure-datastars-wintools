@@ -126,7 +126,8 @@ public sealed class EpisodesIndexGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアTVエピソード")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "全話のサブタイトルと放送日に、脚本・演出・作画監督のクレジットを添えて載せています。好きな回のスタッフや、ある方の担当回をまとめて確かめられます。",
+                // ページの冒頭文（episodes-index.sbn の .lead）と同じ文。数だけはページ側で添える。
+                Subtitle = "第 1 話から最新話まで、サブタイトルと放送日に脚本・演出・作画監督を添えて並べています。見たい回のスタッフも、気になる方の担当回も、まとめて確かめられます。",
                 Badges = new[]
                 {
                     new OgCardBadge("作品", $"{sections.Count}作"),

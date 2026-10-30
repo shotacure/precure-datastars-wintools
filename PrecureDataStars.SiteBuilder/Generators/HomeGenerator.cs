@@ -192,7 +192,7 @@ public sealed class HomeGenerator
             // サイト名「プリキュアデータベース「precure-datastars」」が検索語を含むので、前置きは付けない
             // （PageTitle が空なら <title> は SiteBrandLabel だけで組まれる）。
             PageTitle = "",
-            MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優さん、キャラクターまで。「好き」を深掘りするための情報を、ファンの手で集めた個人運営の非公式データベースです。",
+            MetaDescription = "歴代プリキュアの全話リスト、主題歌と劇伴、スタッフと声優さん、キャラクターを一つにまとめた個人運営の非公式データベースです。放送・パッケージ・公式刊行物にもとづいて、一次資料から集めています。",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",
             JsonLd = jsonLd,

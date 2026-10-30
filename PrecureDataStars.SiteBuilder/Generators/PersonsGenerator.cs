@@ -563,7 +563,7 @@ public sealed class PersonsGenerator
 
         // MetaDescription を実データから組み立てる。
         // 「{人名}は、プリキュアシリーズで{役職1}({N話})・{役職2}({N話})などを担当。」を骨格にする。
-        var metaDescription = BuildPersonMetaDescription(displayName, involvementGroups);
+        var metaDescription = BuildPersonMetaDescription(displayName, involvementGroups, musicSections);
 
         // jobTitle は involvementGroups の RoleLabel（役職名 / 例：「監督」「脚本」）から
         // 担当話数の多い順で上位 3 件のラベルを取り出す。Count は当該役職での担当エピソード数。
@@ -681,35 +681,107 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 人物詳細の meta description。「〇〇さんのプリキュアでのお仕事をまとめました。役職（話数・本数）を多い順に 3 つ。
-    /// 作品ごと・役職ごとのクレジットと初参加の話。」の順で 140 字ほどに収める。
+    /// 人物詳細の meta description。「〇〇さんは、『代表作』『代表作』などで役職・役職を手がけてきた方です。
+    /// 作品ごと・役職ごとのクレジットに、初めて参加した話を添えています。」の順で 150 字ほどに収める。
+    /// 主役は「何をしてきた人か」（役職）。作品は役職をまたいで担当量（話数。映画や作品単位の関与は 1 本）を合算し、
+    /// 多い順に 2 作だけ代表として挙げる（作品を並べすぎて役職が埋もれないように）。
+    /// 声の出演は、いちばん多く演じた役の名前で言う（「〇〇役などを演じてきた声優さん」）。
+    /// 本編のクレジットが無く音楽のクレジットだけの人は、音楽の区分（作詞・作曲・編曲 / 演奏 など）と関わった先（歌・劇伴・CD）で言う。
     /// </summary>
     private static string BuildPersonMetaDescription(
         string displayName,
-        IReadOnlyList<InvolvementGroup> involvementGroups)
+        IReadOnlyList<InvolvementGroup> involvementGroups,
+        IReadOnlyList<PersonMusicSection> musicSections)
     {
         const int targetMaxChars = 150;
-        string head = $"{displayName}さんのプリキュアでのお仕事をまとめました。";
-        const string tail = "作品ごと・役職ごとのクレジットと、初参加の話も分かります。";
+        const string tail = "作品ごと・役職ごとのクレジットに、初めて参加した話を添えています。";
 
-        var ordered = involvementGroups
+        var groups = involvementGroups
             .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.RoleLabel != "(役職未設定)" && g.Count > 0)
             .OrderByDescending(g => g.Count)
-            .Take(3)
             .ToList();
-        if (ordered.Count == 0) return head + tail;
-
-        // 「役職（N話・M本）」を多い順に、末尾の一文を残せる範囲で足す。
-        var parts = new List<string>();
-        foreach (var g in ordered)
+        if (groups.Count == 0)
         {
-            // CountLabel は「担当 97 話・2 本」の形なので、「担当」と空白を除いて「97話・2本」にする。
-            string part = $"{g.RoleLabel}（{g.CountLabel.Replace("担当", "").Replace(" ", "")}）";
-            string joined = string.Join("、", parts.Append(part)) + "など。";
-            if (head.Length + joined.Length + tail.Length > targetMaxChars) break;
-            parts.Add(part);
+            // 音楽のクレジットだけの人。区分は件数の多い順に 2 つ、関わった先は件数のある枠だけ。
+            var music = musicSections
+                .Where(s => !string.IsNullOrWhiteSpace(s.Label) && s.SongCount + s.BgmCount + s.DiscCount > 0)
+                .OrderByDescending(s => s.SongCount + s.BgmCount + s.DiscCount)
+                .ToList();
+            if (music.Count == 0) return $"{displayName}さんがプリキュアで手がけた仕事をまとめています。{tail}";
+
+            var kinds = new List<string>();
+            if (music.Any(s => s.SongCount > 0)) kinds.Add("歌");
+            if (music.Any(s => s.BgmCount > 0)) kinds.Add("劇伴");
+            if (music.Any(s => s.DiscCount > 0)) kinds.Add("CD");
+            string where = "プリキュアの" + string.Join("・", kinds);
+            const string musicTail = "曲ごと・役割ごとのクレジットと、収録 CD を載せています。";
+            if (music[0].Label == "歌唱")
+                return $"{displayName}さんは、{where}を歌ってきた方です。{musicTail}";
+            string what = string.Join("・", music.Take(2).Select(s => s.Label.Replace("演奏等", "演奏"))) + (music.Count > 2 ? "など" : "");
+            return $"{displayName}さんは、{where}で{what}を手がけてきた方です。{musicTail}";
         }
-        return parts.Count == 0 ? head + tail : head + string.Join("、", parts) + "など。" + tail;
+
+        // 作品 1 行の重み。各話の内訳がある TV の行は話数、映画や作品単位の関与は 1。
+        static int RowWeight(InvolvementSeriesRow r) => r.Episodes.Count > 0 ? r.Episodes.Count : 1;
+        static IEnumerable<string> Characters(InvolvementSeriesRow r)
+            => r.CharacterNames.Split('、', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        // 代表作：役職をまたいで作品ごとに担当量を合算し、多い順。
+        var works = groups.SelectMany(g => g.SeriesRows)
+            .GroupBy(r => r.SeriesTitle, StringComparer.Ordinal)
+            .Select(x => (Title: x.Key, Weight: x.Sum(RowWeight)))
+            .OrderByDescending(x => x.Weight)
+            .ToList();
+
+        // 何をしてきたか。スタッフの役職は多い順。声の出演はいちばん多く演じた役の名前（役名が無ければ役職名のまま）。
+        var voiceGroup = groups.FirstOrDefault(g => g.HasCharacterColumn);
+        string mainCharacter = voiceGroup is null ? "" : voiceGroup.SeriesRows
+            .OrderByDescending(RowWeight)
+            .SelectMany(Characters)
+            .FirstOrDefault() ?? "";
+        bool manyCharacters = voiceGroup is not null
+            && voiceGroup.SeriesRows.SelectMany(Characters).Distinct(StringComparer.Ordinal).Count() > 1;
+        var staffRoles = groups
+            .Where(g => !g.HasCharacterColumn || (ReferenceEquals(g, voiceGroup) && mainCharacter.Length == 0))
+            .Select(g => g.RoleLabel)
+            .ToList();
+        bool voiceFirst = voiceGroup is not null && mainCharacter.Length > 0 && ReferenceEquals(groups[0], voiceGroup);
+
+        string Compose(int workCount, int roleCount)
+        {
+            string where = works.Count == 0
+                ? "プリキュアシリーズ"
+                : string.Concat(works.Take(workCount).Select(w => $"『{w.Title}』")) + (works.Count > workCount ? "など" : "");
+            string whatStaff = staffRoles.Count == 0
+                ? ""
+                : string.Join("・", staffRoles.Take(roleCount)) + (staffRoles.Count > roleCount ? "など" : "");
+            string whatVoice = mainCharacter.Length == 0 ? "" : $"{mainCharacter}役{(manyCharacters ? "など" : "")}";
+
+            string body;
+            if (whatStaff.Length > 0 && whatVoice.Length > 0)
+            {
+                body = voiceFirst
+                    ? $"{where}で{whatVoice}を演じ、{whatStaff}も手がけてきた方です。"
+                    : $"{where}で{whatStaff}を手がけ、{whatVoice}も演じてきた方です。";
+            }
+            else if (whatVoice.Length > 0)
+            {
+                body = $"{where}で{whatVoice}を演じてきた声優さんです。";
+            }
+            else
+            {
+                body = $"{where}で{whatStaff}を手がけてきた方です。";
+            }
+            return $"{displayName}さんは、{body}{tail}";
+        }
+
+        // 代表作 2 作・役職 2 つから始め、長ければ作品 → 役職の順に減らす。
+        foreach (var (workCount, roleCount) in new[] { (2, 2), (1, 2), (1, 1) })
+        {
+            string text = Compose(workCount, roleCount);
+            if (text.Length <= targetMaxChars) return text;
+        }
+        return Compose(1, 1);
     }
 
     /// <summary>人物の名義群を時系列に並べる（predecessor チェーンを上に辿って root を見つけ、 successor チェーンで下降）。チェーンに含まれなかった alias は末尾に並べる。</summary>

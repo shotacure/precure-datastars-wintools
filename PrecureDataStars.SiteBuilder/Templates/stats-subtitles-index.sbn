@@ -1,12 +1,12 @@
 <section>
   <h1>歴代サブタイトル統計</h1>
   <p class="muted page-coverage">{{ CoverageLabel }}</p>
-  <p class="lead">プリキュア全シリーズのサブタイトルから文字種別・文字数・漢字率・記号率などを集計した統計です。</p>
+  <p class="lead">TV シリーズ全話のサブタイトルから、文字数・漢字率・記号率と、よく使われる文字を数えています。作品ごとの言葉づかいの違いを見比べられます。</p>
 </section>
 
 {{## 1 ページ 1 ランキング厳守の方針で詳細 16 ページ + 索引 1 ページ。
      リンク集を「使用文字 / 文字数 / 漢字率 / 記号率 / シリーズ別」の 5 グループに整理。
-     シリーズ別の集計はテレビシリーズのみが対象（スピンオフ・映画は除外）。
+     シリーズ別の集計はTV シリーズだけが対象で、スピンオフ・映画は含みません。
      各項目はカード全域 = 1 リンクの横長カードとして縦に並べる。
      左ボーダーをホバー時にアクセントピンクへ変色させ、押下可能性を表現する。 ##}}
 <section id="chars">
@@ -15,13 +15,13 @@
     <li>
       <a class="stats-landing-link" href="/stats/subtitles/chars/all/">
         <span class="stats-landing-link-title">使用文字 TOP 100（全文字）</span>
-        <span class="stats-landing-link-desc">サブタイトルに使われた全文字種の出現回数 上位 100 件。</span>
+        <span class="stats-landing-link-desc">サブタイトルに使われた全文字種の出現回数の上位 100 件です。</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/subtitles/chars/kanji/">
         <span class="stats-landing-link-title">使用文字 TOP 100（漢字限定）</span>
-        <span class="stats-landing-link-desc">漢字（および繰り返し記号「々」）の出現回数 上位 100 件。</span>
+        <span class="stats-landing-link-desc">漢字（および繰り返し記号「々」）の出現回数の上位 100 件です。</span>
       </a>
     </li>
     <li>

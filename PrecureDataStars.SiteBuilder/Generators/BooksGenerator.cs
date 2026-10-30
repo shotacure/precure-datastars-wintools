@@ -120,7 +120,8 @@ public sealed class BooksGenerator
             // 本文リード行と同じ母数をカードにも置く。
             OgCard = new OgCardSpec(Kicker: "", Title: "プリキュアの書籍(本・Kindle)")
             {
-                Subtitle = "設定資料集・ファンブック・絵本・楽譜に、紙と Kindle の購入先を添えて載せています。読みたい本や、資料に使える本を探せます。",
+                // ページの冒頭文（books-index.sbn の .lead）と同じ文。数だけはページ側で添える。
+                Subtitle = "設定資料集・ファンブックから絵本・楽譜まで、プリキュアの書籍に発売日・出版社と、紙と Kindle の購入先を添えています。読みたい一冊も、調べものに効く一冊も探せます。",
                 Badges = new[] { new OgCardBadge("書籍", $"{rows.Count}件") }
             },
             MetaDescription = $"プリキュア関連の書籍 {rows.Count} 件の一覧。設定資料集・ファンブック・絵本・楽譜まで、紙と Kindle の購入先、発売日、出版社をまとめました。",

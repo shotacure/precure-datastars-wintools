@@ -1,7 +1,7 @@
 <h1>歴代クリエイター</h1>
 
 <p class="lead">
-  プリキュアの歴史を紡いできた方々。
+  スタッフ、声優さん、歌を作り歌った方々を、役職と作品ごとにまとめています。名前ひとつから、その方が関わった作品と話をまとめて確かめられます。
 </p>
 
 {{## 音楽カテゴリランディング（/music/）と同型のカード構成（スタッフ / 声の出演 / 音楽制作 / 歌唱）。
@@ -13,7 +13,7 @@
 <section class="music-categories is-two-col">
   <a class="music-category-card" href="/creators/staff/">
     <h2>スタッフ</h2>
-    <p>プリキュア制作にまつわるたくさんのお仕事と、それに携わった方々の記録。</p>
+    <p>脚本・演出・作画から制作会社まで、プリキュアを作ってきた方々と企業・団体を役職ごとにまとめています。</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ StaffPersonCount }}</span>
@@ -28,7 +28,7 @@
 
   <a class="music-category-card" href="/creators/voice-cast/">
     <h2>声の出演</h2>
-    <p>プリキュアに出演した声優さんと、演じたキャラクターの記録。</p>
+    <p>キャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ VoiceCastCount }}</span>
@@ -39,7 +39,7 @@
 
   <a class="music-category-card" href="/creators/music-production/">
     <h2>音楽制作</h2>
-    <p>プリキュアの主題歌・挿入歌・キャラクターソングと劇伴の制作に携わった方々の記録。</p>
+    <p>作詞・作曲・編曲から演奏・録音まで、歌と劇伴と CD を手がけた方々を役割ごとにまとめています。</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ MusicProductionPersonCount }}</span>
@@ -54,7 +54,7 @@
 
   <a class="music-category-card" href="/creators/singers/">
     <h2>歌唱</h2>
-    <p>プリキュアの主題歌・挿入歌・キャラクターソングを歌った方々の記録。</p>
+    <p>主題歌・挿入歌・キャラクターソングを歌った方々とキャラクターを、曲とともにまとめています。</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ SingerCount }}</span>

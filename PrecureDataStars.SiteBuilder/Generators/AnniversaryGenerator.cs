@@ -329,7 +329,7 @@ public sealed class AnniversaryGenerator
         var layout = new LayoutModel
         {
             PageTitle = "プリキュア記念日カレンダー",
-            MetaDescription = $"プリキュアの記念日カレンダー。歴代の放送日・映画の公開日、キャラクターとクリエイターの方々の誕生日 {totalEntries} 件を、366 日の日付ごとにまとめました。今日は何の日かがすぐ分かります。",
+            MetaDescription = $"プリキュアの記念日カレンダー。歴代の放送日・映画の公開日、キャラクターとクリエイターの方々の誕生日 {totalEntries} 件を、366 日の日付ごとにまとめました。今日の記念日も、推しの誕生日も確かめられます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -338,7 +338,8 @@ public sealed class AnniversaryGenerator
             // 収録件数はサイト側の都合の数なのでカードには出さず、どんなページかをリード文で示す。
             OgCard = new OgCardSpec(Kicker: "", Title: "プリキュア記念日カレンダー")
             {
-                Subtitle = "放送日・映画の公開日・キャラクターとクリエイターの方々の誕生日を、12 か月のカレンダーに書き込んでいます。今日の記念日や、推しの誕生日を確かめられます。"
+                // ページの冒頭文（anniversary-index.sbn・anniversary-day.sbn の .lead）と同じ文。
+                Subtitle = "歴代の放送日・映画の公開日と、キャラクターやクリエイターの方々の誕生日を、366 日のカレンダーに書き込んでいます。今日の記念日も、推しの誕生日も確かめられます。"
             }
         };
 

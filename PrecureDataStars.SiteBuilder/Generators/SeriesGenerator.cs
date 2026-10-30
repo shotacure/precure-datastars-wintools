@@ -1015,7 +1015,8 @@ public sealed class SeriesGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアシリーズ")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "全作品を放送・公開の順に並べ、話数・放送期間・主要スタッフを載せています。作品どうしの規模やスタッフの顔ぶれを見比べられます。",
+                // ページの冒頭文（series-index.sbn の .lead）と同じ文。数だけはページ側で添える。
+                Subtitle = "全作品を放送・公開の順に並べ、話数・期間・主要スタッフを添えています。初代から最新作までの流れと、スタッフの顔ぶれの移り変わりを追えます。",
                 Badges = new[]
                 {
                     new OgCardBadge("TV", $"{tvRows.Count}作"),

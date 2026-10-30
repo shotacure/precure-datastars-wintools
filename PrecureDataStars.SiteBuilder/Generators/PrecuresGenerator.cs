@@ -151,7 +151,8 @@ public sealed class PrecuresGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアオールスターズ")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "歴代プリキュアを登場順に並べ、変身前後の名前と声優さんを載せています。作品をまたいで見比べられます。",
+                // ページの冒頭文（precures-index.sbn の .lead）と同じ文。数だけはページ側で添える。
+                Subtitle = "歴代のプリキュアを登場順に並べ、変身前後の名前と演じた声優さんを添えています。初代から最新作まで、作品をまたいで一望できます。",
                 MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                 Badges = new[] { new OgCardBadge("プリキュア", $"{rows.Count}人") }
             },

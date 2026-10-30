@@ -91,9 +91,10 @@ public sealed class SubtitleStatsGenerator
             OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代サブタイトル統計")
             {
                 MetaLeft = _coverageLabel,
-                Subtitle = "歴代サブタイトルの文字数・漢字率・記号率と、よく使われる文字を数えています。作品ごとの言葉づかいの違いを見比べられます。"
+                // ページの冒頭文（stats-subtitles-index.sbn の .lead）と同じ文。
+                Subtitle = "TV シリーズ全話のサブタイトルから、文字数・漢字率・記号率と、よく使われる文字を数えています。作品ごとの言葉づかいの違いを見比べられます。"
             },
-            MetaDescription = "歴代プリキュア全話のサブタイトル統計。文字数・漢字率・記号率と、よく使われる文字を全シリーズで集計しました。作品ごとのタイトルの個性が数字で見えてきます。",
+            MetaDescription = "歴代プリキュア全話のサブタイトル統計。文字数・漢字率・記号率と、よく使われる文字を全シリーズで集計しました。作品ごとの言葉づかいの違いを見比べられます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

@@ -1168,7 +1168,7 @@ public sealed class CreatorsGenerator
                 "歴代プリキュア音楽制作",
                 BuildEntityBadges(personCount, companyCount),
                 Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
-                "作詞・作曲・編曲から演奏・録音まで、歌・劇伴・CD を手がけた方々を役割ごとにまとめています。好きな曲の作家が手がけたほかの曲も探せます。"),
+                "作詞・作曲・編曲から演奏・録音まで、歌と劇伴と CD を手がけた方々を役割ごとにまとめています。好きな曲の作家が残したほかの仕事も探せます。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1862,7 +1862,7 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("ユニット", $"{unitCount}組")
                 },
                 Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
-                "プリキュアの歌を歌った方々とキャラクターをまとめています。歌った曲と収録 CD を確かめられます。"),
+                "主題歌・挿入歌・キャラクターソングを歌った方々とキャラクターを、初めて歌った曲と曲数とともにまとめています。歌った曲と収録 CD を確かめられます。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2071,7 +2071,7 @@ public sealed class CreatorsGenerator
                 "歴代プリキュアスタッフ",
                 BuildEntityBadges(content.PersonCount, content.CompanyCount),
                 Array.Empty<OgCardFactLine>(), null,
-                "脚本・演出・作画から制作会社まで、携わった方々と企業・団体を役職ごとにまとめています。好きな回の演出家が担当したほかの回も探せます。"),
+                "脚本・演出・作画から制作会社まで、プリキュアを作ってきた方々と企業・団体を役職ごとにまとめています。好きな回の演出家が手がけたほかの回も探せます。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2252,7 +2252,7 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("声優", $"{countRows.Count}人")
                 },
                 Array.Empty<OgCardFactLine>(), null,
-                "キャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。あのキャラの声優さんや、その方が演じたほかの役を確かめられます。"),
+                "キャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。あのキャラの声も、その方が演じたほかの役も確かめられます。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2686,7 +2686,8 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("歌唱", $"{singerCount}人")
                 },
                 Array.Empty<OgCardFactLine>(), null,
-                "スタッフ・声優さん・音楽制作・歌唱の方々の入口です。名前から、その方が関わった作品と話をまとめて確かめられます。"),
+                // ページの冒頭文（creators-landing.sbn の .lead）と同じ文。
+                "スタッフ、声優さん、歌を作り歌った方々を、役職と作品ごとにまとめています。名前ひとつから、その方が関わった作品と話をまとめて確かめられます。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

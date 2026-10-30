@@ -275,7 +275,8 @@ public sealed class ProductsGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア音楽商品(CD/配信)")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "プリキュアの音楽 CD に、発売日・収録曲・購入先を載せています。欲しい曲が入った盤や、買い逃した CD を探せます。",
+                // ページの冒頭文（products-index.sbn の .lead）と同じ文。数だけはページ側で添える。
+                Subtitle = "主題歌シングルからサウンドトラック、ベスト盤まで、歴代の音楽商品に発売日・収録曲・購入先を添えています。欲しい曲の入った一枚も、買い逃した一枚も探せます。",
                 Badges = BuildIndexOgBadges(products.Count, discsByProduct.Values.SelectMany(d => d).ToList())
             },
             MetaDescription = $"歴代プリキュアの音楽商品（CD・配信）{products.Count} 点 {discsByProduct.Values.Sum(d => d.Count)} 枚の一覧。サウンドトラックや主題歌シングルの発売日・収録曲・購入先をまとめました。",

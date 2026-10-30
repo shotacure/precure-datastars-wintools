@@ -328,7 +328,8 @@ public sealed class CharactersGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代キャラクター")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "歴代のキャラクターを作品ごとに並べ、演じた声優さんと登場した話を載せています。ゲストキャラの声優さんや出番も確かめられます。",
+                // ページの冒頭文（characters-index.sbn の .lead）と同じ文。数だけはページ側で添える。
+                Subtitle = "プリキュアから妖精・敵・ゲストまで、歴代のキャラクターを作品ごとに並べ、演じた声優さんと登場した話を添えています。一度きりの出番も確かめられます。",
                 MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                 Badges = new[]
                 {
@@ -569,7 +570,7 @@ public sealed class CharactersGenerator
             var layout = new LayoutModel
             {
                 PageTitle = title,
-                MetaDescription = $"『{series.Title}』のその他のキャラクター {rows.Count} 名を、登場話ごとに担当の声優さんとあわせて一覧にしました。",
+                MetaDescription = $"『{series.Title}』のその他のキャラクター {rows.Count} 名を、登場した話ごとに、演じた声優さんを添えて並べています。",
                 OgCard = new OgCardSpec(Kicker: series.Title, Title: "その他のキャラクター")
                 {
                     MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),

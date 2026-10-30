@@ -436,7 +436,8 @@ public sealed class MusicGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア音楽")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "歌・劇伴（BGM）・音楽 CD の目録の入口です。曲名・作家・CD のどこからでも、プリキュアの音楽を探せます。",
+                // ページの冒頭文（music-landing.sbn の .lead）と同じ文。
+                Subtitle = "主題歌・挿入歌、劇伴（BGM）、CD と配信の音楽商品を、歴代プリキュアの音楽として一つにまとめています。曲名からも、作家からも、盤からも探せます。",
                 Badges = new[]
                 {
                     new OgCardBadge("歌", $"{recordingsCount}件"),
@@ -600,7 +601,8 @@ public sealed class MusicGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア劇伴音楽(BGM)")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "作品ごとの劇伴に、M ナンバー・曲名・作曲者・収録 CD を載せています。気になった BGM が入ったサントラを確かめられます。",
+                // ページの冒頭文（bgms-index.sbn の .lead）と同じ文。
+                Subtitle = "変身の曲も名場面の一曲も、作品ごとの劇伴（BGM）に M ナンバー・曲名・作曲者・収録 CD を添えています。題名の分からないあの曲が入ったサントラを突き止められます。",
                 Badges = BuildBgmCountBadges(Array.Empty<OgCardBadge>(), totalSongs, totalCues, sources)
             },
             Breadcrumbs = new[]

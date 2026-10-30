@@ -6,7 +6,7 @@
 <p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 <p class="lead">
-  <a href="{{ SeriesUrl }}">{{ SeriesTitle | html.escape }}</a><span class="muted series-year">({{ SeriesStartYearLabel }})</span>のその他のキャラクター {{ GuestCount }} 名を、登場話ごとにまとめました。
+  <a href="{{ SeriesUrl }}">{{ SeriesTitle | html.escape }}</a><span class="muted series-year">({{ SeriesStartYearLabel }})</span>のその他のキャラクター {{ GuestCount }} 名を、登場した話ごとに、演じた声優さんを添えて並べています。
 </p>
 
 {{## 単発キャラ（characters.has_own_page = 0 のキャラ。最初に登場した作品・話に置く）は個別ページを持たず、ここに集約する。

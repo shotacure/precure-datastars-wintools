@@ -996,6 +996,11 @@ Role: PRODUCTION 制作 (order 2)
    .\scripts\register-deploy-task.ps1           # 毎日 08:00 と毎週水曜・土曜の 08:30 に登録
    .\scripts\register-deploy-task.ps1 -Unregister
    ```
+8. サイトの文章の点検：`scripts/check-site-copy.ps1` が出力フォルダの HTML を読み、一覧・入口の冒頭文（OGP カードのリード文と同じ文）で同じ結びが 3 本以上の別々の文にあるもの、冒頭文・meta description の問いかけ・ダッシュ・飾りの引用符・誘いの言い回し、外に出さない内部用語（HTML・JS・CSS）を数えて知らせる。止めはしない。`deploy.ps1` がドライランの後に回す。`-SiteDir` でテストの出力も点検できる（省略時は `App.config` の `SiteOutputDir`）
+9. OGP カードの見本の差し替え：`scripts/og-gallery-refresh.py` が、見本のページ（カードを並べた HTML）の各カードを出力フォルダの `og/` の画像に差し替えた HTML と画像のフォルダを作る
+   ```powershell
+   python -I scripts/og-gallery-refresh.py <見本の HTML> <サイトの出力フォルダ> <作業フォルダ> --from img5 --to img5
+   ```
 
 #### B. 生成されるページ
 

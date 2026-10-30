@@ -255,6 +255,6 @@ public sealed class EpisodePartStatsGenerator
     /// <summary>エピソード尺統計の各詳細ページ用の標準レイアウトを生成する。</summary>
     private static LayoutModel MakeLayout(string pageTitle, string breadcrumbLabel)
         => StatsPageLayout.Make(
-            pageTitle, "。プリキュア全シリーズの本編の“尺”を集計した統計です。",
+            pageTitle, "。プリキュア全シリーズの本編の尺を集計した統計です。",
             "歴代エピソード尺統計", "/stats/episodes/", breadcrumbLabel);
 }

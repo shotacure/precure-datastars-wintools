@@ -136,6 +136,15 @@ try {
     Write-Host ""
     Write-Host ("  差分: upload {0} / delete {1} / unchanged {2} / 警告 {3}" -f $uploadCount, $deleteCount, $unchangedCount, $warnDisplay) -ForegroundColor Cyan
 
+    # --- サイトの文章の点検（知らせるだけ。止めない） ---
+    # ドライランで作った本番の出力を、文章の決まり（結びの重なり・問いかけ・内部用語など）に照らす。
+    Write-Host ""
+    try {
+        & (Join-Path $PSScriptRoot 'check-site-copy.ps1') | Out-Null
+    } catch {
+        Write-Host "  文章の点検を回せませんでした: $($_.Exception.Message)" -ForegroundColor DarkYellow
+    }
+
     # --- 削除の数え上げ ---
     # ドライランの「Delete (orphan) targets:」に続く「  - {S3 キー}」の行を読み、OGP カード（og/ の下。ページに
     # 伴って消える）を除いた件数を、大量の削除のゲートに使う。

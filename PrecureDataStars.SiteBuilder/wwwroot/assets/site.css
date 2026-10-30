@@ -8686,7 +8686,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .entity-row-name {
   font-weight: 600;
 }
-/* 初参加順で旧名義の行に添える、いまの名乗り（最新名義）の括弧書き。 */
+/* 初参加順で旧名義の行に添える、いまの名乗りの括弧書き。 */
 .entity-row-current {
   margin-left: -4px;
   font-size: 0.88em;

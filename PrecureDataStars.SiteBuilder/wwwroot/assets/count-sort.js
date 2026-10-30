@@ -24,7 +24,7 @@
   var KINDS = [
     { key: 'tv', icon: '📺', label: 'TV' },
     { key: 'movie', icon: '🎥', label: '映画' },
-    { key: 'otona', icon: '🌙', label: '大人向け' },
+    { key: 'otona', icon: '🌙', label: 'オトナ' },
     { key: 'song', icon: '🎵', label: '曲' },
     { key: 'cd', icon: '💿', label: '音盤' },
     { key: 'book', icon: '📚', label: '書籍' },

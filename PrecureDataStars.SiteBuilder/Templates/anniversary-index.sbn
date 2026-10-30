@@ -15,7 +15,7 @@
        どの年の曜日で組んだ面かは凡例と並べて断っておく。 ##}}
   <p class="muted anniv-legend">
     <span class="cal-chip cal-chip-ep"><span class="cal-chip-emoji">📺</span>TV 放送</span>{{ if HasOtonaEpisodes }}
-    <span class="cal-chip cal-chip-otona"><span class="cal-chip-emoji">🌙</span>大人向け放送</span>{{ end }}
+    <span class="cal-chip cal-chip-otona"><span class="cal-chip-emoji">🌙</span>オトナ 放送</span>{{ end }}
     <span class="cal-chip cal-chip-movie"><span class="cal-chip-emoji">🎥</span>劇場公開</span>
     <span class="cal-chip cal-chip-bday cal-chip-plain"><span class="cal-chip-emoji">🎂</span>キャラクター誕生日</span>
     <span class="cal-chip cal-chip-person"><span class="cal-chip-emoji">🎂</span>クリエイター誕生日</span>

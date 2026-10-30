@@ -79,13 +79,13 @@
      構造は TV シリーズと同じカード型だが、プリキュア・スタッフのサブ行は持たない
      （データ運用上の対象外）。
      アンカー id:
-       - 大人向けスピンオフ（OTONA）→ id="otona"
+       - オトナシリーズ（OTONA）→ id="otona"
        - ショートアニメ（SHORT）→ id="short-anime"
        - イベント（EVENT）→ id="event"
        - スピンオフ（SPIN-OFF）→ id="spinoff" ##}}
 {{~ if (array.size OtonaSeries) > 0 ~}}
 <section id="otona">
-  <h2>大人向けスピンオフ</h2>
+  <h2>オトナシリーズ</h2>
   <ul class="series-card-list series-card-list-spinoff">
     {{~ for s in OtonaSeries ~}}
     <li>

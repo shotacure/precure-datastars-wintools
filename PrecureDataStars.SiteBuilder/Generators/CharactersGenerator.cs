@@ -621,7 +621,7 @@ public sealed class CharactersGenerator
         var badges = new List<OgCardBadge>();
         if (episodeCount > 0) badges.Add(new OgCardBadge("TV", $"{episodeCount}話"));
         if (movieCount > 0) badges.Add(new OgCardBadge("映画", $"{movieCount}本"));
-        if (otonaEpisodeCount > 0) badges.Add(new OgCardBadge("大人向け", $"{otonaEpisodeCount}話"));
+        if (otonaEpisodeCount > 0) badges.Add(new OgCardBadge("オトナ", $"{otonaEpisodeCount}話"));
 
         // 学校は作品を観れば分かる設定で、カードの限られた面積を割く価値が薄いので出さない。
         var facts = new List<OgCardFactLine>();
@@ -1154,7 +1154,7 @@ public sealed class CharactersGenerator
         public int MovieCount { get; set; }
         /// <summary>大人向けスピンオフ（種別 OTONA）での登場話数合計（🌙 ピル）。</summary>
         public int OtonaEpisodeCount { get; set; }
-        /// <summary>"登場 N 話・M 本・大人向け K 話" などの動詞つき単位表記。すべてゼロなら空文字。
+        /// <summary>"登場 N 話・M 本・オトナ K 話" などの動詞つき単位表記。すべてゼロなら空文字。
         /// 「登場」を冠して、エピソードの話数（#N・第N話）と数量の「N 話」を読み分けられるようにする。</summary>
         public string CountLabel
         {
@@ -1163,7 +1163,7 @@ public sealed class CharactersGenerator
                 var parts = new List<string>(3);
                 if (EpisodeCount > 0) parts.Add($"{EpisodeCount} 話");
                 if (MovieCount > 0) parts.Add($"{MovieCount} 本");
-                if (OtonaEpisodeCount > 0) parts.Add($"大人向け {OtonaEpisodeCount} 話");
+                if (OtonaEpisodeCount > 0) parts.Add($"オトナ {OtonaEpisodeCount} 話");
                 return parts.Count == 0 ? "" : $"登場 {string.Join("・", parts)}";
             }
         }

@@ -360,7 +360,7 @@ public sealed class CompaniesGenerator
         var badges = new List<OgCardBadge>();
         if (creditEpisodeCountTotal > 0) badges.Add(new OgCardBadge("TV", $"{creditEpisodeCountTotal}話"));
         if (creditMovieCountTotal > 0) badges.Add(new OgCardBadge("映画", $"{creditMovieCountTotal}本"));
-        if (creditOtonaEpisodeCountTotal > 0) badges.Add(new OgCardBadge("大人向け", $"{creditOtonaEpisodeCountTotal}話"));
+        if (creditOtonaEpisodeCountTotal > 0) badges.Add(new OgCardBadge("オトナ", $"{creditOtonaEpisodeCountTotal}話"));
 
         // 役職は担当規模の多い順に上位 4 件（人物と同じ）。
         var roles = groups
@@ -432,7 +432,7 @@ public sealed class CompaniesGenerator
         var parts = new List<string>(3);
         if (group.EpisodeCount > 0) parts.Add($"{group.EpisodeCount}話");
         if (group.MovieCount > 0) parts.Add($"{group.MovieCount}本");
-        if (group.OtonaEpisodeCount > 0) parts.Add($"大人向け {group.OtonaEpisodeCount}話");
+        if (group.OtonaEpisodeCount > 0) parts.Add($"オトナ {group.OtonaEpisodeCount}話");
         return string.Join(" / ", parts);
     }
 

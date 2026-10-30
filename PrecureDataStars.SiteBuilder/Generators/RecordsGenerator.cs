@@ -106,9 +106,9 @@ public sealed class RecordsGenerator
             {
                 MetaLeft = OgCoverageLabel.Compact(partsCoverage),
                 // ページの冒頭文（stats-records-index.sbn の .lead）と同じ文。
-                Subtitle = "いちばん長いアバンタイトル、いちばん多く脚本を書いた方など、歴代の「いちばん」を全話のデータから集めています。記録の裏づけにも、話のタネにも使えます。"
+                Subtitle = "いちばん長いアバンタイトル、いちばん多く脚本を書いた方など、歴代の「いちばん」を、尺・クレジット・登場回数のデータから集めています。それぞれ 3 位までを載せています。"
             },
-            MetaDescription = "歴代プリキュアの記録集。いちばん長いアバンタイトル、いちばん多く脚本を書いた方、いちばん多くの話に登場したキャラクターなど、全シリーズ・全話のデータから「いちばん」を集めました。",
+            MetaDescription = "歴代プリキュアの記録集。いちばん長いアバンタイトル、いちばん多く脚本を書いた方、いちばん多くの話に登場したキャラクターなど、尺・クレジット・登場回数のデータから「いちばん」を集めました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

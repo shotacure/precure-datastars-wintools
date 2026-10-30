@@ -26,7 +26,7 @@
 
   <a class="music-category-card" href="/bgms/">
     <h2>劇伴音楽(BGM)</h2>
-    <p>作品ごとの劇伴に、M ナンバー・曲名・作曲者・収録 CD を添えています。題名の分からない曲も、収録サントラまで分かります。</p>
+    <p>作品ごとの劇伴に、M ナンバー・曲名・作曲者・収録 CD を添えています。</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ BgmCueTotal }}</span>

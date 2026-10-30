@@ -1281,7 +1281,7 @@ public sealed class CreatorsGenerator
                 "歴代プリキュア音楽制作",
                 BuildEntityBadges(personCount, companyCount),
                 Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
-                "作詞・作曲・編曲から演奏・録音まで、歌と劇伴と CD を手がけた方々を役割ごとにまとめています。好きな曲の作家が残したほかの仕事も探せます。"),
+                "作詞・作曲・編曲から演奏・録音まで、歌と劇伴と CD を手がけた方々を役割ごとにまとめています。その方が手がけたほかの曲や盤も、名前のリンク先にまとめています。"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

@@ -45,7 +45,7 @@ internal static class InvolvementRowBuilder
     /// <param name="roleGroup">同一役職グループに属する関与群。</param>
     /// <param name="extrasResolver">シリーズ単位の関与群から行併記の付加情報（演じたキャラ名・所属屋号ラベル）を
     /// 解決するフック。未指定（null）なら全フィールド空文字の <see cref="InvolvementSeriesRowExtras.Empty"/> を使う。</param>
-    internal static (List<InvolvementSeriesRow> SeriesRows, int EpisodeCountTotal, int MovieCountTotal, int AdultEpisodeCountTotal) BuildSeriesRows(
+    internal static (List<InvolvementSeriesRow> SeriesRows, int EpisodeCountTotal, int MovieCountTotal, int OtonaEpisodeCountTotal) BuildSeriesRows(
         BuildContext ctx,
         IEnumerable<Involvement> roleGroup,
         Func<IEnumerable<Involvement>, InvolvementSeriesRowExtras>? extrasResolver = null)
@@ -53,7 +53,7 @@ internal static class InvolvementRowBuilder
         var seriesRows = new List<InvolvementSeriesRow>();
         int episodeCountTotal = 0;
         int movieCountTotal = 0;
-        int adultEpisodeCountTotal = 0;
+        int otonaEpisodeCountTotal = 0;
 
         foreach (var bySeries in roleGroup
             .GroupBy(i => i.SeriesId)
@@ -141,16 +141,16 @@ internal static class InvolvementRowBuilder
             //   （映画 1 本に OP / ED / INSERT / SOUND_TRACK が同一カードに同居しても 1 本扱い）。
             // TV 系（credit_attach_to='EPISODE'）：エピソード単位の関与話数を加算（重複話数は HashSet で排除済み）。
             // SERIES スコープのみで episode 関与が無い TV 系（稀ケース）は本カウントには寄与せず 0 計上。
-            // 大人向け（オトナプリキュア・デュアルシャドウなど）は 🌙 の札の話数として TV と分けて数える。
-            // ショートのスピンオフ（ぷちきゅあ）は話を持たないので、行には出すがどの札にも数えない。
+            // 大人向けスピンオフ（OTONA）は 🌙 の札の話数として TV と分けて数える。
+            // それ以外のスピンオフ（ショート・スピンオフ）は、行には出すがどの札にも数えない。
             // 種別の判定は映画系より先に行う（ショートは作品単位でクレジットを持つため、映画系の判定にも当たる）。
-            if (ctx.IsAdultSeries(bySeries.Key))
+            if (ctx.IsOtonaSeries(bySeries.Key))
             {
-                adultEpisodeCountTotal += episodeNos.Count;
+                otonaEpisodeCountTotal += episodeNos.Count;
             }
             else if (ctx.IsSpinOffSeries(bySeries.Key))
             {
-                // ショートのスピンオフは数えない。
+                // 大人向け以外のスピンオフは数えない。
             }
             else if (isMovieKindSeries)
             {
@@ -162,7 +162,7 @@ internal static class InvolvementRowBuilder
             }
         }
 
-        return (seriesRows, episodeCountTotal, movieCountTotal, adultEpisodeCountTotal);
+        return (seriesRows, episodeCountTotal, movieCountTotal, otonaEpisodeCountTotal);
     }
 
     /// <summary>

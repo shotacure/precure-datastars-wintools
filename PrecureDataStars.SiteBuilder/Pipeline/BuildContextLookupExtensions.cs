@@ -80,18 +80,18 @@ public static class BuildContextLookupExtensions
 
     /// <summary>
     /// スピンオフ（<see cref="SeriesClassifier.IsSpinOff"/>：大人向け・ショート・スピンオフ）かを判定する。
-    /// 人物・企業のページの担当量の札では、大人向け（<see cref="IsAdultSeries"/>）は 🌙 で数え、
-    /// それ以外のスピンオフ（ショート）はどの札にも数えない。未登録シリーズは <c>false</c>。
+    /// 人物・企業のページの担当量の札では、大人向け（<see cref="IsOtonaSeries"/>）は 🌙 で数え、
+    /// それ以外のスピンオフ（ショート・スピンオフ）はどの札にも数えない。未登録シリーズは <c>false</c>。
     /// </summary>
     public static bool IsSpinOffSeries(this BuildContext ctx, int seriesId)
         => ctx.SeriesById.TryGetValue(seriesId, out var s) && SeriesClassifier.IsSpinOff(s);
 
     /// <summary>
-    /// 大人向け（<see cref="SeriesClassifier.IsAdult"/>）かを判定する。人物・企業のページで、大人向けの参加話数を
+    /// 大人向けスピンオフ（<see cref="SeriesClassifier.IsOtona"/>）かを判定する。人物・企業のページで、大人向けスピンオフの参加話数を
     /// 🌙 の札で TV・映画と分けて数えるのに使う。未登録シリーズは <c>false</c>。
     /// </summary>
-    public static bool IsAdultSeries(this BuildContext ctx, int seriesId)
-        => ctx.SeriesById.TryGetValue(seriesId, out var s) && SeriesClassifier.IsAdult(s);
+    public static bool IsOtonaSeries(this BuildContext ctx, int seriesId)
+        => ctx.SeriesById.TryGetValue(seriesId, out var s) && SeriesClassifier.IsOtona(s);
 
     /// <summary>録音の出典シリーズ開始日を引く。出典が無い録音は末尾扱い（<see cref="DateOnly.MaxValue"/>）。 「歌った録音」の選択（複数あれば出典シリーズが最も早いものを採る）に使う。</summary>
     public static DateOnly RecordingSeriesStart(this BuildContext ctx, SongRecording rec)

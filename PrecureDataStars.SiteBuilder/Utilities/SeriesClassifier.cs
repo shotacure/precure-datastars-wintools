@@ -24,12 +24,11 @@ public static class SeriesClassifier
         => s.KindCode is "OTONA" or "SHORT" or "SPIN-OFF";
 
     /// <summary>
-    /// 大人向けか：<c>'OTONA' / 'SPIN-OFF'</c> が該当する（オトナプリキュア'23・魔法つかいプリキュア！！・デュアルシャドウ）。
-    /// スピンオフのうちショート（<c>'SHORT'</c>、ぷちきゅあ）を除いたもの。人物・企業のページで、大人向けの参加話数を
-    /// 🌙 の札で TV・映画と分けて数えるのに使う。
+    /// 大人向けスピンオフ（<c>'OTONA'</c>）か：オトナプリキュア'23・魔法つかいプリキュア！！・デュアルシャドウなど。
+    /// 人物・企業のページで、大人向けスピンオフの参加話数を 🌙 の札で TV・映画と分けて数えるのに使う。
     /// </summary>
-    public static bool IsAdult(Series s)
-        => s.KindCode is "OTONA" or "SPIN-OFF";
+    public static bool IsOtona(Series s)
+        => string.Equals(s.KindCode, "OTONA", StringComparison.Ordinal);
 
     /// <summary>
     /// シリーズ種別の <c>series_kinds.credit_attach_to</c> が <c>EPISODE</c>（= TV / SPIN-OFF /

@@ -9303,7 +9303,7 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   color: var(--accent-amber, #b45309);
 }
 /* 大人向け（話）= 夜空の藍の淡い色味。人物・企業詳細で、大人向けシリーズの担当話数を 🌙 で TV と分けて出す。 */
-.count-pill-adult {
+.count-pill-otona {
   background: rgba(63, 74, 158, 0.10);
   border-color: rgba(63, 74, 158, 0.34);
   color: #3f4a9e;

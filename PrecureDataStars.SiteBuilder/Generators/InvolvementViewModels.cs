@@ -17,10 +17,10 @@ internal sealed class InvolvementGroup
     public int EpisodeCount { get; set; }
     /// <summary>映画系シリーズ（series_kinds.credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）での担当本数（1 シリーズ = 1 本）。</summary>
     public int MovieCount { get; set; }
-    /// <summary>大人向けシリーズ（オトナプリキュアなど）での担当エピソード合計数（🌙 ピル）。ショートのスピンオフは含めない。</summary>
-    public int AdultEpisodeCount { get; set; }
-    /// <summary>担当の総量（<see cref="EpisodeCount"/> + <see cref="MovieCount"/> + <see cref="AdultEpisodeCount"/>）。降順ソートのキーとして使う。</summary>
-    public int Count => EpisodeCount + MovieCount + AdultEpisodeCount;
+    /// <summary>大人向けシリーズ（オトナプリキュアなど）での担当エピソード合計数（🌙 ピル）。大人向け以外のスピンオフは含めない。</summary>
+    public int OtonaEpisodeCount { get; set; }
+    /// <summary>担当の総量（<see cref="EpisodeCount"/> + <see cref="MovieCount"/> + <see cref="OtonaEpisodeCount"/>）。降順ソートのキーとして使う。</summary>
+    public int Count => EpisodeCount + MovieCount + OtonaEpisodeCount;
     /// <summary>"担当 N 話・M 本・大人向け K 話" などの動詞つき単位表記。すべてゼロなら空文字。
     /// 声優役グループ（<see cref="HasCharacterColumn"/>）は「出演」、それ以外は「担当」を冠して、
     /// エピソードの話数（#N・第N話）と数量の「N 話」を読み分けられるようにする。</summary>
@@ -31,7 +31,7 @@ internal sealed class InvolvementGroup
             var parts = new List<string>(3);
             if (EpisodeCount > 0) parts.Add($"{EpisodeCount} 話");
             if (MovieCount > 0) parts.Add($"{MovieCount} 本");
-            if (AdultEpisodeCount > 0) parts.Add($"大人向け {AdultEpisodeCount} 話");
+            if (OtonaEpisodeCount > 0) parts.Add($"大人向け {OtonaEpisodeCount} 話");
             return parts.Count == 0 ? "" : $"{CountVerb} {string.Join("・", parts)}";
         }
     }
@@ -69,7 +69,7 @@ internal sealed class AliasInvolvementSection
     /// <summary>名義見出し横に出す合計担当本数（<see cref="Groups"/> 内映画系シリーズ横断の合算）。</summary>
     public int MovieCount { get; set; }
     /// <summary>名義見出し横に出す大人向けの合計担当話数（<see cref="Groups"/> 内大人向けシリーズ横断の合算）。</summary>
-    public int AdultEpisodeCount { get; set; }
+    public int OtonaEpisodeCount { get; set; }
 }
 
 /// <summary>声の出演の「役（キャラクター）」大くくりサブセクション 1 件。</summary>

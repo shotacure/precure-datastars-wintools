@@ -2709,10 +2709,12 @@ public sealed class CreatorsGenerator
     /// <param name="coverageLabel">基準点ラベル。null なら本編クレジットの収録範囲（<see cref="BuildContext.CreditCoverageLabel"/>）。</param>
     /// <summary>
     /// 役職詳細の OGP カード（人物・企業と同じプロフィール組み）。
-    /// 「役職名 → 人物数・団体数と、この役職がクレジットされた TV の話数・映画の本数 → 担当の多い順の顔ぶれ →
-    /// 別称・初出」の順に置く。透かしは初出の年。
-    /// 役職名と人数だけでは「いつからある役職で、誰の仕事か」が伝わらないため、顔ぶれと初出で役職の輪郭を示す。
+    /// 「役職名 → 人物数・団体数と、この役職がクレジットされた TV の話数・映画の本数 → 担当回数順の顔ぶれ → 別称」の順に置く。
+    /// 透かしは初出の年。役職名と人数だけでは「誰の仕事か」が伝わらないため、顔ぶれを入る限り多く並べる。
     /// </summary>
+    /// <summary>役職詳細のカードに並べる顔ぶれの数（担当回数順の上位）。</summary>
+    private const int RoleCardTopCount = 12;
+
     private OgCardSpec BuildRoleOgCard(
         Role role, int personCount, int companyCount,
         IReadOnlyList<EntityRow> rows, IReadOnlyList<RoleTimelineEntity> entities,
@@ -2731,12 +2733,12 @@ public sealed class CreatorsGenerator
         if (episodes.Count > 0) badges.Add(new OgCardBadge("TV", $"{episodes.Count}話"));
         if (movies.Count > 0) badges.Add(new OgCardBadge("映画", $"{movies.Count}本"));
 
-        // 担当の多い順に 4 者まで。「名前 n話 / n本」を読点で並べる。
-        var top = rows.OrderByDescending(r => r.TotalCount).ThenBy(r => r.FirstSortStart).ThenBy(r => r.FirstSortEpNo).Take(4).ToList();
+        // 担当回数順に RoleCardTopCount 者まで。「名前 n話 / n本」を読点で並べる。
+        var top = rows.OrderByDescending(r => r.TotalCount).ThenBy(r => r.FirstSortStart).ThenBy(r => r.FirstSortEpNo).Take(RoleCardTopCount).ToList();
         var facts = new List<OgCardFactLine>();
         if (top.Count > 0)
         {
-            facts.Add(new OgCardFactLine("担当の多い順", string.Join("、", top.Select(r =>
+            facts.Add(new OgCardFactLine("担当回数順", string.Join("、", top.Select(r =>
             {
                 string count = (r.EpisodeCount, r.MovieCount) switch
                 {
@@ -2748,7 +2750,7 @@ public sealed class CreatorsGenerator
             }))));
         }
 
-        // 初出：この役職が最初にクレジットされた話（映画なら公開日）。透かしはその年。
+        // 透かしは、この役職が最初にクレジットされた話（映画なら公開日）の年。
         (DateOnly Date, string Text)? debut = null;
         foreach (var (sid, eid) in episodes)
         {
@@ -2766,7 +2768,6 @@ public sealed class CreatorsGenerator
         var foot = new List<OgCardFactLine>();
         if (alternateNames.Count > 0)
             foot.Add(new OgCardFactLine("別称", string.Join("・", alternateNames.Select(a => a.RoleNameJa))));
-        if (debut is not null) foot.Add(new OgCardFactLine("初出", debut.Value.Text));
 
         return new OgCardSpec(Kicker: "", Title: role.NameJa)
         {

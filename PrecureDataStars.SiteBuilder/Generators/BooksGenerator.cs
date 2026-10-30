@@ -317,8 +317,8 @@ public sealed class BooksGenerator
         {
             PageTitle = book.Title,
             MetaDescription = BuildDetailDescription(book, publisher, row.PrimaryGenreLabel),
-            // 商品詳細と同じ組み方。ジャンルを前置きに、量（ページ・価格・判型・電子）をバッジに、
-            // 発売日・出版社・クレジット（著・編集・イラストなど）を事実行に。透かしは関連する作品（無ければ発売年）で、
+            // ジャンルを前置きに、発売日・出版社・判型・ページ数・電子版・ISBN・クレジット（著・編集・イラストなど）を事実行に
+            // （大きな数のバッジは置かない）。透かしは関連する作品（無ければ発売年）で、
             // 右上は透かしに譲るので発売日は上段に置かない。
             // 関連する作品が複数なら、作品名を 1 行 1 作品で添える。ジャンルは前置きに出すので事実行では繰り返さない。
             OgCard = new OgCardSpec(
@@ -327,8 +327,7 @@ public sealed class BooksGenerator
             {
                 BandColorHex = OgCardColors.Book,
                 Watermark = seriesRows.Count > 0 ? seriesRows[0].Title : book.ReleaseDate.Year.ToString(),
-                Badges = BuildBookOgBadges(book),
-                InlineFacts = BuildBookOgFacts(FormatDateLong(book.ReleaseDate), book.Isbn13 ?? "", publisher, creditRows),
+                InlineFacts = BuildBookOgFacts(book, FormatDateLong(book.ReleaseDate), book.Isbn13 ?? "", publisher, creditRows),
                 Facts = seriesRows.Count > 1
                     ? seriesRows.Select(s => new OgCardFactLine("", $"『{s.Title}』")).ToArray()
                     : Array.Empty<OgCardFactLine>()
@@ -417,25 +416,19 @@ public sealed class BooksGenerator
     }
 
     /// <summary>詳細ページの meta description。書名・ジャンル・出版社・発売日を 1 文に畳む。</summary>
-    /// <summary>書籍カードの数バッジ。ページ数・判型・Kindle の有無など、数として語れるものだけを置く（価格は出さない）。</summary>
-    private static OgCardBadge[] BuildBookOgBadges(Book book)
-    {
-        var badges = new List<OgCardBadge>();
-        if (book.PageCount is ushort pages && pages > 0) badges.Add(new OgCardBadge("ページ", $"{pages}"));
-        if (!string.IsNullOrWhiteSpace(book.TrimSize)) badges.Add(new OgCardBadge("判型", book.TrimSize!));
-        if (book.ReleaseDateKindle.HasValue) badges.Add(new OgCardBadge("電子", "Kindle あり"));
-        return badges.ToArray();
-    }
-
     /// <summary>
-    /// 書籍カードの事実行。発売日・ISBN・出版社と、役職ごとのクレジット（著・監修・イラストなど。役職マスタの順）。
+    /// 書籍カードの事実行。発売日・出版社・判型・ページ数・電子版の有無・ISBN と、役職ごとのクレジット（著・監修・イラストなど。役職マスタの順）。
+    /// ページ数や判型は誇る数ではなく本の仕様なので、大きな数にせず本文と同じ事実行に置く（価格は出さない）。
     /// ISBN は同名の改訂版や判型違いを見分ける鍵なので、音楽商品の品番と同じく事実行に置く。
     /// </summary>
-    private static OgCardFactLine[] BuildBookOgFacts(string releaseDate, string isbn13, string publisher, IReadOnlyList<BookCreditGroup> creditRows)
+    private static OgCardFactLine[] BuildBookOgFacts(Book book, string releaseDate, string isbn13, string publisher, IReadOnlyList<BookCreditGroup> creditRows)
     {
         var facts = new List<OgCardFactLine> { new("発売", releaseDate) };
-        if (!string.IsNullOrWhiteSpace(isbn13)) facts.Add(new OgCardFactLine("ISBN", isbn13));
         if (!string.IsNullOrWhiteSpace(publisher)) facts.Add(new OgCardFactLine("出版社", publisher));
+        if (!string.IsNullOrWhiteSpace(book.TrimSize)) facts.Add(new OgCardFactLine("判型", book.TrimSize!));
+        if (book.PageCount is ushort pages && pages > 0) facts.Add(new OgCardFactLine("ページ", $"{pages}"));
+        if (book.ReleaseDateKindle.HasValue) facts.Add(new OgCardFactLine("電子版", "Kindle"));
+        if (!string.IsNullOrWhiteSpace(isbn13)) facts.Add(new OgCardFactLine("ISBN", isbn13));
         foreach (var g in creditRows)
             if (!string.IsNullOrWhiteSpace(g.NamesText)) facts.Add(new OgCardFactLine(g.RoleLabel, g.NamesText));
         return facts.ToArray();

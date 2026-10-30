@@ -45,6 +45,8 @@ public sealed class TitleCharIndex
     /// 与えられたエピソード集合からインデックスを構築する。
     /// <see cref="Episode.TitleCharStats"/> が空、または <see cref="Episode.TotalEpNo"/> が未設定の話は
     /// インデックスに含めない（既存 SQL <c>GetTitleCharRevivalStatsAsync</c> の WHERE 条件と同じ運用）。
+    /// 比べる相手は本線の TV（<c>kind_code='TV'</c>）の話だけに絞る。スピンオフの話に通算話数が入っても、
+    /// 本線の各話ページの「初出 / 唯一 / N年Mか月ぶり」に混ざらないようにするため。
     /// </summary>
     /// <param name="episodes">全エピソード（既に <c>is_deleted = 0</c> 済みであることを前提とする）。</param>
     /// <param name="seriesById">シリーズ ID → <see cref="Series"/> の索引。 復活情報の「『○○プリキュア』第N話」表記用に <see cref="Series.Title"/> を引く。</param>
@@ -61,6 +63,7 @@ public sealed class TitleCharIndex
             if (string.IsNullOrEmpty(e.TitleCharStats)) continue;
             if (e.TotalEpNo is not int totalEpNo) continue;
             if (!seriesById.TryGetValue(e.SeriesId, out var series)) continue;
+            if (!string.Equals(series.KindCode, "TV", StringComparison.Ordinal)) continue;
 
             // title_char_stats JSON から chars のキーだけ取り出す。値（出現回数）は本インデックスでは使わない。
             // JSON が壊れているとき（保存不整合等）は当該エピソードをスキップして他に影響を与えない。

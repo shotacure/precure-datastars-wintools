@@ -174,7 +174,7 @@ public sealed class EpisodesRepository : RepositoryBase
 
     //  サブタイトル文字統計 — 初出・使用回数
 
-    /// <summary>指定した文字（title_char_stats.chars のキー）が初めて使われたエピソードを検索する。 JSON_CONTAINS_PATH を使い、全シリーズ横断で on_air_at が最も古いものを返す。</summary>
+    /// <summary>指定した文字（title_char_stats.chars のキー）が初めて使われたエピソードを検索する。 JSON_CONTAINS_PATH を使い、本線の TV シリーズ（kind_code='TV'）横断で on_air_at が最も古いものを返す（スピンオフの話は比べる相手に入れない）。</summary>
     /// <param name="key">検索する文字（書記素単位のキー文字列）。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>初出エピソードの ID と放送日時。該当なしの場合は (null, null)。</returns>
@@ -185,6 +185,7 @@ public sealed class EpisodesRepository : RepositoryBase
         FROM episodes
         WHERE is_deleted = 0
           AND title_char_stats IS NOT NULL
+          AND series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
           AND JSON_CONTAINS_PATH(title_char_stats, 'one', CONCAT('$.chars."', REPLACE(REPLACE(@key, '\\', '\\\\'), '\"', '\\\"'), '"'))
         ORDER BY on_air_at, episode_id
         LIMIT 1;
@@ -195,7 +196,7 @@ public sealed class EpisodesRepository : RepositoryBase
         return row == default ? (null, null) : (row.episode_id, row.on_air_at);
     }
 
-    /// <summary>指定した文字が使われているエピソード数（全シリーズ横断）をカウントする。</summary>
+    /// <summary>指定した文字が使われているエピソード数（本線の TV シリーズ横断。スピンオフの話は数えない）をカウントする。</summary>
     /// <param name="key">検索する文字（書記素単位のキー文字列）。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>使用エピソード数。</returns>
@@ -206,6 +207,7 @@ public sealed class EpisodesRepository : RepositoryBase
         FROM episodes
         WHERE is_deleted = 0
           AND title_char_stats IS NOT NULL
+          AND series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
           AND JSON_CONTAINS_PATH(title_char_stats, 'one', CONCAT('$.chars."', REPLACE(REPLACE(@key, '\\', '\\\\'), '\"', '\\\"'), '"'));
     """;
         return await ExecuteScalarAsync<int>(sql, new { key }, ct).ConfigureAwait(false);
@@ -275,7 +277,7 @@ me_chars AS (
   ) jt
 ),
 history AS (
-  -- 過去の出現（話単位で1回）
+  -- 過去の出現（話単位で1回）。比べる相手は本線の TV だけ（スピンオフの話は入れない）
   SELECT e.episode_id, e.series_id, e.on_air_at, e.total_ep_no, e.series_ep_no, e.title_text, jt2.ch
   FROM episodes e
   JOIN JSON_TABLE(
@@ -286,6 +288,7 @@ history AS (
   WHERE e.is_deleted = 0
     AND e.title_char_stats IS NOT NULL
     AND e.total_ep_no IS NOT NULL
+    AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
 ),
 last_prev AS (
   -- 対象話より前での最終出現

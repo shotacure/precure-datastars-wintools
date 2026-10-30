@@ -82,7 +82,9 @@ internal sealed class CreditTreeRenderer
     private static string BuildRoleNameHtml(string? roleCode, string roleName, IReadOnlyDictionary<string, Role> roleMap)
     {
         if (string.IsNullOrEmpty(roleName)) return "";
-        if (string.IsNullOrEmpty(roleCode)) return Esc(roleName);
+        // 表記（role_label_text）の改行は、画面で見出しが 2 行に積まれている所。<br> で描く
+        string nameHtml = Esc(roleName).Replace("\n", "<br>");
+        if (string.IsNullOrEmpty(roleCode)) return nameHtml;
 
         roleMap.TryGetValue(roleCode!, out var r);
 
@@ -91,11 +93,11 @@ internal sealed class CreditTreeRenderer
         // 紐付けると死リンクになる（このフォーマット種の役職詳細ページは生成しない方針）ため、
         // プレーンテキストで出す。歌スタッフの集計は歌系 4 役職（作詞/作曲/編曲/歌唱）の専用ページが担う。
         if (r != null && string.Equals(r.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
-            return Esc(roleName);
+            return nameHtml;
 
         // 表記のみ（NOTICE 形式）の役職も役職詳細ページを作らないため、プレーンテキストで出す。
         if (r != null && string.Equals(r.RoleFormatKind, "NOTICE", StringComparison.Ordinal))
-            return Esc(roleName);
+            return nameHtml;
 
         // VOICE_CAST フォーマット種の役職は声の出演一覧（/creators/voice-cast/）に集約しているため、
         // そちらに飛ばす。それ以外は /creators/roles/{role_code}/ の役職詳細ページへ。
@@ -104,9 +106,9 @@ internal sealed class CreditTreeRenderer
                            && string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
         // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）はプレーンテキストで出す。
         if (!isVoiceCast && !PathUtil.HasRolePage(roleCode!))
-            return Esc(roleName);
+            return nameHtml;
         string url = isVoiceCast ? PathUtil.CreatorsVoiceCastUrl() : PathUtil.CreatorsRoleUrl(roleCode!);
-        return $"<a href=\"{url}\">{Esc(roleName)}</a>";
+        return $"<a href=\"{url}\">{nameHtml}</a>";
     }
 
     /// <summary>

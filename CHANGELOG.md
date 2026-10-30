@@ -5,6 +5,7 @@
 ### 開発中（次回リリース）
 
 - **依存：MySqlConnector を 2.5.0 から 2.6.1 に上げた**（`Directory.Packages.props`）：SslMode を VerifyCA／VerifyFull にして SslCa を指定しない接続で、証明書を確かめる前に平文のパスワードを送ることがある脆弱性（GHSA-473q-m89c-ghf8）を塞ぐ。
+- **サイト・Catalog：役職の表記（`credit_card_roles.role_label_text`）の改行を、役職名のセルで行を分けて描くようにした**（`CreditTreeRenderer.BuildRoleNameHtml`・`CreditPreviewRenderer`）：画面で見出しが 2 行に積まれている役職（「エンディングダンス」の下に「CGディレクター」）を、ブロックの見出しを使わずに画面と同じ上下で出す。
 
 ### v1.20.0 (2026-10-30)
 

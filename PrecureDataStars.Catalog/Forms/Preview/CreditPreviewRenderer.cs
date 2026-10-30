@@ -1244,7 +1244,8 @@ internal sealed class CreditPreviewRenderer
         string roleMisprintPrefixHtml = !string.IsNullOrEmpty(roleMisprintText) && roleName.Length > 0
             ? $"<del title=\"クレジット時の誤記\">{Esc(roleMisprintText!)}</del><br>"
             : "";
-        string roleNameHtml = joinedLabelHtml ?? (roleMisprintPrefixHtml + Esc(roleName));
+        // 表記（role_label_text）の改行は、画面で見出しが 2 行に積まれている所。<br> で描く
+        string roleNameHtml = joinedLabelHtml ?? (roleMisprintPrefixHtml + Esc(roleName).Replace("\n", "<br>"));
 
         // テンプレを role_templates から解決
         string? template = null;

@@ -1878,9 +1878,11 @@ public sealed partial class OgCardRenderer : IDisposable
             }
 
             // 区切りが無い（＝1 語が幅を超えている）。文字単位で折るしかない。
+            // 次の行の頭が行頭禁則の字（閉じ括弧・感嘆符・小書きの仮名など）になるときは、その前の字ごと次の行へ送る。
             int fit = start;
             while (fit < text.Length && Measure(font, text.AsSpan(start, fit - start + 1)) <= maxWidth) fit++;
             if (fit == start) fit = start + 1;
+            while (fit < text.Length && fit - start > 1 && LineStartForbidden.Contains(text[fit])) fit--;
             lines.Add(text[start..fit]);
             start = fit;
         }

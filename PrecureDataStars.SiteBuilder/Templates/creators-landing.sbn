@@ -61,5 +61,32 @@
         <span class="music-category-stats-label">名</span>
       </li>
     </ul>
+  </a>{{ if HasOtona }}
+
+  {{## オトナシリーズ（種別 OTONA）のスタッフ・声の出演。本編の 2 枚と同じ作りの一覧で、クレジットがあるときだけ出す。 ##}}
+  <a class="music-category-card" href="/creators/otona/staff/">
+    <h2>オトナシリーズのスタッフ</h2>
+    <p>大人向けシリーズの脚本・演出・作画から制作会社まで、手がけた方々を役職ごとにまとめています。</p>
+    <ul class="music-category-stats">
+      <li>
+        <span class="music-category-stats-value">{{ OtonaStaffPersonCount }}</span>
+        <span class="music-category-stats-label">名</span>
+      </li>
+      <li>
+        <span class="music-category-stats-value">{{ OtonaStaffCompanyCount }}</span>
+        <span class="music-category-stats-label">団体</span>
+      </li>
+    </ul>
   </a>
+
+  <a class="music-category-card" href="/creators/otona/voice-cast/">
+    <h2>オトナシリーズの声の出演</h2>
+    <p>大人向けシリーズでキャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。</p>
+    <ul class="music-category-stats">
+      <li>
+        <span class="music-category-stats-value">{{ OtonaVoiceCastCount }}</span>
+        <span class="music-category-stats-label">名</span>
+      </li>
+    </ul>
+  </a>{{ end }}
 </section>

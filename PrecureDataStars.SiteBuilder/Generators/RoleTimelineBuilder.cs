@@ -433,7 +433,8 @@ internal sealed class RoleTimelineBuilder
                 products.Add(new RoleTimelineMark { Left = Pct(d) });
         }
 
-        // 内訳：TV・映画はシリーズの放送・公開順に「📺 シリーズ名 #1～49（添え書き）」「🎥 映画名（添え書き）」、
+        // 内訳：TV・映画はシリーズの放送・公開順に「📺 シリーズ名 #1～49（添え書き）」「🎥 映画名（添え書き）」
+        // （大人向けスピンオフの話は 📺 の代わりに 🌙）、
         // 歌・劇伴・盤は年ごとに「🎵 2004年 曲名、曲名」「🎼 2004年 作品名（録音回）」「💿 2004年 商品名」で 1 行ずつ。
         var works = new List<(DateOnly Sort, string Text)>();
         foreach (var sid in tvEpNos.Keys.Concat(movieIds).Distinct())
@@ -441,7 +442,7 @@ internal sealed class RoleTimelineBuilder
             if (!_ctx.SeriesById.TryGetValue(sid, out var s)) continue;
             string note = e.SeriesNotes is not null && e.SeriesNotes.TryGetValue(sid, out var n) && n != "" ? $"（{n}）" : "";
             works.Add((s.StartDate, tvEpNos.TryGetValue(sid, out var nos)
-                ? $"📺 {s.Title} {EpisodeRangeCompressor.Compress(nos)}{note}"
+                ? $"{(_ctx.IsOtonaSeries(sid) ? "🌙" : "📺")} {s.Title} {EpisodeRangeCompressor.Compress(nos)}{note}"
                 : $"🎥 {s.Title}{note}"));
         }
         foreach (var (kind, icon, order) in new[] { (CreditKind.Song, "🎵", 0), (CreditKind.Bgm, "🎼", 1), (CreditKind.Product, "💿", 2) })

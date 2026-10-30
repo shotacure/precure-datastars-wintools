@@ -187,6 +187,12 @@ public static class PathUtil
     /// <summary>声の出演（声優）一覧ページの URL（/creators/voice-cast/）。</summary>
     public static string CreatorsVoiceCastUrl() => "/creators/voice-cast/";
 
+    /// <summary>オトナシリーズのスタッフ一覧ページの URL（/creators/otona/staff/）。</summary>
+    public static string CreatorsOtonaStaffUrl() => "/creators/otona/staff/";
+
+    /// <summary>オトナシリーズの声の出演（声優）一覧ページの URL（/creators/otona/voice-cast/）。</summary>
+    public static string CreatorsOtonaVoiceCastUrl() => "/creators/otona/voice-cast/";
+
     /// <summary>音楽制作（楽曲の作詞・作曲・編曲の担当者）一覧ページの URL（/creators/music-production/）。</summary>
     public static string CreatorsMusicProductionUrl() => "/creators/music-production/";
 

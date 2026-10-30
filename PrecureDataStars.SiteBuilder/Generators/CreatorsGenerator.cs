@@ -46,8 +46,10 @@ public sealed class CreatorsGenerator
     /// 役職詳細・スタッフ一覧・声の出演一覧の集計に使う関与インデックス。
     /// 本編（<see cref="CreatorListScope"/> の範囲のシリーズ）の関与だけを残した写しで、
     /// 単発のイベント映像とスピンオフのクレジットはこれらの一覧に入れない（作品詳細・人物・企業のページには出る）。
+    /// オトナシリーズのスタッフ一覧・声の出演一覧を作る間だけ、オトナシリーズの関与だけを残した写しに差し替え、
+    /// 作り終えたら本編の写しに戻す（<see cref="GenerateAsync"/>。生成は 1 本の流れで行うので、差し替え中にほかの集計は走らない）。
     /// </summary>
-    private readonly CreditInvolvementIndex _index;
+    private CreditInvolvementIndex _index;
 
     /// <summary>絞り込む前の関与インデックス。企業の最新屋号など、サイト全体でそろえる値を決めるのに使う。</summary>
     private readonly CreditInvolvementIndex _fullIndex;
@@ -192,6 +194,11 @@ public sealed class CreatorsGenerator
         var roleIndexEntries = new List<RoleIndexEntry>();
         // 役職詳細・声の出演の線表。軸（期間・シリーズの帯）は共通なので 1 度だけ確定させる。
         var roleTimeline = new RoleTimelineBuilder(_ctx);
+        // スタッフ一覧の役職順タブに載せうる役職（系譜の代表と、集計に含めるクラスタの role_code）。
+        // オトナシリーズのスタッフ一覧でも、同じ役職の並びで集計し直すのに使う。
+        var staffRoleClusters = new List<(Role Role, HashSet<string> MemberCodes)>();
+        // 役職詳細ページを作った役職（オトナシリーズのスタッフ一覧で、役職名を役職詳細へリンクできるか）。
+        var roleCodesWithDetail = new HashSet<string>(StringComparer.Ordinal);
         // 音楽制作ページの役職タブ用（作詞・作曲・編曲の役職詳細への入口）。
         var musicRoleEntries = new List<RoleIndexEntry>();
 
@@ -245,6 +252,7 @@ public sealed class CreatorsGenerator
                             && !string.Equals(rr.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal))
                 .ToHashSet(StringComparer.Ordinal);
 
+            staffRoleClusters.Add((role, memberCodes));
             var rowSet = BuildRoleEntityRows(
                 role.RoleCode, memberCodes, roleByCode, aliasIdsByPersonId, allPersons,
                 companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById);
@@ -255,57 +263,20 @@ public sealed class CreatorsGenerator
             // 役職詳細ページも生成せず、「役職順」タブの索引（roleIndexEntries）にも積まない。
             if (rows.Count == 0) continue;
 
-            int personCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal));
-            int companyCount = rows.Count - personCount;
-
             GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline);
+            roleCodesWithDetail.Add(role.RoleCode);
 
-            // 役職順タブの並べ替えキー：この役職が最も早くクレジットされた
-            long roleSortStart = long.MaxValue;
-            int roleSortEpNo = int.MaxValue;
-            long roleSortPos = long.MaxValue;
-            foreach (var er in rows)
-            {
-                if (er.FirstSortStart < roleSortStart
-                    || (er.FirstSortStart == roleSortStart && er.FirstSortEpNo < roleSortEpNo)
-                    || (er.FirstSortStart == roleSortStart && er.FirstSortEpNo == roleSortEpNo
-                        && er.FirstSortPos < roleSortPos))
-                {
-                    roleSortStart = er.FirstSortStart;
-                    roleSortEpNo = er.FirstSortEpNo;
-                    roleSortPos = er.FirstSortPos;
-                }
-            }
-
-            roleIndexEntries.Add(new RoleIndexEntry
-            {
-                RoleNameJa = role.NameJa,
-                // 役職詳細ページへのリンクは PathUtil 経由で組み立て、URL パス上のコードを
-                // 小文字化する。テンプレ側はこの組み立て済み URL のみ参照する。
-                RoleUrl = PathUtil.CreatorsRoleUrl(role.RoleCode),
-                PersonCount = personCount,
-                CompanyCount = companyCount,
-                SortStart = roleSortStart,
-                SortEpNo = roleSortEpNo,
-                SortPos = roleSortPos,
-                RoleNameKey = role.RoleCode,
-                // TV 系シリーズ（credit_attach_to='EPISODE'）のクレジットが 1 件も無い役職は「映画のみ」。
-                IsMovieOnly = rows.All(r => r.EpisodeCount == 0)
-            });
+            // 役職詳細ページへのリンクは PathUtil 経由で組み立て、URL パス上のコードを
+            // 小文字化する。テンプレ側はこの組み立て済み URL のみ参照する。
+            roleIndexEntries.Add(BuildRoleIndexEntry(role, rows, PathUtil.CreatorsRoleUrl(role.RoleCode)));
         }
 
-        // 役職順：最も早くクレジットされた (放送開始, 話数, クレジット階層位置) の昇順。
-        roleIndexEntries = roleIndexEntries
-            .OrderBy(e => e.SortStart)
-            .ThenBy(e => e.SortEpNo)
-            .ThenBy(e => e.SortPos)
-            .ThenBy(e => e.RoleNameKey, StringComparer.Ordinal)
-            .ToList();
+        roleIndexEntries = OrderRoleIndexEntries(roleIndexEntries);
 
         // ── スタッフ一覧（/creators/staff/） ──
         GenerateStaff(roleIndexEntries, aliasIdsByPersonId, allPersons, personById,
             companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById, companyById,
-            rankableRoles, roleByCode, out int staffPersonCount, out int staffCompanyCount);
+            rankableRoles, roleByCode, MainListPages, out int staffPersonCount, out int staffCompanyCount);
 
         // ── 声の出演（/creators/voice-cast/） ──
         var allCharacters = (await _charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
@@ -324,7 +295,44 @@ public sealed class CreatorsGenerator
                     precureOrderByCharacter.TryAdd(ca.CharacterId, precureOrder);
         }
         GenerateVoiceCast(aliasIdsByPersonId, allPersons, allCharacters, allCharacterAliases, roleTimeline,
-            precureOrderByCharacter, out int voiceCastCount);
+            precureOrderByCharacter, MainListPages, out int voiceCastCount);
+
+        // ── オトナシリーズのスタッフ一覧・声の出演一覧（/creators/otona/staff/・/creators/otona/voice-cast/） ──
+        // 本編の 2 ページと同じ作りで、関与をオトナシリーズ（種別 OTONA）の作品だけに絞った写しで集計し直す。
+        // 役職詳細は作らず（役職名は本編の役職詳細へリンクし、無い役職はリンクしない）、一覧に載った方の記録
+        // （人物・企業のパンくず、OGP カードの年表、誕生日の判定に使う）にも入れない。本編の 2 ページの数・並びには触れない。
+        // オトナシリーズのクレジットが 1 件も無いうちは、ページも入口のカードも作らない。
+        var otonaIndex = _fullIndex.RestrictToSeries(sid => _ctx.IsOtonaSeries(sid));
+        bool hasOtonaCredits = otonaIndex.ByPersonAlias.Count > 0 || otonaIndex.ByCompanyAlias.Count > 0 || otonaIndex.ByLogo.Count > 0;
+        int otonaStaffPersonCount = 0, otonaStaffCompanyCount = 0, otonaVoiceCastCount = 0;
+        if (hasOtonaCredits)
+        {
+            var otonaPages = BuildOtonaListPages();
+            var mainIndex = _index;
+            _index = otonaIndex;
+            try
+            {
+                var otonaRoleEntries = new List<RoleIndexEntry>();
+                foreach (var (role, memberCodes) in staffRoleClusters)
+                {
+                    var rows = BuildRoleEntityRows(
+                        role.RoleCode, memberCodes, roleByCode, aliasIdsByPersonId, allPersons,
+                        companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById).CountRows;
+                    if (rows.Count == 0) continue;
+                    otonaRoleEntries.Add(BuildRoleIndexEntry(role, rows,
+                        roleCodesWithDetail.Contains(role.RoleCode) ? PathUtil.CreatorsRoleUrl(role.RoleCode) : ""));
+                }
+                GenerateStaff(OrderRoleIndexEntries(otonaRoleEntries), aliasIdsByPersonId, allPersons, personById,
+                    companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById, companyById,
+                    rankableRoles, roleByCode, otonaPages, out otonaStaffPersonCount, out otonaStaffCompanyCount);
+                GenerateVoiceCast(aliasIdsByPersonId, allPersons, allCharacters, allCharacterAliases, roleTimeline,
+                    precureOrderByCharacter, otonaPages, out otonaVoiceCastCount);
+            }
+            finally
+            {
+                _index = mainIndex;
+            }
+        }
 
         // ── 音楽制作（/creators/music-production/）・歌唱（/creators/singers/） ──
         musicRoleEntries = musicRoleEntries
@@ -352,7 +360,8 @@ public sealed class CreatorsGenerator
 
         // ── ランディング（/creators/） ──
         GenerateLanding(staffPersonCount, staffCompanyCount, voiceCastCount,
-            musicProductionPersonCount, musicProductionCompanyCount, singerCount);
+            musicProductionPersonCount, musicProductionCompanyCount, singerCount,
+            hasOtonaCredits, otonaStaffPersonCount, otonaStaffCompanyCount, otonaVoiceCastCount);
 
         // 人物・企業詳細のパンくずが「本人が載っている一覧」を経由できるよう、各一覧に載せた顔ぶれを渡す。
         _ctx.CreatorLists = _lists;
@@ -361,6 +370,110 @@ public sealed class CreatorsGenerator
 
         _ctx.Logger.Success(
             $"creators: {rankableRoles.Count} 役職詳細 + スタッフ + 声の出演 + 音楽制作 + 歌唱 + ランディング");
+    }
+
+    /// <summary>
+    /// スタッフ一覧の役職順タブの 1 行（役職名・人数・社数と並べ替えキー）を、その役職の行群から組み立てる。
+    /// 並べ替えキーは、この役職が最も早くクレジットされた (放送開始, 話数, クレジット階層位置)。
+    /// </summary>
+    /// <param name="roleUrl">役職名のリンク先。役職詳細ページが無い役職は空文字（テンプレはリンクせずに名前だけ出す）。</param>
+    private static RoleIndexEntry BuildRoleIndexEntry(Role role, IReadOnlyList<EntityRow> rows, string roleUrl)
+    {
+        int personCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal));
+        int companyCount = rows.Count - personCount;
+
+        long roleSortStart = long.MaxValue;
+        int roleSortEpNo = int.MaxValue;
+        long roleSortPos = long.MaxValue;
+        foreach (var er in rows)
+        {
+            if (er.FirstSortStart < roleSortStart
+                || (er.FirstSortStart == roleSortStart && er.FirstSortEpNo < roleSortEpNo)
+                || (er.FirstSortStart == roleSortStart && er.FirstSortEpNo == roleSortEpNo
+                    && er.FirstSortPos < roleSortPos))
+            {
+                roleSortStart = er.FirstSortStart;
+                roleSortEpNo = er.FirstSortEpNo;
+                roleSortPos = er.FirstSortPos;
+            }
+        }
+
+        return new RoleIndexEntry
+        {
+            RoleNameJa = role.NameJa,
+            RoleUrl = roleUrl,
+            PersonCount = personCount,
+            CompanyCount = companyCount,
+            SortStart = roleSortStart,
+            SortEpNo = roleSortEpNo,
+            SortPos = roleSortPos,
+            RoleNameKey = role.RoleCode,
+            // TV 系シリーズ（credit_attach_to='EPISODE'）のクレジットが 1 件も無い役職は「映画のみ」。
+            IsMovieOnly = rows.All(r => r.EpisodeCount == 0)
+        };
+    }
+
+    /// <summary>役職順：最も早くクレジットされた (放送開始, 話数, クレジット階層位置) の昇順。</summary>
+    private static List<RoleIndexEntry> OrderRoleIndexEntries(IEnumerable<RoleIndexEntry> entries)
+        => entries
+            .OrderBy(e => e.SortStart)
+            .ThenBy(e => e.SortEpNo)
+            .ThenBy(e => e.SortPos)
+            .ThenBy(e => e.RoleNameKey, StringComparer.Ordinal)
+            .ToList();
+
+    /// <summary>
+    /// スタッフ一覧・声の出演一覧の 1 組の出し分け（URL・題・説明文と、話数の札）。
+    /// 本編（TV と映画）の組と、オトナシリーズの組で同じ生成処理を使い、ここに書いた所だけを変える。
+    /// </summary>
+    /// <param name="EpisodePillClass">話数の札のクラス（本編は 📺 の <c>count-pill-tv</c>、オトナシリーズは 🌙 の <c>count-pill-otona</c>）。</param>
+    /// <param name="RecordsMembership">一覧に載った方を記録するか（人物・企業のパンくず、OGP カードの年表、誕生日の判定に使う。本編の組だけ）。</param>
+    /// <param name="ShowsCoverage">ページと OGP カードに基準点（本編クレジットの収録範囲）を出すか。本編の組だけ。</param>
+    private sealed record CreatorListPages(
+        string StaffUrl, string StaffTitle, string StaffMetaDescription, string StaffOgLead,
+        string VoiceCastUrl, string VoiceCastTitle, string VoiceCastMetaDescription, string VoiceCastOgLead,
+        string EpisodePillClass, string EpisodePillEmoji, bool RecordsMembership, bool ShowsCoverage);
+
+    /// <summary>本編（TV と映画）のスタッフ一覧・声の出演一覧。</summary>
+    private static readonly CreatorListPages MainListPages = new(
+        StaffUrl: PathUtil.CreatorsStaffUrl(),
+        StaffTitle: "歴代プリキュアスタッフ",
+        StaffMetaDescription: "歴代プリキュアのスタッフ一覧。脚本・演出・作画監督から制作会社まで、プリキュアを支えてきた方々（人物・企業・団体）を役職ごとにまとめました。参加話数や初参加の作品で並べ替えられます。",
+        StaffOgLead: "脚本・演出・作画から制作会社まで、プリキュアを作ってきた方々と企業・団体を役職ごとにまとめています。好きな回の演出家が手がけたほかの回も探せます。",
+        VoiceCastUrl: PathUtil.CreatorsVoiceCastUrl(),
+        VoiceCastTitle: "歴代プリキュア声優",
+        VoiceCastMetaDescription: "歴代プリキュアの声優さん一覧。キャラクターを演じた声優さんを作品ごと・役ごとにまとめました。初出演の作品や出演話数で並べ替えられます。",
+        VoiceCastOgLead: "キャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。あのキャラの声の主も、その方のほかの役も、同じページに並びます。",
+        EpisodePillClass: "count-pill-tv",
+        EpisodePillEmoji: "📺",
+        RecordsMembership: true,
+        ShowsCoverage: true);
+
+    /// <summary>
+    /// オトナシリーズ（種別 OTONA）のスタッフ一覧・声の出演一覧。
+    /// 題と見出しはサイトでの呼び名「オトナシリーズ」、説明文とリード文は一般語の「大人向けシリーズ」で書く。
+    /// meta description には種別 OTONA の作品名を放送順に並べる。
+    /// OGP カードのリード文は入口のカード（creators-landing.sbn）の文と 1 文目をそろえる。
+    /// </summary>
+    private CreatorListPages BuildOtonaListPages()
+    {
+        string titles = string.Concat(_ctx.Series
+            .Where(s => _ctx.IsOtonaSeries(s.SeriesId))
+            .OrderBy(s => s.StartDate).ThenBy(s => s.SeriesId)
+            .Select(s => $"『{s.Title}』"));
+        return new(
+            StaffUrl: PathUtil.CreatorsOtonaStaffUrl(),
+            StaffTitle: "オトナシリーズのスタッフ",
+            StaffMetaDescription: $"プリキュアの大人向けシリーズのスタッフ一覧。{titles}を手がけた方々（人物・企業・団体）を役職ごとにまとめました。参加話数や初参加の作品で並べ替えられます。",
+            StaffOgLead: "大人向けシリーズの脚本・演出・作画から制作会社まで、手がけた方々を役職ごとにまとめています。参加話数の多い順や、初めて参加した作品の順にも並べ替えられます。",
+            VoiceCastUrl: PathUtil.CreatorsOtonaVoiceCastUrl(),
+            VoiceCastTitle: "オトナシリーズの声優",
+            VoiceCastMetaDescription: $"プリキュアの大人向けシリーズの声優さん一覧。{titles}でキャラクターを演じた声優さんを、作品ごと・役ごとにまとめました。出演話数や初出演の作品で並べ替えられます。",
+            VoiceCastOgLead: "大人向けシリーズでキャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。出演話数の多い順や、初めて出演した作品の順でも見られます。",
+            EpisodePillClass: "count-pill-otona",
+            EpisodePillEmoji: "🌙",
+            RecordsMembership: false,
+            ShowsCoverage: false);
     }
 
     // 役職詳細
@@ -2005,7 +2118,7 @@ public sealed class CreatorsGenerator
 
     // スタッフ一覧
 
-    /// <summary><c>/creators/staff/</c> を 4 タブで書き出す。 役職順タブは役職名 + 人数/社数の索引（各役職詳細への入口）。 それ以外の 3 タブは全役職横断の人物・企業/団体の混在一覧。</summary>
+    /// <summary><c>/creators/staff/</c>（オトナシリーズは <c>/creators/otona/staff/</c>。<paramref name="pages"/> で出し分ける）を 4 タブで書き出す。 役職順タブは役職名 + 人数/社数の索引（各役職詳細への入口）。 それ以外の 3 タブは全役職横断の人物・企業/団体の混在一覧。</summary>
     private void GenerateStaff(
         IReadOnlyList<RoleIndexEntry> roleIndexEntries,
         IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
@@ -2018,6 +2131,7 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<int, Company> companyById,
         IReadOnlyList<Role> rankableRoles,
         IReadOnlyDictionary<string, Role> roleByCode,
+        CreatorListPages pages,
         out int staffPersonCount,
         out int staffCompanyCount)
     {
@@ -2038,10 +2152,13 @@ public sealed class CreatorsGenerator
             aliasIdsByPersonId, allPersons, companyAliasesByCompany, logosByCompanyAlias,
             allCompanies, companyAliasById, repNameMap, withWorksTooltip: false);
         var rows = rowSet.CountRows;
-        foreach (var r in rows)
+        if (pages.RecordsMembership)
         {
-            if (string.Equals(r.EntityKind, "person", StringComparison.Ordinal)) _lists.StaffPersons.Add(r.EntityId);
-            else _lists.StaffCompanies.Add(r.EntityId);
+            foreach (var r in rows)
+            {
+                if (string.Equals(r.EntityKind, "person", StringComparison.Ordinal)) _lists.StaffPersons.Add(r.EntityId);
+                else _lists.StaffCompanies.Add(r.EntityId);
+            }
         }
 
         staffPersonCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal));
@@ -2061,25 +2178,28 @@ public sealed class CreatorsGenerator
             CountRows = SortByCount(rows),
             PersonCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal)),
             CompanyCount = rows.Count(r => string.Equals(r.EntityKind, "company", StringComparison.Ordinal)),
-            CoverageLabel = _ctx.CreditCoverageLabel
+            CoverageLabel = pages.ShowsCoverage ? _ctx.CreditCoverageLabel : "",
+            PageTitle = pages.StaffTitle,
+            EpisodePillClass = pages.EpisodePillClass,
+            EpisodePillEmoji = pages.EpisodePillEmoji
         };
         var layout = new LayoutModel
         {
-            PageTitle = "歴代プリキュアスタッフ",
-            MetaDescription = "歴代プリキュアのスタッフ一覧。脚本・演出・作画監督から制作会社まで、プリキュアを支えてきた方々（人物・企業・団体）を役職ごとにまとめました。参加話数や初参加の作品で並べ替えられます。",
+            PageTitle = pages.StaffTitle,
+            MetaDescription = pages.StaffMetaDescription,
             OgCard = BuildCreatorsOgCard(
-                "歴代プリキュアスタッフ",
+                pages.StaffTitle,
                 BuildEntityBadges(content.PersonCount, content.CompanyCount),
-                Array.Empty<OgCardFactLine>(), null,
-                "脚本・演出・作画から制作会社まで、プリキュアを作ってきた方々と企業・団体を役職ごとにまとめています。好きな回の演出家が手がけたほかの回も探せます。"),
+                Array.Empty<OgCardFactLine>(), content.CoverageLabel,
+                pages.StaffOgLead),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代クリエイター", Url = PathUtil.CreatorsLandingUrl() },
-                new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = "" }
+                new BreadcrumbItem { Label = pages.StaffTitle, Url = "" }
             }
         };
-        _page.RenderAndWrite(PathUtil.CreatorsStaffUrl(), "creators",
+        _page.RenderAndWrite(pages.StaffUrl, "creators",
             "creators-staff.sbn", content, layout);
     }
 
@@ -2102,6 +2222,7 @@ public sealed class CreatorsGenerator
         IReadOnlyList<CharacterAlias> allCharacterAliases,
         RoleTimelineBuilder timelineBuilder,
         IReadOnlyDictionary<int, int> precureOrderByCharacter,
+        CreatorListPages pages,
         out int voiceCastCount)
     {
         var characterById = allCharacters.ToDictionary(c => c.CharacterId);
@@ -2171,7 +2292,8 @@ public sealed class CreatorsGenerator
             .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
             .ThenBy(r => r.PersonName, StringComparer.Ordinal)
             .ToList();
-        foreach (var r in countRows) _lists.VoiceCastPersons.Add(r.PersonId);
+        if (pages.RecordsMembership)
+            foreach (var r in countRows) _lists.VoiceCastPersons.Add(r.PersonId);
 
         // 「プリキュアを演じた方のみ」：プリキュアのマスタのキャラを演じたことがある方を、全タブの行に印を付ける
         // （キャラクター別タブでも、その方が演じたほかのキャラの行を含めて残す）。
@@ -2220,7 +2342,9 @@ public sealed class CreatorsGenerator
             .Where(r => precureOrderByPerson.ContainsKey(r.PersonId))
             .GroupBy(r => r.PersonUrl, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => precureOrderByPerson[g.First().PersonId], StringComparer.Ordinal);
-        var timeline = RecordTimelineRows(timelineBuilder.Build(timelineEntities, RoleTimelineRules.VoiceCast));
+        // 年表に主な方として載った記録（OGP カードの年表の判定）は本編の組だけに付ける。
+        var builtTimeline = timelineBuilder.Build(timelineEntities, RoleTimelineRules.VoiceCast);
+        var timeline = pages.RecordsMembership ? RecordTimelineRows(builtTimeline) : builtTimeline;
         if (timeline is not null)
             foreach (var row in timeline.Rows)
                 if (precureOrderByUrl.TryGetValue(row.EntityUrl, out int order))
@@ -2238,29 +2362,32 @@ public sealed class CreatorsGenerator
             CountRows = countRows,
             // 年表タブの線表（1 年間に 4 回以上出演した声優）。
             Timeline = timeline,
-            CoverageLabel = _ctx.CreditCoverageLabel,
-            PrecureCount = precureOrderByCharacter.Values.Distinct().Count()
+            CoverageLabel = pages.ShowsCoverage ? _ctx.CreditCoverageLabel : "",
+            PrecureCount = precureOrderByCharacter.Values.Distinct().Count(),
+            PageTitle = pages.VoiceCastTitle,
+            EpisodePillClass = pages.EpisodePillClass,
+            EpisodePillEmoji = pages.EpisodePillEmoji
         };
         var layout = new LayoutModel
         {
-            PageTitle = "歴代プリキュア声優",
-            MetaDescription = "歴代プリキュアの声優さん一覧。キャラクターを演じた声優さんを作品ごと・役ごとにまとめました。初出演の作品や出演話数で並べ替えられます。",
+            PageTitle = pages.VoiceCastTitle,
+            MetaDescription = pages.VoiceCastMetaDescription,
             OgCard = BuildCreatorsOgCard(
-                "歴代プリキュア声優",
+                pages.VoiceCastTitle,
                 new[]
                 {
                     new OgCardBadge("声優", $"{countRows.Count}人")
                 },
-                Array.Empty<OgCardFactLine>(), null,
-                "キャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。あのキャラの声の主も、その方のほかの役も、同じページに並びます。"),
+                Array.Empty<OgCardFactLine>(), content.CoverageLabel,
+                pages.VoiceCastOgLead),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代クリエイター", Url = PathUtil.CreatorsLandingUrl() },
-                new BreadcrumbItem { Label = "歴代プリキュア声優", Url = "" }
+                new BreadcrumbItem { Label = pages.VoiceCastTitle, Url = "" }
             }
         };
-        _page.RenderAndWrite(PathUtil.CreatorsVoiceCastUrl(), "creators",
+        _page.RenderAndWrite(pages.VoiceCastUrl, "creators",
             "creators-voice-cast.sbn", content, layout);
     }
 
@@ -2661,7 +2788,8 @@ public sealed class CreatorsGenerator
 
     /// <summary><c>/creators/</c> ランディング。スタッフ / 声の出演 / 音楽制作 / 歌唱 の 4 カードを案内する （音楽カテゴリランディング <c>/music/</c> と同型の意匠）。</summary>
     private void GenerateLanding(int staffPersonCount, int staffCompanyCount, int voiceCastCount,
-        int musicProductionPersonCount, int musicProductionCompanyCount, int singerCount)
+        int musicProductionPersonCount, int musicProductionCompanyCount, int singerCount,
+        bool hasOtona, int otonaStaffPersonCount, int otonaStaffCompanyCount, int otonaVoiceCastCount)
     {
         var content = new LandingModel
         {
@@ -2670,7 +2798,11 @@ public sealed class CreatorsGenerator
             VoiceCastCount = voiceCastCount,
             MusicProductionPersonCount = musicProductionPersonCount,
             MusicProductionCompanyCount = musicProductionCompanyCount,
-            SingerCount = singerCount
+            SingerCount = singerCount,
+            HasOtona = hasOtona,
+            OtonaStaffPersonCount = otonaStaffPersonCount,
+            OtonaStaffCompanyCount = otonaStaffCompanyCount,
+            OtonaVoiceCastCount = otonaVoiceCastCount
         };
         var layout = new LayoutModel
         {
@@ -3159,6 +3291,13 @@ public sealed class CreatorsGenerator
         public int MusicProductionCompanyCount { get; set; }
         /// <summary>楽曲の歌唱に関わった人物数（キャラとしての歌唱は声優として数える）。</summary>
         public int SingerCount { get; set; }
+        /// <summary>オトナシリーズのクレジットがあるか（オトナシリーズのスタッフ・声の出演のカードを出すか）。</summary>
+        public bool HasOtona { get; set; }
+        /// <summary>オトナシリーズのスタッフの人物数・団体数（人と団体は合算しない）。</summary>
+        public int OtonaStaffPersonCount { get; set; }
+        public int OtonaStaffCompanyCount { get; set; }
+        /// <summary>オトナシリーズで声の出演が確認できる声優数。</summary>
+        public int OtonaVoiceCastCount { get; set; }
     }
 
     /// <summary>音楽制作ページの表示モデル。</summary>
@@ -3323,6 +3462,11 @@ public sealed class CreatorsGenerator
         public int PersonCount { get; set; }
         public int CompanyCount { get; set; }
         public string CoverageLabel { get; set; } = "";
+        /// <summary>ページの題（h1）。本編は「歴代プリキュアスタッフ」、オトナシリーズは「オトナシリーズのスタッフ」。</summary>
+        public string PageTitle { get; set; } = "";
+        /// <summary>話数の札のクラスと絵文字（本編は 📺、オトナシリーズは 🌙）。</summary>
+        public string EpisodePillClass { get; set; } = "";
+        public string EpisodePillEmoji { get; set; } = "";
     }
 
     private sealed class RoleDetailModel
@@ -3495,6 +3639,11 @@ public sealed class CreatorsGenerator
         public string CoverageLabel { get; set; } = "";
         /// <summary>プリキュアのマスタのプリキュアの人数（「プリキュアを演じた方のみ」の ? の説明に出す）。</summary>
         public int PrecureCount { get; set; }
+        /// <summary>ページの題（h1）。本編は「歴代プリキュア声優」、オトナシリーズは「オトナシリーズの声優」。</summary>
+        public string PageTitle { get; set; } = "";
+        /// <summary>話数の札のクラスと絵文字（本編は 📺、オトナシリーズは 🌙）。</summary>
+        public string EpisodePillClass { get; set; } = "";
+        public string EpisodePillEmoji { get; set; } = "";
     }
 
     /// <summary>声の出演のシリーズ別セクション（キャラクター順・初出演順タブで使用）。 シリーズ名・年は見出しに集約し、配下行からはシリーズ情報を出さない。</summary>

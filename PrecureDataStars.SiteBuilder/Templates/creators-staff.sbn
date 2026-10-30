@@ -1,5 +1,7 @@
-<h1>歴代プリキュアスタッフ</h1>
+<h1>{{ PageTitle }}</h1>
+{{~ if CoverageLabel != "" ~}}
 <p class="muted page-coverage">{{ CoverageLabel }}</p>
+{{~ end ~}}
 
 {{## スタッフ一覧。
      ・役職順タブ：役職名 + その役職に関わった人物数・企業/団体数の索引。各役職名から
@@ -67,7 +69,11 @@
     <ul class="entity-list entity-list-grid" id="staff-roles-tv">
       {{~ for r in TvRoles ~}}
       <li class="entity-row">
-        {{~ if r.PersonCount > 0 || r.CompanyCount > 0 ~}}
+        {{~ if (r.PersonCount > 0 || r.CompanyCount > 0) && r.RoleUrl == "" ~}}
+        {{## 役職詳細の無い役職（オトナシリーズだけで使う役職）は、リンクせずに名前だけ出す。 ##}}
+        <span class="entity-row-name">{{ r.RoleNameJa | html.escape }}</span>
+        <span class="entity-row-count"><span class="count-badges">{{~ if r.PersonCount > 0 ~}}<span class="count-pill count-pill-person" title="人物"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg>{{ r.PersonCount }}</span>{{~ end ~}}{{~ if r.CompanyCount > 0 ~}}<span class="count-pill count-pill-company" title="企業・団体"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg>{{ r.CompanyCount }}</span>{{~ end ~}}</span></span>
+        {{~ else if r.PersonCount > 0 || r.CompanyCount > 0 ~}}
         <a class="entity-row-link" href="{{ r.RoleUrl }}" aria-label="{{ r.RoleNameJa | html.escape }}"></a>
         <a class="entity-row-name" href="{{ r.RoleUrl }}">{{ r.RoleNameJa | html.escape }}</a>
         <span class="entity-row-count"><span class="count-badges">{{~ if r.PersonCount > 0 ~}}<span class="count-pill count-pill-person" title="人物"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg>{{ r.PersonCount }}</span>{{~ end ~}}{{~ if r.CompanyCount > 0 ~}}<span class="count-pill count-pill-company" title="企業・団体"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg>{{ r.CompanyCount }}</span>{{~ end ~}}</span></span>
@@ -117,7 +123,7 @@
         {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
         <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
         <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
-        <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}</span></span>
+        <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}</span></span>
       </li>
       {{~ end ~}}
     </ul>
@@ -146,7 +152,7 @@
           {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
           <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
           <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
-          <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}</span></span>
+          <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}</span></span>
         </li>
         {{~ end ~}}
       </ul>
@@ -169,7 +175,7 @@
         {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
         <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
         <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
-        <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}</span></span>
+        <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}</span></span>
       </li>
       {{~ end ~}}
     </ul>

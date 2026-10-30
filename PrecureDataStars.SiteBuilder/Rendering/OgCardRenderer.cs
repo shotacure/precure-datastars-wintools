@@ -720,6 +720,13 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <summary>カードの見出しで、外へ広く広がる光とみなす層のぼかし（字の大きさに対する比）。これ以上の層は広がりを半分にする。</summary>
     private const float CardSpreadingBlur = 0.03f;
 
+    /// <summary>
+    /// カードの見出しの黒フチの太さの上限（字の大きさに対する比）。『ふたりはプリキュアSplash☆Star』のサブタイトルの太さ。
+    /// 初代・Max Heart のフチ（0.11 前後）は 80px の字では白い字を細らせて読みにくいので、カードだけこの太さで頭打ちにする
+    /// （各話ページのテロップ画像と書体の見本は放送どおりの太さのまま）。
+    /// </summary>
+    private const float CardMaxOutlineWidth = 0.068f;
+
     /// <summary>カードのエピソードのサブタイトルの字の大きさ（固定。どの回も仮想ボディの高さをそろえ、長い題は長体で収める）。</summary>
     private const float DecoratedTitleSize = 80f;
 
@@ -727,7 +734,7 @@ public sealed partial class OgCardRenderer : IDisposable
     /// エピソードのサブタイトルを、各話のテロップ画像と同じ描き方（作品の書体・装飾・振り仮名の組み方、倍で重ねて縮める。装飾が無ければ白い字に黒フチと影）で、
     /// 決まった字の大きさ（<paramref name="size"/>）の 1 行に描き、左端を本文の左端にそろえて置く。放送の改行はせず、
     /// 行と行のあいだは字の大きさの 4 分の 1 空ける。装飾の太さ・ずれ・ぼかしは字の大きさに対する比なので、字の大きさに合わせて変わる。
-    /// 外へ広く広がる光（光彩と、ぼかしの大きいフチ・影）は広がりを半分にする。行ごとに色の組を持つグラデーション（<c>lineColors</c>）は、
+    /// 外へ広く広がる光（光彩と、ぼかしの大きいフチ・影）は広がりを半分にし、黒フチは <see cref="CardMaxOutlineWidth"/> で頭打ちにする。行ごとに色の組を持つグラデーション（<c>lineColors</c>）は、
     /// 放送の行ごとに描き分けて、その行の色の組をかける。全体が本文の幅を超えるときは横に縮めて収める。見出しの下端 Y を返す。
     /// </summary>
     /// <param name="html">ルビ付きのサブタイトル（放送の改行は <c>&lt;br&gt;</c>）。</param>
@@ -741,9 +748,15 @@ public sealed partial class OgCardRenderer : IDisposable
         static TelopDecoration Narrow(TelopDecoration d) => d with
         {
             Glow = d.Glow is null ? null : d.Glow with { Width = d.Glow.Width * 0.5f, Blur = d.Glow.Blur * 0.5f },
-            Layers = d.Layers.Select(l => l.Blur >= CardSpreadingBlur && l.Kind != TelopDecorationLayer.KindBevel
-                ? l with { Blur = l.Blur * 0.5f, Width = l.Width * 0.5f, Spread = l.Spread * 0.5f, SpreadX = l.SpreadX * 0.5f }
-                : l).ToList(),
+            Layers = d.Layers.Select(l =>
+            {
+                if (l.Blur >= CardSpreadingBlur && l.Kind != TelopDecorationLayer.KindBevel)
+                    l = l with { Blur = l.Blur * 0.5f, Width = l.Width * 0.5f, Spread = l.Spread * 0.5f, SpreadX = l.SpreadX * 0.5f };
+                // 太い黒フチは読みやすさのため、Splash☆Star の太さ（CardMaxOutlineWidth）で頭打ちにする（カードだけ）。
+                if (l.Kind == TelopDecorationLayer.KindOutline && l.Width > CardMaxOutlineWidth)
+                    l = l with { Width = CardMaxOutlineWidth };
+                return l;
+            }).ToList(),
             Ruby = d.Ruby is null ? null : Narrow(d.Ruby)
         };
         // 行ごとの色の組を、放送の i 行目の組だけにする
@@ -1756,15 +1769,19 @@ public sealed partial class OgCardRenderer : IDisposable
     private (float Top, float Bottom, bool Truncated) DrawStackedFacts(SKCanvas canvas, SKPaint paint, IReadOnlyList<OgCardFactLine> facts, float x, float anchor, bool anchorToTop = false, int maxLines = FactMaxLines, float scale = 1f)
     {
         using var labelFont = new SKFont(_emphasisTypeface, (FactFontSize - 3f) * scale);
+        // 数で始まるラベル（記念日カレンダーの「2005年」など）は役職名ではなく数なので、見出しの書体ではなく数字の書体で組む。
+        using var numericLabelFont = new SKFont(_numberTypeface, (FactFontSize - 3f) * scale);
         using var valueFont = new SKFont(_bodyTypeface, FactFontSize * scale);
         using var subFont = new SKFont(_bodyTypeface, (FactFontSize - 3f) * scale);
         float lineHeight = FactLineHeight * scale;
+        static bool IsNumericLabel(string label) => label.Length > 0 && char.IsDigit(label[0]);
+        SKFont LabelFontFor(string label) => IsNumericLabel(label) ? numericLabelFont : labelFont;
 
         // 続き行の字下げ量は最も広いラベルに合わせる。値の左端が縦に揃うので、
         // 2 段に割れた項目も 1 つのまとまりとして読める。
         float indent = facts
             .Where(f => !string.IsNullOrWhiteSpace(f.Label))
-            .Select(f => Measure(labelFont, f.Label))
+            .Select(f => Measure(LabelFontFor(f.Label), f.Label))
             .DefaultIfEmpty(0f)
             .Max() + 14f;
         // 続き行はさらに一段深く落とす。値の左端に揃えるだけだと「同じ項目の続き」に見えず、
@@ -1812,7 +1829,7 @@ public sealed partial class OgCardRenderer : IDisposable
             if (head is not null && !string.IsNullOrWhiteSpace(head.Label))
             {
                 paint.Color = SKColor.TryParse(head.LabelColorHex, out var labelColor) ? labelColor : Muted;
-                DrawText(canvas, head.Label, cursor, baseline, SKTextAlign.Left, labelFont, paint);
+                DrawText(canvas, head.Label, cursor, baseline, SKTextAlign.Left, LabelFontFor(head.Label), paint);
             }
             // ラベルの有無に関わらず値の左端は揃える。折り返した続き行も同じ位置から始まるので、
             // 1 項目が何行に伸びても「どこからどこまでが 1 項目か」が縦の揃いで読める。

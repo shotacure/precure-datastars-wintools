@@ -47,6 +47,7 @@ internal static class OgCareerCardParts
     /// 作品が <see cref="WorksMaxLines"/> より多ければ、参加の多い作品（TV は話数、映画は 1 本）から上限まで選び、
     /// 残りを「ほか n 作品」にまとめる。並びは選んだ作品を放送開始・公開の早い順に。
     /// 年表が意味を持たないほど参加の少ない人物・団体でも、どの作品のどの話に関わったかは一目で伝わる。
+    /// 声の出演は、その作品で演じた役を話数の多い順に 2 つまで「〇〇役」として添える（話数だけ並べても誰を演じたかが伝わらないため）。
     /// </summary>
     public static IReadOnlyList<OgCardFactLine> BuildWorksLines(BuildContext ctx, IReadOnlyList<Involvement> involvements)
     {
@@ -54,9 +55,10 @@ internal static class OgCareerCardParts
         foreach (var g in involvements.GroupBy(i => i.SeriesId))
         {
             if (!ctx.SeriesById.TryGetValue(g.Key, out var series)) continue;
+            string roles = VoiceRolesSuffix(ctx, g);
             if (ctx.IsMovieKindSeries(g.Key))
             {
-                works.Add((series.StartDate, 1, $"『{series.Title}』"));
+                works.Add((series.StartDate, 1, $"『{series.Title}』{roles}"));
                 continue;
             }
 
@@ -80,7 +82,7 @@ internal static class OgCareerCardParts
                 ? (hasSeriesScope ? "シリーズ全体" : "")
                 : isAll ? "全話" : EpisodeRangeCompressor.Compress(episodeNos);
             int count = episodeNos.Count > 0 ? episodeNos.Count : 1;
-            works.Add((series.StartDate, count, $"『{series.Title}』" + (range.Length > 0 ? " " + range : "")));
+            works.Add((series.StartDate, count, $"『{series.Title}』" + (range.Length > 0 ? " " + range : "") + roles));
         }
 
         // 上限を超えるときだけ参加の多い順に絞り、選んだ作品は時系列に戻す。
@@ -91,5 +93,27 @@ internal static class OgCareerCardParts
         if (works.Count > shown.Count)
             lines.Add(new OgCardFactLine("", $"ほか{works.Count - shown.Count}作品"));
         return lines;
+    }
+
+    /// <summary>作品行に添える役。1 作品ぶんの関与のうち声の出演（CHARACTER_VOICE）の役名を、出た話の多い順に 2 つまで。</summary>
+    private const int VoiceRolesMax = 2;
+
+    /// <summary>
+    /// 1 作品ぶんの関与から、声の出演の役を「 〇〇役」「 〇〇役・△△役」「 〇〇役・△△役ほか」の形で返す。
+    /// 役名はクレジットされたキャラクターの名義（苗字の無い名義はフルネームの名義に寄せる）。声の出演が無ければ空文字。
+    /// </summary>
+    private static string VoiceRolesSuffix(BuildContext ctx, IEnumerable<Involvement> seriesInvolvements)
+    {
+        var names = seriesInvolvements
+            .Where(i => i.IsVoiceCast && i.CharacterAliasId is int)
+            .Select(i => ctx.CharacterAliasById.TryGetValue(i.CharacterAliasId!.Value, out var ca) ? ctx.CharacterAliasNames.DisplayName(ca) : "")
+            .Where(n => n.Length > 0)
+            .GroupBy(n => n, StringComparer.Ordinal)
+            .OrderByDescending(x => x.Count())
+            .Select(x => x.Key)
+            .ToList();
+        if (names.Count == 0) return "";
+        string joined = string.Join("・", names.Take(VoiceRolesMax).Select(n => n + "役"));
+        return " " + joined + (names.Count > VoiceRolesMax ? "ほか" : "");
     }
 }

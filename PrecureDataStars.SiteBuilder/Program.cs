@@ -10,6 +10,7 @@ namespace PrecureDataStars.SiteBuilder;
 /// スクリプトやパイプ経由（標準入力か標準出力がリダイレクト）なら聞かずにテストモード。
 /// <c>--production --deploy</c> でビルド後に S3 へ差分同期＋CloudFront キャッシュ削除まで実行する。
 /// <c>--dry-run</c> は変更計画のみ表示（無変更）、<c>--yes</c> は削除前確認の省略。
+/// <c>--upload-only</c> はサイトを作り直さず、直前の全体のドライランで作った出力をそのまま上げる（<c>--production --deploy</c> と併用）。
 /// <c>--refresh-telop</c> はサブタイトルのテロップ画像を、<c>--refresh-og</c> は OGP カード画像を、作り置きを使わずに描き直す
 /// （<c>--page</c> と併用すれば対象のページだけ）。
 /// <c>--og-cards &lt;一覧.json&gt; &lt;出力先&gt;</c> は、DB を使わずに一覧のカードだけを同じ描き方で描く（precure.news 用。<see cref="OgCardBatch"/>）。</summary>
@@ -43,6 +44,7 @@ internal static class Program
             bool skipConfirm = false;
             bool refreshTelop = false;
             bool refreshOg = false;
+            bool uploadOnly = false;
             string pageFilter = "";
             bool expectPageValue = false;
             foreach (var a in args)
@@ -69,6 +71,8 @@ internal static class Program
                     refreshTelop = true;
                 else if (string.Equals(a, "--refresh-og", StringComparison.OrdinalIgnoreCase))
                     refreshOg = true;
+                else if (string.Equals(a, "--upload-only", StringComparison.OrdinalIgnoreCase))
+                    uploadOnly = true;
                 else
                 {
                     Console.Error.WriteLine($"不明な引数: {a}");
@@ -114,8 +118,16 @@ internal static class Program
                 return 2;
             }
 
+            // --upload-only は作り直さずに上げるだけなので、全体のビルドの本番デプロイとしてだけ使える。
+            if (uploadOnly && (!deploy || dryRun || !string.IsNullOrEmpty(pageFilter) || refreshTelop || refreshOg))
+            {
+                Console.Error.WriteLine("--upload-only は --production --deploy と併用し、--dry-run / --page / --refresh-* とは併用しないでください。");
+                PrintUsage();
+                return 2;
+            }
+
             var deployOptions = deploy
-                ? new DeployRuntimeOptions(Requested: true, DryRun: dryRun, SkipConfirm: skipConfirm)
+                ? new DeployRuntimeOptions(Requested: true, DryRun: dryRun, SkipConfirm: skipConfirm, UploadOnly: uploadOnly)
                 : DeployRuntimeOptions.None;
 
             var config = BuildConfig.FromAppConfig(isProduction, deployOptions, pageFilter, refreshTelop, refreshOg);
@@ -162,7 +174,7 @@ internal static class Program
     /// <summary>使い方の表示。引数エラー時に共通で出す。</summary>
     private static void PrintUsage()
     {
-        Console.Error.WriteLine("使い方: PrecureDataStars.SiteBuilder [--test | --production] [--page <path>] [--refresh-telop] [--refresh-og] [--deploy [--dry-run] [--yes]]");
+        Console.Error.WriteLine("使い方: PrecureDataStars.SiteBuilder [--test | --production] [--page <path>] [--refresh-telop] [--refresh-og] [--deploy [--dry-run | --upload-only] [--yes]]");
         Console.Error.WriteLine("  引数なし     : 端末からの対話実行ならテスト／本番ビルドだけ／本番ビルド＋デプロイを 1 回聞く（Enter = テスト）。");
         Console.Error.WriteLine("                 デプロイを選ぶと --production --deploy と同じ（削除があれば一覧を出して y/N で確かめる）。スクリプトやパイプ経由ならテストモード");
         Console.Error.WriteLine("  --test       : テストモード（SiteOutputDirTest へ、GA4 / AdSense / ads.txt なし）。問い合わせを出さない");
@@ -174,6 +186,7 @@ internal static class Program
         Console.Error.WriteLine("  --deploy     : 本番ビルド後に S3 へ差分同期＋CloudFront キャッシュ削除（--production 必須）");
         Console.Error.WriteLine("  --dry-run    : デプロイ計画のみ表示（S3 / CloudFront を変更しない。--deploy と併用）");
         Console.Error.WriteLine("  --yes        : 削除前の確認をスキップ（--deploy と併用）");
+        Console.Error.WriteLine("  --upload-only: サイトを作り直さず、直前の全体のドライランの出力をそのまま上げる（--deploy と併用）");
         Console.Error.WriteLine("別の使い方: PrecureDataStars.SiteBuilder --og-cards <一覧.json> <出力先>");
         Console.Error.WriteLine("  一覧のカードだけを、このサイトと同じ描き方・書体で PNG にする（DB を使わない。precure.news 用）");
     }

@@ -986,6 +986,9 @@ Role: PRODUCTION 制作 (order 2)
 
    # OGP カード画像を作り置きを使わずに全部描き直す（--page と併用すれば対象のページだけ）
    dotnet run --project PrecureDataStars.SiteBuilder -c Release -- --refresh-og
+
+   # 直前の全体のドライラン（--production --deploy --dry-run）で作った出力を、作り直さずにそのまま上げる（deploy.ps1 の本番反映）
+   dotnet run --project PrecureDataStars.SiteBuilder -c Release -- --production --deploy --yes --upload-only
    ```
 5. 出力先に静的 HTML 一式と `assets/site.css` が生成される。ビルドログ先頭に現在のモードと出力先が明示される。出力は前回のものを残したまま、中身が変わるファイルだけ書き、全体ビルドの最後に今回の出力に属さないファイルを消す（下記「出力の書き出し」参照）。Build Summary に「書いた / 変わらず / 消した」の件数と OGP カードの作り置きの効きが出る
 6. 本番への反映は `scripts/deploy.ps1`（ドライランで差分と警告を確かめ、安全なら反映）。DB で消した・改名したものに伴うページの削除はそのまま通し、件数をログに出す。OGP カード（`og/` の下）を除いた削除が 100 件を超えたとき（生成の不具合でページがまとめて消えた疑い）と、ビルド警告があるときは反映を止める（内容を確かめたうえで `-Force` を付ければ続行）。ビルドの前に `PrecureDataStars.ArtTrackRefresh` で配信音源を確かめ直し（「商品・ディスク管理画面」の「配信音源の取り込みと再確認」）、失敗したときは反映しない。`-DryRunOnly` でも確かめ直しは流す。2 つのデプロイが同時に走らないよう、名前付きの mutex（`Global\precure-tv-deploy`）で 1 つずつにし、後から来たほうは先のデプロイが終わるまで最大 2 時間待つ

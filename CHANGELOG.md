@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：直前の全体のドライランで作った出力を、作り直さずに本番へ上げる `--upload-only` を足した**（`Deploy.PendingDeploy`・`SiteBuilderPipeline.UploadPendingAsync`・`EntityUrlRegistry.PendingDeploySlugs`）：全体のドライランは出力の隣に控え `{出力ディレクトリ}.pending-deploy.json`（公開記録に書く人物・キャラ・企業・ユニットの URL）を書き、全体のビルドは始めに控えを消す。`--upload-only` は控えが無ければ止まり、上げ終えたら控えの URL を公開記録に書いて控えを消す。
 - **サイト：S3 との突き合わせを速くした**（`S3DeployService.ListAllObjectsAsync`・`ListPrefixAsync`・`ComputeLocalMd5`）：S3 の一覧はルートの直下のフォルダごとに分けて同時に引き、手元のファイルの MD5 は論理コア数で並列に求め、2 つを同時に進める。一覧が約 10 秒から 2 秒ほどになった。かかった時間を `Compare` の行に出す。
 - **サイト：クリエイターの役職詳細ページを並列に作るようにした**（`CreatorsGenerator` の役職ごとの繰り返し）：役職ごとの集計とページの書き出しを並列に行い、書いた記録（サマリ・進捗・sitemap）と索引への積み上げは役職の順で逐次に行う（各話と同じ 2 相方式）。年表に載った URL の記録は排他する。クリエイターの生成が約 11 秒から 4 秒ほどになった。出力は変わらない。
 - **道具：サイトの文章の点検 `scripts/check-site-copy.ps1` を速くした**：出力の HTML・JS・CSS を 1 度だけ列挙して論理コア数に分けて並列に読み、内部用語は序数の文字列検索で探す。約 12 秒から 4 秒ほどになった。

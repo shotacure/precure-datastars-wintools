@@ -38,6 +38,17 @@ public sealed class SiteBuilderPipeline
         // 進捗の事前予想件数算出（COUNT クエリ）でも本ファクトリを使うため、先に確保する。
         var factory = MySqlConnectionFactory.FromConnectionString(config.ConnectionString);
 
+        // 作り直さずに上げるとき（--upload-only）は、生成を飛ばして直前のドライランの出力を上げるだけにする。
+        if (config.Deploy.UploadOnly)
+        {
+            await UploadPendingAsync(config, logger, factory, stopwatch, ct).ConfigureAwait(false);
+            return;
+        }
+
+        // 全体ビルドは出力を作り直すので、前のドライランの控えを消す（控えのある出力＝ドライランで作ったままの出力に限る）。
+        if (string.IsNullOrEmpty(config.PageFilter))
+            Deploy.PendingDeploy.Delete(config.OutputDirectory);
+
         // 22 セクション分の進捗枠を事前登録する。
         // ページ書き出し件数の予想は ctx 構築前に SQL の COUNT(*) で軽く取得する
         // （DB の統計から即返るため数十ミリ秒で完了）。事前に予想できないセクションは null
@@ -381,6 +392,10 @@ public sealed class SiteBuilderPipeline
             var deployer = new Deploy.S3DeployService(config, logger);
             bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
 
+            // 全体のドライランは、この出力を作り直さずに上げられるよう控えを書く（deploy.ps1 の本番反映が --upload-only で使う）。
+            if (config.Deploy.DryRun && string.IsNullOrEmpty(config.PageFilter))
+                ctx.EntityUrls.PendingDeploySlugs().Save(config.OutputDirectory);
+
             // 本番がこのビルドの出力と一致したら、いまの人物・キャラ・企業・ユニット URL を公開記録（published_entity_slugs）に追記する。
             // 以後のビルドで人物の表示名義・キャラ名・企業の正式名が変わって URL が変わったとき、この記録から旧 URL → 新 URL の 301 を作る。
             // ピンポイントモード（--page）は一部のページしか上げないため記録しない。
@@ -433,6 +448,32 @@ public sealed class SiteBuilderPipeline
         yield return ("search_index",       "検索索引",         1);
         yield return ("seo",                "SEO ファイル",     1);
         yield return ("prune",              "出力の掃除",       1);
+    }
+
+    /// <summary>
+    /// 直前の全体のドライランで作った出力を、作り直さずに本番へ上げる（<c>--upload-only</c>）。
+    /// 控え（<see cref="Deploy.PendingDeploy"/>）が無ければ、出力がドライランのままか分からないので止める。
+    /// 本番がこの出力と一致したら、控えの URL を公開記録に書き、控えを消す（同じ控えで 2 度上げない）。
+    /// </summary>
+    private static async Task UploadPendingAsync(
+        BuildConfig config, BuildLogger logger, IConnectionFactory factory, Stopwatch stopwatch, CancellationToken ct)
+    {
+        var pending = Deploy.PendingDeploy.Load(config.OutputDirectory)
+            ?? throw new InvalidOperationException(
+                $"ドライランの控えがありません（{Deploy.PendingDeploy.PathFor(config.OutputDirectory)}）。"
+                + "先に --production --deploy --dry-run で全体をビルドしてください。");
+        logger.Info("Upload only      : 直前のドライランの出力を作り直さずに上げます");
+
+        var deployer = new Deploy.S3DeployService(config, logger);
+        bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
+        if (published)
+        {
+            var (persons, characters, companies, units) =
+                await EntityUrlRegistry.RecordPublishedSlugsAsync(factory, pending, ct).ConfigureAwait(false);
+            logger.Info($"Published slugs  : 公開記録に人物 URL {persons} 件・キャラ URL {characters} 件・企業 URL {companies} 件・ユニット URL {units} 件を追加");
+            Deploy.PendingDeploy.Delete(config.OutputDirectory);
+        }
+        logger.Info($"Elapsed          : {stopwatch.Elapsed.TotalSeconds:0.0} sec");
     }
 
     /// <summary>

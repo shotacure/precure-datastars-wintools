@@ -415,7 +415,19 @@ public sealed class EntityUrlRegistry
     /// ユニットの URL も同じく記録する（entity_kind = UNIT、person_alias_id）。
     /// 戻り値は新たに記録した件数（人物・キャラ・企業・ユニット）。
     /// </summary>
-    public async Task<(int Persons, int Characters, int Companies, int Units)> RecordPublishedSlugsAsync(IConnectionFactory factory, CancellationToken ct)
+    public Task<(int Persons, int Characters, int Companies, int Units)> RecordPublishedSlugsAsync(IConnectionFactory factory, CancellationToken ct)
+        => RecordPublishedSlugsAsync(factory, PendingDeploySlugs(), ct);
+
+    /// <summary>いまの人物・キャラ・企業・ユニットの URL のスラッグ（公開記録に書く分）を、作り直さずに上げるときの控えにする。</summary>
+    public Deploy.PendingDeploy PendingDeploySlugs()
+        => new(new Dictionary<int, string>(_personSlugs), new Dictionary<int, string>(_characterSlugs),
+               new Dictionary<int, string>(_companySlugs), new Dictionary<int, string>(_unitSlugs));
+
+    /// <summary>
+    /// 控え（<see cref="Deploy.PendingDeploy"/>）のスラッグを公開記録に書く。中身は <see cref="RecordPublishedSlugsAsync(IConnectionFactory, CancellationToken)"/> と同じ。
+    /// </summary>
+    public static async Task<(int Persons, int Characters, int Companies, int Units)> RecordPublishedSlugsAsync(
+        IConnectionFactory factory, Deploy.PendingDeploy slugs, CancellationToken ct)
     {
         const string personSql = """
             INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, person_id, last_published_at)
@@ -451,10 +463,10 @@ public sealed class EntityUrlRegistry
              WHERE entity_kind = 'UNIT' AND slug = @Slug AND person_alias_id = @EntityId
             """;
         var at = DateTime.Now;
-        var personRows = _personSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
-        var characterRows = _characterSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
-        var companyRows = _companySlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
-        var unitRows = _unitSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
+        var personRows = slugs.Persons.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
+        var characterRows = slugs.Characters.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
+        var companyRows = slugs.Companies.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
+        var unitRows = slugs.Units.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
         await using var conn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         int persons = await conn.ExecuteAsync(new CommandDefinition(personSql, personRows, tx, cancellationToken: ct)).ConfigureAwait(false);

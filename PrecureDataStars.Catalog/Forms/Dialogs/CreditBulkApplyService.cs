@@ -988,6 +988,8 @@ public sealed class CreditBulkApplyService
             // 無視されるため、ここでは入力された値をそのまま転記する。
             if (pe.PersonMisprintText is not null) last.Entity.PersonMisprintText = pe.PersonMisprintText;
             if (pe.CharacterMisprintText is not null) last.Entity.CharacterMisprintText = pe.CharacterMisprintText;
+            // 画面の組みどおりの役名（改行入り）。役名が画面で折れているときだけ立つ。
+            if (pe.CharacterDisplayText is not null) last.Entity.CharacterDisplayText = pe.CharacterDisplayText;
             if (pe.CompanyMisprintText is not null) last.Entity.CompanyMisprintText = pe.CompanyMisprintText;
             // 所属のロゴの版（屋号#lg<id>）。所属の会社名義が付いたときだけ持たせる（ロゴは会社の所属の版を表すため）。
             if (pe.AffiliationLogoId is not null && last.Entity.AffiliationCompanyAliasId is not null)
@@ -2792,6 +2794,7 @@ public sealed class CreditBulkApplyService
         // （誤記の追加・削除・修正をエントリ差分として認識させるため）。
         sb.Append(e.PersonMisprintText ?? string.Empty).Append('|');
         sb.Append(e.CharacterMisprintText ?? string.Empty).Append('|');
+        sb.Append(e.CharacterDisplayText ?? string.Empty).Append('|');
         sb.Append(e.CompanyMisprintText ?? string.Empty).Append('\n');
         return sb.ToString();
     }

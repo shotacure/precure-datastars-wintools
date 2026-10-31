@@ -2208,11 +2208,21 @@ internal sealed class CreditPreviewRenderer
         return "(キャラ未指定)";
     }
 
+    /// <summary>
+    /// 役名を HTML にエスケープして返す。画面の組みどおりの役名（<see cref="CreditBlockEntry.CharacterDisplayText"/>）があれば、
+    /// 名義の名前の代わりにそれを描き、改行（LF）の位置に &lt;br&gt; を入れる。
+    /// </summary>
+    private static string EscCharacterName(string name, string? displayText)
+    {
+        if (string.IsNullOrEmpty(displayText)) return Esc(name);
+        return string.Join("<br>", displayText.Replace("\r\n", "\n").Split('\n').Select(Esc));
+    }
+
     /// <summary>CHARACTER_VOICE エントリのキャラ名義を、誤記前置を含む HTML として返す。 キャラ側の <see cref="CreditBlockEntry.CharacterMisprintText"/> があれば 「&lt;del&gt;誤記&lt;/del&gt; 正名義」の形で前置する。</summary>
     private async Task<string> ResolveCharacterLabelHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         string baseLabel = await ResolveCharacterLabelAsync(e, ct);
-        return PrependMisprintHtml(Esc(baseLabel), e.CharacterMisprintText);
+        return PrependMisprintHtml(EscCharacterName(baseLabel, e.CharacterDisplayText), e.CharacterMisprintText);
     }
 
     /// <summary>CHARACTER_VOICE / PERSON エントリの「声優名 + (所属)」を整形してプレーンテキストで返す。 既存 <see cref="ResolveEntryLabelAsync"/> の PERSON 分岐と同じ書式で揃える。</summary>

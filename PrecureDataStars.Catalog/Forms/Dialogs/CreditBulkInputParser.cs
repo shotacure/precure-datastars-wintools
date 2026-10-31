@@ -35,6 +35,8 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     （<c>parallel_prefix</c> / <c>parallel_suffix</c>）と小さい字で描く指定（<c>parallel_small</c>）。
 ///     後ろの字と <c>small</c> は省略可。例: <c>&amp;{／} &lt;クマタ&gt;声優</c>（ダークマター／クマタ）、
 ///     <c>&amp;{（|）|small} &lt;キュアエール&gt;声優</c>（野乃はな（キュアエール））。</description></item>
+///   <item><description>役名の中の <c>\n</c>（バックスラッシュと n）→ 画面の改行。名義の名前からは抜き、改行入りの役名を
+///     <c>character_display_text</c> に持つ。例: <c>&lt;てんびん座の\nプリンセス&gt;MAKO</c>（役名が画面で 2 行に折れているとき）。</description></item>
 ///   <item><description><c>@cols=N</c>（ブロック先頭の単独行）→ そのブロックの <c>col_count</c> を明示指定。
 ///     省略時は従来どおりタブ数+1 で推測。</description></item>
 ///   <item><description><c>@blank</c>（セル全体）→ 空きの升（<c>entry_kind = BLANK</c>）。複数列のブロックで、画面の並びの途中に
@@ -1722,6 +1724,17 @@ public static class CreditBulkInputParser
             var (charaOld, charaNew) = SplitOldNewRedirect(charaBeforeRedirect);
             var (personOld, personNew) = SplitOldNewRedirect(personBeforeRedirect);
 
+            // 役名の中の「\n」（バックスラッシュと n）は画面の改行。名義の名前からは抜き、
+            // 画面の組みどおりの役名（改行入り）として別に持つ（credit_block_entries.character_display_text）。
+            // 例: <てんびん座の\nプリンセス>MAKO → 名義「てんびん座のプリンセス」、画面の役名「てんびん座の⏎プリンセス」
+            string? charaDisplayText = null;
+            if (charaNew.Contains(@"\n"))
+            {
+                charaDisplayText = charaNew.Replace(@"\n", "\n");
+                charaNew = charaNew.Replace(@"\n", string.Empty);
+            }
+            charaOld = charaOld?.Replace(@"\n", string.Empty);
+
             // 声優名末尾の "#数値" を person_alias_id 明示参照として抜き出す
             // （SplitMisprint / SplitOldNewRedirect の後段で実施。誤記やリダイレクトの "=>" を先に剥がしてから
             //  純粋な名前末尾の #数値 を判定する方が安全）。
@@ -1741,6 +1754,7 @@ public static class CreditBulkInputParser
                 CharacterRawText = charaNew,
                 CharacterOldName = charaOld,
                 CharacterMisprintText = charaMisprint,
+                CharacterDisplayText = charaDisplayText,
                 IsForcedNewCharacter = aster,
                 CharacterAliasIdOverride = characterAliasIdOverride,
                 PersonRawText = personPureName,

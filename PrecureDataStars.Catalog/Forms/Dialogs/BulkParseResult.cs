@@ -299,6 +299,12 @@ public sealed class ParsedEntry
     public string? CharacterMisprintText { get; set; }
 
     /// <summary>
+    /// 一括入力 <c>&lt;前\n後&gt;...</c> 記法で抽出された「画面の組みどおりの役名」（改行入り）。
+    /// CHARACTER_VOICE のとき、役名の中の <c>\n</c> を本物の改行にしたものが入る（名義の名前からは <c>\n</c> を抜く）。
+    /// </summary>
+    public string? CharacterDisplayText { get; set; }
+
+    /// <summary>
     /// 一括入力 <c>[屋号]×屋号誤記</c> 記法で抽出された「企業屋号側の誤記表記」。
     /// COMPANY / LOGO のとき、× の右側がここに入る。用法は <see cref="PersonMisprintText"/> と同じ。
     /// </summary>

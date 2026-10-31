@@ -125,6 +125,16 @@ internal sealed class CreditTreeRenderer
     }
 
     /// <summary>
+    /// 役名を HTML にエスケープして返す。画面の組みどおりの役名（<see cref="CreditBlockEntry.CharacterDisplayText"/>）があれば、
+    /// 名義の名前の代わりにそれを描き、改行（LF）の位置に &lt;br&gt; を入れる。
+    /// </summary>
+    private static string EscCharacterName(string name, string? displayText)
+    {
+        if (string.IsNullOrEmpty(displayText)) return Esc(name);
+        return string.Join("<br>", displayText.Replace("\r\n", "\n").Split('\n').Select(Esc));
+    }
+
+    /// <summary>
     /// 人物名の代わりに画面に出た伏せ字（<see cref="CreditBlockEntry.PersonMaskedText"/>）があれば、
     /// 「伏せ字 (正名義)」の形にくるんだ HTML を返す。正名義側は人物詳細へのリンクなどを含んだ HTML のまま括弧に入れる。
     /// <paramref name="masked"/> が null / 空文字の場合は <paramref name="nameHtml"/> をそのまま返す。
@@ -1598,13 +1608,13 @@ internal sealed class CreditTreeRenderer
             {
                 int? characterId = await _lookup.LookupCharacterIdFromAliasAsync(caId).ConfigureAwait(false);
                 baseHtml = characterId.HasValue
-                    ? $"<a href=\"{PathUtil.CharacterUrl(characterId.Value)}\">{Esc(name)}</a>"
-                    : Esc(name);
+                    ? $"<a href=\"{PathUtil.CharacterUrl(characterId.Value)}\">{EscCharacterName(name, e.CharacterDisplayText)}</a>"
+                    : EscCharacterName(name, e.CharacterDisplayText);
                 return PrependMisprintHtml(baseHtml, e.CharacterMisprintText);
             }
         }
         if (!string.IsNullOrWhiteSpace(e.RawCharacterText))
-            return PrependMisprintHtml(Esc(e.RawCharacterText!), e.CharacterMisprintText);
+            return PrependMisprintHtml(EscCharacterName(e.RawCharacterText!, e.CharacterDisplayText), e.CharacterMisprintText);
         return PrependMisprintHtml("(キャラクター未指定)", e.CharacterMisprintText);
     }
 
@@ -1706,7 +1716,7 @@ internal sealed class CreditTreeRenderer
                     string charName = e.CharacterAliasId.HasValue
                         ? ((await _lookup.LookupCharacterAliasNameAsync(e.CharacterAliasId.Value).ConfigureAwait(false)) ?? "(キャラクター不明)")
                         : (e.RawCharacterText ?? "(キャラクター未指定)");
-                    string charHtml = PrependMisprintHtml(Esc(charName), e.CharacterMisprintText);
+                    string charHtml = PrependMisprintHtml(EscCharacterName(charName, e.CharacterDisplayText), e.CharacterMisprintText);
 
                     // 声優側は PERSON と同じく「名前 + (所属)」で出す（スペシャルゲストの「たくや (ザ・たっち)」など）。
                     // 人物側の誤記前置も ResolvePersonWithAffiliationHtmlAsync が行う。

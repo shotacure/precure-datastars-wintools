@@ -2712,6 +2712,7 @@ CREATE TABLE `credit_block_entries` (
   --   表示は「打ち消し線で誤記」 + 半角SP + 「正名義」を並べる運用（CreditPreviewRenderer / CreditTreeRenderer）。
   `person_misprint_text`           varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `character_misprint_text`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `character_display_text`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '画面の組みどおりの役名（改行入り）。役名が画面で折れているときだけ。改行を抜いた字はキャラの名義と同じ。NULL は名義の名前のまま',
   `company_misprint_text`          varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   -- 人物名の代わりに画面に出た伏せ字表記（「謎の少女　？」の「？」など）。NULL = 伏せ字なし。
   --   名義（person_alias_id）は本来の人物に紐付けたまま持ち、表示は「伏せ字 (正名義)」の形にする。

@@ -678,6 +678,15 @@ internal static class CreditBulkInputEncoder
 
         string charaWithAliasId = await AppendAliasIdSuffixIfAmbiguousCharacterAsync(charaName, e.CharacterAliasId, cache);
 
+        // 画面の組みどおりの役名（改行入り）があり、改行を抜くと名義の名前と同じなら、名前の部分を改行の位置に
+        // 「\n」を入れた形で書く（<てんびん座の\nプリンセス>）。名義と食い違うときは書かない（読み戻すと名義が変わるため）。
+        if (!string.IsNullOrEmpty(e.CharacterDisplayText)
+            && e.CharacterDisplayText.Replace("\r\n", "\n").Replace("\n", string.Empty) == charaName)
+        {
+            string displayEscaped = e.CharacterDisplayText.Replace("\r\n", "\n").Replace("\n", @"\n");
+            charaWithAliasId = displayEscaped + charaWithAliasId.Substring(charaName.Length);
+        }
+
         string actorName = "";
         if (e.PersonAliasId is int paId)
         {

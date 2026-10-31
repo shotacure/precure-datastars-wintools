@@ -131,16 +131,32 @@ public sealed class CreatorsGenerator
     }
 
     /// <summary>各一覧に載せた人物・企業/団体の記録。生成の最後に <see cref="BuildContext.CreatorLists"/> へ差し込む。</summary>
+    /// <summary>
+    /// 役職詳細の並列フェーズで、役職 1 つから得たもの。記録と索引への積み上げは、あとで役職の順に逐次で行う。
+    /// </summary>
+    private sealed class RoleOutcome
+    {
+        /// <summary>書き出した役職詳細ページの URL（書かなかったときは null）。</summary>
+        public string? WrittenUrl { get; set; }
+        /// <summary>音楽制作ページの役職タブに積む行（作家の役職のとき）。</summary>
+        public RoleIndexEntry? MusicEntry { get; init; }
+        /// <summary>スタッフ一覧のオトナシリーズ版で使う、役職と系譜の構成役職（作家の役職以外）。</summary>
+        public (Role Role, HashSet<string> MemberCodes)? StaffCluster { get; init; }
+        /// <summary>スタッフ一覧の役職順タブに積む行（役職詳細を書いたとき）。</summary>
+        public RoleIndexEntry? StaffEntry { get; set; }
+    }
+
     private readonly CreatorListMembership _lists = new();
     /// <summary>役職詳細・声の出演一覧の年表に主な方の行として載った人物・企業/団体の URL（OGP カードの年表を出すかの判定に渡す）。</summary>
     private readonly HashSet<string> _siteTimelineEntityUrls = new(StringComparer.Ordinal);
 
-    /// <summary>役職詳細・声の出演一覧の年表に主な方として載った行の URL を記録し、年表をそのまま返す。</summary>
+    /// <summary>役職詳細・声の出演一覧の年表に主な方として載った行の URL を記録し、年表をそのまま返す。役職詳細から並列に呼ばれるので記録は排他する。</summary>
     private RoleTimelineModel? RecordTimelineRows(RoleTimelineModel? timeline)
     {
         if (timeline is not null)
-            foreach (var row in timeline.Rows)
-                if (row.IsMain && !string.IsNullOrEmpty(row.EntityUrl)) _siteTimelineEntityUrls.Add(row.EntityUrl);
+            lock (_siteTimelineEntityUrls)
+                foreach (var row in timeline.Rows)
+                    if (row.IsMain && !string.IsNullOrEmpty(row.EntityUrl)) _siteTimelineEntityUrls.Add(row.EntityUrl);
         return timeline;
     }
 
@@ -214,18 +230,24 @@ public sealed class CreatorsGenerator
         // 音楽の年表（作詞・作曲・編曲・音楽の役職詳細・音楽制作・歌唱）で歌・劇伴・盤を時期に置くための日付。
         var musicDates = await MusicTimelineDates.LoadAsync(_ctx, _discsRepo, _productsRepo, ct).ConfigureAwait(false);
 
-        foreach (var role in rankableRoles)
+        // 役職ごとの集計と役職詳細ページの書き出しは、役職どうしで独立なので並列に行い、結果を役職の順の配列に置く。
+        // ページを書いた記録（サマリ・進捗・sitemap）と索引への積み上げは、そのあと役職の順で逐次に行う
+        // （各話と同じ 2 相方式。sitemap.xml の並びと索引の順をビルドごとに揺らさない）。
+        var roleOutcomes = new RoleOutcome?[rankableRoles.Count];
+        Parallel.For(0, rankableRoles.Count, i =>
         {
+            var role = rankableRoles[i];
+
             // 主題歌・挿入歌（THEME_SONG 形式）の役職は専用の人物集計ページを持たない。
             // クレジット階層では {THEME_SONGS} として曲そのものを出し（曲詳細へリンク）、歌スタッフの
             // 集計は歌系 4 役職（作詞/作曲/編曲/歌唱）の専用ページが担うため、役職詳細ページも
             // 「役職順」索引エントリも作らない（CreditTreeRenderer 側でも役職ラベルはリンク化しない）。
             if (string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
-                continue;
+                return;
 
             // 歌唱系の役職（歌・コーラス・台詞）は役職詳細を作らず、歌唱ページに集約する。
             if (PathUtil.IsSingerRole(role.RoleCode))
-                continue;
+                return;
 
             // 楽曲の作家 3 役職は専用集計に分岐。本編クレジット階層を介さず、song_credits から
             // 人物別の「担当曲数」を直接数える。スタッフ一覧の役職順タブには載せず、音楽制作ページの役職タブに並べる。
@@ -233,16 +255,19 @@ public sealed class CreatorsGenerator
             {
                 var songRows = BuildSongRoleRows(role.RoleCode, allSongCredits, allSingers,
                     personIdByAlias, personById);
-                if (songRows.Count == 0) continue;
-                GenerateSongRoleDetail(role, songRows, musicDates);
-                musicRoleEntries.Add(new RoleIndexEntry
+                if (songRows.Count == 0) return;
+                roleOutcomes[i] = new RoleOutcome
                 {
-                    RoleNameJa = role.NameJa,
-                    RoleUrl = PathUtil.CreatorsRoleUrl(role.RoleCode),
-                    PersonCount = songRows.Count,
-                    RoleNameKey = role.RoleCode
-                });
-                continue;
+                    WrittenUrl = GenerateSongRoleDetail(role, songRows, musicDates),
+                    MusicEntry = new RoleIndexEntry
+                    {
+                        RoleNameJa = role.NameJa,
+                        RoleUrl = PathUtil.CreatorsRoleUrl(role.RoleCode),
+                        PersonCount = songRows.Count,
+                        RoleNameKey = role.RoleCode
+                    }
+                };
+                return;
             }
 
             // クラスタ全 role_code（自分を含む）を集計対象とする。
@@ -252,7 +277,8 @@ public sealed class CreatorsGenerator
                             && !string.Equals(rr.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal))
                 .ToHashSet(StringComparer.Ordinal);
 
-            staffRoleClusters.Add((role, memberCodes));
+            var outcome = new RoleOutcome { StaffCluster = (role, memberCodes) };
+            roleOutcomes[i] = outcome;
             var rowSet = BuildRoleEntityRows(
                 role.RoleCode, memberCodes, roleByCode, aliasIdsByPersonId, allPersons,
                 companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById);
@@ -261,14 +287,26 @@ public sealed class CreatorsGenerator
 
             // 一度もクレジットのない役職は出さない方針：関与エンティティが 0 件なら
             // 役職詳細ページも生成せず、「役職順」タブの索引（roleIndexEntries）にも積まない。
-            if (rows.Count == 0) continue;
+            if (rows.Count == 0) return;
 
-            GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline);
-            roleCodesWithDetail.Add(role.RoleCode);
+            outcome.WrittenUrl = GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline);
 
             // 役職詳細ページへのリンクは PathUtil 経由で組み立て、URL パス上のコードを
             // 小文字化する。テンプレ側はこの組み立て済み URL のみ参照する。
-            roleIndexEntries.Add(BuildRoleIndexEntry(role, rows, PathUtil.CreatorsRoleUrl(role.RoleCode)));
+            outcome.StaffEntry = BuildRoleIndexEntry(role, rows, PathUtil.CreatorsRoleUrl(role.RoleCode));
+        });
+
+        foreach (var outcome in roleOutcomes)
+        {
+            if (outcome is null) continue;
+            if (outcome.WrittenUrl is not null) _page.RecordWritten(outcome.WrittenUrl, "creators");
+            if (outcome.MusicEntry is not null) musicRoleEntries.Add(outcome.MusicEntry);
+            if (outcome.StaffCluster is { } cluster) staffRoleClusters.Add(cluster);
+            if (outcome.StaffEntry is not null)
+            {
+                roleCodesWithDetail.Add(outcome.StaffCluster!.Value.Role.RoleCode);
+                roleIndexEntries.Add(outcome.StaffEntry);
+            }
         }
 
         roleIndexEntries = OrderRoleIndexEntries(roleIndexEntries);
@@ -868,7 +906,7 @@ public sealed class CreatorsGenerator
         => LatestAliasResolver.CreditOrderKey(_ctx, inv);
 
     /// <summary>/creators/roles/{rep_role_code}/ を 3 タブ（五十音順 / 初参加順 / 担当回数順）で書き出し、担当の移り変わりの線表を年表タブに置く。</summary>
-    private void GenerateRoleDetail(
+    private string GenerateRoleDetail(
         Role role,
         IReadOnlySet<string> memberCodes,
         IReadOnlyDictionary<string, Role> roleByCode,
@@ -920,8 +958,10 @@ public sealed class CreatorsGenerator
         };
         // 出力先パスもリンク生成と同一の PathUtil.CreatorsRoleUrl を通すことで、
         // URL パス上のコード小文字化と出力ディレクトリ名を必ず一致させる。
-        _page.RenderAndWrite(PathUtil.CreatorsRoleUrl(role.RoleCode), "creators",
-            "creators-role-detail.sbn", content, layout);
+        // 役職ごとに並列で呼ばれるので、書き出しまでにとどめ、記録（RecordWritten）は呼び出し側が役職の順で行う。
+        var url = PathUtil.CreatorsRoleUrl(role.RoleCode);
+        _page.RenderAndWriteFile(url, "creators-role-detail.sbn", content, layout);
+        return url;
     }
 
     /// <summary>
@@ -1084,7 +1124,7 @@ public sealed class CreatorsGenerator
     /// 歌系役職 1 種の専用ページ <c>/creators/roles/{code}/</c> を「五十音順 / 担当曲数順」の 2 タブで書き出し、
     /// 担当した曲を初めて盤に収められた日に置いた線表を年表タブに置く（1 年間に 2 曲以上担当した人）。
     /// </summary>
-    private void GenerateSongRoleDetail(Role role, List<SongRoleRow> rows, MusicTimelineDates musicDates)
+    private string GenerateSongRoleDetail(Role role, List<SongRoleRow> rows, MusicTimelineDates musicDates)
     {
         var collector = new MusicTimelineCollector(_ctx, musicDates);
         foreach (var r in rows)
@@ -1123,8 +1163,10 @@ public sealed class CreatorsGenerator
                 new BreadcrumbItem { Label = role.NameJa, Url = "" }
             }
         };
-        _page.RenderAndWrite(PathUtil.CreatorsRoleUrl(role.RoleCode), "creators",
-            "creators-song-role-detail.sbn", content, layout);
+        // 役職ごとに並列で呼ばれるので、書き出しまでにとどめ、記録（RecordWritten）は呼び出し側が役職の順で行う。
+        var url = PathUtil.CreatorsRoleUrl(role.RoleCode);
+        _page.RenderAndWriteFile(url, "creators-song-role-detail.sbn", content, layout);
+        return url;
     }
 
     /// <summary>五十音順：読み昇順（空読みは末尾） → 名前。</summary>

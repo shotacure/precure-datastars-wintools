@@ -316,6 +316,7 @@ internal sealed class CreditDraftLoader
         CardRoleId = 0,
         BlockSeq = s.BlockSeq,
         ColCount = s.ColCount,
+        ContinuesPrevious = s.ContinuesPrevious,
         LeadingCompanyAliasId = s.LeadingCompanyAliasId,
         LeadingCompanyNotOnScreen = s.LeadingCompanyNotOnScreen,
         HeadingSeriesId = s.HeadingSeriesId,

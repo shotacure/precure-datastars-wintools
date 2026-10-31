@@ -397,7 +397,7 @@ internal static class CreditBulkInputEncoder
         }
     }
 
-    /// <summary>1 ブロック分の本体を出力する。 出力順: <c>@cols=N</c>（必要時）→ <c>@heading_series=N</c> / <c>@heading=文字</c>（必要時）→ ブロック備考 → <c>[[leading_company]]</c>（必要時）→ エントリ行群（タブ整列）。</summary>
+    /// <summary>1 ブロック分の本体を出力する。 出力順: <c>@cols=N</c>（必要時）→ <c>@continues_previous</c>（必要時）→ <c>@heading_series=N</c> / <c>@heading=文字</c>（必要時）→ ブロック備考 → <c>[[leading_company]]</c>（必要時）→ エントリ行群（タブ整列）。</summary>
     private static async Task EncodeBlockBodyAsync(
         DraftBlock block, LookupCache cache, StringBuilder sb, CancellationToken ct)
     {
@@ -410,6 +410,12 @@ internal static class CreditBulkInputEncoder
         if (colCount > 1)
         {
             sb.Append("@cols=").Append(colCount).Append(LineSeparator);
+        }
+
+        // 前のブロックの続き（空きを入れずに列数だけ変える）。
+        if (block.Entity.ContinuesPrevious)
+        {
+            sb.Append("@continues_previous").Append(LineSeparator);
         }
 
         // ブロック先頭の見出し（作品・文字）。

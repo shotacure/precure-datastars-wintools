@@ -203,8 +203,11 @@ public partial class CreditEditorForm
                             }
                             if (headingLabel.Length > 0 && block.HeadingItalic) headingLabel += "（斜体）";
 
+                            // 前のブロックの続き（空きを入れずに列数だけ変える）なら印を添える。
+                            string continuesLabel = block.ContinuesPrevious ? "  [続き]" : "";
+
                             var blockNode = new TreeNode(
-                                $"🔵 Block #{blockDisplayIndex}  ({block.ColCount} cols, {entries.Count} entries){headingLabel}{leadingLabel}")
+                                $"🔵 Block #{blockDisplayIndex}  ({block.ColCount} cols, {entries.Count} entries){continuesLabel}{headingLabel}{leadingLabel}")
                             {
                                 Tag = new NodeTag(NodeKind.Block, draftBlock.CurrentId, draftBlock)
                             };

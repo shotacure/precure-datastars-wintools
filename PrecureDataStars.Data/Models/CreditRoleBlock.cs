@@ -31,6 +31,13 @@ public sealed class CreditRoleBlock
     /// <summary>表示列数（既定 1、DB 列名 col_count）。1 ならエントリは縦並び、2 以上で横カラム表示。</summary>
     public byte ColCount { get; set; } = 1;
 
+    /// <summary>
+    /// 前のブロックの続きか（DB 列名 continues_previous）。画面では空行なしで続くのに途中の行だけ升の数が違うとき、
+    /// 列数の違う行を別のブロックに分けてこの印を付ける。表示はブロックの間の空きを入れず、前の行にそのまま続ける。
+    /// 役職の最初のブロックには付けない。
+    /// </summary>
+    public bool ContinuesPrevious { get; set; }
+
     /// <summary>ブロック先頭に出す企業名義 ID（→ company_aliases.alias_id、任意）。</summary>
     public int? LeadingCompanyAliasId { get; set; }
 

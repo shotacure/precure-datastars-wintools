@@ -2655,6 +2655,7 @@ CREATE TABLE `credit_role_blocks` (
   `card_role_id`              int             NOT NULL,
   `block_seq`                 tinyint unsigned NOT NULL,
   `col_count`                 tinyint unsigned NOT NULL DEFAULT '1',
+  `continues_previous`        tinyint(1)      NOT NULL DEFAULT 0 COMMENT '1 なら前のブロックの続き。間に空きを入れず、列数だけ変えて続ける（役職の最初のブロックには付けない）',
   `leading_company_alias_id`  int             DEFAULT NULL,
   `leading_company_not_on_screen` tinyint      NOT NULL DEFAULT 0 COMMENT '1 なら筆頭の会社は画面にはクレジットされていない（クレジット漏れ）。表示だけ括弧で包む',
   `heading_series_id`         int             DEFAULT NULL COMMENT 'ブロック先頭の見出しにする作品（series.series_id）。映画の声の出演の作品ごとのまとまりなど',

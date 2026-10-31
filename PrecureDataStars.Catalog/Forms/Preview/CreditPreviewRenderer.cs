@@ -1428,6 +1428,8 @@ internal sealed class CreditPreviewRenderer
         foreach (var bs in blocks)
         {
             if (bs.Entries.Count == 0) continue;
+            // 前のブロックの続き（continues_previous）は、ブロックの間の空きを入れずに前の行へそのまま続ける。
+            bool breakBeforeBlock = !isFirstBlock && !bs.Block.ContinuesPrevious;
 
             bool isFirstRowOfThisBlock = true;
             prevAffilAliasId = null;
@@ -1435,7 +1437,7 @@ internal sealed class CreditPreviewRenderer
 
             foreach (var e in bs.Entries)
             {
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 isFirstRowOfThisBlock = false;
                 if (firstRow)
@@ -1747,6 +1749,8 @@ internal sealed class CreditPreviewRenderer
         foreach (var bs in blocks)
         {
             if (bs.Entries.Count == 0) continue;
+            // 前のブロックの続き（continues_previous）は、ブロックの間の空きを入れずに前の行へそのまま続ける。
+            bool breakBeforeBlock = !isFirstBlock && !bs.Block.ContinuesPrevious;
             // col_count に応じてエントリを行に分割。ColCount は byte 型のため Math.Max(int,int) と
             // Math.Max(byte,byte) の曖昧解決を避けるため明示的に int キャストする。
             int cols = Math.Max(1, (int)bs.Block.ColCount);
@@ -1774,7 +1778,7 @@ internal sealed class CreditPreviewRenderer
             string headingHtml = await BuildBlockHeadingHtmlAsync(bs.Block);
             if (headingHtml.Length > 0)
             {
-                bool addBreakClass = !isFirstBlock;
+                bool addBreakClass = breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -1795,7 +1799,7 @@ internal sealed class CreditPreviewRenderer
             // ─ leading_company がある場合の先頭行（屋号名のみ）─
             if (hasLeading)
             {
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock; // 最初のブロックには付けない
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock; // 最初のブロックには付けない
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -1815,7 +1819,7 @@ internal sealed class CreditPreviewRenderer
 
             for (int i = 0; i < bs.Entries.Count; i += cols)
             {
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 isFirstRowOfThisBlock = false;
                 if (firstRow)
@@ -1900,6 +1904,8 @@ internal sealed class CreditPreviewRenderer
         foreach (var bs in blocks)
         {
             if (bs.Entries.Count == 0) continue;
+            // 前のブロックの続き（continues_previous）は、ブロックの間の空きを入れずに前の行へそのまま続ける。
+            bool breakBeforeBlock = !isFirstBlock && !bs.Block.ContinuesPrevious;
 
             // ブロックの leading_company（グループトップ屋号）を解決する。
             string? leadingCompanyName = null;
@@ -1920,7 +1926,7 @@ internal sealed class CreditPreviewRenderer
             string headingHtml = await BuildBlockHeadingHtmlAsync(bs.Block);
             if (headingHtml.Length > 0)
             {
-                bool addBreakClass = !isFirstBlock;
+                bool addBreakClass = breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -1942,7 +1948,7 @@ internal sealed class CreditPreviewRenderer
             // ─ leading_company がある場合の先頭行（屋号名のみ）─
             if (hasLeading)
             {
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -2024,7 +2030,7 @@ internal sealed class CreditPreviewRenderer
             for (int i = 0; i < entryCount; i++)
             {
                 var slot = resolved[i];
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 isFirstRowOfThisBlock = false;
 

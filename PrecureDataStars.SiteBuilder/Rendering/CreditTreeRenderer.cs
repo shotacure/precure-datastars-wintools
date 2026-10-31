@@ -814,6 +814,8 @@ internal sealed class CreditTreeRenderer
         foreach (var bs in blocks)
         {
             if (bs.Entries.Count == 0) continue;
+            // 前のブロックの続き（continues_previous）は、ブロックの間の空きを入れずに前の行へそのまま続ける。
+            bool breakBeforeBlock = !isFirstBlock && !bs.Block.ContinuesPrevious;
 
             bool isFirstRowOfThisBlock = true;
             // ブロック区切り直後は屋号繰り返し圧縮の状態を一旦リセットする
@@ -823,7 +825,7 @@ internal sealed class CreditTreeRenderer
 
             foreach (var e in bs.Entries)
             {
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 isFirstRowOfThisBlock = false;
                 if (firstRow)
@@ -1151,6 +1153,8 @@ internal sealed class CreditTreeRenderer
         foreach (var bs in blocks)
         {
             if (bs.Entries.Count == 0) continue;
+            // 前のブロックの続き（continues_previous）は、ブロックの間の空きを入れずに前の行へそのまま続ける。
+            bool breakBeforeBlock = !isFirstBlock && !bs.Block.ContinuesPrevious;
             int cols = Math.Max(1, (int)bs.Block.ColCount);
 
             // leading_company（ブロック先頭の屋号）も詳細ページへのリンク付きで出す。
@@ -1174,7 +1178,7 @@ internal sealed class CreditTreeRenderer
             string headingHtml = BuildBlockHeadingHtml(bs.Block);
             if (headingHtml.Length > 0)
             {
-                bool addBreakClass = !isFirstBlock;
+                bool addBreakClass = breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -1194,7 +1198,7 @@ internal sealed class CreditTreeRenderer
 
             if (hasLeading)
             {
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -1212,7 +1216,7 @@ internal sealed class CreditTreeRenderer
 
             for (int i = 0; i < bs.Entries.Count; i += cols)
             {
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 isFirstRowOfThisBlock = false;
                 if (firstRow)
@@ -1280,6 +1284,8 @@ internal sealed class CreditTreeRenderer
         foreach (var bs in blocks)
         {
             if (bs.Entries.Count == 0) continue;
+            // 前のブロックの続き（continues_previous）は、ブロックの間の空きを入れずに前の行へそのまま続ける。
+            bool breakBeforeBlock = !isFirstBlock && !bs.Block.ContinuesPrevious;
 
             // leading_company もリンク化。
             string? leadingCompanyName = null;
@@ -1303,7 +1309,7 @@ internal sealed class CreditTreeRenderer
             string headingHtml = BuildBlockHeadingHtml(bs.Block);
             if (headingHtml.Length > 0)
             {
-                bool addBreakClass = !isFirstBlock;
+                bool addBreakClass = breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -1324,7 +1330,7 @@ internal sealed class CreditTreeRenderer
 
             if (hasLeading)
             {
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -1406,7 +1412,7 @@ internal sealed class CreditTreeRenderer
             for (int i = 0; i < entryCount; i++)
             {
                 var slot = resolved[i];
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 isFirstRowOfThisBlock = false;
 

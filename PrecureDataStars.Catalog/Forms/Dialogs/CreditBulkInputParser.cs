@@ -40,6 +40,9 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///   <item><description><c>@blank</c>（セル全体）→ 空きの升（<c>entry_kind = BLANK</c>）。複数列のブロックで、画面の並びの途中に
 ///     何も書かれていない升の位置を埋めて、後ろのエントリの列をそろえる（例: <c>@blank&lt;TAB&gt;山田 太郎</c>）。
 ///     タブの間を空けただけのセルは従来どおり読み飛ばす。行頭のセルが <c>@blank</c> の行はディレクティブ行ではなくエントリ行として読む。</description></item>
+///   <item><description><c>@continues_previous</c>（ブロック区切りの後、最初のエントリより前の単独行）→ そのブロックは前のブロックの続き
+///     （<c>continues_previous</c>）。画面では空行なしで続くのに途中の行だけ升の数が違うとき、その行を別のブロックにして付ける。
+///     表示はブロックの間の空きを入れない。役職の最初のブロックには付けられない。</description></item>
 ///   <item><description><c>@heading=文字</c> / <c>@heading_series=N</c>（ブロックの最初のエントリより前の単独行）→
 ///     そのブロックの先頭に出す見出し。<c>@heading_series=N</c> は作品（<c>series_id</c>）を指し、
 ///     <c>@heading=文字</c> は画面どおりの見出しの文字（作品の正式タイトルと表記が違うとき、または「特別出演」など作品ではない見出し）。</description></item>
@@ -196,6 +199,9 @@ public static class CreditBulkInputParser
     private static readonly Regex HeadingSeriesDirectiveRegex = new(@"^@heading_series=(?<n>\d+)$", RegexOptions.Compiled);
     // ディレクティブ行: @heading_italic。そのブロックの見出しを画面どおり斜体で出す（@heading / @heading_series と同じ位置に書く）。
     private static readonly Regex HeadingItalicDirectiveRegex = new(@"^@heading_italic$", RegexOptions.Compiled);
+    // ディレクティブ行: @continues_previous。そのブロックは前のブロックの続き（credit_role_blocks.continues_previous）。
+    // 空きを入れずに列数だけ変える。役職の 2 つ目以降のブロックで、最初のエントリより前に書く。
+    private static readonly Regex ContinuesPreviousDirectiveRegex = new(@"^@continues_previous$", RegexOptions.Compiled);
 
     // ディレクティブ行: @affil_layout=suffix|prefix 形式。役職ヘッダ直後に書くと、その役職の
     // 人物所属表記レイアウトを切り替える（PREFIX = 名前左の屋号列、SUFFIX = 名前右の (屋号) 後置）。
@@ -561,6 +567,40 @@ public static class CreditBulkInputParser
                     // @cols= の二重指定を防ぐため、消費後はフラグを下ろす。
                     // ただし @notes= はまだ受付可能（pendingColsForBlock と pendingNotesTarget は独立）。
                     pendingColsForBlock = false;
+                    continue;
+                }
+
+                // @continues_previous : このブロックは前のブロックの続き。空きを入れずに列数だけ変える。
+                // 役職の 2 つ目以降のブロックで、最初のエントリ（屋号 [[XXX]] を含む）より前にだけ書ける。
+                if (ContinuesPreviousDirectiveRegex.IsMatch(trimmed))
+                {
+                    if (curRole is null
+                        || (curBlock is not null && (curBlock.Rows.Count > 0 || curBlock.LeadingCompanyText is not null)))
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @continues_previous はブロックの区切りの後、最初のエントリより前にだけ書けます。"
+                        });
+                        continue;
+                    }
+                    if (curBlock is null)
+                    {
+                        curBlock = new ParsedBlock();
+                        curRole.Blocks.Add(curBlock);
+                    }
+                    if (curRole.Blocks.IndexOf(curBlock) == 0)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @continues_previous は役職の最初のブロックには付けられません。"
+                        });
+                        continue;
+                    }
+                    curBlock.ContinuesPrevious = true;
                     continue;
                 }
 

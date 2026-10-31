@@ -182,6 +182,9 @@ public sealed class ParsedBlock
 
     /// <summary><c>@leading_not_on_screen</c> で指定された、筆頭の会社が画面に出ていない印（<c>credit_role_blocks.leading_company_not_on_screen</c>）。</summary>
     public bool LeadingCompanyNotOnScreen { get; set; }
+
+    /// <summary><c>@continues_previous</c> で指定された、前のブロックの続きの印（<c>credit_role_blocks.continues_previous</c>）。</summary>
+    public bool ContinuesPrevious { get; set; }
 }
 
 /// <summary>パース結果における 1 行分のエントリ群。タブ区切りで複数エントリを持つ。</summary>

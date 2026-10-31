@@ -18,7 +18,7 @@
 --   A. マスタ遊離検出（紐付き先が全部消えていて宙に浮いている）
 --   B. 同名重複検出（誤統合 / 誤分割の兆候）
 --   C. キャスティング異常検出（同一キャラに複数声優、共有名義の濫用）
---   D. 補足整合性（entry_kind と紐付け列の不整合）
+--   D. 補足整合性（entry_kind と紐付け列の不整合、役職・ブロックのつなぎの印）
 -- ============================================================================
 
 
@@ -301,6 +301,21 @@ WHERE ccr.join_previous = 1
          AND prev.order_in_group < ccr.order_in_group)
 ORDER BY ccr.card_role_id;
 
+-- D5: continues_previous = 1 なのに役職の中で前のブロックがない
+--   件数 > 0 の意味: 役職の最初のブロックに「前のブロックの続き」が立っている。続く相手が無いので
+--   表示上は効かないが、ブロックの分け方か印の付け先を間違えている可能性が高い。
+--   対処: クレジットの画面と照らして、ブロックの区切りか continues_previous を直す。
+SELECT 'D5 continues_previous without previous block' AS check_name,
+    crb.block_id,
+    crb.card_role_id,
+    crb.block_seq
+FROM credit_role_blocks crb
+WHERE crb.continues_previous = 1
+  AND NOT EXISTS (
+      SELECT 1 FROM credit_role_blocks prev
+       WHERE prev.card_role_id = crb.card_role_id
+         AND prev.block_seq < crb.block_seq)
+ORDER BY crb.block_id;
 
 -- E1: 音楽クレジットの紐付け先が出典の盤に載っていない
 --   件数 > 0 の意味: 「music_credits の曲・録音・劇伴セッションの行が、出典の盤（source_product_catalog_no）の
@@ -376,6 +391,7 @@ UNION ALL SELECT 'D1 entry_kind mismatch',             COUNT(*) FROM credit_bloc
 UNION ALL SELECT 'D2 role_label_text same as name_ja', COUNT(*) FROM credit_card_roles ccr JOIN roles r ON r.role_code = ccr.role_code WHERE ccr.role_label_text IS NOT NULL AND CAST(ccr.role_label_text AS BINARY) = CAST(r.name_ja AS BINARY)
 UNION ALL SELECT 'D3 join_separator w/o join_previous', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_separator IS NOT NULL AND ccr.join_previous = 0
 UNION ALL SELECT 'D4 join_previous w/o previous role', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_card_roles prev WHERE prev.card_group_id = ccr.card_group_id AND prev.order_in_group < ccr.order_in_group)
+UNION ALL SELECT 'D5 continues_previous w/o previous block', COUNT(*) FROM credit_role_blocks crb WHERE crb.continues_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_role_blocks prev WHERE prev.card_role_id = crb.card_role_id AND prev.block_seq < crb.block_seq)
 UNION ALL SELECT 'E1 music_credits target not on source disc', COUNT(*) FROM music_credits m
     WHERE (m.target_kind = 'SONG' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no JOIN song_recordings r ON r.song_recording_id = t.song_recording_id WHERE d.product_catalog_no = m.source_product_catalog_no AND r.song_id = m.song_id))
        OR (m.target_kind = 'SONG_RECORDING' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no WHERE d.product_catalog_no = m.source_product_catalog_no AND t.song_recording_id = m.song_recording_id))

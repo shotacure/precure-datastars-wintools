@@ -605,8 +605,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertBlockAsync(MySqlConnection conn, MySqlTransaction tx, CreditRoleBlock b, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_role_blocks (card_role_id, block_seq, col_count, leading_company_alias_id, leading_company_not_on_screen, heading_series_id, heading_text, heading_italic, notes, created_by, updated_by)
-            VALUES (@CardRoleId, @BlockSeq, @ColCount, @LeadingCompanyAliasId, @LeadingCompanyNotOnScreen, @HeadingSeriesId, @HeadingText, @HeadingItalic, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_role_blocks (card_role_id, block_seq, col_count, continues_previous, leading_company_alias_id, leading_company_not_on_screen, heading_series_id, heading_text, heading_italic, notes, created_by, updated_by)
+            VALUES (@CardRoleId, @BlockSeq, @ColCount, @ContinuesPrevious, @LeadingCompanyAliasId, @LeadingCompanyNotOnScreen, @HeadingSeriesId, @HeadingText, @HeadingItalic, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, b, transaction: tx, cancellationToken: ct));
@@ -756,6 +756,7 @@ internal sealed class CreditSaveService
             UPDATE credit_role_blocks SET
               card_role_id = @CardRoleId,
               col_count = @ColCount,
+              continues_previous = @ContinuesPrevious,
               leading_company_alias_id = @LeadingCompanyAliasId,
               leading_company_not_on_screen = @LeadingCompanyNotOnScreen,
               heading_series_id = @HeadingSeriesId,

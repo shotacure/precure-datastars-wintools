@@ -514,7 +514,7 @@ public static class ThemeSongsHandler
             = new Dictionary<string, IReadOnlyList<(int, string)>>();
 
         /// <summary>
-        /// テンプレの展開中だけ使う：いま <c>{?SAME_LYRICIST_COMPOSER_ARRANGER}</c> / <c>{?SAME_COMPOSER_ARRANGER}</c> の中にいるとき、
+        /// テンプレの展開中だけ使う：いま <c>{?SAME_LYRICIST_COMPOSER_ARRANGER}</c> / <c>{?SAME_LYRICIST_COMPOSER}</c> / <c>{?SAME_COMPOSER_ARRANGER}</c> の中にいるとき、
         /// その 1 行にまとめた役職の並び。外では null。人物の括弧に役職を添えるかの判断に使う。
         /// </summary>
         public IReadOnlyList<string>? MergedCreditRoles { get; set; }

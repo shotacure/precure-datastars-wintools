@@ -48,9 +48,10 @@ namespace PrecureDataStars.TemplateRendering;
 ///     <c>{SAME_COMPOSER_ARRANGER}</c> は作曲と編曲が同じ名義（連名も同じ）なら "1"、違えば空で、
 ///     <c>{?SAME_COMPOSER_ARRANGER}</c> / <c>{?!SAME_COMPOSER_ARRANGER}</c> で書き分ける。
 ///     <c>{SAME_LYRICIST_COMPOSER_ARRANGER}</c> は作詞・作曲・編曲の 3 つが同じ名義なら "1"、違えば空。
+///     <c>{SAME_LYRICIST_COMPOSER}</c> は作詞と作曲が同じ名義なら "1"、違えば空（「作詞・作曲：」の 1 行にまとめる画面用）。
 ///     所属の会社名だけを出す行（「Nostalgic Orchestra」）は会社名どうしで同じと見る。
 ///     <c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> は、会社名だけの行なら会社名のあとに実際の人物を小さい括弧で添え、
-///     <c>{?SAME_LYRICIST_COMPOSER_ARRANGER}</c> / <c>{?SAME_COMPOSER_ARRANGER}</c> の中では、まとめた役職ぶんの人物を
+///     <c>{?SAME_LYRICIST_COMPOSER_ARRANGER}</c> / <c>{?SAME_LYRICIST_COMPOSER}</c> / <c>{?SAME_COMPOSER_ARRANGER}</c> の中では、まとめた役職ぶんの人物を
 ///     役職つきで並べる（「作詞・作曲・編曲：Nostalgic Orchestra（作詞・作曲：藤本 記子、編曲：福富 雅之）」）。
 ///     <c>{LYRICS_TRANSLATOR}</c> は英訳（<c>LYRICS_TRANSLATION</c> 役職）の連名で、無い曲は空。
 ///     <c>{INSTRUMENTAL}</c> はその回（その映画）ではインストゥルメンタルで使った曲なら "1"、違えば空で、
@@ -76,11 +77,13 @@ public static class RoleTemplateRenderer
 
     /// <summary>
     /// 1 行にまとめる条件の名前 → その行にまとめた役職の並び。
-    /// <c>SAME_LYRICIST_COMPOSER_ARRANGER</c> は作詞・作曲・編曲、<c>SAME_COMPOSER_ARRANGER</c> は作曲・編曲。それ以外は null。
+    /// <c>SAME_LYRICIST_COMPOSER_ARRANGER</c> は作詞・作曲・編曲、<c>SAME_LYRICIST_COMPOSER</c> は作詞・作曲、
+    /// <c>SAME_COMPOSER_ARRANGER</c> は作曲・編曲。それ以外は null。
     /// </summary>
     private static IReadOnlyList<string>? MergedRolesOf(string conditionName) => conditionName switch
     {
         "SAME_LYRICIST_COMPOSER_ARRANGER" => new[] { SongCreditRoles.Lyrics, SongCreditRoles.Composition, SongCreditRoles.Arrangement },
+        "SAME_LYRICIST_COMPOSER" => new[] { SongCreditRoles.Lyrics, SongCreditRoles.Composition },
         "SAME_COMPOSER_ARRANGER" => new[] { SongCreditRoles.Composition, SongCreditRoles.Arrangement },
         _ => null,
     };
@@ -445,6 +448,11 @@ public static class RoleTemplateRenderer
                 return currentSong is { LyricistHtml.Length: > 0 } sameAll
                        && string.Equals(sameAll.LyricistHtml, sameAll.ComposerHtml, StringComparison.Ordinal)
                        && string.Equals(sameAll.ComposerHtml, sameAll.ArrangerHtml, StringComparison.Ordinal)
+                    ? "1" : "";
+            case "SAME_LYRICIST_COMPOSER":
+                // 作詞と作曲が同じ名義（連名も同じ）なら "1"。画面で「作詞・作曲：」の 1 行にまとめ、編曲を別の行に出す作品用。
+                return currentSong is { LyricistHtml.Length: > 0 } sameLc
+                       && string.Equals(sameLc.LyricistHtml, sameLc.ComposerHtml, StringComparison.Ordinal)
                     ? "1" : "";
             case "LYRICS_TRANSLATOR":
                 // 楽曲スコープ：英訳（LYRICS_TRANSLATION）の連名（リンク化済み HTML）。無い曲は空文字列で、

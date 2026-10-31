@@ -36,7 +36,8 @@ namespace PrecureDataStars.AmazonSync;
 ///   <item>引数なし: 鮮度切れ（未取得 or 20 時間以上前）のみ取得</item>
 /// </list>
 /// </para>
-/// Creators API のレート制限（1 TPS）を順守するため、各リクエストの間に 1100 ms の sleep を入れる。
+/// 巡回では ASIN を 10 件ずつまとめて GetItems で引き、Creators API のレート制限（1 TPS）を順守するため、
+/// 各リクエストの間に 1100 ms の sleep を入れる。
 /// Amazon アソシエイトの Creators API 使用要件は、画像のリンクを最長 24 時間までしか保存させないので、
 /// 本番デプロイ（scripts/deploy.ps1）が毎回これを流し、毎日の定時デプロイで全件が 24 時間以内に取り直される。
 /// Amazon が答えたうえで画像が無かった側（ASIN が無効になった・画像が載っていない）は保存していた URL を空にし、
@@ -52,6 +53,9 @@ public static class Program
 
     /// <summary>Creators API レート制限（1 TPS）順守のためのリクエスト間隔ミリ秒。</summary>
     private const int RateLimitDelayMs = 1100;
+
+    /// <summary>GetItems 1 回に載せられる ASIN の上限。</summary>
+    private const int GetItemsBatchSize = 10;
 
     public static async Task<int> Main(string[] args)
     {
@@ -256,6 +260,10 @@ public static class Program
             Console.WriteLine($"対象商品: {targets.Count} 件 ({modeLabel})");
             if (dryRun) Console.WriteLine("(dry-run モード：DB 更新は行いません)");
 
+            // 対象の全 ASIN（デジタル・CD）を先に 10 件ずつまとめて引いておき、商品ごとの判定はその結果の表で行う。
+            var (productUrls, productFailed) = await FetchImageUrlsAsync(paApi,
+                targets.SelectMany(p => new[] { p.AmazonAsinDigital, p.AmazonAsinCd }));
+
             int ok = 0, miss = 0;
             int idx = 0;
             foreach (var prod in targets)
@@ -273,31 +281,13 @@ public static class Program
 
                 if (!string.IsNullOrWhiteSpace(prod.AmazonAsinDigital))
                 {
-                    try
-                    {
-                        var item = await paApi.GetItemAsync(prod.AmazonAsinDigital!, CancellationToken.None);
-                        if (item?.LargeImageUrl is { Length: > 0 } u) digitalUrl = u;
-                    }
-                    catch (Exception ex)
-                    {
-                        requestFailed = true;
-                        Console.WriteLine($"  ! Digital ASIN 取得失敗: {ex.Message}");
-                    }
-                    await Task.Delay(RateLimitDelayMs);
+                    if (productFailed.Contains(prod.AmazonAsinDigital!.Trim())) requestFailed = true;
+                    else digitalUrl = productUrls.GetValueOrDefault(prod.AmazonAsinDigital!.Trim());
                 }
                 if (!string.IsNullOrWhiteSpace(prod.AmazonAsinCd))
                 {
-                    try
-                    {
-                        var item = await paApi.GetItemAsync(prod.AmazonAsinCd!, CancellationToken.None);
-                        if (item?.LargeImageUrl is { Length: > 0 } u) cdUrl = u;
-                    }
-                    catch (Exception ex)
-                    {
-                        requestFailed = true;
-                        Console.WriteLine($"  ! CD ASIN 取得失敗: {ex.Message}");
-                    }
-                    await Task.Delay(RateLimitDelayMs);
+                    if (productFailed.Contains(prod.AmazonAsinCd!.Trim())) requestFailed = true;
+                    else cdUrl = productUrls.GetValueOrDefault(prod.AmazonAsinCd!.Trim());
                 }
 
                 if (requestFailed)
@@ -404,6 +394,10 @@ public static class Program
         Console.WriteLine($"対象書籍: {targets.Count} 件 ({(all ? "全件強制" : $"未取得・鮮度切れ {StaleHours} 時間以上")})");
         if (dryRun) Console.WriteLine("(dry-run モード：DB 更新は行いません)");
 
+        // 音楽商品と同じく、対象の全 ASIN（紙・Kindle）を先に 10 件ずつまとめて引いておく。
+        var (bookUrls, bookFailed) = await FetchImageUrlsAsync(paApi,
+            targets.SelectMany(b => new[] { b.AmazonAsinPrint, b.AmazonAsinKindle }));
+
         int ok = 0, miss = 0, idx = 0;
         foreach (var book in targets)
         {
@@ -417,23 +411,13 @@ public static class Program
 
             if (!string.IsNullOrWhiteSpace(book.AmazonAsinPrint))
             {
-                try
-                {
-                    var item = await paApi.GetItemAsync(book.AmazonAsinPrint!, CancellationToken.None);
-                    if (item?.LargeImageUrl is { Length: > 0 } u) printUrl = u;
-                }
-                catch (Exception ex) { requestFailed = true; Console.WriteLine($"  ! 紙 ASIN 取得失敗: {ex.Message}"); }
-                await Task.Delay(RateLimitDelayMs);
+                if (bookFailed.Contains(book.AmazonAsinPrint!.Trim())) requestFailed = true;
+                else printUrl = bookUrls.GetValueOrDefault(book.AmazonAsinPrint!.Trim());
             }
             if (!string.IsNullOrWhiteSpace(book.AmazonAsinKindle))
             {
-                try
-                {
-                    var item = await paApi.GetItemAsync(book.AmazonAsinKindle!, CancellationToken.None);
-                    if (item?.LargeImageUrl is { Length: > 0 } u) kindleUrl = u;
-                }
-                catch (Exception ex) { requestFailed = true; Console.WriteLine($"  ! Kindle ASIN 取得失敗: {ex.Message}"); }
-                await Task.Delay(RateLimitDelayMs);
+                if (bookFailed.Contains(book.AmazonAsinKindle!.Trim())) requestFailed = true;
+                else kindleUrl = bookUrls.GetValueOrDefault(book.AmazonAsinKindle!.Trim());
             }
 
             if (requestFailed)
@@ -466,6 +450,61 @@ public static class Program
         Console.WriteLine();
         Console.WriteLine($"書籍完了: 取得成功 {ok} 件 / 失敗・該当なし {miss} 件");
         return 0;
+    }
+
+    /// <summary>
+    /// ASIN を重複を除いて 10 件ずつまとめて GetItems で引き、ASIN → 大きい画像の URL の表と、
+    /// 通信・応答に失敗した ASIN の集合を返す。応答に載らなかった ASIN と画像の無い ASIN は表にも失敗にも入らない
+    /// （Amazon が答えたうえで画像が無かった扱い）。まとめた要求が失敗したときはその分を 1 件ずつ引き直し、
+    /// それでも失敗した ASIN だけを失敗に入れる（無効な ASIN が 1 つ混ざっただけで、同じ組のほかの ASIN まで
+    /// 取り直せなくなるのを避ける）。各リクエストの後に <see cref="RateLimitDelayMs"/> 待つ。
+    /// </summary>
+    private static async Task<(Dictionary<string, string> Urls, HashSet<string> Failed)> FetchImageUrlsAsync(
+        PaApiClient paApi, IEnumerable<string?> asins)
+    {
+        var distinct = asins
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .Select(a => a!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var urls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var failed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var chunks = distinct.Chunk(GetItemsBatchSize).ToList();
+        Console.WriteLine($"ASIN {distinct.Count} 件を {GetItemsBatchSize} 件ずつ {chunks.Count} 回で引きます。");
+        foreach (var chunk in chunks)
+        {
+            try
+            {
+                var items = await paApi.GetItemsAsync(chunk, CancellationToken.None);
+                foreach (var item in items)
+                {
+                    if (item.Asin.Length > 0 && item.LargeImageUrl is { Length: > 0 } u) urls[item.Asin] = u;
+                }
+                await Task.Delay(RateLimitDelayMs);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  ! まとめた取得に失敗（{string.Join(", ", chunk)}）: {ex.Message}。1 件ずつ引き直します。");
+                await Task.Delay(RateLimitDelayMs);
+                foreach (var asin in chunk)
+                {
+                    try
+                    {
+                        var item = await paApi.GetItemAsync(asin, CancellationToken.None);
+                        if (item?.LargeImageUrl is { Length: > 0 } u) urls[asin] = u;
+                    }
+                    catch (Exception ex1)
+                    {
+                        failed.Add(asin);
+                        Console.WriteLine($"  ! {asin} 取得失敗: {ex1.Message}");
+                    }
+                    await Task.Delay(RateLimitDelayMs);
+                }
+            }
+        }
+        Console.WriteLine();
+        return (urls, failed);
     }
 
     /// <summary>

@@ -16,7 +16,7 @@
 			ビルドモードはコマンドライン引数で決まる（引数なし＝テスト、"production" オプション付き＝本番）。
 			SiteOutputDir     : 本番モードの出力先。未設定時は exe 直下 "out/site/"。
 			SiteOutputDirTest : テストモード（既定）の出力先。未設定時は exe 直下 "out/site-test/"。
-			テストモードでは GA4 / AdSense のタグと ads.txt を出力しない（ID は設定したままでよい）。
+			テストモードでは GA4 のタグを出力しない（ID は設定したままでよい）。
 		-->
 		<add key="SiteOutputDir" value="" />
 		<add key="SiteOutputDirTest" value="" />
@@ -81,19 +81,6 @@
 			Search Console での所有権確認が完了すれば削除して構わない（ただし残しておいても害はない）。
 		-->
 		<add key="GoogleSiteVerification" value="" />
-
-		<!--
-			Google AdSense のパブリッシャー ID（例: ca-pub-1234567890123456）。
-			設定すると全 HTML ページの <head> に AdSense ローダスクリプトが 1 行だけ出力され、
-			Google の自動広告（Auto Ads）が有効化される。広告ユニットの個別配置は不要で、
-			Google が自動的にページ内の最適な位置に広告を配置する。
-			実際に出力されるのは本番モード起動時のみ（テストモードでは設定したままでも出力されない）。
-			未設定時は本番モードでも AdSense スクリプトを出力しない。
-			本値が有効なときは、サイト接続（所有確認）用の google-adsense-account メタタグと、
-			SeoGenerator による /ads.txt も併せて出力される
-			（標準 1 行: google.com, pub-XXXXX, DIRECT, f08c47fec0942fa0）。
-		-->
-		<add key="GoogleAdSenseClientId" value="" />
 
 		<!--
 			OGP（Open Graph Protocol）の og:image に使うサイト共通既定画像。

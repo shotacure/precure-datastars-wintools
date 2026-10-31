@@ -5,7 +5,7 @@ using PrecureDataStars.SiteBuilder.Rendering;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>法律・運営情報系の補助ページを生成するジェネレータ。
-/// プライバシーポリシーの文面は常に本番運用状態（GA4 + AdSense 有効）を前提とした固定記述で、
+/// プライバシーポリシーの文面は常に本番運用状態（GA4 有効）を前提とした固定記述で、
 /// ローカルテスト時の ID 未設定（タグ出力オフ）には文面を追従させない。</summary>
 public sealed class PolicyPagesGenerator
 {
@@ -61,8 +61,8 @@ public sealed class PolicyPagesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "プライバシーポリシー",
-            OgLead = "Cookie とブラウザへの保存、アクセス解析、広告配信、外部への情報送信、お問い合わせの扱いを説明しています。",
-            MetaDescription = $"{_ctx.Config.SiteName} のプライバシーポリシーです。Cookie とブラウザへの保存、アクセス解析、広告配信、外部への情報送信、お問い合わせで受け取る情報の取り扱いを説明しています。",
+            OgLead = "Cookie とブラウザへの保存、アクセス解析、広告（Amazon アソシエイト）、外部への情報送信、お問い合わせの扱いを説明しています。",
+            MetaDescription = $"{_ctx.Config.SiteName} のプライバシーポリシーです。Cookie とブラウザへの保存、アクセス解析、広告（Amazon アソシエイト）、外部への情報送信、お問い合わせで受け取る情報の取り扱いを説明しています。",
             // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
             SuppressShareButtons = true,
             Breadcrumbs = new[]

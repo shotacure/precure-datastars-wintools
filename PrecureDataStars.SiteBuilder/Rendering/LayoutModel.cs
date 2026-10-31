@@ -91,9 +91,6 @@ public sealed class LayoutModel
     /// <summary>Google Search Console の所有権確認用トークン。 PageRenderer が BuildConfig から自動補完する。空文字なら確認用メタタグを出力しない。</summary>
     public string GoogleSiteVerification { get; set; } = "";
 
-    /// <summary>Google AdSense のパブリッシャー ID（例: ca-pub-1234567890123456）。</summary>
-    public string GoogleAdSenseClientId { get; set; } = "";
-
     /// <summary>フッタの著作権表記に使う「年」の文字列。</summary>
     public string CopyrightYears { get; set; } = "";
 

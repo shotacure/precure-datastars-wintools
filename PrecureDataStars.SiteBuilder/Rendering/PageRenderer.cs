@@ -319,7 +319,7 @@ public sealed class PageRenderer
         // コンテンツ部分を先にレンダリング → そのまま HTML 文字列として layout の Content に詰める。
         var contentHtml = _renderer.Render(contentTemplate, contentModel);
 
-        // 共通項（SiteName / BaseUrl / OGP / GA4 / AdSense / 著作権年 / パンくず JSON-LD）を
+        // 共通項（SiteName / BaseUrl / OGP / GA4 / 著作権年 / パンくず JSON-LD）を
         // config から補完する。CanonicalPath が未指定なら本ページの urlPath を充てる。
         ApplyCommonLayoutDefaults(layoutMeta, urlPath);
 
@@ -476,7 +476,7 @@ public sealed class PageRenderer
     /// レイアウト共通メタの自動補完。<see cref="RenderAndWrite"/> と
     /// <see cref="RenderAndWriteToOutputFile"/> の双方から呼ぶ共通処理。
     /// 補完対象は SiteName / BaseUrl / CanonicalPath / OgType / OgImage /
-    /// Ga4MeasurementId / GoogleSiteVerification / GoogleAdSenseClientId /
+    /// Ga4MeasurementId / GoogleSiteVerification /
     /// CopyrightYears と、パンくず由来の BreadcrumbList JSON-LD。いずれも
     /// 呼び出し側で未指定（空）のプロパティだけを config 値や算出値で埋める
     /// （明示設定があればそれを優先）。
@@ -531,9 +531,6 @@ public sealed class PageRenderer
             layoutMeta.Ga4MeasurementId = _config.Ga4MeasurementId;
         if (string.IsNullOrEmpty(layoutMeta.GoogleSiteVerification))
             layoutMeta.GoogleSiteVerification = _config.GoogleSiteVerification;
-        // AdSense クライアント ID も同様に config から自動補完。
-        if (string.IsNullOrEmpty(layoutMeta.GoogleAdSenseClientId))
-            layoutMeta.GoogleAdSenseClientId = _config.GoogleAdSenseClientId;
         // 著作権表記年。コンストラクタで算出済みの値を毎ページ同じ内容で詰める。
         // Generator から個別指定する想定は無いが、もし明示設定があればそちらを優先する。
         if (string.IsNullOrEmpty(layoutMeta.CopyrightYears))

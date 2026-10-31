@@ -4,7 +4,7 @@ using PrecureDataStars.SiteBuilder.Pipeline;
 namespace PrecureDataStars.SiteBuilder;
 
 /// <summary>SiteBuilder のエントリポイント。
-/// <c>--test</c> でテストモード（テスト用ディレクトリへ、GA4 / AdSense / ads.txt なしで生成）、
+/// <c>--test</c> でテストモード（テスト用ディレクトリへ、GA4 なしで生成）、
 /// <c>--production</c> で本番モード（本番ディレクトリへ全出力込みで生成）。
 /// どちらも指定しないときは、端末からの対話実行なら 1 回だけテスト／本番／本番＋デプロイを聞く（Enter = テスト）。
 /// スクリプトやパイプ経由（標準入力か標準出力がリダイレクト）なら聞かずにテストモード。
@@ -177,8 +177,8 @@ internal static class Program
         Console.Error.WriteLine("使い方: PrecureDataStars.SiteBuilder [--test | --production] [--page <path>] [--refresh-telop] [--refresh-og] [--deploy [--dry-run | --upload-only] [--yes]]");
         Console.Error.WriteLine("  引数なし     : 端末からの対話実行ならテスト／本番ビルドだけ／本番ビルド＋デプロイを 1 回聞く（Enter = テスト）。");
         Console.Error.WriteLine("                 デプロイを選ぶと --production --deploy と同じ（削除があれば一覧を出して y/N で確かめる）。スクリプトやパイプ経由ならテストモード");
-        Console.Error.WriteLine("  --test       : テストモード（SiteOutputDirTest へ、GA4 / AdSense / ads.txt なし）。問い合わせを出さない");
-        Console.Error.WriteLine("  --production : 本番モード（SiteOutputDir へ、GA4 / AdSense / ads.txt あり）");
+        Console.Error.WriteLine("  --test       : テストモード（SiteOutputDirTest へ、GA4 なし）。問い合わせを出さない");
+        Console.Error.WriteLine("  --production : 本番モード（SiteOutputDir へ、GA4 あり）");
         Console.Error.WriteLine("  --page <path>: ピンポイントビルド。URL パスに <path> を含むページだけを生成（例: /privacy/）。");
         Console.Error.WriteLine("                 sitemap / 検索インデックスは再生成せず、--deploy 時も削除は行わない（部分生成の安全策）。");
         Console.Error.WriteLine("  --refresh-telop : サブタイトルのテロップ画像を作り置きを使わずに描き直す（--page と併用すれば対象の話だけ）");

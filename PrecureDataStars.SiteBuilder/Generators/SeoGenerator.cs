@@ -20,8 +20,6 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description><c>/robots.txt</c> — 通常クローラへの全許可 + sitemap.xml への参照に加え、
 ///     リソース消費の大きい外部クローラ（AI 学習スクレイパ系・バックリンク収集系）への
 ///     個別 Disallow を主要検索エンジンには控えめな <c>Crawl-delay</c> を付ける。</description></item>
-///   <item><description><c>/ads.txt</c> — Google AdSense のパブリッシャー ID が設定されているときに
-///     IAB 標準形式の 1 行（DIRECT 関係）を出力する。</description></item>
 /// </list>
 /// BaseUrl が空の場合は sitemap.xml の <c>&lt;loc&gt;</c> 値が組み立てられないため、
 /// 警告ログを出力したうえで sitemap.xml は生成せず robots.txt のみ書き出す（クロールを許可するか
@@ -84,9 +82,6 @@ public sealed class SeoGenerator
     /// <summary>主要検索エンジン向けに付ける Crawl-delay 値（秒）。</summary>
     private const int MainCrawlerCrawlDelaySeconds = 10;
 
-    /// <summary>AdSense の <c>ads.txt</c> に書く Google 公式の関係識別子。 IAB 仕様で固定値の TAG-ID 部分。AdSense のパブリッシャ全員が共通で使う。</summary>
-    private const string GoogleAdSenseAdsTxtTagId = "f08c47fec0942fa0";
-
     public SeoGenerator(BuildContext ctx, BuildConfig config, PageRenderer pageRenderer, OutputWriter output)
     {
         _ctx = ctx;
@@ -103,16 +98,13 @@ public sealed class SeoGenerator
         {
             _ctx.Logger.Info("BaseUrl が未設定のため sitemap.xml の生成をスキップします（robots.txt のみ書き出し）。");
             WriteRobotsTxt(includeSitemap: false);
-            WriteAdsTxtIfConfigured();
             return Task.CompletedTask;
         }
 
         WriteSitemapXml();
         WriteRobotsTxt(includeSitemap: true);
-        WriteAdsTxtIfConfigured();
 
-        _ctx.Logger.Success($"SEO: sitemap.xml ({_pageRenderer.WrittenPages.Count} URL) + robots.txt"
-            + (string.IsNullOrEmpty(_config.GoogleAdSenseClientId) ? "" : " + ads.txt"));
+        _ctx.Logger.Success($"SEO: sitemap.xml ({_pageRenderer.WrittenPages.Count} URL) + robots.txt");
         return Task.CompletedTask;
     }
 
@@ -241,45 +233,5 @@ public sealed class SeoGenerator
         }
 
         _output.WriteText(Path.Combine(_config.OutputDirectory, "robots.txt"), sb.ToString());
-    }
-
-    /// <summary>
-    /// <c>/ads.txt</c> を書き出す。
-    /// IAB の Authorized Digital Sellers 仕様に従い、Google AdSense のパブリッシャー ID が
-    /// 設定されているときだけ「<c>google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0</c>」の
-    /// 標準 1 行を出力する。AdSense クライアント ID は App.config の <c>GoogleAdSenseClientId</c> 値
-    /// （<c>ca-pub-XXXXXXXXXXXXXXXX</c> 形式）から接頭辞 <c>ca-</c> を除いた <c>pub-XXXXXXXXXXXXXXXX</c>
-    /// 部分を sellers ID として使う。
-    /// 未設定時は ads.txt を生成しない。設定があっても <c>pub-</c> で始まる形に正規化できない値の場合は
-    /// 警告を出して書き出しを見送る（不正な ads.txt は AdSense 審査で警告対象となるため）。
-    /// </summary>
-    private void WriteAdsTxtIfConfigured()
-    {
-        var clientId = _config.GoogleAdSenseClientId;
-        if (string.IsNullOrEmpty(clientId)) return;
-
-        // "ca-pub-XXXX..." → "pub-XXXX..." に正規化（既に "pub-" で始まる入力にも対応）。
-        string sellersId;
-        if (clientId.StartsWith("ca-pub-", StringComparison.OrdinalIgnoreCase))
-        {
-            sellersId = clientId.Substring("ca-".Length);
-        }
-        else if (clientId.StartsWith("pub-", StringComparison.OrdinalIgnoreCase))
-        {
-            sellersId = clientId;
-        }
-        else
-        {
-            _ctx.Logger.Warn(
-                $"GoogleAdSenseClientId='{clientId}' が pub-/ca-pub- 形式ではないため ads.txt の生成をスキップします。");
-            return;
-        }
-
-        var sb = new StringBuilder();
-        // 1 行目はコメント（運用者向け）。空行を挟むと一部のクローラが警告するため挟まない。
-        sb.AppendLine("# precure-datastars ads.txt");
-        sb.AppendLine($"google.com, {sellersId}, DIRECT, {GoogleAdSenseAdsTxtTagId}");
-
-        _output.WriteText(Path.Combine(_config.OutputDirectory, "ads.txt"), sb.ToString());
     }
 }

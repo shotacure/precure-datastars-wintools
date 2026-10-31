@@ -9,7 +9,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// <c>content/articles/*.md</c>（Markdown ＋ front-matter）からコラムを生成するジェネレータ。
 /// DB に依存せず、ビルド出力へコピーされた Markdown を読み、<c>/articles/{slug}/</c> と
 /// 一覧 <c>/articles/</c> を出力する。本文は Markdig で HTML 化し、既存レイアウト
-/// （ヘッダ／フッタ／ナビ／シェア／AdSense）に流し込む。記事は運営情報ページと違い
+/// （ヘッダ／フッタ／ナビ／シェア）に流し込む。記事は運営情報ページと違い
 /// シェア対象なので <see cref="LayoutModel.SuppressShareButtons"/> は立てない。
 /// <para>
 /// 本番モードでは、下書き（front-matter の <c>draft: true</c>）と、公開日時（<c>date</c>）がビルド時点より

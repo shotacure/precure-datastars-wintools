@@ -32,7 +32,7 @@ public sealed class SiteBuilderPipeline
         logger.Info($"Site name        : {config.SiteName}");
         // ビルドモードはタグ出力の有無に直結するため、毎回ログ先頭で明示する
         // （本番のつもりがテストモードのまま、の事故にすぐ気付けるように）。
-        logger.Info($"Build mode       : {(config.IsProductionMode ? "production（GA4 / AdSense / ads.txt を出力）" : "test（GA4 / AdSense / ads.txt を出力しない）")}");
+        logger.Info($"Build mode       : {(config.IsProductionMode ? "production（GA4 を出力）" : "test（GA4 を出力しない）")}");
 
         // DB 接続。各 Generator は本ファクトリを使い回す。
         // 進捗の事前予想件数算出（COUNT クエリ）でも本ファクトリを使うため、先に確保する。
@@ -307,7 +307,7 @@ public sealed class SiteBuilderPipeline
         // 出力の掃除より前に書いて、自分自身が掃除で消されないようにする（前回の残りのカードは走査で除く）。
         new OgGalleryGenerator(ctx, config, output).Generate();
 
-        // サイト全体の集約物（検索インデックス・sitemap / robots / ads.txt）と出力の掃除は、ピンポイントビルド
+        // サイト全体の集約物（検索インデックス・sitemap / robots）と出力の掃除は、ピンポイントビルド
         // （--page）では行わない。部分生成のため WrittenPages が当該ページのみになり、全件前提の
         // これらを上書きすると内容が壊れるため、既存ファイルをそのまま残す。
         int prunedFiles = 0;
@@ -323,9 +323,9 @@ public sealed class SiteBuilderPipeline
             reporter.PageWritten();
             reporter.EndSection();
 
-            // SEO 関連ファイル（sitemap.xml / robots.txt / ads.txt）。
+            // SEO 関連ファイル（sitemap.xml / robots.txt）。
             // 全ページの書き出しが完了した後に PageRenderer.WrittenPages を引いて URL リストを構築するため、
-            // パイプラインの最後に実行する。ads.txt 出力と robots.txt 強化を追加。
+            // パイプラインの最後に実行する。
             // こちらも HTML ページ書き出しではないので、ダミーで PageWritten を 1 回呼ぶ。
             reporter.BeginSection("seo");
             await new SeoGenerator(ctx, config, pageRenderer, output).GenerateAsync(ct).ConfigureAwait(false);

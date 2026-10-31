@@ -962,17 +962,17 @@ Role: PRODUCTION 制作 (order 2)
    - `SiteBaseUrl`: canonical / OGP / sitemap.xml の絶対 URL 組み立て用ベース URL（末尾スラッシュなし、例 `https://precure.tv`）。空のときは canonical 出力をスキップ
    - `SiteName`: サイト名の英字ワードマーク（既定 `precure-datastars`）。規約系ページの地の文・Amazon アソシエイト参加表明・構造化データの `alternateName` に使う
    - `SiteNameJa`: サイト名の日本語キーワード部（例 `プリキュアデータベース`）。`SiteName` と合成した「`SiteNameJa`「`SiteName`」」形式の可視ブランド表記が `<title>` サフィックス・フッタのワードマーク・ホーム h1・`og:site_name`・シェアテキストに出る。ヘッダのワードマークは、固有名詞の `SiteName` を主役（大きく太く）にし、本値を肩書きとして小さく淡く前に添える（カギかっこなし。幅 560px 以下では肩書きを上の段に回した 2 段）。構造化データの `name` には本値のみを使う。空のときは英字ワードマーク単体の表記になる
-   - `Ga4MeasurementId` / `GoogleAdSenseClientId`: GA4 メジャメント ID と AdSense パブリッシャー ID。設定したままでよく、タグ・ads.txt が実際に出力されるのは本番モードのみ
+   - `Ga4MeasurementId`: GA4 メジャメント ID。設定したままでよく、タグが実際に出力されるのは本番モードのみ
    - `AmazonAssociateTag`: Amazon アソシエイトのトラッキング ID（例 `yourtag-22`）。商品詳細の Amazon リンクに `?tag=` として付与しアフィリエイト計測に使う
    - `OgCardTitleFont` / `OgCardBodyFont` / `OgCardEmphasisFont` / `OgCardLabelFont` / `OgCardNumberFont` / `OgCardWatermarkFont`: OGP カードの書体ファイルのパス（見出し / 本文 / 左上の前置き / 事実行の頭のラベル（役職名など） / 大きい数字 / 透かし）。商用書体はリポジトリに同梱できないため、インストール済みファイルをローカルの App.config で指す（`%LOCALAPPDATA%` などの環境変数可）。空なら同梱の Noto Sans JP。指定したファイルが無ければ起動時に止まる
    - `SubtitleTelopCacheDir`: サブタイトルのテロップ画像（`/subtitles/`）の作り置きの置き場（空のときは `%LOCALAPPDATA%\PrecureDataStars\SiteBuilder\subtitle-telops`）。テストと本番で共用する。出力ディレクトリの中を指すと起動時に止まる
    - `OgCardCacheDir`: OGP カード画像（`/og/`）の作り置きの置き場（空のときは `%LOCALAPPDATA%\PrecureDataStars\SiteBuilder\og-cards`）。テストと本番で共用する。出力ディレクトリの中を指すと起動時に止まる
 4. ビルド & 実行:
    ```bash
-   # テストモード: SiteOutputDirTest へ生成。GA4 / AdSense / ads.txt は出力しない
+   # テストモード: SiteOutputDirTest へ生成。GA4 のタグは出力しない
    dotnet run --project PrecureDataStars.SiteBuilder -c Release -- --test
 
-   # 本番モード: SiteOutputDir へ生成。GA4 / AdSense タグと ads.txt を出力する
+   # 本番モード: SiteOutputDir へ生成。GA4 のタグを出力する
    dotnet run --project PrecureDataStars.SiteBuilder -c Release -- --production
 
    # モードを指定せずに端末から実行すると、[T] テスト（Enter）／[P] 本番ビルドだけ／[D] 本番ビルド＋デプロイ を 1 回聞く。
@@ -1012,9 +1012,9 @@ Role: PRODUCTION 制作 (order 2)
 | URL パターン | 内容 |
 |---|---|
 | `/` | サイトトップ。シリーズ一覧をグリッド表示し、本サイトの特徴を紹介 |
-| `/about/` | サイト案内。目的、このサイトを作った理由、運営者（X アカウント・プリキュアでの活動の経歴）、サイトの方針、権利表記、運営情報ページの案内 |
+| `/about/` | サイト案内。目的、このサイトを作った理由、運営者（X アカウント・プリキュアでの活動の経歴）、運営費と広告（広告配信サービスは使わず広告枠を置かないこと、Amazon アソシエイトに参加する理由と紹介料の使い道）、サイトの方針、権利表記、運営情報ページの案内 |
 | `/about/sources/` | データの出典と収録の決まり。エピソード・パート尺・クレジット・主題歌の使用・楽曲・劇伴・音楽商品・書籍・人物・キャラクター・記念日の種別ごとに、どこから採ったかを説明する。各ページ末尾の引用ボックスとサイト案内から案内する |
-| `/privacy/` | プライバシーポリシー。Cookie とブラウザへの保存（localStorage）、アクセス解析（GA4）、広告配信（AdSense）、外部への情報送信の一覧、お問い合わせで受け取る情報、オプトアウト。末尾に改定日 |
+| `/privacy/` | プライバシーポリシー。Cookie とブラウザへの保存（localStorage）、アクセス解析（GA4）、広告（広告配信サービスは使わず、Amazon アソシエイトのリンクだけ）、外部への情報送信の一覧、お問い合わせで受け取る情報、オプトアウト。末尾に改定日 |
 | `/disclaimer/` | 免責事項。情報の正確性、著作権と商標権の整理（根拠は折りたたみ）、サブタイトル画像と書体の見本（本編と同様のフォントで当サイトが描いた画像であること、フォントのライセンス、使用フォントの一覧〔`fonts` の描く書体ごと。作品と、その作品で使っている場所を添える〕の折りたたみ）、当サイトの内容の利用、外部リンク、Amazon アソシエイトと商品画像、配信音源、準拠法と管轄、運営の変更。末尾に改定日 |
 | `/contact/` | お問い合わせ。X とメールの 2 窓口、誤りの報告の仕方、ご本人・所属先の方への案内（載せている情報の範囲）、引用・取材のご依頼、返信について |
 | `/series/` | 全シリーズ索引。種別・話数併記 |

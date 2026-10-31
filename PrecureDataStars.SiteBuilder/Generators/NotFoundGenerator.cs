@@ -13,7 +13,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// <list type="bullet">
 ///   <item>「リンク切れで来訪したユーザに、サイトの存在自体は健在であることを示す」</item>
 ///   <item>「主要セクションへの導線を提供して、目的のページに辿り着く別経路を提供する」</item>
-///   <item>「サイトの健全性評価（AdSense / Search Console）で 404 のハンドリングが甘いと見なされないよう、
+///   <item>「サイトの健全性評価（Search Console）で 404 のハンドリングが甘いと見なされないよう、
 ///     しっかり作り込んだエラーページを用意する」</item>
 /// </list>
 /// 本ジェネレータが書き出すページは <c>sitemap.xml</c> には登録されない（404 は SERP インデックス

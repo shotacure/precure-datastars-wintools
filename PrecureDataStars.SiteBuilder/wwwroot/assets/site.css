@@ -8326,16 +8326,6 @@ table:has(th.col-rank) tbody tr:nth-child(3) td.col-rank {
   box-shadow: inset 0 0 0 1px #d97706;
 }
 
-/* AdSense Auto Ads の CLS（Cumulative Layout Shift）抑制プレースホルダ Auto Ads が挿入する <ins class="adsbygoogle"> に対して、最低限の高さを与えておくことで 広告ロード前後でのレイアウトジャンプを軽減する目的。 */
-ins.adsbygoogle {
-  display: block;
-  min-height: 1px;
-}
-ins.adsbygoogle[data-ad-status="filled"] {
-  /* 充填された広告では何もしない（min-height をリセットして広告本来の高さに任せる）。 */
-  min-height: auto;
-}
-
 /* 404 ページ用スタイル not-found.sbn 経由で出力される /404.html 専用。 */
 .not-found-hero {
   text-align: center;

@@ -42,9 +42,6 @@ public sealed class BuildConfig
     /// <summary>Google Search Console の所有権確認用トークン （&lt;meta name="google-site-verification" content="..."&gt; の content 値）。</summary>
     public string GoogleSiteVerification { get; }
 
-    /// <summary>Google AdSense のパブリッシャー ID（例: ca-pub-1234567890123456）。</summary>
-    public string GoogleAdSenseClientId { get; }
-
     /// <summary>サイトの公開（初公開）年。</summary>
     public int PublishedYear { get; }
 
@@ -62,8 +59,7 @@ public sealed class BuildConfig
 
     /// <summary>本番モードかどうか。コマンドライン引数 <c>--production</c> 指定時のみ true。
     /// テストモード（既定）では出力先が <c>SiteOutputDirTest</c> に切り替わり、
-    /// <see cref="Ga4MeasurementId"/> / <see cref="GoogleAdSenseClientId"/> が空文字に正規化されて
-    /// GA4 タグ・AdSense タグ・ads.txt の出力経路ごと止まる
+    /// <see cref="Ga4MeasurementId"/> が空文字に正規化されて GA4 タグの出力経路ごと止まる
     /// （ID 自体は App.config に常設したまま、起動引数だけで公開ビルドに移行できる）。</summary>
     public bool IsProductionMode { get; }
 
@@ -138,7 +134,6 @@ public sealed class BuildConfig
         string siteNameJa,
         string ga4MeasurementId,
         string googleSiteVerification,
-        string googleAdSenseClientId,
         int publishedYear,
         string defaultOgImage,
         string amazonAssociateTag,
@@ -164,7 +159,6 @@ public sealed class BuildConfig
         SiteNameJa = siteNameJa;
         Ga4MeasurementId = ga4MeasurementId;
         GoogleSiteVerification = googleSiteVerification;
-        GoogleAdSenseClientId = googleAdSenseClientId;
         PublishedYear = publishedYear;
         DefaultOgImage = defaultOgImage;
         AmazonAssociateTag = amazonAssociateTag;
@@ -240,7 +234,7 @@ public sealed class BuildConfig
 
     /// <summary>App.config から設定を読み出して <see cref="BuildConfig"/> を構築する。</summary>
     /// <param name="isProductionMode">本番モードかどうか（コマンドライン引数 <c>--production</c> 由来）。
-    /// 出力先ディレクトリの選択と、計測・広告系（GA4 / AdSense / ads.txt）の出力可否を決める。</param>
+    /// 出力先ディレクトリの選択と、計測（GA4）の出力可否を決める。</param>
     /// <param name="deploy">デプロイ実行時オプション（<c>--deploy</c> / <c>--dry-run</c> / <c>--yes</c> 由来）。
     /// 未指定なら <see cref="DeployRuntimeOptions.None"/> を渡す。</param>
     /// <param name="pageFilter">ピンポイントビルドのページフィルタ（<c>--page</c> 由来）。空文字なら全ページ。</param>
@@ -287,9 +281,6 @@ public sealed class BuildConfig
         // _layout.sbn 側で空判定して埋め込み有無を切り替える運用。
         var ga4 = ConfigurationManager.AppSettings["Ga4MeasurementId"] ?? "";
         var gsv = ConfigurationManager.AppSettings["GoogleSiteVerification"] ?? "";
-        // AdSense 自動広告。設定されていれば head に AdSense ローダスクリプトを
-        // 埋め込んで Google の自動広告を有効化する。
-        var ads = ConfigurationManager.AppSettings["GoogleAdSenseClientId"] ?? "";
 
         // 公開年。App.config の SitePublishedYear で上書き可能。
         int publishedYear = 2026;
@@ -312,10 +303,9 @@ public sealed class BuildConfig
 
         var ogFonts = ReadOgCardFonts();
 
-        // テストモードでは GA4 / AdSense の ID を空に正規化して、タグ・ads.txt の出力経路ごと止める。
+        // テストモードでは GA4 の ID を空に正規化して、タグの出力経路ごと止める。
         // ID は App.config に常設したまま運用できる（公開ビルドのたびに値をよける必要がない）。
         var effectiveGa4 = isProductionMode ? ga4.Trim() : "";
-        var effectiveAds = isProductionMode ? ads.Trim() : "";
 
         // AWS デプロイ先設定。値の必須チェックは「実際に --deploy が指定されたとき」に
         // S3DeployService 側で行う（生成だけしたいケースで AWS 設定を強制しないため）。
@@ -357,7 +347,7 @@ public sealed class BuildConfig
 
         return new BuildConfig(
             cs, outputDir, articlesDir, baseUrl, siteName, siteNameJa,
-            effectiveGa4, gsv.Trim(), effectiveAds, publishedYear,
+            effectiveGa4, gsv.Trim(), publishedYear,
             defaultOg, amazonTag, ogFonts, isProductionMode,
             awsBucket, awsRegion, awsProfile, cfDist, protectedPrefixes, deploy,
             pageFilter ?? "", telopCacheDir, refreshSubtitleTelops, ogCardCacheDir, refreshOgCards);

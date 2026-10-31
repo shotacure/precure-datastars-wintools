@@ -4,7 +4,7 @@
 
 ### 開発中（次回リリース）
 
-- **サイト：このサイトについて（`/about/`）の「運営者について」の末尾に、広告の収益の使い道の一文を足した**（`about.sbn`）：「広告の収益は、サーバーやドメインなどのインフラと開発環境の維持に充てます。」。precure.news の about と同じ文。
+- **サイト：Google AdSense をやめ、広告は Amazon アソシエイトのリンクだけにした**：全ページの `<head>` の AdSense のメタタグとローダスクリプト（`_layout.sbn`）、`/ads.txt`（`SeoGenerator`）、AdSense の広告枠の CSS を外し、設定 `GoogleAdSenseClientId`（`BuildConfig`・`LayoutModel`・`PageRenderer`・`App.config.sample`）をなくした。このサイトについて（`/about/`）に「運営費と広告について」（`#funding`）の節を足し、広告配信サービスを使わず広告枠を設けていないこと、Amazon アソシエイトに参加するのは公式の商品画像を Amazon の定めた方法で参照して表示するためであること、紹介料はドメインやクラウドなどのインフラと開発環境の維持に充てることを書いた。プライバシーポリシーは「広告配信について」を「広告について」に改め（同じ筋で、Amazon の Cookie と当サイトが受け取る集計の範囲も書く）、要点・Cookie・外部への情報送信の一覧から AdSense を外して、改定日を 2026年10月31日にした。プライバシーポリシーの meta description・カードの文と、about の運営情報の案内も「広告（Amazon アソシエイト）」に直した。
 - **道具：本番デプロイの台本 `scripts/deploy.ps1` を速くした**：3 つの道具（SiteBuilder・ArtTrackRefresh・AmazonSync）を `scripts/deploy-tools.slnf` で最初に 1 度だけ Release でビルドし、以後は exe を直に呼ぶ（`dotnet run` で呼ぶたびにビルドを確かめない）。配信音源の確かめ直しと Amazon の画像の取り直しを同時に流し、出力は終わってから順に出す。本番反映はサイトを作り直さず、ドライランの出力をそのまま上げる（`--upload-only`）。サイトの文章の点検は本番反映と同時に回す。
 - **サイト：直前の全体のドライランで作った出力を、作り直さずに本番へ上げる `--upload-only` を足した**（`Deploy.PendingDeploy`・`SiteBuilderPipeline.UploadPendingAsync`・`EntityUrlRegistry.PendingDeploySlugs`）：全体のドライランは出力の隣に控え `{出力ディレクトリ}.pending-deploy.json`（公開記録に書く人物・キャラ・企業・ユニットの URL）を書き、全体のビルドは始めに控えを消す。`--upload-only` は控えが無ければ止まり、上げ終えたら控えの URL を公開記録に書いて控えを消す。
 - **サイト：S3 との突き合わせを速くした**（`S3DeployService.ListAllObjectsAsync`・`ListPrefixAsync`・`ComputeLocalMd5`）：S3 の一覧はルートの直下のフォルダごとに分けて同時に引き、手元のファイルの MD5 は論理コア数で並列に求め、2 つを同時に進める。一覧が約 10 秒から 2 秒ほどになった。かかった時間を `Compare` の行に出す。

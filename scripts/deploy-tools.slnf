@@ -1,0 +1,10 @@
+{
+  "solution": {
+    "path": "..\\precure-datastars-wintools.sln",
+    "projects": [
+      "PrecureDataStars.SiteBuilder\\PrecureDataStars.SiteBuilder.csproj",
+      "PrecureDataStars.AmazonSync\\PrecureDataStars.AmazonSync.csproj",
+      "PrecureDataStars.ArtTrackRefresh\\PrecureDataStars.ArtTrackRefresh.csproj"
+    ]
+  }
+}

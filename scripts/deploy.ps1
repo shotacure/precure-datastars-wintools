@@ -16,14 +16,19 @@
   Creators API で取り直す（Amazon アソシエイトの Creators API 使用要件で、画像のリンクの保存は最長 24 時間）。
   失敗したとき（キー・接続文字列の不備など）はデプロイしない。-DryRunOnly でも流す。
 
+  配信音源の再確認と Amazon の画像の取り直しは、互いに別の表しか書かないので同時に流す。
+  3 つの道具（SiteBuilder・ArtTrackRefresh・AmazonSync）は最初に scripts/deploy-tools.slnf で 1 度だけ Release でビルドし、
+  以後はできた exe を直に呼ぶ（dotnet run のように呼ぶたびにビルドを確かめない）。
   実行は 2 段階：
 
-    1. まず --dry-run で差分プラン（upload / delete / unchanged）とビルド警告数を取得し、安全ゲートを通す。
+    1. まず --dry-run で全体をビルドし、差分プラン（upload / delete / unchanged）とビルド警告数を取得し、安全ゲートを通す。
          - delete（既存 S3 オブジェクトの消去）は、DB で消した・改名したものに伴う削除として通し、件数と中身をログに出す。
            止めるのは、OGP カード（og/ の下）を除いた削除が 100 件（$MassDeleteLimit）を超えたときだけ（DB の読み込みの空振りや
            生成の不具合で、ページがまとめて消えた出力を本番に流さないため）。意図した大量の削除なら -Force。
          - ビルド警告（Warnings）が 1 件以上 … 品質ゲートとして既定で中止する（-Force で続行）。
-    2. ゲートを通過（大量の削除が無く Warnings=0、または -Force）した場合のみ、本番反映（--yes）を実行する。
+    2. ゲートを通過（大量の削除が無く Warnings=0、または -Force）した場合のみ、本番反映（--yes --upload-only）を実行する。
+       サイトは作り直さず、ドライランで作った出力をそのまま上げる（SiteBuilder の --upload-only。ドライランの控えを使う）。
+       サイトの文章の点検（check-site-copy.ps1。知らせるだけ）は、本番反映と同時に回す。
 
   非対話実行のため本番反映は常に --yes（削除確認の y/N 省略）で走る。安全性は事前ドライランの
   ゲートで担保する。バケット名・Distribution ID・AWS プロファイル等の実値は App.config
@@ -65,7 +70,14 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
-$project = 'PrecureDataStars.SiteBuilder'
+# デプロイで使う 3 つの道具。最初に 1 度だけ Release でビルドし、以後はできた exe を直に呼ぶ。
+$toolsFilter = Join-Path $PSScriptRoot 'deploy-tools.slnf'
+function Get-ToolExe([string]$name) {
+    $exe = Get-ChildItem -Path (Join-Path $repoRoot "$name/bin/Release") -Filter "$name.exe" -Recurse -File |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $exe) { throw "$name の exe が見つかりません（Release のビルドを確かめてください）。" }
+    return $exe.FullName
+}
 
 # OGP カードを除いた削除がこの件数を超えたら、生成の不具合を疑って反映を止める。
 $MassDeleteLimit = 100
@@ -89,31 +101,60 @@ try {
 
 try {
 
-    # --- 準備: 配信音源の再確認 ---
-    # 出力はそのままコンソールへ流す（変化のあった音源・AMBIGUOUS に戻した商品を後から読めるように）。
-    Write-Host "[準備] 配信音源の再確認" -ForegroundColor Yellow
-    & dotnet run --project 'PrecureDataStars.ArtTrackRefresh'
-    if ($LASTEXITCODE -ne 0) {
-        throw "配信音源の再確認が失敗しました (exit $LASTEXITCODE)。上のログを確認してください。"
-    }
+    # --- 準備: 道具のビルド ---
+    Write-Host "[準備] 道具のビルド（Release）" -ForegroundColor Yellow
+    & dotnet build $toolsFilter -c Release --nologo -v q
+    if ($LASTEXITCODE -ne 0) { throw "道具のビルドが失敗しました (exit $LASTEXITCODE)。" }
+    $siteBuilderExe = Get-ToolExe 'PrecureDataStars.SiteBuilder'
+    $artTrackExe    = Get-ToolExe 'PrecureDataStars.ArtTrackRefresh'
+    $amazonSyncExe  = Get-ToolExe 'PrecureDataStars.AmazonSync'
     Write-Host ""
 
-    # --- 準備: Amazon の画像の取り直し ---
-    # Creators API 使用要件は画像のリンクの保存を最長 24 時間に限るので、取得から 20 時間を過ぎた
+    # --- 準備: 配信音源の再確認と Amazon の画像の取り直し（同時に流す） ---
+    # 配信音源の再確認（ArtTrackRefresh）は tracks と products の取り込み状態だけを、Amazon の画像の取り直し（AmazonSync）は
+    # 商品・書籍の画像 URL だけを書くので、互いに待たずに同時に流す。出力はそれぞれ一時ファイルに取り、終わってから順に出す
+    # （変化のあった音源・AMBIGUOUS に戻した商品・取り直せなかった画像を後から読めるように）。
+    # Amazon の画像は、Creators API 使用要件で画像のリンクの保存が最長 24 時間なので、取得から 20 時間を過ぎた
     # 商品・書籍の画像 URL を取り直してからビルドする（毎日の定時デプロイで全件が入れ替わる）。
-    Write-Host "[準備] Amazon の画像の取り直し" -ForegroundColor Yellow
-    & dotnet run --project 'PrecureDataStars.AmazonSync' -- --target all
-    if ($LASTEXITCODE -ne 0) {
-        throw "Amazon の画像の取り直しが失敗しました (exit $LASTEXITCODE)。上のログを確認してください。"
+    $prepDir = Join-Path ([System.IO.Path]::GetTempPath()) "precure-tv-deploy-$PID"
+    New-Item -ItemType Directory -Force -Path $prepDir | Out-Null
+    try {
+        $prep = @(
+            @{ Label = '配信音源の再確認'; Exe = $artTrackExe; Args = @() },
+            @{ Label = 'Amazon の画像の取り直し'; Exe = $amazonSyncExe; Args = @('--target', 'all') }
+        )
+        foreach ($job in $prep) {
+            $job.Out = Join-Path $prepDir ("{0}.out.txt" -f [System.IO.Path]::GetFileNameWithoutExtension($job.Exe))
+            $job.Err = Join-Path $prepDir ("{0}.err.txt" -f [System.IO.Path]::GetFileNameWithoutExtension($job.Exe))
+            $startArgs = @{
+                FilePath = $job.Exe; WorkingDirectory = (Split-Path $job.Exe); NoNewWindow = $true; PassThru = $true
+                RedirectStandardOutput = $job.Out; RedirectStandardError = $job.Err
+            }
+            if ($job.Args.Count -gt 0) { $startArgs.ArgumentList = $job.Args }
+            $job.Process = Start-Process @startArgs
+        }
+        foreach ($job in $prep) {
+            $job.Process.WaitForExit()
+            Write-Host "[準備] $($job.Label)" -ForegroundColor Yellow
+            Get-Content -Path $job.Out -Encoding utf8 | ForEach-Object { Write-Host $_ }
+            Get-Content -Path $job.Err -Encoding utf8 | ForEach-Object { Write-Host $_ -ForegroundColor Red }
+            Write-Host ""
+        }
+        foreach ($job in $prep) {
+            if ($job.Process.ExitCode -ne 0) {
+                throw "$($job.Label)が失敗しました (exit $($job.Process.ExitCode))。上のログを確認してください。"
+            }
+        }
+    } finally {
+        Remove-Item -Recurse -Force -Path $prepDir -ErrorAction SilentlyContinue
     }
-    Write-Host ""
 
     # --- フェーズ 1: ドライラン（差分プレビュー） ---
     # stdout を Tee-Object で変数にも取り込みつつコンソールへ流す（2>&1 は使わない＝
     # native の stderr を success ストリームへ混ぜると ErrorActionPreference=Stop で
     # 途中停止する PowerShell の落とし穴を避けるため。Plan/Warnings 行は stdout に出る）。
     Write-Host "[1/2] ドライラン（差分プレビュー）" -ForegroundColor Yellow
-    & dotnet run --project $project -- --production --deploy --dry-run | Tee-Object -Variable dryOutput
+    & $siteBuilderExe --production --deploy --dry-run | Tee-Object -Variable dryOutput
     if ($LASTEXITCODE -ne 0) {
         throw "ドライラン（ビルド）が失敗しました (exit $LASTEXITCODE)。上のログを確認してください。"
     }
@@ -138,11 +179,16 @@ try {
 
     # --- サイトの文章の点検（知らせるだけ。止めない） ---
     # ドライランで作った本番の出力を、文章の決まり（結びの重なり・問いかけ・内部用語など）に照らす。
-    Write-Host ""
-    try {
-        & (Join-Path $PSScriptRoot 'check-site-copy.ps1') | Out-Null
-    } catch {
-        Write-Host "  文章の点検を回せませんでした: $($_.Exception.Message)" -ForegroundColor DarkYellow
+    # 出力を読むだけなので、本番反映（出力を読んで上げるだけ）と同時に回し、結果は反映の後に出す。
+    $copyCheckScript = Join-Path $PSScriptRoot 'check-site-copy.ps1'
+    $copyCheck = Start-ThreadJob -ScriptBlock { & $using:copyCheckScript | Out-Null }
+    function Show-CopyCheck {
+        Write-Host ""
+        try {
+            Receive-Job -Job $copyCheck -Wait -AutoRemoveJob -ErrorAction Stop
+        } catch {
+            Write-Host "  文章の点検を回せませんでした: $($_.Exception.Message)" -ForegroundColor DarkYellow
+        }
     }
 
     # --- 削除の数え上げ ---
@@ -170,13 +216,15 @@ try {
     }
 
     if ($DryRunOnly) {
+        Show-CopyCheck
         Write-Host ""
         Write-Host "  -DryRunOnly のため、反映は行いません。" -ForegroundColor DarkGray
         return
     }
 
-    # 反映する変更が無ければ 2 度目のビルドを省いて終了。
+    # 反映する変更が無ければ終了。
     if ($uploadCount -eq 0 -and $deleteCount -eq 0) {
+        Show-CopyCheck
         Write-Host ""
         Write-Host "  差分なし（upload 0 / delete 0）。反映する変更はありません。" -ForegroundColor Green
         return
@@ -194,6 +242,7 @@ try {
         Write-Host "!!! 安全ゲートにより反映を中止しました:" -ForegroundColor Red
         $blockReasons | ForEach-Object { Write-Host "    - $_" -ForegroundColor Red }
         Write-Host "    内容を確認し、意図的なら -Force を付けて再実行してください。" -ForegroundColor Red
+        Show-CopyCheck
         throw "Deploy aborted by safety gate（削除/警告あり）。"
     }
     if ($blockReasons.Count -gt 0 -and $Force) {
@@ -201,12 +250,15 @@ try {
         Write-Host "  -Force 指定: 安全ゲート（$($blockReasons -join ' / ')）を無視して反映します。" -ForegroundColor Magenta
     }
 
-    # --- フェーズ 2: 本番反映（--yes） ---
+    # --- フェーズ 2: 本番反映（--yes --upload-only） ---
+    # サイトは作り直さず、ドライランで作った出力をそのまま上げる（ゲートで見た差分と同じものが上がる）。
     Write-Host ""
-    Write-Host "[2/2] 本番反映（--production --deploy --yes）" -ForegroundColor Yellow
-    & dotnet run --project $project -- --production --deploy --yes
-    if ($LASTEXITCODE -ne 0) {
-        throw "本番反映が失敗しました (exit $LASTEXITCODE)。"
+    Write-Host "[2/2] 本番反映（--production --deploy --yes --upload-only）" -ForegroundColor Yellow
+    & $siteBuilderExe --production --deploy --yes --upload-only
+    $uploadExit = $LASTEXITCODE
+    Show-CopyCheck
+    if ($uploadExit -ne 0) {
+        throw "本番反映が失敗しました (exit $uploadExit)。"
     }
 
     Write-Host ""

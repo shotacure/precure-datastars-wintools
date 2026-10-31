@@ -517,7 +517,7 @@ public sealed class RecordsGenerator
                         TitleHtml = SubtitleGuardRenderer.GuardRichHtml(
                             StatsEpisodeRows.BuildTitleHtml(ep.TitleRichHtml, ep.TitleText),
                             SubtitleGuardRenderer.RevealAtFor(ep.EpisodeId, _ctx.SubtitleRevealAtByEpisodeId)),
-                        OnAirDate = JpDateFormat.Date(ep.OnAirAt),
+                        OnAirDate = JpDateFormat.BroadcastDate(ep.OnAirAt),
                         Parts = diffParts
                     });
                 }

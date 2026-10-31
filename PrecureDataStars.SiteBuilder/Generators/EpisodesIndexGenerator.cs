@@ -70,7 +70,7 @@ public sealed class EpisodesIndexGenerator
                         SeriesEpNo = e.SeriesEpNo,
                         TitleDisplayHtml = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(e.TitleRichHtml, e.TitleText, revealAt, e.MagazineSubtitleStatus),
                         // 密表示用に「2024.2.4」形式へ短縮（年.月.日、月日は 0 詰めしない）。
-                        OnAirDate = JpDateFormat.DotDate(e.OnAirAt),
+                        OnAirDate = JpDateFormat.BroadcastDotDate(e.OnAirAt),
                         EpisodeUrl = PathUtil.EpisodeUrl(s.Slug, e.SeriesEpNo),
                         Screenplay        = staff.Screenplay,
                         Storyboard        = staff.Storyboard,

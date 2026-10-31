@@ -8,7 +8,8 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// <summary>
 /// <see cref="EpisodePart"/> の列から <see cref="FormatTableModel"/> を組み立てるヘルパー。
 /// 本放送列は放送開始時刻（<c>episode.on_air_at</c> の時刻部分）を起点に、
-/// 各パートの累積「開始時刻〜終了時刻」を <c>HH:mm:ss</c> 形式で出す。
+/// 各パートの累積「開始時刻〜終了時刻」を <c>HH:mm:ss</c> 形式で出す。時刻は放送日（<see cref="JpDateFormat.BroadcastDay"/>）を起点にするので、
+/// 深夜の回と 0 時をまたぐ所は 24 を足して書く（「26:00:00」）。
 /// この計算は エピソードエディタ <c>EpisodesEditorForm.LoadPartsForEpisodeAsync</c> と同じ。
 /// 配信列は時刻ではなく「累積開始秒（<c>m:ss</c>）」と「尺（<c>m:ss</c>）」を出す。
 /// 累積開始秒の起点は <c>series.vod_intro</c>（配信版に挿入される先頭イントロ尺）。
@@ -36,6 +37,8 @@ public static class FormatTableBuilder
         int oaCum = 0;
         int vodCum = vodIntroSeconds ?? 0;
         int discCum = 0;
+        // 本放送列の時刻の起点（深夜の回は前の日）
+        var broadcastDay = JpDateFormat.BroadcastDay(onAirAt);
 
         var rows = new List<FormatTableRow>(parts.Count);
         foreach (var p in parts.OrderBy(x => x.EpisodeSeq))
@@ -51,8 +54,8 @@ public static class FormatTableBuilder
             {
                 var start = onAirAt.AddSeconds(oaCum);
                 var end = start.AddSeconds(oa);
-                row.OaStart = start.ToString(@"HH\:mm\:ss");
-                row.OaEnd = end.ToString(@"HH\:mm\:ss");
+                row.OaStart = BroadcastClockSeconds(start, broadcastDay);
+                row.OaEnd = BroadcastClockSeconds(end, broadcastDay);
                 row.OaDuration = HtmlUtil.FormatSeconds(oa);
                 oaCum += oa;
             }
@@ -90,6 +93,13 @@ public static class FormatTableBuilder
             Bars = bars,
             Legend = legend
         };
+    }
+
+    /// <summary>放送日を起点にした「HH:mm:ss」（放送日の翌日の時刻は 24 を足して「26:00:00」）。</summary>
+    private static string BroadcastClockSeconds(DateTime at, DateTime broadcastDay)
+    {
+        var span = at - broadcastDay.Date;
+        return $"{(int)span.TotalHours:00}:{span.Minutes:00}:{span.Seconds:00}";
     }
 
     /// <summary>パート種別コードを帯グラフの色パレットキーへ写像する。

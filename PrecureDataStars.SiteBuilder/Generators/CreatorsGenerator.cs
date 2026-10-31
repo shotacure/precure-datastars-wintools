@@ -2888,7 +2888,7 @@ public sealed class CreatorsGenerator
         {
             if (!_ctx.EpisodeById.TryGetValue(eid, out var ep) || !_ctx.SeriesById.TryGetValue(sid, out var s)) continue;
             if (debut is null || ep.OnAirDate < debut.Value.Date)
-                debut = (ep.OnAirDate, $"『{s.Title}』第{ep.SeriesEpNo}話({ep.OnAirDate:yyyy.M.d})");
+                debut = (ep.OnAirDate, $"『{s.Title}』第{ep.SeriesEpNo}話({JpDateFormat.BroadcastDotDate(ep.OnAirAt)})");
         }
         foreach (var sid in movies)
         {

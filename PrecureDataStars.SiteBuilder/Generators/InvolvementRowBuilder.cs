@@ -198,7 +198,7 @@ internal static class InvolvementRowBuilder
                     ? $"第{e.SeriesEpNo}話{e.TitleDisplayText}"
                     : $"第{e.SeriesEpNo}話「{JapaneseQuotes.InQuotes(e.TitleText)}」",
                 Url = PathUtil.EpisodeUrl(seriesSlug, e.SeriesEpNo),
-                OnAirLabel = JpDateFormat.Date(e.OnAirAt)
+                OnAirLabel = JpDateFormat.BroadcastDate(e.OnAirAt)
             })
             .ToList();
     }

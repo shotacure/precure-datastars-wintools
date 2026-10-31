@@ -67,12 +67,14 @@ public static class AnniversaryDataBuilder
             // （表示側が現在時刻と比較して出し分ける。HTML はクライアント側 JS が担当する）。
             var revealAt = SubtitleGuardRenderer.RevealAtFor(episode.EpisodeId, ctx.SubtitleRevealAtByEpisodeId);
 
+            // 記念日は放送日に置く（深夜の回は前の日。番組表・公式の表記と同じ日）
+            var broadcastDay = JpDateFormat.BroadcastDay(episode.OnAirAt);
             entries.Add(new AnniversaryEntry
             {
                 Kind = "ep",
-                Year = episode.OnAirAt.Year,
-                Month = episode.OnAirAt.Month,
-                Day = episode.OnAirAt.Day,
+                Year = broadcastDay.Year,
+                Month = broadcastDay.Month,
+                Day = broadcastDay.Day,
                 SeriesTitle = series.Title,
                 SeriesSlug = series.Slug,
                 SeriesTitleShort = string.IsNullOrEmpty(series.TitleShort) ? series.Title : series.TitleShort,

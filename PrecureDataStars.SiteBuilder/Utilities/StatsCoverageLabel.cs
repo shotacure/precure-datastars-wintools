@@ -30,9 +30,9 @@ public static class StatsCoverageLabel
     /// <summary>基準点の日付の短い表記（「2009.2.1」。年・月・日をピリオドでつなぎ、0 で埋めない）。</summary>
     public static string ShortDate(DateTime date) => $"{date.Year}.{date.Month}.{date.Day}";
 
-    /// <summary>話を基準点にした表記（「『○○プリキュア』第N話(YYYY.M.D)時点」。日付はその話の放送日。シリーズは正式名）。</summary>
+    /// <summary>話を基準点にした表記（「『○○プリキュア』第N話(YYYY.M.D)時点」。日付はその話の放送日〔深夜の回は前の日〕。シリーズは正式名）。</summary>
     public static string EpisodePoint(Series series, Episode episode)
-        => $"『{series.Title}』第{episode.SeriesEpNo}話({ShortDate(episode.OnAirAt)})時点";
+        => $"『{series.Title}』第{episode.SeriesEpNo}話({ShortDate(JpDateFormat.BroadcastDay(episode.OnAirAt))})時点";
 
     /// <summary>カバレッジラベル文字列を組み立てる（<see cref="EpisodePoint"/>）。</summary>
     /// <param name="latest">
@@ -55,7 +55,7 @@ public static class StatsCoverageLabel
         var oa = episode.OnAirAt;
         var onAirJst = new DateTimeOffset(DateTime.SpecifyKind(oa, DateTimeKind.Unspecified), TimeSpan.FromHours(9));
         if (onAirJst > buildTime)
-            return $"『{series.Title}』第{episode.SeriesEpNo}話({ShortDate(oa)}放送予定)まで";
+            return $"『{series.Title}』第{episode.SeriesEpNo}話({ShortDate(JpDateFormat.BroadcastDay(oa))}放送予定)まで";
         return EpisodePoint(series, episode);
     }
 

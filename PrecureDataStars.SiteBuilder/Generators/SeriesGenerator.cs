@@ -1103,7 +1103,7 @@ public sealed class SeriesGenerator
                 {
                     SeriesEpNo = e.SeriesEpNo,
                     TitleDisplayHtml = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(titleRichInline, e.TitleText, revealAt, e.MagazineSubtitleStatus),
-                    OnAirDate = JpDateFormat.DotDate(e.OnAirAt),
+                    OnAirDate = JpDateFormat.BroadcastDotDate(e.OnAirAt),
                     EpisodeUrl = PathUtil.EpisodeUrl(s.Slug, e.SeriesEpNo),
                     Screenplay = staff.Screenplay,
                     Storyboard = staff.Storyboard,

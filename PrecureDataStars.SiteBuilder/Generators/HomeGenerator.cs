@@ -519,7 +519,7 @@ WHERE e.is_deleted = 0
                 // 未解禁（前話の予告が未放送）ならガード span で包む。
                 // サブタイトル未確定話は雑誌掲載状態に応じたプレースホルダ表示になる。
                 TitleDisplayHtml = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(x.Episode.TitleRichHtml, x.Episode.TitleText, revealAt, x.Episode.MagazineSubtitleStatus),
-                OnAirDate = JpDateFormat.DotDate(x.Episode.OnAirAt),
+                OnAirDate = JpDateFormat.BroadcastDotDate(x.Episode.OnAirAt),
                 EpisodeUrl = PathUtil.EpisodeUrl(series.Slug, x.Episode.SeriesEpNo),
                 Screenplay = staff.Screenplay,
                 Storyboard = staff.Storyboard,

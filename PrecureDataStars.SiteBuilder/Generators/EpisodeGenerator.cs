@@ -846,10 +846,8 @@ public sealed class EpisodeGenerator
             Kicker: "",
             // サブタイトル未確定話は誌面文言のプレースホルダをそのまま主題に据える。
             Title: string.IsNullOrEmpty(ep.TitleText) ? ep.TitleDisplayText : ep.TitleText,
-            // 放送日と放送枠（「2004年2月1日 8:30〜9:00」）。枠の長さ（episodes.duration_minutes）が無い話は開始の時刻だけ。
-            Subtitle: ep.DurationMinutes is byte minutes && minutes > 0
-                ? $"{JpDateFormat.Date(ep.OnAirAt)} {ep.OnAirAt:H:mm}〜{ep.OnAirAt.AddMinutes(minutes):H:mm}"
-                : $"{JpDateFormat.Date(ep.OnAirAt)} {ep.OnAirAt:H:mm}")
+            // 放送日と放送枠（「2004年2月1日 8:30〜9:00」、深夜の回は前の日の「26:00〜26:30」）。枠の長さ（episodes.duration_minutes）が無い話は開始の時刻だけ。
+            Subtitle: JpDateFormat.BroadcastDateTime(ep.OnAirAt, ep.DurationMinutes))
         {
             // サブタイトルはサイト本体と同じくルビ付きで組む（title_rich_html が無い話は素で組まれる）。
             TitleRubyHtml = ep.TitleRichHtml ?? "",
@@ -1296,7 +1294,7 @@ public sealed class EpisodeGenerator
         var sb = new System.Text.StringBuilder();
         sb.Append('『').Append(series.Title).Append("』第").Append(ep.SeriesEpNo).Append('話');
         if (!string.IsNullOrWhiteSpace(ep.TitleText)) sb.Append('「').Append(JapaneseQuotes.InQuotes(ep.TitleText)).Append('」');
-        sb.Append('（').Append(ep.OnAirAt.ToString("yyyy年M月d日")).Append("放送）。");
+        sb.Append('（').Append(JpDateFormat.BroadcastDate(ep.OnAirAt)).Append("放送）。");
 
         // 主要スタッフ（最大 3 役職）。末尾の一文を残せる範囲で足す。
         var credits = new List<string>();
@@ -1551,7 +1549,7 @@ public sealed class EpisodeGenerator
             beads.Add(new ComboBead
             {
                 Url = PathUtil.EpisodeUrl(owner.Slug, target.SeriesEpNo),
-                Label = $"{i + 1} 回目：『{owner.Title}』 第{target.SeriesEpNo}話（{target.OnAirAt:yyyy年M月d日}）",
+                Label = $"{i + 1} 回目：『{owner.Title}』 第{target.SeriesEpNo}話（{JpDateFormat.BroadcastDate(target.OnAirAt)}）",
                 State = i < current ? "is-past" : i == current ? "is-current" : "is-future",
                 YearLabel = !showYear ? "" : shortYear ? (year % 100).ToString("00") : year.ToString()
             });
@@ -1570,7 +1568,7 @@ public sealed class EpisodeGenerator
             Url = PathUtil.EpisodeUrl(owner.Slug, target.SeriesEpNo),
             EpisodeLabel = $"第{target.SeriesEpNo}話",
             SeriesTitle = owner.SeriesId == current.SeriesId ? "" : owner.Title,
-            Title = $"『{owner.Title}』 第{target.SeriesEpNo}話（{target.OnAirAt:yyyy年M月d日}）"
+            Title = $"『{owner.Title}』 第{target.SeriesEpNo}話（{JpDateFormat.BroadcastDate(target.OnAirAt)}）"
         };
     }
 
@@ -1822,15 +1820,10 @@ public sealed class EpisodeGenerator
     /// <summary>スタッフ役職の判定スペック。</summary>
     private sealed record StaffSpec(string Label, string[] RoleCodeCandidates, string[] RoleNameCandidates);
 
-    /// <summary>放送日時を「2004年2月1日 8:30〜9:00」または「2004年2月1日 8:30」フォーマットで返す。 <paramref name="durationMinutes"/> が NULL（尺未登録）の場合は終了時刻を表示しない。 尺登録済みの場合は分単位で加算した終了時刻も併記する。 時刻部分は <c>H:mm</c>（先頭ゼロなし、分は 2 桁）。</summary>
+    /// <summary>放送日時を「2004年2月1日 8:30〜9:00」または「2004年2月1日 8:30」フォーマットで返す。 <paramref name="durationMinutes"/> が NULL（尺未登録）の場合は終了時刻を表示しない。 尺登録済みの場合は分単位で加算した終了時刻も併記する。 時刻部分は <c>H:mm</c>（先頭ゼロなし、分は 2 桁）。
+    /// 深夜の回（開始が <see cref="JpDateFormat.LateNightEndHour"/> 時より前）は前の日の放送として、時刻に 24 を足して書く（「2025年1月11日 26:00〜26:30」）。</summary>
     private static string FormatJpDateTimeWithDuration(DateTime dt, byte? durationMinutes)
-    {
-        string head = $"{dt.Year}年{dt.Month}月{dt.Day}日 {dt.Hour}:{dt.Minute:D2}";
-        if (!durationMinutes.HasValue || durationMinutes.Value == 0) return head;
-
-        var endDt = dt.AddMinutes(durationMinutes.Value);
-        return $"{head}〜{endDt.Hour}:{endDt.Minute:D2}";
-    }
+        => JpDateFormat.BroadcastDateTime(dt, durationMinutes);
 
     /// <summary>
     /// subtitle-display（サブタイトル本表示ブロック）の中身を組み立てる。

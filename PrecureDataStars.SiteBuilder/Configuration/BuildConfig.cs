@@ -203,7 +203,8 @@ public sealed class BuildConfig
             ObliqueDegrees: ReadDegrees("OgCardObliqueDegrees"),
             Latin: ReadFontPath("OgCardLatinFont"),
             Fallback: ReadFontPath("OgCardFallbackFont"),
-            Emoji: ReadFontPath("OgCardEmojiFont"));
+            Emoji: ReadFontPath("OgCardEmojiFont"),
+            Label: ReadFontPath("OgCardLabelFont"));
 
         // 斜体の角度（度）。未設定・不正なら 0（立てたまま）。
         static float ReadDegrees(string key)

@@ -293,8 +293,10 @@ public sealed partial class OgCardRenderer : IDisposable
     private readonly SKTypeface _bodyTypeface;
     /// <summary>見出し書体（Noto Sans JP Bold）。サイトの h1・h2 と同じ太さ。設定で商用書体に差し替えられる。</summary>
     private readonly SKTypeface _boldTypeface;
-    /// <summary>本文の強調部（役職名などのラベル、前置きの作品名）の書体。既定は見出しと同じ。</summary>
+    /// <summary>左上の前置き（所属の作品名・種別）の書体。既定は見出しと同じ。</summary>
     private readonly SKTypeface _emphasisTypeface;
+    /// <summary>事実行の頭のラベル（役職名など）の書体。既定は前置きと同じ。</summary>
+    private readonly SKTypeface _labelTypeface;
     /// <summary>大きいピンクの数字の書体（既定は見出しと同じ）。</summary>
     private readonly SKTypeface _numberTypeface;
     /// <summary>右上の透かしの書体（既定は見出しと同じ）。</summary>
@@ -366,7 +368,8 @@ public sealed partial class OgCardRenderer : IDisposable
             Path.GetFileName(fonts.Number), Path.GetFileName(fonts.Watermark), Path.GetFileName(fonts.Notice),
             string.Join(';', fonts.TitleCondensedPaths.Select(Path.GetFileName)),
             fonts.ObliqueDegrees.ToString(CultureInfo.InvariantCulture),
-            Path.GetFileName(fonts.Latin), Path.GetFileName(fonts.Fallback), Path.GetFileName(fonts.Emoji));
+            Path.GetFileName(fonts.Latin), Path.GetFileName(fonts.Fallback), Path.GetFileName(fonts.Emoji),
+            Path.GetFileName(fonts.Label));
 
         var fontDir = Path.Combine(AppContext.BaseDirectory, "Fonts");
         _brandTypeface = Own(LoadTypeface(Path.Combine(fontDir, "KiwiMaru-Medium.ttf")));
@@ -377,6 +380,7 @@ public sealed partial class OgCardRenderer : IDisposable
         _bodyTypeface = Own(fonts.Body.Length > 0 ? LoadTypeface(fonts.Body) : LoadTypeface(notoPath, BodyFontWeight));
         _boldTypeface = Own(fonts.Title.Length > 0 ? LoadTypeface(fonts.Title) : LoadTypeface(notoPath, HeadingFontWeight));
         _emphasisTypeface = fonts.Emphasis.Length > 0 ? Own(LoadTypeface(fonts.Emphasis)) : _boldTypeface;
+        _labelTypeface = fonts.Label.Length > 0 ? Own(LoadTypeface(fonts.Label)) : _emphasisTypeface;
         _numberTypeface = fonts.Number.Length > 0 ? Own(LoadTypeface(fonts.Number)) : _boldTypeface;
         _watermarkTypeface = fonts.Watermark.Length > 0 ? Own(LoadTypeface(fonts.Watermark)) : _boldTypeface;
         _noticeTypeface = fonts.Notice.Length > 0 ? Own(LoadTypeface(fonts.Notice)) : _bodyTypeface;
@@ -392,7 +396,7 @@ public sealed partial class OgCardRenderer : IDisposable
         if (condensed.Count > 0)
             _condensedByHandle[_boldTypeface.Handle] = condensed.OrderByDescending(c => c.Ratio).Select(c => c.Typeface).ToList();
 
-        // ここまでに読んだのがカードの地の文の書体（見出し・本文・強調・数字・透かし・注意書き・コンデンス版）。
+        // ここまでに読んだのがカードの地の文の書体（見出し・本文・前置き・ラベル・数字・透かし・注意書き・コンデンス版）。
         var cardTypefaces = _ownedTypefaces.ToList();
         var latinTypeface = fonts.Latin.Length > 0 ? Own(LoadTypeface(fonts.Latin)) : null;
         var fallbackTypeface = fonts.Fallback.Length > 0 ? Own(LoadTypeface(fonts.Fallback)) : null;
@@ -401,9 +405,10 @@ public sealed partial class OgCardRenderer : IDisposable
         foreach (var typeface in _ownedTypefaces)
             _shapers[typeface.Handle] = new OgTextShaper(typeface);
 
-        // 見出し・強調・透かしの書体は、欧文の部分を欧文の書体で、字形の無い字を補いの書体で組む。
-        // 本文・数字・注意書きの書体は、見出しと別の書体を指定したときは英数字までその書体の字で組む
-        // （本文と数字は UD新ゴ のような字の揃った書体、注意書きは初代のエンドクレジットを模した石井ゴシックの斜体）。
+        // 見出し・前置きの書体は、欧文の部分を欧文の書体で、字形の無い字を補いの書体で組む。
+        // 本文・数字・注意書き・ラベル・透かしの書体は、見出しと別の書体を指定したときは英数字までその書体の字で組む
+        // （本文・数字・ラベルは UD新ゴ のような字の揃った書体、注意書きは初代のエンドクレジットを模した石井ゴシックの斜体、
+        // 透かしはそれ自体の書体）。ラベルと透かしは、楽器の役職名の頭の 🎸 などの絵文字だけを絵文字の書体で組む。
         // 作品ごとの書体（サブタイトルのテロップなど）とワードマークは、その書体だけで組む。
         var latinShaper = latinTypeface is null ? null : _shapers[latinTypeface.Handle];
         var fallbackShaper = fallbackTypeface is null ? null : _shapers[fallbackTypeface.Handle];
@@ -416,8 +421,14 @@ public sealed partial class OgCardRenderer : IDisposable
             if (OwnFile(fonts.Body)) keepOwn.Add(_bodyTypeface);
             if (OwnFile(fonts.Number)) keepOwn.Add(_numberTypeface);
             if (OwnFile(fonts.Notice)) keepOwn.Add(_noticeTypeface);
+            var emojiOnly = new List<SKTypeface>();
+            if (OwnFile(fonts.Label)) emojiOnly.Add(_labelTypeface);
+            if (OwnFile(fonts.Watermark)) emojiOnly.Add(_watermarkTypeface);
             foreach (var typeface in cardTypefaces.Where(t => t != _brandTypeface && !keepOwn.Contains(t)))
-                _shapers[typeface.Handle].UseSubstitutes(latinShaper, fallbackShaper, emojiShaper);
+            {
+                if (emojiOnly.Contains(typeface)) _shapers[typeface.Handle].UseSubstitutes(null, null, emojiShaper);
+                else _shapers[typeface.Handle].UseSubstitutes(latinShaper, fallbackShaper, emojiShaper);
+            }
         }
         // ワードマークはサイトのヘッダと同じ見た目にする。Kiwi Maru はかなを全角のまま組む書体なので、
         // 字面詰めはかけず、ブラウザと同じく OpenType 機能（欧文の kern）だけを効かせる。
@@ -1529,7 +1540,7 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <param name="scale">文字と行送りの拡大率（疎なカードで大きく組むため）。</param>
     private (float Top, float Bottom, bool Truncated) DrawInlineFacts(SKCanvas canvas, SKPaint paint, IReadOnlyList<OgCardFactLine> facts, float x, float anchor, float maxWidth, bool anchorToTop = false, int maxLines = InlineFactMaxLines, float scale = 1f, SKTypeface? valueTypeface = null, float verticalScale = 1f, bool prose = false)
     {
-        using var labelFont = new SKFont(_emphasisTypeface, (FactFontSize - 4f) * scale);
+        using var labelFont = new SKFont(_labelTypeface, (FactFontSize - 4f) * scale);
         // 平体は、字の大きさを率だけ下げて横方向を同じ率で広げる（字幅はそのまま、高さだけ縮む）。
         using var valueFont = new SKFont(valueTypeface ?? _bodyTypeface, FactFontSize * scale * verticalScale) { ScaleX = 1f / verticalScale };
         // クレジットに無い補足（「（藤本 記子）」）は、値より小さい字で間を空けて描く。
@@ -1768,8 +1779,8 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <param name="scale">字の大きさと行送りの拡大率（疎の組みで、全項目が入るまで下げる）。</param>
     private (float Top, float Bottom, bool Truncated) DrawStackedFacts(SKCanvas canvas, SKPaint paint, IReadOnlyList<OgCardFactLine> facts, float x, float anchor, bool anchorToTop = false, int maxLines = FactMaxLines, float scale = 1f)
     {
-        using var labelFont = new SKFont(_emphasisTypeface, (FactFontSize - 3f) * scale);
-        // 数で始まるラベル（記念日カレンダーの「2005年」など）は役職名ではなく数なので、見出しの書体ではなく数字の書体で組む。
+        using var labelFont = new SKFont(_labelTypeface, (FactFontSize - 3f) * scale);
+        // 数で始まるラベル（記念日カレンダーの「2005年」など）は役職名ではなく数なので、ラベルの書体ではなく数字の書体で組む。
         using var numericLabelFont = new SKFont(_numberTypeface, (FactFontSize - 3f) * scale);
         using var valueFont = new SKFont(_bodyTypeface, FactFontSize * scale);
         using var subFont = new SKFont(_bodyTypeface, (FactFontSize - 3f) * scale);

@@ -120,9 +120,10 @@
 			空なら同梱の Noto Sans JP で描く。%LOCALAPPDATA% などの環境変数は展開される。
 			  OgCardTitleFont     : 見出し（氏名・作品名・サブタイトル）と識別子
 			  OgCardBodyFont      : 本文（値・単位・注記・年表の目盛り）
-			  OgCardEmphasisFont  : 本文の強調部（役職名などのラベル、前置きの作品名。空なら見出しと同じ）
+			  OgCardEmphasisFont  : 左上の前置き（所属の作品名・種別。空なら見出しと同じ）
+			  OgCardLabelFont     : 事実行の頭のラベル（役職名など。空なら前置きと同じ）。欧文の差し替え・補いはかけない
 			  OgCardNumberFont    : 大きいピンクの数字（空なら見出しと同じ）
-			  OgCardWatermarkFont : 右上の透かし（空なら見出しと同じ）
+			  OgCardWatermarkFont : 右上の透かし（空なら見出しと同じ）。見出しと別の書体なら、欧文の差し替え・補いはかけない
 			  OgCardTitleCondensedFonts : 見出し書体のコンデンス版（字幅を詰めた別ファイル。UD新ゴ コンデンス90〜50 など）を
 			                              「;」区切りで。見出しが 1 行に収まらないとき、長体の代わりに広い順に差し替える。
 			                              空なら長体（字形を横に縮める）で詰める
@@ -137,6 +138,7 @@
 		<add key="OgCardTitleFont" value="" />
 		<add key="OgCardBodyFont" value="" />
 		<add key="OgCardEmphasisFont" value="" />
+		<add key="OgCardLabelFont" value="" />
 		<add key="OgCardNumberFont" value="" />
 		<add key="OgCardWatermarkFont" value="" />
 		<add key="OgCardTitleCondensedFonts" value="" />

@@ -80,12 +80,12 @@ public static class FontSampleRequests
     /// <summary>
     /// 見本の文を替えるスピンオフ（作品のスラッグ → ルビ付きの文）。放送開始の年で引く <see cref="SubtitleSampleByYear"/> は本線の作品のもので、
     /// 同じ年に始まったスピンオフには当てないので、スピンオフの見本の文はここに置く（キボウノチカラ〜オトナプリキュア'23〜は、本編の題が
-    /// 全話片仮名なので、見本も片仮名の「アバレルオトナ」。魔法つかいプリキュア！！〜MIRAI DAYS〜は、本編の振り仮名が「刻（とき）」だけなので、
+    /// 全話片仮名なので、見本も片仮名の「オトナノアバレ」。魔法つかいプリキュア！！〜MIRAI DAYS〜は、本編の振り仮名が「刻（とき）」だけなので、
     /// 見本も「刻」だけに振り仮名を付けた「刻だって暴れたい」）。
     /// </summary>
     private static readonly Dictionary<string, string> SubtitleSampleBySeries = new(StringComparer.Ordinal)
     {
-        ["otona"] = "アバレルオトナ",
+        ["otona"] = "オトナノアバレ",
         ["maho2"] = "<ruby>刻<rt>とき</rt></ruby>だって暴れたい"
     };
 

@@ -42,6 +42,12 @@ public sealed class S3DeployService
     /// 同時 PUT を容易に捌くため、フル更新（数千ファイル）の所要時間を詰める狙いで高めに取る。</summary>
     private const int UploadConcurrency = 64;
 
+    /// <summary>
+    /// S3 の一覧をフォルダごとに分けて同時に引く深さ（<see cref="ListPrefixAsync"/>）。1 ならルートの直下のフォルダごとに分ける。
+    /// 1 回の往復は 0.1〜0.4 秒で、深く分けると要求が数千に増えて詰まり、かえって遅い。
+    /// </summary>
+    private const int ListSplitDepth = 1;
+
     public S3DeployService(BuildConfig config, BuildLogger logger)
     {
         _config = config;
@@ -83,18 +89,21 @@ public sealed class S3DeployService
         _logger.Info($"Distribution     : {(string.IsNullOrWhiteSpace(_config.CloudFrontDistributionId) ? "(invalidation skip)" : _config.CloudFrontDistributionId)}");
         _logger.Info($"Mode             : {(_config.Deploy.DryRun ? "DRY-RUN（無変更）" : "LIVE")}");
 
-        // 1) S3 側の現状（key → ETag）を全件取得。
-        var s3Etags = await ListAllObjectsAsync(s3, bucket, ct).ConfigureAwait(false);
+        // 1) S3 側の現状（key → ETag）の全件と、ローカル成果物の MD5 を同時に求める（どちらも待ちが主で互いに独立）。
+        var listWatch = System.Diagnostics.Stopwatch.StartNew();
+        var listing = ListAllObjectsAsync(s3, bucket, ct).ContinueWith(t => { listWatch.Stop(); return t; }, ct).Unwrap();
+        var md5Watch = System.Diagnostics.Stopwatch.StartNew();
+        var localMd5 = await Task.Run(() => ComputeLocalMd5(outputDir), ct).ConfigureAwait(false);
+        md5Watch.Stop();
+        var s3Etags = await listing.ConfigureAwait(false);
+        _logger.Info($"Compare          : S3 の一覧 {s3Etags.Count} 件 {listWatch.Elapsed.TotalSeconds:0.0} 秒 / 手元の MD5 {localMd5.Count} 件 {md5Watch.Elapsed.TotalSeconds:0.0} 秒（同時に進める）");
 
-        // 2) ローカル成果物を走査して、アップロード対象（新規 or 内容変化）を抽出。
+        // 2) アップロード対象（新規 or 内容変化）を抽出。並びはローカルのパスの順（ログと計画を毎回同じ順にする）。
         var localKeys = new HashSet<string>(StringComparer.Ordinal);
         var toUpload = new List<(string Key, string LocalPath)>();
-        foreach (var path in Directory.EnumerateFiles(outputDir, "*", SearchOption.AllDirectories))
+        foreach (var (key, path, md5) in localMd5)
         {
-            var key = Path.GetRelativePath(outputDir, path).Replace('\\', '/');
             localKeys.Add(key);
-
-            var md5 = ComputeMd5Hex(path);
             // ETag が無い（新規）／マルチパート（'-' を含み MD5 と比較不能）／不一致ならアップロード。
             if (!s3Etags.TryGetValue(key, out var etag) || etag.Contains('-') || !string.Equals(etag, md5, StringComparison.Ordinal))
                 toUpload.Add((key, path));
@@ -186,25 +195,76 @@ public sealed class S3DeployService
         return creds;
     }
 
-    /// <summary>バケット内の全オブジェクトを列挙し、key → 正規化 ETag の辞書を返す。</summary>
+    /// <summary>
+    /// バケット内の全オブジェクトを列挙し、key → 正規化 ETag の辞書を返す。
+    /// 1 回の一覧は 1,000 件までで、続きは前の応答の印が要るため、1 本の列挙では往復を順に待つしかない。
+    /// そこで接頭辞（「/」で区切ったフォルダ）ごとに分けて同時に列挙する（<see cref="ListPrefixAsync"/>）。
+    /// </summary>
     private static async Task<Dictionary<string, string>> ListAllObjectsAsync(IAmazonS3 s3, string bucket, CancellationToken ct)
     {
-        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        var result = new System.Collections.Concurrent.ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+        await ListPrefixAsync(s3, bucket, "", depth: 0, result, ct).ConfigureAwait(false);
+        return new Dictionary<string, string>(result, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// 接頭辞 <paramref name="prefix"/> の下を列挙して <paramref name="result"/> に足す。上から <see cref="ListSplitDepth"/> 段までは、
+    /// まず「/」区切りで 1 段だけ引き、1 回の応答に収まったら（その段の直下のファイルと子のフォルダが 1,000 件未満）、
+    /// 子のフォルダをそれぞれ同時に同じ要領で引く。それより深い段と、収まらない段は、区切らずにその接頭辞の下を全件順に引く。
+    /// </summary>
+    private static async Task ListPrefixAsync(
+        IAmazonS3 s3, string bucket, string prefix, int depth,
+        System.Collections.Concurrent.ConcurrentDictionary<string, string> result, CancellationToken ct)
+    {
+        if (depth >= ListSplitDepth)
+        {
+            await ListFlatAsync(s3, bucket, prefix, result, ct).ConfigureAwait(false);
+            return;
+        }
+        var level = await s3.ListObjectsV2Async(
+            new ListObjectsV2Request { BucketName = bucket, Prefix = prefix, Delimiter = "/" }, ct).ConfigureAwait(false);
+        if (level.IsTruncated ?? false)
+        {
+            await ListFlatAsync(s3, bucket, prefix, result, ct).ConfigureAwait(false);
+            return;
+        }
+
+        if (level.S3Objects is not null)
+            foreach (var o in level.S3Objects)
+                result[o.Key] = NormalizeEtag(o.ETag);
+        var children = level.CommonPrefixes ?? new List<string>();
+        await Task.WhenAll(children.Select(child => ListPrefixAsync(s3, bucket, child, depth + 1, result, ct))).ConfigureAwait(false);
+    }
+
+    /// <summary>接頭辞の下を区切らずに全件、続きの印をたどって順に引く。</summary>
+    private static async Task ListFlatAsync(
+        IAmazonS3 s3, string bucket, string prefix,
+        System.Collections.Concurrent.ConcurrentDictionary<string, string> result, CancellationToken ct)
+    {
         string? token = null;
         do
         {
             var resp = await s3.ListObjectsV2Async(
-                new ListObjectsV2Request { BucketName = bucket, ContinuationToken = token }, ct).ConfigureAwait(false);
-
+                new ListObjectsV2Request { BucketName = bucket, Prefix = prefix, ContinuationToken = token }, ct).ConfigureAwait(false);
             if (resp.S3Objects is not null)
                 foreach (var o in resp.S3Objects)
                     result[o.Key] = NormalizeEtag(o.ETag);
-
             token = (resp.IsTruncated ?? false) ? resp.NextContinuationToken : null;
         }
         while (token is not null);
+    }
 
-        return result;
+    /// <summary>
+    /// 出力ディレクトリの全ファイルの (S3 のキー, パス, MD5) を、パスの順に返す。MD5 は論理コア数で並列に求める。
+    /// </summary>
+    private static List<(string Key, string Path, string Md5)> ComputeLocalMd5(string outputDir)
+    {
+        var paths = Directory.EnumerateFiles(outputDir, "*", SearchOption.AllDirectories).ToArray();
+        var md5s = new string[paths.Length];
+        Parallel.For(0, paths.Length, i => md5s[i] = ComputeMd5Hex(paths[i]));
+        return paths
+            .Select((path, i) => (Path.GetRelativePath(outputDir, path).Replace('\\', '/'), path, md5s[i]))
+            .ToList();
     }
 
     /// <summary>アップロード対象を並列で PutObject する。</summary>

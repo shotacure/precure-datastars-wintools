@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：OGP カードの描画を、ページの生成の流れから切り離して、全工程のカードを論理コア数まで同時に描くようにした**（`PageRenderer.RenderOgCard`・`DrawOgCardAsync`・`WaitForOgCardsAsync`、工程 `og_cards`）：これまでは各話・人物・商品・歌の工程だけがページごとに並列で、ほかの工程は 1 枚ずつ描いていた。描くカードは URL だけを先に返して描く仕事に回し、同じ作り置きの鍵のカードは 1 度だけ描く。全ページの生成の後で全部の描き上がりを待ち、出力の走査と掃除はその後に行う。出力は変わらない。
 - **道具：配信音源の再確認を速くした**（`YouTubeDataApiClient.GetVideoDetailsAsync`・`TracksRepository.UpdateArtTrackAssignmentsAsync`）：`videos.list` の 50 件ずつの要求を 8 本まで同時に送り、確認の書き込みを 1 つのトランザクションで確定する。全件の確認が約 30 秒から 5 秒ほどになった。使うユニット数は変わらない。
 - **道具：回帰確認 `scripts/verify-site-output.ps1` に `-SiteBuilderArgs` を足した**：SiteBuilder に足して渡す引数。画像の描き方の経路を変えたときは `--refresh-og` を渡し、作り置きを写すのでなく描いた画像どうしを比べる。
 - **サイト：OGP カードの事実行の頭のラベル（役職名など）を、左上の前置きと別の書体で組めるようにし、ラベルと透かしに欧文の差し替え・字の補いをかけないようにした**（`OgCardFontPaths.Label`・設定 `OgCardLabelFont`、`OgCardRenderer` の `_labelTypeface`）：ラベルは `OgCardLabelFont`（空なら前置きと同じ書体）で組み、見出しと別の書体なら英数字までその書体の字で組む。透かしも見出しと別の書体なら同じく透かしの書体の字だけで組む。どちらも絵文字だけは絵文字の書体で組む。

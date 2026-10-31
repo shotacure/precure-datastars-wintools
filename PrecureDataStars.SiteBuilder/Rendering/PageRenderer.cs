@@ -64,6 +64,19 @@ public sealed class PageRenderer
     private int _ogCardsRendered;
     private int _ogCardsFromCache;
 
+    /// <summary>
+    /// 描きかけの OGP カード（作り置きの鍵 → 描く仕事）。同じ鍵のカードは 1 度だけ描き、描き上がった画像を各ページの出力へ写す。
+    /// 描く仕事は <see cref="_ogCardDrawGate"/> の数までスレッドプールで同時に進み、ページの生成はその描き上がりを待たずに先へ進む。
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task<OgCardDrawn>>> _ogCardJobs = new(StringComparer.Ordinal);
+    /// <summary>描いたカードを各ページの出力へ置く仕事。<see cref="WaitForOgCardsAsync"/> で全部の完了を待つ。</summary>
+    private readonly System.Collections.Concurrent.ConcurrentBag<Task> _ogCardPlacements = new();
+    /// <summary>カードを同時に描く数（論理コア数）。カードの描画は CPU だけを使う。</summary>
+    private readonly SemaphoreSlim _ogCardDrawGate = new(Environment.ProcessorCount);
+
+    /// <summary>描き上がったカードの画像ファイルと、それが作り置きか（false なら書体が無く既定の書体で描いた、作り置きに入れない一時ファイル）。</summary>
+    private sealed record OgCardDrawn(string File, bool Cached);
+
     public PageRenderer(ScribanRenderer renderer, BuildConfig config, BuildSummary summary, OutputWriter output, ProgressReporter? reporter = null, OgCardRenderer? ogCardRenderer = null)
     {
         _renderer = renderer;
@@ -117,6 +130,8 @@ public sealed class PageRenderer
     /// <see cref="OgCardRenderer.CacheKey"/>）から写し、同じ鍵の作り置きが無いとき（と <c>--refresh-og</c> のとき）だけ
     /// 描いて作り置きに足す。指定の書体が無く既定の書体で描いたカードは作り置きに入れず出力へ直接置く
     /// （書体を入れた次のビルドで描き直されるように）。
+    /// 作り置きのあるカードはその場で写し、描くカードは描く仕事に回して URL だけを先に返す（描き上がると出力へ写す）。
+    /// 出力にカードがそろうのは <see cref="WaitForOgCardsAsync"/> の後。
     /// 出力先はページごとに異なり、作り置きへは一時ファイルに描いてから置き換えるので、並列フェーズから呼んで安全。
     /// BaseUrl 未設定時は絶対 URL を組めないため何もせず空文字を返す。
     /// </summary>
@@ -132,31 +147,69 @@ public sealed class PageRenderer
         var key = _ogCardRenderer.CacheKey(spec);
         _ogCardKeysUsed.TryAdd(key, 0);
         var cacheFile = Path.Combine(_config.OgCardCacheDirectory, key + ".png");
-        if (_config.RefreshOgCards || !File.Exists(cacheFile))
+        // 同じ鍵のカードを描いている途中なら、作り置きが置かれていても描き上がりを待って写す。
+        if (_config.RefreshOgCards || !File.Exists(cacheFile) || _ogCardJobs.ContainsKey(key))
+        {
+            var renderer = _ogCardRenderer;
+            var job = _ogCardJobs.GetOrAdd(key, _ => new Lazy<Task<OgCardDrawn>>(
+                () => Task.Run(() => DrawOgCardAsync(renderer, spec, cacheFile, canonicalPath))));
+            _ogCardPlacements.Add(PlaceOgCardAsync(job.Value, outputFile));
+        }
+        else
+        {
+            Interlocked.Increment(ref _ogCardsFromCache);
+            _output.CopyFrom(cacheFile, outputFile);
+        }
+        return $"{_config.BaseUrl}/{relativePath}";
+    }
+
+    /// <summary>
+    /// カードを 1 枚描く。作り置きへは一時ファイルに描いてから置き換える。指定の書体が無く既定の書体で描いたカードは
+    /// 作り置きに入れず、一時ファイルのまま返す（書体を入れた次のビルドで描き直されるように。一時ファイルは
+    /// <see cref="WaitForOgCardsAsync"/> が写し終えた後に消す）。
+    /// </summary>
+    private async Task<OgCardDrawn> DrawOgCardAsync(OgCardRenderer renderer, OgCardSpec spec, string cacheFile, string canonicalPath)
+    {
+        await _ogCardDrawGate.WaitAsync().ConfigureAwait(false);
+        try
         {
             Directory.CreateDirectory(_config.OgCardCacheDirectory);
             var tempFile = $"{cacheFile}.{Guid.NewGuid():N}.tmp";
-            var missing = _ogCardRenderer.Render(spec, tempFile);
+            var missing = renderer.Render(spec, tempFile);
             Interlocked.Increment(ref _ogCardsRendered);
             if (missing is not null)
             {
                 lock (_ogCardGlyphLock) _ogCardGlyphWarnings.TryAdd(missing, canonicalPath);
             }
-            if (OgCardRenderer.IsTypefaceWarning(missing))
-            {
-                PathUtil.EnsureParentDirectory(outputFile);
-                File.Move(tempFile, outputFile, overwrite: true);
-                _output.Register(outputFile);
-                return $"{_config.BaseUrl}/{relativePath}";
-            }
+            if (OgCardRenderer.IsTypefaceWarning(missing)) return new OgCardDrawn(tempFile, Cached: false);
             File.Move(tempFile, cacheFile, overwrite: true);
+            return new OgCardDrawn(cacheFile, Cached: true);
         }
-        else
+        finally
         {
-            Interlocked.Increment(ref _ogCardsFromCache);
+            _ogCardDrawGate.Release();
         }
-        _output.CopyFrom(cacheFile, outputFile);
-        return $"{_config.BaseUrl}/{relativePath}";
+    }
+
+    /// <summary>描き上がったカードを、そのページの出力へ写す。</summary>
+    private async Task PlaceOgCardAsync(Task<OgCardDrawn> job, string outputFile)
+    {
+        var drawn = await job.ConfigureAwait(false);
+        _output.CopyFrom(drawn.File, outputFile);
+    }
+
+    /// <summary>
+    /// 描く仕事に回した OGP カードがすべて描き上がり、各ページの出力へ写し終わるのを待つ。全ページの生成の後、
+    /// 出力を走査・掃除する前に呼ぶ。描く途中の失敗はここで例外として上がる。
+    /// </summary>
+    public async Task WaitForOgCardsAsync()
+    {
+        await Task.WhenAll(_ogCardPlacements).ConfigureAwait(false);
+        foreach (var job in _ogCardJobs.Values)
+        {
+            var drawn = await job.Value.ConfigureAwait(false);
+            if (!drawn.Cached) File.Delete(drawn.File);
+        }
     }
 
     /// <summary>

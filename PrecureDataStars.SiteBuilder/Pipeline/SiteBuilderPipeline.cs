@@ -285,6 +285,12 @@ public sealed class SiteBuilderPipeline
         await new RecordsGenerator(ctx, pageRenderer, factory, involvementIndex, chiefStaffIndex).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
+        // OGP カードは各ページの生成と並行して描いているので、出力を走査・掃除する前に全部の描き上がりを待つ。
+        reporter.BeginSection("og_cards");
+        await pageRenderer.WaitForOgCardsAsync().ConfigureAwait(false);
+        reporter.PageWritten();
+        reporter.EndSection();
+
         // OGP カード一覧（確認用）。全ページのカード生成が終わったあとに出力ディレクトリを走査するため、
         // ページ書き出しがすべて済んだこの位置で実行する。テストモードでのみ書き出す。
         // 出力の掃除より前に書いて、自分自身が掃除で消されないようにする（前回の残りのカードは走査で除く）。
@@ -423,6 +429,7 @@ public sealed class SiteBuilderPipeline
         yield return ("episode_part_stats", "パート尺統計",     null);
         // 歴代記録は索引 1 ページ + 尺の違い 1 ページで常に一定。
         yield return ("records",            "歴代記録",         2);
+        yield return ("og_cards",           "OGP カード",       1);
         yield return ("search_index",       "検索索引",         1);
         yield return ("seo",                "SEO ファイル",     1);
         yield return ("prune",              "出力の掃除",       1);

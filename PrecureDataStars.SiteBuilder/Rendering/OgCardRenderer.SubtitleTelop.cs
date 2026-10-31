@@ -396,6 +396,20 @@ public sealed partial class OgCardRenderer
         var canvas = surface.Canvas;
         if (SceneTransparent) canvas.Clear(SKColors.Transparent);
         else DrawSceneBackground(canvas, scene.Width, FontScene.Height);
+        // 環状のグラデーションは、同じまとまりのテロップ全体の中心を軸にするので、先に置く範囲を求める。
+        // 範囲は行ごとの仮想ボディ（字の並びの左端から行の幅、ベースラインの上 TelopAscentRatio・下 1 − TelopAscentRatio）を合わせた四角
+        var groupBounds = new Dictionary<string, SKRect>(StringComparer.Ordinal);
+        foreach (var scenePiece in scene.Pieces)
+        {
+            if (SceneGlyphOnly || scenePiece.Group is not { } group || scenePiece.Profile.Decoration.FillGradient is not { Radial: true }) continue;
+            var probe = DrawTelopImage(scenePiece.Html, scenePiece.FontFamily, scenePiece.Profile, scenePiece.SizePx);
+            if (probe is null) continue;
+            float pl = scenePiece.CenterX ? scenePiece.X - probe.LineWidth / 2f : scenePiece.X;
+            var rect = new SKRect(pl, scenePiece.Y - scenePiece.SizePx * TelopAscentRatio, pl + probe.LineWidth,
+                scenePiece.Y + scenePiece.SizePx * (1f - TelopAscentRatio));
+            probe.Image.Dispose();
+            groupBounds[group] = groupBounds.TryGetValue(group, out var acc) ? SKRect.Union(acc, rect) : rect;
+        }
         foreach (var scenePiece in scene.Pieces)
         {
             var piece = SceneGlyphOnly ? scenePiece with { Profile = GlyphOnly(scenePiece.Profile) } : scenePiece;
@@ -403,6 +417,18 @@ public sealed partial class OgCardRenderer
             if (drawn is null) continue;
             float left = piece.CenterX ? piece.X - drawn.LineWidth / 2f : piece.X;
             float ox = left - drawn.Left, oy = piece.Y - drawn.Baseline;
+            // 環状のグラデーションは、まとまりの中心と半径（中心からいちばん遠い角までの距離 × 倍率）を組みの座標に直し、描き直す
+            if (piece.Group is { } g && groupBounds.TryGetValue(g, out var bounds) && piece.Profile.Decoration.FillGradient is { Radial: true } rg)
+            {
+                drawn.Image.Dispose();
+                float lx = ox + drawn.OriginX, ly = oy + drawn.OriginY;
+                float cx = bounds.MidX - lx, cy = bounds.MidY - ly;
+                float radius = MathF.Sqrt(bounds.Width * bounds.Width + bounds.Height * bounds.Height) / 2f * rg.Radius;
+                var local = rg with { Line = [cx, cy, cx + radius, cy] };
+                var profile = piece.Profile with { Decoration = piece.Profile.Decoration with { FillGradient = local } };
+                drawn = DrawTelopImage(piece.Html, piece.FontFamily, profile, piece.SizePx);
+                if (drawn is null) continue;
+            }
             // 画面全体にかかるグラデーションは、置く位置を差し引いて組みの座標に直し、描き直す（置く位置も切り抜き方も塗りによらない）
             if (piece.Profile.Decoration.FillGradient is { SceneLine: { Count: 4 } sl } fg)
             {

@@ -282,8 +282,19 @@ public sealed record TelopGradient
 
     /// <summary>
     /// <see cref="SceneLine"/> を、描く画像の画素の座標に直したもの（x0, y0, x1, y1）。場面の画像を描くときに、置く位置から求めて入れる。
+    /// <see cref="Radial"/> のときは (x0, y0) が中心、(x1, y1) までの距離が半径。
     /// </summary>
     public IReadOnlyList<float>? Line { get; init; }
+
+    /// <summary>
+    /// 環状に色を移すか。true なら <see cref="Axis"/> などに代えて、字のまとまりの中心から外へ同心円で色を移す（最初の色が中心、最後の色が外）。
+    /// まとまりは、各話のサブタイトルの画像ならその画像の字の範囲、フォントのページの場面の画像ならクレジット（役職名と人名）全体。
+    /// 半径は、まとまりの中心から外形のいちばん遠い角までの距離に <see cref="Radius"/> を掛けた長さで、その外は最後の色のまま。
+    /// </summary>
+    public bool Radial { get; init; }
+
+    /// <summary><see cref="Radial"/> の半径の倍率（まとまりの中心からいちばん遠い角までの距離に対する比）。</summary>
+    public float Radius { get; init; } = 1f;
 }
 
 /// <summary>字の内側の光。字の形をぼかし、輪郭に近いところほど濃く色を載せる。</summary>

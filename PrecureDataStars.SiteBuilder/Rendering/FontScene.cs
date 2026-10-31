@@ -14,6 +14,7 @@ public sealed record FontScene(int Width, IReadOnlyList<FontScenePiece> Pieces)
 /// <summary>
 /// 場面の画像に置くテロップ 1 つ。<paramref name="SizePx"/> は字の大きさ（画面の高さ 1080 の画素）、
 /// <paramref name="X"/>・<paramref name="Y"/> は置く位置（画面の画素）で、<paramref name="CenterX"/> なら行の中心、そうでなければ字の並びの左端。
-/// <paramref name="Y"/> はベースライン。
+/// <paramref name="Y"/> はベースライン。<paramref name="Group"/> は同じまとまり（クレジットの役職名と人名）のテロップに付ける名前で、
+/// 環状のグラデーション（<see cref="PrecureDataStars.Data.Models.TelopGradient.Radial"/>）は同じ名前のテロップ全体の中心を軸にかける。
 /// </summary>
-public sealed record FontScenePiece(string Html, string FontFamily, SubtitleTelopProfile Profile, float SizePx, float X, float Y, bool CenterX);
+public sealed record FontScenePiece(string Html, string FontFamily, SubtitleTelopProfile Profile, float SizePx, float X, float Y, bool CenterX, string? Group = null);

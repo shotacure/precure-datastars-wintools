@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **道具：配信音源の再確認を速くした**（`YouTubeDataApiClient.GetVideoDetailsAsync`・`TracksRepository.UpdateArtTrackAssignmentsAsync`）：`videos.list` の 50 件ずつの要求を 8 本まで同時に送り、確認の書き込みを 1 つのトランザクションで確定する。全件の確認が約 30 秒から 5 秒ほどになった。使うユニット数は変わらない。
 - **道具：回帰確認 `scripts/verify-site-output.ps1` に `-SiteBuilderArgs` を足した**：SiteBuilder に足して渡す引数。画像の描き方の経路を変えたときは `--refresh-og` を渡し、作り置きを写すのでなく描いた画像どうしを比べる。
 - **サイト：OGP カードの事実行の頭のラベル（役職名など）を、左上の前置きと別の書体で組めるようにし、ラベルと透かしに欧文の差し替え・字の補いをかけないようにした**（`OgCardFontPaths.Label`・設定 `OgCardLabelFont`、`OgCardRenderer` の `_labelTypeface`）：ラベルは `OgCardLabelFont`（空なら前置きと同じ書体）で組み、見出しと別の書体なら英数字までその書体の字で組む。透かしも見出しと別の書体なら同じく透かしの書体の字だけで組む。どちらも絵文字だけは絵文字の書体で組む。
 - **道具：円盤の解析ツールで、話の最初のチャプターの頭の黒 1 秒を見込んで照合するようにし、一覧の秒数を四捨五入にした**（`PrecureDataStars.BDAnalyzer`・`EpisodeLinkMatcher.EpisodeHeadBlackMs`・`IsWithinTolerance`・`EpisodeLinkDialog`・`MainForm`）：DB の円盤尺は収録された映像の尺で頭の黒を含まないので、話の最初のパートだけチャプターとの差を −1〜＋2 秒まで許す（当てる画面の差の赤字も同じ）。一覧の Seconds の列は切り上げをやめ、四捨五入（0.5 は切り上げ）で出す。

@@ -503,7 +503,19 @@ public sealed class TracksRepository : RepositoryBase
             .ToList();
         if (rows.Count == 0) return;
 
-        await ExecuteAsync(sql, rows, ct).ConfigureAwait(false);
+        // 全商品の再確認では数千行を 1 行ずつ UPDATE するので、1 行ごとにコミットせず 1 つのトランザクションでまとめて確定する。
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await conn.ExecuteAsync(new CommandDefinition(sql, rows, transaction: tx, cancellationToken: ct)).ConfigureAwait(false);
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct).ConfigureAwait(false);
+            throw;
+        }
     }
 
     /// <summary>動画 ID が割り当て済みの全トラックを、定期の再確認の対象として取得する。 論理削除した商品のトラックも含める（API から取ったデータを保存している以上、確かめ直す対象になるため）。</summary>

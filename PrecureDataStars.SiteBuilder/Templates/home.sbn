@@ -290,6 +290,12 @@
     </article>
     {{~ end ~}}
   </div>
+  {{## 購入ボタンは Amazon アソシエイトの広告なので、カードの並びのすぐ下で広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。
+       購入リンクのあるカードが 1 枚も無いときは出さない。文は商品・書籍の詳細ページの注記と同じ。 ##}}
+  {{~ has_amazon_links = false; for p in UpcomingProducts; if p.AmazonCdUrl != "" || p.AmazonDigitalUrl != ""; has_amazon_links = true; end; end ~}}
+  {{~ if has_amazon_links ~}}
+  <p class="muted product-links-note home-product-links-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
+  {{~ end ~}}
 </section>
 {{~ end ~}}
 
@@ -335,6 +341,12 @@
     </article>
     {{~ end ~}}
   </div>
+  {{## 購入ボタンは Amazon アソシエイトの広告なので、カードの並びのすぐ下で広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。
+       購入リンクのあるカードが 1 枚も無いときは出さない。文は商品・書籍の詳細ページの注記と同じ。 ##}}
+  {{~ has_amazon_links = false; for p in LatestProducts; if p.AmazonCdUrl != "" || p.AmazonDigitalUrl != ""; has_amazon_links = true; end; end ~}}
+  {{~ if has_amazon_links ~}}
+  <p class="muted product-links-note home-product-links-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
+  {{~ end ~}}
 </section>
 {{~ end ~}}
 
@@ -379,6 +391,12 @@
     </article>
     {{~ end ~}}
   </div>
+  {{## 購入ボタンは Amazon アソシエイトの広告なので、カードの並びのすぐ下で広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。
+       購入リンクのあるカードが 1 枚も無いときは出さない。文は商品・書籍の詳細ページの注記と同じ。 ##}}
+  {{~ has_amazon_links = false; for b in UpcomingBooks; if b.AmazonPrintUrl != "" || b.AmazonKindleUrl != ""; has_amazon_links = true; end; end ~}}
+  {{~ if has_amazon_links ~}}
+  <p class="muted product-links-note home-product-links-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
+  {{~ end ~}}
 </section>
 {{~ end ~}}
 
@@ -421,5 +439,11 @@
     </article>
     {{~ end ~}}
   </div>
+  {{## 購入ボタンは Amazon アソシエイトの広告なので、カードの並びのすぐ下で広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。
+       購入リンクのあるカードが 1 枚も無いときは出さない。文は商品・書籍の詳細ページの注記と同じ。 ##}}
+  {{~ has_amazon_links = false; for b in LatestBooks; if b.AmazonPrintUrl != "" || b.AmazonKindleUrl != ""; has_amazon_links = true; end; end ~}}
+  {{~ if has_amazon_links ~}}
+  <p class="muted product-links-note home-product-links-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
+  {{~ end ~}}
 </section>
 {{~ end ~}}

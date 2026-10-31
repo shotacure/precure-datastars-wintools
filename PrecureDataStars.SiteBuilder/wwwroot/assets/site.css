@@ -2356,6 +2356,10 @@ a.series-card-children-title:hover {
   margin: 6px 0 0;
   font-size: 0.82em;
 }
+/* ホームの商品・書籍のカードの並びの下に置く同じ注記。並びの下の余白に食い込ませて、カードとの間を詰める。 */
+.home-product-links-note {
+  margin: -8px 0 16px;
+}
 .product-links-list {
   list-style: none;
   margin: 0;

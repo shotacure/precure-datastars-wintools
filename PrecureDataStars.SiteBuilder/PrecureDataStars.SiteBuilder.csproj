@@ -92,17 +92,43 @@
     組み方など描画コードのどこを変えても鍵が変わり、自動的に描き直しになる（版の数字を手で上げ忘れて
     古い画像が残ることがない）。書体ファイルは含めない（書体は名前で鍵に入る。ファイルの中身を差し替えても
     描き直さない）。
+    ハッシュはファイルの文字を読み、改行を LF にそろえ、BOM を除いてから求める（ComputeOgRenderSourceStamp）。
+    同じ描画コードなら、CRLF で取り出した作業ツリーでも LF で取り出した作業ツリー（git worktree など）でも同じ印になり、
+    作り置きを共用できる。
   -->
+  <UsingTask TaskName="ComputeOgRenderSourceStamp" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Files ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <Stamp ParameterType="System.String" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.Security.Cryptography" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        // ファイル名（プロジェクトからの相対パス）の順に「名前=中身のハッシュ」を並べ、その全体をハッシュする。
+        // 中身は File.ReadAllText で読んで BOM を落とし、CRLF・CR を LF にそろえる。
+        // インラインタスクは netstandard2.0 でコンパイルされるので、SHA256.HashData・Convert.ToHexString は使えない。
+        using (var sha = SHA256.Create())
+        {
+            Func<string, string> hex = s => BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(s))).Replace("-", "").ToLowerInvariant();
+            var listing = new StringBuilder();
+            foreach (var item in Files.OrderBy(f => f.ItemSpec, StringComparer.Ordinal))
+            {
+                var text = File.ReadAllText(item.GetMetadata("FullPath")).Replace("\r\n", "\n").Replace('\r', '\n');
+                listing.Append(item.ItemSpec).Append('=').Append(hex(text)).Append('\n');
+            }
+            Stamp = hex(listing.ToString());
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
   <ItemGroup>
     <OgRenderSource Include="Rendering\OgCard*.cs;Rendering\OgTextShaper.cs;Rendering\SubtitleTelop*.cs;Rendering\TelopRaster.cs;Rendering\InstalledFontIndex.cs" />
   </ItemGroup>
   <Target Name="GenerateOgRenderSourceStamp" BeforeTargets="BeforeCompile;CoreCompile">
-    <GetFileHash Files="@(OgRenderSource)" Algorithm="SHA256">
-      <Output TaskParameter="Items" ItemName="_OgRenderSourceHashed" />
-    </GetFileHash>
-    <Hash ItemsToHash="@(_OgRenderSourceHashed->'%(Identity)=%(FileHash)')">
-      <Output TaskParameter="HashResult" PropertyName="_OgRenderSourceStamp" />
-    </Hash>
+    <ComputeOgRenderSourceStamp Files="@(OgRenderSource)">
+      <Output TaskParameter="Stamp" PropertyName="_OgRenderSourceStamp" />
+    </ComputeOgRenderSourceStamp>
     <PropertyGroup>
       <_OgRenderSourceStampFile>$(IntermediateOutputPath)OgRenderSourceStamp.g.cs</_OgRenderSourceStampFile>
     </PropertyGroup>

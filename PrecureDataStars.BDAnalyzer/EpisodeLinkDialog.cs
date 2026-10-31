@@ -553,7 +553,7 @@ namespace PrecureDataStars.BDAnalyzer
                 if (part?.DiscLength is not ushort dl) continue;
                 bool isLast = IsLastDiscPart(ep, part);
                 long diff = (long)ch.DurationMs - EpisodeLinkMatcher.ExpectedMs(part, isLast);
-                if (!EpisodeLinkMatcher.IsWithinTolerance(diff))
+                if (!EpisodeLinkMatcher.IsWithinTolerance(diff, IsFirstDiscPart(ep, part)))
                     list.Add($"第 {ep.SeriesEpNo} 話 {part.PartType}（DB {dl} 秒{(isLast ? "＋余白 1 秒" : "")}）：差 {diff / 1000.0:+0.0;-0.0} 秒");
             }
             return list;
@@ -589,7 +589,7 @@ namespace PrecureDataStars.BDAnalyzer
             {
                 long diff = (long)tag.Chapter.DurationMs - EpisodeLinkMatcher.ExpectedMs(part, isLast);
                 row.Cells[ColDiff].Value = (diff / 1000.0).ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture);
-                row.Cells[ColDiff].Style.ForeColor = EpisodeLinkMatcher.IsWithinTolerance(diff) ? SystemColors.ControlText : Color.Red;
+                row.Cells[ColDiff].Style.ForeColor = EpisodeLinkMatcher.IsWithinTolerance(diff, IsFirstDiscPart(ep!, part)) ? SystemColors.ControlText : Color.Red;
             }
             else row.Cells[ColDiff].Value = "";
         }
@@ -685,6 +685,11 @@ namespace PrecureDataStars.BDAnalyzer
         private bool IsLastDiscPart(Episode ep, EpisodePart part)
             => _partsByEpisode.TryGetValue(ep.EpisodeId, out var parts)
                && parts.LastOrDefault(p => p.DiscLength is not null) is { } last && last.EpisodeSeq == part.EpisodeSeq;
+
+        /// <summary>そのパートが、話の円盤尺を持つパートのうち最初のものか（話の最初のチャプターの頭に 1 秒の黒が入っていることがある）。</summary>
+        private bool IsFirstDiscPart(Episode ep, EpisodePart part)
+            => _partsByEpisode.TryGetValue(ep.EpisodeId, out var parts)
+               && parts.FirstOrDefault(p => p.DiscLength is not null) is { } first && first.EpisodeSeq == part.EpisodeSeq;
 
         private Episode? EpisodeOf(string? epNoText)
             => int.TryParse(epNoText, out var n) ? _episodes.FirstOrDefault(e => e.SeriesEpNo == n) : null;

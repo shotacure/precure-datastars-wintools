@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **道具：円盤の解析ツールで、話の最初のチャプターの頭の黒 1 秒を見込んで照合するようにし、一覧の秒数を四捨五入にした**（`PrecureDataStars.BDAnalyzer`・`EpisodeLinkMatcher.EpisodeHeadBlackMs`・`IsWithinTolerance`・`EpisodeLinkDialog`・`MainForm`）：DB の円盤尺は収録された映像の尺で頭の黒を含まないので、話の最初のパートだけチャプターとの差を −1〜＋2 秒まで許す（当てる画面の差の赤字も同じ）。一覧の Seconds の列は切り上げをやめ、四捨五入（0.5 は切り上げ）で出す。
 - **道具：定時の本番デプロイの毎日の回を 6:00 にした**（`scripts/register-deploy-task.ps1` の `-PrepareAt` の既定値）：Amazon の画像の取り直しと下準備の回。水曜・土曜 8:30 のコラムの公開の回は変えない。
 - **道具：Amazon の画像の取り直しを、ASIN 10 件ずつのまとめ取りにした**（`PrecureDataStars.AmazonSync`・`FetchImageUrlsAsync`）：GetItems 1 回に 10 件まで載せ、商品・書籍ごとの判定はまとめて引いた結果の表で行う。まとめた要求が失敗したときはその 10 件を 1 件ずつ引き直す。全件の取り直しが約 15 分から 2 分弱になり、毎日の定時デプロイの待ちが縮んだ。
 - **サイト：深夜の回（開始が 5:00 より前）の日付と時刻を、前の日の放送として出すようにした**（`JpDateFormat.BroadcastDay`・`BroadcastDate`・`BroadcastDotDate`・`BroadcastClock`・`BroadcastDateTime`）：各話ページと OGP カードの放送日時は「2025年1月11日 26:00〜26:30」、本放送の流れの表の時刻は「26:00:00」から。エピソード一覧・作品の各話の表・担当の表・記録・初登場の注記・サブタイトルの「〜以来」・統計の基準点・クリエイターの初担当・記念日カレンダー（とホームの今日の記念日）も同じ放送日で出す。DB の `on_air_at` は実際の日時のまま持ち、構造化データの公開日・並び順・サブタイトルの解禁時刻は実際の日時で計算する。

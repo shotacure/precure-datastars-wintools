@@ -11,6 +11,7 @@ namespace PrecureDataStars.BDAnalyzer
     /// 突き合わせて、「このプレイリストは第 N 話、チャプター i は第 N 話のパート k」の候補を出す。
     /// 尺は DB の値を正とし、チャプターの尺（Blu-ray の生の値）は照合の手がかりとしてだけ使う。
     /// 話の最後のチャプター（ユニットの末尾）には 1 秒の余白が付いているので、話の最後のパートだけ円盤尺 + 1 秒を期待する。
+    /// 話の最初のチャプターの頭に 1 秒の黒が入っている話もあるので、話の最初のパートは 1 秒長いチャプターも許す。
     /// <list type="bullet">
     ///   <item><description>比べるのは、話のパートのうち円盤尺（disc_length）を持つものを episode_seq 順に並べたもの。</description></item>
     ///   <item><description>チャプター列の連続した部分列が、パート列と 1 対 1 で尺の差 <see cref="ToleranceMs"/> 以内（最後のパートは余白 1 秒を足して比べる）なら一致。
@@ -29,12 +30,22 @@ namespace PrecureDataStars.BDAnalyzer
         /// <summary>チャプターの尺と期待する尺（<see cref="ExpectedMs"/>）の差として許す幅（ミリ秒）。</summary>
         public const int ToleranceMs = 1000;
 
+        /// <summary>
+        /// 話の最初のチャプターの頭に入っていることのある黒（ミリ秒）。巻の最初の話などのアバンの頭に付く。DB の円盤尺は収録された映像の尺なので
+        /// この黒を含まず、照合では話の最初のパートだけ、この分だけ長いチャプターも許す。
+        /// </summary>
+        public const int EpisodeHeadBlackMs = 1000;
+
         /// <summary>パートに対して期待するチャプターの尺（ミリ秒）。話の最後のパートは末尾の余白 1 秒を足す。</summary>
         public static long ExpectedMs(EpisodePart part, bool isLastPartOfEpisode)
             => (part.DiscLength ?? 0) * 1000L + (isLastPartOfEpisode ? EpisodeTailMarginMs : 0);
 
-        /// <summary>チャプターの尺と期待する尺の差が許容の範囲か。</summary>
-        public static bool IsWithinTolerance(long diffMs) => Math.Abs(diffMs) <= ToleranceMs;
+        /// <summary>
+        /// チャプターの尺と期待する尺の差が許容の範囲か。話の最初のパート（<paramref name="isFirstPartOfEpisode"/>）は、
+        /// 頭の黒（<see cref="EpisodeHeadBlackMs"/>）の分だけ長い側にも許す。
+        /// </summary>
+        public static bool IsWithinTolerance(long diffMs, bool isFirstPartOfEpisode = false)
+            => diffMs >= -ToleranceMs && diffMs <= ToleranceMs + (isFirstPartOfEpisode ? EpisodeHeadBlackMs : 0);
 
         /// <summary>1 つのプレイリストの当て方の提案。</summary>
         public sealed class PlaylistProposal
@@ -167,7 +178,7 @@ namespace PrecureDataStars.BDAnalyzer
                 for (int k = 0; k < parts.Count && ok; k++)
                 {
                     long diff = (long)durations[offset + k] - ExpectedMs(parts[k], k == parts.Count - 1);
-                    if (!IsWithinTolerance(diff)) ok = false;
+                    if (!IsWithinTolerance(diff, k == 0)) ok = false;
                 }
                 if (ok) return offset;
             }

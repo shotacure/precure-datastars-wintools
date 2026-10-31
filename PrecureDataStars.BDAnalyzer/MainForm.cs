@@ -299,7 +299,7 @@ namespace PrecureDataStars.BDAnalyzer
                 var header = new ListViewItem($"[{t.VtsTag}]");
                 header.SubItems.Add(FormatTs(t.TotalDuration));
                 header.SubItems.Add(""); // 累積欄は空
-                header.SubItems.Add(Math.Ceiling(t.TotalDuration.TotalSeconds).ToString(CultureInfo.InvariantCulture));
+                header.SubItems.Add(Math.Round(t.TotalDuration.TotalSeconds, MidpointRounding.AwayFromZero).ToString(CultureInfo.InvariantCulture));
                 header.BackColor = System.Drawing.SystemColors.ControlLight;
                 header.Tag = new ListRowInfo { Kind = ListRowKind.Title, PlaylistTag = t.VtsTag };
                 // 総尺最大タイトル以外は未チェックで開始する
@@ -318,7 +318,7 @@ namespace PrecureDataStars.BDAnalyzer
                     var chap = new ListViewItem($"    {i + 1}"); // 2 段インデント
                     chap.SubItems.Add(FormatTs(dur));
                     chap.SubItems.Add(FormatTs(accumInTitle));
-                    chap.SubItems.Add(Math.Ceiling(dur.TotalSeconds).ToString(CultureInfo.InvariantCulture));
+                    chap.SubItems.Add(Math.Round(dur.TotalSeconds, MidpointRounding.AwayFromZero).ToString(CultureInfo.InvariantCulture));
                     chap.Tag = new ListRowInfo { Kind = ListRowKind.Chapter, PlaylistTag = t.VtsTag };
                     // 配下チャプターも親タイトルのチェック状態に揃える（連動ロジックと整合）
                     chap.Checked = isDefaultChecked;
@@ -428,7 +428,7 @@ namespace PrecureDataStars.BDAnalyzer
                 var lvi = new ListViewItem(row.label);
                 lvi.SubItems.Add(FormatTs(row.len));
                 lvi.SubItems.Add(FormatTs(row.accum));
-                lvi.SubItems.Add(Math.Ceiling(row.len.TotalSeconds).ToString(CultureInfo.InvariantCulture));
+                lvi.SubItems.Add(Math.Round(row.len.TotalSeconds, MidpointRounding.AwayFromZero).ToString(CultureInfo.InvariantCulture));
                 // 単一 VTS モードでもチェックボックスを統一的に有効化（既定チェック）
                 lvi.Tag = new ListRowInfo { Kind = ListRowKind.Chapter, PlaylistTag = Path.GetFileName(path) };
                 lvi.Checked = true;
@@ -598,7 +598,7 @@ namespace PrecureDataStars.BDAnalyzer
                 var header = new ListViewItem($"[{t.PlaylistFile}]");
                 header.SubItems.Add(FormatTs(t.TotalDuration));
                 header.SubItems.Add(""); // 累積欄は空
-                header.SubItems.Add(Math.Ceiling(t.TotalDuration.TotalSeconds).ToString(CultureInfo.InvariantCulture));
+                header.SubItems.Add(Math.Round(t.TotalDuration.TotalSeconds, MidpointRounding.AwayFromZero).ToString(CultureInfo.InvariantCulture));
                 header.BackColor = System.Drawing.SystemColors.ControlLight;
                 header.Tag = new ListRowInfo { Kind = ListRowKind.Title, PlaylistTag = t.PlaylistFile };
                 header.Checked = isDefaultChecked;
@@ -617,7 +617,7 @@ namespace PrecureDataStars.BDAnalyzer
                     var chap = new ListViewItem($"    {i + 1}"); // 2 段インデント
                     chap.SubItems.Add(FormatTs(dur));
                     chap.SubItems.Add(FormatTs(accumInTitle));
-                    chap.SubItems.Add(Math.Ceiling(dur.TotalSeconds).ToString(CultureInfo.InvariantCulture));
+                    chap.SubItems.Add(Math.Round(dur.TotalSeconds, MidpointRounding.AwayFromZero).ToString(CultureInfo.InvariantCulture));
                     // m2ts の切り出し用に、プレイリスト時間軸での開始時刻と尺、タイトル内のチャプター番号も持たせる
                     chap.Tag = new ListRowInfo
                     {

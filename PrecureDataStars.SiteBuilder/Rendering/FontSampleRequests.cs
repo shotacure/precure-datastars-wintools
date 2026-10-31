@@ -78,11 +78,25 @@ public static class FontSampleRequests
     };
 
     /// <summary>
+    /// 見本の文を替えるスピンオフ（作品のスラッグ → ルビ付きの文）。放送開始の年で引く <see cref="SubtitleSampleByYear"/> は本線の作品のもので、
+    /// 同じ年に始まったスピンオフには当てないので、スピンオフの見本の文はここに置く（キボウノチカラ〜オトナプリキュア'23〜は、本編の題が
+    /// 全話片仮名なので、見本も片仮名の「アバレルオトナ」。魔法つかいプリキュア！！〜MIRAI DAYS〜は、本編の振り仮名が「刻（とき）」だけなので、
+    /// 見本も「刻」だけに振り仮名を付けた「刻だって暴れたい」）。
+    /// </summary>
+    private static readonly Dictionary<string, string> SubtitleSampleBySeries = new(StringComparer.Ordinal)
+    {
+        ["otona"] = "アバレルオトナ",
+        ["maho2"] = "<ruby>刻<rt>とき</rt></ruby>だって暴れたい"
+    };
+
+    /// <summary>
     /// 作品のサブタイトルの見本の文（2 行の話が優勢な作品は 2 行。語り口の違う作品は 2 行目の結びを替え、本編に 2 行目の見本ほど
     /// 長い行の無い作品は短い文にする）。
     /// </summary>
     private static string SubtitleSampleHtml(Series series, BuildContext ctx) =>
-        SubtitleSampleByYear.TryGetValue(series.StartDate.Year, out var html) ? html
+        SubtitleSampleBySeries.TryGetValue(series.Slug, out var seriesHtml) ? seriesHtml
+        // 放送開始の年で引く見本の文は本線の作品のもの（同じ年に始まったスピンオフには当てない）
+        : !SeriesClassifier.IsSpinOff(series) && SubtitleSampleByYear.TryGetValue(series.StartDate.Year, out var html) ? html
         : !MostlyTwoLines(series, ctx) ? SubtitleRubyHtml
         : LongestLineLength(series, ctx) < SubtitleSecondLineLength ? SubtitleShortTwoLineRubyHtml
         : SubtitleTwoLineRubyHtml;
@@ -121,6 +135,26 @@ public static class FontSampleRequests
     /// <summary>ED の役職名と人名（東映動画の黎明期を支えた原画家の方々のお名前をお借りしている。姓と名の間は全角の空白）。</summary>
     private const string EdRole = "原画";
     private static readonly string[] EdNames = { "大工原　章", "森　康二", "大塚康生", "中村和子", "楠部大吉郎", "奥山玲子" };
+
+    /// <summary>
+    /// ED の見本を役職名のまとまりの並びで描く作品（作品のスラッグ → 上から順のまとまり）。放送の原画の欄が、メインアニメーターの下に
+    /// 原画が多段で続く組みの作品は、見本も同じ組みにする（キボウノチカラ〜オトナプリキュア'23〜）。原画の人数が多く列を組む作品は、
+    /// 見本も同じ 15 人を「原画」1 つに並べる（魔法つかいプリキュア！！〜MIRAI DAYS〜）。ここに無い作品は「原画」と <see cref="EdNames"/> の 1 つ。
+    /// </summary>
+    private static readonly Dictionary<string, (string Role, string[] Names)[]> EdBlocksBySeries = new(StringComparer.Ordinal)
+    {
+        ["otona"] =
+        [
+            ("メインアニメーター", ["大工原　章", "森　康二"]),
+            ("原画", ["大塚康生", "坂本雄作", "喜多真佐武", "紺野修司", "中村和子", "寺千賀雄", "楠部大吉郎", "長沢寿美子",
+                      "藤井　武", "加藤洋子", "松隅玉江", "赤坂　進", "奥山玲子"])
+        ],
+        ["maho2"] =
+        [
+            ("原画", ["大工原　章", "森　康二", "大塚康生", "坂本雄作", "喜多真佐武", "紺野修司", "中村和子", "寺千賀雄", "楠部大吉郎",
+                      "長沢寿美子", "藤井　武", "加藤洋子", "松隅玉江", "赤坂　進", "奥山玲子"])
+        ]
+    };
 
     /// <summary>
     /// 場面の見本の文の差し替え（体裁の測定用）。環境変数 <c>PRECURE_FONT_SCENE_TEXTS</c> に JSON のファイルを指すと、
@@ -166,12 +200,14 @@ public static class FontSampleRequests
     /// <summary>OP の場面の画像の材料（クレジットか歌詞の書体があれば）。</summary>
     public static SubtitleTelopRequest? OpScene(Series series, BuildContext ctx) =>
         Scene(series, ctx, Usage(ctx, series.SeriesId, FontUsageKinds.OpCredit, 1), Usage(ctx, series.SeriesId, FontUsageKinds.OpLyrics, 1),
-            Usage(ctx, series.SeriesId, FontUsageKinds.OpLyricsRuby, 1), OpRole, OpNames, opening: true, "op");
+            Usage(ctx, series.SeriesId, FontUsageKinds.OpLyricsRuby, 1), [(OpRole, OpNames)], opening: true, "op");
 
     /// <summary>ED の場面の画像の材料（時期ごと）。</summary>
     public static SubtitleTelopRequest? EdScene(Series series, int period, BuildContext ctx) =>
         Scene(series, ctx, Usage(ctx, series.SeriesId, FontUsageKinds.EdCredit, period), Usage(ctx, series.SeriesId, FontUsageKinds.EdLyrics, period),
-            Usage(ctx, series.SeriesId, FontUsageKinds.EdLyricsRuby, period), EdRole, EdNames, opening: false, $"ed{period}");
+            Usage(ctx, series.SeriesId, FontUsageKinds.EdLyricsRuby, period),
+            EdBlocksBySeries.TryGetValue(series.Slug, out var blocks) ? blocks.Select(b => (b.Role, (IReadOnlyList<string>)b.Names)).ToList() : [(EdRole, EdNames)],
+            opening: false, $"ed{period}");
 
     /// <summary>サブタイトルの場面の画像の材料。サブタイトルの位置はまだ測っていないので、画面の中央に置く。</summary>
     public static SubtitleTelopRequest? SubtitleScene(Series series, BuildContext ctx)
@@ -238,14 +274,21 @@ public static class FontSampleRequests
     /// <summary>
     /// クレジットと歌詞を置いた場面の材料。クレジットは人名の 1 行目の左端・ベースラインを組み方の画面の位置に置き、役職名は
     /// 組み方の役職名の値（人名に対する位置・字取り）で、人名は字取りの幅に均等に割り付けて行送りで並べる。
+    /// 役職名のまとまりが複数あれば上から順に、前のまとまりの最後の行から行送りとまとまりの間の空き（<c>name.blockGap</c>）だけ下げて並べる。
     /// 歌詞は行の中心・ベースラインを組み方の画面の位置に置く。
     /// </summary>
     private static SubtitleTelopRequest? Scene(Series series, BuildContext ctx, SeriesFontUsage? credit, SeriesFontUsage? lyrics,
-        SeriesFontUsage? ruby, string role, IReadOnlyList<string> names, bool opening, string fileKey)
+        SeriesFontUsage? ruby, IReadOnlyList<(string Role, IReadOnlyList<string> Names)> blocks, bool opening, string fileKey)
     {
         TextOverrides.TryGetValue($"{series.Slug}/{fileKey}", out var textOverride);
-        if (textOverride?.Role is { Length: > 0 } overrideRole) role = overrideRole;
-        if (textOverride?.Names is { Count: > 0 } overrideNames) names = overrideNames;
+        // 測定用の文の差し替えは、最初のまとまりの役職名・人名に当てる
+        if (textOverride is not null && blocks.Count > 0)
+        {
+            var (firstRole, firstNames) = blocks[0];
+            if (textOverride.Role is { Length: > 0 } overrideRole) firstRole = overrideRole;
+            if (textOverride.Names is { Count: > 0 } overrideNames) firstNames = overrideNames;
+            blocks = [(firstRole, firstNames), .. blocks.Skip(1)];
+        }
         var pieces = new List<FontScenePiece>();
         var creditLayout = credit is null ? null : TelopLayout.Parse(credit.Layout);
         var lyricsLayout = lyrics is null ? null : TelopLayout.Parse(lyrics.Layout);
@@ -258,50 +301,62 @@ public static class FontSampleRequests
             var screen = creditLayout?.Screen;
             float x = (screen?.X ?? (opening ? 0.62f : 0.28f)) * width;
             float y = (screen?.Y ?? (opening ? 0.40f : 0.22f)) * FontScene.Height;
-            TelopRoleLayout? rl = null;
-            creditLayout?.Roles?.TryGetValue(role, out rl);
-            float dx = rl?.Dx ?? (opening ? 0.75f : 3.3f);
-            float offset = rl?.BaselineOffset ?? (opening ? 1.2f : 0.08f);
-            float roleSpan = rl?.Span ?? 3f;
-
-            var roleProfile = WithDecoration(SubtitleTelopProfile.Default, credit, nameSize / roleSize) with
-            {
-                Solid = true,
-                LetterSpacingEm = Justify(role, roleSpan)
-            };
-            // 役職名だけ字の色が違うクレジットは、塗りを役職名の色にする（字ごとの色・塗りのグラデーションは人名の塗りなので外す）
-            if (roleProfile.Decoration.RoleFillChars is { Count: > 0 } roleChars)
-                roleProfile = roleProfile with
-                {
-                    Decoration = roleProfile.Decoration with { Fill = roleChars[0], FillGradient = null, FillChars = roleChars }
-                };
-            else if (roleProfile.Decoration.RoleFill is { } roleFill)
-                roleProfile = roleProfile with
-                {
-                    Decoration = roleProfile.Decoration with { Fill = roleFill, FillGradient = null, FillChars = null }
-                };
-            pieces.Add(new FontScenePiece(HtmlUtil.Escape(role), creditFont, roleProfile, roleSize, x - dx * nameSize, y - offset * nameSize, CenterX: false));
-
             float pitch = textOverride?.NamePitch ?? creditLayout?.Name?.Pitch ?? 1.3f;
+            float blockGap = creditLayout?.Name?.BlockGap ?? 0f;
             float? nameSpan = creditLayout?.Name?.Span;
             // 2 列以上の組みは、行ごとに左から右へ並べ、右端まで埋めたら次の行の左へ移る
             int columns = Math.Max(1, creditLayout?.Name?.Columns ?? 1);
             float columnPitch = creditLayout?.Name?.ColumnPitch ?? 6f;
-            for (int i = 0; i < names.Count; i++)
+            // 役職名と人名は 1 つのまとまり（環状のグラデーションの軸を決める範囲）
+            const string creditGroup = "credit";
+
+            foreach (var (role, names) in blocks)
             {
-                int col = i % columns, row = i / columns;
-                // 名前の中の全角の空白も 1 字に数えて字取りの幅に均等に割り付ける（空白の空きは 1 字＋前後の字間）。
-                // 列ごとの字取りがあればその列の幅に割り付ける
-                float? colSpan = creditLayout?.Name?.ColumnSpans is { } spans && col < spans.Count ? spans[col] : nameSpan;
-                float ls = colSpan is float s ? Justify(names[i], s) : 0f;
-                var nameProfile = WithDecoration(SubtitleTelopProfile.Default, credit, 1f) with
+                TelopRoleLayout? rl = null;
+                creditLayout?.Roles?.TryGetValue(role, out rl);
+                float dx = rl?.Dx ?? (opening ? 0.75f : 3.3f);
+                float offset = rl?.BaselineOffset ?? (opening ? 1.2f : 0.08f);
+                float roleSpan = rl?.Span ?? 3f;
+
+                var roleProfile = WithDecoration(SubtitleTelopProfile.Default, credit, nameSize / roleSize) with
                 {
-                    Solid = creditLayout?.Name?.Solid ?? true,
-                    LetterSpacingEm = ls,
-                    SpaceEm = 1f + 2f * ls
+                    Solid = true,
+                    LetterSpacingEm = Justify(role, roleSpan),
+                    // 役職名の欄の幅を超える役職名は、その幅まで長体で詰める
+                    LineMaxWidth = rl?.MaxWidth is float roleMax ? roleMax * nameSize : null
                 };
-                pieces.Add(new FontScenePiece(HtmlUtil.Escape(names[i]), creditFont, nameProfile, nameSize,
-                    x + col * columnPitch * nameSize, y + row * pitch * nameSize, CenterX: false));
+                // 役職名だけ字の色が違うクレジットは、塗りを役職名の色にする（字ごとの色・塗りのグラデーションは人名の塗りなので外す）
+                if (roleProfile.Decoration.RoleFillChars is { Count: > 0 } roleChars)
+                    roleProfile = roleProfile with
+                    {
+                        Decoration = roleProfile.Decoration with { Fill = roleChars[0], FillGradient = null, FillChars = roleChars }
+                    };
+                else if (roleProfile.Decoration.RoleFill is { } roleFill)
+                    roleProfile = roleProfile with
+                    {
+                        Decoration = roleProfile.Decoration with { Fill = roleFill, FillGradient = null, FillChars = null }
+                    };
+                pieces.Add(new FontScenePiece(HtmlUtil.Escape(role), creditFont, roleProfile, roleSize, x - dx * nameSize, y - offset * nameSize, CenterX: false, creditGroup));
+
+                for (int i = 0; i < names.Count; i++)
+                {
+                    int col = i % columns, row = i / columns;
+                    // 名前の中の全角の空白も 1 字に数えて字取りの幅に均等に割り付ける（空白の空きは 1 字＋前後の字間）。
+                    // 列ごとの字取りがあればその列の幅に割り付ける
+                    float? colSpan = creditLayout?.Name?.ColumnSpans is { } spans && col < spans.Count ? spans[col] : nameSpan;
+                    float ls = colSpan is float s ? Justify(names[i], s) : 0f;
+                    var nameProfile = WithDecoration(SubtitleTelopProfile.Default, credit, 1f) with
+                    {
+                        Solid = creditLayout?.Name?.Solid ?? true,
+                        LetterSpacingEm = ls,
+                        SpaceEm = 1f + 2f * ls
+                    };
+                    pieces.Add(new FontScenePiece(HtmlUtil.Escape(names[i]), creditFont, nameProfile, nameSize,
+                        x + col * columnPitch * nameSize, y + row * pitch * nameSize, CenterX: false, creditGroup));
+                }
+                // 次のまとまりは、このまとまりの最後の行から行送りとまとまりの間の空きだけ下げる
+                int rows = Math.Max(1, (names.Count + columns - 1) / columns);
+                y += ((rows - 1) * pitch + pitch + blockGap) * nameSize;
             }
         }
 

@@ -120,6 +120,12 @@ public sealed record TelopRoleLayout
 
     /// <summary>役職名のベースラインの、人名の 1 行目のベースラインからの高さ（上を正）。</summary>
     public float? BaselineOffset { get; init; }
+
+    /// <summary>
+    /// 役職名の幅の上限（人名の字の大きさに対する比）。役職名の欄の幅が決まっていて、長い役職名を長体で詰めて収める組みで持つ
+    /// （「メインアニメーター」）。超える役職名はこの幅まで横だけ縮める。null なら縮めない。
+    /// </summary>
+    public float? MaxWidth { get; init; }
 }
 
 /// <summary>人名の組み。値は人名の字の大きさに対する比。</summary>
@@ -150,6 +156,12 @@ public sealed record TelopNameLayout
     /// （かなを詰めて組む作品）。
     /// </summary>
     public bool? Solid { get; init; }
+
+    /// <summary>
+    /// 役職名のまとまりが縦に続くとき（「メインアニメーター」の下に「原画」など）の、まとまりの間に足す空き。前のまとまりの最後の行の
+    /// ベースラインから、次のまとまりの 1 行目のベースラインまでを、行送り（<see cref="Pitch"/>）にこの空きを足した長さにする。null なら 0。
+    /// </summary>
+    public float? BlockGap { get; init; }
 }
 
 /// <summary>声の出演の組み。値は声優名の字の大きさに対する比。</summary>

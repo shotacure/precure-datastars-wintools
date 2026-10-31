@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  scheduled-deploy.ps1（precure.tv の定時の本番デプロイ）を毎日 8:00 と毎週水曜・土曜の 8:30 に動かすタスクをタスクスケジューラに登録（または解除）する。
+  scheduled-deploy.ps1（precure.tv の定時の本番デプロイ）を毎日 6:00 と毎週水曜・土曜の 8:30 に動かすタスクをタスクスケジューラに登録（または解除）する。
 
 .DESCRIPTION
   現在のユーザーの「ログオン中だけ実行」のタスクとして登録する（管理者権限もパスワードの保存も要らない）。
@@ -9,13 +9,13 @@
   画面には出さず（-WindowStyle Hidden）、結果は %LOCALAPPDATA%\precure-datastars\scheduled-deploy.log に残る。
   同じ名前のタスクがあれば置き換える。
 
-  8:00 の回は毎日動く。Amazon の画像 URL を取り直して公開し直し（Creators API 使用要件で、画像のリンクの保存は
+  6:00 の回は毎日動く。Amazon の画像 URL を取り直して公開し直し（Creators API 使用要件で、画像のリンクの保存は
   最長 24 時間）、その時点の作業フォルダのコードと DB の内容も公開する。
-  水曜・土曜の 8:00 の回はコラムの公開の下準備も兼ね、前回のデプロイからのコードの変更・DB の更新をあらかじめ本番に流しておく
+  水曜・土曜の 6:00 の回はコラムの公開の下準備も兼ね、前回のデプロイからのコードの変更・DB の更新をあらかじめ本番に流しておく
   （コードを変えた後の最初のビルドは OGP カードを描き直すので数分かかる）。公開日時が 8:30 のコラムは
   まだ出ない。8:30 の回はその作り置きを使うので、差分がほぼコラムだけになり短時間で終わる。
-  8:00 の回が安全ゲートなどで止まったときは通知が出るので、8:30 までに直すか判断できる。
-  8:00 の回が 8:30 を過ぎても動いているときは、8:30 の回はそれが終わるのを待ってから動く（MultipleInstances Queue）。
+  6:00 の回が安全ゲートなどで止まったときは通知が出るので、8:30 までに直すか判断できる。
+  6:00 の回が 8:30 を過ぎても動いているときは、8:30 の回はそれが終わるのを待ってから動く（MultipleInstances Queue）。
 
 .PARAMETER TaskName
   タスク名。既定「precure-datastars scheduled deploy」。
@@ -27,7 +27,7 @@
   コラムを公開する回の実行時刻。既定 08:30（コラムの公開時刻）。
 
 .PARAMETER PrepareAt
-  毎日動く下準備の回の実行時刻。既定 08:00。空文字にすると下準備の回を登録しない
+  毎日動く下準備の回の実行時刻。既定 06:00。空文字にすると下準備の回を登録しない
   （その場合 Amazon の画像は 24 時間以内に取り直されなくなる）。
 
 .PARAMETER Unregister
@@ -46,7 +46,7 @@ param(
     [string]$TaskName = 'precure-datastars scheduled deploy',
     [System.DayOfWeek[]]$DaysOfWeek = @([System.DayOfWeek]::Wednesday, [System.DayOfWeek]::Saturday),
     [string]$At = '08:30',
-    [string]$PrepareAt = '08:00',
+    [string]$PrepareAt = '06:00',
     [switch]$Unregister,
     [switch]$RunNow
 )

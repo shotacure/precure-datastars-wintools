@@ -74,10 +74,34 @@ $endings = @{}
 $problems = New-Object System.Collections.Generic.List[string]
 
 # 冒頭文を持つページ（一覧・入口・統計）だけを読む。個別ページの文は型から作るので、結びの重なりは数えない。
-$leadFiles = Get-ChildItem -Path $SiteDir -Recurse -Filter 'index.html' -File |
-    Where-Object { $_.FullName -notmatch '[\\/](og|assets)[\\/]' } |
-    Select-String -Pattern '<p class="lead">' -List |
-    Select-Object -ExpandProperty Path
+# 出力の HTML・JS・CSS を 1 度だけ列挙し、論理コア数に分けて並列に読む。1 つのファイルから、冒頭文があるか
+# （一覧・入口の index.html のうち og・assets の下を除く）と、内部用語の最初の 1 つを拾う。
+$scanFiles = [System.IO.Directory]::EnumerateFiles($SiteDir, '*', [System.IO.SearchOption]::AllDirectories) |
+    Where-Object { $_ -match '\.(html|js|css)$' -and $_ -notmatch '[\\/]og-gallery[\\/]' }
+$chunkCount = [Environment]::ProcessorCount
+$chunks = [System.Collections.Generic.List[string][]]::new($chunkCount)
+for ($k = 0; $k -lt $chunkCount; $k++) { $chunks[$k] = [System.Collections.Generic.List[string]]::new() }
+$n = 0
+foreach ($f in $scanFiles) { $chunks[$n % $chunkCount].Add($f); $n++ }
+$scanned = $chunks | ForEach-Object -ThrottleLimit $chunkCount -Parallel {
+    $terms = $using:internalTerms
+    foreach ($f in $_) {
+        $text = [System.IO.File]::ReadAllText($f)
+        $lead = $f.EndsWith('index.html') -and $f -notmatch '[\\/](og|assets)[\\/]' -and $text.Contains('<p class="lead">')
+        # 内部用語は正規表現でなく序数の文字列検索で探す（400MB を超える出力を正規表現で読むと 10 秒近くかかる）。
+        $term = $null
+        $at = [int]::MaxValue
+        foreach ($t in $terms) {
+            $p = $text.IndexOf($t, [System.StringComparison]::Ordinal)
+            if ($p -ge 0 -and $p -lt $at) { $at = $p; $term = $t }
+        }
+        if ($lead -or $term) {
+            [pscustomobject]@{ Path = $f; Lead = $lead; Term = $term }
+        }
+    }
+} | Sort-Object Path
+
+$leadFiles = @($scanned | Where-Object Lead | Select-Object -ExpandProperty Path)
 
 foreach ($file in $leadFiles) {
     $html = Get-Content -Raw -Encoding UTF8 $file
@@ -121,12 +145,9 @@ foreach ($r in $repeats) {
     $problems.Add("同じ結び「…$($r.Key)」が $($r.Value.Count) 文：$(($r.Value.Values | Select-Object -First 6) -join '、')")
 }
 
-# 内部用語（HTML・JS・CSS 全部）
-$internalHits = Get-ChildItem -Path $SiteDir -Recurse -File -Include '*.html', '*.js', '*.css' |
-    Where-Object { $_.FullName -notmatch '[\\/]og-gallery[\\/]' } |
-    Select-String -Pattern ($internalTerms -join '|') -List
-foreach ($h in $internalHits) {
-    $problems.Add("内部用語「$($h.Matches[0].Value)」  /$(Get-PagePath $h.Path)")
+# 内部用語（HTML・JS・CSS 全部。上の並列の読み込みで拾ったもの）
+foreach ($h in ($scanned | Where-Object Term)) {
+    $problems.Add("内部用語「$($h.Term)」  /$(Get-PagePath $h.Path)")
 }
 
 Write-Host "  冒頭文のあるページ: $($leadFiles.Count)"

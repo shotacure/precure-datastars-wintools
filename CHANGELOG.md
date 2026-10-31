@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **道具：サイトの文章の点検 `scripts/check-site-copy.ps1` を速くした**：出力の HTML・JS・CSS を 1 度だけ列挙して論理コア数に分けて並列に読み、内部用語は序数の文字列検索で探す。約 12 秒から 4 秒ほどになった。
 - **サイト：OGP カードの描画を、ページの生成の流れから切り離して、全工程のカードを論理コア数まで同時に描くようにした**（`PageRenderer.RenderOgCard`・`DrawOgCardAsync`・`WaitForOgCardsAsync`、工程 `og_cards`）：これまでは各話・人物・商品・歌の工程だけがページごとに並列で、ほかの工程は 1 枚ずつ描いていた。描くカードは URL だけを先に返して描く仕事に回し、同じ作り置きの鍵のカードは 1 度だけ描く。全ページの生成の後で全部の描き上がりを待ち、出力の走査と掃除はその後に行う。出力は変わらない。
 - **道具：配信音源の再確認を速くした**（`YouTubeDataApiClient.GetVideoDetailsAsync`・`TracksRepository.UpdateArtTrackAssignmentsAsync`）：`videos.list` の 50 件ずつの要求を 8 本まで同時に送り、確認の書き込みを 1 つのトランザクションで確定する。全件の確認が約 30 秒から 5 秒ほどになった。使うユニット数は変わらない。
 - **道具：回帰確認 `scripts/verify-site-output.ps1` に `-SiteBuilderArgs` を足した**：SiteBuilder に足して渡す引数。画像の描き方の経路を変えたときは `--refresh-og` を渡し、作り置きを写すのでなく描いた画像どうしを比べる。

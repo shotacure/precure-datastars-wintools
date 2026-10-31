@@ -72,6 +72,8 @@
     同人誌やイベント出演を含む創作活動の全体は、
     「<a href="https://showtime.precure.tv/" target="_blank" rel="noopener noreferrer">SHOWTIME ―ショウタイム―</a>」にまとめています。
   </p>
+  {{## 広告収益の使い道。precure.news の about と同じ文にそろえる。 ##}}
+  <p>広告の収益は、サーバーやドメインなどのインフラと開発環境の維持に充てます。</p>
 </section>
 
 {{## サイトの方針。実際の運用（一次資料・画面どおりのクレジット・公開情報だけ・あらすじは扱わない・

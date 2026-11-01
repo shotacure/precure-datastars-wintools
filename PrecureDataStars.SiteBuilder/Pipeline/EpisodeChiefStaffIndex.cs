@@ -5,9 +5,9 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 
 /// <summary>
 /// 各話のチーフ（脚本・絵コンテ・演出・作画監督・美術。区分は <see cref="EpisodeChiefRoles"/>）の顔ぶれを
-/// TV 系の全話分まとめた索引と、「この組み合わせは通算何回目か」の数え上げ。
+/// TV 系の全話分まとめた索引と、「この組み合わせは通算何回目か」「この方がこの役職を担当したのは何回目か」の数え上げ。
 /// <para>
-/// エピソード詳細のスタッフ欄（「絵コンテ×演出 通算 3 回目」と、その組み合わせが現れた全話の玉の列）と、
+/// エピソード詳細のスタッフ欄（「演出×作画監督 通算 3 回目」「演出 16 回目」と、それが現れた全話の玉の列）と、
 /// 歴代記録ページ（最も多く組んだ演出と作画監督）が同じ数え方を使う。
 /// 数えるのは本編クレジット（<see cref="BuildContext.CreditsByEpisode"/>）に PERSON / TEXT エントリとして
 /// 現れた顔ぶれで、本放送限定（<see cref="CreditBlockEntry.IsBroadcastOnly"/>）のエントリは
@@ -40,7 +40,7 @@ public sealed class EpisodeChiefStaffIndex
     /// <summary>数える組み合わせの一覧（表示順）。</summary>
     public static IReadOnlyList<ChiefCombo> Combos { get; } = new[] { StoryboardAndDirector, DirectorAndAnimationDirector, ScreenplayDirectorAnimationDirector };
 
-    /// <summary>エピソード ID → 区分（1〜5）→ 顔ぶれキーの昇順リスト。区分にエントリが無ければキー自体を持たない。</summary>
+    /// <summary>エピソード ID → 区分（1〜5）→ 顔ぶれキーのリスト（クレジットに現れた順・重複なし）。区分にエントリが無ければキー自体を持たない。</summary>
     private readonly IReadOnlyDictionary<int, IReadOnlyDictionary<int, IReadOnlyList<string>>> _chiefsByEpisode;
 
     /// <summary>組み合わせコード → 顔ぶれ署名 → その顔ぶれで作られた話の ID（放送順）。</summary>
@@ -49,6 +49,12 @@ public sealed class EpisodeChiefStaffIndex
     /// <summary>組み合わせコード → 顔ぶれ署名 → その顔ぶれが初めて現れた順（0 始まり。放送順で早いほど小さい）。</summary>
     private readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>> _firstAppearance;
 
+    /// <summary>(区分, 顔ぶれキー) → その方がその役職を担当した話の ID（放送順）。</summary>
+    private readonly IReadOnlyDictionary<(int ChiefRole, string Key), IReadOnlyList<int>> _roleRuns;
+
+    /// <summary>エピソード ID → 本線の TV の全話（クレジットの有無を問わない）を放送順に並べたときの位置（0 始まり）。連続担当の判定に使う。</summary>
+    private readonly IReadOnlyDictionary<int, int> _broadcastPosition;
+
     /// <summary>顔ぶれキー → 表示用（名前とリンク先）。</summary>
     private readonly IReadOnlyDictionary<string, ChiefPerson> _people;
 
@@ -56,11 +62,15 @@ public sealed class EpisodeChiefStaffIndex
         IReadOnlyDictionary<int, IReadOnlyDictionary<int, IReadOnlyList<string>>> chiefsByEpisode,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<int>>> occurrences,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>> firstAppearance,
+        IReadOnlyDictionary<(int ChiefRole, string Key), IReadOnlyList<int>> roleRuns,
+        IReadOnlyDictionary<int, int> broadcastPosition,
         IReadOnlyDictionary<string, ChiefPerson> people)
     {
         _chiefsByEpisode = chiefsByEpisode;
         _occurrences = occurrences;
         _firstAppearance = firstAppearance;
+        _roleRuns = roleRuns;
+        _broadcastPosition = broadcastPosition;
         _people = people;
     }
 
@@ -69,6 +79,8 @@ public sealed class EpisodeChiefStaffIndex
         new Dictionary<int, IReadOnlyDictionary<int, IReadOnlyList<string>>>(),
         new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<int>>>(),
         new Dictionary<string, IReadOnlyDictionary<string, int>>(),
+        new Dictionary<(int ChiefRole, string Key), IReadOnlyList<int>>(),
+        new Dictionary<int, int>(),
         new Dictionary<string, ChiefPerson>());
 
     /// <summary>
@@ -100,7 +112,8 @@ public sealed class EpisodeChiefStaffIndex
         foreach (var (_, ep) in episodes)
         {
             if (!ctx.CreditsByEpisode.TryGetValue(ep.EpisodeId, out var credits)) continue;
-            var byRole = new Dictionary<int, SortedSet<string>>();
+            // 区分ごとの顔ぶれはクレジットに現れた順で持つ（役職ごとのカードの並び）。組み合わせの署名は Signature で並べ替えて作る。
+            var byRole = new Dictionary<int, List<string>>();
 
             foreach (var credit in credits)
             {
@@ -123,12 +136,12 @@ public sealed class EpisodeChiefStaffIndex
                         var person = ResolvePerson(ctx, entry);
                         if (person is null) continue;
                         people.TryAdd(person.Key, person);
-                        if (!byRole.TryGetValue(chiefNo, out var set))
+                        if (!byRole.TryGetValue(chiefNo, out var keys))
                         {
-                            set = new SortedSet<string>(StringComparer.Ordinal);
-                            byRole[chiefNo] = set;
+                            keys = new List<string>();
+                            byRole[chiefNo] = keys;
                         }
-                        set.Add(person.Key);
+                        if (!keys.Contains(person.Key, StringComparer.Ordinal)) keys.Add(person.Key);
                     }
                 }
             }
@@ -136,7 +149,26 @@ public sealed class EpisodeChiefStaffIndex
             if (byRole.Count == 0) continue;
             chiefsByEpisode[ep.EpisodeId] = byRole.ToDictionary(
                 kv => kv.Key,
-                kv => (IReadOnlyList<string>)kv.Value.ToList());
+                kv => (IReadOnlyList<string>)kv.Value);
+        }
+
+        // 区分と人の組ごとに、その方がその役職を担当した話を放送順に並べる。
+        var roleRuns = new Dictionary<(int ChiefRole, string Key), List<int>>();
+        foreach (var (_, ep) in episodes)
+        {
+            if (!chiefsByEpisode.TryGetValue(ep.EpisodeId, out var chiefs)) continue;
+            foreach (var (chiefRole, keys) in chiefs)
+            {
+                foreach (string key in keys)
+                {
+                    if (!roleRuns.TryGetValue((chiefRole, key), out var list))
+                    {
+                        list = new List<int>();
+                        roleRuns[(chiefRole, key)] = list;
+                    }
+                    list.Add(ep.EpisodeId);
+                }
+            }
         }
 
         // 組み合わせごとに、顔ぶれ署名 → 放送順の話 ID 列と、署名が初めて現れた順を作る。
@@ -163,7 +195,61 @@ public sealed class EpisodeChiefStaffIndex
             firstAppearance[combo.Code] = firstSeen;
         }
 
-        return new EpisodeChiefStaffIndex(chiefsByEpisode, occurrences, firstAppearance, people);
+        var broadcastPosition = new Dictionary<int, int>();
+        for (int i = 0; i < episodes.Count; i++) broadcastPosition[episodes[i].Episode.EpisodeId] = i;
+
+        return new EpisodeChiefStaffIndex(
+            chiefsByEpisode, occurrences, firstAppearance,
+            roleRuns.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<int>)kv.Value),
+            broadcastPosition,
+            people);
+    }
+
+    /// <summary>
+    /// 指定の話で、チーフの役職ごと・人ごとの通算情報（その方がその役職を担当したのは何回目か）。
+    /// 並びは区分の順（脚本 → 絵コンテ → 演出 → 作画監督 → 美術）、同じ区分の中はクレジットに現れた順。
+    /// 絵コンテと演出を同じ方が担当した回は、区分ごとに 1 件ずつ返す。
+    /// </summary>
+    public IReadOnlyList<ChiefRoleOccurrence> RoleOccurrences(int episodeId)
+    {
+        if (!_chiefsByEpisode.TryGetValue(episodeId, out var chiefs)) return Array.Empty<ChiefRoleOccurrence>();
+        var result = new List<ChiefRoleOccurrence>();
+        foreach (var (chiefRole, keys) in chiefs.OrderBy(kv => kv.Key))
+        {
+            foreach (string key in keys)
+            {
+                if (!_roleRuns.TryGetValue((chiefRole, key), out var list)) continue;
+                int index = -1;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    if (list[i] == episodeId) { index = i; break; }
+                }
+                if (index < 0) continue;
+                var person = _people.TryGetValue(key, out var p) ? p : new ChiefPerson(key, key, "");
+
+                // 連続担当：放送順で直前の話もこの方がこの役職なら続けてさかのぼる（休止をはさんでも話の並びで数える）。
+                int streak = 1;
+                for (int i = index; i > 0; i--)
+                {
+                    if (!_broadcastPosition.TryGetValue(list[i], out int pos)
+                        || !_broadcastPosition.TryGetValue(list[i - 1], out int prevPos)
+                        || prevPos != pos - 1) break;
+                    streak++;
+                }
+
+                result.Add(new ChiefRoleOccurrence(
+                    ChiefRole: chiefRole,
+                    RoleLabel: EpisodeChiefRoles.Label(chiefRole),
+                    Person: person,
+                    Ordinal: index + 1,
+                    Total: list.Count,
+                    PreviousEpisodeId: index > 0 ? list[index - 1] : null,
+                    NextEpisodeId: index + 1 < list.Count ? list[index + 1] : null,
+                    EpisodeIds: list,
+                    Streak: streak));
+            }
+        }
+        return result;
     }
 
     /// <summary>
@@ -249,7 +335,7 @@ public sealed class EpisodeChiefStaffIndex
         for (int i = 0; i < combo.ChiefRoles.Count; i++)
         {
             if (!chiefs.TryGetValue(combo.ChiefRoles[i], out var keys) || keys.Count == 0) return null;
-            parts[i] = string.Join("+", keys);
+            parts[i] = string.Join("+", keys.OrderBy(k => k, StringComparer.Ordinal));
         }
         return string.Join("|", parts);
     }
@@ -298,6 +384,20 @@ public sealed record ChiefCombo(string Code, string Label, IReadOnlyList<int> Ch
 public sealed record ChiefComboOccurrence(
     int Ordinal, int Total, int FirstEpisodeId, int? PreviousEpisodeId, int? NextEpisodeId,
     IReadOnlyList<int> EpisodeIds, IReadOnlyList<ChiefComboMember> Members);
+
+/// <summary>ある話での、チーフの役職 1 つ・1 人分の通算情報（その方がその役職を担当したのは何回目か）。</summary>
+/// <param name="ChiefRole">区分（<see cref="EpisodeChiefRoles"/>）。</param>
+/// <param name="RoleLabel">区分の表示名。</param>
+/// <param name="Person">担当した方。</param>
+/// <param name="Ordinal">この話が通算何回目か（1 始まり）。</param>
+/// <param name="Total">収録済みの範囲での担当回数。</param>
+/// <param name="PreviousEpisodeId">前回の話（初担当なら null）。</param>
+/// <param name="NextEpisodeId">次回の話（最新なら null）。</param>
+/// <param name="EpisodeIds">その方がその役職を担当した話の ID（放送順。収録済みの範囲の全件）。</param>
+/// <param name="Streak">この話で終わる連続担当の話数（本線の TV の放送順で直前の話も担当していれば 2 以上、続いていなければ 1）。</param>
+public sealed record ChiefRoleOccurrence(
+    int ChiefRole, string RoleLabel, ChiefPerson Person, int Ordinal, int Total,
+    int? PreviousEpisodeId, int? NextEpisodeId, IReadOnlyList<int> EpisodeIds, int Streak);
 
 /// <summary>組み合わせの登場回数ランキングの 1 行。</summary>
 public sealed record ChiefComboRanking(int Rank, int Count, IReadOnlyList<ChiefComboMember> Members, IReadOnlyList<int> EpisodeIds);

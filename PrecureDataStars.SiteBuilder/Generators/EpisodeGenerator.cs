@@ -512,6 +512,13 @@ public sealed class EpisodeGenerator
 
         // チーフの組み合わせの通算回数（絵コンテと演出 / 演出と作画監督 / 脚本・演出・作画監督）。スタッフ行の下に開閉の枠で添える。
         var staffCombos = BuildStaffCombos(series, ep);
+        // 開閉の枠の中のカードは、役職ごと・人ごとのカード（何回目・前の回からどれくらいぶり）を先に、組み合わせのカードを後に並べる。
+        var staffRoleCards = BuildStaffRoleCards(series, ep);
+        // 数え方の断り。トップのデータ充足率と同じく「『作品名』第N話まで」で、クレジットのある最新の TV の話を基準にする。
+        string staffComboNote = _ctx.CreditCoverageEpisode is { } coverage
+            ? $"（『{coverage.Series.Title}』第{coverage.Episode.SeriesEpNo}話までのデータで数えています）"
+            : "";
+        var staffComboCards = staffRoleCards.Concat(staffCombos).ToList();
 
         // 使用音声（episode_uses）セクションをパート別に構築。
         var episodeUseSections = await BuildEpisodeUsesViewAsync(ep.EpisodeId, ct).ConfigureAwait(false);
@@ -648,6 +655,9 @@ public sealed class EpisodeGenerator
             CreditBlocks = creditBlocks,
             Staff = staffRows,
             StaffCombos = staffCombos,
+            StaffRoleCards = staffRoleCards,
+            StaffComboNote = staffComboNote,
+            StaffComboCards = staffComboCards,
             RecordBadges = recordBadges,
             EpisodeUseSections = episodeUseSections,
             Totals = totalsItems,
@@ -1448,7 +1458,7 @@ public sealed class EpisodeGenerator
     /// 組み合わせごとに <see cref="EpisodeChiefStaffIndex.Lookup"/> で通算情報を引き、閉じた状態の 1 かたまり
     /// （役職の札と「通算 N 回目」。初回は「初顔合わせ」）と、開いた状態のカード（顔ぶれ・放送順の玉の列・
     /// 前回と次回のミニカード）の材料にする。構成役職のどれかが無い回（未収録・該当役職なし）は出さない。
-    /// 絵コンテと演出を同じ方が兼ねた回は「兼任」として、顔ぶれを「名前 (絵コンテ・演出兼任)」と書く。
+    /// 絵コンテと演出を同じ方が兼ねた回は組み合わせとして出さない（兼任は珍しくないので、数えて見せる意味が薄い）。
     /// </summary>
     private IReadOnlyList<StaffComboRow> BuildStaffCombos(Series series, Episode ep)
     {
@@ -1458,31 +1468,27 @@ public sealed class EpisodeGenerator
             var occurrence = _chiefIndex.Lookup(combo, ep.EpisodeId);
             if (occurrence is null) continue;
 
-            // 兼任：組み合わせの役職がすべて同じ顔ぶれ（絵コンテと演出を同じ方が担当）。
+            // 兼任：組み合わせの役職がすべて同じ顔ぶれ（絵コンテと演出を同じ方が担当）。出さない。
             bool isSolo = occurrence.Members.Count > 1
                 && occurrence.Members.All(m => m.Persons.Select(p => p.Key)
                     .SequenceEqual(occurrence.Members[0].Persons.Select(p => p.Key)));
+            if (isSolo) continue;
 
             var badges = combo.ChiefRoles
-                .Select(r => (Code: ChiefRoleCode(r), Label: EpisodeChiefRoles.Label(r)))
-                .Select(r => new StaffComboBadge { Code = r.Code, Label = r.Label, Url = CreatorsRoleUrlFor(r.Code, r.Label) ?? "" })
+                .Select(r => ChiefRoleBadge(r))
                 .ToList();
 
-            string NamesOf(ChiefComboMember m) => string.Join("、", m.Persons.Select(p => string.IsNullOrEmpty(p.Url)
-                ? $"<span class=\"staff-name\">{HtmlUtil.Escape(p.Name)}</span>"
-                : $"<a class=\"staff-name\" href=\"{p.Url}\">{HtmlUtil.Escape(p.Name)}</a>"));
-            string namesHtml = isSolo
-                ? $"{NamesOf(occurrence.Members[0])} <span class=\"staff-combo-both\">({string.Join("・", badges.Select(b => b.Label))}兼任)</span>"
-                : string.Join("<span class=\"staff-combo-x\">×</span>", occurrence.Members.Select(NamesOf));
+            string namesHtml = string.Join("<span class=\"staff-combo-x\">×</span>",
+                occurrence.Members.Select(m => string.Join("、", m.Persons.Select(ChiefPersonHtml))));
 
             int current = occurrence.Ordinal - 1;
             rows.Add(new StaffComboRow
             {
                 Label = combo.Label,
                 Badges = badges,
-                IsSolo = isSolo,
                 Ordinal = occurrence.Ordinal,
                 Total = occurrence.Total,
+                FirstLabel = "初顔合わせ",
                 NamesHtml = namesHtml,
                 Beads = BuildComboBeads(occurrence.EpisodeIds, current),
                 IsDense = Math.Min(occurrence.Total, ComboBeadsMax) > ComboBeadsDense,
@@ -1492,6 +1498,75 @@ public sealed class EpisodeGenerator
         }
         return rows;
     }
+
+    /// <summary>
+    /// スタッフセクションの「くわしく」に並べる、チーフの役職ごと・人ごとのカード（その方がその役職を担当したのは何回目か、
+    /// 放送順で直前の話から続けての担当なら「N話連続」、間が空いたなら前に担当した回からどれくらい空いたか）を組み立てる。<see cref="EpisodeChiefStaffIndex.RoleOccurrences"/> の並び
+    /// （脚本 → 絵コンテ → 演出 → 作画監督 → 美術、同じ役職の中はクレジットの順）で、カードの作りは組み合わせのカードと同じ。
+    /// 初めての回は「初担当」。
+    /// </summary>
+    private IReadOnlyList<StaffComboRow> BuildStaffRoleCards(Series series, Episode ep)
+    {
+        var rows = new List<StaffComboRow>();
+        foreach (var occurrence in _chiefIndex.RoleOccurrences(ep.EpisodeId))
+        {
+            // 放送順で直前の話からの連続担当は「N話連続」、間が空いたときは前に担当した回からの空き。
+            string gapLabel = "";
+            if (occurrence.Streak >= 2)
+            {
+                gapLabel = $"{occurrence.Streak}話連続";
+            }
+            else if (occurrence.PreviousEpisodeId is int prevEpId
+                && _ctx.EpisodeById.TryGetValue(prevEpId, out var prevEp))
+            {
+                gapLabel = GapSinceLabel(prevEp.OnAirAt, ep.OnAirAt);
+            }
+
+            rows.Add(new StaffComboRow
+            {
+                Label = $"{occurrence.RoleLabel} {occurrence.Person.Name}",
+                Badges = new[] { ChiefRoleBadge(occurrence.ChiefRole) },
+                Ordinal = occurrence.Ordinal,
+                Total = occurrence.Total,
+                FirstLabel = "初担当",
+                GapLabel = gapLabel,
+                NamesHtml = ChiefPersonHtml(occurrence.Person),
+                Beads = BuildComboBeads(occurrence.EpisodeIds, occurrence.Ordinal - 1),
+                IsDense = Math.Min(occurrence.Total, ComboBeadsMax) > ComboBeadsDense,
+                Prev = occurrence.PreviousEpisodeId is int prevId ? ComboNavOf(series, prevId) : null,
+                Next = occurrence.NextEpisodeId is int nextId ? ComboNavOf(series, nextId) : null
+            });
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// 前の回から今回までの空きを「N年Mか月ぶり」「Mか月ぶり」「N週ぶり」で返す。
+    /// 月数はサブタイトル文字情報の「ぶり」と同じく、放送日の日差 ÷ 30.4375 の四捨五入。
+    /// 12 か月以上は「N年Mか月ぶり」（M = 0 でも省略しない）、1 か月未満（四捨五入で 0）は週で数え、1 週に満たなければ空文字。
+    /// </summary>
+    private static string GapSinceLabel(DateTime previousOnAirAt, DateTime currentOnAirAt)
+    {
+        double days = (JpDateFormat.BroadcastDay(currentOnAirAt) - JpDateFormat.BroadcastDay(previousOnAirAt)).TotalDays;
+        int months = (int)Math.Round(days / 30.4375);
+        if (months >= 12) return $"{months / 12}年{months % 12}か月ぶり";
+        if (months >= 1) return $"{months}か月ぶり";
+        int weeks = (int)(days / 7);
+        return weeks >= 1 ? $"{weeks}週ぶり" : "";
+    }
+
+    /// <summary>チーフの区分 → カードの役職の札（色・表示名・役職のページ）。</summary>
+    private StaffComboBadge ChiefRoleBadge(int chiefRole)
+    {
+        string code = ChiefRoleCode(chiefRole);
+        string label = EpisodeChiefRoles.Label(chiefRole);
+        return new StaffComboBadge { Code = code, Label = label, Url = CreatorsRoleUrlFor(code, label) ?? "" };
+    }
+
+    /// <summary>カードの顔ぶれの 1 人（人物ページがあればリンク）。</summary>
+    private static string ChiefPersonHtml(ChiefPerson p) => string.IsNullOrEmpty(p.Url)
+        ? $"<span class=\"staff-name\">{HtmlUtil.Escape(p.Name)}</span>"
+        : $"<a class=\"staff-name\" href=\"{p.Url}\">{HtmlUtil.Escape(p.Name)}</a>";
 
     /// <summary>チーフの区分 → 役職の札の色とリンク先に使う役職コード（スタッフ行の札と同じ）。</summary>
     private static string ChiefRoleCode(int chiefRole) => chiefRole switch
@@ -1952,8 +2027,14 @@ public sealed class EpisodeGenerator
         public IReadOnlyList<CreditBlockView> CreditBlocks { get; set; } = Array.Empty<CreditBlockView>();
         /// <summary>主要スタッフ情報（脚本／絵コンテ／演出／作画監督／美術）。クレジット階層から抽出した抜粋。</summary>
         public IReadOnlyList<StaffRow> Staff { get; set; } = Array.Empty<StaffRow>();
-        /// <summary>チーフの組み合わせの通算回数（絵コンテと演出 / 演出と作画監督 / 脚本・演出・作画監督）。構成役職が揃わない組み合わせは入らない。</summary>
+        /// <summary>チーフの組み合わせの通算回数（絵コンテと演出 / 演出と作画監督 / 脚本・演出・作画監督）。構成役職が揃わない組み合わせと、絵コンテと演出の兼任は入らない。</summary>
         public IReadOnlyList<StaffComboRow> StaffCombos { get; set; } = Array.Empty<StaffComboRow>();
+        /// <summary>チーフの役職ごと・人ごとの通算回数（閉じた状態では組み合わせの行の上に 1 人 1 かたまりで出す）。</summary>
+        public IReadOnlyList<StaffComboRow> StaffRoleCards { get; set; } = Array.Empty<StaffComboRow>();
+        /// <summary>「くわしく」を開いたときの数え方の断り（「（『○○プリキュア』第N話までのデータで数えています）」）。基準の話が無ければ空文字。</summary>
+        public string StaffComboNote { get; set; } = "";
+        /// <summary>「くわしく」の中のカード（役職ごと・人ごとのカード → 組み合わせのカードの順）。</summary>
+        public IReadOnlyList<StaffComboRow> StaffComboCards { get; set; } = Array.Empty<StaffComboRow>();
         /// <summary>h1 直下の歴代記録バッジ。歴代 10 位以内、またはシリーズ内で最長・最短の尺を持つ回だけ非空。</summary>
         public IReadOnlyList<RecordBadge> RecordBadges { get; set; } = Array.Empty<RecordBadge>();
         /// <summary>使用音声セクション。episode_uses をパート別にグルーピングしたもの。 0 件のエピソードでは空配列で、テンプレ側でセクション自体を非表示にする。</summary>
@@ -2049,26 +2130,28 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>
-    /// チーフの組み合わせの通算回数 1 件。閉じた状態は「[絵コンテ]×[演出] 2 回目」、開いた状態はカード
-    /// （「3 回中 2 回目」・顔ぶれ・放送順の玉の列・前回と次回のミニカード）。
+    /// チーフの組み合わせの通算回数、または役職ごと・人ごとの通算回数 1 件。
+    /// 組み合わせは閉じた状態で「[絵コンテ]×[演出] 2 回目」、開いた状態はどちらもカード
+    /// （「3 回中 2 回目」・顔ぶれ・放送順の玉の列・前回と次回のミニカード。役職ごとのカードは前の回からの空きも）。
     /// </summary>
     private sealed class StaffComboRow
     {
-        /// <summary>組み合わせの名前（「絵コンテと演出」「演出と作画監督」「脚本・演出・作画監督」）。読み上げ用。</summary>
+        /// <summary>カードの名前（組み合わせは「絵コンテと演出」など、役職ごとは「演出 志水 淳児」）。読み上げ用。</summary>
         public string Label { get; set; } = "";
-        /// <summary>組み合わせの役職の札（組み合わせの役職の順）。</summary>
+        /// <summary>役職の札（組み合わせは組み合わせの役職の順、役職ごとは 1 つ）。</summary>
         public IReadOnlyList<StaffComboBadge> Badges { get; set; } = Array.Empty<StaffComboBadge>();
-        /// <summary>絵コンテと演出を同じ方が兼ねた回か。札を × でつながず「兼任」と添える。</summary>
-        public bool IsSolo { get; set; }
         /// <summary>この話が何回目か（1 始まり）。</summary>
         public int Ordinal { get; set; }
         /// <summary>収録済みの範囲での登場回数。</summary>
         public int Total { get; set; }
-        /// <summary>初めての組み合わせ（「初顔合わせ」）か。</summary>
+        /// <summary>初めての回か。</summary>
         public bool IsFirst => Ordinal == 1;
-        /// <summary>顔ぶれ（人物ページへのリンク済み HTML 断片。兼任は「名前 (絵コンテ・演出兼任)」）。</summary>
-        public string NamesHtml { get; set; } = "";
-        /// <summary>放送順の玉の列。</summary>
+        /// <summary>初めての回に回数の代わりに出す文（組み合わせは「初顔合わせ」、役職ごとは「初担当」）。</summary>
+        public string FirstLabel { get; set; } = "";
+        /// <summary>連続担当（「3話連続」）か前の回からの空き（「1年10か月ぶり」など）。役職ごとのカードだけ。無ければ空文字。</summary>
+        public string GapLabel { get; set; } = "";
+        /// <summary>顔ぶれ（人物ページへのリンク済み HTML 断片）。</summary>
+        public string NamesHtml { get; set; } = "";        /// <summary>放送順の玉の列。</summary>
         public IReadOnlyList<ComboBead> Beads { get; set; } = Array.Empty<ComboBead>();
         /// <summary>玉を小さく描くか（玉が多い列）。</summary>
         public bool IsDense { get; set; }

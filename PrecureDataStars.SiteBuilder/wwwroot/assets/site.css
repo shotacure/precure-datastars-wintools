@@ -11040,8 +11040,17 @@ body.has-art-track-bar {
   outline: 2px solid var(--accent-purple);
   outline-offset: 2px;
 }
-.staff-combo-minis {
+/* 閉じた状態のかたまりの行：上が役職ごと・人ごと、下が組み合わせ。 */
+.staff-combo-mini-rows {
   flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.staff-combos[open] .staff-combo-mini-rows {
+  display: none;
+}
+.staff-combo-minis {
   min-width: 0;
   display: flex;
   flex-wrap: wrap;
@@ -11049,9 +11058,6 @@ body.has-art-track-bar {
   margin: 0;
   padding: 0;
   list-style: none;
-}
-.staff-combos[open] .staff-combo-minis {
-  display: none;
 }
 .staff-combo-mini {
   display: inline-flex;
@@ -11094,11 +11100,6 @@ body.has-art-track-bar {
   font-size: 0.7em;
   margin: 0 1px;
 }
-.staff-combo-solo {
-  color: var(--muted);
-  font-size: 0.72em;
-  margin-left: 3px;
-}
 .staff-combo-count {
   font-size: 0.85em;
   color: var(--muted);
@@ -11110,6 +11111,11 @@ body.has-art-track-bar {
   font-size: 1.15em;
 }
 .staff-combo-first {
+  font-size: 0.78em;
+  font-weight: 700;
+  color: var(--accent-pink);
+}
+.staff-combo-mini-gap {
   font-size: 0.78em;
   font-weight: 700;
   color: var(--accent-pink);
@@ -11223,10 +11229,19 @@ body.has-art-track-bar {
   font-weight: 700;
   color: var(--accent-pink);
 }
+/* 顔ぶれの行。役職ごとのカードは右端に連続担当（「3話連続」）か前の回からの空き（「1年10か月ぶり」）を添え、収まらなければ次の行の右端に回す。 */
 .staff-combo-names {
   margin: -2px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 8px;
   font-weight: 600;
   font-size: 0.95em;
+}
+.staff-combo-people {
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 .staff-combo-names .staff-combo-x {
@@ -11234,10 +11249,12 @@ body.has-art-track-bar {
   font-weight: 400;
   margin: 0 4px;
 }
-.staff-combo-both {
-  color: var(--muted);
-  font-weight: 400;
-  font-size: 0.88em;
+.staff-combo-gap {
+  margin-left: auto;
+  font-size: 0.85em;
+  font-weight: 700;
+  color: var(--accent-pink);
+  white-space: nowrap;
 }
 
 /* 放送順の玉の列。等間隔に並べ、年が変わる玉の下に年を出す。今回だけ大きくピンク、前は塗り、後は白抜き。

@@ -324,8 +324,9 @@ public static class ThemeSongsHandler
     /// <summary>
     /// 会社名だけの行（所属の出し方が COMPANY_ONLY）の会社名のあとに添える、実際の人物の小さい括弧の HTML。
     /// 1 行にまとめた役職の中にいるとき（<see cref="ThemeSongRow.MergedCreditRoles"/>）は、まとめた役職ぶんの人物を並べ、
-    /// 役職ごとに人が分かれるなら役職を添える（「（作詞・作曲：藤本 記子、編曲：福富 雅之）」。同じ人の役職は「・」でまとめ、人の間は「、」）。
-    /// 人物が 1 人だけ、または役職が 1 つだけのときは名前だけを「・」で並べる（「（藤本 記子）」）。
+    /// 役職ごとに人が分かれるなら、同じ役職の組の人をまとめて役職を添える（「（作詞・作曲：藤本 記子、編曲：福富 雅之）」。
+    /// 役職は「・」でまとめ、組の中の人は「・」、組の間は「、」）。
+    /// 全員が同じ役職の組（人物が 1 人だけ・役職が 1 つだけのときを含む）なら、名前だけを「・」で並べる（「（馬瀬 みさき・堀本 陸）」）。
     /// 名前はリンク化済み HTML（人物詳細へ）。会社名だけの行が無ければ空文字。
     /// </summary>
     internal static string CompanyOnlyPeopleSuffixHtml(ThemeSongRow? song, string role)
@@ -344,10 +345,20 @@ public static class ThemeSongsHandler
             }
         }
         if (people.Count == 0) return "";
-        string inner = people.Count == 1 || roles.Count == 1
-            ? string.Join("・", people.Select(p => p.Html))
-            : string.Join("、", people.Select(p =>
-                string.Join("・", p.Roles.Select(r => WriterRoleLabels.TryGetValue(r, out var l) ? l : r)) + "：" + p.Html));
+        // 役職の組（並びは役職テンプレの順）ごとに人をまとめる。組が 1 つだけ（全員が同じ役職）なら名前だけを並べる。
+        var groups = new List<(string Key, List<string> Roles, List<string> Names)>();
+        foreach (var p in people)
+        {
+            var ordered = roles.Where(p.Roles.Contains).ToList();
+            string key = string.Join(",", ordered);
+            int at = groups.FindIndex(g => g.Key == key);
+            if (at < 0) groups.Add((key, ordered, new List<string> { p.Html }));
+            else groups[at].Names.Add(p.Html);
+        }
+        string inner = groups.Count == 1
+            ? string.Join("・", groups[0].Names)
+            : string.Join("、", groups.Select(g =>
+                string.Join("・", g.Roles.Select(r => WriterRoleLabels.TryGetValue(r, out var l) ? l : r)) + "：" + string.Join("・", g.Names)));
         return $"<span class=\"staff-primary-name muted\">（{inner}）</span>";
     }
 

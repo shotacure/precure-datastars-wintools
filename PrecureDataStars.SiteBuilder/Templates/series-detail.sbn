@@ -199,29 +199,8 @@
             allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
         </div>
         {{~ end ~}}
-        {{~ if t.VocalistsHtml != "" ~}}
-        <div class="ts-meta-row ts-meta-vocalists"><span class="ts-meta-label">{{ t.VocalistsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.VocalistsHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.ChorusHtml != "" ~}}
-        <div class="ts-meta-row ts-meta-chorus"><span class="ts-meta-label">{{ t.ChorusRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ChorusHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.DialogueHtml != "" ~}}
-        <div class="ts-meta-row ts-meta-dialogue"><span class="ts-meta-label">{{ t.DialogueRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.DialogueHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.SpokenWordHtml != "" ~}}
-        <div class="ts-meta-row ts-meta-dialogue"><span class="ts-meta-label">{{ t.SpokenWordRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.SpokenWordHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.LyricsHtml != "" ~}}
-        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.LyricsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.LyricsHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.CompositionHtml != "" ~}}
-        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.CompositionRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.CompositionHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.ArrangementHtml != "" ~}}
-        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.ArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ArrangementHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.MedleyArrangementHtml != "" ~}}
-        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.MedleyArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.MedleyArrangementHtml }}</span></div>
+        {{~ if t.CreditBadgesHtml != "" ~}}
+        <div class="staff-badges-row ts-credits">{{ t.CreditBadgesHtml }}</div>
         {{~ end ~}}
         {{~ if t.Notes != "" ~}}
         <div class="ts-meta-row ts-meta-notes muted">{{ t.Notes | html.escape }}</div>

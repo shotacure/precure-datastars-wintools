@@ -83,6 +83,9 @@ public sealed class ThemeSongRow
     public string SpokenWordHtml { get; set; } = "";
     /// <summary>「語り」役職ラベル HTML。 <see cref="SpokenWordHtml"/> が非空のときだけセットされる。</summary>
     public string SpokenWordRoleLabelHtml { get; set; } = "";
+    /// <summary>歌・作家の「役職バッジ + 名義」の並び（<see cref="ThemeSongCreditBadges.Build"/>）。テンプレはこれを
+    /// <c>.staff-badges-row</c> の中に置く。名義がすべて空なら空文字。</summary>
+    public string CreditBadgesHtml { get; set; } = "";
 }
 
 /// <summary>主題歌行の入力ソース 1 件分（EPISODE / SERIES どちらの主題歌テーブルからでも来る共通形）。
@@ -191,9 +194,10 @@ public sealed class ThemeSongRowBuilder
             string arrangementRoleLabelHtml = "";
             string medleyArrangementHtml = "";
             string medleyArrangementRoleLabelHtml = "";
+            IReadOnlyList<SongCredit> credits = Array.Empty<SongCredit>();
             if (song is not null)
             {
-                var credits = await GetSongCreditsAsync(song.SongId).ConfigureAwait(false);
+                credits = await GetSongCreditsAsync(song.SongId).ConfigureAwait(false);
                 lyricsHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap);
                 compositionHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Composition, song.ComposerName, personAliasMap);
                 arrangementHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Arrangement, song.ArrangerName, personAliasMap);
@@ -273,6 +277,9 @@ public sealed class ThemeSongRowBuilder
                 DialogueRoleLabelHtml = dialogueRoleLabelHtml,
                 SpokenWordHtml = spokenWordHtml,
                 SpokenWordRoleLabelHtml = spokenWordRoleLabelHtml,
+                CreditBadgesHtml = ThemeSongCreditBadges.Build(roleMap, credits,
+                    vocalistsHtml, chorusHtml, dialogueHtml, spokenWordHtml,
+                    lyricsHtml, compositionHtml, arrangementHtml, medleyArrangementHtml),
                 Notes = d.Notes ?? "",
                 IsBroadcastOnly = d.IsBroadcastOnly,
                 EpisodeRangeLabel = d.EpisodeRangeLabel ?? "",

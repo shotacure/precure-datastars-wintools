@@ -271,34 +271,12 @@
           {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
           {{~ if t.ArtTrackId != "" ~}}<button type="button" class="art-track-play ts-play{{ if t.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ t.ArtTrackId | html.escape }}"{{ if t.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }}{{ if t.ArtTrackAltId != "" }} data-art-track-alt-id="{{ t.ArtTrackAltId | html.escape }}" data-art-track-alt-sub="{{ t.ArtTrackAltSourceAlbum | html.escape }}"{{ end }} data-art-track-title="{{ t.Title | html.escape }}" data-art-track-sub="{{ t.ArtTrackSourceAlbum | html.escape }}" aria-label="{{ t.Title | html.escape }} を再生{{ if t.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if t.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>{{~ end ~}}
         </div>
-        {{## 2 行目以降：作詞・作曲・編曲・歌 のメタ情報。
-             各行は「[役職ラベル]：[名義 HTML]」の形。空判定で行ごと省略する。
-             歌は主役級のためリストの最後ではなく作詞より上の見やすい位置（最初のメタ行）に置く。
-             「歌」のラベルもリンク化（VocalistsRoleLabelHtml）。
-             メタ行は CSS で inline 化されているため、改行は入らず空白区切りで並ぶ。 ##}}
-        {{~ if t.VocalistsHtml != "" ~}}
-        <div class="ts-meta-row ts-meta-vocalists"><span class="ts-meta-label">{{ t.VocalistsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.VocalistsHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.ChorusHtml != "" ~}}
-        <div class="ts-meta-row ts-meta-chorus"><span class="ts-meta-label">{{ t.ChorusRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ChorusHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.DialogueHtml != "" ~}}
-        <div class="ts-meta-row ts-meta-dialogue"><span class="ts-meta-label">{{ t.DialogueRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.DialogueHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.SpokenWordHtml != "" ~}}
-        <div class="ts-meta-row ts-meta-dialogue"><span class="ts-meta-label">{{ t.SpokenWordRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.SpokenWordHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.LyricsHtml != "" ~}}
-        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.LyricsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.LyricsHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.CompositionHtml != "" ~}}
-        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.CompositionRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.CompositionHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.ArrangementHtml != "" ~}}
-        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.ArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ArrangementHtml }}</span></div>
-        {{~ end ~}}
-        {{~ if t.MedleyArrangementHtml != "" ~}}
-        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.MedleyArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.MedleyArrangementHtml }}</span></div>
+        {{## 2 行目以降：歌・作詞・作曲・編曲 のクレジット。
+             楽曲索引のカードと同じ「役職バッジ + 名義」のグループを横に流す（ThemeSongCreditBadges）。
+             歌は主役級のため先頭に置く。名義が同じ隣り合う作家の役職は [作詞][作曲] のようにまとめる。
+             バッジは役職詳細・歌唱ページへのリンク。名義がすべて空なら行ごと出さない。 ##}}
+        {{~ if t.CreditBadgesHtml != "" ~}}
+        <div class="staff-badges-row ts-credits">{{ t.CreditBadgesHtml }}</div>
         {{~ end ~}}
         {{~ if t.Notes != "" ~}}
         <div class="ts-meta-row ts-meta-notes muted">{{ t.Notes | html.escape }}</div>

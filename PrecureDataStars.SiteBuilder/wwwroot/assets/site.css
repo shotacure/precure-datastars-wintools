@@ -1641,6 +1641,17 @@ a.series-card-children-title:hover {
   font-weight: 500;
 }
 
+/* 歌・作家のクレジット：役職バッジ + 名義のグループを横に流す（楽曲索引のカードと同じ .staff-badges-row）。 */
+.theme-songs-list .ts-credits {
+  margin: 2px 0 0 8px;
+  font-size: 0.94em;
+}
+/* 歌の名義だけは主役級に（楽曲詳細の song-recording-vocalists と同じ哲学）。 */
+.theme-songs-list .ts-credit-vocals .ts-credit-names {
+  font-size: 1.064em;
+  font-weight: 500;
+}
+
 /* 備考行：ラベル無しでそのまま muted 表示。 */
 .theme-songs-list .ts-meta-notes {
   display: block;

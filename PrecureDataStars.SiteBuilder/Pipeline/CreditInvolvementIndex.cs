@@ -705,6 +705,7 @@ public sealed class CreditInvolvementIndex
         // 1 テーブルにまとめており、BGM のレコードは content_kind_code='BGM' で識別する。
         // bgm 系には usage_actuality 概念は無い（episode_theme_songs だけが持つ）。
         // bgm_cues の PK は (series_id, m_no_detail) なので、cue ごとに紐付くエピソード全件にバラして集計。
+        // 名義を持たない文字だけの行（entry_kind=TEXT、person_alias_id が NULL）は人物の関与にならないので除く。
         const string sqlBgmCueCredits = """
             SELECT
               eu.episode_id              AS EpisodeId,
@@ -717,7 +718,8 @@ public sealed class CreditInvolvementIndex
               ON eu.bgm_series_id   = bcc.series_id
              AND eu.bgm_m_no_detail = bcc.m_no_detail
             JOIN episodes ep ON ep.episode_id = eu.episode_id
-            WHERE eu.content_kind_code = 'BGM';
+            WHERE eu.content_kind_code = 'BGM'
+              AND bcc.person_alias_id IS NOT NULL;
             """;
 
         await using (var conn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false))

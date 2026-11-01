@@ -359,13 +359,20 @@ public static class SiteDataLoader
         // 歌の作家連名に印刷された所属（「岡部 啓一（MONACA）」）を、盤の音楽クレジットと同じ形の行に写す。
         // 企業詳細の「所属としてクレジットされた方々」に載せるため。根拠の盤は、その曲の録音が最初に入った商品
         // （ディスクは商品の発売日順に並んでいるので、最初に見つかった商品）。
+        // 劇伴の作家連名に印刷された所属（「福富 雅之（Nostalgic Orchestra）」）も同じ形の行に写す。紐付け先はその劇伴のセッション、
+        // 根拠の盤はその劇伴が最初に入った商品。
         var firstProductBySong = new Dictionary<int, string>();
+        var firstProductByCue = new Dictionary<(int SeriesId, string MNoDetail), string>();
         foreach (var disc in allDiscs)
         {
             if (!tracksByCatalogNo.TryGetValue(disc.CatalogNo, out var discTracks)) continue;
             foreach (var t in discTracks)
+            {
                 if (t.SongRecordingId is int rid && songRecordingById.TryGetValue(rid, out var rec))
                     firstProductBySong.TryAdd(rec.SongId, disc.ProductCatalogNo);
+                if (t.BgmSeriesId is int bsid && !string.IsNullOrEmpty(t.BgmMNoDetail))
+                    firstProductByCue.TryAdd((bsid, t.BgmMNoDetail), disc.ProductCatalogNo);
+            }
         }
         var songCreditAffiliationRows = songCreditsBySong.Values
             .SelectMany(list => list)
@@ -382,12 +389,33 @@ public static class SiteDataLoader
                 SourceProductCatalogNo = firstProductBySong.TryGetValue(c.SongId, out var firstProduct) ? firstProduct : null
             })
             .ToList();
+        // 劇伴のセッションは cue から引く（論理削除された劇伴の曲は bgm_cues に載らないので、その行は捨てる）。
+        var sessionNoByCue = bgmCuesBySeries.Values
+            .SelectMany(list => list)
+            .ToDictionary(c => (c.SeriesId, c.MNoDetail), c => c.SessionNo);
+        var bgmCueCreditAffiliationRows = bgmCueCreditsByCue
+            .SelectMany(kv => kv.Value)
+            .Where(c => c.AffiliationCompanyAliasId.HasValue && c.PersonAliasId.HasValue
+                        && sessionNoByCue.ContainsKey((c.SeriesId, c.MNoDetail)))
+            .Select(c => new MusicCredit
+            {
+                TargetKind = MusicCreditTargetKinds.BgmSession,
+                BgmSeriesId = c.SeriesId,
+                BgmSessionNo = sessionNoByCue[(c.SeriesId, c.MNoDetail)],
+                RoleCode = c.CreditRole,
+                CreditSeq = c.CreditSeq,
+                EntryKind = "PERSON",
+                PersonAliasId = c.PersonAliasId,
+                AffiliationCompanyAliasId = c.AffiliationCompanyAliasId,
+                SourceProductCatalogNo = firstProductByCue.TryGetValue((c.SeriesId, c.MNoDetail), out var firstProduct) ? firstProduct : null
+            })
+            .ToList();
         var musicCredits = new MusicCreditIndex(
             await musicCreditsRepo.GetAllAsync(ct).ConfigureAwait(false),
             allProducts,
             await bgmSessionsRepo.GetAllAsync(ct).ConfigureAwait(false),
             allDiscs,
-            songCreditAffiliationRows);
+            songCreditAffiliationRows.Concat(bgmCueCreditAffiliationRows).ToList());
         // 主題歌の再生ボタン用に、録音ごとに鳴らす配信音源を選んでおく。
         var themeArtTracks = new ThemeArtTrackIndex(tracksByCatalogNo, allDiscs.ToList(), allProducts.ToList());
         // 歌の一覧の再生ボタン用は、曲を通して聴けるようフルサイズを優先して選ぶ。

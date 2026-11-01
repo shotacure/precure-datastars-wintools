@@ -38,7 +38,7 @@ public sealed class TrackCreditHtmlBuilder
 {
     private readonly IReadOnlyDictionary<int, PersonAlias> _personAliasMap;
     private readonly IReadOnlyDictionary<int, CharacterAlias> _characterAliasMap;
-    /// <summary>歌の作家連名の所属（会社名義）の解決用。</summary>
+    /// <summary>歌・劇伴の作家連名の所属（会社名義）の解決用。</summary>
     private readonly IReadOnlyDictionary<int, CompanyAlias> _companyAliasMap;
     /// <summary>名義 → 人物詳細リンクの解決（共有名義の添字付き複数リンクを含め、他ページと同じ規則）。</summary>
     private readonly StaffNameLinkResolver _staffLinkResolver;
@@ -272,10 +272,13 @@ public sealed class TrackCreditHtmlBuilder
     /// 劇伴クレジット（<c>bgm_cue_credits</c>）から「役職バッジ + 名義」セグメントの列 HTML を組み立てる。
     /// 役職並び順は SiteDataLoader が事前展開した辞書の並びを尊重（COMPOSITION → ARRANGEMENT →
     /// その他 role_code 昇順、同役内は credit_seq 昇順）。
-    /// 同一役職内の連名は <see cref="BgmCueCredit.PrecedingSeparator"/> 尊重で連結する。
+    /// 同一役職内の連名は <see cref="BgmCueCredit.PrecedingSeparator"/> 尊重で連結する（空なら「、」）。
+    /// 名義と所属は歌の作家連名と同じ <see cref="SongCreditAffiliation.BuildNamesHtml"/> で組む
+    /// （所属を名義のあとに添える・所属の会社名だけ・名義だけ）。名義を持たない文字だけの行（TEXT）は
+    /// raw_text を HTML エスケープしてそのまま出す（リンクなし）。
     /// <para>
-    /// 隣り合う役職グループで「連名 <c>person_alias_id</c> の列が順序通り完全一致」する場合は、
-    /// 1 つのセグメントに集約してバッジを横並びにし、名義は 1 回だけ出す。
+    /// 隣り合う役職グループで「連名の HTML が完全一致」する場合は、
+    /// 1 つのセグメントに集約してバッジを横並びにし、名義は 1 回だけ出す（<c>BuildMergedRoleSegmentsHtml</c> の流儀）。
     /// 例：作曲・編曲ともに「佐藤 直紀」のみ → <c>[作曲][編曲] 佐藤 直紀</c>。
     /// 例：作曲・編曲ともに「佐藤 直紀、菅野 祐悟」（連名同順） → <c>[作曲][編曲] 佐藤 直紀、菅野 祐悟</c>。
     /// 単独同一のケースもこの一般則に内包される。これにより劇伴の同一スタッフによる作曲・編曲が
@@ -302,60 +305,32 @@ public sealed class TrackCreditHtmlBuilder
             groups[^1].Items.Add(c);
         }
 
-        // ステップ 2：隣り合うグループで連名 person_alias_id の列が順序通り完全一致するなら統合する。
-        // 統合グループは複数の役職コードを並べてバッジを出し、名義は 1 回だけ出力する。
-        var merged = new List<(List<string> RoleCodes, List<BgmCueCredit> Items)>();
-        foreach (var g in groups)
-        {
-            if (merged.Count > 0)
-            {
-                var last = merged[^1];
-                if (last.Items.Count == g.Items.Count
-                    && last.Items.Zip(g.Items, (a, b) => a.PersonAliasId == b.PersonAliasId).All(x => x))
-                {
-                    last.RoleCodes.Add(g.RoleCode);
-                    continue;
-                }
-            }
-            merged.Add((new List<string> { g.RoleCode }, g.Items));
-        }
-
-        // ステップ 3：各マージグループを HTML セグメントへ変換。バッジは役職コードの数だけ並べ、
-        // 名義は連名 preceding_separator 尊重で 1 回だけ出す。
-        var segments = new List<string>();
-        foreach (var mg in merged)
-        {
-            var badgesSb = new StringBuilder();
-            foreach (var rc in mg.RoleCodes)
-            {
-                string fallback = rc switch
-                {
-                    "COMPOSITION" => "作曲",
-                    "ARRANGEMENT" => "編曲",
-                    _ => rc
-                };
-                // 劇伴の作曲・編曲はリンクしない（役職詳細は楽曲の作家の一覧のため）。
-                badgesSb.Append(BuildRoleBadgeHtml(rc, fallback, linkable: false));
-            }
-            var nameSb = new StringBuilder();
-            for (int i = 0; i < mg.Items.Count; i++)
-            {
-                var c = mg.Items[i];
-                if (i > 0)
-                {
-                    string sep = string.IsNullOrEmpty(c.PrecedingSeparator) ? "、" : c.PrecedingSeparator!;
-                    nameSb.Append(Escape(sep));
-                }
-                nameSb.Append(BuildPersonAliasLinkHtml(c.PersonAliasId));
-            }
-            segments.Add(
-                "<span class=\"track-credit-segment\">"
-                + badgesSb
-                + $"<span class=\"track-credit-names\">{nameSb}</span>"
-                + "</span>");
-        }
-        return string.Join("", segments);
+        // ステップ 2：役職ごとに名義 HTML を組み、隣り合う役職で HTML が同じならバッジを並べて名義を 1 回だけ出す。
+        // 劇伴の作曲・編曲はリンクしない（役職詳細は楽曲の作家の一覧のため）。
+        var entries = groups
+            .Select(g => (g.RoleCode, BgmRoleFallbackLabel(g.RoleCode), BuildBgmCueCreditNamesHtml(g.Items), (string?)null))
+            .ToList();
+        return BuildMergedRoleSegmentsHtml(entries, linkable: false);
     }
+
+    /// <summary>劇伴の役職バッジのフォールバック表記（役職マスタに無いとき）。</summary>
+    private static string BgmRoleFallbackLabel(string roleCode) => roleCode switch
+    {
+        "COMPOSITION" => "作曲",
+        "ARRANGEMENT" => "編曲",
+        _ => roleCode
+    };
+
+    /// <summary>
+    /// 劇伴の 1 役職分の連名（credit_seq 順）の名義 HTML。名義の行は人物リンクと所属、文字の行は raw_text のエスケープ。
+    /// 区切りは preceding_separator（空なら「、」）。
+    /// </summary>
+    private string BuildBgmCueCreditNamesHtml(IReadOnlyList<BgmCueCredit> rows)
+        => SongCreditAffiliation.BuildNamesHtml(rows, _companyAliasMap,
+            c => c.PersonAliasId is int id && !c.IsText ? BuildPersonAliasLinkHtml(id) : Escape(c.RawText),
+            c => c.PersonAliasId is int id && !c.IsText ? ResolvePersonAliasDisplayLabel(id) : c.RawText ?? "",
+            (c, text) => _staffLinkResolver.ResolveAsHtml(c.PersonAliasId, text),
+            "、");
 
     /// <summary>
     /// 劇伴の歌い手（<c>bgm_cue_singers</c>）から「役職バッジ + 連名」セグメントの列 HTML を組み立てる。

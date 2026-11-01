@@ -1440,7 +1440,8 @@ public sealed class PersonsGenerator
         {
             foreach (var c in kv.Value)
             {
-                if (!aliasSet.Contains(c.PersonAliasId)) continue;
+                // 名義を持たない文字だけの行（entry_kind=TEXT）は人物に結び付かない。
+                if (c.PersonAliasId is not int aliasId || !aliasSet.Contains(aliasId)) continue;
                 if (!bySeries.TryGetValue(kv.Key.SeriesId, out var acc))
                 {
                     acc = (new HashSet<string>(StringComparer.Ordinal), new HashSet<string>(StringComparer.Ordinal));

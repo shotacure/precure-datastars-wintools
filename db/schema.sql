@@ -3421,8 +3421,13 @@ CREATE TABLE `bgm_cue_credits` (
   `m_no_detail`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `credit_role`         varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `credit_seq`          tinyint unsigned NOT NULL,
-  `person_alias_id`     int              NOT NULL,
+  `entry_kind`          enum('PERSON','TEXT') NOT NULL DEFAULT 'PERSON' COMMENT '行の種類（PERSON＝名義の行 / TEXT＝名義を持たない文字だけの行）',
+  `person_alias_id`     int              DEFAULT NULL COMMENT 'PERSON の行の名義（person_aliases.alias_id）。TEXT の行では NULL',
+  `raw_text`            varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'TEXT の行の表記（「不詳」など）',
   `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `affiliation_company_alias_id` int DEFAULT NULL COMMENT '名義に添える所属の会社名義（company_aliases.alias_id）',
+  `affiliation_text`    varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '会社マスタに無い所属の自由記述（会社名義があればそちらを使う）',
+  `affiliation_display` enum('NAME_WITH_COMPANY','COMPANY_ONLY','NAME_ONLY') NOT NULL DEFAULT 'NAME_WITH_COMPANY' COMMENT '所属の出し方（名義＋所属 / 所属の会社名だけ / 名義だけ）',
   `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -3432,12 +3437,59 @@ CREATE TABLE `bgm_cue_credits` (
   KEY `ix_bgm_cue_credits_alias` (`person_alias_id`),
   KEY `ix_bgm_cue_credits_role` (`credit_role`),
   KEY `ix_bgm_cue_credits_cue` (`series_id`, `m_no_detail`),
+  KEY `ix_bgm_cue_credits_aff_company` (`affiliation_company_alias_id`),
   CONSTRAINT `ck_bgm_cue_credits_seq_pos` CHECK (`credit_seq` >= 1),
   CONSTRAINT `fk_bgm_cue_credits_cue`   FOREIGN KEY (`series_id`, `m_no_detail`) REFERENCES `bgm_cues` (`series_id`, `m_no_detail`) ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_bgm_cue_credits_alias` FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases` (`alias_id`)            ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `fk_bgm_cue_credits_role`  FOREIGN KEY (`credit_role`)              REFERENCES `roles`          (`role_code`)           ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_bgm_cue_credits_role`  FOREIGN KEY (`credit_role`)              REFERENCES `roles`          (`role_code`)           ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_bgm_cue_credits_aff_company` FOREIGN KEY (`affiliation_company_alias_id`) REFERENCES `company_aliases` (`alias_id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Triggers for table `bgm_cue_credits`
+-- 行の種類（entry_kind）と名義・文字・所属の列の整合性は、credit_block_entries と同じく
+-- BEFORE INSERT/UPDATE トリガーで担保する（MySQL 8.0 では FK の参照アクション列を CHECK に含められないため）。
+--   PERSON … person_alias_id 必須、raw_text は NULL
+--   TEXT   … raw_text 必須（空文字不可）、person_alias_id・affiliation_company_alias_id・affiliation_text は NULL
+--
+
+DROP TRIGGER IF EXISTS `trg_bgm_cue_credits_bi_consistency`;
+DROP TRIGGER IF EXISTS `trg_bgm_cue_credits_bu_consistency`;
+
+DELIMITER ;;
+
+CREATE TRIGGER `trg_bgm_cue_credits_bi_consistency`
+BEFORE INSERT ON `bgm_cue_credits`
+FOR EACH ROW
+BEGIN
+  IF NEW.entry_kind = 'PERSON' AND (NEW.person_alias_id IS NULL OR NEW.raw_text IS NOT NULL) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'bgm_cue_credits: entry_kind=PERSON requires person_alias_id and no raw_text';
+  END IF;
+  IF NEW.entry_kind = 'TEXT' AND (NEW.raw_text IS NULL OR NEW.raw_text = '' OR NEW.person_alias_id IS NOT NULL
+                                  OR NEW.affiliation_company_alias_id IS NOT NULL OR NEW.affiliation_text IS NOT NULL) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'bgm_cue_credits: entry_kind=TEXT requires non-empty raw_text and no person_alias_id / affiliation';
+  END IF;
+END;;
+
+CREATE TRIGGER `trg_bgm_cue_credits_bu_consistency`
+BEFORE UPDATE ON `bgm_cue_credits`
+FOR EACH ROW
+BEGIN
+  IF NEW.entry_kind = 'PERSON' AND (NEW.person_alias_id IS NULL OR NEW.raw_text IS NOT NULL) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'bgm_cue_credits: entry_kind=PERSON requires person_alias_id and no raw_text';
+  END IF;
+  IF NEW.entry_kind = 'TEXT' AND (NEW.raw_text IS NULL OR NEW.raw_text = '' OR NEW.person_alias_id IS NOT NULL
+                                  OR NEW.affiliation_company_alias_id IS NOT NULL OR NEW.affiliation_text IS NOT NULL) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'bgm_cue_credits: entry_kind=TEXT requires non-empty raw_text and no person_alias_id / affiliation';
+  END IF;
+END;;
+
+DELIMITER ;
 
 --
 -- Table structure for table `bgm_cue_singers`

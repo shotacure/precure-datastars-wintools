@@ -105,28 +105,10 @@ public sealed class SongCreditsRepository : RepositoryBase
         // 先頭は区切りなし、それ以降は preceding_separator + 名前を連結。
         // 所属は、次の名義と同じ所属が続くときは最後の名義のあとにだけ添える（盤スタッフの所属と同じ畳み方）。
         // 所属の会社名だけを出す行は、同じ会社名だけの行が続くときは 1 回だけ出す。
-        string ShownAff(int i) => rows[i].Display == SongCreditAffiliationDisplay.NameWithCompany ? rows[i].Affiliation ?? "" : "";
-        bool CompanyOnly(int i) => rows[i].Display == SongCreditAffiliationDisplay.CompanyOnly && !string.IsNullOrEmpty(rows[i].Affiliation);
-        var sb = new System.Text.StringBuilder();
-        string? lastCompanyOnly = null;
-        for (int i = 0; i < rows.Count; i++)
-        {
-            bool companyOnly = CompanyOnly(i);
-            if (companyOnly && string.Equals(lastCompanyOnly, rows[i].Affiliation, StringComparison.Ordinal)) continue;
-            if (sb.Length > 0) sb.Append(rows[i].Sep ?? "");
-            if (companyOnly)
-            {
-                sb.Append(rows[i].Affiliation);
-                lastCompanyOnly = rows[i].Affiliation;
-                continue;
-            }
-            lastCompanyOnly = null;
-            sb.Append(rows[i].DisplayName);
-            string aff = ShownAff(i);
-            string nextAff = i + 1 < rows.Count ? ShownAff(i + 1) : "";
-            if (aff.Length > 0 && !string.Equals(aff, nextAff, StringComparison.Ordinal)) sb.Append('（').Append(aff).Append('）');
-        }
-        return sb.ToString();
+        // 畳み方は劇伴の作家連名（BgmCueCreditsRepository.GetDisplayStringAsync）と共通の AffiliatedCreditDisplayText に置く。
+        return AffiliatedCreditDisplayText.Build(rows
+            .Select(r => new AffiliatedCreditDisplayText.Row(r.Sep, r.DisplayName, r.Affiliation, r.Display))
+            .ToList());
     }
 
     /// <summary>

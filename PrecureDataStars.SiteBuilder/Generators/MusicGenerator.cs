@@ -268,6 +268,8 @@ public sealed class MusicGenerator
     /// 無ければ Name）、そして名義の所属人物が 1 人に絞れる場合のみ PersonId を持つ。
     /// 共同名義（person_alias_persons 上で複数 person を持つ alias）の場合は PersonId は null になり、
     /// /bgms/ 一覧では人物詳細リンクを張らずに表示テキストだけを出す。
+    /// 名義を持たない文字だけの行（entry_kind=TEXT、person_alias_id が NULL）は person_aliases との JOIN で落ち、
+    /// 主要スタッフの集計に入らない。
     /// </summary>
     private async Task<IReadOnlyDictionary<(int SeriesId, string MNoDetail, string Role), List<BgmCueCreditAlias>>>
         LoadBgmCueCreditAliasesAsync(CancellationToken ct)
@@ -307,6 +309,7 @@ public sealed class MusicGenerator
             {
                 entry = new BgmCueCreditAlias
                 {
+                    CreditSeq = r.CreditSeq,
                     AliasId = r.AliasId,
                     DisplayText = r.DisplayText,
                     PersonId = r.PersonId,           // 最初の person_id を仮セット
@@ -356,6 +359,8 @@ public sealed class MusicGenerator
     /// <summary>1 名義クレジット分の情報（/bgms/ 一覧用）。</summary>
     private sealed class BgmCueCreditAlias
     {
+        /// <summary>連名の中の順（bgm_cue_credits.credit_seq）。劇伴詳細の曲のカードで行と突き合わせる。</summary>
+        public byte CreditSeq { get; set; }
         public int AliasId { get; set; }
         public string DisplayText { get; set; } = "";
         /// <summary>名義の所属人物が 1 人に絞れた場合の人物 ID。共同名義（複数 person 紐付け）では null。</summary>
@@ -871,6 +876,12 @@ public sealed class MusicGenerator
     {
         await Task.Yield();  // メソッドを async に保つためのダミー（将来 DB 追加クエリを足したときに困らないように）
 
+        // 曲のカードの作家の行で、名義の表示テキストと人物リンク先を (series_id, m_no_detail, role, credit_seq) で引けるようにする
+        // （主要スタッフの集計と同じ名義の解決を使う）。
+        var creditAliasBySeq = creditAliasesByBgmCue
+            .SelectMany(kv => kv.Value.Select(a => (Key: (kv.Key.SeriesId, kv.Key.MNoDetail, kv.Key.Role, a.CreditSeq), Alias: a)))
+            .ToDictionary(x => x.Key, x => x.Alias);
+
         foreach (var (seriesId, cues) in cuesBySeries)
         {
             if (!_ctx.SeriesById.TryGetValue(seriesId, out var s)) continue;
@@ -1008,16 +1019,11 @@ public sealed class MusicGenerator
                     : null;
                 if (artTrackSource is not null) artTrackSource.IsArtTrackSource = true;
 
-                // スタッフバッジ。/bgms/ 一覧で使うのと同じ BuildBgmKeyStaffEntries を、
-                // 当該 cue 1 件だけのリストに対して呼ぶ。結果として「この cue の作曲・編曲」
-                // 名義（PersonId 込）が得られる。作曲・編曲の集合が同順序で完全一致するなら
-                // 1 グループに統合される（劇伴一覧のマージルールと同じ）。
-                var singleCueList = new[] { c };
-                var composers = BuildBgmKeyStaffEntries(singleCueList, "COMPOSITION",
-                    cue => cue.ComposerName, creditAliasesByBgmCue);
-                var arrangers = BuildBgmKeyStaffEntries(singleCueList, "ARRANGEMENT",
-                    cue => cue.ArrangerName, creditAliasesByBgmCue);
-                var staffGroups = BuildBgmStaffGroups(composers, arrangers);
+                // スタッフバッジ。構造化行（bgm_cue_credits）のある役職は credit_seq 順の行から
+                // 所属つきの名義 HTML を組む（BuildCueStaffGroups）。どちらの役職にも構造化行が無い cue は、
+                // /bgms/ 一覧で使うのと同じ BuildBgmKeyStaffEntries を当該 cue 1 件だけのリストに対して呼び、
+                // フリーテキストの名前を出す。作曲・編曲が同じなら 1 グループに統合される（劇伴一覧のマージルールと同じ）。
+                var staffGroups = BuildCueStaffGroups(c, creditAliasesByBgmCue, creditAliasBySeq);
 
                 return new BgmCueRow
                 {
@@ -1115,6 +1121,94 @@ public sealed class MusicGenerator
             };
             _page.RenderAndWrite($"/bgms/{s.Slug}/", "music", "bgms-detail.sbn", content, layout);
         }
+    }
+
+    /// <summary>
+    /// 劇伴詳細の曲のカードに出す作曲・編曲のスタッフグループを組み立てる。
+    /// <list type="bullet">
+    ///   <item>構造化行（bgm_cue_credits）のある役職は、credit_seq 順の行から名義 HTML（<see cref="BgmStaffGroup.NamesHtml"/>）を組む。
+    ///     所属は歌の作家連名と同じ出し方（<see cref="SongCreditAffiliation.BuildNamesHtml"/>）で添え、名義を持たない文字だけの行は文字のまま出す。</item>
+    ///   <item>作曲・編曲がともに構造化行を持ち、名義 HTML が同じなら、作曲・編曲のバッジを並べた 1 グループにまとめる。</item>
+    ///   <item>どちらの役職にも構造化行が無い cue は、フリーテキスト（composer_name / arranger_name）の名前を劇伴一覧と同じ規則で出す。
+    ///     片方だけ構造化行を持つ cue は、もう片方をフリーテキストのグループとして並べる。</item>
+    /// </list>
+    /// </summary>
+    private IReadOnlyList<BgmStaffGroup> BuildCueStaffGroups(
+        BgmCue cue,
+        IReadOnlyDictionary<(int SeriesId, string MNoDetail, string Role), List<BgmCueCreditAlias>> creditAliasesByBgmCue,
+        IReadOnlyDictionary<(int SeriesId, string MNoDetail, string Role, byte CreditSeq), BgmCueCreditAlias> creditAliasBySeq)
+    {
+        string composerHtml = BuildCueCreditNamesHtml(cue, "COMPOSITION", creditAliasBySeq);
+        string arrangerHtml = BuildCueCreditNamesHtml(cue, "ARRANGEMENT", creditAliasBySeq);
+
+        var singleCueList = new[] { cue };
+        if (composerHtml.Length == 0 && arrangerHtml.Length == 0)
+        {
+            return BuildBgmStaffGroups(
+                BuildBgmKeyStaffEntries(singleCueList, "COMPOSITION", c => c.ComposerName, creditAliasesByBgmCue),
+                BuildBgmKeyStaffEntries(singleCueList, "ARRANGEMENT", c => c.ArrangerName, creditAliasesByBgmCue));
+        }
+
+        var composerBadge = new BgmRoleBadge { RoleCode = "COMPOSITION", RoleLabel = "作曲" };
+        var arrangerBadge = new BgmRoleBadge { RoleCode = "ARRANGEMENT", RoleLabel = "編曲" };
+        if (string.Equals(composerHtml, arrangerHtml, StringComparison.Ordinal))
+        {
+            return new[] { new BgmStaffGroup { Roles = new[] { composerBadge, arrangerBadge }, NamesHtml = composerHtml } };
+        }
+
+        // 役職ごとに別グループ（作曲 → 編曲）。構造化行の無い役職はフリーテキストの名前で出す。
+        var groups = new List<BgmStaffGroup>();
+        void AddRole(BgmRoleBadge badge, string namesHtml, Func<BgmCue, string?> freeTextSelector)
+        {
+            if (namesHtml.Length > 0)
+            {
+                groups.Add(new BgmStaffGroup { Roles = new[] { badge }, NamesHtml = namesHtml });
+                return;
+            }
+            var members = BuildBgmKeyStaffEntries(singleCueList, badge.RoleCode, freeTextSelector, creditAliasesByBgmCue);
+            if (members.Count > 0) groups.Add(new BgmStaffGroup { Roles = new[] { badge }, Members = members });
+        }
+        AddRole(composerBadge, composerHtml, c => c.ComposerName);
+        AddRole(arrangerBadge, arrangerHtml, c => c.ArrangerName);
+        return groups;
+    }
+
+    /// <summary>
+    /// 曲の 1 役職分の構造化行（credit_seq 順）から名義 HTML を組む。構造化行が無ければ空文字。
+    /// 名義は人物が 1 人に決まれば人物詳細へのリンク（<c>a.staff-name</c>）、決まらなければ <c>span.staff-name</c>
+    /// （主要スタッフの表示と同じ印）。名義を持たない文字だけの行は <c>span.staff-name</c> の文字。区切りは preceding_separator（空なら「、」）。
+    /// </summary>
+    private string BuildCueCreditNamesHtml(
+        BgmCue cue,
+        string role,
+        IReadOnlyDictionary<(int SeriesId, string MNoDetail, string Role, byte CreditSeq), BgmCueCreditAlias> creditAliasBySeq)
+    {
+        if (!_ctx.BgmCueCreditsByCue.TryGetValue((cue.SeriesId, cue.MNoDetail), out var credits)) return "";
+        var rows = credits
+            .Where(r => string.Equals(r.CreditRole, role, StringComparison.Ordinal))
+            .OrderBy(r => r.CreditSeq)
+            .ToList();
+        if (rows.Count == 0) return "";
+
+        BgmCueCreditAlias? AliasOf(BgmCueCredit r)
+            => r.IsText ? null : creditAliasBySeq.GetValueOrDefault((r.SeriesId, r.MNoDetail, r.CreditRole, r.CreditSeq));
+        string NameOf(BgmCueCredit r)
+        {
+            if (r.IsText) return r.RawText ?? "";
+            if (AliasOf(r) is { } a) return a.DisplayText;
+            return r.PersonAliasId is int id && _ctx.PersonAliasById.TryGetValue(id, out var pa) ? pa.GetDisplayName() : "";
+        }
+        // 表示テキストのエスケープは、メンバー列をテンプレで出すとき（html.escape）と同じ規則にそろえる。
+        string StaffNameHtml(BgmCueCredit r, string text)
+            => AliasOf(r)?.PersonId is int pid
+                ? $"<a class=\"staff-name\" href=\"{HtmlUtil.Escape(PathUtil.PersonUrl(pid))}\">{System.Net.WebUtility.HtmlEncode(text)}</a>"
+                : $"<span class=\"staff-name\">{System.Net.WebUtility.HtmlEncode(text)}</span>";
+
+        return SongCreditAffiliation.BuildNamesHtml(rows, _ctx.CompanyAliasById,
+            r => StaffNameHtml(r, NameOf(r)),
+            NameOf,
+            StaffNameHtml,
+            "、");
     }
 
     /// <summary>
@@ -1369,6 +1463,11 @@ public sealed class MusicGenerator
         public IReadOnlyList<BgmRoleBadge> Roles { get; set; } = Array.Empty<BgmRoleBadge>();
         /// <summary>このグループに属するメンバー（人物）の列。劇伴データ集計由来は頻度降順、本編クレジット由来はクレジット順。</summary>
         public IReadOnlyList<BgmKeyStaffEntry> Members { get; set; } = Array.Empty<BgmKeyStaffEntry>();
+        /// <summary>
+        /// 名義の並びの組み立て済み HTML（劇伴詳細の曲のカードで、構造化行のある役職だけ）。credit_seq 順の名義に所属を添え、
+        /// 名義を持たない文字だけの行は文字のまま出す。空でなければテンプレは <see cref="Members"/> の代わりにこれを出す。
+        /// </summary>
+        public string NamesHtml { get; set; } = "";
     }
 
     /// <summary>役職バッジ 1 個分（コードと表示ラベルのみ）。</summary>

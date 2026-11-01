@@ -25,7 +25,7 @@ public sealed class MusicCreditIndex
     public IReadOnlyDictionary<int, IReadOnlyList<MusicCredit>> ByCompanyAlias { get; }
     /// <summary>
     /// 所属の屋号（affiliation_company_alias_id）→ その屋号を所属として添えた名義の行。企業詳細の「所属スタッフのクレジット」に使う。
-    /// 歌の作家連名（song_credits）に印刷された所属も、同じ形の行に写して含める（コンストラクタの songCreditAffiliationRows）。
+    /// 歌・劇伴の作家連名（song_credits / bgm_cue_credits）に印刷された所属も、同じ形の行に写して含める（コンストラクタの creditAffiliationRows）。
     /// </summary>
     public IReadOnlyDictionary<int, IReadOnlyList<MusicCredit>> ByAffiliationCompanyAlias { get; }
 
@@ -47,12 +47,13 @@ public sealed class MusicCreditIndex
     /// </summary>
     public string CoverageLabel { get; }
 
-    /// <param name="songCreditAffiliationRows">
-    /// 歌の作家連名のうち所属の会社名義を持つ行を、音楽クレジットの形（紐付け先は曲）に写したもの。
-    /// <see cref="ByAffiliationCompanyAlias"/> にだけ加え、件数や名義・曲ごとの索引には含めない（曲・人物の表示は song_credits 側で出すため）。
+    /// <param name="creditAffiliationRows">
+    /// 歌・劇伴の作家連名のうち所属の会社名義を持つ行を、音楽クレジットの形（紐付け先は歌なら曲、劇伴ならその劇伴のセッション）に写したもの。
+    /// <see cref="ByAffiliationCompanyAlias"/> にだけ加え、件数や名義・曲・セッションごとの索引には含めない
+    /// （曲・劇伴・人物の表示は song_credits / bgm_cue_credits 側で出すため）。
     /// </param>
     public MusicCreditIndex(IReadOnlyList<MusicCredit> rows, IReadOnlyList<Product> products, IReadOnlyList<BgmSession> sessions, IReadOnlyList<Disc> discs,
-        IReadOnlyList<MusicCredit>? songCreditAffiliationRows = null)
+        IReadOnlyList<MusicCredit>? creditAffiliationRows = null)
     {
         SeriesIdByProduct = discs
             .Where(d => d.SeriesId.HasValue)
@@ -80,7 +81,7 @@ public sealed class MusicCreditIndex
         ByPersonAlias = Group(rows.Where(r => r.PersonAliasId.HasValue), r => r.PersonAliasId!.Value);
         ByCharacterAlias = Group(rows.Where(r => r.CharacterAliasId.HasValue), r => r.CharacterAliasId!.Value);
         ByCompanyAlias = Group(rows.Where(r => r.CompanyAliasId.HasValue), r => r.CompanyAliasId!.Value);
-        ByAffiliationCompanyAlias = Group(rows.Concat(songCreditAffiliationRows ?? Array.Empty<MusicCredit>())
+        ByAffiliationCompanyAlias = Group(rows.Concat(creditAffiliationRows ?? Array.Empty<MusicCredit>())
             .Where(r => r.AffiliationCompanyAliasId.HasValue), r => r.AffiliationCompanyAliasId!.Value);
         ProductByCatalogNo = products.GroupBy(p => p.ProductCatalogNo, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);

@@ -139,19 +139,25 @@ public static class CreditText
     /// <summary>
     /// 劇伴 cue の指定役職（作曲 / 編曲）の名義を、<c>preceding_separator</c> で連結した平文で返す。
     /// 構造化行が無ければ <paramref name="fallbackText"/>（bgm_cues の *_name 列）を返す。
+    /// 名義を持たない文字だけの行（TEXT）は raw_text をそのまま出す。
+    /// <paramref name="companyAliasMap"/> を渡すと、サントラに印刷された所属を歌の作家連名と同じ出し方で添える
+    /// （名義のあとに「（Nostalgic Orchestra）」、所属の会社名だけ、名義だけ。<see cref="SongCreditAffiliation"/>）。
     /// </summary>
     public static string BgmCueCreditNames(
         IReadOnlyList<BgmCueCredit>? credits,
         string roleCode,
         string? fallbackText,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap)
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CompanyAlias>? companyAliasMap = null)
     {
         var rows = (credits ?? Array.Empty<BgmCueCredit>())
             .Where(c => string.Equals(c.CreditRole, roleCode, StringComparison.Ordinal))
             .OrderBy(c => c.CreditSeq)
             .ToList();
         if (rows.Count == 0) return fallbackText?.Trim() ?? "";
-        return JoinNames(rows.Select(r => (r.PrecedingSeparator, PersonName(r.PersonAliasId, personAliasMap))));
+        string NameOf(BgmCueCredit r) => r.IsText ? r.RawText?.Trim() ?? "" : PersonName(r.PersonAliasId, personAliasMap);
+        if (companyAliasMap is null) return JoinNames(rows.Select(r => (r.PrecedingSeparator, NameOf(r))));
+        return SongCreditAffiliation.BuildNamesText(rows, companyAliasMap, NameOf);
     }
 
     private static List<SongCredit> SongCreditRows(IReadOnlyList<SongCredit>? credits, string roleCode)

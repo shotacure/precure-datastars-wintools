@@ -380,6 +380,16 @@ WHERE sc.affiliation_display = 'COMPANY_ONLY' AND sc.affiliation_company_alias_i
 ORDER BY sc.song_id, sc.credit_role, sc.credit_seq;
 
 
+-- E3: 所属の会社名だけを出す劇伴の作家の行に、所属が無い
+--   件数 > 0 の意味: 「bgm_cue_credits.affiliation_display = 'COMPANY_ONLY' なのに、所属の会社名義も自由記述も無い」状態（E2 の劇伴版）。
+--   表示は名義に戻るが、サントラの表記（団体名だけ）と違ってしまう。会社名義が消えて SET NULL になったときなどに起きる。
+--   名義を持たない文字だけの行（entry_kind = 'TEXT'）は所属を持たないので対象外。
+SELECT 'E3 bgm_cue_credits company-only w/o affiliation' AS check_name, bcc.series_id, bcc.m_no_detail, bcc.credit_role, bcc.credit_seq, bcc.person_alias_id
+FROM bgm_cue_credits bcc
+WHERE bcc.entry_kind = 'PERSON' AND bcc.affiliation_display = 'COMPANY_ONLY' AND bcc.affiliation_company_alias_id IS NULL AND (bcc.affiliation_text IS NULL OR bcc.affiliation_text = '')
+ORDER BY bcc.series_id, bcc.m_no_detail, bcc.credit_role, bcc.credit_seq;
+
+
 -- ============================================================================
 -- 全件カウントサマリ（最後に実行すると一覧で異常箇所がわかる）
 -- ============================================================================
@@ -432,4 +442,6 @@ UNION ALL SELECT 'E1 music_credits target not on source disc', COUNT(*) FROM mus
        OR (m.target_kind = 'SONG_RECORDING' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no WHERE d.product_catalog_no = m.source_product_catalog_no AND t.song_recording_id = m.song_recording_id))
        OR (m.target_kind = 'BGM_SESSION' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no JOIN bgm_cues bc ON bc.series_id = t.bgm_series_id AND bc.m_no_detail = t.bgm_m_no_detail WHERE d.product_catalog_no = m.source_product_catalog_no AND bc.series_id = m.bgm_series_id AND bc.session_no = m.bgm_session_no))
 UNION ALL SELECT 'E2 song_credits company-only w/o affiliation', COUNT(*) FROM song_credits sc
-    WHERE sc.affiliation_display = 'COMPANY_ONLY' AND sc.affiliation_company_alias_id IS NULL AND (sc.affiliation_text IS NULL OR sc.affiliation_text = '');
+    WHERE sc.affiliation_display = 'COMPANY_ONLY' AND sc.affiliation_company_alias_id IS NULL AND (sc.affiliation_text IS NULL OR sc.affiliation_text = '')
+UNION ALL SELECT 'E3 bgm_cue_credits company-only w/o affiliation', COUNT(*) FROM bgm_cue_credits bcc
+    WHERE bcc.entry_kind = 'PERSON' AND bcc.affiliation_display = 'COMPANY_ONLY' AND bcc.affiliation_company_alias_id IS NULL AND (bcc.affiliation_text IS NULL OR bcc.affiliation_text = '');

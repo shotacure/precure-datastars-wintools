@@ -27,9 +27,10 @@ public partial class BgmCuesEditorForm : Form
     private readonly TracksRepository _tracksRepo;
     private readonly SeriesRepository _seriesRepo;
 
-    // 構造化クレジット（bgm_cue_credits）と picker 用リポジトリ
+    // 構造化クレジット（bgm_cue_credits）と picker 用リポジトリ（名義と、作家の所属の会社名義）
     private readonly PersonAliasesRepository _personAliasesRepo;
     private readonly BgmCueCreditsRepository _bgmCueCreditsRepo;
+    private readonly CompanyAliasesRepository _companyAliasesRepo;
     // 歌い手（bgm_cue_singers。スキャットなど）と、その編集ダイアログのキャラ名義 picker 用リポジトリ
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     private readonly BgmCueSingersRepository _bgmCueSingersRepo;
@@ -50,6 +51,7 @@ public partial class BgmCuesEditorForm : Form
         // 構造化クレジット用
         PersonAliasesRepository personAliasesRepo,
         BgmCueCreditsRepository bgmCueCreditsRepo,
+        CompanyAliasesRepository companyAliasesRepo,
         // 歌い手用
         CharacterAliasesRepository characterAliasesRepo,
         BgmCueSingersRepository bgmCueSingersRepo)
@@ -63,6 +65,7 @@ public partial class BgmCuesEditorForm : Form
         // 追加分の保持
         _personAliasesRepo = personAliasesRepo ?? throw new ArgumentNullException(nameof(personAliasesRepo));
         _bgmCueCreditsRepo = bgmCueCreditsRepo ?? throw new ArgumentNullException(nameof(bgmCueCreditsRepo));
+        _companyAliasesRepo = companyAliasesRepo ?? throw new ArgumentNullException(nameof(companyAliasesRepo));
         _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
         _bgmCueSingersRepo = bgmCueSingersRepo ?? throw new ArgumentNullException(nameof(bgmCueSingersRepo));
 
@@ -504,7 +507,10 @@ public partial class BgmCuesEditorForm : Form
         }
     }
 
-    /// <summary>「構造化作曲 / 編曲」編集ボタンのハンドラ。</summary>
+    /// <summary>
+    /// 「構造化作曲 / 編曲」編集ボタンのハンドラ。歌の作家連名と同じ編集ダイアログで、名義ごとの所属（会社名義または自由記述）と
+    /// 所属の出し方、名義を持たない文字だけの行（「不詳」など）を入れられる。
+    /// </summary>
     private async Task OnEditCueCreditsAsync(string role)
     {
         if (gridCues.CurrentRow?.DataBoundItem is not BgmCue c)
@@ -519,12 +525,31 @@ public partial class BgmCuesEditorForm : Form
             var initial = new List<PersonAliasCreditsEditDialog.LineDto>();
             foreach (var ec in existing)
             {
-                string display = await _personAliasesRepo.GetDisplayNameAsync(ec.PersonAliasId);
+                // 文字の行は名義・所属を持たないので、表記だけを渡す
+                if (ec.IsText || ec.PersonAliasId is not int aliasId)
+                {
+                    initial.Add(new PersonAliasCreditsEditDialog.LineDto
+                    {
+                        IsText = true,
+                        RawText = ec.RawText,
+                        PrecedingSeparator = ec.PrecedingSeparator,
+                        Notes = ec.Notes
+                    });
+                    continue;
+                }
+                string display = await _personAliasesRepo.GetDisplayNameAsync(aliasId);
+                string? affDisplay = ec.AffiliationCompanyAliasId is int affId
+                    ? (await _companyAliasesRepo.GetByIdAsync(affId))?.Name
+                    : null;
                 initial.Add(new PersonAliasCreditsEditDialog.LineDto
                 {
-                    AliasId = ec.PersonAliasId,
+                    AliasId = aliasId,
                     AliasDisplay = display,
                     PrecedingSeparator = ec.PrecedingSeparator,
+                    AffiliationCompanyAliasId = ec.AffiliationCompanyAliasId,
+                    AffiliationCompanyDisplay = affDisplay,
+                    AffiliationText = ec.AffiliationText,
+                    AffiliationMode = ec.AffiliationDisplay,
                     Notes = ec.Notes
                 });
             }
@@ -538,17 +563,25 @@ public partial class BgmCuesEditorForm : Form
                 _                             => $"BGM {role} クレジット編集（{c.SeriesId}/{c.MNoDetail}）"
             };
 
-            using var dlg = new PersonAliasCreditsEditDialog(title, initial, _personAliasesRepo);
+            // 会社名義のリポジトリを渡して所属の欄を出し、文字の行も入れられるようにする
+            using var dlg = new PersonAliasCreditsEditDialog(title, initial, _personAliasesRepo, _companyAliasesRepo, allowTextLines: true);
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
+            // 編集結果を BgmCueCredit モデルに変換し、ReplaceAllByRoleAsync で一括 INSERT。
+            // 文字の行は名義・所属を持たない（列の整合性は DB のトリガーで担保）。
             var newCredits = dlg.ResultLines.Select((l, i) => new BgmCueCredit
             {
                 SeriesId = c.SeriesId,
                 MNoDetail = c.MNoDetail,
                 CreditRole = role,
                 CreditSeq = (byte)(i + 1),
-                PersonAliasId = l.AliasId,
+                EntryKind = l.IsText ? BgmCueCreditEntryKinds.Text : BgmCueCreditEntryKinds.Person,
+                PersonAliasId = l.IsText ? null : l.AliasId,
+                RawText = l.IsText ? l.RawText : null,
                 PrecedingSeparator = i == 0 ? null : l.PrecedingSeparator,
+                AffiliationCompanyAliasId = l.IsText ? null : l.AffiliationCompanyAliasId,
+                AffiliationText = l.IsText ? null : l.AffiliationText,
+                AffiliationDisplay = l.AffiliationMode ?? SongCreditAffiliationDisplay.NameWithCompany,
                 Notes = l.Notes
             }).ToList();
 

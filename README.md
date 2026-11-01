@@ -546,6 +546,7 @@ title,title_kana,series_title_short,lyricist_name,lyricist_name_kana,composer_na
 - **検索バー**（最上部）: シリーズフィルタ、セッションフィルタ、検索キーワード、検索ボタン、CSV取り込みボタン
 - **中段**: 左に劇伴一覧、右に詳細（シリーズ・セッション・セクション・M番号詳細・M番号分類・メニュー名・作曲者・作曲者かな・編曲者・編曲者かな・尺(秒)・仮 M 番号フラグ・仮番号を採番ボタン・欠番フラグ・備考）
 - **下段**: 選択中キューの収録ディスク・トラック一覧（読み取り専用）
+- **構造化クレジット**（詳細の下）: 作曲・編曲（`bgm_cue_credits`）と歌い手（`bgm_cue_singers`）の連名の表示と「編集...」。作曲・編曲の編集ダイアログは歌の作家と同じもので、名義ごとの所属（会社名義の選択か自由記述）と所属の出し方に加え、名義を持たない文字だけの行（「文字の行」にチェックして「不詳」などを入れる）を入れられる
 
 **セクション**: セッション内の区分（サントラ封入の BGM リストにある「<アイテム関連BGM>」「<情景描写BGM>」等の小見出し）。セクションコンボには編集側で選択中のセッションに属するセクションだけが並び、先頭の「(なし)」で所属なし（`section_no` = NULL）になる。1 つのセッション内で所属ありと所属なしの音源は混在させない運用。セクション自体の追加・改名・削除は「マスタ管理 → 劇伴・セクション」タブで行う。
 
@@ -1867,11 +1868,11 @@ CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.
 
 > 音楽種別 `music_class_code` は `song_recordings` 側で保持する設計。同一曲のカバーやアレンジが「主題歌→キャラソン」のように文脈で種別を変えるケースを表現するため、種別を録音単位で管理する。
 
-> `songs.*_name` / `song_recordings.singer_name` / `bgm_cues.composer_name`・`arranger_name` のフリーテキストは、構造化クレジット（`song_credits` / `song_recording_singers` / `bgm_cue_credits`）がまだ無い曲・録音・劇伴のためのフォールバック。サイトは画面表示だけでなく、meta description・OGP カード・JSON-LD・使用曲リストの副題といった平文の出力先でも、役職ごとに構造化行があればそれだけを使い、1 行も無い役職に限ってフリーテキストを使う（平文化は `CreditText` に集約。書式は画面表示と同じで、キャラ歌唱は「キャラ(CV:声優)」）。曲・録音の作詞・作曲・編曲（メドレー編曲を含む）・歌唱は、構造化した役職のフリーテキスト（名前と読み）を空にする（読みは名義の `name_kana` に移す）。劇伴のフリーテキストは商品ページが直接使うので残す。
+> `songs.*_name` / `song_recordings.singer_name` / `bgm_cues.composer_name`・`arranger_name` のフリーテキストは、構造化クレジット（`song_credits` / `song_recording_singers` / `bgm_cue_credits`）がまだ無い曲・録音・劇伴のためのフォールバック。サイトは画面表示だけでなく、meta description・OGP カード・JSON-LD・使用曲リストの副題といった平文の出力先でも、役職ごとに構造化行があればそれだけを使い、1 行も無い役職に限ってフリーテキストを使う（平文化は `CreditText` に集約。書式は画面表示と同じで、キャラ歌唱は「キャラ(CV:声優)」）。曲・録音・劇伴とも、構造化した役職のフリーテキスト（名前と読み）を空にする（読みは名義の `name_kana` に移す。劇伴の商品ページは曲ごとに構造化行があればそれを使う）。
 
 > `song_credits.role_label_text` は、盤に印刷された作家の役職の表記（「原詞」など）。役職名（`roles.name_ja`）と違うときだけ、その役職の連名の先頭行（`credit_seq` がいちばん小さい行）に入れる（`SongCreditRoles.LabelTextOf`）。サイトは楽曲詳細・楽曲一覧のカード・盤のトラック・主題歌の行・OGP カード・meta description の役職の表記をこの文字にし（リンク先は役職のまま）、人物ページ・役職詳細・統計などの集計は役職のまま。Catalog の歌管理は表記のある役職の連名に〔表記〕を添えて見せ、連名を編集し直しても表記を先頭行に引き継ぐ（表記そのものの入力欄は持たない）。
 
-> `song_credits.affiliation_company_alias_id` / `affiliation_text` は、盤に印刷された作家の所属（「岡部啓一(MONACA)」の MONACA）。会社マスタの名義（`company_aliases`）に紐付けるのを基本とし、マスタに無い所属だけ自由記述に入れる。サイトは楽曲詳細・楽曲一覧のカード・盤のトラック・エピソードや作品の主題歌の行で名義のあとに「（MONACA）」を薄字で添え（盤スタッフの所属と同じ `music-credit-affiliation`。会社名義なら企業詳細へリンク）、同じ所属が続く連名は最後の名義のあとにだけ添える（`SongCreditAffiliation`）。meta description・OGP カードの平文にも添える。各話のクレジット画面の主題歌カード（役職テンプレ）には添えない（画面の表記どおりにするため）。企業詳細の「所属スタッフのクレジット」には、その会社を所属とする作家を歌として載せる（根拠の盤はその曲の録音が最初に入った商品）。Catalog の歌管理の作詞・作曲・編曲・メドレー編曲の編集ダイアログで、名義ごとに所属（会社名義の選択か自由記述）を入れる。
+> `song_credits.affiliation_company_alias_id` / `affiliation_text` は、盤に印刷された作家の所属（「岡部啓一(MONACA)」の MONACA）。会社マスタの名義（`company_aliases`）に紐付けるのを基本とし、マスタに無い所属だけ自由記述に入れる。サイトは楽曲詳細・楽曲一覧のカード・盤のトラック・エピソードや作品の主題歌の行で名義のあとに「（MONACA）」を薄字で添え（盤スタッフの所属と同じ `music-credit-affiliation`。会社名義なら企業詳細へリンク）、同じ所属が続く連名は最後の名義のあとにだけ添える（`SongCreditAffiliation`）。劇伴の作家連名（`bgm_cue_credits`）の所属も同じ部品で組む（共通の形は `IAffiliatedPersonCredit`）。meta description・OGP カードの平文にも添える。各話のクレジット画面の主題歌カード（役職テンプレ）には添えない（画面の表記どおりにするため）。企業詳細の「所属スタッフのクレジット」には、その会社を所属とする作家を歌として載せる（根拠の盤はその曲の録音が最初に入った商品）。Catalog の歌管理の作詞・作曲・編曲・メドレー編曲の編集ダイアログで、名義ごとに所属（会社名義の選択か自由記述）を入れる。
 
 > `song_credits.affiliation_display` は、所属の出し方（既定 `NAME_WITH_COMPANY`）。`NAME_WITH_COMPANY` は名義のあとに所属を添える（「藤本 記子（Nostalgic Orchestra）」）。`COMPANY_ONLY` は名義を出さず所属の会社名だけを出す（盤に「作詞・作曲・編曲：Nostalgic Orchestra」とだけ載っているとき。データは作詞・作曲＝藤本 記子、編曲＝福富 雅之、所属＝Nostalgic Orchestra で持つ）。`NAME_ONLY` は所属を持ったまま名義だけを出す（盤には名前だけだが、実質はその団体の仕事のとき）。どれもデータは人物＋所属なので、人物詳細・/creators の集計は人物の仕事として数え、企業詳細の所属スタッフにも載る。所属の会社名だけを出す行は、会社名のあとに実際の人物を小さい括弧で添える（「Nostalgic Orchestra（藤本 記子）」）。人物が 1 人に決まれば会社名の文字をその人物の詳細へリンクし、同じ所属の会社名だけの行が連名で続いて人物が 2 人以上になるときは、会社名は 1 回だけ出して企業詳細へリンクし、括弧の名前をそれぞれ人物の詳細へリンクする（区切りも出さない）。所属が引けない（会社名義が消えたなど）ときは名義に戻す（健全性チェックの E2 で見つける）。盤のトラック・楽曲詳細・楽曲一覧のカード・主題歌の行・平文（meta description・OGP カード）は同じ部品 `SongCreditAffiliation.BuildNamesHtml` / `BuildNamesText` で組み、盤のトラック行・楽曲一覧のカードでは表示が同じ役職どうしがまとまる（作詞・作曲＝藤本 記子、編曲＝福富 雅之なら「[作詞][作曲] Nostalgic Orchestra（藤本 記子）」と「[編曲] Nostalgic Orchestra（福富 雅之）」）。OGP カードの画像では、人物の括弧をクレジットに無い補足として小さい補助色の字で間を空けて描く（`OgCardNote.Wrap` で包んだ部分を `OgCardRenderer` の流し込みが描き分ける）。構造化データ（JSON-LD）では所属の会社名だけの行も実際の人物を `Person` として出す。役職テンプレ（各話・映画のクレジット画面）では所属を添えないが、所属の会社名だけを出す行は会社名義を出し（画面も団体名だけの表記のため。企業詳細へリンク）、そのあとに実際の人物の括弧を添える。「作詞・作曲・編曲が同じ」「作曲と編曲が同じ」の条件は会社名どうしで比べ、その条件で 1 行にまとめたときは、まとめた役職ぶんの人物を役職つきで並べる（「作詞・作曲・編曲：Nostalgic Orchestra（作詞・作曲：藤本 記子、編曲：福富 雅之）」。同じ人の役職は「・」でまとめ、人の間は「、」。人物が 1 人なら名前だけ）。Catalog の作家の編集ダイアログでは、所属の欄の「所属の出し方」で選ぶ（グリッドの所属の列に〔会社名だけ〕〔名義だけ〕を添える）。
 
@@ -2001,6 +2002,37 @@ CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.
 - `ix_bgm_cues_session (series_id, session_no)`
 - `ix_bgm_cues_section (series_id, session_no, section_no)`
 
+#### `bgm_cue_credits` — 劇伴の作家
+
+劇伴の曲（`bgm_cues`）の作曲・編曲の連名。1 行は名義の行（`entry_kind` = `PERSON`）か、名義を持たない文字だけの行（`TEXT`。「不詳」など、人物にできない作家の表記）。名義の行は歌の作家（`song_credits`）と同じ所属と所属の出し方を持てる（サントラに「福富雅之(Nostalgic Orchestra)」のように印刷されているとき）。行の種類と名義・文字・所属の列の整合性はトリガー（`trg_bgm_cue_credits_bi_consistency` / `_bu_consistency`）で担保する。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `series_id` | INT PK(1) | 所属シリーズ |
+| `m_no_detail` | VARCHAR(255) PK(2) | M 番号。`(series_id, m_no_detail)` の複合 FK で → `bgm_cues`（ON DELETE CASCADE / ON UPDATE CASCADE） |
+| `credit_role` | VARCHAR(64) PK(3) FK | 役職（→ `roles`。`COMPOSITION` / `ARRANGEMENT`） |
+| `credit_seq` | TINYINT UNSIGNED PK(4) | 役職ごとの連名の順（1 始まり） |
+| `entry_kind` | ENUM('PERSON','TEXT') NOT NULL DEFAULT 'PERSON' | 行の種類 |
+| `person_alias_id` | INT NULL FK | 名義（→ `person_aliases`、ON DELETE RESTRICT）。`PERSON` の行で必須、`TEXT` の行では NULL |
+| `raw_text` | VARCHAR(255) NULL | `TEXT` の行の表記（空文字不可）。`PERSON` の行では NULL |
+| `preceding_separator` | VARCHAR(8) NULL | seq>=2 の行で前の名義との区切り（空ならサイトは「、」） |
+| `affiliation_company_alias_id` | INT NULL FK | 名義に添える所属の会社名義（→ `company_aliases`、ON DELETE SET NULL）。`TEXT` の行では NULL |
+| `affiliation_text` | VARCHAR(64) NULL | 会社マスタに無い所属の自由記述（会社名義があればそちらを使う）。`TEXT` の行では NULL |
+| `affiliation_display` | ENUM('NAME_WITH_COMPANY','COMPANY_ONLY','NAME_ONLY') NOT NULL DEFAULT 'NAME_WITH_COMPANY' | 所属の出し方。意味は `song_credits.affiliation_display` と同じ（名義＋所属 / 所属の会社名だけ / 名義だけ） |
+| `notes` | TEXT NULL | 備考 |
+| `created_at` / `updated_at` / `created_by` / `updated_by` | 監査列 | |
+
+サイトでは、所属と文字の行を次の所に出す。どれも所属の畳み方は歌の作家と同じ部品（`SongCreditAffiliation`）で、名義は人物詳細へリンクし、文字の行はリンクなしの文字で出す。
+
+- 商品詳細のトラック行：「[作曲] 名義（所属）」の形（`TrackCreditHtmlBuilder.BuildBgmCueCreditsSegmentsHtml`）。作曲と編曲の名前の並び（所属を含む）が同じなら「[作曲][編曲]」とバッジを並べて 1 回だけ出す
+- 劇伴詳細（`/bgms/{作品}/`）の曲のカード：構造化行のある役職は登録順（`credit_seq`）の名義に所属を添えて出す（人物が 1 人に決まる名義は人物詳細へリンク）。作曲と編曲の名前の並びが同じなら 1 つにまとめる。構造化行の無い役職はフリーテキストのまま
+- 各話の使用曲の副題（「作曲: 〜」）：所属つきの平文（`CreditText.BgmCueCreditNames`）
+- 企業詳細の「所属スタッフのクレジット」：所属の会社名義を持つ行を、その劇伴のセッションへの劇伴として載せる（根拠の盤はその劇伴が最初に入った商品）
+
+出さない所：`/bgms/` の一覧と劇伴詳細の見出しの主要スタッフ（担当割合の集計）・劇伴詳細の OGP カードと meta description は名義だけで、所属を添えない。文字の行は人物にならないので、主要スタッフの集計・人物詳細の音楽クレジット・`/creators/` の集計・クレジットの逆引き（`CreditInvolvementIndex`）・商品の作曲者の集計には数えない。所属の会社名だけを出す行に所属が無いものは健全性チェックの E3 で拾う。
+
+Catalog では「劇伴マスタ管理」の構造化クレジットで、作曲・編曲の「編集...」から入れる（所属の欄と「文字の行」の欄を持つ作家の編集ダイアログ。文字の行にチェックすると、名義・所属の欄の代わりに文字を入れる）。
+
 #### `bgm_cue_singers` — 劇伴の歌い手
 
 劇伴の曲（`bgm_cues`）の中で声を出す人・キャラ（サントラに「スキャット：キュアミラクル(CV:高橋李依)、…」のように載る歌い手）の連名。列の意味は歌の録音の歌唱者 `song_recording_singers` と同じで、`billing_kind` = `PERSON`（人物・ユニットの名義）/ `CHARACTER_WITH_CV`（キャラ ＋ 声優）、スラッシュの相方・区切り・所属・ユニットのメンバー展開を持つ。役職（`role_code`）は主に `SCAT`（スキャット）で、`VOCALS`（歌）・`BACKING_VOCALS`（コーラス）も入れられる。
@@ -2032,7 +2064,7 @@ CDAnalyzer が READ CD で読んだ音から取った指紋（`PrecureDataStars.
 
 #### `musical_work_credits` — 曲（著作物）の作家
 
-曲（著作物）の作家の連名。列は `bgm_cue_credits` と同じ流儀で、役職は歌の作家（`song_credits`）と同じ役職コード。PK は `(work_id, credit_role, credit_seq)`。
+曲（著作物）の作家の連名。列は `bgm_cue_credits` と同じ流儀（所属・文字の行の列は持たない）で、役職は歌の作家（`song_credits`）と同じ役職コード。PK は `(work_id, credit_role, credit_seq)`。
 
 | 列名 | 型 | 説明 |
 |---|---|---|

@@ -28,6 +28,8 @@ partial class PersonAliasCreditsEditDialog
     private TextBox txtAffiliationText = null!;
     private Label lblAffiliationMode = null!;
     private ComboBox cboAffiliationMode = null!;
+    private CheckBox chkTextLine = null!;
+    private TextBox txtRawText = null!;
     private Label lblNotes = null!;
     private TextBox txtNotes = null!;
 
@@ -87,7 +89,7 @@ partial class PersonAliasCreditsEditDialog
         gridLines.Columns.AddRange(new DataGridViewColumn[]
         {
             new DataGridViewTextBoxColumn { Name = "colSeq",      HeaderText = "Seq",         Width = 60,  DataPropertyName = "Seq" },
-            new DataGridViewTextBoxColumn { Name = "colAlias",    HeaderText = "名義",         Width = 360, DataPropertyName = "AliasDisplay" },
+            new DataGridViewTextBoxColumn { Name = "colAlias",    HeaderText = "名義",         Width = 360, DataPropertyName = "NameDisplay" },
             new DataGridViewTextBoxColumn { Name = "colSep",      HeaderText = "区切り",       Width = 100, DataPropertyName = "Separator" },
             new DataGridViewTextBoxColumn { Name = "colAffiliation", HeaderText = "所属",      Width = 140, DataPropertyName = "AffiliationDisplay" },
             new DataGridViewTextBoxColumn { Name = "colNotes",    HeaderText = "備考",         Width = 220, DataPropertyName = "Notes" },
@@ -144,6 +146,10 @@ partial class PersonAliasCreditsEditDialog
         lblAffiliationMode = new Label { Text = "所属の出し方:", Location = new Point(12, 160), AutoSize = true };
         cboAffiliationMode = new ComboBox { Location = new Point(120, 156), Size = new Size(240, 23), DropDownStyle = ComboBoxStyle.DropDownList };
 
+        // 名義を持たない文字だけの行（「不詳」など）。劇伴の作家連名のときだけ表示。チェックすると名義・所属の欄の代わりに文字を入れる
+        chkTextLine = new CheckBox { Text = "文字の行:", Location = new Point(380, 158), AutoSize = true };
+        txtRawText = new TextBox { Location = new Point(460, 156), Size = new Size(220, 23), MaxLength = 255, Enabled = false, PlaceholderText = "不詳 など、名義にできない表記" };
+
         lblNotes = new Label { Text = "備考:", Location = new Point(12, 128), AutoSize = true };
         txtNotes = new TextBox
         {
@@ -166,6 +172,7 @@ partial class PersonAliasCreditsEditDialog
             lblAffiliation, txtAffiliationCompany, btnPickAffiliation, btnClearAffiliation,
             lblAffiliationText, txtAffiliationText,
             lblAffiliationMode, cboAffiliationMode,
+            chkTextLine, txtRawText,
             lblNotes, txtNotes,
             btnAdd, btnApply, btnDelete, btnUp, btnDown
         });

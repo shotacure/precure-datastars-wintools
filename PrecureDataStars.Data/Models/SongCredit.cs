@@ -14,7 +14,7 @@ namespace PrecureDataStars.Data.Models;
 /// 役職識別を roles マスタに統一する方針に基づき、任意の roles.role_code を受け入れる。
 /// 主題歌系の典型値は LYRICS / COMPOSITION / ARRANGEMENT。
 /// </summary>
-public sealed class SongCredit
+public sealed class SongCredit : IAffiliatedPersonCredit
 {
     /// <summary>対象曲 ID（→ songs.song_id）。</summary>
     public int SongId { get; set; }
@@ -27,6 +27,9 @@ public sealed class SongCredit
 
     /// <summary>名義参照（→ person_aliases.alias_id）。</summary>
     public int PersonAliasId { get; set; }
+
+    /// <summary>所属を添える作家連名の共通の形では名義を null 許容で渡す（歌の作家連名は常に名義を持つ）。</summary>
+    int? IAffiliatedPersonCredit.PersonAliasId => PersonAliasId;
 
     /// <summary>
     /// 盤に印刷された役職の表記（「原詞」など）。役職名（roles.name_ja）と違うときだけ入れる。
@@ -66,7 +69,7 @@ public sealed class SongCredit
     public string? UpdatedBy { get; set; }
 }
 
-/// <summary>song_credits.affiliation_display の値（所属の出し方）。</summary>
+/// <summary>song_credits / bgm_cue_credits の affiliation_display の値（所属の出し方）。</summary>
 public static class SongCreditAffiliationDisplay
 {
     /// <summary>名義のあとに所属を添える（「藤本 記子（Nostalgic Orchestra）」。既定）。</summary>

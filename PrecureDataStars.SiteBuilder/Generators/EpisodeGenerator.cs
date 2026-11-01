@@ -1241,7 +1241,7 @@ public sealed class EpisodeGenerator
                     var subParts = new List<string> { mNoLabel };
                     string composerText = CreditText.BgmCueCreditNames(
                         _ctx.BgmCueCreditsByCue.TryGetValue((cue.SeriesId, cue.MNoDetail), out var cueCredits) ? cueCredits : null,
-                        "COMPOSITION", cue.ComposerName, _ctx.PersonAliasById);
+                        "COMPOSITION", cue.ComposerName, _ctx.PersonAliasById, _ctx.CompanyAliasById);
                     if (!string.IsNullOrEmpty(composerText)) subParts.Add($"作曲: {composerText}");
                     subTitle = string.Join(" / ", subParts);
                 }

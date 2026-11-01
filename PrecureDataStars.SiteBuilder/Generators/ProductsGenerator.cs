@@ -1089,7 +1089,9 @@ public sealed class ProductsGenerator
                         {
                             foreach (var c in credits.Where(c => string.Equals(c.CreditRole, "COMPOSITION", StringComparison.Ordinal)))
                             {
-                                if (!_ctx.PersonAliasById.TryGetValue(c.PersonAliasId, out var alias)) continue;
+                                // 名義を持たない文字だけの行（entry_kind=TEXT）は作曲者に数えない。
+                                if (c.PersonAliasId is not int composerAliasId
+                                    || !_ctx.PersonAliasById.TryGetValue(composerAliasId, out var alias)) continue;
                                 string name = alias.DisplayTextOverride ?? alias.Name;
                                 composerCounts[name] = composerCounts.TryGetValue(name, out int n) ? n + 1 : 1;
                             }
@@ -1949,7 +1951,7 @@ public sealed class ProductsGenerator
     /// <para>
     /// 同一名義の作曲・編曲はバッジを並べて 1 セグメントに統合する
     /// （<c>[作曲][編曲] 佐藤 直紀</c> の形）。これは構造化エントリ版
-    /// <see cref="TrackCreditHtmlBuilder.BuildBgmCueCreditsSegmentsHtmlAsync"/> と同じ
+    /// <see cref="TrackCreditHtmlBuilder.BuildBgmCueCreditsSegmentsHtml"/> と同じ
     /// 視覚規則に揃えるためのもの。
     /// </para>
     /// <para>

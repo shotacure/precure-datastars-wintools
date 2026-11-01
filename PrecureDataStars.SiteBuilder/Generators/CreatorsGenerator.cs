@@ -1255,10 +1255,11 @@ public sealed class CreatorsGenerator
         }
 
         // ── 劇伴（作編曲）：bgm_cue_credits と、劇伴セッションに付いた音楽クレジットの作詞・作曲・編曲 ──
+        //    名義を持たない文字だけの行（entry_kind=TEXT）は人物に数えない。
         var bgmWritingAcc = new MusicEntityAccumulator();
         foreach (var (cueKey, credits) in _ctx.BgmCueCreditsByCue)
             foreach (var c in credits)
-                if (PersonKey(c.PersonAliasId, personIdByAlias) is { } key)
+                if (c.PersonAliasId is int bgmAliasId && PersonKey(bgmAliasId, personIdByAlias) is { } key)
                     AddSeries(bgmWritingAcc, key, cueKey.SeriesId, c.CreditRole, bgm: true);
         foreach (var (sessionKey, rows) in _ctx.MusicCredits.BySession)
             foreach (var r in rows)

@@ -12,7 +12,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     キャラの行は星の印にして見分け、名前は役職詳細・キャラクター詳細へリンクする。並びは最初の参加の早い順
 ///     （<see cref="RoleTimelineBuilder.Build"/> の決まり）。</description></item>
 ///   <item><description>人物の音楽の役職は、歌の作家・歌唱（song_credits / song_recording_singers）、劇伴の作家
-///     （bgm_cue_credits）、盤の音楽クレジット（music_credits）から（ユニットも同じで、ユニットの名義の分）。企業・団体は、会社そのものが
+///     （bgm_cue_credits）・歌い手（bgm_cue_singers）、盤の音楽クレジット（music_credits）から（ユニットも同じで、ユニットの名義の分）。企業・団体は、会社そのものが
 ///     載った盤の音楽クレジットから。</description></item>
 ///   <item><description>キャラクターの行は、声の出演を演じた声優ごと（人物の印。声優のページへリンク）と、キャラの名義で歌った歌の
 ///     役職（歌唱・コーラス・台詞など）ごと。</description></item>
@@ -85,7 +85,7 @@ internal sealed class CreditTimelineBuilder
             characterRows++;
         }
 
-        // 音楽の役職：歌の作家・歌唱、劇伴の作家、盤の音楽クレジットを、役職ごとに 1 行にまとめる。
+        // 音楽の役職：歌の作家・歌唱、劇伴の作家・歌い手、盤の音楽クレジットを、役職ごとに 1 行にまとめる。
         var aliasSet = aliasIds.ToHashSet();
         roleRows += AddMusicRoleRows(entities, (music, keyOf) =>
         {
@@ -110,6 +110,12 @@ internal sealed class CreditTimelineBuilder
                 foreach (var c in credits)
                     if (c.PersonAliasId is int aid && aliasSet.Contains(aid))
                         music.AddCue(keyOf(c.CreditRole), cue.SeriesId, cue.MNoDetail);
+            // 劇伴の歌い手（スキャットなど）。キャラの名義・ユニットで載った行もその声優・メンバーに展開して見る
+            // （音楽クレジットの欄と同じ）。役職は歌の歌唱と同じ行にまとめ、劇伴の録音回の日に置く。
+            foreach (var (cue, singers) in _ctx.BgmCueSingersByCue)
+                foreach (var s in singers)
+                    if (_ctx.ExpandSingerParticipants(s).Any(p => p.PersonAliasId is int pid && aliasSet.Contains(pid)))
+                        music.AddCue(keyOf(s.RoleCode), cue.SeriesId, cue.MNoDetail);
         });
 
         return Finish(entities, roleRows, characterRows);

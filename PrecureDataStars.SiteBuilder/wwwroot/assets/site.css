@@ -7020,7 +7020,7 @@ a.credit-card-series:focus-visible {
   display: none;
 }
 /* 現在地アイテムでの件数バッジ：濃ピンク背景 + 白文字で強調。 */
-.page-section-nav-item.is-current .page-section-nav-count {
+.page-section-nav-item.is-current > a > .page-section-nav-count {
   background: var(--accent-pink);
   color: #fff;
   box-shadow:
@@ -7045,7 +7045,7 @@ a.credit-card-series:focus-visible {
               transform 0.18s ease;
 }
 /* バッジが存在するアイテム（has-count かつ count.is-empty でない）では dot を隠す。 */
-.page-section-nav-item:has(.page-section-nav-count:not(.is-empty)) .page-section-nav-dot {
+.page-section-nav-item:has(> a > .page-section-nav-count:not(.is-empty)) > a > .page-section-nav-dot {
   display: none;
 }
 
@@ -7053,7 +7053,7 @@ a.credit-card-series:focus-visible {
 .page-section-nav-item.is-passed > a {
   color: var(--fg);
 }
-.page-section-nav-item.is-passed .page-section-nav-dot {
+.page-section-nav-item.is-passed > a > .page-section-nav-dot {
   background: #fff;
   border-color: var(--accent-pink);
 }
@@ -7063,7 +7063,7 @@ a.credit-card-series:focus-visible {
   color: var(--accent-pink);
   font-weight: 600;
 }
-.page-section-nav-item.is-current .page-section-nav-dot {
+.page-section-nav-item.is-current > a > .page-section-nav-dot {
   background: var(--accent-pink);
   border-color: var(--accent-pink);
   box-shadow:
@@ -7083,6 +7083,49 @@ a.credit-card-series:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 2 段目（子の行）：親と同じ縦線の上に小さめの丸で並べ、ラベルを少し下げて小さくする。
+   開くのは現在地の親（.is-open）の下だけで、ほかの親の子の並びは閉じる。 */
+.page-section-nav-sublist {
+  list-style: none;
+  margin: 0 0 4px 0;
+  padding: 0;
+}
+.page-section-nav-item:not(.is-open) > .page-section-nav-sublist {
+  display: none;
+}
+.page-section-nav-child > a {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.page-section-nav-child .page-section-nav-dot {
+  width: 7px;
+  height: 7px;
+  border-width: 1.5px;
+}
+.page-section-nav-child .page-section-nav-label {
+  font-size: 0.8em;
+  padding-left: 0.6em;
+}
+.page-section-nav-child .page-section-nav-year {
+  font-size: 0.72em;
+}
+/* 前置きのある子の行（映画のシリーズ名の部分）は 2 段：上に前置きを 7 割の字で、下に副題。どちらも長ければ末尾を省略する。 */
+.page-section-nav-label.has-prefix {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.page-section-nav-prefix,
+.page-section-nav-main {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-section-nav-prefix {
+  font-size: 0.7em;
+  opacity: 0.85;
 }
 
 /* 縦線位置：マーカー列（grid 第 2 列）の中央を貫通させる - has-year なし: 年列 0、gap 8px、マーカー 16px → マーカー中央 = 0 + 8 + 16/2 = 16px - has-year あり: 年列 2.6em(=約 41.6px @ 16px base)、gap 8px、マーカー */
@@ -7105,7 +7148,8 @@ a.credit-card-series:focus-visible {
 
 /* セクション側のスクロールオフセット：スティッキーヘッダ（2 行構造で約 95px）ぶん、
    アンカークリック時のジャンプ位置を上に逃がす。実高さ + 約 15px のバッファで 110px。 */
-section[id] {
+section[id],
+[data-section-nav-child][id] {
   scroll-margin-top: 110px;
 }
 
@@ -7137,7 +7181,8 @@ section[id] {
 
 /* モバイル：scroll-margin-top を少し縮める（ヘッダが非固定で消えるため余白小でも見出しが隠れない）。 */
 @media (max-width: 560px) {
-  section[id] {
+  section[id],
+  [data-section-nav-child][id] {
     scroll-margin-top: 60px;
   }
 }
@@ -7181,6 +7226,24 @@ section[id] {
   background: rgba(233, 30, 99, 0.08);
   color: var(--accent-pink);
   outline: none;
+}
+/* ミラーの子の行：左のナビと同じく現在地の親の下だけを開き、1 段下げて小さめに出す。 */
+.mobile-nav-overlay-section-nav-sublist {
+  list-style: none;
+  margin: 0 0 4px 0;
+  padding: 0 0 0 14px;
+}
+.mobile-nav-overlay-section-nav-list li:not(.is-open) > .mobile-nav-overlay-section-nav-sublist {
+  display: none;
+}
+.mobile-nav-overlay-section-nav-sublist a {
+  padding: 6px 14px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.mobile-nav-overlay-section-nav-prefix {
+  display: block;
+  font-size: 0.7em;
 }
 
 /* ════════════════════════════════════════════════════════════════ モバイル時のハンバーガーメニュー（site-header は通常通り static） - デスクトップ（>768px）：site-header は非固定、左サイドにセクションナビ。 */

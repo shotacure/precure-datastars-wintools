@@ -22,6 +22,12 @@
  *   - スクロール位置に応じて現在地アイテムへ .is-current、それより上のアイテムへ .is-passed を付与。
  *   - モバイル（≤768px）では左サイドナビが見えないので、ハンバーガーオーバーレイ内の
  *     #mobileSectionNav にも同じアイテム列をミラー描画する（ナビ自体は非表示でもデータは流し込む）。
+ *   - 2 段のツリー：section の中に data-section-nav-child と id を持つ要素があれば、その section の
+ *     子の行として 1 段下げて並べる（ラベル・年・件数は section と同じ data-section-nav-label / -year / -count）。
+ *     子の行は data-section-nav-prefix があればラベルの上の段に小さく出し（映画のシリーズ名の部分など）、
+ *     data-section-nav-title があればホバーの全文をそれにする。
+ *     子の行を開くのは現在地の section だけ（.is-open）で、ほかの section の子は閉じておく。
+ *     現在地は、帯の中に子の要素があればその子と親、無ければ section で決める。子の印の無いページは 1 段のまま。
  *   - スムーススクロールは「ナビ内クリックで遷移した場合のみ」プログラム的に
  *     scrollTo({ behavior: 'smooth' }) で行う。CSS の html { scroll-behavior: smooth } は
  *     使わない方針（URL 直リンクや戻る／進むナビ起因のスクロールでもアニメーションが
@@ -97,7 +103,27 @@
       if (year) hasAnyYear = true;
       if (count) hasAnyCount = true;
 
-      items.push({ id: id, label: label, year: year, count: count, element: sec });
+      // 子の行：section の中の data-section-nav-child 付きの要素（id 必須、非表示のものは除く）。
+      var children = [];
+      var childNodes = sec.querySelectorAll('[data-section-nav-child][id]');
+      for (var c = 0; c < childNodes.length; c++) {
+        var ch = childNodes[c];
+        if (ch.offsetParent === null) continue;
+        var chId = ch.getAttribute('id') || '';
+        if (!chId) continue;
+        var chLabel = ch.getAttribute('data-section-nav-label') || '';
+        if (!chLabel) chLabel = (ch.textContent || '').replace(/\s+/g, ' ').trim() || chId;
+        // ホバーで出す全文（ラベルを縮めた子の行だけ。無ければラベル）と、ラベルの上の段に小さく出す前置き（映画のシリーズ名の部分など）
+        var chTitle = ch.getAttribute('data-section-nav-title') || '';
+        var chPrefix = ch.getAttribute('data-section-nav-prefix') || '';
+        var chYear = ch.getAttribute('data-section-nav-year') || '';
+        var chCount = ch.getAttribute('data-section-nav-count') || '';
+        if (chYear) hasAnyYear = true;
+        if (chCount) hasAnyCount = true;
+        children.push({ id: chId, label: chLabel, prefix: chPrefix, title: chTitle, year: chYear, count: chCount, element: ch, isChild: true });
+      }
+
+      items.push({ id: id, label: label, year: year, count: count, element: sec, children: children });
     }
     return { items: items, hasAnyYear: hasAnyYear, hasAnyCount: hasAnyCount };
   }
@@ -112,14 +138,14 @@
   // クラス切替アニメーションを安定して効かせる）。
   function buildTimelineItem(item) {
     var li = document.createElement('li');
-    li.className = 'page-section-nav-item';
+    li.className = item.isChild ? 'page-section-nav-item page-section-nav-child' : 'page-section-nav-item';
 
     var a = document.createElement('a');
     a.href = '#' + item.id;
     a.setAttribute('data-target-id', item.id);
     // ラベルが長いと CSS の text-overflow で末尾省略されるため、フル文字列を title 属性に保持。
-    // ホバー時にツールチップで全部が見えるようにする。
-    a.setAttribute('title', item.label);
+    // ホバー時にツールチップで全部が見えるようにする（全文が別にある子の行はその全文）。
+    a.setAttribute('title', item.title || item.label);
 
     // 年エリア（4 桁西暦、等幅）。値が空でも要素を出してレイアウトを揃える。
     var yearSpan = document.createElement('span');
@@ -145,7 +171,20 @@
 
     var label = document.createElement('span');
     label.className = 'page-section-nav-label';
-    label.textContent = item.label;
+    if (item.prefix) {
+      // 前置きのある行は 2 段：上に前置きを小さく、下にラベル
+      label.classList.add('has-prefix');
+      var pre = document.createElement('span');
+      pre.className = 'page-section-nav-prefix';
+      pre.textContent = item.prefix;
+      var main = document.createElement('span');
+      main.className = 'page-section-nav-main';
+      main.textContent = item.label;
+      label.appendChild(pre);
+      label.appendChild(main);
+    } else {
+      label.textContent = item.label;
+    }
 
     // ○ の左側に年・バッジを並べる。順序：[年4桁] [バッジ] ○ [ラベル]
     a.appendChild(yearSpan);
@@ -163,35 +202,93 @@
     var a = document.createElement('a');
     a.href = '#' + item.id;
     a.setAttribute('data-target-id', item.id);
-    a.textContent = item.label;
+    if (item.prefix) {
+      // 前置きのある行は左のナビと同じく 2 段
+      var pre = document.createElement('span');
+      pre.className = 'mobile-nav-overlay-section-nav-prefix';
+      pre.textContent = item.prefix;
+      a.appendChild(pre);
+      a.appendChild(document.createTextNode(item.label));
+    } else {
+      a.textContent = item.label;
+    }
     li.appendChild(a);
     return li;
   }
 
-  // 現在地ハイライトを切り替える。引数 id に該当するアイテムを .is-current にし、
-  // それより上のアイテムを .is-passed（通過済み、中抜き円表示）、下のアイテムを素の状態にする。
-  function setCurrent(items, id) {
-    var found = false;
-    for (var i = 0; i < items.length; i++) {
-      var li = items[i].itemEl;
+  // 1 列（親の並び、または 1 つの親の子の並び）の現在地を切り替える。引数 id に該当するアイテムを .is-current にし、
+  // それより上のアイテムを .is-passed（通過済み、中抜き円表示）、下のアイテムを素の状態にする。id が null なら全部を素の状態にする。
+  function markRow(list, id) {
+    var found = id === null;
+    for (var i = 0; i < list.length; i++) {
+      var li = list[i].itemEl;
       if (!li) continue;
-      if (items[i].id === id) {
+      var a = li.querySelector(':scope > a');
+      if (list[i].id === id) {
         li.classList.add('is-current');
         li.classList.remove('is-passed');
-        li.querySelector('a').setAttribute('aria-current', 'true');
+        a.setAttribute('aria-current', 'true');
         found = true;
       } else if (!found) {
         // current より前 = 既に通過したアイテム
         li.classList.remove('is-current');
         li.classList.add('is-passed');
-        li.querySelector('a').removeAttribute('aria-current');
+        a.removeAttribute('aria-current');
       } else {
         // current より後 = 未到達
         li.classList.remove('is-current');
         li.classList.remove('is-passed');
-        li.querySelector('a').removeAttribute('aria-current');
+        a.removeAttribute('aria-current');
       }
     }
+  }
+
+  // 現在地ハイライトを切り替える。parentId の親を現在地にして子の行を開き（.is-open）、
+  // childId があればその親の子の並びの現在地にする。ほかの親の子は閉じて印を外す。
+  function setCurrent(items, parentId, childId) {
+    markRow(items, parentId);
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (!it.children || it.children.length === 0) continue;
+      var open = it.id === parentId;
+      if (it.itemEl) it.itemEl.classList.toggle('is-open', open);
+      if (it.mirrorEl) it.mirrorEl.classList.toggle('is-open', open);
+      markRow(it.children, open ? (childId || null) : null);
+      if (open && childId) {
+        for (var c = 0; c < it.children.length; c++) {
+          if (it.children[c].id === childId) keepInView(it.children[c].itemEl);
+        }
+      }
+    }
+  }
+
+  // 子の行が開いてナビがナビ自身の高さを超えたとき、現在地の行がナビの見える範囲に入るよう、ナビの中だけを動かす
+  // （scrollIntoView はページ全体も動かしうるので使わない）。
+  function keepInView(li) {
+    if (!li) return;
+    var top = li.offsetTop;
+    var el = li.offsetParent;
+    while (el && el !== navHost) {
+      top += el.offsetTop;
+      el = el.offsetParent;
+    }
+    if (top < navHost.scrollTop) {
+      navHost.scrollTop = top;
+    } else if (top + li.offsetHeight > navHost.scrollTop + navHost.clientHeight) {
+      navHost.scrollTop = top + li.offsetHeight - navHost.clientHeight;
+    }
+  }
+
+  // id から（親の id, 子の id）を引く。子の id なら親とその子、親の id なら親だけ、無ければ null。
+  function resolveId(items, id) {
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].id === id) return { parentId: id, childId: null };
+      var kids = items[i].children || [];
+      for (var c = 0; c < kids.length; c++) {
+        if (kids[c].id === id) return { parentId: items[i].id, childId: id };
+      }
+    }
+    return null;
   }
 
   // 描画済みのアイテムに対する IntersectionObserver / scroll listener の解除用ハンドル。
@@ -249,9 +346,25 @@
     var list = document.createElement('ol');
     list.className = 'page-section-nav-list';
 
+    // 子の行（要素の監視にも使う）を親ごとに並べ、親の li の中に 1 段下げた ol で入れる。
+    var allChildren = [];
     for (var i = 0; i < items.length; i++) {
       var li = buildTimelineItem(items[i]);
       items[i].itemEl = li;
+      var kids = items[i].children || [];
+      if (kids.length > 0) {
+        li.classList.add('has-children');
+        var sub = document.createElement('ol');
+        sub.className = 'page-section-nav-sublist';
+        for (var ci = 0; ci < kids.length; ci++) {
+          var cli = buildTimelineItem(kids[ci]);
+          kids[ci].itemEl = cli;
+          kids[ci].parentId = items[i].id;
+          sub.appendChild(cli);
+          allChildren.push(kids[ci]);
+        }
+        li.appendChild(sub);
+      }
       list.appendChild(li);
     }
     inner.appendChild(list);
@@ -265,7 +378,20 @@
       if (mobileUl) {
         mobileUl.innerHTML = '';
         for (var mi = 0; mi < items.length; mi++) {
-          mobileUl.appendChild(buildMobileMirrorItem(items[mi]));
+          var mli = buildMobileMirrorItem(items[mi]);
+          var mkids = items[mi].children || [];
+          if (mkids.length > 0) {
+            // 子の行は左のナビと同じく、現在地の親の下だけを開く（.is-open は setCurrent が付け外しする）
+            mli.classList.add('has-children');
+            var mul = document.createElement('ul');
+            mul.className = 'mobile-nav-overlay-section-nav-sublist';
+            for (var mc = 0; mc < mkids.length; mc++) {
+              mul.appendChild(buildMobileMirrorItem(mkids[mc]));
+            }
+            mli.appendChild(mul);
+          }
+          items[mi].mirrorEl = mli;
+          mobileUl.appendChild(mli);
         }
         mobileNavMirror.removeAttribute('hidden');
       }
@@ -297,7 +423,19 @@
         }
       }
 
-      // ドキュメント順で最初に見える id を選ぶ。
+      // 帯の中に子の要素があれば、ドキュメント順で最初の子とその親を現在地にする。
+      // 子が無ければ、ドキュメント順で最初に見える親を選ぶ。
+      var pickedChild = null;
+      for (var q = 0; q < allChildren.length; q++) {
+        if (lastVisibleSet[allChildren[q].id]) {
+          pickedChild = allChildren[q];
+          break;
+        }
+      }
+      if (pickedChild) {
+        setCurrent(items, pickedChild.parentId, pickedChild.id);
+        return;
+      }
       var pickedId = null;
       for (var k = 0; k < items.length; k++) {
         if (lastVisibleSet[items[k].id]) {
@@ -307,7 +445,7 @@
       }
 
       // どれも視界に無いときは最後のハイライトを維持する（最初の節より上へ戻ったときは scroll 側で先頭に戻す）。
-      if (pickedId) setCurrent(items, pickedId);
+      if (pickedId) setCurrent(items, pickedId, null);
     }, {
       // 上端は固定ヘッダぶんを差し引く。下端は画面上半分以内のセクションを優先するため -55%。
       rootMargin: '-' + topOffsetPx + 'px 0px -55% 0px',
@@ -317,13 +455,14 @@
     for (var m = 0; m < items.length; m++) {
       currentObserver.observe(items[m].element);
     }
-
-    // 初期ハイライト：URL に #fragment があればそれを、無ければ最初のセクションを current にする。
-    var initialId = (location.hash || '').replace(/^#/, '');
-    if (!initialId || !items.some(function (it) { return it.id === initialId; })) {
-      initialId = items[0].id;
+    for (var mo = 0; mo < allChildren.length; mo++) {
+      currentObserver.observe(allChildren[mo].element);
     }
-    setCurrent(items, initialId);
+
+    // 初期ハイライト：URL に #fragment があればそれ（子の id なら親も）を、無ければ最初のセクションを current にする。
+    var initial = resolveId(items, (location.hash || '').replace(/^#/, ''));
+    if (!initial) initial = { parentId: items[0].id, childId: null };
+    setCurrent(items, initial.parentId, initial.childId);
 
     // スクロール進捗ゲージ：ナビの縦線左半分を、現在のスクロール位置に応じて
     // プリキュアピンクで塗っていく。リスト内 CSS 変数 --progress（0〜100%）を JS で更新し、
@@ -350,7 +489,7 @@
         list.style.setProperty('--progress', pct.toFixed(2) + '%');
         // 最初の節の上端が現在地の帯より下にある（ページ先頭付近にいる）ときは、どの節も帯に入らず
         // IntersectionObserver が現在地を更新しないので、最初の節を現在地にする。
-        if (pos < 0) setCurrent(items, items[0].id);
+        if (pos < 0) setCurrent(items, items[0].id, null);
       });
     };
     window.addEventListener('scroll', scrollProgressHandler, { passive: true });

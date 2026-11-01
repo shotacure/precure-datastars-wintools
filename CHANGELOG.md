@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：左のもくじに 2 段目（子の行）を持てるようにし、`/series/` の種類順で区分の下に作品を並べた**（`section-nav.js`・`site.css`・`series-index.sbn`・`SeriesGenerator` の `TvSeriesRow.NavYear` / `MovieSeriesRow.NavYear`）：section の中の `data-section-nav-child` 付きの要素を子の行として 1 段下げて並べ、現在地の section の下だけを開く。現在地は帯の中の最初の子とその親で決め、ナビの中だけを動かして現在地の行を見せる。スマホのメニューの「もくじ」も同じ。現在地・通過済みの丸の指定は、子の行の丸を巻き込まないよう自分の行の丸だけに絞った。シリーズ一覧の作品の行には `id="series-{slug}"`・題名・開始年を付けた。映画の行は題名をシリーズ名の部分（上の段に 7 割の字で）と副題の 2 段に分けた（`MovieSeriesRow.NavPrefix` / `NavLabel`、`SeriesGenerator.SplitMovieNavTitle`、`data-section-nav-prefix`）。ホバーの全文は `data-section-nav-title` の題名。
+
 - **クレジット：役職テンプレに作詞・作曲の同一の条件 `{SAME_LYRICIST_COMPOSER}` を足した**（`RoleTemplateRenderer`・`ThemeSongsHandler`）：作詞と作曲が同じ名義（連名も同じ）なら "1"、違えば空。同じ作品の同じ役職（ED 主題歌など）で、作詞・作曲が同じ人の曲は「作詞・作曲：」の 1 行、違う人の曲は 2 行と、曲ごとに画面どおり書き分ける。条件の中では作詞・作曲をまとめた役職として扱う（会社名だけの行の人物の括弧に役職を添える）。
 
 - **クレジット：ブロックに「前のブロックの続き」の印 `continues_previous` を足した**（`credit_role_blocks`、マイグレーション `v1.20.0_add_block_continues_previous.sql`）：列数はブロックごとに 1 つなので、画面では空行なしで続くのに途中の行だけ升の数が違うクレジットは、その行を別のブロックにしてこの印を付ける。サイトのクレジット（`CreditTreeRenderer`）と Catalog のプレビューはブロックの間の空き（`block-break`）を入れずに前の行へ続け、クレジット編集のツリーは「[続き]」を添える。一括入力は `@continues_previous`（役職の最初のブロックには書けない）、生成プログラム `gen_tv_episode.py`・`gen_movie.py` は `B(..., cont=1)`（OP の複製でも写す）。役職の最初のブロックに付いたものはヘルスチェックの D5 で拾う。

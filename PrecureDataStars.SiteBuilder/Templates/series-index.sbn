@@ -26,6 +26,12 @@
 
 <div class="tab-panel is-active" id="series-tab-panel-kind" data-tab-panel="kind" role="tabpanel">
 
+{{## ──────── 左のもくじの子の行 ────────
+     種類順のタブでは、作品の行（li）に id（series-{slug}）と data-section-nav-child を付け、section-nav.js が
+     区分（section）の下に作品を 1 段下げて並べる（ラベルは data-section-nav-label、開始年は data-section-nav-year）。
+     映画は題名をシリーズ名の部分（data-section-nav-prefix。上の段に小さく）と副題（data-section-nav-label）に分け、ホバーの全文は data-section-nav-title の題名。
+     年度順のタブは同じカードを共用するので印を付けない（id が重ならないように）。 ##}}
+
 {{## ──────── 共通カード語彙について ────────
      /series/ のセクション群（TV シリーズ・映画・大人向け・ショート・イベント・スピンオフ）は
      /bgms/ と同じ「.bgms-card 系」と意匠を共有するカード型リストで描画する。連番は
@@ -46,7 +52,7 @@
   <h2>TV シリーズ</h2>
   <ul class="series-card-list series-card-list-tv">
     {{~ for tv in TvSeries ~}}
-    <li>
+    <li id="series-{{ tv.Slug }}" data-section-nav-child data-section-nav-label="{{ tv.Title | html.escape }}" data-section-nav-year="{{ tv.NavYear }}">
       {{ include '_series-card-tv.sbn' }}
     </li>
     {{~ end ~}}
@@ -65,7 +71,7 @@
   <h2>映画</h2>
   <ul class="series-card-list series-card-list-movie">
     {{~ for m in MovieSeries ~}}
-    <li>
+    <li id="series-{{ m.Slug }}" data-section-nav-child data-section-nav-label="{{ m.NavLabel | html.escape }}" data-section-nav-prefix="{{ m.NavPrefix | html.escape }}" data-section-nav-title="{{ m.Title | html.escape }}" data-section-nav-year="{{ m.NavYear }}">
       {{ include '_series-card-movie.sbn' }}
     </li>
     {{~ end ~}}
@@ -88,7 +94,7 @@
   <h2>オトナシリーズ</h2>
   <ul class="series-card-list series-card-list-spinoff">
     {{~ for s in OtonaSeries ~}}
-    <li>
+    <li id="series-{{ s.Slug }}" data-section-nav-child data-section-nav-label="{{ s.Title | html.escape }}" data-section-nav-year="{{ s.NavYear }}">
       {{ include '_series-card-simple.sbn' }}
     </li>
     {{~ end ~}}
@@ -101,7 +107,7 @@
   <h2>ショートアニメ</h2>
   <ul class="series-card-list series-card-list-spinoff">
     {{~ for s in ShortSeries ~}}
-    <li>
+    <li id="series-{{ s.Slug }}" data-section-nav-child data-section-nav-label="{{ s.Title | html.escape }}" data-section-nav-year="{{ s.NavYear }}">
       {{ include '_series-card-simple.sbn' }}
     </li>
     {{~ end ~}}
@@ -114,7 +120,7 @@
   <h2>イベント</h2>
   <ul class="series-card-list series-card-list-spinoff">
     {{~ for s in EventSeries ~}}
-    <li>
+    <li id="series-{{ s.Slug }}" data-section-nav-child data-section-nav-label="{{ s.Title | html.escape }}" data-section-nav-year="{{ s.NavYear }}">
       {{ include '_series-card-simple.sbn' }}
     </li>
     {{~ end ~}}
@@ -127,7 +133,7 @@
   <h2>スピンオフ</h2>
   <ul class="series-card-list series-card-list-spinoff">
     {{~ for s in SpinOffSeries ~}}
-    <li>
+    <li id="series-{{ s.Slug }}" data-section-nav-child data-section-nav-label="{{ s.Title | html.escape }}" data-section-nav-year="{{ s.NavYear }}">
       {{ include '_series-card-simple.sbn' }}
     </li>
     {{~ end ~}}

@@ -1224,7 +1224,10 @@ internal sealed class CreditTreeRenderer
                 isFirstRowOfThisBlock = false;
             }
 
-            for (int i = 0; i < bs.Entries.Count; i += cols)
+            // 名前の併記（parallel_with_entry_id。画面で「高橋郁子・香村純子」のように 1 行につながる名前）は、
+            // 独立した升にせず、相手の升の後ろに間の字（parallel_prefix / parallel_suffix）つきで並べる。
+            var gridEntries = FoldParallelNameEntries(bs.Entries, out var nameFollowers);
+            for (int i = 0; i < gridEntries.Count; i += cols)
             {
                 bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
@@ -1241,10 +1244,19 @@ internal sealed class CreditTreeRenderer
                 for (int j = 0; j < cols; j++)
                 {
                     html.Append("<td class=\"entry-cell\">");
-                    if (i + j < bs.Entries.Count)
+                    if (i + j < gridEntries.Count)
                     {
-                        var e = bs.Entries[i + j];
+                        var e = gridEntries[i + j];
                         string entryHtml = await ResolveEntryHtmlAsync(e, ct).ConfigureAwait(false);
+                        if (nameFollowers.TryGetValue(e.EntryId, out var followers))
+                        {
+                            foreach (var f in followers)
+                            {
+                                entryHtml += Esc(f.ParallelPrefix ?? "")
+                                           + await ResolveEntryHtmlAsync(f, ct).ConfigureAwait(false)
+                                           + Esc(f.ParallelSuffix ?? "");
+                            }
+                        }
                         // 空きの升（BLANK）は中身が無いので字下げも付けず、空の升のまま出す。
                         if (hasLeading && entryHtml.Length > 0) html.Append("　"); // 全角SP 1 個分の字下げ
                         html.Append(entryHtml);
@@ -1569,6 +1581,40 @@ internal sealed class CreditTreeRenderer
             headOf[e.EntryId] = e.EntryId;
         }
         return rows;
+    }
+
+    /// <summary>
+    /// 普通の役職のブロックで、併記（<see cref="CreditBlockEntry.ParallelWithEntryId"/>）の付いた名前のエントリ
+    /// （声の出演以外）を取り除いた「升になるエントリ」の並びを返す。取り除いたエントリは、相手（同じブロックの前にある
+    /// 升のエントリ）の entry_id ごとに <paramref name="followers"/> に並び順のまま集める。併記の併記（A・B・C）は先頭の A にまとめる。
+    /// 相手が同じブロックの前に無いエントリは、取り除かずに普通の升として残す。
+    /// </summary>
+    private static List<CreditBlockEntry> FoldParallelNameEntries(
+        IReadOnlyList<CreditBlockEntry> entries,
+        out Dictionary<int, List<CreditBlockEntry>> followers)
+    {
+        followers = new Dictionary<int, List<CreditBlockEntry>>();
+        var cells = new List<CreditBlockEntry>(entries.Count);
+        var headOf = new Dictionary<int, int>();
+        foreach (var e in entries)
+        {
+            if (e.EntryKind != "CHARACTER_VOICE"
+                && e.ParallelWithEntryId is int target
+                && headOf.TryGetValue(target, out int head))
+            {
+                if (!followers.TryGetValue(head, out var list))
+                {
+                    list = new List<CreditBlockEntry>();
+                    followers[head] = list;
+                }
+                list.Add(e);
+                headOf[e.EntryId] = head;
+                continue;
+            }
+            cells.Add(e);
+            headOf[e.EntryId] = e.EntryId;
+        }
+        return cells;
     }
 
     /// <summary>

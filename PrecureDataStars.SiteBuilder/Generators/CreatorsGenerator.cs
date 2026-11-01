@@ -2345,6 +2345,32 @@ public sealed class CreatorsGenerator
         if (pages.RecordsMembership)
             foreach (var r in countRows) _lists.VoiceCastPersons.Add(r.PersonId);
 
+        // クレジット役柄数順（セクション無し）：声優 1 人 = 1 行（出演回数順と同じ行）。演じたキャラの数を、TV シリーズ
+        // （このページの範囲の TV 系。本編のページは本線の TV、オトナシリーズのページは大人向けスピンオフ）の話に出たキャラと、
+        // 映画に出たキャラに分けて数える（同じキャラは名義・シリーズをまたいで 1 役）。話数の無いシリーズ全体のクレジットだけの
+        // 方は数えない。並びは TV のキャラ数 → 映画のキャラ数 → 出演回数順と同じ初登場の順。
+        var charCountByPerson = rows
+            .GroupBy(r => r.PersonId)
+            .ToDictionary(g => g.Key, g => (
+                Tv: g.Where(r => !_ctx.IsMovieKindSeries(r.SeriesId) && r.EpisodeCount > 0).Select(r => r.CharacterId).Distinct().Count(),
+                Movie: g.Where(r => r.MovieCount > 0).Select(r => r.CharacterId).Distinct().Count()));
+        foreach (var r in countRows)
+            if (charCountByPerson.TryGetValue(r.PersonId, out var cc))
+            {
+                r.TvCharacterCount = cc.Tv;
+                r.MovieCharacterCount = cc.Movie;
+            }
+        var charCountRows = countRows
+            .Where(r => r.TvCharacterCount + r.MovieCharacterCount > 0)
+            .OrderByDescending(r => r.TvCharacterCount)
+            .ThenByDescending(r => r.MovieCharacterCount)
+            .ThenBy(r => r.SeriesSortStart)
+            .ThenBy(r => r.EarliestEpNo)
+            .ThenBy(r => r.EarliestPos)
+            .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
+            .ThenBy(r => r.PersonName, StringComparer.Ordinal)
+            .ToList();
+
         // 「プリキュアを演じた方のみ」：プリキュアのマスタのキャラを演じたことがある方を、全タブの行に印を付ける
         // （キャラクター別タブでも、その方が演じたほかのキャラの行を含めて残す）。
         // 年表は絞り込み中だけプリキュアのマスタの順に並べ直す（複数のプリキュアを演じた方はいちばん前の順）。
@@ -2410,6 +2436,7 @@ public sealed class CreatorsGenerator
             // KanaRows = kanaRows,
             DebutSections = debutSections,
             CountRows = countRows,
+            CharacterCountRows = charCountRows,
             // 年表タブの線表（1 年間に 4 回以上出演した声優）。
             Timeline = timeline,
             CoverageLabel = pages.ShowsCoverage ? _ctx.CreditCoverageLabel : "",
@@ -3688,6 +3715,8 @@ public sealed class CreatorsGenerator
         /// <summary>初出演順：シリーズごとのセクション。</summary>
         public IReadOnlyList<VoiceSeriesSection> DebutSections { get; set; } = Array.Empty<VoiceSeriesSection>();
         public IReadOnlyList<VoiceCastRow> CountRows { get; set; } = Array.Empty<VoiceCastRow>();
+        /// <summary>クレジット役柄数順タブの行（声優 1 人 = 1 行。TV シリーズで演じたキャラの数の多い順）。</summary>
+        public IReadOnlyList<VoiceCastRow> CharacterCountRows { get; set; } = Array.Empty<VoiceCastRow>();
         /// <summary>年表タブの線表。載せる声優が居ないときは null（年表タブを出さない）。</summary>
         public RoleTimelineModel? Timeline { get; set; }
         public string CoverageLabel { get; set; } = "";
@@ -3748,6 +3777,10 @@ public sealed class CreatorsGenerator
         /// <summary>出演回数順タブ（声優単位の集約行）専用：代表キャラ以外にも演じたキャラが
         /// 居るとき true。テンプレ側で「（キャラ 役 他）」の「他」を付ける。</summary>
         public bool HasOtherCharacters { get; set; }
+        /// <summary>クレジット役柄数順タブ（声優単位の集約行）専用：このページの範囲の TV シリーズの話で演じたキャラの数。</summary>
+        public int TvCharacterCount { get; set; }
+        /// <summary>クレジット役柄数順タブ（声優単位の集約行）専用：映画で演じたキャラの数。</summary>
+        public int MovieCharacterCount { get; set; }
         /// <summary>この行の声優がプリキュア（プリキュアのマスタのキャラ）を演じたことがあるか。「プリキュアを演じた方のみ」の絞り込みに使う。</summary>
         public bool IsPrecureCast { get; set; }
         /// <summary>初出演順タブ専用：初めて出演した話（「第N話「サブタイトル」」）。同じセクションで直前の行と同じ話なら空。</summary>

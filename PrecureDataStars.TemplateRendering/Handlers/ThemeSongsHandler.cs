@@ -250,7 +250,7 @@ public static class ThemeSongsHandler
         r.ComposerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Composition, lookup, ct).ConfigureAwait(false);
         r.ArrangerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Arrangement, lookup, ct).ConfigureAwait(false);
         r.MedleyArrangerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false);
-        // 名義のあとに所属を添えた部品（テンプレの {LYRICIST:aff="1"} などで使う）。
+        // 名義のあとに所属を添えた部品（テンプレの {LYRICIST} / {COMPOSER} / {ARRANGER} で使う）。
         r.LyricistAffParts = await songCredits.GetDisplayHtmlPartsWithAffiliationAsync(r.SongId, SongCreditRoles.Lyrics, lookup, ct).ConfigureAwait(false);
         r.ComposerAffParts = await songCredits.GetDisplayHtmlPartsWithAffiliationAsync(r.SongId, SongCreditRoles.Composition, lookup, ct).ConfigureAwait(false);
         r.ArrangerAffParts = await songCredits.GetDisplayHtmlPartsWithAffiliationAsync(r.SongId, SongCreditRoles.Arrangement, lookup, ct).ConfigureAwait(false);
@@ -523,7 +523,7 @@ public static class ThemeSongsHandler
 
         // ── 名義ごとの部品（名義のあとに所属を添えたもの）──
         // 所属の出し方が NAME_WITH_COMPANY の行は名義のあとに「(所属)」を添える（同じ所属が続くときは最後の名義のあとにだけ）。
-        // 役職テンプレの {LYRICIST:aff="1"} のように、画面に作家の所属が出る作品で使う。構造化クレジットが無い曲は空。
+        // 役職テンプレの {LYRICIST} / {COMPOSER} / {ARRANGER} の値。所属を添えない行は名義だけ。構造化クレジットが無い曲は空。
         public IReadOnlyList<(string Sep, string Html)> LyricistAffParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> ComposerAffParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> ArrangerAffParts { get; set; } = Array.Empty<(string, string)>();

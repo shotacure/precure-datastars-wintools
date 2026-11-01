@@ -1,4 +1,5 @@
 using System.Globalization;
+using PrecureDataStars.Data.Models;
 using PrecureDataStars.SiteBuilder.Pipeline;
 using PrecureDataStars.SiteBuilder.Utilities;
 
@@ -41,6 +42,11 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     見える。凡例は色と役職名（役職詳細へのリンク）だけを出す。関連する役職の担当は、行の並び・主な方の判定・続けて参加した期間には使わない。</description></item>
 /// </list>
 /// 軸は同じ期間のページで共通なので、インスタンスを 1 つ作ってページ（役職）ごとに <see cref="Build"/> を呼ぶ。
+/// <para>
+/// 人物詳細・企業/団体詳細の年表（<see cref="ForParticipation"/>）は、軸をその参加のある期間だけに絞る。TV シリーズの帯のうち、参加
+/// （TV の話・映画・歌・劇伴・盤）の日付が 1 つでも入る帯だけを並べ、最初の参加より前・最後の参加より後と、途中の参加の無い帯は
+/// 軸に入れない。続かない帯のあいだには <see cref="ScopedGapDays"/> 日ぶんの切れ目（<see cref="RoleTimelineModel.Gaps"/>）を置く。
+/// </para>
 /// </summary>
 internal sealed class RoleTimelineBuilder
 {
@@ -56,12 +62,28 @@ internal sealed class RoleTimelineBuilder
     /// <summary>広い画面でも年の目盛りを 4 桁で出せる帯の数の上限。</summary>
     private const int AllTickBandsMaxWide = 22;
 
+    /// <summary>参加のある期間だけの軸（<see cref="ForParticipation"/>）で、続かない帯のあいだに置く切れ目の幅（日）。</summary>
+    private const int ScopedGapDays = 91;
+
     private readonly BuildContext _ctx;
     private readonly DateOnly _axisStart;
     private readonly int _axisDays;
     private readonly IReadOnlyList<RoleTimelineBand> _bands;
     private readonly IReadOnlyList<RoleTimelineTick> _ticks;
     private readonly string _tickDensityClass;
+    private readonly IReadOnlyList<RoleTimelineGap> _gaps = Array.Empty<RoleTimelineGap>();
+
+    /// <summary>
+    /// 参加のある期間だけの軸の区間（日付の範囲と、軸の左端からの位置〔日〕）。null なら軸は最初の TV シリーズから
+    /// 続けて取る（<see cref="Ratio"/> は日付をそのまま比で置く）。
+    /// </summary>
+    private readonly IReadOnlyList<AxisPiece>? _pieces;
+
+    /// <summary>参加のある期間だけの軸の 1 区間（続いて並ぶ帯をひとまとめにしたもの）。</summary>
+    /// <param name="Start">区間の始まり（最初の帯の放送開始日）。</param>
+    /// <param name="End">区間の終わり（最後の帯の終わり。次のシリーズの放送開始日か軸の終わり）。</param>
+    /// <param name="Offset">区間の始まりの、軸の左端からの位置（日。前の区間と切れ目の幅を足したもの）。</param>
+    private readonly record struct AxisPiece(DateOnly Start, DateOnly End, int Offset);
 
     /// <summary>
     /// 軸（期間・シリーズの帯・年の目盛り）を確定させる。収録しているクレジットが無ければ軸を持たず、<see cref="Build"/> は常に null を返す。
@@ -69,6 +91,24 @@ internal sealed class RoleTimelineBuilder
     /// <param name="ctx">ビルド全体の共有データ。</param>
     /// <param name="extendTo">軸の終わりをこの日まで伸ばす（歌唱一覧で、クレジットの収録範囲より後の歌まで描くとき）。null なら伸ばさない。</param>
     public RoleTimelineBuilder(BuildContext ctx, DateOnly? extendTo = null)
+        : this(ctx, extendTo, scopeDates: null)
+    {
+    }
+
+    /// <summary>
+    /// 人物詳細・企業/団体詳細の年表のための、参加のある期間だけの軸を作る。<paramref name="dates"/> はその人・その会社の参加の日付
+    /// （TV の話の放送日・映画の公開日・歌・劇伴・盤の日付）。日付が無ければ軸を持たず、<see cref="Build"/> は常に null を返す。
+    /// </summary>
+    public static RoleTimelineBuilder ForParticipation(BuildContext ctx, IReadOnlyCollection<DateOnly> dates)
+    {
+        DateOnly? last = dates.Count > 0 ? dates.Max() : null;
+        return new RoleTimelineBuilder(ctx, last?.AddDays(1), dates);
+    }
+
+    /// <param name="ctx">ビルド全体の共有データ。</param>
+    /// <param name="extendTo">軸の終わりをこの日まで伸ばす。null なら伸ばさない。</param>
+    /// <param name="scopeDates">参加のある期間だけの軸にするときの参加の日付（<see cref="ForParticipation"/>）。null なら軸を続けて取る。</param>
+    private RoleTimelineBuilder(BuildContext ctx, DateOnly? extendTo, IReadOnlyCollection<DateOnly>? scopeDates)
     {
         _ctx = ctx;
         _bands = Array.Empty<RoleTimelineBand>();
@@ -94,6 +134,13 @@ internal sealed class RoleTimelineBuilder
             .ThenBy(s => s.SeriesId)
             .ToList();
         if (tvSeries.Count == 0) return;
+
+        if (scopeDates is not null)
+        {
+            if (scopeDates.Count == 0) return;
+            (_axisStart, _axisDays, _bands, _ticks, _tickDensityClass, _pieces, _gaps) = BuildScopedAxis(tvSeries, axisEnd, scopeDates);
+            return;
+        }
 
         _axisStart = tvSeries[0].StartDate;
         _axisDays = axisEnd.DayNumber - _axisStart.DayNumber;
@@ -129,6 +176,98 @@ internal sealed class RoleTimelineBuilder
         _tickDensityClass = tvSeries.Count > AllTickBandsMaxWide ? "rtl-ticks-sparse"
             : manyBands ? "rtl-ticks-medium"
             : "";
+    }
+
+    /// <summary>
+    /// 参加のある期間だけの軸を組む。TV シリーズの帯（放送開始日から次のシリーズの放送開始日まで。最後の帯は
+    /// <paramref name="axisEnd"/> まで）のうち、参加の日付が入る帯だけを残す（最初のシリーズより前の日付は最初の帯に入れる）。
+    /// 続いて残った帯は 1 つの区間にし、続かない区間のあいだに <see cref="ScopedGapDays"/> 日ぶんの切れ目を置く。
+    /// 帯の塗り分けと目盛りの間引きは、残った帯の並びで決める。
+    /// </summary>
+    private static (DateOnly AxisStart, int AxisDays, IReadOnlyList<RoleTimelineBand> Bands, IReadOnlyList<RoleTimelineTick> Ticks,
+        string TickDensityClass, IReadOnlyList<AxisPiece> Pieces, IReadOnlyList<RoleTimelineGap> Gaps)
+        BuildScopedAxis(IReadOnlyList<Series> tvSeries, DateOnly axisEnd, IReadOnlyCollection<DateOnly> dates)
+    {
+        DateOnly BandEnd(int i) => i + 1 < tvSeries.Count ? tvSeries[i + 1].StartDate : axisEnd;
+        var kept = new SortedSet<int>();
+        foreach (var d in dates)
+        {
+            int idx = 0;
+            for (int i = tvSeries.Count - 1; i >= 0; i--)
+            {
+                if (tvSeries[i].StartDate <= d) { idx = i; break; }
+            }
+            kept.Add(idx);
+        }
+
+        // 続いて残った帯をひとまとめの区間にし、区間ごとに軸の位置（日）を割り当てる。
+        var pieces = new List<AxisPiece>();
+        var gapStarts = new List<int>();
+        int offset = 0;
+        int runFirst = -1, prev = -1;
+        void Close()
+        {
+            if (runFirst < 0) return;
+            var start = tvSeries[runFirst].StartDate;
+            var end = BandEnd(prev);
+            if (pieces.Count > 0)
+            {
+                gapStarts.Add(offset);
+                offset += ScopedGapDays;
+            }
+            pieces.Add(new AxisPiece(start, end, offset));
+            offset += end.DayNumber - start.DayNumber;
+        }
+        foreach (int i in kept)
+        {
+            if (prev >= 0 && i != prev + 1)
+            {
+                Close();
+                runFirst = -1;
+            }
+            if (runFirst < 0) runFirst = i;
+            prev = i;
+        }
+        Close();
+        int axisDays = offset;
+
+        string P(int day) => Num((double)day / axisDays * 100);
+        int Place(DateOnly d)
+        {
+            foreach (var pc in pieces)
+                if (d >= pc.Start && d <= pc.End) return pc.Offset + (d.DayNumber - pc.Start.DayNumber);
+            return 0;
+        }
+
+        var bands = new List<RoleTimelineBand>(kept.Count);
+        var ticks = new List<RoleTimelineTick>(kept.Count);
+        int n = 0;
+        foreach (int i in kept)
+        {
+            var s = tvSeries[i];
+            var end = BandEnd(i);
+            int left = Place(s.StartDate);
+            bands.Add(new RoleTimelineBand
+            {
+                Left = P(left),
+                Width = P(end.DayNumber - s.StartDate.DayNumber),
+                IsAlt = n % 2 == 1
+            });
+            ticks.Add(new RoleTimelineTick
+            {
+                Left = P(left),
+                YearLabel = s.StartDate.Year.ToString(CultureInfo.InvariantCulture),
+                SeriesTitle = s.Title,
+                SeriesUrl = PathUtil.SeriesUrl(s.Slug),
+                ShowLabel = (end.DayNumber - s.StartDate.DayNumber) >= 120
+            });
+            n++;
+        }
+        var gaps = gapStarts.Select(g => new RoleTimelineGap { Left = P(g), Width = P(ScopedGapDays) }).ToList();
+        string density = kept.Count > AllTickBandsMaxWide ? "rtl-ticks-sparse"
+            : kept.Count > AllTickBandsMaxNarrow ? "rtl-ticks-medium"
+            : "";
+        return (pieces[0].Start, axisDays, bands, ticks, density, pieces, gaps);
     }
 
     /// <summary>
@@ -183,6 +322,8 @@ internal sealed class RoleTimelineBuilder
         var legend = new List<RoleTimelineLegendItem>();
         if (ordered.Any(r => r.Row.Segments.Count > 0))
             legend.Add(new RoleTimelineLegendItem { Kind = "tv", Label = $"{rules.Verb}した話（TV）" });
+        if (ordered.Any(r => r.Row.SpinOffSegments.Count > 0))
+            legend.Add(new RoleTimelineLegendItem { Kind = "spinoff", Label = $"{rules.Verb}した話（スピンオフ）" });
         if (ordered.Any(r => r.Row.Movies.Count > 0))
             legend.Add(new RoleTimelineLegendItem { Kind = "movie", Label = "映画" });
         if (ordered.Any(r => r.Row.Songs.Count > 0))
@@ -222,6 +363,7 @@ internal sealed class RoleTimelineBuilder
             MainCount = rows.Count(r => r.Row.IsMain),
             Legend = legend,
             Bands = _bands,
+            Gaps = _gaps,
             Ticks = _ticks,
             TickDensityClass = _tickDensityClass,
             HasGroups = grouped,
@@ -382,6 +524,7 @@ internal sealed class RoleTimelineBuilder
 
         var spans = new List<RoleTimelineMark>(chains.Count);
         var segments = new List<RoleTimelineMark>();
+        var spinOffSegments = new List<RoleTimelineMark>();
         var movies = new List<RoleTimelineMark>();
         var songs = new List<RoleTimelineMark>();
         var bgms = new List<RoleTimelineMark>();
@@ -399,9 +542,11 @@ internal sealed class RoleTimelineBuilder
                 spans.Add(new RoleTimelineMark { Left = Pct(start), Width = PctWidth(start, end) });
             periodLabels.Add(PeriodLabel(start, chain[^1].Date));
 
-            // TV の話は、同じシリーズで話数が続く間をひと続きの帯にまとめる。
+            // TV の話は、同じシリーズで話数が続く間をひと続きの帯にまとめる。スピンオフを分けて描く線表
+            // （RoleTimelineRules.SeparateSpinOffs）では、スピンオフの話の帯を別の色の帯にする。
             foreach (var bySeries in chain.Where(c => c.Kind == CreditKind.Tv).GroupBy(c => c.SeriesId))
             {
+                var segTarget = rules.SeparateSpinOffs && _ctx.IsSpinOffSeries(bySeries.Key) ? spinOffSegments : segments;
                 var eps = bySeries.OrderBy(c => c.EpNo).ToList();
                 int runStart = 0;
                 for (int i = 1; i <= eps.Count; i++)
@@ -409,7 +554,7 @@ internal sealed class RoleTimelineBuilder
                     if (i < eps.Count && eps[i].EpNo == eps[i - 1].EpNo + 1) continue;
                     var segStart = eps[runStart].Date;
                     var segEnd = eps[i - 1].Date.AddDays(EpisodeSpanDays);
-                    segments.Add(new RoleTimelineMark { Left = Pct(segStart), Width = PctWidth(segStart, segEnd) });
+                    segTarget.Add(new RoleTimelineMark { Left = Pct(segStart), Width = PctWidth(segStart, segEnd) });
                     runStart = i;
                 }
                 if (!tvEpNos.TryGetValue(bySeries.Key, out var set))
@@ -514,6 +659,7 @@ internal sealed class RoleTimelineBuilder
             EntityUrl = e.EntityUrl,
             Spans = spans,
             Segments = segments,
+            SpinOffSegments = spinOffSegments,
             Movies = movies,
             Songs = songs,
             Bgms = bgms,
@@ -627,8 +773,23 @@ internal sealed class RoleTimelineBuilder
     /// <summary>期間の軸上の幅（百分率、小数 2 桁の文字列）。</summary>
     private string PctWidth(DateOnly start, DateOnly end) => Num(Math.Max(0, Ratio(end) - Ratio(start)) * 100);
 
+    /// <summary>
+    /// 日付の軸上の位置（0〜1）。参加のある期間だけの軸では、日付の入る区間の中で置き、区間の外（切れ目・軸の外）の日付は
+    /// 直前の区間の終わり（最初の区間より前なら左端）に寄せる。
+    /// </summary>
     private double Ratio(DateOnly d)
-        => Math.Clamp((double)(d.DayNumber - _axisStart.DayNumber) / _axisDays, 0, 1);
+    {
+        if (_pieces is null)
+            return Math.Clamp((double)(d.DayNumber - _axisStart.DayNumber) / _axisDays, 0, 1);
+        int prevEnd = 0;
+        foreach (var pc in _pieces)
+        {
+            if (d < pc.Start) return (double)prevEnd / _axisDays;
+            if (d <= pc.End) return (double)(pc.Offset + d.DayNumber - pc.Start.DayNumber) / _axisDays;
+            prevEnd = pc.Offset + (pc.End.DayNumber - pc.Start.DayNumber);
+        }
+        return 1;
+    }
 
     private static string Num(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
 
@@ -654,6 +815,12 @@ internal sealed record RoleTimelineRules(
     int MaxGapDays, int WindowDays, int MinCreditsInWindow, bool IncludeOpeningCredit, bool IncludeAll, int ShowAllUpTo, string Verb,
     IReadOnlyList<string> FilterTip)
 {
+    /// <summary>
+    /// スピンオフ（大人向けスピンオフなど）の話を、本線の TV の話と別の色の帯で描くか（凡例も分ける）。人物詳細・企業/団体詳細の
+    /// 年表で使う。横軸の帯と目盛りは本線の TV シリーズのまま。
+    /// </summary>
+    public bool SeparateSpinOffs { get; init; }
+
     /// <summary>
     /// 映画の本数（通算）がこの数以上なら回数・期間によらず載せる（0 なら使わない）。映画は年に 1〜2 本しかなく
     /// 「一定期間に何回」の決まりに届かないので、映画で続けて担当している方を拾うために使う。
@@ -704,6 +871,14 @@ internal sealed record RoleTimelineRules(
     public static readonly RoleTimelineRules MusicRole = new(
         91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, ShowAllUpTo: 0, "担当", NoFilter);
 
+    /// <summary>
+    /// 人物詳細・企業/団体詳細：その人・その会社の役職・役柄の行すべて（続けて参加した期間の線は 13 週以内の間隔でつなぐ）。
+    /// 凡例の動詞は呼び出し側が行の顔ぶれに合わせて差し替える（<c>with { Verb = … }</c>）。
+    /// </summary>
+    public static readonly RoleTimelineRules Credit = new(
+        91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, ShowAllUpTo: 0, "参加", NoFilter)
+    { SeparateSpinOffs = true };
+
     /// <summary>歌唱：一覧に載る歌手・キャラクターすべて（続けて参加した期間の線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules Singers = new(
         91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, ShowAllUpTo: 0, "参加", NoFilter);
@@ -712,7 +887,7 @@ internal sealed record RoleTimelineRules(
 /// <summary>線表に載せる候補 1 つ分（<see cref="RoleTimelineBuilder.Build"/> の入力）。</summary>
 internal sealed class RoleTimelineEntity
 {
-    /// <summary>"person" / "company" / "singer" / "character" / "unit"（行頭のアイコンと、絞り込みの種類）。</summary>
+    /// <summary>"person" / "company" / "singer" / "character" / "unit" / "role"（人物・企業/団体詳細の役職の行）（行頭のアイコンと、絞り込みの種類）。</summary>
     public required string EntityKind { get; init; }
     /// <summary>行に出す名前（人物は表示名義、企業は最後に使われた屋号、キャラクターは一覧と同じ名義）。</summary>
     public required string EntityName { get; init; }
@@ -806,6 +981,8 @@ internal sealed class RoleTimelineModel
     public IReadOnlyList<RoleTimelineLegendItem> Legend { get; set; } = Array.Empty<RoleTimelineLegendItem>();
     /// <summary>TV シリーズの帯（交互に薄く塗る）。</summary>
     public IReadOnlyList<RoleTimelineBand> Bands { get; set; } = Array.Empty<RoleTimelineBand>();
+    /// <summary>参加のある期間だけの軸で、続かない帯のあいだに置く切れ目（それ以外の線表では空）。</summary>
+    public IReadOnlyList<RoleTimelineGap> Gaps { get; set; } = Array.Empty<RoleTimelineGap>();
     /// <summary>年の目盛り（帯ごとに 1 つ）。</summary>
     public IReadOnlyList<RoleTimelineTick> Ticks { get; set; } = Array.Empty<RoleTimelineTick>();
     /// <summary>帯が多いときに目盛りの年を下 2 桁にする CSS クラス（"rtl-ticks-medium" は狭い画面だけ / "rtl-ticks-sparse" は常に / 空）。</summary>
@@ -822,7 +999,7 @@ internal sealed class RoleTimelineModel
 }
 
 /// <summary>
-/// 凡例 1 項目。Kind は "tv" / "movie" / "song" / "bgm" / "disc" / "span"、関連する役職は "rel"（TV の話の細い帯）か
+/// 凡例 1 項目。Kind は "tv" / "spinoff" / "movie" / "song" / "bgm" / "disc" / "span"、関連する役職は "rel"（TV の話の細い帯）か
 /// "rel-movie"（映画の白抜きの輪）（印の見本の CSS クラス）。関連する役職の見本の色は <see cref="Color"/>。
 /// </summary>
 internal sealed class RoleTimelineLegendItem
@@ -847,6 +1024,13 @@ internal sealed class RoleTimelineBand
     public string Width { get; set; } = "";
     /// <summary>交互に薄く塗る側の帯か。</summary>
     public bool IsAlt { get; set; }
+}
+
+/// <summary>参加のある期間だけの軸の切れ目 1 つ（参加の無い期間を詰めた所）。</summary>
+internal sealed class RoleTimelineGap
+{
+    public string Left { get; set; } = "";
+    public string Width { get; set; } = "";
 }
 
 /// <summary>線表の年の目盛り 1 つ（TV シリーズの放送開始の位置）。</summary>
@@ -898,6 +1082,8 @@ internal sealed class RoleTimelineRow
     public IReadOnlyList<RoleTimelineMark> Spans { get; set; } = Array.Empty<RoleTimelineMark>();
     /// <summary>TV の話の帯（話数が続く間はひと続き）。</summary>
     public IReadOnlyList<RoleTimelineMark> Segments { get; set; } = Array.Empty<RoleTimelineMark>();
+    /// <summary>スピンオフの話の帯（<see cref="RoleTimelineRules.SeparateSpinOffs"/> の線表だけ。ほかの線表では <see cref="Segments"/> に入る）。</summary>
+    public IReadOnlyList<RoleTimelineMark> SpinOffSegments { get; set; } = Array.Empty<RoleTimelineMark>();
     /// <summary>映画の点（<see cref="RoleTimelineMark.Width"/> は使わない）。</summary>
     public IReadOnlyList<RoleTimelineMark> Movies { get; set; } = Array.Empty<RoleTimelineMark>();
     /// <summary>歌の点（同じ日に出た曲は 1 つ。<see cref="RoleTimelineMark.Width"/> は使わない）。</summary>

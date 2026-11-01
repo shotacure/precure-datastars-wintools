@@ -11557,3 +11557,128 @@ a.staff-combo-nav-card:hover {
 .home-product-card-countdown:empty {
   display: none;
 }
+
+/* ──────── 人物詳細・企業/団体詳細の年表（基本情報の下の開閉の枠） ────────
+   閉じた状態は「年表」・参加の期間と行の数・すべての参加を 1 本にまとめた細い帯・「くわしく」を 1 行に並べる
+   （狭い画面では帯を下の行に回す）。開くと帯を隠し、役職・役柄ごとの線表（.role-timeline）を枠の中に出す。 */
+.credit-timeline {
+  margin: 1.2em 0 1.6em;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+.credit-timeline > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 0.55em 0.8em;
+  border-radius: 10px;
+}
+.credit-timeline > summary::-webkit-details-marker {
+  display: none;
+}
+.credit-timeline > summary:focus-visible {
+  outline: 2px solid var(--accent-purple);
+  outline-offset: 2px;
+}
+.ctl-label {
+  font-weight: 700;
+}
+.ctl-meta {
+  font-size: 0.85em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* 閉じた状態の帯。線表の印（.rtl-seg など）をそのまま使い、軸も開いたときの線表と同じ（参加のある期間だけ）。 */
+.ctl-mini.role-timeline {
+  flex: 1 1 12em;
+  min-width: 8em;
+  margin: 0;
+}
+.ctl-mini-track {
+  position: relative;
+  display: block;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 3px;
+}
+.ctl-mini-track > .rtl-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.ctl-mini-track .rtl-seg {
+  height: 8px;
+  margin-top: -4px;
+}
+.credit-timeline[open] .ctl-mini {
+  display: none;
+}
+.ctl-toggle {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 0.8em;
+  color: var(--muted);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.ctl-toggle::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+}
+.credit-timeline[open] .ctl-toggle::after {
+  transform: rotate(-135deg) translate(-1px, -1px);
+}
+.credit-timeline > summary:hover .ctl-toggle {
+  color: var(--accent-pink);
+}
+.credit-timeline .is-open-label,
+.credit-timeline[open] .is-closed-label {
+  display: none;
+}
+.credit-timeline[open] .is-open-label {
+  display: inline;
+}
+.ctl-body {
+  padding: 0 0.8em 0.4em;
+}
+.ctl-body .role-timeline {
+  margin-bottom: 0.6em;
+}
+@media (max-width: 640px) {
+  .ctl-mini.role-timeline {
+    order: 3;
+    flex-basis: 100%;
+  }
+}
+/* 参加のある期間だけの軸の切れ目（参加の無い期間を詰めた所）。帯の段は斜線の地、目盛りの段は「≈」。 */
+.rtl-gap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(135deg, #fff 0 3px, #e3e5ea 3px 4px);
+  border-left: 1px solid var(--rtl-grid);
+  border-right: 1px solid var(--rtl-grid);
+}
+.rtl-gap-mark {
+  position: absolute;
+  bottom: 4px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--muted);
+}
+/* 人物・企業/団体詳細の年表で、スピンオフの話の帯と凡例の見本（記念日カレンダーの 🌙 と同じ藍）。 */
+.rtl-seg-spinoff { background: #3f4a9e; }
+.rtl-key-spinoff { width: 18px; height: 10px; border-radius: 3px; background: #3f4a9e; }
+/* 人物・企業/団体詳細の年表の役職の行の印（札）。役柄の行はキャラクターの星（.rtl-badge-character）。 */
+.rtl-badge-role { background: rgba(59, 130, 196, 0.12); color: #2563a8; }

@@ -22,6 +22,12 @@ public sealed class CharactersGenerator
     /// 正確に解決するための索引。同一曲を複数録音で歌っている場合は出典が最も早い録音を採る。</summary>
     private IReadOnlyDictionary<int, IReadOnlyDictionary<int, SongRecording>>? _charSungRecordingByAlias;
 
+    /// <summary>年表の歌の日付（盤の発売日）を引く。</summary>
+    private readonly DiscsRepository _discsRepo;
+    private readonly ProductsRepository _productsRepo;
+    /// <summary>キャラクター詳細の年表の組み立て（詳細ページを作る前に 1 度だけ作る）。</summary>
+    private CreditTimelineBuilder? _timelineBuilder;
+
     /// <summary>person_alias_id → person_id（声優名を人物詳細へリンクするための逆引き。共有名義は並び先頭の人物にリンクする）。
     /// <c>GenerateAsync</c> の冒頭で 1 度だけ詰め、声の出演履歴とゲストキャラクターページで使い回す。
     /// 人物に紐付かない名義（ユニット名義など）はキーを持たず、リンクなしの文字で出す。</summary>
@@ -58,6 +64,8 @@ public sealed class CharactersGenerator
         _personAliasesRepo = new PersonAliasesRepository(factory);
         _precuresRepo = new PrecuresRepository(factory);
         _personsRepo = new PersonsRepository(factory);
+        _discsRepo = new DiscsRepository(factory);
+        _productsRepo = new ProductsRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -136,6 +144,13 @@ public sealed class CharactersGenerator
             _charSongRolesByAlias = rolesBucket.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<(int SongId, string RoleCode)>)kv.Value);
             _charSungRecordingByAlias = sungRecBucket.ToDictionary(kv => kv.Key, kv => (IReadOnlyDictionary<int, SongRecording>)kv.Value);
         }
+
+        // 年表の組み立て（キャラの名義で歌った歌は、キャラの名義ごとの索引から引く）。
+        _timelineBuilder ??= new CreditTimelineBuilder(
+            _ctx,
+            await MusicTimelineDates.LoadAsync(_ctx, _discsRepo, _productsRepo, ct).ConfigureAwait(false),
+            _charSongRolesByAlias,
+            _charSungRecordingByAlias);
 
         // 索引ページ。
         GenerateIndex(allCharacters, aliasesByCharacter, kindMap);
@@ -429,8 +444,16 @@ public sealed class CharactersGenerator
             aliasIds.Where(_index.VoiceCastByCharacterAlias.ContainsKey)
                     .SelectMany(id => _index.VoiceCastByCharacterAlias[id]));
 
+        // 年表：声の出演を演じた声優ごとと、キャラの名義で歌った歌の役職ごとの線表（参加のある期間だけ）。
+        var creditTimeline = _timelineBuilder!.BuildForCharacter(aliasIds,
+            aliasIds.Where(_index.VoiceCastByCharacterAlias.ContainsKey)
+                    .SelectMany(id => _index.VoiceCastByCharacterAlias[id])
+                    .ToList());
+
         var content = new CharacterDetailModel
         {
+            CreditTimeline = creditTimeline,
+            Timeline = creditTimeline?.Timeline,
             Character = new CharacterView
             {
                 CharacterId = character.CharacterId,
@@ -1174,6 +1197,10 @@ public sealed class CharactersGenerator
 
     private sealed class CharacterDetailModel
     {
+        /// <summary>年表（基本情報の下の開閉の枠）。描ける参加が無ければ null（枠を出さない）。</summary>
+        public CreditTimelineView? CreditTimeline { get; set; }
+        /// <summary>年表の線表（<see cref="CreditTimeline"/> の中身。共通の部品 _role-timeline.sbn が Timeline の名で読む）。</summary>
+        public RoleTimelineModel? Timeline { get; set; }
         public CharacterView Character { get; set; } = new();
         public IReadOnlyList<CharacterAliasRow> Aliases { get; set; } = Array.Empty<CharacterAliasRow>();
         public IReadOnlyList<FamilyRelationRow> FamilyRelations { get; set; } = Array.Empty<FamilyRelationRow>();

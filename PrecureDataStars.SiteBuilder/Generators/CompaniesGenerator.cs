@@ -42,6 +42,12 @@ public sealed class CompaniesGenerator
     /// <summary>person_id → Person（メンバー履歴行のソート用に人物読みを参照）。</summary>
     private IReadOnlyDictionary<int, Person>? _personById;
 
+    /// <summary>年表の盤の音楽クレジットの日付（盤の発売日）を引く。</summary>
+    private readonly DiscsRepository _discsRepo;
+    private readonly ProductsRepository _productsRepo;
+    /// <summary>企業・団体詳細の年表の組み立て（ページを作る前に 1 度だけ作る）。</summary>
+    private CreditTimelineBuilder? _timelineBuilder;
+
     public CompaniesGenerator(
         BuildContext ctx,
         PageRenderer page,
@@ -63,6 +69,8 @@ public sealed class CompaniesGenerator
         _personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
         _personAliasesRepo = new PersonAliasesRepository(factory);
         _personsRepo = new PersonsRepository(factory);
+        _discsRepo = new DiscsRepository(factory);
+        _productsRepo = new ProductsRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -105,6 +113,10 @@ public sealed class CompaniesGenerator
 
         // 企業索引は「クリエイター > スタッフ」（/creators/staff/）に集約。
         // 本ジェネレータは企業・団体単体の詳細ページ（/companies/{id}/）生成に専念する。
+
+        // 年表の組み立ても、ページを作る前に用意する（盤の音楽クレジットの日付は盤と商品を読んで決める）。
+        _timelineBuilder ??= new CreditTimelineBuilder(
+            _ctx, await MusicTimelineDates.LoadAsync(_ctx, _discsRepo, _productsRepo, ct).ConfigureAwait(false));
 
         // 出典は全件を読み、企業ごとの脚注と本文の番号にしておく。
         _sourcesByCompany = EntitySourceFootnotes.ByCompany(await _sourcesRepo.GetAllAsync(ct).ConfigureAwait(false));
@@ -250,6 +262,12 @@ public sealed class CompaniesGenerator
         musicTotal.AddRange(musicOwnRoles.Select(r => r.Counts));
         musicTotal.AddRange(musicMemberRoles.Select(r => r.Counts));
 
+        // 年表：本編クレジットの役職と、会社そのものが載った盤の音楽クレジットの役職ごとの線表（参加のある期間だけ）。
+        var creditTimeline = _timelineBuilder!.BuildForCompany(
+            allInvolvements, groups,
+            aliases.Where(a => _ctx.MusicCredits.ByCompanyAlias.ContainsKey(a.AliasId))
+                .SelectMany(a => _ctx.MusicCredits.ByCompanyAlias[a.AliasId]));
+
         // 商号履歴：正式名（社名）の名義を有効期間の古い順に並べる（期間の無い名義は前身・後継のつながりの順で前に置く）。
         // 正式名の名義が 2 つ以上あるときだけ出す（1 つなら見出しの名前と同じなので出さない）。
         var officialNames = BuildOfficialNameHistory(aliases);
@@ -276,6 +294,8 @@ public sealed class CompaniesGenerator
             Relations = relations,
             InvolvementGroups = groups,
             InvolvementSections = involvementSections,
+            CreditTimeline = creditTimeline,
+            Timeline = creditTimeline?.Timeline,
             CreditEpisodeCountTotal = creditEpisodeCountTotal,
             CreditMovieCountTotal = creditMovieCountTotal,
             CreditOtonaEpisodeCountTotal = creditOtonaEpisodeCountTotal,
@@ -1260,6 +1280,10 @@ public sealed class CompaniesGenerator
 
     private sealed class CompanyDetailModel
     {
+        /// <summary>年表（基本情報の下の開閉の枠）。描ける参加が無ければ null（枠を出さない）。</summary>
+        public CreditTimelineView? CreditTimeline { get; set; }
+        /// <summary>年表の線表（<see cref="CreditTimeline"/> の中身。共通の部品 _role-timeline.sbn が Timeline の名で読む）。</summary>
+        public RoleTimelineModel? Timeline { get; set; }
         /// <summary>音楽クレジット：会社そのものが載っている行（役職 → 歌 / 劇伴 / 音盤）。無ければ空。</summary>
         public IReadOnlyList<CompanyMusicRoleGroup> MusicOwnRoles { get; set; } = Array.Empty<CompanyMusicRoleGroup>();
         /// <summary>音楽クレジット：会社を所属として載った人物（役職 → 人物 → 歌 / 劇伴 / 音盤）。無ければ空。</summary>

@@ -20,6 +20,9 @@
      ・所属の人の行は、帯の下に会社の所属としてクレジットされていた期間の細い線（rtl-aff。まとめた会社以外の会社は
        点線の rtl-aff-other）を引き、内訳に「所属：会社名（期間）」の行（data-aff）を添える。
      ・横軸は TV シリーズ 1 作を 1 本の帯にし、帯の左端に放送開始年の目盛り（シリーズ詳細へのリンク）を置く。
+       人物・企業/団体詳細の年表は参加のある帯だけを並べ、続かない帯のあいだに切れ目（Timeline.Gaps の rtl-gap。斜線の地と目盛りの段の「≈」）を置く。
+     ・人物・企業/団体詳細の年表は、スピンオフの話を藍の帯（rtl-seg-spinoff）で本線の TV の話と分けて描く。
+     ・人物・企業/団体詳細の年表の行は役職（EntityKind が role。札の印）と役柄（character。星の印）で、名前は役職詳細・キャラクター詳細へのリンク。
      ・役職詳細では、ページの役職と関連でつながった役職の担当（r.Related）を、主の印より先に描いて下に重ねる
        （細い帯と白抜きの輪。色は役職ごとに RoleTimelineBuilder が決めて --rel-c / --key-c で渡す）。凡例は役職ごとに 1 項目で、
        役職名は役職詳細へのリンク。 ##}}
@@ -45,10 +48,11 @@
   </div>
   <div class="rtl{{ if Timeline.TickDensityClass != "" }} {{ Timeline.TickDensityClass }}{{ end }}">
     <div class="rtl-bands" aria-hidden="true">
-      {{~ for b in Timeline.Bands ~}}<span class="rtl-band{{ if b.IsAlt }} rtl-band-alt{{ end }}" style="left:{{ b.Left }}%;width:{{ b.Width }}%"></span>{{~ end ~}}
+      {{~ for b in Timeline.Bands ~}}<span class="rtl-band{{ if b.IsAlt }} rtl-band-alt{{ end }}" style="left:{{ b.Left }}%;width:{{ b.Width }}%"></span>{{~ end ~}}{{~ for g in Timeline.Gaps ~}}<span class="rtl-gap" style="left:{{ g.Left }}%;width:{{ g.Width }}%"></span>{{~ end ~}}
     </div>
     <div class="rtl-axis">
       <div class="rtl-axis-track">
+        {{~ for g in Timeline.Gaps ~}}<span class="rtl-gap-mark" style="left:{{ g.Left }}%;width:{{ g.Width }}%">≈</span>{{~ end ~}}
         {{~ for t in Timeline.Ticks ~}}
         {{~ if t.ShowLabel ~}}<a class="rtl-tick" style="left:{{ t.Left }}%" href="{{ t.SeriesUrl }}" title="{{ t.SeriesTitle | html.escape }}"><span class="rtl-tick-cc">{{ t.YearLabel | string.slice 0 2 }}</span>{{ t.YearLabel | string.slice 2 }}</a>
         {{~ else ~}}<span class="rtl-tick" style="left:{{ t.Left }}%" aria-hidden="true"></span>
@@ -62,6 +66,7 @@
         <a class="rtl-name" href="{{ r.EntityUrl }}">
           {{~ if r.EntityKind == "company" ~}}<span class="rtl-badge rtl-badge-company" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" fill-rule="evenodd"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>
           {{~ else if r.EntityKind == "unit" ~}}<span class="rtl-badge rtl-badge-unit" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><circle cx="5.2" cy="5.4" r="2.4"/><circle cx="10.8" cy="5.4" r="2.4"/><path d="M0.6 14a4.6 4.6 0 0 1 9.2 0z"/><path d="M6.2 14a4.6 4.6 0 0 1 9.2 0z"/></svg></span>
+          {{~ else if r.EntityKind == "role" ~}}<span class="rtl-badge rtl-badge-role" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" fill-rule="evenodd"><path d="M1.5 2.5v5.2l7 7 6-6-7-7H2.5a1 1 0 0 0-1 .8zM5 4.1a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z"/></svg></span>
           {{~ else if r.EntityKind == "character" ~}}<span class="rtl-badge rtl-badge-character" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M8 1.2l2 4.3 4.7.5-3.5 3.2 1 4.6L8 11.4l-4.2 2.4 1-4.6L1.3 6l4.7-.5z"/></svg></span>
           {{~ else ~}}<span class="rtl-badge rtl-badge-person" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
           {{~ end ~}}<span class="rtl-name-text">{{ r.EntityName | html.escape }}</span></a>
@@ -69,6 +74,7 @@
           {{~ for m in r.Related ~}}{{ if m.IsMovie }}<span class="rtl-rel-movie" style="left:{{ m.Left }}%;--rel-c:{{ m.Color }}"></span>{{ else }}<span class="rtl-rel" style="left:{{ m.Left }}%;width:{{ m.Width }}%;--rel-c:{{ m.Color }}"></span>{{ end }}{{~ end ~}}
           {{~ for m in r.Spans ~}}<span class="rtl-span" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}
           {{~ for m in r.Segments ~}}<span class="rtl-seg" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}
+          {{~ for m in r.SpinOffSegments ~}}<span class="rtl-seg rtl-seg-spinoff" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}
           {{~ for m in r.Movies ~}}<span class="rtl-movie" style="left:{{ m.Left }}%"></span>{{~ end ~}}
           {{~ for m in r.Songs ~}}<span class="rtl-song" style="left:{{ m.Left }}%"></span>{{~ end ~}}
           {{~ for m in r.Bgms ~}}<span class="rtl-bgm" style="left:{{ m.Left }}%"></span>{{~ end ~}}

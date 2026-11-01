@@ -1354,26 +1354,6 @@ public sealed class CreatorsGenerator
         }
     }
 
-    /// <summary>音楽クレジット 1 行を、年表の入力に担当先（曲・録音・劇伴の録音回・盤）の単位で足す。</summary>
-    private void AddMusicCreditToTimeline(MusicTimelineCollector timeline, (char Kind, int Id) key, MusicCredit r)
-    {
-        switch (r.TargetKind)
-        {
-            case MusicCreditTargetKinds.Song when r.SongId is int sid:
-                timeline.AddSong(key, sid);
-                break;
-            case MusicCreditTargetKinds.SongRecording when r.SongRecordingId is int rid && _ctx.SongRecordingById.TryGetValue(rid, out var rec):
-                timeline.AddSong(key, rec.SongId, rid);
-                break;
-            case MusicCreditTargetKinds.BgmSession when r.BgmSeriesId is int bsid:
-                timeline.AddSession(key, bsid, r.BgmSessionNo ?? 0);
-                break;
-            case MusicCreditTargetKinds.Product when r.ProductCatalogNo is string pc:
-                timeline.AddProduct(key, pc);
-                break;
-        }
-    }
-
     /// <summary>
     /// 音楽クレジット 1 行の作品（シリーズ）。曲は初出録音の出典シリーズ、録音はその出典シリーズ、劇伴セッションはそのシリーズ、
     /// 盤はディスクに登録されたシリーズ。解決できなければ null。
@@ -1499,7 +1479,7 @@ public sealed class CreatorsGenerator
         {
             if (EntityKeyOf(r, personIdByAlias) is not { } key) continue;
             if (MusicCreditViewBuilder.DescribeTarget(_ctx, r) is not { } t) continue;
-            AddMusicCreditToTimeline(timeline, key, r);
+            timeline.AddMusicCredit(key, r);
             var acc = AccOf(key);
             switch (r.TargetKind)
             {

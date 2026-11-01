@@ -46,6 +46,8 @@
   </section>
   {{~ end ~}}
 
+{{ include '_credit-timeline.sbn' ~}}
+
   {{## 商号履歴。正式名（社名）の名義（company_aliases.is_official_name）を古い順に「期間 ｜ 商号」の表で出す。
        基本情報の下に置き、正式名の名義が 2 つ以上あるときだけ出す。 ##}}
   {{~ if (array.size OfficialNames) > 0 ~}}

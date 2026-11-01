@@ -4,6 +4,27 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：人物詳細・企業/団体詳細・ユニット詳細・キャラクター詳細に年表を足した**（`CreditTimelineBuilder`・`RoleTimelineBuilder.ForParticipation` / `RoleTimelineModel.Gaps` / `RoleTimelineRules.Credit` / `SeparateSpinOffs` / `RoleTimelineRow.SpinOffSegments`・`MusicTimelineCollector.AddMusicCredit`・`PersonsGenerator`・`CompaniesGenerator`・`CharactersGenerator`・`_credit-timeline.sbn`・`persons-detail.sbn`・`companies-detail.sbn`・`units-detail.sbn`・`characters-detail.sbn`・`_role-timeline.sbn`・`site.css` の `.credit-timeline` / `.rtl-gap` / `.rtl-seg-spinoff` / `.rtl-badge-role`）：
+  - 基本情報の下に、ふだんは閉じた開閉の枠で置く
+    - 閉じた状態：参加の期間・役職と役柄の行の数と、すべての参加を 1 本にまとめた帯
+    - 開いた状態：役職・役柄ごとの線表
+  - 人物の行は 3 種類で、最初の参加の早い順に並べる。名前は役職詳細・キャラクター詳細へのリンク
+    - 本編クレジットの役職（声の出演を除く）
+    - 声の出演の演じたキャラ
+    - 音楽の役職（歌・劇伴・盤のクレジットを役職ごとにまとめる）
+  - 企業・団体の行は 2 種類
+    - 本編クレジットの役職（屋号・ロゴ・ブロックの先頭の会社として）
+    - 会社そのものが載った盤の音楽クレジットの役職
+  - ユニットの行は、ユニットの名義で関わった役職（歌唱・コーラスや盤の音楽クレジットなど。人物と同じまとめ方）
+  - キャラクターの行は 2 種類。声優が代わったキャラは、行が分かれて交代の時期が見える
+    - 声の出演を演じた声優ごと（人物の印。声優のページへのリンク）
+    - キャラの名義で歌った歌の役職（歌唱・コーラス・台詞など）
+  - 役職の行は札、役柄の行は星、声優の行は人物の印で見分ける
+  - 横軸は参加のある期間だけにする。参加の日付の入る TV シリーズの帯だけを並べ、続かない帯のあいだに切れ目（斜線の地と「≈」）を置く
+  - スピンオフの話は、本線の TV の話と別の藍の帯で描き、凡例も分ける（横軸の帯と目盛りは本線の TV シリーズのまま）
+  - 描き方と吹き出しは、役職詳細などの年表タブと同じ部品を使う。音楽クレジット 1 行を年表に足す処理は、`CreatorsGenerator` から `MusicTimelineCollector` へ移した
+  - 年表タブを持つほかのページの出力は変わらない
+
 - **サイト：歴代記録（`/stats/records/`）の崩れを直し、カードの中身とリンク先を見直した**（`RecordsGenerator`・`EpisodeChiefStaffIndex`・`stats-records-index.sbn`・`site.css` の `.records-grid` / `.records-card-title`・`episode-detail.sbn`）：
   - 記録カードの見出しに、全体の `h3::before` の青い点が重なって先頭の字を隠していた。カードの見出しでは点を出さない
   - エピソード詳細のスタッフの節のための `#staff` の指定（flex で横に流す）が、記録ページの同じ id の節にも効いて、スタッフ・声優の欄だけカードの幅が変わっていた。エピソード詳細の節に `episode-staff` の class を付け、指定を `#staff.episode-staff` に絞った

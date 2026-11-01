@@ -36,6 +36,12 @@ public sealed class PersonsGenerator
     private readonly PersonPositionsRepository _positionsRepo;
     /// <summary>役職履歴の見出しに添える会社名を引く（並列レンダリングの前に 1 度だけ）。</summary>
     private readonly CompaniesRepository _companiesRepo;
+    /// <summary>年表の歌・劇伴・盤の日付（盤の発売日）を引く（並列レンダリングの前に 1 度だけ）。</summary>
+    private readonly DiscsRepository _discsRepo;
+    private readonly ProductsRepository _productsRepo;
+
+    /// <summary>人物詳細の年表の組み立て（並列レンダリングの前に 1 度だけ作る）。</summary>
+    private CreditTimelineBuilder? _timelineBuilder;
 
     private readonly CreditInvolvementIndex _index;
 
@@ -103,6 +109,8 @@ public sealed class PersonsGenerator
         _sourcesRepo = new EntitySourcesRepository(factory);
         _positionsRepo = new PersonPositionsRepository(factory);
         _companiesRepo = new CompaniesRepository(factory);
+        _discsRepo = new DiscsRepository(factory);
+        _productsRepo = new ProductsRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -219,6 +227,13 @@ public sealed class PersonsGenerator
                     g => (IReadOnlyList<SongRecording>)g.OrderBy(r => r.SongRecordingId).ToList());
         }
 
+        // 年表の組み立ても並列レンダリングの前に用意する（歌・劇伴・盤の日付は盤と商品を読んで決める）。
+        _timelineBuilder ??= new CreditTimelineBuilder(
+            _ctx,
+            await MusicTimelineDates.LoadAsync(_ctx, _discsRepo, _productsRepo, ct).ConfigureAwait(false),
+            _songRolesByAlias!,
+            _sungRecordingByAlias!);
+
         // 「代表作（プリキュアを除く）」も並列レンダリングの前に全件を読み、人物ごとの表示行にしておく。
         if (_notableWorksByPerson is null)
         {
@@ -300,6 +315,12 @@ public sealed class PersonsGenerator
         var musicSections = BuildPersonMusicSections(aliasIds, songCards, name);
         // 歌唱者（歌・コーラス・台詞）として参加したユニットか。歌唱の一覧へ戻るリンクとパンくずを出し分ける。
         bool isSinger = songCards.Any(c => c.Roles.Any(r => PathUtil.IsSingerRole(r.Code)));
+        // 年表：ユニットの名義で関わった役職ごとの線表（本編クレジットに載っていればその役職も。参加のある期間だけ）。
+        var unitMainInvolvements = _index.ByPersonAlias.TryGetValue(unit.AliasId, out var unitInvs)
+            ? unitInvs.Where(IsMainInvolvement).ToList()
+            : new List<Involvement>();
+        var creditTimeline = _timelineBuilder!.BuildForPerson(
+            aliasIds, unitMainInvolvements, BuildPersonInvolvementGroups(aliasIds, IsMainInvolvement));
         string coverageLabel = string.IsNullOrEmpty(_ctx.MusicCredits.CoverageLabel) ? _ctx.CreditCoverageLabel : _ctx.MusicCredits.CoverageLabel;
 
         var content = new UnitDetailModel
@@ -312,6 +333,8 @@ public sealed class PersonsGenerator
                 Members = members
             },
             MusicSections = musicSections,
+            CreditTimeline = creditTimeline,
+            Timeline = creditTimeline?.Timeline,
             IsSinger = isSinger,
             CoverageLabel = coverageLabel
         };
@@ -513,6 +536,8 @@ public sealed class PersonsGenerator
         string deathDateLabel = person.DeathMonth is null ? "没年" : "没年月日";
         // 初参加：本編クレジット（声の出演を含む）のいちばん早い話。収録範囲外なら null。基本情報と OGP カードで使う。
         var firstAppearance = FirstAppearanceResolver.Resolve(_ctx, allPersonInvolvements);
+        // 年表：役職・役柄ごとの線表（その人の参加のある期間だけ）。描ける参加が無ければ出さない。
+        var creditTimeline = _timelineBuilder!.BuildForPerson(aliasIds, allPersonInvolvements, involvementGroups);
 
         var content = new PersonDetailModel
         {
@@ -541,6 +566,8 @@ public sealed class PersonsGenerator
             CreditEpisodeCountTotal = creditEpisodeCountTotal,
             CreditMovieCountTotal = creditMovieCountTotal,
             CreditOtonaEpisodeCountTotal = creditOtonaEpisodeCountTotal,
+            CreditTimeline = creditTimeline,
+            Timeline = creditTimeline?.Timeline,
             MusicSections = musicSections,
             NotableWorks = _notableWorksByPerson!.TryGetValue(person.PersonId, out var works)
                 ? works
@@ -1712,6 +1739,10 @@ public sealed class PersonsGenerator
     private sealed class UnitDetailModel
     {
         public UnitView Unit { get; set; } = new();
+        /// <summary>年表（基本情報の下の開閉の枠）。描ける参加が無ければ null（枠を出さない）。</summary>
+        public CreditTimelineView? CreditTimeline { get; set; }
+        /// <summary>年表の線表（<see cref="CreditTimeline"/> の中身。共通の部品 _role-timeline.sbn が Timeline の名で読む）。</summary>
+        public RoleTimelineModel? Timeline { get; set; }
         /// <summary>音楽クレジットの節（人物詳細と同じ組み立て）。</summary>
         public IReadOnlyList<PersonMusicSection> MusicSections { get; set; } = Array.Empty<PersonMusicSection>();
         public int MusicSongTotal => MusicSections.SelectMany(s => s.SongKeys).Distinct(StringComparer.Ordinal).Count();
@@ -1753,6 +1784,10 @@ public sealed class PersonsGenerator
         public int CreditMovieCountTotal { get; set; }
         /// <summary>クレジットセクション見出し横に出す合計担当話数（大人向けシリーズ横断、🌙 ピル）。</summary>
         public int CreditOtonaEpisodeCountTotal { get; set; }
+        /// <summary>年表（基本情報の下の開閉の枠）。描ける参加が無ければ null（枠を出さない）。</summary>
+        public CreditTimelineView? CreditTimeline { get; set; }
+        /// <summary>年表の線表（<see cref="CreditTimeline"/> の中身。共通の部品 _role-timeline.sbn が Timeline の名で読む）。</summary>
+        public RoleTimelineModel? Timeline { get; set; }
         /// <summary>音楽クレジット（区分ごと。何も無い区分は含まない）。</summary>
         public IReadOnlyList<PersonMusicSection> MusicSections { get; set; } = Array.Empty<PersonMusicSection>();
         /// <summary>音楽クレジットの見出しの札（全区分を通して重複を除いた曲数・劇伴の件数・盤数）。</summary>

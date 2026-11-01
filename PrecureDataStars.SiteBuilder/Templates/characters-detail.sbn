@@ -56,6 +56,8 @@
     </div>
   </section>
 
+{{ include '_credit-timeline.sbn' ~}}
+
   {{## プリキュア情報セクション。
        PRECURE 種別キャラかつ precures レコードに紐付くキャラのみ表示する。
        4 区分（変身前 / 変身後 / 変身後 2 / 別形態）の名義表と、

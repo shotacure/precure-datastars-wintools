@@ -295,7 +295,7 @@ public sealed class SiteBuilderPipeline
         // 歴代記録（/stats/records/）と本放送・配信・円盤の尺の違い。尺のランキングはパート尺統計と同じ SQL、
         // スタッフ・キャラクターは関与索引とチーフの顔ぶれ索引から数える。
         reporter.BeginSection("records");
-        await new RecordsGenerator(ctx, pageRenderer, factory, involvementIndex, chiefStaffIndex).GenerateAsync(ct).ConfigureAwait(false);
+        await new RecordsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
         // OGP カードは各ページの生成と並行して描いているので、出力を走査・掃除する前に全部の描き上がりを待つ。

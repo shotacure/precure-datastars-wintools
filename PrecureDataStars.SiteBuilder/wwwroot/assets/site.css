@@ -8630,29 +8630,30 @@ table:has(th.col-rank) tbody tr:nth-child(3) td.col-rank {
 /* エピソード詳細のスタッフセクション。
    1 役職 = 1 .key-staff-line（同一人物が兼ねる「絵コンテ・演出」は 1 entry 内で複数バッジを並べる仕様で、
    常に 1 セット = 1 行）。シリーズ詳細 #key-staff のような grid 縦揃えは要求されないため、セット単位で
-   flex 子として並べる：デスクトップではセット境界で wrap、モバイルでは column に倒して 1 セット = 1 行に。 */
-#staff {
+   flex 子として並べる：デスクトップではセット境界で wrap、モバイルでは column に倒して 1 セット = 1 行に。
+   ほかのページにも id="staff" の節（歴代記録のスタッフ・声優など）があるので、指定は .episode-staff の付いた節に絞る。 */
+#staff.episode-staff {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 6px 20px;
 }
 /* 見出しは flex 内でも全幅を占めてセット群の上に独立して並ぶ。 */
-#staff > h2 {
+#staff.episode-staff > h2 {
   flex-basis: 100%;
   margin-bottom: 4px;
 }
 /* グローバルの display: contents を上書きし、各 .key-staff-line を 1 つの flex 子に戻す。
    セット内（バッジ + 名義）の途中改行はセット境界以外で起きないよう nowrap で凝集する。
    行幅を超えるときは親の flex-wrap によってセット境界（次の .key-staff-line）で折り返す。 */
-#staff .key-staff-line {
+#staff.episode-staff .key-staff-line {
   display: block;
   white-space: nowrap;
 }
 /* モバイル：1 セット 1 行で縦に積む（flex 方向を column に倒す）。
    align-items を flex-start に切り替えてセットを左揃えに、gap も縦間隔だけに簡素化する。 */
 @media (max-width: 640px) {
-  #staff {
+  #staff.episode-staff {
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
@@ -11015,7 +11016,7 @@ body.has-art-track-bar {
    #staff は flex（セットを横に並べる）なので、開閉の枠は全幅の子にして下に回す。
    閉じた状態は 1 組 1 かたまり（小さな札 × 札・「N 回目」）を区切り線で横に流し、右端に「くわしく」。
    開くとかたまりは隠れ、「閉じる」の行の左に数え方の断り、その下に組み合わせごとのカード。 */
-#staff .staff-combos {
+#staff.episode-staff .staff-combos {
   flex-basis: 100%;
   /* スマホ幅で #staff が縦並び・左寄せ（align-items: flex-start）になっても、枠は全幅に伸ばす。 */
   align-self: stretch;
@@ -11411,7 +11412,9 @@ a.staff-combo-nav-card:hover {
    分類ごとに記録カードをグリッドで並べる。カードは順位・名前（＋添え書き）・値の 3 列。 */
 .records-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  /* 本文の幅（960px）で 2 列。組み合わせの行（演出 ○○ × 作画監督 ○○）やキャラ名（美墨なぎさ / キュアブラック）が
+     途中で折れない幅を取る。狭い画面では 1 列で全幅。 */
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
   gap: 1em;
   margin: 0.8em 0 1.4em;
 }
@@ -11427,6 +11430,11 @@ a.staff-combo-nav-card:hover {
   border: 0;
   font-size: 1em;
   font-weight: 600;
+}
+.records-card-title::before {
+  /* 見出しの左の余白を 0 にしているので、グローバルの h3::before（左に絶対配置される青丸マーカー）が
+     先頭の字に重なる。カードの枠が区切りを担うので、マーカーは出さない。 */
+  content: none;
 }
 .records-entries {
   list-style: none;
@@ -11459,10 +11467,6 @@ a.staff-combo-nav-card:hover {
 }
 .records-sub {
   display: block;
-  font-size: 0.85em;
-  color: var(--muted);
-}
-.records-role {
   font-size: 0.85em;
   color: var(--muted);
 }

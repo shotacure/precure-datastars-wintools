@@ -12,7 +12,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// <para>
 /// 歴代記録は「いちばん」を集めた記録集。本編の尺（アバンタイトル・A パート・B パートの長短、中 CM の早遅）は
 /// パート尺統計と同じランキング SQL から上位だけを取り、スタッフ（脚本・絵コンテ・演出・作画監督の担当話数、
-/// 演出と作画監督の組み合わせ、声の出演の話数・役の数）とキャラクター（登場話数・登場作品数）は
+/// 声の出演の話数・役の数）とキャラクター（TV シリーズの登場話数・登場作品数）は
 /// クレジットの関与索引から数える。順位は同点を同じ順位とし、次の順位は同点の数だけ繰り下げる
 /// （3 位までを出し、同率は全件載せる）。
 /// </para>
@@ -50,21 +50,18 @@ public sealed class RecordsGenerator
     private readonly EpisodePartStatsRepository _partStatsRepo;
     private readonly CharactersRepository _charactersRepo;
     private readonly CreditInvolvementIndex _involvements;
-    private readonly EpisodeChiefStaffIndex _chiefs;
 
     public RecordsGenerator(
         BuildContext ctx,
         PageRenderer page,
         IConnectionFactory factory,
-        CreditInvolvementIndex involvements,
-        EpisodeChiefStaffIndex chiefs)
+        CreditInvolvementIndex involvements)
     {
         _ctx = ctx;
         _page = page;
         _partStatsRepo = new EpisodePartStatsRepository(factory);
         _charactersRepo = new CharactersRepository(factory);
         _involvements = involvements;
-        _chiefs = chiefs;
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -271,17 +268,18 @@ public sealed class RecordsGenerator
                 $"{label}を多く担当した人",
                 "話",
                 stats.Select(kv => (kv.Key, kv.Value.ChiefEpisodes.TryGetValue(chief, out var s) ? s.Count : 0)),
-                PathUtil.CreatorsRoleUrl(roleCode),
+                // 役職詳細は初参加順のタブで開くので、担当回数順のタブを開いた状態（view-state.js の #tab=）へリンクする。
+                PathUtil.CreatorsRoleUrl(roleCode) + "#tab=count",
                 $"{label}の担当回数順を見る"));
         }
-        items.Add(TopCombosItem(EpisodeChiefStaffIndex.DirectorAndAnimationDirector, "combo-director-ad", "多く組んだ演出と作画監督"));
-        items.Add(TopCombosItem(EpisodeChiefStaffIndex.ScreenplayDirectorAnimationDirector, "combo-screenplay-director-ad", "多く組んだ脚本・演出・作画監督"));
         items.Add(TopPersons("voice-episodes", "声の出演が多い声優さん", "話",
             stats.Select(kv => (kv.Key, kv.Value.VoiceEpisodes.Count)),
-            PathUtil.CreatorsVoiceCastUrl(), "声の出演一覧を見る"));
-        items.Add(TopPersons("voice-characters", "演じた役が多い声優さん", "役",
+            // 声の出演一覧の出演回数順のタブを開いた状態へリンクする。
+            PathUtil.CreatorsVoiceCastUrl() + "#tab=count", "声の出演一覧を見る"));
+        items.Add(TopPersons("voice-characters", "クレジットされた役柄が多い声優さん", "役",
             stats.Select(kv => (kv.Key, kv.Value.Characters.Count)),
-            PathUtil.CreatorsVoiceCastUrl(), "声の出演一覧を見る"));
+            // 声の出演一覧のクレジット役柄数順のタブを、TV シリーズで演じたキャラの数（📺）の多い順にした状態へリンクする。
+            PathUtil.CreatorsVoiceCastUrl() + "#tab=charcount&csort=tv-desc", "声の出演一覧を見る"));
 
         return new RecordGroup
         {
@@ -323,27 +321,6 @@ public sealed class RecordsGenerator
         return new RecordItem { Id = id, Title = title, Entries = entries, MoreUrl = moreUrl, MoreLabel = moreLabel };
     }
 
-    private RecordItem TopCombosItem(ChiefCombo combo, string id, string title)
-    {
-        var entries = _chiefs.TopCombos(combo, TopRank)
-            .Select(r => new RecordEntry
-            {
-                RankLabel = r.Rank.ToString(),
-                ValueLabel = $"{r.Count}話",
-                NameHtml = string.Join(" × ", r.Members.Select(m =>
-                    $"<span class=\"records-role\">{HtmlUtil.Escape(m.RoleLabel)}</span> "
-                    + string.Join("、", m.Persons.Select(ChiefPersonHtml)))),
-                SubHtml = r.EpisodeIds.Count > 0
-                    ? "初回 " + EpisodeRefHtml(r.EpisodeIds[0]) + (r.EpisodeIds.Count > 1 ? " ／ 最新 " + EpisodeRefHtml(r.EpisodeIds[^1]) : "")
-                    : ""
-            })
-            .ToList();
-        return new RecordItem { Id = id, Title = title, Entries = entries };
-    }
-
-    private static string ChiefPersonHtml(ChiefPerson p)
-        => string.IsNullOrEmpty(p.Url) ? HtmlUtil.Escape(p.Name) : $"<a href=\"{p.Url}\">{HtmlUtil.Escape(p.Name)}</a>";
-
     private string PersonLinkHtml(int personId)
     {
         string name = _ctx.EntityUrls.PersonDisplayLabel(personId) ?? "";
@@ -366,38 +343,51 @@ public sealed class RecordsGenerator
             .GroupBy(a => a.CharacterId)
             .ToDictionary(g => g.Key, g => g.Select(a => a.AliasId).ToList());
 
-        var rows = new List<(Character Character, int Episodes, int Movies, int Works)>();
+        var rows = new List<(Character Character, int Episodes, int Movies, int Works, int SpinOffWorks)>();
+        // キャラクター一覧の登場回数順のリスト（個別ページを持つキャラ）に 🌙 の札が出るか。出るときは件数バッジでの
+        // 並べ替えの合計に 🌙 も入る（count-sort.js）ので、「もっと見る」のリンクに書く並べ替えの値が変わる。
+        bool countListHasOtona = false;
         foreach (var c in characters)
         {
             if (!aliasesByCharacter.TryGetValue(c.CharacterId, out var aliasIds)) continue;
-            // 記録は本線の TV と映画だけで数える（大人向けスピンオフの話数は使わない）。
-            var (episodes, movies, _) = CharacterAppearanceCounter.Count(_ctx, _involvements, aliasIds);
-            if (episodes == 0 && movies == 0) continue;
+            // 話数・本数は本線の TV と映画だけで数える（大人向けスピンオフの話数は使わない）。
+            var (episodes, movies, otonaEpisodes) = CharacterAppearanceCounter.Count(_ctx, _involvements, aliasIds);
+            if (otonaEpisodes > 0 && !_ctx.EntityUrls.IsGuestCharacter(c.CharacterId)) countListHasOtona = true;
 
-            // 登場作品数：声の出演のクレジットがあるシリーズを 1 作品と数える。併映の短編は親映画に含める。
+            // 登場作品数：声の出演のクレジットがあるシリーズを 1 作品と数える。スピンオフ（大人向けを含む）も 1 作品に数え、
+            // 併映の短編は親映画に含める。
             var works = new HashSet<int>();
+            var spinOffWorks = new HashSet<int>();
             foreach (var aliasId in aliasIds)
             {
                 if (!_involvements.VoiceCastByCharacterAlias.TryGetValue(aliasId, out var invs)) continue;
                 foreach (var inv in invs)
                 {
                     if (!_ctx.SeriesById.TryGetValue(inv.SeriesId, out var series)) continue;
-                    // 記録の作品数は本線（TV・映画）だけで数える
-                    if (SeriesClassifier.IsSpinOff(series)) continue;
+                    if (SeriesClassifier.IsSpinOff(series)) spinOffWorks.Add(series.SeriesId);
                     works.Add(SeriesClassifier.IsMovieShortChild(series) && series.ParentSeriesId is int parentId ? parentId : series.SeriesId);
                 }
             }
-            rows.Add((c, episodes, movies, works.Count));
+            if (works.Count == 0) continue;
+            rows.Add((c, episodes, movies, works.Count, spinOffWorks.Count));
         }
 
+        // 「もっと見る」はキャラクター一覧の登場回数順のタブへ。TV シリーズの登場話数は 📺 の多い順、登場作品数は
+        // 件数バッジの合計（📺🎥。🌙 の札があれば 🌙 も含む）の多い順に並べた状態（view-state.js の #tab= / csort=）を開く。
+        string countTabUrl = "/characters/#tab=count";
+        string tvSortUrl = countTabUrl + "&csort=tv-desc";
+        string totalSortUrl = countTabUrl + (countListHasOtona ? "&csort=tv_movie_otona-desc" : "&csort=tv_movie-desc");
         var items = new List<RecordItem>
         {
-            TopCharacters("character-episodes", "登場話数が多いキャラクター", rows
+            TopCharacters("character-episodes", "TVシリーズ登場話数が多いキャラクター", rows
                 .OrderByDescending(r => r.Episodes).ThenByDescending(r => r.Movies).ThenBy(r => r.Character.NameKana ?? "", StringComparer.Ordinal)
-                .Select(r => (r.Character, r.Episodes, $"{r.Episodes}話", r.Movies > 0 ? $"映画 {r.Movies}本" : ""))),
+                .Select(r => (r.Character, r.Episodes, $"{r.Episodes}話", "")),
+                tvSortUrl),
             TopCharacters("character-works", "登場作品数が多いキャラクター", rows
                 .OrderByDescending(r => r.Works).ThenByDescending(r => r.Episodes).ThenBy(r => r.Character.NameKana ?? "", StringComparer.Ordinal)
-                .Select(r => (r.Character, r.Works, $"{r.Works}作品", $"TV {r.Episodes}話・映画 {r.Movies}本")))
+                .Select(r => (r.Character, r.Works, $"{r.Works}作品",
+                    $"TV {r.Episodes}話・映画 {r.Movies}本" + (r.SpinOffWorks > 0 ? $"・スピンオフ {r.SpinOffWorks}作品" : ""))),
+                totalSortUrl)
         };
 
         return new RecordGroup
@@ -410,7 +400,7 @@ public sealed class RecordsGenerator
         };
     }
 
-    private RecordItem TopCharacters(string id, string title, IEnumerable<(Character Character, int Count, string Value, string Sub)> ordered)
+    private RecordItem TopCharacters(string id, string title, IEnumerable<(Character Character, int Count, string Value, string Sub)> ordered, string moreUrl)
     {
         var entries = new List<RecordEntry>();
         int rank = 0;
@@ -436,7 +426,7 @@ public sealed class RecordsGenerator
             });
             i++;
         }
-        return new RecordItem { Id = id, Title = title, Entries = entries, MoreUrl = "/characters/", MoreLabel = "キャラクター一覧を見る" };
+        return new RecordItem { Id = id, Title = title, Entries = entries, MoreUrl = moreUrl, MoreLabel = "キャラクター一覧を見る" };
     }
 
     // ── 本放送・配信・円盤の尺の違い ──
@@ -592,15 +582,6 @@ public sealed class RecordsGenerator
     /// <summary>シリーズ名（リンク）と年度の添え書き。複数シリーズが並ぶ文脈なので年度を薄色で付ける。</summary>
     private static string SeriesRefHtml(string seriesUrl, string seriesTitle, string startYearLabel)
         => $"<a href=\"{seriesUrl}\">{HtmlUtil.Escape(seriesTitle)}</a> <span class=\"stats-ep-year\">({startYearLabel})</span>";
-
-    /// <summary>話への参照（「シリーズ名 (年) 第N話」。話はリンク、サブタイトルは出さない）。</summary>
-    private string EpisodeRefHtml(int episodeId)
-    {
-        if (!_ctx.EpisodeById.TryGetValue(episodeId, out var ep)) return "";
-        if (!_ctx.SeriesById.TryGetValue(ep.SeriesId, out var series)) return "";
-        return SeriesRefHtml(PathUtil.SeriesUrl(series.Slug), series.Title, _ctx.StartYearLabel(series.SeriesId))
-            + $" <a href=\"{PathUtil.EpisodeUrl(series.Slug, ep.SeriesEpNo)}\">第{ep.SeriesEpNo}話</a>";
-    }
 
     // ── テンプレ用モデル ──
 

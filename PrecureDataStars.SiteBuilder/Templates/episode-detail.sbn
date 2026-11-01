@@ -185,7 +185,7 @@
        絵コンテと演出が同一人物の場合、テンプレ側で「絵コンテ」「演出」のバッジを 2 つ並べる
        （RoleCode は空、SubRoleLinks の各 Code / Label を使う）。 ##}}
   {{~ if (array.size Staff) > 0 ~}}
-  <section id="staff">
+  <section id="staff" class="episode-staff">
     <h2>スタッフ</h2>
     {{~ for s in Staff ~}}
     <div class="key-staff-line">

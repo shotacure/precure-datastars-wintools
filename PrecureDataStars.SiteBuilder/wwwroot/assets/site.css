@@ -1840,6 +1840,42 @@ a.series-card-children-title:hover {
   display: flex;
   justify-content: flex-end;
 }
+/* 映画の最後の画面に題名（英題など）の行が並ぶ組み：題名の行を中央にそろえ、行ごとの字の大きさを
+   テンプレの style で --film-end-title-l1〜l6 に指定する（指定の無い行は本文と同じ大きさ）。 */
+.credit-section .film-end-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+  margin-bottom: 0.8em;
+}
+.credit-section .film-end-title > span:nth-child(1) { font-size: var(--film-end-title-l1, 1em); }
+.credit-section .film-end-title > span:nth-child(2) { font-size: var(--film-end-title-l2, 1em); }
+.credit-section .film-end-title > span:nth-child(3) { font-size: var(--film-end-title-l3, 1em); }
+.credit-section .film-end-title > span:nth-child(4) { font-size: var(--film-end-title-l4, 1em); }
+.credit-section .film-end-title > span:nth-child(5) { font-size: var(--film-end-title-l5, 1em); }
+.credit-section .film-end-title > span:nth-child(6) { font-size: var(--film-end-title-l6, 1em); }
+/* 映画の最後の画面の下の段：CJ マークを左端、© の行を中央、映倫審査番号を右端に 1 行で並べる。 */
+.credit-section .film-end-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1em;
+}
+.credit-section .film-end-row .film-end-text {
+  text-align: center;
+}
+/* 下の段の © の行と映倫審査番号は画面どおり 1 行で組む（狭い画面では折り返してはみ出しを防ぐ）。 */
+.credit-section .film-end-row .film-end-title,
+.credit-section .film-end-row .film-rating {
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .credit-section .film-end-row .film-end-title,
+  .credit-section .film-end-row .film-rating {
+    white-space: normal;
+  }
+}
 /* CJ マークの印（小さく丸囲みで出す）。 */
 .credit-section .cj-mark {
   display: inline-block;

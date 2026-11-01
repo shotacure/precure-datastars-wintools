@@ -1,12 +1,15 @@
 {{## フォントのページ /fonts/。FontsGenerator から FontsIndexModel { SeriesSections } で渡る。
      作品ごと（放送開始順、見出しは h2）に、場面（オープニング・エンディング・サブタイトル。見出しは h3）のカードを並べる。
      カードは放送の画面を模した見本（押すと大きな画像を重ねて出す）と、その場面で使われた書体（書体のページへのリンクとベンダー名）。
-     ルビの書体は親字と違うときだけ添える。見出しの下のリード文に、見本の作り方と、お借りしたお名前・歌詞についての断りを置く。 ##}}
+     ルビの書体は親字と違うときだけ添える。見出しの下のリード文に、見本の作り方と、お借りしたお名前・歌詞についての断りを置く。
+     作品の section には、左のもくじ（section-nav.js）のラベル（題名）と年（data-section-nav-label / -year）を付ける（件数は無い）。 ##}}
 <h1>歴代タイトル字幕フォント</h1>
 <p class="fonts-lead">組見本の画像は公式と同じ写研・フォントワークス・モリサワ各社の書体を正規のライセンス契約下で使用し、当サイトで作成しました。OPクレジットは東堂いづみ先生、EDクレジットは東映動画の黎明期を支えたレジェンドアニメーター諸氏のお名前をお借りしています。歌詞およびサブタイトルは、『ふたりはプリキュア』企画書のキャッチフレーズをアレンジして使用しています。</p>
 
 {{~ for s in SeriesSections ~}}
-<section class="fonts-series-section" id="{{ s.Anchor }}">
+<section class="fonts-series-section" id="{{ s.Anchor }}"
+         data-section-nav-label="{{ s.SeriesTitle | html.escape }}"
+         data-section-nav-year="{{ s.StartYearLabel }}">
   <h2 class="fonts-series-heading"><a href="{{ s.SeriesUrl }}">{{ s.SeriesTitle | html.escape }}</a><span class="series-year">({{ s.StartYearLabel }})</span></h2>
   <div class="fonts-scene-grid">
     {{~ for c in s.Cards ~}}

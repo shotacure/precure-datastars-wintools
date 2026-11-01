@@ -41,12 +41,15 @@
 
          左サイドナビでシリーズセクションを
          「[年4桁] [件数バッジ] ○ ラベル」のレイアウトで出すため、属性を追加：
-           - data-section-nav-label   ：シリーズタイトル（s.Label）のみ
+           - data-section-nav-label   ：シリーズタイトル（s.Label）のみ（映画は副題。nav_main）
+           - data-section-nav-prefix  ：映画のシリーズ名の部分（上の段に小さく。nav_prefix）。-title はホバーの全文
            - data-section-nav-year    ：シリーズ開始年（バケット系セクションでは空）
            - data-section-nav-count   ：商品件数 ##}}
     {{~ for s in SeriesSections ~}}
     <section id="prod-series-{{ for.index + 1 }}"
-             data-section-nav-label="{{ s.Label | html.escape }}"
+             data-section-nav-label="{{ (nav_main s.Label) | html.escape }}"
+             data-section-nav-prefix="{{ (nav_prefix s.Label) | html.escape }}"
+             data-section-nav-title="{{ s.Label | html.escape }}"
              data-section-nav-year="{{ s.SeriesStartYearLabel }}"
              data-section-nav-count="{{ array.size s.Members }}">
       <h2>

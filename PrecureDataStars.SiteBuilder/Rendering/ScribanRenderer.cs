@@ -76,6 +76,9 @@ public sealed class ScribanRenderer
         functions.Import("asset_url", new Func<string, string>(AssetUrl.Versioned));
         // 「」で囲んで出す文字列の中の「」を『』にする（{{ t.Title | in_quotes | html.escape }}）。
         functions.Import("in_quotes", new Func<string, string>(s => PrecureDataStars.TemplateRendering.JapaneseQuotes.InQuotes(s)));
+        // 左のもくじの映画の題名を上の段（シリーズ名の部分）と下の段（副題）に分ける（{{ nav_prefix s.Title }} / {{ nav_main s.Title }}）。
+        functions.Import("nav_prefix", new Func<string, string>(MovieNavTitle.PrefixPart));
+        functions.Import("nav_main", new Func<string, string>(MovieNavTitle.MainPart));
         return functions;
     }
 

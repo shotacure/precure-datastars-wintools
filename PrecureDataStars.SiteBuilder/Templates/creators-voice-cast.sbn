@@ -62,7 +62,12 @@
     <p class="empty-row">声の出演がまだ登録されていません。</p>
     {{~ else ~}}
     {{~ for s in CharacterSections ~}}
-    <section class="creators-series-section"{{ if s.HasPrecureCast }} data-precure-cast{{ end }}>
+    <section class="creators-series-section" id="chars-{{ for.index + 1 }}"
+             data-section-nav-label="{{ (nav_main s.SeriesTitle) | html.escape }}"
+             data-section-nav-prefix="{{ (nav_prefix s.SeriesTitle) | html.escape }}"
+             data-section-nav-title="{{ s.SeriesTitle | html.escape }}"
+             data-section-nav-year="{{ s.SeriesYearLabel }}"
+             data-section-nav-count="{{ array.size s.Members }}"{{ if s.HasPrecureCast }} data-precure-cast{{ end }}>
       <h2 class="creators-series-heading">
         {{~ if s.SeriesUrl != "" ~}}
         <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
@@ -115,7 +120,12 @@
     <p class="empty-row">声の出演がまだ登録されていません。</p>
     {{~ else ~}}
     {{~ for s in DebutSections ~}}
-    <section class="creators-series-section"{{ if s.HasPrecureCast }} data-precure-cast{{ end }}>
+    <section class="creators-series-section" id="debut-{{ for.index + 1 }}"
+             data-section-nav-label="{{ (nav_main s.SeriesTitle) | html.escape }}"
+             data-section-nav-prefix="{{ (nav_prefix s.SeriesTitle) | html.escape }}"
+             data-section-nav-title="{{ s.SeriesTitle | html.escape }}"
+             data-section-nav-year="{{ s.SeriesYearLabel }}"
+             data-section-nav-count="{{ array.size s.Members }}"{{ if s.HasPrecureCast }} data-precure-cast{{ end }}>
       <h2 class="creators-series-heading">
         {{~ if s.SeriesUrl != "" ~}}
         <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>

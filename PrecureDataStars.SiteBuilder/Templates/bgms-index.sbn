@@ -8,7 +8,8 @@
 <p class="empty-row">劇伴データはまだ登録されていません。</p>
 {{~ else ~}}
 {{## カード型リスト。1 シリーズ = 1 カード。
-     構造は <li><div class="bgms-card">...</div></li>。カード全体クリックでの遷移は、
+     構造は <li><section class="bgms-card">...</section></li>。section は左のもくじ（section-nav.js）の作品の行の元で、
+     id（bgm-{slug}）・題名（映画は nav_prefix / nav_main で上の段と副題）・開始年・曲数を属性で渡す。カード全体クリックでの遷移は、
      カード内に絶対配置した「透明オーバーレイリンク」<a class="bgms-card-link"> で実装する。
      これにより HTML 構造上はネスト <a> を作らず（HTML 仕様適合）、かつ
      スタッフ名内のリンク（人物詳細へ）はオーバーレイより上位 z-index に置くことで
@@ -30,7 +31,12 @@
 <ul class="bgms-card-list">
   {{~ for r in Rows ~}}
   <li>
-    <div class="bgms-card">
+    <section class="bgms-card" id="bgm-{{ r.SeriesSlug }}"
+             data-section-nav-label="{{ (nav_main r.SeriesTitle) | html.escape }}"
+             data-section-nav-prefix="{{ (nav_prefix r.SeriesTitle) | html.escape }}"
+             data-section-nav-title="{{ r.SeriesTitle | html.escape }}"
+             data-section-nav-year="{{ r.SeriesStartYearLabel }}"
+             data-section-nav-count="{{ r.SongCount }}">
       <a class="bgms-card-link" href="/bgms/{{ r.SeriesSlug }}/" aria-label="{{ r.SeriesTitle | html.escape }}"></a>
       <div class="bgms-card-head">
         <h2 class="bgms-card-title">{{ r.SeriesTitle | html.escape }}</h2>
@@ -45,7 +51,7 @@
         {{~ end ~}}
       </div>
       {{~ end ~}}
-    </div>
+    </section>
   </li>
   {{~ end ~}}
 </ul>

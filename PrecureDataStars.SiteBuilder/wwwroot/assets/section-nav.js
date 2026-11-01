@@ -24,7 +24,7 @@
  *     #mobileSectionNav にも同じアイテム列をミラー描画する（ナビ自体は非表示でもデータは流し込む）。
  *   - 2 段のツリー：section の中に data-section-nav-child と id を持つ要素があれば、その section の
  *     子の行として 1 段下げて並べる（ラベル・年・件数は section と同じ data-section-nav-label / -year / -count）。
- *     子の行は data-section-nav-prefix があればラベルの上の段に小さく出し（映画のシリーズ名の部分など）、
+ *   - section・子の行とも、data-section-nav-prefix があればラベルの上の段に小さく出し（映画のシリーズ名の部分など）、
  *     data-section-nav-title があればホバーの全文をそれにする。
  *     子の行を開くのは現在地の section だけ（.is-open）で、ほかの section の子は閉じておく。
  *     現在地は、帯の中に子の要素があればその子と親、無ければ section で決める。子の印の無いページは 1 段のまま。
@@ -102,6 +102,9 @@
       var count = sec.getAttribute('data-section-nav-count') || '';
       if (year) hasAnyYear = true;
       if (count) hasAnyCount = true;
+      // ラベルの上の段に小さく出す前置き（映画のシリーズ名の部分など）と、ホバーの全文（子の行と同じ属性）
+      var prefix = sec.getAttribute('data-section-nav-prefix') || '';
+      var title = sec.getAttribute('data-section-nav-title') || '';
 
       // 子の行：section の中の data-section-nav-child 付きの要素（id 必須、非表示のものは除く）。
       var children = [];
@@ -123,7 +126,7 @@
         children.push({ id: chId, label: chLabel, prefix: chPrefix, title: chTitle, year: chYear, count: chCount, element: ch, isChild: true });
       }
 
-      items.push({ id: id, label: label, year: year, count: count, element: sec, children: children });
+      items.push({ id: id, label: label, prefix: prefix, title: title, year: year, count: count, element: sec, children: children });
     }
     return { items: items, hasAnyYear: hasAnyYear, hasAnyCount: hasAnyCount };
   }
@@ -247,6 +250,12 @@
   // childId があればその親の子の並びの現在地にする。ほかの親の子は閉じて印を外す。
   function setCurrent(items, parentId, childId) {
     markRow(items, parentId);
+    // 現在地の親の行もナビの見える範囲に入れる（作品ごとの区切りが多い一覧でナビがナビ自身の高さを超えるとき）。子があれば下で子の行を入れる
+    if (!childId) {
+      for (var p = 0; p < items.length; p++) {
+        if (items[p].id === parentId) keepInView(items[p].itemEl);
+      }
+    }
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
       if (!it.children || it.children.length === 0) continue;
@@ -262,7 +271,7 @@
     }
   }
 
-  // 子の行が開いてナビがナビ自身の高さを超えたとき、現在地の行がナビの見える範囲に入るよう、ナビの中だけを動かす
+  // ナビがナビ自身の高さを超えたとき（子の行が開いたとき・区切りの多い一覧）、現在地の行がナビの見える範囲に入るよう、ナビの中だけを動かす
   // （scrollIntoView はページ全体も動かしうるので使わない）。
   function keepInView(li) {
     if (!li) return;
@@ -559,16 +568,30 @@
   // タブ切り替えの検知：.tab-panel.is-active クラスの変動を観測する。
   // products-tabs 等は 1 ページに複数の .tab-panel を持ち、JS が is-active を付け替える。
   // 子孫の class 属性変化を全体監視するのは負荷が気になるので、tab-panel 群に限定する。
-  var tabPanels = document.querySelectorAll('.tab-panel');
-  if (tabPanels.length > 0) {
-    var tabObserver = new MutationObserver(function () {
+  // タブの中の小さな並べ替えの切り替え（[data-sort-panel] の hidden の付け外し）も同じく組み直す。
+  // 区分の ON/OFF・「プリキュアを演じた方のみ」はページの根元（.products-tabs）の属性（data-hide-* / data-precure-only）で
+  // カードや区切りを隠すので、根元の属性の変化でも組み直す。続けて起きた変化は 1 フレームにまとめる。
+  var rebuildScheduled = false;
+  function scheduleRebuild() {
+    if (rebuildScheduled) return;
+    rebuildScheduled = true;
+    window.requestAnimationFrame(function () {
+      rebuildScheduled = false;
       rebuild();
     });
+  }
+  var tabPanels = document.querySelectorAll('.tab-panel, [data-sort-panel]');
+  var tabRoots = document.querySelectorAll('.products-tabs');
+  if (tabPanels.length > 0 || tabRoots.length > 0) {
+    var tabObserver = new MutationObserver(scheduleRebuild);
     for (var n = 0; n < tabPanels.length; n++) {
       tabObserver.observe(tabPanels[n], {
         attributes: true,
         attributeFilter: ['class', 'hidden']
       });
+    }
+    for (var r = 0; r < tabRoots.length; r++) {
+      tabObserver.observe(tabRoots[r], { attributes: true });
     }
   }
 

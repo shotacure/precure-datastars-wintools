@@ -28,12 +28,14 @@
        data-tab-panel="debut" role="tabpanel">
 {{## 大セクション = 所属シリーズ（最早登場シリーズ）。シリーズ内は種別サブセクション（h3）。
      左サイドナビは section-nav.js が <section id="series-{n}"> を自動検出し、
-     data-section-nav-label（シリーズ名）/ -year（開始年4桁）/ -count（キャラ件数）で
-     「[年] [件数] ○ ラベル」を構築する。「その他（未登場）」は year 空。 ##}}
+     data-section-nav-label（シリーズ名。映画は副題）/ -prefix（映画のシリーズ名の部分。上の段に小さく）/ -title（ホバーの全文）/
+     -year（開始年4桁）/ -count（キャラ件数）で「[年] [件数] ○ ラベル」を構築する。映画の分け方は nav_prefix / nav_main（MovieNavTitle）。「その他（未登場）」は year 空。 ##}}
 {{~ for s in Sections ~}}
 <section id="series-{{ for.index + 1 }}"
          class="characters-section"
-         data-section-nav-label="{{ s.SeriesTitle | html.escape }}"
+         data-section-nav-label="{{ (nav_main s.SeriesTitle) | html.escape }}"
+         data-section-nav-prefix="{{ (nav_prefix s.SeriesTitle) | html.escape }}"
+         data-section-nav-title="{{ s.SeriesTitle | html.escape }}"
          data-section-nav-year="{{ s.SeriesStartYearLabel }}"
          data-section-nav-count="{{ s.MemberCount }}">
   <h2>

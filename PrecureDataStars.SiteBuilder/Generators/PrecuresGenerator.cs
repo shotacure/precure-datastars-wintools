@@ -125,6 +125,8 @@ public sealed class PrecuresGenerator
                 return new PrecureDebutSection
                 {
                     SeriesHeadingLabel = series is null ? "その他" : $"{series.Title}（{series.StartDate.Year}）",
+                    SeriesTitle = series is null ? "その他" : series.Title,
+                    SeriesYearLabel = series is null ? "" : series.StartDate.Year.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     SeriesUrl = series is null ? "" : PathUtil.SeriesUrl(series.Slug),
                     Members = g.OrderBy(r => r.Order).ToList()
                 };
@@ -207,6 +209,10 @@ public sealed class PrecuresGenerator
     {
         /// <summary>見出し（「シリーズ名（年）」。紐付くシリーズが無いプリキュアは「その他」）。</summary>
         public string SeriesHeadingLabel { get; set; } = "";
+        /// <summary>左のもくじ（section-nav.js）のラベルに使う題名だけ（「その他」のセクションは「その他」）。</summary>
+        public string SeriesTitle { get; set; } = "";
+        /// <summary>左のもくじの年の欄に出す放送開始の年（4 桁）。「その他」は空。</summary>
+        public string SeriesYearLabel { get; set; } = "";
         public string SeriesUrl { get; set; } = "";
         public IReadOnlyList<PrecureIndexRow> Members { get; set; } = Array.Empty<PrecureIndexRow>();
     }

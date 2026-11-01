@@ -120,6 +120,8 @@ public sealed class SiteBuilderPipeline
         // 以降 PathUtil.PersonUrl / CharacterUrl / CompanyUrl はこの台帳を引く。
         ctx.EntityUrls = await EntityUrlRegistry.BuildAsync(ctx, factory, involvementIndex, ct).ConfigureAwait(false);
         PathUtil.UseEntityUrls(ctx.EntityUrls);
+        // 左のもくじの映画の題名の分け方（テンプレートの nav_prefix / nav_main）
+        MovieNavTitle.UseSeries(ctx.SeriesById);
 
         // 旧 ID URL → 新 URL の転送表を出力へ書き出す（デプロイで S3 に上がり、Lambda@Edge が 301 に使う）。
         LegacyRedirectMapWriter.Write(output, ctx.EntityUrls.LegacyRedirects);

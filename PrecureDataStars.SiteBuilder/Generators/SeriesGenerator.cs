@@ -856,53 +856,6 @@ public sealed class SeriesGenerator
     }
 
     /// <summary>
-    /// 左のもくじ（section-nav.js）の映画の子の行のラベルを、上の段のシリーズ名の部分（Prefix）と下の段の副題（Main）に分ける。
-    /// <list type="number">
-    ///   <item><description>題名の頭の「映画」（と続く空白）は、切る所を探すときだけ脇に置き、上の段には題名どおり残す（「映画 HUGっと！プリキュア♡ふたりはプリキュア」）</description></item>
-    ///   <item><description>親の作品の題名で始まっていれば（！？の全角・半角の違いは同じとみなす）その後ろから、始まっていなければ頭から、最初の空白を探して切る
-    ///     （「HUGっと！プリキュア♡ふたりはプリキュア」「わんだふるぷりきゅあ!ざ・むーびー!」のように親の題名に続く語も上の段に入る。
-    ///     「ふたりはプリキュアMax Heart」のように親の題名の中の空白では切らない）</description></item>
-    ///   <item><description>副題の頭が数字だけの語（「Max Heart 2」の 2）なら上の段に入れる</description></item>
-    ///   <item><description>空白が無ければ分けず、Prefix は空・Main は題名のまま。ただし春映画（SPRING）で「プリキュア」で始まるものは、
-    ///     上の段を「映画 プリキュア」、下の段を残り（「ドリームスターズ！」）にする</description></item>
-    /// </list>
-    /// </summary>
-    private (string Prefix, string Main) SplitMovieNavTitle(Series m)
-    {
-        string body = m.Title.StartsWith("映画", StringComparison.Ordinal) ? m.Title.Substring(2).TrimStart(' ', '　') : m.Title;
-        // 頭の「映画」と続く空白（題名の書き方のまま）。上の段の頭に付け直す
-        string head = m.Title.Substring(0, m.Title.Length - body.Length);
-        static string Norm(string s) => s.Replace('！', '!').Replace('？', '?');
-        int start = 0;
-        if (m.ParentSeriesId is int pid && _ctx.SeriesById.TryGetValue(pid, out var parent)
-            && Norm(body).StartsWith(Norm(parent.Title), StringComparison.Ordinal))
-        {
-            start = parent.Title.Length;
-        }
-        int cut = body.IndexOfAny(new[] { ' ', '　' }, Math.Min(start, body.Length));
-        if (cut < 0)
-        {
-            // 空白の無い春映画（「映画 プリキュアドリームスターズ！」など）は、頭の「映画 プリキュア」だけを上の段にする
-            const string Precure = "プリキュア";
-            if (string.Equals(m.KindCode, "SPRING", StringComparison.Ordinal)
-                && body.StartsWith(Precure, StringComparison.Ordinal) && body.Length > Precure.Length)
-            {
-                return (head + Precure, body.Substring(Precure.Length));
-            }
-            return ("", m.Title);
-        }
-        string prefix = head + body.Substring(0, cut);
-        string main = body.Substring(cut + 1).TrimStart(' ', '　');
-        var num = System.Text.RegularExpressions.Regex.Match(main, @"^(\d+)[ 　]+(.+)$");
-        if (num.Success)
-        {
-            prefix += " " + num.Groups[1].Value;
-            main = num.Groups[2].Value;
-        }
-        return main.Length == 0 ? ("", m.Title) : (prefix, main);
-    }
-
-    /// <summary>
     /// 映画カードの上映時間の表示（本体と、同じ行に続けて添える補足）。
     /// 本体は長編（親の映画だけ）の尺「m分ss秒」。併映のある映画は、補足に「(上映総尺 m分ss秒)」（長編＋全併映）を添える
     /// （併映の尺が未登録なら補足なし）。
@@ -991,7 +944,7 @@ public sealed class SeriesGenerator
                 // 子がすべて SEGMENT の 3 本立ては、親に入れた上映時間（番組全体）か子の合計を尺として出す。
                 var (runtimeLabel, runtimeSubLabel) = BuildMovieRuntimeLabels(m, children);
                 // 左のもくじの子の行のラベル（上の段のシリーズ名の部分と下の段の副題）
-                var (navPrefix, navMain) = SplitMovieNavTitle(m);
+                var (navPrefix, navMain) = MovieNavTitle.Split(m, _ctx.SeriesById);
 
                 return new MovieSeriesRow
                 {
@@ -2158,7 +2111,7 @@ public sealed class SeriesGenerator
         /// <summary>左のもくじ（section-nav.js）の子の行に添える公開年（4 桁）。種類順の一覧で作品の行の data-section-nav-year に入れる。</summary>
         public string NavYear { get; set; } = "";
         /// <summary>
-        /// 左のもくじの子の行のラベル（下の段）。題名を <see cref="SplitMovieNavTitle"/> で「シリーズ名の部分」と「副題」に分けた副題。
+        /// 左のもくじの子の行のラベル（下の段）。題名を <see cref="MovieNavTitle.Split"/> で「シリーズ名の部分」と「副題」に分けた副題。
         /// 分けられない題名は、題名をそのままここに入れる。ホバーで出す全文は題名（data-section-nav-title）。
         /// </summary>
         public string NavLabel { get; set; } = "";

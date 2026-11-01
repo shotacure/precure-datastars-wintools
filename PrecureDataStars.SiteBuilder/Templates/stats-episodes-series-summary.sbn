@@ -7,8 +7,13 @@
 
 {{## 旧 stats-episodes-by-series.sbn を引き継いで series-summary.sbn にリネーム。
      平均値の小数部分のみ <span class="micro-fraction"> でフォント縮小表記する仕様を追加。 ##}}
+{{## 作品ごとの section には、左のもくじ（section-nav.js）の id・ラベル（題名。映画は nav_prefix / nav_main で上の段と副題）・年を付ける。 ##}}
 {{~ for g in Groups ~}}
-<section class="stats-by-series-group">
+<section class="stats-by-series-group" id="series-{{ for.index + 1 }}"
+         data-section-nav-label="{{ (nav_main g.SeriesTitle) | html.escape }}"
+         data-section-nav-prefix="{{ (nav_prefix g.SeriesTitle) | html.escape }}"
+         data-section-nav-title="{{ g.SeriesTitle | html.escape }}"
+         data-section-nav-year="{{ g.SeriesStartYearLabel }}">
   <h2>
     <a href="{{ g.SeriesUrl }}">{{ g.SeriesTitle | html.escape }}</a>
     {{~ if g.SeriesStartYearLabel != "" ~}}

@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：作品ごとの区切りを持つページすべてで、左のもくじに作品を並べるようにした**（`section-nav.js`・`MovieNavTitle`・`ScribanRenderer` の `nav_prefix` / `nav_main`・各一覧のテンプレ・`CreatorsGenerator` / `PrecuresGenerator` の区切りに題名と年）：劇伴の一覧・クリエイターの初参加順（スタッフ・声の出演・歌唱・音楽制作の各タブ・役職ごと・音楽の役職ごと）・歴代プリキュア・統計の作品ごとのエピソード集計に、作品ごとのもくじを付けた。フォントの一覧は見出しの文字を拾っていたのを、ほかのページと同じ題名と年の属性に直した。シリーズ一覧の年度順も、年度の下に作品を並べるツリーにした。映画の題名を上の段と副題に分ける決まりをシリーズ一覧専用から共通の部品（`MovieNavTitle`）に移し、キャラクター・楽曲・商品・書籍の一覧にも当てた。もくじは、タブの中の並べ替えの切り替えと、区分の ON/OFF・「プリキュアを演じた方のみ」でも組み直し、現在地の親の行もナビの見える範囲に入れるようにした。
+
 - **サイト：左のもくじに 2 段目（子の行）を持てるようにし、`/series/` の種類順で区分の下に作品を並べた**（`section-nav.js`・`site.css`・`series-index.sbn`・`SeriesGenerator` の `TvSeriesRow.NavYear` / `MovieSeriesRow.NavYear`）：section の中の `data-section-nav-child` 付きの要素を子の行として 1 段下げて並べ、現在地の section の下だけを開く。現在地は帯の中の最初の子とその親で決め、ナビの中だけを動かして現在地の行を見せる。スマホのメニューの「もくじ」も同じ。現在地・通過済みの丸の指定は、子の行の丸を巻き込まないよう自分の行の丸だけに絞った。シリーズ一覧の作品の行には `id="series-{slug}"`・題名・開始年を付けた。映画の行は題名をシリーズ名の部分（上の段に 7 割の字で）と副題の 2 段に分けた（`MovieSeriesRow.NavPrefix` / `NavLabel`、`SeriesGenerator.SplitMovieNavTitle`、`data-section-nav-prefix`）。ホバーの全文は `data-section-nav-title` の題名。
 
 - **クレジット：役職テンプレに作詞・作曲の同一の条件 `{SAME_LYRICIST_COMPOSER}` を足した**（`RoleTemplateRenderer`・`ThemeSongsHandler`）：作詞と作曲が同じ名義（連名も同じ）なら "1"、違えば空。同じ作品の同じ役職（ED 主題歌など）で、作詞・作曲が同じ人の曲は「作詞・作曲：」の 1 行、違う人の曲は 2 行と、曲ごとに画面どおり書き分ける。条件の中では作詞・作曲をまとめた役職として扱う（会社名だけの行の人物の括弧に役職を添える）。

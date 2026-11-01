@@ -11,11 +11,13 @@
      ・行タイトルは「曲名 + 半角SP + variant_label 接尾辞」。親曲名のサブ表示は持たない。
      ・左サイドナビは section-nav.js が <section id="songs-series-{n}"> を自動検出して
        縦タイムラインを構築する。属性 data-section-nav-* を付与して
-       「[年4桁] [件数] ○ ラベル」のレイアウトに揃える。 ##}}
+       「[年4桁] [件数] ○ ラベル」のレイアウトに揃える（映画は nav_prefix / nav_main で上の段と副題に分ける）。 ##}}
 {{~ for s in SeriesSections ~}}
 <section id="songs-series-{{ for.index + 1 }}"
          class="songs-section"
-         data-section-nav-label="{{ s.SeriesTitle | html.escape }}"
+         data-section-nav-label="{{ (nav_main s.SeriesTitle) | html.escape }}"
+         data-section-nav-prefix="{{ (nav_prefix s.SeriesTitle) | html.escape }}"
+         data-section-nav-title="{{ s.SeriesTitle | html.escape }}"
          data-section-nav-year="{{ s.SeriesStartYearLabel }}"
          data-section-nav-count="{{ array.size s.Recordings }}">
   <h2>

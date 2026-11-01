@@ -109,7 +109,12 @@
     <p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
     {{~ else ~}}
     {{~ for s in DebutSections ~}}
-    <section class="creators-series-section">
+    <section class="creators-series-section" id="debut-{{ for.index + 1 }}"
+             data-section-nav-label="{{ (nav_main s.SeriesTitle) | html.escape }}"
+             data-section-nav-prefix="{{ (nav_prefix s.SeriesTitle) | html.escape }}"
+             data-section-nav-title="{{ s.SeriesTitle | html.escape }}"
+             data-section-nav-year="{{ s.SeriesYearLabel }}"
+             data-section-nav-count="{{ array.size s.Members }}">
       <h2 class="creators-series-heading">
         {{~ if s.SeriesUrl != "" ~}}
         <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>

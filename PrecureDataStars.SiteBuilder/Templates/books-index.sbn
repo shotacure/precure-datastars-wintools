@@ -84,7 +84,9 @@
        data-tab-panel="genre" role="tabpanel" hidden>
     {{~ for s in GenreSections ~}}
     <section id="book-genre-{{ for.index + 1 }}"
-             data-section-nav-label="{{ s.Label | html.escape }}"
+             data-section-nav-label="{{ (nav_main s.Label) | html.escape }}"
+             data-section-nav-prefix="{{ (nav_prefix s.Label) | html.escape }}"
+             data-section-nav-title="{{ s.Label | html.escape }}"
              data-section-nav-count="{{ array.size s.Members }}">
       <h2>
         {{ s.Label | html.escape }}
@@ -130,14 +132,16 @@
 
   {{## ──────── シリーズ別パネル ────────
        左サイドナビでシリーズセクションを「[年4桁] [件数バッジ] ○ ラベル」で出すため、
-       商品索引と同じ属性（data-section-nav-label / -year / -count）を付ける。
+       商品索引と同じ属性（data-section-nav-label / -prefix / -title / -year / -count）を付ける（映画は nav_prefix / nav_main で上の段と副題に分ける）。
        シリーズ紐付けが無い書籍は末尾の「オールスターズ・シリーズ横断」セクションへ集まる
        （このセクションだけ年ラベルが空になる）。 ##}}
   <div class="tab-panel" id="books-tab-panel-series"
        data-tab-panel="series" role="tabpanel" hidden>
     {{~ for s in SeriesSections ~}}
     <section id="book-series-{{ for.index + 1 }}"
-             data-section-nav-label="{{ s.Label | html.escape }}"
+             data-section-nav-label="{{ (nav_main s.Label) | html.escape }}"
+             data-section-nav-prefix="{{ (nav_prefix s.Label) | html.escape }}"
+             data-section-nav-title="{{ s.Label | html.escape }}"
              data-section-nav-year="{{ s.SeriesStartYearLabel }}"
              data-section-nav-count="{{ array.size s.Members }}">
       <h2>

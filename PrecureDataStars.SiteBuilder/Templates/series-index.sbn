@@ -145,14 +145,20 @@
 
 {{## ──────── 年度順 ────────
      1 年度 1 段。段の見出しは年度、中は放送開始・公開日の順に TV・映画・スピンオフのカードを並べる。
-     年度順では区分が混ざるので、連番は出さずに区分の札（TV / 秋映画 / 春映画 / スピンオフ・イベント）を添える。 ##}}
+     年度順では区分が混ざるので、連番は出さずに区分の札（TV / 秋映画 / 春映画 / スピンオフ・イベント）を添える。
+     左のもくじは年度の下に作品を 1 段下げて並べる（id は year-series-{slug}。種類順の series-{slug} と重ならないように）。
+     親の行が年度なので、子の行には年を付けない。映画は nav_prefix / nav_main で上の段と副題に分ける。 ##}}
 <div class="tab-panel" id="series-tab-panel-year" data-tab-panel="year" role="tabpanel" hidden>
   {{~ for y in YearGroups ~}}
   <section class="series-year" id="{{ y.Anchor }}">
     <h2>{{ y.YearLabel }}</h2>
     <ul class="series-card-list series-year-list">
       {{~ for it in y.Items ~}}
-      <li data-kind-group="{{ it.Group }}">
+      {{~ nav_s = it.Tv ?? it.Movie ?? it.Simple ~}}
+      <li data-kind-group="{{ it.Group }}" id="year-series-{{ nav_s.Slug }}" data-section-nav-child
+          data-section-nav-label="{{ (nav_main nav_s.Title) | html.escape }}"
+          data-section-nav-prefix="{{ (nav_prefix nav_s.Title) | html.escape }}"
+          data-section-nav-title="{{ nav_s.Title | html.escape }}">
         {{~ if it.Tv ~}}
         {{~ tv = it.Tv ~}}
         {{ include '_series-card-tv.sbn' }}

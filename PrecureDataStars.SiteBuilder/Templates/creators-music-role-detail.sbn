@@ -27,7 +27,12 @@
 
   <div data-sort-panel="debut">
     {{~ for sec in DebutSections ~}}
-    <section class="creators-series-section">
+    <section class="creators-series-section" id="debut-{{ for.index + 1 }}"
+             data-section-nav-label="{{ (nav_main sec.SeriesTitle) | html.escape }}"
+             data-section-nav-prefix="{{ (nav_prefix sec.SeriesTitle) | html.escape }}"
+             data-section-nav-title="{{ sec.SeriesTitle | html.escape }}"
+             data-section-nav-year="{{ sec.SeriesYearLabel }}"
+             data-section-nav-count="{{ array.size sec.Members }}">
       <h2 class="creators-series-heading">{{~ if sec.SeriesUrl != "" ~}}<a href="{{ sec.SeriesUrl }}">{{ sec.SeriesHeadingLabel | html.escape }}</a>{{~ else ~}}{{ sec.SeriesHeadingLabel | html.escape }}{{~ end ~}}</h2>
       <ul class="entity-list music-role-member-list">
         {{~ for e in sec.Members ~}}

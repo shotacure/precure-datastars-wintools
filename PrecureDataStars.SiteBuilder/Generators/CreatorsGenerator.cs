@@ -2084,6 +2084,8 @@ public sealed class CreatorsGenerator
             .Select(g => new DebutSeriesSection
             {
                 SeriesHeadingLabel = g.Key is int sid ? SeriesHeadingLabel(sid) : "その他",
+                SeriesTitle = g.Key is int sid3 ? _ctx.SeriesById[sid3].Title : "その他",
+                SeriesYearLabel = g.Key is int sid4 ? _ctx.SeriesById[sid4].StartDate.Year.ToString(System.Globalization.CultureInfo.InvariantCulture) : "",
                 SeriesUrl = g.Key is int sid2 ? PathUtil.SeriesUrl(_ctx.SeriesById[sid2].Slug) : "",
                 Members = g.OrderBy(x => x.Index).Select(x => (object)x.Row).ToList()
             })
@@ -2093,6 +2095,10 @@ public sealed class CreatorsGenerator
     private sealed class DebutSeriesSection
     {
         public string SeriesHeadingLabel { get; set; } = "";
+        /// <summary>左のもくじ（section-nav.js）のラベルに使う題名だけ（「その他」のセクションは「その他」）。</summary>
+        public string SeriesTitle { get; set; } = "";
+        /// <summary>左のもくじの年の欄に出す放送開始・公開の年（4 桁）。「その他」は空。</summary>
+        public string SeriesYearLabel { get; set; } = "";
         public string SeriesUrl { get; set; } = "";
         public IReadOnlyList<object> Members { get; set; } = Array.Empty<object>();
     }
@@ -2312,6 +2318,7 @@ public sealed class CreatorsGenerator
                 SeriesHeadingLabel = string.IsNullOrEmpty(g.Key.SeriesYearLabel)
                     ? g.Key.SeriesTitle
                     : $"{g.Key.SeriesTitle}（{g.Key.SeriesYearLabel}）",
+                SeriesYearLabel = g.Key.SeriesYearLabel,
                 SortStart = g.Key.SeriesSortStart,
                 Members = g
                     .OrderBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
@@ -2814,6 +2821,7 @@ public sealed class CreatorsGenerator
                 SeriesHeadingLabel = string.IsNullOrEmpty(g.Key.SeriesYearLabel)
                     ? g.Key.SeriesTitle
                     : $"{g.Key.SeriesTitle}（{g.Key.SeriesYearLabel}）",
+                SeriesYearLabel = g.Key.SeriesYearLabel,
                 SortStart = g.Key.SeriesSortStart,
                 // キャラの並び＝そのキャラが最初にクレジットされた位置（クレジット出現順）。
                 Members = g
@@ -3121,6 +3129,7 @@ public sealed class CreatorsGenerator
                     SeriesTitle = r.FirstSeriesTitle,
                     SeriesUrl = r.FirstSeriesUrl,
                     SeriesHeadingLabel = headLabel,
+                    SeriesYearLabel = r.FirstSeriesYearLabel,
                     SortStart = r.FirstSortStart,
                     Members = new List<EntityRow>()
                 };
@@ -3660,6 +3669,8 @@ public sealed class CreatorsGenerator
     private sealed class EntitySeriesSection
     {
         public string SeriesTitle { get; set; } = "";
+        /// <summary>左のもくじ（section-nav.js）の年の欄に出す放送開始・公開の年（4 桁）。分からなければ空。</summary>
+        public string SeriesYearLabel { get; set; } = "";
         public string SeriesUrl { get; set; } = "";
         /// <summary>「シリーズ名（年）」整形済み見出しラベル。</summary>
         public string SeriesHeadingLabel { get; set; } = "";
@@ -3692,6 +3703,8 @@ public sealed class CreatorsGenerator
     private sealed class VoiceSeriesSection
     {
         public string SeriesTitle { get; set; } = "";
+        /// <summary>左のもくじ（section-nav.js）の年の欄に出す放送開始・公開の年（4 桁）。分からなければ空。</summary>
+        public string SeriesYearLabel { get; set; } = "";
         public string SeriesUrl { get; set; } = "";
         public string SeriesHeadingLabel { get; set; } = "";
         public long SortStart { get; set; }

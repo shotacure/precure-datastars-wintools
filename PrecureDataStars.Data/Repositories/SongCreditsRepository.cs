@@ -145,11 +145,25 @@ public sealed class SongCreditsRepository : RepositoryBase
     /// 先頭の部品の区切りは空文字。役職テンプレで区切りを差し替える（<c>{ARRANGER:sep="/"}</c> など）ときに使う。
     /// 行が無ければ空の並び。
     /// 役職テンプレ（各話のクレジット画面の主題歌カード）で使うので、所属は添えない（画面の表記どおりにするため）。
+    /// 画面に所属が出る作品の役職テンプレは <see cref="GetDisplayHtmlPartsWithAffiliationAsync"/> を使う。
     /// ただし所属の出し方が「会社名だけ」（COMPANY_ONLY）の行は、名義の代わりに所属の会社名義を出す
     /// （画面も会社名だけの表記のため。同じ会社名だけの行が続くときは 1 回だけ）。
     /// 会社名のあとに添える実際の人物は <see cref="GetCompanyOnlyPeopleHtmlAsync"/> で別に引く。
     /// </summary>
-    public async Task<IReadOnlyList<(string Sep, string Html)>> GetDisplayHtmlPartsAsync(int songId, string role, ILookupCache lookup, CancellationToken ct = default)
+    public Task<IReadOnlyList<(string Sep, string Html)>> GetDisplayHtmlPartsAsync(int songId, string role, ILookupCache lookup, CancellationToken ct = default)
+        => GetDisplayHtmlPartsCoreAsync(songId, role, lookup, withAffiliation: false, ct);
+
+    /// <summary>
+    /// <see cref="GetDisplayHtmlPartsAsync"/> と同じ並びで、所属の出し方が「名義のあとに所属を添える」（NAME_WITH_COMPANY）の行には
+    /// 名義のあとに「(所属)」を <c>staff-affiliation</c> の小さい字で添える。次の名義と同じ所属が続くときは最後の名義のあとにだけ添える
+    /// （<see cref="GetDisplayStringAsync"/> と同じ畳み方）。所属は会社名義ならリンク化済み HTML、自由記述なら HtmlEncode した文字。
+    /// 役職テンプレの <c>{LYRICIST:aff="1"}</c> など、画面に作家の所属が出る作品で使う。
+    /// </summary>
+    public Task<IReadOnlyList<(string Sep, string Html)>> GetDisplayHtmlPartsWithAffiliationAsync(int songId, string role, ILookupCache lookup, CancellationToken ct = default)
+        => GetDisplayHtmlPartsCoreAsync(songId, role, lookup, withAffiliation: true, ct);
+
+    private async Task<IReadOnlyList<(string Sep, string Html)>> GetDisplayHtmlPartsCoreAsync(
+        int songId, string role, ILookupCache lookup, bool withAffiliation, CancellationToken ct)
     {
         // 連名行を seq 順で取得し、各行の preceding_separator と person_alias_id を集める。
         // 表示名そのものは lookup 経由で別途引くため、SELECT で取らない（lookup 側でキャッシュ済みを期待）。
@@ -159,7 +173,8 @@ public sealed class SongCreditsRepository : RepositoryBase
               sc.preceding_separator   AS Sep,
               sc.person_alias_id       AS PersonAliasId,
               sc.affiliation_company_alias_id AS CompanyAliasId,
-              sc.affiliation_display   AS Display
+              sc.affiliation_display   AS Display,
+              NULLIF(sc.affiliation_text, '') AS AffiliationText
             FROM song_credits sc
             WHERE sc.song_id = @songId
               AND sc.credit_role = @role
@@ -167,8 +182,12 @@ public sealed class SongCreditsRepository : RepositoryBase
             """;
 
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = (await conn.QueryAsync<(byte Seq, string? Sep, int PersonAliasId, int? CompanyAliasId, string Display)>(
+        var rows = (await conn.QueryAsync<(byte Seq, string? Sep, int PersonAliasId, int? CompanyAliasId, string Display, string? AffiliationText)>(
             new CommandDefinition(sql, new { songId, role }, cancellationToken: ct))).ToList();
+        // 添える所属の見分け（会社名義 ID か自由記述）。名義のあとに所属を添えない行・所属の無い行は null。
+        string? AffKey(int i) => rows[i].Display != SongCreditAffiliationDisplay.NameWithCompany ? null
+            : rows[i].CompanyAliasId is int c ? "c" + c
+            : rows[i].AffiliationText is string t ? "t" + t : null;
         var parts = new List<(string Sep, string Html)>(rows.Count);
         int? lastCompanyOnly = null;
         for (int i = 0; i < rows.Count; i++)
@@ -185,8 +204,15 @@ public sealed class SongCreditsRepository : RepositoryBase
             lastCompanyOnly = null;
             // lookup でリンク化済み HTML を取得。未解決時（alias 削除済み等）は空文字を使い、
             // 表示上は連名要素が欠落するが、レイアウト崩壊は避ける。
-            var html = await lookup.LookupPersonAliasHtmlAsync(rows[i].PersonAliasId).ConfigureAwait(false);
-            parts.Add((parts.Count > 0 ? rows[i].Sep ?? "" : "", html ?? ""));
+            var html = await lookup.LookupPersonAliasHtmlAsync(rows[i].PersonAliasId).ConfigureAwait(false) ?? "";
+            if (withAffiliation && AffKey(i) is string key && key != (i + 1 < rows.Count ? AffKey(i + 1) : null))
+            {
+                string affHtml = rows[i].CompanyAliasId is int acid
+                    ? await lookup.LookupCompanyAliasHtmlAsync(acid).ConfigureAwait(false) ?? ""
+                    : System.Net.WebUtility.HtmlEncode(rows[i].AffiliationText ?? "");
+                if (affHtml.Length > 0) html += $"<span class=\"staff-affiliation\">({affHtml})</span>";
+            }
+            parts.Add((parts.Count > 0 ? rows[i].Sep ?? "" : "", html));
         }
         return parts;
     }

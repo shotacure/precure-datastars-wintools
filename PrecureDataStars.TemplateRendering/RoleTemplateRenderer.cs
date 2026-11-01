@@ -44,6 +44,8 @@ namespace PrecureDataStars.TemplateRendering;
 ///     連名のプレースホルダ（<c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> / <c>{MEDLEY_ARRANGER}</c> /
 ///     <c>{SINGER}</c> / <c>{CHORUS}</c>）は <c>sep="…"</c> で名義の間の区切りを差し替えられる（DB の区切りの代わりに
 ///     テンプレの文字を HTML のまま入れる。<c>sep="&lt;br&gt;"</c> で改行）。構造化クレジットが無い曲には効かない。
+///     <c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> は <c>aff="1"</c> で、所属の出し方が「名義のあとに所属を添える」行の名義のあとに
+///     「(所属)」を小さい字で添える（次の名義と同じ所属が続くときは最後の名義のあとにだけ）。画面に作家の所属が出る作品用で、指定が無ければ所属は出さない。
 ///     <c>{SONG_SERIES_TITLE}</c> は曲の作品（録音の作品）の正式タイトルで、クレジットの作品と同じ作品の曲なら空。
 ///     <c>{SAME_COMPOSER_ARRANGER}</c> は作曲と編曲が同じ名義（連名も同じ）なら "1"、違えば空で、
 ///     <c>{?SAME_COMPOSER_ARRANGER}</c> / <c>{?!SAME_COMPOSER_ARRANGER}</c> で書き分ける。
@@ -73,6 +75,23 @@ public static class RoleTemplateRenderer
         if (parts is { Count: > 1 } && ph.Options.TryGetValue("sep", out var sep))
             return string.Join(sep, parts.Select(p => p.Html));
         return joinedHtml ?? "";
+    }
+
+    /// <summary>
+    /// 作家の連名（<c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c>）の値。<c>aff="1"</c> の指定があり、名義のあとに所属を添えた部品
+    /// （<paramref name="affParts"/>）があれば、それを DB の区切り（<c>sep="…"</c> があればテンプレの文字）でつなぐ。
+    /// 指定が無いとき・構造化クレジットが無い曲は <see cref="NamesHtml"/> と同じ。
+    /// </summary>
+    private static string CreditNamesHtml(PlaceholderNode ph, string? joinedHtml,
+        IReadOnlyList<(string Sep, string Html)>? parts, IReadOnlyList<(string Sep, string Html)>? affParts)
+    {
+        if (affParts is { Count: > 0 } && ph.Options.TryGetValue("aff", out var aff) && aff == "1")
+        {
+            if (affParts.Count > 1 && ph.Options.TryGetValue("sep", out var sep))
+                return string.Join(sep, affParts.Select(p => p.Html));
+            return string.Concat(affParts.Select(p => System.Net.WebUtility.HtmlEncode(p.Sep) + p.Html));
+        }
+        return NamesHtml(ph, joinedHtml, parts);
     }
 
     /// <summary>
@@ -430,13 +449,14 @@ public static class RoleTemplateRenderer
             case "LYRICIST":
                 // stage B-4：構造化クレジットがあればリンク化済み HTML、なければ
                 // 会社名だけの行（「Nostalgic Orchestra」）には、実際の人物の括弧を添える。
-                return NamesHtml(ph, currentSong?.LyricistHtml, currentSong?.LyricistParts)
+                // aff="1" の指定があれば、名義のあとに所属を「(所属)」で添える（画面に作家の所属が出る作品用）。
+                return CreditNamesHtml(ph, currentSong?.LyricistHtml, currentSong?.LyricistParts, currentSong?.LyricistAffParts)
                      + ThemeSongsHandler.CompanyOnlyPeopleSuffixHtml(currentSong, SongCreditRoles.Lyrics);
             case "COMPOSER":
-                return NamesHtml(ph, currentSong?.ComposerHtml, currentSong?.ComposerParts)
+                return CreditNamesHtml(ph, currentSong?.ComposerHtml, currentSong?.ComposerParts, currentSong?.ComposerAffParts)
                      + ThemeSongsHandler.CompanyOnlyPeopleSuffixHtml(currentSong, SongCreditRoles.Composition);
             case "ARRANGER":
-                return NamesHtml(ph, currentSong?.ArrangerHtml, currentSong?.ArrangerParts)
+                return CreditNamesHtml(ph, currentSong?.ArrangerHtml, currentSong?.ArrangerParts, currentSong?.ArrangerAffParts)
                      + ThemeSongsHandler.CompanyOnlyPeopleSuffixHtml(currentSong, SongCreditRoles.Arrangement);
             case "SAME_COMPOSER_ARRANGER":
                 // 作曲と編曲が同じ名義（連名も同じ）なら "1"。画面で「作曲：」「編曲：」の 2 行に名前を 1 つだけ出す作品用。

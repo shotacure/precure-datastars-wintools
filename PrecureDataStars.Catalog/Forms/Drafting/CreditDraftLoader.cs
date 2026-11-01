@@ -338,6 +338,7 @@ internal sealed class CreditDraftLoader
         CharacterAliasId = s.CharacterAliasId,
         RawCharacterText = s.RawCharacterText,
         PersonMisprintText = s.PersonMisprintText,
+        PersonDisplayText = s.PersonDisplayText,
         CharacterMisprintText = s.CharacterMisprintText,
         CharacterDisplayText = s.CharacterDisplayText,
         CompanyMisprintText = s.CompanyMisprintText,

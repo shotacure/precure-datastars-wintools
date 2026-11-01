@@ -336,6 +336,20 @@ WHERE cbe.character_display_text IS NOT NULL
 ORDER BY cbe.entry_id;
 
 
+-- D7: 人物名の表記揺れ（person_display_text）が名義と食い違う
+--   件数 > 0 の意味: 人物・声の出演以外のエントリに付いている、名義が無い、名義と同じ字が入っている、または
+--   空白・中黒・ピリオド・ハイフン・イコール・スラッシュを除くと名義の名前と字が違う（表記揺れではなく別の名前が入った）。
+--   対処: クレジットの画面と照らして、person_display_text を直すか消す。字そのものが違うなら名義を足す。
+SELECT 'D7 person_display_text mismatch' AS check_name,
+    cbe.entry_id,
+    cbe.entry_kind,
+    cbe.person_display_text,
+    pa.name AS person_alias_name
+FROM credit_block_entries cbe
+LEFT JOIN person_aliases pa ON pa.alias_id = cbe.person_alias_id
+WHERE cbe.person_display_text IS NOT NULL AND (cbe.entry_kind NOT IN ('PERSON', 'CHARACTER_VOICE') OR pa.alias_id IS NULL OR CAST(cbe.person_display_text AS BINARY) = CAST(pa.name AS BINARY) OR CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cbe.person_display_text, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY) <> CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(pa.name, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY))
+ORDER BY cbe.entry_id;
+
 -- E1: 音楽クレジットの紐付け先が出典の盤に載っていない
 --   件数 > 0 の意味: 「music_credits の曲・録音・劇伴セッションの行が、出典の盤（source_product_catalog_no）の
 --   トラックに無い曲・録音・セッションを指している」状態。曲 ID と録音 ID の取り違え（曲 ID の列に録音 ID を入れる）が典型。
@@ -412,6 +426,7 @@ UNION ALL SELECT 'D3 join_separator w/o join_previous', COUNT(*) FROM credit_car
 UNION ALL SELECT 'D4 join_previous w/o previous role', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_card_roles prev WHERE prev.card_group_id = ccr.card_group_id AND prev.order_in_group < ccr.order_in_group)
 UNION ALL SELECT 'D5 continues_previous w/o previous block', COUNT(*) FROM credit_role_blocks crb WHERE crb.continues_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_role_blocks prev WHERE prev.card_role_id = crb.card_role_id AND prev.block_seq < crb.block_seq)
 UNION ALL SELECT 'D6 character_display_text mismatch', COUNT(*) FROM credit_block_entries cbe LEFT JOIN character_aliases ca ON ca.alias_id = cbe.character_alias_id WHERE cbe.character_display_text IS NOT NULL AND (cbe.entry_kind <> 'CHARACTER_VOICE' OR LOCATE('\n', cbe.character_display_text) = 0 OR CAST(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '') AS BINARY) <> CAST(COALESCE(ca.name, cbe.raw_character_text, '') AS BINARY))
+UNION ALL SELECT 'D7 person_display_text mismatch', COUNT(*) FROM credit_block_entries cbe LEFT JOIN person_aliases pa ON pa.alias_id = cbe.person_alias_id WHERE cbe.person_display_text IS NOT NULL AND (cbe.entry_kind NOT IN ('PERSON', 'CHARACTER_VOICE') OR pa.alias_id IS NULL OR CAST(cbe.person_display_text AS BINARY) = CAST(pa.name AS BINARY) OR CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cbe.person_display_text, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY) <> CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(pa.name, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY))
 UNION ALL SELECT 'E1 music_credits target not on source disc', COUNT(*) FROM music_credits m
     WHERE (m.target_kind = 'SONG' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no JOIN song_recordings r ON r.song_recording_id = t.song_recording_id WHERE d.product_catalog_no = m.source_product_catalog_no AND r.song_id = m.song_id))
        OR (m.target_kind = 'SONG_RECORDING' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no WHERE d.product_catalog_no = m.source_product_catalog_no AND t.song_recording_id = m.song_recording_id))

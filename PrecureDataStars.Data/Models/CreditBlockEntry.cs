@@ -53,6 +53,13 @@ public sealed class CreditBlockEntry
     public string? PersonMisprintText { get; set; }
 
     /// <summary>
+    /// 画面に出た人物名の表記揺れ（DB 列名 person_display_text）。PERSON / CHARACTER_VOICE で使う。
+    /// 名義（<see cref="PersonAliasId"/>）とは空白・中黒・記号の有無や位置だけが違う画面の表記を、名義を増やさずに持つ。
+    /// 誤記ではないので印を付けず、表示は名義の名前の代わりにこの字を出す（リンク先は名義の人物のまま）。NULL は名義の名前のまま。
+    /// </summary>
+    public string? PersonDisplayText { get; set; }
+
+    /// <summary>
     /// クレジット時の誤記（キャラクター側）。CHARACTER_VOICE のときのみ意味を持つ。
     /// 用法は <see cref="PersonMisprintText"/> と同じ（NULL = 誤記なし、マスタを汚さない補助情報）。
     /// </summary>

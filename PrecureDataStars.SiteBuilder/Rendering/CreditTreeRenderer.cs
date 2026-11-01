@@ -1624,6 +1624,8 @@ internal sealed class CreditTreeRenderer
         string name = e.PersonAliasId.HasValue
             ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)"
             : "(名義未指定)";
+        // 画面の表記揺れがあれば、名義の名前の代わりにそれで比べる（表記の違う行を同名として融合させない）。
+        if (!string.IsNullOrEmpty(e.PersonDisplayText)) name = e.PersonDisplayText!;
         // 所属表示は 3 パターン：
         //   両持ち (ID + override テキスト) → テキスト側を表示（リンク先は ID の企業詳細だが、ラベル経路では URL は出さない）
         //   ID のみ → 屋号マスタ名
@@ -1654,9 +1656,12 @@ internal sealed class CreditTreeRenderer
     private async Task<string> ResolvePersonWithAffiliationHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         // 表示テキスト：LookupCache.LookupPersonAliasNameAsync は pa.Name を返す。
-        string displayText = e.PersonAliasId.HasValue
-            ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)")
-            : "(名義未指定)";
+        // 画面の表記揺れ（PersonDisplayText）があれば名義の名前の代わりにそれを出す（誤記ではないので印は付けない。リンク先は名義の人物）。
+        string displayText = !string.IsNullOrEmpty(e.PersonDisplayText)
+            ? e.PersonDisplayText!
+            : e.PersonAliasId.HasValue
+                ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)")
+                : "(名義未指定)";
         string nameHtml = _staffLinkResolver.ResolveAsHtml(e.PersonAliasId, displayText);
 
         // 所属付加：括弧付きで表示。3 パターン：

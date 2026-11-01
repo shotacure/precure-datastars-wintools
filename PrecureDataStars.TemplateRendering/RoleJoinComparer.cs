@@ -35,6 +35,7 @@ public static class RoleJoinComparer
                   .Append(':').Append(e.AffiliationLogoId)
                   .Append(':').Append(e.AffiliationText)
                   .Append(':').Append(e.PersonMisprintText)
+                  .Append(':').Append(e.PersonDisplayText)
                   .Append(':').Append(e.PersonMaskedText)
                   .Append(':').Append(e.CharacterMisprintText)
                   .Append(':').Append(e.CompanyMisprintText);

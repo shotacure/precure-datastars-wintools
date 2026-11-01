@@ -293,6 +293,13 @@ public sealed class ParsedEntry
     public string? PersonMisprintText { get; set; }
 
     /// <summary>
+    /// 一括入力 <c>名義|画面の表記</c> 記法で抽出された「人物名の表記揺れ」。
+    /// PERSON / CHARACTER_VOICE のとき、| の右側がここに入る。名義は | の左側で引き当て、
+    /// 適用時に <see cref="Data.Models.CreditBlockEntry.PersonDisplayText"/> へそのまま転写する。
+    /// </summary>
+    public string? PersonDisplayText { get; set; }
+
+    /// <summary>
     /// 一括入力 <c>&lt;キャラ×キャラ誤記&gt;...</c> 記法で抽出された「キャラ側の誤記表記」。
     /// CHARACTER_VOICE のとき、× の右側がここに入る。用法は <see cref="PersonMisprintText"/> と同じ。
     /// </summary>

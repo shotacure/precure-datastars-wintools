@@ -987,6 +987,8 @@ public sealed class CreditBulkApplyService
             // 種別ごとの妥当性（PERSON で character_misprint が立つ等）は CreditPreviewRenderer 側で
             // 無視されるため、ここでは入力された値をそのまま転記する。
             if (pe.PersonMisprintText is not null) last.Entity.PersonMisprintText = pe.PersonMisprintText;
+            // 画面に出た人物名の表記揺れ（名義と空白・記号だけが違う表記）。誤記とは別に持つ。
+            if (pe.PersonDisplayText is not null) last.Entity.PersonDisplayText = pe.PersonDisplayText;
             if (pe.CharacterMisprintText is not null) last.Entity.CharacterMisprintText = pe.CharacterMisprintText;
             // 画面の組みどおりの役名（改行入り）。役名が画面で折れているときだけ立つ。
             if (pe.CharacterDisplayText is not null) last.Entity.CharacterDisplayText = pe.CharacterDisplayText;
@@ -2793,6 +2795,7 @@ public sealed class CreditBulkApplyService
         // 誤記もシリアライズに含めて差分検出の対象にする
         // （誤記の追加・削除・修正をエントリ差分として認識させるため）。
         sb.Append(e.PersonMisprintText ?? string.Empty).Append('|');
+        sb.Append(e.PersonDisplayText ?? string.Empty).Append('|');
         sb.Append(e.CharacterMisprintText ?? string.Empty).Append('|');
         sb.Append(e.CharacterDisplayText ?? string.Empty).Append('|');
         sb.Append(e.CompanyMisprintText ?? string.Empty).Append('\n');

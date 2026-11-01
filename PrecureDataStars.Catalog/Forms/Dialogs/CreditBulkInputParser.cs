@@ -37,6 +37,9 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     <c>&amp;{（|）|small} &lt;キュアエール&gt;声優</c>（野乃はな（キュアエール））。</description></item>
 ///   <item><description>役名の中の <c>\n</c>（バックスラッシュと n）→ 画面の改行。名義の名前からは抜き、改行入りの役名を
 ///     <c>character_display_text</c> に持つ。例: <c>&lt;てんびん座の\nプリンセス&gt;MAKO</c>（役名が画面で 2 行に折れているとき）。</description></item>
+///   <item><description>人物名・声優名の <c>名義|画面の表記</c> → 画面に出た人物名の表記揺れ。名義は <c>|</c> の左側で引き当て、
+///     右側（名義と空白・中黒・記号の有無や位置だけが違う画面の表記）を <c>person_display_text</c> に持つ。誤記の <c>×</c> とは別。
+///     例: <c>ロメオ・アンニョンヌエボJr.|ロメオ・アンニョンヌエボ Jr.</c>。</description></item>
 ///   <item><description><c>@cols=N</c>（ブロック先頭の単独行）→ そのブロックの <c>col_count</c> を明示指定。
 ///     省略時は従来どおりタブ数+1 で推測。</description></item>
 ///   <item><description><c>@blank</c>（セル全体）→ 空きの升（<c>entry_kind = BLANK</c>）。複数列のブロックで、画面の並びの途中に
@@ -1716,7 +1719,9 @@ public static class CreditBulkInputParser
             //   → person_main="菊池 心",       person_misprint="菊地 心"
             // × の左側がさらに "旧 => 新" 記法の対象になり得るため、× を先に剥がす。
             var (charaBeforeRedirect, charaMisprint) = SplitMisprint(chara);
-            var (personBeforeRedirect, personMisprint) = SplitMisprint(personAfterAster);
+            // 声優名の "名義|画面の表記"（表記揺れ）を先に剥がしてから誤記を剥がす。
+            var (personMainAfterDisplay, personDisplay) = SplitPersonDisplay(personAfterAster);
+            var (personBeforeRedirect, personMisprint) = SplitMisprint(personMainAfterDisplay);
 
             // キャラ名・声優名それぞれに "旧 => 新" 記法を適用する。
             // キャラ名側で <キュアブラック旧 => キュアブラック新>、声優名側で 本名 旧 => 本名 新 のように
@@ -1760,6 +1765,7 @@ public static class CreditBulkInputParser
                 PersonRawText = personPureName,
                 PersonOldName = personOld,
                 PersonMisprintText = personMisprint,
+                PersonDisplayText = personDisplay,
                 IsForcedNewPerson = isForcedNewPerson,
                 PersonAliasIdOverride = personAliasIdOverride,
                 AffiliationRawText = affRaw,
@@ -1807,7 +1813,8 @@ public static class CreditBulkInputParser
                 // 声優側の先頭 "*" 強制新規マーカーを剥がす。
                 var (personAfterAster, isForcedNewPerson) = SplitForcedNewMarker(personName);
                 // 声優名側に "名義 × 誤記" 記法を先に適用してから "旧 => 新" を適用する。
-                var (personBeforeRedirect, personMisprint) = SplitMisprint(personAfterAster);
+                var (personMainAfterDisplay, personDisplay) = SplitPersonDisplay(personAfterAster);
+                var (personBeforeRedirect, personMisprint) = SplitMisprint(personMainAfterDisplay);
                 var (personOld, personNew) = SplitOldNewRedirect(personBeforeRedirect);
                 // 末尾の #数値 を person_alias_id 明示参照として抜き出す。
                 var (personPureName, personAliasIdOverride) = SplitAliasIdOverride(personNew);
@@ -1821,6 +1828,7 @@ public static class CreditBulkInputParser
                     PersonRawText = personPureName,
                     PersonOldName = personOld,
                     PersonMisprintText = personMisprint,
+                    PersonDisplayText = personDisplay,
                     IsForcedNewPerson = isForcedNewPerson,
                     PersonAliasIdOverride = personAliasIdOverride,
                     AffiliationRawText = affRaw2,
@@ -1864,7 +1872,8 @@ public static class CreditBulkInputParser
 
             // 人物名側に "名義 × 誤記" 記法を先に適用してから "旧 => 新" を適用する。
             // 所属 "(...)" は SplitAffiliation で既に剥がれているため、× の左右は純粋に人物名表記に限られる。
-            var (personBeforeRedirect, personMisprint) = SplitMisprint(personName);
+            var (personMainAfterDisplay, personDisplay) = SplitPersonDisplay(personName);
+            var (personBeforeRedirect, personMisprint) = SplitMisprint(personMainAfterDisplay);
             var (personOld, personNew) = SplitOldNewRedirect(personBeforeRedirect);
 
             // 末尾の "#数値" を person_alias_id 明示参照として抜き出す
@@ -1882,6 +1891,7 @@ public static class CreditBulkInputParser
                 PersonRawText = personPureName,
                 PersonOldName = personOld,
                 PersonMisprintText = personMisprint,
+                PersonDisplayText = personDisplay,
                 IsForcedNewPerson = isForcedNewPerson,
                 PersonAliasIdOverride = personAliasIdOverride,
                 AffiliationRawText = affRaw3,
@@ -2062,6 +2072,23 @@ public static class CreditBulkInputParser
         // 片側が空のセパレータ（"山田×" や "×山田"）は誤記指定なしとして扱う。
         if (left.Length == 0 || right.Length == 0) return (text.Trim(), null);
 
+        return (left, right);
+    }
+
+    /// <summary>
+    /// 「名義|画面の表記」記法を左右に分ける。左側 = 名義（マスタ参照キー）、右側 = 画面に出た人物名の表記揺れ
+    /// （名義と空白・中黒・記号の有無や位置だけが違う表記。<c>credit_block_entries.person_display_text</c>）。
+    /// 最初の <c>|</c> で切る。片側が空のときは表記揺れの指定なしとして (text, null) を返す。
+    /// <see cref="SplitMisprint"/> よりも先に呼ぶ。
+    /// </summary>
+    private static (string MainName, string? DisplayText) SplitPersonDisplay(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return (string.Empty, null);
+        int sep = text.IndexOf('|');
+        if (sep < 0) return (text, null);
+        string left = text.Substring(0, sep).Trim();
+        string right = text.Substring(sep + 1).Trim();
+        if (left.Length == 0 || right.Length == 0) return (text, null);
         return (left, right);
     }
 

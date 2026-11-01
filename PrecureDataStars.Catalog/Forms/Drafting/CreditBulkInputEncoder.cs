@@ -649,6 +649,8 @@ internal static class CreditBulkInputEncoder
         // 誤記は所属より内側、人物名の直後に連結する（パーサの SplitAffiliation が末尾の (...) を先に剥がすため、
         // × は「人物名」フィールドの中で完結する必要がある）。
         string nameWithMisprint = AppendMisprintSuffix(nameWithAliasId, e.PersonMisprintText);
+        // 画面の表記揺れは誤記の後ろに「|表記」で連結する（パーサは | で先に切り、左側から誤記を剥がす）。
+        nameWithMisprint = AppendDisplaySuffix(nameWithMisprint, e.PersonDisplayText);
 
         if (suppressAffiliation) return nameWithMisprint;
         // ResolveAffiliationStringAsync は括弧込みの完全な「(...)」文字列を返す（または null）。
@@ -699,7 +701,7 @@ internal static class CreditBulkInputEncoder
         // キャラ側・声優側それぞれに誤記が立っていれば「×」で連結する。
         // 例: <キュアブラック×キュアブラッグ>菊池 心×菊地 心(東映アニメーション)
         string charaWithMisprint = AppendMisprintSuffix(charaWithAliasId, e.CharacterMisprintText);
-        string actorWithMisprint = AppendMisprintSuffix(actorWithAliasId, e.PersonMisprintText);
+        string actorWithMisprint = AppendDisplaySuffix(AppendMisprintSuffix(actorWithAliasId, e.PersonMisprintText), e.PersonDisplayText);
 
         string actorPart;
         if (suppressAffiliation)
@@ -784,6 +786,13 @@ internal static class CreditBulkInputEncoder
     {
         if (string.IsNullOrEmpty(misprint)) return mainText;
         return $"{mainText}{MisprintSeparator}{misprint}";
+    }
+
+    /// <summary>人物名の表記揺れ（<see cref="CreditBlockEntry.PersonDisplayText"/>）を「名義|画面の表記」記法で連結する。NULL・空なら連結しない。</summary>
+    private static string AppendDisplaySuffix(string mainText, string? displayText)
+    {
+        if (string.IsNullOrEmpty(displayText)) return mainText;
+        return $"{mainText}|{displayText}";
     }
 
     /// <summary>所属表記を「人物名末尾に追記する括弧付き文字列」として解決する。

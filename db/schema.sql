@@ -2711,6 +2711,7 @@ CREATE TABLE `credit_block_entries` (
   --   NULL = 誤記なし。値があれば誤記あり（フラグは設けない）。マスタは汚さず、エントリ単位で完結させる。
   --   表示は「打ち消し線で誤記」 + 半角SP + 「正名義」を並べる運用（CreditPreviewRenderer / CreditTreeRenderer）。
   `person_misprint_text`           varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `person_display_text`            varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '画面に出た人物名の表記揺れ。名義と空白・記号だけが違うときだけ。誤記ではない。NULL は名義の名前のまま',
   `character_misprint_text`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `character_display_text`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '画面の組みどおりの役名（改行入り）。役名が画面で折れているときだけ。改行を抜いた字はキャラの名義と同じ。NULL は名義の名前のまま',
   `company_misprint_text`          varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,

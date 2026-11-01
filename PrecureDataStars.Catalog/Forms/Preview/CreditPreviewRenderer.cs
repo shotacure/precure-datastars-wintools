@@ -2231,6 +2231,8 @@ internal sealed class CreditPreviewRenderer
         string name = e.PersonAliasId.HasValue
             ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value)) ?? "(名義不明)"
             : "(名義未指定)";
+        // 画面の表記揺れがあれば名義の名前の代わりにそれを出す。
+        if (!string.IsNullOrEmpty(e.PersonDisplayText)) name = e.PersonDisplayText!;
         // 所属は 4 パターン：人物名義(ユニット等)、両持ち (ID + override テキスト)、ID のみ、テキストのみ。
         if (e.AffiliationPersonAliasId is int apid)
         {
@@ -2260,6 +2262,8 @@ internal sealed class CreditPreviewRenderer
         string baseName = e.PersonAliasId.HasValue
             ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value)) ?? "(名義不明)"
             : "(名義未指定)";
+        // 画面の表記揺れ（PersonDisplayText）があれば名義の名前の代わりにそれを出す（誤記ではないので印は付けない）。
+        if (!string.IsNullOrEmpty(e.PersonDisplayText)) baseName = e.PersonDisplayText!;
         string nameHtml = Esc(baseName);
 
         string? affilInnerLabel = null;
@@ -2341,6 +2345,8 @@ internal sealed class CreditPreviewRenderer
                     string name = e.PersonAliasId.HasValue
                         ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value)) ?? "(名義不明)"
                         : "(名義未指定)";
+                    // 画面の表記揺れがあれば名義の名前の代わりにそれを出す。
+                    if (!string.IsNullOrEmpty(e.PersonDisplayText)) name = e.PersonDisplayText!;
                     // 所属は 4 パターン：人物名義(ユニット等)、両持ち、ID のみ、テキストのみ。
                     if (e.AffiliationPersonAliasId is int apid)
                     {

@@ -6512,9 +6512,11 @@ a.credit-card-series:focus-visible {
 .footnote:target {
   background: rgba(255, 220, 120, 0.25);
 }
+/* inline-block は親の text-indent（ぶら下げの -2.6em）を受け継ぐので、番号の箱の中では 0 に戻す */
 .footnote-no {
   display: inline-block;
   min-width: 2.4em;
+  text-indent: 0;
   font-family: var(--font-num);
 }
 .footnote-url {

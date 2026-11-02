@@ -157,6 +157,7 @@ partial class CreditMastersEditorForm
     private ComboBox cboOvRole = null!;
     // 詳細パネルのシリーズ選択コンボ（「（既定 / 全シリーズ）」または特定シリーズ）
     private ComboBox cboOvTemplateSeries = null!;
+    private NumericUpDown numOvTemplateEpisodeNo = null!;
     private DateTimePicker dtOvFrom = null!;
     private DateTimePicker dtOvTo = null!;
     private CheckBox chkOvToNull = null!;
@@ -892,6 +893,11 @@ partial class CreditMastersEditorForm
         // 役職コンボは詳細パネル外（上部の cboOvSeries）に統一しているため、
         // ここではシリーズ・書式テンプレ・備考だけを配置する。役職は上のコンボに従う。
         AddLabeledControl(pnl, "シリーズ", cboOvTemplateSeries, 18, 18, inputWidth: 360);
+
+        // 話数（そのシリーズの中の 1 話だけに効くテンプレにするとき）。0 ならシリーズ全体（または既定）のテンプレ。
+        // 同じシリーズの中で、回によって画面の書式（項目の見出しなど）が違うときに使う。
+        numOvTemplateEpisodeNo = new NumericUpDown { Minimum = 0, Maximum = 999, Value = 0 };
+        AddLabeledControl(pnl, "話数（0=全話）", numOvTemplateEpisodeNo, 520, 18, inputWidth: 80);
 
         var lblFmt = new Label { Text = "書式テンプレ", Location = new Point(18, 54), Size = new Size(110, 20) };
         txtOvFormatTemplate.Location = new Point(132, 50);

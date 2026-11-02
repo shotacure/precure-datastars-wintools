@@ -508,7 +508,7 @@ internal sealed class CreditPreviewRenderer
                     {
                         var prescanCode = siblingCr.RoleCode;
                         if (string.IsNullOrEmpty(prescanCode)) continue;
-                        var prescanTpl = await _roleTemplatesRepo.ResolveAsync(prescanCode!, resolveSeriesId, ct);
+                        var prescanTpl = await _roleTemplatesRepo.ResolveAsync(prescanCode!, resolveSeriesId, ct, credit.EpisodeId);
                         string? prescanTemplate = prescanTpl?.FormatTemplate;
                         if (string.IsNullOrWhiteSpace(prescanTemplate)) continue;
                         // 軽量検出：テンプレ文字列中の {ROLE:<CODE>. から <CODE> を抜き出す。
@@ -899,7 +899,7 @@ internal sealed class CreditPreviewRenderer
                     {
                         var prescanCode = siblingDRole.Entity.RoleCode;
                         if (string.IsNullOrEmpty(prescanCode)) continue;
-                        var prescanTpl = await _roleTemplatesRepo.ResolveAsync(prescanCode!, resolveSeriesId, ct);
+                        var prescanTpl = await _roleTemplatesRepo.ResolveAsync(prescanCode!, resolveSeriesId, ct, credit.EpisodeId);
                         string? prescanTemplate = prescanTpl?.FormatTemplate;
                         if (string.IsNullOrWhiteSpace(prescanTemplate)) continue;
                         // 軽量検出：テンプレ文字列中の {ROLE:<CODE>. から <CODE> を抜き出す。
@@ -1257,7 +1257,7 @@ internal sealed class CreditPreviewRenderer
         string? contentHeaderOverride = null;
         if (!string.IsNullOrEmpty(roleCode))
         {
-            var tpl = await _roleTemplatesRepo.ResolveAsync(roleCode!, resolveSeriesId, ct);
+            var tpl = await _roleTemplatesRepo.ResolveAsync(roleCode!, resolveSeriesId, ct, scopeKind == "EPISODE" ? episodeId : null);
             template = tpl?.FormatTemplate;
             contentHeaderOverride = string.IsNullOrEmpty(tpl?.ContentHeaderOverride) ? null : tpl!.ContentHeaderOverride;
         }

@@ -119,6 +119,8 @@ public static class ThemeSongsHandler
     /// <param name="kinds">theme_kind 絞り込み（OP/ED/INSERT、空なら全部）。指定順がそのまま並び順になる。</param>
     /// <param name="lookup">名義・キャラ ID → リンク化 HTML 解決インターフェース。</param>
     /// <param name="ct">キャンセルトークン。</param>
+    /// <param name="cvLabelOverride">歌唱・コーラスの声優の前に置く記号を、歌唱者の行の記号（cv_label）に代えて使う文字
+    /// （<c>{#THEME_SONGS:cv="CV."}</c>。画面の記号が盤と違う作品用）。null なら行の記号。</param>
     /// <returns>JOIN 結果の楽曲行リスト（*Html フィールド設定済み）。</returns>
     internal static async Task<IReadOnlyList<ThemeSongRow>> FetchAsync(
         IConnectionFactory factory,
@@ -126,7 +128,8 @@ public static class ThemeSongsHandler
         int? seriesId,
         IReadOnlyList<string>? kinds,
         ILookupCache lookup,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? cvLabelOverride = null)
     {
         bool hasEpisode = episodeId.HasValue && episodeId.Value > 0;
         bool hasSeries = seriesId.HasValue && seriesId.Value > 0;
@@ -213,25 +216,38 @@ public static class ThemeSongsHandler
         // テンプレ展開は 1 エピソード当たり主題歌 2-4 件程度のため、行ごとの追加クエリで実用的に問題ない。
         var songCredits = new SongCreditsRepository(factory);
         var recordingSingers = new SongRecordingSingersRepository(factory);
+        var episodeSingers = new EpisodeThemeSongSingersRepository(factory);
         foreach (var r in rows)
         {
             if (r.SongId > 0)
             {
                 await FillSongCreditsAsync(r, songCredits, lookup, ct).ConfigureAwait(false);
             }
-            if (r.SongRecordingId > 0)
+            // エピソードのクレジットに出た歌唱者（episode_theme_song_singers）がある主題歌は、
+            // 録音の歌唱者ではなく画面に出た歌唱者で、歌・コーラスとも描く（行の無い役職は出さない）。
+            if (hasEpisode && r.ThemeKind is string kind && r.Seq is byte seq
+                && await episodeSingers.ExistsAsync(episodeId!.Value, r.IsBroadcastOnly, kind, seq, ct).ConfigureAwait(false))
+            {
+                r.SingerParts = await episodeSingers.GetDisplayHtmlPartsAsync(episodeId!.Value, r.IsBroadcastOnly, kind, seq,
+                    SongRecordingSingerRoles.Vocals, lookup, cvLabelOverride, ct).ConfigureAwait(false);
+                r.ChorusParts = await episodeSingers.GetDisplayHtmlPartsAsync(episodeId!.Value, r.IsBroadcastOnly, kind, seq,
+                    SongRecordingSingerRoles.Chorus, lookup, cvLabelOverride, ct).ConfigureAwait(false);
+                r.SingerHtml = EpisodeThemeSongSingersRepository.JoinHtmlParts(r.SingerParts);
+                r.ChorusHtml = EpisodeThemeSongSingersRepository.JoinHtmlParts(r.ChorusParts);
+            }
+            else if (r.SongRecordingId > 0)
             {
                 // うた：song_recording_singers から VOCALS 役職の連名を HTML 版で取得（部品も持たせる）。
-                r.SingerParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct).ConfigureAwait(false);
-                r.ChorusParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct).ConfigureAwait(false);
-                string singHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct).ConfigureAwait(false);
+                r.SingerParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct, cvLabelOverride).ConfigureAwait(false);
+                r.ChorusParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct, cvLabelOverride).ConfigureAwait(false);
+                string singHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct, cvLabelOverride).ConfigureAwait(false);
                 r.SingerHtml = !string.IsNullOrEmpty(singHtml)
                     ? singHtml
                     : (string.IsNullOrEmpty(r.SingerName) ? "" : System.Net.WebUtility.HtmlEncode(r.SingerName));
 
                 // コーラス：song_recording_singers から BACKING_VOCALS 役職の連名を HTML 版で取得。
                 // テンプレ側で {CHORUS} / {?CHORUS}...{/?CHORUS} として参照できる。
-                r.ChorusHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct).ConfigureAwait(false) ?? "";
+                r.ChorusHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct, cvLabelOverride).ConfigureAwait(false) ?? "";
             }
         }
 

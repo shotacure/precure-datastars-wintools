@@ -71,6 +71,12 @@ public sealed class SongRecordingSinger
     public string? AffiliationText { get; set; }
 
     /// <summary>
+    /// CHARACTER_WITH_CV 行の声優の前に置く記号（「(」と声優名のあいだの文字）。初出盤の表記をそのまま持つ
+    /// （例: "CV."）。NULL なら <see cref="SongRecordingSingerDisplay.DefaultCvLabel"/>（"CV:"）。PERSON 行では意味を持たない。
+    /// </summary>
+    public string? CvLabel { get; set; }
+
+    /// <summary>
     /// PERSON 行の名義がユニット名義（person_alias_members にメンバーを持つ）のとき、表示でユニット名の後ろに
     /// メンバーを括弧書きで展開するか（例: 「ぷりきゅあ5（夢原のぞみ/キュアドリーム(CV:三瓶由布子)、…）」）。
     /// 同じユニットでも、歌の行では展開し、コーラスの行では名前だけ出す、のように行ごとに選べる。
@@ -118,6 +124,18 @@ public static class SongRecordingSingerRoles
 /// </summary>
 public static class SongRecordingSingerDisplay
 {
+    /// <summary>声優の前に置く記号の既定値（「キャラ(CV:声優)」の "CV:"）。</summary>
+    public const string DefaultCvLabel = "CV:";
+
+    /// <summary>
+    /// 声優の前に置く記号を返す。<paramref name="overrideLabel"/>（役職テンプレの <c>cv="…"</c> など、表示の文脈で決まる記号）が
+    /// あればそれを、無ければ行の記号（<see cref="SongRecordingSinger.CvLabel"/>）を、それも無ければ <see cref="DefaultCvLabel"/>。
+    /// </summary>
+    public static string CvLabelOf(string? rowLabel, string? overrideLabel = null)
+        => !string.IsNullOrEmpty(overrideLabel) ? overrideLabel
+         : !string.IsNullOrEmpty(rowLabel) ? rowLabel
+         : DefaultCvLabel;
+
     /// <summary>
     /// キャラ歌唱の行で「(CV:声優)」を省くかを返す。同じ連名（同じ役職の行）に、その声優が人物として名前で出ているときは
     /// 省く（「工藤 真由 with フェアリートーン」のように、声優を重ねて「(CV:工藤 真由)」と出さない）。データの声優はそのまま持つ。

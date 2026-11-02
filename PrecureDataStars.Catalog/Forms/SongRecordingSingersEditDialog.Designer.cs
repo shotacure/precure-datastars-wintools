@@ -33,6 +33,8 @@ partial class SongRecordingSingersEditDialog
     private Button btnPickCharacter = null!;
     private Label lblVoice = null!;
     private TextBox txtVoiceDisplay = null!;
+    private Label lblCvLabel = null!;
+    private TextBox txtCvLabel = null!;
     private Button btnPickVoice = null!;
     private Label lblSlashVoice = null!;
     private TextBox txtSlashVoiceDisplay = null!;
@@ -152,6 +154,9 @@ partial class SongRecordingSingersEditDialog
         btnPickCharacter = new Button { Text = "選択...", Location = new Point(608, 139), Size = new Size(72, 25) };
 
         lblVoice = new Label { Text = "CV(声優):", Location = new Point(12, 176), AutoSize = true };
+        // 声優の前に置く記号（盤の表記。空なら "CV:"）。
+        lblCvLabel = new Label { Text = "記号:", Location = new Point(688, 176), AutoSize = true };
+        txtCvLabel = new TextBox { Location = new Point(728, 172), Size = new Size(56, 23), MaxLength = 8, PlaceholderText = "CV:" };
         txtVoiceDisplay = new TextBox { Location = new Point(160, 172), Size = new Size(440, 23), ReadOnly = true, BackColor = SystemColors.Window };
         btnPickVoice = new Button { Text = "選択...", Location = new Point(608, 171), Size = new Size(72, 25) };
 
@@ -216,7 +221,7 @@ partial class SongRecordingSingersEditDialog
             lblPerson, txtPersonDisplay, btnPickPerson,
             lblSlashPerson, txtSlashPersonDisplay, btnPickSlashPerson, btnClearSlashPerson,
             lblCharacter, txtCharacterDisplay, btnPickCharacter,
-            lblVoice, txtVoiceDisplay, btnPickVoice,
+            lblVoice, txtVoiceDisplay, btnPickVoice, lblCvLabel, txtCvLabel,
             lblSlashVoice, txtSlashVoiceDisplay, btnPickSlashVoice, btnClearSlashVoice,
             lblSlashCharacter, txtSlashCharacterDisplay, btnPickSlashCharacter, btnClearSlashCharacter,
             lblSeparator, txtSeparator, lblSepHint, chkExpandUnit,

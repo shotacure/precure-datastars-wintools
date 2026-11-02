@@ -36,6 +36,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
           slash_voice_person_alias_id AS SlashVoicePersonAliasId,
           preceding_separator        AS PrecedingSeparator,
           affiliation_text           AS AffiliationText,
+          cv_label                   AS CvLabel,
           expand_unit_members        AS ExpandUnitMembers,
           notes                      AS Notes,
           created_at                 AS CreatedAt,
@@ -59,6 +60,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         public int? SlashVoicePersonAliasId { get; set; }
         public string? PrecedingSeparator { get; set; }
         public string? AffiliationText { get; set; }
+        public string? CvLabel { get; set; }
         public bool ExpandUnitMembers { get; set; }
         public string? Notes { get; set; }
         public DateTime? CreatedAt { get; set; }
@@ -80,6 +82,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
             SlashVoicePersonAliasId = SlashVoicePersonAliasId,
             PrecedingSeparator = PrecedingSeparator,
             AffiliationText = AffiliationText,
+            CvLabel = CvLabel,
             ExpandUnitMembers = ExpandUnitMembers,
             Notes = Notes,
             CreatedAt = CreatedAt,
@@ -165,6 +168,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
               srs.billing_kind                                            AS Kind,
               srs.preceding_separator                                     AS Sep,
               srs.affiliation_text                                        AS Aff,
+              srs.cv_label                                                AS CvLabel,
               COALESCE(NULLIF(pa.display_text_override, ''),  pa.name)    AS PersonName,
               ca.name                                                     AS CharacterName,
               COALESCE(NULLIF(pav.display_text_override, ''), pav.name)   AS VoiceName,
@@ -217,7 +221,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                     && !(VoiceAppearsAsPerson(r.VoicePersonAliasId, personRows)
                          && (r.SlashVoicePersonAliasId is null || VoiceAppearsAsPerson(r.SlashVoicePersonAliasId, personRows))))
                 {
-                    sb.Append("(CV:").Append(r.VoiceName);
+                    sb.Append('(').Append(SongRecordingSingerDisplay.CvLabelOf(r.CvLabel)).Append(r.VoiceName);
                     if (!string.IsNullOrEmpty(r.SlashVoiceName))
                         sb.Append(" / ").Append(r.SlashVoiceName);
                     sb.Append(')');
@@ -236,6 +240,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         public string Kind { get; set; } = "";
         public string? Sep { get; set; }
         public string? Aff { get; set; }
+        public string? CvLabel { get; set; }
         public string? PersonName { get; set; }
         public string? CharacterName { get; set; }
         public string? VoiceName { get; set; }
@@ -269,14 +274,22 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
     /// <param name="roleCode">役職コード（null/省略時は VOCALS）。</param>
     /// <param name="lookup">名義解決インターフェース。</param>
     /// <param name="ct">キャンセルトークン。</param>
+    /// <param name="cvLabelOverride">声優の前に置く記号を、行の記号（cv_label）に代えて使う文字（主題歌のカードで、画面の記号に合わせるとき）。null なら行の記号。</param>
     /// <returns>連名 HTML 文字列。0 件なら空文字。</returns>
     public async Task<string> GetDisplayHtmlAsync(
         int songRecordingId,
         string? roleCode,
         ILookupCache lookup,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? cvLabelOverride = null)
     {
-        var parts = await GetDisplayHtmlPartsAsync(songRecordingId, roleCode, lookup, ct).ConfigureAwait(false);
+        var parts = await GetDisplayHtmlPartsAsync(songRecordingId, roleCode, lookup, ct, cvLabelOverride).ConfigureAwait(false);
+        return JoinHtmlParts(parts);
+    }
+
+    /// <summary>歌唱者ごとの部品を、直前との区切り（HtmlEncode する）でつないだ連名 HTML にする。</summary>
+    internal static string JoinHtmlParts(IReadOnlyList<(string Sep, string Html)> parts)
+    {
         var sb = new System.Text.StringBuilder();
         foreach (var (sep, html) in parts)
         {
@@ -291,12 +304,14 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
     /// 連名を、歌唱者ごとの部品（直前との区切り, リンク化済み HTML）の並びで返す（<see cref="GetDisplayHtmlAsync"/> の元）。
     /// 部品の HTML はスラッシュの相方・(CV:…)・所属まで含む 1 行分。先頭の部品の区切りは空文字。
     /// 役職テンプレで区切りを差し替える（<c>{SINGER:sep="&lt;br&gt;"}</c> など）ときに使う。行が無ければ空の並び。
+    /// <paramref name="cvLabelOverride"/> があれば、声優の前の記号を行の記号（cv_label）に代えてその文字にする。
     /// </summary>
     public async Task<IReadOnlyList<(string Sep, string Html)>> GetDisplayHtmlPartsAsync(
         int songRecordingId,
         string? roleCode,
         ILookupCache lookup,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? cvLabelOverride = null)
     {
         string targetRole = roleCode ?? SongRecordingSingerRoles.Vocals;
 
@@ -308,6 +323,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
               srs.billing_kind             AS Kind,
               srs.preceding_separator      AS Sep,
               srs.affiliation_text         AS Aff,
+              srs.cv_label                 AS CvLabel,
               srs.person_alias_id          AS PersonAliasId,
               srs.character_alias_id       AS CharacterAliasId,
               srs.voice_person_alias_id    AS VoicePersonAliasId,
@@ -323,6 +339,16 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<HtmlRow>(
             new CommandDefinition(sql, new { id = songRecordingId, role = targetRole }, cancellationToken: ct))).ToList();
+        return await BuildHtmlPartsAsync(rows, lookup, cvLabelOverride).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 連名の行（seq 順）を、歌唱者ごとの部品（直前との区切り, リンク化済み HTML）の並びにする。
+    /// 録音の歌唱者（song_recording_singers）と、エピソードのクレジットに出た歌唱者（episode_theme_song_singers）で共有する。
+    /// </summary>
+    internal static async Task<IReadOnlyList<(string Sep, string Html)>> BuildHtmlPartsAsync(
+        IReadOnlyList<HtmlRow> rows, ILookupCache lookup, string? cvLabelOverride)
+    {
         var parts = new List<(string Sep, string Html)>(rows.Count);
         for (int i = 0; i < rows.Count; i++)
         {
@@ -365,7 +391,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                 {
                     // 「(CV:◯◯)」の形式。CV 名義は person_alias なので人物リンク化を使う。
                     // 2 人目の声優がいれば「(CV:◯◯ / △△)」と並べ、2 人目も人物リンク化する。
-                    sb.Append("(CV:");
+                    sb.Append('(').Append(System.Net.WebUtility.HtmlEncode(SongRecordingSingerDisplay.CvLabelOf(r.CvLabel, cvLabelOverride)));
                     var html = await lookup.LookupPersonAliasHtmlAsync(vpid).ConfigureAwait(false);
                     sb.Append(html ?? "");
                     if (r.SlashVoicePersonAliasId is int svpid)
@@ -389,13 +415,14 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         return parts;
     }
 
-    /// <summary>HTML 版 GetDisplayHtmlAsync 用の SQL 戻り値受け取り DTO。</summary>
-    private sealed class HtmlRow
+    /// <summary>HTML 版 GetDisplayHtmlAsync 用の SQL 戻り値受け取り DTO（<see cref="BuildHtmlPartsAsync"/> の入力）。</summary>
+    internal sealed class HtmlRow
     {
         public byte Seq { get; set; }
         public string Kind { get; set; } = "";
         public string? Sep { get; set; }
         public string? Aff { get; set; }
+        public string? CvLabel { get; set; }
         public int? PersonAliasId { get; set; }
         public int? CharacterAliasId { get; set; }
         public int? VoicePersonAliasId { get; set; }
@@ -412,13 +439,13 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
               (song_recording_id, role_code, singer_seq, billing_kind,
                person_alias_id, character_alias_id, voice_person_alias_id,
                slash_person_alias_id, slash_character_alias_id, slash_voice_person_alias_id,
-               preceding_separator, affiliation_text, expand_unit_members, notes,
+               preceding_separator, affiliation_text, cv_label, expand_unit_members, notes,
                created_by, updated_by)
             VALUES
               (@SongRecordingId, @RoleCode, @SingerSeq, @KindStr,
                @PersonAliasId, @CharacterAliasId, @VoicePersonAliasId,
                @SlashPersonAliasId, @SlashCharacterAliasId, @SlashVoicePersonAliasId,
-               @PrecedingSeparator, @AffiliationText, @ExpandUnitMembers, @Notes,
+               @PrecedingSeparator, @AffiliationText, @CvLabel, @ExpandUnitMembers, @Notes,
                @CreatedBy, @UpdatedBy);
             """;
 
@@ -436,6 +463,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
             s.SlashVoicePersonAliasId,
             s.PrecedingSeparator,
             s.AffiliationText,
+            s.CvLabel,
             s.ExpandUnitMembers,
             s.Notes,
             s.CreatedBy,
@@ -457,6 +485,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
               slash_voice_person_alias_id = @SlashVoicePersonAliasId,
               preceding_separator      = @PrecedingSeparator,
               affiliation_text         = @AffiliationText,
+              cv_label                 = @CvLabel,
               expand_unit_members      = @ExpandUnitMembers,
               notes                    = @Notes,
               updated_by               = @UpdatedBy
@@ -479,6 +508,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
             s.SlashVoicePersonAliasId,
             s.PrecedingSeparator,
             s.AffiliationText,
+            s.CvLabel,
             s.ExpandUnitMembers,
             s.Notes,
             s.UpdatedBy
@@ -516,13 +546,13 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                       (song_recording_id, role_code, singer_seq, billing_kind,
                        person_alias_id, character_alias_id, voice_person_alias_id,
                        slash_person_alias_id, slash_character_alias_id, slash_voice_person_alias_id,
-                       preceding_separator, affiliation_text, expand_unit_members, notes,
+                       preceding_separator, affiliation_text, cv_label, expand_unit_members, notes,
                        created_by, updated_by)
                     VALUES
                       (@SongRecordingId, @RoleCode, @SingerSeq, @KindStr,
                        @PersonAliasId, @CharacterAliasId, @VoicePersonAliasId,
                        @SlashPersonAliasId, @SlashCharacterAliasId, @SlashVoicePersonAliasId,
-                       @PrecedingSeparator, @AffiliationText, @ExpandUnitMembers, @Notes,
+                       @PrecedingSeparator, @AffiliationText, @CvLabel, @ExpandUnitMembers, @Notes,
                        @CreatedBy, @UpdatedBy);
                     """,
                     new
@@ -540,6 +570,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                         // seq=1 では区切りなし
                         PrecedingSeparator = seq == 1 ? null : s.PrecedingSeparator,
                         s.AffiliationText,
+                        s.CvLabel,
                         s.ExpandUnitMembers,
                         s.Notes,
                         CreatedBy = updatedBy,

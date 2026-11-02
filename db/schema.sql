@@ -2408,10 +2408,12 @@ CREATE TABLE `role_relations` (
 
 --
 -- Table structure for table `role_templates`
--- 役職テンプレート。既定テンプレ（全シリーズ共通）とシリーズ別上書きを単一テーブルで管理する。
+-- 役職テンプレート。既定テンプレ（全シリーズ共通）とシリーズ別・エピソード別の上書きを単一テーブルで管理する。
 --   - series_id IS NULL ：既定テンプレ（全シリーズ共通）
---   - series_id IS NOT NULL：そのシリーズ専用のテンプレ
--- 解決ロジック：(role_code, series_id) で検索 → 無ければ (role_code, NULL) フォールバック。
+--   - series_id IS NOT NULL, episode_id IS NULL：そのシリーズ専用のテンプレ
+--   - episode_id IS NOT NULL：そのエピソード専用のテンプレ（series_id はそのエピソードのシリーズ）。
+--     同じシリーズの中で、回によって画面の書式（項目の見出しなど）が違うときに使う
+-- 解決ロジック：(role_code, episode_id) で検索 → (role_code, series_id) → 無ければ (role_code, NULL) フォールバック。
 -- 期間制限（valid_from/valid_to）は持たない。
 --
 DROP TABLE IF EXISTS `role_templates`;
@@ -2421,6 +2423,7 @@ CREATE TABLE `role_templates` (
   `template_id`     int          NOT NULL AUTO_INCREMENT,
   `role_code`       varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `series_id`       int              NULL,
+  `episode_id`      int              NULL COMMENT 'エピソード別のテンプレのエピソード（NULL=シリーズ別または既定）。series_id はそのエピソードのシリーズ',
   `format_template` text         NOT NULL,
   `content_header_override` varchar(256) NULL COMMENT 'コンテンツ領域に出すヘッダ文字列（左カラム役職名の代替）。非 NULL のときレンダラがヘッダを出力して左カラム役職名を抑止する。',
   `notes`           text             NULL,
@@ -2429,11 +2432,13 @@ CREATE TABLE `role_templates` (
   `created_by`      varchar(64)      NULL,
   `updated_by`      varchar(64)      NULL,
   PRIMARY KEY (`template_id`),
-  UNIQUE KEY `uk_role_templates_role_series` (`role_code`,`series_id`),
+  UNIQUE KEY `uk_role_templates_role_series_episode` (`role_code`,`series_id`,`episode_id`),
   KEY `ix_role_templates_role` (`role_code`),
   KEY `ix_role_templates_series` (`series_id`),
+  KEY `ix_role_templates_episode` (`episode_id`),
   CONSTRAINT `fk_role_templates_role`   FOREIGN KEY (`role_code`) REFERENCES `roles`  (`role_code`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_role_templates_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT `fk_role_templates_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_role_templates_episode` FOREIGN KEY (`episode_id`) REFERENCES `episodes` (`episode_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -2816,6 +2821,73 @@ CREATE TABLE `episode_theme_songs` (
   KEY `ix_ets_song_recording` (`song_recording_id`),
   CONSTRAINT `fk_ets_episode`        FOREIGN KEY (`episode_id`)             REFERENCES `episodes`        (`episode_id`)        ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_ets_song_recording` FOREIGN KEY (`song_recording_id`)      REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `episode_theme_song_singers`
+-- エピソードのクレジットの主題歌のカードに出た歌唱者。使った録音の歌唱者（song_recording_singers）と
+-- 画面の歌唱者が違うときに、画面に出た歌唱者を名義でつないで持つ。行の形は song_recording_singers と同じで、
+-- episode_theme_songs の 1 行（episode_id, is_broadcast_only, theme_kind, seq）に連なる。
+-- 行がある主題歌は、クレジットのカードの歌（VOCALS）・コーラス（BACKING_VOCALS）をこちらで描く
+-- （主題歌・挿入歌の一覧など、録音の情報として出す所は録音の歌唱者のまま）。
+--
+DROP TABLE IF EXISTS `episode_theme_song_singers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `episode_theme_song_singers` (
+  `episode_id`                int              NOT NULL,
+  `is_broadcast_only`         tinyint(1)       NOT NULL DEFAULT 0,
+  `theme_kind`                enum('OP','ED','INSERT') NOT NULL,
+  `seq`                       tinyint unsigned NOT NULL,
+  `role_code`                 varchar(64)      NOT NULL DEFAULT 'VOCALS',
+  `singer_seq`                tinyint unsigned NOT NULL,
+  `billing_kind`              enum('PERSON','CHARACTER_WITH_CV') NOT NULL,
+  `person_alias_id`           int              DEFAULT NULL,
+  `character_alias_id`        int              DEFAULT NULL,
+  `voice_person_alias_id`     int              DEFAULT NULL,
+  `slash_person_alias_id`     int              DEFAULT NULL,
+  `slash_character_alias_id`  int              DEFAULT NULL,
+  `slash_voice_person_alias_id` int            DEFAULT NULL,
+  `preceding_separator`       varchar(8)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `affiliation_text`          varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `cv_label`                  varchar(8)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `notes`                     text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`                varchar(64)      DEFAULT NULL,
+  `updated_by`                varchar(64)      DEFAULT NULL,
+  PRIMARY KEY (`episode_id`, `is_broadcast_only`, `theme_kind`, `seq`, `role_code`, `singer_seq`),
+  KEY `ix_etss_role`            (`role_code`),
+  KEY `ix_etss_person`          (`person_alias_id`),
+  KEY `ix_etss_character`       (`character_alias_id`),
+  KEY `ix_etss_voice`           (`voice_person_alias_id`),
+  KEY `ix_etss_slash_person`    (`slash_person_alias_id`),
+  KEY `ix_etss_slash_character` (`slash_character_alias_id`),
+  KEY `ix_etss_slash_voice`     (`slash_voice_person_alias_id`),
+  CONSTRAINT `ck_etss_seq_pos` CHECK (`singer_seq` >= 1),
+  CONSTRAINT `ck_etss_kind_columns` CHECK (
+       (`billing_kind` = 'PERSON'
+          AND `person_alias_id`       IS NOT NULL
+          AND `character_alias_id`    IS NULL
+          AND `voice_person_alias_id` IS NULL
+          AND `slash_character_alias_id` IS NULL
+          AND `slash_voice_person_alias_id` IS NULL)
+    OR (`billing_kind` = 'CHARACTER_WITH_CV'
+          AND `character_alias_id`    IS NOT NULL
+          AND `voice_person_alias_id` IS NOT NULL
+          AND `person_alias_id`       IS NULL
+          AND `slash_person_alias_id` IS NULL)
+  ),
+  CONSTRAINT `fk_etss_theme_song`      FOREIGN KEY (`episode_id`, `is_broadcast_only`, `theme_kind`, `seq`)
+                                       REFERENCES `episode_theme_songs` (`episode_id`, `is_broadcast_only`, `theme_kind`, `seq`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_etss_role`            FOREIGN KEY (`role_code`)                REFERENCES `roles`             (`role_code`)         ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_etss_person`          FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_etss_character`       FOREIGN KEY (`character_alias_id`)       REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_etss_voice`           FOREIGN KEY (`voice_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_etss_slash_person`    FOREIGN KEY (`slash_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_etss_slash_character` FOREIGN KEY (`slash_character_alias_id`) REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_etss_slash_voice`     FOREIGN KEY (`slash_voice_person_alias_id`) REFERENCES `person_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -3296,6 +3368,8 @@ CREATE TABLE `song_recording_singers` (
   `slash_voice_person_alias_id` int            DEFAULT NULL,
   `preceding_separator`       varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `affiliation_text`          varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- CHARACTER_WITH_CV 行の声優の前に置く記号（「キャラ(CV:声優)」の "CV:" を初出盤の表記どおりに。例: "CV."）。NULL なら "CV:"。
+  `cv_label`                  varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   -- PERSON 行の名義がユニット名義のとき、表示でユニット名の後ろにメンバーを括弧書きで展開するか（1=展開）。
   -- 同じユニットでも歌の行では展開し、コーラスの行では名前だけ出す、のように行ごとに選ぶ。
   `expand_unit_members`       tinyint(1)       NOT NULL DEFAULT 0,

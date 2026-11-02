@@ -704,6 +704,7 @@ public partial class SongsEditorForm : Form
                     SlashVoiceDisplay = s.SlashVoicePersonAliasId.HasValue ? await _personAliasesRepo.GetDisplayNameAsync(s.SlashVoicePersonAliasId.Value) : null,
                     PrecedingSeparator = s.PrecedingSeparator,
                     AffiliationText = s.AffiliationText,
+                    CvLabel = s.CvLabel,
                     ExpandUnitMembers = s.ExpandUnitMembers,
                     Notes = s.Notes
                 });
@@ -729,6 +730,7 @@ public partial class SongsEditorForm : Form
                 SlashVoicePersonAliasId = l.BillingKind == SingerBillingKind.CharacterWithCv ? l.SlashVoicePersonAliasId : null,
                 PrecedingSeparator = i == 0 ? null : l.PrecedingSeparator,
                 AffiliationText = l.AffiliationText,
+                CvLabel = l.BillingKind == SingerBillingKind.CharacterWithCv ? l.CvLabel : null,
                 ExpandUnitMembers = l.BillingKind == SingerBillingKind.Person && l.ExpandUnitMembers,
                 Notes = l.Notes
             }).ToList();

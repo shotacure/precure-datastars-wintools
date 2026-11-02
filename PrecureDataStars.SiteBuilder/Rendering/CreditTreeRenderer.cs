@@ -297,7 +297,7 @@ internal sealed class CreditTreeRenderer
                     foreach (var siblingRole in cardRoles)
                     {
                         if (string.IsNullOrEmpty(siblingRole.RoleCode)) continue;
-                        var tpl = _ctx.RoleTemplateResolver.Resolve(siblingRole.RoleCode!, resolveSeriesId);
+                        var tpl = _ctx.RoleTemplateResolver.Resolve(siblingRole.RoleCode!, resolveSeriesId, credit.EpisodeId);
                         string? template = tpl?.FormatTemplate;
                         if (string.IsNullOrWhiteSpace(template)) continue;
                         // 軽量検出：テンプレ文字列に {ROLE:<CODE>. が含まれる先で <CODE> を抜き出す。
@@ -637,7 +637,7 @@ internal sealed class CreditTreeRenderer
         string? contentHeaderOverride = null;
         if (!string.IsNullOrEmpty(roleCode))
         {
-            var tpl = _ctx.RoleTemplateResolver.Resolve(roleCode!, resolveSeriesId);
+            var tpl = _ctx.RoleTemplateResolver.Resolve(roleCode!, resolveSeriesId, scopeKind == "EPISODE" ? episodeId : null);
             template = tpl?.FormatTemplate;
             contentHeaderOverride = string.IsNullOrEmpty(tpl?.ContentHeaderOverride) ? null : tpl!.ContentHeaderOverride;
         }

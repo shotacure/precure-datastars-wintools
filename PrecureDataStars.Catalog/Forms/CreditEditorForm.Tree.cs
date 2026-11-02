@@ -139,7 +139,7 @@ public partial class CreditEditorForm
                             {
                                 seriesIdForResolve = null;
                             }
-                            var tpl = await _roleTemplatesRepo.ResolveAsync(role.RoleCode!, seriesIdForResolve);
+                            var tpl = await _roleTemplatesRepo.ResolveAsync(role.RoleCode!, seriesIdForResolve, episodeId: _currentCredit?.EpisodeId);
                             int columns = ExtractThemeSongsColumns(tpl?.FormatTemplate);
                             if (columns >= 2) roleNote = $"  [横 {columns} カラム表示指定]";
                         }

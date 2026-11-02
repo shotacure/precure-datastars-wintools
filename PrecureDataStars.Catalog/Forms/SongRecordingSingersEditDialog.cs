@@ -17,7 +17,7 @@ public partial class SongRecordingSingersEditDialog : Form
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     private readonly BindingList<LineRow> _lines = new();
 
-    /// <summary>「2人目のCV」の欄を使うか。2 人目の声優の列を持つ表（song_recording_singers）の編集でだけ true。</summary>
+    /// <summary>「2人目のCV」と「記号」（声優の前の記号）の欄を使うか。その列を持つ表（song_recording_singers）の編集でだけ true。</summary>
     private readonly bool _slashVoiceEnabled;
 
     /// <summary>編集確定時の連名行リスト（OK で閉じたとき有効）。</summary>
@@ -27,7 +27,7 @@ public partial class SongRecordingSingersEditDialog : Form
     /// <param name="personAliasesRepo">人物名義の選択に使うリポジトリ。</param>
     /// <param name="characterAliasesRepo">キャラ名義の選択に使うリポジトリ。</param>
     /// <param name="slashVoiceEnabled">
-    /// 「2人目のCV」の欄を出すか。2 人目の声優の列を持たない表（劇伴の歌い手 bgm_cue_singers）の編集では false にして欄を隠す。
+    /// 「2人目のCV」と「記号」の欄を出すか。その列を持たない表（劇伴の歌い手 bgm_cue_singers）の編集では false にして欄を隠す。
     /// </param>
     public SongRecordingSingersEditDialog(
         IReadOnlyList<LineDto> initialLines,
@@ -42,6 +42,7 @@ public partial class SongRecordingSingersEditDialog : Form
         InitializeComponent();
         gridLines.DataSource = _lines;
         lblSlashVoice.Visible = txtSlashVoiceDisplay.Visible = btnPickSlashVoice.Visible = btnClearSlashVoice.Visible = _slashVoiceEnabled;
+        lblCvLabel.Visible = txtCvLabel.Visible = _slashVoiceEnabled;
 
         byte seq = 1;
         foreach (var l in initialLines)
@@ -64,6 +65,7 @@ public partial class SongRecordingSingersEditDialog : Form
                 SlashVoiceDisplay = l.SlashVoiceDisplay,
                 Separator = l.PrecedingSeparator,
                 AffiliationText = l.AffiliationText,
+                CvLabel = l.CvLabel,
                 ExpandUnitMembers = l.ExpandUnitMembers,
                 Notes = l.Notes
             });
@@ -126,6 +128,7 @@ public partial class SongRecordingSingersEditDialog : Form
         txtCharacterDisplay.Enabled = btnPickCharacter.Enabled = !isPerson;
         txtVoiceDisplay.Enabled = btnPickVoice.Enabled = !isPerson;
         txtSlashVoiceDisplay.Enabled = btnPickSlashVoice.Enabled = btnClearSlashVoice.Enabled = !isPerson && _slashVoiceEnabled;
+        txtCvLabel.Enabled = !isPerson && _slashVoiceEnabled;
         txtSlashCharacterDisplay.Enabled = btnPickSlashCharacter.Enabled = btnClearSlashCharacter.Enabled = !isPerson;
         // メンバー展開はユニット名義（PERSON 主名義）の行だけで意味を持つ。
         chkExpandUnit.Enabled = isPerson;
@@ -157,6 +160,7 @@ public partial class SongRecordingSingersEditDialog : Form
             txtSeparator.Text = row.Separator ?? "";
             txtSeparator.Enabled = row.Seq >= 2;
             txtAffiliation.Text = row.AffiliationText ?? "";
+            txtCvLabel.Text = row.CvLabel ?? "";
             chkExpandUnit.Checked = row.ExpandUnitMembers;
             txtNotes.Text = row.Notes ?? "";
         }
@@ -173,6 +177,7 @@ public partial class SongRecordingSingersEditDialog : Form
             txtSeparator.Text = "";
             txtSeparator.Enabled = true;
             txtAffiliation.Text = "";
+            txtCvLabel.Text = "";
             chkExpandUnit.Checked = false;
             txtNotes.Text = "";
         }
@@ -207,6 +212,7 @@ public partial class SongRecordingSingersEditDialog : Form
         row.SlashVoicePersonAliasId = updated.SlashVoicePersonAliasId; row.SlashVoiceDisplay = updated.SlashVoiceDisplay;
         row.Separator = row.Seq >= 2 ? updated.Separator : null;
         row.AffiliationText = updated.AffiliationText;
+        row.CvLabel = updated.CvLabel;
         row.ExpandUnitMembers = updated.ExpandUnitMembers;
         row.Notes = updated.Notes;
         row.RecomputeFullDisplay();
@@ -263,6 +269,9 @@ public partial class SongRecordingSingersEditDialog : Form
                 line.SlashVoicePersonAliasId = svid;
                 line.SlashVoiceDisplay = txtSlashVoiceDisplay.Text;
             }
+            // 声優の前の記号（任意。空なら既定の "CV:"）。
+            if (_slashVoiceEnabled && !string.IsNullOrWhiteSpace(txtCvLabel.Text))
+                line.CvLabel = txtCvLabel.Text.Trim();
         }
 
         line.Separator = string.IsNullOrWhiteSpace(txtSeparator.Text) ? null : txtSeparator.Text;
@@ -320,6 +329,7 @@ public partial class SongRecordingSingersEditDialog : Form
             SlashVoiceDisplay = l.SlashVoiceDisplay,
             PrecedingSeparator = l.Separator,
             AffiliationText = l.AffiliationText,
+            CvLabel = l.CvLabel,
             ExpandUnitMembers = l.ExpandUnitMembers,
             Notes = l.Notes
         }).ToList();
@@ -347,6 +357,8 @@ public partial class SongRecordingSingersEditDialog : Form
         public string? SlashVoiceDisplay { get; set; }
         public string? PrecedingSeparator { get; set; }
         public string? AffiliationText { get; set; }
+        /// <summary>CHARACTER_WITH_CV 行の声優の前の記号（例: "CV."、null なら既定の "CV:"）。</summary>
+        public string? CvLabel { get; set; }
         /// <summary>PERSON 主名義がユニット名義のとき、表示でメンバーを展開するか。</summary>
         public bool ExpandUnitMembers { get; set; }
         public string? Notes { get; set; }
@@ -371,6 +383,7 @@ public partial class SongRecordingSingersEditDialog : Form
         public string? SlashVoiceDisplay { get; set; }
         public string? Separator { get; set; }
         public string? AffiliationText { get; set; }
+        public string? CvLabel { get; set; }
         public bool ExpandUnitMembers { get; set; }
         public string? Notes { get; set; }
 
@@ -396,8 +409,8 @@ public partial class SongRecordingSingersEditDialog : Form
                 if (!string.IsNullOrEmpty(SlashCharacterDisplay)) sb.Append(" / ").Append(SlashCharacterDisplay);
                 if (!string.IsNullOrEmpty(VoiceDisplay))
                 {
-                    // 2 人目の声優がいれば「(CV:声優1 / 声優2)」。
-                    sb.Append("(CV:").Append(VoiceDisplay);
+                    // 2 人目の声優がいれば「(CV:声優1 / 声優2)」。記号は行の記号（無ければ "CV:"）。
+                    sb.Append('(').Append(SongRecordingSingerDisplay.CvLabelOf(CvLabel)).Append(VoiceDisplay);
                     if (!string.IsNullOrEmpty(SlashVoiceDisplay)) sb.Append(" / ").Append(SlashVoiceDisplay);
                     sb.Append(')');
                 }

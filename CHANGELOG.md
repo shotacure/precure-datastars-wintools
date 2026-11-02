@@ -4,6 +4,12 @@
 
 ### 開発中（次回リリース）
 
+- **クレジット：TV の主題歌のカードを画面の文字どおりに描けるようにした**（`role_templates.episode_id`・`song_recording_singers.cv_label`・`episode_theme_song_singers`・`RoleTemplateResolver`・`RoleTemplatesRepository`・`SongRecordingSingersRepository`・`EpisodeThemeSongSingersRepository`・`ThemeSongsHandler`・`RoleTemplateRenderer`・`SingerHtmlBuilder`・`CreditText`・`CreditMastersEditorForm.RoleTabs`・`SongRecordingSingersEditDialog`。マイグレーション `v1.20.0_theme_song_credit_as_printed.sql`）
+  - 役職テンプレをエピソード別にも持てるようにした。同じシリーズの中で回によって画面の書式が違うとき、その回だけのテンプレを使う（(role_code, episode_id) → (role_code, series_id) → 既定の順）。Catalog の「役職テンプレート」タブに「話数（0=全話）」の欄を足した
+  - 歌唱者の「キャラ(CV:声優)」の声優の前の記号を `song_recording_singers.cv_label` で持つようにした（NULL なら「CV:」）。Catalog の歌唱者編集に「記号」の欄を足した
+  - 曲のループ `{#THEME_SONGS}` に `cv="…"` を足した。クレジットの主題歌のカードの歌唱・コーラスの記号を、歌唱者の行の記号に代えて画面の記号にする
+  - エピソードのクレジットに出た歌唱者を持つ表 `episode_theme_song_singers` を足した。行がある主題歌は、クレジットのカードの歌・コーラスを録音の歌唱者ではなくこの表で描く（主題歌・挿入歌の一覧や曲のページは録音の歌唱者のまま）。ヘルスチェックの孤立名義の検査（A2・A4）にこの表を足した
+
 - **クレジット：声の出演で前の行と同じ役名・同じ声優が続くときの画面の組み方を持つ欄 `same_character_layout` / `same_person_layout` を足した**（`credit_block_entries`、マイグレーション `v1.20.0_add_entry_same_layout.sql`）：毎行書く（`REPEAT`）・最初の行に 1 回だけ書く（`TOP`）・縦の真ん中に 1 回だけ書く（`MIDDLE`）を、続くまとまりの 2 行目以降に持つ。サイトのクレジット（`CreditTreeRenderer`）と Catalog のプレビュー（`CreditPreviewRenderer`）は、同じ役名の 2 行目以降を空ける・同じ声優を 1 つの升にまとめるのを文字が同じかどうかで決めていたのをやめ、この値で描き分ける。Catalog の一括入力は行頭の `^{役名の形|声優の形} ` で読み書きする。ヘルスチェックに付け忘れ・付け違いの検査 D8 を足した
 
 - **DB・サイト・Catalog：プリキュアのキーカラーをグラデーションでも持てるようにした**（`precures.key_color_gradient`・`KeyColorGradient`・`KeyColorBadge`・`OgCardRenderer`・`CreditMastersEditorForm.PrecureTabs`。マイグレーション `v1.20.0_precures_key_color_gradient.sql`）

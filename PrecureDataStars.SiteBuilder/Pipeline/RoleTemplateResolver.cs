@@ -3,7 +3,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.SiteBuilder.Pipeline;
 
 /// <summary>
-/// 役職テンプレ（<c>role_templates</c>）の (role_code, series_id) → <see cref="RoleTemplate"/> 解決を
+/// 役職テンプレ（<c>role_templates</c>）の (role_code, episode_id / series_id) → <see cref="RoleTemplate"/> 解決を
 /// メモリ辞書で同期実行するヘルパ。SiteDataLoader が起動時に
 /// <see cref="Data.Repositories.RoleTemplatesRepository.GetAllAsync"/> を 1 度呼んで全件取得した結果を
 /// 渡して構築する。
@@ -16,21 +16,28 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// </summary>
 public sealed class RoleTemplateResolver
 {
+    private readonly IReadOnlyDictionary<(string RoleCode, int EpisodeId), RoleTemplate> _byEpisode;
     private readonly IReadOnlyDictionary<(string RoleCode, int SeriesId), RoleTemplate> _bySeries;
     private readonly IReadOnlyDictionary<string, RoleTemplate> _byDefault;
 
     /// <summary>
-    /// 全 role_templates 行を受け取り、(role_code, series_id) 別と既定 (series_id=NULL) 別の 2 段辞書を構築する。
+    /// 全 role_templates 行を受け取り、(role_code, episode_id) 別・(role_code, series_id) 別・既定 (series_id=NULL) 別の 3 段辞書を構築する。
     /// 同一キーで重複がある場合は最初の 1 件を採用する（マスタ UNIQUE で実質発生しない想定）。
     /// </summary>
     public RoleTemplateResolver(IEnumerable<RoleTemplate> allTemplates)
     {
+        var byEpisode = new Dictionary<(string, int), RoleTemplate>();
         var bySeries = new Dictionary<(string, int), RoleTemplate>();
         var byDefault = new Dictionary<string, RoleTemplate>(StringComparer.Ordinal);
         foreach (var t in allTemplates)
         {
             if (string.IsNullOrEmpty(t.RoleCode)) continue;
-            if (t.SeriesId is int sid)
+            if (t.EpisodeId is int eid)
+            {
+                var key = (t.RoleCode, eid);
+                if (!byEpisode.ContainsKey(key)) byEpisode[key] = t;
+            }
+            else if (t.SeriesId is int sid)
             {
                 var key = (t.RoleCode, sid);
                 if (!bySeries.ContainsKey(key)) bySeries[key] = t;
@@ -40,18 +47,20 @@ public sealed class RoleTemplateResolver
                 if (!byDefault.ContainsKey(t.RoleCode)) byDefault[t.RoleCode] = t;
             }
         }
+        _byEpisode = byEpisode;
         _bySeries = bySeries;
         _byDefault = byDefault;
     }
 
     /// <summary>
-    /// (role_code, series_id) で見つかればそれを返し、無ければ (role_code, NULL) の既定テンプレを返す。
+    /// (role_code, episode_id) で見つかればそれを、無ければ (role_code, series_id) を、それも無ければ (role_code, NULL) の既定テンプレを返す。
     /// 既定も無ければ null。<see cref="Data.Repositories.RoleTemplatesRepository.ResolveAsync"/> と同じ
-    /// 優先順位ルール（シリーズ別オーバーライド優先 → 既定フォールバック）。
+    /// 優先順位ルール（エピソード別 → シリーズ別オーバーライド → 既定フォールバック）。
     /// </summary>
-    public RoleTemplate? Resolve(string roleCode, int? seriesId)
+    public RoleTemplate? Resolve(string roleCode, int? seriesId, int? episodeId = null)
     {
         if (string.IsNullOrEmpty(roleCode)) return null;
+        if (episodeId is int eid && _byEpisode.TryGetValue((roleCode, eid), out var epHit)) return epHit;
         if (seriesId is int sid && _bySeries.TryGetValue((roleCode, sid), out var hit)) return hit;
         return _byDefault.TryGetValue(roleCode, out var def) ? def : null;
     }

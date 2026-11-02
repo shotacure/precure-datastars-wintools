@@ -38,6 +38,8 @@ namespace PrecureDataStars.TemplateRendering;
 ///     （旧 <c>{THEME_SONGS}</c> プレースホルダにも効く）。
 ///     曲名（<c>{SONG_TITLE}</c>）は、画面の表記（<c>title_credited_text</c>）があれば文字だけその表記で出す（誤記があるときは使わない）。
 ///     <c>merge_same_song=1</c> を書くと、同じ曲の録音が続く行を 1 曲にまとめる（歌唱は歌い手を改行で並べ、版の名前は出さない）。
+///     <c>cv="CV."</c> のように書くと、歌唱・コーラスの「キャラ(CV:声優)」の声優の前の記号を、歌唱者の行の記号（盤の表記）に代えてその文字にする。
+///     エピソードのクレジットに出た歌唱者（<c>episode_theme_song_singers</c>）がある主題歌は、歌唱・コーラスを録音の歌唱者ではなくその行で描く。
 ///     内側で <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> / <c>{COMPOSER}</c> /
 ///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{CHORUS}</c> / <c>{VARIANT_LABEL}</c> / <c>{SONG_SERIES_TITLE}</c> の楽曲スコーププレースホルダが
 ///     解決可能（<c>{CHORUS}</c> は <c>BACKING_VOCALS</c> 役職の連名、不在時は空）。
@@ -210,7 +212,10 @@ public static class RoleTemplateRenderer
                                            .Select(s => s.ToUpperInvariant())
                                            .ToArray();
                         }
-                        var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, lookup, ct).ConfigureAwait(false);
+                        // cv="…"：歌唱・コーラスの声優の前に置く記号を、歌唱者の行の記号（盤の表記）に代えて画面の記号にする。
+                        string cvRaw = tsLoop.GetOption("cv", "");
+                        var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, lookup, ct,
+                            cvLabelOverride: string.IsNullOrEmpty(cvRaw) ? null : cvRaw).ConfigureAwait(false);
                         // seq=N / seq=N-M：同じ区分の中で番号（episode_theme_songs / series_theme_songs.seq）が範囲に入る曲だけを出す。
                         // 「テーマソング」と「挿入歌」のように、同じ挿入歌の区分の曲を別々の役職の欄に分けて出す画面用。
                         if (TryParseSeqRange(tsLoop.GetOption("seq", ""), out int seqFrom, out int seqTo))

@@ -7,9 +7,9 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// role_templates テーブル（役職テンプレート）の CRUD リポジトリ。
-/// 既定テンプレ（全シリーズ共通、series_id=NULL）とシリーズ別オーバーライド（series_id 非 NULL）を
-/// 単一テーブルで管理する。(role_code, series_id) で UNIQUE。
-/// 解決ロジック：<see cref="ResolveAsync"/> が「(role_code, series_id) で検索 →
+/// 既定テンプレ（全シリーズ共通、series_id=NULL）とシリーズ別オーバーライド（series_id 非 NULL）、
+/// エピソード別オーバーライド（episode_id 非 NULL）を単一テーブルで管理する。(role_code, series_id, episode_id) で UNIQUE。
+/// 解決ロジック：<see cref="ResolveAsync"/> が「(role_code, episode_id) で検索 → (role_code, series_id) →
 /// 無ければ (role_code, NULL) フォールバック」のロジックを 1 SQL 内で実行する。
 /// </summary>
 public sealed class RoleTemplatesRepository : RepositoryBase
@@ -24,6 +24,7 @@ public sealed class RoleTemplatesRepository : RepositoryBase
               template_id     AS TemplateId,
               role_code       AS RoleCode,
               series_id       AS SeriesId,
+              episode_id      AS EpisodeId,
               format_template AS FormatTemplate,
               content_header_override AS ContentHeaderOverride,
               notes           AS Notes,
@@ -32,7 +33,7 @@ public sealed class RoleTemplatesRepository : RepositoryBase
               created_by      AS CreatedBy,
               updated_by      AS UpdatedBy
             FROM role_templates
-            ORDER BY role_code, IFNULL(series_id, 0);
+            ORDER BY role_code, IFNULL(series_id, 0), IFNULL(episode_id, 0);
             """;
 
         return await QueryListAsync<RoleTemplate>(sql, ct: ct).ConfigureAwait(false);
@@ -46,6 +47,7 @@ public sealed class RoleTemplatesRepository : RepositoryBase
               template_id     AS TemplateId,
               role_code       AS RoleCode,
               series_id       AS SeriesId,
+              episode_id      AS EpisodeId,
               format_template AS FormatTemplate,
               content_header_override AS ContentHeaderOverride,
               notes           AS Notes,
@@ -55,7 +57,7 @@ public sealed class RoleTemplatesRepository : RepositoryBase
               updated_by      AS UpdatedBy
             FROM role_templates
             WHERE role_code = @roleCode
-            ORDER BY IFNULL(series_id, 0);
+            ORDER BY IFNULL(series_id, 0), IFNULL(episode_id, 0);
             """;
         return await QueryListAsync<RoleTemplate>(sql, new { roleCode }, ct).ConfigureAwait(false);
     }
@@ -68,6 +70,7 @@ public sealed class RoleTemplatesRepository : RepositoryBase
               template_id     AS TemplateId,
               role_code       AS RoleCode,
               series_id       AS SeriesId,
+              episode_id      AS EpisodeId,
               format_template AS FormatTemplate,
               content_header_override AS ContentHeaderOverride,
               notes           AS Notes,
@@ -81,18 +84,20 @@ public sealed class RoleTemplatesRepository : RepositoryBase
         return await QuerySingleOrDefaultAsync<RoleTemplate>(sql, new { templateId }, ct).ConfigureAwait(false);
     }
 
-    /// <summary>テンプレ解決：(role_code, series_id) で 1 件、無ければ (role_code, NULL) で 1 件、 それも無ければ null を返す。クレジットレンダリング時に呼ぶ専用メソッド。</summary>
+    /// <summary>テンプレ解決：(role_code, episode_id) で 1 件、無ければ (role_code, series_id) で 1 件、無ければ (role_code, NULL) で 1 件、 それも無ければ null を返す。クレジットレンダリング時に呼ぶ専用メソッド。</summary>
     /// <param name="roleCode">役職コード。</param>
     /// <param name="seriesId">シリーズ ID（NULL なら既定のみを引く）。</param>
-    public async Task<RoleTemplate?> ResolveAsync(string roleCode, int? seriesId, CancellationToken ct = default)
+    /// <param name="episodeId">エピソード ID（エピソード単位のクレジットのとき。NULL ならエピソード別のテンプレを引かない）。</param>
+    public async Task<RoleTemplate?> ResolveAsync(string roleCode, int? seriesId, CancellationToken ct = default, int? episodeId = null)
     {
-        // (role_code, series_id) を優先、無ければ (role_code, NULL) を返す。1 SQL で済ませるために
+        // (role_code, episode_id) → (role_code, series_id) → (role_code, NULL) の順。1 SQL で済ませるために
         // UNION ALL + 「優先順位列」でソート → 先頭 1 件を取る。
         const string sql = """
             SELECT
               template_id     AS TemplateId,
               role_code       AS RoleCode,
               series_id       AS SeriesId,
+              episode_id      AS EpisodeId,
               format_template AS FormatTemplate,
               content_header_override AS ContentHeaderOverride,
               notes           AS Notes,
@@ -102,21 +107,24 @@ public sealed class RoleTemplatesRepository : RepositoryBase
               updated_by      AS UpdatedBy,
               priority
             FROM (
+                SELECT *, 0 AS priority FROM role_templates
+                  WHERE role_code = @roleCode AND episode_id = @episodeId
+                UNION ALL
                 SELECT *, 1 AS priority FROM role_templates
-                  WHERE role_code = @roleCode AND series_id = @seriesId
+                  WHERE role_code = @roleCode AND series_id = @seriesId AND episode_id IS NULL
                 UNION ALL
                 SELECT *, 2 AS priority FROM role_templates
-                  WHERE role_code = @roleCode AND series_id IS NULL
+                  WHERE role_code = @roleCode AND series_id IS NULL AND episode_id IS NULL
             ) t
             ORDER BY priority
             LIMIT 1;
             """;
-        return await QuerySingleOrDefaultAsync<RoleTemplate>(sql, new { roleCode, seriesId }, ct).ConfigureAwait(false);
+        return await QuerySingleOrDefaultAsync<RoleTemplate>(sql, new { roleCode, seriesId, episodeId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// UPSERT：(role_code, series_id) のキーで衝突したら format_template / notes を更新する。
-    /// MySQL では UNIQUE KEY (role_code, series_id) があり、series_id NULL も含めて検出する設計のため、
+    /// UPSERT：(role_code, series_id, episode_id) のキーで衝突したら format_template / notes を更新する。
+    /// MySQL では UNIQUE KEY (role_code, series_id, episode_id) があり、NULL も含めて検出する設計のため、
     /// アプリ側で「既存 1 件確認 → INSERT or UPDATE」の 2 段階で実装する（NULL を含む UNIQUE は
     /// MySQL 8.0 で複数行を許容する仕様の都合）。
     /// </summary>
@@ -126,12 +134,14 @@ public sealed class RoleTemplatesRepository : RepositoryBase
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
-            // 既存検索（series_id が NULL の場合は IS NULL で検索する必要がある）
+            // 既存検索（series_id / episode_id が NULL の場合は IS NULL で検索する必要がある）
             const string findSql = """
                 SELECT template_id FROM role_templates
                  WHERE role_code = @RoleCode
                    AND ((@SeriesId IS NULL AND series_id IS NULL)
                      OR (@SeriesId IS NOT NULL AND series_id = @SeriesId))
+                   AND ((@EpisodeId IS NULL AND episode_id IS NULL)
+                     OR (@EpisodeId IS NOT NULL AND episode_id = @EpisodeId))
                  LIMIT 1;
                 """;
             int? existingId = await conn.ExecuteScalarAsync<int?>(new CommandDefinition(findSql, t, transaction: tx, cancellationToken: ct));
@@ -162,9 +172,9 @@ public sealed class RoleTemplatesRepository : RepositoryBase
                 // INSERT
                 const string ins = """
                     INSERT INTO role_templates
-                      (role_code, series_id, format_template, content_header_override, notes, created_by, updated_by)
+                      (role_code, series_id, episode_id, format_template, content_header_override, notes, created_by, updated_by)
                     VALUES
-                      (@RoleCode, @SeriesId, @FormatTemplate, @ContentHeaderOverride, @Notes, @CreatedBy, @UpdatedBy);
+                      (@RoleCode, @SeriesId, @EpisodeId, @FormatTemplate, @ContentHeaderOverride, @Notes, @CreatedBy, @UpdatedBy);
                     SELECT LAST_INSERT_ID();
                     """;
                 int newId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(ins, t, transaction: tx, cancellationToken: ct));

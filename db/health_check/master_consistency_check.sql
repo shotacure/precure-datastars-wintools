@@ -40,7 +40,7 @@ ORDER BY p.person_id;
 
 -- A2: person_alias がどこからも参照されていない孤立 alias
 --   件数 > 0 の意味: 「person_aliases 行はあるが、person_alias_persons /
---   credit_block_entries / song_credits / song_recording_singers /
+--   credit_block_entries / song_credits / song_recording_singers / episode_theme_song_singers /
 --   bgm_cue_credits / bgm_cue_singers / musical_work_credits からも参照されていない」状態。
 --   ただし「後で使う目的で先行登録した名義」は意図的に温存されているため、
 --   この結果に出てくるすべてが異常とは限らない。マスタ管理画面で確認して、
@@ -52,6 +52,10 @@ WHERE pa.is_deleted = 0
   AND NOT EXISTS (SELECT 1 FROM credit_block_entries   p WHERE p.person_alias_id       = pa.alias_id)
   AND NOT EXISTS (SELECT 1 FROM song_credits           p WHERE p.person_alias_id       = pa.alias_id)
   AND NOT EXISTS (SELECT 1 FROM song_recording_singers p WHERE p.person_alias_id       = pa.alias_id
+                                                            OR p.voice_person_alias_id = pa.alias_id
+                                                            OR p.slash_person_alias_id = pa.alias_id
+                                                            OR p.slash_voice_person_alias_id = pa.alias_id)
+  AND NOT EXISTS (SELECT 1 FROM episode_theme_song_singers p WHERE p.person_alias_id   = pa.alias_id
                                                             OR p.voice_person_alias_id = pa.alias_id
                                                             OR p.slash_person_alias_id = pa.alias_id
                                                             OR p.slash_voice_person_alias_id = pa.alias_id)
@@ -77,13 +81,15 @@ ORDER BY c.character_id;
 
 -- A4: character_alias がどこからも参照されていない孤立 alias
 --   件数 > 0 の意味: 「character_aliases 行はあるが、credit_block_entries /
---   song_recording_singers / bgm_cue_singers / precures / person_alias_members からも
+--   song_recording_singers / episode_theme_song_singers / bgm_cue_singers / precures / person_alias_members からも
 --   参照されていない」状態。マスタ汚染の典型パターン。
 SELECT 'A4 orphan character_aliases' AS check_name, ca.alias_id, ca.character_id, ca.name
 FROM character_aliases ca
 WHERE ca.is_deleted = 0
   AND NOT EXISTS (SELECT 1 FROM credit_block_entries   p WHERE p.character_alias_id        = ca.alias_id)
   AND NOT EXISTS (SELECT 1 FROM song_recording_singers p WHERE p.character_alias_id        = ca.alias_id
+                                                            OR p.slash_character_alias_id  = ca.alias_id)
+  AND NOT EXISTS (SELECT 1 FROM episode_theme_song_singers p WHERE p.character_alias_id    = ca.alias_id
                                                             OR p.slash_character_alias_id  = ca.alias_id)
   AND NOT EXISTS (SELECT 1 FROM bgm_cue_singers        p WHERE p.character_alias_id        = ca.alias_id
                                                             OR p.slash_character_alias_id  = ca.alias_id)
@@ -422,6 +428,7 @@ UNION ALL SELECT 'A2 orphan person_aliases',           COUNT(*) FROM person_alia
       AND NOT EXISTS (SELECT 1 FROM credit_block_entries   p WHERE p.person_alias_id       = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM song_credits           p WHERE p.person_alias_id       = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM song_recording_singers p WHERE p.person_alias_id       = pa.alias_id OR p.voice_person_alias_id = pa.alias_id OR p.slash_person_alias_id = pa.alias_id OR p.slash_voice_person_alias_id = pa.alias_id)
+      AND NOT EXISTS (SELECT 1 FROM episode_theme_song_singers p WHERE p.person_alias_id   = pa.alias_id OR p.voice_person_alias_id = pa.alias_id OR p.slash_person_alias_id = pa.alias_id OR p.slash_voice_person_alias_id = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM bgm_cue_credits        p WHERE p.person_alias_id       = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM bgm_cue_singers        p WHERE p.person_alias_id       = pa.alias_id OR p.voice_person_alias_id = pa.alias_id OR p.slash_person_alias_id = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM musical_work_credits   p WHERE p.person_alias_id       = pa.alias_id)
@@ -431,6 +438,7 @@ UNION ALL SELECT 'A4 orphan character_aliases',        COUNT(*) FROM character_a
     WHERE ca.is_deleted = 0
       AND NOT EXISTS (SELECT 1 FROM credit_block_entries   p WHERE p.character_alias_id        = ca.alias_id)
       AND NOT EXISTS (SELECT 1 FROM song_recording_singers p WHERE p.character_alias_id        = ca.alias_id OR p.slash_character_alias_id = ca.alias_id)
+      AND NOT EXISTS (SELECT 1 FROM episode_theme_song_singers p WHERE p.character_alias_id    = ca.alias_id OR p.slash_character_alias_id = ca.alias_id)
       AND NOT EXISTS (SELECT 1 FROM bgm_cue_singers        p WHERE p.character_alias_id        = ca.alias_id OR p.slash_character_alias_id = ca.alias_id)
       AND NOT EXISTS (SELECT 1 FROM precures               p WHERE p.pre_transform_alias_id    = ca.alias_id OR p.transform_alias_id = ca.alias_id OR p.transform2_alias_id = ca.alias_id OR p.alt_form_alias_id = ca.alias_id)
       AND NOT EXISTS (SELECT 1 FROM person_alias_members   p WHERE p.member_character_alias_id = ca.alias_id)

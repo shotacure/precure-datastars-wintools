@@ -376,7 +376,8 @@ public sealed class SeriesGenerator
                 VoiceActorName = voiceActorName,
                 VoiceActorPersonId = precure.VoiceActorPersonId,
                 // バッジ地色（#RRGGBB）。未設定/不正値は後段でフォールバックバッジにする。
-                KeyColor = precure.KeyColor ?? ""
+                KeyColor = precure.KeyColor ?? "",
+                KeyColorGradient = precure.KeyColorGradient ?? ""
             };
         }
     }
@@ -789,7 +790,7 @@ public sealed class SeriesGenerator
                     : $"{baseName} (CV: {r.VoiceActorName})";
 
             // 地色 → 文字色・ボーダー色を解決。未設定/不正値は空文字（テンプレ側で無装飾バッジ）。
-            var (bg, fg, border) = KeyColorBadge.Resolve(r.KeyColor);
+            var (bg, fg, border) = KeyColorBadge.Resolve(r.KeyColor, r.KeyColorGradient);
 
             badges.Add(new PrecureBadge
             {
@@ -2075,6 +2076,8 @@ public sealed class SeriesGenerator
         public int? VoiceActorPersonId { get; set; }
         /// <summary>シリーズ一覧プリキュアバッジの地色（<c>#RRGGBB</c>。未設定または不正値は空文字）。</summary>
         public string KeyColor { get; set; } = "";
+        /// <summary>キーカラーのグラデーション（<c>precures.key_color_gradient</c>。無ければ空文字）。読める値ならバッジの地色はこちら。</summary>
+        public string KeyColorGradient { get; set; } = "";
         /// <summary>略記（変身後の名前から「キュア」を除いたもの。変身前の名前と CV を出さない）。映画の客演（親の TV シリーズが無い作品は全員）。</summary>
         public bool Abbreviated { get; set; }
         /// <summary>略記のとき、映画の公開の時点で最後に所属していた TV シリーズ（略記はこの単位で 1 行にまとめる）。</summary>
@@ -2095,7 +2098,7 @@ public sealed class SeriesGenerator
         public int CharacterId { get; set; }
         /// <summary>バッジ表示テキスト（「美墨なぎさ (CV: 本名陽子)」等）。</summary>
         public string Label { get; set; } = "";
-        /// <summary>地色（<c>#RRGGBB</c>）。空文字なら CSS 既定の淡色。</summary>
+        /// <summary>地色（<c>#RRGGBB</c>、グラデーションのプリキュアは <c>linear-gradient(...)</c>）。空文字なら CSS 既定の淡色。</summary>
         public string BackgroundColor { get; set; } = "";
         /// <summary>文字色（地色輝度から自動算出した暗/明グレー）。空文字なら CSS 既定。</summary>
         public string TextColor { get; set; } = "";

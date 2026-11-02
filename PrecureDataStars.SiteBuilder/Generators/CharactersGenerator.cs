@@ -432,11 +432,13 @@ public sealed class CharactersGenerator
         // 学校 / 学年・組 / 家業 / 専属声優）を追加で詰める。それ以外は null（テンプレ側で非表示）。
         PrecureProfileView? precureProfile = null;
         string keyColor = "";
+        string? keyColorGradient = null;
         if (string.Equals(character.CharacterKind, "PRECURE", StringComparison.Ordinal)
             && precureByCharacter.TryGetValue(character.CharacterId, out var precure))
         {
             precureProfile = BuildPrecureProfile(precure, aliasById, personsById);
             keyColor = precure.KeyColor ?? "";
+            keyColorGradient = precure.KeyColorGradient;
         }
 
         // 初登場：声の出演のクレジット（歌唱は含めない）のいちばん早い話。収録範囲外なら null。基本情報と OGP カードで使う。
@@ -512,7 +514,7 @@ public sealed class CharactersGenerator
             },
             OgType = "profile",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(character, content, aliasIds, firstAppearance, keyColor, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(character, content, aliasIds, firstAppearance, keyColor, keyColorGradient, _ctx.CreditCoverageLabel)
         };
         _page.RenderAndWrite(PathUtil.CharacterUrl(character.CharacterId), "characters", "characters-detail.sbn", content, layout);
     }
@@ -624,7 +626,8 @@ public sealed class CharactersGenerator
     /// <summary>
     /// キャラクター詳細ページの OGP カードを組み立てる（プロフィール組み）。
     /// 「名前 → 登場話数・映画本数 → 声優 → 登場した期間の年表 → 初登場」の順。
-    /// 色帯はプリキュアならイメージカラー（見える濃さに寄せる）、それ以外はキャラクターの藤色。透かしは出身作品の作品名。
+    /// 色帯はプリキュアならイメージカラー（見える濃さに寄せる。グラデーションのプリキュアは色帯と透かしをそのグラデーションで）、
+    /// それ以外はキャラクターの藤色。透かしは出身作品の作品名。
     /// </summary>
     private OgCardSpec BuildOgCard(
         Character character,
@@ -632,6 +635,7 @@ public sealed class CharactersGenerator
         IReadOnlyList<int> aliasIds,
         FirstAppearance? firstAppearance,
         string keyColor,
+        string? keyColorGradient,
         string coverageLabel)
     {
         var voiceActors = content.VoiceCastRows
@@ -676,6 +680,7 @@ public sealed class CharactersGenerator
             InlineFacts = facts,
             Facts = works,
             BandColorHex = bandColor,
+            BandGradient = OgCardColors.ForKeyColorGradient(keyColorGradient),
             Watermark = originTitle,
             FootFacts = firstAppearance is null
                 ? Array.Empty<OgCardFactLine>()

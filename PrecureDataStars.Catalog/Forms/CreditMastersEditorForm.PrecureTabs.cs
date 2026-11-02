@@ -9,6 +9,7 @@ using System.Windows.Forms;
 using PrecureDataStars.Catalog.Forms.Controls;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
+using PrecureDataStars.Data.Text;
 
 namespace PrecureDataStars.Catalog.Forms;
 
@@ -40,6 +41,10 @@ partial class CreditMastersEditorForm
     private Label lblPrVoiceActorName = null!;
     // 肌色ピッカー（HSL/RGB 両入力 + ΔE 評価バッジ込み UserControl）
     private SkinColorPickerControl skinColorPicker = null!;
+    // キーカラー：1 色（#RRGGBB）とグラデーション（「#RRGGBB 位置%」をカンマでつないだ色の並び）、塗った見本
+    private TextBox txtPrKeyColor = null!;
+    private TextBox txtPrKeyColorGradient = null!;
+    private Panel pnlPrKeyColorPreview = null!;
     // 学校・クラス・家業
     private TextBox txtPrSchool = null!;
     private TextBox txtPrSchoolClass = null!;
@@ -194,6 +199,35 @@ partial class CreditMastersEditorForm
         };
         pnl.Controls.Add(lblSkin);
         pnl.Controls.Add(skinColorPicker);
+
+        // ── キーカラー（肌色ピッカーの右、x=712..984 帯）──
+        // 1 色は札の文字色の明るさの判定にも使うので、グラデーションのプリキュアでも入れる。
+        // グラデーションは左から右への色の並び（例「#F1346E 1%, #FF65F8 19%」）。見本は入力のたびに塗り直す。
+        var lblKeyColor = new Label
+        {
+            Text = "キーカラー",
+            Location = new Point(712, 286),
+            Size = new Size(100, 20),
+            Font = new Font(Font, FontStyle.Bold)
+        };
+        var lblKeyColorSolid = new Label { Text = "1 色", Location = new Point(712, 314), Size = new Size(84, 20) };
+        txtPrKeyColor = new TextBox { Location = new Point(800, 310), Size = new Size(90, 23), MaxLength = 7 };
+        var lblKeyColorGradient = new Label { Text = "グラデーション", Location = new Point(712, 342), Size = new Size(272, 20) };
+        txtPrKeyColorGradient = new TextBox
+        {
+            Location = new Point(712, 362),
+            Size = new Size(272, 44),
+            Multiline = true,
+            MaxLength = 512,
+        };
+        pnlPrKeyColorPreview = new Panel
+        {
+            Location = new Point(712, 412),
+            Size = new Size(272, 26),
+            BorderStyle = BorderStyle.FixedSingle
+        };
+        pnlPrKeyColorPreview.Paint += (_, e) => PaintPrKeyColorPreview(e.Graphics, pnlPrKeyColorPreview.ClientRectangle);
+        pnl.Controls.AddRange(new Control[] { lblKeyColor, lblKeyColorSolid, txtPrKeyColor, lblKeyColorGradient, txtPrKeyColorGradient, pnlPrKeyColorPreview });
 
         // ── 家族グリッド（全幅、高さ 130px）──
         var lblFamily = new Label
@@ -392,6 +426,8 @@ partial class CreditMastersEditorForm
         };
         numPrVoiceActorPersonId.ValueChanged += async (_, __) => await ResolvePrVoiceActorNameAsync();
         btnPrPickVoiceActor.Click += (_, __) => OpenPersonPicker(numPrVoiceActorPersonId);
+        txtPrKeyColor.TextChanged += (_, __) => pnlPrKeyColorPreview.Invalidate();
+        txtPrKeyColorGradient.TextChanged += (_, __) => pnlPrKeyColorPreview.Invalidate();
         btnNewPrecure.Click += (_, __) => ClearPrecureForm();
         btnSavePrecure.Click += async (_, __) => await SavePrecureAsync();
         btnDeletePrecure.Click += async (_, __) => await DeletePrecureAsync();
@@ -564,6 +600,10 @@ partial class CreditMastersEditorForm
             skinColorPicker.SetHsl(p.SkinColorH, p.SkinColorS, p.SkinColorL);
             skinColorPicker.SetRgb(p.SkinColorR, p.SkinColorG, p.SkinColorB);
 
+            // キーカラー
+            txtPrKeyColor.Text = p.KeyColor ?? "";
+            txtPrKeyColorGradient.Text = p.KeyColorGradient ?? "";
+
             // 学校情報・備考
             txtPrSchool.Text = p.School ?? "";
             txtPrSchoolClass.Text = p.SchoolClass ?? "";
@@ -618,11 +658,47 @@ partial class CreditMastersEditorForm
         lblPrVoiceActorName.Text = "";
         skinColorPicker.SetHsl(null, null, null);
         skinColorPicker.SetRgb(null, null, null);
+        txtPrKeyColor.Text = "";
+        txtPrKeyColorGradient.Text = "";
         txtPrSchool.Text = "";
         txtPrSchoolClass.Text = "";
         txtPrFamilyBusiness.Text = "";
         txtPrNotes.Text = "";
         gridPrFamily.DataSource = new List<CharacterFamilyRelationListRow>();
+    }
+
+    /// <summary>「#RRGGBB」形式の色か。</summary>
+    private static bool IsHexColor(string value)
+        => value.Length == 7 && value[0] == '#' && value.Skip(1).All(Uri.IsHexDigit);
+
+    /// <summary>
+    /// キーカラーの見本を塗る。グラデーションが読めれば左から右へ、読めなければ 1 色、どちらも無ければ何も塗らない。
+    /// </summary>
+    private void PaintPrKeyColorPreview(Graphics g, Rectangle bounds)
+    {
+        if (bounds.Width <= 0 || bounds.Height <= 0) return;
+        if (KeyColorGradient.TryParse(txtPrKeyColorGradient.Text.Trim(), out var stops))
+        {
+            // ColorBlend は 0 と 1 の位置を持つ必要があるので、両端の色を端まで延ばす。
+            var colors = new List<Color>();
+            var positions = new List<float>();
+            if (stops[0].Position > 0f) { colors.Add(Color.FromArgb(stops[0].R, stops[0].G, stops[0].B)); positions.Add(0f); }
+            foreach (var st in stops) { colors.Add(Color.FromArgb(st.R, st.G, st.B)); positions.Add(st.Position); }
+            var lastStop = stops[^1];
+            if (lastStop.Position < 1f) { colors.Add(Color.FromArgb(lastStop.R, lastStop.G, lastStop.B)); positions.Add(1f); }
+            using var brush = new System.Drawing.Drawing2D.LinearGradientBrush(bounds, Color.Black, Color.White, 0f)
+            {
+                InterpolationColors = new System.Drawing.Drawing2D.ColorBlend { Colors = colors.ToArray(), Positions = positions.ToArray() }
+            };
+            g.FillRectangle(brush, bounds);
+            return;
+        }
+        string solid = txtPrKeyColor.Text.Trim();
+        if (IsHexColor(solid))
+        {
+            using var brush = new SolidBrush(ColorTranslator.FromHtml(solid));
+            g.FillRectangle(brush, bounds);
+        }
     }
 
     /// <summary>1=January ～ 12=December の英名を返す（CultureInfo.InvariantCulture）。</summary>
@@ -668,6 +744,14 @@ partial class CreditMastersEditorForm
             var (h, s, l) = skinColorPicker.GetHsl();
             var (r, g, b) = skinColorPicker.GetRgb();
 
+            // キーカラー（形式は DB の CHECK 制約と同じ。違えば保存しない）
+            string? keyColor = NullIfEmpty(txtPrKeyColor.Text.Trim());
+            if (keyColor is not null && !IsHexColor(keyColor))
+            { MessageBox.Show(this, "キーカラー（1 色）は「#RRGGBB」の形で入れてください。"); return; }
+            string? keyColorGradient = NullIfEmpty(txtPrKeyColorGradient.Text.Trim());
+            if (keyColorGradient is not null && !KeyColorGradient.IsValid(keyColorGradient))
+            { MessageBox.Show(this, "グラデーションは「#RRGGBB 位置%」を「, 」でつないで、左から右へ 2 色以上入れてください（位置は 0〜100）。"); return; }
+
             bool isUpdate = gridPrecures.CurrentRow?.DataBoundItem is PrecureListRow currentRow
                 && currentRow.PrecureId > 0
                 && gridPrecures.SelectedRows.Count > 0;
@@ -690,6 +774,8 @@ partial class CreditMastersEditorForm
                 existing.SkinColorR = r;
                 existing.SkinColorG = g;
                 existing.SkinColorB = b;
+                existing.KeyColor = keyColor;
+                existing.KeyColorGradient = keyColorGradient;
                 existing.School = NullIfEmpty(txtPrSchool.Text);
                 existing.SchoolClass = NullIfEmpty(txtPrSchoolClass.Text);
                 existing.FamilyBusiness = NullIfEmpty(txtPrFamilyBusiness.Text);
@@ -712,6 +798,8 @@ partial class CreditMastersEditorForm
                     SkinColorR = r,
                     SkinColorG = g,
                     SkinColorB = b,
+                    KeyColor = keyColor,
+                    KeyColorGradient = keyColorGradient,
                     School = NullIfEmpty(txtPrSchool.Text),
                     SchoolClass = NullIfEmpty(txtPrSchoolClass.Text),
                     FamilyBusiness = NullIfEmpty(txtPrFamilyBusiness.Text),

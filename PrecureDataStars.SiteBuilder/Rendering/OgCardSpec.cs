@@ -137,6 +137,14 @@ public sealed record OgCardSpec(
     public string BandColorHex { get; init; } = "";
 
     /// <summary>
+    /// 色帯と透かしを 1 色ではなくグラデーションで塗るときの色の並び（<c>precures.key_color_gradient</c> の形式。
+    /// 「<c>#RRGGBB 位置%</c>」をカンマでつないだもの）。色帯は上から下へ、透かしは左から右へ塗る。
+    /// 年表の地色など 1 色が要る所は <see cref="BandColorHex"/> を使う。null か読めない値なら 1 色で塗る。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? BandGradient { get; init; }
+
+    /// <summary>
     /// 右上に薄く大きく置く透かしの文字。縮小表示でも「何のカードか」が形で伝わるようにする。
     /// エピソードは「第12話」、シリーズは放送開始年、人物は主な役職、キャラクターと歌は出身シリーズの作品名、
     /// 記念日は月日。空なら描かない。
@@ -468,5 +476,19 @@ public static class OgCardColors
         if (l < 22f) l = 30f;
         if (s < 45f) s = 45f;
         return SkiaSharp.SKColor.FromHsl(h, s, l).ToString();
+    }
+
+    /// <summary>
+    /// キーカラーのグラデーション（<c>precures.key_color_gradient</c>）の各色を <see cref="ForKeyColor"/> と同じ濃さへ寄せ、
+    /// 同じ形式（「<c>#RRGGBB 位置%</c>」をカンマでつないだもの）で返す。読めなければ null。
+    /// </summary>
+    public static string? ForKeyColorGradient(string? gradient)
+    {
+        if (!PrecureDataStars.Data.Text.KeyColorGradient.TryParse(gradient, out var stops)) return null;
+        return string.Join(", ", stops.Select(st =>
+        {
+            var c = SkiaSharp.SKColor.Parse(ForKeyColor(st.Hex));
+            return $"#{c.Red:X2}{c.Green:X2}{c.Blue:X2} {(int)Math.Round(st.Position * 100f)}%";
+        }));
     }
 }

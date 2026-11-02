@@ -4,6 +4,12 @@
 
 ### 開発中（次回リリース）
 
+- **DB・サイト・Catalog：プリキュアのキーカラーをグラデーションでも持てるようにした**（`precures.key_color_gradient`・`KeyColorGradient`・`KeyColorBadge`・`OgCardRenderer`・`CreditMastersEditorForm.PrecureTabs`。マイグレーション `v1.20.0_precures_key_color_gradient.sql`）
+  - 色見本が 1 色の塗りでないプリキュア用に、左から右への色の並び（「`#RRGGBB 位置%`」をカンマでつないだ形）を入れる列を足した。形式は CHECK 制約で縛る
+  - プリキュアの札（シリーズ一覧・ホーム・カレンダー・記念日）の地色を、列があるときはそのグラデーションにする。文字色・ボーダー色は 1 色のキーカラーから決める
+  - キャラクター詳細の OGP カードは、色帯を上から下へ、透かしを左から右へグラデーションで塗る。列が無いカードの作り置きの鍵は変わらない
+  - 入力用のデスクトップアプリ（Catalog）の「プリキュア」タブに、キーカラー（1 色）とグラデーションの入力欄と見本を足した（これまでキーカラーは画面から入れられなかった）
+
 - **サイト：人物詳細・企業/団体詳細・ユニット詳細・キャラクター詳細に年表を足した**（`CreditTimelineBuilder`・`RoleTimelineBuilder.ForParticipation` / `RoleTimelineModel.Gaps` / `RoleTimelineRules.Credit` / `SeparateSpinOffs` / `RoleTimelineRow.SpinOffSegments`・`MusicTimelineCollector.AddMusicCredit`・`PersonsGenerator`・`CompaniesGenerator`・`CharactersGenerator`・`_credit-timeline.sbn`・`persons-detail.sbn`・`companies-detail.sbn`・`units-detail.sbn`・`characters-detail.sbn`・`_role-timeline.sbn`・`site.css` の `.credit-timeline` / `.rtl-gap` / `.rtl-seg-spinoff` / `.rtl-badge-role`）：
   - 基本情報の下に、ふだんは閉じた開閉の枠で置く
     - 閉じた状態：参加の期間・役職と役柄の行の数と、すべての参加を 1 本にまとめた帯

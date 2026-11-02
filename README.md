@@ -1151,6 +1151,8 @@ Role: PRODUCTION 制作 (order 2)
 
 バッジの地色はプリキュアマスタの `key_color`（`char(7)`・`#RRGGBB`・NULL 可、フォーマットは CHECK 制約 `ck_precures_key_color` で担保）。文字色は地色を WCAG 2.x 定義の相対輝度（linearized sRGB の加重和 0.2126R + 0.7152G + 0.0722B）に変換し、しきい値 0.179 を境に暗グレー `#1a1a1a` ／明グレー `#f5f5f5` を自動で出し分ける。ボーダーは文字色側に寄せた半透明色（暗文字側 `rgba(0,0,0,.22)`／明文字側 `rgba(255,255,255,.30)`）。地色・文字色・ボーダーはビルド時に算出され、バッジ要素のインライン `style` として出力する。`key_color` 未設定または不正値のプリキュアはインライン色を持たず、`.precure-badge` の CSS 既定で描画される。色解決は `SeriesGenerator.ResolveBadgeColors` に集約、バッジ整形は `BuildPrecureBadges`。
 
+色見本が 1 色の塗りでないプリキュア（キュアサマー）は、`key_color_gradient`（`varchar(512)`・NULL 可）に左から右への色の並びを「`#RRGGBB 位置%`」をカンマと空白でつないだ形（例 `#F1346E 0%, #FF65F8 19%, …`。2 色以上、位置は 0〜100 で左から右へ）で持つ。形式は CHECK 制約 `ck_precures_key_color_gradient` と `PrecureDataStars.Data.Text.KeyColorGradient` で担保する。読める値があれば、プリキュアの札（シリーズ一覧・ホームの今日の記念日・カレンダー・記念日のページ）の地色は `linear-gradient(to right, …)` になり（`KeyColorBadge.Resolve`）、キャラクター詳細の OGP カードは色帯を上から下へ、透かしを左から右へそのグラデーションで塗る（各色は 1 色のときと同じく見える濃さに寄せる。`OgCardColors.ForKeyColorGradient`・`OgCardSpec.BandGradient`）。文字色・ボーダー色、OGP カードの年表の地色など 1 色が要る所は `key_color` を使うので、グラデーションのプリキュアにも `key_color` を入れる（グラデーションの真ん中の色）。入力用のデスクトップアプリ（Catalog）の「プリキュア」タブでは、肌色の右に 1 色とグラデーションの入力欄と塗った見本を置き、保存の前に形式を確かめる。
+
 ##### シリーズ詳細の「主題歌・挿入歌」セクション
 
 引き当て元はシリーズ種別で分かれる。`credit_attach_to='SERIES'`（映画系）は `series_theme_songs` をそのまま並べ、`credit_attach_to='EPISODE'`（TV / SPIN-OFF / OTONA / SHORT）は `episode_theme_songs` を `(theme_kind, song_recording_id, is_broadcast_only)` の 3 つ組でシリーズ単位に畳む（`ThemeSongSeriesAggregator`）。行の体裁は両者共通の `ts-card`（区分バッジ／曲名リンク／歌・コーラス・台詞・作詞・作曲・編曲のメタ行）で、集約側だけが曲名の右に使用話数ラベルを持つ。

@@ -2164,6 +2164,7 @@ CREATE TABLE `precures` (
   `counts_only_when_transformed` tinyint(1)   NOT NULL DEFAULT '0',  -- 1=作品単位の作品のプリキュアの欄で、その作品の series_precures に行がある作品（変身した作品）でだけ数える（キュアモフルン）
   `voice_actor_person_id`  int                DEFAULT NULL,
   `key_color`              char(7)            DEFAULT NULL,  -- シリーズ一覧プリキュアバッジの地色（#RRGGBB、NULL=未設定）
+  `key_color_gradient`     varchar(512)       DEFAULT NULL,  -- キーカラーのグラデーション（「#RRGGBB 位置%」をカンマでつないだ左から右への色の並び、NULL=1 色のキーカラーだけ）
   `skin_color_h`           smallint unsigned  DEFAULT NULL,
   `skin_color_s`           tinyint unsigned   DEFAULT NULL,
   `skin_color_l`           tinyint unsigned   DEFAULT NULL,
@@ -2191,6 +2192,7 @@ CREATE TABLE `precures` (
   CONSTRAINT `fk_precures_alt_form`       FOREIGN KEY (`alt_form_alias_id`)      REFERENCES `character_aliases` (`alias_id`)  ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_precures_voice_actor`    FOREIGN KEY (`voice_actor_person_id`)  REFERENCES `persons`           (`person_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_precures_key_color`      CHECK (`key_color`  IS NULL OR (`key_color`  REGEXP '^#[0-9A-Fa-f]{6}$')),
+  CONSTRAINT `ck_precures_key_color_gradient` CHECK (`key_color_gradient` IS NULL OR (`key_color_gradient` REGEXP '^#[0-9A-Fa-f]{6} [0-9]{1,3}%(, #[0-9A-Fa-f]{6} [0-9]{1,3}%)+$')),
   CONSTRAINT `ck_precures_skin_h`         CHECK (`skin_color_h` IS NULL OR (`skin_color_h` BETWEEN 0 AND 360)),
   CONSTRAINT `ck_precures_skin_s`         CHECK (`skin_color_s` IS NULL OR (`skin_color_s` BETWEEN 0 AND 100)),
   CONSTRAINT `ck_precures_skin_l`         CHECK (`skin_color_l` IS NULL OR (`skin_color_l` BETWEEN 0 AND 100))

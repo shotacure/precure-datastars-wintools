@@ -161,18 +161,20 @@ public static class AnniversaryDataBuilder
             // 既定は正式名称（precure 紐付けの無い ALLY 等）。
             string displayName = c.Name;
             string keyColor = "";
+            string keyColorGradient = "";
             Series? repSeries = null;
 
             if (precureByCharacter.TryGetValue(c.CharacterId, out var pr))
             {
                 keyColor = pr.KeyColor ?? "";
+                keyColorGradient = pr.KeyColorGradient ?? "";
                 // プリキュアの誕生日は変身前名義で表示する。
                 if (aliasById.TryGetValue(pr.PreTransformAliasId, out var preA) && !string.IsNullOrEmpty(preA.Name))
                     displayName = preA.Name;
                 if (seriesByPrecure.TryGetValue(pr.PrecureId, out var sps)) repSeries = sps;
             }
 
-            var (bg, fg, bd) = KeyColorBadge.Resolve(keyColor);
+            var (bg, fg, bd) = KeyColorBadge.Resolve(keyColor, keyColorGradient);
             entries.Add(new AnniversaryEntry
             {
                 Kind = "cb",

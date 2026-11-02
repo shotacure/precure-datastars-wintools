@@ -2069,10 +2069,25 @@ public sealed partial class OgCardRenderer : IDisposable
     private SKColor BandColor(OgCardSpec spec)
         => SKColor.TryParse(spec.BandColorHex, out var c) ? c : AccentPink;
 
-    /// <summary>左端の色帯。カードの種別を色で見分けるための帯で、全カードに描く。</summary>
+    /// <summary>
+    /// 色帯・透かしのグラデーション（<see cref="OgCardSpec.BandGradient"/>）を、<paramref name="from"/> から <paramref name="to"/> へ塗るシェーダーにする。
+    /// 不透明度は全色 <paramref name="alpha"/>。グラデーションが無いか読めなければ null（1 色で塗る）。
+    /// </summary>
+    private static SKShader? BandGradientShader(OgCardSpec spec, SKPoint from, SKPoint to, byte alpha = 0xff)
+    {
+        if (!PrecureDataStars.Data.Text.KeyColorGradient.TryParse(spec.BandGradient, out var stops)) return null;
+        return SKShader.CreateLinearGradient(
+            from, to,
+            stops.Select(st => new SKColor(st.R, st.G, st.B, alpha)).ToArray(),
+            stops.Select(st => st.Position).ToArray(),
+            SKShaderTileMode.Clamp);
+    }
+
+    /// <summary>左端の色帯。カードの種別を色で見分けるための帯で、全カードに描く。グラデーションのプリキュアは上から下へ塗る。</summary>
     private void DrawBand(SKCanvas canvas, OgCardSpec spec)
     {
-        using var paint = new SKPaint { Color = BandColor(spec) };
+        using var shader = BandGradientShader(spec, new SKPoint(0f, 0f), new SKPoint(0f, CardHeight));
+        using var paint = new SKPaint { Color = BandColor(spec), Shader = shader };
         canvas.DrawRect(SKRect.Create(0f, 0f, BandWidth, CardHeight), paint);
     }
 
@@ -2102,6 +2117,9 @@ public sealed partial class OgCardRenderer : IDisposable
         float lineHeight = mainFont.Size * 1.08f;
         float baseline = WatermarkTop + mainFont.Size * 0.92f;
         float right = CardWidth - PaddingRight;
+        // グラデーションのプリキュアは、主の文字の左端から右端へ同じ薄さで塗る。
+        using var gradientShader = BandGradientShader(spec, new SKPoint(right - mainWidth, 0f), new SKPoint(right, 0f), 0x58);
+        if (gradientShader is not null) paint.Shader = gradientShader;
         foreach (var line in mainLines)
         {
             DrawText(canvas, line, right, baseline, SKTextAlign.Right, mainFont, paint);

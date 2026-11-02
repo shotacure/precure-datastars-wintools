@@ -269,6 +269,11 @@ internal sealed class CreditPreviewRenderer
           table.fallback-vc-table td.actor-cell[rowspan] {
             vertical-align: middle;
           }
+          /* 同じ役名のひと続きを真ん中に 1 回だけ書く（MIDDLE）とき、rowspan 結合された character-cell も
+             N 行ぶんの中央に揃える。 */
+          table.fallback-vc-table td.character-cell[rowspan] {
+            vertical-align: middle;
+          }
           /* 直前行と同じキャラ名義のときに表示を省略するときの空セル
              （横幅は維持してテキストを空にする）。 */
           table.fallback-vc-table td.character-cell.dim {
@@ -1863,9 +1868,10 @@ internal sealed class CreditPreviewRenderer
     /// <list type="bullet">
     ///   <item><description><c>col_count</c> は無視して常に 1 行 1 エントリで縦並びにする
     ///     （VOICE_CAST にカラム分けの慣習が無いため）。</description></item>
-    ///   <item><description>同役職内（=本メソッド呼び出しの 1 回内）で「直前行と同じキャラ名」のときは
-    ///     キャラ名セルを薄く（class=dim、空表示）出して視覚的に省略する。
-    ///     ブロック跨ぎでも継続するので、複数ブロックに分かれている VOICE_CAST 内でも自然に動く。</description></item>
+    ///   <item><description>同じブロックで同じ役名・同じ声優が続く行（ひと続き）は、エントリの
+    ///     <see cref="CreditBlockEntry.SameCharacterLayout"/> / <see cref="CreditBlockEntry.SamePersonLayout"/> に従って出す
+    ///     （ひと続きの解決は <see cref="VoiceCastRunLayout"/>）。REPEAT は毎行書く、TOP は先頭の行に 1 回だけ書いて続きの行は
+    ///     空のセル（役名の側は class=dim）、MIDDLE は升を縦に結合（rowspan）して真ん中に 1 回だけ書く。</description></item>
     ///   <item><description>CHARACTER_VOICE 以外の種別（PERSON、COMPANY、TEXT 等）が混じっている場合、
     ///     キャラセルは空表示にして声優セル位置に <see cref="ResolveEntryLabelAsync"/> の文字列を
     ///     そのまま出す（書式違いのエントリでも壊れず描画する保険）。</description></item>
@@ -1898,8 +1904,6 @@ internal sealed class CreditPreviewRenderer
         html.Append("<table class=\"fallback-vc-table\">");
         bool firstRow = true;
         bool isFirstBlock = true;
-        // 直前行のキャラ名（表示用文字列）。空文字とは null を区別する：
-        string? prevCharLabel = null;
 
         foreach (var bs in blocks)
         {
@@ -1942,7 +1946,6 @@ internal sealed class CreditPreviewRenderer
                 html.Append($"<td class=\"character-cell block-heading{markClass}\" colspan=\"2\">{headingHtml}</td>");
                 html.Append("</tr>");
                 isFirstRowOfThisBlock = false;
-                prevCharLabel = null;
             }
 
             // ─ leading_company がある場合の先頭行（屋号名のみ）─
@@ -1963,69 +1966,45 @@ internal sealed class CreditPreviewRenderer
                 html.Append($"<td class=\"character-cell\" colspan=\"2\">{Esc(leadingCompanyName!)}</td>");
                 html.Append("</tr>");
                 isFirstRowOfThisBlock = false;
-                // 字下げ視覚化のため、ブロック先頭の prevCharLabel をリセット（前ブロックの dim 連鎖を断つ）。
-                prevCharLabel = null;
             }
 
             // 併記の CHARACTER_VOICE エントリは独立した行にせず、相手の行の役名の升に並べる（SiteBuilder と同じ）。
             var rowEntries = FoldParallelCharacterEntries(bs.Entries, out var parallelFollowers);
 
-            // 各エントリの表示要素を先に解決し、隣接 CHARACTER_VOICE 行で actor 表示 HTML が一致する
-            // 連続区間（n 役連続）を rowspan で結合する事前計算を行う。actor の同一性判定は
-            // 「最終的に表示される actor-cell の HTML 文字列」で行うため、所属（affiliation）や
-            // スラッシュ配偶名義の違いがあれば自動的に別グループとして扱われる。
+            // 各エントリの表示要素を先に解決し、同じ役名・同じ声優が続く行（ひと続き）の升の出し方を
+            // エントリの same_character_layout / same_person_layout から事前に決める（VoiceCastRunLayout、SiteBuilder と同じ）。
             // 併記で畳んだエントリは行を持たないので、この計算にも入らない。
             int entryCount = rowEntries.Count;
-            var resolved = new (bool IsCharVoice, string CharLabel, string CharHtml, string ActorHtml, string EntryHtml)[entryCount];
+            var resolved = new (bool IsCharVoice, string CharHtml, string ActorHtml, string EntryHtml)[entryCount];
             for (int i = 0; i < entryCount; i++)
             {
                 var ent = rowEntries[i];
                 if (ent.EntryKind == "CHARACTER_VOICE")
                 {
-                    string lbl = await ResolveCharacterLabelAsync(ent, ct);
                     string chh = await ResolveCharacterLabelHtmlAsync(ent, ct);
                     if (parallelFollowers.TryGetValue(i, out var followers))
                     {
-                        // 併記の役名を前後の字つきで後ろに並べる。同じ役名の続きの判定にも含める。
+                        // 併記の役名を前後の字つきで後ろに並べる。
                         foreach (var f in followers)
                         {
-                            lbl += (f.ParallelPrefix ?? "") + await ResolveCharacterLabelAsync(f, ct) + (f.ParallelSuffix ?? "");
                             string inner = Esc(f.ParallelPrefix ?? "") + await ResolveCharacterLabelHtmlAsync(f, ct) + Esc(f.ParallelSuffix ?? "");
                             chh += f.ParallelSmall ? $"<small>{inner}</small>" : inner;
                         }
                     }
                     string ahh = await ResolvePersonWithAffiliationHtmlAsync(ent, ct);
-                    resolved[i] = (true, lbl, chh, ahh, "");
+                    resolved[i] = (true, chh, ahh, "");
                 }
                 else
                 {
                     string eh = await ResolveEntryLabelHtmlAsync(ent, ct);
-                    resolved[i] = (false, "", "", "", eh);
+                    resolved[i] = (false, "", "", eh);
                 }
             }
-            // rowspanFor[i]：このエントリの actor-cell を rowspan=N で出す（N>=2 の場合属性付き、
-            // N==1 は普通の単一セル、N==0 は actor-cell を一切出さない rowspan 吸収行）。
-            int[] rowspanFor = new int[entryCount];
-            for (int i = 0; i < entryCount; i++) rowspanFor[i] = 1;
-            for (int i = 0; i < entryCount; )
-            {
-                if (!resolved[i].IsCharVoice || string.IsNullOrEmpty(resolved[i].ActorHtml))
-                {
-                    i++;
-                    continue;
-                }
-                int j = i + 1;
-                while (j < entryCount
-                       && resolved[j].IsCharVoice
-                       && string.Equals(resolved[j].ActorHtml, resolved[i].ActorHtml, StringComparison.Ordinal))
-                {
-                    j++;
-                }
-                int span = j - i;
-                rowspanFor[i] = span;
-                for (int k = i + 1; k < j; k++) rowspanFor[k] = 0;
-                i = j;
-            }
+            // charCellFor[i] / actorCellFor[i]：このエントリの character-cell / actor-cell の出し方。
+            // 1 はふつうの単一セル、N>=2 は rowspan=N の結合セル、0 はセルを一切出さない rowspan 吸収行、
+            // -1 は空のセル（VoiceCastRunLayout の定数）。
+            int[] charCellFor = VoiceCastRunLayout.Resolve(rowEntries, e => e.SameCharacterLayout);
+            int[] actorCellFor = VoiceCastRunLayout.Resolve(rowEntries, e => e.SamePersonLayout);
 
             for (int i = 0; i < entryCount; i++)
             {
@@ -2050,36 +2029,43 @@ internal sealed class CreditPreviewRenderer
                 // キャラ名カラム ／ 声優名カラム
                 if (slot.IsCharVoice)
                 {
-                    // 直前行と同じキャラ名なら、表示を省略（class=dim で空セル）
-                    bool sameAsPrev = prevCharLabel is not null
-                        && string.Equals(slot.CharLabel, prevCharLabel, StringComparison.Ordinal);
-                    if (sameAsPrev)
+                    int charCell = charCellFor[i];
+                    if (charCell == VoiceCastRunLayout.BlankCell)
                     {
+                        // 同じ役名の続き（TOP）：役名は先頭の行にだけ書き、この行は表示を省略（class=dim で空セル）
                         html.Append("<td class=\"character-cell dim\"></td>");
                     }
-                    else
+                    else if (charCell != VoiceCastRunLayout.OmittedCell)
                     {
                         // leading_company があるブロックの中身は字下げ（全角SP 1 個分）。
                         // dim 表示の場合は空セルなので字下げ不要。
                         string charPrefix = hasLeading ? "　" : "";
-                        html.Append($"<td class=\"character-cell\">{charPrefix}{slot.CharHtml}</td>");
+                        // 同じ役名のひと続き（MIDDLE）：先頭行で rowspan=N の character-cell を出し、後続行は省略。
+                        // CSS で td.character-cell[rowspan] の vertical-align を middle に上書きしているので、
+                        // 結合セルは N 行ぶんの中央に揃う。
+                        string charSpanAttr = charCell >= 2 ? $" rowspan=\"{charCell}\"" : "";
+                        html.Append($"<td class=\"character-cell\"{charSpanAttr}>{charPrefix}{slot.CharHtml}</td>");
                     }
+                    // OmittedCell：直前の rowspan で吸収されるので何も出さない。
 
-                    int span = rowspanFor[i];
+                    int span = actorCellFor[i];
                     if (span >= 2)
                     {
-                        // n 役連続：先頭行で rowspan=N の actor-cell を出し、後続行は actor-cell を完全省略。
+                        // n 役連続（MIDDLE）：先頭行で rowspan=N の actor-cell を出し、後続行は actor-cell を完全省略。
                         // CSS で td.actor-cell[rowspan] の vertical-align を middle に上書きしているので、
                         // 結合セルは N 行ぶんの中央に視覚的に揃う。
                         html.Append($"<td class=\"actor-cell\" rowspan=\"{span}\">{slot.ActorHtml}</td>");
                     }
-                    else if (span == 1)
+                    else if (span == VoiceCastRunLayout.NormalCell)
                     {
                         html.Append($"<td class=\"actor-cell\">{slot.ActorHtml}</td>");
                     }
-                    // span == 0：直前の rowspan で吸収されるので何も出さない。
-
-                    prevCharLabel = slot.CharLabel;
+                    else if (span == VoiceCastRunLayout.BlankCell)
+                    {
+                        // n 役連続（TOP）：声優名は先頭の行にだけ書き、この行は空の actor-cell。
+                        html.Append("<td class=\"actor-cell\"></td>");
+                    }
+                    // OmittedCell：直前の rowspan で吸収されるので何も出さない。
                 }
                 else
                 {
@@ -2089,8 +2075,6 @@ internal sealed class CreditPreviewRenderer
                     // leading_company がある場合は字下げ。
                     string actorPrefix = hasLeading ? "　" : "";
                     html.Append($"<td class=\"actor-cell\">{actorPrefix}{slot.EntryHtml}</td>");
-                    // この行で「同じキャラ名 dim 化判定」の連鎖を切るため、prevCharLabel は null に戻す。
-                    prevCharLabel = null;
                 }
 
                 html.Append("</tr>");

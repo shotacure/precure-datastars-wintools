@@ -43,6 +43,8 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
           parallel_prefix                AS ParallelPrefix,
           parallel_suffix                AS ParallelSuffix,
           parallel_small                 AS ParallelSmall,
+          same_character_layout          AS SameCharacterLayout,
+          same_person_layout             AS SamePersonLayout,
           notes                          AS Notes,
           created_at                     AS CreatedAt,
           updated_at                     AS UpdatedAt,
@@ -99,6 +101,7 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
                company_alias_id, logo_id, raw_text,
                affiliation_company_alias_id, affiliation_person_alias_id, affiliation_logo_id, affiliation_text, affiliation_inline,
                parallel_with_entry_id, parallel_prefix, parallel_suffix, parallel_small,
+               same_character_layout, same_person_layout,
                notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
@@ -107,6 +110,7 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
                @CompanyAliasId, @LogoId, @RawText,
                @AffiliationCompanyAliasId, @AffiliationPersonAliasId, @AffiliationLogoId, @AffiliationText, @AffiliationInline,
                @ParallelWithEntryId, @ParallelPrefix, @ParallelSuffix, @ParallelSmall,
+               @SameCharacterLayout, @SamePersonLayout,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -144,6 +148,8 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
               parallel_prefix               = @ParallelPrefix,
               parallel_suffix               = @ParallelSuffix,
               parallel_small                = @ParallelSmall,
+              same_character_layout         = @SameCharacterLayout,
+              same_person_layout            = @SamePersonLayout,
               notes                         = @Notes,
               updated_by                    = @UpdatedBy
             WHERE entry_id = @EntryId;

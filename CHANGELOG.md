@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **クレジット：声の出演で前の行と同じ役名・同じ声優が続くときの画面の組み方を持つ欄 `same_character_layout` / `same_person_layout` を足した**（`credit_block_entries`、マイグレーション `v1.20.0_add_entry_same_layout.sql`）：毎行書く（`REPEAT`）・最初の行に 1 回だけ書く（`TOP`）・縦の真ん中に 1 回だけ書く（`MIDDLE`）を、続くまとまりの 2 行目以降に持つ。サイトのクレジット（`CreditTreeRenderer`）と Catalog のプレビュー（`CreditPreviewRenderer`）は、同じ役名の 2 行目以降を空ける・同じ声優を 1 つの升にまとめるのを文字が同じかどうかで決めていたのをやめ、この値で描き分ける。Catalog の一括入力は行頭の `^{役名の形|声優の形} ` で読み書きする。ヘルスチェックに付け忘れ・付け違いの検査 D8 を足した
+
 - **DB・サイト・Catalog：プリキュアのキーカラーをグラデーションでも持てるようにした**（`precures.key_color_gradient`・`KeyColorGradient`・`KeyColorBadge`・`OgCardRenderer`・`CreditMastersEditorForm.PrecureTabs`。マイグレーション `v1.20.0_precures_key_color_gradient.sql`）
   - 色見本が 1 色の塗りでないプリキュア用に、左から右への色の並び（「`#RRGGBB 位置%`」をカンマでつないだ形）を入れる列を足した。形式は CHECK 制約で縛る
   - プリキュアの札（シリーズ一覧・ホーム・カレンダー・記念日）の地色を、列があるときはそのグラデーションにする。文字色・ボーダー色は 1 色のキーカラーから決める

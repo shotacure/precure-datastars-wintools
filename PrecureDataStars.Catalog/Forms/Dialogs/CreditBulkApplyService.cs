@@ -993,6 +993,13 @@ public sealed class CreditBulkApplyService
             // 画面の組みどおりの役名（改行入り）。役名が画面で折れているときだけ立つ。
             if (pe.CharacterDisplayText is not null) last.Entity.CharacterDisplayText = pe.CharacterDisplayText;
             if (pe.CompanyMisprintText is not null) last.Entity.CompanyMisprintText = pe.CompanyMisprintText;
+            // 同じ役名・同じ声優が続く行の名前の出し方。パーサが CHARACTER_VOICE のときだけ立て、
+            // TEXT に降格したエントリには持たせない（声の出演の行でだけ意味を持つため）。
+            if (last.Entity.EntryKind == "CHARACTER_VOICE")
+            {
+                if (pe.SameCharacterLayout is not null) last.Entity.SameCharacterLayout = pe.SameCharacterLayout;
+                if (pe.SamePersonLayout is not null) last.Entity.SamePersonLayout = pe.SamePersonLayout;
+            }
             // 所属のロゴの版（屋号#lg<id>）。所属の会社名義が付いたときだけ持たせる（ロゴは会社の所属の版を表すため）。
             if (pe.AffiliationLogoId is not null && last.Entity.AffiliationCompanyAliasId is not null)
                 last.Entity.AffiliationLogoId = pe.AffiliationLogoId;
@@ -2791,6 +2798,9 @@ public sealed class CreditBulkApplyService
         sb.Append(e.ParallelPrefix ?? string.Empty).Append('|');
         sb.Append(e.ParallelSuffix ?? string.Empty).Append('|');
         sb.Append(e.ParallelSmall ? '1' : '0').Append('|');
+        // 同じ役名・同じ声優が続く行の名前の出し方も差分検出の対象にする。
+        sb.Append(e.SameCharacterLayout ?? string.Empty).Append('|');
+        sb.Append(e.SamePersonLayout ?? string.Empty).Append('|');
         sb.Append(e.Notes ?? string.Empty).Append('|');
         // 誤記もシリアライズに含めて差分検出の対象にする
         // （誤記の追加・削除・修正をエントリ差分として認識させるため）。

@@ -29,7 +29,8 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 ///   <item><description>グループトップ屋号: <c>[[屋号]]</c>（ブロックの最初の有意行）</description></item>
 ///   <item><description>エントリ: 種別ごとの構文（PERSON は素のテキスト、CHARACTER_VOICE は <c>&lt;キャラ&gt;声優</c>、
 ///     COMPANY は <c>[屋号]</c>、LOGO は <c>[屋号#CIバージョン]</c>、TEXT は raw_text のまま）</description></item>
-///   <item><description>エントリ前後修飾子: 行頭 <c>🎬 </c>（IsBroadcastOnly）／<c>&amp; </c>（A/B 併記）、
+///   <item><description>エントリ前後修飾子: 行頭 <c>🎬 </c>（IsBroadcastOnly）／<c>&amp; </c>（A/B 併記）／
+///     <c>^{役名の形|声優の形} </c>（CHARACTER_VOICE の SameCharacterLayout / SamePersonLayout）、
 ///     行末 <c> // 備考</c>（Notes）</description></item>
 /// </list>
 /// マスタ未引きエントリ（TEXT 種別、または ID が解決不能なケース）は <c>raw_text</c> をそのまま出力する。
@@ -570,7 +571,7 @@ internal static class CreditBulkInputEncoder
         return false;
     }
 
-    /// <summary>1 エントリを 1 セル文字列に変換する。 行頭プレフィクス（🎬 / & ）と行末サフィックス（ // 備考）を含む完全な単一セル表現を返す。
+    /// <summary>1 エントリを 1 セル文字列に変換する。 行頭プレフィクス（🎬 / & / ^{...} ）と行末サフィックス（ // 備考）を含む完全な単一セル表現を返す。
     /// <paramref name="suppressAffiliation"/> = true のとき、PERSON / CHARACTER_VOICE の所属表記 <c>(屋号)</c> 後置を抑止する
     /// （PREFIX レイアウト下では所属は屋号列として左に置くため、セル本体には含めない）。</summary>
     private static async Task<string> EncodeEntryAsCellAsync(
@@ -595,7 +596,7 @@ internal static class CreditBulkInputEncoder
         // ─── 修飾子の前後付加 ───
         var sb = new StringBuilder();
 
-        // 行頭プレフィクス: 🎬（本放送限定）→ &（併記継続）の順で連結。
+        // 行頭プレフィクス: 🎬（本放送限定）→ &（併記継続）→ ^{...}（同じ役名・同じ声優が続く行の出し方）の順で連結。
         // 順序自体に意味は無いが、出力の一貫性のため固定順とする。
         if (e.IsBroadcastOnly)
         {
@@ -615,6 +616,14 @@ internal static class CreditBulkInputEncoder
             {
                 sb.Append(ParallelContinuationMarker);
             }
+        }
+        // 同じ役名・同じ声優が続く行の名前の出し方（CHARACTER_VOICE のみ）。どちらかがあれば ^{役名の形|声優の形} の形で、
+        // 併記のマーカーの後ろに置く。声優の形が無ければ 2 つ目の欄と | を省く。
+        if (e.EntryKind == "CHARACTER_VOICE" && (e.SameCharacterLayout is not null || e.SamePersonLayout is not null))
+        {
+            sb.Append("^{").Append(e.SameCharacterLayout ?? "");
+            if (e.SamePersonLayout is not null) sb.Append('|').Append(e.SamePersonLayout);
+            sb.Append("} ");
         }
 
         sb.Append(body);

@@ -335,6 +335,19 @@ public sealed class ParsedEntry
     /// <summary>併記のエントリを小さい字で描く（同 3 つ目の欄が <c>small</c>）。</summary>
     public bool ParallelSmall { get; set; }
 
+    /// <summary>
+    /// 同じ役名が続く行の役名の出し方（<c>^{役名の形|声優の形} </c> の 1 つ目の欄。REPEAT / TOP / MIDDLE）。
+    /// 適用時に <see cref="Data.Models.CreditBlockEntry.SameCharacterLayout"/> へそのまま転写する。null は直前の行の続きではない。
+    /// CHARACTER_VOICE のときのみ持つ。
+    /// </summary>
+    public string? SameCharacterLayout { get; set; }
+
+    /// <summary>
+    /// 同じ声優が続く行の声優名の出し方（同 2 つ目の欄）。
+    /// 適用時に <see cref="Data.Models.CreditBlockEntry.SamePersonLayout"/> へそのまま転写する。
+    /// </summary>
+    public string? SamePersonLayout { get; set; }
+
     /// <summary>エントリ単位の備考。</summary>
     public string? Notes { get; set; }
 

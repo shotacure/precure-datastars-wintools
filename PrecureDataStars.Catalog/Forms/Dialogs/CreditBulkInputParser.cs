@@ -35,6 +35,10 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     （<c>parallel_prefix</c> / <c>parallel_suffix</c>）と小さい字で描く指定（<c>parallel_small</c>）。
 ///     後ろの字と <c>small</c> は省略可。例: <c>&amp;{／} &lt;クマタ&gt;声優</c>（ダークマター／クマタ）、
 ///     <c>&amp;{（|）|small} &lt;キュアエール&gt;声優</c>（野乃はな（キュアエール））。</description></item>
+///   <item><description>エントリ行頭の <c>^{役名の形|声優の形} </c> プレフィクス（CHARACTER_VOICE のみ）→ 直前の行と同じ役名・同じ声優が続く行で、
+///     その名前をどう出すか（<c>same_character_layout</c> / <c>same_person_layout</c>）。各欄は <c>REPEAT</c>（毎行書く）/
+///     <c>TOP</c>（上の行に 1 回）/ <c>MIDDLE</c>（真ん中に 1 回）/ 空（直前の行の続きではない）。2 つ目の欄と <c>|</c> は省略可。
+///     ひと続きの 2 行目以降に付ける。例: <c>^{TOP} &lt;生徒&gt;山田</c>、<c>^{|MIDDLE} &lt;天宮いくと&gt;依田 菜津</c>。</description></item>
 ///   <item><description>役名の中の <c>\n</c>（バックスラッシュと n）→ 画面の改行。名義の名前からは抜き、改行入りの役名を
 ///     <c>character_display_text</c> に持つ。例: <c>&lt;てんびん座の\nプリンセス&gt;MAKO</c>（役名が画面で 2 行に折れているとき）。</description></item>
 ///   <item><description>人物名・声優名の <c>名義|画面の表記</c> → 画面に出た人物名の表記揺れ。名義は <c>|</c> の左側で引き当て、
@@ -238,6 +242,12 @@ public static class CreditBulkInputParser
 
     /// <summary>同マーカーの 3 つ目の欄で、小さい字で描く指定。</summary>
     private const string ParallelSmallKeyword = "small";
+
+    /// <summary>同じ役名・同じ声優が続く行の名前の出し方を指定するマーカー <c>^{役名の形|声優の形} </c> の開き。</summary>
+    private const string SameLayoutMarkerOpen = "^{";
+
+    /// <summary>同マーカーの閉じ（閉じ括弧の後ろに半角スペース）。</summary>
+    private const string SameLayoutMarkerClose = "} ";
 
     // 行末の備考コメント区切り: 半角スペース + スラッシュ 2 個 + 半角スペース。
     // 例: "山田 太郎 // 旧名義あり" → 名前部分 "山田 太郎" + 備考 "旧名義あり"。
@@ -1513,6 +1523,9 @@ public static class CreditBulkInputParser
     ///   <item><description>行頭 <c>&amp;{前|後|small} </c> → 併記に加えて、名前の前・後ろに付く字と小さい字の指定
     ///     （<see cref="ParsedEntry.ParallelPrefix"/> / <see cref="ParsedEntry.ParallelSuffix"/> / <see cref="ParsedEntry.ParallelSmall"/>）。
     ///     後ろの字と <c>small</c> は省略可（<c>&amp;{／} </c>、<c>&amp;{（|）|small} </c>）</description></item>
+    ///   <item><description>行頭 <c>^{役名の形|声優の形} </c> → 同じ役名・同じ声優が続く行の名前の出し方
+    ///     （<see cref="ParsedEntry.SameCharacterLayout"/> / <see cref="ParsedEntry.SamePersonLayout"/>）。各欄は REPEAT / TOP / MIDDLE / 空、
+    ///     2 つ目の欄と <c>|</c> は省略可（<c>^{TOP} </c>、<c>^{|MIDDLE} </c>、<c>^{REPEAT|MIDDLE} </c>）。CHARACTER_VOICE 以外に付いたときは警告して捨てる</description></item>
     ///   <item><description>行末 <c> // 備考</c> → <see cref="ParsedEntry.Notes"/> に値をセット</description></item>
     /// </list>
     /// これらは順序を問わず重ねて指定可能（例: <c>🎬 &amp; 山田 // 備考</c>）。
@@ -1553,6 +1566,10 @@ public static class CreditBulkInputParser
         string? parallelPrefix = null;
         string? parallelSuffix = null;
         bool parallelSmall = false;
+        // ^{役名の形|声優の形} マーカーの値（REPEAT / TOP / MIDDLE）と、マーカーが付いていたか。
+        string? sameCharacterLayout = null;
+        string? samePersonLayout = null;
+        bool hasSameLayoutMarker = false;
         // 何度かループして、剥がせるだけ剥がす（順序問わず）。
         bool stripped;
         do
@@ -1587,6 +1604,29 @@ public static class CreditBulkInputParser
                     stripped = true;
                 }
             }
+            // ^{役名の形|声優の形} マーカー（閉じ括弧の後ろに半角スペース必須）。同じ役名・同じ声優が続く行の名前の出し方。
+            if (cell.StartsWith(SameLayoutMarkerOpen, StringComparison.Ordinal))
+            {
+                int close = cell.IndexOf(SameLayoutMarkerClose, SameLayoutMarkerOpen.Length, StringComparison.Ordinal);
+                if (close > 0)
+                {
+                    var parts = cell.Substring(SameLayoutMarkerOpen.Length, close - SameLayoutMarkerOpen.Length).Split('|');
+                    hasSameLayoutMarker = true;
+                    sameCharacterLayout = ParseSameLayoutWord(parts.Length >= 1 ? parts[0] : "", "役名の形", lineNo, result);
+                    samePersonLayout = ParseSameLayoutWord(parts.Length >= 2 ? parts[1] : "", "声優の形", lineNo, result);
+                    if (parts.Length >= 3)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Warning,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: ^{{...}} の欄は 2 つまでです（3 つ目以降は読み捨てます）。"
+                        });
+                    }
+                    cell = cell.Substring(close + SameLayoutMarkerClose.Length).TrimStart();
+                    stripped = true;
+                }
+            }
         } while (stripped);
 
         if (cell.Length == 0)
@@ -1595,7 +1635,7 @@ public static class CreditBulkInputParser
             {
                 Severity = WarningSeverity.Warning,
                 LineNumber = lineNo,
-                Message = $"{lineNo} 行目: マーカー（🎬 / & / //）以外の本体が空です。"
+                Message = $"{lineNo} 行目: マーカー（🎬 / & / ^ / //）以外の本体が空です。"
             });
             return null;
         }
@@ -1608,6 +1648,25 @@ public static class CreditBulkInputParser
             if (parallelPrefix is not null) e.ParallelPrefix = parallelPrefix;
             if (parallelSuffix is not null) e.ParallelSuffix = parallelSuffix;
             if (parallelSmall) e.ParallelSmall = true;
+            // 同じ役名・同じ声優が続く行の名前の出し方は声の出演の行（CHARACTER_VOICE）でだけ意味を持つ。
+            // ほかの種別に付いていたら警告して捨てる。
+            if (hasSameLayoutMarker)
+            {
+                if (e.Kind == ParsedEntryKind.CharacterVoice)
+                {
+                    e.SameCharacterLayout = sameCharacterLayout;
+                    e.SamePersonLayout = samePersonLayout;
+                }
+                else
+                {
+                    result.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Warning,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: ^{{...}}（同じ役名・同じ声優が続く行の出し方）は <キャラ>声優 の行にだけ付けられます。読み捨てます。"
+                    });
+                }
+            }
             if (entryNotes is not null) e.Notes = entryNotes;
             return e;
         }
@@ -1913,6 +1972,25 @@ public static class CreditBulkInputParser
         // 名前ベースの素朴判定。「声の出演」「キャスト」「VOICE CAST」「Voice」を含むか。
         string n = role.DisplayName;
         return n.Contains("声") || n.Contains("キャスト") || n.Contains("CAST", StringComparison.OrdinalIgnoreCase) || n.Contains("Voice", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// <c>^{役名の形|声優の形} </c> マーカーの 1 欄を読む。REPEAT / TOP / MIDDLE（大文字小文字は問わない）を
+    /// <see cref="PrecureDataStars.Data.Models.CreditEntrySameLayouts"/> の値にして返し、空欄は null を返す。知らない語は警告して null を返す。
+    /// </summary>
+    private static string? ParseSameLayoutWord(string word, string fieldLabel, int lineNo, BulkParseResult result)
+    {
+        string w = word.Trim();
+        if (w.Length == 0) return null;
+        string upper = w.ToUpperInvariant();
+        if (PrecureDataStars.Data.Models.CreditEntrySameLayouts.IsValid(upper)) return upper;
+        result.Warnings.Add(new ParseWarning
+        {
+            Severity = WarningSeverity.Warning,
+            LineNumber = lineNo,
+            Message = $"{lineNo} 行目: ^{{...}} の{fieldLabel}「{w}」は使えません（REPEAT / TOP / MIDDLE のどれか、または空）。読み捨てます。"
+        });
+        return null;
     }
 
     /// <summary>行全体がハイフン（半角 '-'）のみで構成されるかを判定する。</summary>

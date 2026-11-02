@@ -130,6 +130,21 @@ public sealed class CreditBlockEntry
     /// <summary>true なら併記のエントリ（前後の字を含む）を小さい字で描く。</summary>
     public bool ParallelSmall { get; set; }
 
+    /// <summary>
+    /// 同じ役名が続く行の、役名の出し方（DB 列名 same_character_layout。<see cref="CreditEntrySameLayouts"/> の値）。CHARACTER_VOICE のときのみ意味を持つ。
+    /// 値のある行は、同じブロックで直前の CHARACTER_VOICE の行（声の出演の表で直前の行）と同じ役名の続き（ひと続きの 2 行目以降）であることを示す。
+    /// ひと続きの先頭の行は NULL。出し方はひと続きの 2 行目の値で決まる：
+    /// REPEAT = 毎行書く / TOP = 先頭の行に 1 回だけ書き、続きの行は空ける / MIDDLE = ひと続きの行の真ん中に 1 回だけ書く。
+    /// NULL は「直前の行の続きではない」で、ふつうに描く。
+    /// </summary>
+    public string? SameCharacterLayout { get; set; }
+
+    /// <summary>
+    /// 同じ声優が続く行の、声優名の出し方（DB 列名 same_person_layout。<see cref="CreditEntrySameLayouts"/> の値）。CHARACTER_VOICE のときのみ意味を持つ。
+    /// 用法は <see cref="SameCharacterLayout"/> と同じで、声優の側を受け持つ。
+    /// </summary>
+    public string? SamePersonLayout { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 
@@ -139,4 +154,21 @@ public sealed class CreditBlockEntry
     public DateTime? UpdatedAt { get; set; }
     public string? CreatedBy { get; set; }
     public string? UpdatedBy { get; set; }
+}
+
+/// <summary>
+/// credit_block_entries.same_character_layout / same_person_layout の値（同じ役名・同じ声優が続く行の名前の出し方）。
+/// </summary>
+public static class CreditEntrySameLayouts
+{
+    /// <summary>ひと続きの行の毎行に名前を書く。</summary>
+    public const string Repeat = "REPEAT";
+    /// <summary>ひと続きの先頭の行に 1 回だけ名前を書き、続きの行は空ける。</summary>
+    public const string Top = "TOP";
+    /// <summary>ひと続きの行の真ん中に 1 回だけ名前を書く（升を縦に結合して上下の中央にそろえる）。</summary>
+    public const string Middle = "MIDDLE";
+
+    /// <summary>許される値か（大文字小文字を区別する。NULL は別に扱う）。</summary>
+    public static bool IsValid(string? value)
+        => value is Repeat or Top or Middle;
 }

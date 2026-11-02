@@ -1990,6 +1990,11 @@ a.series-card-children-title:hover {
 .credit-section table.fallback-vc-table td.actor-cell[rowspan] {
   vertical-align: middle;
 }
+/* 同じ役名が続く行で役名を真ん中に 1 回だけ書くとき、rowspan 結合された character-cell も
+   結合された N 行ぶんの中央に揃える。 */
+.credit-section table.fallback-vc-table td.character-cell[rowspan] {
+  vertical-align: middle;
+}
 .credit-section table.fallback-vc-table td.character-cell.dim {
   color: #ccc;
 }

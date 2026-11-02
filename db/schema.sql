@@ -2716,6 +2716,11 @@ CREATE TABLE `credit_block_entries` (
   `person_display_text`            varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '画面に出た人物名の表記揺れ。名義と空白・記号だけが違うときだけ。誤記ではない。NULL は名義の名前のまま',
   `character_misprint_text`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `character_display_text`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '画面の組みどおりの役名（改行入り）。役名が画面で折れているときだけ。改行を抜いた字はキャラの名義と同じ。NULL は名義の名前のまま',
+  -- 同じブロックで直前の CHARACTER_VOICE と役名・声優が同じ行の、画面での出し方。まとまりの最初の行と、前の行と続かない行は NULL。
+  --   REPEAT = 毎行書く / TOP = まとまりの最初の行に 1 回だけ書き、以降の行は空き / MIDDLE = まとまりの縦の真ん中に 1 回だけ書く。
+  --   描き方はこの値だけで決める（文字が同じかどうかでは決めない）。CHARACTER_VOICE のエントリにだけ付ける（ck_entry_same_layout_voice）。
+  `same_character_layout`          enum('REPEAT','TOP','MIDDLE') DEFAULT NULL COMMENT '前の行と同じ役名のときの画面の組み方（REPEAT=毎行書く / TOP=最初の行に 1 回 / MIDDLE=縦の真ん中に 1 回）。前の行と続かない行は NULL',
+  `same_person_layout`             enum('REPEAT','TOP','MIDDLE') DEFAULT NULL COMMENT '前の行と同じ声優のときの画面の組み方（REPEAT=毎行書く / TOP=最初の行に 1 回 / MIDDLE=縦の真ん中に 1 回）。前の行と続かない行は NULL',
   `company_misprint_text`          varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   -- 人物名の代わりに画面に出た伏せ字表記（「謎の少女　？」の「？」など）。NULL = 伏せ字なし。
   --   名義（person_alias_id）は本来の人物に紐付けたまま持ち、表示は「伏せ字 (正名義)」の形にする。
@@ -2767,7 +2772,8 @@ CREATE TABLE `credit_block_entries` (
   CONSTRAINT `fk_be_aff_person_alias`  FOREIGN KEY (`affiliation_person_alias_id`)  REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_aff_logo`          FOREIGN KEY (`affiliation_logo_id`)          REFERENCES `logos`                (`logo_id`)           ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_parallel`          FOREIGN KEY (`parallel_with_entry_id`)       REFERENCES `credit_block_entries` (`entry_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `ck_be_seq_pos` CHECK ((`entry_seq` >= 1))
+  CONSTRAINT `ck_be_seq_pos` CHECK ((`entry_seq` >= 1)),
+  CONSTRAINT `ck_entry_same_layout_voice` CHECK ((`entry_kind` = 'CHARACTER_VOICE') OR (`same_character_layout` IS NULL AND `same_person_layout` IS NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

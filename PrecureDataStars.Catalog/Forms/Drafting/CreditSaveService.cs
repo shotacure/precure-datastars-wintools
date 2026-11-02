@@ -622,6 +622,7 @@ internal sealed class CreditSaveService
                company_alias_id, logo_id, raw_text,
                affiliation_company_alias_id, affiliation_person_alias_id, affiliation_logo_id, affiliation_text, affiliation_inline,
                parallel_with_entry_id, parallel_prefix, parallel_suffix, parallel_small,
+               same_character_layout, same_person_layout,
                notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
@@ -630,6 +631,7 @@ internal sealed class CreditSaveService
                @CompanyAliasId, @LogoId, @RawText,
                @AffiliationCompanyAliasId, @AffiliationPersonAliasId, @AffiliationLogoId, @AffiliationText, @AffiliationInline,
                @ParallelWithEntryId, @ParallelPrefix, @ParallelSuffix, @ParallelSmall,
+               @SameCharacterLayout, @SamePersonLayout,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -801,6 +803,8 @@ internal sealed class CreditSaveService
               parallel_prefix = @ParallelPrefix,
               parallel_suffix = @ParallelSuffix,
               parallel_small = @ParallelSmall,
+              same_character_layout = @SameCharacterLayout,
+              same_person_layout = @SamePersonLayout,
               notes = @Notes,
               updated_by = @UpdatedBy
             WHERE entry_id = @EntryId;

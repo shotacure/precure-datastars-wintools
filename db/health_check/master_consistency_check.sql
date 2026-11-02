@@ -18,7 +18,7 @@
 --   A. マスタ遊離検出（紐付き先が全部消えていて宙に浮いている）
 --   B. 同名重複検出（誤統合 / 誤分割の兆候）
 --   C. キャスティング異常検出（同一キャラに複数声優、共有名義の濫用）
---   D. 補足整合性（entry_kind と紐付け列の不整合、役職・ブロックのつなぎの印）
+--   D. 補足整合性（entry_kind と紐付け列の不整合、役職・ブロックのつなぎの印、声の出演の続く行の組み方）
 -- ============================================================================
 
 
@@ -350,6 +350,27 @@ LEFT JOIN person_aliases pa ON pa.alias_id = cbe.person_alias_id
 WHERE cbe.person_display_text IS NOT NULL AND (cbe.entry_kind NOT IN ('PERSON', 'CHARACTER_VOICE') OR pa.alias_id IS NULL OR CAST(cbe.person_display_text AS BINARY) = CAST(pa.name AS BINARY) OR CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cbe.person_display_text, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY) <> CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(pa.name, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY))
 ORDER BY cbe.entry_id;
 
+-- D8: 同じ役名・同じ声優が続く行の画面の組み方（same_character_layout / same_person_layout）の付け忘れ・付け違い
+--   件数 > 0 の意味: 同じブロックで直前の声の出演と役名（または声優）が同じなのに値が無い（描き方が決まらず毎行書かれる）、
+--   または直前の行と続いていないのに値が入っている。併記のエントリは除いて並べる。
+--   対処: クレジットの画面で、毎行書くか（REPEAT）・最初の行に 1 回か（TOP）・縦の真ん中に 1 回か（MIDDLE）を見て入れるか、値を消す。
+SELECT 'D8 same layout mismatch' AS check_name,
+    y.entry_id, y.same_character_layout, y.same_person_layout, y.plbl AS prev_character, y.lbl AS character_name, y.pp AS prev_person_alias_id, y.p AS person_alias_id
+FROM (SELECT cbe.entry_id, cbe.entry_kind, cbe.same_character_layout, cbe.same_person_layout,
+        COALESCE(ca.name, cbe.raw_character_text) AS lbl, cbe.person_alias_id AS p,
+        LAG(cbe.entry_kind) OVER w AS pk, LAG(COALESCE(ca.name, cbe.raw_character_text)) OVER w AS plbl, LAG(cbe.person_alias_id) OVER w AS pp
+      FROM credit_block_entries cbe
+      LEFT JOIN character_aliases ca ON ca.alias_id = cbe.character_alias_id
+      WHERE cbe.parallel_with_entry_id IS NULL
+      WINDOW w AS (PARTITION BY cbe.block_id, cbe.is_broadcast_only ORDER BY cbe.entry_seq)) y
+WHERE y.entry_kind = 'CHARACTER_VOICE'
+  AND ((y.same_character_layout IS NOT NULL AND NOT COALESCE(y.pk = 'CHARACTER_VOICE' AND y.lbl <=> y.plbl, FALSE))
+    OR (y.same_character_layout IS NULL AND y.pk = 'CHARACTER_VOICE' AND y.lbl = y.plbl)
+    OR (y.same_person_layout IS NOT NULL AND NOT COALESCE(y.pk = 'CHARACTER_VOICE' AND y.p <=> y.pp, FALSE))
+    OR (y.same_person_layout IS NULL AND y.pk = 'CHARACTER_VOICE' AND y.p = y.pp))
+ORDER BY y.entry_id;
+
+
 -- E1: 音楽クレジットの紐付け先が出典の盤に載っていない
 --   件数 > 0 の意味: 「music_credits の曲・録音・劇伴セッションの行が、出典の盤（source_product_catalog_no）の
 --   トラックに無い曲・録音・セッションを指している」状態。曲 ID と録音 ID の取り違え（曲 ID の列に録音 ID を入れる）が典型。
@@ -437,6 +458,7 @@ UNION ALL SELECT 'D4 join_previous w/o previous role', COUNT(*) FROM credit_card
 UNION ALL SELECT 'D5 continues_previous w/o previous block', COUNT(*) FROM credit_role_blocks crb WHERE crb.continues_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_role_blocks prev WHERE prev.card_role_id = crb.card_role_id AND prev.block_seq < crb.block_seq)
 UNION ALL SELECT 'D6 character_display_text mismatch', COUNT(*) FROM credit_block_entries cbe LEFT JOIN character_aliases ca ON ca.alias_id = cbe.character_alias_id WHERE cbe.character_display_text IS NOT NULL AND (cbe.entry_kind <> 'CHARACTER_VOICE' OR LOCATE('\n', cbe.character_display_text) = 0 OR CAST(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '') AS BINARY) <> CAST(COALESCE(ca.name, cbe.raw_character_text, '') AS BINARY))
 UNION ALL SELECT 'D7 person_display_text mismatch', COUNT(*) FROM credit_block_entries cbe LEFT JOIN person_aliases pa ON pa.alias_id = cbe.person_alias_id WHERE cbe.person_display_text IS NOT NULL AND (cbe.entry_kind NOT IN ('PERSON', 'CHARACTER_VOICE') OR pa.alias_id IS NULL OR CAST(cbe.person_display_text AS BINARY) = CAST(pa.name AS BINARY) OR CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cbe.person_display_text, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY) <> CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(pa.name, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY))
+UNION ALL SELECT 'D8 same layout mismatch', COUNT(*) FROM (SELECT cbe.entry_id, cbe.entry_kind, cbe.same_character_layout, cbe.same_person_layout,     COALESCE(ca.name, cbe.raw_character_text) AS lbl, cbe.person_alias_id AS p,     LAG(cbe.entry_kind) OVER w AS pk, LAG(COALESCE(ca.name, cbe.raw_character_text)) OVER w AS plbl, LAG(cbe.person_alias_id) OVER w AS pp    FROM credit_block_entries cbe    LEFT JOIN character_aliases ca ON ca.alias_id = cbe.character_alias_id    WHERE cbe.parallel_with_entry_id IS NULL    WINDOW w AS (PARTITION BY cbe.block_id, cbe.is_broadcast_only ORDER BY cbe.entry_seq)) y WHERE y.entry_kind = 'CHARACTER_VOICE'  AND ((y.same_character_layout IS NOT NULL AND NOT COALESCE(y.pk = 'CHARACTER_VOICE' AND y.lbl <=> y.plbl, FALSE))   OR (y.same_character_layout IS NULL AND y.pk = 'CHARACTER_VOICE' AND y.lbl = y.plbl)   OR (y.same_person_layout IS NOT NULL AND NOT COALESCE(y.pk = 'CHARACTER_VOICE' AND y.p <=> y.pp, FALSE))   OR (y.same_person_layout IS NULL AND y.pk = 'CHARACTER_VOICE' AND y.p = y.pp))
 UNION ALL SELECT 'E1 music_credits target not on source disc', COUNT(*) FROM music_credits m
     WHERE (m.target_kind = 'SONG' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no JOIN song_recordings r ON r.song_recording_id = t.song_recording_id WHERE d.product_catalog_no = m.source_product_catalog_no AND r.song_id = m.song_id))
        OR (m.target_kind = 'SONG_RECORDING' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no WHERE d.product_catalog_no = m.source_product_catalog_no AND t.song_recording_id = m.song_recording_id))

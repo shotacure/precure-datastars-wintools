@@ -305,13 +305,15 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
     /// 部品の HTML はスラッシュの相方・(CV:…)・所属まで含む 1 行分。先頭の部品の区切りは空文字。
     /// 役職テンプレで区切りを差し替える（<c>{SINGER:sep="&lt;br&gt;"}</c> など）ときに使う。行が無ければ空の並び。
     /// <paramref name="cvLabelOverride"/> があれば、声優の前の記号を行の記号（cv_label）に代えてその文字にする。
+    /// <paramref name="cvStarts"/> を渡すと、部品ごとの「(CV:…)」の始まる位置を足す（<see cref="BuildHtmlPartsAsync"/>）。
     /// </summary>
     public async Task<IReadOnlyList<(string Sep, string Html)>> GetDisplayHtmlPartsAsync(
         int songRecordingId,
         string? roleCode,
         ILookupCache lookup,
         CancellationToken ct = default,
-        string? cvLabelOverride = null)
+        string? cvLabelOverride = null,
+        List<int>? cvStarts = null)
     {
         string targetRole = roleCode ?? SongRecordingSingerRoles.Vocals;
 
@@ -339,21 +341,24 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<HtmlRow>(
             new CommandDefinition(sql, new { id = songRecordingId, role = targetRole }, cancellationToken: ct))).ToList();
-        return await BuildHtmlPartsAsync(rows, lookup, cvLabelOverride).ConfigureAwait(false);
+        return await BuildHtmlPartsAsync(rows, lookup, cvLabelOverride, cvStarts).ConfigureAwait(false);
     }
 
     /// <summary>
     /// 連名の行（seq 順）を、歌唱者ごとの部品（直前との区切り, リンク化済み HTML）の並びにする。
     /// 録音の歌唱者（song_recording_singers）と、エピソードのクレジットに出た歌唱者（episode_theme_song_singers）で共有する。
+    /// <paramref name="cvStarts"/> を渡すと、部品ごとに「(CV:…)」が始まる HTML 上の位置（無ければ -1）を部品と同じ順で足す
+    /// （役職テンプレの <c>{SINGER:cv_align=1}</c> で、名前と「(CV:…)」を別の欄に分けて縦にそろえるため）。
     /// </summary>
     internal static async Task<IReadOnlyList<(string Sep, string Html)>> BuildHtmlPartsAsync(
-        IReadOnlyList<HtmlRow> rows, ILookupCache lookup, string? cvLabelOverride)
+        IReadOnlyList<HtmlRow> rows, ILookupCache lookup, string? cvLabelOverride, List<int>? cvStarts = null)
     {
         var parts = new List<(string Sep, string Html)>(rows.Count);
         for (int i = 0; i < rows.Count; i++)
         {
             var r = rows[i];
             var sb = new System.Text.StringBuilder();
+            int cvStart = -1;
 
             if (r.Kind == "PERSON")
             {
@@ -391,6 +396,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                 {
                     // 「(CV:◯◯)」の形式。CV 名義は person_alias なので人物リンク化を使う。
                     // 2 人目の声優がいれば「(CV:◯◯ / △△)」と並べ、2 人目も人物リンク化する。
+                    cvStart = sb.Length;
                     sb.Append('(').Append(System.Net.WebUtility.HtmlEncode(SongRecordingSingerDisplay.CvLabelOf(r.CvLabel, cvLabelOverride)));
                     var html = await lookup.LookupPersonAliasHtmlAsync(vpid).ConfigureAwait(false);
                     sb.Append(html ?? "");
@@ -411,6 +417,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                 sb.Append(' ').Append(System.Net.WebUtility.HtmlEncode(r.Aff));
             }
             parts.Add((i > 0 ? r.Sep ?? "" : "", sb.ToString()));
+            cvStarts?.Add(cvStart);
         }
         return parts;
     }

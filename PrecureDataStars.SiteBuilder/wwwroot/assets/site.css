@@ -1908,6 +1908,20 @@ a.series-card-children-title:hover {
   margin: 0 0 8px calc(var(--credit-role-name-w, 8em) + 16px);
 }
 
+/* 主題歌のカードの歌唱で「(CV:」の頭を縦にそろえた表（役職テンプレの {SINGER:cv_align=1}）。
+   狭い幅では表をほどき、1 人 1 行で名前のすぐ後ろに「(CV:…)」を続ける。収まらないときは「(CV」の前で折る
+   （名前と「(CV:…)」はそれぞれ折らない）。 */
+@media (max-width: 640px) {
+  table.cv-align,
+  table.cv-align > tbody,
+  table.cv-align > tbody > tr {
+    display: block !important;
+  }
+  table.cv-align > tbody > tr > td {
+    display: inline-block !important;
+  }
+}
+
 /* テンプレ未定義時のフォールバック表（役職名 | エントリ右並び） */
 .credit-section table.fallback-table {
   border-collapse: collapse;

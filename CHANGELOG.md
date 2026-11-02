@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **クレジット：主題歌のカードの歌唱で「(CV:」の頭を縦にそろえられるようにした**（`RoleTemplateRenderer`・`ThemeSongsHandler`・`SongRecordingSingersRepository`・`EpisodeThemeSongSingersRepository`・`site.css`）：`{SINGER}` / `{CHORUS}` の `cv_align=1` で、名前と「(CV:…)」を 2 列の表に分けて並べる。サイトの狭い幅では表をほどき、「(CV」の前で折る
+
 - **クレジット：TV の主題歌のカードを画面の文字どおりに描けるようにした**（`role_templates.episode_id`・`song_recording_singers.cv_label`・`episode_theme_song_singers`・`RoleTemplateResolver`・`RoleTemplatesRepository`・`SongRecordingSingersRepository`・`EpisodeThemeSongSingersRepository`・`ThemeSongsHandler`・`RoleTemplateRenderer`・`SingerHtmlBuilder`・`CreditText`・`CreditMastersEditorForm.RoleTabs`・`SongRecordingSingersEditDialog`。マイグレーション `v1.20.0_theme_song_credit_as_printed.sql`）
   - 役職テンプレをエピソード別にも持てるようにした。同じシリーズの中で回によって画面の書式が違うとき、その回だけのテンプレを使う（(role_code, episode_id) → (role_code, series_id) → 既定の順）。Catalog の「役職テンプレート」タブに「話数（0=全話）」の欄を足した
   - 歌唱者の「キャラ(CV:声優)」の声優の前の記号を `song_recording_singers.cv_label` で持つようにした（NULL なら「CV:」）。Catalog の歌唱者編集に「記号」の欄を足した

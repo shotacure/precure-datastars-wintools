@@ -34,6 +34,7 @@ public sealed class EpisodeThemeSongSingersRepository : RepositoryBase
     /// <summary>
     /// 指定の主題歌の行・役職の歌唱者を、歌唱者ごとの部品（直前との区切り, リンク化済み HTML）の並びで返す。
     /// 行が無ければ空の並び。<paramref name="cvLabelOverride"/> があれば、声優の前の記号を行の記号（cv_label）に代えてその文字にする。
+    /// <paramref name="cvStarts"/> を渡すと、部品ごとの「(CV:…)」の始まる位置を足す（<see cref="SongRecordingSingersRepository.BuildHtmlPartsAsync"/>）。
     /// </summary>
     public async Task<IReadOnlyList<(string Sep, string Html)>> GetDisplayHtmlPartsAsync(
         int episodeId,
@@ -43,7 +44,8 @@ public sealed class EpisodeThemeSongSingersRepository : RepositoryBase
         string roleCode,
         ILookupCache lookup,
         string? cvLabelOverride = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        List<int>? cvStarts = null)
     {
         const string sql = """
             SELECT
@@ -69,7 +71,7 @@ public sealed class EpisodeThemeSongSingersRepository : RepositoryBase
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<SongRecordingSingersRepository.HtmlRow>(new CommandDefinition(
             sql, new { episodeId, isBroadcastOnly, themeKind, seq, roleCode }, cancellationToken: ct)).ConfigureAwait(false)).ToList();
-        return await SongRecordingSingersRepository.BuildHtmlPartsAsync(rows, lookup, cvLabelOverride).ConfigureAwait(false);
+        return await SongRecordingSingersRepository.BuildHtmlPartsAsync(rows, lookup, cvLabelOverride, cvStarts).ConfigureAwait(false);
     }
 
     /// <summary>部品の並びを、直前との区切り（HtmlEncode する）でつないだ連名 HTML にする。</summary>

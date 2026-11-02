@@ -228,18 +228,26 @@ public static class ThemeSongsHandler
             if (hasEpisode && r.ThemeKind is string kind && r.Seq is byte seq
                 && await episodeSingers.ExistsAsync(episodeId!.Value, r.IsBroadcastOnly, kind, seq, ct).ConfigureAwait(false))
             {
+                var singerCv = new List<int>();
+                var chorusCv = new List<int>();
                 r.SingerParts = await episodeSingers.GetDisplayHtmlPartsAsync(episodeId!.Value, r.IsBroadcastOnly, kind, seq,
-                    SongRecordingSingerRoles.Vocals, lookup, cvLabelOverride, ct).ConfigureAwait(false);
+                    SongRecordingSingerRoles.Vocals, lookup, cvLabelOverride, ct, singerCv).ConfigureAwait(false);
                 r.ChorusParts = await episodeSingers.GetDisplayHtmlPartsAsync(episodeId!.Value, r.IsBroadcastOnly, kind, seq,
-                    SongRecordingSingerRoles.Chorus, lookup, cvLabelOverride, ct).ConfigureAwait(false);
+                    SongRecordingSingerRoles.Chorus, lookup, cvLabelOverride, ct, chorusCv).ConfigureAwait(false);
+                r.SingerCvStarts = singerCv;
+                r.ChorusCvStarts = chorusCv;
                 r.SingerHtml = EpisodeThemeSongSingersRepository.JoinHtmlParts(r.SingerParts);
                 r.ChorusHtml = EpisodeThemeSongSingersRepository.JoinHtmlParts(r.ChorusParts);
             }
             else if (r.SongRecordingId > 0)
             {
                 // うた：song_recording_singers から VOCALS 役職の連名を HTML 版で取得（部品も持たせる）。
-                r.SingerParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct, cvLabelOverride).ConfigureAwait(false);
-                r.ChorusParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct, cvLabelOverride).ConfigureAwait(false);
+                var singerCv = new List<int>();
+                var chorusCv = new List<int>();
+                r.SingerParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct, cvLabelOverride, singerCv).ConfigureAwait(false);
+                r.ChorusParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct, cvLabelOverride, chorusCv).ConfigureAwait(false);
+                r.SingerCvStarts = singerCv;
+                r.ChorusCvStarts = chorusCv;
                 string singHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct, cvLabelOverride).ConfigureAwait(false);
                 r.SingerHtml = !string.IsNullOrEmpty(singHtml)
                     ? singHtml
@@ -536,6 +544,10 @@ public static class ThemeSongsHandler
         public IReadOnlyList<(string Sep, string Html)> LyricsTranslatorParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> SingerParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> ChorusParts { get; set; } = Array.Empty<(string, string)>();
+        // 歌・コーラスの部品ごとに「(CV:…)」が始まる HTML 上の位置（無ければ -1）。部品と同じ順・同じ数。
+        // 役職テンプレの {SINGER:cv_align=1} で、名前と「(CV:…)」を別の欄に分けて縦にそろえるときに使う。
+        public IReadOnlyList<int> SingerCvStarts { get; set; } = Array.Empty<int>();
+        public IReadOnlyList<int> ChorusCvStarts { get; set; } = Array.Empty<int>();
 
         // ── 名義ごとの部品（名義のあとに所属を添えたもの）──
         // 所属の出し方が NAME_WITH_COMPANY の行は名義のあとに「(所属)」を添える（同じ所属が続くときは最後の名義のあとにだけ）。

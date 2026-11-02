@@ -46,6 +46,8 @@ namespace PrecureDataStars.TemplateRendering;
 ///     連名のプレースホルダ（<c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> / <c>{MEDLEY_ARRANGER}</c> /
 ///     <c>{SINGER}</c> / <c>{CHORUS}</c>）は <c>sep="…"</c> で名義の間の区切りを差し替えられる（DB の区切りの代わりに
 ///     テンプレの文字を HTML のまま入れる。<c>sep="&lt;br&gt;"</c> で改行）。構造化クレジットが無い曲には効かない。
+///     <c>{SINGER}</c> / <c>{CHORUS}</c> は <c>cv_align=1</c> で、1 人 1 行に並べて「(CV:…)」の頭を縦にそろえる
+///     （名前と「(CV:…)」を 2 列の格子に分ける。名義が 2 つ以上のときだけ）。
 ///     <c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> は、曲のクレジットの所属の出し方が「名義のあとに所属を添える」行なら、名義のあとに
 ///     「(所属)」を小さい字で添える（次の名義と同じ所属が続くときは最後の名義のあとにだけ）。所属を出すかどうかは曲のクレジットで決まり、テンプレでは指定しない。
 ///     <c>{SONG_SERIES_TITLE}</c> は曲の作品（録音の作品）の正式タイトルで、クレジットの作品と同じ作品の曲なら空。
@@ -72,11 +74,41 @@ public static class RoleTemplateRenderer
     /// フリーテキストのときは、DB の区切りでつないだ <paramref name="joinedHtml"/> を返す。
     /// </summary>
     private static string NamesHtml(PlaceholderNode ph, string? joinedHtml,
-        IReadOnlyList<(string Sep, string Html)>? parts)
+        IReadOnlyList<(string Sep, string Html)>? parts, IReadOnlyList<int>? cvStarts = null)
     {
+        if (parts is { Count: > 1 } && cvStarts is not null && cvStarts.Count == parts.Count
+            && ph.Options.TryGetValue("cv_align", out var align) && align == "1")
+            return CvAlignedHtml(parts, cvStarts);
         if (parts is { Count: > 1 } && ph.Options.TryGetValue("sep", out var sep))
             return string.Join(sep, parts.Select(p => p.Html));
         return joinedHtml ?? "";
+    }
+
+    /// <summary>
+    /// 歌・コーラスの名義を 1 人 1 行に並べ、「(CV:…)」の頭を縦にそろえた HTML（<c>{SINGER:cv_align=1}</c>）。
+    /// 名前と「(CV:…)」（所属の添え書きを含む）を 2 列の表の別の欄に入れ、名前の欄の幅をいちばん長い名前に合わせる
+    /// （画面で短い名前の後ろを空けて「(CV:」をそろえている作品用）。「(CV:…)」の無い名義は 2 列をまたいで 1 行に置く。
+    /// 表にしているのは Catalog のプレビュー（IE の描画）でもそろえるため。サイトの狭い幅では、site.css が表を
+    /// ほどいて 1 人 1 行の並びに戻す（クラス <c>cv-align</c>）。DB の区切り（「&amp;」「、」など）は使わない。
+    /// </summary>
+    private static string CvAlignedHtml(IReadOnlyList<(string Sep, string Html)> parts, IReadOnlyList<int> cvStarts)
+    {
+        const string cell = "<td style=\"padding:0;border:0;background:transparent;vertical-align:baseline;white-space:nowrap;\"";
+        var sb = new System.Text.StringBuilder(
+            "<table class=\"cv-align\" style=\"display:inline-table;width:auto;border-collapse:collapse;margin:0;\"><tbody>");
+        for (int i = 0; i < parts.Count; i++)
+        {
+            string html = parts[i].Html;
+            int at = cvStarts[i];
+            sb.Append("<tr>");
+            if (at < 0 || at > html.Length)
+                sb.Append(cell).Append(" colspan=\"2\">").Append(html).Append("</td>");
+            else
+                sb.Append(cell).Append('>').Append(html, 0, at).Append("</td>")
+                  .Append(cell).Append('>').Append(html, at, html.Length - at).Append("</td>");
+            sb.Append("</tr>");
+        }
+        return sb.Append("</tbody></table>").ToString();
     }
 
     /// <summary>
@@ -143,6 +175,7 @@ public static class RoleTemplateRenderer
                             : string.IsNullOrEmpty(row.SingerHtml) ? prev.SingerHtml
                             : prev.SingerHtml + "<br>" + row.SingerHtml;
             prev.SingerParts = prev.SingerParts.Concat(row.SingerParts.Select((p, i) => i == 0 ? ("<br>", p.Html) : p)).ToList();
+            prev.SingerCvStarts = prev.SingerCvStarts.Concat(row.SingerCvStarts).ToList();
             prev.VariantLabel = null;
         }
         return result;
@@ -493,12 +526,12 @@ public static class RoleTemplateRenderer
                 // テンプレ側で {?MEDLEY_ARRANGER}メドレー編曲:{MEDLEY_ARRANGER}{/?MEDLEY_ARRANGER} のように条件展開できる。
                 return NamesHtml(ph, currentSong?.MedleyArrangerHtml, currentSong?.MedleyArrangerParts);
             case "SINGER":
-                return NamesHtml(ph, currentSong?.SingerHtml, currentSong?.SingerParts);
+                return NamesHtml(ph, currentSong?.SingerHtml, currentSong?.SingerParts, currentSong?.SingerCvStarts);
             case "CHORUS":
                 // 楽曲スコープ：BACKING_VOCALS 役職の連名（リンク化済み HTML）。
                 // 該当録音にコーラスが居ない場合は空文字列を返すため、
                 // テンプレ側で {?CHORUS}コーラス:{CHORUS}{/?CHORUS} のように条件展開できる。
-                return NamesHtml(ph, currentSong?.ChorusHtml, currentSong?.ChorusParts);
+                return NamesHtml(ph, currentSong?.ChorusHtml, currentSong?.ChorusParts, currentSong?.ChorusCvStarts);
             case "VARIANT_LABEL":
                 return System.Net.WebUtility.HtmlEncode(currentSong?.VariantLabel ?? "");
             case "SONG_SERIES_TITLE":

@@ -11,11 +11,12 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 /// <summary>
 /// 新規クレジット作成ダイアログ。
 /// scope_kind と series_id / episode_id は呼び出し側で確定済みの状態で渡され、
-/// 本ダイアログでは「OP/ED の選択 / presentation / 本放送限定フラグ / part_type / notes」のみを
+/// 本ダイアログでは「OP/ED の選択 / presentation / part_type / 版 / notes」のみを
 /// 入力する。OK 押下時に <see cref="Result"/> プロパティに値が組まれた <see cref="Credit"/> を
 /// 返すが、DB への INSERT は呼び出し側で行う（責務分離のため）。
 /// part_type コンボには <c>part_types</c> マスタ全件＋先頭の「（規定位置）」を流し込む。
 /// 「（規定位置）」を選んだ場合は <see cref="Credit.PartType"/> = null となる。
+/// 版コンボは「共通」（<see cref="Credit.MediaVersion"/> = null、既定）・「本放送」・「Blu-ray・配信」の 3 つ。
 /// </summary>
 public partial class CreditNewDialog : Form
 {
@@ -48,6 +49,14 @@ public partial class CreditNewDialog : Form
 
         InitializeComponent();
         lblTargetValue.Text = targetLabel;
+        cboMediaVersion.DisplayMember = "Label";
+        cboMediaVersion.ValueMember = "Code";
+        cboMediaVersion.DataSource = new List<CodeLabel>
+        {
+            new CodeLabel("", "共通（本放送と Blu-ray・配信で同じ）"),
+            new CodeLabel(CreditMediaVersions.Broadcast, CreditMediaVersions.LabelOf(CreditMediaVersions.Broadcast)),
+            new CodeLabel(CreditMediaVersions.HomeVideo, CreditMediaVersions.LabelOf(CreditMediaVersions.HomeVideo)),
+        };
 
         btnOk.Click += (_, __) => OnOkClick();
         Load += async (_, __) => await OnLoadAsync();
@@ -82,6 +91,7 @@ public partial class CreditNewDialog : Form
             SeriesId = _seriesId,
             EpisodeId = _episodeId,
             CreditKind = rbKindOp.Checked ? "OP" : "ED",
+            MediaVersion = (cboMediaVersion.SelectedValue as string) is { Length: > 0 } version ? version : null,
             PartType = (cboPartType.SelectedValue as string) is { Length: > 0 } code ? code : null,
             Presentation = rbPresentationCards.Checked ? "CARDS" : "ROLL",
             Notes = string.IsNullOrWhiteSpace(txtNotes.Text) ? null : txtNotes.Text.Trim(),

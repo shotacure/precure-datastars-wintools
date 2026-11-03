@@ -2444,10 +2444,11 @@ CREATE TABLE `role_templates` (
 
 --
 -- Table structure for table `credits`
--- クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で OP/ED 各 1 件まで。
--- 本放送と円盤・配信の差し替えは個々のエントリ単位（credit_block_entries.is_broadcast_only）で
--- 行うため、クレジット本体（クレジット 1 件 = OP または ED の役職構成）には
--- 本放送限定フラグを持たせない。
+-- クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で、OP/ED 各 1 件を版（media_version）ごとに持つ。
+-- 版は NULL（共通）が通常。本放送と Blu-ray・配信でクレジットのフォーマットが丸ごと違う作品（オトナシリーズ）だけ、
+-- 同じ回・同じ種類を BROADCAST（本放送）と HOME_VIDEO（Blu-ray・配信）の 2 本で並べる。
+-- SiteBuilder の集計は共通と Blu-ray・配信版だけで数え、本放送版は表示だけに使う。
+-- 一部の差し替え（ロゴバージョン違い等）は個々のエントリ単位（credit_block_entries.is_broadcast_only）で行う。
 -- scope=SERIES なら series_id 必須・episode_id NULL、scope=EPISODE はその逆。
 -- part_type が NULL の行は「規定位置（part_types.default_credit_kind が
 -- credit_kind と一致するパート）で流れる」を意味する。
@@ -2467,6 +2468,11 @@ CREATE TABLE `credits` (
   `series_id`         int                                                          DEFAULT NULL,
   `episode_id`        int                                                          DEFAULT NULL,
   `credit_kind`       varchar(16)                                                  NOT NULL,
+  -- 版（BROADCAST = 本放送、HOME_VIDEO = Blu-ray・配信、NULL = 共通）。
+  `media_version`     enum('BROADCAST','HOME_VIDEO')                               DEFAULT NULL,
+  -- 一意制約用の生成列。MySQL の UNIQUE は NULL どうしを衝突させないため、NULL を空文字にして
+  -- 共通（NULL）のクレジットも同じ回・同じ種類で 1 本までに抑える。
+  `media_version_key` varchar(16) GENERATED ALWAYS AS (IFNULL(`media_version`, '')) STORED,
   -- 同一スコープ（同一エピソード／同一シリーズ）内でのクレジットの表示順。
   -- credits はクレジット階層の最上位だが、従来は順序カラムを持たず
   -- credit_kind の暗黙順（OP→ED）に依存していた。OP より ED を先に流す回や
@@ -2482,8 +2488,8 @@ CREATE TABLE `credits` (
   `updated_by`        varchar(64)  DEFAULT NULL,
   `is_deleted`        tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`credit_id`),
-  UNIQUE KEY `uq_credit_series_kind`  (`series_id`,`credit_kind`),
-  UNIQUE KEY `uq_credit_episode_kind` (`episode_id`,`credit_kind`),
+  UNIQUE KEY `uq_credit_series_kind_version`  (`series_id`,`credit_kind`,`media_version_key`),
+  UNIQUE KEY `uq_credit_episode_kind_version` (`episode_id`,`credit_kind`,`media_version_key`),
   -- 同一スコープ内で credit_seq を一意にし、表示順の重複・破綻を防ぐ。
   -- series_id / episode_id は排他（scope_kind で一方のみ非 NULL）なので
   -- NULL を含む行同士は MySQL の UNIQUE では衝突しない（想定どおり）。

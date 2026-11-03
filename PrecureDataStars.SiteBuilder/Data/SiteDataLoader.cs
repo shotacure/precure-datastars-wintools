@@ -279,12 +279,22 @@ public static class SiteDataLoader
         // SeriesGenerator の per-episode 6 階層 DB ループの起点 GetByEpisodeAsync を撲滅するため、
         // および EpisodeGenerator が per-page で同じ呼び出しを発火していた経路も同時に置き換える前提。
         var allCredits = await creditsRepo.GetAllAsync(ct).ConfigureAwait(false);
-        var creditsByEpisode = allCredits
+        // 表示用（エピソード詳細・作品詳細のクレジット）は全版、集計用は本放送版を除いた共通と Blu-ray・配信版だけ。
+        var creditsByEpisodeForDisplay = allCredits
             .Where(c => c.EpisodeId.HasValue)
             .GroupBy(c => c.EpisodeId!.Value)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
-        var creditsBySeries = allCredits
+        var creditsBySeriesForDisplay = allCredits
             .Where(c => string.Equals(c.ScopeKind, "SERIES", StringComparison.Ordinal) && c.SeriesId.HasValue)
+            .GroupBy(c => c.SeriesId!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
+        var creditsByEpisode = allCredits
+            .Where(c => c.EpisodeId.HasValue && CreditMediaVersions.CountsForStats(c.MediaVersion))
+            .GroupBy(c => c.EpisodeId!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
+        var creditsBySeries = allCredits
+            .Where(c => string.Equals(c.ScopeKind, "SERIES", StringComparison.Ordinal) && c.SeriesId.HasValue
+                        && CreditMediaVersions.CountsForStats(c.MediaVersion))
             .GroupBy(c => c.SeriesId!.Value)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
         logger.Info($"credits: episode_scope={creditsByEpisode.Count} ep, series_scope={creditsBySeries.Count} series");
@@ -464,6 +474,8 @@ public static class SiteDataLoader
             CreditTree = creditTreeIndex,
             CreditsByEpisode = creditsByEpisode,
             CreditsBySeries = creditsBySeries,
+            CreditsByEpisodeForDisplay = creditsByEpisodeForDisplay,
+            CreditsBySeriesForDisplay = creditsBySeriesForDisplay,
             PersonAliasById = personAliasById,
             CharacterAliasById = characterAliasById,
             CompanyAliasById = companyAliasById,

@@ -352,7 +352,8 @@ internal sealed class CreditPreviewRenderer
         else
         {
             // 並び順を OP → ED 固定に揃える
-            var sorted = credits.OrderBy(c => KindOrder(c.CreditKind)).ThenBy(c => c.CreditKind).ToList();
+            var sorted = credits.OrderBy(c => KindOrder(c.CreditKind)).ThenBy(c => c.CreditKind)
+                .ThenBy(c => CreditMediaVersions.SortOrder(c.MediaVersion)).ToList();
             for (int i = 0; i < sorted.Count; i++)
             {
                 if (i > 0) html.Append("<hr class=\"credit-separator\">");
@@ -372,6 +373,8 @@ internal sealed class CreditPreviewRenderer
         CancellationToken ct)
     {
         string kindLabel = kindMap.TryGetValue(credit.CreditKind, out var nm) ? nm : credit.CreditKind;
+        // 版のあるクレジット（本放送／Blu-ray・配信）は見出しに版を添えて、同じ種別の 2 本を見分ける。
+        if (credit.MediaVersion is not null) kindLabel += $"（{CreditMediaVersions.LabelOf(credit.MediaVersion)}）";
         html.Append($"<h1>{Esc(kindLabel)}</h1>");
 
         var cards = (await _cardsRepo.GetByCreditAsync(credit.CreditId, ct))
@@ -774,6 +777,8 @@ internal sealed class CreditPreviewRenderer
         int? resolveSeriesId = await ResolveTemplateSeriesIdAsync(credit, ct);
 
         string kindLabel = kindMap.TryGetValue(credit.CreditKind, out var nm) ? nm : credit.CreditKind;
+        // 版のあるクレジット（本放送／Blu-ray・配信）は見出しに版を添えて、同じ種別の 2 本を見分ける。
+        if (credit.MediaVersion is not null) kindLabel += $"（{CreditMediaVersions.LabelOf(credit.MediaVersion)}）";
         html.Append($"<h1>{Esc(kindLabel)}</h1>");
 
         // Draft の Card → Tier → Group → Role を辿る。State==Deleted は除外。順序キーは Entity の seq 列に従う。

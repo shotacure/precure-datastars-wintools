@@ -219,6 +219,8 @@ public sealed class BuildContext
     /// 旧 SeriesGenerator / EpisodeGenerator はページごとに <c>CreditsRepository.GetByEpisodeAsync</c> を
     /// 発火していたが、SiteDataLoader で全件取得して episode_id でグルーピングすることで
     /// per-page の DB 往復を撲滅する。並びは credit_seq 昇順を維持。
+    /// 集計（関わった話数・役職の何回目・スタッフの抜き出しなど）の元なので、本放送版（media_version = BROADCAST）は含まない。
+    /// クレジットの表示には <see cref="CreditsByEpisodeForDisplay"/> を使う。
     /// </summary>
     public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> CreditsByEpisode { get; init; }
 
@@ -228,6 +230,15 @@ public sealed class BuildContext
     /// を発火する代わりに本辞書を使う想定。並びは credit_seq 昇順を維持。
     /// </summary>
     public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> CreditsBySeries { get; init; }
+
+    /// <summary>
+    /// episode_id → そのエピソードのクレジット（scope=EPISODE）を全版（共通・本放送・Blu-ray・配信）含めた辞書。
+    /// エピソード詳細のクレジットの描画だけに使う（本放送版は表示だけで集計には数えない）。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> CreditsByEpisodeForDisplay { get; init; }
+
+    /// <summary>series_id → そのシリーズのクレジット（scope=SERIES）を全版含めた辞書。作品詳細のクレジットの描画だけに使う。</summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> CreditsBySeriesForDisplay { get; init; }
 
     /// <summary>
     /// episode_id → そのエピソードのパート一覧（episode_seq 昇順）の事前展開辞書。

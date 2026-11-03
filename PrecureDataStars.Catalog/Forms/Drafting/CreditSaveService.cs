@@ -644,6 +644,7 @@ internal sealed class CreditSaveService
     {
         const string sql = """
             UPDATE credits SET
+              media_version = @MediaVersion,
               presentation = @Presentation,
               part_type = @PartType,
               notes = @Notes,
@@ -662,10 +663,10 @@ internal sealed class CreditSaveService
     {
         const string sql = """
             INSERT INTO credits
-              (scope_kind, series_id, episode_id, credit_kind, credit_seq, part_type, presentation,
+              (scope_kind, series_id, episode_id, credit_kind, media_version, credit_seq, part_type, presentation,
                notes, created_by, updated_by)
             VALUES
-              (@ScopeKind, @SeriesId, @EpisodeId, @CreditKind,
+              (@ScopeKind, @SeriesId, @EpisodeId, @CreditKind, @MediaVersion,
                (SELECT COALESCE(MAX(c2.credit_seq), 0) + 1
                   FROM (SELECT credit_seq, series_id, episode_id FROM credits) AS c2
                  WHERE (@SeriesId  IS NOT NULL AND c2.series_id  = @SeriesId)

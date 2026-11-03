@@ -755,7 +755,11 @@ public partial class CreditEditorForm : Form
     /// <param name="c">対象クレジット。</param>
     /// <param name="orderNo">表示母集合内での 1 始まり順序番号（リスト先頭=1）。</param>
     private static string BuildCreditListLabel(Credit c, int orderNo)
-        => $"#{orderNo}  {c.CreditKind}  ({c.Presentation})";
+        => $"#{orderNo}  {KindWithVersion(c)}  ({c.Presentation})";
+
+    /// <summary>クレジット種別に版の表示名を添えた文字列（例：「OP」「OP 本放送」）。版が共通（NULL）なら種別だけ。</summary>
+    private static string KindWithVersion(Credit c)
+        => c.MediaVersion is null ? c.CreditKind : $"{c.CreditKind} {CreditMediaVersions.LabelOf(c.MediaVersion)}";
 
     /// <summary>クレジット選択時のエントリポイント（ディスパッチャ）。
     /// 直列化キュー方式で「連続発火 N 回 → 最新 1 回だけが実処理を完走」を保証する。
@@ -908,7 +912,7 @@ public partial class CreditEditorForm : Form
             ? "  ★ 未保存の変更あり"
             : "";
         lblStatusBar.Text =
-            $"現在編集中: {scope} {idLabel}  /  {_currentCredit.CreditKind}  ({_currentCredit.Presentation}){unsavedMark}";
+            $"現在編集中: {scope} {idLabel}  /  {KindWithVersion(_currentCredit)}  ({_currentCredit.Presentation}){unsavedMark}";
     }
 
     /// <summary>TreeView 上で「Pending マスタを参照しているノード」を塗る色。
@@ -1254,7 +1258,7 @@ public partial class CreditEditorForm : Form
         // _currentCredit が null の場合（理論上ありえないが）は無難なフォールバック文言。
         string label = _currentCredit is null
             ? "現在のクレジット"
-            : $"#{_currentCredit.CreditId} {_currentCredit.CreditKind} ({_currentCredit.Presentation})";
+            : $"#{_currentCredit.CreditId} {KindWithVersion(_currentCredit)} ({_currentCredit.Presentation})";
 
         var result = MessageBox.Show(this,
             $"「{label}」に未保存の変更があります。\n\n"
@@ -1619,7 +1623,7 @@ public partial class CreditEditorForm : Form
             {
                 // 1062 = Duplicate entry: UNIQUE 衝突
                 MessageBox.Show(this,
-                    "同じスコープ・OP/ED 区分のクレジットが既に存在します。\n" +
+                    "同じスコープ・OP/ED 区分・版のクレジットが既に存在します。\n" +
                     "（既存クレジットのプロパティを編集してください）",
                     "重複エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -1654,17 +1658,17 @@ public partial class CreditEditorForm : Form
             if (dlg.ShowDialog(this) != DialogResult.OK || dlg.Result is null) return;
             var destEntity = dlg.Result;
 
-            // コピー先に同種クレジット（episode_id × credit_kind）の既存があるか確認。
+            // コピー先に同種クレジット（episode_id × credit_kind × 版）の既存があるか確認。
             // ある場合は「上書き（旧を論理削除）／中止」を選ばせる。
             if (destEntity.EpisodeId is int destEpisodeId)
             {
                 var existing = await _creditsRepo.GetByEpisodeAsync(destEpisodeId);
                 var conflict = existing.FirstOrDefault(c =>
-                    c.CreditKind == destEntity.CreditKind);
+                    c.CreditKind == destEntity.CreditKind && c.MediaVersion == destEntity.MediaVersion);
                 if (conflict is not null)
                 {
                     var ans = MessageBox.Show(this,
-                        $"コピー先エピソードに既に同種クレジット（#{conflict.CreditId} {conflict.CreditKind} ({conflict.Presentation})）があります。\n\n"
+                        $"コピー先エピソードに既に同種クレジット（#{conflict.CreditId} {KindWithVersion(conflict)} ({conflict.Presentation})）があります。\n\n"
                         + "[はい]   = 既存を論理削除して上書き\n"
                         + "[いいえ] = 操作を中止",
                         "クレジットの重複", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);

@@ -167,6 +167,7 @@ public partial class CreditCopyDialog : Form
                 SeriesId = null,
                 EpisodeId = episodeId,
                 CreditKind = _srcCredit.CreditKind,   // 固定
+                MediaVersion = _srcCredit.MediaVersion,   // 版もコピー元と同じ（本放送版は本放送版へ写す）
                 Presentation = presentation,
                 PartType = partType,
                 Notes = notes,

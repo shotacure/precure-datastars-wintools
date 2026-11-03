@@ -486,6 +486,15 @@ public sealed class EpisodeGenerator
             .OrderBy(c => KindOrder(c.CreditKind))
             .ThenBy(c => c.CreditKind, StringComparer.Ordinal)
             .ToList();
+        // 描画は全版（本放送版を含む）。同じ種別の中は 共通 → 本放送 → Blu-ray・配信 の順。
+        var displayCredits = (_ctx.CreditsByEpisodeForDisplay.TryGetValue(ep.EpisodeId, out var cachedDisplayCredits)
+                ? cachedDisplayCredits
+                : (IReadOnlyList<Credit>)Array.Empty<Credit>())
+            .Where(c => !c.IsDeleted)
+            .OrderBy(c => KindOrder(c.CreditKind))
+            .ThenBy(c => c.CreditKind, StringComparer.Ordinal)
+            .ThenBy(c => CreditMediaVersions.SortOrder(c.MediaVersion))
+            .ToList();
 
         // credit_kinds マスタから日本語名（"オープニングクレジット" / "エンディングクレジット" 等）を取り出す。
         // プレビュー側の RenderOneCreditFromDbAsync と同じ参照ルート。
@@ -496,12 +505,12 @@ public sealed class EpisodeGenerator
         }
 
         var creditBlocks = new List<CreditBlockView>();
-        foreach (var c in credits)
+        foreach (var c in displayCredits)
         {
             var html = await _creditRenderer.RenderAsync(c, _ctx.Logger, ct).ConfigureAwait(false);
             creditBlocks.Add(new CreditBlockView
             {
-                CreditKindLabel = _creditKindLabelMap.TryGetValue(c.CreditKind, out var nm) ? nm : c.CreditKind,
+                CreditKindLabel = CreditHeadingLabel(c, _creditKindLabelMap),
                 Html = html
             });
         }
@@ -1657,6 +1666,16 @@ public sealed class EpisodeGenerator
             SeriesTitle = owner.SeriesId == current.SeriesId ? "" : owner.Title,
             Title = $"『{owner.Title}』 第{target.SeriesEpNo}話（{JpDateFormat.BroadcastDate(target.OnAirAt)}）"
         };
+    }
+
+    /// <summary>
+    /// クレジットの見出し（credit_kinds の日本語名）。版のあるクレジットは「オープニングクレジット（本放送）」のように版を添える。
+    /// 作品詳細（SeriesGenerator）の SERIES スコープのクレジットの見出しにも使う。
+    /// </summary>
+    internal static string CreditHeadingLabel(Credit c, IReadOnlyDictionary<string, string> kindLabelMap)
+    {
+        string label = kindLabelMap.TryGetValue(c.CreditKind, out var nm) ? nm : c.CreditKind;
+        return c.MediaVersion is null ? label : $"{label}（{CreditMediaVersions.LabelOf(c.MediaVersion)}）";
     }
 
     /// <summary>主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。</summary>

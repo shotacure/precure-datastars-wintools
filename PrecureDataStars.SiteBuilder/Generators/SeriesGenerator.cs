@@ -1354,7 +1354,8 @@ public sealed class SeriesGenerator
         }
         // SERIES スコープのクレジット行は SiteDataLoader が全件ロード済み（is_deleted=0）の辞書から引く
         // （EPISODE スコープのクレジットは series_id を持たない運用のため、旧 GetBySeriesAsync と同一の行集合になる）。
-        var seriesCredits = (_ctx.CreditsBySeries.TryGetValue(s.SeriesId, out var cachedSeriesCredits)
+        // 描画は全版（本放送版を含む）の辞書から引く。
+        var seriesCredits = (_ctx.CreditsBySeriesForDisplay.TryGetValue(s.SeriesId, out var cachedSeriesCredits)
                 ? cachedSeriesCredits
                 : (IReadOnlyList<Credit>)Array.Empty<Credit>())
             .Where(c => !c.IsDeleted)
@@ -1367,7 +1368,7 @@ public sealed class SeriesGenerator
             string html = await _creditRenderer.RenderAsync(c, _ctx.Logger, ct).ConfigureAwait(false);
             creditBlocks.Add(new SeriesCreditBlockView
             {
-                CreditKindLabel = _creditKindLabelMap.TryGetValue(c.CreditKind, out var nm) ? nm : c.CreditKind,
+                CreditKindLabel = EpisodeGenerator.CreditHeadingLabel(c, _creditKindLabelMap),
                 Html = html
             });
         }

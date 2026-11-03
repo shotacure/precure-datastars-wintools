@@ -151,6 +151,8 @@ public partial class CreditEditorForm
                         if (role.JoinPrevious) roleNote += $"  [直前の役職とまとめる 区切り「{Dialogs.JoinedRoleLabelText.EncodeLineBreaks(role.JoinSeparator ?? "")}」]";
                         if (role.HideRoleLabel) roleNote += "  [役職名を出さない]";
                         if (role.NotOnScreen) roleNote += "  [画面に無い]";
+                        // 名前は画面に出ているが役職名だけが画面に無い行（role_label_not_on_screen）。
+                        if (role.RoleLabelNotOnScreen) roleNote += "  [役職名は画面に無い]";
                         // 主題歌ループが出す曲を劇中順の範囲で絞る指定（theme_song_seq）。
                         if (!string.IsNullOrEmpty(role.ThemeSongSeq)) roleNote += $"  [曲 {role.ThemeSongSeq}]";
 

@@ -882,6 +882,8 @@ public sealed class CreditBulkApplyService
         role.Entity.HideRoleLabel = pr.HideRoleLabel;
         // その行は画面にはクレジットされていないか（クレジット漏れ）。
         role.Entity.NotOnScreen = pr.NotOnScreen;
+        // 名前は画面に出ているが役職名だけが画面に無いか。
+        role.Entity.RoleLabelNotOnScreen = pr.RoleLabelNotOnScreen;
         // 主題歌ループが出す曲を絞る劇中順の範囲。
         role.Entity.ThemeSongSeq = pr.ThemeSongSeq;
 
@@ -2443,6 +2445,7 @@ public sealed class CreditBulkApplyService
             || !string.Equals(draftRole.Entity.JoinSeparator, newRole.JoinSeparator, StringComparison.Ordinal)
             || draftRole.Entity.HideRoleLabel != newRole.HideRoleLabel
             || draftRole.Entity.NotOnScreen != newRole.NotOnScreen
+            || draftRole.Entity.RoleLabelNotOnScreen != newRole.RoleLabelNotOnScreen
             || !string.Equals(draftRole.Entity.ThemeSongSeq, newRole.ThemeSongSeq, StringComparison.Ordinal))
         {
             draftRole.Entity.RoleLabelText = newRole.RoleLabelText;
@@ -2451,6 +2454,7 @@ public sealed class CreditBulkApplyService
             draftRole.Entity.JoinSeparator = newRole.JoinSeparator;
             draftRole.Entity.HideRoleLabel = newRole.HideRoleLabel;
             draftRole.Entity.NotOnScreen = newRole.NotOnScreen;
+            draftRole.Entity.RoleLabelNotOnScreen = newRole.RoleLabelNotOnScreen;
             draftRole.Entity.ThemeSongSeq = newRole.ThemeSongSeq;
             draftRole.MarkModified();
         }
@@ -2750,6 +2754,7 @@ public sealed class CreditBulkApplyService
           .Append("|joinsep=").Append(r.JoinSeparator ?? string.Empty)
           .Append("|hidelabel=").Append(r.HideRoleLabel ? '1' : '0')
           .Append("|notonscreen=").Append(r.NotOnScreen ? '1' : '0')
+          .Append("|labelnotonscreen=").Append(r.RoleLabelNotOnScreen ? '1' : '0')
           .Append("|themesongseq=").Append(r.ThemeSongSeq ?? string.Empty).Append('\n');
         foreach (var b in r.Blocks) sb.Append(SerializeBlockForCompare(b));
         return sb.ToString();

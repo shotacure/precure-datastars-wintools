@@ -60,6 +60,13 @@ public sealed class TemplateContext
     public IReadOnlySet<string> VisitedRoleCodes { get; }
 
     /// <summary>
+    /// この役職の行は役職名だけが画面にはクレジットされていないか（<c>credit_card_roles.role_label_not_on_screen</c>）。
+    /// true のとき <c>{ROLE_NAME}</c> と、自分の役職コードを指す <c>{ROLE_LINK:code=…}</c> を全角の括弧で包んで薄く出す
+    /// （<see cref="CreditRoleLabel.WrapNotOnScreenHtml"/>）。名前・中身はふつうに出す。
+    /// </summary>
+    public bool RoleLabelNotOnScreen { get; }
+
+    /// <summary>
     /// この役職の行で主題歌（<c>{#THEME_SONGS}</c> ループ・旧 <c>{THEME_SONGS}</c> プレースホルダ）が出す曲を絞る劇中順の範囲
     /// （<c>credit_card_roles.theme_song_seq</c>。<c>"N"</c> か <c>"N-M"</c>）。null なら絞らない。
     /// テンプレは役職ごとに共通なので、主題歌のカードが分かれて挿入歌を振り分けるときの「カードごとの範囲」は役職の行の値で持つ。
@@ -84,7 +91,8 @@ public sealed class TemplateContext
     /// <c>series_theme_songs</c> 経由の {THEME_SONGS} 展開を可能にする。
     /// <paramref name="scopeSeriesTitle"/> を渡すと <c>{SERIES_TITLE}</c> プレースホルダで、<paramref name="scopeFilmRatingNo"/> を渡すと
     /// <c>{FILM_RATING_NO}</c> プレースホルダで参照できる（省略時は空文字）。<paramref name="scopeFilmCjMark"/> は <c>{CJ_MARK}</c> の値になる（省略時は false）。
-    /// <paramref name="themeSongSeq"/> は役職の行の <c>theme_song_seq</c>（主題歌の曲を劇中順の範囲で絞る。省略時は絞らない）。</summary>
+    /// <paramref name="themeSongSeq"/> は役職の行の <c>theme_song_seq</c>（主題歌の曲を劇中順の範囲で絞る。省略時は絞らない）。
+    /// <paramref name="roleLabelNotOnScreen"/> は役職の行の <c>role_label_not_on_screen</c>（役職名だけ画面に無い。省略時は false）。</summary>
     public TemplateContext(
         string roleCode,
         string roleName,
@@ -98,7 +106,8 @@ public sealed class TemplateContext
         string? scopeSeriesTitle = null,
         string? scopeFilmRatingNo = null,
         bool scopeFilmCjMark = false,
-        string? themeSongSeq = null)
+        string? themeSongSeq = null,
+        bool roleLabelNotOnScreen = false)
     {
         RoleCode = roleCode ?? "";
         RoleName = roleName ?? "";
@@ -113,6 +122,7 @@ public sealed class TemplateContext
         SiblingRoleResolver = siblingRoleResolver;
         VisitedRoleCodes = visitedRoleCodes ?? new HashSet<string>(StringComparer.Ordinal);
         ThemeSongSeq = string.IsNullOrWhiteSpace(themeSongSeq) ? null : themeSongSeq;
+        RoleLabelNotOnScreen = roleLabelNotOnScreen;
     }
 
     /// <summary>
@@ -120,7 +130,7 @@ public sealed class TemplateContext
     /// <c>{ROLE:CODE.PLACEHOLDER}</c> 評価時にレンダラが内部的に呼び、<paramref name="targetRoleCode"/> 配下の
     /// blocks を <see cref="Blocks"/> に差し替えた一時コンテキストを作る。VisitedRoleCodes には
     /// <paramref name="targetRoleCode"/> が追加される（再帰 ROLE 参照を打ち止めるため）。
-    /// <see cref="ThemeSongSeq"/> は外側の役職の行の値なので引き継がない。
+    /// <see cref="ThemeSongSeq"/> と <see cref="RoleLabelNotOnScreen"/> は外側の役職の行の値なので引き継がない。
     /// </summary>
     public TemplateContext WithSiblingRoleScope(string targetRoleCode, IReadOnlyList<BlockSnapshot> targetBlocks)
     {

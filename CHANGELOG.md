@@ -4,6 +4,12 @@
 
 ### 開発中（次回リリース）
 
+- **スキーマ・サイト・Catalog：クレジットの役職の行に「役職名だけ画面に無い」印 `role_label_not_on_screen` を足した**（マイグレーション `v1.20.0_add_card_role_label_not_on_screen.sql`・`CreditCardRole`・`CreditCardRolesRepository`・`CreditSaveService`・`CreditDraftLoader`・`CreditBulkInputParser`・`CreditBulkInputEncoder`・`CreditBulkApplyService`・`CreditEditorForm`・`CreditPreviewRenderer`・`CreditRoleLabel`・`TemplateContext`・`RoleTemplateRenderer`・`CastingCooperationAppend`・`CreditTreeRenderer`・`site.css`）：名前は画面に出ているが役職の見出しが無い行（ED の原画の末尾に 1 人だけで出ている人が、実質は「料理作監」の担当など）を、役職はデータとして入れて数えつつ、見出しが画面に無かったと示すため。
+  - 1 のときサイトのクレジットと Catalog のプレビューは、役職名の欄とシリーズ別の見出し上書き（テンプレの `{ROLE_NAME}`・自分の役職を指す `{ROLE_LINK}` も）だけを「（料理作監）」のように全角の括弧で包み、`not_on_screen` と同じ薄い色で出す（`title` に「画面にはクレジットされていない役職名」）。名前・中身はふつうに出し、集計は今までどおり数える
+  - 1 行にまとめた役職は、印のある役職の表記だけを包む。声の出演の表の末尾に足す「協力」行は、協力の役職のいずれかに印があれば「協力」の文字だけを包む（`CastingCooperationAppend.LabelNotOnScreen`）
+  - 行ごと画面に無い `not_on_screen` とは意味が重なるので、同じ行に両方は立てない。DB は CHECK 制約 `ck_card_role_not_on_screen_exclusive` で弾き、Catalog は保存の前と一括入力の読み込みで止める
+  - 一括入力は役職開始行の直後の `@label_not_on_screen` で読み書きし、ツリーの役職ノードに `[役職名は画面に無い]` を添える
+
 - **サイト：エピソード詳細のスタッフの「くわしく」で、特筆すべき回数・連続・空きだけをピンクにした**（`EpisodeGenerator.BuildStaffRoleCards` / `IsMilestoneOrdinal` / `IsLongGap`・`episode-detail.sbn`・`site.css`）：これまで回数・「N話連続」・「〇か月ぶり」をすべてピンクにしていたのを、節目の回数（10・25・50 回目、そのあとは 50 回ごと）・連続担当・26 週以上の空き（と従来どおり「初担当」「初顔合わせ」）だけにし、ほかは本文の色にした。閉じた状態の 1 行とカードの両方
 
 - **DB・サイト・Catalog：クレジットを版（本放送／Blu-ray・配信）ごとに持てるようにした**（`credits.media_version`・`media_version_key`・`Credit`・`CreditMediaVersions`・`CreditsRepository`・`CreditSaveService`・`CreditNewDialog`・`CreditCopyDialog`・`CreditEditorForm`・`CreditPreviewRenderer`・`SiteDataLoader`・`BuildContext`・`EpisodeGenerator`・`SeriesGenerator`。マイグレーション `v1.20.0_add_credit_media_version.sql`）

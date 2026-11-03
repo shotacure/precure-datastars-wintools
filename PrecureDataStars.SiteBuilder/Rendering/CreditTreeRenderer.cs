@@ -231,7 +231,7 @@ internal sealed class CreditTreeRenderer
             IReadOnlyList<CreditBlockEntry>? cooperationEntriesForCard = cooperationContext?.Entries;
             int? cooperationAppendTargetCardRoleId = cooperationContext?.LastVoiceCastCardRoleId;
             CastingCooperationAppend? cooperationAppendForCard = cooperationContext is { } coopCtx
-                ? new CastingCooperationAppend(coopCtx.Entries, coopCtx.LabelText, coopCtx.NotOnScreen)
+                ? new CastingCooperationAppend(coopCtx.Entries, coopCtx.LabelText, coopCtx.NotOnScreen, coopCtx.LabelNotOnScreen)
                 : null;
 
             // 絵コンテ・演出融合のカード横断事前スキャン。
@@ -392,6 +392,7 @@ internal sealed class CreditTreeRenderer
                             roleNameHtmlOverride: joinedLabelHtmlByLeadId.TryGetValue(cr.CardRoleId, out var joinedHtml) ? joinedHtml : null,
                             hideRoleLabel: cr.HideRoleLabel,
                             notOnScreen: cr.NotOnScreen,
+                            roleLabelNotOnScreen: cr.RoleLabelNotOnScreen,
                             themeSongSeq: cr.ThemeSongSeq,
                             html, ct).ConfigureAwait(false);
 
@@ -449,6 +450,7 @@ internal sealed class CreditTreeRenderer
     /// 役職ごとの文字の範囲はデータで決まっているので、文字列を探して当てはめることはしない。
     /// まとめる役職のどれかに役職名の誤記（<c>role_misprint_text</c>）があれば、画面どおりの行（誤記の役職は誤記で）を
     /// 取り消し線で 1 行目に出し、正しい行を 2 行目に改行して出す。
+    /// 役職名だけ画面に無い役職（<c>role_label_not_on_screen</c>）は、その役職の表記だけを全角の括弧で包む。
     /// </summary>
     private static string BuildJoinedRoleNameHtml(IReadOnlyList<CreditCardRole> members, IReadOnlyDictionary<string, Role> roleMap)
     {
@@ -467,7 +469,9 @@ internal sealed class CreditTreeRenderer
             var m = members[k];
             // 区切りの改行は、役職名を上下 2 段に重ねる画面なので <br> にする。
             if (k > 0) sb.Append(Esc(m.JoinSeparator ?? "").Replace("\n", "<br>"));
-            sb.Append(BuildRoleNameHtml(m.RoleCode, CreditRoleLabel.Resolve(m.RoleLabelText, m.RoleCode, roleMap), roleMap));
+            string memberHtml = BuildRoleNameHtml(m.RoleCode, CreditRoleLabel.Resolve(m.RoleLabelText, m.RoleCode, roleMap), roleMap);
+            // 役職名だけ画面に無い役職（role_label_not_on_screen）は、その役職の表記だけを全角の括弧で包んで薄く出す。
+            sb.Append(m.RoleLabelNotOnScreen ? CreditRoleLabel.WrapNotOnScreenHtml(memberHtml) : memberHtml);
         }
         return sb.ToString();
     }
@@ -502,8 +506,8 @@ internal sealed class CreditTreeRenderer
             : Series.StoryboardDisplaySeparate;
     }
 
-    /// <summary>カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の CardRoleId + 「協力」行の表記（CASTING_COOPERATION 役職のうち最初に画面の表記を持つものの <c>role_label_text</c>、無ければ null）+ 画面に無い印（CASTING_COOPERATION 役職のいずれかが <c>not_on_screen</c>）を返す（プレビューと同一仕様）。 探索は <see cref="CreditTreeIndex"/> の事前展開済みスナップショットを辿るだけで完結する。</summary>
-    private static (List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId, string? LabelText, bool NotOnScreen)? CollectCardCastingCooperationContext(
+    /// <summary>カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の CardRoleId + 「協力」行の表記（CASTING_COOPERATION 役職のうち最初に画面の表記を持つものの <c>role_label_text</c>、無ければ null）+ 画面に無い印（CASTING_COOPERATION 役職のいずれかが <c>not_on_screen</c>）+ 「協力」の文字だけ画面に無い印（同じく <c>role_label_not_on_screen</c>）を返す（プレビューと同一仕様）。 探索は <see cref="CreditTreeIndex"/> の事前展開済みスナップショットを辿るだけで完結する。</summary>
+    private static (List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId, string? LabelText, bool NotOnScreen, bool LabelNotOnScreen)? CollectCardCastingCooperationContext(
         CreditCardSnapshot cardSnap,
         IReadOnlyDictionary<string, Role> roleMap)
     {
@@ -534,7 +538,8 @@ internal sealed class CreditTreeRenderer
             .Select(rs => rs.Role.RoleLabelText)
             .FirstOrDefault(t => !string.IsNullOrEmpty(t));
         bool notOnScreen = cooperationRoleSnaps.Any(rs => rs.Role.NotOnScreen);
-        return (aggregated, lastVcCardRoleId.Value, labelText, notOnScreen);
+        bool labelNotOnScreen = cooperationRoleSnaps.Any(rs => rs.Role.RoleLabelNotOnScreen);
+        return (aggregated, lastVcCardRoleId.Value, labelText, notOnScreen, labelNotOnScreen);
     }
 
     /// <summary>指定 CardRole 配下の全エントリ（<c>is_broadcast_only = 0</c> のみ）を block_seq → entry_seq 順で平坦化する。</summary>
@@ -601,6 +606,10 @@ internal sealed class CreditTreeRenderer
         // 画面にはクレジットされていない行（credit_card_roles.not_on_screen）。true なら役職ラッパに not-on-screen を付け、
         // CSS で役職名から中身までを括弧で包んで薄い色で出す。データとしては通常どおり数える。
         bool notOnScreen,
+        // 役職名だけが画面にはクレジットされていない行（credit_card_roles.role_label_not_on_screen）。true なら役職名の欄と
+        // content-header の見出しを全角の括弧で包んで薄く出し（CreditRoleLabel.WrapNotOnScreenHtml）、名前・中身はふつうに出す。
+        // 1 行にまとめた行は、まとめる役職ごとに BuildJoinedRoleNameHtml で包み済み。
+        bool roleLabelNotOnScreen,
         // 主題歌ループが出す曲を絞る劇中順の範囲（credit_card_roles.theme_song_seq。"N" か "N-M"）。null なら絞らない。
         // テンプレの展開コンテキストに渡し、主題歌のカードが分かれて挿入歌を振り分ける回でカードごとの曲だけを出す。
         string? themeSongSeq,
@@ -648,8 +657,14 @@ internal sealed class CreditTreeRenderer
         string roleMisprintPrefixHtml = !string.IsNullOrEmpty(roleMisprintText) && roleName.Length > 0
             ? BuildRoleMisprintPrefixHtml(roleMisprintText!)
             : "";
+        // 1 行にまとめた行の役職名 HTML（呼び出し側で組み立て済み）は、役職名だけ画面に無い印も役職ごとに反映済み。
+        bool isJoinedRoleName = roleNameHtmlOverride is not null;
         if (roleMisprintPrefixHtml.Length > 0 && roleNameHtmlOverride is null)
             roleNameHtmlOverride = roleMisprintPrefixHtml + BuildRoleNameHtml(roleCode, roleName, roleMap);
+
+        // 役職名だけ画面に無い行は、役職名の欄（誤記の取り消し線を含む）を全角の括弧で包んで薄く出す。
+        if (roleLabelNotOnScreen && roleName.Length > 0 && !isJoinedRoleName)
+            roleNameHtmlOverride = CreditRoleLabel.WrapNotOnScreenHtml(roleNameHtmlOverride ?? BuildRoleNameHtml(roleCode, roleName, roleMap));
 
         html.Append(notOnScreen
             ? "<div class=\"role not-on-screen\" title=\"画面にはクレジットされていない\">"
@@ -663,8 +678,9 @@ internal sealed class CreditTreeRenderer
         if (contentHeaderOverride is not null)
         {
             html.Append("<div class=\"role-content-header\"><strong>");
-            html.Append(roleMisprintPrefixHtml);
-            html.Append(BuildRoleNameHtml(roleCode, contentHeaderOverride, roleMap));
+            string contentHeaderHtml = roleMisprintPrefixHtml + BuildRoleNameHtml(roleCode, contentHeaderOverride, roleMap);
+            // 役職名だけ画面に無い行は、見出しも全角の括弧で包んで薄く出す。
+            html.Append(roleLabelNotOnScreen ? CreditRoleLabel.WrapNotOnScreenHtml(contentHeaderHtml) : contentHeaderHtml);
             html.Append("</strong></div>");
         }
 
@@ -688,7 +704,8 @@ internal sealed class CreditTreeRenderer
                     scopeSeriesTitle: seriesForCtx?.Title,
                     scopeFilmRatingNo: seriesForCtx?.FilmRatingNo,
                     scopeFilmCjMark: seriesForCtx?.FilmCjMark ?? false,
-                    themeSongSeq: themeSongSeq);
+                    themeSongSeq: themeSongSeq,
+                    roleLabelNotOnScreen: roleLabelNotOnScreen && !hideRoleLabel);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
 
                 string normalized = rendered.Replace("\r\n", "\n").Replace("\r", "\n");
@@ -1511,6 +1528,10 @@ internal sealed class CreditTreeRenderer
                         ? (string.IsNullOrEmpty(coopRole.NameJa) ? "協力" : coopRole.NameJa)
                         : "協力";
                 string cooperationLabelHtml = BuildRoleNameHtml(RoleCodeCastingCooperation, cooperationRoleName, roleMap);
+                // 「協力」の文字だけ画面に無い（屋号は画面にある）ときは、「協力」だけを全角の括弧で包んで薄く出す。
+                // 行ごと画面に無いときは下の not-on-screen で行ごと包むので重ねない。
+                if (appendedCooperation.LabelNotOnScreen && !appendedCooperation.NotOnScreen)
+                    cooperationLabelHtml = CreditRoleLabel.WrapNotOnScreenHtml(cooperationLabelHtml);
 
                 // 画面に無い「協力」は not-on-screen を付け、CSS で「協力」から屋号までを括弧で包んで薄い色で出す。
                 html.Append(appendedCooperation.NotOnScreen

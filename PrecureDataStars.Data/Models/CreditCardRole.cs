@@ -61,6 +61,13 @@ public sealed class CreditCardRole
     /// データは入れて集計・関与は <see cref="RoleCode"/> のまま数え、クレジットの表示だけ括弧で包んで薄くし、画面に無かったことを示す。</summary>
     public bool NotOnScreen { get; set; }
 
+    /// <summary>true ならこの行の役職名だけが画面にはクレジットされていない（名前は画面に出ているが、役職の見出しが無い）。
+    /// 例：ED の原画の末尾に 1 人だけで出ている人が、実質は「料理作監」の担当であるとき。
+    /// データは入れて集計・関与は <see cref="RoleCode"/> のまま数え、クレジットの表示では役職名だけを全角の括弧で包んで薄くし、
+    /// 名前・中身はふつうに出す。行ごと画面に無い <see cref="NotOnScreen"/> とは別の印で、両方を同時に立てない
+    /// （DB の CHECK 制約 <c>ck_card_role_not_on_screen_exclusive</c> で弾く）。</summary>
+    public bool RoleLabelNotOnScreen { get; set; }
+
     /// <summary>この役職の行で主題歌ループ（<c>{#THEME_SONGS}</c>）が出す曲を絞る劇中順の範囲。
     /// <c>"N"</c>（seq=N の 1 曲）か <c>"N-M"</c>（seq が N 以上 M 以下）で、episode_theme_songs.seq / series_theme_songs.seq を指す。
     /// null なら絞らない。主題歌の形式（roles.role_format_kind='THEME_SONG'）の役職でだけ意味を持ち、

@@ -355,6 +355,12 @@ internal static class CreditBulkInputEncoder
             sb.Append("@not_on_screen").Append(LineSeparator);
         }
 
+        // 名前は画面に出ているが役職名だけが画面に無い（@not_on_screen とは同時に立たない）。
+        if (role.Entity.RoleLabelNotOnScreen)
+        {
+            sb.Append("@label_not_on_screen").Append(LineSeparator);
+        }
+
         // 主題歌ループが出す曲を劇中順の範囲で絞る（主題歌のカードが分かれて挿入歌を振り分けるとき）。
         if (!string.IsNullOrEmpty(role.Entity.ThemeSongSeq))
         {

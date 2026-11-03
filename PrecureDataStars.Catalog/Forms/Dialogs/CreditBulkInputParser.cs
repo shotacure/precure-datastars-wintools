@@ -169,6 +169,10 @@ public static class CreditBulkInputParser
     // ディレクティブ行: @not_on_screen。直前の役職の行は画面にはクレジットされていない（credit_card_roles.not_on_screen）。
     private static readonly Regex NotOnScreenDirectiveRegex = new(@"^@not_on_screen$", RegexOptions.Compiled);
 
+    // ディレクティブ行: @label_not_on_screen。直前の役職の行は、名前は画面に出ているが役職名だけが画面に無い
+    // （credit_card_roles.role_label_not_on_screen）。@not_on_screen とは同じ役職に両方書けない。
+    private static readonly Regex LabelNotOnScreenDirectiveRegex = new(@"^@label_not_on_screen$", RegexOptions.Compiled);
+
     // ディレクティブ行: @theme_song_seq=N / @theme_song_seq=N-M。直前の役職の行で主題歌ループが出す曲を劇中順の範囲で絞る
     // （credit_card_roles.theme_song_seq）。値の形（半角数字の N か N-M）は ThemeSongSeqValueRegex で確かめる。
     private static readonly Regex ThemeSongSeqDirectiveRegex = new(@"^@theme_song_seq=(?<value>.*)$", RegexOptions.Compiled);
@@ -816,7 +820,44 @@ public static class CreditBulkInputParser
                         });
                         continue;
                     }
+                    if (curRole.RoleLabelNotOnScreen)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @not_on_screen と @label_not_on_screen は同じ役職に両方は書けません（行ごと画面に無いなら @not_on_screen だけ）。"
+                        });
+                        continue;
+                    }
                     curRole.NotOnScreen = true;
+                    continue;
+                }
+
+                // @label_not_on_screen : 直前の役職の行は、名前は画面に出ているが役職名だけが画面に無い。
+                if (LabelNotOnScreenDirectiveRegex.IsMatch(trimmed))
+                {
+                    if (curRole is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @label_not_on_screen は役職指定後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    if (curRole.NotOnScreen)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @not_on_screen と @label_not_on_screen は同じ役職に両方は書けません（行ごと画面に無いなら @not_on_screen だけ）。"
+                        });
+                        continue;
+                    }
+                    curRole.RoleLabelNotOnScreen = true;
                     continue;
                 }
 

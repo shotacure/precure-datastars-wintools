@@ -63,6 +63,10 @@ internal sealed class CreditSaveService
         if (session is null) throw new ArgumentNullException(nameof(session));
         if (session.Root is null) throw new InvalidOperationException("session.Root が null です。");
 
+        // 行ごと画面に無い印（not_on_screen）と役職名だけ画面に無い印（role_label_not_on_screen）は意味が重なるので、
+        // 同じ役職に両方は立てない。DB の CHECK 制約でも弾くが、接続を開く前に分かる言葉で止める。
+        ValidateRoleNotOnScreenFlags(session);
+
         await using var conn = await _factory.CreateOpenedAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
         try
@@ -595,8 +599,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertRoleAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardRole r, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, not_on_screen, theme_song_seq, notes, created_by, updated_by)
-            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @NotOnScreen, @ThemeSongSeq, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, not_on_screen, role_label_not_on_screen, theme_song_seq, notes, created_by, updated_by)
+            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @NotOnScreen, @RoleLabelNotOnScreen, @ThemeSongSeq, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, r, transaction: tx, cancellationToken: ct));
@@ -742,6 +746,7 @@ internal sealed class CreditSaveService
               join_separator     = @JoinSeparator,
               hide_role_label    = @HideRoleLabel,
               not_on_screen      = @NotOnScreen,
+              role_label_not_on_screen = @RoleLabelNotOnScreen,
               theme_song_seq     = @ThemeSongSeq,
               notes              = @Notes,
               updated_by         = @UpdatedBy
@@ -1107,6 +1112,29 @@ internal sealed class CreditSaveService
                     }
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// 削除予定でない全役職について、<see cref="CreditCardRole.NotOnScreen"/> と
+    /// <see cref="CreditCardRole.RoleLabelNotOnScreen"/> が同時に立っていないかを確かめる。
+    /// 立っていれば役職コードを添えて <see cref="InvalidOperationException"/> を投げ、保存を始めない。
+    /// </summary>
+    private static void ValidateRoleNotOnScreenFlags(CreditDraftSession session)
+    {
+        var conflicts = session.Root.Cards
+            .Where(c => c.State != DraftState.Deleted)
+            .SelectMany(c => c.Tiers.Where(t => t.State != DraftState.Deleted))
+            .SelectMany(t => t.Groups.Where(g => g.State != DraftState.Deleted))
+            .SelectMany(g => g.Roles.Where(r => r.State != DraftState.Deleted))
+            .Where(r => r.Entity.NotOnScreen && r.Entity.RoleLabelNotOnScreen)
+            .Select(r => r.Entity.RoleCode ?? "(役職未設定)")
+            .ToList();
+        if (conflicts.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "「画面に無い」と「役職名は画面に無い」は同じ役職に両方は立てられません（行ごと画面に無いなら「画面に無い」だけ）。対象の役職: "
+                + string.Join("、", conflicts));
         }
     }
 

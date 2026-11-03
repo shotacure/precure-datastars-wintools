@@ -148,6 +148,11 @@ public sealed class ParsedRole
     /// 毎回出る役職がその回だけ画面から抜けているとき（クレジット漏れ）に立てる。データは入れて、表示だけ括弧で示す。</summary>
     public bool NotOnScreen { get; set; }
 
+    /// <summary>その行の役職名だけが画面にはクレジットされていないか（<c>credit_card_roles.role_label_not_on_screen</c>）。
+    /// <c>@label_not_on_screen</c> 行で設定される。名前は画面に出ているが役職の見出しが無いとき（例：ED の原画の末尾に 1 人だけで出ている
+    /// 「料理作監」の担当）に立てる。表示では役職名だけを括弧で包み、名前はふつうに出す。<see cref="NotOnScreen"/> とは同時に立てない。</summary>
+    public bool RoleLabelNotOnScreen { get; set; }
+
     /// <summary>その行で主題歌ループが出す曲を絞る劇中順の範囲（<c>credit_card_roles.theme_song_seq</c>）。<c>"N"</c> か <c>"N-M"</c>。
     /// <c>@theme_song_seq=N</c> / <c>@theme_song_seq=N-M</c> 行で設定される。主題歌のカードが分かれて挿入歌を振り分けるときに使う。</summary>
     public string? ThemeSongSeq { get; set; }

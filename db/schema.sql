@@ -2630,6 +2630,10 @@ CREATE TABLE `credit_card_roles` (
   `hide_role_label` tinyint                                              NOT NULL DEFAULT 0,
   -- 1 ならこの行は画面にはクレジットされていない（クレジット漏れ）。データは入れて集計・関与に数え、表示だけ括弧で包んで示す。
   `not_on_screen`  tinyint                                               NOT NULL DEFAULT 0,
+  -- 1 ならこの行の役職名（見出し）だけが画面にはクレジットされていない。名前・中身は画面に出ている
+  -- （例：ED の原画の末尾に 1 人だけで出ている人が、実質は「料理作監」の担当）。データは入れて集計・関与に数え、
+  -- 表示では役職名だけを全角の括弧で包んで薄くし、名前はふつうに出す。not_on_screen と同じ行に両方は立てない。
+  `role_label_not_on_screen` tinyint                                     NOT NULL DEFAULT 0 COMMENT '1 ならこの行の役職名だけが画面にはクレジットされていない（名前は画面にある。表示は役職名だけ括弧で示す）',
   -- 主題歌ループが出す曲を絞る劇中順の範囲（"N" か "N-M"。episode_theme_songs.seq / series_theme_songs.seq）。NULL なら絞らない。
   -- その役職の行で役職テンプレートの {#THEME_SONGS} ループ（旧 {THEME_SONGS} も）が出す曲を、この範囲の曲だけにする
   -- （テンプレート側の seq= と両方あれば両方を満たす曲だけ）。主題歌の形式（roles.role_format_kind='THEME_SONG'）の役職でだけ意味を持つ。
@@ -2645,7 +2649,8 @@ CREATE TABLE `credit_card_roles` (
   KEY `ix_card_role_role` (`role_code`),
   CONSTRAINT `fk_card_role_group` FOREIGN KEY (`card_group_id`) REFERENCES `credit_card_groups` (`card_group_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_card_role_role`  FOREIGN KEY (`role_code`)     REFERENCES `roles`              (`role_code`)     ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `ck_card_role_order_pos` CHECK ((`order_in_group` >= 1))
+  CONSTRAINT `ck_card_role_order_pos` CHECK ((`order_in_group` >= 1)),
+  CONSTRAINT `ck_card_role_not_on_screen_exclusive` CHECK ((not(((`not_on_screen` = 1) and (`role_label_not_on_screen` = 1)))))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

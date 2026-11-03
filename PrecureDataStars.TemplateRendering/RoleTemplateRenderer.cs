@@ -416,7 +416,11 @@ public static class RoleTemplateRenderer
                 // HTML 出力経路のため、役職名も HTML エスケープを通す。
                 // 既存テンプレでは「役職名 ＋ ブロック展開結果」の単純連結で使われており、
                 // 役職名に HTML 特殊文字が含まれるケースは稀だが念のため。
-                return System.Net.WebUtility.HtmlEncode(ctx.RoleName);
+                // 役職名だけ画面に無い行（role_label_not_on_screen）は、役職名を全角の括弧で包んで薄く出す。
+                {
+                    string roleNameHtml = System.Net.WebUtility.HtmlEncode(ctx.RoleName);
+                    return ctx.RoleLabelNotOnScreen ? CreditRoleLabel.WrapNotOnScreenHtml(roleNameHtml) : roleNameHtml;
+                }
 
             case "SERIES_TITLE":
                 // scope_kind=SERIES のシリーズタイトル（series.title）。EPISODE スコープや未供給時は空文字。
@@ -649,6 +653,10 @@ public static class RoleTemplateRenderer
                     // 挙動を ILookupCache.LookupRoleHtmlWithLabelAsync 側で持っている。
                     string roleCode = ph.GetOption("code", "");
                     if (string.IsNullOrEmpty(roleCode)) return "";
+                    // 自分の役職コードを指すリンク（テンプレが自前で置く見出し）は、役職名だけ画面に無い行なら
+                    // 全角の括弧で包んで薄く出す。ほかの役職コードを指すリンクは包まない。
+                    bool wrapNotOnScreen = ctx.RoleLabelNotOnScreen
+                        && string.Equals(roleCode, ctx.RoleCode, StringComparison.Ordinal);
                     string label = ph.GetOption("label", "");
                     if (!string.IsNullOrEmpty(label))
                     {
@@ -660,11 +668,13 @@ public static class RoleTemplateRenderer
                             label = label.Replace("{SERIES_TITLE}", ctx.ScopeSeriesTitle ?? "", StringComparison.Ordinal);
                         }
                         var inner = await lookup.LookupRoleHtmlWithLabelAsync(roleCode, label).ConfigureAwait(false);
-                        return inner ?? "";
+                        return wrapNotOnScreen ? CreditRoleLabel.WrapNotOnScreenHtml(inner ?? "") : (inner ?? "");
                     }
                     var html = await lookup.LookupRoleHtmlAsync(roleCode).ConfigureAwait(false);
                     if (string.IsNullOrEmpty(html)) return "";
-                    return $"<strong>{html}</strong>";
+                    return wrapNotOnScreen
+                        ? CreditRoleLabel.WrapNotOnScreenHtml($"<strong>{html}</strong>")
+                        : $"<strong>{html}</strong>";
                 }
 
             default:

@@ -11,4 +11,7 @@ namespace PrecureDataStars.TemplateRendering;
 /// 無ければ null で、役職マスタの名前で出す。</param>
 /// <param name="NotOnScreen">true なら「協力」行は画面にはクレジットされていない（CASTING_COOPERATION 役職のいずれかが
 /// <c>not_on_screen</c>）。行ごと括弧で包み、薄い色で出す。</param>
-public sealed record CastingCooperationAppend(IReadOnlyList<CreditBlockEntry> Entries, string? LabelText, bool NotOnScreen = false);
+/// <param name="LabelNotOnScreen">true なら「協力」の文字だけが画面にはクレジットされていない（CASTING_COOPERATION 役職のいずれかが
+/// <c>role_label_not_on_screen</c>）。「協力」だけを括弧で包んで薄く出し、屋号はふつうに出す。
+/// <paramref name="NotOnScreen"/> が true のときは行ごと包むので使わない。</param>
+public sealed record CastingCooperationAppend(IReadOnlyList<CreditBlockEntry> Entries, string? LabelText, bool NotOnScreen = false, bool LabelNotOnScreen = false);

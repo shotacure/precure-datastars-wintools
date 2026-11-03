@@ -10,6 +10,8 @@
   - シリーズ詳細は録音ごとにまとめるので、サイズ違いで行を分けない。クレジットのカードでも使わない
   - Catalog の「エピソード主題歌」タブに「サイズ」の選択欄を足した。主題歌のコピー（他話から・範囲）と並べ替えはサイズごと写す
 
+- **サイト：楽曲詳細の配信音源の再生ボタンを、サイズの表示順に並べるようにした**（`SongsGenerator.BuildRecordingPlayRows`）：歌入りが先・フルサイズが先頭は変えず、残りを尺の長い順ではなく `song_size_variants.display_order` の順（同じサイズの中は長い順、サイズ未設定は最後）にした。尺がほぼ同じ TV サイズ Type.I〜V がフレーム単位の差で入れ替わって並んでいた
+
 - **クレジット：主題歌のカードの歌唱で「(CV:」の頭を縦にそろえられるようにした**（`RoleTemplateRenderer`・`ThemeSongsHandler`・`SongRecordingSingersRepository`・`EpisodeThemeSongSingersRepository`・`site.css`）：`{SINGER}` / `{CHORUS}` の `cv_align=1` で、名前と「(CV:…)」を 2 列の表に分けて並べる。サイトの狭い幅では表をほどき、「(CV」の前で折る
 
 - **クレジット：TV の主題歌のカードを画面の文字どおりに描けるようにした**（`role_templates.episode_id`・`song_recording_singers.cv_label`・`episode_theme_song_singers`・`RoleTemplateResolver`・`RoleTemplatesRepository`・`SongRecordingSingersRepository`・`EpisodeThemeSongSingersRepository`・`ThemeSongsHandler`・`RoleTemplateRenderer`・`SingerHtmlBuilder`・`CreditText`・`CreditMastersEditorForm.RoleTabs`・`SongRecordingSingersEditDialog`。マイグレーション `v1.20.0_theme_song_credit_as_printed.sql`）

@@ -374,7 +374,7 @@ public sealed class SongsGenerator
                 singersByRecording, musicClassMap, personAliasMap, characterAliasMap);
             // 配信音源の再生ボタンは収録トラック群から組み立てる（サイズ × バージョンごと、初出盤固定）。
             // ビュー本体の組み立てとは入力が別系統なので、BuildRecordingView の引数を増やさず後付けする。
-            recordingView.PlayRows = BuildRecordingPlayRows(tracksRows);
+            recordingView.PlayRows = BuildRecordingPlayRows(tracksRows, sizeVariantMap);
             // 録音ごとの音楽クレジット（カバー等、録音ごとに違う演奏者・スタッフ。music_credits の SONG_RECORDING 紐付け）。
             // 録音ごとの音楽クレジット（カバー等）。役職ごとのユニットを横に流して並べる。
             recordingView.MusicCreditsHtml = _ctx.MusicCredits.ByRecording.TryGetValue(r.SongRecordingId, out var recMusicRows)
@@ -573,7 +573,9 @@ public sealed class SongsGenerator
 
     /// <summary>録音 1 件分の「収録トラック・商品」行群を組み立てる（発売日 → 品番 → Disc 番 → Track 番の昇順ソート済み）。</summary>
     /// <summary>録音 1 件分の配信音源（YouTube アートトラック）再生ボタン行を組み立てる。 サイズ（フル / TV など）とパート（歌入り / カラオケなど）の組み合わせごとに 1 ボタンを出す。 同じ組み合わせが複数の盤に収録されていても音源は同一なので 1 件に絞る。採るのは初出（発売が 最も早い盤）で、それが会員限定だったときのために、誰でも再生できる盤の音源を代わりとして 併せ持たせる（どちらを鳴らすかは閲覧者の設定によってページ側で決まる）。 <paramref name="tracksRows"/> は発売日昇順に整列済みなので、先頭から順に拾えば初出になる。 バッジ HTML は代表トラックのものをそのまま使うため、サイズもパートも持たない楽曲では 空文字になり、テンプレ側はボタンだけを出す。</summary>
-    private static List<RecordingPlayRow> BuildRecordingPlayRows(List<RecordingTrackRow> tracksRows)
+    private static List<RecordingPlayRow> BuildRecordingPlayRows(
+        List<RecordingTrackRow> tracksRows,
+        IReadOnlyDictionary<string, SongSizeVariant> sizeVariantMap)
     {
         var playRows = new List<RecordingPlayRow>();
         // 組み合わせごとの出力位置。初出が会員限定だった場合に、あとから見つかった
@@ -611,11 +613,17 @@ public sealed class SongsGenerator
         }
 
         // 並びは発売日順ではなく「聴きたい順」にする。歌入りを先に、そのなかでフルサイズを先頭に置き、
-        // 残りは長い順。カラオケ等はそのあとへ同じ規則で続く。
+        // 残りはサイズの表示順（song_size_variants.display_order：TV サイズ → 歌詞 1 番・2 番 → Type.I〜V → 映画サイズ …）、
+        // サイズ未設定（とマスタに無いコード）は最後。同じサイズの中は長い順。カラオケ等はそのあとへ同じ規則で続く。
+        // 尺の近いサイズ違い（Type.I〜V など）がフレーム単位の差で入れ替わらないよう、尺より先にサイズで並べる。
         // 同着は追加順（＝発売日順）のまま（OrderBy は安定ソート）。
+        int SizeOrder(string code)
+            => code == "FULL" ? -1
+             : code.Length > 0 && sizeVariantMap.TryGetValue(code, out var sv) && sv.DisplayOrder.HasValue ? sv.DisplayOrder.Value
+             : int.MaxValue;
         return playRows
             .OrderBy(r => IsVocalPart(r.SongPartVariantCode) ? 0 : 1)
-            .ThenBy(r => r.SongSizeVariantCode == "FULL" ? 0 : 1)
+            .ThenBy(r => SizeOrder(r.SongSizeVariantCode))
             .ThenByDescending(r => r.LengthFrames)
             .ToList();
     }

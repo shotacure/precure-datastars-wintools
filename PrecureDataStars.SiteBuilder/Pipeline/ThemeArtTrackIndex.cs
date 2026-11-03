@@ -15,6 +15,8 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 ///     同じサイズで誰でも再生できる盤の音源を代わりとして併せ持つ（どちらを鳴らすかは閲覧者の設定でページ側が決める。歌の詳細と同じ）。</description></item>
 ///   <item><description>埋め込み可と確認済み（<c>youtube_embeddable = 1</c>）の音源だけを使う。</description></item>
 /// </list>
+/// <para>エピソードの主題歌にサイズ（<c>episode_theme_songs.song_size_variant_code</c>）が指定されているときのために、
+/// 録音 × サイズごとにも 1 つ選んで持つ（<see cref="ByRecordingAndSize"/>。同じサイズの中で発売の早い盤を採る）。</para>
 /// </summary>
 public sealed class ThemeArtTrackIndex
 {
@@ -23,6 +25,21 @@ public sealed class ThemeArtTrackIndex
 
     /// <summary>song_recording_id → 鳴らす配信音源。</summary>
     public IReadOnlyDictionary<int, ThemeArtTrack> ByRecording { get; }
+
+    /// <summary>(song_recording_id, サイズコード) → そのサイズの配信音源。サイズ未設定のトラックは入れない。</summary>
+    public IReadOnlyDictionary<(int RecordingId, string SizeVariantCode), ThemeArtTrack> ByRecordingAndSize { get; }
+
+    /// <summary>
+    /// エピソードの主題歌 1 行で鳴らす配信音源。サイズが指定されていて、そのサイズの音源があればそれ、
+    /// 無ければ（サイズ未指定も）録音ごとに選んだ音源（<see cref="ByRecording"/>）。どちらも無ければ null。
+    /// </summary>
+    public ThemeArtTrack? Resolve(int songRecordingId, string? sizeVariantCode)
+    {
+        if (!string.IsNullOrEmpty(sizeVariantCode)
+            && ByRecordingAndSize.TryGetValue((songRecordingId, sizeVariantCode), out var sized))
+            return sized;
+        return ByRecording.TryGetValue(songRecordingId, out var at) ? at : null;
+    }
 
     /// <param name="preferFullSize">true なら曲を通して聴く用（歌の一覧）に、フルサイズを優先して選ぶ。</param>
     public ThemeArtTrackIndex(
@@ -50,23 +67,33 @@ public sealed class ThemeArtTrackIndex
             candidates.Add((recId, priority, product.ReleaseDate, t.CatalogNo, t.TrackNo, size, t, disc, product));
         }
 
-        var byRecording = new Dictionary<int, ThemeArtTrack>();
-        foreach (var g in candidates.GroupBy(c => c.RecordingId))
+        // 優先度順に並べた候補の先頭を採り、それが会員限定なら同じサイズで誰でも再生できる音源を代わりに添える。
+        ThemeArtTrack Pick(IEnumerable<(int RecordingId, int Priority, DateTime Release, string CatalogNo, byte TrackNo, string Size, Track Track, Disc Disc, Product Product)> group)
         {
-            var ordered = g.OrderBy(c => c.Priority).ThenBy(c => c.Release).ThenBy(c => c.CatalogNo, StringComparer.Ordinal).ThenBy(c => c.TrackNo).ToList();
+            var ordered = group.OrderBy(c => c.Priority).ThenBy(c => c.Release).ThenBy(c => c.CatalogNo, StringComparer.Ordinal).ThenBy(c => c.TrackNo).ToList();
             var primary = ordered[0];
             bool premium = IsPremiumOnly(primary.Track);
             var alt = premium
                 ? ordered.FirstOrDefault(c => c.Size == primary.Size && !IsPremiumOnly(c.Track) && c.Track.YoutubeArtTrackId != primary.Track.YoutubeArtTrackId)
                 : default;
-            byRecording[g.Key] = new ThemeArtTrack(
+            return new ThemeArtTrack(
                 ArtTrackId: primary.Track.YoutubeArtTrackId!,
                 PremiumOnly: premium,
                 SourceAlbum: AlbumLabel(primary.Product, primary.Disc),
                 AltArtTrackId: alt.Track?.YoutubeArtTrackId ?? "",
                 AltSourceAlbum: alt.Track is null ? "" : AlbumLabel(alt.Product, alt.Disc));
         }
+
+        var byRecording = new Dictionary<int, ThemeArtTrack>();
+        foreach (var g in candidates.GroupBy(c => c.RecordingId))
+            byRecording[g.Key] = Pick(g);
         ByRecording = byRecording;
+
+        // 同じサイズの中では優先度が揃うので、発売の早い盤が採られる。
+        var byRecordingAndSize = new Dictionary<(int, string), ThemeArtTrack>();
+        foreach (var g in candidates.Where(c => c.Size.Length > 0).GroupBy(c => (c.RecordingId, c.Size)))
+            byRecordingAndSize[g.Key] = Pick(g);
+        ByRecordingAndSize = byRecordingAndSize;
     }
 
     /// <summary>歌が入っているパート区分か。未設定（空）と <c>_ANY</c> は区分を持たない録音物なので歌入り扱い（歌の詳細と同じ判定）。</summary>

@@ -1597,6 +1597,10 @@ a.series-card-children-title:hover {
 .theme-songs-list .ts-bcast {
   font-size: 0.88em;
 }
+/* エピソード詳細でその回のサイズの指定がある行にだけ出るサイズの名前（「（TVサイズ Type.I）」）。 */
+.theme-songs-list .ts-size {
+  font-size: 0.88em;
+}
 /* シリーズ詳細でのみ出る使用話数ラベル（「#1～49 (全話)」「#24～47（本放送では #35～38 を除く）」）。 */
 .theme-songs-list .ts-range {
   font-size: 0.88em;

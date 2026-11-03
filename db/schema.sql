@@ -2803,6 +2803,10 @@ CREATE TABLE `episode_theme_songs` (
   `seq`                     tinyint unsigned                                     NOT NULL DEFAULT '0',
   `usage_actuality`         enum('NORMAL','BROADCAST_NOT_CREDITED','CREDITED_NOT_BROADCAST') NOT NULL DEFAULT 'NORMAL',
   `song_recording_id`       int                                                  NOT NULL,
+  -- その回で流れたサイズ（→ song_size_variants）。NULL なら指定なし。
+  -- エピソード詳細の主題歌・挿入歌の一覧で曲名の後ろにサイズの名前を添え、再生ボタンは同じサイズの配信音源を優先する。
+  -- シリーズ詳細は録音ごとにまとめるのでサイズを出さない。クレジットのカードでも使わない（画面の表記どおり）。
+  `song_size_variant_code`  varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'その回で流れたサイズ（→ song_size_variants）。NULL なら指定なし',
   -- クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。NULL なら誤記なし。
   -- クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名（songs.title）を続ける。
   `title_misprint_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -2819,8 +2823,10 @@ CREATE TABLE `episode_theme_songs` (
   `updated_by`              varchar(64)  DEFAULT NULL,
   PRIMARY KEY (`episode_id`,`is_broadcast_only`,`theme_kind`,`seq`),
   KEY `ix_ets_song_recording` (`song_recording_id`),
+  KEY `ix_ets_song_size` (`song_size_variant_code`),
   CONSTRAINT `fk_ets_episode`        FOREIGN KEY (`episode_id`)             REFERENCES `episodes`        (`episode_id`)        ON DELETE CASCADE  ON UPDATE CASCADE,
-  CONSTRAINT `fk_ets_song_recording` FOREIGN KEY (`song_recording_id`)      REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_ets_song_recording` FOREIGN KEY (`song_recording_id`)      REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_ets_song_size`      FOREIGN KEY (`song_size_variant_code`) REFERENCES `song_size_variants` (`variant_code`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

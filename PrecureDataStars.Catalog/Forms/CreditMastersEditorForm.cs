@@ -37,6 +37,8 @@ public partial class CreditMastersEditorForm : Form
     // クレジット種別マスタの CRUD 用。
     private readonly CreditKindsRepository _creditKindsRepo;
     private readonly EpisodeThemeSongsRepository _episodeThemeSongsRepo;
+    // エピソード主題歌タブのサイズ選択欄の候補（曲のサイズ種別マスタ）
+    private readonly SongSizeVariantsRepository _songSizeVariantsRepo;
     private readonly SeriesKindsRepository _seriesKindsRepo;
     private readonly PartTypesRepository _partTypesRepo;
     private readonly SeriesRepository _seriesRepo;
@@ -115,7 +117,9 @@ public partial class CreditMastersEditorForm : Form
         // 人物の役職履歴
         PersonPositionsRepository personPositionsRepo,
         // 人物・企業のプロフィールの出典
-        EntitySourcesRepository entitySourcesRepo)
+        EntitySourcesRepository entitySourcesRepo,
+        // エピソード主題歌タブのサイズ選択欄の候補
+        SongSizeVariantsRepository songSizeVariantsRepo)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
@@ -124,6 +128,7 @@ public partial class CreditMastersEditorForm : Form
         _roleTemplatesRepo = roleTemplatesRepo ?? throw new ArgumentNullException(nameof(roleTemplatesRepo));
         _creditKindsRepo = creditKindsRepo ?? throw new ArgumentNullException(nameof(creditKindsRepo));
         _episodeThemeSongsRepo = episodeThemeSongsRepo ?? throw new ArgumentNullException(nameof(episodeThemeSongsRepo));
+        _songSizeVariantsRepo = songSizeVariantsRepo ?? throw new ArgumentNullException(nameof(songSizeVariantsRepo));
         _seriesKindsRepo = seriesKindsRepo ?? throw new ArgumentNullException(nameof(seriesKindsRepo));
         _partTypesRepo = partTypesRepo ?? throw new ArgumentNullException(nameof(partTypesRepo));
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
@@ -413,9 +418,18 @@ public partial class CreditMastersEditorForm : Form
             cboEtsSeries.DisplayMember = "Label";
             cboEtsSeries.ValueMember = "Id";
             cboEtsSeries.DataSource = seriesItems.Select(x => new IdLabel<int>(x.Id, x.Label)).ToList();
-            // 編集パネル既定値（本放送フラグは OFF、種別は OP）
+            // サイズ選択欄：先頭が「（指定なし）」= NULL。sentinel の _ANY と次回予告（NEXT）は本編の主題歌のサイズではないので候補に出さない。
+            var sizeItems = new List<IdLabel<string?>> { new IdLabel<string?>(null, "（指定なし）") };
+            sizeItems.AddRange((await _songSizeVariantsRepo.GetAllAsync())
+                .Where(v => v.VariantCode != "_ANY" && v.VariantCode != "NEXT")
+                .OrderBy(v => v.DisplayOrder ?? byte.MaxValue)
+                .Select(v => new IdLabel<string?>(v.VariantCode, v.NameJa)));
+            cboEtsSize.DisplayMember = "Label";
+            cboEtsSize.DataSource = sizeItems;
+            // 編集パネル既定値（本放送フラグは OFF、種別は OP、サイズは指定なし）
             chkEtsBroadcastOnly.Checked = false;
             cboEtsThemeKind.SelectedItem = "OP";
+            cboEtsSize.SelectedIndex = 0;
             if (seriesItems.Count > 0) await ReloadEpisodesForEtsAsync();
 
             // 人物名義タブのコンボ初期化（人物リスト）

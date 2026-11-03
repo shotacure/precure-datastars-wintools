@@ -1043,8 +1043,15 @@ public sealed class EpisodeGenerator
                 ? SongDisplayTitle.Build(song.Title, rec?.VariantLabel)
                 : "(曲名未登録)";
 
-            // 再生ボタンで鳴らす配信音源（歌入りで本編のサイズを優先。カラオケしか無ければ無し）。
-            ThemeArtTrack? artTrack = _ctx.ThemeArtTracks.ByRecording.TryGetValue(t.SongRecordingId, out var at) ? at : null;
+            // その回で流れたサイズの名前（song_size_variants.name_ja）。サイズの指定が無ければ空でサイズを出さない。
+            string sizeLabel = !string.IsNullOrEmpty(t.SongSizeVariantCode)
+                && _sizeVariantMap is not null
+                && _sizeVariantMap.TryGetValue(t.SongSizeVariantCode!, out var sizeVariant)
+                    ? sizeVariant.NameJa
+                    : "";
+
+            // 再生ボタンで鳴らす配信音源（その回のサイズの音源があればそれ。無ければ歌入りで本編のサイズを優先。カラオケしか無ければ無し）。
+            ThemeArtTrack? artTrack = _ctx.ThemeArtTracks.Resolve(t.SongRecordingId, t.SongSizeVariantCode);
             rows.Add(new ThemeSongRow
             {
                 KindLabel = kindLabel,
@@ -1075,6 +1082,7 @@ public sealed class EpisodeGenerator
                 Notes = t.Notes ?? "",
                 IsBroadcastOnly = t.IsBroadcastOnly,
                 IsInstrumental = t.IsInstrumental == true,
+                SizeLabel = sizeLabel,
                 ArtTrackId = artTrack?.ArtTrackId ?? "",
                 ArtTrackPremiumOnly = artTrack?.PremiumOnly ?? false,
                 ArtTrackSourceAlbum = artTrack?.SourceAlbum ?? "",
@@ -2321,6 +2329,8 @@ public sealed class EpisodeGenerator
         public bool IsBroadcastOnly { get; set; }
         /// <summary>この回ではインストゥルメンタルで使った印（曲名の後ろ、カギ括弧の内側に「（インストゥルメンタル）」を添える）。</summary>
         public bool IsInstrumental { get; set; }
+        /// <summary>その回で流れたサイズの名前（例: "TVサイズ Type.I"）。カギ括弧の後ろに「（…）」で添える。空文字なら出さない。</summary>
+        public string SizeLabel { get; set; } = "";
         /// <summary>再生ボタンで鳴らす配信音源（<see cref="BuildContext.ThemeArtTracks"/> が選んだもの）。無ければ空文字でボタンを出さない。</summary>
         public string ArtTrackId { get; set; } = "";
         /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>

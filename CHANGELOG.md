@@ -4,6 +4,12 @@
 
 ### 開発中（次回リリース）
 
+- **DB・サイト・Catalog：エピソードの主題歌の紐付けにその回で流れたサイズを持てるようにした**（`episode_theme_songs.song_size_variant_code`・`EpisodeThemeSongsRepository`・`ThemeArtTrackIndex.ByRecordingAndSize` / `Resolve`・`EpisodeGenerator`・`episode-detail.sbn`・`site.css` の `.ts-size`・`CreditMastersEditorForm`・`EpisodeThemeSongCopyDialog`・`EpisodeThemeSongRangeCopyDialog`。マイグレーション `v1.20.0_add_theme_song_size.sql`）
+  - `song_size_variants` への FK で、NULL なら指定なし
+  - エピソード詳細の主題歌・挿入歌の一覧で、サイズが入っている行は曲名の後ろに「（TVサイズ Type.I）」のようにサイズの名前を添える。再生ボタンは、そのサイズの配信音源があればそれを鳴らす
+  - シリーズ詳細は録音ごとにまとめるので、サイズ違いで行を分けない。クレジットのカードでも使わない
+  - Catalog の「エピソード主題歌」タブに「サイズ」の選択欄を足した。主題歌のコピー（他話から・範囲）と並べ替えはサイズごと写す
+
 - **クレジット：主題歌のカードの歌唱で「(CV:」の頭を縦にそろえられるようにした**（`RoleTemplateRenderer`・`ThemeSongsHandler`・`SongRecordingSingersRepository`・`EpisodeThemeSongSingersRepository`・`site.css`）：`{SINGER}` / `{CHORUS}` の `cv_align=1` で、名前と「(CV:…)」を 2 列の表に分けて並べる。サイトの狭い幅では表をほどき、「(CV」の前で折る
 
 - **クレジット：TV の主題歌のカードを画面の文字どおりに描けるようにした**（`role_templates.episode_id`・`song_recording_singers.cv_label`・`episode_theme_song_singers`・`RoleTemplateResolver`・`RoleTemplatesRepository`・`SongRecordingSingersRepository`・`EpisodeThemeSongSingersRepository`・`ThemeSongsHandler`・`RoleTemplateRenderer`・`SingerHtmlBuilder`・`CreditText`・`CreditMastersEditorForm.RoleTabs`・`SongRecordingSingersEditDialog`。マイグレーション `v1.20.0_theme_song_credit_as_printed.sql`）

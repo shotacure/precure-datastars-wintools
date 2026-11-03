@@ -49,6 +49,7 @@ public partial class CreditMastersEditorForm
             cboEtsThemeKind.SelectedItem = t.ThemeKind;
             numEtsInsertSeq.Value = t.Seq;
             numEtsSongRecordingId.Value = t.SongRecordingId;
+            SelectEtsSize(t.SongSizeVariantCode);
             txtEtsNotes.Text = t.Notes ?? "";
         }
     }
@@ -78,6 +79,8 @@ public partial class CreditMastersEditorForm
                 ThemeKind = themeKind,
                 Seq = seq,
                 SongRecordingId = songRecordingId,
+                // 「（指定なし）」は Id が null
+                SongSizeVariantCode = (cboEtsSize.SelectedItem as IdLabel<string?>)?.Id,
                 Notes = NullIfEmpty(txtEtsNotes.Text),
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -86,6 +89,20 @@ public partial class CreditMastersEditorForm
             await ReloadEpisodeThemeSongsAsync();
         }
         catch (Exception ex) { this.ShowError(ex); }
+    }
+
+    /// <summary>サイズ選択欄を指定のサイズコードに合わせる。null や候補に無いコードなら「（指定なし）」。</summary>
+    private void SelectEtsSize(string? sizeCode)
+    {
+        for (int i = 0; i < cboEtsSize.Items.Count; i++)
+        {
+            if (cboEtsSize.Items[i] is IdLabel<string?> item && item.Id == sizeCode)
+            {
+                cboEtsSize.SelectedIndex = i;
+                return;
+            }
+        }
+        if (cboEtsSize.Items.Count > 0) cboEtsSize.SelectedIndex = 0;
     }
 
     private async Task DeleteEpisodeThemeSongAsync()

@@ -37,6 +37,11 @@ public sealed class EpisodeThemeSong
     /// <summary>歌録音 ID（必須、→ song_recordings.song_recording_id）。</summary>
     public int SongRecordingId { get; set; }
 
+    /// <summary>その回で流れたサイズ（→ song_size_variants.variant_code、例: "TV_TYPE_I"）。null ならサイズの指定なし。
+    /// エピソード詳細の主題歌・挿入歌の一覧で曲名の後ろにサイズの名前を添え、再生ボタンは同じサイズの配信音源を優先する。
+    /// シリーズ詳細は録音ごとにまとめるのでサイズを出さない。クレジットのカード（役職テンプレの描画）でも使わない。</summary>
+    public string? SongSizeVariantCode { get; set; }
+
     /// <summary>クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。null なら誤記なし。
     /// クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名を続ける。</summary>
     public string? TitleMisprintText { get; set; }

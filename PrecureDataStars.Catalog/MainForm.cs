@@ -421,7 +421,9 @@ public partial class MainForm : Form
                 // 人物の役職履歴
                 _personPositionsRepo,
                 // 人物・企業のプロフィールの出典
-                _entitySourcesRepo);
+                _entitySourcesRepo,
+                // エピソード主題歌タブのサイズ選択欄の候補
+                _songSizeVariantsRepo);
             f.ShowDialog();
         });
 

@@ -174,6 +174,8 @@ partial class CreditMastersEditorForm
     private CheckBox chkEtsBroadcastOnly = null!;
     private NumericUpDown numEtsInsertSeq = null!;
     private NumericUpDown numEtsSongRecordingId = null!;
+    // その回で流れたサイズ（先頭の「（指定なし）」が NULL）
+    private ComboBox cboEtsSize = null!;
     private TextBox txtEtsNotes = null!;
     private Button btnSaveEts = null!;
     private Button btnDeleteEts = null!;
@@ -973,6 +975,7 @@ partial class CreditMastersEditorForm
         numEtsInsertSeq = new NumericUpDown { Maximum = 255 };
         numEtsSongRecordingId = new NumericUpDown { Maximum = 9_999_999 };
         txtEtsNotes = new TextBox { Multiline = true };
+        cboEtsSize = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
 
         // 編集パネルの先頭に本放送限定チェックを配置（種別より上）。
         // これは PK の一部なので、ユーザーは「どの行（既定 / 本放送限定）を編集しているか」を
@@ -990,10 +993,13 @@ partial class CreditMastersEditorForm
         };
         pnl.Controls.Add(btnPickEtsSongRecordingId);
 
+        // その回で流れたサイズ（エピソード詳細の主題歌の一覧で曲名の後ろに出す。指定なしならサイズを出さない）
+        AddLabeledControl(pnl, "サイズ",                cboEtsSize,                18, 146, inputWidth: 200);
+
         // 備考欄を上に詰めた。
         // レーベル名はクレジット側の COMPANY エントリで持つ運用に整理（episode_theme_songs は楽曲の事実だけ）。
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, 150), Size = new Size(110, 20) };
-        txtEtsNotes.Location = new Point(132, 146);
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, 182), Size = new Size(110, 20) };
+        txtEtsNotes.Location = new Point(132, 178);
         txtEtsNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtEtsNotes);
 

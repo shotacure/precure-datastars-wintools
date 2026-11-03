@@ -10,6 +10,8 @@
   - エピソード詳細・作品詳細は全版を描き、見出しに「（本放送）」「（Blu-ray・配信）」を添える。集計（関わった話数・役職の何回目・N 話連続・主要スタッフなど）は共通と Blu-ray・配信版だけで数え、本放送版は表示だけにした
   - Catalog の新規クレジット作成に「版」の選択欄を足した。クレジット一覧・状態表示・プレビューの見出しに版を添え、話数コピーは版ごと写し、重複の確かめも版ごとにした
 
+- **クレジット：主題歌の歌唱・コーラスのユニット名義を、メンバーの名前を括弧で添えて描けるようにした**（`SongRecordingSingersRepository`）：録音の歌唱者の行でメンバーを開く印（`expand_unit_members`）が立ったユニット名義は、エピソード詳細・作品詳細のクレジット表記で「トロピカる部（ファイルーズ あい・花守 ゆみり・…）」のように、メンバーの名前（キャラのメンバーは声優）を「・」でつないで全角の括弧で添える。主題歌・挿入歌の一覧や曲のページの書き方（キャラのメンバーは「キャラ(CV:声優)」を「、」でつなぐ）は変えない
+
 - **DB・サイト・Catalog：エピソードの主題歌の紐付けにその回で流れたサイズを持てるようにした**（`episode_theme_songs.song_size_variant_code`・`EpisodeThemeSongsRepository`・`ThemeArtTrackIndex.ByRecordingAndSize` / `Resolve`・`EpisodeGenerator`・`episode-detail.sbn`・`site.css` の `.ts-size`・`CreditMastersEditorForm`・`EpisodeThemeSongCopyDialog`・`EpisodeThemeSongRangeCopyDialog`。マイグレーション `v1.20.0_add_theme_song_size.sql`）
   - `song_size_variants` への FK で、NULL なら指定なし
   - エピソード詳細の主題歌・挿入歌の一覧で、サイズが入っている行は曲名の後ろに「（TVサイズ Type.I）」のようにサイズの名前を添える。再生ボタンは、そのサイズの配信音源があればそれを鳴らす

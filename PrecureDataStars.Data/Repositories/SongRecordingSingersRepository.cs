@@ -331,7 +331,8 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
               srs.voice_person_alias_id    AS VoicePersonAliasId,
               srs.slash_person_alias_id    AS SlashPersonAliasId,
               srs.slash_character_alias_id AS SlashCharacterAliasId,
-              srs.slash_voice_person_alias_id AS SlashVoicePersonAliasId
+              srs.slash_voice_person_alias_id AS SlashVoicePersonAliasId,
+              srs.expand_unit_members      AS ExpandUnitMembers
             FROM song_recording_singers srs
             WHERE srs.song_recording_id = @id
               AND srs.role_code         = @role
@@ -341,7 +342,27 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<HtmlRow>(
             new CommandDefinition(sql, new { id = songRecordingId, role = targetRole }, cancellationToken: ct))).ToList();
-        return await BuildHtmlPartsAsync(rows, lookup, cvLabelOverride, cvStarts).ConfigureAwait(false);
+
+        // メンバーを開くユニット名義（expand_unit_members = 1）のメンバーの名前の名義。
+        // キャラのメンバーは声優、人物のメンバーは本人（クレジットの画面は「ユニット（声優・声優…）」の形で出る）。
+        Dictionary<int, IReadOnlyList<int>>? unitMembers = null;
+        var unitIds = rows.Where(r => r.ExpandUnitMembers && r.PersonAliasId.HasValue).Select(r => r.PersonAliasId!.Value).Distinct().ToList();
+        if (unitIds.Count > 0)
+        {
+            const string memberSql = """
+                SELECT parent_alias_id AS UnitAliasId,
+                       COALESCE(member_voice_person_alias_id, member_person_alias_id) AS NameAliasId
+                FROM person_alias_members
+                WHERE parent_alias_id IN @unitIds
+                ORDER BY parent_alias_id, member_seq;
+                """;
+            var members = await conn.QueryAsync<(int UnitAliasId, int? NameAliasId)>(
+                new CommandDefinition(memberSql, new { unitIds }, cancellationToken: ct)).ConfigureAwait(false);
+            unitMembers = members.Where(m => m.NameAliasId.HasValue)
+                .GroupBy(m => m.UnitAliasId)
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<int>)g.Select(m => m.NameAliasId!.Value).ToList());
+        }
+        return await BuildHtmlPartsAsync(rows, lookup, cvLabelOverride, cvStarts, unitMembers).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -349,9 +370,12 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
     /// 録音の歌唱者（song_recording_singers）と、エピソードのクレジットに出た歌唱者（episode_theme_song_singers）で共有する。
     /// <paramref name="cvStarts"/> を渡すと、部品ごとに「(CV:…)」が始まる HTML 上の位置（無ければ -1）を部品と同じ順で足す
     /// （役職テンプレの <c>{SINGER:cv_align=1}</c> で、名前と「(CV:…)」を別の欄に分けて縦にそろえるため）。
+    /// <paramref name="unitMembers"/>（ユニット名義 → メンバーの名前の名義の並び）に載ったユニット名義の行は、
+    /// 名前の後ろにメンバーを「（名前・名前…）」と全角の括弧と「・」で添える。
     /// </summary>
     internal static async Task<IReadOnlyList<(string Sep, string Html)>> BuildHtmlPartsAsync(
-        IReadOnlyList<HtmlRow> rows, ILookupCache lookup, string? cvLabelOverride, List<int>? cvStarts = null)
+        IReadOnlyList<HtmlRow> rows, ILookupCache lookup, string? cvLabelOverride, List<int>? cvStarts = null,
+        IReadOnlyDictionary<int, IReadOnlyList<int>>? unitMembers = null)
     {
         var parts = new List<(string Sep, string Html)>(rows.Count);
         for (int i = 0; i < rows.Count; i++)
@@ -367,6 +391,16 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                 {
                     var html = await lookup.LookupPersonAliasHtmlAsync(pid).ConfigureAwait(false);
                     sb.Append(html ?? "");
+                    if (unitMembers is not null && unitMembers.TryGetValue(pid, out var memberIds) && memberIds.Count > 0)
+                    {
+                        sb.Append('（');
+                        for (int m = 0; m < memberIds.Count; m++)
+                        {
+                            if (m > 0) sb.Append('・');
+                            sb.Append(await lookup.LookupPersonAliasHtmlAsync(memberIds[m]).ConfigureAwait(false) ?? "");
+                        }
+                        sb.Append('）');
+                    }
                 }
                 if (r.SlashPersonAliasId is int spid)
                 {
@@ -436,6 +470,8 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         public int? SlashPersonAliasId { get; set; }
         public int? SlashCharacterAliasId { get; set; }
         public int? SlashVoicePersonAliasId { get; set; }
+        /// <summary>ユニット名義のメンバーを開くか（song_recording_singers.expand_unit_members。episode_theme_song_singers には無いので常に false）。</summary>
+        public bool ExpandUnitMembers { get; set; }
     }
 
     /// <summary>1 行追加（呼び出し側で role_code と singer_seq を採番済みの前提）。</summary>

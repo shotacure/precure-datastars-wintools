@@ -1528,15 +1528,19 @@ public sealed class EpisodeGenerator
         foreach (var occurrence in _chiefIndex.RoleOccurrences(ep.EpisodeId))
         {
             // 放送順で直前の話からの連続担当は「N話連続」、間が空いたときは前に担当した回からの空き。
+            // 赤で目立たせるのは、連続担当（2 話以上）と、26 週以上空いたときだけ。
             string gapLabel = "";
+            bool isGapNotable = false;
             if (occurrence.Streak >= 2)
             {
                 gapLabel = $"{occurrence.Streak}話連続";
+                isGapNotable = true;
             }
             else if (occurrence.PreviousEpisodeId is int prevEpId
                 && _ctx.EpisodeById.TryGetValue(prevEpId, out var prevEp))
             {
                 gapLabel = GapSinceLabel(prevEp.OnAirAt, ep.OnAirAt);
+                isGapNotable = IsLongGap(prevEp.OnAirAt, ep.OnAirAt);
             }
 
             rows.Add(new StaffComboRow
@@ -1547,6 +1551,7 @@ public sealed class EpisodeGenerator
                 Total = occurrence.Total,
                 FirstLabel = "初担当",
                 GapLabel = gapLabel,
+                IsGapNotable = isGapNotable,
                 NamesHtml = ChiefPersonHtml(occurrence.Person),
                 Beads = BuildComboBeads(occurrence.EpisodeIds, occurrence.Ordinal - 1),
                 IsDense = Math.Min(occurrence.Total, ComboBeadsMax) > ComboBeadsDense,
@@ -1556,6 +1561,17 @@ public sealed class EpisodeGenerator
         }
         return rows;
     }
+
+    /// <summary>赤で目立たせる長い空きのしきい（週）。前に担当した回から 26 週以上空いたら目立たせる。</summary>
+    private const int NotableGapWeeks = 26;
+
+    /// <summary>前の回から今回までの空きが、赤で目立たせる長さ（<see cref="NotableGapWeeks"/> 週以上）か。日差は <see cref="GapSinceLabel"/> と同じく放送日で数える。</summary>
+    private static bool IsLongGap(DateTime previousOnAirAt, DateTime currentOnAirAt)
+        => (JpDateFormat.BroadcastDay(currentOnAirAt) - JpDateFormat.BroadcastDay(previousOnAirAt)).TotalDays >= NotableGapWeeks * 7;
+
+    /// <summary>赤で目立たせる節目の回数か（10・25・50 回目、そのあとは 50 回ごと）。初めての回は別の文（初担当・初顔合わせ）で目立たせる。</summary>
+    private static bool IsMilestoneOrdinal(int ordinal)
+        => ordinal == 10 || ordinal == 25 || (ordinal >= 50 && ordinal % 50 == 0);
 
     /// <summary>
     /// 前の回から今回までの空きを「N年Mか月ぶり」「Mか月ぶり」「N週ぶり」で返す。
@@ -2173,10 +2189,14 @@ public sealed class EpisodeGenerator
         public int Total { get; set; }
         /// <summary>初めての回か。</summary>
         public bool IsFirst => Ordinal == 1;
+        /// <summary>回数を赤で目立たせるか（節目の回数。<see cref="IsMilestoneOrdinal"/>）。</summary>
+        public bool IsOrdinalNotable => IsMilestoneOrdinal(Ordinal);
         /// <summary>初めての回に回数の代わりに出す文（組み合わせは「初顔合わせ」、役職ごとは「初担当」）。</summary>
         public string FirstLabel { get; set; } = "";
         /// <summary>連続担当（「3話連続」）か前の回からの空き（「1年10か月ぶり」など）。役職ごとのカードだけ。無ければ空文字。</summary>
         public string GapLabel { get; set; } = "";
+        /// <summary><see cref="GapLabel"/> を赤で目立たせるか（連続担当と、26 週以上の空き）。</summary>
+        public bool IsGapNotable { get; set; }
         /// <summary>顔ぶれ（人物ページへのリンク済み HTML 断片）。</summary>
         public string NamesHtml { get; set; } = "";        /// <summary>放送順の玉の列。</summary>
         public IReadOnlyList<ComboBead> Beads { get; set; } = Array.Empty<ComboBead>();

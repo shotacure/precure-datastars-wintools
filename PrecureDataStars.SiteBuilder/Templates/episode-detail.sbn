@@ -208,14 +208,14 @@
           {{~ if (array.size StaffRoleCards) > 0 ~}}
           <ul class="staff-combo-minis">
             {{~ for c in StaffRoleCards ~}}
-            <li class="staff-combo-mini" aria-label="{{ c.Label | html.escape }}"><span class="staff-combo-mini-roles">{{~ for b in c.Badges ~}}<span class="role-badge role-badge-xs" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>{{~ if c.IsFirst ~}}<span class="staff-combo-first">{{ c.FirstLabel }}</span>{{~ else ~}}<span class="staff-combo-count"><b>{{ c.Ordinal }}</b> 回目</span>{{~ end ~}}{{~ if c.GapLabel != "" ~}}<span class="staff-combo-mini-gap">{{ c.GapLabel }}</span>{{~ end ~}}</li>
+            <li class="staff-combo-mini" aria-label="{{ c.Label | html.escape }}"><span class="staff-combo-mini-roles">{{~ for b in c.Badges ~}}<span class="role-badge role-badge-xs" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>{{~ if c.IsFirst ~}}<span class="staff-combo-first">{{ c.FirstLabel }}</span>{{~ else ~}}<span class="staff-combo-count{{ if c.IsOrdinalNotable }} is-notable{{ end }}"><b>{{ c.Ordinal }}</b> 回目</span>{{~ end ~}}{{~ if c.GapLabel != "" ~}}<span class="staff-combo-mini-gap{{ if c.IsGapNotable }} is-notable{{ end }}">{{ c.GapLabel }}</span>{{~ end ~}}</li>
             {{~ end ~}}
           </ul>
           {{~ end ~}}
           {{~ if (array.size StaffCombos) > 0 ~}}
           <ul class="staff-combo-minis">
             {{~ for c in StaffCombos ~}}
-            <li class="staff-combo-mini" aria-label="{{ c.Label | html.escape }}"><span class="staff-combo-mini-roles">{{~ for b in c.Badges ~}}{{~ if !for.first ~}}<span class="staff-combo-x">×</span>{{~ end ~}}<span class="role-badge role-badge-xs" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>{{~ if c.IsFirst ~}}<span class="staff-combo-first">{{ c.FirstLabel }}</span>{{~ else ~}}<span class="staff-combo-count"><b>{{ c.Ordinal }}</b> 回目</span>{{~ end ~}}</li>
+            <li class="staff-combo-mini" aria-label="{{ c.Label | html.escape }}"><span class="staff-combo-mini-roles">{{~ for b in c.Badges ~}}{{~ if !for.first ~}}<span class="staff-combo-x">×</span>{{~ end ~}}<span class="role-badge role-badge-xs" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>{{~ if c.IsFirst ~}}<span class="staff-combo-first">{{ c.FirstLabel }}</span>{{~ else ~}}<span class="staff-combo-count{{ if c.IsOrdinalNotable }} is-notable{{ end }}"><b>{{ c.Ordinal }}</b> 回目</span>{{~ end ~}}</li>
             {{~ end ~}}
           </ul>
           {{~ end ~}}
@@ -228,9 +228,9 @@
         <article class="staff-combo-card" aria-label="{{ c.Label | html.escape }}">
           <div class="staff-combo-head">
             <div class="staff-combo-roles">{{~ for b in c.Badges ~}}{{~ if !for.first ~}}<span class="staff-combo-x">×</span>{{~ end ~}}{{~ if b.Url != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ b.Code }}" href="{{ b.Url }}">{{ b.Label | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}{{~ end ~}}</div>
-            <div class="staff-combo-ordinal">{{~ if c.Total > 1 ~}}<span class="staff-combo-total">{{ c.Total }} 回中</span>{{~ end ~}}{{~ if c.IsFirst ~}}<span class="staff-combo-first-big">{{ c.FirstLabel }}</span>{{~ else ~}}<b>{{ c.Ordinal }}</b><span class="staff-combo-unit">回目</span>{{~ end ~}}</div>
+            <div class="staff-combo-ordinal{{ if c.IsOrdinalNotable }} is-notable{{ end }}">{{~ if c.Total > 1 ~}}<span class="staff-combo-total">{{ c.Total }} 回中</span>{{~ end ~}}{{~ if c.IsFirst ~}}<span class="staff-combo-first-big">{{ c.FirstLabel }}</span>{{~ else ~}}<b>{{ c.Ordinal }}</b><span class="staff-combo-unit">回目</span>{{~ end ~}}</div>
           </div>
-          <p class="staff-combo-names"><span class="staff-combo-people">{{ c.NamesHtml }}</span>{{~ if c.GapLabel != "" ~}}<span class="staff-combo-gap">{{ c.GapLabel }}</span>{{~ end ~}}</p>
+          <p class="staff-combo-names"><span class="staff-combo-people">{{ c.NamesHtml }}</span>{{~ if c.GapLabel != "" ~}}<span class="staff-combo-gap{{ if c.IsGapNotable }} is-notable{{ end }}">{{ c.GapLabel }}</span>{{~ end ~}}</p>
           <ol class="staff-combo-beads{{ if c.IsDense }} is-dense{{ end }}">
             {{~ for bd in c.Beads ~}}
             {{~ if bd.IsGap ~}}

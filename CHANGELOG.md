@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：エピソード詳細のスタッフの「くわしく」で、特筆すべき回数・連続・空きだけをピンクにした**（`EpisodeGenerator.BuildStaffRoleCards` / `IsMilestoneOrdinal` / `IsLongGap`・`episode-detail.sbn`・`site.css`）：これまで回数・「N話連続」・「〇か月ぶり」をすべてピンクにしていたのを、節目の回数（10・25・50 回目、そのあとは 50 回ごと）・連続担当・26 週以上の空き（と従来どおり「初担当」「初顔合わせ」）だけにし、ほかは本文の色にした。閉じた状態の 1 行とカードの両方
+
 - **DB・サイト・Catalog：クレジットを版（本放送／Blu-ray・配信）ごとに持てるようにした**（`credits.media_version`・`media_version_key`・`Credit`・`CreditMediaVersions`・`CreditsRepository`・`CreditSaveService`・`CreditNewDialog`・`CreditCopyDialog`・`CreditEditorForm`・`CreditPreviewRenderer`・`SiteDataLoader`・`BuildContext`・`EpisodeGenerator`・`SeriesGenerator`。マイグレーション `v1.20.0_add_credit_media_version.sql`）
   - 本放送と Blu-ray・配信でクレジットのフォーマットが丸ごと違う作品（オトナシリーズ）用に、同じ回・同じ種類のクレジットを版ごとに 2 本並べて持てるようにした。版が NULL（共通）のクレジットは今までどおり
   - 一意制約を「回（作品）×種類」から「回（作品）×種類×版」に付け替えた。NULL どうしも衝突させるため、NULL を空文字にした生成列で張る

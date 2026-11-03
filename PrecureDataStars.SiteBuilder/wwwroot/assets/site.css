@@ -11128,11 +11128,15 @@ body.has-art-track-bar {
   font-size: 0.85em;
   color: var(--muted);
 }
+/* 回数・連続・空きは、特筆すべきもの（節目の回数・連続担当・26 週以上の空き。is-notable）だけピンク、ほかは本文の色。 */
 .staff-combo-count b {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
-  color: var(--accent-pink);
+  color: var(--fg);
   font-size: 1.15em;
+}
+.staff-combo-count.is-notable b {
+  color: var(--accent-pink);
 }
 .staff-combo-first {
   font-size: 0.78em;
@@ -11142,6 +11146,9 @@ body.has-art-track-bar {
 .staff-combo-mini-gap {
   font-size: 0.78em;
   font-weight: 700;
+  color: var(--fg);
+}
+.staff-combo-mini-gap.is-notable {
   color: var(--accent-pink);
 }
 /* 数え方の断りは開いたときだけ、「閉じる」の行の左に出す（「閉じる」1 語だけの空いた行にしない）。 */
@@ -11223,7 +11230,7 @@ body.has-art-track-bar {
 .staff-combo-roles .staff-combo-x {
   font-size: 0.8em;
 }
-/* 通算：1 行で「11 回中 9 回目」。数字だけ等幅で大きくピンク、ほかは小さく、ベースラインをそろえる。 */
+/* 通算：1 行で「11 回中 9 回目」。数字だけ等幅で大きく（節目の回数だけピンク）、ほかは小さく、ベースラインをそろえる。 */
 .staff-combo-ordinal {
   display: inline-flex;
   align-items: baseline;
@@ -11241,8 +11248,11 @@ body.has-art-track-bar {
   font-variant-numeric: tabular-nums;
   font-size: 1.75em;
   font-weight: 700;
-  color: var(--accent-pink);
+  color: var(--fg);
   letter-spacing: -0.02em;
+}
+.staff-combo-ordinal.is-notable b {
+  color: var(--accent-pink);
 }
 .staff-combo-unit {
   font-size: 0.78em;
@@ -11277,8 +11287,11 @@ body.has-art-track-bar {
   margin-left: auto;
   font-size: 0.85em;
   font-weight: 700;
-  color: var(--accent-pink);
+  color: var(--fg);
   white-space: nowrap;
+}
+.staff-combo-gap.is-notable {
+  color: var(--accent-pink);
 }
 
 /* 放送順の玉の列。等間隔に並べ、年が変わる玉の下に年を出す。今回だけ大きくピンク、前は塗り、後は白抜き。

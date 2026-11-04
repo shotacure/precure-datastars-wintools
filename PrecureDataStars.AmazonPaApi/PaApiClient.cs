@@ -47,6 +47,8 @@ public sealed class PaApiClient
         "itemInfo.title",
         "itemInfo.byLineInfo",
         "itemInfo.productInfo",
+        // 商品の EAN（JAN）。CD のジャケット画像の取り直しと同じ巡回で取り、構造化データの gtin13 に使う。
+        "itemInfo.externalIds",
         "offersV2.listings.price",
     };
 

@@ -788,6 +788,9 @@ CREATE TABLE `products` (
   `cover_image_source` varchar(16) DEFAULT NULL,
   `cover_image_show_both` tinyint(1) NOT NULL DEFAULT '0',
   `cover_image_fetched_at` datetime DEFAULT NULL,
+  -- Amazon の CD の ASIN から取った EAN（JAN、13 桁）。画像と同じ GetItems で取り、画像と同じく毎日取り直す。
+  -- 構造化データの gtin13 に使う（盤の mcn があればそちらが先）。
+  `amazon_ean` varchar(13) DEFAULT NULL COMMENT 'Amazon の CD の ASIN から取った EAN（JAN）。画像と同じく毎日取り直す',
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションに公式ページとして出す。
   `official_url` varchar(1024) DEFAULT NULL,

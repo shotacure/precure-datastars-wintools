@@ -261,7 +261,7 @@ public static class Program
             if (dryRun) Console.WriteLine("(dry-run モード：DB 更新は行いません)");
 
             // 対象の全 ASIN（デジタル・CD）を先に 10 件ずつまとめて引いておき、商品ごとの判定はその結果の表で行う。
-            var (productUrls, productFailed) = await FetchImageUrlsAsync(paApi,
+            var (productUrls, productEans, productFailed) = await FetchImageUrlsAsync(paApi,
                 targets.SelectMany(p => new[] { p.AmazonAsinDigital, p.AmazonAsinCd }));
 
             int ok = 0, miss = 0;
@@ -294,8 +294,20 @@ public static class Program
                 {
                     miss++;
                     Console.WriteLine("取得失敗（今の画像を残し、次の巡回で取り直す）");
+                    continue;
                 }
-                else if (digitalUrl != null || cdUrl != null)
+
+                // CD の ASIN の EAN（JAN）。画像と同じく、取り直しのたびに入れ替える（取れなければ空にする）。
+                // Amazon から取った値なので、構造化データの gtin13 には盤の mcn が無いときだけ使う。
+                string? ean = string.IsNullOrWhiteSpace(prod.AmazonAsinCd)
+                    ? null
+                    : productEans.GetValueOrDefault(prod.AmazonAsinCd!.Trim());
+                if (!dryRun && !string.Equals(ean, prod.AmazonEan, StringComparison.Ordinal))
+                {
+                    await repo.UpdateAmazonEanAsync(prod.ProductCatalogNo, ean);
+                }
+
+                if (digitalUrl != null || cdUrl != null)
                 {
                     // 採用ソース決定：upgrade モードはデジタルへ格上げ、それ以外は既存の明示選択を尊重しつつ
                     // 未選択／選択先が空ならデジタル→CD の既定優先（DecideCoverSource 参照）。
@@ -395,7 +407,7 @@ public static class Program
         if (dryRun) Console.WriteLine("(dry-run モード：DB 更新は行いません)");
 
         // 音楽商品と同じく、対象の全 ASIN（紙・Kindle）を先に 10 件ずつまとめて引いておく。
-        var (bookUrls, bookFailed) = await FetchImageUrlsAsync(paApi,
+        var (bookUrls, _, bookFailed) = await FetchImageUrlsAsync(paApi,
             targets.SelectMany(b => new[] { b.AmazonAsinPrint, b.AmazonAsinKindle }));
 
         int ok = 0, miss = 0, idx = 0;
@@ -453,13 +465,13 @@ public static class Program
     }
 
     /// <summary>
-    /// ASIN を重複を除いて 10 件ずつまとめて GetItems で引き、ASIN → 大きい画像の URL の表と、
+    /// ASIN を重複を除いて 10 件ずつまとめて GetItems で引き、ASIN → 大きい画像の URL の表、ASIN → EAN（JAN）の表と、
     /// 通信・応答に失敗した ASIN の集合を返す。応答に載らなかった ASIN と画像の無い ASIN は表にも失敗にも入らない
     /// （Amazon が答えたうえで画像が無かった扱い）。まとめた要求が失敗したときはその分を 1 件ずつ引き直し、
     /// それでも失敗した ASIN だけを失敗に入れる（無効な ASIN が 1 つ混ざっただけで、同じ組のほかの ASIN まで
     /// 取り直せなくなるのを避ける）。各リクエストの後に <see cref="RateLimitDelayMs"/> 待つ。
     /// </summary>
-    private static async Task<(Dictionary<string, string> Urls, HashSet<string> Failed)> FetchImageUrlsAsync(
+    private static async Task<(Dictionary<string, string> Urls, Dictionary<string, string> Eans, HashSet<string> Failed)> FetchImageUrlsAsync(
         PaApiClient paApi, IEnumerable<string?> asins)
     {
         var distinct = asins
@@ -468,6 +480,7 @@ public static class Program
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         var urls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var eans = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var failed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var chunks = distinct.Chunk(GetItemsBatchSize).ToList();
@@ -480,6 +493,7 @@ public static class Program
                 foreach (var item in items)
                 {
                     if (item.Asin.Length > 0 && item.LargeImageUrl is { Length: > 0 } u) urls[item.Asin] = u;
+                    if (item.Asin.Length > 0 && item.Ean is { Length: > 0 } e) eans[item.Asin] = e.Trim();
                 }
                 await Task.Delay(RateLimitDelayMs);
             }
@@ -493,6 +507,7 @@ public static class Program
                     {
                         var item = await paApi.GetItemAsync(asin, CancellationToken.None);
                         if (item?.LargeImageUrl is { Length: > 0 } u) urls[asin] = u;
+                        if (item?.Ean is { Length: > 0 } e) eans[asin] = e.Trim();
                     }
                     catch (Exception ex1)
                     {
@@ -504,7 +519,7 @@ public static class Program
             }
         }
         Console.WriteLine();
-        return (urls, failed);
+        return (urls, eans, failed);
     }
 
     /// <summary>

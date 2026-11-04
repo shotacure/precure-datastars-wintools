@@ -1780,6 +1780,7 @@ series_relation_kinds ──┘    │            │
 | `cover_image_url` | VARCHAR(512) NULL | ジャケット画像 URL（Amazon CDN を直接参照するホットリンク。実体は保存しない） |
 | `cover_image_source` | VARCHAR(16) NULL | 画像の取得元コード。`amazon_cd`（Creators API・CD ASIN 由来）／`amazon_digital`（Creators API・デジタル ASIN 由来）の 2 値 |
 | `cover_image_fetched_at` | DATETIME NULL | 画像 URL の取得日時（鮮度判定用。AmazonSync は 20 時間経過で再取得） |
+| `amazon_ean` | VARCHAR(13) NULL | Amazon の CD の ASIN から取った EAN（JAN）。AmazonSync が画像と同じ取得（`itemInfo.externalIds`）で取り、画像と同じく取り直すたびに入れ替える。商品詳細の構造化データ（Product）の `gtin13` に使い、無ければ CD 系の盤の `mcn`（ほかの商品の盤と同じ値のものは除く）を使う |
 | `notes` | TEXT NULL | 備考 |
 | `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
 | `created_at` / `updated_at` | TIMESTAMP | 作成・更新日時 |

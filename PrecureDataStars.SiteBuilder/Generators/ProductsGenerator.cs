@@ -27,6 +27,12 @@ public sealed class ProductsGenerator
     /// <summary>同じ題名の商品が複数ある題名の集合（GenerateAsync が並列レンダリングの前に確定させる）。</summary>
     private HashSet<string> _duplicateTitles = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// 2 つ以上の商品の盤に出てくる mcn の集合（GenerateAsync が並列レンダリングの前に確定させる）。mcn は CD そのものの番号で、
+    /// 同じ CD を違う包装で出した版や再発売の盤では同じ値になり、商品ごとの JAN と一致しないので、gtin13 には使わない。
+    /// </summary>
+    private HashSet<string> _sharedMcns = new(StringComparer.Ordinal);
+
     private readonly BuildContext _ctx;
     private readonly PageRenderer _page;
 
@@ -227,6 +233,16 @@ public sealed class ProductsGenerator
         // 並列レンダリングの前に確定させ、以後は読み取りだけにする。
         _duplicateTitles = allProducts
             .GroupBy(x => x.Title, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+        _sharedMcns = discsByProduct
+            .SelectMany(kv => kv.Value
+                .Where(d => !string.IsNullOrWhiteSpace(d.Mcn))
+                .Select(d => (Mcn: d.Mcn!.Trim(), Product: kv.Key)))
+            .Distinct()
+            .GroupBy(x => x.Mcn, StringComparer.Ordinal)
             .Where(g => g.Count() > 1)
             .Select(g => g.Key)
             .ToHashSet(StringComparer.Ordinal);
@@ -891,12 +907,6 @@ public sealed class ProductsGenerator
             if (!string.IsNullOrEmpty(labelPc.NameEn)) org["alternateName"] = labelPc.NameEn;
             jsonLdDict["recordLabel"] = org;
         }
-        // 商品 JAN が 13 桁の数字（= JAN/EAN-13 = schema.org の GTIN-13）なら gtin13 を出力する。
-        // JAN は複数ディスクで共通のため、複数枚組 BOX でも商品単位で一意に定まる。
-        if (productJan.Length == 13 && productJan.All(char.IsDigit))
-        {
-            jsonLdDict["gtin13"] = productJan;
-        }
         // ジャケット画像（Amazon CDN ホットリンク URL）を image に乗せる。商品詳細ページで表示している
         // 代表ジャケットと同一 URL。2 デザインを併記する商品は副ジャケットも配列で添える。未取得は出さない。
         if (!string.IsNullOrEmpty(coverPrimaryUrl))
@@ -935,10 +945,20 @@ public sealed class ProductsGenerator
         if (offers.Count > 0)
         {
             jsonLdDict["offers"] = offers;
-            // Product の brand には発売元（レーベル）を載せる。JAN（gtin）は持っていないので出さない。
+            // Product の brand には発売元（レーベル）を載せる。
             // 返品・送料（hasMerchantReturnPolicy・shippingDetails）は売り手（Amazon）の条件で当サイトは決められないので出さない。
             if (!isMusicAlbum && !string.IsNullOrWhiteSpace(labelText))
                 jsonLdDict["brand"] = new Dictionary<string, object?> { ["@type"] = "Brand", ["name"] = labelText };
+            // gtin13（JAN = EAN-13）。Amazon から取った商品の EAN（products.amazon_ean）を先に、無ければ商品 JAN として出している
+            // CD 系の盤の mcn（productJan）。mcn はほかの商品の盤と同じ値なら使わない（_sharedMcns。同じ CD を違う包装で出した版など）。
+            // 13 桁でチェック数字の合うものだけを使う。
+            if (!isMusicAlbum)
+            {
+                string? gtin = IsValidGtin13(product.AmazonEan) ? product.AmazonEan!.Trim()
+                    : IsValidGtin13(productJan) && !_sharedMcns.Contains(productJan.Trim()) ? productJan.Trim()
+                    : null;
+                if (gtin is not null) jsonLdDict["gtin13"] = gtin;
+            }
         }
         else if (!isMusicAlbum)
         {
@@ -1203,6 +1223,20 @@ public sealed class ProductsGenerator
             if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
         }
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// JAN（EAN-13）として使える値か。13 桁の数字で、0 だけでなく、末尾のチェック数字が合うもの
+    /// （奇数桁 ×1・偶数桁 ×3 の和から求める）。
+    /// </summary>
+    private static bool IsValidGtin13(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return false;
+        string c = code.Trim();
+        if (c.Length != 13 || !c.All(char.IsAsciiDigit) || c.All(ch => ch == '0')) return false;
+        int sum = 0;
+        for (int i = 0; i < 12; i++) sum += (c[i] - '0') * (i % 2 == 0 ? 1 : 3);
+        return (10 - sum % 10) % 10 == c[12] - '0';
     }
 
     /// <summary>商品社名 ID から社名（和名）を引く（構造化 ID で解決する）。 ID が NULL、マスタ未登録、論理削除済みのいずれかの場合は空文字を返す （フリーテキストフォールバックは存在しない）。</summary>

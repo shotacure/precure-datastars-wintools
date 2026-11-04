@@ -102,6 +102,12 @@ public sealed class Product
     /// <summary>ジャケット画像 URL の取得日時。再取得（鮮度判定）に使う。未取得は NULL。</summary>
     public DateTime? CoverImageFetchedAt { get; set; }
 
+    /// <summary>
+    /// Amazon の CD の ASIN から取った EAN（JAN、13 桁、<c>products.amazon_ean</c>）。AmazonSync がジャケット画像と同じ取得で
+    /// 毎日取り直す。構造化データの gtin13 に使う（盤の mcn があればそちらが先）。取れなかった商品は NULL。
+    /// </summary>
+    public string? AmazonEan { get; set; }
+
     // ── 備考 ──
 
     /// <summary>備考。</summary>

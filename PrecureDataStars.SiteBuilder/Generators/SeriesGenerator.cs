@@ -172,7 +172,8 @@ public sealed class SeriesGenerator
             ctx,
             staffLinkResolver,
             roleSuccessorResolver,
-            new SongMusicClassesRepository(factory));
+            new SongMusicClassesRepository(factory),
+            new SongSizeVariantsRepository(factory));
 
         // SERIES スコープのクレジット階層描画用。EpisodeGenerator と同じパターンで構築：
         // LookupCache を BuildContext + 接続ファクトリから生成し、StaffNameLinkResolver を後注入。

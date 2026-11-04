@@ -30,7 +30,7 @@ public sealed class ThemeArtTrackIndex
     public IReadOnlyDictionary<(int RecordingId, string SizeVariantCode), ThemeArtTrack> ByRecordingAndSize { get; }
 
     /// <summary>
-    /// エピソードの主題歌 1 行で鳴らす配信音源。サイズが指定されていて、そのサイズの音源があればそれ、
+    /// 主題歌の再生ボタン 1 つで鳴らす配信音源（<see cref="Utilities.ThemeSongCardParts.ResolvePlay"/> から使う）。サイズが指定されていて、そのサイズの音源があればそれ、
     /// 無ければ（サイズ未指定も）録音ごとに選んだ音源（<see cref="ByRecording"/>）。どちらも無ければ null。
     /// </summary>
     public ThemeArtTrack? Resolve(int songRecordingId, string? sizeVariantCode)

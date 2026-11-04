@@ -4,6 +4,12 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：エピソード詳細・シリーズ詳細の主題歌・挿入歌で、同じ録音を OP・ED・挿入歌として使っていたらカードを 1 枚にまとめ、サイズを緑のピル・再生ボタンをサイズごとにした**（`ThemeSongCardParts`〔新規：`ThemeSongKindEntry`・`ThemeSongPlay`〕・`EpisodeGenerator`・`ThemeSongRowBuilder`・`ThemeSongSeriesAggregator`・`SeriesGenerator`・`episode-detail.sbn`・`series-detail.sbn`・`site.css`）
+  - 同じ録音を何度か使った回（シリーズ）は、区分のバッジを使った順に並べて 1 枚にまとめる。まとめるのは録音と本放送限定の印（エピソード詳細ではインストゥルメンタルの印も）が同じものだけ。シリーズ詳細は区分が 2 つ以上なら各区分のバッジの直後にその区分の使用話数を置く（区分が 1 つなら今までどおり曲名の後ろ）
+  - 区分が 2 つ以上のカードの見出しは、左に「区分のバッジ＋使用話数」を 1 区分 1 行で縦に積み、右の曲名・サイズ・（本放送のみ）・再生ボタンをその縦の真ん中にそろえて 1 行に組む（`.ts-headline-multi`・`.ts-kinds`・`.ts-headline-main`・`.ts-plays-inline`）。幅 600px 以下では 1 行目を区分の積みと再生ボタン、2 行目を曲名・サイズにする
+  - サイズは「（TVサイズ）」の括弧書きをやめ、楽曲詳細と同じ緑のピル（`.recording-tracks-kind-badge.recording-tracks-kind-size`）にした。シリーズ詳細にも、その系列で使った違うサイズを使った順に出す（`ThemeSongDescriptor.SizeVariantCodes`）
+  - 再生ボタンはサイズごとに 1 つ、使った順にカードの右上へ並べる（`.ts-plays`。見出しの右の空きはボタンの数 `--ts-play-count` に合わせる）。鳴らす音源が同じボタンは 1 つにまとめる。そのサイズの音源で鳴らすボタンは、説明（`title`・`aria-label`）にサイズの名前を添える
+  - 主題歌の一覧の `ul`・`li` で、属性の前の空白が抜けていたのを直した
 - **サイト：カレンダーのキーカラーの無いキャラの誕生日チップを、凡例と同じピンクにした**（`site.css` の `.cal-chip-plain`）：凡例の「キャラクター誕生日」はピンク（#ffd9ec）なのに、プリキュア以外のキャラのチップは灰色で塗っていた。地 #ffd9ec・字 #9b2c66（「今日の記念日」の誕生日ラベルと同じ）にそろえた。記念日の一覧のページの凡例のチップも同じ色になる。
 - **サイト：記念日のカレンダーに、誕生日の入ったキャラをキャラクター種別を問わずすべて載せるようにした**（`AnniversaryDataBuilder`）：キャラクター誕生日を `character_kind` が `PRECURE` / `ALLY` のキャラに限っていたため、誕生日を設定したサブキャラ（`SUPPORTING`）などがキャラ詳細には出るのにカレンダーに載らなかった。プリキュア以外は `ALLY` と同じく名称の素バッジで出す。
 - **スキーマ・サイト・Catalog：クレジットの役職の行に「役職名だけ画面に無い」印 `role_label_not_on_screen` を足した**（マイグレーション `v1.20.0_add_card_role_label_not_on_screen.sql`・`CreditCardRole`・`CreditCardRolesRepository`・`CreditSaveService`・`CreditDraftLoader`・`CreditBulkInputParser`・`CreditBulkInputEncoder`・`CreditBulkApplyService`・`CreditEditorForm`・`CreditPreviewRenderer`・`CreditRoleLabel`・`TemplateContext`・`RoleTemplateRenderer`・`CastingCooperationAppend`・`CreditTreeRenderer`・`site.css`）：名前は画面に出ているが役職の見出しが無い行（ED の原画の末尾に 1 人だけで出ている人が、実質は「料理作監」の担当など）を、役職はデータとして入れて数えつつ、見出しが画面に無かったと示すため。

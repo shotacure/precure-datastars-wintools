@@ -943,6 +943,14 @@ public sealed class EpisodeGenerator
                 : Array.Empty<SongRecordingSinger>());
 
         var rows = new List<ThemeSongRow>(themes.Count);
+        // 同じ録音を OP・ED・挿入歌として何度か使った回は、カードを 1 枚にまとめる。
+        // まとめるのは録音・インストゥルメンタルの印・本放送限定の印がすべて同じ行だけ（どれかが違えば見出しの書き方が変わるので別のカード）。
+        // 2 回目以降の行は、最初の行のカードに区分バッジ・サイズ・再生ボタン・備考だけを足す。
+        var rowByUsageKey = new Dictionary<(int SongRecordingId, bool IsInstrumental, bool IsBroadcastOnly), ThemeSongRow>();
+        // サイズコード → サイズの名前（song_size_variants.name_ja）。
+        var sizeLabelByCode = _sizeVariantMap is null
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            : _sizeVariantMap.ToDictionary(kv => kv.Key, kv => kv.Value.NameJa, StringComparer.Ordinal);
         // seq 列が劇中順を表すため、Seq 昇順だけで劇中で流れる順番に並ぶ
         // （OP/ED/INSERT を区別する独自ソートは不要）。
         // 同じ枠の本放送 / 円盤・配信 差し替え（2 行並立）は、先に流れた本放送限定行を先に置く。
@@ -970,6 +978,26 @@ public sealed class EpisodeGenerator
             string kindLabel = _songMusicClassLabelMap.TryGetValue(t.ThemeKind, out var classNameJa)
                 ? classNameJa
                 : t.ThemeKind;
+
+            // その回で流れたサイズの名前（song_size_variants.name_ja）。サイズの指定が無ければ空でサイズを出さない。
+            string sizeLabel = !string.IsNullOrEmpty(t.SongSizeVariantCode)
+                && sizeLabelByCode.TryGetValue(t.SongSizeVariantCode!, out var sizeName)
+                    ? sizeName
+                    : "";
+
+            // 再生ボタンで鳴らす配信音源（その回のサイズの音源があればそれ。無ければ歌入りで本編のサイズを優先。カラオケしか無ければ無し）。
+            ThemeSongPlay? play = ThemeSongCardParts.ResolvePlay(
+                _ctx.ThemeArtTracks, t.SongRecordingId, t.SongSizeVariantCode, sizeLabelByCode);
+
+            var usageKey = (t.SongRecordingId, t.IsInstrumental == true, t.IsBroadcastOnly);
+            if (rowByUsageKey.TryGetValue(usageKey, out var mergedRow))
+            {
+                ThemeSongCardParts.AddKind(mergedRow.Kinds, new ThemeSongKindEntry { Label = kindLabel });
+                ThemeSongCardParts.AddDistinct(mergedRow.SizeLabels, sizeLabel);
+                ThemeSongCardParts.AddPlay(mergedRow.Plays, play);
+                mergedRow.Notes = ThemeSongCardParts.AppendNote(mergedRow.Notes, t.Notes);
+                continue;
+            }
 
             // 楽曲詳細ページへのリンク URL を組み立てる（song_id が引けたときだけ）。
             // 録音単位のアンカー URL（筆頭録音はページ先頭、それ以外は #recording-N）。
@@ -1052,18 +1080,8 @@ public sealed class EpisodeGenerator
                 ? SongDisplayTitle.Build(song.Title, rec?.VariantLabel)
                 : "(曲名未登録)";
 
-            // その回で流れたサイズの名前（song_size_variants.name_ja）。サイズの指定が無ければ空でサイズを出さない。
-            string sizeLabel = !string.IsNullOrEmpty(t.SongSizeVariantCode)
-                && _sizeVariantMap is not null
-                && _sizeVariantMap.TryGetValue(t.SongSizeVariantCode!, out var sizeVariant)
-                    ? sizeVariant.NameJa
-                    : "";
-
-            // 再生ボタンで鳴らす配信音源（その回のサイズの音源があればそれ。無ければ歌入りで本編のサイズを優先。カラオケしか無ければ無し）。
-            ThemeArtTrack? artTrack = _ctx.ThemeArtTracks.Resolve(t.SongRecordingId, t.SongSizeVariantCode);
-            rows.Add(new ThemeSongRow
+            var row = new ThemeSongRow
             {
-                KindLabel = kindLabel,
                 Title = displayTitle,
                 SongTitle = song?.Title ?? "",
                 SongLink = songLink,
@@ -1090,14 +1108,13 @@ public sealed class EpisodeGenerator
                     lyricsHtml, compositionHtml, arrangementHtml, medleyArrangementHtml),
                 Notes = t.Notes ?? "",
                 IsBroadcastOnly = t.IsBroadcastOnly,
-                IsInstrumental = t.IsInstrumental == true,
-                SizeLabel = sizeLabel,
-                ArtTrackId = artTrack?.ArtTrackId ?? "",
-                ArtTrackPremiumOnly = artTrack?.PremiumOnly ?? false,
-                ArtTrackSourceAlbum = artTrack?.SourceAlbum ?? "",
-                ArtTrackAltId = artTrack?.AltArtTrackId ?? "",
-                ArtTrackAltSourceAlbum = artTrack?.AltSourceAlbum ?? ""
-            });
+                IsInstrumental = t.IsInstrumental == true
+            };
+            row.Kinds.Add(new ThemeSongKindEntry { Label = kindLabel });
+            ThemeSongCardParts.AddDistinct(row.SizeLabels, sizeLabel);
+            ThemeSongCardParts.AddPlay(row.Plays, play);
+            rowByUsageKey[usageKey] = row;
+            rows.Add(row);
         }
         return rows;
     }
@@ -2348,8 +2365,8 @@ public sealed class EpisodeGenerator
     /// <summary>主題歌 1 行（テーブルではなく縦リスト 1 行表現）の DTO。</summary>
     private sealed class ThemeSongRow
     {
-        /// <summary>区分ラベル（"OP" / "ED" / "挿入歌"）。</summary>
-        public string KindLabel { get; set; } = "";
+        /// <summary>区分バッジの並び（"オープニング主題歌" / "エンディング主題歌" / "挿入歌"）。同じ録音を何度か使った回は使った順に複数。</summary>
+        public List<ThemeSongKindEntry> Kinds { get; } = new();
         /// <summary>楽曲タイトル。テンプレ側で <c>「タイトル」</c> のようにカギ括弧で括る。
         /// 「親 song.title + 半角SP + variant_label 接尾辞」で組む（SongsGenerator displayTitle 慣例）。</summary>
         public string Title { get; set; } = "";
@@ -2368,18 +2385,10 @@ public sealed class EpisodeGenerator
         public bool IsBroadcastOnly { get; set; }
         /// <summary>この回ではインストゥルメンタルで使った印（曲名の後ろ、カギ括弧の内側に「（インストゥルメンタル）」を添える）。</summary>
         public bool IsInstrumental { get; set; }
-        /// <summary>その回で流れたサイズの名前（例: "TVサイズ Type.I"）。カギ括弧の後ろに「（…）」で添える。空文字なら出さない。</summary>
-        public string SizeLabel { get; set; } = "";
-        /// <summary>再生ボタンで鳴らす配信音源（<see cref="BuildContext.ThemeArtTracks"/> が選んだもの）。無ければ空文字でボタンを出さない。</summary>
-        public string ArtTrackId { get; set; } = "";
-        /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>
-        public bool ArtTrackPremiumOnly { get; set; }
-        /// <summary>音源が入っている盤の表記（プレイヤーの補足に出す）。</summary>
-        public string ArtTrackSourceAlbum { get; set; } = "";
-        /// <summary>会員限定のときの代わり（誰でも再生できる同じサイズの音源）。無ければ空文字。</summary>
-        public string ArtTrackAltId { get; set; } = "";
-        /// <summary>代わりの音源が入っている盤の表記。</summary>
-        public string ArtTrackAltSourceAlbum { get; set; } = "";
+        /// <summary>その回で流れたサイズの名前の並び（例: "TVサイズ Type.I"）。違うサイズだけを使った順に。曲名の後ろに緑のピルで出す。空なら出さない。</summary>
+        public List<string> SizeLabels { get; } = new();
+        /// <summary>再生ボタンの並び（サイズごと・使った順。鳴らす音源が同じなら 1 つ）。空ならボタンを出さない。</summary>
+        public List<ThemeSongPlay> Plays { get; } = new();
 
         // ── 構造化クレジット由来の HTML 群 ──
         /// <summary>作詞の表示用 HTML。</summary>

@@ -10,8 +10,12 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// テンプレ <c>episode-detail.sbn</c> / <c>series-detail.sbn</c> の <c>#theme-songs</c> セクションで描画される。</summary>
 public sealed class ThemeSongRow
 {
-    /// <summary>区分ラベル（"OP" / "ED" / "挿入歌"）。</summary>
-    public string KindLabel { get; set; } = "";
+    /// <summary>区分バッジの並び（"オープニング主題歌" / "エンディング主題歌" / "挿入歌"）。
+    /// 同じ録音を OP・ED・挿入歌として使ったときは 1 枚のカードにまとめ、使った順に複数並べる。
+    /// シリーズ詳細のエピソードを持つ系列では、区分ごとに使用話数の範囲ラベル（<see cref="ThemeSongKindEntry.RangeLabel"/>）を持つ。
+    /// 範囲ラベルは <see cref="ThemeSongSeriesAggregator"/> が組み立て、既定行の使用範囲に本放送限定行の差し替えが割り込むときは
+    /// 「#1～49 (全話)（本放送では #35～38 を除く）」のように差し替え区間の附記まで含む。</summary>
+    public List<ThemeSongKindEntry> Kinds { get; } = new();
     /// <summary>表示タイトル。「<c>songs.title</c> + 半角SP + <c>song_recordings.variant_label</c> 接尾辞」で組む
     /// （SongsGenerator の displayTitle 慣例と同一）。variant_label は「(MOVIE EDIT)」等の版接尾辞のみを保持する
     /// 前提で、テンプレ側は別途バリエーション欄を出さない。</summary>
@@ -29,26 +33,14 @@ public sealed class ThemeSongRow
     public string Notes { get; set; } = "";
     /// <summary>本放送限定フラグ（「（本放送のみ）」を末尾に併記する）。</summary>
     public bool IsBroadcastOnly { get; set; }
-    /// <summary>使用話数の範囲ラベル（「#1～49 (全話)」「#24～47」等）。
-    /// シリーズ詳細で <c>episode_theme_songs</c> をシリーズ単位に集約して出す文脈でのみセットされ、
-    /// エピソード詳細・映画シリーズ詳細（<c>series_theme_songs</c> 由来）では空文字のまま。
-    /// 既定行の使用範囲に本放送限定行の差し替えが割り込むときは
-    /// 「#1～49 (全話)（本放送では #35～38 を除く）」のように差し替え区間の附記まで含む。
-    /// 組み立ては <see cref="ThemeSongSeriesAggregator"/> が担う。</summary>
-    public string EpisodeRangeLabel { get; set; } = "";
     /// <summary>録音の公式 YouTube 動画 ID（<c>song_recordings.youtube_url</c> から抽出）。
     /// 空文字なら動画は出さない。シリーズ詳細の ts-card で見出し行の直下に埋め込む。</summary>
     public string YoutubeId { get; set; } = "";
-    /// <summary>再生ボタンで鳴らす配信音源（<see cref="BuildContext.ThemeArtTracks"/> が選んだもの）。無ければ空文字でボタンを出さない。</summary>
-    public string ArtTrackId { get; set; } = "";
-    /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>
-    public bool ArtTrackPremiumOnly { get; set; }
-    /// <summary>音源が入っている盤の表記（プレイヤーの補足に出す）。</summary>
-    public string ArtTrackSourceAlbum { get; set; } = "";
-    /// <summary>会員限定のときの代わり（誰でも再生できる同じサイズの音源）。無ければ空文字。</summary>
-    public string ArtTrackAltId { get; set; } = "";
-    /// <summary>代わりの音源が入っている盤の表記。</summary>
-    public string ArtTrackAltSourceAlbum { get; set; } = "";
+    /// <summary>使ったサイズの名前の並び（例: "TVサイズ"）。違うサイズだけを使った順に。曲名の後ろに緑のピルで出す。
+    /// シリーズ詳細のエピソードを持つ系列で、サイズの指定がある話があるときだけ入る。</summary>
+    public List<string> SizeLabels { get; } = new();
+    /// <summary>再生ボタンの並び（サイズごと・使った順。鳴らす音源が同じなら 1 つ）。空ならボタンを出さない。</summary>
+    public List<ThemeSongPlay> Plays { get; } = new();
 
     // ── 構造化クレジット由来の HTML 群 ──
     /// <summary>作詞の表示用 HTML。</summary>
@@ -95,7 +87,9 @@ public sealed class ThemeSongRow
 /// シリーズ単位の集約（<see cref="ThemeSongSeriesAggregator"/>）が並び順を通すための連番を載せるので
 /// 本 DTO 側は <c>int</c> で受ける。</para>
 /// <para><paramref name="EpisodeRangeLabel"/> はシリーズ集約文脈だけで使う使用話数ラベル。
-/// エピソード単位・映画シリーズ単位の呼び出しでは省略する（既定 null → 表示されない）。</para></summary>
+/// エピソード単位・映画シリーズ単位の呼び出しでは省略する（既定 null → 表示されない）。</para>
+/// <para><paramref name="SizeVariantCodes"/> もシリーズ集約文脈だけで使う、その区分で使ったサイズコードの並び
+/// （使った順・重複なし。サイズの指定が無い話は null の要素）。省略（null）なら録音ごとに選んだ音源のボタンを 1 つ出す。</para></summary>
 public sealed record ThemeSongDescriptor(
     int SongRecordingId,
     string ThemeKind,
@@ -103,7 +97,8 @@ public sealed record ThemeSongDescriptor(
     bool IsBroadcastOnly,
     string UsageActuality,
     string? Notes,
-    string? EpisodeRangeLabel = null);
+    string? EpisodeRangeLabel = null,
+    IReadOnlyList<string?>? SizeVariantCodes = null);
 
 /// <summary>主題歌 / 挿入歌セクションの表示用 DTO 列を組み立てる共通ヘルパ。
 /// EpisodeGenerator / SeriesGenerator の重複ロジックを集約。
@@ -114,21 +109,27 @@ public sealed class ThemeSongRowBuilder
     private readonly BuildContext _ctx;
     private readonly StaffNameLinkResolver _staffLinkResolver;
     private readonly SongMusicClassesRepository _songMusicClassesRepo;
+    private readonly SongSizeVariantsRepository _songSizeVariantsRepo;
     // 歌唱者連名／歌系役職ラベルの HTML 化（3 ジェネレータ共通ビルダ）。
     private readonly SingerHtmlBuilder _singerHtml;
 
     /// <summary>song_music_classes の表示名キャッシュ（class_code → name_ja）。 同一 builder インスタンスを使い回す限り 1 度だけロード。</summary>
     private Dictionary<string, string>? _songMusicClassLabelMap;
 
+    /// <summary>サイズの名前のキャッシュ（variant_code → name_ja）。 同一 builder インスタンスを使い回す限り 1 度だけロード。</summary>
+    private Dictionary<string, string>? _sizeLabelMap;
+
     public ThemeSongRowBuilder(
         BuildContext ctx,
         StaffNameLinkResolver staffLinkResolver,
         RoleSuccessorResolver roleSuccessorResolver,
-        SongMusicClassesRepository songMusicClassesRepo)
+        SongMusicClassesRepository songMusicClassesRepo,
+        SongSizeVariantsRepository songSizeVariantsRepo)
     {
         _ctx = ctx;
         _staffLinkResolver = staffLinkResolver;
         _songMusicClassesRepo = songMusicClassesRepo;
+        _songSizeVariantsRepo = songSizeVariantsRepo;
         _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver, ctx.UnitMembersByAlias);
     }
 
@@ -138,7 +139,9 @@ public sealed class ThemeSongRowBuilder
     /// 並びは「最初に流れたもの優先」で (Seq 昇順, IsBroadcastOnly 降順)。
     /// Seq が劇中順（OP → 挿入歌 → ED）を表すので第 1 キーはこれ。
     /// 同じ枠が本放送と円盤・配信で差し替えられているとき（2 行並立）は、
-    /// 実際に先に流れた本放送限定行を先に置く。</summary>
+    /// 実際に先に流れた本放送限定行を先に置く。
+    /// 同じ録音を OP・ED・挿入歌として使っていたら（録音と本放送限定の印が同じ記述子）、最初の行のカードに
+    /// 区分バッジ（使用話数つき）・サイズ・再生ボタン・備考を足して 1 枚にまとめる。</summary>
     public async Task<IReadOnlyList<ThemeSongRow>> BuildAsync(
         IReadOnlyList<ThemeSongDescriptor> sources,
         CancellationToken ct = default)
@@ -153,6 +156,11 @@ public sealed class ThemeSongRowBuilder
         {
             var allClasses = await _songMusicClassesRepo.GetAllAsync(ct).ConfigureAwait(false);
             _songMusicClassLabelMap = allClasses.ToDictionary(c => c.ClassCode, c => c.NameJa, StringComparer.Ordinal);
+        }
+        if (_sizeLabelMap is null)
+        {
+            var allSizes = await _songSizeVariantsRepo.GetAllAsync(ct).ConfigureAwait(false);
+            _sizeLabelMap = allSizes.ToDictionary(v => v.VariantCode, v => v.NameJa, StringComparer.Ordinal);
         }
 
         // 構造化クレジット（song_credits / song_recording_singers）は SiteDataLoader が
@@ -169,6 +177,8 @@ public sealed class ThemeSongRowBuilder
                 : Array.Empty<SongRecordingSinger>());
 
         var rows = new List<ThemeSongRow>(sources.Count);
+        // (録音, 本放送限定の印) → まとめ先のカード。
+        var rowByUsageKey = new Dictionary<(int SongRecordingId, bool IsBroadcastOnly), ThemeSongRow>();
         foreach (var d in sources
             .Where(x => !string.Equals(x.UsageActuality, EpisodeThemeSongUsageActualities.CreditedNotBroadcast, StringComparison.Ordinal))
             .OrderBy(x => x.Seq)
@@ -181,6 +191,36 @@ public sealed class ThemeSongRowBuilder
             string kindLabel = _songMusicClassLabelMap.TryGetValue(d.ThemeKind, out var classNameJa)
                 ? classNameJa
                 : d.ThemeKind;
+            var kindEntry = new ThemeSongKindEntry { Label = kindLabel, RangeLabel = d.EpisodeRangeLabel ?? "" };
+
+            // 使ったサイズの名前と再生ボタン。サイズの並びが無ければ（映画系列・サイズの指定が無い話だけ）録音ごとに選んだ音源のボタンを 1 つ。
+            var sizeLabels = new List<string>();
+            var plays = new List<ThemeSongPlay>();
+            if (d.SizeVariantCodes is { Count: > 0 } sizeCodes)
+            {
+                foreach (var code in sizeCodes)
+                {
+                    if (!string.IsNullOrEmpty(code) && _sizeLabelMap.TryGetValue(code, out var sizeName))
+                        ThemeSongCardParts.AddDistinct(sizeLabels, sizeName);
+                    ThemeSongCardParts.AddPlay(plays,
+                        ThemeSongCardParts.ResolvePlay(_ctx.ThemeArtTracks, d.SongRecordingId, code, _sizeLabelMap));
+                }
+            }
+            else
+            {
+                ThemeSongCardParts.AddPlay(plays,
+                    ThemeSongCardParts.ResolvePlay(_ctx.ThemeArtTracks, d.SongRecordingId, null, _sizeLabelMap));
+            }
+
+            var usageKey = (d.SongRecordingId, d.IsBroadcastOnly);
+            if (rowByUsageKey.TryGetValue(usageKey, out var mergedRow))
+            {
+                ThemeSongCardParts.AddKind(mergedRow.Kinds, kindEntry);
+                foreach (var sl in sizeLabels) ThemeSongCardParts.AddDistinct(mergedRow.SizeLabels, sl);
+                foreach (var p in plays) ThemeSongCardParts.AddPlay(mergedRow.Plays, p);
+                mergedRow.Notes = ThemeSongCardParts.AppendNote(mergedRow.Notes, d.Notes);
+                continue;
+            }
 
             int? songId = song?.SongId;
             // 録音単位のアンカー URL（筆頭録音はページ先頭、それ以外は #recording-N）。
@@ -252,11 +292,8 @@ public sealed class ThemeSongRowBuilder
                 ? SongDisplayTitle.Build(song.Title, rec?.VariantLabel)
                 : "(曲名未登録)";
 
-            // 再生ボタンで鳴らす配信音源（歌入りで本編のサイズを優先。カラオケしか無ければ無し）。
-            ThemeArtTrack? artTrack = _ctx.ThemeArtTracks.ByRecording.TryGetValue(d.SongRecordingId, out var at) ? at : null;
-            rows.Add(new ThemeSongRow
+            var row = new ThemeSongRow
             {
-                KindLabel = kindLabel,
                 Title = displayTitle,
                 SongTitle = song?.Title ?? "",
                 SongLink = songLink,
@@ -282,14 +319,13 @@ public sealed class ThemeSongRowBuilder
                     lyricsHtml, compositionHtml, arrangementHtml, medleyArrangementHtml),
                 Notes = d.Notes ?? "",
                 IsBroadcastOnly = d.IsBroadcastOnly,
-                EpisodeRangeLabel = d.EpisodeRangeLabel ?? "",
                 YoutubeId = YoutubeUtil.ExtractId(rec?.YoutubeUrl),
-                ArtTrackId = artTrack?.ArtTrackId ?? "",
-                ArtTrackPremiumOnly = artTrack?.PremiumOnly ?? false,
-                ArtTrackSourceAlbum = artTrack?.SourceAlbum ?? "",
-                ArtTrackAltId = artTrack?.AltArtTrackId ?? "",
-                ArtTrackAltSourceAlbum = artTrack?.AltSourceAlbum ?? "",
-            });
+            };
+            row.Kinds.Add(kindEntry);
+            row.SizeLabels.AddRange(sizeLabels);
+            row.Plays.AddRange(plays);
+            rowByUsageKey[usageKey] = row;
+            rows.Add(row);
         }
         return rows;
     }

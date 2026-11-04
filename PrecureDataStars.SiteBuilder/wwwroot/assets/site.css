@@ -1556,18 +1556,67 @@ a.series-card-children-title:hover {
   gap: 8px;
   margin-bottom: 4px;
 }
-/* 配信音源の再生ボタン：カードの右上に固定する。見出しが折り返しても行を増やさないよう、
-   ボタンのあるカードだけ見出し行の右側をボタンの幅だけ空ける。 */
+/* 同じ録音を OP・ED・挿入歌として使ってまとめたカード（区分が 2 つ以上）：
+   左に「区分バッジ＋使用話数」を 1 区分 1 行で縦に積み、右の曲名・サイズ・（本放送のみ）はその縦の真ん中にそろえる。 */
+.theme-songs-list .ts-headline.ts-headline-multi {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+}
+.theme-songs-list .ts-kinds {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.theme-songs-list .ts-kind-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+.theme-songs-list .ts-headline-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+/* まとめたカードの再生ボタンは見出しの右端に置き、縦に積んだ区分の真ん中にそろえる（右上の絶対配置にしない）。 */
+.theme-songs-list .ts-plays.ts-plays-inline {
+  position: static;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+/* 狭い画面では曲名が細い列に押し込まれるので、1 行目を「区分の積み＋再生ボタン」、2 行目を曲名・サイズに組み替える。 */
+@media (max-width: 600px) {
+  .theme-songs-list .ts-headline.ts-headline-multi {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .theme-songs-list .ts-headline-multi > .ts-kinds { order: 1; }
+  .theme-songs-list .ts-headline-multi > .ts-plays-inline { order: 2; }
+  .theme-songs-list .ts-headline-multi > .ts-headline-main {
+    order: 3;
+    flex: 1 1 100%;
+  }
+}
+/* 配信音源の再生ボタン：カードの右上に固定する（サイズごとに 1 つ、使った順に横へ並べる）。
+   見出しが折り返しても行を増やさないよう、ボタンのあるカードだけ見出し行の右側をボタンの数ぶん空ける
+   （ボタンの数は li の --ts-play-count。1 つなら 2.6em）。 */
 .theme-songs-list .ts-card {
   position: relative;
 }
-.theme-songs-list .ts-card:has(> .ts-headline > .ts-play) > .ts-headline {
-  padding-right: 2.6em;
+.theme-songs-list .ts-card:has(> .ts-plays) > .ts-headline {
+  padding-right: calc(var(--ts-play-count, 1) * 2.3em + 0.3em);
 }
-.theme-songs-list .ts-play {
+.theme-songs-list .ts-plays {
   position: absolute;
   top: 10px;
   right: 12px;
+  display: flex;
+  gap: 0.4em;
 }
 .theme-songs-list .ts-kind {
   display: inline-block;
@@ -1595,10 +1644,6 @@ a.series-card-children-title:hover {
   font-size: 0.88em;
 }
 .theme-songs-list .ts-bcast {
-  font-size: 0.88em;
-}
-/* エピソード詳細でその回のサイズの指定がある行にだけ出るサイズの名前（「（TVサイズ Type.I）」）。 */
-.theme-songs-list .ts-size {
   font-size: 0.88em;
 }
 /* シリーズ詳細でのみ出る使用話数ラベル（「#1～49 (全話)」「#24～47（本放送では #35～38 を除く）」）。 */

@@ -9697,9 +9697,10 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   border-color: rgba(0, 0, 0, 0.16);
   font-weight: 600;
 }
+/* キーカラーの無いキャラの誕生日チップ。凡例（.cal-legend-bday）と誕生日ラベルのピンクにそろえる。 */
 .cal-chip-plain {
-  background: #f1f1f4;
-  color: #333;
+  background: #ffd9ec;
+  color: #9b2c66;
 }
 .cal-chip-movie {
   background: #fff2d6;

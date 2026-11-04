@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：記念日のカレンダーに、誕生日の入ったキャラをキャラクター種別を問わずすべて載せるようにした**（`AnniversaryDataBuilder`）：キャラクター誕生日を `character_kind` が `PRECURE` / `ALLY` のキャラに限っていたため、誕生日を設定したサブキャラ（`SUPPORTING`）などがキャラ詳細には出るのにカレンダーに載らなかった。プリキュア以外は `ALLY` と同じく名称の素バッジで出す。
 - **スキーマ・サイト・Catalog：クレジットの役職の行に「役職名だけ画面に無い」印 `role_label_not_on_screen` を足した**（マイグレーション `v1.20.0_add_card_role_label_not_on_screen.sql`・`CreditCardRole`・`CreditCardRolesRepository`・`CreditSaveService`・`CreditDraftLoader`・`CreditBulkInputParser`・`CreditBulkInputEncoder`・`CreditBulkApplyService`・`CreditEditorForm`・`CreditPreviewRenderer`・`CreditRoleLabel`・`TemplateContext`・`RoleTemplateRenderer`・`CastingCooperationAppend`・`CreditTreeRenderer`・`site.css`）：名前は画面に出ているが役職の見出しが無い行（ED の原画の末尾に 1 人だけで出ている人が、実質は「料理作監」の担当など）を、役職はデータとして入れて数えつつ、見出しが画面に無かったと示すため。
   - 1 のときサイトのクレジットと Catalog のプレビューは、役職名の欄とシリーズ別の見出し上書き（テンプレの `{ROLE_NAME}`・自分の役職を指す `{ROLE_LINK}` も）だけを「（料理作監）」のように全角の括弧で包み、`not_on_screen` と同じ薄い色で出す（`title` に「画面にはクレジットされていない役職名」）。名前・中身はふつうに出し、集計は今までどおり数える
   - 1 行にまとめた役職は、印のある役職の表記だけを包む。声の出演の表の末尾に足す「協力」行は、協力の役職のいずれかに印があれば「協力」の文字だけを包む（`CastingCooperationAppend.LabelNotOnScreen`）

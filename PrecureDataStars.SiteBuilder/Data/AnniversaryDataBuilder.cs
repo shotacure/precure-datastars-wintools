@@ -151,14 +151,12 @@ public static class AnniversaryDataBuilder
             seriesByPrecure[sp.PrecureId] = s;
         }
 
-        // ── キャラクター誕生日（PRECURE / ALLY、月日が揃っているもの）──
+        // ── キャラクター誕生日（キャラクター種別を問わず、月日が揃っているものすべて）──
         foreach (var c in characters)
         {
-            if (!(string.Equals(c.CharacterKind, "PRECURE", StringComparison.Ordinal)
-                  || string.Equals(c.CharacterKind, "ALLY", StringComparison.Ordinal))) continue;
             if (c.BirthMonth is not byte cm || c.BirthDay is not byte cd) continue;
 
-            // 既定は正式名称（precure 紐付けの無い ALLY 等）。
+            // 既定は正式名称（precure 紐付けの無い ALLY・SUPPORTING 等）。
             string displayName = c.Name;
             string keyColor = "";
             string keyColorGradient = "";

@@ -161,8 +161,8 @@ public sealed class ArticlesGenerator
                     .ToList()
             },
             MetaDescription =
-                "プリキュアのコラム。precure.tv を運営する祥太が、歴代プリキュアを多種多様なアプローチで読み解きます。" +
-                "毎週水曜・土曜の朝 8:30 更新。",
+                // ページの冒頭文（articles-index.sbn の .articles-lead）と同じ文。
+                "precure.tvを運営する祥太による、歴代プリキュアを多種多様なアプローチで読み解いていくコラムです。毎週水曜・土曜の朝 8:30 に更新します。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

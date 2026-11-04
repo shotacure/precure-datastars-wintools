@@ -1,7 +1,7 @@
 <section>
   <h1>Bパート尺 短い順 TOP 100</h1>
   <p class="muted page-coverage">{{ CoverageLabel }}</p>
-  <p class="lead">プリキュア全シリーズの本編 B パート（中 CM 後の本編パート）の尺を短い順に並べた上位 100 件です。</p>
+  <p class="lead">プリキュア全シリーズの本編 B パート（中 CM 後の本編パート）の尺の短い順 上位 100 件</p>
   <p class="muted stats-note">同点は同じ順位とし、次の順位は同点の数だけ繰り下げます。100 位が同点なら全件を載せています。</p>
 </section>
 

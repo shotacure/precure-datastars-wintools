@@ -1,6 +1,6 @@
 <section>
   <h1>統計</h1>
-  <p class="lead">サブタイトルの文字数と漢字率、本編パートとアバンタイトルの尺を TV シリーズ全話から数え、歴代の「いちばん」とあわせて載せています。作品ごとの平均や比率も、表にして並べています。</p>
+  <p class="lead">サブタイトルと尺の統計、歴代の「いちばん」</p>
 </section>
 
 {{## クリエイターランディング・音楽ランディングと同型のカード型レイアウト
@@ -13,19 +13,19 @@
 <section class="music-categories">
   <a class="music-category-card" href="/stats/subtitles/">
     <h2>歴代サブタイトル統計</h2>
-    <p>TV シリーズ全話のサブタイトルから、よく使われる文字、文字数と漢字率の順位、作品ごとの文字種の比率を数えています。</p>
+    <p>よく使われる文字、文字数、漢字率</p>
     <p class="muted stats-coverage">{{ SubtitleCoverageLabel }}</p>
   </a>
 
   <a class="music-category-card" href="/stats/episodes/">
     <h2>歴代エピソード尺統計</h2>
-    <p>TV シリーズ全話の A パート・B パートの尺と中 CM に入る時刻の順位、作品ごとのパートの平均尺をまとめています。</p>
+    <p>パートの尺と中 CM の時刻</p>
     <p class="muted stats-coverage">{{ EpisodeCoverageLabel }}</p>
   </a>
 
   <a class="music-category-card" href="/stats/records/">
     <h2>歴代記録</h2>
-    <p>いちばん長いアバンタイトル、いちばん多く脚本を書いた方、いちばん多くの話に登場したキャラクターなど、尺・クレジット・登場回数のデータから「いちばん」を集めています。本放送・配信・円盤で尺が違う話の一覧も載せています。</p>
+    <p>歴代の「いちばん」</p>
     <p class="muted stats-coverage">尺：{{ EpisodeCoverageLabel }}</p>
     <p class="muted stats-coverage">クレジット：{{ CreditCoverageLabel }}</p>
   </a>

@@ -1330,33 +1330,27 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>
-    /// エピソード詳細の meta description。「『作品』第N話「サブタイトル」（放送日）。役職：名前（主要 3 役職）。何をまとめたページか。」
-    /// の順で、検索結果に出る 140 字ほどに収める。クレジットは「役職：名前」の表記（敬称略）。
+    /// エピソード詳細の meta description。「放送日。役職：名前／役職：名前／役職：名前」（主要 3 役職。敬称略）を 150 字ほどに収める。
+    /// 作品名・話数・サブタイトルはページ名に出ているので入れない。
     /// 主題歌はシリーズ単位で全話共通なので、その話固有の情報ではないため載せない。
     /// </summary>
     private static string BuildMetaDescription(Series series, Episode ep, IReadOnlyList<StaffRow> staffRows)
     {
         const int targetMaxChars = 150;
-        const string tail = "各話スタッフ、主題歌・挿入歌、パート構成をまとめました。";
 
         var sb = new System.Text.StringBuilder();
-        sb.Append('『').Append(series.Title).Append("』第").Append(ep.SeriesEpNo).Append('話');
-        if (!string.IsNullOrWhiteSpace(ep.TitleText)) sb.Append('「').Append(JapaneseQuotes.InQuotes(ep.TitleText)).Append('」');
-        sb.Append('（').Append(JpDateFormat.BroadcastDate(ep.OnAirAt)).Append("放送）。");
+        sb.Append(JpDateFormat.BroadcastDate(ep.OnAirAt)).Append("放送");
 
-        // 主要スタッフ（最大 3 役職）。末尾の一文を残せる範囲で足す。
         var credits = new List<string>();
         foreach (var staff in staffRows)
         {
             if (credits.Count >= 3) break;
             if (string.IsNullOrWhiteSpace(staff.NamesLine)) continue;
             string seg = $"{staff.RoleLabel}：{StripHtmlTags(staff.NamesLine)}";
-            string joined = string.Join("、", credits.Append(seg)) + "。";
-            if (sb.Length + joined.Length + tail.Length > targetMaxChars) break;
+            if (sb.Length + 1 + string.Join("／", credits.Append(seg)).Length > targetMaxChars) break;
             credits.Add(seg);
         }
-        if (credits.Count > 0) sb.Append(string.Join("、", credits)).Append('。');
-        sb.Append(tail);
+        if (credits.Count > 0) sb.Append('。').Append(string.Join("／", credits));
         return sb.ToString();
     }
 

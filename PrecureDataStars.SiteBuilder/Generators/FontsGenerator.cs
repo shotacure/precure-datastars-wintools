@@ -71,11 +71,11 @@ public sealed class FontsGenerator
             PageTitle = "歴代タイトル字幕フォント",
             // カードは書体（ファミリー）とウェイトの数を出し、その下にリード文で中身を伝える（リード文は文の切れ目で改行する）。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代タイトル字幕フォント",
-                Subtitle: "歴代プリキュアTVシリーズのOP・EDのクレジットと歌詞、\nサブタイトルの字幕フォントの一覧です。\n書体見本のほか、公式と同じフォントを使用した組見本もあります。")
+                Subtitle: "歴代プリキュアの字幕フォント")
             {
                 Badges = new[] { new OgCardBadge("書体", $"{familyCount}ファミリー"), new OgCardBadge("", $"{fontCount}ウェイト") }
             },
-            MetaDescription = $"歴代プリキュアのタイトル字幕フォント一覧。OP・ED のクレジットと歌詞、サブタイトルに使われた書体を、{content.SeriesSections.Count} 作品ごとに放送の画面を模した見本つきでまとめました。",
+            MetaDescription = "歴代プリキュアの字幕フォント",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -179,7 +179,7 @@ public sealed class FontsGenerator
             // その右にメーカー名（写研の書体は「写研・モリサワ」）、その下に書体見本と同じ字をその書体で装飾なしで並べる
             // （左に「愛」「永」、右にひらがな・カタカナ・漢字 2 行）。描く書体の無い書体は見出しと説明文だけ
             OgCard = new OgCardSpec(Kicker: "", Title: string.IsNullOrWhiteSpace(first.RenderFontName) ? first.DisplayName : first.RenderDisplayName,
-                Subtitle: string.IsNullOrWhiteSpace(first.RenderFontName) ? $"{foundry}の書体。歴代プリキュアで使われた作品と場所を、見本つきでまとめました。" : VendorLabel(first))
+                Subtitle: string.IsNullOrWhiteSpace(first.RenderFontName) ? $"{foundry}の書体。歴代プリキュアで使われた作品と場所（見本つき）" : VendorLabel(first))
             {
                 Watermark = "フォント",
                 Specimen = string.IsNullOrWhiteSpace(first.RenderFontName) ? null : new OgCardSpecimen(first.RenderFontName, "愛永",
@@ -189,7 +189,7 @@ public sealed class FontsGenerator
                         FontSampleRequests.SpecimenBottomLeft[..8], FontSampleRequests.SpecimenBottomLeft[8..]
                     })
             },
-            MetaDescription = $"{first.DisplayName}（{foundry}）が使われた歴代プリキュアの作品と場所（OP・ED のクレジットと歌詞、サブタイトル）を、書体見本と放送の画面を模した見本つきでまとめました。",
+            MetaDescription = $"{first.DisplayName}（{foundry}）が使われた歴代プリキュアの作品と場所（OP・ED のクレジットと歌詞、サブタイトル／書体見本・組見本つき）",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

@@ -5,6 +5,12 @@
 ### 開発中（次回リリース）
 
 - **サイト：og:title・twitter:title を `<title>` と同じ「ページ名 | サイト名」にした**（`_layout.sbn`）：ページ名だけだったため、リンクの見出しや検索結果にサイト名が出なかった。
+- **サイト：一覧・入口のページの冒頭文・OGP カードの文・meta description を、載っているものを短く言うだけの形にし、個別のページの説明文の結びを項目を並べる形にした**（テンプレートの一覧・入口・統計のページ、`HomeGenerator`・`PrecuresGenerator`・`SeriesGenerator`・`CharactersGenerator`・`BooksGenerator`・`EpisodesIndexGenerator`・`SongsGenerator`・`MusicGenerator`・`ProductsGenerator`・`CreatorsGenerator`・`AnniversaryGenerator`・`FontsGenerator`・`ArticlesGenerator`・`StatsLandingGenerator`・`EpisodePartStatsGenerator`・`SubtitleStatsGenerator`・`RecordsGenerator`・`PersonsGenerator`・`CompaniesGenerator`・`EpisodeGenerator`）
+  - 「〜を添えています」「〜をまとめています／まとめました」「〜を並べています」と、2 文目の使い道（「〜を探せます」など）をやめ、「歴代のレギュラープリキュア＋映画限定プリキュア 75 名」「初代から最新作まで、TV シリーズ・映画・スピンオフ 全 71 作品（同時上映の短編 8 本を含む）」のように言う。タブで並べ方が変わるページには並び順を書かない
+  - ホームの meta description と JSON-LD の description は、見出しの下のタグライン「プリキュアまるごとデータベース。」と同じにした
+  - 書体とコラムの一覧は、見えている冒頭文はそのままで、meta description とカードの文をそれに合わせた
+  - 詳細ページの meta description から、ページ名と重なる名前・作品名と、「〜を手がけてきた方です」「〜をまとめました」のような情報のない文を外し、事実だけにした。人物・企業は主要な実績を「役職（2016年『作品』、2015年『作品』ほか）」で「／」でつなぎ、役職は役職マスタの表示順（主要な役職ほど前）、作品は担当量の多い 2 作を年の順に。声の出演は「キャラ名役（2016年『作品』）」。キャラは「種別（2004年『作品』ほか）。声：〇〇」、歌は「種別（2004年『作品』）。歌：〇〇／作詞：〇〇／作曲：〇〇」、エピソードは「放送日。役職：名前／…」、作品は「放送開始年月の TV シリーズ（全 N 話）。変身名（声：〇〇）」、盤は「発売日の種別（N 枚組・N トラック）。発売元：〇〇」、劇伴は「劇伴（BGM）N 曲 M バージョン（期間）。作曲・編曲：〇〇」、書籍は「ジャンル／出版社／発売年月」、ユニットは「プリキュアの歌に参加したユニット（N 曲）。メンバー：…」、記念日の日付は「M月D日のプリキュア：出来事の内訳」
+  - 統計のランキングのページの冒頭文を「〜の長い順 上位 100 件」の形にした
 - **サイト：エピソード詳細・シリーズ詳細の主題歌・挿入歌で、同じ録音を OP・ED・挿入歌として使っていたらカードを 1 枚にまとめ、サイズを緑のピル・再生ボタンをサイズごとにした**（`ThemeSongCardParts`〔新規：`ThemeSongKindEntry`・`ThemeSongPlay`〕・`EpisodeGenerator`・`ThemeSongRowBuilder`・`ThemeSongSeriesAggregator`・`SeriesGenerator`・`episode-detail.sbn`・`series-detail.sbn`・`site.css`）
   - 同じ録音を何度か使った回（シリーズ）は、区分のバッジを使った順に並べて 1 枚にまとめる。まとめるのは録音と本放送限定の印（エピソード詳細ではインストゥルメンタルの印も）が同じものだけ。シリーズ詳細は区分が 2 つ以上なら各区分のバッジの直後にその区分の使用話数を置く（区分が 1 つなら今までどおり曲名の後ろ）
   - 区分が 2 つ以上のカードの見出しは、左に「区分のバッジ＋使用話数」を 1 区分 1 行で縦に積み、右の曲名・サイズ・（本放送のみ）・再生ボタンをその縦の真ん中にそろえて 1 行に組む（`.ts-headline-multi`・`.ts-kinds`・`.ts-headline-main`・`.ts-plays-inline`）。幅 600px 以下では 1 行目を区分の積みと再生ボタン、2 行目を曲名・サイズにする

@@ -127,14 +127,15 @@ public sealed class EpisodesIndexGenerator
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（episodes-index.sbn の .lead）と同じ文。数だけはページ側で添える。
-                Subtitle = "第 1 話から最新話まで、サブタイトルと放送日に脚本・演出・作画監督を添えて並べています。見たい回を探すにも、ある方の担当回を追うにも使える全話リストです。",
+                Subtitle = "歴代 TV シリーズの全話",
                 Badges = new[]
                 {
                     new OgCardBadge("作品", $"{sections.Count}作"),
                     new OgCardBadge("話数", $"{totalEpisodes}話")
                 }
             },
-            MetaDescription = $"歴代プリキュア TV シリーズ {sections.Count} 作・{totalEpisodes} 話の全話リスト。サブタイトル・放送日のほか、脚本・演出・作画監督を各話にまとめました。",
+            // ページの冒頭文（episodes-index.sbn の .lead）と同じ文。
+            MetaDescription = $"歴代 TV シリーズ {sections.Count} 作・{totalEpisodes} 話",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

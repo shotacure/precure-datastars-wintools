@@ -244,7 +244,7 @@ public sealed class AnniversaryGenerator
         _page.RenderAndWrite(url, "anniversary", "anniversary-day.sbn", content, layout);
     }
 
-    /// <summary>日付別ページの meta description。「M月D日のプリキュア。出来事の内訳。何のページか。」</summary>
+    /// <summary>日付別ページの meta description。「M月D日のプリキュア：出来事の内訳」。</summary>
     private static string BuildMetaDescription(string dateLabel, int episodes, int movies, int characterBirthdays, int personBirthdays)
     {
         var parts = new List<string>();
@@ -253,10 +253,9 @@ public sealed class AnniversaryGenerator
         if (characterBirthdays > 0) parts.Add($"キャラクター {characterBirthdays} 人の誕生日");
         if (personBirthdays > 0) parts.Add($"クリエイター {personBirthdays} 人の誕生日");
 
-        const string tail = "歴代の放送日・公開日・誕生日を日付ごとにまとめた記念日カレンダーです。";
         return parts.Count == 0
-            ? $"{dateLabel}のプリキュア。この日の出来事は、いまのところ登録がありません。{tail}"
-            : $"{dateLabel}のプリキュア。{string.Join("、", parts)}。{tail}";
+            ? $"{dateLabel}のプリキュア：この日の出来事は、いまのところ登録がありません"
+            : $"{dateLabel}のプリキュア：{string.Join("、", parts)}";
     }
 
     /// <summary>
@@ -333,7 +332,7 @@ public sealed class AnniversaryGenerator
         var layout = new LayoutModel
         {
             PageTitle = "プリキュア記念日カレンダー",
-            MetaDescription = $"プリキュアの記念日カレンダー。歴代の放送日・映画の公開日、キャラクターとクリエイターの方々の誕生日 {totalEntries} 件を、366 日の日付ごとにまとめました。今日が誰の誕生日で、何の放送日だったかが日付ごとに分かります。",
+            MetaDescription = "プリキュアの放送日・公開日・誕生日のカレンダー",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -343,7 +342,7 @@ public sealed class AnniversaryGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "プリキュア記念日カレンダー")
             {
                 // ページの冒頭文（anniversary-index.sbn・anniversary-day.sbn の .lead）と同じ文。
-                Subtitle = "歴代の放送日・映画の公開日と、キャラクターやクリエイターの方々の誕生日を、366 日のカレンダーに書き込んでいます。今日が誰の誕生日で、何の放送日だったかが日付ごとに分かります。"
+                Subtitle = "放送日・公開日・誕生日のカレンダー"
             }
         };
 

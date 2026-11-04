@@ -62,9 +62,9 @@ public sealed class StatsLandingGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "統計")
             {
                 // ページの冒頭文（stats-landing.sbn の .lead）と同じ文。
-                Subtitle = "サブタイトルの文字数と漢字率、本編パートとアバンタイトルの尺を TV シリーズ全話から数え、歴代の「いちばん」とあわせて載せています。作品ごとの平均や比率も、表にして並べています。"
+                Subtitle = "サブタイトルと尺の統計、歴代の「いちばん」"
             },
-            MetaDescription = "歴代プリキュア全話の統計。サブタイトルの文字数・漢字率・記号率と、本編パート・アバンタイトルの尺を全シリーズで集計しました。作品ごとの平均や比率も表にまとめました。",
+            MetaDescription = "歴代プリキュアのサブタイトルと尺の統計、歴代の「いちばん」",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

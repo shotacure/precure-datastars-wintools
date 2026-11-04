@@ -1,7 +1,7 @@
 <h1>歴代クリエイター</h1>
 
 <p class="lead">
-  スタッフ、声優さん、歌を作り歌った方々を、役職と作品ごとにまとめています。名前ひとつで、その方が関わった作品と話がひとまとまりに出てきます。
+  歴代プリキュアを作ってきた方々
 </p>
 
 {{## 音楽カテゴリランディング（/music/）と同型のカード構成（スタッフ / 声の出演 / 音楽制作 / 歌唱）。
@@ -13,7 +13,7 @@
 <section class="music-categories is-two-col">
   <a class="music-category-card" href="/creators/staff/">
     <h2>スタッフ</h2>
-    <p>脚本・演出・作画から制作会社まで、プリキュアを作ってきた方々と企業・団体を役職ごとにまとめています。</p>
+    <p>プリキュアのレギュラーシリーズと映画を作ってきた方々</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ StaffPersonCount }}</span>
@@ -28,7 +28,7 @@
 
   <a class="music-category-card" href="/creators/voice-cast/">
     <h2>声の出演</h2>
-    <p>キャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。</p>
+    <p>プリキュアのレギュラーシリーズと映画に出演した方々</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ VoiceCastCount }}</span>
@@ -39,7 +39,7 @@
 
   <a class="music-category-card" href="/creators/music-production/">
     <h2>音楽制作</h2>
-    <p>作詞・作曲・編曲から演奏・録音まで、歌と劇伴と CD を手がけた方々を役割ごとにまとめています。</p>
+    <p>プリキュアの歌と音楽を作ってきた方々</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ MusicProductionPersonCount }}</span>
@@ -54,7 +54,7 @@
 
   <a class="music-category-card" href="/creators/singers/">
     <h2>歌唱</h2>
-    <p>主題歌・挿入歌・キャラクターソングを歌った方々とキャラクターを、曲とともにまとめています。</p>
+    <p>プリキュアを歌ってきた方々</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ SingerCount }}</span>
@@ -66,7 +66,7 @@
   {{## オトナシリーズ（種別 OTONA）のスタッフ・声の出演。本編の 2 枚と同じ作りの一覧で、クレジットがあるときだけ出す。 ##}}
   <a class="music-category-card" href="/creators/otona/staff/">
     <h2>オトナシリーズのスタッフ</h2>
-    <p>大人向けシリーズの脚本・演出・作画から制作会社まで、手がけた方々を役職ごとにまとめています。</p>
+    <p>大人向けシリーズを作ってきた方々</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ OtonaStaffPersonCount }}</span>
@@ -81,7 +81,7 @@
 
   <a class="music-category-card" href="/creators/otona/voice-cast/">
     <h2>オトナシリーズの声の出演</h2>
-    <p>大人向けシリーズでキャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。</p>
+    <p>大人向けシリーズに出演した方々</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ OtonaVoiceCastCount }}</span>

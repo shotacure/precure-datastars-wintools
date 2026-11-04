@@ -6,7 +6,7 @@
      末尾に「本放送・配信・円盤の尺の違い」への導線（stats-landing-list の横長カード）を置く。 ##}}
 <section>
   <h1>歴代記録</h1>
-  <p class="lead">いちばん長いアバンタイトル、いちばん多く脚本を書いた方、いちばん多くの話に出たキャラクターなど、歴代の「いちばん」を、尺・クレジット・登場回数のデータから集めています。それぞれ 3 位までを載せています。</p>
+  <p class="lead">歴代の「いちばん」</p>
   <p class="muted stats-note">順位は同じ値を同じ順位とし、3 位まで載せています。</p>
 </section>
 
@@ -48,7 +48,7 @@
 
 <section id="format-differences">
   <h2>本放送・配信・円盤の違い</h2>
-  <p>同じ話でも、本放送と配信（Amazon Prime Video）、Blu-ray / DVD でパートの長さが違うことがあります。本放送を基準に、長さの違うパートがある話を並べています。<br>
+  <p>本放送・配信・円盤で尺が違う話<br>
   <span class="muted stats-coverage">{{ FormatDiff.CoverageLabel }}</span></p>
   <ul class="stats-landing-list">
     <li>

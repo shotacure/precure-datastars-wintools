@@ -1016,6 +1016,7 @@ public sealed class SeriesGenerator
         // meta description の作品数は公開の単位で数える（同時上映の短編は親の映画と 1 つに数え、重ねない）。
         int releaseCount = _ctx.Series.Count - _ctx.Series.Count(SeriesClassifier.IsMovieShortChild);
         int spinOffCount = _ctx.Series.Count(SeriesClassifier.IsSpinOff);
+        int movieShortCount = _ctx.Series.Count(SeriesClassifier.IsMovieShortChild);
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアシリーズ",
@@ -1024,7 +1025,7 @@ public sealed class SeriesGenerator
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（series-index.sbn の .lead）と同じ文。数だけはページ側で添える。
-                Subtitle = "全作品を放送・公開の順に並べ、話数・期間・主要スタッフを添えています。TV シリーズ・秋映画・春映画などの種類ごとに、表示を絞り込めます。",
+                Subtitle = "初代から最新作まで、TV シリーズ・映画・スピンオフ 全作品",
                 Badges = new[]
                 {
                     new OgCardBadge("TV", $"{tvRows.Count}作"),
@@ -1032,7 +1033,9 @@ public sealed class SeriesGenerator
                     new OgCardBadge("スピンオフ", $"{spinOffCount}作")
                 }
             },
-            MetaDescription = $"歴代プリキュア {releaseCount} 作品（TV {tvRows.Count} 作・映画 {movieRows.Count} 作ほか）の一覧。放送・公開の順に、各作品の話数・放送期間・主要スタッフをまとめました。",
+            // ページの冒頭文（series-index.sbn の .lead）と同じ文。
+            MetaDescription = $"初代から最新作まで、TV シリーズ・映画・スピンオフ 全 {_ctx.Series.Count} 作品"
+                + (movieShortCount > 0 ? $"（同時上映の短編 {movieShortCount} 本を含む）" : ""),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1572,8 +1575,8 @@ public sealed class SeriesGenerator
     }
 
     /// <summary>
-    /// シリーズ詳細の meta description。「『作品』は 2004 年 2 月放送開始の TV シリーズ（全 49 話）。プリキュアは〇〇（声：△△さん）ほか。
-    /// 各話のサブタイトルと放送日、主要スタッフ、主題歌、劇伴、商品をまとめました。」の順で 140 字ほどに収める。
+    /// シリーズ詳細の meta description。「2004 年 2 月放送開始の TV シリーズ（全 49 話）。キュアブラック（声：本名 陽子）、キュアホワイト（声：ゆかな）ほか」
+    /// の形で 150 字ほどに収める（作品名はページ名に出ているので入れない）。
     /// </summary>
     private static string BuildSeriesMetaDescription(
         Series s,
@@ -1581,44 +1584,37 @@ public sealed class SeriesGenerator
     {
         const int targetMaxChars = 150;
         bool isMovie = s.KindCode == "MOVIE" || s.KindCode == "MOVIE_SHORT" || s.KindCode == "SPRING";
-        string tail = isMovie
-            ? "スタッフ、主題歌、劇伴、商品をまとめました。"
-            : "各話のサブタイトルと放送日、主要スタッフ、主題歌、劇伴、商品をまとめました。";
 
         var sb = new System.Text.StringBuilder();
-        sb.Append('『').Append(s.Title).Append("』は");
         if (!s.IsStartDateExact)
         {
-            // 開始日が年や年月までしか確かでない作品：「2027年放送予定の TV シリーズ。」「2027年7月公開予定の映画。」
-            sb.Append(JpDateFormat.PlannedStart(s, broadcast: !isMovie)).Append(isMovie ? "の映画。" : "の TV シリーズ。");
-            sb.Append(tail);
+            // 開始日が年や年月までしか確かでない作品：「2027年放送予定の TV シリーズ」「2027年7月公開予定の映画」
+            sb.Append(JpDateFormat.PlannedStart(s, broadcast: !isMovie)).Append(isMovie ? "の映画" : "の TV シリーズ");
             return sb.ToString();
         }
         sb.Append(s.StartDate.Year).Append('年').Append(s.StartDate.Month).Append('月');
         if (isMovie)
         {
-            sb.Append("公開の映画。");
+            sb.Append("公開の映画");
         }
         else
         {
             sb.Append("放送開始の TV シリーズ");
             if (s.Episodes.HasValue && s.Episodes.Value > 0) sb.Append("（全 ").Append(s.Episodes.Value).Append(" 話）");
-            sb.Append('。');
         }
 
-        // プリキュア（最大 2 名）：変身名（声：声優さん）。
+        // プリキュア（最大 2 名）：変身名（声：声優）。
         var precures = precureRows
             .Where(p => !string.IsNullOrWhiteSpace(p.TransformName) && !string.IsNullOrWhiteSpace(p.VoiceActorName))
             .Take(2)
-            .Select(p => $"{p.TransformName}（声：{p.VoiceActorName}さん）")
+            .Select(p => $"{p.TransformName}（声：{p.VoiceActorName}）")
             .ToList();
         if (precures.Count > 0)
         {
             bool more = precureRows.Count(p => !string.IsNullOrWhiteSpace(p.VoiceActorName)) > precures.Count;
-            string fragment = "プリキュアは" + string.Join("、", precures) + (more ? "ほか" : "") + "。";
-            if (sb.Length + fragment.Length + tail.Length <= targetMaxChars) sb.Append(fragment);
+            string fragment = "。" + string.Join("、", precures) + (more ? "ほか" : "");
+            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
         }
-        sb.Append(tail);
         return sb.ToString();
     }
 

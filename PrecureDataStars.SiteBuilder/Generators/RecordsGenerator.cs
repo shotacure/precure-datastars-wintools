@@ -103,9 +103,9 @@ public sealed class RecordsGenerator
             {
                 MetaLeft = OgCoverageLabel.Compact(partsCoverage),
                 // ページの冒頭文（stats-records-index.sbn の .lead）と同じ文。
-                Subtitle = "いちばん長いアバンタイトル、いちばん多く脚本を書いた方など、歴代の「いちばん」を、尺・クレジット・登場回数のデータから集めています。それぞれ 3 位までを載せています。"
+                Subtitle = "歴代の「いちばん」"
             },
-            MetaDescription = "歴代プリキュアの記録集。いちばん長いアバンタイトル、いちばん多く脚本を書いた方、いちばん多くの話に登場したキャラクターなど、尺・クレジット・登場回数のデータから「いちばん」を集めました。",
+            MetaDescription = "歴代プリキュアの「いちばん」",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -550,7 +550,7 @@ public sealed class RecordsGenerator
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（stats-records-format-differences.sbn の .lead）と同じ文。
-                Subtitle = "同じ話でも、本放送と配信・Blu-ray / DVD でパートの長さが違うことがあります。本放送を基準に、違いのある話を版ごとの差とともに並べています。",
+                Subtitle = "本放送・配信・円盤で尺が違う話",
                 MetaLeft = OgCoverageLabel.Compact(content.CoverageLabel),
                 Badges = new[]
                 {
@@ -558,7 +558,7 @@ public sealed class RecordsGenerator
                     new OgCardBadge("予告が違う", $"{content.TrailerCount}話")
                 }
             },
-            MetaDescription = "プリキュアの本放送・配信（Amazon Prime Video）・Blu-ray / DVD でパートの長さが違う話の一覧。本放送を基準に、歴代全シリーズから違いのある話を集めました。",
+            MetaDescription = "歴代プリキュアの、本放送・配信・円盤で尺が違う話",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

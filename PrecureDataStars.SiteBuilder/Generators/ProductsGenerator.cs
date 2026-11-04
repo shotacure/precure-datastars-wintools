@@ -276,10 +276,11 @@ public sealed class ProductsGenerator
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（products-index.sbn の .lead）と同じ文。数だけはページ側で添える。
-                Subtitle = "主題歌シングルからサウンドトラック、ベスト盤まで、歴代の音楽商品に発売日・収録曲・購入先を添えています。収録曲から、欲しい曲の入った一枚を探せます。",
+                Subtitle = "歴代プリキュアの音楽商品（CD・配信）",
                 Badges = BuildIndexOgBadges(products.Count, discsByProduct.Values.SelectMany(d => d).ToList())
             },
-            MetaDescription = $"歴代プリキュアの音楽商品（CD・配信）{products.Count} 点 {discsByProduct.Values.Sum(d => d.Count)} 枚の一覧。サウンドトラックや主題歌シングルの発売日・収録曲・購入先をまとめました。",
+            // ページの冒頭文（products-index.sbn の .lead）と同じ文。
+            MetaDescription = $"歴代プリキュアの音楽商品（CD・配信）全 {products.Count} 点",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1168,8 +1169,7 @@ public sealed class ProductsGenerator
     }
 
     /// <summary>
-    /// 商品詳細の meta description。「『商品名』は 2018 年 5 月 23 日発売の種別（2 枚組・4 トラック）。発売元は〇〇。
-    /// 収録曲とクレジット、品番、価格、購入先をまとめました。」の順で 140 字ほどに収める。
+    /// 商品詳細の meta description。「2018 年 5 月 23 日発売の種別（2 枚組・4 トラック）。発売元：〇〇」（商品名はページ名に出ているので入れない）。
     /// </summary>
     private static string BuildProductMetaDescription(
         Product product,
@@ -1178,24 +1178,20 @@ public sealed class ProductsGenerator
         int totalTracks)
     {
         const int targetMaxChars = 150;
-        const string tail = "収録曲とクレジット、品番、価格、購入先をまとめました。";
 
         var sb = new System.Text.StringBuilder();
-        sb.Append('『').Append(product.Title).Append("』は")
-          .Append(product.ReleaseDate.ToString("yyyy年M月d日")).Append("発売の")
+        sb.Append(product.ReleaseDate.ToString("yyyy年M月d日")).Append("発売の")
           .Append(string.IsNullOrWhiteSpace(productKindLabel) ? "音楽商品" : productKindLabel);
         var scale = new List<string>();
         if (product.DiscCount > 1) scale.Add($"{product.DiscCount}枚組");
         if (totalTracks > 0) scale.Add($"{totalTracks}トラック");
         if (scale.Count > 0) sb.Append('（').Append(string.Join("・", scale)).Append('）');
-        sb.Append('。');
 
         if (!string.IsNullOrWhiteSpace(labelText))
         {
-            string fragment = $"発売元は{labelText}。";
-            if (sb.Length + fragment.Length + tail.Length <= targetMaxChars) sb.Append(fragment);
+            string fragment = $"。発売元：{labelText}";
+            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
         }
-        sb.Append(tail);
         return sb.ToString();
     }
 

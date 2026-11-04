@@ -436,13 +436,13 @@ public sealed class MusicGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア音楽",
-            MetaDescription = $"歴代プリキュアの音楽の入口。主題歌・挿入歌 {recordingsCount} 件、劇伴（BGM）{bgmCueTotal} 件、音楽商品 {productsCount} 点 {discsCount} 枚を、曲・作品・商品ごとにまとめました。",
+            MetaDescription = "歴代プリキュアの歌・劇伴・音楽商品",
             // ページ本文の 3 カードに出している数をそのままカードにも置く。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア音楽")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（music-landing.sbn の .lead）と同じ文。
-                Subtitle = "主題歌・挿入歌、劇伴（BGM）、CD と配信の音楽商品を、歴代プリキュアの音楽として一つにまとめています。曲名からも、作家からも、盤からも探せます。",
+                Subtitle = "歴代プリキュアの歌・劇伴・音楽商品",
                 Badges = new[]
                 {
                     new OgCardBadge("歌", $"{recordingsCount}件"),
@@ -602,12 +602,12 @@ public sealed class MusicGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア劇伴音楽(BGM)",
-            MetaDescription = $"歴代プリキュア {rows.Count} 作品の劇伴（BGM）一覧。{totalSongs} 曲 {totalCues} バージョンを、M ナンバー・メニュータイトル・作曲者・収録盤とともにまとめました。",
+            MetaDescription = $"歴代プリキュア {rows.Count} 作品の劇伴（BGM）{totalSongs} 曲",
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア劇伴音楽(BGM)")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（bgms-index.sbn の .lead）と同じ文。
-                Subtitle = "作品ごとの劇伴（BGM）に、M ナンバー・曲名・作曲者・収録 CD を添えています。曲ごとに、収録した盤と曲順まで載せています。",
+                Subtitle = "歴代プリキュアの劇伴（BGM）",
                 Badges = BuildBgmCountBadges(Array.Empty<OgCardBadge>(), totalSongs, totalCues, sources)
             },
             Breadcrumbs = new[]
@@ -1274,8 +1274,8 @@ public sealed class MusicGenerator
     }
 
     /// <summary>
-    /// 劇伴詳細の meta description。「『作品』の劇伴（BGM）N 曲 M バージョン（期間）。作曲・編曲：〇〇。
-    /// M ナンバーとメニュータイトル、収録 CD をまとめました。」の順で 140 字ほどに収める。
+    /// 劇伴詳細の meta description。「劇伴（BGM）N 曲 M バージョン（期間）。作曲・編曲：〇〇」の形で 150 字ほどに収める
+    /// （作品名はページ名に出ているので入れない）。
     /// </summary>
     private static string BuildBgmMetaDescription(
         Series series,
@@ -1284,12 +1284,10 @@ public sealed class MusicGenerator
         IReadOnlyList<BgmStaffGroup> staffGroups)
     {
         const int targetMaxChars = 150;
-        const string tail = "M ナンバーとメニュータイトル、収録 CD をまとめました。";
 
         var sb = new System.Text.StringBuilder();
-        sb.Append('『').Append(series.Title).Append("』の劇伴（BGM）").Append(countsLabel);
+        sb.Append("劇伴（BGM）").Append(countsLabel);
         if (!string.IsNullOrWhiteSpace(periodLabel)) sb.Append('（').Append(periodLabel).Append('）');
-        sb.Append('。');
 
         // 作曲・編曲（入る分だけ）。「役職：名前」の表記。
         var kept = new List<string>();
@@ -1298,12 +1296,10 @@ public sealed class MusicGenerator
             string label = string.Join("・", g.Roles.Select(r => r.RoleLabel));
             string names = string.Join("、", g.Members.Select(m => m.Name));
             if (label.Length == 0 || names.Length == 0) continue;
-            string joined = string.Join("、", kept.Append($"{label}：{names}")) + "。";
-            if (sb.Length + joined.Length + tail.Length > targetMaxChars) break;
+            if (sb.Length + 1 + string.Join("／", kept.Append($"{label}：{names}")).Length > targetMaxChars) break;
             kept.Add($"{label}：{names}");
         }
-        if (kept.Count > 0) sb.Append(string.Join("、", kept)).Append('。');
-        sb.Append(tail);
+        if (kept.Count > 0) sb.Append('。').Append(string.Join("／", kept));
         return sb.ToString();
     }
 

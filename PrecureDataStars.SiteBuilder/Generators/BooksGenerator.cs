@@ -121,10 +121,11 @@ public sealed class BooksGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "プリキュアの書籍(本・Kindle)")
             {
                 // ページの冒頭文（books-index.sbn の .lead）と同じ文。数だけはページ側で添える。
-                Subtitle = "設定資料集・ファンブックから絵本・楽譜まで、プリキュアの書籍に発売日・出版社と、紙と Kindle の購入先を添えています。判型・ページ数・ISBN は、1 冊ずつのページに載せています。",
+                Subtitle = "コミック版からファンブックまで、プリキュアの書籍",
                 Badges = new[] { new OgCardBadge("書籍", $"{rows.Count}件") }
             },
-            MetaDescription = $"プリキュア関連の書籍 {rows.Count} 件の一覧。設定資料集・ファンブック・絵本・楽譜まで、紙と Kindle の購入先、発売日、出版社をまとめました。",
+            // ページの冒頭文（books-index.sbn の .lead）と同じ文。
+            MetaDescription = $"コミック版からファンブックまで、プリキュアの書籍全 {rows.Count} 件",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -434,7 +435,7 @@ public sealed class BooksGenerator
         return facts.ToArray();
     }
 
-    /// <summary>書籍詳細の meta description。「『書名』（ジャンル／出版社／発売年月）。判型・ページ数・ISBN・収録シリーズと購入先をまとめました。」</summary>
+    /// <summary>書籍詳細の meta description。「ジャンル／出版社／発売年月」（書名はページ名に出ているので入れない）。</summary>
     private static string BuildDetailDescription(Book book, string publisher, string genreLabel)
     {
         var parts = new List<string>();
@@ -442,8 +443,7 @@ public sealed class BooksGenerator
         if (publisher.Length > 0) parts.Add(publisher);
         parts.Add($"{book.ReleaseDate.Year}年{book.ReleaseDate.Month}月発売");
 
-        return $"『{book.Title}』（{string.Join("／", parts)}）。"
-             + "判型・ページ数・ISBN・収録シリーズと、紙版・Kindle 版の購入先をまとめました。";
+        return string.Join("／", parts);
     }
 }
 

@@ -272,12 +272,13 @@ public sealed class SongsGenerator
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（songs-index.sbn の .lead）と同じ文。数だけはページ側で添える。
-                Subtitle = "主題歌から挿入歌・キャラクターソングまで、歌ごとに作詞・作曲・編曲・歌唱と収録 CD を添えています。作家や歌い手の名前からは、その方のほかの曲へつながります。",
+                Subtitle = "歴代プリキュアの歌",
                 Badges = songCount == allRows.Count
                     ? new[] { new OgCardBadge("", $"{songCount}曲") }
                     : new[] { new OgCardBadge("", $"{songCount}曲"), new OgCardBadge("", $"{allRows.Count}ver.") }
             },
-            MetaDescription = $"歴代プリキュアの歌 {allRows.Count} 曲の一覧。オープニング・エンディングから挿入歌・キャラクターソングまで、作詞・作曲・歌手と収録 CD をまとめました。",
+            // ページの冒頭文（songs-index.sbn の .lead）と同じ文。
+            MetaDescription = $"歴代プリキュアの歌全 {allRows.Count} 曲",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -419,6 +420,7 @@ public sealed class SongsGenerator
         var metaDescription = BuildSongMetaDescription(
             songTitle: song.Title,
             seriesTitle: repSeriesTitle,
+            seriesStartYearLabel: recordingViews.Count > 0 ? recordingViews[0].SeriesStartYearLabel : "",
             musicClassLabel: musicClassLabel,
             recordingViews: recordingViews,
             lyricistName: lyricistText,
@@ -934,12 +936,13 @@ public sealed class SongsGenerator
     }
 
     /// <summary>
-    /// 楽曲詳細の meta description。「「曲名」は『作品』の種別。歌：〇〇、作詞：△△、作曲：□□。使われた話、バージョン、収録 CD、クレジットをまとめました。」
-    /// の順で 140 字ほどに収める。クレジットは「役職：名前」の表記（敬称略。歌い手はキャラクター名義のこともあるため）。
+    /// 楽曲詳細の meta description。「種別（2004年『作品』）。歌：〇〇／作詞：△△／作曲：□□」の形で 150 字ほどに収める（曲名はページ名に出ているので入れない）。
+    /// クレジットは「役職：名前」の表記（敬称略。歌い手はキャラクター名義のこともあるため）。
     /// </summary>
     private static string BuildSongMetaDescription(
         string songTitle,
         string seriesTitle,
+        string seriesStartYearLabel,
         string musicClassLabel,
         IReadOnlyList<RecordingView> recordingViews,
         string lyricistName,
@@ -948,12 +951,11 @@ public sealed class SongsGenerator
         string compositionLabel = "作曲")
     {
         const int targetMaxChars = 150;
-        const string tail = "使われた話、バージョン、収録 CD、クレジットをまとめました。";
 
         var sb = new System.Text.StringBuilder();
-        sb.Append('「').Append(JapaneseQuotes.InQuotes(songTitle)).Append("」は");
-        sb.Append(string.IsNullOrWhiteSpace(seriesTitle) ? "プリキュアシリーズ" : $"『{seriesTitle}』");
-        sb.Append('の').Append(string.IsNullOrWhiteSpace(musicClassLabel) ? "歌" : musicClassLabel).Append('。');
+        sb.Append(string.IsNullOrWhiteSpace(musicClassLabel) ? "歌" : musicClassLabel);
+        if (!string.IsNullOrWhiteSpace(seriesTitle))
+            sb.Append('（').Append(string.IsNullOrEmpty(seriesStartYearLabel) ? "" : $"{seriesStartYearLabel}年").Append('『').Append(seriesTitle).Append("』）");
 
         // 歌い手（録音をまたいで重複を除き 2 つまで）→ 作詞 → 作曲。
         var credits = new List<string>();
@@ -969,12 +971,10 @@ public sealed class SongsGenerator
         var kept = new List<string>();
         foreach (var c in credits)
         {
-            string joined = string.Join("、", kept.Append(c)) + "。";
-            if (sb.Length + joined.Length + tail.Length > targetMaxChars) break;
+            if (sb.Length + 1 + string.Join("／", kept.Append(c)).Length > targetMaxChars) break;
             kept.Add(c);
         }
-        if (kept.Count > 0) sb.Append(string.Join("、", kept)).Append('。');
-        sb.Append(tail);
+        if (kept.Count > 0) sb.Append('。').Append(string.Join("／", kept));
         return sb.ToString();
     }
 

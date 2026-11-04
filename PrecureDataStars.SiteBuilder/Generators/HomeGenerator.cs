@@ -193,7 +193,8 @@ public sealed class HomeGenerator
             // サイト名「プリキュアデータベース「precure-datastars」」が検索語を含むので、前置きは付けない
             // （PageTitle が空なら <title> は SiteBrandLabel だけで組まれる）。
             PageTitle = "",
-            MetaDescription = "歴代プリキュアの全話リスト、主題歌と劇伴、スタッフと声優さん、キャラクターを一つにまとめた個人運営の非公式データベースです。放送・パッケージ・公式刊行物にもとづいて、一次資料から集めています。",
+            // 説明文はタグライン（見出しの下の「プリキュアまるごとデータベース。」）そのもの。
+            MetaDescription = "プリキュアまるごとデータベース。",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",
             JsonLd = jsonLd,
@@ -229,9 +230,8 @@ public sealed class HomeGenerator
         _ctx.Logger.Success("/");
     }
 
-    /// <summary>サイト全体を代表する説明文。WebSite / Organization の description に共用する。</summary>
-    private const string SiteDescription =
-        "歴代プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断的に閲覧できる、個人運営の非公式ファンデータベースです。";
+    /// <summary>サイト全体を代表する説明文。WebSite / Organization の description に共用する（ホームのタグラインと同じ）。</summary>
+    private const string SiteDescription = "プリキュアまるごとデータベース。";
 
     /// <summary>運営者の公式アカウント（Schema.org の sameAs に載せる）。</summary>
     private const string OperatorXUrl = "https://x.com/shota_";

@@ -476,12 +476,12 @@ public sealed class CreatorsGenerator
     private static readonly CreatorListPages MainListPages = new(
         StaffUrl: PathUtil.CreatorsStaffUrl(),
         StaffTitle: "歴代プリキュアスタッフ",
-        StaffMetaDescription: "歴代プリキュアのスタッフ一覧。脚本・演出・作画監督から制作会社まで、プリキュアを支えてきた方々（人物・企業・団体）を役職ごとにまとめました。参加話数や初参加の作品で並べ替えられます。",
-        StaffOgLead: "脚本・演出・作画から制作会社まで、プリキュアを作ってきた方々と企業・団体を役職ごとにまとめています。好きな回の演出家が手がけたほかの回も探せます。",
+        StaffMetaDescription: "プリキュアのレギュラーシリーズと映画を作ってきた方々",
+        StaffOgLead: "プリキュアのレギュラーシリーズと映画を作ってきた方々",
         VoiceCastUrl: PathUtil.CreatorsVoiceCastUrl(),
         VoiceCastTitle: "歴代プリキュア声優",
-        VoiceCastMetaDescription: "歴代プリキュアの声優さん一覧。キャラクターを演じた声優さんを作品ごと・役ごとにまとめました。初出演の作品や出演話数で並べ替えられます。",
-        VoiceCastOgLead: "キャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。あのキャラの声の主も、その方のほかの役も、同じページに並びます。",
+        VoiceCastMetaDescription: "プリキュアのレギュラーシリーズと映画に出演した方々",
+        VoiceCastOgLead: "プリキュアのレギュラーシリーズと映画に出演した方々",
         EpisodePillClass: "count-pill-tv",
         EpisodePillEmoji: "📺",
         RecordsMembership: true,
@@ -502,12 +502,12 @@ public sealed class CreatorsGenerator
         return new(
             StaffUrl: PathUtil.CreatorsOtonaStaffUrl(),
             StaffTitle: "オトナシリーズのスタッフ",
-            StaffMetaDescription: $"プリキュアの大人向けシリーズのスタッフ一覧。{titles}を手がけた方々（人物・企業・団体）を役職ごとにまとめました。参加話数や初参加の作品で並べ替えられます。",
-            StaffOgLead: "大人向けシリーズの脚本・演出・作画から制作会社まで、手がけた方々を役職ごとにまとめています。参加話数の多い順や、初めて参加した作品の順にも並べ替えられます。",
+            StaffMetaDescription: "大人向けシリーズを作ってきた方々",
+            StaffOgLead: "大人向けシリーズを作ってきた方々",
             VoiceCastUrl: PathUtil.CreatorsOtonaVoiceCastUrl(),
             VoiceCastTitle: "オトナシリーズの声優",
-            VoiceCastMetaDescription: $"プリキュアの大人向けシリーズの声優さん一覧。{titles}でキャラクターを演じた声優さんを、作品ごと・役ごとにまとめました。出演話数や初出演の作品で並べ替えられます。",
-            VoiceCastOgLead: "大人向けシリーズでキャラクターを演じた声優さんを、作品ごと・役ごとにまとめています。出演話数の多い順や、初めて出演した作品の順でも見られます。",
+            VoiceCastMetaDescription: "大人向けシリーズに出演した方々",
+            VoiceCastOgLead: "大人向けシリーズに出演した方々",
             EpisodePillClass: "count-pill-otona",
             EpisodePillEmoji: "🌙",
             RecordsMembership: false,
@@ -946,7 +946,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した方々（人物・企業・団体）を一覧にしました。初参加順・担当回数順で並べ替えられます。",
+            MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した方々（人物・企業・団体）",
             OgCard = BuildRoleOgCard(role, content.PersonCount, content.CompanyCount, rows, rowSet.TimelineEntities, alternateNames),
             Breadcrumbs = new[]
             {
@@ -1150,7 +1150,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアの歌で役職「{role.NameJa}」を担当した方々を一覧にしました。初参加順・担当曲数順で並べ替えられます。",
+            MetaDescription = $"歴代プリキュアの歌で役職「{role.NameJa}」を担当した方々",
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 new[] { new OgCardBadge("人物", $"{rows.Count}人") },
@@ -1319,12 +1319,12 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア音楽制作",
-            MetaDescription = "歴代プリキュアの音楽制作スタッフ一覧。作詞・作曲・編曲から演奏・エンジニアまで、歌・劇伴・音盤のクレジットに名前のある方々（人物・団体）を役職ごとにまとめました。",
+            MetaDescription = "プリキュアの歌と音楽を作ってきた方々",
             OgCard = BuildCreatorsOgCard(
                 "歴代プリキュア音楽制作",
                 BuildEntityBadges(personCount, companyCount),
                 Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
-                "作詞・作曲・編曲から演奏・録音まで、歌と劇伴と CD を手がけた方々を役割ごとにまとめています。その方が手がけたほかの曲や盤も、名前のリンク先にまとめています。"),
+                "プリキュアの歌と音楽を作ってきた方々"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1638,7 +1638,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアの歌・劇伴・音盤で「{role.NameJa}」を担当した方々（人物・団体）を一覧にしました。",
+            MetaDescription = $"歴代プリキュアの歌・劇伴・音盤で「{role.NameJa}」を担当した方々（人物・団体）",
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 BuildEntityBadges(persons, companies),
@@ -1988,7 +1988,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア歌唱",
-            MetaDescription = "歴代プリキュアの歌手一覧。主題歌・挿入歌・キャラクターソングを歌った方々とキャラクター・ユニットを、初参加の曲と参加曲数とともにまとめました。",
+            MetaDescription = "プリキュアを歌ってきた方々",
             OgCard = BuildCreatorsOgCard(
                 "歴代プリキュア歌唱",
                 new[]
@@ -1998,7 +1998,7 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("ユニット", $"{unitCount}組")
                 },
                 Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
-                "主題歌・挿入歌・キャラクターソングを歌った方々とキャラクターを、初めて歌った曲と曲数とともにまとめています。名前から、歌った曲と収録 CD までひと続きに載せています。"),
+                "プリキュアを歌ってきた方々"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2865,7 +2865,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代クリエイター",
-            MetaDescription = "歴代プリキュアのクリエイター一覧。脚本・演出・作画から制作会社までのスタッフの方々、キャラクターを演じた声優さん、歌を作り歌った方々を、作品ごと・役職ごとにまとめました。",
+            MetaDescription = "歴代プリキュアを作ってきた方々",
             OgCard = BuildCreatorsOgCard(
                 "歴代クリエイター",
                 new[]
@@ -2877,7 +2877,7 @@ public sealed class CreatorsGenerator
                 },
                 Array.Empty<OgCardFactLine>(), null,
                 // ページの冒頭文（creators-landing.sbn の .lead）と同じ文。
-                "スタッフ、声優さん、歌を作り歌った方々を、役職と作品ごとにまとめています。名前ひとつで、その方が関わった作品と話がひとまとまりに出てきます。"),
+                "歴代プリキュアを作ってきた方々"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

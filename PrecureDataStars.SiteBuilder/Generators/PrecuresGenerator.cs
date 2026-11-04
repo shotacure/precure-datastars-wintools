@@ -155,11 +155,11 @@ public sealed class PrecuresGenerator
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（precures-index.sbn の .lead）と同じ文。数だけはページ側で添える。
-                Subtitle = "歴代のプリキュアを登場順に並べ、変身前後の名前と演じた声優さんを添えています。作品をまたいで一枚に収めた名簿です。",
+                Subtitle = "歴代のレギュラープリキュア＋映画限定プリキュア",
                 MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                 Badges = new[] { new OgCardBadge("プリキュア", $"{rows.Count}人") }
             },
-            MetaDescription = $"歴代プリキュア（変身ヒロイン）{rows.Count} 名の一覧。登場順に、変身前後の名前と担当の声優さんをまとめました。",
+            MetaDescription = $"歴代のレギュラープリキュア＋映画限定プリキュア {rows.Count} 名",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

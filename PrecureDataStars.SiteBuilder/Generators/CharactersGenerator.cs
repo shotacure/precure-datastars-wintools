@@ -347,7 +347,7 @@ public sealed class CharactersGenerator
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（characters-index.sbn の .lead）と同じ文。数だけはページ側で添える。
-                Subtitle = "プリキュアから妖精・敵・ゲストまで、歴代のキャラクターを作品ごとに並べ、演じた声優さんと登場した話を添えています。一度きりの出番も同じ扱いで載せています。",
+                Subtitle = "プリキュア・妖精たち・敵・とりまく人々、歴代のキャラクター",
                 MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                 Badges = new[]
                 {
@@ -355,7 +355,8 @@ public sealed class CharactersGenerator
                     new OgCardBadge("作品", $"{sections.Count}作")
                 }
             },
-            MetaDescription = $"歴代プリキュアのキャラクター {characters.Count} 名の一覧。プリキュアから妖精・敵・その他のキャラクターまで、作品ごとに担当の声優さんと登場エピソードをまとめました。",
+            // ページの冒頭文（characters-index.sbn の .lead）と同じ文。
+            MetaDescription = $"プリキュア・妖精たち・敵・とりまく人々、歴代のキャラクター全 {characters.Count} 名",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -598,7 +599,7 @@ public sealed class CharactersGenerator
             var layout = new LayoutModel
             {
                 PageTitle = title,
-                MetaDescription = $"『{series.Title}』のその他のキャラクター {rows.Count} 名を、登場した話ごとに、演じた声優さんを添えて並べています。",
+                MetaDescription = $"『{series.Title}』のその他のキャラクター {rows.Count} 名",
                 OgCard = new OgCardSpec(Kicker: series.Title, Title: "その他のキャラクター")
                 {
                     MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
@@ -712,8 +713,7 @@ public sealed class CharactersGenerator
     }
 
     /// <summary>
-    /// キャラクター詳細の meta description。「〇〇は、『作品』に登場する種別。声は△△さん。登場した作品と話、名義、家族関係をまとめました。」
-    /// の順で 140 字ほどに収める。
+    /// キャラクター詳細の meta description。「種別（2004年『作品』、2005年『作品』ほか）。声：△△」（名前はページ名に出ているので入れない）。
     /// </summary>
     private static string BuildCharacterMetaDescription(
         string characterName,
@@ -721,27 +721,17 @@ public sealed class CharactersGenerator
         IReadOnlyList<VoiceCastRow> voiceRows)
     {
         const int targetMaxChars = 150;
-        const string tail = "登場した作品と話、名義、家族関係をまとめました。";
 
         // 登場作品（重複を除いて出た順に 2 作品まで）。
-        var seriesTitles = voiceRows
-            .Select(v => v.SeriesTitle)
-            .Where(t => !string.IsNullOrEmpty(t))
-            .Distinct(StringComparer.Ordinal)
+        var works = voiceRows
+            .Where(v => !string.IsNullOrEmpty(v.SeriesTitle))
+            .GroupBy(v => v.SeriesTitle, StringComparer.Ordinal)
+            .Select(x => x.First().SeriesStartYearLabel.Length > 0 ? $"{x.First().SeriesStartYearLabel}年『{x.Key}』" : $"『{x.Key}』")
             .ToList();
         var sb = new System.Text.StringBuilder();
-        sb.Append(characterName).Append("は、");
-        if (seriesTitles.Count > 0)
-        {
-            sb.Append(string.Join("", seriesTitles.Take(2).Select(t => $"『{t}』")));
-            if (seriesTitles.Count > 2) sb.Append("など");
-            sb.Append("に登場する");
-        }
-        else
-        {
-            sb.Append("プリキュアシリーズに登場する");
-        }
-        sb.Append(string.IsNullOrWhiteSpace(kindLabel) ? "キャラクター" : kindLabel).Append('。');
+        sb.Append(string.IsNullOrWhiteSpace(kindLabel) ? "キャラクター" : kindLabel);
+        if (works.Count > 0)
+            sb.Append('（').Append(string.Join("、", works.Take(2))).Append(works.Count > 2 ? "ほか" : "").Append('）');
 
         // 声の出演（最大 2 名）。VoiceActorNames は「、」連結のフリーテキストなので分割する。
         var voices = voiceRows
@@ -754,11 +744,10 @@ public sealed class CharactersGenerator
             .ToList();
         if (voices.Count > 0)
         {
-            string fragment = "声は" + string.Join("、", voices.Take(2).Select(n => n + "さん")) + (voices.Count > 2 ? "ほか" : "") + "。";
-            if (sb.Length + fragment.Length + tail.Length <= targetMaxChars) sb.Append(fragment);
+            string fragment = "。声：" + string.Join("、", voices.Take(2)) + (voices.Count > 2 ? "ほか" : "");
+            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
         }
-        sb.Append(tail);
-        return sb.ToString();
+        return sb.Length > 0 ? sb.ToString() : characterName;
     }
 
     /// <summary>

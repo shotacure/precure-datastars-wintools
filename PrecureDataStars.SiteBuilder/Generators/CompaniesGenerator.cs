@@ -321,7 +321,7 @@ public sealed class CompaniesGenerator
         // 「{会社名}は、プリキュアシリーズで{役職1}({N作品})・{役職2}({N作品})などを担当した企業・団体。」を骨格にする。
         // ページの名前（meta description・JSON-LD・パンくず・共有用の画像）は、見出し・title と同じ正式名にそろえる。
         // 代表屋号（略称など）は JSON-LD の別名（alternateName）に入る。
-        var metaDescription = BuildCompanyMetaDescription(company.Name, groups);
+        var metaDescription = BuildCompanyMetaDescription(company.Name, groups, _ctx.RoleByCode);
 
         var jsonLdDict = new Dictionary<string, object?>
         {
@@ -457,34 +457,38 @@ public sealed class CompaniesGenerator
     }
 
     /// <summary>
-    /// 企業・団体詳細の meta description。「〇〇がプリキュアシリーズで担当したクレジットをまとめました。役職（話数・本数）を多い順に 3 つ。
-    /// 作品ごと・役職ごとの一覧と、所属としてクレジットされた方々。」の順で 140 字ほどに収める。
+    /// 企業・団体詳細の meta description。主要な実績だけを「役職（2016年『作品』、2015年『作品』ほか）」の形で「／」でつなぎ、150 字ほどに収める
+    /// （名前はページ名に出ているので入れない）。役職は役職マスタの表示順（主要な役職ほど前）、
+    /// 各役職の作品は担当量（話数。映画や作品単位の関与は 1 本）の多い順に 2 作まで選び、年の順に並べる。
     /// </summary>
     private static string BuildCompanyMetaDescription(
         string displayName,
-        IReadOnlyList<InvolvementGroup> involvementGroups)
+        IReadOnlyList<InvolvementGroup> involvementGroups,
+        IReadOnlyDictionary<string, Role> roleByCode)
     {
         const int targetMaxChars = 150;
-        string head = $"{displayName}がプリキュアシリーズで担当したクレジットをまとめています。";
-        const string tail = "作品ごと・役職ごとの一覧に、所属としてクレジットされた方々を添えています。";
+        static int RowWeight(InvolvementSeriesRow r) => r.Episodes.Count > 0 ? r.Episodes.Count : 1;
+        int RoleOrder(InvolvementGroup g)
+            => roleByCode.TryGetValue(g.RoleCode, out var role) && role.DisplayOrder is ushort o ? o : int.MaxValue;
 
-        var ordered = involvementGroups
+        var sb = new System.Text.StringBuilder();
+        foreach (var g in involvementGroups
             .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.RoleLabel != "(役職未設定)" && g.Count > 0)
-            .OrderByDescending(g => g.Count)
-            .Take(3)
-            .ToList();
-        if (ordered.Count == 0) return head + tail;
-
-        var parts = new List<string>();
-        foreach (var g in ordered)
+            .OrderBy(RoleOrder)
+            .ThenByDescending(g => g.Count))
         {
-            // CountLabel は「担当 97 話・2 本」の形なので、「担当」と空白を除いて「97話・2本」にする。
-            string part = $"{g.RoleLabel}（{g.CountLabel.Replace("担当", "").Replace(" ", "")}）";
-            string joined = string.Join("、", parts.Append(part)) + "など。";
-            if (head.Length + joined.Length + tail.Length > targetMaxChars) break;
-            parts.Add(part);
+            var works = g.SeriesRows
+                .GroupBy(r => r.SeriesTitle, StringComparer.Ordinal)
+                .Select(x => (Title: x.Key, Year: x.First().SeriesStartYearLabel, Weight: x.Sum(RowWeight)))
+                .OrderByDescending(x => x.Weight)
+                .ToList();
+            if (works.Count == 0) continue;
+            string entry = $"{g.RoleLabel}（{string.Join("、", works.Take(2).OrderBy(w => w.Year, StringComparer.Ordinal).Select(w => w.Year.Length > 0 ? $"{w.Year}年『{w.Title}』" : $"『{w.Title}』"))}{(works.Count > 2 ? "ほか" : "")}）";
+            if (sb.Length > 0 && sb.Length + 1 + entry.Length > targetMaxChars) break;
+            if (sb.Length > 0) sb.Append('／');
+            sb.Append(entry);
         }
-        return parts.Count == 0 ? head + tail : head + string.Join("、", parts) + "など。" + tail;
+        return sb.Length > 0 ? sb.ToString() : displayName;
     }
 
     /// <summary>

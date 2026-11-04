@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：og:title・twitter:title を `<title>` と同じ「ページ名 | サイト名」にした**（`_layout.sbn`）：ページ名だけだったため、リンクの見出しや検索結果にサイト名が出なかった。
 - **サイト：エピソード詳細・シリーズ詳細の主題歌・挿入歌で、同じ録音を OP・ED・挿入歌として使っていたらカードを 1 枚にまとめ、サイズを緑のピル・再生ボタンをサイズごとにした**（`ThemeSongCardParts`〔新規：`ThemeSongKindEntry`・`ThemeSongPlay`〕・`EpisodeGenerator`・`ThemeSongRowBuilder`・`ThemeSongSeriesAggregator`・`SeriesGenerator`・`episode-detail.sbn`・`series-detail.sbn`・`site.css`）
   - 同じ録音を何度か使った回（シリーズ）は、区分のバッジを使った順に並べて 1 枚にまとめる。まとめるのは録音と本放送限定の印（エピソード詳細ではインストゥルメンタルの印も）が同じものだけ。シリーズ詳細は区分が 2 つ以上なら各区分のバッジの直後にその区分の使用話数を置く（区分が 1 つなら今までどおり曲名の後ろ）
   - 区分が 2 つ以上のカードの見出しは、左に「区分のバッジ＋使用話数」を 1 区分 1 行で縦に積み、右の曲名・サイズ・（本放送のみ）・再生ボタンをその縦の真ん中にそろえて 1 行に組む（`.ts-headline-multi`・`.ts-kinds`・`.ts-headline-main`・`.ts-plays-inline`）。幅 600px 以下では 1 行目を区分の積みと再生ボタン、2 行目を曲名・サイズにする

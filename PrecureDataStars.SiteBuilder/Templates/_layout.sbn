@@ -37,14 +37,15 @@
 {{## ──────── OGP（Open Graph Protocol）+ Twitter カード ────────
      画像は Generator 側または PageRenderer の自動補完で
      入った場合のみ出力する。og:url / og:title / og:description / og:type は
-     必ず出力する（OG パーサが空欄を嫌うため）。site_name と locale は固定値。 ##}}
+     必ず出力する（OG パーサが空欄を嫌うため）。site_name と locale は固定値。
+     og:title / twitter:title は <title> と同じ「ページ名 | サイト名」（検索結果やリンクの見出しにページ名だけが出ないように）。 ##}}
 {{~ if BaseUrl != "" && CanonicalPath != "" && !SuppressCanonical ~}}
 <meta property="og:url" content="{{ BaseUrl }}{{ CanonicalPath }}">
 {{~ end ~}}
 <meta property="og:type" content="{{ OgType }}">
 <meta property="og:site_name" content="{{ SiteBrandLabel | html.escape }}">
 <meta property="og:locale" content="ja_JP">
-<meta property="og:title" content="{{ if PageTitle != "" }}{{ PageTitle | html.escape }}{{ else }}{{ SiteBrandLabel | html.escape }}{{ end }}">
+<meta property="og:title" content="{{ if PageTitle != "" }}{{ PageTitle | html.escape }} | {{ end }}{{ SiteBrandLabel | html.escape }}">
 {{~ if MetaDescription != "" ~}}
 <meta property="og:description" content="{{ MetaDescription | html.escape }}">
 {{~ end ~}}
@@ -71,7 +72,7 @@
 <meta name="twitter:site" content="@shota_">
 <meta name="twitter:creator" content="@shota_">
 
-<meta name="twitter:title" content="{{ if PageTitle != "" }}{{ PageTitle | html.escape }}{{ else }}{{ SiteBrandLabel | html.escape }}{{ end }}">
+<meta name="twitter:title" content="{{ if PageTitle != "" }}{{ PageTitle | html.escape }} | {{ end }}{{ SiteBrandLabel | html.escape }}">
 {{~ if MetaDescription != "" ~}}
 <meta name="twitter:description" content="{{ MetaDescription | html.escape }}">
 {{~ end ~}}

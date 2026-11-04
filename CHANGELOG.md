@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：劇伴の入っていない作品の劇伴の URL（`/bgms/{作品}/`）を、作品のページへ 301 で転送するようにした**（`EntityUrlRegistry`）：劇伴のページは劇伴のある作品にしか無く、以前のクロールで開かれた URL（`/bgms/3dtheater/` など）が 404 になっていた。
 - **サイト：og:title・twitter:title を `<title>` と同じ「ページ名 | サイト名」にした**（`_layout.sbn`）：ページ名だけだったため、リンクの見出しや検索結果にサイト名が出なかった。
 - **サイト：一覧・入口のページの冒頭文・OGP カードの文・meta description を、載っているものを短く言うだけの形にし、個別のページの説明文の結びを項目を並べる形にした**（テンプレートの一覧・入口・統計のページ、`HomeGenerator`・`PrecuresGenerator`・`SeriesGenerator`・`CharactersGenerator`・`BooksGenerator`・`EpisodesIndexGenerator`・`SongsGenerator`・`MusicGenerator`・`ProductsGenerator`・`CreatorsGenerator`・`AnniversaryGenerator`・`FontsGenerator`・`ArticlesGenerator`・`StatsLandingGenerator`・`EpisodePartStatsGenerator`・`SubtitleStatsGenerator`・`RecordsGenerator`・`PersonsGenerator`・`CompaniesGenerator`・`EpisodeGenerator`）
   - 「〜を添えています」「〜をまとめています／まとめました」「〜を並べています」と、2 文目の使い道（「〜を探せます」など）をやめ、「歴代のレギュラープリキュア＋映画限定プリキュア 75 名」「初代から最新作まで、TV シリーズ・映画・スピンオフ 全 71 作品（同時上映の短編 8 本を含む）」のように言う。タブで並べ方が変わるページには並び順を書かない

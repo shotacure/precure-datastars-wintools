@@ -361,6 +361,14 @@ public sealed class EntityUrlRegistry
         foreach (var (from, to) in RetiredPageRedirects)
             reg._legacyRedirects.Add(new LegacyRedirect(from, to));
 
+        // 劇伴の入っていない作品には劇伴のページ（/bgms/{slug}/）が無いので、その URL は作品のページへ転送する
+        // （以前のクロールや推測で開かれた URL を 404 にしない）。劇伴のページを作る条件は MusicGenerator と同じ（劇伴が 1 件以上）。
+        foreach (var s in ctx.Series)
+        {
+            if (ctx.BgmCuesBySeries.TryGetValue(s.SeriesId, out var cues) && cues.Count > 0) continue;
+            reg._legacyRedirects.Add(new LegacyRedirect(PathUtil.BgmsForSeriesUrl(s.Slug).TrimEnd('/'), PathUtil.SeriesUrl(s.Slug)));
+        }
+
         // 書籍は URL に使うコードの優先順（ISBN-13 → 定期刊行物コード → Kindle ASIN → 紙の ASIN）が変わると URL が変わる
         // （Kindle だけ登録していた本にあとから紙版の ISBN を入れたときなど）。その本が持つほかのコードの URL からも
         // いまの URL へ転送して、以前のコードで公開していたページを 404 にしない。ほかの本がいまそのコードの URL を

@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：商品詳細の構造化データで、価格を付けられるオファーの無い商品を Product ではなく CreativeWork として出し、Product には発売元を brand として載せた**（`ProductsGenerator`）：Product 型は offers・review・aggregateRating のどれかが無いとリッチリザルトの重要エラーになり、特典 CD など定価の無い商品が「無効」になっていた。JAN（gtin）は持っていないので出さず、返品・送料は売り手（Amazon）の条件なので出さない。
 - **サイト：劇伴の入っていない作品の劇伴の URL（`/bgms/{作品}/`）を、作品のページへ 301 で転送するようにした**（`EntityUrlRegistry`）：劇伴のページは劇伴のある作品にしか無く、以前のクロールで開かれた URL（`/bgms/3dtheater/` など）が 404 になっていた。
 - **サイト：og:title・twitter:title を `<title>` と同じ「ページ名 | サイト名」にした**（`_layout.sbn`）：ページ名だけだったため、リンクの見出しや検索結果にサイト名が出なかった。
 - **サイト：一覧・入口のページの冒頭文・OGP カードの文・meta description を、載っているものを短く言うだけの形にし、個別のページの説明文の結びを項目を並べる形にした**（テンプレートの一覧・入口・統計のページ、`HomeGenerator`・`PrecuresGenerator`・`SeriesGenerator`・`CharactersGenerator`・`BooksGenerator`・`EpisodesIndexGenerator`・`SongsGenerator`・`MusicGenerator`・`ProductsGenerator`・`CreatorsGenerator`・`AnniversaryGenerator`・`FontsGenerator`・`ArticlesGenerator`・`StatsLandingGenerator`・`EpisodePartStatsGenerator`・`SubtitleStatsGenerator`・`RecordsGenerator`・`PersonsGenerator`・`CompaniesGenerator`・`EpisodeGenerator`）

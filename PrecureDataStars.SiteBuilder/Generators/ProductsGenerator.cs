@@ -844,7 +844,7 @@ public sealed class ProductsGenerator
                 : ""
         };
 
-        // 構造化データ。音楽系の商品種別なら MusicAlbum、それ以外は Product。
+        // 構造化データ。音楽系の商品種別なら MusicAlbum、それ以外は Product（価格を付けられるオファーが無ければ CreativeWork）。
         // description / numberOfTracks を追加して、検索結果のリッチスニペット候補要素を増やす。
         string baseUrl = _ctx.Config.BaseUrl;
         string productUrl = PathUtil.ProductUrl(product.ProductCatalogNo);
@@ -935,6 +935,16 @@ public sealed class ProductsGenerator
         if (offers.Count > 0)
         {
             jsonLdDict["offers"] = offers;
+            // Product の brand には発売元（レーベル）を載せる。JAN（gtin）は持っていないので出さない。
+            // 返品・送料（hasMerchantReturnPolicy・shippingDetails）は売り手（Amazon）の条件で当サイトは決められないので出さない。
+            if (!isMusicAlbum && !string.IsNullOrWhiteSpace(labelText))
+                jsonLdDict["brand"] = new Dictionary<string, object?> { ["@type"] = "Brand", ["name"] = labelText };
+        }
+        else if (!isMusicAlbum)
+        {
+            // Product 型は offers・review・aggregateRating のどれかが無いとリッチリザルトの重要エラーになる。
+            // 価格を付けられるオファーが無い商品（特典・非売品や定価未登録のもの）は、Product ではなく CreativeWork として出す。
+            jsonLdDict["@type"] = "CreativeWork";
         }
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + productUrl;
         var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);

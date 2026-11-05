@@ -79,11 +79,13 @@
       }
     }
 
-    // 誕生日はキャラクター → 主要な人物（pp=1。プリキュア役の声優さん・OP・各話のチーフ）→ そのほかの人物の順。
+    // 誕生日はキャラクター → プリキュア役の声優さん（pt=0）→ メインスタッフ（pt=1）→ そのほかの人物の順、
+    // 人物は同じ段の中で本編のクレジット回数（pc）の多い順。
     bdays.sort(function (a, b) {
-      var oa = a.k === 'cb' ? 0 : (a.pp ? 1 : 2);
-      var ob = b.k === 'cb' ? 0 : (b.pp ? 1 : 2);
-      return oa - ob;
+      var oa = a.k === 'cb' ? -1 : (a.pt === undefined ? 2 : a.pt);
+      var ob = b.k === 'cb' ? -1 : (b.pt === undefined ? 2 : b.pt);
+      if (oa !== ob) return oa - ob;
+      return (b.pc || 0) - (a.pc || 0);
     });
 
     var todayItems = filterToday(eps, today);

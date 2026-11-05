@@ -105,8 +105,11 @@ public sealed record AnniversaryEntry
     public bool IsDeceased { get; init; }
 
     /// <summary>
-    /// 主要な人物（プリキュア役の声優さん・OP・各話のチーフ。<see cref="Pipeline.BirthdayCalendarEligibility.IsPrimary"/>）か。
-    /// カレンダーのチップでは TV 放送より前に、そうでない人物は TV 放送の後ろに並べる。
+    /// 人物の段（<see cref="Pipeline.BirthdayCalendarEligibility.TierOf"/>。0 = プリキュア役の声優さん、1 = メインスタッフ、2 = そのほか）。
+    /// カレンダーのチップでは 0・1 を TV 放送より前に、2 を TV 放送の後ろに並べる。
     /// </summary>
-    public bool IsPrimaryPerson { get; init; }
+    public int PersonTier { get; init; } = 2;
+
+    /// <summary>人物の本編のクレジット回数。同じ段の中では多い順に並べる。</summary>
+    public int PersonCreditCount { get; init; }
 }

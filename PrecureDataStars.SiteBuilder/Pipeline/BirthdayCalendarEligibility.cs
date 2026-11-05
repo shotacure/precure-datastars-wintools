@@ -15,9 +15,10 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// </list>
 /// 声の出演がある人物でも、OP・各話のチーフ・TV の主題歌の歌唱のどれかの経験があるか、通算のクレジット回数が足りていれば出す。
 /// 人物詳細の誕生日はこの判定に関係なく出す。クレジットの入力が進めば、出演回数や経験が増えて対象も増える。
-/// <para>出す人物のうち、プリキュア役の声優さん（<c>precures.voice_actor_person_id</c>）と、OP のクレジットか各話のチーフ
-/// （エピソード一覧に載る役職）としてクレジットされた人物は「主要」（<see cref="IsPrimary"/>）とし、カレンダーのチップでは
-/// TV 放送より前に並べる。そのほかの人物は TV 放送の後ろに並べる。</para>
+/// <para>出す人物は、カレンダーのチップの並びのために 3 つの段に分ける（<see cref="TierOf"/>）：
+/// 0 = プリキュア役の声優さん（<c>precures.voice_actor_person_id</c>）、1 = メインスタッフ（OP のクレジットか各話のチーフ〔エピソード一覧に載る役職〕
+/// としてクレジットされた人物）、2 = そのほか。0・1 は TV 放送より前に、2 は TV 放送の後ろに、同じ段の中は本編のクレジット回数
+/// （<see cref="CreditCountOf"/>）の多い順で並べる。</para>
 /// </summary>
 public sealed class BirthdayCalendarEligibility
 {
@@ -30,23 +31,30 @@ public sealed class BirthdayCalendarEligibility
     /// <summary>カレンダーに出す人物の person_id。null は全員を出す（未構築時）。</summary>
     private readonly HashSet<int>? _eligiblePersonIds;
 
-    /// <summary>主要な人物（プリキュア役の声優さん・OP・各話のチーフ）の person_id。</summary>
-    private readonly HashSet<int> _primaryPersonIds;
+    /// <summary>person_id → 段（0 = プリキュア役の声優さん、1 = メインスタッフ）。載っていない人物は 2（そのほか）。</summary>
+    private readonly Dictionary<int, int> _tierByPerson;
 
-    private BirthdayCalendarEligibility(HashSet<int>? eligiblePersonIds, HashSet<int> primaryPersonIds)
+    /// <summary>person_id → 本編のクレジット回数（TV の話数と映画の本数。人物詳細の「本編クレジット」と同じ数え方）。</summary>
+    private readonly Dictionary<int, int> _creditCountByPerson;
+
+    private BirthdayCalendarEligibility(HashSet<int>? eligiblePersonIds, Dictionary<int, int> tierByPerson, Dictionary<int, int> creditCountByPerson)
     {
         _eligiblePersonIds = eligiblePersonIds;
-        _primaryPersonIds = primaryPersonIds;
+        _tierByPerson = tierByPerson;
+        _creditCountByPerson = creditCountByPerson;
     }
 
-    /// <summary>未構築時（Catalog 側プレビュー等）用。全員を出し、主要の区別はしない。</summary>
-    public static BirthdayCalendarEligibility All { get; } = new(null, new HashSet<int>());
+    /// <summary>未構築時（Catalog 側プレビュー等）用。全員を出し、段の区別はしない。</summary>
+    public static BirthdayCalendarEligibility All { get; } = new(null, new Dictionary<int, int>(), new Dictionary<int, int>());
 
     /// <summary>この人物の誕生日をカレンダーに出すか。</summary>
     public bool IsEligible(int personId) => _eligiblePersonIds is null || _eligiblePersonIds.Contains(personId);
 
-    /// <summary>主要な人物（プリキュア役の声優さん・OP・各話のチーフ）か。カレンダーのチップの並びで TV 放送より前に置く。</summary>
-    public bool IsPrimary(int personId) => _primaryPersonIds.Contains(personId);
+    /// <summary>カレンダーのチップの並びの段（0 = プリキュア役の声優さん、1 = メインスタッフ、2 = そのほか）。</summary>
+    public int TierOf(int personId) => _tierByPerson.TryGetValue(personId, out var t) ? t : 2;
+
+    /// <summary>本編のクレジット回数（同じ段の中の並びに使う。多いほど前）。</summary>
+    public int CreditCountOf(int personId) => _creditCountByPerson.TryGetValue(personId, out var n) ? n : 0;
 
     /// <summary>
     /// クレジット関与の索引から、カレンダーに誕生日を出す人物を決める。
@@ -57,7 +65,8 @@ public sealed class BirthdayCalendarEligibility
     public static BirthdayCalendarEligibility Build(BuildContext ctx, CreditInvolvementIndex index, IReadOnlySet<int> precureVoicePersonIds)
     {
         var eligible = new HashSet<int>();
-        var primary = new HashSet<int>();
+        var tierByPerson = new Dictionary<int, int>();
+        var creditCountByPerson = new Dictionary<int, int>();
         foreach (var (personId, aliasIds) in ctx.AliasIdsByPerson)
         {
             // 声の出演の回数（TV の話数と映画の本数）。
@@ -134,13 +143,18 @@ public sealed class BirthdayCalendarEligibility
                 || episodeKeys.Count + movieSeries.Count >= VoiceCastMinAppearances
                 || creditEpisodeKeys.Count + creditMovieSeries.Count >= MinTotalCreditAppearances)
                 eligible.Add(personId);
-            if (hasPrimaryStaffCredit || precureVoicePersonIds.Contains(personId))
+            if (precureVoicePersonIds.Contains(personId))
             {
                 // プリキュア役の声優さんは出演回数に関係なく出す。
                 eligible.Add(personId);
-                primary.Add(personId);
+                tierByPerson[personId] = 0;
             }
+            else if (hasPrimaryStaffCredit)
+            {
+                tierByPerson[personId] = 1;
+            }
+            creditCountByPerson[personId] = creditEpisodeKeys.Count + creditMovieSeries.Count;
         }
-        return new BirthdayCalendarEligibility(eligible, primary);
+        return new BirthdayCalendarEligibility(eligible, tierByPerson, creditCountByPerson);
     }
 }

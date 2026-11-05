@@ -140,8 +140,11 @@ public sealed class AnniversaryGenerator
         var episodes = dayEntries.Where(e => e.Kind == "ep").OrderBy(e => e.Year).ThenBy(e => e.EpisodeNo).ToList();
         var movies = dayEntries.Where(e => e.Kind == "mv").OrderBy(e => e.Year).ToList();
         var characterBirthdays = dayEntries.Where(e => e.Kind == "cb").ToList();
-        // 人物の誕生日は主要な人物（プリキュア役の声優さん・OP・各話のチーフ）を先に。
-        var personBirthdays = dayEntries.Where(e => e.Kind == "pb").OrderByDescending(e => e.IsPrimaryPerson).ToList();
+        // 人物の誕生日はプリキュア役の声優さん → メインスタッフ → そのほか、同じ段は本編のクレジット回数の多い順。
+        var personBirthdays = dayEntries.Where(e => e.Kind == "pb")
+            .OrderBy(e => e.PersonTier)
+            .ThenByDescending(e => e.PersonCreditCount)
+            .ToList();
 
         var content = new DayContentModel
         {
@@ -351,7 +354,8 @@ public sealed class AnniversaryGenerator
 
     /// <summary>
     /// 1 日ぶんのチップを、ホームの当月カレンダーと同じ並び順
-    /// （キャラクター誕生日 → 映画公開 → 主要な人物の誕生日 → TV 放送 → そのほかの人物の誕生日）で組み立てる。
+    /// （キャラクター誕生日 → 映画公開 → プリキュア役の声優さんの誕生日 → メインスタッフの誕生日 → TV 放送 → そのほかの人物の誕生日。
+    /// 人物は同じ段の中で本編のクレジット回数の多い順）で組み立てる。
     /// カレンダーのページなので、その日の出来事は省かずに全部載せる。
     /// </summary>
     private static IReadOnlyList<DayChip> BuildDayChips(IReadOnlyList<AnniversaryEntry> dayEntries, DateTimeOffset now)
@@ -360,12 +364,12 @@ public sealed class AnniversaryGenerator
         {
             "cb" => 0,
             "mv" => 1,
-            "pb" => e.IsPrimaryPerson ? 2 : 4,
-            _ => 3
+            "pb" => e.PersonTier switch { 0 => 2, 1 => 3, _ => 5 },
+            _ => 4
         };
 
         var chips = new List<DayChip>();
-        foreach (var e in dayEntries.OrderBy(Order).ThenBy(e => e.Year ?? 0).ThenBy(e => e.EpisodeNo))
+        foreach (var e in dayEntries.OrderBy(Order).ThenByDescending(e => e.PersonCreditCount).ThenBy(e => e.Year ?? 0).ThenBy(e => e.EpisodeNo))
         {
             chips.Add(e.Kind switch
             {

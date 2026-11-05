@@ -46,9 +46,6 @@
           {{~ for c in d.Chips ~}}
           <a class="{{ c.CssClass }}" href="{{ c.Url }}" title="{{ c.Tooltip | html.escape }}"{{ if c.StyleAttr != "" }} style="{{ c.StyleAttr }}"{{ end }}><span class="cal-chip-emoji">{{ c.Emoji }}</span><span class="cal-chip-short">{{ c.Label | html.escape }}</span><span class="cal-chip-full">{{ c.LabelFull | html.escape }}</span></a>
           {{~ end ~}}
-          {{~ if d.OverflowCount > 0 ~}}
-          <a class="cal-chip cal-chip-more" href="{{ d.Url }}">ほか{{ d.OverflowCount }}件</a>
-          {{~ end ~}}
         </div>
         {{~ end ~}}
         {{~ if d.Count == 0 ~}}
@@ -65,9 +62,6 @@
           <div class="cal-chips">
             {{~ for c in m.LeapDay.Chips ~}}
             <a class="{{ c.CssClass }}" href="{{ c.Url }}" title="{{ c.Tooltip | html.escape }}"{{ if c.StyleAttr != "" }} style="{{ c.StyleAttr }}"{{ end }}><span class="cal-chip-emoji">{{ c.Emoji }}</span><span class="cal-chip-short">{{ c.Label | html.escape }}</span><span class="cal-chip-full">{{ c.LabelFull | html.escape }}</span></a>
-            {{~ end ~}}
-            {{~ if m.LeapDay.OverflowCount > 0 ~}}
-            <a class="cal-chip cal-chip-more" href="{{ m.LeapDay.Url }}">ほか{{ m.LeapDay.OverflowCount }}件</a>
             {{~ end ~}}
           </div>
           {{~ end ~}}

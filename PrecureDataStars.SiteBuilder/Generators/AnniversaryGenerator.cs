@@ -91,7 +91,6 @@ public sealed class AnniversaryGenerator
                     Url = dayUrl,
                     Count = dayEntries.Count,
                     Chips = chips,
-                    OverflowCount = Math.Max(0, dayEntries.Count - chips.Count),
                     MdKey = $"{month}-{day}",
                     DowClass = hasCell ? DowClassOf(displayYear, month, day) : "",
                     DowLabel = hasCell ? WeekdayLabels[(int)new DateTime(displayYear, month, day).DayOfWeek] : ""
@@ -141,7 +140,8 @@ public sealed class AnniversaryGenerator
         var episodes = dayEntries.Where(e => e.Kind == "ep").OrderBy(e => e.Year).ThenBy(e => e.EpisodeNo).ToList();
         var movies = dayEntries.Where(e => e.Kind == "mv").OrderBy(e => e.Year).ToList();
         var characterBirthdays = dayEntries.Where(e => e.Kind == "cb").ToList();
-        var personBirthdays = dayEntries.Where(e => e.Kind == "pb").ToList();
+        // 人物の誕生日は主要な人物（プリキュア役の声優さん・OP・各話のチーフ）を先に。
+        var personBirthdays = dayEntries.Where(e => e.Kind == "pb").OrderByDescending(e => e.IsPrimaryPerson).ToList();
 
         var content = new DayContentModel
         {
@@ -351,29 +351,22 @@ public sealed class AnniversaryGenerator
 
     /// <summary>
     /// 1 日ぶんのチップを、ホームの当月カレンダーと同じ並び順
-    /// （キャラクター誕生日 → 映画公開 → 人物誕生日 → TV 放送）で組み立てる。
-    /// 12 か月ぶんを 1 面に並べる都合でセルの高さを揃えたいので上限を設け、
-    /// 溢れた分は「ほか n件」として日付ページへ送る。
+    /// （キャラクター誕生日 → 映画公開 → 主要な人物の誕生日 → TV 放送 → そのほかの人物の誕生日）で組み立てる。
+    /// カレンダーのページなので、その日の出来事は省かずに全部載せる。
     /// </summary>
     private static IReadOnlyList<DayChip> BuildDayChips(IReadOnlyList<AnniversaryEntry> dayEntries, DateTimeOffset now)
     {
-        // 1 セルに積める上限。多い日（同じ月日に何年ぶんも放送がある日）でも
-        // グリッドの行高がここで頭打ちになる。ホームの当月カレンダーが 1 日あたり
-        // 出す枚数（同時期に放送していたシリーズ数ぶん）と釣り合う値にしてある。
-        const int MaxChips = 6;
-
         static int Order(AnniversaryEntry e) => e.Kind switch
         {
             "cb" => 0,
             "mv" => 1,
-            "pb" => 2,
+            "pb" => e.IsPrimaryPerson ? 2 : 4,
             _ => 3
         };
 
         var chips = new List<DayChip>();
         foreach (var e in dayEntries.OrderBy(Order).ThenBy(e => e.Year ?? 0).ThenBy(e => e.EpisodeNo))
         {
-            if (chips.Count >= MaxChips) break;
             chips.Add(e.Kind switch
             {
                 "cb" => new DayChip
@@ -565,8 +558,6 @@ public sealed class AnniversaryGenerator
         public int Count { get; set; }
         /// <summary>セルに載せるチップ（ホームの当月カレンダーと同じ意匠・同じ並び順）。</summary>
         public IReadOnlyList<DayChip> Chips { get; set; } = Array.Empty<DayChip>();
-        /// <summary>セルに載りきらなかった件数。0 なら「ほか n件」を出さない。</summary>
-        public int OverflowCount { get; set; }
     }
 
     /// <summary>

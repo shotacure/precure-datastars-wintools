@@ -843,7 +843,9 @@ WHERE e.is_deleted = 0
                         pn = e.PersonName,
                         pu = e.PersonUrl,
                         // by は「今日の記念日」で年齢を添えるための生年。亡くなった人には年齢を添えないので出さない。
-                        by = e.IsDeceased ? null : e.BirthYear
+                        by = e.IsDeceased ? null : e.BirthYear,
+                        // pp は主要な人物（プリキュア役の声優さん・OP・各話のチーフ）の印。カレンダーで TV 放送より前に並べる。
+                        pp = e.IsPrimaryPerson ? 1 : (int?)null
                     });
                     break;
             }

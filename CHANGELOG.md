@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：記念日のカレンダーのページで「ほか n件」の省略をやめ、人物の誕生日を主要な人物とそのほかの人物で並べ分けた**（`BirthdayCalendarEligibility.IsPrimary`・`SiteBuilderPipeline`・`AnniversaryEntry.IsPrimaryPerson`・`AnniversaryDataBuilder`・`AnniversaryGenerator`・`HomeGenerator`・`anniversary-index.sbn`・`calendar.js`・`anniversaries.js`・`site.css`）：1 日 6 枚で切っていたため、放送開始日（第 1 話）などが「ほか n件」に畳まれていた。カレンダーのページはその日の出来事を全部載せる。プリキュア役の声優さんと、OP のクレジットか各話のチーフとして載った人物を「主要な人物」とし、チップは「キャラクター誕生日 → 映画公開日 → 主要な人物の誕生日 → TV 放送 → そのほかの人物の誕生日」の順にした（ホームのカレンダーと今日の記念日・日別ページも同じ）。プリキュア役の声優さんは出演回数に関係なく誕生日を出す。
 - **スキーマ・AmazonSync・サイト：商品に Amazon の EAN（JAN）を持ち、構造化データの gtin13 に使うようにした**（マイグレーション `v1.20.0_add_product_amazon_ean.sql`・`Product.AmazonEan`・`ProductsRepository.UpdateAmazonEanAsync`・`PaApiClient` の標準リソースに `itemInfo.externalIds`・AmazonSync・`ProductsGenerator`）：AmazonSync がジャケット画像の取り直しと同じ取得で CD の ASIN の EAN を取り、`products.amazon_ean` に入れ替える。gtin13 は Amazon の EAN を先に、無ければ CD 系の盤の mcn を使い、ほかの商品の盤と同じ mcn（同じ CD を違う包装で出した版・再発売の盤）は使わない。13 桁でチェック数字の合うものだけを出す。
 - **サイト：商品詳細の構造化データで、価格を付けられるオファーの無い商品を Product ではなく CreativeWork として出し、Product には発売元を brand として載せた**（`ProductsGenerator`）：Product 型は offers・review・aggregateRating のどれかが無いとリッチリザルトの重要エラーになり、特典 CD など定価の無い商品が「無効」になっていた。JAN（gtin）は持っていないので出さず、返品・送料は売り手（Amazon）の条件なので出さない。
 - **サイト：劇伴の入っていない作品の劇伴の URL（`/bgms/{作品}/`）を、作品のページへ 301 で転送するようにした**（`EntityUrlRegistry`）：劇伴のページは劇伴のある作品にしか無く、以前のクロールで開かれた URL（`/bgms/3dtheater/` など）が 404 になっていた。

@@ -79,6 +79,13 @@
       }
     }
 
+    // 誕生日はキャラクター → 主要な人物（pp=1。プリキュア役の声優さん・OP・各話のチーフ）→ そのほかの人物の順。
+    bdays.sort(function (a, b) {
+      var oa = a.k === 'cb' ? 0 : (a.pp ? 1 : 2);
+      var ob = b.k === 'cb' ? 0 : (b.pp ? 1 : 2);
+      return oa - ob;
+    });
+
     var todayItems = filterToday(eps, today);
     var weekItems = filterThisWeek(eps, today, todayItems);
 

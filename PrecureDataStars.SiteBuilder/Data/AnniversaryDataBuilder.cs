@@ -211,7 +211,8 @@ public static class AnniversaryDataBuilder
                 PersonName = pe.FullName,
                 PersonUrl = PathUtil.PersonUrl(pe.PersonId),
                 BirthYear = birthYear,
-                IsDeceased = pe.DeathYear.HasValue
+                IsDeceased = pe.DeathYear.HasValue,
+                IsPrimaryPerson = ctx.BirthdayCalendar.IsPrimary(pe.PersonId)
             });
         }
     }

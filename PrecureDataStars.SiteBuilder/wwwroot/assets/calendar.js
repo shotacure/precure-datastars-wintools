@@ -18,10 +18,10 @@
  *         ra=サブタイトル解禁時刻任意。未解禁ならチップの title 属性からサブタイトルを外す）
  *   mv … 映画公開日（ts=シリーズ略称, su=シリーズ URL）
  *   cb … キャラクター誕生日（pn=変身前名義/表示名, cu=URL, kc/kf/kb=バッジ色）
- *   pb … 人物誕生日（pn=氏名, pu=URL）
+ *   pb … 人物誕生日（pn=氏名, pu=URL, pp=主要な人物の印任意〔プリキュア役の声優さん・OP・各話のチーフ〕）
  *
  * 1 日のセル／行内チップの優先順（上から）：
- *   キャラクター誕生日(cb) > 映画公開日(mv) > 人物誕生日(pb) > TV 放送(ep)
+ *   キャラクター誕生日(cb) > 映画公開日(mv) > 主要な人物の誕生日(pb, pp=1) > TV 放送(ep) > そのほかの人物の誕生日(pb)
  *
  * 注記：カレンダーはコンパクト表示のため、ep / mv はシリーズ略称（title_short）を
  * 用いる。これは「生成出力では title_short を参照しない」サイト方針の明示例外で、
@@ -39,8 +39,13 @@
 
 
   var WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
-  // チップ優先順位（小さいほど上）。
+  // チップ優先順位（小さいほど上）。人物の誕生日は主要な人物（pp=1）だけ TV 放送より上、ほかは TV 放送の下。
   var KIND_ORDER = { cb: 0, mv: 1, pb: 2, ep: 3 };
+  function chipOrder(it) {
+    if (it.k === 'pb') return it.pp ? 2 : 4;
+    var o = KIND_ORDER[it.k];
+    return o === undefined ? 9 : o;
+  }
   // 狭い幅判定の閾値。site.css の旧カレンダーフォールバックと同じ 720px に合わせる。
   var MOBILE_QUERY = '(max-width: 720px)';
 
@@ -178,10 +183,10 @@
     }
   }
 
-  // 1 セル／行内のチップ並び：種別優先（cb→mv→pb→ep）、同種はシリーズ年→話数で安定的に。
+  // 1 セル／行内のチップ並び：種別優先（cb→mv→主要な pb→ep→そのほかの pb）、同種はシリーズ年→話数で安定的に。
   function sortChips(a, b2) {
-    var oa = KIND_ORDER[a.k]; if (oa === undefined) oa = 9;
-    var ob = KIND_ORDER[b2.k]; if (ob === undefined) ob = 9;
+    var oa = chipOrder(a);
+    var ob = chipOrder(b2);
     if (oa !== ob) return oa - ob;
     var ya = a.sy || a.y || 0, yb = b2.sy || b2.y || 0;
     if (ya !== yb) return ya - yb;

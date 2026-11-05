@@ -103,4 +103,10 @@ public sealed record AnniversaryEntry
     /// 記念日の日別ページの「YYYY年生まれ」は生年の事実なので、この値に関わらず出す。
     /// </summary>
     public bool IsDeceased { get; init; }
+
+    /// <summary>
+    /// 主要な人物（プリキュア役の声優さん・OP・各話のチーフ。<see cref="Pipeline.BirthdayCalendarEligibility.IsPrimary"/>）か。
+    /// カレンダーのチップでは TV 放送より前に、そうでない人物は TV 放送の後ろに並べる。
+    /// </summary>
+    public bool IsPrimaryPerson { get; init; }
 }

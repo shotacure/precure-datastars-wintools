@@ -139,7 +139,11 @@ public sealed class SiteBuilderPipeline
 
         // 人物の誕生日を記念日カレンダーに出すかの判定。ホーム（声の出演一覧より先に作る）と記念日ページが
         // 同じ判定を使うよう、関与索引の構築直後に 1 回だけ決める。
-        ctx.BirthdayCalendar = BirthdayCalendarEligibility.Build(ctx, involvementIndex);
+        var precureVoicePersonIds = (await new PrecuresRepository(factory).GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false))
+            .Where(p => p.VoiceActorPersonId.HasValue)
+            .Select(p => p.VoiceActorPersonId!.Value)
+            .ToHashSet();
+        ctx.BirthdayCalendar = BirthdayCalendarEligibility.Build(ctx, involvementIndex, precureVoicePersonIds);
 
         // 各話のチーフ（脚本・絵コンテ・演出・作画監督・美術）の顔ぶれ索引。エピソード詳細の
         // 「組み合わせの通算回数」と歴代記録の「多く組んだ演出と作画監督」が同じ索引を読む。

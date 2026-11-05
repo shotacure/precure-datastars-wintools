@@ -15,6 +15,9 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// </list>
 /// 声の出演がある人物でも、OP・各話のチーフ・TV の主題歌の歌唱のどれかの経験があるか、通算のクレジット回数が足りていれば出す。
 /// 人物詳細の誕生日はこの判定に関係なく出す。クレジットの入力が進めば、出演回数や経験が増えて対象も増える。
+/// <para>出す人物のうち、プリキュア役の声優さん（<c>precures.voice_actor_person_id</c>）と、OP のクレジットか各話のチーフ
+/// （エピソード一覧に載る役職）としてクレジットされた人物は「主要」（<see cref="IsPrimary"/>）とし、カレンダーのチップでは
+/// TV 放送より前に並べる。そのほかの人物は TV 放送の後ろに並べる。</para>
 /// </summary>
 public sealed class BirthdayCalendarEligibility
 {
@@ -27,25 +30,34 @@ public sealed class BirthdayCalendarEligibility
     /// <summary>カレンダーに出す人物の person_id。null は全員を出す（未構築時）。</summary>
     private readonly HashSet<int>? _eligiblePersonIds;
 
-    private BirthdayCalendarEligibility(HashSet<int>? eligiblePersonIds)
+    /// <summary>主要な人物（プリキュア役の声優さん・OP・各話のチーフ）の person_id。</summary>
+    private readonly HashSet<int> _primaryPersonIds;
+
+    private BirthdayCalendarEligibility(HashSet<int>? eligiblePersonIds, HashSet<int> primaryPersonIds)
     {
         _eligiblePersonIds = eligiblePersonIds;
+        _primaryPersonIds = primaryPersonIds;
     }
 
-    /// <summary>未構築時（Catalog 側プレビュー等）用。全員を出す。</summary>
-    public static BirthdayCalendarEligibility All { get; } = new(null);
+    /// <summary>未構築時（Catalog 側プレビュー等）用。全員を出し、主要の区別はしない。</summary>
+    public static BirthdayCalendarEligibility All { get; } = new(null, new HashSet<int>());
 
     /// <summary>この人物の誕生日をカレンダーに出すか。</summary>
     public bool IsEligible(int personId) => _eligiblePersonIds is null || _eligiblePersonIds.Contains(personId);
+
+    /// <summary>主要な人物（プリキュア役の声優さん・OP・各話のチーフ）か。カレンダーのチップの並びで TV 放送より前に置く。</summary>
+    public bool IsPrimary(int personId) => _primaryPersonIds.Contains(personId);
 
     /// <summary>
     /// クレジット関与の索引から、カレンダーに誕生日を出す人物を決める。
     /// 出演回数は声の出演一覧（CreatorsGenerator）と同じく、キャラクター名義に紐付く声の出演だけを、
     /// TV は (シリーズ, 話数) の重複を除いた数、映画は映画系シリーズの重複を除いた本数で数える。
     /// </summary>
-    public static BirthdayCalendarEligibility Build(BuildContext ctx, CreditInvolvementIndex index)
+    /// <param name="precureVoicePersonIds">プリキュア役の声優さんの person_id（<c>precures.voice_actor_person_id</c>）。主要の判定に使う。</param>
+    public static BirthdayCalendarEligibility Build(BuildContext ctx, CreditInvolvementIndex index, IReadOnlySet<int> precureVoicePersonIds)
     {
         var eligible = new HashSet<int>();
+        var primary = new HashSet<int>();
         foreach (var (personId, aliasIds) in ctx.AliasIdsByPerson)
         {
             // 声の出演の回数（TV の話数と映画の本数）。
@@ -56,6 +68,8 @@ public sealed class BirthdayCalendarEligibility
             var creditMovieSeries = new HashSet<int>();
             // OP・各話のチーフ・TV の主題歌の歌唱のどれかを務めたことがあるか（声の出演の回数に関係なく出す）。
             bool hasKeyCredit = false;
+            // OP か各話のチーフとしてクレジットされたことがあるか（主要の判定。主題歌の歌唱は含めない）。
+            bool hasPrimaryStaffCredit = false;
 
             foreach (var aid in aliasIds)
             {
@@ -100,15 +114,19 @@ public sealed class BirthdayCalendarEligibility
 
                     // スタッフとしての経験は、本編のクレジットの人物エントリだけで見る
                     // （主題歌・挿入歌の作家や劇伴の作曲・編曲、企業・ロゴは含めない）。
-                    if (hasKeyCredit || inv.Kind != InvolvementKind.Person || !inv.IsMainCredit) continue;
+                    if (hasPrimaryStaffCredit || inv.Kind != InvolvementKind.Person || !inv.IsMainCredit) continue;
                     if (string.Equals(inv.CreditKind, "OP", StringComparison.Ordinal))
                     {
                         hasKeyCredit = true;
+                        hasPrimaryStaffCredit = true;
                         continue;
                     }
                     string? roleNameJa = ctx.RoleByCode.TryGetValue(inv.RoleCode, out var role) ? role.NameJa : null;
                     if (EpisodeChiefRoles.Classify(inv.RoleCode, roleNameJa) is not null)
+                    {
                         hasKeyCredit = true;
+                        hasPrimaryStaffCredit = true;
+                    }
                 }
             }
 
@@ -116,7 +134,13 @@ public sealed class BirthdayCalendarEligibility
                 || episodeKeys.Count + movieSeries.Count >= VoiceCastMinAppearances
                 || creditEpisodeKeys.Count + creditMovieSeries.Count >= MinTotalCreditAppearances)
                 eligible.Add(personId);
+            if (hasPrimaryStaffCredit || precureVoicePersonIds.Contains(personId))
+            {
+                // プリキュア役の声優さんは出演回数に関係なく出す。
+                eligible.Add(personId);
+                primary.Add(personId);
+            }
         }
-        return new BirthdayCalendarEligibility(eligible);
+        return new BirthdayCalendarEligibility(eligible, primary);
     }
 }

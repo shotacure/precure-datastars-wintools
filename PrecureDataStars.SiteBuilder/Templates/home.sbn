@@ -116,7 +116,7 @@
      calendar.js はデータ空のとき #home-calendar を非表示にするため、
      366 日ぶんのページへの唯一の入口である本リンクはその外側に置く。 ##}}
 <p class="home-calendar-more">
-  <a href="/anniversary/">日付から探す — プリキュア記念日カレンダー</a>
+  <a class="button-link" href="/anniversary/">日付から探す — プリキュア記念日カレンダー</a>
 </p>
 <script src="{{ asset_url "/assets/calendar.js" }}" defer></script>
 

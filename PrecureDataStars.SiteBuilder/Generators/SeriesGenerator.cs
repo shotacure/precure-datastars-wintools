@@ -1489,10 +1489,11 @@ public sealed class SeriesGenerator
     /// </summary>
     private (string Names, string CurrentNote) CreditedAliasLabel(Dictionary<int, (int Ep, int Seq, int Sub)> credited, int personId, string? fallbackFullName)
     {
-        string current = _ctx.EntityUrls.PersonDisplayLabel(personId) ?? fallbackFullName ?? "";
+        // 名義と比べる今の名乗りは、同姓同名の別人を見分ける添え書きの無いもの（添え書きは名乗りではないので括弧にも出さない）。
+        string current = _ctx.EntityUrls.PersonDisplayName(personId) ?? fallbackFullName ?? "";
         var names = credited.OrderBy(kv => kv.Value).Select(kv => _ctx.PersonAliasById.TryGetValue(kv.Key, out var a) ? a.GetDisplayName() : null)
             .Where(n => !string.IsNullOrEmpty(n)).Distinct(StringComparer.Ordinal).ToList();
-        if (names.Count == 0) return (current, "");
+        if (names.Count == 0) return (_ctx.EntityUrls.PersonDisplayLabel(personId) ?? current, "");
         string creditedNames = string.Join(" / ", names);
         // クレジットの名義に今の名乗りが含まれていれば括弧は要らない（空白・中黒の違いだけの表記の揺れも同じとみなす）
         string currentKey = NameKeyIgnoringSeparators(current);

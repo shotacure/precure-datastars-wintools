@@ -37,6 +37,7 @@ $logDir = Join-Path $env:LOCALAPPDATA 'precure-datastars'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $logPath = Join-Path $logDir 'episode-links.log'
 . (Join-Path $PSScriptRoot 'show-toast.ps1')
+. (Join-Path $PSScriptRoot 'build-lock.ps1')
 
 function Write-Log([string]$message) {
     $line = "{0}  {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $message
@@ -55,7 +56,10 @@ $exitCode = 1
 $output = @()
 try {
     $project = Join-Path $repoRoot 'PrecureDataStars.EpisodeLinkSync/PrecureDataStars.EpisodeLinkSync.csproj'
-    & dotnet build $project -c Release --nologo -v q *>&1 | ForEach-Object { Add-Content -LiteralPath $logPath -Value "    $_" -Encoding UTF8 }
+    # 同じ時刻に始まるほかの定時のタスクとビルドが重ならないよう、ビルドの間だけ鍵を掛ける。
+    Invoke-WithBuildLock {
+        & dotnet build $project -c Release --nologo -v q *>&1 | ForEach-Object { Add-Content -LiteralPath $logPath -Value "    $_" -Encoding UTF8 }
+    }
     if ($LASTEXITCODE -ne 0) { throw "EpisodeLinkSync のビルドが失敗しました (exit $LASTEXITCODE)。" }
     $exe = Get-ChildItem -Path (Join-Path $repoRoot 'PrecureDataStars.EpisodeLinkSync/bin/Release') -Filter 'PrecureDataStars.EpisodeLinkSync.exe' -Recurse -File |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1

@@ -1028,7 +1028,7 @@ Role: PRODUCTION 制作 (order 2)
    - `--date yyyy-MM-dd`（ツールの引数。`--watch --dry-run` と一緒のときだけ）：見続ける回の「今日」を差し替えて試す。過ぎた日なら 1 回見て終わる
    - 引数なし（毎日 5:50 の回）：放送日時がいまの前後（過去 28 日・先 21 日）の回のうち、放送済みの回のあらすじ・ラインナップと、新着一覧に出ている予告を 1 回見て回る（ラインナップは放送から数日遅れで出る）
    - 断られたとき（429・5xx）とつながらないときは、その相手だけ間隔を広げる（10 秒から倍々に最長 5 分）
-   - 経過は `%LOCALAPPDATA%\precure-datastars\episode-links.log` に追記する。知らせることがあったときと失敗したときは Windows の通知を出す（通知の組み立ては定時デプロイと同じ `scripts/show-toast.ps1`）。`register-episode-links-task.ps1` で 2 つのタスク（日曜 9:00 の見続ける回・毎日 5:50 の回）を登録する
+   - 経過は `%LOCALAPPDATA%\precure-datastars\episode-links.log` に追記する。知らせることがあったときと失敗したときは Windows の通知を出す（通知の組み立ては定時デプロイと同じ `scripts/show-toast.ps1`）。始めの Release のビルドは、同じ時刻に始まるほかの定時のタスクと重ならないよう、`scripts/build-lock.ps1` の名前付きの鍵で 1 つずつ行う（後から来たほうは最大 10 分待つ）。`register-episode-links-task.ps1` で 2 つのタスク（日曜 9:00 の見続ける回・毎日 5:50 の回）を登録する
    ```powershell
    .\scripts\scheduled-episode-links.ps1 -DryRun           # 書かずに 1 回見て回る
    .\scripts\scheduled-episode-links.ps1 -Watch            # 今日の回の分がそろうまで見続ける

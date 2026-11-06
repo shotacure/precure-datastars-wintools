@@ -51,24 +51,13 @@ function Write-Log([string]$message) {
 
 # 公開できなかったことを Windows の通知で知らせる。タスクは画面を出さずに動くので、ログだけでは気づけない。
 # PowerShell 7 からは WinRT の型を直接使えないため、Windows PowerShell 5.1 に通知の組み立てを任せる
-# （アプリ ID は Windows PowerShell のもの。通知センターにも残る）。
+# （アプリ ID は Windows PowerShell のもの。通知センターにも残る）。通知の組み立ては show-toast.ps1。
+. (Join-Path $PSScriptRoot 'show-toast.ps1')
 function Show-FailureNotification([string]$reason) {
     try {
-        $esc = { param($t) [Security.SecurityElement]::Escape($t).Replace("'", "''") }
-        $title = & $esc 'precure.tv の定時デプロイが公開できませんでした'
-        $body = & $esc ("{0}　{1}" -f (Get-Date -Format 'M/d HH:mm'), $reason)
-        $foot = & $esc ("記録: $logPath")
-        $toastScript = @"
-`$null = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
-`$null = [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
-`$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-`$xml.LoadXml('<toast scenario="reminder"><visual><binding template="ToastGeneric"><text>$title</text><text>$body</text><text>$foot</text></binding></visual><actions><action content="閉じる" arguments="dismiss" activationType="system"/></actions></toast>')
-`$appId = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
-[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier(`$appId).Show([Windows.UI.Notifications.ToastNotification]::new(`$xml))
-"@
-        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($toastScript))
-        & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -EncodedCommand $encoded 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "powershell.exe の終了コード $LASTEXITCODE" }
+        Show-Toast -Title 'precure.tv の定時デプロイが公開できませんでした' `
+            -Body ("{0}　{1}" -f (Get-Date -Format 'M/d HH:mm'), $reason) `
+            -Foot "記録: $logPath"
     }
     catch {
         Write-Log "通知を出せませんでした：$($_.Exception.Message)"

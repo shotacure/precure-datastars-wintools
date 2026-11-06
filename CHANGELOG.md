@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **スクリプト：Windows の通知を出す処理を `scripts/show-toast.ps1` に出し、定時デプロイと放送後のリンクの取り込みで使い回すようにした**（`scheduled-deploy.ps1`）
 - **サイト：シリーズ詳細・エピソード詳細の主題歌カードで、違うサイズを 2 つ以上使ったときは、サイズの札を見出しの下に縦に並べ、札の右にそのサイズの再生ボタンを置くようにした**（`ThemeSongCardParts.SizeRows` / `LoosePlays`・`ThemeSongRow`・`EpisodeGenerator`・`series-detail.sbn`・`episode-detail.sbn`・`site.css`）：デパプリの ED の Type.I〜IV のように、札とボタンが曲名の後ろに横に流れて、どのボタンがどの Type か分からなかった。札の列とボタンの列を 2 列の格子でそろえる。どの札にも当たらないボタン（サイズの指定が無い話の、録音の既定の音源）はカードの右上に置く
 - **サイト：シリーズ詳細のメインスタッフで、同姓同名の別人を見分ける添え書きのある人物の名義の後ろに「(平林 佐和子 (脚本))」のような括弧が出ていたのを直した**（`SeriesGenerator.CreditedAliasLabel`）：クレジットの名義と比べる今の名乗りに添え書き付きの名前を使っていたため、名義が同じでも違う名前とみなしていた。比べるのも括弧に出すのも添え書きの無い名乗りにした
 - **サイト：作品詳細のプリキュア欄とプリキュア一覧の行頭に、キーカラーの正方形を置いた**（`KeyColorBadge.SwatchBackground`・`SeriesGenerator`・`PrecuresGenerator`・`_key-swatch.sbn`〔新規〕・`series-detail.sbn`・`precures-index.sbn`・`site.css`）：グラデーション（`precures.key_color_gradient`）を持つプリキュアは左上から右下への斜めのグラデーションで塗り、白や淡い色でも形が見えるよう灰色で縁取る。キーカラーが無ければ縁取りだけの正方形にする。あわせて、作品詳細のプリキュア欄で声優が未登録のときに「(CV:)」が空のまま出ていたのを、添え書きごと出さないようにした。

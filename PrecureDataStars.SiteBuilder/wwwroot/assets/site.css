@@ -10051,7 +10051,14 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 }
 .article-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
 .article-body img { max-width: 100%; height: auto; border-radius: 6px; }
-.article-body table { border-collapse: collapse; margin: 1.2em 0; font-size: 0.92em; }
+/* 長い URL・英数字の続きが本文の幅からはみ出さないよう途中で折り返す。表のセルには掛けない
+   （掛けると表が縮んで、下の横スクロールにならない）。 */
+.article-body p, .article-body li, .article-body blockquote, .article-body figcaption { overflow-wrap: anywhere; }
+/* 表は本文の幅を超えたら表だけを横にスクロールさせ、ページをはみ出させない。 */
+.article-body table {
+  display: block; max-width: 100%; overflow-x: auto;
+  border-collapse: collapse; margin: 1.2em 0; font-size: 0.92em;
+}
 .article-body th, .article-body td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
 .article-body th { background: var(--th-bg); }
 /* 本文に埋め込む部品（precure.news の記事と同じ書き方で使える。news もこの CSS を読み込む）。

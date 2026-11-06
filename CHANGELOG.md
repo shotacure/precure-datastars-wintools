@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：コラムの本文の表が本文の幅を超えたら、表だけを横にスクロールさせ、ページをはみ出させないようにした**（`site.css`：`.article-body table` を `display: block; max-width: 100%; overflow-x: auto`）。あわせて本文の段落・箇条書き・引用・図の説明は、長い URL や英数字の続きを途中で折り返す（`overflow-wrap: anywhere`。表のセルには掛けない）。
 - **スクリプト：放送後のリンクの取り込みの始めのビルドを、名前付きの鍵（mutex）で 1 つずつ行うようにした**（`scripts/build-lock.ps1`〔新規〕・`scheduled-episode-links.ps1`）：同じ時刻に始まるほかの定時のタスクとビルドが重なると、同じプロジェクトの DLL を開けずにビルドが失敗していた。後から来たほうは先のビルドが終わるまで最大 10 分待つ。
 - **サイト：シリーズ詳細の主題歌カードで、サイズが話によって分かれる（サイズの札が 2 つ以上の）とき、札の左にそのサイズが流れた話数を出すようにした**（`ThemeSongDescriptor.SizeEpisodeNos`・`ThemeSongSeriesAggregator`・`ThemeSongRow.SizeEpisodeNos`・`ThemeSongSizeRow.RangeLabel`・`ThemeSongCardParts.SizeRows` / `AddEpisodeNos`・`series-detail.sbn`・`site.css`）：デパプリの ED の Type.I〜IV のように、どの話でどのサイズが流れたかを「#1～3, 10, 13, 16」の形で示す。曲の使用話数は見出しのまま。サイズの指定が無い話は数えず、点線の札（放送で流れたサイズとは限らない音源）には話数を付けない。札とボタンの 2 列を「話数｜札｜ボタン」の 3 列にし、狭い幅では話数の側を折り返す。
   - サイズの札の並びを、初めて流れた話の順からサイズの表の並び順（`song_size_variants.display_order`。TVサイズ → Type.I → Type.II …）にした（`ThemeSongRowBuilder`）

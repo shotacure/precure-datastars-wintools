@@ -64,6 +64,7 @@ public sealed class CreatorsGenerator
     private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
     private readonly CompaniesRepository _companiesRepo;
     private readonly CompanyAliasesRepository _companyAliasesRepo;
+    private readonly CompanyRelationsRepository _companyRelationsRepo;
     private readonly LogosRepository _logosRepo;
     private readonly CharactersRepository _charactersRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
@@ -80,6 +81,15 @@ public sealed class CreatorsGenerator
 
     /// <summary>company_id → 全クレジット横断で最後に使われた company_alias_id（<see cref="BuildLatestAliasMaps"/> で確定）。</summary>
     private readonly Dictionary<int, int> _latestCompanyAliasId = new();
+
+    /// <summary>
+    /// company_id → 事業の引き継ぎ（company_relations の SUCCESSOR）でつながった系譜の代表（系譜の中で最も小さい company_id）。
+    /// 系譜を持たない企業は入れない。役職詳細の年表で、系譜の企業を並べてひとまとめにし、所属の人をその下にまとめるのに使う。
+    /// </summary>
+    private readonly Dictionary<int, int> _companyLineageRoot = new();
+
+    /// <summary>company_id → 前身の企業（SUCCESSOR の from 側）と関係の言い回し。年表の内訳に「前身：企業名」を添えるのに使う。</summary>
+    private readonly Dictionary<int, List<(int CompanyId, string Name, string? Label)>> _companyPredecessors = new();
 
     /// <summary>
     /// 楽曲の作家 3 役職（作詞・作曲・編曲）の表示順。これらの役職の /creators/roles/{code}/ ページは、
@@ -120,6 +130,7 @@ public sealed class CreatorsGenerator
         _personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
         _companiesRepo = new CompaniesRepository(factory);
         _companyAliasesRepo = new CompanyAliasesRepository(factory);
+        _companyRelationsRepo = new CompanyRelationsRepository(factory);
         _logosRepo = new LogosRepository(factory);
         _charactersRepo = new CharactersRepository(factory);
         _characterAliasesRepo = new CharacterAliasesRepository(factory);
@@ -170,6 +181,7 @@ public sealed class CreatorsGenerator
         var allCompanies = (await _companiesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allCompanyAliases = (await _companyAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allLogos = (await _logosRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+        var allCompanyRelations = await _companyRelationsRepo.GetAllAsync(ct).ConfigureAwait(false);
 
         // 人物と紐付く全 alias_id は SiteDataLoader が BuildContext.AliasIdsByPerson に
         // 全件辞書化済み。旧コードは人物数（~5,000）分の GetByPersonAsync を順次発火する
@@ -205,6 +217,7 @@ public sealed class CreatorsGenerator
 
         // 「担当回数順」の行表記に使う、人物・企業ごとの最後に使われた名義を先に確定させる。
         BuildLatestAliasMaps(aliasIdsByPersonId, companyAliasesByCompany, logosByCompanyAlias);
+        BuildCompanyLineages(allCompanyRelations, companyById);
 
         // ── 役職詳細ページ群を生成し、あわせて「役職順」タブ用の索引エントリも構築 ──
         var roleIndexEntries = new List<RoleIndexEntry>();
@@ -683,9 +696,12 @@ public sealed class CreatorsGenerator
                 ? AliasLabel(latestAid)
                 : (c.Name, c.NameKana ?? "");
             // 企業の屋号は改名に限らず、雑誌名・部門名など並立する別名義も多いので、初参加行に最新屋号は添えない。
+            // 年表の見出しの鍵は系譜の鍵（系譜の企業は同じ鍵で並べてひとまとめにする）。
             AppendEntityRows(set, agg, "company", c.CompanyId, PathUtil.CompanyUrl(c.CompanyId),
                 latest, AliasLabel, _ => false, repNameMap, withWorksTooltip, roleUsageNote,
-                groupKey: groupMembers ? CompanyGroupKey(c.CompanyId) : "");
+                groupKey: groupMembers ? CompanyLineageKey(c.CompanyId) : "",
+                companyKey: groupMembers ? CompanyGroupKey(c.CompanyId) : "",
+                entitySubLabel: groupMembers ? PredecessorLabel(c.CompanyId, companyAliasById) : "");
         }
 
         return set;
@@ -695,13 +711,73 @@ public sealed class CreatorsGenerator
     private static string CompanyGroupKey(int companyId)
         => "company:" + companyId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>年表で人物をまとめる所属先の企業と、企業ごとの所属としてクレジットされた担当（<see cref="BuildMemberOf"/>）。</summary>
+    /// <summary>企業の系譜の鍵。系譜を持つ企業は系譜の代表の鍵、持たない企業は自分の鍵（<see cref="CompanyGroupKey"/>）。</summary>
+    private string CompanyLineageKey(int companyId)
+        => CompanyGroupKey(LineageRootOf(companyId));
+
+    /// <summary>企業の系譜の代表の company_id（系譜を持たなければ自分）。</summary>
+    private int LineageRootOf(int companyId)
+        => _companyLineageRoot.TryGetValue(companyId, out var root) ? root : companyId;
+
+    /// <summary>
+    /// 事業の引き継ぎ（company_relations の SUCCESSOR）で企業の系譜を組む（<see cref="_companyLineageRoot"/> /
+    /// <see cref="_companyPredecessors"/>）。引き継ぎでつながった企業は向きを問わず 1 つの系譜にし、系譜の中で最も小さい
+    /// company_id を代表にする。両端のどちらかが公開対象でない関係は使わない。所属（PARENT）は系譜にしない。
+    /// </summary>
+    private void BuildCompanyLineages(IReadOnlyList<CompanyRelation> relations, IReadOnlyDictionary<int, Company> companyById)
+    {
+        _companyLineageRoot.Clear();
+        _companyPredecessors.Clear();
+        var parent = new Dictionary<int, int>();
+        int Find(int x)
+        {
+            while (parent.TryGetValue(x, out var p) && p != x) x = p;
+            return x;
+        }
+        foreach (var r in relations)
+        {
+            if (!string.Equals(r.RelationKind, CompanyRelationKinds.Successor, StringComparison.Ordinal)) continue;
+            if (r.FromCompanyId == r.ToCompanyId) continue;
+            if (!companyById.ContainsKey(r.FromCompanyId) || !companyById.ContainsKey(r.ToCompanyId)) continue;
+            parent.TryAdd(r.FromCompanyId, r.FromCompanyId);
+            parent.TryAdd(r.ToCompanyId, r.ToCompanyId);
+            int a = Find(r.FromCompanyId), b = Find(r.ToCompanyId);
+            if (a != b) parent[Math.Max(a, b)] = Math.Min(a, b);
+            if (!_companyPredecessors.TryGetValue(r.ToCompanyId, out var preds))
+                _companyPredecessors[r.ToCompanyId] = preds = new List<(int, string, string?)>();
+            preds.Add((r.FromCompanyId, companyById[r.FromCompanyId].Name, r.RelationLabel));
+        }
+        foreach (var id in parent.Keys) _companyLineageRoot[id] = Find(id);
+    }
+
+    /// <summary>
+    /// 年表の内訳で企業の名前の下に添える前身の 1 行（「前身（会社分割）：朝日放送」の形。言い回しが無ければ「前身：…」）。
+    /// 前身の企業名は全クレジット横断で最後に使われた屋号（クレジットが無ければ正式名称）。前身が 2 つ以上なら「、」でつなぐ。前身が無ければ空文字。
+    /// </summary>
+    private string PredecessorLabel(int companyId, IReadOnlyDictionary<int, CompanyAlias> companyAliasById)
+    {
+        if (!_companyPredecessors.TryGetValue(companyId, out var preds)) return "";
+        return string.Join("、", preds.Select(p =>
+        {
+            string name = _latestCompanyAliasId.TryGetValue(p.CompanyId, out var aid) && companyAliasById.TryGetValue(aid, out var a)
+                ? a.Name
+                : p.Name;
+            string head = string.IsNullOrWhiteSpace(p.Label) ? "前身" : $"前身（{p.Label}）";
+            return $"{head}：{name}";
+        }));
+    }
+
+    /// <summary>
+    /// 年表で人物をまとめる所属先（企業の系譜の代表の company_id。系譜を持たない企業はその企業）と、
+    /// 企業ごとの所属としてクレジットされた担当（<see cref="BuildMemberOf"/>）。
+    /// </summary>
     private sealed record PersonMembership(int CompanyId, IReadOnlyList<RoleTimelineAffiliation> Affiliations);
 
     /// <summary>
     /// 人物 → 所属（person_id → 所属先の企業と企業ごとの所属の担当）。集計対象の関与（<paramref name="accept"/>）のうち、企業の所属として
     /// クレジットされたもの（所属屋号付きのエントリと、先頭企業ブロックの配下のエントリ。いずれも企業側の Member 関与）を企業ごとに集め、
     /// 年表でまとめる企業は、2 社以上に所属したことがある人なら所属の回数の多い企業（同じ数なら先にクレジットされた企業）にする。
+    /// 事業の引き継ぎでつながった企業（<see cref="_companyLineageRoot"/>）は 1 つの系譜として回数を合わせ、まとめる先は系譜の代表にする。
     /// 企業ごとの担当（TV の話・映画）は、年表の所属線と内訳の「所属：」の行に使う。企業名は全クレジット横断で最後に使われた屋号。
     /// </summary>
     private Dictionary<int, PersonMembership> BuildMemberOf(
@@ -747,13 +823,15 @@ public sealed class CreatorsGenerator
             .ToDictionary(
                 g => g.Key,
                 g => new PersonMembership(
-                    g.OrderByDescending(kv => kv.Value.Count)
-                     .ThenBy(kv => kv.Value.First)
-                     .ThenBy(kv => kv.Key.CompanyId)
-                     .First().Key.CompanyId,
+                    g.GroupBy(kv => LineageRootOf(kv.Key.CompanyId))
+                     .OrderByDescending(lg => lg.Sum(kv => kv.Value.Count))
+                     .ThenBy(lg => lg.Min(kv => kv.Value.First))
+                     .ThenBy(lg => lg.Key)
+                     .First().Key,
                     g.Select(kv => new RoleTimelineAffiliation
                     {
-                        GroupKey = CompanyGroupKey(kv.Key.CompanyId),
+                        GroupKey = CompanyLineageKey(kv.Key.CompanyId),
+                        CompanyKey = CompanyGroupKey(kv.Key.CompanyId),
                         CompanyName = CompanyName(kv.Key.CompanyId),
                         Episodes = kv.Value.Episodes,
                         MovieSeriesIds = kv.Value.Movies
@@ -776,6 +854,8 @@ public sealed class CreatorsGenerator
     /// <param name="groupKey">年表で所属の人をまとめる見出しの鍵（企業の行。まとめないなら空文字）。</param>
     /// <param name="memberOf">年表で所属先としてまとめる企業の鍵（人物の行。所属していなければ空文字）。</param>
     /// <param name="affiliations">年表の所属線に描く、企業ごとの所属としてクレジットされた担当（人物の行。無ければ null）。</param>
+    /// <param name="companyKey">年表で企業の行の、その企業自身の鍵（系譜の企業の所属線の色分けに使う。企業以外は空文字）。</param>
+    /// <param name="entitySubLabel">年表の内訳で名前の下に添える 1 行（企業の前身など。無ければ空文字）。</param>
     private void AppendEntityRows(
         EntityRowSet set, EntityAggregate agg, string entityKind, int entityId, string url,
         (string Name, string Kana) latest, Func<int, (string Name, string Kana)> aliasLabel,
@@ -783,7 +863,8 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<string, string>? repNameMap, bool withWorksTooltip,
         Func<EntityAggregate, string>? roleUsageNote,
         string groupKey = "", string memberOf = "",
-        IReadOnlyList<RoleTimelineAffiliation>? affiliations = null)
+        IReadOnlyList<RoleTimelineAffiliation>? affiliations = null,
+        string companyKey = "", string entitySubLabel = "")
     {
         string tooltip = withWorksTooltip ? BuildWorksTooltip(agg.EpisodeKeys, agg.MovieSeriesIds) : "";
         string rolesLabel = repNameMap is null ? "" : BuildRolesLabel(agg.EarliestByRep, repNameMap);
@@ -798,10 +879,12 @@ public sealed class CreatorsGenerator
         {
             EntityKind = entityKind,
             EntityName = latest.Name,
+            EntitySubLabel = entitySubLabel,
             EntityUrl = url,
             FirstSortPos = countRow.FirstSortPos,
             HasOpeningCredit = agg.HasOpeningCredit,
             GroupKey = groupKey,
+            CompanyKey = companyKey,
             MemberOf = memberOf,
             Affiliations = affiliations ?? Array.Empty<RoleTimelineAffiliation>(),
             Episodes = agg.EpisodeKeys,

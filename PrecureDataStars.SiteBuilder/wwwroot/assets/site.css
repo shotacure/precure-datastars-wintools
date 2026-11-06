@@ -9151,8 +9151,10 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .rtl-name:hover { text-decoration: none; }
 /* 役職詳細で「すべて」を見せているときの、会社とその所属の人のまとまり（ゾーン）。名前の欄に地色を敷き、
    会社の行の上に区切り線、所属の人は字下げして左に縦線を引く。帯の部分はシリーズの縞と重なるので地色を敷かない。
+   事業の引き継ぎでつながった会社の 2 つ目からの行（rtl-row-group-succ）は、前の会社と同じまとまりなので区切り線を引かない。
    個人・団体で絞り込んだときは、まとめる前の並び（--rtl-flat）に戻し、地色・字下げもしない。 */
 .creators-root[data-entity-filter="all"] .rtl-row-group-head { border-top: 1px solid var(--rtl-group-line); }
+.creators-root[data-entity-filter="all"] .rtl-row-group-head.rtl-row-group-succ { border-top: 0; }
 .creators-root[data-entity-filter="all"] .rtl-row-group-head .rtl-name,
 .creators-root[data-entity-filter="all"] .rtl-row-member .rtl-name {
   align-self: stretch;
@@ -9215,14 +9217,20 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   flex: 1 1 auto;
   align-self: stretch;
 }
-/* 所属線：会社の所属としてクレジットされていた期間を、帯の下に細い線で引く（まとめた会社は実線、ほかの会社は点線）。 */
+/* 所属線：会社の所属としてクレジットされていた期間を、帯の下に細い線で引く（まとめた会社は実線、ほかの会社は点線）。
+   事業の引き継ぎでつながった会社の 2 つ目からは会社ごとの色（--aff-c）で引く。違う会社の線が同じ時期に重なるときは、
+   段（--aff-lane）ごとに 3px ずつ上げる。 */
 .rtl-aff {
   position: absolute;
-  bottom: 2px;
+  bottom: calc(2px + var(--aff-lane, 0) * 3px);
   height: 0;
-  border-top: 2px solid var(--rtl-aff);
+  border-top: 2px solid var(--aff-c, var(--rtl-aff));
 }
 .rtl-aff-other { border-top-style: dotted; }
+/* 系譜の会社の行の名前に、所属線と同じ色の下線を引く（名前の幅を食わないよう、見本は置かずに下線にする）。
+   凡例の見本（.rtl-key-aff）も同じ色の線。 */
+.rtl-name-aff { box-shadow: inset 0 -2px 0 var(--aff-c, var(--rtl-aff)); }
+.rtl-key-aff { width: 18px; height: 0; border-top: 2px solid var(--key-c, var(--rtl-aff)); }
 /* 続けて担当した期間（13 週以内の間隔でつながる担当の始まりから終わりまで）の細線。 */
 .rtl-span {
   position: absolute;

@@ -4,6 +4,13 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：役職詳細の年表で、事業の引き継ぎ（分社化・会社分割など）でつながった会社を 1 つの系譜としてまとめるようにした**（`CreatorsGenerator`・`RoleTimelineBuilder`・`_role-timeline.sbn`・`site.css`）：会社どうしの関係（`company_relations`）の SUCCESSOR でつながった会社が、最初に参加した日の順で離れた位置に別々の行として出ていた。
+  - 系譜の会社の行は、系譜で最初に参加した会社の位置に並べる。2 つ目からの行（`rtl-row-group-succ`）は上の区切り線を引かない。所属の人は最後の会社の行の下にまとめる。個人・団体で絞り込んだときも、系譜の会社は並べて置く
+  - 人物をまとめる所属先は、系譜の会社の所属の回数を合わせて決める。系譜の中の会社の所属線は点線にせず実線で引く
+  - 分社化の後にどちらの会社でクレジットされたかが分かるよう、系譜の 2 つ目からの会社の所属線を会社ごとの色で引き、会社の行の名前に同じ色の下線（`rtl-name-aff`）を引く。凡例に「所属：会社名」の線の見本を足す。違う会社の所属線が同じ時期に重なるときは段を上げて並べる（`RoleTimelineAffiliationMark.Lane`）
+  - 後継の会社の行の内訳に「前身（会社分割）：朝日放送」の形で前身を添える
+  - 「主な方のみ」では、系譜の会社か所属の人のどれかが主な方なら、系譜の会社の行をすべて見せる
+
 - **サイト：記念日のカレンダーのページで「ほか n件」の省略をやめ、人物の誕生日を主要な人物とそのほかの人物で並べ分けた**（`BirthdayCalendarEligibility`・`SiteBuilderPipeline`・`AnniversaryEntry.PersonTier` / `PersonCreditCount`・`AnniversaryDataBuilder`・`AnniversaryGenerator`・`HomeGenerator`・`anniversary-index.sbn`・`calendar.js`・`anniversaries.js`・`site.css`）：1 日 6 枚で切っていたため、放送開始日（第 1 話）などが「ほか n件」に畳まれていた。カレンダーのページはその日の出来事を全部載せる。人物の誕生日はプリキュア役の声優さん・メインスタッフ（OP のクレジットか各話のチーフとして載った人物）・そのほかの 3 段に分け（`BirthdayCalendarEligibility.TierOf`・`CreditCountOf`）、チップは「キャラクター誕生日 → 映画公開日 → プリキュア役の声優さんの誕生日 → メインスタッフの誕生日 → TV 放送 → そのほかの人物の誕生日」の順、人物は同じ段の中で本編のクレジット回数の多い順にした（ホームのカレンダーと今日の記念日・日別ページも同じ）。プリキュア役の声優さんは出演回数に関係なく誕生日を出す。
 - **スキーマ・AmazonSync・サイト：商品に Amazon の EAN（JAN）を持ち、構造化データの gtin13 に使うようにした**（マイグレーション `v1.20.0_add_product_amazon_ean.sql`・`Product.AmazonEan`・`ProductsRepository.UpdateAmazonEanAsync`・`PaApiClient` の標準リソースに `itemInfo.externalIds`・AmazonSync・`ProductsGenerator`）：AmazonSync がジャケット画像の取り直しと同じ取得で CD の ASIN の EAN を取り、`products.amazon_ean` に入れ替える。gtin13 は Amazon の EAN を先に、無ければ CD 系の盤の mcn を使い、ほかの商品の盤と同じ mcn（同じ CD を違う包装で出した版・再発売の盤）は使わない。13 桁でチェック数字の合うものだけを出す。
 - **サイト：商品詳細の構造化データで、価格を付けられるオファーの無い商品を Product ではなく CreativeWork として出し、Product には発売元を brand として載せた**（`ProductsGenerator`）：Product 型は offers・review・aggregateRating のどれかが無いとリッチリザルトの重要エラーになり、特典 CD など定価の無い商品が「無効」になっていた。JAN（gtin）は持っていないので出さず、返品・送料は売り手（Amazon）の条件なので出さない。

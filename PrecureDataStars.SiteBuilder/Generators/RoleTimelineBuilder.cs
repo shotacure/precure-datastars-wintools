@@ -32,7 +32,9 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description>並びは、最初の参加の日付の早い順。同じ日に始めた行は、団体を先に置き、その中で最後の参加の
 ///     日付の早い順（最初に抜けた順）、それも同じなら呼び出し側が渡す並びのキー（役職詳細・声の出演はその話のクレジットで
 ///     上に出ている順）→ 名前。役職詳細で「すべて」を見せているときは、その役職を会社の所属としてクレジットされたことのある
-///     人物を、会社の行のすぐ下に（同じ並びの順で）字下げしてまとめる（<see cref="RoleTimelineEntity.MemberOf"/>）。</description></item>
+///     人物を、会社の行のすぐ下に（同じ並びの順で）字下げしてまとめる（<see cref="RoleTimelineEntity.MemberOf"/>）。
+///     事業の引き継ぎでつながった会社（分社化・会社分割など）は系譜としてひとまとめにし、系譜で最初に参加した会社の位置に
+///     並べて置いて、所属の人はその下にまとめる。</description></item>
 ///   <item><description>描くものは、続けて参加した期間（2 件以上つながったものの細線）・TV の話（同じシリーズで話数が
 ///     続く間はひと続きの帯。1 話は放送日から <see cref="EpisodeSpanDays"/> 日の幅）・映画（公開日の点）・
 ///     歌・劇伴（初めて収められた盤の発売日の点。日付の決め方は <see cref="MusicTimelineDates"/>）・盤（発売日の四角）。</description></item>
@@ -318,6 +320,7 @@ internal sealed class RoleTimelineBuilder
             .ThenBy(r => r.Row.EntityName, StringComparer.Ordinal)
             .ToList();
         bool grouped = GroupMembers(ordered, filterable);
+        var lineageLegend = AssignLineageColors(ordered);
 
         var legend = new List<RoleTimelineLegendItem>();
         if (ordered.Any(r => r.Row.Segments.Count > 0))
@@ -354,6 +357,7 @@ internal sealed class RoleTimelineBuilder
             });
         }
         legend.Add(new RoleTimelineLegendItem { Kind = "span", Label = $"続けて{rules.Verb}した期間" });
+        legend.AddRange(lineageLegend);
 
         return new RoleTimelineModel
         {
@@ -379,6 +383,9 @@ internal sealed class RoleTimelineBuilder
     /// <paramref name="ordered"/> はその並び（ゾーンの並び）に組み替え、行ごとに <see cref="RoleTimelineRow.FlatOrder"/>
     /// （個人・団体で絞り込んだときの元の並びの位置）を書き込む。所属先の会社が行に無い人は会社の外に置く。
     /// 主な方を選び分けるページでは、所属の人に主な方がいれば会社の行も主な方にする（見出しの会社の無いまま所属の人を見せない）。
+    /// 事業の引き継ぎでつながった会社（同じ <see cref="RoleTimelineEntity.GroupKey"/> を持つ会社の行）は、系譜で最初に参加した
+    /// 会社の位置に並べて置き（2 つ目からは <see cref="RoleTimelineRow.IsGroupSuccessor"/>）、所属の人はその最後の会社の行の下に続ける。
+    /// 個人・団体で絞り込んだときの並びでも、系譜の会社は並べて置く。系譜の会社のどれかか所属の人に主な方がいれば、系譜の会社の行をすべて主な方にする。
     /// まとめる会社が 1 つも無ければ何もせず false。
     /// </summary>
     private static bool GroupMembers(List<BuiltRow> ordered, bool filterable)
@@ -386,36 +393,115 @@ internal sealed class RoleTimelineBuilder
         var heads = ordered
             .Where(r => r.Entity.GroupKey != "")
             .GroupBy(r => r.Entity.GroupKey, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
         var membersByHead = ordered
             .Where(r => r.Entity.MemberOf != "" && heads.ContainsKey(r.Entity.MemberOf))
             .GroupBy(r => r.Entity.MemberOf, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
-        if (membersByHead.Count == 0) return false;
+        // まとめるのは、所属の人がいる会社と、系譜の会社が 2 つ以上行にあるもの。
+        var zoneKeys = heads
+            .Where(kv => kv.Value.Count > 1 || membersByHead.ContainsKey(kv.Key))
+            .Select(kv => kv.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        if (zoneKeys.Count == 0) return false;
 
-        for (int i = 0; i < ordered.Count; i++) ordered[i].Row.FlatOrder = i;
-
-        var zoned = new List<BuiltRow>(ordered.Count);
+        // 個人・団体で絞り込んだときの並び：元の並びのまま、系譜の会社だけを最初の会社の位置に寄せる。
+        var flat = new List<BuiltRow>(ordered.Count);
+        var flatPlaced = new HashSet<string>(StringComparer.Ordinal);
         foreach (var r in ordered)
         {
+            if (r.Entity.GroupKey != "" && heads[r.Entity.GroupKey].Count > 1)
+            {
+                if (flatPlaced.Add(r.Entity.GroupKey)) flat.AddRange(heads[r.Entity.GroupKey]);
+                continue;
+            }
+            flat.Add(r);
+        }
+        for (int i = 0; i < flat.Count; i++) flat[i].Row.FlatOrder = i;
+
+        var zoned = new List<BuiltRow>(ordered.Count);
+        var placed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var r in flat)
+        {
             if (r.Entity.MemberOf != "" && membersByHead.ContainsKey(r.Entity.MemberOf)) continue;
-            zoned.Add(r);
-            if (r.Entity.GroupKey == "" || !membersByHead.TryGetValue(r.Entity.GroupKey, out var members)) continue;
-            r.Row.IsGroupHead = true;
-            if (filterable && members.Any(m => m.Row.IsMain)) r.Row.IsMain = true;
+            if (r.Entity.GroupKey == "" || !zoneKeys.Contains(r.Entity.GroupKey))
+            {
+                zoned.Add(r);
+                continue;
+            }
+            if (!placed.Add(r.Entity.GroupKey)) continue;
+
+            var companies = heads[r.Entity.GroupKey];
+            var members = membersByHead.TryGetValue(r.Entity.GroupKey, out var ms) ? ms : new List<BuiltRow>();
+            bool zoneMain = filterable && companies.Concat(members).Any(m => m.Row.IsMain);
+            for (int i = 0; i < companies.Count; i++)
+            {
+                var c = companies[i];
+                c.Row.IsGroupHead = true;
+                c.Row.IsGroupSuccessor = i > 0;
+                if (zoneMain) c.Row.IsMain = true;
+                // TV のみ・映画のみで絞り込んだときも、所属の人か系譜のほかの会社が見えていれば見出しの会社の行を残す。
+                c.Row.ZoneHasTv = members.Any(m => m.Row.HasTv) || companies.Any(o => o != c && o.Row.HasTv);
+                c.Row.ZoneHasMovie = members.Any(m => m.Row.HasMovie) || companies.Any(o => o != c && o.Row.HasMovie);
+                zoned.Add(c);
+            }
             foreach (var m in members)
             {
                 m.Row.IsGroupMember = true;
                 zoned.Add(m);
             }
-            // TV のみ・映画のみで絞り込んだときも、所属の人が見えていれば見出しの会社の行を残す。
-            r.Row.ZoneHasTv = members.Any(m => m.Row.HasTv);
-            r.Row.ZoneHasMovie = members.Any(m => m.Row.HasMovie);
         }
         ordered.Clear();
         ordered.AddRange(zoned);
         return true;
     }
+
+    /// <summary>
+    /// 事業の引き継ぎでつながった会社（同じ鍵の会社の行が 2 つ以上並んだゾーン）の所属線を、会社ごとの色で描き分ける。
+    /// 系譜の最初の会社はふだんの所属線の色のまま、2 つ目からの会社に <see cref="LineageAffColors"/> の色をページの上から順に割り当てる。
+    /// 会社の行の名前に同じ色の下線（<see cref="RoleTimelineRow.AffColor"/>）を引き、所属の人の所属線
+    /// （<see cref="RoleTimelineAffiliationMark.CompanyKey"/> が一致するもの）をその色にする。
+    /// 凡例の項目（「所属：会社名」と線の見本）を、所属線を描いた会社の分だけ返す。
+    /// </summary>
+    private static List<RoleTimelineLegendItem> AssignLineageColors(List<BuiltRow> ordered)
+    {
+        var legend = new List<RoleTimelineLegendItem>();
+        var zones = ordered
+            .Where(r => r.Row.IsGroupHead)
+            .GroupBy(r => r.Entity.GroupKey, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .ToList();
+        if (zones.Count == 0) return legend;
+
+        var drawn = ordered
+            .SelectMany(r => r.Row.Affiliations)
+            .Select(m => m.CompanyKey)
+            .ToHashSet(StringComparer.Ordinal);
+        var colorByCompany = new Dictionary<string, string>(StringComparer.Ordinal);
+        int next = 0;
+        foreach (var zone in zones)
+        {
+            int i = 0;
+            foreach (var c in zone)
+            {
+                string color = i++ == 0 ? "" : LineageAffColors[next++ % LineageAffColors.Length];
+                colorByCompany[c.Entity.CompanyKey] = color;
+                c.Row.HasAffChip = true;
+                c.Row.AffColor = color;
+                if (drawn.Contains(c.Entity.CompanyKey))
+                    legend.Add(new RoleTimelineLegendItem { Kind = "aff", Color = color, Label = $"所属：{c.Row.EntityName}" });
+            }
+        }
+        foreach (var r in ordered)
+            foreach (var m in r.Row.Affiliations)
+                if (colorByCompany.TryGetValue(m.CompanyKey, out var color)) m.Color = color;
+        return legend;
+    }
+
+    /// <summary>
+    /// 系譜の 2 つ目からの会社の所属線の色。主の青・映画の橙・関連する役職の色（若葉・ティール・藤色）と紛れない色を選ぶ。
+    /// </summary>
+    private static readonly string[] LineageAffColors = { "#e0703a", "#3f9b5a", "#c0508f", "#8d6e3f" };
 
     /// <summary>組み立てた 1 行と、並び・主な方の選び出しに使う値。</summary>
     /// <param name="Qualifies">ページの決まり（<see cref="RoleTimelineRules"/>）を満たすか。</param>
@@ -676,12 +762,13 @@ internal sealed class RoleTimelineBuilder
     /// 所属線と内訳の「所属：」の行を組む。企業ごとに、所属としてクレジットされた担当（TV の話・映画）を日付順に並べ、
     /// 続けて参加した期間と同じ間隔（<see cref="RoleTimelineRules.MaxGapDays"/>）以内ならつないで 1 本の線にする
     /// （映画の個人名だけのクレジットなど、所属の出ていない回が挟まっても切れない）。1 件だけの期間も、TV の 1 話ぶんの幅で引く。
-    /// まとめた企業（<see cref="RoleTimelineEntity.MemberOf"/>）以外の企業の線は点線にする。企業の並びは最初の所属の早い順。
+    /// まとめた企業（<see cref="RoleTimelineEntity.MemberOf"/>。系譜の企業を含む）以外の企業の線は点線にする。企業の並びは最初の所属の早い順。
+    /// 違う企業の線が同じ時期に重なるときは、後から始まる線を 1 段上に引く（<see cref="RoleTimelineAffiliationMark.Lane"/>）。
     /// </summary>
     private void BuildAffiliationLines(RoleTimelineEntity e, RoleTimelineRow row, RoleTimelineRules rules)
     {
         if (e.Affiliations.Count == 0) return;
-        var marks = new List<RoleTimelineAffiliationMark>();
+        var marks = new List<(DateOnly From, DateOnly To, RoleTimelineAffiliationMark Mark)>();
         var texts = new List<(DateOnly First, string Text)>();
         foreach (var aff in e.Affiliations)
         {
@@ -701,14 +788,33 @@ internal sealed class RoleTimelineBuilder
                 if (i < dates.Count && dates[i].DayNumber - dates[i - 1].DayNumber <= rules.MaxGapDays) continue;
                 var from = dates[start];
                 var to = dates[i - 1].AddDays(EpisodeSpanDays);
-                marks.Add(new RoleTimelineAffiliationMark { Left = Pct(from), Width = PctWidth(from, to), IsOther = isOther });
+                marks.Add((from, to, new RoleTimelineAffiliationMark
+                {
+                    Left = Pct(from),
+                    Width = PctWidth(from, to),
+                    IsOther = isOther,
+                    CompanyKey = aff.CompanyKey
+                }));
                 labels.Add(PeriodLabel(from, dates[i - 1]));
                 start = i;
             }
             if (aff.CompanyName != "")
                 texts.Add((dates[0], $"所属：{aff.CompanyName}（{string.Join("、", labels)}）"));
         }
-        row.Affiliations = marks;
+        // 段の割り当て：始まりの早い順に、前の線が終わっている一番下の段へ置く。
+        var laneEnds = new List<DateOnly>();
+        foreach (var (from, to, mark) in marks.OrderBy(x => x.From))
+        {
+            int lane = laneEnds.FindIndex(end => end <= from);
+            if (lane < 0)
+            {
+                lane = laneEnds.Count;
+                laneEnds.Add(to);
+            }
+            else laneEnds[lane] = to;
+            mark.Lane = lane;
+        }
+        row.Affiliations = marks.Select(x => x.Mark).ToList();
         row.AffiliationText = string.Join("\n", texts.OrderBy(t => t.First).Select(t => t.Text));
     }
 
@@ -904,8 +1010,11 @@ internal sealed class RoleTimelineEntity
     public bool HasOpeningCredit { get; init; }
     /// <summary>
     /// 所属の人をまとめる見出しになる行の鍵（役職詳細の企業の行。"company:{company_id}"）。まとめないものは空文字。
+    /// 事業の引き継ぎでつながった企業は、系譜の代表の企業の鍵を共有する（同じ鍵の行は並べてひとまとめにする）。
     /// </summary>
     public string GroupKey { get; init; } = "";
+    /// <summary>企業の行の、その企業自身の鍵（"company:{company_id}"。系譜の企業でも系譜の代表ではなく自分）。企業以外は空文字。</summary>
+    public string CompanyKey { get; init; } = "";
     /// <summary>
     /// 所属先の会社の <see cref="GroupKey"/>（役職詳細で、その役職を会社の所属としてクレジットされたことのある人物）。
     /// 「すべて」を見せているときは会社の行のすぐ下に字下げして置く。所属していなければ空文字。
@@ -938,8 +1047,10 @@ internal sealed class RoleTimelineEntity
 /// <summary>人物が 1 つの企業の所属としてクレジットされた担当（<see cref="RoleTimelineEntity.Affiliations"/>）。</summary>
 internal sealed class RoleTimelineAffiliation
 {
-    /// <summary>企業の鍵（<see cref="RoleTimelineEntity.GroupKey"/> と同じ形）。</summary>
+    /// <summary>企業の鍵（<see cref="RoleTimelineEntity.GroupKey"/> と同じ。系譜の企業は系譜の代表の鍵）。</summary>
     public required string GroupKey { get; init; }
+    /// <summary>その企業自身の鍵（<see cref="RoleTimelineEntity.CompanyKey"/> と同じ。系譜の企業ごとに所属線の色を変えるのに使う）。</summary>
+    public required string CompanyKey { get; init; }
     /// <summary>内訳に出す企業名。</summary>
     public required string CompanyName { get; init; }
     /// <summary>所属としてクレジットされた TV 系の話 (series_id, episode_id)。</summary>
@@ -1052,6 +1163,12 @@ internal sealed class RoleTimelineAffiliationMark
     public string Width { get; set; } = "0";
     /// <summary>年表でまとめた企業とは別の企業の所属か（点線で引く）。</summary>
     public bool IsOther { get; set; }
+    /// <summary>所属した企業の鍵（<see cref="RoleTimelineAffiliation.CompanyKey"/>）。</summary>
+    public string CompanyKey { get; set; } = "";
+    /// <summary>線の色（CSS の色。系譜の 2 つ目からの企業だけ。空ならふだんの所属線の色）。</summary>
+    public string Color { get; set; } = "";
+    /// <summary>線を引く段（0 が一番下。違う企業の線が同じ時期に重なるとき 1 段ずつ上げる）。</summary>
+    public int Lane { get; set; }
 }
 
 /// <summary>線表の 1 行（人物・企業/団体・キャラクター 1 つ）。</summary>
@@ -1066,6 +1183,12 @@ internal sealed class RoleTimelineRow
     public bool IsMain { get; set; } = true;
     /// <summary>所属の人をまとめた会社の行か（「すべて」のときのゾーンの見出し）。</summary>
     public bool IsGroupHead { get; set; }
+    /// <summary>ゾーンの見出しのうち、系譜の 2 つ目以降の会社の行か（前の会社の行と区切らずに続ける）。</summary>
+    public bool IsGroupSuccessor { get; set; }
+    /// <summary>系譜の会社の行で、名前に所属線の色の下線を引くか。</summary>
+    public bool HasAffChip { get; set; }
+    /// <summary>名前の下線の色（CSS の色。空ならふだんの所属線の色）。</summary>
+    public string AffColor { get; set; } = "";
     /// <summary>会社の行の下にまとめた所属の人の行か（「すべて」のときは字下げする）。</summary>
     public bool IsGroupMember { get; set; }
     /// <summary>まとめる前の並びでの位置（個人・団体で絞り込んだときの並び。<see cref="RoleTimelineModel.HasGroups"/> のときだけ使う）。</summary>

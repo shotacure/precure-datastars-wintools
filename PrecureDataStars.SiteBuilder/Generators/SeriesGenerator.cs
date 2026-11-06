@@ -1280,7 +1280,8 @@ public sealed class SeriesGenerator
                 TransformName = p.TransformName,
                 PreTransformName = p.PreTransformName,
                 VoiceActorName = p.VoiceActorName,
-                VoiceActorPersonId = p.VoiceActorPersonId
+                VoiceActorPersonId = p.VoiceActorPersonId,
+                SwatchBackground = KeyColorBadge.SwatchBackground(p.KeyColor, p.KeyColorGradient)
             })
             .ToList();
 
@@ -2243,6 +2244,8 @@ public sealed class SeriesGenerator
         public string PreTransformName { get; set; } = "";
         public string VoiceActorName { get; set; } = "";
         public int? VoiceActorPersonId { get; set; }
+        /// <summary>行頭のキーカラーの正方形の地（<see cref="KeyColorBadge.SwatchBackground"/>。無ければ空文字）。</summary>
+        public string SwatchBackground { get; set; } = "";
     }
 
     private sealed class KeyStaffSection

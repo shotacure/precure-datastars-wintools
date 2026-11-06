@@ -1,0 +1,3 @@
+{{## 一覧の行頭に置くキーカラーの正方形（作品詳細のプリキュア欄・プリキュア一覧）。呼び出し側で変数 p に SwatchBackground を持つ行を入れてから include する。
+     地が空（キーカラー未登録）なら縁取りだけの正方形で、名前の位置をそろえる。 ##}}
+<span class="key-swatch"{{ if p.SwatchBackground != "" }} style="background:{{ p.SwatchBackground }}"{{ end }} aria-hidden="true"></span>

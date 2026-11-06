@@ -8865,6 +8865,18 @@ table:has(th.col-rank) tbody tr:nth-child(3) td.col-rank {
 .entity-row-name {
   font-weight: 600;
 }
+/* プリキュアの行頭に置くキーカラーの正方形（_key-swatch.sbn）。地はインラインの background（1 色か斜めのグラデーション）。
+   白や淡い色でも形が見えるよう、明暗どちらの地でも出る中間の灰色で縁取る。地が無ければ縁取りだけ。 */
+.key-swatch {
+  flex: none;
+  align-self: center;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: -2px;
+  border: 1px solid rgba(128, 128, 128, 0.5);
+  border-radius: 2px;
+  box-sizing: border-box;
+}
 /* 初参加順で旧名義の行に添える、いまの名乗りの括弧書き。 */
 .entity-row-current {
   margin-left: -4px;

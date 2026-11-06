@@ -58,4 +58,19 @@ public static class KeyColorBadge
         string gradientCss = KeyColorGradient.ToCssLinearGradient(gradient);
         return (gradientCss != "" ? gradientCss : keyColor, text, border);
     }
+
+    /// <summary>
+    /// 一覧の行頭に置くキーカラーの正方形の地（CSS の <c>background</c> にそのまま入る値）。
+    /// グラデーション（<c>precures.key_color_gradient</c>）が読める値なら左上から右下への斜めの <c>linear-gradient</c>、
+    /// 無ければ 1 色のキーカラー（<c>#RRGGBB</c>）。どちらも無いか形式が違えば空文字（テンプレは縁取りだけの正方形にする）。
+    /// </summary>
+    public static string SwatchBackground(string? keyColor, string? gradient)
+    {
+        if (KeyColorGradient.TryParse(gradient, out _))
+            return $"linear-gradient(to bottom right, {gradient})";
+        if (keyColor is { Length: 7 } && keyColor[0] == '#'
+            && keyColor.AsSpan(1).IndexOfAnyExcept("0123456789ABCDEFabcdef") < 0)
+            return keyColor;
+        return "";
+    }
 }

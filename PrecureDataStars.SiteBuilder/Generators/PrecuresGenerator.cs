@@ -105,6 +105,7 @@ public sealed class PrecuresGenerator
                     VoiceActorName = (p.VoiceActorPersonId is int vid && personsById.TryGetValue(vid, out var v))
                         ? v.FullName : "",
                     VoiceActorPersonId = p.VoiceActorPersonId,
+                    SwatchBackground = KeyColorBadge.SwatchBackground(p.KeyColor, p.KeyColorGradient),
                     EpisodeCount = ep,
                     MovieCount = mv,
                     OtonaEpisodeCount = ot,
@@ -192,6 +193,8 @@ public sealed class PrecuresGenerator
         public string PreTransformName { get; set; } = "";
         public string VoiceActorName { get; set; } = "";
         public int? VoiceActorPersonId { get; set; }
+        /// <summary>行頭のキーカラーの正方形の地（<see cref="KeyColorBadge.SwatchBackground"/>。無ければ空文字）。</summary>
+        public string SwatchBackground { get; set; } = "";
         /// <summary>TV 系シリーズでの登場話数（キャラクター一覧と同じ数え方）。</summary>
         public int EpisodeCount { get; set; }
         /// <summary>映画系シリーズでの登場本数（1 シリーズ = 1 本）。</summary>

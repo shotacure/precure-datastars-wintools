@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **ツール：TV の各話の、放送後に公式から出るリンクを自動で入れるツールを足した**（`PrecureDataStars.EpisodeLinkSync`・`EpisodesRepository.FillLinkIfEmptyAsync`・`EpisodeLinkColumn`・`scripts/scheduled-episode-links.ps1`・`scripts/register-episode-links-task.ps1`）：東映アニメーションのあらすじ（`toei_anim_summary_url`）・作品ラインナップ（`toei_anim_lineup_url`）・公式 YouTube チャンネルの予告（`youtube_trailer_url`）を見つけ、空の列にだけ書く。あらすじとラインナップは同じ作品の近い回の URL の話数を差し替えて組み、ページが 200 で返り本文にその回の「第N話」があるときだけ書く（まだ無い回はトップへ転送される）。予告はチャンネルの新着一覧（RSS）から題が「{作品名}　第N話 予告「…」」のものを拾い、サブタイトルが DB と違うときとその回が DB に無いときは書かずに知らせる。日曜 9:00 からは今日の回のあらすじと次の回の予告が出るまで 5 秒おきに見続け（12:00 まで）、毎日 5:50 には前後数週の回を 1 回見て回る（ラインナップは数日遅れで出るため）。断られたときはその相手だけ間隔を広げる。知らせることと失敗は Windows の通知で出す
 - **スクリプト：Windows の通知を出す処理を `scripts/show-toast.ps1` に出し、定時デプロイと放送後のリンクの取り込みで使い回すようにした**（`scheduled-deploy.ps1`）
 - **サイト：シリーズ詳細・エピソード詳細の主題歌カードで、違うサイズを 2 つ以上使ったときは、サイズの札を見出しの下に縦に並べ、札の右にそのサイズの再生ボタンを置くようにした**（`ThemeSongCardParts.SizeRows` / `LoosePlays`・`ThemeSongRow`・`EpisodeGenerator`・`series-detail.sbn`・`episode-detail.sbn`・`site.css`）：デパプリの ED の Type.I〜IV のように、札とボタンが曲名の後ろに横に流れて、どのボタンがどの Type か分からなかった。札の列とボタンの列を 2 列の格子でそろえる。どの札にも当たらないボタン（サイズの指定が無い話の、録音の既定の音源）はカードの右上に置く
 - **サイト：シリーズ詳細のメインスタッフで、同姓同名の別人を見分ける添え書きのある人物の名義の後ろに「(平林 佐和子 (脚本))」のような括弧が出ていたのを直した**（`SeriesGenerator.CreditedAliasLabel`）：クレジットの名義と比べる今の名乗りに添え書き付きの名前を使っていたため、名義が同じでも違う名前とみなしていた。比べるのも括弧に出すのも添え書きの無い名乗りにした

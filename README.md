@@ -26,6 +26,7 @@ precure-datastars-wintools.sln
 ├── PrecureDataStars.TitleCharStatsRefresh … サブタイトル文字統計の作り直し（内部用コンソール）
 ├── PrecureDataStars.ArtTrackRefresh … 配信音源（YouTube アートトラック）の定期の再確認（内部用コンソール）
 ├── PrecureDataStars.DeezerIsrcSync … 配信版の ISRC の取り込み（内部用コンソール）
+├── PrecureDataStars.EpisodeLinkSync … 放送後のあらすじ・ラインナップ・予告のリンクの自動取り込み（内部用コンソール）
 │
 ├── PrecureDataStars.BDAnalyzer … Blu-ray/DVD チャプター解析（WinForms）＋DB 連携
 ├── PrecureDataStars.CDAnalyzer … CD-DA トラック解析・音の特徴の記録（WinForms）＋DB 連携
@@ -60,6 +61,7 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.TitleCharStatsRefresh** | コンソール（内部用） | 指定したエピソードの `title_text` を Episodes の保存時と同じ `TitleCharStatsBuilder` にかけ、`title_char_stats` を作り直す。サブタイトルを DB 直接で直したあとに使う。引数だけなら DB の統計との違いを表示するのみで、`--apply` を付けたときだけ違いのある話を 1 トランザクションで書き換える（`title_char_stats` 以外の列には触れない）。配布 ZIP には含めない。使い方は「エピソード管理」を参照。 |
 | **PrecureDataStars.ArtTrackRefresh** | コンソール（内部用） | 割り当て済みの配信音源（YouTube アートトラック）を YouTube Data API で確かめ直し、埋め込み可否・地域制限・確認時刻を更新する。消えた動画は割り当てを外し、変化のあった商品は取り込み状態を `AMBIGUOUS` に戻す。`scripts/deploy.ps1` が本番デプロイの最初に流す。配布 ZIP には含めない。使い方は「商品・ディスク管理画面」の「配信音源の取り込みと再確認」を参照。 |
 | **PrecureDataStars.DeezerIsrcSync** | コンソール（内部用） | CD のトラックに、配信版の ISRC（`tracks.digital_isrc`）を Deezer の公開 API（認証なし）から取り込む。商品ごとに配信のアルバムを特定し（`products.deezer_album_id`）、「何枚目・何曲目」で突き合わせる。定時デプロイには組み込まず手で回す。配布 ZIP には含めない。使い方は「商品・ディスク管理画面」の「配信版の ISRC」を参照。 |
+| **PrecureDataStars.EpisodeLinkSync** | コンソール（内部用） | TV の各話の、放送後に公式から出るリンク（東映アニメーションのあらすじ `episodes.toei_anim_summary_url`・作品ラインナップ `toei_anim_lineup_url`・公式 YouTube チャンネルの予告 `youtube_trailer_url`）を見つけ、空の列にだけ書く。タスクスケジューラから `scripts/scheduled-episode-links.ps1` 経由で動かす（日曜 9:00 から見続ける回と、毎日 5:50 の 1 回）。配布 ZIP には含めない。 |
 
 ---
 
@@ -93,7 +95,7 @@ mysql -u root -p < db/schema.sql
 
 ### 2. 接続文字列の設定
 
-DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / SiteBuilder / AmazonSync / TitleCharStatsRefresh / ArtTrackRefresh / DeezerIsrcSync）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。Catalog と ArtTrackRefresh は、配信音源を扱うための YouTube Data API v3 の API キー（`appSettings` の `YouTube.ApiKey`）も設定する。
+DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / SiteBuilder / AmazonSync / TitleCharStatsRefresh / ArtTrackRefresh / DeezerIsrcSync / EpisodeLinkSync）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。Catalog と ArtTrackRefresh は、配信音源を扱うための YouTube Data API v3 の API キー（`appSettings` の `YouTube.ApiKey`）も設定する。
 
 ```xml
 <connectionStrings>
@@ -1018,8 +1020,21 @@ Role: PRODUCTION 制作 (order 2)
    .\scripts\register-deploy-task.ps1           # 毎日 06:00 と毎週水曜・土曜の 08:30 に登録
    .\scripts\register-deploy-task.ps1 -Unregister
    ```
-8. サイトの文章の点検：`scripts/check-site-copy.ps1` が出力フォルダの HTML を読み、一覧・入口の冒頭文（OGP カードのリード文と同じ文）で同じ結びが 3 本以上の別々の文にあるもの、冒頭文・meta description の問いかけ・ダッシュ・飾りの引用符・誘いの言い回し、外に出さない内部用語（HTML・JS・CSS）を数えて知らせる。止めはしない。`deploy.ps1` がドライランの後に、本番反映と同時に回す。出力の HTML・JS・CSS は 1 度だけ列挙して論理コア数に分けて並列に読み、内部用語は正規表現でなく序数の文字列検索で探す。`-SiteDir` でテストの出力も点検できる（省略時は `App.config` の `SiteOutputDir`）
-9. OGP カードの見本の差し替え：`scripts/og-gallery-refresh.py` が、見本のページ（カードを並べた HTML）の各カードを出力フォルダの `og/` の画像に差し替えた HTML と画像のフォルダを作る
+8. 放送後のリンクの自動取り込み：`scripts/scheduled-episode-links.ps1` が `PrecureDataStars.EpisodeLinkSync` を Release でビルドして動かし、TV の各話の、放送後に公式から出るリンクを episodes の空の列にだけ書く（入っている値は上書きしない。`updated_by` は `EpisodeLinkSync`）。対象は本線の TV（kind_code='TV'）だけ。サイトに出るのは次の本番デプロイ
+   - あらすじ（`toei_anim_summary_url`）・ラインナップ（`toei_anim_lineup_url`）：同じ作品で URL の入っている話数のいちばん近い回の URL の話数の部分（`/{話数}/`）を差し替えて組み、転送を追わずに開いて、200 で返り本文にその回の「第N話」があれば書く。まだ無い回のページは東映アニメーションのトップへ転送される。作品の最初の 1 話は手で入れる
+   - 予告（`youtube_trailer_url`）：プリキュア公式 YouTube チャンネルの新着一覧（RSS。認証なし）から、題が「{作品名}　第N話 予告「{サブタイトル}」」のもの（NFKC で正規化して比べる）。予告の題のサブタイトルが `title_text` と違うときは書かずに知らせる。その回が DB に無いときは回を作らずに知らせる。サブタイトルが空の回には書いて、予告の題を知らせる
+   - `-Watch`（日曜 9:00 の回）：今日放送の回のあらすじのページと次の回の予告が出るまで 5 秒おきに見続け、そろったら終わる。12:00 までにそろわなければ知らせる。ラインナップは見ない。今日放送の回が無ければ何もしない
+   - 引数なし（毎日 5:50 の回）：放送日時がいまの前後（過去 28 日・先 21 日）の回のうち、放送済みの回のあらすじ・ラインナップと、新着一覧に出ている予告を 1 回見て回る（ラインナップは放送から数日遅れで出る）
+   - 断られたとき（429・5xx）とつながらないときは、その相手だけ間隔を広げる（10 秒から倍々に最長 5 分）
+   - 経過は `%LOCALAPPDATA%\precure-datastars\episode-links.log` に追記する。知らせることがあったときと失敗したときは Windows の通知を出す（通知の組み立ては定時デプロイと同じ `scripts/show-toast.ps1`）。`register-episode-links-task.ps1` で 2 つのタスク（日曜 9:00 の見続ける回・毎日 5:50 の回）を登録する
+   ```powershell
+   .\scripts\scheduled-episode-links.ps1 -DryRun           # 書かずに 1 回見て回る
+   .\scripts\scheduled-episode-links.ps1 -Watch            # 今日の回の分がそろうまで見続ける
+   .\scripts\register-episode-links-task.ps1              # 日曜 09:00 と毎日 05:50 に登録
+   .\scripts\register-episode-links-task.ps1 -Unregister
+   ```
+9. サイトの文章の点検：`scripts/check-site-copy.ps1` が出力フォルダの HTML を読み、一覧・入口の冒頭文（OGP カードのリード文と同じ文）で同じ結びが 3 本以上の別々の文にあるもの、冒頭文・meta description の問いかけ・ダッシュ・飾りの引用符・誘いの言い回し、外に出さない内部用語（HTML・JS・CSS）を数えて知らせる。止めはしない。`deploy.ps1` がドライランの後に、本番反映と同時に回す。出力の HTML・JS・CSS は 1 度だけ列挙して論理コア数に分けて並列に読み、内部用語は正規表現でなく序数の文字列検索で探す。`-SiteDir` でテストの出力も点検できる（省略時は `App.config` の `SiteOutputDir`）
+10. OGP カードの見本の差し替え：`scripts/og-gallery-refresh.py` が、見本のページ（カードを並べた HTML）の各カードを出力フォルダの `og/` の画像に差し替えた HTML と画像のフォルダを作る
    ```powershell
    python -I scripts/og-gallery-refresh.py <見本の HTML> <サイトの出力フォルダ> <作業フォルダ> --from img5 --to img5
    ```

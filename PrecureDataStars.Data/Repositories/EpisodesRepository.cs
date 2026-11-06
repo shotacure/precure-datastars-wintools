@@ -161,6 +161,33 @@ public sealed class EpisodesRepository : RepositoryBase
         await ExecuteAsync(sql, e, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// 外部リンクの列（あらすじ・ラインナップ・予告）が空のときだけ URL を書く（入っている値は上書きしない）。
+    /// 放送後のリンクの自動取り込み（EpisodeLinkSync）が使う。
+    /// </summary>
+    /// <param name="episodeId">エピソード ID。</param>
+    /// <param name="column">書く列。</param>
+    /// <param name="url">URL。</param>
+    /// <param name="updatedBy">updated_by に入れる名前。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    /// <returns>書いたら true（既に値が入っていた・回が無いときは false）。</returns>
+    public async Task<bool> FillLinkIfEmptyAsync(int episodeId, EpisodeLinkColumn column, string url, string updatedBy, CancellationToken ct = default)
+    {
+        // 列名は列挙から決めた固定の文字列だけを SQL に埋める。
+        string col = column switch
+        {
+            EpisodeLinkColumn.ToeiAnimSummary => "toei_anim_summary_url",
+            EpisodeLinkColumn.ToeiAnimLineup => "toei_anim_lineup_url",
+            EpisodeLinkColumn.YoutubeTrailer => "youtube_trailer_url",
+            _ => throw new ArgumentOutOfRangeException(nameof(column))
+        };
+        string sql = $"""
+            UPDATE episodes SET {col} = @url, updated_by = @updatedBy
+             WHERE episode_id = @episodeId AND is_deleted = 0 AND ({col} IS NULL OR {col} = '');
+            """;
+        return await ExecuteAsync(sql, new { episodeId, url, updatedBy }, ct).ConfigureAwait(false) > 0;
+    }
+
     /// <summary>サブタイトル有無と雑誌掲載状態の整合を検証する。 サブタイトル空を許すのは掲載状態が非公開 / 未定のときのみ （DB 側 CHECK: ck_ep_title_or_magazine_reason と同一ルール）。</summary>
     /// <exception cref="ArgumentException">サブタイトル空なのに掲載状態が非公開 / 未定でない場合。</exception>
     private static void ValidateSubtitlePresence(Episode e)

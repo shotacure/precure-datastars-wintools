@@ -39,6 +39,15 @@ public sealed class ThemeSongPlay
     /// サイズの指定が無い・そのサイズの音源が無く録音の既定の音源で鳴らすときは空文字（ボタンの説明にサイズを書かない）。
     /// </summary>
     public string SizeLabel { get; init; } = "";
+
+    /// <summary>
+    /// 実際に鳴る音源のトラックのサイズの名前（「フルサイズ」など）。録音の既定の音源へ落ちたときも入る。トラックのサイズが未設定なら空文字。
+    /// 札の付かないボタンの左に、どのサイズが鳴るかを示す札として出す。
+    /// </summary>
+    public string SourceSizeLabel { get; init; } = "";
+
+    /// <summary>ボタンの説明に書くサイズの名前（指定どおりのサイズで鳴るならそのサイズ、そうでなければ実際に鳴る音源のサイズ）。</summary>
+    public string DisplaySizeLabel => SizeLabel.Length > 0 ? SizeLabel : SourceSizeLabel;
 }
 
 /// <summary>
@@ -58,24 +67,27 @@ public sealed class ThemeSongSizeRow
 public static class ThemeSongCardParts
 {
     /// <summary>
-    /// サイズの札を縦に並べる行。札が 2 つ以上のカードだけで、札ごとにそのサイズの名前の付いた再生ボタンを添える。
-    /// 札が 1 つ以下なら空（札は曲名の後ろ、ボタンはカードの右上の今の形）。
+    /// サイズの札を縦に並べる行。札ごとに、そのサイズの名前の付いた再生ボタンを添える（そのサイズの音源が無ければ札だけ）。
+    /// 札が 2 つ以上のカードと、札が 1 つでそのサイズの音源で鳴るカード（札をボタンの左へ移す）で作る。
+    /// 札が無いカードと、札が 1 つでもそのサイズの音源が無いカードは空（札は曲名の後ろ）。
     /// </summary>
     public static List<ThemeSongSizeRow> SizeRows(IReadOnlyList<string> sizeLabels, IReadOnlyList<ThemeSongPlay> plays)
-        => sizeLabels.Count < 2
-            ? []
-            : sizeLabels.Select(l => new ThemeSongSizeRow
-            {
-                Label = l,
-                Play = plays.FirstOrDefault(p => string.Equals(p.SizeLabel, l, StringComparison.Ordinal))
-            }).ToList();
+    {
+        if (sizeLabels.Count == 0) return [];
+        if (sizeLabels.Count == 1 && !plays.Any(p => string.Equals(p.SizeLabel, sizeLabels[0], StringComparison.Ordinal))) return [];
+        return sizeLabels.Select(l => new ThemeSongSizeRow
+        {
+            Label = l,
+            Play = plays.FirstOrDefault(p => string.Equals(p.SizeLabel, l, StringComparison.Ordinal))
+        }).ToList();
+    }
 
     /// <summary>
-    /// カードの右上（区分が 2 つ以上なら見出しの右端）に置く再生ボタン。札を縦に並べるカードでは、どの札にも当たらないもの
+    /// 札の付かない再生ボタン。札を縦に並べるカードでは、どの札にも当たらないもの
     /// （サイズの指定が無い話の、録音の既定の音源など）だけ。札を縦に並べないカードではすべて。
     /// </summary>
     public static List<ThemeSongPlay> LoosePlays(IReadOnlyList<string> sizeLabels, IReadOnlyList<ThemeSongPlay> plays)
-        => sizeLabels.Count < 2
+        => SizeRows(sizeLabels, plays).Count == 0
             ? plays.ToList()
             : plays.Where(p => !sizeLabels.Contains(p.SizeLabel, StringComparer.Ordinal)).ToList();
 
@@ -95,7 +107,8 @@ public static class ThemeSongCardParts
         bool isSized = !string.IsNullOrEmpty(sizeVariantCode)
             && index.ByRecordingAndSize.ContainsKey((songRecordingId, sizeVariantCode));
         string sizeLabel = isSized && sizeLabelByCode.TryGetValue(sizeVariantCode!, out var label) ? label : "";
-        return FromArtTrack(artTrack, sizeLabel);
+        string sourceSizeLabel = sizeLabelByCode.TryGetValue(artTrack.SizeVariantCode, out var sourceLabel) ? sourceLabel : "";
+        return FromArtTrack(artTrack, sizeLabel, sourceSizeLabel);
     }
 
     /// <summary>
@@ -138,13 +151,14 @@ public static class ThemeSongCardParts
         return current.Split(" / ").Contains(note, StringComparer.Ordinal) ? current : current + " / " + note;
     }
 
-    private static ThemeSongPlay FromArtTrack(ThemeArtTrack at, string sizeLabel) => new()
+    private static ThemeSongPlay FromArtTrack(ThemeArtTrack at, string sizeLabel, string sourceSizeLabel) => new()
     {
         ArtTrackId = at.ArtTrackId,
         PremiumOnly = at.PremiumOnly,
         SourceAlbum = at.SourceAlbum,
         AltArtTrackId = at.AltArtTrackId,
         AltSourceAlbum = at.AltSourceAlbum,
-        SizeLabel = sizeLabel
+        SizeLabel = sizeLabel,
+        SourceSizeLabel = sourceSizeLabel
     };
 }

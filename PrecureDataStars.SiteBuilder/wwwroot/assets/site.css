@@ -1583,10 +1583,10 @@ a.series-card-children-title:hover {
   gap: 8px;
   min-width: 0;
 }
-/* まとめたカードの再生ボタンは見出しの右端に置き、縦に積んだ区分の真ん中にそろえる（右上の絶対配置にしない）。 */
-.theme-songs-list .ts-plays.ts-plays-inline {
-  position: static;
-  margin-left: auto;
+/* 札とボタンが 1 組だけで動画の無いカードは、その組を見出しの行の右端に置く（まとめたカードでは縦に積んだ区分の真ん中にそろえる）。 */
+.theme-songs-list .ts-sizes.ts-sizes-inline {
+  margin: 0 0 0 auto;
+  align-self: center;
   flex: 0 0 auto;
 }
 /* 狭い画面では曲名が細い列に押し込まれるので、1 行目を「区分の積み＋再生ボタン」、2 行目を曲名・サイズに組み替える。 */
@@ -1596,30 +1596,36 @@ a.series-card-children-title:hover {
     row-gap: 6px;
   }
   .theme-songs-list .ts-headline-multi > .ts-kinds { order: 1; }
-  .theme-songs-list .ts-headline-multi > .ts-plays-inline { order: 2; }
+  .theme-songs-list .ts-headline-multi > .ts-sizes-inline { order: 2; }
   .theme-songs-list .ts-headline-multi > .ts-headline-main {
     order: 3;
     flex: 1 1 100%;
   }
 }
-/* 配信音源の再生ボタン：カードの右上に固定する（サイズごとに 1 つ、使った順に横へ並べる）。
-   見出しが折り返しても行を増やさないよう、ボタンのあるカードだけ見出し行の右側をボタンの数ぶん空ける
-   （ボタンの数は li の --ts-play-count。1 つなら 2.6em）。 */
-.theme-songs-list .ts-card {
-  position: relative;
+/* 配信音源の再生ボタン：サイズの札とそのサイズのボタンを 1 組にして、右寄せの列に 1 組 1 行で縦に積む（楽曲詳細と同じ形）。
+   見出しの行に入れないカードは 2 列に組み、右の列（.ts-sizes-side）をカードの上端から積む。ほかの子は左の列に上から順に入る。
+   狭い画面では 2 列をほどき、列は書いた順（動画の下・クレジットの上）に右寄せで置く。 */
+.theme-songs-list .ts-card:has(> .ts-sizes-side) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 16px;
+  align-items: start;
 }
-.theme-songs-list .ts-card:has(> .ts-plays) > .ts-headline {
-  padding-right: calc(var(--ts-play-count, 1) * 2.3em + 0.3em);
+.theme-songs-list .ts-card:has(> .ts-sizes-side) > * {
+  grid-column: 1;
 }
-.theme-songs-list .ts-plays {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  display: flex;
-  gap: 0.4em;
+.theme-songs-list .ts-card > .ts-sizes-side {
+  grid-column: 2;
+  grid-row: 1 / span 2;
 }
-/* 違うサイズを 2 つ以上使ったカード：サイズの札を見出しの下に 1 つ 1 行で縦に並べ、札の右にそのサイズの再生ボタンを置く。
-   札の幅がそろわなくてもボタンが縦にそろうよう、札の列とボタンの列の 2 列の格子に組む（行の li は格子に溶かす）。 */
+@media (max-width: 600px) {
+  .theme-songs-list .ts-card:has(> .ts-sizes-side) {
+    display: block;
+  }
+}
+/* サイズの札を見出しの下に 1 つ 1 行で縦に並べ、札の右にそのサイズの再生ボタンを置く。
+   札の幅がそろわなくてもボタンが縦にそろうよう、札の列とボタンの列の 2 列の格子に組む（行の li は格子に溶かす）。
+   札の付かないボタンもボタンの列に入れる。再生ボタンのあるカード（.ts-sizes-side）は列ごと右へ寄せ、札もボタンの側へ寄せる。 */
 .theme-songs-list .ts-sizes {
   list-style: none;
   margin: 2px 0 8px;
@@ -1636,6 +1642,29 @@ a.series-card-children-title:hover {
 }
 .theme-songs-list .ts-size-row > .recording-tracks-kind-size {
   grid-column: 1;
+}
+.theme-songs-list .ts-size-row > .ts-play {
+  grid-column: 2;
+}
+/* 札の付かないボタン（サイズの指定が無い回などに鳴る録音の既定の音源）の札。放送で流れたサイズとは限らないので、
+   緑の札と見分けがつくよう灰色の点線の枠にする。 */
+.theme-songs-list .recording-tracks-kind-badge.recording-tracks-kind-size.ts-size-unaired {
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed currentColor;
+  cursor: help;
+}
+.theme-songs-list .ts-sizes.ts-sizes-side {
+  width: max-content;
+  max-width: 100%;
+  margin-left: auto;
+  justify-items: end;
+  row-gap: 8px;
+}
+@media (min-width: 601px) {
+  .theme-songs-list .ts-card > .ts-sizes-side {
+    margin: 0;
+  }
 }
 .theme-songs-list .ts-kind {
   display: inline-block;

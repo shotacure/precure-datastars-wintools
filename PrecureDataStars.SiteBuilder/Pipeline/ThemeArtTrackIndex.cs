@@ -81,7 +81,8 @@ public sealed class ThemeArtTrackIndex
                 PremiumOnly: premium,
                 SourceAlbum: AlbumLabel(primary.Product, primary.Disc),
                 AltArtTrackId: alt.Track?.YoutubeArtTrackId ?? "",
-                AltSourceAlbum: alt.Track is null ? "" : AlbumLabel(alt.Product, alt.Disc));
+                AltSourceAlbum: alt.Track is null ? "" : AlbumLabel(alt.Product, alt.Disc),
+                SizeVariantCode: primary.Size);
         }
 
         var byRecording = new Dictionary<int, ThemeArtTrack>();
@@ -123,4 +124,5 @@ public sealed class ThemeArtTrackIndex
 /// <param name="SourceAlbum">音源が入っている盤の表記。</param>
 /// <param name="AltArtTrackId">会員限定のときの代わり（誰でも再生できる同じサイズの音源）。無ければ空文字。</param>
 /// <param name="AltSourceAlbum">代わりの音源が入っている盤の表記。</param>
-public sealed record ThemeArtTrack(string ArtTrackId, bool PremiumOnly, string SourceAlbum, string AltArtTrackId, string AltSourceAlbum);
+/// <param name="SizeVariantCode">鳴らす音源のトラックのサイズ（<c>tracks.song_size_variant_code</c>）。未設定なら空文字。</param>
+public sealed record ThemeArtTrack(string ArtTrackId, bool PremiumOnly, string SourceAlbum, string AltArtTrackId, string AltSourceAlbum, string SizeVariantCode);

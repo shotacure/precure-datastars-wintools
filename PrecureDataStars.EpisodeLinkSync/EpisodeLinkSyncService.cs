@@ -1,7 +1,9 @@
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
+using PrecureDataStars.Data.TitleCharStatsJson;
 
 namespace PrecureDataStars.EpisodeLinkSync;
 
@@ -13,7 +15,10 @@ namespace PrecureDataStars.EpisodeLinkSync;
 ///     まだ無い回のページは東映アニメーションのトップへ転送されるので、転送は「まだ」とみなす。</item>
 ///   <item>予告（<c>youtube_trailer_url</c>）：プリキュア公式 YouTube チャンネルの新着一覧から、題が
 ///     「{作品名}　第N話 予告「{サブタイトル}」」のものを拾う。予告の題のサブタイトルが DB の <c>title_text</c> と違うときは書かずに知らせる。
-///     その回が DB に無いときは回を作らずに知らせる（休止の週があり、放送日を機械では決めないため）。</item>
+///     その回が DB に無いときは、1 回だけ見て回るときは回を作らずに知らせる（休止の週があり、放送日を機械では決められないため）。</item>
+///   <item>日曜の見続ける回だけは、次の回の予告が出たときに、その回が DB に無ければ予告の題から回を仮で作り、
+///     回はあるのにサブタイトルが空ならサブタイトルを仮で入れる（<see cref="CreateFromTrailerAsync"/>・<see cref="FillTitleFromTrailerAsync"/>）。
+///     作った・入れたことは知らせ、ふりがな・ルビ・放送日は祥太さんが確かめる。</item>
 /// </list>
 /// 対象は本線の TV（kind_code='TV'）だけ。入っている値は上書きしない。知らせることは <see cref="Notices"/> にためる
 /// （同じことは 1 回の実行で 1 度だけ）。
@@ -32,6 +37,12 @@ internal sealed class EpisodeLinkSyncService
 
     /// <summary>予告の題。NFKC で正規化した後の形（全角の数字・空白は半角になる）。</summary>
     private static readonly Regex TrailerTitle = new(@"^(?<series>.+?)\s*第\s*(?<no>\d+)\s*話\s*予告\s*「(?<sub>.*)」\s*$", RegexOptions.Compiled);
+
+    /// <summary>予告の題の末尾の「…」。DB に入れるサブタイトルは正規化する前の題から、字を変えずに取る。</summary>
+    private static readonly Regex TrailerSubtitleRaw = new(@"「(?<sub>.*)」\s*$", RegexOptions.Compiled);
+
+    /// <summary>サブタイトルの中の改行の位置を表す空白（半角・全角）。ルビ付き表記では改行にする。</summary>
+    private static readonly Regex SubtitleBreak = new(@"[ 　]+", RegexOptions.Compiled);
 
     private readonly EpisodesRepository _episodes;
     private readonly SeriesRepository _series;
@@ -109,13 +120,12 @@ internal sealed class EpisodeLinkSyncService
     }
 
     /// <summary>
-    /// 今日放送の TV の回について、あらすじのページと次の回の予告が出るまで <paramref name="interval"/> おきに見続ける。
+    /// <paramref name="today"/>（ふだんは今日）に放送の TV の回について、あらすじのページと次の回の予告が出るまで <paramref name="interval"/> おきに見続ける。
     /// どちらもそろったら true で終わる。<paramref name="until"/> を過ぎたら、そろわなかったものを知らせて false で終わる。
     /// 今日放送の回が無ければ（休止の週）何もせずに true。ラインナップは数日遅れで出るので、ここでは見ない。
     /// </summary>
-    public async Task<bool> RunWatchAsync(DateTime until, TimeSpan interval, CancellationToken ct)
+    public async Task<bool> RunWatchAsync(DateTime today, DateTime until, TimeSpan interval, CancellationToken ct)
     {
-        var today = DateTime.Today;
         var first = await LoadAsync(ct).ConfigureAwait(false);
         var target = first.Episodes.Where(e => first.IsTv(e) && e.OnAirAt.Date == today).OrderBy(e => e.OnAirAt).LastOrDefault();
         if (target is null)
@@ -151,7 +161,7 @@ internal sealed class EpisodeLinkSyncService
                     foreach (var video in feed)
                     {
                         if (ParseTrailer(snap, video) is not { } t || t.SeriesId != ep.SeriesId || t.EpisodeNo != nextNo) continue;
-                        trailerDone = await ApplyTrailerAsync(t, video, ct).ConfigureAwait(false);
+                        trailerDone = await ApplyTrailerAsync(t, video, ct, snap).ConfigureAwait(false);
                         break;
                     }
                 }
@@ -210,8 +220,11 @@ internal sealed class EpisodeLinkSyncService
         _ => e.YoutubeTrailerUrl
     };
 
-    /// <summary>新着一覧の 1 本を予告として読んだ結果。<see cref="Episode"/> はその回が DB に無ければ null。</summary>
-    private sealed record Trailer(int SeriesId, string SeriesTitle, int EpisodeNo, string Subtitle, Episode? Episode);
+    /// <summary>
+    /// 新着一覧の 1 本を予告として読んだ結果。<see cref="Episode"/> はその回が DB に無ければ null。
+    /// <see cref="Subtitle"/> は比べるための正規化した形、<see cref="RawSubtitle"/> は題のままの字（DB に入れるのはこちら）。
+    /// </summary>
+    private sealed record Trailer(int SeriesId, string SeriesTitle, int EpisodeNo, string Subtitle, string RawSubtitle, Episode? Episode);
 
     /// <summary>題が「{TV の作品名} 第N話 予告「…」」の形なら読む。作品名は NFKC で正規化して比べる。</summary>
     private static Trailer? ParseTrailer(Snapshot snap, FeedVideo video)
@@ -221,23 +234,35 @@ internal sealed class EpisodeLinkSyncService
         string seriesPart = m.Groups["series"].Value.Trim();
         var series = snap.SeriesById.Values.FirstOrDefault(s => s.KindCode == "TV" && Normalize(s.Title) == seriesPart);
         if (series is null || !int.TryParse(m.Groups["no"].Value, out int no)) return null;
-        return new Trailer(series.SeriesId, series.Title, no, m.Groups["sub"].Value, snap.Find(series.SeriesId, no));
+        var raw = TrailerSubtitleRaw.Match(video.Title);
+        string rawSub = raw.Success ? raw.Groups["sub"].Value.Trim() : m.Groups["sub"].Value;
+        return new Trailer(series.SeriesId, series.Title, no, m.Groups["sub"].Value, rawSub, snap.Find(series.SeriesId, no));
     }
 
     /// <summary>
     /// 予告を書く。もう入っている・書いた・知らせた（DB に回が無い・サブタイトルが違う）ときは true（それ以上待たなくてよい）。
+    /// <paramref name="fillFrom"/> を渡したとき（日曜の見続ける回）は、DB に無い回を予告の題から仮で作り、空のサブタイトルを仮で入れる。
     /// </summary>
-    private async Task<bool> ApplyTrailerAsync(Trailer t, FeedVideo video, CancellationToken ct)
+    private async Task<bool> ApplyTrailerAsync(Trailer t, FeedVideo video, CancellationToken ct, Snapshot? fillFrom = null)
     {
         string what = $"{t.SeriesTitle} 第{t.EpisodeNo}話の予告";
         if (t.Episode is not { } ep)
         {
+            if (fillFrom is not null)
+            {
+                await CreateFromTrailerAsync(fillFrom, t, video, ct).ConfigureAwait(false);
+                return true;
+            }
             Notice($"trailer-norow:{t.SeriesId}:{t.EpisodeNo}",
                 $"{what}が出ましたが、DB にその回がありません。サブタイトル「{t.Subtitle}」 {video.WatchUrl}");
             return true;
         }
         if (!string.IsNullOrEmpty(ep.YoutubeTrailerUrl)) return true;
-        if (string.IsNullOrEmpty(ep.TitleText))
+        if (string.IsNullOrEmpty(ep.TitleText) && fillFrom is not null)
+        {
+            await FillTitleFromTrailerAsync(ep, t, ct).ConfigureAwait(false);
+        }
+        else if (string.IsNullOrEmpty(ep.TitleText))
         {
             Notice($"trailer-notitle:{ep.EpisodeId}", $"{what}を入れました。DB のサブタイトルが空です。予告の題は「{t.Subtitle}」です。");
         }
@@ -250,6 +275,84 @@ internal sealed class EpisodeLinkSyncService
         await WriteAsync(ep, EpisodeLinkColumn.YoutubeTrailer, video.WatchUrl, what, ct).ConfigureAwait(false);
         return true;
     }
+
+    /// <summary>
+    /// DB に無い回を、予告の題から仮で作る（予告の URL も一緒に入れる）。
+    /// 話数・通しの番号（全話・放送回・ニチアサ枠）は前の回に 1 を足し、放送日時は前の回のちょうど 1 週間後（休止は考えない）、
+    /// 尺は前の回と同じ。サブタイトルは題のままの字で入れ、ルビ付き表記はサブタイトルの空白を改行にしただけのもの、
+    /// 文字統計は Episodes の保存と同じ <see cref="TitleCharStatsBuilder"/> で作り、ふりがなは空にする。
+    /// episode_id は採番の続きになるので、放送順と ID の順がずれないよう、作る回がいちばん後の放送で、
+    /// 前の回が通しの番号でもいちばん後のときだけ作る。作れないときは知らせるだけ。
+    /// </summary>
+    private async Task CreateFromTrailerAsync(Snapshot snap, Trailer t, FeedVideo video, CancellationToken ct)
+    {
+        string what = $"{t.SeriesTitle} 第{t.EpisodeNo}話";
+        string key = $"trailer-create:{t.SeriesId}:{t.EpisodeNo}";
+        var prev = snap.Find(t.SeriesId, t.EpisodeNo - 1);
+        if (prev is null || prev.TotalEpNo is null || prev.TotalOaNo is null || prev.NitiasaOaNo is null)
+        {
+            Notice(key, $"{what}の予告が出ましたが、前の回か前の回の通しの番号が DB に無いので、回を作っていません。サブタイトル「{t.RawSubtitle}」 {video.WatchUrl}");
+            return;
+        }
+        var onAirAt = prev.OnAirAt.AddDays(7);
+        if (snap.Episodes.Any(e => e.OnAirAt >= onAirAt
+                || e.TotalEpNo > prev.TotalEpNo || e.TotalOaNo > prev.TotalOaNo || e.NitiasaOaNo > prev.NitiasaOaNo))
+        {
+            Notice(key, $"{what}の予告が出ましたが、DB に {onAirAt:M/d} 以降の回か、前の回より後の通しの番号の回があるので、回を作っていません。サブタイトル「{t.RawSubtitle}」 {video.WatchUrl}");
+            return;
+        }
+
+        var episode = new Episode
+        {
+            SeriesId = t.SeriesId,
+            SeriesEpNo = t.EpisodeNo,
+            TotalEpNo = prev.TotalEpNo + 1,
+            TotalOaNo = prev.TotalOaNo + 1,
+            NitiasaOaNo = prev.NitiasaOaNo + 1,
+            TitleText = t.RawSubtitle,
+            TitleRichHtml = RichHtmlOf(t.RawSubtitle),
+            TitleKana = null,
+            TitleCharStats = TitleCharStatsBuilder.BuildJson(t.RawSubtitle),
+            OnAirAt = onAirAt,
+            DurationMinutes = prev.DurationMinutes,
+            YoutubeTrailerUrl = video.WatchUrl,
+            CreatedBy = UpdatedBy,
+            UpdatedBy = UpdatedBy
+        };
+        if (_dryRun)
+        {
+            _log($"{what}を予告の題から作ります（書かずに試しています）：放送 {onAirAt:yyyy-MM-dd HH:mm}・サブタイトル「{t.RawSubtitle}」・予告 {video.WatchUrl}");
+            return;
+        }
+        int id = await _episodes.InsertAsync(episode, ct).ConfigureAwait(false);
+        WrittenCount++;
+        _log($"{what}を予告の題から作りました：episode {id}・放送 {onAirAt:yyyy-MM-dd HH:mm}・サブタイトル「{t.RawSubtitle}」・予告 {video.WatchUrl}");
+        Notice(key, $"{what}が DB に無かったので、予告の題から仮で作りました（episode {id}・放送 {onAirAt:M/d HH:mm}・サブタイトル「{t.RawSubtitle}」）。ふりがな・ルビ・改行の位置・放送日を確かめてください。");
+    }
+
+    /// <summary>
+    /// 回はあるのにサブタイトルが空のとき、予告の題のサブタイトルを仮で入れる（ルビ付き表記・文字統計も。ふりがなは触らない）。
+    /// </summary>
+    private async Task FillTitleFromTrailerAsync(Episode ep, Trailer t, CancellationToken ct)
+    {
+        string what = $"{t.SeriesTitle} 第{t.EpisodeNo}話のサブタイトル";
+        if (_dryRun)
+        {
+            _log($"{what}を予告の題から入れます（書かずに試しています）：「{t.RawSubtitle}」");
+            return;
+        }
+        if (await _episodes.FillTitleIfEmptyAsync(ep.EpisodeId, t.RawSubtitle, RichHtmlOf(t.RawSubtitle),
+                TitleCharStatsBuilder.BuildJson(t.RawSubtitle), UpdatedBy, ct).ConfigureAwait(false))
+        {
+            WrittenCount++;
+            _log($"{what}を予告の題から入れました：episode {ep.EpisodeId}「{t.RawSubtitle}」");
+            Notice($"trailer-title:{ep.EpisodeId}", $"{what}が空だったので、予告の題から仮で入れました（episode {ep.EpisodeId}「{t.RawSubtitle}」）。ふりがな・ルビ・改行の位置を確かめてください。");
+        }
+    }
+
+    /// <summary>ルビの無いルビ付き表記：HTML の特殊文字を逃がし、改行の位置を表す空白を &lt;br&gt; にする。</summary>
+    private static string RichHtmlOf(string subtitle)
+        => string.Join("<br>", SubtitleBreak.Split(subtitle.Trim()).Select(WebUtility.HtmlEncode));
 
     /// <summary>空の列にだけ書く。書いた（または書かずに試すとき）は true。</summary>
     private async Task<bool> WriteAsync(Episode ep, EpisodeLinkColumn column, string url, string what, CancellationToken ct)

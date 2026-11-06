@@ -15,11 +15,12 @@ namespace PrecureDataStars.EpisodeLinkSync;
 ///   EpisodeLinkSync --watch [--until HH:mm] [--interval 秒] [--dry-run]  # 今日の回のあらすじと次の回の予告が出るまで見続ける（日曜の分）
 /// </code>
 /// <c>--watch</c> の既定は 12:00 まで 5 秒おき。<c>--dry-run</c> は DB へ書かずに見つけたものを表示する。
+/// <c>--date</c> は見続ける回の「今日」を差し替える試すとき用の引数で、<c>--dry-run</c> と一緒のときだけ使える（過ぎた日なら 1 回見て終わる）。
 /// 終了コード: 0 = 正常 / 3 = 知らせることがある（最後に一覧を出す）/ 1 = 実行時エラー / 2 = 引数・設定の誤り。
 /// </remarks>
 internal static class Program
 {
-    private const string Usage = "使い方: EpisodeLinkSync [--watch [--until HH:mm] [--interval 秒]] [--dry-run]";
+    private const string Usage = "使い方: EpisodeLinkSync [--watch [--until HH:mm] [--interval 秒] [--date yyyy-MM-dd]] [--dry-run]";
 
     private static async Task<int> Main(string[] args)
     {
@@ -28,12 +29,17 @@ internal static class Program
         bool watch = false, dryRun = false;
         TimeOnly until = new(12, 0);
         double intervalSec = 5;
+        // 見続ける回の「今日」。--date は試すとき用で、--dry-run と一緒のときだけ受け付ける（過ぎた日なら 1 回見て終わる）。
+        DateTime today = DateTime.Today;
+        bool dateGiven = false;
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i])
             {
                 case "--watch": watch = true; break;
                 case "--dry-run": dryRun = true; break;
+                case "--date" when i + 1 < args.Length && DateTime.TryParseExact(args[i + 1], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d):
+                    today = d; dateGiven = true; i++; break;
                 case "--until" when i + 1 < args.Length && TimeOnly.TryParseExact(args[i + 1], "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var u):
                     until = u; i++; break;
                 case "--interval" when i + 1 < args.Length && double.TryParse(args[i + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out var s) && s >= 1:
@@ -43,6 +49,12 @@ internal static class Program
                     Console.Error.WriteLine(Usage);
                     return 2;
             }
+        }
+
+        if (dateGiven && !dryRun)
+        {
+            Console.Error.WriteLine("ERROR: --date は --dry-run と一緒のときだけ使えます。");
+            return 2;
         }
 
         var cs = ConfigurationManager.ConnectionStrings[DbConfig.DefaultConnectionStringName]?.ConnectionString;
@@ -60,7 +72,7 @@ internal static class Program
 
             Log($"放送後のリンクの取り込み{(watch ? "（見続ける）" : "")}{(dryRun ? "（書かない）" : "")}");
             if (watch)
-                await service.RunWatchAsync(DateTime.Today + until.ToTimeSpan(), TimeSpan.FromSeconds(intervalSec), CancellationToken.None);
+                await service.RunWatchAsync(today, today + until.ToTimeSpan(), TimeSpan.FromSeconds(intervalSec), CancellationToken.None);
             else
                 await service.RunOnceAsync(CancellationToken.None);
 

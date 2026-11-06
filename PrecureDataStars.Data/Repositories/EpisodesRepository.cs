@@ -188,6 +188,21 @@ public sealed class EpisodesRepository : RepositoryBase
         return await ExecuteAsync(sql, new { episodeId, url, updatedBy }, ct).ConfigureAwait(false) > 0;
     }
 
+    /// <summary>
+    /// サブタイトル（<c>title_text</c>）が空のときだけ、サブタイトル・ルビ付き表記・文字統計を書く（入っている値は上書きしない）。
+    /// ふりがな（<c>title_kana</c>）には触れない。放送後のリンクの自動取り込み（EpisodeLinkSync）が予告の題から入れるときに使う。
+    /// </summary>
+    /// <returns>書いたら true（既にサブタイトルが入っていた・回が無いときは false）。</returns>
+    public async Task<bool> FillTitleIfEmptyAsync(int episodeId, string titleText, string titleRichHtml, string titleCharStats, string updatedBy, CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE episodes SET title_text = @titleText, title_rich_html = @titleRichHtml, title_char_stats = @titleCharStats,
+                                updated_by = @updatedBy
+             WHERE episode_id = @episodeId AND is_deleted = 0 AND (title_text IS NULL OR title_text = '');
+            """;
+        return await ExecuteAsync(sql, new { episodeId, titleText, titleRichHtml, titleCharStats, updatedBy }, ct).ConfigureAwait(false) > 0;
+    }
+
     /// <summary>サブタイトル有無と雑誌掲載状態の整合を検証する。 サブタイトル空を許すのは掲載状態が非公開 / 未定のときのみ （DB 側 CHECK: ck_ep_title_or_magazine_reason と同一ルール）。</summary>
     /// <exception cref="ArgumentException">サブタイトル空なのに掲載状態が非公開 / 未定でない場合。</exception>
     private static void ValidateSubtitlePresence(Episode e)

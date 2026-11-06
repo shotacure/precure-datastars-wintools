@@ -2383,6 +2383,10 @@ public sealed class EpisodeGenerator
         public List<string> SizeLabels { get; } = new();
         /// <summary>再生ボタンの並び（サイズごと・使った順。鳴らす音源が同じなら 1 つ）。空ならボタンを出さない。</summary>
         public List<ThemeSongPlay> Plays { get; } = new();
+        /// <summary>サイズの札を縦に並べる行（札が 2 つ以上のときだけ。札ごとにそのサイズの再生ボタン）。</summary>
+        public List<ThemeSongSizeRow> SizeRows => ThemeSongCardParts.SizeRows(SizeLabels, Plays);
+        /// <summary>カードの右上に置く再生ボタン（札を縦に並べるときは、どの札にも当たらないものだけ）。</summary>
+        public List<ThemeSongPlay> LoosePlays => ThemeSongCardParts.LoosePlays(SizeLabels, Plays);
 
         // ── 構造化クレジット由来の HTML 群 ──
         /// <summary>作詞の表示用 HTML。</summary>

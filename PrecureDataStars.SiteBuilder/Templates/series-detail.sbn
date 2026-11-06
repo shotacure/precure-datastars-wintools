@@ -183,16 +183,18 @@
   <section id="theme-songs">
     <h2>主題歌・挿入歌</h2>
     <ul class="theme-songs-list"{{ if has_theme_play }} data-art-track-list data-art-track-mode="single"{{ end }}>
+      {{## 配信音源の再生ボタン 1 つ（p は再生ボタン、曲名はいまのカードの t.Title）。カードの右上のボタンと、縦に並べたサイズの札の横のボタンで使う。 ##}}
+      {{~ func ts_play_button(p) ~}}<button type="button" class="art-track-play ts-play{{ if p.PremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ p.ArtTrackId | html.escape }}"{{ if p.PremiumOnly }} data-art-track-premium="1"{{ end }}{{ if p.AltArtTrackId != "" }} data-art-track-alt-id="{{ p.AltArtTrackId | html.escape }}" data-art-track-alt-sub="{{ p.AltSourceAlbum | html.escape }}"{{ end }} data-art-track-title="{{ t.Title | html.escape }}" data-art-track-sub="{{ p.SourceAlbum | html.escape }}" aria-label="{{ t.Title | html.escape }}{{ if p.SizeLabel != "" }}（{{ p.SizeLabel | html.escape }}）{{ end }} を再生{{ if p.PremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if p.PremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}{{ if p.SizeLabel != "" }}{{ p.SizeLabel | html.escape }}の{{ end }}配信音源を再生{{ end }}"></button>{{~ end ~}}
       {{~ for t in ThemeSongs ~}}
       {{## 同じ録音を OP・ED・挿入歌として使っていたら 1 枚のカードにまとめ、区分バッジを使った順に並べる。
            区分が 1 つなら使用話数は曲名の後ろに置いて 1 行に流す。2 つ以上なら左に「区分バッジ＋使用話数」を 1 区分 1 行で縦に積み、
            右の曲名・サイズ・（本放送のみ）はその縦の真ん中にそろえて 1 行に組む（.ts-headline-multi）。
            サイズ（その系列で使ったサイズ。楽曲詳細と同じ緑のピル）は曲名の後ろに使った順で。 ##}}
       {{~ multi_kind = (array.size t.Kinds) > 1 ~}}
-      <li class="ts-card"{{ if (array.size t.Plays) > 0 && !multi_kind }} style="--ts-play-count:{{ array.size t.Plays }}"{{ end }}>
+      <li class="ts-card"{{ if (array.size t.LoosePlays) > 0 && !multi_kind }} style="--ts-play-count:{{ array.size t.LoosePlays }}"{{ end }}>
         {{## 再生ボタン群。区分が 1 つのカードはカードの右上（.ts-plays を見出しの外に絶対配置）、
              2 つ以上のカードは見出しの右端に置き、縦に積んだ区分の真ん中にそろえる（.ts-plays-inline）。 ##}}
-        {{~ capture plays_html ~}}{{~ for p in t.Plays ~}}<button type="button" class="art-track-play ts-play{{ if p.PremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ p.ArtTrackId | html.escape }}"{{ if p.PremiumOnly }} data-art-track-premium="1"{{ end }}{{ if p.AltArtTrackId != "" }} data-art-track-alt-id="{{ p.AltArtTrackId | html.escape }}" data-art-track-alt-sub="{{ p.AltSourceAlbum | html.escape }}"{{ end }} data-art-track-title="{{ t.Title | html.escape }}" data-art-track-sub="{{ p.SourceAlbum | html.escape }}" aria-label="{{ t.Title | html.escape }}{{ if p.SizeLabel != "" }}（{{ p.SizeLabel | html.escape }}）{{ end }} を再生{{ if p.PremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if p.PremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}{{ if p.SizeLabel != "" }}{{ p.SizeLabel | html.escape }}の{{ end }}配信音源を再生{{ end }}"></button>{{~ end ~}}{{~ end ~}}
+        {{~ capture plays_html ~}}{{~ for p in t.LoosePlays ~}}{{ ts_play_button p }}{{~ end ~}}{{~ end ~}}
         <div class="ts-headline{{ if multi_kind }} ts-headline-multi{{ end }}">
           {{~ if multi_kind ~}}
           <div class="ts-kinds">
@@ -204,15 +206,22 @@
           {{~ end ~}}
           <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | in_quotes | html.escape }}</a>{{~ else ~}}{{ t.Title | in_quotes | html.escape }}{{~ end ~}}」</span>
           {{~ if !multi_kind && t.Kinds[0].RangeLabel != "" ~}}<span class="ts-range muted">{{ t.Kinds[0].RangeLabel | html.escape }}</span>{{~ end ~}}
-          {{~ for sz in t.SizeLabels ~}}<span class="recording-tracks-kind-badge recording-tracks-kind-size">{{ sz | html.escape }}</span>{{~ end ~}}
+          {{~ if (array.size t.SizeRows) == 0 ~}}{{~ for sz in t.SizeLabels ~}}<span class="recording-tracks-kind-badge recording-tracks-kind-size">{{ sz | html.escape }}</span>{{~ end ~}}{{~ end ~}}
           {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
           {{~ if multi_kind ~}}
           </div>
-          {{~ if (array.size t.Plays) > 0 ~}}<div class="ts-plays ts-plays-inline">{{ plays_html }}</div>{{~ end ~}}
+          {{~ if (array.size t.LoosePlays) > 0 ~}}<div class="ts-plays ts-plays-inline">{{ plays_html }}</div>{{~ end ~}}
           {{~ end ~}}
         </div>
-        {{~ if (array.size t.Plays) > 0 && !multi_kind ~}}
+        {{~ if (array.size t.LoosePlays) > 0 && !multi_kind ~}}
         <div class="ts-plays">{{ plays_html }}</div>
+        {{~ end ~}}
+        {{## 違うサイズを 2 つ以上使ったカード（デパプリの ED の Type.I〜IV など）は、サイズの札を見出しの下に縦に並べ、
+             札の右にそのサイズの音源の再生ボタンを置く（その音源が無ければ札だけ）。 ##}}
+        {{~ if (array.size t.SizeRows) > 0 ~}}
+        <ul class="ts-sizes">
+          {{~ for sr in t.SizeRows ~}}<li class="ts-size-row"><span class="recording-tracks-kind-badge recording-tracks-kind-size">{{ sr.Label | html.escape }}</span>{{~ if sr.Play ~}}{{ ts_play_button sr.Play }}{{~ end ~}}</li>{{~ end ~}}
+        </ul>
         {{~ end ~}}
         {{## 録音の公式 YouTube 動画（URL 登録があるときだけ）。エピソード予告と同じ iframe 埋め込み。 ##}}
         {{~ if t.YoutubeId != "" ~}}

@@ -41,9 +41,44 @@ public sealed class ThemeSongPlay
     public string SizeLabel { get; init; } = "";
 }
 
+/// <summary>
+/// サイズの札を縦に並べるときの 1 行（デパプリの ED の Type.I〜IV のように、1 枚のカードで違うサイズを 2 つ以上使ったとき）。
+/// 札の右に、そのサイズの音源の再生ボタンを置く。
+/// </summary>
+public sealed class ThemeSongSizeRow
+{
+    /// <summary>サイズの名前（「TVサイズ Type.I」など）。</summary>
+    public string Label { get; init; } = "";
+
+    /// <summary>そのサイズの音源の再生ボタン。そのサイズの音源が無ければ null（札だけ出す）。</summary>
+    public ThemeSongPlay? Play { get; init; }
+}
+
 /// <summary>主題歌カードを録音ごとに 1 枚へまとめるときの、区分・サイズ・再生ボタン・備考の足し込み。</summary>
 public static class ThemeSongCardParts
 {
+    /// <summary>
+    /// サイズの札を縦に並べる行。札が 2 つ以上のカードだけで、札ごとにそのサイズの名前の付いた再生ボタンを添える。
+    /// 札が 1 つ以下なら空（札は曲名の後ろ、ボタンはカードの右上の今の形）。
+    /// </summary>
+    public static List<ThemeSongSizeRow> SizeRows(IReadOnlyList<string> sizeLabels, IReadOnlyList<ThemeSongPlay> plays)
+        => sizeLabels.Count < 2
+            ? []
+            : sizeLabels.Select(l => new ThemeSongSizeRow
+            {
+                Label = l,
+                Play = plays.FirstOrDefault(p => string.Equals(p.SizeLabel, l, StringComparison.Ordinal))
+            }).ToList();
+
+    /// <summary>
+    /// カードの右上（区分が 2 つ以上なら見出しの右端）に置く再生ボタン。札を縦に並べるカードでは、どの札にも当たらないもの
+    /// （サイズの指定が無い話の、録音の既定の音源など）だけ。札を縦に並べないカードではすべて。
+    /// </summary>
+    public static List<ThemeSongPlay> LoosePlays(IReadOnlyList<string> sizeLabels, IReadOnlyList<ThemeSongPlay> plays)
+        => sizeLabels.Count < 2
+            ? plays.ToList()
+            : plays.Where(p => !sizeLabels.Contains(p.SizeLabel, StringComparer.Ordinal)).ToList();
+
     /// <summary>
     /// 録音 × サイズの再生ボタンを選ぶ。サイズが指定されていてそのサイズの音源があればそれ（サイズの名前つき）、
     /// 無ければ（サイズ未指定も）録音ごとに選んだ音源（サイズの名前なし）。どちらも無ければ null。

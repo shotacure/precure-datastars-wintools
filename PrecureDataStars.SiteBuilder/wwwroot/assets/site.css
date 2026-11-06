@@ -1618,6 +1618,25 @@ a.series-card-children-title:hover {
   display: flex;
   gap: 0.4em;
 }
+/* 違うサイズを 2 つ以上使ったカード：サイズの札を見出しの下に 1 つ 1 行で縦に並べ、札の右にそのサイズの再生ボタンを置く。
+   札の幅がそろわなくてもボタンが縦にそろうよう、札の列とボタンの列の 2 列の格子に組む（行の li は格子に溶かす）。 */
+.theme-songs-list .ts-sizes {
+  list-style: none;
+  margin: 2px 0 8px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: max-content max-content;
+  align-items: center;
+  justify-items: start;
+  column-gap: 8px;
+  row-gap: 4px;
+}
+.theme-songs-list .ts-size-row {
+  display: contents;
+}
+.theme-songs-list .ts-size-row > .recording-tracks-kind-size {
+  grid-column: 1;
+}
 .theme-songs-list .ts-kind {
   display: inline-block;
   font-size: 0.82em;

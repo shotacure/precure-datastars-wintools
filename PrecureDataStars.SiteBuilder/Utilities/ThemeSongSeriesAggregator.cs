@@ -127,7 +127,15 @@ public static class ThemeSongSeriesAggregator
                     .ThenBy(u => u.Seq)
                     .Select(u => u.SizeCode)
                     .Distinct()
-                    .ToList()));
+                    .ToList(),
+                // サイズごとの流れた話数（サイズの札の左に出す）。サイズの指定が無い話は入れない。
+                SizeEpisodeNos: sizeUsesByGroup[kv.Key]
+                    .Where(u => u.SizeCode is not null)
+                    .GroupBy(u => u.SizeCode!, StringComparer.Ordinal)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => (IReadOnlyCollection<int>)g.Select(u => u.EpNo).ToHashSet(),
+                        StringComparer.Ordinal)));
         }
         return result;
     }

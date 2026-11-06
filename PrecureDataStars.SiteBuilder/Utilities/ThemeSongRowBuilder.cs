@@ -36,13 +36,15 @@ public sealed class ThemeSongRow
     /// <summary>録音の公式 YouTube 動画 ID（<c>song_recordings.youtube_url</c> から抽出）。
     /// 空文字なら動画は出さない。シリーズ詳細の ts-card で見出し行の直下に埋め込む。</summary>
     public string YoutubeId { get; set; } = "";
-    /// <summary>使ったサイズの名前の並び（例: "TVサイズ"）。違うサイズだけを使った順に。曲名の後ろに緑のピルで出す。
+    /// <summary>使ったサイズの名前の並び（例: "TVサイズ"）。違うサイズだけを、サイズの表の並び順（song_size_variants.display_order）に。曲名の後ろに緑のピルで出す。
     /// シリーズ詳細のエピソードを持つ系列で、サイズの指定がある話があるときだけ入る。</summary>
     public List<string> SizeLabels { get; } = new();
     /// <summary>再生ボタンの並び（サイズごと・使った順。鳴らす音源が同じなら 1 つ）。空ならボタンを出さない。</summary>
     public List<ThemeSongPlay> Plays { get; } = new();
-    /// <summary>サイズの札を縦に並べる行（札が 2 つ以上のときだけ。札ごとにそのサイズの再生ボタン）。</summary>
-    public List<ThemeSongSizeRow> SizeRows => ThemeSongCardParts.SizeRows(SizeLabels, Plays);
+    /// <summary>サイズの名前 → そのサイズで流れた話数。シリーズ詳細のエピソードを持つ系列だけが持つ。</summary>
+    public Dictionary<string, HashSet<int>> SizeEpisodeNos { get; } = new(StringComparer.Ordinal);
+    /// <summary>サイズの札を縦に並べる行（札ごとにそのサイズの再生ボタン。札が 2 つ以上なら札の左に流れた話数）。</summary>
+    public List<ThemeSongSizeRow> SizeRows => ThemeSongCardParts.SizeRows(SizeLabels, Plays, SizeEpisodeNos);
     /// <summary>カードの右上に置く再生ボタン（札を縦に並べるときは、どの札にも当たらないものだけ）。</summary>
     public List<ThemeSongPlay> LoosePlays => ThemeSongCardParts.LoosePlays(SizeLabels, Plays);
 
@@ -93,7 +95,9 @@ public sealed class ThemeSongRow
 /// <para><paramref name="EpisodeRangeLabel"/> はシリーズ集約文脈だけで使う使用話数ラベル。
 /// エピソード単位・映画シリーズ単位の呼び出しでは省略する（既定 null → 表示されない）。</para>
 /// <para><paramref name="SizeVariantCodes"/> もシリーズ集約文脈だけで使う、その区分で使ったサイズコードの並び
-/// （使った順・重複なし。サイズの指定が無い話は null の要素）。省略（null）なら録音ごとに選んだ音源のボタンを 1 つ出す。</para></summary>
+/// （使った順・重複なし。サイズの指定が無い話は null の要素）。省略（null）なら録音ごとに選んだ音源のボタンを 1 つ出す。</para>
+/// <para><paramref name="SizeEpisodeNos"/> もシリーズ集約文脈だけで使う、サイズコード → そのサイズで流れた話数
+/// （サイズの指定が無い話は含まない）。サイズの札が 2 つ以上のカードで、札の左に出す話数の元になる。</para></summary>
 public sealed record ThemeSongDescriptor(
     int SongRecordingId,
     string ThemeKind,
@@ -102,7 +106,8 @@ public sealed record ThemeSongDescriptor(
     string UsageActuality,
     string? Notes,
     string? EpisodeRangeLabel = null,
-    IReadOnlyList<string?>? SizeVariantCodes = null);
+    IReadOnlyList<string?>? SizeVariantCodes = null,
+    IReadOnlyDictionary<string, IReadOnlyCollection<int>>? SizeEpisodeNos = null);
 
 /// <summary>主題歌 / 挿入歌セクションの表示用 DTO 列を組み立てる共通ヘルパ。
 /// EpisodeGenerator / SeriesGenerator の重複ロジックを集約。
@@ -122,6 +127,9 @@ public sealed class ThemeSongRowBuilder
 
     /// <summary>サイズの名前のキャッシュ（variant_code → name_ja）。 同一 builder インスタンスを使い回す限り 1 度だけロード。</summary>
     private Dictionary<string, string>? _sizeLabelMap;
+
+    /// <summary>サイズの名前 → サイズの表の並び順（song_size_variants.display_order。未設定は最後）。<see cref="_sizeLabelMap"/> と一緒にロード。</summary>
+    private Dictionary<string, int>? _sizeOrderByLabel;
 
     public ThemeSongRowBuilder(
         BuildContext ctx,
@@ -165,6 +173,8 @@ public sealed class ThemeSongRowBuilder
         {
             var allSizes = await _songSizeVariantsRepo.GetAllAsync(ct).ConfigureAwait(false);
             _sizeLabelMap = allSizes.ToDictionary(v => v.VariantCode, v => v.NameJa, StringComparer.Ordinal);
+            _sizeOrderByLabel = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var v in allSizes) _sizeOrderByLabel.TryAdd(v.NameJa, v.DisplayOrder ?? int.MaxValue);
         }
 
         // 構造化クレジット（song_credits / song_recording_singers）は SiteDataLoader が
@@ -210,6 +220,16 @@ public sealed class ThemeSongRowBuilder
                         ThemeSongCardParts.ResolvePlay(_ctx.ThemeArtTracks, d.SongRecordingId, code, _sizeLabelMap));
                 }
             }
+            // サイズの名前 → そのサイズで流れた話数（シリーズ集約文脈だけ）。
+            var sizeEpisodeNos = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+            if (d.SizeEpisodeNos is not null)
+            {
+                foreach (var (code, nos) in d.SizeEpisodeNos)
+                {
+                    if (_sizeLabelMap.TryGetValue(code, out var sizeName))
+                        ThemeSongCardParts.AddEpisodeNos(sizeEpisodeNos, sizeName, nos);
+                }
+            }
             else
             {
                 ThemeSongCardParts.AddPlay(plays,
@@ -222,6 +242,7 @@ public sealed class ThemeSongRowBuilder
                 ThemeSongCardParts.AddKind(mergedRow.Kinds, kindEntry);
                 foreach (var sl in sizeLabels) ThemeSongCardParts.AddDistinct(mergedRow.SizeLabels, sl);
                 foreach (var p in plays) ThemeSongCardParts.AddPlay(mergedRow.Plays, p);
+                foreach (var (sizeName, nos) in sizeEpisodeNos) ThemeSongCardParts.AddEpisodeNos(mergedRow.SizeEpisodeNos, sizeName, nos);
                 mergedRow.Notes = ThemeSongCardParts.AppendNote(mergedRow.Notes, d.Notes);
                 continue;
             }
@@ -328,8 +349,18 @@ public sealed class ThemeSongRowBuilder
             row.Kinds.Add(kindEntry);
             row.SizeLabels.AddRange(sizeLabels);
             row.Plays.AddRange(plays);
+            foreach (var (sizeName, nos) in sizeEpisodeNos) ThemeSongCardParts.AddEpisodeNos(row.SizeEpisodeNos, sizeName, nos);
             rowByUsageKey[usageKey] = row;
             rows.Add(row);
+        }
+        // サイズの札はサイズの表の並び順（TVサイズ → Type.I → Type.II …）にそろえる。
+        foreach (var row in rows)
+        {
+            var sorted = row.SizeLabels
+                .OrderBy(l => _sizeOrderByLabel!.TryGetValue(l, out var o) ? o : int.MaxValue)
+                .ToList();
+            row.SizeLabels.Clear();
+            row.SizeLabels.AddRange(sorted);
         }
         return rows;
     }

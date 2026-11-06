@@ -192,7 +192,8 @@
            サイズ（その系列で使ったサイズ。楽曲詳細と同じ緑のピル）は曲名の後ろに使った順で。 ##}}
       {{~ multi_kind = (array.size t.Kinds) > 1 ~}}
         {{## 再生ボタン群。サイズの札とそのサイズのボタンを 1 組にして 1 組 1 行で縦に積み、右寄せでボタンを右端の一直線にそろえる
-             （楽曲詳細と同じ形。札の付かないボタンは、実際に鳴る音源のサイズの札を付けた行として後ろに足す）。置き場所は、
+             （楽曲詳細と同じ形。札の付かないボタンは、実際に鳴る音源のサイズの札を付けた行として後ろに足す）。
+             札が 2 つ以上のカード（サイズが話によって分かれるとき）は、札の左にそのサイズが流れた話数を出す。置き場所は、
              動画が無くて 1 組だけなら見出しの行の右端（.ts-sizes-inline）。それ以外はカードを 2 列に組み、右の列にカードの上端から積む
              （.ts-sizes-side のあるカード。狭い画面では 2 列をほどき、動画の下に右寄せ）。再生ボタンが 1 つも無いカードは、札を左に縦に並べるだけ（.ts-sizes）。 ##}}
         {{~ side_count = (array.size t.SizeRows) + (array.size t.LoosePlays) ~}}
@@ -200,7 +201,7 @@
         {{~ for sr in t.SizeRows ~}}{{~ if sr.Play ~}}{{~ has_play = true ~}}{{~ end ~}}{{~ end ~}}
         {{~ side_inline = has_play && side_count == 1 && t.YoutubeId == "" ~}}
       <li class="ts-card">
-        {{~ capture side_html ~}}{{~ for sr in t.SizeRows ~}}<li class="ts-size-row"><span class="recording-tracks-kind-badge recording-tracks-kind-size">{{ sr.Label | html.escape }}</span>{{~ if sr.Play ~}}{{ ts_play_button sr.Play }}{{~ end ~}}</li>{{~ end ~}}{{~ for p in t.LoosePlays ~}}<li class="ts-size-row">{{~ if p.SourceSizeLabel != "" ~}}<span class="recording-tracks-kind-badge recording-tracks-kind-size ts-size-unaired" title="放送で流れたサイズとは限らない音源">{{ p.SourceSizeLabel | html.escape }}</span>{{~ end ~}}{{ ts_play_button p }}</li>{{~ end ~}}{{~ end ~}}
+        {{~ capture side_html ~}}{{~ for sr in t.SizeRows ~}}<li class="ts-size-row">{{~ if sr.RangeLabel != "" ~}}<span class="ts-size-range muted">{{ sr.RangeLabel | html.escape }}</span>{{~ end ~}}<span class="recording-tracks-kind-badge recording-tracks-kind-size">{{ sr.Label | html.escape }}</span>{{~ if sr.Play ~}}{{ ts_play_button sr.Play }}{{~ end ~}}</li>{{~ end ~}}{{~ for p in t.LoosePlays ~}}<li class="ts-size-row">{{~ if p.SourceSizeLabel != "" ~}}<span class="recording-tracks-kind-badge recording-tracks-kind-size ts-size-unaired" title="放送で流れたサイズとは限らない音源">{{ p.SourceSizeLabel | html.escape }}</span>{{~ end ~}}{{ ts_play_button p }}</li>{{~ end ~}}{{~ end ~}}
         <div class="ts-headline{{ if multi_kind }} ts-headline-multi{{ end }}">
           {{~ if multi_kind ~}}
           <div class="ts-kinds">

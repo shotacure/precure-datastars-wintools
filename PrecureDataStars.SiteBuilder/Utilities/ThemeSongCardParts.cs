@@ -61,6 +61,12 @@ public sealed class ThemeSongSizeRow
 
     /// <summary>そのサイズの音源の再生ボタン。そのサイズの音源が無ければ null（札だけ出す）。</summary>
     public ThemeSongPlay? Play { get; init; }
+
+    /// <summary>
+    /// そのサイズが流れた話数（「#1～3, 10, 13, 16」など）。札の左に出す。札が 2 つ以上のカード
+    /// （サイズが話によって分かれるとき）で、シリーズ詳細のエピソードを持つ系列だけが持ち、ほかは空文字。
+    /// </summary>
+    public string RangeLabel { get; init; } = "";
 }
 
 /// <summary>主題歌カードを録音ごとに 1 枚へまとめるときの、区分・サイズ・再生ボタン・備考の足し込み。</summary>
@@ -70,16 +76,36 @@ public static class ThemeSongCardParts
     /// サイズの札を縦に並べる行。札ごとに、そのサイズの名前の付いた再生ボタンを添える（そのサイズの音源が無ければ札だけ）。
     /// 札が 2 つ以上のカードと、札が 1 つでそのサイズの音源で鳴るカード（札をボタンの左へ移す）で作る。
     /// 札が無いカードと、札が 1 つでもそのサイズの音源が無いカードは空（札は曲名の後ろ）。
+    /// 札が 2 つ以上で <paramref name="episodeNosByLabel"/> があれば、札ごとにそのサイズが流れた話数を添える
+    /// （札が 1 つなら曲の使用話数と同じなので添えない）。
     /// </summary>
-    public static List<ThemeSongSizeRow> SizeRows(IReadOnlyList<string> sizeLabels, IReadOnlyList<ThemeSongPlay> plays)
+    public static List<ThemeSongSizeRow> SizeRows(
+        IReadOnlyList<string> sizeLabels,
+        IReadOnlyList<ThemeSongPlay> plays,
+        IReadOnlyDictionary<string, HashSet<int>>? episodeNosByLabel = null)
     {
         if (sizeLabels.Count == 0) return [];
         if (sizeLabels.Count == 1 && !plays.Any(p => string.Equals(p.SizeLabel, sizeLabels[0], StringComparison.Ordinal))) return [];
+        bool withRange = sizeLabels.Count > 1 && episodeNosByLabel is not null;
         return sizeLabels.Select(l => new ThemeSongSizeRow
         {
             Label = l,
-            Play = plays.FirstOrDefault(p => string.Equals(p.SizeLabel, l, StringComparison.Ordinal))
+            Play = plays.FirstOrDefault(p => string.Equals(p.SizeLabel, l, StringComparison.Ordinal)),
+            RangeLabel = withRange && episodeNosByLabel!.TryGetValue(l, out var nos)
+                ? EpisodeRangeCompressor.Compress(nos)
+                : ""
         }).ToList();
+    }
+
+    /// <summary>サイズの名前ごとの話数の集合に、話数を足す（同じ録音を OP・ED で使ったカードをまとめるときも和を取る）。</summary>
+    public static void AddEpisodeNos(Dictionary<string, HashSet<int>> episodeNosByLabel, string sizeLabel, IEnumerable<int> episodeNos)
+    {
+        if (!episodeNosByLabel.TryGetValue(sizeLabel, out var set))
+        {
+            set = new HashSet<int>();
+            episodeNosByLabel[sizeLabel] = set;
+        }
+        set.UnionWith(episodeNos);
     }
 
     /// <summary>

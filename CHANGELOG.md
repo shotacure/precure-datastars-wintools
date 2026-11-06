@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：シリーズ詳細の主題歌カードで、サイズが話によって分かれる（サイズの札が 2 つ以上の）とき、札の左にそのサイズが流れた話数を出すようにした**（`ThemeSongDescriptor.SizeEpisodeNos`・`ThemeSongSeriesAggregator`・`ThemeSongRow.SizeEpisodeNos`・`ThemeSongSizeRow.RangeLabel`・`ThemeSongCardParts.SizeRows` / `AddEpisodeNos`・`series-detail.sbn`・`site.css`）：デパプリの ED の Type.I〜IV のように、どの話でどのサイズが流れたかを「#1～3, 10, 13, 16」の形で示す。曲の使用話数は見出しのまま。サイズの指定が無い話は数えず、点線の札（放送で流れたサイズとは限らない音源）には話数を付けない。札とボタンの 2 列を「話数｜札｜ボタン」の 3 列にし、狭い幅では話数の側を折り返す。
+  - サイズの札の並びを、初めて流れた話の順からサイズの表の並び順（`song_size_variants.display_order`。TVサイズ → Type.I → Type.II …）にした（`ThemeSongRowBuilder`）
 - **サイト：ホームのカレンダーの下の記念日カレンダーへのリンクを、ピンクのピルのボタン（`.button-link`）にした**（`home.sbn`・`site.css`）：灰色の字に細い下線だけで目立たなかった。
 - **サイト：記念日のカレンダーに人物の誕生日を出す基準を絞った**（`BirthdayCalendarEligibility.VoiceCastMinAppearances` / `MainStaffMinCreditAppearances`）：声の出演は 5 回以上から 10 回以上に、OP のクレジット・各話のチーフ（メインスタッフ）は本編のクレジットが通算 10 回以上の人物だけにした（チーフを 1〜2 回だけ務めた人を外す）。カレンダーの人物は 556 人から 436 人になった。
 - **サイト：シリーズ詳細・エピソード詳細の主題歌カードで、再生ボタンのあるサイズの札をボタンの左に置き、札とボタンの組を右寄せで縦に積むようにした**（`ThemeSongCardParts.SizeRows` / `LoosePlays`・`ThemeSongPlay.SourceSizeLabel` / `DisplaySizeLabel`・`ThemeArtTrack.SizeVariantCode`・`series-detail.sbn`・`episode-detail.sbn`・`site.css`）：楽曲詳細と同じ形にし、ボタンを右端の一直線にそろえる。動画が無くて 1 組だけなら見出しの行の右端に置き、それ以外はカードを 2 列に組んで右の列にカードの上端から積む（狭い画面では 2 列をほどき、動画の下に右寄せ）。サイズが 1 つのカードも、そのサイズの音源で鳴るなら札を曲名の後ろからボタンの左へ移す。どの札にも当たらないボタン（サイズの指定が無い回などに鳴る録音の既定の音源）には、実際に鳴る音源のトラックのサイズを札にして付け、放送で流れたサイズとは限らないので灰色の点線の枠にし、ボタンの説明にもそう書く。再生ボタンが 1 つも無いカードはこれまでどおり。カードの右上に絶対配置していた再生ボタン（`.ts-plays`）はやめた

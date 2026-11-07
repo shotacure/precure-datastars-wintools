@@ -125,6 +125,11 @@ public sealed class BuildConfig
     /// <see cref="PageFilter"/> と組み合わせると、対象のページの画像だけを描き直す。</summary>
     public bool RefreshOgCards { get; }
 
+    /// <summary>テストビルドで差し替えるビルドの基準時刻（<c>--as-of</c> 由来）。null なら今の時刻。
+    /// 予告・雑誌の発売で回が明らかになったか（<see cref="Utilities.PrereleaseEpisodeFilter"/>）とサブタイトルのぼかしの判定に使い、
+    /// 発売日の前と後でページがどう変わるかを確かめるためのもの。本番ビルドでは指定できない。</summary>
+    public DateTimeOffset? AsOf { get; }
+
     private BuildConfig(
         string connectionString,
         string outputDirectory,
@@ -149,7 +154,8 @@ public sealed class BuildConfig
         string subtitleTelopCacheDirectory,
         bool refreshSubtitleTelops,
         string ogCardCacheDirectory,
-        bool refreshOgCards)
+        bool refreshOgCards,
+        DateTimeOffset? asOf)
     {
         ConnectionString = connectionString;
         OutputDirectory = outputDirectory;
@@ -175,6 +181,7 @@ public sealed class BuildConfig
         RefreshSubtitleTelops = refreshSubtitleTelops;
         OgCardCacheDirectory = ogCardCacheDirectory;
         RefreshOgCards = refreshOgCards;
+        AsOf = asOf;
     }
 
     /// <summary>
@@ -240,9 +247,10 @@ public sealed class BuildConfig
     /// <param name="pageFilter">ピンポイントビルドのページフィルタ（<c>--page</c> 由来）。空文字なら全ページ。</param>
     /// <param name="refreshSubtitleTelops">サブタイトルのテロップ画像を作り置きを使わずに描き直すか（<c>--refresh-telop</c> 由来）。</param>
     /// <param name="refreshOgCards">OGP カード画像を作り置きを使わずに描き直すか（<c>--refresh-og</c> 由来）。</param>
+    /// <param name="asOf">テストビルドで差し替えるビルドの基準時刻（<c>--as-of</c> 由来）。null なら今の時刻。</param>
     /// <returns>構築済み設定。</returns>
     /// <exception cref="InvalidOperationException">必須項目（接続文字列）が未設定の場合。</exception>
-    public static BuildConfig FromAppConfig(bool isProductionMode, DeployRuntimeOptions deploy, string pageFilter, bool refreshSubtitleTelops = false, bool refreshOgCards = false)
+    public static BuildConfig FromAppConfig(bool isProductionMode, DeployRuntimeOptions deploy, string pageFilter, bool refreshSubtitleTelops = false, bool refreshOgCards = false, DateTimeOffset? asOf = null)
     {
         // 接続文字列は既存ツール群と同じ名前（DbConfig.DefaultConnectionStringName = "DatastarsMySql"）で統一
         var cs = ConfigurationManager.ConnectionStrings[DbConfig.DefaultConnectionStringName]?.ConnectionString
@@ -350,6 +358,6 @@ public sealed class BuildConfig
             effectiveGa4, gsv.Trim(), publishedYear,
             defaultOg, amazonTag, ogFonts, isProductionMode,
             awsBucket, awsRegion, awsProfile, cfDist, protectedPrefixes, deploy,
-            pageFilter ?? "", telopCacheDir, refreshSubtitleTelops, ogCardCacheDir, refreshOgCards);
+            pageFilter ?? "", telopCacheDir, refreshSubtitleTelops, ogCardCacheDir, refreshOgCards, asOf);
     }
 }

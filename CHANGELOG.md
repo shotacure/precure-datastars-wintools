@@ -4,6 +4,10 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：予告も雑誌の発売もまだの回を、ビルドの出力に一切出さないようにした**（`PrereleaseEpisodeFilter`〔新規〕・`SiteDataLoader`・`BuildContext.HiddenEpisodeIds` / `HiddenEpisodes`・`SubtitleStatsRepository`・`SubtitleStatsGenerator`）：回の情報は、前の回の予告（誰にでも出す）とアニメ雑誌の号の発売日の 0:00（早く見る設定の閲覧者にだけ、ぼかしの枠で出す）で明らかになる。どちらもまだの回はぼかしの枠の中にも入れられないので、読み込みの直後にすべての索引から外し、サブタイトル統計の SQL でも除く。前もって DB に入れた回が、号の発売前の定時デプロイで一覧・ページ・統計・各話の「〜第N話まで」に出ていた。発売前の号の掲載状態も、予告で明らかになった回でも出さない。
+  - 出力の点検を足した（`PrereleaseOutputGuard`〔新規〕）：全体の生成の後に、出さない回のページの URL とサブタイトル・読みが出力のどこかに残っていれば警告にし、定時デプロイの安全ゲートで公開を止める
+  - テストビルドの基準時刻を差し替える `--as-of` を足した（`BuildConfig.AsOf`。`--test` と併用）
+- **スクリプト：アニメ雑誌の号の発売日の 0:00 に本番デプロイする定時の回を足した**（`scheduled-deploy.ps1 -MagazineReleaseOnly`・`register-deploy-task.ps1`・SiteBuilder の `--magazine-release-today`〔`MagazineReleaseCheck`〕）：別のタスクで毎日 0:00 に動き、今日が号の発売日のときだけデプロイする。
 - **ツール：BDAnalyzer で、読み取った Blu-ray の当てが決まったら確認を出さずに記録するようにした**（`MainForm.LoadAndSaveBdAsync`）：TV の話が当たり、どのプレイリストも候補が 1 話だけのとき、または作品単位のまとまりがただ 1 つに当たったときは、要約の確認を出さずに bd_* に記録し、状態の欄に作品と話数の範囲を出す。決まらなかった盤はこれまでどおり確認を出し、止まった理由を要約の頭に添える。記録済みの盤は確認なしで更新し、話も本編も当たっていない記録済みの盤はもう一度作品を判定して当てる。
   - 管理ファイルに欠けがある読み取り（`index.bdmv`・`MovieObject.bdmv`・プレイリスト・クリップ情報・`STREAM` のどれかが読めない）は、3 秒おきに 10 回まで読み直し、読み切れたものだけを記録するようにした（`MainForm.IncompleteReadReason`）。読み切れなければ記録せずに入れ直すよう知らせる。盤ごとの結果を `%LOCALAPPDATA%\precure-datastars\bd-read.log` に 1 行ずつ残す（`MainForm.RecordReadResult`）。管理ファイルを 1 つも読めなかった盤はハッシュの鍵を作らずに止めるようにした（`BdmvStructureReader.HashDiscId`）：何も読めなかったときのハッシュはどの盤でも同じ値になり、別の盤の記録を上書きしていた
 - **サイト：コラムの脚注の番号を、本文の参照も脚注の側も「[1]」の形にした**（`ArticlesGenerator.FormatFootnoteRefs`・`site.css`）：本文は Markdig の参照を `<sup class="fn-ref">[<a>1</a>]</sup>` にし、リンクは括弧の中の番号だけ。脚注の側は CSS のカウンターで番号を「[1]」にしてぶら下げる。

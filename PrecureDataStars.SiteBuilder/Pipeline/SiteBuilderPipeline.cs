@@ -349,6 +349,11 @@ public sealed class SiteBuilderPipeline
             reporter.EndSection();
         }
 
+        // まだ出さない話（予告も雑誌の発売もまだの話）が出力に残っていないかの点検。出力の掃除の後に、出力の全体を照らす。
+        int prereleaseHits = PrereleaseOutputGuard.Check(ctx, config.OutputDirectory);
+        if (ctx.HiddenEpisodes.Count > 0)
+            logger.Info($"prerelease guard: まだ出さない話 {ctx.HiddenEpisodes.Count} 件を出力に照らし、{prereleaseHits} か所で見つかりました");
+
         // OGP カードの書体に関する報告を、種類ごとに 1 度だけ出す。ブランド書体に無い文字の代替描画は情報として残し、
         // 指定した書体（作品の書体の表が指す fonts.render_font_name など）がこの PC に無い場合は、気づかずに別の書体で焼いてデプロイしないよう警告にする。
         foreach (var (message, samplePath) in pageRenderer.OgCardGlyphWarnings)

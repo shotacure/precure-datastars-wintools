@@ -12,6 +12,10 @@
   手動のデプロイ（deploy.ps1 を作業フォルダで流す）とまったく同じことをする。コードはその時点の作業フォルダのもの
   （未コミットの変更も含む）、App.config・出力先・作り置き（OGP カード・テロップ画像）も手動のデプロイと同じものを使う。
 
+  別のタスクで毎日 0:00 にも動かす（-MagazineReleaseOnly）。その日がアニメ雑誌の号の発売日のときだけビルドして公開し、
+  その号で明らかになる回を、早く見る設定の閲覧者に発売日の 0:00 から出す（発売日でなければ何もせずに終わる）。
+  発売日かどうかは SiteBuilder の --magazine-release-today で DB の号の表に照らす。
+
   安全ゲート（大量の削除・ビルド警告）で止まったときや失敗したときは公開しない。
   経過はすべてログ（%LOCALAPPDATA%\precure-datastars\scheduled-deploy.log）に追記する。
   公開できなかったときは Windows の通知（トースト）を出す。通知は Windows PowerShell 5.1 の WinRT で出すので、
@@ -19,6 +23,9 @@
 
 .PARAMETER DryRunOnly
   差分の確認（deploy.ps1 -DryRunOnly）だけを行い、本番には反映しない。仕組みの動作確認に使う。
+
+.PARAMETER MagazineReleaseOnly
+  今日がアニメ雑誌の号の発売日のときだけデプロイする。発売日でなければログに 1 行書いて終わる（0:00 の回）。
 
 .PARAMETER TestNotification
   デプロイはせず、公開できなかったときの通知だけを出す。通知が見えるかの確認に使う。
@@ -32,6 +39,7 @@
 [CmdletBinding()]
 param(
     [switch]$DryRunOnly,
+    [switch]$MagazineReleaseOnly,
     [switch]$TestNotification
 )
 
@@ -76,6 +84,24 @@ try {
     $commit = (& git -C $repoRoot rev-parse --short HEAD).Trim()
     $dirty = @(& git -C $repoRoot status --porcelain).Count
     Write-Log "作業フォルダ（コミット $commit、未コミットの変更 $dirty 件）でビルドします。"
+
+    # 0:00 の回：今日が雑誌の号の発売日かを SiteBuilder に確かめ、発売日でなければここで終える。
+    if ($MagazineReleaseOnly) {
+        & dotnet build (Join-Path $PSScriptRoot 'deploy-tools.slnf') -c Release --nologo -v q
+        if ($LASTEXITCODE -ne 0) { throw "道具のビルドが失敗しました (exit $LASTEXITCODE)。" }
+        $siteBuilderExe = Get-ChildItem -Path (Join-Path $repoRoot 'PrecureDataStars.SiteBuilder/bin/Release') -Filter 'PrecureDataStars.SiteBuilder.exe' -Recurse -File |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if (-not $siteBuilderExe) { throw "PrecureDataStars.SiteBuilder の exe が見つかりません。" }
+        $checkOutput = & $siteBuilderExe.FullName --magazine-release-today 2>&1
+        $checkExit = $LASTEXITCODE
+        foreach ($line in $checkOutput) { Write-Log "    $line" }
+        if ($checkExit -eq 3) {
+            Write-Log "雑誌の号の発売日ではないので、デプロイしません。"
+            $succeeded = $true
+            return
+        }
+        if ($checkExit -ne 0) { throw "雑誌の号の発売日を確かめられませんでした (exit $checkExit)。" }
+    }
 
     # deploy.ps1 の出力はすべてログにも残す（ゲートで止まった理由・差分の件数を後から読めるように）。
     $deployArgs = @{}

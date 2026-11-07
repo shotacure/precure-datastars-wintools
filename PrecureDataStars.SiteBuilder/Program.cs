@@ -13,7 +13,9 @@ namespace PrecureDataStars.SiteBuilder;
 /// <c>--upload-only</c> はサイトを作り直さず、直前の全体のドライランで作った出力をそのまま上げる（<c>--production --deploy</c> と併用）。
 /// <c>--refresh-telop</c> はサブタイトルのテロップ画像を、<c>--refresh-og</c> は OGP カード画像を、作り置きを使わずに描き直す
 /// （<c>--page</c> と併用すれば対象のページだけ）。
-/// <c>--og-cards &lt;一覧.json&gt; &lt;出力先&gt;</c> は、DB を使わずに一覧のカードだけを同じ描き方で描く（precure.news 用。<see cref="OgCardBatch"/>）。</summary>
+/// <c>--og-cards &lt;一覧.json&gt; &lt;出力先&gt;</c> は、DB を使わずに一覧のカードだけを同じ描き方で描く（precure.news 用。<see cref="OgCardBatch"/>）。
+/// <c>--as-of &lt;時刻&gt;</c> はテストビルドの基準時刻を差し替える（<c>--test</c> と併用）。
+/// <c>--magazine-release-today</c> は、今日がアニメ雑誌の号の発売日かを終了コードで返す（<see cref="MagazineReleaseCheck"/>）。</summary>
 internal static class Program
 {
     private static async Task<int> Main(string[] args)
@@ -35,6 +37,17 @@ internal static class Program
                 return OgCardBatch.Run(args[1], args[2]);
             }
 
+            // 今日がアニメ雑誌の号の発売日かを確かめる起動方法（発売日 0:00 の定時デプロイが、ビルドするかを決めるのに使う）。
+            if (args.Length > 0 && string.Equals(args[0], "--magazine-release-today", StringComparison.OrdinalIgnoreCase))
+            {
+                if (args.Length != 1)
+                {
+                    PrintUsage();
+                    return 2;
+                }
+                return await MagazineReleaseCheck.RunAsync().ConfigureAwait(false);
+            }
+
             // ビルドモード・デプロイ意図はコマンドライン引数で決める（App.config では決めない）。
             // 既定はテストモード：うっかり普通に起動しても本番ディレクトリ・本番タグには触れない。
             bool isProduction = false;
@@ -47,9 +60,24 @@ internal static class Program
             bool uploadOnly = false;
             string pageFilter = "";
             bool expectPageValue = false;
+            DateTimeOffset? asOf = null;
+            bool expectAsOfValue = false;
             foreach (var a in args)
             {
-                if (expectPageValue)
+                if (expectAsOfValue)
+                {
+                    // 直前の "--as-of" に続く値（ビルドの基準時刻。日本時間の "2026-11-10T00:00" の形）。
+                    if (!DateTime.TryParseExact(a, new[] { "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd" },
+                            System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var local))
+                    {
+                        Console.Error.WriteLine($"--as-of の時刻を読めません: {a}（例: 2026-11-10T00:00。日本時間）");
+                        PrintUsage();
+                        return 2;
+                    }
+                    asOf = new DateTimeOffset(local, TimeSpan.FromHours(9));
+                    expectAsOfValue = false;
+                }
+                else if (expectPageValue)
                 {
                     // 直前の "--page" に続く値（生成対象のページ URL パス断片。例: /privacy/）。
                     pageFilter = a;
@@ -73,6 +101,8 @@ internal static class Program
                     refreshOg = true;
                 else if (string.Equals(a, "--upload-only", StringComparison.OrdinalIgnoreCase))
                     uploadOnly = true;
+                else if (string.Equals(a, "--as-of", StringComparison.OrdinalIgnoreCase))
+                    expectAsOfValue = true;
                 else
                 {
                     Console.Error.WriteLine($"不明な引数: {a}");
@@ -83,6 +113,12 @@ internal static class Program
             if (expectPageValue)
             {
                 Console.Error.WriteLine("--page にはページの URL パス（例: /privacy/）を指定してください。");
+                PrintUsage();
+                return 2;
+            }
+            if (expectAsOfValue)
+            {
+                Console.Error.WriteLine("--as-of にはビルドの基準時刻（例: 2026-11-10T00:00。日本時間）を指定してください。");
                 PrintUsage();
                 return 2;
             }
@@ -130,7 +166,15 @@ internal static class Program
                 ? new DeployRuntimeOptions(Requested: true, DryRun: dryRun, SkipConfirm: skipConfirm, UploadOnly: uploadOnly)
                 : DeployRuntimeOptions.None;
 
-            var config = BuildConfig.FromAppConfig(isProduction, deployOptions, pageFilter, refreshTelop, refreshOg);
+            // 基準時刻の差し替えはテストビルドだけ（本番に、今と違う時刻の判定で作ったページを出さない）。
+            if (asOf is not null && !isTest)
+            {
+                Console.Error.WriteLine("--as-of は --test と併用してください（本番ビルドでは基準時刻を差し替えられません）。");
+                PrintUsage();
+                return 2;
+            }
+
+            var config = BuildConfig.FromAppConfig(isProduction, deployOptions, pageFilter, refreshTelop, refreshOg, asOf);
             var pipeline = new SiteBuilderPipeline();
             await pipeline.RunAsync(config).ConfigureAwait(false);
             return 0;
@@ -187,7 +231,11 @@ internal static class Program
         Console.Error.WriteLine("  --dry-run    : デプロイ計画のみ表示（S3 / CloudFront を変更しない。--deploy と併用）");
         Console.Error.WriteLine("  --yes        : 削除前の確認をスキップ（--deploy と併用）");
         Console.Error.WriteLine("  --upload-only: サイトを作り直さず、直前の全体のドライランの出力をそのまま上げる（--deploy と併用）");
+        Console.Error.WriteLine("  --as-of <時刻>: ビルドの基準時刻を差し替える（日本時間。例: 2026-11-10T00:00。--test と併用）。");
+        Console.Error.WriteLine("                 予告・雑誌の発売の前と後でページがどう変わるかを確かめる");
         Console.Error.WriteLine("別の使い方: PrecureDataStars.SiteBuilder --og-cards <一覧.json> <出力先>");
         Console.Error.WriteLine("  一覧のカードだけを、このサイトと同じ描き方・書体で PNG にする（DB を使わない。precure.news 用）");
+        Console.Error.WriteLine("別の使い方: PrecureDataStars.SiteBuilder --magazine-release-today");
+        Console.Error.WriteLine("  今日がアニメ雑誌の号の発売日なら終了コード 0、そうでなければ 3（発売日 0:00 の定時デプロイが使う）");
     }
 }

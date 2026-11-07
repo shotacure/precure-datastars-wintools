@@ -373,6 +373,18 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<int, DateTimeOffset> SubtitleRevealAtByEpisodeId { get; init; }
 
     /// <summary>
+    /// ビルド時点で予告も雑誌の発売もまだの話（<see cref="Utilities.PrereleaseEpisodeFilter"/>）の episode_id。
+    /// <see cref="EpisodeById"/> などの索引からは外してあり、DB を直接引く集計（サブタイトル統計など）はこの集合で同じ話を除く。
+    /// </summary>
+    public required IReadOnlySet<int> HiddenEpisodeIds { get; init; }
+
+    /// <summary>
+    /// <see cref="HiddenEpisodeIds"/> の話の行。出力の点検（<see cref="PrereleaseOutputGuard"/>）が、
+    /// これらの話のページの URL とサブタイトルが出力に残っていないかを確かめるのに使う。
+    /// </summary>
+    public required IReadOnlyList<Episode> HiddenEpisodes { get; init; }
+
+    /// <summary>
     /// ビルドの基準時刻。サブタイトル解禁時刻の辞書を作った時刻で、ページタイトル・OGP など
     /// 後から隠せない出力で「解禁前か」を判定するときも、この時刻で比べて辞書と判定をそろえる。
     /// </summary>

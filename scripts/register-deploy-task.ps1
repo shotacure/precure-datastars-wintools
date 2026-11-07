@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
-  scheduled-deploy.ps1（precure.tv の定時の本番デプロイ）を毎日 6:00 と毎週水曜・土曜の 8:30 に動かすタスクをタスクスケジューラに登録（または解除）する。
+  scheduled-deploy.ps1（precure.tv の定時の本番デプロイ）を毎日 6:00 と毎週水曜・土曜の 8:30 に動かすタスクと、
+  アニメ雑誌の号の発売日の 0:00 に動かすタスクをタスクスケジューラに登録（または解除）する。
 
 .DESCRIPTION
   現在のユーザーの「ログオン中だけ実行」のタスクとして登録する（管理者権限もパスワードの保存も要らない）。
@@ -17,6 +18,9 @@
   6:00 の回が安全ゲートなどで止まったときは通知が出るので、8:30 までに直すか判断できる。
   6:00 の回が 8:30 を過ぎても動いているときは、8:30 の回はそれが終わるのを待ってから動く（MultipleInstances Queue）。
 
+  発売日の回は別のタスクで、毎日 0:00 に scheduled-deploy.ps1 -MagazineReleaseOnly を動かす。その日が号の発売日のときだけ
+  ビルドして公開し、号で明らかになる回を早く見る設定の閲覧者に出す。発売日でなければ何もせずに終わる。
+
 .PARAMETER TaskName
   タスク名。既定「precure-datastars scheduled deploy」。
 
@@ -30,8 +34,14 @@
   毎日動く下準備の回の実行時刻。既定 06:00。空文字にすると下準備の回を登録しない
   （その場合 Amazon の画像は 24 時間以内に取り直されなくなる）。
 
+.PARAMETER MagazineReleaseTaskName
+  発売日の回のタスク名。既定「precure-datastars magazine release deploy」。
+
+.PARAMETER MagazineReleaseAt
+  発売日の回の実行時刻。既定 00:00。空文字にすると発売日の回を登録しない。
+
 .PARAMETER Unregister
-  タスクを解除する。
+  タスクを解除する（発売日の回のタスクも）。
 
 .PARAMETER RunNow
   登録したあと、すぐに 1 回動かす（本番に公開されるので注意）。
@@ -47,6 +57,8 @@ param(
     [System.DayOfWeek[]]$DaysOfWeek = @([System.DayOfWeek]::Wednesday, [System.DayOfWeek]::Saturday),
     [string]$At = '08:30',
     [string]$PrepareAt = '06:00',
+    [string]$MagazineReleaseTaskName = 'precure-datastars magazine release deploy',
+    [string]$MagazineReleaseAt = '00:00',
     [switch]$Unregister,
     [switch]$RunNow
 )
@@ -57,6 +69,10 @@ $ErrorActionPreference = 'Stop'
 if ($Unregister) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     Write-Host "解除しました: $TaskName" -ForegroundColor Green
+    if (Get-ScheduledTask -TaskName $MagazineReleaseTaskName -ErrorAction SilentlyContinue) {
+        Unregister-ScheduledTask -TaskName $MagazineReleaseTaskName -Confirm:$false
+        Write-Host "解除しました: $MagazineReleaseTaskName" -ForegroundColor Green
+    }
     return
 }
 
@@ -93,6 +109,21 @@ Write-Host "  実行      : $shell -File `"$script`""
 Write-Host "  時刻      : $timesLabel（スリープなら起こす。動けなかったときは次に使えるとき）"
 Write-Host "  次回      : $($info.NextRunTime)"
 Write-Host "  記録      : $(Join-Path $env:LOCALAPPDATA 'precure-datastars\scheduled-deploy.log')"
+
+# 発売日の回：毎日この時刻に動き、その日が雑誌の号の発売日のときだけ公開する。
+if ($MagazineReleaseAt) {
+    $magazineAction = New-ScheduledTaskAction -Execute $shell `
+        -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script`" -MagazineReleaseOnly" `
+        -WorkingDirectory $repoRoot
+    Register-ScheduledTask -TaskName $MagazineReleaseTaskName -Action $magazineAction `
+        -Trigger (New-ScheduledTaskTrigger -Daily -At $MagazineReleaseAt) -Settings $settings -Principal $principal `
+        -Description "precure.tv の雑誌の号の発売日の本番デプロイ。毎日 $MagazineReleaseAt に動き、発売日のときだけ公開する（scripts/scheduled-deploy.ps1 -MagazineReleaseOnly）" `
+        -Force | Out-Null
+    $magazineInfo = Get-ScheduledTaskInfo -TaskName $MagazineReleaseTaskName
+    Write-Host "登録しました: $MagazineReleaseTaskName" -ForegroundColor Green
+    Write-Host "  時刻      : 毎日 $MagazineReleaseAt（雑誌の号の発売日のときだけ公開する）"
+    Write-Host "  次回      : $($magazineInfo.NextRunTime)"
+}
 
 if ($RunNow) {
     Start-ScheduledTask -TaskName $TaskName

@@ -82,7 +82,36 @@ public static class SiteDataLoader
         // 旧版は seriesAll の foreach で per-series GetBySeriesAsync を 60+ 回発火する N+1 だった。
         // GetAllAsync は (series_id, series_ep_no) 昇順で返すため、GroupBy 結果はそのまま per-series 取得と
         // 同等の並び順になる。
-        var allEpisodes = await episodesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var loadedEpisodes = await episodesRepo.GetAllAsync(ct).ConfigureAwait(false);
+
+        // アニメ雑誌の号マスタ：号の年月昇順の全件。エピソード詳細の
+        // 「アニメ雑誌サブタイトル掲載」セクションで放送日 → 号の解決（MagazineIssueResolver）に使い、
+        // 下の「まだ明らかになっていない話」の判定にも使う。
+        var magazineIssues = await magazineIssuesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        logger.Info($"magazine_issues: {magazineIssues.Count} 号");
+
+        // ビルドの基準の時刻。予告・雑誌の発売で明らかになったかどうかはこの時刻で決める
+        // （テストビルドだけ --as-of で差し替えられる）。
+        var buildStartedAt = config.AsOf ?? DateTimeOffset.Now;
+        if (config.AsOf is { } asOf) logger.Info($"build time (--as-of): {asOf:yyyy-MM-dd HH:mm zzz}");
+
+        // サブタイトル解禁時刻の事前計算（DB アクセスなし。前話の on_air_at から算出するだけ）。
+        // /series/{slug}/{n}/・/episodes/・ホーム・統計 7 系統・検索インデックスなど、サブタイトルが
+        // 出現しうる全ページがこの辞書を参照する。実装は SubtitleEmbargoCalculator（Utilities）を参照。
+        // 前話の放送日から求めるので、下で外す話も含めた全件から作る。
+        var subtitleRevealAtByEpisodeId = SubtitleEmbargoCalculator.Build(loadedEpisodes, buildStartedAt);
+
+        // 予告も雑誌の発売もまだの話は、ビルドの時点で無い話として扱い、以後のすべての索引から外す（PrereleaseEpisodeFilter）。
+        // 発売前の号の掲載状態も消す。DB を直接引く集計は HiddenEpisodeIds で同じ話を除き、出力の点検で残っていないか確かめる。
+        var hiddenEpisodeIds = PrereleaseEpisodeFilter.FindHidden(loadedEpisodes, subtitleRevealAtByEpisodeId, magazineIssues, buildStartedAt);
+        var allEpisodes = loadedEpisodes.Where(e => !hiddenEpisodeIds.Contains(e.EpisodeId)).ToList();
+        int clearedMagazineStatuses = PrereleaseEpisodeFilter.ClearUnreleasedMagazineStatuses(allEpisodes, magazineIssues, buildStartedAt);
+        subtitleRevealAtByEpisodeId = subtitleRevealAtByEpisodeId
+            .Where(kv => !hiddenEpisodeIds.Contains(kv.Key))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+        logger.Info($"subtitle_embargo: {subtitleRevealAtByEpisodeId.Count} エピソードが解禁待ち圏内");
+        logger.Info($"prerelease: 予告・雑誌の発売前で出さない話 {hiddenEpisodeIds.Count} 件、発売前の号の掲載状態を消した話 {clearedMagazineStatuses} 件");
+
         var episodesBySeries = allEpisodes
             .GroupBy(e => e.SeriesId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Episode>)g.ToList());
@@ -123,13 +152,10 @@ public static class SiteDataLoader
         // 全エピソード分のパート尺偏差値・順位を 1 度だけ算出する。
         // EpisodeGenerator が per-page で全件 CTE 集計を繰り返さないよう、
         // 結果を episode_id 単位の辞書に格納してビルドコンテキストで共有する。
-        var partLengthStatsByEpisode = await episodePartsRepo.GetAllPartLengthStatsAsync(ct).ConfigureAwait(false);
+        var partLengthStatsByEpisode = (await episodePartsRepo.GetAllPartLengthStatsAsync(ct).ConfigureAwait(false))
+            .Where(kv => !hiddenEpisodeIds.Contains(kv.Key))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
         logger.Info($"part_length_stats: {partLengthStatsByEpisode.Count} エピソード分を事前計算");
-
-        // アニメ雑誌の号マスタ：号の年月昇順の全件。エピソード詳細の
-        // 「アニメ雑誌サブタイトル掲載」セクションで放送日 → 号の解決（MagazineIssueResolver）に使う。
-        var magazineIssues = await magazineIssuesRepo.GetAllAsync(ct).ConfigureAwait(false);
-        logger.Info($"magazine_issues: {magazineIssues.Count} 号");
 
         // 作品で使われた書体のマスタと、作品のどこにどの書体を使ったか：書体のページ・見本の画像・
         // 免責事項の「使用フォントの一覧」がここから引く（サブタイトルのテロップ画像の書体は SeriesRepository が同じ表から引く）。
@@ -137,13 +163,6 @@ public static class SiteDataLoader
         var fontById = fonts.ToDictionary(f => f.FontId);
         var fontUsages = await fontsRepo.GetAllUsagesAsync(ct).ConfigureAwait(false);
         logger.Info($"fonts: {fonts.Count} 書体 / series_font_usages: {fontUsages.Count} 行");
-
-        // サブタイトル解禁時刻の事前計算（DB アクセスなし。前話の on_air_at から算出するだけ）。
-        // /series/{slug}/{n}/・/episodes/・ホーム・統計 7 系統・検索インデックスなど、サブタイトルが
-        // 出現しうる全ページがこの辞書を参照する。実装は SubtitleEmbargoCalculator（Utilities）を参照。
-        var buildStartedAt = DateTimeOffset.Now;
-        var subtitleRevealAtByEpisodeId = SubtitleEmbargoCalculator.Build(allEpisodes, buildStartedAt);
-        logger.Info($"subtitle_embargo: {subtitleRevealAtByEpisodeId.Count} エピソードが解禁待ち圏内");
 
         // サブタイトル文字統計の事前展開（DB アクセスなし、ロード済み episodes の title_char_stats JSON を C# 側でパース）。
         // TitleCharInfoRenderer がページごとに JSON_CONTAINS_PATH 全表走査を文字数分繰り返さないよう、
@@ -154,13 +173,17 @@ public static class SiteDataLoader
         // エピソード詳細ページが per-page で引いていた 3 テーブル（パート / 主題歌 / 使用音声）を
         // 全件ロードして episode_id 単位の辞書に事前グルーピングする。各 GetAllAsync の ORDER BY は
         // (episode_id, per-id 取得時と同じ並び) になっており、GroupBy 結果は per-id 取得と同一順を保つ。
+        // 出さない話（hiddenEpisodeIds）の行は、どの辞書にも入れない。
         var episodePartsByEpisode = (await episodePartsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .Where(p => !hiddenEpisodeIds.Contains(p.EpisodeId))
             .GroupBy(p => p.EpisodeId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodePart>)g.ToList());
         var themeSongsByEpisode = (await episodeThemeSongsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .Where(t => !hiddenEpisodeIds.Contains(t.EpisodeId))
             .GroupBy(t => t.EpisodeId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodeThemeSong>)g.ToList());
         var episodeUsesByEpisode = (await episodeUsesRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .Where(u => !hiddenEpisodeIds.Contains(u.EpisodeId))
             .GroupBy(u => u.EpisodeId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodeUse>)g.ToList());
         logger.Info($"episode_parts: {episodePartsByEpisode.Count} ep / episode_theme_songs: {themeSongsByEpisode.Count} ep / episode_uses: {episodeUsesByEpisode.Count} ep");
@@ -278,7 +301,9 @@ public static class SiteDataLoader
         // 全 credits 行を 1 度の SELECT で取得して episode_id / series_id 単位でグルーピング。
         // SeriesGenerator の per-episode 6 階層 DB ループの起点 GetByEpisodeAsync を撲滅するため、
         // および EpisodeGenerator が per-page で同じ呼び出しを発火していた経路も同時に置き換える前提。
-        var allCredits = await creditsRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var allCredits = (await creditsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .Where(c => c.EpisodeId is not int eid || !hiddenEpisodeIds.Contains(eid))
+            .ToList();
         // 表示用（エピソード詳細・作品詳細のクレジット）は全版、集計用は本放送版を除いた共通と Blu-ray・配信版だけ。
         var creditsByEpisodeForDisplay = allCredits
             .Where(c => c.EpisodeId.HasValue)
@@ -451,6 +476,8 @@ public static class SiteDataLoader
             SeriesById = seriesById,
             LatestAiredTvEpisode = latestAired,
             SubtitleRevealAtByEpisodeId = subtitleRevealAtByEpisodeId,
+            HiddenEpisodeIds = hiddenEpisodeIds,
+            HiddenEpisodes = loadedEpisodes.Where(e => hiddenEpisodeIds.Contains(e.EpisodeId)).ToList(),
             BuildStartedAt = buildStartedAt,
             PartLengthStatsByEpisode = partLengthStatsByEpisode,
             TitleCharIndex = titleCharIndex,

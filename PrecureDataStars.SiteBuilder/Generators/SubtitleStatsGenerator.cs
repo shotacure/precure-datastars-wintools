@@ -29,7 +29,7 @@ public sealed class SubtitleStatsGenerator
     {
         _ctx = ctx;
         _page = page;
-        _repo = new SubtitleStatsRepository(factory);
+        _repo = new SubtitleStatsRepository(factory, ctx.HiddenEpisodeIds.ToList());
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)

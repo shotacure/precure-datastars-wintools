@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：本文の書体に無い簡体字を、同じ設計のゴシックで出すようにした**（`_layout.sbn`・`site.css` の `--font-base`・`OgTextShaper.UseSubstitutes`・`OgCardRenderer`・`OgCardFontPaths.ChineseFallback` / `ChineseBodyFallback`・`BuildConfig`・App.config の `OgCardChineseFallbackFont` / `OgCardChineseBodyFallbackFont`〔新規〕）：中国のスタッフの名前の「玮」「陈」などは Noto Sans JP に無く、ブラウザが端末の別の書体で出していた。Google Fonts の Noto Sans SC を Noto Sans JP の次に置き、Noto Sans JP に無い字だけをそれで出す。OGP カードは、補いの書体（Pr6N）にも無い字が豆腐になっていたので、補いを前から順に探す並びにし、Pr6N の次に簡体字の書体（UD新ゴ 簡体中文 など）を置けるようにした。本文・数字・注意書きの書体には、簡体字の補いだけを掛ける
 - **スキーマ・Catalog：声の出演の画面の役名（`character_display_text`）を、名義の頭を省いた役名にも使えるようにした**（`CreditBlockEntry.IsValidCharacterDisplayText`〔新規〕・`CreditBulkInputParser`・`CreditBulkInputEncoder`・ヘルスチェック D6・マイグレーション `v1.20.0_entry_character_display_text_omitted_head.sql`〔列の説明だけ〕）：双子の姓を省いて「みつき」とだけ出る役のように、画面の役名が名義（「菓彩みつき」）の後ろの部分だけのとき、名義はフルネームのまま画面の字をこの欄に持つ。役名が画面で折れているとき（改行入り）の使い方はそのまま。一括入力は `<名義|画面の役名>声優` で書き、逆翻訳も同じ形で出す。サイトの描画は変えていない（クレジットの表では画面の字、表の外では名義の名前）
 - **サイト：予告も雑誌の発売もまだの回を、ビルドの出力に一切出さないようにした**（`PrereleaseEpisodeFilter`〔新規〕・`SiteDataLoader`・`BuildContext.HiddenEpisodeIds` / `HiddenEpisodes`・`SubtitleStatsRepository`・`SubtitleStatsGenerator`）：回の情報は、前の回の予告（誰にでも出す）とアニメ雑誌の号の発売日の 0:00（早く見る設定の閲覧者にだけ、ぼかしの枠で出す）で明らかになる。どちらもまだの回はぼかしの枠の中にも入れられないので、読み込みの直後にすべての索引から外し、サブタイトル統計の SQL でも除く。前もって DB に入れた回が、号の発売前の定時デプロイで一覧・ページ・統計・各話の「〜第N話まで」に出ていた。発売前の号の掲載状態も、予告で明らかになった回でも出さない。
   - 出力の点検を足した（`PrereleaseOutputGuard`〔新規〕）：全体の生成の後に、出さない回のページの URL とサブタイトル・読みが出力のどこかに残っていれば警告にし、定時デプロイの安全ゲートで公開を止める

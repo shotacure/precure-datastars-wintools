@@ -119,6 +119,8 @@
 			  OgCardLatinFont     : 見出し・強調・透かしの欧文（英数字と欧文の記号）だけを差し替えて組む書体（空なら差し替えない）。
 			                        半角のアポストロフィはこの書体の「’」で組む。本文・数字・注意書きを別の書体にしたときは、その書体の欧文のまま
 			  OgCardFallbackFont  : 和文の書体に無い字を補う書体（空なら補わない）
+			  OgCardChineseFallbackFont     : 見出し側の書体と OgCardFallbackFont のどちらにも無い字（Pr6N に無い簡体字など）を補う書体（空なら補わない）
+			  OgCardChineseBodyFallbackFont : 本文・数字・注意書きの書体に無い簡体字を補う書体（空なら補わない）
 			  OgCardEmojiFont     : 絵文字（楽器の役職名の頭の 🎸 など）を組む色つきの書体（空なら地の書体のまま）
 			カーニングと詰め（kern / palt）は HarfBuzz で効かせる。
 		-->
@@ -133,6 +135,8 @@
 		<add key="OgCardObliqueDegrees" value="" />
 		<add key="OgCardLatinFont" value="" />
 		<add key="OgCardFallbackFont" value="" />
+		<add key="OgCardChineseFallbackFont" value="" />
+		<add key="OgCardChineseBodyFallbackFont" value="" />
 		<add key="OgCardEmojiFont" value="" />
 
 		<!--

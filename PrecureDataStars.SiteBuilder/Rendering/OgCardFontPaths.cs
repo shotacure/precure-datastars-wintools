@@ -29,11 +29,20 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// <param name="Fallback">
 /// 和文の書体に字形が無い字を補う書体（収録字の少ない書体に、近い太さの Pr6N の書体を当てるなど）。空なら補わない。
 /// </param>
+/// <param name="ChineseFallback">
+/// 見出し・前置きの書体と <see cref="Fallback"/> のどちらにも字形が無い字（Pr6N に無い簡体字など）を補う書体
+/// （UD新ゴ 簡体中文 の太めのウェイトなど）。空なら補わない。
+/// </param>
+/// <param name="ChineseBodyFallback">
+/// 本文・数字・注意書きの書体（<see cref="Body"/> などを見出しと別の書体にしたとき）に字形が無い字を補う書体
+/// （UD新ゴ 簡体中文 Regular など）。この書体たちには <see cref="Fallback"/> を掛けないので、簡体字の補いだけを掛ける。空なら補わない。
+/// </param>
 /// <param name="Emoji">絵文字（楽器の役職名の頭の 🎸 など）を組む色つきの書体（Segoe UI Emoji など）。見出し・前置き・ラベル・透かしの書体の文字列の絵文字に使う。空なら絵文字も地の書体のまま。</param>
 public sealed record OgCardFontPaths(
     string Title = "", string Body = "", string Emphasis = "", string Number = "", string Watermark = "",
     IReadOnlyList<string>? TitleCondensed = null, string Notice = "", float ObliqueDegrees = 0f,
-    string Latin = "", string Fallback = "", string Emoji = "", string Label = "")
+    string Latin = "", string Fallback = "", string Emoji = "", string Label = "",
+    string ChineseFallback = "", string ChineseBodyFallback = "")
 {
     /// <summary>何も指定しない（同梱フォントだけで描く）。</summary>
     public static OgCardFontPaths Bundled { get; } = new();

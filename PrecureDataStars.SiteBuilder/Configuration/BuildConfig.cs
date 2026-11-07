@@ -53,7 +53,8 @@ public sealed class BuildConfig
 
     /// <summary>OGP カードの書体ファイル（App.config の <c>OgCardTitleFont</c> / <c>OgCardBodyFont</c> / <c>OgCardEmphasisFont</c> /
     /// <c>OgCardNumberFont</c> / <c>OgCardWatermarkFont</c>、見出しのコンデンス版は <c>OgCardTitleCondensedFonts</c>、
-    /// 欧文の差し替えは <c>OgCardLatinFont</c>、欠けた字の補いは <c>OgCardFallbackFont</c>）。
+    /// 欧文の差し替えは <c>OgCardLatinFont</c>、欠けた字の補いは <c>OgCardFallbackFont</c>、
+    /// それでも欠ける簡体字の補いは <c>OgCardChineseFallbackFont</c>〔見出し側〕・<c>OgCardChineseBodyFallbackFont</c>〔本文側〕）。
     /// 空のものは同梱の Noto Sans JP にフォールバックする。</summary>
     public Rendering.OgCardFontPaths OgCardFonts { get; }
 
@@ -205,7 +206,9 @@ public sealed class BuildConfig
             Latin: ReadFontPath("OgCardLatinFont"),
             Fallback: ReadFontPath("OgCardFallbackFont"),
             Emoji: ReadFontPath("OgCardEmojiFont"),
-            Label: ReadFontPath("OgCardLabelFont"));
+            Label: ReadFontPath("OgCardLabelFont"),
+            ChineseFallback: ReadFontPath("OgCardChineseFallbackFont"),
+            ChineseBodyFallback: ReadFontPath("OgCardChineseBodyFallbackFont"));
 
         // 斜体の角度（度）。未設定・不正なら 0（立てたまま）。
         static float ReadDegrees(string key)

@@ -369,7 +369,8 @@ public sealed partial class OgCardRenderer : IDisposable
             string.Join(';', fonts.TitleCondensedPaths.Select(Path.GetFileName)),
             fonts.ObliqueDegrees.ToString(CultureInfo.InvariantCulture),
             Path.GetFileName(fonts.Latin), Path.GetFileName(fonts.Fallback), Path.GetFileName(fonts.Emoji),
-            Path.GetFileName(fonts.Label));
+            Path.GetFileName(fonts.Label),
+            Path.GetFileName(fonts.ChineseFallback), Path.GetFileName(fonts.ChineseBodyFallback));
 
         var fontDir = Path.Combine(AppContext.BaseDirectory, "Fonts");
         _brandTypeface = Own(LoadTypeface(Path.Combine(fontDir, "KiwiMaru-Medium.ttf")));
@@ -401,6 +402,8 @@ public sealed partial class OgCardRenderer : IDisposable
         var latinTypeface = fonts.Latin.Length > 0 ? Own(LoadTypeface(fonts.Latin)) : null;
         var fallbackTypeface = fonts.Fallback.Length > 0 ? Own(LoadTypeface(fonts.Fallback)) : null;
         var emojiTypeface = fonts.Emoji.Length > 0 ? Own(LoadTypeface(fonts.Emoji)) : null;
+        var chineseTypeface = fonts.ChineseFallback.Length > 0 ? Own(LoadTypeface(fonts.ChineseFallback)) : null;
+        var chineseBodyTypeface = fonts.ChineseBodyFallback.Length > 0 ? Own(LoadTypeface(fonts.ChineseBodyFallback)) : null;
 
         foreach (var typeface in _ownedTypefaces)
             _shapers[typeface.Handle] = new OgTextShaper(typeface);
@@ -413,7 +416,11 @@ public sealed partial class OgCardRenderer : IDisposable
         var latinShaper = latinTypeface is null ? null : _shapers[latinTypeface.Handle];
         var fallbackShaper = fallbackTypeface is null ? null : _shapers[fallbackTypeface.Handle];
         var emojiShaper = emojiTypeface is null ? null : _shapers[emojiTypeface.Handle];
-        if (latinShaper is not null || fallbackShaper is not null || emojiShaper is not null)
+        // 字形の無い字の補いは、近い太さの Pr6N の書体、その次に簡体字の書体の順に探す（中国のスタッフの名前の「玮」「陈」など）。
+        var fallbackShapers = new[] { fallbackShaper, chineseTypeface is null ? null : _shapers[chineseTypeface.Handle] }
+            .OfType<OgTextShaper>().ToList();
+        var chineseBodyShaper = chineseBodyTypeface is null ? null : _shapers[chineseBodyTypeface.Handle];
+        if (latinShaper is not null || fallbackShapers.Count > 0 || emojiShaper is not null || chineseBodyShaper is not null)
         {
             var headingFiles = new[] { fonts.Title, fonts.Emphasis };
             bool OwnFile(string path) => path.Length > 0 && !headingFiles.Contains(path);
@@ -427,8 +434,12 @@ public sealed partial class OgCardRenderer : IDisposable
             foreach (var typeface in cardTypefaces.Where(t => t != _brandTypeface && !keepOwn.Contains(t)))
             {
                 if (emojiOnly.Contains(typeface)) _shapers[typeface.Handle].UseSubstitutes(null, null, emojiShaper);
-                else _shapers[typeface.Handle].UseSubstitutes(latinShaper, fallbackShaper, emojiShaper);
+                else _shapers[typeface.Handle].UseSubstitutes(latinShaper, fallbackShapers, emojiShaper);
             }
+            // 本文・数字・注意書きを見出しと別の書体で組むときは、その書体の字のまま組み、字形の無い簡体字だけを補う。
+            if (chineseBodyShaper is not null)
+                foreach (var typeface in keepOwn.Distinct())
+                    _shapers[typeface.Handle].UseSubstitutes(null, new[] { chineseBodyShaper }, null);
         }
         // ワードマークはサイトのヘッダと同じ見た目にする。Kiwi Maru はかなを全角のまま組む書体なので、
         // 字面詰めはかけず、ブラウザと同じく OpenType 機能（欧文の kern）だけを効かせる。

@@ -69,8 +69,11 @@ public sealed class OgTextShaper : IDisposable
     /// <summary>欧文の部分を組む組版器（<see cref="UseSubstitutes"/>）。null なら差し替えない。</summary>
     private OgTextShaper? _latin;
 
-    /// <summary>この書体に字形が無い字を組む組版器（<see cref="UseSubstitutes"/>）。null なら補わない。</summary>
-    private OgTextShaper? _fallback;
+    /// <summary>
+    /// この書体に字形が無い字を組む組版器の並び（<see cref="UseSubstitutes"/>）。前から順に、字形を持つ最初の組版器で組む
+    /// （近い太さの Pr6N の書体、その次に簡体字の書体、など）。空なら補わない。
+    /// </summary>
+    private IReadOnlyList<OgTextShaper> _fallbacks = Array.Empty<OgTextShaper>();
 
     /// <summary>絵文字を組む組版器（<see cref="UseSubstitutes"/>。色つきの絵文字の書体）。null なら絵文字もこの書体のまま。</summary>
     private OgTextShaper? _emoji;
@@ -127,19 +130,19 @@ public sealed class OgTextShaper : IDisposable
 
     /// <summary>
     /// 文字列の一部を別の書体で組むように指定する。<paramref name="latin"/> は欧文（<see cref="IsLatinRun"/>）の部分を、
-    /// <paramref name="fallback"/> はこの書体に字形が無い字を、<paramref name="emoji"/> は絵文字（<see cref="IsEmoji"/>）を組む。
+    /// <paramref name="fallbacks"/> はこの書体に字形が無い字を（前から順に、字形を持つ最初の書体で）、<paramref name="emoji"/> は絵文字（<see cref="IsEmoji"/>）を組む。
     /// いずれも、差し替え先に字形が無い字はこの書体のまま組む。
     /// 指定すると <see cref="Measure"/>・<see cref="InkExtent"/>・<see cref="Draw(SKCanvas, string, float, float, SKTextAlign, SKFont, SKPaint, SKPaint?, float)"/>
     /// が文字列を書体ごとの断片に切り分けて組み、続けて並べる（<see cref="Shape"/> はこの書体だけで組む）。
     /// </summary>
-    public void UseSubstitutes(OgTextShaper? latin, OgTextShaper? fallback, OgTextShaper? emoji = null)
+    public void UseSubstitutes(OgTextShaper? latin, IReadOnlyList<OgTextShaper>? fallbacks, OgTextShaper? emoji = null)
     {
         _latin = latin;
-        _fallback = fallback;
+        _fallbacks = fallbacks ?? Array.Empty<OgTextShaper>();
         _emoji = emoji;
     }
 
-    private bool HasSubstitutes => _latin is not null || _fallback is not null || _emoji is not null;
+    private bool HasSubstitutes => _latin is not null || _fallbacks.Count > 0 || _emoji is not null;
 
     /// <summary>
     /// 絵文字か（絵文字の面 U+1F000〜U+1FAFF、記号・装飾記号 U+2600〜U+27BF）。絵文字の異体字セレクタ（U+FE0F）と
@@ -194,8 +197,8 @@ public sealed class OgTextShaper : IDisposable
                 shaper = _emoji;
             else if (_latin is not null && IsLatinRun(text, i, codePoint) && _latin.HasGlyph(codePoint == '\'' ? 0x2019 : codePoint))
                 shaper = _latin;
-            else if (!HasGlyph(codePoint) && _fallback is not null && _fallback.HasGlyph(codePoint))
-                shaper = _fallback;
+            else if (!HasGlyph(codePoint) && _fallbacks.FirstOrDefault(f => f.HasGlyph(codePoint)) is { } fallbackShaper)
+                shaper = fallbackShaper;
             else
                 shaper = this;
 

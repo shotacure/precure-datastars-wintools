@@ -17,8 +17,9 @@
   /* monospace が必要な場面（M 番号などのインライン）専用フォント変数。 */
   --font-mono: "JetBrains Mono", "Consolas", "Menlo", "Roboto Mono", monospace;
 
-  /* サイト全体の本文・見出しのベース書体（可読性の高いやわらかな日本語ゴシック）。 */
-  --font-base: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  /* サイト全体の本文・見出しのベース書体（可読性の高いやわらかな日本語ゴシック）。
+     Noto Sans JP に無い簡体字（中国のスタッフの名前の「玮」「陈」など）は、同じ設計のゴシックの Noto Sans SC で出す。 */
+  --font-base: "Noto Sans JP", "Noto Sans SC", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
   /* ブランド表記（ヘッダ・フッタのサイト名、ホーム大見出し・タグライン）専用の据え置き書体。 */
   --font-brand: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
   /* アクセント書体・装飾系。索引ページのリード文・404 見出しなど「ここぞ」の数箇所に効かせる。 */

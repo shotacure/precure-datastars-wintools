@@ -80,10 +80,11 @@
 {{## Google Fonts: 本文・見出しのベースは Noto Sans JP（可読性の高い日本語ゴシック）。
      ブランド表記（ヘッダ・フッタのサイト名、ホーム大見出し・タグライン）は Kiwi Maru を据え置き、
      Kaisei Decol（やわらかい装飾系）と DotGothic16（ドット/デジタル系）を「ここぞ」のアクセントに使う。
-     4 ファミリーを 1 リクエストにまとめ、preconnect で読み込みを高速化する。 ##}}
+     Noto Sans SC は Noto Sans JP に無い簡体字を補うだけで、字の範囲ごとに分けて配られるので、その字のあるページでだけ読み込まれる。
+     5 ファミリーを 1 リクエストにまとめ、preconnect で読み込みを高速化する。 ##}}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Kiwi+Maru:wght@400;500&family=Kaisei+Decol:wght@400;500;700&family=DotGothic16&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&family=Kiwi+Maru:wght@400;500&family=Kaisei+Decol:wght@400;500;700&family=DotGothic16&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ asset_url "/assets/site.css" }}">
 
 {{## ──────── ダイアログのキーボード操作（フォーカスを中に閉じ込め、閉じたら戻す） ────────

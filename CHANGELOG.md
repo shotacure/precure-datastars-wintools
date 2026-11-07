@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：人物詳細の声の出演で、役の見出しを、その声優がその役でクレジットされた名義を初めてクレジットされた順に「 / 」でつないだものにした**（`PersonsGenerator.BuildVoiceCharacterSections`）：これまでは役ごとに最初に読んだ行の名義 1 つだけを出していて、正体が明かされる前の名義（「謎の声」）が役名になっていた。「謎の声 / クレッシェンドトーン」「和実ゆい / キュアプレシャス」のように出す。苗字の無い名義はフルネームの名義に置き換えてから重なりを除く。声優一覧（/creators/voice-cast/）の役名は最も多くクレジットされた名義のまま
 - **サイト・Catalog：役職テンプレの `{TEXTS}` を、ブロックの外でも使えるようにした**（`RoleTemplateRenderer`）：ブロックの外（役職のスコープ）では、その役職の全ブロックの文字のエントリを順に結合する。映画のタイトルカード（役職 `TITLE`）で、画面のタイトルが作品名と違う行（併映短編の ED の頭のタイトルなど）だけ文字を持たせ、`{?TEXTS}{TEXTS}{/?TEXTS}{?!TEXTS}{SERIES_TITLE}{/?!TEXTS}` のように書き分けるため。今あるテンプレは `{TEXTS}` をブロックの中でしか使っていないので、出力は変わらない
 - **サイト：商品詳細の構造化データで、ジャケット画像の無い商品には価格のオファー（`offers`）を出さないようにした**（`ProductsGenerator`）：オファーのある商品は Google の「販売者のリスティング」として扱われ、`image` が無いと重大な問題になる。発売前で Amazon にまだジャケットの無い商品で出ていた。画像が取れたビルドからオファーを出す。オファーの `availability` は、発売日がビルド時点より後なら予約受付中（`PreOrder`）にした（これまでは常に `InStock`）
 - **スキーマ・サイト・Catalog：企業の名義に、クレジットでの表記を名義の名前と別に持てるようにした**（`company_aliases.display_text_override`〔マイグレーション v1.20.0_add_company_alias_display_text_override.sql〕・`CompanyAlias.DisplayTextOverride` / `CreditDisplayName()`・`CompanyAliasesRepository`・SiteBuilder の `CreditTreeRenderer`・`LookupCache.LookupCompanyAliasCreditNameAsync`〔新規〕/ `LookupCompanyAliasHtmlAsync` / `LookupLogoHtmlAsync`・Catalog の `CreditPreviewRenderer`・`LookupCache`・`CreditMastersEditorForm` の企業屋号タブの「クレジット表記」）：ロゴは書かれている文字の屋号にぶら下げて屋号の名前で出すが、文字の無いロゴ（東映アニメーションの屋号「プリキュア15周年」）は名前のままではロゴと分からないので、会社・ロゴのエントリにだけ「(プリキュア15周年ロゴ)」のような表記を出せるようにした。リンク先・集計・企業詳細の名義の一覧は名義の名前のまま

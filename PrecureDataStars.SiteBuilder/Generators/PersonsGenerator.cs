@@ -1151,15 +1151,20 @@ public sealed class PersonsGenerator
     /// 対象は CharacterVoice 関与が複数キャラに跨る場合のみで、1 キャラ以下なら空リストを返す
     /// （テンプレは空のとき従来のシリーズ行表示にフォールバックする）。
     /// セクションの並びは役の初登場（シリーズ開始日 → 最早話数）順。各セクション内はシリーズ行
-    /// （放送開始日順、話数の圧縮表記つき）。表示名は最初にクレジットされた名義（character_aliases.name）。
+    /// （放送開始日順、話数の圧縮表記つき）。
+    /// 見出しの役名は、その声優がそのキャラクターでクレジットされた名義をすべて、初めてクレジットされた順
+    /// （シリーズ開始日 → 話数 → 同じ回なら索引の並び）に「 / 」でつないだもの（例：「謎の声 / クレッシェンドトーン」
+    /// 「和実ゆい / キュアプレシャス」）。名義は苗字の無いものをフルネームの名義に置き換えて（CharacterAliasNames）から重なりを除く。
     /// </summary>
     private IReadOnlyList<CharacterRoleSection> BuildVoiceCharacterSections(IEnumerable<Involvement> roleGroup)
     {
-        // キャラ ID → (表示名, 表示順キー, シリーズ ID → 話数集合 / シリーズ全体スコープ有無)
-        var byChar = new Dictionary<int, (string Label, long FirstKey, Dictionary<int, (HashSet<int> EpNos, bool SeriesScope)> Series)>();
+        // キャラ ID → (役名ごとの初出キー, 表示順キー, シリーズ ID → 話数集合 / シリーズ全体スコープ有無)
+        var byChar = new Dictionary<int, (Dictionary<string, (long Key, int Order)> Labels, long FirstKey, Dictionary<int, (HashSet<int> EpNos, bool SeriesScope)> Series)>();
+        int order = 0;
 
         foreach (var inv in roleGroup)
         {
+            order++;
             if (!inv.IsVoiceCast) continue;
             if (inv.CharacterAliasId is not int caId) continue;
             if (!_ctx.CharacterAliasById.TryGetValue(caId, out var ca)) continue;
@@ -1173,13 +1178,18 @@ public sealed class PersonsGenerator
 
             if (!byChar.TryGetValue(charId, out var acc))
             {
-                // 見出しの役名は苗字の無い名義ならフルネームの名義で出す（CharacterAliasNames）。
-                acc = (_ctx.CharacterAliasNames.DisplayName(ca), key, new Dictionary<int, (HashSet<int>, bool)>());
+                acc = (new Dictionary<string, (long, int)>(StringComparer.Ordinal), key, new Dictionary<int, (HashSet<int>, bool)>());
                 byChar[charId] = acc;
+            }
+            // 役名ごとに、いちばん早くクレジットされた位置を覚える。
+            string label = _ctx.CharacterAliasNames.DisplayName(ca);
+            if (!acc.Labels.TryGetValue(label, out var first) || (key, order).CompareTo((first.Key, first.Order)) < 0)
+            {
+                acc.Labels[label] = (key, order);
             }
             if (key < acc.FirstKey)
             {
-                acc = (acc.Label, key, acc.Series);
+                acc = (acc.Labels, key, acc.Series);
                 byChar[charId] = acc;
             }
             if (!acc.Series.TryGetValue(inv.SeriesId, out var s))
@@ -1223,7 +1233,9 @@ public sealed class PersonsGenerator
 
             sections.Add(new CharacterRoleSection
             {
-                CharacterLabel = kv.Value.Label,
+                CharacterLabel = string.Join(" / ", kv.Value.Labels
+                    .OrderBy(l => l.Value.Key).ThenBy(l => l.Value.Order)
+                    .Select(l => l.Key)),
                 CharacterUrl = PathUtil.CharacterUrl(kv.Key),
                 SeriesRows = rows
             });

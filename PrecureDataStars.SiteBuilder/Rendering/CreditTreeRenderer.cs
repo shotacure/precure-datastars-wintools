@@ -1731,7 +1731,8 @@ internal sealed class CreditTreeRenderer
         }
         else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
         {
-            affilInnerHtml = Esc(e.AffiliationText!);
+            // ユニットの名義に添えたメンバーのかっこ書き（「和牛 (水田 信二・川西賢志郎)」）は、メンバーの名前の所だけ人物詳細へリンクする。
+            affilInnerHtml = BuildUnitMemberAffiliationHtml(e.PersonAliasId, e.AffiliationText!);
         }
         if (affilInnerHtml is not null)
         {
@@ -1743,6 +1744,38 @@ internal sealed class CreditTreeRenderer
         // 誤記は所属の外側、名義断片全体の左に前置（誤記は名義そのものに対する注釈であって、
         // 所属表記まで含めた塊に対するものではないため、所属より外で前置するのが意味的に整合）。
         return PrependMisprintHtml(nameHtml, e.PersonMisprintText);
+    }
+
+    /// <summary>
+    /// 所属の文字（affiliation_text）を HTML にする。名義がユニット（<see cref="BuildContext.UnitMembersByAlias"/> に人物のメンバーを持つ）なら、
+    /// 文字を区切りの字（・、／/）で分け、空白を除いてメンバーの名義の名前と同じになる所を、その名義の表記（姓と名の間の空白も名義どおり）で
+    /// 人物詳細へのリンクにする。区切りの字と、メンバーと合わない所は文字のまま。ユニットでない名義は文字をそのまま出す。
+    /// </summary>
+    private string BuildUnitMemberAffiliationHtml(int? personAliasId, string affiliationText)
+    {
+        if (personAliasId is not int unitAliasId
+            || !_ctx.UnitMembersByAlias.TryGetValue(unitAliasId, out var members))
+            return Esc(affiliationText);
+
+        static string Squash(string s) => s.Replace(" ", "").Replace("　", "");
+        var memberAliasIdByName = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var m in members)
+        {
+            if (m.MemberKind != PersonAliasMemberKind.Person || m.MemberPersonAliasId is not int paid) continue;
+            if (!_ctx.PersonAliasById.TryGetValue(paid, out var alias) || string.IsNullOrEmpty(alias.Name)) continue;
+            memberAliasIdByName.TryAdd(Squash(alias.Name), paid);
+        }
+        if (memberAliasIdByName.Count == 0) return Esc(affiliationText);
+
+        var sb = new StringBuilder();
+        foreach (var part in System.Text.RegularExpressions.Regex.Split(affiliationText, "([・、／/])"))
+        {
+            if (part.Length == 0) continue;
+            sb.Append(memberAliasIdByName.TryGetValue(Squash(part), out var memberAliasId)
+                ? _staffLinkResolver.ResolveAsHtml(memberAliasId, _ctx.PersonAliasById[memberAliasId].GetDisplayName())
+                : Esc(part));
+        }
+        return sb.ToString();
     }
 
     /// <summary>1 エントリ分の表示を「リンク済み HTML 断片」として返す。 PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT / BLANK の 6 種に対応（BLANK は空文字）。 各種別ごとにクレジット時の誤記（Person / Character / Company）を左側に前置する。</summary>

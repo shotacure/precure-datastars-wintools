@@ -54,6 +54,12 @@ public sealed class PersonsGenerator
     /// <summary>person_id → 当該人物に紐付く全 alias_id のリスト（person_alias_persons の逆引き）。 1 度ロードしたら使い回す。</summary>
     private IReadOnlyDictionary<int, IReadOnlyList<int>>? _aliasesByPerson;
 
+    /// <summary>
+    /// 人物のメンバーの名義 alias_id → その名義がメンバーに入っているユニットの名義 alias_id 群（person_alias_members の逆引き）。
+    /// ユニットの名義でクレジットされた本編クレジット（「和牛 (水田 信二・川西賢志郎)」の声の出演など）を、メンバーの人物詳細にも載せるために使う。
+    /// </summary>
+    private IReadOnlyDictionary<int, IReadOnlyList<int>>? _unitAliasIdsByMemberAlias;
+
     /// <summary>役職コード → Role モデル。役職の表示名解決と display_order の取得に使う。</summary>
     private IReadOnlyDictionary<string, Role>? _roleMap;
 
@@ -142,6 +148,12 @@ public sealed class PersonsGenerator
         // person_id → alias_id 群の逆引きは SiteDataLoader が BuildContext.AliasIdsByPerson に
         // 全件辞書化済み。本ジェネレータ内でローカル辞書を持たず、共有辞書を直接参照する。
         _aliasesByPerson ??= _ctx.AliasIdsByPerson;
+        _unitAliasIdsByMemberAlias ??= _ctx.UnitMembersByAlias
+            .SelectMany(kv => kv.Value
+                .Where(m => m.MemberKind == PersonAliasMemberKind.Person && m.MemberPersonAliasId.HasValue)
+                .Select(m => (Member: m.MemberPersonAliasId!.Value, Unit: kv.Key)))
+            .GroupBy(x => x.Member)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<int>)g.Select(x => x.Unit).Distinct().OrderBy(id => id).ToList());
 
         // 「楽曲」セクションの person_alias_id → (song_id, role_code) 索引を 1 度だけ前計算。
         // song_credits（作詞・作曲・編曲）と song_recording_singers（歌・コーラス）の両ソースから
@@ -503,21 +515,41 @@ public sealed class PersonsGenerator
         // 名義との比較（別名義の欄を出すか等）と本文・JSON-LD には添え書きの無い displayName を使う。
         string displayLabel = _ctx.EntityUrls.PersonDisplayLabel(person.PersonId) ?? displayName;
 
+        // 本編クレジットの欄で見る名義：本人の名義に、本人がメンバーに入っているユニットの名義を足したもの
+        // （ユニットの名義でクレジットされた回も、名義ごとのセクションでユニットの名前の下に出す）。
+        // 音楽クレジットはユニットのメンバーへの展開を曲の索引側で済ませているので、本人の名義だけで引く。
+        // ユニットの名義の後ろにメンバーも 1 人ずつクレジットされている回（「Berryz工房」の後に 7 人が並ぶ声の出演など）は、
+        // 本人の名義の関与と（作品・回・OP/ED・役職）が重なるので、重ならない関与を持つユニットの名義だけを足す。
+        var ownCreditKeys = aliasIds
+            .Where(_index.ByPersonAlias.ContainsKey)
+            .SelectMany(id => _index.ByPersonAlias[id])
+            .Where(IsMainInvolvement)
+            .Select(CreditKey)
+            .ToHashSet();
+        var creditAliasIds = aliasIds
+            .Concat(aliasIds
+                .SelectMany(id => _unitAliasIdsByMemberAlias!.TryGetValue(id, out var units) ? units : Array.Empty<int>())
+                .Where(unitId => _index.ByPersonAlias.TryGetValue(unitId, out var unitInvs)
+                                 && unitInvs.Where(IsMainInvolvement).Any(inv => !ownCreditKeys.Contains(CreditKey(inv)))))
+            .Distinct()
+            .ToList();
+        static (int, int?, string, string) CreditKey(Involvement inv) => (inv.SeriesId, inv.EpisodeId, inv.CreditKind, inv.RoleCode);
+
         // 役職別グループ化された関与一覧を組み立て（フラット、全名義横断）。
         // 本編クレジットの欄には本編のクレジット階層に載った関与だけを出す（主題歌・挿入歌経由の作家・歌唱と
         // 劇伴の作曲・編曲は音楽クレジットの欄に分ける）。
-        var involvementGroups = BuildPersonInvolvementGroups(aliasIds, IsMainInvolvement);
+        var involvementGroups = BuildPersonInvolvementGroups(creditAliasIds, IsMainInvolvement);
 
         // クレジットのある名義が 2 つ以上あるとき、または 1 つでも見出しの名前（表示名義）と違うときは、
         // 名義単位のセクション（初登場順）に分ける（企業・団体詳細と同じ規律）。改名して見出しが現在の名前になった
         // 人物でも、クレジットされた当時の名義が分かるようにする。それ以外はテンプレ側が involvementGroups のフラット表示を使う。
-        var involvementSections = BuildPersonAliasInvolvementSections(aliasIds, aliasById, displayName);
+        var involvementSections = BuildPersonAliasInvolvementSections(creditAliasIds, aliasById, displayName);
 
         // クレジット合計バッジは role 別 EpisodeCount の単純合算ではなく distinct 話数・本数で出す。
         // 同一名義が同じ話数に複数役職でクレジットされている場合、role ごとの EpisodeCount を
         // 合算すると同じ話数を二重に数えてしまうため、全名義の関与を再度 InvolvementRowBuilder に
         // 通してシリーズ単位で distinct 集計する（CompaniesGenerator と同じ規律）。
-        var allPersonInvolvements = aliasIds.Where(_index.ByPersonAlias.ContainsKey).SelectMany(id => _index.ByPersonAlias[id])
+        var allPersonInvolvements = creditAliasIds.Where(_index.ByPersonAlias.ContainsKey).SelectMany(id => _index.ByPersonAlias[id])
             .Where(IsMainInvolvement).ToList();
         var (_, creditEpisodeCountTotal, creditMovieCountTotal, creditOtonaEpisodeCountTotal) = InvolvementRowBuilder.BuildSeriesRows(_ctx, allPersonInvolvements);
 

@@ -10076,7 +10076,16 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 /* 画像とキャプション。 */
 .article-body figure { margin: 0 0 1.2em; }
 .article-body figcaption { font-size: 0.85em; color: var(--muted); margin-top: 0.3em; }
-/* 記事の分類をリンクにしたときは下線を出さない。 */
+/* Markdown の脚注（Markdig が出す div.footnotes）。上の区切りはサイトの脚注（.footnotes）の点線だけにし、
+   Markdig が先頭に入れる hr は出さない。 */
+.article-body .footnotes > hr { display: none; }
+/* 脚注の番号は本文の参照（[1]）に合わせて「[1]」の形にし、番号の幅だけぶら下げる。 */
+.article-body .footnotes ol { list-style: none; padding-left: 0; counter-reset: article-fn; }
+.article-body .footnotes li { position: relative; padding-left: 2.6em; counter-increment: article-fn; }
+.article-body .footnotes li::before {
+  content: "[" counter(article-fn) "]";
+  position: absolute; left: 0; font-family: var(--font-num);
+}/* 記事の分類をリンクにしたときは下線を出さない。 */
 a.article-tag { text-decoration: none; }
 
 /* ホームの「データ充足率」暫定表記（赤字）。BuildLabel 直下に小さく出す。追いついたら除去する。 */

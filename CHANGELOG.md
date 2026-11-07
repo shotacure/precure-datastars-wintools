@@ -4,6 +4,9 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：コラムの脚注の番号を、本文の参照も脚注の側も「[1]」の形にした**（`ArticlesGenerator.FormatFootnoteRefs`・`site.css`）：本文は Markdig の参照を `<sup class="fn-ref">[<a>1</a>]</sup>` にし、リンクは括弧の中の番号だけ。脚注の側は CSS のカウンターで番号を「[1]」にしてぶら下げる。
+  - 既に使った脚注の参照の直後に別の参照を続けて並べる（`[^a][^b]`）と、Markdig が前の参照を黙って落としていたのを直した（`ArticlesGenerator.SeparateAdjacentFootnoteRefs`：並んだ参照の間に空の HTML コメントを挟んで変換し、変換後に取り除く）
+- **サイト：コラムの Markdown の脚注の上に区切りの線が点線と実線の 2 本出ていたのを、点線の 1 本にした**（`site.css`：Markdig が `div.footnotes` の先頭に入れる `hr` を `.article-body .footnotes > hr` で出さない。点線はサイトの脚注〔`.footnotes`〕のもの）。
 - **サイト：コラムの本文の表が本文の幅を超えたら、表だけを横にスクロールさせ、ページをはみ出させないようにした**（`site.css`：`.article-body table` を `display: block; max-width: 100%; overflow-x: auto`）。あわせて本文の段落・箇条書き・引用・図の説明は、長い URL や英数字の続きを途中で折り返す（`overflow-wrap: anywhere`。表のセルには掛けない）。
 - **スクリプト：放送後のリンクの取り込みの始めのビルドを、名前付きの鍵（mutex）で 1 つずつ行うようにした**（`scripts/build-lock.ps1`〔新規〕・`scheduled-episode-links.ps1`）：同じ時刻に始まるほかの定時のタスクとビルドが重なると、同じプロジェクトの DLL を開けずにビルドが失敗していた。後から来たほうは先のビルドが終わるまで最大 10 分待つ。
 - **サイト：シリーズ詳細の主題歌カードで、サイズが話によって分かれる（サイズの札が 2 つ以上の）とき、札の左にそのサイズが流れた話数を出すようにした**（`ThemeSongDescriptor.SizeEpisodeNos`・`ThemeSongSeriesAggregator`・`ThemeSongRow.SizeEpisodeNos`・`ThemeSongSizeRow.RangeLabel`・`ThemeSongCardParts.SizeRows` / `AddEpisodeNos`・`series-detail.sbn`・`site.css`）：デパプリの ED の Type.I〜IV のように、どの話でどのサイズが流れたかを「#1～3, 10, 13, 16」の形で示す。曲の使用話数は見出しのまま。サイズの指定が無い話は数えず、点線の札（放送で流れたサイズとは限らない音源）には話数を付けない。札とボタンの 2 列を「話数｜札｜ボタン」の 3 列にし、狭い幅では話数の側を折り返す。

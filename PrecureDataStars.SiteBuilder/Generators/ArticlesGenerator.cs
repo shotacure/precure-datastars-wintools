@@ -272,13 +272,34 @@ public sealed class ArticlesGenerator
         var tags = meta.GetValueOrDefault("tags", "")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        var bodyHtml = Markdown.ToHtml(body, MarkdownPipeline);
+        var bodyHtml = FormatFootnoteRefs(Markdown.ToHtml(SeparateAdjacentFootnoteRefs(body), MarkdownPipeline));
 
         // 素材のフォルダは原稿のファイル名に合わせる（front-matter で slug を変えても、置き場は原稿の隣のまま）。
         var assetDir = Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path));
 
         return new Article(slug, title, description, date, dateLabel, dateIso, tags, bodyHtml, isDraft, publishAt, assetDir);
     }
+
+    /// <summary>
+    /// 続けて並んだ脚注の参照（<c>[^a][^b]</c>）の間に空の HTML コメントを挟む。Markdig は、既に使った脚注の参照の直後に
+    /// 別の参照が続くと、前の参照を黙って落とす。挟んだコメントは <see cref="FormatFootnoteRefs"/> で取り除く。
+    /// </summary>
+    private static string SeparateAdjacentFootnoteRefs(string markdown)
+        => AdjacentFootnoteRefRegex.Replace(markdown, "$1" + FootnoteRefSeparator);
+
+    /// <summary>
+    /// 本文の脚注の参照を「[1]」の形にする。Markdig の <c>&lt;a class="footnote-ref"&gt;&lt;sup&gt;1&lt;/sup&gt;&lt;/a&gt;</c> を
+    /// <c>&lt;sup class="fn-ref"&gt;[&lt;a class="footnote-ref"&gt;1&lt;/a&gt;]&lt;/sup&gt;</c> にし、リンクは括弧の中の番号だけにする。
+    /// 脚注の側の番号の括弧は CSS（<c>.article-body .footnotes</c>）で付ける。
+    /// </summary>
+    private static string FormatFootnoteRefs(string html)
+        => FootnoteRefRegex.Replace(html.Replace(FootnoteRefSeparator, ""), "<sup class=\"fn-ref\">[<a$1>$2</a>]</sup>");
+
+    private const string FootnoteRefSeparator = "<!---->";
+    private static readonly System.Text.RegularExpressions.Regex AdjacentFootnoteRefRegex =
+        new(@"(\[\^[^\]\s]+\])(?=\[\^)", System.Text.RegularExpressions.RegexOptions.Compiled);
+    private static readonly System.Text.RegularExpressions.Regex FootnoteRefRegex =
+        new(@"<a( [^>]*class=""footnote-ref""[^>]*)><sup>([^<]*)</sup></a>", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>原稿 1 本。<paramref name="IsDraft"/> と <paramref name="PublishAt"/> は本番に出すかどうかの判定に使う。
     /// <paramref name="DateIso"/> は time 要素の datetime 属性に入れる "yyyy-MM-dd"（日付が無ければ空）。

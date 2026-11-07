@@ -242,6 +242,7 @@ partial class CreditMastersEditorForm
     private DateTimePicker dtCaTo = null!;
     private CheckBox chkCaToNull = null!;
     private TextBox txtCaNotes = null!;
+    private TextBox txtCaDisplayTextOverride = null!;  // クレジットでの表記（会社・ロゴのエントリ。空なら屋号名）
     private Button btnNewCompanyAlias = null!;
     private Button btnSaveCompanyAlias = null!;
     private Button btnDeleteCompanyAlias = null!;
@@ -1302,6 +1303,7 @@ partial class CreditMastersEditorForm
         dtCaFrom = new DateTimePicker(); chkCaFromNull = new CheckBox();
         dtCaTo = new DateTimePicker(); chkCaToNull = new CheckBox();
         txtCaNotes = new TextBox { Multiline = true };
+        txtCaDisplayTextOverride = new TextBox();
 
         AddLabeledControl(pnl, "屋号名",        txtCaName,        18,  18, inputWidth: 320);
         // 正式名（社名）の名義の印。企業詳細の「商号履歴」には印の付いた名義だけを出す。
@@ -1336,6 +1338,9 @@ partial class CreditMastersEditorForm
         txtCaNotes.Location = new Point(132, 242);
         txtCaNotes.Size = new Size(450, 60);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtCaNotes);
+
+        // クレジットでの表記。会社・ロゴのエントリで屋号名の代わりに出す（文字の無いロゴの屋号「プリキュア15周年」を「(プリキュア15周年ロゴ)」と出すなど）。
+        AddLabeledControl(pnl, "クレジット表記", txtCaDisplayTextOverride, 18, 310, inputWidth: 320);
 
         btnNewCompanyAlias = new Button { Text = "新規",       Location = new Point(620, 18), Size = new Size(140, 28) };
         btnSaveCompanyAlias = new Button { Text = "保存 / 更新", Location = new Point(620, 50), Size = new Size(140, 28) };

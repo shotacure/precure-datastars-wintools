@@ -273,6 +273,14 @@ internal sealed class LookupCache : ILookupCache
         return ca?.Name;
     }
 
+    /// <summary>company_alias_id → クレジットの会社・ロゴのエントリに出す名前（クレジットでの表記があればそれ、無ければ屋号名）。未登録なら null。負数なら Pending 経路。</summary>
+    public async Task<string?> LookupCompanyAliasCreditNameAsync(int aliasId)
+    {
+        if (ResolvePendingCompanyAliasName(aliasId) is string pendingName) return pendingName;
+        var ca = await GetCompanyAliasAsync(aliasId);
+        return ca?.CreditDisplayName();
+    }
+
     /// <summary>series_id → 作品の正式タイトル。ブロック先頭の作品見出しの表示に使う。未登録なら null。</summary>
     public async Task<string?> LookupSeriesTitleAsync(int seriesId)
     {
@@ -328,7 +336,7 @@ internal sealed class LookupCache : ILookupCache
         return System.Net.WebUtility.HtmlEncode(name);
     }
 
-    /// <summary>company_alias_id → 屋号名を HTML エスケープしただけのプレーンテキスト。負数 ID は Pending 経路で ⚠ + 名前を赤太字。</summary>
+    /// <summary>company_alias_id → 屋号名（クレジットでの表記があればそれ）を HTML エスケープしただけのプレーンテキスト。負数 ID は Pending 経路で ⚠ + 名前を赤太字。</summary>
     public async Task<string?> LookupCompanyAliasHtmlAsync(int aliasId)
     {
         if (aliasId < 0 && _pendingSession is not null
@@ -337,8 +345,8 @@ internal sealed class LookupCache : ILookupCache
             return WrapPendingHtml(System.Net.WebUtility.HtmlEncode(pending.AliasName));
         }
         var ca = await GetCompanyAliasAsync(aliasId);
-        if (ca?.Name is not string name || string.IsNullOrEmpty(name)) return null;
-        return System.Net.WebUtility.HtmlEncode(name);
+        if (ca is null || string.IsNullOrEmpty(ca.Name)) return null;
+        return System.Net.WebUtility.HtmlEncode(ca.CreditDisplayName());
     }
 
     /// <summary>logo_id → ロゴ親屋号名を HTML エスケープしただけのプレーンテキスト。 CI バージョンラベルは付けず、屋号名のみを返す（テンプレ展開の通常運用に合わせる）。
@@ -372,7 +380,7 @@ internal sealed class LookupCache : ILookupCache
         if (lg is null) return null;
         var ca = await GetCompanyAliasAsync(lg.CompanyAliasId);
         if (ca is null) return null;
-        return System.Net.WebUtility.HtmlEncode(ca.Name ?? "");
+        return System.Net.WebUtility.HtmlEncode(ca.CreditDisplayName());
     }
 
     /// <summary>

@@ -183,13 +183,13 @@ internal sealed class CreditTreeRenderer
         return block.HeadingItalic && html.Length > 0 ? $"<span class=\"block-heading-italic\">{html}</span>" : html;
     }
 
-    /// <summary>ロゴエントリの表示を「屋号名に置換 + 親企業詳細ページへのリンク」に変換する。 CI バージョンラベルは省く方針（屋号単位で集約した方が読み手にとって分かりやすいため）。 解決失敗時はプレースホルダ文字列を返す。</summary>
+    /// <summary>ロゴエントリの表示を「屋号名に置換 + 親企業詳細ページへのリンク」に変換する。 ロゴは書かれている文字の屋号にぶら下がるので、屋号名がそのまま画面の字になる。屋号にクレジットでの表記（display_text_override）があればそれを出す。 CI バージョンラベルは出さない。 解決失敗時はプレースホルダ文字列を返す。</summary>
     private async Task<string> BuildLogoHtmlAsync(int? logoId)
     {
         if (!logoId.HasValue) return Esc("(ロゴ未指定)");
         var lg = await _lookup.GetLogoForRenderingAsync(logoId.Value).ConfigureAwait(false);
         if (lg is null) return Esc("(ロゴ不明)");
-        string? aliasName = await _lookup.LookupCompanyAliasNameAsync(lg.CompanyAliasId).ConfigureAwait(false);
+        string? aliasName = await _lookup.LookupCompanyAliasCreditNameAsync(lg.CompanyAliasId).ConfigureAwait(false);
         if (string.IsNullOrEmpty(aliasName)) return Esc("(屋号不明)");
         return await BuildCompanyAliasHtmlAsync(lg.CompanyAliasId, aliasName).ConfigureAwait(false);
     }
@@ -1775,7 +1775,8 @@ internal sealed class CreditTreeRenderer
             case "COMPANY":
                 {
                     if (!e.CompanyAliasId.HasValue) return PrependMisprintHtml(Esc("(企業屋号未指定)"), e.CompanyMisprintText);
-                    string? name = await _lookup.LookupCompanyAliasNameAsync(e.CompanyAliasId.Value).ConfigureAwait(false);
+                    // 屋号にクレジットでの表記（display_text_override）があればそれを出す。
+                    string? name = await _lookup.LookupCompanyAliasCreditNameAsync(e.CompanyAliasId.Value).ConfigureAwait(false);
                     if (string.IsNullOrEmpty(name)) return PrependMisprintHtml(Esc("(企業屋号不明)"), e.CompanyMisprintText);
                     string baseHtml = await BuildCompanyAliasHtmlAsync(e.CompanyAliasId.Value, name).ConfigureAwait(false);
                     return PrependMisprintHtml(baseHtml, e.CompanyMisprintText);

@@ -30,6 +30,16 @@ public sealed class CompanyAlias
     /// </summary>
     public bool IsOfficialName { get; set; }
 
+    /// <summary>
+    /// クレジットでの表記（任意）。会社・ロゴのエントリで、名義の名前の代わりにこの字を出す
+    /// （文字の無いロゴの名義「プリキュア15周年」を「(プリキュア15周年ロゴ)」と出すなど）。
+    /// リンク先・集計・企業詳細の名義の一覧は <see cref="Name"/> のまま。NULL は名義の名前で出す（<see cref="CreditDisplayName()"/>）。
+    /// </summary>
+    public string? DisplayTextOverride { get; set; }
+
+    /// <summary>クレジットに出す名前。<see cref="DisplayTextOverride"/> があればそれ、無ければ <see cref="Name"/>。</summary>
+    public string CreditDisplayName() => string.IsNullOrWhiteSpace(DisplayTextOverride) ? Name : DisplayTextOverride!;
+
     /// <summary>前任名義 ID（屋号変更前の名義を指す自参照、任意）。</summary>
     public int? PredecessorAliasId { get; set; }
 

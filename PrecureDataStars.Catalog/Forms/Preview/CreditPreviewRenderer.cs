@@ -2410,14 +2410,14 @@ internal sealed class CreditPreviewRenderer
                 }
             case "COMPANY":
                 return e.CompanyAliasId.HasValue
-                    ? ((await _lookup.LookupCompanyAliasNameAsync(e.CompanyAliasId.Value)) ?? "(企業屋号不明)")
+                    ? ((await _lookup.LookupCompanyAliasCreditNameAsync(e.CompanyAliasId.Value)) ?? "(企業屋号不明)")
                     : "(企業屋号未指定)";
             case "LOGO":
                 {
                     if (!e.LogoId.HasValue) return "(ロゴ未指定)";
                     var lg = await _lookup.GetLogoForRenderingAsync(e.LogoId.Value);
                     if (lg is null) return "(ロゴ不明)";
-                    string? aliasName = await _lookup.LookupCompanyAliasNameAsync(lg.CompanyAliasId);
+                    string? aliasName = await _lookup.LookupCompanyAliasCreditNameAsync(lg.CompanyAliasId);
                     return aliasName ?? "(屋号不明)";
                 }
             case "TEXT":

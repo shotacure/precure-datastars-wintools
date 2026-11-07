@@ -324,8 +324,9 @@ WHERE crb.continues_previous = 1
 ORDER BY crb.block_id;
 
 -- D6: 画面の組みどおりの役名（character_display_text）が名義と食い違う
---   件数 > 0 の意味: 声の出演以外のエントリに付いている、改行が入っていない、または改行を抜いた字がキャラの名義
---   （名義が無ければ raw_character_text）と違う。名義の字を直したのに画面の役名が古いまま、などのずれ。
+--   件数 > 0 の意味: 声の出演以外のエントリに付いている、または改行を抜いた字が、キャラの名義（名義が無ければ raw_character_text）と
+--   同じ（このときは改行が要る）でも、名義の後ろの部分で名義より短い字（頭の姓などを画面で省いた役名）でもない。
+--   名義の字を直したのに画面の役名が古いまま、などのずれ。
 --   対処: クレジットの画面と照らして、character_display_text を直すか消す。
 SELECT 'D6 character_display_text mismatch' AS check_name,
     cbe.entry_id,
@@ -336,9 +337,17 @@ FROM credit_block_entries cbe
 LEFT JOIN character_aliases ca ON ca.alias_id = cbe.character_alias_id
 WHERE cbe.character_display_text IS NOT NULL
   AND (cbe.entry_kind <> 'CHARACTER_VOICE'
-       OR LOCATE('\n', cbe.character_display_text) = 0
-       OR CAST(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '') AS BINARY)
-          <> CAST(COALESCE(ca.name, cbe.raw_character_text, '') AS BINARY))
+       OR NOT (
+            -- 役名が画面で折れている：改行を抜くと名義と同じで、改行がある
+            (CAST(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '') AS BINARY)
+                = CAST(COALESCE(ca.name, cbe.raw_character_text, '') AS BINARY)
+             AND LOCATE('\n', cbe.character_display_text) > 0)
+            -- 頭を省いた役名：改行を抜いた字が名義の後ろの部分で、名義より短い
+         OR (CHAR_LENGTH(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', ''))
+                BETWEEN 1 AND CHAR_LENGTH(COALESCE(ca.name, cbe.raw_character_text, '')) - 1
+             AND CAST(RIGHT(COALESCE(ca.name, cbe.raw_character_text, ''),
+                            CHAR_LENGTH(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', ''))) AS BINARY)
+                 = CAST(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '') AS BINARY))))
 ORDER BY cbe.entry_id;
 
 
@@ -464,7 +473,7 @@ UNION ALL SELECT 'D2 role_label_text same as name_ja', COUNT(*) FROM credit_card
 UNION ALL SELECT 'D3 join_separator w/o join_previous', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_separator IS NOT NULL AND ccr.join_previous = 0
 UNION ALL SELECT 'D4 join_previous w/o previous role', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_card_roles prev WHERE prev.card_group_id = ccr.card_group_id AND prev.order_in_group < ccr.order_in_group)
 UNION ALL SELECT 'D5 continues_previous w/o previous block', COUNT(*) FROM credit_role_blocks crb WHERE crb.continues_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_role_blocks prev WHERE prev.card_role_id = crb.card_role_id AND prev.block_seq < crb.block_seq)
-UNION ALL SELECT 'D6 character_display_text mismatch', COUNT(*) FROM credit_block_entries cbe LEFT JOIN character_aliases ca ON ca.alias_id = cbe.character_alias_id WHERE cbe.character_display_text IS NOT NULL AND (cbe.entry_kind <> 'CHARACTER_VOICE' OR LOCATE('\n', cbe.character_display_text) = 0 OR CAST(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '') AS BINARY) <> CAST(COALESCE(ca.name, cbe.raw_character_text, '') AS BINARY))
+UNION ALL SELECT 'D6 character_display_text mismatch', COUNT(*) FROM credit_block_entries cbe LEFT JOIN character_aliases ca ON ca.alias_id = cbe.character_alias_id WHERE cbe.character_display_text IS NOT NULL AND (cbe.entry_kind <> 'CHARACTER_VOICE' OR NOT ((CAST(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '') AS BINARY) = CAST(COALESCE(ca.name, cbe.raw_character_text, '') AS BINARY) AND LOCATE('\n', cbe.character_display_text) > 0) OR (CHAR_LENGTH(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '')) BETWEEN 1 AND CHAR_LENGTH(COALESCE(ca.name, cbe.raw_character_text, '')) - 1 AND CAST(RIGHT(COALESCE(ca.name, cbe.raw_character_text, ''), CHAR_LENGTH(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', ''))) AS BINARY) = CAST(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '') AS BINARY))))
 UNION ALL SELECT 'D7 person_display_text mismatch', COUNT(*) FROM credit_block_entries cbe LEFT JOIN person_aliases pa ON pa.alias_id = cbe.person_alias_id WHERE cbe.person_display_text IS NOT NULL AND (cbe.entry_kind NOT IN ('PERSON', 'CHARACTER_VOICE') OR pa.alias_id IS NULL OR CAST(cbe.person_display_text AS BINARY) = CAST(pa.name AS BINARY) OR CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cbe.person_display_text, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY) <> CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(pa.name, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY))
 UNION ALL SELECT 'D8 same layout mismatch', COUNT(*) FROM (SELECT cbe.entry_id, cbe.entry_kind, cbe.same_character_layout, cbe.same_person_layout,     COALESCE(ca.name, cbe.raw_character_text) AS lbl, cbe.person_alias_id AS p,     LAG(cbe.entry_kind) OVER w AS pk, LAG(COALESCE(ca.name, cbe.raw_character_text)) OVER w AS plbl, LAG(cbe.person_alias_id) OVER w AS pp    FROM credit_block_entries cbe    LEFT JOIN character_aliases ca ON ca.alias_id = cbe.character_alias_id    WHERE cbe.parallel_with_entry_id IS NULL    WINDOW w AS (PARTITION BY cbe.block_id, cbe.is_broadcast_only ORDER BY cbe.entry_seq)) y WHERE y.entry_kind = 'CHARACTER_VOICE'  AND ((y.same_character_layout IS NOT NULL AND NOT COALESCE(y.pk = 'CHARACTER_VOICE' AND y.lbl <=> y.plbl, FALSE))   OR (y.same_character_layout IS NULL AND y.pk = 'CHARACTER_VOICE' AND y.lbl = y.plbl)   OR (y.same_person_layout IS NOT NULL AND NOT COALESCE(y.pk = 'CHARACTER_VOICE' AND y.p <=> y.pp, FALSE))   OR (y.same_person_layout IS NULL AND y.pk = 'CHARACTER_VOICE' AND y.p = y.pp))
 UNION ALL SELECT 'E1 music_credits target not on source disc', COUNT(*) FROM music_credits m

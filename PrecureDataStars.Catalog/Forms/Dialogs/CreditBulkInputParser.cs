@@ -41,6 +41,8 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     ひと続きの 2 行目以降に付ける。例: <c>^{TOP} &lt;生徒&gt;山田</c>、<c>^{|MIDDLE} &lt;天宮いくと&gt;依田 菜津</c>。</description></item>
 ///   <item><description>役名の中の <c>\n</c>（バックスラッシュと n）→ 画面の改行。名義の名前からは抜き、改行入りの役名を
 ///     <c>character_display_text</c> に持つ。例: <c>&lt;てんびん座の\nプリンセス&gt;MAKO</c>（役名が画面で 2 行に折れているとき）。</description></item>
+///   <item><description>役名の <c>名義|画面の役名</c> → 画面の役名が名義の頭を省いた後ろの部分だけのとき（双子の姓の省略など）。
+///     名義は <c>|</c> の左側で引き当て、右側を <c>character_display_text</c> に持つ。例: <c>&lt;菓彩みつき|みつき&gt;宮田 俊哉</c>。</description></item>
 ///   <item><description>人物名・声優名の <c>名義|画面の表記</c> → 画面に出た人物名の表記揺れ。名義は <c>|</c> の左側で引き当て、
 ///     右側（名義と空白・中黒・記号の有無や位置だけが違う画面の表記）を <c>person_display_text</c> に持つ。誤記の <c>×</c> とは別。
 ///     例: <c>ロメオ・アンニョンヌエボJr.|ロメオ・アンニョンヌエボ Jr.</c>。</description></item>
@@ -1818,6 +1820,15 @@ public static class CreditBulkInputParser
             //   → chara_main="キュアブラック", chara_misprint="キュアブラッグ"
             //   → person_main="菊池 心",       person_misprint="菊地 心"
             // × の左側がさらに "旧 => 新" 記法の対象になり得るため、× を先に剥がす。
+            // 役名の "名義|画面の役名"（画面が名義の頭を省いた後ろの部分だけのとき）を先に剥がす。
+            // 例: <菓彩みつき|みつき>宮田 俊哉 → 名義「菓彩みつき」、画面の役名「みつき」
+            string? charaShortDisplay = null;
+            int charaDisplaySep = chara.IndexOf('|');
+            if (charaDisplaySep >= 0)
+            {
+                charaShortDisplay = chara.Substring(charaDisplaySep + 1).Trim().Replace(@"\n", "\n");
+                chara = chara.Substring(0, charaDisplaySep).Trim();
+            }
             var (charaBeforeRedirect, charaMisprint) = SplitMisprint(chara);
             // 声優名の "名義|画面の表記"（表記揺れ）を先に剥がしてから誤記を剥がす。
             var (personMainAfterDisplay, personDisplay) = SplitPersonDisplay(personAfterAster);
@@ -1839,6 +1850,22 @@ public static class CreditBulkInputParser
                 charaNew = charaNew.Replace(@"\n", string.Empty);
             }
             charaOld = charaOld?.Replace(@"\n", string.Empty);
+            if (charaShortDisplay is not null)
+            {
+                if (charaDisplayText is not null
+                    || !PrecureDataStars.Data.Models.CreditBlockEntry.IsValidCharacterDisplayText(charaShortDisplay, charaNew)
+                    || charaShortDisplay.Replace("\n", string.Empty) == charaNew)
+                {
+                    result.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Block,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: 画面の役名「{charaShortDisplay.Replace("\n", @"\n")}」が名義「{charaNew}」の後ろの部分ではありません（<名義|画面の役名> は、画面が名義の頭を省いているときに使います）。"
+                    });
+                    return null;
+                }
+                charaDisplayText = charaShortDisplay;
+            }
 
             // 声優名末尾の "#数値" を person_alias_id 明示参照として抜き出す
             // （SplitMisprint / SplitOldNewRedirect の後段で実施。誤記やリダイレクトの "=>" を先に剥がしてから

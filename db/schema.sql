@@ -2734,7 +2734,7 @@ CREATE TABLE `credit_block_entries` (
   `person_misprint_text`           varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `person_display_text`            varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '画面に出た人物名の表記揺れ。名義と空白・記号だけが違うときだけ。誤記ではない。NULL は名義の名前のまま',
   `character_misprint_text`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
-  `character_display_text`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '画面の組みどおりの役名（改行入り）。役名が画面で折れているときだけ。改行を抜いた字はキャラの名義と同じ。NULL は名義の名前のまま',
+  `character_display_text`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '画面の組みどおりの役名。役名が画面で折れているとき（改行入り。改行を抜いた字はキャラの名義と同じ）か、画面が名義の頭を省いた後ろの部分だけのとき（名義より短い）。NULL は名義の名前のまま',
   -- 同じブロックで直前の CHARACTER_VOICE と役名・声優が同じ行の、画面での出し方。まとまりの最初の行と、前の行と続かない行は NULL。
   --   REPEAT = 毎行書く / TOP = まとまりの最初の行に 1 回だけ書き、以降の行は空き / MIDDLE = まとまりの縦の真ん中に 1 回だけ書く。
   --   描き方はこの値だけで決める（文字が同じかどうかでは決めない）。CHARACTER_VOICE のエントリにだけ付ける（ck_entry_same_layout_voice）。

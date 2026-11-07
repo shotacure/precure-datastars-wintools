@@ -68,9 +68,22 @@ public sealed class CreditBlockEntry
     /// <summary>
     /// 画面の組みどおりの役名（DB 列名 character_display_text）。CHARACTER_VOICE のときのみ意味を持つ。
     /// 画面で 1 つの役名が 2 行以上に折れて出るとき、その役名を改行（LF）ごと持ち、表示は改行の位置で折って描く。
-    /// キャラは 1 つのまま。改行を抜いた字はキャラの名義と同じにする。NULL は名義の名前のまま描く。
+    /// 画面の役名が名義の頭を省いた後ろの部分だけのとき（双子の姓を省いた「みつき」＝名義「菓彩みつき」など）も、画面の字を持つ。
+    /// キャラは 1 つのまま。使える字は <see cref="IsValidCharacterDisplayText"/>。NULL は名義の名前のまま描く。
     /// </summary>
     public string? CharacterDisplayText { get; set; }
+
+    /// <summary>
+    /// <paramref name="displayText"/> が名義 <paramref name="characterName"/> の画面の役名として使えるか。
+    /// 改行を抜いた字が、改行を含んで名義と同じ（役名が画面で折れている）か、名義の後ろの部分で名義より短い（頭の姓などを画面で省いている）とき true。
+    /// </summary>
+    public static bool IsValidCharacterDisplayText(string displayText, string characterName)
+    {
+        string flat = displayText.Replace("\r", string.Empty).Replace("\n", string.Empty);
+        if (flat.Length == 0) return false;
+        if (flat == characterName) return displayText.Contains('\n');
+        return flat.Length < characterName.Length && characterName.EndsWith(flat, StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// クレジット時の誤記（企業屋号側）。COMPANY / LOGO で使う。

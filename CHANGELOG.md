@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **ツール：BDAnalyzer で、読み取った Blu-ray の当てが決まったら確認を出さずに記録するようにした**（`MainForm.LoadAndSaveBdAsync`）：TV の話が当たり、どのプレイリストも候補が 1 話だけのとき、または作品単位のまとまりがただ 1 つに当たったときは、要約の確認を出さずに bd_* に記録し、状態の欄に作品と話数の範囲を出す。決まらなかった盤はこれまでどおり確認を出し、止まった理由を要約の頭に添える。記録済みの盤は確認なしで更新し、話も本編も当たっていない記録済みの盤はもう一度作品を判定して当てる。
+  - 管理ファイルに欠けがある読み取り（`index.bdmv`・`MovieObject.bdmv`・プレイリスト・クリップ情報・`STREAM` のどれかが読めない）は、3 秒おきに 10 回まで読み直し、読み切れたものだけを記録するようにした（`MainForm.IncompleteReadReason`）。読み切れなければ記録せずに入れ直すよう知らせる。盤ごとの結果を `%LOCALAPPDATA%\precure-datastars\bd-read.log` に 1 行ずつ残す（`MainForm.RecordReadResult`）。管理ファイルを 1 つも読めなかった盤はハッシュの鍵を作らずに止めるようにした（`BdmvStructureReader.HashDiscId`）：何も読めなかったときのハッシュはどの盤でも同じ値になり、別の盤の記録を上書きしていた
 - **サイト：コラムの脚注の番号を、本文の参照も脚注の側も「[1]」の形にした**（`ArticlesGenerator.FormatFootnoteRefs`・`site.css`）：本文は Markdig の参照を `<sup class="fn-ref">[<a>1</a>]</sup>` にし、リンクは括弧の中の番号だけ。脚注の側は CSS のカウンターで番号を「[1]」にしてぶら下げる。
   - 既に使った脚注の参照の直後に別の参照を続けて並べる（`[^a][^b]`）と、Markdig が前の参照を黙って落としていたのを直した（`ArticlesGenerator.SeparateAdjacentFootnoteRefs`：並んだ参照の間に空の HTML コメントを挟んで変換し、変換後に取り除く）
 - **サイト：コラムの Markdown の脚注の上に区切りの線が点線と実線の 2 本出ていたのを、点線の 1 本にした**（`site.css`：Markdig が `div.footnotes` の先頭に入れる `hr` を `.article-body .footnotes > hr` で出さない。点線はサイトの脚注〔`.footnotes`〕のもの）。

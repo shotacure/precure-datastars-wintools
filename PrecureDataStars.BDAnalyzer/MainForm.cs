@@ -1014,8 +1014,10 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// Blu-ray の読み取り（PLAYLIST フォルダの全走査）に続けて、BDMV の管理ファイルから情報を読み、
-        /// 記録済みの盤なら当て方と品番を引き継ぎ、未記録なら作品を自動で判定して話とパートを当て、
-        /// 要約の確認 1 回で bd_* に記録する。DB 連携が無効なら読むだけ。
+        /// 記録済みの盤なら当て方と品番を引き継ぎ、未記録の盤（記録済みでも話・本編が 1 つも当たっていない盤）なら作品を自動で判定して話とパートを当てる。
+        /// 当てが決まった盤（<see cref="AutoDetectSeriesAndLinkAsync"/> が true、または引き継いだ当て方がある盤）は確認を出さずに bd_* に記録し、
+        /// 状態の欄に作品と話数を出す。決まらなかった盤は理由を添えた要約の確認 1 回で記録する（直すなら「話とパートを当てる...」）。
+        /// トレイは開けない（読んだ後にクレジットを撮るなど、盤を入れたまま続ける作業がある）。DB 連携が無効なら読むだけ。
         /// </summary>
         private async Task LoadAndSaveBdAsync(string mplsPath)
         {
@@ -1026,8 +1028,39 @@ namespace PrecureDataStars.BDAnalyzer
                 string? playlistDir = Path.GetDirectoryName(mplsPath);
                 string? bdmvRoot = playlistDir is null ? null : Path.GetDirectoryName(playlistDir);
                 if (bdmvRoot is null || !string.Equals(Path.GetFileName(playlistDir), "PLAYLIST", StringComparison.OrdinalIgnoreCase)) return;
-                var bd = await Task.Run(() => BdmvStructureReader.Read(bdmvRoot));
-                if (bd.Playlists.Count == 0 && bd.Clips.Count == 0 && bd.Titles.Count == 0) return;
+                // 入れた直後の盤は、回り始めのうちにドライブが読めない状態へ戻ることがあり、管理ファイルの一部だけ読めて残りが欠ける。
+                // 欠けが無くなるまで間を置いて読み直し、読み切れたものだけを記録に回す（読み切れなければ記録もトレイを開けることもしない）
+                BdStructure? bd = null;
+                string? problem = null;
+                int attemptsUsed = 0;
+                for (int attempt = 1; attempt <= BdReadAttempts; attempt++)
+                {
+                    attemptsUsed = attempt;
+                    if (attempt > 1)
+                    {
+                        lblDbStatus.Text = $"読み取りが途中で切れたので読み直します（{attempt}/{BdReadAttempts} 回目。{problem}）…";
+                        await Task.Delay(BdReadRetryDelayMs);
+                    }
+                    try
+                    {
+                        bd = await Task.Run(() => BdmvStructureReader.Read(bdmvRoot));
+                        problem = IncompleteReadReason(bd);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+                    {
+                        bd = null;
+                        problem = ex.Message;
+                    }
+                    if (problem is null) break;
+                }
+                if (bd is null || problem is not null)
+                {
+                    lblDbStatus.Text = $"{BdReadAttempts} 回読んでも読み切れませんでした（{problem}）。記録していません";
+                    RecordReadResult(recorded: false, bd?.Disc.BdmtName ?? Path.GetPathRoot(mplsPath), null, $"読み切れず（{BdReadAttempts} 回）：{problem}");
+                    MessageBox.Show(this, $"Blu-ray を {BdReadAttempts} 回読み直しても、管理ファイルを読み切れませんでした（{problem}）。\n記録していません。ディスクの汚れを確かめて入れ直してください。",
+                        "Blu-ray の情報を記録", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
                 _lastBd = bd;
 
                 if (_bdRepo is null) return;
@@ -1054,22 +1087,114 @@ namespace PrecureDataStars.BDAnalyzer
                     }
                 }
                 MarkMenuPlaylists(bd);
-                if (existing is null)
+                if (existing is null) bd.Disc.FirstReadAt = bd.Disc.LastReadAt;
+                bool confident = HasLinks(bd);
+                if (!confident)
                 {
-                    bd.Disc.FirstReadAt = bd.Disc.LastReadAt;
-                    await AutoDetectSeriesAndLinkAsync(bd);
+                    // 当て方の無い盤は作品を判定して当てる。決まらなければ、記録済みの盤で選んであった作品は残す
+                    int? keptSeriesId = bd.Disc.SeriesId;
+                    confident = await AutoDetectSeriesAndLinkAsync(bd);
+                    if (!confident && keptSeriesId is not null) bd.Disc.SeriesId = keptSeriesId;
                 }
                 RefreshEpisodeLinkColumn();
-                await SaveBdAsync(confirm: true, isUpdate: existing is not null);
+                if (!confident)
+                {
+                    string reason = bd.Disc.SeriesId is null ? "作品を決められませんでした"
+                        : !HasLinks(bd) ? "話・本編が 1 つも当たりませんでした"
+                        : "同じ尺の話が複数あり、当て方を決めきれないプレイリストがあります";
+                    bool savedAfterConfirm = await SaveBdAsync(confirm: true, isUpdate: existing is not null, autoStopReason: reason);
+                    RecordReadResult(savedAfterConfirm, bd.Disc.BdmtName, bd.Disc.DiscId,
+                        $"{(savedAfterConfirm ? "確認して記録" : "記録せず（確認で取り消し）")}：{reason}　{await DescribeLinksAsync(bd)}");
+                    return;
+                }
+                if (!await SaveBdAsync(confirm: false, isUpdate: existing is not null))
+                {
+                    RecordReadResult(recorded: false, bd.Disc.BdmtName, bd.Disc.DiscId, "記録できず（DB への書き込みに失敗）");
+                    return;
+                }
+                string savedSummary = $"{(existing is null ? "記録しました" : "更新しました")}：{await DescribeLinksAsync(bd)}";
+                lblDbStatus.Text = savedSummary;
+                RecordReadResult(recorded: true, bd.Disc.BdmtName, bd.Disc.DiscId,
+                    savedSummary + (attemptsUsed > 1 ? $"（読み直し {attemptsUsed - 1} 回）" : ""));
             }
             catch (Exception ex)
             {
+                RecordReadResult(recorded: false, _lastBd?.Disc.BdmtName ?? Path.GetPathRoot(mplsPath), _lastBd?.Disc.DiscId, "エラー：" + ex.Message);
                 MessageBox.Show(this, "Blu-ray の情報を読めませんでした: " + ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
                 SetDbPanelEnabled(_registration is not null, lblDbStatus.Text);
             }
+        }
+
+        /// <summary>
+        /// 盤の読み取りの結果を 1 行ずつ残す記録（%LOCALAPPDATA%\precure-datastars\bd-read.log）。
+        /// 何枚目がどう終わったか（記録・読み直しの回数・止まった理由・当たった作品と話数）を後から読めるようにする。
+        /// </summary>
+        private static readonly string ReadLogPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "precure-datastars", "bd-read.log");
+
+        /// <summary>
+        /// 盤の読み取りの結果を記録（<see cref="ReadLogPath"/>）に足す。記録に書けなくても読み取りの流れは止めない。
+        /// </summary>
+        private void RecordReadResult(bool recorded, string? discName, string? discId, string detail)
+        {
+            string line = string.Join("\t",
+                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                recorded ? "記録" : "止まった",
+                discName ?? "（ディスク名なし）",
+                discId ?? "（ID なし）",
+                detail);
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(ReadLogPath)!);
+                File.AppendAllText(ReadLogPath, line + Environment.NewLine, Encoding.UTF8);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                lblInfo.Text = $"読み取りの記録を書けませんでした: {ex.Message}";
+            }
+        }
+
+        /// <summary>Blu-ray の管理ファイルを読み切れるまで読む回数の上限。</summary>
+        private const int BdReadAttempts = 10;
+
+        /// <summary>読み直す前に待つ時間（ミリ秒）。入れた直後の盤が回り始めて落ち着くのを待つ。</summary>
+        private const int BdReadRetryDelayMs = 3000;
+
+        /// <summary>
+        /// 読んだ管理ファイルに欠けがあれば理由を返す（欠けが無ければ null）。index.bdmv・MovieObject.bdmv・プレイリスト・
+        /// クリップ情報・STREAM はどの Blu-ray にもあるので、どれかが読めていなければ読み取りが途中で切れたとみなす。
+        /// </summary>
+        private static string? IncompleteReadReason(BdStructure bd)
+        {
+            var missing = new List<string>();
+            if (bd.Disc.TitleCount is null) missing.Add("index.bdmv");
+            if (bd.MovieObjects.Count == 0) missing.Add("MovieObject.bdmv");
+            if (bd.Playlists.Count == 0) missing.Add("PLAYLIST");
+            if (bd.Clips.Count == 0) missing.Add("CLIPINF");
+            if (bd.Disc.M2tsTotalBytes is null || bd.Clips.Any(c => c.FileSizeBytes is null)) missing.Add("STREAM");
+            return missing.Count == 0 ? null : string.Join("・", missing) + " を読めません";
+        }
+
+        /// <summary>話か作品単位の本編が 1 つでも当たっていて、作品も決まっているか（記録済みの盤から当て方を引き継げたかの判定にも使う）。</summary>
+        private static bool HasLinks(BdStructure bd)
+            => bd.Disc.SeriesId is not null && bd.Chapters.Any(c => c.EpisodeId is not null || c.ChapterKind == "FEATURE");
+
+        /// <summary>状態の欄に出す当て方の要約（「作品名 第 13〜16 話（4 話）」「作品名 本編 2 本」）。</summary>
+        private async Task<string> DescribeLinksAsync(BdStructure bd)
+        {
+            var allSeries = _seriesRepo is null ? Array.Empty<Series>() : await _seriesRepo.GetAllAsync();
+            string title = bd.Disc.SeriesId is int sid ? allSeries.FirstOrDefault(x => x.SeriesId == sid)?.Title ?? $"series {sid}" : "（作品未判定）";
+            var epIds = bd.Chapters.Where(c => c.EpisodeId is not null).Select(c => c.EpisodeId!.Value).Distinct().ToList();
+            if (epIds.Count > 0 && _episodesRepo is not null)
+            {
+                var nos = (await _episodesRepo.GetAllAsync()).Where(e => epIds.Contains(e.EpisodeId)).Select(e => e.SeriesEpNo).OrderBy(n => n).ToList();
+                if (nos.Count > 0) return $"{title} 第 {nos[0]}〜{nos[^1]} 話（{nos.Count} 話）";
+            }
+            int features = bd.Playlists.Count(p => p.PlaylistKind == "FEATURE");
+            return features > 0 ? $"{title} 本編 {features} 本" : title;
         }
 
         /// <summary>
@@ -1080,10 +1205,12 @@ namespace PrecureDataStars.BDAnalyzer
         /// 当たるまとまりが複数なら、ディスク名で決められる作品（<see cref="SeriesNameMatcher"/>）がその中にあればそれを採る。
         /// 尺でどれにも当たらなければ、ディスク名で決められる作品を盤の作品にする（話・本編の当ては人が「話とパートを当てる...」で行う）。
         /// ディスク名で決めるときは、円盤尺を持つ TV 作品（尺で当たらなかったと分かっている作品）を外す。どれでも決まらなければ未判定のまま。
+        /// 当てが決まった（TV の話が当たり、どのプレイリストも候補が 1 話だけ／作品単位のまとまりがただ 1 つに当たった）なら true を返し、
+        /// 呼び出し側は確認なしで記録する。ディスク名だけで作品を決めたときと、どれにも当たらなかったときは false。
         /// </summary>
-        private async Task AutoDetectSeriesAndLinkAsync(BdStructure bd)
+        private async Task<bool> AutoDetectSeriesAndLinkAsync(BdStructure bd)
         {
-            if (_seriesRepo is null || _episodesRepo is null || _episodePartsRepo is null) return;
+            if (_seriesRepo is null || _episodesRepo is null || _episodePartsRepo is null) return false;
             var tvSeries = (await _seriesRepo.GetAllAsync()).Where(x => string.Equals(x.KindCode, "TV", StringComparison.Ordinal)).ToList();
             var allEpisodes = await _episodesRepo.GetAllAsync();
             var allParts = await _episodePartsRepo.GetAllAsync();
@@ -1135,12 +1262,13 @@ namespace PrecureDataStars.BDAnalyzer
                 {
                     bd.Disc.SeriesId = hits[0].Group.Root.SeriesId;
                     foreach (var proposal in hits[0].Proposals) ApplyFeatureProposal(bd, proposal);
+                    return true;
                 }
-                else if (hits.Count == 0 && nameGuess is int guessed)
+                if (hits.Count == 0 && nameGuess is int guessed)
                 {
                     bd.Disc.SeriesId = guessed;
                 }
-                return;
+                return false;
             }
 
             bd.Disc.SeriesId = bestSeries.SeriesId;
@@ -1156,6 +1284,7 @@ namespace PrecureDataStars.BDAnalyzer
                     chapters[i].EpisodeSeq = proposal.Chapters[i].EpisodeSeq;
                 }
             }
+            return bestAmbiguous == 0;
         }
 
         /// <summary>
@@ -1200,11 +1329,12 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// Blu-ray の情報を bd_* に記録する。<paramref name="confirm"/> なら要約（ディスク名・ID・各種の数・当てた作品と話）を出して OK を待つ。
-        /// 「Blu-ray の情報を記録」ボタンからも、読み取り直後の自動の流れからも使う。
+        /// <paramref name="autoStopReason"/> は、読み取り直後の自動の流れで確認なしに記録しなかった理由（要約の頭に出す）。
+        /// 「Blu-ray の情報を記録」ボタンからも、読み取り直後の自動の流れからも使う。記録したら true。
         /// </summary>
-        private async Task SaveBdAsync(bool confirm, bool? isUpdate = null)
+        private async Task<bool> SaveBdAsync(bool confirm, bool? isUpdate = null, string? autoStopReason = null)
         {
-            if (_bdRepo is null || _lastBd is null) return;
+            if (_bdRepo is null || _lastBd is null) return false;
             var bd = _lastBd;
             try
             {
@@ -1241,7 +1371,8 @@ namespace PrecureDataStars.BDAnalyzer
                     string nl = Environment.NewLine;
                     string runTimes = string.Concat(_pendingRunTimes.Select(kv => $"上映時間：{TitleOf(kv.Key)} を {kv.Value} 秒（{kv.Value / 60}:{kv.Value % 60:00}）にします" + nl));
                     string text =
-                        (isUpdate == true ? "記録済みの Blu-ray です。読み直した内容で更新します。" : "この Blu-ray の情報を記録します。") + nl + nl
+                        (autoStopReason is null ? "" : $"自動では記録しませんでした：{autoStopReason}" + nl + nl)
+                        + (isUpdate == true ? "記録済みの Blu-ray です。読み直した内容で更新します。" : "この Blu-ray の情報を記録します。") + nl + nl
                         + $"ディスク名：{bd.Disc.BdmtName ?? "（なし）"}　ラベル：{bd.Disc.VolumeLabel ?? "（なし）"}" + nl
                         + $"ディスク ID：{bd.Disc.DiscId}{(bd.Disc.DiscIdSource == "HASH" ? "（id.bdmv なし。管理ファイルのハッシュ）" : "")}" + nl
                         + $"タイトル {bd.Titles.Count}・プレイリスト {bd.Playlists.Count}・チャプター {bd.Chapters.Count}・クリップ {bd.Clips.Count}・マーク {bd.Marks.Count}・命令 {bd.MovieObjectCommands.Count}" + nl
@@ -1249,7 +1380,7 @@ namespace PrecureDataStars.BDAnalyzer
                         + (bd.Disc.CatalogNo is null ? "品番：未設定（「既存ディスクと照合 / 新規登録...」で結びつけられます）" : $"品番：{bd.Disc.CatalogNo}") + nl
                         + runTimes + nl
                         + "記録しますか？（当て方は「話とパートを当てる...」で直してから記録し直せます）";
-                    if (MessageBox.Show(this, text, "Blu-ray の情報を記録", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+                    if (MessageBox.Show(this, text, "Blu-ray の情報を記録", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return false;
                 }
                 await _bdRepo.ReplaceAllAsync(bd);
                 string runTimeNote = "";
@@ -1260,10 +1391,12 @@ namespace PrecureDataStars.BDAnalyzer
                     _pendingRunTimes.Clear();
                 }
                 lblDbStatus.Text = $"Blu-ray の情報を記録しました（ディスク ID {bd.Disc.DiscId[..8]}…）{runTimeNote}";
+                return true;
             }
             catch (Exception ex)
             {
                 MessageBox.Show(this, "Blu-ray の情報を記録できませんでした: " + ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
         }
 

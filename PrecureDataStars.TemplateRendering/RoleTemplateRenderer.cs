@@ -18,7 +18,7 @@ namespace PrecureDataStars.TemplateRendering;
 ///   <item><description><c>{COMPANIES[:sep="」「",wrap="「」"]}</c> ... カレントブロック内の COMPANY エントリ群を結合</description></item>
 ///   <item><description><c>{PERSONS[:sep="、"]}</c> ... カレントブロック内の PERSON エントリ群を結合</description></item>
 ///   <item><description><c>{LOGOS[:sep=" "]}</c> ... カレントブロック内の LOGO エントリ（ロゴ名義 → 文字列）</description></item>
-///   <item><description><c>{TEXTS[:sep=" "]}</c> ... カレントブロック内の TEXT エントリの raw_text 結合</description></item>
+///   <item><description><c>{TEXTS[:sep=" "]}</c> ... カレントブロック内の TEXT エントリの raw_text 結合（ブロックの外では役職の全ブロックの TEXT エントリを結合）</description></item>
 ///   <item><description><c>{THEME_SONGS[:kind=OP|ED|INSERT|OP+ED|ED+INSERT|ALL,columns=N]}</c> ... episode_theme_songs から動的取得（<see cref="ThemeSongsHandler"/> へ委譲）。kind 省略時は ALL 相当。</description></item>
 ///   <item><description><c>{ROLE_LINK:code=ROLE_CODE}</c> ... 役職統計ページへのリンク化済み HTML。
 ///     <c>code</c> オプションで指定された役職コードに対応する役職表示名を <see cref="ILookupCache.LookupRoleHtmlAsync"/>
@@ -619,8 +619,13 @@ public static class RoleTemplateRenderer
 
             case "TEXTS":
                 {
-                    if (currentBlock is null) return "";
-                    var texts = currentBlock.Entries
+                    // ブロックの外（役職のスコープ）では、その役職の全ブロックの TEXT エントリを順に結合する。
+                    // 映画のタイトルカード（役職 TITLE）で、画面のタイトルが作品名と違う行だけ文字を持たせ、
+                    // 「{?TEXTS}{TEXTS}{/?TEXTS}{?!TEXTS}{SERIES_TITLE}{/?!TEXTS}」のように書き分けるのに使う。
+                    var sourceEntries = currentBlock is not null
+                        ? currentBlock.Entries
+                        : ctx.Blocks.SelectMany(b => b.Entries);
+                    var texts = sourceEntries
                         .Where(x => x.EntryKind == "TEXT" && !string.IsNullOrEmpty(x.RawText))
                         .Select(x => x.RawText!).ToList();
                     string sep = ph.GetOption("sep", " ");

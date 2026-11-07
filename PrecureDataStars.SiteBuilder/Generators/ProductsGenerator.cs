@@ -924,9 +924,14 @@ public sealed class ProductsGenerator
         // 本体価格は税率改定に左右されない固定値で「リリース時点」の曖昧さがなく、Amazon のライブ価格でもない
         // ため PA-API の価格鮮度要件にも抵触しない。valueAddedTaxIncluded:false で税抜であることを明示する。
         // アフィリエイトタグは url に既に含まれている。
+        // offers を持つ商品は Google の「販売者のリスティング」として扱われ、image が必須になる。ジャケット画像が
+        // まだ無い商品（発売前で Amazon に画像が出ていないものなど）はオファーを出さず、画像が取れたビルドから出す。
+        // availability は発売日がビルド時点より後なら予約受付中（PreOrder）、それ以外は在庫あり（InStock）。
         var offers = new List<Dictionary<string, object?>>();
-        if (!string.IsNullOrEmpty(amazonCdUrl) && product.PriceExTax is int exTaxPrice)
+        if (!string.IsNullOrEmpty(amazonCdUrl) && product.PriceExTax is int exTaxPrice
+            && !string.IsNullOrEmpty(coverPrimaryUrl))
         {
+            bool isPreOrder = product.ReleaseDate.Date > _ctx.BuildStartedAt.Date;
             offers.Add(new Dictionary<string, object?>
             {
                 ["@type"] = "Offer",
@@ -938,7 +943,7 @@ public sealed class ProductsGenerator
                     ["priceCurrency"] = "JPY",
                     ["valueAddedTaxIncluded"] = false
                 },
-                ["availability"] = "https://schema.org/InStock",
+                ["availability"] = isPreOrder ? "https://schema.org/PreOrder" : "https://schema.org/InStock",
                 ["category"] = "Physical"
             });
         }
@@ -963,7 +968,8 @@ public sealed class ProductsGenerator
         else if (!isMusicAlbum)
         {
             // Product 型は offers・review・aggregateRating のどれかが無いとリッチリザルトの重要エラーになる。
-            // 価格を付けられるオファーが無い商品（特典・非売品や定価未登録のもの）は、Product ではなく CreativeWork として出す。
+            // 価格を付けられるオファーが無い商品（特典・非売品や定価未登録のもの、ジャケット画像の無いもの）は、
+            // Product ではなく CreativeWork として出す。
             jsonLdDict["@type"] = "CreativeWork";
         }
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + productUrl;

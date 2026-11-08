@@ -4,6 +4,9 @@
 
 ### 開発中（次回リリース）
 
+- **サイト・テンプレ：曲の作家の種類に「ブラスアレンジ」を足し、主題歌のカードの役職テンプレで追加の編曲を出せるようにした**（`SongCreditRoles.StringsArrangement` / `OrchestraArrangement` / `BrassArrangement` / `ExtraArrangements`〔新規〕・`ThemeSongsHandler.ThemeSongRow.ExtraCredits`〔新規〕・`RoleTemplateRenderer` の `{SONG_CREDIT:code=…}`〔新規〕・`TemplateParser.ParseOptions` を internal に・`SongsGenerator`：TV の ED の主題歌のカードに「作曲・編曲」の行と「歌」の行の間に「ブラスアレンジ：三好啓太」の行が出る作品があり、曲の作家の種類にも、テンプレから出す差し込みにも無かった）
+  - 役職 `BRASS_ARRANGEMENT`（ブラスアレンジ、曲の作家の種類）は DB のデータで足す。曲の構造化クレジット（`song_credits`）に持ち、曲詳細の基本情報では編曲の後ろにストリングス編曲・オーケストラ編曲と並べて出す
+  - 役職テンプレの `{SONG_CREDIT:code=BRASS_ARRANGEMENT}` は、曲のループの中で、指定した追加の編曲（`STRINGS_ARRANGEMENT`・`ORCHESTRA_ARRANGEMENT`・`BRASS_ARRANGEMENT`）の連名を出す。無い曲は空。条件の `{?…}` も名前の後ろの指定を読むようにし、`{?SONG_CREDIT:code=BRASS_ARRANGEMENT}ブラスアレンジ：{SONG_CREDIT:code=BRASS_ARRANGEMENT}{/?SONG_CREDIT:code=BRASS_ARRANGEMENT}` で行ごと出し分けられる。`sep=` も効く
 - **ツール：放送後のリンクの取り込みで、公式 YouTube チャンネルの予告を YouTube Data API v3 で探すようにした**（`WebProbe.ReadChannelUploadsAsync`〔`ReadChannelFeedAsync` から置き換え〕・`YouTubeDataApiClient.GetPlaylistHeadAsync`〔新規〕・EpisodeLinkSync の App.config の `YouTube.ApiKey`〔新規。Catalog・ArtTrackRefresh と同じキー〕）：チャンネルの新着一覧（RSS）は 500・404 を返すことがあり、予告を待つ間に読めなくなっていた。チャンネルのアップロードの再生リストの先頭 15 本を `playlistItems.list`（1 回 1 ユニット）で読む。YouTube とのやりとりを Data API だけにそろえる。Catalog.Common を使うため、EpisodeLinkSync のターゲットを `net9.0-windows` にした。
   - Data API の 429・5xx とつながらないときは、これまでどおり間隔を広げる。それ以外の断り（403 のクォータ超過・キーの誤りなど）は、その実行の間はもう YouTube を見ずに知らせ、`-Watch` は予告を待つのをやめる
 - **ツール・スクリプト：放送後のリンクの取り込みの `-Watch` で、待っている間の様子を窓のいちばん下の 1 行に出して書き換え続けるようにした**（`EpisodeLinkSyncService.WaitingStatus`・`Program.Status`・`scheduled-episode-links.ps1`）：あらすじと予告を待つ間は何も出ず、動いているのか分からなかった。待っているもの・YouTube を最後に読めた時刻・12:00 までの残りを、回るたびに書き換える。ログには残さない。出力が画面でないときはツールが `[status] ` を頭に付けた 1 行で出し、スクリプトがそれを書き換えの 1 行にする

@@ -217,7 +217,7 @@ public static class TemplateParser
     }
 
     /// <summary>"opt1=val1,opt2=val2" 形式の文字列を辞書に変換する。値はクォート（<c>"..."</c>）を許容。</summary>
-    private static Dictionary<string, string> ParseOptions(string opts)
+    internal static Dictionary<string, string> ParseOptions(string opts)
     {
         var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(opts)) return dict;

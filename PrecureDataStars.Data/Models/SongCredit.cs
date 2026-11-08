@@ -93,6 +93,18 @@ public static class SongCreditRoles
     public const string MedleyArrangement = "MEDLEY_ARRANGEMENT";
     /// <summary>英訳（日本語の詞を英語に訳した人。画面では「英訳詞」と出ることがある）。</summary>
     public const string LyricsTranslation = "LYRICS_TRANSLATION";
+    /// <summary>ストリングス編曲。</summary>
+    public const string StringsArrangement = "STRINGS_ARRANGEMENT";
+    /// <summary>オーケストラ編曲。</summary>
+    public const string OrchestraArrangement = "ORCHESTRA_ARRANGEMENT";
+    /// <summary>ブラスアレンジ（管楽器の編曲。画面では「ブラスアレンジ」と出る）。</summary>
+    public const string BrassArrangement = "BRASS_ARRANGEMENT";
+
+    /// <summary>
+    /// 編曲に加えて曲が持つことのある編曲の役職。曲のページの基本情報では編曲の後ろにこの順で並べ、
+    /// 主題歌のカードの役職テンプレでは <c>{SONG_CREDIT:code=…}</c> で名前を出せる。
+    /// </summary>
+    public static readonly IReadOnlyList<string> ExtraArrangements = new[] { StringsArrangement, OrchestraArrangement, BrassArrangement };
 
     /// <summary>
     /// 曲の連名行から、指定役職の盤の表記（<see cref="SongCredit.RoleLabelText"/>）を返す。

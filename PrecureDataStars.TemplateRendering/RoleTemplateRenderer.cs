@@ -284,8 +284,13 @@ public static class RoleTemplateRenderer
                     {
                         // 条件名を「カレントスコープのプレースホルダ」として一度解決し、非空なら本体を展開。
                         // 名前の頭に "!" があれば否定（解決値が空のときだけ展開）。
+                        // 「{?SONG_CREDIT:code=BRASS_ARRANGEMENT}」のように名前の後ろに指定があれば、プレースホルダと同じく読む。
                         bool negate = cond.Name.StartsWith('!');
-                        var probe = new PlaceholderNode(negate ? cond.Name.Substring(1) : cond.Name);
+                        string condName = negate ? cond.Name.Substring(1) : cond.Name;
+                        int condColon = condName.IndexOf(':');
+                        var probe = condColon < 0
+                            ? new PlaceholderNode(condName)
+                            : new PlaceholderNode(condName.Substring(0, condColon).Trim(), TemplateParser.ParseOptions(condName.Substring(condColon + 1)));
                         string val = await ResolvePlaceholderAsync(probe, ctx, currentBlock, currentSong, factory, lookup, ct).ConfigureAwait(false);
                         if (string.IsNullOrEmpty(val) == negate)
                         {
@@ -529,6 +534,13 @@ public static class RoleTemplateRenderer
                 // 楽曲スコープ：メドレー編曲の連名（リンク化済み HTML）。無い曲は空文字列で、
                 // テンプレ側で {?MEDLEY_ARRANGER}メドレー編曲:{MEDLEY_ARRANGER}{/?MEDLEY_ARRANGER} のように条件展開できる。
                 return NamesHtml(ph, currentSong?.MedleyArrangerHtml, currentSong?.MedleyArrangerParts);
+            case "SONG_CREDIT":
+                // 楽曲スコープ：code で指定した追加の編曲（STRINGS_ARRANGEMENT・ORCHESTRA_ARRANGEMENT・BRASS_ARRANGEMENT）の連名
+                // （リンク化済み HTML）。無い曲は空文字列で、テンプレ側で
+                // {?SONG_CREDIT:code=BRASS_ARRANGEMENT}ブラスアレンジ：{SONG_CREDIT:code=BRASS_ARRANGEMENT}{/?SONG_CREDIT:code=BRASS_ARRANGEMENT} のように条件展開できる。
+                return currentSong is not null && currentSong.ExtraCredits.TryGetValue(ph.GetOption("code", ""), out var extra)
+                    ? NamesHtml(ph, extra.Html, extra.Parts)
+                    : "";
             case "SINGER":
                 return NamesHtml(ph, currentSong?.SingerHtml, currentSong?.SingerParts, currentSong?.SingerCvStarts);
             case "CHORUS":

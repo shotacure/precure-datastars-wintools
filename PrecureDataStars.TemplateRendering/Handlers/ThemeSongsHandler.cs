@@ -298,6 +298,15 @@ public static class ThemeSongsHandler
         // メドレー編曲：構造化行だけ（フリーテキスト列は持たない）。無い曲は空文字列。
         r.MedleyArrangerHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false) ?? "";
 
+        // 追加の編曲（ストリングス編曲・オーケストラ編曲・ブラスアレンジ）：構造化行だけ。テンプレの {SONG_CREDIT:code=…} の値。
+        foreach (var extraRole in SongCreditRoles.ExtraArrangements)
+        {
+            string html = await songCredits.GetDisplayHtmlAsync(r.SongId, extraRole, lookup, ct).ConfigureAwait(false) ?? "";
+            if (html.Length == 0) continue;
+            var parts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, extraRole, lookup, ct).ConfigureAwait(false);
+            r.ExtraCredits[extraRole] = (html, parts);
+        }
+
         // 会社名だけを出す行の実際の人物（役職ごと）。会社名のあとの括弧に使う。
         r.CompanyOnlyPeople = await songCredits.GetCompanyOnlyPeopleHtmlAsync(r.SongId, lookup, ct).ConfigureAwait(false);
 
@@ -529,6 +538,11 @@ public static class ThemeSongsHandler
         public string MedleyArrangerHtml { get; set; } = "";
         /// <summary>英訳（<c>LYRICS_TRANSLATION</c>）連名のリンク化済み HTML。無ければ空文字列。テンプレ側で <c>{LYRICS_TRANSLATOR}</c> として参照する。</summary>
         public string LyricsTranslatorHtml { get; set; } = "";
+        /// <summary>
+        /// 追加の編曲（<see cref="SongCreditRoles.ExtraArrangements"/>）の役職コード → 連名のリンク化済み HTML と名義ごとの部品。
+        /// その役職の構造化行がある役職だけ入る。テンプレ側で <c>{SONG_CREDIT:code=BRASS_ARRANGEMENT}</c> として参照する。
+        /// </summary>
+        public Dictionary<string, (string Html, IReadOnlyList<(string Sep, string Html)> Parts)> ExtraCredits { get; } = new(StringComparer.Ordinal);
         public string SingerHtml { get; set; } = "";
 
         /// <summary>コーラス（<c>BACKING_VOCALS</c>）連名のリンク化済み HTML。 該当録音にコーラス歌唱者が居なければ空文字列。テンプレ側で <c>{CHORUS}</c> として参照する。</summary>

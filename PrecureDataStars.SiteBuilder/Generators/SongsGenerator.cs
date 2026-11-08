@@ -341,7 +341,7 @@ public sealed class SongsGenerator
         var includedInMedleys = BuildIncludedInMedleyViews(song.SongId);
         // この曲を使っている劇伴の曲（メドレーの劇伴など。bgm_cue_source_parts の逆引き）。
         var usedInBgmCues = BuildUsedInBgmCueViews(song.SongId);
-        // 追加の編曲（ストリングス編曲・オーケストラ編曲）は構造化行だけ（フリーテキスト列は持たない）。
+        // 追加の編曲（ストリングス編曲・オーケストラ編曲・ブラスアレンジ）は構造化行だけ（フリーテキスト列は持たない）。
         // 役職詳細ページは無いのでラベルはリンクしない。役職ごとに「バッジ + 名前」のユニットを、編曲の後ろへ並べる順に連ねる。
         var extraArrangementUnits = new System.Text.StringBuilder();
         foreach (var extraRole in ExtraArrangementRoles)
@@ -1414,7 +1414,7 @@ public sealed class SongsGenerator
     }
 
     /// <summary>追加の編曲の役職コード（song_credits で作詞・作曲・編曲と並べて持つ）。基本情報で編曲の後ろにこの順で並べる。</summary>
-    private static readonly string[] ExtraArrangementRoles = { "STRINGS_ARRANGEMENT", "ORCHESTRA_ARRANGEMENT" };
+    private static readonly IReadOnlyList<string> ExtraArrangementRoles = SongCreditRoles.ExtraArrangements;
 
     private sealed class SongDetailModel
     {

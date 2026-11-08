@@ -682,6 +682,28 @@ public sealed partial class OgCardRenderer : IDisposable
     /// </summary>
     private void DrawStandardBody(SKCanvas canvas, SKPaint paint, OgCardSpec spec, float contentWidth)
     {
+        // 見出しは、2 行に折っても説明文が切れずに入るなら折り、切れるなら長体で 1 行に詰める（下が空くカードを詰めた 1 行にしない）。
+        using (var recorder = new SKPictureRecorder())
+        {
+            var probe = recorder.BeginRecording(SKRect.Create(CardWidth, CardHeight));
+            DrawStandardBodyAt(probe, paint, spec, contentWidth, wrapTitle: true, out bool truncated);
+            recorder.EndRecording().Dispose();
+            if (!truncated)
+            {
+                DrawStandardBodyAt(canvas, paint, spec, contentWidth, wrapTitle: true, out _);
+                return;
+            }
+        }
+        DrawStandardBodyAt(canvas, paint, spec, contentWidth, wrapTitle: false, out _);
+    }
+
+    /// <summary>
+    /// 標準の組みを描く。<paramref name="wrapTitle"/> は見出しを 2 行に折ることを先に試すか（<see cref="FitTitleCondensed"/>）。
+    /// <paramref name="truncated"/> は説明文がフッタまでの余白に入り切らず末尾を落としたとき true。
+    /// </summary>
+    private void DrawStandardBodyAt(SKCanvas canvas, SKPaint paint, OgCardSpec spec, float contentWidth, bool wrapTitle, out bool truncated)
+    {
+        truncated = false;
         float y = 96f;
 
         // ── パンくず経路 ──
@@ -695,7 +717,7 @@ public sealed partial class OgCardRenderer : IDisposable
 
         // ── 見出し＋ピンク罫 ──
         using var titleFont = new SKFont(_boldTypeface, TitleSizeCandidates[^1]);
-        var titleLines = FitTitle(spec.Title, titleFont, paint, contentWidth, TitleSizeCandidates, TitleMaxLines);
+        var titleLines = FitTitleCondensed(spec.Title, titleFont, paint, contentWidth, TitleSizeCandidates, TitleMaxLines, wrapTitle);
 
         paint.Color = Foreground;
         foreach (var line in titleLines)
@@ -718,11 +740,13 @@ public sealed partial class OgCardRenderer : IDisposable
             y += 20f;
             float available = (FooterLineY - FooterClearance) - y;
             int maxLines = Math.Max(0, (int)(available / DescriptionLineHeight));
+            if (maxLines == 0) truncated = true;
             if (maxLines > 0)
             {
                 var lines = WrapText(spec.Subtitle, descFont, paint, descWidth, maxLines + 1, prose: true);
                 if (lines.Count > maxLines)
                 {
+                    truncated = true;
                     lines = lines.Take(maxLines).ToList();
                     lines[^1] = Ellipsize(lines[^1] + "…", descFont, paint, descWidth);
                 }
@@ -922,15 +946,20 @@ public sealed partial class OgCardRenderer : IDisposable
         if (spec.HeroVoice || spec.Bar.Count > 0)
             return DrawDenseBodyAt(canvas, paint, spec, contentWidth, watermarkBottom, titleTypeface, 1f, 1f, out _);
 
+        // 見出しは、等倍のまま 2 行に折ってもフッタの線より上に収まり事実行も切れないなら折る（下が空くカードを詰めた 1 行にしない）。
+        // 入らなければ見出しを長体で 1 行に詰め、それでも入らないときだけ事実行を小さくする。
         float floor = FooterLineY - FooterClearance;
-        foreach (var (statScale, factScale) in DenseScaleCandidates)
+        var attempts = new[] { (Wrap: true, Scale: DenseScaleCandidates[0]) }
+            .Concat(DenseScaleCandidates.Select(s => (Wrap: false, Scale: s)));
+        foreach (var (wrap, (statScale, factScale)) in attempts)
         {
             using var recorder = new SKPictureRecorder();
             var probe = recorder.BeginRecording(SKRect.Create(CardWidth, CardHeight));
-            float bottom = DrawDenseBodyAt(probe, paint, spec, contentWidth, watermarkBottom, titleTypeface, statScale, factScale, out bool truncated);
+            float bottom = DrawDenseBodyAt(probe, paint, spec, contentWidth, watermarkBottom, titleTypeface, statScale, factScale, out bool truncated, wrap);
             recorder.EndRecording().Dispose();
-            if (bottom > floor || truncated) continue;
-            return DrawDenseBodyAt(canvas, paint, spec, contentWidth, watermarkBottom, titleTypeface, statScale, factScale, out _);
+            // 2 行に折る組みは、フッタの上の余白に少し入る程度（フッタの線まで）なら入ったとみなす。
+            if (bottom > (wrap ? FooterLineY : floor) || truncated) continue;
+            return DrawDenseBodyAt(canvas, paint, spec, contentWidth, watermarkBottom, titleTypeface, statScale, factScale, out _, wrap);
         }
         return DrawDenseBodyAt(canvas, paint, spec, contentWidth, watermarkBottom, titleTypeface, 1f, 1f, out _);
     }
@@ -939,10 +968,11 @@ public sealed partial class OgCardRenderer : IDisposable
     /// 高密度の組みを、指定の拡大率で描く。<paramref name="statScaleHint"/> は数の拡大率
     /// （数だけのカードとヒーロー調は固定の率を使うので無視する）、<paramref name="factScale"/> は流し込みの事実行の拡大率。
     /// <paramref name="truncated"/> は事実行が高さに入り切らず末尾を落としたとき true。
+    /// <paramref name="wrapTitle"/> は振り仮名の無い見出しを 2 行に折ることを先に試すか（<see cref="FitTitleCondensed"/>）。
     /// </summary>
     private float DrawDenseBodyAt(
         SKCanvas canvas, SKPaint paint, OgCardSpec spec, float contentWidth, float watermarkBottom, SKTypeface titleTypeface,
-        float statScaleHint, float factScale, out bool truncated)
+        float statScaleHint, float factScale, out bool truncated, bool wrapTitle = false)
     {
         truncated = false;
         // ── 最上段（左：所属シリーズ・種別 ／ 右：放送日時などの補助） ──
@@ -1001,7 +1031,7 @@ public sealed partial class OgCardRenderer : IDisposable
         else
         {
             using var titleFont = new SKFont(spec.HeroVoice ? _brandTypeface : titleTypeface, titleSizes[^1]);
-            var titleLines = FitTitle(spec.Title, titleFont, paint, contentWidth, titleSizes, TitleMaxLinesFor(spec));
+            var titleLines = FitTitleCondensed(spec.Title, titleFont, paint, contentWidth, titleSizes, TitleMaxLinesFor(spec), wrapTitle);
             paint.Color = spec.HeroVoice ? HeroTitleColor : Foreground;
             foreach (var line in titleLines)
             {
@@ -2724,6 +2754,56 @@ public sealed partial class OgCardRenderer : IDisposable
     }
 
     /// <summary>
+    /// 見出しを組む。<paramref name="wrapFirst"/> なら、まず等幅のまま 2 行に折ることを、候補の大きい文字サイズから順に試す
+    /// （<see cref="WrapTitleTwoLines"/>。よい切れ目が無ければ折らない）。折らないときは候補の最大の文字サイズで 1 行に詰め（<see cref="CondenseToFit"/>）、
+    /// 詰めても 1 行に収まらなければ等幅に戻して <see cref="FitTitle"/> で文字サイズを下げ、規定行数に折り返す。
+    /// <paramref name="font"/> の文字サイズ・書体・長体の率は採用した組みのものに書き換わる。
+    /// </summary>
+    private List<string> FitTitleCondensed(string title, SKFont font, SKPaint paint, float maxWidth, float[] sizeCandidates, int maxLines, bool wrapFirst = false)
+    {
+        font.ScaleX = 1f;
+        if (wrapFirst && maxLines >= 2)
+        {
+            foreach (var size in sizeCandidates)
+            {
+                font.Size = size;
+                if (WrapTitleTwoLines(title, font, maxWidth) is { } wrapped) return wrapped;
+            }
+        }
+        font.Size = sizeCandidates[0];
+        if (CondenseToFit(font, () => WrapText(title, font, paint, maxWidth, 2).Count <= 1))
+            return WrapText(title, font, paint, maxWidth, 1);
+        return FitTitle(title, font, paint, maxWidth, sizeCandidates, maxLines);
+    }
+
+    /// <summary>2 行に折った見出しの 2 行目に求める最低の幅（本文の幅に対する比）。これより短い 2 行目（「100」「スト」だけ）にはしない。</summary>
+    private const float MinSecondTitleLineRatio = 0.2f;
+
+    /// <summary>
+    /// 見出しを、いまの字の大きさのまま 2 行に折る。1 行に収まればその 1 行を返す。
+    /// 切れ目は <see cref="IsPreferredBreak"/> の位置（空白・記号の後ろ、文字種の境目、カタカナ語の切れ目）のうち、
+    /// 数とそれに続く字の間（<see cref="IsTitleBreakAvoided"/>）を除いたもので、
+    /// 両方の行が幅に収まり、2 行目が <see cref="MinSecondTitleLineRatio"/> 以上の幅になる位置のうち、1 行目がいちばん長くなる所で折る。
+    /// そういう位置が無ければ（語の途中でしか折れない・2 行目が短くなる）null を返す。
+    /// </summary>
+    private List<string>? WrapTitleTwoLines(string title, SKFont font, float maxWidth)
+    {
+        if (title.Contains('\n')) return null;
+        if (Measure(font, title) <= maxWidth) return new List<string> { title };
+        for (int k = title.Length - 1; k >= 1; k--)
+        {
+            if (!IsPreferredBreak(title, k) || IsTitleBreakAvoided(title, k)) continue;
+            string first = title[..k].TrimEnd(), second = title[k..].TrimStart();
+            if (first.Length == 0 || second.Length == 0) continue;
+            float secondWidth = Measure(font, second);
+            if (secondWidth > maxWidth) break;
+            if (Measure(font, first) > maxWidth || secondWidth < maxWidth * MinSecondTitleLineRatio) continue;
+            return new List<string> { first, second };
+        }
+        return null;
+    }
+
+    /// <summary>
     /// 日本語テキストを指定幅で折り返す。単語区切りが無いため 1 文字ずつ積んで幅を測り、
     /// 溢れた時点で改行する。改行位置が行頭禁則文字に当たる場合は 1 文字前へ送る。
     /// </summary>
@@ -2805,16 +2885,42 @@ public sealed partial class OgCardRenderer : IDisposable
     {
         for (int k = line.Length - 1; k >= 1; k--)
         {
-            char prev = line[k - 1];
-            char next = line[k];
-            if (LineStartForbidden.Contains(next)) continue;
-            if (BreakAfter.Contains(prev) || BreakBefore.Contains(next)) return k;
-            bool prevLatin = IsLatin(prev), nextLatin = IsLatin(next);
-            if (prevLatin != nextLatin && prev != ' ' && next != ' ') return k;
-            bool prevKana = IsKatakana(prev), nextKana = IsKatakana(next);
-            if (prevKana != nextKana && !prevLatin && !nextLatin) return k;
+            if (IsPreferredBreak(line, k)) return k;
         }
         return -1;
+    }
+
+    /// <summary>
+    /// 見出しを 2 行に折るとき（<see cref="WrapTitleTwoLines"/>）に避ける位置か。数とその前後の字の間（「アルバム2」「4つ」。空白をはさめば折れる）、
+    /// 副題の頭の波ダッシュ（空白か行頭のあとの「~」「～」「〜」）の直後、副題の終わりの波ダッシュ（空白でない字のあとの波ダッシュ）の前、
+    /// 区切りの斜線（「/」「／」）の前（2 行目を斜線から始めない）。
+    /// </summary>
+    private static bool IsTitleBreakAvoided(string text, int k)
+    {
+        char prev = text[k - 1];
+        char next = text[k];
+        if (char.IsDigit(next) && !char.IsWhiteSpace(prev)) return true;
+        if (char.IsDigit(prev) && !char.IsWhiteSpace(next)) return true;
+        if (TitleWaveDashes.Contains(next) && !char.IsWhiteSpace(prev)) return true;
+        string rest = text[k..].TrimStart();
+        if (rest.Length > 0 && (rest[0] == '/' || rest[0] == '／')) return true;
+        return TitleWaveDashes.Contains(prev) && (k < 2 || char.IsWhiteSpace(text[k - 2]));
+    }
+
+    /// <summary>副題を囲む波ダッシュ（半角のチルダ・全角のチルダ・波ダッシュ）。</summary>
+    private const string TitleWaveDashes = "~～〜";
+
+    /// <summary>位置 <paramref name="k"/> の直前（<c>text[k - 1]</c> と <c>text[k]</c> の間）が、見出しを折るのに向いた位置か（<see cref="LastPreferredBreak"/> の候補）。</summary>
+    private static bool IsPreferredBreak(string text, int k)
+    {
+        char prev = text[k - 1];
+        char next = text[k];
+        if (LineStartForbidden.Contains(next)) return false;
+        if (BreakAfter.Contains(prev) || BreakBefore.Contains(next)) return true;
+        bool prevLatin = IsLatin(prev), nextLatin = IsLatin(next);
+        if (prevLatin != nextLatin && prev != ' ' && next != ' ') return true;
+        bool prevKana = IsKatakana(prev), nextKana = IsKatakana(next);
+        return prevKana != nextKana && !prevLatin && !nextLatin;
     }
 
     /// <summary>

@@ -1608,12 +1608,20 @@ CREATE TABLE `persons` (
   `notes`            text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションにアイコン付きで並ぶ。
   -- official_url は本人の公式サイト、affiliation_url は所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ。
+  -- link_collection_url はリンク集（lit.link・linktr.ee など）、blog_url はブログ（note・tumblr など）。
+  -- x_sub_url は 2 つ目の X アカウント、portfolio_url は作品集のページ（ArtStation・Behance・carrd など）。
   -- wikipedia_url は本人の Wikipedia 記事で、外部リンクの最後に出す。
   `official_url`     varchar(1024) DEFAULT NULL COMMENT '本人の公式サイト URL（詳細ページに外部リンクとして表示）',
   `affiliation_url`  varchar(1024) DEFAULT NULL COMMENT '所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL',
+  `link_collection_url` varchar(1024) DEFAULT NULL COMMENT 'リンク集のページ URL（lit.link・linktr.ee など）',
   `x_url`            varchar(1024) DEFAULT NULL,
+  `x_sub_url`        varchar(1024) DEFAULT NULL COMMENT '2 つ目の X (Twitter) プロフィール URL（言語違いなど）',
+  `bluesky_url`      varchar(1024) DEFAULT NULL COMMENT 'Bluesky プロフィール URL',
   `instagram_url`    varchar(1024) DEFAULT NULL,
   `youtube_url`      varchar(1024) DEFAULT NULL,
+  `blog_url`         varchar(1024) DEFAULT NULL COMMENT 'ブログ URL（note・tumblr など）',
+  `pixiv_url`        varchar(1024) DEFAULT NULL COMMENT 'pixiv ユーザーページ URL',
+  `portfolio_url`    varchar(1024) DEFAULT NULL COMMENT '作品集のページ URL（ArtStation・Behance・carrd など）',
   `wikipedia_url`    varchar(1024) DEFAULT NULL,
   `created_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1810,11 +1818,18 @@ CREATE TABLE `companies` (
   `dissolved_date`  date         DEFAULT NULL,
   `notes`           text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションにアイコン付きで並ぶ。
+  -- link_collection_url はリンク集、blog_url はブログ、x_sub_url は 2 つ目の X アカウント、portfolio_url は作品集のページ。
   -- wikipedia_url は企業の Wikipedia 記事で、外部リンクの最後に出す。
   `official_url`    varchar(1024) DEFAULT NULL,
+  `link_collection_url` varchar(1024) DEFAULT NULL COMMENT 'リンク集のページ URL（lit.link・linktr.ee など）',
   `x_url`           varchar(1024) DEFAULT NULL,
+  `x_sub_url`       varchar(1024) DEFAULT NULL COMMENT '2 つ目の X (Twitter) アカウント URL（言語違いなど）',
+  `bluesky_url`     varchar(1024) DEFAULT NULL COMMENT 'Bluesky アカウント URL',
   `instagram_url`   varchar(1024) DEFAULT NULL,
   `youtube_url`     varchar(1024) DEFAULT NULL,
+  `blog_url`        varchar(1024) DEFAULT NULL COMMENT 'ブログ URL（note など）',
+  `pixiv_url`       varchar(1024) DEFAULT NULL COMMENT 'pixiv ユーザーページ URL',
+  `portfolio_url`   varchar(1024) DEFAULT NULL COMMENT '作品集のページ URL（ArtStation・Behance など）',
   `wikipedia_url`   varchar(1024) DEFAULT NULL,
   `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

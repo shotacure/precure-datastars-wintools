@@ -586,9 +586,15 @@ public sealed class PersonsGenerator
                 FirstAppearanceHtml = firstAppearance?.ToHtml() ?? "",
                 OfficialUrl = person.OfficialUrl ?? "",
                 AffiliationUrl = person.AffiliationUrl ?? "",
+                LinkCollectionUrl = person.LinkCollectionUrl ?? "",
                 XUrl = person.XUrl ?? "",
+                XSubUrl = person.XSubUrl ?? "",
+                BlueskyUrl = person.BlueskyUrl ?? "",
                 InstagramUrl = person.InstagramUrl ?? "",
                 YoutubeUrl = person.YoutubeUrl ?? "",
+                BlogUrl = person.BlogUrl ?? "",
+                PixivUrl = person.PixivUrl ?? "",
+                PortfolioUrl = person.PortfolioUrl ?? "",
                 WikipediaUrl = person.WikipediaUrl ?? ""
             },
             InvolvementGroups = involvementGroups,
@@ -1882,9 +1888,19 @@ public sealed class PersonsGenerator
         public string OfficialUrl { get; set; } = "";
         /// <summary>所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL。「外部リンク」セクションに「所属先」として、公式ページの次に出す。</summary>
         public string AffiliationUrl { get; set; } = "";
+        /// <summary>リンク集のページ URL（lit.link・linktr.ee など）。「外部リンク」セクションに「リンク集」として出す。</summary>
+        public string LinkCollectionUrl { get; set; } = "";
         public string XUrl { get; set; } = "";
+        /// <summary>2 つ目の X (Twitter) アカウント URL。「外部リンク」セクションに「X (Twitter) 2」として、1 つ目の X の次に出す。</summary>
+        public string XSubUrl { get; set; } = "";
+        public string BlueskyUrl { get; set; } = "";
         public string InstagramUrl { get; set; } = "";
         public string YoutubeUrl { get; set; } = "";
+        /// <summary>ブログ URL（note・tumblr・アメーバブログなど）。「外部リンク」セクションに「ブログ」として出す。</summary>
+        public string BlogUrl { get; set; } = "";
+        public string PixivUrl { get; set; } = "";
+        /// <summary>作品集のページ URL（ArtStation・Behance・carrd など）。「外部リンク」セクションに「ポートフォリオ」として出す。</summary>
+        public string PortfolioUrl { get; set; } = "";
         /// <summary>本人の Wikipedia 記事 URL。「外部リンク」セクションの最後に「Wikipedia」として出す。</summary>
         public string WikipediaUrl { get; set; } = "";
     }

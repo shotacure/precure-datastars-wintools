@@ -369,23 +369,42 @@
   </section>
   {{~ end ~}}
 
-  {{## 外部リンクセクション。詳細ページの末尾に置く。Company.OfficialUrl / XUrl / InstagramUrl / YoutubeUrl / WikipediaUrl が
-       一つでもあれば表示。Wikipedia は企業の記事で、並びの最後に置く。 ##}}
-  {{~ if Company.OfficialUrl != "" || Company.XUrl != "" || Company.InstagramUrl != "" || Company.YoutubeUrl != "" || Company.WikipediaUrl != "" ~}}
+  {{## 外部リンクセクション。詳細ページの末尾に置く。Company の外部リンクの URL が一つでもあれば表示。
+       並びは 公式ページ → リンク集 → X → X 2 → Bluesky → Instagram → YouTube → ブログ → pixiv → ポートフォリオ → Wikipedia。
+       Wikipedia は企業の記事で、並びの最後に置く。 ##}}
+  {{~ if Company.OfficialUrl != "" || Company.LinkCollectionUrl != "" || Company.XUrl != "" || Company.XSubUrl != "" || Company.BlueskyUrl != "" || Company.InstagramUrl != "" || Company.YoutubeUrl != "" || Company.BlogUrl != "" || Company.PixivUrl != "" || Company.PortfolioUrl != "" || Company.WikipediaUrl != "" ~}}
   <section id="external-links">
     <h2>外部リンク</h2>
     <ul class="external-links">
       {{~ if Company.OfficialUrl != "" ~}}
       <li><a class="external-link external-link-official" href="{{ Company.OfficialUrl }}" target="_blank" rel="noopener nofollow">公式ページ</a></li>
       {{~ end ~}}
+      {{~ if Company.LinkCollectionUrl != "" ~}}
+      <li><a class="external-link external-link-link-collection" href="{{ Company.LinkCollectionUrl }}" target="_blank" rel="noopener nofollow">リンク集</a></li>
+      {{~ end ~}}
       {{~ if Company.XUrl != "" ~}}
       <li><a class="external-link external-link-x" href="{{ Company.XUrl }}" target="_blank" rel="noopener nofollow">X (Twitter)</a></li>
+      {{~ end ~}}
+      {{~ if Company.XSubUrl != "" ~}}
+      <li><a class="external-link external-link-x" href="{{ Company.XSubUrl }}" target="_blank" rel="noopener nofollow">X (Twitter) 2</a></li>
+      {{~ end ~}}
+      {{~ if Company.BlueskyUrl != "" ~}}
+      <li><a class="external-link external-link-bluesky" href="{{ Company.BlueskyUrl }}" target="_blank" rel="noopener nofollow">Bluesky</a></li>
       {{~ end ~}}
       {{~ if Company.InstagramUrl != "" ~}}
       <li><a class="external-link external-link-instagram" href="{{ Company.InstagramUrl }}" target="_blank" rel="noopener nofollow">Instagram</a></li>
       {{~ end ~}}
       {{~ if Company.YoutubeUrl != "" ~}}
       <li><a class="external-link external-link-youtube" href="{{ Company.YoutubeUrl }}" target="_blank" rel="noopener nofollow">YouTube</a></li>
+      {{~ end ~}}
+      {{~ if Company.BlogUrl != "" ~}}
+      <li><a class="external-link external-link-blog" href="{{ Company.BlogUrl }}" target="_blank" rel="noopener nofollow">ブログ</a></li>
+      {{~ end ~}}
+      {{~ if Company.PixivUrl != "" ~}}
+      <li><a class="external-link external-link-pixiv" href="{{ Company.PixivUrl }}" target="_blank" rel="noopener nofollow">pixiv</a></li>
+      {{~ end ~}}
+      {{~ if Company.PortfolioUrl != "" ~}}
+      <li><a class="external-link external-link-portfolio" href="{{ Company.PortfolioUrl }}" target="_blank" rel="noopener nofollow">ポートフォリオ</a></li>
       {{~ end ~}}
       {{~ if Company.WikipediaUrl != "" ~}}
       <li><a class="external-link external-link-wikipedia" href="{{ Company.WikipediaUrl }}" target="_blank" rel="noopener nofollow">Wikipedia</a></li>

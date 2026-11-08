@@ -314,10 +314,12 @@
   </section>
   {{~ end ~}}
 
-  {{## 外部リンクセクション。詳細ページの末尾に置く。Person.OfficialUrl / AffiliationUrl / XUrl / InstagramUrl / YoutubeUrl / WikipediaUrl が
-       一つでもあれば表示。公式ページは本人の公式サイト、所属先は事務所・会社・楽団などのサイトにある本人のプロフィール。
+  {{## 外部リンクセクション。詳細ページの末尾に置く。Person の外部リンクの URL が一つでもあれば表示。
+       並びは 公式ページ → 所属先 → リンク集 → X → X 2 → Bluesky → Instagram → YouTube → ブログ → pixiv → ポートフォリオ → Wikipedia。
+       公式ページは本人の公式サイト、所属先は事務所・会社・楽団などのサイトにある本人のプロフィール、
+       リンク集は lit.link・linktr.ee など、ブログは note・tumblr など、ポートフォリオは ArtStation・Behance・carrd などの作品集。
        Wikipedia は本人の記事で、並びの最後に置く。 ##}}
-  {{~ if Person.OfficialUrl != "" || Person.AffiliationUrl != "" || Person.XUrl != "" || Person.InstagramUrl != "" || Person.YoutubeUrl != "" || Person.WikipediaUrl != "" ~}}
+  {{~ if Person.OfficialUrl != "" || Person.AffiliationUrl != "" || Person.LinkCollectionUrl != "" || Person.XUrl != "" || Person.XSubUrl != "" || Person.BlueskyUrl != "" || Person.InstagramUrl != "" || Person.YoutubeUrl != "" || Person.BlogUrl != "" || Person.PixivUrl != "" || Person.PortfolioUrl != "" || Person.WikipediaUrl != "" ~}}
   <section id="external-links">
     <h2>外部リンク</h2>
     <ul class="external-links">
@@ -327,14 +329,32 @@
       {{~ if Person.AffiliationUrl != "" ~}}
       <li><a class="external-link external-link-affiliation" href="{{ Person.AffiliationUrl }}" target="_blank" rel="noopener nofollow">所属先</a></li>
       {{~ end ~}}
+      {{~ if Person.LinkCollectionUrl != "" ~}}
+      <li><a class="external-link external-link-link-collection" href="{{ Person.LinkCollectionUrl }}" target="_blank" rel="noopener nofollow">リンク集</a></li>
+      {{~ end ~}}
       {{~ if Person.XUrl != "" ~}}
       <li><a class="external-link external-link-x" href="{{ Person.XUrl }}" target="_blank" rel="noopener nofollow">X (Twitter)</a></li>
+      {{~ end ~}}
+      {{~ if Person.XSubUrl != "" ~}}
+      <li><a class="external-link external-link-x" href="{{ Person.XSubUrl }}" target="_blank" rel="noopener nofollow">X (Twitter) 2</a></li>
+      {{~ end ~}}
+      {{~ if Person.BlueskyUrl != "" ~}}
+      <li><a class="external-link external-link-bluesky" href="{{ Person.BlueskyUrl }}" target="_blank" rel="noopener nofollow">Bluesky</a></li>
       {{~ end ~}}
       {{~ if Person.InstagramUrl != "" ~}}
       <li><a class="external-link external-link-instagram" href="{{ Person.InstagramUrl }}" target="_blank" rel="noopener nofollow">Instagram</a></li>
       {{~ end ~}}
       {{~ if Person.YoutubeUrl != "" ~}}
       <li><a class="external-link external-link-youtube" href="{{ Person.YoutubeUrl }}" target="_blank" rel="noopener nofollow">YouTube</a></li>
+      {{~ end ~}}
+      {{~ if Person.BlogUrl != "" ~}}
+      <li><a class="external-link external-link-blog" href="{{ Person.BlogUrl }}" target="_blank" rel="noopener nofollow">ブログ</a></li>
+      {{~ end ~}}
+      {{~ if Person.PixivUrl != "" ~}}
+      <li><a class="external-link external-link-pixiv" href="{{ Person.PixivUrl }}" target="_blank" rel="noopener nofollow">pixiv</a></li>
+      {{~ end ~}}
+      {{~ if Person.PortfolioUrl != "" ~}}
+      <li><a class="external-link external-link-portfolio" href="{{ Person.PortfolioUrl }}" target="_blank" rel="noopener nofollow">ポートフォリオ</a></li>
       {{~ end ~}}
       {{~ if Person.WikipediaUrl != "" ~}}
       <li><a class="external-link external-link-wikipedia" href="{{ Person.WikipediaUrl }}" target="_blank" rel="noopener nofollow">Wikipedia</a></li>

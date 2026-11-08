@@ -1311,15 +1311,21 @@ DB の各表の備考（`notes` 列。企業・商品・人物・ユニット・
 
 ##### 外部リンク（persons）
 
-人物（`persons`）は外部リンクを次の列で持ち、人物詳細の末尾「外部リンク」セクションに、値のある列だけをバッジとして表の順に並べる。Catalog の「クレジット系マスタ管理」の人物タブに、列ごとの入力欄がある。
+人物（`persons`）は外部リンクを次の列で持ち、人物詳細の末尾「外部リンク」セクションに、値のある列だけをバッジとして表の順に並べる。Catalog の「クレジット系マスタ管理」の人物タブに、列ごとの入力欄がある。企業（`companies`）も `affiliation_url` を除く同じ列を持ち、企業詳細に同じ並び・同じバッジで出す（企業タブに入力欄がある）。
 
 | 列 | バッジ（枠の色） | 中身 |
 |---|---|---|
 | `official_url` | 公式ページ（グレー） | 本人の公式サイト |
 | `affiliation_url` | 所属先（青） | 所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ。本人の公式サイトとは別に持ち、両方ある人物はどちらも出す。所属先が変わったらこの列だけを書き換える |
+| `link_collection_url` | リンク集（緑） | lit.link・linktr.ee などのリンク集のページ |
 | `x_url` | X (Twitter)（黒） | X のプロフィール |
+| `x_sub_url` | X (Twitter) 2（黒） | 2 つ目の X のプロフィール（言語違いのアカウントなど） |
+| `bluesky_url` | Bluesky（青） | Bluesky のプロフィール |
 | `instagram_url` | Instagram（ピンク） | Instagram のプロフィール |
 | `youtube_url` | YouTube（赤） | YouTube のチャンネル |
+| `blog_url` | ブログ（橙） | note・tumblr・アメーバブログなどのブログ |
+| `pixiv_url` | pixiv（水色） | pixiv のユーザーページ |
+| `portfolio_url` | ポートフォリオ（紫） | ArtStation・Behance・carrd などの作品集のページ |
 | `wikipedia_url` | Wikipedia（薄いグレー） | 本人の Wikipedia 記事。並びの最後に出す |
 
 ##### プロフィールの出典（entity_sources）

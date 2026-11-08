@@ -145,9 +145,15 @@ public partial class CreditMastersEditorForm
             txtPNotes.Text = p.Notes ?? "";
             txtPOfficialUrl.Text = p.OfficialUrl ?? "";
             txtPAffiliationUrl.Text = p.AffiliationUrl ?? "";
+            txtPLinkCollectionUrl.Text = p.LinkCollectionUrl ?? "";
             txtPXUrl.Text = p.XUrl ?? "";
+            txtPXSubUrl.Text = p.XSubUrl ?? "";
+            txtPBlueskyUrl.Text = p.BlueskyUrl ?? "";
             txtPInstagramUrl.Text = p.InstagramUrl ?? "";
             txtPYoutubeUrl.Text = p.YoutubeUrl ?? "";
+            txtPBlogUrl.Text = p.BlogUrl ?? "";
+            txtPPixivUrl.Text = p.PixivUrl ?? "";
+            txtPPortfolioUrl.Text = p.PortfolioUrl ?? "";
             txtPWikipediaUrl.Text = p.WikipediaUrl ?? "";
             _ = LoadPrimaryAliasChoicesAsync(p.PersonId, p.PrimaryAliasId);
         }
@@ -160,8 +166,10 @@ public partial class CreditMastersEditorForm
         txtPFullName.Text = ""; txtPFullNameKana.Text = "";
         txtPNameEn.Text = ""; txtPNotes.Text = "";
         txtPDisambiguation.Text = "";
-        txtPOfficialUrl.Text = ""; txtPAffiliationUrl.Text = ""; txtPXUrl.Text = "";
+        txtPOfficialUrl.Text = ""; txtPAffiliationUrl.Text = ""; txtPLinkCollectionUrl.Text = "";
+        txtPXUrl.Text = ""; txtPXSubUrl.Text = ""; txtPBlueskyUrl.Text = "";
         txtPInstagramUrl.Text = ""; txtPYoutubeUrl.Text = "";
+        txtPBlogUrl.Text = ""; txtPPixivUrl.Text = ""; txtPPortfolioUrl.Text = "";
         txtPWikipediaUrl.Text = "";
         LoadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown, cboPBirthYearVis,
             cboPBirthMonth, cboPBirthDay, null, "PUBLIC", null, null);
@@ -218,9 +226,15 @@ public partial class CreditMastersEditorForm
                 current.Notes = NullIfEmpty(txtPNotes.Text);
                 current.OfficialUrl = NullIfEmpty(txtPOfficialUrl.Text);
                 current.AffiliationUrl = NullIfEmpty(txtPAffiliationUrl.Text);
+                current.LinkCollectionUrl = NullIfEmpty(txtPLinkCollectionUrl.Text);
                 current.XUrl = NullIfEmpty(txtPXUrl.Text);
+                current.XSubUrl = NullIfEmpty(txtPXSubUrl.Text);
+                current.BlueskyUrl = NullIfEmpty(txtPBlueskyUrl.Text);
                 current.InstagramUrl = NullIfEmpty(txtPInstagramUrl.Text);
                 current.YoutubeUrl = NullIfEmpty(txtPYoutubeUrl.Text);
+                current.BlogUrl = NullIfEmpty(txtPBlogUrl.Text);
+                current.PixivUrl = NullIfEmpty(txtPPixivUrl.Text);
+                current.PortfolioUrl = NullIfEmpty(txtPPortfolioUrl.Text);
                 current.WikipediaUrl = NullIfEmpty(txtPWikipediaUrl.Text);
                 current.PrimaryAliasId = (cboPPrimaryAlias.SelectedItem as IdLabel<int?>)?.Id;
                 current.UpdatedBy = Environment.UserName;
@@ -248,9 +262,15 @@ public partial class CreditMastersEditorForm
                     Notes = NullIfEmpty(txtPNotes.Text),
                     OfficialUrl = NullIfEmpty(txtPOfficialUrl.Text),
                     AffiliationUrl = NullIfEmpty(txtPAffiliationUrl.Text),
+                    LinkCollectionUrl = NullIfEmpty(txtPLinkCollectionUrl.Text),
                     XUrl = NullIfEmpty(txtPXUrl.Text),
+                    XSubUrl = NullIfEmpty(txtPXSubUrl.Text),
+                    BlueskyUrl = NullIfEmpty(txtPBlueskyUrl.Text),
                     InstagramUrl = NullIfEmpty(txtPInstagramUrl.Text),
                     YoutubeUrl = NullIfEmpty(txtPYoutubeUrl.Text),
+                    BlogUrl = NullIfEmpty(txtPBlogUrl.Text),
+                    PixivUrl = NullIfEmpty(txtPPixivUrl.Text),
+                    PortfolioUrl = NullIfEmpty(txtPPortfolioUrl.Text),
                     WikipediaUrl = NullIfEmpty(txtPWikipediaUrl.Text),
                     CreatedBy = Environment.UserName,
                     UpdatedBy = Environment.UserName
@@ -295,9 +315,15 @@ public partial class CreditMastersEditorForm
             SetDateOrNull(dtCDissolved, chkCDissolvedNull, c.DissolvedDate);
             txtCNotes.Text = c.Notes ?? "";
             txtCOfficialUrl.Text = c.OfficialUrl ?? "";
+            txtCLinkCollectionUrl.Text = c.LinkCollectionUrl ?? "";
             txtCXUrl.Text = c.XUrl ?? "";
+            txtCXSubUrl.Text = c.XSubUrl ?? "";
+            txtCBlueskyUrl.Text = c.BlueskyUrl ?? "";
             txtCInstagramUrl.Text = c.InstagramUrl ?? "";
             txtCYoutubeUrl.Text = c.YoutubeUrl ?? "";
+            txtCBlogUrl.Text = c.BlogUrl ?? "";
+            txtCPixivUrl.Text = c.PixivUrl ?? "";
+            txtCPortfolioUrl.Text = c.PortfolioUrl ?? "";
             txtCWikipediaUrl.Text = c.WikipediaUrl ?? "";
         }
     }
@@ -308,8 +334,10 @@ public partial class CreditMastersEditorForm
         txtCName.Text = ""; txtCNameKana.Text = ""; txtCNameEn.Text = "";
         chkCFoundedNull.Checked = true; chkCDissolvedNull.Checked = true;
         txtCNotes.Text = "";
-        txtCOfficialUrl.Text = ""; txtCXUrl.Text = "";
+        txtCOfficialUrl.Text = ""; txtCLinkCollectionUrl.Text = ""; txtCXUrl.Text = "";
+        txtCXSubUrl.Text = ""; txtCBlueskyUrl.Text = "";
         txtCInstagramUrl.Text = ""; txtCYoutubeUrl.Text = "";
+        txtCBlogUrl.Text = ""; txtCPixivUrl.Text = ""; txtCPortfolioUrl.Text = "";
         txtCWikipediaUrl.Text = "";
     }
 
@@ -347,9 +375,15 @@ public partial class CreditMastersEditorForm
                 current.DissolvedDate = chkCDissolvedNull.Checked ? null : dtCDissolved.Value.Date;
                 current.Notes = NullIfEmpty(txtCNotes.Text);
                 current.OfficialUrl = NullIfEmpty(txtCOfficialUrl.Text);
+                current.LinkCollectionUrl = NullIfEmpty(txtCLinkCollectionUrl.Text);
                 current.XUrl = NullIfEmpty(txtCXUrl.Text);
+                current.XSubUrl = NullIfEmpty(txtCXSubUrl.Text);
+                current.BlueskyUrl = NullIfEmpty(txtCBlueskyUrl.Text);
                 current.InstagramUrl = NullIfEmpty(txtCInstagramUrl.Text);
                 current.YoutubeUrl = NullIfEmpty(txtCYoutubeUrl.Text);
+                current.BlogUrl = NullIfEmpty(txtCBlogUrl.Text);
+                current.PixivUrl = NullIfEmpty(txtCPixivUrl.Text);
+                current.PortfolioUrl = NullIfEmpty(txtCPortfolioUrl.Text);
                 current.WikipediaUrl = NullIfEmpty(txtCWikipediaUrl.Text);
                 current.UpdatedBy = Environment.UserName;
                 await _companiesRepo.UpdateAsync(current);
@@ -365,9 +399,15 @@ public partial class CreditMastersEditorForm
                     DissolvedDate = chkCDissolvedNull.Checked ? null : dtCDissolved.Value.Date,
                     Notes = NullIfEmpty(txtCNotes.Text),
                     OfficialUrl = NullIfEmpty(txtCOfficialUrl.Text),
+                    LinkCollectionUrl = NullIfEmpty(txtCLinkCollectionUrl.Text),
                     XUrl = NullIfEmpty(txtCXUrl.Text),
+                    XSubUrl = NullIfEmpty(txtCXSubUrl.Text),
+                    BlueskyUrl = NullIfEmpty(txtCBlueskyUrl.Text),
                     InstagramUrl = NullIfEmpty(txtCInstagramUrl.Text),
                     YoutubeUrl = NullIfEmpty(txtCYoutubeUrl.Text),
+                    BlogUrl = NullIfEmpty(txtCBlogUrl.Text),
+                    PixivUrl = NullIfEmpty(txtCPixivUrl.Text),
+                    PortfolioUrl = NullIfEmpty(txtCPortfolioUrl.Text),
                     WikipediaUrl = NullIfEmpty(txtCWikipediaUrl.Text),
                     CreatedBy = Environment.UserName,
                     UpdatedBy = Environment.UserName

@@ -6799,6 +6799,12 @@ a.credit-card-series:focus-visible {
 .external-link-x         { border-color: #0f172a; }
 .external-link-instagram { border-color: #d6249f; }
 .external-link-youtube   { border-color: #ff0000; }
+/* リンク集（lit.link など）・ブログ（note など）・ポートフォリオ（作品集）は、公式ページのグレーと見分けられる色。 */
+.external-link-link-collection { border-color: #16a34a; }
+.external-link-bluesky   { border-color: #1185fe; }
+.external-link-blog      { border-color: #ea580c; }
+.external-link-pixiv     { border-color: #0096fa; }
+.external-link-portfolio { border-color: #7c3aed; }
 .external-link-wikipedia { border-color: #a2a9b1; }
 
 /* スタッフ表：役職ラベルリンク エピソード詳細のスタッフセクション（staff-table）で、役職ラベル（脚本／絵コンテ／演出 等）を 役職統計詳細ページにリンクできるようになった。 */

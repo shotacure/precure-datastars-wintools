@@ -285,9 +285,15 @@ public sealed class CompaniesGenerator
                 FoundedDate = JpDateFormat.NullableDate(company.FoundedDate),
                 DissolvedDate = JpDateFormat.NullableDate(company.DissolvedDate),
                 OfficialUrl = company.OfficialUrl ?? "",
+                LinkCollectionUrl = company.LinkCollectionUrl ?? "",
                 XUrl = company.XUrl ?? "",
+                XSubUrl = company.XSubUrl ?? "",
+                BlueskyUrl = company.BlueskyUrl ?? "",
                 InstagramUrl = company.InstagramUrl ?? "",
                 YoutubeUrl = company.YoutubeUrl ?? "",
+                BlogUrl = company.BlogUrl ?? "",
+                PixivUrl = company.PixivUrl ?? "",
+                PortfolioUrl = company.PortfolioUrl ?? "",
                 WikipediaUrl = company.WikipediaUrl ?? ""
             },
             Relations = relations,
@@ -1400,9 +1406,19 @@ public sealed class CompaniesGenerator
         public string DissolvedDate { get; set; } = "";
         /// <summary>公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。</summary>
         public string OfficialUrl { get; set; } = "";
+        /// <summary>リンク集のページ URL（lit.link・linktr.ee など）。「外部リンク」セクションに「リンク集」として出す。</summary>
+        public string LinkCollectionUrl { get; set; } = "";
         public string XUrl { get; set; } = "";
+        /// <summary>2 つ目の X (Twitter) アカウント URL。「外部リンク」セクションに「X (Twitter) 2」として、1 つ目の X の次に出す。</summary>
+        public string XSubUrl { get; set; } = "";
+        public string BlueskyUrl { get; set; } = "";
         public string InstagramUrl { get; set; } = "";
         public string YoutubeUrl { get; set; } = "";
+        /// <summary>ブログ URL（note・tumblr・アメーバブログなど）。「外部リンク」セクションに「ブログ」として出す。</summary>
+        public string BlogUrl { get; set; } = "";
+        public string PixivUrl { get; set; } = "";
+        /// <summary>作品集のページ URL（ArtStation・Behance・carrd など）。「外部リンク」セクションに「ポートフォリオ」として出す。</summary>
+        public string PortfolioUrl { get; set; } = "";
         /// <summary>企業の Wikipedia 記事 URL。「外部リンク」セクションの最後に「Wikipedia」として出す。</summary>
         public string WikipediaUrl { get; set; } = "";
     }

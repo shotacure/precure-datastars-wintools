@@ -327,9 +327,6 @@
         {{~ if t.CreditBadgesHtml != "" ~}}
         <div class="staff-badges-row ts-credits">{{ t.CreditBadgesHtml }}</div>
         {{~ end ~}}
-        {{~ if t.Notes != "" ~}}
-        <div class="ts-meta-row ts-meta-notes muted">{{ t.Notes | html.escape }}</div>
-        {{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>
@@ -476,7 +473,7 @@
           <th colspan="2">本放送</th>
           <th colspan="2">配信<span class="th-note">(Amazon Prime)</span></th>
           <th>円盤</th>
-          <th rowspan="2">備考</th>
+          <th rowspan="2">補足事項</th>
         </tr>
         <tr>
           <th>時刻</th><th>尺</th>
@@ -493,7 +490,7 @@
           <td class="num timecode">{{ if r.VodStart != "" }}{{ r.VodStart }}{{ else }}<span class="empty">—</span>{{ end }}</td>
           <td class="num duration">{{ if r.VodDuration != "" }}{{ r.VodDuration }}{{ else }}<span class="empty">—</span>{{ end }}</td>
           <td class="num duration">{{ if r.DiscDuration != "" }}{{ r.DiscDuration }}{{ else }}<span class="empty">—</span>{{ end }}</td>
-          <td class="notes">{{ r.Notes | html.escape }}</td>
+          <td class="notes">{{ r.Supplement | html.escape }}</td>
         </tr>
         {{~ end ~}}
       </tbody>
@@ -560,14 +557,6 @@
     {{~ if BuildPointCaption != "" ~}}
     <p class="section-refpoint">（{{ BuildPointCaption | html.escape }}）</p>
     {{~ end ~}}
-  </section>
-  {{~ end ~}}
-
-  {{## 備考 ##}}
-  {{~ if Episode.Notes != "" ~}}
-  <section id="notes">
-    <h2>備考</h2>
-    <p>{{ Episode.Notes | html.escape }}</p>
   </section>
   {{~ end ~}}
 

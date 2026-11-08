@@ -47,12 +47,6 @@
         <span class="fact-value is-wrap">{{ Character.FirstAppearanceHtml }}</span>
       </div>
       {{~ end ~}}
-      {{~ if Character.Notes != "" ~}}
-      <div class="fact">
-        <span class="fact-label">備考</span>
-        <span class="fact-value is-wrap">{{ Character.Notes | html.escape }}</span>
-      </div>
-      {{~ end ~}}
     </div>
   </section>
 
@@ -119,7 +113,7 @@
       {{~ for a in Aliases ~}}
       <li class="entity-row is-static">
         <span class="entity-row-name">{{ a.Name | html.escape }}</span>
-        <span class="entity-row-sub muted">{{ a.NameKana | html.escape }}{{~ if a.Notes != "" ~}}{{ if a.NameKana != "" }}　{{ end }}{{ a.Notes | html.escape }}{{~ end ~}}</span>
+        <span class="entity-row-sub muted">{{ a.NameKana | html.escape }}</span>
       </li>
       {{~ end ~}}
     </ul>
@@ -130,16 +124,13 @@
   {{~ if (array.size FamilyRelations) > 0 ~}}
   <section id="family-relations">
     <h2>家族関係</h2>
-    {{## 行全体クリックで相手キャラクターの詳細へ。続柄はバッジ、備考は添え書き（旧: 3 列テーブル）。 ##}}
+    {{## 行全体クリックで相手キャラクターの詳細へ。続柄はバッジ。 ##}}
     <ul class="entity-list">
       {{~ for f in FamilyRelations ~}}
       <li class="entity-row">
         <a class="entity-row-link" href="{{ character_url f.RelatedCharacterId }}" aria-label="{{ f.RelatedCharacterName | html.escape }}"></a>
         <span class="tag-badge">{{ f.RelationLabel | html.escape }}</span>
         <a class="entity-row-name" href="{{ character_url f.RelatedCharacterId }}">{{ f.RelatedCharacterName | html.escape }}</a>
-        {{~ if f.Notes != "" ~}}
-        <span class="entity-row-sub muted">{{ f.Notes | html.escape }}</span>
-        {{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>

@@ -306,7 +306,6 @@ public sealed class BooksGenerator
                 // 判型は人手で整えた trim_size を優先し、無ければ Amazon 由来の装丁表記で代替する。
                 FormatLabel = !string.IsNullOrEmpty(book.TrimSize) ? book.TrimSize! : (book.BindingText ?? ""),
                 EditionLabel = FormatEditionLabel(book),
-                Notes = book.Notes ?? "",
                 OfficialUrl = book.OfficialUrl ?? ""
             },
             GenreLabels = genreRows,
@@ -594,8 +593,6 @@ public sealed class BookDetailView
     /// <summary>版構成ラベル（紙・Kindle / 紙 / Kindle）。</summary>
     public string EditionLabel { get; set; } = "";
 
-    /// <summary>備考。</summary>
-    public string Notes { get; set; } = "";
 
     /// <summary>公式ページ URL。</summary>
     public string OfficialUrl { get; set; } = "";

@@ -19,8 +19,8 @@
   {{## 基本情報はファクトタイル表現（エピソード・シリーズ詳細と共通の意匠）。
        正式名称（Company.Name）と読み（NameKana）は h1・直下の読み行に出しているため、
        ここでは重複表示しない。英語表記（NameEn）は内部データとして保持するが Web 上では出さない。
-       設立・解散・備考が一切無いときはセクションごと省く（空の見出しだけ残さない）。 ##}}
-  {{~ if Company.FoundedDate != "" || Company.DissolvedDate != "" || Company.Notes != "" ~}}
+       設立・解散がどちらも無いときはセクションごと省く（空の見出しだけ残さない）。DB の備考はサイトに出さない。 ##}}
+  {{~ if Company.FoundedDate != "" || Company.DissolvedDate != "" ~}}
   <section id="basic-info">
     <h2>基本情報</h2>
     <div class="fact-grid">
@@ -34,12 +34,6 @@
       <div class="fact">
         <span class="fact-label">解散</span>
         <span class="fact-value">{{ Company.DissolvedDate }}{{ Sources.Refs.Dissolved }}</span>
-      </div>
-      {{~ end ~}}
-      {{~ if Company.Notes != "" ~}}
-      <div class="fact">
-        <span class="fact-label">備考</span>
-        <span class="fact-value is-wrap">{{ Company.Notes | html.escape }}</span>
       </div>
       {{~ end ~}}
     </div>

@@ -29,6 +29,7 @@ public sealed class EpisodePartsRepository : RepositoryBase
               oa_length    AS OaLength,
               disc_length  AS DiscLength,
               vod_length   AS VodLength,
+              supplement   AS Supplement,
               notes        AS Notes,
               created_by   AS CreatedBy,
               updated_by   AS UpdatedBy
@@ -56,6 +57,7 @@ public sealed class EpisodePartsRepository : RepositoryBase
               oa_length    AS OaLength,
               disc_length  AS DiscLength,
               vod_length   AS VodLength,
+              supplement   AS Supplement,
               notes        AS Notes,
               created_by   AS CreatedBy,
               updated_by   AS UpdatedBy
@@ -75,11 +77,11 @@ public sealed class EpisodePartsRepository : RepositoryBase
         INSERT INTO episode_parts(
           episode_id, episode_seq, part_type,
           oa_length, disc_length, vod_length,
-          notes, created_by, updated_by
+          supplement, notes, created_by, updated_by
         ) VALUES (
           @EpisodeId, @EpisodeSeq, @PartType,
           @OaLength, @DiscLength, @VodLength,
-          @Notes, @CreatedBy, @UpdatedBy
+          @Supplement, @Notes, @CreatedBy, @UpdatedBy
         );
     """;
 
@@ -107,6 +109,7 @@ public sealed class EpisodePartsRepository : RepositoryBase
               oa_length   = @OaLength,
               disc_length = @DiscLength,
               vod_length  = @VodLength,
+              supplement  = @Supplement,
               notes       = @Notes,
               updated_by  = @UpdatedBy
             WHERE episode_id = @EpisodeId
@@ -268,12 +271,13 @@ public sealed class EpisodePartsRepository : RepositoryBase
               oa_length   = @OaLength,
               disc_length = @DiscLength,
               vod_length  = @VodLength,
+              supplement  = @Supplement,
               notes       = @Notes,
               updated_by  = @auditUser
             WHERE episode_id = @EpisodeId
               AND episode_seq = @EpisodeSeq;
             """,
-                new { u.EpisodeId, u.EpisodeSeq, u.PartType, u.OaLength, u.DiscLength, u.VodLength, u.Notes, auditUser },
+                new { u.EpisodeId, u.EpisodeSeq, u.PartType, u.OaLength, u.DiscLength, u.VodLength, u.Supplement, u.Notes, auditUser },
                 transaction: tx, cancellationToken: ct));
         }
 
@@ -283,9 +287,9 @@ public sealed class EpisodePartsRepository : RepositoryBase
             await conn.ExecuteAsync(new CommandDefinition(
                 """
             INSERT INTO episode_parts
-              (episode_id, episode_seq, part_type, oa_length, disc_length, vod_length, notes, created_by, updated_by)
+              (episode_id, episode_seq, part_type, oa_length, disc_length, vod_length, supplement, notes, created_by, updated_by)
             VALUES
-              (@EpisodeId, @EpisodeSeq, @PartType, @OaLength, @DiscLength, @VodLength, @Notes, @auditUser, @auditUser);
+              (@EpisodeId, @EpisodeSeq, @PartType, @OaLength, @DiscLength, @VodLength, @Supplement, @Notes, @auditUser, @auditUser);
             """,
                 ops.Inserts.Select(r => new {
                     r.EpisodeId,
@@ -294,6 +298,7 @@ public sealed class EpisodePartsRepository : RepositoryBase
                     r.OaLength,
                     r.DiscLength,
                     r.VodLength,
+                    r.Supplement,
                     r.Notes,
                     auditUser
                 }),

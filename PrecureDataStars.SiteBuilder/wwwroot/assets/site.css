@@ -1760,13 +1760,6 @@ a.series-card-children-title:hover {
   font-weight: 500;
 }
 
-/* 備考行：ラベル無しでそのまま muted 表示。 */
-.theme-songs-list .ts-meta-notes {
-  display: block;
-  margin-left: 8px;
-  font-size: 0.88em;
-}
-
 /* 旧テーブル形式（テンプレ側で参照しなくなったが、互換のため空定義のみ残す）。 */
 .theme-songs-table {
   width: 100%;

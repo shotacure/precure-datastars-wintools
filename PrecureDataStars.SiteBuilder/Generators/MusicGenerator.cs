@@ -967,7 +967,6 @@ public sealed class MusicGenerator
                         MNoClass = c.MNoClass ?? "",
                         IsMissing = true,
                         MenuTitle = c.MenuTitle ?? "",
-                        Notes = c.Notes ?? "",
                         AnchorId = "cue-" + PathUtil.SlugifyMNoDetail(c.MNoDetail)
                     };
                 }
@@ -1051,7 +1050,6 @@ public sealed class MusicGenerator
                             artTrackAlt.ProductTitleFull,
                             artTrackAlt.DiscTitle,
                             artTrackAlt.DiscNoInSet),
-                    Notes = c.Notes ?? "",
                     // 商品詳細トラック行からアンカーリンクされる先の id 属性値。
                     // m_no_detail を URL-safe 化したものを「cue-{...}」の形で組み立てる
                     // （生値を id 属性に流すと CJK や記号で URL エンコードが必要になるため、
@@ -1614,7 +1612,6 @@ public sealed class MusicGenerator
         public string AltArtTrackId { get; set; } = "";
         /// <summary>代わりの音源が収録されているアルバム。<see cref="AltArtTrackId"/> があるときだけ入る。</summary>
         public string AltArtTrackAlbum { get; set; } = "";
-        public string Notes { get; set; } = "";
         /// <summary>収録盤情報のリスト（発売日昇順）。 カード末尾に小さく「discs.title_short | Tr.N | トラックタイトル」を列挙する。 0 件のときはテンプレ側で「（未収録）」と表示する。</summary>
         public IReadOnlyList<BgmCueRecording> Recordings { get; set; } = Array.Empty<BgmCueRecording>();
         /// <summary>

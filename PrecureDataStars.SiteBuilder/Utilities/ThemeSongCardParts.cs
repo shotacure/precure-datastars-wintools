@@ -169,13 +169,6 @@ public static class ThemeSongCardParts
         list.Add(value);
     }
 
-    /// <summary>備考をつなぐ。空なら今のまま、同じ備考が既に含まれていればつながない。</summary>
-    public static string AppendNote(string current, string? note)
-    {
-        if (string.IsNullOrEmpty(note)) return current;
-        if (current.Length == 0) return note;
-        return current.Split(" / ").Contains(note, StringComparer.Ordinal) ? current : current + " / " + note;
-    }
 
     private static ThemeSongPlay FromArtTrack(ThemeArtTrack at, string sizeLabel, string sourceSizeLabel) => new()
     {

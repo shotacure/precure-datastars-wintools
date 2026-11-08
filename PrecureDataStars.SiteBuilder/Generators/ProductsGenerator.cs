@@ -850,7 +850,6 @@ public sealed class ProductsGenerator
                 CoverImageSource = product.CoverImageSource ?? "",
                 AmazonCdUrl = amazonCdUrl,
                 AmazonDigitalUrl = amazonDigitalUrl,
-                Notes = product.Notes ?? "",
                 OfficialUrl = product.OfficialUrl ?? ""
             },
             Discs = discViews,
@@ -2235,7 +2234,6 @@ public sealed class ProductsGenerator
         public string AmazonCdUrl { get; set; } = "";
         /// <summary>Amazon 商品リンク（デジタル音源向け。アフィリエイトタグ付き。ASIN 未設定なら空）。</summary>
         public string AmazonDigitalUrl { get; set; } = "";
-        public string Notes { get; set; } = "";
         /// <summary>音楽商品の公式ページ URL（任意）。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして出す。</summary>
         public string OfficialUrl { get; set; } = "";
     }

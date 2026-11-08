@@ -30,6 +30,7 @@ CREATE TABLE `episode_parts` (
   `oa_length` smallint unsigned DEFAULT NULL,
   `disc_length` smallint unsigned DEFAULT NULL,
   `vod_length` smallint unsigned DEFAULT NULL,
+  `supplement` varchar(255) DEFAULT NULL COMMENT '補足事項。パートの中身の添え書き（提供サイドスーパー・コーナー名など）で、サイトのフォーマットの表に出す',
   `notes` varchar(255) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

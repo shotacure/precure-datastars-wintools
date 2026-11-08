@@ -95,9 +95,6 @@
         {{~ if Book.PeriodicalCode != "" ~}}
         <tr><th>定期刊行物コード</th><td><code>{{ Book.PeriodicalCode | html.escape }}</code></td></tr>
         {{~ end ~}}
-        {{~ if Book.Notes != "" ~}}
-        <tr><th>備考</th><td>{{ Book.Notes | html.escape }}</td></tr>
-        {{~ end ~}}
       </tbody>
     </table>
   </section>

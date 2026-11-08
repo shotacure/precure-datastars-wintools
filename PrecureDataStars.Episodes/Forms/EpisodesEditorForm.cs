@@ -42,7 +42,8 @@ public partial class EpisodesEditorForm : Form
         public ushort? DiscLength { get; set; }           // 円盤尺
         public ushort? VodLength { get; set; }            // 配信尺
         public string? OaTime { get; set; }             // OA時刻
-        public string? Notes { get; set; }             // 備考
+        public string? Supplement { get; set; }        // 補足事項（サイトのフォーマットの表に出す）
+        public string? Notes { get; set; }             // 備考（サイトには出さない）
         public byte OriginalSeq { get; set; }  // 読み込み時のseq固定。新規は0にする
         public bool IsContentDirty { get; set; }  // 値を編集したらtrue
 
@@ -1579,7 +1580,16 @@ public partial class EpisodesEditorForm : Form
             ReadOnly = true
         });
 
-        // 備考
+        // 補足事項（サイトのフォーマットの表の「補足事項」の列に出る）
+        dgvParts.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = nameof(PartRow.Supplement),
+            HeaderText = "補足事項",
+            Width = 220,
+            Name = "colSupplement"
+        });
+
+        // 備考（サイトには出さない）
         dgvParts.Columns.Add(new DataGridViewTextBoxColumn
         {
             DataPropertyName = nameof(PartRow.Notes),
@@ -1800,6 +1810,7 @@ public partial class EpisodesEditorForm : Form
                 DiscLength = p.DiscLength,
                 VodLength = p.VodLength,
                 OaTime = oa_time,
+                Supplement = p.Supplement,
                 Notes = p.Notes,
                 OriginalSeq = p.EpisodeSeq
             });
@@ -1824,6 +1835,7 @@ public partial class EpisodesEditorForm : Form
             OaLength = r.OaLength,
             DiscLength = r.DiscLength,
             VodLength = r.VodLength,
+            Supplement = r.Supplement,
             Notes = r.Notes,
             CreatedBy = AuditUser,
             UpdatedBy = AuditUser
@@ -1853,6 +1865,7 @@ public partial class EpisodesEditorForm : Form
             OaLength = r.OaLength,
             DiscLength = r.DiscLength,
             VodLength = r.VodLength,
+            Supplement = r.Supplement,
             Notes = r.Notes,
             CreatedBy = AuditUser,
             UpdatedBy = AuditUser
@@ -1909,6 +1922,7 @@ public partial class EpisodesEditorForm : Form
                 DiscLength = p.DiscLength,
                 VodLength = p.VodLength,
                 OaTime = oaTime,
+                Supplement = p.Supplement,
                 Notes = p.Notes,
                 OriginalSeq = 0
             });
@@ -1939,6 +1953,7 @@ public partial class EpisodesEditorForm : Form
                              || colName == nameof(PartRow.OaLength)
                              || colName == nameof(PartRow.DiscLength)
                              || colName == nameof(PartRow.VodLength)
+                             || colName == nameof(PartRow.Supplement)
                              || colName == nameof(PartRow.Notes)))
         {
             if (dgvParts.Rows[e.RowIndex].DataBoundItem is PartRow r)
@@ -2008,6 +2023,7 @@ public partial class EpisodesEditorForm : Form
                     OaLength = r.OaLength,
                     DiscLength = r.DiscLength,
                     VodLength = r.VodLength,
+                    Supplement = r.Supplement,
                     Notes = r.Notes
                 });
                 continue;
@@ -2035,6 +2051,7 @@ public partial class EpisodesEditorForm : Form
                     OaLength = r.OaLength,
                     DiscLength = r.DiscLength,
                     VodLength = r.VodLength,
+                    Supplement = r.Supplement,
                     Notes = r.Notes
                 });
                 usedOriginalSeqs.Add(oldSeq);           // ★ 旧行は使うので削除しない
@@ -2051,6 +2068,7 @@ public partial class EpisodesEditorForm : Form
                     OaLength = r.OaLength,
                     DiscLength = r.DiscLength,
                     VodLength = r.VodLength,
+                    Supplement = r.Supplement,
                     Notes = r.Notes
                 });
                 // usedOriginalSeqs には入れない（消すので）

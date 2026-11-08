@@ -29,8 +29,6 @@ public sealed class ThemeSongRow
     public string SongLink { get; set; } = "";
     /// <summary>歌唱者の平文（<see cref="CreditText.Vocalists"/> で構造化優先に解決済み。構造化行が無ければ singer_name）。 画面表示は <see cref="VocalistsHtml"/> を使う。</summary>
     public string SingerName { get; set; } = "";
-    /// <summary>備考（任意）。</summary>
-    public string Notes { get; set; } = "";
     /// <summary>本放送限定フラグ（「（本放送のみ）」を末尾に併記する）。</summary>
     public bool IsBroadcastOnly { get; set; }
     /// <summary>録音の公式 YouTube 動画 ID（<c>song_recordings.youtube_url</c> から抽出）。
@@ -104,7 +102,6 @@ public sealed record ThemeSongDescriptor(
     int Seq,
     bool IsBroadcastOnly,
     string UsageActuality,
-    string? Notes,
     string? EpisodeRangeLabel = null,
     IReadOnlyList<string?>? SizeVariantCodes = null,
     IReadOnlyDictionary<string, IReadOnlyCollection<int>>? SizeEpisodeNos = null);
@@ -243,7 +240,6 @@ public sealed class ThemeSongRowBuilder
                 foreach (var sl in sizeLabels) ThemeSongCardParts.AddDistinct(mergedRow.SizeLabels, sl);
                 foreach (var p in plays) ThemeSongCardParts.AddPlay(mergedRow.Plays, p);
                 foreach (var (sizeName, nos) in sizeEpisodeNos) ThemeSongCardParts.AddEpisodeNos(mergedRow.SizeEpisodeNos, sizeName, nos);
-                mergedRow.Notes = ThemeSongCardParts.AppendNote(mergedRow.Notes, d.Notes);
                 continue;
             }
 
@@ -342,7 +338,6 @@ public sealed class ThemeSongRowBuilder
                 CreditBadgesHtml = ThemeSongCreditBadges.Build(roleMap, credits,
                     vocalistsHtml, chorusHtml, dialogueHtml, spokenWordHtml,
                     lyricsHtml, compositionHtml, arrangementHtml, medleyArrangementHtml),
-                Notes = d.Notes ?? "",
                 IsBroadcastOnly = d.IsBroadcastOnly,
                 YoutubeId = YoutubeUtil.ExtractId(rec?.YoutubeUrl),
             };

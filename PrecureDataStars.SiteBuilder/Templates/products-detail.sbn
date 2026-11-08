@@ -85,9 +85,6 @@
         {{~ if Product.Jan != "" ~}}
         <tr><th>JAN</th><td><code>{{ Product.Jan | html.escape }}</code></td></tr>
         {{~ end ~}}
-        {{~ if Product.Notes != "" ~}}
-        <tr><th>備考</th><td>{{ Product.Notes | html.escape }}</td></tr>
-        {{~ end ~}}
       </tbody>
     </table>
   </section>

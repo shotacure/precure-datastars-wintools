@@ -18,9 +18,9 @@
     {{~ end ~}}
   </div>
 
-  {{## ユニットの基本情報：メンバー（人物は人物詳細へ、キャラクターは声優つきでキャラクター詳細へ）と備考。
-       メンバーの登録が無く備考も無いユニットはセクションを出さない。 ##}}
-  {{~ if (array.size Unit.Members) > 0 || Unit.Notes != "" ~}}
+  {{## ユニットの基本情報：メンバー（人物は人物詳細へ、キャラクターは声優つきでキャラクター詳細へ）。
+       メンバーの登録が無いユニットはセクションを出さない。DB の備考はサイトに出さない。 ##}}
+  {{~ if (array.size Unit.Members) > 0 ~}}
   <section id="basic-info">
     <h2>基本情報</h2>
     <div class="fact-grid">
@@ -28,12 +28,6 @@
       <div class="fact">
         <span class="fact-label">メンバー</span>
         <span class="fact-value is-wrap">{{~ for m in Unit.Members ~}}{{~ if !for.first ~}}<span class="unit-member-sep">、</span>{{~ end ~}}<span class="unit-member">{{ m.Html }}</span>{{~ end ~}}</span>
-      </div>
-      {{~ end ~}}
-      {{~ if Unit.Notes != "" ~}}
-      <div class="fact">
-        <span class="fact-label">備考</span>
-        <span class="fact-value is-wrap">{{ Unit.Notes | html.escape }}</span>
       </div>
       {{~ end ~}}
     </div>

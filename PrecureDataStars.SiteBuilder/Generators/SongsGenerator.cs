@@ -408,7 +408,6 @@ public sealed class SongsGenerator
                 UsedInBgmCues = usedInBgmCues,
                 ExtraArrangementUnitsHtml = extraArrangementUnitsHtml,
                 MusicCreditsHtml = songMusicCreditsHtml,
-                Notes = song.Notes ?? ""
             },
             Recordings = recordingViews
         };
@@ -883,8 +882,7 @@ public sealed class SongsGenerator
             BadgeClassSuffix = recBadgeClassSuffix,
             SeriesTitle = recSeriesTitle,
             SeriesLink = recSeriesLink,
-            SeriesStartYearLabel = recSeriesStartYearLabel,
-            Notes = r.Notes ?? "",
+            SeriesStartYearLabel = recSeriesStartYearLabel,
             YoutubeId = YoutubeUtil.ExtractId(r.YoutubeUrl),
             VocalistsHtml = vocalistsHtml,
             ChorusHtml = chorusHtml,
@@ -1462,7 +1460,6 @@ public sealed class SongsGenerator
         public IReadOnlyList<BgmCueLinkView> UsedInBgmCues { get; set; } = Array.Empty<BgmCueLinkView>();
         /// <summary>曲に共通の音楽クレジット（演奏・コーラス等 / レコーディング 等）の組み立て済み HTML（出典の段落込み）。無ければ空文字。</summary>
         public string MusicCreditsHtml { get; set; } = "";
-        public string Notes { get; set; } = "";
     }
 
     /// <summary>この曲が入っているメドレーへのリンク。</summary>
@@ -1580,7 +1577,6 @@ public sealed class SongsGenerator
         public string SeriesLink { get; set; } = "";
         /// <summary>録音単位の出典シリーズの開始年（西暦 4 桁）。シリーズ名の隣に「(2023)」のように薄色で添える補助表示用。 シリーズ未解決時は空文字。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
-        public string Notes { get; set; } = "";
         /// <summary>公式 YouTube 動画 ID（<c>song_recordings.youtube_url</c> から抽出）。空文字なら動画は出さない。 ミュージックビデオの埋め込み用で、配信音源（<see cref="ArtTrackId"/>）とは別物。</summary>
         public string YoutubeId { get; set; } = "";
         /// <summary>

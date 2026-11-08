@@ -651,8 +651,7 @@ public sealed class EpisodeGenerator
                 // 埋め込み iframe 用に YouTube URL から動画 ID を抽出する（失敗時は空文字）。
                 YoutubeId = YoutubeUtil.ExtractId(ep.YoutubeTrailerUrl),
                 SpecialYoutubeTrailerUrl = ep.YoutubeSpecialTrailerUrl ?? "",
-                SpecialYoutubeId = YoutubeUtil.ExtractId(ep.YoutubeSpecialTrailerUrl),
-                Notes = BroadcastNoteText.ForDisplay(ep.Notes)
+                SpecialYoutubeId = YoutubeUtil.ExtractId(ep.YoutubeSpecialTrailerUrl)
             },
             FormatTable = formatTable,
             TitleCharInfoHtml = titleCharInfoHtml,
@@ -995,7 +994,6 @@ public sealed class EpisodeGenerator
                 ThemeSongCardParts.AddKind(mergedRow.Kinds, new ThemeSongKindEntry { Label = kindLabel });
                 ThemeSongCardParts.AddDistinct(mergedRow.SizeLabels, sizeLabel);
                 ThemeSongCardParts.AddPlay(mergedRow.Plays, play);
-                mergedRow.Notes = ThemeSongCardParts.AppendNote(mergedRow.Notes, t.Notes);
                 continue;
             }
 
@@ -1106,7 +1104,6 @@ public sealed class EpisodeGenerator
                 CreditBadgesHtml = ThemeSongCreditBadges.Build(roleMap, credits,
                     vocalistsHtml, chorusHtml, dialogueHtml, spokenWordHtml,
                     lyricsHtml, compositionHtml, arrangementHtml, medleyArrangementHtml),
-                Notes = t.Notes ?? "",
                 IsBroadcastOnly = t.IsBroadcastOnly,
                 IsInstrumental = t.IsInstrumental == true
             };
@@ -2321,7 +2318,6 @@ public sealed class EpisodeGenerator
         /// <summary>特別予告（本放送時）の YouTube URL と抽出済み動画 ID。ID が空なら詳細ページに特別予告ブロックを出さない。</summary>
         public string SpecialYoutubeTrailerUrl { get; set; } = "";
         public string SpecialYoutubeId { get; set; } = "";
-        public string Notes { get; set; } = "";
         /// <summary>サブタイトル未確定話のプレースホルダ（（サブタイトル「未定」）等）。確定話では空文字。 非空のときテンプレ側は h1 の鉤括弧を出さず「第N話（サブタイトル「未定」）」の形で描画する。</summary>
         public string SubtitlePlaceholder { get; set; } = "";
     }
@@ -2373,8 +2369,6 @@ public sealed class EpisodeGenerator
         public string VariantLabel { get; set; } = "";
         /// <summary>歌唱者の平文（<see cref="CreditText.Vocalists"/> で構造化優先に解決済み。構造化行が無ければ <c>song_recordings.singer_name</c>）。 画面表示は <see cref="VocalistsHtml"/> を使う。</summary>
         public string SingerName { get; set; } = "";
-        /// <summary>備考（任意）。</summary>
-        public string Notes { get; set; } = "";
         /// <summary>本放送限定フラグ（「（本放送のみ）」を末尾に併記する）。</summary>
         public bool IsBroadcastOnly { get; set; }
         /// <summary>この回ではインストゥルメンタルで使った印（曲名の後ろ、カギ括弧の内側に「（インストゥルメンタル）」を添える）。</summary>

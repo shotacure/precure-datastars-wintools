@@ -1307,7 +1307,6 @@ public sealed class SeriesGenerator
                         KindLabel = kindNameByCode.TryGetValue(c.ContentKindCode, out var kn)
                             ? kn : c.ContentKindCode,
                         Title = c.Title ?? "",
-                        Notes = c.Notes ?? "",
                         IsUnused = c.IsUnused,
                         IsMissing = c.IsMissing,
                     });
@@ -1343,7 +1342,7 @@ public sealed class SeriesGenerator
                 : Array.Empty<SeriesThemeSong>();
             themeDescriptors = seriesThemes
                 .Select(t => new ThemeSongDescriptor(
-                    t.SongRecordingId, t.ThemeKind, t.Seq, t.IsBroadcastOnly, t.UsageActuality, t.Notes))
+                    t.SongRecordingId, t.ThemeKind, t.Seq, t.IsBroadcastOnly, t.UsageActuality))
                 .ToList();
         }
         var themeRows = await _themeSongRowBuilder.BuildAsync(themeDescriptors, ct).ConfigureAwait(false);
@@ -2231,7 +2230,6 @@ public sealed class SeriesGenerator
         public string MNo { get; set; } = "";
         public string KindLabel { get; set; } = "";
         public string Title { get; set; } = "";
-        public string Notes { get; set; } = "";
         public bool IsUnused { get; set; }
         public bool IsMissing { get; set; }
     }

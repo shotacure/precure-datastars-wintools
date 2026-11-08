@@ -395,7 +395,6 @@ public sealed class CharactersGenerator
                 Name = a.Name,
                 NameKana = a.NameKana ?? "",
                 NameEn = a.NameEn ?? "",
-                Notes = a.Notes ?? ""
             })
             .ToList();
 
@@ -416,7 +415,6 @@ public sealed class CharactersGenerator
                 RelationLabel = relationKindMap.TryGetValue(f.RelationCode, out var rk) ? rk.NameJa : f.RelationCode,
                 RelatedCharacterId = f.RelatedCharacterId,
                 RelatedCharacterName = charactersById[f.RelatedCharacterId].Name,
-                Notes = f.Notes ?? ""
             })
             .ToList();
 
@@ -466,7 +464,6 @@ public sealed class CharactersGenerator
                 KindLabel = kindLabel,
                 Birthday = birthday,
                 FirstAppearanceHtml = firstAppearance?.ToHtml() ?? "",
-                Notes = character.Notes ?? "",
                 OfficialUrl = character.OfficialUrl ?? ""
             },
             Aliases = aliasRows,
@@ -1260,7 +1257,6 @@ public sealed class CharactersGenerator
         public string Birthday { get; set; } = "";
         /// <summary>初登場の話（リンク付き HTML、<see cref="FirstAppearanceResolver"/>）。収録範囲外・該当なしは空文字。</summary>
         public string FirstAppearanceHtml { get; set; } = "";
-        public string Notes { get; set; } = "";
         /// <summary>キャラクター公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
         public string OfficialUrl { get; set; } = "";
     }
@@ -1289,7 +1285,6 @@ public sealed class CharactersGenerator
         public string Name { get; set; } = "";
         public string NameKana { get; set; } = "";
         public string NameEn { get; set; } = "";
-        public string Notes { get; set; } = "";
     }
 
     private sealed class FamilyRelationRow
@@ -1297,7 +1292,6 @@ public sealed class CharactersGenerator
         public string RelationLabel { get; set; } = "";
         public int RelatedCharacterId { get; set; }
         public string RelatedCharacterName { get; set; } = "";
-        public string Notes { get; set; } = "";
     }
 
     /// <summary>キャラ詳細の声優出演 1 行（シリーズ単位 + 話数圧縮）。</summary>

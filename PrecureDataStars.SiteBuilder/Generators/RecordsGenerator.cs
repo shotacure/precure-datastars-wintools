@@ -491,7 +491,7 @@ public sealed class RecordsGenerator
                         VodDeltaLabel = DeltaLabel(vodDelta),
                         DiscLabel = p.DiscLength is ushort d ? HtmlUtil.FormatSeconds(d) : "",
                         DiscDeltaLabel = DeltaLabel(discDelta),
-                        Note = BroadcastNoteText.ForDisplay(p.Notes)
+                        Note = BroadcastNoteText.ForDisplay(p.Supplement)
                     });
                 }
                 if (anyComparable) compared++;

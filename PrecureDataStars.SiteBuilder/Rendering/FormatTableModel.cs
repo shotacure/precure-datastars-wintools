@@ -46,8 +46,8 @@ public sealed class FormatTableRow
     /// <summary>円盤版の尺（mm:ss）。時刻列は出さない。</summary>
     public string DiscDuration { get; set; } = "";
 
-    /// <summary>備考（episode_parts.notes）。</summary>
-    public string Notes { get; set; } = "";
+    /// <summary>補足事項（episode_parts.supplement。「OA時」などの略語は「本放送時」に言い換え済み）。</summary>
+    public string Supplement { get; set; } = "";
 }
 
 /// <summary>帯グラフの 1 メディア分のバー。</summary>

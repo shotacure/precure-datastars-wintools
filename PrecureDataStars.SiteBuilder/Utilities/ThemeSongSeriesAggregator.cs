@@ -117,8 +117,6 @@ public static class ThemeSongSeriesAggregator
                 // 集約前に CREDITED_NOT_BROADCAST を除外済みなので、後段ビルダの同名フィルタには掛からない値を渡す。
                 // 表示に効くのはこのフィルタだけで、区分ラベルは theme_kind から引かれる。
                 UsageActuality: EpisodeThemeSongUsageActualities.Normal,
-                // 備考は話ごとの記述なのでシリーズ単位には畳まない。
-                Notes: null,
                 EpisodeRangeLabel: BuildRangeLabel(
                     kv.Value, allEpisodeNos, isBroadcastOnly, broadcastOnlyNos, defaultNos),
                 // 使ったサイズを使った順（話数 → 劇中順）に重複なしで。

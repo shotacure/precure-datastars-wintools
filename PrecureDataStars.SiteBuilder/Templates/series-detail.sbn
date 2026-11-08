@@ -240,9 +240,6 @@
         {{~ if t.CreditBadgesHtml != "" ~}}
         <div class="staff-badges-row ts-credits">{{ t.CreditBadgesHtml }}</div>
         {{~ end ~}}
-        {{~ if t.Notes != "" ~}}
-        <div class="ts-meta-row ts-meta-notes muted">{{ t.Notes | html.escape }}</div>
-        {{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>
@@ -276,7 +273,7 @@
     <h2>BGM リスト</h2>
     <table class="movie-bgm-table">
       <thead>
-        <tr><th>No.</th><th>M番号</th><th>区分</th><th>曲名 / メニュー表記</th><th>備考</th></tr>
+        <tr><th>No.</th><th>M番号</th><th>区分</th><th>曲名 / メニュー表記</th></tr>
       </thead>
       <tbody>
         {{~ for c in MovieBgmCues ~}}
@@ -286,12 +283,10 @@
           <td class="movie-bgm-mno muted">（欠番）</td>
           <td class="movie-bgm-kind muted">{{ c.KindLabel | html.escape }}</td>
           <td class="movie-bgm-title muted">（欠番 — 未制作）</td>
-          <td class="movie-bgm-notes muted">{{ c.Notes | html.escape }}</td>
           {{~ else ~}}
           <td class="movie-bgm-mno">{{ c.MNo | html.escape }}</td>
           <td class="movie-bgm-kind">{{ c.KindLabel | html.escape }}</td>
           <td class="movie-bgm-title">{{ c.Title | html.escape }}{{~ if c.IsUnused ~}}<span class="movie-bgm-unused-note muted">（未使用）</span>{{~ end ~}}</td>
-          <td class="movie-bgm-notes">{{ c.Notes | html.escape }}</td>
           {{~ end ~}}
         </tr>
         {{~ end ~}}

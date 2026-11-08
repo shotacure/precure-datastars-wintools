@@ -284,7 +284,6 @@ public sealed class CompaniesGenerator
                 NameEn = company.NameEn ?? "",
                 FoundedDate = JpDateFormat.NullableDate(company.FoundedDate),
                 DissolvedDate = JpDateFormat.NullableDate(company.DissolvedDate),
-                Notes = company.Notes ?? "",
                 OfficialUrl = company.OfficialUrl ?? "",
                 XUrl = company.XUrl ?? "",
                 InstagramUrl = company.InstagramUrl ?? "",
@@ -1265,7 +1264,6 @@ public sealed class CompaniesGenerator
             NameEn = a.NameEn ?? "",
             ValidFrom = JpDateFormat.NullableDate(a.ValidFrom),
             ValidTo = JpDateFormat.NullableDate(a.ValidTo),
-            Notes = a.Notes ?? "",
             Logos = (logosByAlias.TryGetValue(a.AliasId, out var lst) ? lst : Array.Empty<Logo>())
                 .OrderBy(l => l.ValidFrom ?? DateTime.MinValue)
                 .Select(l => new LogoView
@@ -1400,7 +1398,6 @@ public sealed class CompaniesGenerator
         public string NameEn { get; set; } = "";
         public string FoundedDate { get; set; } = "";
         public string DissolvedDate { get; set; } = "";
-        public string Notes { get; set; } = "";
         /// <summary>公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。</summary>
         public string OfficialUrl { get; set; } = "";
         public string XUrl { get; set; } = "";
@@ -1480,7 +1477,6 @@ public sealed class CompaniesGenerator
         public string NameEn { get; set; } = "";
         public string ValidFrom { get; set; } = "";
         public string ValidTo { get; set; } = "";
-        public string Notes { get; set; } = "";
         public IReadOnlyList<LogoView> Logos { get; set; } = Array.Empty<LogoView>();
     }
 

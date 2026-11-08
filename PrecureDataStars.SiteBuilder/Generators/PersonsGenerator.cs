@@ -341,7 +341,6 @@ public sealed class PersonsGenerator
             {
                 Name = name,
                 NameKana = unit.NameKana ?? "",
-                Notes = unit.Notes ?? "",
                 Members = members
             },
             MusicSections = musicSections,
@@ -581,7 +580,6 @@ public sealed class PersonsGenerator
                 FullName = person.FullName,
                 FullNameKana = person.FullNameKana ?? "",
                 NameEn = person.NameEn ?? "",
-                Notes = person.Notes ?? "",
                 Birthday = birthday,
                 DeathDate = deathDate,
                 DeathDateLabel = deathDateLabel,
@@ -868,7 +866,6 @@ public sealed class PersonsGenerator
             NameEn = a.NameEn ?? "",
             ValidFrom = JpDateFormat.NullableDate(a.ValidFrom),
             ValidTo = JpDateFormat.NullableDate(a.ValidTo),
-            Notes = a.Notes ?? ""
         }).ToList();
     }
 
@@ -1783,7 +1780,6 @@ public sealed class PersonsGenerator
     {
         public string Name { get; set; } = "";
         public string NameKana { get; set; } = "";
-        public string Notes { get; set; } = "";
         public IReadOnlyList<UnitMemberView> Members { get; set; } = Array.Empty<UnitMemberView>();
     }
 
@@ -1874,7 +1870,6 @@ public sealed class PersonsGenerator
         /// <summary>見出し名（<see cref="DisplayName"/>）の読み。空文字なら読みの行を出さない。</summary>
         public string DisplayNameKana { get; set; } = "";
         public string NameEn { get; set; } = "";
-        public string Notes { get; set; } = "";
         /// <summary>誕生日表記（「YYYY年M月D日」または「M月D日」、未設定時は空文字）。</summary>
         public string Birthday { get; set; } = "";
         /// <summary>没年月日表記（「YYYY年M月D日」「YYYY年M月」「YYYY年」、存命・不明なら空文字）。</summary>
@@ -1991,6 +1986,5 @@ public sealed class PersonsGenerator
         public string NameEn { get; set; } = "";
         public string ValidFrom { get; set; } = "";
         public string ValidTo { get; set; } = "";
-        public string Notes { get; set; } = "";
     }
 }

@@ -66,9 +66,6 @@
     {{ Song.MusicCreditsHtml }}
   </section>
   {{~ end ~}}
-  {{~ if Song.Notes != "" ~}}
-  <p class="muted">{{ Song.Notes | html.escape }}</p>
-  {{~ end ~}}
 
   {{## 録音バージョンごとに「収録商品」と「主題歌使用エピソード」をまとめる。 ##}}
   {{~ if (array.size Recordings) == 0 ~}}
@@ -184,9 +181,6 @@
     {{~ end ~}}
     {{## この録音だけの音楽クレジット（カバー等）。役職ごとのユニットを横に流す。 ##}}
     {{ r.MusicCreditsHtml }}
-    {{~ if r.Notes != "" ~}}
-    <p class="muted">{{ r.Notes | html.escape }}</p>
-    {{~ end ~}}
 
     {{## 本編使用。EPISODE 紐付け（TV 系）は「シリーズ × 区分 × broadcast_only × usage_actuality」で
          集約し、連続話番号を「第1〜49話」のような範囲表記に縮約。SERIES 紐付け（映画系列）は

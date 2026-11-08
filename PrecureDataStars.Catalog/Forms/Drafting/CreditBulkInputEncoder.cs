@@ -457,6 +457,12 @@ internal static class CreditBulkInputEncoder
                 sb.Append("@leading_not_on_screen").Append(LineSeparator);
             }
         }
+        // 文字だけの筆頭の団体（leading_text）は [[XXX]] と同じ位置に @leading_text= で書く。
+        // 一括入力は同じブロックに両方を書けないので、筆頭の会社があるときは会社だけを出す（表示も会社が優先）。
+        else if (!string.IsNullOrEmpty(block.Entity.LeadingText))
+        {
+            sb.Append("@leading_text=").Append(block.Entity.LeadingText).Append(LineSeparator);
+        }
 
         // エントリ群を ColCount で行に分割しながらタブ結合で出力する。
         var liveEntries = block.Entries.Where(e => e.State != DraftState.Deleted).ToList();

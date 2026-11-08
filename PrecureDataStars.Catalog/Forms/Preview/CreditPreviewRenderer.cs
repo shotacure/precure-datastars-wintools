@@ -1814,6 +1814,9 @@ internal sealed class CreditPreviewRenderer
                 if (bs.Block.LeadingCompanyNotOnScreen && !string.IsNullOrEmpty(leadingCompanyName))
                     leadingCompanyName = $"（{leadingCompanyName}）";
             }
+            // 会社のデータを持たない文字だけの筆頭（leading_text）も、SiteBuilder と同じく同じ位置に出して下を字下げする。
+            if (string.IsNullOrEmpty(leadingCompanyName) && !string.IsNullOrEmpty(bs.Block.LeadingText))
+                leadingCompanyName = bs.Block.LeadingText;
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 
             // ブロック跨ぎの視覚的区切り。ブロックが切り替わる先頭の <tr> に
@@ -1962,6 +1965,9 @@ internal sealed class CreditPreviewRenderer
                 if (bs.Block.LeadingCompanyNotOnScreen && !string.IsNullOrEmpty(leadingCompanyName))
                     leadingCompanyName = $"（{leadingCompanyName}）";
             }
+            // 会社のデータを持たない文字だけの筆頭（leading_text）も、SiteBuilder と同じく同じ位置に出して下を字下げする。
+            if (string.IsNullOrEmpty(leadingCompanyName) && !string.IsNullOrEmpty(bs.Block.LeadingText))
+                leadingCompanyName = bs.Block.LeadingText;
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 
             // ブロック跨ぎの視覚的区切り（VOICE_CAST 表でも同様に block-break クラスで管理）。

@@ -191,6 +191,11 @@ public partial class CreditEditorForm
                                 else leadingLabel = $"  先頭=#{lcid}";
                                 if (block.LeadingCompanyNotOnScreen) leadingLabel += " [画面に無い]";
                             }
+                            else if (!string.IsNullOrEmpty(block.LeadingText))
+                            {
+                                // 文字だけの筆頭の団体（会社のデータは持たない）。
+                                leadingLabel = $"  先頭=「{block.LeadingText}」[文字]";
+                            }
 
                             // ブロック先頭の見出し（作品名・「特別出演」など）があればラベルに併記する。
                             string headingLabel = "";

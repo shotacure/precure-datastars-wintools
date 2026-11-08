@@ -185,6 +185,12 @@ public sealed class ParsedBlock
     /// <summary><c>@heading_italic</c> で指定された、見出しを斜体で出す印（<c>credit_role_blocks.heading_italic</c>）。</summary>
     public bool HeadingItalic { get; set; }
 
+    /// <summary>
+    /// <c>@leading_text=文字</c> で指定された、文字だけの筆頭の団体（<c>credit_role_blocks.leading_text</c>）。
+    /// 会社のデータは作らない。<see cref="LeadingCompanyText"/> と同じブロックには書けない。
+    /// </summary>
+    public string? LeadingText { get; set; }
+
     /// <summary><c>@leading_not_on_screen</c> で指定された、筆頭の会社が画面に出ていない印（<c>credit_role_blocks.leading_company_not_on_screen</c>）。</summary>
     public bool LeadingCompanyNotOnScreen { get; set; }
 

@@ -48,6 +48,17 @@ public sealed class CreditRoleBlock
     public bool LeadingCompanyNotOnScreen { get; set; }
 
     /// <summary>
+    /// ブロックの筆頭の団体を文字だけで持つ（任意、DB 列名 leading_text、画面の表記どおり）。
+    /// 「いこーよ・アンバサダーのみなさん」のように、会社・団体のデータを作らないまとまりの頭の名前。
+    /// 表示は筆頭の会社と同じく 1 行に出して下の名前を字下げするが、リンクは付けず、所属・集計にも数えない。
+    /// <see cref="LeadingCompanyAliasId"/> と同時には使わない（両方あるときは会社を出す）。
+    /// </summary>
+    public string? LeadingText { get; set; }
+
+    /// <summary>筆頭（会社または文字だけの団体）を持つか。</summary>
+    public bool HasLeading => LeadingCompanyAliasId is not null || !string.IsNullOrEmpty(LeadingText);
+
+    /// <summary>
     /// ブロック先頭の見出しにする作品 ID（→ series.series_id、任意）。
     /// 複数の作品のキャラクターが並ぶ映画の声の出演で、作品ごとのまとまりの頭に出る作品名を表す。
     /// 表示文字は <see cref="HeadingText"/> があればそれ、無ければ作品の正式タイトル。

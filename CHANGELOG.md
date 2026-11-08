@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **クレジット：ブロックの筆頭を、会社のデータを作らずに文字だけで持てるようにした**（`credit_role_blocks.leading_text`・マイグレーション `v1.20.0_add_block_leading_text.sql`・`CreditRoleBlock.LeadingText` / `HasLeading`〔新規〕・`CreditRoleBlocksRepository`・SiteBuilder の `CreditTreeRenderer`・Catalog の `CreditPreviewRenderer`・`CreditBulkInputParser` / `CreditBulkInputEncoder` の `@leading_text=文字`〔新規〕・`CreditBulkApplyService`・`CreditDraftLoader`・`CreditSaveService`・`CreditEditorForm` のツリーのラベル）：映画の「協力」の「いこーよ・アンバサダーのみなさん」のように、名前のまとまりの頭に団体の名前が出るが団体としてのデータは持たないものを、筆頭の会社と同じ組み方（団体の名前を 1 行に出し、下の名前を字下げ）で出せるようにする。これまでは名前と同じ文字の行に置くしかなく、長い団体名に列の幅が引っぱられて 2 列目が離れ、字下げも付かなかった。リンクは付けず、所属・集計にも数えない
+
 - **サイト：サイト内検索で、人物を見出しと違う名義で引いたとき、当たった名義の後ろに見出しをかっこで添えて「山口 祐司 (やしろ 駿)」の形で出すようにした**（`SearchIndexGenerator`・`search.js` の `findMatchedAltName` / `allTermsIn`〔新規〕）：旧名義でも引けるが、結果には見出しの名前だけが出て、なぜ当たったのか分からなかった。索引の人物の行に、見出しと表記の違う名義の表記と照合用の文字列（`a`）を持たせる。見出し（表記と見出しの読み）で全語が当たるときは、これまでどおり見出しだけを出す
 
 - **サイト：ホームの「今月のカレンダー」と記念日カレンダーで、オトナシリーズの放送のチップを TV 放送と同じ配色にした**（`calendar.js`・`AnniversaryGenerator.BuildEpisodeChip`・`anniversary-index.sbn`・`site.css` の `.cal-chip-otona` を削除）：藍の地が映画のチップと見分けにくく、TV 放送に見えなかった。見分けは 📺 の代わりの 🌙 だけで付く。記念日カレンダーの凡例の「🌙 オトナ 放送」も外した

@@ -14,6 +14,9 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///   <item><description>空行 → 同一役職内のブロック区切り</description></item>
 ///   <item><description><c>[XXX]</c>（行全体）→ COMPANY エントリ（位置に関係なく常に COMPANY 扱い）</description></item>
 ///   <item><description><c>[[XXX]]</c>（行全体）→ グループトップ屋号（<c>leading_company_alias_id</c>）。ブロックの最初の有意行でのみ許可、それ以外は Block 警告</description></item>
+///   <item><description><c>@leading_text=文字</c>（<c>[[XXX]]</c> と同じ位置の単独行）→ 会社のデータを作らない文字だけの筆頭の団体
+///     （<c>leading_text</c>。「いこーよ・アンバサダーのみなさん」など）。表示は <c>[[XXX]]</c> と同じく下の名前を字下げする。
+///     同じブロックに <c>[[XXX]]</c> とは書けない</description></item>
 ///   <item><description>タブ区切り行 → エントリ群（タブ最大数+1 = col_count）</description></item>
 ///   <item><description><c>&lt;キャラ名義&gt;声優名義</c>（VOICE_CAST 役職内）→ CHARACTER_VOICE</description></item>
 ///   <item><description><c>&lt;*キャラ名義&gt;声優名義</c>（VOICE_CAST 役職内）→ 強制新規キャラ</description></item>
@@ -183,6 +186,10 @@ public static class CreditBulkInputParser
     // ディレクティブ行: @leading_not_on_screen。直前の筆頭の会社 [[XXX]] は画面にはクレジットされていない
     // （credit_role_blocks.leading_company_not_on_screen）。[[XXX]] の行のすぐ後、エントリより前に書く。
     private static readonly Regex LeadingNotOnScreenDirectiveRegex = new(@"^@leading_not_on_screen$", RegexOptions.Compiled);
+
+    // ディレクティブ行: @leading_text=文字。会社のデータを作らない文字だけの筆頭の団体（credit_role_blocks.leading_text）。
+    // [[XXX]] と同じく、ブロックの最初のエントリより前に書く。同じブロックに [[XXX]] とは書けない。
+    private static readonly Regex LeadingTextDirectiveRegex = new(@"^@leading_text=(?<value>.+)$", RegexOptions.Compiled);
 
     // 役職ヘッダ "役職名: @label=文字"。画面の役職の表記（role_label_text）を役職ヘッダと 1 行で書く。
     private static readonly Regex RoleHeadInlineLabelRegex =
@@ -596,7 +603,7 @@ public static class CreditBulkInputParser
                 if (ContinuesPreviousDirectiveRegex.IsMatch(trimmed))
                 {
                     if (curRole is null
-                        || (curBlock is not null && (curBlock.Rows.Count > 0 || curBlock.LeadingCompanyText is not null)))
+                        || (curBlock is not null && (curBlock.Rows.Count > 0 || curBlock.LeadingCompanyText is not null || curBlock.LeadingText is not null)))
                     {
                         result.Warnings.Add(new ParseWarning
                         {
@@ -642,7 +649,7 @@ public static class CreditBulkInputParser
                         });
                         continue;
                     }
-                    if (curBlock is not null && (curBlock.Rows.Count > 0 || curBlock.LeadingCompanyText is not null))
+                    if (curBlock is not null && (curBlock.Rows.Count > 0 || curBlock.LeadingCompanyText is not null || curBlock.LeadingText is not null))
                     {
                         result.Warnings.Add(new ParseWarning
                         {
@@ -902,6 +909,45 @@ public static class CreditBulkInputParser
                     continue;
                 }
 
+                // @leading_text=文字 : 会社のデータを作らない文字だけの筆頭の団体。[[XXX]] と同じ位置（ブロックの最初のエントリより前）に書く。
+                var leadingTextMatch = LeadingTextDirectiveRegex.Match(trimmed);
+                if (leadingTextMatch.Success)
+                {
+                    if (curRole is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @leading_text= は役職指定後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    if (curBlock is not null && (curBlock.Rows.Count > 0 || curBlock.LeadingCompanyText is not null || curBlock.LeadingText is not null))
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @leading_text= はブロックの最初のエントリより前に 1 回だけ書けます（[[XXX]] とは同じブロックに書けません）。"
+                        });
+                        continue;
+                    }
+                    if (curBlock is null)
+                    {
+                        curBlock = new ParsedBlock();
+                        curRole.Blocks.Add(curBlock);
+                    }
+                    curBlock.LeadingText = leadingTextMatch.Groups["value"].Value.Trim();
+                    // 筆頭の行はエントリではないので、[[XXX]] と同じくブロックのセットアップを続ける（@cols= はもう受け付けない）。
+                    pendingColsForBlock = false;
+                    if (pendingNotesTarget == NotesTarget.Role || pendingNotesTarget == NotesTarget.Block)
+                    {
+                        pendingNotesTarget = NotesTarget.Block;
+                    }
+                    continue;
+                }
+
                 // @leading_not_on_screen : 直前の筆頭の会社 [[XXX]] は画面にはクレジットされていない（クレジット漏れ）。
                 if (LeadingNotOnScreenDirectiveRegex.IsMatch(trimmed))
                 {
@@ -924,7 +970,7 @@ public static class CreditBulkInputParser
                 {
                     Severity = WarningSeverity.Block,
                     LineNumber = lineNo,
-                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= / @heading= / @heading_series= / @label= / @misprint= / @pos= / @join= / @join_previous のみサポートします。"
+                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= / @heading= / @heading_series= / @leading_text= / @label= / @misprint= / @pos= / @join= / @join_previous のみサポートします。"
                 });
                 continue;
             }
@@ -1086,7 +1132,7 @@ public static class CreditBulkInputParser
             var leadingBracketMatch = LeadingCompanyBracketRegex.Match(trimmed);
             if (leadingBracketMatch.Success)
             {
-                if (curBlock.Rows.Count == 0 && curBlock.LeadingCompanyText is null)
+                if (curBlock.Rows.Count == 0 && curBlock.LeadingCompanyText is null && curBlock.LeadingText is null)
                 {
                     // ブロック先頭の有意行 → leading_company として吸収。
                     curBlock.LeadingCompanyText = leadingBracketMatch.Groups["name"].Value.Trim();
@@ -1111,6 +1157,8 @@ public static class CreditBulkInputParser
                     // 途中での [[XXX]] または重複指定 → Block 警告。
                     string reason = curBlock.LeadingCompanyText is not null
                         ? "ブロックに既に [[XXX]] のグループトップ屋号が指定されています"
+                        : curBlock.LeadingText is not null
+                        ? "ブロックに既に @leading_text= の筆頭の団体が指定されています"
                         : "[[XXX]] はブロックの最初の有意行でのみ指定できます（このブロックには既にエントリ行があります）";
                     result.Warnings.Add(new ParseWarning
                     {

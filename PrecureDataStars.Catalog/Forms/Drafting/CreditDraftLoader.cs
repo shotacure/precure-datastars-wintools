@@ -320,6 +320,7 @@ internal sealed class CreditDraftLoader
         ContinuesPrevious = s.ContinuesPrevious,
         LeadingCompanyAliasId = s.LeadingCompanyAliasId,
         LeadingCompanyNotOnScreen = s.LeadingCompanyNotOnScreen,
+        LeadingText = s.LeadingText,
         HeadingSeriesId = s.HeadingSeriesId,
         HeadingText = s.HeadingText,
         HeadingItalic = s.HeadingItalic,

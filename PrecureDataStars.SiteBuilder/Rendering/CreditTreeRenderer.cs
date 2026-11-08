@@ -1197,6 +1197,12 @@ internal sealed class CreditTreeRenderer
                     if (bs.Block.LeadingCompanyNotOnScreen) leadingCompanyHtml = LeadingNotOnScreenHtml(leadingCompanyHtml);
                 }
             }
+            // 会社のデータを持たない文字だけの筆頭（「いこーよ・アンバサダーのみなさん」など）は、リンクを付けずに同じ位置へ出す。
+            if (string.IsNullOrEmpty(leadingCompanyName) && !string.IsNullOrEmpty(bs.Block.LeadingText))
+            {
+                leadingCompanyName = bs.Block.LeadingText;
+                leadingCompanyHtml = Esc(bs.Block.LeadingText!);
+            }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 
             bool isFirstRowOfThisBlock = true;
@@ -1341,6 +1347,12 @@ internal sealed class CreditTreeRenderer
                     // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、括弧で包んで薄い色で示す。
                     if (bs.Block.LeadingCompanyNotOnScreen) leadingCompanyHtml = LeadingNotOnScreenHtml(leadingCompanyHtml);
                 }
+            }
+            // 会社のデータを持たない文字だけの筆頭（「いこーよ・アンバサダーのみなさん」など）は、リンクを付けずに同じ位置へ出す。
+            if (string.IsNullOrEmpty(leadingCompanyName) && !string.IsNullOrEmpty(bs.Block.LeadingText))
+            {
+                leadingCompanyName = bs.Block.LeadingText;
+                leadingCompanyHtml = Esc(bs.Block.LeadingText!);
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 

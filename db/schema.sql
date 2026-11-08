@@ -2680,6 +2680,7 @@ CREATE TABLE `credit_role_blocks` (
   `continues_previous`        tinyint(1)      NOT NULL DEFAULT 0 COMMENT '1 なら前のブロックの続き。間に空きを入れず、列数だけ変えて続ける（役職の最初のブロックには付けない）',
   `leading_company_alias_id`  int             DEFAULT NULL,
   `leading_company_not_on_screen` tinyint      NOT NULL DEFAULT 0 COMMENT '1 なら筆頭の会社は画面にはクレジットされていない（クレジット漏れ）。表示だけ括弧で包む',
+  `leading_text`              varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'ブロックの筆頭の団体を文字だけで持つ（画面の表記どおり）。会社のデータは作らず、表示は筆頭の会社と同じく下の名前を字下げする',
   `heading_series_id`         int             DEFAULT NULL COMMENT 'ブロック先頭の見出しにする作品（series.series_id）。映画の声の出演の作品ごとのまとまりなど',
   `heading_text`              varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'ブロック先頭の見出しの文字（画面の表記どおり）。NULL なら作品の正式タイトル',
   `heading_italic`            tinyint(1) NOT NULL DEFAULT 0 COMMENT 'ブロック先頭の見出しを斜体で出すか（画面どおり）',

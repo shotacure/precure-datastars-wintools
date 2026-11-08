@@ -10077,6 +10077,44 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 /* 画像とキャプション。 */
 .article-body figure { margin: 0 0 1.2em; }
 .article-body figcaption { font-size: 0.85em; color: var(--muted); margin-top: 0.3em; }
+/* コラムの中の「囲み」（原稿の ::: study-note … ::: が div.study-note になる）。
+   プリキュアの話題を離れて、統計などの一般の知識を解説するところに使う。方眼紙の点を敷いた淡い青の地に、
+   最初の見出しを青い札にして枠の上辺に載せ、右上にきらめきを添える。 */
+.article-body .study-note {
+  position: relative;
+  margin: 2.6em 0 2em;
+  padding: 1.9em 1.4em 0.4em;
+  border: 1px solid rgba(51, 112, 170, 0.35);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle, rgba(51, 112, 170, 0.16) 1px, transparent 1.2px) 0 0 / 16px 16px,
+    #f5f9fd;
+  box-shadow: 0 3px 0 rgba(51, 112, 170, 0.12);
+}
+/* 札は流れの中に置き、上の余白を負の値で食わせて 1 行目の中心を枠の上辺に合わせる（1 行の札の高さ 2.02em の半分）。
+   題が長くて折り返すと札が下へ伸び、本文はその下から始まる。右上のきらめきに届かないよう幅を抑える。 */
+.article-body .study-note > :is(h3, h4):first-child {
+  position: relative;
+  width: fit-content; max-width: calc(100% - 4.7em);
+  margin: -2.91em 0 0.9em -0.3em;
+  padding: 0.3em 1.1em 0.32em 2.35em;
+  font-family: var(--font-accent-deco); font-size: 1em; font-weight: 700; line-height: 1.4;
+  color: #fff; background: var(--accent-blue); border-radius: 1.01em;
+  border-bottom: none;
+  box-shadow: 0 2px 0 rgba(51, 112, 170, 0.28);
+}
+/* 札の頭の ✦ は、折り返した 2 行目が下に回り込まないよう左の余白にぶら下げ、1 行目の字の中心に合わせる。 */
+.article-body .study-note > :is(h3, h4):first-child::before {
+  content: "✦";
+  position: absolute; left: 0.95em; top: 0.3em;
+  line-height: 1.4; color: var(--accent-yellow);
+}
+.article-body .study-note::after {
+  content: "✧ ✦ ✧";
+  position: absolute; top: 0.55em; right: 1em;
+  font-size: 0.85em; letter-spacing: 0.15em; color: var(--accent-yellow);
+}
+.article-body .study-note > :last-child { margin-bottom: 1em; }
 /* Markdown の脚注（Markdig が出す div.footnotes）。上の区切りはサイトの脚注（.footnotes）の点線だけにし、
    Markdig が先頭に入れる hr は出さない。 */
 .article-body .footnotes > hr { display: none; }

@@ -5,6 +5,7 @@
 ### 開発中（次回リリース）
 
 - **サイト：コラムの本文に「囲み」（`::: study-note` 〜 `:::`）を書けるようにした**（`site.css` の `.article-body .study-note`〔新規〕）：プリキュアの話題を離れて統計などの一般の知識を解説するところを、本文と見分けられるようにした。方眼の点を敷いた淡い青の地に、囲みの最初の見出しを青い札にして枠の上辺に載せ、右上にきらめきを添える。札の題が長いときは札が下へ伸びて折り返し、右上の飾りには届かない
+- **サイト：コラムの記事の頭の日付に、最終更新日をかっこ書きで出すようにした**（`ArticlesGenerator.ParseArticle`・`article-detail.sbn`）：コラムは公開後も書き直すことがあり、いつ直したかが分からなかった。原稿の前置きの `updated`（`2026-11-08` の形）を読み、公開日より後の日付のときだけ「2026年10月28日（2026年11月8日更新）」と出す。更新日は `<time datetime>` で包む。読めない値は警告にする。一覧のページと OGP カードの日付は公開日のまま
 - **サイト・テンプレ：曲の作家の種類に「ブラスアレンジ」を足し、主題歌のカードの役職テンプレで追加の編曲を出せるようにした**（`SongCreditRoles.StringsArrangement` / `OrchestraArrangement` / `BrassArrangement` / `ExtraArrangements`〔新規〕・`ThemeSongsHandler.ThemeSongRow.ExtraCredits`〔新規〕・`RoleTemplateRenderer` の `{SONG_CREDIT:code=…}`〔新規〕・`TemplateParser.ParseOptions` を internal に・`SongsGenerator`：TV の ED の主題歌のカードに「作曲・編曲」の行と「歌」の行の間に「ブラスアレンジ：三好啓太」の行が出る作品があり、曲の作家の種類にも、テンプレから出す差し込みにも無かった）
   - 役職 `BRASS_ARRANGEMENT`（ブラスアレンジ、曲の作家の種類）は DB のデータで足す。曲の構造化クレジット（`song_credits`）に持ち、曲詳細の基本情報では編曲の後ろにストリングス編曲・オーケストラ編曲と並べて出す
   - 役職テンプレの `{SONG_CREDIT:code=BRASS_ARRANGEMENT}` は、曲のループの中で、指定した追加の編曲（`STRINGS_ARRANGEMENT`・`ORCHESTRA_ARRANGEMENT`・`BRASS_ARRANGEMENT`）の連名を出す。無い曲は空。条件の `{?…}` も名前の後ろの指定を読むようにし、`{?SONG_CREDIT:code=BRASS_ARRANGEMENT}ブラスアレンジ：{SONG_CREDIT:code=BRASS_ARRANGEMENT}{/?SONG_CREDIT:code=BRASS_ARRANGEMENT}` で行ごと出し分けられる。`sep=` も効く

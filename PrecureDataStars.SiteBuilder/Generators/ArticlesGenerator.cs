@@ -101,6 +101,8 @@ public sealed class ArticlesGenerator
                 // 記事メタは読み込み元で欠けている可能性があるため、表示側の非 null 前提に合わせて丸める。
                 DateLabel = a.DateLabel ?? "",
                 DateIso = a.DateIso,
+                UpdatedLabel = a.UpdatedLabel,
+                UpdatedIso = a.UpdatedIso,
                 Tags = a.Tags ?? Array.Empty<string>(),
                 BodyHtml = a.BodyHtml,
                 HasTweet = a.BodyHtml.Contains("twitter-tweet", StringComparison.Ordinal),
@@ -265,6 +267,24 @@ public sealed class ArticlesGenerator
             _ctx.Logger.Warn($"コラムの date を読めません（{rawDate}）: {Path.GetFileName(path)}");
         }
 
+        // 最終更新日。公開後に書き直した記事だけが "updated: 2026-11-08" のように日付だけで持つ。
+        // 公開日（date の日付）より後の日付のときだけ表示する。不正なら警告してラベル空。
+        string updatedLabel = "";
+        string updatedIso = "";
+        var rawUpdated = meta.GetValueOrDefault("updated", "").Trim();
+        if (DateTime.TryParseExact(rawUpdated, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var updated))
+        {
+            if (updated.Date > date.Date)
+            {
+                updatedLabel = $"{updated.Year}年{updated.Month}月{updated.Day}日";
+                updatedIso = updated.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            }
+        }
+        else if (!string.IsNullOrEmpty(rawUpdated))
+        {
+            _ctx.Logger.Warn($"コラムの updated を読めません（{rawUpdated}）: {Path.GetFileName(path)}");
+        }
+
         // 下書き。"draft: true" のときだけ下書き扱い（本番に出さない）。
         var isDraft = string.Equals(meta.GetValueOrDefault("draft", "").Trim(), "true", StringComparison.OrdinalIgnoreCase);
 
@@ -277,7 +297,7 @@ public sealed class ArticlesGenerator
         // 素材のフォルダは原稿のファイル名に合わせる（front-matter で slug を変えても、置き場は原稿の隣のまま）。
         var assetDir = Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path));
 
-        return new Article(slug, title, description, date, dateLabel, dateIso, tags, bodyHtml, isDraft, publishAt, assetDir);
+        return new Article(slug, title, description, date, dateLabel, dateIso, updatedLabel, updatedIso, tags, bodyHtml, isDraft, publishAt, assetDir);
     }
 
     /// <summary>
@@ -303,10 +323,11 @@ public sealed class ArticlesGenerator
 
     /// <summary>原稿 1 本。<paramref name="IsDraft"/> と <paramref name="PublishAt"/> は本番に出すかどうかの判定に使う。
     /// <paramref name="DateIso"/> は time 要素の datetime 属性に入れる "yyyy-MM-dd"（日付が無ければ空）。
+    /// <paramref name="UpdatedLabel"/>・<paramref name="UpdatedIso"/> は最終更新日（公開日より後に書き直したときだけ。無ければ空）。
     /// <paramref name="AssetDir"/> は図などの素材を置くフォルダ（原稿と同じ名前。無くてもよい）。</summary>
     private sealed record Article(
         string Slug, string Title, string Description,
-        DateTime Date, string DateLabel, string DateIso, IReadOnlyList<string> Tags, string BodyHtml,
+        DateTime Date, string DateLabel, string DateIso, string UpdatedLabel, string UpdatedIso, IReadOnlyList<string> Tags, string BodyHtml,
         bool IsDraft, DateTimeOffset PublishAt, string AssetDir);
 
     // ── テンプレに渡すモデル ──
@@ -318,6 +339,10 @@ public sealed class ArticlesGenerator
         public string DateLabel { get; set; } = "";
         /// <summary>time 要素の datetime 属性（"yyyy-MM-dd"、日付が無ければ空）。</summary>
         public string DateIso { get; set; } = "";
+        /// <summary>最終更新日の表示（「2026年11月8日」）。公開後に書き直していなければ空。</summary>
+        public string UpdatedLabel { get; set; } = "";
+        /// <summary>最終更新日の time 要素の datetime 属性（"yyyy-MM-dd"、無ければ空）。</summary>
+        public string UpdatedIso { get; set; } = "";
         public IReadOnlyList<string> Tags { get; set; } = Array.Empty<string>();
         /// <summary>Markdig で HTML 化済みの本文。テンプレ側でそのまま（raw）出力する。</summary>
         public string BodyHtml { get; set; } = "";

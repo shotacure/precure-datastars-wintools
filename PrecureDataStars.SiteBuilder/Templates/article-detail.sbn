@@ -4,7 +4,8 @@
   <h1>{{ Title | html.escape }}</h1>
   <div class="article-meta">
     {{~ if DateLabel != "" ~}}
-    <time class="article-date"{{ if DateIso != "" }} datetime="{{ DateIso }}"{{ end }}>{{ DateLabel }}</time>
+    {{## 公開後に書き直した記事は、公開日の後ろに最終更新日をかっこ書きで添える。 ##}}
+    <span class="article-date"><time{{ if DateIso != "" }} datetime="{{ DateIso }}"{{ end }}>{{ DateLabel }}</time>{{ if UpdatedLabel != "" }}（<time datetime="{{ UpdatedIso }}">{{ UpdatedLabel }}</time>更新）{{ end }}</span>
     {{~ end ~}}
     {{~ if (array.size Tags) > 0 ~}}
     <span class="article-tags">

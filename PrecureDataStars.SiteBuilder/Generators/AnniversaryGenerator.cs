@@ -110,9 +110,7 @@ public sealed class AnniversaryGenerator
             });
         }
 
-        // 凡例の 🌙 は大人向けスピンオフの放送が 1 件でもあるときだけ出す（升目に出ない記号を凡例に並べない）。
-        bool hasOtonaEpisodes = entries.Any(e => e.Kind == "ep" && e.IsOtona);
-        RenderIndexPage(monthSections, entries.Count, displayYear, hasOtonaEpisodes);
+        RenderIndexPage(monthSections, entries.Count, displayYear);
         _ctx.Logger.Success($"anniversary: {writtenDays} 日 + 索引 1 ページ");
     }
 
@@ -329,9 +327,9 @@ public sealed class AnniversaryGenerator
     // ════════════════════ 索引ページ ════════════════════
 
     /// <summary>月別に全日を並べた索引を書き出す。</summary>
-    private void RenderIndexPage(IReadOnlyList<MonthSection> months, int totalEntries, int displayYear, bool hasOtonaEpisodes)
+    private void RenderIndexPage(IReadOnlyList<MonthSection> months, int totalEntries, int displayYear)
     {
-        var content = new IndexContentModel { Months = months, TotalEntries = totalEntries, DisplayYear = displayYear, HasOtonaEpisodes = hasOtonaEpisodes };
+        var content = new IndexContentModel { Months = months, TotalEntries = totalEntries, DisplayYear = displayYear };
         var layout = new LayoutModel
         {
             PageTitle = "プリキュア記念日カレンダー",
@@ -412,12 +410,12 @@ public sealed class AnniversaryGenerator
     }
 
     /// <summary>
-    /// TV 放送のチップ。第 1 話・最終話は強調クラスを足す。大人向けスピンオフの話は 📺 の代わりに 🌙 を付け、藍の配色にする。
+    /// TV 放送のチップ。第 1 話・最終話は強調クラスを足す。大人向けスピンオフの話も TV 放送と同じ配色で、📺 の代わりに 🌙 を付けて見分ける。
     /// ツールチップはネイティブ表示のため CSS でぼかせない。未解禁の話はサブタイトルを含めない。
     /// </summary>
     private static DayChip BuildEpisodeChip(AnniversaryEntry e, DateTimeOffset now)
     {
-        string cls = e.IsOtona ? "cal-chip cal-chip-otona" : "cal-chip cal-chip-ep";
+        string cls = "cal-chip cal-chip-ep";
         if (e.IsFirstEpisode) cls += " cal-chip-ep-first";
         if (e.IsLastEpisode) cls += " cal-chip-ep-last";
 
@@ -531,8 +529,6 @@ public sealed class AnniversaryGenerator
         public int TotalEntries { get; set; }
         /// <summary>カレンダーの升目を組んだ年。曜日の並びはこの年のもの。</summary>
         public int DisplayYear { get; set; }
-        /// <summary>大人向けスピンオフの放送が 1 件でもあるか（凡例に 🌙 を出すかの判定）。</summary>
-        public bool HasOtonaEpisodes { get; set; }
     }
 
     private sealed class MonthSection

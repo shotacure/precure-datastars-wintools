@@ -377,11 +377,11 @@
         + '" title="' + escapeAttr(it.pn) + '">'
         + '<span class="cal-chip-emoji">🎂</span>' + escapeHtml(it.pn) + '</a>';
     }
-    // ep（TV 放送）：テレビ絵文字 + シリーズ名 + #話数。大人向けスピンオフの話（o）は 🌙 と藍の配色。
+    // ep（TV 放送）：テレビ絵文字 + シリーズ名 + #話数。大人向けスピンオフの話（o）も同じ配色で、絵文字だけ 🌙 にする。
     var epTitle = useFullName ? it.st : it.ts;
     var label = escapeHtml(epTitle) + '#' + escapeHtml(String(it.en));
     // 1 話（ef）／最終話（el）には強調用の追加クラスを付与する。
-    var epCls = it.o ? 'cal-chip cal-chip-otona' : 'cal-chip cal-chip-ep';
+    var epCls = 'cal-chip cal-chip-ep';
     if (it.ef) epCls += ' cal-chip-ep-first';
     if (it.el) epCls += ' cal-chip-ep-last';
     // title 属性はネイティブのホバーツールチップで CSS でぼかせないため、

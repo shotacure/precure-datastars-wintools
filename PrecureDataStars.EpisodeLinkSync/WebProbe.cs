@@ -2,12 +2,12 @@ using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
+using PrecureDataStars.Catalog.Common.Services;
 
 namespace PrecureDataStars.EpisodeLinkSync;
 
 /// <summary>ページの確かめの結果。</summary>
-internal enum ProbeResult
+public enum ProbeResult
 {
     /// <summary>ページがあり、その回のページだと確かめられた。</summary>
     Found,
@@ -19,34 +19,44 @@ internal enum ProbeResult
     Unknown
 }
 
-/// <summary>YouTube のチャンネルの新着一覧（RSS）の 1 本。</summary>
-internal sealed record FeedVideo(string VideoId, string Title)
+/// <summary>YouTube のチャンネルのアップロードの再生リストの 1 本。</summary>
+public sealed record FeedVideo(string VideoId, string Title)
 {
     public string WatchUrl => $"https://www.youtube.com/watch?v={VideoId}";
 }
 
 /// <summary>
-/// 公式のページと YouTube の新着一覧を見に行く HTTP の窓口。
+/// 公式のページと YouTube の新着を見に行く窓口。
 /// <para>
 /// 転送は追わない（東映アニメーションのサイトは、まだ無い回のページをトップへ転送する）。
 /// 断られたとき（429・5xx）とつながらないときは、その相手（ホスト）だけ間隔を広げ（10 秒から倍々に最長 5 分）、
 /// 広げている間はリクエストを送らずに <see cref="ProbeResult.Unknown"/> を返す。うまく取れたら間隔を戻す。
 /// </para>
+/// <para>
+/// YouTube は Data API v3 だけで見る（チャンネルのアップロードの再生リストの先頭の 1 ページ。1 回 1 ユニット）。
+/// 429・5xx・つながらないときは上と同じく間隔を広げる。それ以外の断り（403 のクォータ超過・キーの誤りなど）は
+/// 待っても直らないので、この実行の間はもう YouTube を見ない（<see cref="YouTubeStoppedReason"/>）。
+/// </para>
 /// </summary>
-internal sealed class WebProbe : IDisposable
+public sealed class WebProbe : IDisposable
 {
     private static readonly TimeSpan FirstBackoff = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(5);
 
-    private static readonly XNamespace Atom = "http://www.w3.org/2005/Atom";
-    private static readonly XNamespace Yt = "http://www.youtube.com/xml/schemas/2015";
+    /// <summary>新着として読む本数（アップロードの再生リストの先頭から）。</summary>
+    private const int UploadsHeadSize = 15;
+
+    /// <summary>YouTube Data API の相手。間隔を広げるときの鍵にも使う。</summary>
+    private const string YouTubeApiHost = "www.googleapis.com";
 
     private readonly HttpClient _http;
+    private readonly YouTubeDataApiClient _youtube;
     private readonly Action<string> _log;
     private readonly Dictionary<string, (DateTime Until, TimeSpan Backoff)> _backoff = new(StringComparer.OrdinalIgnoreCase);
 
-    public WebProbe(Action<string> log)
+    public WebProbe(YouTubeDataApiClient youtube, Action<string> log)
     {
+        _youtube = youtube;
         _log = log;
         _http = new HttpClient(new SocketsHttpHandler
         {
@@ -71,22 +81,44 @@ internal sealed class WebProbe : IDisposable
             ? ProbeResult.Found : ProbeResult.NotYet;
     }
 
-    /// <summary>YouTube のチャンネルの新着一覧（RSS、新しい順に 15 本ほど）を読む。読めなければ null。</summary>
-    public async Task<IReadOnlyList<FeedVideo>?> ReadChannelFeedAsync(string channelId, CancellationToken ct)
+    /// <summary>YouTube を最後に読めた時刻。まだ読めていなければ null。</summary>
+    public DateTime? YouTubeLastReadAt { get; private set; }
+
+    /// <summary>待っても直らない断りで YouTube を見るのをやめたときの理由。見ている間は null。</summary>
+    public string? YouTubeStoppedReason { get; private set; }
+
+    /// <summary>
+    /// YouTube のチャンネルの新着（アップロードの再生リストの先頭 15 本、新しい順）を Data API で読む。
+    /// 読めなければ null（間隔を広げている間・断られた・つながらない・見るのをやめた後）。
+    /// </summary>
+    public async Task<IReadOnlyList<FeedVideo>?> ReadChannelUploadsAsync(string channelId, CancellationToken ct)
     {
-        string url = $"https://www.youtube.com/feeds/videos.xml?channel_id={Uri.EscapeDataString(channelId)}";
-        var (status, body) = await GetAsync(url, ct).ConfigureAwait(false);
-        if (status != HttpStatusCode.OK || body is null) return null;
+        if (YouTubeStoppedReason is not null) return null;
+        if (_backoff.TryGetValue(YouTubeApiHost, out var b) && DateTime.Now < b.Until) return null;
+
+        // チャンネル ID の頭の「UC」を「UU」にしたものが、そのチャンネルのアップロードの再生リスト。
+        string uploads = "UU" + channelId[2..];
         try
         {
-            return XDocument.Parse(body).Root?.Elements(Atom + "entry")
-                .Select(e => new FeedVideo((string?)e.Element(Yt + "videoId") ?? "", (string?)e.Element(Atom + "title") ?? ""))
-                .Where(v => v.VideoId.Length > 0)
-                .ToList() ?? [];
+            var items = await _youtube.GetPlaylistHeadAsync(uploads, UploadsHeadSize, ct).ConfigureAwait(false);
+            _backoff.Remove(YouTubeApiHost);
+            YouTubeLastReadAt = DateTime.Now;
+            return items.Select(v => new FeedVideo(v.VideoId, v.Title)).ToList();
         }
-        catch (System.Xml.XmlException ex)
+        catch (YouTubeDataApiException ex) when ((int)ex.StatusCode == 429 || (int)ex.StatusCode >= 500)
         {
-            _log($"YouTube の新着一覧を読めませんでした：{ex.Message}");
+            Backoff(YouTubeApiHost, $"HTTP {(int)ex.StatusCode}");
+            return null;
+        }
+        catch (YouTubeDataApiException ex)
+        {
+            YouTubeStoppedReason = ex.Message;
+            _log($"YouTube Data API に断られたので、この実行の間は YouTube を見ません：{ex.Message}");
+            return null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            Backoff(YouTubeApiHost, ex.Message);
             return null;
         }
     }

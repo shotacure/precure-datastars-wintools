@@ -2,13 +2,17 @@
 <configuration>
   <!--
     PrecureDataStars.EpisodeLinkSync の設定サンプル。
-    このファイルを App.config にコピーし、接続文字列を環境に合わせて書き換える。
+    このファイルを App.config にコピーし、接続文字列と API キーを環境に合わせて書き換える。
     .gitignore は **/App.config を除外しているため、本サンプルだけがリポジトリに残る。
-    東映アニメーションのページと YouTube のチャンネルの新着一覧（RSS）は認証が要らないので、API キーの設定は無い。
+    東映アニメーションのページは認証が要らない。YouTube のチャンネルの新着は Data API v3 で読むので API キーが要る。
   -->
   <connectionStrings>
     <!-- DB 接続文字列：他ツール（Catalog 等）と同じもの。episodes のリンクの列を書くため UPDATE 権限が要る。 -->
     <add name="DatastarsMySql"
          connectionString="Server=127.0.0.1;Port=3306;Database=precure_datastars;User Id=YOUR_USER;password=YOUR_PASSWORD;Allow User Variables=true;CharSet=utf8mb4;TreatTinyAsBoolean=true" />
   </connectionStrings>
+  <appSettings>
+    <!-- YouTube Data API v3 の API キー。Catalog・ArtTrackRefresh の YouTube.ApiKey と同じものでよい。 -->
+    <add key="YouTube.ApiKey" value="YOUR_YOUTUBE_DATA_API_KEY" />
+  </appSettings>
 </configuration>

@@ -6,20 +6,23 @@
       公式 YouTube チャンネルの予告）を見つけて、episodes の空の列にだけ書く内部用コンソール。
       タスクスケジューラから scripts/scheduled-episode-links.ps1 経由で動かす（登録は register-episode-links-task.ps1）。
       配布 ZIP には含めない。
+      YouTube は Catalog と共有の YouTubeDataApiClient（Catalog.Common）で見る。Catalog.Common が Windows 向けのため
+      ターゲットも net9.0-windows にそろえる。
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net9.0-windows</TargetFramework>
     <RootNamespace>PrecureDataStars.EpisodeLinkSync</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\PrecureDataStars.Data\PrecureDataStars.Data.csproj" />
+    <ProjectReference Include="..\PrecureDataStars.Catalog.Common\PrecureDataStars.Catalog.Common.csproj" />
     <ProjectReference Include="..\PrecureDataStars.Data.TitleCharStatsJson\PrecureDataStars.Data.TitleCharStatsJson.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- App.config から接続文字列を読み出すため。 -->
+    <!-- App.config から接続文字列と API キーを読み出すため。 -->
     <PackageReference Include="System.Configuration.ConfigurationManager" />
   </ItemGroup>
 

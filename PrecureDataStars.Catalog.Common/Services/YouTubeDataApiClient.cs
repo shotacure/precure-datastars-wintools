@@ -11,10 +11,12 @@ using System.Threading.Tasks;
 namespace PrecureDataStars.Catalog.Common.Services;
 
 /// <summary>
-/// YouTube Data API v3 の薄いクライアント。配信音源（アートトラック）の取り込みに必要な
-/// 2 つの読み取り操作だけを扱う。
+/// YouTube Data API v3 の薄いクライアント。配信音源（アートトラック）の取り込みと、
+/// 放送後のリンクの取り込み（EpisodeLinkSync の予告探し）に必要な読み取り操作だけを扱う。
 /// <list type="bullet">
 ///   <item><see cref="GetPlaylistItemsAsync"/>：アルバムのプレイリストを全件展開する（50 件 1 ユニット）。</item>
+///   <item><see cref="GetPlaylistHeadAsync"/>：プレイリストの先頭の 1 ページだけを読む（1 回 1 ユニット）。
+///     チャンネルのアップロードの再生リスト（<c>UU...</c>）は新しい順に並ぶので、新着を見るのに使う。</item>
 ///   <item><see cref="GetVideoDetailsAsync"/>：動画の埋め込み可否・地域制限・再生時間を取得する（50 件 1 ユニット）。</item>
 /// </list>
 /// <para>
@@ -25,6 +27,8 @@ namespace PrecureDataStars.Catalog.Common.Services;
 /// <para>
 /// 日次クォータは既定 10,000 ユニット。本クライアントが使う 2 操作はいずれも 50 件 1 ユニットなので、
 /// 全商品（400 点弱）を取り込んでも消費は十数ユニットに収まる。
+/// 同じキーを使う EpisodeLinkSync の日曜の見張りは <see cref="GetPlaylistHeadAsync"/> を 5 秒おきに 3 時間呼ぶので
+/// 2,160 ユニットほど使うが、合わせても既定のクォータに収まる。
 /// </para>
 /// </summary>
 public sealed class YouTubeDataApiClient : IDisposable
@@ -69,25 +73,7 @@ public sealed class YouTubeDataApiClient : IDisposable
 
             using var doc = await GetJsonAsync(url, ct).ConfigureAwait(false);
             var root = doc.RootElement;
-
-            if (root.TryGetProperty("items", out var items))
-            {
-                foreach (var item in items.EnumerateArray())
-                {
-                    if (!item.TryGetProperty("snippet", out var sn)) continue;
-
-                    string videoId = sn.TryGetProperty("resourceId", out var res)
-                        && res.TryGetProperty("videoId", out var vid) ? (vid.GetString() ?? "") : "";
-                    if (videoId.Length == 0) continue;
-
-                    results.Add(new YouTubePlaylistVideo
-                    {
-                        Position = sn.TryGetProperty("position", out var pos) ? pos.GetInt32() : results.Count,
-                        VideoId = videoId,
-                        Title = sn.TryGetProperty("title", out var ti) ? (ti.GetString() ?? "") : ""
-                    });
-                }
-            }
+            AddPlaylistItems(root, results);
 
             pageToken = root.TryGetProperty("nextPageToken", out var np) ? np.GetString() : null;
         }
@@ -95,6 +81,46 @@ public sealed class YouTubeDataApiClient : IDisposable
 
         // position は API 側で歯抜けになることがないが、ページ跨ぎの順序を保証するため明示的に整列する。
         return results.OrderBy(v => v.Position).ToList();
+    }
+
+    /// <summary>プレイリストの先頭の 1 ページだけ（最大 <paramref name="maxResults"/> 件）を position 昇順で取得する。
+    /// ページはめくらないので、消費は 1 回 1 ユニット。チャンネルのアップロードの再生リスト（<c>UU...</c>）は
+    /// 新しい順に並ぶので、新着の数本を見るのに使う。</summary>
+    /// <param name="playlistId">プレイリスト ID。</param>
+    /// <param name="maxResults">読む件数（1〜50）。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task<IReadOnlyList<YouTubePlaylistVideo>> GetPlaylistHeadAsync(
+        string playlistId, int maxResults, CancellationToken ct = default)
+    {
+        int size = Math.Clamp(maxResults, 1, PageSize);
+        string url = $"{BaseUrl}playlistItems?part=snippet&maxResults={size}"
+                   + $"&playlistId={Uri.EscapeDataString(playlistId)}&key={Uri.EscapeDataString(_apiKey)}";
+
+        using var doc = await GetJsonAsync(url, ct).ConfigureAwait(false);
+        var results = new List<YouTubePlaylistVideo>();
+        AddPlaylistItems(doc.RootElement, results);
+        return results.OrderBy(v => v.Position).ToList();
+    }
+
+    /// <summary>playlistItems の応答の 1 ページ分の <c>items</c> を <paramref name="results"/> に足す。動画 ID の無い項目は飛ばす。</summary>
+    private static void AddPlaylistItems(JsonElement root, List<YouTubePlaylistVideo> results)
+    {
+        if (!root.TryGetProperty("items", out var items)) return;
+        foreach (var item in items.EnumerateArray())
+        {
+            if (!item.TryGetProperty("snippet", out var sn)) continue;
+
+            string videoId = sn.TryGetProperty("resourceId", out var res)
+                && res.TryGetProperty("videoId", out var vid) ? (vid.GetString() ?? "") : "";
+            if (videoId.Length == 0) continue;
+
+            results.Add(new YouTubePlaylistVideo
+            {
+                Position = sn.TryGetProperty("position", out var pos) ? pos.GetInt32() : results.Count,
+                VideoId = videoId,
+                Title = sn.TryGetProperty("title", out var ti) ? (ti.GetString() ?? "") : ""
+            });
+        }
     }
 
     /// <summary>動画の埋め込み可否（<c>status.embeddable</c>）と再生時間（<c>contentDetails.duration</c>）を まとめて取得する。埋め込み可否は権利者が外部サイトでの再生を許可していない音源を掲載しない判定に、 再生時間はトラックとの対応付けに使う。地域制限は日本で再生できない音源を見分けるのに使う。 応答に含まれない動画 ID（削除・非公開など）は戻り値に現れない。</summary>

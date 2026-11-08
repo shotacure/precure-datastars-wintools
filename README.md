@@ -95,7 +95,7 @@ mysql -u root -p < db/schema.sql
 
 ### 2. 接続文字列の設定
 
-DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / SiteBuilder / AmazonSync / TitleCharStatsRefresh / ArtTrackRefresh / DeezerIsrcSync / EpisodeLinkSync）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。Catalog と ArtTrackRefresh は、配信音源を扱うための YouTube Data API v3 の API キー（`appSettings` の `YouTube.ApiKey`）も設定する。
+DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / SiteBuilder / AmazonSync / TitleCharStatsRefresh / ArtTrackRefresh / DeezerIsrcSync / EpisodeLinkSync）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。Catalog と ArtTrackRefresh は、配信音源を扱うための YouTube Data API v3 の API キー（`appSettings` の `YouTube.ApiKey`）も設定する。EpisodeLinkSync も、公式 YouTube チャンネルの予告を探すのに同じキーを設定する。
 
 ```xml
 <connectionStrings>
@@ -1036,12 +1036,12 @@ Role: PRODUCTION 制作 (order 2)
    ```
 8. 放送後のリンクの自動取り込み：`scripts/scheduled-episode-links.ps1` が `PrecureDataStars.EpisodeLinkSync` を Release でビルドして動かし、TV の各話の、放送後に公式から出るリンクを episodes の空の列にだけ書く（入っている値は上書きしない。`updated_by` は `EpisodeLinkSync`）。対象は本線の TV（kind_code='TV'）だけ。サイトに出るのは次の本番デプロイ
    - あらすじ（`toei_anim_summary_url`）・ラインナップ（`toei_anim_lineup_url`）：同じ作品で URL の入っている話数のいちばん近い回の URL の話数の部分（`/{話数}/`）を差し替えて組み、転送を追わずに開いて、200 で返り本文にその回の「第N話」があれば書く。まだ無い回のページは東映アニメーションのトップへ転送される。作品の最初の 1 話は手で入れる
-   - 予告（`youtube_trailer_url`）：プリキュア公式 YouTube チャンネルの新着一覧（RSS。認証なし）から、題が「{作品名}　第N話 予告「{サブタイトル}」」のもの（NFKC で正規化して比べる）。予告の題のサブタイトルが `title_text` と違うときは書かずに知らせる。その回が DB に無いときは、引数なしの回では回を作らずに知らせる（`-Watch` の回は下のとおり仮で作る）。サブタイトルが空の回には書いて、予告の題を知らせる
-   - `-Watch`（日曜 9:00 の回）：今日放送の回のあらすじのページと次の回の予告が出るまで 5 秒おきに見続け、そろったら終わる。12:00 までにそろわなければ知らせる。ラインナップは見ない。今日放送の回が無ければ何もしない
+   - 予告（`youtube_trailer_url`）：プリキュア公式 YouTube チャンネルの新着（YouTube Data API v3 の `playlistItems.list` で、チャンネルのアップロードの再生リストの先頭 15 本を読む。1 回 1 ユニットで、`-Watch` の 3 時間で 2,160 ユニットほど。API キーは App.config の `YouTube.ApiKey`）から、題が「{作品名}　第N話 予告「{サブタイトル}」」のもの（NFKC で正規化して比べる）。予告の題のサブタイトルが `title_text` と違うときは書かずに知らせる。その回が DB に無いときは、引数なしの回では回を作らずに知らせる（`-Watch` の回は下のとおり仮で作る）。サブタイトルが空の回には書いて、予告の題を知らせる
+   - `-Watch`（日曜 9:00 の回）：今日放送の回のあらすじのページと次の回の予告が出るまで 5 秒おきに見続け、そろったら終わる。12:00 までにそろわなければ知らせる。ラインナップは見ない。今日放送の回が無ければ何もしない。待っている間は、窓のいちばん下の 1 行に、待っているもの・YouTube を最後に読めた時刻・12:00 までの残りを出して書き換え続ける（ログには残さない。ツールが `[status] ` を頭に付けて出す行を、スクリプトが書き換えの 1 行にする）
    - `-Watch` で次の回の予告が出たとき、その回が DB に無ければ予告の題から回を仮で作る（`created_by` も `EpisodeLinkSync`）。話数・通しの番号（全話・放送回・ニチアサ枠）は前の回に 1 を足し、放送日時は前の回のちょうど 1 週間後（休止は考えない）、尺は前の回と同じ。サブタイトルは予告の題の「」の中を正規化せずにそのままの字で入れ、ルビ付き表記はサブタイトルの空白を改行にしただけのもの、文字統計は Episodes の保存と同じ形で作り、ふりがなは空にする。予告の URL も一緒に入れる。episode_id が放送順の連番からずれないよう、作る回がいちばん後の放送で、前の回が通しの番号でもいちばん後のときだけ作り、そうでなければ知らせるだけにする。回はあるのにサブタイトルが空なら、サブタイトル・ルビ付き表記・文字統計を同じように入れる。作った・入れたときは、ふりがな・ルビ・改行の位置・放送日を確かめるよう知らせる。引数なしの回は、DB に無い回を作らずに知らせるだけ
    - `--date yyyy-MM-dd`（ツールの引数。`--watch --dry-run` と一緒のときだけ）：見続ける回の「今日」を差し替えて試す。過ぎた日なら 1 回見て終わる
    - 引数なし（毎日 5:50 の回）：放送日時がいまの前後（過去 28 日・先 21 日）の回のうち、放送済みの回のあらすじ・ラインナップと、新着一覧に出ている予告を 1 回見て回る（ラインナップは放送から数日遅れで出る）
-   - 断られたとき（429・5xx）とつながらないときは、その相手だけ間隔を広げる（10 秒から倍々に最長 5 分）
+   - 断られたとき（429・5xx）とつながらないときは、その相手だけ間隔を広げる（10 秒から倍々に最長 5 分）。YouTube Data API のそれ以外の断り（403 のクォータ超過・キーの誤りなど）は待っても直らないので、その実行の間はもう YouTube を見ずに知らせる（`-Watch` は予告を待つのをやめる）
    - 経過は `%LOCALAPPDATA%\precure-datastars\episode-links.log` に追記する。知らせることがあったときと失敗したときは Windows の通知を出す（通知の組み立ては定時デプロイと同じ `scripts/show-toast.ps1`）。始めの Release のビルドは、同じ時刻に始まるほかの定時のタスクと重ならないよう、`scripts/build-lock.ps1` の名前付きの鍵で 1 つずつ行う（後から来たほうは最大 10 分待つ）。`register-episode-links-task.ps1` で 2 つのタスク（日曜 9:00 の見続ける回・毎日 5:50 の回）を登録する
    ```powershell
    .\scripts\scheduled-episode-links.ps1 -DryRun           # 書かずに 1 回見て回る

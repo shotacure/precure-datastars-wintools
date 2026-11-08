@@ -5,6 +5,7 @@
 .DESCRIPTION
   タスクスケジューラから動かす（登録は register-episode-links-task.ps1）。
   -Watch を付けると、今日放送の TV の回のあらすじのページと次の回の予告が出るまで 5 秒おきに見続ける（日曜 9:00 の回。12:00 まで）。
+  見続ける間は、待っているものと 12:00 までの残りを窓のいちばん下の 1 行で書き換え続ける（ログには残さない）。
   付けなければ、前後数週の回のあらすじ・ラインナップ・予告を 1 回だけ見て回る（毎日 5:50 の回。6:00 の定時デプロイの前に入れておく）。
   見つけたものは episodes の空の列にだけ書く。サイトに出るのは次の本番デプロイ。
 
@@ -45,6 +46,11 @@ function Write-Log([string]$message) {
     Write-Host $line
 }
 
+# EpisodeLinkSync が「[status] 」を頭に付けて出す行は、待っている間の 1 行。ログに残さず、窓のいちばん下で書き換える。
+$statusPrefix = '[status] '
+$clearLine = "$([char]27)[2K`r"
+$statusShown = $false
+
 function Show-Notice([string]$title, [string]$body) {
     try { Show-Toast -Title $title -Body $body -Foot "記録: $logPath" }
     catch { Write-Log "通知を出せませんでした：$($_.Exception.Message)" }
@@ -71,10 +77,18 @@ try {
     Push-Location (Split-Path $exe.FullName)
     try {
         & $exe.FullName @toolArgs *>&1 | ForEach-Object {
-            $output += "$_"
-            Add-Content -LiteralPath $logPath -Value "    $_" -Encoding UTF8
+            $line = "$_"
+            if ($line.StartsWith($statusPrefix)) {
+                [Console]::Write($clearLine + $line.Substring($statusPrefix.Length))
+                $statusShown = $true
+                return
+            }
+            if ($statusShown) { [Console]::Write($clearLine); $statusShown = $false }
+            $output += $line
+            Add-Content -LiteralPath $logPath -Value "    $line" -Encoding UTF8
             $_
         }
+        if ($statusShown) { [Console]::Write($clearLine); $statusShown = $false }
         $exitCode = $LASTEXITCODE
     }
     finally { Pop-Location }

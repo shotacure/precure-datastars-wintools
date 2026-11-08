@@ -13,7 +13,7 @@ namespace PrecureDataStars.EpisodeLinkSync;
 ///   <item>あらすじ（<c>toei_anim_summary_url</c>）・ラインナップ（<c>toei_anim_lineup_url</c>）：同じ作品で URL の入っている
 ///     いちばん近い回の URL の話数の部分（<c>/{話数}/</c>）を差し替えて組み、ページが 200 で返り本文にその回の「第N話」があれば書く。
 ///     まだ無い回のページは東映アニメーションのトップへ転送されるので、転送は「まだ」とみなす。</item>
-///   <item>予告（<c>youtube_trailer_url</c>）：プリキュア公式 YouTube チャンネルの新着一覧から、題が
+///   <item>予告（<c>youtube_trailer_url</c>）：プリキュア公式 YouTube チャンネルの新着（Data API で読むアップロードの再生リストの先頭）から、題が
 ///     「{作品名}　第N話 予告「{サブタイトル}」」のものを拾う。予告の題のサブタイトルが DB の <c>title_text</c> と違うときは書かずに知らせる。
 ///     その回が DB に無いときは、1 回だけ見て回るときは回を作らずに知らせる（休止の週があり、放送日を機械では決められないため）。</item>
 ///   <item>日曜の見続ける回だけは、次の回の予告が出たときに、その回が DB に無ければ予告の題から回を仮で作り、
@@ -23,7 +23,7 @@ namespace PrecureDataStars.EpisodeLinkSync;
 /// 対象は本線の TV（kind_code='TV'）だけ。入っている値は上書きしない。知らせることは <see cref="Notices"/> にためる
 /// （同じことは 1 回の実行で 1 度だけ）。
 /// </summary>
-internal sealed class EpisodeLinkSyncService
+public sealed class EpisodeLinkSyncService
 {
     /// <summary>updated_by に入れる名前。</summary>
     public const string UpdatedBy = "EpisodeLinkSync";
@@ -49,15 +49,55 @@ internal sealed class EpisodeLinkSyncService
     private readonly WebProbe _web;
     private readonly bool _dryRun;
     private readonly Action<string> _log;
+    private readonly Action<string> _status;
     private readonly HashSet<string> _noticed = new(StringComparer.Ordinal);
 
-    public EpisodeLinkSyncService(EpisodesRepository episodes, SeriesRepository series, WebProbe web, bool dryRun, Action<string> log)
+    /// <param name="status">見続ける間の「いま何を待っているか」の 1 行を出す先（ログには残さない。窓のいちばん下で書き換える）。</param>
+    public EpisodeLinkSyncService(EpisodesRepository episodes, SeriesRepository series, WebProbe web, bool dryRun,
+        Action<string> log, Action<string> status)
     {
         _episodes = episodes;
         _series = series;
         _web = web;
         _dryRun = dryRun;
         _log = log;
+        _status = status;
+    }
+
+    /// <summary>
+    /// 見続ける回の進み具合。<see cref="BeginWatchAsync"/> で作り、<see cref="WatchStepAsync"/> で 1 回ずつ進める。
+    /// </summary>
+    public sealed class WatchSession
+    {
+        internal WatchSession(Episode target, string seriesTitle)
+        {
+            Target = target;
+            SeriesTitle = seriesTitle;
+        }
+
+        /// <summary>今日放送の回。</summary>
+        public Episode Target { get; }
+
+        /// <summary>その回の作品名。</summary>
+        public string SeriesTitle { get; }
+
+        /// <summary>予告を待つ次の回の話数。</summary>
+        public int NextNo => Target.SeriesEpNo + 1;
+
+        /// <summary>あらすじのページの URL が入った（入っていた）。</summary>
+        public bool SummaryDone { get; internal set; }
+
+        /// <summary>次の回の予告が入った（入っていた・書かずに知らせた）。</summary>
+        public bool TrailerDone { get; internal set; }
+
+        /// <summary>YouTube Data API に待っても直らない断りを受けて、予告を待つのをやめた。</summary>
+        public bool TrailerGivenUp { get; internal set; }
+
+        /// <summary>見ている回が DB から無くなった。</summary>
+        public bool Gone { get; internal set; }
+
+        /// <summary>これ以上見回らなくてよい。</summary>
+        public bool Finished => Gone || (SummaryDone && (TrailerDone || TrailerGivenUp));
     }
 
     /// <summary>知らせること（祥太さんが見て手で直すもの）。</summary>
@@ -103,10 +143,11 @@ internal sealed class EpisodeLinkSyncService
                 await TryPageAsync(snap, ep, EpisodeLinkColumn.ToeiAnimLineup, ct).ConfigureAwait(false);
         }
 
-        var feed = await _web.ReadChannelFeedAsync(PrecureChannelId, ct).ConfigureAwait(false);
+        var feed = await _web.ReadChannelUploadsAsync(PrecureChannelId, ct).ConfigureAwait(false);
         if (feed is null)
         {
-            Notice("feed", "YouTube の新着一覧を読めませんでした（予告は見ていません）。");
+            Notice("feed", "YouTube の新着を読めませんでした（予告は見ていません）。"
+                + (_web.YouTubeStoppedReason is { } why ? $"{why}" : ""));
             return;
         }
         var ids = window.Select(e => e.EpisodeId).ToHashSet();
@@ -123,60 +164,115 @@ internal sealed class EpisodeLinkSyncService
     /// <paramref name="today"/>（ふだんは今日）に放送の TV の回について、あらすじのページと次の回の予告が出るまで <paramref name="interval"/> おきに見続ける。
     /// どちらもそろったら true で終わる。<paramref name="until"/> を過ぎたら、そろわなかったものを知らせて false で終わる。
     /// 今日放送の回が無ければ（休止の週）何もせずに true。ラインナップは数日遅れで出るので、ここでは見ない。
+    /// YouTube Data API に待っても直らない断り（クォータ超過など）を受けたら、予告は待つのをやめて知らせる。
+    /// 待っている間は、回るたびに待っているものと締め切りまでの残りを 1 行で出す（<see cref="_status"/>）。
+    /// 1 回ぶんの見回りは <see cref="WatchStepAsync"/> で、ほかの流れから 1 回ずつ呼ぶこともできる。
     /// </summary>
     public async Task<bool> RunWatchAsync(DateTime today, DateTime until, TimeSpan interval, CancellationToken ct)
     {
+        var session = await BeginWatchAsync(today, ct).ConfigureAwait(false);
+        if (session is null) return true;
+        _log($"{session.SeriesTitle} 第{session.Target.SeriesEpNo}話（episode {session.Target.EpisodeId}）のあらすじのページと、第{session.NextNo}話の予告を {interval.TotalSeconds:0} 秒おきに見ます（{until:HH:mm} まで）。");
+
+        while (true)
+        {
+            await WatchStepAsync(session, ct).ConfigureAwait(false);
+            if (session.Gone) return false;
+            if (session.SummaryDone && session.TrailerDone) return true;
+            if (session.SummaryDone && session.TrailerGivenUp) return false;
+            if (DateTime.Now >= until)
+            {
+                EndWatch(session, until);
+                return false;
+            }
+            _status(WaitingStatus(session, until));
+            await Task.Delay(interval, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// 見続ける回を決める。<paramref name="today"/> に放送の TV の回（同じ日に 2 回あればあとの回）。無ければ（休止の週）null。
+    /// </summary>
+    public async Task<WatchSession?> BeginWatchAsync(DateTime today, CancellationToken ct)
+    {
         var first = await LoadAsync(ct).ConfigureAwait(false);
-        var target = first.Episodes.Where(e => first.IsTv(e) && e.OnAirAt.Date == today).OrderBy(e => e.OnAirAt).LastOrDefault();
+        var target = first.Episodes.Where(e => first.IsTv(e) && e.OnAirAt.Date == today.Date).OrderBy(e => e.OnAirAt).LastOrDefault();
         if (target is null)
         {
             _log("今日放送の TV の回はありません。");
-            return true;
+            return null;
         }
-        string seriesTitle = first.SeriesById[target.SeriesId].Title;
-        int nextNo = target.SeriesEpNo + 1;
-        _log($"{seriesTitle} 第{target.SeriesEpNo}話（episode {target.EpisodeId}）のあらすじのページと、第{nextNo}話の予告を {interval.TotalSeconds:0} 秒おきに見ます（{until:HH:mm} まで）。");
+        return new WatchSession(target, first.SeriesById[target.SeriesId].Title);
+    }
 
-        bool summaryDone = false, trailerDone = false;
-        while (true)
+    /// <summary>
+    /// 見続ける回の 1 回ぶんの見回り：まだのあらすじのページと次の回の予告を 1 度ずつ見て、見つかれば書く。
+    /// 手で入れた分も拾えるよう、毎回 DB を読み直す。
+    /// </summary>
+    public async Task WatchStepAsync(WatchSession session, CancellationToken ct)
+    {
+        if (session.Finished) return;
+        var snap = await LoadAsync(ct).ConfigureAwait(false);
+        var ep = snap.Episodes.FirstOrDefault(e => e.EpisodeId == session.Target.EpisodeId);
+        if (ep is null)
         {
-            // 手で入れた分も拾えるよう、毎回 DB を読み直す。
-            var snap = await LoadAsync(ct).ConfigureAwait(false);
-            var ep = snap.Episodes.FirstOrDefault(e => e.EpisodeId == target.EpisodeId);
-            if (ep is null) { Notice("gone", $"episode {target.EpisodeId} が DB から無くなりました。"); return false; }
-
-            if (!summaryDone)
-            {
-                summaryDone = !string.IsNullOrEmpty(ep.ToeiAnimSummaryUrl)
-                    || await TryPageAsync(snap, ep, EpisodeLinkColumn.ToeiAnimSummary, ct).ConfigureAwait(false);
-                if (summaryDone) _log($"第{ep.SeriesEpNo}話のあらすじのページ：そろいました。");
-            }
-            if (!trailerDone)
-            {
-                var next = snap.Find(ep.SeriesId, nextNo);
-                if (next is not null && !string.IsNullOrEmpty(next.YoutubeTrailerUrl))
-                    trailerDone = true;
-                else if (await _web.ReadChannelFeedAsync(PrecureChannelId, ct).ConfigureAwait(false) is { } feed)
-                {
-                    foreach (var video in feed)
-                    {
-                        if (ParseTrailer(snap, video) is not { } t || t.SeriesId != ep.SeriesId || t.EpisodeNo != nextNo) continue;
-                        trailerDone = await ApplyTrailerAsync(t, video, ct, snap).ConfigureAwait(false);
-                        break;
-                    }
-                }
-                if (trailerDone) _log($"第{nextNo}話の予告：そろいました。");
-            }
-
-            if (summaryDone && trailerDone) return true;
-            if (DateTime.Now >= until)
-            {
-                if (!summaryDone) Notice("watch-summary", $"{seriesTitle} 第{ep.SeriesEpNo}話のあらすじのページが {until:HH:mm} までに見つかりませんでした。");
-                if (!trailerDone) Notice("watch-trailer", $"{seriesTitle} 第{nextNo}話の予告が {until:HH:mm} までに見つかりませんでした。");
-                return false;
-            }
-            await Task.Delay(interval, ct).ConfigureAwait(false);
+            session.Gone = true;
+            Notice("gone", $"episode {session.Target.EpisodeId} が DB から無くなりました。");
+            return;
         }
+
+        if (!session.SummaryDone)
+        {
+            session.SummaryDone = !string.IsNullOrEmpty(ep.ToeiAnimSummaryUrl)
+                || await TryPageAsync(snap, ep, EpisodeLinkColumn.ToeiAnimSummary, ct).ConfigureAwait(false);
+            if (session.SummaryDone) _log($"第{ep.SeriesEpNo}話のあらすじのページ：そろいました。");
+        }
+        if (!session.TrailerDone && !session.TrailerGivenUp)
+        {
+            int nextNo = session.NextNo;
+            var next = snap.Find(ep.SeriesId, nextNo);
+            if (next is not null && !string.IsNullOrEmpty(next.YoutubeTrailerUrl))
+                session.TrailerDone = true;
+            else if (await _web.ReadChannelUploadsAsync(PrecureChannelId, ct).ConfigureAwait(false) is { } feed)
+            {
+                foreach (var video in feed)
+                {
+                    if (ParseTrailer(snap, video) is not { } t || t.SeriesId != ep.SeriesId || t.EpisodeNo != nextNo) continue;
+                    session.TrailerDone = await ApplyTrailerAsync(t, video, ct, snap).ConfigureAwait(false);
+                    break;
+                }
+            }
+            if (session.TrailerDone) _log($"第{nextNo}話の予告：そろいました。");
+            else if (_web.YouTubeStoppedReason is { } why)
+            {
+                session.TrailerGivenUp = true;
+                Notice("watch-trailer-stopped", $"{session.SeriesTitle} 第{nextNo}話の予告は、YouTube Data API に断られたので待つのをやめました。{why}");
+            }
+        }
+    }
+
+    /// <summary>締め切り（<paramref name="until"/>）までにそろわなかったものを知らせる。</summary>
+    public void EndWatch(WatchSession session, DateTime until)
+    {
+        if (!session.SummaryDone)
+            Notice("watch-summary", $"{session.SeriesTitle} 第{session.Target.SeriesEpNo}話のあらすじのページが {until:HH:mm} までに見つかりませんでした。");
+        if (!session.TrailerDone && !session.TrailerGivenUp)
+            Notice("watch-trailer", $"{session.SeriesTitle} 第{session.NextNo}話の予告が {until:HH:mm} までに見つかりませんでした。");
+    }
+
+    /// <summary>見続ける間の 1 行：待っているもの・YouTube を最後に読めた時刻・締め切りまでの残り。</summary>
+    public string WaitingStatus(WatchSession session, DateTime until)
+    {
+        var waiting = new List<string>();
+        if (!session.SummaryDone) waiting.Add($"第{session.Target.SeriesEpNo}話のあらすじ");
+        if (!session.TrailerDone && !session.TrailerGivenUp)
+        {
+            string yt = _web.YouTubeLastReadAt is { } at ? $"YouTube は {at:HH:mm:ss} に読めています" : "YouTube をまだ読めていません";
+            waiting.Add($"第{session.NextNo}話の予告（{yt}）");
+        }
+        var left = until - DateTime.Now;
+        if (left < TimeSpan.Zero) left = TimeSpan.Zero;
+        return $"待っています：{string.Join("・", waiting)}　{until:HH:mm} まであと {(int)left.TotalHours}:{left.Minutes:00}";
     }
 
     /// <summary>あらすじ・ラインナップのページを組んで確かめ、あれば書く。書いた（またはもう入っていた）ら true。</summary>

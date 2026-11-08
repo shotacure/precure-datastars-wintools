@@ -4,6 +4,10 @@
 
 ### 開発中（次回リリース）
 
+- **ツール：放送後のリンクの取り込みで、公式 YouTube チャンネルの予告を YouTube Data API v3 で探すようにした**（`WebProbe.ReadChannelUploadsAsync`〔`ReadChannelFeedAsync` から置き換え〕・`YouTubeDataApiClient.GetPlaylistHeadAsync`〔新規〕・EpisodeLinkSync の App.config の `YouTube.ApiKey`〔新規。Catalog・ArtTrackRefresh と同じキー〕）：チャンネルの新着一覧（RSS）は 500・404 を返すことがあり、予告を待つ間に読めなくなっていた。チャンネルのアップロードの再生リストの先頭 15 本を `playlistItems.list`（1 回 1 ユニット）で読む。YouTube とのやりとりを Data API だけにそろえる。Catalog.Common を使うため、EpisodeLinkSync のターゲットを `net9.0-windows` にした。
+  - Data API の 429・5xx とつながらないときは、これまでどおり間隔を広げる。それ以外の断り（403 のクォータ超過・キーの誤りなど）は、その実行の間はもう YouTube を見ずに知らせ、`-Watch` は予告を待つのをやめる
+- **ツール・スクリプト：放送後のリンクの取り込みの `-Watch` で、待っている間の様子を窓のいちばん下の 1 行に出して書き換え続けるようにした**（`EpisodeLinkSyncService.WaitingStatus`・`Program.Status`・`scheduled-episode-links.ps1`）：あらすじと予告を待つ間は何も出ず、動いているのか分からなかった。待っているもの・YouTube を最後に読めた時刻・12:00 までの残りを、回るたびに書き換える。ログには残さない。出力が画面でないときはツールが `[status] ` を頭に付けた 1 行で出し、スクリプトがそれを書き換えの 1 行にする
+- **ツール：放送後のリンクの取り込みの見続ける処理を、1 回ぶんずつ呼べるようにした**（`EpisodeLinkSyncService.WatchSession`〔新規〕・`BeginWatchAsync` / `WatchStepAsync` / `EndWatch`〔新規〕・`EpisodeLinkSyncService`・`WebProbe`・`FeedVideo`・`ProbeResult` を public に）：ほかの流れが自分の見回りの中から 1 回ずつ呼べるようにするため。`RunWatchAsync` はこれらを回すだけになり、動きは変わらない
 - **サイト：ユニットの名義でクレジットされた本編クレジットを、メンバーの人物詳細にも載せ、クレジット表記のかっこ書きのメンバーを人物詳細へリンクするようにした**（`PersonsGenerator.RenderDetail`・`CreditTreeRenderer.BuildUnitMemberAffiliationHtml`〔新規〕）：「和牛 (水田 信二・川西賢志郎)」のような声の出演で、かっこの中の名前は文字のままで、メンバーの人物詳細にも出演が無かった。
   - クレジット表記：名義がユニット（`person_alias_members` に人物のメンバーを持つ）のとき、所属の文字を区切りの字（・、／/）で分け、空白を除いてメンバーの名義と同じ名前になる所を、名義の表記で人物詳細へのリンクにする
   - 人物詳細：本人がメンバーに入っているユニットの名義の本編クレジットを、名義ごとのセクション（ユニットの名前の見出し）に出し、クレジットの合計・初参加・年表にも含める。ユニットの名義の後ろにメンバーも 1 人ずつクレジットされている回は、本人の名義の関与と（作品・回・OP/ED・役職）が重なるので足さない。音楽クレジットと集計のページは変えていない

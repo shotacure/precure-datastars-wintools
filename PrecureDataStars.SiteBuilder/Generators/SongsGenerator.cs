@@ -882,7 +882,7 @@ public sealed class SongsGenerator
             BadgeClassSuffix = recBadgeClassSuffix,
             SeriesTitle = recSeriesTitle,
             SeriesLink = recSeriesLink,
-            SeriesStartYearLabel = recSeriesStartYearLabel,
+            SeriesStartYearLabel = recSeriesStartYearLabel,
             YoutubeId = YoutubeUtil.ExtractId(r.YoutubeUrl),
             VocalistsHtml = vocalistsHtml,
             ChorusHtml = chorusHtml,

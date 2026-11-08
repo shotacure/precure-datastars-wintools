@@ -13,8 +13,9 @@
  *   - キーボード操作：↓↑ で候補移動、Enter で選択、Esc で閉じる
  *
  * 検索対象は SearchIndexGenerator が出力する JSON 配列。各アイテムは
- *   { u: URL, t: title, k: kind, s: subtext, x: reading, ra: 解禁時刻(任意) }
- * の最大 6 キー。ra はエピソードのうち「前話の予告がまだ放送されていない話」だけに付き、
+ *   { u: URL, t: title, k: kind, s: subtext, x: reading, ra: 解禁時刻(任意), a: 別の名義(任意) }
+ * の最大 7 キー。a は人物だけに付き、見出しと表記の違う名義を [表記, 照合用の正規化済み文字列] の並びで持つ。
+ * 見出しでは当たらず a の名義で当たった人物は「山口 祐司 (やしろ 駿)」のように、当たった名義の後ろに見出しを括弧で添えて出す。ra はエピソードのうち「前話の予告がまだ放送されていない話」だけに付き、
  * subtitle-embargo.js（window.PCDS.subtitleEmbargo）の判定結果に応じてタイトル表示を
  * 差し替える（マッチング自体は t の実テキストに対して行う。ra の有無に関わらず件数は変わらない）。
  * ========================================================================== */
@@ -117,6 +118,29 @@
       });
   }
 
+  /** 全クエリ語が、照合用の文字列 normalized（正規化済み）か raw（小文字化した表記）のどちらかに含まれるか。 */
+  function allTermsIn(terms, normalized, raw) {
+    for (var i = 0; i < terms.length; i++) {
+      if (normalized.indexOf(terms[i].norm) === -1 && (raw === null || raw.indexOf(terms[i].raw) === -1)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * 人物の見出し（表記と、reading の先頭に置いた見出しの読み）では全語が当たらず、別の名義（item.a）で全語が当たるとき、
+   * その名義の表記を返す。見出しで当たる・別の名義を持たない・どの名義でも全語がそろわないときは null。
+   */
+  function findMatchedAltName(item, terms, titleNorm, titleLower) {
+    if (!item.a || item.a.length === 0) return null;
+    var displayReading = (item.x || '').split('|')[0];
+    if (allTermsIn(terms, titleNorm + '|' + displayReading, titleLower)) return null;
+    for (var i = 0; i < item.a.length; i++) {
+      var alt = item.a[i];
+      if (allTermsIn(terms, alt[1] || '', (alt[0] || '').toLowerCase())) return alt[0];
+    }
+    return null;
+  }
+
   /**
    * 検索の本体。クエリを空白で分割して全語が title / reading のいずれかに含まれているかを AND 判定。
    * マッチした結果は (種別優先順位, タイトル長) の 2 段ソートで並べて、上位 MAX_RESULTS 件を返す。
@@ -152,7 +176,10 @@
           break;
         }
       }
-      if (allMatch) results.push(item);
+      if (allMatch) {
+        item._alt = findMatchedAltName(item, terms, titleNorm, titleLower);
+        results.push(item);
+      }
     }
 
     // ソート：種別優先順位 → タイトル長昇順（短いものほど一般的なマッチに近い）→ タイトル昇順。
@@ -197,7 +224,8 @@
 
     var title = document.createElement('span');
     title.className = 'site-search-result-title';
-    title.textContent = displayTitle(item);
+    // 別の名義で当たった人物は「当たった名義 (見出し)」の形にする。
+    title.textContent = item._alt ? item._alt + ' (' + displayTitle(item) + ')' : displayTitle(item);
     a.appendChild(title);
 
     if (item.s) {

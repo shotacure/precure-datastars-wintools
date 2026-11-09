@@ -8120,6 +8120,10 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 /* URL コピー — 操作系として SNS とは別格のグレー基調 */
 .share-button-copy { background: #f3f4f6; color: #1f2937; border-color: #d1d5db; }
 .share-button-copy:hover { background: #e5e7eb; color: #111827; }
+/* 引用：URL コピーと同じグレーのピル。引用ボックスを開いている間は枠を濃くする。 */
+.share-button-cite { background: #f3f4f6; color: #1f2937; border-color: #d1d5db; }
+.share-button-cite:hover { background: #e5e7eb; color: #111827; }
+.share-button-cite[aria-expanded="true"] { border-color: #6b7280; background: #e5e7eb; }
 
 /* コピー成功時のトースト。固定位置の小さなピル状ラベルでフェード表示する。 */
 .share-toast {
@@ -11113,7 +11117,8 @@ body.has-art-track-bar {
 }
 
 /* ──────── 引用ボックス（_cite-box.sbn） ────────
-   シェアボタンの直下に置く「このページを引用する」。シェアカードと同じ角丸の箱で、色は控えめなグレー。
+   シェアボタンの直下に置く「このページを引用する」。既定で閉じていて、シェアボタンの並びの「引用」で開く。
+   シェアカードと同じ角丸の箱で、色は控えめなグレー。
    引用文は <pre> だが折り返して読める幅に収める（URL は overflow-wrap で途中改行を許す）。 */
 .cite-box {
   margin: 0 0 1.2em;
@@ -11121,23 +11126,6 @@ body.has-art-track-bar {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   background: #fafafa;
-}
-.cite-box-heading {
-  display: flex;
-  align-items: center;
-  gap: 0.45em;
-  font-size: 0.95em;
-  font-weight: 600;
-  color: #374151;
-  margin: 0 0 0.6em;
-  padding: 0;
-  border: 0;
-  letter-spacing: 0.04em;
-}
-.cite-box-heading svg {
-  width: 1.05em;
-  height: 1.05em;
-  flex: none;
 }
 .cite-box-lead {
   margin: 0 0 0.7em;

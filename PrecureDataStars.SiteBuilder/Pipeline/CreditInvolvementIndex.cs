@@ -197,6 +197,7 @@ public sealed class CreditInvolvementIndex
                         foreach (var crSnap in grpSnap.Roles.OrderBy(r => r.Role.OrderInGroup))
                         {
                             string roleCode = crSnap.Role.RoleCode ?? "";
+                            string? roleLabelText = string.IsNullOrWhiteSpace(crSnap.Role.RoleLabelText) ? null : crSnap.Role.RoleLabelText;
                             if (noticeRoleCodes.Contains(roleCode)) continue;
                             var blocks = crSnap.Blocks.OrderBy(b => b.Block.BlockSeq).ToList();
 
@@ -224,6 +225,7 @@ public sealed class CreditInvolvementIndex
                                         EpisodeId = scopeEpisodeId,
                                         CreditKind = credit.CreditKind,
                                         RoleCode = roleCode,
+                                        RoleLabelText = roleLabelText,
                                         Kind = InvolvementKind.LeadingCompany,
                                         IsBroadcastOnly = false,
                                         CreditSeq = leadSeq
@@ -237,6 +239,7 @@ public sealed class CreditInvolvementIndex
                                             EpisodeId = scopeEpisodeId,
                                             CreditKind = credit.CreditKind,
                                             RoleCode = roleCode,
+                                            RoleLabelText = roleLabelText,
                                             Kind = InvolvementKind.LeadingCompany,
                                             IsBroadcastOnly = false,
                                             CreditSeq = leadSeq
@@ -268,6 +271,7 @@ public sealed class CreditInvolvementIndex
                                             EpisodeId = scopeEpisodeId,
                                             CreditKind = credit.CreditKind,
                                             RoleCode = roleCode,
+                                            RoleLabelText = roleLabelText,
                                             Kind = kind,
                                             EntryKind = e.EntryKind,
                                             PersonAliasId = paid,
@@ -290,6 +294,7 @@ public sealed class CreditInvolvementIndex
                                                 EpisodeId = scopeEpisodeId,
                                                 CreditKind = credit.CreditKind,
                                                 RoleCode = roleCode,
+                                                RoleLabelText = roleLabelText,
                                                 Kind = InvolvementKind.Member,
                                                 EntryKind = e.EntryKind,
                                                 PersonAliasId = paid,
@@ -311,6 +316,7 @@ public sealed class CreditInvolvementIndex
                                                 EpisodeId = scopeEpisodeId,
                                                 CreditKind = credit.CreditKind,
                                                 RoleCode = roleCode,
+                                                RoleLabelText = roleLabelText,
                                                 Kind = InvolvementKind.Company,
                                                 IsBroadcastOnly = e.IsBroadcastOnly,
                                                 CreditSeq = entrySeq
@@ -341,6 +347,7 @@ public sealed class CreditInvolvementIndex
                                             EpisodeId = scopeEpisodeId,
                                             CreditKind = credit.CreditKind,
                                             RoleCode = roleCode,
+                                            RoleLabelText = roleLabelText,
                                             Kind = InvolvementKind.Member,
                                             EntryKind = e.EntryKind,
                                             PersonAliasId = memberPaid,
@@ -358,6 +365,7 @@ public sealed class CreditInvolvementIndex
                                                 EpisodeId = scopeEpisodeId,
                                                 CreditKind = credit.CreditKind,
                                                 RoleCode = roleCode,
+                                                RoleLabelText = roleLabelText,
                                                 Kind = InvolvementKind.Member,
                                                 EntryKind = e.EntryKind,
                                                 PersonAliasId = memberPaid,
@@ -378,6 +386,7 @@ public sealed class CreditInvolvementIndex
                                             EpisodeId = scopeEpisodeId,
                                             CreditKind = credit.CreditKind,
                                             RoleCode = roleCode,
+                                            RoleLabelText = roleLabelText,
                                             Kind = InvolvementKind.Company,
                                             EntryKind = e.EntryKind,
                                             IsBroadcastOnly = e.IsBroadcastOnly,
@@ -395,6 +404,7 @@ public sealed class CreditInvolvementIndex
                                             EpisodeId = scopeEpisodeId,
                                             CreditKind = credit.CreditKind,
                                             RoleCode = roleCode,
+                                            RoleLabelText = roleLabelText,
                                             Kind = InvolvementKind.Logo,
                                             EntryKind = e.EntryKind,
                                             LogoId = lid,
@@ -418,6 +428,7 @@ public sealed class CreditInvolvementIndex
                                             EpisodeId = scopeEpisodeId,
                                             CreditKind = credit.CreditKind,
                                             RoleCode = roleCode,
+                                            RoleLabelText = roleLabelText,
                                             Kind = InvolvementKind.Member,
                                             EntryKind = e.EntryKind,
                                             PersonAliasId = tapMemberPaid,
@@ -845,6 +856,12 @@ public sealed class Involvement
 
     /// <summary>役職コード（例: SCREENPLAY、EPISODE_DIRECTOR、VOICE CAST、PRODUCTION）。</summary>
     public string RoleCode { get; init; } = "";
+
+    /// <summary>
+    /// 画面に出た役職の表記（credit_card_roles.role_label_text）。役職名どおりの表記なら null。
+    /// 作品のメインスタッフのバッジを画面の表記で出すのに使う（例：役職はプロデューサーで画面は「企画」）。
+    /// </summary>
+    public string? RoleLabelText { get; init; }
 
     /// <summary>関与の種別（人物 / 声優 / 屋号 / ロゴ / ブロック先頭企業）。</summary>
     public InvolvementKind Kind { get; init; }

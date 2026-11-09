@@ -577,6 +577,8 @@ public sealed class SeriesGenerator
                     int sortEpNo = int.MaxValue;
                     int sortCreditSeq = int.MaxValue;
                     int sortCreditSubSeq = int.MaxValue;
+                    // 最も早いクレジットでの、画面の役職の表記（役職名どおりなら null）。
+                    string? firstRoleLabel = null;
                     // この作品のこの役職でクレジットされた名義と、それぞれが最初に出た所（名乗りは当時の名義で出す）
                     var creditedAliases = new Dictionary<int, (int Ep, int Seq, int Sub)>();
                     foreach (var aid in aliasIds)
@@ -601,6 +603,7 @@ public sealed class SeriesGenerator
                                     sortEpNo = 0;
                                     sortCreditSeq = inv.CreditSeq;
                                     sortCreditSubSeq = inv.CreditSubSeq;
+                                    firstRoleLabel = inv.RoleLabelText;
                                 }
                             }
                             else if (inv.EpisodeId is int eid && epNoByEpId!.TryGetValue(eid, out var n))
@@ -614,6 +617,7 @@ public sealed class SeriesGenerator
                                     sortEpNo = n;
                                     sortCreditSeq = inv.CreditSeq;
                                     sortCreditSubSeq = inv.CreditSubSeq;
+                                    firstRoleLabel = inv.RoleLabelText;
                                 }
                             }
                             // 所属屋号 alias_id の出現回数
@@ -645,6 +649,7 @@ public sealed class SeriesGenerator
                         DisplayName = creditedNames,
                         CurrentNameNote = currentNote,
                         AffiliationLabel = affiliationLabel,
+                        CreditedRoleLabel = firstRoleLabel ?? spec.Label,
                         SortEpNo = sortEpNo,
                         SortCreditSeq = sortCreditSeq,
                         SortCreditSubSeq = sortCreditSubSeq
@@ -667,19 +672,24 @@ public sealed class SeriesGenerator
                 // 系譜代表の役職コード。リンク URL はこの代表コードを PathUtil 経由で
                 // 小文字化して組み立てる（現行挙動どおり代表ページへ飛ばす）。
                 var repRoleCode = _roleSuccessorResolver.GetRepresentative(spec.Code);
-                groups.Add(new KeyStaffRoleGroup
+                // バッジの役職名は画面の表記どおり（役職はプロデューサーで画面は「企画」なら「企画」）。
+                // 同じ役職でも表記の違う人は、表記ごとに別のバッジに分ける（並びは最初に出た人の順）。
+                foreach (var byLabel in members.GroupBy(m => m.CreditedRoleLabel, StringComparer.Ordinal))
                 {
-                    RoleCode = spec.Code,
-                    RepRoleCode = repRoleCode,
-                    // テンプレ側はこの組み立て済み URL のみリンク href に使う。
-                    // data-role-code 属性はバッジ色分け CSS の都合で RoleCode（実コード）を使う。
-                    // オトナシリーズの作品は、オトナシリーズの役職のページ（無ければ本編の役職詳細）を指す。
-                    RoleUrl = isOtonaKind
-                        ? PathUtil.CreatorsRoleUrlInWork(repRoleCode, true)
-                        : PathUtil.CreatorsRoleUrl(repRoleCode),
-                    RoleLabel = spec.Label,
-                    Members = members
-                });
+                    groups.Add(new KeyStaffRoleGroup
+                    {
+                        RoleCode = spec.Code,
+                        RepRoleCode = repRoleCode,
+                        // テンプレ側はこの組み立て済み URL のみリンク href に使う。
+                        // data-role-code 属性はバッジ色分け CSS の都合で RoleCode（実コード）を使う。
+                        // オトナシリーズの作品は、オトナシリーズの役職のページ（無ければ本編の役職詳細）を指す。
+                        RoleUrl = isOtonaKind
+                            ? PathUtil.CreatorsRoleUrlInWork(repRoleCode, true)
+                            : PathUtil.CreatorsRoleUrl(repRoleCode),
+                        RoleLabel = byLabel.Key,
+                        Members = byLabel.ToList()
+                    });
+                }
             }
 
             // 企画はプロデューサー不在時のみ残すフォールバック枠。
@@ -1949,6 +1959,8 @@ public sealed class SeriesGenerator
                 int sortCreditSubSeq = int.MaxValue;
                 // 映画系で 1 件でも該当 Involvement が見つかったか（episodeNos に頼らない判定）。
                 bool foundMovieInvolvement = false;
+                // 最も早いクレジットでの、画面の役職の表記（役職名どおりなら null）。
+                string? firstRoleLabel = null;
                 // この作品のこの役職でクレジットされた名義と、それぞれが最初に出た所（名乗りは当時の名義で出す）
                 var creditedAliases = new Dictionary<int, (int Ep, int Seq, int Sub)>();
                 foreach (var aid in aliasIds)
@@ -1972,6 +1984,7 @@ public sealed class SeriesGenerator
                                 sortEpNo = 0;
                                 sortCreditSeq = inv.CreditSeq;
                                 sortCreditSubSeq = inv.CreditSubSeq;
+                                firstRoleLabel = inv.RoleLabelText;
                             }
                         }
                         else if (inv.EpisodeId is int eid
@@ -1987,6 +2000,7 @@ public sealed class SeriesGenerator
                                 sortEpNo = epNo;
                                 sortCreditSeq = inv.CreditSeq;
                                 sortCreditSubSeq = inv.CreditSubSeq;
+                                firstRoleLabel = inv.RoleLabelText;
                             }
                         }
                         // 所属屋号 alias_id の出現回数（エピソードスコープ・SERIES スコープを問わず数える。
@@ -2032,6 +2046,7 @@ public sealed class SeriesGenerator
                     CurrentNameNote = credited.CurrentNote,
                     RangeLabel = rangeLabel,
                     AffiliationLabel = affiliationLabel,
+                    CreditedRoleLabel = firstRoleLabel ?? spec.Label,
                     SortEpNo = sortEpNo,
                     SortCreditSeq = sortCreditSeq,
                     SortCreditSubSeq = sortCreditSubSeq
@@ -2051,18 +2066,23 @@ public sealed class SeriesGenerator
                 return a.SortCreditSubSeq.CompareTo(b.SortCreditSubSeq);
             });
 
-            sections.Add(new KeyStaffSection
+            // バッジの役職名は画面の表記どおり（役職はプロデューサーで画面は「企画」なら「企画」）。
+            // 同じ役職でも表記の違う人は、表記ごとに別の行に分ける（並びは最初に出た人の順）。
+            foreach (var byLabel in rows.GroupBy(r => r.CreditedRoleLabel, StringComparer.Ordinal))
             {
-                RoleCode = spec.Code,
-                // バッジリンク先は PathUtil 経由で組み立て、URL パス上の役職コードを
-                // 小文字化する。現行挙動どおり spec.Code をそのまま対象にする
-                // （系譜代表への置換は行わない）。data-role-code 属性側は
-                // バッジ色分け CSS の都合で実コード（大文字）のまま使う。
-                // オトナシリーズの作品は、オトナシリーズの役職のページを持つ役職ならそちらへ（PathUtil.CreatorsRoleUrlInWork）。
-                RoleUrl = PathUtil.CreatorsRoleUrlInWork(spec.Code, _ctx.IsOtonaSeries(series.SeriesId)),
-                RoleLabel = spec.Label,
-                Members = rows
-            });
+                sections.Add(new KeyStaffSection
+                {
+                    RoleCode = spec.Code,
+                    // バッジリンク先は PathUtil 経由で組み立て、URL パス上の役職コードを
+                    // 小文字化する。現行挙動どおり spec.Code をそのまま対象にする
+                    // （系譜代表への置換は行わない）。data-role-code 属性側は
+                    // バッジ色分け CSS の都合で実コード（大文字）のまま使う。
+                    // オトナシリーズの作品は、オトナシリーズの役職のページを持つ役職ならそちらへ（PathUtil.CreatorsRoleUrlInWork）。
+                    RoleUrl = PathUtil.CreatorsRoleUrlInWork(spec.Code, _ctx.IsOtonaSeries(series.SeriesId)),
+                    RoleLabel = byLabel.Key,
+                    Members = byLabel.ToList()
+                });
+            }
         }
 
         // 企画はプロデューサー不在時のみ残すフォールバック枠。
@@ -2153,6 +2173,8 @@ public sealed class SeriesGenerator
     private sealed class KeyStaffMember
     {
         public int PersonId { get; set; }
+        /// <summary>この作品のこの役職で最初にクレジットされたときの、画面の役職の表記（役職名どおりなら役職名）。バッジを表記ごとに分けるのに使う。</summary>
+        public string CreditedRoleLabel { get; set; } = "";
         /// <summary>表示用人物名（この作品のこの役職でクレジットされた名義）。</summary>
         public string DisplayName { get; set; } = "";
         /// <summary>クレジットの名義が今の名乗りと違うときの今の名乗り（括弧で少し小さく添える）。同じなら空。</summary>
@@ -2408,6 +2430,8 @@ public sealed class SeriesGenerator
     private sealed class MainStaffRow
     {
         public int PersonId { get; set; }
+        /// <summary>この作品のこの役職で最初にクレジットされたときの、画面の役職の表記（役職名どおりなら役職名）。行を表記ごとに分けるのに使う。</summary>
+        public string CreditedRoleLabel { get; set; } = "";
         /// <summary>この作品のこの役職でクレジットされた名義。</summary>
         public string FullName { get; set; } = "";
         /// <summary>クレジットの名義が今の名乗りと違うときの今の名乗り（括弧で少し小さく添える）。同じなら空。</summary>

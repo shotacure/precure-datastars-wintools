@@ -3,6 +3,7 @@ using PrecureDataStars.TemplateRendering.Handlers;
 using PrecureDataStars.Data;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
+using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.TemplateRendering;
 
@@ -48,6 +49,8 @@ namespace PrecureDataStars.TemplateRendering;
 ///     テンプレの文字を HTML のまま入れる。<c>sep="&lt;br&gt;"</c> で改行）。構造化クレジットが無い曲には効かない。
 ///     <c>{SINGER}</c> / <c>{CHORUS}</c> は <c>cv_align=1</c> で、1 人 1 行に並べて「(CV:…)」の頭を縦にそろえる
 ///     （名前と「(CV:…)」を 2 列の格子に分ける。名義が 2 つ以上のときだけ）。
+///     <c>{SINGER}</c> / <c>{CHORUS}</c> は <c>member_sep="…"</c> で、ユニット名義のメンバーのあいだの区切り（既定は「・」）を作品の画面の字にする
+///     （「キュア・カルテット（五條 真由美、うちやえ ゆか…）」の「、」）。
 ///     <c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> は、曲のクレジットの所属の出し方が「名義のあとに所属を添える」行なら、名義のあとに
 ///     「(所属)」を小さい字で添える（次の名義と同じ所属が続くときは最後の名義のあとにだけ）。所属を出すかどうかは曲のクレジットで決まり、テンプレでは指定しない。
 ///     <c>{SONG_SERIES_TITLE}</c> は曲の作品（録音の作品）の正式タイトルで、クレジットの作品と同じ作品の曲なら空。
@@ -76,12 +79,18 @@ public static class RoleTemplateRenderer
     private static string NamesHtml(PlaceholderNode ph, string? joinedHtml,
         IReadOnlyList<(string Sep, string Html)>? parts, IReadOnlyList<int>? cvStarts = null)
     {
+        string html;
         if (parts is { Count: > 1 } && cvStarts is not null && cvStarts.Count == parts.Count
             && ph.Options.TryGetValue("cv_align", out var align) && align == "1")
-            return CvAlignedHtml(parts, cvStarts);
-        if (parts is { Count: > 1 } && ph.Options.TryGetValue("sep", out var sep))
-            return string.Join(sep, parts.Select(p => p.Html));
-        return joinedHtml ?? "";
+            html = CvAlignedHtml(parts, cvStarts);
+        else if (parts is { Count: > 1 } && ph.Options.TryGetValue("sep", out var sep))
+            html = string.Join(sep, parts.Select(p => p.Html));
+        else
+            html = joinedHtml ?? "";
+        // member_sep：ユニット名義のメンバーのあいだの区切り（既定は「・」）を、作品の画面の字に差し替える。
+        if (ph.Options.TryGetValue("member_sep", out var memberSep))
+            html = html.Replace(SongRecordingSingersRepository.UnitMemberSeparatorHtml, System.Net.WebUtility.HtmlEncode(memberSep));
+        return html;
     }
 
     /// <summary>

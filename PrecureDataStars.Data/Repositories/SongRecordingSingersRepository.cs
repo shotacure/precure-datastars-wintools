@@ -287,6 +287,12 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         return JoinHtmlParts(parts);
     }
 
+    /// <summary>
+    /// ユニット名義のメンバーのあいだの区切りの HTML（既定の字は「・」）。役職テンプレの <c>member_sep</c> の指定で、
+    /// この部分だけを別の字に差し替える（名前の中の「・」は差し替えない）。
+    /// </summary>
+    public const string UnitMemberSeparatorHtml = "<span class=\"unit-member-sep\">・</span>";
+
     /// <summary>歌唱者ごとの部品を、直前との区切り（HtmlEncode する）でつないだ連名 HTML にする。</summary>
     internal static string JoinHtmlParts(IReadOnlyList<(string Sep, string Html)> parts)
     {
@@ -371,7 +377,8 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
     /// <paramref name="cvStarts"/> を渡すと、部品ごとに「(CV:…)」が始まる HTML 上の位置（無ければ -1）を部品と同じ順で足す
     /// （役職テンプレの <c>{SINGER:cv_align=1}</c> で、名前と「(CV:…)」を別の欄に分けて縦にそろえるため）。
     /// <paramref name="unitMembers"/>（ユニット名義 → メンバーの名前の名義の並び）に載ったユニット名義の行は、
-    /// 名前の後ろにメンバーを「（名前・名前…）」と全角の括弧と「・」で添える。
+    /// 名前の後ろにメンバーを「（名前・名前…）」と全角の括弧と「・」で添える。メンバーのあいだの「・」は
+    /// <see cref="UnitMemberSeparatorHtml"/> の形で出し、役職テンプレの <c>{SINGER:member_sep=、}</c> で作品の画面の字に差し替えられる。
     /// </summary>
     internal static async Task<IReadOnlyList<(string Sep, string Html)>> BuildHtmlPartsAsync(
         IReadOnlyList<HtmlRow> rows, ILookupCache lookup, string? cvLabelOverride, List<int>? cvStarts = null,
@@ -396,7 +403,7 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                         sb.Append('（');
                         for (int m = 0; m < memberIds.Count; m++)
                         {
-                            if (m > 0) sb.Append('・');
+                            if (m > 0) sb.Append(UnitMemberSeparatorHtml);
                             sb.Append(await lookup.LookupPersonAliasHtmlAsync(memberIds[m]).ConfigureAwait(false) ?? "");
                         }
                         sb.Append('）');

@@ -1103,7 +1103,7 @@ public sealed class MusicGenerator
             };
             var layout = new LayoutModel
             {
-                PageTitle = $"{s.Title}の劇伴音楽",
+                PageTitle = $"{s.Title} - 劇伴音楽",
                 MetaDescription = BuildBgmMetaDescription(s, content.SeriesPeriod, countsLabel, cardStaffGroups),
                 OgCard = BuildBgmOgCard(
                     s, content.SeriesPeriod, songCount, producedCues.Count,

@@ -1,4 +1,4 @@
-<h1>劇伴音楽 - {{ SeriesTitle | html.escape }}</h1>
+<h1>{{ SeriesTitle | html.escape }} - 劇伴音楽</h1>
 
 <p class="muted">
   <a href="/series/{{ SeriesSlug }}/">{{ SeriesTitle | html.escape }}</a>

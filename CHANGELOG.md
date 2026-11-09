@@ -6,6 +6,8 @@
 
 - **サイト：人物などの URL が大文字小文字だけ違う形に変わったとき、本番でリンク先が 404 になっていたのを直した**（`OutputWriter.AlignNameCase`〔新規〕・`SiteBuilderPipeline` の `prune` セクション・`EntityUrlRegistry`〔旧名の転送表・公開中の名義の選び方〕）：表示名義が「Ryan Prajinog」から「RYAN PRAJINOG」に変わったような人物は、Windows の出力に前回のディレクトリ名のまま中身だけが書き換わり、S3 には前回の形のキーで上がっていた。サイトのリンクは今回の形を指すので 404 になっていた。全体ビルドの最後、掃除の前に、出力のファイル・ディレクトリの名前を今回の URL の形にそろえる。大文字小文字だけ違う旧 URL は、同じ実体のいまの URL と同じとみなして転送していなかったので、今の URL へ 301 で転送する。公開中の名義から表示名義を選ぶときも、大文字小文字だけ違う名義があれば公開中の URL と完全に一致するものを選ぶ
 
+- **サイト：劇伴の入っていない作品の劇伴の URL（/bgms/{作品}/）の 301 転送を、Lambda@Edge でも引くようにした**（`scripts/lambda-edge/legacy-redirect/index.mjs` の `BGM_PATH`〔新規〕）：転送表には載っていたが、Lambda@Edge が /bgms/ のパスを引いていなかったので 404 のままだった
+
 - **サイト：人物・企業/団体詳細の年表の凡例で、スピンオフの帯がどれもオトナシリーズの話なら項目を「オトナ」にした**（`RoleTimelineRow.HasNonOtonaSpinOff`〔新規〕・`RoleTimelineBuilder`）：オトナシリーズの話の帯にも凡例が「スピンオフ」と出ていた。ショート・スピンオフの話の帯が 1 本でもあれば、今までどおり「スピンオフ」。凡例の並びは「TV」「映画」「オトナ（スピンオフ）」の順にした（スピンオフが映画の前に出ていた）
 
 - **サイト：本編の作品で総作画監督がいる回は、各話のスタッフの札に総作画監督を作画監督の前に出すようにした**（`EpisodeStaffCards.ChiefAnimationDirectorCode` / `ChiefAnimationDirectorLabel` / `IsChiefAnimationDirector`〔新規〕・`EpisodeStaffSummary.ChiefAnimationDirector` / `ChiefAnimationDirectorUrl`〔新規〕・`SeriesGenerator.ExtractStaffSummaryAsync`・`EpisodeGenerator.BuildStaffRows`・`HomeGenerator`・`EpisodesIndexGenerator`・`series-detail.sbn`・`home.sbn`・`episodes-index.sbn`：作品のエピソード一覧・エピソード詳細のスタッフ欄・トップページのエピソード欄・/episodes/ の札は脚本・絵コンテ・演出・作画監督・美術の 5 つで、総作画監督を拾っていなかった。札は作画監督と同じ緑で、総作画監督の役職のページを指す。エピソード詳細の OGP カードも同じ並び。各話のチーフの区分〔記念日カレンダー・歴代記録〕には入れない。オトナシリーズの作品は今までどおり、作画監督と同じカードの役職の札で出す）

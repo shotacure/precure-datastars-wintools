@@ -10,6 +10,7 @@
 // その本が持つほかのコードの URL）も、いまの URL へ 301 で転送する。表に無い名前の URL はそのままオリジンへ通す
 // （いまのページはそのまま返る）。
 // 廃止した役職詳細（/creators/roles/{code}/。歌唱系は /creators/singers/ に集約）も表にあれば転送する。
+// 劇伴の入っていない作品の劇伴の URL（/bgms/{作品}/。劇伴のページは劇伴のある作品にしか無い）も表にあれば作品のページへ転送する。
 // viewer-request の CloudFront Function が先に "…/index.html" へ書き換えるので、その形も受ける。
 //
 // 転送表は SiteBuilder がビルドのたびにサイト出力の _edge/legacy-redirects.json に書き出し、
@@ -33,6 +34,8 @@ const LEGACY_ID_PATH = /^\/(persons|characters|companies|books)\/(\d+)(?:\/(?:in
 const NAME_PATH = /^\/(people|characters|companies|units|books)\/([^\/]+)(?:\/(?:index\.html)?)?$/;
 // 役職詳細 URL（表に載っている廃止ページだけが転送される）。
 const ROLE_PATH = /^\/creators\/roles\/([^\/]+)(?:\/(?:index\.html)?)?$/;
+// 作品ごとの劇伴 URL（表に載っている劇伴の無い作品だけが転送される）。
+const BGM_PATH = /^\/bgms\/([^\/]+)(?:\/(?:index\.html)?)?$/;
 
 /** リクエスト URI から転送表のキーを作る。対象外の URI は null。 */
 function mapKeyOf(uri) {
@@ -48,6 +51,8 @@ function mapKeyOf(uri) {
     }
     const role = uri.match(ROLE_PATH);
     if (role) return '/creators/roles/' + role[1];
+    const bgm = uri.match(BGM_PATH);
+    if (bgm) return '/bgms/' + bgm[1];
     return null;
 }
 

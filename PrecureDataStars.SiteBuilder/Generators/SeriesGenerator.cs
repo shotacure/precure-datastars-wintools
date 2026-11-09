@@ -224,6 +224,11 @@ public sealed class SeriesGenerator
     /// 行がある作品（変身した作品）でだけ数える。
     /// どちらもクレジットに出てくる順（OP → ED → そのほか、カード・ティア・グループ・役職・ブロック・エントリの順で最初に出た所）。
     /// </para>
+    /// <para>
+    /// オトナシリーズの作品（種別 OTONA）も同じく、各話のクレジット（話数順、話の中は OP → ED → そのほか）の声の出演から
+    /// 出たプリキュアを引く。本編の数に混ぜないので <c>series_precures</c> には行を持たず、出たプリキュアはすべて
+    /// 今までどおりの表記（変身前 / 変身後 (CV)）で出す。クレジットが無い作品は出さない。
+    /// </para>
     /// </summary>
     private async Task BuildPrecureRowsBySeriesCacheAsync(CancellationToken ct)
     {
@@ -289,18 +294,32 @@ public sealed class SeriesGenerator
         var countsOnlyWhenTransformedIds = new HashSet<int>(allPrecures.Where(p => p.CountsOnlyWhenTransformed).Select(p => p.PrecureId));
         foreach (var series in _ctx.Series)
         {
-            if (!_ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var kind)
-                || !string.Equals(kind.CreditAttachTo, "SERIES", StringComparison.Ordinal)) continue;
+            if (!_ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var kind)) continue;
+            bool isSeriesScoped = string.Equals(kind.CreditAttachTo, "SERIES", StringComparison.Ordinal);
+            // オトナシリーズの作品も、クレジットの声の出演から出たプリキュアを引く（本編の数に混ぜないので series_precures には行を持たない）
+            bool isOtona = SeriesClassifier.IsOtona(series);
+            if (!isSeriesScoped && !isOtona) continue;
             // 作品単位の作品は、クレジットに出たプリキュアだけを出す（クレジットが無ければ出さない）
             dict.Remove(series.SeriesId);
-            if (!_ctx.CreditsBySeries.TryGetValue(series.SeriesId, out var credits)) continue;
+            // クレジットの並び：作品単位の作品は作品のクレジット、オトナシリーズの作品は話数順に各話のクレジット
+            var orderedCredits = new List<Credit>();
+            if (isSeriesScoped)
+            {
+                if (_ctx.CreditsBySeries.TryGetValue(series.SeriesId, out var seriesCredits))
+                    orderedCredits.AddRange(OrderCreditsForPrecureScan(seriesCredits));
+            }
+            else if (_ctx.EpisodesBySeries.TryGetValue(series.SeriesId, out var otonaEpisodes))
+            {
+                foreach (var ep in otonaEpisodes.OrderBy(e => e.SeriesEpNo))
+                    if (_ctx.CreditsByEpisode.TryGetValue(ep.EpisodeId, out var epCredits))
+                        orderedCredits.AddRange(OrderCreditsForPrecureScan(epCredits));
+            }
+            if (orderedCredits.Count == 0) continue;
             var linkedIds = new HashSet<int>(allPairs.Where(x => x.SeriesId == series.SeriesId).Select(x => x.PrecureId));
             // クレジットに出てくる順（最初に出た所）で集める
             var found = new List<Precure>();
             var seen = new HashSet<int>();
-            foreach (var credit in credits
-                         .OrderBy(c => c.CreditKind == "OP" ? 0 : c.CreditKind == "ED" ? 1 : 2)
-                         .ThenBy(c => c.CreditSeq).ThenBy(c => c.CreditId))
+            foreach (var credit in orderedCredits)
             {
                 if (!_ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cards)) continue;
                 foreach (var entry in cards.SelectMany(c => c.Tiers).SelectMany(t => t.Groups).SelectMany(g => g.Roles)
@@ -316,8 +335,9 @@ public sealed class SeriesGenerator
                 }
             }
             if (found.Count == 0) continue;
-            // その作品か親の TV シリーズに紐付くプリキュアは今までどおりの表記で先に、それ以外は略記で続ける
-            var ownIds = new HashSet<int>(linkedIds);
+            // その作品か親の TV シリーズに紐付くプリキュアは今までどおりの表記で先に、それ以外は略記で続ける。
+            // オトナシリーズの作品は、出たプリキュアをすべて今までどおりの表記（変身前 / 変身後 (CV)）で出す（客演の略記は無い）。
+            var ownIds = isOtona ? new HashSet<int>(found.Select(p => p.PrecureId)) : new HashSet<int>(linkedIds);
             if (series.ParentSeriesId is int parentId
                 && _ctx.Series.FirstOrDefault(x => x.SeriesId == parentId) is { } parent
                 && string.Equals(parent.KindCode, "TV", StringComparison.Ordinal))
@@ -382,6 +402,12 @@ public sealed class SeriesGenerator
             };
         }
     }
+
+    /// <summary>プリキュアを拾うときのクレジットの並び（OP → ED → そのほか、同じ種類の中は credit_seq → credit_id）。</summary>
+    private static IEnumerable<Credit> OrderCreditsForPrecureScan(IEnumerable<Credit> credits)
+        => credits
+            .OrderBy(c => c.CreditKind == "OP" ? 0 : c.CreditKind == "ED" ? 1 : 2)
+            .ThenBy(c => c.CreditSeq).ThenBy(c => c.CreditId);
 
     /// <summary>指定シリーズに紐付くプリキュア表示行リストを返す （無ければ空リスト）。</summary>
     private IReadOnlyList<SeriesPrecureDisplay> GetPrecureRows(int seriesId)
@@ -508,18 +534,21 @@ public sealed class SeriesGenerator
         foreach (var s in _ctx.Series)
         {
             // 集計対象判定：TV 系（credit_attach_to='EPISODE'）と映画系（'SERIES'）で役職セット・
-            // クレジット順ソート方針を切り替える。スピンオフ系は出さない（OTONA/SHORT/SPIN-OFF カードに
-            // サブ行を持たない既存仕様）。
+            // クレジット順ソート方針を切り替える。オトナシリーズ（OTONA）は TV と同じ話ごとの集計で、
+            // 役職セットは作品詳細のメインスタッフと同じ OtonaKeyStaffRoleSpecs。SHORT / SPIN-OFF は出さない。
             if (!_ctx.SeriesKindByCode.TryGetValue(s.KindCode, out var seriesKind)) continue;
             bool isMovieKind = string.Equals(seriesKind.CreditAttachTo, "SERIES", StringComparison.Ordinal)
                                && (string.Equals(s.KindCode, "MOVIE", StringComparison.Ordinal)
                                    || string.Equals(s.KindCode, "MOVIE_SHORT", StringComparison.Ordinal)
                                    || string.Equals(s.KindCode, "SPRING", StringComparison.Ordinal)
                                    || string.Equals(s.KindCode, "EVENT", StringComparison.Ordinal));
-            bool isTvKind = string.Equals(s.KindCode, "TV", StringComparison.Ordinal);
+            bool isOtonaKind = SeriesClassifier.IsOtona(s);
+            bool isTvKind = string.Equals(s.KindCode, "TV", StringComparison.Ordinal) || isOtonaKind;
             if (!isMovieKind && !isTvKind) continue;
 
-            var roleSpecs = isMovieKind ? MovieKeyStaffRoleSpecs : TvKeyStaffRoleSpecs;
+            var roleSpecs = isMovieKind ? MovieKeyStaffRoleSpecs
+                : isOtonaKind ? OtonaKeyStaffRoleSpecs
+                : TvKeyStaffRoleSpecs;
 
             // TV はエピソードから話番号 → クレジット順ソートに使う。映画はエピソードを持たないので epNoByEpId は空。
             IReadOnlyDictionary<int, int>? epNoByEpId = null;
@@ -644,7 +673,10 @@ public sealed class SeriesGenerator
                     RepRoleCode = repRoleCode,
                     // テンプレ側はこの組み立て済み URL のみリンク href に使う。
                     // data-role-code 属性はバッジ色分け CSS の都合で RoleCode（実コード）を使う。
-                    RoleUrl = PathUtil.CreatorsRoleUrl(repRoleCode),
+                    // オトナシリーズの作品は、オトナシリーズの役職のページ（無ければ本編の役職詳細）を指す。
+                    RoleUrl = isOtonaKind
+                        ? PathUtil.CreatorsRoleUrlInWork(repRoleCode, true)
+                        : PathUtil.CreatorsRoleUrl(repRoleCode),
                     RoleLabel = spec.Label,
                     Members = members
                 });

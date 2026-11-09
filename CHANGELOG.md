@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：シリーズ一覧のオトナシリーズの作品のカードと作品詳細に、出たプリキュアを出し、一覧のカードにメインスタッフを出すようにした**（`SeriesGenerator`〔`BuildPrecureRowsBySeriesCacheAsync`・`BuildKeyStaffSummaryBySeriesCacheAsync`・`OrderCreditsForPrecureScan`〔新規〕〕・`_series-card-simple.sbn`・`series-index.sbn`：オトナシリーズ・ショート・イベント・スピンオフのカードは題名・期間・話数しか描かず、メインスタッフの集計も TV と映画だけで、オトナシリーズの作品には作品とプリキュアのつなぎも無いので、どちらも空だった。オトナシリーズの作品のプリキュアは、各話のクレジットの声の出演から話数順に引き、すべて TV と同じ表記〔変身前 / 変身後 (CV)〕で出す〔series_precures には行を持たないので本編の数には混ざらない〕。一覧のカードのメインスタッフは作品詳細と同じ 5 役職〔美術は美術監督〕で、役職の札はオトナシリーズの役職のページを指す。カードの部品はプリキュアとスタッフの行が組まれている作品だけ TV のカードと同じ形で描くので、メインスタッフの集計があったイベントの作品にも出る）
+
 - **サイト：人物・企業/団体詳細の年表で、本線とスピンオフ（オトナシリーズなど）の両方を担当した役職の行を段に分けた**（`RoleTimelineRow.SpinOffLane`・`_role-timeline.sbn`・`site.css` の `.rtl-lane`〔新規〕）：同じ役職のレギュラーとスピンオフの話の帯が同じ段に重なり、見分けにくかった。上の段に本線の印、下の段にスピンオフの帯を描き、役職名は 2 段の真ん中に 1 つ置く。片方だけの行は 1 段のまま
 
 - **サイト：オトナシリーズの役職のページの年表を、本編の役職詳細と同じ線表に戻し、横軸の帯を年度でなくオトナシリーズの作品 1 本ずつにした**（`CreatorsGenerator`〔`CreatorListPages.EpisodeLegendLabel`〔新規〕・`BuildWorksTimeline` と `WorksTimelineModel` を削除〕・`RoleTimelineBuilder.ForSeriesBands`〔新規〕・`RoleTimelineRules.EpisodeLegendLabel`〔新規〕・`creators-role-detail.sbn`・`_role-works-timeline.sbn` を削除）：作品を列にして担当した回を並べる表では、本編の役職のページと見た目がそろわず、担当の移り変わりも読めなかった。帯の幅はその作品の第 1 話から最終話の放送枠までで、帯にするのはクレジットを収録した作品だけ。凡例の話の帯の項目は「オトナ」

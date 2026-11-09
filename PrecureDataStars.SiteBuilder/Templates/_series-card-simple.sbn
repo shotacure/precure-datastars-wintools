@@ -1,5 +1,7 @@
 {{## /series/ の大人向けスピンオフ・ショート・イベント・スピンオフのカード（種類順・年度順で共用）。
-     呼び出し側で変数 s に TvSeriesRow を入れてから include する。本体（番号・タイトル・期間・話数）だけ。 ##}}
+     呼び出し側で変数 s に TvSeriesRow を入れてから include する。本体（番号・タイトル・期間・話数）の下に、
+     プリキュアのバッジとスタッフのバッジ（どちらも組まれている作品だけ。今はオトナシリーズの作品で、
+     プリキュアはクレジットの声の出演から、スタッフは作品詳細のメインスタッフと同じ役職）。描き方は TV のカードと同じ。 ##}}
 <div class="series-card">
   <a class="bgms-card-link" href="/series/{{ s.Slug }}/" aria-label="{{ s.Title | html.escape }}"></a>
   <div class="series-card-head">
@@ -9,4 +11,22 @@
       <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ s.EpisodesLabel }}</span>{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
     </div>
   </div>
+  {{~ if (array.size s.PrecureBadges) > 0 || (array.size s.KeyStaffSummary) > 0 ~}}
+  <div class="series-card-sub">
+    {{~ if (array.size s.PrecureBadges) > 0 ~}}
+    <div class="precure-badges-row">
+      {{~ for p in s.PrecureBadges ~}}
+      <a class="precure-badge" href="{{ character_url p.CharacterId }}"{{~ if p.BackgroundColor != "" ~}} style="background:{{ p.BackgroundColor }};color:{{ p.TextColor }};border-color:{{ p.BorderColor }}"{{~ end ~}}>{{ p.Label | html.escape }}</a>
+      {{~ end ~}}
+    </div>
+    {{~ end ~}}
+    {{~ if (array.size s.KeyStaffSummary) > 0 ~}}
+    <div class="staff-badges-row">
+      {{~ for g in s.KeyStaffSummary ~}}
+      <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for m in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url m.PersonId }}">{{ m.DisplayName | html.escape }}</a>{{~ if m.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ m.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+      {{~ end ~}}
+    </div>
+    {{~ end ~}}
+  </div>
+  {{~ end ~}}
 </div>

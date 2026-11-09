@@ -174,7 +174,7 @@ public sealed class FontsGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = $"{first.DisplayName}（フォント）",
+            PageTitle = first.DisplayName,
             // カードは右上の透かしに「フォント」、見出しに見本を描いた書体名とウェイト（代用で描く書体は代用の書体。作品で使われた書体名と代用の旨はページに出す）、
             // その右にメーカー名（写研の書体は「写研・モリサワ」）、その下に書体見本と同じ字をその書体で装飾なしで並べる
             // （左に「愛」「永」、右にひらがな・カタカナ・漢字 2 行）。描く書体の無い書体は見出しと説明文だけ

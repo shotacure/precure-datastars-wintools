@@ -551,7 +551,7 @@ public sealed class CreatorsGenerator
     /// <param name="ShowsCoverage">ページと OGP カードに基準点（本編クレジットの収録範囲）を出すか。本編の組だけ。</param>
     /// <param name="RoleUrlOf">役職のページの URL（本編は <see cref="PathUtil.CreatorsRoleUrl"/>、オトナシリーズは <see cref="PathUtil.CreatorsOtonaRoleUrl"/>）。</param>
     /// <param name="StaffLinkLabel">役職のページの見出しの上に置く、スタッフ一覧へのリンクの文字。</param>
-    /// <param name="RoleTitleSuffix">役職のページの題の括弧書き（「脚本（クリエイター）」の「クリエイター」）。</param>
+    /// <param name="RoleTitleSuffix">役職のページの題の括弧書き（「脚本（オトナシリーズ）」の「オトナシリーズ」）。空なら括弧を付けず役職名だけ（本編）。</param>
     /// <param name="RoleMetaScope">役職のページの meta description で、担当した作品の範囲を表す語。</param>
     /// <param name="EpisodeBadgeLabel">役職のページの OGP カードで、話数のバッジに付ける語（本編は「TV」、オトナシリーズは「オトナ」）。</param>
     /// <param name="EpisodeLegendLabel">役職のページの年表の凡例の、話の帯の項目の文字（本編は「TV」、オトナシリーズは「オトナ」）。</param>
@@ -579,7 +579,7 @@ public sealed class CreatorsGenerator
         ShowsCoverage: true,
         RoleUrlOf: PathUtil.CreatorsRoleUrl,
         StaffLinkLabel: "スタッフ",
-        RoleTitleSuffix: "クリエイター",
+        RoleTitleSuffix: "",
         RoleMetaScope: "歴代プリキュアシリーズ",
         EpisodeBadgeLabel: "TV",
         CountSortStart: "",
@@ -1131,7 +1131,7 @@ public sealed class CreatorsGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = $"{role.NameJa}（{pages.RoleTitleSuffix}）",
+            PageTitle = pages.RoleTitleSuffix.Length == 0 ? role.NameJa : $"{role.NameJa}（{pages.RoleTitleSuffix}）",
             MetaDescription = $"{pages.RoleMetaScope}で役職「{role.NameJa}」を担当した方々（人物・企業・団体）",
             OgCard = BuildRoleOgCard(role, content.PersonCount, content.CompanyCount, rows, rowSet.TimelineEntities, alternateNames,
                 pages.EpisodeBadgeLabel, content.CoverageLabel),
@@ -1336,7 +1336,7 @@ public sealed class CreatorsGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = $"{role.NameJa}（クリエイター）",
+            PageTitle = role.NameJa,
             MetaDescription = $"歴代プリキュアの歌で役職「{role.NameJa}」を担当した方々",
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
@@ -1824,7 +1824,7 @@ public sealed class CreatorsGenerator
         int companies = rows.Count - persons;
         var layout = new LayoutModel
         {
-            PageTitle = $"{role.NameJa}（クリエイター）",
+            PageTitle = role.NameJa,
             MetaDescription = $"歴代プリキュアの歌・劇伴・音盤で「{role.NameJa}」を担当した方々（人物・団体）",
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,

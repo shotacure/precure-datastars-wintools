@@ -116,9 +116,9 @@ public sealed class BooksGenerator
 
         var layout = new LayoutModel
         {
-            PageTitle = "プリキュアの書籍(本・Kindle)",
+            PageTitle = "プリキュアの書籍",
             // 本文リード行と同じ母数をカードにも置く。
-            OgCard = new OgCardSpec(Kicker: "", Title: "プリキュアの書籍(本・Kindle)")
+            OgCard = new OgCardSpec(Kicker: "", Title: "プリキュアの書籍")
             {
                 // ページの冒頭文（books-index.sbn の .lead）と同じ文。数だけはページ側で添える。
                 Subtitle = "コミック版からファンブックまで、プリキュアの書籍",
@@ -129,7 +129,7 @@ public sealed class BooksGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "プリキュアの書籍(本・Kindle)", Url = "" }
+                new BreadcrumbItem { Label = "プリキュアの書籍", Url = "" }
             }
         };
 
@@ -335,7 +335,7 @@ public sealed class BooksGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "プリキュアの書籍(本・Kindle)", Url = "/books/" },
+                new BreadcrumbItem { Label = "プリキュアの書籍", Url = "/books/" },
                 new BreadcrumbItem { Label = book.Title, Url = "" }
             }
         };

@@ -9,12 +9,12 @@
      劇伴は bgm_cues の閲覧可能件数（仮 M 番号は除外）。
      音楽商品は「N 点」と「M 枚」を 2 ペアで表記（点数 = products、枚数 = discs）。
      歌・劇伴カードと同じ「数値＋ラベル」ペアの並びに揃え、カード内に重複ラベル「音楽商品」は
-     置かない（カード見出し <h2>音楽商品(CD/配信)</h2> がカテゴリ名を兼ねる）。
+     置かない（カード見出し <h2>音楽商品</h2> がカテゴリ名を兼ねる）。
      カード自体を <a> でラップしてカード全域を 1 リンクとして扱う（カード内部にテキストリンクは
      置かない。ホバーで色変化＋微浮上で押下可能性を示す）。 ##}}
 <section class="music-categories">
   <a class="music-category-card" href="/songs/">
-    <h2>プリキュアソング(歌)</h2>
+    <h2>プリキュアソング</h2>
     <p>主題歌・挿入歌・キャラクターソング</p>
     <ul class="music-category-stats">
       <li>
@@ -25,7 +25,7 @@
   </a>
 
   <a class="music-category-card" href="/bgms/">
-    <h2>劇伴音楽(BGM)</h2>
+    <h2>劇伴音楽</h2>
     <p>TV シリーズ・映画の劇伴</p>
     <ul class="music-category-stats">
       <li>
@@ -36,7 +36,7 @@
   </a>
 
   <a class="music-category-card" href="/products/">
-    <h2>音楽商品(CD/配信)</h2>
+    <h2>音楽商品</h2>
     <p>CD と配信の音楽商品</p>
     {{## 「N 点 M 枚」を歌・劇伴カードの「曲」表記と同じスタイル（value + label のペア並び）で
          表現するため、1 つの <li> 内に value-label ペアを 2 セット入れる。ホーム DB 統計の

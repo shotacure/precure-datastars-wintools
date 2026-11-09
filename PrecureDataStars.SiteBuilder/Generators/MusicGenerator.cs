@@ -601,9 +601,9 @@ public sealed class MusicGenerator
                 (acc, x) => (acc.SongCount + x.SongCount, acc.VersionCount + x.VersionCount, acc.TotalFrames + x.TotalFrames));
         var layout = new LayoutModel
         {
-            PageTitle = "歴代プリキュア劇伴音楽(BGM)",
+            PageTitle = "歴代プリキュア劇伴音楽",
             MetaDescription = $"歴代プリキュア {rows.Count} 作品の劇伴（BGM）{totalSongs} 曲",
-            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア劇伴音楽(BGM)")
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア劇伴音楽")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（bgms-index.sbn の .lead）と同じ文。
@@ -614,7 +614,7 @@ public sealed class MusicGenerator
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "歴代プリキュア劇伴音楽(BGM)", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュア劇伴音楽", Url = "" }
             }
         };
         _page.RenderAndWrite("/bgms/", "music", "bgms-index.sbn", content, layout);
@@ -1103,7 +1103,7 @@ public sealed class MusicGenerator
             };
             var layout = new LayoutModel
             {
-                PageTitle = $"{s.Title}の劇伴音楽(BGM)",
+                PageTitle = $"{s.Title}の劇伴音楽",
                 MetaDescription = BuildBgmMetaDescription(s, content.SeriesPeriod, countsLabel, cardStaffGroups),
                 OgCard = BuildBgmOgCard(
                     s, content.SeriesPeriod, songCount, producedCues.Count,
@@ -1113,7 +1113,7 @@ public sealed class MusicGenerator
                 {
                     new BreadcrumbItem { Label = "ホーム", Url = "/" },
                     new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
-                    new BreadcrumbItem { Label = "歴代プリキュア劇伴音楽(BGM)", Url = "/bgms/" },
+                    new BreadcrumbItem { Label = "歴代プリキュア劇伴音楽", Url = "/bgms/" },
                     new BreadcrumbItem { Label = s.Title, Url = "" }
                 }
             };
@@ -1211,7 +1211,7 @@ public sealed class MusicGenerator
 
     /// <summary>
     /// 劇伴詳細ページの OGP カードを組み立てる。
-    /// 「劇伴音楽(BGM) → 作品名 → 期間 → 量の数（曲数・バージョン数・音源の収録時間）→ 作曲・編曲」の順に置き、
+    /// 「劇伴音楽 → 作品名 → 期間 → 量の数（曲数・バージョン数・音源の収録時間）→ 作曲・編曲」の順に置き、
     /// 右上の透かしに放送開始年（映画は公開年）を出す。
     /// 商品詳細のカードと同じ組み方で、識別（どの作品か）を見出しに、量を数のバッジに、中身の手がかりを事実行に振り分ける。
     /// 曲目は並べない。総曲数に対して数行しか入らず、どれが載るかは並び順で決まってしまうため、
@@ -1227,7 +1227,7 @@ public sealed class MusicGenerator
     {
         var badges = BuildBgmCountBadges(Array.Empty<OgCardBadge>(), songCount, cueCount, sources);
 
-        return new OgCardSpec(Kicker: "劇伴音楽(BGM)", Title: series.Title)
+        return new OgCardSpec(Kicker: "劇伴音楽", Title: series.Title)
         {
             Subtitle = periodLabel ?? "",
             BandColorHex = OgCardColors.Music,

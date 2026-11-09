@@ -266,9 +266,9 @@ public sealed class SongsGenerator
         int songCount = recordingsBySong.Count(kv => kv.Value.Count > 0 && songById.ContainsKey(kv.Key));
         var layout = new LayoutModel
         {
-            PageTitle = "歴代プリキュアソング(歌)",
+            PageTitle = "歴代プリキュアソング",
             // 数は曲（作品としての歌）の数と、バージョン（録音）の数。バージョン数は曲数と食い違うときだけ出す。
-            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアソング(歌)")
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアソング")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（songs-index.sbn の .lead）と同じ文。数だけはページ側で添える。
@@ -283,7 +283,7 @@ public sealed class SongsGenerator
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "歴代プリキュアソング(歌)", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュアソング", Url = "" }
             }
         };
         _page.RenderAndWrite("/songs/", "songs", "songs-index.sbn", content, layout);
@@ -456,7 +456,7 @@ public sealed class SongsGenerator
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "歴代プリキュアソング(歌)", Url = "/songs/" },
+                new BreadcrumbItem { Label = "歴代プリキュアソング", Url = "/songs/" },
                 new BreadcrumbItem { Label = song.Title, Url = "" }
             },
             OgType = "music.song",

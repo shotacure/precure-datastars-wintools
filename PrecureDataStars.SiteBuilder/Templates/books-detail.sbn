@@ -1,6 +1,6 @@
 <article>
   <p class="muted">
-    <a href="/books/">プリキュアの書籍(本・Kindle)</a>
+    <a href="/books/">プリキュアの書籍</a>
   </p>
 
   <h1>{{ Book.Title | html.escape }}</h1>

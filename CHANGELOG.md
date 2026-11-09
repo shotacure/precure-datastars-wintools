@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：音楽制作の一覧と音楽の役職詳細で、盤のクレジットの初参加・初担当の節を、盤の発売日に放送していた本線の TV シリーズで決めるようにした**（`CreatorsGenerator.SeriesOfProduct`〔新規〕・`SeriesOfMusicCredit`・`BuildMusicRoleDetailRows`・`BuildContextLookupExtensions.MainlineTvSeriesOnAir`〔新規〕）：盤の作品は 1 枚目のディスクに登録されたシリーズで決めていたので、2023 年発売の「プリキュアボーカルベストBOX 2018-2023」のように何年分かをまとめた盤だけを担当した人が、2018 年の作品の節に入っていた。発売日が分からない盤は今までどおりディスクのシリーズ
+
 - **サイト：役職のページ（本編・オトナシリーズ・歌・音楽制作の役職）の「初参加順」のタブ・並べ替えボタンを「初担当順」にした**（`creators-role-detail.sbn`・`creators-song-role-detail.sbn`・`creators-music-role-detail.sbn`）：役職のページの節はその役職で初めてクレジットされた作品で分けていて、役職を問わない一覧のページの「初参加順」と同じ名前では違いが分からなかった。スタッフ一覧・声の出演一覧・音楽制作・歌唱の一覧は「初参加順」のまま
 
 - **サイト：スタッフ一覧の役職順タブを、その役職が初めてクレジットされた作品ごとの節に分けた**（`CreatorsGenerator`〔`SectionRolesByFirstSeries` / `RoleSeriesSection`〔新規〕・`RoleIndexEntry.FirstSeriesTitle` / `FirstSeriesUrl` / `FirstSeriesYearLabel`〔新規〕・`StaffModel.RoleSections`〔`TvRoles` / `MovieOnlyRoles` と `RoleIndexEntry.IsMovieOnly` を置き換え〕〕・`creators-staff.sbn`）：「TV シリーズでクレジットされた役職」と「映画でのみクレジットされた役職」の 2 つに分けていた。節は作品の放送開始・公開順で、見出しと左のもくじは初参加順タブと同じ「作品名（年）」。節の中は今までどおり初めて出た回のクレジットの順。オトナシリーズのスタッフ一覧の役職順タブも、オトナシリーズの作品ごとの節になる

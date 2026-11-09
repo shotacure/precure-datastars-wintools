@@ -35,7 +35,7 @@ public sealed class MusicCreditIndex
     /// <summary>(series_id, session_no) → 劇伴セッション。</summary>
     public IReadOnlyDictionary<(int SeriesId, byte SessionNo), BgmSession> SessionByKey { get; }
 
-    /// <summary>product_catalog_no → 作品（ディスクに登録されたシリーズのうち、ディスク番号が最小のもの）。音楽制作ページの作品数の集計に使う。</summary>
+    /// <summary>product_catalog_no → 作品（ディスクに登録されたシリーズのうち、ディスク番号が最小のもの）。音楽制作ページ・音楽の役職詳細で、発売日から作品を決められない盤の初参加の節に使う。</summary>
     public IReadOnlyDictionary<string, int> SeriesIdByProduct { get; }
 
     public int Count { get; }

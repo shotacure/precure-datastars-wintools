@@ -79,6 +79,19 @@ public static class BuildContextLookupExtensions
         => ctx.SeriesById.TryGetValue(seriesId, out var s) && string.Equals(s.KindCode, "TV", StringComparison.Ordinal);
 
     /// <summary>
+    /// その日に放送していた本線の TV シリーズ（kind_code='TV' のうち、放送開始日がその日以前で最も新しいもの）の series_id。
+    /// 放送開始日が同じなら series_id の小さい方。最初のシリーズの放送開始より前の日付は null。
+    /// 盤（商品）を、発売日の時点で放送していた作品に置くのに使う。
+    /// </summary>
+    public static int? MainlineTvSeriesOnAir(this BuildContext ctx, DateOnly date)
+        => ctx.Series
+            .Where(s => string.Equals(s.KindCode, "TV", StringComparison.Ordinal) && s.StartDate <= date)
+            .OrderByDescending(s => s.StartDate)
+            .ThenBy(s => s.SeriesId)
+            .Select(s => (int?)s.SeriesId)
+            .FirstOrDefault();
+
+    /// <summary>
     /// スピンオフ（<see cref="SeriesClassifier.IsSpinOff"/>：大人向け・ショート・スピンオフ）かを判定する。
     /// 人物・企業のページの担当量の札では、大人向け（<see cref="IsOtonaSeries"/>）は 🌙 で数え、
     /// それ以外のスピンオフ（ショート・スピンオフ）はどの札にも数えない。未登録シリーズは <c>false</c>。

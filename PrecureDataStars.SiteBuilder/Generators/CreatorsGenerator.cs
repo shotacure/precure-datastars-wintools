@@ -1579,7 +1579,7 @@ public sealed class CreatorsGenerator
 
     /// <summary>
     /// 音楽クレジット 1 行の作品（シリーズ）。曲は初出録音の出典シリーズ、録音はその出典シリーズ、劇伴セッションはそのシリーズ、
-    /// 盤はディスクに登録されたシリーズ。解決できなければ null。
+    /// 盤は発売日に放送していた本線の TV シリーズ（<see cref="SeriesOfProduct"/>）。解決できなければ null。
     /// </summary>
     private int? SeriesOfMusicCredit(MusicCredit r, IReadOnlyDictionary<int, int> minRecIdBySong) => r.TargetKind switch
     {
@@ -1588,10 +1588,23 @@ public sealed class CreatorsGenerator
         MusicCreditTargetKinds.SongRecording when r.SongRecordingId is int rid2
                                                   && _ctx.SongRecordingById.TryGetValue(rid2, out var rec2) => rec2.SeriesId,
         MusicCreditTargetKinds.BgmSession => r.BgmSeriesId,
-        MusicCreditTargetKinds.Product when r.ProductCatalogNo is string pc
-                                            && _ctx.MusicCredits.SeriesIdByProduct.TryGetValue(pc, out var psid) => psid,
+        MusicCreditTargetKinds.Product when r.ProductCatalogNo is string pc => SeriesOfProduct(pc),
         _ => null
     };
+
+    /// <summary>
+    /// 盤（商品）の作品。発売日に放送していた本線の TV シリーズ（<see cref="BuildContextLookupExtensions.MainlineTvSeriesOnAir"/>）に置く。
+    /// 何年分かをまとめた BOX やコレクション（1 枚目のディスクが古い作品のもの）を、収録した最も古い作品ではなく、出た時期の作品に置くため。
+    /// 発売日が分からない・最初の TV シリーズより前なら、ディスクに登録されたシリーズ（ディスク番号が最小のもの）。
+    /// </summary>
+    private int? SeriesOfProduct(string catalogNo)
+    {
+        if (_ctx.MusicCredits.ProductByCatalogNo.TryGetValue(catalogNo, out var product)
+            && product.ReleaseDate != default
+            && _ctx.MainlineTvSeriesOnAir(DateOnly.FromDateTime(product.ReleaseDate)) is int onAir)
+            return onAir;
+        return _ctx.MusicCredits.SeriesIdByProduct.TryGetValue(catalogNo, out var psid) ? psid : null;
+    }
 
     /// <summary>
     /// 音楽制作ページの一覧タブ 1 つ分（初参加順のシリーズ別セクションと、多い順の一覧）を組み立てる。
@@ -1718,8 +1731,7 @@ public sealed class CreatorsGenerator
                     acc.AddSong(rec.SongId, t.Title, t.Url, t.Sort, rec.SeriesId);
                     break;
                 case MusicCreditTargetKinds.Product when r.ProductCatalogNo is string pc:
-                    acc.AddProduct(pc, t.Title, t.Url, t.Sort,
-                        _ctx.MusicCredits.SeriesIdByProduct.TryGetValue(pc, out var psid) ? psid : null);
+                    acc.AddProduct(pc, t.Title, t.Url, t.Sort, SeriesOfProduct(pc));
                     break;
             }
         }

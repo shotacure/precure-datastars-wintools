@@ -16,7 +16,7 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 /// 返すが、DB への INSERT は呼び出し側で行う（責務分離のため）。
 /// part_type コンボには <c>part_types</c> マスタ全件＋先頭の「（規定位置）」を流し込む。
 /// 「（規定位置）」を選んだ場合は <see cref="Credit.PartType"/> = null となる。
-/// 版コンボは「共通」（<see cref="Credit.MediaVersion"/> = null、既定）・「本放送」・「Blu-ray・配信」の 3 つ。
+/// 版コンボは「共通」（<see cref="Credit.MediaVersion"/> = null、既定）・「本放送」・「Blu-ray・配信」・「本放送・Blu-ray」・「配信」の 5 つ。
 /// </summary>
 public partial class CreditNewDialog : Form
 {
@@ -56,6 +56,8 @@ public partial class CreditNewDialog : Form
             new CodeLabel("", "共通（本放送と Blu-ray・配信で同じ）"),
             new CodeLabel(CreditMediaVersions.Broadcast, CreditMediaVersions.LabelOf(CreditMediaVersions.Broadcast)),
             new CodeLabel(CreditMediaVersions.HomeVideo, CreditMediaVersions.LabelOf(CreditMediaVersions.HomeVideo)),
+            new CodeLabel("BROADCAST,BLURAY", CreditMediaVersions.LabelOf("BROADCAST,BLURAY")),
+            new CodeLabel(CreditMediaVersions.Streaming, CreditMediaVersions.LabelOf(CreditMediaVersions.Streaming)),
         };
 
         btnOk.Click += (_, __) => OnOkClick();

@@ -126,13 +126,13 @@ internal sealed class CreditPreviewRenderer
              */
           .card  { margin-top: 40px; }
           .card:first-child { margin-top: 0; }
-          /* 本放送と Blu-ray・配信で違うカード：版の付いたカードが続くところを角丸の細い線の枠 1 つにまとめ、
-             上半分（本放送）と下半分（Blu-ray・配信）で地の色を分ける（サイトと同じ）。 */
+          /* 媒体によって違うカード：版の付いたカードが続くところを 1 組ずつ角丸の細い線の枠にまとめ、
+             上半分（組の前の版）と下半分（組の後ろの版）で地の色を分ける（サイトと同じ）。 */
           .card-versions { margin-top: 40px; border: 1px solid #d0d0d0; border-radius: 10px; overflow: hidden; }
           .card-versions:first-child { margin-top: 0; }
           .card-version { padding: 10px 14px 14px; }
-          .card-version-broadcast { background: #fdf1f6; }
-          .card-version-homevideo { background: #eef4fb; border-top: 1px solid #d0d0d0; }
+          .card-version-upper { background: #fdf1f6; }
+          .card-version-lower { background: #eef4fb; border-top: 1px solid #d0d0d0; }
           .card-version-label { margin: 0 0 8px; font-size: 0.8em; font-weight: bold; color: #666; }
           .card-version-none { margin: 0; color: #666; }
           .card-version .card:first-of-type { margin-top: 0; }
@@ -410,10 +410,11 @@ internal sealed class CreditPreviewRenderer
         if (credit.MediaVersion is not null) kindLabel += $"（{CreditMediaVersions.LabelOf(credit.MediaVersion)}）";
         html.Append($"<h1>{Esc(kindLabel)}</h1>");
 
-        // 版の付いたカード（本放送 / Blu-ray・配信）は、隣どうしの 1 組ごとに本放送を先・Blu-ray・配信を後に並べ替えて 1 つの枠で描く（サイト側と同じ）。
-        var cards = CardVersionLayout.OrderVersionRuns(
+        // 版の付いたカード（媒体の組）は、隣どうしの 1 組ごとに組の前の版を先・後ろの版を後に並べ替えて 1 つの枠で描く（サイト側と同じ）。
+        var versionPlan = CardVersionLayout.Plan(
             (await _cardsRepo.GetByCreditAsync(credit.CreditId, ct)).OrderBy(c => c.CardSeq).ToList(),
             c => c.MediaVersion);
+        var cards = versionPlan.Cards;
         if (cards.Count == 0) { html.Append("<p class=\"empty-credit\">（カード未登録）</p>"); return; }
 
         var allRoles = await _rolesRepo.GetAllAsync(ct);
@@ -429,15 +430,15 @@ internal sealed class CreditPreviewRenderer
         // （ユーザー要望: VOICE_CAST だけが対象。「原画」等の通常役職は従来どおり毎回再表示）。
         // 切り替わり判定の対象は VOICE_CAST 役職のみ。NORMAL 役職を間に挟むと chain は途切れる。
         string? prevVoiceCastRoleCode = null;
-        // 版の枠の中で、本放送の半分と Blu-ray・配信の半分を同じ状態から描くための控え（CardVersionLayout.CarryState）
+        // 版の枠の中で、上半分と下半分を同じ状態から描くための控え（CardVersionPlan.CarryState）
         string? savedVoiceCastRoleCode = null;
 
         for (int cardIndex = 0; cardIndex < cards.Count; cardIndex++)
         {
             var card = cards[cardIndex];
             // 版の枠を開く（サイト側と同じ）。
-            prevVoiceCastRoleCode = CardVersionLayout.CarryState(cardIndex > 0 ? cards[cardIndex - 1].MediaVersion : null, card.MediaVersion, prevVoiceCastRoleCode, ref savedVoiceCastRoleCode);
-            html.Append(CardVersionLayout.OpenBefore(cardIndex > 0 ? cards[cardIndex - 1].MediaVersion : null, card.MediaVersion));
+            prevVoiceCastRoleCode = versionPlan.CarryState(cardIndex, prevVoiceCastRoleCode, ref savedVoiceCastRoleCode);
+            html.Append(versionPlan.OpenBefore(cardIndex));
             // ロール（流れるクレジット）のカードは card-roll を足す（サイト側と同じ）。
             html.Append(string.Equals(card.Presentation, "ROLL", StringComparison.Ordinal)
                 ? "<div class=\"card card-roll\">"
@@ -709,7 +710,7 @@ internal sealed class CreditPreviewRenderer
             }
             html.Append("</div>"); // .card
             // 版の枠を閉じる（サイト側と同じ）。
-            html.Append(CardVersionLayout.CloseAfter(card.MediaVersion, cardIndex + 1 < cards.Count ? cards[cardIndex + 1].MediaVersion : null));
+            html.Append(versionPlan.CloseAfter(cardIndex));
         }
     }
 
@@ -829,12 +830,13 @@ internal sealed class CreditPreviewRenderer
         html.Append($"<h1>{Esc(kindLabel)}</h1>");
 
         // Draft の Card → Tier → Group → Role を辿る。State==Deleted は除外。順序キーは Entity の seq 列に従う。
-        // 版の付いたカードは、隣どうしの 1 組ごとに本放送を先・Blu-ray・配信を後に並べ替えて、1 組 1 つの枠で描く（DB 描画側と同じ）。
-        var draftCards = CardVersionLayout.OrderVersionRuns(
+        // 版の付いたカードは、隣どうしの 1 組ごとに組の前の版を先・後ろの版を後に並べ替えて、1 組 1 つの枠で描く（DB 描画側と同じ）。
+        var draftPlan = CardVersionLayout.Plan(
             session.Root.Cards
                 .Where(c => c.State != DraftState.Deleted)
                 .OrderBy(c => c.Entity.CardSeq).ToList(),
             c => c.Entity.MediaVersion);
+        var draftCards = draftPlan.Cards;
         if (draftCards.Count == 0)
         {
             html.Append("<p class=\"empty-credit\">（カード未登録）</p>");
@@ -847,15 +849,15 @@ internal sealed class CreditPreviewRenderer
 
         // 直前 VOICE_CAST 役職コード追跡（DB 描画側と同じ仕様）。
         string? prevVoiceCastRoleCode = null;
-        // 版の枠の中で、本放送の半分と Blu-ray・配信の半分を同じ状態から描くための控え（CardVersionLayout.CarryState）
+        // 版の枠の中で、上半分と下半分を同じ状態から描くための控え（CardVersionPlan.CarryState）
         string? savedVoiceCastRoleCode = null;
 
         for (int cardIndex = 0; cardIndex < draftCards.Count; cardIndex++)
         {
             var dCard = draftCards[cardIndex];
             // 版の枠を開く（DB 描画側と同じ）。
-            prevVoiceCastRoleCode = CardVersionLayout.CarryState(cardIndex > 0 ? draftCards[cardIndex - 1].Entity.MediaVersion : null, dCard.Entity.MediaVersion, prevVoiceCastRoleCode, ref savedVoiceCastRoleCode);
-            html.Append(CardVersionLayout.OpenBefore(cardIndex > 0 ? draftCards[cardIndex - 1].Entity.MediaVersion : null, dCard.Entity.MediaVersion));
+            prevVoiceCastRoleCode = draftPlan.CarryState(cardIndex, prevVoiceCastRoleCode, ref savedVoiceCastRoleCode);
+            html.Append(draftPlan.OpenBefore(cardIndex));
             html.Append(string.Equals(dCard.Entity.Presentation, "ROLL", StringComparison.Ordinal)
                 ? "<div class=\"card card-roll\">"
                 : "<div class=\"card\">");
@@ -1116,8 +1118,7 @@ internal sealed class CreditPreviewRenderer
             }
             html.Append("</div>"); // .card
             // 版の枠を閉じる（DB 描画側と同じ）。
-            html.Append(CardVersionLayout.CloseAfter(dCard.Entity.MediaVersion,
-                cardIndex + 1 < draftCards.Count ? draftCards[cardIndex + 1].Entity.MediaVersion : null));
+            html.Append(draftPlan.CloseAfter(cardIndex));
         }
 
         html.Append(HtmlFoot);

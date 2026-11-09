@@ -60,7 +60,7 @@ public sealed class ParsedCard
     /// <summary>カードの見せ方（"CARDS" / "ROLL"）。カード内の <c>@roll</c> 単独行で "ROLL" になる。既定 "CARDS"。</summary>
     public string Presentation { get; set; } = "CARDS";
 
-    /// <summary>カードの版（<see cref="CreditMediaVersions.Broadcast"/> / <see cref="CreditMediaVersions.HomeVideo"/>）。カード内の <c>@broadcast</c> / <c>@homevideo</c> 単独行で決まる。書かなければ null（共通）。</summary>
+    /// <summary>カードの版（そのカードが出る媒体の組。値は <see cref="CreditMediaVersions"/>）。カード内の <c>@broadcast</c>・<c>@homevideo</c>・<c>@broadcast,bluray</c>・<c>@streaming</c> などの単独行で決まる。書かなければ null（共通）。</summary>
     public string? MediaVersion { get; set; }
 }
 

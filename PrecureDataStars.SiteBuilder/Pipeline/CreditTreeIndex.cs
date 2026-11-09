@@ -26,8 +26,9 @@ public sealed class CreditTreeIndex
 {
     /// <summary>
     /// credit_id → ぶら下がる <see cref="CreditCardSnapshot"/> 一覧（card_seq 昇順整列済み）。集計・抜き出し用。
-    /// 本放送のカード（<c>credit_cards.media_version = BROADCAST</c>）は、組になる Blu-ray・配信のカード（描画の枠と同じ 1 組）に
-    /// 同じ人物・同じ会社がいるエントリと筆頭を除いて含める（本放送にしか名前の無い人を数え、両方に出る人を二重に数えない）。
+    /// 版の付いたカード（<c>credit_cards.media_version</c>）の 1 組のうち、組の前の版のカード（本放送など）は、組の後ろの版のカード
+    /// （描画の枠と同じ 1 組。集計の本体）に同じ人物・同じ会社がいるエントリと筆頭を除いて含める
+    /// （前の版にしか名前の無い人を数え、両方に出る人を二重に数えない）。
     /// 該当 credit にカードが 1 枚も無い場合は辞書に登録されない（呼び出し側は <c>TryGetValue</c> で受ける）。
     /// </summary>
     public IReadOnlyDictionary<int, IReadOnlyList<CreditCardSnapshot>> CardsByCreditId { get; }
@@ -170,23 +171,24 @@ public sealed class CreditTreeIndex
     }
 
     /// <summary>
-    /// 集計用のカードの並びを作る。共通と Blu-ray・配信のカードはそのまま、本放送のカードは、組になる Blu-ray・配信のカード
-    /// （<see cref="CardVersionLayout.SplitVersionFrames{T}"/> の 1 組）に同じ人物・同じ会社がいるエントリと筆頭の会社を除いて入れる。
+    /// 集計用のカードの並びを作る。共通と組の後ろの版のカードはそのまま、組の前の版のカードは、組になる後ろの版のカード
+    /// （<see cref="CardVersionLayout.Plan{T}"/> の 1 組）に同じ人物・同じ会社がいるエントリと筆頭の会社を除いて入れる。
     /// </summary>
     private static List<CreditCardSnapshot> BuildStatsCards(IReadOnlyList<CreditCardSnapshot> cards, IReadOnlyDictionary<int, int>? personByAlias)
     {
-        if (!cards.Any(c => c.Card.MediaVersion == CreditMediaVersions.Broadcast)) return cards.ToList();
+        if (!cards.Any(c => c.Card.MediaVersion is not null)) return cards.ToList();
+        var plan = CardVersionLayout.Plan(cards, c => c.Card.MediaVersion);
 
         string PersonKey(int aliasId) => personByAlias is not null && personByAlias.TryGetValue(aliasId, out var pid) ? $"p{pid}" : $"a{aliasId}";
         static IEnumerable<CreditBlockSnapshot> Blocks(CreditCardSnapshot c) =>
             c.Tiers.SelectMany(t => t.Groups).SelectMany(g => g.Roles).SelectMany(r => r.Blocks);
 
-        // 本放送のカード → 組の Blu-ray・配信のカードにいる人物・会社の鍵
+        // 組の前の版のカード → 組の後ろの版のカードにいる人物・会社の鍵
         var hvKeysByBroadcastCard = new Dictionary<int, HashSet<string>>();
-        foreach (var frame in CardVersionLayout.SplitVersionFrames(cards, c => c.Card.MediaVersion))
+        foreach (var (upperCards, lowerCards) in plan.Frames)
         {
             var keys = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var c in frame.Where(c => c.Card.MediaVersion == CreditMediaVersions.HomeVideo))
+            foreach (var c in lowerCards)
                 foreach (var b in Blocks(c))
                 {
                     if (b.Block.LeadingCompanyAliasId is int l1) keys.Add($"c{l1}");
@@ -197,19 +199,19 @@ public sealed class CreditTreeIndex
                         if (e.CompanyAliasId is int ca) keys.Add($"c{ca}");
                     }
                 }
-            foreach (var c in frame.Where(c => c.Card.MediaVersion == CreditMediaVersions.Broadcast))
+            foreach (var c in upperCards)
                 hvKeysByBroadcastCard[c.Card.CardId] = keys;
         }
 
         var result = new List<CreditCardSnapshot>(cards.Count);
         foreach (var c in cards)
         {
-            if (c.Card.MediaVersion != CreditMediaVersions.Broadcast || !hvKeysByBroadcastCard.TryGetValue(c.Card.CardId, out var hv))
+            if (!hvKeysByBroadcastCard.TryGetValue(c.Card.CardId, out var hv))
             {
                 result.Add(c);
                 continue;
             }
-            // 本放送のカードは、組の Blu-ray・配信のカードにいない人物・会社だけを残した写しにする（筆頭の会社も同じ）
+            // 組の前の版のカードは、組の後ろの版のカードにいない人物・会社だけを残した写しにする（筆頭の会社も同じ）
             var tiers = c.Tiers.Select(t => new CreditCardTierSnapshot(t.Tier, t.Groups.Select(g => new CreditCardGroupSnapshot(g.Group,
                 g.Roles.Select(r => new CreditCardRoleSnapshot(r.Role, r.Blocks.Select(b =>
                 {

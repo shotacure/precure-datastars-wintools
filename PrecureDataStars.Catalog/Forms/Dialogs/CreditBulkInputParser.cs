@@ -225,9 +225,11 @@ public static class CreditBulkInputParser
     // カード内のどこに書いてもよい（エンコーダはカード区切り直後に出す）。
     private static readonly Regex RollDirectiveRegex = new(@"^@roll$", RegexOptions.Compiled);
 
-    // ディレクティブ行: @broadcast / @homevideo 単独行。そのカードの版を本放送 / Blu-ray・配信にする（書かなければ共通）。
-    // カード内のどこに書いてもよい（エンコーダはカード区切り直後、@roll の後に出す）。
-    private static readonly Regex MediaVersionDirectiveRegex = new(@"^@(?<v>broadcast|homevideo)$", RegexOptions.Compiled);
+    // ディレクティブ行: そのカードの版（そのカードが出る媒体の組）。書かなければ共通。
+    // 媒体は broadcast（本放送）・bluray（Blu-ray）・streaming（配信）をカンマでつなぐ（@broadcast,bluray・@streaming など）。
+    // homevideo は bluray,streaming（Blu-ray・配信）の略。カード内のどこに書いてもよい（エンコーダはカード区切り直後、@roll の後に出す）。
+    private static readonly Regex MediaVersionDirectiveRegex = new(
+        @"^@(?<v>(?:broadcast|bluray|streaming|homevideo)(?:,(?:broadcast|bluray|streaming|homevideo))*)$", RegexOptions.Compiled);
 
     // ディレクティブ行: @cols=N 形式。N は 1 以上の整数。
     private static readonly Regex ColsDirectiveRegex = new(@"^@cols=(?<n>\d+)$", RegexOptions.Compiled);
@@ -561,11 +563,11 @@ public static class CreditBulkInputParser
                 var mediaVersionMatch = MediaVersionDirectiveRegex.Match(trimmed);
                 if (mediaVersionMatch.Success)
                 {
-                    // カードの版（本放送 / Blu-ray・配信）。1 枚目のカードでも書けるよう、未作成なら暗黙のカードを作る。
+                    // カードの版（媒体の組）。1 枚目のカードでも書けるよう、未作成なら暗黙のカードを作る。
                     EnsureScaffold(ref curCard, ref curTier, ref curGroup, result);
-                    curCard!.MediaVersion = mediaVersionMatch.Groups["v"].Value == "broadcast"
-                        ? PrecureDataStars.Data.Models.CreditMediaVersions.Broadcast
-                        : PrecureDataStars.Data.Models.CreditMediaVersions.HomeVideo;
+                    curCard!.MediaVersion = PrecureDataStars.Data.Models.CreditMediaVersions.Normalize(
+                        mediaVersionMatch.Groups["v"].Value.Split(',')
+                            .SelectMany(t => t == "homevideo" ? new[] { "bluray", "streaming" } : new[] { t }));
                     continue;
                 }
 

@@ -145,11 +145,15 @@ internal static class CreditBulkInputEncoder
         // ロールのカードは @roll 単独行を先頭に出す（カードのときは出さない）。
         if (string.Equals(card.Entity.Presentation, "ROLL", StringComparison.Ordinal))
             sb.Append("@roll").Append(LineSeparator);
-        // 版の付いたカードは @broadcast / @homevideo 単独行を続けて出す（共通のカードは出さない）。
-        if (string.Equals(card.Entity.MediaVersion, CreditMediaVersions.Broadcast, StringComparison.Ordinal))
-            sb.Append("@broadcast").Append(LineSeparator);
-        else if (string.Equals(card.Entity.MediaVersion, CreditMediaVersions.HomeVideo, StringComparison.Ordinal))
-            sb.Append("@homevideo").Append(LineSeparator);
+        // 版の付いたカードは、媒体の組を @ の単独行で続けて出す（共通のカードは出さない）。
+        // Blu-ray と配信の組は @homevideo、それ以外は媒体を小文字でカンマにつなぐ（@broadcast・@broadcast,bluray・@streaming など）。
+        if (card.Entity.MediaVersion is { Length: > 0 } version)
+        {
+            string directive = string.Equals(version, CreditMediaVersions.HomeVideo, StringComparison.Ordinal)
+                ? "homevideo"
+                : string.Join(",", CreditMediaVersions.Media(version).Select(m => m.ToLowerInvariant()));
+            sb.Append('@').Append(directive).Append(LineSeparator);
+        }
 
         // カード備考（@notes=...）。空文字 / null の場合は出力省略（パーサも空値を null として扱う）。
         EmitNotesDirective(card.Entity.Notes, sb);

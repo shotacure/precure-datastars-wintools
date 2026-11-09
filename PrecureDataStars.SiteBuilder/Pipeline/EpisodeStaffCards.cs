@@ -25,15 +25,15 @@ public static class EpisodeStaffCards
     public const string AnimationCardBadgeRoleCode = "ANIMATION_DIRECTOR";
 
     /// <summary>
-    /// 札を組むときに読むカードを、カードの順に返す。本放送と Blu-ray・配信の両方の版のカードを持つクレジットは、
-    /// Blu-ray・配信の版（と共通）のカードだけを読み、本放送の版のカードは読まない。
+    /// 札を組むときに読むカードを、カードの順に返す。2 つの版のカードを持つクレジットは、組の後ろの版（集計の本体。
+    /// 「Blu-ray・配信」「配信」など）と共通のカードだけを読み、組の前の版（「本放送」「本放送・Blu-ray」など）のカードは読まない。
     /// </summary>
     public static IEnumerable<CreditCardSnapshot> CardsForStaff(IReadOnlyList<CreditCardSnapshot> cards)
     {
-        bool hasHomeVideo = cards.Any(c => c.Card.MediaVersion == CreditMediaVersions.HomeVideo);
-        return cards
-            .Where(c => !(hasHomeVideo && c.Card.MediaVersion == CreditMediaVersions.Broadcast))
-            .OrderBy(c => c.Card.CardSeq);
+        var ordered = cards.OrderBy(c => c.Card.CardSeq).ToList();
+        var plan = TemplateRendering.CardVersionLayout.Plan(ordered, c => c.Card.MediaVersion);
+        bool hasLower = plan.LowerVersion is not null && ordered.Any(c => c.Card.MediaVersion == plan.LowerVersion);
+        return ordered.Where(c => !(hasLower && plan.IsUpper(c)));
     }
 
     /// <summary>カードの役職を、段 → グループ → グループ内の順（クレジットの順）に並べて返す。</summary>

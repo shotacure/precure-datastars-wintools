@@ -2488,11 +2488,11 @@ CREATE TABLE `credits` (
   `series_id`         int                                                          DEFAULT NULL,
   `episode_id`        int                                                          DEFAULT NULL,
   `credit_kind`       varchar(16)                                                  NOT NULL,
-  -- 版（BROADCAST = 本放送、HOME_VIDEO = Blu-ray・配信、NULL = 共通）。
-  `media_version`     enum('BROADCAST','HOME_VIDEO')                               DEFAULT NULL,
+  -- 版：そのクレジットが出る媒体の組（BROADCAST = 本放送、BLURAY = Blu-ray、STREAMING = 配信。例 'BLURAY,STREAMING'）。NULL = 共通。
+  `media_version`     set('BROADCAST','BLURAY','STREAMING')                        DEFAULT NULL,
   -- 一意制約用の生成列。MySQL の UNIQUE は NULL どうしを衝突させないため、NULL を空文字にして
   -- 共通（NULL）のクレジットも同じ回・同じ種類で 1 本までに抑える。
-  `media_version_key` varchar(16) GENERATED ALWAYS AS (IFNULL(`media_version`, '')) STORED,
+  `media_version_key` varchar(32) GENERATED ALWAYS AS (IFNULL(`media_version`, '')) STORED,
   -- 同一スコープ（同一エピソード／同一シリーズ）内でのクレジットの表示順。
   -- credits はクレジット階層の最上位だが、従来は順序カラムを持たず
   -- credit_kind の暗黙順（OP→ED）に依存していた。OP より ED を先に流す回や
@@ -2541,9 +2541,10 @@ CREATE TABLE `credit_cards` (
   -- 1 つのクレジットの中でカード → ロール → カードと切り替わるため、カード単位で持つ。
   -- ロール部分は ROLL のカード 1 枚で表す。credits.presentation はクレジット全体の主な見せ方。
   `presentation` enum('CARDS','ROLL') NOT NULL DEFAULT 'CARDS' COMMENT 'カードの見せ方（CARDS=カード / ROLL=ロール）',
-  -- カードの版（BROADCAST=本放送 / HOME_VIDEO=Blu-ray・配信 / NULL=共通）。本放送と Blu-ray・配信で違うカードだけ版を付け、
-  -- 隣どうしに並べる。サイトは版の付いたカードが続くところを 1 つの枠に上下で描く。集計は共通と Blu-ray・配信だけで数える。
-  `media_version` enum('BROADCAST','HOME_VIDEO') DEFAULT NULL COMMENT 'カードの版（BROADCAST=本放送、HOME_VIDEO=Blu-ray・配信、NULL=共通）',
+  -- カードの版：そのカードが出る媒体の組（BROADCAST = 本放送、BLURAY = Blu-ray、STREAMING = 配信。NULL = 共通）。
+  -- 媒体によって違うカードだけ版を付け、2 つの版のカードを隣どうしに並べる。サイトは 1 組ずつ枠を作り、組の前の版を上・後ろの版を下に描く。
+  -- 集計は組の後ろの版が本体（前の版のカードは、後ろの版のカードにいない人だけを数える）。
+  `media_version` set('BROADCAST','BLURAY','STREAMING') DEFAULT NULL COMMENT 'カードの版（そのカードが出る媒体の組。BROADCAST=本放送、BLURAY=Blu-ray、STREAMING=配信、NULL=共通）',
   `notes`      text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

@@ -31,9 +31,10 @@ public sealed class Credit
     public string CreditKind { get; set; } = "OP";
 
     /// <summary>
-    /// 版（"BROADCAST" = 本放送、"HOME_VIDEO" = Blu-ray・配信、NULL = 共通）。値は <see cref="CreditMediaVersions"/>。
+    /// 版（そのクレジットが出る媒体の組。"BROADCAST" = 本放送、"BLURAY,STREAMING" = Blu-ray・配信 のように、
+    /// BROADCAST / BLURAY / STREAMING をこの順にカンマでつないだ値。NULL = 共通）。値と表示名は <see cref="CreditMediaVersions"/>。
     /// 同じスコープ・同じ <see cref="CreditKind"/> の中で一意（NULL どうしも 1 本まで。DB 側は生成列 media_version_key の UNIQUE で担保）。
-    /// SiteBuilder の集計は共通と Blu-ray・配信版だけで数え、本放送版は表示だけに使う。
+    /// SiteBuilder の集計は共通と本放送を含まない版だけで数え、本放送を含む版は表示だけに使う。
     /// </summary>
     public string? MediaVersion { get; set; }
 
@@ -60,33 +61,69 @@ public sealed class Credit
     public bool IsDeleted { get; set; }
 }
 
-/// <summary>クレジットの版（<see cref="Credit.MediaVersion"/>）の値と表示名。</summary>
+/// <summary>
+/// クレジット・カードの版（<see cref="Credit.MediaVersion"/>・<see cref="CreditCard.MediaVersion"/>）の値と表示名。
+/// 版は、そのクレジット・カードが出る媒体の組（DB は SET('BROADCAST','BLURAY','STREAMING')）。値は媒体のコードを
+/// 本放送 → Blu-ray → 配信 の順にカンマでつないだ文字列（"BROADCAST"・"BLURAY,STREAMING"・"BROADCAST,BLURAY"・"STREAMING" など）、NULL は共通。
+/// 本放送と Blu-ray・配信でクレジットが違う回は、違うところのカードを 2 つの版で隣どうしに置き、1 組ずつの枠に描く
+/// （組の前のカードが上、後ろのカードが下。後ろの版が集計の本体）。
+/// </summary>
 public static class CreditMediaVersions
 {
-    /// <summary>本放送。集計には数えず、表示だけに使う。</summary>
+    /// <summary>媒体：本放送。</summary>
     public const string Broadcast = "BROADCAST";
 
-    /// <summary>Blu-ray・配信。</summary>
-    public const string HomeVideo = "HOME_VIDEO";
+    /// <summary>媒体：Blu-ray。</summary>
+    public const string BluRay = "BLURAY";
 
-    /// <summary>版の表示名。NULL（共通）は空文字。</summary>
-    public static string LabelOf(string? mediaVersion) => mediaVersion switch
+    /// <summary>媒体：配信。</summary>
+    public const string Streaming = "STREAMING";
+
+    /// <summary>Blu-ray と配信の組（本放送と違い、Blu-ray と配信は同じ版の回）。</summary>
+    public const string HomeVideo = "BLURAY,STREAMING";
+
+    /// <summary>媒体のコードの並び（DB の SET の定義順。値はこの順でつなぐ）。</summary>
+    private static readonly string[] MediaOrder = { Broadcast, BluRay, Streaming };
+
+    /// <summary>媒体のコード → 表示名。</summary>
+    private static string MediaLabel(string media) => media switch
     {
         Broadcast => "本放送",
-        HomeVideo => "Blu-ray・配信",
-        _ => ""
+        BluRay => "Blu-ray",
+        Streaming => "配信",
+        _ => media
     };
 
-    /// <summary>同じ種別のクレジットを並べる順（共通 → 本放送 → Blu-ray・配信）。</summary>
-    public static int SortOrder(string? mediaVersion) => mediaVersion switch
+    /// <summary>版の値を媒体のコードの並び（定義順）に分ける。NULL・空は空の並び。</summary>
+    public static IReadOnlyList<string> Media(string? mediaVersion)
     {
-        null => 0,
-        Broadcast => 1,
-        HomeVideo => 2,
-        _ => 9
-    };
+        if (string.IsNullOrEmpty(mediaVersion)) return Array.Empty<string>();
+        var parts = mediaVersion.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return MediaOrder.Where(m => parts.Contains(m, StringComparer.Ordinal)).ToList();
+    }
 
-    /// <summary>集計（関わった話数・役職の何回目など）に数える版か。本放送版だけ数えない。</summary>
-    public static bool CountsForStats(string? mediaVersion)
-        => !string.Equals(mediaVersion, Broadcast, StringComparison.Ordinal);
+    /// <summary>媒体のコードの組を、定義順にカンマでつないだ版の値にする。空なら NULL（共通）。知らないコードがあれば例外。</summary>
+    public static string? Normalize(IEnumerable<string> media)
+    {
+        var set = media.Select(m => m.Trim().ToUpperInvariant()).Where(m => m.Length > 0).ToHashSet(StringComparer.Ordinal);
+        foreach (var m in set)
+            if (!MediaOrder.Contains(m, StringComparer.Ordinal)) throw new ArgumentException($"版の媒体のコードが不明: {m}");
+        var ordered = MediaOrder.Where(set.Contains).ToList();
+        return ordered.Count == 0 ? null : string.Join(",", ordered);
+    }
+
+    /// <summary>版の表示名（媒体の表示名を「・」でつなぐ。"BROADCAST,BLURAY" → 「本放送・Blu-ray」）。NULL（共通）は空文字。</summary>
+    public static string LabelOf(string? mediaVersion)
+        => string.Join("・", Media(mediaVersion).Select(MediaLabel));
+
+    /// <summary>版に本放送が含まれるか。</summary>
+    public static bool IncludesBroadcast(string? mediaVersion)
+        => Media(mediaVersion).Contains(Broadcast, StringComparer.Ordinal);
+
+    /// <summary>同じ種別のクレジットを並べる順（共通 → 本放送を含む版 → それ以外の版）。</summary>
+    public static int SortOrder(string? mediaVersion)
+        => mediaVersion is null ? 0 : IncludesBroadcast(mediaVersion) ? 1 : 2;
+
+    /// <summary>クレジット単位の版で、集計（関わった話数・役職の何回目など）に数える版か。本放送を含む版は数えない。</summary>
+    public static bool CountsForStats(string? mediaVersion) => !IncludesBroadcast(mediaVersion);
 }

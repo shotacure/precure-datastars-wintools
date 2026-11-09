@@ -1914,8 +1914,9 @@ a.series-card-children-title:hover {
 .credit-section .role  { margin-top: 6px; }
 .credit-section .role:first-child { margin-top: 0; }
 
-/* 本放送と Blu-ray・配信で違うカード：版の付いたカードが続くところを角丸の細い線の枠 1 つにまとめ、
-   上半分（本放送）と下半分（Blu-ray・配信）で地の色を分ける。共通のカードは枠に入れない。 */
+/* 媒体（本放送・Blu-ray・配信）によって違うカード：版の付いたカードが続くところを 1 組ずつ角丸の細い線の枠にまとめ、
+   上半分（組の前の版。「本放送」「本放送・Blu-ray」など）と下半分（組の後ろの版。「Blu-ray・配信」「配信」など）で地の色を分ける。
+   共通のカードは枠に入れない。 */
 .credit-section .card-versions {
   margin-top: 40px;
   border: 1px solid var(--border);
@@ -1924,8 +1925,8 @@ a.series-card-children-title:hover {
 }
 .credit-section .card-versions:first-child { margin-top: 0; }
 .credit-section .card-version { padding: 10px 14px 14px; }
-.credit-section .card-version-broadcast { background: #fdf1f6; }
-.credit-section .card-version-homevideo { background: #eef4fb; border-top: 1px solid var(--border); }
+.credit-section .card-version-upper { background: #fdf1f6; }
+.credit-section .card-version-lower { background: #eef4fb; border-top: 1px solid var(--border); }
 .credit-section .card-version-label {
   margin: 0 0 8px;
   font-size: 0.8em;

@@ -278,9 +278,10 @@ internal sealed class CreditTreeRenderer
             html.Append("<p class=\"empty-credit\">（カード未登録）</p>");
             return html.ToString();
         }
-        // 版の付いたカード（本放送 / Blu-ray・配信）は、隣どうしの 1 組ごとに本放送を先・Blu-ray・配信を後に並べ替えて、1 組 1 つの枠で描く。
-        var cardSnapshots = CardVersionLayout.OrderVersionRuns(
+        // 版の付いたカード（媒体の組）は、隣どうしの 1 組ごとに組の前の版を先・後ろの版を後に並べ替えて、1 組 1 つの枠で描く。
+        var versionPlan = CardVersionLayout.Plan(
             cardSnapshotsAll.OrderBy(c => c.Card.CardSeq).ToList(), c => c.Card.MediaVersion);
+        var cardSnapshots = versionPlan.Cards;
 
         // 役職マスタは BuildContext で事前展開済みのため直接参照する。
         var roleMap = _ctx.RoleByCode;
@@ -288,17 +289,16 @@ internal sealed class CreditTreeRenderer
 
         string storyboardDisplay = GetStoryboardDisplay(resolveSeriesId);
         string? prevVoiceCastRoleCode = null;
-        // 版の枠の中で、本放送の半分と Blu-ray・配信の半分を同じ状態から描くための控え（CardVersionLayout.CarryState）
+        // 版の枠の中で、上半分と下半分を同じ状態から描くための控え（CardVersionPlan.CarryState）
         string? savedVoiceCastRoleCode = null;
 
         for (int cardIndex = 0; cardIndex < cardSnapshots.Count; cardIndex++)
         {
             var cardSnap = cardSnapshots[cardIndex];
             var card = cardSnap.Card;
-            // 版の枠を開く（1 組の頭・本放送から Blu-ray・配信へ切り替わるところ）。
-            prevVoiceCastRoleCode = CardVersionLayout.CarryState(cardIndex > 0 ? cardSnapshots[cardIndex - 1].Card.MediaVersion : null, card.MediaVersion, prevVoiceCastRoleCode, ref savedVoiceCastRoleCode);
-            html.Append(CardVersionLayout.OpenBefore(
-                cardIndex > 0 ? cardSnapshots[cardIndex - 1].Card.MediaVersion : null, card.MediaVersion));
+            // 版の枠を開く（1 組の頭・上半分から下半分へ切り替わるところ）。
+            prevVoiceCastRoleCode = versionPlan.CarryState(cardIndex, prevVoiceCastRoleCode, ref savedVoiceCastRoleCode);
+            html.Append(versionPlan.OpenBefore(cardIndex));
             // ロール（流れるクレジット）のカードは card-roll を足して見た目を分けられるようにする。
             html.Append(string.Equals(card.Presentation, "ROLL", StringComparison.Ordinal)
                 ? "<div class=\"card card-roll\">"
@@ -483,9 +483,8 @@ internal sealed class CreditTreeRenderer
                 html.Append("</div>"); // .tier
             }
             html.Append("</div>"); // .card
-            // 版の枠を閉じる（1 組の終わり・本放送から Blu-ray・配信へ切り替わるところ）。
-            html.Append(CardVersionLayout.CloseAfter(card.MediaVersion,
-                cardIndex + 1 < cardSnapshots.Count ? cardSnapshots[cardIndex + 1].Card.MediaVersion : null));
+            // 版の枠を閉じる（1 組の終わり・上半分から下半分へ切り替わるところ）。
+            html.Append(versionPlan.CloseAfter(cardIndex));
         }
 
         return html.ToString();

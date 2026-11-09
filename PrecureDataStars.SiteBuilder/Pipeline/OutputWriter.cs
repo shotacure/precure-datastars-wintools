@@ -123,6 +123,68 @@ public sealed class OutputWriter
         return removed;
     }
 
+    /// <summary>
+    /// 出力ディレクトリにあるファイル・ディレクトリの名前の大文字小文字を、今回の出力として記録したパスにそろえる。
+    /// 戻り値は名前を付け替えたファイル・ディレクトリの数。全体ビルドの最後に <see cref="PruneOrphans"/> の前に呼ぶ。
+    /// <list type="bullet">
+    ///   <item><description>Windows のファイルシステムは大文字小文字を区別しないので、URL が大文字小文字だけ違う形に変わった
+    ///     ページ（人物の表示名義が「Ryan Prajinog」から「RYAN PRAJINOG」に変わったときなど）は、前回のディレクトリ名のまま
+    ///     中身だけが書き換わる。S3 のキーとサイトの URL は大文字小文字を区別するので、そのままデプロイするとリンク先が 404 になる。</description></item>
+    ///   <item><description>記録したパスと実際の名前が大文字小文字だけ違うものを探し、ルートに近い階層から順に一時名を経由して
+    ///     付け替える（大文字小文字だけの改名は直接できない場合があるため）。</description></item>
+    /// </list>
+    /// </summary>
+    public int AlignNameCase()
+    {
+        if (!Directory.Exists(Root)) return 0;
+
+        // 記録したパス（大文字小文字は記録した形のまま）を、大文字小文字を区別しない引き当て用に持つ。
+        var tracked = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in _files.Keys) tracked[key] = key;
+
+        var mismatched = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories))
+        {
+            var actual = Path.GetFullPath(file);
+            if (tracked.TryGetValue(actual, out var desired) && !string.Equals(actual, desired, StringComparison.Ordinal))
+                mismatched.Add(desired);
+        }
+
+        int renamed = 0;
+        foreach (var desired in mismatched)
+        {
+            // ルート直下から 1 階層ずつ、実際の名前を引いて記録した名前と比べる（先に付け替えた親の結果を引き継ぐ）。
+            var segments = Path.GetRelativePath(Root, desired).Split(Path.DirectorySeparatorChar);
+            var current = Root;
+            for (int i = 0; i < segments.Length; i++)
+            {
+                bool isFile = i == segments.Length - 1;
+                var want = segments[i];
+                var entry = new DirectoryInfo(current).EnumerateFileSystemInfos()
+                    .FirstOrDefault(e => string.Equals(e.Name, want, StringComparison.OrdinalIgnoreCase));
+                if (entry is null) break;
+                var target = Path.Combine(current, want);
+                if (!string.Equals(entry.Name, want, StringComparison.Ordinal))
+                {
+                    var temp = Path.Combine(current, $"~case-{Guid.NewGuid():N}");
+                    if (isFile)
+                    {
+                        File.Move(entry.FullName, temp);
+                        File.Move(temp, target);
+                    }
+                    else
+                    {
+                        Directory.Move(entry.FullName, temp);
+                        Directory.Move(temp, target);
+                    }
+                    renamed++;
+                }
+                current = target;
+            }
+        }
+        return renamed;
+    }
+
     /// <summary>同じ場所に同じ中身のファイルがあるか。大きさが違えば読まずに不一致とする。</summary>
     private static bool HasSameContent(string full, byte[] bytes)
     {

@@ -201,15 +201,21 @@ public sealed class EntityUrlRegistry
             }
             if (chosen is null && publishedPersonSlugs.TryGetValue(p.PersonId, out var publishedSlug))
             {
-                foreach (var aid in ownAliasIds)
+                // 添え書きのある人物は、添え書き付きの名前で公開しているので、それと比べる。
+                // 大文字小文字だけ違う名義（「Ryan Prajinog」と「RYAN PRAJINOG」など）があるときは、公開中の URL と
+                // 完全に一致する名義を選ぶ（URL は大文字小文字を区別するため）。一致が無ければ大文字小文字を区別せずに選ぶ。
+                foreach (var comparison in new[] { StringComparison.Ordinal, StringComparison.OrdinalIgnoreCase })
                 {
-                    // 添え書きのある人物は、添え書き付きの名前で公開しているので、それと比べる。
-                    if (ctx.PersonAliasById.TryGetValue(aid, out var a)
-                        && string.Equals(UrlSlug.FromName(WithDisambiguation(a.Name, p.Disambiguation)), publishedSlug, StringComparison.OrdinalIgnoreCase))
+                    foreach (var aid in ownAliasIds)
                     {
-                        chosen = aid;
-                        break;
+                        if (ctx.PersonAliasById.TryGetValue(aid, out var a)
+                            && string.Equals(UrlSlug.FromName(WithDisambiguation(a.Name, p.Disambiguation)), publishedSlug, comparison))
+                        {
+                            chosen = aid;
+                            break;
+                        }
                     }
+                    if (chosen is not null) break;
                 }
             }
             if (chosen is null && latestAliasIds.TryGetValue(p.PersonId, out var latest))
@@ -327,7 +333,8 @@ public sealed class EntityUrlRegistry
             }
 
             // 旧名の人物・キャラ・企業 URL の転送表。本番で公開した記録（published_entity_slugs）のうち、いまの URL と違うものを
-            // いまの URL へ転送する。同じ区分でいま別の実体がその名前の URL を使っている（ページが実在する）ときは転送しない。
+            // いまの URL へ転送する。同じ区分でいま別の実体がその名前の URL を使っている（ページが実在する）ときは転送しない
+            // （名前の衝突は大文字小文字を区別せずに見る。同じ実体の大文字小文字だけ違う旧 URL は転送する）。
             // 転送元のキーはデコード済みのスラッグで持つ（Lambda@Edge 側でリクエスト URI をデコードして引く）。
             const string publishedSql = """
                 SELECT entity_kind AS EntityKind, slug AS Slug, COALESCE(person_id, character_id, company_id, person_alias_id) AS EntityId
@@ -337,22 +344,35 @@ public sealed class EntityUrlRegistry
                 """;
             var published = await conn.QueryAsync<PublishedSlugRow>(
                 new CommandDefinition(publishedSql, cancellationToken: ct)).ConfigureAwait(false);
-            var livePersonSlugs = new HashSet<string>(reg._personSlugs.Values, StringComparer.OrdinalIgnoreCase);
-            var liveCharacterSlugs = new HashSet<string>(reg._characterSlugs.Values, StringComparer.OrdinalIgnoreCase);
-            var liveCompanySlugs = new HashSet<string>(reg._companySlugs.Values, StringComparer.OrdinalIgnoreCase);
-            var liveUnitSlugs = new HashSet<string>(reg._unitSlugs.Values, StringComparer.OrdinalIgnoreCase);
+            // いまのスラッグ → 実体 ID（大文字小文字を区別せずに引く）。同じ実体のいまのスラッグと大文字小文字だけ違う旧スラッグ
+            // （表示名義が「Ryan Prajinog」から「RYAN PRAJINOG」に変わったときなど）は、サイトの URL が大文字小文字を区別するので転送する。
+            static Dictionary<string, int> LiveOwners(Dictionary<int, string> slugs)
+            {
+                var owners = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var (id, slug) in slugs) owners.TryAdd(slug, id);
+                return owners;
+            }
+            var livePersonSlugs = LiveOwners(reg._personSlugs);
+            var liveCharacterSlugs = LiveOwners(reg._characterSlugs);
+            var liveCompanySlugs = LiveOwners(reg._companySlugs);
+            var liveUnitSlugs = LiveOwners(reg._unitSlugs);
             foreach (var row in published)
             {
-                var (section, liveSlugs, urls) = row.EntityKind switch
+                var (section, liveSlugs, currentSlugs, urls) = row.EntityKind switch
                 {
-                    "PERSON" => ("people", livePersonSlugs, reg._personUrls),
-                    "CHARACTER" => ("characters", liveCharacterSlugs, reg._characterUrls),
-                    "COMPANY" => ("companies", liveCompanySlugs, reg._companyUrls),
-                    "UNIT" => ("units", liveUnitSlugs, reg._unitUrls),
-                    _ => ("", null, null)
+                    "PERSON" => ("people", livePersonSlugs, reg._personSlugs, reg._personUrls),
+                    "CHARACTER" => ("characters", liveCharacterSlugs, reg._characterSlugs, reg._characterUrls),
+                    "COMPANY" => ("companies", liveCompanySlugs, reg._companySlugs, reg._companyUrls),
+                    "UNIT" => ("units", liveUnitSlugs, reg._unitSlugs, reg._unitUrls),
+                    _ => ("", null, null, null)
                 };
-                if (liveSlugs is null || urls is null || row.EntityId is not int eid) continue;
-                if (liveSlugs.Contains(row.Slug)) continue;
+                if (liveSlugs is null || currentSlugs is null || urls is null || row.EntityId is not int eid) continue;
+                if (liveSlugs.TryGetValue(row.Slug, out var owner))
+                {
+                    // 別の実体がいま使っている名前、または同じ実体のいまの URL そのものは転送しない。
+                    if (owner != eid) continue;
+                    if (currentSlugs.TryGetValue(eid, out var currentSlug) && string.Equals(currentSlug, row.Slug, StringComparison.Ordinal)) continue;
+                }
                 if (!urls.TryGetValue(eid, out var to)) continue;
                 reg._legacyRedirects.Add(new LegacyRedirect($"/{section}/{row.Slug}", to));
             }

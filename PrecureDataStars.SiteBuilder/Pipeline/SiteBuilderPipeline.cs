@@ -344,10 +344,13 @@ public sealed class SiteBuilderPipeline
             // 出力の掃除。今回の出力に属さないファイル（生成されなくなったページや画像）を消して、出力を今回の
             // 生成物だけにする。あわせて、今回のどのページにも使わなかった OGP カードの作り置き（材料や描き方を
             // 変える前の古い画像）も消す。全ファイルの書き出しが済んだあと、最後に行う。
+            // 掃除の前に、URL が大文字小文字だけ違う形に変わったページの名前を今回の URL の形にそろえる
+            // （Windows では前回の名前のまま上書きされ、そのままデプロイすると S3 のキーが前回の形のまま残るため）。
             reporter.BeginSection("prune");
+            int caseRenamed = output.AlignNameCase();
             prunedFiles = output.PruneOrphans();
             staleOgCards = PruneOgCardCache(config.OgCardCacheDirectory, pageRenderer.OgCardCacheKeysUsed);
-            logger.Info($"output pruned: {prunedFiles} files removed / stale og cards: {staleOgCards} removed");
+            logger.Info($"output pruned: {prunedFiles} files removed / stale og cards: {staleOgCards} removed / name case aligned: {caseRenamed}");
             reporter.PageWritten();
             reporter.EndSection();
         }

@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：音楽の役職詳細（演奏・プロデューサーなど）の「初担当順・参加数順・年表」を、ほかの役職詳細と同じタブにした**（`creators-music-role-detail.sbn`）：このページだけ、丸い並べ替えの切り替えボタンで出していた。中身と並びは変えない
+
 - **サイト：作詞・作曲・編曲の役職のページの初担当順を、その役職で初めて担当した録音の作品ごとの節に分けた**（`CreatorsGenerator`〔`SongRoleRow.DebutSeriesId` を役職のページでも埋める・`SongRoleDetailModel.DebutSections`〔新規〕〕・`creators-song-role-detail.sbn`）：初担当順は節の無い 1 つの並びで、どの作品からの人か分からなかった。節は TV・映画を混ぜた放送開始・公開順で、見出しと左のもくじは「作品名（年）」。節の中は今までどおり録音の順
 
 - **サイト：スタッフ一覧の役職順タブを、TV でクレジットされた役職と映画でのみクレジットされた役職に分けたうえで、それぞれ作品ごとの節に分けた**（`CreatorsGenerator`〔`SectionRolesByFirstSeries` に節分けの回を選ぶ引数・`RoleFirstCredit`〔新規〕・`RoleIndexEntry.First` / `FirstTv`〔新規〕・`EntityAggregate.FirstTv`〔新規〕・`EntityRow.FirstTvSeriesId` ほか TV 系の最早関与の列〔新規〕・`StaffModel.RoleTvSections` / `RoleMovieSections`〔`RoleSections` を置き換え〕〕・`creators-staff.sbn`・`_staff-role-row.sbn`〔新規〕・`site.css` の `.creators-role-group` / `.creators-role-group-heading`〔新規〕）：作品ごとの節だけにしたら、TV の役職と映画の役職が混ざった。TV の側は TV で初めてクレジットされた作品で、映画の側は初めての映画で節を分ける。左のもくじは「TV」「映画」の下に作品を 1 段下げて並べる（作品の節を `data-section-nav-child` にする）。映画でのみの役職が無いオトナシリーズのスタッフ一覧は、作品の節だけを並べる

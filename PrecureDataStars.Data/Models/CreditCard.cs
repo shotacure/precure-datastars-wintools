@@ -19,6 +19,13 @@ public sealed class CreditCard
     /// </summary>
     public string Presentation { get; set; } = "CARDS";
 
+    /// <summary>
+    /// カードの版（<see cref="CreditMediaVersions.Broadcast"/> = 本放送 / <see cref="CreditMediaVersions.HomeVideo"/> = Blu-ray・配信 / null = 共通）。
+    /// 本放送と Blu-ray・配信で違うカードだけ版を付け、本放送のカードと Blu-ray・配信のカードを隣どうしに並べる。
+    /// 描画は版の付いたカードが続くところを 1 つの枠にまとめて上下に出し、集計は共通と Blu-ray・配信のカードだけで数える。
+    /// </summary>
+    public string? MediaVersion { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

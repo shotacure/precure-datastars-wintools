@@ -15,6 +15,7 @@ public sealed class CreditCardsRepository : RepositoryBase
           credit_id   AS CreditId,
           card_seq    AS CardSeq,
           presentation AS Presentation,
+          media_version AS MediaVersion,
           notes       AS Notes,
           created_at  AS CreatedAt,
           updated_at  AS UpdatedAt,
@@ -65,9 +66,9 @@ public sealed class CreditCardsRepository : RepositoryBase
     {
         const string sqlCard = """
             INSERT INTO credit_cards
-              (credit_id, card_seq, presentation, notes, created_by, updated_by)
+              (credit_id, card_seq, presentation, media_version, notes, created_by, updated_by)
             VALUES
-              (@CreditId, @CardSeq, @Presentation, @Notes, @CreatedBy, @UpdatedBy);
+              (@CreditId, @CardSeq, @Presentation, @MediaVersion, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         const string sqlTier = """
@@ -110,6 +111,7 @@ public sealed class CreditCardsRepository : RepositoryBase
               credit_id  = @CreditId,
               card_seq   = @CardSeq,
               presentation = @Presentation,
+              media_version = @MediaVersion,
               notes      = @Notes,
               updated_by = @UpdatedBy
             WHERE card_id = @CardId;

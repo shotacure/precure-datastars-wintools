@@ -46,6 +46,29 @@ public static class PathUtil
         return !_rolesWithoutPage.Contains(rep);
     }
 
+    /// <summary>
+    /// オトナシリーズの役職のページ（<see cref="CreatorsOtonaRoleUrl"/>）を持つ役職（系譜の代表の role_code）。
+    /// オトナシリーズのクレジットに出る役職のうち、本編の役職詳細と同じくページを作る役職が当たる
+    /// （<see cref="Pipeline.CreatorListScope.OtonaRolesWithPage"/>）。<see cref="UseOtonaRolePages"/> で差し込み、以降は読み取り専用。
+    /// 未設定のあいだは空（どの役職もオトナシリーズの役職のページを持たない扱い）。
+    /// </summary>
+    private static IReadOnlySet<string> _otonaRolesWithPage = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>オトナシリーズの役職のページを持つ役職の集合を差し込む（ページ生成より前に 1 度だけ呼ぶ）。</summary>
+    public static void UseOtonaRolePages(IReadOnlySet<string> roleCodes) => _otonaRolesWithPage = roleCodes;
+
+    /// <summary>
+    /// 役職名をオトナシリーズの役職のページ（<see cref="CreatorsOtonaRoleUrl"/>）へのリンクにしてよいか。系譜の代表で判定する。
+    /// オトナシリーズの作品のクレジット・関わりの行で使い、false のときは本編の役職詳細の判定（<see cref="HasRolePage"/>）に任せる。
+    /// </summary>
+    public static bool HasOtonaRolePage(string roleCode)
+    {
+        if (string.IsNullOrEmpty(roleCode) || IsSingerRole(roleCode)) return false;
+        string rep = _roleRepresentative(roleCode);
+        if (string.IsNullOrEmpty(rep)) rep = roleCode;
+        return _otonaRolesWithPage.Contains(rep);
+    }
+
     /// <summary>「URL パス」（先頭スラッシュ付き、末尾スラッシュ付き）を「出力ファイルパス」に変換する。 末尾は <c>index.html</c> を付与。</summary>
     /// <param name="outputRoot">出力ルートディレクトリ。</param>
     /// <param name="urlPath">URL パス（例 "/series/precure/"）。先頭スラッシュは必須。パーセントエンコードされたセグメントはデコードしたファイル名で書き出す。</param>
@@ -151,6 +174,25 @@ public static class PathUtil
         if (string.IsNullOrEmpty(rep)) rep = roleCode;
         return $"/creators/roles/{rep.ToLowerInvariant()}/";
     }
+
+    /// <summary>
+    /// オトナシリーズの役職のページの URL パス（<c>/creators/otona/roles/{rep_role_code}/</c>）。
+    /// オトナシリーズのクレジットだけで集計した役職詳細で、URL の組み立て（系譜の代表・小文字化）は
+    /// 本編の役職詳細（<see cref="CreatorsRoleUrl"/>）と同じ規則。ページを持つかは <see cref="HasOtonaRolePage"/> で判定する。
+    /// </summary>
+    public static string CreatorsOtonaRoleUrl(string roleCode)
+    {
+        string rep = _roleRepresentative(roleCode);
+        if (string.IsNullOrEmpty(rep)) rep = roleCode;
+        return $"/creators/otona/roles/{rep.ToLowerInvariant()}/";
+    }
+
+    /// <summary>
+    /// 作品のページ・各話のページのスタッフの札の役職のリンク先。オトナシリーズの作品（<paramref name="isOtonaWork"/>）で
+    /// オトナシリーズの役職のページを持つ役職（<see cref="HasOtonaRolePage"/>）ならそのページ、それ以外は本編の役職詳細（<see cref="CreatorsRoleUrl"/>）。
+    /// </summary>
+    public static string CreatorsRoleUrlInWork(string roleCode, bool isOtonaWork)
+        => isOtonaWork && HasOtonaRolePage(roleCode) ? CreatorsOtonaRoleUrl(roleCode) : CreatorsRoleUrl(roleCode);
 
     /// <summary>
     /// 楽曲のクレジット行（作詞・作曲・編曲・歌・コーラス・台詞）の役職バッジのリンク先。

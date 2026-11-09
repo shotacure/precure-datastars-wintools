@@ -12,7 +12,7 @@ namespace PrecureDataStars.TemplateRendering;
 public static class RoleJoinComparer
 {
     /// <summary>
-    /// 役職配下のブロック群から比較用のキーを作る。ブロックの区切り・カラム数・ブロック先頭企業と、
+    /// 役職配下のブロック群から比較用のキーを作る。ブロックの区切り・カラム数・ブロック先頭企業（2 社目・間の字・後ろの字を含む）と、
     /// エントリの並び・種別・参照先・表記（誤記・伏せ字を含む）をすべて含める。
     /// </summary>
     public static string BuildKey(IReadOnlyList<BlockSnapshot> blocks)
@@ -20,7 +20,10 @@ public static class RoleJoinComparer
         var sb = new StringBuilder();
         foreach (var bs in blocks)
         {
-            sb.Append("|B").Append(bs.Block.ColCount).Append(':').Append(bs.Block.LeadingCompanyAliasId);
+            sb.Append("|B").Append(bs.Block.ColCount).Append(':').Append(bs.Block.LeadingCompanyAliasId)
+              .Append(':').Append(bs.Block.LeadingCompany2AliasId)
+              .Append(':').Append(bs.Block.LeadingCompanySeparator)
+              .Append(':').Append(bs.Block.LeadingCompanySuffix);
             foreach (var e in bs.Entries)
             {
                 sb.Append("|E").Append(e.EntryKind)
@@ -38,7 +41,8 @@ public static class RoleJoinComparer
                   .Append(':').Append(e.PersonDisplayText)
                   .Append(':').Append(e.PersonMaskedText)
                   .Append(':').Append(e.CharacterMisprintText)
-                  .Append(':').Append(e.CompanyMisprintText);
+                  .Append(':').Append(e.CompanyMisprintText)
+                  .Append(':').Append(e.CompanyDisplayText);
             }
         }
         return sb.ToString();

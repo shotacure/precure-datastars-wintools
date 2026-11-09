@@ -1393,6 +1393,7 @@ public sealed class SeriesGenerator
         var content = new SeriesDetailModel
         {
             Series = seriesView,
+            EpisodeStaffRoleUrls = EpisodeStaffRoleUrlSet.For(_ctx.IsOtonaSeries(s.SeriesId)),
             BgmLinks = bgmLinks,
             Episodes = epRows,
             RelatedWorks = relatedWorks,
@@ -1951,7 +1952,8 @@ public sealed class SeriesGenerator
                 // 小文字化する。現行挙動どおり spec.Code をそのまま対象にする
                 // （系譜代表への置換は行わない）。data-role-code 属性側は
                 // バッジ色分け CSS の都合で実コード（大文字）のまま使う。
-                RoleUrl = PathUtil.CreatorsRoleUrl(spec.Code),
+                // オトナシリーズの作品は、オトナシリーズの役職のページを持つ役職ならそちらへ（PathUtil.CreatorsRoleUrlInWork）。
+                RoleUrl = PathUtil.CreatorsRoleUrlInWork(spec.Code, _ctx.IsOtonaSeries(series.SeriesId)),
                 RoleLabel = spec.Label,
                 Members = rows
             });
@@ -2172,6 +2174,8 @@ public sealed class SeriesGenerator
         /// <summary>「劇伴」節のボタン（劇伴一覧ページがある自作品・子作品の分）。空なら節ごと出さない。</summary>
         public IReadOnlyList<BgmLinkRow> BgmLinks { get; set; } = Array.Empty<BgmLinkRow>();
         public IReadOnlyList<EpisodeIndexRow> Episodes { get; set; } = Array.Empty<EpisodeIndexRow>();
+        /// <summary>エピソード一覧の各行のスタッフの札（脚本・絵コンテ・演出・作画監督・美術）のリンク先。</summary>
+        public EpisodeStaffRoleUrlSet EpisodeStaffRoleUrls { get; set; } = EpisodeStaffRoleUrlSet.Main;
         /// <summary>
         /// 「関連作品」セクション用。
         /// 親・子作品（続編・映画・同時上映の短編・スピンオフ等）を 1 つのリストにまとめて保持する。
@@ -2204,6 +2208,46 @@ public sealed class SeriesGenerator
         public string NextLabel { get; set; } = "";
         /// <summary>前後ナビ自体を出すか（TV シリーズと映画のみ true）。</summary>
         public bool HasPrevNextNav { get; set; }
+    }
+
+    /// <summary>
+    /// シリーズ詳細のエピソード一覧の各行に並ぶスタッフの札（脚本・絵コンテ・演出・作画監督・美術）のリンク先。
+    /// 本編の作品は本編の役職詳細（<see cref="Main"/>）。オトナシリーズの作品は、オトナシリーズの役職のページを持つ役職なら
+    /// そのページを指す（美術の札は、オトナシリーズのクレジットの役職が美術監督なので美術監督のページ）。
+    /// </summary>
+    private sealed class EpisodeStaffRoleUrlSet
+    {
+        public string Screenplay { get; init; } = "";
+        public string Storyboard { get; init; } = "";
+        public string EpisodeDirector { get; init; } = "";
+        public string AnimationDirector { get; init; } = "";
+        public string ArtDirector { get; init; } = "";
+
+        /// <summary>本編の作品の札のリンク先（本編の役職詳細）。</summary>
+        public static readonly EpisodeStaffRoleUrlSet Main = new()
+        {
+            Screenplay = "/creators/roles/screenplay/",
+            Storyboard = "/creators/roles/storyboard/",
+            EpisodeDirector = "/creators/roles/episode_director/",
+            AnimationDirector = "/creators/roles/animation_director/",
+            ArtDirector = "/creators/roles/art_director_tv/"
+        };
+
+        /// <summary>作品に合わせた札のリンク先。オトナシリーズの作品でなければ <see cref="Main"/>。</summary>
+        public static EpisodeStaffRoleUrlSet For(bool isOtonaWork)
+        {
+            if (!isOtonaWork) return Main;
+            static string Otona(string code, string mainUrl)
+                => PathUtil.HasOtonaRolePage(code) ? PathUtil.CreatorsOtonaRoleUrl(code) : mainUrl;
+            return new EpisodeStaffRoleUrlSet
+            {
+                Screenplay = Otona("SCREENPLAY", Main.Screenplay),
+                Storyboard = Otona("STORYBOARD", Main.Storyboard),
+                EpisodeDirector = Otona("EPISODE_DIRECTOR", Main.EpisodeDirector),
+                AnimationDirector = Otona("ANIMATION_DIRECTOR", Main.AnimationDirector),
+                ArtDirector = Otona("ART_DIRECTOR", Main.ArtDirector)
+            };
+        }
     }
 
     /// <summary>シリーズ詳細ページのクレジットセクション 1 ブロック分の描画ビュー。

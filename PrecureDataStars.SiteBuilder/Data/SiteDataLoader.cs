@@ -295,7 +295,7 @@ public static class SiteDataLoader
         // ビルド開始時に 1 度だけ走らせて BuildContext 経由で全 Generator から参照できるようにする。
         var creditTreeIndex = await CreditTreeIndex.BuildAsync(
             creditCardsRepo, creditCardTiersRepo, creditCardGroupsRepo,
-            creditCardRolesRepo, creditRoleBlocksRepo, creditBlockEntriesRepo, ct).ConfigureAwait(false);
+            creditCardRolesRepo, creditRoleBlocksRepo, creditBlockEntriesRepo, ct, personAliasPersonsRepo).ConfigureAwait(false);
         logger.Info($"credit_tree: {creditTreeIndex.CardsByCreditId.Count} クレジット分を事前展開");
 
         // 全 credits 行を 1 度の SELECT で取得して episode_id / series_id 単位でグルーピング。

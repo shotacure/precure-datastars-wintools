@@ -126,6 +126,16 @@ internal sealed class CreditPreviewRenderer
              */
           .card  { margin-top: 40px; }
           .card:first-child { margin-top: 0; }
+          /* 本放送と Blu-ray・配信で違うカード：版の付いたカードが続くところを角丸の細い線の枠 1 つにまとめ、
+             上半分（本放送）と下半分（Blu-ray・配信）で地の色を分ける（サイトと同じ）。 */
+          .card-versions { margin-top: 40px; border: 1px solid #d0d0d0; border-radius: 10px; overflow: hidden; }
+          .card-versions:first-child { margin-top: 0; }
+          .card-version { padding: 10px 14px 14px; }
+          .card-version-broadcast { background: #fdf1f6; }
+          .card-version-homevideo { background: #eef4fb; border-top: 1px solid #d0d0d0; }
+          .card-version-label { margin: 0 0 8px; font-size: 0.8em; font-weight: bold; color: #666; }
+          .card-version-none { margin: 0; color: #666; }
+          .card-version .card:first-of-type { margin-top: 0; }
           .tier  { margin-top: 24px; }
           .tier:first-child { margin-top: 0; }
           .group { margin-top: 14px; }
@@ -318,6 +328,24 @@ internal sealed class CreditPreviewRenderer
         return WebUtility.HtmlEncode(s);
     }
 
+    /// <summary>
+    /// 筆頭の 1 社目の表示名に、2 社目（<see cref="CreditRoleBlock.LeadingCompany2AliasId"/>）と
+    /// 後ろの字（<see cref="CreditRoleBlock.LeadingCompanySuffix"/>）を続けた「社名1 + 間の字 + 社名2 + 後ろの字」を返す（プレーンテキスト）。
+    /// 2 社目の名義が引けないときは 2 社目と間の字（<see cref="CreditRoleBlock.LeadingCompanySeparator"/>）を出さない。
+    /// </summary>
+    private async Task<string> AppendLeadingCompanyRestAsync(CreditRoleBlock block, string name)
+    {
+        if (block.LeadingCompany2AliasId is int lead2Id)
+        {
+            string? name2 = await _lookup.LookupCompanyAliasNameAsync(lead2Id);
+            if (!string.IsNullOrEmpty(name2))
+                name = name + (block.LeadingCompanySeparator ?? "") + name2;
+        }
+        if (!string.IsNullOrEmpty(block.LeadingCompanySuffix))
+            name += block.LeadingCompanySuffix;
+        return name;
+    }
+
     /// <summary>表示順固定マップ：OP=1, ED=2, それ以外=999。</summary>
     private static int KindOrder(string k) => k switch { "OP" => 1, "ED" => 2, _ => 999 };
 
@@ -382,8 +410,10 @@ internal sealed class CreditPreviewRenderer
         if (credit.MediaVersion is not null) kindLabel += $"（{CreditMediaVersions.LabelOf(credit.MediaVersion)}）";
         html.Append($"<h1>{Esc(kindLabel)}</h1>");
 
-        var cards = (await _cardsRepo.GetByCreditAsync(credit.CreditId, ct))
-            .OrderBy(c => c.CardSeq).ToList();
+        // 版の付いたカード（本放送 / Blu-ray・配信）は、隣どうしの 1 組ごとに本放送を先・Blu-ray・配信を後に並べ替えて 1 つの枠で描く（サイト側と同じ）。
+        var cards = CardVersionLayout.OrderVersionRuns(
+            (await _cardsRepo.GetByCreditAsync(credit.CreditId, ct)).OrderBy(c => c.CardSeq).ToList(),
+            c => c.MediaVersion);
         if (cards.Count == 0) { html.Append("<p class=\"empty-credit\">（カード未登録）</p>"); return; }
 
         var allRoles = await _rolesRepo.GetAllAsync(ct);
@@ -399,9 +429,15 @@ internal sealed class CreditPreviewRenderer
         // （ユーザー要望: VOICE_CAST だけが対象。「原画」等の通常役職は従来どおり毎回再表示）。
         // 切り替わり判定の対象は VOICE_CAST 役職のみ。NORMAL 役職を間に挟むと chain は途切れる。
         string? prevVoiceCastRoleCode = null;
+        // 版の枠の中で、本放送の半分と Blu-ray・配信の半分を同じ状態から描くための控え（CardVersionLayout.CarryState）
+        string? savedVoiceCastRoleCode = null;
 
-        foreach (var card in cards)
+        for (int cardIndex = 0; cardIndex < cards.Count; cardIndex++)
         {
+            var card = cards[cardIndex];
+            // 版の枠を開く（サイト側と同じ）。
+            prevVoiceCastRoleCode = CardVersionLayout.CarryState(cardIndex > 0 ? cards[cardIndex - 1].MediaVersion : null, card.MediaVersion, prevVoiceCastRoleCode, ref savedVoiceCastRoleCode);
+            html.Append(CardVersionLayout.OpenBefore(cardIndex > 0 ? cards[cardIndex - 1].MediaVersion : null, card.MediaVersion));
             // ロール（流れるクレジット）のカードは card-roll を足す（サイト側と同じ）。
             html.Append(string.Equals(card.Presentation, "ROLL", StringComparison.Ordinal)
                 ? "<div class=\"card card-roll\">"
@@ -672,6 +708,8 @@ internal sealed class CreditPreviewRenderer
                 html.Append("</div>"); // .tier
             }
             html.Append("</div>"); // .card
+            // 版の枠を閉じる（サイト側と同じ）。
+            html.Append(CardVersionLayout.CloseAfter(card.MediaVersion, cardIndex + 1 < cards.Count ? cards[cardIndex + 1].MediaVersion : null));
         }
     }
 
@@ -791,9 +829,12 @@ internal sealed class CreditPreviewRenderer
         html.Append($"<h1>{Esc(kindLabel)}</h1>");
 
         // Draft の Card → Tier → Group → Role を辿る。State==Deleted は除外。順序キーは Entity の seq 列に従う。
-        var draftCards = session.Root.Cards
-            .Where(c => c.State != DraftState.Deleted)
-            .OrderBy(c => c.Entity.CardSeq).ToList();
+        // 版の付いたカードは、隣どうしの 1 組ごとに本放送を先・Blu-ray・配信を後に並べ替えて、1 組 1 つの枠で描く（DB 描画側と同じ）。
+        var draftCards = CardVersionLayout.OrderVersionRuns(
+            session.Root.Cards
+                .Where(c => c.State != DraftState.Deleted)
+                .OrderBy(c => c.Entity.CardSeq).ToList(),
+            c => c.Entity.MediaVersion);
         if (draftCards.Count == 0)
         {
             html.Append("<p class=\"empty-credit\">（カード未登録）</p>");
@@ -806,9 +847,15 @@ internal sealed class CreditPreviewRenderer
 
         // 直前 VOICE_CAST 役職コード追跡（DB 描画側と同じ仕様）。
         string? prevVoiceCastRoleCode = null;
+        // 版の枠の中で、本放送の半分と Blu-ray・配信の半分を同じ状態から描くための控え（CardVersionLayout.CarryState）
+        string? savedVoiceCastRoleCode = null;
 
-        foreach (var dCard in draftCards)
+        for (int cardIndex = 0; cardIndex < draftCards.Count; cardIndex++)
         {
+            var dCard = draftCards[cardIndex];
+            // 版の枠を開く（DB 描画側と同じ）。
+            prevVoiceCastRoleCode = CardVersionLayout.CarryState(cardIndex > 0 ? draftCards[cardIndex - 1].Entity.MediaVersion : null, dCard.Entity.MediaVersion, prevVoiceCastRoleCode, ref savedVoiceCastRoleCode);
+            html.Append(CardVersionLayout.OpenBefore(cardIndex > 0 ? draftCards[cardIndex - 1].Entity.MediaVersion : null, dCard.Entity.MediaVersion));
             html.Append(string.Equals(dCard.Entity.Presentation, "ROLL", StringComparison.Ordinal)
                 ? "<div class=\"card card-roll\">"
                 : "<div class=\"card\">");
@@ -1068,6 +1115,9 @@ internal sealed class CreditPreviewRenderer
                 html.Append("</div>"); // .tier
             }
             html.Append("</div>"); // .card
+            // 版の枠を閉じる（DB 描画側と同じ）。
+            html.Append(CardVersionLayout.CloseAfter(dCard.Entity.MediaVersion,
+                cardIndex + 1 < draftCards.Count ? draftCards[cardIndex + 1].Entity.MediaVersion : null));
         }
 
         html.Append(HtmlFoot);
@@ -1270,8 +1320,11 @@ internal sealed class CreditPreviewRenderer
                 roleName = roleCode!;
             }
         }
-        // 画面の役職の表記があれば、役職名をその表記で出す（役職名を出さない役職はそのまま出さない）。
-        if (!string.IsNullOrEmpty(roleLabelText) && roleName.Length > 0) roleName = roleLabelText!;
+        // 「画面の文字」（ON_SCREEN_TEXT）に見出しの表記があるときは、1 対 1 で当たる役職の無い見出し（本放送の「3DCG」など）を文字で持つ形。
+        // 見出しは役職名の欄（左の列）に出し、名前はテンプレを通さずほかの役職と同じ格子で並べる。
+        bool screenTextHeading = string.Equals(roleCode, "ON_SCREEN_TEXT", StringComparison.Ordinal) && !string.IsNullOrEmpty(roleLabelText);
+        // 画面の役職の表記があれば、役職名をその表記で出す（役職名を出さない役職はそのまま出さない。見出しを文字で持つ「画面の文字」は出す）。
+        if (!string.IsNullOrEmpty(roleLabelText) && (roleName.Length > 0 || screenTextHeading)) roleName = roleLabelText!;
         // 1 行にまとめた役職は、まとめた行の文字を役職名として出す（プレビューはリンクなしの文字）。
         if (joinedLabel is not null) roleName = joinedLabel;
         // その行だけ役職名を出さない印が立っていれば、役職名の欄を空にする（同じ見出しの下に 2 社目が続くときなど）。
@@ -1295,7 +1348,7 @@ internal sealed class CreditPreviewRenderer
         // テンプレを role_templates から解決
         string? template = null;
         string? contentHeaderOverride = null;
-        if (!string.IsNullOrEmpty(roleCode))
+        if (!string.IsNullOrEmpty(roleCode) && !screenTextHeading)
         {
             var tpl = await _roleTemplatesRepo.ResolveAsync(roleCode!, resolveSeriesId, ct, scopeKind == "EPISODE" ? episodeId : null);
             template = tpl?.FormatTemplate;
@@ -1330,9 +1383,10 @@ internal sealed class CreditPreviewRenderer
                 // SERIES スコープのクレジット（映画系列）では scopeSeriesId に resolveSeriesId 相当を渡し、
                 // {THEME_SONGS} ハンドラが series_theme_songs を引き当てるようにする。EPISODE スコープでは null。
                 int? scopeSeriesIdForCtx = scopeKind == "SERIES" ? resolveSeriesId : null;
-                // SERIES スコープの場合、テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。
-                // 映倫審査番号（{FILM_RATING_NO}）と CJ マークの有無（{CJ_MARK}）も同じシリーズから引く。
-                var (scopeSeriesTitleForCtx, scopeFilmRatingNoForCtx, scopeFilmCjMarkForCtx) = await GetSeriesTitleAndFilmRatingAsync(scopeSeriesIdForCtx, ct);
+                // テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。SERIES スコープはクレジットの作品、
+                // EPISODE スコープはその話の作品（TV の OP のタイトルカード〔役職 TITLE〕で使う）。
+                // 映倫審査番号（{FILM_RATING_NO}）と CJ マークの有無（{CJ_MARK}）も同じシリーズから引く（映画だけの値なので TV では空）。
+                var (scopeSeriesTitleForCtx, scopeFilmRatingNoForCtx, scopeFilmCjMarkForCtx) = await GetSeriesTitleAndFilmRatingAsync(resolveSeriesId, ct);
                 var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, scopeSeriesIdForCtx, creditKind,
                     siblingRoleResolver: siblingRoleResolver,
                     visitedRoleCodes: null,
@@ -1810,6 +1864,9 @@ internal sealed class CreditPreviewRenderer
             if (bs.Block.LeadingCompanyAliasId is int leadId)
             {
                 leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId);
+                // 2 社目（間の字つき）と後ろの字を、SiteBuilder と同じく筆頭の行に続ける。
+                if (!string.IsNullOrEmpty(leadingCompanyName))
+                    leadingCompanyName = await AppendLeadingCompanyRestAsync(bs.Block, leadingCompanyName);
                 // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、SiteBuilder と同じく括弧で包む。
                 if (bs.Block.LeadingCompanyNotOnScreen && !string.IsNullOrEmpty(leadingCompanyName))
                     leadingCompanyName = $"（{leadingCompanyName}）";
@@ -1961,6 +2018,9 @@ internal sealed class CreditPreviewRenderer
             if (bs.Block.LeadingCompanyAliasId is int leadId)
             {
                 leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId);
+                // 2 社目（間の字つき）と後ろの字を、SiteBuilder と同じく筆頭の行に続ける。
+                if (!string.IsNullOrEmpty(leadingCompanyName))
+                    leadingCompanyName = await AppendLeadingCompanyRestAsync(bs.Block, leadingCompanyName);
                 // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、SiteBuilder と同じく括弧で包む。
                 if (bs.Block.LeadingCompanyNotOnScreen && !string.IsNullOrEmpty(leadingCompanyName))
                     leadingCompanyName = $"（{leadingCompanyName}）";
@@ -2415,9 +2475,14 @@ internal sealed class CreditPreviewRenderer
                     return $"{charName} … {voice}";
                 }
             case "COMPANY":
-                return e.CompanyAliasId.HasValue
-                    ? ((await _lookup.LookupCompanyAliasCreditNameAsync(e.CompanyAliasId.Value)) ?? "(企業屋号不明)")
-                    : "(企業屋号未指定)";
+                {
+                    if (!e.CompanyAliasId.HasValue) return "(企業屋号未指定)";
+                    string? name = await _lookup.LookupCompanyAliasCreditNameAsync(e.CompanyAliasId.Value);
+                    if (name is null) return "(企業屋号不明)";
+                    // 画面の表記揺れがあれば屋号の名前の代わりにそれを出す（誤記ではないので印は付けない）。
+                    if (!string.IsNullOrEmpty(e.CompanyDisplayText)) name = e.CompanyDisplayText!;
+                    return name;
+                }
             case "LOGO":
                 {
                     if (!e.LogoId.HasValue) return "(ロゴ未指定)";

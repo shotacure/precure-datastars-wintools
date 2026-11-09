@@ -92,6 +92,15 @@ public sealed class CreditBlockEntry
     public string? CompanyMisprintText { get; set; }
 
     /// <summary>
+    /// 画面に出た企業名の表記揺れ（DB 列名 company_display_text）。COMPANY で使う。
+    /// 名義（<see cref="CompanyAliasId"/>）とは空白・中黒・記号の有無や位置だけが違う画面の表記を、名義を増やさずに持つ
+    /// （名義「BUG FILMS」に対する画面の「BUGFILMS」など）。
+    /// 誤記ではないので印を付けず、表示は名義の名前の代わりにこの字を出す（リンク先は名義の企業のまま）。NULL は名義の名前のまま。
+    /// 用法は <see cref="PersonDisplayText"/> と同じ。
+    /// </summary>
+    public string? CompanyDisplayText { get; set; }
+
+    /// <summary>
     /// 人物名の代わりに画面に出た伏せ字表記（例：声優を伏せた「謎の少女　？」の「？」）。PERSON / CHARACTER_VOICE で使う。
     /// 名義（<see cref="PersonAliasId"/>）は本来の人物に紐付けたまま持ち、集計も通常どおり数える。
     /// NULL = 伏せ字なし。値があれば表示は「伏せ字 (正名義)」の形にする。

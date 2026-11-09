@@ -111,6 +111,9 @@ public sealed class SiteBuilderPipeline
         // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）。クレジット・人物・企業の各ページで
         // 役職名をリンクにしないのに使うので、系譜の Resolver の後・全ページ生成より前に 1 度だけ確定させる。
         PathUtil.UseRolesWithoutPage(CreatorListScope.RolesWithoutPage(ctx, involvementIndex, roleSuccessorResolver));
+        // オトナシリーズの役職のページ（/creators/otona/roles/{code}/）を持つ役職。オトナシリーズの作品のクレジットと、
+        // 人物・企業のページのオトナシリーズの関わりの行で、役職名をそちらへリンクするのに使う。
+        PathUtil.UseOtonaRolePages(CreatorListScope.OtonaRolesWithPage(ctx, involvementIndex, roleSuccessorResolver));
         // 役職どうしの関連（role_relations：段階・並列）。系譜の代表へ寄せて引くので Resolver の後に 1 度だけ作る。
         // CreatorsGenerator が役職詳細の年表に関連する役職の担当を重ねるのに使う。
         var roleRelationIndex = await BuildRoleRelationIndexAsync(factory, roleSuccessorResolver, ct).ConfigureAwait(false);

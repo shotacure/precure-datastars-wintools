@@ -33,7 +33,7 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 ///   </item>
 ///   <item>
 ///     <description>
-///       <c>credit_role_blocks.leading_company_alias_id</c> ─ ブロック先頭企業
+///       <c>credit_role_blocks.leading_company_alias_id</c> ─ ブロック先頭企業（2 社の連名なら <c>leading_company2_alias_id</c> も）
 ///       （配下に COMPANY エントリが無くても屋号関与として記録）
 ///     </description>
 ///   </item>
@@ -228,6 +228,20 @@ public sealed class CreditInvolvementIndex
                                         IsBroadcastOnly = false,
                                         CreditSeq = leadSeq
                                     });
+                                    // 筆頭が 2 社の連名なら、2 社目（leading_company2_alias_id）も 1 社目と同じ屋号関与として記録する。
+                                    if (b.LeadingCompany2AliasId is int lead2Id && lead2Id != leadId)
+                                    {
+                                        AddCompany(lead2Id, new Involvement
+                                        {
+                                            SeriesId = seriesIdForCredit,
+                                            EpisodeId = scopeEpisodeId,
+                                            CreditKind = credit.CreditKind,
+                                            RoleCode = roleCode,
+                                            Kind = InvolvementKind.LeadingCompany,
+                                            IsBroadcastOnly = false,
+                                            CreditSeq = leadSeq
+                                        });
+                                    }
                                 }
 
                                 // ブロックの途中に TOEI ANIMATION PHILS. の屋号が置かれたとき、その後ろ（次の屋号・ロゴの手前まで）に
@@ -335,6 +349,24 @@ public sealed class CreditInvolvementIndex
                                             IsBroadcastOnly = e.IsBroadcastOnly,
                                             CreditSeq = entrySeq
                                         });
+                                        // 筆頭が 2 社の連名なら、配下の person は 2 社目のメンバーとしても数える。
+                                        if (b.LeadingCompany2AliasId is int memberLead2Id && memberLead2Id != memberLeadId)
+                                        {
+                                            AddCompany(memberLead2Id, new Involvement
+                                            {
+                                                SeriesId = seriesIdForCredit,
+                                                EpisodeId = scopeEpisodeId,
+                                                CreditKind = credit.CreditKind,
+                                                RoleCode = roleCode,
+                                                Kind = InvolvementKind.Member,
+                                                EntryKind = e.EntryKind,
+                                                PersonAliasId = memberPaid,
+                                                CharacterAliasId = e.CharacterAliasId,
+                                                AffiliationCompanyAliasId = memberLead2Id,
+                                                IsBroadcastOnly = e.IsBroadcastOnly,
+                                                CreditSeq = entrySeq
+                                            });
+                                        }
                                     }
 
                                     // 屋号エントリ（COMPANY）。
@@ -925,7 +957,7 @@ public enum InvolvementKind
     Company = 2,
     /// <summary>LOGO エントリ（ロゴ → 屋号への間接参照）。</summary>
     Logo = 3,
-    /// <summary>credit_role_blocks.leading_company_alias_id（ブロック先頭の屋号）。</summary>
+    /// <summary>credit_role_blocks.leading_company_alias_id（ブロック先頭の屋号）。2 社の連名の 2 社目（leading_company2_alias_id）も同じ種別で数える。</summary>
     LeadingCompany = 4,
     /// <summary>PERSON / CHARACTER_VOICE エントリの所属屋号としての参照。 「○○（東映アニメーション）」のような所属付きクレジット表記で、 屋号側から「当該屋号に所属していた人物名義」を逆引きできるようにする。 企業詳細ページの「メンバー履歴」セクションがこの種別で <see cref="CreditInvolvementIndex.ByCompanyAlias"/> を絞り込んで使う。</summary>
     Member = 5

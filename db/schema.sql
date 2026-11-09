@@ -2541,6 +2541,9 @@ CREATE TABLE `credit_cards` (
   -- 1 つのクレジットの中でカード → ロール → カードと切り替わるため、カード単位で持つ。
   -- ロール部分は ROLL のカード 1 枚で表す。credits.presentation はクレジット全体の主な見せ方。
   `presentation` enum('CARDS','ROLL') NOT NULL DEFAULT 'CARDS' COMMENT 'カードの見せ方（CARDS=カード / ROLL=ロール）',
+  -- カードの版（BROADCAST=本放送 / HOME_VIDEO=Blu-ray・配信 / NULL=共通）。本放送と Blu-ray・配信で違うカードだけ版を付け、
+  -- 隣どうしに並べる。サイトは版の付いたカードが続くところを 1 つの枠に上下で描く。集計は共通と Blu-ray・配信だけで数える。
+  `media_version` enum('BROADCAST','HOME_VIDEO') DEFAULT NULL COMMENT 'カードの版（BROADCAST=本放送、HOME_VIDEO=Blu-ray・配信、NULL=共通）',
   `notes`      text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2680,6 +2683,8 @@ CREATE TABLE `credit_card_roles` (
 -- col_count はブロック内エントリを「何カラムで並べるか」の表示意図を保持する列。
 -- 行数はカラム数とエントリ数の従属関係で実行時に決まるため、独立した行数列は持たない。
 -- leading_company_alias_id にはブロック先頭に企業名を出すケースの企業名義を入れる。
+-- leading_company2_alias_id は筆頭に 2 社が連名で出るときの 2 社目、leading_company_separator はその 2 社の間の字、
+-- leading_company_suffix は筆頭の会社名の後ろに付く字（「スタジオトゥインクル/AMGA 撮影班」の「/」と「 撮影班」）。
 -- heading_series_id / heading_text はブロック先頭の見出し（映画の声の出演の作品ごとのまとまりの頭に出る作品名、
 -- 「特別出演」など）。作品を指すときは heading_series_id、画面の表記が作品の正式タイトルと違うときや
 -- 作品ではない見出しは heading_text に画面どおりの文字を入れる。
@@ -2696,6 +2701,9 @@ CREATE TABLE `credit_role_blocks` (
   `continues_previous`        tinyint(1)      NOT NULL DEFAULT 0 COMMENT '1 なら前のブロックの続き。間に空きを入れず、列数だけ変えて続ける（役職の最初のブロックには付けない）',
   `leading_company_alias_id`  int             DEFAULT NULL,
   `leading_company_not_on_screen` tinyint      NOT NULL DEFAULT 0 COMMENT '1 なら筆頭の会社は画面にはクレジットされていない（クレジット漏れ）。表示だけ括弧で包む',
+  `leading_company2_alias_id` int             DEFAULT NULL COMMENT '筆頭の 2 社目の会社名義（company_aliases.alias_id）。2 社が連名で出るときの 2 社目。所属・集計に数える',
+  `leading_company_separator` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '筆頭の 2 社の間に出す字（画面の表記どおり。例 "/"）',
+  `leading_company_suffix`    varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '筆頭の会社名の後ろに付く字（画面の表記どおり。例 " 撮影班"）。1 社だけのときも使える',
   `leading_text`              varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'ブロックの筆頭の団体を文字だけで持つ（画面の表記どおり）。会社のデータは作らず、表示は筆頭の会社と同じく下の名前を字下げする',
   `heading_series_id`         int             DEFAULT NULL COMMENT 'ブロック先頭の見出しにする作品（series.series_id）。映画の声の出演の作品ごとのまとまりなど',
   `heading_text`              varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'ブロック先頭の見出しの文字（画面の表記どおり）。NULL なら作品の正式タイトル',
@@ -2708,9 +2716,11 @@ CREATE TABLE `credit_role_blocks` (
   PRIMARY KEY (`block_id`),
   UNIQUE KEY `uq_block_card_role_seq` (`card_role_id`,`block_seq`),
   KEY `ix_block_lead_company` (`leading_company_alias_id`),
+  KEY `ix_block_lead_company2` (`leading_company2_alias_id`),
   KEY `fk_block_heading_series` (`heading_series_id`),
   CONSTRAINT `fk_block_card_role`    FOREIGN KEY (`card_role_id`)             REFERENCES `credit_card_roles` (`card_role_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_block_lead_company` FOREIGN KEY (`leading_company_alias_id`) REFERENCES `company_aliases`   (`alias_id`)     ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_block_lead_company2` FOREIGN KEY (`leading_company2_alias_id`) REFERENCES `company_aliases` (`alias_id`)    ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_block_heading_series` FOREIGN KEY (`heading_series_id`)      REFERENCES `series`            (`series_id`)    ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_block_seq_pos`       CHECK ((`block_seq` >= 1)),
   CONSTRAINT `ck_block_col_count_pos` CHECK ((`col_count` >= 1))
@@ -2759,6 +2769,7 @@ CREATE TABLE `credit_block_entries` (
   `same_character_layout`          enum('REPEAT','TOP','MIDDLE') DEFAULT NULL COMMENT '前の行と同じ役名のときの画面の組み方（REPEAT=毎行書く / TOP=最初の行に 1 回 / MIDDLE=縦の真ん中に 1 回）。前の行と続かない行は NULL',
   `same_person_layout`             enum('REPEAT','TOP','MIDDLE') DEFAULT NULL COMMENT '前の行と同じ声優のときの画面の組み方（REPEAT=毎行書く / TOP=最初の行に 1 回 / MIDDLE=縦の真ん中に 1 回）。前の行と続かない行は NULL',
   `company_misprint_text`          varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `company_display_text`           varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '画面に出た企業名の表記揺れ。名義と空白・記号だけが違うときだけ。誤記ではない。NULL は名義の名前のまま',
   -- 人物名の代わりに画面に出た伏せ字表記（「謎の少女　？」の「？」など）。NULL = 伏せ字なし。
   --   名義（person_alias_id）は本来の人物に紐付けたまま持ち、表示は「伏せ字 (正名義)」の形にする。
   `person_masked_text`             varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,

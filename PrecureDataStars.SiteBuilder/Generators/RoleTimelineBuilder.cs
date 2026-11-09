@@ -353,7 +353,7 @@ internal sealed class RoleTimelineBuilder
                 ExtraKind = hasTv && hasMovie ? "rel-movie" : "",
                 Color = relatedColors.TryGetValue(g.Role.RoleCode, out var c) ? c : "",
                 Label = g.Role.RoleName,
-                Url = PathUtil.CreatorsRoleUrl(g.Role.RoleCode)
+                Url = (rules.RelatedRoleUrl ?? PathUtil.CreatorsRoleUrl)(g.Role.RoleCode)
             });
         }
         legend.Add(new RoleTimelineLegendItem { Kind = "span", Label = $"続けて{rules.Verb}した期間" });
@@ -687,7 +687,7 @@ internal sealed class RoleTimelineBuilder
         }
 
         // 関連する役職の担当：役職ごとに、TV の話は同じシリーズで話数が続く間をひと続きの細い帯に、映画は白抜きの輪にする（色は役職ごと）。
-        // 内訳には主の担当の後ろに「〔役職名〕📺 シリーズ名 #…」「〔役職名〕🎥 映画名」を役職ごとに足す。
+        // 内訳には主の担当の後ろに「〔役職名〕📺 シリーズ名 #…」「〔役職名〕🎥 映画名」を役職ごとに足す（大人向けスピンオフの話は 📺 の代わりに 🌙）。
         var related = new List<RoleTimelineRelatedMark>();
         var drawnRelated = new List<RoleTimelineRelatedRole>();
         var relatedWorks = new List<string>();
@@ -726,7 +726,7 @@ internal sealed class RoleTimelineBuilder
                     runStart = i;
                 }
                 if (_ctx.SeriesById.TryGetValue(sid, out var s))
-                    relLines.Add((s.StartDate, $"〔{rel.RoleName}〕📺 {s.Title} {EpisodeRangeCompressor.Compress(bySeries.Keys)}"));
+                    relLines.Add((s.StartDate, $"〔{rel.RoleName}〕{(_ctx.IsOtonaSeries(sid) ? "🌙" : "📺")} {s.Title} {EpisodeRangeCompressor.Compress(bySeries.Keys)}"));
             }
             foreach (var sid in relMovies)
             {
@@ -932,6 +932,12 @@ internal sealed record RoleTimelineRules(
     /// 「一定期間に何回」の決まりに届かないので、映画で続けて担当している方を拾うために使う。
     /// </summary>
     public int MinMovies { get; init; }
+
+    /// <summary>
+    /// 凡例の関連する役職のリンク先（役職コード → URL）。null なら本編の役職詳細（<see cref="PathUtil.CreatorsRoleUrl"/>）。
+    /// オトナシリーズの役職のページでは、オトナシリーズの役職のページ（<see cref="PathUtil.CreatorsOtonaRoleUrl"/>）を指す。
+    /// </summary>
+    public Func<string, string>? RelatedRoleUrl { get; init; }
 
     /// <summary>全員を載せる決まりのページの条件（スイッチを出さない）。</summary>
     private static readonly IReadOnlyList<string> NoFilter = Array.Empty<string>();

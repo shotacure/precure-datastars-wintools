@@ -14,6 +14,10 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///   <item><description>空行 → 同一役職内のブロック区切り</description></item>
 ///   <item><description><c>[XXX]</c>（行全体）→ COMPANY エントリ（位置に関係なく常に COMPANY 扱い）</description></item>
 ///   <item><description><c>[[XXX]]</c>（行全体）→ グループトップ屋号（<c>leading_company_alias_id</c>）。ブロックの最初の有意行でのみ許可、それ以外は Block 警告</description></item>
+///   <item><description><c>[[XXX]]間の字[[YYY]]後ろの字</c>（行全体）→ 2 社の連名の筆頭（2 社目 <c>leading_company2_alias_id</c>・
+///     間の字 <c>leading_company_separator</c>・後ろの字 <c>leading_company_suffix</c>）。
+///     「スタジオトゥインクル/AMGA 撮影班」は <c>[[スタジオトゥインクル]]/[[AMGA]] 撮影班</c>。
+///     2 社目なしで後ろの字だけなら <c>[[XXX]]後ろの字</c>（<c>[[AMGA]] 撮影班</c>）。後ろの字の先頭の空白は画面の表記として残す</description></item>
 ///   <item><description><c>@leading_text=文字</c>（<c>[[XXX]]</c> と同じ位置の単独行）→ 会社のデータを作らない文字だけの筆頭の団体
 ///     （<c>leading_text</c>。「いこーよ・アンバサダーのみなさん」など）。表示は <c>[[XXX]]</c> と同じく下の名前を字下げする。
 ///     同じブロックに <c>[[XXX]]</c> とは書けない</description></item>
@@ -49,6 +53,9 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///   <item><description>人物名・声優名の <c>名義|画面の表記</c> → 画面に出た人物名の表記揺れ。名義は <c>|</c> の左側で引き当て、
 ///     右側（名義と空白・中黒・記号の有無や位置だけが違う画面の表記）を <c>person_display_text</c> に持つ。誤記の <c>×</c> とは別。
 ///     例: <c>ロメオ・アンニョンヌエボJr.|ロメオ・アンニョンヌエボ Jr.</c>。</description></item>
+///   <item><description>企業の <c>[屋号|画面の表記]</c> / <c>[屋号#alias_id|画面の表記]</c> → 画面に出た企業名の表記揺れ。屋号は <c>|</c> の左側で引き当て、
+///     右側（屋号と空白・中黒・記号の有無や位置だけが違う画面の表記）を <c>company_display_text</c> に持つ。誤記の <c>×</c>（<c>]</c> の外）とは別。
+///     COMPANY のエントリだけで使え、LOGO（<c>[屋号#CIバージョン]</c>）には付けられない。例: <c>[BUG FILMS|BUGFILMS]</c>。</description></item>
 ///   <item><description><c>@cols=N</c>（ブロック先頭の単独行）→ そのブロックの <c>col_count</c> を明示指定。
 ///     省略時は従来どおりタブ数+1 で推測。</description></item>
 ///   <item><description><c>@blank</c>（セル全体）→ 空きの升（<c>entry_kind = BLANK</c>）。複数列のブロックで、画面の並びの途中に
@@ -115,16 +122,22 @@ public static class CreditBulkInputParser
     // 1 つ目の # の右側が非純数値（CI バージョン）の場合、aliasid グループはマッチせず ci のみが取れる。
     // 末尾の "×誤記" / "✕誤記" 後置はクレジット時の屋号誤記を記録する任意キャプチャ（misprint グループ）。
     // CI バージョン側に対しては誤記を許可しない（CI バージョン違いは別 logos 行で表現するため）。
+    // 閉じ括弧の直前の "|画面の表記"（任意、display グループ）は画面に出た企業名の表記揺れ（company_display_text）。
+    // 屋号・CI バージョンには | を含めない。
     // 単一ブラケット [XXX] と LOGO [XXX#YYY] を同じ正規表現で受け止める統合形に整理（過去は別正規表現で
     // 2 段判定していたが、alias_id 明示記法の追加で分岐が複雑化したため統合）。
     private static readonly Regex BracketEntryRegex = new(
-        @"^\[(?<name>[^\[\]#]+)(?:#(?<aliasid>\d+))?(?:#(?<ci>[^#\[\]]+))?\](?:[×✕]\s*(?<misprint>.+))?$",
+        @"^\[(?<name>[^\[\]#|]+)(?:#(?<aliasid>\d+))?(?:#(?<ci>[^#\[\]|]+))?(?:\|(?<display>[^\[\]]*))?\](?:[×✕]\s*(?<misprint>.+))?$",
         RegexOptions.Compiled);
 
     // 行全体が [[XXX]] のパターン。グループトップ屋号 (leading_company_alias_id) を
     // 明示するための専用構文。ブロック内最初の有意行でのみ許可される。
     // 単一ブラケット [XXX] とは構文上完全に区別されるため、誤読の心配なく両方を併用できる。
-    private static readonly Regex LeadingCompanyBracketRegex = new(@"^\[\[(?<name>[^\[\]]+)\]\]$", RegexOptions.Compiled);
+    // 2 社の連名は [[XXX]]間の字[[YYY]]後ろの字、1 社に後ろの字だけ付くときは [[XXX]]後ろの字。
+    // 間の字・後ろの字には角括弧とタブを含めない（間の字は空でもよい）。
+    private static readonly Regex LeadingCompanyBracketRegex = new(
+        @"^\[\[(?<name>[^\[\]]+)\]\](?:(?<sep>[^\[\]\t]*?)\[\[(?<name2>[^\[\]]+)\]\])?(?<suffix>[^\[\]\t]*)$",
+        RegexOptions.Compiled);
 
     // VOICE_CAST 構文: <キャラ>声優 / <*キャラ>声優 / <キャラ#aliasid>声優 / <*キャラ#aliasid>声優
     // - aster: 先頭の * フラグ（強制新規キャラ、モブ用途）
@@ -211,6 +224,10 @@ public static class CreditBulkInputParser
     // ディレクティブ行: @roll 単独行。そのカードをロール（流れるクレジット）として扱う。
     // カード内のどこに書いてもよい（エンコーダはカード区切り直後に出す）。
     private static readonly Regex RollDirectiveRegex = new(@"^@roll$", RegexOptions.Compiled);
+
+    // ディレクティブ行: @broadcast / @homevideo 単独行。そのカードの版を本放送 / Blu-ray・配信にする（書かなければ共通）。
+    // カード内のどこに書いてもよい（エンコーダはカード区切り直後、@roll の後に出す）。
+    private static readonly Regex MediaVersionDirectiveRegex = new(@"^@(?<v>broadcast|homevideo)$", RegexOptions.Compiled);
 
     // ディレクティブ行: @cols=N 形式。N は 1 以上の整数。
     private static readonly Regex ColsDirectiveRegex = new(@"^@cols=(?<n>\d+)$", RegexOptions.Compiled);
@@ -538,6 +555,17 @@ public static class CreditBulkInputParser
                     // カードの見せ方をロールにする。1 枚目のカードでも書けるよう、未作成なら暗黙のカードを作る。
                     EnsureScaffold(ref curCard, ref curTier, ref curGroup, result);
                     curCard!.Presentation = "ROLL";
+                    continue;
+                }
+
+                var mediaVersionMatch = MediaVersionDirectiveRegex.Match(trimmed);
+                if (mediaVersionMatch.Success)
+                {
+                    // カードの版（本放送 / Blu-ray・配信）。1 枚目のカードでも書けるよう、未作成なら暗黙のカードを作る。
+                    EnsureScaffold(ref curCard, ref curTier, ref curGroup, result);
+                    curCard!.MediaVersion = mediaVersionMatch.Groups["v"].Value == "broadcast"
+                        ? PrecureDataStars.Data.Models.CreditMediaVersions.Broadcast
+                        : PrecureDataStars.Data.Models.CreditMediaVersions.HomeVideo;
                     continue;
                 }
 
@@ -1136,6 +1164,16 @@ public static class CreditBulkInputParser
                 {
                     // ブロック先頭の有意行 → leading_company として吸収。
                     curBlock.LeadingCompanyText = leadingBracketMatch.Groups["name"].Value.Trim();
+                    // 2 社の連名の 2 社目と間の字、筆頭の行の後ろの字（どれも無ければ null）。
+                    // 間の字・後ろの字は空白も画面の表記として持つので Trim しない（行末の空白は行全体の Trim で落ちる）。
+                    if (leadingBracketMatch.Groups["name2"].Success)
+                    {
+                        curBlock.LeadingCompany2Text = leadingBracketMatch.Groups["name2"].Value.Trim();
+                        string sep = leadingBracketMatch.Groups["sep"].Value;
+                        curBlock.LeadingCompanySeparator = sep.Length > 0 ? sep : null;
+                    }
+                    string suffix = leadingBracketMatch.Groups["suffix"].Value;
+                    curBlock.LeadingCompanySuffix = suffix.Length > 0 ? suffix : null;
 
                     // leading_company 行はエントリではないため、ブロックセットアップは継続する。
                     // ただし @cols= はもう受け付けない（エントリ行直前まで来ている認識のため）、
@@ -1781,6 +1819,7 @@ public static class CreditBulkInputParser
         // グループトップ屋号 (leading_company_alias_id) の指定は二重ブラケット [[XXX]] 側の別構文で、
         // 呼び出し前のブロック処理段で先に消費されているため、ここに来る時点で [[XXX]] は存在しない。
         // 末尾の "×誤記" 後置（任意）でクレジット時の屋号誤記を記録する。CI バージョン側は誤記対象外。
+        // 閉じ括弧の直前の "|画面の表記"（任意）は画面に出た企業名の表記揺れ。COMPANY だけで持ち、LOGO に付いていたら警告して捨てる。
         var bracketEntryMatch = BracketEntryRegex.Match(cell);
         if (bracketEntryMatch.Success)
         {
@@ -1804,12 +1843,28 @@ public static class CreditBulkInputParser
                 : null;
             if (string.IsNullOrEmpty(misprint)) misprint = null;
 
+            string? companyDisplay = bracketEntryMatch.Groups["display"].Success
+                ? bracketEntryMatch.Groups["display"].Value.Trim()
+                : null;
+            if (string.IsNullOrEmpty(companyDisplay)) companyDisplay = null;
+            if (companyDisplay is not null && ci is not null)
+            {
+                result.Warnings.Add(new ParseWarning
+                {
+                    Severity = WarningSeverity.Warning,
+                    LineNumber = lineNo,
+                    Message = $"{lineNo} 行目: [屋号|画面の表記] の画面の表記は COMPANY（[屋号]）にだけ付けられます。LOGO（[屋号#CIバージョン]）では読み捨てます。"
+                });
+                companyDisplay = null;
+            }
+
             return AttachModifiers(new ParsedEntry
             {
                 Kind = ci is not null ? ParsedEntryKind.Logo : ParsedEntryKind.Company,
                 CompanyRawText = companyNew,
                 CompanyOldName = companyOld,
                 CompanyMisprintText = misprint,
+                CompanyDisplayText = companyDisplay,
                 CompanyAliasIdOverride = companyAliasIdOverride,
                 LogoCiVersionLabel = ci,
                 LineNumber = lineNo,

@@ -48,6 +48,26 @@ public sealed class CreditRoleBlock
     public bool LeadingCompanyNotOnScreen { get; set; }
 
     /// <summary>
+    /// 筆頭の 2 社目の企業名義 ID（→ company_aliases.alias_id、任意、DB 列名 leading_company2_alias_id）。
+    /// 「スタジオトゥインクル/AMGA 撮影班」のように、筆頭に 2 社が連名で出るときの 2 社目。
+    /// <see cref="LeadingCompanyAliasId"/> と同じく会社のページへリンクし、所属・集計にも数える。
+    /// 1 社目（<see cref="LeadingCompanyAliasId"/>）が無いときは使わない。
+    /// </summary>
+    public int? LeadingCompany2AliasId { get; set; }
+
+    /// <summary>
+    /// 筆頭の 2 社の間に出す字（任意、DB 列名 leading_company_separator、画面の表記どおり。例 "/"）。
+    /// <see cref="LeadingCompany2AliasId"/> があるときだけ意味を持つ。
+    /// </summary>
+    public string? LeadingCompanySeparator { get; set; }
+
+    /// <summary>
+    /// 筆頭の会社名の後ろに付く字（任意、DB 列名 leading_company_suffix、画面の表記どおり。例 " 撮影班"）。
+    /// 2 社のときは 2 社目の後ろ、1 社だけのときは 1 社目の後ろに出す。リンクは付けない。
+    /// </summary>
+    public string? LeadingCompanySuffix { get; set; }
+
+    /// <summary>
     /// ブロックの筆頭の団体を文字だけで持つ（任意、DB 列名 leading_text、画面の表記どおり）。
     /// 「いこーよ・アンバサダーのみなさん」のように、会社・団体のデータを作らないまとまりの頭の名前。
     /// 表示は筆頭の会社と同じく 1 行に出して下の名前を字下げするが、リンクは付けず、所属・集計にも数えない。

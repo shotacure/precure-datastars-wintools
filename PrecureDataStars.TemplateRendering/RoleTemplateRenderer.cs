@@ -14,7 +14,7 @@ namespace PrecureDataStars.TemplateRendering;
 /// サポートするプレースホルダ：
 /// <list type="bullet">
 ///   <item><description><c>{ROLE_NAME}</c> ... 役職表示名</description></item>
-///   <item><description><c>{LEADING_COMPANY}</c> ... カレントブロックの leading_company_alias_id 解決名</description></item>
+///   <item><description><c>{LEADING_COMPANY}</c> ... カレントブロックの leading_company_alias_id 解決名（2 社目 leading_company2_alias_id があれば間の字と 2 社目を、後ろの字 leading_company_suffix があればそれを続ける）</description></item>
 ///   <item><description><c>{COMPANIES[:sep="」「",wrap="「」"]}</c> ... カレントブロック内の COMPANY エントリ群を結合</description></item>
 ///   <item><description><c>{PERSONS[:sep="、"]}</c> ... カレントブロック内の PERSON エントリ群を結合</description></item>
 ///   <item><description><c>{LOGOS[:sep=" "]}</c> ... カレントブロック内の LOGO エントリ（ロゴ名義 → 文字列）</description></item>
@@ -582,7 +582,21 @@ public static class RoleTemplateRenderer
                     // SiteBuilder 側 LookupCache はリンク化済み HTML を、Catalog 側は HTML エスケープした
                     // プレーンテキストを返す（ILookupCache のデフォルト実装にフォールバック）。
                     var name = await lookup.LookupCompanyAliasHtmlAsync(leadId).ConfigureAwait(false);
-                    return name ?? "";
+                    if (string.IsNullOrEmpty(name)) return "";
+                    // 筆頭が 2 社の連名なら「社名1 + 間の字 + 社名2」、後ろの字があれば続ける（字はエスケープして出す）。
+                    var leadSb = new StringBuilder(name);
+                    if (currentBlock.Block.LeadingCompany2AliasId is int lead2Id)
+                    {
+                        var name2 = await lookup.LookupCompanyAliasHtmlAsync(lead2Id).ConfigureAwait(false);
+                        if (!string.IsNullOrEmpty(name2))
+                        {
+                            leadSb.Append(System.Net.WebUtility.HtmlEncode(currentBlock.Block.LeadingCompanySeparator ?? ""))
+                                  .Append(name2);
+                        }
+                    }
+                    if (!string.IsNullOrEmpty(currentBlock.Block.LeadingCompanySuffix))
+                        leadSb.Append(System.Net.WebUtility.HtmlEncode(currentBlock.Block.LeadingCompanySuffix));
+                    return leadSb.ToString();
                 }
 
             case "COMPANIES":

@@ -59,6 +59,9 @@ public sealed class ParsedCard
 
     /// <summary>カードの見せ方（"CARDS" / "ROLL"）。カード内の <c>@roll</c> 単独行で "ROLL" になる。既定 "CARDS"。</summary>
     public string Presentation { get; set; } = "CARDS";
+
+    /// <summary>カードの版（<see cref="CreditMediaVersions.Broadcast"/> / <see cref="CreditMediaVersions.HomeVideo"/>）。カード内の <c>@broadcast</c> / <c>@homevideo</c> 単独行で決まる。書かなければ null（共通）。</summary>
+    public string? MediaVersion { get; set; }
 }
 
 /// <summary>パース結果における 1 Tier 分の塊。 テキスト中の <c>--</c> 単独行で区切られる。tier_no は 1 と 2 のみが有効。</summary>
@@ -163,6 +166,21 @@ public sealed class ParsedBlock
 {
     /// <summary>先頭の <c>[XXX]</c> 行があった場合に企業屋号として保持する生テキスト。 設定されていれば適用時に <c>credit_role_blocks.leading_company_alias_id</c> に解決する。</summary>
     public string? LeadingCompanyText { get; set; }
+
+    /// <summary>
+    /// 筆頭の行 <c>[[XXX]]間の字[[YYY]]後ろの字</c> の 2 社目 <c>YYY</c> の生テキスト。
+    /// 設定されていれば適用時に <c>credit_role_blocks.leading_company2_alias_id</c> に解決する。
+    /// </summary>
+    public string? LeadingCompany2Text { get; set; }
+
+    /// <summary>筆頭の 2 社の間の字（<c>credit_role_blocks.leading_company_separator</c>）。2 社目が無いときは null。空文字も null にする。</summary>
+    public string? LeadingCompanySeparator { get; set; }
+
+    /// <summary>
+    /// 筆頭の行の最後の <c>]]</c> の後ろに書かれた字（<c>credit_role_blocks.leading_company_suffix</c>）。
+    /// 先頭の空白は画面の表記として残す（<c>[[AMGA]] 撮影班</c> → " 撮影班"）。無ければ null。
+    /// </summary>
+    public string? LeadingCompanySuffix { get; set; }
 
     /// <summary>ブロック内の行群（タブ区切り展開済み）。</summary>
     public List<ParsedEntryRow> Rows { get; } = new();
@@ -327,6 +345,14 @@ public sealed class ParsedEntry
     /// COMPANY / LOGO のとき、× の右側がここに入る。用法は <see cref="PersonMisprintText"/> と同じ。
     /// </summary>
     public string? CompanyMisprintText { get; set; }
+
+    /// <summary>
+    /// 一括入力 <c>[屋号|画面の表記]</c> 記法で抽出された「企業名の表記揺れ」。
+    /// COMPANY のとき、| の右側がここに入る。屋号は | の左側で引き当て、
+    /// 適用時に <see cref="Data.Models.CreditBlockEntry.CompanyDisplayText"/> へそのまま転写する。
+    /// 用法は <see cref="PersonDisplayText"/> と同じ。
+    /// </summary>
+    public string? CompanyDisplayText { get; set; }
 
     /// <summary>マスタに引き当てできない場合に <c>credit_block_entries.raw_text</c> に退避するテキスト。 パース時には使われない（適用時に必要に応じて埋められる）。</summary>
     public string? RawText { get; set; }

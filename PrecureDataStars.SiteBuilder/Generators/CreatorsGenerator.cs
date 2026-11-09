@@ -20,6 +20,10 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     のタブで切り替える役職詳細。担当の移り変わりの線表（<see cref="RoleTimelineBuilder"/>）を年表タブに置く。</description></item>
 ///   <item><description><c>/creators/voice-cast/</c> … 五十音順 / キャラクター順 /
 ///     初出演順 / 出演回数順 の 4 タブで声優を並べ、出演の移り変わりの線表を年表タブに置く。</description></item>
+///   <item><description><c>/creators/otona/staff/</c>・<c>/creators/otona/roles/{rep_role_code}/</c>・<c>/creators/otona/voice-cast/</c> …
+///     オトナシリーズ（種別 OTONA）のクレジットだけで集計した、スタッフ一覧・役職詳細・声の出演一覧（作りは本編の各ページと同じ）。
+///     オトナシリーズの役職詳細の行には、同じ役職を本編で担当した話数・本数を 📺・🎥 の札で 🌙 の札の前に添える
+///     （並び・初参加順・年表はオトナシリーズの分だけで決める。本編のページにはオトナシリーズの数を出さない）。</description></item>
 /// </list>
 /// 集計の骨格：
 /// <list type="bullet">
@@ -155,11 +159,17 @@ public sealed class CreatorsGenerator
         public (Role Role, HashSet<string> MemberCodes)? StaffCluster { get; init; }
         /// <summary>スタッフ一覧の役職順タブに積む行（役職詳細を書いたとき）。</summary>
         public RoleIndexEntry? StaffEntry { get; set; }
+        /// <summary>本編の範囲でのエンティティ（種類, ID）ごとの担当の話数・本数。オトナシリーズの役職のページの行に本編の札を添えるのに使う。</summary>
+        public IReadOnlyDictionary<(string Kind, int Id), (int Episodes, int Movies)>? MainCounts { get; set; }
     }
 
     private readonly CreatorListMembership _lists = new();
     /// <summary>役職詳細・声の出演一覧の年表に主な方の行として載った人物・企業/団体の URL（OGP カードの年表を出すかの判定に渡す）。</summary>
     private readonly HashSet<string> _siteTimelineEntityUrls = new(StringComparer.Ordinal);
+
+    /// <summary><paramref name="record"/> が true のときだけ <see cref="RecordTimelineRows"/> で記録し、年表をそのまま返す。</summary>
+    private RoleTimelineModel? RecordTimelineRowsIf(bool record, RoleTimelineModel? timeline)
+        => record ? RecordTimelineRows(timeline) : timeline;
 
     /// <summary>役職詳細・声の出演一覧の年表に主な方として載った行の URL を記録し、年表をそのまま返す。役職詳細から並列に呼ばれるので記録は排他する。</summary>
     private RoleTimelineModel? RecordTimelineRows(RoleTimelineModel? timeline)
@@ -226,8 +236,6 @@ public sealed class CreatorsGenerator
         // スタッフ一覧の役職順タブに載せうる役職（系譜の代表と、集計に含めるクラスタの role_code）。
         // オトナシリーズのスタッフ一覧でも、同じ役職の並びで集計し直すのに使う。
         var staffRoleClusters = new List<(Role Role, HashSet<string> MemberCodes)>();
-        // 役職詳細ページを作った役職（オトナシリーズのスタッフ一覧で、役職名を役職詳細へリンクできるか）。
-        var roleCodesWithDetail = new HashSet<string>(StringComparer.Ordinal);
         // 音楽制作ページの役職タブ用（作詞・作曲・編曲の役職詳細への入口）。
         var musicRoleEntries = new List<RoleIndexEntry>();
 
@@ -247,6 +255,8 @@ public sealed class CreatorsGenerator
         // ページを書いた記録（サマリ・進捗・sitemap）と索引への積み上げは、そのあと役職の順で逐次に行う
         // （各話と同じ 2 相方式。sitemap.xml の並びと索引の順をビルドごとに揺らさない）。
         var roleOutcomes = new RoleOutcome?[rankableRoles.Count];
+        // 役職（系譜の代表）ごとの本編の担当の話数・本数（オトナシリーズの役職のページの行に本編の札を添えるのに使う）。
+        var mainCountsByRole = new Dictionary<string, IReadOnlyDictionary<(string Kind, int Id), (int Episodes, int Movies)>>(StringComparer.Ordinal);
         Parallel.For(0, rankableRoles.Count, i =>
         {
             var role = rankableRoles[i];
@@ -302,7 +312,8 @@ public sealed class CreatorsGenerator
             // 役職詳細ページも生成せず、「役職順」タブの索引（roleIndexEntries）にも積まない。
             if (rows.Count == 0) return;
 
-            outcome.WrittenUrl = GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline);
+            outcome.MainCounts = rows.ToDictionary(r => (r.EntityKind, r.EntityId), r => (r.EpisodeCount, r.MovieCount));
+            outcome.WrittenUrl = GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline, MainListPages);
 
             // 役職詳細ページへのリンクは PathUtil 経由で組み立て、URL パス上のコードを
             // 小文字化する。テンプレ側はこの組み立て済み URL のみ参照する。
@@ -314,18 +325,19 @@ public sealed class CreatorsGenerator
             if (outcome is null) continue;
             if (outcome.WrittenUrl is not null) _page.RecordWritten(outcome.WrittenUrl, "creators");
             if (outcome.MusicEntry is not null) musicRoleEntries.Add(outcome.MusicEntry);
-            if (outcome.StaffCluster is { } cluster) staffRoleClusters.Add(cluster);
-            if (outcome.StaffEntry is not null)
+            if (outcome.StaffCluster is { } cluster)
             {
-                roleCodesWithDetail.Add(outcome.StaffCluster!.Value.Role.RoleCode);
-                roleIndexEntries.Add(outcome.StaffEntry);
+                staffRoleClusters.Add(cluster);
+                if (outcome.MainCounts is not null) mainCountsByRole[cluster.Role.RoleCode] = outcome.MainCounts;
             }
+            if (outcome.StaffEntry is not null) roleIndexEntries.Add(outcome.StaffEntry);
         }
 
         roleIndexEntries = OrderRoleIndexEntries(roleIndexEntries);
 
         // ── スタッフ一覧（/creators/staff/） ──
-        GenerateStaff(roleIndexEntries, aliasIdsByPersonId, allPersons, personById,
+        // 本編のスタッフ一覧の人物・企業/団体ごとの参加の話数・本数は、オトナシリーズのスタッフ一覧の行に本編の札を添えるのに使う。
+        var mainStaffCounts = GenerateStaff(roleIndexEntries, aliasIdsByPersonId, allPersons, personById,
             companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById, companyById,
             rankableRoles, roleByCode, MainListPages, out int staffPersonCount, out int staffCompanyCount);
 
@@ -350,8 +362,9 @@ public sealed class CreatorsGenerator
 
         // ── オトナシリーズのスタッフ一覧・声の出演一覧（/creators/otona/staff/・/creators/otona/voice-cast/） ──
         // 本編の 2 ページと同じ作りで、関与をオトナシリーズ（種別 OTONA）の作品だけに絞った写しで集計し直す。
-        // 役職詳細は作らず（役職名は本編の役職詳細へリンクし、無い役職はリンクしない）、一覧に載った方の記録
-        // （人物・企業のパンくず、OGP カードの年表、誕生日の判定に使う）にも入れない。本編の 2 ページの数・並びには触れない。
+        // 役職ごとのページはオトナシリーズの役職のページ（/creators/otona/roles/{code}/）として本編の役職詳細と同じ作りで書き、
+        // スタッフ一覧の役職順タブの役職名はそちらへリンクする。一覧に載った方の記録
+        // （人物・企業のパンくず、OGP カードの年表、誕生日の判定に使う）には入れない。本編の 2 ページ・役職詳細の数・並びには触れない。
         // オトナシリーズのクレジットが 1 件も無いうちは、ページも入口のカードも作らない。
         var otonaIndex = _fullIndex.RestrictToSeries(sid => _ctx.IsOtonaSeries(sid));
         bool hasOtonaCredits = otonaIndex.ByPersonAlias.Count > 0 || otonaIndex.ByCompanyAlias.Count > 0 || otonaIndex.ByLogo.Count > 0;
@@ -360,22 +373,72 @@ public sealed class CreatorsGenerator
         {
             var otonaPages = BuildOtonaListPages();
             var mainIndex = _index;
+
+            // 初参加順は、本編（TV と映画）とオトナシリーズを通した初参加の作品で節を分ける。そのための集計を、本編とオトナシリーズの
+            // 関与を合わせた写しで先に作っておく（載せる顔ぶれと札の数は、あとでオトナシリーズの集計の行に合わせる。OtonaDebutRows）。
+            var combinedIndex = _fullIndex.RestrictToSeries(sid => CreatorListScope.Includes(_ctx, sid) || _ctx.IsOtonaSeries(sid));
+            var otonaRoleClusters = staffRoleClusters.Where(c => PathUtil.HasOtonaRolePage(c.Role.RoleCode)).ToList();
+            var combinedRoleRowSets = new Dictionary<string, EntityRowSet>(StringComparer.Ordinal);
+            EntityRowSet combinedStaffRowSet;
+            _index = combinedIndex;
+            try
+            {
+                var built = new EntityRowSet[otonaRoleClusters.Count];
+                Parallel.For(0, otonaRoleClusters.Count, i =>
+                {
+                    var (role, memberCodes) = otonaRoleClusters[i];
+                    built[i] = BuildRoleEntityRows(
+                        role.RoleCode, memberCodes, roleByCode, aliasIdsByPersonId, allPersons,
+                        companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById);
+                });
+                for (int i = 0; i < otonaRoleClusters.Count; i++) combinedRoleRowSets[otonaRoleClusters[i].Role.RoleCode] = built[i];
+                combinedStaffRowSet = BuildStaffRowSet(rankableRoles, aliasIdsByPersonId, allPersons,
+                    companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById);
+            }
+            finally
+            {
+                _index = mainIndex;
+            }
+
             _index = otonaIndex;
             try
             {
                 var otonaRoleEntries = new List<RoleIndexEntry>();
+                // オトナシリーズの役職のページは、ページを持つ役職の集合（PathUtil.HasOtonaRolePage。クレジットと人物・企業の
+                // ページのリンクもこれで決める）の役職にだけ書く。役職の順に逐次で書いて記録するので sitemap の並びは揺れない。
+                var writtenOtonaRoles = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var (role, memberCodes) in staffRoleClusters)
                 {
-                    var rows = BuildRoleEntityRows(
+                    var rowSet = BuildRoleEntityRows(
                         role.RoleCode, memberCodes, roleByCode, aliasIdsByPersonId, allPersons,
-                        companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById).CountRows;
+                        companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById);
+                    var rows = rowSet.CountRows;
                     if (rows.Count == 0) continue;
-                    otonaRoleEntries.Add(BuildRoleIndexEntry(role, rows,
-                        roleCodesWithDetail.Contains(role.RoleCode) ? PathUtil.CreatorsRoleUrl(role.RoleCode) : ""));
+                    string roleUrl = "";
+                    if (PathUtil.HasOtonaRolePage(role.RoleCode))
+                    {
+                        // 行（初参加順・担当回数順）に、同じ役職を本編で担当した話数・本数を札として添える（並び・年表はオトナシリーズの分だけ）。
+                        // 初参加順は本編とオトナシリーズを通した初担当の作品で節を分ける（OtonaDebutRows）。
+                        mainCountsByRole.TryGetValue(role.RoleCode, out var mainCounts);
+                        ApplyMainCounts(rowSet.CountRows, mainCounts);
+                        var debutRows = combinedRoleRowSets.TryGetValue(role.RoleCode, out var combinedRowSet)
+                            ? OtonaDebutRows(combinedRowSet, rows, mainCounts)
+                            : rowSet.DebutRows;
+                        roleUrl = GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline, otonaPages, debutRows);
+                        _page.RecordWritten(roleUrl, "creators");
+                        writtenOtonaRoles.Add(role.RoleCode);
+                    }
+                    otonaRoleEntries.Add(BuildRoleIndexEntry(role, rows, roleUrl));
                 }
+                // ページを持つはずの役職で、集計の行が無くて書かなかったもの（リンクが行き先を失う）を知らせる。
+                foreach (var (role, _) in staffRoleClusters)
+                    if (PathUtil.HasOtonaRolePage(role.RoleCode) && !writtenOtonaRoles.Contains(role.RoleCode))
+                        _ctx.Logger.Warn($"オトナシリーズの役職のページを書けなかった役職: {role.RoleCode}（{role.NameJa}）");
+                _ctx.Logger.Info($"creators: オトナシリーズの役職のページ {writtenOtonaRoles.Count} 件");
                 GenerateStaff(OrderRoleIndexEntries(otonaRoleEntries), aliasIdsByPersonId, allPersons, personById,
                     companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById, companyById,
-                    rankableRoles, roleByCode, otonaPages, out otonaStaffPersonCount, out otonaStaffCompanyCount);
+                    rankableRoles, roleByCode, otonaPages, out otonaStaffPersonCount, out otonaStaffCompanyCount,
+                    mainCounts: mainStaffCounts, combinedRowSet: combinedStaffRowSet);
                 GenerateVoiceCast(aliasIdsByPersonId, allPersons, allCharacters, allCharacterAliases, roleTimeline,
                     precureOrderByCharacter, otonaPages, out otonaVoiceCastCount);
             }
@@ -480,10 +543,19 @@ public sealed class CreatorsGenerator
     /// <param name="EpisodePillClass">話数の札のクラス（本編は 📺 の <c>count-pill-tv</c>、オトナシリーズは 🌙 の <c>count-pill-otona</c>）。</param>
     /// <param name="RecordsMembership">一覧に載った方を記録するか（人物・企業のパンくず、OGP カードの年表、誕生日の判定に使う。本編の組だけ）。</param>
     /// <param name="ShowsCoverage">ページと OGP カードに基準点（本編クレジットの収録範囲）を出すか。本編の組だけ。</param>
+    /// <param name="RoleUrlOf">役職のページの URL（本編は <see cref="PathUtil.CreatorsRoleUrl"/>、オトナシリーズは <see cref="PathUtil.CreatorsOtonaRoleUrl"/>）。</param>
+    /// <param name="StaffLinkLabel">役職のページの見出しの上に置く、スタッフ一覧へのリンクの文字。</param>
+    /// <param name="RoleTitleSuffix">役職のページの題の括弧書き（「脚本（クリエイター）」の「クリエイター」）。</param>
+    /// <param name="RoleMetaScope">役職のページの meta description で、担当した作品の範囲を表す語。</param>
+    /// <param name="EpisodeBadgeLabel">役職のページの OGP カードで、話数のバッジに付ける語（本編は「TV」、オトナシリーズは「オトナ」）。</param>
+    /// <param name="WorksTimeline">役職のページの年表を、年度の目盛りの線表でなく作品の目盛りの表（<see cref="BuildWorksTimeline"/>）にするか。オトナシリーズの組だけ。</param>
+    /// <param name="CountSortStart">参加回数順・担当回数順の並べ替えのボタンの最初の種類（count-sort.js の data-count-sort-start。空なら既定の最初の種類）。</param>
     private sealed record CreatorListPages(
         string StaffUrl, string StaffTitle, string StaffMetaDescription, string StaffOgLead,
         string VoiceCastUrl, string VoiceCastTitle, string VoiceCastMetaDescription, string VoiceCastOgLead,
-        string EpisodePillClass, string EpisodePillEmoji, bool RecordsMembership, bool ShowsCoverage);
+        string EpisodePillClass, string EpisodePillEmoji, bool RecordsMembership, bool ShowsCoverage,
+        Func<string, string> RoleUrlOf, string StaffLinkLabel, string RoleTitleSuffix, string RoleMetaScope, string EpisodeBadgeLabel,
+        bool WorksTimeline, string CountSortStart);
 
     /// <summary>本編（TV と映画）のスタッフ一覧・声の出演一覧。</summary>
     private static readonly CreatorListPages MainListPages = new(
@@ -498,7 +570,14 @@ public sealed class CreatorsGenerator
         EpisodePillClass: "count-pill-tv",
         EpisodePillEmoji: "📺",
         RecordsMembership: true,
-        ShowsCoverage: true);
+        ShowsCoverage: true,
+        RoleUrlOf: PathUtil.CreatorsRoleUrl,
+        StaffLinkLabel: "スタッフ",
+        RoleTitleSuffix: "クリエイター",
+        RoleMetaScope: "歴代プリキュアシリーズ",
+        EpisodeBadgeLabel: "TV",
+        WorksTimeline: false,
+        CountSortStart: "");
 
     /// <summary>
     /// オトナシリーズ（種別 OTONA）のスタッフ一覧・声の出演一覧。
@@ -524,7 +603,14 @@ public sealed class CreatorsGenerator
             EpisodePillClass: "count-pill-otona",
             EpisodePillEmoji: "🌙",
             RecordsMembership: false,
-            ShowsCoverage: false);
+            ShowsCoverage: false,
+            RoleUrlOf: PathUtil.CreatorsOtonaRoleUrl,
+            StaffLinkLabel: "オトナシリーズのスタッフ",
+            RoleTitleSuffix: "オトナシリーズ",
+            RoleMetaScope: "大人向けシリーズ",
+            EpisodeBadgeLabel: "オトナ",
+            WorksTimeline: true,
+            CountSortStart: "otona");
     }
 
     // 役職詳細
@@ -994,7 +1080,9 @@ public sealed class CreatorsGenerator
         IReadOnlySet<string> memberCodes,
         IReadOnlyDictionary<string, Role> roleByCode,
         EntityRowSet rowSet,
-        RoleTimelineBuilder roleTimeline)
+        RoleTimelineBuilder roleTimeline,
+        CreatorListPages pages,
+        IReadOnlyList<EntityRow>? debutRows = null)
     {
         var rows = rowSet.CountRows;
 
@@ -1016,33 +1104,45 @@ public sealed class CreatorsGenerator
             // データが揃ったら下行のコメントを外して復活させる。
             // KanaRows = SortByKana(rows),
             // 初参加順は名義ごとの行（改名・屋号変更ごとに、その名義が初めて出たシリーズへ置く）。
-            DebutSections = SectionByDebut(rowSet.DebutRows),
+            // 初参加順の行は呼び出し側が差し替えられる（オトナシリーズの役職のページは本編とオトナシリーズを通した初担当の作品で分ける）。
+            DebutSections = SectionByDebut(debutRows ?? rowSet.DebutRows),
             CountRows = SortByCount(rows),
             AlternateNames = alternateNames,
             NameHistory = BuildRoleNameHistory(memberCodes, roleByCode),
-            Timeline = RecordTimelineRows(roleTimeline.Build(rowSet.TimelineEntities, RoleTimelineRules.Staff)),
-            CoverageLabel = _ctx.CreditCoverageLabel,
+            // 年表に主な方の行として載った記録（OGP カードの年表の判定）は本編の組だけに付ける。
+            // 年表の凡例の関連する役職は、このページと同じ組の役職のページへリンクする。
+            // 作品の目盛りの年表（WorksTimeline）の組では、年度の目盛りの線表は作らない。
+            Timeline = pages.WorksTimeline ? null : RecordTimelineRowsIf(pages.RecordsMembership,
+                roleTimeline.Build(rowSet.TimelineEntities, RoleTimelineRules.Staff with { RelatedRoleUrl = pages.RoleUrlOf })),
+            WorksTimeline = pages.WorksTimeline ? BuildWorksTimeline(rowSet.TimelineEntities) : null,
+            CountSortStart = pages.CountSortStart,
+            CoverageLabel = pages.ShowsCoverage ? _ctx.CreditCoverageLabel : "",
             // 個人と団体が両方そろっているときだけ entity-filter を出すための件数（片方だけの役職では絞り込みが無意味）。
             PersonCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal)),
-            CompanyCount = rows.Count(r => string.Equals(r.EntityKind, "company", StringComparison.Ordinal))
+            CompanyCount = rows.Count(r => string.Equals(r.EntityKind, "company", StringComparison.Ordinal)),
+            StaffUrl = pages.StaffUrl,
+            StaffLinkLabel = pages.StaffLinkLabel,
+            EpisodePillClass = pages.EpisodePillClass,
+            EpisodePillEmoji = pages.EpisodePillEmoji
         };
         var layout = new LayoutModel
         {
-            PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した方々（人物・企業・団体）",
-            OgCard = BuildRoleOgCard(role, content.PersonCount, content.CompanyCount, rows, rowSet.TimelineEntities, alternateNames),
+            PageTitle = $"{role.NameJa}（{pages.RoleTitleSuffix}）",
+            MetaDescription = $"{pages.RoleMetaScope}で役職「{role.NameJa}」を担当した方々（人物・企業・団体）",
+            OgCard = BuildRoleOgCard(role, content.PersonCount, content.CompanyCount, rows, rowSet.TimelineEntities, alternateNames,
+                pages.EpisodeBadgeLabel, content.CoverageLabel),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代クリエイター", Url = PathUtil.CreatorsLandingUrl() },
-                new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = PathUtil.CreatorsStaffUrl() },
+                new BreadcrumbItem { Label = pages.StaffTitle, Url = pages.StaffUrl },
                 new BreadcrumbItem { Label = role.NameJa, Url = "" }
             }
         };
-        // 出力先パスもリンク生成と同一の PathUtil.CreatorsRoleUrl を通すことで、
+        // 出力先パスもリンク生成と同一の PathUtil.CreatorsRoleUrl（オトナシリーズは PathUtil.CreatorsOtonaRoleUrl）を通すことで、
         // URL パス上のコード小文字化と出力ディレクトリ名を必ず一致させる。
         // 役職ごとに並列で呼ばれるので、書き出しまでにとどめ、記録（RecordWritten）は呼び出し側が役職の順で行う。
-        var url = PathUtil.CreatorsRoleUrl(role.RoleCode);
+        var url = pages.RoleUrlOf(role.RoleCode);
         _page.RenderAndWriteFile(url, "creators-role-detail.sbn", content, layout);
         return url;
     }
@@ -2231,7 +2331,10 @@ public sealed class CreatorsGenerator
     // スタッフ一覧
 
     /// <summary><c>/creators/staff/</c>（オトナシリーズは <c>/creators/otona/staff/</c>。<paramref name="pages"/> で出し分ける）を 4 タブで書き出す。 役職順タブは役職名 + 人数/社数の索引（各役職詳細への入口）。 それ以外の 3 タブは全役職横断の人物・企業/団体の混在一覧。</summary>
-    private void GenerateStaff(
+    /// <param name="mainCounts">オトナシリーズの組で、行に添える本編の参加の話数・本数（エンティティごと）。本編の組は null。</param>
+    /// <param name="combinedRowSet">オトナシリーズの組で、初参加順の節を本編とオトナシリーズを通した初参加の作品で分けるための集計（<see cref="OtonaDebutRows"/>）。本編の組は null。</param>
+    /// <returns>この一覧の行（エンティティごと）の参加の話数・本数。</returns>
+    private IReadOnlyDictionary<(string Kind, int Id), (int Episodes, int Movies)> GenerateStaff(
         IReadOnlyList<RoleIndexEntry> roleIndexEntries,
         IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
         IReadOnlyList<Person> allPersons,
@@ -2245,25 +2348,16 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<string, Role> roleByCode,
         CreatorListPages pages,
         out int staffPersonCount,
-        out int staffCompanyCount)
+        out int staffCompanyCount,
+        IReadOnlyDictionary<(string Kind, int Id), (int Episodes, int Movies)>? mainCounts = null,
+        EntityRowSet? combinedRowSet = null)
     {
-        // 内訳・役職ラベルに使う「代表 role_code → 代表 NameJa」マップ。
-        var repNameMap = rankableRoles.ToDictionary(r => r.RoleCode, r => r.NameJa, StringComparer.Ordinal);
-
-        // 全 non-VOICE_CAST 役職を横断し、エピソード単位で重複排除（複数役職の兼任も 1 回扱い）。
-        // 役職ラベルは代表 role_code で束ね、最早出現順に全列挙する。
-        // 主題歌・挿入歌の使用を経由した関与（楽曲の作家・歌唱）は数えない。本編クレジットに載ったスタッフだけの一覧にし、
-        // 楽曲の作家・歌唱は音楽制作・歌唱ページに分ける。
-        var rowSet = BuildEntityRowSet(
-            inv =>
-            {
-                if (inv.EntryKind is "SONG_CREDIT" or "RECORDING_SINGER") return null;
-                string rep = _resolver.GetRepresentative(inv.RoleCode);
-                return repNameMap.ContainsKey(rep) ? rep : null; // VOICE_CAST 等は対象外
-            },
-            aliasIdsByPersonId, allPersons, companyAliasesByCompany, logosByCompanyAlias,
-            allCompanies, companyAliasById, repNameMap, withWorksTooltip: false);
+        var rowSet = BuildStaffRowSet(rankableRoles, aliasIdsByPersonId, allPersons,
+            companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById);
         var rows = rowSet.CountRows;
+        // オトナシリーズの組：行に本編の札を添え、初参加順は本編とオトナシリーズを通した初参加の作品で節を分ける。
+        ApplyMainCounts(rows, mainCounts);
+        var debutRows = combinedRowSet is null ? rowSet.DebutRows : OtonaDebutRows(combinedRowSet, rows, mainCounts);
         if (pages.RecordsMembership)
         {
             foreach (var r in rows)
@@ -2286,14 +2380,15 @@ public sealed class CreatorsGenerator
             // データが揃ったら下行のコメントを外して復活させる（KanaRows は未設定＝空のまま）。
             // KanaRows = SortByKana(rows),
             // 初参加順は名義ごとの行（改名・屋号変更ごとに、その名義が初めて出たシリーズへ置く）。
-            DebutSections = SectionByDebut(rowSet.DebutRows),
+            DebutSections = SectionByDebut(debutRows),
             CountRows = SortByCount(rows),
             PersonCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal)),
             CompanyCount = rows.Count(r => string.Equals(r.EntityKind, "company", StringComparison.Ordinal)),
             CoverageLabel = pages.ShowsCoverage ? _ctx.CreditCoverageLabel : "",
             PageTitle = pages.StaffTitle,
             EpisodePillClass = pages.EpisodePillClass,
-            EpisodePillEmoji = pages.EpisodePillEmoji
+            EpisodePillEmoji = pages.EpisodePillEmoji,
+            CountSortStart = pages.CountSortStart
         };
         var layout = new LayoutModel
         {
@@ -2313,6 +2408,125 @@ public sealed class CreatorsGenerator
         };
         _page.RenderAndWrite(pages.StaffUrl, "creators",
             "creators-staff.sbn", content, layout);
+        return rows.ToDictionary(r => (r.EntityKind, r.EntityId), r => (r.EpisodeCount, r.MovieCount));
+    }
+
+    /// <summary>
+    /// スタッフ一覧の行群（いまの <see cref="_index"/> の範囲）。全 non-VOICE_CAST 役職を横断し、エピソード単位で重複排除（複数役職の兼任も 1 回扱い）。
+    /// 役職ラベルは代表 role_code で束ね、最早出現順に全列挙する。
+    /// 主題歌・挿入歌の使用を経由した関与（楽曲の作家・歌唱）は数えない。本編クレジットに載ったスタッフだけの一覧にし、
+    /// 楽曲の作家・歌唱は音楽制作・歌唱ページに分ける。
+    /// </summary>
+    private EntityRowSet BuildStaffRowSet(
+        IReadOnlyList<Role> rankableRoles,
+        IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
+        IReadOnlyList<Person> allPersons,
+        IReadOnlyDictionary<int, List<int>> companyAliasesByCompany,
+        IReadOnlyDictionary<int, List<int>> logosByCompanyAlias,
+        IReadOnlyList<Company> allCompanies,
+        IReadOnlyDictionary<int, CompanyAlias> companyAliasById)
+    {
+        // 内訳・役職ラベルに使う「代表 role_code → 代表 NameJa」マップ。
+        var repNameMap = rankableRoles.ToDictionary(r => r.RoleCode, r => r.NameJa, StringComparer.Ordinal);
+        return BuildEntityRowSet(
+            inv =>
+            {
+                if (inv.EntryKind is "SONG_CREDIT" or "RECORDING_SINGER") return null;
+                string rep = _resolver.GetRepresentative(inv.RoleCode);
+                return repNameMap.ContainsKey(rep) ? rep : null; // VOICE_CAST 等は対象外
+            },
+            aliasIdsByPersonId, allPersons, companyAliasesByCompany, logosByCompanyAlias,
+            allCompanies, companyAliasById, repNameMap, withWorksTooltip: false);
+    }
+
+    /// <summary>行に、本編の参加の話数・本数（<paramref name="mainCounts"/>。エンティティごと）を札として入れる。null なら何もしない。</summary>
+    private static void ApplyMainCounts(
+        IEnumerable<EntityRow> rows, IReadOnlyDictionary<(string Kind, int Id), (int Episodes, int Movies)>? mainCounts)
+    {
+        if (mainCounts is null) return;
+        foreach (var r in rows)
+        {
+            if (!mainCounts.TryGetValue((r.EntityKind, r.EntityId), out var mc)) continue;
+            r.MainEpisodeCount = mc.Episodes;
+            r.MainMovieCount = mc.Movies;
+        }
+    }
+
+    /// <summary>
+    /// オトナシリーズの一覧・役職のページの初参加順の行。本編（TV と映画）とオトナシリーズを通した集計（<paramref name="combined"/>）の
+    /// 名義ごとの行（その名義が初めてクレジットされた作品に置く）のうち、オトナシリーズの集計に行がある人物・企業/団体の行だけを残す。
+    /// 札の数はオトナシリーズの数（🌙）と本編の数（📺・🎥。<paramref name="mainCounts"/>）に、役職ラベル・表記ごとの担当数は
+    /// オトナシリーズの行のものに入れ替える。
+    /// </summary>
+    private static List<EntityRow> OtonaDebutRows(
+        EntityRowSet combined, IReadOnlyList<EntityRow> otonaCountRows,
+        IReadOnlyDictionary<(string Kind, int Id), (int Episodes, int Movies)>? mainCounts)
+    {
+        var otonaByKey = otonaCountRows.ToDictionary(r => (r.EntityKind, r.EntityId));
+        var result = new List<EntityRow>();
+        foreach (var r in combined.DebutRows)
+        {
+            if (!otonaByKey.TryGetValue((r.EntityKind, r.EntityId), out var o)) continue;
+            r.EpisodeCount = o.EpisodeCount;
+            r.MovieCount = o.MovieCount;
+            r.RolesLabel = o.RolesLabel;
+            r.RoleUsageNote = o.RoleUsageNote;
+            r.MainEpisodeCount = 0;
+            r.MainMovieCount = 0;
+            result.Add(r);
+        }
+        ApplyMainCounts(result, mainCounts);
+        return result;
+    }
+
+    /// <summary>
+    /// 作品の目盛りの年表（オトナシリーズの役職のページ）。列はこの役職の担当がある作品を放送順に並べ、作品名の後ろに放送開始の年を添える。
+    /// 行は人物・企業/団体ごとに、初めて担当した順（初めて担当した話の放送日、同じ日ならクレジットの位置）に並べ、升にはその作品で担当した回を
+    /// 「#1～4」の形で入れる（作品全体のクレジットだけのときは「全話」）。行が無ければ null（年表タブを出さない）。
+    /// </summary>
+    private WorksTimelineModel? BuildWorksTimeline(IReadOnlyList<RoleTimelineEntity> entities)
+    {
+        if (entities.Count == 0) return null;
+        var seriesIds = entities.SelectMany(e => e.Episodes.Select(k => k.SeriesId).Concat(e.MovieSeriesIds))
+            .Distinct()
+            .Where(sid => _ctx.SeriesById.ContainsKey(sid))
+            .OrderBy(sid => _ctx.SeriesById[sid].StartDate).ThenBy(sid => sid)
+            .ToList();
+        if (seriesIds.Count == 0) return null;
+
+        var columns = seriesIds.Select(sid => _ctx.SeriesById[sid]).Select(s => new WorksTimelineColumn
+        {
+            SeriesTitle = s.Title,
+            SeriesUrl = PathUtil.SeriesUrl(s.Slug),
+            YearLabel = s.StartDate.Year.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        }).ToList();
+
+        // 初めて担当した日（話の放送日。作品全体のクレジット・映画は作品の開始日）。
+        DateOnly FirstDate(RoleTimelineEntity e)
+        {
+            var dates = e.Episodes.Select(k => k.EpisodeId != 0 && _ctx.EpisodeById.TryGetValue(k.EpisodeId, out var ep)
+                    ? ep.OnAirDate : _ctx.SeriesStartDate(k.SeriesId))
+                .Concat(e.MovieSeriesIds.Select(sid => _ctx.SeriesStartDate(sid)));
+            return dates.DefaultIfEmpty(DateOnly.MaxValue).Min();
+        }
+        var rows = entities
+            .OrderBy(FirstDate).ThenBy(e => e.FirstSortPos)
+            .ThenBy(e => e.EntityName, StringComparer.Ordinal)
+            .Select(e => new WorksTimelineRow
+            {
+                EntityKind = e.EntityKind,
+                EntityName = e.EntityName,
+                EntityUrl = e.EntityUrl,
+                Cells = seriesIds.Select(sid =>
+                {
+                    var epNos = e.Episodes.Where(k => k.SeriesId == sid && k.EpisodeId != 0)
+                        .Select(k => _ctx.EpisodeSeriesEpNo(sid, k.EpisodeId)).ToList();
+                    if (epNos.Count > 0) return EpisodeRangeCompressor.Compress(epNos);
+                    return e.Episodes.Any(k => k.SeriesId == sid) || e.MovieSeriesIds.Contains(sid) ? "全話" : "";
+                }).ToList()
+            })
+            .ToList();
+        return new WorksTimelineModel { Columns = columns, Rows = rows };
     }
 
     // 声の出演
@@ -2984,6 +3198,7 @@ public sealed class CreatorsGenerator
     /// 役職詳細の OGP カード（人物・企業と同じプロフィール組み）。
     /// 「役職名 → 人物数・団体数と、この役職がクレジットされた TV の話数・映画の本数 → 担当回数順の顔ぶれ → 別称」の順に置く。
     /// 透かしは初出の年。役職名と人数だけでは「誰の仕事か」が伝わらないため、顔ぶれを入る限り多く並べる。
+    /// 話数のバッジの語（<c>episodeBadgeLabel</c>：本編は「TV」、オトナシリーズは「オトナ」）と左上の基準点（<c>coverageLabel</c>。空なら出さない）は呼び出し側が渡す。
     /// </summary>
     /// <summary>役職詳細のカードに並べる顔ぶれの数（担当回数順の上位）。</summary>
     private const int RoleCardTopCount = 12;
@@ -2991,7 +3206,9 @@ public sealed class CreatorsGenerator
     private OgCardSpec BuildRoleOgCard(
         Role role, int personCount, int companyCount,
         IReadOnlyList<EntityRow> rows, IReadOnlyList<RoleTimelineEntity> entities,
-        IReadOnlyList<AlternateNameItem> alternateNames)
+        IReadOnlyList<AlternateNameItem> alternateNames,
+        string episodeBadgeLabel,
+        string coverageLabel)
     {
         // この役職がクレジットされた話・映画（担当者をまたいで 1 話・1 本に畳む）。
         var episodes = new HashSet<(int SeriesId, int EpisodeId)>();
@@ -3003,7 +3220,7 @@ public sealed class CreatorsGenerator
         }
 
         var badges = new List<OgCardBadge>(BuildEntityBadges(personCount, companyCount));
-        if (episodes.Count > 0) badges.Add(new OgCardBadge("TV", $"{episodes.Count}話"));
+        if (episodes.Count > 0) badges.Add(new OgCardBadge(episodeBadgeLabel, $"{episodes.Count}話"));
         if (movies.Count > 0) badges.Add(new OgCardBadge("映画", $"{movies.Count}本"));
 
         // 担当回数順に RoleCardTopCount 者まで。「名前 n話 / n本」を読点で並べる。
@@ -3044,7 +3261,7 @@ public sealed class CreatorsGenerator
 
         return new OgCardSpec(Kicker: "", Title: role.NameJa)
         {
-            MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
+            MetaLeft = OgCoverageLabel.Compact(coverageLabel),
             BandColorHex = OgCardColors.Staff,
             Badges = badges,
             InlineFacts = facts,
@@ -3592,6 +3809,8 @@ public sealed class CreatorsGenerator
     private sealed class StaffModel
     {
         public IReadOnlyList<RoleIndexEntry> Roles { get; set; } = Array.Empty<RoleIndexEntry>();
+        /// <summary>参加回数順の並べ替えのボタンの最初の種類（count-sort.js の data-count-sort-start。空なら付けない）。</summary>
+        public string CountSortStart { get; set; } = "";
         /// <summary>役職順タブの前半：TV 系シリーズで 1 度でもクレジットされた役職。</summary>
         public IReadOnlyList<RoleIndexEntry> TvRoles { get; set; } = Array.Empty<RoleIndexEntry>();
         /// <summary>役職順タブの後半：映画系シリーズでのみクレジットされた役職（別セクション）。</summary>
@@ -3629,6 +3848,41 @@ public sealed class CreatorsGenerator
         /// <summary>個人・団体の件数。両方 &gt; 0 のときだけ entity-filter（すべて / 個人のみ / 団体のみ）をテンプレで表示する（片方だけの役職では絞り込みが無意味なため）。</summary>
         public int PersonCount { get; set; }
         public int CompanyCount { get; set; }
+        /// <summary>見出しの上に置くスタッフ一覧へのリンク（本編は <c>/creators/staff/</c>、オトナシリーズは <c>/creators/otona/staff/</c>）。</summary>
+        public string StaffUrl { get; set; } = "";
+        /// <summary>見出しの上のスタッフ一覧へのリンクの文字。</summary>
+        public string StaffLinkLabel { get; set; } = "";
+        /// <summary>話数の札のクラス（本編は 📺 の <c>count-pill-tv</c>、オトナシリーズは 🌙 の <c>count-pill-otona</c>）。</summary>
+        public string EpisodePillClass { get; set; } = "";
+        public string EpisodePillEmoji { get; set; } = "";
+        /// <summary>年表タブの作品の目盛りの表（オトナシリーズの役職のページだけ。入っているときは <see cref="Timeline"/> の代わりに出す）。</summary>
+        public WorksTimelineModel? WorksTimeline { get; set; }
+        /// <summary>担当回数順の並べ替えのボタンの最初の種類（count-sort.js の data-count-sort-start。空なら付けない）。</summary>
+        public string CountSortStart { get; set; } = "";
+    }
+
+    /// <summary>作品の目盛りの年表（列＝作品、行＝人物・企業/団体、升＝その作品で担当した回の範囲）。</summary>
+    private sealed class WorksTimelineModel
+    {
+        public IReadOnlyList<WorksTimelineColumn> Columns { get; init; } = Array.Empty<WorksTimelineColumn>();
+        public IReadOnlyList<WorksTimelineRow> Rows { get; init; } = Array.Empty<WorksTimelineRow>();
+    }
+
+    /// <summary>作品の目盛りの年表の列（作品名と放送開始の年）。</summary>
+    private sealed class WorksTimelineColumn
+    {
+        public string SeriesTitle { get; init; } = "";
+        public string SeriesUrl { get; init; } = "";
+        public string YearLabel { get; init; } = "";
+    }
+
+    /// <summary>作品の目盛りの年表の行。<see cref="Cells"/> は列の順に、その作品で担当した回の範囲（「#1～4」。担当が無ければ空）。</summary>
+    private sealed class WorksTimelineRow
+    {
+        public string EntityKind { get; init; } = "";
+        public string EntityName { get; init; } = "";
+        public string EntityUrl { get; init; } = "";
+        public IReadOnlyList<string> Cells { get; init; } = Array.Empty<string>();
     }
 
     /// <summary>歌系役職詳細ページ用の表示モデル。 既存 <see cref="RoleDetailModel"/> と並列に置く別 DTO。初参加順タブは持たない。</summary>
@@ -3724,6 +3978,12 @@ public sealed class CreatorsGenerator
         public int EpisodeCount { get; set; }
         /// <summary>映画系シリーズ（series_kinds.credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）での担当本数（1 シリーズ = 1 本）。</summary>
         public int MovieCount { get; set; }
+        /// <summary>
+        /// オトナシリーズの役職のページの行だけに入れる、同じ役職（系譜の代表で同じ役職）を本編（TV と映画）で担当した話数・本数。
+        /// テンプレは 🌙 の札の前に 📺・🎥 の札として出す（0 なら出さない）。並べ替え・初参加順・年表には使わない。本編のページでは 0。
+        /// </summary>
+        public int MainEpisodeCount { get; set; }
+        public int MainMovieCount { get; set; }
         /// <summary>担当の総量（<see cref="EpisodeCount"/> + <see cref="MovieCount"/>）。担当多い順タブのソートキー兼テンプレ存在判定用。</summary>
         public int TotalCount => EpisodeCount + MovieCount;
         /// <summary>"担当 N 話・M 本" / "担当 N 話" / "担当 M 本" の単位付き表記。両方ゼロなら空文字。

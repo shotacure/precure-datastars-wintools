@@ -1,3 +1,4 @@
+using PrecureDataStars.Data.Models;
 using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Pipeline;
@@ -47,5 +48,42 @@ public static class CreatorListScope
         }
 
         return RoleCodes(index).Select(Rep).Where(rep => !withPage.Contains(rep)).ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// オトナシリーズの役職のページ（/creators/otona/roles/{code}/）を持つ役職（系譜の代表の role_code）を求める。
+    /// オトナシリーズ（<see cref="BuildContextLookupExtensions.IsOtonaSeries"/>）のクレジットに、人物・企業/団体・ロゴの名義で
+    /// 出てくる役職のうち、本編の役職詳細と同じくページを作る役職が当たる。声の出演（VOICE_CAST 形式。オトナシリーズの声の出演一覧へ集約）・
+    /// 表記のみ（NOTICE 形式）・主題歌・挿入歌（THEME_SONG 形式）・歌唱系・楽曲の作家（作詞・作曲・編曲）の役職は入れない。
+    /// CreatorsGenerator はこの集合の役職にだけオトナシリーズの役職のページを書き、クレジット・人物・企業の各ページはこの集合でリンクを決める。
+    /// </summary>
+    public static IReadOnlySet<string> OtonaRolesWithPage(BuildContext ctx, CreditInvolvementIndex index, RoleSuccessorResolver resolver)
+    {
+        // 人物の行を持つ名義（ユニットなど人物の無い名義の関与は、役職のページの行にならないので数えない）。
+        var personAliasIds = ctx.AliasIdsByPerson.Values.SelectMany(ids => ids).ToHashSet();
+
+        bool IsExcludedFormat(string roleCode)
+            => !ctx.RoleByCode.TryGetValue(roleCode, out var r)
+               || r.RoleFormatKind is "VOICE_CAST" or "NOTICE" or "THEME_SONG";
+
+        bool IsSongCreditRole(string roleCode)
+            => roleCode is SongCreditRoles.Lyrics or SongCreditRoles.Composition
+                or SongCreditRoles.Arrangement or SongCreditRoles.MedleyArrangement;
+
+        var otona = index.RestrictToSeries(sid => ctx.IsOtonaSeries(sid));
+        var involvements = otona.ByPersonAlias.Where(kv => personAliasIds.Contains(kv.Key)).SelectMany(kv => kv.Value)
+            .Concat(otona.ByCompanyAlias.Values.SelectMany(list => list))
+            .Concat(otona.ByLogo.Values.SelectMany(list => list));
+
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var inv in involvements)
+        {
+            if (string.IsNullOrEmpty(inv.RoleCode) || IsExcludedFormat(inv.RoleCode)) continue;
+            string rep = resolver.GetRepresentative(inv.RoleCode);
+            if (string.IsNullOrEmpty(rep)) rep = inv.RoleCode;
+            if (IsExcludedFormat(rep) || PathUtil.IsSingerRole(rep) || IsSongCreditRole(rep)) continue;
+            result.Add(rep);
+        }
+        return result;
     }
 }

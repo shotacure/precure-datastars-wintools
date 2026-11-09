@@ -1214,6 +1214,9 @@ public sealed class CompaniesGenerator
                     // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）はリンクなし。
                     _ => PathUtil.HasRolePage(roleCode) ? PathUtil.CreatorsRoleUrl(roleCode) : ""
                 };
+                // オトナシリーズの作品だけのグループ（と、本編の役職詳細を持たない役職でオトナシリーズの作品を含むグループ）は、
+                // オトナシリーズの役職のページ（声の出演はオトナシリーズの声の出演一覧）へ。
+                roleUrl = InvolvementRowBuilder.OtonaAwareRoleUrl(_ctx, roleCode, formatKind, roleGroup, roleUrl);
             }
 
             // 役職グループ内をさらにシリーズ単位で集約。共通骨格は InvolvementRowBuilder に委譲する。

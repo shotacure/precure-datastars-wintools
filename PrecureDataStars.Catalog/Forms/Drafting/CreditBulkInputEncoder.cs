@@ -145,6 +145,11 @@ internal static class CreditBulkInputEncoder
         // ロールのカードは @roll 単独行を先頭に出す（カードのときは出さない）。
         if (string.Equals(card.Entity.Presentation, "ROLL", StringComparison.Ordinal))
             sb.Append("@roll").Append(LineSeparator);
+        // 版の付いたカードは @broadcast / @homevideo 単独行を続けて出す（共通のカードは出さない）。
+        if (string.Equals(card.Entity.MediaVersion, CreditMediaVersions.Broadcast, StringComparison.Ordinal))
+            sb.Append("@broadcast").Append(LineSeparator);
+        else if (string.Equals(card.Entity.MediaVersion, CreditMediaVersions.HomeVideo, StringComparison.Ordinal))
+            sb.Append("@homevideo").Append(LineSeparator);
 
         // カード備考（@notes=...）。空文字 / null の場合は出力省略（パーサも空値を null として扱う）。
         EmitNotesDirective(card.Entity.Notes, sb);
@@ -450,7 +455,23 @@ internal static class CreditBulkInputEncoder
             string nameOrFallback = !string.IsNullOrEmpty(aliasName)
                 ? aliasName
                 : $"alias#{leadingId}";
-            sb.Append("[[").Append(nameOrFallback).Append("]]").Append(LineSeparator);
+            sb.Append("[[").Append(nameOrFallback).Append("]]");
+            // 2 社の連名なら同じ行に「間の字[[2 社目]]」を、後ろの字があればその後ろに続ける
+            // （[[スタジオトゥインクル]]/[[AMGA]] 撮影班）。パーサの LeadingCompanyBracketRegex と往復で同じ形。
+            if (block.Entity.LeadingCompany2AliasId is int leading2Id)
+            {
+                string? alias2Name = await cache.LookupCompanyAliasNameAsync(leading2Id);
+                string name2OrFallback = !string.IsNullOrEmpty(alias2Name)
+                    ? alias2Name
+                    : $"alias#{leading2Id}";
+                sb.Append(block.Entity.LeadingCompanySeparator ?? string.Empty)
+                  .Append("[[").Append(name2OrFallback).Append("]]");
+            }
+            if (!string.IsNullOrEmpty(block.Entity.LeadingCompanySuffix))
+            {
+                sb.Append(block.Entity.LeadingCompanySuffix);
+            }
+            sb.Append(LineSeparator);
             // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、[[XXX]] のすぐ後に印を書く。
             if (block.Entity.LeadingCompanyNotOnScreen)
             {
@@ -743,7 +764,7 @@ internal static class CreditBulkInputEncoder
         return $"<{charaWithMisprint}>{actorPart}";
     }
 
-    /// <summary>COMPANY エントリの本体（<c>[屋号]</c> または <c>[屋号#alias_id]</c>、任意で <c>×誤記</c> を後置）を生成する。 DB に同名屋号 alias が複数存在するときのみ <c>#alias_id</c> を後置する（同名 1 件のみなら無印）。</summary>
+    /// <summary>COMPANY エントリの本体（<c>[屋号]</c> または <c>[屋号#alias_id]</c>、任意で <c>×誤記</c> を後置）を生成する。 DB に同名屋号 alias が複数存在するときのみ <c>#alias_id</c> を後置する（同名 1 件のみなら無印）。 画面に出た企業名の表記揺れ（<see cref="CreditBlockEntry.CompanyDisplayText"/>）があれば閉じ括弧の直前に <c>|画面の表記</c> を入れる（<c>[BUG FILMS|BUGFILMS]</c>）。</summary>
     private static async Task<string> BuildCompanyCellAsync(CreditBlockEntry e, LookupCache cache)
     {
         string body;
@@ -751,7 +772,7 @@ internal static class CreditBulkInputEncoder
         {
             string? name = await cache.LookupCompanyAliasNameAsync(caId);
             string nameWithAliasId = await AppendAliasIdSuffixIfAmbiguousCompanyAsync(name ?? $"alias#{caId}", caId, cache);
-            body = $"[{nameWithAliasId}]";
+            body = $"[{AppendDisplaySuffix(nameWithAliasId, e.CompanyDisplayText)}]";
         }
         else
         {
@@ -814,7 +835,7 @@ internal static class CreditBulkInputEncoder
         return $"{mainText}{MisprintSeparator}{misprint}";
     }
 
-    /// <summary>人物名の表記揺れ（<see cref="CreditBlockEntry.PersonDisplayText"/>）を「名義|画面の表記」記法で連結する。NULL・空なら連結しない。</summary>
+    /// <summary>人物名の表記揺れ（<see cref="CreditBlockEntry.PersonDisplayText"/>）・企業名の表記揺れ（<see cref="CreditBlockEntry.CompanyDisplayText"/>）を「名義|画面の表記」記法で連結する。NULL・空なら連結しない。</summary>
     private static string AppendDisplaySuffix(string mainText, string? displayText)
     {
         if (string.IsNullOrEmpty(displayText)) return mainText;

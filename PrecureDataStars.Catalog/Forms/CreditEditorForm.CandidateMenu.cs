@@ -63,8 +63,11 @@ public partial class CreditEditorForm
 
     /// <summary>ブロックトップ屋号 <c>[[XXX]]</c> 行の検出。<c>CreditBulkInputParser</c> の同名 Regex と仕様一致。
     /// <c>[[OLD=>NEW]]</c> 形式の名前リダイレクトもこの Regex が拾い、中身の <c>OLD=&gt;NEW</c> 文字列を
-    /// <see cref="ResolveLeadingCompanyAliasIdAsync"/> 側で分離して新側 NEW を alias 検索に使う。</summary>
-    private static readonly Regex LeadingCompanyLineRegex = new(@"^\[\[(?<name>[^\[\]]+)\]\]$", RegexOptions.Compiled);
+    /// <see cref="ResolveLeadingCompanyAliasIdAsync"/> 側で分離して新側 NEW を alias 検索に使う。
+    /// 2 社の連名 <c>[[XXX]]間の字[[YYY]]後ろの字</c> と後ろの字つき <c>[[XXX]]後ろの字</c> も同じ形で受け、1 社目 XXX を拾う。</summary>
+    private static readonly Regex LeadingCompanyLineRegex = new(
+        @"^\[\[(?<name>[^\[\]]+)\]\](?:(?<sep>[^\[\]\t]*?)\[\[(?<name2>[^\[\]]+)\]\])?(?<suffix>[^\[\]\t]*)$",
+        RegexOptions.Compiled);
 
     /// <summary>候補メニューの最大件数（PERSON / COMPANY セクションごと）。</summary>
     private const int MaxCandidatesPerSection = 20;

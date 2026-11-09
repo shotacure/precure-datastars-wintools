@@ -9,6 +9,7 @@
  *   例：📺⬇ → 📺⬆ → 🎥⬇ → 🎥⬆ → 📺🎥⬇ → 📺🎥⬆ → 📺⬇ …
  * ・既定：最初の種類の多い順（例：📺⬇）で並べ直した状態から始める。
  *   data-count-sort-initial="none"：もともとの並び（役職の表示順など）のまま「⇅」から始め、一周したら元の並びに戻す。
+ *   data-count-sort-start="otona"：その種類の多い順（例：🌙⬇）から始める（その種類がリストに無ければ既定どおり）。
  * ・同じ数の行はもともとの並び順を保つ。種類ごとの並べ替えでは、その種類が 0 の行を向きにかかわらず末尾に置く。
  * ・ボタンは対象リストが画面に出ているときだけ表示する（タブや初参加順／多い順の切り替えに合わせて、クリックのたびに判定し直す）。
  * ・ページ出力は増やさず、並べ替えはこのスクリプトの中だけで行う（外部ライブラリなし）。
@@ -81,7 +82,14 @@
     var initialNone = btn.getAttribute('data-count-sort-initial') === 'none';
     if (initialNone) states.unshift({ keys: null, desc: true });
     // 既定は最初の種類の多い順（例：📺⬇）から始める。「⇅」から始めるリストはもとの並びのまま。
+    // data-count-sort-start で種類を指定したリストは、その種類の多い順から始める。
     var pos = 0;
+    var startKey = btn.getAttribute('data-count-sort-start');
+    if (startKey && !initialNone) {
+      states.forEach(function (st, i) {
+        if (pos === 0 && st.keys && st.keys.length === 1 && st.keys[0] === startKey && st.desc) pos = i;
+      });
+    }
 
     function valueOf(row, keys) {
       var sum = 0, has = false;

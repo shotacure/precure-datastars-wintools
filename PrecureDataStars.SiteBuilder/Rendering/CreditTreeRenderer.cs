@@ -58,16 +58,46 @@ internal sealed class CreditTreeRenderer
     private const string RoleCodeEpisodeDirector = "EPISODE_DIRECTOR";
     private const string RoleCodeCastingCooperation = "CASTING_COOPERATION";
 
+    /// <summary>
+    /// 役職名をオトナシリーズの役職のページ（<c>/creators/otona/roles/{role_code}/</c>、声の出演は <c>/creators/otona/voice-cast/</c>）へ
+    /// リンクする描き方か。オトナシリーズの作品のクレジットを描く写し（<see cref="_otonaRenderer"/>）だけ true。
+    /// </summary>
+    private readonly bool _otonaRoleLinks;
+
+    /// <summary>
+    /// オトナシリーズの作品のクレジットを描く写し（役職名のリンク先だけが違う）。<see cref="RenderAsync"/> はクレジットの作品が
+    /// オトナシリーズ（<see cref="BuildContextLookupExtensions.IsOtonaSeries"/>）ならこちらに描かせる。写し自身は null。
+    /// </summary>
+    private readonly CreditTreeRenderer? _otonaRenderer;
+
     public CreditTreeRenderer(
         BuildContext ctx,
         IConnectionFactory factory,
         LookupCache lookup,
         StaffNameLinkResolver staffLinkResolver)
+        : this(ctx, factory, lookup, staffLinkResolver, otonaRoleLinks: false)
+    {
+    }
+
+    /// <summary>
+    /// <paramref name="otonaRoleLinks"/> が false（本編の描き方）のときは、役職名のリンク先だけをオトナシリーズの役職のページへ向けた
+    /// 写しも作る（テンプレ DSL の役職リンクも同じく、<see cref="LookupCache.ForOtonaRoleLinks"/> の写しで解決する）。
+    /// </summary>
+    private CreditTreeRenderer(
+        BuildContext ctx,
+        IConnectionFactory factory,
+        LookupCache lookup,
+        StaffNameLinkResolver staffLinkResolver,
+        bool otonaRoleLinks)
     {
         _ctx = ctx;
         _factory = factory;
         _lookup = lookup;
         _staffLinkResolver = staffLinkResolver;
+        _otonaRoleLinks = otonaRoleLinks;
+        _otonaRenderer = otonaRoleLinks
+            ? null
+            : new CreditTreeRenderer(ctx, factory, lookup.ForOtonaRoleLinks(), staffLinkResolver, otonaRoleLinks: true);
     }
 
     private static string Esc(string s) => WebUtility.HtmlEncode(s ?? "");
@@ -78,8 +108,11 @@ internal sealed class CreditTreeRenderer
     /// VOICE_CAST 系役職は専用統計ページ <c>/creators/voice-cast/</c> へ、それ以外は
     /// <c>/creators/roles/{role_code}/</c> へリンクする。<paramref name="roleCode"/> が NULL/空の場合は
     /// リンク化せずエスケープのみ。
+    /// オトナシリーズの作品のクレジット（<see cref="_otonaRoleLinks"/>）では、VOICE_CAST 系役職は <c>/creators/otona/voice-cast/</c> へ、
+    /// オトナシリーズの役職のページを持つ役職（<see cref="PathUtil.HasOtonaRolePage"/>）は <c>/creators/otona/roles/{role_code}/</c> へ
+    /// リンクし（本編にもある役職でも）、持たない役職は本編と同じ判定で出す。
     /// </summary>
-    private static string BuildRoleNameHtml(string? roleCode, string roleName, IReadOnlyDictionary<string, Role> roleMap)
+    private string BuildRoleNameHtml(string? roleCode, string roleName, IReadOnlyDictionary<string, Role> roleMap)
     {
         if (string.IsNullOrEmpty(roleName)) return "";
         // 表記（role_label_text）の改行は、画面で見出しが 2 行に積まれている所。<br> で描く
@@ -104,6 +137,11 @@ internal sealed class CreditTreeRenderer
         // どちらの URL も PathUtil に集約し、本レンダラ内に文字列リテラルでパスを持たない。
         bool isVoiceCast = r != null
                            && string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
+        if (_otonaRoleLinks)
+        {
+            if (isVoiceCast) return $"<a href=\"{PathUtil.CreatorsOtonaVoiceCastUrl()}\">{nameHtml}</a>";
+            if (PathUtil.HasOtonaRolePage(roleCode!)) return $"<a href=\"{PathUtil.CreatorsOtonaRoleUrl(roleCode!)}\">{nameHtml}</a>";
+        }
         // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）はプレーンテキストで出す。
         if (!isVoiceCast && !PathUtil.HasRolePage(roleCode!))
             return nameHtml;
@@ -156,6 +194,32 @@ internal sealed class CreditTreeRenderer
     }
 
     /// <summary>
+    /// 筆頭の 1 社目の表示名と HTML に、2 社目（<see cref="CreditRoleBlock.LeadingCompany2AliasId"/>）と
+    /// 後ろの字（<see cref="CreditRoleBlock.LeadingCompanySuffix"/>）を続けた「社名1 + 間の字 + 社名2 + 後ろの字」を返す。
+    /// 2 社目は 1 社目と同じく会社のページへのリンクにし、間の字（<see cref="CreditRoleBlock.LeadingCompanySeparator"/>）と
+    /// 後ろの字はエスケープした文字のまま出す。2 社目の名義が引けないときは 2 社目と間の字を出さない。
+    /// </summary>
+    private async Task<(string Name, string Html)> AppendLeadingCompanyRestAsync(CreditRoleBlock block, string name, string html)
+    {
+        if (block.LeadingCompany2AliasId is int lead2Id)
+        {
+            string? name2 = await _lookup.LookupCompanyAliasNameAsync(lead2Id).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(name2))
+            {
+                string sep = block.LeadingCompanySeparator ?? "";
+                name = name + sep + name2;
+                html = html + Esc(sep) + await BuildCompanyAliasHtmlAsync(lead2Id, name2).ConfigureAwait(false);
+            }
+        }
+        if (!string.IsNullOrEmpty(block.LeadingCompanySuffix))
+        {
+            name += block.LeadingCompanySuffix;
+            html += Esc(block.LeadingCompanySuffix);
+        }
+        return (name, html);
+    }
+
+    /// <summary>
     /// 画面にはクレジットされていない筆頭の会社（<see cref="CreditRoleBlock.LeadingCompanyNotOnScreen"/>）の HTML。
     /// 「（三晃プロダクション）」と括弧で包み、役職の行の not-on-screen と同じ薄い色で出す。
     /// </summary>
@@ -198,18 +262,25 @@ internal sealed class CreditTreeRenderer
     /// プレビューと違い、見出し（&lt;h1&gt;）はテンプレ側で出すため本メソッドでは出さない。
     public async Task<string> RenderAsync(Credit credit, BuildLogger logger, CancellationToken ct = default)
     {
+        // オトナシリーズの作品のクレジットは、役職名をオトナシリーズの役職のページへリンクする写しで描く。
+        if (_otonaRenderer is not null && ResolveTemplateSeriesId(credit) is int creditSeriesId && _ctx.IsOtonaSeries(creditSeriesId))
+            return await _otonaRenderer.RenderAsync(credit, logger, ct).ConfigureAwait(false);
+
         var html = new StringBuilder();
 
         // クレジット階層は SiteDataLoader がビルド開始時に 1 度だけ 6 テーブル分の GetAllAsync で
         // 取得して BuildContext.CreditTree に詰めている。本ループでは credit_id 経由で
         // 該当 credit のカード群 (CreditCardSnapshot) を辞書から引くだけで、生成中の DB 往復は発生しない。
-        if (!_ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cardSnapshotsAll)
+        // 描画は本放送のカードも含む全部の版（集計用の CardsByCreditId は本放送のカードを除いている）。
+        if (!_ctx.CreditTree.CardsByCreditIdForDisplay.TryGetValue(credit.CreditId, out var cardSnapshotsAll)
             || cardSnapshotsAll.Count == 0)
         {
             html.Append("<p class=\"empty-credit\">（カード未登録）</p>");
             return html.ToString();
         }
-        var cardSnapshots = cardSnapshotsAll.OrderBy(c => c.Card.CardSeq).ToList();
+        // 版の付いたカード（本放送 / Blu-ray・配信）は、隣どうしの 1 組ごとに本放送を先・Blu-ray・配信を後に並べ替えて、1 組 1 つの枠で描く。
+        var cardSnapshots = CardVersionLayout.OrderVersionRuns(
+            cardSnapshotsAll.OrderBy(c => c.Card.CardSeq).ToList(), c => c.Card.MediaVersion);
 
         // 役職マスタは BuildContext で事前展開済みのため直接参照する。
         var roleMap = _ctx.RoleByCode;
@@ -217,10 +288,17 @@ internal sealed class CreditTreeRenderer
 
         string storyboardDisplay = GetStoryboardDisplay(resolveSeriesId);
         string? prevVoiceCastRoleCode = null;
+        // 版の枠の中で、本放送の半分と Blu-ray・配信の半分を同じ状態から描くための控え（CardVersionLayout.CarryState）
+        string? savedVoiceCastRoleCode = null;
 
-        foreach (var cardSnap in cardSnapshots)
+        for (int cardIndex = 0; cardIndex < cardSnapshots.Count; cardIndex++)
         {
+            var cardSnap = cardSnapshots[cardIndex];
             var card = cardSnap.Card;
+            // 版の枠を開く（1 組の頭・本放送から Blu-ray・配信へ切り替わるところ）。
+            prevVoiceCastRoleCode = CardVersionLayout.CarryState(cardIndex > 0 ? cardSnapshots[cardIndex - 1].Card.MediaVersion : null, card.MediaVersion, prevVoiceCastRoleCode, ref savedVoiceCastRoleCode);
+            html.Append(CardVersionLayout.OpenBefore(
+                cardIndex > 0 ? cardSnapshots[cardIndex - 1].Card.MediaVersion : null, card.MediaVersion));
             // ロール（流れるクレジット）のカードは card-roll を足して見た目を分けられるようにする。
             html.Append(string.Equals(card.Presentation, "ROLL", StringComparison.Ordinal)
                 ? "<div class=\"card card-roll\">"
@@ -405,6 +483,9 @@ internal sealed class CreditTreeRenderer
                 html.Append("</div>"); // .tier
             }
             html.Append("</div>"); // .card
+            // 版の枠を閉じる（1 組の終わり・本放送から Blu-ray・配信へ切り替わるところ）。
+            html.Append(CardVersionLayout.CloseAfter(card.MediaVersion,
+                cardIndex + 1 < cardSnapshots.Count ? cardSnapshots[cardIndex + 1].Card.MediaVersion : null));
         }
 
         return html.ToString();
@@ -416,7 +497,7 @@ internal sealed class CreditTreeRenderer
     /// まとめる役職どうしでエントリが一致しないときは、打ち間違いを隠さないよう別々の行のまま出してビルド警告を出す。
     /// </summary>
     /// <returns>先頭役職の CardRoleId → まとめた行の役職名 HTML、表示を飛ばす後続役職の CardRoleId 集合。</returns>
-    private static (Dictionary<int, string> LabelHtmlByLeadId, HashSet<int> FollowerIds) ResolveJoinedRoles(
+    private (Dictionary<int, string> LabelHtmlByLeadId, HashSet<int> FollowerIds) ResolveJoinedRoles(
         IReadOnlyList<CreditCardRoleSnapshot> roleSnapshots,
         IReadOnlyDictionary<string, Role> roleMap,
         Credit credit,
@@ -452,7 +533,7 @@ internal sealed class CreditTreeRenderer
     /// 取り消し線で 1 行目に出し、正しい行を 2 行目に改行して出す。
     /// 役職名だけ画面に無い役職（<c>role_label_not_on_screen</c>）は、その役職の表記だけを全角の括弧で包む。
     /// </summary>
-    private static string BuildJoinedRoleNameHtml(IReadOnlyList<CreditCardRole> members, IReadOnlyDictionary<string, Role> roleMap)
+    private string BuildJoinedRoleNameHtml(IReadOnlyList<CreditCardRole> members, IReadOnlyDictionary<string, Role> roleMap)
     {
         var sb = new StringBuilder();
         if (members.Any(m => !string.IsNullOrEmpty(m.RoleMisprintText)))
@@ -633,8 +714,11 @@ internal sealed class CreditTreeRenderer
                 roleName = roleCode!;
             }
         }
-        // 画面の役職の表記があれば、役職名をその表記で出す（役職名を出さない役職はそのまま出さない）。
-        if (!string.IsNullOrEmpty(roleLabelText) && roleName.Length > 0) roleName = roleLabelText!;
+        // 「画面の文字」（ON_SCREEN_TEXT）に見出しの表記があるときは、1 対 1 で当たる役職の無い見出し（本放送の「3DCG」など）を文字で持つ形。
+        // 見出しは役職名の欄（左の列）に出し、名前はテンプレを通さずほかの役職と同じ格子で並べる。
+        bool screenTextHeading = string.Equals(roleCode, "ON_SCREEN_TEXT", StringComparison.Ordinal) && !string.IsNullOrEmpty(roleLabelText);
+        // 画面の役職の表記があれば、役職名をその表記で出す（役職名を出さない役職はそのまま出さない。見出しを文字で持つ「画面の文字」は出す）。
+        if (!string.IsNullOrEmpty(roleLabelText) && (roleName.Length > 0 || screenTextHeading)) roleName = roleLabelText!;
         // その行だけ役職名を出さない印が立っていれば、役職名の欄を空にする（同じ見出しの下に 2 社目が続くときなど）。
         if (hideRoleLabel)
         {
@@ -644,7 +728,7 @@ internal sealed class CreditTreeRenderer
 
         string? template = null;
         string? contentHeaderOverride = null;
-        if (!string.IsNullOrEmpty(roleCode))
+        if (!string.IsNullOrEmpty(roleCode) && !screenTextHeading)
         {
             var tpl = _ctx.RoleTemplateResolver.Resolve(roleCode!, resolveSeriesId, scopeKind == "EPISODE" ? episodeId : null);
             template = tpl?.FormatTemplate;
@@ -693,9 +777,10 @@ internal sealed class CreditTreeRenderer
                 // SERIES スコープのクレジット（映画系列）では scopeSeriesId に credit.SeriesId 相当を渡し、
                 // {THEME_SONGS} ハンドラが series_theme_songs を引き当てるようにする。EPISODE スコープでは null。
                 int? scopeSeriesIdForCtx = scopeKind == "SERIES" ? resolveSeriesId : null;
-                // SERIES スコープの場合、テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。
-                // 映倫審査番号（{FILM_RATING_NO}）と CJ マークの有無（{CJ_MARK}）も同じシリーズから引く。
-                Series? seriesForCtx = scopeSeriesIdForCtx is int ssid && _ctx.SeriesById.TryGetValue(ssid, out var sfc)
+                // テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。SERIES スコープはクレジットの作品、
+                // EPISODE スコープはその話の作品（TV の OP のタイトルカード〔役職 TITLE〕で使う）。
+                // 映倫審査番号（{FILM_RATING_NO}）と CJ マークの有無（{CJ_MARK}）も同じシリーズから引く（映画だけの値なので TV では空）。
+                Series? seriesForCtx = resolveSeriesId is int ssid && _ctx.SeriesById.TryGetValue(ssid, out var sfc)
                     ? sfc
                     : null;
                 var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, scopeSeriesIdForCtx, creditKind,
@@ -1193,6 +1278,8 @@ internal sealed class CreditTreeRenderer
                 if (!string.IsNullOrEmpty(leadingCompanyName))
                 {
                     leadingCompanyHtml = await BuildCompanyAliasHtmlAsync(leadId, leadingCompanyName).ConfigureAwait(false);
+                    // 2 社目（間の字つき）と後ろの字を、筆頭の行に続ける。
+                    (leadingCompanyName, leadingCompanyHtml) = await AppendLeadingCompanyRestAsync(bs.Block, leadingCompanyName, leadingCompanyHtml).ConfigureAwait(false);
                     // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、括弧で包んで薄い色で示す。
                     if (bs.Block.LeadingCompanyNotOnScreen) leadingCompanyHtml = LeadingNotOnScreenHtml(leadingCompanyHtml);
                 }
@@ -1344,6 +1431,8 @@ internal sealed class CreditTreeRenderer
                 if (!string.IsNullOrEmpty(leadingCompanyName))
                 {
                     leadingCompanyHtml = await BuildCompanyAliasHtmlAsync(leadId, leadingCompanyName).ConfigureAwait(false);
+                    // 2 社目（間の字つき）と後ろの字を、筆頭の行に続ける。
+                    (leadingCompanyName, leadingCompanyHtml) = await AppendLeadingCompanyRestAsync(bs.Block, leadingCompanyName, leadingCompanyHtml).ConfigureAwait(false);
                     // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、括弧で包んで薄い色で示す。
                     if (bs.Block.LeadingCompanyNotOnScreen) leadingCompanyHtml = LeadingNotOnScreenHtml(leadingCompanyHtml);
                 }
@@ -1823,6 +1912,8 @@ internal sealed class CreditTreeRenderer
                     // 屋号にクレジットでの表記（display_text_override）があればそれを出す。
                     string? name = await _lookup.LookupCompanyAliasCreditNameAsync(e.CompanyAliasId.Value).ConfigureAwait(false);
                     if (string.IsNullOrEmpty(name)) return PrependMisprintHtml(Esc("(企業屋号不明)"), e.CompanyMisprintText);
+                    // 画面の表記揺れ（CompanyDisplayText）があれば屋号の名前の代わりにそれを出す（誤記ではないので印は付けない。リンク先は名義の企業）。
+                    if (!string.IsNullOrEmpty(e.CompanyDisplayText)) name = e.CompanyDisplayText!;
                     string baseHtml = await BuildCompanyAliasHtmlAsync(e.CompanyAliasId.Value, name).ConfigureAwait(false);
                     return PrependMisprintHtml(baseHtml, e.CompanyMisprintText);
                 }

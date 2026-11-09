@@ -719,6 +719,8 @@ public sealed class CreditBulkApplyService
                             AppendTextEntry(session, block, $"[{pb.LeadingCompanyText}]");
                         }
                     }
+                    // 筆頭の 2 社目・間の字・後ろの字。
+                    await ApplyLeadingCompanyRestNewAsync(pb, session, block, updatedBy, ct);
 
                     foreach (var prow in pb.Rows)
                     {
@@ -785,6 +787,9 @@ public sealed class CreditBulkApplyService
         // カードの見せ方（カード / ロール）も同じ要領で、変わったときだけ転写する。
         ApplyNotesIfChanged(targetCard, pc.Presentation, p => targetCard.Entity.Presentation = p ?? "CARDS",
             () => targetCard.Entity.Presentation);
+        // カードの版（共通 / 本放送 / Blu-ray・配信）も同じ要領で、変わったときだけ転写する。
+        ApplyNotesIfChanged(targetCard, pc.MediaVersion, v => targetCard.Entity.MediaVersion = v,
+            () => targetCard.Entity.MediaVersion);
 
         // 既存の Tier をそのまま使うか、新規追加するか。
         // Card 作成直後の seed Tier (TierNo=1) は 1 つ既にあるので、最初の ParsedTier はそれを使う。
@@ -940,6 +945,8 @@ public sealed class CreditBulkApplyService
                 AppendTextEntry(session, block, $"[{pb.LeadingCompanyText}]");
             }
         }
+        // [先頭企業屋号] の 2 社目・間の字・後ろの字
+        await ApplyLeadingCompanyRestNewAsync(pb, session, block, updatedBy, ct);
 
         // ─── 各行・各セル ───
         foreach (var row in pb.Rows)
@@ -949,6 +956,32 @@ public sealed class CreditBulkApplyService
             {
                 await AppendParsedEntryAsync(session, block, pe, parentRole, updatedBy, ct);
             }
+        }
+    }
+
+    /// <summary>
+    /// 新規 Block に、筆頭の 2 社目（<see cref="ParsedBlock.LeadingCompany2Text"/>）・間の字・後ろの字を写す。
+    /// 2 社目は 1 社目と同じく名義に解決し（<c>[[OLD=&gt;NEW]]</c> のリダイレクト記法も可）、無ければ作る。
+    /// 解決できないときは 1 社目と同じく TEXT エントリとしてブロックに退避し、間の字も持たない。
+    /// </summary>
+    private async Task ApplyLeadingCompanyRestNewAsync(
+        ParsedBlock pb, CreditDraftSession session, DraftBlock block, string? updatedBy, CancellationToken ct)
+    {
+        block.Entity.LeadingCompanySuffix = pb.LeadingCompanySuffix;
+        if (string.IsNullOrEmpty(pb.LeadingCompany2Text)) return;
+
+        var (lead2OldName, lead2NewName) = SplitLeadingCompanyRedirect(pb.LeadingCompany2Text);
+        int? lead2AliasId = await ResolveOrCreateCompanyAliasAsync(
+            session, lead2NewName, oldName: lead2OldName, updatedBy, ct);
+        if (lead2AliasId.HasValue)
+        {
+            block.Entity.LeadingCompany2AliasId = lead2AliasId;
+            block.Entity.LeadingCompanySeparator = pb.LeadingCompanySeparator;
+        }
+        else
+        {
+            InfoMessages.Add($"ブロック先頭企業の 2 社目 [{pb.LeadingCompany2Text}] を登録できませんでした。TEXT エントリとして退避します。");
+            AppendTextEntry(session, block, $"[{pb.LeadingCompany2Text}]");
         }
     }
 
@@ -999,6 +1032,9 @@ public sealed class CreditBulkApplyService
             // 画面の組みどおりの役名（改行入り）。役名が画面で折れているときだけ立つ。
             if (pe.CharacterDisplayText is not null) last.Entity.CharacterDisplayText = pe.CharacterDisplayText;
             if (pe.CompanyMisprintText is not null) last.Entity.CompanyMisprintText = pe.CompanyMisprintText;
+            // 画面に出た企業名の表記揺れ（名義と空白・記号だけが違う表記）。誤記とは別に持つ。
+            // 企業の升（COMPANY）でだけ意味を持つので、TEXT に降格したエントリには持たせない。
+            if (pe.CompanyDisplayText is not null && last.Entity.EntryKind == "COMPANY") last.Entity.CompanyDisplayText = pe.CompanyDisplayText;
             // 同じ役名・同じ声優が続く行の名前の出し方。パーサが CHARACTER_VOICE のときだけ立て、
             // TEXT に降格したエントリには持たせない（声の出演の行でだけ意味を持つため）。
             if (last.Entity.EntryKind == "CHARACTER_VOICE")
@@ -2182,7 +2218,7 @@ public sealed class CreditBulkApplyService
     /// <see cref="CreditDraftSession.PendingCharacterAliases"/> /
     /// <see cref="CreditDraftSession.PendingCompanyAliases"/> /
     /// <see cref="CreditDraftSession.PendingLogos"/>）を辞書から除去する。
-    /// 走査対象：Deleted ノードを除く全 Block.LeadingCompanyAliasId、全 Entry の PersonAliasId /
+    /// 走査対象：Deleted ノードを除く全 Block.LeadingCompanyAliasId / LeadingCompany2AliasId、全 Entry の PersonAliasId /
     /// CharacterAliasId / CompanyAliasId / LogoId / AffiliationCompanyAliasId。
     /// Pending Logo の <see cref="Drafting.PendingLogo.CompanyAliasId"/> も負数なら依存追加し、
     /// 屋号 Pending が Logo Pending 経由で生きていれば守る。
@@ -2203,6 +2239,7 @@ public sealed class CreditBulkApplyService
         foreach (var block in role.Blocks.Where(b => b.State != DraftState.Deleted))
         {
             if (block.Entity.LeadingCompanyAliasId is int lid && lid < 0) refCompany.Add(lid);
+            if (block.Entity.LeadingCompany2AliasId is int lid2 && lid2 < 0) refCompany.Add(lid2);
             foreach (var entry in block.Entries.Where(e => e.State != DraftState.Deleted))
             {
                 if (entry.Entity.PersonAliasId is int pid && pid < 0) refPerson.Add(pid);
@@ -2587,6 +2624,43 @@ public sealed class CreditBulkApplyService
             }
         }
 
+        // 筆頭の 2 社目の比較（旧/新の LeadingCompany2Text 文字列が違うときだけ再解決）。
+        if (!string.Equals(oldBlock.LeadingCompany2Text, newBlock.LeadingCompany2Text, StringComparison.Ordinal))
+        {
+            if (string.IsNullOrEmpty(newBlock.LeadingCompany2Text))
+            {
+                if (draftBlock.Entity.LeadingCompany2AliasId is not null)
+                {
+                    draftBlock.Entity.LeadingCompany2AliasId = null;
+                    draftBlock.MarkModified();
+                }
+            }
+            else
+            {
+                var (lead2OldName, lead2NewName) = SplitLeadingCompanyRedirect(newBlock.LeadingCompany2Text);
+                int? lead2AliasId = await ResolveOrCreateCompanyAliasAsync(
+                    session, lead2NewName, oldName: lead2OldName, updatedBy, ct);
+                if (lead2AliasId.HasValue && draftBlock.Entity.LeadingCompany2AliasId != lead2AliasId)
+                {
+                    draftBlock.Entity.LeadingCompany2AliasId = lead2AliasId;
+                    draftBlock.MarkModified();
+                }
+                else if (!lead2AliasId.HasValue)
+                {
+                    InfoMessages.Add($"ブロック先頭企業の 2 社目 [{newBlock.LeadingCompany2Text}] を登録できませんでした。Draft の値は変更しません。");
+                }
+            }
+        }
+
+        // 筆頭の 2 社の間の字・後ろの字の比較。
+        if (!string.Equals(draftBlock.Entity.LeadingCompanySeparator, newBlock.LeadingCompanySeparator, StringComparison.Ordinal)
+            || !string.Equals(draftBlock.Entity.LeadingCompanySuffix, newBlock.LeadingCompanySuffix, StringComparison.Ordinal))
+        {
+            draftBlock.Entity.LeadingCompanySeparator = newBlock.LeadingCompanySeparator;
+            draftBlock.Entity.LeadingCompanySuffix = newBlock.LeadingCompanySuffix;
+            draftBlock.MarkModified();
+        }
+
         // Entry 階層を LCS マッチング（is_broadcast_only=false / true で 2 グループに分けて各々）。
         await ApplyDiffEntriesInBlockAsync(oldBlock, newBlock, session, draftBlock, parentRole, updatedBy, ct);
     }
@@ -2728,7 +2802,8 @@ public sealed class CreditBulkApplyService
     private static string SerializeCardForCompare(ParsedCard c)
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append("C|notes=").Append(c.Notes ?? string.Empty).Append("|presentation=").Append(c.Presentation).Append('\n');
+        sb.Append("C|notes=").Append(c.Notes ?? string.Empty).Append("|presentation=").Append(c.Presentation)
+          .Append("|media_version=").Append(c.MediaVersion ?? string.Empty).Append('\n');
         foreach (var t in c.Tiers) sb.Append(SerializeTierForCompare(t));
         return sb.ToString();
     }
@@ -2778,6 +2853,9 @@ public sealed class CreditBulkApplyService
         sb.Append("B|cols=").Append(b.ColCount)
           .Append("|leading=").Append(b.LeadingCompanyText ?? string.Empty)
           .Append("|leadtext=").Append(b.LeadingText ?? string.Empty)
+          .Append("|leading2=").Append(b.LeadingCompany2Text ?? string.Empty)
+          .Append("|leadsep=").Append(b.LeadingCompanySeparator ?? string.Empty)
+          .Append("|leadsuf=").Append(b.LeadingCompanySuffix ?? string.Empty)
           .Append("|hseries=").Append(b.HeadingSeriesId?.ToString() ?? string.Empty)
           .Append("|htext=").Append(b.HeadingText ?? string.Empty)
           .Append("|hitalic=").Append(b.HeadingItalic ? "1" : "0")
@@ -2825,7 +2903,8 @@ public sealed class CreditBulkApplyService
         sb.Append(e.PersonDisplayText ?? string.Empty).Append('|');
         sb.Append(e.CharacterMisprintText ?? string.Empty).Append('|');
         sb.Append(e.CharacterDisplayText ?? string.Empty).Append('|');
-        sb.Append(e.CompanyMisprintText ?? string.Empty).Append('\n');
+        sb.Append(e.CompanyMisprintText ?? string.Empty).Append('|');
+        sb.Append(e.CompanyDisplayText ?? string.Empty).Append('\n');
         return sb.ToString();
     }
 }

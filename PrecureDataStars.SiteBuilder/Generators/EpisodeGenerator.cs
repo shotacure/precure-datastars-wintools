@@ -517,7 +517,7 @@ public sealed class EpisodeGenerator
 
         // スタッフ情報（クレジット階層から脚本／絵コンテ／演出／作画監督／美術監督を抽出）。
         // クレジットセクションとは別に「主要スタッフ」セクションとして上部基本情報の近くに出す。
-        var staffRows = BuildStaffRows(credits);
+        var staffRows = BuildStaffRows(credits, series);
 
         // チーフの組み合わせの通算回数（絵コンテと演出 / 演出と作画監督 / 脚本・演出・作画監督）。スタッフ行の下に開閉の枠で添える。
         var staffCombos = BuildStaffCombos(series, ep);
@@ -1500,7 +1500,7 @@ public sealed class EpisodeGenerator
             if (isSolo) continue;
 
             var badges = combo.ChiefRoles
-                .Select(r => ChiefRoleBadge(r))
+                .Select(r => ChiefRoleBadge(r, series))
                 .ToList();
 
             string namesHtml = string.Join("<span class=\"staff-combo-x\">×</span>",
@@ -1554,7 +1554,7 @@ public sealed class EpisodeGenerator
             rows.Add(new StaffComboRow
             {
                 Label = $"{occurrence.RoleLabel} {occurrence.Person.Name}",
-                Badges = new[] { ChiefRoleBadge(occurrence.ChiefRole) },
+                Badges = new[] { ChiefRoleBadge(occurrence.ChiefRole, series) },
                 Ordinal = occurrence.Ordinal,
                 Total = occurrence.Total,
                 FirstLabel = "初担当",
@@ -1597,11 +1597,11 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>チーフの区分 → カードの役職の札（色・表示名・役職のページ）。</summary>
-    private StaffComboBadge ChiefRoleBadge(int chiefRole)
+    private StaffComboBadge ChiefRoleBadge(int chiefRole, Series series)
     {
         string code = ChiefRoleCode(chiefRole);
         string label = EpisodeChiefRoles.Label(chiefRole);
-        return new StaffComboBadge { Code = code, Label = label, Url = CreatorsRoleUrlFor(code, label) ?? "" };
+        return new StaffComboBadge { Code = code, Label = label, Url = CreatorsRoleUrlFor(code, label, series) ?? "" };
     }
 
     /// <summary>カードの顔ぶれの 1 人（人物ページがあればリンク）。</summary>
@@ -1703,7 +1703,7 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。</summary>
-    private IReadOnlyList<StaffRow> BuildStaffRows(IReadOnlyList<Credit> credits)
+    private IReadOnlyList<StaffRow> BuildStaffRows(IReadOnlyList<Credit> credits, Series series)
     {
         // 役職マスタは BuildContext で事前展開済み（role_code → Role）。
         _roleMap ??= _ctx.RoleByCode;
@@ -1802,11 +1802,11 @@ public sealed class EpisodeGenerator
         // テンプレ側で「絵コンテ」「演出」それぞれを別リンクとして描画できるようにする。
         string? RoleUrl(string label) => label switch
         {
-            "脚本" => CreatorsRoleUrlFor("SCREENPLAY", "脚本"),
-            "絵コンテ" => CreatorsRoleUrlFor("STORYBOARD", "絵コンテ"),
-            "演出" => CreatorsRoleUrlFor("EPISODE_DIRECTOR", "演出"),
-            "作画監督" => CreatorsRoleUrlFor("ANIMATION_DIRECTOR", "作画監督"),
-            "美術" => CreatorsRoleUrlFor("ART_DIRECTOR_TV", "美術"),
+            "脚本" => CreatorsRoleUrlFor("SCREENPLAY", "脚本", series),
+            "絵コンテ" => CreatorsRoleUrlFor("STORYBOARD", "絵コンテ", series),
+            "演出" => CreatorsRoleUrlFor("EPISODE_DIRECTOR", "演出", series),
+            "作画監督" => CreatorsRoleUrlFor("ANIMATION_DIRECTOR", "作画監督", series),
+            "美術" => CreatorsRoleUrlFor("ART_DIRECTOR_TV", "美術", series),
             _ => null
         };
 
@@ -1865,9 +1865,16 @@ public sealed class EpisodeGenerator
     /// 1) コード候補そのままが <see cref="RoleSuccessorResolver"/> のクラスタに含まれていればそれを採用。
     /// 2) 含まれていなければ表示名候補（"脚本" 等）でマスタを走査し、ヒットしたコードのクラスタ代表を採用。
     /// 3) どちらでも引けないときは <c>null</c>（テンプレ側でリンク化を抑止）。
+    /// 話の作品（<paramref name="series"/>）がオトナシリーズで、オトナシリーズの役職のページを持つ役職なら、
+    /// そちら（<c>/creators/otona/roles/{rep}/</c>）を指す（<see cref="PathUtil.CreatorsRoleUrlInWork"/>）。
     /// </summary>
-    private string? CreatorsRoleUrlFor(string preferredRoleCode, string fallbackNameJa)
+    private string? CreatorsRoleUrlFor(string preferredRoleCode, string fallbackNameJa, Series series)
     {
+        bool isOtonaWork = _ctx.IsOtonaSeries(series.SeriesId);
+        // オトナシリーズの作品の美術の札は、クレジットの役職が美術監督（ART_DIRECTOR）なので、美術監督のオトナシリーズの役職のページを指す。
+        if (isOtonaWork && string.Equals(preferredRoleCode, "ART_DIRECTOR_TV", StringComparison.Ordinal)
+            && PathUtil.HasOtonaRolePage("ART_DIRECTOR"))
+            return PathUtil.CreatorsOtonaRoleUrl("ART_DIRECTOR");
         // 役職マスタが未ロードならリンク化スキップ（直前段で必ずロードしているはずだが念のため）。
         if (_roleMap is null) return null;
 
@@ -1875,7 +1882,7 @@ public sealed class EpisodeGenerator
         if (_roleMap.ContainsKey(preferredRoleCode))
         {
             string rep = _roleSuccessorResolver.GetRepresentative(preferredRoleCode);
-            if (!string.IsNullOrEmpty(rep)) return PathUtil.CreatorsRoleUrl(rep);
+            if (!string.IsNullOrEmpty(rep)) return PathUtil.CreatorsRoleUrlInWork(rep, isOtonaWork);
         }
 
         // 2) name_ja フォールバック検索：表示名が一致する役職コードを 1 件採用。
@@ -1884,7 +1891,7 @@ public sealed class EpisodeGenerator
             if (string.Equals(role.NameJa, fallbackNameJa, StringComparison.Ordinal))
             {
                 string rep = _roleSuccessorResolver.GetRepresentative(code);
-                if (!string.IsNullOrEmpty(rep)) return PathUtil.CreatorsRoleUrl(rep);
+                if (!string.IsNullOrEmpty(rep)) return PathUtil.CreatorsRoleUrlInWork(rep, isOtonaWork);
             }
         }
 

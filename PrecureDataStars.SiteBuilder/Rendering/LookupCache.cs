@@ -50,6 +50,12 @@ internal sealed class LookupCache : ILookupCache
     /// </summary>
     private Utilities.StaffNameLinkResolver? _staffLinkResolver;
 
+    /// <summary>
+    /// 役職名のリンク（<see cref="LookupRoleHtmlAsync"/> / <see cref="LookupRoleHtmlWithLabelAsync"/>）を、オトナシリーズの役職のページ
+    /// （<see cref="PathUtil.CreatorsOtonaRoleUrl"/>）へ向けるか。オトナシリーズの作品のクレジットを描く写し（<see cref="ForOtonaRoleLinks"/>）だけ true。
+    /// </summary>
+    private readonly bool _otonaRoleLinks;
+
     public LookupCache(BuildContext ctx, IConnectionFactory factory)
     {
         _personAliasById = ctx.PersonAliasById;
@@ -58,6 +64,33 @@ internal sealed class LookupCache : ILookupCache
         _logoById = ctx.LogoById;
         _roleByCode = ctx.RoleByCode;
         _factory = factory;
+    }
+
+    /// <summary>辞書・接続ファクトリ・人物リンクの解決器を <paramref name="source"/> と共有し、役職名のリンク先だけを切り替えた写しを作る。</summary>
+    private LookupCache(LookupCache source, bool otonaRoleLinks)
+    {
+        _personAliasById = source._personAliasById;
+        _characterAliasById = source._characterAliasById;
+        _companyAliasById = source._companyAliasById;
+        _logoById = source._logoById;
+        _roleByCode = source._roleByCode;
+        _factory = source._factory;
+        _staffLinkResolver = source._staffLinkResolver;
+        _otonaRoleLinks = otonaRoleLinks;
+    }
+
+    /// <summary>
+    /// オトナシリーズの作品のクレジットを描くときの写し。役職名はオトナシリーズの役職のページを持つ役職
+    /// （<see cref="PathUtil.HasOtonaRolePage"/>）ならそちらへリンクし、持たない役職は本編と同じ判定で出す。
+    /// 人物リンクの解決器（<see cref="SetStaffLinkResolver"/>）を結んだ後に呼ぶ。
+    /// </summary>
+    public LookupCache ForOtonaRoleLinks() => new(this, otonaRoleLinks: true);
+
+    /// <summary>役職名のリンク先。オトナシリーズの写しでオトナシリーズの役職のページを持つ役職ならそのページ、本編の役職詳細を持つ役職なら本編の役職詳細、どちらも無ければ null（リンクしない）。</summary>
+    private string? RoleLinkUrl(string roleCode)
+    {
+        if (_otonaRoleLinks && PathUtil.HasOtonaRolePage(roleCode)) return PathUtil.CreatorsOtonaRoleUrl(roleCode);
+        return PathUtil.HasRolePage(roleCode) ? PathUtil.CreatorsRoleUrl(roleCode) : null;
     }
 
     /// <summary>人物名義のリンク化を担う <see cref="Utilities.StaffNameLinkResolver"/> を後注入する。 LookupCache を構築するタイミングでは <c>StaffNameLinkResolver</c> がまだ初期化されていないため、 パイプライン側で順番に組み立ててから本メソッドで結びつける。</summary>
@@ -181,9 +214,10 @@ internal sealed class LookupCache : ILookupCache
         if (string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
             return Task.FromResult<string?>(escapedName);
         // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）も平文で返す。
-        if (!PathUtil.HasRolePage(roleCode))
+        // オトナシリーズの写しでは、オトナシリーズの役職のページを持つ役職をそちらへリンクする（RoleLinkUrl）。
+        if (RoleLinkUrl(roleCode) is not string url)
             return Task.FromResult<string?>(escapedName);
-        return Task.FromResult<string?>($"<a href=\"{PathUtil.CreatorsRoleUrl(roleCode)}\">{escapedName}</a>");
+        return Task.FromResult<string?>($"<a href=\"{url}\">{escapedName}</a>");
     }
 
     /// <summary>
@@ -205,9 +239,10 @@ internal sealed class LookupCache : ILookupCache
         if (string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
             return Task.FromResult<string?>(escapedLabel);
         // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）も平文で返す。
-        if (!PathUtil.HasRolePage(roleCode))
+        // オトナシリーズの写しでは、オトナシリーズの役職のページを持つ役職をそちらへリンクする（RoleLinkUrl）。
+        if (RoleLinkUrl(roleCode) is not string url)
             return Task.FromResult<string?>(escapedLabel);
-        return Task.FromResult<string?>($"<a href=\"{PathUtil.CreatorsRoleUrl(roleCode)}\">{escapedLabel}</a>");
+        return Task.FromResult<string?>($"<a href=\"{url}\">{escapedLabel}</a>");
     }
 
     /// <summary>屋号（company_alias）→ クレジットの会社・ロゴのエントリに出す名前（クレジットでの表記があればそれ、無ければ名義の名前）。未登録なら null。</summary>

@@ -9698,6 +9698,17 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   text-decoration: underline;
 }
 
+/* スタッフ一覧の役職順タブの「TVシリーズでクレジットされた役職」「映画でのみクレジットされた役職」の大きな区切り。
+   中の作品ごとの節（.creators-series-section の h3）より一段大きく見せる。 */
+.creators-role-group {
+  margin: 0 0 32px;
+}
+.creators-role-group-heading {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 20px 0 4px;
+}
+
 /* ホーム：誕生日対応の「今日の記念日」カード ＋ 「今月のカレンダー」。
    記念日の誕生日カード（cb/pb）はエピソードカードの上に積まれる（JS 側で順序保証）。 */
 

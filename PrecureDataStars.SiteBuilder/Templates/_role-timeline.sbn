@@ -18,6 +18,7 @@
      ・歴代プリキュア声優では、プリキュアを演じた方の行に data-precure-cast を付け、ページの「プリキュアを演じた方のみ」（ルートの
        data-precure-only）で行を出し分ける（site.css）。入れている間は「主な方のみ」を切って触れなくし（ページのインライン JS）、
        行はプリキュアのマスタの順（--rtl-precure-order）に並べ直す。
+     ・所属線は TV の話（本線とスピンオフ）の担当からだけ引き、映画の担当からは引かない。段を分けた行では本線の段とスピンオフの段の下にそれぞれ引く。
      ・所属の人の行は、帯の下に会社の所属としてクレジットされていた期間の細い線（rtl-aff。まとめた会社以外の会社は
        点線の rtl-aff-other）を引き、内訳に「所属：会社名（期間）」の行（data-aff）を添える。
        事業の引き継ぎでつながった会社は、2 つ目からの会社の所属線を会社ごとの色（--aff-c）で引き、会社の行の名前の後ろに
@@ -25,8 +26,9 @@
      ・横軸は TV シリーズ 1 作を 1 本の帯にし、帯の左端に放送開始年の目盛り（シリーズ詳細へのリンク）を置く。
        人物・企業/団体詳細の年表は参加のある帯だけを並べ、続かない帯のあいだに切れ目（Timeline.Gaps の rtl-gap。斜線の地と目盛りの段の「≈」）を置く。
      ・人物・企業/団体詳細の年表は、スピンオフの話を藍の帯（rtl-seg-spinoff）で本線の TV の話と分けて描く。本線の印とスピンオフの帯の
-       両方がある行（r.IsSplit）は 2 段にし、上の段（rtl-lane）に本線、下の段（rtl-lane-spinoff）にスピンオフの帯を置く。名前は 2 段の真ん中に 1 つ。
-     ・映画の点は TV の話の帯より先に描いて帯の後ろに置く（点のほうが大きく、上に置くと帯が隠れる）。
+       両方がある行（r.SpinOffLane）と、映画の公開日が TV の話の帯と重なる時期がある行（r.MovieLane）は段を分け（r.LaneCount、rtl-lanes-2 / rtl-lanes-3）、
+       上から本線（TV の話・歌・劇伴・盤）、映画（関連する役職の映画の輪を含む）、スピンオフの順に段（rtl-lane）を置く。
+       違う役職の映画の丸が重なりそうなときは、役職ごとに上下にわずかにずらす（--dy。同じ役職の丸どうしはずらさない）。名前は段の数によらず行の真ん中に 1 つ。
      ・人物・企業/団体詳細の年表の行は役職（EntityKind が role。札の印）と役柄（character。星の印）で、名前は役職詳細・キャラクター詳細へのリンク。
      ・役職詳細では、ページの役職と関連でつながった役職の担当（r.Related）を、主の印より先に描いて下に重ねる
        （細い帯と白抜きの輪。色は役職ごとに RoleTimelineBuilder が決めて --rel-c / --key-c で渡す）。凡例は役職ごとに 1 項目で、
@@ -67,7 +69,7 @@
     </div>
     <ol class="rtl-rows">
       {{~ for r in Timeline.Rows ~}}
-      <li class="rtl-row{{ if r.IsSplit }} rtl-row-split{{ end }}{{ if !r.IsMain }} rtl-row-extra{{ end }}{{ if r.IsGroupHead }} rtl-row-group-head{{ end }}{{ if r.IsGroupSuccessor }} rtl-row-group-succ{{ end }}{{ if r.IsGroupMember }} rtl-row-member{{ end }}"{{ if Timeline.HasGroups || r.PrecureOrder > 0 }} style="{{ if Timeline.HasGroups }}--rtl-flat:{{ r.FlatOrder }}{{ if r.PrecureOrder > 0 }};{{ end }}{{ end }}{{ if r.PrecureOrder > 0 }}--rtl-precure-order:{{ r.PrecureOrder }}{{ end }}"{{ end }}{{ if Timeline.HasMediaFilter }}{{ if r.HasTv }} data-tv{{ end }}{{ if r.HasMovie }} data-movie{{ end }}{{ if r.ZoneHasTv }} data-zone-tv{{ end }}{{ if r.ZoneHasMovie }} data-zone-movie{{ end }}{{ end }}{{ if r.IsPrecureCast }} data-precure-cast{{ end }} data-entity-type="{{ r.EntityKind }}" data-period="{{ r.PeriodLabel | html.escape }}" data-works="{{ r.WorksText | html.escape }}"{{ if r.EntitySubLabel != "" }} data-sub="{{ r.EntitySubLabel | html.escape }}"{{ end }}{{ if r.AffiliationText != "" }} data-aff="{{ r.AffiliationText | html.escape }}"{{ end }}>
+      <li class="rtl-row{{ if r.LaneCount > 1 }} rtl-lanes-{{ r.LaneCount }}{{ end }}{{ if !r.IsMain }} rtl-row-extra{{ end }}{{ if r.IsGroupHead }} rtl-row-group-head{{ end }}{{ if r.IsGroupSuccessor }} rtl-row-group-succ{{ end }}{{ if r.IsGroupMember }} rtl-row-member{{ end }}"{{ if Timeline.HasGroups || r.PrecureOrder > 0 }} style="{{ if Timeline.HasGroups }}--rtl-flat:{{ r.FlatOrder }}{{ if r.PrecureOrder > 0 }};{{ end }}{{ end }}{{ if r.PrecureOrder > 0 }}--rtl-precure-order:{{ r.PrecureOrder }}{{ end }}"{{ end }}{{ if Timeline.HasMediaFilter }}{{ if r.HasTv }} data-tv{{ end }}{{ if r.HasMovie }} data-movie{{ end }}{{ if r.ZoneHasTv }} data-zone-tv{{ end }}{{ if r.ZoneHasMovie }} data-zone-movie{{ end }}{{ end }}{{ if r.IsPrecureCast }} data-precure-cast{{ end }} data-entity-type="{{ r.EntityKind }}" data-period="{{ r.PeriodLabel | html.escape }}" data-works="{{ r.WorksText | html.escape }}"{{ if r.EntitySubLabel != "" }} data-sub="{{ r.EntitySubLabel | html.escape }}"{{ end }}{{ if r.AffiliationText != "" }} data-aff="{{ r.AffiliationText | html.escape }}"{{ end }}>
         <a class="rtl-name" href="{{ r.EntityUrl }}">
           {{~ if r.EntityKind == "company" ~}}<span class="rtl-badge rtl-badge-company" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" fill-rule="evenodd"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>
           {{~ else if r.EntityKind == "unit" ~}}<span class="rtl-badge rtl-badge-unit" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><circle cx="5.2" cy="5.4" r="2.4"/><circle cx="10.8" cy="5.4" r="2.4"/><path d="M0.6 14a4.6 4.6 0 0 1 9.2 0z"/><path d="M6.2 14a4.6 4.6 0 0 1 9.2 0z"/></svg></span>
@@ -76,17 +78,19 @@
           {{~ else ~}}<span class="rtl-badge rtl-badge-person" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
           {{~ end ~}}<span class="rtl-name-text{{ if r.HasAffChip }} rtl-name-aff{{ end }}"{{ if r.AffColor != "" }} style="--aff-c:{{ r.AffColor }}"{{ end }}>{{ r.EntityName | html.escape }}</span></a>
         <div class="rtl-track" aria-hidden="true">
-          {{~ if r.IsSplit ~}}<div class="rtl-lane">{{~ end ~}}
-          {{~ for m in r.Related ~}}{{ if m.IsMovie }}<span class="rtl-rel-movie" style="left:{{ m.Left }}%;--rel-c:{{ m.Color }}"></span>{{ else }}<span class="rtl-rel" style="left:{{ m.Left }}%;width:{{ m.Width }}%;--rel-c:{{ m.Color }}"></span>{{ end }}{{~ end ~}}
+          {{~ if r.LaneCount > 1 ~}}<div class="rtl-lane">{{~ end ~}}
+          {{~ for m in r.Related ~}}{{ if m.IsMovie }}{{ if !r.MovieLane }}<span class="rtl-rel-movie" style="left:{{ m.Left }}%;--rel-c:{{ m.Color }}{{ if m.Shift != 0 }};--dy:{{ m.Shift }}{{ end }}"></span>{{ end }}{{ else }}<span class="rtl-rel" style="left:{{ m.Left }}%;width:{{ m.Width }}%;--rel-c:{{ m.Color }}"></span>{{ end }}{{~ end ~}}
           {{~ for m in r.Spans ~}}<span class="rtl-span" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}
-          {{~ for m in r.Movies ~}}<span class="rtl-movie" style="left:{{ m.Left }}%"></span>{{~ end ~}}
           {{~ for m in r.Segments ~}}<span class="rtl-seg" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}
-          {{~ if !r.IsSplit ~}}{{~ for m in r.SpinOffSegments ~}}<span class="rtl-seg rtl-seg-spinoff" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}{{~ end ~}}
+          {{~ if !r.SpinOffLane ~}}{{~ for m in r.SpinOffSegments ~}}<span class="rtl-seg rtl-seg-spinoff" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}{{~ end ~}}
+          {{~ if !r.MovieLane ~}}{{~ for m in r.Movies ~}}<span class="rtl-movie" style="left:{{ m.Left }}%{{ if m.Shift != 0 }};--dy:{{ m.Shift }}{{ end }}"></span>{{~ end ~}}{{~ end ~}}
           {{~ for m in r.Songs ~}}<span class="rtl-song" style="left:{{ m.Left }}%"></span>{{~ end ~}}
           {{~ for m in r.Bgms ~}}<span class="rtl-bgm" style="left:{{ m.Left }}%"></span>{{~ end ~}}
           {{~ for m in r.Products ~}}<span class="rtl-disc" style="left:{{ m.Left }}%"></span>{{~ end ~}}
-          {{~ if r.IsSplit ~}}</div><div class="rtl-lane rtl-lane-spinoff">{{~ for m in r.SpinOffSegments ~}}<span class="rtl-seg rtl-seg-spinoff" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}</div>{{~ end ~}}
-          {{~ for m in r.Affiliations ~}}<span class="rtl-aff{{ if m.IsOther }} rtl-aff-other{{ end }}" style="left:{{ m.Left }}%;width:{{ m.Width }}%{{ if m.Color != "" }};--aff-c:{{ m.Color }}{{ end }}{{ if m.Lane > 0 }};--aff-lane:{{ m.Lane }}{{ end }}"></span>{{~ end ~}}
+          {{~ for m in r.Affiliations ~}}{{ if !m.InSpinOffLane }}<span class="rtl-aff{{ if m.IsOther }} rtl-aff-other{{ end }}" style="left:{{ m.Left }}%;width:{{ m.Width }}%{{ if m.Color != "" }};--aff-c:{{ m.Color }}{{ end }}{{ if m.Lane > 0 }};--aff-lane:{{ m.Lane }}{{ end }}"></span>{{ end }}{{~ end ~}}
+          {{~ if r.LaneCount > 1 ~}}</div>{{~ end ~}}
+          {{~ if r.MovieLane ~}}<div class="rtl-lane">{{~ for m in r.Related ~}}{{ if m.IsMovie }}<span class="rtl-rel-movie" style="left:{{ m.Left }}%;--rel-c:{{ m.Color }}{{ if m.Shift != 0 }};--dy:{{ m.Shift }}{{ end }}"></span>{{ end }}{{~ end ~}}{{~ for m in r.Movies ~}}<span class="rtl-movie" style="left:{{ m.Left }}%{{ if m.Shift != 0 }};--dy:{{ m.Shift }}{{ end }}"></span>{{~ end ~}}</div>{{~ end ~}}
+          {{~ if r.SpinOffLane ~}}<div class="rtl-lane">{{~ for m in r.SpinOffSegments ~}}<span class="rtl-seg rtl-seg-spinoff" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}{{~ for m in r.Affiliations ~}}{{ if m.InSpinOffLane }}<span class="rtl-aff{{ if m.IsOther }} rtl-aff-other{{ end }}" style="left:{{ m.Left }}%;width:{{ m.Width }}%{{ if m.Color != "" }};--aff-c:{{ m.Color }}{{ end }}{{ if m.Lane > 0 }};--aff-lane:{{ m.Lane }}{{ end }}"></span>{{ end }}{{~ end ~}}</div>{{~ end ~}}
         </div>
       </li>
       {{~ end ~}}

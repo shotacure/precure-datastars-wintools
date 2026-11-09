@@ -9343,10 +9343,10 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   background: var(--rtl-tv);
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.85);
 }
-/* 映画（公開日の点。重なっても読めるよう地の色の輪を付ける）。 */
+/* 映画（公開日の点。重なっても読めるよう地の色の輪を付ける。違う役職の丸と重なりそうなときは --dy で上下に 3px ずらす）。TV の話の帯と重なる時期がある行は、映画を別の段に置く（.rtl-lanes-*）。 */
 .rtl-movie {
   position: absolute;
-  top: 50%;
+  top: calc(50% + var(--dy, 0) * 3px);
   width: 9px;
   height: 9px;
   margin: -4.5px 0 0 -4.5px;
@@ -9392,7 +9392,7 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 /* 関連する役職の映画（白抜きの輪。主の役職の映画の点と形で分ける）。 */
 .rtl-rel-movie {
   position: absolute;
-  top: 50%;
+  top: calc(50% + var(--dy, 0) * 3px);
   width: 9px;
   height: 9px;
   margin: -4.5px 0 0 -4.5px;
@@ -11893,10 +11893,14 @@ a.staff-combo-nav-card:hover {
 /* 人物・企業/団体詳細の年表で、スピンオフの話の帯と凡例の見本（記念日カレンダーの 🌙 と同じ藍）。 */
 .rtl-seg-spinoff { background: #3f4a9e; }
 .rtl-key-spinoff { width: 18px; height: 10px; border-radius: 3px; background: #3f4a9e; }
-/* 本線の印とスピンオフの帯の両方がある行は 2 段にする（上の段に本線、下の段にスピンオフ。名前は行の真ん中のまま）。
-   段の中の印は、これまでどおり段の上下の真ん中（top: 50%）に置く。 */
-.rtl-row-split { height: 40px; }
+/* 段を分けた行（本線とスピンオフの両方がある行・映画が TV の話の帯と重なる時期がある行）。段は上から本線、映画、スピンオフ。
+   名前は行の真ん中のまま。段の中の印は、これまでどおり段の上下の真ん中（top: 50%）に置く。 */
+.rtl-lanes-2 { height: 40px; }
+.rtl-lanes-3 { height: 54px; }
 .rtl-lane { position: absolute; left: 0; right: 0; top: 0; height: 50%; }
-.rtl-lane-spinoff { top: 50%; }
+.rtl-lanes-2 .rtl-lane:nth-of-type(2) { top: 50%; }
+.rtl-lanes-3 .rtl-lane { height: 33.333%; }
+.rtl-lanes-3 .rtl-lane:nth-of-type(2) { top: 33.333%; }
+.rtl-lanes-3 .rtl-lane:nth-of-type(3) { top: 66.667%; }
 /* 人物・企業/団体詳細の年表の役職の行の印（札）。役柄の行はキャラクターの星（.rtl-badge-character）。 */
 .rtl-badge-role { background: rgba(59, 130, 196, 0.12); color: #2563a8; }

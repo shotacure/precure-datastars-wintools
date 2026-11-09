@@ -70,6 +70,15 @@ internal sealed class RoleTimelineBuilder
     /// <summary>作品ごとの帯の軸（<see cref="ForSeriesBands"/>）で、作品の帯のあいだに置く切れ目の幅（日）。</summary>
     private const int SeriesBandGapDays = 14;
 
+    /// <summary>映画の公開日が TV の話の帯にこの日数（前後 3 か月。幅 180 日）まで近ければ、重なるとみて映画を別の段に分ける（線表の幅では 3 か月ほどで点と帯が重なる）。</summary>
+    private const int MovieLaneMarginDays = 90;
+
+    /// <summary>
+    /// 映画の丸（自分の映画の点・関連する役職の映画の輪）どうしが重なるとみる間隔（軸の幅に対する百分率）。
+    /// 丸の幅 9px が、ふつうの画面の線表の幅のおよそ 1.3% にあたる。
+    /// </summary>
+    private const double MovieOverlapPct = 1.3;
+
     private readonly BuildContext _ctx;
     private readonly DateOnly _axisStart;
     private readonly int _axisDays;
@@ -655,9 +664,9 @@ internal sealed class RoleTimelineBuilder
         }
         chains.Add(cur);
 
-        // 期間の終わり：最後の参加の放送枠の終わり（映画・歌・劇伴・盤は日付の翌日）。
+        // 期間の終わり：最後の参加の放送枠の終わり（映画・歌・劇伴・盤は点の真ん中＝その日付）。
         static DateOnly ChainEnd(List<Credit> chain)
-            => chain.Max(c => c.Kind == CreditKind.Tv ? c.Date.AddDays(EpisodeSpanDays) : c.Date.AddDays(1));
+            => chain.Max(c => c.Kind == CreditKind.Tv ? c.Date.AddDays(EpisodeSpanDays) : c.Date);
         bool qualifies = rules.IncludeAll
             || (rules.IncludeOpeningCredit && e.HasOpeningCredit)
             || MaxCreditsInWindow(credits, rules.WindowDays) >= rules.MinCreditsInWindow
@@ -667,6 +676,9 @@ internal sealed class RoleTimelineBuilder
         var segments = new List<RoleTimelineMark>();
         var spinOffSegments = new List<RoleTimelineMark>();
         var movies = new List<RoleTimelineMark>();
+        // 映画の段を分けるかの判定に使う、本線の TV の話の帯（関連する役職の帯を含む）の期間と映画（関連する役職の映画を含む）の公開日。
+        var tvRanges = new List<(DateOnly Start, DateOnly End)>();
+        var movieDates = new List<DateOnly>();
         var songs = new List<RoleTimelineMark>();
         var bgms = new List<RoleTimelineMark>();
         var products = new List<RoleTimelineMark>();
@@ -677,10 +689,6 @@ internal sealed class RoleTimelineBuilder
         foreach (var chain in chains)
         {
             var start = chain[0].Date;
-            var end = ChainEnd(chain);
-            // 細線は 2 件以上つながった期間だけに引く（単発の参加は帯・点だけ）。
-            if (chain.Count >= 2)
-                spans.Add(new RoleTimelineMark { Left = Pct(start), Width = PctWidth(start, end) });
             periodLabels.Add(PeriodLabel(start, chain[^1].Date));
 
             // TV の話は、同じシリーズで話数が続く間をひと続きの帯にまとめる。スピンオフを分けて描く線表
@@ -696,6 +704,7 @@ internal sealed class RoleTimelineBuilder
                     var segStart = eps[runStart].Date;
                     var segEnd = eps[i - 1].Date.AddDays(EpisodeSpanDays);
                     segTarget.Add(new RoleTimelineMark { Left = Pct(segStart), Width = PctWidth(segStart, segEnd) });
+                    if (ReferenceEquals(segTarget, segments)) tvRanges.Add((segStart, segEnd));
                     runStart = i;
                 }
                 if (!tvEpNos.TryGetValue(bySeries.Key, out var set))
@@ -708,6 +717,7 @@ internal sealed class RoleTimelineBuilder
             foreach (var c in chain.Where(c => c.Kind == CreditKind.Movie))
             {
                 movies.Add(new RoleTimelineMark { Left = Pct(c.Date) });
+                movieDates.Add(c.Date);
                 movieIds.Add(c.SeriesId);
             }
             // 歌・劇伴・盤は、同じ日のものを 1 つの印にまとめる。
@@ -778,6 +788,7 @@ internal sealed class RoleTimelineBuilder
                     var segStart = eps[runStart].Value;
                     var segEnd = eps[i - 1].Value.AddDays(EpisodeSpanDays);
                     related.Add(new RoleTimelineRelatedMark { Color = color, Left = Pct(segStart), Width = PctWidth(segStart, segEnd) });
+                    tvRanges.Add((segStart, segEnd));
                     runStart = i;
                 }
                 if (_ctx.SeriesById.TryGetValue(sid, out var s))
@@ -787,9 +798,57 @@ internal sealed class RoleTimelineBuilder
             {
                 var s = _ctx.SeriesById[sid];
                 related.Add(new RoleTimelineRelatedMark { Color = color, Left = Pct(s.StartDate), IsMovie = true });
+                movieDates.Add(s.StartDate);
                 relLines.Add((s.StartDate, $"〔{rel.RoleName}〕🎥 {s.Title}"));
             }
             relatedWorks.AddRange(relLines.OrderBy(l => l.Sort).Select(l => l.Text));
+        }
+
+        // 映画・スピンオフを別の段に描くか（RoleTimelineRow.MovieLane / SpinOffLane と同じ決まり）。
+        // 映画は、公開日が本線の TV の話の帯（関連する役職の帯を含む）の期間（前後 MovieLaneMarginDays 日を含む）に入れば分ける。
+        bool movieLane = movieDates.Any(d => tvRanges.Any(r =>
+            d >= r.Start.AddDays(-MovieLaneMarginDays) && d <= r.End.AddDays(MovieLaneMarginDays)));
+        bool spinOffLane = spinOffSegments.Count > 0
+            && (segments.Count > 0 || movies.Count > 0 || songs.Count > 0 || bgms.Count > 0 || products.Count > 0);
+        // 続けて参加した期間の細線は、一番上の段（本線）に描く印の参加だけでつなぎ直して引く。別の段に分けた映画・スピンオフの日付まで
+        // 線がはみ出さないように、端は上の段の最初の印の始まりと最後の印の終わり（TV の話は放送枠の終わり）にきっちり合わせる。
+        // 細線は 2 件以上つながった期間だけに引く（単発の参加は帯・点だけ）。
+        var topCredits = credits.Where(c =>
+                !(movieLane && c.Kind == CreditKind.Movie)
+                && !(spinOffLane && c.Kind == CreditKind.Tv && _ctx.IsSpinOffSeries(c.SeriesId)))
+            .ToList();
+        var run = new List<Credit>();
+        void CloseRun()
+        {
+            if (run.Count >= 2)
+            {
+                var s0 = run.Min(c => c.Date);
+                spans.Add(new RoleTimelineMark { Left = Pct(s0), Width = PctWidth(s0, ChainEnd(run)) });
+            }
+            run = new List<Credit>();
+        }
+        foreach (var c in topCredits)
+        {
+            if (run.Count > 0 && c.Date.DayNumber - run[^1].Date.DayNumber > rules.MaxGapDays) CloseRun();
+            run.Add(c);
+        }
+        CloseRun();
+
+        // 映画の丸（自分の映画の点と関連する役職の映画の輪。同じ段に並ぶ）が隣の丸と MovieOverlapPct より近く続く組の中に、
+        // 違う役職の丸があるときだけ、役職ごとに上・下・上…と交互にずらす。同じ役職の丸どうし（併映など）はずらさずに重ねる。
+        // 役職は、自分の映画を空文字、関連する役職の映画を役職の色で見分ける（色は役職ごとに 1 つ）。
+        var moviePoints = movies.Select(m => (Left: double.Parse(m.Left, CultureInfo.InvariantCulture), Role: "", Set: (Action<int>)(v => m.Shift = v)))
+            .Concat(related.Where(m => m.IsMovie).Select(m => (Left: double.Parse(m.Left, CultureInfo.InvariantCulture), Role: m.Color, Set: (Action<int>)(v => m.Shift = v))))
+            .OrderBy(x => x.Left)
+            .ToList();
+        for (int i = 0; i < moviePoints.Count;)
+        {
+            int j = i + 1;
+            while (j < moviePoints.Count && moviePoints[j].Left - moviePoints[j - 1].Left < MovieOverlapPct) j++;
+            var roles = moviePoints.Skip(i).Take(j - i).Select(x => x.Role).Distinct().ToList();
+            if (roles.Count >= 2)
+                for (int k = i; k < j; k++) moviePoints[k].Set(roles.IndexOf(moviePoints[k].Role) % 2 == 0 ? -1 : 1);
+            i = j;
         }
 
         var row = new RoleTimelineRow
@@ -802,6 +861,7 @@ internal sealed class RoleTimelineBuilder
             Segments = segments,
             SpinOffSegments = spinOffSegments,
             Movies = movies,
+            MovieLane = movieLane,
             Songs = songs,
             Bgms = bgms,
             Products = products,
@@ -814,7 +874,10 @@ internal sealed class RoleTimelineBuilder
     }
 
     /// <summary>
-    /// 所属線と内訳の「所属：」の行を組む。企業ごとに、所属としてクレジットされた担当（TV の話・映画）を日付順に並べ、
+    /// 所属線と内訳の「所属：」の行を組む。所属線は TV の話（本線とスピンオフ）の担当からだけ引き、映画の担当からは引かない
+    /// （映画の点の段に線が付いて見えないように）。スピンオフの段を分けた行（<see cref="RoleTimelineRow.SpinOffLane"/>）では、
+    /// スピンオフの話の線をスピンオフの段（<see cref="RoleTimelineAffiliationMark.InSpinOffLane"/>）に分けて引く。
+    /// 内訳の「所属：」の期間は映画も含めて数える。企業ごとに、所属としてクレジットされた担当を日付順に並べ、
     /// 続けて参加した期間と同じ間隔（<see cref="RoleTimelineRules.MaxGapDays"/>）以内ならつないで 1 本の線にする
     /// （映画の個人名だけのクレジットなど、所属の出ていない回が挟まっても切れない）。1 件だけの期間も、TV の 1 話ぶんの幅で引く。
     /// まとめた企業（<see cref="RoleTimelineEntity.MemberOf"/>。系譜の企業を含む）以外の企業の線は点線にする。企業の並びは最初の所属の早い順。
@@ -825,49 +888,74 @@ internal sealed class RoleTimelineBuilder
         if (e.Affiliations.Count == 0) return;
         var marks = new List<(DateOnly From, DateOnly To, RoleTimelineAffiliationMark Mark)>();
         var texts = new List<(DateOnly First, string Text)>();
-        foreach (var aff in e.Affiliations)
-        {
-            var dates = new List<DateOnly>();
-            foreach (var (_, eid) in aff.Episodes)
-                if (eid != 0 && _ctx.EpisodeById.TryGetValue(eid, out var ep)) dates.Add(ep.OnAirDate);
-            foreach (var sid in aff.MovieSeriesIds)
-                if (_ctx.SeriesById.TryGetValue(sid, out var s)) dates.Add(s.StartDate);
-            if (dates.Count == 0) continue;
-            dates.Sort();
+        bool splitSpinOff = row.SpinOffLane;
 
-            bool isOther = !string.Equals(aff.GroupKey, e.MemberOf, StringComparison.Ordinal);
-            var labels = new List<string>();
+        // 日付順の参加を、間隔 MaxGapDays 以内でつないだ期間（始まり, 最後の参加）に分ける。
+        List<(DateOnly From, DateOnly Last)> Runs(List<DateOnly> dates)
+        {
+            var runs = new List<(DateOnly, DateOnly)>();
+            dates.Sort();
             int start = 0;
             for (int i = 1; i <= dates.Count; i++)
             {
                 if (i < dates.Count && dates[i].DayNumber - dates[i - 1].DayNumber <= rules.MaxGapDays) continue;
-                var from = dates[start];
-                var to = dates[i - 1].AddDays(EpisodeSpanDays);
-                marks.Add((from, to, new RoleTimelineAffiliationMark
-                {
-                    Left = Pct(from),
-                    Width = PctWidth(from, to),
-                    IsOther = isOther,
-                    CompanyKey = aff.CompanyKey
-                }));
-                labels.Add(PeriodLabel(from, dates[i - 1]));
+                runs.Add((dates[start], dates[i - 1]));
                 start = i;
             }
-            if (aff.CompanyName != "")
-                texts.Add((dates[0], $"所属：{aff.CompanyName}（{string.Join("、", labels)}）"));
+            return runs;
         }
-        // 段の割り当て：始まりの早い順に、前の線が終わっている一番下の段へ置く。
-        var laneEnds = new List<DateOnly>();
-        foreach (var (from, to, mark) in marks.OrderBy(x => x.From))
+
+        foreach (var aff in e.Affiliations)
         {
-            int lane = laneEnds.FindIndex(end => end <= from);
-            if (lane < 0)
+            var mainDates = new List<DateOnly>();
+            var spinDates = new List<DateOnly>();
+            foreach (var (sid, eid) in aff.Episodes)
             {
-                lane = laneEnds.Count;
-                laneEnds.Add(to);
+                if (eid == 0 || !_ctx.EpisodeById.TryGetValue(eid, out var ep)) continue;
+                (splitSpinOff && _ctx.IsSpinOffSeries(sid) ? spinDates : mainDates).Add(ep.OnAirDate);
             }
-            else laneEnds[lane] = to;
-            mark.Lane = lane;
+            var allDates = mainDates.Concat(spinDates).ToList();
+            foreach (var sid in aff.MovieSeriesIds)
+                if (_ctx.SeriesById.TryGetValue(sid, out var s)) allDates.Add(s.StartDate);
+            if (allDates.Count == 0) continue;
+
+            bool isOther = !string.Equals(aff.GroupKey, e.MemberOf, StringComparison.Ordinal);
+            foreach (var (dates, inSpin) in new[] { (mainDates, false), (spinDates, true) })
+            {
+                foreach (var (from, last) in Runs(dates))
+                {
+                    var to = last.AddDays(EpisodeSpanDays);
+                    marks.Add((from, to, new RoleTimelineAffiliationMark
+                    {
+                        Left = Pct(from),
+                        Width = PctWidth(from, to),
+                        IsOther = isOther,
+                        CompanyKey = aff.CompanyKey,
+                        InSpinOffLane = inSpin
+                    }));
+                }
+            }
+            if (aff.CompanyName != "")
+            {
+                var runs = Runs(allDates);
+                texts.Add((runs[0].From, $"所属：{aff.CompanyName}（{string.Join("、", runs.Select(r => PeriodLabel(r.From, r.Last)))}）"));
+            }
+        }
+        // 段の割り当て：段（本線・スピンオフ）ごとに、始まりの早い順に、前の線が終わっている一番下の段へ置く。
+        foreach (var group in marks.GroupBy(x => x.Mark.InSpinOffLane))
+        {
+            var laneEnds = new List<DateOnly>();
+            foreach (var (from, to, mark) in group.OrderBy(x => x.From))
+            {
+                int lane = laneEnds.FindIndex(end => end <= from);
+                if (lane < 0)
+                {
+                    lane = laneEnds.Count;
+                    laneEnds.Add(to);
+                }
+                else laneEnds[lane] = to;
+                mark.Lane = lane;
+            }
         }
         row.Affiliations = marks.Select(x => x.Mark).ToList();
         row.AffiliationText = string.Join("\n", texts.OrderBy(t => t.First).Select(t => t.Text));
@@ -1233,6 +1321,8 @@ internal sealed class RoleTimelineAffiliationMark
     public string Color { get; set; } = "";
     /// <summary>線を引く段（0 が一番下。違う企業の線が同じ時期に重なるとき 1 段ずつ上げる）。</summary>
     public int Lane { get; set; }
+    /// <summary>スピンオフの段（<see cref="RoleTimelineRow.SpinOffLane"/>）の下に引く線か。偽なら本線の段（段を分けない行は行の下）。</summary>
+    public bool InSpinOffLane { get; set; }
 }
 
 /// <summary>線表の 1 行（人物・企業/団体・キャラクター 1 つ）。</summary>
@@ -1261,11 +1351,22 @@ internal sealed class RoleTimelineRow
     public bool HasTv => Segments.Count > 0;
 
     /// <summary>
-    /// 行を 2 段に分けるか。スピンオフの話の帯と、本線の印（TV の話・映画・歌・劇伴・盤）の両方がある行だけ、上の段に本線、
-    /// 下の段にスピンオフの帯を描く（名前は 2 段の真ん中に 1 つ）。
+    /// 映画を別の段に描くか。映画（関連する役職の映画の輪を含む）の公開日が本線の TV の話の帯（関連する役職の帯を含む）と重なる時期がある行だけ立つ
+    /// （帯と点が重なって見えなくなるため）。立つ行では、関連する役職の映画の輪も映画の段に描く。
     /// </summary>
-    public bool IsSplit => SpinOffSegments.Count > 0
+    public bool MovieLane { get; set; }
+
+    /// <summary>
+    /// スピンオフの話の帯を別の段に描くか。スピンオフの帯と本線の印（TV の話・映画・歌・劇伴・盤）の両方がある行だけ立つ。
+    /// </summary>
+    public bool SpinOffLane => SpinOffSegments.Count > 0
         && (Segments.Count > 0 || Movies.Count > 0 || Songs.Count > 0 || Bgms.Count > 0 || Products.Count > 0);
+
+    /// <summary>
+    /// 行の段の数（1〜3）。段は上から本線（TV の話・歌・劇伴・盤）、映画（<see cref="MovieLane"/>）、スピンオフ（<see cref="SpinOffLane"/>）。
+    /// 名前は段の数によらず行の真ん中に 1 つ。
+    /// </summary>
+    public int LaneCount => 1 + (MovieLane ? 1 : 0) + (SpinOffLane ? 1 : 0);
     /// <summary>映画を描いた行か（「映画のみ」で見せる行。関連する役職の担当は数えない）。</summary>
     public bool HasMovie => Movies.Count > 0;
     /// <summary>会社の行（<see cref="IsGroupHead"/>）の下にまとめた所属の人に、TV の話を描いた行があるか。</summary>
@@ -1313,6 +1414,8 @@ internal sealed class RoleTimelineMark
 {
     public string Left { get; set; } = "";
     public string Width { get; set; } = "";
+    /// <summary>映画の点を上下にずらす向き（-1 で上、1 で下、0 でずらさない）。違う役職の映画の丸と重なりそうなときだけ立つ。</summary>
+    public int Shift { get; set; }
 }
 
 /// <summary>関連する役職の担当の印 1 つ（TV の話の細い帯、または映画の白抜きの輪）。</summary>
@@ -1325,4 +1428,6 @@ internal sealed class RoleTimelineRelatedMark
     public string Width { get; set; } = "";
     /// <summary>映画の輪か。</summary>
     public bool IsMovie { get; set; }
+    /// <summary>映画の輪を上下にずらす向き（-1 で上、1 で下、0 でずらさない）。違う役職の映画の丸と重なりそうなときだけ立つ。</summary>
+    public int Shift { get; set; }
 }

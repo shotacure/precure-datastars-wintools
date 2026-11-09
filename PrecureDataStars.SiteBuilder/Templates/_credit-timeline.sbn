@@ -14,9 +14,9 @@
         {{~ for b in Timeline.Bands ~}}<span class="rtl-band{{ if b.IsAlt }} rtl-band-alt{{ end }}" style="left:{{ b.Left }}%;width:{{ b.Width }}%"></span>{{~ end ~}}
         {{~ for g in Timeline.Gaps ~}}<span class="rtl-gap" style="left:{{ g.Left }}%;width:{{ g.Width }}%"></span>{{~ end ~}}
         {{~ for x in m.Spans ~}}<span class="rtl-span" style="left:{{ x.Left }}%;width:{{ x.Width }}%"></span>{{~ end ~}}
-        {{~ for x in m.Movies ~}}<span class="rtl-movie" style="left:{{ x.Left }}%"></span>{{~ end ~}}
         {{~ for x in m.Segments ~}}<span class="rtl-seg" style="left:{{ x.Left }}%;width:{{ x.Width }}%"></span>{{~ end ~}}
         {{~ for x in m.SpinOffSegments ~}}<span class="rtl-seg rtl-seg-spinoff" style="left:{{ x.Left }}%;width:{{ x.Width }}%"></span>{{~ end ~}}
+        {{~ for x in m.Movies ~}}<span class="rtl-movie" style="left:{{ x.Left }}%"></span>{{~ end ~}}
         {{~ for x in m.Songs ~}}<span class="rtl-song" style="left:{{ x.Left }}%"></span>{{~ end ~}}
         {{~ for x in m.Bgms ~}}<span class="rtl-bgm" style="left:{{ x.Left }}%"></span>{{~ end ~}}
         {{~ for x in m.Products ~}}<span class="rtl-disc" style="left:{{ x.Left }}%"></span>{{~ end ~}}

@@ -1363,7 +1363,10 @@ public sealed class CreatorsGenerator
                 PersonUrl = PathUtil.PersonUrl(kv.Key),
                 SongCount = kv.Value.Count,
                 // 初参加順の代理キー。未取得は末尾に送るため int.MaxValue。
-                DebutRecordingId = debutRecIdByPerson.TryGetValue(kv.Key, out var dr) ? dr : int.MaxValue
+                DebutRecordingId = debutRecIdByPerson.TryGetValue(kv.Key, out var dr) ? dr : int.MaxValue,
+                // 初担当順の節：この役職で初めて担当した録音の出典シリーズ（TV・映画を問わない）。
+                DebutSeriesId = debutRecIdByPerson.TryGetValue(kv.Key, out var dr2)
+                                && _ctx.SongRecordingById.TryGetValue(dr2, out var debutRec) ? debutRec.SeriesId : null
             });
         }
         return rows;
@@ -1391,6 +1394,8 @@ public sealed class CreatorsGenerator
             // 読みデータが揃ったら KanaRows の行のコメントを外して五十音順タブを復活させられる。
             // KanaRows = SortSongRowsByKana(rows),
             DebutRows = SortSongRowsByDebut(rows),
+            // 初担当順は、この役職で初めて担当した録音の作品ごとの節に分ける（TV・映画を混ぜた放送開始・公開順）。
+            DebutSections = BuildDebutSeriesSections(SortSongRowsByDebut(rows), r => r.DebutSeriesId),
             CountRows = SortSongRowsByCount(rows),
             Timeline = new RoleTimelineBuilder(_ctx, RoleTimelineBuilder.ExtendToFor(timelineEntities))
                 .Build(timelineEntities, RoleTimelineRules.SongWriter),
@@ -3893,8 +3898,10 @@ public sealed class CreatorsGenerator
     {
         public string RoleNameJa { get; set; } = "";
         public IReadOnlyList<SongRoleRow> KanaRows { get; set; } = Array.Empty<SongRoleRow>();
-        /// <summary>初参加順（recording_id 順）の行。五十音順の代替として既定タブに使う。</summary>
+        /// <summary>初担当順（recording_id 順）の行。五十音順の代替として既定タブに使う。</summary>
         public IReadOnlyList<SongRoleRow> DebutRows { get; set; } = Array.Empty<SongRoleRow>();
+        /// <summary>初担当順の行を、この役職で初めて担当した録音の作品ごとの節に束ねたもの（TV・映画を混ぜた放送開始・公開順）。</summary>
+        public IReadOnlyList<DebutSeriesSection> DebutSections { get; set; } = Array.Empty<DebutSeriesSection>();
         public IReadOnlyList<SongRoleRow> CountRows { get; set; } = Array.Empty<SongRoleRow>();
         /// <summary>年表タブ（切り替え）の線表。載せる行が無ければ null（年表を出さない）。</summary>
         public RoleTimelineModel? Timeline { get; set; }

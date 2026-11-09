@@ -62,21 +62,32 @@
   </div>
   {{~ end ~}}
 
-  {{## ──────── 初担当順パネル（既定。recording_id 順＝五十音順の代替） ──────── ##}}
+  {{## ──────── 初担当順パネル（既定。recording_id 順＝五十音順の代替。初めて担当した録音の作品ごとの節） ──────── ##}}
   <div class="tab-panel is-active" id="song-role-tab-panel-debut"
        data-tab-panel="debut" role="tabpanel">
     {{~ if (array.size DebutRows) == 0 ~}}
     <p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
     {{~ else ~}}
-    <ul class="entity-list entity-list-grid">
-      {{~ for e in DebutRows ~}}
-      <li class="entity-row">
-        <a class="entity-row-link" href="{{ e.PersonUrl }}" aria-label="{{ e.PersonName | html.escape }}"></a>
-        <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
-        <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-song">🎵 {{ e.SongCount }}</span></span></span>
-      </li>
-      {{~ end ~}}
-    </ul>
+    {{## この役職で初めて担当した録音の作品ごとの節（TV・映画を混ぜた放送開始・公開順）。見出しと左のもくじは「作品名（年）」。 ##}}
+    {{~ for sec in DebutSections ~}}
+    <section class="creators-series-section" id="debut-{{ for.index + 1 }}"
+             data-section-nav-label="{{ (nav_main sec.SeriesTitle) | html.escape }}"
+             data-section-nav-prefix="{{ (nav_prefix sec.SeriesTitle) | html.escape }}"
+             data-section-nav-title="{{ sec.SeriesTitle | html.escape }}"
+             data-section-nav-year="{{ sec.SeriesYearLabel }}"
+             data-section-nav-count="{{ array.size sec.Members }}">
+      <h2 class="creators-series-heading">{{~ if sec.SeriesUrl != "" ~}}<a href="{{ sec.SeriesUrl }}">{{ sec.SeriesHeadingLabel | html.escape }}</a>{{~ else ~}}{{ sec.SeriesHeadingLabel | html.escape }}{{~ end ~}}</h2>
+      <ul class="entity-list entity-list-grid">
+        {{~ for e in sec.Members ~}}
+        <li class="entity-row">
+          <a class="entity-row-link" href="{{ e.PersonUrl }}" aria-label="{{ e.PersonName | html.escape }}"></a>
+          <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
+          <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-song">🎵 {{ e.SongCount }}</span></span></span>
+        </li>
+        {{~ end ~}}
+      </ul>
+    </section>
+    {{~ end ~}}
     {{~ end ~}}
   </div>
 

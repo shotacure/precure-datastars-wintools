@@ -41,8 +41,8 @@
      「順位」「ランキング」の語・順位列は用いない。 ##}}
 <div class="creators-root creators-tabs products-tabs" data-entity-filter="all">
   <div class="tabs" role="tablist" aria-label="役職別一覧の並べ替え">
-    {{## 五十音順タブは読み（kana）データ未整備のため一旦無効化。既定タブは初参加順へ繰り上げ。
-         データが揃ったらこのコメントを外し、初参加順ボタンの is-active / aria-selected を戻す。
+    {{## 五十音順タブは読み（kana）データ未整備のため一旦無効化。既定タブは初担当順へ繰り上げ。
+         データが揃ったらこのコメントを外し、初担当順ボタンの is-active / aria-selected を戻す。
     <button type="button" class="tab-btn is-active" data-tab="kana"
             role="tab" aria-selected="true" aria-controls="role-tab-panel-kana">
       五十音<span class="tab-sfx">順</span>
@@ -50,7 +50,7 @@
     ##}}
     <button type="button" class="tab-btn is-active" data-tab="debut"
             role="tab" aria-selected="true" aria-controls="role-tab-panel-debut">
-      初参加<span class="tab-sfx">順</span>
+      初担当<span class="tab-sfx">順</span>
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="role-tab-panel-count">
@@ -102,7 +102,7 @@
   </div>
   {{~ end ~}}
 
-  {{## ──────── 初参加順パネル（初参加シリーズごとのセクション。五十音順無効化に伴い既定タブ） ──────── ##}}
+  {{## ──────── 初担当順パネル（この役職で初めて担当した作品ごとのセクション。五十音順無効化に伴い既定タブ） ──────── ##}}
   <div class="tab-panel is-active" id="role-tab-panel-debut"
        data-tab-panel="debut" role="tabpanel">
     {{~ if (array.size DebutSections) == 0 ~}}

@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：役職のページ（本編・オトナシリーズ・歌・音楽制作の役職）の「初参加順」のタブ・並べ替えボタンを「初担当順」にした**（`creators-role-detail.sbn`・`creators-song-role-detail.sbn`・`creators-music-role-detail.sbn`）：役職のページの節はその役職で初めてクレジットされた作品で分けていて、役職を問わない一覧のページの「初参加順」と同じ名前では違いが分からなかった。スタッフ一覧・声の出演一覧・音楽制作・歌唱の一覧は「初参加順」のまま
+
 - **サイト：スタッフ一覧の役職順タブを、その役職が初めてクレジットされた作品ごとの節に分けた**（`CreatorsGenerator`〔`SectionRolesByFirstSeries` / `RoleSeriesSection`〔新規〕・`RoleIndexEntry.FirstSeriesTitle` / `FirstSeriesUrl` / `FirstSeriesYearLabel`〔新規〕・`StaffModel.RoleSections`〔`TvRoles` / `MovieOnlyRoles` と `RoleIndexEntry.IsMovieOnly` を置き換え〕〕・`creators-staff.sbn`）：「TV シリーズでクレジットされた役職」と「映画でのみクレジットされた役職」の 2 つに分けていた。節は作品の放送開始・公開順で、見出しと左のもくじは初参加順タブと同じ「作品名（年）」。節の中は今までどおり初めて出た回のクレジットの順。オトナシリーズのスタッフ一覧の役職順タブも、オトナシリーズの作品ごとの節になる
 
 - **サイト：スタッフ一覧の初参加順タブで、同じ日に公開された作品（併映の映画と短編など）の節が何度も切れていたのを直した**（`CreatorsGenerator.SectionByDebut`・`FirstCreditAccumulator.SeriesId` / `EntityRow.FirstSeriesId`〔新規〕）：行を初参加の (日付, 話数, クレジットの位置) で並べてから作品が変わるたびに節を切っていたので、同じ日の作品の行が交互に並ぶと同じ作品の節がいくつもできていた（本編のスタッフ一覧で 59 作品に 180 節）。同じ作品の行は 1 つの節にまとめ、同じ日の作品どうしは series_id 順に並べる

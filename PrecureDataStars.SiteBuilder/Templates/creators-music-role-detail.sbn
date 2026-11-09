@@ -8,7 +8,7 @@
 {{## 音楽クレジット（music_credits、ストリングス編曲は song_credits）の役職 1 つ分。
      ・1 行 = 人物または団体のアコーディオン（details）。閉じた状態は名前と件数（劇伴の TV 作品数 📺・映画本数 🎥、歌の曲数 🎵、盤の点数 💿）。
        開くと担当先を「劇伴（1 作品 1 行、録音回を添える）/ 歌（曲・録音ごとに 1 行）/ 盤」に分けて並べる。
-     ・並べ替えは音楽制作ページと同じ「初参加順（初参加の作品ごとのセクション）/ 参加数順」の切り替え（data-sort-panel）。
+     ・並べ替えは音楽制作ページと同じ「初担当順（この役職で初めて担当した作品ごとのセクション。音楽制作ページでは初参加順）/ 参加数順」の切り替え（data-sort-panel）。
        切り替えの最後の「年表」は、担当先を時期に置いた線表（一覧の全員。中身は _role-timeline.sbn）。
        パラメータ付き include は使わない方針なので、行の中身は両方の並びに直接展開する。 ##}}
 {{~ if (array.size CountRows) == 0 ~}}
@@ -17,7 +17,7 @@
 <div class="music-role-detail">
   <div class="list-toolbar">
   <div class="sort-toggle" role="group" aria-label="並べ替え">
-    <button type="button" class="sort-toggle-btn is-active" data-sort="debut">初参加<span class="tab-sfx">順</span></button>
+    <button type="button" class="sort-toggle-btn is-active" data-sort="debut">初担当<span class="tab-sfx">順</span></button>
     <button type="button" class="sort-toggle-btn" data-sort="count">参加数<span class="tab-sfx">順</span></button>
     {{~ if Timeline ~}}<button type="button" class="sort-toggle-btn" data-sort="timeline">年表</button>{{~ end ~}}
   </div>

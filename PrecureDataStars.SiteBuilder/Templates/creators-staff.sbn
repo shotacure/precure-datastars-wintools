@@ -6,6 +6,7 @@
 {{## スタッフ一覧。
      ・役職順タブ：役職名 + その役職に関わった人物数・企業/団体数の索引。各役職名から
        役職詳細ページ（/creators/roles/{code}/）へ送り出す。最も軽量なので既定タブにする。
+       役職は、初めてクレジットされた作品ごとの節に分ける。
      ・五十音順 / 初参加順 / 参加回数順タブ：人物と企業・団体を 1 リストに混在させた
        一覧。行ごとに「個人 / 団体」バッジで区別し、上部の絞り込みトグルで
        個人のみ・団体のみに切り替えられる（data-entity-filter を CSS で解決）。
@@ -58,48 +59,36 @@
     {{~ if (array.size Roles) == 0 ~}}
     <p class="empty-row">クレジット情報のある役職がまだ登録されていません。</p>
     {{~ else ~}}
-    {{## 役職名 + 担当数（人物 N 名・企業 M 社）の軽い行なので複数列詰めグリッドで並べる。
-         映画系シリーズでのみクレジットされた役職は後半の別セクションへ分ける
-         （映画のみの役職が無いときは見出しを出さず 1 リストのまま）。
-         2 つのリストは行構造が同一だが、パラメータ付き include を避けて各リストに直接展開する。 ##}}
-    {{~ if (array.size MovieOnlyRoles) > 0 ~}}
-    <section class="creators-series-section">
-      <h2 class="creators-series-heading">TVシリーズでクレジットされた役職</h2>
-    {{~ end ~}}
-    <ul class="entity-list entity-list-grid" id="staff-roles-tv">
-      {{~ for r in TvRoles ~}}
-      <li class="entity-row">
-        {{~ if (r.PersonCount > 0 || r.CompanyCount > 0) && r.RoleUrl == "" ~}}
-        {{## 役職のページの無い役職（本編の一覧なら本編の役職詳細、オトナシリーズの一覧ならオトナシリーズの役職のページが無い役職）は、リンクせずに名前だけ出す。 ##}}
-        <span class="entity-row-name">{{ r.RoleNameJa | html.escape }}</span>
-        <span class="entity-row-count"><span class="count-badges">{{~ if r.PersonCount > 0 ~}}<span class="count-pill count-pill-person" title="人物"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg>{{ r.PersonCount }}</span>{{~ end ~}}{{~ if r.CompanyCount > 0 ~}}<span class="count-pill count-pill-company" title="企業・団体"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg>{{ r.CompanyCount }}</span>{{~ end ~}}</span></span>
-        {{~ else if r.PersonCount > 0 || r.CompanyCount > 0 ~}}
-        <a class="entity-row-link" href="{{ r.RoleUrl }}" aria-label="{{ r.RoleNameJa | html.escape }}"></a>
-        <a class="entity-row-name" href="{{ r.RoleUrl }}">{{ r.RoleNameJa | html.escape }}</a>
-        <span class="entity-row-count"><span class="count-badges">{{~ if r.PersonCount > 0 ~}}<span class="count-pill count-pill-person" title="人物"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg>{{ r.PersonCount }}</span>{{~ end ~}}{{~ if r.CompanyCount > 0 ~}}<span class="count-pill count-pill-company" title="企業・団体"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg>{{ r.CompanyCount }}</span>{{~ end ~}}</span></span>
-        {{~ else ~}}
-        <span class="entity-row-name muted">{{ r.RoleNameJa | html.escape }}</span>
-        <span class="entity-row-count muted">—</span>
-        {{~ end ~}}
-      </li>
-      {{~ end ~}}
-    </ul>
-    {{~ if (array.size MovieOnlyRoles) > 0 ~}}
-    </section>
-    <section class="creators-series-section">
-      <h2 class="creators-series-heading">映画でのみクレジットされた役職</h2>
-      <ul class="entity-list entity-list-grid" id="staff-roles-movie">
-        {{~ for r in MovieOnlyRoles ~}}
-        <li class="entity-row">
-          {{~ if r.PersonCount > 0 || r.CompanyCount > 0 ~}}
-          <a class="entity-row-link" href="{{ r.RoleUrl }}" aria-label="{{ r.RoleNameJa | html.escape }}"></a>
-          <a class="entity-row-name" href="{{ r.RoleUrl }}">{{ r.RoleNameJa | html.escape }}</a>
-          <span class="entity-row-count"><span class="count-badges">{{~ if r.PersonCount > 0 ~}}<span class="count-pill count-pill-person" title="人物"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg>{{ r.PersonCount }}</span>{{~ end ~}}{{~ if r.CompanyCount > 0 ~}}<span class="count-pill count-pill-company" title="企業・団体"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg>{{ r.CompanyCount }}</span>{{~ end ~}}</span></span>
-          {{~ else ~}}
-          <span class="entity-row-name muted">{{ r.RoleNameJa | html.escape }}</span>
-          <span class="entity-row-count muted">—</span>
-          {{~ end ~}}
-        </li>
+    {{## 役職は、初めてクレジットされた作品ごとの節に分ける（節は作品の放送開始・公開順、節の中は初めて出た回のクレジットの順）。
+         見出しと左のもくじは初参加順タブと同じ「作品名（年）」。役職名 + 担当数（人物 N 名・企業 M 社）の軽い行なので複数列詰めグリッドで並べる。 ##}}
+    {{~ for s in RoleSections ~}}
+    <section class="creators-series-section" id="roles-{{ for.index + 1 }}"
+             data-section-nav-label="{{ (nav_main s.SeriesTitle) | html.escape }}"
+             data-section-nav-prefix="{{ (nav_prefix s.SeriesTitle) | html.escape }}"
+             data-section-nav-title="{{ s.SeriesTitle | html.escape }}"
+             data-section-nav-year="{{ s.SeriesYearLabel }}"
+             data-section-nav-count="{{ array.size s.Roles }}">
+      <h2 class="creators-series-heading">
+        {{~ if s.SeriesUrl != "" ~}}
+        <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
+        {{~ else ~}}{{ s.SeriesHeadingLabel | html.escape }}{{~ end ~}}
+      </h2>
+      <ul class="entity-list entity-list-grid">
+        {{~ for r in s.Roles ~}}
+          <li class="entity-row">
+            {{~ if (r.PersonCount > 0 || r.CompanyCount > 0) && r.RoleUrl == "" ~}}
+            {{## 役職のページの無い役職（本編の一覧なら本編の役職詳細、オトナシリーズの一覧ならオトナシリーズの役職のページが無い役職）は、リンクせずに名前だけ出す。 ##}}
+            <span class="entity-row-name">{{ r.RoleNameJa | html.escape }}</span>
+            <span class="entity-row-count"><span class="count-badges">{{~ if r.PersonCount > 0 ~}}<span class="count-pill count-pill-person" title="人物"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg>{{ r.PersonCount }}</span>{{~ end ~}}{{~ if r.CompanyCount > 0 ~}}<span class="count-pill count-pill-company" title="企業・団体"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg>{{ r.CompanyCount }}</span>{{~ end ~}}</span></span>
+            {{~ else if r.PersonCount > 0 || r.CompanyCount > 0 ~}}
+            <a class="entity-row-link" href="{{ r.RoleUrl }}" aria-label="{{ r.RoleNameJa | html.escape }}"></a>
+            <a class="entity-row-name" href="{{ r.RoleUrl }}">{{ r.RoleNameJa | html.escape }}</a>
+            <span class="entity-row-count"><span class="count-badges">{{~ if r.PersonCount > 0 ~}}<span class="count-pill count-pill-person" title="人物"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg>{{ r.PersonCount }}</span>{{~ end ~}}{{~ if r.CompanyCount > 0 ~}}<span class="count-pill count-pill-company" title="企業・団体"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg>{{ r.CompanyCount }}</span>{{~ end ~}}</span></span>
+            {{~ else ~}}
+            <span class="entity-row-name muted">{{ r.RoleNameJa | html.escape }}</span>
+            <span class="entity-row-count muted">—</span>
+            {{~ end ~}}
+          </li>
         {{~ end ~}}
       </ul>
     </section>

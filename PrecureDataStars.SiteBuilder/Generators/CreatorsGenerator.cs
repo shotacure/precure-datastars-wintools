@@ -495,6 +495,7 @@ public sealed class CreatorsGenerator
     /// <summary>
     /// スタッフ一覧の役職順タブの 1 行（役職名・人数・社数と並べ替えキー）を、その役職の行群から組み立てる。
     /// 並べ替えキーは、この役職が最も早くクレジットされた (放送開始, 話数, クレジット階層位置)。
+    /// その最も早い行の作品（題・URL・年）を、役職順タブの節分け（<see cref="SectionRolesByFirstSeries"/>）に使う。
     /// </summary>
     /// <param name="roleUrl">役職名のリンク先。役職詳細ページが無い役職は空文字（テンプレはリンクせずに名前だけ出す）。</param>
     private static RoleIndexEntry BuildRoleIndexEntry(Role role, IReadOnlyList<EntityRow> rows, string roleUrl)
@@ -505,6 +506,7 @@ public sealed class CreatorsGenerator
         long roleSortStart = long.MaxValue;
         int roleSortEpNo = int.MaxValue;
         long roleSortPos = long.MaxValue;
+        EntityRow? firstRow = null;
         foreach (var er in rows)
         {
             if (er.FirstSortStart < roleSortStart
@@ -515,6 +517,7 @@ public sealed class CreatorsGenerator
                 roleSortStart = er.FirstSortStart;
                 roleSortEpNo = er.FirstSortEpNo;
                 roleSortPos = er.FirstSortPos;
+                firstRow = er;
             }
         }
 
@@ -528,8 +531,10 @@ public sealed class CreatorsGenerator
             SortEpNo = roleSortEpNo,
             SortPos = roleSortPos,
             RoleNameKey = role.RoleCode,
-            // TV 系シリーズ（credit_attach_to='EPISODE'）のクレジットが 1 件も無い役職は「映画のみ」。
-            IsMovieOnly = rows.All(r => r.EpisodeCount == 0)
+            FirstSeriesId = firstRow?.FirstSeriesId,
+            FirstSeriesTitle = firstRow?.FirstSeriesTitle ?? "",
+            FirstSeriesUrl = firstRow?.FirstSeriesUrl ?? "",
+            FirstSeriesYearLabel = firstRow?.FirstSeriesYearLabel ?? ""
         };
     }
 
@@ -540,6 +545,37 @@ public sealed class CreatorsGenerator
             .ThenBy(e => e.SortEpNo)
             .ThenBy(e => e.SortPos)
             .ThenBy(e => e.RoleNameKey, StringComparer.Ordinal)
+            .ToList();
+
+    /// <summary>
+    /// 役職順タブの役職を、その役職が初めてクレジットされた作品ごとの節に束ねる。
+    /// 渡す役職は <see cref="OrderRoleIndexEntries"/> で並べたもの（初めての作品の放送開始・公開順）で、
+    /// 節は作品の放送開始・公開順（同じ日の作品どうしは series_id 順）で、同じ作品の役職は 1 つの節にまとめる
+    /// （併映の作品のように同じ日の作品の役職が交互に並んでも、節が切れない）。
+    /// 節の中は渡された順（初めて出た回のクレジットの順）。節の見出しは初参加順タブと同じ「作品名（年）」。
+    /// </summary>
+    private static List<RoleSeriesSection> SectionRolesByFirstSeries(IEnumerable<RoleIndexEntry> orderedEntries)
+        => orderedEntries
+            .Select((e, index) => (Entry: e, Index: index))
+            .GroupBy(x => (x.Entry.SortStart, x.Entry.FirstSeriesId, x.Entry.FirstSeriesTitle))
+            .OrderBy(g => g.Key.SortStart)
+            .ThenBy(g => g.Key.FirstSeriesId ?? int.MaxValue)
+            .ThenBy(g => g.Min(x => x.Index))
+            .Select(g =>
+            {
+                var e = g.First().Entry;
+                return new RoleSeriesSection
+                {
+                    SeriesTitle = e.FirstSeriesTitle,
+                    SeriesUrl = e.FirstSeriesUrl,
+                    SeriesYearLabel = e.FirstSeriesYearLabel,
+                    SeriesHeadingLabel = string.IsNullOrEmpty(e.FirstSeriesYearLabel)
+                        ? e.FirstSeriesTitle
+                        : $"{e.FirstSeriesTitle}（{e.FirstSeriesYearLabel}）",
+                    SortStart = e.SortStart,
+                    Roles = g.OrderBy(x => x.Index).Select(x => x.Entry).ToList()
+                };
+            })
             .ToList();
 
     /// <summary>
@@ -2377,8 +2413,7 @@ public sealed class CreatorsGenerator
         var content = new StaffModel
         {
             Roles = roleIndexEntries,
-            TvRoles = roleIndexEntries.Where(e => !e.IsMovieOnly).ToList(),
-            MovieOnlyRoles = roleIndexEntries.Where(e => e.IsMovieOnly).ToList(),
+            RoleSections = SectionRolesByFirstSeries(roleIndexEntries),
             TotalRoles = roleIndexEntries.Count,
             // 五十音順タブは読み（kana）データ未整備のため一旦無効化。テンプレ側もコメントアウト済み。
             // データが揃ったら下行のコメントを外して復活させる（KanaRows は未設定＝空のまま）。
@@ -3260,6 +3295,7 @@ public sealed class CreatorsGenerator
             MovieCount = movieCount,
             SeriesCount = seriesCount,
             WorksTooltip = worksTooltip,
+            FirstSeriesId = first.SeriesId,
             FirstSeriesTitle = first.SeriesTitle,
             FirstSeriesUrl = first.SeriesUrl,
             FirstSeriesYearLabel = first.SeriesYearLabel,
@@ -3368,39 +3404,30 @@ public sealed class CreatorsGenerator
         .ThenBy(r => r.EntityName, StringComparer.Ordinal)
         .ToList();
 
-    /// <summary>初参加順を「初参加シリーズ」ごとのセクションに束ねる。 セクションはシリーズ放送開始日順、セクション内は SortByDebut と同じ クレジット順（話数 → クレジット出現位置 → 読み → 名前）。 各行のシリーズ名・年は重複するためセクション見出しへ移し、行からは出さない。</summary>
+    /// <summary>初参加順を「初参加シリーズ」ごとのセクションに束ねる。 セクションはシリーズ放送開始日順（同じ日の作品どうしは series_id 順）、セクション内は SortByDebut と同じ クレジット順（話数 → クレジット出現位置 → 読み → 名前）。 同じ作品の行は 1 つのセクションにまとめる（併映の作品のように同じ日の作品の行が交互に並んでも、セクションが切れない）。 各行のシリーズ名・年は重複するためセクション見出しへ移し、行からは出さない。</summary>
     private static List<EntitySeriesSection> SectionByDebut(IEnumerable<EntityRow> rows)
-    {
-        var ordered = SortByDebut(rows);
-        var sections = new List<EntitySeriesSection>();
-        EntitySeriesSection? current = null;
-        foreach (var r in ordered)
-        {
-            // 初参加シリーズの識別は (放送開始シリアル, シリーズ名) で十分
-            // （同日開始の別シリーズが理論上あり得るためタイトルも併用）。
-            string headLabel = r.FirstSeriesTitle;
-            if (!string.IsNullOrEmpty(r.FirstSeriesYearLabel))
-                headLabel += $"（{r.FirstSeriesYearLabel}）";
-
-            if (current is null
-                || current.SortStart != r.FirstSortStart
-                || !string.Equals(current.SeriesTitle, r.FirstSeriesTitle, StringComparison.Ordinal))
+        => SortByDebut(rows)
+            .Select((r, index) => (Row: r, Index: index))
+            .GroupBy(x => (x.Row.FirstSortStart, x.Row.FirstSeriesId, x.Row.FirstSeriesTitle))
+            .OrderBy(g => g.Key.FirstSortStart)
+            .ThenBy(g => g.Key.FirstSeriesId ?? int.MaxValue)
+            .ThenBy(g => g.Min(x => x.Index))
+            .Select(g =>
             {
-                current = new EntitySeriesSection
+                var r = g.First().Row;
+                return new EntitySeriesSection
                 {
                     SeriesTitle = r.FirstSeriesTitle,
                     SeriesUrl = r.FirstSeriesUrl,
-                    SeriesHeadingLabel = headLabel,
+                    SeriesHeadingLabel = string.IsNullOrEmpty(r.FirstSeriesYearLabel)
+                        ? r.FirstSeriesTitle
+                        : $"{r.FirstSeriesTitle}（{r.FirstSeriesYearLabel}）",
                     SeriesYearLabel = r.FirstSeriesYearLabel,
                     SortStart = r.FirstSortStart,
-                    Members = new List<EntityRow>()
+                    Members = g.OrderBy(x => x.Index).Select(x => x.Row).ToList()
                 };
-                sections.Add(current);
-            }
-            ((List<EntityRow>)current.Members).Add(r);
-        }
-        return sections;
-    }
+            })
+            .ToList();
 
     /// <summary>
     /// 関与の最早 (シリーズ放送開始日, シリーズ内話数, クレジット出現位置) を畳み込みで保持し、
@@ -3442,6 +3469,8 @@ public sealed class CreatorsGenerator
         private Series? BestSeries
             => _bestSeriesId is int id && _ctx.SeriesById.TryGetValue(id, out var s) ? s : null;
 
+        /// <summary>最早の作品の series_id（分からなければ null）。初参加順・役職順の節を作品ごとにまとめるのに使う。</summary>
+        public int? SeriesId => BestSeries?.SeriesId;
         public string SeriesTitle => BestSeries?.Title ?? "";
         public string SeriesUrl => BestSeries is { } s ? PathUtil.SeriesUrl(s.Slug) : "";
         public string SeriesYearLabel
@@ -3765,10 +3794,8 @@ public sealed class CreatorsGenerator
         public IReadOnlyList<RoleIndexEntry> Roles { get; set; } = Array.Empty<RoleIndexEntry>();
         /// <summary>参加回数順の並べ替えのボタンの最初の種類（count-sort.js の data-count-sort-start。空なら付けない）。</summary>
         public string CountSortStart { get; set; } = "";
-        /// <summary>役職順タブの前半：TV 系シリーズで 1 度でもクレジットされた役職。</summary>
-        public IReadOnlyList<RoleIndexEntry> TvRoles { get; set; } = Array.Empty<RoleIndexEntry>();
-        /// <summary>役職順タブの後半：映画系シリーズでのみクレジットされた役職（別セクション）。</summary>
-        public IReadOnlyList<RoleIndexEntry> MovieOnlyRoles { get; set; } = Array.Empty<RoleIndexEntry>();
+        /// <summary>役職順タブ：役職を、初めてクレジットされた作品ごとの節に束ねたもの。</summary>
+        public IReadOnlyList<RoleSeriesSection> RoleSections { get; set; } = Array.Empty<RoleSeriesSection>();
         public int TotalRoles { get; set; }
         public IReadOnlyList<EntityRow> KanaRows { get; set; } = Array.Empty<EntityRow>();
         /// <summary>初参加順は初参加シリーズごとのセクションに束ねる。</summary>
@@ -3863,8 +3890,28 @@ public sealed class CreatorsGenerator
         public long SortPos { get; set; }
         /// <summary>完全同点時の安定化キー（内部 role_code。表示には用いない）。</summary>
         public string RoleNameKey { get; set; } = "";
-        /// <summary>映画系シリーズでのみクレジットされた役職なら true（役職順タブで別セクションに分ける）。</summary>
-        public bool IsMovieOnly { get; set; }
+        /// <summary>この役職が初めてクレジットされた作品の series_id（分からなければ null）。</summary>
+        public int? FirstSeriesId { get; set; }
+        /// <summary>この役職が初めてクレジットされた作品の題（役職順タブの節の見出し）。</summary>
+        public string FirstSeriesTitle { get; set; } = "";
+        /// <summary>この役職が初めてクレジットされた作品のページの URL。</summary>
+        public string FirstSeriesUrl { get; set; } = "";
+        /// <summary>この役職が初めてクレジットされた作品の放送開始・公開の年（4 桁）。</summary>
+        public string FirstSeriesYearLabel { get; set; } = "";
+    }
+
+    /// <summary>役職順タブの、初めてクレジットされた作品ごとの節 1 つ分。</summary>
+    private sealed class RoleSeriesSection
+    {
+        public string SeriesTitle { get; set; } = "";
+        /// <summary>左のもくじ（section-nav.js）の年の欄に出す放送開始・公開の年（4 桁）。分からなければ空。</summary>
+        public string SeriesYearLabel { get; set; } = "";
+        public string SeriesUrl { get; set; } = "";
+        /// <summary>「作品名（年）」整形済み見出しラベル。</summary>
+        public string SeriesHeadingLabel { get; set; } = "";
+        /// <summary>節の区切りの判定用（放送開始日シリアル）。</summary>
+        public long SortStart { get; set; }
+        public IReadOnlyList<RoleIndexEntry> Roles { get; set; } = Array.Empty<RoleIndexEntry>();
     }
 
     private sealed class AlternateNameItem
@@ -3936,6 +3983,8 @@ public sealed class CreatorsGenerator
         public string RolesLabel { get; set; } = "";
         /// <summary>役職詳細の行に添える「表記ごとの担当数」（<see cref="BuildRoleUsageNote"/>）。添えない行は空文字。</summary>
         public string RoleUsageNote { get; set; } = "";
+        /// <summary>初めてクレジットされた作品の series_id（分からなければ null）。</summary>
+        public int? FirstSeriesId { get; set; }
         public string FirstSeriesTitle { get; set; } = "";
         public string FirstSeriesUrl { get; set; } = "";
         public string FirstSeriesYearLabel { get; set; } = "";

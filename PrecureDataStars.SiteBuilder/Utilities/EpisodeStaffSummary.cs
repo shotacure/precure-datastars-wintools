@@ -26,6 +26,12 @@ public sealed class EpisodeStaffSummary
     /// <summary>演出担当者（同上）。</summary>
     public string EpisodeDirector { get; set; } = "";
 
+    /// <summary>総作画監督担当者（同上）。本編の作品だけで、テンプレ側は作画監督の札の直前に出す。オトナシリーズの作品は空（<see cref="AnimationCardRoles"/> に入る）。</summary>
+    public string ChiefAnimationDirector { get; set; } = "";
+
+    /// <summary>総作画監督の札のリンク先（総作画監督の役職のページ）。</summary>
+    public string ChiefAnimationDirectorUrl { get; set; } = "";
+
     /// <summary>作画監督担当者（同上）。</summary>
     public string AnimationDirector { get; set; } = "";
 

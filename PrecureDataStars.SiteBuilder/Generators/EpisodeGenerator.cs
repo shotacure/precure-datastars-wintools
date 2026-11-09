@@ -1704,6 +1704,7 @@ public sealed class EpisodeGenerator
 
     /// <summary>
     /// 主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。
+    /// 本編の作品で総作画監督がいる回は、作画監督の行の直前に総作画監督の行を置く。
     /// 読むカードと、オトナシリーズの作品の札（作画監督の代わりに作画監督と同じカードの役職を 1 役職 1 行、美術は美術デザイン）の
     /// 決まりは <see cref="EpisodeStaffCards"/>（作品のページのエピソード一覧と共通）。
     /// </summary>
@@ -1724,6 +1725,8 @@ public sealed class EpisodeGenerator
             new StaffSpec("脚本",     new[] { "SCREENPLAY" },         new[] { "脚本" }),
             new StaffSpec("絵コンテ", new[] { "STORYBOARD" },         new[] { "絵コンテ" }),
             new StaffSpec("演出",     new[] { "EPISODE_DIRECTOR" },   new[] { "演出" }),
+            // 総作画監督は本編の作品だけ（その回にいるときだけ、作画監督の行の直前に出る）。オトナシリーズの作品は作画監督と同じカードの役職の行で出す。
+            new StaffSpec(EpisodeStaffCards.ChiefAnimationDirectorLabel, new[] { EpisodeStaffCards.ChiefAnimationDirectorCode }, new[] { EpisodeStaffCards.ChiefAnimationDirectorLabel }),
             new StaffSpec("作画監督", new[] { "ANIMATION_DIRECTOR" }, new[] { "作画監督" }),
             new StaffSpec("美術",     new[] { "ART_DIRECTOR" },       new[] { "美術" })
         };
@@ -1760,7 +1763,7 @@ public sealed class EpisodeGenerator
             EpisodeChiefRoles.Screenplay => staffSpecs[0],
             EpisodeChiefRoles.Storyboard => staffSpecs[1],
             EpisodeChiefRoles.EpisodeDirector => staffSpecs[2],
-            EpisodeChiefRoles.ArtDirector => staffSpecs[4],
+            EpisodeChiefRoles.ArtDirector => staffSpecs[5],
             _ => null
         };
 
@@ -1849,6 +1852,7 @@ public sealed class EpisodeGenerator
             "脚本" => CreatorsRoleUrlFor("SCREENPLAY", "脚本", series),
             "絵コンテ" => CreatorsRoleUrlFor("STORYBOARD", "絵コンテ", series),
             "演出" => CreatorsRoleUrlFor("EPISODE_DIRECTOR", "演出", series),
+            EpisodeStaffCards.ChiefAnimationDirectorLabel => CreatorsRoleUrlFor(EpisodeStaffCards.ChiefAnimationDirectorCode, EpisodeStaffCards.ChiefAnimationDirectorLabel, series),
             "作画監督" => CreatorsRoleUrlFor("ANIMATION_DIRECTOR", "作画監督", series),
             "美術" => CreatorsRoleUrlFor("ART_DIRECTOR_TV", "美術", series),
             _ => null
@@ -1925,7 +1929,10 @@ public sealed class EpisodeGenerator
                 RoleLabel = spec.Label,
                 // RoleCode はバッジの data-role-code に使う。staffSpecs では RoleCodeCandidates の
                 // 先頭が代表コード（"SCREENPLAY" / "STORYBOARD" / 等）になる。
-                RoleCode = spec.RoleCodeCandidates.Length > 0 ? spec.RoleCodeCandidates[0] : "",
+                // 総作画監督の札は作画監督と同じ緑（OGP カードの役職名の色も同じ）。
+                RoleCode = spec.Label == EpisodeStaffCards.ChiefAnimationDirectorLabel
+                    ? EpisodeStaffCards.AnimationCardBadgeRoleCode
+                    : spec.RoleCodeCandidates.Length > 0 ? spec.RoleCodeCandidates[0] : "",
                 RoleUrl = RoleUrl(spec.Label) ?? "",
                 SubRoleLinks = Array.Empty<StaffRoleLink>(),
                 NamesLine = string.Join("、", names)
@@ -2237,7 +2244,7 @@ public sealed class EpisodeGenerator
     /// <summary>主要スタッフ 1 行（役職名 + 人物名のリスト）。</summary>
     private sealed class StaffRow
     {
-        /// <summary>表示用役職名（"脚本" / "絵コンテ" / "演出" / "作画監督" / "美術" / "絵コンテ・演出"）。</summary>
+        /// <summary>表示用役職名（"脚本" / "絵コンテ" / "演出" / "総作画監督" / "作画監督" / "美術" / "絵コンテ・演出"）。</summary>
         public string RoleLabel { get; set; } = "";
 
         /// <summary>役職代表コード。</summary>

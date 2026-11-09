@@ -75,6 +75,8 @@ public sealed class EpisodesIndexGenerator
                         Screenplay        = staff.Screenplay,
                         Storyboard        = staff.Storyboard,
                         EpisodeDirector   = staff.EpisodeDirector,
+                        ChiefAnimationDirector = staff.ChiefAnimationDirector,
+                        ChiefAnimationDirectorUrl = staff.ChiefAnimationDirectorUrl,
                         AnimationDirector = staff.AnimationDirector,
                         ArtDirector       = staff.ArtDirector,
                         StoryboardDirectorMerged = staff.StoryboardDirectorMerged
@@ -182,6 +184,9 @@ public sealed class EpisodesIndexGenerator
         public string Screenplay { get; set; } = "";
         public string Storyboard { get; set; } = "";
         public string EpisodeDirector { get; set; } = "";
+        /// <summary>総作画監督（本編の作品だけ。作画監督の札の直前に出す）と、その札のリンク先（<see cref="EpisodeStaffSummary.ChiefAnimationDirector"/> と同じ値）。</summary>
+        public string ChiefAnimationDirector { get; set; } = "";
+        public string ChiefAnimationDirectorUrl { get; set; } = "";
         public string AnimationDirector { get; set; } = "";
         public string ArtDirector { get; set; } = "";
         /// <summary>絵コンテ＝演出（同一エントリ集合）のとき true。テンプレ側で 2 バッジ並びにまとめる。</summary>

@@ -7,6 +7,7 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// 読むカードの選び方と、作品ごとの札の決まり。
 /// <para>
 /// 本編の作品は、脚本・絵コンテ・演出・作画監督・美術（区分は <see cref="EpisodeChiefRoles"/>）の 5 つの札。
+/// その回に総作画監督がいるときは、作画監督の札の直前に総作画監督の札（<see cref="ChiefAnimationDirectorCode"/>）を出す。
 /// オトナシリーズの作品は、作画監督が毎回大勢並ぶので作画監督の札を出さず、作画監督と同じカードにある作画監督以外の役職
 /// （総作画監督・料理パート作画監督・アクション作画監督・サブキャラクターデザインなど。区分 1〜5 の役職は除く）を
 /// クレジットの見出しの文字で 1 役職 1 札にして、クレジットの順に作画監督と同じ緑の札で並べる。
@@ -23,6 +24,25 @@ public static class EpisodeStaffCards
 
     /// <summary>オトナシリーズの作品で、作画監督と同じカードの役職の札の色分けに使う役職コード（作画監督と同じ緑）。</summary>
     public const string AnimationCardBadgeRoleCode = "ANIMATION_DIRECTOR";
+
+    /// <summary>総作画監督の役職コード。本編の作品で、その回に総作画監督がいるときだけ作画監督の札の直前に札を出す。</summary>
+    public const string ChiefAnimationDirectorCode = "CHIEF_ANIMATION_DIRECTOR";
+
+    /// <summary>総作画監督の札の文字。</summary>
+    public const string ChiefAnimationDirectorLabel = "総作画監督";
+
+    /// <summary>
+    /// 本編の作品で総作画監督の札に入れる役職か（役職コードが総作画監督か、役職マスタの名前が「総作画監督」）。
+    /// 各話のチーフの区分（<see cref="EpisodeChiefRoles"/>。記念日カレンダーや歴代記録と共通）には入れず、札にだけ出す。
+    /// オトナシリーズの作品は、総作画監督も作画監督と同じカードの役職の札（<see cref="AnimationCardBadgeLabel"/>）で出す。
+    /// </summary>
+    public static bool IsChiefAnimationDirector(CreditCardRole cr, IReadOnlyDictionary<string, Role> roleMap)
+    {
+        if (cr.RoleCode is null) return false;
+        if (string.Equals(cr.RoleCode, ChiefAnimationDirectorCode, StringComparison.Ordinal)) return true;
+        return roleMap.TryGetValue(cr.RoleCode, out var role)
+            && string.Equals(role.NameJa, ChiefAnimationDirectorLabel, StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// 札を組むときに読むカードを、カードの順に返す。2 つの版のカードを持つクレジットは、組の後ろの版（集計の本体。

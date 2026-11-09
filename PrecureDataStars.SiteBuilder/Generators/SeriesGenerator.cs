@@ -1166,6 +1166,8 @@ public sealed class SeriesGenerator
                     Screenplay = staff.Screenplay,
                     Storyboard = staff.Storyboard,
                     EpisodeDirector = staff.EpisodeDirector,
+                    ChiefAnimationDirector = staff.ChiefAnimationDirector,
+                    ChiefAnimationDirectorUrl = staff.ChiefAnimationDirectorUrl,
                     AnimationDirector = staff.AnimationDirector,
                     ArtDirector = staff.ArtDirector,
                     ArtLabel = staff.ArtLabel,
@@ -1673,6 +1675,7 @@ public sealed class SeriesGenerator
 
     /// <summary>
     /// 指定エピソードのクレジット階層から、脚本・絵コンテ・演出・作画監督・美術の人物名を引く。
+    /// 本編の作品は総作画監督（<see cref="EpisodeStaffCards.IsChiefAnimationDirector"/>）も引き、<see cref="EpisodeStaffSummary.ChiefAnimationDirector"/> に入れる。
     /// 本メソッドの戻り値を <see cref="_episodeStaffByIdCache"/> に memoize するように変更。
     /// 同一エピソードで複数回呼ばれた場合はキャッシュから返す（実際にはシリーズ詳細ページ生成での 1 回のみだが、
     /// パイプライン後段 <see cref="EpisodesIndexGenerator"/> から <see cref="GetEpisodeStaffSummaries"/> 経由で
@@ -1692,6 +1695,9 @@ public sealed class SeriesGenerator
         var director = new List<string>();
         var animDirector = new List<string>();
         var artDirector = new List<string>();
+        // 本編の作品の総作画監督（作画監督の札の直前に出す）
+        var chiefAnimDirector = new List<string>();
+        var seenCad = new HashSet<string>(StringComparer.Ordinal);
         var seenSc = new HashSet<string>(StringComparer.Ordinal);
         var seenSb = new HashSet<string>(StringComparer.Ordinal);
         var seenDr = new HashSet<string>(StringComparer.Ordinal);
@@ -1729,7 +1735,10 @@ public sealed class SeriesGenerator
                 {
                     int? bucket = EpisodeStaffCards.ClassifyForWork(roleSnap.Role, roleMap, isOtonaWork);
                     (string Label, string RoleCode, List<string> Names, HashSet<string> Seen)? badge = null;
-                    if (bucket is null)
+                    // 本編の作品の総作画監督は、各話のチーフの区分の外にある専用の札に集める。
+                    bool isChiefAnim = bucket is null && !isOtonaWork
+                        && EpisodeStaffCards.IsChiefAnimationDirector(roleSnap.Role, roleMap);
+                    if (bucket is null && !isChiefAnim)
                     {
                         if (!isAnimCard) continue;
                         string? label = EpisodeStaffCards.AnimationCardBadgeLabel(roleSnap.Role, roleMap);
@@ -1756,6 +1765,11 @@ public sealed class SeriesGenerator
                                 if (bd.Seen.Add(key)) bd.Names.Add(html);
                                 continue;
                             }
+                            if (isChiefAnim)
+                            {
+                                if (seenCad.Add(key)) chiefAnimDirector.Add(html);
+                                continue;
+                            }
                             switch (bucket)
                             {
                                 case 1: if (seenSc.Add(key)) screenplay.Add(html); break;
@@ -1775,6 +1789,8 @@ public sealed class SeriesGenerator
             Screenplay        = string.Join("、", screenplay),
             Storyboard        = string.Join("、", storyboard),
             EpisodeDirector   = string.Join("、", director),
+            ChiefAnimationDirector = string.Join("、", chiefAnimDirector),
+            ChiefAnimationDirectorUrl = PathUtil.CreatorsRoleUrl(_roleSuccessorResolver.GetRepresentative(EpisodeStaffCards.ChiefAnimationDirectorCode)),
             AnimationDirector = string.Join("、", animDirector),
             ArtDirector       = string.Join("、", artDirector),
             // 絵コンテ／演出のキー集合が一致（両方非空＋同一）のとき、テンプレで統合表示を許可するフラグ。
@@ -2460,6 +2476,9 @@ public sealed class SeriesGenerator
         public string Screenplay { get; set; } = "";
         public string Storyboard { get; set; } = "";
         public string EpisodeDirector { get; set; } = "";
+        /// <summary>総作画監督（本編の作品だけ。作画監督の札の直前に出す）と、その札のリンク先（<see cref="EpisodeStaffSummary.ChiefAnimationDirector"/> と同じ値）。</summary>
+        public string ChiefAnimationDirector { get; set; } = "";
+        public string ChiefAnimationDirectorUrl { get; set; } = "";
         public string AnimationDirector { get; set; } = "";
         public string ArtDirector { get; set; } = "";
         /// <summary>美術の札の文字・色分けの役職コード・リンク先（<see cref="EpisodeStaffSummary.ArtLabel"/> ほかと同じ値）。</summary>

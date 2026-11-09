@@ -29,9 +29,41 @@ public sealed class EpisodeStaffSummary
     /// <summary>作画監督担当者（同上）。</summary>
     public string AnimationDirector { get; set; } = "";
 
-    /// <summary>美術監督担当者（同上）。</summary>
+    /// <summary>美術担当者（同上）。本編の作品は美術監督（区分 5 の役職）、オトナシリーズの作品は各話の美術デザイン。</summary>
     public string ArtDirector { get; set; } = "";
+
+    /// <summary>美術の札の文字。本編の作品は「美術」、オトナシリーズの作品は「美術デザイン」。</summary>
+    public string ArtLabel { get; set; } = "美術";
+
+    /// <summary>美術の札の色分けに使う役職コード（CSS の <c>data-role-code</c>）。本編の作品は <c>ART_DIRECTOR_TV</c>、オトナシリーズの作品は <c>ART_DESIGN</c>。どちらも黄。</summary>
+    public string ArtRoleCode { get; set; } = "ART_DIRECTOR_TV";
+
+    /// <summary>美術の札のリンク先。本編の作品は TV の美術の役職詳細、オトナシリーズの作品は美術デザインのオトナシリーズの役職のページ（無ければ本編の役職詳細）。</summary>
+    public string ArtRoleUrl { get; set; } = "/creators/roles/art_director_tv/";
+
+    /// <summary>
+    /// オトナシリーズの作品で、作画監督の札の代わりに並べる札。作画監督と同じカードにある作画監督以外の役職
+    /// （総作画監督・料理パート作画監督・サブキャラクターデザインなど）を、クレジットの順に 1 役職 1 札で持つ。
+    /// 本編の作品は空で、作画監督は <see cref="AnimationDirector"/> に入る。
+    /// </summary>
+    public IReadOnlyList<EpisodeStaffBadge> AnimationCardRoles { get; set; } = Array.Empty<EpisodeStaffBadge>();
 
     /// <summary>絵コンテと演出が同一人物（同一エントリ集合）かどうかのフラグ。 true のとき、テンプレ側で「絵コンテ・演出 ○○」の 1 ライン統合表示を行う。</summary>
     public bool StoryboardDirectorMerged { get; set; }
+}
+
+/// <summary>エピソード一覧のスタッフ段の札 1 つ（役職の札と担当者の HTML 断片）。</summary>
+public sealed class EpisodeStaffBadge
+{
+    /// <summary>札の文字。クレジットの見出しの文字（role_label_text）があればそれ、無ければ役職マスタの名前。</summary>
+    public string Label { get; set; } = "";
+
+    /// <summary>札の色分けに使う役職コード（CSS の <c>data-role-code</c>）。</summary>
+    public string RoleCode { get; set; } = "";
+
+    /// <summary>札のリンク先（役職のページ）。</summary>
+    public string RoleUrl { get; set; } = "";
+
+    /// <summary>担当者の HTML 断片（PERSON は <c>&lt;a&gt;</c> でリンク化済み、「、」で連結）。</summary>
+    public string NamesHtml { get; set; } = "";
 }

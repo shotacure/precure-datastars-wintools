@@ -1702,7 +1702,11 @@ public sealed class EpisodeGenerator
         return c.MediaVersion is null ? label : $"{label}（{CreditMediaVersions.LabelOf(c.MediaVersion)}）";
     }
 
-    /// <summary>主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。</summary>
+    /// <summary>
+    /// 主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。
+    /// 読むカードと、オトナシリーズの作品の札（作画監督の代わりに作画監督と同じカードの役職を 1 役職 1 行、美術は美術デザイン）の
+    /// 決まりは <see cref="EpisodeStaffCards"/>（作品のページのエピソード一覧と共通）。
+    /// </summary>
     private IReadOnlyList<StaffRow> BuildStaffRows(IReadOnlyList<Credit> credits, Series series)
     {
         // 役職マスタは BuildContext で事前展開済み（role_code → Role）。
@@ -1747,6 +1751,19 @@ public sealed class EpisodeGenerator
         var collected = staffSpecs.ToDictionary(s => s.Label, _ => new List<string>(), StringComparer.Ordinal);
         var seen = staffSpecs.ToDictionary(s => s.Label, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
 
+        // オトナシリーズの作品は、区分 1〜3 の札はそのまま、作画監督の札の代わりに作画監督と同じカードの役職の札
+        // （札の文字ごとに 1 行。並びは最初に現れた順）を置き、美術の札には美術デザインを入れて「美術デザイン」と出す。
+        bool isOtonaWork = _ctx.IsOtonaSeries(series.SeriesId);
+        var animCardBadges = new List<(string Label, string RoleCode, List<string> Names, HashSet<string> Seen)>();
+        StaffSpec? SpecForOtona(int? bucket) => bucket switch
+        {
+            EpisodeChiefRoles.Screenplay => staffSpecs[0],
+            EpisodeChiefRoles.Storyboard => staffSpecs[1],
+            EpisodeChiefRoles.EpisodeDirector => staffSpecs[2],
+            EpisodeChiefRoles.ArtDirector => staffSpecs[4],
+            _ => null
+        };
+
         // クレジット → カード → tier → group → cardRole の順で走査して、
         // ヒット役職配下の PERSON エントリの名義を引く。
         // 階層 6 段は SiteDataLoader が事前展開済みの BuildContext.CreditTree スナップショットを辿る
@@ -1756,32 +1773,59 @@ public sealed class EpisodeGenerator
         foreach (var credit in credits)
         {
             if (!_ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cardSnapshots)) continue;
-            foreach (var cardSnap in cardSnapshots.OrderBy(c => c.Card.CardSeq))
+            // Blu-ray・配信の版のカードがあるクレジットは、本放送の版のカードを読まない（札は Blu-ray・配信の版で組む）。
+            foreach (var cardSnap in EpisodeStaffCards.CardsForStaff(cardSnapshots))
             {
-                foreach (var tierSnap in cardSnap.Tiers.OrderBy(t => t.Tier.TierNo))
+                var orderedRoles = EpisodeStaffCards.OrderedRoles(cardSnap);
+                // オトナシリーズの作品で作画監督のいるカードは、作画監督以外の役職（区分 1〜5 を除く）を札にする。
+                bool isAnimCard = isOtonaWork && EpisodeStaffCards.HasAnimationDirector(orderedRoles, _roleMap);
+                foreach (var crSnap in orderedRoles)
                 {
-                    foreach (var grpSnap in tierSnap.Groups.OrderBy(g => g.Group.GroupNo))
-                    {
-                        foreach (var crSnap in grpSnap.Roles.OrderBy(r => r.Role.OrderInGroup))
-                        {
-                            var cr = crSnap.Role;
-                            if (cr.RoleCode is null) continue;
-                            if (!roleCodeToSpec.TryGetValue(cr.RoleCode, out var spec)) continue;
+                    var cr = crSnap.Role;
+                    if (cr.RoleCode is null) continue;
 
-                            // 配下のブロックとエントリを引いて、PERSON エントリの名義のみを集める。
-                            foreach (var blockSnap in crSnap.Blocks.OrderBy(b => b.Block.BlockSeq))
+                    StaffSpec? spec = null;
+                    (string Label, string RoleCode, List<string> Names, HashSet<string> Seen)? badge = null;
+                    if (!isOtonaWork)
+                    {
+                        if (!roleCodeToSpec.TryGetValue(cr.RoleCode, out var found)) continue;
+                        spec = found;
+                    }
+                    else
+                    {
+                        spec = SpecForOtona(EpisodeStaffCards.ClassifyForWork(cr, _roleMap, isOtonaWork: true));
+                        if (spec is null)
+                        {
+                            if (!isAnimCard) continue;
+                            string? label = EpisodeStaffCards.AnimationCardBadgeLabel(cr, _roleMap);
+                            if (label is null) continue;
+                            int idx = animCardBadges.FindIndex(x => string.Equals(x.Label, label, StringComparison.Ordinal));
+                            if (idx < 0)
                             {
-                                var entries = blockSnap.Entries
-                                    .Where(e => !e.IsBroadcastOnly)
-                                    .OrderBy(e => e.EntrySeq);
-                                foreach (var e in entries)
-                                {
-                                    var (key, html) = ResolveStaffEntry(e);
-                                    if (string.IsNullOrEmpty(html)) continue;
-                                    if (seen[spec.Label].Add(key))
-                                        collected[spec.Label].Add(html);
-                                }
+                                animCardBadges.Add((label, cr.RoleCode, new List<string>(), new HashSet<string>(StringComparer.Ordinal)));
+                                idx = animCardBadges.Count - 1;
                             }
+                            badge = animCardBadges[idx];
+                        }
+                    }
+
+                    // 配下のブロックとエントリを引いて、PERSON エントリの名義のみを集める。
+                    foreach (var blockSnap in crSnap.Blocks.OrderBy(b => b.Block.BlockSeq))
+                    {
+                        var entries = blockSnap.Entries
+                            .Where(e => !e.IsBroadcastOnly)
+                            .OrderBy(e => e.EntrySeq);
+                        foreach (var e in entries)
+                        {
+                            var (key, html) = ResolveStaffEntry(e);
+                            if (string.IsNullOrEmpty(html)) continue;
+                            if (badge is { } bd)
+                            {
+                                if (bd.Seen.Add(key)) bd.Names.Add(html);
+                                continue;
+                            }
+                            if (seen[spec!.Label].Add(key))
+                                collected[spec.Label].Add(html);
                         }
                     }
                 }
@@ -1816,6 +1860,23 @@ public sealed class EpisodeGenerator
         var rows = new List<StaffRow>();
         foreach (var spec in staffSpecs)
         {
+            // オトナシリーズの作品は、作画監督の行の位置に作画監督と同じカードの役職の行を並べる。
+            if (isOtonaWork && spec.Label == "作画監督")
+            {
+                foreach (var b in animCardBadges.Where(x => x.Names.Count > 0))
+                {
+                    rows.Add(new StaffRow
+                    {
+                        RoleLabel = b.Label,
+                        RoleCode = EpisodeStaffCards.AnimationCardBadgeRoleCode,
+                        RoleUrl = PathUtil.CreatorsRoleUrlInWork(b.RoleCode, isOtonaWork),
+                        SubRoleLinks = Array.Empty<StaffRoleLink>(),
+                        NamesLine = string.Join("、", b.Names)
+                    });
+                }
+                continue;
+            }
+
             var names = collected[spec.Label];
             if (names.Count == 0) continue;
 
@@ -1845,6 +1906,20 @@ public sealed class EpisodeGenerator
             }
 
             // 通常モード：1 役職 1 行で素直に出す。
+            // オトナシリーズの作品の美術の行は美術デザイン（札の文字・色・リンク先とも美術デザイン）。
+            if (isOtonaWork && spec.Label == "美術")
+            {
+                rows.Add(new StaffRow
+                {
+                    RoleLabel = EpisodeStaffCards.OtonaArtLabel,
+                    RoleCode = EpisodeStaffCards.ArtDesignCode,
+                    RoleUrl = PathUtil.CreatorsRoleUrlInWork(EpisodeStaffCards.ArtDesignCode, isOtonaWork),
+                    SubRoleLinks = Array.Empty<StaffRoleLink>(),
+                    NamesLine = string.Join("、", names)
+                });
+                continue;
+            }
+
             rows.Add(new StaffRow
             {
                 RoleLabel = spec.Label,
@@ -1871,7 +1946,7 @@ public sealed class EpisodeGenerator
     private string? CreatorsRoleUrlFor(string preferredRoleCode, string fallbackNameJa, Series series)
     {
         bool isOtonaWork = _ctx.IsOtonaSeries(series.SeriesId);
-        // オトナシリーズの作品の美術の札は、クレジットの役職が美術監督（ART_DIRECTOR）なので、美術監督のオトナシリーズの役職のページを指す。
+        // オトナシリーズの作品で美術（ART_DIRECTOR_TV）の札を引かれたときは、オトナシリーズのクレジットの役職が美術監督（ART_DIRECTOR）なので、美術監督のオトナシリーズの役職のページを指す。
         if (isOtonaWork && string.Equals(preferredRoleCode, "ART_DIRECTOR_TV", StringComparison.Ordinal)
             && PathUtil.HasOtonaRolePage("ART_DIRECTOR"))
             return PathUtil.CreatorsOtonaRoleUrl("ART_DIRECTOR");

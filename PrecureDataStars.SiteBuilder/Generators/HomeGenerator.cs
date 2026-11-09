@@ -526,6 +526,10 @@ WHERE e.is_deleted = 0
                 EpisodeDirector = staff.EpisodeDirector,
                 AnimationDirector = staff.AnimationDirector,
                 ArtDirector = staff.ArtDirector,
+                ArtLabel = staff.ArtLabel,
+                ArtRoleCode = staff.ArtRoleCode,
+                ArtRoleUrl = staff.ArtRoleUrl,
+                AnimationCardRoles = staff.AnimationCardRoles,
                 StoryboardDirectorMerged = staff.StoryboardDirectorMerged
             };
         }).ToList();
@@ -1027,6 +1031,12 @@ WHERE e.is_deleted = 0
         public string EpisodeDirector { get; set; } = "";
         public string AnimationDirector { get; set; } = "";
         public string ArtDirector { get; set; } = "";
+        /// <summary>美術の札の文字・色分けの役職コード・リンク先（<see cref="EpisodeStaffSummary.ArtLabel"/> ほかと同じ値。オトナシリーズの作品は美術デザイン）。</summary>
+        public string ArtLabel { get; set; } = "美術";
+        public string ArtRoleCode { get; set; } = "ART_DIRECTOR_TV";
+        public string ArtRoleUrl { get; set; } = "/creators/roles/art_director_tv/";
+        /// <summary>オトナシリーズの作品で作画監督の札の代わりに並べる札（<see cref="EpisodeStaffSummary.AnimationCardRoles"/>）。</summary>
+        public IReadOnlyList<EpisodeStaffBadge> AnimationCardRoles { get; set; } = Array.Empty<EpisodeStaffBadge>();
         /// <summary>絵コンテ＝演出が同一人物のとき true（テンプレ側で 2 バッジ統合）。</summary>
         public bool StoryboardDirectorMerged { get; set; }
     }

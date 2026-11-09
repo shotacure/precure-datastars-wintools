@@ -4,6 +4,12 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：人物・企業/団体詳細の年表で、本線とスピンオフ（オトナシリーズなど）の両方を担当した役職の行を 2 段に分けた**（`RoleTimelineRow.IsSplit`〔新規〕・`_role-timeline.sbn`・`site.css` の `.rtl-row-split` / `.rtl-lane` / `.rtl-lane-spinoff`〔新規〕）：同じ役職のレギュラーとスピンオフの話の帯が同じ段に重なり、見分けにくかった。上の段に本線の印、下の段にスピンオフの帯を描き、役職名は 2 段の真ん中に 1 つ置く。片方だけの行は 1 段のまま
+
+- **サイト：オトナシリーズの役職のページの年表を、本編の役職詳細と同じ線表に戻し、横軸の帯を年度でなくオトナシリーズの作品 1 本ずつにした**（`CreatorsGenerator`〔`CreatorListPages.EpisodeLegendLabel`〔新規〕・`BuildWorksTimeline` と `WorksTimelineModel` を削除〕・`RoleTimelineBuilder.ForSeriesBands`〔新規〕・`RoleTimelineRules.EpisodeLegendLabel`〔新規〕・`creators-role-detail.sbn`・`_role-works-timeline.sbn` を削除）：作品を列にして担当した回を並べる表では、本編の役職のページと見た目がそろわず、担当の移り変わりも読めなかった。帯の幅はその作品の第 1 話から最終話の放送枠までで、帯にするのはクレジットを収録した作品だけ。凡例の話の帯の項目は「オトナ」
+
+- **サイト：線表の凡例の話の帯の項目を「TV」「スピンオフ」の短い形にし、映画の点を TV の話の帯の後ろに描くようにした**（`RoleTimelineBuilder`・`_role-timeline.sbn`・`_credit-timeline.sbn`）：凡例が「担当した話（TV）」と長く、映画の点（帯より大きい）が帯の上に重なって TV の話が見えなかった
+
 - **サイト：主題歌のカードの歌唱で、ユニット名義のメンバーのあいだの区切りを役職テンプレで指定できるようにした**（`SongRecordingSingersRepository.UnitMemberSeparatorHtml`〔新規〕・`RoleTemplateRenderer`〔`{SINGER:member_sep=…}` / `{CHORUS:member_sep=…}`〕）：メンバーは「（名前・名前…）」の「・」で決め打ちされていて、「キュア・カルテット (五條真由美、うちやえゆか、…)」のように読点で並べる作品の画面に合わせられなかった。指定の無いテンプレは今までどおり「・」
 
 - **クレジット：版を、そのクレジット・カードが出る媒体（本放送・Blu-ray・配信）の組で持つようにした**（`credits.media_version` / `credit_cards.media_version` を `SET('BROADCAST','BLURAY','STREAMING')` に・`credits.media_version_key` を varchar(32) に・マイグレーション `v1.20.0_media_version_set.sql`・`CreditMediaVersions`〔`BluRay` / `Streaming` / `Media` / `Normalize` / `IncludesBroadcast`〔新規〕・`HomeVideo` は `BLURAY,STREAMING`〕・`CardVersionLayout.Plan` / `CardVersionPlan`〔新規。`OrderVersionRuns` / `SplitVersionFrames` / `OpenBefore` / `CloseAfter` / `CarryState` を置き換え〕・`CreditTreeRenderer`・`CreditTreeIndex`・`EpisodeStaffCards.CardsForStaff`・Catalog の `CreditPreviewRenderer`・`CreditBulkInputParser` / `CreditBulkInputEncoder` の版の行・`CreditNewDialog` の版のコンボ・`site.css` の `.card-version-upper` / `.card-version-lower`〔`.card-version-broadcast` / `.card-version-homevideo` から改名〕・生成プログラム `gen_tv_episode.py` の `ver=`）：版は「本放送」と「Blu-ray・配信」の 2 つしか持てず、オトナプリキュア'23 の #5〜#8 のように Blu-ray が本放送と同じで配信だけクレジットが違う回を表せなかった。版を媒体の組にし、サイトと Catalog のプレビューの枠の見出しは組から「本放送」「Blu-ray・配信」「本放送・Blu-ray」「配信」のように作る。枠の上下と集計の本体は値ではなく並びで決め、隣どうしに並べた 2 つの版のうち前の版を上、後ろの版を下にして、後ろの版を集計の本体にする（前の版のカードは、組の後ろの版のカードにいない人だけを数える）。一括入力の版の行は媒体をカンマでつなぐ（`@broadcast,bluray`・`@streaming` など。`@broadcast` / `@homevideo` はこれまでどおり書ける）。マイグレーションは、これまでの `HOME_VIDEO` を `BLURAY,STREAMING` に移す（#1〜#4 の見た目は変わらない）

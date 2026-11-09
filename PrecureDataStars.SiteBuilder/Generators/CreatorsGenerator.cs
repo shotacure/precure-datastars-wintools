@@ -401,6 +401,12 @@ public sealed class CreatorsGenerator
             }
 
             _index = otonaIndex;
+            // オトナシリーズの役職のページの年表は、本編の役職詳細と同じ線表で、横軸の帯を年度でなくオトナシリーズの作品 1 本ずつにする
+            // （帯の幅はその作品の第 1 話から最終話の放送枠まで。ForSeriesBands）。帯にするのはクレジットを収録した作品だけ。
+            var otonaRoleTimeline = RoleTimelineBuilder.ForSeriesBands(_ctx, _ctx.Series
+                .Where(s => _ctx.IsOtonaSeries(s.SeriesId)
+                    && _ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)
+                    && eps.Any(e => _ctx.CreditsByEpisode.ContainsKey(e.EpisodeId))));
             try
             {
                 var otonaRoleEntries = new List<RoleIndexEntry>();
@@ -424,7 +430,7 @@ public sealed class CreatorsGenerator
                         var debutRows = combinedRoleRowSets.TryGetValue(role.RoleCode, out var combinedRowSet)
                             ? OtonaDebutRows(combinedRowSet, rows, mainCounts)
                             : rowSet.DebutRows;
-                        roleUrl = GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline, otonaPages, debutRows);
+                        roleUrl = GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, otonaRoleTimeline, otonaPages, debutRows);
                         _page.RecordWritten(roleUrl, "creators");
                         writtenOtonaRoles.Add(role.RoleCode);
                     }
@@ -548,14 +554,14 @@ public sealed class CreatorsGenerator
     /// <param name="RoleTitleSuffix">役職のページの題の括弧書き（「脚本（クリエイター）」の「クリエイター」）。</param>
     /// <param name="RoleMetaScope">役職のページの meta description で、担当した作品の範囲を表す語。</param>
     /// <param name="EpisodeBadgeLabel">役職のページの OGP カードで、話数のバッジに付ける語（本編は「TV」、オトナシリーズは「オトナ」）。</param>
-    /// <param name="WorksTimeline">役職のページの年表を、年度の目盛りの線表でなく作品の目盛りの表（<see cref="BuildWorksTimeline"/>）にするか。オトナシリーズの組だけ。</param>
+    /// <param name="EpisodeLegendLabel">役職のページの年表の凡例の、話の帯の項目の文字（本編は「TV」、オトナシリーズは「オトナ」）。</param>
     /// <param name="CountSortStart">参加回数順・担当回数順の並べ替えのボタンの最初の種類（count-sort.js の data-count-sort-start。空なら既定の最初の種類）。</param>
     private sealed record CreatorListPages(
         string StaffUrl, string StaffTitle, string StaffMetaDescription, string StaffOgLead,
         string VoiceCastUrl, string VoiceCastTitle, string VoiceCastMetaDescription, string VoiceCastOgLead,
         string EpisodePillClass, string EpisodePillEmoji, bool RecordsMembership, bool ShowsCoverage,
         Func<string, string> RoleUrlOf, string StaffLinkLabel, string RoleTitleSuffix, string RoleMetaScope, string EpisodeBadgeLabel,
-        bool WorksTimeline, string CountSortStart);
+        string CountSortStart, string EpisodeLegendLabel);
 
     /// <summary>本編（TV と映画）のスタッフ一覧・声の出演一覧。</summary>
     private static readonly CreatorListPages MainListPages = new(
@@ -576,8 +582,8 @@ public sealed class CreatorsGenerator
         RoleTitleSuffix: "クリエイター",
         RoleMetaScope: "歴代プリキュアシリーズ",
         EpisodeBadgeLabel: "TV",
-        WorksTimeline: false,
-        CountSortStart: "");
+        CountSortStart: "",
+        EpisodeLegendLabel: "TV");
 
     /// <summary>
     /// オトナシリーズ（種別 OTONA）のスタッフ一覧・声の出演一覧。
@@ -609,8 +615,8 @@ public sealed class CreatorsGenerator
             RoleTitleSuffix: "オトナシリーズ",
             RoleMetaScope: "大人向けシリーズ",
             EpisodeBadgeLabel: "オトナ",
-            WorksTimeline: true,
-            CountSortStart: "otona");
+            CountSortStart: "otona",
+            EpisodeLegendLabel: "オトナ");
     }
 
     // 役職詳細
@@ -1111,10 +1117,8 @@ public sealed class CreatorsGenerator
             NameHistory = BuildRoleNameHistory(memberCodes, roleByCode),
             // 年表に主な方の行として載った記録（OGP カードの年表の判定）は本編の組だけに付ける。
             // 年表の凡例の関連する役職は、このページと同じ組の役職のページへリンクする。
-            // 作品の目盛りの年表（WorksTimeline）の組では、年度の目盛りの線表は作らない。
-            Timeline = pages.WorksTimeline ? null : RecordTimelineRowsIf(pages.RecordsMembership,
-                roleTimeline.Build(rowSet.TimelineEntities, RoleTimelineRules.Staff with { RelatedRoleUrl = pages.RoleUrlOf })),
-            WorksTimeline = pages.WorksTimeline ? BuildWorksTimeline(rowSet.TimelineEntities) : null,
+            Timeline = RecordTimelineRowsIf(pages.RecordsMembership,
+                roleTimeline.Build(rowSet.TimelineEntities, RoleTimelineRules.Staff with { RelatedRoleUrl = pages.RoleUrlOf, EpisodeLegendLabel = pages.EpisodeLegendLabel })),
             CountSortStart = pages.CountSortStart,
             CoverageLabel = pages.ShowsCoverage ? _ctx.CreditCoverageLabel : "",
             // 個人と団体が両方そろっているときだけ entity-filter を出すための件数（片方だけの役職では絞り込みが無意味）。
@@ -2479,56 +2483,6 @@ public sealed class CreatorsGenerator
         return result;
     }
 
-    /// <summary>
-    /// 作品の目盛りの年表（オトナシリーズの役職のページ）。列はこの役職の担当がある作品を放送順に並べ、作品名の後ろに放送開始の年を添える。
-    /// 行は人物・企業/団体ごとに、初めて担当した順（初めて担当した話の放送日、同じ日ならクレジットの位置）に並べ、升にはその作品で担当した回を
-    /// 「#1～4」の形で入れる（作品全体のクレジットだけのときは「全話」）。行が無ければ null（年表タブを出さない）。
-    /// </summary>
-    private WorksTimelineModel? BuildWorksTimeline(IReadOnlyList<RoleTimelineEntity> entities)
-    {
-        if (entities.Count == 0) return null;
-        var seriesIds = entities.SelectMany(e => e.Episodes.Select(k => k.SeriesId).Concat(e.MovieSeriesIds))
-            .Distinct()
-            .Where(sid => _ctx.SeriesById.ContainsKey(sid))
-            .OrderBy(sid => _ctx.SeriesById[sid].StartDate).ThenBy(sid => sid)
-            .ToList();
-        if (seriesIds.Count == 0) return null;
-
-        var columns = seriesIds.Select(sid => _ctx.SeriesById[sid]).Select(s => new WorksTimelineColumn
-        {
-            SeriesTitle = s.Title,
-            SeriesUrl = PathUtil.SeriesUrl(s.Slug),
-            YearLabel = s.StartDate.Year.ToString(System.Globalization.CultureInfo.InvariantCulture)
-        }).ToList();
-
-        // 初めて担当した日（話の放送日。作品全体のクレジット・映画は作品の開始日）。
-        DateOnly FirstDate(RoleTimelineEntity e)
-        {
-            var dates = e.Episodes.Select(k => k.EpisodeId != 0 && _ctx.EpisodeById.TryGetValue(k.EpisodeId, out var ep)
-                    ? ep.OnAirDate : _ctx.SeriesStartDate(k.SeriesId))
-                .Concat(e.MovieSeriesIds.Select(sid => _ctx.SeriesStartDate(sid)));
-            return dates.DefaultIfEmpty(DateOnly.MaxValue).Min();
-        }
-        var rows = entities
-            .OrderBy(FirstDate).ThenBy(e => e.FirstSortPos)
-            .ThenBy(e => e.EntityName, StringComparer.Ordinal)
-            .Select(e => new WorksTimelineRow
-            {
-                EntityKind = e.EntityKind,
-                EntityName = e.EntityName,
-                EntityUrl = e.EntityUrl,
-                Cells = seriesIds.Select(sid =>
-                {
-                    var epNos = e.Episodes.Where(k => k.SeriesId == sid && k.EpisodeId != 0)
-                        .Select(k => _ctx.EpisodeSeriesEpNo(sid, k.EpisodeId)).ToList();
-                    if (epNos.Count > 0) return EpisodeRangeCompressor.Compress(epNos);
-                    return e.Episodes.Any(k => k.SeriesId == sid) || e.MovieSeriesIds.Contains(sid) ? "全話" : "";
-                }).ToList()
-            })
-            .ToList();
-        return new WorksTimelineModel { Columns = columns, Rows = rows };
-    }
-
     // 声の出演
 
     /// <summary>
@@ -3856,33 +3810,8 @@ public sealed class CreatorsGenerator
         public string EpisodePillClass { get; set; } = "";
         public string EpisodePillEmoji { get; set; } = "";
         /// <summary>年表タブの作品の目盛りの表（オトナシリーズの役職のページだけ。入っているときは <see cref="Timeline"/> の代わりに出す）。</summary>
-        public WorksTimelineModel? WorksTimeline { get; set; }
         /// <summary>担当回数順の並べ替えのボタンの最初の種類（count-sort.js の data-count-sort-start。空なら付けない）。</summary>
         public string CountSortStart { get; set; } = "";
-    }
-
-    /// <summary>作品の目盛りの年表（列＝作品、行＝人物・企業/団体、升＝その作品で担当した回の範囲）。</summary>
-    private sealed class WorksTimelineModel
-    {
-        public IReadOnlyList<WorksTimelineColumn> Columns { get; init; } = Array.Empty<WorksTimelineColumn>();
-        public IReadOnlyList<WorksTimelineRow> Rows { get; init; } = Array.Empty<WorksTimelineRow>();
-    }
-
-    /// <summary>作品の目盛りの年表の列（作品名と放送開始の年）。</summary>
-    private sealed class WorksTimelineColumn
-    {
-        public string SeriesTitle { get; init; } = "";
-        public string SeriesUrl { get; init; } = "";
-        public string YearLabel { get; init; } = "";
-    }
-
-    /// <summary>作品の目盛りの年表の行。<see cref="Cells"/> は列の順に、その作品で担当した回の範囲（「#1～4」。担当が無ければ空）。</summary>
-    private sealed class WorksTimelineRow
-    {
-        public string EntityKind { get; init; } = "";
-        public string EntityName { get; init; } = "";
-        public string EntityUrl { get; init; } = "";
-        public IReadOnlyList<string> Cells { get; init; } = Array.Empty<string>();
     }
 
     /// <summary>歌系役職詳細ページ用の表示モデル。 既存 <see cref="RoleDetailModel"/> と並列に置く別 DTO。初参加順タブは持たない。</summary>

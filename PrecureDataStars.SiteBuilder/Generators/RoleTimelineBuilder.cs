@@ -67,6 +67,9 @@ internal sealed class RoleTimelineBuilder
     /// <summary>参加のある期間だけの軸（<see cref="ForParticipation"/>）で、続かない帯のあいだに置く切れ目の幅（日）。</summary>
     private const int ScopedGapDays = 91;
 
+    /// <summary>作品ごとの帯の軸（<see cref="ForSeriesBands"/>）で、作品の帯のあいだに置く切れ目の幅（日）。</summary>
+    private const int SeriesBandGapDays = 14;
+
     private readonly BuildContext _ctx;
     private readonly DateOnly _axisStart;
     private readonly int _axisDays;
@@ -105,6 +108,58 @@ internal sealed class RoleTimelineBuilder
     {
         DateOnly? last = dates.Count > 0 ? dates.Max() : null;
         return new RoleTimelineBuilder(ctx, last?.AddDays(1), dates);
+    }
+
+    /// <summary>
+    /// 作品ごとの帯の軸を作る（オトナシリーズの役職のページの年表）。帯は渡した作品 1 本につき 1 本で、幅はその作品の第 1 話の放送日から
+    /// 最終話の放送枠の終わりまで。年度（本編の TV シリーズ）の帯は使わない。作品が 2 本以上なら放送順に並べ、帯のあいだに
+    /// <see cref="SeriesBandGapDays"/> 日ぶんの切れ目を置く。話の無い作品は帯にしない。帯が 1 本も無ければ <see cref="Build"/> は常に null を返す。
+    /// </summary>
+    public static RoleTimelineBuilder ForSeriesBands(BuildContext ctx, IEnumerable<Series> series)
+        => new RoleTimelineBuilder(ctx, series.OrderBy(s => s.StartDate).ThenBy(s => s.SeriesId).ToList());
+
+    private RoleTimelineBuilder(BuildContext ctx, IReadOnlyList<Series> bandSeries)
+    {
+        _ctx = ctx;
+        _bands = Array.Empty<RoleTimelineBand>();
+        _ticks = Array.Empty<RoleTimelineTick>();
+        _tickDensityClass = "";
+
+        var pieces = new List<AxisPiece>();
+        var kept = new List<(Series S, int Left, int Days)>();
+        var gapStarts = new List<int>();
+        int offset = 0;
+        foreach (var s in bandSeries)
+        {
+            if (!ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps) || eps.Count == 0) continue;
+            var start = eps.Min(e => e.OnAirDate);
+            var end = eps.Max(e => e.OnAirDate).AddDays(EpisodeSpanDays);
+            if (pieces.Count > 0)
+            {
+                gapStarts.Add(offset);
+                offset += SeriesBandGapDays;
+            }
+            pieces.Add(new AxisPiece(start, end, offset));
+            int days = end.DayNumber - start.DayNumber;
+            kept.Add((s, offset, days));
+            offset += days;
+        }
+        if (pieces.Count == 0) return;
+
+        _axisStart = pieces[0].Start;
+        _axisDays = offset;
+        _pieces = pieces;
+        string P(int day) => Num((double)day / offset * 100);
+        _bands = kept.Select((k, i) => new RoleTimelineBand { Left = P(k.Left), Width = P(k.Days), IsAlt = i % 2 == 1 }).ToList();
+        _ticks = kept.Select(k => new RoleTimelineTick
+        {
+            Left = P(k.Left),
+            YearLabel = k.S.StartDate.Year.ToString(CultureInfo.InvariantCulture),
+            SeriesTitle = k.S.Title,
+            SeriesUrl = PathUtil.SeriesUrl(k.S.Slug),
+            ShowLabel = true
+        }).ToList();
+        _gaps = gapStarts.Select(g => new RoleTimelineGap { Left = P(g), Width = P(SeriesBandGapDays) }).ToList();
     }
 
     /// <param name="ctx">ビルド全体の共有データ。</param>
@@ -324,9 +379,9 @@ internal sealed class RoleTimelineBuilder
 
         var legend = new List<RoleTimelineLegendItem>();
         if (ordered.Any(r => r.Row.Segments.Count > 0))
-            legend.Add(new RoleTimelineLegendItem { Kind = "tv", Label = $"{rules.Verb}した話（TV）" });
+            legend.Add(new RoleTimelineLegendItem { Kind = "tv", Label = rules.EpisodeLegendLabel });
         if (ordered.Any(r => r.Row.SpinOffSegments.Count > 0))
-            legend.Add(new RoleTimelineLegendItem { Kind = "spinoff", Label = $"{rules.Verb}した話（スピンオフ）" });
+            legend.Add(new RoleTimelineLegendItem { Kind = "spinoff", Label = "スピンオフ" });
         if (ordered.Any(r => r.Row.Movies.Count > 0))
             legend.Add(new RoleTimelineLegendItem { Kind = "movie", Label = "映画" });
         if (ordered.Any(r => r.Row.Songs.Count > 0))
@@ -939,6 +994,9 @@ internal sealed record RoleTimelineRules(
     /// </summary>
     public Func<string, string>? RelatedRoleUrl { get; init; }
 
+    /// <summary>凡例の話の帯の項目の文字（本編は「TV」、オトナシリーズの役職のページは「オトナ」）。</summary>
+    public string EpisodeLegendLabel { get; init; } = "TV";
+
     /// <summary>全員を載せる決まりのページの条件（スイッチを出さない）。</summary>
     private static readonly IReadOnlyList<string> NoFilter = Array.Empty<string>();
 
@@ -1201,6 +1259,13 @@ internal sealed class RoleTimelineRow
     public int FlatOrder { get; set; }
     /// <summary>TV の話を描いた行か（「TVのみ」で見せる行。関連する役職の担当は数えない）。</summary>
     public bool HasTv => Segments.Count > 0;
+
+    /// <summary>
+    /// 行を 2 段に分けるか。スピンオフの話の帯と、本線の印（TV の話・映画・歌・劇伴・盤）の両方がある行だけ、上の段に本線、
+    /// 下の段にスピンオフの帯を描く（名前は 2 段の真ん中に 1 つ）。
+    /// </summary>
+    public bool IsSplit => SpinOffSegments.Count > 0
+        && (Segments.Count > 0 || Movies.Count > 0 || Songs.Count > 0 || Bgms.Count > 0 || Products.Count > 0);
     /// <summary>映画を描いた行か（「映画のみ」で見せる行。関連する役職の担当は数えない）。</summary>
     public bool HasMovie => Movies.Count > 0;
     /// <summary>会社の行（<see cref="IsGroupHead"/>）の下にまとめた所属の人に、TV の話を描いた行があるか。</summary>

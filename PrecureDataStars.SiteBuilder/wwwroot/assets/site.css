@@ -11893,5 +11893,10 @@ a.staff-combo-nav-card:hover {
 /* 人物・企業/団体詳細の年表で、スピンオフの話の帯と凡例の見本（記念日カレンダーの 🌙 と同じ藍）。 */
 .rtl-seg-spinoff { background: #3f4a9e; }
 .rtl-key-spinoff { width: 18px; height: 10px; border-radius: 3px; background: #3f4a9e; }
+/* 本線の印とスピンオフの帯の両方がある行は 2 段にする（上の段に本線、下の段にスピンオフ。名前は行の真ん中のまま）。
+   段の中の印は、これまでどおり段の上下の真ん中（top: 50%）に置く。 */
+.rtl-row-split { height: 40px; }
+.rtl-lane { position: absolute; left: 0; right: 0; top: 0; height: 50%; }
+.rtl-lane-spinoff { top: 50%; }
 /* 人物・企業/団体詳細の年表の役職の行の印（札）。役柄の行はキャラクターの星（.rtl-badge-character）。 */
 .rtl-badge-role { background: rgba(59, 130, 196, 0.12); color: #2563a8; }

@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：人物・企業/団体詳細の年表の凡例で、スピンオフの帯がどれもオトナシリーズの話なら項目を「オトナ」にした**（`RoleTimelineRow.HasNonOtonaSpinOff`〔新規〕・`RoleTimelineBuilder`）：オトナシリーズの話の帯にも凡例が「スピンオフ」と出ていた。ショート・スピンオフの話の帯が 1 本でもあれば、今までどおり「スピンオフ」。凡例の並びは「TV」「映画」「オトナ（スピンオフ）」の順にした（スピンオフが映画の前に出ていた）
+
 - **サイト：本編の作品で総作画監督がいる回は、各話のスタッフの札に総作画監督を作画監督の前に出すようにした**（`EpisodeStaffCards.ChiefAnimationDirectorCode` / `ChiefAnimationDirectorLabel` / `IsChiefAnimationDirector`〔新規〕・`EpisodeStaffSummary.ChiefAnimationDirector` / `ChiefAnimationDirectorUrl`〔新規〕・`SeriesGenerator.ExtractStaffSummaryAsync`・`EpisodeGenerator.BuildStaffRows`・`HomeGenerator`・`EpisodesIndexGenerator`・`series-detail.sbn`・`home.sbn`・`episodes-index.sbn`：作品のエピソード一覧・エピソード詳細のスタッフ欄・トップページのエピソード欄・/episodes/ の札は脚本・絵コンテ・演出・作画監督・美術の 5 つで、総作画監督を拾っていなかった。札は作画監督と同じ緑で、総作画監督の役職のページを指す。エピソード詳細の OGP カードも同じ並び。各話のチーフの区分〔記念日カレンダー・歴代記録〕には入れない。オトナシリーズの作品は今までどおり、作画監督と同じカードの役職の札で出す）
 
 - **サイト：シリーズ一覧のオトナシリーズの作品のカードと作品詳細に、出たプリキュアを出し、一覧のカードにメインスタッフを出すようにした**（`SeriesGenerator`〔`BuildPrecureRowsBySeriesCacheAsync`・`BuildKeyStaffSummaryBySeriesCacheAsync`・`OrderCreditsForPrecureScan`〔新規〕〕・`_series-card-simple.sbn`・`series-index.sbn`：オトナシリーズ・ショート・イベント・スピンオフのカードは題名・期間・話数しか描かず、メインスタッフの集計も TV と映画だけで、オトナシリーズの作品には作品とプリキュアのつなぎも無いので、どちらも空だった。オトナシリーズの作品のプリキュアは、各話のクレジットの声の出演から話数順に引き、すべて TV と同じ表記〔変身前 / 変身後 (CV)〕で出す〔series_precures には行を持たないので本編の数には混ざらない〕。一覧のカードのメインスタッフは作品詳細と同じ 5 役職〔美術は美術監督〕で、役職の札はオトナシリーズの役職のページを指す。カードの部品はプリキュアとスタッフの行が組まれている作品だけ TV のカードと同じ形で描くので、メインスタッフの集計があったイベントの作品にも出る）

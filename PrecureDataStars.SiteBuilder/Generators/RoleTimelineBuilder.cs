@@ -389,10 +389,17 @@ internal sealed class RoleTimelineBuilder
         var legend = new List<RoleTimelineLegendItem>();
         if (ordered.Any(r => r.Row.Segments.Count > 0))
             legend.Add(new RoleTimelineLegendItem { Kind = "tv", Label = rules.EpisodeLegendLabel });
-        if (ordered.Any(r => r.Row.SpinOffSegments.Count > 0))
-            legend.Add(new RoleTimelineLegendItem { Kind = "spinoff", Label = "スピンオフ" });
+        // 凡例の並びは TV、映画、スピンオフ（オトナ）の順。
         if (ordered.Any(r => r.Row.Movies.Count > 0))
             legend.Add(new RoleTimelineLegendItem { Kind = "movie", Label = "映画" });
+        // スピンオフの帯の項目は、帯がどれもオトナシリーズ（大人向けスピンオフ）の話なら「オトナ」、
+        // それ以外のスピンオフ（ショート・スピンオフ）の話が 1 本でもあれば「スピンオフ」。
+        if (ordered.Any(r => r.Row.SpinOffSegments.Count > 0))
+            legend.Add(new RoleTimelineLegendItem
+            {
+                Kind = "spinoff",
+                Label = ordered.Any(r => r.Row.HasNonOtonaSpinOff) ? "スピンオフ" : "オトナ",
+            });
         if (ordered.Any(r => r.Row.Songs.Count > 0))
             legend.Add(new RoleTimelineLegendItem { Kind = "song", Label = "歌（初めて盤に収められた日）" });
         if (ordered.Any(r => r.Row.Bgms.Count > 0))
@@ -675,6 +682,8 @@ internal sealed class RoleTimelineBuilder
         var spans = new List<RoleTimelineMark>(chains.Count);
         var segments = new List<RoleTimelineMark>();
         var spinOffSegments = new List<RoleTimelineMark>();
+        // スピンオフの帯に、オトナシリーズ以外のスピンオフの話が入ったか（凡例の文字を決める）。
+        bool hasNonOtonaSpinOff = false;
         var movies = new List<RoleTimelineMark>();
         // 映画の段を分けるかの判定に使う、本線の TV の話の帯（関連する役職の帯を含む）の期間と映画（関連する役職の映画を含む）の公開日。
         var tvRanges = new List<(DateOnly Start, DateOnly End)>();
@@ -696,6 +705,7 @@ internal sealed class RoleTimelineBuilder
             foreach (var bySeries in chain.Where(c => c.Kind == CreditKind.Tv).GroupBy(c => c.SeriesId))
             {
                 var segTarget = rules.SeparateSpinOffs && _ctx.IsSpinOffSeries(bySeries.Key) ? spinOffSegments : segments;
+                if (ReferenceEquals(segTarget, spinOffSegments) && !_ctx.IsOtonaSeries(bySeries.Key)) hasNonOtonaSpinOff = true;
                 var eps = bySeries.OrderBy(c => c.EpNo).ToList();
                 int runStart = 0;
                 for (int i = 1; i <= eps.Count; i++)
@@ -860,6 +870,7 @@ internal sealed class RoleTimelineBuilder
             Spans = spans,
             Segments = segments,
             SpinOffSegments = spinOffSegments,
+            HasNonOtonaSpinOff = hasNonOtonaSpinOff,
             Movies = movies,
             MovieLane = movieLane,
             Songs = songs,
@@ -1379,6 +1390,11 @@ internal sealed class RoleTimelineRow
     public IReadOnlyList<RoleTimelineMark> Segments { get; set; } = Array.Empty<RoleTimelineMark>();
     /// <summary>スピンオフの話の帯（<see cref="RoleTimelineRules.SeparateSpinOffs"/> の線表だけ。ほかの線表では <see cref="Segments"/> に入る）。</summary>
     public IReadOnlyList<RoleTimelineMark> SpinOffSegments { get; set; } = Array.Empty<RoleTimelineMark>();
+    /// <summary>
+    /// <see cref="SpinOffSegments"/> に、オトナシリーズ（大人向けスピンオフ）以外のスピンオフの話の帯が入っているか。
+    /// 凡例のスピンオフの帯の項目を「オトナ」にするか「スピンオフ」にするかを決める。
+    /// </summary>
+    public bool HasNonOtonaSpinOff { get; set; }
     /// <summary>映画の点（<see cref="RoleTimelineMark.Width"/> は使わない）。</summary>
     public IReadOnlyList<RoleTimelineMark> Movies { get; set; } = Array.Empty<RoleTimelineMark>();
     /// <summary>歌の点（同じ日に出た曲は 1 つ。<see cref="RoleTimelineMark.Width"/> は使わない）。</summary>

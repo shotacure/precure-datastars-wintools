@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：robots.txt で、AI の学習に使ってよいクローラを OpenAI と Anthropic だけにした**（`SeoGenerator.BlockedCrawlerUserAgents`・robots.txt の頭のコメント）：GPTBot・ChatGPT-User・ClaudeBot・anthropic-ai・Claude-Web を断るのをやめ、`User-agent: *` の全許可で通す（Claude-User・Claude-SearchBot・OAI-SearchBot も通る）。ほかの会社の学習用クローラは今までどおり断り、Meta-ExternalAgent・cohere-training-data-crawler・AI2Bot・Ai2Bot-Dolma・PanguBot・Timpibot・ImagesiftBot・img2dataset を足した
+
 - **サイト：シリーズ一覧のカードとシリーズ詳細のメインスタッフの役職のバッジを、画面の役職の表記で出すようにした**（`Involvement.RoleLabelText`〔新規〕・`CreditInvolvementIndex`・`SeriesGenerator`〔`KeyStaffMember.CreditedRoleLabel` / `MainStaffRow.CreditedRoleLabel`〔新規〕・`BuildKeyStaffSummaryBySeriesCacheAsync`・`BuildMainStaffSectionsAsync`〕）：バッジは役職ごとに決めた名前で出していたので、画面では「企画」の映画（39 作品）でも「プロデューサー」と出ていた。同じ役職でも表記の違う人は表記ごとに別のバッジに分ける
 
 - **サイト：「このページを引用する」のボックスを既定で閉じ、シェアボタンの並びに足した「引用」ボタンで開閉するようにした。トップページの引用文のページ名が空だったのを、サイト名にした**（`_share-buttons.sbn`・`_cite-box.sbn`・`cite-box.js`・`site.css` の `.share-button-cite`〔新規〕・`.cite-box-heading` を削除）：全ページの本文の末尾で、シェアボタンの下にいつも大きな箱を出していて場所を取っていた。トップページはページ名が無いので、引用文が `"". プリキュアデータベース …` になっていた

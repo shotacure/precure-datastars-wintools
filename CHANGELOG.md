@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：プライバシーポリシーの「無効化・オプトアウトの方法」から、パーソナライズ広告の設定の案内を外した**（`privacy.sbn`）：当サイトは広告配信サービスを使っていないので、Google アカウントの広告設定の案内は当てはまらなかった
+
 - **サイト：運営情報のページ（このサイトについて・プライバシーポリシー・免責事項・お問い合わせ）の文を 7 か所直した**（`about.sbn`・`privacy.sbn`・`disclaimer.sbn`・`contact.sbn`）：主語と述語のねじれ（プライバシーポリシーの GA4 の 2 文）、片方だけの「〜たり」（免責事項の画像の転載）、「」の無いページ名（免責事項の配信音源の案内）、同じことを 2 文で言う返信の案内（お問い合わせ）、「まとめた」と体言止めの結び（このサイトについて）を直した。プライバシーポリシーと免責事項の改定日を 2026年11月11日にした
 
 - **サイト：robots.txt で、AI の学習に使ってよいクローラを OpenAI と Anthropic だけにした**（`SeoGenerator.BlockedCrawlerUserAgents`・robots.txt の頭のコメント）：GPTBot・ChatGPT-User・ClaudeBot・anthropic-ai・Claude-Web を断るのをやめ、`User-agent: *` の全許可で通す（Claude-User・Claude-SearchBot・OAI-SearchBot も通る）。ほかの会社の学習用クローラは今までどおり断り、Meta-ExternalAgent・cohere-training-data-crawler・AI2Bot・Ai2Bot-Dolma・PanguBot・Timpibot・ImagesiftBot・img2dataset を足した

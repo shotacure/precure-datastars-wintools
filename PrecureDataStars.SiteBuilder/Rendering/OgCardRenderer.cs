@@ -1703,7 +1703,7 @@ public sealed partial class OgCardRenderer : IDisposable
                     string remaining = token;
                     while (remaining.Length > 0)
                     {
-                        string chunk = TakeFittingPrefix(remaining, valueFont, paint, maxWidth - used);
+                        string chunk = TakeFittingPrefix(remaining, valueFont, paint, maxWidth - used, prose);
                         if (chunk.Length == 0)
                         {
                             if (NewLine(hang)) continue;
@@ -1719,6 +1719,15 @@ public sealed partial class OgCardRenderer : IDisposable
                         lines[^1].Add(new FactPiece(chunk, Foreground, false, 0f));
                         used += Measure(valueFont, chunk);
                         remaining = remaining[chunk.Length..];
+                        if (remaining.Length == 0) break;
+                        // 残りがあるなら、ここが折る位置。行に残った幅へ続きを詰めず（禁則で手前へ戻した字が元の行に戻ってしまう）、必ず次の行へ送る。
+                        // 文章は、折った位置に続く空白を次の行の頭に残さない。
+                        if (prose) remaining = remaining.TrimStart(' ');
+                        if (NewLine(hang)) continue;
+                        if (prose) EllipsizeLastLine(lines[^1], labelFont, valueFont, noteFont, paint, maxWidth);
+                        else truncated = true;
+                        stop = true;
+                        break;
                     }
                     if (stop) break;
                     continue;
@@ -1763,10 +1772,14 @@ public sealed partial class OgCardRenderer : IDisposable
     }
 
     /// <summary>
-    /// 指定幅に収まる最長の先頭部分を返す。切れ目が行頭禁則文字に当たる場合は 1 文字手前で切る。
+    /// 指定幅に収まる最長の先頭部分を返す。切れ目が行頭禁則文字に当たる場合は、次の行の頭が禁則でなくなるまで手前で切る。
     /// 1 文字も入らない場合は空文字（呼び出し側が改行する合図）。
     /// </summary>
-    private string TakeFittingPrefix(string text, SKFont font, SKPaint paint, float maxWidth)
+    /// <param name="prose">
+    /// 文章として折るか。true なら説明文・リード文（<see cref="WrapText"/> の文章の折り方）と同じ位置で切る
+    /// （行頭禁則の字の前・開き括弧の後ろ・欧文の単語の途中・数と単位の間を避ける）。
+    /// </param>
+    private string TakeFittingPrefix(string text, SKFont font, SKPaint paint, float maxWidth, bool prose = false)
     {
         if (maxWidth <= 0f) return "";
         if (Measure(font, text) <= maxWidth) return text;
@@ -1779,8 +1792,17 @@ public sealed partial class OgCardRenderer : IDisposable
         }
         if (take == 0) return "";
 
-        // 次の行の頭が禁則文字にならないよう 1 文字戻す。
-        if (take < text.Length && LineStartForbidden.Contains(text[take]) && take > 1) take--;
+        if (take >= text.Length) return text;
+
+        if (prose)
+        {
+            // 溢れた字の前から順に遡り、折ってよい最初の位置で切る。行の 4 割より前にしか無ければ、溢れた字の前で切る。
+            int at = LastProseBreak(text[..(take + 1)]);
+            return text[..(at < (take + 1) * 0.4f ? take : at)];
+        }
+
+        // 次の行の頭が禁則文字にならないよう戻す。「！』」のように禁則の文字が続くときは、禁則でなくなるまで繰り返す。
+        while (take > 1 && LineStartForbidden.Contains(text[take])) take--;
         return text[..take];
     }
 

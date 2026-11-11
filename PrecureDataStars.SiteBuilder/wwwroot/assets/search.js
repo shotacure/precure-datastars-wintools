@@ -43,7 +43,9 @@
     'company':   '企業・団体',
     'song':      '歌',
     'product':   '商品',
-    'book':      '書籍'
+    'book':      '書籍',
+    'role':      '役職',
+    'font':      'フォント'
   };
 
   // 結果並び替え用：種別の表示優先順位。同点（マッチスコア）の場合の順序を決める。
@@ -57,7 +59,9 @@
     'company':   6,
     'song':      7,
     'product':   8,
-    'book':      9
+    'book':      9,
+    'role':      10,
+    'font':      11
   };
 
   /** クエリ文字列を正規化する。SearchIndexGenerator.NormalizeForSearch と対応する処理。 */

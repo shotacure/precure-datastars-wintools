@@ -67,9 +67,6 @@ internal sealed class RoleTimelineBuilder
     /// <summary>参加のある期間だけの軸（<see cref="ForParticipation"/>）で、続かない帯のあいだに置く切れ目の幅（日）。</summary>
     private const int ScopedGapDays = 91;
 
-    /// <summary>作品ごとの帯の軸（<see cref="ForSeriesBands"/>）で、作品の帯のあいだに置く切れ目の幅（日）。</summary>
-    private const int SeriesBandGapDays = 14;
-
     /// <summary>映画の公開日が TV の話の帯にこの日数（前後 3 か月。幅 180 日）まで近ければ、重なるとみて映画を別の段に分ける（線表の幅では 3 か月ほどで点と帯が重なる）。</summary>
     private const int MovieLaneMarginDays = 90;
 
@@ -120,55 +117,36 @@ internal sealed class RoleTimelineBuilder
     }
 
     /// <summary>
-    /// 作品ごとの帯の軸を作る（オトナシリーズの役職のページの年表）。帯は渡した作品 1 本につき 1 本で、幅はその作品の第 1 話の放送日から
-    /// 最終話の放送枠の終わりまで。年度（本編の TV シリーズ）の帯は使わない。作品が 2 本以上なら放送順に並べ、帯のあいだに
-    /// <see cref="SeriesBandGapDays"/> 日ぶんの切れ目を置く。話の無い作品は帯にしない。帯が 1 本も無ければ <see cref="Build"/> は常に null を返す。
+    /// 線表に載せる候補の参加の日付（TV の話の放送日・映画の公開日）をすべて集める。ページの範囲の外の参加
+    /// （<see cref="RoleTimelineEntity.GuestEpisodes"/> / <see cref="RoleTimelineEntity.GuestMovieSeriesIds"/>）と、関連する役職の担当の日付も含める。
+    /// オトナシリーズの役職のページ・声の出演一覧で、載っている方の参加のある期間だけの軸（<see cref="ForParticipation"/>）を作るのに使う。
     /// </summary>
-    public static RoleTimelineBuilder ForSeriesBands(BuildContext ctx, IEnumerable<Series> series)
-        => new RoleTimelineBuilder(ctx, series.OrderBy(s => s.StartDate).ThenBy(s => s.SeriesId).ToList());
-
-    private RoleTimelineBuilder(BuildContext ctx, IReadOnlyList<Series> bandSeries)
+    public static IReadOnlyCollection<DateOnly> ParticipationDates(BuildContext ctx, IEnumerable<RoleTimelineEntity> entities)
     {
-        _ctx = ctx;
-        _bands = Array.Empty<RoleTimelineBand>();
-        _ticks = Array.Empty<RoleTimelineTick>();
-        _tickDensityClass = "";
-
-        var pieces = new List<AxisPiece>();
-        var kept = new List<(Series S, int Left, int Days)>();
-        var gapStarts = new List<int>();
-        int offset = 0;
-        foreach (var s in bandSeries)
+        var dates = new HashSet<DateOnly>();
+        void Episodes(IEnumerable<(int SeriesId, int EpisodeId)> eps)
         {
-            if (!ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps) || eps.Count == 0) continue;
-            var start = eps.Min(e => e.OnAirDate);
-            var end = eps.Max(e => e.OnAirDate).AddDays(EpisodeSpanDays);
-            if (pieces.Count > 0)
-            {
-                gapStarts.Add(offset);
-                offset += SeriesBandGapDays;
-            }
-            pieces.Add(new AxisPiece(start, end, offset));
-            int days = end.DayNumber - start.DayNumber;
-            kept.Add((s, offset, days));
-            offset += days;
+            foreach (var (_, eid) in eps)
+                if (eid != 0 && ctx.EpisodeById.TryGetValue(eid, out var ep)) dates.Add(ep.OnAirDate);
         }
-        if (pieces.Count == 0) return;
-
-        _axisStart = pieces[0].Start;
-        _axisDays = offset;
-        _pieces = pieces;
-        string P(int day) => Num((double)day / offset * 100);
-        _bands = kept.Select((k, i) => new RoleTimelineBand { Left = P(k.Left), Width = P(k.Days), IsAlt = i % 2 == 1 }).ToList();
-        _ticks = kept.Select(k => new RoleTimelineTick
+        void Movies(IEnumerable<int> seriesIds)
         {
-            Left = P(k.Left),
-            YearLabel = k.S.StartDate.Year.ToString(CultureInfo.InvariantCulture),
-            SeriesTitle = k.S.Title,
-            SeriesUrl = PathUtil.SeriesUrl(k.S.Slug),
-            ShowLabel = true
-        }).ToList();
-        _gaps = gapStarts.Select(g => new RoleTimelineGap { Left = P(g), Width = P(SeriesBandGapDays) }).ToList();
+            foreach (var sid in seriesIds)
+                if (ctx.SeriesById.TryGetValue(sid, out var s)) dates.Add(s.StartDate);
+        }
+        foreach (var e in entities)
+        {
+            Episodes(e.Episodes);
+            Movies(e.MovieSeriesIds);
+            Episodes(e.GuestEpisodes);
+            Movies(e.GuestMovieSeriesIds);
+            foreach (var rel in e.RelatedRoles)
+            {
+                Episodes(rel.Episodes);
+                Movies(rel.MovieSeriesIds);
+            }
+        }
+        return dates;
     }
 
     /// <param name="ctx">ビルド全体の共有データ。</param>
@@ -388,7 +366,7 @@ internal sealed class RoleTimelineBuilder
 
         var legend = new List<RoleTimelineLegendItem>();
         if (ordered.Any(r => r.Row.Segments.Count > 0))
-            legend.Add(new RoleTimelineLegendItem { Kind = "tv", Label = rules.EpisodeLegendLabel });
+            legend.Add(new RoleTimelineLegendItem { Kind = "tv", Label = "TV" });
         // 凡例の並びは TV、映画、スピンオフ（オトナ）の順。
         if (ordered.Any(r => r.Row.Movies.Count > 0))
             legend.Add(new RoleTimelineLegendItem { Kind = "movie", Label = "映画" });
@@ -739,6 +717,44 @@ internal sealed class RoleTimelineBuilder
                 products.Add(new RoleTimelineMark { Left = Pct(d) });
         }
 
+        // 「TVのみ」「映画のみ」の絞り込みは、ページの範囲の参加だけで決める（下で足す範囲の外の参加は数えない）。
+        bool hasOwnTv = segments.Count > 0;
+        bool hasOwnMovie = movies.Count > 0;
+
+        // ページの範囲の外の参加（本編の一覧のオトナシリーズ、オトナシリーズの一覧の本編）は、帯・点と内訳の行を足すだけで、
+        // 続けて参加した期間・主な方の判定・並びには使わない。スピンオフの話は藍の帯、本線の TV の話は主の帯、映画は点。
+        foreach (var bySeries in e.GuestEpisodes
+                     .Select(x => (x.SeriesId, Ep: x.EpisodeId != 0 && _ctx.EpisodeById.TryGetValue(x.EpisodeId, out var gep) ? gep : null))
+                     .Where(x => x.Ep is not null)
+                     .GroupBy(x => x.SeriesId))
+        {
+            bool spinOff = _ctx.IsSpinOffSeries(bySeries.Key);
+            if (spinOff && !_ctx.IsOtonaSeries(bySeries.Key)) hasNonOtonaSpinOff = true;
+            var eps = bySeries.Select(x => x.Ep!).DistinctBy(ep => ep.SeriesEpNo).OrderBy(ep => ep.SeriesEpNo).ToList();
+            int runStart = 0;
+            for (int i = 1; i <= eps.Count; i++)
+            {
+                if (i < eps.Count && eps[i].SeriesEpNo == eps[i - 1].SeriesEpNo + 1) continue;
+                var segStart = eps[runStart].OnAirDate;
+                var segEnd = eps[i - 1].OnAirDate.AddDays(EpisodeSpanDays);
+                (spinOff ? spinOffSegments : segments).Add(new RoleTimelineMark { Left = Pct(segStart), Width = PctWidth(segStart, segEnd) });
+                if (!spinOff) tvRanges.Add((segStart, segEnd));
+                runStart = i;
+            }
+            if (!tvEpNos.TryGetValue(bySeries.Key, out var set))
+            {
+                set = new SortedSet<int>();
+                tvEpNos[bySeries.Key] = set;
+            }
+            foreach (var ep in eps) set.Add(ep.SeriesEpNo);
+        }
+        foreach (var sid in e.GuestMovieSeriesIds)
+        {
+            if (!_ctx.SeriesById.TryGetValue(sid, out var gs) || !movieIds.Add(sid)) continue;
+            movies.Add(new RoleTimelineMark { Left = Pct(gs.StartDate) });
+            movieDates.Add(gs.StartDate);
+        }
+
         // 内訳：TV・映画はシリーズの放送・公開順に「📺 シリーズ名 #1～49（添え書き）」「🎥 映画名（添え書き）」
         // （大人向けスピンオフの話は 📺 の代わりに 🌙）、
         // 歌・劇伴・盤は年ごとに「🎵 2004年 曲名、曲名」「🎼 2004年 作品名（録音回）」「💿 2004年 商品名」で 1 行ずつ。
@@ -746,7 +762,8 @@ internal sealed class RoleTimelineBuilder
         foreach (var sid in tvEpNos.Keys.Concat(movieIds).Distinct())
         {
             if (!_ctx.SeriesById.TryGetValue(sid, out var s)) continue;
-            string note = e.SeriesNotes is not null && e.SeriesNotes.TryGetValue(sid, out var n) && n != "" ? $"（{n}）" : "";
+            string note = (e.SeriesNotes is not null && e.SeriesNotes.TryGetValue(sid, out var n) && n != "")
+                || (e.GuestSeriesNotes is not null && e.GuestSeriesNotes.TryGetValue(sid, out n) && n != "") ? $"（{n}）" : "";
             works.Add((s.StartDate, tvEpNos.TryGetValue(sid, out var nos)
                 ? $"{(_ctx.IsOtonaSeries(sid) ? "🌙" : "📺")} {s.Title} {EpisodeRangeCompressor.Compress(nos)}{note}"
                 : $"🎥 {s.Title}{note}"));
@@ -871,6 +888,8 @@ internal sealed class RoleTimelineBuilder
             Segments = segments,
             SpinOffSegments = spinOffSegments,
             HasNonOtonaSpinOff = hasNonOtonaSpinOff,
+            HasTv = hasOwnTv,
+            HasMovie = hasOwnMovie,
             Movies = movies,
             MovieLane = movieLane,
             Songs = songs,
@@ -1093,9 +1112,6 @@ internal sealed record RoleTimelineRules(
     /// </summary>
     public Func<string, string>? RelatedRoleUrl { get; init; }
 
-    /// <summary>凡例の話の帯の項目の文字（本編は「TV」、オトナシリーズの役職のページは「オトナ」）。</summary>
-    public string EpisodeLegendLabel { get; init; } = "TV";
-
     /// <summary>全員を載せる決まりのページの条件（スイッチを出さない）。</summary>
     private static readonly IReadOnlyList<string> NoFilter = Array.Empty<string>();
 
@@ -1114,7 +1130,7 @@ internal sealed record RoleTimelineRules(
             $"{DefaultShowAllUpTo}名に満たないときは担当回数の多い方から補います",
             "（同じ回数ならクレジットが早い方、同じ話なら先に出ている方）"
         })
-    { MinMovies = 3 };
+    { MinMovies = 3, SeparateSpinOffs = true };
 
     /// <summary>声の出演：1 年間（52 週）に 4 回以上出演した声優（細線は 4 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules VoiceCast = new(
@@ -1124,7 +1140,8 @@ internal sealed record RoleTimelineRules(
             "52週のあいだに4回以上出演した方（TVの話数・映画の本数）",
             $"{DefaultShowAllUpTo}名に満たないときは出演回数の多い方から補います",
             "（同じ回数ならクレジットが早い方、同じ話なら先に出ている方）"
-        });
+        })
+    { SeparateSpinOffs = true };
 
     /// <summary>作詞・作曲・編曲の役職詳細：1 年間（52 週）に 2 曲以上担当した人物（細線は 13 週以内の間隔でつなぐ）。</summary>
     public static readonly RoleTimelineRules SongWriter = new(
@@ -1200,6 +1217,15 @@ internal sealed class RoleTimelineEntity
     public IReadOnlyCollection<RoleTimelinePoint> Products { get; init; } = Array.Empty<RoleTimelinePoint>();
     /// <summary>内訳でシリーズ・映画の後ろに括弧で添える文（series_id → 文。声優の演じたキャラなど）。</summary>
     public IReadOnlyDictionary<int, string>? SeriesNotes { get; init; }
+    /// <summary>
+    /// ページの範囲の外で参加した TV 系の話 (series_id, episode_id)。本編の一覧ではオトナシリーズの話、オトナシリーズの一覧では本編の話。
+    /// 帯と内訳の行を足すだけで、行の並び・主な方の判定・続けて参加した期間には使わない。
+    /// </summary>
+    public IReadOnlyCollection<(int SeriesId, int EpisodeId)> GuestEpisodes { get; set; } = Array.Empty<(int, int)>();
+    /// <summary>ページの範囲の外で参加した映画系のシリーズ（オトナシリーズの一覧での本編の映画）。扱いは <see cref="GuestEpisodes"/> と同じ。</summary>
+    public IReadOnlyCollection<int> GuestMovieSeriesIds { get; set; } = Array.Empty<int>();
+    /// <summary>ページの範囲の外の参加の内訳で、シリーズ・映画の後ろに括弧で添える文（series_id → 文）。</summary>
+    public IReadOnlyDictionary<int, string>? GuestSeriesNotes { get; set; }
     /// <summary>
     /// 役職詳細で、ページの役職と関連（段階・並列）でつながった役職の担当。主の帯の下に重ねて描くだけで、
     /// 行の並び・主な方の判定には使わない。役職詳細以外のページでは空。
@@ -1358,8 +1384,8 @@ internal sealed class RoleTimelineRow
     public bool IsGroupMember { get; set; }
     /// <summary>まとめる前の並びでの位置（個人・団体で絞り込んだときの並び。<see cref="RoleTimelineModel.HasGroups"/> のときだけ使う）。</summary>
     public int FlatOrder { get; set; }
-    /// <summary>TV の話を描いた行か（「TVのみ」で見せる行。関連する役職の担当は数えない）。</summary>
-    public bool HasTv => Segments.Count > 0;
+    /// <summary>TV の話を描いた行か（「TVのみ」で見せる行。関連する役職の担当と、ページの範囲の外の参加は数えない）。</summary>
+    public bool HasTv { get; set; }
 
     /// <summary>
     /// 映画を別の段に描くか。映画（関連する役職の映画の輪を含む）の公開日が本線の TV の話の帯（関連する役職の帯を含む）と重なる時期がある行だけ立つ
@@ -1378,8 +1404,8 @@ internal sealed class RoleTimelineRow
     /// 名前は段の数によらず行の真ん中に 1 つ。
     /// </summary>
     public int LaneCount => 1 + (MovieLane ? 1 : 0) + (SpinOffLane ? 1 : 0);
-    /// <summary>映画を描いた行か（「映画のみ」で見せる行。関連する役職の担当は数えない）。</summary>
-    public bool HasMovie => Movies.Count > 0;
+    /// <summary>映画を描いた行か（「映画のみ」で見せる行。関連する役職の担当と、ページの範囲の外の参加は数えない）。</summary>
+    public bool HasMovie { get; set; }
     /// <summary>会社の行（<see cref="IsGroupHead"/>）の下にまとめた所属の人に、TV の話を描いた行があるか。</summary>
     public bool ZoneHasTv { get; set; }
     /// <summary>会社の行（<see cref="IsGroupHead"/>）の下にまとめた所属の人に、映画を描いた行があるか。</summary>

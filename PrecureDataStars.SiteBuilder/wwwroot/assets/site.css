@@ -3706,6 +3706,8 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 .site-search-result-kind-company   { background: #d1fae5; color: #065f46; }
 .site-search-result-kind-song      { background: #e0e7ff; color: #3730a3; }
 .site-search-result-kind-product   { background: #ffedd5; color: #9a3412; }
+.site-search-result-kind-role      { background: #ccfbf1; color: #115e59; }
+.site-search-result-kind-font      { background: #e5e7eb; color: #1f2937; }
 
 .site-search-result-title {
   font-size: 0.95em;

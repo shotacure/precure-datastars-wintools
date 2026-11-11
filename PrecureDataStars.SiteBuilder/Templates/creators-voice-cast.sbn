@@ -56,8 +56,8 @@
     <div class="rtl-filter-tip precure-only-tip" role="tooltip" hidden>プリキュアを演じたことがある声優さんだけを出します。ここでいう「プリキュア」は、TVシリーズのレギュラープリキュア（シャイニールミナスおよびミルキィローズを含むプリキュアオールスターズ）ならびにキュアエコーとキュアモフルンの{{ PrecureCount }}名です。</div>
   </div>
   {{## 件数での並べ替えボタン（count-sort.js）。data-count-sort-for のリストの行を、件数バッジの種類ごとに多い順／少ない順で並べ替える。対象リストが出ているときだけ表示される。 ##}}
-  <button type="button" class="count-sort-btn" data-count-sort-for="vc-count-list" hidden></button>
-  <button type="button" class="count-sort-btn" data-count-sort-for="vc-charcount-list" hidden></button>
+  <button type="button" class="count-sort-btn" data-count-sort-for="vc-count-list"{{ if CountSortStart != "" }} data-count-sort-start="{{ CountSortStart }}"{{ end }} hidden></button>
+  <button type="button" class="count-sort-btn" data-count-sort-for="vc-charcount-list"{{ if CountSortStart != "" }} data-count-sort-start="{{ CountSortStart }}"{{ end }} hidden></button>
   </div>
 
   {{## ──────── キャラクター順パネル（既定・シリーズセクション） ──────── ##}}
@@ -87,7 +87,7 @@
           <a class="entity-row-link" href="{{ r.CharacterUrl }}" aria-label="{{ r.CharacterName | html.escape }}"></a>
           <a class="entity-row-name" href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a>
           <span class="entity-row-sub muted">(CV: <a href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>{{ if r.HasOtherPersons }} 他{{ end }})</span>
-          <span class="entity-row-count">{{~ if r.EpisodeCount > 0 || r.MovieCount > 0 ~}}<span class="count-badges">{{~ if r.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ r.EpisodeCount }}</span>{{~ end ~}}{{~ if r.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCount }}</span>{{~ end ~}}</span>{{~ else ~}}<span class="muted">—</span>{{~ end ~}}</span>
+          <span class="entity-row-count">{{~ if r.EpisodeCount > 0 || r.MovieCount > 0 || r.MainEpisodeCount > 0 || r.MainMovieCount > 0 || r.OtonaEpisodeCount > 0 ~}}<span class="count-badges">{{~ if r.MainEpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ r.MainEpisodeCount }}</span>{{~ end ~}}{{~ if r.MainMovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MainMovieCount }}</span>{{~ end ~}}{{~ if r.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ r.EpisodeCount }}</span>{{~ end ~}}{{~ if r.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCount }}</span>{{~ end ~}}{{~ if r.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ r.OtonaEpisodeCount }}</span>{{~ end ~}}</span>{{~ else ~}}<span class="muted">—</span>{{~ end ~}}</span>
         </li>
         {{~ end ~}}
       </ul>
@@ -110,7 +110,7 @@
         <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
         <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
         <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役)</span>
-        <span class="entity-row-count">{{~ if r.EpisodeCount > 0 || r.MovieCount > 0 ~}}<span class="count-badges">{{~ if r.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ r.EpisodeCount }}</span>{{~ end ~}}{{~ if r.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCount }}</span>{{~ end ~}}</span>{{~ else ~}}<span class="muted">—</span>{{~ end ~}}</span>
+        <span class="entity-row-count">{{~ if r.EpisodeCount > 0 || r.MovieCount > 0 || r.MainEpisodeCount > 0 || r.MainMovieCount > 0 || r.OtonaEpisodeCount > 0 ~}}<span class="count-badges">{{~ if r.MainEpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ r.MainEpisodeCount }}</span>{{~ end ~}}{{~ if r.MainMovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MainMovieCount }}</span>{{~ end ~}}{{~ if r.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ r.EpisodeCount }}</span>{{~ end ~}}{{~ if r.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCount }}</span>{{~ end ~}}{{~ if r.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ r.OtonaEpisodeCount }}</span>{{~ end ~}}</span>{{~ else ~}}<span class="muted">—</span>{{~ end ~}}</span>
       </li>
       {{~ end ~}}
     </ul>
@@ -147,7 +147,7 @@
           <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
           <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
           <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役){{ if r.DebutEpisodeLabel != "" }}<a class="entity-row-debut{{ if r.DebutShowAll }} debut-all{{ end }}{{ if r.DebutShowPrecure }} debut-precure{{ end }}" href="{{ r.DebutEpisodeUrl }}">{{ r.DebutEpisodeLabel | html.escape }}</a>{{ end }}</span>
-          <span class="entity-row-count">{{~ if r.EpisodeCount > 0 || r.MovieCount > 0 ~}}<span class="count-badges">{{~ if r.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ r.EpisodeCount }}</span>{{~ end ~}}{{~ if r.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCount }}</span>{{~ end ~}}</span>{{~ else ~}}<span class="muted">—</span>{{~ end ~}}</span>
+          <span class="entity-row-count">{{~ if r.EpisodeCount > 0 || r.MovieCount > 0 || r.MainEpisodeCount > 0 || r.MainMovieCount > 0 || r.OtonaEpisodeCount > 0 ~}}<span class="count-badges">{{~ if r.MainEpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ r.MainEpisodeCount }}</span>{{~ end ~}}{{~ if r.MainMovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MainMovieCount }}</span>{{~ end ~}}{{~ if r.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ r.EpisodeCount }}</span>{{~ end ~}}{{~ if r.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCount }}</span>{{~ end ~}}{{~ if r.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ r.OtonaEpisodeCount }}</span>{{~ end ~}}</span>{{~ else ~}}<span class="muted">—</span>{{~ end ~}}</span>
         </li>
         {{~ end ~}}
       </ul>
@@ -168,7 +168,7 @@
         <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
         <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
         <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役{{ if r.HasOtherCharacters }} 他{{ end }})</span>
-        <span class="entity-row-count">{{~ if r.EpisodeCount > 0 || r.MovieCount > 0 ~}}<span class="count-badges">{{~ if r.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ r.EpisodeCount }}</span>{{~ end ~}}{{~ if r.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCount }}</span>{{~ end ~}}</span>{{~ else ~}}<span class="muted">—</span>{{~ end ~}}</span>
+        <span class="entity-row-count">{{~ if r.EpisodeCount > 0 || r.MovieCount > 0 || r.MainEpisodeCount > 0 || r.MainMovieCount > 0 || r.OtonaEpisodeCount > 0 ~}}<span class="count-badges">{{~ if r.MainEpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ r.MainEpisodeCount }}</span>{{~ end ~}}{{~ if r.MainMovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MainMovieCount }}</span>{{~ end ~}}{{~ if r.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ r.EpisodeCount }}</span>{{~ end ~}}{{~ if r.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCount }}</span>{{~ end ~}}{{~ if r.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ r.OtonaEpisodeCount }}</span>{{~ end ~}}</span>{{~ else ~}}<span class="muted">—</span>{{~ end ~}}</span>
       </li>
       {{~ end ~}}
     </ul>
@@ -177,7 +177,7 @@
 
   {{## ──────── クレジット役柄数順パネル（セクション無し） ────────
        声優 1 人 = 1 行。札は演じたキャラの数で、TV シリーズの話に出たキャラ（📺。オトナシリーズのページは 🌙）と
-       映画に出たキャラ（🎥）に分ける。件数の並べ替え（count-sort.js）は出演回数順とは別のボタンで持つ。 ##}}
+       映画に出たキャラ（🎥）に分ける。もう片方の組で演じたキャラの数も添える（本編のページは後ろに 🌙、オトナシリーズのページは前に 📺・🎥）。件数の並べ替え（count-sort.js）は出演回数順とは別のボタンで持つ。 ##}}
   <div class="tab-panel" id="vc-tab-panel-charcount"
        data-tab-panel="charcount" role="tabpanel" hidden>
     {{~ if (array.size CharacterCountRows) == 0 ~}}
@@ -188,7 +188,7 @@
       <li class="entity-row"{{ if r.IsPrecureCast }} data-precure-cast{{ end }}>
         <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
         <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
-        <span class="entity-row-count"><span class="count-badges">{{~ if r.TvCharacterCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ r.TvCharacterCount }}役</span>{{~ end ~}}{{~ if r.MovieCharacterCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCharacterCount }}役</span>{{~ end ~}}</span></span>
+        <span class="entity-row-count"><span class="count-badges">{{~ if r.MainTvCharacterCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ r.MainTvCharacterCount }}役</span>{{~ end ~}}{{~ if r.MainMovieCharacterCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MainMovieCharacterCount }}役</span>{{~ end ~}}{{~ if r.TvCharacterCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ r.TvCharacterCount }}役</span>{{~ end ~}}{{~ if r.MovieCharacterCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCharacterCount }}役</span>{{~ end ~}}{{~ if r.OtonaCharacterCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ r.OtonaCharacterCount }}役</span>{{~ end ~}}</span></span>
       </li>
       {{~ end ~}}
     </ul>

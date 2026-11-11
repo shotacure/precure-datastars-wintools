@@ -25,6 +25,9 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description>企業（company）— 制作会社等</description></item>
 ///   <item><description>楽曲（song）— 主題歌・劇中歌</description></item>
 ///   <item><description>商品（product）— CD / Blu-ray / DVD</description></item>
+///   <item><description>書籍（book）</description></item>
+///   <item><description>役職（role）— 役職のページ（本編・オトナシリーズ・音楽制作）</description></item>
+///   <item><description>フォント（font）— 書体のページ</description></item>
 /// </list>
 /// JSON のフォーマットは検索 UI と密結合。短いキー名で容量を抑える設計：
 /// <list type="table">
@@ -325,6 +328,23 @@ public sealed class SearchIndexGenerator
                 k = "book",
                 s = subLabel,
                 x = NormalizeForSearch(bk.TitleKana ?? bk.Title)
+            });
+        }
+
+        // ── 役職・フォント ──
+        // 役職のページ（本編・オトナシリーズ・音楽制作）と書体のページは、書いたジェネレータが BuildContext.SearchPages に積んだものを載せる。
+        // 読みのデータは無いので、題と、添えられた語（役職の歴代の名前・英語名、書体のファミリー名）を「|」区切りで照合用に持たせる。
+        // 同じ URL に 2 度書かれたページは、後から書かれたもの（出力に残っているページ）だけを載せる。
+        foreach (var page in _ctx.SearchPages.GroupBy(p => p.Url, StringComparer.Ordinal).Select(g => g.Last()))
+        {
+            items.Add(new SearchIndexItem
+            {
+                u = page.Url,
+                t = page.Title,
+                k = page.Kind,
+                s = page.Sub,
+                x = string.Join("|", new[] { page.Title }.Concat(page.SearchTexts)
+                    .Select(NormalizeForSearch).Where(r => r.Length > 0).Distinct(StringComparer.Ordinal))
             });
         }
 

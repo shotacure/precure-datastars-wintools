@@ -198,6 +198,9 @@ public sealed class FontsGenerator
             }
         };
         _page.RenderAndWrite(url, "fonts", "fonts-detail.sbn", content, layout);
+        // サイト内検索に書体のページを載せる。題は書体名とウェイト、下にメーカー名。まとめる書体名（ファミリー）でも当たるようにする。
+        _ctx.SearchPages.Add(new SearchPageEntry("font", url, first.DisplayName, foundry,
+            new[] { first.FamilyName, first.PageFamilyName }.Distinct(StringComparer.Ordinal).ToList()));
     }
 
     /// <summary>

@@ -351,6 +351,12 @@ public sealed class BuildContext
     public IReadOnlySet<string>? SiteTimelineEntityUrls { get; set; }
 
     /// <summary>
+    /// サイト内検索に載せるページのうち、マスタからは書いたかどうかが決まらないもの（役職のページ・書体のページ）。
+    /// ページを書いたジェネレータが、ページを記録する逐次の所で積み（並列の処理からは積まない）、SearchIndexGenerator が検索の索引に入れる。
+    /// </summary>
+    public List<SearchPageEntry> SearchPages { get; } = new();
+
+    /// <summary>
     /// 人物の誕生日を記念日カレンダー（ホームのカレンダー・今日の記念日・記念日の日別ページ）に出すかの判定。
     /// <see cref="CreditInvolvementIndex"/> 構築直後に Pipeline が 1 度だけ詰める（ホームは声の出演一覧より先に作るため）。
     /// 未構築なら全員を出す。
@@ -390,3 +396,11 @@ public sealed class BuildContext
     /// </summary>
     public required DateTimeOffset BuildStartedAt { get; init; }
 }
+
+/// <summary>サイト内検索に載せるページ 1 件（<see cref="BuildContext.SearchPages"/>）。</summary>
+/// <param name="Kind">検索の種別（"role"＝役職のページ / "font"＝書体のページ）。</param>
+/// <param name="Url">ページの URL。</param>
+/// <param name="Title">検索結果に出す題（役職名・書体名）。</param>
+/// <param name="Sub">検索結果で題の下に添える語（「オトナシリーズ」・メーカー名など。無ければ空文字）。</param>
+/// <param name="SearchTexts">題のほかに照合する語（役職の歴代の名前・英語名、書体のファミリー名など）。</param>
+public sealed record SearchPageEntry(string Kind, string Url, string Title, string Sub, IReadOnlyList<string> SearchTexts);

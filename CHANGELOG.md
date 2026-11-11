@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：運営情報のページ（このサイトについて・プライバシーポリシー・免責事項・お問い合わせ）の文を 7 か所直した**（`about.sbn`・`privacy.sbn`・`disclaimer.sbn`・`contact.sbn`）：主語と述語のねじれ（プライバシーポリシーの GA4 の 2 文）、片方だけの「〜たり」（免責事項の画像の転載）、「」の無いページ名（免責事項の配信音源の案内）、同じことを 2 文で言う返信の案内（お問い合わせ）、「まとめた」と体言止めの結び（このサイトについて）を直した。プライバシーポリシーと免責事項の改定日を 2026年11月11日にした
+
 - **サイト：robots.txt で、AI の学習に使ってよいクローラを OpenAI と Anthropic だけにした**（`SeoGenerator.BlockedCrawlerUserAgents`・robots.txt の頭のコメント）：GPTBot・ChatGPT-User・ClaudeBot・anthropic-ai・Claude-Web を断るのをやめ、`User-agent: *` の全許可で通す（Claude-User・Claude-SearchBot・OAI-SearchBot も通る）。ほかの会社の学習用クローラは今までどおり断り、Meta-ExternalAgent・cohere-training-data-crawler・AI2Bot・Ai2Bot-Dolma・PanguBot・Timpibot・ImagesiftBot・img2dataset を足した
 
 - **サイト：シリーズ一覧のカードとシリーズ詳細のメインスタッフの役職のバッジを、画面の役職の表記で出すようにした**（`Involvement.RoleLabelText`〔新規〕・`CreditInvolvementIndex`・`SeriesGenerator`〔`KeyStaffMember.CreditedRoleLabel` / `MainStaffRow.CreditedRoleLabel`〔新規〕・`BuildKeyStaffSummaryBySeriesCacheAsync`・`BuildMainStaffSectionsAsync`〕）：バッジは役職ごとに決めた名前で出していたので、画面では「企画」の映画（39 作品）でも「プロデューサー」と出ていた。同じ役職でも表記の違う人は表記ごとに別のバッジに分ける

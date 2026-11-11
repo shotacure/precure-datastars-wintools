@@ -46,11 +46,11 @@
   <p>
     当サイトは、サイトの利用状況を把握するために Google LLC が提供する Google Analytics 4（GA4）を利用しています。
     GA4 は Cookie を使い、利用者を個人として特定しない形でトラフィックデータを収集します。
-    収集された情報は Google のプライバシーポリシーにもとづいて管理され、当サイトの利用状況の分析と改善に使います。
+    収集された情報は Google のプライバシーポリシーにもとづいて管理されます。当サイトは、この情報を利用状況の分析と改善に使います。
   </p>
   <p>
     このデータの収集は、Cookie を無効にすることで拒否できます。
-    Google Analytics の利用規約とプライバシーポリシーは、
+    詳しくは、
     <a href="https://marketingplatform.google.com/about/analytics/terms/jp/" target="_blank" rel="noopener noreferrer">Google Analytics 利用規約</a>
     および
     <a href="https://policies.google.com/privacy?hl=ja" target="_blank" rel="noopener noreferrer">Google プライバシーポリシー</a>
@@ -120,4 +120,4 @@
   <p class="muted">このポリシーは予告なく変更することがあります。変更したときは、このページで公開した時点から適用します。</p>
 </section>
 
-<p class="policy-revised">最終改定：2026年10月31日</p>
+<p class="policy-revised">最終改定：2026年11月11日</p>

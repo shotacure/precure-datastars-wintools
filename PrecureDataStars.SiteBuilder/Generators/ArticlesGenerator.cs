@@ -30,6 +30,12 @@ public sealed class ArticlesGenerator
     /// <summary>一覧のカードに題名を並べる、新しい記事の本数。</summary>
     private const int LatestArticlesOnCard = 4;
 
+    /// <summary>記事のカードの要約を組む書体（precure.news の記事のカードの要約と同じ）。</summary>
+    private const string SummaryFontFamily = "FOT-筑紫新聞明朝 Pr6N L";
+
+    /// <summary>記事のカードの要約の平体の率（precure.news の記事のカードの要約と同じ 80%）。</summary>
+    private const float SummaryVerticalScale = 0.8f;
+
     // Markdig パイプライン。テーブル・自動リンク等の一般的な拡張を有効化する
     // （入力は内製の信頼ソースのため、サニタイズは行わない＝既存テンプレと同じ前提）。
     // 強調の拡張は打ち消し線（~~文字~~）だけにする。曲名・盤名は「~光の章~」のように半角の ~ で副題を挟むので、
@@ -117,12 +123,15 @@ public sealed class ArticlesGenerator
                 // 記事は本文の量を数で語れないので、種別と日付・タグで識別できるようにする。
                 // 見出しの下に前置き（description）を文章として流し込み、入り切らなければ最後の行を「…」で切る。
                 // タグは要約に高さを回すため「音楽・データ」のように 1 行にまとめて下に置く。
+                // 要約は precure.news の記事のカードと同じ書体・平体で組む。
                 OgCard = new OgCardSpec(Kicker: "コラム", Title: a.Title)
                 {
                     KickerRight = a.DateLabel ?? "",
                     InlineFacts = string.IsNullOrWhiteSpace(a.Description)
                         ? Array.Empty<OgCardFactLine>()
                         : new[] { new OgCardFactLine("", a.Description.Trim()) },
+                    InlineFactsFontFamily = SummaryFontFamily,
+                    InlineFactsVerticalScale = SummaryVerticalScale,
                     InlineFactsProse = true,
                     Facts = a.Tags is { Count: > 0 } tags
                         ? new[] { new OgCardFactLine("", string.Join("・", tags.Take(3))) }

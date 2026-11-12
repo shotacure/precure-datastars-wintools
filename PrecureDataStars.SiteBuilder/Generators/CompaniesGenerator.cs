@@ -150,7 +150,7 @@ public sealed class CompaniesGenerator
 
     /// <summary>
     /// 1 団体から見た関係の表示行を組み立てる。並びは 前身 → 後継 → 所属（親）→ 傘下（子）、
-    /// 同じ並びの中は開始日の昇順（開始日なしは後ろ）→ 相手の正式名称順。
+    /// 同じ並びの中は開始日の昇順（開始日なしは後ろ）→ 相手の company_id の順。
     /// <list type="bullet">
     ///   <item>PARENT で自分が子：「所属」。言い回しが「子会社」なら「親会社」、ほかは「所属（部署）」のように言い回しを括弧で添える。</item>
     ///   <item>PARENT で自分が親：言い回し（「部署」「子会社」「雑誌」など）。無ければ「傘下」。</item>
@@ -165,7 +165,7 @@ public sealed class CompaniesGenerator
         static string WithLabel(string head, string? label)
             => string.IsNullOrWhiteSpace(label) ? head : $"{head}（{label}）";
 
-        var rows = new List<(int Order, DateTime? From, string Name, CompanyRelationView View)>();
+        var rows = new List<(int Order, DateTime? From, int OtherId, CompanyRelationView View)>();
         foreach (var r in relations)
         {
             bool selfIsFrom = r.FromCompanyId == selfId;
@@ -188,7 +188,7 @@ public sealed class CompaniesGenerator
                 (DateTime f, DateTime t) => $"{JpDateFormat.DotDate(f)}〜{JpDateFormat.DotDate(t)}"
             };
 
-            rows.Add((order, r.ValidFrom, other.Name, new CompanyRelationView
+            rows.Add((order, r.ValidFrom, otherId, new CompanyRelationView
             {
                 Label = label,
                 CompanyName = other.Name,
@@ -201,7 +201,7 @@ public sealed class CompaniesGenerator
             .OrderBy(x => x.Order)
             .ThenBy(x => x.From.HasValue ? 0 : 1)
             .ThenBy(x => x.From)
-            .ThenBy(x => x.Name, StringComparer.Ordinal)
+            .ThenBy(x => x.OtherId)
             .Select(x => x.View)
             .ToList();
     }
@@ -423,25 +423,32 @@ public sealed class CompaniesGenerator
 
     /// <summary>
     /// カード下端に出す所属の人物の要約。「○○、△△、□□ ほか n 人」の形で、担当回数（TV の話数と映画の本数の和）の多い順に
-    /// 3 人まで名前を出す。担当回数には大人向けの話数も含める。名義違いは人物単位に畳む。所属の人物がいなければ空。
+    /// 3 人まで名前を出す。担当回数が同じ人は初参加の順（メンバー履歴に初めて出た順＝屋号の最初の関与日 → 初クレジット順）→ person_id。
+    /// 担当回数には大人向けの話数も含める。名義違いは人物単位に畳む。所属の人物がいなければ空。
     /// </summary>
     private static string FormatMemberSummary(IReadOnlyList<MemberHistoryAliasSection> memberHistory)
     {
-        var byPerson = new Dictionary<int, (string Name, int Count)>();
+        var byPerson = new Dictionary<int, (string Name, int Count, int FirstSeen)>();
         foreach (var section in memberHistory)
         {
             foreach (var row in section.Persons)
             {
                 int count = row.EpisodeCount + row.MovieCount + row.OtonaEpisodeCount;
                 if (byPerson.TryGetValue(row.PersonId, out var cur))
-                    byPerson[row.PersonId] = (cur.Name, cur.Count + count);
+                    byPerson[row.PersonId] = (cur.Name, cur.Count + count, cur.FirstSeen);
                 else
-                    byPerson[row.PersonId] = (row.PersonName, count);
+                    byPerson[row.PersonId] = (row.PersonName, count, byPerson.Count);
             }
         }
         if (byPerson.Count == 0) return "";
 
-        var top = byPerson.Values.OrderByDescending(p => p.Count).ThenBy(p => p.Name, StringComparer.Ordinal).Take(3).ToList();
+        var top = byPerson
+            .OrderByDescending(kv => kv.Value.Count)
+            .ThenBy(kv => kv.Value.FirstSeen)
+            .ThenBy(kv => kv.Key)
+            .Select(kv => kv.Value)
+            .Take(3)
+            .ToList();
         string names = string.Join("、", top.Select(p => p.Name));
         int rest = byPerson.Count - top.Count;
         return rest > 0 ? $"{names} ほか{rest}人" : names;
@@ -658,7 +665,9 @@ public sealed class CompaniesGenerator
         var result = new List<(int Order, CompanyMusicRoleGroup Role)>();
         foreach (var rg in rows.GroupBy(r => r.RoleCode, StringComparer.Ordinal))
         {
-            var persons = new List<(DateTime First, CompanyMusicMemberPerson Person)>();
+            // 人物の並び：最初の紐付け先の日付 → その盤の中の順（紐付け先の順 → 音楽クレジットの順 credit_seq）→ person_id
+            // （人物に紐付かない名義は人物の後ろに名義 ID の順）。
+            var persons = new List<((DateTime Date, long Target, int Seq) First, int Id, CompanyMusicMemberPerson Person)>();
             // 人物に紐付く名義は人物ごとに、紐付かない名義は名義ごとに（負の名義 ID をキーにして）まとめる。
             foreach (var pg in rg.GroupBy(r => MusicCreditViewBuilder.PersonIdOf(_ctx, r.PersonAliasId!.Value) is int pid ? pid : -r.PersonAliasId!.Value))
             {
@@ -668,7 +677,9 @@ public sealed class CompaniesGenerator
                     .ToList();
                 var kinds = BuildMusicKinds(company, pg.ToList(), withAliasNote: false);
                 if (names.Count == 0 || kinds.Count == 0) continue;
-                var first = pg.Select(r => MusicCreditViewBuilder.DescribeTarget(_ctx, r)?.Sort ?? DateTime.MaxValue).Min();
+                var first = pg.Select(r => (Date: MusicCreditViewBuilder.DescribeTarget(_ctx, r)?.Sort ?? DateTime.MaxValue,
+                        Target: MusicCreditViewBuilder.TargetOrder(_ctx, r), Seq: (int)r.CreditSeq))
+                    .Min();
                 var person = new CompanyMusicMemberPerson
                 {
                     Name = string.Join("・", names),
@@ -677,14 +688,19 @@ public sealed class CompaniesGenerator
                     Kinds = kinds
                 };
                 person.Counts.AddRange(kinds.Select(k => k.Counts));
-                persons.Add((first, person));
+                persons.Add((first, pg.Key, person));
             }
             if (persons.Count == 0) continue;
             var group = new CompanyMusicRoleGroup
             {
                 RoleCode = rg.Key,
                 RoleLabel = MusicCreditViewBuilder.RoleName(_ctx, rg.Key),
-                Persons = persons.OrderBy(p => p.First).ThenBy(p => p.Person.Name, StringComparer.Ordinal).Select(p => p.Person).ToList()
+                Persons = persons
+                    .OrderBy(p => p.First)
+                    .ThenBy(p => p.Id > 0 ? 0 : 1)
+                    .ThenBy(p => Math.Abs(p.Id))
+                    .Select(p => p.Person)
+                    .ToList()
             };
             group.Counts.AddRange(group.Persons.Select(p => p.Counts));
             result.Add((RoleOrder(rg.Key), group));
@@ -705,7 +721,8 @@ public sealed class CompaniesGenerator
         var sections = new List<CompanyMusicKindSection>();
         foreach (var (label, kinds) in MusicTargetKindSections)
         {
-            var items = new List<(DateTime Sort, string Key, string? CatalogNo, CompanyMusicItem Item)>();
+            // Order は同じ日付の行の並び（劇伴は series_id → 録音回、歌は盤の中の順＝録音 ID、盤は 0 で、その後ろは品番を含む URL の順）。
+            var items = new List<(DateTime Sort, (long Series, long Target) Order, string Key, string? CatalogNo, CompanyMusicItem Item)>();
             foreach (var g in rows.Where(r => kinds.Contains(r.TargetKind))
                          .GroupBy(r => (r.TargetKind, r.SongId, r.SongRecordingId, r.BgmSeriesId, r.BgmSessionNo, r.ProductCatalogNo)))
             {
@@ -713,13 +730,15 @@ public sealed class CompaniesGenerator
                 string aliasNote = withAliasNote
                     ? CompanyAliasNote(company, g.Where(r => r.CompanyAliasId.HasValue).Select(r => r.CompanyAliasId!.Value))
                     : "";
-                items.Add((t.Sort, MusicCreditCounting.Key(label, t.Url, t.Sub), g.Key.ProductCatalogNo,
+                items.Add((t.Sort, (g.Key.BgmSeriesId ?? 0, MusicCreditViewBuilder.TargetOrder(_ctx, g.First())),
+                    MusicCreditCounting.Key(label, t.Url, t.Sub), g.Key.ProductCatalogNo,
                     new CompanyMusicItem { Title = t.Title, Url = t.Url, SubLabel = t.Sub, AliasNote = aliasNote }));
             }
             if (items.Count == 0) continue;
             var merged = items
                 .GroupBy(x => x.Key, StringComparer.Ordinal)
-                .Select(x => x.OrderBy(y => y.Item.Url.Contains('#') ? 1 : 0).ThenBy(y => y.Sort).First() with { Sort = x.Min(y => y.Sort) })
+                .Select(x => x.OrderBy(y => y.Item.Url.Contains('#') ? 1 : 0).ThenBy(y => y.Sort).First()
+                    with { Sort = x.Min(y => y.Sort), Order = x.Min(y => y.Order) })
                 .ToList();
             var duplicateTitles = merged.GroupBy(x => x.Item.Title, StringComparer.Ordinal).Where(x => x.Count() > 1).Select(x => x.Key).ToHashSet(StringComparer.Ordinal);
             foreach (var x in merged)
@@ -729,7 +748,7 @@ public sealed class CompaniesGenerator
             {
                 Label = label,
                 CountLabel = MusicCreditCounting.CountLabel(label, merged.Count),
-                Items = merged.OrderBy(x => x.Sort).ThenBy(x => x.Item.Title, StringComparer.Ordinal).Select(x => x.Item).ToList()
+                Items = merged.OrderBy(x => x.Sort).ThenBy(x => x.Order).ThenBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Item).ToList()
             };
             section.Counts.Add(label, merged.Select(x => x.Key));
             sections.Add(section);
@@ -767,11 +786,11 @@ public sealed class CompaniesGenerator
         // (AffiliationCompanyAliasId, RoleCode) → その役職グループ内の最早クレジット位置キー。
         // 屋号内の役職並びを「初参加」昇順にするためのアキュムレータ。生 Involvement から
         // CreditSeq / CreditSubSeq を保持したまま畳み込む（grouped 化すると階層位置が落ちるため別管理）。
-        var earliestByRole = new Dictionary<(int AffId, string RoleCode), (long StartDay, int EpNo, long Pos)>();
+        var earliestByRole = new Dictionary<(int AffId, string RoleCode), (long StartDay, int SeriesId, int EpNo, long Pos)>();
         // (AffiliationCompanyAliasId, RoleCode, PersonId) → その人物の最早クレジット位置キー。
         // メンバー履歴の人物行を「初クレジット順（シリーズ → 話数 → クレジット階層位置）」に並べるために使う。
         // person 単位（名義違いは同一人物に畳む）で集計する。
-        var earliestByPerson = new Dictionary<(int AffId, string RoleCode, int PersonId), (long StartDay, int EpNo, long Pos)>();
+        var earliestByPerson = new Dictionary<(int AffId, string RoleCode, int PersonId), (long StartDay, int SeriesId, int EpNo, long Pos)>();
         foreach (var inv in members)
         {
             if (inv.PersonAliasId is not int paid) continue;
@@ -796,14 +815,14 @@ public sealed class CompaniesGenerator
             }
 
             // (屋号, 役職) 単位の最早クレジット位置を畳み込む。FirstCreditAccumulator と同じ合成基準
-            // （シリーズ放送開始日 → シリーズ内話数[series-scope は 0 で最優先] → クレジット階層位置）。
+            // （シリーズ放送開始日 → series_id → シリーズ内話数[series-scope は 0 で最優先] → クレジット階層位置）。
             var roleKey = (affId, inv.RoleCode ?? "");
             long day = _ctx.SeriesStartDate(inv.SeriesId).DayNumber;
             int epNo = inv.EpisodeId is int eid2
                 ? (_ctx.LookupEpisode(inv.SeriesId, eid2)?.SeriesEpNo ?? int.MaxValue)
                 : 0;
             long pos = inv.CreditPos;
-            var cand = (day, epNo, pos);
+            var cand = (day, inv.SeriesId, epNo, pos);
             if (!earliestByRole.TryGetValue(roleKey, out var cur) || CompareCreditKey(cand, cur) < 0)
             {
                 earliestByRole[roleKey] = cand;
@@ -861,7 +880,7 @@ public sealed class CompaniesGenerator
                     : (_roleMap is not null && _roleMap.TryGetValue(roleCode, out var rr) ? (rr.NameJa ?? roleCode) : roleCode);
                 var earliest = earliestByPerson.TryGetValue((affId, roleCode, personId), out var ek)
                     ? ek
-                    : (long.MaxValue, int.MaxValue, long.MaxValue);
+                    : (long.MaxValue, int.MaxValue, int.MaxValue, long.MaxValue);
                 roleBucket = new PersonRoleBucket { RoleCode = roleCode, RoleNameJa = roleNameJa, EarliestCreditKey = earliest };
                 personBucket.Roles[roleCode] = roleBucket;
             }
@@ -906,6 +925,7 @@ public sealed class CompaniesGenerator
                         {
                             var works = rb.WorksBySeries
                                 .OrderBy(kv => _ctx.SeriesStartDate(kv.Key))
+                                .ThenBy(kv => kv.Key)
                                 .Select(kv => BuildMemberHistoryWork(kv.Key, kv.Value.IsSeriesScope, kv.Value.EpNos))
                                 .Where(w => w is not null)
                                 .Select(w => w!)
@@ -949,7 +969,7 @@ public sealed class CompaniesGenerator
                     // 人物の並べ替えキー＝役職横断の最早クレジット位置（初クレジット順）。
                     var personEarliest = roleGroups.Count > 0
                         ? roleGroups.Min(x => x.EarliestCreditKey)
-                        : (long.MaxValue, int.MaxValue, long.MaxValue);
+                        : (long.MaxValue, int.MaxValue, int.MaxValue, long.MaxValue);
 
                     return (Earliest: personEarliest, Row: new MemberHistoryPersonRow
                     {
@@ -962,6 +982,7 @@ public sealed class CompaniesGenerator
                     });
                 })
                 .OrderBy(x => x.Earliest)
+                .ThenBy(x => x.Row.PersonId)
                 .Select(x => x.Row)
                 .ToList();
 
@@ -1081,7 +1102,7 @@ public sealed class CompaniesGenerator
         public string RoleCode = "";
         public string RoleNameJa = "";
         /// <summary>この (屋号, 人物, 役職) の最早クレジット位置キー（役職の初クレジット順並べ替え用）。 (シリーズ放送開始日のシリアル値, シリーズ内話数, クレジット階層位置) の辞書順。</summary>
-        public (long StartDay, int EpNo, long Pos) EarliestCreditKey;
+        public (long StartDay, int SeriesId, int EpNo, long Pos) EarliestCreditKey;
         /// <summary>シリーズ単位でマージした担当作品（名義違いの同一シリーズは話数を合算）。 (IsSeriesScope, 話数集合)。</summary>
         public Dictionary<int, (bool IsSeriesScope, HashSet<int> EpNos)> WorksBySeries { get; } = new();
     }
@@ -1153,12 +1174,12 @@ public sealed class CompaniesGenerator
     /// <summary>
     /// 関与群の「最早クレジット位置」キーを畳み込んで返す（初参加順ソート用）。
     /// CreatorsGenerator.FirstCreditAccumulator と同じ合成基準：
-    /// シリーズ放送開始日のシリアル値 → シリーズ内話数（series-scope = 0 で最優先） → クレジット階層位置
+    /// シリーズ放送開始日のシリアル値 → series_id → シリーズ内話数（series-scope = 0 で最優先） → クレジット階層位置
     /// （CreditSeq, CreditSubSeq の辞書順）。roles.display_order には依存しない。
     /// </summary>
-    private (long StartDay, int EpNo, long Pos) EarliestCreditKey(IEnumerable<Involvement> invs)
+    private (long StartDay, int SeriesId, int EpNo, long Pos) EarliestCreditKey(IEnumerable<Involvement> invs)
     {
-        var best = (StartDay: long.MaxValue, EpNo: int.MaxValue, Pos: long.MaxValue);
+        var best = (StartDay: long.MaxValue, SeriesId: int.MaxValue, EpNo: int.MaxValue, Pos: long.MaxValue);
         foreach (var inv in invs)
         {
             long day = _ctx.SeriesStartDate(inv.SeriesId).DayNumber;
@@ -1166,18 +1187,20 @@ public sealed class CompaniesGenerator
                 ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
                 : 0;
             long pos = inv.CreditPos;
-            var cand = (day, epNo, pos);
+            var cand = (day, inv.SeriesId, epNo, pos);
             if (CompareCreditKey(cand, best) < 0) best = cand;
         }
         return best;
     }
 
-    /// <summary>最早クレジット位置キーの辞書順比較（StartDay → EpNo → Pos）。</summary>
+    /// <summary>最早クレジット位置キーの辞書順比較（StartDay → SeriesId → EpNo → Pos）。同じ日の映画と併映の短編は series_id の順（本編が先）。</summary>
     private static int CompareCreditKey(
-        (long StartDay, int EpNo, long Pos) a,
-        (long StartDay, int EpNo, long Pos) b)
+        (long StartDay, int SeriesId, int EpNo, long Pos) a,
+        (long StartDay, int SeriesId, int EpNo, long Pos) b)
     {
         int c = a.StartDay.CompareTo(b.StartDay);
+        if (c != 0) return c;
+        c = a.SeriesId.CompareTo(b.SeriesId);
         if (c != 0) return c;
         c = a.EpNo.CompareTo(b.EpNo);
         if (c != 0) return c;

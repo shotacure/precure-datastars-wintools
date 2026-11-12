@@ -217,9 +217,12 @@ public sealed class CharactersGenerator
                         ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
                         : 0; // シリーズスコープは最早扱い
                     int seq = inv.CreditSeq;
+                    // 放送開始日 → series_id（同じ日の映画と併映の短編は本編が先）→ 話数 → クレジットの位置。
+                    int curSeriesId = bestSeriesId == 0 ? int.MaxValue : bestSeriesId;
                     if (start < bestStart
-                        || (start == bestStart && epNo < bestEpNo)
-                        || (start == bestStart && epNo == bestEpNo && seq < bestSeq))
+                        || (start == bestStart && inv.SeriesId < curSeriesId)
+                        || (start == bestStart && inv.SeriesId == curSeriesId && epNo < bestEpNo)
+                        || (start == bestStart && inv.SeriesId == curSeriesId && epNo == bestEpNo && seq < bestSeq))
                     {
                         bestStart = start;
                         bestEpNo = epNo;
@@ -269,13 +272,11 @@ public sealed class CharactersGenerator
                         KindLabel = KindLabel(kg.Key),
                         Members = kg
                             // クレジット順（最早 → 同話数内はクレジット出現位置順）。
-                            // 完全同点・クレジット皆無時は読み仮名→名前で安定化する。
+                            // 完全同点・クレジット皆無時は character_id（表示順）で安定化する。
                             .OrderBy(x => x.Key.Start)
                             .ThenBy(x => x.Key.EpNo)
                             .ThenBy(x => x.Key.Seq)
-                            .ThenBy(x => string.IsNullOrEmpty(x.Ch.NameKana) ? 1 : 0)
-                            .ThenBy(x => x.Ch.NameKana ?? "", StringComparer.Ordinal)
-                            .ThenBy(x => x.Ch.Name, StringComparer.Ordinal)
+                            .ThenBy(x => x.Ch.CharacterId)
                             .Select(x => new CharacterIndexRow
                             {
                                 CharacterId = x.Ch.CharacterId,
@@ -294,6 +295,7 @@ public sealed class CharactersGenerator
                 {
                     IsOther = isOther,
                     SeriesStart = isOther ? long.MaxValue : _ctx.SeriesStartDate(seriesId).DayNumber,
+                    SeriesId = seriesId,
                     Section = new CharacterSeriesSection
                     {
                         SeriesTitle = isOther ? "その他（未登場）" : series!.Title,
@@ -308,6 +310,7 @@ public sealed class CharactersGenerator
             })
             .OrderBy(s => s.IsOther ? 1 : 0)
             .ThenBy(s => s.SeriesStart)
+            .ThenBy(s => s.SeriesId)
             .Select(s => s.Section)
             .ToList();
 
@@ -317,9 +320,10 @@ public sealed class CharactersGenerator
             .Where(e => !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId) && (e.Ep + e.Mv + e.Ot) > 0)
             .OrderByDescending(e => e.Ep + e.Mv + e.Ot)
             .ThenBy(e => e.Key.Start)
+            .ThenBy(e => e.Key.SeriesId)
             .ThenBy(e => e.Key.EpNo)
             .ThenBy(e => e.Key.Seq)
-            .ThenBy(e => e.Ch.Name, StringComparer.Ordinal)
+            .ThenBy(e => e.Ch.CharacterId)
             .Select(e => new CharacterIndexRow
             {
                 CharacterId = e.Ch.CharacterId,
@@ -521,7 +525,7 @@ public sealed class CharactersGenerator
     /// <c>/characters/guests/{series_slug}/</c>（ゲストキャラクター）をシリーズごとに書き出す。
     /// 単発キャラ（<see cref="EntityUrlRegistry.IsGuestCharacter"/>）を登場話ごとに見出しで束ね、
     /// 見出しには <c>id="ep{話数}"</c> を付けてキャラへのリンク（<see cref="PathUtil.CharacterUrl"/>）の着地点にする。
-    /// 話内の並びはクレジット順（最早のクレジット出現位置）。声優は人物詳細へリンクする。
+    /// 話内の並びはクレジット順（最早のクレジット出現位置。同じ位置は character_id の順）。声優は人物詳細へリンクする。
     /// </summary>
     /// <returns>書き出したページ数。</returns>
     private int GenerateGuestPages(
@@ -535,7 +539,7 @@ public sealed class CharactersGenerator
         {
             if (!_ctx.SeriesById.TryGetValue(seriesId, out var series)) continue;
 
-            var rows = new List<(GuestPlacement Placement, int CreditSeq, GuestCharacterRow Row)>();
+            var rows = new List<(GuestPlacement Placement, int CreditSeq, int CharacterId, GuestCharacterRow Row)>();
             foreach (var characterId in characterIds)
             {
                 if (!charactersById.TryGetValue(characterId, out var ch)) continue;
@@ -557,7 +561,7 @@ public sealed class CharactersGenerator
                     actorLinks.Add(PersonLinkHtml(paid, nm));
                 }
 
-                rows.Add((placement, invs.Count > 0 ? invs[0].CreditSeq : int.MaxValue, new GuestCharacterRow
+                rows.Add((placement, invs.Count > 0 ? invs[0].CreditSeq : int.MaxValue, characterId, new GuestCharacterRow
                 {
                     Name = ch.Name,
                     KindCode = ch.CharacterKind,
@@ -577,7 +581,7 @@ public sealed class CharactersGenerator
                     EpisodeUrl = g.Key is int n2 ? PathUtil.EpisodeUrl(series.Slug, n2) : "",
                     Characters = g
                         .OrderBy(r => r.CreditSeq)
-                        .ThenBy(r => r.Row.Name, StringComparer.Ordinal)
+                        .ThenBy(r => r.CharacterId)
                         .Select(r => r.Row)
                         .ToList()
                 })
@@ -821,7 +825,7 @@ public sealed class CharactersGenerator
 
     /// <summary>キャラが CHARACTER_WITH_CV で歌った楽曲を 1 曲 = 1 カードに集約する。
     /// 出典シリーズ・タイトルは「キャラが歌った録音」から解決する（録音ごとに出典・版が異なり得るため）。
-    /// 並びは「シリーズ開始年昇順 → 曲タイトル昇順」、出典不明は末尾。
+    /// 並びは「歌った録音の recording_id 昇順（カタログ登場順）→ song_id」。
     /// 共通中間処理（song_id 単位の集約 → 歌った録音・出典・種別・役職バッジの解決）は
     /// <see cref="SongCardBuilder"/>（PersonsGenerator と共用）に集約し、本メソッドは
     /// キャラ詳細用 DTO への射影と最終ソートだけを行う。</summary>
@@ -836,8 +840,9 @@ public sealed class CharactersGenerator
         if (cores.Count == 0) return Array.Empty<CharacterSongCard>();
 
         // 共通中間表現からキャラ詳細用 DTO へ射影（役職バッジは URL なしの SongRoleBadge）。
+        // ソート：歌った録音の recording_id 昇順（カタログ登場順）→ song_id。人物詳細の楽曲と同じ流儀。
         var cards = new List<CharacterSongCard>(cores.Count);
-        foreach (var core in cores)
+        foreach (var core in cores.OrderBy(c => c.SortRecordingId).ThenBy(c => c.SongId))
         {
             cards.Add(new CharacterSongCard
             {
@@ -856,11 +861,7 @@ public sealed class CharactersGenerator
             });
         }
 
-        // ソート：歌った録音の recording_id 昇順（カタログ登場順）。人物詳細の楽曲と同じ流儀。
-        return cards
-            .OrderBy(c => c.SortRecordingId)
-            .ThenBy(c => c.Title, StringComparer.Ordinal)
-            .ToList();
+        return cards;
     }
 
     /// <summary>

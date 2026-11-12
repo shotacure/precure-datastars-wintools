@@ -90,11 +90,11 @@ public sealed class ArticlesGenerator
                 _ctx.Logger.Info($"下書き・公開日時前のコラム {held} 本は本番に出しません。");
         }
 
-        // 公開日降順（同日はタイトル昇順）で並べる。
+        // 公開日時（date に書いた時刻まで）の降順、同じ日時は記事の URL の名前（slug）の昇順で並べる。
         articles.Sort((a, b) =>
         {
             int cmp = b.Date.CompareTo(a.Date);
-            return cmp != 0 ? cmp : string.CompareOrdinal(a.Title, b.Title);
+            return cmp != 0 ? cmp : string.CompareOrdinal(a.Slug, b.Slug);
         });
 
         // 各記事詳細。

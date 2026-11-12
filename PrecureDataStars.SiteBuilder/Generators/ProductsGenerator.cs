@@ -1096,6 +1096,8 @@ public sealed class ProductsGenerator
     private (IReadOnlyList<OgCardFactLine> Facts, int FirstReleaseCount) BuildOgContentFacts(List<Disc> discs, string productCatalogNo)
     {
         var composerCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        // 作曲者が盤の中で初めて出た順（ディスクの順 → トラックの順 → そのトラックの credit_seq）。曲数が同じ人の並びに使う。
+        var composerFirstSeen = new Dictionary<string, int>(StringComparer.Ordinal);
         var firstRecordings = new HashSet<int>();
         var firstCues = new HashSet<(int, string)>();
         int songs = 0, karaoke = 0, bgm = 0, drama = 0, other = 0;
@@ -1130,6 +1132,7 @@ public sealed class ProductsGenerator
                                     || !_ctx.PersonAliasById.TryGetValue(composerAliasId, out var alias)) continue;
                                 string name = alias.DisplayTextOverride ?? alias.Name;
                                 composerCounts[name] = composerCounts.TryGetValue(name, out int n) ? n + 1 : 1;
+                                composerFirstSeen.TryAdd(name, composerFirstSeen.Count);
                             }
                         }
                         break;
@@ -1146,7 +1149,7 @@ public sealed class ProductsGenerator
         var facts = new List<OgCardFactLine>();
         if (composerCounts.Count > 0)
         {
-            var composers = composerCounts.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => kv.Key).ToList();
+            var composers = composerCounts.OrderByDescending(kv => kv.Value).ThenBy(kv => composerFirstSeen[kv.Key]).Select(kv => kv.Key).ToList();
             facts.Add(new OgCardFactLine("音楽", JoinWithRest(composers)) { LabelColorHex = OgRolePalette.ColorFor("COMPOSITION") });
         }
 

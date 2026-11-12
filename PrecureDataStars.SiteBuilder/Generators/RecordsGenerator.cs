@@ -208,7 +208,18 @@ public sealed class RecordsGenerator
         public Dictionary<int, HashSet<int>> ChiefEpisodes { get; } = new();
         public HashSet<int> VoiceEpisodes { get; } = new();
         public HashSet<int> Characters { get; } = new();
+        /// <summary>役職（<see cref="ChiefEpisodes"/> のキー）ごとの初参加の位置（放送開始日 → series_id → 話数 → クレジットの位置）。同じ回数の人の並びに使う。</summary>
+        public Dictionary<int, (long Start, int SeriesId, int EpNo, long Pos)> FirstChief { get; } = new();
+        /// <summary>声の出演の初出演の位置（並べ方は <see cref="FirstChief"/> と同じ）。</summary>
+        public (long Start, int SeriesId, int EpNo, long Pos) FirstVoice { get; set; } = (long.MaxValue, int.MaxValue, int.MaxValue, long.MaxValue);
         public bool IsEmpty => ChiefEpisodes.Count == 0 && VoiceEpisodes.Count == 0;
+    }
+
+    /// <summary>関与のクレジットの位置（放送開始日 → series_id → 話数 → クレジットの位置）。</summary>
+    private (long Start, int SeriesId, int EpNo, long Pos) CreditKey(Involvement inv)
+    {
+        var (start, epNo, pos) = LatestAliasResolver.CreditOrderKey(_ctx, inv);
+        return (start, inv.SeriesId, epNo, pos);
     }
 
     private RecordGroup BuildStaffGroup(string coverage)
@@ -230,6 +241,8 @@ public sealed class RecordsGenerator
                     if (inv.IsVoiceCast)
                     {
                         st.VoiceEpisodes.Add(episodeId);
+                        var voiceKey = CreditKey(inv);
+                        if (voiceKey.CompareTo(st.FirstVoice) < 0) st.FirstVoice = voiceKey;
                         if (inv.CharacterAliasId is int characterAliasId
                             && _ctx.CharacterAliasById.TryGetValue(characterAliasId, out var characterAlias))
                         {
@@ -247,6 +260,9 @@ public sealed class RecordsGenerator
                             st.ChiefEpisodes[chief] = set;
                         }
                         set.Add(episodeId);
+                        var chiefKey = CreditKey(inv);
+                        if (!st.FirstChief.TryGetValue(chief, out var curChief) || chiefKey.CompareTo(curChief) < 0)
+                            st.FirstChief[chief] = chiefKey;
                     }
                 }
             }
@@ -267,17 +283,18 @@ public sealed class RecordsGenerator
                 $"chief-{roleCode.ToLowerInvariant().Replace('_', '-')}",
                 $"{label}を多く担当した人",
                 "話",
-                stats.Select(kv => (kv.Key, kv.Value.ChiefEpisodes.TryGetValue(chief, out var s) ? s.Count : 0)),
+                stats.Select(kv => (kv.Key, kv.Value.ChiefEpisodes.TryGetValue(chief, out var s) ? s.Count : 0,
+                    kv.Value.FirstChief.TryGetValue(chief, out var f) ? f : (long.MaxValue, int.MaxValue, int.MaxValue, long.MaxValue))),
                 // 役職詳細は初参加順のタブで開くので、担当回数順のタブを開いた状態（view-state.js の #tab=）へリンクする。
                 PathUtil.CreatorsRoleUrl(roleCode) + "#tab=count",
                 $"{label}の担当回数順を見る"));
         }
         items.Add(TopPersons("voice-episodes", "声の出演が多い声優さん", "話",
-            stats.Select(kv => (kv.Key, kv.Value.VoiceEpisodes.Count)),
+            stats.Select(kv => (kv.Key, kv.Value.VoiceEpisodes.Count, kv.Value.FirstVoice)),
             // 声の出演一覧の出演回数順のタブを開いた状態へリンクする。
             PathUtil.CreatorsVoiceCastUrl() + "#tab=count", "声の出演一覧を見る"));
         items.Add(TopPersons("voice-characters", "クレジットされた役柄が多い声優さん", "役",
-            stats.Select(kv => (kv.Key, kv.Value.Characters.Count)),
+            stats.Select(kv => (kv.Key, kv.Value.Characters.Count, kv.Value.FirstVoice)),
             // 声の出演一覧のクレジット役柄数順のタブを、TV シリーズで演じたキャラの数（📺）の多い順にした状態へリンクする。
             PathUtil.CreatorsVoiceCastUrl() + "#tab=charcount&csort=tv-desc", "声の出演一覧を見る"));
 
@@ -291,13 +308,14 @@ public sealed class RecordsGenerator
         };
     }
 
-    /// <summary>人物の数え上げから上位を取り出す。同数は同じ順位で、名前の読みの順に並べる。</summary>
-    private RecordItem TopPersons(string id, string title, string unit, IEnumerable<(int PersonId, int Count)> counts, string moreUrl, string moreLabel)
+    /// <summary>人物の数え上げから上位を取り出す。同数は同じ順位で、初参加の順（放送開始日 → series_id → 話数 → クレジットの位置）→ person_id に並べる。</summary>
+    private RecordItem TopPersons(string id, string title, string unit,
+        IEnumerable<(int PersonId, int Count, (long Start, int SeriesId, int EpNo, long Pos) First)> counts, string moreUrl, string moreLabel)
     {
         var ordered = counts
             .Where(c => c.Count > 0)
             .OrderByDescending(c => c.Count)
-            .ThenBy(c => _ctx.EntityUrls.PersonDisplayKana(c.PersonId) ?? "", StringComparer.Ordinal)
+            .ThenBy(c => c.First)
             .ThenBy(c => c.PersonId)
             .ToList();
         var entries = new List<RecordEntry>();
@@ -343,7 +361,8 @@ public sealed class RecordsGenerator
             .GroupBy(a => a.CharacterId)
             .ToDictionary(g => g.Key, g => g.Select(a => a.AliasId).ToList());
 
-        var rows = new List<(Character Character, int Episodes, int Movies, int Works, int SpinOffWorks)>();
+        // First は初登場のクレジットの位置（放送開始日 → series_id → 話数 → クレジットの位置）。同じ数のキャラの並びに使う。
+        var rows = new List<(Character Character, int Episodes, int Movies, int Works, int SpinOffWorks, (long Start, int SeriesId, int EpNo, long Pos) First)>();
         // キャラクター一覧の登場回数順のリスト（個別ページを持つキャラ）に 🌙 の札が出るか。出るときは件数バッジでの
         // 並べ替えの合計に 🌙 も入る（count-sort.js）ので、「もっと見る」のリンクに書く並べ替えの値が変わる。
         bool countListHasOtona = false;
@@ -358,18 +377,21 @@ public sealed class RecordsGenerator
             // 併映の短編は親映画に含める。
             var works = new HashSet<int>();
             var spinOffWorks = new HashSet<int>();
+            var first = (Start: long.MaxValue, SeriesId: int.MaxValue, EpNo: int.MaxValue, Pos: long.MaxValue);
             foreach (var aliasId in aliasIds)
             {
                 if (!_involvements.VoiceCastByCharacterAlias.TryGetValue(aliasId, out var invs)) continue;
                 foreach (var inv in invs)
                 {
                     if (!_ctx.SeriesById.TryGetValue(inv.SeriesId, out var series)) continue;
+                    var key = CreditKey(inv);
+                    if (key.CompareTo(first) < 0) first = key;
                     if (SeriesClassifier.IsSpinOff(series)) spinOffWorks.Add(series.SeriesId);
                     works.Add(SeriesClassifier.IsMovieShortChild(series) && series.ParentSeriesId is int parentId ? parentId : series.SeriesId);
                 }
             }
             if (works.Count == 0) continue;
-            rows.Add((c, episodes, movies, works.Count, spinOffWorks.Count));
+            rows.Add((c, episodes, movies, works.Count, spinOffWorks.Count, first));
         }
 
         // 「もっと見る」はキャラクター一覧の登場回数順のタブへ。TV シリーズの登場話数は 📺 の多い順、登場作品数は
@@ -380,11 +402,11 @@ public sealed class RecordsGenerator
         var items = new List<RecordItem>
         {
             TopCharacters("character-episodes", "TVシリーズ登場話数が多いキャラクター", rows
-                .OrderByDescending(r => r.Episodes).ThenByDescending(r => r.Movies).ThenBy(r => r.Character.NameKana ?? "", StringComparer.Ordinal)
+                .OrderByDescending(r => r.Episodes).ThenByDescending(r => r.Movies).ThenBy(r => r.First).ThenBy(r => r.Character.CharacterId)
                 .Select(r => (r.Character, r.Episodes, $"{r.Episodes}話", "")),
                 tvSortUrl),
             TopCharacters("character-works", "登場作品数が多いキャラクター", rows
-                .OrderByDescending(r => r.Works).ThenByDescending(r => r.Episodes).ThenBy(r => r.Character.NameKana ?? "", StringComparer.Ordinal)
+                .OrderByDescending(r => r.Works).ThenByDescending(r => r.Episodes).ThenBy(r => r.First).ThenBy(r => r.Character.CharacterId)
                 .Select(r => (r.Character, r.Works, $"{r.Works}作品",
                     $"TV {r.Episodes}話・映画 {r.Movies}本" + (r.SpinOffWorks > 0 ? $"・スピンオフ {r.SpinOffWorks}作品" : ""))),
                 totalSortUrl)

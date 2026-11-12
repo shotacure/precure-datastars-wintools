@@ -187,6 +187,22 @@ public sealed class BuildContext
     public string SongLinkForRecording(int songRecordingId, int songId)
         => SongRecordingAnchorUrlById.TryGetValue(songRecordingId, out var url) ? url : PathUtil.SongUrl(songId);
 
+    private IReadOnlyDictionary<int, int>? _minRecordingIdBySong;
+
+    /// <summary>
+    /// song_id → その曲の最小 song_recording_id（録音 ID は登録＝初出の順なので「その曲の初出」の代理）。
+    /// 同じ盤に入った曲どうしを並べる所で、曲に付いた音楽クレジットの並びに使う。初めて引いたときに <see cref="SongRecordingById"/> から作る。
+    /// </summary>
+    public IReadOnlyDictionary<int, int> MinRecordingIdBySong
+        => LazyInitializer.EnsureInitialized(ref _minRecordingIdBySong, () =>
+        {
+            var map = new Dictionary<int, int>();
+            foreach (var rec in SongRecordingById.Values)
+                if (!map.TryGetValue(rec.SongId, out var cur) || rec.SongRecordingId < cur)
+                    map[rec.SongId] = rec.SongRecordingId;
+            return map;
+        });
+
     /// <summary>music_class_code → <see cref="SongMusicClass"/> の全件辞書（OP / ED / イメージソング 等の楽曲種別マスタ）。 人物・キャラ詳細の「楽曲」カードが録音の種別ラベル・バッジを引くのに使う。</summary>
     public required IReadOnlyDictionary<string, SongMusicClass> MusicClassByCode { get; init; }
 

@@ -390,6 +390,20 @@ public static class MusicCreditViewBuilder
     }
 
     /// <summary>
+    /// 音楽クレジット行の紐付け先の並べ替えの値（同じ日付の盤の中の並び）。盤そのもの（0）→ 録音回（session_no）→
+    /// 曲・録音（1000 + 録音 ID。曲はその曲の最小録音 ID）の順。同じ盤に入った曲どうしは録音 ID の順になる。
+    /// 紐付け先が解決できない行は最後（int.MaxValue）。
+    /// </summary>
+    public static long TargetOrder(BuildContext ctx, MusicCredit r) => r.TargetKind switch
+    {
+        MusicCreditTargetKinds.Product => 0,
+        MusicCreditTargetKinds.BgmSession => r.BgmSessionNo ?? 0,
+        MusicCreditTargetKinds.SongRecording when r.SongRecordingId is int rid => 1_000L + rid,
+        MusicCreditTargetKinds.Song when r.SongId is int sid && ctx.MinRecordingIdBySong.TryGetValue(sid, out var mr) => 1_000L + mr,
+        _ => int.MaxValue
+    };
+
+    /// <summary>
     /// 別名義でのクレジットに、人物の本名義（人物詳細の見出しと同じ名義）を括弧で添える HTML。
     /// 例：「仲弓 香乃」→「（ゆかな）」。名義が本名義と同じ（空白の違いを除く）なら空文字。
     /// </summary>

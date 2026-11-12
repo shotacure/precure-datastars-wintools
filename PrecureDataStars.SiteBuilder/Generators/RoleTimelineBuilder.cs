@@ -357,6 +357,9 @@ internal sealed class RoleTimelineBuilder
             if (built is not null) rows.Add(built);
         }
         if (rows.Count == 0) return null;
+        // 渡された順（呼び出し側の一覧の並び＝クレジットの順・ID の順）。ほかのキーがすべて同じ行どうしの最後の決め手に使う。
+        var inputOrder = new Dictionary<BuiltRow, int>(ReferenceEqualityComparer.Instance);
+        for (int i = 0; i < rows.Count; i++) inputOrder[rows[i]] = i;
 
         bool filterable = !rules.IncludeAll && rows.Count > rules.ShowAllUpTo;
         if (filterable)
@@ -365,12 +368,12 @@ internal sealed class RoleTimelineBuilder
             int lack = rules.ShowAllUpTo - rows.Count(r => r.Qualifies);
             if (lack > 0)
             {
-                // 補う順：参加の多い順 → 最初の参加の早い順 → 同じ話ならクレジットで先に出ている順 → 名前。
+                // 補う順：参加の多い順 → 最初の参加の早い順 → 同じ話ならクレジットで先に出ている順 → 渡された順。
                 foreach (var r in rows.Where(r => !r.Qualifies)
                              .OrderByDescending(r => r.CreditCount)
                              .ThenBy(r => r.First)
                              .ThenBy(r => r.FirstPos)
-                             .ThenBy(r => r.Row.EntityName, StringComparer.Ordinal)
+                             .ThenBy(r => inputOrder[r])
                              .Take(lack))
                     r.Row.IsMain = true;
             }
@@ -381,7 +384,7 @@ internal sealed class RoleTimelineBuilder
             .ThenBy(r => string.Equals(r.Row.EntityKind, "company", StringComparison.Ordinal) ? 0 : 1)
             .ThenBy(r => r.Last)
             .ThenBy(r => r.FirstPos)
-            .ThenBy(r => r.Row.EntityName, StringComparer.Ordinal)
+            .ThenBy(r => inputOrder[r])
             .ToList();
         bool grouped = GroupMembers(ordered, filterable);
         var lineageLegend = AssignLineageColors(ordered);
@@ -1164,7 +1167,8 @@ internal sealed class RoleTimelineEntity
     public required string EntityUrl { get; init; }
     /// <summary>
     /// 最初と最後の参加の日付が同じ行どうしの並びのキー（小さいほうが先）。役職詳細・声の出演は初めてクレジットされた話の中での
-    /// クレジットの位置（その話のクレジットで上に出ている順）、歌唱・作詞作曲編曲は初参加の録音、音楽の役職詳細は最初の担当先の日付。
+    /// クレジットの位置（その話のクレジットで上に出ている順）、歌唱・作詞作曲編曲は初参加の録音、音楽の役職詳細は初参加順の一覧での位置
+    /// （最初の担当先の日付 → 盤の中の順 → 音楽クレジットの順）。
     /// </summary>
     public long FirstSortPos { get; init; }
     /// <summary>役職を問わずオープニングのクレジットに出たことがあるか（役職詳細のメインスタッフの判定）。</summary>

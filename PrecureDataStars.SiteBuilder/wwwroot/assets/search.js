@@ -147,7 +147,7 @@
 
   /**
    * 検索の本体。クエリを空白で分割して全語が title / reading のいずれかに含まれているかを AND 判定。
-   * マッチした結果は (種別優先順位, タイトル長) の 2 段ソートで並べて、上位 MAX_RESULTS 件を返す。
+   * マッチした結果は (種別優先順位, タイトル長, 索引の並び) で並べて、上位 MAX_RESULTS 件を返す。
    */
   function performSearch(rawQuery) {
     if (!indexData || indexData.length === 0) return [];
@@ -182,11 +182,14 @@
       }
       if (allMatch) {
         item._alt = findMatchedAltName(item, terms, titleNorm, titleLower);
+        // 索引の中の位置。索引は種別ごとに ID の順（作品・人物・キャラ・会社・曲は ID、盤・本は発売日の順）で書いてあるので、
+        // 種別と長さが同じ候補はこの順に並べる。
+        item._i = j;
         results.push(item);
       }
     }
 
-    // ソート：種別優先順位 → タイトル長昇順（短いものほど一般的なマッチに近い）→ タイトル昇順。
+    // ソート：種別優先順位 → タイトル長昇順（短いものほど一般的なマッチに近い）→ 索引の並び（ID の順）。
     results.sort(function (a, b) {
       var ka = KIND_ORDER[a.k] || 99;
       var kb = KIND_ORDER[b.k] || 99;
@@ -194,7 +197,7 @@
       var la = (a.t || '').length;
       var lb = (b.t || '').length;
       if (la !== lb) return la - lb;
-      return (a.t || '').localeCompare(b.t || '', 'ja');
+      return a._i - b._i;
     });
 
     return results.slice(0, MAX_RESULTS);

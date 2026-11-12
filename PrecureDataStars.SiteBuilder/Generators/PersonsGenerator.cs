@@ -895,31 +895,23 @@ public sealed class PersonsGenerator
         if (all.Count == 0) return Array.Empty<InvolvementGroup>();
 
         // 役職グループの並びは「その役職で当該人物が最初にクレジットされた位置」（初参加）昇順。
-        // キーは (シリーズ放送開始日のシリアル値, シリーズ内話数, クレジット階層位置) の辞書順で、
+        // キーは (シリーズ放送開始日のシリアル値, series_id, シリーズ内話数, クレジット階層位置) の辞書順で、
         // CreatorsGenerator.FirstCreditAccumulator と同じ合成基準（roles.display_order には依存しない）。
+        // 同じ日の映画と併映の短編は series_id の順（本編が先）。
         // シリーズ全体スコープ（episode_id=null）の関与は話数 0 として当該シリーズ内で最優先に扱う。
-        (long StartDay, int EpNo, long Pos) EarliestCreditKey(IEnumerable<Involvement> invs)
+        (long StartDay, int SeriesId, int EpNo, long Pos) EarliestCreditKey(IEnumerable<Involvement> invs)
         {
-            long bestDay = long.MaxValue;
-            int bestEpNo = int.MaxValue;
-            long bestPos = long.MaxValue;
+            var best = (StartDay: long.MaxValue, SeriesId: int.MaxValue, EpNo: int.MaxValue, Pos: long.MaxValue);
             foreach (var inv in invs)
             {
                 long day = _ctx.SeriesStartDate(inv.SeriesId).DayNumber;
                 int epNo = inv.EpisodeId is int eid
                     ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
                     : 0;
-                long pos = inv.CreditPos;
-                if (day < bestDay
-                    || (day == bestDay && epNo < bestEpNo)
-                    || (day == bestDay && epNo == bestEpNo && pos < bestPos))
-                {
-                    bestDay = day;
-                    bestEpNo = epNo;
-                    bestPos = pos;
-                }
+                var cand = (StartDay: day, inv.SeriesId, EpNo: epNo, Pos: inv.CreditPos);
+                if (cand.CompareTo(best) < 0) best = cand;
             }
-            return (bestDay, bestEpNo, bestPos);
+            return best;
         }
 
         // グループ分けキーは「カテゴリプレフィックスコード × 役職コード」の複合。
@@ -1537,12 +1529,13 @@ public sealed class PersonsGenerator
     /// 劇伴の中で使われた曲（著作物。musical_works）の作家（musical_work_credits）を、曲ごとの 1 行
     /// （担当した役職のバッジ + 曲名 + 「〇〇の劇伴で使用」）に束ねる。曲（著作物）は単独のページを持たないので、
     /// 行のリンク先はその曲を使っている劇伴の曲のカード（シリーズの放送開始日順で最初のもの）にする。
-    /// どの劇伴の曲にも使われていない曲（著作物）は出さない。並びは最初に使われたシリーズの放送開始日順 → 曲名順。
+    /// どの劇伴の曲にも使われていない曲（著作物）は出さない。並びは最初に使われたシリーズの放送開始日順 → series_id →
+    /// そのシリーズで最初に使われた劇伴の M 番号の順 → musical_work_id。
     /// </summary>
     private IReadOnlyList<PersonMusicCreditItem> BuildMusicalWorkCreditItems(IReadOnlyList<int> aliasIds)
     {
         var aliasSet = aliasIds.ToHashSet();
-        var items = new List<(DateOnly Sort, PersonMusicCreditItem Item)>();
+        var items = new List<(DateOnly Sort, int SeriesId, string MNoDetail, int WorkId, PersonMusicCreditItem Item)>();
         foreach (var (workId, credits) in _ctx.MusicalWorkCreditsByWork)
         {
             var roles = credits
@@ -1553,15 +1546,18 @@ public sealed class PersonsGenerator
             if (roles.Count == 0) continue;
             if (!_ctx.MusicalWorkById.TryGetValue(workId, out var work)) continue;
             if (!_ctx.BgmCuesBySourceWork.TryGetValue(workId, out var cueKeys)) continue;
-            var refs = cueKeys
-                .Select(k => _bgmCueRefs.Describe(k.SeriesId, k.MNoDetail))
-                .OfType<BgmCueRef>()
-                .OrderBy(r => _ctx.SeriesStartDate(r.SeriesId))
-                .ThenBy(r => r.CueLabel, StringComparer.Ordinal)
+            // 使われた劇伴の曲は、シリーズの放送開始日 → series_id → M 番号の順（MNoNaturalComparer。"M2" が "M10" より前）。
+            var used = cueKeys
+                .Select(k => (k.MNoDetail, Ref: _bgmCueRefs.Describe(k.SeriesId, k.MNoDetail)))
+                .Where(x => x.Ref is not null)
+                .OrderBy(x => _ctx.SeriesStartDate(x.Ref!.SeriesId))
+                .ThenBy(x => x.Ref!.SeriesId)
+                .ThenBy(x => x.MNoDetail, MNoNaturalComparer.Instance)
                 .ToList();
+            var refs = used.Select(x => x.Ref!).ToList();
             if (refs.Count == 0) continue;
             string seriesTitles = string.Join("、", refs.Select(r => r.SeriesTitle).Distinct(StringComparer.Ordinal));
-            items.Add((_ctx.SeriesStartDate(refs[0].SeriesId), new PersonMusicCreditItem
+            items.Add((_ctx.SeriesStartDate(refs[0].SeriesId), refs[0].SeriesId, used[0].MNoDetail, workId, new PersonMusicCreditItem
             {
                 Title = work.Title,
                 Url = refs[0].Url,
@@ -1580,7 +1576,9 @@ public sealed class PersonsGenerator
         }
         return items
             .OrderBy(x => x.Sort)
-            .ThenBy(x => x.Item.Title, StringComparer.Ordinal)
+            .ThenBy(x => x.SeriesId)
+            .ThenBy(x => x.MNoDetail, MNoNaturalComparer.Instance)
+            .ThenBy(x => x.WorkId)
             .Select(x => x.Item)
             .ToList();
     }
@@ -1638,10 +1636,14 @@ public sealed class PersonsGenerator
             .ToList();
     }
 
-    /// <summary>音盤の音楽クレジット行を、紐付け先（曲・録音・劇伴セッション・商品）ごとの 1 行に束ねる。並びは根拠の盤の発売日順。</summary>
+    /// <summary>
+    /// 音盤の音楽クレジット行を、紐付け先（曲・録音・劇伴セッション・商品）ごとの 1 行に束ねる。並びは根拠の盤の発売日順。
+    /// 同じ日付の行は、劇伴は series_id → 録音回、歌は盤の中の順（録音 ID。<see cref="MusicCreditViewBuilder.TargetOrder"/>）、
+    /// 盤は品番の順（リンク先の URL が品番）。
+    /// </summary>
     private IReadOnlyList<PersonMusicCreditItem> BuildMusicCreditItems(IEnumerable<MusicCredit> rows, string displayName)
     {
-        var items = new List<(DateTime Sort, PersonMusicCreditItem Item)>();
+        var items = new List<(DateTime Sort, (long Series, long Target) Order, PersonMusicCreditItem Item)>();
         foreach (var g in rows.GroupBy(r => (r.TargetKind, r.SongId, r.SongRecordingId, r.BgmSeriesId, r.BgmSessionNo, r.ProductCatalogNo)))
         {
             var target = MusicCreditViewBuilder.DescribeTarget(_ctx, g.First());
@@ -1662,9 +1664,10 @@ public sealed class PersonsGenerator
                 .OrderBy(b => b.DisplayOrder)
                 .ToList();
             string aliasNote = AliasNote(g.Where(r => r.PersonAliasId.HasValue).Select(r => r.PersonAliasId!.Value), displayName);
-            items.Add((sort, new PersonMusicCreditItem { Title = title, Url = url, SubLabel = sub, Roles = roles, AliasNote = aliasNote }));
+            items.Add((sort, (g.Key.BgmSeriesId ?? 0, MusicCreditViewBuilder.TargetOrder(_ctx, g.First())),
+                new PersonMusicCreditItem { Title = title, Url = url, SubLabel = sub, Roles = roles, AliasNote = aliasNote }));
         }
-        return items.OrderBy(x => x.Sort).ThenBy(x => x.Item.Title, StringComparer.Ordinal).Select(x => x.Item).ToList();
+        return items.OrderBy(x => x.Sort).ThenBy(x => x.Order).ThenBy(x => x.Item.Url, StringComparer.Ordinal).Select(x => x.Item).ToList();
     }
 
     /// <summary>

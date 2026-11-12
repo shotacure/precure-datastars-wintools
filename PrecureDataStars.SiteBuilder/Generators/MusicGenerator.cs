@@ -790,6 +790,22 @@ public sealed class MusicGenerator
         // (alias_id?, normalized_text) をキーにした集計。alias 有り行は alias_id をキー、
         // フリーテキスト行は text をキーにして、別名義として並立させる。
         var buckets = new Dictionary<string, BgmKeyStaffEntry>();
+        // 担当数が同じ名義の並び：その作品で最初に担当した cue の M 番号（MNoNaturalComparer）→ その cue の credit_seq →
+        // alias_id（フリーテキストは credit_seq を持たないので、同じ cue の名義の後ろ）。
+        var firstPos = new Dictionary<string, (string MNoDetail, int Seq, int Id)>();
+        void OfferFirst(string bucketKey, string mNoDetail, int seq, int id)
+        {
+            if (!firstPos.TryGetValue(bucketKey, out var cur)
+                || CompareFirst((mNoDetail, seq, id), cur) < 0)
+                firstPos[bucketKey] = (mNoDetail, seq, id);
+        }
+        static int CompareFirst((string MNoDetail, int Seq, int Id) a, (string MNoDetail, int Seq, int Id) b)
+        {
+            int c = MNoNaturalComparer.Instance.Compare(a.MNoDetail, b.MNoDetail);
+            if (c != 0) return c;
+            c = a.Seq.CompareTo(b.Seq);
+            return c != 0 ? c : a.Id.CompareTo(b.Id);
+        }
         int denom = 0;  // 役職に何らかのクレジット情報が入っている cue の数。
 
         foreach (var cue in cues)
@@ -815,6 +831,7 @@ public sealed class MusicGenerator
                         buckets[bucketKey] = entry;
                     }
                     entry.Count++;
+                    OfferFirst(bucketKey, cue.MNoDetail, cred.CreditSeq, cred.AliasId);
                 }
                 counted = true;
             }
@@ -837,6 +854,7 @@ public sealed class MusicGenerator
                         buckets[bucketKey] = entry;
                     }
                     entry.Count++;
+                    OfferFirst(bucketKey, cue.MNoDetail, int.MaxValue, int.MaxValue);
                     counted = true;
                 }
             }
@@ -855,11 +873,19 @@ public sealed class MusicGenerator
             entry.SharePercent = (int)Math.Round((double)entry.Count / denom * 100);
         }
 
-        return buckets.Values
-            .Where(e => (double)e.Count / denom >= thresholdRatio)
-            .OrderByDescending(e => e.Count)
-            .ThenBy(e => e.Name, StringComparer.Ordinal)
+        var ordered = buckets
+            .Where(kv => (double)kv.Value.Count / denom >= thresholdRatio)
             .ToList();
+        // 最後の決め手は集計で初めて出た順（cue の並び＝録音回 → 回の中の順）。
+        var seenOrder = buckets.Keys.Select((k, i) => (k, i)).ToDictionary(x => x.k, x => x.i);
+        ordered.Sort((a, b) =>
+        {
+            int c = b.Value.Count.CompareTo(a.Value.Count);
+            if (c != 0) return c;
+            c = CompareFirst(firstPos[a.Key], firstPos[b.Key]);
+            return c != 0 ? c : seenOrder[a.Key].CompareTo(seenOrder[b.Key]);
+        });
+        return ordered.Select(kv => kv.Value).ToList();
     }
 
     /// <summary>/bgms/{slug}/ 1 シリーズあたりの劇伴詳細。各 cue を 1 枚のカードとして

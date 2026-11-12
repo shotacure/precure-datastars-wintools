@@ -310,12 +310,13 @@ internal sealed class CreditTimelineBuilder
 
     /// <summary>
     /// 音楽の役職の行のリンク先。作詞・作曲・編曲は役職詳細、歌唱系は歌唱ページ、それ以外（演奏・録音・盤の製作など）は
-    /// 音楽の役職詳細。
+    /// 音楽の役職詳細。役職詳細を持たない役職（歌唱者の行だけで使うスキャット・ガヤなど）は空文字（名前をリンクにしない）。
     /// </summary>
     private static string MusicRoleUrl(string roleCode)
     {
         string songUrl = PathUtil.SongRoleBadgeUrl(roleCode);
-        return songUrl != "" ? songUrl : PathUtil.CreatorsRoleUrl(roleCode);
+        if (songUrl != "") return songUrl;
+        return PathUtil.HasRolePage(roleCode) ? PathUtil.CreatorsRoleUrl(roleCode) : "";
     }
 }
 

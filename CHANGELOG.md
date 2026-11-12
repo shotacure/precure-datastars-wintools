@@ -4,6 +4,10 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：役職詳細の無い役職へのリンクを出さないようにした**（`CreatorListScope.RolesWithoutPage`・`CreditTimelineBuilder`・`_role-timeline.sbn`）：役職詳細の行は人物と企業/団体の名義から作るので、名義が文字だけ・曲だけ・ユニットだけの役職にはページが無い。それなのに、名義が 1 つも無い役職をページ有りとして扱い、行き先の無いリンクを出していた（オトナシリーズの「制作・著作」、2016 年の映画の「テーマソング」、歌の「スキャット」「ガヤ」）。役職マスタのすべての役職を、一覧の範囲のクレジットか音楽クレジットに人物・企業/団体の名義で出てくるか（と楽曲の作家の役職か）で判定し直した。人物・ユニットのページの年表の役職の行も、ページの無い役職は名前を文字だけで出す
+
+- **サイト：スタッフ一覧・声の出演一覧の説明文の「レギュラーシリーズ」を「TVシリーズ」にした**（`CreatorsGenerator`・`creators-landing.sbn`）：オトナシリーズも載るようになったので、オトナシリーズを含む言い方にした。meta description・OGP カード・歴代クリエイターのページのカードの文が変わる
+
 - **サイト：サイト内検索で、役職のページと書体のページを探せるようにした**（`BuildContext.SearchPages`〔新規〕・`SearchIndexGenerator`・`CreatorsGenerator`・`FontsGenerator`・`search.js`・`site.css`）：検索の種別に「役職」と「フォント」を足した。役職は役職詳細（スタッフの役職と音楽制作の役職）で、英語名と、系譜でまとめた歴代の役職名でも当たる。音楽制作の役職は、役職名の下にその旨を出す。書体はウェイトごとのページで、書体名の下にメーカー名を出す
 
 - **サイト：オトナシリーズだけのスタッフ一覧・声の出演一覧・役職のページをやめ、TV・映画と合わせた一覧に一本化した。見せる種類は「📺 TV / 🎥 映画 / 🌙 オトナ」のボタンで切り替える**（`CreatorsGenerator`・`RoleTimelineBuilder`・`CreatorListScope`・`PathUtil`・`EntityUrlRegistry`・`CreditTreeRenderer`・`LookupCache`・`InvolvementRowBuilder`・`SeriesGenerator`・`EpisodeGenerator`・`_work-kind-toggles.sbn`〔新規〕・`creators-staff.sbn`・`creators-role-detail.sbn`・`creators-voice-cast.sbn`・`_role-timeline.sbn`・`creators-landing.sbn`・`count-sort.js`・`role-timeline.js`・`view-state.js`・`site.css`）：スタッフ一覧・役職詳細・声の出演一覧に、オトナシリーズのクレジットも合わせて載せ、各行の札を 📺・🎥・🌙 に分けた。ボタンは全タブに効き、開いたときはすべて入っていて、最後の 1 つは切れない。切った種類の札と、その種類にしか参加していない方の行を隠す。「初めて」で節を分ける一覧（役職順・初参加順・初担当順・初出演順・キャラクター順）は、入っている種類の中で初めての作品の節に行を出す。年表はオトナシリーズの話を藍の帯で描き、🌙 だけを入れているときはオトナシリーズの作品ごとの帯の線表に切り替える。年表の「TV・映画 / TVのみ / 映画のみ」は、このボタンに置き換えた（`_role-timeline-media.sbn` を削除。URL の `#` の `media` は `works` になった）。`/creators/otona/…` の URL は同じ役割のページへ 301 で転送し、歴代クリエイターのページのオトナシリーズのカード 2 枚と、オトナシリーズの作品のクレジット・人物・企業のページからのリンクも役職詳細・声の出演一覧へ寄せた。人物・企業のページのパンくず、誕生日を記念日に出すかの判定、OGP カードの年表の判定は、今までどおり本編に参加した方だけで決める

@@ -629,11 +629,11 @@ public sealed class CreatorsGenerator
     /// <summary>スタッフ一覧の題（h1・パンくず・OGP カード）。</summary>
     private const string StaffPageTitle = "歴代プリキュアスタッフ";
     /// <summary>スタッフ一覧の meta description と OGP カードのリード文。</summary>
-    private const string StaffPageLead = "プリキュアのレギュラーシリーズと映画を作ってきた方々";
+    private const string StaffPageLead = "プリキュアのTVシリーズと映画を作ってきた方々";
     /// <summary>声の出演一覧の題（h1・パンくず・OGP カード）。</summary>
     private const string VoiceCastPageTitle = "歴代プリキュア声優";
     /// <summary>声の出演一覧の meta description と OGP カードのリード文。</summary>
-    private const string VoiceCastPageLead = "プリキュアのレギュラーシリーズと映画に出演した方々";
+    private const string VoiceCastPageLead = "プリキュアのTVシリーズと映画に出演した方々";
 
     // 役職詳細
 

@@ -257,10 +257,33 @@ public static class MusicCreditViewBuilder
     public static string RoleName(BuildContext ctx, string roleCode)
         => ctx.RoleByCode.TryGetValue(roleCode, out var role) && !string.IsNullOrEmpty(role.NameJa) ? role.NameJa : roleCode;
 
+    /// <summary>
+    /// 作品のクレジットの役職と同じ名前の音楽の役職に、役職マスタで付けている見分けの括弧書き（「スペシャルサンクス（音楽）」の「（音楽）」）。
+    /// 役職のページの題や人物・企業のページの見出しのように、作品のクレジットの役職と並ぶ所では付けたまま出す。
+    /// </summary>
+    private const string MusicRoleSuffix = "（音楽）";
+
+    /// <summary>
+    /// 音楽のクレジットだけが並ぶ所（盤・曲・劇伴のページのクレジットの表、音楽制作のページ）で出す役職名。括弧書きの「（音楽）」
+    /// （<see cref="MusicRoleSuffix"/>）は、ここでは何も見分けないので外す。
+    /// </summary>
+    public static string MusicPageRoleName(BuildContext ctx, string roleCode)
+    {
+        string name = RoleName(ctx, roleCode);
+        return name.Length > MusicRoleSuffix.Length && name.EndsWith(MusicRoleSuffix, StringComparison.Ordinal)
+            ? name[..^MusicRoleSuffix.Length]
+            : name;
+    }
+
+    /// <summary>音楽のクレジットだけが並ぶ所のバッジに出す役職名（<see cref="BadgeLabel"/> と同じ形で、役職名は <see cref="MusicPageRoleName"/>）。</summary>
+    public static string MusicPageBadgeLabel(BuildContext ctx, string roleCode)
+        => RoleEmojiByCode.TryGetValue(roleCode, out var emoji) ? $"{emoji} {MusicPageRoleName(ctx, roleCode)}" : MusicPageRoleName(ctx, roleCode);
+
     private static MusicCreditLineView BuildLine(BuildContext ctx, string roleCode, IReadOnlyList<MusicCredit> rows)
     {
-        string roleName = RoleName(ctx, roleCode);
-        string badgeName = BadgeLabel(ctx, roleCode);
+        // クレジットの表は音楽のクレジットだけが並ぶので、役職名の見分けの「（音楽）」は外す。
+        string roleName = MusicPageRoleName(ctx, roleCode);
+        string badgeName = MusicPageBadgeLabel(ctx, roleCode);
         var notes = rows.Select(r => r.EnsembleNote).Where(n => !string.IsNullOrEmpty(n)).Distinct(StringComparer.Ordinal).ToList();
         string label = notes.Count > 0 ? $"{badgeName}（{string.Join("、", notes)}）" : badgeName;
         string printedRole = rows.Select(r => r.RoleLabelText).FirstOrDefault(t => !string.IsNullOrEmpty(t)) ?? "";

@@ -1684,7 +1684,7 @@ public sealed class CreatorsGenerator
                 GenerateMusicRoleDetail(role, detail);
                 entries.Add(new RoleIndexEntry
                 {
-                    RoleNameJa = role.NameJa,
+                    RoleNameJa = MusicCreditViewBuilder.MusicPageRoleName(_ctx, role.RoleCode),
                     RoleUrl = PathUtil.CreatorsRoleUrl(role.RoleCode),
                     PersonCount = detail.Count(d => d.EntityKind == "person"),
                     CompanyCount = detail.Count(d => d.EntityKind == "company"),
@@ -1985,7 +1985,7 @@ public sealed class CreatorsGenerator
                 Roles = v.Roles
                     .Select(code => (Code: code, Order: _ctx.RoleByCode.TryGetValue(code, out var role) ? role.DisplayOrder ?? ushort.MaxValue : ushort.MaxValue))
                     .OrderBy(x => x.Order)
-                    .Select(x => new MusicRoleBadge { Code = x.Code, Label = MusicCreditViewBuilder.BadgeLabel(_ctx, x.Code) })
+                    .Select(x => new MusicRoleBadge { Code = x.Code, Label = MusicCreditViewBuilder.MusicPageBadgeLabel(_ctx, x.Code) })
                     .ToList()
             });
         }

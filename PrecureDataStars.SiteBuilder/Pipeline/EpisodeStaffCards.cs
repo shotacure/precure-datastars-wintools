@@ -48,6 +48,8 @@ public static class EpisodeStaffCards
     ///     （並びは行の順、同じ役職の中はクレジットに初めて出た順）。</item>
     ///   <item>担当者は PERSON / TEXT のエントリを、クレジットの順に、重複判定キー（<c>P:alias_id</c> / <c>T:テキスト</c>）で 1 度だけ並べる。
     ///     本放送のみのエントリは読まない。担当者のいない札は出さない。</item>
+    ///   <item>担当者の会社（エントリの所属、無ければブロックの筆頭の会社）を名前の後ろに「（会社）」で添える
+    ///     （<see cref="AffiliationSuffixHtml"/>）。画面では会社が名前の上の見出しでも、札では括弧書きにする。</item>
     ///   <item>絵コンテと演出が作品の行に両方あり、その回にどちらも札が 1 つずつで、顔ぶれ（重複判定キーの集合）が同じなら、
     ///     絵コンテの札の位置に 2 つの役職を並べた 1 つの札にまとめ、名前は 1 回だけ出す。</item>
     ///   <item>札の色は行の色（style 属性は <see cref="RoleBadgeColor.InlineStyle"/>）、リンク先は系譜の代表の役職のページ（<see cref="PathUtil.CreatorsRoleUrl"/>）。</item>
@@ -58,12 +60,16 @@ public static class EpisodeStaffCards
     /// <param name="rows">作品の札の役職の行（並び順の順）。null や空なら札は無い。</param>
     /// <param name="roleMap">役職マスタ（role_code → <see cref="Role"/>）。</param>
     /// <param name="resolveEntry">エントリ 1 件から（重複判定キー、表示用 HTML）を取り出す。HTML が空のエントリは数えない。</param>
+    /// <param name="companyAliasById">会社の屋号（alias_id → <see cref="CompanyAlias"/>）。担当者に添える会社の名前とリンク先に使う。</param>
+    /// <param name="logoById">ロゴ（logo_id → <see cref="Logo"/>）。所属がロゴのとき、ロゴがぶら下がる屋号を引くのに使う。</param>
     public static IReadOnlyList<EpisodeStaffBadge> BuildBadges(
         IEnumerable<Credit> credits,
         IReadOnlyDictionary<int, IReadOnlyList<CreditCardSnapshot>> cardsByCreditId,
         IReadOnlyList<SeriesEpisodeStaffRole>? rows,
         IReadOnlyDictionary<string, Role> roleMap,
-        Func<CreditBlockEntry, (string Key, string Html)> resolveEntry)
+        Func<CreditBlockEntry, (string Key, string Html)> resolveEntry,
+        IReadOnlyDictionary<int, CompanyAlias> companyAliasById,
+        IReadOnlyDictionary<int, Logo> logoById)
     {
         if (rows is null || rows.Count == 0) return Array.Empty<EpisodeStaffBadge>();
 
@@ -101,7 +107,8 @@ public static class EpisodeStaffCards
                         {
                             var (key, html) = resolveEntry(e);
                             if (string.IsNullOrEmpty(html)) continue;
-                            if (bucket.Seen.Add(key)) bucket.Names.Add(html);
+                            if (bucket.Seen.Add(key))
+                                bucket.Names.Add(html + AffiliationSuffixHtml(e, blockSnap.Block, companyAliasById, logoById));
                         }
                     }
                 }
@@ -131,6 +138,53 @@ public static class EpisodeStaffCards
             result.Add(new EpisodeStaffBadge { Roles = roles, NamesHtml = string.Join("、", b.Names) });
         }
         return result;
+    }
+
+    /// <summary>担当者に添える会社の括弧を包む span の class。名前だけを取り出す側（JSON-LD の人名など）はこの span ごと除く。</summary>
+    public const string AffiliationCssClass = "staff-affiliation";
+
+    /// <summary>
+    /// 札の担当者 1 人の後ろに添える会社の HTML（<c>&lt;span class="staff-affiliation muted"&gt;（会社）&lt;/span&gt;</c>）。会社が無ければ空文字。
+    /// <list type="bullet">
+    ///   <item>エントリの所属を先に見る：会社の屋号ならその屋号、ロゴならロゴがぶら下がる屋号、文字だけならその文字。</item>
+    ///   <item>エントリに所属が無ければ、ブロックの筆頭を使う：筆頭の会社（2 社の連名は間の字と後ろの字を挟んで並べる）、
+    ///     会社のデータを持たない筆頭（leading_text）はその文字。画面に無い筆頭（leading_company_not_on_screen）も添える。</item>
+    ///   <item>屋号は会社のページ（<see cref="PathUtil.CompanyUrl"/>）へリンクし、文字だけのものはエスケープした平文にする。</item>
+    /// </list>
+    /// </summary>
+    public static string AffiliationSuffixHtml(
+        CreditBlockEntry e,
+        CreditRoleBlock block,
+        IReadOnlyDictionary<int, CompanyAlias> companyAliasById,
+        IReadOnlyDictionary<int, Logo> logoById)
+    {
+        string inner = "";
+        if (e.AffiliationCompanyAliasId is int affAlias)
+            inner = CompanyLinkHtml(affAlias, companyAliasById);
+        else if (e.AffiliationLogoId is int logoId && logoById.TryGetValue(logoId, out var logo))
+            inner = CompanyLinkHtml(logo.CompanyAliasId, companyAliasById);
+        else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
+            inner = HtmlUtil.Escape(e.AffiliationText.Trim());
+        else if (block.LeadingCompanyAliasId is int lead)
+        {
+            inner = CompanyLinkHtml(lead, companyAliasById);
+            if (block.LeadingCompany2AliasId is int lead2)
+                inner += HtmlUtil.Escape(block.LeadingCompanySeparator ?? "") + CompanyLinkHtml(lead2, companyAliasById);
+            inner += HtmlUtil.Escape(block.LeadingCompanySuffix ?? "");
+        }
+        else if (!string.IsNullOrWhiteSpace(block.LeadingText))
+            inner = HtmlUtil.Escape(block.LeadingText.Trim());
+
+        return inner.Length == 0 ? "" : $"<span class=\"{AffiliationCssClass} muted\">（{inner}）</span>";
+    }
+
+    /// <summary>屋号 1 つの HTML（会社のページへのリンク）。屋号が引けなければ空文字。</summary>
+    private static string CompanyLinkHtml(int aliasId, IReadOnlyDictionary<int, CompanyAlias> companyAliasById)
+    {
+        if (!companyAliasById.TryGetValue(aliasId, out var ca) || string.IsNullOrEmpty(ca.Name)) return "";
+        return ca.CompanyId > 0
+            ? $"<a class=\"staff-name\" href=\"{HtmlUtil.Escape(PathUtil.CompanyUrl(ca.CompanyId))}\">{HtmlUtil.Escape(ca.Name)}</a>"
+            : HtmlUtil.Escape(ca.Name);
     }
 
     private static EpisodeStaffBadgeRole ToRole(Bucket b) => new()

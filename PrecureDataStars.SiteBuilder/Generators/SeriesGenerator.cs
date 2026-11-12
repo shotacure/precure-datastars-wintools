@@ -1635,7 +1635,9 @@ public sealed class SeriesGenerator
                 _ctx.CreditTree.CardsByCreditId,
                 _ctx.EpisodeStaffRolesBySeries.TryGetValue(seriesId, out var rows) ? rows : null,
                 _roleMap!,
-                ResolveStaffEntry)
+                ResolveStaffEntry,
+                _ctx.CompanyAliasById,
+                _ctx.LogoById)
         };
         // 本メソッドの結果を episode_id キーでキャッシュ。
         // 後段 EpisodesIndexGenerator で GetEpisodeStaffSummaries() 経由参照される。
@@ -1643,7 +1645,7 @@ public sealed class SeriesGenerator
         return result;
     }
 
-    /// <summary>PERSON / TEXT エントリから (重複判定キー, 表示用 HTML 文字列) を取り出す。</summary>
+    /// <summary>PERSON / TEXT エントリから (重複判定キー, 表示用 HTML 文字列) を取り出す。返すのは名前だけで、会社の括弧は札を組む側が添える。</summary>
     private (string Key, string Html) ResolveStaffEntry(CreditBlockEntry e)
     {
         // DB アクセスは BuildContext 由来の辞書 lookup に置き換わったため、同期で完結する。

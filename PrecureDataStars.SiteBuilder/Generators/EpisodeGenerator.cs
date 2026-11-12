@@ -1386,11 +1386,13 @@ public sealed class EpisodeGenerator
     ///。空白要素は除外、各人名の前後空白も除去する。
     /// 注意：<see cref="StaffRow.NamesLine"/> は実体としては <c>&lt;a href="..."&gt;人名&lt;/a&gt;</c> でラップされた
     /// HTML 断片の連結である。本メソッドの結果は JSON-LD の Person.name 値として使われるため、
-    /// 各エントリから HTML タグを除去してプレーンテキスト化する。
+    /// 各エントリから会社の括弧（<see cref="EpisodeStaffCards.AffiliationCssClass"/> の span）を除き、HTML タグを除去してプレーンテキスト化する。
     /// </summary>
     private static List<string> SplitNamesLine(string namesLine)
     {
         if (string.IsNullOrEmpty(namesLine)) return new List<string>();
+        namesLine = System.Text.RegularExpressions.Regex.Replace(
+            namesLine, "<span class=\"" + EpisodeStaffCards.AffiliationCssClass + "[^\"]*\">.*?</span>", "");
         return namesLine.Split('、', StringSplitOptions.RemoveEmptyEntries)
             .Select(n => StripHtmlTags(n).Trim())
             .Where(n => !string.IsNullOrEmpty(n))
@@ -1727,7 +1729,9 @@ public sealed class EpisodeGenerator
             _ctx.CreditTree.CardsByCreditId,
             _ctx.EpisodeStaffRolesBySeries.TryGetValue(series.SeriesId, out var staffRoles) ? staffRoles : null,
             _roleMap,
-            ResolveStaffEntry);
+            ResolveStaffEntry,
+            _ctx.CompanyAliasById,
+            _ctx.LogoById);
 
         // 札 1 つを 1 行にする。HTML 断片を「、」で連結した文字列を NamesLine に詰める。テンプレ側では html.escape を
         // かけずにそのまま出力する（PERSON エントリは既に <a> タグでラップ済み、TEXT は escape 済み）。
@@ -1812,7 +1816,7 @@ public sealed class EpisodeGenerator
     /// 変換し、TEXT エントリは HTML エスケープのみ施したプレーンテキストにする。
     /// 重複判定キーは PERSON なら <c>"P:{alias_id}"</c>、TEXT なら <c>"T:{raw_text}"</c>。
     /// それ以外（CHARACTER_VOICE / COMPANY / LOGO）は空文字 + 空 HTML を返して呼び出し元で除外する。
-    /// 所属（屋号）は表示しない（スタッフ一覧は素朴に「役職 — 名前、名前、名前」で出す方針）。
+    /// 返すのは名前だけ。会社の括弧は札を組む側（<see cref="EpisodeStaffCards.AffiliationSuffixHtml"/>）が後ろに添える。
     /// 名義の解決は BuildContext.PersonAliasById（削除済み込みの全件辞書）への同期 lookup で行う
     /// （per-id GetByIdAsync の DB 往復を撲滅。旧経路の GetByIdAsync も削除済み名義を返す仕様だったため
     /// 解決結果は同一）。

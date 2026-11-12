@@ -1158,13 +1158,18 @@ public sealed class PersonsGenerator
             PerEpisodeCharacterNamesHtml: CharacterLinksHtml(perEpisodeCharacters));
 
         // character_alias_id からキャラを引き、未登場の character_id なら初出順で追加する。
+        // 同じキャラに別の名義でクレジットされていれば、その名義を初出順に「 / 」でつないで役名にする
+        // （役ごとの見出しと同じ決まり。例「スバル / ガオウ」「和実ゆい / キュアプレシャス」）。
         // 役名は苗字の無い名義ならフルネームの名義で出す（CharacterAliasNames）。
         void AddCharacter(List<(int CharacterId, string Name)> list, int characterAliasId)
         {
             if (!_ctx.CharacterAliasById.TryGetValue(characterAliasId, out var ca)) return;
             if (string.IsNullOrEmpty(ca.Name)) return;
-            if (list.Any(c => c.CharacterId == ca.CharacterId)) return;
-            list.Add((ca.CharacterId, _ctx.CharacterAliasNames.DisplayName(ca)));
+            var name = _ctx.CharacterAliasNames.DisplayName(ca);
+            int i = list.FindIndex(c => c.CharacterId == ca.CharacterId);
+            if (i < 0) { list.Add((ca.CharacterId, name)); return; }
+            if (list[i].Name.Split(" / ").Contains(name)) return;
+            list[i] = (ca.CharacterId, list[i].Name + " / " + name);
         }
 
         // キャラ名をキャラクター詳細（単発キャラはゲストキャラクターページの該当話）へのリンクにして「、」で連結する。

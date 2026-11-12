@@ -3042,6 +3042,12 @@ public sealed class CreatorsGenerator
                             }
                         }
                     }
+                    else if (acc.BestEpNo == int.MaxValue && inv.CreditPos < acc.BestPos)
+                    {
+                        // 話の無い作品まるごとのクレジット（映画など）は、そのクレジットの中の位置で並べる。
+                        // 同じ作品に話のクレジットもあれば、そちらの最早話数と位置が優先する（上の分岐で上書きされる）。
+                        acc.BestPos = inv.CreditPos;
+                    }
                     bucket[key] = acc;
                 }
             }

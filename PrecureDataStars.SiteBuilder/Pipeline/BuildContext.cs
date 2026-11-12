@@ -209,6 +209,13 @@ public sealed class BuildContext
     /// <summary>role_code → <see cref="Role"/> の全件辞書。 LookupCache および CreditTreeRenderer が初回 DB 引きしていた経路を撲滅する。</summary>
     public required IReadOnlyDictionary<string, Role> RoleByCode { get; init; }
 
+    /// <summary>
+    /// 作品 ID → その作品のメインスタッフの役職（<c>series_key_staff_roles</c>、並び順の順）。
+    /// シリーズ一覧のカードのバッジと作品詳細のメインスタッフは、この行の役職だけをこの順・この色で出す。
+    /// 行の無い作品はキーを持たない（メインスタッフを出さない）。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<SeriesKeyStaffRole>> KeyStaffRolesBySeries { get; init; }
+
     /// <summary>役職テンプレ（<c>role_templates</c>）を (role_code, series_id) 解決可能な形で保持。 CreditTreeRenderer が per-sibling-role で <c>RoleTemplatesRepository.ResolveAsync</c> を発火していたのを 同期辞書 lookup に置き換える。</summary>
     public required RoleTemplateResolver RoleTemplateResolver { get; init; }
 

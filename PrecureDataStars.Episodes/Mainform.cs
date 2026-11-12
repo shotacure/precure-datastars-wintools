@@ -14,6 +14,8 @@ public partial class MainForm : Form
     private readonly SeriesRelationKindsRepository _relKindsRepo;
     private readonly PartTypesRepository _partTypesRepo;
     private readonly MagazineIssuesRepository _magazineIssuesRepo;
+    private readonly RolesRepository _rolesRepo;
+    private readonly SeriesKeyStaffRolesRepository _keyStaffRolesRepo;
 
     /// <summary><see cref="MainForm"/> の新しいインスタンスを生成する。</summary>
     /// <param name="seriesRepo">シリーズリポジトリ。</param>
@@ -23,6 +25,8 @@ public partial class MainForm : Form
     /// <param name="relKindsRepo">シリーズ関係種別マスタリポジトリ。</param>
     /// <param name="partTypesRepo">パート種別マスタリポジトリ。</param>
     /// <param name="magazineIssuesRepo">アニメ雑誌の号マスタリポジトリ。</param>
+    /// <param name="rolesRepo">役職マスタリポジトリ（シリーズ編集のメインスタッフの役職の選択肢）。</param>
+    /// <param name="keyStaffRolesRepo">作品ごとのメインスタッフの役職のリポジトリ。</param>
     public MainForm(
         SeriesRepository seriesRepo,
         EpisodesRepository episodesRepo,
@@ -30,7 +34,9 @@ public partial class MainForm : Form
         SeriesKindsRepository kindsRepo,
         SeriesRelationKindsRepository relKindsRepo,
         PartTypesRepository partTypesRepo,
-        MagazineIssuesRepository magazineIssuesRepo)
+        MagazineIssuesRepository magazineIssuesRepo,
+        RolesRepository rolesRepo,
+        SeriesKeyStaffRolesRepository keyStaffRolesRepo)
     {
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
         _episodesRepo = episodesRepo ?? throw new ArgumentNullException(nameof(episodesRepo));
@@ -39,6 +45,8 @@ public partial class MainForm : Form
         _relKindsRepo = relKindsRepo ?? throw new ArgumentNullException(nameof(relKindsRepo));
         _partTypesRepo = partTypesRepo ?? throw new ArgumentNullException(nameof(partTypesRepo));
         _magazineIssuesRepo = magazineIssuesRepo ?? throw new ArgumentNullException(nameof(magazineIssuesRepo));
+        _rolesRepo = rolesRepo ?? throw new ArgumentNullException(nameof(rolesRepo));
+        _keyStaffRolesRepo = keyStaffRolesRepo ?? throw new ArgumentNullException(nameof(keyStaffRolesRepo));
         InitializeComponent();
     }
 
@@ -55,7 +63,7 @@ public partial class MainForm : Form
     private void mnuSeries_Click(object? sender, EventArgs e)
         => RunChildModal(() =>
         {
-            using var f = new SeriesEditorForm(_seriesRepo, _kindsRepo, _relKindsRepo);
+            using var f = new SeriesEditorForm(_seriesRepo, _kindsRepo, _relKindsRepo, _rolesRepo, _keyStaffRolesRepo);
             f.ShowDialog();
         });
 

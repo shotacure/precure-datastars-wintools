@@ -63,6 +63,16 @@ namespace PrecureDataStars.Episodes.Forms
         private System.Windows.Forms.Label lblStoryboardDisplay = null!;
         private System.Windows.Forms.ComboBox cmbStoryboardDisplay = null!;
 
+        // 作品ごとのメインスタッフの役職（series_key_staff_roles）。行の順がサイトでの並び。
+        private System.Windows.Forms.Label lblKeyStaff = null!;
+        private System.Windows.Forms.DataGridView dgvKeyStaff = null!;
+        private System.Windows.Forms.Button btnKeyStaffAdd = null!;
+        private System.Windows.Forms.Button btnKeyStaffRemove = null!;
+        private System.Windows.Forms.Button btnKeyStaffUp = null!;
+        private System.Windows.Forms.Button btnKeyStaffDown = null!;
+        private System.Windows.Forms.Button btnKeyStaffColor = null!;
+        private System.Windows.Forms.Label lblKeyStaffNote = null!;
+
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null)) components.Dispose();
@@ -119,11 +129,20 @@ namespace PrecureDataStars.Episodes.Forms
             // 追加: 絵コンテ・演出融合表示フラグ用 CheckBox。
             lblStoryboardDisplay = new Label();
             cmbStoryboardDisplay = new ComboBox();
+            lblKeyStaff = new Label();
+            dgvKeyStaff = new DataGridView();
+            btnKeyStaffAdd = new Button();
+            btnKeyStaffRemove = new Button();
+            btnKeyStaffUp = new Button();
+            btnKeyStaffDown = new Button();
+            btnKeyStaffColor = new Button();
+            lblKeyStaffNote = new Label();
             btnAdd = new Button();
             btnSave = new Button();
             ((System.ComponentModel.ISupportInitialize)numSeqInParent).BeginInit();
             ((System.ComponentModel.ISupportInitialize)numEpisodes).BeginInit();
             ((System.ComponentModel.ISupportInitialize)numRunTimeSeconds).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)dgvKeyStaff).BeginInit();
             SuspendLayout();
             // 
             // lstSeries
@@ -132,7 +151,7 @@ namespace PrecureDataStars.Episodes.Forms
             lstSeries.BorderStyle = BorderStyle.FixedSingle;
             lstSeries.Location = new Point(12, 12);
             lstSeries.Name = "lstSeries";
-            lstSeries.Size = new Size(640, 822);
+            lstSeries.Size = new Size(640, 1062);
             lstSeries.TabIndex = 0;
             // 
             // lblTitle
@@ -535,12 +554,93 @@ namespace PrecureDataStars.Episodes.Forms
             cmbStoryboardDisplay.Name = "cmbStoryboardDisplay";
             cmbStoryboardDisplay.Size = new Size(520, 28);
             cmbStoryboardDisplay.TabIndex = 39;
+            //
+            // lblKeyStaff
+            //
+            lblKeyStaff.AutoSize = true;
+            lblKeyStaff.Location = new Point(664, 812);
+            lblKeyStaff.Name = "lblKeyStaff";
+            lblKeyStaff.Size = new Size(110, 20);
+            lblKeyStaff.TabIndex = 45;
+            lblKeyStaff.Text = "メインスタッフ";
+            //
+            // dgvKeyStaff
+            //   メインスタッフとして出す役職と、バッジの色（#rrggbb）。行の順がサイトでの並び。
+            //   列（役職のドロップダウン・色）は役職マスタを読んでからコードで組む。
+            //
+            dgvKeyStaff.AllowUserToAddRows = false;
+            dgvKeyStaff.AllowUserToDeleteRows = false;
+            dgvKeyStaff.AllowUserToResizeRows = false;
+            dgvKeyStaff.AllowUserToOrderColumns = false;
+            dgvKeyStaff.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            dgvKeyStaff.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvKeyStaff.Location = new Point(900, 809);
+            dgvKeyStaff.MultiSelect = false;
+            dgvKeyStaff.Name = "dgvKeyStaff";
+            dgvKeyStaff.RowHeadersVisible = false;
+            dgvKeyStaff.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgvKeyStaff.Size = new Size(420, 230);
+            dgvKeyStaff.TabIndex = 46;
+            //
+            // btnKeyStaffAdd
+            //
+            btnKeyStaffAdd.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            btnKeyStaffAdd.Location = new Point(1330, 809);
+            btnKeyStaffAdd.Name = "btnKeyStaffAdd";
+            btnKeyStaffAdd.Size = new Size(100, 30);
+            btnKeyStaffAdd.TabIndex = 47;
+            btnKeyStaffAdd.Text = "行を足す";
+            //
+            // btnKeyStaffRemove
+            //
+            btnKeyStaffRemove.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            btnKeyStaffRemove.Location = new Point(1330, 845);
+            btnKeyStaffRemove.Name = "btnKeyStaffRemove";
+            btnKeyStaffRemove.Size = new Size(100, 30);
+            btnKeyStaffRemove.TabIndex = 48;
+            btnKeyStaffRemove.Text = "行を消す";
+            //
+            // btnKeyStaffUp
+            //
+            btnKeyStaffUp.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            btnKeyStaffUp.Location = new Point(1330, 881);
+            btnKeyStaffUp.Name = "btnKeyStaffUp";
+            btnKeyStaffUp.Size = new Size(100, 30);
+            btnKeyStaffUp.TabIndex = 49;
+            btnKeyStaffUp.Text = "↑ 上へ";
+            //
+            // btnKeyStaffDown
+            //
+            btnKeyStaffDown.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            btnKeyStaffDown.Location = new Point(1330, 917);
+            btnKeyStaffDown.Name = "btnKeyStaffDown";
+            btnKeyStaffDown.Size = new Size(100, 30);
+            btnKeyStaffDown.TabIndex = 50;
+            btnKeyStaffDown.Text = "↓ 下へ";
+            //
+            // btnKeyStaffColor
+            //
+            btnKeyStaffColor.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            btnKeyStaffColor.Location = new Point(1330, 953);
+            btnKeyStaffColor.Name = "btnKeyStaffColor";
+            btnKeyStaffColor.Size = new Size(100, 30);
+            btnKeyStaffColor.TabIndex = 51;
+            btnKeyStaffColor.Text = "色を選ぶ…";
+            //
+            // lblKeyStaffNote
+            //
+            lblKeyStaffNote.AutoSize = true;
+            lblKeyStaffNote.ForeColor = SystemColors.GrayText;
+            lblKeyStaffNote.Location = new Point(900, 1046);
+            lblKeyStaffNote.Name = "lblKeyStaffNote";
+            lblKeyStaffNote.TabIndex = 52;
+            lblKeyStaffNote.Text = "シリーズ一覧と作品詳細に、この順・この色で出ます。行が無ければメインスタッフを出しません。「保存」で書き込みます。";
             // 
             // btnAdd
             // 
             btnAdd.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnAdd.AutoSize = true;
-            btnAdd.Location = new Point(1327, 858);
+            btnAdd.Location = new Point(1327, 1098);
             btnAdd.Name = "btnAdd";
             btnAdd.Size = new Size(75, 30);
             btnAdd.TabIndex = 40;
@@ -550,7 +650,7 @@ namespace PrecureDataStars.Episodes.Forms
             // 
             btnSave.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnSave.AutoSize = true;
-            btnSave.Location = new Point(1413, 858);
+            btnSave.Location = new Point(1413, 1098);
             btnSave.Name = "btnSave";
             btnSave.Size = new Size(75, 30);
             btnSave.TabIndex = 41;
@@ -559,7 +659,7 @@ namespace PrecureDataStars.Episodes.Forms
             // SeriesEditorForm
             // 
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(1500, 900);
+            ClientSize = new Size(1500, 1140);
             Controls.Add(lstSeries);
             Controls.Add(lblTitle);
             Controls.Add(txtTitle);
@@ -608,15 +708,24 @@ namespace PrecureDataStars.Episodes.Forms
             // 追加: 絵コンテ・演出融合表示フラグ。
             Controls.Add(lblStoryboardDisplay);
             Controls.Add(cmbStoryboardDisplay);
+            Controls.Add(lblKeyStaff);
+            Controls.Add(dgvKeyStaff);
+            Controls.Add(btnKeyStaffAdd);
+            Controls.Add(btnKeyStaffRemove);
+            Controls.Add(btnKeyStaffUp);
+            Controls.Add(btnKeyStaffDown);
+            Controls.Add(btnKeyStaffColor);
+            Controls.Add(lblKeyStaffNote);
             Controls.Add(btnAdd);
             Controls.Add(btnSave);
-            MinimumSize = new Size(1200, 780);
+            MinimumSize = new Size(1200, 1100);
             Name = "SeriesEditorForm";
             StartPosition = FormStartPosition.CenterScreen;
             Text = "シリーズ編集";
             ((System.ComponentModel.ISupportInitialize)numSeqInParent).EndInit();
             ((System.ComponentModel.ISupportInitialize)numEpisodes).EndInit();
             ((System.ComponentModel.ISupportInitialize)numRunTimeSeconds).EndInit();
+            ((System.ComponentModel.ISupportInitialize)dgvKeyStaff).EndInit();
             ResumeLayout(false);
             PerformLayout();
         }

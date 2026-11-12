@@ -34,7 +34,7 @@
     {{~ if (array.size m.KeyStaffSummary) > 0 ~}}
     <div class="staff-badges-row">
       {{~ for g in m.KeyStaffSummary ~}}
-      <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url mem.PersonId }}">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ mem.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+      <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}"{{ if g.BadgeStyle != "" }} style="{{ g.BadgeStyle }}"{{ end }} href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url mem.PersonId }}">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ mem.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
       {{~ end ~}}
     </div>
     {{~ end ~}}
@@ -64,7 +64,7 @@
         {{~ if (array.size c.KeyStaffSummary) > 0 ~}}
         <div class="staff-badges-row">
       {{~ for g in c.KeyStaffSummary ~}}
-      <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url mem.PersonId }}">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ mem.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+      <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}"{{ if g.BadgeStyle != "" }} style="{{ g.BadgeStyle }}"{{ end }} href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url mem.PersonId }}">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ mem.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
       {{~ end ~}}
         </div>
         {{~ end ~}}

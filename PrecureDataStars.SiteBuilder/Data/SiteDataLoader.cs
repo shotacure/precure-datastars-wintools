@@ -369,6 +369,11 @@ public static class SiteDataLoader
         var roleTemplateResolver = new RoleTemplateResolver(allRoleTemplates);
         logger.Info($"role masters: roles={roleByCode.Count}, role_templates={allRoleTemplates.Count}");
 
+        // 作品ごとのメインスタッフの役職（並び順の順。リポジトリが series_id → display_order で返す）。
+        var keyStaffRolesBySeries = (await new SeriesKeyStaffRolesRepository(factory).GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(r => r.SeriesId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<SeriesKeyStaffRole>)g.ToList());
+
         // 家族関係を character_id 単位でグルーピング。CharactersGenerator / PrecuresGenerator の
         // per-character GetByCharacterAsync を撲滅する。
         var familyRelationsByCharacter = (await familyRepo.GetAllAsync(ct).ConfigureAwait(false))
@@ -512,6 +517,7 @@ public static class SiteDataLoader
             SongRecordingAnchorUrlById = songRecordingAnchorUrlById,
             MusicClassByCode = musicClassByCode,
             RoleByCode = roleByCode,
+            KeyStaffRolesBySeries = keyStaffRolesBySeries,
             RoleTemplateResolver = roleTemplateResolver,
             FamilyRelationsByCharacter = familyRelationsByCharacter,
             AliasIdsByPerson = aliasIdsByPerson,

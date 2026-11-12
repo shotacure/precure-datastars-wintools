@@ -26,8 +26,8 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// 個別シリーズページのエピソード一覧は <see cref="SeriesKind.CreditAttachTo"/> が EPISODE のときだけ表示する。
 /// 表構造ではなく <c>&lt;dl class="ep-list"&gt;</c> + <c>&lt;dt&gt;</c>（話数 + サブタイトル）+ <c>&lt;dd&gt;</c>
 /// （字下げでスタッフ群）の縦並びレイアウト。
-/// メインスタッフセクションは PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR / CHARACTER_DESIGN /
-/// COSTUME_PROP_DESIGN（クレジットのある作品だけ）/ ART_DESIGN の役職を出し、全話担当者は名前のみ、部分担当者は「名前 (#1～4, 8)」表記。
+/// メインスタッフセクションは作品ごとの行（<c>series_key_staff_roles</c>）の役職を行の順・行の色で出し、
+/// 全話担当者は名前のみ、部分担当者は「名前 (#1～4, 8)」表記。
 /// 劇伴一覧はシリーズ詳細から除外し、別ページ <c>/bgms/{slug}/</c> へのリンク 1 本に置き換える。
 /// </summary>
 public sealed class SeriesGenerator
@@ -111,9 +111,9 @@ public sealed class SeriesGenerator
 
     // ── シリーズ一覧サブ行用：メインスタッフ簡易サマリ集計キャッシュ。
     //    series_id → 役職グループのリスト。
-    //    各役職グループは「PRODUCER」「SERIES_COMPOSITION」「SERIES_DIRECTOR」「CHARACTER_DESIGN」「COSTUME_PROP_DESIGN」「ART_DESIGN」のいずれかで、
+    //    各役職グループは作品ごとの行（series_key_staff_roles）の役職のどれかで、
     //    連名全員と所属屋号を含む構造化データを持つ。テンプレ側で色付きバッジ + 人物リンクとして描画する。
-    //    TV シリーズのみ集計対象。 ──
+    //    行を持つ作品だけが集計対象。 ──
     private IReadOnlyDictionary<int, IReadOnlyList<KeyStaffRoleGroup>>? _keyStaffSummaryBySeriesCache;
 
     // ── 屋号 alias_id → 名前 マップ。
@@ -419,95 +419,37 @@ public sealed class SeriesGenerator
     }
 
     /// <summary>
-    /// シリーズ一覧 TV サブ行用のメインスタッフ簡易サマリを全 TV シリーズについて集計し、
+    /// 作品のメインスタッフの役職（<c>series_key_staff_roles</c> の行、並び順の順）を、
+    /// 役職コード・役職名・バッジの色で返す。行の無い作品は空（メインスタッフを出さない）。
+    /// 役職名は役職マスタの名前で、画面の役職の表記が違う人はクレジットの表記でバッジを分ける。
+    /// どの役職をどの順・どの色で出すかは作品の行だけで決まり、作品の種別ごとの決まりは持たない。
+    /// </summary>
+    private IReadOnlyList<(string Code, string Label, string Color)> KeyStaffRoleSpecsFor(int seriesId)
+    {
+        if (!_ctx.KeyStaffRolesBySeries.TryGetValue(seriesId, out var rows)) return Array.Empty<(string, string, string)>();
+        return rows
+            .Select(r => (
+                r.RoleCode,
+                _ctx.RoleByCode.TryGetValue(r.RoleCode, out var role) ? role.NameJa : r.RoleCode,
+                RoleBadgeColor.Normalize(r.BadgeColor)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// シリーズ一覧のカード用のメインスタッフ簡易サマリを、メインスタッフの役職の行を持つ全作品について集計し、
     /// <c>series_id → 役職グループのリスト</c> としてキャッシュする。
     /// 役職ごとに構造化 DTO リストを返す。文字列ではなく構造化することで、
     /// リンク化・所属屋号付きでの表示や連名スタッフの保持ができる。
-    /// シリーズ詳細の <see cref="BuildMainStaffSectionsAsync"/> と同じ役職セット 5 種について、
+    /// 役職は作品詳細の <see cref="BuildMainStaffSectionsAsync"/> と同じく <see cref="KeyStaffRoleSpecsFor"/> の行で、
     /// 各役職に該当する全人物をクレジット順（当該シリーズ・役職での
     /// (EpisodeNo, CreditSeq, CreditSubSeq) lex min 昇順）で集めて <see cref="KeyStaffMember"/> として並べる。
     /// 同一エピソード内では各エントリの CreditSeq が一意なので、異なる人物がこの三つ組で完全に一致することはなく
     /// クレジット順だけで序列が確定する。担当エピソード数・kana 等の補助キーは使わない。
     /// 所属屋号（<c>Involvement.AffiliationCompanyAliasId</c>）も当該シリーズ内最頻のものを引き当てて添える。
-    /// テンプレ側では役職バッジ（色付き）+ 名前リンク + 所属屋号 の構造で描画される。
-    /// <para>役職コードと色マッピング（CSS 側 <c>data-role-code</c> セレクタと対応）：</para>
-    /// <list type="bullet">
-    ///   <item><description><c>PRODUCER</c>           → 紫</description></item>
-    ///   <item><description><c>SERIES_COMPOSITION</c> → 青</description></item>
-    ///   <item><description><c>SERIES_DIRECTOR</c>    → ピンク</description></item>
-    ///   <item><description><c>CHARACTER_DESIGN</c>   → 緑</description></item>
-    ///   <item><description><c>ART_DESIGN</c>         → 黄</description></item>
-    /// </list>
+    /// テンプレ側では役職バッジ（作品の行の色）+ 名前リンク + 所属屋号 の構造で描画される。
+    /// 話ごとにクレジットが付く作品（credit_attach_to='EPISODE'）は話のクレジットから、
+    /// 作品にクレジットが付く作品（'SERIES'）は作品のクレジットから集計する。
     /// </summary>
-    /// <summary>
-    /// TV 系シリーズ（credit_attach_to='EPISODE'）のメインスタッフ集計対象役職。
-    /// 衣装・プロップデザイン（COSTUME_PROP_DESIGN）は、画面ではキャラクターデザインの見出しの下に並び、
-    /// 公式のスタッフ欄で別の役職とされている人の行（わんだふるぷりきゅあ！の NaSka など）。
-    /// クレジットの無い役職は集計で落ちるので、この役職を持つ作品にだけ出る。
-    /// </summary>
-    private static readonly (string Code, string Label)[] TvKeyStaffRoleSpecs = new[]
-    {
-        ("PRODUCER",            "プロデューサー"),
-        ("SERIES_COMPOSITION",  "シリーズ構成"),
-        ("SERIES_DIRECTOR",     "シリーズディレクター"),
-        ("CHARACTER_DESIGN",    "キャラクターデザイン"),
-        ("COSTUME_PROP_DESIGN", "衣装・プロップデザイン"),
-        ("ART_DESIGN",          "美術デザイン")
-    };
-
-    /// <summary>
-    /// オトナシリーズの作品（種別 OTONA）のメインスタッフ集計対象役職 5 種。
-    /// TV と同じ並びで、美術の枠だけ美術監督（ART_DIRECTOR、OP のクレジット）を数える。
-    /// オトナシリーズでは美術デザイン（ART_DESIGN）は各話の ED に出る話ごとのスタッフで、エピソード一覧の札に出す。
-    /// </summary>
-    private static readonly (string Code, string Label)[] OtonaKeyStaffRoleSpecs = new[]
-    {
-        ("PRODUCER",            "プロデューサー"),
-        ("SERIES_COMPOSITION",  "シリーズ構成"),
-        ("SERIES_DIRECTOR",     "シリーズディレクター"),
-        ("CHARACTER_DESIGN",    "キャラクターデザイン"),
-        ("ART_DIRECTOR",        "美術監督")
-    };
-
-    /// <summary>
-    /// 映画系シリーズ（credit_attach_to='SERIES'）のメインスタッフ集計対象役職 7 種。
-    /// 色は TV 同等役職と共有：脚本 = シリーズ構成（青）、監督 = シリーズディレクター（ピンク）、
-    /// キャラクターデザイン・作画監督 = 緑、美術監督 = 美術デザイン（黄）、
-    /// プロデューサー・企画 = 紫。
-    /// CSS 側で role-badge[data-role-code] の selector group を共有して同色化している。
-    /// <para>
-    /// 企画（PLANNING）はプロデューサー枠のフォールバック。初期作にはプロデューサー表記が無く
-    /// 企画のみクレジットされる作品があるため、同じ枠・同じ色で拾う。
-    /// 両方クレジットされている作品では企画を落とし、プロデューサーだけを出す
-    /// （<see cref="DropPlanningWhenProducerPresent{T}"/>）。PRODUCER の直前に置いてあるので、
-    /// どちらが残っても行の位置は変わらない。
-    /// </para>
-    /// </summary>
-    private static readonly (string Code, string Label)[] MovieKeyStaffRoleSpecs = new[]
-    {
-        ("PLANNING",            "企画"),
-        ("PRODUCER",            "プロデューサー"),
-        ("SCREENPLAY",          "脚本"),
-        ("DIRECTOR",            "監督"),
-        ("CHARACTER_DESIGN",    "キャラクターデザイン"),
-        ("ANIMATION_DIRECTOR",  "作画監督"),
-        ("ART_DIRECTOR",        "美術監督")
-    };
-
-    /// <summary>
-    /// メインスタッフ集計結果から、プロデューサーが 1 件でも立っている場合に企画の行を落とす。
-    /// 企画はプロデューサー不在時のみ出すフォールバック枠なので、両方揃っている作品では
-    /// プロデューサーを優先する。シリーズ一覧サブ行（<see cref="KeyStaffRoleGroup"/>）と
-    /// シリーズ詳細セクション（<see cref="KeyStaffSection"/>）で同じ判定を共有するため、
-    /// 役職コードの取り出しだけ呼び出し側から渡す形にしてある。
-    /// 空の役職は呼び出し側の集計ループで既に除外済みなので、ここに残っている行は必ず 1 件以上を持つ。
-    /// </summary>
-    private static void DropPlanningWhenProducerPresent<T>(List<T> items, Func<T, string> roleCodeOf)
-    {
-        if (!items.Any(x => string.Equals(roleCodeOf(x), "PRODUCER", StringComparison.Ordinal))) return;
-        items.RemoveAll(x => string.Equals(roleCodeOf(x), "PLANNING", StringComparison.Ordinal));
-    }
-
     private async Task BuildKeyStaffSummaryBySeriesCacheAsync(CancellationToken ct)
     {
 
@@ -539,22 +481,15 @@ public sealed class SeriesGenerator
         var summaryDict = new Dictionary<int, IReadOnlyList<KeyStaffRoleGroup>>();
         foreach (var s in _ctx.Series)
         {
-            // 集計対象判定：TV 系（credit_attach_to='EPISODE'）と映画系（'SERIES'）で役職セット・
-            // クレジット順ソート方針を切り替える。オトナシリーズ（OTONA）は TV と同じ話ごとの集計で、
-            // 役職セットは作品詳細のメインスタッフと同じ OtonaKeyStaffRoleSpecs。SHORT / SPIN-OFF は出さない。
+            // 集計対象：メインスタッフの役職の行を持つ作品だけ。話ごとにクレジットが付く作品
+            // （credit_attach_to='EPISODE'）と作品にクレジットが付く作品（'SERIES'）で、集めるクレジットと
+            // クレジット順ソートの方針を切り替える。
+            var roleSpecs = KeyStaffRoleSpecsFor(s.SeriesId);
+            if (roleSpecs.Count == 0) continue;
             if (!_ctx.SeriesKindByCode.TryGetValue(s.KindCode, out var seriesKind)) continue;
-            bool isMovieKind = string.Equals(seriesKind.CreditAttachTo, "SERIES", StringComparison.Ordinal)
-                               && (string.Equals(s.KindCode, "MOVIE", StringComparison.Ordinal)
-                                   || string.Equals(s.KindCode, "MOVIE_SHORT", StringComparison.Ordinal)
-                                   || string.Equals(s.KindCode, "SPRING", StringComparison.Ordinal)
-                                   || string.Equals(s.KindCode, "EVENT", StringComparison.Ordinal));
-            bool isOtonaKind = SeriesClassifier.IsOtona(s);
-            bool isTvKind = string.Equals(s.KindCode, "TV", StringComparison.Ordinal) || isOtonaKind;
+            bool isMovieKind = string.Equals(seriesKind.CreditAttachTo, "SERIES", StringComparison.Ordinal);
+            bool isTvKind = string.Equals(seriesKind.CreditAttachTo, "EPISODE", StringComparison.Ordinal);
             if (!isMovieKind && !isTvKind) continue;
-
-            var roleSpecs = isMovieKind ? MovieKeyStaffRoleSpecs
-                : isOtonaKind ? OtonaKeyStaffRoleSpecs
-                : TvKeyStaffRoleSpecs;
 
             // TV はエピソードから話番号 → クレジット順ソートに使う。映画はエピソードを持たないので epNoByEpId は空。
             IReadOnlyDictionary<int, int>? epNoByEpId = null;
@@ -687,17 +622,14 @@ public sealed class SeriesGenerator
                         RoleCode = spec.Code,
                         RepRoleCode = repRoleCode,
                         // テンプレ側はこの組み立て済み URL のみリンク href に使う。
-                        // data-role-code 属性はバッジ色分け CSS の都合で RoleCode（実コード）を使う。
+                        // data-role-code 属性は RoleCode（実コード）を使う。バッジの色は作品の行の色を style で当てる。
                         RoleUrl = PathUtil.CreatorsRoleUrl(repRoleCode),
                         RoleLabel = byLabel.Key,
+                        BadgeStyle = RoleBadgeColor.InlineStyle(spec.Color),
                         Members = byLabel.ToList()
                     });
                 }
             }
-
-            // 企画はプロデューサー不在時のみ残すフォールバック枠。
-            // TV 側の役職セットに PLANNING は含まれないので、映画系だけが実質の対象になる。
-            DropPlanningWhenProducerPresent(groups, g => g.RoleCode);
 
             if (groups.Count > 0)
                 summaryDict[s.SeriesId] = groups;
@@ -1039,7 +971,7 @@ public sealed class SeriesGenerator
                             RelationBadgeLabel = string.Equals(c.RelationToParent, "SEGMENT", StringComparison.Ordinal) ? "同時上映" : "併映",
                             // 子作品（併映短編）に出たプリキュア（クレジットの声の出演から。親が TV ではないので略記）
                             PrecureLines = BuildPrecureBadgeLines(GetPrecureRows(c.SeriesId)),
-                            // 子作品（併映短編）自身のメインスタッフ。親映画と同じ役職セットで集計する。
+                            // 子作品（併映短編）自身のメインスタッフ。子作品自身の行の役職で集計する。
                             KeyStaffSummary = GetKeyStaffSummary(c.SeriesId)
                         })
                         .ToList()
@@ -1611,7 +1543,7 @@ public sealed class SeriesGenerator
             .Where(s => s.Members.Count > 0 && !string.IsNullOrWhiteSpace(s.RoleLabel))
             .Select(s => new OgCardFactLine(s.RoleLabel, string.Join("、", s.Members.Select(FormatStaffMember)))
             {
-                LabelColorHex = OgRolePalette.ColorFor(s.RoleCode)
+                LabelColorHex = s.BadgeColor
             })
             .ToArray();
 
@@ -1894,7 +1826,7 @@ public sealed class SeriesGenerator
         return label;
     }
 
-    /// <summary>メインスタッフセクション群を構築する。 TV 系（credit_attach_to='EPISODE'）はエピソードスコープ Involvement から、 映画系（credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）は SERIES スコープ Involvement から集計する。役職セットはそれぞれ <see cref="TvKeyStaffRoleSpecs"/> と <see cref="MovieKeyStaffRoleSpecs"/>。</summary>
+    /// <summary>メインスタッフセクション群を構築する。 TV 系（credit_attach_to='EPISODE'）はエピソードスコープ Involvement から、 映画系（credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）は SERIES スコープ Involvement から集計する。役職・並び・バッジの色は作品の行（<see cref="KeyStaffRoleSpecsFor"/>）で、行の無い作品は空。</summary>
     private async Task<IReadOnlyList<KeyStaffSection>> BuildMainStaffSectionsAsync(
         Series series, IReadOnlyList<Episode> eps, CancellationToken ct)
     {
@@ -1929,9 +1861,8 @@ public sealed class SeriesGenerator
             _companyAliasNameMapCache = allAliases.ToDictionary(a => a.AliasId, a => a.Name);
         }
 
-        var roleSpecs = isMovieKind ? MovieKeyStaffRoleSpecs
-            : _ctx.IsOtonaSeries(series.SeriesId) ? OtonaKeyStaffRoleSpecs
-            : TvKeyStaffRoleSpecs;
+        var roleSpecs = KeyStaffRoleSpecsFor(series.SeriesId);
+        if (roleSpecs.Count == 0) return Array.Empty<KeyStaffSection>();
 
         // TV はエピソードから話番号集合と (epId → epNo) マップを作る。映画は eps が空 / 関係無し。
         var allEpisodeNos = isTvLike
@@ -2078,18 +2009,16 @@ public sealed class SeriesGenerator
                     RoleCode = spec.Code,
                     // バッジリンク先は PathUtil 経由で組み立て、URL パス上の役職コードを
                     // 小文字化する。現行挙動どおり spec.Code をそのまま対象にする
-                    // （系譜代表への置換は行わない）。data-role-code 属性側は
-                    // バッジ色分け CSS の都合で実コード（大文字）のまま使う。
+                    // （系譜代表への置換は行わない）。data-role-code 属性側は実コード（大文字）のまま使う。
                     RoleUrl = PathUtil.CreatorsRoleUrl(spec.Code),
                     RoleLabel = byLabel.Key,
+                    // バッジの色は作品の行の色（style で当てる。OGP カードの役職名の色も同じ色）。
+                    BadgeColor = spec.Color,
+                    BadgeStyle = RoleBadgeColor.InlineStyle(spec.Color),
                     Members = byLabel.ToList()
                 });
             }
         }
-
-        // 企画はプロデューサー不在時のみ残すフォールバック枠。
-        // TV 側の役職セットに PLANNING は含まれないので、映画系だけが実質の対象になる。
-        DropPlanningWhenProducerPresent(sections, x => x.RoleCode);
 
         return sections;
     }
@@ -2159,7 +2088,7 @@ public sealed class SeriesGenerator
     /// <summary>シリーズ一覧 TV サブ行用：1 役職分の集計結果。</summary>
     private sealed class KeyStaffRoleGroup
     {
-        /// <summary>役職コード（バッジ色マッピング用、CSS の <c>data-role-code</c> 属性として出力）。</summary>
+        /// <summary>役職コード（<c>data-role-code</c> 属性として出力）。</summary>
         public string RoleCode { get; set; } = "";
         /// <summary>代表 role_code（系譜クラスタ代表。集計・参照用に保持）。</summary>
         public string RepRoleCode { get; set; } = "";
@@ -2167,6 +2096,8 @@ public sealed class SeriesGenerator
         public string RoleUrl { get; set; } = "";
         /// <summary>表示ラベル（「プロデューサー」「シリーズ構成」等）。</summary>
         public string RoleLabel { get; set; } = "";
+        /// <summary>バッジの style 属性の値（作品の行の色から作った地・字・枠の色。<see cref="RoleBadgeColor.InlineStyle"/>）。</summary>
+        public string BadgeStyle { get; set; } = "";
         /// <summary>当該役職に該当する人物群（クレジット順 = (EpisodeNo, CreditSeq, CreditSubSeq) lex min 昇順）。</summary>
         public IReadOnlyList<KeyStaffMember> Members { get; set; } = Array.Empty<KeyStaffMember>();
     }
@@ -2405,11 +2336,15 @@ public sealed class SeriesGenerator
 
     private sealed class KeyStaffSection
     {
-        /// <summary>役職コード（バッジ色分け CSS の data-role-code 属性用、実コードのまま）。</summary>
+        /// <summary>役職コード（data-role-code 属性用、実コードのまま）。</summary>
         public string RoleCode { get; set; } = "";
         /// <summary>役職統計ページへの組み立て済み URL（<c>/creators/roles/{小文字コード}/</c>）。 テンプレ側はこの値のみリンク href に使い、生の役職コードを URL に直接埋めない。</summary>
         public string RoleUrl { get; set; } = "";
         public string RoleLabel { get; set; } = "";
+        /// <summary>作品の行のバッジの色（<c>#rrggbb</c>）。OGP カードの役職名の色に使う。</summary>
+        public string BadgeColor { get; set; } = "";
+        /// <summary>バッジの style 属性の値（<see cref="BadgeColor"/> から作った地・字・枠の色。<see cref="RoleBadgeColor.InlineStyle"/>）。</summary>
+        public string BadgeStyle { get; set; } = "";
         public IReadOnlyList<MainStaffRow> Members { get; set; } = Array.Empty<MainStaffRow>();
     }
 

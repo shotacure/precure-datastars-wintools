@@ -140,17 +140,14 @@
   {{~ end ~}}
 
   {{## メインスタッフセクション。
-       TV 系（credit_attach_to='EPISODE'）：PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR /
-         CHARACTER_DESIGN / COSTUME_PROP_DESIGN（クレジットのある作品だけ）/ ART_DESIGN の役職。話数表記あり（全話担当者は名前のみ、部分担当者は
+       役職・並び・バッジの色は作品ごとの行（series_key_staff_roles）で決まり、行の無い作品には出さない。
+       TV 系（credit_attach_to='EPISODE'）：話のクレジットから集計し、話数表記あり（全話担当者は名前のみ、部分担当者は
          「名前 (#1〜4, 8)」表記）。
        映画系（credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）：
-         PRODUCER / SCREENPLAY / DIRECTOR / CHARACTER_DESIGN / ANIMATION_DIRECTOR / ART_DIRECTOR
-         の 6 役職。SERIES-attached クレジットから集計、話数表記なし。
+         SERIES-attached クレジットから集計、話数表記なし。
        担当話数による足切りは無し。
        表示形式：役職ごとに 1 行、行内は 2 列 grid 構成
-         ・左列：役職バッジ（右揃え、CSS で max-content 幅）。バッジ色は TV / 映画で同等役職を共有
-           （脚本=シリーズ構成=青、監督=シリーズディレクター=ピンク、作画監督=キャラクターデザイン=緑、
-           美術監督=美術デザイン=黄、プロデューサー=紫）。
+         ・左列：役職バッジ（右揃え、CSS で max-content 幅）。バッジの地・字・枠の色は行の色から作って style で当てる。
          ・右列：人物名群（左揃え、人名(範囲)、人名(範囲)、…）
        バッジ幅が役職によって異なるため（「美術デザイン」「シリーズディレクター」等）、
        grid の縦境界で揃えることで人物名の左端を全行で一致させる。
@@ -160,7 +157,7 @@
     <h2>メインスタッフ</h2>
     {{~ for ks in KeyStaffSections ~}}
     <div class="key-staff-line">
-      <a class="role-badge role-badge-sm" data-role-code="{{ ks.RoleCode }}" href="{{ ks.RoleUrl }}">{{ ks.RoleLabel | html.escape }}</a>
+      <a class="role-badge role-badge-sm" data-role-code="{{ ks.RoleCode }}"{{ if ks.BadgeStyle != "" }} style="{{ ks.BadgeStyle }}"{{ end }} href="{{ ks.RoleUrl }}">{{ ks.RoleLabel | html.escape }}</a>
       <span class="key-staff-names">{{~ for m in ks.Members ~}}<span class="staff-member-group"><a class="key-staff-name" href="{{ person_url m.PersonId }}">{{ m.FullName | html.escape }}</a>{{~ if m.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ m.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if m.RangeLabel != "" ~}}<span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
     </div>
     {{~ end ~}}

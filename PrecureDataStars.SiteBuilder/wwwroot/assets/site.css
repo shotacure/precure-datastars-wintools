@@ -7685,8 +7685,9 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   color: #c71958;
   border-color: rgba(233, 30, 99, 0.42);
 }
-/* キャラクターデザイン・作画監督 = 緑 */
+/* キャラクターデザイン・衣装・プロップデザイン・作画監督 = 緑 */
 .role-badge[data-role-code="CHARACTER_DESIGN"],
+.role-badge[data-role-code="COSTUME_PROP_DESIGN"],
 .role-badge[data-role-code="ANIMATION_DIRECTOR"] {
   background: rgba(76, 163, 107, 0.14);
   color: #38784f;

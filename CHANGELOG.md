@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：シリーズ一覧と作品詳細のメインスタッフに「衣装・プロップデザイン」の役職を足した**（`SeriesGenerator`・`site.css`・`OgCardSpec`）：TV の作品のバッジに、キャラクターデザインの次に出す。色はキャラクターデザインと同じ緑。クレジットの無い作品には出ない。画面ではキャラクターデザインの見出しの下に並ぶが、公式のスタッフ欄では衣装・プロップデザインとされている人（わんだふるぷりきゅあ！）は、エピソード詳細のクレジット表記では役職名を全角のカッコで包んだ行で出し、一覧ではこの役職で数える。
+
 - **サイト：人物のページの声の出演で、同じキャラに別の役名でクレジットされた役は、役名をクレジットされた順に「 / 」でつないで出すようにした**（`PersonsGenerator`・`CreditInvolvementIndex`〔`Involvement.CharacterDisplayText` を追加〕）：役ごとの見出しと作品ごとの行の両方で、画面の役名（正体を伏せた「？？？」、見分けを付けた「ガオウ（狼）」など）があればそれを、無ければ名義を役名にし、話数とクレジットの並びの順に並べる。作品ごとの行は最初の名義だけを出していて、役ごとの見出しは画面の役名を見ていなかった。
 
 - **サイト：一覧の並びに、読みや題名・名前の文字の順を使わないようにした**（`CreatorsGenerator`・`RoleTimelineBuilder`・`CompaniesGenerator`・`CharactersGenerator`・`PersonsGenerator`・`MusicGenerator`・`RecordsGenerator`・`ArticlesGenerator`・`ProductsGenerator`・`search.js`・`BuildContext.MinRecordingIdBySong`〔新規〕・`MusicCreditViewBuilder.TargetOrder`〔新規〕）：作品の並びは公開日のあとを作品の ID の順にし、同じ公開日の映画と短編は本編を先にする。初出の作品も「公開日 → 作品の ID → 話数 → クレジットの位置」で決める。同じ作品・同じ盤・同じ回数の中は、クレジットの並び（本編のクレジット、歌の作家の並び、歌手の並び、盤のクレジットの並び）で並べ、それでも同じなら人物・会社・キャラの ID の順にする。サイト内検索の結果の最後の決め手も索引の順（ID の順）にした。止めてある五十音順のタブはそのまま。

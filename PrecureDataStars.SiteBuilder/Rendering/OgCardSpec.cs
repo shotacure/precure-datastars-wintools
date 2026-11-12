@@ -437,7 +437,7 @@ public static class OgRolePalette
         "SERIES_COMPOSITION" or "SCREENPLAY" => "#3b82c4",
         "STORYBOARD" => "#2ea7ad",
         "SERIES_DIRECTOR" or "EPISODE_DIRECTOR" or "DIRECTOR" => "#e91e63",
-        "CHARACTER_DESIGN" or "ANIMATION_DIRECTOR" => "#4ca36b",
+        "CHARACTER_DESIGN" or "COSTUME_PROP_DESIGN" or "ANIMATION_DIRECTOR" => "#4ca36b",
         "ART_DESIGN" or "ART_DIRECTOR" or "ART_DIRECTOR_TV" => "#d4a017",
         // 楽曲の役職（サイトの楽曲詳細のバッジと同じ 4 色）。
         "LYRICS" or "LYRICS_TRANSLATION" => "#c0354c",

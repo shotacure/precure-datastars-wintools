@@ -141,7 +141,7 @@
 
   {{## メインスタッフセクション。
        TV 系（credit_attach_to='EPISODE'）：PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR /
-         CHARACTER_DESIGN / ART_DESIGN の 5 役職。話数表記あり（全話担当者は名前のみ、部分担当者は
+         CHARACTER_DESIGN / COSTUME_PROP_DESIGN（クレジットのある作品だけ）/ ART_DESIGN の役職。話数表記あり（全話担当者は名前のみ、部分担当者は
          「名前 (#1〜4, 8)」表記）。
        映画系（credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）：
          PRODUCER / SCREENPLAY / DIRECTOR / CHARACTER_DESIGN / ANIMATION_DIRECTOR / ART_DIRECTOR

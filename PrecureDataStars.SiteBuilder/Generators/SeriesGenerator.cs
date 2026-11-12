@@ -26,8 +26,8 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// 個別シリーズページのエピソード一覧は <see cref="SeriesKind.CreditAttachTo"/> が EPISODE のときだけ表示する。
 /// 表構造ではなく <c>&lt;dl class="ep-list"&gt;</c> + <c>&lt;dt&gt;</c>（話数 + サブタイトル）+ <c>&lt;dd&gt;</c>
 /// （字下げでスタッフ群）の縦並びレイアウト。
-/// メインスタッフセクションは PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR / CHARACTER_DESIGN / ART_DESIGN
-/// の 5 役職を出し、全話担当者は名前のみ、部分担当者は「名前 (#1～4, 8)」表記。
+/// メインスタッフセクションは PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR / CHARACTER_DESIGN /
+/// COSTUME_PROP_DESIGN（クレジットのある作品だけ）/ ART_DESIGN の役職を出し、全話担当者は名前のみ、部分担当者は「名前 (#1～4, 8)」表記。
 /// 劇伴一覧はシリーズ詳細から除外し、別ページ <c>/bgms/{slug}/</c> へのリンク 1 本に置き換える。
 /// </summary>
 public sealed class SeriesGenerator
@@ -111,7 +111,7 @@ public sealed class SeriesGenerator
 
     // ── シリーズ一覧サブ行用：メインスタッフ簡易サマリ集計キャッシュ。
     //    series_id → 役職グループのリスト。
-    //    各役職グループは「PRODUCER」「SERIES_COMPOSITION」「SERIES_DIRECTOR」「CHARACTER_DESIGN」「ART_DESIGN」のいずれかで、
+    //    各役職グループは「PRODUCER」「SERIES_COMPOSITION」「SERIES_DIRECTOR」「CHARACTER_DESIGN」「COSTUME_PROP_DESIGN」「ART_DESIGN」のいずれかで、
     //    連名全員と所属屋号を含む構造化データを持つ。テンプレ側で色付きバッジ + 人物リンクとして描画する。
     //    TV シリーズのみ集計対象。 ──
     private IReadOnlyDictionary<int, IReadOnlyList<KeyStaffRoleGroup>>? _keyStaffSummaryBySeriesCache;
@@ -439,13 +439,19 @@ public sealed class SeriesGenerator
     ///   <item><description><c>ART_DESIGN</c>         → 黄</description></item>
     /// </list>
     /// </summary>
-    /// <summary>TV 系シリーズ（credit_attach_to='EPISODE'）のメインスタッフ集計対象役職 5 種。</summary>
+    /// <summary>
+    /// TV 系シリーズ（credit_attach_to='EPISODE'）のメインスタッフ集計対象役職。
+    /// 衣装・プロップデザイン（COSTUME_PROP_DESIGN）は、画面ではキャラクターデザインの見出しの下に並び、
+    /// 公式のスタッフ欄で別の役職とされている人の行（わんだふるぷりきゅあ！の NaSka など）。
+    /// クレジットの無い役職は集計で落ちるので、この役職を持つ作品にだけ出る。
+    /// </summary>
     private static readonly (string Code, string Label)[] TvKeyStaffRoleSpecs = new[]
     {
         ("PRODUCER",            "プロデューサー"),
         ("SERIES_COMPOSITION",  "シリーズ構成"),
         ("SERIES_DIRECTOR",     "シリーズディレクター"),
         ("CHARACTER_DESIGN",    "キャラクターデザイン"),
+        ("COSTUME_PROP_DESIGN", "衣装・プロップデザイン"),
         ("ART_DESIGN",          "美術デザイン")
     };
 

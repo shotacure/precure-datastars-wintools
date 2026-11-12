@@ -277,6 +277,7 @@ public sealed class CreditInvolvementIndex
                                             PersonAliasId = paid,
                                             CharacterAliasId = e.CharacterAliasId,
                                             RawCharacterText = e.RawCharacterText,
+                                            CharacterDisplayText = e.CharacterDisplayText,
                                             // 所属屋号 ID を Involvement に持ち回す。
                                             // 人物詳細ページ側でこの屋号 ID を参照して「(東映アニメーション)」のような所属併記を出す。
                                             AffiliationCompanyAliasId = e.AffiliationCompanyAliasId,
@@ -893,6 +894,12 @@ public sealed class Involvement
 
     /// <summary>CHARACTER_VOICE で raw_character_text を使っている場合の生テキスト。</summary>
     public string? RawCharacterText { get; init; }
+
+    /// <summary>
+    /// CHARACTER_VOICE の画面の役名（credit_block_entries.character_display_text）。名義の名前のままなら null。
+    /// 正体を伏せた「？？？」や、名乗りの見分けを付けた「ガオウ（狼）」など、クレジットされた役名を出すのに使う。
+    /// </summary>
+    public string? CharacterDisplayText { get; init; }
 
     /// <summary>Logo 種別のときのロゴ ID。</summary>
     public int? LogoId { get; init; }

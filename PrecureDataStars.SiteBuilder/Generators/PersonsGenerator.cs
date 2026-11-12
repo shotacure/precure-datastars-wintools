@@ -1107,13 +1107,20 @@ public sealed class PersonsGenerator
         var seriesScopeAffiliationIds = new List<int>();
         var perEpisodeAffiliationIds = new List<int>();
 
+        // 演じたキャラの役名は、クレジットされた順（話数 → 同じ回なら索引の並び＝クレジットの並び）に集める。
+        var voiceInvs = invs
+            .Select((inv, i) => (inv, i, ep: inv.EpisodeId is int e && _ctx.LookupEpisode(inv.SeriesId, e) is { } x ? x.SeriesEpNo : 0))
+            .OrderBy(t => t.ep).ThenBy(t => t.i).Select(t => t.inv).ToList();
+        foreach (var inv in voiceInvs)
+        {
+            if (inv.IsVoiceCast && inv.CharacterAliasId.HasValue)
+                AddCharacter(inv.EpisodeId is int ? perEpisodeCharacters : seriesScopeCharacters, inv);
+        }
+
         foreach (var inv in invs)
         {
             if (inv.EpisodeId is int)
             {
-                // 声優関与のとき演じたキャラを集める（シリーズ単位で重複排除）。
-                if (inv.IsVoiceCast && inv.CharacterAliasId.HasValue)
-                    AddCharacter(perEpisodeCharacters, inv.CharacterAliasId.Value);
                 // 所属屋号 ID を初出順で記録（人物詳細での所属併記用）。
                 if (inv.AffiliationCompanyAliasId is int affId
                     && !perEpisodeAffiliationIds.Contains(affId))
@@ -1123,8 +1130,6 @@ public sealed class PersonsGenerator
             }
             else
             {
-                if (inv.IsVoiceCast && inv.CharacterAliasId.HasValue)
-                    AddCharacter(seriesScopeCharacters, inv.CharacterAliasId.Value);
                 if (inv.AffiliationCompanyAliasId is int affIdS
                     && !seriesScopeAffiliationIds.Contains(affIdS))
                 {
@@ -1158,14 +1163,14 @@ public sealed class PersonsGenerator
             PerEpisodeCharacterNamesHtml: CharacterLinksHtml(perEpisodeCharacters));
 
         // character_alias_id からキャラを引き、未登場の character_id なら初出順で追加する。
-        // 同じキャラに別の名義でクレジットされていれば、その名義を初出順に「 / 」でつないで役名にする
-        // （役ごとの見出しと同じ決まり。例「スバル / ガオウ」「和実ゆい / キュアプレシャス」）。
-        // 役名は苗字の無い名義ならフルネームの名義で出す（CharacterAliasNames）。
-        void AddCharacter(List<(int CharacterId, string Name)> list, int characterAliasId)
+        // 同じキャラに別の役名でクレジットされていれば、その役名をクレジットされた順に「 / 」でつなぐ
+        // （役ごとの見出しと同じ決まり。例「？？？ / ガオウ / スバル」「和実ゆい / キュアプレシャス」）。
+        // 役名は VoiceRoleLabel（画面の役名があればそれ、無ければ名義）。
+        void AddCharacter(List<(int CharacterId, string Name)> list, Involvement inv)
         {
-            if (!_ctx.CharacterAliasById.TryGetValue(characterAliasId, out var ca)) return;
+            if (!_ctx.CharacterAliasById.TryGetValue(inv.CharacterAliasId!.Value, out var ca)) return;
             if (string.IsNullOrEmpty(ca.Name)) return;
-            var name = _ctx.CharacterAliasNames.DisplayName(ca);
+            var name = VoiceRoleLabel(inv, ca);
             int i = list.FindIndex(c => c.CharacterId == ca.CharacterId);
             if (i < 0) { list.Add((ca.CharacterId, name)); return; }
             if (list[i].Name.Split(" / ").Contains(name)) return;
@@ -1179,12 +1184,26 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
+    /// 声の出演のクレジットの役名。画面の役名（character_display_text）が名義と違えばそれを
+    /// （正体を伏せた「？？？」、名乗りの見分けを付けた「ガオウ（狼）」など）、同じなら名義の名前を返す。
+    /// 画面の役名の改行と、空白だけの違いは同じ役名として扱う。名義は苗字の無いものをフルネームの名義に置き換える（CharacterAliasNames）。
+    /// </summary>
+    private string VoiceRoleLabel(Involvement inv, CharacterAlias ca)
+    {
+        string aliasLabel = _ctx.CharacterAliasNames.DisplayName(ca);
+        if (string.IsNullOrEmpty(inv.CharacterDisplayText)) return aliasLabel;
+        string flat = inv.CharacterDisplayText.Replace("\r", "").Replace("\n", "");
+        static string NoSpace(string t) => t.Replace(" ", "").Replace("　", "");
+        return NoSpace(flat) == NoSpace(ca.Name) || NoSpace(flat) == NoSpace(aliasLabel) ? aliasLabel : flat;
+    }
+
+    /// <summary>
     /// 声の出演グループを「役（キャラクター）」単位のサブセクションに分ける。
     /// 対象は CharacterVoice 関与が複数キャラに跨る場合のみで、1 キャラ以下なら空リストを返す
     /// （テンプレは空のとき従来のシリーズ行表示にフォールバックする）。
     /// セクションの並びは役の初登場（シリーズ開始日 → 最早話数）順。各セクション内はシリーズ行
     /// （放送開始日順、話数の圧縮表記つき）。
-    /// 見出しの役名は、その声優がそのキャラクターでクレジットされた名義をすべて、初めてクレジットされた順
+    /// 見出しの役名は、その声優がそのキャラクターでクレジットされた役名（<see cref="VoiceRoleLabel"/>）をすべて、初めてクレジットされた順
     /// （シリーズ開始日 → 話数 → 同じ回なら索引の並び）に「 / 」でつないだもの（例：「謎の声 / クレッシェンドトーン」
     /// 「和実ゆい / キュアプレシャス」）。名義は苗字の無いものをフルネームの名義に置き換えて（CharacterAliasNames）から重なりを除く。
     /// </summary>
@@ -1214,7 +1233,7 @@ public sealed class PersonsGenerator
                 byChar[charId] = acc;
             }
             // 役名ごとに、いちばん早くクレジットされた位置を覚える。
-            string label = _ctx.CharacterAliasNames.DisplayName(ca);
+            string label = VoiceRoleLabel(inv, ca);
             if (!acc.Labels.TryGetValue(label, out var first) || (key, order).CompareTo((first.Key, first.Order)) < 0)
             {
                 acc.Labels[label] = (key, order);

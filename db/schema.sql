@@ -2392,6 +2392,35 @@ CREATE TABLE `series_key_staff_roles` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- 作品ごとの各話のスタッフの札の役職
+--
+-- 作品のページのエピソード一覧・トップページのエピソード欄・/episodes/・エピソード詳細のスタッフ欄
+-- （と各話の OGP カード）は、この表に行のある役職だけを display_order の順に、badge_color の色で出す。
+-- 行の無い作品には札を出さない。札の地・枠・字の色は badge_color から作る。
+--
+
+DROP TABLE IF EXISTS `series_episode_staff_roles`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `series_episode_staff_roles` (
+  `series_id`     int              NOT NULL COMMENT '作品',
+  `role_code`     varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '各話の札に出す役職',
+  `display_order` tinyint unsigned NOT NULL COMMENT '作品の中の並び順（小さいほど先）',
+  `badge_color`   char(7)          NOT NULL COMMENT '札の色（#rrggbb の小文字）',
+  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`    varchar(64) DEFAULT NULL,
+  `updated_by`    varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`series_id`, `role_code`),
+  KEY `ix_series_episode_staff_roles_role` (`role_code`),
+  CONSTRAINT `fk_series_episode_staff_roles_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_series_episode_staff_roles_role` FOREIGN KEY (`role_code`) REFERENCES `roles` (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `ck_series_episode_staff_roles_color` CHECK (regexp_like(`badge_color`, '^#[0-9a-f]{6}$', 'c'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='作品ごとの各話のスタッフの札の役職（エピソード一覧・トップ・エピソード詳細・/episodes/）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- 役職系譜の関係テーブル
 --
 -- 役職の系譜（変更元 → 変更先）は分裂・併合を含む多対多の関係なので、

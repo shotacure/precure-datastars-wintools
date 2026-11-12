@@ -51,36 +51,17 @@
           <span class="ep-row-date">{{ e.OnAirDate }}</span>
         </div>
         <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{ e.TitleDisplayHtml }}</a>
-        {{## スタッフ列：5 役職を色付きバッジ + 人物名（既に <a> リンク済み HTML）で並べる。
-             絵コンテ＝演出（StoryboardDirectorMerged=true）のときは 2 バッジ並び + 名前 1 回に統合。
-             全フィールド空の場合はスタッフ列ごと描画しない（クレジット未登録対策）。
+        {{## スタッフ列：作品の表（series_episode_staff_roles）の行のある役職を、行の順に色付きバッジ + 人物名（既に <a> リンク済み HTML）で並べる。
+             バッジの文字・色（style 属性）・リンク先は生成側が札ごとに渡す（e.StaffBadges の各 Roles）。
+             絵コンテ＝演出（同一人物）の回は、1 つの札に 2 バッジ並び + 名前 1 回に統合済み。
+             札が無い場合はスタッフ列ごと描画しない（クレジット未登録・表に行の無い作品）。
              空のときも grid 列は確保されるので、列幅は崩れない。
              役職バッジはシリーズ詳細のエピソード一覧・ホームと同じく、役職詳細ページへのリンクにする。
              バッジ色分け用の data-role-code 属性は CSS セレクタの都合上、実コード（大文字）のまま保持する。 ##}}
-        {{~ if e.Screenplay != "" || e.Storyboard != "" || e.EpisodeDirector != "" || e.ChiefAnimationDirector != "" || e.AnimationDirector != "" || e.ArtDirector != "" ~}}
+        {{~ if (array.size e.StaffBadges) > 0 ~}}
         <div class="staff-badges-row">
-          {{~ if e.Screenplay != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="SCREENPLAY" href="/creators/roles/screenplay/">脚本</a>{{ e.Screenplay }}</span>
-          {{~ end ~}}
-          {{~ if e.StoryboardDirectorMerged ~}}
-          {{## 絵コンテ＝演出（同一人物）→ バッジ 2 個並び + 名前 1 回 ##}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/creators/roles/storyboard/">絵コンテ</a><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/creators/roles/episode_director/">演出</a>{{ e.Storyboard }}</span>
-          {{~ else ~}}
-          {{~ if e.Storyboard != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/creators/roles/storyboard/">絵コンテ</a>{{ e.Storyboard }}</span>
-          {{~ end ~}}
-          {{~ if e.EpisodeDirector != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/creators/roles/episode_director/">演出</a>{{ e.EpisodeDirector }}</span>
-          {{~ end ~}}
-          {{~ end ~}}
-          {{~ if e.ChiefAnimationDirector != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="{{ e.ChiefAnimationDirectorUrl }}">総作画監督</a>{{ e.ChiefAnimationDirector }}</span>
-          {{~ end ~}}
-          {{~ if e.AnimationDirector != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="/creators/roles/animation_director/">作画監督</a>{{ e.AnimationDirector }}</span>
-          {{~ end ~}}
-          {{~ if e.ArtDirector != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ART_DIRECTOR_TV" href="/creators/roles/art_director_tv/">美術</a>{{ e.ArtDirector }}</span>
+          {{~ for b in e.StaffBadges ~}}
+          <span class="staff-badge-group">{{~ for r in b.Roles ~}}<a class="role-badge role-badge-sm" data-role-code="{{ r.RoleCode }}"{{ if r.BadgeStyle != "" }} style="{{ r.BadgeStyle }}"{{ end }} href="{{ r.RoleUrl }}">{{ r.Label | html.escape }}</a>{{~ end ~}}{{ b.NamesHtml }}</span>
           {{~ end ~}}
         </div>
         {{~ end ~}}

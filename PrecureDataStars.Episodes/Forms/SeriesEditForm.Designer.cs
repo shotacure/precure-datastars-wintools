@@ -73,6 +73,16 @@ namespace PrecureDataStars.Episodes.Forms
         private System.Windows.Forms.Button btnKeyStaffColor = null!;
         private System.Windows.Forms.Label lblKeyStaffNote = null!;
 
+        // 作品ごとの各話のスタッフの札の役職（series_episode_staff_roles）。行の順がサイトでの並び。
+        private System.Windows.Forms.Label lblEpisodeStaff = null!;
+        private System.Windows.Forms.DataGridView dgvEpisodeStaff = null!;
+        private System.Windows.Forms.Button btnEpisodeStaffAdd = null!;
+        private System.Windows.Forms.Button btnEpisodeStaffRemove = null!;
+        private System.Windows.Forms.Button btnEpisodeStaffUp = null!;
+        private System.Windows.Forms.Button btnEpisodeStaffDown = null!;
+        private System.Windows.Forms.Button btnEpisodeStaffColor = null!;
+        private System.Windows.Forms.Label lblEpisodeStaffNote = null!;
+
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null)) components.Dispose();
@@ -137,12 +147,21 @@ namespace PrecureDataStars.Episodes.Forms
             btnKeyStaffDown = new Button();
             btnKeyStaffColor = new Button();
             lblKeyStaffNote = new Label();
+            lblEpisodeStaff = new Label();
+            dgvEpisodeStaff = new DataGridView();
+            btnEpisodeStaffAdd = new Button();
+            btnEpisodeStaffRemove = new Button();
+            btnEpisodeStaffUp = new Button();
+            btnEpisodeStaffDown = new Button();
+            btnEpisodeStaffColor = new Button();
+            lblEpisodeStaffNote = new Label();
             btnAdd = new Button();
             btnSave = new Button();
             ((System.ComponentModel.ISupportInitialize)numSeqInParent).BeginInit();
             ((System.ComponentModel.ISupportInitialize)numEpisodes).BeginInit();
             ((System.ComponentModel.ISupportInitialize)numRunTimeSeconds).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvKeyStaff).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)dgvEpisodeStaff).BeginInit();
             SuspendLayout();
             // 
             // lstSeries
@@ -574,67 +593,152 @@ namespace PrecureDataStars.Episodes.Forms
             dgvKeyStaff.AllowUserToOrderColumns = false;
             dgvKeyStaff.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             dgvKeyStaff.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dgvKeyStaff.Location = new Point(900, 809);
+            dgvKeyStaff.Location = new Point(664, 836);
             dgvKeyStaff.MultiSelect = false;
             dgvKeyStaff.Name = "dgvKeyStaff";
             dgvKeyStaff.RowHeadersVisible = false;
             dgvKeyStaff.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dgvKeyStaff.Size = new Size(420, 230);
+            dgvKeyStaff.Size = new Size(404, 170);
             dgvKeyStaff.TabIndex = 46;
             //
             // btnKeyStaffAdd
+            //   ボタンは欄の下に横に並べる。
             //
             btnKeyStaffAdd.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            btnKeyStaffAdd.Location = new Point(1330, 809);
+            btnKeyStaffAdd.Location = new Point(664, 1012);
             btnKeyStaffAdd.Name = "btnKeyStaffAdd";
-            btnKeyStaffAdd.Size = new Size(100, 30);
+            btnKeyStaffAdd.Size = new Size(76, 30);
             btnKeyStaffAdd.TabIndex = 47;
             btnKeyStaffAdd.Text = "行を足す";
             //
             // btnKeyStaffRemove
             //
             btnKeyStaffRemove.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            btnKeyStaffRemove.Location = new Point(1330, 845);
+            btnKeyStaffRemove.Location = new Point(746, 1012);
             btnKeyStaffRemove.Name = "btnKeyStaffRemove";
-            btnKeyStaffRemove.Size = new Size(100, 30);
+            btnKeyStaffRemove.Size = new Size(76, 30);
             btnKeyStaffRemove.TabIndex = 48;
             btnKeyStaffRemove.Text = "行を消す";
             //
             // btnKeyStaffUp
             //
             btnKeyStaffUp.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            btnKeyStaffUp.Location = new Point(1330, 881);
+            btnKeyStaffUp.Location = new Point(828, 1012);
             btnKeyStaffUp.Name = "btnKeyStaffUp";
-            btnKeyStaffUp.Size = new Size(100, 30);
+            btnKeyStaffUp.Size = new Size(66, 30);
             btnKeyStaffUp.TabIndex = 49;
             btnKeyStaffUp.Text = "↑ 上へ";
             //
             // btnKeyStaffDown
             //
             btnKeyStaffDown.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            btnKeyStaffDown.Location = new Point(1330, 917);
+            btnKeyStaffDown.Location = new Point(900, 1012);
             btnKeyStaffDown.Name = "btnKeyStaffDown";
-            btnKeyStaffDown.Size = new Size(100, 30);
+            btnKeyStaffDown.Size = new Size(66, 30);
             btnKeyStaffDown.TabIndex = 50;
             btnKeyStaffDown.Text = "↓ 下へ";
             //
             // btnKeyStaffColor
             //
             btnKeyStaffColor.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            btnKeyStaffColor.Location = new Point(1330, 953);
+            btnKeyStaffColor.Location = new Point(972, 1012);
             btnKeyStaffColor.Name = "btnKeyStaffColor";
-            btnKeyStaffColor.Size = new Size(100, 30);
+            btnKeyStaffColor.Size = new Size(96, 30);
             btnKeyStaffColor.TabIndex = 51;
             btnKeyStaffColor.Text = "色を選ぶ…";
             //
             // lblKeyStaffNote
+            //   欄の幅で折り返す。
             //
-            lblKeyStaffNote.AutoSize = true;
             lblKeyStaffNote.ForeColor = SystemColors.GrayText;
-            lblKeyStaffNote.Location = new Point(900, 1046);
+            lblKeyStaffNote.Location = new Point(664, 1048);
             lblKeyStaffNote.Name = "lblKeyStaffNote";
+            lblKeyStaffNote.Size = new Size(404, 44);
             lblKeyStaffNote.TabIndex = 52;
             lblKeyStaffNote.Text = "シリーズ一覧と作品詳細に、この順・この色で出ます。行が無ければメインスタッフを出しません。「保存」で書き込みます。";
+            //
+            // lblEpisodeStaff
+            //
+            lblEpisodeStaff.AutoSize = true;
+            lblEpisodeStaff.Location = new Point(1084, 812);
+            lblEpisodeStaff.Name = "lblEpisodeStaff";
+            lblEpisodeStaff.Size = new Size(110, 20);
+            lblEpisodeStaff.TabIndex = 53;
+            lblEpisodeStaff.Text = "エピソードの札";
+            //
+            // dgvEpisodeStaff
+            //   各話のスタッフの札として出す役職と、札の色（#rrggbb）。行の順がサイトでの並び。
+            //   列（役職のドロップダウン・色）は役職マスタを読んでからコードで組む。
+            //
+            dgvEpisodeStaff.AllowUserToAddRows = false;
+            dgvEpisodeStaff.AllowUserToDeleteRows = false;
+            dgvEpisodeStaff.AllowUserToResizeRows = false;
+            dgvEpisodeStaff.AllowUserToOrderColumns = false;
+            dgvEpisodeStaff.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            dgvEpisodeStaff.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvEpisodeStaff.Location = new Point(1084, 836);
+            dgvEpisodeStaff.MultiSelect = false;
+            dgvEpisodeStaff.Name = "dgvEpisodeStaff";
+            dgvEpisodeStaff.RowHeadersVisible = false;
+            dgvEpisodeStaff.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgvEpisodeStaff.Size = new Size(404, 170);
+            dgvEpisodeStaff.TabIndex = 54;
+            //
+            // btnEpisodeStaffAdd
+            //   ボタンは欄の下に横に並べる。
+            //
+            btnEpisodeStaffAdd.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            btnEpisodeStaffAdd.Location = new Point(1084, 1012);
+            btnEpisodeStaffAdd.Name = "btnEpisodeStaffAdd";
+            btnEpisodeStaffAdd.Size = new Size(76, 30);
+            btnEpisodeStaffAdd.TabIndex = 55;
+            btnEpisodeStaffAdd.Text = "行を足す";
+            //
+            // btnEpisodeStaffRemove
+            //
+            btnEpisodeStaffRemove.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            btnEpisodeStaffRemove.Location = new Point(1166, 1012);
+            btnEpisodeStaffRemove.Name = "btnEpisodeStaffRemove";
+            btnEpisodeStaffRemove.Size = new Size(76, 30);
+            btnEpisodeStaffRemove.TabIndex = 56;
+            btnEpisodeStaffRemove.Text = "行を消す";
+            //
+            // btnEpisodeStaffUp
+            //
+            btnEpisodeStaffUp.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            btnEpisodeStaffUp.Location = new Point(1248, 1012);
+            btnEpisodeStaffUp.Name = "btnEpisodeStaffUp";
+            btnEpisodeStaffUp.Size = new Size(66, 30);
+            btnEpisodeStaffUp.TabIndex = 57;
+            btnEpisodeStaffUp.Text = "↑ 上へ";
+            //
+            // btnEpisodeStaffDown
+            //
+            btnEpisodeStaffDown.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            btnEpisodeStaffDown.Location = new Point(1320, 1012);
+            btnEpisodeStaffDown.Name = "btnEpisodeStaffDown";
+            btnEpisodeStaffDown.Size = new Size(66, 30);
+            btnEpisodeStaffDown.TabIndex = 58;
+            btnEpisodeStaffDown.Text = "↓ 下へ";
+            //
+            // btnEpisodeStaffColor
+            //
+            btnEpisodeStaffColor.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            btnEpisodeStaffColor.Location = new Point(1392, 1012);
+            btnEpisodeStaffColor.Name = "btnEpisodeStaffColor";
+            btnEpisodeStaffColor.Size = new Size(96, 30);
+            btnEpisodeStaffColor.TabIndex = 59;
+            btnEpisodeStaffColor.Text = "色を選ぶ…";
+            //
+            // lblEpisodeStaffNote
+            //   欄の幅で折り返す。
+            //
+            lblEpisodeStaffNote.ForeColor = SystemColors.GrayText;
+            lblEpisodeStaffNote.Location = new Point(1084, 1048);
+            lblEpisodeStaffNote.Name = "lblEpisodeStaffNote";
+            lblEpisodeStaffNote.Size = new Size(404, 44);
+            lblEpisodeStaffNote.TabIndex = 60;
+            lblEpisodeStaffNote.Text = "エピソード一覧と各話のスタッフ欄に、この順・この色で出ます。行が無ければ札を出しません。「保存」で書き込みます。";
             // 
             // btnAdd
             // 
@@ -716,6 +820,14 @@ namespace PrecureDataStars.Episodes.Forms
             Controls.Add(btnKeyStaffDown);
             Controls.Add(btnKeyStaffColor);
             Controls.Add(lblKeyStaffNote);
+            Controls.Add(lblEpisodeStaff);
+            Controls.Add(dgvEpisodeStaff);
+            Controls.Add(btnEpisodeStaffAdd);
+            Controls.Add(btnEpisodeStaffRemove);
+            Controls.Add(btnEpisodeStaffUp);
+            Controls.Add(btnEpisodeStaffDown);
+            Controls.Add(btnEpisodeStaffColor);
+            Controls.Add(lblEpisodeStaffNote);
             Controls.Add(btnAdd);
             Controls.Add(btnSave);
             MinimumSize = new Size(1200, 1100);
@@ -726,6 +838,7 @@ namespace PrecureDataStars.Episodes.Forms
             ((System.ComponentModel.ISupportInitialize)numEpisodes).EndInit();
             ((System.ComponentModel.ISupportInitialize)numRunTimeSeconds).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvKeyStaff).EndInit();
+            ((System.ComponentModel.ISupportInitialize)dgvEpisodeStaff).EndInit();
             ResumeLayout(false);
             PerformLayout();
         }

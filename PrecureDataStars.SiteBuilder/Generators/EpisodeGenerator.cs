@@ -515,7 +515,7 @@ public sealed class EpisodeGenerator
             });
         }
 
-        // スタッフ情報（クレジット階層から脚本／絵コンテ／演出／作画監督／美術監督を抽出）。
+        // スタッフ情報（クレジット階層から、作品の表の行のある役職を抽出）。
         // クレジットセクションとは別に「主要スタッフ」セクションとして上部基本情報の近くに出す。
         var staffRows = BuildStaffRows(credits, series);
 
@@ -830,7 +830,7 @@ public sealed class EpisodeGenerator
         {
             // 区切りの「・」は色を持たせず、役職名だけを色分けする。
             if (parts.Count > 0) parts.Add(new OgCardLabelPart("・", ""));
-            parts.Add(new OgCardLabelPart(link.Label, OgRolePalette.ColorFor(link.Code)));
+            parts.Add(new OgCardLabelPart(link.Label, link.ColorHex));
         }
         return parts;
     }
@@ -851,8 +851,8 @@ public sealed class EpisodeGenerator
             .Where(s => !string.IsNullOrWhiteSpace(s.NamesLine))
             .Select(s => new OgCardFactLine(s.RoleLabel, StripTags(s.NamesLine))
             {
-                // 役職名の色はサイトの役職バッジと同じ配色に揃える。
-                LabelColorHex = OgRolePalette.ColorFor(s.RoleCode),
+                // 役職名の色はサイトの役職バッジと同じ色（作品の表の行の色）に揃える。
+                LabelColorHex = s.ColorHex,
                 // 「絵コンテ・演出」のような統合行は RoleCode を持たないので、
                 // 構成役職ごとに色を分けた断片として組む（束ねた全体が無彩色に落ちるのを防ぐ）。
                 LabelParts = BuildLabelParts(s)
@@ -1351,12 +1351,13 @@ public sealed class EpisodeGenerator
         return sb.ToString();
     }
 
-    /// <summary>スタッフ行群から「演出」役職の人物名一覧を取り出す。</summary>
+    /// <summary>スタッフ行群から「演出」役職（役職コード EPISODE_DIRECTOR。単独行か、絵コンテ（STORYBOARD）との統合行）の人物名一覧を取り出す。</summary>
     private static List<string> ExtractDirectorPersons(IReadOnlyList<StaffRow> staffRows)
     {
         foreach (var row in staffRows)
         {
-            if (row.RoleLabel == "演出" || row.RoleLabel == "絵コンテ・演出")
+            if (row.RoleCode == EpisodeStaffCards.EpisodeDirectorCode
+                || row.SubRoleLinks.Any(l => l.Code == EpisodeStaffCards.EpisodeDirectorCode))
             {
                 return SplitNamesLine(row.NamesLine);
             }
@@ -1364,12 +1365,15 @@ public sealed class EpisodeGenerator
         return new List<string>();
     }
 
-    /// <summary>スタッフ行群から「脚本」役職の人物名一覧を取り出す。</summary>
+    /// <summary>脚本の役職コード（JSON-LD の creator に載せる役職）。</summary>
+    private const string ScreenplayRoleCode = "SCREENPLAY";
+
+    /// <summary>スタッフ行群から「脚本」役職（役職コード SCREENPLAY）の人物名一覧を取り出す。</summary>
     private static List<string> ExtractScreenplayPersons(IReadOnlyList<StaffRow> staffRows)
     {
         foreach (var row in staffRows)
         {
-            if (row.RoleLabel == "脚本")
+            if (row.RoleCode == ScreenplayRoleCode)
             {
                 return SplitNamesLine(row.NamesLine);
             }
@@ -1703,239 +1707,64 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>
-    /// 主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。
-    /// 本編の作品で総作画監督がいる回は、作画監督の行の直前に総作画監督の行を置く。
-    /// 読むカードと、オトナシリーズの作品の札（作画監督の代わりに作画監督と同じカードの役職を 1 役職 1 行、美術は美術デザイン）の
-    /// 決まりは <see cref="EpisodeStaffCards"/>（作品のページのエピソード一覧と共通）。
+    /// 主要スタッフ（各話のスタッフの札）の表示行を構築する。
+    /// 札に出す役職・並び・色は作品の表（<see cref="BuildContext.EpisodeStaffRolesBySeries"/>）の行で、
+    /// 読むカードと札の組み立ては <see cref="EpisodeStaffCards.BuildBadges"/>（作品のページのエピソード一覧と共通）。
+    /// 行の無い作品は空（スタッフ欄を出さない）。
     /// </summary>
     private IReadOnlyList<StaffRow> BuildStaffRows(IReadOnlyList<Credit> credits, Series series)
     {
         // 役職マスタは BuildContext で事前展開済み（role_code → Role）。
         _roleMap ??= _ctx.RoleByCode;
 
-        // スタッフセクションは脚本／絵コンテ／演出／作画監督／美術 の 5 役職を
-        // 別々のラインで出すが、絵コンテと演出が同じ人物（同じ集合）になった場合だけ
-        // 「絵コンテ・演出」の 1 ラインに統合する。そのため一旦は役職コード単位で
-        // (重複判定キー → 表示用 HTML) のペアリストとして集めておき、最後に行 DTO を組み立てる。
-        // 抽出対象役職と、役職コード／表示名の候補。
-        // role_code がリポジトリ内の役職マスタに実在する値を直接指定する。
-        // 加えて name_ja 側でもマッチを許容するので、マスタが今後追加・改名されても拾いやすい。
-        var staffSpecs = new[]
-        {
-            new StaffSpec("脚本",     new[] { "SCREENPLAY" },         new[] { "脚本" }),
-            new StaffSpec("絵コンテ", new[] { "STORYBOARD" },         new[] { "絵コンテ" }),
-            new StaffSpec("演出",     new[] { "EPISODE_DIRECTOR" },   new[] { "演出" }),
-            // 総作画監督は本編の作品だけ（その回にいるときだけ、作画監督の行の直前に出る）。オトナシリーズの作品は作画監督と同じカードの役職の行で出す。
-            new StaffSpec(EpisodeStaffCards.ChiefAnimationDirectorLabel, new[] { EpisodeStaffCards.ChiefAnimationDirectorCode }, new[] { EpisodeStaffCards.ChiefAnimationDirectorLabel }),
-            new StaffSpec("作画監督", new[] { "ANIMATION_DIRECTOR" }, new[] { "作画監督" }),
-            new StaffSpec("美術",     new[] { "ART_DIRECTOR" },       new[] { "美術" })
-        };
-
-        // 役職コード → スタッフ仕様の逆引きを 1 度だけ作る。
-        // role_code がコード候補に一致、または当該 role の name_ja が表示名候補のいずれかに一致するとき採用。
-        var roleCodeToSpec = new Dictionary<string, StaffSpec>(StringComparer.Ordinal);
-        foreach (var (code, role) in _roleMap)
-        {
-            foreach (var spec in staffSpecs)
-            {
-                if (spec.RoleCodeCandidates.Contains(code, StringComparer.Ordinal)
-                    || (role.NameJa is { } nm && spec.RoleNameCandidates.Contains(nm, StringComparer.Ordinal)))
-                {
-                    if (!roleCodeToSpec.ContainsKey(code))
-                        roleCodeToSpec[code] = spec;
-                }
-            }
-        }
-
-        // 仕様ラベル → 集めた人物名（HTML 断片）のリスト。
         // 重複判定キーは PERSON エントリなら "P:{alias_id}"、TEXT エントリなら "T:{raw_text}" とし、
-        // リンク化の有無に関わらず同一エントリを 1 度だけ表示するようにする。
-        // 絵コンテと演出の同一性判定にも使うため、キー集合（HashSet<string>）も保持しておく。
-        var collected = staffSpecs.ToDictionary(s => s.Label, _ => new List<string>(), StringComparer.Ordinal);
-        var seen = staffSpecs.ToDictionary(s => s.Label, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
-
-        // オトナシリーズの作品は、区分 1〜3 の札はそのまま、作画監督の札の代わりに作画監督と同じカードの役職の札
-        // （札の文字ごとに 1 行。並びは最初に現れた順）を置き、美術の札には美術デザインを入れて「美術デザイン」と出す。
-        bool isOtonaWork = _ctx.IsOtonaSeries(series.SeriesId);
-        var animCardBadges = new List<(string Label, string RoleCode, List<string> Names, HashSet<string> Seen)>();
-        StaffSpec? SpecForOtona(int? bucket) => bucket switch
-        {
-            EpisodeChiefRoles.Screenplay => staffSpecs[0],
-            EpisodeChiefRoles.Storyboard => staffSpecs[1],
-            EpisodeChiefRoles.EpisodeDirector => staffSpecs[2],
-            EpisodeChiefRoles.ArtDirector => staffSpecs[5],
-            _ => null
-        };
-
-        // クレジット → カード → tier → group → cardRole の順で走査して、
-        // ヒット役職配下の PERSON エントリの名義を引く。
+        // リンク化の有無に関わらず同一エントリを 1 度だけ表示する。絵コンテと演出の同一性判定にも同じキーの集合を使う。
         // 階層 6 段は SiteDataLoader が事前展開済みの BuildContext.CreditTree スナップショットを辿る
         // （旧実装はページごとに階層別 GetBy*Async を発火しており、エピソード数 × 階層分の
-        // DB 往復が走っていた）。スナップショット各層は per-id 取得時と同一の並び順を保持しているが、
-        // 旧経路と同じ明示ソートを保険として残す。
-        foreach (var credit in credits)
-        {
-            if (!_ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cardSnapshots)) continue;
-            // Blu-ray・配信の版のカードがあるクレジットは、本放送の版のカードを読まない（札は Blu-ray・配信の版で組む）。
-            foreach (var cardSnap in EpisodeStaffCards.CardsForStaff(cardSnapshots))
-            {
-                var orderedRoles = EpisodeStaffCards.OrderedRoles(cardSnap);
-                // オトナシリーズの作品で作画監督のいるカードは、作画監督以外の役職（区分 1〜5 を除く）を札にする。
-                bool isAnimCard = isOtonaWork && EpisodeStaffCards.HasAnimationDirector(orderedRoles, _roleMap);
-                foreach (var crSnap in orderedRoles)
-                {
-                    var cr = crSnap.Role;
-                    if (cr.RoleCode is null) continue;
+        // DB 往復が走っていた）。
+        var badges = EpisodeStaffCards.BuildBadges(
+            credits,
+            _ctx.CreditTree.CardsByCreditId,
+            _ctx.EpisodeStaffRolesBySeries.TryGetValue(series.SeriesId, out var staffRoles) ? staffRoles : null,
+            _roleMap,
+            ResolveStaffEntry);
 
-                    StaffSpec? spec = null;
-                    (string Label, string RoleCode, List<string> Names, HashSet<string> Seen)? badge = null;
-                    if (!isOtonaWork)
-                    {
-                        if (!roleCodeToSpec.TryGetValue(cr.RoleCode, out var found)) continue;
-                        spec = found;
-                    }
-                    else
-                    {
-                        spec = SpecForOtona(EpisodeStaffCards.ClassifyForWork(cr, _roleMap, isOtonaWork: true));
-                        if (spec is null)
-                        {
-                            if (!isAnimCard) continue;
-                            string? label = EpisodeStaffCards.AnimationCardBadgeLabel(cr, _roleMap);
-                            if (label is null) continue;
-                            int idx = animCardBadges.FindIndex(x => string.Equals(x.Label, label, StringComparison.Ordinal));
-                            if (idx < 0)
-                            {
-                                animCardBadges.Add((label, cr.RoleCode, new List<string>(), new HashSet<string>(StringComparer.Ordinal)));
-                                idx = animCardBadges.Count - 1;
-                            }
-                            badge = animCardBadges[idx];
-                        }
-                    }
-
-                    // 配下のブロックとエントリを引いて、PERSON エントリの名義のみを集める。
-                    foreach (var blockSnap in crSnap.Blocks.OrderBy(b => b.Block.BlockSeq))
-                    {
-                        var entries = blockSnap.Entries
-                            .Where(e => !e.IsBroadcastOnly)
-                            .OrderBy(e => e.EntrySeq);
-                        foreach (var e in entries)
-                        {
-                            var (key, html) = ResolveStaffEntry(e);
-                            if (string.IsNullOrEmpty(html)) continue;
-                            if (badge is { } bd)
-                            {
-                                if (bd.Seen.Add(key)) bd.Names.Add(html);
-                                continue;
-                            }
-                            if (seen[spec!.Label].Add(key))
-                                collected[spec.Label].Add(html);
-                        }
-                    }
-                }
-            }
-        }
-
-        // 絵コンテ・演出が同一集合（同じ重複キー集合）の場合、1 ラインに統合する。
-        // 例：絵コンテ＝伊藤 尚往、演出＝伊藤 尚往 → 「絵コンテ・演出 伊藤 尚往」
-        // 異なる場合は 2 行に分ける（絵コンテ A、演出 B）。
-        // 統合判定はキー集合の集合比較で行う（HTML 表現の文字列比較だと alias の表示揺れに弱いため）。
-        bool storyboardDirectorMerged =
-            seen["絵コンテ"].Count > 0
-            && seen["演出"].Count > 0
-            && seen["絵コンテ"].SetEquals(seen["演出"]);
-
-        // 役職コード解決：表示順は仕様の配列順を踏襲。各行の RoleUrl は系譜代表 role_code の役職統計ページ。
-        // 統合行 (絵コンテ・演出) のときは特例的に「絵コンテ用 URL」と「演出用 URL」の両方を保持し、
-        // テンプレ側で「絵コンテ」「演出」それぞれを別リンクとして描画できるようにする。
-        string? RoleUrl(string label) => label switch
-        {
-            "脚本" => CreatorsRoleUrlFor("SCREENPLAY", "脚本", series),
-            "絵コンテ" => CreatorsRoleUrlFor("STORYBOARD", "絵コンテ", series),
-            "演出" => CreatorsRoleUrlFor("EPISODE_DIRECTOR", "演出", series),
-            EpisodeStaffCards.ChiefAnimationDirectorLabel => CreatorsRoleUrlFor(EpisodeStaffCards.ChiefAnimationDirectorCode, EpisodeStaffCards.ChiefAnimationDirectorLabel, series),
-            "作画監督" => CreatorsRoleUrlFor("ANIMATION_DIRECTOR", "作画監督", series),
-            "美術" => CreatorsRoleUrlFor("ART_DIRECTOR_TV", "美術", series),
-            _ => null
-        };
-
-        // 仕様の並び順で、エントリのある役職だけ DTO 化。
-        // HTML 断片を「、」で連結した文字列を NamesLine に詰める。テンプレ側では html.escape を
+        // 札 1 つを 1 行にする。HTML 断片を「、」で連結した文字列を NamesLine に詰める。テンプレ側では html.escape を
         // かけずにそのまま出力する（PERSON エントリは既に <a> タグでラップ済み、TEXT は escape 済み）。
-        var rows = new List<StaffRow>();
-        foreach (var spec in staffSpecs)
+        var rows = new List<StaffRow>(badges.Count);
+        foreach (var b in badges)
         {
-            // オトナシリーズの作品は、作画監督の行の位置に作画監督と同じカードの役職の行を並べる。
-            if (isOtonaWork && spec.Label == "作画監督")
+            if (b.Roles.Count >= 2)
             {
-                foreach (var b in animCardBadges.Where(x => x.Names.Count > 0))
-                {
-                    rows.Add(new StaffRow
-                    {
-                        RoleLabel = b.Label,
-                        RoleCode = EpisodeStaffCards.AnimationCardBadgeRoleCode,
-                        RoleUrl = PathUtil.CreatorsRoleUrl(b.RoleCode),
-                        SubRoleLinks = Array.Empty<StaffRoleLink>(),
-                        NamesLine = string.Join("、", b.Names)
-                    });
-                }
-                continue;
-            }
-
-            var names = collected[spec.Label];
-            if (names.Count == 0) continue;
-
-            // 統合モード中は絵コンテ単体／演出単体ではなく、絵コンテ位置で 1 行だけ出す（演出はスキップ）。
-            if (storyboardDirectorMerged)
-            {
-                if (spec.Label == "演出") continue;
-                if (spec.Label == "絵コンテ")
-                {
-                    rows.Add(new StaffRow
-                    {
-                        // 表示ラベル文字列は「絵コンテ・演出」。テンプレ側でリンク分割するため、
-                        // 構成役職それぞれの URL を SubRoleLinks にも詰める。
-                        RoleLabel = "絵コンテ・演出",
-                        // 統合行では RoleCode は空文字（テンプレ側は SubRoleLinks の各 Code を使う）。
-                        RoleCode = "",
-                        RoleUrl = "",
-                        SubRoleLinks = new List<StaffRoleLink>
-                        {
-                            new StaffRoleLink { Code = "STORYBOARD",        Label = "絵コンテ", Url = RoleUrl("絵コンテ") ?? "" },
-                            new StaffRoleLink { Code = "EPISODE_DIRECTOR",  Label = "演出",     Url = RoleUrl("演出")     ?? "" }
-                        },
-                        NamesLine = string.Join("、", names)
-                    });
-                    continue;
-                }
-            }
-
-            // 通常モード：1 役職 1 行で素直に出す。
-            // オトナシリーズの作品の美術の行は美術デザイン（札の文字・色・リンク先とも美術デザイン）。
-            if (isOtonaWork && spec.Label == "美術")
-            {
+                // 絵コンテ・演出が同一集合（同じ重複キー集合）の回は、絵コンテの位置で 1 行だけ出す。
+                // 例：絵コンテ＝伊藤 尚往、演出＝伊藤 尚往 → 「絵コンテ・演出 伊藤 尚往」
                 rows.Add(new StaffRow
                 {
-                    RoleLabel = EpisodeStaffCards.OtonaArtLabel,
-                    RoleCode = EpisodeStaffCards.ArtDesignCode,
-                    RoleUrl = PathUtil.CreatorsRoleUrl(EpisodeStaffCards.ArtDesignCode),
-                    SubRoleLinks = Array.Empty<StaffRoleLink>(),
-                    NamesLine = string.Join("、", names)
+                    // 表示ラベル文字列は「絵コンテ・演出」。テンプレ側でリンク分割するため、
+                    // 構成役職それぞれの URL を SubRoleLinks にも詰める。
+                    RoleLabel = string.Join("・", b.Roles.Select(r => r.Label)),
+                    // 統合行では RoleCode は空文字（テンプレ側は SubRoleLinks の各 Code を使う）。
+                    RoleCode = "",
+                    RoleUrl = "",
+                    SubRoleLinks = b.Roles
+                        .Select(r => new StaffRoleLink { Code = r.RoleCode, Label = r.Label, Url = r.RoleUrl, BadgeStyle = r.BadgeStyle, ColorHex = r.ColorHex })
+                        .ToList(),
+                    NamesLine = b.NamesHtml
                 });
                 continue;
             }
 
+            // 通常：1 役職 1 行で素直に出す。札の文字・色・リンク先は札のまま。
+            var role = b.Roles[0];
             rows.Add(new StaffRow
             {
-                RoleLabel = spec.Label,
-                // RoleCode はバッジの data-role-code に使う。staffSpecs では RoleCodeCandidates の
-                // 先頭が代表コード（"SCREENPLAY" / "STORYBOARD" / 等）になる。
-                // 総作画監督の札は作画監督と同じ緑（OGP カードの役職名の色も同じ）。
-                RoleCode = spec.Label == EpisodeStaffCards.ChiefAnimationDirectorLabel
-                    ? EpisodeStaffCards.AnimationCardBadgeRoleCode
-                    : spec.RoleCodeCandidates.Length > 0 ? spec.RoleCodeCandidates[0] : "",
-                RoleUrl = RoleUrl(spec.Label) ?? "",
+                RoleLabel = role.Label,
+                RoleCode = role.RoleCode,
+                RoleUrl = role.RoleUrl,
+                BadgeStyle = role.BadgeStyle,
+                ColorHex = role.ColorHex,
                 SubRoleLinks = Array.Empty<StaffRoleLink>(),
-                NamesLine = string.Join("、", names)
+                NamesLine = b.NamesHtml
             });
         }
         return rows;
@@ -2032,9 +1861,6 @@ public sealed class EpisodeGenerator
                 return null;
         }
     }
-
-    /// <summary>スタッフ役職の判定スペック。</summary>
-    private sealed record StaffSpec(string Label, string[] RoleCodeCandidates, string[] RoleNameCandidates);
 
     /// <summary>放送日時を「2004年2月1日 8:30〜9:00」または「2004年2月1日 8:30」フォーマットで返す。 <paramref name="durationMinutes"/> が NULL（尺未登録）の場合は終了時刻を表示しない。 尺登録済みの場合は分単位で加算した終了時刻も併記する。 時刻部分は <c>H:mm</c>（先頭ゼロなし、分は 2 桁）。
     /// 深夜の回（開始が <see cref="JpDateFormat.LateNightEndHour"/> 時より前）は前の日の放送として、時刻に 24 を足して書く（「2025年1月11日 26:00〜26:30」）。</summary>
@@ -2241,11 +2067,17 @@ public sealed class EpisodeGenerator
     /// <summary>主要スタッフ 1 行（役職名 + 人物名のリスト）。</summary>
     private sealed class StaffRow
     {
-        /// <summary>表示用役職名（"脚本" / "絵コンテ" / "演出" / "総作画監督" / "作画監督" / "美術" / "絵コンテ・演出"）。</summary>
+        /// <summary>表示用役職名（札の文字。"脚本" / "絵コンテ" / "演出" / "総作画監督" / "作画監督" / "美術" / 統合行の "絵コンテ・演出" など）。</summary>
         public string RoleLabel { get; set; } = "";
 
-        /// <summary>役職代表コード。</summary>
+        /// <summary>役職コード（バッジの data-role-code）。統合行は空文字。</summary>
         public string RoleCode { get; set; } = "";
+
+        /// <summary>バッジの style 属性の値（作品の表の行の色から作った地・字・枠の色）。統合行は空文字（<see cref="SubRoleLinks"/> の各値を使う）。</summary>
+        public string BadgeStyle { get; set; } = "";
+
+        /// <summary>作品の表の行の色（<c>#rrggbb</c>）。OGP カードの役職名の色。統合行は空文字。</summary>
+        public string ColorHex { get; set; } = "";
 
         /// <summary>役職統計詳細ページの URL。<c>"/creators/roles/{rep_role_code}/"</c> 形式。 空文字のときはテンプレ側でリンク化せずプレーンテキスト表示。 「絵コンテ・演出」統合行ではこの値ではなく <see cref="SubRoleLinks"/> を使う。</summary>
         public string RoleUrl { get; set; } = "";
@@ -2260,10 +2092,14 @@ public sealed class EpisodeGenerator
     /// <summary>統合ラベル「絵コンテ・演出」を分割描画するためのリンク 1 件分。 テンプレ側では <c>&lt;a href="{Url}"&gt;{Label}&lt;/a&gt;</c> として埋め込む。</summary>
     private sealed class StaffRoleLink
     {
-        /// <summary>役職代表コード。</summary>
+        /// <summary>役職コード（バッジの data-role-code）。</summary>
         public string Code { get; set; } = "";
         public string Label { get; set; } = "";
         public string Url { get; set; } = "";
+        /// <summary>バッジの style 属性の値（作品の表の行の色から作った地・字・枠の色）。</summary>
+        public string BadgeStyle { get; set; } = "";
+        /// <summary>作品の表の行の色（<c>#rrggbb</c>）。OGP カードの役職名の色。</summary>
+        public string ColorHex { get; set; } = "";
     }
 
     /// <summary>

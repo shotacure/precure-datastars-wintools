@@ -300,7 +300,7 @@
        各エピソード行は ep-row-main（第N話＋放送日の縦積み + サブタイトル + スタッフバッジ群）。
        サブタイトルは共通の .ep-row-title（CSS で太字）。TitleDisplayHtml はルビ付き優先・
        無ければエスケープ平文で、未解禁なら subtitle-embargo.js 用のガード span 込み。絵コンテ＝演出が同一人物
-       （StoryboardDirectorMerged）のときバッジ 2 個並び + 名前 1 回統合は維持。 ##}}
+       の回は、札（StaffBadges）の中でバッジ 2 個並び + 名前 1 回に統合済み。 ##}}
   {{~ if Series.HasEpisodeList ~}}
   <section id="episode-list">
     <h2>エピソード一覧</h2>
@@ -326,40 +326,14 @@
               <span class="ep-row-date">{{ e.OnAirDate }}</span>
             </div>
             <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{ e.TitleDisplayHtml }}</a>
-            {{## スタッフ列：5 役職を色付きバッジ + 人物名（既に <a> リンク済み HTML）で並べる。
-                 バッジのリンク先は生成側が渡す EpisodeStaffRoleUrls（オトナシリーズの作品はオトナシリーズの役職のページ）。
-                 美術の札の文字・色・リンク先は行ごと（e.ArtLabel ほか。オトナシリーズの作品は「美術デザイン」）。
-                 本編の作品で総作画監督がいる回は、作画監督の札の直前に総作画監督の札（緑）を出す。
-                 オトナシリーズの作品は作画監督の札を出さず、作画監督と同じカードの役職を e.AnimationCardRoles の札で並べる。
-                 絵コンテ＝演出（StoryboardDirectorMerged=true）のときは 2 バッジ並び + 名前 1 回に統合。
-                 全フィールド空の場合はスタッフ列ごと描画しない（クレジット未登録対策）。 ##}}
-            {{~ if e.Screenplay != "" || e.Storyboard != "" || e.EpisodeDirector != "" || e.ChiefAnimationDirector != "" || e.AnimationDirector != "" || e.ArtDirector != "" || (array.size e.AnimationCardRoles) > 0 ~}}
+            {{## スタッフ列：作品の表（series_episode_staff_roles）の行のある役職を、行の順に色付きバッジ + 人物名（既に <a> リンク済み HTML）で並べる。
+                 バッジの文字・色（style 属性）・リンク先は生成側が札ごとに渡す（e.StaffBadges の各 Roles）。
+                 絵コンテ＝演出（同一人物）の回は、1 つの札に 2 バッジ並び + 名前 1 回に統合済み。
+                 札が無い場合はスタッフ列ごと描画しない（クレジット未登録・表に行の無い作品）。 ##}}
+            {{~ if (array.size e.StaffBadges) > 0 ~}}
             <div class="staff-badges-row">
-              {{~ if e.Screenplay != "" ~}}
-              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="SCREENPLAY" href="{{ EpisodeStaffRoleUrls.Screenplay }}">脚本</a>{{ e.Screenplay }}</span>
-              {{~ end ~}}
-              {{~ if e.StoryboardDirectorMerged ~}}
-              {{## 絵コンテ＝演出（同一人物）→ バッジ 2 個並び + 名前 1 回に統合 ##}}
-              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="{{ EpisodeStaffRoleUrls.Storyboard }}">絵コンテ</a><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="{{ EpisodeStaffRoleUrls.EpisodeDirector }}">演出</a>{{ e.Storyboard }}</span>
-              {{~ else ~}}
-              {{~ if e.Storyboard != "" ~}}
-              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="{{ EpisodeStaffRoleUrls.Storyboard }}">絵コンテ</a>{{ e.Storyboard }}</span>
-              {{~ end ~}}
-              {{~ if e.EpisodeDirector != "" ~}}
-              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="{{ EpisodeStaffRoleUrls.EpisodeDirector }}">演出</a>{{ e.EpisodeDirector }}</span>
-              {{~ end ~}}
-              {{~ end ~}}
-              {{~ if e.ChiefAnimationDirector != "" ~}}
-              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="{{ e.ChiefAnimationDirectorUrl }}">総作画監督</a>{{ e.ChiefAnimationDirector }}</span>
-              {{~ end ~}}
-              {{~ if e.AnimationDirector != "" ~}}
-              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="{{ EpisodeStaffRoleUrls.AnimationDirector }}">作画監督</a>{{ e.AnimationDirector }}</span>
-              {{~ end ~}}
-              {{~ for b in e.AnimationCardRoles ~}}
-              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ b.RoleCode }}" href="{{ b.RoleUrl }}">{{ b.Label | html.escape }}</a>{{ b.NamesHtml }}</span>
-              {{~ end ~}}
-              {{~ if e.ArtDirector != "" ~}}
-              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ e.ArtRoleCode }}" href="{{ e.ArtRoleUrl }}">{{ e.ArtLabel }}</a>{{ e.ArtDirector }}</span>
+              {{~ for b in e.StaffBadges ~}}
+              <span class="staff-badge-group">{{~ for r in b.Roles ~}}<a class="role-badge role-badge-sm" data-role-code="{{ r.RoleCode }}"{{ if r.BadgeStyle != "" }} style="{{ r.BadgeStyle }}"{{ end }} href="{{ r.RoleUrl }}">{{ r.Label | html.escape }}</a>{{~ end ~}}{{ b.NamesHtml }}</span>
               {{~ end ~}}
             </div>
             {{~ end ~}}

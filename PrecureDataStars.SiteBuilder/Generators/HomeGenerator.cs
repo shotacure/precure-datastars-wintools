@@ -497,7 +497,7 @@ WHERE e.is_deleted = 0
     /// シリーズ単位のエピソード群（並び順は呼び出し側で確定済み）から
     /// 1 つの <see cref="HomeEpisodeSection"/> を組み立てる共通ヘルパ。
     /// 各エピソードに <see cref="_episodeStaffByIdCache"/> のスタッフサマリを引き当て、
-    /// /episodes/ と同じ 5 役職バッジ段つきの行を作る。日付は密表示用に
+    /// /episodes/ と同じ各話のスタッフの札の段つきの行を作る。日付は密表示用に
     /// 「2024.2.4」形式（<see cref="JpDateFormat.DotDate"/>）へ統一する。
     /// </summary>
     private HomeEpisodeSection BuildHomeEpisodeSection(IReadOnlyList<EpisodeWithSeries> rowsInOrder)
@@ -506,7 +506,7 @@ WHERE e.is_deleted = 0
         var series = first.Series;
         var rows = rowsInOrder.Select(x =>
         {
-            // クレジット未登録などでキャッシュに無いエピソードは全フィールド空のサマリ。
+            // クレジット未登録などでキャッシュに無いエピソードは札の無いサマリ。
             var staff = _episodeStaffByIdCache.TryGetValue(x.Episode.EpisodeId, out var ss)
                 ? ss
                 : new EpisodeStaffSummary();
@@ -521,18 +521,7 @@ WHERE e.is_deleted = 0
                 TitleDisplayHtml = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(x.Episode.TitleRichHtml, x.Episode.TitleText, revealAt, x.Episode.MagazineSubtitleStatus),
                 OnAirDate = JpDateFormat.BroadcastDotDate(x.Episode.OnAirAt),
                 EpisodeUrl = PathUtil.EpisodeUrl(series.Slug, x.Episode.SeriesEpNo),
-                Screenplay = staff.Screenplay,
-                Storyboard = staff.Storyboard,
-                EpisodeDirector = staff.EpisodeDirector,
-                ChiefAnimationDirector = staff.ChiefAnimationDirector,
-                ChiefAnimationDirectorUrl = staff.ChiefAnimationDirectorUrl,
-                AnimationDirector = staff.AnimationDirector,
-                ArtDirector = staff.ArtDirector,
-                ArtLabel = staff.ArtLabel,
-                ArtRoleCode = staff.ArtRoleCode,
-                ArtRoleUrl = staff.ArtRoleUrl,
-                AnimationCardRoles = staff.AnimationCardRoles,
-                StoryboardDirectorMerged = staff.StoryboardDirectorMerged
+                StaffBadges = staff.Badges
             };
         }).ToList();
 
@@ -1019,7 +1008,7 @@ WHERE e.is_deleted = 0
         public IReadOnlyList<HomeEpisodeRow> Episodes { get; set; } = Array.Empty<HomeEpisodeRow>();
     }
 
-    /// <summary>ホームのエピソードセクション内 1 行。/episodes/ の EpisodesIndexRow と同等の 表示項目（第N話・放送日・サブタイトル・5 役職スタッフ HTML 断片）を持つ。</summary>
+    /// <summary>ホームのエピソードセクション内 1 行。/episodes/ の EpisodesIndexRow と同等の 表示項目（第N話・放送日・サブタイトル・各話のスタッフの札）を持つ。</summary>
     private sealed class HomeEpisodeRow
     {
         public int SeriesEpNo { get; set; }
@@ -1028,22 +1017,8 @@ WHERE e.is_deleted = 0
         /// <summary>放送日（密表示用「2024.2.4」形式に統一）。</summary>
         public string OnAirDate { get; set; } = "";
         public string EpisodeUrl { get; set; } = "";
-        public string Screenplay { get; set; } = "";
-        public string Storyboard { get; set; } = "";
-        public string EpisodeDirector { get; set; } = "";
-        /// <summary>総作画監督（本編の作品だけ。作画監督の札の直前に出す）と、その札のリンク先（<see cref="EpisodeStaffSummary.ChiefAnimationDirector"/> と同じ値）。</summary>
-        public string ChiefAnimationDirector { get; set; } = "";
-        public string ChiefAnimationDirectorUrl { get; set; } = "";
-        public string AnimationDirector { get; set; } = "";
-        public string ArtDirector { get; set; } = "";
-        /// <summary>美術の札の文字・色分けの役職コード・リンク先（<see cref="EpisodeStaffSummary.ArtLabel"/> ほかと同じ値。オトナシリーズの作品は美術デザイン）。</summary>
-        public string ArtLabel { get; set; } = "美術";
-        public string ArtRoleCode { get; set; } = "ART_DIRECTOR_TV";
-        public string ArtRoleUrl { get; set; } = "/creators/roles/art_director_tv/";
-        /// <summary>オトナシリーズの作品で作画監督の札の代わりに並べる札（<see cref="EpisodeStaffSummary.AnimationCardRoles"/>）。</summary>
-        public IReadOnlyList<EpisodeStaffBadge> AnimationCardRoles { get; set; } = Array.Empty<EpisodeStaffBadge>();
-        /// <summary>絵コンテ＝演出が同一人物のとき true（テンプレ側で 2 バッジ統合）。</summary>
-        public bool StoryboardDirectorMerged { get; set; }
+        /// <summary>その回の札（<see cref="EpisodeStaffSummary.Badges"/>。作品の表の行の順・行の色）。絵コンテ＝演出が同一人物の回は 2 バッジ並びの 1 つの札。</summary>
+        public IReadOnlyList<EpisodeStaffBadge> StaffBadges { get; set; } = Array.Empty<EpisodeStaffBadge>();
     }
 
     /// <summary>ホームのカードグリッド用 1 商品ぶんの表示 DTO。 単純な日付・タイトルに加え、ジャケット画像・購入導線（Amazon CD/デジタル）・ シリーズ表記・税込価格・状態バッジ（「予約受付中」「発売中」「本日発売」）と 「発売まで N 日」表示を計算済みの文字列として保持する。 ビルド時点での状態を焼き込む（ホームは毎日ビルド前提）。</summary>

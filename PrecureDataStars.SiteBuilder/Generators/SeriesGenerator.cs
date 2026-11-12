@@ -130,7 +130,7 @@ public sealed class SeriesGenerator
     private IReadOnlyDictionary<string, string>? _relationKindReverseLabelMapCache;
 
     // ── エピソード単位 staff サマリの memoize。
-    //    シリーズ詳細ページ生成（GenerateDetailAsync 内）で各エピソードについて ExtractStaffSummaryAsync を
+    //    シリーズ詳細ページ生成（GenerateDetailAsync 内）で各エピソードについて ExtractStaffSummary を
     //    呼び出すが、その結果を本キャッシュに溜め、後段 /episodes/ ランディング生成側
     //    （EpisodesIndexGenerator）からも参照できるようにする。
     //    キーは episode_id。エピソードが存在しないキー（=未抽出）は呼び出し側で対応。 ──
@@ -649,9 +649,9 @@ public sealed class SeriesGenerator
     /// <summary>
     /// /episodes/ ランディングページ生成（<see cref="EpisodesIndexGenerator"/>）から参照される、
     /// エピソード単位 staff サマリの memoize キャッシュ。
-    /// 本キャッシュは <see cref="ExtractStaffSummaryAsync"/> を経由したときだけ詰められる。
+    /// 本キャッシュは <see cref="ExtractStaffSummary"/> を経由したときだけ詰められる。
     /// <see cref="GenerateDetailAsync"/> が各 TV シリーズの全エピソードについて
-    /// <c>ExtractStaffSummaryAsync</c> を呼ぶため、<see cref="GenerateAsync"/> 完了後は
+    /// <c>ExtractStaffSummary</c> を呼ぶため、<see cref="GenerateAsync"/> 完了後は
     /// クレジット添付対象（credit_attach_to=EPISODE）のシリーズ配下エピソード全件が揃っている。
     /// </summary>
     public IReadOnlyDictionary<int, EpisodeStaffSummary> GetEpisodeStaffSummaries()
@@ -1087,10 +1087,9 @@ public sealed class SeriesGenerator
             // 役職マスタは BuildContext で事前展開済み（role_code → Role）。
             _roleMap ??= _ctx.RoleByCode;
 
-            bool isOtonaWork = _ctx.IsOtonaSeries(s.SeriesId);
             foreach (var e in eps.OrderBy(x => x.SeriesEpNo))
             {
-                var staff = await ExtractStaffSummaryAsync(e.EpisodeId, isOtonaWork, ct).ConfigureAwait(false);
+                var staff = ExtractStaffSummary(e.EpisodeId, s.SeriesId);
                 // stage B-6：ルビ付きサブタイトル HTML を流すが、シリーズ詳細のエピソード一覧では
                 // 1 行表示にしたいので、データ内の改行表現 <br>（および念のため <br/>・<br />）を
                 // 半角スペースへ置換する。ルビ要素（<ruby><rt>...</rt></ruby>）はインライン要素なので、
@@ -1108,20 +1107,9 @@ public sealed class SeriesGenerator
                     TitleDisplayHtml = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(titleRichInline, e.TitleText, revealAt, e.MagazineSubtitleStatus),
                     OnAirDate = JpDateFormat.BroadcastDotDate(e.OnAirAt),
                     EpisodeUrl = PathUtil.EpisodeUrl(s.Slug, e.SeriesEpNo),
-                    Screenplay = staff.Screenplay,
-                    Storyboard = staff.Storyboard,
-                    EpisodeDirector = staff.EpisodeDirector,
-                    ChiefAnimationDirector = staff.ChiefAnimationDirector,
-                    ChiefAnimationDirectorUrl = staff.ChiefAnimationDirectorUrl,
-                    AnimationDirector = staff.AnimationDirector,
-                    ArtDirector = staff.ArtDirector,
-                    ArtLabel = staff.ArtLabel,
-                    ArtRoleCode = staff.ArtRoleCode,
-                    ArtRoleUrl = staff.ArtRoleUrl,
-                    AnimationCardRoles = staff.AnimationCardRoles,
-                    // 絵コンテと演出が同一人物（PERSON エントリのキー集合が一致 + どちらも非空）のとき、
-                    // テンプレ側で「絵コンテ・演出 ○○」の 1 表記に統合する。同一性判定は集合比較で行う。
-                    StoryboardDirectorMerged = staff.StoryboardDirectorMerged
+                    // 札は作品の表の行の順・行の色。絵コンテと演出が同一人物（PERSON エントリのキー集合が一致 + どちらも非空）のときは、
+                    // 2 つの役職を並べた 1 つの札（名前は 1 回）になっている。同一性判定は集合比較で行う。
+                    StaffBadges = staff.Badges
                 });
             }
         }
@@ -1391,7 +1379,6 @@ public sealed class SeriesGenerator
         var content = new SeriesDetailModel
         {
             Series = seriesView,
-            EpisodeStaffRoleUrls = EpisodeStaffRoleUrlSet.Main,
             BgmLinks = bgmLinks,
             Episodes = epRows,
             RelatedWorks = relatedWorks,
@@ -1619,43 +1606,18 @@ public sealed class SeriesGenerator
     }
 
     /// <summary>
-    /// 指定エピソードのクレジット階層から、脚本・絵コンテ・演出・作画監督・美術の人物名を引く。
-    /// 本編の作品は総作画監督（<see cref="EpisodeStaffCards.IsChiefAnimationDirector"/>）も引き、<see cref="EpisodeStaffSummary.ChiefAnimationDirector"/> に入れる。
+    /// 指定エピソードのクレジット階層から、その回の各話のスタッフの札（役職と担当者）を引く。
+    /// 札に出す役職・並び・色は作品の表（<see cref="BuildContext.EpisodeStaffRolesBySeries"/>）の行で、
+    /// 組み立ては <see cref="EpisodeStaffCards.BuildBadges"/>（エピソード詳細のスタッフ欄と共通）。行の無い作品は札が無い。
     /// 本メソッドの戻り値を <see cref="_episodeStaffByIdCache"/> に memoize するように変更。
     /// 同一エピソードで複数回呼ばれた場合はキャッシュから返す（実際にはシリーズ詳細ページ生成での 1 回のみだが、
     /// パイプライン後段 <see cref="EpisodesIndexGenerator"/> から <see cref="GetEpisodeStaffSummaries"/> 経由で
     /// 全エピソード分のサマリを参照させるための副次効果が主目的）。
-    /// <para>
-    /// 読むカードと、オトナシリーズの作品（<paramref name="isOtonaWork"/>）の札の決まりは <see cref="EpisodeStaffCards"/>
-    /// （エピソード詳細のスタッフ欄と共通）。作画監督と同じカードの役職の札は <see cref="EpisodeStaffSummary.AnimationCardRoles"/> に入る。
-    /// </para>
     /// </summary>
-    private async Task<EpisodeStaffSummary> ExtractStaffSummaryAsync(int episodeId, bool isOtonaWork, CancellationToken ct)
+    private EpisodeStaffSummary ExtractStaffSummary(int episodeId, int seriesId)
     {
         // 同一 episode_id について 2 回目以降の呼び出しはキャッシュから返す（メモ化）。
         if (_episodeStaffByIdCache.TryGetValue(episodeId, out var cached)) return cached;
-
-        var screenplay = new List<string>();
-        var storyboard = new List<string>();
-        var director = new List<string>();
-        var animDirector = new List<string>();
-        var artDirector = new List<string>();
-        // 本編の作品の総作画監督（作画監督の札の直前に出す）
-        var chiefAnimDirector = new List<string>();
-        var seenCad = new HashSet<string>(StringComparer.Ordinal);
-        var seenSc = new HashSet<string>(StringComparer.Ordinal);
-        var seenSb = new HashSet<string>(StringComparer.Ordinal);
-        var seenDr = new HashSet<string>(StringComparer.Ordinal);
-        var seenAd = new HashSet<string>(StringComparer.Ordinal);
-        var seenAt = new HashSet<string>(StringComparer.Ordinal);
-
-        // オトナシリーズの作品の、作画監督と同じカードの役職の札（札の文字ごとに 1 つ。並びは最初に現れた順）。
-        var animCardBadges = new List<(string Label, string RoleCode, List<string> Names, HashSet<string> Seen)>();
-
-        // 区分（1=脚本、2=絵コンテ、3=演出、4=作画監督、5=美術）の判定は、記念日カレンダーに誕生日を出す人物の
-        // 判定（BirthdayCalendarEligibility）と共通の EpisodeChiefRoles に置く。役職マスタに無いコードは対象外。
-        // オトナシリーズの作品は区分を読み替える（作画監督・美術監督は札にせず、美術デザインを美術の札に）。
-        var roleMap = _roleMap!;
 
         // クレジットと階層 6 段はすべて SiteDataLoader が事前展開済み（BuildContext.CreditsByEpisode /
         // CreditTree.CardsByCreditId）。本メソッドは per-episode に呼ばれるが、内部の DB アクセスは
@@ -1666,99 +1628,15 @@ public sealed class SeriesGenerator
             ? creditList.Where(c => !c.IsDeleted)
             : Enumerable.Empty<Credit>();
 
-        foreach (var credit in credits)
-        {
-            if (!_ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cardSnapshots)) continue;
-            // Blu-ray・配信の版のカードがあるクレジットは、本放送の版のカードを読まない（札は Blu-ray・配信の版で組む）。
-            foreach (var cardSnap in EpisodeStaffCards.CardsForStaff(cardSnapshots))
-            {
-                var orderedRoles = EpisodeStaffCards.OrderedRoles(cardSnap);
-                // オトナシリーズの作品で作画監督のいるカードは、作画監督以外の役職（区分 1〜5 を除く）を札にする。
-                bool isAnimCard = isOtonaWork && EpisodeStaffCards.HasAnimationDirector(orderedRoles, roleMap);
-
-                foreach (var roleSnap in orderedRoles)
-                {
-                    int? bucket = EpisodeStaffCards.ClassifyForWork(roleSnap.Role, roleMap, isOtonaWork);
-                    (string Label, string RoleCode, List<string> Names, HashSet<string> Seen)? badge = null;
-                    // 本編の作品の総作画監督は、各話のチーフの区分の外にある専用の札に集める。
-                    bool isChiefAnim = bucket is null && !isOtonaWork
-                        && EpisodeStaffCards.IsChiefAnimationDirector(roleSnap.Role, roleMap);
-                    if (bucket is null && !isChiefAnim)
-                    {
-                        if (!isAnimCard) continue;
-                        string? label = EpisodeStaffCards.AnimationCardBadgeLabel(roleSnap.Role, roleMap);
-                        if (label is null) continue;
-                        int idx = animCardBadges.FindIndex(x => string.Equals(x.Label, label, StringComparison.Ordinal));
-                        if (idx < 0)
-                        {
-                            animCardBadges.Add((label, roleSnap.Role.RoleCode!, new List<string>(), new HashSet<string>(StringComparer.Ordinal)));
-                            idx = animCardBadges.Count - 1;
-                        }
-                        badge = animCardBadges[idx];
-                    }
-
-                    foreach (var blockSnap in roleSnap.Blocks.OrderBy(b => b.Block.BlockSeq))
-                    {
-                        foreach (var e in blockSnap.Entries
-                            .Where(en => !en.IsBroadcastOnly)
-                            .OrderBy(en => en.EntrySeq))
-                        {
-                            var (key, html) = await ResolveStaffEntryAsync(e, ct).ConfigureAwait(false);
-                            if (string.IsNullOrEmpty(html)) continue;
-                            if (badge is { } bd)
-                            {
-                                if (bd.Seen.Add(key)) bd.Names.Add(html);
-                                continue;
-                            }
-                            if (isChiefAnim)
-                            {
-                                if (seenCad.Add(key)) chiefAnimDirector.Add(html);
-                                continue;
-                            }
-                            switch (bucket)
-                            {
-                                case 1: if (seenSc.Add(key)) screenplay.Add(html); break;
-                                case 2: if (seenSb.Add(key)) storyboard.Add(html); break;
-                                case 3: if (seenDr.Add(key)) director.Add(html); break;
-                                case 4: if (seenAd.Add(key)) animDirector.Add(html); break;
-                                case 5: if (seenAt.Add(key)) artDirector.Add(html); break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         var result = new EpisodeStaffSummary
         {
-            Screenplay        = string.Join("、", screenplay),
-            Storyboard        = string.Join("、", storyboard),
-            EpisodeDirector   = string.Join("、", director),
-            ChiefAnimationDirector = string.Join("、", chiefAnimDirector),
-            ChiefAnimationDirectorUrl = PathUtil.CreatorsRoleUrl(_roleSuccessorResolver.GetRepresentative(EpisodeStaffCards.ChiefAnimationDirectorCode)),
-            AnimationDirector = string.Join("、", animDirector),
-            ArtDirector       = string.Join("、", artDirector),
-            // 絵コンテ／演出のキー集合が一致（両方非空＋同一）のとき、テンプレで統合表示を許可するフラグ。
-            // 同じ人物が両方を兼任しているクレジット表現に対して「絵コンテ・演出 ○○」の 1 表記にまとめる。
-            StoryboardDirectorMerged = seenSb.Count > 0 && seenDr.Count > 0 && seenSb.SetEquals(seenDr),
-            // 作画監督と同じカードの役職の札は緑（作画監督と同じ色）。
-            AnimationCardRoles = animCardBadges
-                .Where(x => x.Names.Count > 0)
-                .Select(x => new EpisodeStaffBadge
-                {
-                    Label = x.Label,
-                    RoleCode = EpisodeStaffCards.AnimationCardBadgeRoleCode,
-                    RoleUrl = PathUtil.CreatorsRoleUrl(x.RoleCode),
-                    NamesHtml = string.Join("、", x.Names)
-                })
-                .ToList()
+            Badges = EpisodeStaffCards.BuildBadges(
+                credits,
+                _ctx.CreditTree.CardsByCreditId,
+                _ctx.EpisodeStaffRolesBySeries.TryGetValue(seriesId, out var rows) ? rows : null,
+                _roleMap!,
+                ResolveStaffEntry)
         };
-        if (isOtonaWork)
-        {
-            result.ArtLabel = EpisodeStaffCards.OtonaArtLabel;
-            result.ArtRoleCode = EpisodeStaffCards.ArtDesignCode;
-            result.ArtRoleUrl = PathUtil.CreatorsRoleUrl(EpisodeStaffCards.ArtDesignCode);
-        }
         // 本メソッドの結果を episode_id キーでキャッシュ。
         // 後段 EpisodesIndexGenerator で GetEpisodeStaffSummaries() 経由参照される。
         _episodeStaffByIdCache[episodeId] = result;
@@ -1766,11 +1644,9 @@ public sealed class SeriesGenerator
     }
 
     /// <summary>PERSON / TEXT エントリから (重複判定キー, 表示用 HTML 文字列) を取り出す。</summary>
-    private async Task<(string Key, string Html)> ResolveStaffEntryAsync(CreditBlockEntry e, CancellationToken ct)
+    private (string Key, string Html) ResolveStaffEntry(CreditBlockEntry e)
     {
-        // DB アクセスは BuildContext 由来の辞書 lookup に置き換わったため本体に await は残らないが、
-        // async シグネチャは将来の DB アクセス追加余地として温存する。
-        await Task.CompletedTask;
+        // DB アクセスは BuildContext 由来の辞書 lookup に置き換わったため、同期で完結する。
         switch (e.EntryKind)
         {
             case "PERSON":
@@ -2235,8 +2111,6 @@ public sealed class SeriesGenerator
         /// <summary>「劇伴」節のボタン（劇伴一覧ページがある自作品・子作品の分）。空なら節ごと出さない。</summary>
         public IReadOnlyList<BgmLinkRow> BgmLinks { get; set; } = Array.Empty<BgmLinkRow>();
         public IReadOnlyList<EpisodeIndexRow> Episodes { get; set; } = Array.Empty<EpisodeIndexRow>();
-        /// <summary>エピソード一覧の各行のスタッフの札（脚本・絵コンテ・演出・作画監督）のリンク先。</summary>
-        public EpisodeStaffRoleUrlSet EpisodeStaffRoleUrls { get; set; } = EpisodeStaffRoleUrlSet.Main;
         /// <summary>
         /// 「関連作品」セクション用。
         /// 親・子作品（続編・映画・同時上映の短編・スピンオフ等）を 1 つのリストにまとめて保持する。
@@ -2269,28 +2143,6 @@ public sealed class SeriesGenerator
         public string NextLabel { get; set; } = "";
         /// <summary>前後ナビ自体を出すか（TV シリーズと映画のみ true）。</summary>
         public bool HasPrevNextNav { get; set; }
-    }
-
-    /// <summary>
-    /// シリーズ詳細のエピソード一覧の各行に並ぶスタッフの札（脚本・絵コンテ・演出・作画監督）のリンク先。
-    /// どの作品も役職詳細（<see cref="Main"/>）を指す。美術の札と、オトナシリーズの作品の作画監督のカードの札のリンク先は、行ごとに
-    /// <see cref="EpisodeStaffSummary"/> が持つ。
-    /// </summary>
-    private sealed class EpisodeStaffRoleUrlSet
-    {
-        public string Screenplay { get; init; } = "";
-        public string Storyboard { get; init; } = "";
-        public string EpisodeDirector { get; init; } = "";
-        public string AnimationDirector { get; init; } = "";
-
-        /// <summary>札のリンク先（役職詳細）。</summary>
-        public static readonly EpisodeStaffRoleUrlSet Main = new()
-        {
-            Screenplay = "/creators/roles/screenplay/",
-            Storyboard = "/creators/roles/storyboard/",
-            EpisodeDirector = "/creators/roles/episode_director/",
-            AnimationDirector = "/creators/roles/animation_director/"
-        };
     }
 
     /// <summary>シリーズ詳細ページのクレジットセクション 1 ブロック分の描画ビュー。
@@ -2418,24 +2270,13 @@ public sealed class SeriesGenerator
         public string OnAirDate { get; set; } = "";
         /// <summary>エピソード詳細ページへの URL（<c>/series/{slug}/{seriesEpNo}/</c>）。 /episodes/ ランディングと同一の episodes-index-section 構造で サブタイトルをリンク化するために保持する。</summary>
         public string EpisodeUrl { get; set; } = "";
-        public string Screenplay { get; set; } = "";
-        public string Storyboard { get; set; } = "";
-        public string EpisodeDirector { get; set; } = "";
-        /// <summary>総作画監督（本編の作品だけ。作画監督の札の直前に出す）と、その札のリンク先（<see cref="EpisodeStaffSummary.ChiefAnimationDirector"/> と同じ値）。</summary>
-        public string ChiefAnimationDirector { get; set; } = "";
-        public string ChiefAnimationDirectorUrl { get; set; } = "";
-        public string AnimationDirector { get; set; } = "";
-        public string ArtDirector { get; set; } = "";
-        /// <summary>美術の札の文字・色分けの役職コード・リンク先（<see cref="EpisodeStaffSummary.ArtLabel"/> ほかと同じ値）。</summary>
-        public string ArtLabel { get; set; } = "美術";
-        public string ArtRoleCode { get; set; } = "ART_DIRECTOR_TV";
-        public string ArtRoleUrl { get; set; } = "";
-        /// <summary>オトナシリーズの作品で作画監督の札の代わりに並べる札（<see cref="EpisodeStaffSummary.AnimationCardRoles"/>）。</summary>
-        public IReadOnlyList<EpisodeStaffBadge> AnimationCardRoles { get; set; } = Array.Empty<EpisodeStaffBadge>();
-        /// <summary>絵コンテと演出が同じ人物（PERSON エントリの重複キー集合が一致 + 両方非空）かどうか。
-        /// true のときテンプレ側でエピソード一覧の当該行を「絵コンテ・演出 ○○」の 1 表記に統合する。
-        /// false のときは「絵コンテ ○○ / 演出 ○○」と 2 つ独立して並べる。</summary>
-        public bool StoryboardDirectorMerged { get; set; }
+        /// <summary>
+        /// その回の各話のスタッフの札（<see cref="EpisodeStaffSummary.Badges"/>。作品の表の行の順・行の色）。
+        /// 絵コンテと演出が同じ人物（PERSON エントリの重複キー集合が一致 + 両方非空）の回は、2 つの役職を並べた 1 つの札で、
+        /// テンプレ側でエピソード一覧の当該行を「絵コンテ・演出 ○○」の 1 表記に統合する。
+        /// 空のときはスタッフ列ごと描画しない。
+        /// </summary>
+        public IReadOnlyList<EpisodeStaffBadge> StaffBadges { get; set; } = Array.Empty<EpisodeStaffBadge>();
     }
 
     // EpisodeStaffSummary は PrecureDataStars.SiteBuilder/Utilities/EpisodeStaffSummary.cs に

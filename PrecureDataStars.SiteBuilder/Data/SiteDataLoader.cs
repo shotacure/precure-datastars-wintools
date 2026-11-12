@@ -374,6 +374,11 @@ public static class SiteDataLoader
             .GroupBy(r => r.SeriesId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<SeriesKeyStaffRole>)g.ToList());
 
+        // 作品ごとの各話のスタッフの札の役職（並び順の順。リポジトリが series_id → display_order で返す）。
+        var episodeStaffRolesBySeries = (await new SeriesEpisodeStaffRolesRepository(factory).GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(r => r.SeriesId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<SeriesEpisodeStaffRole>)g.ToList());
+
         // 家族関係を character_id 単位でグルーピング。CharactersGenerator / PrecuresGenerator の
         // per-character GetByCharacterAsync を撲滅する。
         var familyRelationsByCharacter = (await familyRepo.GetAllAsync(ct).ConfigureAwait(false))
@@ -518,6 +523,7 @@ public static class SiteDataLoader
             MusicClassByCode = musicClassByCode,
             RoleByCode = roleByCode,
             KeyStaffRolesBySeries = keyStaffRolesBySeries,
+            EpisodeStaffRolesBySeries = episodeStaffRolesBySeries,
             RoleTemplateResolver = roleTemplateResolver,
             FamilyRelationsByCharacter = familyRelationsByCharacter,
             AliasIdsByPerson = aliasIdsByPerson,

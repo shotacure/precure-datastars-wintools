@@ -1,9 +1,10 @@
 namespace PrecureDataStars.SiteBuilder.Pipeline;
 
 /// <summary>
-/// 各話のチーフ（エピソード一覧・ホームのエピソード欄のスタッフ欄に出す、脚本・絵コンテ・演出・作画監督・美術）の役職の判定。
-/// エピソード一覧のスタッフ欄（<see cref="Generators.SeriesGenerator"/>）と、記念日カレンダーに誕生日を出す人物の判定
-/// （<see cref="BirthdayCalendarEligibility"/>）で同じ決まりを使う。
+/// 各話のチーフ（脚本・絵コンテ・演出・作画監督・美術）の役職の判定。
+/// 記念日カレンダーに誕生日を出す人物の判定（<see cref="BirthdayCalendarEligibility"/>）・歴代記録・
+/// 各話のチーフの顔ぶれの索引（<see cref="EpisodeChiefStaffIndex"/>。エピソード詳細の「くわしく」のカードと札）で同じ決まりを使う。
+/// 各話のスタッフの札（エピソード一覧・エピソード詳細のスタッフ欄）はこの区分を使わず、作品ごとの表で役職を決める（<see cref="EpisodeStaffCards"/>）。
 /// </summary>
 public static class EpisodeChiefRoles
 {

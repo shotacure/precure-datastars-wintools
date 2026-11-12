@@ -11,9 +11,9 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// 各シリーズセクションは <c>&lt;details&gt;</c> で折り畳み可能とし、初期状態ではいずれも閉じる
 /// （描画コスト・スクロール量の抑制）。各エピソード行は「メイン段 + スタッフ段」の 2 段構成。
 /// メイン段は「第N話 + サブタイトル + 放送日」（放送日は <c>2024.2.4</c> 形式）、
-/// スタッフ段にはエピソード詳細と同じ 5 役職（脚本・絵コンテ・演出・作画監督・美術）を
+/// スタッフ段にはエピソード詳細と同じ各話のスタッフの札（作品の表 <c>series_episode_staff_roles</c> の行のある役職を、行の順・行の色で）を
 /// 色付きバッジ + 人物名リンク（<c>StaffNameLinkResolver</c> で <c>&lt;a&gt;</c> 化済み）の形で並べる。
-/// スタッフ情報の抽出は <see cref="SeriesGenerator.ExtractStaffSummaryAsync"/> がシリーズ詳細ページ
+/// スタッフ情報の抽出は <c>SeriesGenerator.ExtractStaffSummary</c> がシリーズ詳細ページ
 /// 生成中に実施した memoize 結果（<see cref="SeriesGenerator.GetEpisodeStaffSummaries"/>）を
 /// パイプライン経由で受け取り、クレジット階層への再走査を避ける。
 /// ホームのデータベース統計セクション「エピソード」ボックスからの遷移先。
@@ -60,7 +60,7 @@ public sealed class EpisodesIndexGenerator
                 .Select(e =>
                 {
                     // SeriesGenerator が memoize した EpisodeStaffSummary を引き当てる。
-                    // クレジット未登録などキャッシュに無いエピソードでは全フィールドが空文字のサマリを使う。
+                    // クレジット未登録などキャッシュに無いエピソードでは札の無いサマリを使う。
                     var staff = _episodeStaffByIdCache.TryGetValue(e.EpisodeId, out var ss)
                         ? ss
                         : new EpisodeStaffSummary();
@@ -72,14 +72,7 @@ public sealed class EpisodesIndexGenerator
                         // 密表示用に「2024.2.4」形式へ短縮（年.月.日、月日は 0 詰めしない）。
                         OnAirDate = JpDateFormat.BroadcastDotDate(e.OnAirAt),
                         EpisodeUrl = PathUtil.EpisodeUrl(s.Slug, e.SeriesEpNo),
-                        Screenplay        = staff.Screenplay,
-                        Storyboard        = staff.Storyboard,
-                        EpisodeDirector   = staff.EpisodeDirector,
-                        ChiefAnimationDirector = staff.ChiefAnimationDirector,
-                        ChiefAnimationDirectorUrl = staff.ChiefAnimationDirectorUrl,
-                        AnimationDirector = staff.AnimationDirector,
-                        ArtDirector       = staff.ArtDirector,
-                        StoryboardDirectorMerged = staff.StoryboardDirectorMerged
+                        StaffBadges = staff.Badges
                     };
                 })
                 .ToList();
@@ -180,16 +173,8 @@ public sealed class EpisodesIndexGenerator
         public string OnAirDate { get; set; } = "";
         public string EpisodeUrl { get; set; } = "";
 
-        // エピソード詳細の 5 役職スタッフサマリ（HTML 断片、PERSON は <a> リンク済み）。
-        public string Screenplay { get; set; } = "";
-        public string Storyboard { get; set; } = "";
-        public string EpisodeDirector { get; set; } = "";
-        /// <summary>総作画監督（本編の作品だけ。作画監督の札の直前に出す）と、その札のリンク先（<see cref="EpisodeStaffSummary.ChiefAnimationDirector"/> と同じ値）。</summary>
-        public string ChiefAnimationDirector { get; set; } = "";
-        public string ChiefAnimationDirectorUrl { get; set; } = "";
-        public string AnimationDirector { get; set; } = "";
-        public string ArtDirector { get; set; } = "";
-        /// <summary>絵コンテ＝演出（同一エントリ集合）のとき true。テンプレ側で 2 バッジ並びにまとめる。</summary>
-        public bool StoryboardDirectorMerged { get; set; }
+        // エピソード詳細と同じ各話のスタッフの札（担当者は HTML 断片、PERSON は <a> リンク済み）。
+        /// <summary>その回の札（<see cref="EpisodeStaffSummary.Badges"/>）。絵コンテ＝演出（同一エントリ集合）の回は 2 バッジ並びの 1 つの札。</summary>
+        public IReadOnlyList<EpisodeStaffBadge> StaffBadges { get; set; } = Array.Empty<EpisodeStaffBadge>();
     }
 }

@@ -1,8 +1,6 @@
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
-using System.Globalization;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace PrecureDataStars.Episodes.Forms;
 
@@ -22,18 +20,14 @@ public partial class SeriesEditorForm : Form
     private List<Series> _series = new();         // 画面上の全シリーズ（is_deleted=0）
     private Series? _current;                     // 現在編集中のシリーズ
 
-    // 作品ごとのメインスタッフの役職（series_key_staff_roles）
+    // 作品ごとのメインスタッフの役職（series_key_staff_roles）と、各話のスタッフの札の役職（series_episode_staff_roles）
     private readonly RolesRepository _rolesRepo;
     private readonly SeriesKeyStaffRolesRepository _keyStaffRolesRepo;
-    /// <summary>役職ごとに、ほかの作品でいちばん多く使われている色（行を足して役職を選んだときの色の初期値）。</summary>
-    private Dictionary<string, string> _usualColorByRole = new(StringComparer.Ordinal);
-    /// <summary>メインスタッフの欄の読み込みの世代。読み込み中に別の作品を選んだら、古い読み込みの結果を捨てる。</summary>
-    private int _keyStaffLoadGen;
-    /// <summary>メインスタッフの欄の役職の列と色の列の名前。</summary>
-    private const string KeyStaffRoleColumn = "colKeyStaffRole";
-    private const string KeyStaffColorColumn = "colKeyStaffColor";
-    /// <summary>バッジの色の書式（#rrggbb）。</summary>
-    private static readonly Regex BadgeColorPattern = new("^#[0-9a-fA-F]{6}$", RegexOptions.Compiled);
+    private readonly SeriesEpisodeStaffRolesRepository _episodeStaffRolesRepo;
+    /// <summary>「メインスタッフ」の欄（役職・並び・バッジの色）。</summary>
+    private readonly RoleColorGridEditor _keyStaffEditor;
+    /// <summary>「エピソードの札」の欄（役職・並び・札の色）。</summary>
+    private readonly RoleColorGridEditor _episodeStaffEditor;
 
     /// <summary>親シリーズ ComboBox 用の選択肢モデル（ID + 表示テキスト）。</summary>
     private sealed class ParentOption
@@ -57,36 +51,29 @@ public partial class SeriesEditorForm : Form
     /// <param name="relKindsRepo">シリーズ関係種別マスタリポジトリ。</param>
     /// <param name="rolesRepo">役職マスタリポジトリ（メインスタッフの役職の選択肢）。</param>
     /// <param name="keyStaffRolesRepo">作品ごとのメインスタッフの役職のリポジトリ。</param>
+    /// <param name="episodeStaffRolesRepo">作品ごとの各話のスタッフの札の役職のリポジトリ。</param>
     public SeriesEditorForm(
         SeriesRepository seriesRepo,
         SeriesKindsRepository kindsRepo,
         SeriesRelationKindsRepository relKindsRepo,
         RolesRepository rolesRepo,
-        SeriesKeyStaffRolesRepository keyStaffRolesRepo)
+        SeriesKeyStaffRolesRepository keyStaffRolesRepo,
+        SeriesEpisodeStaffRolesRepository episodeStaffRolesRepo)
     {
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
         _kindsRepo = kindsRepo ?? throw new ArgumentNullException(nameof(kindsRepo));
         _relKindsRepo = relKindsRepo ?? throw new ArgumentNullException(nameof(relKindsRepo));
         _rolesRepo = rolesRepo ?? throw new ArgumentNullException(nameof(rolesRepo));
         _keyStaffRolesRepo = keyStaffRolesRepo ?? throw new ArgumentNullException(nameof(keyStaffRolesRepo));
+        _episodeStaffRolesRepo = episodeStaffRolesRepo ?? throw new ArgumentNullException(nameof(episodeStaffRolesRepo));
 
         InitializeComponent();
 
-        // メインスタッフの欄
-        btnKeyStaffAdd.Click += (_, __) => AddKeyStaffRow();
-        btnKeyStaffRemove.Click += (_, __) => RemoveKeyStaffRow();
-        btnKeyStaffUp.Click += (_, __) => MoveKeyStaffRow(-1);
-        btnKeyStaffDown.Click += (_, __) => MoveKeyStaffRow(+1);
-        btnKeyStaffColor.Click += (_, __) => PickKeyStaffColor();
-        dgvKeyStaff.CellFormatting += DgvKeyStaff_CellFormatting;
-        dgvKeyStaff.CellValueChanged += DgvKeyStaff_CellValueChanged;
-        dgvKeyStaff.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0 && IsColorColumn(e.ColumnIndex)) PickKeyStaffColor(); };
-        // ドロップダウンで選んだ値をすぐ確定させ、色の初期値を入れられるようにする
-        dgvKeyStaff.CurrentCellDirtyStateChanged += (_, __) =>
-        {
-            if (dgvKeyStaff.IsCurrentCellDirty && dgvKeyStaff.CurrentCell is DataGridViewComboBoxCell)
-                dgvKeyStaff.CommitEdit(DataGridViewDataErrorContexts.Commit);
-        };
+        // メインスタッフの欄と、エピソードの札の欄（行を足す・消す・並べ替える・色を選ぶ操作は共通の部品）
+        _keyStaffEditor = new RoleColorGridEditor(this, dgvKeyStaff, "メインスタッフ",
+            btnKeyStaffAdd, btnKeyStaffRemove, btnKeyStaffUp, btnKeyStaffDown, btnKeyStaffColor);
+        _episodeStaffEditor = new RoleColorGridEditor(this, dgvEpisodeStaff, "エピソードの札",
+            btnEpisodeStaffAdd, btnEpisodeStaffRemove, btnEpisodeStaffUp, btnEpisodeStaffDown, btnEpisodeStaffColor);
 
         // events
         lstSeries.SelectedIndexChanged += (_, __) => BindSelected();
@@ -110,16 +97,16 @@ public partial class SeriesEditorForm : Form
         // テーブル由来でコンボ構築
         PopulateCombosFromLookups();
 
-        // メインスタッフの欄の列（役職の選択肢）と、役職ごとのいつもの色
+        // メインスタッフの欄とエピソードの札の欄の列（役職の選択肢）と、それぞれの欄での役職ごとのいつもの色
         var roles = await _rolesRepo.GetAllAsync();
         var allKeyStaff = await _keyStaffRolesRepo.GetAllAsync();
-        _usualColorByRole = allKeyStaff
-            .GroupBy(r => r.RoleCode, StringComparer.Ordinal)
-            .ToDictionary(
-                g => g.Key,
-                g => g.GroupBy(r => r.BadgeColor.ToLowerInvariant()).OrderByDescending(c => c.Count()).ThenBy(c => c.Key).First().Key,
-                StringComparer.Ordinal);
-        BuildKeyStaffColumns(roles);
+        var allEpisodeStaff = await _episodeStaffRolesRepo.GetAllAsync();
+        _keyStaffEditor.SetUsualColors(allKeyStaff.Select(r => (r.RoleCode, r.BadgeColor)));
+        _episodeStaffEditor.SetUsualColors(allEpisodeStaff.Select(r => (r.RoleCode, r.BadgeColor)));
+        _keyStaffEditor.BuildColumns(roles);
+        _episodeStaffEditor.BuildColumns(roles);
+        // 列を組む前に作品を選んでいたら、ここで読み込み直す
+        if (_current is not null) LoadStaffRoles(_current.SeriesId);
 
         // DBから全シリーズを取得
         _series = (await _seriesRepo.GetAllAsync()).ToList();
@@ -253,9 +240,9 @@ public partial class SeriesEditorForm : Form
             cmbStoryboardDisplay.SelectedValue = Series.StoryboardDisplaySeparate;
             // 開始日の確かさも初期状態（日付まで確か）に戻す。
             cmbStartDatePrecision.SelectedValue = Series.StartDatePrecisionDay;
-            // メインスタッフの欄も空にする。
-            Interlocked.Increment(ref _keyStaffLoadGen);
-            dgvKeyStaff.Rows.Clear();
+            // メインスタッフの欄とエピソードの札の欄も空にする。
+            _keyStaffEditor.Clear();
+            _episodeStaffEditor.Clear();
             return;
         }
 
@@ -325,156 +312,20 @@ public partial class SeriesEditorForm : Form
         chkFilmCjMark.Checked = _current.FilmCjMark;
         // 絵コンテと演出の出し方の読み込み。
         cmbStoryboardDisplay.SelectedValue = _current.StoryboardDisplay;
-        // メインスタッフの役職の読み込み。
-        _ = LoadKeyStaffAsync(_current.SeriesId);
+        // メインスタッフの役職と、エピソードの札の役職の読み込み。
+        LoadStaffRoles(_current.SeriesId);
     }
 
     /// <summary>
-    /// メインスタッフの欄の列を組む。役職の列は役職マスタのドロップダウン（表示は役職名、値は役職コード）、
-    /// 色の列は #rrggbb の文字（セルの地にその色を敷く）。
+    /// 指定作品のメインスタッフの役職とエピソードの札の役職を読み込んで、それぞれの欄に並べる。
+    /// 読み込み中に別の作品を選んだら結果を捨てる。列がまだ組まれていなければ（役職マスタの読み込み前）何もしない。
     /// </summary>
-    private void BuildKeyStaffColumns(IReadOnlyList<Role> roles)
+    private void LoadStaffRoles(int seriesId)
     {
-        dgvKeyStaff.Columns.Clear();
-        var roleOptions = roles
-            .Select(r => new ComboOption<string> { Value = r.RoleCode, Text = $"{r.NameJa}（{r.RoleCode}）" })
-            .ToList();
-        dgvKeyStaff.Columns.Add(new DataGridViewComboBoxColumn
-        {
-            Name = KeyStaffRoleColumn,
-            HeaderText = "役職",
-            DataSource = roleOptions,
-            ValueMember = nameof(ComboOption<string>.Value),
-            DisplayMember = nameof(ComboOption<string>.Text),
-            DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton,
-            FlatStyle = FlatStyle.Flat,
-            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
-            SortMode = DataGridViewColumnSortMode.NotSortable
-        });
-        dgvKeyStaff.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = KeyStaffColorColumn,
-            HeaderText = "色",
-            Width = 100,
-            MaxInputLength = 7,
-            SortMode = DataGridViewColumnSortMode.NotSortable
-        });
-        // 列を組む前に作品を選んでいたら、ここで読み込み直す
-        if (_current is not null) _ = LoadKeyStaffAsync(_current.SeriesId);
-    }
-
-    /// <summary>
-    /// 指定作品のメインスタッフの役職を読み込んで欄に並べる。読み込み中に別の作品を選んだら、結果を捨てる。
-    /// 列がまだ組まれていなければ（役職マスタの読み込み前）何もしない。
-    /// </summary>
-    private async Task LoadKeyStaffAsync(int seriesId)
-    {
-        int gen = Interlocked.Increment(ref _keyStaffLoadGen);
-        dgvKeyStaff.Rows.Clear();
-        if (dgvKeyStaff.Columns.Count == 0) return;
-        var rows = await _keyStaffRolesRepo.GetBySeriesAsync(seriesId);
-        if (gen != _keyStaffLoadGen) return;
-        dgvKeyStaff.Rows.Clear();
-        foreach (var r in rows)
-            dgvKeyStaff.Rows.Add(r.RoleCode, r.BadgeColor);
-    }
-
-    /// <summary>メインスタッフの欄に空の行を足して選ぶ（役職を選ぶと色の初期値が入る）。</summary>
-    private void AddKeyStaffRow()
-    {
-        if (_current is null || dgvKeyStaff.Columns.Count == 0) return;
-        int i = dgvKeyStaff.Rows.Add();
-        dgvKeyStaff.CurrentCell = dgvKeyStaff.Rows[i].Cells[KeyStaffRoleColumn];
-    }
-
-    /// <summary>メインスタッフの欄の選んだ行を消す。</summary>
-    private void RemoveKeyStaffRow()
-    {
-        if (dgvKeyStaff.CurrentRow is not { } row) return;
-        dgvKeyStaff.Rows.Remove(row);
-    }
-
-    /// <summary>メインスタッフの欄の選んだ行を上（-1）か下（+1）へ 1 つ動かす。</summary>
-    private void MoveKeyStaffRow(int delta)
-    {
-        if (dgvKeyStaff.CurrentRow is not { } row) return;
-        int from = row.Index, to = from + delta;
-        if (to < 0 || to >= dgvKeyStaff.Rows.Count) return;
-        dgvKeyStaff.EndEdit();
-        dgvKeyStaff.Rows.RemoveAt(from);
-        dgvKeyStaff.Rows.Insert(to, row);
-        dgvKeyStaff.CurrentCell = dgvKeyStaff.Rows[to].Cells[KeyStaffRoleColumn];
-    }
-
-    /// <summary>メインスタッフの欄の選んだ行の色を、色の選択ダイアログで選ぶ。</summary>
-    private void PickKeyStaffColor()
-    {
-        if (dgvKeyStaff.CurrentRow is not { } row) return;
-        var cell = row.Cells[KeyStaffColorColumn];
-        using var dlg = new ColorDialog { FullOpen = true, AnyColor = true };
-        if (TryParseBadgeColor(cell.Value as string, out var current)) dlg.Color = current;
-        if (dlg.ShowDialog(this) != DialogResult.OK) return;
-        cell.Value = $"#{dlg.Color.R:x2}{dlg.Color.G:x2}{dlg.Color.B:x2}";
-    }
-
-    /// <summary>役職を選んで色が空なら、その役職のいつもの色を入れる。</summary>
-    private void DgvKeyStaff_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
-    {
-        if (e.RowIndex < 0 || dgvKeyStaff.Columns[e.ColumnIndex].Name != KeyStaffRoleColumn) return;
-        var row = dgvKeyStaff.Rows[e.RowIndex];
-        var colorCell = row.Cells[KeyStaffColorColumn];
-        if (!string.IsNullOrWhiteSpace(colorCell.Value as string)) return;
-        if (row.Cells[KeyStaffRoleColumn].Value is string code && _usualColorByRole.TryGetValue(code, out var usual))
-            colorCell.Value = usual;
-    }
-
-    /// <summary>色の列のセルの地に、その色を敷く（読めない色なら敷かない）。</summary>
-    private void DgvKeyStaff_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
-    {
-        if (e.RowIndex < 0 || !IsColorColumn(e.ColumnIndex) || e.CellStyle is null) return;
-        if (!TryParseBadgeColor(e.Value as string, out var c)) return;
-        e.CellStyle.BackColor = c;
-        e.CellStyle.SelectionBackColor = c;
-        // 字は地の明るさで白か黒にする
-        var fore = (c.R * 299 + c.G * 587 + c.B * 114) / 1000 >= 140 ? Color.Black : Color.White;
-        e.CellStyle.ForeColor = fore;
-        e.CellStyle.SelectionForeColor = fore;
-    }
-
-    private bool IsColorColumn(int columnIndex)
-        => columnIndex >= 0 && dgvKeyStaff.Columns[columnIndex].Name == KeyStaffColorColumn;
-
-    private static bool TryParseBadgeColor(string? text, out Color color)
-    {
-        color = Color.Empty;
-        if (text is null || !BadgeColorPattern.IsMatch(text.Trim())) return false;
-        int rgb = int.Parse(text.Trim().AsSpan(1), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-        color = Color.FromArgb((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff);
-        return true;
-    }
-
-    /// <summary>
-    /// メインスタッフの欄を、保存する行（欄の上からの順）にする。役職が空・色が #rrggbb でない・同じ役職が 2 回あるときは
-    /// 理由を返して保存しない。
-    /// </summary>
-    private (List<SeriesKeyStaffRole>? Rows, string? Error) CollectKeyStaffRows()
-    {
-        dgvKeyStaff.EndEdit();
-        var rows = new List<SeriesKeyStaffRole>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (DataGridViewRow r in dgvKeyStaff.Rows)
-        {
-            int no = r.Index + 1;
-            if (r.Cells[KeyStaffRoleColumn].Value is not string code || code.Length == 0)
-                return (null, $"メインスタッフの {no} 行目の役職が空です。");
-            var color = (r.Cells[KeyStaffColorColumn].Value as string ?? "").Trim();
-            if (!BadgeColorPattern.IsMatch(color))
-                return (null, $"メインスタッフの {no} 行目の色は #rrggbb の形で書いてください（いま「{color}」）。");
-            if (!seen.Add(code))
-                return (null, $"メインスタッフの {no} 行目の役職（{code}）が、上の行と重なっています。");
-            rows.Add(new SeriesKeyStaffRole { RoleCode = code, BadgeColor = color.ToLowerInvariant() });
-        }
-        return (rows, null);
+        _ = _keyStaffEditor.LoadAsync(async () =>
+            (await _keyStaffRolesRepo.GetBySeriesAsync(seriesId)).Select(r => (r.RoleCode, r.BadgeColor)));
+        _ = _episodeStaffEditor.LoadAsync(async () =>
+            (await _episodeStaffRolesRepo.GetBySeriesAsync(seriesId)).Select(r => (r.RoleCode, r.BadgeColor)));
     }
 
     /// <summary>右ペインの編集内容を Series モデルに反映し、DB へ UPDATE する。</summary>
@@ -542,17 +393,26 @@ public partial class SeriesEditorForm : Form
             MessageBox.Show("スラッグは必須です。", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        // メインスタッフの欄（書き込む前に全部の行を確かめる）
-        var (keyStaffRows, keyStaffError) = CollectKeyStaffRows();
+        // メインスタッフの欄とエピソードの札の欄（書き込む前に全部の行を確かめる）
+        var (keyStaffRows, keyStaffError) = _keyStaffEditor.Collect();
         if (keyStaffRows is null)
         {
             MessageBox.Show(keyStaffError, "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
+        var (episodeStaffRows, episodeStaffError) = _episodeStaffEditor.Collect();
+        if (episodeStaffRows is null)
+        {
+            MessageBox.Show(episodeStaffError, "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
 
-        // 保存（作品の行と、メインスタッフの役職の置き換え）
+        // 保存（作品の行と、メインスタッフの役職・エピソードの札の役職の置き換え）
         await _seriesRepo.UpdateAsync(_current);
-        await _keyStaffRolesRepo.ReplaceForSeriesAsync(_current.SeriesId, keyStaffRows, AuditUser);
+        await _keyStaffRolesRepo.ReplaceForSeriesAsync(_current.SeriesId,
+            keyStaffRows.Select(r => new SeriesKeyStaffRole { RoleCode = r.RoleCode, BadgeColor = r.BadgeColor }).ToList(), AuditUser);
+        await _episodeStaffRolesRepo.ReplaceForSeriesAsync(_current.SeriesId,
+            episodeStaffRows.Select(r => new SeriesEpisodeStaffRole { RoleCode = r.RoleCode, BadgeColor = r.BadgeColor }).ToList(), AuditUser);
 
         // リストの表示文字（タイトル）が変化する可能性があるので再バインド
         var idx = lstSeries.SelectedIndex;

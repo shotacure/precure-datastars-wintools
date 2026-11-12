@@ -16,6 +16,7 @@ public partial class MainForm : Form
     private readonly MagazineIssuesRepository _magazineIssuesRepo;
     private readonly RolesRepository _rolesRepo;
     private readonly SeriesKeyStaffRolesRepository _keyStaffRolesRepo;
+    private readonly SeriesEpisodeStaffRolesRepository _episodeStaffRolesRepo;
 
     /// <summary><see cref="MainForm"/> の新しいインスタンスを生成する。</summary>
     /// <param name="seriesRepo">シリーズリポジトリ。</param>
@@ -27,6 +28,7 @@ public partial class MainForm : Form
     /// <param name="magazineIssuesRepo">アニメ雑誌の号マスタリポジトリ。</param>
     /// <param name="rolesRepo">役職マスタリポジトリ（シリーズ編集のメインスタッフの役職の選択肢）。</param>
     /// <param name="keyStaffRolesRepo">作品ごとのメインスタッフの役職のリポジトリ。</param>
+    /// <param name="episodeStaffRolesRepo">作品ごとの各話のスタッフの札の役職のリポジトリ。</param>
     public MainForm(
         SeriesRepository seriesRepo,
         EpisodesRepository episodesRepo,
@@ -36,7 +38,8 @@ public partial class MainForm : Form
         PartTypesRepository partTypesRepo,
         MagazineIssuesRepository magazineIssuesRepo,
         RolesRepository rolesRepo,
-        SeriesKeyStaffRolesRepository keyStaffRolesRepo)
+        SeriesKeyStaffRolesRepository keyStaffRolesRepo,
+        SeriesEpisodeStaffRolesRepository episodeStaffRolesRepo)
     {
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
         _episodesRepo = episodesRepo ?? throw new ArgumentNullException(nameof(episodesRepo));
@@ -47,6 +50,7 @@ public partial class MainForm : Form
         _magazineIssuesRepo = magazineIssuesRepo ?? throw new ArgumentNullException(nameof(magazineIssuesRepo));
         _rolesRepo = rolesRepo ?? throw new ArgumentNullException(nameof(rolesRepo));
         _keyStaffRolesRepo = keyStaffRolesRepo ?? throw new ArgumentNullException(nameof(keyStaffRolesRepo));
+        _episodeStaffRolesRepo = episodeStaffRolesRepo ?? throw new ArgumentNullException(nameof(episodeStaffRolesRepo));
         InitializeComponent();
     }
 
@@ -63,7 +67,7 @@ public partial class MainForm : Form
     private void mnuSeries_Click(object? sender, EventArgs e)
         => RunChildModal(() =>
         {
-            using var f = new SeriesEditorForm(_seriesRepo, _kindsRepo, _relKindsRepo, _rolesRepo, _keyStaffRolesRepo);
+            using var f = new SeriesEditorForm(_seriesRepo, _kindsRepo, _relKindsRepo, _rolesRepo, _keyStaffRolesRepo, _episodeStaffRolesRepo);
             f.ShowDialog();
         });
 

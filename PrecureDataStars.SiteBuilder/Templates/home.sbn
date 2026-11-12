@@ -150,32 +150,10 @@
             <span class="ep-row-date">{{ e.OnAirDate }}</span>
           </div>
           <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{ e.TitleDisplayHtml }}</a>
-          {{~ if e.Screenplay != "" || e.Storyboard != "" || e.EpisodeDirector != "" || e.ChiefAnimationDirector != "" || e.AnimationDirector != "" || e.ArtDirector != "" || (array.size e.AnimationCardRoles) > 0 ~}}
+          {{~ if (array.size e.StaffBadges) > 0 ~}}
           <div class="staff-badges-row">
-            {{~ if e.Screenplay != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="SCREENPLAY" href="/creators/roles/screenplay/">脚本</a>{{ e.Screenplay }}</span>
-            {{~ end ~}}
-            {{~ if e.StoryboardDirectorMerged ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/creators/roles/storyboard/">絵コンテ</a><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/creators/roles/episode_director/">演出</a>{{ e.Storyboard }}</span>
-            {{~ else ~}}
-            {{~ if e.Storyboard != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/creators/roles/storyboard/">絵コンテ</a>{{ e.Storyboard }}</span>
-            {{~ end ~}}
-            {{~ if e.EpisodeDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/creators/roles/episode_director/">演出</a>{{ e.EpisodeDirector }}</span>
-            {{~ end ~}}
-            {{~ end ~}}
-            {{~ if e.ChiefAnimationDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="{{ e.ChiefAnimationDirectorUrl }}">総作画監督</a>{{ e.ChiefAnimationDirector }}</span>
-            {{~ end ~}}
-            {{~ if e.AnimationDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="/creators/roles/animation_director/">作画監督</a>{{ e.AnimationDirector }}</span>
-            {{~ end ~}}
-            {{~ for b in e.AnimationCardRoles ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ b.RoleCode }}" href="{{ b.RoleUrl }}">{{ b.Label | html.escape }}</a>{{ b.NamesHtml }}</span>
-            {{~ end ~}}
-            {{~ if e.ArtDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ e.ArtRoleCode }}" href="{{ e.ArtRoleUrl }}">{{ e.ArtLabel }}</a>{{ e.ArtDirector }}</span>
+            {{~ for b in e.StaffBadges ~}}
+            <span class="staff-badge-group">{{~ for r in b.Roles ~}}<a class="role-badge role-badge-sm" data-role-code="{{ r.RoleCode }}"{{ if r.BadgeStyle != "" }} style="{{ r.BadgeStyle }}"{{ end }} href="{{ r.RoleUrl }}">{{ r.Label | html.escape }}</a>{{~ end ~}}{{ b.NamesHtml }}</span>
             {{~ end ~}}
           </div>
           {{~ end ~}}
@@ -216,32 +194,10 @@
             <span class="ep-row-date">{{ e.OnAirDate }}</span>
           </div>
           <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{ e.TitleDisplayHtml }}</a>
-          {{~ if e.Screenplay != "" || e.Storyboard != "" || e.EpisodeDirector != "" || e.ChiefAnimationDirector != "" || e.AnimationDirector != "" || e.ArtDirector != "" || (array.size e.AnimationCardRoles) > 0 ~}}
+          {{~ if (array.size e.StaffBadges) > 0 ~}}
           <div class="staff-badges-row">
-            {{~ if e.Screenplay != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="SCREENPLAY" href="/creators/roles/screenplay/">脚本</a>{{ e.Screenplay }}</span>
-            {{~ end ~}}
-            {{~ if e.StoryboardDirectorMerged ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/creators/roles/storyboard/">絵コンテ</a><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/creators/roles/episode_director/">演出</a>{{ e.Storyboard }}</span>
-            {{~ else ~}}
-            {{~ if e.Storyboard != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/creators/roles/storyboard/">絵コンテ</a>{{ e.Storyboard }}</span>
-            {{~ end ~}}
-            {{~ if e.EpisodeDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/creators/roles/episode_director/">演出</a>{{ e.EpisodeDirector }}</span>
-            {{~ end ~}}
-            {{~ end ~}}
-            {{~ if e.ChiefAnimationDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="{{ e.ChiefAnimationDirectorUrl }}">総作画監督</a>{{ e.ChiefAnimationDirector }}</span>
-            {{~ end ~}}
-            {{~ if e.AnimationDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="/creators/roles/animation_director/">作画監督</a>{{ e.AnimationDirector }}</span>
-            {{~ end ~}}
-            {{~ for b in e.AnimationCardRoles ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ b.RoleCode }}" href="{{ b.RoleUrl }}">{{ b.Label | html.escape }}</a>{{ b.NamesHtml }}</span>
-            {{~ end ~}}
-            {{~ if e.ArtDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ e.ArtRoleCode }}" href="{{ e.ArtRoleUrl }}">{{ e.ArtLabel }}</a>{{ e.ArtDirector }}</span>
+            {{~ for b in e.StaffBadges ~}}
+            <span class="staff-badge-group">{{~ for r in b.Roles ~}}<a class="role-badge role-badge-sm" data-role-code="{{ r.RoleCode }}"{{ if r.BadgeStyle != "" }} style="{{ r.BadgeStyle }}"{{ end }} href="{{ r.RoleUrl }}">{{ r.Label | html.escape }}</a>{{~ end ~}}{{ b.NamesHtml }}</span>
             {{~ end ~}}
           </div>
           {{~ end ~}}

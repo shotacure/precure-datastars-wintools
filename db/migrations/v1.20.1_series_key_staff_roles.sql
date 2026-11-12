@@ -10,13 +10,14 @@
 --     display_order  作品の中の並び順（小さいほど先）
 --     badge_color    バッジの色（#rrggbb の小文字）。バッジの地・枠・字の色はこの色から作る
 --
--- 初期の行は、これまでの表示と同じになるように作品の種別とクレジットから作る：
+-- 初期の行は、これまでの表示と同じになるように作品の種別とクレジットから作る。種別ごとの役職のうち、
+-- その作品のクレジットに出ている役職だけを入れる（クレジットがまだ無い作品には入れない。クレジットを入れるときに画面で決める）：
 --   TV                     プロデューサー・シリーズ構成・シリーズディレクター・キャラクターデザイン・
---                          衣装・プロップデザイン（その役職のクレジットがある作品だけ）・美術デザイン
+--                          衣装・プロップデザイン・美術デザイン
 --   OTONA                  プロデューサー・シリーズ構成・シリーズディレクター・キャラクターデザイン・美術監督
---   MOVIE / MOVIE_SHORT /  企画（企画のクレジットがあってプロデューサーのクレジットが無い作品だけ）・
+--   MOVIE / MOVIE_SHORT /  企画（プロデューサーのクレジットが無い作品だけ）・
 --   SPRING / EVENT         プロデューサー・脚本・監督・キャラクターデザイン・作画監督・美術監督
--- 行のある作品には足さない（画面で直した行を上書きしない）。
+-- 並び順は作品ごとに 1 から振る。行のある作品には足さない（画面で直した行を上書きしない）。
 --
 -- 冪等性: CREATE TABLE IF NOT EXISTS と、行の無い作品だけへの INSERT。
 -- =====================================================================
@@ -48,8 +49,7 @@ SELECT DISTINCT s.series_id, r.role_code
   JOIN credit_cards      cc ON cc.card_id      = t.card_id
   JOIN credits            c ON c.credit_id     = cc.credit_id
   LEFT JOIN episodes      e ON e.episode_id    = c.episode_id
-  JOIN series             s ON s.series_id     = COALESCE(c.series_id, e.series_id)
- WHERE r.role_code IN ('PLANNING', 'PRODUCER', 'COSTUME_PROP_DESIGN');
+  JOIN series             s ON s.series_id     = COALESCE(c.series_id, e.series_id);
 
 -- 行の無い作品（この時点で行を持つ作品は除く）
 DROP TABLE IF EXISTS `_v1201_target_series`;
@@ -58,8 +58,8 @@ SELECT s.series_id, s.kind_code
   FROM series s
  WHERE NOT EXISTS (SELECT 1 FROM series_key_staff_roles k WHERE k.series_id = s.series_id);
 
--- 種別ごとの役職の組（cond：ALWAYS＝いつも / CREDITED＝その役職のクレジットがあるとき /
--- PLANNING_ONLY＝企画のクレジットがあってプロデューサーのクレジットが無いとき）
+-- 種別ごとの役職の組。どの行も、その作品のクレジットにその役職が出ているときだけ入れる
+-- （cond：PLANNING_ONLY＝さらにプロデューサーのクレジットが無いときだけ）
 INSERT INTO series_key_staff_roles (series_id, role_code, display_order, badge_color, created_by, updated_by)
 SELECT ts.series_id, d.role_code, d.display_order, d.badge_color, 'migration_v1.20.1', 'migration_v1.20.1'
   FROM _v1201_target_series ts
@@ -84,12 +84,17 @@ SELECT ts.series_id, d.role_code, d.display_order, d.badge_color, 'migration_v1.
     UNION ALL SELECT 'MOVIE', 'ART_DIRECTOR',        7, '#d4a017', 'ALWAYS'
   ) d
     ON d.kind_code = CASE WHEN ts.kind_code IN ('MOVIE', 'MOVIE_SHORT', 'SPRING', 'EVENT') THEN 'MOVIE' ELSE ts.kind_code END
- WHERE d.cond = 'ALWAYS'
-    OR (d.cond = 'CREDITED'
-        AND EXISTS (SELECT 1 FROM _v1201_credited_roles cr WHERE cr.series_id = ts.series_id AND cr.role_code = d.role_code))
-    OR (d.cond = 'PLANNING_ONLY'
-        AND EXISTS     (SELECT 1 FROM _v1201_credited_roles cr WHERE cr.series_id = ts.series_id AND cr.role_code = 'PLANNING')
-        AND NOT EXISTS (SELECT 1 FROM _v1201_credited_roles cr WHERE cr.series_id = ts.series_id AND cr.role_code = 'PRODUCER'));
+ WHERE EXISTS (SELECT 1 FROM _v1201_credited_roles cr WHERE cr.series_id = ts.series_id AND cr.role_code = d.role_code)
+   AND (d.cond <> 'PLANNING_ONLY'
+        OR NOT EXISTS (SELECT 1 FROM _v1201_credited_roles cr WHERE cr.series_id = ts.series_id AND cr.role_code = 'PRODUCER'));
+
+-- 入れた作品の並び順を 1 から詰める
+UPDATE series_key_staff_roles k
+  JOIN (SELECT series_id, role_code, ROW_NUMBER() OVER (PARTITION BY series_id ORDER BY display_order, role_code) AS rn
+          FROM series_key_staff_roles) x ON x.series_id = k.series_id AND x.role_code = k.role_code
+  JOIN _v1201_target_series ts ON ts.series_id = k.series_id
+   SET k.display_order = x.rn
+ WHERE k.display_order <> x.rn;
 
 DROP TABLE IF EXISTS `_v1201_credited_roles`;
 DROP TABLE IF EXISTS `_v1201_target_series`;

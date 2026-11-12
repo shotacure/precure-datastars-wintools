@@ -179,8 +179,8 @@
 
   {{## スタッフ。
      役職ごと 1 行で「[役職バッジ] 人名(リンク済 HTML)」のフラットレイアウト（シリーズ詳細メインスタッフと共通）。
-       バッジは data-role-code 属性でシリーズ一覧と同じ役職別色（SCREENPLAY=ピンク／STORYBOARD=水色／
-       EPISODE_DIRECTOR=ピンク／ANIMATION_DIRECTOR=緑／ART_DIRECTOR=黄）を継承する。
+       出す役職・並び・色は作品の表（series_episode_staff_roles）の行で、エピソード一覧の札と同じ。
+       バッジの色は行の色から作った style 属性（BadgeStyle）で当てる（data-role-code 属性も付ける）。
        NamesLine は <a href="/people/{名前}/">人名</a> でラップ済の HTML 断片、html.escape はかけない。
        絵コンテと演出が同一人物の場合、テンプレ側で「絵コンテ」「演出」のバッジを 2 つ並べる
        （RoleCode は空、SubRoleLinks の各 Code / Label を使う）。 ##}}
@@ -189,7 +189,7 @@
     <h2>スタッフ</h2>
     {{~ for s in Staff ~}}
     <div class="key-staff-line">
-      <span class="staff-badge-group">{{~ if (array.size s.SubRoleLinks) > 0 ~}}{{## 統合行「絵コンテ・演出」：バッジを 2 つ並べる ##}}{{~ for sr in s.SubRoleLinks ~}}{{~ if sr.Url != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ sr.Code }}" href="{{ sr.Url }}">{{ sr.Label | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ sr.Code }}">{{ sr.Label | html.escape }}</span>{{~ end ~}}{{~ end ~}}{{~ else if s.RoleUrl != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ s.RoleCode }}" href="{{ s.RoleUrl }}">{{ s.RoleLabel | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ s.RoleCode }}">{{ s.RoleLabel | html.escape }}</span>{{~ end ~}}{{ s.NamesLine }}</span>
+      <span class="staff-badge-group">{{~ if (array.size s.SubRoleLinks) > 0 ~}}{{## 統合行「絵コンテ・演出」：バッジを 2 つ並べる ##}}{{~ for sr in s.SubRoleLinks ~}}{{~ if sr.Url != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ sr.Code }}"{{ if sr.BadgeStyle != "" }} style="{{ sr.BadgeStyle }}"{{ end }} href="{{ sr.Url }}">{{ sr.Label | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ sr.Code }}"{{ if sr.BadgeStyle != "" }} style="{{ sr.BadgeStyle }}"{{ end }}>{{ sr.Label | html.escape }}</span>{{~ end ~}}{{~ end ~}}{{~ else if s.RoleUrl != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ s.RoleCode }}"{{ if s.BadgeStyle != "" }} style="{{ s.BadgeStyle }}"{{ end }} href="{{ s.RoleUrl }}">{{ s.RoleLabel | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ s.RoleCode }}"{{ if s.BadgeStyle != "" }} style="{{ s.BadgeStyle }}"{{ end }}>{{ s.RoleLabel | html.escape }}</span>{{~ end ~}}{{ s.NamesLine }}</span>
     </div>
     {{~ end ~}}
     {{## 「くわしく」の開閉の枠。中のカードは、チーフの役職ごと・人ごとのカード（その方がその役職を担当したのは何回目か・前の回から

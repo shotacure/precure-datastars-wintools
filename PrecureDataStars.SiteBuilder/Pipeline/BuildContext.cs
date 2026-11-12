@@ -216,6 +216,14 @@ public sealed class BuildContext
     /// </summary>
     public required IReadOnlyDictionary<int, IReadOnlyList<SeriesKeyStaffRole>> KeyStaffRolesBySeries { get; init; }
 
+    /// <summary>
+    /// 作品 ID → その作品の各話のスタッフの札の役職（<c>series_episode_staff_roles</c>、並び順の順）。
+    /// 作品のページのエピソード一覧・トップページのエピソード欄・/episodes/・エピソード詳細のスタッフ欄は、
+    /// この行の役職だけをこの順・この色で出す（<see cref="EpisodeStaffCards.BuildBadges"/>）。
+    /// 行の無い作品はキーを持たない（札を出さない）。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<SeriesEpisodeStaffRole>> EpisodeStaffRolesBySeries { get; init; }
+
     /// <summary>役職テンプレ（<c>role_templates</c>）を (role_code, series_id) 解決可能な形で保持。 CreditTreeRenderer が per-sibling-role で <c>RoleTemplatesRepository.ResolveAsync</c> を発火していたのを 同期辞書 lookup に置き換える。</summary>
     public required RoleTemplateResolver RoleTemplateResolver { get; init; }
 

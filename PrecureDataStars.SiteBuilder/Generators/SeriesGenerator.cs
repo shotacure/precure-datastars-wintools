@@ -1326,9 +1326,17 @@ public sealed class SeriesGenerator
             var seriesThemes = _seriesThemeSongsBySeriesCache.TryGetValue(s.SeriesId, out var cachedSeriesThemes)
                 ? cachedSeriesThemes
                 : Array.Empty<SeriesThemeSong>();
+            // その作品で流れたサイズが入っている行は、そのサイズの札と同じサイズの配信音源の再生ボタンを出す
+            // （話数は添えないので、サイズごとの話数は空で渡す）。サイズの指定が無い行は、録音ごとに選んだ音源の
+            // ボタンを 1 つ出す（流れたサイズとは限らない音源の扱い）。
             themeDescriptors = seriesThemes
-                .Select(t => new ThemeSongDescriptor(
-                    t.SongRecordingId, t.ThemeKind, t.Seq, t.IsBroadcastOnly, t.UsageActuality))
+                .Select(t => string.IsNullOrEmpty(t.SongSizeVariantCode)
+                    ? new ThemeSongDescriptor(
+                        t.SongRecordingId, t.ThemeKind, t.Seq, t.IsBroadcastOnly, t.UsageActuality)
+                    : new ThemeSongDescriptor(
+                        t.SongRecordingId, t.ThemeKind, t.Seq, t.IsBroadcastOnly, t.UsageActuality,
+                        SizeVariantCodes: new string?[] { t.SongSizeVariantCode },
+                        SizeEpisodeNos: new Dictionary<string, IReadOnlyCollection<int>>()))
                 .ToList();
         }
         var themeRows = await _themeSongRowBuilder.BuildAsync(themeDescriptors, ct).ConfigureAwait(false);

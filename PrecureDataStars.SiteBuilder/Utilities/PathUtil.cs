@@ -25,7 +25,7 @@ public static class PathUtil
     public static void UseRoleRepresentatives(RoleSuccessorResolver resolver) => _roleRepresentative = resolver.GetRepresentative;
 
     /// <summary>
-    /// 役職詳細ページを持たない役職（系譜の代表の role_code）。単発のイベント映像・スピンオフだけで使う役職が当たる
+    /// 役職詳細ページを持たない役職（系譜の代表の role_code）。単発のイベント映像と、オトナシリーズ以外のスピンオフだけで使う役職が当たる
     /// （<see cref="Pipeline.CreatorListScope.RolesWithoutPage"/>）。<see cref="UseRolesWithoutPage"/> で差し込み、以降は読み取り専用。
     /// 未設定のあいだは空（すべての役職がページを持つ扱い）。
     /// </summary>
@@ -44,29 +44,6 @@ public static class PathUtil
         string rep = _roleRepresentative(roleCode);
         if (string.IsNullOrEmpty(rep)) rep = roleCode;
         return !_rolesWithoutPage.Contains(rep);
-    }
-
-    /// <summary>
-    /// オトナシリーズの役職のページ（<see cref="CreatorsOtonaRoleUrl"/>）を持つ役職（系譜の代表の role_code）。
-    /// オトナシリーズのクレジットに出る役職のうち、本編の役職詳細と同じくページを作る役職が当たる
-    /// （<see cref="Pipeline.CreatorListScope.OtonaRolesWithPage"/>）。<see cref="UseOtonaRolePages"/> で差し込み、以降は読み取り専用。
-    /// 未設定のあいだは空（どの役職もオトナシリーズの役職のページを持たない扱い）。
-    /// </summary>
-    private static IReadOnlySet<string> _otonaRolesWithPage = new HashSet<string>(StringComparer.Ordinal);
-
-    /// <summary>オトナシリーズの役職のページを持つ役職の集合を差し込む（ページ生成より前に 1 度だけ呼ぶ）。</summary>
-    public static void UseOtonaRolePages(IReadOnlySet<string> roleCodes) => _otonaRolesWithPage = roleCodes;
-
-    /// <summary>
-    /// 役職名をオトナシリーズの役職のページ（<see cref="CreatorsOtonaRoleUrl"/>）へのリンクにしてよいか。系譜の代表で判定する。
-    /// オトナシリーズの作品のクレジット・関わりの行で使い、false のときは本編の役職詳細の判定（<see cref="HasRolePage"/>）に任せる。
-    /// </summary>
-    public static bool HasOtonaRolePage(string roleCode)
-    {
-        if (string.IsNullOrEmpty(roleCode) || IsSingerRole(roleCode)) return false;
-        string rep = _roleRepresentative(roleCode);
-        if (string.IsNullOrEmpty(rep)) rep = roleCode;
-        return _otonaRolesWithPage.Contains(rep);
     }
 
     /// <summary>「URL パス」（先頭スラッシュ付き、末尾スラッシュ付き）を「出力ファイルパス」に変換する。 末尾は <c>index.html</c> を付与。</summary>
@@ -176,25 +153,6 @@ public static class PathUtil
     }
 
     /// <summary>
-    /// オトナシリーズの役職のページの URL パス（<c>/creators/otona/roles/{rep_role_code}/</c>）。
-    /// オトナシリーズのクレジットだけで集計した役職詳細で、URL の組み立て（系譜の代表・小文字化）は
-    /// 本編の役職詳細（<see cref="CreatorsRoleUrl"/>）と同じ規則。ページを持つかは <see cref="HasOtonaRolePage"/> で判定する。
-    /// </summary>
-    public static string CreatorsOtonaRoleUrl(string roleCode)
-    {
-        string rep = _roleRepresentative(roleCode);
-        if (string.IsNullOrEmpty(rep)) rep = roleCode;
-        return $"/creators/otona/roles/{rep.ToLowerInvariant()}/";
-    }
-
-    /// <summary>
-    /// 作品のページ・各話のページのスタッフの札の役職のリンク先。オトナシリーズの作品（<paramref name="isOtonaWork"/>）で
-    /// オトナシリーズの役職のページを持つ役職（<see cref="HasOtonaRolePage"/>）ならそのページ、それ以外は本編の役職詳細（<see cref="CreatorsRoleUrl"/>）。
-    /// </summary>
-    public static string CreatorsRoleUrlInWork(string roleCode, bool isOtonaWork)
-        => isOtonaWork && HasOtonaRolePage(roleCode) ? CreatorsOtonaRoleUrl(roleCode) : CreatorsRoleUrl(roleCode);
-
-    /// <summary>
     /// 楽曲のクレジット行（作詞・作曲・編曲・歌・コーラス・台詞）の役職バッジのリンク先。
     /// 作詞・作曲・編曲は役職詳細、歌唱系は歌唱ページ。それ以外（出典など役職でないもの）は空文字（リンクしない）。
     /// 劇伴の作曲・編曲は役職詳細が楽曲の作家の一覧なので、呼び出し側でリンクしない。
@@ -228,12 +186,6 @@ public static class PathUtil
 
     /// <summary>声の出演（声優）一覧ページの URL（/creators/voice-cast/）。</summary>
     public static string CreatorsVoiceCastUrl() => "/creators/voice-cast/";
-
-    /// <summary>オトナシリーズのスタッフ一覧ページの URL（/creators/otona/staff/）。</summary>
-    public static string CreatorsOtonaStaffUrl() => "/creators/otona/staff/";
-
-    /// <summary>オトナシリーズの声の出演（声優）一覧ページの URL（/creators/otona/voice-cast/）。</summary>
-    public static string CreatorsOtonaVoiceCastUrl() => "/creators/otona/voice-cast/";
 
     /// <summary>音楽制作（楽曲の作詞・作曲・編曲の担当者）一覧ページの URL（/creators/music-production/）。</summary>
     public static string CreatorsMusicProductionUrl() => "/creators/music-production/";

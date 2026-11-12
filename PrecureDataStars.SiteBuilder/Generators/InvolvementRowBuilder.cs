@@ -36,37 +36,6 @@ internal readonly record struct InvolvementSeriesRowExtras(
 internal static class InvolvementRowBuilder
 {
     /// <summary>
-    /// 人物・企業詳細の役職グループの見出しのリンク先を、グループの関与の作品に合わせて決める。
-    /// グループの関与がすべてオトナシリーズ（<see cref="BuildContextLookupExtensions.IsOtonaSeries"/>）の作品なら、
-    /// オトナシリーズの役職のページ（声の出演は <c>/creators/otona/voice-cast/</c>）を指す。
-    /// 本編などの作品の関与もあるグループは本編のリンク先（<paramref name="mainUrl"/>）のままで、本編のリンク先が無い
-    /// （本編の役職詳細を持たない役職の）ときだけオトナシリーズの役職のページを指す。オトナシリーズの関与が無いグループと、
-    /// オトナシリーズの役職のページを持たない役職（<see cref="PathUtil.HasOtonaRolePage"/>）は <paramref name="mainUrl"/> をそのまま返す。
-    /// </summary>
-    /// <param name="ctx">ビルド共有コンテキスト（読み取り専用辞書のみ参照）。</param>
-    /// <param name="roleCode">グループの役職コード。</param>
-    /// <param name="formatKind">役職の形式（<c>roles.role_format_kind</c>。THEME_SONG はリンクしないのでそのまま返す）。</param>
-    /// <param name="roleGroup">グループの関与群。</param>
-    /// <param name="mainUrl">本編の判定で決めたリンク先（リンクしないときは空文字）。</param>
-    internal static string OtonaAwareRoleUrl(
-        BuildContext ctx, string roleCode, string formatKind, IEnumerable<Involvement> roleGroup, string mainUrl)
-    {
-        if (string.IsNullOrEmpty(roleCode) || string.Equals(formatKind, "THEME_SONG", StringComparison.Ordinal)) return mainUrl;
-        bool anyOtona = false, allOtona = true;
-        foreach (var inv in roleGroup)
-        {
-            if (ctx.IsOtonaSeries(inv.SeriesId)) anyOtona = true;
-            else allOtona = false;
-        }
-        if (!anyOtona) return mainUrl;
-        string otonaUrl = string.Equals(formatKind, "VOICE_CAST", StringComparison.Ordinal) ? PathUtil.CreatorsOtonaVoiceCastUrl()
-            : PathUtil.HasOtonaRolePage(roleCode) ? PathUtil.CreatorsOtonaRoleUrl(roleCode)
-            : "";
-        if (otonaUrl == "") return mainUrl;
-        return allOtona || mainUrl == "" ? otonaUrl : mainUrl;
-    }
-
-    /// <summary>
     /// 役職グループ 1 件分の関与群をシリーズ単位（放送開始日昇順）に集約し、
     /// 話数圧縮表記つきの行群と担当量（TV 話数・映画本数・大人向け話数）を組み立てる。
     /// 各シリーズにつき「シリーズ全体スコープの 1 行（あれば先）」と「エピソード単位の集約 1 行（話数があれば）」の

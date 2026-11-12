@@ -6,7 +6,10 @@
 {{## スタッフ一覧。
      ・役職順タブ：役職名 + その役職に関わった人物数・企業/団体数の索引。各役職名から
        役職詳細ページ（/creators/roles/{code}/）へ送り出す。最も軽量なので既定タブにする。
-       役職は、TV でクレジットされた役職と映画でのみクレジットされた役職に分け、それぞれを作品ごとの節に分ける。
+       役職は、TV・映画・オトナシリーズのそれぞれでクレジットされた役職の組に分け、それぞれを作品ごとの節に分ける。
+     ・タブの下の段の右の 📺 TV・🎥 映画・🌙 オトナのボタン（_work-kind-toggles.sbn）で、見せる種類を切り替える。
+       役職順・初参加順は、入っている種類の中で初めての作品の節に行が出る（行は種類ごとに置いてあり、data-wk-own・data-wk-after で出し分ける）。
+       参加回数順は、行の data-wk（参加した種類）が入っている種類に 1 つも当たらなければ隠す（site.css）。
      ・五十音順 / 初参加順 / 参加回数順タブ：人物と企業・団体を 1 リストに混在させた
        一覧。行ごとに「個人 / 団体」バッジで区別し、上部の絞り込みトグルで
        個人のみ・団体のみに切り替えられる（data-entity-filter を CSS で解決）。
@@ -16,7 +19,7 @@
      ・3 つのエンティティタブはテーブル構造が同一だが、Scriban のパラメータ付き
        include は本プロジェクトで未採用（_share-buttons.sbn のみ無引数 include）なので、
        堅牢性を優先して各パネルにテーブルマークアップを直接展開する。 ##}}
-<div class="creators-root creators-tabs products-tabs" data-entity-filter="all" data-active-tab="roles">
+<div class="creators-root creators-tabs products-tabs" data-entity-filter="all" data-active-tab="roles" data-wk-on="{{ Kinds.Tokens }}">
   <div class="tabs" role="tablist" aria-label="スタッフ一覧の並べ替え">
     <button type="button" class="tab-btn is-active" data-tab="roles"
             role="tab" aria-selected="true" aria-controls="staff-tab-panel-roles">
@@ -48,9 +51,11 @@
     <button type="button" class="entity-filter-btn" data-entity-filter-set="person">個人のみ</button>
     <button type="button" class="entity-filter-btn" data-entity-filter-set="company">団体のみ</button>
   </div>
+  {{## 📺 TV・🎥 映画・🌙 オトナの出し分けのボタン。全タブに効く。件数での並べ替えボタンのすぐ左に並べる（並べ替えボタンが段の右端）。 ##}}
+  {{ include '_work-kind-toggles.sbn' }}
   {{## 件数での並べ替えボタン（count-sort.js）。data-count-sort-for のリストの行を、件数バッジの種類ごとに多い順／少ない順で並べ替える。対象リストが出ているときだけ表示される。 ##}}
   <button type="button" class="count-sort-btn" data-count-sort-for="staff-roles-tv staff-roles-movie" data-count-sort-initial="none" hidden></button>
-  <button type="button" class="count-sort-btn" data-count-sort-for="staff-count-list"{{ if CountSortStart != "" }} data-count-sort-start="{{ CountSortStart }}"{{ end }} hidden></button>
+  <button type="button" class="count-sort-btn" data-count-sort-for="staff-count-list" hidden></button>
   </div>
 
   {{## ──────── 役職順パネル（既定） ──────── ##}}
@@ -59,23 +64,25 @@
     {{~ if (array.size Roles) == 0 ~}}
     <p class="empty-row">クレジット情報のある役職がまだ登録されていません。</p>
     {{~ else ~}}
-    {{## TV で 1 度でもクレジットされた役職と、映画でのみクレジットされた役職に分け、それぞれを作品ごとの節に分ける
-         （TV の側は TV で初めてクレジットされた作品、映画の側は初めての映画。節は放送開始・公開順、節の中は初めて出た回のクレジットの順）。
-         作品の節の見出しと左のもくじは初参加順タブと同じ「作品名（年）」で、左のもくじでは「TV／映画」の下に作品を 1 段下げて並べる
-         （作品の節は data-section-nav-child の div にし、section-nav.js が TV・映画の section の子の行にする）。
-         映画でのみの役職が無い一覧（オトナシリーズ）は、TV・映画の見出しを出さず作品の節だけを並べる。
+    {{## 役職を「TV シリーズでクレジットされた役職」「映画でクレジットされた役職」「オトナシリーズでクレジットされた役職」の 3 つの組に分け、
+         それぞれをその種類で初めてクレジットされた作品ごとの節に分ける（節は放送開始・公開順、節の中は初めて出た回のクレジットの順）。
+         役職は、クレジットされた種類ごとに 1 つずつ置く（行の data-wk-own）。映画の組の役職で TV にもあるもの、オトナシリーズの組の役職で
+         TV か映画にもあるものは、それらの種類（行の data-wk-after）が入っているあいだ隠す（site.css）。開いたときは、TV の組に TV の役職、
+         映画の組に映画だけの役職、オトナシリーズの組にオトナシリーズだけの役職が並び、📺 を切ると映画の組に映画の役職がすべて並ぶ。
+         見える役職が無くなった節と組は隠す（data-wk-empty。開いたときの分はここで付け、切り替えのたびに _work-kind-toggles.sbn が付け直す）。
+         作品の節の見出しと左のもくじは初参加順タブと同じ「作品名（年）」で、左のもくじでは「TV／映画／オトナ」の下に作品を 1 段下げて並べる
+         （作品の節は data-section-nav-child の div にし、section-nav.js が TV・映画・オトナの section の子の行にする）。
          役職名 + 担当数（人物 N 名・企業 M 社）の軽い行なので複数列詰めグリッドで並べる。 ##}}
-    {{~ if (array.size RoleMovieSections) > 0 ~}}
-    <section class="creators-role-group" id="roles-tv" data-section-nav-label="TV">
+    <section class="creators-role-group" id="roles-tv" data-section-nav-label="TV" data-wk-group>
       <h2 class="creators-role-group-heading">TVシリーズでクレジットされた役職</h2>
       {{~ for s in RoleTvSections ~}}
       <div class="creators-series-section"
-           id="roles-tv-{{ for.index + 1 }}" data-section-nav-child
+           id="roles-tv-{{ for.index + 1 }}" data-section-nav-child data-wk-section{{ if s.DefaultEmpty }} data-wk-empty{{ end }}
            data-section-nav-label="{{ (nav_main s.SeriesTitle) | html.escape }}"
            data-section-nav-prefix="{{ (nav_prefix s.SeriesTitle) | html.escape }}"
            data-section-nav-title="{{ s.SeriesTitle | html.escape }}"
            data-section-nav-year="{{ s.SeriesYearLabel }}"
-           data-section-nav-count="{{ array.size s.Roles }}">
+           data-section-nav-count="{{ s.DefaultCount }}">
         <h3 class="creators-series-heading">
           {{~ if s.SeriesUrl != "" ~}}
           <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
@@ -89,16 +96,17 @@
       </div>
       {{~ end ~}}
     </section>
-    <section class="creators-role-group" id="roles-movie" data-section-nav-label="映画">
-      <h2 class="creators-role-group-heading">映画でのみクレジットされた役職</h2>
+    {{~ if (array.size RoleMovieSections) > 0 ~}}
+    <section class="creators-role-group" id="roles-movie" data-section-nav-label="映画" data-wk-group{{ if RoleMovieDefaultEmpty }} data-wk-empty{{ end }}>
+      <h2 class="creators-role-group-heading">映画でクレジットされた役職</h2>
       {{~ for s in RoleMovieSections ~}}
       <div class="creators-series-section"
-           id="roles-movie-{{ for.index + 1 }}" data-section-nav-child
+           id="roles-movie-{{ for.index + 1 }}" data-section-nav-child data-wk-section{{ if s.DefaultEmpty }} data-wk-empty{{ end }}
            data-section-nav-label="{{ (nav_main s.SeriesTitle) | html.escape }}"
            data-section-nav-prefix="{{ (nav_prefix s.SeriesTitle) | html.escape }}"
            data-section-nav-title="{{ s.SeriesTitle | html.escape }}"
            data-section-nav-year="{{ s.SeriesYearLabel }}"
-           data-section-nav-count="{{ array.size s.Roles }}">
+           data-section-nav-count="{{ s.DefaultCount }}">
         <h3 class="creators-series-heading">
           {{~ if s.SeriesUrl != "" ~}}
           <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
@@ -112,27 +120,31 @@
       </div>
       {{~ end ~}}
     </section>
-    {{~ else ~}}
-    {{~ for s in RoleTvSections ~}}
-    <section class="creators-series-section"
-             id="roles-{{ for.index + 1 }}"
-             data-section-nav-label="{{ (nav_main s.SeriesTitle) | html.escape }}"
-             data-section-nav-prefix="{{ (nav_prefix s.SeriesTitle) | html.escape }}"
-             data-section-nav-title="{{ s.SeriesTitle | html.escape }}"
-             data-section-nav-year="{{ s.SeriesYearLabel }}"
-             data-section-nav-count="{{ array.size s.Roles }}">
-      <h2 class="creators-series-heading">
-        {{~ if s.SeriesUrl != "" ~}}
-        <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
-        {{~ else ~}}{{ s.SeriesHeadingLabel | html.escape }}{{~ end ~}}
-      </h2>
-      <ul class="entity-list entity-list-grid">
-        {{~ for r in s.Roles ~}}
-        {{ include '_staff-role-row.sbn' }}
-        {{~ end ~}}
-      </ul>
-    </section>
     {{~ end ~}}
+    {{~ if (array.size RoleOtonaSections) > 0 ~}}
+    <section class="creators-role-group" id="roles-otona" data-section-nav-label="オトナ" data-wk-group{{ if RoleOtonaDefaultEmpty }} data-wk-empty{{ end }}>
+      <h2 class="creators-role-group-heading">オトナシリーズでクレジットされた役職</h2>
+      {{~ for s in RoleOtonaSections ~}}
+      <div class="creators-series-section"
+           id="roles-otona-{{ for.index + 1 }}" data-section-nav-child data-wk-section{{ if s.DefaultEmpty }} data-wk-empty{{ end }}
+           data-section-nav-label="{{ (nav_main s.SeriesTitle) | html.escape }}"
+           data-section-nav-prefix="{{ (nav_prefix s.SeriesTitle) | html.escape }}"
+           data-section-nav-title="{{ s.SeriesTitle | html.escape }}"
+           data-section-nav-year="{{ s.SeriesYearLabel }}"
+           data-section-nav-count="{{ s.DefaultCount }}">
+        <h3 class="creators-series-heading">
+          {{~ if s.SeriesUrl != "" ~}}
+          <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
+          {{~ else ~}}{{ s.SeriesHeadingLabel | html.escape }}{{~ end ~}}
+        </h3>
+        <ul class="entity-list entity-list-grid">
+          {{~ for r in s.Roles ~}}
+          {{ include '_staff-role-row.sbn' }}
+          {{~ end ~}}
+        </ul>
+      </div>
+      {{~ end ~}}
+    </section>
     {{~ end ~}}
     {{~ end ~}}
   </div>
@@ -147,13 +159,13 @@
     {{## 読みがなは並べ替えキーとしてのみ使い、行には表示しない（一覧の方針）。 ##}}
     <ul class="entity-list">
       {{~ for e in KanaRows ~}}
-      <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
+      <li class="entity-row" data-entity-type="{{ e.EntityKind }}" data-wk="{{ e.Kinds }}">
         <a class="entity-row-link" href="{{ e.EntityUrl }}" aria-label="{{ e.EntityName | html.escape }}"></a>
         {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person" aria-label="個人" title="個人"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
         {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
         <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
         <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
-        <span class="entity-row-count"><span class="count-badges">{{~ if e.MainEpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.MainEpisodeCount }}</span>{{~ end ~}}{{~ if e.MainMovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MainMovieCount }}</span>{{~ end ~}}{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}{{~ if e.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ e.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
+        <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}{{~ if e.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ e.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
       </li>
       {{~ end ~}}
     </ul>
@@ -168,12 +180,12 @@
     <p class="empty-row">該当するスタッフがまだ登録されていません。</p>
     {{~ else ~}}
     {{~ for s in DebutSections ~}}
-    <section class="creators-series-section" id="debut-{{ for.index + 1 }}"
+    <section class="creators-series-section" id="debut-{{ for.index + 1 }}" data-wk-section{{ if s.DefaultEmpty }} data-wk-empty{{ end }}
              data-section-nav-label="{{ (nav_main s.SeriesTitle) | html.escape }}"
              data-section-nav-prefix="{{ (nav_prefix s.SeriesTitle) | html.escape }}"
              data-section-nav-title="{{ s.SeriesTitle | html.escape }}"
              data-section-nav-year="{{ s.SeriesYearLabel }}"
-             data-section-nav-count="{{ array.size s.Members }}">
+             data-section-nav-count="{{ s.DefaultCount }}">
       <h2 class="creators-series-heading">
         {{~ if s.SeriesUrl != "" ~}}
         <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
@@ -181,13 +193,13 @@
       </h2>
       <ul class="entity-list">
         {{~ for e in s.Members ~}}
-        <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
+        <li class="entity-row" data-entity-type="{{ e.EntityKind }}" data-wk-own="{{ e.WkOwn }}"{{ if e.WkAfter != "" }} data-wk-after="{{ e.WkAfter }}"{{ end }}>
           <a class="entity-row-link" href="{{ e.EntityUrl }}" aria-label="{{ e.EntityName | html.escape }}"></a>
           {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person" aria-label="個人" title="個人"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
           {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
           <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
           <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
-          <span class="entity-row-count"><span class="count-badges">{{~ if e.MainEpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.MainEpisodeCount }}</span>{{~ end ~}}{{~ if e.MainMovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MainMovieCount }}</span>{{~ end ~}}{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}{{~ if e.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ e.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
+          <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}{{~ if e.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ e.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
         </li>
         {{~ end ~}}
       </ul>
@@ -204,13 +216,13 @@
     {{~ else ~}}
     <ul class="entity-list" id="staff-count-list">
       {{~ for e in CountRows ~}}
-      <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
+      <li class="entity-row" data-entity-type="{{ e.EntityKind }}" data-wk="{{ e.Kinds }}">
         <a class="entity-row-link" href="{{ e.EntityUrl }}" aria-label="{{ e.EntityName | html.escape }}"></a>
         {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person" aria-label="個人" title="個人"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
         {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
         <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
         <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
-        <span class="entity-row-count"><span class="count-badges">{{~ if e.MainEpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.MainEpisodeCount }}</span>{{~ end ~}}{{~ if e.MainMovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MainMovieCount }}</span>{{~ end ~}}{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill {{ EpisodePillClass }}">{{ EpisodePillEmoji }} {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}{{~ if e.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ e.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
+        <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}{{~ if e.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ e.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
       </li>
       {{~ end ~}}
     </ul>

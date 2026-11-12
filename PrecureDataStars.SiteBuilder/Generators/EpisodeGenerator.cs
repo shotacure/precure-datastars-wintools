@@ -1873,7 +1873,7 @@ public sealed class EpisodeGenerator
                     {
                         RoleLabel = b.Label,
                         RoleCode = EpisodeStaffCards.AnimationCardBadgeRoleCode,
-                        RoleUrl = PathUtil.CreatorsRoleUrlInWork(b.RoleCode, isOtonaWork),
+                        RoleUrl = PathUtil.CreatorsRoleUrl(b.RoleCode),
                         SubRoleLinks = Array.Empty<StaffRoleLink>(),
                         NamesLine = string.Join("、", b.Names)
                     });
@@ -1917,7 +1917,7 @@ public sealed class EpisodeGenerator
                 {
                     RoleLabel = EpisodeStaffCards.OtonaArtLabel,
                     RoleCode = EpisodeStaffCards.ArtDesignCode,
-                    RoleUrl = PathUtil.CreatorsRoleUrlInWork(EpisodeStaffCards.ArtDesignCode, isOtonaWork),
+                    RoleUrl = PathUtil.CreatorsRoleUrl(EpisodeStaffCards.ArtDesignCode),
                     SubRoleLinks = Array.Empty<StaffRoleLink>(),
                     NamesLine = string.Join("、", names)
                 });
@@ -1947,16 +1947,13 @@ public sealed class EpisodeGenerator
     /// 1) コード候補そのままが <see cref="RoleSuccessorResolver"/> のクラスタに含まれていればそれを採用。
     /// 2) 含まれていなければ表示名候補（"脚本" 等）でマスタを走査し、ヒットしたコードのクラスタ代表を採用。
     /// 3) どちらでも引けないときは <c>null</c>（テンプレ側でリンク化を抑止）。
-    /// 話の作品（<paramref name="series"/>）がオトナシリーズで、オトナシリーズの役職のページを持つ役職なら、
-    /// そちら（<c>/creators/otona/roles/{rep}/</c>）を指す（<see cref="PathUtil.CreatorsRoleUrlInWork"/>）。
     /// </summary>
     private string? CreatorsRoleUrlFor(string preferredRoleCode, string fallbackNameJa, Series series)
     {
-        bool isOtonaWork = _ctx.IsOtonaSeries(series.SeriesId);
-        // オトナシリーズの作品で美術（ART_DIRECTOR_TV）の札を引かれたときは、オトナシリーズのクレジットの役職が美術監督（ART_DIRECTOR）なので、美術監督のオトナシリーズの役職のページを指す。
-        if (isOtonaWork && string.Equals(preferredRoleCode, "ART_DIRECTOR_TV", StringComparison.Ordinal)
-            && PathUtil.HasOtonaRolePage("ART_DIRECTOR"))
-            return PathUtil.CreatorsOtonaRoleUrl("ART_DIRECTOR");
+        // オトナシリーズの作品で美術（ART_DIRECTOR_TV）の札を引かれたときは、オトナシリーズのクレジットの役職が美術監督（ART_DIRECTOR）なので、美術監督の役職詳細を指す。
+        if (_ctx.IsOtonaSeries(series.SeriesId) && string.Equals(preferredRoleCode, "ART_DIRECTOR_TV", StringComparison.Ordinal)
+            && PathUtil.HasRolePage("ART_DIRECTOR"))
+            return PathUtil.CreatorsRoleUrl("ART_DIRECTOR");
         // 役職マスタが未ロードならリンク化スキップ（直前段で必ずロードしているはずだが念のため）。
         if (_roleMap is null) return null;
 
@@ -1964,7 +1961,7 @@ public sealed class EpisodeGenerator
         if (_roleMap.ContainsKey(preferredRoleCode))
         {
             string rep = _roleSuccessorResolver.GetRepresentative(preferredRoleCode);
-            if (!string.IsNullOrEmpty(rep)) return PathUtil.CreatorsRoleUrlInWork(rep, isOtonaWork);
+            if (!string.IsNullOrEmpty(rep)) return PathUtil.CreatorsRoleUrl(rep);
         }
 
         // 2) name_ja フォールバック検索：表示名が一致する役職コードを 1 件採用。
@@ -1973,7 +1970,7 @@ public sealed class EpisodeGenerator
             if (string.Equals(role.NameJa, fallbackNameJa, StringComparison.Ordinal))
             {
                 string rep = _roleSuccessorResolver.GetRepresentative(code);
-                if (!string.IsNullOrEmpty(rep)) return PathUtil.CreatorsRoleUrlInWork(rep, isOtonaWork);
+                if (!string.IsNullOrEmpty(rep)) return PathUtil.CreatorsRoleUrl(rep);
             }
         }
 

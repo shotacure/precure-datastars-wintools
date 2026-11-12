@@ -58,46 +58,16 @@ internal sealed class CreditTreeRenderer
     private const string RoleCodeEpisodeDirector = "EPISODE_DIRECTOR";
     private const string RoleCodeCastingCooperation = "CASTING_COOPERATION";
 
-    /// <summary>
-    /// 役職名をオトナシリーズの役職のページ（<c>/creators/otona/roles/{role_code}/</c>、声の出演は <c>/creators/otona/voice-cast/</c>）へ
-    /// リンクする描き方か。オトナシリーズの作品のクレジットを描く写し（<see cref="_otonaRenderer"/>）だけ true。
-    /// </summary>
-    private readonly bool _otonaRoleLinks;
-
-    /// <summary>
-    /// オトナシリーズの作品のクレジットを描く写し（役職名のリンク先だけが違う）。<see cref="RenderAsync"/> はクレジットの作品が
-    /// オトナシリーズ（<see cref="BuildContextLookupExtensions.IsOtonaSeries"/>）ならこちらに描かせる。写し自身は null。
-    /// </summary>
-    private readonly CreditTreeRenderer? _otonaRenderer;
-
     public CreditTreeRenderer(
         BuildContext ctx,
         IConnectionFactory factory,
         LookupCache lookup,
         StaffNameLinkResolver staffLinkResolver)
-        : this(ctx, factory, lookup, staffLinkResolver, otonaRoleLinks: false)
-    {
-    }
-
-    /// <summary>
-    /// <paramref name="otonaRoleLinks"/> が false（本編の描き方）のときは、役職名のリンク先だけをオトナシリーズの役職のページへ向けた
-    /// 写しも作る（テンプレ DSL の役職リンクも同じく、<see cref="LookupCache.ForOtonaRoleLinks"/> の写しで解決する）。
-    /// </summary>
-    private CreditTreeRenderer(
-        BuildContext ctx,
-        IConnectionFactory factory,
-        LookupCache lookup,
-        StaffNameLinkResolver staffLinkResolver,
-        bool otonaRoleLinks)
     {
         _ctx = ctx;
         _factory = factory;
         _lookup = lookup;
         _staffLinkResolver = staffLinkResolver;
-        _otonaRoleLinks = otonaRoleLinks;
-        _otonaRenderer = otonaRoleLinks
-            ? null
-            : new CreditTreeRenderer(ctx, factory, lookup.ForOtonaRoleLinks(), staffLinkResolver, otonaRoleLinks: true);
     }
 
     private static string Esc(string s) => WebUtility.HtmlEncode(s ?? "");
@@ -108,9 +78,6 @@ internal sealed class CreditTreeRenderer
     /// VOICE_CAST 系役職は専用統計ページ <c>/creators/voice-cast/</c> へ、それ以外は
     /// <c>/creators/roles/{role_code}/</c> へリンクする。<paramref name="roleCode"/> が NULL/空の場合は
     /// リンク化せずエスケープのみ。
-    /// オトナシリーズの作品のクレジット（<see cref="_otonaRoleLinks"/>）では、VOICE_CAST 系役職は <c>/creators/otona/voice-cast/</c> へ、
-    /// オトナシリーズの役職のページを持つ役職（<see cref="PathUtil.HasOtonaRolePage"/>）は <c>/creators/otona/roles/{role_code}/</c> へ
-    /// リンクし（本編にもある役職でも）、持たない役職は本編と同じ判定で出す。
     /// </summary>
     private string BuildRoleNameHtml(string? roleCode, string roleName, IReadOnlyDictionary<string, Role> roleMap)
     {
@@ -137,12 +104,7 @@ internal sealed class CreditTreeRenderer
         // どちらの URL も PathUtil に集約し、本レンダラ内に文字列リテラルでパスを持たない。
         bool isVoiceCast = r != null
                            && string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
-        if (_otonaRoleLinks)
-        {
-            if (isVoiceCast) return $"<a href=\"{PathUtil.CreatorsOtonaVoiceCastUrl()}\">{nameHtml}</a>";
-            if (PathUtil.HasOtonaRolePage(roleCode!)) return $"<a href=\"{PathUtil.CreatorsOtonaRoleUrl(roleCode!)}\">{nameHtml}</a>";
-        }
-        // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）はプレーンテキストで出す。
+        // 役職詳細ページを持たない役職（単発のイベント映像と、オトナシリーズ以外のスピンオフだけで使う役職）はプレーンテキストで出す。
         if (!isVoiceCast && !PathUtil.HasRolePage(roleCode!))
             return nameHtml;
         string url = isVoiceCast ? PathUtil.CreatorsVoiceCastUrl() : PathUtil.CreatorsRoleUrl(roleCode!);
@@ -262,10 +224,6 @@ internal sealed class CreditTreeRenderer
     /// プレビューと違い、見出し（&lt;h1&gt;）はテンプレ側で出すため本メソッドでは出さない。
     public async Task<string> RenderAsync(Credit credit, BuildLogger logger, CancellationToken ct = default)
     {
-        // オトナシリーズの作品のクレジットは、役職名をオトナシリーズの役職のページへリンクする写しで描く。
-        if (_otonaRenderer is not null && ResolveTemplateSeriesId(credit) is int creditSeriesId && _ctx.IsOtonaSeries(creditSeriesId))
-            return await _otonaRenderer.RenderAsync(credit, logger, ct).ConfigureAwait(false);
-
         var html = new StringBuilder();
 
         // クレジット階層は SiteDataLoader がビルド開始時に 1 度だけ 6 テーブル分の GetAllAsync で

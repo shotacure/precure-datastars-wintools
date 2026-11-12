@@ -9272,28 +9272,114 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   border-left: 1px solid var(--rtl-group-line);
 }
 .creators-root:not([data-entity-filter="all"]) .rtl-row { order: var(--rtl-flat, 0); }
-/* 年表の「TV・映画 / TVのみ / 映画のみ」（ボタンの見た目は個人・団体の絞り込みと共通）。ページのルートの data-media に合わせて、
-   TV の話・映画を描いていない行を隠す。会社の行は、「すべて」のときは所属の人に見える行があれば見出しとして残し、
-   個人・団体で絞り込んだときは自分の担当だけで決める。
-   ボタンはタブの下の段に置き、年表タブを開いているときだけ見せる。個人・団体の絞り込みの右に並ぶときは細い縦線で区切る。 */
-.rtl-media {
+/* 📺 TV・🎥 映画・🌙 オトナの出し分け（_work-kind-toggles.sbn。スタッフ一覧・役職詳細・声の出演一覧）。
+   ルートの data-wk-off に切っている種類が空白区切りで入り、行・節・役職・年表の行の data-wk（参加した種類）が、
+   切っていない種類に 1 つも当たらなければ隠す（切っている種類の組み合わせ 7 通りを、それぞれ「残りの種類がその行に無い」で書く）。
+   年表の会社の行は、「すべて」のときは所属の人に見える行があれば（data-wk-zone）見出しとして残し、
+   個人・団体で絞り込んだときは自分の担当だけで決める。 */
+[data-wk-off~="tv"] [data-wk]:not([data-wk~="movie"]):not([data-wk~="otona"]):not(.rtl-row-group-head),
+[data-wk-off~="tv"] .rtl-row-group-head[data-wk]:not([data-wk~="movie"]):not([data-wk~="otona"]):not([data-wk-zone~="movie"]):not([data-wk-zone~="otona"]),
+.creators-root[data-wk-off~="tv"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk]:not([data-wk~="movie"]):not([data-wk~="otona"]),
+[data-wk-off~="movie"] [data-wk]:not([data-wk~="tv"]):not([data-wk~="otona"]):not(.rtl-row-group-head),
+[data-wk-off~="movie"] .rtl-row-group-head[data-wk]:not([data-wk~="tv"]):not([data-wk~="otona"]):not([data-wk-zone~="tv"]):not([data-wk-zone~="otona"]),
+.creators-root[data-wk-off~="movie"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk]:not([data-wk~="tv"]):not([data-wk~="otona"]),
+[data-wk-off~="tv"][data-wk-off~="movie"] [data-wk]:not([data-wk~="otona"]):not(.rtl-row-group-head),
+[data-wk-off~="tv"][data-wk-off~="movie"] .rtl-row-group-head[data-wk]:not([data-wk~="otona"]):not([data-wk-zone~="otona"]),
+.creators-root[data-wk-off~="tv"][data-wk-off~="movie"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk]:not([data-wk~="otona"]),
+[data-wk-off~="otona"] [data-wk]:not([data-wk~="tv"]):not([data-wk~="movie"]):not(.rtl-row-group-head),
+[data-wk-off~="otona"] .rtl-row-group-head[data-wk]:not([data-wk~="tv"]):not([data-wk~="movie"]):not([data-wk-zone~="tv"]):not([data-wk-zone~="movie"]),
+.creators-root[data-wk-off~="otona"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk]:not([data-wk~="tv"]):not([data-wk~="movie"]),
+[data-wk-off~="tv"][data-wk-off~="otona"] [data-wk]:not([data-wk~="movie"]):not(.rtl-row-group-head),
+[data-wk-off~="tv"][data-wk-off~="otona"] .rtl-row-group-head[data-wk]:not([data-wk~="movie"]):not([data-wk-zone~="movie"]),
+.creators-root[data-wk-off~="tv"][data-wk-off~="otona"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk]:not([data-wk~="movie"]),
+[data-wk-off~="movie"][data-wk-off~="otona"] [data-wk]:not([data-wk~="tv"]):not(.rtl-row-group-head),
+[data-wk-off~="movie"][data-wk-off~="otona"] .rtl-row-group-head[data-wk]:not([data-wk~="tv"]):not([data-wk-zone~="tv"]),
+.creators-root[data-wk-off~="movie"][data-wk-off~="otona"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk]:not([data-wk~="tv"]),
+[data-wk-off~="tv"][data-wk-off~="movie"][data-wk-off~="otona"] [data-wk]:not(.rtl-row-group-head),
+[data-wk-off~="tv"][data-wk-off~="movie"][data-wk-off~="otona"] .rtl-row-group-head[data-wk],
+.creators-root[data-wk-off~="tv"][data-wk-off~="movie"][data-wk-off~="otona"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk] {
+  display: none;
+}
+/* 「初めて」で節を分ける一覧（役職順・初参加順・初担当順・初出演順・キャラクター別）の行は、種類ごとにその種類で初めての作品の節に置いてある。
+   置いた種類（data-wk-own）を切っているときと、それより早い初めてを持つ種類（data-wk-after）が 1 つでも入っているときは隠す。
+   見える行が無くなった節・組（data-wk-empty。_work-kind-toggles.sbn が付ける）も隠す。 */
+[data-wk-off~="tv"] [data-wk-own="tv"],
+[data-wk-off~="movie"] [data-wk-own="movie"],
+[data-wk-off~="otona"] [data-wk-own="otona"],
+[data-wk-on~="tv"] [data-wk-after~="tv"],
+[data-wk-on~="movie"] [data-wk-after~="movie"],
+[data-wk-on~="otona"] [data-wk-after~="otona"],
+[data-wk-on] [data-wk-empty] {
+  display: none;
+}
+/* 切っている種類の札と、年表の帯・点を隠す。細線（続けて参加した期間）と所属線は種類をまたいで引くので、1 つでも切ったら隠す。 */
+[data-wk-off~="tv"] .count-badges .count-pill-tv,
+[data-wk-off~="movie"] .count-badges .count-pill-movie,
+[data-wk-off~="otona"] .count-badges .count-pill-otona,
+[data-wk-off~="tv"] .rtl-seg:not(.rtl-seg-spinoff),
+[data-wk-off~="tv"] .rtl-rel:not(.rtl-rel-spinoff),
+[data-wk-off~="movie"] .rtl-movie,
+[data-wk-off~="movie"] .rtl-rel-movie,
+[data-wk-off~="otona"] .rtl-seg-spinoff,
+[data-wk-off~="otona"] .rtl-rel-spinoff,
+[data-wk-off~="tv"] .rtl-span,
+[data-wk-off~="movie"] .rtl-span,
+[data-wk-off~="otona"] .rtl-span,
+[data-wk-off~="tv"] .rtl-aff,
+[data-wk-off~="movie"] .rtl-aff,
+[data-wk-off~="otona"] .rtl-aff {
+  display: none;
+}
+/* 凡例も、切っている種類の項目と、細線の項目を隠す。 */
+[data-wk-off~="tv"] .rtl-legend li:has(> .rtl-key-tv),
+[data-wk-off~="movie"] .rtl-legend li:has(> .rtl-key-movie),
+[data-wk-off~="otona"] .rtl-legend li:has(> .rtl-key-spinoff),
+[data-wk-off~="tv"] .rtl-legend li:has(> .rtl-key-span),
+[data-wk-off~="movie"] .rtl-legend li:has(> .rtl-key-span),
+[data-wk-off~="otona"] .rtl-legend li:has(> .rtl-key-span) {
+  display: none;
+}
+[data-wk-only="otona"] .wk-timeline-otona .rtl-legend li:has(> .rtl-key-span) { display: inline-flex; }
+/* オトナシリーズの作品ごとの帯の線表（.wk-timeline-otona）は 🌙 だけを入れているとき（ルートの data-wk-only="otona"）に見せ、
+   そのあいだ年度の帯の線表（.wk-timeline-all）を隠す。作品ごとの帯の線表の中では、細線と所属線を隠さない。 */
+.wk-timeline-otona { display: none; }
+[data-wk-only="otona"] .wk-timeline-otona { display: block; }
+[data-wk-only="otona"] .wk-timeline-all { display: none; }
+[data-wk-only="otona"] .wk-timeline-otona .rtl-span,
+[data-wk-only="otona"] .wk-timeline-otona .rtl-aff { display: block; }
+/* ボタンは段の右に寄せる。入っている種類は枠と字を濃く、切っている種類は薄くして取り消し線。最後の 1 つは切れない。 */
+.wk-toggles {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin-left: auto;
 }
-.products-tabs:not([data-active-tab="timeline"]) .rtl-media { display: none; }
-.list-toolbar > .entity-filter + .rtl-media {
-  padding-left: 12px;
-  border-left: 1px solid var(--border);
+/* 段の右端は件数の並べ替えボタンで、出し分けのボタンはその左に少しあけて並べる。「プリキュアを演じた方のみ」が左にあるときは、その右に少しあける。 */
+.list-toolbar > .precure-only ~ .wk-toggles { margin-left: 14px; }
+.list-toolbar > .wk-toggles ~ .count-sort-btn { margin-left: 14px; }
+.wk-toggle {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 0.88em;
+  cursor: pointer;
+  text-decoration: line-through;
+  opacity: 0.7;
 }
-.products-tabs[data-active-tab="timeline"] .list-toolbar:has(> .rtl-media) { display: flex; }
-[data-media="tv"] .rtl-row:not([data-tv]):not(.rtl-row-group-head),
-[data-media="movie"] .rtl-row:not([data-movie]):not(.rtl-row-group-head),
-[data-media="tv"] .rtl-row-group-head:not([data-tv]):not([data-zone-tv]),
-[data-media="movie"] .rtl-row-group-head:not([data-movie]):not([data-zone-movie]),
-.creators-root[data-media="tv"]:not([data-entity-filter="all"]) .rtl-row-group-head:not([data-tv]),
-.creators-root[data-media="movie"]:not([data-entity-filter="all"]) .rtl-row-group-head:not([data-movie]) {
-  display: none;
+.wk-toggle.is-active {
+  text-decoration: none;
+  opacity: 1;
+  color: var(--fg);
+  border-color: var(--fg);
+}
+.wk-toggle.is-last { cursor: default; }
+.wk-toggle:hover:not(.is-active) { background: var(--surface-2, rgba(0, 0, 0, 0.04)); }
+.wk-toggle:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: 2px;
 }
 .rtl-row:hover .rtl-name-text,
 .rtl-name:focus-visible .rtl-name-text { text-decoration: underline; }
@@ -9648,8 +9734,7 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .creators-root[data-active-tab="roles"] .entity-filter {
   display: none;
 }
-.entity-filter-btn,
-.rtl-media-btn {
+.entity-filter-btn {
   appearance: none;
   border: 1px solid var(--border);
   background: transparent;
@@ -9659,17 +9744,14 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   font-size: 0.88em;
   cursor: pointer;
 }
-.entity-filter-btn:hover:not(.is-active),
-.rtl-media-btn:hover:not(.is-active) {
+.entity-filter-btn:hover:not(.is-active) {
   background: var(--surface-2, rgba(0, 0, 0, 0.04));
 }
-.entity-filter-btn.is-active,
-.rtl-media-btn.is-active {
+.entity-filter-btn.is-active {
   color: var(--fg);
   border-color: var(--fg);
 }
-.entity-filter-btn:focus-visible,
-.rtl-media-btn:focus-visible {
+.entity-filter-btn:focus-visible {
   outline: 2px solid var(--accent-pink, #ec4899);
   outline-offset: 2px;
 }
@@ -11007,7 +11089,7 @@ body.has-art-track-bar {
   margin-left: auto;
 }
 /* 並べ替えボタンだけの段で、ボタンが隠れているタブ（初参加順など）では段ごと詰める。 */
-.list-toolbar:not(:has(> .entity-filter, > .sort-toggle, > .precure-only, > .count-sort-btn:not([hidden]))) {
+.list-toolbar:not(:has(> .entity-filter, > .sort-toggle, > .precure-only, > .wk-toggles, > .count-sort-btn:not([hidden]))) {
   display: none;
 }
 /* 歴代プリキュア声優の「プリキュアを演じた方のみ」（全タブに効くスイッチ）。入れるとページのルートの data-precure-only で、

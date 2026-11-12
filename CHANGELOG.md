@@ -4,9 +4,9 @@
 
 ### 開発中（次回リリース）
 
-- **サイト：サイト内検索で、役職のページと書体のページを探せるようにした**（`BuildContext.SearchPages`〔新規〕・`SearchIndexGenerator`・`CreatorsGenerator`・`FontsGenerator`・`search.js`・`site.css`）：検索の種別に「役職」と「フォント」を足した。役職は本編・オトナシリーズ・音楽制作の役職のページで、英語名と、系譜でまとめた歴代の役職名でも当たる。オトナシリーズと音楽制作のページは、役職名の下にその旨を出す。書体はウェイトごとのページで、書体名の下にメーカー名を出す
+- **サイト：サイト内検索で、役職のページと書体のページを探せるようにした**（`BuildContext.SearchPages`〔新規〕・`SearchIndexGenerator`・`CreatorsGenerator`・`FontsGenerator`・`search.js`・`site.css`）：検索の種別に「役職」と「フォント」を足した。役職は役職詳細（スタッフの役職と音楽制作の役職）で、英語名と、系譜でまとめた歴代の役職名でも当たる。音楽制作の役職は、役職名の下にその旨を出す。書体はウェイトごとのページで、書体名の下にメーカー名を出す
 
-- **サイト：本編のスタッフ一覧・役職詳細・声の出演一覧に、載っている方のオトナシリーズの数を出すようにした。オトナシリーズの一覧・役職のページには、本編の数を全タブと年表に出す**（`CreatorsGenerator`・`RoleTimelineBuilder`・`creators-staff.sbn`・`creators-role-detail.sbn`・`creators-voice-cast.sbn`）：本編のページは各タブの行に 🌙 の札を足し、年表にオトナシリーズの話を藍の帯で重ねた。オトナシリーズのページは 📺・🎥 の札が無かった声の出演一覧の 4 タブにも札を足し、年表に本編の TV の話と映画を重ねた。どちらも、載せる顔ぶれ・並び・年表の「主な方」の判定は、そのページの範囲の分だけで決める。オトナシリーズの役職のページの年表は、横軸をオトナシリーズの作品ごとの帯から年度の帯に替え、載っている方の参加が無い年度は省いて切れ目を置く（声の出演一覧の年表も同じ軸にした）
+- **サイト：オトナシリーズだけのスタッフ一覧・声の出演一覧・役職のページをやめ、TV・映画と合わせた一覧に一本化した。見せる種類は「📺 TV / 🎥 映画 / 🌙 オトナ」のボタンで切り替える**（`CreatorsGenerator`・`RoleTimelineBuilder`・`CreatorListScope`・`PathUtil`・`EntityUrlRegistry`・`CreditTreeRenderer`・`LookupCache`・`InvolvementRowBuilder`・`SeriesGenerator`・`EpisodeGenerator`・`_work-kind-toggles.sbn`〔新規〕・`creators-staff.sbn`・`creators-role-detail.sbn`・`creators-voice-cast.sbn`・`_role-timeline.sbn`・`creators-landing.sbn`・`count-sort.js`・`role-timeline.js`・`view-state.js`・`site.css`）：スタッフ一覧・役職詳細・声の出演一覧に、オトナシリーズのクレジットも合わせて載せ、各行の札を 📺・🎥・🌙 に分けた。ボタンは全タブに効き、開いたときはすべて入っていて、最後の 1 つは切れない。切った種類の札と、その種類にしか参加していない方の行を隠す。「初めて」で節を分ける一覧（役職順・初参加順・初担当順・初出演順・キャラクター順）は、入っている種類の中で初めての作品の節に行を出す。年表はオトナシリーズの話を藍の帯で描き、🌙 だけを入れているときはオトナシリーズの作品ごとの帯の線表に切り替える。年表の「TV・映画 / TVのみ / 映画のみ」は、このボタンに置き換えた（`_role-timeline-media.sbn` を削除。URL の `#` の `media` は `works` になった）。`/creators/otona/…` の URL は同じ役割のページへ 301 で転送し、歴代クリエイターのページのオトナシリーズのカード 2 枚と、オトナシリーズの作品のクレジット・人物・企業のページからのリンクも役職詳細・声の出演一覧へ寄せた。人物・企業のページのパンくず、誕生日を記念日に出すかの判定、OGP カードの年表の判定は、今までどおり本編に参加した方だけで決める
 
 - **サイト：コラムの OGP カードの要約を、precure.news の記事のカードの要約と同じ書体で組む**（`ArticlesGenerator`）：筑紫新聞明朝 L の 80% 平体にした。今までは本文の書体だった
 

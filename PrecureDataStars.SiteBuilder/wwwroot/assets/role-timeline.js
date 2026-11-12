@@ -3,10 +3,10 @@
    内訳は行の data-sub（名前の下に添える 1 行。キャラクターの CV など）・data-period（参加期間）・
    data-works（作品ごとの参加。改行区切り）から組み立てる。名前にキーボードのフォーカスが来たときも行の下に出す。
    「主な方のみ」のスイッチ（.rtl-filter）は、切ると主な方でない行（.rtl-row-extra）も見せ、横の数を
-   「主な方 / 全員」で出す（個人・団体の絞り込みと TV・映画の絞り込みで隠れている行は数えない）。? はマウスを載せる・タップする・
+   「主な方 / 全員」で出す（個人・団体の絞り込みと TV・映画・オトナの出し分けで隠れている行は数えない）。? はマウスを載せる・タップする・
    フォーカスすると主な方の条件の吹き出しを出す。
-   「TV・映画 / TVのみ / 映画のみ」のボタン（.rtl-media-btn。ページのタブの下の段に置く）は、ページのルート（.products-tabs）の
-   data-media を切り替える（行の出し分けは site.css）。
+   役職詳細・声の出演一覧の 📺 TV・🎥 映画・🌙 オトナのボタン（_work-kind-toggles.sbn）で入っている種類（ルートの data-wk-on）に、
+   行の data-wk が 1 つも当たらない行は隠れている（行の出し分けは site.css）ので数えない。
    歴代プリキュア声優の「プリキュアを演じた方のみ」（ページのルートの data-precure-only）で隠れている行も数えない。ページから
    rtl-recount のイベントが来たら横の数を数え直す。 */
 (function () {
@@ -119,19 +119,6 @@
     countUpdaters.forEach(function (f) { f(); });
   });
 
-  // TV・映画の絞り込み。ボタンを押すとページのルートの data-media を替え、横の数を数え直す。
-  document.querySelectorAll('.rtl-media').forEach(function (group) {
-    var buttons = group.querySelectorAll('.rtl-media-btn');
-    var root = group.closest('.products-tabs') || document.body;
-    buttons.forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        root.setAttribute('data-media', btn.getAttribute('data-media-set'));
-        buttons.forEach(function (b) { b.classList.toggle('is-active', b === btn); });
-        countUpdaters.forEach(function (f) { f(); });
-      });
-    });
-  });
-
   // 「主な方のみ」のスイッチ。横の数を数え直す関数を返す（スイッチが無ければ null）。
   function setupFilter(sec) {
     var box = sec.querySelector('.rtl-filter');
@@ -146,16 +133,19 @@
     function updateCount() {
       var root = sec.closest('[data-entity-filter]');
       var filter = root ? root.getAttribute('data-entity-filter') : '';
-      var mediaRoot = sec.closest('[data-media]');
-      var media = mediaRoot ? mediaRoot.getAttribute('data-media') : 'all';
+      var wkRoot = sec.closest('[data-wk-on]');
+      var wkOn = wkRoot ? (wkRoot.getAttribute('data-wk-on') || '').split(/\s+/).filter(Boolean) : null;
       var precureOnly = !!sec.closest('[data-precure-only]');
       var main = 0, total = 0;
       rows.forEach(function (r) {
         var t = r.getAttribute('data-entity-type');
         // 絞り込み中（all 以外）は、その種類の行だけを数える（個人・団体、歌手・キャラクター・ユニット）。
         if (filter && filter !== 'all' && t !== filter) return;
-        // TV のみ・映画のみでは、その担当を描いた行だけを数える（見出しとして残した会社の行も、自分の担当で決める）。
-        if (media !== 'all' && !r.hasAttribute('data-' + media)) return;
+        // TV・映画・オトナのうち入っている種類の担当を描いた行だけを数える（見出しとして残した会社の行も、自分の担当で決める）。
+        if (wkOn && r.hasAttribute('data-wk')) {
+          var own = (r.getAttribute('data-wk') || '').split(/\s+/);
+          if (!wkOn.some(function (k) { return own.indexOf(k) >= 0; })) return;
+        }
         // 「プリキュアを演じた方のみ」では、その方の行だけを数える。
         if (precureOnly && !r.hasAttribute('data-precure-cast')) return;
         total++;

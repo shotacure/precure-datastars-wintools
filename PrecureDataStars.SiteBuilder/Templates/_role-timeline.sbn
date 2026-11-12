@@ -1,6 +1,7 @@
 {{## 年表タブの中身（担当・出演・参加の移り変わりの線表）。役職詳細・声の出演一覧・歌唱一覧・音楽制作一覧・
      作詞作曲編曲や音楽の役職詳細の年表タブ（切り替え）のパネルから
-     引数なしの include で取り込み、各ページのモデルの Timeline（RoleTimelineModel）を描く。
+     引数なしの include で取り込み、各ページのモデルの Timeline（RoleTimelineModel）を描く。1 ページに 2 つ描くとき（役職詳細・声の出演一覧の
+     オトナシリーズの作品ごとの帯の線表）は、呼び出し側が Timeline を差し替え、rtl_script_done を立ててから 2 つ目を取り込む（スクリプトの読み込みは 1 度だけ）。
      ・凡例と「主な方のみ」のスイッチ（主な方の条件は ? の吹き出し。横に主な方の数 / 全行の数。候補が 10 以下・全員を載せるページは出さない）のあとに、
        名前・年の目盛り・印（TV の話の帯 / 映画の点 / 歌の点 / 劇伴の点 /
        盤の四角 / 続けて参加した期間の細線）の線表を全行出す。主な方でない行（rtl-row-extra）は、スイッチが入っている間
@@ -11,10 +12,10 @@
        すぐ下に所属の人の行 rtl-row-member）で出し、「すべて」のときだけ字下げと地色でひとまとめに見せる。
        事業の引き継ぎでつながった会社は見出しの行を並べ、2 つ目からの会社の行（rtl-row-group-succ）は上の区切り線を引かない。
        個人・団体で絞り込んだときは、行の --rtl-flat（まとめる前の並びの位置）の順に並べ直す（site.css）。
-     ・TV の行と映画の行が両方あるとき（Timeline.HasMediaFilter）は、ページのタブの下の段に「TV・映画 / TVのみ / 映画のみ」の
-       ボタン（_role-timeline-media.sbn）を置き、行の data-tv / data-movie（その行に TV の話の帯・映画の点を描いたか。関連する
-       役職の担当は数えない）で、ページのルートの data-media に合わせて行を隠す（site.css。切り替えは role-timeline.js）。
-       会社の行は、所属の人の中に見える行があれば（data-zone-tv / data-zone-movie）見出しとして残す。
+     ・役職詳細・声の出演一覧では、行の data-wk（その行に本線の TV の話の帯・映画の点・オトナシリーズの話の帯を描いたか。関連する
+       役職の担当は数えない）を、タブの下の段の 📺 TV・🎥 映画・🌙 オトナのボタン（_work-kind-toggles.sbn）で入っている種類
+       （ルートの data-wk-on）に照らし、1 つも当たらない行を隠す。切っている種類の帯・点も隠す（site.css）。
+       会社の行は、所属の人の中に見える行があれば（data-wk-zone）見出しとして残す。
      ・歴代プリキュア声優では、プリキュアを演じた方の行に data-precure-cast を付け、ページの「プリキュアを演じた方のみ」（ルートの
        data-precure-only）で行を出し分ける（site.css）。入れている間は「主な方のみ」を切って触れなくし（ページのインライン JS）、
        行はプリキュアのマスタの順（--rtl-precure-order）に並べ直す。
@@ -69,7 +70,7 @@
     </div>
     <ol class="rtl-rows">
       {{~ for r in Timeline.Rows ~}}
-      <li class="rtl-row{{ if r.LaneCount > 1 }} rtl-lanes-{{ r.LaneCount }}{{ end }}{{ if !r.IsMain }} rtl-row-extra{{ end }}{{ if r.IsGroupHead }} rtl-row-group-head{{ end }}{{ if r.IsGroupSuccessor }} rtl-row-group-succ{{ end }}{{ if r.IsGroupMember }} rtl-row-member{{ end }}"{{ if Timeline.HasGroups || r.PrecureOrder > 0 }} style="{{ if Timeline.HasGroups }}--rtl-flat:{{ r.FlatOrder }}{{ if r.PrecureOrder > 0 }};{{ end }}{{ end }}{{ if r.PrecureOrder > 0 }}--rtl-precure-order:{{ r.PrecureOrder }}{{ end }}"{{ end }}{{ if Timeline.HasMediaFilter }}{{ if r.HasTv }} data-tv{{ end }}{{ if r.HasMovie }} data-movie{{ end }}{{ if r.ZoneHasTv }} data-zone-tv{{ end }}{{ if r.ZoneHasMovie }} data-zone-movie{{ end }}{{ end }}{{ if r.IsPrecureCast }} data-precure-cast{{ end }} data-entity-type="{{ r.EntityKind }}" data-period="{{ r.PeriodLabel | html.escape }}" data-works="{{ r.WorksText | html.escape }}"{{ if r.EntitySubLabel != "" }} data-sub="{{ r.EntitySubLabel | html.escape }}"{{ end }}{{ if r.AffiliationText != "" }} data-aff="{{ r.AffiliationText | html.escape }}"{{ end }}>
+      <li class="rtl-row{{ if r.LaneCount > 1 }} rtl-lanes-{{ r.LaneCount }}{{ end }}{{ if !r.IsMain }} rtl-row-extra{{ end }}{{ if r.IsGroupHead }} rtl-row-group-head{{ end }}{{ if r.IsGroupSuccessor }} rtl-row-group-succ{{ end }}{{ if r.IsGroupMember }} rtl-row-member{{ end }}"{{ if Timeline.HasGroups || r.PrecureOrder > 0 }} style="{{ if Timeline.HasGroups }}--rtl-flat:{{ r.FlatOrder }}{{ if r.PrecureOrder > 0 }};{{ end }}{{ end }}{{ if r.PrecureOrder > 0 }}--rtl-precure-order:{{ r.PrecureOrder }}{{ end }}"{{ end }} data-wk="{{ if r.HasTv }}tv {{ end }}{{ if r.HasMovie }}movie {{ end }}{{ if r.HasOtona }}otona{{ end }}"{{ if r.IsGroupHead }} data-wk-zone="{{ if r.ZoneHasTv }}tv {{ end }}{{ if r.ZoneHasMovie }}movie {{ end }}{{ if r.ZoneHasOtona }}otona{{ end }}"{{ end }}{{ if r.IsPrecureCast }} data-precure-cast{{ end }} data-entity-type="{{ r.EntityKind }}" data-period="{{ r.PeriodLabel | html.escape }}" data-works="{{ r.WorksText | html.escape }}"{{ if r.EntitySubLabel != "" }} data-sub="{{ r.EntitySubLabel | html.escape }}"{{ end }}{{ if r.AffiliationText != "" }} data-aff="{{ r.AffiliationText | html.escape }}"{{ end }}>
         <a class="rtl-name" href="{{ r.EntityUrl }}">
           {{~ if r.EntityKind == "company" ~}}<span class="rtl-badge rtl-badge-company" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" fill-rule="evenodd"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>
           {{~ else if r.EntityKind == "unit" ~}}<span class="rtl-badge rtl-badge-unit" aria-hidden="true"><svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><circle cx="5.2" cy="5.4" r="2.4"/><circle cx="10.8" cy="5.4" r="2.4"/><path d="M0.6 14a4.6 4.6 0 0 1 9.2 0z"/><path d="M6.2 14a4.6 4.6 0 0 1 9.2 0z"/></svg></span>
@@ -79,7 +80,7 @@
           {{~ end ~}}<span class="rtl-name-text{{ if r.HasAffChip }} rtl-name-aff{{ end }}"{{ if r.AffColor != "" }} style="--aff-c:{{ r.AffColor }}"{{ end }}>{{ r.EntityName | html.escape }}</span></a>
         <div class="rtl-track" aria-hidden="true">
           {{~ if r.LaneCount > 1 ~}}<div class="rtl-lane">{{~ end ~}}
-          {{~ for m in r.Related ~}}{{ if m.IsMovie }}{{ if !r.MovieLane }}<span class="rtl-rel-movie" style="left:{{ m.Left }}%;--rel-c:{{ m.Color }}{{ if m.Shift != 0 }};--dy:{{ m.Shift }}{{ end }}"></span>{{ end }}{{ else }}<span class="rtl-rel" style="left:{{ m.Left }}%;width:{{ m.Width }}%;--rel-c:{{ m.Color }}"></span>{{ end }}{{~ end ~}}
+          {{~ for m in r.Related ~}}{{ if m.IsMovie }}{{ if !r.MovieLane }}<span class="rtl-rel-movie" style="left:{{ m.Left }}%;--rel-c:{{ m.Color }}{{ if m.Shift != 0 }};--dy:{{ m.Shift }}{{ end }}"></span>{{ end }}{{ else }}<span class="rtl-rel{{ if m.IsSpinOff }} rtl-rel-spinoff{{ end }}" style="left:{{ m.Left }}%;width:{{ m.Width }}%;--rel-c:{{ m.Color }}"></span>{{ end }}{{~ end ~}}
           {{~ for m in r.Spans ~}}<span class="rtl-span" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}
           {{~ for m in r.Segments ~}}<span class="rtl-seg" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}
           {{~ if !r.SpinOffLane ~}}{{~ for m in r.SpinOffSegments ~}}<span class="rtl-seg rtl-seg-spinoff" style="left:{{ m.Left }}%;width:{{ m.Width }}%"></span>{{~ end ~}}{{~ end ~}}
@@ -97,4 +98,6 @@
     </ol>
   </div>
 </div>
+{{~ if !rtl_script_done ~}}
 <script src="{{ asset_url "/assets/role-timeline.js" }}" defer></script>
+{{~ end ~}}

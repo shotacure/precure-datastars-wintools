@@ -682,10 +682,7 @@ public sealed class SeriesGenerator
                         RepRoleCode = repRoleCode,
                         // テンプレ側はこの組み立て済み URL のみリンク href に使う。
                         // data-role-code 属性はバッジ色分け CSS の都合で RoleCode（実コード）を使う。
-                        // オトナシリーズの作品は、オトナシリーズの役職のページ（無ければ本編の役職詳細）を指す。
-                        RoleUrl = isOtonaKind
-                            ? PathUtil.CreatorsRoleUrlInWork(repRoleCode, true)
-                            : PathUtil.CreatorsRoleUrl(repRoleCode),
+                        RoleUrl = PathUtil.CreatorsRoleUrl(repRoleCode),
                         RoleLabel = byLabel.Key,
                         Members = byLabel.ToList()
                     });
@@ -1456,7 +1453,7 @@ public sealed class SeriesGenerator
         var content = new SeriesDetailModel
         {
             Series = seriesView,
-            EpisodeStaffRoleUrls = EpisodeStaffRoleUrlSet.For(_ctx.IsOtonaSeries(s.SeriesId)),
+            EpisodeStaffRoleUrls = EpisodeStaffRoleUrlSet.Main,
             BgmLinks = bgmLinks,
             Episodes = epRows,
             RelatedWorks = relatedWorks,
@@ -1806,14 +1803,14 @@ public sealed class SeriesGenerator
             // 絵コンテ／演出のキー集合が一致（両方非空＋同一）のとき、テンプレで統合表示を許可するフラグ。
             // 同じ人物が両方を兼任しているクレジット表現に対して「絵コンテ・演出 ○○」の 1 表記にまとめる。
             StoryboardDirectorMerged = seenSb.Count > 0 && seenDr.Count > 0 && seenSb.SetEquals(seenDr),
-            // 作画監督と同じカードの役職の札は緑（作画監督と同じ色）。リンク先はオトナシリーズの役職のページがあればそちら。
+            // 作画監督と同じカードの役職の札は緑（作画監督と同じ色）。
             AnimationCardRoles = animCardBadges
                 .Where(x => x.Names.Count > 0)
                 .Select(x => new EpisodeStaffBadge
                 {
                     Label = x.Label,
                     RoleCode = EpisodeStaffCards.AnimationCardBadgeRoleCode,
-                    RoleUrl = PathUtil.CreatorsRoleUrlInWork(x.RoleCode, isOtonaWork),
+                    RoleUrl = PathUtil.CreatorsRoleUrl(x.RoleCode),
                     NamesHtml = string.Join("、", x.Names)
                 })
                 .ToList()
@@ -1822,7 +1819,7 @@ public sealed class SeriesGenerator
         {
             result.ArtLabel = EpisodeStaffCards.OtonaArtLabel;
             result.ArtRoleCode = EpisodeStaffCards.ArtDesignCode;
-            result.ArtRoleUrl = PathUtil.CreatorsRoleUrlInWork(EpisodeStaffCards.ArtDesignCode, isOtonaWork);
+            result.ArtRoleUrl = PathUtil.CreatorsRoleUrl(EpisodeStaffCards.ArtDesignCode);
         }
         // 本メソッドの結果を episode_id キーでキャッシュ。
         // 後段 EpisodesIndexGenerator で GetEpisodeStaffSummaries() 経由参照される。
@@ -2077,8 +2074,7 @@ public sealed class SeriesGenerator
                     // 小文字化する。現行挙動どおり spec.Code をそのまま対象にする
                     // （系譜代表への置換は行わない）。data-role-code 属性側は
                     // バッジ色分け CSS の都合で実コード（大文字）のまま使う。
-                    // オトナシリーズの作品は、オトナシリーズの役職のページを持つ役職ならそちらへ（PathUtil.CreatorsRoleUrlInWork）。
-                    RoleUrl = PathUtil.CreatorsRoleUrlInWork(spec.Code, _ctx.IsOtonaSeries(series.SeriesId)),
+                    RoleUrl = PathUtil.CreatorsRoleUrl(spec.Code),
                     RoleLabel = byLabel.Key,
                     Members = byLabel.ToList()
                 });
@@ -2340,8 +2336,7 @@ public sealed class SeriesGenerator
 
     /// <summary>
     /// シリーズ詳細のエピソード一覧の各行に並ぶスタッフの札（脚本・絵コンテ・演出・作画監督）のリンク先。
-    /// 本編の作品は本編の役職詳細（<see cref="Main"/>）。オトナシリーズの作品は、オトナシリーズの役職のページを持つ役職なら
-    /// そのページを指す。美術の札と、オトナシリーズの作品の作画監督のカードの札のリンク先は、行ごとに
+    /// どの作品も役職詳細（<see cref="Main"/>）を指す。美術の札と、オトナシリーズの作品の作画監督のカードの札のリンク先は、行ごとに
     /// <see cref="EpisodeStaffSummary"/> が持つ。
     /// </summary>
     private sealed class EpisodeStaffRoleUrlSet
@@ -2351,7 +2346,7 @@ public sealed class SeriesGenerator
         public string EpisodeDirector { get; init; } = "";
         public string AnimationDirector { get; init; } = "";
 
-        /// <summary>本編の作品の札のリンク先（本編の役職詳細）。</summary>
+        /// <summary>札のリンク先（役職詳細）。</summary>
         public static readonly EpisodeStaffRoleUrlSet Main = new()
         {
             Screenplay = "/creators/roles/screenplay/",
@@ -2359,21 +2354,6 @@ public sealed class SeriesGenerator
             EpisodeDirector = "/creators/roles/episode_director/",
             AnimationDirector = "/creators/roles/animation_director/"
         };
-
-        /// <summary>作品に合わせた札のリンク先。オトナシリーズの作品でなければ <see cref="Main"/>。</summary>
-        public static EpisodeStaffRoleUrlSet For(bool isOtonaWork)
-        {
-            if (!isOtonaWork) return Main;
-            static string Otona(string code, string mainUrl)
-                => PathUtil.HasOtonaRolePage(code) ? PathUtil.CreatorsOtonaRoleUrl(code) : mainUrl;
-            return new EpisodeStaffRoleUrlSet
-            {
-                Screenplay = Otona("SCREENPLAY", Main.Screenplay),
-                Storyboard = Otona("STORYBOARD", Main.Storyboard),
-                EpisodeDirector = Otona("EPISODE_DIRECTOR", Main.EpisodeDirector),
-                AnimationDirector = Otona("ANIMATION_DIRECTOR", Main.AnimationDirector)
-            };
-        }
     }
 
     /// <summary>シリーズ詳細ページのクレジットセクション 1 ブロック分の描画ビュー。

@@ -381,6 +381,27 @@ public sealed class EntityUrlRegistry
         foreach (var (from, to) in RetiredPageRedirects)
             reg._legacyRedirects.Add(new LegacyRedirect(from, to));
 
+        // オトナシリーズだけのスタッフ一覧・声の出演一覧・役職のページ（/creators/otona/…）は、TV・映画と合わせた一覧に一本化した。
+        // 以前の URL を同じ役割のページへ転送する。役職のページは、オトナシリーズのクレジットに出る役職（系譜の代表）のうち
+        // 役職詳細を持つものの分だけ載せる（声の出演・表記のみ・主題歌の役職と歌唱系は役職詳細を持たないので載せない）。
+        reg._legacyRedirects.Add(new LegacyRedirect("/creators/otona/staff", PathUtil.CreatorsStaffUrl()));
+        reg._legacyRedirects.Add(new LegacyRedirect("/creators/otona/voice-cast", PathUtil.CreatorsVoiceCastUrl()));
+        const string roleUrlPrefix = "/creators/roles/";
+        var otonaRoleUrls = index.ByPersonAlias.Values.Concat(index.ByCompanyAlias.Values).Concat(index.ByLogo.Values)
+            .SelectMany(list => list)
+            .Where(inv => ctx.IsOtonaSeries(inv.SeriesId) && !string.IsNullOrEmpty(inv.RoleCode))
+            .Select(inv => inv.RoleCode)
+            .Distinct(StringComparer.Ordinal)
+            .Where(code => ctx.RoleByCode.TryGetValue(code, out var role)
+                && role.RoleFormatKind is not ("VOICE_CAST" or "NOTICE" or "THEME_SONG")
+                && !PathUtil.IsSingerRole(code) && PathUtil.HasRolePage(code))
+            .Select(PathUtil.CreatorsRoleUrl)
+            .Where(url => url.StartsWith(roleUrlPrefix, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(url => url, StringComparer.Ordinal);
+        foreach (var url in otonaRoleUrls)
+            reg._legacyRedirects.Add(new LegacyRedirect("/creators/otona/roles/" + url[roleUrlPrefix.Length..].TrimEnd('/'), url));
+
         // 劇伴の入っていない作品には劇伴のページ（/bgms/{slug}/）が無いので、その URL は作品のページへ転送する
         // （以前のクロールや推測で開かれた URL を 404 にしない）。劇伴のページを作る条件は MusicGenerator と同じ（劇伴が 1 件以上）。
         foreach (var s in ctx.Series)

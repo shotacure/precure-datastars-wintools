@@ -157,6 +157,8 @@ public sealed class CreatorsGenerator
         public (Role Role, HashSet<string> MemberCodes)? StaffCluster { get; init; }
         /// <summary>スタッフ一覧の役職順タブに積む行（役職詳細を書いたとき）。</summary>
         public RoleIndexEntry? StaffEntry { get; set; }
+        /// <summary>音楽の役職詳細を持つ役職で、作品のクレジットの担当（音楽の役職詳細の「作品のクレジット」に載せる）。それ以外は null。</summary>
+        public EntityRowSet? CreditRowSetForMusic { get; set; }
     }
 
     /// <summary>
@@ -260,6 +262,34 @@ public sealed class CreatorsGenerator
     }
 
     private readonly CreatorListMembership _lists = new();
+
+    /// <summary>
+    /// 音楽の役職詳細を持つ役職（role_code）ごとの、作品のクレジットの担当。役職詳細の並列フェーズで積み、GenerateMusicProduction が
+    /// 音楽の役職詳細の「作品のクレジット」に載せる。
+    /// </summary>
+    private readonly Dictionary<string, EntityRowSet> _creditRowSetsByMusicRole = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 音楽の役職詳細（/creators/roles/{code}/。GenerateMusicProduction が書く）を持つ役職。音楽クレジットの区分を持つ役職のうち、
+    /// 歌唱系と楽曲の作家（作詞・作曲・編曲）を除き、音楽クレジットか曲のクレジットに人物・企業/団体の名義の行があるもの。
+    /// </summary>
+    private HashSet<string> MusicPageRoleCodes(
+        IReadOnlyList<Role> allRoles, IReadOnlyList<SongCredit> allSongCredits, IReadOnlyDictionary<int, int> personIdByAlias)
+    {
+        var withEntity = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var mc in _ctx.MusicCredits.BySong.Values.Concat(_ctx.MusicCredits.ByRecording.Values)
+                     .Concat(_ctx.MusicCredits.BySession.Values).Concat(_ctx.MusicCredits.ByProduct.Values).SelectMany(list => list))
+            if (EntityKeyOf(mc, personIdByAlias) is not null) withEntity.Add(mc.RoleCode);
+        foreach (var sc in allSongCredits)
+            if (PersonKey(sc.PersonAliasId, personIdByAlias) is not null) withEntity.Add(sc.CreditRole);
+        return allRoles
+            .Where(r => !string.IsNullOrEmpty(r.MusicCreditGroup)
+                        && !PathUtil.IsSingerRole(r.RoleCode)
+                        && Array.IndexOf(SongCreditRoleOrder, r.RoleCode) < 0
+                        && withEntity.Contains(r.RoleCode))
+            .Select(r => r.RoleCode)
+            .ToHashSet(StringComparer.Ordinal);
+    }
     /// <summary>役職詳細・声の出演一覧の年表に主な方の行として載った人物・企業/団体の URL（OGP カードの年表を出すかの判定に渡す）。</summary>
     private readonly HashSet<string> _siteTimelineEntityUrls = new(StringComparer.Ordinal);
 
@@ -366,6 +396,10 @@ public sealed class CreatorsGenerator
                             && !string.Equals(rr.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal))
                 .ToHashSet(StringComparer.Ordinal);
 
+        // 音楽の役職詳細（GenerateMusicProduction が書く）を持つ役職。作品のクレジットにも出る役職は、スタッフの役職詳細を別に書かず、
+        // 作品のクレジットの担当を音楽の役職詳細に「作品のクレジット」として載せる（同じ URL に 2 つのページを書かない）。
+        var musicPageRoles = MusicPageRoleCodes(allRoles, allSongCredits, personIdByAlias);
+
         // 役職ごとの集計と役職詳細ページの書き出しは、役職どうしで独立なので並列に行い、結果を役職の順の配列に置く。
         // ページを書いた記録（サマリ・進捗・sitemap）と索引への積み上げは、そのあと役職の順で逐次に行う
         // （各話と同じ 2 相方式。sitemap.xml の並びと索引の順をビルドごとに揺らさない）。
@@ -421,7 +455,11 @@ public sealed class CreatorsGenerator
             // 役職詳細ページも生成せず、「役職順」タブの索引（roleIndexEntries）にも積まない。
             if (rows.Count == 0) return;
 
-            outcome.WrittenUrl = GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline, otonaTimeline);
+            // 音楽の役職詳細を持つ役職は、作品のクレジットの担当をそちらへ渡す（ページは音楽の側で書く）。
+            if (musicPageRoles.Contains(role.RoleCode))
+                outcome.CreditRowSetForMusic = rowSet;
+            else
+                outcome.WrittenUrl = GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline, otonaTimeline);
 
             // 役職詳細ページへのリンクは PathUtil 経由で組み立て、URL パス上のコードを
             // 小文字化する。テンプレ側はこの組み立て済み URL のみ参照する。
@@ -442,6 +480,7 @@ public sealed class CreatorsGenerator
             }
             if (outcome.MusicEntry is not null) musicRoleEntries.Add(outcome.MusicEntry);
             if (outcome.StaffEntry is not null) roleIndexEntries.Add(outcome.StaffEntry);
+            if (outcome.CreditRowSetForMusic is not null) _creditRowSetsByMusicRole[rankableRoles[i].RoleCode] = outcome.CreditRowSetForMusic;
         }
 
         roleIndexEntries = OrderRoleIndexEntries(roleIndexEntries);
@@ -649,7 +688,8 @@ public sealed class CreatorsGenerator
         IReadOnlyList<Company> allCompanies,
         IReadOnlyDictionary<int, CompanyAlias> companyAliasById)
         => BuildEntityRowSet(
-            inv => memberCodes.Contains(inv.RoleCode) ? inv.RoleCode : null,
+            // 主題歌・挿入歌の使用を経由した関与（曲の作家・歌唱）は数えない（スタッフ一覧と同じ）。曲のクレジットは音楽の役職詳細に出る。
+            inv => inv.EntryKind is not ("SONG_CREDIT" or "RECORDING_SINGER") && memberCodes.Contains(inv.RoleCode) ? inv.RoleCode : null,
             aliasIdsByPersonId, allPersons, companyAliasesByCompany, logosByCompanyAlias,
             allCompanies, companyAliasById, repNameMap: null, withWorksTooltip: true,
             roleUsageNote: agg => BuildRoleUsageNote(agg, pageRoleCode, roleByCode),
@@ -1679,7 +1719,8 @@ public sealed class CreatorsGenerator
                 }
                 var rows = musicRowsByRole.TryGetValue(role.RoleCode, out var mr) ? mr : new List<MusicCredit>();
                 var songCreditRows = allSongCredits.Where(c => string.Equals(c.CreditRole, role.RoleCode, StringComparison.Ordinal)).ToList();
-                var detail = BuildMusicRoleDetailRows(rows, songCreditRows, personIdByAlias, personById, minRecIdBySong, musicDates);
+                _creditRowSetsByMusicRole.TryGetValue(role.RoleCode, out var creditRowSet);
+                var detail = BuildMusicRoleDetailRows(rows, songCreditRows, personIdByAlias, personById, minRecIdBySong, musicDates, creditRowSet);
                 if (detail.Count == 0) continue;
                 GenerateMusicRoleDetail(role, detail);
                 entries.Add(new RoleIndexEntry
@@ -1709,9 +1750,12 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<int, int> personIdByAlias,
         IReadOnlyDictionary<int, Person> personById,
         IReadOnlyDictionary<int, int> minRecIdBySong,
-        MusicTimelineDates musicDates)
+        MusicTimelineDates musicDates,
+        EntityRowSet? creditRowSet = null)
     {
         var accByEntity = new Dictionary<(char Kind, int Id), MusicRoleTargetAccumulator>();
+        // 作品のクレジットの担当（役職が作品のクレジットにも出るとき）。年表に TV の話・映画を重ねるのに使う。
+        var creditEntityByKey = new Dictionary<(char Kind, int Id), RoleTimelineEntity>();
         // 年表タブの入力（担当先を曲・録音回・盤の単位で、初めて盤に収められた日・発売日に置く）。
         var timeline = new MusicTimelineCollector(_ctx, musicDates);
         MusicRoleTargetAccumulator AccOf((char Kind, int Id) key)
@@ -1758,6 +1802,26 @@ public sealed class CreatorsGenerator
             timeline.AddSong(key, c.SongId);
         }
 
+        // 作品のクレジットの担当（TV の話・映画・オトナシリーズの話）。行と年表の入力は同じ並びで 1 件ずつ対になっている。
+        if (creditRowSet is not null)
+        {
+            for (int i = 0; i < creditRowSet.CountRows.Count && i < creditRowSet.TimelineEntities.Count; i++)
+            {
+                var row = creditRowSet.CountRows[i];
+                var ce = creditRowSet.TimelineEntities[i];
+                (char Kind, int Id) key = string.Equals(row.EntityKind, "person", StringComparison.Ordinal) ? ('P', row.EntityId) : ('C', row.EntityId);
+                var acc = AccOf(key);
+                foreach (var (sid, eid) in ce.Episodes)
+                {
+                    if (eid == 0 || !_ctx.EpisodeById.TryGetValue(eid, out var ep)) continue;
+                    acc.AddCreditEpisode(sid, ep.SeriesEpNo, ep.OnAirDate.ToDateTime(TimeOnly.MinValue));
+                }
+                foreach (var sid in ce.MovieSeriesIds)
+                    if (_ctx.SeriesById.TryGetValue(sid, out var mv)) acc.AddCreditMovie(sid, mv.StartDate.ToDateTime(TimeOnly.MinValue));
+                creditEntityByKey[key] = ce;
+            }
+        }
+
         var result = new List<MusicRoleDetailRow>();
         foreach (var (key, acc) in accByEntity)
         {
@@ -1777,22 +1841,40 @@ public sealed class CreatorsGenerator
                 .OrderBy(i => i.Sort).ThenBy(i => i.Title, StringComparer.Ordinal)
                 .Select(i => new MusicRoleTarget { Title = i.Title, Url = i.Url })
                 .ToList();
-            var bgmSeries = acc.Bgm.Keys.Where(_ctx.SeriesById.ContainsKey).ToList();
+            // 作品のクレジット：1 作品 1 行（TV 系は担当した話数の範囲を添える）。作品の放送・公開順。
+            var credits = acc.CreditEpisodes.Keys.Concat(acc.CreditMovies)
+                .Distinct()
+                .Where(_ctx.SeriesById.ContainsKey)
+                .OrderBy(sid => _ctx.SeriesStartDate(sid).DayNumber)
+                .ThenBy(sid => sid)
+                .Select(sid => new MusicRoleTarget
+                {
+                    Title = _ctx.SeriesById[sid].Title,
+                    Url = PathUtil.SeriesUrl(_ctx.SeriesById[sid].Slug),
+                    Sub = acc.CreditEpisodes.TryGetValue(sid, out var nos) ? EpisodeRangeCompressor.Compress(nos) : ""
+                })
+                .ToList();
+            // 作品の数は、劇伴の作品と作品のクレジットの作品を合わせて数える（同じ作品は 1 つ）。本線の TV（📺）・映画（🎥）・オトナシリーズ（🌙）に分ける。
+            var works = acc.Bgm.Keys.Concat(acc.CreditEpisodes.Keys).Concat(acc.CreditMovies)
+                .Where(_ctx.SeriesById.ContainsKey)
+                .ToHashSet();
             var row = new MusicRoleDetailRow
             {
                 EntityKind = ent.Kind,
                 Name = ent.Name,
                 NameKana = ent.Kana,
                 Url = ent.Url,
+                CreditItems = credits,
                 BgmItems = bgm,
                 SongItems = Ordered(acc.Songs.Values),
                 ProductItems = Ordered(acc.Products.Values),
-                TvWorkCount = bgmSeries.Count(sid => !_ctx.IsMovieKindSeries(sid)),
-                MovieWorkCount = bgmSeries.Count(sid => _ctx.IsMovieKindSeries(sid)),
+                TvWorkCount = works.Count(sid => !_ctx.IsMovieKindSeries(sid) && !_ctx.IsOtonaSeries(sid)),
+                MovieWorkCount = works.Count(sid => _ctx.IsMovieKindSeries(sid)),
+                OtonaWorkCount = works.Count(sid => _ctx.IsOtonaSeries(sid)),
                 SongCount = acc.SongIds.Count,
                 ProductCount = acc.Products.Count
             };
-            row.Count = row.TvWorkCount + row.MovieWorkCount + row.SongCount + row.ProductCount;
+            row.Count = row.TvWorkCount + row.MovieWorkCount + row.OtonaWorkCount + row.SongCount + row.ProductCount;
             if (row.Count == 0) continue;
             // 初参加：日付が最も早い担当先（同日・日付不明はシリーズの放送開始が早い方）。
             var debut = acc.Candidates
@@ -1801,7 +1883,10 @@ public sealed class CreatorsGenerator
                 .First();
             row.FirstSort = debut.Sort;
             row.DebutSeriesId = debut.SeriesId;
-            row.TimelineEntity = timeline.ToEntity(key, ent.Kind, ent.Name, ent.Url, debut.Sort.Ticks);
+            row.TimelineEntity = WithCreditEpisodes(
+                timeline.ToEntity(key, ent.Kind, ent.Name, ent.Url, debut.Sort.Ticks),
+                creditEntityByKey.TryGetValue(key, out var creditEntity) ? creditEntity : null,
+                ent.Kind, ent.Name, ent.Url, debut.Sort.Ticks);
             result.Add(row);
         }
         return result
@@ -1812,7 +1897,28 @@ public sealed class CreatorsGenerator
             .ToList();
     }
 
-    /// <summary>音楽クレジットの役職詳細で、人物・団体 1 つ分の担当先（劇伴・歌・盤）を集める。</summary>
+    /// <summary>
+    /// 音楽の役職詳細の年表の入力に、作品のクレジットの担当（TV の話・映画）を重ねる。どちらかが無ければもう片方をもとに作る。両方無ければ null。
+    /// </summary>
+    private static RoleTimelineEntity? WithCreditEpisodes(
+        RoleTimelineEntity? music, RoleTimelineEntity? credit, string kind, string name, string url, long firstSortPos)
+    {
+        if (credit is null) return music;
+        return new RoleTimelineEntity
+        {
+            EntityKind = kind,
+            EntityName = name,
+            EntityUrl = url,
+            FirstSortPos = firstSortPos,
+            Episodes = credit.Episodes,
+            MovieSeriesIds = credit.MovieSeriesIds,
+            Songs = music?.Songs ?? Array.Empty<RoleTimelinePoint>(),
+            Bgms = music?.Bgms ?? Array.Empty<RoleTimelinePoint>(),
+            Products = music?.Products ?? Array.Empty<RoleTimelinePoint>()
+        };
+    }
+
+    /// <summary>音楽クレジットの役職詳細で、人物・団体 1 つ分の担当先（作品のクレジット・劇伴・歌・盤）を集める。</summary>
     private sealed class MusicRoleTargetAccumulator
     {
         /// <summary>担当先 1 件（歌・盤）。同じリンク先は日付の早い方を残す。</summary>
@@ -1830,6 +1936,27 @@ public sealed class CreatorsGenerator
         public readonly Dictionary<string, Item> Products = new(StringComparer.Ordinal);
         /// <summary>初参加の候補（担当先ごとの日付と作品）。</summary>
         public readonly List<(DateTime Sort, int? SeriesId)> Candidates = new();
+        /// <summary>作品のクレジットで担当した TV 系の話（series_id → 話数）。</summary>
+        public readonly Dictionary<int, SortedSet<int>> CreditEpisodes = new();
+        /// <summary>作品のクレジットで担当した映画（series_id）。</summary>
+        public readonly HashSet<int> CreditMovies = new();
+
+        public void AddCreditEpisode(int seriesId, int epNo, DateTime sort)
+        {
+            if (!CreditEpisodes.TryGetValue(seriesId, out var nos))
+            {
+                nos = new SortedSet<int>();
+                CreditEpisodes[seriesId] = nos;
+            }
+            nos.Add(epNo);
+            Candidates.Add((sort, seriesId));
+        }
+
+        public void AddCreditMovie(int seriesId, DateTime sort)
+        {
+            CreditMovies.Add(seriesId);
+            Candidates.Add((sort, seriesId));
+        }
 
         public void AddBgm(int seriesId, int sessionNo, string sessionName, DateTime sort)
         {
@@ -3849,15 +3976,21 @@ public sealed class CreatorsGenerator
         /// <summary>初参加の担当先の日付（根拠の盤の発売日）と作品。</summary>
         public DateTime FirstSort { get; set; }
         public int? DebutSeriesId { get; set; }
-        /// <summary>劇伴を担当した TV 系の作品数（📺）と映画系の本数（🎥）。</summary>
+        /// <summary>
+        /// 担当した作品の数。劇伴の作品と作品のクレジットの作品を合わせて数え（同じ作品は 1 つ）、本線の TV シリーズ（📺）・映画（🎥）・
+        /// オトナシリーズ（🌙）に分ける。
+        /// </summary>
         public int TvWorkCount { get; set; }
         public int MovieWorkCount { get; set; }
+        public int OtonaWorkCount { get; set; }
         /// <summary>担当した歌の曲数（🎵。録音違いは 1 曲に数える）。</summary>
         public int SongCount { get; set; }
         /// <summary>担当した盤の点数（💿）。</summary>
         public int ProductCount { get; set; }
-        /// <summary>件数の合計（📺 + 🎥 + 🎵 + 💿）。参加数順の並べ替えに使う。</summary>
+        /// <summary>件数の合計（📺 + 🎥 + 🌙 + 🎵 + 💿）。参加数順の並べ替えに使う。</summary>
         public int Count { get; set; }
+        /// <summary>作品のクレジット：1 作品 1 行（Sub は TV 系で担当した話数の範囲。映画は空）。</summary>
+        public IReadOnlyList<MusicRoleTarget> CreditItems { get; set; } = Array.Empty<MusicRoleTarget>();
         /// <summary>劇伴：1 作品 1 行（Sub は担当した録音回を「・」でつないだもの）。</summary>
         public IReadOnlyList<MusicRoleTarget> BgmItems { get; set; } = Array.Empty<MusicRoleTarget>();
         /// <summary>歌：曲・録音ごとに 1 行。</summary>

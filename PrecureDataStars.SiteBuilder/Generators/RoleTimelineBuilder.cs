@@ -1133,9 +1133,10 @@ internal sealed record RoleTimelineRules(
             "（同じ曲数なら担当が早い方）"
         });
 
-    /// <summary>音楽の役職詳細（演奏など）：一覧に載る人物・団体すべて（細線は 13 週以内の間隔でつなぐ）。</summary>
+    /// <summary>音楽の役職詳細（演奏など）：一覧に載る人物・団体すべて（細線は 13 週以内の間隔でつなぐ）。作品のクレジットのオトナシリーズの話は藍の帯で分ける。</summary>
     public static readonly RoleTimelineRules MusicRole = new(
-        91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, ShowAllUpTo: 0, "担当", NoFilter);
+        91, WindowDays: 0, MinCreditsInWindow: 0, IncludeOpeningCredit: false, IncludeAll: true, ShowAllUpTo: 0, "担当", NoFilter)
+    { SeparateSpinOffs = true };
 
     /// <summary>
     /// 人物詳細・企業/団体詳細：その人・その会社の役職・役柄の行すべて（続けて参加した期間の線は 13 週以内の間隔でつなぐ）。

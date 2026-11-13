@@ -2996,6 +2996,7 @@ CREATE TABLE `episode_theme_song_singers` (
   `slash_person_alias_id`     int              DEFAULT NULL,
   `slash_character_alias_id`  int              DEFAULT NULL,
   `slash_voice_person_alias_id` int            DEFAULT NULL,
+  `voice_masked_text`         varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '声優名を伏せて出た画面の字（「？？？」など）。NULL なら伏せていない。声優の名義は正体の人につないだまま持つ',
   `preceding_separator`       varchar(8)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `affiliation_text`          varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `cv_label`                  varchar(8)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,

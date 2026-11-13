@@ -59,7 +59,8 @@ public sealed class EpisodeThemeSongSingersRepository : RepositoryBase
               s.voice_person_alias_id    AS VoicePersonAliasId,
               s.slash_person_alias_id    AS SlashPersonAliasId,
               s.slash_character_alias_id AS SlashCharacterAliasId,
-              s.slash_voice_person_alias_id AS SlashVoicePersonAliasId
+              s.slash_voice_person_alias_id AS SlashVoicePersonAliasId,
+              s.voice_masked_text        AS VoiceMaskedText
             FROM episode_theme_song_singers s
             WHERE s.episode_id        = @episodeId
               AND s.is_broadcast_only = @isBroadcastOnly

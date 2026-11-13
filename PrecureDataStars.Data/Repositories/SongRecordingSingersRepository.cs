@@ -439,14 +439,15 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
                     // 2 人目の声優がいれば「(CV:◯◯ / △△)」と並べ、2 人目も人物リンク化する。
                     cvStart = sb.Length;
                     sb.Append('(').Append(System.Net.WebUtility.HtmlEncode(SongRecordingSingerDisplay.CvLabelOf(r.CvLabel, cvLabelOverride)));
-                    var html = await lookup.LookupPersonAliasHtmlAsync(vpid).ConfigureAwait(false);
-                    sb.Append(html ?? "");
+                    var voice = new System.Text.StringBuilder();
+                    voice.Append(await lookup.LookupPersonAliasHtmlAsync(vpid).ConfigureAwait(false) ?? "");
                     if (r.SlashVoicePersonAliasId is int svpid)
                     {
-                        sb.Append(" / ");
+                        voice.Append(" / ");
                         var slashHtml = await lookup.LookupPersonAliasHtmlAsync(svpid).ConfigureAwait(false);
-                        sb.Append(slashHtml ?? "");
+                        voice.Append(slashHtml ?? "");
                     }
+                    sb.Append(WrapMaskedVoiceHtml(voice.ToString(), r.VoiceMaskedText));
                     sb.Append(')');
                 }
             }
@@ -463,6 +464,18 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         return parts;
     }
 
+    /// <summary>
+    /// 声優名を伏せて出た画面の字（<see cref="HtmlRow.VoiceMaskedText"/>）があれば、声優の部分を
+    /// 「伏せ字 (正名義)」の形にくるむ。クレジットの名前の伏せ字（サイトの CreditTreeRenderer の staff-masked）と同じ組み立てで、
+    /// 正名義は人物詳細へのリンクを含んだ HTML のまま括弧に入れる。伏せ字が無ければ <paramref name="voiceHtml"/> をそのまま返す。
+    /// </summary>
+    private static string WrapMaskedVoiceHtml(string voiceHtml, string? masked)
+    {
+        if (string.IsNullOrEmpty(masked)) return voiceHtml;
+        return $"<span class=\"staff-masked\" title=\"クレジットでは伏せられた表記\">{System.Net.WebUtility.HtmlEncode(masked)}</span> "
+             + $"<span class=\"staff-masked-actual\">({voiceHtml})</span>";
+    }
+
     /// <summary>HTML 版 GetDisplayHtmlAsync 用の SQL 戻り値受け取り DTO（<see cref="BuildHtmlPartsAsync"/> の入力）。</summary>
     internal sealed class HtmlRow
     {
@@ -477,6 +490,11 @@ public sealed class SongRecordingSingersRepository : RepositoryBase
         public int? SlashPersonAliasId { get; set; }
         public int? SlashCharacterAliasId { get; set; }
         public int? SlashVoicePersonAliasId { get; set; }
+        /// <summary>
+        /// 声優名を伏せて出た画面の字（episode_theme_song_singers.voice_masked_text。「？？？」など）。
+        /// song_recording_singers には無いので録音の歌唱者では常に null。
+        /// </summary>
+        public string? VoiceMaskedText { get; set; }
         /// <summary>ユニット名義のメンバーを開くか（song_recording_singers.expand_unit_members。episode_theme_song_singers には無いので常に false）。</summary>
         public bool ExpandUnitMembers { get; set; }
     }

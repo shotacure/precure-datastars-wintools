@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：エピソードのクレジットの主題歌のカードで、声優名を伏せて出た歌唱者を画面どおりに出せるようにした**（`episode_theme_song_singers.voice_masked_text`〔新規〕・マイグレーション `v1.20.1_add_episode_singer_voice_masked.sql`・`EpisodeThemeSongSingersRepository`・`SongRecordingSingersRepository.BuildHtmlPartsAsync`）：「キュアズキューン(CV：？？？)」のように声優名を伏せた歌の行を、声優の名義は正体の人につないだまま、クレジットの名前の伏せ字と同じ「？？？ (正名義)」の形で出す。入力欄は無く SQL で入れる
+
 - **サイト：作品詳細・各話の詳細・トップページに、Amazon で売られている商品の枠を出せるようにした**（`series_shop_items`〔新規〕・マイグレーション `v1.20.1_series_shop_items.sql`・`SeriesShopItem`・`SeriesShopItemsRepository`・`PaListing`〔新規〕・`PaResourceSet.Offers`〔新規〕・AmazonSync の `--shop-check`・SiteBuilder の `--publish-shop-items`・`ShopItemsFile`〔新規〕・`ShopItemsPublisher`〔新規〕・`shop-box.js`〔新規〕・`BuildContext.ShopItems`・`SeriesGenerator`・`EpisodeGenerator`・`HomeGenerator`・`PageRenderer`・`_layout.sbn`・`scripts/scheduled-shop-check.ps1`〔新規〕・`scripts/register-shop-check-task.ps1`〔新規〕・`scripts/deploy.ps1`）：作品ごとに、枠に出す商品（ASIN・商品名・媒体の札・発売日・並び順）を表に持つ。行は SQL で入れる。音楽商品のほか、商品の表に無い Blu-ray も ASIN だけで載せられる。枠はその作品の作品詳細と各話の詳細の基本情報の下、トップページの音楽商品の発売予定の上に出る。人物・キャラクター・企業のページには出さない。
   - 枠に出すのは、Amazon で売られていると確かめた行だけ。AmazonSync の `--shop-check` が Creators API で出品を調べ、新品を Amazon.co.jp 本体が売っていて、在庫ありか予約受付中で、カートに入る出品があるときだけ「売られている」とする。中古・マーケットプレイスの出品・在庫切れは「売られていない」とする。通信に失敗した回は行を書き換えない。
   - 枠の中身はページの HTML に入れず、`/shop-items.json` に書く。ページは空の置き場だけを持ち、開いたときに `shop-box.js` がこのファイルを読んで枠を描く。売られている行が無ければ枠ごと出ない。フッターの Amazon についての注記は、枠が出たときだけ見せる。

@@ -36,9 +36,14 @@ public sealed class SitemapLastmodManifest
     /// </summary>
     /// <param name="pages">(URL パス, 出力ファイルの絶対パス) の列。書き出し順。</param>
     /// <param name="buildTimeIso">変化／新規ページに付ける当該ビルドの時刻（ISO-8601 / W3C Datetime）。</param>
+    /// <param name="hashOf">
+    /// 出力ファイルの絶対パス → 中身の MD5（16 進）。書く時に取った印を渡す（<c>OutputWriter.Md5Of</c>）。
+    /// null を返したファイルと、省いたときは、ファイルを読んで求める。
+    /// </param>
     public LastmodResolveResult Resolve(
         IReadOnlyList<(string UrlPath, string OutputFilePath)> pages,
-        string buildTimeIso)
+        string buildTimeIso,
+        Func<string, string?>? hashOf = null)
     {
         var previous = LoadPrevious();
         var next = new Dictionary<string, ManifestEntry>(pages.Count, StringComparer.Ordinal);
@@ -47,7 +52,8 @@ public sealed class SitemapLastmodManifest
 
         foreach (var (urlPath, outputFilePath) in pages)
         {
-            string hash = ComputeFileHashOrEmpty(outputFilePath);
+            // マニフェストの印は大文字の 16 進で持つ。
+            string hash = hashOf?.Invoke(outputFilePath)?.ToUpperInvariant() ?? ComputeFileHashOrEmpty(outputFilePath);
             string lastmod;
             // ハッシュが取得でき、かつ前回と一致したページだけ lastmod を据え置く。
             // ハッシュ取得不可（ファイル欠落など）は安全側で「変化扱い」＝当該ビルド時刻にする。

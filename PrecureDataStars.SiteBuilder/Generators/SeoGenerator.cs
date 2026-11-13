@@ -125,7 +125,8 @@ public sealed class SeoGenerator
             .ToList();
         var manifest = new SitemapLastmodManifest(
             SitemapLastmodManifest.DeriveManifestPath(_config.OutputDirectory));
-        var lastmod = manifest.Resolve(pages, buildTimeIso);
+        // 印は各ページを書く時に取ってあるので、出力のファイルを読み返さない。
+        var lastmod = manifest.Resolve(pages, buildTimeIso, _output.Md5Of);
         _ctx.Logger.Info(
             $"sitemap lastmod: 据え置き {lastmod.Unchanged} / 更新 {lastmod.Changed} / 新規 {lastmod.Added}");
 

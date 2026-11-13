@@ -93,10 +93,10 @@ public sealed class S3DeployService
         var listWatch = System.Diagnostics.Stopwatch.StartNew();
         var listing = ListAllObjectsAsync(s3, bucket, ct).ContinueWith(t => { listWatch.Stop(); return t; }, ct).Unwrap();
         var md5Watch = System.Diagnostics.Stopwatch.StartNew();
-        var localMd5 = await Task.Run(() => ComputeLocalMd5(outputDir), ct).ConfigureAwait(false);
+        var (localMd5, readCount) = await Task.Run(() => ComputeLocalMd5(outputDir), ct).ConfigureAwait(false);
         md5Watch.Stop();
         var s3Etags = await listing.ConfigureAwait(false);
-        _logger.Info($"Compare          : S3 の一覧 {s3Etags.Count} 件 {listWatch.Elapsed.TotalSeconds:0.0} 秒 / 手元の MD5 {localMd5.Count} 件 {md5Watch.Elapsed.TotalSeconds:0.0} 秒（同時に進める）");
+        _logger.Info($"Compare          : S3 の一覧 {s3Etags.Count} 件 {listWatch.Elapsed.TotalSeconds:0.0} 秒 / 手元の MD5 {localMd5.Count} 件（うち読んで求めた {readCount} 件）{md5Watch.Elapsed.TotalSeconds:0.0} 秒（同時に進める）");
 
         // 2) アップロード対象（新規 or 内容変化）を抽出。並びはローカルのパスの順（ログと計画を毎回同じ順にする）。
         var localKeys = new HashSet<string>(StringComparer.Ordinal);
@@ -255,16 +255,33 @@ public sealed class S3DeployService
     }
 
     /// <summary>
-    /// 出力ディレクトリの全ファイルの (S3 のキー, パス, MD5) を、パスの順に返す。MD5 は論理コア数で並列に求める。
+    /// 出力ディレクトリの全ファイルの (S3 のキー, パス, MD5) を、パスの順に返す。
+    /// MD5 は、ビルドが書く時に取って残した台帳（<see cref="OutputWriter.LoadLedger"/>）から引く。台帳に無いファイルと、
+    /// 大きさか更新時刻が台帳と違うファイル（台帳の外で書き換えられたもの）だけを、論理コア数で並列に読んで求める。
+    /// 戻り値の ReadCount は読んで求めた件数。
     /// </summary>
-    private static List<(string Key, string Path, string Md5)> ComputeLocalMd5(string outputDir)
+    private static (List<(string Key, string Path, string Md5)> Files, int ReadCount) ComputeLocalMd5(string outputDir)
     {
-        var paths = Directory.EnumerateFiles(outputDir, "*", SearchOption.AllDirectories).ToArray();
-        var md5s = new string[paths.Length];
-        Parallel.For(0, paths.Length, i => md5s[i] = ComputeMd5Hex(paths[i]));
-        return paths
-            .Select((path, i) => (Path.GetRelativePath(outputDir, path).Replace('\\', '/'), path, md5s[i]))
+        var ledger = OutputWriter.LoadLedger(outputDir);
+        var files = new DirectoryInfo(outputDir).EnumerateFiles("*", SearchOption.AllDirectories).ToArray();
+        var md5s = new string[files.Length];
+        int read = 0;
+        Parallel.For(0, files.Length, i =>
+        {
+            var file = files[i];
+            if (ledger.TryGetValue(file.FullName, out var stamp)
+                && stamp.Length == file.Length && stamp.MtimeTicks == file.LastWriteTimeUtc.Ticks)
+            {
+                md5s[i] = stamp.Md5;
+                return;
+            }
+            md5s[i] = ComputeMd5Hex(file.FullName);
+            Interlocked.Increment(ref read);
+        });
+        var result = files
+            .Select((file, i) => (Path.GetRelativePath(outputDir, file.FullName).Replace('\\', '/'), file.FullName, md5s[i]))
             .ToList();
+        return (result, read);
     }
 
     /// <summary>アップロード対象を並列で PutObject する。</summary>

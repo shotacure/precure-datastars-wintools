@@ -357,6 +357,10 @@ public sealed class SiteBuilderPipeline
             reporter.EndSection();
         }
 
+        // 書いたファイルの中身の印を台帳へ残す（次のビルドとデプロイが、出力を読み返さずに差分を決めるのに使う）。
+        // ピンポイントビルドは一部のファイルしか書かないので、前回までの台帳に今回の分を重ねる。
+        output.SaveLedger(keepPrevious: !string.IsNullOrEmpty(config.PageFilter));
+
         // まだ出さない話（予告も雑誌の発売もまだの話）が出力に残っていないかの点検。出力の掃除の後に、出力の全体を照らす。
         int prereleaseHits = PrereleaseOutputGuard.Check(ctx, config.OutputDirectory);
         if (ctx.HiddenEpisodes.Count > 0)

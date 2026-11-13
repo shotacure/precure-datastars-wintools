@@ -18,14 +18,27 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 ///     孤児削除（ローカルに無い S3 オブジェクトの削除）がそのまま効く。</description></item>
 /// </list>
 /// ページの並列レンダリングから同時に呼ばれる。出力先はページごとに別なので、記録だけを並行辞書で持てばよい。
+/// <para>
+/// 書いたファイルの中身の印（MD5）は、書く時に手元のバイト列から取って控え、ビルドの終わりに台帳
+/// （<see cref="LedgerPathFor"/>。出力の隣のファイル）へ残す。sitemap の更新日の判定とデプロイの差分の判定は
+/// この印を使い、出力のファイルを読み返さない。次のビルドは台帳を読み、ファイルの大きさと更新時刻が台帳と同じなら
+/// 中身も台帳の印のとおりとみなして、既存のファイルを読まずに「変わらない」を決める。大きさか更新時刻が違う
+/// ファイル（台帳の外で書き換えられたもの）は、台帳を信じずに読んで確かめる。
+/// </para>
 /// </summary>
 public sealed class OutputWriter
 {
     /// <summary><see cref="File.WriteAllText(string, string)"/> と同じ UTF-8（BOM なし）。</summary>
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
-    /// <summary>今回の出力に属するファイル（絶対パス。Windows のパスなので大文字小文字を区別しない）。</summary>
-    private readonly ConcurrentDictionary<string, byte> _files = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// 今回の出力に属するファイル（絶対パス。Windows のパスなので大文字小文字を区別しない）と、その中身の印。
+    /// 印が null のファイルは <see cref="Register"/> で記録しただけのもので、要るときに読んで求める。
+    /// </summary>
+    private readonly ConcurrentDictionary<string, OutputFileStamp?> _files = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>前回までのビルドが残した台帳（絶対パス → 中身の印）。</summary>
+    private readonly IReadOnlyDictionary<string, OutputFileStamp> _previous;
 
     private int _written;
     private int _unchanged;
@@ -33,6 +46,7 @@ public sealed class OutputWriter
     public OutputWriter(string outputRoot)
     {
         Root = Path.GetFullPath(outputRoot);
+        _previous = LoadLedger(Root);
     }
 
     /// <summary>出力ディレクトリの絶対パス。</summary>
@@ -50,14 +64,26 @@ public sealed class OutputWriter
     /// <summary>バイト列を書く。同じ中身のファイルがあれば書かない。戻り値は書いたかどうか。</summary>
     public bool WriteBytes(string path, byte[] bytes)
     {
-        var full = Register(path);
-        if (HasSameContent(full, bytes))
+        var full = Path.GetFullPath(path);
+        string md5 = Md5Hex(bytes);
+        var info = new FileInfo(full);
+        if (info.Exists && info.Length == bytes.Length)
         {
-            Interlocked.Increment(ref _unchanged);
-            return false;
+            // 台帳どおりのファイル（大きさと更新時刻が同じ）は印どうしを比べ、そうでなければ読んで比べる。
+            long mtime = info.LastWriteTimeUtc.Ticks;
+            bool same = _previous.TryGetValue(full, out var prev) && prev.Length == info.Length && prev.MtimeTicks == mtime
+                ? string.Equals(prev.Md5, md5, StringComparison.Ordinal)
+                : File.ReadAllBytes(full).AsSpan().SequenceEqual(bytes);
+            if (same)
+            {
+                _files[full] = new OutputFileStamp(md5, info.Length, mtime);
+                Interlocked.Increment(ref _unchanged);
+                return false;
+            }
         }
         PathUtil.EnsureParentDirectory(full);
         File.WriteAllBytes(full, bytes);
+        _files[full] = new OutputFileStamp(md5, bytes.Length, File.GetLastWriteTimeUtc(full).Ticks);
         Interlocked.Increment(ref _written);
         return true;
     }
@@ -68,17 +94,26 @@ public sealed class OutputWriter
     /// </summary>
     public bool CopyFrom(string sourcePath, string path)
     {
-        var full = Register(path);
+        var full = Path.GetFullPath(path);
         var source = new FileInfo(sourcePath);
         var target = new FileInfo(full);
-        if (target.Exists && target.Length == source.Length && target.LastWriteTimeUtc == source.LastWriteTimeUtc)
+        long mtime = source.LastWriteTimeUtc.Ticks;
+        if (target.Exists && target.Length == source.Length && target.LastWriteTimeUtc.Ticks == mtime)
         {
+            // 写さずに済ませるときの印は台帳から引く。台帳に無いか、台帳と違うファイルなら読んで求める。
+            string known = _previous.TryGetValue(full, out var prev) && prev.Length == target.Length && prev.MtimeTicks == mtime
+                ? prev.Md5
+                : Md5Hex(File.ReadAllBytes(full));
+            _files[full] = new OutputFileStamp(known, target.Length, mtime);
             Interlocked.Increment(ref _unchanged);
             return false;
         }
+        // 元のファイルを 1 度だけ読み、印を取ってから書く（写した後に読み返さない）。
+        var bytes = File.ReadAllBytes(sourcePath);
         PathUtil.EnsureParentDirectory(full);
-        File.Copy(sourcePath, full, overwrite: true);
+        File.WriteAllBytes(full, bytes);
         File.SetLastWriteTimeUtc(full, source.LastWriteTimeUtc);
+        _files[full] = new OutputFileStamp(Md5Hex(bytes), bytes.Length, mtime);
         Interlocked.Increment(ref _written);
         return true;
     }
@@ -90,9 +125,87 @@ public sealed class OutputWriter
     public string Register(string path)
     {
         var full = Path.GetFullPath(path);
-        _files.TryAdd(full, 0);
+        _files.TryAdd(full, null);
         return full;
     }
+
+    /// <summary>
+    /// 今回の出力として記録したファイルの中身の印（MD5。小文字の 16 進）。記録していないファイルは null。
+    /// <see cref="Register"/> で記録しただけのファイルは、ここで読んで求める。
+    /// </summary>
+    public string? Md5Of(string path)
+    {
+        var full = Path.GetFullPath(path);
+        if (!_files.TryGetValue(full, out var stamp)) return null;
+        if (stamp is not null) return stamp.Md5;
+        var info = new FileInfo(full);
+        if (!info.Exists) return null;
+        var read = new OutputFileStamp(Md5Hex(File.ReadAllBytes(full)), info.Length, info.LastWriteTimeUtc.Ticks);
+        _files[full] = read;
+        return read.Md5;
+    }
+
+    /// <summary>
+    /// 出力ディレクトリに対応する台帳のパス（出力の兄弟。sitemap の lastmod の記録と同じ置き方）。
+    /// 出力ディレクトリの中には置かない（S3 へ上がらないように）。
+    /// </summary>
+    public static string LedgerPathFor(string outputDirectory)
+        => Path.GetFullPath(outputDirectory).TrimEnd('/', '\\') + ".files.json";
+
+    /// <summary>
+    /// 台帳を読む（絶対パス → 中身の印）。無いか読めなければ空（すべてのファイルを読んで確かめることになるだけで、害は無い）。
+    /// </summary>
+    public static IReadOnlyDictionary<string, OutputFileStamp> LoadLedger(string outputDirectory)
+    {
+        var root = Path.GetFullPath(outputDirectory);
+        var result = new Dictionary<string, OutputFileStamp>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var path = LedgerPathFor(root);
+            if (!File.Exists(path)) return result;
+            var loaded = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, OutputFileStamp>>(File.ReadAllBytes(path));
+            if (loaded is null) return result;
+            foreach (var (relative, stamp) in loaded)
+            {
+                if (stamp is null || string.IsNullOrEmpty(stamp.Md5)) continue;
+                result[Path.GetFullPath(Path.Combine(root, relative))] = stamp;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or UnauthorizedAccessException)
+        {
+            result.Clear();
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// 今回の出力の印を台帳へ残す。全体ビルドでは今回の出力に属するファイルだけを残す（<see cref="PruneOrphans"/> の後に呼ぶ）。
+    /// ピンポイントビルド（<c>--page</c>）では、前回までの台帳に今回書いた分を重ねる（<paramref name="keepPrevious"/>）。
+    /// 一時ファイルに書いてから置き換えるので、途中で止まっても台帳は壊れない。
+    /// </summary>
+    public void SaveLedger(bool keepPrevious)
+    {
+        var entries = new SortedDictionary<string, OutputFileStamp>(StringComparer.Ordinal);
+        string Relative(string full) => Path.GetRelativePath(Root, full).Replace('\\', '/');
+        if (keepPrevious)
+            foreach (var (full, stamp) in _previous)
+                entries[Relative(full)] = stamp;
+        foreach (var (full, stamp) in _files)
+        {
+            // 印を取っていないファイルは台帳に載せない（次のビルドで読んで確かめる）。
+            if (stamp is null) entries.Remove(Relative(full));
+            else entries[Relative(full)] = stamp;
+        }
+
+        var path = LedgerPathFor(Root);
+        var temp = $"{path}.{Guid.NewGuid():N}.tmp";
+        File.WriteAllBytes(temp, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(entries));
+        File.Move(temp, path, overwrite: true);
+    }
+
+    /// <summary>バイト列の MD5（小文字の 16 進。S3 の ETag と比べる形）。</summary>
+    private static string Md5Hex(byte[] bytes)
+        => Convert.ToHexString(System.Security.Cryptography.MD5.HashData(bytes)).ToLowerInvariant();
 
     /// <summary>そのファイルが今回の出力として記録済みか（前回の出力の残りではないか）。</summary>
     public bool IsTracked(string path) => _files.ContainsKey(Path.GetFullPath(path));
@@ -185,11 +298,13 @@ public sealed class OutputWriter
         return renamed;
     }
 
-    /// <summary>同じ場所に同じ中身のファイルがあるか。大きさが違えば読まずに不一致とする。</summary>
-    private static bool HasSameContent(string full, byte[] bytes)
-    {
-        var info = new FileInfo(full);
-        if (!info.Exists || info.Length != bytes.Length) return false;
-        return File.ReadAllBytes(full).AsSpan().SequenceEqual(bytes);
-    }
 }
+
+/// <summary>出力のファイル 1 つの中身の印。台帳（<see cref="OutputWriter.LedgerPathFor"/>）に残す。</summary>
+/// <param name="Md5">中身の MD5（小文字の 16 進）。</param>
+/// <param name="Length">ファイルの大きさ（バイト）。</param>
+/// <param name="MtimeTicks">ファイルの更新時刻（UTC の Ticks）。</param>
+public sealed record OutputFileStamp(
+    [property: System.Text.Json.Serialization.JsonPropertyName("h")] string Md5,
+    [property: System.Text.Json.Serialization.JsonPropertyName("l")] long Length,
+    [property: System.Text.Json.Serialization.JsonPropertyName("t")] long MtimeTicks);

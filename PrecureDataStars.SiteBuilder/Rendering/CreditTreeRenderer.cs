@@ -145,14 +145,27 @@ internal sealed class CreditTreeRenderer
         return $"<span class=\"staff-masked\" title=\"クレジットでは伏せられた表記\">{Esc(masked)}</span> <span class=\"staff-masked-actual\">({nameHtml})</span>";
     }
 
-    /// <summary>企業屋号（company_alias）の表示名を、親企業詳細ページへのリンク済み HTML に変換する。</summary>
+    /// <summary>
+    /// 企業屋号（company_alias）の表示名を、親企業詳細ページへのリンク済み HTML に変換する。
+    /// 名義に画面で小さめの字で出ている末尾（<see cref="CompanyAlias.CreditSmallSuffix"/>。「01(ゼロワン)」の「(ゼロワン)」）があり、
+    /// 表示名の末尾がそれと一致するときは、手前の部分だけをリンクにし、末尾をリンクの後ろに <c>span.credit-small-suffix</c> で出す。
+    /// </summary>
     private async Task<string> BuildCompanyAliasHtmlAsync(int? aliasId, string displayName)
     {
         if (string.IsNullOrEmpty(displayName)) return "";
         if (!aliasId.HasValue) return Esc(displayName);
         int? cid = await _lookup.LookupCompanyIdFromAliasAsync(aliasId.Value).ConfigureAwait(false);
-        if (!cid.HasValue) return Esc(displayName);
-        return $"<a href=\"{PathUtil.CompanyUrl(cid.Value)}\">{Esc(displayName)}</a>";
+        string? smallSuffix = _lookup.LookupCompanyAliasCreditSmallSuffix(aliasId.Value);
+        string body = displayName;
+        string suffixHtml = "";
+        if (smallSuffix is not null && displayName.Length > smallSuffix.Length
+            && displayName.EndsWith(smallSuffix, StringComparison.Ordinal))
+        {
+            body = displayName[..^smallSuffix.Length];
+            suffixHtml = $"<span class=\"credit-small-suffix\">{Esc(smallSuffix)}</span>";
+        }
+        if (!cid.HasValue) return Esc(body) + suffixHtml;
+        return $"<a href=\"{PathUtil.CompanyUrl(cid.Value)}\">{Esc(body)}</a>{suffixHtml}";
     }
 
     /// <summary>

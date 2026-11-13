@@ -40,6 +40,13 @@ public sealed class CompanyAlias
     /// <summary>クレジットに出す名前。<see cref="DisplayTextOverride"/> があればそれ、無ければ <see cref="Name"/>。</summary>
     public string CreditDisplayName() => string.IsNullOrWhiteSpace(DisplayTextOverride) ? Name : DisplayTextOverride!;
 
+    /// <summary>
+    /// クレジットの表記の末尾のうち、画面で小さめの字で出ている部分（任意。例：名義「01(ゼロワン)」の「(ゼロワン)」）。
+    /// サイトのクレジットでは、名前の末尾がこの字と一致するとき、手前の部分だけを会社へのリンクにし、
+    /// この部分をリンクの後ろに所属の表記と同じ小さめの字で出す。NULL・不一致なら名前全体をそのまま出す。
+    /// </summary>
+    public string? CreditSmallSuffix { get; set; }
+
     /// <summary>前任名義 ID（屋号変更前の名義を指す自参照、任意）。</summary>
     public int? PredecessorAliasId { get; set; }
 

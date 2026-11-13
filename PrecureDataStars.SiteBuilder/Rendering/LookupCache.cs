@@ -216,6 +216,10 @@ internal sealed class LookupCache : ILookupCache
         return Task.FromResult<string?>($"<a href=\"{url}\">{escapedLabel}</a>");
     }
 
+    /// <summary>屋号（company_alias）→ クレジットの表記の末尾のうち画面で小さめの字で出ている部分（<see cref="CompanyAlias.CreditSmallSuffix"/>）。無ければ null。</summary>
+    internal string? LookupCompanyAliasCreditSmallSuffix(int aliasId)
+        => _companyAliasById.TryGetValue(aliasId, out var ca) && !string.IsNullOrEmpty(ca.CreditSmallSuffix) ? ca.CreditSmallSuffix : null;
+
     /// <summary>屋号（company_alias）→ クレジットの会社・ロゴのエントリに出す名前（クレジットでの表記があればそれ、無ければ名義の名前）。未登録なら null。</summary>
     internal Task<string?> LookupCompanyAliasCreditNameAsync(int aliasId)
         => Task.FromResult<string?>(_companyAliasById.TryGetValue(aliasId, out var ca) ? ca.CreditDisplayName() : null);

@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **スキーマ・サイト：会社の名義の末尾のうち画面で小さめの字で出ている部分を持ち、クレジットで小さめの字で出すようにした**（`company_aliases.credit_small_suffix`〔新規〕・`db/migrations/v1.20.1_add_company_alias_credit_small_suffix.sql`〔新規〕・`CompanyAlias.CreditSmallSuffix`〔新規〕・`LookupCache.LookupCompanyAliasCreditSmallSuffix`〔新規〕・`CreditTreeRenderer.BuildCompanyAliasHtmlAsync`・`site.css`）：画面では「01(ゼロワン)」のカッコの中が小さめの字なのに、サイトでは名前全体を同じ大きさのリンクで出していた。出す名前の末尾がこの字と一致するとき、手前の部分だけをリンクにし、末尾をリンクの後ろに所属の表記と同じ大きさで出す。
+
 - **サイト：歴代記録に「1 話のクレジット」を足し、声の出演人数と参加スタッフ数の多い回・少ない回を出すようにした**（`RecordsGenerator.CountEpisodeCredits`〔新規〕・`RecordsGenerator.BuildEpisodeCreditGroup`〔新規〕・`RecordsGenerator.GenerateEpisodeCreditRanking`〔新規〕・`stats-records-episode-credits.sbn`〔新規〕・`stats-records-index.sbn`）：TV シリーズの OP・ED のクレジットを話ごとに数える。声の出演は声優の人数、スタッフは人と会社を合わせた数。本放送だけの行と主題歌・挿入歌のクレジットは入れない。全体の順位（上位 100 件）は `/stats/records/{cast|staff}/{most|least}/` に出す。ページの冒頭の文と OGP カードは「最長・最短・最多・最少の上位 3 位」にした。
 
 - **サイト：シリーズ一覧のカードで、並んだ役職の人がまったく同じとき、バッジを並べて名前を 1 回だけ出すようにした**（`SeriesGenerator.MergeSameMemberGroups`〔新規〕・`KeyStaffBadge`〔新規〕・`_series-card-movie.sbn`・`_series-card-tv.sbn`・`_series-card-simple.sbn`）：映画のキャラクターデザインと作画監督が同じ人だと、同じ名前が 2 回続いていた。人物・名義・今の名乗り・所属の並びが一致するときだけまとめ、一部の人だけが重なる役職は別のバッジのまま出す。シリーズ詳細のメインスタッフは変えていない。

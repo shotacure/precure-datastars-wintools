@@ -1860,6 +1860,7 @@ CREATE TABLE `company_aliases` (
   `name_en`               varchar(128) DEFAULT NULL,
   `is_official_name`      tinyint NOT NULL DEFAULT 0 COMMENT '1 なら正式名（社名）の名義。企業詳細の商号履歴に出す',
   `display_text_override` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'クレジットでの表記（会社・ロゴのエントリ）。NULL は名義の名前で出す',
+  `credit_small_suffix`   varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'クレジットの表記の末尾のうち画面で小さめの字で出ている部分。NULL は名前全体をそのまま出す',
   `predecessor_alias_id`  int          DEFAULT NULL,
   `successor_alias_id`    int          DEFAULT NULL,
   `valid_from`            date         DEFAULT NULL,

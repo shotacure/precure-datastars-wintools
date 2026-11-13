@@ -18,6 +18,7 @@ public sealed class CompanyAliasesRepository : RepositoryBase
           name_en               AS NameEn,
           is_official_name      AS IsOfficialName,
           display_text_override AS DisplayTextOverride,
+          credit_small_suffix   AS CreditSmallSuffix,
           predecessor_alias_id  AS PredecessorAliasId,
           successor_alias_id    AS SuccessorAliasId,
           valid_from            AS ValidFrom,

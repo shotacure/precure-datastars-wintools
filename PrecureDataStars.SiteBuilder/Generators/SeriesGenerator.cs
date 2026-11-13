@@ -635,9 +635,51 @@ public sealed class SeriesGenerator
             }
 
             if (groups.Count > 0)
-                summaryDict[s.SeriesId] = groups;
+                summaryDict[s.SeriesId] = MergeSameMemberGroups(groups);
         }
         _keyStaffSummaryBySeriesCache = summaryDict;
+    }
+
+    /// <summary>
+    /// 並んだ役職グループの人がまったく同じ（人物・名義・今の名乗り・所属の並びが一致）とき、後ろのグループのバッジを
+    /// 前のグループの <see cref="KeyStaffRoleGroup.ExtraBadges"/> に移し、名前を 1 回だけ出す
+    /// （映画のキャラクターデザインと総作画監督が同じ人なら「［キャラクターデザイン］［総作画監督］名前」）。
+    /// 並びが離れた役職や、一部の人だけが重なる役職はまとめない。
+    /// </summary>
+    private static IReadOnlyList<KeyStaffRoleGroup> MergeSameMemberGroups(List<KeyStaffRoleGroup> groups)
+    {
+        var merged = new List<KeyStaffRoleGroup>(groups.Count);
+        foreach (var g in groups)
+        {
+            var prev = merged.Count > 0 ? merged[^1] : null;
+            if (prev is not null && SameMembers(prev.Members, g.Members))
+            {
+                prev.ExtraBadges.Add(new KeyStaffBadge
+                {
+                    RoleCode = g.RoleCode,
+                    RoleUrl = g.RoleUrl,
+                    RoleLabel = g.RoleLabel,
+                    BadgeStyle = g.BadgeStyle
+                });
+                continue;
+            }
+            merged.Add(g);
+        }
+        return merged;
+
+        static bool SameMembers(IReadOnlyList<KeyStaffMember> a, IReadOnlyList<KeyStaffMember> b)
+        {
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++)
+            {
+                if (a[i].PersonId != b[i].PersonId
+                    || !string.Equals(a[i].DisplayName, b[i].DisplayName, StringComparison.Ordinal)
+                    || !string.Equals(a[i].CurrentNameNote, b[i].CurrentNameNote, StringComparison.Ordinal)
+                    || !string.Equals(a[i].AffiliationLabel, b[i].AffiliationLabel, StringComparison.Ordinal))
+                    return false;
+            }
+            return true;
+        }
     }
 
     /// <summary>指定シリーズのメインスタッフサマリ（役職グループのリスト）を返す。 データ無しのときは空リストを返す。</summary>
@@ -2029,6 +2071,21 @@ public sealed class SeriesGenerator
         public string BadgeStyle { get; set; } = "";
         /// <summary>当該役職に該当する人物群（クレジット順 = (EpisodeNo, CreditSeq, CreditSubSeq) lex min 昇順）。</summary>
         public IReadOnlyList<KeyStaffMember> Members { get; set; } = Array.Empty<KeyStaffMember>();
+        /// <summary>このグループと人がまったく同じで、すぐ後ろに並ぶ役職のバッジ（先頭のバッジの後ろに並べ、名前は 1 回だけ出す）。</summary>
+        public List<KeyStaffBadge> ExtraBadges { get; } = new();
+    }
+
+    /// <summary>シリーズ一覧のメインスタッフで、先頭のバッジの後ろに並べる役職バッジ 1 つ分。</summary>
+    private sealed class KeyStaffBadge
+    {
+        /// <summary>役職コード（<c>data-role-code</c> 属性として出力）。</summary>
+        public string RoleCode { get; set; } = "";
+        /// <summary>バッジリンク先の組み立て済み URL。</summary>
+        public string RoleUrl { get; set; } = "";
+        /// <summary>表示ラベル（画面の役職の表記）。</summary>
+        public string RoleLabel { get; set; } = "";
+        /// <summary>バッジの style 属性の値。</summary>
+        public string BadgeStyle { get; set; } = "";
     }
 
     /// <summary>シリーズ一覧 TV サブ行用：1 役職グループ内の 1 名分。</summary>

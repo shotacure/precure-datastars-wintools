@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：シリーズ一覧のカードで、並んだ役職の人がまったく同じとき、バッジを並べて名前を 1 回だけ出すようにした**（`SeriesGenerator.MergeSameMemberGroups`〔新規〕・`KeyStaffBadge`〔新規〕・`_series-card-movie.sbn`・`_series-card-tv.sbn`・`_series-card-simple.sbn`）：映画のキャラクターデザインと作画監督が同じ人だと、同じ名前が 2 回続いていた。人物・名義・今の名乗り・所属の並びが一致するときだけまとめ、一部の人だけが重なる役職は別のバッジのまま出す。シリーズ詳細のメインスタッフは変えていない。
+
 - **SiteBuilder：何も変わらない全体ビルドを 33 秒から 25 秒に縮めた**（`SeriesGenerator.PersonIdsCreditedIn`〔新規〕・`CreatorsGenerator.BuildRoleEntityIndex`〔新規〕・`CreatorsGenerator.BuildRoleEntityRows`・`CreatorsGenerator.BuildEntityRowSet`・`OutputWriter.PruneOrphans`・`OutputWriter.AlignNameCase`・`SubtitleTelopPreflight.DescribeFontRoutes`・`SiteBuilderPipeline`）：出力は変わらない。
   - シリーズのメインスタッフの集計は、作品と役職ごとに全人物の全クレジットを見直していた。「作品と役職 → クレジットのある人物」の索引を 1 度作り、該当する人物だけを見る（シリーズの区間 6.1 秒 → 2.7 秒）。
   - 役職詳細の集計は、役職ごとに全人物・全企業の全クレジットを見直していた。「役職 → 関与のある人物・企業」の索引を並列のループの前に作り、その役職クラスタに関与のある人物・企業だけを見る。年表に重ねる関連する役職の判定は、関与の役職ごとに 1 度だけ引く（クリエイターの区間 5.7 秒 → 4.2 秒）。

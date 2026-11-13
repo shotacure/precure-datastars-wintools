@@ -17,7 +17,9 @@
        バッジ色は CSS の data-role-code group selector で TV 同等役職と共有：
          プロデューサー = 紫、脚本 = 青、監督 = ピンク、キャラクターデザイン / 作画監督 = 緑、
          美術監督 = 黄。映画は SERIES-attached クレジットから集計するため
-         「(範囲)」表記は無し。所属屋号は最頻 1 件を併記。 ##}}
+         「(範囲)」表記は無し。所属屋号は最頻 1 件を併記。
+       並んだ役職の人がまったく同じとき（キャラクターデザインと総作画監督が同じ人など）は、
+       g.ExtraBadges のバッジを先頭のバッジの後ろに並べ、名前は 1 回だけ出す。 ##}}
   <div class="series-card-sub">
     {{~ if (array.size m.PrecureLines) > 0 ~}}
     {{## プリキュア：親の TV シリーズのプリキュアは TV と同じ表記で普通に折り返し、客演・春映画の略記は出身の作品ごとに 1 行（作品の切れ目でだけ改行）。 ##}}
@@ -34,7 +36,7 @@
     {{~ if (array.size m.KeyStaffSummary) > 0 ~}}
     <div class="staff-badges-row">
       {{~ for g in m.KeyStaffSummary ~}}
-      <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}"{{ if g.BadgeStyle != "" }} style="{{ g.BadgeStyle }}"{{ end }} href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url mem.PersonId }}">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ mem.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+      <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}"{{ if g.BadgeStyle != "" }} style="{{ g.BadgeStyle }}"{{ end }} href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for xb in g.ExtraBadges ~}}<a class="role-badge role-badge-sm" data-role-code="{{ xb.RoleCode }}"{{ if xb.BadgeStyle != "" }} style="{{ xb.BadgeStyle }}"{{ end }} href="{{ xb.RoleUrl }}">{{ xb.RoleLabel | html.escape }}</a>{{~ end ~}}{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url mem.PersonId }}">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ mem.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
       {{~ end ~}}
     </div>
     {{~ end ~}}
@@ -64,7 +66,7 @@
         {{~ if (array.size c.KeyStaffSummary) > 0 ~}}
         <div class="staff-badges-row">
       {{~ for g in c.KeyStaffSummary ~}}
-      <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}"{{ if g.BadgeStyle != "" }} style="{{ g.BadgeStyle }}"{{ end }} href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url mem.PersonId }}">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ mem.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+      <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}"{{ if g.BadgeStyle != "" }} style="{{ g.BadgeStyle }}"{{ end }} href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for xb in g.ExtraBadges ~}}<a class="role-badge role-badge-sm" data-role-code="{{ xb.RoleCode }}"{{ if xb.BadgeStyle != "" }} style="{{ xb.BadgeStyle }}"{{ end }} href="{{ xb.RoleUrl }}">{{ xb.RoleLabel | html.escape }}</a>{{~ end ~}}{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="{{ person_url mem.PersonId }}">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ mem.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
       {{~ end ~}}
         </div>
         {{~ end ~}}

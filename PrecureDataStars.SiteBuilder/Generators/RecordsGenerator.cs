@@ -16,6 +16,12 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// クレジットの関与索引から数える。順位は同点を同じ順位とし、次の順位は同点の数だけ繰り下げる
 /// （3 位までを出し、同率は全件載せる）。
 /// </para>
+/// <para>
+/// 1 話のクレジット（声の出演人数・参加スタッフ数の多い回と少ない回）も同じ関与索引から数え、
+/// 記録集には 3 位までを、<c>/stats/records/{cast|staff}/{most|least}/</c> には上位 100 件（100 位が同点なら全件）を出す。
+/// 数えるのは本線の TV シリーズの OP・ED のクレジットで、本放送だけの行（Blu-ray に無い行）と
+/// 主題歌・挿入歌のクレジット（作家・歌唱・レーベルなど）は入れない。
+/// </para>
 /// </summary>
 public sealed class RecordsGenerator
 {
@@ -58,14 +64,24 @@ public sealed class RecordsGenerator
         string partsCoverage = StatsCoverageLabel.Build(StatsCoverageLabel.FindLatestTvEpisodeWithParts(_ctx, episodeIdsWithParts));
         string creditCoverage = _ctx.CreditCoverageLabel;
 
+        var episodeCounts = CountEpisodeCredits();
+
         var groups = new List<RecordGroup>
         {
             await BuildPartLengthGroupAsync(partsCoverage, ct).ConfigureAwait(false),
+            BuildEpisodeCreditGroup(episodeCounts, creditCoverage),
             BuildStaffGroup(creditCoverage),
             await BuildCharacterGroupAsync(creditCoverage, ct).ConfigureAwait(false)
         };
 
         GenerateIndex(groups, partsCoverage);
+
+        // 1 話のクレジットの全体の順位（上位 100 件）。声の出演人数と参加スタッフ数を、それぞれ多い順と少ない順で。
+        foreach (var metric in EpisodeCreditMetrics)
+        {
+            GenerateEpisodeCreditRanking(episodeCounts, metric, most: true, creditCoverage);
+            GenerateEpisodeCreditRanking(episodeCounts, metric, most: false, creditCoverage);
+        }
 
         _ctx.Logger.Success(IndexUrl);
     }
@@ -86,9 +102,9 @@ public sealed class RecordsGenerator
             {
                 MetaLeft = OgCoverageLabel.Compact(partsCoverage),
                 // ページの冒頭文（stats-records-index.sbn の .lead）と同じ文。
-                Subtitle = "最長・最短・最多の上位 3 位"
+                Subtitle = "最長・最短・最多・最少の上位 3 位"
             },
-            MetaDescription = "最長・最短・最多の上位 3 位",
+            MetaDescription = "最長・最短・最多・最少の上位 3 位",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -199,6 +215,211 @@ public sealed class RecordsGenerator
     {
         var t = ProgramStart + TimeSpan.FromSeconds(Math.Round(offsetSeconds));
         return $"{(int)t.TotalHours}:{t.Minutes:D2}:{t.Seconds:D2}";
+    }
+
+    // ── 1 話のクレジット ──
+
+    /// <summary>全体の順位のページに載せる件数（100 位が同点なら全件）。</summary>
+    private const int RankingLimit = 100;
+
+    /// <summary>1 話のクレジットの数。<see cref="VoicePeople"/> は声の出演の声優の人数、<see cref="Staff"/> はスタッフの人と会社を合わせた数。</summary>
+    private sealed record EpisodeCreditCount(Episode Episode, int VoicePeople, int Staff);
+
+    /// <summary>1 話のクレジットの記録の 1 指標（声の出演人数 / 参加スタッフ数）。</summary>
+    private sealed record EpisodeCreditMetric(string Slug, string Label, string Unit, Func<EpisodeCreditCount, int> Value, string Lead);
+
+    private static readonly EpisodeCreditMetric[] EpisodeCreditMetrics =
+    {
+        new("cast", "声の出演人数", "人", c => c.VoicePeople,
+            "声の出演に名前の出た声優の人数です。1 人で何役演じても 1 人と数えます。"),
+        new("staff", "参加スタッフ数", "", c => c.Staff,
+            "OP・ED に名前の出た人と会社を合わせた数です。声の出演は入れず、同じ人・会社が何度載っても 1 と数えます。")
+    };
+
+    /// <summary>主題歌・挿入歌のクレジットの役職か（曲の行・レーベル・主題歌協力・主題歌プロモーション）。1 話のクレジットの数に入れない。</summary>
+    private bool IsThemeSongRole(string roleCode)
+        => roleCode is "LABEL" or "THEME_SONG_COOPERATION" or "THEME_SONG_PROMOTION"
+           || (_ctx.RoleByCode.TryGetValue(roleCode, out var role)
+               && string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal));
+
+    /// <summary>
+    /// 本線の TV の話ごとに、声の出演の声優の人数と、スタッフ（人と会社）の数を数える。
+    /// 人は別名義をまとめて人物で、会社は屋号・ロゴをまとめて会社で 1 と数える（人物につながらないユニット名義は名義で 1）。
+    /// 本放送だけの行と、主題歌・挿入歌のクレジット（曲の作家・歌唱は関与の索引で本編のクレジットでないもの、
+    /// カードの上ではレーベルなどの役職）は数えない。声の出演に付いた所属の会社もスタッフに入れない。
+    /// </summary>
+    private List<EpisodeCreditCount> CountEpisodeCredits()
+    {
+        var voice = new Dictionary<int, HashSet<string>>();
+        var staff = new Dictionary<int, HashSet<string>>();
+
+        // 数える関与か（本線の TV の話の、Blu-ray にもある行）。
+        bool Eligible(Involvement inv, out int episodeId)
+        {
+            episodeId = inv.EpisodeId ?? 0;
+            return inv.EpisodeId is not null && !inv.IsBroadcastOnly && _ctx.IsMainlineTvSeries(inv.SeriesId);
+        }
+        static void Add(Dictionary<int, HashSet<string>> map, int episodeId, string key)
+        {
+            if (!map.TryGetValue(episodeId, out var set))
+            {
+                set = new HashSet<string>(StringComparer.Ordinal);
+                map[episodeId] = set;
+            }
+            set.Add(key);
+        }
+
+        foreach (var (aliasId, invs) in _involvements.ByPersonAlias)
+        {
+            string key = _ctx.PersonIdByAlias.TryGetValue(aliasId, out var personId) ? $"p{personId}" : $"a{aliasId}";
+            foreach (var inv in invs)
+            {
+                if (!Eligible(inv, out int episodeId)) continue;
+                if (inv.IsVoiceCast) Add(voice, episodeId, key);
+                else if (inv.Kind == InvolvementKind.Person && inv.IsMainCredit && !IsThemeSongRole(inv.RoleCode)) Add(staff, episodeId, key);
+            }
+        }
+
+        foreach (var (companyAliasId, invs) in _involvements.ByCompanyAlias)
+        {
+            string key = _ctx.CompanyAliasById.TryGetValue(companyAliasId, out var ca) ? $"c{ca.CompanyId}" : $"ca{companyAliasId}";
+            foreach (var inv in invs)
+            {
+                if (!Eligible(inv, out int episodeId)) continue;
+                // 屋号のエントリ・ブロックの先頭の会社・人に付いた所属の会社。所属の人の側の関与（Member）は人で数え済み。
+                if (inv.Kind is not (InvolvementKind.Company or InvolvementKind.LeadingCompany)) continue;
+                if (inv.RoleCode == "VOICE CAST" || IsThemeSongRole(inv.RoleCode)) continue;
+                Add(staff, episodeId, key);
+            }
+        }
+
+        foreach (var (logoId, invs) in _involvements.ByLogo)
+        {
+            string key = _ctx.LogoById.TryGetValue(logoId, out var logo)
+                         && _ctx.CompanyAliasById.TryGetValue(logo.CompanyAliasId, out var logoAlias)
+                ? $"c{logoAlias.CompanyId}"
+                : $"l{logoId}";
+            foreach (var inv in invs)
+            {
+                if (!Eligible(inv, out int episodeId)) continue;
+                if (IsThemeSongRole(inv.RoleCode)) continue;
+                Add(staff, episodeId, key);
+            }
+        }
+
+        var rows = new List<EpisodeCreditCount>();
+        foreach (int episodeId in voice.Keys.Union(staff.Keys))
+        {
+            // 公開前などで索引から外れた話は数えない。
+            if (!_ctx.EpisodeById.TryGetValue(episodeId, out var episode)) continue;
+            rows.Add(new EpisodeCreditCount(episode,
+                voice.TryGetValue(episodeId, out var v) ? v.Count : 0,
+                staff.TryGetValue(episodeId, out var s) ? s.Count : 0));
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// 指標の多い順（<paramref name="most"/>）か少ない順に並べ、同点を同じ順位にした順位を振る。
+    /// 同じ数の話は放送順に並べる。数が 0 の話（声の出演の無い回など）は順位に入れない。
+    /// </summary>
+    private static List<(EpisodeCreditCount Row, int Rank, int Value)> RankEpisodeCredits(
+        IEnumerable<EpisodeCreditCount> rows, EpisodeCreditMetric metric, bool most, int limit)
+    {
+        var withValue = rows.Select(r => (Row: r, Value: metric.Value(r))).Where(x => x.Value > 0);
+        var ordered = (most ? withValue.OrderByDescending(x => x.Value) : withValue.OrderBy(x => x.Value))
+            .ThenBy(x => x.Row.Episode.OnAirAt)
+            .ThenBy(x => x.Row.Episode.EpisodeId)
+            .ToList();
+        var result = new List<(EpisodeCreditCount, int, int)>();
+        int rank = 0;
+        int prev = int.MinValue;
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            if (ordered[i].Value != prev)
+            {
+                rank = i + 1;
+                prev = ordered[i].Value;
+            }
+            if (rank > limit) break;
+            result.Add((ordered[i].Row, rank, ordered[i].Value));
+        }
+        return result;
+    }
+
+    /// <summary>1 話のクレジットの全体の順位のページの URL。</summary>
+    private static string EpisodeCreditRankingUrl(EpisodeCreditMetric metric, bool most)
+        => $"{IndexUrl}{metric.Slug}/{(most ? "most" : "least")}/";
+
+    private RecordGroup BuildEpisodeCreditGroup(IReadOnlyList<EpisodeCreditCount> counts, string coverage)
+    {
+        // 同じ指標の「多い回」と「少ない回」は、本編の尺と同じく左右に並べた 1 つの組にする。
+        var pairs = EpisodeCreditMetrics
+            .Select(m => new RecordPair
+            {
+                Title = m.Label,
+                High = EpisodeCreditItem(counts, m, most: true),
+                Low = EpisodeCreditItem(counts, m, most: false)
+            })
+            .ToList();
+        return new RecordGroup
+        {
+            Id = "episode-credits",
+            Title = "1 話のクレジット",
+            Lead = "TV シリーズの OP・ED のクレジットから数えた、1 話あたりの数です。Blu-ray のクレジットで数え、主題歌・挿入歌のクレジットは入れません。",
+            CoverageLabel = coverage,
+            Pairs = pairs
+        };
+    }
+
+    private RecordItem EpisodeCreditItem(IReadOnlyList<EpisodeCreditCount> counts, EpisodeCreditMetric metric, bool most)
+    {
+        var entries = RankEpisodeCredits(counts, metric, most, TopRank)
+            .Select(x =>
+            {
+                var ep = x.Row.Episode;
+                var series = _ctx.SeriesById[ep.SeriesId];
+                var entry = EpisodeEntry(x.Rank, x.Value.ToString(), series.Slug, ep.SeriesEpNo, series.Title, ep.TitleText);
+                entry.ValueLabel = $"{x.Value}{metric.Unit}";
+                entry.ValueUnit = metric.Unit;
+                return entry;
+            })
+            .ToList();
+        return new RecordItem
+        {
+            Id = $"{metric.Slug}-{(most ? "most" : "least")}",
+            Title = most ? "多い回" : "少ない回",
+            Entries = entries,
+            MoreUrl = EpisodeCreditRankingUrl(metric, most),
+            MoreLabel = "TOP 100 を見る"
+        };
+    }
+
+    /// <summary>1 話のクレジットの全体の順位（上位 100 件、100 位が同点なら全件）を 1 ページ書き出す。</summary>
+    private void GenerateEpisodeCreditRanking(IReadOnlyList<EpisodeCreditCount> counts, EpisodeCreditMetric metric, bool most, string coverage)
+    {
+        var ranked = RankEpisodeCredits(counts, metric, most, RankingLimit);
+        var rows = StatsEpisodeRows.Build(_ctx, ranked.Select(x =>
+        {
+            var ep = x.Row.Episode;
+            var series = _ctx.SeriesById[ep.SeriesId];
+            return new StatsEpisodeInput(series.Slug, ep.SeriesEpNo, series.Title, _ctx.StartYearLabelBySlug(series.Slug),
+                true, x.Rank, $"{x.Value}{metric.Unit}", ep.TitleText);
+        }));
+        string orderLabel = most ? "多い順" : "少ない順";
+        string title = $"{metric.Label} {orderLabel} TOP 100";
+        var content = new
+        {
+            Title = title,
+            Lead = $"TV シリーズで{metric.Label}が{(most ? "多い" : "少ない")}回の上位 100 件",
+            Note = metric.Lead + "Blu-ray のクレジットで数え、主題歌・挿入歌のクレジットは入れません。",
+            CoverageLabel = coverage,
+            Rows = rows
+        };
+        var layout = StatsPageLayout.Make(
+            title, "。プリキュアの TV シリーズの OP・ED のクレジットから数えた記録です。",
+            "歴代記録", IndexUrl, $"{metric.Label} {orderLabel}");
+        _page.RenderAndWrite(EpisodeCreditRankingUrl(metric, most), "stats", "stats-records-episode-credits.sbn", content, layout);
     }
 
     // ── スタッフ ──

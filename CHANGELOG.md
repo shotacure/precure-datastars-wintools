@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：歴代記録に「1 話のクレジット」を足し、声の出演人数と参加スタッフ数の多い回・少ない回を出すようにした**（`RecordsGenerator.CountEpisodeCredits`〔新規〕・`RecordsGenerator.BuildEpisodeCreditGroup`〔新規〕・`RecordsGenerator.GenerateEpisodeCreditRanking`〔新規〕・`stats-records-episode-credits.sbn`〔新規〕・`stats-records-index.sbn`）：TV シリーズの OP・ED のクレジットを話ごとに数える。声の出演は声優の人数、スタッフは人と会社を合わせた数。本放送だけの行と主題歌・挿入歌のクレジットは入れない。全体の順位（上位 100 件）は `/stats/records/{cast|staff}/{most|least}/` に出す。ページの冒頭の文と OGP カードは「最長・最短・最多・最少の上位 3 位」にした。
+
 - **サイト：シリーズ一覧のカードで、並んだ役職の人がまったく同じとき、バッジを並べて名前を 1 回だけ出すようにした**（`SeriesGenerator.MergeSameMemberGroups`〔新規〕・`KeyStaffBadge`〔新規〕・`_series-card-movie.sbn`・`_series-card-tv.sbn`・`_series-card-simple.sbn`）：映画のキャラクターデザインと作画監督が同じ人だと、同じ名前が 2 回続いていた。人物・名義・今の名乗り・所属の並びが一致するときだけまとめ、一部の人だけが重なる役職は別のバッジのまま出す。シリーズ詳細のメインスタッフは変えていない。
 
 - **SiteBuilder：何も変わらない全体ビルドを 33 秒から 25 秒に縮めた**（`SeriesGenerator.PersonIdsCreditedIn`〔新規〕・`CreatorsGenerator.BuildRoleEntityIndex`〔新規〕・`CreatorsGenerator.BuildRoleEntityRows`・`CreatorsGenerator.BuildEntityRowSet`・`OutputWriter.PruneOrphans`・`OutputWriter.AlignNameCase`・`SubtitleTelopPreflight.DescribeFontRoutes`・`SiteBuilderPipeline`）：出力は変わらない。

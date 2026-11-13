@@ -9765,7 +9765,8 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .creators-root[data-entity-filter="singer"] [data-entity-type="unit"],
 .creators-root[data-entity-filter="character"] [data-entity-type="unit"],
 .creators-root[data-entity-filter="unit"] [data-entity-type="singer"],
-.creators-root[data-entity-filter="unit"] [data-entity-type="character"] {
+.creators-root[data-entity-filter="unit"] [data-entity-type="character"],
+.creators-root[data-entity-filter="precure-singer"] [data-entity-type]:not([data-precure-singer]) {
   display: none;
 }
 

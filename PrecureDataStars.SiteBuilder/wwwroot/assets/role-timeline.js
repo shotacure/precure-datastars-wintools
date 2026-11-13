@@ -140,7 +140,10 @@
       rows.forEach(function (r) {
         var t = r.getAttribute('data-entity-type');
         // 絞り込み中（all 以外）は、その種類の行だけを数える（個人・団体、歌手・キャラクター・ユニット）。
-        if (filter && filter !== 'all' && t !== filter) return;
+        // 「プリキュアシンガーのみ」は種類をまたぐので、行の印（data-precure-singer）で数える。
+        if (filter === 'precure-singer') {
+          if (!r.hasAttribute('data-precure-singer')) return;
+        } else if (filter && filter !== 'all' && t !== filter) return;
         // TV・映画・オトナのうち入っている種類の担当を描いた行だけを数える（見出しとして残した会社の行も、自分の担当で決める）。
         if (wkOn && r.hasAttribute('data-wk')) {
           var own = (r.getAttribute('data-wk') || '').split(/\s+/);

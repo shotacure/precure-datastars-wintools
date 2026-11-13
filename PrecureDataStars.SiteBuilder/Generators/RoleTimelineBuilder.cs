@@ -1419,6 +1419,11 @@ internal sealed class RoleTimelineRow
     /// </summary>
     public bool IsPrecureCast { get; set; }
     /// <summary>
+    /// プリキュアシンガー（本人の名義で TV シリーズの主題歌を歌った方と、その方だけのユニット）の行か。歴代プリキュア歌唱の
+    /// 「プリキュアシンガーのみ」の絞り込みに使う（行の data-precure-singer。ほかのページでは常に false）。
+    /// </summary>
+    public bool IsPrecureSinger { get; set; }
+    /// <summary>
     /// 「プリキュアを演じた方のみ」のときの並び順（演じたプリキュアのプリキュアのマスタの順。1 始まり、プリキュアを演じていない行は 0）。
     /// 行の --rtl-precure-order で渡し、site.css が絞り込み中だけ並べ替えに使う。
     /// </summary>

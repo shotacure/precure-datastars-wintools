@@ -2315,12 +2315,43 @@ public sealed class CreatorsGenerator
     }
 
     /// <summary>
+    /// プリキュアシンガーの人物（person_id）。本線の TV シリーズの各話の主題歌（OP・ED。本放送だけの主題歌を除く）に使われた録音で、
+    /// 本人の名義（人物につながる名義。主名義かスラッシュの相方）で歌（VOCALS）を担当した人物。
+    /// キャラクターの名義で歌った声優と、人物につながらない名義（団体・ユニット）は含めない。
+    /// </summary>
+    private HashSet<int> PrecureSingerPersons(
+        IReadOnlyList<SongRecordingSinger> allSingers,
+        IReadOnlyDictionary<int, int> personIdByAlias)
+    {
+        var themeRecordings = new HashSet<int>();
+        foreach (var (episodeId, themeSongs) in _ctx.ThemeSongsByEpisode)
+        {
+            if (!_ctx.EpisodeById.TryGetValue(episodeId, out var ep) || !_ctx.IsMainlineTvSeries(ep.SeriesId)) continue;
+            foreach (var t in themeSongs)
+                if (!t.IsBroadcastOnly && t.ThemeKind is "OP" or "ED") themeRecordings.Add(t.SongRecordingId);
+        }
+
+        var persons = new HashSet<int>();
+        foreach (var s in allSingers)
+        {
+            if (s.BillingKind != SingerBillingKind.Person
+                || !string.Equals(s.RoleCode, "VOCALS", StringComparison.Ordinal)
+                || !themeRecordings.Contains(s.SongRecordingId)) continue;
+            foreach (var aliasId in new[] { s.PersonAliasId, s.SlashPersonAliasId })
+                if (aliasId is int id && personIdByAlias.TryGetValue(id, out var personId)) persons.Add(personId);
+        }
+        return persons;
+    }
+
+    /// <summary>
     /// <c>/creators/singers/</c> を 2 タブ（初参加順 / 参加曲数順）で書き出す。
     /// 歌・コーラス・台詞の別を問わず、録音の歌唱者行（song_recording_singers）をユニットのメンバーまで展開し
     /// （<see cref="BuildContextLookupExtensions.ExpandSingerParticipants(BuildContext, SongRecordingSinger)"/>）、
     /// 「歌手」（人物単位。本人名義での参加）と「キャラクター」（キャラ × 声優の組ごと）と「ユニット」（人物の行を持たない名義。
     /// ユニット詳細 /units/{名前}/ を持つもの）の行を 1 つのリストに並べる。
     /// 行には種別（data-entity-type = singer / character / unit）を持たせ、タブの下の絞り込みで出し分ける。
+    /// 歌手とユニットの行のうちプリキュアシンガー（<see cref="PrecureSingerPersons"/>）には印（data-precure-singer）を付け、
+    /// 「プリキュアシンガーのみ」で出し分ける。
     /// 歌手の行は <paramref name="leadSingers"/>（<see cref="LeadSingerPersons"/>）の人だけで、
     /// その人のコーラスや名前の出ないユニットでの参加も曲数・初参加に数える。参加曲数は song_id 単位で重複排除する。
     /// 年表タブには、一覧の行すべてを載せた参加の移り変わりの線表を置く（歌は録音が初めて盤に収められた日）。
@@ -2490,6 +2521,24 @@ public sealed class CreatorsGenerator
             .Distinct()
             .Count();
 
+        // プリキュアシンガーの印。歌手の行は本人、ユニットの行はメンバーが全員プリキュアシンガーの人物のもの。
+        var precureSingers = PrecureSingerPersons(allSingers, personIdByAlias);
+        var precureSingerUrls = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var r in rows)
+        {
+            r.IsPrecureSinger = r.EntityKind switch
+            {
+                "singer" => precureSingers.Contains(r.EntityId),
+                "unit" => _ctx.UnitMembersByAlias.TryGetValue(r.EntityId, out var members) && members.Count > 0
+                    && members.All(m => m.MemberKind == PersonAliasMemberKind.Person
+                        && m.MemberPersonAliasId is int memberAliasId
+                        && personIdByAlias.TryGetValue(memberAliasId, out var memberPersonId)
+                        && precureSingers.Contains(memberPersonId)),
+                _ => false
+            };
+            if (r.IsPrecureSinger) precureSingerUrls.Add(r.Url);
+        }
+
         // 同じ録音で初参加した行は、歌手 → ユニット → キャラクターの順、その中は歌唱の連名の順（singer_seq）→ ID の順に並べる。
         var debutRows = rows
             .OrderBy(r => r.DebutRecordingId)
@@ -2510,11 +2559,16 @@ public sealed class CreatorsGenerator
 
         // 年表タブの線表（一覧の行すべて）。軸は最後の歌まで伸ばす。
         var timelineBuilder = new RoleTimelineBuilder(_ctx, RoleTimelineBuilder.ExtendToFor(timelineEntities));
+        var singersTimeline = timelineBuilder.Build(timelineEntities, RoleTimelineRules.Singers);
+        // 線表の行にも、一覧と同じプリキュアシンガーの印を付ける（行はリンク先で突き合わせる）。
+        if (singersTimeline is not null)
+            foreach (var row in singersTimeline.Rows)
+                if (row.EntityKind != "character" && precureSingerUrls.Contains(row.EntityUrl)) row.IsPrecureSinger = true;
         var content = new SingersModel
         {
             DebutSections = BuildDebutSeriesSections(debutRows, r => r.DebutSeriesId),
             CountRows = countRows,
-            Timeline = timelineBuilder.Build(timelineEntities, RoleTimelineRules.Singers),
+            Timeline = singersTimeline,
             CoverageLabel = MusicCoverageLabel
         };
         var layout = new LayoutModel
@@ -4163,6 +4217,8 @@ public sealed class CreatorsGenerator
     /// <summary>歌唱ページの 1 行。歌手（人物単位）またはキャラクター（キャラ × 声優の組）。</summary>
     private sealed class SingerListRow
     {
+        /// <summary>プリキュアシンガー（<see cref="PrecureSingerPersons"/> の人物と、その人物だけのユニット）の行か（行の data-precure-singer）。</summary>
+        public bool IsPrecureSinger { get; set; }
         /// <summary>"singer" / "character"（絞り込み用の data-entity-type と行頭アイコンの出し分け）。</summary>
         public string EntityKind { get; set; } = "";
         /// <summary>歌手は人物名（表示名義）、キャラクターは「変身前 / 変身後」または最初に歌ったときの名義。</summary>

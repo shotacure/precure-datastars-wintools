@@ -6,8 +6,10 @@
        行頭のアイコン（歌手 = 人 / キャラクター = 星）で区別する。キャラクターの行は「キャラ名(CV: 声優)」。
      ・初参加順タブ：初参加の録音の出典シリーズごとのセクション。参加曲数順タブ：曲数の多い順。
        年表タブ：参加の移り変わりの線表（行は一覧と同じ data-entity-type を持ち、絞り込みが線表の行にも効く）。
-     ・タブの下の絞り込み（すべて / 歌手のみ / キャラクターのみ / ユニットのみ）はルートの data-entity-filter を書き換え、
+     ・タブの下の絞り込み（すべて / 歌手のみ / プリキュアシンガーのみ / キャラクターのみ / ユニットのみ）はルートの data-entity-filter を書き換え、
        行の出し分けは site.css 側のセレクタが解決する。絞り込みで行が無くなったシリーズ見出しは JS で隠す。
+     ・プリキュアシンガーは、本人の名義で TV シリーズの主題歌（本放送だけの主題歌を除く）を歌った方と、その方だけで組んだユニット
+       （行の data-precure-singer）。
      ・タブ切替はスタッフ一覧と同じインライン JS。 ##}}
 <div class="creators-root creators-tabs products-tabs" data-entity-filter="all">
   <div class="tabs" role="tablist" aria-label="歌唱一覧の並べ替え">
@@ -31,6 +33,7 @@
   <div class="entity-filter" role="group" aria-label="歌手・キャラクター・ユニットで絞り込み">
     <button type="button" class="entity-filter-btn is-active" data-entity-filter-set="all">すべて</button>
     <button type="button" class="entity-filter-btn" data-entity-filter-set="singer">歌手のみ</button>
+    <button type="button" class="entity-filter-btn" data-entity-filter-set="precure-singer">プリキュアシンガーのみ</button>
     <button type="button" class="entity-filter-btn" data-entity-filter-set="character">キャラクターのみ</button>
     <button type="button" class="entity-filter-btn" data-entity-filter-set="unit">ユニットのみ</button>
   </div>
@@ -55,7 +58,7 @@
       <h2 class="creators-series-heading">{{~ if sec.SeriesUrl != "" ~}}<a href="{{ sec.SeriesUrl }}">{{ sec.SeriesHeadingLabel | html.escape }}</a>{{~ else ~}}{{ sec.SeriesHeadingLabel | html.escape }}{{~ end ~}}</h2>
       <ul class="entity-list">
         {{~ for e in sec.Members ~}}
-        <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
+        <li class="entity-row" data-entity-type="{{ e.EntityKind }}"{{ if e.IsPrecureSinger }} data-precure-singer{{ end }}>
           {{~ if e.EntityKind == "singer" ~}}<span class="entity-badge entity-badge-person" aria-label="歌手" title="歌手"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
           {{~ else if e.EntityKind == "unit" ~}}<span class="entity-badge entity-badge-unit" aria-label="ユニット" title="ユニット"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="5.2" cy="5.4" r="2.4"/><circle cx="10.8" cy="5.4" r="2.4"/><path d="M0.6 14a4.6 4.6 0 0 1 9.2 0z"/><path d="M6.2 14a4.6 4.6 0 0 1 9.2 0z"/></svg></span>
           {{~ else ~}}<span class="entity-badge entity-badge-character" aria-label="キャラクター" title="キャラクター"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 1.2l2 4.3 4.7.5-3.5 3.2 1 4.6L8 11.4l-4.2 2.4 1-4.6L1.3 6l4.7-.5z"/></svg></span>{{~ end ~}}
@@ -78,7 +81,7 @@
     {{~ else ~}}
     <ul class="entity-list" id="singers-count-list">
       {{~ for e in CountRows ~}}
-      <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
+      <li class="entity-row" data-entity-type="{{ e.EntityKind }}"{{ if e.IsPrecureSinger }} data-precure-singer{{ end }}>
         {{~ if e.EntityKind == "singer" ~}}<span class="entity-badge entity-badge-person" aria-label="歌手" title="歌手"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
         {{~ else if e.EntityKind == "unit" ~}}<span class="entity-badge entity-badge-unit" aria-label="ユニット" title="ユニット"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="5.2" cy="5.4" r="2.4"/><circle cx="10.8" cy="5.4" r="2.4"/><path d="M0.6 14a4.6 4.6 0 0 1 9.2 0z"/><path d="M6.2 14a4.6 4.6 0 0 1 9.2 0z"/></svg></span>
           {{~ else ~}}<span class="entity-badge entity-badge-character" aria-label="キャラクター" title="キャラクター"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 1.2l2 4.3 4.7.5-3.5 3.2 1 4.6L8 11.4l-4.2 2.4 1-4.6L1.3 6l4.7-.5z"/></svg></span>{{~ end ~}}
@@ -130,7 +133,9 @@
       root.setAttribute('data-entity-filter', mode);
       filterButtons.forEach(function (b) { b.classList.toggle('is-active', b === btn); });
       root.querySelectorAll('.creators-series-section').forEach(function (sec) {
-        var visible = mode === 'all' || sec.querySelector('[data-entity-type="' + mode + '"]');
+        // プリキュアシンガーは種類（data-entity-type）をまたぐので、行の印（data-precure-singer）で探す。
+        var selector = mode === 'precure-singer' ? '[data-precure-singer]' : '[data-entity-type="' + mode + '"]';
+        var visible = mode === 'all' || sec.querySelector(selector);
         if (visible) { sec.removeAttribute('hidden'); } else { sec.setAttribute('hidden', ''); }
       });
     });

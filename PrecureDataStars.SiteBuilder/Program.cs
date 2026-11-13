@@ -15,6 +15,7 @@ namespace PrecureDataStars.SiteBuilder;
 /// （<c>--page</c> と併用すれば対象のページだけ）。
 /// <c>--og-cards &lt;一覧.json&gt; &lt;出力先&gt;</c> は、DB を使わずに一覧のカードだけを同じ描き方で描く（precure.news 用。<see cref="OgCardBatch"/>）。
 /// <c>--as-of &lt;時刻&gt;</c> はテストビルドの基準時刻を差し替える（<c>--test</c> と併用）。
+/// <c>--diff</c> は出力に書き込まず、今の出力との差分（増える・書き換わる・消えるファイル）だけを出す。
 /// <c>--magazine-release-today</c> は、今日がアニメ雑誌の号の発売日かを終了コードで返す（<see cref="MagazineReleaseCheck"/>）。
 /// <c>--publish-shop-items</c> は、販売中の商品のファイルだけを本番に上げ直す（<see cref="ShopItemsPublisher"/>）。</summary>
 internal static class Program
@@ -75,6 +76,7 @@ internal static class Program
             bool expectPageValue = false;
             DateTimeOffset? asOf = null;
             bool expectAsOfValue = false;
+            bool diffOnly = false;
             foreach (var a in args)
             {
                 if (expectAsOfValue)
@@ -116,6 +118,8 @@ internal static class Program
                     uploadOnly = true;
                 else if (string.Equals(a, "--as-of", StringComparison.OrdinalIgnoreCase))
                     expectAsOfValue = true;
+                else if (string.Equals(a, "--diff", StringComparison.OrdinalIgnoreCase))
+                    diffOnly = true;
                 else
                 {
                     Console.Error.WriteLine($"不明な引数: {a}");
@@ -175,6 +179,14 @@ internal static class Program
                 return 2;
             }
 
+            // --diff は出力に書き込まないので、その出力を上げるデプロイとは併用できない。
+            if (diffOnly && deploy)
+            {
+                Console.Error.WriteLine("--diff は --deploy と併用できません（出力に書き込まないので、上げるものがありません）。");
+                PrintUsage();
+                return 2;
+            }
+
             var deployOptions = deploy
                 ? new DeployRuntimeOptions(Requested: true, DryRun: dryRun, SkipConfirm: skipConfirm, UploadOnly: uploadOnly)
                 : DeployRuntimeOptions.None;
@@ -187,7 +199,7 @@ internal static class Program
                 return 2;
             }
 
-            var config = BuildConfig.FromAppConfig(isProduction, deployOptions, pageFilter, refreshTelop, refreshOg, asOf);
+            var config = BuildConfig.FromAppConfig(isProduction, deployOptions, pageFilter, refreshTelop, refreshOg, asOf, diffOnly);
             var pipeline = new SiteBuilderPipeline();
             await pipeline.RunAsync(config).ConfigureAwait(false);
             return 0;
@@ -231,13 +243,15 @@ internal static class Program
     /// <summary>使い方の表示。引数エラー時に共通で出す。</summary>
     private static void PrintUsage()
     {
-        Console.Error.WriteLine("使い方: PrecureDataStars.SiteBuilder [--test | --production] [--page <path>] [--refresh-telop] [--refresh-og] [--deploy [--dry-run | --upload-only] [--yes]]");
+        Console.Error.WriteLine("使い方: PrecureDataStars.SiteBuilder [--test | --production] [--page <path>] [--diff] [--refresh-telop] [--refresh-og] [--deploy [--dry-run | --upload-only] [--yes]]");
         Console.Error.WriteLine("  引数なし     : 端末からの対話実行ならテスト／本番ビルドだけ／本番ビルド＋デプロイを 1 回聞く（Enter = テスト）。");
         Console.Error.WriteLine("                 デプロイを選ぶと --production --deploy と同じ（削除があれば一覧を出して y/N で確かめる）。スクリプトやパイプ経由ならテストモード");
         Console.Error.WriteLine("  --test       : テストモード（SiteOutputDirTest へ、GA4 なし）。問い合わせを出さない");
         Console.Error.WriteLine("  --production : 本番モード（SiteOutputDir へ、GA4 あり）");
         Console.Error.WriteLine("  --page <path>: ピンポイントビルド。URL パスに <path> を含むページだけを生成（例: /privacy/）。");
         Console.Error.WriteLine("                 sitemap / 検索インデックスは再生成せず、--deploy 時も削除は行わない（部分生成の安全策）。");
+        Console.Error.WriteLine("  --diff       : 出力に書き込まず、今の出力との差分（増える・書き換わる・消えるファイル）の一覧だけを出す。");
+        Console.Error.WriteLine("                 増える・書き換わるファイルの中身は、出力の隣の「<出力>.diff」に置く（--deploy とは併用できない）");
         Console.Error.WriteLine("  --refresh-telop : サブタイトルのテロップ画像を作り置きを使わずに描き直す（--page と併用すれば対象の話だけ）");
         Console.Error.WriteLine("  --refresh-og    : OGP カード画像を作り置きを使わずに描き直す（--page と併用すれば対象のページだけ）");
         Console.Error.WriteLine("  --deploy     : 本番ビルド後に S3 へ差分同期＋CloudFront キャッシュ削除（--production 必須）");

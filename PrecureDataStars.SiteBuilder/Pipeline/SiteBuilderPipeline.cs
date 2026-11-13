@@ -46,7 +46,8 @@ public sealed class SiteBuilderPipeline
         }
 
         // 全体ビルドは出力を作り直すので、前のドライランの控えを消す（控えのある出力＝ドライランで作ったままの出力に限る）。
-        if (string.IsNullOrEmpty(config.PageFilter))
+        // 差分だけを出すビルドは出力を書かないので、控えも残す。
+        if (string.IsNullOrEmpty(config.PageFilter) && !config.DiffOnly)
             Deploy.PendingDeploy.Delete(config.OutputDirectory);
 
         // 22 セクション分の進捗枠を事前登録する。
@@ -74,8 +75,10 @@ public sealed class SiteBuilderPipeline
         // 削除）が正しく効く。空にしてから作り直すのに比べて、数千件のファイル作成と一掃が要らない。
         // ピンポイントビルド（--page）は差分生成なので最後の掃除もしない（対象外ページの既存出力を温存する）。
         // 出力への書き出し（転送表・静的アセット・各ページ・画像・SEO ファイル）はすべてこの窓口を通す。
-        var output = new OutputWriter(config.OutputDirectory);
-        Directory.CreateDirectory(config.OutputDirectory);
+        // 差分だけを出すビルド（--diff）では、この窓口が出力に書かず、今の出力との違いだけを控える。
+        var output = new OutputWriter(config.OutputDirectory, config.DiffOnly);
+        if (config.DiffOnly) logger.Info($"Diff only        : 出力に書き込みません（差分の中身は {OutputWriter.DiffDirectoryFor(config.OutputDirectory)}）");
+        else Directory.CreateDirectory(config.OutputDirectory);
 
         // テンプレ → ページ書き出しヘルパー。
         // 進捗バーへのページ書き出し通知も PageRenderer 経由で発火するため、reporter を渡す。
@@ -370,8 +373,9 @@ public sealed class SiteBuilderPipeline
         output.SaveLedger(keepPrevious: !string.IsNullOrEmpty(config.PageFilter));
 
         // まだ出さない話（予告も雑誌の発売もまだの話）が出力に残っていないかの点検。出力の掃除の後に、出力の全体を照らす。
-        int prereleaseHits = PrereleaseOutputGuard.Check(ctx, config.OutputDirectory);
-        if (ctx.HiddenEpisodes.Count > 0)
+        // 差分だけを出すビルドでは、出力が今回のビルドの中身ではないので点検しない。
+        int prereleaseHits = config.DiffOnly ? 0 : PrereleaseOutputGuard.Check(ctx, config.OutputDirectory);
+        if (ctx.HiddenEpisodes.Count > 0 && !config.DiffOnly)
             logger.Info($"prerelease guard: まだ出さない話 {ctx.HiddenEpisodes.Count} 件を出力に照らし、{prereleaseHits} か所で見つかりました");
 
         // OGP カードの書体に関する報告を、種類ごとに 1 度だけ出す。ブランド書体に無い文字の代替描画は情報として残し、
@@ -427,6 +431,8 @@ public sealed class SiteBuilderPipeline
         logger.Info($"Warnings         : {logger.WarningCount}");
         logger.Info($"Elapsed          : {stopwatch.Elapsed.TotalSeconds:0.0} sec");
 
+        if (config.DiffOnly) ReportDiff(output, config, logger);
+
         // 本番デプロイ（--deploy 指定時のみ）。生成済み成果物を S3 へ差分同期し、
         // CloudFront のキャッシュを無効化する。テスト出力からのデプロイは Program 側で弾いているため、
         // ここに到達する時点で必ず本番ビルドの出力ディレクトリを対象にしている。
@@ -449,6 +455,57 @@ public sealed class SiteBuilderPipeline
             }
         }
     }
+
+    /// <summary>
+    /// 差分だけを出すビルドの結果を出す。種類ごとの件数、最上位のディレクトリごとの件数、ファイルの一覧（先頭
+    /// <see cref="DiffListLimit"/> 件）をログに出し、全件の一覧を差分ディレクトリの <c>_diff.txt</c> に書く。
+    /// 一覧の各行は「＋（増える）／～（書き換わる）／－（消える）」と相対パス。
+    /// </summary>
+    private static void ReportDiff(OutputWriter output, BuildConfig config, BuildLogger logger)
+    {
+        var changes = output.Changes;
+        logger.Section("Diff");
+        int added = changes.Count(c => c.Kind == OutputChangeKind.Added);
+        int changed = changes.Count(c => c.Kind == OutputChangeKind.Changed);
+        int removed = changes.Count(c => c.Kind == OutputChangeKind.Removed);
+        if (changes.Count == 0)
+        {
+            logger.Info(string.IsNullOrEmpty(config.PageFilter)
+                ? "IDENTICAL: 今の出力と同じです（増える 0 / 書き換わる 0 / 消える 0）"
+                : "IDENTICAL: 対象のページは今の出力と同じです（増える 0 / 書き換わる 0）");
+            return;
+        }
+        logger.Info($"増える {added} / 書き換わる {changed} / 消える {removed}");
+
+        static string Mark(OutputChangeKind kind) => kind switch
+        {
+            OutputChangeKind.Added => "＋",
+            OutputChangeKind.Changed => "～",
+            _ => "－",
+        };
+        static string Top(string relativePath)
+        {
+            int slash = relativePath.IndexOf('/');
+            return slash < 0 ? "(直下)" : relativePath[..slash] + "/";
+        }
+        foreach (var group in changes.GroupBy(c => Top(c.RelativePath)).OrderBy(g => g.Key, StringComparer.Ordinal))
+            logger.Info($"  {group.Key,-16} ＋{group.Count(c => c.Kind == OutputChangeKind.Added)} ～{group.Count(c => c.Kind == OutputChangeKind.Changed)} －{group.Count(c => c.Kind == OutputChangeKind.Removed)}");
+
+        foreach (var change in changes.Take(DiffListLimit))
+            logger.Info($"{Mark(change.Kind)} {change.RelativePath}");
+        if (changes.Count > DiffListLimit)
+            logger.Info($"…ほか {changes.Count - DiffListLimit} 件");
+
+        var diffDirectory = OutputWriter.DiffDirectoryFor(config.OutputDirectory);
+        Directory.CreateDirectory(diffDirectory);
+        var listPath = Path.Combine(diffDirectory, "_diff.txt");
+        File.WriteAllLines(listPath, changes.Select(c => $"{Mark(c.Kind)} {c.RelativePath}"));
+        logger.Info($"全件の一覧: {listPath}");
+        logger.Info($"増える・書き換わるファイルの中身: {diffDirectory}");
+    }
+
+    /// <summary>差分だけを出すビルドで、ログに出すファイルの一覧の上限。</summary>
+    private const int DiffListLimit = 100;
 
     /// <summary>
     /// 進捗バーに登録する 22 セクション分のプランを、与えられた予想ページ数辞書から組み立てる。

@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **SiteBuilder：出力に書き込まずに、今の出力との差分だけを出す `--diff` を足した**（`OutputWriter.DiffOnly`〔新規〕・`OutputWriter.Changes`〔新規〕・`OutputWriter.TrackedFilesUnder`〔新規〕・`OutputChange`〔新規〕・`BuildConfig.DiffOnly`〔新規〕・`SiteBuilderPipeline.ReportDiff`〔新規〕・`SitemapLastmodManifest.Resolve`・`SeoGenerator`・`OgGalleryGenerator`・`Program`）：コードやデータを変えたあと出力がどう変わるかは、出力を作り直してからでないと分からなかった。`--diff` を付けたビルドは、出力・台帳・sitemap の更新日の控えに手を付けず、増える・書き換わる・消えるファイルの件数と一覧を出す。増える・書き換わるファイルの中身は出力の隣の `{出力ディレクトリ}.diff` に同じ相対パスで置くので、今の出力と 1 ファイルずつ見比べられる。違いが無ければ `IDENTICAL` と出す。`--page` と併用できる。`--deploy` とは併用できない。更新時刻だけが違って中身が同じ画像は差分に数えない。テストモードの OGP カード一覧は、出力のディレクトリを走査せず、今回の出力として記録したファイルから作るようにした（ふつうのビルドの出力は変わらない）。
+
 - **SiteBuilder：書体が引けないときに、既定の書体で描いた OGP カードで前回の画像を上書きしないようにした**（`OgCardRenderer.MissingTypefaces`〔新規〕・`OgCardRenderer.ProbeTypeface`〔新規〕・`InstalledFontIndex.NameTableHasName`〔新規〕・`PageRenderer.RenderOgCard`・`SubtitleTelopPreflight.LogFontRoutes`〔新規〕・`OgCardBatch`・`SiteBuilderPipeline`）：カードの材料が名前で指す書体（見出し・タグライン・事実行・エピソードのサブタイトルと振り仮名・書体見本）がこの PC で引けないと、既定の見出し書体で描いて出力へ置いていた。引けないカードは描かず、出力に前回の画像があれば残し、無ければカードなしにして、書体名ごとに警告を出す。`--og-cards` も同じ扱いにした。名前で引いた書体は、その name テーブルに頼んだ名前があるかを照らし、無ければ使わない。ビルドの冒頭に、書体の表の描く書体名がどの経路で引けるかをログに出す。書体がそろっている PC では出力は変わらない。
 
 - **サイト：一覧の OGP カードから、右下の基準点の注記（「〜時点」）を外した**（`CreatorsGenerator.BuildCreatorsOgCard`・`CharactersGenerator`・`PrecuresGenerator`）：歴代キャラクター・作品ごとのその他のキャラクター・歴代プリキュアオールスターズ・クリエイターの一覧（スタッフ・声の出演・音楽制作・歌唱・歴代クリエイター）・音楽の役職のカードが対象。注記の日付が放送のたびに変わり、カードが毎週描き直しになっていた。ページの本文の表記と、統計のカード（歴代記録・エピソード尺統計・サブタイトル統計）の注記は残した。

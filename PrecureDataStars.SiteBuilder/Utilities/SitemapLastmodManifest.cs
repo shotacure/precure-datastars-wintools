@@ -32,7 +32,8 @@ public sealed class SitemapLastmodManifest
     /// <summary>
     /// 各ページの出力ファイルのハッシュを前回マニフェストと突き合わせ、URL ごとの lastmod を解決する。
     /// 解決後の状態を新しいマニフェストとして保存する（今ビルドに存在するページのみを残すため、
-    /// 生成されなくなったページのエントリは自然に脱落する）。
+    /// 生成されなくなったページのエントリは自然に脱落する）。<paramref name="save"/> が false なら保存しない
+    /// （出力に書き込まないビルド用）。
     /// </summary>
     /// <param name="pages">(URL パス, 出力ファイルの絶対パス) の列。書き出し順。</param>
     /// <param name="buildTimeIso">変化／新規ページに付ける当該ビルドの時刻（ISO-8601 / W3C Datetime）。</param>
@@ -40,10 +41,12 @@ public sealed class SitemapLastmodManifest
     /// 出力ファイルの絶対パス → 中身の MD5（16 進）。書く時に取った印を渡す（<c>OutputWriter.Md5Of</c>）。
     /// null を返したファイルと、省いたときは、ファイルを読んで求める。
     /// </param>
+    /// <param name="save">解決後の状態をマニフェストに保存するか。</param>
     public LastmodResolveResult Resolve(
         IReadOnlyList<(string UrlPath, string OutputFilePath)> pages,
         string buildTimeIso,
-        Func<string, string?>? hashOf = null)
+        Func<string, string?>? hashOf = null,
+        bool save = true)
     {
         var previous = LoadPrevious();
         var next = new Dictionary<string, ManifestEntry>(pages.Count, StringComparer.Ordinal);
@@ -71,7 +74,7 @@ public sealed class SitemapLastmodManifest
             lastmodByUrl[urlPath] = lastmod;
         }
 
-        Save(next);
+        if (save) Save(next);
         return new LastmodResolveResult
         {
             LastmodByUrl = lastmodByUrl,

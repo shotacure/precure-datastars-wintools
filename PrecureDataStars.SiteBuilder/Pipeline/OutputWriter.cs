@@ -25,6 +25,11 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// 中身も台帳の印のとおりとみなして、既存のファイルを読まずに「変わらない」を決める。大きさか更新時刻が違う
 /// ファイル（台帳の外で書き換えられたもの）は、台帳を信じずに読んで確かめる。
 /// </para>
+/// <para>
+/// 差分だけを出すビルド（<c>--diff</c>）では、出力にも台帳にも書き込まない。増える・書き換わるファイルの中身は
+/// 差分ディレクトリ（<see cref="DiffDirectoryFor"/>。出力の隣）へ同じ相対パスで置き、消えるファイルとあわせて
+/// <see cref="Changes"/> に控える。今の出力と 1 ファイルずつ見比べられる。
+/// </para>
 /// </summary>
 public sealed class OutputWriter
 {
@@ -43,10 +48,53 @@ public sealed class OutputWriter
     private int _written;
     private int _unchanged;
 
-    public OutputWriter(string outputRoot)
+    /// <summary>差分だけを出すビルドで、増える・書き換わるファイルの中身を置くディレクトリ。ふつうのビルドでは null。</summary>
+    private readonly string? _diffDirectory;
+
+    /// <summary>差分だけを出すビルドで控えた、今の出力との違い。</summary>
+    private readonly ConcurrentBag<OutputChange> _changes = new();
+
+    /// <param name="outputRoot">出力ディレクトリ。</param>
+    /// <param name="diffOnly">出力に書き込まず、今の出力との差分だけを控えるか（<c>--diff</c>）。</param>
+    public OutputWriter(string outputRoot, bool diffOnly = false)
     {
         Root = Path.GetFullPath(outputRoot);
         _previous = LoadLedger(Root);
+        if (diffOnly)
+        {
+            // 前回の差分は残さない（今回の差分と混ざらないように）。
+            _diffDirectory = DiffDirectoryFor(Root);
+            if (Directory.Exists(_diffDirectory)) Directory.Delete(_diffDirectory, recursive: true);
+        }
+    }
+
+    /// <summary>出力に書き込まず、今の出力との差分だけを控えるビルドか。</summary>
+    public bool DiffOnly => _diffDirectory is not null;
+
+    /// <summary>
+    /// 出力ディレクトリに対応する差分ディレクトリのパス（出力の兄弟）。差分だけを出すビルドが、増える・書き換わる
+    /// ファイルの中身を出力と同じ相対パスで置く。
+    /// </summary>
+    public static string DiffDirectoryFor(string outputDirectory)
+        => Path.GetFullPath(outputDirectory).TrimEnd('/', '\\') + ".diff";
+
+    /// <summary>差分だけを出すビルドで控えた、今の出力との違い（相対パスの順）。ふつうのビルドでは空。</summary>
+    public IReadOnlyList<OutputChange> Changes
+        => _changes.OrderBy(c => c.RelativePath, StringComparer.Ordinal).ToList();
+
+    /// <summary>
+    /// 差分だけを出すビルドで、増える・書き換わるファイル 1 つを控え、その中身を差分ディレクトリへ置く。
+    /// 出力には書かない。印の更新時刻は 0（台帳には残さないので使われない）。
+    /// </summary>
+    private void RecordDiff(string full, byte[] bytes, string md5, bool exists)
+    {
+        var relative = Path.GetRelativePath(Root, full).Replace('\\', '/');
+        var target = Path.Combine(_diffDirectory!, relative.Replace('/', Path.DirectorySeparatorChar));
+        PathUtil.EnsureParentDirectory(target);
+        File.WriteAllBytes(target, bytes);
+        _changes.Add(new OutputChange(relative, exists ? OutputChangeKind.Changed : OutputChangeKind.Added));
+        _files[full] = new OutputFileStamp(md5, bytes.Length, 0);
+        Interlocked.Increment(ref _written);
     }
 
     /// <summary>出力ディレクトリの絶対パス。</summary>
@@ -81,6 +129,11 @@ public sealed class OutputWriter
                 return false;
             }
         }
+        if (DiffOnly)
+        {
+            RecordDiff(full, bytes, md5, info.Exists);
+            return true;
+        }
         PathUtil.EnsureParentDirectory(full);
         File.WriteAllBytes(full, bytes);
         _files[full] = new OutputFileStamp(md5, bytes.Length, File.GetLastWriteTimeUtc(full).Ticks);
@@ -110,6 +163,25 @@ public sealed class OutputWriter
         }
         // 元のファイルを 1 度だけ読み、印を取ってから書く（写した後に読み返さない）。
         var bytes = File.ReadAllBytes(sourcePath);
+        if (DiffOnly)
+        {
+            // 更新時刻だけが違って中身が同じファイルは、差分に数えない（ふつうのビルドは写し直すが、中身は変わらない）。
+            string md5 = Md5Hex(bytes);
+            if (target.Exists && target.Length == bytes.Length)
+            {
+                string current = _previous.TryGetValue(full, out var known) && known.Length == target.Length && known.MtimeTicks == target.LastWriteTimeUtc.Ticks
+                    ? known.Md5
+                    : Md5Hex(File.ReadAllBytes(full));
+                if (string.Equals(current, md5, StringComparison.Ordinal))
+                {
+                    _files[full] = new OutputFileStamp(md5, target.Length, target.LastWriteTimeUtc.Ticks);
+                    Interlocked.Increment(ref _unchanged);
+                    return false;
+                }
+            }
+            RecordDiff(full, bytes, md5, target.Exists);
+            return true;
+        }
         PathUtil.EnsureParentDirectory(full);
         File.WriteAllBytes(full, bytes);
         File.SetLastWriteTimeUtc(full, source.LastWriteTimeUtc);
@@ -182,9 +254,11 @@ public sealed class OutputWriter
     /// 今回の出力の印を台帳へ残す。全体ビルドでは今回の出力に属するファイルだけを残す（<see cref="PruneOrphans"/> の後に呼ぶ）。
     /// ピンポイントビルド（<c>--page</c>）では、前回までの台帳に今回書いた分を重ねる（<paramref name="keepPrevious"/>）。
     /// 一時ファイルに書いてから置き換えるので、途中で止まっても台帳は壊れない。
+    /// 差分だけを出すビルドでは何もしない（出力を書いていないので、台帳は前回のまま）。
     /// </summary>
     public void SaveLedger(bool keepPrevious)
     {
+        if (DiffOnly) return;
         var entries = new SortedDictionary<string, OutputFileStamp>(StringComparer.Ordinal);
         string Relative(string full) => Path.GetRelativePath(Root, full).Replace('\\', '/');
         if (keepPrevious)
@@ -207,12 +281,26 @@ public sealed class OutputWriter
     private static string Md5Hex(byte[] bytes)
         => Convert.ToHexString(System.Security.Cryptography.MD5.HashData(bytes)).ToLowerInvariant();
 
+    /// <summary>
+    /// 今回の出力として記録したファイルのうち、<paramref name="directory"/> の下にあって拡張子が <paramref name="extension"/>
+    /// （<c>.png</c> の形）のものの絶対パス。出力のディレクトリを走査しないので、差分だけを出すビルドでも
+    /// （ファイルを書いていなくても）今回の出力の顔ぶれが分かる。
+    /// </summary>
+    public IReadOnlyList<string> TrackedFilesUnder(string directory, string extension)
+    {
+        var prefix = Path.GetFullPath(directory).TrimEnd('/', '\\') + Path.DirectorySeparatorChar;
+        return _files.Keys
+            .Where(f => f.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && f.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
     /// <summary>そのファイルが今回の出力として記録済みか（前回の出力の残りではないか）。</summary>
     public bool IsTracked(string path) => _files.ContainsKey(Path.GetFullPath(path));
 
     /// <summary>
     /// 出力ディレクトリにあって今回の出力に属さないファイルを消し、空になったディレクトリも消す。戻り値は消したファイル数。
     /// 全体ビルドの最後に呼ぶ。ピンポイントビルド（<c>--page</c>）では呼ばない（対象外のページを消してしまう）。
+    /// 差分だけを出すビルドでは消さず、消えるファイルとして控えて数だけ返す。
     /// </summary>
     public int PruneOrphans()
     {
@@ -222,9 +310,11 @@ public sealed class OutputWriter
         foreach (var file in Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories))
         {
             if (_files.ContainsKey(Path.GetFullPath(file))) continue;
-            File.Delete(file);
+            if (DiffOnly) _changes.Add(new OutputChange(Path.GetRelativePath(Root, file).Replace('\\', '/'), OutputChangeKind.Removed));
+            else File.Delete(file);
             removed++;
         }
+        if (DiffOnly) return removed;
 
         // 深いディレクトリから見て、空になったものを消す（子を消してから親を見る順になる）。
         foreach (var dir in Directory.EnumerateDirectories(Root, "*", SearchOption.AllDirectories)
@@ -246,10 +336,11 @@ public sealed class OutputWriter
     ///   <item><description>記録したパスと実際の名前が大文字小文字だけ違うものを探し、ルートに近い階層から順に一時名を経由して
     ///     付け替える（大文字小文字だけの改名は直接できない場合があるため）。</description></item>
     /// </list>
+    /// 差分だけを出すビルドでは何もしない。
     /// </summary>
     public int AlignNameCase()
     {
-        if (!Directory.Exists(Root)) return 0;
+        if (DiffOnly || !Directory.Exists(Root)) return 0;
 
         // 記録したパス（大文字小文字は記録した形のまま）を、大文字小文字を区別しない引き当て用に持つ。
         var tracked = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -299,6 +390,22 @@ public sealed class OutputWriter
     }
 
 }
+
+/// <summary>差分だけを出すビルドで控える、今の出力との違いの種類。</summary>
+public enum OutputChangeKind
+{
+    /// <summary>今の出力に無く、増えるファイル。</summary>
+    Added,
+    /// <summary>今の出力にあり、中身が書き換わるファイル。</summary>
+    Changed,
+    /// <summary>今の出力にあり、今回の出力に属さないので消えるファイル。</summary>
+    Removed,
+}
+
+/// <summary>差分だけを出すビルドで控える、今の出力との違い 1 件。</summary>
+/// <param name="RelativePath">出力ディレクトリからの相対パス（区切りは <c>/</c>）。</param>
+/// <param name="Kind">違いの種類。</param>
+public sealed record OutputChange(string RelativePath, OutputChangeKind Kind);
 
 /// <summary>出力のファイル 1 つの中身の印。台帳（<see cref="OutputWriter.LedgerPathFor"/>）に残す。</summary>
 /// <param name="Md5">中身の MD5（小文字の 16 進）。</param>

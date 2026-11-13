@@ -361,6 +361,23 @@ public sealed record OgCardFactLine(string Label, string Text)
     /// 2 段に分けて全部見せるための枠。1 行 1 項目で積む <see cref="OgCardSpec.Facts"/> でのみ使う。
     /// </summary>
     public string SubText { get; init; } = "";
+
+    /// <summary>
+    /// 値を「同じ種類の項目の並び」として渡す指定（役職ごとの作品名、歌った曲名など）。非 null なら <see cref="Text"/> の代わりに使う。
+    /// 描画の側が、先頭から入るだけ（項目あたりの行数の上限まで）並べ、入りきらない分があれば末尾に「ほか」と添える。
+    /// 大事な項目から順に並べて渡す。1 行 1 項目で積む <see cref="OgCardSpec.Facts"/> でのみ使う。
+    /// null のときは JSON に出さず、既存のカードの作り置きの鍵を変えない。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? Items { get; init; }
+
+    /// <summary><see cref="Items"/> に入れなかった項目がまだあるか。true なら全部入っても末尾に「ほか」と添える。</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ItemsHaveMore { get; init; }
+
+    /// <summary><see cref="Items"/> のあいだに挟む区切り。null なら挟まない（『』や「」で括った名前はそのまま続けて並べる）。</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ItemsSeparator { get; init; }
 }
 
 /// <summary>

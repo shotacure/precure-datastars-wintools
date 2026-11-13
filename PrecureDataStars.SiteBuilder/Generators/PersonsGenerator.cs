@@ -84,6 +84,10 @@ public sealed class PersonsGenerator
     /// 作詞・作曲・編曲（曲単位の仕事）だけの曲は本索引に乗らず、従来どおり曲の代表録音から出典を解決する。</summary>
     private IReadOnlyDictionary<int, IReadOnlyDictionary<int, SongRecording>>? _sungRecordingByAlias;
 
+    /// <summary>本人の名義で歌（VOCALS。コーラスは除く）を担当した人物名義（ユニットの PERSON メンバーを含む。キャラクターの名義で歌った声優は含めない）。
+    /// OGP カードで、声の出演をしたことのある歌手と、歌うこともある声優を分けるのに使う（<see cref="IsSinger"/>）。</summary>
+    private HashSet<int>? _ownNameVocalAliases;
+
     /// <summary>person_id → 「代表作（プリキュアを除く）」の表示行（並び順どおり）。<c>GenerateAsync</c> で並列レンダリングの前に 1 度だけ詰める。</summary>
     private IReadOnlyDictionary<int, IReadOnlyList<NotableWorkView>>? _notableWorksByPerson;
     /// <summary>person_id → 脚注（出典）と本文の番号。<c>GenerateAsync</c> で並列レンダリングの前に 1 度だけ詰める。</summary>
@@ -193,6 +197,7 @@ public sealed class PersonsGenerator
             // 歌った録音を alias × song_id 単位で記録する（出典・版をカードで正確に出すため）。
             // 同一曲を複数録音で歌っている場合は出典シリーズが最も早い録音を採用する。
             var sungRecByAlias = new Dictionary<int, Dictionary<int, SongRecording>>();
+            var ownNameVocal = new HashSet<int>();
             void AddSungRecording(int aliasId, SongRecording rec)
             {
                 if (!sungRecByAlias.TryGetValue(aliasId, out var bySong))
@@ -218,6 +223,8 @@ public sealed class PersonsGenerator
                         if (p.PersonAliasId is not int paid || !seenInRow.Add(paid)) continue;
                         AddSingerSong(paid, rec.SongId, s.RoleCode);
                         AddSungRecording(paid, rec);
+                        if (p.CharacterAliasId is null && string.Equals(s.RoleCode, "VOCALS", StringComparison.Ordinal))
+                            ownNameVocal.Add(paid);
                     }
                 }
             }
@@ -227,6 +234,7 @@ public sealed class PersonsGenerator
             _sungRecordingByAlias = sungRecByAlias.ToDictionary(
                 kv => kv.Key,
                 kv => (IReadOnlyDictionary<int, SongRecording>)kv.Value);
+            _ownNameVocalAliases = ownNameVocal;
         }
 
         // song_id → recordings の索引も 1 度だけ組み立てておく（カード行の出典シリーズ解決用）。
@@ -389,7 +397,7 @@ public sealed class PersonsGenerator
                 },
             OgType = "profile",
             JsonLd = JsonLdBuilder.Serialize(jsonLdDict),
-            OgCard = BuildUnitOgCard(name, memberNames, songCards, songCount, coverageLabel)
+            OgCard = BuildUnitOgCard(name, memberNames, songCards)
         };
 
         _page.RenderAndWriteFile(url, "units-detail.sbn", content, layout);
@@ -450,34 +458,22 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// ユニット詳細の OGP カード（プロフィール組み）。「ユニット名 → 曲数 → メンバー → 関わった作品 → 初参加の曲」の順。
-    /// 色帯と透かしは音楽（紫、「ユニット」）。曲数はクレジット確認済みの範囲なので、基準点を右下の注記に明記する。
+    /// ユニット詳細の OGP カード（プロフィール組み）。「ユニット名 → メンバー → 歌った曲 → 初参加の曲」の順。
+    /// 色帯と透かしは音楽（紫、「ユニット」）。曲数は出さない（クレジットの入力が進むたびに変わり、数だけでは何を歌ったかが伝わらないため）。
     /// </summary>
-    private static OgCardSpec BuildUnitOgCard(string name, IReadOnlyList<string> memberNames, IReadOnlyList<PersonSongCard> songCards, int songCount, string coverageLabel)
+    private static OgCardSpec BuildUnitOgCard(string name, IReadOnlyList<string> memberNames, IReadOnlyList<PersonSongCard> songCards)
     {
-        var badges = new List<OgCardBadge>();
-        if (songCount > 0) badges.Add(new OgCardBadge("曲", $"{songCount}曲"));
         var inline = memberNames.Count > 0
             ? new[] { new OgCardFactLine("メンバー", string.Join("・", memberNames.Take(6)) + (memberNames.Count > 6 ? " ほか" : "")) }
             : Array.Empty<OgCardFactLine>();
-        // 関わった作品（出典の作品の放送開始順、重複を除いて最大 4 つ）。
-        var works = songCards
-            .Where(c => c.SeriesTitle.Length > 0)
-            .OrderBy(c => c.SeriesStartDateRaw ?? DateOnly.MaxValue)
-            .Select(c => c.SeriesTitle)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-        var facts = works.Take(4).Select(t => new OgCardFactLine("", t)).ToList();
-        if (works.Count > 4) facts.Add(new OgCardFactLine("", $"ほか {works.Count - 4} 作品"));
         var first = songCards.OrderBy(c => c.SortRecordingId).ThenBy(c => c.SongId).FirstOrDefault();
         return new OgCardSpec(Kicker: "", Title: name)
         {
-            MetaLeft = OgCoverageLabel.Compact(coverageLabel),
-            Badges = badges,
             InlineFacts = inline,
             BandColorHex = OgCardColors.Music,
             Watermark = "ユニット",
-            Facts = facts,
+            // 歌った曲（と、あれば作詞などの役職ごとの曲）を曲名で並べる。
+            Facts = BuildSongGroupLines(songCards),
             FootFacts = first is null
                 ? Array.Empty<OgCardFactLine>()
                 : new[] { new OgCardFactLine("初参加", $"「{PrecureDataStars.TemplateRendering.JapaneseQuotes.InQuotes(first.Title)}」") }
@@ -675,7 +671,7 @@ public sealed class PersonsGenerator
             Breadcrumbs = CreatorListMembership.DetailBreadcrumbs(_ctx.CreatorLists.ListForPerson(person.PersonId), displayLabel),
             OgType = "profile",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(displayLabel, personUrl, involvementGroups, allPersonInvolvements, firstAppearance, creditEpisodeCountTotal, creditMovieCountTotal, creditOtonaEpisodeCountTotal, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(displayLabel, allPersonInvolvements, songCards, firstAppearance, IsSinger(aliasIds, allPersonInvolvements))
         };
 
         _page.RenderAndWriteFile(personUrl, "persons-detail.sbn", content, layout);
@@ -684,71 +680,112 @@ public sealed class PersonsGenerator
 
     /// <summary>
     /// 人物詳細ページの OGP カードを組み立てる（プロフィール組み）。
-    /// 「氏名 → TV 話数・映画本数 → 役職と話数 → 関わった期間の年表 → 初参加」の順に置く。
-    /// 氏名だけのカードでは誰なのか伝わらないため、担当話数の多い役職と、いつからいつまで関わったかの年表で
-    /// 「プリキュアで何をしてきた人か」を一目で示す。色帯は人物の青（声の出演しかない人物は緑）、透かしは主な役職。
-    /// 年表はサイトの年表（役職詳細・声の出演一覧）に載る人物にだけ出す（載らない人には単発の点しか描けず、意味が伝わらない）。
-    /// 年表を出さない人物には、代わりに関わった作品を 1 行 1 作品で並べる。
+    /// 「氏名 → 何をしてきたか（役職ごとの作品、役職ごとの曲）→ 初参加」の順に置き、「プリキュアで何をしてきた人か」を事績で示す。
+    /// 色帯は人物の青（声の出演しかない人物は緑、歌手と音楽だけの人は音楽の紫）、透かしは主な役職（歌手は「歌」）。
+    /// 担当した話数・本数・曲数は出さない（役職を足した延べの数では仕事の大きさが読めず、クレジットの入力が進むたびに変わってしまうため）。
+    /// 歌手（<paramref name="isSinger"/>）は曲の項目を先に、声の出演などの項目を後ろに並べ、初参加も最初の曲にする。
+    /// それ以外の人は本編の役職の項目を先に、曲の項目を後ろに並べる（本編のクレジットが無い作詞家・作曲家は曲だけになる）。
     /// </summary>
+    /// <param name="isSinger">
+    /// 声の出演をしたことのある歌手と、歌うこともある声優を分ける。本人の名義で歌（コーラスは除く）を担当した録音があり、
+    /// 本編のクレジットに主な役職（メインスタッフかオープニングの役職。主題歌・挿入歌の役職は除く）が無い人を歌手とする。声優がキャラクターの名義で歌った曲は数えない。
+    /// </param>
     private OgCardSpec BuildOgCard(
         string displayName,
-        string personUrl,
-        IReadOnlyList<InvolvementGroup> involvementGroups,
         IReadOnlyList<Involvement> mainInvolvements,
+        IReadOnlyList<PersonSongCard> songCards,
         FirstAppearance? firstAppearance,
-        int creditEpisodeCountTotal,
-        int creditMovieCountTotal,
-        int creditOtonaEpisodeCountTotal,
-        string coverageLabel)
+        bool isSinger)
     {
-        // TV・映画・大人向けはどれも「担当した量」なので、片方だけを「担当」と呼ばず媒体名で対等に並べる。
-        var badges = new List<OgCardBadge>();
-        if (creditEpisodeCountTotal > 0) badges.Add(new OgCardBadge("TV", $"{creditEpisodeCountTotal}話"));
-        if (creditMovieCountTotal > 0) badges.Add(new OgCardBadge("映画", $"{creditMovieCountTotal}本"));
-        if (creditOtonaEpisodeCountTotal > 0) badges.Add(new OgCardBadge("オトナ", $"{creditOtonaEpisodeCountTotal}話"));
+        // 曲の項目を別に並べる人は、主題歌・挿入歌の役職を本編の項目にしない（同じ仕事が二重に出るため）。
+        var career = OgCareerCardParts.BuildCareerLines(_ctx, mainInvolvements, excludeSongRoles: songCards.Count > 0);
+        var songs = BuildSongGroupLines(songCards);
+        var facts = isSinger ? songs.Concat(career).ToList() : career.Concat(songs).ToList();
 
-        // 役職は担当規模の多い順に上位 4 件。
-        var roles = involvementGroups
-            .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.Count > 0)
-            .OrderByDescending(g => g.Count)
-            .Take(4)
-            .Select(g => new OgCardFactLine(g.RoleLabel, FormatInvolvementCount(g)))
-            .ToArray();
+        // 透かしは主な役職。本編の役職が無く音楽だけの人は、曲のいちばん多い役職（作詞・作曲など）。
+        string mainRole = OgCareerCardParts.ResolveMainRoleLabel(_ctx, mainInvolvements);
+        bool musicOnly = !isSinger && mainRole.Length == 0 && songs.Count > 0;
+        string watermark = isSinger ? "歌" : musicOnly ? songs[0].Label : mainRole;
 
         bool voiceOnly = mainInvolvements.Count > 0 && mainInvolvements.All(i => i.IsVoiceCast);
-        string bandColor = voiceOnly ? OgCardColors.VoiceActor : OgCardColors.Staff;
+        string bandColor = isSinger || musicOnly ? OgCardColors.Music : voiceOnly ? OgCardColors.VoiceActor : OgCardColors.Staff;
+
+        // 初参加：歌手は最初の曲（出典の作品の早い順 → 録音の早い順）、それ以外は本編のいちばん早い話。
+        OgCardFactLine? debut = null;
+        if (isSinger)
+        {
+            var firstSong = songCards
+                .OrderBy(c => c.SeriesStartDateRaw ?? DateOnly.MaxValue)
+                .ThenBy(c => c.SortRecordingId)
+                .FirstOrDefault();
+            if (firstSong is not null)
+            {
+                string series = firstSong.SeriesTitle.Length > 0 ? $"『{firstSong.SeriesTitle}』" : "";
+                debut = new OgCardFactLine("初参加", series + SongTitleItem(firstSong));
+            }
+        }
+        else if (firstAppearance is not null)
+        {
+            debut = new OgCardFactLine("初参加", firstAppearance.ToPlainText());
+        }
 
         // 前置きは置かない。「クリエイター」と名乗らせなくても、氏名と担当役職の並びで何者かは伝わる。
         return new OgCardSpec(Kicker: "", Title: displayName)
         {
-            // 担当話数はクレジット登録済みの範囲でしか数えられない。母数を示さずに数だけ出すと
-            // 「歴代の全担当数」と受け取られてしまうため、基準点を右下の注記に明記する。
-            MetaLeft = OgCoverageLabel.Compact(coverageLabel),
-            Badges = badges,
-            InlineFacts = roles,
             BandColorHex = bandColor,
-            Watermark = OgCareerCardParts.ResolveMainRoleLabel(_ctx, mainInvolvements),
-            // 関わった作品を 1 行 1 作品で並べる（年表の棒は何を読めばよいかが伝わらないので出さない）。
-            Facts = OgCareerCardParts.BuildWorksLines(_ctx, mainInvolvements),
-            FootFacts = firstAppearance is null
-                ? Array.Empty<OgCardFactLine>()
-                : new[] { new OgCardFactLine("初参加", firstAppearance.ToPlainText()) }
+            Watermark = watermark,
+            Facts = facts,
+            FootFacts = debut is null ? Array.Empty<OgCardFactLine>() : new[] { debut }
         };
     }
 
     /// <summary>
-    /// 役職ごとの関与規模をカード用に短く整形する。総数はバッジ側で出しているため、
-    /// <see cref="InvolvementGroup.CountLabel"/> のように「担当」を繰り返さず件数だけを並べる。
+    /// 本人の名義で歌った（コーラスを除く）人物を歌手とみなすかを決める。
+    /// 本人の名義の歌があり、本編のクレジットに主な役職（<see cref="OgCareerCardParts.HasPrincipalStaffRole"/>）が無ければ歌手。
+    /// 作曲家など主な役職を持つ人が本人の名義で歌った場合は、その役職の仕事を先に見せるため歌手にしない。
+    /// 演技協力のような端の役職が 1 つあるだけの歌手は歌手のまま。
     /// </summary>
-    private static string FormatInvolvementCount(InvolvementGroup group)
+    private bool IsSinger(IReadOnlyList<int> aliasIds, IReadOnlyList<Involvement> mainInvolvements)
     {
-        // TV の話数・映画の本数・大人向けの話数のうち、0 でないものを「 / 」で並べる。
-        var parts = new List<string>(3);
-        if (group.EpisodeCount > 0) parts.Add($"{group.EpisodeCount}話");
-        if (group.MovieCount > 0) parts.Add($"{group.MovieCount}本");
-        if (group.OtonaEpisodeCount > 0) parts.Add($"オトナ {group.OtonaEpisodeCount}話");
-        return string.Join(" / ", parts);
+        if (_ownNameVocalAliases is null || !aliasIds.Any(_ownNameVocalAliases.Contains)) return false;
+        return !OgCareerCardParts.HasPrincipalStaffRole(_ctx, mainInvolvements);
     }
+
+    /// <summary>
+    /// カードに並べる曲の項目。曲での役職（歌・作詞・作曲・編曲など）ごとに 1 項目で、値は曲名の並び（「歌　「曲名」「曲名」 ほか」）。
+    /// 項目の並びは曲の多い役職 → 役職の表示順。項目の中の曲は、TV・映画のオープニング・エンディング主題歌 → それ以外で、
+    /// 同じ段の中は出典の作品の早い順。入りきらない曲は描画の側が後ろから落として「ほか」と添える。
+    /// </summary>
+    private static IReadOnlyList<OgCardFactLine> BuildSongGroupLines(IReadOnlyList<PersonSongCard> songCards)
+    {
+        static bool IsThemeSong(PersonSongCard c) => c.BadgeClassSuffix is "op" or "ed" or "movie-op" or "movie-ed";
+        return songCards
+            .SelectMany(c => c.Roles.Select(r => (Role: r, Card: c)))
+            .GroupBy(x => x.Role.Code, StringComparer.Ordinal)
+            .Select(g =>
+            {
+                var songs = g.Select(x => x.Card)
+                    .DistinctBy(c => c.SongId)
+                    .OrderByDescending(IsThemeSong)
+                    .ThenBy(c => c.SeriesStartDateRaw ?? DateOnly.MaxValue)
+                    .ThenBy(c => c.SortRecordingId)
+                    .ToList();
+                var role = g.First().Role;
+                string color = OgRolePalette.ColorFor(g.Key);
+                return (songs.Count, role.DisplayOrder, Line: new OgCardFactLine(role.Label, "")
+                {
+                    LabelColorHex = color.Length > 0 ? color : OgCardColors.Music,
+                    Items = songs.Take(OgCareerCardParts.GroupItemsMax).Select(SongTitleItem).ToList(),
+                    ItemsHaveMore = songs.Count > OgCareerCardParts.GroupItemsMax
+                });
+            })
+            .OrderByDescending(x => x.Count).ThenBy(x => x.DisplayOrder)
+            .Select(x => x.Line)
+            .ToList();
+    }
+
+    /// <summary>曲 1 件を項目にした値（「曲名」）。</summary>
+    private static string SongTitleItem(PersonSongCard c) => $"「{PrecureDataStars.TemplateRendering.JapaneseQuotes.InQuotes(c.Title)}」";
 
     /// <summary>
     /// 人物詳細の meta description。主要な実績だけを「役職（2016年『作品』、2015年『作品』ほか）」の形で「／」でつなぎ、150 字ほどに収める。

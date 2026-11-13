@@ -351,7 +351,7 @@ public sealed class CompaniesGenerator
             // 企業ページは website 寄り（プロフィール的でもあるが OGP profile は人物用なので使わない）。
             OgType = "website",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(company.Name, companyUrl, groups, allInvolvements, memberHistory, creditEpisodeCountTotal, creditMovieCountTotal, creditOtonaEpisodeCountTotal, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(company.Name, allInvolvements, memberHistory)
         };
 
         _page.RenderAndWrite(
@@ -366,35 +366,15 @@ public sealed class CompaniesGenerator
 
     /// <summary>
     /// 企業詳細ページの OGP カードを組み立てる（人物と同じプロフィール組み）。
-    /// 「名称 → TV 話数・映画本数 → 役職と話数 → 関わった期間の年表 → 所属の人物・初参加」の順に置き、
-    /// 社名だけでは伝わらない「プリキュアでどの工程をどれだけ、いつからいつまで担ってきたか」を示す。透かしは主な役職。
-    /// 年表はサイトの年表（役職詳細）に載る団体にだけ出し、出さない団体には代わりに関わった作品を 1 行 1 作品で並べる。
+    /// 「名称 → 担った役職と、その役職で関わった作品 → 所属の人物・初参加」の順に置き、
+    /// 社名だけでは伝わらない「プリキュアでどの作品のどの工程を担ってきたか」を事績で示す。透かしは主な役職。
+    /// 担当した話数・本数は出さない（役職を足した延べの数では仕事の大きさが読めず、クレジットの入力が進むたびに変わってしまうため）。
     /// </summary>
     private OgCardSpec BuildOgCard(
         string displayName,
-        string companyUrl,
-        IReadOnlyList<InvolvementGroup> groups,
         IReadOnlyList<Involvement> allInvolvements,
-        IReadOnlyList<MemberHistoryAliasSection> memberHistory,
-        int creditEpisodeCountTotal,
-        int creditMovieCountTotal,
-        int creditOtonaEpisodeCountTotal,
-        string coverageLabel)
+        IReadOnlyList<MemberHistoryAliasSection> memberHistory)
     {
-        // TV・映画・大人向けはどれも「担当した量」なので、片方だけを「担当」と呼ばず媒体名で対等に並べる。
-        var badges = new List<OgCardBadge>();
-        if (creditEpisodeCountTotal > 0) badges.Add(new OgCardBadge("TV", $"{creditEpisodeCountTotal}話"));
-        if (creditMovieCountTotal > 0) badges.Add(new OgCardBadge("映画", $"{creditMovieCountTotal}本"));
-        if (creditOtonaEpisodeCountTotal > 0) badges.Add(new OgCardBadge("オトナ", $"{creditOtonaEpisodeCountTotal}話"));
-
-        // 役職は担当規模の多い順に上位 4 件（人物と同じ）。
-        var roles = groups
-            .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.Count > 0)
-            .OrderByDescending(g => g.Count)
-            .Take(4)
-            .Select(g => new OgCardFactLine(g.RoleLabel, FormatInvolvementCount(g)))
-            .ToArray();
-
         // 関わった作品・透かし・初参加は本編のクレジット（主題歌・劇伴経由の関与を除く）から決める。
         var mainInvolvements = allInvolvements.Where(i => i.IsMainCredit).ToList();
         var firstAppearance = FirstAppearanceResolver.Resolve(_ctx, mainInvolvements);
@@ -409,20 +389,15 @@ public sealed class CompaniesGenerator
         return new OgCardSpec(Kicker: "", Title: displayName)
         {
             BandColorHex = OgCardColors.Staff,
-            // 担当話数はクレジット登録済みの範囲でしか数えられないため、基準点を明記する。
-            // 位置は数の直下。数を読んだ直後に効く但し書きなので、数より先に目に入る上段には置かない。
-            MetaLeft = OgCoverageLabel.Compact(coverageLabel),
-            Badges = badges,
-            InlineFacts = roles,
             Watermark = OgCareerCardParts.ResolveMainRoleLabel(_ctx, mainInvolvements),
-            // 関わった作品を 1 行 1 作品で並べる（年表の棒は何を読めばよいかが伝わらないので出さない）。
-            Facts = OgCareerCardParts.BuildWorksLines(_ctx, mainInvolvements),
+            // 役職ごとに、関わった作品を並べる。
+            Facts = OgCareerCardParts.BuildCareerLines(_ctx, mainInvolvements),
             FootFacts = foot
         };
     }
 
     /// <summary>
-    /// カード下端に出す所属の人物の要約。「○○、△△、□□ ほか n 人」の形で、担当回数（TV の話数と映画の本数の和）の多い順に
+    /// カード下端に出す所属の人物の要約。「○○、△△、□□ ほか」の形で（人数は出さない）、担当回数（TV の話数と映画の本数の和）の多い順に
     /// 3 人まで名前を出す。担当回数が同じ人は初参加の順（メンバー履歴に初めて出た順＝屋号の最初の関与日 → 初クレジット順）→ person_id。
     /// 担当回数には大人向けの話数も含める。名義違いは人物単位に畳む。所属の人物がいなければ空。
     /// </summary>
@@ -450,22 +425,7 @@ public sealed class CompaniesGenerator
             .Take(3)
             .ToList();
         string names = string.Join("、", top.Select(p => p.Name));
-        int rest = byPerson.Count - top.Count;
-        return rest > 0 ? $"{names} ほか{rest}人" : names;
-    }
-
-    /// <summary>
-    /// 役職ごとの関与規模をカード用に短く整形する。総数はバッジ側で出しているため、
-    /// <see cref="InvolvementGroup.CountLabel"/> のように「担当」を繰り返さず件数だけを並べる。
-    /// </summary>
-    private static string FormatInvolvementCount(InvolvementGroup group)
-    {
-        // TV の話数・映画の本数・大人向けの話数のうち、0 でないものを「 / 」で並べる。
-        var parts = new List<string>(3);
-        if (group.EpisodeCount > 0) parts.Add($"{group.EpisodeCount}話");
-        if (group.MovieCount > 0) parts.Add($"{group.MovieCount}本");
-        if (group.OtonaEpisodeCount > 0) parts.Add($"オトナ {group.OtonaEpisodeCount}話");
-        return string.Join(" / ", parts);
+        return byPerson.Count > top.Count ? $"{names} ほか" : names;
     }
 
     /// <summary>

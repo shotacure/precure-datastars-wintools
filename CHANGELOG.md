@@ -4,6 +4,14 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：人物・企業・キャラクター・ユニット・役職の OGP カードを、数を出さずに仕事の中身を並べる形にした**（`OgCareerCardParts.BuildCareerLines`〔新規〕・`OgCardFactLine.Items`〔新規〕・`OgCardRenderer.FitFactItems`〔新規〕・`PersonsGenerator`・`CompaniesGenerator`・`CharactersGenerator`・`CreatorsGenerator`）：担当した話数・本数・曲数と基準点の注記は、クレジットの入力が進むたびに変わり、役職を足した延べの数では仕事の大きさも読めないので、この 5 種のカードから外した。
+  - 人物と企業は、役職ごとに 1 項目にした。見出しが役職で、値はその役職で関わった作品の並び。声の出演も 1 項目にまとめ、作品ごとに演じた役を添える。項目はメインスタッフかオープニングの役職（と声の出演）を先に置き、同じ段の中は担当した話の多い順に並べる。項目の中の作品は主に担当した TV の作品を放送順に、それ以外を話の多い順に並べる。3 話以下の担当には話を添える。
+  - 入りきらない作品は、描画の側が後ろから落として「ほか」と添える（数は出さない）。行は作品名・曲名の切れ目でだけ折る。
+  - 人物の曲は曲での役職（歌・作詞・作曲など）ごとに曲名を並べる。主題歌を先に置く。
+  - 本人名義で歌った録音があり、本編に主な役職（メインスタッフかオープニングの役職）が無い方は、歌手として扱う。透かしは「歌」、色帯は音楽の紫で、曲の項目を先に、声の出演を後ろに置く。キャラクターの名義で歌った声優さんは、これまでどおり声の出演を先に置く。
+  - キャラクターは登場した作品を出番の多い順に 1 項目にまとめた。ユニットは歌った曲を曲名で並べる。企業の下端の所属は人数を出さず「ほか」とだけ添える。
+  - 役職は担当者の名前と人数・話数をやめ、「〜を担当した方々」の 1 文と別称・初出にした。透かしは初出の年をやめ、本編の役職は「スタッフ」、音楽の役職のページは「ミュージック」にした。役職のページの meta description から「役職」の語を外した。
+
 - **サイト：エピソードのクレジットの主題歌のカードで、声優名を伏せて出た歌唱者を画面どおりに出せるようにした**（`episode_theme_song_singers.voice_masked_text`〔新規〕・マイグレーション `v1.20.1_add_episode_singer_voice_masked.sql`・`EpisodeThemeSongSingersRepository`・`SongRecordingSingersRepository.BuildHtmlPartsAsync`）：「キュアズキューン(CV：？？？)」のように声優名を伏せた歌の行を、声優の名義は正体の人につないだまま、クレジットの名前の伏せ字と同じ「？？？ (正名義)」の形で出す。入力欄は無く SQL で入れる
 
 - **サイト：作品詳細・各話の詳細・トップページに、Amazon で売られている商品の枠を出せるようにした**（`series_shop_items`〔新規〕・マイグレーション `v1.20.1_series_shop_items.sql`・`SeriesShopItem`・`SeriesShopItemsRepository`・`PaListing`〔新規〕・`PaResourceSet.Offers`〔新規〕・AmazonSync の `--shop-check`・SiteBuilder の `--publish-shop-items`・`ShopItemsFile`〔新規〕・`ShopItemsPublisher`〔新規〕・`shop-box.js`〔新規〕・`BuildContext.ShopItems`・`SeriesGenerator`・`EpisodeGenerator`・`HomeGenerator`・`PageRenderer`・`_layout.sbn`・`scripts/scheduled-shop-check.ps1`〔新規〕・`scripts/register-shop-check-task.ps1`〔新規〕・`scripts/deploy.ps1`）：作品ごとに、枠に出す商品（ASIN・商品名・媒体の札・発売日・並び順）を表に持つ。行は SQL で入れる。音楽商品のほか、商品の表に無い Blu-ray も ASIN だけで載せられる。枠はその作品の作品詳細と各話の詳細の基本情報の下、トップページの音楽商品の発売予定の上に出る。人物・キャラクター・企業のページには出さない。

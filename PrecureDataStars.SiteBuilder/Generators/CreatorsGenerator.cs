@@ -1217,9 +1217,8 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = role.NameJa,
-            MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した方々（人物・企業・団体）",
-            OgCard = BuildRoleOgCard(role, content.PersonCount, content.CompanyCount, rows, rowSet.TimelineEntities, alternateNames,
-                content.CoverageLabel),
+            MetaDescription = $"歴代プリキュアシリーズで「{role.NameJa}」を担当した方々（人物・企業・団体）",
+            OgCard = BuildRoleOgCard(role, $"歴代プリキュアシリーズで「{role.NameJa}」を担当した方々（人物・企業・団体）", rowSet.TimelineEntities, alternateNames),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1441,11 +1440,12 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = role.NameJa,
-            MetaDescription = $"歴代プリキュアの歌で役職「{role.NameJa}」を担当した方々",
+            MetaDescription = $"歴代プリキュアの歌で「{role.NameJa}」を担当した方々",
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 new[] { new OgCardBadge("人物", $"{rows.Count}人") },
-                new[] { new OgCardFactLine("集計元", "歌のクレジット（劇中歌・キャラクターソングを含む）") }, MusicCoverageLabel),
+                new[] { new OgCardFactLine("集計元", "歌のクレジット（劇中歌・キャラクターソングを含む）") }, MusicCoverageLabel,
+                watermark: MusicRoleWatermark),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2134,7 +2134,8 @@ public sealed class CreatorsGenerator
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 BuildEntityBadges(persons, companies),
-                new[] { new OgCardFactLine("集計元", "歌・劇伴・音盤のクレジット") }, MusicCoverageLabel),
+                new[] { new OgCardFactLine("集計元", "歌・劇伴・音盤のクレジット") }, MusicCoverageLabel,
+                watermark: MusicRoleWatermark),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -3551,18 +3552,17 @@ public sealed class CreatorsGenerator
     /// <param name="coverageLabel">基準点ラベル。null なら本編クレジットの収録範囲（<see cref="BuildContext.CreditCoverageLabel"/>）。</param>
     /// <summary>
     /// 役職詳細の OGP カード（人物・企業と同じプロフィール組み）。
-    /// 「役職名 → 人物数・団体数と、この役職がクレジットされた TV の話数・映画の本数・オトナシリーズの話数 → 担当回数順の顔ぶれ → 別称」の順に置く。
-    /// 透かしは初出の年。役職名と人数だけでは「誰の仕事か」が伝わらないため、顔ぶれを入る限り多く並べる。
-    /// 左上の基準点（<c>coverageLabel</c>。空なら出さない）は呼び出し側が渡す。
+    /// 「役職名 → 何の一覧か（1 文）→ 別称・初出」の順に置く。
+    /// シェアされた先で「開くと何が分かるか」が伝わればよいので、役職についての事実（別称・初出）だけを添える。
+    /// クレジットされた作品の一覧は出さない（原画のようにどの作品にも出る役職では、ほぼ全作品が並ぶだけになるため）。
+    /// 透かしは役職の区分（本編の役職は「スタッフ」、声の出演の役職は「声の出演」。音楽の役職のページは「ミュージック」＝<see cref="MusicRoleWatermark"/>）。
+    /// 人数・話数と担当者の名前は出さない（数はクレジットの入力が進むたびに変わり、役職のカードに特定の人の名前が並ぶと誰のカードかが紛れるため）。
     /// </summary>
-    /// <summary>役職詳細のカードに並べる顔ぶれの数（担当回数順の上位）。</summary>
-    private const int RoleCardTopCount = 12;
-
     private OgCardSpec BuildRoleOgCard(
-        Role role, int personCount, int companyCount,
-        IReadOnlyList<EntityRow> rows, IReadOnlyList<RoleTimelineEntity> entities,
-        IReadOnlyList<AlternateNameItem> alternateNames,
-        string coverageLabel)
+        Role role,
+        string lead,
+        IReadOnlyList<RoleTimelineEntity> entities,
+        IReadOnlyList<AlternateNameItem> alternateNames)
     {
         // この役職がクレジットされた話・映画（担当者をまたいで 1 話・1 本に畳む）。
         var episodes = new HashSet<(int SeriesId, int EpisodeId)>();
@@ -3573,33 +3573,7 @@ public sealed class CreatorsGenerator
             foreach (var sid in e.MovieSeriesIds) movies.Add(sid);
         }
 
-        var badges = new List<OgCardBadge>(BuildEntityBadges(personCount, companyCount));
-        int otonaEpisodes = episodes.Count(k => _ctx.IsOtonaSeries(k.SeriesId));
-        int tvEpisodes = episodes.Count - otonaEpisodes;
-        if (tvEpisodes > 0) badges.Add(new OgCardBadge("TV", $"{tvEpisodes}話"));
-        if (movies.Count > 0) badges.Add(new OgCardBadge("映画", $"{movies.Count}本"));
-        if (otonaEpisodes > 0) badges.Add(new OgCardBadge("オトナ", $"{otonaEpisodes}話"));
-
-        // 担当回数順に RoleCardTopCount 者まで。「名前 n話 / n本」を読点で並べる。
-        var top = rows.OrderByDescending(r => r.TotalCount).ThenBy(r => r.FirstSortStart).ThenBy(r => r.FirstSortEpNo).Take(RoleCardTopCount).ToList();
-        var facts = new List<OgCardFactLine>();
-        if (top.Count > 0)
-        {
-            facts.Add(new OgCardFactLine("担当回数順", string.Join("、", top.Select(r =>
-            {
-                // 話数は本線の TV とオトナシリーズを合わせて数える。
-                int eps = r.EpisodeCount + r.OtonaEpisodeCount;
-                string count = (eps, r.MovieCount) switch
-                {
-                    (> 0, > 0) => $"{eps}話 / {r.MovieCount}本",
-                    (> 0, _) => $"{eps}話",
-                    _ => $"{r.MovieCount}本"
-                };
-                return $"{r.EntityName} {count}";
-            }))));
-        }
-
-        // 透かしは、この役職が最初にクレジットされた話（映画なら公開日）の年。
+        // 初出は、この役職が最初にクレジットされた話（映画なら公開日）。
         (DateOnly Date, string Text)? debut = null;
         foreach (var (sid, eid) in episodes)
         {
@@ -3617,21 +3591,27 @@ public sealed class CreatorsGenerator
         var foot = new List<OgCardFactLine>();
         if (alternateNames.Count > 0)
             foot.Add(new OgCardFactLine("別称", string.Join("・", alternateNames.Select(a => a.RoleNameJa))));
+        if (debut is not null)
+            foot.Add(new OgCardFactLine("初出", debut.Value.Text));
 
         return new OgCardSpec(Kicker: "", Title: role.NameJa)
         {
-            MetaLeft = OgCoverageLabel.Compact(coverageLabel),
             BandColorHex = OgCardColors.Staff,
-            Badges = badges,
-            InlineFacts = facts,
-            Watermark = debut is null ? "" : debut.Value.Date.Year.ToString(),
+            Facts = new[] { new OgCardFactLine("", lead) },
+            Watermark = string.Equals(role.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal) ? "声の出演" : "スタッフ",
             FootFacts = foot
         };
     }
 
-    private OgCardSpec BuildCreatorsOgCard(string title, IReadOnlyList<OgCardBadge> badges, IReadOnlyList<OgCardFactLine> facts, string? coverageLabel = null, string lead = "") =>
+
+    /// <summary>音楽の役職（作詞・作曲・演奏など）の詳細ページのカードの透かし。本編の役職の「スタッフ」と対になる区分。</summary>
+    private const string MusicRoleWatermark = "ミュージック";
+
+    private OgCardSpec BuildCreatorsOgCard(string title, IReadOnlyList<OgCardBadge> badges, IReadOnlyList<OgCardFactLine> facts, string? coverageLabel = null, string lead = "", string watermark = "") =>
         new(Kicker: "", Title: title)
         {
+            // 役職の区分など（空なら出さない）。
+            Watermark = watermark,
             MetaLeft = OgCoverageLabel.Compact(coverageLabel ?? _ctx.CreditCoverageLabel),
             // どんなページかのリード文（数の下に添える）。
             Subtitle = lead,

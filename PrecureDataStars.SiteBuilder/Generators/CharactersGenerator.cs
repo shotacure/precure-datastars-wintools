@@ -516,7 +516,7 @@ public sealed class CharactersGenerator
             },
             OgType = "profile",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(character, content, aliasIds, firstAppearance, keyColor, keyColorGradient, _ctx.CreditCoverageLabel)
+            OgCard = BuildOgCard(character, content, firstAppearance, keyColor, keyColorGradient)
         };
         _page.RenderAndWrite(PathUtil.CharacterUrl(character.CharacterId), "characters", "characters-detail.sbn", content, layout);
     }
@@ -627,30 +627,21 @@ public sealed class CharactersGenerator
     /// </summary>
     /// <summary>
     /// キャラクター詳細ページの OGP カードを組み立てる（プロフィール組み）。
-    /// 「名前 → 登場話数・映画本数 → 声優 → 登場した期間の年表 → 初登場」の順。
+    /// 「名前 → 声優 → 登場した作品と話の範囲 → 初登場」の順。登場した話数・本数は出さない（クレジットの入力が進むたびに変わり、数だけでは何をしたキャラクターかが伝わらないため）。
     /// 色帯はプリキュアならイメージカラー（見える濃さに寄せる。グラデーションのプリキュアは色帯と透かしをそのグラデーションで）、
     /// それ以外はキャラクターの藤色。透かしは出身作品の作品名。
     /// </summary>
     private OgCardSpec BuildOgCard(
         Character character,
         CharacterDetailModel content,
-        IReadOnlyList<int> aliasIds,
         FirstAppearance? firstAppearance,
         string keyColor,
-        string? keyColorGradient,
-        string coverageLabel)
+        string? keyColorGradient)
     {
         var voiceActors = content.VoiceCastRows
             .SelectMany(v => v.VoiceActorNames.Split('、', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-
-        // 登場の量は声の出演のクレジットだけで数える（キャラクター一覧のバッジと同じ数え方）。
-        var (episodeCount, movieCount, otonaEpisodeCount) = CharacterAppearanceCounter.Count(_ctx, _index, aliasIds);
-        var badges = new List<OgCardBadge>();
-        if (episodeCount > 0) badges.Add(new OgCardBadge("TV", $"{episodeCount}話"));
-        if (movieCount > 0) badges.Add(new OgCardBadge("映画", $"{movieCount}本"));
-        if (otonaEpisodeCount > 0) badges.Add(new OgCardBadge("オトナ", $"{otonaEpisodeCount}話"));
 
         // 学校は作品を観れば分かる設定で、カードの限られた面積を割く価値が薄いので出さない。
         var facts = new List<OgCardFactLine>();
@@ -665,20 +656,33 @@ public sealed class CharactersGenerator
             ?? content.VoiceCastRows.Select(v => v.SeriesTitle).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t))
             ?? "";
 
-        // 登場した作品を 1 行 1 作品で積む（作品名と、その作品での登場範囲）。キャラクターは所属作品にしか
-        // 出ないのが普通なので、人物カードのような期間の年表は意味を持たず、代わりにどの作品に出たかを並べる。
-        var works = content.VoiceCastRows
+        // 登場した作品を 1 項目にまとめて並べる。並びは出番の多い作品から（演じた話の多い作品 → 同じなら声の出演履歴の順）で、
+        // 入りきらない作品は描画の側が後ろから落として「ほか」と添える。出番が少ない作品（3 話以下）には話も添える。
+        var workItems = content.VoiceCastRows
             .Where(v => !string.IsNullOrWhiteSpace(v.SeriesTitle))
             .GroupBy(v => v.SeriesTitle, StringComparer.Ordinal)
-            .Select(g => new OgCardFactLine("", $"『{g.Key}』" + (string.IsNullOrWhiteSpace(g.First().RangeLabel) ? "" : " " + g.First().RangeLabel)))
-            .ToArray();
+            .OrderByDescending(g => Math.Max(1, g.Sum(v => v.EpisodeCount)))
+            .Select(g =>
+            {
+                int episodes = g.Sum(v => v.EpisodeCount);
+                bool showRange = g.Count() == 1 && episodes is >= 1 and <= 3 && !string.IsNullOrWhiteSpace(g.First().RangeLabel);
+                return $"『{g.Key}』" + (showRange ? " " + g.First().RangeLabel : "");
+            })
+            .ToList();
+        var works = workItems.Count == 0
+            ? Array.Empty<OgCardFactLine>()
+            : new[]
+            {
+                new OgCardFactLine("登場", "")
+                {
+                    Items = workItems.Take(OgCareerCardParts.GroupItemsMax).ToList(),
+                    ItemsHaveMore = workItems.Count > OgCareerCardParts.GroupItemsMax
+                }
+            };
 
         // 作品名は透かしで見せるので、前置きの行は置かない。
         return new OgCardSpec(Kicker: "", Title: character.Name)
         {
-            // 登場話数もクレジット登録済みの範囲での集計なので、基準点を右下の注記に明記する。
-            MetaLeft = OgCoverageLabel.Compact(coverageLabel),
-            Badges = badges,
             InlineFacts = facts,
             Facts = works,
             BandColorHex = bandColor,
@@ -1043,6 +1047,7 @@ public sealed class CharactersGenerator
                     SeriesStartYearLabel = series.StartDate.Year.ToString(),
                     RangeLabel = rangeLabel,
                     IsAllEpisodes = isAll,
+                    EpisodeCount = epNos.Count,
                     AliasNames = string.Join("、", groupAliases),
                     VoiceActorNames = string.Join("、", g.First.Names),
                     VoiceActorsHtml = string.Join("、", g.First.Links)
@@ -1306,6 +1311,8 @@ public sealed class CharactersGenerator
         public string RangeLabel { get; set; } = "";
         /// <summary>シリーズ内の全話を担当しているフラグ。テンプレで「(全話)」マークを出すかの判定。</summary>
         public bool IsAllEpisodes { get; set; }
+        /// <summary>この行で演じた話の数（シリーズ全体・映画の行は 0）。OGP カードで登場した作品を出番の多い順に並べるのに使う（数そのものは出さない）。</summary>
+        public int EpisodeCount { get; set; }
         /// <summary>シリーズ内で使用されたキャラ名義（連名は「、」連結）。</summary>
         public string AliasNames { get; set; } = "";
         /// <summary>シリーズ内で当該キャラを演じた声優名（連名は「、」連結）。</summary>

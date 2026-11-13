@@ -1853,11 +1853,15 @@ public sealed partial class OgCardRenderer : IDisposable
 
         // 続き行の字下げ量は最も広いラベルに合わせる。値の左端が縦に揃うので、
         // 2 段に割れた項目も 1 つのまとまりとして読める。
-        float indent = facts
+        float widestLabel = facts
             .Where(f => !string.IsNullOrWhiteSpace(f.Label))
             .Select(f => Measure(LabelFontFor(f.Label), f.Label))
             .DefaultIfEmpty(0f)
-            .Max() + 14f;
+            .Max();
+        // 項目の並び（Items）を持つ組みは、見出しが役職名で長さがまちまちになる。長い役職名 1 つに値の幅を取られないよう、
+        // 見出しの幅に上限を置き、超える見出しは長体で（足りなければ末尾を省いて）上限に収める。
+        float labelCap = facts.Any(f => f.Items is not null) ? FactItemsLabelMaxWidth * scale : float.MaxValue;
+        float indent = Math.Min(widestLabel, labelCap) + 14f;
         // 続き行はさらに一段深く落とす。値の左端に揃えるだけだと「同じ項目の続き」に見えず、
         // 別の項目が始まったように読めてしまう。
         float continuationIndent = indent + StackedContinuationIndent;
@@ -1871,7 +1875,10 @@ public sealed partial class OgCardRenderer : IDisposable
         {
             // 値はラベルの右に流し、入りきらない分は値の左端へ揃えて折り返す。
             // 折り返しは項目の区切り（読点・スラッシュ・空白）でのみ起こすので、氏名や社名が途中で割れない。
-            var valueLines = WrapFactValue(OgCardNote.Strip(fact.Text), valueFont, paint, CardWidth - PaddingRight - (x + indent));
+            var valueLines = fact.Items is null
+                ? WrapFactValue(OgCardNote.Strip(fact.Text), valueFont, paint, CardWidth - PaddingRight - (x + indent))
+                : FitFactItems(fact, valueFont, paint, CardWidth - PaddingRight - (x + indent),
+                    Math.Min(limit, facts.Count == 1 ? FactItemsMaxLinesAlone : FactItemsMaxLines));
             var subLines = string.IsNullOrWhiteSpace(fact.SubText)
                 ? new List<string>()
                 : WrapFactValue(fact.SubText, subFont, paint, CardWidth - PaddingRight - (x + continuationIndent));
@@ -1903,7 +1910,16 @@ public sealed partial class OgCardRenderer : IDisposable
             if (head is not null && !string.IsNullOrWhiteSpace(head.Label))
             {
                 paint.Color = SKColor.TryParse(head.LabelColorHex, out var labelColor) ? labelColor : Muted;
-                DrawText(canvas, head.Label, cursor, baseline, SKTextAlign.Left, LabelFontFor(head.Label), paint);
+                var headFont = LabelFontFor(head.Label);
+                string headText = head.Label;
+                float headWidth = Measure(headFont, headText);
+                if (headWidth > labelCap)
+                {
+                    headFont.ScaleX = Math.Max(FactItemsLabelCondenseMin, labelCap / headWidth);
+                    headText = Ellipsize(headText, headFont, paint, labelCap);
+                }
+                DrawText(canvas, headText, cursor, baseline, SKTextAlign.Left, headFont, paint);
+                headFont.ScaleX = 1f;
             }
             // ラベルの有無に関わらず値の左端は揃える。折り返した続き行も同じ位置から始まるので、
             // 1 項目が何行に伸びても「どこからどこまでが 1 項目か」が縦の揃いで読める。
@@ -1961,6 +1977,54 @@ public sealed partial class OgCardRenderer : IDisposable
             start = fit;
         }
         return lines;
+    }
+
+    /// <summary>項目の並び（<see cref="OgCardFactLine.Items"/>）を持つ事実行 1 項目が使える行数。</summary>
+    private const int FactItemsMaxLines = 2;
+
+    /// <summary>事実行がその 1 項目だけのときに使える行数（ほかの項目と場所を分け合わないので、多めに並べる）。</summary>
+    private const int FactItemsMaxLinesAlone = 4;
+
+    /// <summary>項目の並びを持つ組みでの見出しの幅の上限（等倍のとき）。</summary>
+    private const float FactItemsLabelMaxWidth = 270f;
+
+    /// <summary>上限を超える見出しを収めるときの長体の下限（横幅の率）。これでも収まらなければ末尾を省く。</summary>
+    private const float FactItemsLabelCondenseMin = 0.6f;
+
+    /// <summary>
+    /// 項目の並び（<see cref="OgCardFactLine.Items"/>）を、<paramref name="maxLines"/> 行に入るだけ先頭から並べて行に割る。
+    /// 入りきらない項目があるとき（と、渡された時点で続きがあるとき）は末尾に「ほか」と添える。
+    /// 行は項目の切れ目でだけ折る（作品名や曲名の中の読点・中黒では折らない）。1 項目だけで 1 行を超えるときに限り、その項目の中で折る。
+    /// 1 項目だけでも行数を超えるときは、その 1 項目を行数の上限で切る。
+    /// </summary>
+    private List<string> FitFactItems(OgCardFactLine fact, SKFont font, SKPaint paint, float maxWidth, int maxLines)
+    {
+        var items = fact.Items!;
+        string separator = fact.ItemsSeparator ?? "";
+        for (int count = items.Count; count >= 1; count--)
+        {
+            bool more = fact.ItemsHaveMore || count < items.Count;
+            var lines = new List<string>();
+            string current = "";
+            for (int i = 0; i < count; i++)
+            {
+                // 区切りは前の項目の後ろに付けて送り、「ほか」は最後の項目と同じ行に置く。
+                string piece = items[i] + (i < count - 1 ? separator : more ? " ほか" : "");
+                if (Measure(font, current + piece) <= maxWidth)
+                {
+                    current += piece;
+                    continue;
+                }
+                if (current.Length > 0) lines.Add(current);
+                var wrapped = WrapFactValue(piece, font, paint, maxWidth);
+                lines.AddRange(wrapped.Take(wrapped.Count - 1));
+                current = wrapped.Count > 0 ? wrapped[^1] : "";
+            }
+            if (current.Length > 0) lines.Add(current);
+            if (lines.Count <= maxLines) return lines;
+            if (count == 1) return lines.Take(maxLines).ToList();
+        }
+        return new List<string>();
     }
 
     /// <summary>事実行を折ってよい文字（この文字の直後で改行する）。項目そのものの区切りだけを許す。</summary>

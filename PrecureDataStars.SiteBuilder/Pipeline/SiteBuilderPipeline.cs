@@ -347,19 +347,22 @@ public sealed class SiteBuilderPipeline
             reporter.EndSection();
 
             // 出力の掃除。今回の出力に属さないファイル（生成されなくなったページや画像）を消して、出力を今回の
-            // 生成物だけにする。あわせて、今回のどのページにも使わなかった OGP カードの作り置き（材料や描き方を
-            // 変える前の古い画像）も消す。全ファイルの書き出しが済んだあと、最後に行う。
+            // 生成物だけにする。あわせて、OGP カードの作り置きの索引を書き、決まった日数使われなかった行と、どの行からも
+            // 指されない画像（材料や描き方を変える前の古い画像）も消す。全ファイルの書き出しが済んだあと、最後に行う。
             // 掃除の前に、URL が大文字小文字だけ違う形に変わったページの名前を今回の URL の形にそろえる
             // （Windows では前回の名前のまま上書きされ、そのままデプロイすると S3 のキーが前回の形のまま残るため）。
             reporter.BeginSection("prune");
             int caseRenamed = output.AlignNameCase();
             prunedFiles = output.PruneOrphans();
-            staleOgCards = PruneOgCardCache(config.OgCardCacheDirectory, pageRenderer.OgCardCacheKeysUsed);
+            staleOgCards = pageRenderer.FinishOgCardStore(prune: true).Images;
             staleTelopPieces = telopPieceCache.Prune();
             logger.Info($"output pruned: {prunedFiles} files removed / stale og cards: {staleOgCards} removed / stale telop pieces: {staleTelopPieces} removed / name case aligned: {caseRenamed}");
             reporter.PageWritten();
             reporter.EndSection();
         }
+
+        // ピンポイントビルドでも、今回描いたカードを次のビルドで使えるよう、作り置きの索引を書く（掃除はしない）。
+        if (!string.IsNullOrEmpty(config.PageFilter)) pageRenderer.FinishOgCardStore(prune: false);
 
         // 書いたファイルの中身の印を台帳へ残す（次のビルドとデプロイが、出力を読み返さずに差分を決めるのに使う）。
         // ピンポイントビルドは一部のファイルしか書かないので、前回までの台帳に今回の分を重ねる。
@@ -410,9 +413,9 @@ public sealed class SiteBuilderPipeline
 
         // 出力ファイルの書き出し内訳と OGP カードの作り置きの効き。「変わらず」が大半なら差分の小さいビルドで、
         // デプロイの差分（MD5 比較）もそれに見合って小さくなる。
-        var (ogRendered, ogFromCache) = pageRenderer.OgCardCounts;
+        var (ogRendered, ogFromCache, ogPngsWritten) = pageRenderer.OgCardCounts;
         logger.Info($"Output files     : 書いた {output.WrittenCount} / 変わらず {output.UnchangedCount} / 消した {prunedFiles}");
-        logger.Info($"OGP cards        : 作り置き {ogFromCache} / 描いた {ogRendered} / 使わなくなった作り置き {staleOgCards} を消した");
+        logger.Info($"OGP cards        : 作り置き {ogFromCache} / 描いた {ogRendered}（うち画素が変わって PNG を書いた {ogPngsWritten}）/ {CacheIndex.UnusedDays} 日使わなかった作り置き {staleOgCards} を消した");
         var (telopPieceHits, telopPieceDrawn) = telopPieceCache.Counts;
         logger.Info($"Card telop pieces: 作り置き {telopPieceHits} / 描いた {telopPieceDrawn} / {TelopImageCache.UnusedDays} 日使わなかった作り置き {staleTelopPieces} を消した");
         logger.Info($"Warnings         : {logger.WarningCount}");
@@ -571,27 +574,6 @@ public sealed class SiteBuilderPipeline
         result["songs"] = songsCount + 1;
 
         return result;
-    }
-
-    /// <summary>
-    /// OGP カードの作り置きのうち、今回のビルドで使わなかった鍵の画像（材料や描き方を変える前の古い画像）と、
-    /// 描きかけで残った一時ファイルを消す。戻り値は消した画像数。全体ビルドの最後に呼ぶ。
-    /// 作り置きはテストと本番で共用するので、片方でしか作らないカード（下書き・公開日時前のコラムはテストのみ）は、
-    /// もう片方のビルドで消えて次のビルドで描き直されるが、数枚なので構わない。
-    /// </summary>
-    private static int PruneOgCardCache(string cacheDir, IReadOnlySet<string> usedKeys)
-    {
-        if (!Directory.Exists(cacheDir)) return 0;
-
-        int removed = 0;
-        foreach (var file in Directory.EnumerateFiles(cacheDir, "*.png"))
-        {
-            if (usedKeys.Contains(Path.GetFileNameWithoutExtension(file))) continue;
-            File.Delete(file);
-            removed++;
-        }
-        foreach (var file in Directory.EnumerateFiles(cacheDir, "*.tmp")) File.Delete(file);
-        return removed;
     }
 
     /// <summary><c>wwwroot/</c> 配下を出力ルートに丸ごと写す（大きさと更新時刻が同じファイルは写さない）。</summary>

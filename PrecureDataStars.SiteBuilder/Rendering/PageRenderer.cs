@@ -58,8 +58,8 @@ public sealed class PageRenderer
     /// <summary>出力ディレクトリへの書き出しの窓口（変わらないファイルは書かず、今回の出力に属するファイルを記録する）。</summary>
     private readonly OutputWriter _output;
 
-    /// <summary>今回のビルドで使った OGP カードの作り置きの鍵。全体ビルドの最後に、使わなかった作り置きを消すのに使う。</summary>
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _ogCardKeysUsed = new(StringComparer.Ordinal);
+    /// <summary>OGP カード画像の作り置き（鍵 → 画素のハッシュ → PNG の 2 段）。レンダラが無ければ null。</summary>
+    private readonly OgCardStore? _ogCardStore;
 
     private int _ogCardsRendered;
     private int _ogCardsFromCache;
@@ -85,14 +85,22 @@ public sealed class PageRenderer
         _output = output;
         _reporter = reporter;
         _ogCardRenderer = ogCardRenderer;
+        _ogCardStore = ogCardRenderer is null ? null : new OgCardStore(config.OgCardCacheDirectory, config.RefreshOgCards);
         _copyrightYears = BuildCopyrightYearsString(config.PublishedYear, DateTime.Now.Year);
     }
 
-    /// <summary>今回のビルドで使った OGP カードの作り置きの鍵（ファイル名から拡張子を除いたもの）。</summary>
-    public IReadOnlySet<string> OgCardCacheKeysUsed => _ogCardKeysUsed.Keys.ToHashSet(StringComparer.Ordinal);
+    /// <summary>
+    /// OGP カードを描いた枚数、作り置きで済ませた枚数、新しく書いた PNG の枚数（描いたが、同じ画素の PNG がすでにあった分は含まない）。
+    /// ビルド後のサマリ用。
+    /// </summary>
+    public (int Rendered, int FromCache, int PngsWritten) OgCardCounts => (_ogCardsRendered, _ogCardsFromCache, _ogCardStore?.PngsWritten ?? 0);
 
-    /// <summary>OGP カードを描いた枚数と、作り置きで済ませた枚数。ビルド後のサマリ用。</summary>
-    public (int Rendered, int FromCache) OgCardCounts => (_ogCardsRendered, _ogCardsFromCache);
+    /// <summary>
+    /// OGP カードの作り置きの索引を書く。全カードの描き上がり（<see cref="WaitForOgCardsAsync"/>）の後に呼ぶ。
+    /// <paramref name="prune"/>（全体ビルド）なら、決まった日数使われなかった行と、どの行からも指されない画像を消す。
+    /// 戻り値は落とした行の数と消した画像の数。
+    /// </summary>
+    public (int Entries, int Images) FinishOgCardStore(bool prune) => _ogCardStore?.Finish(prune) ?? (0, 0);
 
     /// <summary>ブランド書体で描けなかった文字 → 最初に検出したページ URL。ビルド後の警告出力用。</summary>
     public IReadOnlyDictionary<string, string> OgCardGlyphWarnings
@@ -126,8 +134,8 @@ public sealed class PageRenderer
     /// ページ専用の OGP カード画像を出力へ置き、その絶対 URL を返す。
     /// 出力パスは canonical パスを畳んだもの（<c>/people/高橋任治/</c> → <c>/og/people/高橋任治.png</c>、
     /// ルートは <c>/og/home.png</c>）。
-    /// 画像は作り置き（<see cref="BuildConfig.OgCardCacheDirectory"/> の <c>{鍵}.png</c>。鍵は
-    /// <see cref="OgCardRenderer.CacheKey"/>）から写し、同じ鍵の作り置きが無いとき（と <c>--refresh-og</c> のとき）だけ
+    /// 画像は作り置き（<see cref="OgCardStore"/>。鍵 <see cref="OgCardRenderer.CacheKey"/> から描いた画素のハッシュを引き、
+    /// その名前の PNG を使う）から写し、同じ鍵の作り置きが無いとき（と <c>--refresh-og</c> のとき）だけ
     /// 描いて作り置きに足す。指定の書体が無く既定の書体で描いたカードは作り置きに入れず出力へ直接置く
     /// （書体を入れた次のビルドで描き直されるように）。
     /// 作り置きのあるカードはその場で写し、描くカードは描く仕事に回して URL だけを先に返す（描き上がると出力へ写す）。
@@ -137,7 +145,7 @@ public sealed class PageRenderer
     /// </summary>
     private string RenderOgCard(OgCardSpec spec, string canonicalPath)
     {
-        if (_ogCardRenderer is null || string.IsNullOrEmpty(_config.BaseUrl) || !spec.IsRenderable) return "";
+        if (_ogCardRenderer is null || _ogCardStore is null || string.IsNullOrEmpty(_config.BaseUrl) || !spec.IsRenderable) return "";
 
         var relativePath = OgCardRelativePath(canonicalPath);
         // 名前ベースの canonical（パーセントエンコード済み）はデコードしたファイル名で書き出し、URL はエンコード形のまま返す。
@@ -145,14 +153,14 @@ public sealed class PageRenderer
             PathUtil.DecodePath(relativePath).Replace('/', Path.DirectorySeparatorChar));
 
         var key = _ogCardRenderer.CacheKey(spec);
-        _ogCardKeysUsed.TryAdd(key, 0);
-        var cacheFile = Path.Combine(_config.OgCardCacheDirectory, key + ".png");
-        // 同じ鍵のカードを描いている途中なら、作り置きが置かれていても描き上がりを待って写す。
-        if (_config.RefreshOgCards || !File.Exists(cacheFile) || _ogCardJobs.ContainsKey(key))
+        // 同じ鍵のカードを描いている途中なら、描き上がりを待って写す。
+        var cacheFile = _ogCardJobs.ContainsKey(key) ? null : _ogCardStore.TryGet(key);
+        if (cacheFile is null)
         {
             var renderer = _ogCardRenderer;
+            var store = _ogCardStore;
             var job = _ogCardJobs.GetOrAdd(key, _ => new Lazy<Task<OgCardDrawn>>(
-                () => Task.Run(() => DrawOgCardAsync(renderer, spec, cacheFile, canonicalPath))));
+                () => Task.Run(() => DrawOgCardAsync(renderer, store, spec, key, canonicalPath))));
             _ogCardPlacements.Add(PlaceOgCardAsync(job.Value, outputFile));
         }
         else
@@ -164,26 +172,29 @@ public sealed class PageRenderer
     }
 
     /// <summary>
-    /// カードを 1 枚描く。作り置きへは一時ファイルに描いてから置き換える。指定の書体が無く既定の書体で描いたカードは
-    /// 作り置きに入れず、一時ファイルのまま返す（書体を入れた次のビルドで描き直されるように。一時ファイルは
-    /// <see cref="WaitForOgCardsAsync"/> が写し終えた後に消す）。
+    /// カードを 1 枚、画素まで描いて作り置きに入れる（同じ画素の PNG がすでにあれば、PNG は書かない）。
+    /// 指定の書体が無く既定の書体で描いたカードは作り置きに入れず、一時ファイルに書いて返す
+    /// （書体を入れた次のビルドで描き直されるように。一時ファイルは <see cref="WaitForOgCardsAsync"/> が写し終えた後に消す）。
     /// </summary>
-    private async Task<OgCardDrawn> DrawOgCardAsync(OgCardRenderer renderer, OgCardSpec spec, string cacheFile, string canonicalPath)
+    private async Task<OgCardDrawn> DrawOgCardAsync(OgCardRenderer renderer, OgCardStore store, OgCardSpec spec, string key, string canonicalPath)
     {
         await _ogCardDrawGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            Directory.CreateDirectory(_config.OgCardCacheDirectory);
-            var tempFile = $"{cacheFile}.{Guid.NewGuid():N}.tmp";
-            var missing = renderer.Render(spec, tempFile);
+            using var drawn = renderer.Draw(spec);
             Interlocked.Increment(ref _ogCardsRendered);
-            if (missing is not null)
+            if (drawn.Warning is { } missing)
             {
                 lock (_ogCardGlyphLock) _ogCardGlyphWarnings.TryAdd(missing, canonicalPath);
             }
-            if (OgCardRenderer.IsTypefaceWarning(missing)) return new OgCardDrawn(tempFile, Cached: false);
-            File.Move(tempFile, cacheFile, overwrite: true);
-            return new OgCardDrawn(cacheFile, Cached: true);
+            if (OgCardRenderer.IsTypefaceWarning(drawn.Warning))
+            {
+                Directory.CreateDirectory(_config.OgCardCacheDirectory);
+                var tempFile = Path.Combine(_config.OgCardCacheDirectory, $"{key}.{Guid.NewGuid():N}.tmp");
+                drawn.SavePng(tempFile);
+                return new OgCardDrawn(tempFile, Cached: false);
+            }
+            return new OgCardDrawn(store.Put(key, drawn), Cached: true);
         }
         finally
         {

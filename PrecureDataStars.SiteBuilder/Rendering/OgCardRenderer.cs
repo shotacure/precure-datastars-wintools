@@ -578,7 +578,19 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <returns>ワードマークにブランド書体で描けない文字があればその文字列、無ければ null。</returns>
     public string? Render(OgCardSpec spec, string outputFilePath)
     {
-        using var surface = SKSurface.Create(new SKImageInfo(CardWidth, CardHeight, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using var drawn = Draw(spec);
+        drawn.SavePng(outputFilePath);
+        return drawn.Warning;
+    }
+
+    /// <summary>
+    /// カードを画素まで描く（PNG にはしない）。作り置き（<see cref="Pipeline.OgCardStore"/>）は、描いた画素のハッシュが
+    /// 前と同じなら PNG を書き直さない。戻り値は使い終えたら Dispose する。
+    /// </summary>
+    /// <param name="spec">カードに載せる内容。</param>
+    public OgCardDrawing Draw(OgCardSpec spec)
+    {
+        var surface = SKSurface.Create(new SKImageInfo(CardWidth, CardHeight, SKColorType.Rgba8888, SKAlphaType.Premul));
         var canvas = surface.Canvas;
         DrawBackground(canvas);
         DrawBand(canvas, spec);
@@ -638,15 +650,7 @@ public sealed partial class OgCardRenderer : IDisposable
 
         if (!spec.HeroVoice) DrawFooter(canvas, paint, spec, contentWidth);
 
-        PathUtil.EnsureParentDirectory(outputFilePath);
-        using (var image = surface.Snapshot())
-        using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
-        using (var stream = File.Create(outputFilePath))
-        {
-            data.SaveTo(stream);
-        }
-
-        return fontWarning ?? FindMissingBrandGlyphs(_brandLabel);
+        return new OgCardDrawing(surface, surface.Snapshot(), fontWarning ?? FindMissingBrandGlyphs(_brandLabel));
     }
 
     /// <summary>

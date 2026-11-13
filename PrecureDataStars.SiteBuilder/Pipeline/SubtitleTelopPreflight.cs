@@ -9,7 +9,9 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// <item>今回のビルドで描き直しが要る画像（同じ鍵の作り置きが無い、または <c>--refresh-telop</c>）について、
 /// 描くのに要る書体がこの PC にあるかを描くときと同じ引き方で確かめ、1 つでも無ければ例外で止める
 /// （既定の書体に差し替えて描いたり、出力に手を付けてから止まったりしないため）。作り置きで足りる画像は書体が無くても通る。</item>
-/// <item>全体ビルド（<c>--page</c> なし）では、今回のどの話・どの見本にも使わない鍵の作り置きを消す（サブタイトルや組み方を変える前の古い画像）。</item>
+/// <item>鍵を最後に使った日を索引（<c>index.json</c>。<see cref="CacheIndex"/>）に控え、全体ビルド（<c>--page</c> なし）では、
+/// <see cref="CacheIndex.UnusedDays"/> 日使われなかった鍵の作り置きを消す（サブタイトルや組み方を変える前の古い画像）。
+/// 使わなかった鍵をその場で消すと、中身の違うコードのビルドどうしが互いの作り置きを消し合うので、日数で消す。</item>
 /// </list>
 /// </summary>
 public static class SubtitleTelopPreflight
@@ -24,10 +26,12 @@ public static class SubtitleTelopPreflight
 
         int cached = 0;
         var toRender = new List<SubtitleTelopRequest>();
+        var index = new CacheIndex(Path.Combine(dir, "index.json"));
         foreach (var (request, key) in requests)
         {
             // ピンポイントビルドで描かないページの画像は確かめない（PageRenderer の対象判定と同じ）。
             if (!config.MatchesPageFilter(request.UrlPath)) continue;
+            index.Set(key, "");
             if (!config.RefreshSubtitleTelops && File.Exists(Path.Combine(dir, key + ".png"))) cached++;
             else toRender.Add(request);
         }
@@ -52,18 +56,24 @@ public static class SubtitleTelopPreflight
 
         logger.Info($"Subtitle telops  : 作り置き {cached} 件 / 描き直し {toRender.Count} 件（{dir}）");
 
-        if (!string.IsNullOrEmpty(config.PageFilter) || !Directory.Exists(dir)) return;
+        // 今回使った鍵を索引に控える。全体ビルドでは、決まった日数使われなかった鍵を索引から落とす。
+        bool fullBuild = string.IsNullOrEmpty(config.PageFilter);
+        index.Save(prune: fullBuild);
+        if (!fullBuild || !Directory.Exists(dir)) return;
 
-        // 全体ビルドでは、今回のどの話にも使わない鍵の作り置きと、描きかけで残った一時ファイルを消す。
-        var used = requests.Select(x => x.Key).ToHashSet(StringComparer.Ordinal);
+        // 全体ビルドでは、索引に無い鍵の作り置きと、描きかけで残った一時ファイルを消す（どちらも 1 日より前のものだけ。
+        // 同じ時間に別のビルドが描いたばかりの画像を消さないように）。
+        var staleBefore = DateTime.UtcNow.AddDays(-1);
         int removed = 0;
         foreach (var file in Directory.EnumerateFiles(dir, "*.png"))
         {
-            if (used.Contains(Path.GetFileNameWithoutExtension(file))) continue;
+            if (index.Contains(Path.GetFileNameWithoutExtension(file))) continue;
+            if (File.GetLastWriteTimeUtc(file) >= staleBefore) continue;
             File.Delete(file);
             removed++;
         }
-        foreach (var file in Directory.EnumerateFiles(dir, "*.tmp")) File.Delete(file);
-        if (removed > 0) logger.Info($"Subtitle telops  : 使わなくなった作り置き {removed} 件を消しました");
+        foreach (var file in Directory.EnumerateFiles(dir, "*.tmp"))
+            if (File.GetLastWriteTimeUtc(file) < staleBefore) File.Delete(file);
+        if (removed > 0) logger.Info($"Subtitle telops  : {CacheIndex.UnusedDays} 日使わなかった作り置き {removed} 件を消しました");
     }
 }

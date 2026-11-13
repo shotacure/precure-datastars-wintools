@@ -81,7 +81,9 @@ public sealed class SiteBuilderPipeline
         // OGP カードのラスタライザは同梱フォントを 1 度だけ読み込んで全ページで使い回す
         // （読み取り専用の SKTypeface だけを共有するため並列レンダリングフェーズからも安全に呼べる）。
         var renderer = new ScribanRenderer();
-        using var ogCardRenderer = new OgCardRenderer(config.SiteBrandLabel, config.OgCardFonts);
+        // カードの見出しに載せるサブタイトルの装飾は、カードとは別の作り置きから使う（カードの組み方を変えても描き直さない）。
+        var telopPieceCache = new TelopImageCache(config.TelopPieceCacheDirectory, config.RefreshSubtitleTelops);
+        using var ogCardRenderer = new OgCardRenderer(config.SiteBrandLabel, config.OgCardFonts) { TelopCache = telopPieceCache };
         var pageRenderer = new PageRenderer(renderer, config, summary, output, reporter, ogCardRenderer);
 
         // スタッフ表示用の人物リンク解決ヘルパ。
@@ -318,6 +320,7 @@ public sealed class SiteBuilderPipeline
         // これらを上書きすると内容が壊れるため、既存ファイルをそのまま残す。
         int prunedFiles = 0;
         int staleOgCards = 0;
+        int staleTelopPieces = 0;
         if (string.IsNullOrEmpty(config.PageFilter))
         {
             // サイト内検索の静的 JSON インデックス。
@@ -352,7 +355,8 @@ public sealed class SiteBuilderPipeline
             int caseRenamed = output.AlignNameCase();
             prunedFiles = output.PruneOrphans();
             staleOgCards = PruneOgCardCache(config.OgCardCacheDirectory, pageRenderer.OgCardCacheKeysUsed);
-            logger.Info($"output pruned: {prunedFiles} files removed / stale og cards: {staleOgCards} removed / name case aligned: {caseRenamed}");
+            staleTelopPieces = telopPieceCache.Prune();
+            logger.Info($"output pruned: {prunedFiles} files removed / stale og cards: {staleOgCards} removed / stale telop pieces: {staleTelopPieces} removed / name case aligned: {caseRenamed}");
             reporter.PageWritten();
             reporter.EndSection();
         }
@@ -375,6 +379,11 @@ public sealed class SiteBuilderPipeline
             else
                 logger.Info($"OGP カード: {message}（例: {samplePath}）");
         }
+
+        // カードの見出しの装飾を描き直して突き合わせたら、作り置きと絵が違った。鍵に入らない理由（書体ファイルの差し替えなど）で
+        // 絵が変わっているので、ほかの作り置きも古いおそれがある。
+        foreach (var html in telopPieceCache.Mismatches)
+            logger.Warn($"OGP カード: 見出しの装飾の作り置きが、描き直した絵と違いました（描き直したほうに置き換えました。ほかの作り置きも古いおそれがあるので --refresh-telop --refresh-og で描き直してください）: {html}");
 
         // ここでプログレスバーを片付けてから最終サマリを出す。
         reporter.Finish();
@@ -404,6 +413,8 @@ public sealed class SiteBuilderPipeline
         var (ogRendered, ogFromCache) = pageRenderer.OgCardCounts;
         logger.Info($"Output files     : 書いた {output.WrittenCount} / 変わらず {output.UnchangedCount} / 消した {prunedFiles}");
         logger.Info($"OGP cards        : 作り置き {ogFromCache} / 描いた {ogRendered} / 使わなくなった作り置き {staleOgCards} を消した");
+        var (telopPieceHits, telopPieceDrawn) = telopPieceCache.Counts;
+        logger.Info($"Card telop pieces: 作り置き {telopPieceHits} / 描いた {telopPieceDrawn} / {TelopImageCache.UnusedDays} 日使わなかった作り置き {staleTelopPieces} を消した");
         logger.Info($"Warnings         : {logger.WarningCount}");
         logger.Info($"Elapsed          : {stopwatch.Elapsed.TotalSeconds:0.0} sec");
 

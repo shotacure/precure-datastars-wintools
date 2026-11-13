@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **SiteBuilder：OGP カードの見出しに載せるサブタイトルの装飾を、カードとは別の作り置きにした**（`TelopImageCache`〔新規〕・`OgCardRenderer.DrawTelopImageCached`〔新規〕・`OgCardRenderer.Typefaces.cs`〔新規〕・`TelopRenderSourceStamp`〔新規〕・`BuildConfig.TelopPieceCacheDirectory`・`SiteBuilderPipeline`・`App.config.sample`）：エピソードのカードは、見出しの装飾を画素で重ねるのに 1 枚 2〜3 秒かかり、カードの組み方のコードを少し変えただけでも全話ぶんを描き直していた。装飾を描いた結果（画素と基準の値）を、テロップの描画コードだけの印を鍵にして `TelopPieceCacheDir` に置き、カードを描き直すときはそこから使う。画素は PNG にせずそのまま可逆圧縮する。14 日使われなかった作り置きだけを全体ビルドの最後に消す。使った作り置きの最初の 3 つは描き直して突き合わせ、違えば警告して置き換える。`--refresh-telop` はこの作り置きも使わない。書体名からこの PC の書体を引くコードを `OgCardRenderer.Typefaces.cs` に分けた（中身は変えていない）。出力は変わらない。
+
 - **SiteBuilder：書いたファイルを読み返さずに、sitemap の更新日とデプロイの差分を決めるようにした**（`OutputWriter`・`OutputFileStamp`〔新規〕・`SitemapLastmodManifest`・`SeoGenerator`・`S3DeployService`・`SiteBuilderPipeline`）：出力へ書く時に手元のバイト列から MD5 を取り、ビルドの終わりに出力の隣の台帳（`{出力ディレクトリ}.files.json`）へ大きさ・更新時刻と一緒に残す。sitemap の lastmod の判定と、デプロイで S3 の ETag と比べる手元の MD5 は、この台帳から引く。次のビルドの「同じ中身なら書かない」の判定も、大きさと更新時刻が台帳と同じファイルは読まずに MD5 どうしで比べる。台帳に無いファイルと、大きさか更新時刻が台帳と違うファイルは、これまでどおり読んで確かめる。多くのページが変わったビルドで、書いた直後のファイルを全部読み返すのに数分かかっていた。出力は変わらない。
 
 - **SiteBuilder：`--page` のピンポイントビルドで、書かない詳細ページをモデルの組み立てごと飛ばすようにした**（`PageRenderer.IsTarget`〔新規〕・`PersonsGenerator`・`EpisodeGenerator`・`SongsGenerator`・`ProductsGenerator`・`CompaniesGenerator`・`CharactersGenerator`・`BooksGenerator`・`AnniversaryGenerator`）：絞り込みが書き出しの直前でしか効かず、1 ページだけのビルドでも全ページぶんの集計をしてから捨てていた。全体ビルドの出力は変わらない。

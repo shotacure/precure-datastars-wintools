@@ -122,6 +122,11 @@ public sealed class BuildConfig
     /// 出力ディレクトリの中に置くと全体ビルドの最後に孤児として消されるので、その外に置く（テストと本番で共用する）。</summary>
     public string OgCardCacheDirectory { get; }
 
+    /// <summary>OGP カードの見出しに載せるサブタイトルの装飾（<see cref="Rendering.TelopImageCache"/>）の作り置きの置き場所（絶対パス）。
+    /// App.config の <c>TelopPieceCacheDir</c>。未設定なら <c>%LOCALAPPDATA%\PrecureDataStars\SiteBuilder\telop-pieces</c>。
+    /// 出力ディレクトリの外に置く（テストと本番で共用する）。<c>--refresh-telop</c> のときは使わずに描き直す。</summary>
+    public string TelopPieceCacheDirectory { get; }
+
     /// <summary>OGP カード画像を、作り置きを使わずに描き直すか（<c>--refresh-og</c> 由来）。
     /// <see cref="PageFilter"/> と組み合わせると、対象のページの画像だけを描き直す。</summary>
     public bool RefreshOgCards { get; }
@@ -156,6 +161,7 @@ public sealed class BuildConfig
         bool refreshSubtitleTelops,
         string ogCardCacheDirectory,
         bool refreshOgCards,
+        string telopPieceCacheDirectory,
         DateTimeOffset? asOf)
     {
         ConnectionString = connectionString;
@@ -182,6 +188,7 @@ public sealed class BuildConfig
         RefreshSubtitleTelops = refreshSubtitleTelops;
         OgCardCacheDirectory = ogCardCacheDirectory;
         RefreshOgCards = refreshOgCards;
+        TelopPieceCacheDirectory = telopPieceCacheDirectory;
         AsOf = asOf;
     }
 
@@ -335,6 +342,7 @@ public sealed class BuildConfig
         // 孤児として消されてしまうので、出力ディレクトリ（とその配下）を指していたら設定ミスとして起動時に止める。
         var telopCacheDir = ResolveCacheDir("SubtitleTelopCacheDir", "subtitle-telops");
         var ogCardCacheDir = ResolveCacheDir("OgCardCacheDir", "og-cards");
+        var telopPieceCacheDir = ResolveCacheDir("TelopPieceCacheDir", "telop-pieces");
 
         string ResolveCacheDir(string key, string defaultLeaf)
         {
@@ -361,6 +369,6 @@ public sealed class BuildConfig
             effectiveGa4, gsv.Trim(), publishedYear,
             defaultOg, amazonTag, ogFonts, isProductionMode,
             awsBucket, awsRegion, awsProfile, cfDist, protectedPrefixes, deploy,
-            pageFilter ?? "", telopCacheDir, refreshSubtitleTelops, ogCardCacheDir, refreshOgCards, asOf);
+            pageFilter ?? "", telopCacheDir, refreshSubtitleTelops, ogCardCacheDir, refreshOgCards, telopPieceCacheDir, asOf);
     }
 }

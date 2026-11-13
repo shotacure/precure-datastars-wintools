@@ -95,6 +95,9 @@
     ハッシュはファイルの文字を読み、改行を LF にそろえ、BOM を除いてから求める（ComputeOgRenderSourceStamp）。
     同じ描画コードなら、CRLF で取り出した作業ツリーでも LF で取り出した作業ツリー（git worktree など）でも同じ印になり、
     作り置きを共用できる。
+    テロップの体裁で描く部分（TelopRenderSource）だけの印 TelopRenderSourceStamp.Value も同じ手順で作る。カードの見出しに載せる
+    サブタイトルの装飾の作り置き（TelopImageCache）の鍵がこの値を含むので、カードの組み方のコードを変えても装飾は描き直しにならない。
+    テロップの絵を変えうるコードは TelopRenderSource のファイルに置く。
   -->
   <UsingTask TaskName="ComputeOgRenderSourceStamp" TaskFactory="RoslynCodeTaskFactory"
              AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
@@ -124,6 +127,7 @@
   </UsingTask>
   <ItemGroup>
     <OgRenderSource Include="Rendering\OgCard*.cs;Rendering\OgTextShaper.cs;Rendering\SubtitleTelop*.cs;Rendering\TelopRaster.cs;Rendering\InstalledFontIndex.cs" />
+    <TelopRenderSource Include="Rendering\OgCardRenderer.SubtitleTelop.cs;Rendering\OgCardRenderer.Typefaces.cs;Rendering\OgTextShaper.cs;Rendering\SubtitleTelop*.cs;Rendering\TelopRaster.cs;Rendering\TelopImageCache.cs;Rendering\InstalledFontIndex.cs" />
   </ItemGroup>
   <Target Name="GenerateOgRenderSourceStamp" BeforeTargets="BeforeCompile;CoreCompile">
     <ComputeOgRenderSourceStamp Files="@(OgRenderSource)">
@@ -134,9 +138,19 @@
     </PropertyGroup>
     <WriteLinesToFile File="$(_OgRenderSourceStampFile)" Overwrite="true" WriteOnlyWhenDifferent="true"
       Lines="// &lt;auto-generated /&gt; PrecureDataStars.SiteBuilder.csproj の GenerateOgRenderSourceStamp が作る。;namespace PrecureDataStars.SiteBuilder.Rendering%3B;/// &lt;summary&gt;OGP カード・テロップ画像の描画コード一式の内容ハッシュ。作り置きの鍵に含める。&lt;/summary&gt;;internal static class OgRenderSourceStamp { public const string Value = &quot;$(_OgRenderSourceStamp)&quot;%3B }" />
+    <ComputeOgRenderSourceStamp Files="@(TelopRenderSource)">
+      <Output TaskParameter="Stamp" PropertyName="_TelopRenderSourceStamp" />
+    </ComputeOgRenderSourceStamp>
+    <PropertyGroup>
+      <_TelopRenderSourceStampFile>$(IntermediateOutputPath)TelopRenderSourceStamp.g.cs</_TelopRenderSourceStampFile>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_TelopRenderSourceStampFile)" Overwrite="true" WriteOnlyWhenDifferent="true"
+      Lines="// &lt;auto-generated /&gt; PrecureDataStars.SiteBuilder.csproj の GenerateOgRenderSourceStamp が作る。;namespace PrecureDataStars.SiteBuilder.Rendering%3B;/// &lt;summary&gt;テロップの体裁で描くコード一式の内容ハッシュ。装飾の作り置きの鍵に含める。&lt;/summary&gt;;internal static class TelopRenderSourceStamp { public const string Value = &quot;$(_TelopRenderSourceStamp)&quot;%3B }" />
     <ItemGroup>
       <Compile Include="$(_OgRenderSourceStampFile)" />
       <FileWrites Include="$(_OgRenderSourceStampFile)" />
+      <Compile Include="$(_TelopRenderSourceStampFile)" />
+      <FileWrites Include="$(_TelopRenderSourceStampFile)" />
     </ItemGroup>
   </Target>
 

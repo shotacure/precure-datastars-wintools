@@ -768,6 +768,65 @@ public sealed partial class OgCardRenderer
             originX, originY);
     }
 
+    /// <summary>
+    /// テロップを描いた画像の作り置き。null なら毎回描く。OGP カードの見出しに載せるサブタイトル
+    /// （<see cref="DrawTelopImageCached"/>）だけが使う。
+    /// </summary>
+    internal TelopImageCache? TelopCache { get; init; }
+
+    /// <summary>
+    /// <see cref="DrawTelopImage"/> と同じ画像を、作り置き（<see cref="TelopCache"/>）があればそこから返す。無ければ描いて作り置きに足す。
+    /// 指定の書体がこの PC に無く既定の書体で描いた画像は、作り置きに入れない（書体を入れた次のビルドで描き直されるように）。
+    /// 使った作り置きのうち数個は描き直して突き合わせ、違っていたら控えて描き直したほうに置き換える
+    /// （鍵に入らない理由で絵が変わったことに気づくため）。
+    /// </summary>
+    private TelopImage? DrawTelopImageCached(string rubyHtml, string fontFamily, SubtitleTelopProfile profile, float? fixedSize)
+    {
+        if (TelopCache is not { } cache) return DrawTelopImage(rubyHtml, fontFamily, profile, fixedSize);
+        string key = TelopImageCache.Key(rubyHtml, fontFamily, profile, fixedSize, _headingFontFile);
+        if (cache.TryRead(key) is { } hit)
+        {
+            if (cache.TakeVerifySlot() && TelopTypefacesResolved(fontFamily, profile)
+                && DrawTelopImage(rubyHtml, fontFamily, profile, fixedSize) is { } fresh)
+            {
+                var entry = ToCacheEntry(fresh);
+                if (!entry.SameAs(hit))
+                {
+                    cache.ReportMismatch(rubyHtml);
+                    cache.Write(key, entry);
+                    return fresh;
+                }
+                fresh.Image.Dispose();
+            }
+            var info = new SKImageInfo(hit.Width, hit.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+            return new TelopImage(SKImage.FromPixelCopy(info, hit.Pixels), hit.Baseline, hit.Left, hit.LineWidth, hit.OriginX, hit.OriginY);
+        }
+        var drawn = DrawTelopImage(rubyHtml, fontFamily, profile, fixedSize);
+        if (drawn is null) return null;
+        if (TelopTypefacesResolved(fontFamily, profile)) cache.Write(key, ToCacheEntry(drawn));
+        return drawn;
+    }
+
+    /// <summary>テロップの親字と振り仮名の書体が、指定の名前でこの PC から引けるか（名前が空なら既定の書体を使うので引けたとみなす）。</summary>
+    private bool TelopTypefacesResolved(string fontFamily, SubtitleTelopProfile profile)
+    {
+        ResolveTypeface(fontFamily, _boldTypeface, out string? baseWarning);
+        string? rubyWarning = null;
+        if (profile.RubyFontFamily.Length > 0) ResolveTypeface(profile.RubyFontFamily, _boldTypeface, out rubyWarning);
+        return baseWarning is null && rubyWarning is null;
+    }
+
+    /// <summary>描いたテロップを、作り置きに置く形（画素の並びと基準の値）にする。</summary>
+    private static TelopImageCache.Entry ToCacheEntry(TelopImage drawn)
+    {
+        var info = new SKImageInfo(drawn.Image.Width, drawn.Image.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var bitmap = new SKBitmap(info);
+        if (!drawn.Image.ReadPixels(info, bitmap.GetPixels(), info.RowBytes, 0, 0))
+            throw new InvalidOperationException("テロップの画像の画素を読めませんでした。");
+        return new TelopImageCache.Entry(info.Width, info.Height, bitmap.GetPixelSpan().ToArray(),
+            drawn.Baseline, drawn.Left, drawn.LineWidth, drawn.OriginX, drawn.OriginY);
+    }
+
     /// <summary>画像の不透明な画素の範囲（左・上・右・下、両端を含む）。不透明な画素が無ければ右 &lt; 左になる。</summary>
     private static (int Left, int Top, int Right, int Bottom) InkBounds(SKImage image)
     {

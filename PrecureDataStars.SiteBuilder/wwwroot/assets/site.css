@@ -11707,145 +11707,213 @@ a.staff-combo-nav-card:hover {
 }
 
 /* ──────── 歴代記録（/stats/records/） ────────
-   分類ごとに記録カードをグリッドで並べる。カードは順位・名前（＋添え書き）・値の 3 列。 */
-.records-grid {
+   記録 1 項目が 1 つの枠（.rec）。見出しの帯の下に中身を置く。
+   本編の尺は、対の記録（長い回と短い回、早い回と遅い回）を 1 つの枠の左右に並べ、1 位を大きい数字で、
+   2 位・3 位を小さい行で出す。左（長い・早い）はピンク、右（短い・遅い）は青で見分ける。
+   スタッフ・声優とキャラクターは 2 列に並べ、数を 1 位に対する棒の長さで比べる。 */
+.rec-list {
   display: grid;
-  /* 本文の幅（960px）で 2 列。組み合わせの行（演出 ○○ × 作画監督 ○○）やキャラ名（美墨なぎさ / キュアブラック）が
-     途中で折れない幅を取る。狭い画面では 1 列で全幅。 */
+  gap: 1.1em;
+  margin: 0.9em 0 1.6em;
+}
+.rec-grid {
+  display: grid;
+  /* 本文の幅（960px）で 2 列。狭い画面では 1 列で全幅。 */
   grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
-  gap: 1em;
-  margin: 0.8em 0 1.4em;
+  gap: 1.1em;
+  margin: 0.9em 0 1.6em;
 }
-.records-card {
+.rec {
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 0.9em 1em 1em;
+  border-radius: 14px;
   background: #fff;
+  overflow: hidden;
 }
-.records-card-title {
-  margin: 0 0 0.6em;
-  padding: 0;
+.rec-title {
+  margin: 0;
+  padding: 0.55em 1.1em;
   border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--th-bg);
   font-size: 1em;
-  font-weight: 600;
+  font-weight: 700;
 }
-.records-card-title::before {
-  /* 見出しの左の余白を 0 にしているので、グローバルの h3::before（左に絶対配置される青丸マーカー）が
-     先頭の字に重なる。カードの枠が区切りを担うので、マーカーは出さない。 */
+.rec-title::before {
+  /* 帯が区切りを担うので、グローバルの h3::before（左の青丸マーカー）は出さない。 */
   content: none;
 }
-.records-entries {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.rec-sides {
   display: grid;
-  gap: 0.45em;
+  grid-template-columns: 1fr 1fr;
 }
-.records-entry {
-  display: grid;
-  grid-template-columns: 1.8em minmax(0, 1fr) auto;
-  gap: 0.5em;
-  align-items: baseline;
+.rec-side {
+  --rec-color: var(--accent-pink);
+  min-width: 0;
+  padding: 1em 1.1em 0.9em;
+  display: flex;
+  flex-direction: column;
 }
-.records-rank {
-  font-family: var(--font-num);
+.rec-side-low {
+  --rec-color: var(--accent-blue);
+  border-left: 1px solid var(--border);
+}
+@media (max-width: 640px) {
+  .rec-sides {
+    grid-template-columns: 1fr;
+  }
+  .rec-side-low {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+/* 「長い回」「短い回」の札。 */
+.rec-kind {
+  align-self: flex-start;
+  margin: 0 0 0.7em;
+  padding: 0.05em 0.9em;
+  border-radius: 999px;
+  background: var(--rec-color);
+  color: #fff;
+  font-size: 0.8em;
   font-weight: 700;
-  color: var(--accent);
-  text-align: center;
 }
-.records-entry:first-child .records-rank {
+/* 1 位：2 位・3 位と同じ 3 列（順位・名前・値）で、名前を太く、値を大きい数字にする。値はどの行も右端にそろう。 */
+.rec-top {
+  display: grid;
+  grid-template-columns: 1.3em minmax(0, 1fr) auto;
+  column-gap: 0.5em;
+  align-items: center;
+}
+.rec-top .rec-rank {
   font-size: 1.15em;
+  color: var(--rec-color);
 }
-.records-body {
+.rec-top + .rec-top {
+  margin-top: 0.6em;
+}
+.rec-top-value {
+  font-family: var(--font-num);
+  font-size: 2em;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--rec-color);
+  white-space: nowrap;
+}
+.rec-top-body {
   min-width: 0;
 }
-.records-name {
+.rec-top-name {
   display: block;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
-.records-sub {
+.rec-sub {
   display: block;
   font-size: 0.85em;
   color: var(--muted);
 }
-.records-value {
+.rec-unit {
+  margin-left: 0.15em;
+  font-family: var(--font-base);
+  font-size: 0.6em;
+  font-weight: 400;
+  color: var(--muted);
+}
+/* 2 位・3 位：順位・名前（＋添え書き）・値の 3 列。 */
+.rec-rest {
+  list-style: none;
+  margin: 0.9em 0 0;
+  padding: 0.7em 0 0;
+  border-top: 1px dashed var(--border);
+  display: grid;
+  gap: 0.45em;
+  font-size: 0.92em;
+}
+.rec-rest li {
+  display: grid;
+  grid-template-columns: 1.4em minmax(0, 1fr) auto;
+  column-gap: 0.5em;
+  align-items: baseline;
+}
+.rec-rank {
+  font-family: var(--font-num);
+  font-weight: 700;
+  color: var(--muted);
+  text-align: center;
+}
+.rec-body {
+  min-width: 0;
+}
+.rec-name {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.rec-value {
   font-family: var(--font-num);
   font-weight: 600;
   white-space: nowrap;
 }
-.records-empty {
+/* 数を棒で比べる記録（スタッフ・声優、キャラクター）。棒は 1 位を枠いっぱいにした長さ。 */
+.rec-bars {
+  list-style: none;
   margin: 0;
+  padding: 1em 1.1em 0.2em;
+  display: grid;
+  gap: 0.7em;
+}
+.rec-bars li {
+  display: grid;
+  grid-template-columns: 1.4em minmax(0, 1fr) auto;
+  column-gap: 0.5em;
+  row-gap: 0.25em;
+  align-items: baseline;
+}
+.rec-bars .rec-value {
+  font-size: 1.05em;
+  font-weight: 700;
+}
+.rec-bars .is-top .rec-rank {
+  color: var(--accent-pink);
+}
+.rec-bars .is-top .rec-name {
+  font-size: 1.1em;
+  font-weight: 600;
+}
+.rec-bars .is-top .rec-value {
+  font-size: 1.5em;
+  line-height: 1.1;
+  color: var(--accent-pink);
+}
+.rec-bar {
+  grid-column: 2 / -1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--th-bg);
+  overflow: hidden;
+}
+.rec-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent-pink);
+  opacity: 0.45;
+}
+.rec-bars .is-top .rec-bar > span {
+  opacity: 1;
+}
+.rec-empty {
+  margin: 0;
+  padding: 1em 1.1em 0;
   font-size: 0.9em;
 }
-.records-more {
-  margin: 0.7em 0 0;
+.rec-more {
+  margin: auto 0 0;
+  padding-top: 0.8em;
   font-size: 0.88em;
   text-align: right;
 }
-
-/* ──────── 本放送・配信・円盤の尺の違い（/stats/records/format-differences/） ──────── */
-.fmtdiff-count {
-  font-size: 0.7em;
-  font-weight: 400;
-  margin-left: 0.6em;
-}
-.fmtdiff-series {
-  margin: 1.4em 0 0.5em;
-  font-size: 1.02em;
-}
-.fmtdiff-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.6em;
-}
-.fmtdiff-row {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.6em 0.9em;
-}
-.fmtdiff-ep {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3em 0.6em;
-  align-items: baseline;
-  margin-bottom: 0.35em;
-}
-.fmtdiff-date {
-  font-size: 0.85em;
-}
-.fmtdiff-parts {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.25em;
-  font-size: 0.9em;
-}
-.fmtdiff-parts li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3em 1em;
-  align-items: center;
-}
-.fmtdiff-part {
-  font-weight: 600;
-  min-width: 6em;
-}
-.fmtdiff-src b {
-  font-family: var(--font-num);
-  font-weight: 600;
-}
-.fmtdiff-src i {
-  font-style: normal;
-  font-family: var(--font-num);
-  color: var(--accent);
-}
-.fmtdiff-note {
-  flex-basis: 100%;
-  color: var(--muted);
-  font-size: 0.92em;
+.rec > .rec-more {
+  padding: 0.6em 1.1em 0.8em;
 }
 
 /* ──────── ホームの商品・書籍カードの状態バッジとカウントダウン ────────

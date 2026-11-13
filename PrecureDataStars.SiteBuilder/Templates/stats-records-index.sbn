@@ -1,12 +1,49 @@
 {{## /stats/records/ — 歴代記録。
-     RecordsGenerator から RecordsIndexModel { Groups, FormatDiff } で渡る。
-     Groups は大分類（本編の尺 / スタッフ・声優 / キャラクター）。各分類はカード（RecordItem）を並べ、
-     カードの中は順位・名前（リンク済み HTML）・添え書き・値の 3 位までの行（同率は全件）。
-     分類ごとに基準点ラベル（尺はパート情報、スタッフとキャラクターはクレジットの収録範囲）を h2 の下に出す。
-     末尾に「本放送・配信・円盤の尺の違い」への導線（stats-landing-list の横長カード）を置く。 ##}}
+     RecordsGenerator から RecordsIndexModel { Groups } で渡る。
+     Groups は大分類（本編の尺 / スタッフ・声優 / キャラクター）。分類ごとに基準点ラベル（尺はパート情報、
+     スタッフとキャラクターはクレジットの収録範囲）を h2 の下に出す。
+     本編の尺は対の組（RecordPair。長い回と短い回、早い回と遅い回）を 1 つの枠の左右に並べ、それぞれ 1 位を
+     大きい数字で、2 位・3 位を小さい行で出す（同率 1 位は全件を大きく出す）。
+     スタッフ・声優とキャラクターは項目（RecordItem）ごとの枠で、数を 1 位に対する棒の長さで比べる。 ##}}
+{{~ func record_side(it, kind) ~}}
+    <div class="rec-side rec-side-{{ kind }}" id="{{ it.Id }}">
+      <p class="rec-kind">{{ it.Title | html.escape }}</p>
+      {{~ if (array.size it.Entries) > 0 ~}}
+      {{~ for e in it.Tops ~}}
+      <div class="rec-top">
+        <span class="rec-rank">{{ e.RankLabel }}</span>
+        <span class="rec-top-body">
+          <span class="rec-top-name">{{ e.NameHtml }}</span>
+          {{~ if e.SubHtml != "" ~}}<span class="rec-sub">{{ e.SubHtml }}</span>{{~ end ~}}
+        </span>
+        <span class="rec-top-value">{{ e.ValueNumber | html.escape }}{{~ if e.ValueUnit != "" ~}}<span class="rec-unit">{{ e.ValueUnit | html.escape }}</span>{{~ end ~}}</span>
+      </div>
+      {{~ end ~}}
+      {{~ if (array.size it.Rest) > 0 ~}}
+      <ol class="rec-rest">
+        {{~ for e in it.Rest ~}}
+        <li>
+          <span class="rec-rank">{{ e.RankLabel }}</span>
+          <span class="rec-body">
+            <span class="rec-name">{{ e.NameHtml }}</span>
+            {{~ if e.SubHtml != "" ~}}<span class="rec-sub">{{ e.SubHtml }}</span>{{~ end ~}}
+          </span>
+          <span class="rec-value">{{ e.ValueLabel | html.escape }}</span>
+        </li>
+        {{~ end ~}}
+      </ol>
+      {{~ end ~}}
+      {{~ else ~}}
+      <p class="muted rec-empty">まだ記録がありません。</p>
+      {{~ end ~}}
+      {{~ if it.MoreUrl != "" ~}}
+      <p class="rec-more"><a href="{{ it.MoreUrl }}">{{ it.MoreLabel | html.escape }}</a></p>
+      {{~ end ~}}
+    </div>
+{{~ end ~}}
 <section>
   <h1>歴代記録</h1>
-  <p class="lead">歴代の「いちばん」</p>
+  <p class="lead">最長・最短・最多の上位 3 位</p>
   <p class="muted stats-note">順位は同じ値を同じ順位とし、3 位まで載せています。</p>
 </section>
 
@@ -17,45 +54,47 @@
   <p>{{ g.Lead | html.escape }}<br>
   <span class="muted stats-coverage">{{ g.CoverageLabel }}</span></p>
   {{~ end ~}}
-  <div class="records-grid">
+  {{~ if (array.size g.Pairs) > 0 ~}}
+  <div class="rec-list">
+    {{~ for p in g.Pairs ~}}
+    <article class="rec rec-pair">
+      <h3 class="rec-title">{{ p.Title | html.escape }}</h3>
+      <div class="rec-sides">
+{{ record_side p.High "high" }}
+{{ record_side p.Low "low" }}
+      </div>
+    </article>
+    {{~ end ~}}
+  </div>
+  {{~ end ~}}
+  {{~ if (array.size g.Items) > 0 ~}}
+  <div class="rec-grid">
     {{~ for it in g.Items ~}}
-    <article class="records-card" id="{{ it.Id }}">
-      <h3 class="records-card-title">{{ it.Title | html.escape }}</h3>
+    <article class="rec" id="{{ it.Id }}">
+      <h3 class="rec-title">{{ it.Title | html.escape }}</h3>
       {{~ if (array.size it.Entries) > 0 ~}}
-      <ol class="records-entries">
+      <ol class="rec-bars">
         {{~ for e in it.Entries ~}}
-        <li class="records-entry">
-          <span class="records-rank">{{ e.RankLabel }}</span>
-          <span class="records-body">
-            <span class="records-name">{{ e.NameHtml }}</span>
-            {{~ if e.SubHtml != "" ~}}<span class="records-sub">{{ e.SubHtml }}</span>{{~ end ~}}
+        <li{{ if e.RankLabel == "1" }} class="is-top"{{ end }}>
+          <span class="rec-rank">{{ e.RankLabel }}</span>
+          <span class="rec-body">
+            <span class="rec-name">{{ e.NameHtml }}</span>
+            {{~ if e.SubHtml != "" ~}}<span class="rec-sub">{{ e.SubHtml }}</span>{{~ end ~}}
           </span>
-          <span class="records-value">{{ e.ValueLabel | html.escape }}</span>
+          <span class="rec-value">{{ e.ValueNumber | html.escape }}<span class="rec-unit">{{ e.ValueUnit | html.escape }}</span></span>
+          <span class="rec-bar"><span style="width: {{ e.BarPercent }}%"></span></span>
         </li>
         {{~ end ~}}
       </ol>
       {{~ else ~}}
-      <p class="muted records-empty">まだ記録がありません。</p>
+      <p class="muted rec-empty">まだ記録がありません。</p>
       {{~ end ~}}
       {{~ if it.MoreUrl != "" ~}}
-      <p class="records-more"><a href="{{ it.MoreUrl }}">{{ it.MoreLabel | html.escape }}</a></p>
+      <p class="rec-more"><a href="{{ it.MoreUrl }}">{{ it.MoreLabel | html.escape }}</a></p>
       {{~ end ~}}
     </article>
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 </section>
 {{~ end ~}}
-
-<section id="format-differences">
-  <h2>本放送・配信・円盤の違い</h2>
-  <p>本放送・配信・円盤で尺が違う話<br>
-  <span class="muted stats-coverage">{{ FormatDiff.CoverageLabel }}</span></p>
-  <ul class="stats-landing-list">
-    <li>
-      <a class="stats-landing-link" href="/stats/records/format-differences/">
-        <span class="stats-landing-link-title">本放送・配信・円盤の尺の違い</span>
-        <span class="stats-landing-link-desc">比べた {{ FormatDiff.ComparedEpisodes }} 話のうち、本編の尺が違う話が {{ FormatDiff.MainCount }} 話、次回予告の尺が違う話が {{ FormatDiff.TrailerCount }} 話{{~ if FormatDiff.OtherCount > 0 ~}}、その他のパートが違う話が {{ FormatDiff.OtherCount }} 話{{~ end ~}}あります。</span>
-      </a>
-    </li>
-  </ul>
-</section>

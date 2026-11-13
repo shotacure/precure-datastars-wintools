@@ -386,6 +386,8 @@ public sealed class EntityUrlRegistry
         // 役職詳細を持つものの分だけ載せる（声の出演・表記のみ・主題歌の役職と歌唱系は役職詳細を持たないので載せない）。
         reg._legacyRedirects.Add(new LegacyRedirect("/creators/otona/staff", PathUtil.CreatorsStaffUrl()));
         reg._legacyRedirects.Add(new LegacyRedirect("/creators/otona/voice-cast", PathUtil.CreatorsVoiceCastUrl()));
+        // 本放送・配信・円盤の尺の違いのページは廃止した。入口だった歴代記録へ転送する。
+        reg._legacyRedirects.Add(new LegacyRedirect("/stats/records/format-differences", "/stats/records/"));
         const string roleUrlPrefix = "/creators/roles/";
         var otonaRoleUrls = index.ByPersonAlias.Values.Concat(index.ByCompanyAlias.Values).Concat(index.ByLogo.Values)
             .SelectMany(list => list)

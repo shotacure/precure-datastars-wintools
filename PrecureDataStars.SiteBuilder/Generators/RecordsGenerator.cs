@@ -8,27 +8,19 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// 歴代記録（<c>/stats/records/</c>）と、本放送・配信・円盤の尺の違い（<c>/stats/records/format-differences/</c>）の生成。
+/// 歴代記録（<c>/stats/records/</c>）の生成。
 /// <para>
-/// 歴代記録は「いちばん」を集めた記録集。本編の尺（アバンタイトル・A パート・B パートの長短、中 CM の早遅）は
+/// 歴代記録は最長・最短・最多の上位を集めた記録集。本編の尺（アバンタイトル・A パート・B パートの長短、中 CM の早遅）は
 /// パート尺統計と同じランキング SQL から上位だけを取り、スタッフ（脚本・絵コンテ・演出・作画監督の担当話数、
 /// 声の出演の話数・役の数）とキャラクター（TV シリーズの登場話数・登場作品数）は
 /// クレジットの関与索引から数える。順位は同点を同じ順位とし、次の順位は同点の数だけ繰り下げる
 /// （3 位までを出し、同率は全件載せる）。
-/// </para>
-/// <para>
-/// 尺の違いは、本放送を基準に配信（Amazon Prime Video）と Blu-ray / DVD でパートの長さが違う話を並べる。
-/// 本編（アバンタイトル・オープニング・A / B / C パート・エンディング）、次回予告、その他のパートの 3 つに分け、
-/// それぞれシリーズごとにまとめる。本放送で実測できていないパート（備考に【本放送未確認】）は比べない。
 /// </para>
 /// </summary>
 public sealed class RecordsGenerator
 {
     /// <summary>歴代記録の URL。</summary>
     public const string IndexUrl = "/stats/records/";
-
-    /// <summary>本放送・配信・円盤の尺の違いの URL。</summary>
-    public const string FormatDifferencesUrl = "/stats/records/format-differences/";
 
     /// <summary>記録集に載せる順位の上限（同率は全件）。</summary>
     private const int TopRank = 3;
@@ -38,12 +30,6 @@ public sealed class RecordsGenerator
 
     /// <summary>番組開始基準時刻（08:30:00）。中 CM 入り時刻の絶対時刻表示で使う（パート尺統計と同じ）。</summary>
     private static readonly TimeSpan ProgramStart = new(8, 30, 0);
-
-    /// <summary>尺の違いで「本編」に数えるパート種別。</summary>
-    private static readonly HashSet<string> MainParts = new(StringComparer.Ordinal)
-    {
-        "AVANT", "OPENING", "PART_A", "PART_B", "PART_C", "ENDING"
-    };
 
     private readonly BuildContext _ctx;
     private readonly PageRenderer _page;
@@ -78,22 +64,19 @@ public sealed class RecordsGenerator
             BuildStaffGroup(creditCoverage),
             await BuildCharacterGroupAsync(creditCoverage, ct).ConfigureAwait(false)
         };
-        var formatDiff = BuildFormatDifferences(partsCoverage);
 
-        GenerateIndex(groups, formatDiff, partsCoverage);
-        GenerateFormatDifferences(formatDiff);
+        GenerateIndex(groups, partsCoverage);
 
-        _ctx.Logger.Success($"{IndexUrl}, {FormatDifferencesUrl}");
+        _ctx.Logger.Success(IndexUrl);
     }
 
     // ── 歴代記録（索引） ──
 
-    private void GenerateIndex(IReadOnlyList<RecordGroup> groups, FormatDiffModel formatDiff, string partsCoverage)
+    private void GenerateIndex(IReadOnlyList<RecordGroup> groups, string partsCoverage)
     {
         var content = new RecordsIndexModel
         {
-            Groups = groups,
-            FormatDiff = formatDiff
+            Groups = groups
         };
         var layout = new LayoutModel
         {
@@ -103,9 +86,9 @@ public sealed class RecordsGenerator
             {
                 MetaLeft = OgCoverageLabel.Compact(partsCoverage),
                 // ページの冒頭文（stats-records-index.sbn の .lead）と同じ文。
-                Subtitle = "歴代の「いちばん」"
+                Subtitle = "最長・最短・最多の上位 3 位"
             },
-            MetaDescription = "歴代プリキュアの「いちばん」",
+            MetaDescription = "最長・最短・最多の上位 3 位",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -120,16 +103,33 @@ public sealed class RecordsGenerator
 
     private async Task<RecordGroup> BuildPartLengthGroupAsync(string coverage, CancellationToken ct)
     {
-        var items = new List<RecordItem>
+        // 同じパートの「長い回」と「短い回」（中 CM は「早い回」と「遅い回」）は、左右に並べた 1 つの組にする。
+        var pairs = new List<RecordPair>
         {
-            await PartLengthItemAsync("AVANT", "アバンタイトルが長い回", "avant", ascending: false, ct).ConfigureAwait(false),
-            await PartLengthItemAsync("AVANT", "アバンタイトルが短い回", "avant", ascending: true, ct).ConfigureAwait(false),
-            await PartLengthItemAsync("PART_A", "Aパートが長い回", "part-a", ascending: false, ct).ConfigureAwait(false),
-            await PartLengthItemAsync("PART_A", "Aパートが短い回", "part-a", ascending: true, ct).ConfigureAwait(false),
-            await PartLengthItemAsync("PART_B", "Bパートが長い回", "part-b", ascending: false, ct).ConfigureAwait(false),
-            await PartLengthItemAsync("PART_B", "Bパートが短い回", "part-b", ascending: true, ct).ConfigureAwait(false),
-            await MidCmItemAsync(earliest: true, ct).ConfigureAwait(false),
-            await MidCmItemAsync(earliest: false, ct).ConfigureAwait(false)
+            new()
+            {
+                Title = "アバンタイトルの長さ",
+                High = await PartLengthItemAsync("AVANT", "長い回", "avant", ascending: false, ct).ConfigureAwait(false),
+                Low = await PartLengthItemAsync("AVANT", "短い回", "avant", ascending: true, ct).ConfigureAwait(false)
+            },
+            new()
+            {
+                Title = "Aパートの長さ",
+                High = await PartLengthItemAsync("PART_A", "長い回", "part-a", ascending: false, ct).ConfigureAwait(false),
+                Low = await PartLengthItemAsync("PART_A", "短い回", "part-a", ascending: true, ct).ConfigureAwait(false)
+            },
+            new()
+            {
+                Title = "Bパートの長さ",
+                High = await PartLengthItemAsync("PART_B", "長い回", "part-b", ascending: false, ct).ConfigureAwait(false),
+                Low = await PartLengthItemAsync("PART_B", "短い回", "part-b", ascending: true, ct).ConfigureAwait(false)
+            },
+            new()
+            {
+                Title = "中 CM に入る時刻",
+                High = await MidCmItemAsync(earliest: true, ct).ConfigureAwait(false),
+                Low = await MidCmItemAsync(earliest: false, ct).ConfigureAwait(false)
+            }
         };
         return new RecordGroup
         {
@@ -137,7 +137,7 @@ public sealed class RecordsGenerator
             Title = "本編の尺",
             Lead = "本放送で測ったパートの長さと、中 CM に入る時刻です。順位の全体は歴代エピソード尺統計にあります。",
             CoverageLabel = coverage,
-            Items = items
+            Pairs = pairs
         };
     }
 
@@ -170,7 +170,7 @@ public sealed class RecordsGenerator
         return new RecordItem
         {
             Id = $"midcm-{slug}",
-            Title = earliest ? "中 CM に入るのが早い回" : "中 CM に入るのが遅い回",
+            Title = earliest ? "早い回" : "遅い回",
             Entries = entries,
             MoreUrl = $"/stats/episodes/midcm/{slug}/",
             MoreLabel = "TOP 100 を見る"
@@ -188,6 +188,7 @@ public sealed class RecordsGenerator
         {
             RankLabel = rank.ToString(),
             ValueLabel = value,
+            ValueNumber = value,
             NameHtml = $"<a href=\"{row.EpisodeUrl}\">第{row.SeriesEpNo}話 {row.TitleHtml}</a>",
             SubHtml = SeriesRefHtml(row.SeriesUrl, row.SeriesTitle, row.SeriesStartYearLabel)
         };
@@ -333,6 +334,9 @@ public sealed class RecordsGenerator
             {
                 RankLabel = rank.ToString(),
                 ValueLabel = $"{ordered[i].Count}{unit}",
+                ValueNumber = ordered[i].Count.ToString(),
+                ValueUnit = unit,
+                BarPercent = BarPercentOf(ordered[i].Count, ordered[0].Count),
                 NameHtml = PersonLinkHtml(ordered[i].PersonId)
             });
         }
@@ -362,7 +366,7 @@ public sealed class RecordsGenerator
             .ToDictionary(g => g.Key, g => g.Select(a => a.AliasId).ToList());
 
         // First は初登場のクレジットの位置（放送開始日 → series_id → 話数 → クレジットの位置）。同じ数のキャラの並びに使う。
-        var rows = new List<(Character Character, int Episodes, int Movies, int Works, int SpinOffWorks, (long Start, int SeriesId, int EpNo, long Pos) First)>();
+        var rows = new List<(Character Character, int Episodes, int Movies, int Works, int OtonaWorks, int SpinOffWorks, (long Start, int SeriesId, int EpNo, long Pos) First)>();
         // キャラクター一覧の登場回数順のリスト（個別ページを持つキャラ）に 🌙 の札が出るか。出るときは件数バッジでの
         // 並べ替えの合計に 🌙 も入る（count-sort.js）ので、「もっと見る」のリンクに書く並べ替えの値が変わる。
         bool countListHasOtona = false;
@@ -376,6 +380,8 @@ public sealed class RecordsGenerator
             // 登場作品数：声の出演のクレジットがあるシリーズを 1 作品と数える。スピンオフ（大人向けを含む）も 1 作品に数え、
             // 併映の短編は親映画に含める。
             var works = new HashSet<int>();
+            // 添え書きでは、オトナシリーズとそれ以外のスピンオフを分けて数える（サイトでの呼び名が違う）。
+            var otonaWorks = new HashSet<int>();
             var spinOffWorks = new HashSet<int>();
             var first = (Start: long.MaxValue, SeriesId: int.MaxValue, EpNo: int.MaxValue, Pos: long.MaxValue);
             foreach (var aliasId in aliasIds)
@@ -386,12 +392,13 @@ public sealed class RecordsGenerator
                     if (!_ctx.SeriesById.TryGetValue(inv.SeriesId, out var series)) continue;
                     var key = CreditKey(inv);
                     if (key.CompareTo(first) < 0) first = key;
-                    if (SeriesClassifier.IsSpinOff(series)) spinOffWorks.Add(series.SeriesId);
+                    if (SeriesClassifier.IsOtona(series)) otonaWorks.Add(series.SeriesId);
+                    else if (SeriesClassifier.IsSpinOff(series)) spinOffWorks.Add(series.SeriesId);
                     works.Add(SeriesClassifier.IsMovieShortChild(series) && series.ParentSeriesId is int parentId ? parentId : series.SeriesId);
                 }
             }
             if (works.Count == 0) continue;
-            rows.Add((c, episodes, movies, works.Count, spinOffWorks.Count, first));
+            rows.Add((c, episodes, movies, works.Count, otonaWorks.Count, spinOffWorks.Count, first));
         }
 
         // 「もっと見る」はキャラクター一覧の登場回数順のタブへ。TV シリーズの登場話数は 📺 の多い順、登場作品数は
@@ -403,12 +410,13 @@ public sealed class RecordsGenerator
         {
             TopCharacters("character-episodes", "TVシリーズ登場話数が多いキャラクター", rows
                 .OrderByDescending(r => r.Episodes).ThenByDescending(r => r.Movies).ThenBy(r => r.First).ThenBy(r => r.Character.CharacterId)
-                .Select(r => (r.Character, r.Episodes, $"{r.Episodes}話", "")),
+                .Select(r => (r.Character, r.Episodes, "話", "")),
                 tvSortUrl),
             TopCharacters("character-works", "登場作品数が多いキャラクター", rows
                 .OrderByDescending(r => r.Works).ThenByDescending(r => r.Episodes).ThenBy(r => r.First).ThenBy(r => r.Character.CharacterId)
-                .Select(r => (r.Character, r.Works, $"{r.Works}作品",
-                    $"TV {r.Episodes}話・映画 {r.Movies}本" + (r.SpinOffWorks > 0 ? $"・スピンオフ {r.SpinOffWorks}作品" : ""))),
+                .Select(r => (r.Character, r.Works, "作品",
+                    $"TV {r.Episodes}話・映画 {r.Movies}本" + (r.OtonaWorks > 0 ? $"・オトナ {r.OtonaWorks}作品" : "")
+                        + (r.SpinOffWorks > 0 ? $"・スピンオフ {r.SpinOffWorks}作品" : ""))),
                 totalSortUrl)
         };
 
@@ -422,15 +430,17 @@ public sealed class RecordsGenerator
         };
     }
 
-    private RecordItem TopCharacters(string id, string title, IEnumerable<(Character Character, int Count, string Value, string Sub)> ordered, string moreUrl)
+    private RecordItem TopCharacters(string id, string title, IEnumerable<(Character Character, int Count, string Unit, string Sub)> ordered, string moreUrl)
     {
         var entries = new List<RecordEntry>();
         int rank = 0;
         int prevCount = -1;
+        int topCount = 0;
         int i = 0;
         foreach (var r in ordered)
         {
             if (r.Count <= 0) break;
+            if (i == 0) topCount = r.Count;
             if (r.Count != prevCount)
             {
                 rank = i + 1;
@@ -442,7 +452,10 @@ public sealed class RecordsGenerator
             entries.Add(new RecordEntry
             {
                 RankLabel = rank.ToString(),
-                ValueLabel = r.Value,
+                ValueLabel = $"{r.Count}{r.Unit}",
+                ValueNumber = r.Count.ToString(),
+                ValueUnit = r.Unit,
+                BarPercent = BarPercentOf(r.Count, topCount),
                 NameHtml = url is null ? name : $"<a href=\"{url}\">{name}</a>",
                 SubHtml = HtmlUtil.Escape(r.Sub)
             });
@@ -451,155 +464,11 @@ public sealed class RecordsGenerator
         return new RecordItem { Id = id, Title = title, Entries = entries, MoreUrl = moreUrl, MoreLabel = "キャラクター一覧を見る" };
     }
 
-    // ── 本放送・配信・円盤の尺の違い ──
-
-    private FormatDiffModel BuildFormatDifferences(string coverage)
-    {
-        var sections = new List<FormatDiffSection>
-        {
-            new()
-            {
-                Id = "main",
-                Title = "本編の尺が違う話",
-                Lead = "アバンタイトル・オープニング・A パート・B パート・C パート・エンディングの長さが、本放送と配信・円盤で違う話です。"
-            },
-            new()
-            {
-                Id = "trailer",
-                Title = "次回予告の尺が違う話",
-                Lead = "次回予告の長さが違う話です。本放送では告知などのために予告が短縮されることがあり、配信・円盤には短縮前の予告が収められています。"
-            },
-            new()
-            {
-                Id = "other",
-                Title = "その他のパートの尺が違う話",
-                Lead = "本編・次回予告以外のパートの長さが違う話です。"
-            }
-        };
-        var bySectionId = sections.ToDictionary(s => s.Id, StringComparer.Ordinal);
-
-        int compared = 0;
-        var episodesWithDifference = new HashSet<int>();
-
-        foreach (var series in _ctx.Series.Where(s => _ctx.IsMainlineTvSeries(s.SeriesId)).OrderBy(s => s.StartDate).ThenBy(s => s.SeriesId))
-        {
-            if (!_ctx.EpisodesBySeries.TryGetValue(series.SeriesId, out var episodes)) continue;
-            var rowsBySection = sections.ToDictionary(s => s.Id, _ => new List<FormatDiffRow>(), StringComparer.Ordinal);
-
-            foreach (var ep in episodes)
-            {
-                if (!_ctx.EpisodePartsByEpisode.TryGetValue(ep.EpisodeId, out var parts) || parts.Count == 0) continue;
-
-                bool anyComparable = false;
-                var partsBySection = sections.ToDictionary(s => s.Id, _ => new List<FormatDiffPart>(), StringComparer.Ordinal);
-                foreach (var p in parts.OrderBy(x => x.EpisodeSeq))
-                {
-                    if (p.OaLength is not ushort oa) continue;
-                    if ((p.Notes ?? "").Contains("【本放送未確認】", StringComparison.Ordinal)) continue;
-                    if (p.VodLength is null && p.DiscLength is null) continue;
-                    anyComparable = true;
-
-                    int? vodDelta = p.VodLength is ushort vod ? vod - oa : null;
-                    int? discDelta = p.DiscLength is ushort disc ? disc - oa : null;
-                    if ((vodDelta ?? 0) == 0 && (discDelta ?? 0) == 0) continue;
-
-                    string sectionId = p.PartType == "TRAILER" ? "trailer" : MainParts.Contains(p.PartType) ? "main" : "other";
-                    partsBySection[sectionId].Add(new FormatDiffPart
-                    {
-                        PartName = _ctx.PartTypeByCode.TryGetValue(p.PartType, out var pt) ? pt.NameJa : p.PartType,
-                        PartCss = FormatTableBuilder.PaletteCss(p.PartType),
-                        OaLabel = HtmlUtil.FormatSeconds(oa),
-                        VodLabel = p.VodLength is ushort v ? HtmlUtil.FormatSeconds(v) : "",
-                        VodDeltaLabel = DeltaLabel(vodDelta),
-                        DiscLabel = p.DiscLength is ushort d ? HtmlUtil.FormatSeconds(d) : "",
-                        DiscDeltaLabel = DeltaLabel(discDelta),
-                        Note = BroadcastNoteText.ForDisplay(p.Supplement)
-                    });
-                }
-                if (anyComparable) compared++;
-
-                foreach (var (sectionId, diffParts) in partsBySection)
-                {
-                    if (diffParts.Count == 0) continue;
-                    episodesWithDifference.Add(ep.EpisodeId);
-                    rowsBySection[sectionId].Add(new FormatDiffRow
-                    {
-                        SeriesEpNo = ep.SeriesEpNo,
-                        EpisodeUrl = PathUtil.EpisodeUrl(series.Slug, ep.SeriesEpNo),
-                        TitleHtml = SubtitleGuardRenderer.GuardRichHtml(
-                            StatsEpisodeRows.BuildTitleHtml(ep.TitleRichHtml, ep.TitleText),
-                            SubtitleGuardRenderer.RevealAtFor(ep.EpisodeId, _ctx.SubtitleRevealAtByEpisodeId)),
-                        OnAirDate = JpDateFormat.BroadcastDate(ep.OnAirAt),
-                        Parts = diffParts
-                    });
-                }
-            }
-
-            foreach (var (sectionId, rows) in rowsBySection)
-            {
-                if (rows.Count == 0) continue;
-                bySectionId[sectionId].SeriesGroups.Add(new FormatDiffSeriesGroup
-                {
-                    SeriesTitle = series.Title,
-                    SeriesUrl = PathUtil.SeriesUrl(series.Slug),
-                    SeriesStartYearLabel = _ctx.StartYearLabel(series.SeriesId),
-                    Rows = rows
-                });
-            }
-        }
-
-        foreach (var s in sections)
-            s.EpisodeCount = s.SeriesGroups.Sum(g => g.Rows.Count);
-
-        return new FormatDiffModel
-        {
-            CoverageLabel = coverage,
-            ComparedEpisodes = compared,
-            EpisodesWithDifference = episodesWithDifference.Count,
-            Sections = sections.Where(s => s.SeriesGroups.Count > 0).ToList(),
-            MainCount = bySectionId["main"].EpisodeCount,
-            TrailerCount = bySectionId["trailer"].EpisodeCount,
-            OtherCount = bySectionId["other"].EpisodeCount
-        };
-    }
-
-    private void GenerateFormatDifferences(FormatDiffModel content)
-    {
-        var layout = new LayoutModel
-        {
-            PageTitle = "本放送・配信・円盤の尺の違い",
-            OgCard = new OgCardSpec(Kicker: "歴代記録", Title: "本放送・配信・円盤の尺の違い")
-            {
-                // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                // ページの冒頭文（stats-records-format-differences.sbn の .lead）と同じ文。
-                Subtitle = "本放送・配信・円盤で尺が違う話",
-                MetaLeft = OgCoverageLabel.Compact(content.CoverageLabel),
-                Badges = new[]
-                {
-                    new OgCardBadge("本編が違う", $"{content.MainCount}話"),
-                    new OgCardBadge("予告が違う", $"{content.TrailerCount}話")
-                }
-            },
-            MetaDescription = "歴代プリキュアの、本放送・配信・円盤で尺が違う話",
-            Breadcrumbs = new[]
-            {
-                new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "統計", Url = "/stats/" },
-                new BreadcrumbItem { Label = "歴代記録", Url = IndexUrl },
-                new BreadcrumbItem { Label = "本放送・配信・円盤の尺の違い", Url = "" }
-            }
-        };
-        _page.RenderAndWrite(FormatDifferencesUrl, "stats", "stats-records-format-differences.sbn", content, layout);
-    }
-
-    /// <summary>本放送との差の表記。長ければ「+0:15」、短ければ「−0:15」、差が無いか比べられなければ空文字。</summary>
-    private static string DeltaLabel(int? delta)
-    {
-        if (delta is not int d || d == 0) return "";
-        return d > 0 ? "+" + HtmlUtil.FormatSeconds(d) : "−" + HtmlUtil.FormatSeconds(-d);
-    }
-
     // ── 共通 ──
+
+    /// <summary>1 位の数に対する割合（%。棒の長さ）。細すぎる棒にならないよう下限を 2% にする。</summary>
+    private static int BarPercentOf(int count, int topCount)
+        => topCount <= 0 ? 0 : Math.Clamp((int)Math.Round(count * 100.0 / topCount), 2, 100);
 
     /// <summary>シリーズ名（リンク）と年度の添え書き。複数シリーズが並ぶ文脈なので年度を薄色で付ける。</summary>
     private static string SeriesRefHtml(string seriesUrl, string seriesTitle, string startYearLabel)
@@ -610,7 +479,6 @@ public sealed class RecordsGenerator
     private sealed class RecordsIndexModel
     {
         public IReadOnlyList<RecordGroup> Groups { get; set; } = Array.Empty<RecordGroup>();
-        public FormatDiffModel FormatDiff { get; set; } = new();
     }
 
     /// <summary>記録の大分類（本編の尺 / スタッフ・声優 / キャラクター）。</summary>
@@ -622,6 +490,16 @@ public sealed class RecordsGenerator
         /// <summary>この分類の基準点ラベル（尺はパート情報、スタッフとキャラクターはクレジットの収録範囲）。</summary>
         public string CoverageLabel { get; set; } = "";
         public IReadOnlyList<RecordItem> Items { get; set; } = Array.Empty<RecordItem>();
+        /// <summary>左右に並べる 2 項目の組（本編の尺）。組で出す分類は <see cref="Items"/> を持たない。</summary>
+        public IReadOnlyList<RecordPair> Pairs { get; set; } = Array.Empty<RecordPair>();
+    }
+
+    /// <summary>対になる記録 2 項目（長い回と短い回、早い回と遅い回）。1 つの枠の左右に並べる。</summary>
+    private sealed class RecordPair
+    {
+        public string Title { get; set; } = "";
+        public RecordItem High { get; set; } = new();
+        public RecordItem Low { get; set; } = new();
     }
 
     /// <summary>記録 1 項目（カード 1 枚）。</summary>
@@ -630,6 +508,10 @@ public sealed class RecordsGenerator
         public string Id { get; set; } = "";
         public string Title { get; set; } = "";
         public IReadOnlyList<RecordEntry> Entries { get; set; } = Array.Empty<RecordEntry>();
+        /// <summary>1 位の行（同率なら全件）。大きく出す。</summary>
+        public IReadOnlyList<RecordEntry> Tops => Entries.Where(e => e.RankLabel == "1").ToList();
+        /// <summary>2 位以下の行。</summary>
+        public IReadOnlyList<RecordEntry> Rest => Entries.Where(e => e.RankLabel != "1").ToList();
         /// <summary>全体のランキングなど、続きを見るページ。空なら出さない。</summary>
         public string MoreUrl { get; set; } = "";
         public string MoreLabel { get; set; } = "";
@@ -640,59 +522,13 @@ public sealed class RecordsGenerator
     {
         public string RankLabel { get; set; } = "";
         public string ValueLabel { get; set; } = "";
+        /// <summary>値の数の部分（「150」「7:50」）。大きく出す。</summary>
+        public string ValueNumber { get; set; } = "";
+        /// <summary>値の単位（「話」「役」「作品」）。時間の記録は空。</summary>
+        public string ValueUnit { get; set; } = "";
+        /// <summary>1 位の数に対する割合（%）。数を棒で比べる記録だけが持つ（時間の記録は 0）。</summary>
+        public int BarPercent { get; set; }
         public string NameHtml { get; set; } = "";
         public string SubHtml { get; set; } = "";
-    }
-
-    private sealed class FormatDiffModel
-    {
-        public string CoverageLabel { get; set; } = "";
-        /// <summary>本放送と配信・円盤のどちらかを比べられた話の数。</summary>
-        public int ComparedEpisodes { get; set; }
-        /// <summary>どこかのパートの長さが違った話の数（本編・予告・その他の重複を除く）。</summary>
-        public int EpisodesWithDifference { get; set; }
-        public int MainCount { get; set; }
-        public int TrailerCount { get; set; }
-        public int OtherCount { get; set; }
-        public IReadOnlyList<FormatDiffSection> Sections { get; set; } = Array.Empty<FormatDiffSection>();
-    }
-
-    private sealed class FormatDiffSection
-    {
-        public string Id { get; set; } = "";
-        public string Title { get; set; } = "";
-        public string Lead { get; set; } = "";
-        public int EpisodeCount { get; set; }
-        public List<FormatDiffSeriesGroup> SeriesGroups { get; } = new();
-    }
-
-    private sealed class FormatDiffSeriesGroup
-    {
-        public string SeriesTitle { get; set; } = "";
-        public string SeriesUrl { get; set; } = "";
-        public string SeriesStartYearLabel { get; set; } = "";
-        public IReadOnlyList<FormatDiffRow> Rows { get; set; } = Array.Empty<FormatDiffRow>();
-    }
-
-    private sealed class FormatDiffRow
-    {
-        public int SeriesEpNo { get; set; }
-        public string EpisodeUrl { get; set; } = "";
-        /// <summary>サブタイトル（ルビ付き・解禁ガード済みの HTML）。</summary>
-        public string TitleHtml { get; set; } = "";
-        public string OnAirDate { get; set; } = "";
-        public IReadOnlyList<FormatDiffPart> Parts { get; set; } = Array.Empty<FormatDiffPart>();
-    }
-
-    private sealed class FormatDiffPart
-    {
-        public string PartName { get; set; } = "";
-        public string PartCss { get; set; } = "";
-        public string OaLabel { get; set; } = "";
-        public string VodLabel { get; set; } = "";
-        public string VodDeltaLabel { get; set; } = "";
-        public string DiscLabel { get; set; } = "";
-        public string DiscDeltaLabel { get; set; } = "";
-        public string Note { get; set; } = "";
     }
 }

@@ -1,6 +1,6 @@
 <section>
   <h1>統計</h1>
-  <p class="lead">サブタイトルと尺の統計、歴代の「いちばん」</p>
+  <p class="lead">サブタイトルと尺の統計、最長・最短・最多の記録</p>
 </section>
 
 {{## クリエイターランディング・音楽ランディングと同型のカード型レイアウト
@@ -25,7 +25,7 @@
 
   <a class="music-category-card" href="/stats/records/">
     <h2>歴代記録</h2>
-    <p>歴代の「いちばん」</p>
+    <p>最長・最短・最多の上位 3 位</p>
     <p class="muted stats-coverage">尺：{{ EpisodeCoverageLabel }}</p>
     <p class="muted stats-coverage">クレジット：{{ CreditCoverageLabel }}</p>
   </a>

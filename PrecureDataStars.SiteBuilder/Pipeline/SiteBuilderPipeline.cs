@@ -298,7 +298,7 @@ public sealed class SiteBuilderPipeline
         await new EpisodePartStatsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
-        // 歴代記録（/stats/records/）と本放送・配信・円盤の尺の違い。尺のランキングはパート尺統計と同じ SQL、
+        // 歴代記録（/stats/records/）。尺のランキングはパート尺統計と同じ SQL、
         // スタッフ・キャラクターは関与索引とチーフの顔ぶれ索引から数える。
         reporter.BeginSection("records");
         await new RecordsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
@@ -479,8 +479,8 @@ public sealed class SiteBuilderPipeline
         yield return ("stats_landing",      "統計ランディング", 1);
         yield return ("subtitle_stats",     "字幕統計",         null);
         yield return ("episode_part_stats", "パート尺統計",     null);
-        // 歴代記録は索引 1 ページ + 尺の違い 1 ページで常に一定。
-        yield return ("records",            "歴代記録",         2);
+        // 歴代記録は索引 1 ページで常に一定。
+        yield return ("records",            "歴代記録",         1);
         yield return ("og_cards",           "OGP カード",       1);
         yield return ("search_index",       "検索索引",         1);
         yield return ("seo",                "SEO ファイル",     1);

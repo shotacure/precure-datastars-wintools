@@ -62,9 +62,9 @@ public sealed class StatsLandingGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "統計")
             {
                 // ページの冒頭文（stats-landing.sbn の .lead）と同じ文。
-                Subtitle = "サブタイトルと尺の統計、歴代の「いちばん」"
+                Subtitle = "サブタイトルと尺の統計、最長・最短・最多の記録"
             },
-            MetaDescription = "歴代プリキュアのサブタイトルと尺の統計、歴代の「いちばん」",
+            MetaDescription = "サブタイトルと尺の統計、最長・最短・最多の記録",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

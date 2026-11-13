@@ -94,6 +94,8 @@ public sealed class BooksGenerator
 
         foreach (var (book, row) in books.Zip(rows))
         {
+            // ピンポイントビルドで書かないページは、組み立てごと飛ばす。
+            if (!_page.IsTarget(row.Url)) continue;
             RenderDetail(book, row, seriesIdsByBook, genreLinksByBook, creditsByBook,
                 genreByCode, roleByCode, companyById, aliasById);
         }

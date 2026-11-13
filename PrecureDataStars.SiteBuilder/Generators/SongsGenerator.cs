@@ -311,6 +311,10 @@ public sealed class SongsGenerator
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
     {
+        // ピンポイントビルドで書かないページは、組み立てごと飛ばす。
+        string targetUrl = PathUtil.SongUrl(song.SongId);
+        if (!_page.IsTarget(targetUrl)) return targetUrl;
+
         // 作詞・作曲・編曲：構造化 song_credits を優先、無ければ Song のフリーテキスト列にフォールバック。
         // BuildCreditRoleHtml は名義群（/people/{名前}/ リンク）の HTML を返す。
         // 行のラベル（「作詞」「作曲」「編曲」）も Role マスタを引いて

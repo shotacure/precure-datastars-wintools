@@ -131,6 +131,8 @@ public sealed class AnniversaryGenerator
     private void RenderDayPage(int month, int day, IReadOnlyList<AnniversaryEntry> dayEntries, DateTimeOffset now)
     {
         string url = PathUtil.AnniversaryUrl(month, day);
+        // ピンポイントビルドで書かないページは、組み立てごと飛ばす。
+        if (!_page.IsTarget(url)) return;
         string dateLabel = $"{month}月{day}日";
 
         // 出来事は種別ごとに束ねる。エピソードと映画は「古い順」に並べて、

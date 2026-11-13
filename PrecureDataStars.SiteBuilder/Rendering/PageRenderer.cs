@@ -281,6 +281,14 @@ public sealed class PageRenderer
     private bool ShouldWrite(string urlPath)
         => _config.MatchesPageFilter(urlPath);
 
+    /// <summary>
+    /// <paramref name="urlPath"/> のページを今回のビルドで書くか（ピンポイントビルドの対象か。全体ビルドでは常に true）。
+    /// 詳細ページを 1 件ずつ作る Generator は、モデルを組み立てる前にこれを見て、書かないページは組み立てごと飛ばす
+    /// （書き出しの直前で捨てると、1 ページだけのビルドでも全ページぶんの集計が走る）。
+    /// 飛ばしてよいのは、そのページを作る処理がほかのページの材料を残さないものに限る。
+    /// </summary>
+    public bool IsTarget(string urlPath) => ShouldWrite(urlPath);
+
     /// <summary>コンテンツテンプレを <paramref name="contentModel"/> で 1 度レンダリング → レイアウトに包んでファイル保存する。</summary>
     /// <param name="urlPath">サイト内 URL パス（先頭スラッシュ付き、末尾スラッシュ付き）。</param>
     /// <param name="section">サマリ用セクションラベル（"home" / "series" / "episodes" 等）。</param>

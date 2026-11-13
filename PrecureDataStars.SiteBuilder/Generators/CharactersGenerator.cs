@@ -160,6 +160,8 @@ public sealed class CharactersGenerator
         foreach (var c in allCharacters)
         {
             if (_ctx.EntityUrls.IsGuestCharacter(c.CharacterId)) continue;
+            // ピンポイントビルドで書かないページは、組み立てごと飛ばす（件数には数える）。
+            if (!_page.IsTarget(PathUtil.CharacterUrl(c.CharacterId))) { detailCount++; continue; }
             await GenerateDetailAsync(c, aliasesByCharacter, aliasById, charactersById,
                 kindMap, relationKindMap, personAliasById,
                 precureByCharacter, personsById, ct).ConfigureAwait(false);

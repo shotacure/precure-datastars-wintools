@@ -326,6 +326,8 @@ public sealed class PersonsGenerator
     private string RenderUnitDetail(PersonAlias unit)
     {
         string url = _ctx.EntityUrls.UnitUrl(unit.AliasId)!;
+        // ピンポイントビルドで書かないページは、組み立てごと飛ばす。
+        if (!_page.IsTarget(url)) return url;
         string name = unit.Name;
         var members = BuildUnitMembers(unit.AliasId);
         var aliasIds = new[] { unit.AliasId };
@@ -488,6 +490,10 @@ public sealed class PersonsGenerator
         Person person,
         IReadOnlyDictionary<int, PersonAlias> aliasById)
     {
+        // ピンポイントビルドで書かないページは、組み立てごと飛ばす。
+        string targetUrl = PathUtil.PersonUrl(person.PersonId);
+        if (!_page.IsTarget(targetUrl)) return targetUrl;
+
         var aliasIds = _aliasesByPerson!.TryGetValue(person.PersonId, out var ids)
             ? ids
             : Array.Empty<int>();

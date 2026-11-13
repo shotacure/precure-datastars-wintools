@@ -138,6 +138,8 @@ public sealed class CompaniesGenerator
         // 詳細ページ。
         foreach (var co in companies)
         {
+            // ピンポイントビルドで書かないページは、組み立てごと飛ばす。
+            if (!_page.IsTarget(PathUtil.CompanyUrl(co.CompanyId))) continue;
             var aliases = aliasesByCompany.TryGetValue(co.CompanyId, out var lst) ? lst : new List<CompanyAlias>();
             var relations = relationsByCompany.TryGetValue(co.CompanyId, out var rl)
                 ? BuildRelationViews(co.CompanyId, rl, companyById)

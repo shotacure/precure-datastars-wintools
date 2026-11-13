@@ -6,6 +6,8 @@
 
 - **SiteBuilder：書いたファイルを読み返さずに、sitemap の更新日とデプロイの差分を決めるようにした**（`OutputWriter`・`OutputFileStamp`〔新規〕・`SitemapLastmodManifest`・`SeoGenerator`・`S3DeployService`・`SiteBuilderPipeline`）：出力へ書く時に手元のバイト列から MD5 を取り、ビルドの終わりに出力の隣の台帳（`{出力ディレクトリ}.files.json`）へ大きさ・更新時刻と一緒に残す。sitemap の lastmod の判定と、デプロイで S3 の ETag と比べる手元の MD5 は、この台帳から引く。次のビルドの「同じ中身なら書かない」の判定も、大きさと更新時刻が台帳と同じファイルは読まずに MD5 どうしで比べる。台帳に無いファイルと、大きさか更新時刻が台帳と違うファイルは、これまでどおり読んで確かめる。多くのページが変わったビルドで、書いた直後のファイルを全部読み返すのに数分かかっていた。出力は変わらない。
 
+- **SiteBuilder：`--page` のピンポイントビルドで、書かない詳細ページをモデルの組み立てごと飛ばすようにした**（`PageRenderer.IsTarget`〔新規〕・`PersonsGenerator`・`EpisodeGenerator`・`SongsGenerator`・`ProductsGenerator`・`CompaniesGenerator`・`CharactersGenerator`・`BooksGenerator`・`AnniversaryGenerator`）：絞り込みが書き出しの直前でしか効かず、1 ページだけのビルドでも全ページぶんの集計をしてから捨てていた。全体ビルドの出力は変わらない。
+
 - **サイト：人物・企業・キャラクター・ユニット・役職の OGP カードを、数を出さずに仕事の中身を並べる形にした**（`OgCareerCardParts.BuildCareerLines`〔新規〕・`OgCardFactLine.Items`〔新規〕・`OgCardRenderer.FitFactItems`〔新規〕・`PersonsGenerator`・`CompaniesGenerator`・`CharactersGenerator`・`CreatorsGenerator`）：担当した話数・本数・曲数と基準点の注記は、クレジットの入力が進むたびに変わり、役職を足した延べの数では仕事の大きさも読めないので、この 5 種のカードから外した。
   - 人物と企業は、役職ごとに 1 項目にした。見出しが役職で、値はその役職で関わった作品の並び。声の出演も 1 項目にまとめ、作品ごとに演じた役を添える。項目はメインスタッフかオープニングの役職（と声の出演）を先に置き、同じ段の中は担当した話の多い順に並べる。項目の中の作品は主に担当した TV の作品を放送順に、それ以外を話の多い順に並べる。3 話以下の担当には話を添える。
   - 入りきらない作品は、描画の側が後ろから落として「ほか」と添える（数は出さない）。行は作品名・曲名の切れ目でだけ折る。

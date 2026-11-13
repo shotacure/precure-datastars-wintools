@@ -324,6 +324,10 @@ public sealed class EpisodeGenerator
     /// サマリ・sitemap 記録は呼び出し側が逐次フェーズで行う）。</summary>
     private async Task<string> RenderOneAsync(Series series, Episode ep, CancellationToken ct)
     {
+        // ピンポイントビルドで書かないページは、組み立てごと飛ばす。
+        string targetUrl = PathUtil.EpisodeUrl(series.Slug, ep.SeriesEpNo);
+        if (!_page.IsTarget(targetUrl)) return targetUrl;
+
         // 同シリーズ内の前後話を引き当てる（一覧から自分のインデックスを探す）。
         var siblings = _ctx.EpisodesBySeries[series.SeriesId];
         var idx = -1;

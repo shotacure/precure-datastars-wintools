@@ -637,6 +637,10 @@ public sealed class ProductsGenerator
         IReadOnlyDictionary<int, IReadOnlyList<(string PartCode, string SizeCode, int SeriesId, string MNoDetail)>> bgmAssignmentsByRecordingId,
         IReadOnlyDictionary<int, ProductCompany> productCompanyMap)
     {
+        // ピンポイントビルドで書かないページは、組み立てごと飛ばす。
+        string targetUrl = PathUtil.ProductUrl(product.ProductCatalogNo);
+        if (!_page.IsTarget(targetUrl)) return targetUrl;
+
         var discs = discsByProduct.TryGetValue(product.ProductCatalogNo, out var lst)
             ? lst
             : new List<Disc>();

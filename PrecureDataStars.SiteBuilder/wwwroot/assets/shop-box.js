@@ -3,10 +3,11 @@
  *
  * 対象 DOM 構造（テンプレート側は空の置き場だけを出す）：
  *   <aside class="shop-box" data-shop-series="69" data-shop-heading="この作品の Blu-ray・CD" hidden></aside>
- *   data-shop-series … 作品の ID。その作品の商品だけを出す。"all" なら全作品の商品を出す（トップページ）。
+ *   data-shop-series … 作品の ID。トップページは "home"。
  *
- * 枠の中身は /shop-items.json から読む。このファイルは、Amazon で売られている商品だけを載せていて、
- * 売り切れ・絶版になった商品はすぐ外れ、また売られ始めるとすぐ戻る。出す商品が無ければ枠ごと出さない。
+ * 枠の中身は /shop/{data-shop-series の値}.json から読む。このファイルは、Amazon で売られている商品だけを
+ * 最大 4 件載せていて、売り切れ・絶版になった商品はすぐ外れ、また売られ始めるとすぐ戻る。
+ * 出す商品が無ければ枠ごと出さない。
  * 端末には何も保存しない（ブラウザの通常のキャッシュだけを使う）。
  *
  * フッターの Amazon についての注記（data-shop-footnote）は、枠を出したときだけ見せる。
@@ -15,7 +16,7 @@
 (function () {
   'use strict';
 
-  var FILE_URL = '/shop-items.json';
+  var FILE_DIR = '/shop/';
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -27,34 +28,31 @@
     var boxes = document.querySelectorAll('.shop-box[data-shop-series]');
     if (boxes.length === 0) return;
 
-    fetch(FILE_URL)
-      .then(function (res) { return res.ok ? res.text() : Promise.reject(new Error('HTTP ' + res.status)); })
-      .then(function (text) { renderAll(boxes, text); })
-      .catch(function () {
-        // 読めなかったときは、枠を出さないままにする。
-      });
+    for (var i = 0; i < boxes.length; i++) load(boxes[i]);
   }
 
-  function renderAll(boxes, text) {
-    var items;
-    try { items = (JSON.parse(text) || {}).items || []; } catch (e) { return; }
+  /** 置き場 1 つのファイルを読んで描く。読めなかったときは、枠を出さないままにする。 */
+  function load(box) {
+    var name = box.getAttribute('data-shop-series');
+    if (!/^[0-9a-z]+$/.test(name)) return;
+    fetch(FILE_DIR + name + '.json')
+      .then(function (res) { return res.ok ? res.json() : Promise.reject(new Error('HTTP ' + res.status)); })
+      .then(function (data) {
+        render(box, (data && data.items) || []);
+        showFootnotes();
+      })
+      .catch(function () {});
+  }
 
-    var anyShown = false;
-    for (var i = 0; i < boxes.length; i++) {
-      if (render(boxes[i], items)) anyShown = true;
-    }
+  /** フッターの Amazon についての注記を、枠が 1 つでも出ているときだけ見せる。 */
+  function showFootnotes() {
+    var anyShown = document.querySelector('.shop-box[data-shop-series]:not([hidden])') !== null;
     var notes = document.querySelectorAll('[data-shop-footnote]');
     for (var j = 0; j < notes.length; j++) notes[j].hidden = !anyShown;
   }
 
   /** 置き場 1 つを描く。出す商品があれば true。 */
-  function render(box, items) {
-    var series = box.getAttribute('data-shop-series');
-    var mine = [];
-    for (var i = 0; i < items.length; i++) {
-      if (series === 'all' || String(items[i].series) === series) mine.push(items[i]);
-    }
-
+  function render(box, mine) {
     box.textContent = '';
     if (mine.length === 0) {
       box.hidden = true;
@@ -147,7 +145,7 @@
       if (!m) return '予約受付中';
       return '予約受付中・' + Number(m[1]) + '年' + Number(m[2]) + '月' + Number(m[3]) + '日発売';
     }
-    if (item.status === 'IN_STOCK') return '発売中';
+    if (item.status === 'IN_STOCK' || item.status === 'IN_STOCK_SCARCE') return '発売中';
     return '';
   }
 

@@ -17,8 +17,8 @@
   失敗したとき（キー・接続文字列の不備など）はデプロイしない。-DryRunOnly でも流す。
 
   配信音源の再確認と Amazon の画像の取り直しは、互いに別の表しか書かないので同時に流す。
-  そのあと PrecureDataStars.AmazonSync（--shop-check）で、販売中の商品（作品詳細・各話の詳細・トップページの枠）が
-  Amazon で売られているかを確かめる（定時の点検 scheduled-shop-check.ps1 と同じ点検）。
+  そのあと PrecureDataStars.AmazonSync（--shop-check --all）で、販売中の商品の枠（作品詳細・各話の詳細・トップページ）の候補の全部が
+  Amazon で売られているかを確かめる（定時の点検 scheduled-shop-check.ps1 は、発売から 1 年以内の商品だけを確かめる）。
   3 つの道具（SiteBuilder・ArtTrackRefresh・AmazonSync）は最初に scripts/deploy-tools.slnf で 1 度だけ Release でビルドし、
   以後はできた exe を直に呼ぶ（dotnet run のように呼ぶたびにビルドを確かめない）。
   実行は 2 段階：
@@ -152,7 +152,7 @@ try {
         # 定時の点検（scheduled-shop-check.ps1）を登録していなくても、デプロイのたびに枠のファイルが新しくなる。
         # 画像の取り直しと同じ API を使うので、同時には流さず、終わってから流す。
         Write-Host "[準備] 販売中の商品の点検" -ForegroundColor Yellow
-        & $amazonSyncExe --shop-check
+        & $amazonSyncExe --shop-check --all
         if ($LASTEXITCODE -ne 0) { throw "販売中の商品の点検が失敗しました (exit $LASTEXITCODE)。上のログを確認してください。" }
         Write-Host ""
     } finally {

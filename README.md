@@ -1046,7 +1046,7 @@ DB の各表の備考（`notes` 列。企業・商品・人物・ユニット・
    .\scripts\register-deploy-task.ps1           # 毎日 06:00 と毎週水曜・土曜の 08:30、雑誌の号の発売日の 00:00 に登録
    .\scripts\register-deploy-task.ps1 -Unregister
    ```
-   - 販売中の商品の定時の点検：`scripts/scheduled-shop-check.ps1` が、作品詳細・各話の詳細・トップページの「販売中の商品」の枠に出す商品（`series_shop_items` の `is_enabled = 1` の行）を点検する。まず `PrecureDataStars.AmazonSync --shop-check` が Creators API で出品を調べ、売られているか・在庫の種別・画像の URL を行に書き戻す。新品を Amazon.co.jp 本体が売っていて、在庫ありか予約受付中で、カートに入る出品があるときだけ「売られている」とする。続けて `PrecureDataStars.SiteBuilder --publish-shop-items` が DB の行から枠のファイル（`/shop-items.json`）を組み立て、本番のファイルと中身が違うときだけ S3 に上げ直して、CloudFront のそのパスのキャッシュを消す。サイトは作り直さない。枠の中身はページの HTML に入っておらず、ページを開いたときに `shop-box.js` がこのファイルを読んで描くので、ファイルを上げ直すだけで全ページの枠が変わる。道具は Release でビルド済みの exe をそのまま使う（exe が無いときだけ 1 度ビルドする）。経過は `%LOCALAPPDATA%\precure-datastars\scheduled-shop-check.log` に追記する。変わりが無い回は 1 行、上げ直した回と失敗した回は道具の出力も残す。失敗したときは Windows の通知を出す（失敗が続いている間は最初の 1 回だけ）。`-DryRun` を付けると、Amazon には確かめるが DB にも本番にも書かない。`scripts/register-shop-check-task.ps1` で、15 分おき（`-IntervalMinutes` で変えられる）に動くタスク（既定「precure-datastars shop check」）をタスクスケジューラに登録する。スリープからは起こさない。前の回がまだ動いていれば、その回を飛ばす。本番デプロイ（`deploy.ps1`）もビルドの前に `--shop-check` を流すので、タスクを登録していなくても、デプロイのたびに枠のファイルは新しくなる。枠に出す商品の行は SQL で入れる（作品・ASIN・商品名・媒体の札・発売日・並び順。音楽商品なら `product_catalog_no` を入れると、枠に商品詳細へのリンクが付く）
+   - 販売中の商品の定時の点検：`scripts/scheduled-shop-check.ps1` が、作品詳細・各話の詳細・トップページの「販売中の商品」の枠の候補を点検する。候補は作品に結び付く音楽商品（その作品の盤を持ち、CD の ASIN がある商品。自動で拾う）と、手で入れる行（`series_shop_items` の `is_enabled = 1` の行。商品の表に無い Blu-ray や、別の作品のページにも出したい商品に使う）。まず `PrecureDataStars.AmazonSync --shop-check` が Creators API で出品を調べ、売られているかと在庫の種別を書き戻す（音楽商品は `product_shop_states`、手で入れた行は `series_shop_items`。手で入れた行は画像の URL も取り直す）。新品を Amazon.co.jp 本体が売っていて、在庫あり（残りわずかを含む）か予約受付中で、カートに入る出品があるときだけ「売られている」とする。定時の点検が確かめるのは、手で入れた行と、発売から 1 年以内（発売前を含む）の音楽商品だけ。それより前の音楽商品は、本番デプロイ（`deploy.ps1`）がビルドの前に流す `--shop-check --all` で 1 日 1 回確かめる。続けて `PrecureDataStars.SiteBuilder --publish-shop-items` が DB の行から枠のファイル（作品ごとの `/shop/{作品 ID}.json` と、トップページの `/shop/home.json`）を組み立て、本番のファイルと中身が違うものだけを S3 に上げ直して、CloudFront のそのパスのキャッシュを消す。サイトは作り直さない。枠の中身はページの HTML に入っておらず、ページを開いたときに `shop-box.js` が自分のファイルを読んで描くので、ファイルを上げ直すだけでその作品の全ページの枠が変わる。1 つの枠に出すのは 4 件までで、発売前（予約受付中）の手で入れた行、発売前の音楽商品（発売日の近い順）、発売済みの手で入れた行、発売済みのボーカルベストとサントラ（新しい順）、発売済みのそれ以外の音楽商品（新しい順）の順に選ぶ。トップページは全作品を通して同じ順で選ぶ。道具は Release でビルド済みの exe をそのまま使う（exe が無いときだけ 1 度ビルドする）。経過は `%LOCALAPPDATA%\precure-datastars\scheduled-shop-check.log` に追記する。変わりが無い回は 1 行、上げ直した回と失敗した回は道具の出力も残す。失敗したときは Windows の通知を出す（失敗が続いている間は最初の 1 回だけ）。`-DryRun` を付けると、Amazon には確かめるが DB にも本番にも書かない。`scripts/register-shop-check-task.ps1` で、15 分おき（`-IntervalMinutes` で変えられる）に動くタスク（既定「precure-datastars shop check」）をタスクスケジューラに登録する。スリープからは起こさない。前の回がまだ動いていれば、その回を飛ばす。手で入れる行は SQL で入れる（作品・ASIN・商品名・媒体の札・発売日・並び順）
    ```powershell
    .\scripts\scheduled-shop-check.ps1            # 点検して、変わっていれば枠のファイルを上げ直す
    .\scripts\scheduled-shop-check.ps1 -DryRun    # DB にも本番にも書かずに試す
@@ -1537,9 +1537,9 @@ series_relation_kinds ──┘    │            │
 | `created_at` / `updated_at` | TIMESTAMP | 作成・更新日時 |
 | `created_by` / `updated_by` | VARCHAR(64) | 作成・更新ユーザー |
 
-#### `series_shop_items` — 作品ごとの販売中の商品
+#### `series_shop_items` — 作品ごとの販売中の商品（手で入れる行）
 
-作品詳細・各話の詳細・トップページの「販売中の商品」の枠に出す商品。サイトに出るのは `is_enabled` が 1 で `is_buyable` が 1 の行だけ。行は SQL で入れる。`is_buyable`・`availability_type`・`image_url`・`checked_at` は AmazonSync の `--shop-check` が書き戻す。
+作品詳細・各話の詳細・トップページの「販売中の商品」の枠の候補のうち、手で入れる行。商品の表に無い Blu-ray や、別の作品のページにも出したい商品に使う（作品に結び付く音楽商品は自動で候補になるので、ここには入れない）。候補になるのは `is_enabled` が 1 で `is_buyable` が 1 の行だけ。行は SQL で入れる。`is_buyable`・`availability_type`・`image_url`・`checked_at` は AmazonSync の `--shop-check` が書き戻す。
 
 | 列名 | 型 | 説明 |
 |---|---|---|
@@ -1558,6 +1558,17 @@ series_relation_kinds ──┘    │            │
 | `checked_at` | DATETIME NULL | 最後に確かめた時刻 |
 | `created_at` / `updated_at` | TIMESTAMP | 作成・更新日時 |
 | `created_by` / `updated_by` | VARCHAR(64) | 作成・更新ユーザー |
+
+#### `product_shop_states` — 音楽商品が Amazon で売られているかの状態
+
+「販売中の商品」の枠の候補になる音楽商品（作品に結び付く盤を持ち、CD の ASIN がある商品）の販売の状態。AmazonSync の `--shop-check` が書く。候補になるのは `is_buyable` が 1 の商品だけ。商品の表（`products`）には書かない（点検のたびに商品の更新日時が動かないようにするため）。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `product_catalog_no` | VARCHAR(32) PK FK | 商品（→ `products`。商品を消すと行も消える） |
+| `is_buyable` | TINYINT(1) NOT NULL | 売られているか（1＝候補にする・0＝しない） |
+| `availability_type` | VARCHAR(32) NULL | Amazon が返した在庫の種別（`IN_STOCK`・`IN_STOCK_SCARCE`・`PREORDER` など） |
+| `checked_at` | DATETIME NOT NULL | 最後に確かめた時刻 |
 
 #### `series_episode_staff_roles` — 作品ごとの各話のスタッフの札の役職
 

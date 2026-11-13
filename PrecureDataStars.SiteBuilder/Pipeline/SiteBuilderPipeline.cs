@@ -329,9 +329,10 @@ public sealed class SiteBuilderPipeline
             reporter.PageWritten();
             reporter.EndSection();
 
-            // 販売中の商品のファイル。枠の置き場を持つページが閲覧時に読む（定時の点検も同じ中身を上げ直す）。
-            output.WriteText(Path.Combine(config.OutputDirectory, ShopItemsFile.FileName),
-                ShopItemsFile.BuildJson(ctx.ShopItems, config.AmazonAssociateTag ?? ""));
+            // 販売中の商品のファイル（作品ごとと、トップページ用）。枠の置き場を持つページが閲覧時に読む
+            // （定時の点検も同じ中身を上げ直す）。
+            foreach (var (relativePath, json) in ShopItemsFile.BuildFiles(ctx.ShopItems, ctx.ShopProductCandidates, config.AmazonAssociateTag ?? ""))
+                output.WriteText(Path.Combine(config.OutputDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar)), json);
 
             // SEO 関連ファイル（sitemap.xml / robots.txt）。
             // 全ページの書き出しが完了した後に PageRenderer.WrittenPages を引いて URL リストを構築するため、

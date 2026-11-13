@@ -422,6 +422,9 @@ public sealed class S3DeployService
     /// 更新はデプロイ時 invalidation でエッジへ押し出す。</summary>
     internal static string CacheControlFor(string key)
     {
+        // 販売中の商品のファイルは、売り切れ・再入荷をすぐ枠に映すため HTML と同じ短さにする。
+        if (key.StartsWith(Pipeline.ShopItemsFile.DirectoryName + "/", StringComparison.Ordinal))
+            return "public, max-age=60";
         var ext = Path.GetExtension(key).ToLowerInvariant();
         if (ext == ".html")
             return "public, max-age=60";
@@ -430,6 +433,3 @@ public sealed class S3DeployService
         return "public, max-age=86400";
     }
 }
-        // 販売中の商品のファイルは、売り切れ・再入荷をすぐ枠に映すため HTML と同じ短さにする。
-        if (string.Equals(key, Pipeline.ShopItemsFile.FileName, StringComparison.Ordinal))
-            return "public, max-age=60";

@@ -32,7 +32,8 @@ namespace PrecureDataStars.AmazonSync;
 ///   <item><c>--attach-print --book-id N --print-asin X</c>: 登録済み書籍へ紙版の ASIN・ISBN・
 ///         ページ数・価格・書影を合流させる（電子だけで登録した書籍に紙版を足す用途）</item>
 ///   <item><c>--target products|books|all</c>: 巡回対象（既定 products。books は書籍の表紙のみ、all は両方）</item>
-///   <item><c>--shop-check</c>: 販売中の商品（series_shop_items）が Amazon で売られているかを確かめて書き戻す</item>
+///   <item><c>--shop-check</c>: 販売中の商品の枠の候補（series_shop_items の行と、作品に結び付く音楽商品）が Amazon で
+///         売られているかを確かめて書き戻す。<c>--all</c> を付けると全部、付けなければ手で入れた行と発売から 1 年以内の音楽商品だけ</item>
 ///   <item><c>--offers</c>: <c>--asin</c> のテスト取得で、販売の状態（在庫・新品か中古か・売り手）を見るリソースを要求する</item>
 ///   <item><c>--dry-run</c>: DB 更新せず取得結果だけ表示</item>
 ///   <item>引数なし: 鮮度切れ（未取得 or 20 時間以上前）のみ取得</item>
@@ -206,10 +207,11 @@ public static class Program
                 foreach (var c in changes) Console.WriteLine($"  - {c}");
                 return 0;
             }
-            // 販売中の商品の点検モード。series_shop_items の行が Amazon で売られているかを確かめて書き戻す。
+            // 販売中の商品の点検モード。枠の候補（手で入れた行と音楽商品）が Amazon で売られているかを確かめて書き戻す。
+            // --all を付けると全部、付けなければ手で入れた行と発売から 1 年以内の音楽商品だけを確かめる。
             if (args.Any(a => a.Equals("--shop-check", StringComparison.OrdinalIgnoreCase)))
             {
-                return await RunShopCheckAsync(paApi, factory, dryRun);
+                return await RunShopCheckAsync(paApi, factory, dryRun, all);
             }
 
             // 巡回対象の切り替え。既定は従来どおり音楽商品のみ。
@@ -624,21 +626,39 @@ public static class Program
     }
 
     /// <summary>カンマ区切りの整数リストを解析する。null / 空なら空リスト。</summary>
+    /// <summary>発売からこの日数以内（発売前を含む）の音楽商品は、<c>--all</c> を付けない点検でも確かめる。</summary>
+    private const int ShopCheckRecentDays = 365;
+
     /// <summary>
-    /// 販売中の商品（series_shop_items の出す設定の行）が Amazon で売られているかを確かめ、結果を行に書き戻す。
-    /// 売られていると見なすのは、新品を Amazon.co.jp 本体が売っていて、在庫ありか予約受付中で、カートに入る出品があるとき
+    /// 販売中の商品の枠の候補が Amazon で売られているかを確かめ、結果を書き戻す。
+    /// 候補は、手で入れた行（series_shop_items の出す設定の行）と、作品に結び付く音楽商品（CD の ASIN があるもの）。
+    /// <paramref name="all"/> が false のときは、手で入れた行と、発売から <see cref="ShopCheckRecentDays"/> 日以内
+    /// （発売前を含む）の音楽商品だけを確かめる（定時の点検）。true のときは全部を確かめる（本番デプロイの前）。
+    /// 売られていると見なすのは、新品を Amazon.co.jp 本体が売っていて、在庫あり（残りわずかを含む）か予約受付中で、カートに入る出品があるとき
     /// （<see cref="PaListing.IsSoldNewByAmazon"/>）。Amazon が答えたうえで商品や出品が無かった ASIN は、売られていないとする。
-    /// 通信・応答の失敗は例外のまま上げ、行を書き換えない（前の状態のまま、次の点検で確かめ直す）。
+    /// 通信・応答の失敗は例外のまま上げ、何も書き換えない（前の状態のまま、次の点検で確かめ直す）。
     /// </summary>
-    private static async Task<int> RunShopCheckAsync(PaApiClient paApi, IConnectionFactory factory, bool dryRun)
+    private static async Task<int> RunShopCheckAsync(PaApiClient paApi, IConnectionFactory factory, bool dryRun, bool all)
     {
         var repo = new SeriesShopItemsRepository(factory);
         var rows = await repo.GetEnabledAsync();
-        var asins = rows.Select(r => r.Asin).Distinct(StringComparer.Ordinal).ToList();
-        Console.WriteLine($"販売中の商品の点検: {asins.Count} 件{(dryRun ? "（dry-run）" : "")}");
+        var products = await repo.GetProductCandidatesAsync();
+
+        // 手で入れた行の ASIN（画像もここで取り直す）と、音楽商品の ASIN。同じ ASIN が両方にあれば両方へ書く。
+        var manualTitleByAsin = rows
+            .GroupBy(r => r.Asin, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First().Title, StringComparer.Ordinal);
+        var recentFrom = DateTime.Today.AddDays(-ShopCheckRecentDays);
+        var productsByAsin = products
+            .Where(c => all || c.ReleaseDate >= recentFrom)
+            .GroupBy(c => c.Asin, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var asins = manualTitleByAsin.Keys.Concat(productsByAsin.Keys).Distinct(StringComparer.Ordinal).ToList();
+        Console.WriteLine($"販売中の商品の点検: {asins.Count} 件（手で入れた行 {manualTitleByAsin.Count}・音楽商品 {productsByAsin.Count}"
+            + $"{(all ? "" : $"〔発売から {ShopCheckRecentDays} 日以内〕")}）{(dryRun ? "（dry-run）" : "")}");
         if (asins.Count == 0) return 0;
 
-        // 全部の ASIN の答えがそろってから書き戻す（途中で通信に失敗したら、どの行も書き換えない）。
+        // 全部の ASIN の答えがそろってから書き戻す（途中で通信に失敗したら、何も書き換えない）。
         var itemsByAsin = new Dictionary<string, PaItem>(StringComparer.Ordinal);
         for (int i = 0; i < asins.Count; i += GetItemsBatchSize)
         {
@@ -649,30 +669,46 @@ public static class Program
         }
 
         var now = DateTime.Now;
-        int changed = 0;
+        int changed = 0, buyableCount = 0;
+        // Amazon.co.jp 本体の新品だが、在庫の種別で外した商品の数（種別ごと）。条件を見直す手がかりに出す。
+        var excludedByType = new SortedDictionary<string, int>(StringComparer.Ordinal);
         foreach (var asin in asins)
         {
             itemsByAsin.TryGetValue(asin, out var item);
             var listing = item?.Listings.FirstOrDefault(l => l.IsSoldNewByAmazon);
             bool buyable = listing != null;
+            if (buyable) buyableCount++;
+            var fromAmazon = item?.Listings.FirstOrDefault(l => l.IsNewFromAmazon);
+            if (!buyable && fromAmazon != null)
+            {
+                string type = fromAmazon.AvailabilityType ?? "(種別なし)";
+                excludedByType[type] = excludedByType.GetValueOrDefault(type) + 1;
+            }
             // 売られていないときは、カートに入る出品（無ければ先頭の出品）の種別を記録に残す。
             string? availabilityType = (listing
                 ?? item?.Listings.FirstOrDefault(l => l.IsBuyBoxWinner)
                 ?? item?.Listings.FirstOrDefault())?.AvailabilityType;
-            string? imageUrl = item?.LargeImageUrl ?? item?.MediumImageUrl;
 
-            var before = rows.First(r => r.Asin == asin);
-            bool stateChanged = before.IsBuyable != buyable;
+            bool isManual = manualTitleByAsin.TryGetValue(asin, out var manualTitle);
+            productsByAsin.TryGetValue(asin, out var product);
+            bool? before = isManual ? rows.First(r => r.Asin == asin).IsBuyable : product!.IsBuyable;
+            bool stateChanged = before != buyable;
             if (stateChanged) changed++;
-            Console.WriteLine($"  {asin}  {(buyable ? "売られている" : "売られていない")}"
-                + $"（{availabilityType ?? (item == null ? "商品なし" : "出品なし")}）"
-                + (stateChanged ? "  ← 変わった" : "")
-                + $"  {before.Title}");
+            // 記録に出すのは、状態が変わった商品だけ（全部を確かめる回は数百件になる）。
+            if (stateChanged)
+                Console.WriteLine($"  {asin}  {(buyable ? "売られている" : "売られていない")}"
+                    + $"（{availabilityType ?? (item == null ? "商品なし" : "出品なし")}）  ← 変わった  {manualTitle ?? product!.Title}");
 
-            if (!dryRun)
-                await repo.UpdateCheckResultAsync(asin, buyable, availabilityType, imageUrl, now);
+            if (dryRun) continue;
+            if (isManual)
+                await repo.UpdateCheckResultAsync(asin, buyable, availabilityType, item?.LargeImageUrl ?? item?.MediumImageUrl, now);
+            if (product != null)
+                await repo.UpsertProductStateAsync(asin, buyable, availabilityType, now);
         }
-        Console.WriteLine($"点検を終えました（状態が変わった商品 {changed} 件）。");
+        if (excludedByType.Count > 0)
+            Console.WriteLine("  Amazon.co.jp 本体の新品だが、在庫の種別で外した商品: "
+                + string.Join("・", excludedByType.Select(kv => $"{kv.Key} {kv.Value} 件")));
+        Console.WriteLine($"点検を終えました（売られている {buyableCount} 件・状態が変わった商品 {changed} 件）。");
         return 0;
     }
 

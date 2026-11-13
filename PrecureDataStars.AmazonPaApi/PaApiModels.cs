@@ -72,22 +72,32 @@ public sealed class PaListing
     /// <summary>売り手の名前（<c>merchantInfo.name</c>）。</summary>
     public string? MerchantName { get; set; }
 
-    /// <summary>在庫の種別（<c>availability.type</c>）。在庫ありは "IN_STOCK"、予約受付中は "PREORDER"。</summary>
+    /// <summary>在庫の種別（<c>availability.type</c>）。在庫ありは "IN_STOCK"、残りわずかは "IN_STOCK_SCARCE"、予約受付中は "PREORDER"。
+    /// ほかに "LEADTIME"（取り寄せ）・"AVAILABLE_DATE"（入荷日つき）・"OUT_OF_STOCK"・"UNAVAILABLE" がある。</summary>
     public string? AvailabilityType { get; set; }
 
     /// <summary>在庫の説明（<c>availability.message</c>）。例 "在庫あり。" / "発売予定日は2027年1月27日です。"。</summary>
     public string? AvailabilityMessage { get; set; }
 
-    /// <summary>
-    /// 新品を Amazon.co.jp 本体が売っていて、在庫ありか予約受付中で、カートに入る出品か。
-    /// 中古・マーケットプレイスの出品・在庫切れ・入荷未定は false。
-    /// </summary>
-    public bool IsSoldNewByAmazon =>
+    /// <summary>新品を Amazon.co.jp 本体が売っていて、カートに入る出品か（在庫の種別は問わない）。</summary>
+    public bool IsNewFromAmazon =>
         IsBuyBoxWinner
         && string.Equals(Condition, "New", StringComparison.OrdinalIgnoreCase)
-        && string.Equals(MerchantId, AmazonJpMerchantId, StringComparison.Ordinal)
-        && (string.Equals(AvailabilityType, "IN_STOCK", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(AvailabilityType, "PREORDER", StringComparison.OrdinalIgnoreCase));
+        && string.Equals(MerchantId, AmazonJpMerchantId, StringComparison.Ordinal);
+
+    /// <summary>在庫がある（残りわずかを含む）か。</summary>
+    public bool IsInStock =>
+        string.Equals(AvailabilityType, "IN_STOCK", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(AvailabilityType, "IN_STOCK_SCARCE", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>予約受付中か。</summary>
+    public bool IsPreorder => string.Equals(AvailabilityType, "PREORDER", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 新品を Amazon.co.jp 本体が売っていて、在庫あり（残りわずかを含む）か予約受付中で、カートに入る出品か。
+    /// 中古・マーケットプレイスの出品・取り寄せ・在庫切れ・入荷未定は false。
+    /// </summary>
+    public bool IsSoldNewByAmazon => IsNewFromAmazon && (IsInStock || IsPreorder);
 }
 
 /// <summary>

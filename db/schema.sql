@@ -2392,10 +2392,31 @@ CREATE TABLE `series_key_staff_roles` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- 音楽商品が Amazon で売られているかの状態
+--
+-- 「販売中の商品」の枠は、作品に結び付く音楽商品のうち、CD の ASIN があり、この表で売られているとされた商品を
+-- 候補にする。状態は AmazonSync（--shop-check）が Creators API で確かめて書く。
+--
+
+DROP TABLE IF EXISTS `product_shop_states`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `product_shop_states` (
+  `product_catalog_no` varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '商品',
+  `is_buyable`         tinyint(1)   NOT NULL COMMENT '売られているか（1＝候補にする・0＝しない）',
+  `availability_type`  varchar(32)  DEFAULT NULL COMMENT 'Amazon が返した在庫の種別（IN_STOCK・PREORDER など）',
+  `checked_at`         datetime     NOT NULL COMMENT '最後に確かめた時刻',
+  PRIMARY KEY (`product_catalog_no`),
+  CONSTRAINT `fk_product_shop_states_product` FOREIGN KEY (`product_catalog_no`) REFERENCES `products` (`product_catalog_no`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='音楽商品が Amazon で売られているかの状態（販売中の商品の枠の候補）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- 作品ごとの販売中の商品
 --
--- その作品を主とするページ（作品詳細・各話の詳細）とトップページは、この表の行のうち、
--- is_enabled が 1 で is_buyable が 1 の行だけを小さな枠で出す。
+-- 「販売中の商品」の枠の候補のうち、手で入れる行（商品の表に無い Blu-ray など）。
+-- is_enabled が 1 で is_buyable が 1 の行だけが候補になる（作品に結び付く音楽商品は product_shop_states）。
 -- is_buyable・availability_type・image_url・checked_at は、AmazonSync（--shop-check）が
 -- Creators API で確かめて書き戻す。
 --

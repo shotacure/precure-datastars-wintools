@@ -218,12 +218,19 @@ public sealed class BuildContext
 
     /// <summary>
     /// 販売中の商品（<c>series_shop_items</c>）のうち、出す設定の行（並び順の順）。
-    /// 売られているかどうかにかかわらず入る（売られている行だけを <c>/shop-items.json</c> に書く）。
+    /// 売られているかどうかにかかわらず入る（売られている行だけを枠のファイルに書く。<see cref="ShopItemsFile"/>）。
     /// </summary>
     public required IReadOnlyList<SeriesShopItem> ShopItems { get; init; }
 
     /// <summary>
-    /// 販売中の商品に出す設定の行がある作品の ID。作品詳細・各話の詳細は、ここにある作品のページにだけ枠の置き場を出す
+    /// 販売中の商品の枠の候補になる音楽商品（作品 × 商品。作品に結び付く盤を持ち、CD の ASIN がある商品）。
+    /// 売られているかどうかにかかわらず入る。
+    /// </summary>
+    public required IReadOnlyList<ShopProductCandidate> ShopProductCandidates { get; init; }
+
+    /// <summary>
+    /// 販売中の商品の枠の置き場を出す作品の ID（手で入れた行か、候補の音楽商品がある作品）。
+    /// 作品詳細・各話の詳細は、ここにある作品のページにだけ枠の置き場を出す
     /// （置き場の中身は閲覧時に JS が描くので、売られていない間は何も出ない）。
     /// </summary>
     public required IReadOnlySet<int> ShopSeriesIds { get; init; }

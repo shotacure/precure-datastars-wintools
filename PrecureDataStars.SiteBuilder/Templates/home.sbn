@@ -213,7 +213,7 @@
 {{## 販売中の商品の枠の置き場。中身は shop-box.js が /shop-items.json を読んで描く（Amazon で売られている商品だけ。
      無ければ枠ごと出ない）。置き場は、出す設定の商品があるときだけ出す。 ##}}
 {{~ if HasShopItems ~}}
-<aside class="shop-box home-section" data-shop-series="all" data-shop-heading="Blu-ray・CD のご案内" data-shop-note="Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。" hidden></aside>
+<aside class="shop-box home-section" data-shop-series="home" data-shop-heading="Blu-ray・CD のご案内" data-shop-note="Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。" hidden></aside>
 {{~ end ~}}
 
 {{## ──────── 音楽商品の発売予定（カードグリッド） ────────

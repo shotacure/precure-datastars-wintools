@@ -70,9 +70,31 @@ public sealed class PaApiClient
         "offersV2.listings.price",
     };
 
+    /// <summary>
+    /// 販売の状態を見るリソース集合。出品（offersV2.listings）の在庫・新品か中古か・売り手・
+    /// カートに入る出品かを、画像・タイトル・発売日と一緒に取る。
+    /// </summary>
+    private static readonly string[] OffersResources = new[]
+    {
+        "images.primary.medium",
+        "images.primary.large",
+        "itemInfo.title",
+        "itemInfo.productInfo",
+        "offersV2.listings.price",
+        "offersV2.listings.availability",
+        "offersV2.listings.condition",
+        "offersV2.listings.merchantInfo",
+        "offersV2.listings.isBuyBoxWinner",
+        "offersV2.listings.type",
+    };
+
     /// <summary>リソース集合の選択値から、リクエストに載せる Resources 配列を返す。</summary>
-    private static string[] ResolveResources(PaResourceSet resourceSet)
-        => resourceSet == PaResourceSet.Extended ? ExtendedResources : StandardResources;
+    private static string[] ResolveResources(PaResourceSet resourceSet) => resourceSet switch
+    {
+        PaResourceSet.Extended => ExtendedResources,
+        PaResourceSet.Offers => OffersResources,
+        _ => StandardResources,
+    };
 
     /// <summary><see cref="PaApiClient"/> の新しいインスタンスを生成する。</summary>
     /// <param name="http">HTTP クライアント（呼出側で共有する想定）。Factory 経由で構築されるとき同一の <see cref="HttpClient"/> が
@@ -423,6 +445,32 @@ public sealed class PaApiClient
                     p.PriceAmount = (int)Math.Round(amount);
                 }
             }
+
+            // 出品ごとの在庫・状態・売り手。Offers のリソースを要求したときだけ値が入る
+            // （要求していないときは、どの出品も欄が空のまま並ぶ）。
+            var parsedListings = new List<PaListing>();
+            foreach (var l in listings.EnumerateArray())
+            {
+                var listing = new PaListing
+                {
+                    IsBuyBoxWinner = l.TryGetProperty("isBuyBoxWinner", out var bb) && bb.ValueKind == JsonValueKind.True,
+                };
+                if (l.TryGetProperty("condition", out var condEl) && condEl.ValueKind == JsonValueKind.Object
+                    && condEl.TryGetProperty("value", out var condValue))
+                    listing.Condition = condValue.GetString();
+                if (l.TryGetProperty("merchantInfo", out var merchantEl) && merchantEl.ValueKind == JsonValueKind.Object)
+                {
+                    if (merchantEl.TryGetProperty("id", out var merchantId)) listing.MerchantId = merchantId.GetString();
+                    if (merchantEl.TryGetProperty("name", out var merchantName)) listing.MerchantName = merchantName.GetString();
+                }
+                if (l.TryGetProperty("availability", out var availEl) && availEl.ValueKind == JsonValueKind.Object)
+                {
+                    if (availEl.TryGetProperty("type", out var availType)) listing.AvailabilityType = availType.GetString();
+                    if (availEl.TryGetProperty("message", out var availMessage)) listing.AvailabilityMessage = availMessage.GetString();
+                }
+                parsedListings.Add(listing);
+            }
+            p.Listings = parsedListings;
         }
 
         return p;

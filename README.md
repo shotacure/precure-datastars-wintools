@@ -1046,6 +1046,13 @@ DB の各表の備考（`notes` 列。企業・商品・人物・ユニット・
    .\scripts\register-deploy-task.ps1           # 毎日 06:00 と毎週水曜・土曜の 08:30、雑誌の号の発売日の 00:00 に登録
    .\scripts\register-deploy-task.ps1 -Unregister
    ```
+   - 販売中の商品の定時の点検：`scripts/scheduled-shop-check.ps1` が、作品詳細・各話の詳細・トップページの「販売中の商品」の枠に出す商品（`series_shop_items` の `is_enabled = 1` の行）を点検する。まず `PrecureDataStars.AmazonSync --shop-check` が Creators API で出品を調べ、売られているか・在庫の種別・画像の URL を行に書き戻す。新品を Amazon.co.jp 本体が売っていて、在庫ありか予約受付中で、カートに入る出品があるときだけ「売られている」とする。続けて `PrecureDataStars.SiteBuilder --publish-shop-items` が DB の行から枠のファイル（`/shop-items.json`）を組み立て、本番のファイルと中身が違うときだけ S3 に上げ直して、CloudFront のそのパスのキャッシュを消す。サイトは作り直さない。枠の中身はページの HTML に入っておらず、ページを開いたときに `shop-box.js` がこのファイルを読んで描くので、ファイルを上げ直すだけで全ページの枠が変わる。道具は Release でビルド済みの exe をそのまま使う（exe が無いときだけ 1 度ビルドする）。経過は `%LOCALAPPDATA%\precure-datastars\scheduled-shop-check.log` に追記する。変わりが無い回は 1 行、上げ直した回と失敗した回は道具の出力も残す。失敗したときは Windows の通知を出す（失敗が続いている間は最初の 1 回だけ）。`-DryRun` を付けると、Amazon には確かめるが DB にも本番にも書かない。`scripts/register-shop-check-task.ps1` で、15 分おき（`-IntervalMinutes` で変えられる）に動くタスク（既定「precure-datastars shop check」）をタスクスケジューラに登録する。スリープからは起こさない。前の回がまだ動いていれば、その回を飛ばす。本番デプロイ（`deploy.ps1`）もビルドの前に `--shop-check` を流すので、タスクを登録していなくても、デプロイのたびに枠のファイルは新しくなる。枠に出す商品の行は SQL で入れる（作品・ASIN・商品名・媒体の札・発売日・並び順。音楽商品なら `product_catalog_no` を入れると、枠に商品詳細へのリンクが付く）
+   ```powershell
+   .\scripts\scheduled-shop-check.ps1            # 点検して、変わっていれば枠のファイルを上げ直す
+   .\scripts\scheduled-shop-check.ps1 -DryRun    # DB にも本番にも書かずに試す
+   .\scripts\register-shop-check-task.ps1        # 15 分おきに動くタスクを登録
+   .\scripts\register-shop-check-task.ps1 -Unregister
+   ```
 8. 放送後のリンクの自動取り込み：`scripts/scheduled-episode-links.ps1` が `PrecureDataStars.EpisodeLinkSync` を Release でビルドして動かし、TV の各話の、放送後に公式から出るリンクを episodes の空の列にだけ書く（入っている値は上書きしない。`updated_by` は `EpisodeLinkSync`）。対象は本線の TV（kind_code='TV'）だけ。サイトに出るのは次の本番デプロイ
    - あらすじ（`toei_anim_summary_url`）・ラインナップ（`toei_anim_lineup_url`）：同じ作品で URL の入っている話数のいちばん近い回の URL の話数の部分（`/{話数}/`）を差し替えて組み、転送を追わずに開いて、200 で返り本文にその回の「第N話」があれば書く。まだ無い回のページは東映アニメーションのトップへ転送される。作品の最初の 1 話は手で入れる
    - 予告（`youtube_trailer_url`）：プリキュア公式 YouTube チャンネルの新着（YouTube Data API v3 の `playlistItems.list` で、チャンネルのアップロードの再生リストの先頭 15 本を読む。1 回 1 ユニットで、`-Watch` の 3 時間で 2,160 ユニットほど。API キーは App.config の `YouTube.ApiKey`）から、題が「{作品名}　第N話 予告「{サブタイトル}」」のもの（NFKC で正規化して比べる）。予告の題のサブタイトルが `title_text` と違うときは書かずに知らせる。その回が DB に無いときは、引数なしの回では回を作らずに知らせる（`-Watch` の回は下のとおり仮で作る）。サブタイトルが空の回には書いて、予告の題を知らせる
@@ -1527,6 +1534,28 @@ series_relation_kinds ──┘    │            │
 | `role_code` | VARCHAR PK FK | メインスタッフとして出す役職（→ `roles`） |
 | `display_order` | TINYINT UNSIGNED NOT NULL | 作品の中の並び順（小さいほど先。画面で保存すると 1 から振り直す） |
 | `badge_color` | CHAR(7) NOT NULL | バッジの色（`#rrggbb` の小文字。`ck_series_key_staff_roles_color`）。地・枠・字の色はこの色から作る |
+| `created_at` / `updated_at` | TIMESTAMP | 作成・更新日時 |
+| `created_by` / `updated_by` | VARCHAR(64) | 作成・更新ユーザー |
+
+#### `series_shop_items` — 作品ごとの販売中の商品
+
+作品詳細・各話の詳細・トップページの「販売中の商品」の枠に出す商品。サイトに出るのは `is_enabled` が 1 で `is_buyable` が 1 の行だけ。行は SQL で入れる。`is_buyable`・`availability_type`・`image_url`・`checked_at` は AmazonSync の `--shop-check` が書き戻す。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `shop_item_id` | INT PK AUTO_INCREMENT | 行の ID |
+| `series_id` | INT NOT NULL FK | 作品（→ `series`。作品を消すと行も消える）。`asin` との組で一意 |
+| `asin` | VARCHAR(16) NOT NULL | Amazon の ASIN |
+| `title` | VARCHAR(255) NOT NULL | 枠に出す商品名 |
+| `media_label` | VARCHAR(32) NOT NULL | 媒体の札（Blu-ray・CD など） |
+| `product_catalog_no` | VARCHAR(32) NULL FK | 音楽商品なら、その商品（→ `products`）。枠に商品詳細へのリンクを付ける |
+| `release_date` | DATE NULL | 発売日（予約受付中の行に添える） |
+| `display_order` | SMALLINT UNSIGNED NOT NULL | 並び順（小さいほど先） |
+| `is_enabled` | TINYINT(1) NOT NULL | 0 にすると、売られていても出さない |
+| `is_buyable` | TINYINT(1) NULL | 売られているか（1＝出す・0＝出さない・NULL＝まだ確かめていない） |
+| `availability_type` | VARCHAR(32) NULL | Amazon が返した在庫の種別（`IN_STOCK`・`PREORDER` など） |
+| `image_url` | VARCHAR(512) NULL | 商品画像の URL（Amazon のもの。確かめるたびに取り直す） |
+| `checked_at` | DATETIME NULL | 最後に確かめた時刻 |
 | `created_at` / `updated_at` | TIMESTAMP | 作成・更新日時 |
 | `created_by` / `updated_by` | VARCHAR(64) | 作成・更新ユーザー |
 

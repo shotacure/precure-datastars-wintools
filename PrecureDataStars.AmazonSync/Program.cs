@@ -32,6 +32,8 @@ namespace PrecureDataStars.AmazonSync;
 ///   <item><c>--attach-print --book-id N --print-asin X</c>: 登録済み書籍へ紙版の ASIN・ISBN・
 ///         ページ数・価格・書影を合流させる（電子だけで登録した書籍に紙版を足す用途）</item>
 ///   <item><c>--target products|books|all</c>: 巡回対象（既定 products。books は書籍の表紙のみ、all は両方）</item>
+///   <item><c>--shop-check</c>: 販売中の商品（series_shop_items）が Amazon で売られているかを確かめて書き戻す</item>
+///   <item><c>--offers</c>: <c>--asin</c> のテスト取得で、販売の状態（在庫・新品か中古か・売り手）を見るリソースを要求する</item>
 ///   <item><c>--dry-run</c>: DB 更新せず取得結果だけ表示</item>
 ///   <item>引数なし: 鮮度切れ（未取得 or 20 時間以上前）のみ取得</item>
 /// </list>
@@ -96,9 +98,11 @@ public static class Program
             // 単一 ASIN モード（接続不要のテスト用途）
             if (!string.IsNullOrWhiteSpace(singleAsin))
             {
-                Console.WriteLine($"単一 ASIN テスト取得: {singleAsin}{(extended ? "（拡張リソース）" : "")}");
+                // --offers は販売の状態（在庫・新品か中古か・売り手）を見るリソースで取る。
+                bool offers = args.Any(a => a.Equals("--offers", StringComparison.OrdinalIgnoreCase));
+                Console.WriteLine($"単一 ASIN テスト取得: {singleAsin}{(offers ? "（販売の状態）" : extended ? "（拡張リソース）" : "")}");
                 var item = await paApi.GetItemAsync(singleAsin!, CancellationToken.None,
-                    extended ? PaResourceSet.Extended : PaResourceSet.Standard);
+                    offers ? PaResourceSet.Offers : extended ? PaResourceSet.Extended : PaResourceSet.Standard);
                 if (item == null)
                 {
                     Console.WriteLine("該当商品なし、または応答が空でした。");
@@ -202,8 +206,14 @@ public static class Program
                 foreach (var c in changes) Console.WriteLine($"  - {c}");
                 return 0;
             }
+            // 販売中の商品の点検モード。series_shop_items の行が Amazon で売られているかを確かめて書き戻す。
+            if (args.Any(a => a.Equals("--shop-check", StringComparison.OrdinalIgnoreCase)))
+            {
+                return await RunShopCheckAsync(paApi, factory, dryRun);
+            }
+
             // 巡回対象の切り替え。既定は従来どおり音楽商品のみ。
-            string target = (ReadOptionValue(args, "--target") ?? "products").ToLowerInvariant();
+            string target =(ReadOptionValue(args, "--target") ?? "products").ToLowerInvariant();
             if (target is not ("products" or "books" or "all"))
             {
                 Console.Error.WriteLine($"ERROR: --target の値が不正です: {target}（products / books / all）");
@@ -614,6 +624,58 @@ public static class Program
     }
 
     /// <summary>カンマ区切りの整数リストを解析する。null / 空なら空リスト。</summary>
+    /// <summary>
+    /// 販売中の商品（series_shop_items の出す設定の行）が Amazon で売られているかを確かめ、結果を行に書き戻す。
+    /// 売られていると見なすのは、新品を Amazon.co.jp 本体が売っていて、在庫ありか予約受付中で、カートに入る出品があるとき
+    /// （<see cref="PaListing.IsSoldNewByAmazon"/>）。Amazon が答えたうえで商品や出品が無かった ASIN は、売られていないとする。
+    /// 通信・応答の失敗は例外のまま上げ、行を書き換えない（前の状態のまま、次の点検で確かめ直す）。
+    /// </summary>
+    private static async Task<int> RunShopCheckAsync(PaApiClient paApi, IConnectionFactory factory, bool dryRun)
+    {
+        var repo = new SeriesShopItemsRepository(factory);
+        var rows = await repo.GetEnabledAsync();
+        var asins = rows.Select(r => r.Asin).Distinct(StringComparer.Ordinal).ToList();
+        Console.WriteLine($"販売中の商品の点検: {asins.Count} 件{(dryRun ? "（dry-run）" : "")}");
+        if (asins.Count == 0) return 0;
+
+        // 全部の ASIN の答えがそろってから書き戻す（途中で通信に失敗したら、どの行も書き換えない）。
+        var itemsByAsin = new Dictionary<string, PaItem>(StringComparer.Ordinal);
+        for (int i = 0; i < asins.Count; i += GetItemsBatchSize)
+        {
+            if (i > 0) await Task.Delay(RateLimitDelayMs);
+            var batch = asins.Skip(i).Take(GetItemsBatchSize).ToList();
+            foreach (var item in await paApi.GetItemsAsync(batch, CancellationToken.None, PaResourceSet.Offers))
+                itemsByAsin[item.Asin] = item;
+        }
+
+        var now = DateTime.Now;
+        int changed = 0;
+        foreach (var asin in asins)
+        {
+            itemsByAsin.TryGetValue(asin, out var item);
+            var listing = item?.Listings.FirstOrDefault(l => l.IsSoldNewByAmazon);
+            bool buyable = listing != null;
+            // 売られていないときは、カートに入る出品（無ければ先頭の出品）の種別を記録に残す。
+            string? availabilityType = (listing
+                ?? item?.Listings.FirstOrDefault(l => l.IsBuyBoxWinner)
+                ?? item?.Listings.FirstOrDefault())?.AvailabilityType;
+            string? imageUrl = item?.LargeImageUrl ?? item?.MediumImageUrl;
+
+            var before = rows.First(r => r.Asin == asin);
+            bool stateChanged = before.IsBuyable != buyable;
+            if (stateChanged) changed++;
+            Console.WriteLine($"  {asin}  {(buyable ? "売られている" : "売られていない")}"
+                + $"（{availabilityType ?? (item == null ? "商品なし" : "出品なし")}）"
+                + (stateChanged ? "  ← 変わった" : "")
+                + $"  {before.Title}");
+
+            if (!dryRun)
+                await repo.UpdateCheckResultAsync(asin, buyable, availabilityType, imageUrl, now);
+        }
+        Console.WriteLine($"点検を終えました（状態が変わった商品 {changed} 件）。");
+        return 0;
+    }
+
     private static List<int> ParseIntList(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return new List<int>();

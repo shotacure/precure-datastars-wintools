@@ -136,6 +136,10 @@ public sealed class LayoutModel
     /// true のページのみ、フッタに「商品画像は Amazon Creators API 由来」の注記を出す。</summary>
     public bool HasAmazonImages { get; set; }
 
+    /// <summary>本文に販売中の商品の枠の置き場（<c>data-shop-series</c>）が含まれるか。
+    /// true のページのみ、枠を描く JS を読み込み、枠が出たときだけ見せる Amazon についての注記をフッタに置く。</summary>
+    public bool HasShopBox { get; set; }
+
     /// <summary>本文に YouTube の埋め込みプレイヤー（<c>youtube.com/embed/</c>）が含まれるか。
     /// true のページのみ、フッタに「動画は公式の埋め込みプレイヤー経由・権利は各権利者様」の注記を出す。</summary>
     public bool HasYoutubeEmbeds { get; set; }

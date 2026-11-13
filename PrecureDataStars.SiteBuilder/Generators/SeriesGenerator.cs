@@ -1387,6 +1387,7 @@ public sealed class SeriesGenerator
         var content = new SeriesDetailModel
         {
             Series = seriesView,
+            ShopSeriesId = _ctx.ShopSeriesIds.Contains(s.SeriesId) ? s.SeriesId : 0,
             BgmLinks = bgmLinks,
             Episodes = epRows,
             RelatedWorks = relatedWorks,
@@ -2118,6 +2119,8 @@ public sealed class SeriesGenerator
     private sealed class SeriesDetailModel
     {
         public SeriesDetailView Series { get; set; } = new();
+        /// <summary>販売中の商品の枠の置き場に書く作品 ID。この作品に出す設定の商品が無ければ 0（置き場を出さない）。</summary>
+        public int ShopSeriesId { get; set; }
         /// <summary>「劇伴」節のボタン（劇伴一覧ページがある自作品・子作品の分）。空なら節ごと出さない。</summary>
         public IReadOnlyList<BgmLinkRow> BgmLinks { get; set; } = Array.Empty<BgmLinkRow>();
         public IReadOnlyList<EpisodeIndexRow> Episodes { get; set; } = Array.Empty<EpisodeIndexRow>();

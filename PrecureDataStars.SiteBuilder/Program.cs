@@ -15,7 +15,8 @@ namespace PrecureDataStars.SiteBuilder;
 /// （<c>--page</c> と併用すれば対象のページだけ）。
 /// <c>--og-cards &lt;一覧.json&gt; &lt;出力先&gt;</c> は、DB を使わずに一覧のカードだけを同じ描き方で描く（precure.news 用。<see cref="OgCardBatch"/>）。
 /// <c>--as-of &lt;時刻&gt;</c> はテストビルドの基準時刻を差し替える（<c>--test</c> と併用）。
-/// <c>--magazine-release-today</c> は、今日がアニメ雑誌の号の発売日かを終了コードで返す（<see cref="MagazineReleaseCheck"/>）。</summary>
+/// <c>--magazine-release-today</c> は、今日がアニメ雑誌の号の発売日かを終了コードで返す（<see cref="MagazineReleaseCheck"/>）。
+/// <c>--publish-shop-items</c> は、販売中の商品のファイルだけを本番に上げ直す（<see cref="ShopItemsPublisher"/>）。</summary>
 internal static class Program
 {
     private static async Task<int> Main(string[] args)
@@ -46,6 +47,18 @@ internal static class Program
                     return 2;
                 }
                 return await MagazineReleaseCheck.RunAsync().ConfigureAwait(false);
+            }
+
+            // 販売中の商品のファイルだけを本番に上げ直す起動方法（定時の点検が、Amazon に確かめた直後に呼ぶ）。サイトは作らない。
+            if (args.Length > 0 && string.Equals(args[0], "--publish-shop-items", StringComparison.OrdinalIgnoreCase))
+            {
+                bool shopDryRun = args.Length == 2 && string.Equals(args[1], "--dry-run", StringComparison.OrdinalIgnoreCase);
+                if (args.Length > 2 || (args.Length == 2 && !shopDryRun))
+                {
+                    PrintUsage();
+                    return 2;
+                }
+                return await ShopItemsPublisher.RunAsync(shopDryRun).ConfigureAwait(false);
             }
 
             // ビルドモード・デプロイ意図はコマンドライン引数で決める（App.config では決めない）。
@@ -237,5 +250,7 @@ internal static class Program
         Console.Error.WriteLine("  一覧のカードだけを、このサイトと同じ描き方・書体で PNG にする（DB を使わない。precure.news 用）");
         Console.Error.WriteLine("別の使い方: PrecureDataStars.SiteBuilder --magazine-release-today");
         Console.Error.WriteLine("  今日がアニメ雑誌の号の発売日なら終了コード 0、そうでなければ 3（発売日 0:00 の定時デプロイが使う）");
+        Console.Error.WriteLine("別の使い方: PrecureDataStars.SiteBuilder --publish-shop-items [--dry-run]");
+        Console.Error.WriteLine("  販売中の商品のファイルを DB の行から組み立て、本番のファイルと違うときだけ上げ直す（サイトは作らない。定時の点検が使う）");
     }
 }

@@ -329,6 +329,10 @@ public sealed class SiteBuilderPipeline
             reporter.PageWritten();
             reporter.EndSection();
 
+            // 販売中の商品のファイル。枠の置き場を持つページが閲覧時に読む（定時の点検も同じ中身を上げ直す）。
+            output.WriteText(Path.Combine(config.OutputDirectory, ShopItemsFile.FileName),
+                ShopItemsFile.BuildJson(ctx.ShopItems, config.AmazonAssociateTag ?? ""));
+
             // SEO 関連ファイル（sitemap.xml / robots.txt）。
             // 全ページの書き出しが完了した後に PageRenderer.WrittenPages を引いて URL リストを構築するため、
             // パイプラインの最後に実行する。

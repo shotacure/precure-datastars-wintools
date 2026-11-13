@@ -618,6 +618,7 @@ public sealed class EpisodeGenerator
         // テンプレートに渡すモデル。
         var content = new EpisodeContentModel
         {
+            ShopSeriesId = _ctx.ShopSeriesIds.Contains(series.SeriesId) ? series.SeriesId : 0,
             Series = new SeriesRefView
             {
                 Slug = series.Slug,
@@ -1977,6 +1978,8 @@ public sealed class EpisodeGenerator
     private sealed class EpisodeContentModel
     {
         public SeriesRefView Series { get; set; } = new();
+        /// <summary>販売中の商品の枠の置き場に書く作品 ID。この話の作品に出す設定の商品が無ければ 0（置き場を出さない）。</summary>
+        public int ShopSeriesId { get; set; }
         public EpisodeView Episode { get; set; } = new();
         public FormatTableModel FormatTable { get; set; } = new();
         public string TitleCharInfoHtml { get; set; } = "";

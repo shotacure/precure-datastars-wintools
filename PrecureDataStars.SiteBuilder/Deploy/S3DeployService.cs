@@ -182,7 +182,7 @@ public sealed class S3DeployService
 
     /// <summary>名前付きプロファイルから資格情報を解決する。プロファイル未指定なら null を返し、
     /// 呼び出し側で SDK 既定の資格情報解決チェーンに委ねる。</summary>
-    private static AWSCredentials? ResolveCredentials(string profile)
+    internal static AWSCredentials? ResolveCredentials(string profile)
     {
         if (string.IsNullOrWhiteSpace(profile))
             return null;
@@ -388,7 +388,7 @@ public sealed class S3DeployService
     }
 
     /// <summary>拡張子から Content-Type を推定する。テキスト系は charset=utf-8 を付ける。</summary>
-    private static string GuessContentType(string key)
+    internal static string GuessContentType(string key)
     {
         var ext = Path.GetExtension(key).ToLowerInvariant();
         return ext switch
@@ -420,7 +420,7 @@ public sealed class S3DeployService
     /// HTML は短命（更新を早く反映）、sitemap / robots / 検索インデックス等も短命寄り、
     /// その他の静的アセット（css / js / 画像 / フォント）は 1 日。固定ファイル名のため、
     /// 更新はデプロイ時 invalidation でエッジへ押し出す。</summary>
-    private static string CacheControlFor(string key)
+    internal static string CacheControlFor(string key)
     {
         var ext = Path.GetExtension(key).ToLowerInvariant();
         if (ext == ".html")
@@ -430,3 +430,6 @@ public sealed class S3DeployService
         return "public, max-age=86400";
     }
 }
+        // 販売中の商品のファイルは、売り切れ・再入荷をすぐ枠に映すため HTML と同じ短さにする。
+        if (string.Equals(key, Pipeline.ShopItemsFile.FileName, StringComparison.Ordinal))
+            return "public, max-age=60";

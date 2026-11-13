@@ -342,6 +342,8 @@ public sealed class PageRenderer
         // （免責事項のように本文で Amazon に言及しただけのページでは発火させない）。
         layoutMeta.HasAmazonAffiliateLinks = AmazonAffiliateLinkRegex.IsMatch(contentHtml);
         layoutMeta.HasAmazonImages = contentHtml.Contains("media-amazon.com", StringComparison.Ordinal);
+        // 販売中の商品の枠の置き場。枠の中身（Amazon のリンクと画像）は JS が後から描くので、置き場の有無で見る。
+        layoutMeta.HasShopBox = contentHtml.Contains("data-shop-series=", StringComparison.Ordinal);
         // YouTube 公式動画の埋め込み（エピソード詳細の次回予告等）があるページにも同様の権利注記を出す。
         layoutMeta.HasYoutubeEmbeds = contentHtml.Contains("youtube.com/embed/", StringComparison.Ordinal);
 

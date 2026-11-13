@@ -26,6 +26,8 @@ public enum PaResourceSet
     Standard,
     /// <summary>書籍向け拡張集合。Standard に contentInfo / classifications / externalIds / browseNodeInfo を足したもの。</summary>
     Extended,
+    /// <summary>販売の状態を見る集合。画像・タイトル・発売日に、出品の価格・在庫・新品か中古か・売り手・カートに入る出品かを足したもの。</summary>
+    Offers,
 }
 
 /// <summary>
@@ -48,6 +50,44 @@ public sealed class PaContributor
 
     /// <summary>ログ・診断用の "名前 (ロール)" 表記。</summary>
     public override string ToString() => string.IsNullOrEmpty(Role) ? Name : $"{Name} ({Role})";
+}
+
+/// <summary>
+/// 商品の出品 1 件分（<c>offersV2.listings[]</c> の 1 要素）。<see cref="PaResourceSet.Offers"/> で取得したときだけ埋まる。
+/// </summary>
+public sealed class PaListing
+{
+    /// <summary>Amazon.co.jp 本体の売り手 ID（<c>merchantInfo.id</c>）。</summary>
+    public const string AmazonJpMerchantId = "AN1VRQENFRJN5";
+
+    /// <summary>カートに入る出品か（<c>isBuyBoxWinner</c>）。</summary>
+    public bool IsBuyBoxWinner { get; set; }
+
+    /// <summary>商品の状態（<c>condition.value</c>）。新品は "New"。</summary>
+    public string? Condition { get; set; }
+
+    /// <summary>売り手の ID（<c>merchantInfo.id</c>）。</summary>
+    public string? MerchantId { get; set; }
+
+    /// <summary>売り手の名前（<c>merchantInfo.name</c>）。</summary>
+    public string? MerchantName { get; set; }
+
+    /// <summary>在庫の種別（<c>availability.type</c>）。在庫ありは "IN_STOCK"、予約受付中は "PREORDER"。</summary>
+    public string? AvailabilityType { get; set; }
+
+    /// <summary>在庫の説明（<c>availability.message</c>）。例 "在庫あり。" / "発売予定日は2027年1月27日です。"。</summary>
+    public string? AvailabilityMessage { get; set; }
+
+    /// <summary>
+    /// 新品を Amazon.co.jp 本体が売っていて、在庫ありか予約受付中で、カートに入る出品か。
+    /// 中古・マーケットプレイスの出品・在庫切れ・入荷未定は false。
+    /// </summary>
+    public bool IsSoldNewByAmazon =>
+        IsBuyBoxWinner
+        && string.Equals(Condition, "New", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(MerchantId, AmazonJpMerchantId, StringComparison.Ordinal)
+        && (string.Equals(AvailabilityType, "IN_STOCK", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(AvailabilityType, "PREORDER", StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>
@@ -118,4 +158,7 @@ public sealed class PaItem
 
     /// <summary>ブラウズノード（カテゴリ）名の列。ジャンル推定の手がかりに使う。</summary>
     public IReadOnlyList<string> BrowseNodes { get; set; } = Array.Empty<string>();
+
+    /// <summary>出品の全件（<c>offersV2.listings[]</c>）。Offers 取得時のみ、出品があれば 1 件以上入る。</summary>
+    public IReadOnlyList<PaListing> Listings { get; set; } = Array.Empty<PaListing>();
 }

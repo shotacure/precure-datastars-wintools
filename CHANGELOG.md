@@ -4,6 +4,11 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：作品詳細・各話の詳細・トップページに、Amazon で売られている商品の枠を出せるようにした**（`series_shop_items`〔新規〕・マイグレーション `v1.20.1_series_shop_items.sql`・`SeriesShopItem`・`SeriesShopItemsRepository`・`PaListing`〔新規〕・`PaResourceSet.Offers`〔新規〕・AmazonSync の `--shop-check`・SiteBuilder の `--publish-shop-items`・`ShopItemsFile`〔新規〕・`ShopItemsPublisher`〔新規〕・`shop-box.js`〔新規〕・`BuildContext.ShopItems`・`SeriesGenerator`・`EpisodeGenerator`・`HomeGenerator`・`PageRenderer`・`_layout.sbn`・`scripts/scheduled-shop-check.ps1`〔新規〕・`scripts/register-shop-check-task.ps1`〔新規〕・`scripts/deploy.ps1`）：作品ごとに、枠に出す商品（ASIN・商品名・媒体の札・発売日・並び順）を表に持つ。行は SQL で入れる。音楽商品のほか、商品の表に無い Blu-ray も ASIN だけで載せられる。枠はその作品の作品詳細と各話の詳細の基本情報の下、トップページの音楽商品の発売予定の上に出る。人物・キャラクター・企業のページには出さない。
+  - 枠に出すのは、Amazon で売られていると確かめた行だけ。AmazonSync の `--shop-check` が Creators API で出品を調べ、新品を Amazon.co.jp 本体が売っていて、在庫ありか予約受付中で、カートに入る出品があるときだけ「売られている」とする。中古・マーケットプレイスの出品・在庫切れは「売られていない」とする。通信に失敗した回は行を書き換えない。
+  - 枠の中身はページの HTML に入れず、`/shop-items.json` に書く。ページは空の置き場だけを持ち、開いたときに `shop-box.js` がこのファイルを読んで枠を描く。売られている行が無ければ枠ごと出ない。フッターの Amazon についての注記は、枠が出たときだけ見せる。
+  - SiteBuilder の `--publish-shop-items` はサイトを作り直さずに `/shop-items.json` だけを本番に上げ直す。本番のファイルと中身が同じなら何もしない。`scripts/scheduled-shop-check.ps1` が点検と上げ直しを続けて行い、`scripts/register-shop-check-task.ps1` がこれを 15 分おきに動かすタスクを登録する。売り切れ・絶版になった商品は次の点検で枠から外れ、また売られ始めたら次の点検で戻る。本番デプロイ（`scripts/deploy.ps1`）もビルドの前に同じ点検を流す。
+
 - **DB のバックアップで、ローカル専用ファイルの ZIP に `db/data-fixes/` の画像を入れないようにした**（`scripts/backup-db.ps1`）：作業フォルダの画像（クレジット画像の切り抜き・拡大など）が ZIP の大半を占め、1 個が 1 GB を超えていた。ZIP は DB に書き込むたびに作られ、直近 30 日は全部残すので、保存先とミラー先のディスクを埋めていた。画像は元の画像から作り直せるので含めない。SQL・スクリプト・メモなどはこれまでどおり含める
 
 - **サイト：映画などの作品のページの主題歌・挿入歌に、その作品で流れたサイズを出せるようにした**（`series_theme_songs.song_size_variant_code`〔新規〕・マイグレーション `v1.20.1_add_series_theme_song_size.sql`・`SeriesThemeSong`・`SeriesThemeSongsRepository`・`SeriesGenerator`）：各話の主題歌（`episode_theme_songs`）には流れたサイズの欄があるが、作品単位の主題歌には無く、映画の作品のページのサイズの札はどれも「流れたサイズとは限らない音源」の破線の札になっていた。作品単位の主題歌にも同じ欄を足し、入っている行は TV の作品と同じ実線の札と、そのサイズの配信音源の再生ボタンで出す。入っていない行はこれまでどおり。入力欄は無く SQL で入れる

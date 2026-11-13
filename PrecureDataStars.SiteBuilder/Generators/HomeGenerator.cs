@@ -164,6 +164,7 @@ public sealed class HomeGenerator
         var content = new HomeContentModel
         {
             SiteName = _ctx.Config.SiteName,
+            HasShopItems = _ctx.ShopSeriesIds.Count > 0,
             SiteBrandLabel = _ctx.Config.SiteBrandLabel,
             // 最終ビルド表記は「『○○プリキュア』第n話(YYYY.M.D)時点」
             BuildLabel = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
@@ -969,6 +970,8 @@ WHERE e.is_deleted = 0
     private sealed class HomeContentModel
     {
         public string SiteName { get; set; } = "";
+        /// <summary>販売中の商品の枠の置き場を出すか（出す設定の商品が 1 件でもあるとき）。</summary>
+        public bool HasShopItems { get; set; }
         /// <summary>可視ブランド表記（例: プリキュアデータベース「precure-datastars」）。hero の h1 に出す。</summary>
         public string SiteBrandLabel { get; set; } = "";
         /// <summary>最終ビルド表記の表示文字列（導入）。 「『○○プリキュア』第n話(YYYY.M.D)時点」のような 完成形を C# 側で組み立てて流し込む。</summary>

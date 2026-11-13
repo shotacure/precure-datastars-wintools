@@ -217,6 +217,18 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<int, IReadOnlyList<SeriesKeyStaffRole>> KeyStaffRolesBySeries { get; init; }
 
     /// <summary>
+    /// 販売中の商品（<c>series_shop_items</c>）のうち、出す設定の行（並び順の順）。
+    /// 売られているかどうかにかかわらず入る（売られている行だけを <c>/shop-items.json</c> に書く）。
+    /// </summary>
+    public required IReadOnlyList<SeriesShopItem> ShopItems { get; init; }
+
+    /// <summary>
+    /// 販売中の商品に出す設定の行がある作品の ID。作品詳細・各話の詳細は、ここにある作品のページにだけ枠の置き場を出す
+    /// （置き場の中身は閲覧時に JS が描くので、売られていない間は何も出ない）。
+    /// </summary>
+    public required IReadOnlySet<int> ShopSeriesIds { get; init; }
+
+    /// <summary>
     /// 作品 ID → その作品の各話のスタッフの札の役職（<c>series_episode_staff_roles</c>、並び順の順）。
     /// 作品のページのエピソード一覧・トップページのエピソード欄・/episodes/・エピソード詳細のスタッフ欄は、
     /// この行の役職だけをこの順・この色で出す（<see cref="EpisodeStaffCards.BuildBadges"/>）。

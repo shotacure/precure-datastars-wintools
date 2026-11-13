@@ -4,6 +4,12 @@
 
 ### 開発中（次回リリース）
 
+- **SiteBuilder：何も変わらない全体ビルドを 33 秒から 25 秒に縮めた**（`SeriesGenerator.PersonIdsCreditedIn`〔新規〕・`CreatorsGenerator.BuildRoleEntityIndex`〔新規〕・`CreatorsGenerator.BuildRoleEntityRows`・`CreatorsGenerator.BuildEntityRowSet`・`OutputWriter.PruneOrphans`・`OutputWriter.AlignNameCase`・`SubtitleTelopPreflight.DescribeFontRoutes`・`SiteBuilderPipeline`）：出力は変わらない。
+  - シリーズのメインスタッフの集計は、作品と役職ごとに全人物の全クレジットを見直していた。「作品と役職 → クレジットのある人物」の索引を 1 度作り、該当する人物だけを見る（シリーズの区間 6.1 秒 → 2.7 秒）。
+  - 役職詳細の集計は、役職ごとに全人物・全企業の全クレジットを見直していた。「役職 → 関与のある人物・企業」の索引を並列のループの前に作り、その役職クラスタに関与のある人物・企業だけを見る。年表に重ねる関連する役職の判定は、関与の役職ごとに 1 度だけ引く（クリエイターの区間 5.7 秒 → 4.2 秒）。
+  - 出力の掃除は、出力の全ファイルの走査を 1 回にまとめた（名前の大文字小文字をそろえる処理と同じ一覧を使う）。空のディレクトリは、出力の全ディレクトリを走査せず、ファイルを消したディレクトリとその親だけを見て消す（掃除の区間 3.2 秒 → 1.2 秒）。
+  - 書体の表の書体がこの PC でどう引けるかの点検は、ページの生成の裏で回し、ログは OGP カードの描き上がりの後に出す（読み込みの区間 6.4 秒 → 4.7 秒）。
+
 - **SiteBuilder：出力に書き込まずに、今の出力との差分だけを出す `--diff` を足した**（`OutputWriter.DiffOnly`〔新規〕・`OutputWriter.Changes`〔新規〕・`OutputWriter.TrackedFilesUnder`〔新規〕・`OutputChange`〔新規〕・`BuildConfig.DiffOnly`〔新規〕・`SiteBuilderPipeline.ReportDiff`〔新規〕・`SitemapLastmodManifest.Resolve`・`SeoGenerator`・`OgGalleryGenerator`・`Program`）：コードやデータを変えたあと出力がどう変わるかは、出力を作り直してからでないと分からなかった。`--diff` を付けたビルドは、出力・台帳・sitemap の更新日の控えに手を付けず、増える・書き換わる・消えるファイルの件数と一覧を出す。増える・書き換わるファイルの中身は出力の隣の `{出力ディレクトリ}.diff` に同じ相対パスで置くので、今の出力と 1 ファイルずつ見比べられる。違いが無ければ `IDENTICAL` と出す。`--page` と併用できる。`--deploy` とは併用できない。更新時刻だけが違って中身が同じ画像は差分に数えない。テストモードの OGP カード一覧は、出力のディレクトリを走査せず、今回の出力として記録したファイルから作るようにした（ふつうのビルドの出力は変わらない）。
 
 - **SiteBuilder：書体が引けないときに、既定の書体で描いた OGP カードで前回の画像を上書きしないようにした**（`OgCardRenderer.MissingTypefaces`〔新規〕・`OgCardRenderer.ProbeTypeface`〔新規〕・`InstalledFontIndex.NameTableHasName`〔新規〕・`PageRenderer.RenderOgCard`・`SubtitleTelopPreflight.LogFontRoutes`〔新規〕・`OgCardBatch`・`SiteBuilderPipeline`）：カードの材料が名前で指す書体（見出し・タグライン・事実行・エピソードのサブタイトルと振り仮名・書体見本）がこの PC で引けないと、既定の見出し書体で描いて出力へ置いていた。引けないカードは描かず、出力に前回の画像があれば残し、無ければカードなしにして、書体名ごとに警告を出す。`--og-cards` も同じ扱いにした。名前で引いた書体は、その name テーブルに頼んだ名前があるかを照らし、無ければ使わない。ビルドの冒頭に、書体の表の描く書体名がどの経路で引けるかをログに出す。書体がそろっている PC では出力は変わらない。

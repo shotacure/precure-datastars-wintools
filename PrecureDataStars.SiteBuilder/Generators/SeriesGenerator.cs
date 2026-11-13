@@ -505,8 +505,11 @@ public sealed class SeriesGenerator
                 // 各人物について：所属屋号 alias_id 出現回数辞書 と
                 // クレジット順ソート用の (EpisodeNo, CreditSeq, CreditSubSeq) lex min を求める。
                 var members = new List<KeyStaffMember>();
+                // この作品のこの役職にクレジットのある人物だけを見る（並びは人物マスタの順のまま）。
+                var creditedPersonIds = PersonIdsCreditedIn(s.SeriesId, spec.Code);
                 foreach (var p in _allPersonsCache)
                 {
+                    if (creditedPersonIds is null || !creditedPersonIds.Contains(p.PersonId)) continue;
                     if (!_aliasIdsByPersonIdCache.TryGetValue(p.PersonId, out var aliasIds)) continue;
 
                     var affiliationCounts = new Dictionary<int, int>();
@@ -1713,6 +1716,42 @@ public sealed class SeriesGenerator
         return label;
     }
 
+    /// <summary>
+    /// (作品, 役職) → その作品のその役職にクレジットのある人物の person_id。メインスタッフの集計
+    /// （<see cref="BuildKeyStaffSummaryBySeriesCacheAsync"/> と <see cref="BuildMainStaffSectionsAsync"/>）が、作品と役職ごとに
+    /// 全人物の全クレジットを見直さずに済むよう、最初に使う時に 1 度だけ全クレジットから作る。
+    /// </summary>
+    private Dictionary<(int SeriesId, string RoleCode), HashSet<int>>? _personIdsBySeriesRoleCache;
+
+    /// <summary>
+    /// 作品 <paramref name="seriesId"/> の役職 <paramref name="roleCode"/> にクレジットのある人物の person_id（1 人もいなければ null）。
+    /// <see cref="_aliasIdsByPersonIdCache"/> の確定後に呼ぶ。話のクレジットと作品のクレジットを区別しないので、
+    /// 集計の側の条件（映画は作品のクレジットだけ、など）で外れる人物も含む。
+    /// </summary>
+    private HashSet<int>? PersonIdsCreditedIn(int seriesId, string roleCode)
+    {
+        if (_personIdsBySeriesRoleCache is null)
+        {
+            var map = new Dictionary<(int, string), HashSet<int>>();
+            foreach (var (personId, aliasIds) in _aliasIdsByPersonIdCache!)
+            {
+                foreach (var aid in aliasIds)
+                {
+                    if (!_involvementIndex.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
+                    foreach (var inv in invs)
+                    {
+                        if (string.IsNullOrEmpty(inv.RoleCode)) continue;
+                        var key = (inv.SeriesId, inv.RoleCode);
+                        if (!map.TryGetValue(key, out var set)) map[key] = set = new HashSet<int>();
+                        set.Add(personId);
+                    }
+                }
+            }
+            _personIdsBySeriesRoleCache = map;
+        }
+        return _personIdsBySeriesRoleCache.TryGetValue((seriesId, roleCode), out var ids) ? ids : null;
+    }
+
     /// <summary>メインスタッフセクション群を構築する。 TV 系（credit_attach_to='EPISODE'）はエピソードスコープ Involvement から、 映画系（credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）は SERIES スコープ Involvement から集計する。役職・並び・バッジの色は作品の行（<see cref="KeyStaffRoleSpecsFor"/>）で、行の無い作品は空。</summary>
     private async Task<IReadOnlyList<KeyStaffSection>> BuildMainStaffSectionsAsync(
         Series series, IReadOnlyList<Episode> eps, CancellationToken ct)
@@ -1764,8 +1803,11 @@ public sealed class SeriesGenerator
         foreach (var spec in roleSpecs)
         {
             var rows = new List<MainStaffRow>();
+            // この作品のこの役職にクレジットのある人物だけを見る（並びは人物マスタの順のまま）。
+            var creditedPersonIds = PersonIdsCreditedIn(series.SeriesId, spec.Code);
             foreach (var p in _allPersonsCache)
             {
+                if (creditedPersonIds is null || !creditedPersonIds.Contains(p.PersonId)) continue;
                 if (!_aliasIdsByPersonIdCache.TryGetValue(p.PersonId, out var aliasIds)) continue;
 
                 var episodeNos = new HashSet<int>();

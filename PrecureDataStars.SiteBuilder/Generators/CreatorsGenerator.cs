@@ -400,6 +400,9 @@ public sealed class CreatorsGenerator
         // 作品のクレジットの担当を音楽の役職詳細に「作品のクレジット」として載せる（同じ URL に 2 つのページを書かない）。
         var musicPageRoles = MusicPageRoleCodes(allRoles, allSongCredits, personIdByAlias);
 
+        // 役職 → その役職の関与がある人物・企業の索引。並列の集計から読むだけなので、並列のループの前に確定させる。
+        BuildRoleEntityIndex(aliasIdsByPersonId, companyAliasesByCompany, logosByCompanyAlias);
+
         // 役職ごとの集計と役職詳細ページの書き出しは、役職どうしで独立なので並列に行い、結果を役職の順の配列に置く。
         // ページを書いた記録（サマリ・進捗・sitemap）と索引への積み上げは、そのあと役職の順で逐次に行う
         // （各話と同じ 2 相方式。sitemap.xml の並びと索引の順をビルドごとに揺らさない）。
@@ -676,6 +679,56 @@ public sealed class CreatorsGenerator
 
     // 役職詳細
 
+    /// <summary>役職（role_code）→ 本編のクレジットでその役職の関与がある人物の person_id。<see cref="BuildRoleEntityIndex"/> が作る。</summary>
+    private readonly Dictionary<string, HashSet<int>> _personIdsByRoleCode = new(StringComparer.Ordinal);
+    /// <summary>役職（role_code）→ 本編のクレジットでその役職の関与（屋号・ロゴ・先頭企業）がある企業の company_id。<see cref="BuildRoleEntityIndex"/> が作る。</summary>
+    private readonly Dictionary<string, HashSet<int>> _companyIdsByRoleCode = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 役職 → その役職の関与がある人物・企業の索引（<see cref="_personIdsByRoleCode"/> / <see cref="_companyIdsByRoleCode"/>）を作る。
+    /// 役職詳細の集計（<see cref="BuildRoleEntityRows"/>）が、役職ごとに全人物・全企業の全クレジットを見直さずに済むようにする。
+    /// 主題歌・挿入歌の使用を経由した関与（曲の作家・歌唱）は、役職詳細の集計対象ではないので入れない。
+    /// </summary>
+    private void BuildRoleEntityIndex(
+        IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
+        IReadOnlyDictionary<int, List<int>> companyAliasesByCompany,
+        IReadOnlyDictionary<int, List<int>> logosByCompanyAlias)
+    {
+        _personIdsByRoleCode.Clear();
+        _companyIdsByRoleCode.Clear();
+        static void Note(Dictionary<string, HashSet<int>> map, IReadOnlyList<Involvement> invs, int entityId)
+        {
+            foreach (var inv in invs)
+            {
+                if (inv.EntryKind is "SONG_CREDIT" or "RECORDING_SINGER" || string.IsNullOrEmpty(inv.RoleCode)) continue;
+                if (!map.TryGetValue(inv.RoleCode, out var set)) map[inv.RoleCode] = set = new HashSet<int>();
+                set.Add(entityId);
+            }
+        }
+        foreach (var (personId, aliasIds) in aliasIdsByPersonId)
+            foreach (var aid in aliasIds)
+                if (_index.ByPersonAlias.TryGetValue(aid, out var invs)) Note(_personIdsByRoleCode, invs, personId);
+        foreach (var (companyId, aliasIds) in companyAliasesByCompany)
+        {
+            foreach (var aid in aliasIds)
+            {
+                if (_index.ByCompanyAlias.TryGetValue(aid, out var invs)) Note(_companyIdsByRoleCode, invs, companyId);
+                if (!logosByCompanyAlias.TryGetValue(aid, out var logoIds)) continue;
+                foreach (var logoId in logoIds)
+                    if (_index.ByLogo.TryGetValue(logoId, out var logoInvs)) Note(_companyIdsByRoleCode, logoInvs, companyId);
+            }
+        }
+    }
+
+    /// <summary>役職クラスタ <paramref name="memberCodes"/> のどれかの関与がある人物（または企業）の ID を、索引 <paramref name="map"/> から集める。</summary>
+    private static HashSet<int> EntityIdsOfRoles(Dictionary<string, HashSet<int>> map, IReadOnlySet<string> memberCodes)
+    {
+        var ids = new HashSet<int>();
+        foreach (var code in memberCodes)
+            if (map.TryGetValue(code, out var set)) ids.UnionWith(set);
+        return ids;
+    }
+
     /// <summary>1 役職クラスタに関わった人物・企業/団体を 1 リストに混在させた行群を作る。</summary>
     private EntityRowSet BuildRoleEntityRows(
         string pageRoleCode,
@@ -687,14 +740,27 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<int, List<int>> logosByCompanyAlias,
         IReadOnlyList<Company> allCompanies,
         IReadOnlyDictionary<int, CompanyAlias> companyAliasById)
-        => BuildEntityRowSet(
+    {
+        // 関連する役職の判定は、ページの役職と関与の役職だけで決まるので、関与の役職ごとに 1 度だけ引く。
+        var relatedByRoleCode = new Dictionary<string, RelatedRoleKey?>(StringComparer.Ordinal);
+        return BuildEntityRowSet(
             // 主題歌・挿入歌の使用を経由した関与（曲の作家・歌唱）は数えない（スタッフ一覧と同じ）。曲のクレジットは音楽の役職詳細に出る。
             inv => inv.EntryKind is not ("SONG_CREDIT" or "RECORDING_SINGER") && memberCodes.Contains(inv.RoleCode) ? inv.RoleCode : null,
             aliasIdsByPersonId, allPersons, companyAliasesByCompany, logosByCompanyAlias,
             allCompanies, companyAliasById, repNameMap: null, withWorksTooltip: true,
             roleUsageNote: agg => BuildRoleUsageNote(agg, pageRoleCode, roleByCode),
-            related: inv => RelatedRoleOf(pageRoleCode, inv, roleByCode),
-            groupMembers: true);
+            related: inv =>
+            {
+                if (!inv.IsMainCredit || string.IsNullOrEmpty(inv.RoleCode)) return null;
+                if (!relatedByRoleCode.TryGetValue(inv.RoleCode, out var key))
+                    relatedByRoleCode[inv.RoleCode] = key = RelatedRoleOf(pageRoleCode, inv, roleByCode);
+                return key;
+            },
+            groupMembers: true,
+            // 集計対象の関与が 1 件も無い人物・企業は行にならないので、この役職クラスタの関与がある人物・企業だけを見る。
+            personIds: EntityIdsOfRoles(_personIdsByRoleCode, memberCodes),
+            companyIds: EntityIdsOfRoles(_companyIdsByRoleCode, memberCodes));
+    }
 
     /// <summary>
     /// 役職詳細の年表に重ねる関連する役職の判定。本編のクレジットで、ページの役職と関連（段階・並列）でつながった
@@ -741,6 +807,9 @@ public sealed class CreatorsGenerator
     /// <param name="repNameMap">役職ラベル（スタッフ一覧用）を作るときの「代表 role_code → 役職名」。null なら役職ラベルを作らない。</param>
     /// <param name="withWorksTooltip">行リンクに担当作品一覧の tooltip を付けるか（役職詳細用）。</param>
     /// <param name="groupMembers">年表で会社とその所属の人をまとめるか（役職詳細用。所属は <see cref="BuildMemberOf"/>）。</param>
+    /// <param name="personIds">見る人物の絞り込み（集計対象の関与を持ちうる人物の person_id）。null なら全人物を見る。
+    /// 集計対象の関与（<paramref name="accept"/> が null でない関与）を持つ人物は必ず含めること。</param>
+    /// <param name="companyIds">見る企業の絞り込み（<paramref name="personIds"/> と同じ決まり）。null なら全企業を見る。</param>
     private EntityRowSet BuildEntityRowSet(
         Func<Involvement, string?> accept,
         IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
@@ -753,7 +822,9 @@ public sealed class CreatorsGenerator
         bool withWorksTooltip,
         Func<EntityAggregate, string>? roleUsageNote = null,
         Func<Involvement, RelatedRoleKey?>? related = null,
-        bool groupMembers = false)
+        bool groupMembers = false,
+        IReadOnlySet<int>? personIds = null,
+        IReadOnlySet<int>? companyIds = null)
     {
         var set = new EntityRowSet();
         var memberOf = groupMembers
@@ -771,6 +842,7 @@ public sealed class CreatorsGenerator
         // 人物。
         foreach (var p in allPersons)
         {
+            if (personIds is not null && !personIds.Contains(p.PersonId)) continue;
             if (!aliasIdsByPersonId.TryGetValue(p.PersonId, out var aliasIds)) continue;
 
             var agg = new EntityAggregate(this);
@@ -815,6 +887,7 @@ public sealed class CreatorsGenerator
         // 企業・団体。
         foreach (var c in allCompanies)
         {
+            if (companyIds is not null && !companyIds.Contains(c.CompanyId)) continue;
             if (!companyAliasesByCompany.TryGetValue(c.CompanyId, out var aliasIds)) continue;
 
             var agg = new EntityAggregate(this);

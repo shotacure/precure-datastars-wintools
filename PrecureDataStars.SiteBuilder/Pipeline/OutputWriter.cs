@@ -48,6 +48,16 @@ public sealed class OutputWriter
     private int _written;
     private int _unchanged;
 
+    /// <summary>
+    /// 出力ディレクトリにあるファイルの一覧（絶対パス）。全体ビルドの最後の <see cref="AlignNameCase"/> と <see cref="PruneOrphans"/> が
+    /// 同じ一覧を使い、出力の走査を 1 回で済ませる。名前を付け替えたら捨てて、次に使う時に取り直す。
+    /// </summary>
+    private List<string>? _scannedFiles;
+
+    /// <summary>出力ディレクトリにあるファイルの一覧（<see cref="_scannedFiles"/>）。まだ走査していなければ走査する。</summary>
+    private List<string> ScanFiles()
+        => _scannedFiles ??= Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories).Select(Path.GetFullPath).ToList();
+
     /// <summary>差分だけを出すビルドで、増える・書き換わるファイルの中身を置くディレクトリ。ふつうのビルドでは null。</summary>
     private readonly string? _diffDirectory;
 
@@ -298,7 +308,8 @@ public sealed class OutputWriter
     public bool IsTracked(string path) => _files.ContainsKey(Path.GetFullPath(path));
 
     /// <summary>
-    /// 出力ディレクトリにあって今回の出力に属さないファイルを消し、空になったディレクトリも消す。戻り値は消したファイル数。
+    /// 出力ディレクトリにあって今回の出力に属さないファイルを消し、ファイルを消して空になったディレクトリも
+    /// （その親が空になれば親も）消す。戻り値は消したファイル数。
     /// 全体ビルドの最後に呼ぶ。ピンポイントビルド（<c>--page</c>）では呼ばない（対象外のページを消してしまう）。
     /// 差分だけを出すビルドでは消さず、消えるファイルとして控えて数だけ返す。
     /// </summary>
@@ -307,21 +318,34 @@ public sealed class OutputWriter
         if (!Directory.Exists(Root)) return 0;
 
         int removed = 0;
-        foreach (var file in Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories))
+        var emptied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in ScanFiles())
         {
-            if (_files.ContainsKey(Path.GetFullPath(file))) continue;
+            if (_files.ContainsKey(file)) continue;
             if (DiffOnly) _changes.Add(new OutputChange(Path.GetRelativePath(Root, file).Replace('\\', '/'), OutputChangeKind.Removed));
-            else File.Delete(file);
+            else
+            {
+                File.Delete(file);
+                if (Path.GetDirectoryName(file) is { } parent) emptied.Add(parent);
+            }
             removed++;
         }
+        _scannedFiles = null;
         if (DiffOnly) return removed;
 
-        // 深いディレクトリから見て、空になったものを消す（子を消してから親を見る順になる）。
-        foreach (var dir in Directory.EnumerateDirectories(Root, "*", SearchOption.AllDirectories)
-                     .OrderByDescending(d => d.Length))
+        // ファイルを消したディレクトリを深い順に見て、空になっていれば消し、その親も空になれば続けて消す。
+        // 出力の全ディレクトリは走査しない（ファイルを消していないディレクトリは空にならない）。
+        foreach (var start in emptied.OrderByDescending(d => d.Length))
         {
-            if (!Directory.EnumerateFileSystemEntries(dir).Any())
+            var dir = start;
+            while (dir is not null
+                   && dir.Length > Root.Length
+                   && Directory.Exists(dir)
+                   && !Directory.EnumerateFileSystemEntries(dir).Any())
+            {
                 Directory.Delete(dir);
+                dir = Path.GetDirectoryName(dir);
+            }
         }
         return removed;
     }
@@ -347,12 +371,13 @@ public sealed class OutputWriter
         foreach (var key in _files.Keys) tracked[key] = key;
 
         var mismatched = new List<string>();
-        foreach (var file in Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories))
+        foreach (var actual in ScanFiles())
         {
-            var actual = Path.GetFullPath(file);
             if (tracked.TryGetValue(actual, out var desired) && !string.Equals(actual, desired, StringComparison.Ordinal))
                 mismatched.Add(desired);
         }
+        // 名前を付け替えると一覧のパスが古くなるので、次に使う時に取り直す。
+        if (mismatched.Count > 0) _scannedFiles = null;
 
         int renamed = 0;
         foreach (var desired in mismatched)

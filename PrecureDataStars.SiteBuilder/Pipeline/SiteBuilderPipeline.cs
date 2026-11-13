@@ -67,7 +67,8 @@ public sealed class SiteBuilderPipeline
         // サブタイトルのテロップ画像の作り置きを確かめる。描き直しに要る書体がこの PC に無ければここで止まる
         // （出力に手を付ける前なので、前回の出力はそのまま残る）。
         SubtitleTelopPreflight.Run(ctx, config, logger);
-        SubtitleTelopPreflight.LogFontRoutes(ctx, logger);
+        // 書体の表の書体がこの PC でどう引けるかの点検は数秒かかるので、ページの生成の裏で回し、結果は OGP カードの描き上がりの後にログへ出す。
+        var fontRoutes = Task.Run(() => SubtitleTelopPreflight.DescribeFontRoutes(ctx), ct);
 
         // 出力は前回のものを残したまま、中身が変わるファイルだけ書く（OutputWriter）。全体ビルドでは最後に
         // 今回書かなかったファイル（廃止した役職詳細など、生成されなくなったページ）を消すので、出力は
@@ -311,6 +312,7 @@ public sealed class SiteBuilderPipeline
         // OGP カードは各ページの生成と並行して描いているので、出力を走査・掃除する前に全部の描き上がりを待つ。
         reporter.BeginSection("og_cards");
         await pageRenderer.WaitForOgCardsAsync().ConfigureAwait(false);
+        foreach (var line in await fontRoutes.ConfigureAwait(false)) logger.Info(line);
         reporter.PageWritten();
         reporter.EndSection();
 

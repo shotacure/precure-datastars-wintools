@@ -78,11 +78,12 @@ public static class SubtitleTelopPreflight
     }
 
     /// <summary>
-    /// 書体の表の描く書体名（<c>fonts.render_font_name</c>）が、この PC でどう引けるかをログに残す。
+    /// 書体の表の描く書体名（<c>fonts.render_font_name</c>）が、この PC でどう引けるかを、ログに出す行にして返す。
     /// 書体ファイルの索引で引けた書体は数だけ、それ以外の経路で引けた書体と引けない書体は名前を出す。
     /// 引けない書体があっても止めない（作り置きで足りているあいだは描かない。描くときは <see cref="Run"/> とカードの側で止める・描かない）。
+    /// 書体を 1 つずつ引くので数秒かかる。<paramref name="ctx"/> の書体の表を読むだけなので、ページの生成の裏で回してよい。
     /// </summary>
-    public static void LogFontRoutes(BuildContext ctx, BuildLogger logger)
+    public static IReadOnlyList<string> DescribeFontRoutes(BuildContext ctx)
     {
         var names = ctx.FontById.Values
             .Select(f => f.RenderFontName)
@@ -95,8 +96,12 @@ public static class SubtitleTelopPreflight
         int byIndex = probed.Count(p => p.Probe.Found && p.Probe.Route == "書体ファイルの索引");
         var others = probed.Where(p => p.Probe.Found && p.Probe.Route != "書体ファイルの索引").ToList();
         var missing = probed.Where(p => !p.Probe.Found).ToList();
-        logger.Info($"Fonts            : 書体の表の {names.Count} 書体（書体ファイルの索引 {byIndex} / ほかの経路 {others.Count} / 引けない {missing.Count}）");
-        foreach (var (name, probe) in others) logger.Info($"  書体「{name}」: {probe.Route}");
-        foreach (var (name, probe) in missing) logger.Info($"  書体「{name}」: {probe.Route}");
+        var lines = new List<string>
+        {
+            $"Fonts            : 書体の表の {names.Count} 書体（書体ファイルの索引 {byIndex} / ほかの経路 {others.Count} / 引けない {missing.Count}）",
+        };
+        foreach (var (name, probe) in others) lines.Add($"  書体「{name}」: {probe.Route}");
+        foreach (var (name, probe) in missing) lines.Add($"  書体「{name}」: {probe.Route}");
+        return lines;
     }
 }

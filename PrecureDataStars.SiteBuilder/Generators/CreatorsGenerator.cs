@@ -1634,7 +1634,7 @@ public sealed class CreatorsGenerator
             OgCard = BuildCreatorsOgCard(
                 "歴代プリキュア音楽制作",
                 BuildEntityBadges(personCount, companyCount),
-                Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
+                Array.Empty<OgCardFactLine>(),
                 "プリキュアの歌と音楽を作ってきた方々"),
             Breadcrumbs = new[]
             {
@@ -2134,7 +2134,7 @@ public sealed class CreatorsGenerator
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 BuildEntityBadges(persons, companies),
-                new[] { new OgCardFactLine("集計元", "歌・劇伴・音盤のクレジット") }, MusicCoverageLabel,
+                new[] { new OgCardFactLine("集計元", "歌・劇伴・音盤のクレジット") },
                 watermark: MusicRoleWatermark),
             Breadcrumbs = new[]
             {
@@ -2583,7 +2583,7 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("キャラクター", $"{characterCount}組"),
                     new OgCardBadge("ユニット", $"{unitCount}組")
                 },
-                Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
+                Array.Empty<OgCardFactLine>(),
                 "プリキュアを歌ってきた方々"),
             Breadcrumbs = new[]
             {
@@ -2805,7 +2805,7 @@ public sealed class CreatorsGenerator
             OgCard = BuildCreatorsOgCard(
                 StaffPageTitle,
                 BuildEntityBadges(content.PersonCount, content.CompanyCount),
-                Array.Empty<OgCardFactLine>(), content.CoverageLabel,
+                Array.Empty<OgCardFactLine>(),
                 StaffPageLead),
             Breadcrumbs = new[]
             {
@@ -3082,7 +3082,7 @@ public sealed class CreatorsGenerator
                 {
                     new OgCardBadge("声優", $"{countRows.Count}人")
                 },
-                Array.Empty<OgCardFactLine>(), content.CoverageLabel,
+                Array.Empty<OgCardFactLine>(),
                 VoiceCastPageLead),
             Breadcrumbs = new[]
             {
@@ -3582,7 +3582,7 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("音楽制作", $"{musicProductionPersonCount}名・{musicProductionCompanyCount}団体"),
                     new OgCardBadge("歌唱", $"{singerCount}人")
                 },
-                Array.Empty<OgCardFactLine>(), null,
+                Array.Empty<OgCardFactLine>(),
                 // ページの冒頭文（creators-landing.sbn の .lead）と同じ文。
                 "歴代プリキュアを作ってきた方々"),
             Breadcrumbs = new[]
@@ -3661,12 +3661,12 @@ public sealed class CreatorsGenerator
     /// <summary>音楽の役職（作詞・作曲・演奏など）の詳細ページのカードの透かし。本編の役職の「スタッフ」と対になる区分。</summary>
     private const string MusicRoleWatermark = "ミュージック";
 
-    private OgCardSpec BuildCreatorsOgCard(string title, IReadOnlyList<OgCardBadge> badges, IReadOnlyList<OgCardFactLine> facts, string? coverageLabel = null, string lead = "", string watermark = "") =>
+    private OgCardSpec BuildCreatorsOgCard(string title, IReadOnlyList<OgCardBadge> badges, IReadOnlyList<OgCardFactLine> facts, string lead = "", string watermark = "") =>
         new(Kicker: "", Title: title)
         {
             // 役職の区分など（空なら出さない）。
             Watermark = watermark,
-            MetaLeft = OgCoverageLabel.Compact(coverageLabel ?? _ctx.CreditCoverageLabel),
+            // 基準点（〜時点）の注記はカードに載せない（放送のたびに日付が変わり、カードが毎週描き直しになる。ページの本文には出す）。
             // どんなページかのリード文（数の下に添える）。
             Subtitle = lead,
             Badges = badges,

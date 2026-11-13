@@ -354,7 +354,6 @@ public sealed class CharactersGenerator
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（characters-index.sbn の .lead）と同じ文。数だけはページ側で添える。
                 Subtitle = "プリキュア・妖精たち・敵・とりまく人々、歴代のキャラクター",
-                MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                 Badges = new[]
                 {
                     new OgCardBadge("キャラクター", $"{characters.Count}人"),
@@ -605,7 +604,6 @@ public sealed class CharactersGenerator
                 MetaDescription = $"『{series.Title}』のその他のキャラクター {rows.Count} 名",
                 OgCard = new OgCardSpec(Kicker: series.Title, Title: "その他のキャラクター")
                 {
-                    MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
                     Badges = new[] { new OgCardBadge("キャラクター", $"{rows.Count}人") }
                 },
                 Breadcrumbs = new[]

@@ -76,4 +76,27 @@ public static class SubtitleTelopPreflight
             if (File.GetLastWriteTimeUtc(file) < staleBefore) File.Delete(file);
         if (removed > 0) logger.Info($"Subtitle telops  : {CacheIndex.UnusedDays} 日使わなかった作り置き {removed} 件を消しました");
     }
+
+    /// <summary>
+    /// 書体の表の描く書体名（<c>fonts.render_font_name</c>）が、この PC でどう引けるかをログに残す。
+    /// 書体ファイルの索引で引けた書体は数だけ、それ以外の経路で引けた書体と引けない書体は名前を出す。
+    /// 引けない書体があっても止めない（作り置きで足りているあいだは描かない。描くときは <see cref="Run"/> とカードの側で止める・描かない）。
+    /// </summary>
+    public static void LogFontRoutes(BuildContext ctx, BuildLogger logger)
+    {
+        var names = ctx.FontById.Values
+            .Select(f => f.RenderFontName)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+        var probed = names.Select(n => (Name: n, Probe: OgCardRenderer.ProbeTypeface(n))).ToList();
+        int byIndex = probed.Count(p => p.Probe.Found && p.Probe.Route == "書体ファイルの索引");
+        var others = probed.Where(p => p.Probe.Found && p.Probe.Route != "書体ファイルの索引").ToList();
+        var missing = probed.Where(p => !p.Probe.Found).ToList();
+        logger.Info($"Fonts            : 書体の表の {names.Count} 書体（書体ファイルの索引 {byIndex} / ほかの経路 {others.Count} / 引けない {missing.Count}）");
+        foreach (var (name, probe) in others) logger.Info($"  書体「{name}」: {probe.Route}");
+        foreach (var (name, probe) in missing) logger.Info($"  書体「{name}」: {probe.Route}");
+    }
 }

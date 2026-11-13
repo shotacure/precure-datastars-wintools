@@ -75,6 +75,16 @@ internal static class OgCardBatch
                 }
             }
 
+            // 描くのに要る書体が引けないカードは書かない（既定の書体に差し替えて描かない）。前の画像があれば残す。
+            var missingFonts = renderer.MissingTypefaces(spec);
+            if (missingFonts.Count > 0)
+            {
+                warnings++;
+                written.Add(file);
+                Console.Error.WriteLine($"警告: {card.Path}: 書体「{string.Join("」「", missingFonts)}」がこの PC で引けないため、カードを描きませんでした（前の画像があれば残します）");
+                continue;
+            }
+
             var missing = renderer.Render(spec, file);
             written.Add(file);
             if (missing is not null)

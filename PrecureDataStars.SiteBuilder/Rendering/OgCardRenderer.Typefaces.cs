@@ -54,30 +54,93 @@ public sealed partial class OgCardRenderer
         return typeface is not null;
     }
 
-    /// <summary>インストール済み書体を名前で引く。まず書体ファイルの索引（日本語名・英語名とも）、次に Windows の書体一覧。見つからなければ null。</summary>
-    private static SKTypeface? MatchInstalledTypeface(string name)
+    /// <summary>
+    /// インストール済み書体を名前で引く。まず書体ファイルの索引（日本語名・英語名とも）、次に Windows の書体一覧。見つからなければ null。
+    /// どの経路で引いた書体も、その name テーブルに頼んだ名前があるかを照らし、無ければ使わない
+    /// （書体一覧は、同じ族の別の書体を返すことがある。頼んだ書体と違う書体で描かないため）。
+    /// </summary>
+    private static SKTypeface? MatchInstalledTypeface(string name) => MatchInstalledTypeface(name, out _);
+
+    /// <summary>
+    /// <see cref="MatchInstalledTypeface(string)"/> と同じ。<paramref name="route"/> に、引けた経路か、引けなかった理由を返す（点検のログ用）。
+    /// </summary>
+    private static SKTypeface? MatchInstalledTypeface(string name, out string route)
     {
-        if (FontIndex.Value.Find(name) is { } hit)
+        bool mismatched = false;
+        SKTypeface? Verified(SKTypeface? typeface)
         {
-            var fromFile = SKTypeface.FromFile(hit.Path, hit.Index);
-            if (fromFile is not null) return fromFile;
+            if (typeface is null) return null;
+            if (HasName(typeface, name)) return typeface;
+            mismatched = true;
+            typeface.Dispose();
+            return null;
+        }
+
+        if (FontIndex.Value.Find(name) is { } hit && Verified(SKTypeface.FromFile(hit.Path, hit.Index)) is { } fromFile)
+        {
+            route = "書体ファイルの索引";
+            return fromFile;
         }
 
         var manager = SKFontManager.Default;
-        var direct = manager.MatchFamily(name);
-        if (direct is not null) return direct;
+        if (Verified(manager.MatchFamily(name)) is { } direct)
+        {
+            route = "Windows の書体一覧";
+            return direct;
+        }
 
         int cut = name.LastIndexOf(' ');
-        if (cut <= 0) return null;
-        string family = name[..cut];
-        string styleName = name[(cut + 1)..];
-        using var styles = manager.GetFontStyles(family);
-        if (styles is null || styles.Count == 0) return null;
-        for (int i = 0; i < styles.Count; i++)
+        if (cut > 0)
         {
-            if (string.Equals(styles.GetStyleName(i), styleName, StringComparison.OrdinalIgnoreCase))
-                return styles.CreateTypeface(i);
+            string family = name[..cut];
+            string styleName = name[(cut + 1)..];
+            using var styles = manager.GetFontStyles(family);
+            for (int i = 0; styles is not null && i < styles.Count; i++)
+            {
+                if (!string.Equals(styles.GetStyleName(i), styleName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (Verified(styles.CreateTypeface(i)) is { } styled)
+                {
+                    route = "Windows の書体一覧（族名＋スタイル名）";
+                    return styled;
+                }
+            }
         }
+        route = mismatched ? "名前で引けた書体が、頼んだ名前の書体ではない" : "見つからない";
         return null;
+    }
+
+    /// <summary>書体の name テーブルに、その名前（全名称・族名・族名＋スタイル名のどれか）があるか。</summary>
+    private static bool HasName(SKTypeface typeface, string name)
+        => typeface.TryGetTableData(NameTableTag, out var table) && InstalledFontIndex.NameTableHasName(table, name);
+
+    /// <summary>name テーブルのタグ（'name'）。</summary>
+    private const uint NameTableTag = 0x6E616D65;
+
+    /// <summary>書体名がこの PC でどう引けるか（引けた経路か、引けなかった理由）。点検のログ用。</summary>
+    public static (bool Found, string Route) ProbeTypeface(string name)
+    {
+        using var typeface = MatchInstalledTypeface(name, out string route);
+        return (typeface is not null, route);
+    }
+
+    /// <summary>
+    /// カードの材料が名前で指す書体（見出し・タグライン・流し込みの事実行・エピソードのサブタイトルと振り仮名・書体見本）のうち、
+    /// この PC で引けないものの名前。空でなければ、このカードは描かない（既定の書体に差し替えて描かないため）。
+    /// </summary>
+    public IReadOnlyList<string> MissingTypefaces(OgCardSpec spec)
+    {
+        var names = new[]
+        {
+            spec.TitleFontFamily, spec.StatementFontFamily, spec.InlineFactsFontFamily, spec.EpisodeTitleFontFamily,
+            spec.Specimen?.FontFamily, spec.TitleRubyProfile?.RubyFontFamily, spec.EpisodeTitleRubyProfile?.RubyFontFamily
+        };
+        var missing = new List<string>();
+        foreach (var name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name) || missing.Contains(name)) continue;
+            ResolveTypeface(name, _boldTypeface, out string? warning);
+            if (warning is not null) missing.Add(name);
+        }
+        return missing;
     }
 }

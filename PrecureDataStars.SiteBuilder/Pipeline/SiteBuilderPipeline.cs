@@ -66,6 +66,7 @@ public sealed class SiteBuilderPipeline
         // サブタイトルのテロップ画像の作り置きを確かめる。描き直しに要る書体がこの PC に無ければここで止まる
         // （出力に手を付ける前なので、前回の出力はそのまま残る）。
         SubtitleTelopPreflight.Run(ctx, config, logger);
+        SubtitleTelopPreflight.LogFontRoutes(ctx, logger);
 
         // 出力は前回のものを残したまま、中身が変わるファイルだけ書く（OutputWriter）。全体ビルドでは最後に
         // 今回書かなかったファイル（廃止した役職詳細など、生成されなくなったページ）を消すので、出力は
@@ -382,6 +383,11 @@ public sealed class SiteBuilderPipeline
             else
                 logger.Info($"OGP カード: {message}（例: {samplePath}）");
         }
+
+        // 描くのに要る書体がこの PC で引けず、描かなかったカード。既定の書体に差し替えた画像で前回の画像を上書きしないよう、
+        // 前回の画像を残している（前回の画像が無いページはカードなし）。書体を入れると次のビルドで描かれる。
+        foreach (var (font, (kept, none, samplePath)) in pageRenderer.OgCardMissingFonts.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            logger.Warn($"OGP カード: 書体「{font}」がこの PC で引けないため、カードを描きませんでした（前回の画像を残した {kept} 枚 / カードなし {none} 枚。例: {samplePath}）");
 
         // カードの見出しの装飾を描き直して突き合わせたら、作り置きと絵が違った。鍵に入らない理由（書体ファイルの差し替えなど）で
         // 絵が変わっているので、ほかの作り置きも古いおそれがある。

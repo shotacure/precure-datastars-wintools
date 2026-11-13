@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **SiteBuilder：書体が引けないときに、既定の書体で描いた OGP カードで前回の画像を上書きしないようにした**（`OgCardRenderer.MissingTypefaces`〔新規〕・`OgCardRenderer.ProbeTypeface`〔新規〕・`InstalledFontIndex.NameTableHasName`〔新規〕・`PageRenderer.RenderOgCard`・`SubtitleTelopPreflight.LogFontRoutes`〔新規〕・`OgCardBatch`・`SiteBuilderPipeline`）：カードの材料が名前で指す書体（見出し・タグライン・事実行・エピソードのサブタイトルと振り仮名・書体見本）がこの PC で引けないと、既定の見出し書体で描いて出力へ置いていた。引けないカードは描かず、出力に前回の画像があれば残し、無ければカードなしにして、書体名ごとに警告を出す。`--og-cards` も同じ扱いにした。名前で引いた書体は、その name テーブルに頼んだ名前があるかを照らし、無ければ使わない。ビルドの冒頭に、書体の表の描く書体名がどの経路で引けるかをログに出す。書体がそろっている PC では出力は変わらない。
+
 - **サイト：一覧の OGP カードから、右下の基準点の注記（「〜時点」）を外した**（`CreatorsGenerator.BuildCreatorsOgCard`・`CharactersGenerator`・`PrecuresGenerator`）：歴代キャラクター・作品ごとのその他のキャラクター・歴代プリキュアオールスターズ・クリエイターの一覧（スタッフ・声の出演・音楽制作・歌唱・歴代クリエイター）・音楽の役職のカードが対象。注記の日付が放送のたびに変わり、カードが毎週描き直しになっていた。ページの本文の表記と、統計のカード（歴代記録・エピソード尺統計・サブタイトル統計）の注記は残した。
 
 - **サイト：歴代記録 `/stats/records/` の見た目を作り直し、本放送・配信・円盤の尺の違いのページをやめた**（`RecordsGenerator`・`stats-records-index.sbn`・`stats-records-format-differences.sbn`〔削除〕・`site.css`・`stats-landing.sbn`・`StatsLandingGenerator`・`EntityUrlRegistry`・`SiteBuilderPipeline`）：本編の尺は、同じパートの長い回と短い回（中 CM は早い回と遅い回）を 1 つの枠の左右に並べ、1 位を大きい数字で、2 位・3 位を小さい行で出す。値はどの行も右端にそろえた。スタッフ・声優とキャラクターは、数を 1 位に対する棒の長さで比べる。登場作品数の添え書きは、オトナシリーズを「オトナ」、それ以外のスピンオフを「スピンオフ」と分けて数える。冒頭文・OGP カードの文・meta description は「最長・最短・最多の上位 3 位」にし、統計の入口の文もそろえた。尺の違いのページは、載っていたのが次回予告の短縮回だけで、本編の尺が違う回が無かったのでやめた。予告の短縮は各話のパート表に出ている。URL は歴代記録へ転送する。

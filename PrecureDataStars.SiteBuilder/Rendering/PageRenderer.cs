@@ -58,6 +58,12 @@ public sealed class PageRenderer
     /// <summary>出力ディレクトリへの書き出しの窓口（変わらないファイルは書かず、今回の出力に属するファイルを記録する）。</summary>
     private readonly OutputWriter _output;
 
+    /// <summary>
+    /// 書体がこの PC で引けず、描かなかったカードの記録（書体名 → 前回の画像を残した枚数・カードなしにした枚数・最初に出たページ）。
+    /// 並列レンダリングフェーズから積まれるため <see cref="_ogCardGlyphLock"/> で保護し、ビルド終了後にパイプラインが警告として出す。
+    /// </summary>
+    private readonly Dictionary<string, (int Kept, int None, string SamplePath)> _ogCardMissingFonts = new(StringComparer.Ordinal);
+
     /// <summary>OGP カード画像の作り置き（鍵 → 画素のハッシュ → PNG の 2 段）。レンダラが無ければ null。</summary>
     private readonly OgCardStore? _ogCardStore;
 
@@ -102,6 +108,15 @@ public sealed class PageRenderer
     /// </summary>
     public (int Entries, int Images) FinishOgCardStore(bool prune) => _ogCardStore?.Finish(prune) ?? (0, 0);
 
+    /// <summary>
+    /// 書体がこの PC で引けず、描かなかったカード（書体名 → 前回の画像を残した枚数・カードなしにした枚数・最初に出たページ）。
+    /// ビルド後の警告出力用。
+    /// </summary>
+    public IReadOnlyDictionary<string, (int Kept, int None, string SamplePath)> OgCardMissingFonts
+    {
+        get { lock (_ogCardGlyphLock) return new Dictionary<string, (int, int, string)>(_ogCardMissingFonts, StringComparer.Ordinal); }
+    }
+
     /// <summary>ブランド書体で描けなかった文字 → 最初に検出したページ URL。ビルド後の警告出力用。</summary>
     public IReadOnlyDictionary<string, string> OgCardGlyphWarnings
     {
@@ -136,8 +151,8 @@ public sealed class PageRenderer
     /// ルートは <c>/og/home.png</c>）。
     /// 画像は作り置き（<see cref="OgCardStore"/>。鍵 <see cref="OgCardRenderer.CacheKey"/> から描いた画素のハッシュを引き、
     /// その名前の PNG を使う）から写し、同じ鍵の作り置きが無いとき（と <c>--refresh-og</c> のとき）だけ
-    /// 描いて作り置きに足す。指定の書体が無く既定の書体で描いたカードは作り置きに入れず出力へ直接置く
-    /// （書体を入れた次のビルドで描き直されるように）。
+    /// 描いて作り置きに足す。描くのに要る書体がこの PC で引けないカードは描かず（既定の書体に差し替えて描かない）、
+    /// 出力に前回の画像があればそれを残し、無ければカードなし（空文字を返す。ページは既定の OGP 画像になる）にする。
     /// 作り置きのあるカードはその場で写し、描くカードは描く仕事に回して URL だけを先に返す（描き上がると出力へ写す）。
     /// 出力にカードがそろうのは <see cref="WaitForOgCardsAsync"/> の後。
     /// 出力先はページごとに異なり、作り置きへは一時ファイルに描いてから置き換えるので、並列フェーズから呼んで安全。
@@ -157,6 +172,23 @@ public sealed class PageRenderer
         var cacheFile = _ogCardJobs.ContainsKey(key) ? null : _ogCardStore.TryGet(key);
         if (cacheFile is null)
         {
+            // 描くのに要る書体が引けなければ描かない。前回の画像を今回の出力として残す（掃除で消されないよう記録する）。
+            var missingFonts = _ogCardJobs.ContainsKey(key) ? Array.Empty<string>() : _ogCardRenderer.MissingTypefaces(spec);
+            if (missingFonts.Count > 0)
+            {
+                bool kept = File.Exists(outputFile);
+                if (kept) _output.Register(outputFile);
+                lock (_ogCardGlyphLock)
+                {
+                    foreach (var font in missingFonts)
+                    {
+                        var cur = _ogCardMissingFonts.TryGetValue(font, out var c) ? c : (Kept: 0, None: 0, SamplePath: canonicalPath);
+                        _ogCardMissingFonts[font] = (cur.Kept + (kept ? 1 : 0), cur.None + (kept ? 0 : 1), cur.SamplePath);
+                    }
+                }
+                return kept ? $"{_config.BaseUrl}/{relativePath}" : "";
+            }
+
             var renderer = _ogCardRenderer;
             var store = _ogCardStore;
             var job = _ogCardJobs.GetOrAdd(key, _ => new Lazy<Task<OgCardDrawn>>(

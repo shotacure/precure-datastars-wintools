@@ -164,8 +164,17 @@
     {{~ for ks in KeyStaffSections ~}}
     <div class="key-staff-line">
       <a class="role-badge role-badge-sm" data-role-code="{{ ks.RoleCode }}"{{ if ks.BadgeStyle != "" }} style="{{ ks.BadgeStyle }}"{{ end }} href="{{ ks.RoleUrl }}">{{ ks.RoleLabel | html.escape }}</a>
-      <span class="key-staff-names">{{~ for m in ks.Members ~}}<span class="staff-member-group"><a class="key-staff-name" href="{{ person_url m.PersonId }}">{{ m.FullName | html.escape }}</a>{{~ if m.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ m.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if m.RangeLabel != "" ~}}<span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+      {{~ if ks.NamesSharedWithPrevious == false ~}}
+      <span class="key-staff-names"{{ if ks.NamesRowSpan > 1 }} style="grid-row: span {{ ks.NamesRowSpan }}; align-self: center;"{{ end }}>{{~ for m in ks.Members ~}}<span class="staff-member-group"><a class="key-staff-name" href="{{ person_url m.PersonId }}">{{ m.FullName | html.escape }}</a>{{~ if m.CurrentNameNote != "" ~}}<span class="staff-current-name"> ({{ m.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if m.RangeLabel != "" ~}}<span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+      {{~ end ~}}
     </div>
+    {{~ end ~}}
+    {{~ if (array.size KeyStaffCounts) > 0 ~}}
+    <ul class="staff-combo-minis key-staff-counts" aria-label="映画での担当回数">
+      {{~ for c in KeyStaffCounts ~}}
+      <li class="staff-combo-mini"><span class="staff-combo-mini-roles"><span class="role-badge role-badge-xs" data-role-code="{{ c.RoleCode }}"{{ if c.BadgeStyle != "" }} style="{{ c.BadgeStyle }}"{{ end }}>{{ c.RoleLabel | html.escape }}</span></span><a class="key-staff-name" href="{{ person_url c.PersonId }}">{{ c.Name | html.escape }}</a>{{~ if c.IsFirst ~}}<span class="staff-combo-first">初担当</span>{{~ else ~}}<span class="staff-combo-count{{ if c.IsOrdinalNotable }} is-notable{{ end }}"><b>{{ c.Ordinal }}</b> 回目</span>{{~ end ~}}{{~ if c.GapLabel != "" ~}}<span class="staff-combo-mini-gap{{ if c.IsGapNotable }} is-notable{{ end }}">{{ c.GapLabel }}</span>{{~ end ~}}</li>
+      {{~ end ~}}
+    </ul>
     {{~ end ~}}
   </section>
   {{~ end ~}}

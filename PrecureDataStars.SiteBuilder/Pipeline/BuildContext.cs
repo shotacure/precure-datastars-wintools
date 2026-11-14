@@ -291,6 +291,12 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> CreditsBySeriesForDisplay { get; init; }
 
     /// <summary>
+    /// episode_id → サブタイトルの解禁前の回の仮クレジット（<c>episodes.is_provisional_credit = 1</c>）。人物ページなどから名前が先に分からないよう
+    /// <see cref="CreditsByEpisode"/> などの集計には入れず、各話の札（ぼかしの枠に入れる）だけが引く。解禁後の回の仮クレジットは通常のクレジットと同じ辞書に入る。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> ProvisionalCreditsByEpisode { get; init; }
+
+    /// <summary>
     /// episode_id → そのエピソードのパート一覧（episode_seq 昇順）の事前展開辞書。
     /// 旧 EpisodeGenerator はページごとに <c>EpisodePartsRepository.GetByEpisodeAsync</c> を発火していたが、
     /// SiteDataLoader で全件取得して episode_id でグルーピングし、per-page の DB 往復を撲滅する。

@@ -1,3 +1,4 @@
+using Dapper;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -301,15 +302,40 @@ public static class SiteDataLoader
         // 全 credits 行を 1 度の SELECT で取得して episode_id / series_id 単位でグルーピング。
         // SeriesGenerator の per-episode 6 階層 DB ループの起点 GetByEpisodeAsync を撲滅するため、
         // および EpisodeGenerator が per-page で同じ呼び出しを発火していた経路も同時に置き換える前提。
-        var allCredits = (await creditsRepo.GetAllAsync(ct).ConfigureAwait(false))
+        var allCreditsIncludingProvisional = (await creditsRepo.GetAllAsync(ct).ConfigureAwait(false))
             .Where(c => c.EpisodeId is not int eid || !hiddenEpisodeIds.Contains(eid))
             .ToList();
+        // 仮クレジットのスコープ（回・作品。is_provisional_credit=1）の credits は、ページのクレジット欄には出さない（表示用の辞書から外す）が、
+        // 集計（各話の札・メインスタッフ・人物ページ・統計）には通常のクレジットと同じく数える。
+        // ただしサブタイトルの解禁前の回は、人物ページなどから名前が先に分からないよう集計にも入れず、
+        // 各話の札だけがぼかして使う（ProvisionalCreditsByEpisode）。
+        HashSet<int> provisionalEpisodeIds, provisionalSeriesIds;
+        await using (var provConn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false))
+        {
+            provisionalEpisodeIds = (await provConn.QueryAsync<int>(new CommandDefinition(
+                "SELECT episode_id FROM episodes WHERE is_provisional_credit = 1 AND is_deleted = 0", cancellationToken: ct))).ToHashSet();
+            provisionalSeriesIds = (await provConn.QueryAsync<int>(new CommandDefinition(
+                "SELECT series_id FROM series WHERE is_provisional_credit = 1 AND is_deleted = 0", cancellationToken: ct))).ToHashSet();
+        }
+        bool IsProvisionalCredit(Credit c) =>
+            (c.EpisodeId is int pe && provisionalEpisodeIds.Contains(pe))
+            || (c.EpisodeId is null && c.SeriesId is int ps && provisionalSeriesIds.Contains(ps));
+        // 解禁前の回の仮クレジット（集計に入れない）。
+        bool IsEmbargoedProvisional(Credit c) =>
+            c.EpisodeId is int pe && provisionalEpisodeIds.Contains(pe) && subtitleRevealAtByEpisodeId.ContainsKey(pe);
+        var allCredits = allCreditsIncludingProvisional.Where(c => !IsEmbargoedProvisional(c)).ToList();
+        var provisionalCreditsByEpisode = allCreditsIncludingProvisional
+            .Where(IsEmbargoedProvisional)
+            .GroupBy(c => c.EpisodeId!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
         // 表示用（エピソード詳細・作品詳細のクレジット）は全版、集計用は本放送版を除いた共通と Blu-ray・配信版だけ。
         var creditsByEpisodeForDisplay = allCredits
+            .Where(c => !IsProvisionalCredit(c))
             .Where(c => c.EpisodeId.HasValue)
             .GroupBy(c => c.EpisodeId!.Value)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
         var creditsBySeriesForDisplay = allCredits
+            .Where(c => !IsProvisionalCredit(c))
             .Where(c => string.Equals(c.ScopeKind, "SERIES", StringComparison.Ordinal) && c.SeriesId.HasValue)
             .GroupBy(c => c.SeriesId!.Value)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
@@ -519,6 +545,7 @@ public static class SiteDataLoader
             CreditsBySeries = creditsBySeries,
             CreditsByEpisodeForDisplay = creditsByEpisodeForDisplay,
             CreditsBySeriesForDisplay = creditsBySeriesForDisplay,
+            ProvisionalCreditsByEpisode = provisionalCreditsByEpisode,
             PersonAliasById = personAliasById,
             CharacterAliasById = characterAliasById,
             CompanyAliasById = companyAliasById,

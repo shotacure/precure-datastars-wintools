@@ -1300,6 +1300,8 @@ public sealed class SeriesGenerator
 
         // メインスタッフセクション。
         var keyStaffSections = await BuildMainStaffSectionsAsync(s, eps, ct).ConfigureAwait(false);
+        MarkSharedKeyStaffNames(keyStaffSections);
+        var keyStaffCounts = BuildMovieKeyStaffCounts(s, keyStaffSections);
 
         // 当該シリーズに紐付くプリキュア一覧。
         // 表示行は事前にキャッシュ化された SeriesPrecureDisplay を SeriesPrecureRow に詰め替える
@@ -1438,6 +1440,7 @@ public sealed class SeriesGenerator
             RelatedWorks = relatedWorks,
             Parent = parent,
             KeyStaffSections = keyStaffSections,
+            KeyStaffCounts = keyStaffCounts,
             // プリキュアの欄は TV 系（話を持つ作品）だけに出す。映画系はクレジットの声の出演で足りるので欄を出さない
             // （一覧は説明文と構造化データの出演者には使う）。
             Precures = hasEpisodes ? precureRows : Array.Empty<SeriesPrecureRow>(),
@@ -1678,9 +1681,16 @@ public sealed class SeriesGenerator
         // 完全に消えて辞書 lookup と foreach だけで完結する。CreditTreeIndex は 5 段ネスト構造で
         // cards → tiers → groups → cardRoles → blocks → entries を直接辿れるため、6 階層 Repository への
         // GetBy*Async は不要。エントリの is_broadcast_only=0 フィルタは旧 per-block ロード時と同じ条件で適用。
-        var credits = _ctx.CreditsByEpisode.TryGetValue(episodeId, out var creditList)
-            ? creditList.Where(c => !c.IsDeleted)
-            : Enumerable.Empty<Credit>();
+        // 仮クレジット（正式入力までの仮）の回は、仮の credits を札に使う（ページのクレジットには出ない）。
+        var credits = (_ctx.CreditsByEpisode.TryGetValue(episodeId, out var creditList)
+                ? creditList
+                : (IReadOnlyList<Credit>)Array.Empty<Credit>())
+            .Concat(_ctx.ProvisionalCreditsByEpisode.TryGetValue(episodeId, out var provisionalList)
+                ? provisionalList
+                : (IReadOnlyList<Credit>)Array.Empty<Credit>())
+            .Where(c => !c.IsDeleted);
+        // 解禁前の話は、サブタイトルと同じく担当者の名前をぼかしの枠に入れる（解禁時刻を過ぎたら subtitle-embargo.js が外す）。
+        var revealAt = SubtitleGuardRenderer.RevealAtFor(episodeId, _ctx.SubtitleRevealAtByEpisodeId);
 
         var result = new EpisodeStaffSummary
         {
@@ -1692,6 +1702,8 @@ public sealed class SeriesGenerator
                 ResolveStaffEntry,
                 _ctx.CompanyAliasById,
                 _ctx.LogoById)
+                .Select(b => new EpisodeStaffBadge { Roles = b.Roles, NamesHtml = SubtitleGuardRenderer.GuardRichHtml(b.NamesHtml, revealAt) })
+                .ToList()
         };
         // 本メソッドの結果を episode_id キーでキャッシュ。
         // 後段 EpisodesIndexGenerator で GetEpisodeStaffSummaries() 経由参照される。
@@ -2233,6 +2245,8 @@ public sealed class SeriesGenerator
         public IReadOnlyList<RelatedSeriesRow> RelatedWorks { get; set; } = Array.Empty<RelatedSeriesRow>();
         public RelatedSeriesRow? Parent { get; set; }
         public IReadOnlyList<KeyStaffSection> KeyStaffSections { get; set; } = Array.Empty<KeyStaffSection>();
+        /// <summary>映画だけで数えた、メインスタッフの役職ごと・人ごとの担当回数（映画の作品詳細のメインスタッフの下に出す）。映画でなければ空。</summary>
+        public IReadOnlyList<KeyStaffCountRow> KeyStaffCounts { get; set; } = Array.Empty<KeyStaffCountRow>();
         /// <summary>このシリーズに登場するプリキュア一覧。</summary>
         public IReadOnlyList<SeriesPrecureRow> Precures { get; set; } = Array.Empty<SeriesPrecureRow>();
         /// <summary>映画作品の BGM リスト。映画系シリーズ（MOVIE / MOVIE_SHORT / SPRING / EVENT）のときのみ <c>movie_bgm_cues</c> から取得した行が入る。TV シリーズや 紐付けが 0 件のときは空で、テンプレ側はセクション自体を描画しない。 並び順は (seq, sub_seq, movie_bgm_cue_id) 昇順（リポジトリ側で確定済み）。</summary>
@@ -2298,6 +2312,96 @@ public sealed class SeriesGenerator
         public string SwatchBackground { get; set; } = "";
     }
 
+    /// <summary>回数を数える「映画」の種別（映画・春映画・併映短編。長さを問わない。イベント映像は含めない）。</summary>
+    private static bool IsCountedMovieKind(Series s)
+        => s.KindCode is "MOVIE" or "MOVIE_SHORT" or "SPRING";
+
+    /// <summary>
+    /// 映画のメインスタッフの役職ごと・人ごとに、映画だけで数えた担当回数（公開日順の何本目か）と、前に同じ役職を担った映画からの空きを組み立てる。
+    /// 数えるのは映画（<see cref="IsCountedMovieKind"/>。どんなに短くても映画なら対象）だけで、TV は混ぜない。初めてなら「初担当」。
+    /// 映画でない作品、メインスタッフの無い作品は空。
+    /// </summary>
+    private IReadOnlyList<KeyStaffCountRow> BuildMovieKeyStaffCounts(Series s, IReadOnlyList<KeyStaffSection> sections)
+    {
+        if (!IsCountedMovieKind(s) || sections.Count == 0) return Array.Empty<KeyStaffCountRow>();
+        var movies = _ctx.Series.Where(IsCountedMovieKind).OrderBy(x => x.StartDate).ThenBy(x => x.SeriesId).ToList();
+        var rows = new List<KeyStaffCountRow>();
+        foreach (var section in sections)
+        {
+            foreach (var m in section.Members)
+            {
+                // この人がこの役職でクレジットされた映画（公開日順）
+                var credited = movies
+                    .Where(x => PersonIdsCreditedIn(x.SeriesId, section.RoleCode)?.Contains(m.PersonId) == true)
+                    .ToList();
+                int index = credited.FindIndex(x => x.SeriesId == s.SeriesId);
+                if (index < 0) continue;
+                string gap = "";
+                bool gapNotable = false;
+                if (index > 0)
+                {
+                    var prev = credited[index - 1].StartDate.ToDateTime(TimeOnly.MinValue);
+                    var cur = s.StartDate.ToDateTime(TimeOnly.MinValue);
+                    gap = EpisodeGenerator.GapSinceLabel(prev, cur);
+                    gapNotable = EpisodeGenerator.IsLongGap(prev, cur);
+                }
+                rows.Add(new KeyStaffCountRow
+                {
+                    RoleCode = section.RoleCode,
+                    RoleLabel = section.RoleLabel,
+                    BadgeStyle = section.BadgeStyle,
+                    PersonId = m.PersonId,
+                    Name = m.FullName,
+                    Ordinal = index + 1,
+                    GapLabel = gap,
+                    IsGapNotable = gapNotable
+                });
+            }
+        }
+        return rows;
+    }
+
+    /// <summary>映画のメインスタッフの下に出す、役職ごと・人ごとの担当回数 1 行。</summary>
+    private sealed class KeyStaffCountRow
+    {
+        public string RoleCode { get; set; } = "";
+        public string RoleLabel { get; set; } = "";
+        public string BadgeStyle { get; set; } = "";
+        public int PersonId { get; set; }
+        public string Name { get; set; } = "";
+        /// <summary>映画だけで数えた何本目か（1 始まり）。</summary>
+        public int Ordinal { get; set; }
+        public bool IsFirst => Ordinal == 1;
+        public bool IsOrdinalNotable => EpisodeGenerator.IsMilestoneOrdinal(Ordinal);
+        /// <summary>前に同じ役職を担った映画からの空き（「1年2か月ぶり」）。初めてなら空。</summary>
+        public string GapLabel { get; set; } = "";
+        public bool IsGapNotable { get; set; }
+    }
+
+    /// <summary>
+    /// 並んだ役職の担当者が同じ人の同じ並びのとき（キャラクターデザインと総作画監督を同じ人が担うなど）、
+    /// 名前を先頭の役職に 1 回だけ出すよう印を付ける（<see cref="KeyStaffSection.NamesRowSpan"/>・<see cref="KeyStaffSection.NamesSharedWithPrevious"/>）。
+    /// 名前はバッジの上下の真ん中に 1 回出る。役職の並びは変えない。
+    /// </summary>
+    private static void MarkSharedKeyStaffNames(IReadOnlyList<KeyStaffSection> sections)
+    {
+        static string Key(KeyStaffSection ks) => string.Join(",", ks.Members.Select(m => m.PersonId));
+        int i = 0;
+        while (i < sections.Count)
+        {
+            int j = i + 1;
+            if (sections[i].Members.Count > 0)
+                while (j < sections.Count && Key(sections[j]) == Key(sections[i])) j++;
+            sections[i].NamesRowSpan = j - i;
+            for (int k = i + 1; k < j; k++)
+            {
+                sections[k].NamesRowSpan = 0;
+                sections[k].NamesSharedWithPrevious = true;
+            }
+            i = j;
+        }
+    }
+
     private sealed class KeyStaffSection
     {
         /// <summary>役職コード（data-role-code 属性用、実コードのまま）。</summary>
@@ -2310,6 +2414,13 @@ public sealed class SeriesGenerator
         /// <summary>バッジの style 属性の値（<see cref="BadgeColor"/> から作った地・字・枠の色。<see cref="RoleBadgeColor.InlineStyle"/>）。</summary>
         public string BadgeStyle { get; set; } = "";
         public IReadOnlyList<MainStaffRow> Members { get; set; } = Array.Empty<MainStaffRow>();
+        /// <summary>
+        /// 続く役職と担当者が同じ並びのとき、先頭の役職に、その役職数（2 以上）を入れる。名前は先頭の 1 回だけ、バッジの上下の真ん中に出す。
+        /// まとめない役職は 1。<see cref="NamesSharedWithPrevious"/> の役職は名前を出さないので 0。
+        /// </summary>
+        public int NamesRowSpan { get; set; } = 1;
+        /// <summary>直前の役職と担当者が同じで、名前を直前の役職の欄にまとめた役職（名前を出さない）。</summary>
+        public bool NamesSharedWithPrevious { get; set; }
     }
 
     private sealed class MainStaffRow

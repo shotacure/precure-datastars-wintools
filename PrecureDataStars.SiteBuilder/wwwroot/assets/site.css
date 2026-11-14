@@ -8768,6 +8768,13 @@ table:has(th.col-rank) tbody tr:nth-child(3) td.col-rank {
   /* grid の子要素になるが、自身は描画フローから消して内部の .role-badge と .key-staff-names を 親 grid に直接流す。 */
   display: contents;
 }
+/* 映画のメインスタッフの下の、映画だけで数えた担当回数。grid の全列を使う。 */
+#key-staff > .key-staff-counts {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
 .key-staff-line > .role-badge {
   /* バッジ列：右揃え。 */
   justify-self: end;

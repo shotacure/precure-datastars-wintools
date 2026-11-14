@@ -4,6 +4,12 @@
 
 ### 開発中（次回リリース）
 
+- **スキーマ・サイト：仮クレジットのフラグを足した**（`episodes.is_provisional_credit`・`series.is_provisional_credit`〔新規〕・`db/migrations/v1.20.1_add_provisional_credit_flag.sql`〔新規〕・`BuildContext.ProvisionalCreditsByEpisode`〔新規〕・`SiteDataLoader`・`SeriesGenerator.ExtractStaffSummary`・`EpisodeGenerator.BuildStaffRows`）：正式なクレジットを入れる前に、スタッフの名前だけを先に入れておくための仮のクレジット。フラグが 1 の回・作品の credits は、エピソード詳細・作品詳細のクレジット欄にだけ出さず、各話の札・チーフの回数と組み合わせ・メインスタッフ・人物ページ・統計には通常のクレジットと同じく数える。正式入力のときは、そのスコープの仮の credits を消してフラグを 0 に戻す。サブタイトルの解禁前の回は、人物ページなどから名前が先に分からないよう集計に入れず、各話の札だけがサブタイトルと同じ枠でぼかして使い、ページの meta description と JSON-LD にはスタッフ名を載せない。
+
+- **サイト：映画の作品詳細のメインスタッフの下に、映画だけで数えた担当回数を出すようにした**（`SeriesGenerator.BuildMovieKeyStaffCounts`・`KeyStaffCountRow`〔新規〕・`EpisodeGenerator.GapSinceLabel` ほか 3 メソッドを internal に・`series-detail.sbn`・`site.css`）：メインスタッフの役職ごと・人ごとに「N 回目」と、前に同じ役職を担った映画からの空き（「1年2か月ぶり」）を、各話のスタッフ欄の回数と同じ見た目で出す。数えるのは映画（映画・春映画・併映短編。長さを問わない）の公開日順で、TV とイベント映像は含めない。初めてなら「初担当」。
+
+- **サイト：メインスタッフで、続く役職の担当者が同じ並びなら、名前を 1 回だけバッジの上下の真ん中に出すようにした**（`SeriesGenerator.MarkSharedKeyStaffNames`〔新規〕・`KeyStaffSection.NamesRowSpan` / `NamesSharedWithPrevious`〔新規〕・`series-detail.sbn`）：キャラクターデザインと総作画監督を同じ人が担うときなどに、同じ名前が 2 回並んでいた。
+
 - **サイト・Catalog：主題歌のカードに、本放送だけの曲を版に応じて出すようにした**（`TemplateContext.CardMediaVersion`〔新規〕・`TemplateContext.ShowsBroadcastOnlySongs`〔新規〕・`ThemeSongsHandler.FetchAsync`・`ThemeSongsHandler.RenderAsync`・`RoleTemplateRenderer`・`CreditTreeRenderer.RenderCardRoleCommonAsync`・`CreditPreviewRenderer.RenderCardRoleCommonAsync`：主題歌のカードが、その回の主題歌の行を版に関係なく全部出し、画面に無い本放送だけの曲〔`episode_theme_songs.is_broadcast_only=1`〕が Blu-ray・配信の画面を元にしたカードにも並んでいた。カードの版〔`credit_cards.media_version`〕に `BROADCAST` を含むカードにだけ本放送だけの曲を出し、版の無い共通のカードと Blu-ray・配信のカードからは外す。変わるのは本放送だけの曲を持つ 42 話のカードだけで、エピソードの「主題歌・挿入歌」の欄は変わらない）
 
 - **サイト・Catalog：クレジットの同じグループに同じ役職が 2 つあるとき、2 つ目に 1 つ目の名前が出ていたのを直した**（`CreditTreeRenderer`・`CreditPreviewRenderer`）：同じグループの役職の中身を役職のコードごとに 1 つだけ作り置きし、役職の描画でもそれを引いていた。色指定検査の「検査」の後ろの「検査」、曲ごとの「振付」などで、2 つ目以降に 1 つ目の名前が出ていた。役職の描画とまとめる役職の判定では、その役職の行の中身を引く。テンプレの `{ROLE:CODE.…}` は今までどおり、コードの最初の役職を引く。

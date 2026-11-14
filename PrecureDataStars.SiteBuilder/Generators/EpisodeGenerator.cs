@@ -521,7 +521,11 @@ public sealed class EpisodeGenerator
 
         // スタッフ情報（クレジット階層から、作品の表の行のある役職を抽出）。
         // クレジットセクションとは別に「主要スタッフ」セクションとして上部基本情報の近くに出す。
-        var staffRows = BuildStaffRows(credits, series);
+        // 仮クレジットの回は仮の credits（ページのクレジットには出さない）を足して札を作り、解禁前の話は名前をぼかしの枠に入れる。
+        var staffCredits = _ctx.ProvisionalCreditsByEpisode.TryGetValue(ep.EpisodeId, out var provisionalCredits)
+            ? credits.Concat(provisionalCredits.Where(c => !c.IsDeleted)).ToList()
+            : credits;
+        var staffRows = BuildStaffRows(staffCredits, series, ownRevealAt);
 
         // チーフの組み合わせの通算回数（絵コンテと演出 / 演出と作画監督 / 脚本・演出・作画監督）。スタッフ行の下に開閉の枠で添える。
         var staffCombos = BuildStaffCombos(series, ep);
@@ -703,7 +707,9 @@ public sealed class EpisodeGenerator
         // 単純な定型文「N話のフォーマット表・スタッフ・主題歌情報」だと全エピソードで重複コンテンツ化し、
         // SERP の CTR にも反映されにくいため、放送日・主要スタッフ 2 役職・OP/ED の楽曲名まで含めて
         // 個別性の高い 140 字目安の説明文を作る。
-        var metaDescription = BuildMetaDescription(series, ep, staffRows);
+        // 解禁前の話は、ぼかしの外に出る meta description と JSON-LD にスタッフ名を載せない。
+        var staffRowsForMeta = ownEmbargoed ? Array.Empty<StaffRow>() : staffRows;
+        var metaDescription = BuildMetaDescription(series, ep, staffRowsForMeta);
 
         // エピソード詳細の構造化データは Schema.org の TVEpisode 型。
         string baseUrl = _ctx.Config.BaseUrl;
@@ -736,7 +742,7 @@ public sealed class EpisodeGenerator
         // 脚本役職の人物を creator プロパティに、それぞれ Person 型の配列として埋め込む。
         // 単独役職に複数人いる場合は配列、1 人だけでも配列のまま渡す（Schema.org 仕様上いずれも有効）。
         // 人物が居ない場合は当該プロパティを出力しない。
-        var directorPersons = ExtractDirectorPersons(staffRows);
+        var directorPersons = ExtractDirectorPersons(staffRowsForMeta);
         if (directorPersons.Count > 0)
         {
             jsonLdDict["director"] = directorPersons
@@ -747,7 +753,7 @@ public sealed class EpisodeGenerator
                 })
                 .ToArray();
         }
-        var screenplayPersons = ExtractScreenplayPersons(staffRows);
+        var screenplayPersons = ExtractScreenplayPersons(staffRowsForMeta);
         if (screenplayPersons.Count > 0)
         {
             // 脚本は creator ロールでラップ（"脚本" という日本語の役職名を roleName に明示）。
@@ -1582,14 +1588,14 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>赤で目立たせる長い空きのしきい（週）。前に担当した回から 26 週以上空いたら目立たせる。</summary>
-    private const int NotableGapWeeks = 26;
+    internal const int NotableGapWeeks = 26;
 
     /// <summary>前の回から今回までの空きが、赤で目立たせる長さ（<see cref="NotableGapWeeks"/> 週以上）か。日差は <see cref="GapSinceLabel"/> と同じく放送日で数える。</summary>
-    private static bool IsLongGap(DateTime previousOnAirAt, DateTime currentOnAirAt)
+    internal static bool IsLongGap(DateTime previousOnAirAt, DateTime currentOnAirAt)
         => (JpDateFormat.BroadcastDay(currentOnAirAt) - JpDateFormat.BroadcastDay(previousOnAirAt)).TotalDays >= NotableGapWeeks * 7;
 
     /// <summary>赤で目立たせる節目の回数か（10・25・50 回目、そのあとは 50 回ごと）。初めての回は別の文（初担当・初顔合わせ）で目立たせる。</summary>
-    private static bool IsMilestoneOrdinal(int ordinal)
+    internal static bool IsMilestoneOrdinal(int ordinal)
         => ordinal == 10 || ordinal == 25 || (ordinal >= 50 && ordinal % 50 == 0);
 
     /// <summary>
@@ -1597,7 +1603,7 @@ public sealed class EpisodeGenerator
     /// 月数はサブタイトル文字情報の「ぶり」と同じく、放送日の日差 ÷ 30.4375 の四捨五入。
     /// 12 か月以上は「N年Mか月ぶり」（M = 0 でも省略しない）、1 か月未満（四捨五入で 0）は週で数え、1 週に満たなければ空文字。
     /// </summary>
-    private static string GapSinceLabel(DateTime previousOnAirAt, DateTime currentOnAirAt)
+    internal static string GapSinceLabel(DateTime previousOnAirAt, DateTime currentOnAirAt)
     {
         double days = (JpDateFormat.BroadcastDay(currentOnAirAt) - JpDateFormat.BroadcastDay(previousOnAirAt)).TotalDays;
         int months = (int)Math.Round(days / 30.4375);
@@ -1719,7 +1725,7 @@ public sealed class EpisodeGenerator
     /// 読むカードと札の組み立ては <see cref="EpisodeStaffCards.BuildBadges"/>（作品のページのエピソード一覧と共通）。
     /// 行の無い作品は空（スタッフ欄を出さない）。
     /// </summary>
-    private IReadOnlyList<StaffRow> BuildStaffRows(IReadOnlyList<Credit> credits, Series series)
+    private IReadOnlyList<StaffRow> BuildStaffRows(IReadOnlyList<Credit> credits, Series series, DateTimeOffset? revealAt)
     {
         // 役職マスタは BuildContext で事前展開済み（role_code → Role）。
         _roleMap ??= _ctx.RoleByCode;
@@ -1736,7 +1742,9 @@ public sealed class EpisodeGenerator
             _roleMap,
             ResolveStaffEntry,
             _ctx.CompanyAliasById,
-            _ctx.LogoById);
+            _ctx.LogoById)
+            .Select(b => new EpisodeStaffBadge { Roles = b.Roles, NamesHtml = SubtitleGuardRenderer.GuardRichHtml(b.NamesHtml, revealAt) })
+            .ToList();
 
         // 札 1 つを 1 行にする。HTML 断片を「、」で連結した文字列を NamesLine に詰める。テンプレ側では html.escape を
         // かけずにそのまま出力する（PERSON エントリは既に <a> タグでラップ済み、TEXT は escape 済み）。

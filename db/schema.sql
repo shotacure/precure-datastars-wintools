@@ -76,6 +76,7 @@ CREATE TABLE `episodes` (
   `youtube_special_trailer_url` varchar(1024) DEFAULT NULL,
   `magazine_subtitle_status` enum('PUBLISHED','NOT_DISCLOSED','UNDECIDED','NOT_LISTED') DEFAULT NULL COMMENT 'アニメ雑誌でのサブタイトル掲載状態（NULL=データなし）',
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `is_provisional_credit` tinyint NOT NULL DEFAULT 0 COMMENT '1=この回の credits は正式入力までの仮（ページに出さず、各話の札・メインスタッフにだけ使う）',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
@@ -270,6 +271,7 @@ CREATE TABLE `series` (
   --   MERGE_SAME_PERSON  同じ人のときだけ「(絵コンテ・)演出 ｜ 名前」にまとめ、違う人ならそれぞれの役職名で出す
   --                      （TV のハピネスチャージ以降）
   `storyboard_display` enum('SEPARATE','MERGE','MERGE_SAME_PERSON','JOIN_SAME_PERSON') NOT NULL DEFAULT 'SEPARATE' COMMENT '絵コンテと演出の出し方（SEPARATE=役職名ごと / MERGE=いつも演出にまとめる / MERGE_SAME_PERSON=同じ顔ぶれのときだけ(絵コンテ・)演出にまとめる / JOIN_SAME_PERSON=同じ顔ぶれのときだけ絵コンテ・演出にまとめる）',
+  `is_provisional_credit` tinyint NOT NULL DEFAULT 0 COMMENT '1=この作品の credits は正式入力までの仮（ページに出さず、メインスタッフにだけ使う）',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,

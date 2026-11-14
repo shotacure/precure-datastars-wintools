@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：本番デプロイの最後の「続行しますか? [y/N]」をやめた**（`S3DeployService`・`DeployRuntimeOptions`）：削除があっても対話確認はせず、そのまま反映する。`--yes` は受け付けるが効果は無い。
+
 - **スキーマ・サイト：仮クレジットのフラグを足した**（`episodes.is_provisional_credit`・`series.is_provisional_credit`〔新規〕・`db/migrations/v1.20.1_add_provisional_credit_flag.sql`〔新規〕・`BuildContext.ProvisionalCreditsByEpisode`〔新規〕・`SiteDataLoader`・`SeriesGenerator.ExtractStaffSummary`・`EpisodeGenerator.BuildStaffRows`）：正式なクレジットを入れる前に、スタッフの名前だけを先に入れておくための仮のクレジット。フラグが 1 の回・作品の credits は、エピソード詳細・作品詳細のクレジット欄にだけ出さず、各話の札・チーフの回数と組み合わせ・メインスタッフ・人物ページ・統計には通常のクレジットと同じく数える。正式入力のときは、そのスコープの仮の credits を消してフラグを 0 に戻す。サブタイトルの解禁前の回は、人物ページなどから名前が先に分からないよう集計に入れず、各話の札だけがサブタイトルと同じ枠でぼかして使い、ページの meta description と JSON-LD にはスタッフ名を載せない。
 
 - **サイト：映画の作品詳細のメインスタッフの下に、映画だけで数えた担当回数を出すようにした**（`SeriesGenerator.BuildMovieKeyStaffCounts`・`KeyStaffCountRow`〔新規〕・`EpisodeGenerator.GapSinceLabel` ほか 3 メソッドを internal に・`series-detail.sbn`・`site.css`）：メインスタッフの役職ごと・人ごとに「N 回目」と、前に同じ役職を担った映画からの空き（「1年2か月ぶり」）を、各話のスタッフ欄の回数と同じ見た目で出す。数えるのは映画（映画・春映画・併映短編。長さを問わない）の公開日順で、TV とイベント映像は含めない。初めてなら「初担当」。

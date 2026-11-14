@@ -7,7 +7,7 @@ namespace PrecureDataStars.SiteBuilder.Configuration;
 /// </summary>
 /// <param name="Requested">本番ビルド後に S3 同期＋CloudFront invalidation を実行するか（<c>--deploy</c>）。</param>
 /// <param name="DryRun">差分の計画だけ表示し、S3 / CloudFront を一切変更しないか（<c>--dry-run</c>）。</param>
-/// <param name="SkipConfirm">破壊的操作（削除）前の対話確認をスキップするか（<c>--yes</c>）。</param>
+/// <param name="SkipConfirm">（<c>--yes</c>。受け付けるだけで効果は無い。削除前の対話確認は行わない）</param>
 /// <param name="UploadOnly">
 /// サイトを作り直さず、直前の全体のドライランで作った出力をそのまま上げるか（<c>--upload-only</c>）。
 /// 控え（<see cref="Deploy.PendingDeploy"/>）が無ければ止まる。

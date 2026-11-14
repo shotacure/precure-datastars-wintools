@@ -23,7 +23,7 @@ namespace PrecureDataStars.SiteBuilder.Deploy;
 /// </list>
 /// 認証は <see cref="BuildConfig.AwsProfile"/> の名前付きプロファイル（鍵はリポジトリ外の
 /// <c>~/.aws/credentials</c>）を使う。<c>--dry-run</c> では一切変更せず計画のみ表示し、
-/// 削除がある場合は実行前に対話確認する（<c>--yes</c> で省略）。
+/// 削除があっても対話確認はせず、そのまま反映する（<c>--yes</c> は受け付けるが効果は無い）。
 /// </summary>
 public sealed class S3DeployService
 {
@@ -149,17 +149,8 @@ public sealed class S3DeployService
             return false;
         }
 
-        // 6) 破壊的操作（削除）がある場合は対話確認。--yes で省略。
-        if (toDelete.Count > 0 && !_config.Deploy.SkipConfirm)
-        {
-            Console.Write($"本番バケット '{bucket}' に反映します（アップロード {toUpload.Count} / 削除 {toDelete.Count}）。続行しますか? [y/N]: ");
-            var answer = Console.ReadLine();
-            if (!string.Equals(answer?.Trim(), "y", StringComparison.OrdinalIgnoreCase))
-            {
-                _logger.Warn("デプロイを中止しました（確認で N）。");
-                return false;
-            }
-        }
+        // 6) 削除があっても、対話確認はせずそのまま反映する（削除を理由にデプロイをやめることは無い）。
+        _logger.Info($"本番バケット '{bucket}' に反映します（アップロード {toUpload.Count} / 削除 {toDelete.Count}）。");
 
         // 7) アップロード（並列）。
         if (toUpload.Count > 0)

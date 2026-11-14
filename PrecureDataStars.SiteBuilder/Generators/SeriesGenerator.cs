@@ -1593,15 +1593,16 @@ public sealed class SeriesGenerator
 
         if (isMovieLike)
         {
-            // 映画など：各話カードと同じ疎の組み。「種別 → 題名 → 公開日 → 主要スタッフ（役職色で流し込み）」。透かしは公開年。
+            // 映画など：各話カードと同じ疎の組み。「題名 → 公開日 → 主要スタッフ（役職色で流し込み）」。
+            // 種別は左上の小さな前置きにせず、右上の透かしに公開年と並べて「2026秋映画」と大きく出す。
             return new OgCardSpec(
-                Kicker: string.IsNullOrWhiteSpace(view.KindLabel) ? "映画" : view.KindLabel,
+                Kicker: "",
                 Title: view.Title)
             {
                 Subtitle = periodLine,
                 InlineFacts = staff,
                 BandColorHex = OgCardColors.Episode,
-                Watermark = startYear.ToString()
+                Watermark = startYear + (string.IsNullOrWhiteSpace(view.KindLabel) ? "映画" : view.KindLabel)
             };
         }
 

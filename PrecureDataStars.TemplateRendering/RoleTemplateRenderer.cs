@@ -257,7 +257,8 @@ public static class RoleTemplateRenderer
                         // cv="…"：歌唱・コーラスの声優の前に置く記号を、歌唱者の行の記号（盤の表記）に代えて画面の記号にする。
                         string cvRaw = tsLoop.GetOption("cv", "");
                         var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, lookup, ct,
-                            cvLabelOverride: string.IsNullOrEmpty(cvRaw) ? null : cvRaw).ConfigureAwait(false);
+                            cvLabelOverride: string.IsNullOrEmpty(cvRaw) ? null : cvRaw,
+                            includeBroadcastOnly: ctx.ShowsBroadcastOnlySongs).ConfigureAwait(false);
                         // seq=N / seq=N-M：同じ区分の中で番号（episode_theme_songs / series_theme_songs.seq）が範囲に入る曲だけを出す。
                         // 「テーマソング」と「挿入歌」のように、同じ挿入歌の区分の曲を別々の役職の欄に分けて出す画面用。
                         if (TryParseSeqRange(tsLoop.GetOption("seq", ""), out int seqFrom, out int seqTo))
@@ -581,7 +582,7 @@ public static class RoleTemplateRenderer
                     // 役職の行の theme_song_seq があれば、その劇中順の範囲の曲だけを出す。
                     int? phSeqFrom = null, phSeqTo = null;
                     if (TryParseSeqRange(ctx.ThemeSongSeq ?? "", out int roleFrom, out int roleTo)) { phSeqFrom = roleFrom; phSeqTo = roleTo; }
-                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, cols, lookup, ct, phSeqFrom, phSeqTo).ConfigureAwait(false);
+                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, cols, lookup, ct, phSeqFrom, phSeqTo, ctx.ShowsBroadcastOnlySongs).ConfigureAwait(false);
                 }
 
             case "LEADING_COMPANY":

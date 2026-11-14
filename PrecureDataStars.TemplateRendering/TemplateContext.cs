@@ -74,6 +74,13 @@ public sealed class TemplateContext
     /// </summary>
     public string? ThemeSongSeq { get; }
 
+    /// <summary>
+    /// このカードの版（<c>credit_cards.media_version</c>。<c>BROADCAST</c>・<c>BLURAY</c>・<c>STREAMING</c> のカンマ区切り。null＝版の無い共通のカード）。
+    /// 主題歌の行のうち本放送だけの曲（<c>episode_theme_songs.is_broadcast_only=1</c>）は、本放送の画面が元のカード
+    /// （版に <c>BROADCAST</c> を含むもの）にだけ出す。共通のカードと Blu-ray・配信のカードの画面には本放送だけの曲は無いので出さない。
+    /// </summary>
+    public string? CardMediaVersion { get; }
+
     public TemplateContext(
         string roleCode,
         string roleName,
@@ -107,8 +114,10 @@ public sealed class TemplateContext
         string? scopeFilmRatingNo = null,
         bool scopeFilmCjMark = false,
         string? themeSongSeq = null,
-        bool roleLabelNotOnScreen = false)
+        bool roleLabelNotOnScreen = false,
+        string? cardMediaVersion = null)
     {
+        CardMediaVersion = string.IsNullOrWhiteSpace(cardMediaVersion) ? null : cardMediaVersion;
         RoleCode = roleCode ?? "";
         RoleName = roleName ?? "";
         Blocks = blocks ?? Array.Empty<BlockSnapshot>();
@@ -149,8 +158,13 @@ public sealed class TemplateContext
             visitedRoleCodes: visited,
             scopeSeriesTitle: ScopeSeriesTitle,
             scopeFilmRatingNo: ScopeFilmRatingNo,
-            scopeFilmCjMark: ScopeFilmCjMark);
+            scopeFilmCjMark: ScopeFilmCjMark,
+            cardMediaVersion: CardMediaVersion);
     }
+
+    /// <summary>このカードに本放送だけの主題歌の行を出すか（版に BROADCAST を含むカードだけ）。</summary>
+    public bool ShowsBroadcastOnlySongs =>
+        CardMediaVersion is { } v && v.Split(',', StringSplitOptions.TrimEntries).Contains("BROADCAST", StringComparer.Ordinal);
 }
 
 /// <summary>1 ブロック分のスナップショット。</summary>

@@ -456,6 +456,7 @@ internal sealed class CreditTreeRenderer
                             notOnScreen: cr.NotOnScreen,
                             roleLabelNotOnScreen: cr.RoleLabelNotOnScreen,
                             themeSongSeq: cr.ThemeSongSeq,
+                            cardMediaVersion: card.MediaVersion,
                             html, ct).ConfigureAwait(false);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(cr.RoleCode, roleMap)
@@ -677,6 +678,8 @@ internal sealed class CreditTreeRenderer
         // 主題歌ループが出す曲を絞る劇中順の範囲（credit_card_roles.theme_song_seq。"N" か "N-M"）。null なら絞らない。
         // テンプレの展開コンテキストに渡し、主題歌のカードが分かれて挿入歌を振り分ける回でカードごとの曲だけを出す。
         string? themeSongSeq,
+        // このカードの版（credit_cards.media_version）。主題歌の行のうち本放送だけの曲は、版に BROADCAST を含むカードにだけ出す。
+        string? cardMediaVersion,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -773,7 +776,8 @@ internal sealed class CreditTreeRenderer
                     scopeFilmRatingNo: seriesForCtx?.FilmRatingNo,
                     scopeFilmCjMark: seriesForCtx?.FilmCjMark ?? false,
                     themeSongSeq: themeSongSeq,
-                    roleLabelNotOnScreen: roleLabelNotOnScreen && !hideRoleLabel);
+                    roleLabelNotOnScreen: roleLabelNotOnScreen && !hideRoleLabel,
+                    cardMediaVersion: cardMediaVersion);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
 
                 string normalized = rendered.Replace("\r\n", "\n").Replace("\r", "\n");

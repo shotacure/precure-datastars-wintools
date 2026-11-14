@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト・Catalog：主題歌のカードに、本放送だけの曲を版に応じて出すようにした**（`TemplateContext.CardMediaVersion`〔新規〕・`TemplateContext.ShowsBroadcastOnlySongs`〔新規〕・`ThemeSongsHandler.FetchAsync`・`ThemeSongsHandler.RenderAsync`・`RoleTemplateRenderer`・`CreditTreeRenderer.RenderCardRoleCommonAsync`・`CreditPreviewRenderer.RenderCardRoleCommonAsync`：主題歌のカードが、その回の主題歌の行を版に関係なく全部出し、画面に無い本放送だけの曲〔`episode_theme_songs.is_broadcast_only=1`〕が Blu-ray・配信の画面を元にしたカードにも並んでいた。カードの版〔`credit_cards.media_version`〕に `BROADCAST` を含むカードにだけ本放送だけの曲を出し、版の無い共通のカードと Blu-ray・配信のカードからは外す。変わるのは本放送だけの曲を持つ 42 話のカードだけで、エピソードの「主題歌・挿入歌」の欄は変わらない）
+
 - **サイト・Catalog：クレジットの同じグループに同じ役職が 2 つあるとき、2 つ目に 1 つ目の名前が出ていたのを直した**（`CreditTreeRenderer`・`CreditPreviewRenderer`）：同じグループの役職の中身を役職のコードごとに 1 つだけ作り置きし、役職の描画でもそれを引いていた。色指定検査の「検査」の後ろの「検査」、曲ごとの「振付」などで、2 つ目以降に 1 つ目の名前が出ていた。役職の描画とまとめる役職の判定では、その役職の行の中身を引く。テンプレの `{ROLE:CODE.…}` は今までどおり、コードの最初の役職を引く。
 
 - **スキーマ・サイト・Catalog：声の出演の役名の後ろに、キャラのユニットを小さいカッコで出せるようにした**（`credit_block_entries.character_unit_alias_id`〔新規〕・`db/migrations/v1.20.1_add_entry_character_unit.sql`〔新規〕・`CreditBlockEntry.CharacterUnitAliasId`〔新規〕・`CreditBlockEntriesRepository`・`CreditTreeRenderer.BuildCharacterUnitHtmlAsync`〔新規〕・`CreditPreviewRenderer`・`RoleJoinComparer.BuildKey`・`CreditDraftLoader`・`CreditSaveService`・`CreditBulkInputParser`・`CreditBulkInputEncoder`・`CreditBulkApplyService`・`BulkParseResult`）：映画の声の出演に「ヤギ（サファリア）」のように、役名の後ろに劇中のユニット名が小さいカッコで出る。ユニットはほかのキャラのユニットと同じく persons 行を持たない名義で、キャラと声優の組をメンバーに持つ。エントリはユニットの名義を新しい列で指し、サイトのクレジットの表と Catalog のプレビューで役名の後ろに小さいカッコで出す（リンクは付けない）。Catalog の一括入力では行頭の `~{ユニット名#p<名義ID>} ` で書く。

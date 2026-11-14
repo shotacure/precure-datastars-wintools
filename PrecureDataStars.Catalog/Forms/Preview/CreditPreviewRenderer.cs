@@ -700,6 +700,7 @@ internal sealed class CreditPreviewRenderer
                             notOnScreen: cr.NotOnScreen,
                             roleLabelNotOnScreen: cr.RoleLabelNotOnScreen,
                             themeSongSeq: cr.ThemeSongSeq,
+                            cardMediaVersion: card.MediaVersion,
                             html, ct);
 
                         // 直前ロール記憶を更新: 当該ロールが VOICE_CAST なら role_code を覚える、
@@ -1114,6 +1115,7 @@ internal sealed class CreditPreviewRenderer
                             notOnScreen: dRole.Entity.NotOnScreen,
                             roleLabelNotOnScreen: dRole.Entity.RoleLabelNotOnScreen,
                             themeSongSeq: dRole.Entity.ThemeSongSeq,
+                            cardMediaVersion: dCard.Entity.MediaVersion,
                             html, ct);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(dRole.Entity.RoleCode, roleMap)
@@ -1311,6 +1313,8 @@ internal sealed class CreditPreviewRenderer
         // 主題歌ループが出す曲を絞る劇中順の範囲（credit_card_roles.theme_song_seq。"N" か "N-M"）。null なら絞らない。
         // テンプレの展開コンテキストに渡し、主題歌のカードが分かれて挿入歌を振り分ける回でカードごとの曲だけを出す。
         string? themeSongSeq,
+        // このカードの版（credit_cards.media_version）。主題歌の行のうち本放送だけの曲は、版に BROADCAST を含むカードにだけ出す。
+        string? cardMediaVersion,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -1403,7 +1407,8 @@ internal sealed class CreditPreviewRenderer
                     scopeFilmRatingNo: scopeFilmRatingNoForCtx,
                     scopeFilmCjMark: scopeFilmCjMarkForCtx,
                     themeSongSeq: themeSongSeq,
-                    roleLabelNotOnScreen: roleLabelNotOnScreen && !hideRoleLabel);
+                    roleLabelNotOnScreen: roleLabelNotOnScreen && !hideRoleLabel,
+                    cardMediaVersion: cardMediaVersion);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct);
 
                 // 改行コード正規化。

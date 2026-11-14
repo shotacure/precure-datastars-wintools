@@ -55,7 +55,8 @@ public static class ThemeSongsHandler
         ILookupCache lookup,
         CancellationToken ct = default,
         int? seqFrom = null,
-        int? seqTo = null)
+        int? seqTo = null,
+        bool includeBroadcastOnly = true)
     {
         // どちらか一方が指定されていれば描画対象あり。両方 null（スコープ未確定）なら空文字。
         bool hasEpisode = episodeId.HasValue && episodeId.Value > 0;
@@ -63,7 +64,7 @@ public static class ThemeSongsHandler
         if (!hasEpisode && !hasSeries) return "";
         if (columns < 1) columns = 1;
 
-        var rows = await FetchAsync(factory, episodeId, seriesId, kinds, lookup, ct).ConfigureAwait(false);
+        var rows = await FetchAsync(factory, episodeId, seriesId, kinds, lookup, ct, includeBroadcastOnly: includeBroadcastOnly).ConfigureAwait(false);
         if (seqFrom is int from && seqTo is int to)
             rows = rows.Where(r => r.Seq is byte s && s >= from && s <= to).ToList();
         if (rows.Count == 0) return "";
@@ -121,6 +122,8 @@ public static class ThemeSongsHandler
     /// <param name="ct">キャンセルトークン。</param>
     /// <param name="cvLabelOverride">歌唱・コーラスの声優の前に置く記号を、歌唱者の行の記号（cv_label）に代えて使う文字
     /// （<c>{#THEME_SONGS:cv="CV."}</c>。画面の記号が盤と違う作品用）。null なら行の記号。</param>
+    /// <param name="includeBroadcastOnly">本放送だけの曲（is_broadcast_only=1）も出すか。カードの版に BROADCAST を含むときだけ true
+    /// （共通のカードと Blu-ray・配信のカードの画面には本放送だけの曲は無い。<see cref="TemplateContext.ShowsBroadcastOnlySongs"/>）。既定は true。</param>
     /// <returns>JOIN 結果の楽曲行リスト（*Html フィールド設定済み）。</returns>
     internal static async Task<IReadOnlyList<ThemeSongRow>> FetchAsync(
         IConnectionFactory factory,
@@ -129,7 +132,8 @@ public static class ThemeSongsHandler
         IReadOnlyList<string>? kinds,
         ILookupCache lookup,
         CancellationToken ct = default,
-        string? cvLabelOverride = null)
+        string? cvLabelOverride = null,
+        bool includeBroadcastOnly = true)
     {
         bool hasEpisode = episodeId.HasValue && episodeId.Value > 0;
         bool hasSeries = seriesId.HasValue && seriesId.Value > 0;
@@ -160,13 +164,13 @@ public static class ThemeSongsHandler
         {
             sourceTable = "episode_theme_songs";
             scopeFilter = "ets.episode_id = @scopeId";
-            queryParams = new { scopeId = episodeId!.Value, kinds = effectiveKinds };
+            queryParams = new { scopeId = episodeId!.Value, kinds = effectiveKinds, includeBroadcastOnly = includeBroadcastOnly ? 1 : 0 };
         }
         else
         {
             sourceTable = "series_theme_songs";
             scopeFilter = "ets.series_id = @scopeId";
-            queryParams = new { scopeId = seriesId!.Value, kinds = effectiveKinds };
+            queryParams = new { scopeId = seriesId!.Value, kinds = effectiveKinds, includeBroadcastOnly = includeBroadcastOnly ? 1 : 0 };
         }
         // 曲の作品名（{SONG_SERIES_TITLE}）は、録音の作品（song_recordings.series_id）がクレジットの作品と違うときだけ入れる。
         // エピソードのスコープでは、そのエピソードの作品と比べる。
@@ -198,6 +202,7 @@ public static class ThemeSongsHandler
             WHERE {{scopeFilter}}
               AND ets.theme_kind IN @kinds
               AND ets.usage_actuality <> 'BROADCAST_NOT_CREDITED'
+              AND (@includeBroadcastOnly = 1 OR ets.is_broadcast_only = 0)
             ORDER BY
               ets.seq,
               ets.is_broadcast_only;

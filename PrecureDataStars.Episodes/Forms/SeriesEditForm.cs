@@ -140,12 +140,13 @@ public partial class SeriesEditorForm : Form
         cmbRelation.ValueMember = nameof(ComboOption<string?>.Value);
         cmbRelation.DataSource = relOptions;
 
-        // 絵コンテと演出の出し方（series.storyboard_display）：固定の 3 択
+        // 絵コンテと演出の出し方（series.storyboard_display）：固定の 4 択
         var storyboardOptions = new List<ComboOption<string>>
         {
             new() { Value = Series.StoryboardDisplaySeparate, Text = "それぞれの役職名で出す" },
             new() { Value = Series.StoryboardDisplayMerge, Text = "いつも「演出」にまとめる（違う人なら「演出」の欄に並べる）" },
             new() { Value = Series.StoryboardDisplayMergeSamePerson, Text = "同じ人のときだけ「(絵コンテ・)演出」にまとめる" },
+            new() { Value = Series.StoryboardDisplayJoinSamePerson, Text = "同じ人のときだけ「絵コンテ・演出」にまとめる" },
         };
         cmbStoryboardDisplay.DisplayMember = nameof(ComboOption<string>.Text);
         cmbStoryboardDisplay.ValueMember = nameof(ComboOption<string>.Value);

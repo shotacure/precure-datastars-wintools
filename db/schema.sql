@@ -269,7 +269,7 @@ CREATE TABLE `series` (
   --                      「演出」の欄に「A (絵コンテ)」「B (演出)」と並べる（TV の無印〜ドキドキ!）
   --   MERGE_SAME_PERSON  同じ人のときだけ「(絵コンテ・)演出 ｜ 名前」にまとめ、違う人ならそれぞれの役職名で出す
   --                      （TV のハピネスチャージ以降）
-  `storyboard_display` enum('SEPARATE','MERGE','MERGE_SAME_PERSON') NOT NULL DEFAULT 'SEPARATE' COMMENT '絵コンテと演出の出し方（SEPARATE=役職名ごと / MERGE=いつも演出にまとめる / MERGE_SAME_PERSON=同じ人のときだけまとめる）',
+  `storyboard_display` enum('SEPARATE','MERGE','MERGE_SAME_PERSON','JOIN_SAME_PERSON') NOT NULL DEFAULT 'SEPARATE' COMMENT '絵コンテと演出の出し方（SEPARATE=役職名ごと / MERGE=いつも演出にまとめる / MERGE_SAME_PERSON=同じ顔ぶれのときだけ(絵コンテ・)演出にまとめる / JOIN_SAME_PERSON=同じ顔ぶれのときだけ絵コンテ・演出にまとめる）',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,

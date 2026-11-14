@@ -465,7 +465,7 @@ internal sealed class CreditPreviewRenderer
             // STORYBOARD と EPISODE_DIRECTOR がカード内の表示順（tier_no → group_no → order_in_group）で
             // 隣接していれば、Group を跨いでいても融合表示する（テキスト入力 `--` で Group 区切りされたパターンも捕捉）。
             // 戻り値：(sb の CardRoleId → ペア情報の辞書, dir の CardRoleId 集合)。
-            // MERGE_SAME_PERSON の作品では、絵コンテと演出が同じ人のときだけ融合する（違う人なら独立描画）。
+            // MERGE_SAME_PERSON / JOIN_SAME_PERSON の作品では、絵コンテと演出の顔ぶれが同じときだけ融合する（違えば独立描画）。
             var sbMergeBySbId = new Dictionary<int, (CreditCardRole Sb, CreditCardRole Dir, bool SameGroup)>();
             var sbMergedDirIds = new HashSet<int>();
             if (storyboardDisplay != Series.StoryboardDisplaySeparate)
@@ -489,8 +489,8 @@ internal sealed class CreditPreviewRenderer
                     bool isSb = string.Equals(r1.RoleCode, RoleCodeStoryboard, StringComparison.Ordinal);
                     bool isDir = string.Equals(r2.RoleCode, RoleCodeEpisodeDirector, StringComparison.Ordinal);
                     if (isSb && isDir
-                        && (storyboardDisplay != Series.StoryboardDisplayMergeSamePerson
-                            || IsSamePersonStoryboardDirector(
+                        && (!IsSameMembersOnlyStoryboardDisplay(storyboardDisplay)
+                            || IsSameMembersStoryboardDirector(
                                 await CollectEntriesUnderCardRoleAsync(r1.CardRoleId, ct),
                                 await CollectEntriesUnderCardRoleAsync(r2.CardRoleId, ct))))
                     {
@@ -624,6 +624,7 @@ internal sealed class CreditPreviewRenderer
                             await RenderStoryboardDirectorMergedAsync(sbBlocks, dirBlocks, mergePair.SameGroup,
                                 CreditRoleLabel.Resolve(mergePair.Sb.RoleLabelText, mergePair.Sb.RoleCode, roleMap),
                                 CreditRoleLabel.Resolve(mergePair.Dir.RoleLabelText, mergePair.Dir.RoleCode, roleMap),
+                                storyboardDisplay == Series.StoryboardDisplayJoinSamePerson,
                                 html, ct);
                             prevVoiceCastRoleCode = null;
                             continue;
@@ -874,7 +875,7 @@ internal sealed class CreditPreviewRenderer
             // 表示順（tier_no → group_no → order_in_group）で STORYBOARD と EPISODE_DIRECTOR が
             // 隣接しているペアを検出する。Group を跨いでいても OK（テキスト入力 `--` 越えも捕捉）。
             // 参照同一性で照合するため、key には DraftRole の CurrentId（負数 ID を含む）を使う。
-            // MERGE_SAME_PERSON の作品では、絵コンテと演出が同じ人のときだけ融合する（違う人なら独立描画）。
+            // MERGE_SAME_PERSON / JOIN_SAME_PERSON の作品では、絵コンテと演出の顔ぶれが同じときだけ融合する（違えば独立描画）。
             var draftSbMergeBySbId = new Dictionary<int, (DraftRole Sb, DraftRole Dir, bool SameGroup)>();
             var draftSbMergedDirIds = new HashSet<int>();
             if (storyboardDisplay != Series.StoryboardDisplaySeparate)
@@ -897,8 +898,8 @@ internal sealed class CreditPreviewRenderer
                     bool isSb = string.Equals(r1.Entity.RoleCode, RoleCodeStoryboard, StringComparison.Ordinal);
                     bool isDir = string.Equals(r2.Entity.RoleCode, RoleCodeEpisodeDirector, StringComparison.Ordinal);
                     if (isSb && isDir
-                        && (storyboardDisplay != Series.StoryboardDisplayMergeSamePerson
-                            || IsSamePersonStoryboardDirector(CollectDraftEntries(r1), CollectDraftEntries(r2))))
+                        && (!IsSameMembersOnlyStoryboardDisplay(storyboardDisplay)
+                            || IsSameMembersStoryboardDirector(CollectDraftEntries(r1), CollectDraftEntries(r2))))
                     {
                         draftSbMergeBySbId[r1.CurrentId] = (r1, r2, gid1 == gid2);
                         draftSbMergedDirIds.Add(r2.CurrentId);
@@ -1033,6 +1034,7 @@ internal sealed class CreditPreviewRenderer
                             await RenderStoryboardDirectorMergedAsync(sbBlocks, dirBlocks, draftMergePair.SameGroup,
                                 CreditRoleLabel.Resolve(draftMergePair.Sb.Entity.RoleLabelText, draftMergePair.Sb.Entity.RoleCode, roleMap),
                                 CreditRoleLabel.Resolve(draftMergePair.Dir.Entity.RoleLabelText, draftMergePair.Dir.Entity.RoleCode, roleMap),
+                                storyboardDisplay == Series.StoryboardDisplayJoinSamePerson,
                                 html, ct);
                             prevVoiceCastRoleCode = null;
                             continue;
@@ -1629,20 +1631,35 @@ internal sealed class CreditPreviewRenderer
     }
 
     /// <summary>
-    /// 絵コンテ役職と演出役職のエントリ（<c>is_broadcast_only</c> 除外済み）が 1 件ずつで、同じ人かを判定する
-    /// （<c>MERGE_SAME_PERSON</c> の作品で融合するかの判定。サイト側 CreditTreeRenderer と同じ仕様）。
-    /// 両方が名義を持てば <c>person_alias_id</c> の一致、どちらも名義を持たなければ <c>raw_text</c> の一致で見る。
+    /// 絵コンテと演出の顔ぶれが同じときだけ融合する出し方（<c>MERGE_SAME_PERSON</c> / <c>JOIN_SAME_PERSON</c>）かを返す。
     /// </summary>
-    private static bool IsSamePersonStoryboardDirector(
+    private static bool IsSameMembersOnlyStoryboardDisplay(string storyboardDisplay) =>
+        storyboardDisplay == Series.StoryboardDisplayMergeSamePerson
+        || storyboardDisplay == Series.StoryboardDisplayJoinSamePerson;
+
+    /// <summary>
+    /// 絵コンテ役職と演出役職のエントリ（<c>is_broadcast_only</c> 除外済み、表示順）の顔ぶれが同じかを判定する
+    /// （<c>MERGE_SAME_PERSON</c> / <c>JOIN_SAME_PERSON</c> の作品で融合するかの判定。サイト側 CreditTreeRenderer と同じ仕様）。
+    /// 人数が同じで、順に並べた各エントリが同じ人のときだけ true。一部だけ重なる・重ならない・順が違うときは false。
+    /// 各エントリは、両方が名義を持てば <c>person_alias_id</c> の一致、どちらも名義を持たなければ <c>raw_text</c> の一致で見る。
+    /// </summary>
+    private static bool IsSameMembersStoryboardDirector(
         IReadOnlyList<CreditBlockEntry> storyboardEntries, IReadOnlyList<CreditBlockEntry> directorEntries)
     {
-        if (storyboardEntries.Count != 1 || directorEntries.Count != 1) return false;
-        var s = storyboardEntries[0];
-        var d = directorEntries[0];
-        if (s.PersonAliasId.HasValue && d.PersonAliasId.HasValue)
-            return s.PersonAliasId.Value == d.PersonAliasId.Value;
-        if (s.PersonAliasId.HasValue || d.PersonAliasId.HasValue) return false;
-        return !string.IsNullOrEmpty(s.RawText) && string.Equals(s.RawText, d.RawText, StringComparison.Ordinal);
+        if (storyboardEntries.Count == 0 || storyboardEntries.Count != directorEntries.Count) return false;
+        for (int i = 0; i < storyboardEntries.Count; i++)
+        {
+            var s = storyboardEntries[i];
+            var d = directorEntries[i];
+            if (s.PersonAliasId.HasValue && d.PersonAliasId.HasValue)
+            {
+                if (s.PersonAliasId.Value != d.PersonAliasId.Value) return false;
+                continue;
+            }
+            if (s.PersonAliasId.HasValue || d.PersonAliasId.HasValue) return false;
+            if (string.IsNullOrEmpty(s.RawText) || !string.Equals(s.RawText, d.RawText, StringComparison.Ordinal)) return false;
+        }
+        return true;
     }
 
     /// <summary>Draft 役職配下の全ブロック・全エントリ（削除済み・is_broadcast_only 除外）を 1 つのフラットリストに集める （絵コンテ・演出融合判定用ヘルパ）。</summary>
@@ -1678,14 +1695,13 @@ internal sealed class CreditPreviewRenderer
 
     /// <summary>
     /// 融合可能な「絵コンテ・演出」ペアを 1 つのテーブルに描画する。
-    /// 仕様（storyboard_display が MERGE / MERGE_SAME_PERSON のシリーズで起動）:
+    /// 仕様（storyboard_display が MERGE / MERGE_SAME_PERSON / JOIN_SAME_PERSON のシリーズで起動）:
     /// <list type="bullet">
-    ///   <item><description>同名（絵コンテと演出が同じ person_alias_id、または同じ raw_text）→
-    ///     役職名 = 「（絵コンテ・）演出」、エントリ = その人物名 1 行</description></item>
-    ///   <item><description>異名 → 役職名 = 「演出」、エントリ = 「名前A （絵コンテ）」「名前B （演出）」の 2 行</description></item>
+    ///   <item><description>顔ぶれが同じ（人数が同じで、順に並べた各エントリが同じ person_alias_id、または同じ raw_text）→
+    ///     役職名 = 「（絵コンテ・）演出」（JOIN_SAME_PERSON は「絵コンテ・演出」）、エントリ = 名前を 1 回ずつ</description></item>
+    ///   <item><description>顔ぶれが違う（MERGE のみ）→ 役職名 = 「演出」、エントリ = 「名前A （絵コンテ）」「名前B （演出）」の行</description></item>
     /// </list>
-    /// 各役職のエントリ数がともに 1 件である場合に限り融合する。複数エントリの場合（共同絵コンテ、共同演出など）の
-    /// 仕様は未定のため、本メソッドの呼び出し側で抑止し、通常描画にフォールバックする。
+    /// MERGE_SAME_PERSON / JOIN_SAME_PERSON の作品で顔ぶれが違うときは、呼び出し側で融合を抑止し、通常描画にフォールバックする。
     /// </summary>
     /// <param name="storyboardEntries">STORYBOARD 役職配下の全エントリ（複数ブロック横断のフラットリスト）。</param>
     /// <param name="directorEntries">EPISODE_DIRECTOR 役職配下の全エントリ。</param>
@@ -1698,7 +1714,8 @@ internal sealed class CreditPreviewRenderer
     /// に sb エントリ群を「（絵コンテ）」後置で並べ、続けて dir エントリ群を「（演出）」後置で並べる。
     /// ブロック区切り（block_seq の境界）は &lt;tr class="block-break"&gt; で視覚ギャップ。
     /// sb の最終エントリと dir の先頭エントリの間は sameGroup=false の場合だけ block-break ギャップ。
-    /// 1:1 で同一人物のケースは「（絵コンテ・）演出 ｜ 名前」の旧コンパクト表記を維持。</summary>
+    /// 顔ぶれが同じ（人数が同じで、表示順に並べた各エントリが同じ人）ケースは、見出し 1 つの下に名前を 1 回ずつ並べる。
+    /// 見出しは joinedLabel が true（<c>JOIN_SAME_PERSON</c>）なら「絵コンテ・演出」、false なら「（絵コンテ・）演出」。</summary>
     private async Task RenderStoryboardDirectorMergedAsync(
         IReadOnlyList<IReadOnlyList<CreditBlockEntry>> storyboardBlocks,
         IReadOnlyList<IReadOnlyList<CreditBlockEntry>> directorBlocks,
@@ -1706,6 +1723,8 @@ internal sealed class CreditPreviewRenderer
         // 絵コンテ・演出それぞれの役職の表記（画面の表記か役職名）。
         string storyboardRoleName,
         string directorRoleName,
+        // 顔ぶれが同じときの見出しを「絵コンテ・演出」で出すか（JOIN_SAME_PERSON）。
+        bool joinedLabel,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -1713,30 +1732,49 @@ internal sealed class CreditPreviewRenderer
         int totalDir = directorBlocks.Sum(b => b.Count);
         if (totalSb == 0 && totalDir == 0) return;
 
-        // 旧コンパクト表記：sb 1 件 / dir 1 件 / 同一人物 → 「（絵コンテ・）演出 | 名前」1 行。
-        if (totalSb == 1 && totalDir == 1)
+        // 顔ぶれが同じ → 見出し 1 つの下に、演出のエントリで名前を 1 回ずつ並べる（演出のブロックの区切りは block-break）。
+        var sbFlat = storyboardBlocks.SelectMany(b => b).ToList();
+        var dirFlat = directorBlocks.SelectMany(b => b).ToList();
+        if (sbFlat.Count > 0 && sbFlat.Count == dirFlat.Count)
         {
-            var sb = storyboardBlocks[0][0];
-            var dr = directorBlocks[0][0];
-            bool sameName;
-            if (sb.PersonAliasId.HasValue && dr.PersonAliasId.HasValue)
+            bool sameMembers = true;
+            for (int i = 0; i < sbFlat.Count && sameMembers; i++)
             {
-                sameName = sb.PersonAliasId.Value == dr.PersonAliasId.Value;
+                var sb = sbFlat[i];
+                var dr = dirFlat[i];
+                if (sb.PersonAliasId.HasValue && dr.PersonAliasId.HasValue)
+                {
+                    sameMembers = sb.PersonAliasId.Value == dr.PersonAliasId.Value;
+                }
+                else
+                {
+                    string sbText = await ResolvePersonWithAffiliationAsync(sb, ct);
+                    string drText = await ResolvePersonWithAffiliationAsync(dr, ct);
+                    sameMembers = string.Equals(sbText, drText, StringComparison.Ordinal);
+                }
             }
-            else
+            if (sameMembers)
             {
-                string sbText = await ResolvePersonWithAffiliationAsync(sb, ct);
-                string drText = await ResolvePersonWithAffiliationAsync(dr, ct);
-                sameName = string.Equals(sbText, drText, StringComparison.Ordinal);
-            }
-            if (sameName)
-            {
-                string directorHtml = await ResolvePersonWithAffiliationHtmlAsync(dr, ct);
+                string mergedLabel = joinedLabel
+                    ? $"{storyboardRoleName}・{directorRoleName}"
+                    : $"（{storyboardRoleName}・）{directorRoleName}";
                 html.Append("<div class=\"role\">");
-                html.Append("<table class=\"fallback-table\"><tr>");
-                html.Append($"<td class=\"role-name\">{Esc($"（{storyboardRoleName}・）{directorRoleName}")}</td>");
-                html.Append("<td class=\"entry-cell\">").Append(directorHtml).Append("</td>");
-                html.Append("</tr></table></div>");
+                html.Append("<table class=\"fallback-table\">");
+                bool firstMergedRow = true;
+                for (int bi = 0; bi < directorBlocks.Count; bi++)
+                {
+                    var entries = directorBlocks[bi];
+                    for (int ei = 0; ei < entries.Count; ei++)
+                    {
+                        string trClass = (ei == 0 && bi > 0) ? " class=\"block-break\"" : "";
+                        html.Append($"<tr{trClass}>");
+                        html.Append("<td class=\"role-name\">").Append(firstMergedRow ? Esc(mergedLabel) : "").Append("</td>");
+                        firstMergedRow = false;
+                        string entryHtml = await ResolvePersonWithAffiliationHtmlAsync(entries[ei], ct);
+                        html.Append("<td class=\"entry-cell\">").Append(entryHtml).Append("</td></tr>");
+                    }
+                }
+                html.Append("</table></div>");
                 return;
             }
         }
@@ -1746,6 +1784,58 @@ internal sealed class CreditPreviewRenderer
         string directorLabel = Esc(directorRoleName);
         string sbSuffix = $" {Esc("（絵コンテ）")}";
         string dirSuffix = $" {Esc("（演出）")}";
+
+        // 顔ぶれが一部だけ重なる（絵コンテと演出の両方に出る人がいる）ときは、1 人 1 行にまとめ、
+        // その人が担った役職を後ろに付ける（「名前 （絵コンテ・演出）」「名前 （演出）」。サイト側 CreditTreeRenderer と同じ仕様）。
+        // 並びは絵コンテの順、続けて演出だけの人を演出の順に。
+        var dirUsed = new bool[dirFlat.Count];
+        var overlapRows = new List<(CreditBlockEntry Entry, bool IsSb, bool IsDir)>(sbFlat.Count + dirFlat.Count);
+        bool anyOverlap = false;
+        foreach (var sbEntry in sbFlat)
+        {
+            int match = -1;
+            for (int di = 0; di < dirFlat.Count && match < 0; di++)
+            {
+                if (dirUsed[di]) continue;
+                var drEntry = dirFlat[di];
+                bool same;
+                if (sbEntry.PersonAliasId.HasValue && drEntry.PersonAliasId.HasValue)
+                {
+                    same = sbEntry.PersonAliasId.Value == drEntry.PersonAliasId.Value;
+                }
+                else
+                {
+                    string sbText = await ResolvePersonWithAffiliationAsync(sbEntry, ct);
+                    string drText = await ResolvePersonWithAffiliationAsync(drEntry, ct);
+                    same = !string.IsNullOrEmpty(sbText) && string.Equals(sbText, drText, StringComparison.Ordinal);
+                }
+                if (same) match = di;
+            }
+            if (match >= 0) { dirUsed[match] = true; anyOverlap = true; overlapRows.Add((sbEntry, true, true)); }
+            else overlapRows.Add((sbEntry, true, false));
+        }
+        if (anyOverlap)
+        {
+            for (int di = 0; di < dirFlat.Count; di++)
+            {
+                if (!dirUsed[di]) overlapRows.Add((dirFlat[di], false, true));
+            }
+            string bothSuffix = $" {Esc("（絵コンテ・演出）")}";
+            html.Append("<div class=\"role\">");
+            html.Append("<table class=\"fallback-table\">");
+            bool firstOverlapRow = true;
+            foreach (var (entry, isSb, isDir) in overlapRows)
+            {
+                html.Append("<tr>");
+                html.Append("<td class=\"role-name\">").Append(firstOverlapRow ? directorLabel : "").Append("</td>");
+                firstOverlapRow = false;
+                string entryHtml = await ResolvePersonWithAffiliationHtmlAsync(entry, ct);
+                string suffix = isSb && isDir ? bothSuffix : isSb ? sbSuffix : dirSuffix;
+                html.Append("<td class=\"entry-cell\">").Append(entryHtml).Append(suffix).Append("</td></tr>");
+            }
+            html.Append("</table></div>");
+            return;
+        }
 
         html.Append("<div class=\"role\">");
         html.Append("<table class=\"fallback-table\">");

@@ -199,9 +199,13 @@ public sealed class Series
     ///   <item><description><see cref="StoryboardDisplayMerge"/>（<c>MERGE</c>）：いつも融合する（『ふたりはプリキュア』〜『ドキドキ！プリキュア』）。
     ///     同名（同一 person_alias_id かつ表記一致）→「（絵コンテ・）演出　名前」と 1 行に集約、
     ///     異名 → 「演出　名前A （絵コンテ）」「　　　名前B （演出）」と 2 行で並列表示</description></item>
-    ///   <item><description><see cref="StoryboardDisplayMergeSamePerson"/>（<c>MERGE_SAME_PERSON</c>）：同名のときだけ
-    ///     「（絵コンテ・）演出　名前」に集約し、異名ならそれぞれの役職名で出す（『ハピネスチャージプリキュア！』以降。
-    ///     分業の回は画面で「絵コンテ」「演出」が別々の役職名で出る）</description></item>
+    ///   <item><description><see cref="StoryboardDisplayMergeSamePerson"/>（<c>MERGE_SAME_PERSON</c>）：顔ぶれが同じ
+    ///     （絵コンテと演出の名義が同じ順で全員一致する）ときだけ「（絵コンテ・）演出　名前」に集約し、
+    ///     それ以外（一部だけ重なる・重ならない）はそれぞれの役職名で全員を出す（TV の『ハピネスチャージプリキュア！』以降。
+    ///     兼業の回は画面に「演出」だけが出て、分業の回は「絵コンテ」「演出」が別々の役職名で出る）</description></item>
+    ///   <item><description><see cref="StoryboardDisplayJoinSamePerson"/>（<c>JOIN_SAME_PERSON</c>）：顔ぶれが同じときだけ
+    ///     「絵コンテ・演出　名前」に集約し、それ以外はそれぞれの役職名で全員を出す（オトナシリーズ。
+    ///     兼業の回は画面に「絵コンテ・演出」の見出しが出る）</description></item>
     /// </list>
     /// 本値はあくまで描画上の融合スイッチであり、データ層では
     /// 絵コンテと演出は別々の役職エントリとして保存される。
@@ -214,8 +218,11 @@ public sealed class Series
     /// <summary><see cref="StoryboardDisplay"/> の値：絵コンテと演出をいつも「演出」にまとめる。</summary>
     public const string StoryboardDisplayMerge = "MERGE";
 
-    /// <summary><see cref="StoryboardDisplay"/> の値：絵コンテと演出が同じ人のときだけ「演出」にまとめる。</summary>
+    /// <summary><see cref="StoryboardDisplay"/> の値：絵コンテと演出の顔ぶれが同じときだけ「(絵コンテ・)演出」にまとめる。</summary>
     public const string StoryboardDisplayMergeSamePerson = "MERGE_SAME_PERSON";
+
+    /// <summary><see cref="StoryboardDisplay"/> の値：絵コンテと演出の顔ぶれが同じときだけ「絵コンテ・演出」にまとめる。</summary>
+    public const string StoryboardDisplayJoinSamePerson = "JOIN_SAME_PERSON";
 
     // ── 監査・論理削除 ──
 

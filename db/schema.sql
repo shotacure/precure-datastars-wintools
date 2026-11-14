@@ -2863,6 +2863,7 @@ CREATE TABLE `credit_role_blocks` (
 -- parallel_with_entry_id は「A / B」併記の相手 entry を自参照する任意フィールド。
 -- 併記のエントリは独立した行にならず、相手（同じブロックの前のエントリ）の行に並べて描く。
 -- 前後に付く字は parallel_prefix / parallel_suffix、小さい字で描くかは parallel_small。
+-- character_unit_alias_id は声の出演の役名の後ろに小さいカッコで出すキャラのユニットの名義。
 --
 DROP TABLE IF EXISTS `credit_block_entries`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -2913,7 +2914,11 @@ CREATE TABLE `credit_block_entries` (
   `parallel_suffix`                varchar(8)   CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   -- 1 なら併記のエントリ（前後の字を含む）を小さい字で描く。
   `parallel_small`                 tinyint(1)      NOT NULL DEFAULT 0,
-  `notes`                          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  -- 声の出演の役名の後ろに小さいカッコで出すキャラのユニットの名義（「ヤギ（サファリア）」の「サファリア」）。
+  --   ユニットは persons 行を持たない名義で、person_alias_members にキャラと声優の組をメンバーとして持つ。NULL は出さない。
+--   CHARACTER_VOICE のエントリにだけ付ける（外部キーの SET NULL があり CHECK 制約に使えないので、入力の側で守る）。
+  `character_unit_alias_id`        int             DEFAULT NULL COMMENT '声の出演の役名の後ろに小さいカッコで出すキャラのユニットの名義（person_aliases）。NULL は出さない',
+  `notes`                        text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`                     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`                     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`                     varchar(64)  DEFAULT NULL,
@@ -2931,6 +2936,7 @@ CREATE TABLE `credit_block_entries` (
   KEY `ix_be_aff_person`     (`affiliation_person_alias_id`),
   KEY `ix_be_aff_logo`       (`affiliation_logo_id`),
   KEY `ix_be_parallel`       (`parallel_with_entry_id`),
+  KEY `ix_be_character_unit` (`character_unit_alias_id`),
   CONSTRAINT `fk_be_block`             FOREIGN KEY (`block_id`)                     REFERENCES `credit_role_blocks`   (`block_id`)          ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_be_person_alias`      FOREIGN KEY (`person_alias_id`)              REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_character_alias`   FOREIGN KEY (`character_alias_id`)           REFERENCES `character_aliases`    (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
@@ -2940,6 +2946,7 @@ CREATE TABLE `credit_block_entries` (
   CONSTRAINT `fk_be_aff_person_alias`  FOREIGN KEY (`affiliation_person_alias_id`)  REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_aff_logo`          FOREIGN KEY (`affiliation_logo_id`)          REFERENCES `logos`                (`logo_id`)           ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_parallel`          FOREIGN KEY (`parallel_with_entry_id`)       REFERENCES `credit_block_entries` (`entry_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_character_unit_alias` FOREIGN KEY (`character_unit_alias_id`)   REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_be_seq_pos` CHECK ((`entry_seq` >= 1)),
   CONSTRAINT `ck_entry_same_layout_voice` CHECK ((`entry_kind` = 'CHARACTER_VOICE') OR (`same_character_layout` IS NULL AND `same_person_layout` IS NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

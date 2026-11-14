@@ -608,7 +608,7 @@ internal static class CreditBulkInputEncoder
         return false;
     }
 
-    /// <summary>1 エントリを 1 セル文字列に変換する。 行頭プレフィクス（🎬 / & / ^{...} ）と行末サフィックス（ // 備考）を含む完全な単一セル表現を返す。
+    /// <summary>1 エントリを 1 セル文字列に変換する。 行頭プレフィクス（🎬 / & / ^{...} / ~{...} ）と行末サフィックス（ // 備考）を含む完全な単一セル表現を返す。
     /// <paramref name="suppressAffiliation"/> = true のとき、PERSON / CHARACTER_VOICE の所属表記 <c>(屋号)</c> 後置を抑止する
     /// （PREFIX レイアウト下では所属は屋号列として左に置くため、セル本体には含めない）。</summary>
     private static async Task<string> EncodeEntryAsCellAsync(
@@ -661,6 +661,13 @@ internal static class CreditBulkInputEncoder
             sb.Append("^{").Append(e.SameCharacterLayout ?? "");
             if (e.SamePersonLayout is not null) sb.Append('|').Append(e.SamePersonLayout);
             sb.Append("} ");
+        }
+        // 役名の後ろに小さいカッコで出すキャラのユニット（CHARACTER_VOICE のみ）。~{ユニット名#p<alias_id>} の形で、
+        // 同じ役名・同じ声優の出し方のマーカーの後ろに置く。ユニット名は人が読むための添え書きで、パーサは ID だけを読む。
+        if (e.EntryKind == "CHARACTER_VOICE" && e.CharacterUnitAliasId is int uid)
+        {
+            string uname = await cache.LookupPersonAliasNameAsync(uid) ?? "";
+            sb.Append("~{").Append(uname).Append("#p").Append(uid).Append("} ");
         }
 
         sb.Append(body);

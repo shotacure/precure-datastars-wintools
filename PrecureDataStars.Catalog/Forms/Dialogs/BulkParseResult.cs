@@ -373,6 +373,13 @@ public sealed class ParsedEntry
     public bool ParallelSmall { get; set; }
 
     /// <summary>
+    /// 役名の後ろに小さいカッコで出すキャラのユニットの名義 ID（<c>~{ユニット名#p&lt;alias_id&gt;} </c> の <c>#p</c> の後ろ）。
+    /// 適用時に <see cref="Data.Models.CreditBlockEntry.CharacterUnitAliasId"/> へそのまま転写する（マスタ引き当て不要）。
+    /// CHARACTER_VOICE のときのみ持つ。
+    /// </summary>
+    public int? CharacterUnitAliasId { get; set; }
+
+    /// <summary>
     /// 同じ役名が続く行の役名の出し方（<c>^{役名の形|声優の形} </c> の 1 つ目の欄。REPEAT / TOP / MIDDLE）。
     /// 適用時に <see cref="Data.Models.CreditBlockEntry.SameCharacterLayout"/> へそのまま転写する。null は直前の行の続きではない。
     /// CHARACTER_VOICE のときのみ持つ。

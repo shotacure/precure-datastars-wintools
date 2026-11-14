@@ -360,6 +360,7 @@ internal sealed class CreditDraftLoader
         ParallelPrefix = s.ParallelPrefix,
         ParallelSuffix = s.ParallelSuffix,
         ParallelSmall = s.ParallelSmall,
+        CharacterUnitAliasId = s.CharacterUnitAliasId,
         SameCharacterLayout = s.SameCharacterLayout,
         SamePersonLayout = s.SamePersonLayout,
         Notes = s.Notes,

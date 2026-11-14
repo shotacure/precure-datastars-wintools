@@ -41,6 +41,7 @@ public static class RoleJoinComparer
                   .Append(':').Append(e.PersonDisplayText)
                   .Append(':').Append(e.PersonMaskedText)
                   .Append(':').Append(e.CharacterMisprintText)
+                  .Append(':').Append(e.CharacterUnitAliasId)
                   .Append(':').Append(e.CompanyMisprintText)
                   .Append(':').Append(e.CompanyDisplayText);
             }

@@ -46,6 +46,9 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     その名前をどう出すか（<c>same_character_layout</c> / <c>same_person_layout</c>）。各欄は <c>REPEAT</c>（毎行書く）/
 ///     <c>TOP</c>（上の行に 1 回）/ <c>MIDDLE</c>（真ん中に 1 回）/ 空（直前の行の続きではない）。2 つ目の欄と <c>|</c> は省略可。
 ///     ひと続きの 2 行目以降に付ける。例: <c>^{TOP} &lt;生徒&gt;山田</c>、<c>^{|MIDDLE} &lt;天宮いくと&gt;依田 菜津</c>。</description></item>
+///   <item><description>エントリ行頭の <c>~{ユニット名#p&lt;alias_id&gt;} </c> プレフィクス（CHARACTER_VOICE のみ）→ 役名の後ろに小さいカッコで出す
+///     キャラのユニットの名義（<c>character_unit_alias_id</c>）。ユニットは名義 ID で直に指し、ユニット名は人が読むための添え書き。
+///     例: <c>~{サファリア#p9001} &lt;ヤギ&gt;松井 暁波</c>（ヤギ（サファリア））。</description></item>
 ///   <item><description>役名の中の <c>\n</c>（バックスラッシュと n）→ 画面の改行。名義の名前からは抜き、改行入りの役名を
 ///     <c>character_display_text</c> に持つ。例: <c>&lt;てんびん座の\nプリンセス&gt;MAKO</c>（役名が画面で 2 行に折れているとき）。</description></item>
 ///   <item><description>役名の <c>名義|画面の役名</c> → 画面の役名が名義の頭を省いた後ろの部分だけのとき（双子の姓の省略など）。
@@ -274,6 +277,12 @@ public static class CreditBulkInputParser
 
     /// <summary>同マーカーの 3 つ目の欄で、小さい字で描く指定。</summary>
     private const string ParallelSmallKeyword = "small";
+
+    /// <summary>役名の後ろに小さいカッコで出すキャラのユニットを指定するマーカー <c>~{ユニット名#p&lt;alias_id&gt;} </c> の開き。</summary>
+    private const string CharacterUnitMarkerOpen = "~{";
+
+    /// <summary>同マーカーの閉じ（閉じ括弧の後ろに半角スペース）。</summary>
+    private const string CharacterUnitMarkerClose = "} ";
 
     /// <summary>同じ役名・同じ声優が続く行の名前の出し方を指定するマーカー <c>^{役名の形|声優の形} </c> の開き。</summary>
     private const string SameLayoutMarkerOpen = "^{";
@@ -1657,6 +1666,8 @@ public static class CreditBulkInputParser
     ///   <item><description>行頭 <c>^{役名の形|声優の形} </c> → 同じ役名・同じ声優が続く行の名前の出し方
     ///     （<see cref="ParsedEntry.SameCharacterLayout"/> / <see cref="ParsedEntry.SamePersonLayout"/>）。各欄は REPEAT / TOP / MIDDLE / 空、
     ///     2 つ目の欄と <c>|</c> は省略可（<c>^{TOP} </c>、<c>^{|MIDDLE} </c>、<c>^{REPEAT|MIDDLE} </c>）。CHARACTER_VOICE 以外に付いたときは警告して捨てる</description></item>
+    ///   <item><description>行頭 <c>~{ユニット名#p&lt;alias_id&gt;} </c> → 役名の後ろに小さいカッコで出すキャラのユニット
+    ///     （<see cref="ParsedEntry.CharacterUnitAliasId"/>）。CHARACTER_VOICE 以外に付いたとき・<c>#p</c> の ID が無いときは警告して捨てる</description></item>
     ///   <item><description>行末 <c> // 備考</c> → <see cref="ParsedEntry.Notes"/> に値をセット</description></item>
     /// </list>
     /// これらは順序を問わず重ねて指定可能（例: <c>🎬 &amp; 山田 // 備考</c>）。
@@ -1701,6 +1712,9 @@ public static class CreditBulkInputParser
         string? sameCharacterLayout = null;
         string? samePersonLayout = null;
         bool hasSameLayoutMarker = false;
+        // ~{ユニット名#p<alias_id>} マーカーのユニットの名義 ID と、マーカーが付いていたか。
+        int? characterUnitAliasId = null;
+        bool hasCharacterUnitMarker = false;
         // 何度かループして、剥がせるだけ剥がす（順序問わず）。
         bool stripped;
         do
@@ -1758,6 +1772,33 @@ public static class CreditBulkInputParser
                     stripped = true;
                 }
             }
+            // ~{ユニット名#p<alias_id>} マーカー（閉じ括弧の後ろに半角スペース必須）。役名の後ろに小さいカッコで出すキャラのユニット。
+            // ユニットは名義 ID で直に指す（ユニット名は人が読むための添え書きで、引き当てには使わない）。
+            if (cell.StartsWith(CharacterUnitMarkerOpen, StringComparison.Ordinal))
+            {
+                int close = cell.IndexOf(CharacterUnitMarkerClose, CharacterUnitMarkerOpen.Length, StringComparison.Ordinal);
+                if (close > 0)
+                {
+                    string inner = cell.Substring(CharacterUnitMarkerOpen.Length, close - CharacterUnitMarkerOpen.Length);
+                    hasCharacterUnitMarker = true;
+                    int hash = inner.LastIndexOf("#p", StringComparison.Ordinal);
+                    if (hash >= 0 && int.TryParse(inner.Substring(hash + 2), out int uid) && uid > 0)
+                    {
+                        characterUnitAliasId = uid;
+                    }
+                    else
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Warning,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: ~{{...}}（キャラのユニット）はユニットの名義 ID を「ユニット名#p<名義ID>」の形で書いてください。読み捨てます。"
+                        });
+                    }
+                    cell = cell.Substring(close + CharacterUnitMarkerClose.Length).TrimStart();
+                    stripped = true;
+                }
+            }
         } while (stripped);
 
         if (cell.Length == 0)
@@ -1795,6 +1836,23 @@ public static class CreditBulkInputParser
                         Severity = WarningSeverity.Warning,
                         LineNumber = lineNo,
                         Message = $"{lineNo} 行目: ^{{...}}（同じ役名・同じ声優が続く行の出し方）は <キャラ>声優 の行にだけ付けられます。読み捨てます。"
+                    });
+                }
+            }
+            // キャラのユニットも声の出演の行（CHARACTER_VOICE）でだけ意味を持つ。ほかの種別に付いていたら警告して捨てる。
+            if (hasCharacterUnitMarker && characterUnitAliasId is int cu)
+            {
+                if (e.Kind == ParsedEntryKind.CharacterVoice)
+                {
+                    e.CharacterUnitAliasId = cu;
+                }
+                else
+                {
+                    result.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Warning,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: ~{{...}}（キャラのユニット）は <キャラ>声優 の行にだけ付けられます。読み捨てます。"
                     });
                 }
             }

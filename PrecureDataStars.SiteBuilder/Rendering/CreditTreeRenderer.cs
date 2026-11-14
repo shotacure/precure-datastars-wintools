@@ -1604,6 +1604,8 @@ internal sealed class CreditTreeRenderer
                             chh += await BuildParallelCharacterHtmlAsync(f, ct).ConfigureAwait(false);
                         }
                     }
+                    // キャラのユニット（character_unit_alias_id）があれば、役名の後ろに小さいカッコで並べる。
+                    chh += await BuildCharacterUnitHtmlAsync(ent).ConfigureAwait(false);
                     string ahh = await ResolvePersonWithAffiliationHtmlAsync(ent, ct).ConfigureAwait(false);
                     resolved[i] = (true, chh, ahh, "");
                 }
@@ -1829,6 +1831,19 @@ internal sealed class CreditTreeRenderer
         return e.ParallelSmall ? $"<small class=\"parallel-small\">{inner}</small>" : inner;
     }
 
+    /// <summary>
+    /// 声の出演の役名の後ろに出すキャラのユニット（<see cref="CreditBlockEntry.CharacterUnitAliasId"/>）を、
+    /// 小さいカッコつきの HTML 断片にする（「ヤギ（サファリア）」の「（サファリア）」）。
+    /// ユニットの名義は所属のユニットと同じくリンクなしの文字で出す。ユニットが無ければ空文字。
+    /// </summary>
+    private async Task<string> BuildCharacterUnitHtmlAsync(CreditBlockEntry e)
+    {
+        if (e.CharacterUnitAliasId is not int uid) return "";
+        string? name = await _lookup.LookupPersonAliasNameAsync(uid).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(name)) return "";
+        return $"<small class=\"parallel-small\">（{Esc(name)}）</small>";
+    }
+
     /// <summary>キャラ名義（character_alias）の表示名を「キャラ詳細ページへのリンク済み HTML 断片」として返す。</summary>
     private async Task<string> ResolveCharacterLabelHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
@@ -1988,7 +2003,8 @@ internal sealed class CreditTreeRenderer
                     string charName = e.CharacterAliasId.HasValue
                         ? ((await _lookup.LookupCharacterAliasNameAsync(e.CharacterAliasId.Value).ConfigureAwait(false)) ?? "(キャラクター不明)")
                         : (e.RawCharacterText ?? "(キャラクター未指定)");
-                    string charHtml = PrependMisprintHtml(EscCharacterName(charName, e.CharacterDisplayText), e.CharacterMisprintText);
+                    string charHtml = PrependMisprintHtml(EscCharacterName(charName, e.CharacterDisplayText), e.CharacterMisprintText)
+                        + await BuildCharacterUnitHtmlAsync(e).ConfigureAwait(false);
 
                     // 声優側は PERSON と同じく「名前 + (所属)」で出す（スペシャルゲストの「たくや (ザ・たっち)」など）。
                     // 人物側の誤記前置も ResolvePersonWithAffiliationHtmlAsync が行う。

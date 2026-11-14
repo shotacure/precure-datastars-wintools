@@ -2190,6 +2190,12 @@ internal sealed class CreditPreviewRenderer
                             chh += f.ParallelSmall ? $"<small>{inner}</small>" : inner;
                         }
                     }
+                    // キャラのユニット（character_unit_alias_id）があれば、役名の後ろに小さいカッコで並べる（SiteBuilder と同じ）。
+                    if (ent.CharacterUnitAliasId is int uid)
+                    {
+                        string unitName = (await _lookup.LookupPersonAliasNameAsync(uid)) ?? "";
+                        if (unitName.Length > 0) chh += $"<small>（{Esc(unitName)}）</small>";
+                    }
                     string ahh = await ResolvePersonWithAffiliationHtmlAsync(ent, ct);
                     resolved[i] = (true, chh, ahh, "");
                 }
@@ -2559,6 +2565,12 @@ internal sealed class CreditPreviewRenderer
                     string charName = e.CharacterAliasId.HasValue
                         ? ((await _lookup.LookupCharacterAliasNameAsync(e.CharacterAliasId.Value)) ?? "(キャラ不明)")
                         : (e.RawCharacterText ?? "(キャラ未指定)");
+                    // キャラのユニット（character_unit_alias_id）があれば、役名の後ろにカッコで並べる。
+                    if (e.CharacterUnitAliasId is int uid)
+                    {
+                        string unitName = (await _lookup.LookupPersonAliasNameAsync(uid)) ?? "";
+                        if (unitName.Length > 0) charName += $"（{unitName}）";
+                    }
                     // 声優側は PERSON と同じく「名前 + (所属)」で出す（スペシャルゲストの「たくや (ザ・たっち)」など）。
                     string voice = e.PersonAliasId.HasValue
                         ? await ResolvePersonWithAffiliationAsync(e, ct)

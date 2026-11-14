@@ -626,7 +626,7 @@ internal sealed class CreditSaveService
                person_misprint_text, person_display_text, character_misprint_text, character_display_text, company_misprint_text, company_display_text, person_masked_text,
                company_alias_id, logo_id, raw_text,
                affiliation_company_alias_id, affiliation_person_alias_id, affiliation_logo_id, affiliation_text, affiliation_inline,
-               parallel_with_entry_id, parallel_prefix, parallel_suffix, parallel_small,
+               parallel_with_entry_id, parallel_prefix, parallel_suffix, parallel_small, character_unit_alias_id,
                same_character_layout, same_person_layout,
                notes, created_by, updated_by)
             VALUES
@@ -635,7 +635,7 @@ internal sealed class CreditSaveService
                @PersonMisprintText, @PersonDisplayText, @CharacterMisprintText, @CharacterDisplayText, @CompanyMisprintText, @CompanyDisplayText, @PersonMaskedText,
                @CompanyAliasId, @LogoId, @RawText,
                @AffiliationCompanyAliasId, @AffiliationPersonAliasId, @AffiliationLogoId, @AffiliationText, @AffiliationInline,
-               @ParallelWithEntryId, @ParallelPrefix, @ParallelSuffix, @ParallelSmall,
+               @ParallelWithEntryId, @ParallelPrefix, @ParallelSuffix, @ParallelSmall, @CharacterUnitAliasId,
                @SameCharacterLayout, @SamePersonLayout,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
@@ -816,6 +816,7 @@ internal sealed class CreditSaveService
               parallel_prefix = @ParallelPrefix,
               parallel_suffix = @ParallelSuffix,
               parallel_small = @ParallelSmall,
+              character_unit_alias_id = @CharacterUnitAliasId,
               same_character_layout = @SameCharacterLayout,
               same_person_layout = @SamePersonLayout,
               notes = @Notes,

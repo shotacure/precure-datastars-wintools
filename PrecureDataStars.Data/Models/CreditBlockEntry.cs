@@ -152,6 +152,11 @@ public sealed class CreditBlockEntry
     /// <summary>true なら併記のエントリ（前後の字を含む）を小さい字で描く。</summary>
     public bool ParallelSmall { get; set; }
 
+    /// <summary>声の出演の役名の後ろに小さいカッコで出す、キャラのユニットの名義（person_aliases.alias_id。DB 列名 character_unit_alias_id）。
+    /// 「ヤギ（サファリア）」の「サファリア」。ユニットは persons 行を持たない名義で、person_alias_members にキャラと声優の組をメンバーとして持つ。
+    /// NULL は何も出さない。CHARACTER_VOICE のときのみ意味を持つ。</summary>
+    public int? CharacterUnitAliasId { get; set; }
+
     /// <summary>
     /// 同じ役名が続く行の、役名の出し方（DB 列名 same_character_layout。<see cref="CreditEntrySameLayouts"/> の値）。CHARACTER_VOICE のときのみ意味を持つ。
     /// 値のある行は、同じブロックで直前の CHARACTER_VOICE の行（声の出演の表で直前の行）と同じ役名の続き（ひと続きの 2 行目以降）であることを示す。

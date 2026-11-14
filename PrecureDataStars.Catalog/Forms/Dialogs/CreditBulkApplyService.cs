@@ -1041,6 +1041,8 @@ public sealed class CreditBulkApplyService
             {
                 if (pe.SameCharacterLayout is not null) last.Entity.SameCharacterLayout = pe.SameCharacterLayout;
                 if (pe.SamePersonLayout is not null) last.Entity.SamePersonLayout = pe.SamePersonLayout;
+                // 役名の後ろに小さいカッコで出すキャラのユニット（名義 ID で直に指す）。
+                if (pe.CharacterUnitAliasId is not null) last.Entity.CharacterUnitAliasId = pe.CharacterUnitAliasId;
             }
             // 所属のロゴの版（屋号#lg<id>）。所属の会社名義が付いたときだけ持たせる（ロゴは会社の所属の版を表すため）。
             if (pe.AffiliationLogoId is not null && last.Entity.AffiliationCompanyAliasId is not null)
@@ -2896,6 +2898,8 @@ public sealed class CreditBulkApplyService
         // 同じ役名・同じ声優が続く行の名前の出し方も差分検出の対象にする。
         sb.Append(e.SameCharacterLayout ?? string.Empty).Append('|');
         sb.Append(e.SamePersonLayout ?? string.Empty).Append('|');
+        // キャラのユニットも差分検出の対象にする。
+        sb.Append(e.CharacterUnitAliasId?.ToString() ?? string.Empty).Append('|');
         sb.Append(e.Notes ?? string.Empty).Append('|');
         // 誤記もシリアライズに含めて差分検出の対象にする
         // （誤記の追加・削除・修正をエントリ差分として認識させるため）。

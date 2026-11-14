@@ -327,8 +327,11 @@ internal sealed class CreditTreeRenderer
                     // Entry を CreditTreeIndex のスナップショットから引き出して辞書を作る。各役職の処理時に
                     // SiblingRoleResolver として TemplateContext に渡すことで、レンダラ側から sibling 役職の
                     // 中身が透過的に見える。
-                    // 同 role_code が複数役職に重複している場合は最初の 1 つを採用（同 Group 内重複は通常起き得ない）。
+                    // 同 role_code が複数役職に重複している場合（色指定検査の「検査」と「検査」、曲ごとの振付など）は、
+                    // テンプレから引く sibling としては最初の 1 つを採用する。どの役職の中身かは siblingCardRoleIdByRoleCode に持ち、
+                    // 役職自身の描画で使い回すのは同じ役職のときだけにする。
                     var siblingBlocksByRoleCode = new Dictionary<string, IReadOnlyList<BlockSnapshot>>(StringComparer.Ordinal);
+                    var siblingCardRoleIdByRoleCode = new Dictionary<string, int>(StringComparer.Ordinal);
                     foreach (var siblingRoleSnap in roleSnapshots)
                     {
                         var siblingRole = siblingRoleSnap.Role;
@@ -336,6 +339,7 @@ internal sealed class CreditTreeRenderer
                         if (siblingBlocksByRoleCode.ContainsKey(siblingRole.RoleCode!)) continue;
 
                         siblingBlocksByRoleCode[siblingRole.RoleCode!] = BuildBlockSnapshots(siblingRoleSnap);
+                        siblingCardRoleIdByRoleCode[siblingRole.RoleCode!] = siblingRole.CardRoleId;
                     }
                     // クロージャで辞書を捕捉。null 時は空文字に展開される（レンダラの仕様）。
                     Func<string, IReadOnlyList<BlockSnapshot>?> siblingResolver = code =>
@@ -411,10 +415,14 @@ internal sealed class CreditTreeRenderer
                             continue;
                         }
 
-                        // sibling 辞書から自身の Block を引いて使い回し（重複ロード回避）。
-                        // 辞書に無い役職（RoleCode が null など）は CreditTreeIndex のスナップショットから直接組み立てる。
+                        // 役職自身の Block は、その役職の行（card_role_id）から組み立てる。
+                        // sibling 辞書は role_code ごとに最初の役職だけを持つので、同じ Group に同じ role_code の役職が
+                        // 2 つ以上あるとき（色指定検査の「検査」と「検査」、曲ごとの振付など）に辞書から引くと、
+                        // 2 つ目以降に最初の役職の中身が出てしまう。辞書の中身がこの役職のものと分かるときだけ使い回す。
                         IReadOnlyList<BlockSnapshot> snapshots;
                         if (!string.IsNullOrEmpty(cr.RoleCode)
+                            && siblingCardRoleIdByRoleCode.TryGetValue(cr.RoleCode!, out int cachedRoleId)
+                            && cachedRoleId == cr.CardRoleId
                             && siblingBlocksByRoleCode.TryGetValue(cr.RoleCode!, out var cached))
                         {
                             snapshots = cached;

@@ -520,12 +520,14 @@ internal sealed class CreditPreviewRenderer
                     // 同 Group 内 sibling 役職の Block/Entry を事前ロードして辞書化。
                     // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文用。各役職の処理時に SiblingRoleResolver として
                     // TemplateContext に渡すことで、レンダラから sibling 役職の中身が透過的に見える。
-                    // 各役職本体の処理でもこの辞書を流用して Block の重複ロードを避ける。
+                    // 各役職本体の処理では、役職の行（card_role_id）ごとの辞書 blocksByCardRoleId から自身の Block を引く。
+                    // sibling 辞書は role_code ごとに最初の役職だけを持つので、同じ Group に同じ role_code の役職が 2 つ以上あるとき
+                    // （色指定検査の「検査」と「検査」、曲ごとの振付など）に役職本体の描画に使うと、2 つ目以降に最初の役職の中身が出てしまう。
                     var siblingBlocksByRoleCode = new Dictionary<string, IReadOnlyList<BlockSnapshot>>(StringComparer.Ordinal);
+                    var blocksByCardRoleId = new Dictionary<int, IReadOnlyList<BlockSnapshot>>();
                     foreach (var siblingRole in cardRoles)
                     {
                         if (string.IsNullOrEmpty(siblingRole.RoleCode)) continue;
-                        if (siblingBlocksByRoleCode.ContainsKey(siblingRole.RoleCode!)) continue;
 
                         var sbBlocks = (await _blocksRepo.GetByCardRoleAsync(siblingRole.CardRoleId, ct))
                             .OrderBy(b => b.BlockSeq).ToList();
@@ -537,7 +539,10 @@ internal sealed class CreditPreviewRenderer
                                 .OrderBy(e => e.EntrySeq).ToList();
                             sbSnapshots.Add(new BlockSnapshot(b, entries));
                         }
-                        siblingBlocksByRoleCode[siblingRole.RoleCode!] = sbSnapshots;
+                        blocksByCardRoleId[siblingRole.CardRoleId] = sbSnapshots;
+                        // テンプレから引く sibling は role_code ごとに最初の 1 つ。
+                        if (!siblingBlocksByRoleCode.ContainsKey(siblingRole.RoleCode!))
+                            siblingBlocksByRoleCode[siblingRole.RoleCode!] = sbSnapshots;
                     }
                     Func<string, IReadOnlyList<BlockSnapshot>?> siblingResolver = code =>
                         siblingBlocksByRoleCode.TryGetValue(code, out var s) ? s : null;
@@ -582,8 +587,7 @@ internal sealed class CreditPreviewRenderer
                     var joinInput = new List<(bool JoinPrevious, IReadOnlyList<BlockSnapshot> Blocks)>();
                     foreach (var jr in cardRoles)
                     {
-                        IReadOnlyList<BlockSnapshot> jb = !string.IsNullOrEmpty(jr.RoleCode)
-                            && siblingBlocksByRoleCode.TryGetValue(jr.RoleCode!, out var jbCached)
+                        IReadOnlyList<BlockSnapshot> jb = blocksByCardRoleId.TryGetValue(jr.CardRoleId, out var jbCached)
                                 ? jbCached
                                 : Array.Empty<BlockSnapshot>();
                         joinInput.Add((jr.JoinPrevious, jb));
@@ -646,10 +650,9 @@ internal sealed class CreditPreviewRenderer
                             continue;
                         }
 
-                        // sibling 辞書から自身の Block を引いて使い回し（重複ロード回避）。
+                        // 役職の行ごとの辞書から自身の Block を引いて使い回し（重複ロード回避）。
                         IReadOnlyList<BlockSnapshot> snapshots;
-                        if (!string.IsNullOrEmpty(cr.RoleCode)
-                            && siblingBlocksByRoleCode.TryGetValue(cr.RoleCode!, out var cached))
+                        if (blocksByCardRoleId.TryGetValue(cr.CardRoleId, out var cached))
                         {
                             snapshots = cached;
                         }
@@ -927,13 +930,16 @@ internal sealed class CreditPreviewRenderer
                     // ここでは「sb 側 DraftRole が dRoles に含まれていれば融合本体を発火、dir 側 DraftRole は skip」を
                     // dRoles ループ内（次の foreach）で処理する。group 単独での検出ロジックは廃止済み。
 
-                    // Draft 側 sibling 役職辞書を作って {ROLE:CODE.PLACEHOLDER} 構文に備える。
+                    // Draft 側 sibling 役職辞書を作って {ROLE:CODE.PLACEHOLDER} 構文に備える（role_code ごとに最初の 1 つ）。
+                    // 役職本体の描画は、役職（Draft の役職そのもの。保存前は card_role_id が無いので参照で引く）ごとの
+                    // 辞書 blocksByDraftRole から自身の Block を引く。同じ Group に同じ role_code の役職が 2 つ以上あるとき、
+                    // role_code の辞書から引くと 2 つ目以降に最初の役職の中身が出てしまうため。
                     var siblingBlocksByRoleCode = new Dictionary<string, IReadOnlyList<BlockSnapshot>>(StringComparer.Ordinal);
+                    var blocksByDraftRole = new Dictionary<object, IReadOnlyList<BlockSnapshot>>(ReferenceEqualityComparer.Instance);
                     foreach (var siblingDRole in dRoles)
                     {
                         string? rc = siblingDRole.Entity.RoleCode;
                         if (string.IsNullOrEmpty(rc)) continue;
-                        if (siblingBlocksByRoleCode.ContainsKey(rc!)) continue;
 
                         var sbSnapshots = new List<BlockSnapshot>();
                         foreach (var dBlock in siblingDRole.Blocks
@@ -947,7 +953,9 @@ internal sealed class CreditPreviewRenderer
                                 .ToList();
                             sbSnapshots.Add(new BlockSnapshot(dBlock.Entity, entries));
                         }
-                        siblingBlocksByRoleCode[rc!] = sbSnapshots;
+                        blocksByDraftRole[siblingDRole] = sbSnapshots;
+                        if (!siblingBlocksByRoleCode.ContainsKey(rc!))
+                            siblingBlocksByRoleCode[rc!] = sbSnapshots;
                     }
                     Func<string, IReadOnlyList<BlockSnapshot>?> siblingResolver = code =>
                         siblingBlocksByRoleCode.TryGetValue(code, out var s) ? s : null;
@@ -992,8 +1000,7 @@ internal sealed class CreditPreviewRenderer
                     var draftJoinInput = new List<(bool JoinPrevious, IReadOnlyList<BlockSnapshot> Blocks)>();
                     foreach (var jr in dRoles)
                     {
-                        IReadOnlyList<BlockSnapshot> jb = !string.IsNullOrEmpty(jr.Entity.RoleCode)
-                            && siblingBlocksByRoleCode.TryGetValue(jr.Entity.RoleCode!, out var jbCached)
+                        IReadOnlyList<BlockSnapshot> jb = blocksByDraftRole.TryGetValue(jr, out var jbCached)
                                 ? jbCached
                                 : Array.Empty<BlockSnapshot>();
                         draftJoinInput.Add((jr.Entity.JoinPrevious, jb));
@@ -1056,10 +1063,9 @@ internal sealed class CreditPreviewRenderer
                             continue;
                         }
 
-                        // 自身の Block を sibling 辞書から流用（重複構築を回避）。
+                        // 自身の Block を役職ごとの辞書から流用（重複構築を回避）。
                         IReadOnlyList<BlockSnapshot> snapshots;
-                        if (!string.IsNullOrEmpty(dRole.Entity.RoleCode)
-                            && siblingBlocksByRoleCode.TryGetValue(dRole.Entity.RoleCode!, out var cached))
+                        if (blocksByDraftRole.TryGetValue(dRole, out var cached))
                         {
                             snapshots = cached;
                         }

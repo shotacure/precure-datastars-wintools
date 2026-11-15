@@ -2,15 +2,18 @@
  * 件数バッジでの並べ替えボタン（.count-sort-btn）。
  *
  * ボタンの data-count-sort-for に並べ替え対象のリスト（<ul>）の id を空白区切りで書く。
- * 対象リストの各行（直下の <li>）が持つ件数バッジ（.count-pill-tv / -movie / -song / -cd / -book / -mic / -person / -company）の
+ * 対象リストの各行（直下の <li>）が持つ件数バッジ（.count-pill-tv / -movie / -otona / -song / -cd / -book / -mic / -person / -company）の
  * 数字を読み取り、押すたびに次の順で並べ替える：
  *   バッジの種類ごとに「多い順 ⬇ → 少ない順 ⬆」を、リストに現れる種類の並び順どおりにたどり、
  *   種類が 2 つ以上あるときは最後に全種類の合計（📺🎥 など）で「⬇ → ⬆」、そして最初に戻る。
  *   例：📺⬇ → 📺⬆ → 🎥⬇ → 🎥⬆ → 📺🎥⬇ → 📺🎥⬆ → 📺⬇ …
  * ・既定：最初の種類の多い順（例：📺⬇）で並べ直した状態から始める。
  *   data-count-sort-initial="none"：もともとの並び（役職の表示順など）のまま「⇅」から始め、一周したら元の並びに戻す。
+ *   data-count-sort-start="otona"：その種類の多い順（例：🌙⬇）から始める（その種類がリストに無ければ既定どおり）。
  * ・同じ数の行はもともとの並び順を保つ。種類ごとの並べ替えでは、その種類が 0 の行を向きにかかわらず末尾に置く。
  * ・ボタンは対象リストが画面に出ているときだけ表示する（タブや初参加順／多い順の切り替えに合わせて、クリックのたびに判定し直す）。
+ * ・TV・映画・オトナの出し分けのボタン（_work-kind-toggles.sbn）で切っている種類の札は数えない。ボタンが押されたら（wk-change）、
+ *   入っている種類だけで並べ替えの段階を組み直し、最初の状態に戻す。
  * ・ページ出力は増やさず、並べ替えはこのスクリプトの中だけで行う（外部ライブラリなし）。
  * ・今の並べ替えをボタンの data-count-sort-state に「tv-desc」「tv_movie-asc」「none」の形で書き、最初の状態を
  *   data-count-sort-default に控える。URL の # に残すのは view-state.js（押して状態を合わせる）。
@@ -24,6 +27,7 @@
   var KINDS = [
     { key: 'tv', icon: '📺', label: 'TV' },
     { key: 'movie', icon: '🎥', label: '映画' },
+    { key: 'otona', icon: '🌙', label: 'オトナ' },
     { key: 'song', icon: '🎵', label: '曲' },
     { key: 'cd', icon: '💿', label: '音盤' },
     { key: 'book', icon: '📚', label: '書籍' },
@@ -63,24 +67,44 @@
           return { el: li, index: i, counts: counts };
         });
     });
-    var kinds = KINDS.filter(function (k) { return present[k.key]; });
-    if (kinds.length === 0) return null;
+    if (!KINDS.some(function (k) { return present[k.key]; })) return null;
+
+    // TV・映画・オトナの出し分けのボタンで切っている種類（ルートの data-wk-on に無い種類）は、並べ替えに使わない。
+    var wkRoot = lists[0].closest('[data-wk-on]');
+    function isOn(key) {
+      if (!wkRoot || (key !== 'tv' && key !== 'movie' && key !== 'otona')) return true;
+      return (wkRoot.getAttribute('data-wk-on') || '').split(/\s+/).indexOf(key) >= 0;
+    }
+
+    var initialNone = btn.getAttribute('data-count-sort-initial') === 'none';
+    var states = [];
+    var pos = 0;
 
     // 並べ替えの段階を組み立てる（種類ごとの ⬇⬆、2 種類以上なら合計の ⬇⬆）。
-    var states = [];
-    kinds.forEach(function (k) {
-      states.push({ keys: [k.key], desc: true });
-      states.push({ keys: [k.key], desc: false });
-    });
-    if (kinds.length > 1) {
-      var all = kinds.map(function (k) { return k.key; });
-      states.push({ keys: all, desc: true });
-      states.push({ keys: all, desc: false });
+    function build() {
+      var kinds = KINDS.filter(function (k) { return present[k.key] && isOn(k.key); });
+      states = [];
+      kinds.forEach(function (k) {
+        states.push({ keys: [k.key], desc: true });
+        states.push({ keys: [k.key], desc: false });
+      });
+      if (kinds.length > 1) {
+        var all = kinds.map(function (k) { return k.key; });
+        states.push({ keys: all, desc: true });
+        states.push({ keys: all, desc: false });
+      }
+      if (initialNone || states.length === 0) states.unshift({ keys: null, desc: true });
+      // 既定は最初の種類の多い順（例：📺⬇）から始める。「⇅」から始めるリストはもとの並びのまま。
+      // data-count-sort-start で種類を指定したリストは、その種類の多い順から始める。
+      pos = 0;
+      var startKey = btn.getAttribute('data-count-sort-start');
+      if (startKey && !initialNone) {
+        states.forEach(function (st, i) {
+          if (pos === 0 && st.keys && st.keys.length === 1 && st.keys[0] === startKey && st.desc) pos = i;
+        });
+      }
     }
-    var initialNone = btn.getAttribute('data-count-sort-initial') === 'none';
-    if (initialNone) states.unshift({ keys: null, desc: true });
-    // 既定は最初の種類の多い順（例：📺⬇）から始める。「⇅」から始めるリストはもとの並びのまま。
-    var pos = 0;
+    build();
 
     function valueOf(row, keys) {
       var sum = 0, has = false;
@@ -149,6 +173,10 @@
     });
     if (initialNone) { render(); } else { apply(); }
     btn.setAttribute('data-count-sort-default', stateKey(states[pos]));
+    document.addEventListener('wk-change', function () {
+      build();
+      apply();
+    });
     return refreshVisibility;
   }
 

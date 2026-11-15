@@ -116,7 +116,7 @@
      calendar.js はデータ空のとき #home-calendar を非表示にするため、
      366 日ぶんのページへの唯一の入口である本リンクはその外側に置く。 ##}}
 <p class="home-calendar-more">
-  <a href="/anniversary/">日付から探す — プリキュア記念日カレンダー</a>
+  <a class="button-link" href="/anniversary/">日付から探す — プリキュア記念日カレンダー</a>
 </p>
 <script src="{{ asset_url "/assets/calendar.js" }}" defer></script>
 
@@ -136,7 +136,7 @@
        id・data-section-nav-* を持たせず、見た目（episodes-index-section）だけ流用する。 ##}}
   <section class="episodes-index-section">
     <h2 class="episodes-index-heading">
-      <a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
+      {{ if sec.IsOtona }}🌙 {{ end }}<a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
       {{~ if sec.SeriesStartYearLabel != "" ~}}
       <span class="muted series-year">({{ sec.SeriesStartYearLabel }})</span>
       {{~ end ~}}
@@ -150,26 +150,10 @@
             <span class="ep-row-date">{{ e.OnAirDate }}</span>
           </div>
           <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{ e.TitleDisplayHtml }}</a>
-          {{~ if e.Screenplay != "" || e.Storyboard != "" || e.EpisodeDirector != "" || e.AnimationDirector != "" || e.ArtDirector != "" ~}}
+          {{~ if (array.size e.StaffBadges) > 0 ~}}
           <div class="staff-badges-row">
-            {{~ if e.Screenplay != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="SCREENPLAY" href="/creators/roles/screenplay/">脚本</a>{{ e.Screenplay }}</span>
-            {{~ end ~}}
-            {{~ if e.StoryboardDirectorMerged ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/creators/roles/storyboard/">絵コンテ</a><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/creators/roles/episode_director/">演出</a>{{ e.Storyboard }}</span>
-            {{~ else ~}}
-            {{~ if e.Storyboard != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/creators/roles/storyboard/">絵コンテ</a>{{ e.Storyboard }}</span>
-            {{~ end ~}}
-            {{~ if e.EpisodeDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/creators/roles/episode_director/">演出</a>{{ e.EpisodeDirector }}</span>
-            {{~ end ~}}
-            {{~ end ~}}
-            {{~ if e.AnimationDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="/creators/roles/animation_director/">作画監督</a>{{ e.AnimationDirector }}</span>
-            {{~ end ~}}
-            {{~ if e.ArtDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ART_DIRECTOR_TV" href="/creators/roles/art_director_tv/">美術</a>{{ e.ArtDirector }}</span>
+            {{~ for b in e.StaffBadges ~}}
+            <span class="staff-badge-group">{{~ for r in b.Roles ~}}<a class="role-badge role-badge-sm" data-role-code="{{ r.RoleCode }}"{{ if r.BadgeStyle != "" }} style="{{ r.BadgeStyle }}"{{ end }} href="{{ r.RoleUrl }}">{{ r.Label | html.escape }}</a>{{~ end ~}}{{ b.NamesHtml }}</span>
             {{~ end ~}}
           </div>
           {{~ end ~}}
@@ -196,7 +180,7 @@
        理由は今後の放送予定側と同じ。見た目だけ episodes-index-section を流用する。 ##}}
   <section class="episodes-index-section">
     <h2 class="episodes-index-heading">
-      <a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
+      {{ if sec.IsOtona }}🌙 {{ end }}<a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
       {{~ if sec.SeriesStartYearLabel != "" ~}}
       <span class="muted series-year">({{ sec.SeriesStartYearLabel }})</span>
       {{~ end ~}}
@@ -210,26 +194,10 @@
             <span class="ep-row-date">{{ e.OnAirDate }}</span>
           </div>
           <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{ e.TitleDisplayHtml }}</a>
-          {{~ if e.Screenplay != "" || e.Storyboard != "" || e.EpisodeDirector != "" || e.AnimationDirector != "" || e.ArtDirector != "" ~}}
+          {{~ if (array.size e.StaffBadges) > 0 ~}}
           <div class="staff-badges-row">
-            {{~ if e.Screenplay != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="SCREENPLAY" href="/creators/roles/screenplay/">脚本</a>{{ e.Screenplay }}</span>
-            {{~ end ~}}
-            {{~ if e.StoryboardDirectorMerged ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/creators/roles/storyboard/">絵コンテ</a><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/creators/roles/episode_director/">演出</a>{{ e.Storyboard }}</span>
-            {{~ else ~}}
-            {{~ if e.Storyboard != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/creators/roles/storyboard/">絵コンテ</a>{{ e.Storyboard }}</span>
-            {{~ end ~}}
-            {{~ if e.EpisodeDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/creators/roles/episode_director/">演出</a>{{ e.EpisodeDirector }}</span>
-            {{~ end ~}}
-            {{~ end ~}}
-            {{~ if e.AnimationDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="/creators/roles/animation_director/">作画監督</a>{{ e.AnimationDirector }}</span>
-            {{~ end ~}}
-            {{~ if e.ArtDirector != "" ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ART_DIRECTOR_TV" href="/creators/roles/art_director_tv/">美術</a>{{ e.ArtDirector }}</span>
+            {{~ for b in e.StaffBadges ~}}
+            <span class="staff-badge-group">{{~ for r in b.Roles ~}}<a class="role-badge role-badge-sm" data-role-code="{{ r.RoleCode }}"{{ if r.BadgeStyle != "" }} style="{{ r.BadgeStyle }}"{{ end }} href="{{ r.RoleUrl }}">{{ r.Label | html.escape }}</a>{{~ end ~}}{{ b.NamesHtml }}</span>
             {{~ end ~}}
           </div>
           {{~ end ~}}
@@ -240,6 +208,12 @@
   </section>
   {{~ end ~}}
 </section>
+{{~ end ~}}
+
+{{## 販売中の商品の枠の置き場。中身は shop-box.js が /shop-items.json を読んで描く（Amazon で売られている商品だけ。
+     無ければ枠ごと出ない）。置き場は、出す設定の商品があるときだけ出す。 ##}}
+{{~ if HasShopItems ~}}
+<aside class="shop-box home-section" data-shop-series="home" data-shop-heading="Blu-ray・CD のご案内" data-shop-note="Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。" hidden></aside>
 {{~ end ~}}
 
 {{## ──────── 音楽商品の発売予定（カードグリッド） ────────
@@ -290,6 +264,12 @@
     </article>
     {{~ end ~}}
   </div>
+  {{## 購入ボタンは Amazon アソシエイトの広告なので、カードの並びのすぐ下で広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。
+       購入リンクのあるカードが 1 枚も無いときは出さない。文は商品・書籍の詳細ページの注記と同じ。 ##}}
+  {{~ has_amazon_links = false; for p in UpcomingProducts; if p.AmazonCdUrl != "" || p.AmazonDigitalUrl != ""; has_amazon_links = true; end; end ~}}
+  {{~ if has_amazon_links ~}}
+  <p class="muted product-links-note home-product-links-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
+  {{~ end ~}}
 </section>
 {{~ end ~}}
 
@@ -335,6 +315,12 @@
     </article>
     {{~ end ~}}
   </div>
+  {{## 購入ボタンは Amazon アソシエイトの広告なので、カードの並びのすぐ下で広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。
+       購入リンクのあるカードが 1 枚も無いときは出さない。文は商品・書籍の詳細ページの注記と同じ。 ##}}
+  {{~ has_amazon_links = false; for p in LatestProducts; if p.AmazonCdUrl != "" || p.AmazonDigitalUrl != ""; has_amazon_links = true; end; end ~}}
+  {{~ if has_amazon_links ~}}
+  <p class="muted product-links-note home-product-links-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
+  {{~ end ~}}
 </section>
 {{~ end ~}}
 
@@ -379,6 +365,12 @@
     </article>
     {{~ end ~}}
   </div>
+  {{## 購入ボタンは Amazon アソシエイトの広告なので、カードの並びのすぐ下で広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。
+       購入リンクのあるカードが 1 枚も無いときは出さない。文は商品・書籍の詳細ページの注記と同じ。 ##}}
+  {{~ has_amazon_links = false; for b in UpcomingBooks; if b.AmazonPrintUrl != "" || b.AmazonKindleUrl != ""; has_amazon_links = true; end; end ~}}
+  {{~ if has_amazon_links ~}}
+  <p class="muted product-links-note home-product-links-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
+  {{~ end ~}}
 </section>
 {{~ end ~}}
 
@@ -421,5 +413,11 @@
     </article>
     {{~ end ~}}
   </div>
+  {{## 購入ボタンは Amazon アソシエイトの広告なので、カードの並びのすぐ下で広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。
+       購入リンクのあるカードが 1 枚も無いときは出さない。文は商品・書籍の詳細ページの注記と同じ。 ##}}
+  {{~ has_amazon_links = false; for b in LatestBooks; if b.AmazonPrintUrl != "" || b.AmazonKindleUrl != ""; has_amazon_links = true; end; end ~}}
+  {{~ if has_amazon_links ~}}
+  <p class="muted product-links-note home-product-links-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
+  {{~ end ~}}
 </section>
 {{~ end ~}}

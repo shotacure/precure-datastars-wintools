@@ -396,6 +396,20 @@ public sealed partial class OgCardRenderer
         var canvas = surface.Canvas;
         if (SceneTransparent) canvas.Clear(SKColors.Transparent);
         else DrawSceneBackground(canvas, scene.Width, FontScene.Height);
+        // 環状のグラデーションは、同じまとまりのテロップ全体の中心を軸にするので、先に置く範囲を求める。
+        // 範囲は行ごとの仮想ボディ（字の並びの左端から行の幅、ベースラインの上 TelopAscentRatio・下 1 − TelopAscentRatio）を合わせた四角
+        var groupBounds = new Dictionary<string, SKRect>(StringComparer.Ordinal);
+        foreach (var scenePiece in scene.Pieces)
+        {
+            if (SceneGlyphOnly || scenePiece.Group is not { } group || scenePiece.Profile.Decoration.FillGradient is not { Radial: true }) continue;
+            var probe = DrawTelopImage(scenePiece.Html, scenePiece.FontFamily, scenePiece.Profile, scenePiece.SizePx);
+            if (probe is null) continue;
+            float pl = scenePiece.CenterX ? scenePiece.X - probe.LineWidth / 2f : scenePiece.X;
+            var rect = new SKRect(pl, scenePiece.Y - scenePiece.SizePx * TelopAscentRatio, pl + probe.LineWidth,
+                scenePiece.Y + scenePiece.SizePx * (1f - TelopAscentRatio));
+            probe.Image.Dispose();
+            groupBounds[group] = groupBounds.TryGetValue(group, out var acc) ? SKRect.Union(acc, rect) : rect;
+        }
         foreach (var scenePiece in scene.Pieces)
         {
             var piece = SceneGlyphOnly ? scenePiece with { Profile = GlyphOnly(scenePiece.Profile) } : scenePiece;
@@ -403,6 +417,18 @@ public sealed partial class OgCardRenderer
             if (drawn is null) continue;
             float left = piece.CenterX ? piece.X - drawn.LineWidth / 2f : piece.X;
             float ox = left - drawn.Left, oy = piece.Y - drawn.Baseline;
+            // 環状のグラデーションは、まとまりの中心と半径（中心からいちばん遠い角までの距離 × 倍率）を組みの座標に直し、描き直す
+            if (piece.Group is { } g && groupBounds.TryGetValue(g, out var bounds) && piece.Profile.Decoration.FillGradient is { Radial: true } rg)
+            {
+                drawn.Image.Dispose();
+                float lx = ox + drawn.OriginX, ly = oy + drawn.OriginY;
+                float cx = bounds.MidX - lx, cy = bounds.MidY - ly;
+                float radius = MathF.Sqrt(bounds.Width * bounds.Width + bounds.Height * bounds.Height) / 2f * rg.Radius;
+                var local = rg with { Line = [cx, cy, cx + radius, cy] };
+                var profile = piece.Profile with { Decoration = piece.Profile.Decoration with { FillGradient = local } };
+                drawn = DrawTelopImage(piece.Html, piece.FontFamily, profile, piece.SizePx);
+                if (drawn is null) continue;
+            }
             // 画面全体にかかるグラデーションは、置く位置を差し引いて組みの座標に直し、描き直す（置く位置も切り抜き方も塗りによらない）
             if (piece.Profile.Decoration.FillGradient is { SceneLine: { Count: 4 } sl } fg)
             {
@@ -740,6 +766,65 @@ public sealed partial class OgCardRenderer
         float originX = bleed - cutX, originY = bleed - cutTop;
         return new TelopImage(cropped, originY + lineTops[0] + size * TelopAscentRatio, originX + (width - widths[0]) / 2f, widths[0],
             originX, originY);
+    }
+
+    /// <summary>
+    /// テロップを描いた画像の作り置き。null なら毎回描く。OGP カードの見出しに載せるサブタイトル
+    /// （<see cref="DrawTelopImageCached"/>）だけが使う。
+    /// </summary>
+    internal TelopImageCache? TelopCache { get; init; }
+
+    /// <summary>
+    /// <see cref="DrawTelopImage"/> と同じ画像を、作り置き（<see cref="TelopCache"/>）があればそこから返す。無ければ描いて作り置きに足す。
+    /// 指定の書体がこの PC に無く既定の書体で描いた画像は、作り置きに入れない（書体を入れた次のビルドで描き直されるように）。
+    /// 使った作り置きのうち数個は描き直して突き合わせ、違っていたら控えて描き直したほうに置き換える
+    /// （鍵に入らない理由で絵が変わったことに気づくため）。
+    /// </summary>
+    private TelopImage? DrawTelopImageCached(string rubyHtml, string fontFamily, SubtitleTelopProfile profile, float? fixedSize)
+    {
+        if (TelopCache is not { } cache) return DrawTelopImage(rubyHtml, fontFamily, profile, fixedSize);
+        string key = TelopImageCache.Key(rubyHtml, fontFamily, profile, fixedSize, _headingFontFile);
+        if (cache.TryRead(key) is { } hit)
+        {
+            if (cache.TakeVerifySlot() && TelopTypefacesResolved(fontFamily, profile)
+                && DrawTelopImage(rubyHtml, fontFamily, profile, fixedSize) is { } fresh)
+            {
+                var entry = ToCacheEntry(fresh);
+                if (!entry.SameAs(hit))
+                {
+                    cache.ReportMismatch(rubyHtml);
+                    cache.Write(key, entry);
+                    return fresh;
+                }
+                fresh.Image.Dispose();
+            }
+            var info = new SKImageInfo(hit.Width, hit.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+            return new TelopImage(SKImage.FromPixelCopy(info, hit.Pixels), hit.Baseline, hit.Left, hit.LineWidth, hit.OriginX, hit.OriginY);
+        }
+        var drawn = DrawTelopImage(rubyHtml, fontFamily, profile, fixedSize);
+        if (drawn is null) return null;
+        if (TelopTypefacesResolved(fontFamily, profile)) cache.Write(key, ToCacheEntry(drawn));
+        return drawn;
+    }
+
+    /// <summary>テロップの親字と振り仮名の書体が、指定の名前でこの PC から引けるか（名前が空なら既定の書体を使うので引けたとみなす）。</summary>
+    private bool TelopTypefacesResolved(string fontFamily, SubtitleTelopProfile profile)
+    {
+        ResolveTypeface(fontFamily, _boldTypeface, out string? baseWarning);
+        string? rubyWarning = null;
+        if (profile.RubyFontFamily.Length > 0) ResolveTypeface(profile.RubyFontFamily, _boldTypeface, out rubyWarning);
+        return baseWarning is null && rubyWarning is null;
+    }
+
+    /// <summary>描いたテロップを、作り置きに置く形（画素の並びと基準の値）にする。</summary>
+    private static TelopImageCache.Entry ToCacheEntry(TelopImage drawn)
+    {
+        var info = new SKImageInfo(drawn.Image.Width, drawn.Image.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var bitmap = new SKBitmap(info);
+        if (!drawn.Image.ReadPixels(info, bitmap.GetPixels(), info.RowBytes, 0, 0))
+            throw new InvalidOperationException("テロップの画像の画素を読めませんでした。");
+        return new TelopImageCache.Entry(info.Width, info.Height, bitmap.GetPixelSpan().ToArray(),
+            drawn.Baseline, drawn.Left, drawn.LineWidth, drawn.OriginX, drawn.OriginY);
     }
 
     /// <summary>画像の不透明な画素の範囲（左・上・右・下、両端を含む）。不透明な画素が無ければ右 &lt; 左になる。</summary>

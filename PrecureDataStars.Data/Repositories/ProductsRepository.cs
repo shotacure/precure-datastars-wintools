@@ -54,6 +54,7 @@ public sealed class ProductsRepository : RepositoryBase
           cover_image_source             AS CoverImageSource,
           cover_image_show_both          AS CoverImageShowBoth,
           cover_image_fetched_at         AS CoverImageFetchedAt,
+          amazon_ean                     AS AmazonEan,
           notes                          AS Notes,
           official_url                   AS OfficialUrl,
           youtube_art_track_playlist_id  AS YoutubeArtTrackPlaylistId,
@@ -223,6 +224,23 @@ public sealed class ProductsRepository : RepositoryBase
             CoverImageSource = coverImageSource,
             FetchedAt = fetchedAt
         }, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Amazon の CD の ASIN から取った EAN（JAN）を更新する。AmazonSync がジャケット画像の取り直しと同じ巡回で呼ぶ専用メソッド
+    /// （画像と同じく毎日入れ替える）。取れなかったときは null で空にする。商品の他項目には触れない。
+    /// </summary>
+    /// <param name="productCatalogNo">対象商品の代表品番。</param>
+    /// <param name="amazonEan">EAN（13 桁。無ければ null）。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task UpdateAmazonEanAsync(string productCatalogNo, string? amazonEan, CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE products SET amazon_ean = @AmazonEan
+            WHERE product_catalog_no = @ProductCatalogNo;
+            """;
+
+        await ExecuteAsync(sql, new { ProductCatalogNo = productCatalogNo, AmazonEan = amazonEan }, ct).ConfigureAwait(false);
     }
 
     /// <summary>表示に採用するジャケット画像ソース（代表）と「詳細で両方表示するか」だけを更新する。 Catalog の商品エディタで CD / デジタルを明示選択したときに呼ぶ。 既に両 URL は保存済みの前提で、採用フラグのみ切り替える（URL・取得日時は触らない）。</summary>

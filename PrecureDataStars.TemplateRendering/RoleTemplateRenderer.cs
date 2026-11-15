@@ -3,6 +3,7 @@ using PrecureDataStars.TemplateRendering.Handlers;
 using PrecureDataStars.Data;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
+using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.TemplateRendering;
 
@@ -14,11 +15,11 @@ namespace PrecureDataStars.TemplateRendering;
 /// サポートするプレースホルダ：
 /// <list type="bullet">
 ///   <item><description><c>{ROLE_NAME}</c> ... 役職表示名</description></item>
-///   <item><description><c>{LEADING_COMPANY}</c> ... カレントブロックの leading_company_alias_id 解決名</description></item>
+///   <item><description><c>{LEADING_COMPANY}</c> ... カレントブロックの leading_company_alias_id 解決名（2 社目 leading_company2_alias_id があれば間の字と 2 社目を、後ろの字 leading_company_suffix があればそれを続ける）</description></item>
 ///   <item><description><c>{COMPANIES[:sep="」「",wrap="「」"]}</c> ... カレントブロック内の COMPANY エントリ群を結合</description></item>
 ///   <item><description><c>{PERSONS[:sep="、"]}</c> ... カレントブロック内の PERSON エントリ群を結合</description></item>
 ///   <item><description><c>{LOGOS[:sep=" "]}</c> ... カレントブロック内の LOGO エントリ（ロゴ名義 → 文字列）</description></item>
-///   <item><description><c>{TEXTS[:sep=" "]}</c> ... カレントブロック内の TEXT エントリの raw_text 結合</description></item>
+///   <item><description><c>{TEXTS[:sep=" "]}</c> ... カレントブロック内の TEXT エントリの raw_text 結合（ブロックの外では役職の全ブロックの TEXT エントリを結合）</description></item>
 ///   <item><description><c>{THEME_SONGS[:kind=OP|ED|INSERT|OP+ED|ED+INSERT|ALL,columns=N]}</c> ... episode_theme_songs から動的取得（<see cref="ThemeSongsHandler"/> へ委譲）。kind 省略時は ALL 相当。</description></item>
 ///   <item><description><c>{ROLE_LINK:code=ROLE_CODE}</c> ... 役職統計ページへのリンク化済み HTML。
 ///     <c>code</c> オプションで指定された役職コードに対応する役職表示名を <see cref="ILookupCache.LookupRoleHtmlAsync"/>
@@ -38,19 +39,28 @@ namespace PrecureDataStars.TemplateRendering;
 ///     （旧 <c>{THEME_SONGS}</c> プレースホルダにも効く）。
 ///     曲名（<c>{SONG_TITLE}</c>）は、画面の表記（<c>title_credited_text</c>）があれば文字だけその表記で出す（誤記があるときは使わない）。
 ///     <c>merge_same_song=1</c> を書くと、同じ曲の録音が続く行を 1 曲にまとめる（歌唱は歌い手を改行で並べ、版の名前は出さない）。
+///     <c>cv="CV."</c> のように書くと、歌唱・コーラスの「キャラ(CV:声優)」の声優の前の記号を、歌唱者の行の記号（盤の表記）に代えてその文字にする。
+///     エピソードのクレジットに出た歌唱者（<c>episode_theme_song_singers</c>）がある主題歌は、歌唱・コーラスを録音の歌唱者ではなくその行で描く。
 ///     内側で <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> / <c>{COMPOSER}</c> /
 ///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{CHORUS}</c> / <c>{VARIANT_LABEL}</c> / <c>{SONG_SERIES_TITLE}</c> の楽曲スコーププレースホルダが
 ///     解決可能（<c>{CHORUS}</c> は <c>BACKING_VOCALS</c> 役職の連名、不在時は空）。
 ///     連名のプレースホルダ（<c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> / <c>{MEDLEY_ARRANGER}</c> /
 ///     <c>{SINGER}</c> / <c>{CHORUS}</c>）は <c>sep="…"</c> で名義の間の区切りを差し替えられる（DB の区切りの代わりに
 ///     テンプレの文字を HTML のまま入れる。<c>sep="&lt;br&gt;"</c> で改行）。構造化クレジットが無い曲には効かない。
+///     <c>{SINGER}</c> / <c>{CHORUS}</c> は <c>cv_align=1</c> で、1 人 1 行に並べて「(CV:…)」の頭を縦にそろえる
+///     （名前と「(CV:…)」を 2 列の格子に分ける。名義が 2 つ以上のときだけ）。
+///     <c>{SINGER}</c> / <c>{CHORUS}</c> は <c>member_sep="…"</c> で、ユニット名義のメンバーのあいだの区切り（既定は「・」）を作品の画面の字にする
+///     （「キュア・カルテット（五條 真由美、うちやえ ゆか…）」の「、」）。
+///     <c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> は、曲のクレジットの所属の出し方が「名義のあとに所属を添える」行なら、名義のあとに
+///     「(所属)」を小さい字で添える（次の名義と同じ所属が続くときは最後の名義のあとにだけ）。所属を出すかどうかは曲のクレジットで決まり、テンプレでは指定しない。
 ///     <c>{SONG_SERIES_TITLE}</c> は曲の作品（録音の作品）の正式タイトルで、クレジットの作品と同じ作品の曲なら空。
 ///     <c>{SAME_COMPOSER_ARRANGER}</c> は作曲と編曲が同じ名義（連名も同じ）なら "1"、違えば空で、
 ///     <c>{?SAME_COMPOSER_ARRANGER}</c> / <c>{?!SAME_COMPOSER_ARRANGER}</c> で書き分ける。
 ///     <c>{SAME_LYRICIST_COMPOSER_ARRANGER}</c> は作詞・作曲・編曲の 3 つが同じ名義なら "1"、違えば空。
+///     <c>{SAME_LYRICIST_COMPOSER}</c> は作詞と作曲が同じ名義なら "1"、違えば空（「作詞・作曲：」の 1 行にまとめる画面用）。
 ///     所属の会社名だけを出す行（「Nostalgic Orchestra」）は会社名どうしで同じと見る。
 ///     <c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> は、会社名だけの行なら会社名のあとに実際の人物を小さい括弧で添え、
-///     <c>{?SAME_LYRICIST_COMPOSER_ARRANGER}</c> / <c>{?SAME_COMPOSER_ARRANGER}</c> の中では、まとめた役職ぶんの人物を
+///     <c>{?SAME_LYRICIST_COMPOSER_ARRANGER}</c> / <c>{?SAME_LYRICIST_COMPOSER}</c> / <c>{?SAME_COMPOSER_ARRANGER}</c> の中では、まとめた役職ぶんの人物を
 ///     役職つきで並べる（「作詞・作曲・編曲：Nostalgic Orchestra（作詞・作曲：藤本 記子、編曲：福富 雅之）」）。
 ///     <c>{LYRICS_TRANSLATOR}</c> は英訳（<c>LYRICS_TRANSLATION</c> 役職）の連名で、無い曲は空。
 ///     <c>{INSTRUMENTAL}</c> はその回（その映画）ではインストゥルメンタルで使った曲なら "1"、違えば空で、
@@ -67,20 +77,75 @@ public static class RoleTemplateRenderer
     /// フリーテキストのときは、DB の区切りでつないだ <paramref name="joinedHtml"/> を返す。
     /// </summary>
     private static string NamesHtml(PlaceholderNode ph, string? joinedHtml,
-        IReadOnlyList<(string Sep, string Html)>? parts)
+        IReadOnlyList<(string Sep, string Html)>? parts, IReadOnlyList<int>? cvStarts = null)
     {
-        if (parts is { Count: > 1 } && ph.Options.TryGetValue("sep", out var sep))
-            return string.Join(sep, parts.Select(p => p.Html));
-        return joinedHtml ?? "";
+        string html;
+        if (parts is { Count: > 1 } && cvStarts is not null && cvStarts.Count == parts.Count
+            && ph.Options.TryGetValue("cv_align", out var align) && align == "1")
+            html = CvAlignedHtml(parts, cvStarts);
+        else if (parts is { Count: > 1 } && ph.Options.TryGetValue("sep", out var sep))
+            html = string.Join(sep, parts.Select(p => p.Html));
+        else
+            html = joinedHtml ?? "";
+        // member_sep：ユニット名義のメンバーのあいだの区切り（既定は「・」）を、作品の画面の字に差し替える。
+        if (ph.Options.TryGetValue("member_sep", out var memberSep))
+            html = html.Replace(SongRecordingSingersRepository.UnitMemberSeparatorHtml, System.Net.WebUtility.HtmlEncode(memberSep));
+        return html;
+    }
+
+    /// <summary>
+    /// 歌・コーラスの名義を 1 人 1 行に並べ、「(CV:…)」の頭を縦にそろえた HTML（<c>{SINGER:cv_align=1}</c>）。
+    /// 名前と「(CV:…)」（所属の添え書きを含む）を 2 列の表の別の欄に入れ、名前の欄の幅をいちばん長い名前に合わせる
+    /// （画面で短い名前の後ろを空けて「(CV:」をそろえている作品用）。「(CV:…)」の無い名義は 2 列をまたいで 1 行に置く。
+    /// 表にしているのは Catalog のプレビュー（IE の描画）でもそろえるため。サイトの狭い幅では、site.css が表を
+    /// ほどいて 1 人 1 行の並びに戻す（クラス <c>cv-align</c>）。DB の区切り（「&amp;」「、」など）は使わない。
+    /// </summary>
+    private static string CvAlignedHtml(IReadOnlyList<(string Sep, string Html)> parts, IReadOnlyList<int> cvStarts)
+    {
+        const string cell = "<td style=\"padding:0;border:0;background:transparent;vertical-align:baseline;white-space:nowrap;\"";
+        var sb = new System.Text.StringBuilder(
+            "<table class=\"cv-align\" style=\"display:inline-table;width:auto;border-collapse:collapse;margin:0;\"><tbody>");
+        for (int i = 0; i < parts.Count; i++)
+        {
+            string html = parts[i].Html;
+            int at = cvStarts[i];
+            sb.Append("<tr>");
+            if (at < 0 || at > html.Length)
+                sb.Append(cell).Append(" colspan=\"2\">").Append(html).Append("</td>");
+            else
+                sb.Append(cell).Append('>').Append(html, 0, at).Append("</td>")
+                  .Append(cell).Append('>').Append(html, at, html.Length - at).Append("</td>");
+            sb.Append("</tr>");
+        }
+        return sb.Append("</tbody></table>").ToString();
+    }
+
+    /// <summary>
+    /// 作家の連名（<c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c>）の値。名義のあとに所属を添えた部品
+    /// （<paramref name="affParts"/>）があれば、それを DB の区切り（<c>sep="…"</c> があればテンプレの文字）でつなぐ。
+    /// 所属を添えない行は名義だけの部品と同じ中身になる。構造化クレジットが無い曲は <see cref="NamesHtml"/> と同じ。
+    /// </summary>
+    private static string CreditNamesHtml(PlaceholderNode ph, string? joinedHtml,
+        IReadOnlyList<(string Sep, string Html)>? parts, IReadOnlyList<(string Sep, string Html)>? affParts)
+    {
+        if (affParts is { Count: > 0 })
+        {
+            if (affParts.Count > 1 && ph.Options.TryGetValue("sep", out var sep))
+                return string.Join(sep, affParts.Select(p => p.Html));
+            return string.Concat(affParts.Select(p => System.Net.WebUtility.HtmlEncode(p.Sep) + p.Html));
+        }
+        return NamesHtml(ph, joinedHtml, parts);
     }
 
     /// <summary>
     /// 1 行にまとめる条件の名前 → その行にまとめた役職の並び。
-    /// <c>SAME_LYRICIST_COMPOSER_ARRANGER</c> は作詞・作曲・編曲、<c>SAME_COMPOSER_ARRANGER</c> は作曲・編曲。それ以外は null。
+    /// <c>SAME_LYRICIST_COMPOSER_ARRANGER</c> は作詞・作曲・編曲、<c>SAME_LYRICIST_COMPOSER</c> は作詞・作曲、
+    /// <c>SAME_COMPOSER_ARRANGER</c> は作曲・編曲。それ以外は null。
     /// </summary>
     private static IReadOnlyList<string>? MergedRolesOf(string conditionName) => conditionName switch
     {
         "SAME_LYRICIST_COMPOSER_ARRANGER" => new[] { SongCreditRoles.Lyrics, SongCreditRoles.Composition, SongCreditRoles.Arrangement },
+        "SAME_LYRICIST_COMPOSER" => new[] { SongCreditRoles.Lyrics, SongCreditRoles.Composition },
         "SAME_COMPOSER_ARRANGER" => new[] { SongCreditRoles.Composition, SongCreditRoles.Arrangement },
         _ => null,
     };
@@ -119,6 +184,7 @@ public static class RoleTemplateRenderer
                             : string.IsNullOrEmpty(row.SingerHtml) ? prev.SingerHtml
                             : prev.SingerHtml + "<br>" + row.SingerHtml;
             prev.SingerParts = prev.SingerParts.Concat(row.SingerParts.Select((p, i) => i == 0 ? ("<br>", p.Html) : p)).ToList();
+            prev.SingerCvStarts = prev.SingerCvStarts.Concat(row.SingerCvStarts).ToList();
             prev.VariantLabel = null;
         }
         return result;
@@ -188,7 +254,11 @@ public static class RoleTemplateRenderer
                                            .Select(s => s.ToUpperInvariant())
                                            .ToArray();
                         }
-                        var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, lookup, ct).ConfigureAwait(false);
+                        // cv="…"：歌唱・コーラスの声優の前に置く記号を、歌唱者の行の記号（盤の表記）に代えて画面の記号にする。
+                        string cvRaw = tsLoop.GetOption("cv", "");
+                        var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, lookup, ct,
+                            cvLabelOverride: string.IsNullOrEmpty(cvRaw) ? null : cvRaw,
+                            includeBroadcastOnly: ctx.ShowsBroadcastOnlySongs).ConfigureAwait(false);
                         // seq=N / seq=N-M：同じ区分の中で番号（episode_theme_songs / series_theme_songs.seq）が範囲に入る曲だけを出す。
                         // 「テーマソング」と「挿入歌」のように、同じ挿入歌の区分の曲を別々の役職の欄に分けて出す画面用。
                         if (TryParseSeqRange(tsLoop.GetOption("seq", ""), out int seqFrom, out int seqTo))
@@ -224,8 +294,13 @@ public static class RoleTemplateRenderer
                     {
                         // 条件名を「カレントスコープのプレースホルダ」として一度解決し、非空なら本体を展開。
                         // 名前の頭に "!" があれば否定（解決値が空のときだけ展開）。
+                        // 「{?SONG_CREDIT:code=BRASS_ARRANGEMENT}」のように名前の後ろに指定があれば、プレースホルダと同じく読む。
                         bool negate = cond.Name.StartsWith('!');
-                        var probe = new PlaceholderNode(negate ? cond.Name.Substring(1) : cond.Name);
+                        string condName = negate ? cond.Name.Substring(1) : cond.Name;
+                        int condColon = condName.IndexOf(':');
+                        var probe = condColon < 0
+                            ? new PlaceholderNode(condName)
+                            : new PlaceholderNode(condName.Substring(0, condColon).Trim(), TemplateParser.ParseOptions(condName.Substring(condColon + 1)));
                         string val = await ResolvePlaceholderAsync(probe, ctx, currentBlock, currentSong, factory, lookup, ct).ConfigureAwait(false);
                         if (string.IsNullOrEmpty(val) == negate)
                         {
@@ -356,7 +431,11 @@ public static class RoleTemplateRenderer
                 // HTML 出力経路のため、役職名も HTML エスケープを通す。
                 // 既存テンプレでは「役職名 ＋ ブロック展開結果」の単純連結で使われており、
                 // 役職名に HTML 特殊文字が含まれるケースは稀だが念のため。
-                return System.Net.WebUtility.HtmlEncode(ctx.RoleName);
+                // 役職名だけ画面に無い行（role_label_not_on_screen）は、役職名を全角の括弧で包んで薄く出す。
+                {
+                    string roleNameHtml = System.Net.WebUtility.HtmlEncode(ctx.RoleName);
+                    return ctx.RoleLabelNotOnScreen ? CreditRoleLabel.WrapNotOnScreenHtml(roleNameHtml) : roleNameHtml;
+                }
 
             case "SERIES_TITLE":
                 // scope_kind=SERIES のシリーズタイトル（series.title）。EPISODE スコープや未供給時は空文字。
@@ -427,13 +506,14 @@ public static class RoleTemplateRenderer
             case "LYRICIST":
                 // stage B-4：構造化クレジットがあればリンク化済み HTML、なければ
                 // 会社名だけの行（「Nostalgic Orchestra」）には、実際の人物の括弧を添える。
-                return NamesHtml(ph, currentSong?.LyricistHtml, currentSong?.LyricistParts)
+                // 曲のクレジットで「名義のあとに所属を添える」行は、名義のあとに所属を「(所属)」で添える。
+                return CreditNamesHtml(ph, currentSong?.LyricistHtml, currentSong?.LyricistParts, currentSong?.LyricistAffParts)
                      + ThemeSongsHandler.CompanyOnlyPeopleSuffixHtml(currentSong, SongCreditRoles.Lyrics);
             case "COMPOSER":
-                return NamesHtml(ph, currentSong?.ComposerHtml, currentSong?.ComposerParts)
+                return CreditNamesHtml(ph, currentSong?.ComposerHtml, currentSong?.ComposerParts, currentSong?.ComposerAffParts)
                      + ThemeSongsHandler.CompanyOnlyPeopleSuffixHtml(currentSong, SongCreditRoles.Composition);
             case "ARRANGER":
-                return NamesHtml(ph, currentSong?.ArrangerHtml, currentSong?.ArrangerParts)
+                return CreditNamesHtml(ph, currentSong?.ArrangerHtml, currentSong?.ArrangerParts, currentSong?.ArrangerAffParts)
                      + ThemeSongsHandler.CompanyOnlyPeopleSuffixHtml(currentSong, SongCreditRoles.Arrangement);
             case "SAME_COMPOSER_ARRANGER":
                 // 作曲と編曲が同じ名義（連名も同じ）なら "1"。画面で「作曲：」「編曲：」の 2 行に名前を 1 つだけ出す作品用。
@@ -445,6 +525,11 @@ public static class RoleTemplateRenderer
                 return currentSong is { LyricistHtml.Length: > 0 } sameAll
                        && string.Equals(sameAll.LyricistHtml, sameAll.ComposerHtml, StringComparison.Ordinal)
                        && string.Equals(sameAll.ComposerHtml, sameAll.ArrangerHtml, StringComparison.Ordinal)
+                    ? "1" : "";
+            case "SAME_LYRICIST_COMPOSER":
+                // 作詞と作曲が同じ名義（連名も同じ）なら "1"。画面で「作詞・作曲：」の 1 行にまとめ、編曲を別の行に出す作品用。
+                return currentSong is { LyricistHtml.Length: > 0 } sameLc
+                       && string.Equals(sameLc.LyricistHtml, sameLc.ComposerHtml, StringComparison.Ordinal)
                     ? "1" : "";
             case "LYRICS_TRANSLATOR":
                 // 楽曲スコープ：英訳（LYRICS_TRANSLATION）の連名（リンク化済み HTML）。無い曲は空文字列で、
@@ -459,13 +544,20 @@ public static class RoleTemplateRenderer
                 // 楽曲スコープ：メドレー編曲の連名（リンク化済み HTML）。無い曲は空文字列で、
                 // テンプレ側で {?MEDLEY_ARRANGER}メドレー編曲:{MEDLEY_ARRANGER}{/?MEDLEY_ARRANGER} のように条件展開できる。
                 return NamesHtml(ph, currentSong?.MedleyArrangerHtml, currentSong?.MedleyArrangerParts);
+            case "SONG_CREDIT":
+                // 楽曲スコープ：code で指定した追加の編曲（STRINGS_ARRANGEMENT・ORCHESTRA_ARRANGEMENT・BRASS_ARRANGEMENT）の連名
+                // （リンク化済み HTML）。無い曲は空文字列で、テンプレ側で
+                // {?SONG_CREDIT:code=BRASS_ARRANGEMENT}ブラスアレンジ：{SONG_CREDIT:code=BRASS_ARRANGEMENT}{/?SONG_CREDIT:code=BRASS_ARRANGEMENT} のように条件展開できる。
+                return currentSong is not null && currentSong.ExtraCredits.TryGetValue(ph.GetOption("code", ""), out var extra)
+                    ? NamesHtml(ph, extra.Html, extra.Parts)
+                    : "";
             case "SINGER":
-                return NamesHtml(ph, currentSong?.SingerHtml, currentSong?.SingerParts);
+                return NamesHtml(ph, currentSong?.SingerHtml, currentSong?.SingerParts, currentSong?.SingerCvStarts);
             case "CHORUS":
                 // 楽曲スコープ：BACKING_VOCALS 役職の連名（リンク化済み HTML）。
                 // 該当録音にコーラスが居ない場合は空文字列を返すため、
                 // テンプレ側で {?CHORUS}コーラス:{CHORUS}{/?CHORUS} のように条件展開できる。
-                return NamesHtml(ph, currentSong?.ChorusHtml, currentSong?.ChorusParts);
+                return NamesHtml(ph, currentSong?.ChorusHtml, currentSong?.ChorusParts, currentSong?.ChorusCvStarts);
             case "VARIANT_LABEL":
                 return System.Net.WebUtility.HtmlEncode(currentSong?.VariantLabel ?? "");
             case "SONG_SERIES_TITLE":
@@ -490,7 +582,7 @@ public static class RoleTemplateRenderer
                     // 役職の行の theme_song_seq があれば、その劇中順の範囲の曲だけを出す。
                     int? phSeqFrom = null, phSeqTo = null;
                     if (TryParseSeqRange(ctx.ThemeSongSeq ?? "", out int roleFrom, out int roleTo)) { phSeqFrom = roleFrom; phSeqTo = roleTo; }
-                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, cols, lookup, ct, phSeqFrom, phSeqTo).ConfigureAwait(false);
+                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, cols, lookup, ct, phSeqFrom, phSeqTo, ctx.ShowsBroadcastOnlySongs).ConfigureAwait(false);
                 }
 
             case "LEADING_COMPANY":
@@ -500,7 +592,21 @@ public static class RoleTemplateRenderer
                     // SiteBuilder 側 LookupCache はリンク化済み HTML を、Catalog 側は HTML エスケープした
                     // プレーンテキストを返す（ILookupCache のデフォルト実装にフォールバック）。
                     var name = await lookup.LookupCompanyAliasHtmlAsync(leadId).ConfigureAwait(false);
-                    return name ?? "";
+                    if (string.IsNullOrEmpty(name)) return "";
+                    // 筆頭が 2 社の連名なら「社名1 + 間の字 + 社名2」、後ろの字があれば続ける（字はエスケープして出す）。
+                    var leadSb = new StringBuilder(name);
+                    if (currentBlock.Block.LeadingCompany2AliasId is int lead2Id)
+                    {
+                        var name2 = await lookup.LookupCompanyAliasHtmlAsync(lead2Id).ConfigureAwait(false);
+                        if (!string.IsNullOrEmpty(name2))
+                        {
+                            leadSb.Append(System.Net.WebUtility.HtmlEncode(currentBlock.Block.LeadingCompanySeparator ?? ""))
+                                  .Append(name2);
+                        }
+                    }
+                    if (!string.IsNullOrEmpty(currentBlock.Block.LeadingCompanySuffix))
+                        leadSb.Append(System.Net.WebUtility.HtmlEncode(currentBlock.Block.LeadingCompanySuffix));
+                    return leadSb.ToString();
                 }
 
             case "COMPANIES":
@@ -549,8 +655,13 @@ public static class RoleTemplateRenderer
 
             case "TEXTS":
                 {
-                    if (currentBlock is null) return "";
-                    var texts = currentBlock.Entries
+                    // ブロックの外（役職のスコープ）では、その役職の全ブロックの TEXT エントリを順に結合する。
+                    // 映画のタイトルカード（役職 TITLE）で、画面のタイトルが作品名と違う行だけ文字を持たせ、
+                    // 「{?TEXTS}{TEXTS}{/?TEXTS}{?!TEXTS}{SERIES_TITLE}{/?!TEXTS}」のように書き分けるのに使う。
+                    var sourceEntries = currentBlock is not null
+                        ? currentBlock.Entries
+                        : ctx.Blocks.SelectMany(b => b.Entries);
+                    var texts = sourceEntries
                         .Where(x => x.EntryKind == "TEXT" && !string.IsNullOrEmpty(x.RawText))
                         .Select(x => x.RawText!).ToList();
                     string sep = ph.GetOption("sep", " ");
@@ -583,6 +694,10 @@ public static class RoleTemplateRenderer
                     // 挙動を ILookupCache.LookupRoleHtmlWithLabelAsync 側で持っている。
                     string roleCode = ph.GetOption("code", "");
                     if (string.IsNullOrEmpty(roleCode)) return "";
+                    // 自分の役職コードを指すリンク（テンプレが自前で置く見出し）は、役職名だけ画面に無い行なら
+                    // 全角の括弧で包んで薄く出す。ほかの役職コードを指すリンクは包まない。
+                    bool wrapNotOnScreen = ctx.RoleLabelNotOnScreen
+                        && string.Equals(roleCode, ctx.RoleCode, StringComparison.Ordinal);
                     string label = ph.GetOption("label", "");
                     if (!string.IsNullOrEmpty(label))
                     {
@@ -594,11 +709,13 @@ public static class RoleTemplateRenderer
                             label = label.Replace("{SERIES_TITLE}", ctx.ScopeSeriesTitle ?? "", StringComparison.Ordinal);
                         }
                         var inner = await lookup.LookupRoleHtmlWithLabelAsync(roleCode, label).ConfigureAwait(false);
-                        return inner ?? "";
+                        return wrapNotOnScreen ? CreditRoleLabel.WrapNotOnScreenHtml(inner ?? "") : (inner ?? "");
                     }
                     var html = await lookup.LookupRoleHtmlAsync(roleCode).ConfigureAwait(false);
                     if (string.IsNullOrEmpty(html)) return "";
-                    return $"<strong>{html}</strong>";
+                    return wrapNotOnScreen
+                        ? CreditRoleLabel.WrapNotOnScreenHtml($"<strong>{html}</strong>")
+                        : $"<strong>{html}</strong>";
                 }
 
             default:

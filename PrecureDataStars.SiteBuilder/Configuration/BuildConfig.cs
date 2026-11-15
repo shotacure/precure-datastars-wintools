@@ -42,9 +42,6 @@ public sealed class BuildConfig
     /// <summary>Google Search Console の所有権確認用トークン （&lt;meta name="google-site-verification" content="..."&gt; の content 値）。</summary>
     public string GoogleSiteVerification { get; }
 
-    /// <summary>Google AdSense のパブリッシャー ID（例: ca-pub-1234567890123456）。</summary>
-    public string GoogleAdSenseClientId { get; }
-
     /// <summary>サイトの公開（初公開）年。</summary>
     public int PublishedYear { get; }
 
@@ -55,14 +52,15 @@ public sealed class BuildConfig
     public string AmazonAssociateTag { get; }
 
     /// <summary>OGP カードの書体ファイル（App.config の <c>OgCardTitleFont</c> / <c>OgCardBodyFont</c> / <c>OgCardEmphasisFont</c> /
-    /// <c>OgCardNumberFont</c> / <c>OgCardWatermarkFont</c>、見出しのコンデンス版は <c>OgCardTitleCondensedFonts</c>）。
+    /// <c>OgCardNumberFont</c> / <c>OgCardWatermarkFont</c>、見出しのコンデンス版は <c>OgCardTitleCondensedFonts</c>、
+    /// 欧文の差し替えは <c>OgCardLatinFont</c>、欠けた字の補いは <c>OgCardFallbackFont</c>、
+    /// それでも欠ける簡体字の補いは <c>OgCardChineseFallbackFont</c>〔見出し側〕・<c>OgCardChineseBodyFallbackFont</c>〔本文側〕）。
     /// 空のものは同梱の Noto Sans JP にフォールバックする。</summary>
     public Rendering.OgCardFontPaths OgCardFonts { get; }
 
     /// <summary>本番モードかどうか。コマンドライン引数 <c>--production</c> 指定時のみ true。
     /// テストモード（既定）では出力先が <c>SiteOutputDirTest</c> に切り替わり、
-    /// <see cref="Ga4MeasurementId"/> / <see cref="GoogleAdSenseClientId"/> が空文字に正規化されて
-    /// GA4 タグ・AdSense タグ・ads.txt の出力経路ごと止まる
+    /// <see cref="Ga4MeasurementId"/> が空文字に正規化されて GA4 タグの出力経路ごと止まる
     /// （ID 自体は App.config に常設したまま、起動引数だけで公開ビルドに移行できる）。</summary>
     public bool IsProductionMode { get; }
 
@@ -124,9 +122,24 @@ public sealed class BuildConfig
     /// 出力ディレクトリの中に置くと全体ビルドの最後に孤児として消されるので、その外に置く（テストと本番で共用する）。</summary>
     public string OgCardCacheDirectory { get; }
 
+    /// <summary>OGP カードの見出しに載せるサブタイトルの装飾（<see cref="Rendering.TelopImageCache"/>）の作り置きの置き場所（絶対パス）。
+    /// App.config の <c>TelopPieceCacheDir</c>。未設定なら <c>%LOCALAPPDATA%\PrecureDataStars\SiteBuilder\telop-pieces</c>。
+    /// 出力ディレクトリの外に置く（テストと本番で共用する）。<c>--refresh-telop</c> のときは使わずに描き直す。</summary>
+    public string TelopPieceCacheDirectory { get; }
+
     /// <summary>OGP カード画像を、作り置きを使わずに描き直すか（<c>--refresh-og</c> 由来）。
     /// <see cref="PageFilter"/> と組み合わせると、対象のページの画像だけを描き直す。</summary>
     public bool RefreshOgCards { get; }
+
+    /// <summary>テストビルドで差し替えるビルドの基準時刻（<c>--as-of</c> 由来）。null なら今の時刻。
+    /// 予告・雑誌の発売で回が明らかになったか（<see cref="Utilities.PrereleaseEpisodeFilter"/>）とサブタイトルのぼかしの判定に使い、
+    /// 発売日の前と後でページがどう変わるかを確かめるためのもの。本番ビルドでは指定できない。</summary>
+    public DateTimeOffset? AsOf { get; }
+
+    /// <summary>出力に書き込まず、今の出力との差分だけを出すか（<c>--diff</c> 由来）。
+    /// 書き換わる・増えるファイルの中身は出力の隣の差分ディレクトリ（<see cref="Pipeline.OutputWriter.DiffDirectoryFor"/>）へ置き、
+    /// 出力・台帳・sitemap の更新日の控えには手を付けない。</summary>
+    public bool DiffOnly { get; }
 
     private BuildConfig(
         string connectionString,
@@ -137,7 +150,6 @@ public sealed class BuildConfig
         string siteNameJa,
         string ga4MeasurementId,
         string googleSiteVerification,
-        string googleAdSenseClientId,
         int publishedYear,
         string defaultOgImage,
         string amazonAssociateTag,
@@ -153,7 +165,10 @@ public sealed class BuildConfig
         string subtitleTelopCacheDirectory,
         bool refreshSubtitleTelops,
         string ogCardCacheDirectory,
-        bool refreshOgCards)
+        bool refreshOgCards,
+        string telopPieceCacheDirectory,
+        DateTimeOffset? asOf,
+        bool diffOnly)
     {
         ConnectionString = connectionString;
         OutputDirectory = outputDirectory;
@@ -163,7 +178,6 @@ public sealed class BuildConfig
         SiteNameJa = siteNameJa;
         Ga4MeasurementId = ga4MeasurementId;
         GoogleSiteVerification = googleSiteVerification;
-        GoogleAdSenseClientId = googleAdSenseClientId;
         PublishedYear = publishedYear;
         DefaultOgImage = defaultOgImage;
         AmazonAssociateTag = amazonAssociateTag;
@@ -180,6 +194,9 @@ public sealed class BuildConfig
         RefreshSubtitleTelops = refreshSubtitleTelops;
         OgCardCacheDirectory = ogCardCacheDirectory;
         RefreshOgCards = refreshOgCards;
+        TelopPieceCacheDirectory = telopPieceCacheDirectory;
+        AsOf = asOf;
+        DiffOnly = diffOnly;
     }
 
     /// <summary>
@@ -199,7 +216,13 @@ public sealed class BuildConfig
             Watermark: ReadFontPath("OgCardWatermarkFont"),
             TitleCondensed: ReadFontPaths("OgCardTitleCondensedFonts"),
             Notice: ReadFontPath("OgCardNoticeFont"),
-            ObliqueDegrees: ReadDegrees("OgCardObliqueDegrees"));
+            ObliqueDegrees: ReadDegrees("OgCardObliqueDegrees"),
+            Latin: ReadFontPath("OgCardLatinFont"),
+            Fallback: ReadFontPath("OgCardFallbackFont"),
+            Emoji: ReadFontPath("OgCardEmojiFont"),
+            Label: ReadFontPath("OgCardLabelFont"),
+            ChineseFallback: ReadFontPath("OgCardChineseFallbackFont"),
+            ChineseBodyFallback: ReadFontPath("OgCardChineseBodyFallbackFont"));
 
         // 斜体の角度（度）。未設定・不正なら 0（立てたまま）。
         static float ReadDegrees(string key)
@@ -235,15 +258,17 @@ public sealed class BuildConfig
 
     /// <summary>App.config から設定を読み出して <see cref="BuildConfig"/> を構築する。</summary>
     /// <param name="isProductionMode">本番モードかどうか（コマンドライン引数 <c>--production</c> 由来）。
-    /// 出力先ディレクトリの選択と、計測・広告系（GA4 / AdSense / ads.txt）の出力可否を決める。</param>
+    /// 出力先ディレクトリの選択と、計測（GA4）の出力可否を決める。</param>
     /// <param name="deploy">デプロイ実行時オプション（<c>--deploy</c> / <c>--dry-run</c> / <c>--yes</c> 由来）。
     /// 未指定なら <see cref="DeployRuntimeOptions.None"/> を渡す。</param>
     /// <param name="pageFilter">ピンポイントビルドのページフィルタ（<c>--page</c> 由来）。空文字なら全ページ。</param>
     /// <param name="refreshSubtitleTelops">サブタイトルのテロップ画像を作り置きを使わずに描き直すか（<c>--refresh-telop</c> 由来）。</param>
     /// <param name="refreshOgCards">OGP カード画像を作り置きを使わずに描き直すか（<c>--refresh-og</c> 由来）。</param>
+    /// <param name="asOf">テストビルドで差し替えるビルドの基準時刻（<c>--as-of</c> 由来）。null なら今の時刻。</param>
+    /// <param name="diffOnly">出力に書き込まず、今の出力との差分だけを出すか（<c>--diff</c> 由来）。</param>
     /// <returns>構築済み設定。</returns>
     /// <exception cref="InvalidOperationException">必須項目（接続文字列）が未設定の場合。</exception>
-    public static BuildConfig FromAppConfig(bool isProductionMode, DeployRuntimeOptions deploy, string pageFilter, bool refreshSubtitleTelops = false, bool refreshOgCards = false)
+    public static BuildConfig FromAppConfig(bool isProductionMode, DeployRuntimeOptions deploy, string pageFilter, bool refreshSubtitleTelops = false, bool refreshOgCards = false, DateTimeOffset? asOf = null, bool diffOnly = false)
     {
         // 接続文字列は既存ツール群と同じ名前（DbConfig.DefaultConnectionStringName = "DatastarsMySql"）で統一
         var cs = ConfigurationManager.ConnectionStrings[DbConfig.DefaultConnectionStringName]?.ConnectionString
@@ -282,9 +307,6 @@ public sealed class BuildConfig
         // _layout.sbn 側で空判定して埋め込み有無を切り替える運用。
         var ga4 = ConfigurationManager.AppSettings["Ga4MeasurementId"] ?? "";
         var gsv = ConfigurationManager.AppSettings["GoogleSiteVerification"] ?? "";
-        // AdSense 自動広告。設定されていれば head に AdSense ローダスクリプトを
-        // 埋め込んで Google の自動広告を有効化する。
-        var ads = ConfigurationManager.AppSettings["GoogleAdSenseClientId"] ?? "";
 
         // 公開年。App.config の SitePublishedYear で上書き可能。
         int publishedYear = 2026;
@@ -307,10 +329,9 @@ public sealed class BuildConfig
 
         var ogFonts = ReadOgCardFonts();
 
-        // テストモードでは GA4 / AdSense の ID を空に正規化して、タグ・ads.txt の出力経路ごと止める。
+        // テストモードでは GA4 の ID を空に正規化して、タグの出力経路ごと止める。
         // ID は App.config に常設したまま運用できる（公開ビルドのたびに値をよける必要がない）。
         var effectiveGa4 = isProductionMode ? ga4.Trim() : "";
-        var effectiveAds = isProductionMode ? ads.Trim() : "";
 
         // AWS デプロイ先設定。値の必須チェックは「実際に --deploy が指定されたとき」に
         // S3DeployService 側で行う（生成だけしたいケースで AWS 設定を強制しないため）。
@@ -329,6 +350,7 @@ public sealed class BuildConfig
         // 孤児として消されてしまうので、出力ディレクトリ（とその配下）を指していたら設定ミスとして起動時に止める。
         var telopCacheDir = ResolveCacheDir("SubtitleTelopCacheDir", "subtitle-telops");
         var ogCardCacheDir = ResolveCacheDir("OgCardCacheDir", "og-cards");
+        var telopPieceCacheDir = ResolveCacheDir("TelopPieceCacheDir", "telop-pieces");
 
         string ResolveCacheDir(string key, string defaultLeaf)
         {
@@ -352,9 +374,9 @@ public sealed class BuildConfig
 
         return new BuildConfig(
             cs, outputDir, articlesDir, baseUrl, siteName, siteNameJa,
-            effectiveGa4, gsv.Trim(), effectiveAds, publishedYear,
+            effectiveGa4, gsv.Trim(), publishedYear,
             defaultOg, amazonTag, ogFonts, isProductionMode,
             awsBucket, awsRegion, awsProfile, cfDist, protectedPrefixes, deploy,
-            pageFilter ?? "", telopCacheDir, refreshSubtitleTelops, ogCardCacheDir, refreshOgCards);
+            pageFilter ?? "", telopCacheDir, refreshSubtitleTelops, ogCardCacheDir, refreshOgCards, telopPieceCacheDir, asOf, diffOnly);
     }
 }

@@ -59,6 +59,9 @@ public sealed class ParsedCard
 
     /// <summary>カードの見せ方（"CARDS" / "ROLL"）。カード内の <c>@roll</c> 単独行で "ROLL" になる。既定 "CARDS"。</summary>
     public string Presentation { get; set; } = "CARDS";
+
+    /// <summary>カードの版（そのカードが出る媒体の組。値は <see cref="CreditMediaVersions"/>）。カード内の <c>@broadcast</c>・<c>@homevideo</c>・<c>@broadcast,bluray</c>・<c>@streaming</c> などの単独行で決まる。書かなければ null（共通）。</summary>
+    public string? MediaVersion { get; set; }
 }
 
 /// <summary>パース結果における 1 Tier 分の塊。 テキスト中の <c>--</c> 単独行で区切られる。tier_no は 1 と 2 のみが有効。</summary>
@@ -148,6 +151,11 @@ public sealed class ParsedRole
     /// 毎回出る役職がその回だけ画面から抜けているとき（クレジット漏れ）に立てる。データは入れて、表示だけ括弧で示す。</summary>
     public bool NotOnScreen { get; set; }
 
+    /// <summary>その行の役職名だけが画面にはクレジットされていないか（<c>credit_card_roles.role_label_not_on_screen</c>）。
+    /// <c>@label_not_on_screen</c> 行で設定される。名前は画面に出ているが役職の見出しが無いとき（例：ED の原画の末尾に 1 人だけで出ている
+    /// 「料理作監」の担当）に立てる。表示では役職名だけを括弧で包み、名前はふつうに出す。<see cref="NotOnScreen"/> とは同時に立てない。</summary>
+    public bool RoleLabelNotOnScreen { get; set; }
+
     /// <summary>その行で主題歌ループが出す曲を絞る劇中順の範囲（<c>credit_card_roles.theme_song_seq</c>）。<c>"N"</c> か <c>"N-M"</c>。
     /// <c>@theme_song_seq=N</c> / <c>@theme_song_seq=N-M</c> 行で設定される。主題歌のカードが分かれて挿入歌を振り分けるときに使う。</summary>
     public string? ThemeSongSeq { get; set; }
@@ -158,6 +166,21 @@ public sealed class ParsedBlock
 {
     /// <summary>先頭の <c>[XXX]</c> 行があった場合に企業屋号として保持する生テキスト。 設定されていれば適用時に <c>credit_role_blocks.leading_company_alias_id</c> に解決する。</summary>
     public string? LeadingCompanyText { get; set; }
+
+    /// <summary>
+    /// 筆頭の行 <c>[[XXX]]間の字[[YYY]]後ろの字</c> の 2 社目 <c>YYY</c> の生テキスト。
+    /// 設定されていれば適用時に <c>credit_role_blocks.leading_company2_alias_id</c> に解決する。
+    /// </summary>
+    public string? LeadingCompany2Text { get; set; }
+
+    /// <summary>筆頭の 2 社の間の字（<c>credit_role_blocks.leading_company_separator</c>）。2 社目が無いときは null。空文字も null にする。</summary>
+    public string? LeadingCompanySeparator { get; set; }
+
+    /// <summary>
+    /// 筆頭の行の最後の <c>]]</c> の後ろに書かれた字（<c>credit_role_blocks.leading_company_suffix</c>）。
+    /// 先頭の空白は画面の表記として残す（<c>[[AMGA]] 撮影班</c> → " 撮影班"）。無ければ null。
+    /// </summary>
+    public string? LeadingCompanySuffix { get; set; }
 
     /// <summary>ブロック内の行群（タブ区切り展開済み）。</summary>
     public List<ParsedEntryRow> Rows { get; } = new();
@@ -180,8 +203,17 @@ public sealed class ParsedBlock
     /// <summary><c>@heading_italic</c> で指定された、見出しを斜体で出す印（<c>credit_role_blocks.heading_italic</c>）。</summary>
     public bool HeadingItalic { get; set; }
 
+    /// <summary>
+    /// <c>@leading_text=文字</c> で指定された、文字だけの筆頭の団体（<c>credit_role_blocks.leading_text</c>）。
+    /// 会社のデータは作らない。<see cref="LeadingCompanyText"/> と同じブロックには書けない。
+    /// </summary>
+    public string? LeadingText { get; set; }
+
     /// <summary><c>@leading_not_on_screen</c> で指定された、筆頭の会社が画面に出ていない印（<c>credit_role_blocks.leading_company_not_on_screen</c>）。</summary>
     public bool LeadingCompanyNotOnScreen { get; set; }
+
+    /// <summary><c>@continues_previous</c> で指定された、前のブロックの続きの印（<c>credit_role_blocks.continues_previous</c>）。</summary>
+    public bool ContinuesPrevious { get; set; }
 }
 
 /// <summary>パース結果における 1 行分のエントリ群。タブ区切りで複数エントリを持つ。</summary>
@@ -290,16 +322,37 @@ public sealed class ParsedEntry
     public string? PersonMisprintText { get; set; }
 
     /// <summary>
+    /// 一括入力 <c>名義|画面の表記</c> 記法で抽出された「人物名の表記揺れ」。
+    /// PERSON / CHARACTER_VOICE のとき、| の右側がここに入る。名義は | の左側で引き当て、
+    /// 適用時に <see cref="Data.Models.CreditBlockEntry.PersonDisplayText"/> へそのまま転写する。
+    /// </summary>
+    public string? PersonDisplayText { get; set; }
+
+    /// <summary>
     /// 一括入力 <c>&lt;キャラ×キャラ誤記&gt;...</c> 記法で抽出された「キャラ側の誤記表記」。
     /// CHARACTER_VOICE のとき、× の右側がここに入る。用法は <see cref="PersonMisprintText"/> と同じ。
     /// </summary>
     public string? CharacterMisprintText { get; set; }
 
     /// <summary>
+    /// 一括入力 <c>&lt;前\n後&gt;...</c> 記法で抽出された「画面の組みどおりの役名」（改行入り）。
+    /// CHARACTER_VOICE のとき、役名の中の <c>\n</c> を本物の改行にしたものが入る（名義の名前からは <c>\n</c> を抜く）。
+    /// </summary>
+    public string? CharacterDisplayText { get; set; }
+
+    /// <summary>
     /// 一括入力 <c>[屋号]×屋号誤記</c> 記法で抽出された「企業屋号側の誤記表記」。
     /// COMPANY / LOGO のとき、× の右側がここに入る。用法は <see cref="PersonMisprintText"/> と同じ。
     /// </summary>
     public string? CompanyMisprintText { get; set; }
+
+    /// <summary>
+    /// 一括入力 <c>[屋号|画面の表記]</c> 記法で抽出された「企業名の表記揺れ」。
+    /// COMPANY のとき、| の右側がここに入る。屋号は | の左側で引き当て、
+    /// 適用時に <see cref="Data.Models.CreditBlockEntry.CompanyDisplayText"/> へそのまま転写する。
+    /// 用法は <see cref="PersonDisplayText"/> と同じ。
+    /// </summary>
+    public string? CompanyDisplayText { get; set; }
 
     /// <summary>マスタに引き当てできない場合に <c>credit_block_entries.raw_text</c> に退避するテキスト。 パース時には使われない（適用時に必要に応じて埋められる）。</summary>
     public string? RawText { get; set; }
@@ -318,6 +371,26 @@ public sealed class ParsedEntry
 
     /// <summary>併記のエントリを小さい字で描く（同 3 つ目の欄が <c>small</c>）。</summary>
     public bool ParallelSmall { get; set; }
+
+    /// <summary>
+    /// 役名の後ろに小さいカッコで出すキャラのユニットの名義 ID（<c>~{ユニット名#p&lt;alias_id&gt;} </c> の <c>#p</c> の後ろ）。
+    /// 適用時に <see cref="Data.Models.CreditBlockEntry.CharacterUnitAliasId"/> へそのまま転写する（マスタ引き当て不要）。
+    /// CHARACTER_VOICE のときのみ持つ。
+    /// </summary>
+    public int? CharacterUnitAliasId { get; set; }
+
+    /// <summary>
+    /// 同じ役名が続く行の役名の出し方（<c>^{役名の形|声優の形} </c> の 1 つ目の欄。REPEAT / TOP / MIDDLE）。
+    /// 適用時に <see cref="Data.Models.CreditBlockEntry.SameCharacterLayout"/> へそのまま転写する。null は直前の行の続きではない。
+    /// CHARACTER_VOICE のときのみ持つ。
+    /// </summary>
+    public string? SameCharacterLayout { get; set; }
+
+    /// <summary>
+    /// 同じ声優が続く行の声優名の出し方（同 2 つ目の欄）。
+    /// 適用時に <see cref="Data.Models.CreditBlockEntry.SamePersonLayout"/> へそのまま転写する。
+    /// </summary>
+    public string? SamePersonLayout { get; set; }
 
     /// <summary>エントリ単位の備考。</summary>
     public string? Notes { get; set; }

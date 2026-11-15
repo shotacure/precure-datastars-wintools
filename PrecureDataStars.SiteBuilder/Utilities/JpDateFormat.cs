@@ -103,4 +103,41 @@ public static class JpDateFormat
         };
         return $"{dt.Year}年{dt.Month}月{dt.Day}日（{dayOfWeek}）";
     }
+
+    /// <summary>
+    /// 深夜の放送の境目の時刻。開始がこの時刻より前（0:00〜4:59）の回は、前の日の放送として日付を出し、時刻は 24 を足して書く
+    /// （土曜深夜の 2:00 開始なら「土曜 26:00」）。番組表や公式の表記に合わせるためで、DB は実際の日時のまま持つ。
+    /// </summary>
+    public const int LateNightEndHour = 5;
+
+    /// <summary>放送日（開始が <see cref="LateNightEndHour"/> 時より前の深夜の回は前の日）。時刻は 0:00 にそろえて返す。</summary>
+    public static DateTime BroadcastDay(DateTime onAirAt)
+        => onAirAt.Hour < LateNightEndHour ? onAirAt.Date.AddDays(-1) : onAirAt.Date;
+
+    /// <summary>放送日の「2024年2月4日」形式（深夜の回は前の日）。</summary>
+    public static string BroadcastDate(DateTime onAirAt) => Date(BroadcastDay(onAirAt));
+
+    /// <summary>放送日の「2024.2.4」形式（深夜の回は前の日）。</summary>
+    public static string BroadcastDotDate(DateTime onAirAt) => DotDate(BroadcastDay(onAirAt));
+
+    /// <summary>
+    /// 放送日を起点にした「H:mm」の時刻。<paramref name="at"/> が放送日の翌日なら 24 を足す（深夜の回の「26:00」、
+    /// 深夜に終わる回の終了時刻の「24:30」）。<paramref name="broadcastDay"/> は <see cref="BroadcastDay"/> の値。
+    /// </summary>
+    public static string BroadcastClock(DateTime at, DateTime broadcastDay)
+    {
+        var span = at - broadcastDay.Date;
+        return $"{(int)span.TotalHours}:{span.Minutes:D2}";
+    }
+
+    /// <summary>
+    /// 放送日と放送の時間帯（「2004年2月1日 8:30〜9:00」、深夜の回は「2025年1月11日 26:00〜26:30」）。
+    /// 枠の長さ（分）が無いか 0 なら開始の時刻だけ。
+    /// </summary>
+    public static string BroadcastDateTime(DateTime onAirAt, int? durationMinutes)
+    {
+        var day = BroadcastDay(onAirAt);
+        string head = $"{Date(day)} {BroadcastClock(onAirAt, day)}";
+        return durationMinutes is int m && m > 0 ? $"{head}〜{BroadcastClock(onAirAt.AddMinutes(m), day)}" : head;
+    }
 }

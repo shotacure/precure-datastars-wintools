@@ -1,8 +1,8 @@
 <h1>歴代プリキュアシリーズ</h1>
 
 <p class="lead">
-  初代から最新作まで、TV シリーズ・映画・スピンオフを合わせた全 {{ TotalCount }} 作品{{ if MovieShortCount > 0 }}（同時上映の短編 {{ MovieShortCount }} 本を含む）{{ end }}を、放送・公開順に並べました。歴代プリキュアの“全作品マップ”です。
-  <br><span class="muted">映画の登場プリキュアは、クレジットに名前のあるプリキュアに限っています。</span>
+  初代から最新作まで、TV シリーズ・映画・スピンオフ 全 {{ TotalCount }} 作品{{ if MovieShortCount > 0 }}（同時上映の短編 {{ MovieShortCount }} 本を含む）{{ end }}
+  <br><span class="muted">（映画の登場プリキュアは、クレジットに名前のあるプリキュアに限っています。）</span>
 </p>
 
 {{## ──────── 並べ方のタブ ────────
@@ -26,6 +26,12 @@
 
 <div class="tab-panel is-active" id="series-tab-panel-kind" data-tab-panel="kind" role="tabpanel">
 
+{{## ──────── 左のもくじの子の行 ────────
+     種類順のタブでは、作品の行（li）に id（series-{slug}）と data-section-nav-child を付け、section-nav.js が
+     区分（section）の下に作品を 1 段下げて並べる（ラベルは data-section-nav-label、開始年は data-section-nav-year）。
+     映画は題名をシリーズ名の部分（data-section-nav-prefix。上の段に小さく）と副題（data-section-nav-label）に分け、ホバーの全文は data-section-nav-title の題名。
+     年度順のタブは同じカードを共用するので印を付けない（id が重ならないように）。 ##}}
+
 {{## ──────── 共通カード語彙について ────────
      /series/ のセクション群（TV シリーズ・映画・大人向け・ショート・イベント・スピンオフ）は
      /bgms/ と同じ「.bgms-card 系」と意匠を共有するカード型リストで描画する。連番は
@@ -46,7 +52,7 @@
   <h2>TV シリーズ</h2>
   <ul class="series-card-list series-card-list-tv">
     {{~ for tv in TvSeries ~}}
-    <li>
+    <li id="series-{{ tv.Slug }}" data-section-nav-child data-section-nav-label="{{ tv.Title | html.escape }}" data-section-nav-year="{{ tv.NavYear }}">
       {{ include '_series-card-tv.sbn' }}
     </li>
     {{~ end ~}}
@@ -65,7 +71,7 @@
   <h2>映画</h2>
   <ul class="series-card-list series-card-list-movie">
     {{~ for m in MovieSeries ~}}
-    <li>
+    <li id="series-{{ m.Slug }}" data-section-nav-child data-section-nav-label="{{ m.NavLabel | html.escape }}" data-section-nav-prefix="{{ m.NavPrefix | html.escape }}" data-section-nav-title="{{ m.Title | html.escape }}" data-section-nav-year="{{ m.NavYear }}">
       {{ include '_series-card-movie.sbn' }}
     </li>
     {{~ end ~}}
@@ -76,19 +82,19 @@
 {{## ──────── スピンオフ系セクション ────────
      映画の下に OTONA → SHORT → EVENT → SPIN-OFF の順で並べる。
      各セクションは内容が空のときは表示自体を出さない（不要な見出しが残らないように）。
-     構造は TV シリーズと同じカード型だが、プリキュア・スタッフのサブ行は持たない
-     （データ運用上の対象外）。
+     構造は TV シリーズと同じカード型。プリキュア・スタッフのサブ行は、組まれている作品だけ出す
+     （オトナシリーズの作品。プリキュアはクレジットの声の出演から、スタッフは作品詳細のメインスタッフと同じ役職）。
      アンカー id:
-       - 大人向けスピンオフ（OTONA）→ id="otona"
+       - オトナシリーズ（OTONA）→ id="otona"
        - ショートアニメ（SHORT）→ id="short-anime"
        - イベント（EVENT）→ id="event"
        - スピンオフ（SPIN-OFF）→ id="spinoff" ##}}
 {{~ if (array.size OtonaSeries) > 0 ~}}
 <section id="otona">
-  <h2>大人向けスピンオフ</h2>
+  <h2>オトナシリーズ</h2>
   <ul class="series-card-list series-card-list-spinoff">
     {{~ for s in OtonaSeries ~}}
-    <li>
+    <li id="series-{{ s.Slug }}" data-section-nav-child data-section-nav-label="{{ s.Title | html.escape }}" data-section-nav-year="{{ s.NavYear }}">
       {{ include '_series-card-simple.sbn' }}
     </li>
     {{~ end ~}}
@@ -101,7 +107,7 @@
   <h2>ショートアニメ</h2>
   <ul class="series-card-list series-card-list-spinoff">
     {{~ for s in ShortSeries ~}}
-    <li>
+    <li id="series-{{ s.Slug }}" data-section-nav-child data-section-nav-label="{{ s.Title | html.escape }}" data-section-nav-year="{{ s.NavYear }}">
       {{ include '_series-card-simple.sbn' }}
     </li>
     {{~ end ~}}
@@ -114,7 +120,7 @@
   <h2>イベント</h2>
   <ul class="series-card-list series-card-list-spinoff">
     {{~ for s in EventSeries ~}}
-    <li>
+    <li id="series-{{ s.Slug }}" data-section-nav-child data-section-nav-label="{{ s.Title | html.escape }}" data-section-nav-year="{{ s.NavYear }}">
       {{ include '_series-card-simple.sbn' }}
     </li>
     {{~ end ~}}
@@ -127,7 +133,7 @@
   <h2>スピンオフ</h2>
   <ul class="series-card-list series-card-list-spinoff">
     {{~ for s in SpinOffSeries ~}}
-    <li>
+    <li id="series-{{ s.Slug }}" data-section-nav-child data-section-nav-label="{{ s.Title | html.escape }}" data-section-nav-year="{{ s.NavYear }}">
       {{ include '_series-card-simple.sbn' }}
     </li>
     {{~ end ~}}
@@ -139,14 +145,20 @@
 
 {{## ──────── 年度順 ────────
      1 年度 1 段。段の見出しは年度、中は放送開始・公開日の順に TV・映画・スピンオフのカードを並べる。
-     年度順では区分が混ざるので、連番は出さずに区分の札（TV / 秋映画 / 春映画 / スピンオフ・イベント）を添える。 ##}}
+     年度順では区分が混ざるので、連番は出さずに区分の札（TV / 秋映画 / 春映画 / スピンオフ・イベント）を添える。
+     左のもくじは年度の下に作品を 1 段下げて並べる（id は year-series-{slug}。種類順の series-{slug} と重ならないように）。
+     親の行が年度なので、子の行には年を付けない。映画は nav_prefix / nav_main で上の段と副題に分ける。 ##}}
 <div class="tab-panel" id="series-tab-panel-year" data-tab-panel="year" role="tabpanel" hidden>
   {{~ for y in YearGroups ~}}
   <section class="series-year" id="{{ y.Anchor }}">
     <h2>{{ y.YearLabel }}</h2>
     <ul class="series-card-list series-year-list">
       {{~ for it in y.Items ~}}
-      <li data-kind-group="{{ it.Group }}">
+      {{~ nav_s = it.Tv ?? it.Movie ?? it.Simple ~}}
+      <li data-kind-group="{{ it.Group }}" id="year-series-{{ nav_s.Slug }}" data-section-nav-child
+          data-section-nav-label="{{ (nav_main nav_s.Title) | html.escape }}"
+          data-section-nav-prefix="{{ (nav_prefix nav_s.Title) | html.escape }}"
+          data-section-nav-title="{{ nav_s.Title | html.escape }}">
         {{~ if it.Tv ~}}
         {{~ tv = it.Tv ~}}
         {{ include '_series-card-tv.sbn' }}

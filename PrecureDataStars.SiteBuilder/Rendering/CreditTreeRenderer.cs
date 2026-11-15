@@ -25,10 +25,12 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 ///     直前行と同キャラ名なら dim 空セル、<c>leading_company</c> 字下げ対応）。</description></item>
 ///   <item><description>CASTING_COOPERATION 役職を VOICE_CAST テーブル末尾に「協力」行として追記。
 ///     役職名カラム（右寄せ）に「協力」を置き、屋号一覧は声優名カラムに置く 3 セル構成。</description></item>
-///   <item><description>絵コンテ・演出融合表示（<c>series.storyboard_display</c> が <c>MERGE</c> / <c>MERGE_SAME_PERSON</c>
-///     + カード内で STORYBOARD と EPISODE_DIRECTOR が隣接）→
-///     同名なら役職名「（絵コンテ・）演出」の 1 行、異名なら役職名「演出」+ 2 行（絵コンテ→演出）。
-///     <c>MERGE_SAME_PERSON</c> は同名のときだけ融合し、異名ならそれぞれの役職名で独立描画する。</description></item>
+///   <item><description>絵コンテ・演出融合表示（<c>series.storyboard_display</c> が <c>MERGE</c> / <c>MERGE_SAME_PERSON</c> /
+///     <c>JOIN_SAME_PERSON</c> + カード内で STORYBOARD と EPISODE_DIRECTOR が隣接）→
+///     顔ぶれが同じなら役職名「（絵コンテ・）演出」（<c>JOIN_SAME_PERSON</c> は「絵コンテ・演出」）の下に名前を 1 回ずつ、
+///     違えば役職名「演出」+ 名前ごとの行（絵コンテ→演出）。
+///     <c>MERGE_SAME_PERSON</c> / <c>JOIN_SAME_PERSON</c> は顔ぶれが同じときだけ融合し、
+///     一部だけ重なる・重ならないならそれぞれの役職名で独立描画する。</description></item>
 ///   <item><description>VOICE_CAST 役職名のカード/Tier/Group 跨ぎ抑止
 ///     （直前ロールが同一 role_code の VOICE_CAST なら役職名カラムを空表示）。</description></item>
 ///   <item><description><c>is_broadcast_only=1</c> エントリは描画対象外。</description></item>
@@ -79,10 +81,12 @@ internal sealed class CreditTreeRenderer
     /// <c>/creators/roles/{role_code}/</c> へリンクする。<paramref name="roleCode"/> が NULL/空の場合は
     /// リンク化せずエスケープのみ。
     /// </summary>
-    private static string BuildRoleNameHtml(string? roleCode, string roleName, IReadOnlyDictionary<string, Role> roleMap)
+    private string BuildRoleNameHtml(string? roleCode, string roleName, IReadOnlyDictionary<string, Role> roleMap)
     {
         if (string.IsNullOrEmpty(roleName)) return "";
-        if (string.IsNullOrEmpty(roleCode)) return Esc(roleName);
+        // 表記（role_label_text）の改行は、画面で見出しが 2 行に積まれている所。<br> で描く
+        string nameHtml = Esc(roleName).Replace("\n", "<br>");
+        if (string.IsNullOrEmpty(roleCode)) return nameHtml;
 
         roleMap.TryGetValue(roleCode!, out var r);
 
@@ -91,22 +95,22 @@ internal sealed class CreditTreeRenderer
         // 紐付けると死リンクになる（このフォーマット種の役職詳細ページは生成しない方針）ため、
         // プレーンテキストで出す。歌スタッフの集計は歌系 4 役職（作詞/作曲/編曲/歌唱）の専用ページが担う。
         if (r != null && string.Equals(r.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
-            return Esc(roleName);
+            return nameHtml;
 
         // 表記のみ（NOTICE 形式）の役職も役職詳細ページを作らないため、プレーンテキストで出す。
         if (r != null && string.Equals(r.RoleFormatKind, "NOTICE", StringComparison.Ordinal))
-            return Esc(roleName);
+            return nameHtml;
 
         // VOICE_CAST フォーマット種の役職は声の出演一覧（/creators/voice-cast/）に集約しているため、
         // そちらに飛ばす。それ以外は /creators/roles/{role_code}/ の役職詳細ページへ。
         // どちらの URL も PathUtil に集約し、本レンダラ内に文字列リテラルでパスを持たない。
         bool isVoiceCast = r != null
                            && string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
-        // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）はプレーンテキストで出す。
+        // 役職詳細ページを持たない役職（単発のイベント映像と、オトナシリーズ以外のスピンオフだけで使う役職）はプレーンテキストで出す。
         if (!isVoiceCast && !PathUtil.HasRolePage(roleCode!))
-            return Esc(roleName);
+            return nameHtml;
         string url = isVoiceCast ? PathUtil.CreatorsVoiceCastUrl() : PathUtil.CreatorsRoleUrl(roleCode!);
-        return $"<a href=\"{url}\">{Esc(roleName)}</a>";
+        return $"<a href=\"{url}\">{nameHtml}</a>";
     }
 
     /// <summary>
@@ -123,6 +127,16 @@ internal sealed class CreditTreeRenderer
     }
 
     /// <summary>
+    /// 役名を HTML にエスケープして返す。画面の組みどおりの役名（<see cref="CreditBlockEntry.CharacterDisplayText"/>）があれば、
+    /// 名義の名前の代わりにそれを描き、改行（LF）の位置に &lt;br&gt; を入れる。
+    /// </summary>
+    private static string EscCharacterName(string name, string? displayText)
+    {
+        if (string.IsNullOrEmpty(displayText)) return Esc(name);
+        return string.Join("<br>", displayText.Replace("\r\n", "\n").Split('\n').Select(Esc));
+    }
+
+    /// <summary>
     /// 人物名の代わりに画面に出た伏せ字（<see cref="CreditBlockEntry.PersonMaskedText"/>）があれば、
     /// 「伏せ字 (正名義)」の形にくるんだ HTML を返す。正名義側は人物詳細へのリンクなどを含んだ HTML のまま括弧に入れる。
     /// <paramref name="masked"/> が null / 空文字の場合は <paramref name="nameHtml"/> をそのまま返す。
@@ -133,14 +147,53 @@ internal sealed class CreditTreeRenderer
         return $"<span class=\"staff-masked\" title=\"クレジットでは伏せられた表記\">{Esc(masked)}</span> <span class=\"staff-masked-actual\">({nameHtml})</span>";
     }
 
-    /// <summary>企業屋号（company_alias）の表示名を、親企業詳細ページへのリンク済み HTML に変換する。</summary>
+    /// <summary>
+    /// 企業屋号（company_alias）の表示名を、親企業詳細ページへのリンク済み HTML に変換する。
+    /// 名義に画面で小さめの字で出ている末尾（<see cref="CompanyAlias.CreditSmallSuffix"/>。「01(ゼロワン)」の「(ゼロワン)」）があり、
+    /// 表示名の末尾がそれと一致するときは、手前の部分だけをリンクにし、末尾をリンクの後ろに <c>span.credit-small-suffix</c> で出す。
+    /// </summary>
     private async Task<string> BuildCompanyAliasHtmlAsync(int? aliasId, string displayName)
     {
         if (string.IsNullOrEmpty(displayName)) return "";
         if (!aliasId.HasValue) return Esc(displayName);
         int? cid = await _lookup.LookupCompanyIdFromAliasAsync(aliasId.Value).ConfigureAwait(false);
-        if (!cid.HasValue) return Esc(displayName);
-        return $"<a href=\"{PathUtil.CompanyUrl(cid.Value)}\">{Esc(displayName)}</a>";
+        string? smallSuffix = _lookup.LookupCompanyAliasCreditSmallSuffix(aliasId.Value);
+        string body = displayName;
+        string suffixHtml = "";
+        if (smallSuffix is not null && displayName.Length > smallSuffix.Length
+            && displayName.EndsWith(smallSuffix, StringComparison.Ordinal))
+        {
+            body = displayName[..^smallSuffix.Length];
+            suffixHtml = $"<span class=\"credit-small-suffix\">{Esc(smallSuffix)}</span>";
+        }
+        if (!cid.HasValue) return Esc(body) + suffixHtml;
+        return $"<a href=\"{PathUtil.CompanyUrl(cid.Value)}\">{Esc(body)}</a>{suffixHtml}";
+    }
+
+    /// <summary>
+    /// 筆頭の 1 社目の表示名と HTML に、2 社目（<see cref="CreditRoleBlock.LeadingCompany2AliasId"/>）と
+    /// 後ろの字（<see cref="CreditRoleBlock.LeadingCompanySuffix"/>）を続けた「社名1 + 間の字 + 社名2 + 後ろの字」を返す。
+    /// 2 社目は 1 社目と同じく会社のページへのリンクにし、間の字（<see cref="CreditRoleBlock.LeadingCompanySeparator"/>）と
+    /// 後ろの字はエスケープした文字のまま出す。2 社目の名義が引けないときは 2 社目と間の字を出さない。
+    /// </summary>
+    private async Task<(string Name, string Html)> AppendLeadingCompanyRestAsync(CreditRoleBlock block, string name, string html)
+    {
+        if (block.LeadingCompany2AliasId is int lead2Id)
+        {
+            string? name2 = await _lookup.LookupCompanyAliasNameAsync(lead2Id).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(name2))
+            {
+                string sep = block.LeadingCompanySeparator ?? "";
+                name = name + sep + name2;
+                html = html + Esc(sep) + await BuildCompanyAliasHtmlAsync(lead2Id, name2).ConfigureAwait(false);
+            }
+        }
+        if (!string.IsNullOrEmpty(block.LeadingCompanySuffix))
+        {
+            name += block.LeadingCompanySuffix;
+            html += Esc(block.LeadingCompanySuffix);
+        }
+        return (name, html);
     }
 
     /// <summary>
@@ -171,13 +224,13 @@ internal sealed class CreditTreeRenderer
         return block.HeadingItalic && html.Length > 0 ? $"<span class=\"block-heading-italic\">{html}</span>" : html;
     }
 
-    /// <summary>ロゴエントリの表示を「屋号名に置換 + 親企業詳細ページへのリンク」に変換する。 CI バージョンラベルは省く方針（屋号単位で集約した方が読み手にとって分かりやすいため）。 解決失敗時はプレースホルダ文字列を返す。</summary>
+    /// <summary>ロゴエントリの表示を「屋号名に置換 + 親企業詳細ページへのリンク」に変換する。 ロゴは書かれている文字の屋号にぶら下がるので、屋号名がそのまま画面の字になる。屋号にクレジットでの表記（display_text_override）があればそれを出す。 CI バージョンラベルは出さない。 解決失敗時はプレースホルダ文字列を返す。</summary>
     private async Task<string> BuildLogoHtmlAsync(int? logoId)
     {
         if (!logoId.HasValue) return Esc("(ロゴ未指定)");
         var lg = await _lookup.GetLogoForRenderingAsync(logoId.Value).ConfigureAwait(false);
         if (lg is null) return Esc("(ロゴ不明)");
-        string? aliasName = await _lookup.LookupCompanyAliasNameAsync(lg.CompanyAliasId).ConfigureAwait(false);
+        string? aliasName = await _lookup.LookupCompanyAliasCreditNameAsync(lg.CompanyAliasId).ConfigureAwait(false);
         if (string.IsNullOrEmpty(aliasName)) return Esc("(屋号不明)");
         return await BuildCompanyAliasHtmlAsync(lg.CompanyAliasId, aliasName).ConfigureAwait(false);
     }
@@ -191,13 +244,17 @@ internal sealed class CreditTreeRenderer
         // クレジット階層は SiteDataLoader がビルド開始時に 1 度だけ 6 テーブル分の GetAllAsync で
         // 取得して BuildContext.CreditTree に詰めている。本ループでは credit_id 経由で
         // 該当 credit のカード群 (CreditCardSnapshot) を辞書から引くだけで、生成中の DB 往復は発生しない。
-        if (!_ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cardSnapshotsAll)
+        // 描画は本放送のカードも含む全部の版（集計用の CardsByCreditId は本放送のカードを除いている）。
+        if (!_ctx.CreditTree.CardsByCreditIdForDisplay.TryGetValue(credit.CreditId, out var cardSnapshotsAll)
             || cardSnapshotsAll.Count == 0)
         {
             html.Append("<p class=\"empty-credit\">（カード未登録）</p>");
             return html.ToString();
         }
-        var cardSnapshots = cardSnapshotsAll.OrderBy(c => c.Card.CardSeq).ToList();
+        // 版の付いたカード（媒体の組）は、隣どうしの 1 組ごとに組の前の版を先・後ろの版を後に並べ替えて、1 組 1 つの枠で描く。
+        var versionPlan = CardVersionLayout.Plan(
+            cardSnapshotsAll.OrderBy(c => c.Card.CardSeq).ToList(), c => c.Card.MediaVersion);
+        var cardSnapshots = versionPlan.Cards;
 
         // 役職マスタは BuildContext で事前展開済みのため直接参照する。
         var roleMap = _ctx.RoleByCode;
@@ -205,10 +262,16 @@ internal sealed class CreditTreeRenderer
 
         string storyboardDisplay = GetStoryboardDisplay(resolveSeriesId);
         string? prevVoiceCastRoleCode = null;
+        // 版の枠の中で、上半分と下半分を同じ状態から描くための控え（CardVersionPlan.CarryState）
+        string? savedVoiceCastRoleCode = null;
 
-        foreach (var cardSnap in cardSnapshots)
+        for (int cardIndex = 0; cardIndex < cardSnapshots.Count; cardIndex++)
         {
+            var cardSnap = cardSnapshots[cardIndex];
             var card = cardSnap.Card;
+            // 版の枠を開く（1 組の頭・上半分から下半分へ切り替わるところ）。
+            prevVoiceCastRoleCode = versionPlan.CarryState(cardIndex, prevVoiceCastRoleCode, ref savedVoiceCastRoleCode);
+            html.Append(versionPlan.OpenBefore(cardIndex));
             // ロール（流れるクレジット）のカードは card-roll を足して見た目を分けられるようにする。
             html.Append(string.Equals(card.Presentation, "ROLL", StringComparison.Ordinal)
                 ? "<div class=\"card card-roll\">"
@@ -219,7 +282,7 @@ internal sealed class CreditTreeRenderer
             IReadOnlyList<CreditBlockEntry>? cooperationEntriesForCard = cooperationContext?.Entries;
             int? cooperationAppendTargetCardRoleId = cooperationContext?.LastVoiceCastCardRoleId;
             CastingCooperationAppend? cooperationAppendForCard = cooperationContext is { } coopCtx
-                ? new CastingCooperationAppend(coopCtx.Entries, coopCtx.LabelText, coopCtx.NotOnScreen)
+                ? new CastingCooperationAppend(coopCtx.Entries, coopCtx.LabelText, coopCtx.NotOnScreen, coopCtx.LabelNotOnScreen)
                 : null;
 
             // 絵コンテ・演出融合のカード横断事前スキャン。
@@ -227,11 +290,14 @@ internal sealed class CreditTreeRenderer
             // 隣接していれば、Group を跨いでいても融合表示する（クレジット表記上「絵コンテ・演出」を
             // 分けない作品で、ユーザーが `--` で Group を分けて入力するパターンも捕捉）。
             // 隣接していなければ通常の独立描画にフォールバック。
-            // MERGE_SAME_PERSON の作品では、絵コンテと演出が同じ人のときだけ融合する（違う人なら独立描画）。
+            // MERGE_SAME_PERSON / JOIN_SAME_PERSON の作品では、絵コンテと演出の顔ぶれが同じときだけ融合する
+            // （一部だけ重なる・重ならないなら独立描画）。JOIN_SAME_PERSON は見出しを「絵コンテ・演出」で出す。
             var (storyboardMergeBySbId, storyboardMergedDirIds) =
                 storyboardDisplay != Series.StoryboardDisplaySeparate
                     ? DetectStoryboardDirectorMerges(cardSnap,
-                        samePersonOnly: storyboardDisplay == Series.StoryboardDisplayMergeSamePerson)
+                        samePersonOnly: storyboardDisplay == Series.StoryboardDisplayMergeSamePerson
+                                     || storyboardDisplay == Series.StoryboardDisplayJoinSamePerson,
+                        joinedLabel: storyboardDisplay == Series.StoryboardDisplayJoinSamePerson)
                     : (new Dictionary<int, StoryboardDirectorMerge>(), new HashSet<int>());
 
             foreach (var tierSnap in tierSnapshots)
@@ -261,8 +327,11 @@ internal sealed class CreditTreeRenderer
                     // Entry を CreditTreeIndex のスナップショットから引き出して辞書を作る。各役職の処理時に
                     // SiblingRoleResolver として TemplateContext に渡すことで、レンダラ側から sibling 役職の
                     // 中身が透過的に見える。
-                    // 同 role_code が複数役職に重複している場合は最初の 1 つを採用（同 Group 内重複は通常起き得ない）。
+                    // 同 role_code が複数役職に重複している場合（色指定検査の「検査」と「検査」、曲ごとの振付など）は、
+                    // テンプレから引く sibling としては最初の 1 つを採用する。どの役職の中身かは siblingCardRoleIdByRoleCode に持ち、
+                    // 役職自身の描画で使い回すのは同じ役職のときだけにする。
                     var siblingBlocksByRoleCode = new Dictionary<string, IReadOnlyList<BlockSnapshot>>(StringComparer.Ordinal);
+                    var siblingCardRoleIdByRoleCode = new Dictionary<string, int>(StringComparer.Ordinal);
                     foreach (var siblingRoleSnap in roleSnapshots)
                     {
                         var siblingRole = siblingRoleSnap.Role;
@@ -270,6 +339,7 @@ internal sealed class CreditTreeRenderer
                         if (siblingBlocksByRoleCode.ContainsKey(siblingRole.RoleCode!)) continue;
 
                         siblingBlocksByRoleCode[siblingRole.RoleCode!] = BuildBlockSnapshots(siblingRoleSnap);
+                        siblingCardRoleIdByRoleCode[siblingRole.RoleCode!] = siblingRole.CardRoleId;
                     }
                     // クロージャで辞書を捕捉。null 時は空文字に展開される（レンダラの仕様）。
                     Func<string, IReadOnlyList<BlockSnapshot>?> siblingResolver = code =>
@@ -285,7 +355,7 @@ internal sealed class CreditTreeRenderer
                     foreach (var siblingRole in cardRoles)
                     {
                         if (string.IsNullOrEmpty(siblingRole.RoleCode)) continue;
-                        var tpl = _ctx.RoleTemplateResolver.Resolve(siblingRole.RoleCode!, resolveSeriesId);
+                        var tpl = _ctx.RoleTemplateResolver.Resolve(siblingRole.RoleCode!, resolveSeriesId, credit.EpisodeId);
                         string? template = tpl?.FormatTemplate;
                         if (string.IsNullOrWhiteSpace(template)) continue;
                         // 軽量検出：テンプレ文字列に {ROLE:<CODE>. が含まれる先で <CODE> を抜き出す。
@@ -345,10 +415,14 @@ internal sealed class CreditTreeRenderer
                             continue;
                         }
 
-                        // sibling 辞書から自身の Block を引いて使い回し（重複ロード回避）。
-                        // 辞書に無い役職（RoleCode が null など）は CreditTreeIndex のスナップショットから直接組み立てる。
+                        // 役職自身の Block は、その役職の行（card_role_id）から組み立てる。
+                        // sibling 辞書は role_code ごとに最初の役職だけを持つので、同じ Group に同じ role_code の役職が
+                        // 2 つ以上あるとき（色指定検査の「検査」と「検査」、曲ごとの振付など）に辞書から引くと、
+                        // 2 つ目以降に最初の役職の中身が出てしまう。辞書の中身がこの役職のものと分かるときだけ使い回す。
                         IReadOnlyList<BlockSnapshot> snapshots;
                         if (!string.IsNullOrEmpty(cr.RoleCode)
+                            && siblingCardRoleIdByRoleCode.TryGetValue(cr.RoleCode!, out int cachedRoleId)
+                            && cachedRoleId == cr.CardRoleId
                             && siblingBlocksByRoleCode.TryGetValue(cr.RoleCode!, out var cached))
                         {
                             snapshots = cached;
@@ -380,7 +454,9 @@ internal sealed class CreditTreeRenderer
                             roleNameHtmlOverride: joinedLabelHtmlByLeadId.TryGetValue(cr.CardRoleId, out var joinedHtml) ? joinedHtml : null,
                             hideRoleLabel: cr.HideRoleLabel,
                             notOnScreen: cr.NotOnScreen,
+                            roleLabelNotOnScreen: cr.RoleLabelNotOnScreen,
                             themeSongSeq: cr.ThemeSongSeq,
+                            cardMediaVersion: card.MediaVersion,
                             html, ct).ConfigureAwait(false);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(cr.RoleCode, roleMap)
@@ -392,6 +468,8 @@ internal sealed class CreditTreeRenderer
                 html.Append("</div>"); // .tier
             }
             html.Append("</div>"); // .card
+            // 版の枠を閉じる（1 組の終わり・上半分から下半分へ切り替わるところ）。
+            html.Append(versionPlan.CloseAfter(cardIndex));
         }
 
         return html.ToString();
@@ -403,7 +481,7 @@ internal sealed class CreditTreeRenderer
     /// まとめる役職どうしでエントリが一致しないときは、打ち間違いを隠さないよう別々の行のまま出してビルド警告を出す。
     /// </summary>
     /// <returns>先頭役職の CardRoleId → まとめた行の役職名 HTML、表示を飛ばす後続役職の CardRoleId 集合。</returns>
-    private static (Dictionary<int, string> LabelHtmlByLeadId, HashSet<int> FollowerIds) ResolveJoinedRoles(
+    private (Dictionary<int, string> LabelHtmlByLeadId, HashSet<int> FollowerIds) ResolveJoinedRoles(
         IReadOnlyList<CreditCardRoleSnapshot> roleSnapshots,
         IReadOnlyDictionary<string, Role> roleMap,
         Credit credit,
@@ -437,8 +515,9 @@ internal sealed class CreditTreeRenderer
     /// 役職ごとの文字の範囲はデータで決まっているので、文字列を探して当てはめることはしない。
     /// まとめる役職のどれかに役職名の誤記（<c>role_misprint_text</c>）があれば、画面どおりの行（誤記の役職は誤記で）を
     /// 取り消し線で 1 行目に出し、正しい行を 2 行目に改行して出す。
+    /// 役職名だけ画面に無い役職（<c>role_label_not_on_screen</c>）は、その役職の表記だけを全角の括弧で包む。
     /// </summary>
-    private static string BuildJoinedRoleNameHtml(IReadOnlyList<CreditCardRole> members, IReadOnlyDictionary<string, Role> roleMap)
+    private string BuildJoinedRoleNameHtml(IReadOnlyList<CreditCardRole> members, IReadOnlyDictionary<string, Role> roleMap)
     {
         var sb = new StringBuilder();
         if (members.Any(m => !string.IsNullOrEmpty(m.RoleMisprintText)))
@@ -455,7 +534,9 @@ internal sealed class CreditTreeRenderer
             var m = members[k];
             // 区切りの改行は、役職名を上下 2 段に重ねる画面なので <br> にする。
             if (k > 0) sb.Append(Esc(m.JoinSeparator ?? "").Replace("\n", "<br>"));
-            sb.Append(BuildRoleNameHtml(m.RoleCode, CreditRoleLabel.Resolve(m.RoleLabelText, m.RoleCode, roleMap), roleMap));
+            string memberHtml = BuildRoleNameHtml(m.RoleCode, CreditRoleLabel.Resolve(m.RoleLabelText, m.RoleCode, roleMap), roleMap);
+            // 役職名だけ画面に無い役職（role_label_not_on_screen）は、その役職の表記だけを全角の括弧で包んで薄く出す。
+            sb.Append(m.RoleLabelNotOnScreen ? CreditRoleLabel.WrapNotOnScreenHtml(memberHtml) : memberHtml);
         }
         return sb.ToString();
     }
@@ -490,8 +571,8 @@ internal sealed class CreditTreeRenderer
             : Series.StoryboardDisplaySeparate;
     }
 
-    /// <summary>カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の CardRoleId + 「協力」行の表記（CASTING_COOPERATION 役職のうち最初に画面の表記を持つものの <c>role_label_text</c>、無ければ null）+ 画面に無い印（CASTING_COOPERATION 役職のいずれかが <c>not_on_screen</c>）を返す（プレビューと同一仕様）。 探索は <see cref="CreditTreeIndex"/> の事前展開済みスナップショットを辿るだけで完結する。</summary>
-    private static (List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId, string? LabelText, bool NotOnScreen)? CollectCardCastingCooperationContext(
+    /// <summary>カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の CardRoleId + 「協力」行の表記（CASTING_COOPERATION 役職のうち最初に画面の表記を持つものの <c>role_label_text</c>、無ければ null）+ 画面に無い印（CASTING_COOPERATION 役職のいずれかが <c>not_on_screen</c>）+ 「協力」の文字だけ画面に無い印（同じく <c>role_label_not_on_screen</c>）を返す（プレビューと同一仕様）。 探索は <see cref="CreditTreeIndex"/> の事前展開済みスナップショットを辿るだけで完結する。</summary>
+    private static (List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId, string? LabelText, bool NotOnScreen, bool LabelNotOnScreen)? CollectCardCastingCooperationContext(
         CreditCardSnapshot cardSnap,
         IReadOnlyDictionary<string, Role> roleMap)
     {
@@ -522,7 +603,8 @@ internal sealed class CreditTreeRenderer
             .Select(rs => rs.Role.RoleLabelText)
             .FirstOrDefault(t => !string.IsNullOrEmpty(t));
         bool notOnScreen = cooperationRoleSnaps.Any(rs => rs.Role.NotOnScreen);
-        return (aggregated, lastVcCardRoleId.Value, labelText, notOnScreen);
+        bool labelNotOnScreen = cooperationRoleSnaps.Any(rs => rs.Role.RoleLabelNotOnScreen);
+        return (aggregated, lastVcCardRoleId.Value, labelText, notOnScreen, labelNotOnScreen);
     }
 
     /// <summary>指定 CardRole 配下の全エントリ（<c>is_broadcast_only = 0</c> のみ）を block_seq → entry_seq 順で平坦化する。</summary>
@@ -589,9 +671,15 @@ internal sealed class CreditTreeRenderer
         // 画面にはクレジットされていない行（credit_card_roles.not_on_screen）。true なら役職ラッパに not-on-screen を付け、
         // CSS で役職名から中身までを括弧で包んで薄い色で出す。データとしては通常どおり数える。
         bool notOnScreen,
+        // 役職名だけが画面にはクレジットされていない行（credit_card_roles.role_label_not_on_screen）。true なら役職名の欄と
+        // content-header の見出しを全角の括弧で包んで薄く出し（CreditRoleLabel.WrapNotOnScreenHtml）、名前・中身はふつうに出す。
+        // 1 行にまとめた行は、まとめる役職ごとに BuildJoinedRoleNameHtml で包み済み。
+        bool roleLabelNotOnScreen,
         // 主題歌ループが出す曲を絞る劇中順の範囲（credit_card_roles.theme_song_seq。"N" か "N-M"）。null なら絞らない。
         // テンプレの展開コンテキストに渡し、主題歌のカードが分かれて挿入歌を振り分ける回でカードごとの曲だけを出す。
         string? themeSongSeq,
+        // このカードの版（credit_cards.media_version）。主題歌の行のうち本放送だけの曲は、版に BROADCAST を含むカードにだけ出す。
+        string? cardMediaVersion,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -612,8 +700,11 @@ internal sealed class CreditTreeRenderer
                 roleName = roleCode!;
             }
         }
-        // 画面の役職の表記があれば、役職名をその表記で出す（役職名を出さない役職はそのまま出さない）。
-        if (!string.IsNullOrEmpty(roleLabelText) && roleName.Length > 0) roleName = roleLabelText!;
+        // 「画面の文字」（ON_SCREEN_TEXT）に見出しの表記があるときは、1 対 1 で当たる役職の無い見出し（本放送の「3DCG」など）を文字で持つ形。
+        // 見出しは役職名の欄（左の列）に出し、名前はテンプレを通さずほかの役職と同じ格子で並べる。
+        bool screenTextHeading = string.Equals(roleCode, "ON_SCREEN_TEXT", StringComparison.Ordinal) && !string.IsNullOrEmpty(roleLabelText);
+        // 画面の役職の表記があれば、役職名をその表記で出す（役職名を出さない役職はそのまま出さない。見出しを文字で持つ「画面の文字」は出す）。
+        if (!string.IsNullOrEmpty(roleLabelText) && (roleName.Length > 0 || screenTextHeading)) roleName = roleLabelText!;
         // その行だけ役職名を出さない印が立っていれば、役職名の欄を空にする（同じ見出しの下に 2 社目が続くときなど）。
         if (hideRoleLabel)
         {
@@ -623,9 +714,9 @@ internal sealed class CreditTreeRenderer
 
         string? template = null;
         string? contentHeaderOverride = null;
-        if (!string.IsNullOrEmpty(roleCode))
+        if (!string.IsNullOrEmpty(roleCode) && !screenTextHeading)
         {
-            var tpl = _ctx.RoleTemplateResolver.Resolve(roleCode!, resolveSeriesId);
+            var tpl = _ctx.RoleTemplateResolver.Resolve(roleCode!, resolveSeriesId, scopeKind == "EPISODE" ? episodeId : null);
             template = tpl?.FormatTemplate;
             contentHeaderOverride = string.IsNullOrEmpty(tpl?.ContentHeaderOverride) ? null : tpl!.ContentHeaderOverride;
         }
@@ -636,8 +727,14 @@ internal sealed class CreditTreeRenderer
         string roleMisprintPrefixHtml = !string.IsNullOrEmpty(roleMisprintText) && roleName.Length > 0
             ? BuildRoleMisprintPrefixHtml(roleMisprintText!)
             : "";
+        // 1 行にまとめた行の役職名 HTML（呼び出し側で組み立て済み）は、役職名だけ画面に無い印も役職ごとに反映済み。
+        bool isJoinedRoleName = roleNameHtmlOverride is not null;
         if (roleMisprintPrefixHtml.Length > 0 && roleNameHtmlOverride is null)
             roleNameHtmlOverride = roleMisprintPrefixHtml + BuildRoleNameHtml(roleCode, roleName, roleMap);
+
+        // 役職名だけ画面に無い行は、役職名の欄（誤記の取り消し線を含む）を全角の括弧で包んで薄く出す。
+        if (roleLabelNotOnScreen && roleName.Length > 0 && !isJoinedRoleName)
+            roleNameHtmlOverride = CreditRoleLabel.WrapNotOnScreenHtml(roleNameHtmlOverride ?? BuildRoleNameHtml(roleCode, roleName, roleMap));
 
         html.Append(notOnScreen
             ? "<div class=\"role not-on-screen\" title=\"画面にはクレジットされていない\">"
@@ -651,8 +748,9 @@ internal sealed class CreditTreeRenderer
         if (contentHeaderOverride is not null)
         {
             html.Append("<div class=\"role-content-header\"><strong>");
-            html.Append(roleMisprintPrefixHtml);
-            html.Append(BuildRoleNameHtml(roleCode, contentHeaderOverride, roleMap));
+            string contentHeaderHtml = roleMisprintPrefixHtml + BuildRoleNameHtml(roleCode, contentHeaderOverride, roleMap);
+            // 役職名だけ画面に無い行は、見出しも全角の括弧で包んで薄く出す。
+            html.Append(roleLabelNotOnScreen ? CreditRoleLabel.WrapNotOnScreenHtml(contentHeaderHtml) : contentHeaderHtml);
             html.Append("</strong></div>");
         }
 
@@ -665,9 +763,10 @@ internal sealed class CreditTreeRenderer
                 // SERIES スコープのクレジット（映画系列）では scopeSeriesId に credit.SeriesId 相当を渡し、
                 // {THEME_SONGS} ハンドラが series_theme_songs を引き当てるようにする。EPISODE スコープでは null。
                 int? scopeSeriesIdForCtx = scopeKind == "SERIES" ? resolveSeriesId : null;
-                // SERIES スコープの場合、テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。
-                // 映倫審査番号（{FILM_RATING_NO}）と CJ マークの有無（{CJ_MARK}）も同じシリーズから引く。
-                Series? seriesForCtx = scopeSeriesIdForCtx is int ssid && _ctx.SeriesById.TryGetValue(ssid, out var sfc)
+                // テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。SERIES スコープはクレジットの作品、
+                // EPISODE スコープはその話の作品（TV の OP のタイトルカード〔役職 TITLE〕で使う）。
+                // 映倫審査番号（{FILM_RATING_NO}）と CJ マークの有無（{CJ_MARK}）も同じシリーズから引く（映画だけの値なので TV では空）。
+                Series? seriesForCtx = resolveSeriesId is int ssid && _ctx.SeriesById.TryGetValue(ssid, out var sfc)
                     ? sfc
                     : null;
                 var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, scopeSeriesIdForCtx, creditKind,
@@ -676,7 +775,9 @@ internal sealed class CreditTreeRenderer
                     scopeSeriesTitle: seriesForCtx?.Title,
                     scopeFilmRatingNo: seriesForCtx?.FilmRatingNo,
                     scopeFilmCjMark: seriesForCtx?.FilmCjMark ?? false,
-                    themeSongSeq: themeSongSeq);
+                    themeSongSeq: themeSongSeq,
+                    roleLabelNotOnScreen: roleLabelNotOnScreen && !hideRoleLabel,
+                    cardMediaVersion: cardMediaVersion);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
 
                 string normalized = rendered.Replace("\r\n", "\n").Replace("\r", "\n");
@@ -812,6 +913,8 @@ internal sealed class CreditTreeRenderer
         foreach (var bs in blocks)
         {
             if (bs.Entries.Count == 0) continue;
+            // 前のブロックの続き（continues_previous）は、ブロックの間の空きを入れずに前の行へそのまま続ける。
+            bool breakBeforeBlock = !isFirstBlock && !bs.Block.ContinuesPrevious;
 
             bool isFirstRowOfThisBlock = true;
             // ブロック区切り直後は屋号繰り返し圧縮の状態を一旦リセットする
@@ -821,7 +924,7 @@ internal sealed class CreditTreeRenderer
 
             foreach (var e in bs.Entries)
             {
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 isFirstRowOfThisBlock = false;
                 if (firstRow)
@@ -924,6 +1027,8 @@ internal sealed class CreditTreeRenderer
         public required CreditCardRoleSnapshot Dir { get; init; }
         /// <summary>true なら sb と dir は同じ Group に属する（テキスト入力上は連続 role）。 false ならテキスト上 `--`（Group 区切り）で隔てられている → 融合描画でも sb と dir の間に block-break 相当の視覚ギャップを入れる。</summary>
         public required bool SameGroup { get; init; }
+        /// <summary>true なら顔ぶれが同じときの見出しを「絵コンテ・演出」で出す（<c>JOIN_SAME_PERSON</c>）。 false なら「(絵コンテ・)演出」で出す（<c>MERGE</c> / <c>MERGE_SAME_PERSON</c>）。</summary>
+        public required bool JoinedLabel { get; init; }
     }
 
     /// <summary>
@@ -932,11 +1037,12 @@ internal sealed class CreditTreeRenderer
     /// 戻り値：(sb の CardRoleId → ペア情報の辞書, dir の CardRoleId 集合)。
     /// 隣接ペアが見つかった次の組（i+1）はスキップして i+2 から再開する（dir を二重に sb として
     /// 拾わない、3 連続 sb/dir/sb のような異常入力の暴走防止）。
-    /// <paramref name="samePersonOnly"/> が true（<c>MERGE_SAME_PERSON</c> の作品）なら、絵コンテと演出が
-    /// 1 人ずつで同じ人のペアだけを融合の対象にする（違う人なら両役職とも通常の独立描画）。
+    /// <paramref name="samePersonOnly"/> が true（<c>MERGE_SAME_PERSON</c> / <c>JOIN_SAME_PERSON</c> の作品）なら、
+    /// 絵コンテと演出の顔ぶれが同じペアだけを融合の対象にする（一部だけ重なる・重ならないなら両役職とも通常の独立描画）。
+    /// <paramref name="joinedLabel"/> が true（<c>JOIN_SAME_PERSON</c>）なら、融合したときの見出しを「絵コンテ・演出」で出す。
     /// </summary>
     private static (Dictionary<int, StoryboardDirectorMerge> BySbId, HashSet<int> DirIds)
-        DetectStoryboardDirectorMerges(CreditCardSnapshot cardSnap, bool samePersonOnly)
+        DetectStoryboardDirectorMerges(CreditCardSnapshot cardSnap, bool samePersonOnly, bool joinedLabel)
     {
         var ordered = new List<(int GroupId, CreditCardRoleSnapshot Snap)>();
         foreach (var t in cardSnap.Tiers.OrderBy(x => x.Tier.TierNo))
@@ -958,13 +1064,14 @@ internal sealed class CreditTreeRenderer
             var (gid2, snap2) = ordered[i + 1];
             bool isSb = string.Equals(snap1.Role.RoleCode, RoleCodeStoryboard, StringComparison.Ordinal);
             bool isDir = string.Equals(snap2.Role.RoleCode, RoleCodeEpisodeDirector, StringComparison.Ordinal);
-            if (isSb && isDir && (!samePersonOnly || IsSamePersonStoryboardDirector(snap1, snap2)))
+            if (isSb && isDir && (!samePersonOnly || IsSameMembersStoryboardDirector(snap1, snap2)))
             {
                 bySbId[snap1.Role.CardRoleId] = new StoryboardDirectorMerge
                 {
                     Sb = snap1,
                     Dir = snap2,
-                    SameGroup = gid1 == gid2
+                    SameGroup = gid1 == gid2,
+                    JoinedLabel = joinedLabel
                 };
                 dirIds.Add(snap2.Role.CardRoleId);
                 i++; // 次の組（i+1 = dir）はスキップ
@@ -974,16 +1081,30 @@ internal sealed class CreditTreeRenderer
     }
 
     /// <summary>
-    /// 絵コンテ役職と演出役職のエントリ（<c>is_broadcast_only</c> を除く）が 1 件ずつで、同じ人かを判定する。
+    /// 絵コンテ役職と演出役職のエントリ（<c>is_broadcast_only</c> を除く）の顔ぶれが同じかを判定する。
+    /// 人数が同じで、表示順（block_seq → entry_seq）に並べた各エントリが同じ人のときだけ true。
+    /// 一部だけ重なる・重ならない・順が違うときは false（画面では「絵コンテ」「演出」を分けて全員を出している）。
+    /// </summary>
+    private static bool IsSameMembersStoryboardDirector(CreditCardRoleSnapshot sb, CreditCardRoleSnapshot dir)
+    {
+        var sbEntries = sb.Blocks.OrderBy(b => b.Block.BlockSeq)
+            .SelectMany(b => b.Entries.OrderBy(e => e.EntrySeq)).Where(e => !e.IsBroadcastOnly).ToList();
+        var dirEntries = dir.Blocks.OrderBy(b => b.Block.BlockSeq)
+            .SelectMany(b => b.Entries.OrderBy(e => e.EntrySeq)).Where(e => !e.IsBroadcastOnly).ToList();
+        if (sbEntries.Count == 0 || sbEntries.Count != dirEntries.Count) return false;
+        for (int i = 0; i < sbEntries.Count; i++)
+        {
+            if (!IsSameStoryboardDirectorEntry(sbEntries[i], dirEntries[i])) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// 絵コンテのエントリと演出のエントリが同じ人かを判定する。
     /// 両方が名義を持てば <c>person_alias_id</c> の一致、どちらも名義を持たなければ <c>raw_text</c> の一致で見る。
     /// </summary>
-    private static bool IsSamePersonStoryboardDirector(CreditCardRoleSnapshot sb, CreditCardRoleSnapshot dir)
+    private static bool IsSameStoryboardDirectorEntry(CreditBlockEntry s, CreditBlockEntry d)
     {
-        var sbEntries = sb.Blocks.SelectMany(b => b.Entries).Where(e => !e.IsBroadcastOnly).ToList();
-        var dirEntries = dir.Blocks.SelectMany(b => b.Entries).Where(e => !e.IsBroadcastOnly).ToList();
-        if (sbEntries.Count != 1 || dirEntries.Count != 1) return false;
-        var s = sbEntries[0];
-        var d = dirEntries[0];
         if (s.PersonAliasId.HasValue && d.PersonAliasId.HasValue)
             return s.PersonAliasId.Value == d.PersonAliasId.Value;
         if (s.PersonAliasId.HasValue || d.PersonAliasId.HasValue) return false;
@@ -997,8 +1118,10 @@ internal sealed class CreditTreeRenderer
     /// ブロック区切り（block_seq の境界）は &lt;tr class="block-break"&gt; で視覚ギャップを入れる。
     /// sb の最終エントリと dir の先頭エントリの間は SameGroup=false（テキスト上 `--` で隔てられている）の
     /// ときだけ block-break ギャップを入れる。同 Group 内なら隙間なくタイトに続ける。
-    /// 1:1 で同一人物（sb と dir が同 person_alias）のケースは「(絵コンテ・)演出 ｜ 名前」の旧コンパクト
-    /// 表記を維持（その人物 1 人が両方を担当した 1 行表示）。</summary>
+    /// 顔ぶれが同じ（人数が同じで、表示順に並べた各エントリが同じ人）ケースは、見出し 1 つの下に名前を 1 回ずつ並べる。
+    /// 見出しは <see cref="StoryboardDirectorMerge.JoinedLabel"/> が true なら「絵コンテ・演出」、false なら「(絵コンテ・)演出」。
+    /// 顔ぶれが一部だけ重なる（<c>MERGE</c> の作品でだけここに来る）ケースは、1 人 1 行にして担った役職を後ろに付ける
+    /// （「名前 (絵コンテ・演出)」「名前 (演出)」）。</summary>
     private async Task RenderStoryboardDirectorMergedAsync(
         StoryboardDirectorMerge pair,
         IReadOnlyDictionary<string, Role> roleMap,
@@ -1031,32 +1154,53 @@ internal sealed class CreditTreeRenderer
                 ? (sbR.NameJa ?? "絵コンテ")
                 : "絵コンテ";
 
-        // 旧コンパクト表記：sb 1 件 / dir 1 件 / 同一人物 → 「(絵コンテ・)演出 | 名前」。
-        if (totalSb == 1 && totalDir == 1)
+        // 顔ぶれが同じ（人数が同じで、表示順に並べた各エントリが同じ人）→ 見出し 1 つの下に名前を 1 回ずつ並べる。
+        // 見出しは JOIN_SAME_PERSON なら「絵コンテ・演出」、MERGE / MERGE_SAME_PERSON なら「(絵コンテ・)演出」。
+        // 名前は演出のエントリで出し、演出のブロックの区切りには block-break の空きを入れる。
+        var sbFlat = sbBlocks.SelectMany(b => b).ToList();
+        var dirFlat = dirBlocks.SelectMany(b => b).ToList();
+        if (sbFlat.Count > 0 && sbFlat.Count == dirFlat.Count)
         {
-            var sb = sbBlocks[0][0];
-            var dr = dirBlocks[0][0];
-            bool sameName;
-            if (sb.PersonAliasId.HasValue && dr.PersonAliasId.HasValue)
+            bool sameMembers = true;
+            for (int i = 0; i < sbFlat.Count && sameMembers; i++)
             {
-                sameName = sb.PersonAliasId.Value == dr.PersonAliasId.Value;
+                var sb = sbFlat[i];
+                var dr = dirFlat[i];
+                if (sb.PersonAliasId.HasValue && dr.PersonAliasId.HasValue)
+                {
+                    sameMembers = sb.PersonAliasId.Value == dr.PersonAliasId.Value;
+                }
+                else
+                {
+                    string sbText = await ResolvePersonWithAffiliationLabelAsync(sb, ct).ConfigureAwait(false);
+                    string drText = await ResolvePersonWithAffiliationLabelAsync(dr, ct).ConfigureAwait(false);
+                    sameMembers = string.Equals(sbText, drText, StringComparison.Ordinal);
+                }
             }
-            else
-            {
-                string sbText = await ResolvePersonWithAffiliationLabelAsync(sb, ct).ConfigureAwait(false);
-                string drText = await ResolvePersonWithAffiliationLabelAsync(dr, ct).ConfigureAwait(false);
-                sameName = string.Equals(sbText, drText, StringComparison.Ordinal);
-            }
-            if (sameName)
+            if (sameMembers)
             {
                 string storyboardLinkHtml = BuildRoleNameHtml(RoleCodeStoryboard, storyboardRoleName, roleMap);
                 string directorLinkHtml = BuildRoleNameHtml(RoleCodeEpisodeDirector, directorRoleName, roleMap);
-                string directorHtml = await ResolvePersonWithAffiliationHtmlAsync(dr, ct).ConfigureAwait(false);
+                string mergedLabelHtml = pair.JoinedLabel
+                    ? $"{storyboardLinkHtml}・{directorLinkHtml}"
+                    : $"({storyboardLinkHtml}・){directorLinkHtml}";
                 html.Append("<div class=\"role\">");
-                html.Append("<table class=\"fallback-table\"><tr>");
-                html.Append($"<td class=\"role-name\">({storyboardLinkHtml}・){directorLinkHtml}</td>");
-                html.Append("<td class=\"entry-cell\">").Append(directorHtml).Append("</td>");
-                html.Append("</tr></table></div>");
+                html.Append("<table class=\"fallback-table\">");
+                bool firstMergedRow = true;
+                for (int bi = 0; bi < dirBlocks.Count; bi++)
+                {
+                    var entries = dirBlocks[bi];
+                    for (int ei = 0; ei < entries.Count; ei++)
+                    {
+                        string trClass = (ei == 0 && bi > 0) ? " class=\"block-break\"" : "";
+                        html.Append($"<tr{trClass}>");
+                        html.Append("<td class=\"role-name\">").Append(firstMergedRow ? mergedLabelHtml : "").Append("</td>");
+                        firstMergedRow = false;
+                        string entryHtml = await ResolvePersonWithAffiliationHtmlAsync(entries[ei], ct).ConfigureAwait(false);
+                        html.Append("<td class=\"entry-cell\">").Append(entryHtml).Append("</td></tr>");
+                    }
+                }
+                html.Append("</table></div>");
                 return;
             }
         }
@@ -1067,6 +1211,29 @@ internal sealed class CreditTreeRenderer
         string directorLabelCell = BuildRoleNameHtml(RoleCodeEpisodeDirector, directorRoleName, roleMap);
         string sbSuffix = $" {Esc("(絵コンテ)")}";
         string dirSuffix = $" {Esc("(演出)")}";
+
+        // 顔ぶれが一部だけ重なる（絵コンテと演出の両方に出る人がいる）ときは、1 人 1 行にまとめ、
+        // その人が担った役職を後ろに付ける（「山吉 康夫 (絵コンテ・演出)」「矢部 秋則 (演出)」）。
+        // 並びは絵コンテの順、続けて演出だけの人を演出の順に。画面の「演出」の欄の名前の並びと同じになる。
+        var overlapRows = await BuildStoryboardDirectorOverlapRowsAsync(sbFlat, dirFlat, ct).ConfigureAwait(false);
+        if (overlapRows is not null)
+        {
+            string bothSuffix = $" {Esc("(絵コンテ・演出)")}";
+            html.Append("<div class=\"role\">");
+            html.Append("<table class=\"fallback-table\">");
+            bool firstOverlapRow = true;
+            foreach (var (entry, isSb, isDir) in overlapRows)
+            {
+                html.Append("<tr>");
+                html.Append("<td class=\"role-name\">").Append(firstOverlapRow ? directorLabelCell : "").Append("</td>");
+                firstOverlapRow = false;
+                string entryHtml = await ResolvePersonWithAffiliationHtmlAsync(entry, ct).ConfigureAwait(false);
+                string suffix = isSb && isDir ? bothSuffix : isSb ? sbSuffix : dirSuffix;
+                html.Append("<td class=\"entry-cell\">").Append(entryHtml).Append(suffix).Append("</td></tr>");
+            }
+            html.Append("</table></div>");
+            return;
+        }
 
         html.Append("<div class=\"role\">");
         html.Append("<table class=\"fallback-table\">");
@@ -1124,6 +1291,59 @@ internal sealed class CreditTreeRenderer
         html.Append("</table></div>");
     }
 
+    /// <summary>
+    /// 絵コンテと演出の顔ぶれが一部だけ重なるとき、1 人 1 行の並び（エントリ・絵コンテを担ったか・演出を担ったか）を返す。
+    /// 絵コンテの各エントリを順に置き、同じ人が演出にもいれば両方を担った行にする。続けて、演出だけの人を演出の順に置く。
+    /// 両方に出る人が 1 人もいなければ null（呼び出し側は「(絵コンテ)」「(演出)」を付けて縦に並べる形で出す）。
+    /// 同じ人かは、両方が名義を持てば <c>person_alias_id</c> の一致、そうでなければ表示の文字列の一致で見る。
+    /// </summary>
+    private async Task<List<(CreditBlockEntry Entry, bool IsSb, bool IsDir)>?> BuildStoryboardDirectorOverlapRowsAsync(
+        IReadOnlyList<CreditBlockEntry> sbEntries,
+        IReadOnlyList<CreditBlockEntry> dirEntries,
+        CancellationToken ct)
+    {
+        var dirUsed = new bool[dirEntries.Count];
+        var rows = new List<(CreditBlockEntry Entry, bool IsSb, bool IsDir)>(sbEntries.Count + dirEntries.Count);
+        bool anyOverlap = false;
+        foreach (var sb in sbEntries)
+        {
+            int match = -1;
+            for (int di = 0; di < dirEntries.Count && match < 0; di++)
+            {
+                if (dirUsed[di]) continue;
+                var dr = dirEntries[di];
+                bool same;
+                if (sb.PersonAliasId.HasValue && dr.PersonAliasId.HasValue)
+                {
+                    same = sb.PersonAliasId.Value == dr.PersonAliasId.Value;
+                }
+                else
+                {
+                    string sbText = await ResolvePersonWithAffiliationLabelAsync(sb, ct).ConfigureAwait(false);
+                    string drText = await ResolvePersonWithAffiliationLabelAsync(dr, ct).ConfigureAwait(false);
+                    same = !string.IsNullOrEmpty(sbText) && string.Equals(sbText, drText, StringComparison.Ordinal);
+                }
+                if (same) match = di;
+            }
+            if (match >= 0)
+            {
+                dirUsed[match] = true;
+                anyOverlap = true;
+                rows.Add((sb, true, true));
+            }
+            else
+            {
+                rows.Add((sb, true, false));
+            }
+        }
+        if (!anyOverlap) return null;
+        for (int di = 0; di < dirEntries.Count; di++)
+        {
+            if (!dirUsed[di]) rows.Add((dirEntries[di], false, true));
+        }
+        return rows;
+    }
+
     /// <summary>通常フォールバック描画：役職名（左）+ ブロック内エントリ（右、col_count カラム横並び）。 leading_company はブロック先頭行で太字なし、後続エントリ行は字下げ（全角SP 1 個分）。 役職名・名義・屋号・ロゴをそれぞれ詳細ページへリンク化する。</summary>
     private async Task RenderRoleFallbackAsync(
         string? roleCode,
@@ -1149,6 +1369,8 @@ internal sealed class CreditTreeRenderer
         foreach (var bs in blocks)
         {
             if (bs.Entries.Count == 0) continue;
+            // 前のブロックの続き（continues_previous）は、ブロックの間の空きを入れずに前の行へそのまま続ける。
+            bool breakBeforeBlock = !isFirstBlock && !bs.Block.ContinuesPrevious;
             int cols = Math.Max(1, (int)bs.Block.ColCount);
 
             // leading_company（ブロック先頭の屋号）も詳細ページへのリンク付きで出す。
@@ -1160,9 +1382,17 @@ internal sealed class CreditTreeRenderer
                 if (!string.IsNullOrEmpty(leadingCompanyName))
                 {
                     leadingCompanyHtml = await BuildCompanyAliasHtmlAsync(leadId, leadingCompanyName).ConfigureAwait(false);
+                    // 2 社目（間の字つき）と後ろの字を、筆頭の行に続ける。
+                    (leadingCompanyName, leadingCompanyHtml) = await AppendLeadingCompanyRestAsync(bs.Block, leadingCompanyName, leadingCompanyHtml).ConfigureAwait(false);
                     // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、括弧で包んで薄い色で示す。
                     if (bs.Block.LeadingCompanyNotOnScreen) leadingCompanyHtml = LeadingNotOnScreenHtml(leadingCompanyHtml);
                 }
+            }
+            // 会社のデータを持たない文字だけの筆頭（「いこーよ・アンバサダーのみなさん」など）は、リンクを付けずに同じ位置へ出す。
+            if (string.IsNullOrEmpty(leadingCompanyName) && !string.IsNullOrEmpty(bs.Block.LeadingText))
+            {
+                leadingCompanyName = bs.Block.LeadingText;
+                leadingCompanyHtml = Esc(bs.Block.LeadingText!);
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 
@@ -1172,7 +1402,7 @@ internal sealed class CreditTreeRenderer
             string headingHtml = BuildBlockHeadingHtml(bs.Block);
             if (headingHtml.Length > 0)
             {
-                bool addBreakClass = !isFirstBlock;
+                bool addBreakClass = breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -1192,7 +1422,7 @@ internal sealed class CreditTreeRenderer
 
             if (hasLeading)
             {
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -1208,9 +1438,12 @@ internal sealed class CreditTreeRenderer
                 isFirstRowOfThisBlock = false;
             }
 
-            for (int i = 0; i < bs.Entries.Count; i += cols)
+            // 名前の併記（parallel_with_entry_id。画面で「高橋郁子・香村純子」のように 1 行につながる名前）は、
+            // 独立した升にせず、相手の升の後ろに間の字（parallel_prefix / parallel_suffix）つきで並べる。
+            var gridEntries = FoldParallelNameEntries(bs.Entries, out var nameFollowers);
+            for (int i = 0; i < gridEntries.Count; i += cols)
             {
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 isFirstRowOfThisBlock = false;
                 if (firstRow)
@@ -1225,10 +1458,19 @@ internal sealed class CreditTreeRenderer
                 for (int j = 0; j < cols; j++)
                 {
                     html.Append("<td class=\"entry-cell\">");
-                    if (i + j < bs.Entries.Count)
+                    if (i + j < gridEntries.Count)
                     {
-                        var e = bs.Entries[i + j];
+                        var e = gridEntries[i + j];
                         string entryHtml = await ResolveEntryHtmlAsync(e, ct).ConfigureAwait(false);
+                        if (nameFollowers.TryGetValue(e.EntryId, out var followers))
+                        {
+                            foreach (var f in followers)
+                            {
+                                entryHtml += Esc(f.ParallelPrefix ?? "")
+                                           + await ResolveEntryHtmlAsync(f, ct).ConfigureAwait(false)
+                                           + Esc(f.ParallelSuffix ?? "");
+                            }
+                        }
                         // 空きの升（BLANK）は中身が無いので字下げも付けず、空の升のまま出す。
                         if (hasLeading && entryHtml.Length > 0) html.Append("　"); // 全角SP 1 個分の字下げ
                         html.Append(entryHtml);
@@ -1244,7 +1486,11 @@ internal sealed class CreditTreeRenderer
 
     /// <summary>
     /// VOICE_CAST 役職用 3 カラムフォールバック（役職名 | キャラ名 | 声優名）。
-    /// 同キャラ連続は dim 空セルで省略、leading_company は colspan=2 で見出し行 + 後続字下げ、
+    /// 同じ役名・同じ声優が続く行（ひと続き）は、エントリの <see cref="CreditBlockEntry.SameCharacterLayout"/> /
+    /// <see cref="CreditBlockEntry.SamePersonLayout"/> に従って、毎行書く（REPEAT）・先頭の行に 1 回だけ書いて続きの行は空ける
+    /// （TOP。役名の側は dim の空セル）・升を縦に結合して真ん中に 1 回だけ書く（MIDDLE。rowspan）のいずれかで出す
+    /// （ひと続きの解決は <see cref="VoiceCastRunLayout"/>）。
+    /// leading_company は colspan=2 で見出し行 + 後続字下げ、
     /// CASTING_COOPERATION エントリは末尾に「協力」行として追記する。
     /// 協力行のレイアウト：「協力」を役職名カラムに右寄せで置き、屋号一覧は声優名カラムに置く
     /// （3 カラム構成と整合性を取る）。役職名・名義・屋号はリンク化。
@@ -1273,11 +1519,12 @@ internal sealed class CreditTreeRenderer
         html.Append("<table class=\"fallback-vc-table\">");
         bool firstRow = true;
         bool isFirstBlock = true;
-        string? prevCharLabel = null;
 
         foreach (var bs in blocks)
         {
             if (bs.Entries.Count == 0) continue;
+            // 前のブロックの続き（continues_previous）は、ブロックの間の空きを入れずに前の行へそのまま続ける。
+            bool breakBeforeBlock = !isFirstBlock && !bs.Block.ContinuesPrevious;
 
             // leading_company もリンク化。
             string? leadingCompanyName = null;
@@ -1288,9 +1535,17 @@ internal sealed class CreditTreeRenderer
                 if (!string.IsNullOrEmpty(leadingCompanyName))
                 {
                     leadingCompanyHtml = await BuildCompanyAliasHtmlAsync(leadId, leadingCompanyName).ConfigureAwait(false);
+                    // 2 社目（間の字つき）と後ろの字を、筆頭の行に続ける。
+                    (leadingCompanyName, leadingCompanyHtml) = await AppendLeadingCompanyRestAsync(bs.Block, leadingCompanyName, leadingCompanyHtml).ConfigureAwait(false);
                     // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、括弧で包んで薄い色で示す。
                     if (bs.Block.LeadingCompanyNotOnScreen) leadingCompanyHtml = LeadingNotOnScreenHtml(leadingCompanyHtml);
                 }
+            }
+            // 会社のデータを持たない文字だけの筆頭（「いこーよ・アンバサダーのみなさん」など）は、リンクを付けずに同じ位置へ出す。
+            if (string.IsNullOrEmpty(leadingCompanyName) && !string.IsNullOrEmpty(bs.Block.LeadingText))
+            {
+                leadingCompanyName = bs.Block.LeadingText;
+                leadingCompanyHtml = Esc(bs.Block.LeadingText!);
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 
@@ -1301,7 +1556,7 @@ internal sealed class CreditTreeRenderer
             string headingHtml = BuildBlockHeadingHtml(bs.Block);
             if (headingHtml.Length > 0)
             {
-                bool addBreakClass = !isFirstBlock;
+                bool addBreakClass = breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -1317,12 +1572,11 @@ internal sealed class CreditTreeRenderer
                 html.Append($"<td class=\"character-cell block-heading{markClass}\" colspan=\"2\">{headingHtml}</td>");
                 html.Append("</tr>");
                 isFirstRowOfThisBlock = false;
-                prevCharLabel = null;
             }
 
             if (hasLeading)
             {
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
@@ -1336,7 +1590,6 @@ internal sealed class CreditTreeRenderer
                 html.Append($"<td class=\"character-cell\" colspan=\"2\">{leadingCompanyHtml}</td>");
                 html.Append("</tr>");
                 isFirstRowOfThisBlock = false;
-                prevCharLabel = null;
             }
 
             // 併記（parallel_with_entry_id）の CHARACTER_VOICE エントリは独立した行にせず、
@@ -1344,67 +1597,46 @@ internal sealed class CreditTreeRenderer
             // 相手が同じブロックに見つからないときは、普通の行として描く。
             var rowEntries = FoldParallelCharacterEntries(bs.Entries, out var parallelFollowers);
 
-            // 各エントリの表示要素を先に解決し、隣接 CHARACTER_VOICE 行で actor 表示 HTML が一致する
-            // 連続区間（n 役連続）を rowspan で結合する事前計算を行う。actor の同一性判定は
-            // 「最終的に表示される actor-cell の HTML 文字列」で行うため、所属（affiliation）や
-            // スラッシュ配偶名義の違いがあれば自動的に別グループとして扱われる。
+            // 各エントリの表示要素を先に解決し、同じ役名・同じ声優が続く行（ひと続き）の升の出し方を
+            // エントリの same_character_layout / same_person_layout から事前に決める（VoiceCastRunLayout）。
             // 併記で畳んだエントリは行を持たないので、この計算にも入らない。
             int entryCount = rowEntries.Count;
-            var resolved = new (bool IsCharVoice, string CharLabel, string CharHtml, string ActorHtml, string EntryHtml)[entryCount];
+            var resolved = new (bool IsCharVoice, string CharHtml, string ActorHtml, string EntryHtml)[entryCount];
             for (int i = 0; i < entryCount; i++)
             {
                 var ent = rowEntries[i];
                 if (ent.EntryKind == "CHARACTER_VOICE")
                 {
-                    string lbl = await ResolveCharacterLabelAsync(ent, ct).ConfigureAwait(false);
                     string chh = await ResolveCharacterLabelHtmlAsync(ent, ct).ConfigureAwait(false);
                     if (parallelFollowers.TryGetValue(ent.EntryId, out var followers))
                     {
                         // 併記の相手の役名を、前後の字（parallel_prefix / parallel_suffix）つきで後ろに並べる。
-                        // 同じ役名の続きの判定（sameAsPrev）にも併記の役名を含める。
                         foreach (var f in followers)
                         {
-                            lbl += (f.ParallelPrefix ?? "") + await ResolveCharacterLabelAsync(f, ct).ConfigureAwait(false) + (f.ParallelSuffix ?? "");
                             chh += await BuildParallelCharacterHtmlAsync(f, ct).ConfigureAwait(false);
                         }
                     }
+                    // キャラのユニット（character_unit_alias_id）があれば、役名の後ろに小さいカッコで並べる。
+                    chh += await BuildCharacterUnitHtmlAsync(ent).ConfigureAwait(false);
                     string ahh = await ResolvePersonWithAffiliationHtmlAsync(ent, ct).ConfigureAwait(false);
-                    resolved[i] = (true, lbl, chh, ahh, "");
+                    resolved[i] = (true, chh, ahh, "");
                 }
                 else
                 {
                     string eh = await ResolveEntryHtmlAsync(ent, ct).ConfigureAwait(false);
-                    resolved[i] = (false, "", "", "", eh);
+                    resolved[i] = (false, "", "", eh);
                 }
             }
-            // rowspanFor[i]：このエントリの actor-cell を rowspan=N で出す（N>=2 の場合属性付き、
-            // N==1 は普通の単一セル、N==0 は actor-cell を一切出さない rowspan 吸収行）。
-            int[] rowspanFor = new int[entryCount];
-            for (int i = 0; i < entryCount; i++) rowspanFor[i] = 1;
-            for (int i = 0; i < entryCount; )
-            {
-                if (!resolved[i].IsCharVoice || string.IsNullOrEmpty(resolved[i].ActorHtml))
-                {
-                    i++;
-                    continue;
-                }
-                int j = i + 1;
-                while (j < entryCount
-                       && resolved[j].IsCharVoice
-                       && string.Equals(resolved[j].ActorHtml, resolved[i].ActorHtml, StringComparison.Ordinal))
-                {
-                    j++;
-                }
-                int span = j - i;
-                rowspanFor[i] = span;
-                for (int k = i + 1; k < j; k++) rowspanFor[k] = 0;
-                i = j;
-            }
+            // charCellFor[i] / actorCellFor[i]：このエントリの character-cell / actor-cell の出し方。
+            // 1 はふつうの単一セル、N>=2 は rowspan=N の結合セル、0 はセルを一切出さない rowspan 吸収行、
+            // -1 は空のセル（VoiceCastRunLayout の定数）。
+            int[] charCellFor = VoiceCastRunLayout.Resolve(rowEntries, e => e.SameCharacterLayout);
+            int[] actorCellFor = VoiceCastRunLayout.Resolve(rowEntries, e => e.SamePersonLayout);
 
             for (int i = 0; i < entryCount; i++)
             {
                 var slot = resolved[i];
-                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                bool addBreakClass = isFirstRowOfThisBlock && breakBeforeBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 isFirstRowOfThisBlock = false;
 
@@ -1420,37 +1652,45 @@ internal sealed class CreditTreeRenderer
 
                 if (slot.IsCharVoice)
                 {
-                    bool sameAsPrev = prevCharLabel is not null
-                        && string.Equals(slot.CharLabel, prevCharLabel, StringComparison.Ordinal);
-                    if (sameAsPrev)
+                    int charCell = charCellFor[i];
+                    if (charCell == VoiceCastRunLayout.BlankCell)
                     {
+                        // 同じ役名の続き（TOP）：役名は先頭の行にだけ書き、この行は dim の空セル。
                         html.Append("<td class=\"character-cell dim\"></td>");
                     }
-                    else
+                    else if (charCell != VoiceCastRunLayout.OmittedCell)
                     {
                         // キャラ名を /characters/{character_id}/ にリンク化する。
                         // CharacterAliasId → CharacterId を LookupCache で解決し、解決できれば <a> ラップ、
                         // できないときはエスケープ済み素テキストにフォールバックする。
                         // 字下げ用の全角スペースは leading_company 直下行にだけ加える。
                         string charPrefix = hasLeading ? "　" : "";
-                        html.Append($"<td class=\"character-cell\">{charPrefix}{slot.CharHtml}</td>");
+                        // 同じ役名のひと続き（MIDDLE）：先頭行で rowspan=N の character-cell を出し、後続行は省略。
+                        // CSS で td.character-cell[rowspan] の vertical-align を middle に上書きしているので、
+                        // 結合セルは N 行ぶんの中央に揃う。
+                        string charSpanAttr = charCell >= 2 ? $" rowspan=\"{charCell}\"" : "";
+                        html.Append($"<td class=\"character-cell\"{charSpanAttr}>{charPrefix}{slot.CharHtml}</td>");
                     }
+                    // OmittedCell：直前の rowspan で吸収されるので何も出さない。
 
-                    int span = rowspanFor[i];
+                    int span = actorCellFor[i];
                     if (span >= 2)
                     {
-                        // n 役連続：先頭行で rowspan=N の actor-cell を出し、後続行は actor-cell を完全省略。
+                        // n 役連続（MIDDLE）：先頭行で rowspan=N の actor-cell を出し、後続行は actor-cell を完全省略。
                         // CSS で td.actor-cell[rowspan] の vertical-align を middle に上書きしているので、
                         // 結合セルは N 行ぶんの中央に視覚的に揃う。
                         html.Append($"<td class=\"actor-cell\" rowspan=\"{span}\">{slot.ActorHtml}</td>");
                     }
-                    else if (span == 1)
+                    else if (span == VoiceCastRunLayout.NormalCell)
                     {
                         html.Append($"<td class=\"actor-cell\">{slot.ActorHtml}</td>");
                     }
-                    // span == 0：直前の rowspan で吸収されるので何も出さない。
-
-                    prevCharLabel = slot.CharLabel;
+                    else if (span == VoiceCastRunLayout.BlankCell)
+                    {
+                        // n 役連続（TOP）：声優名は先頭の行にだけ書き、この行は空の actor-cell。
+                        html.Append("<td class=\"actor-cell\"></td>");
+                    }
+                    // OmittedCell：直前の rowspan で吸収されるので何も出さない。
                 }
                 else
                 {
@@ -1459,7 +1699,6 @@ internal sealed class CreditTreeRenderer
                     // 空きの升（BLANK）は中身が無いので字下げを付けない。
                     string actorPrefix = hasLeading && slot.EntryHtml.Length > 0 ? "　" : "";
                     html.Append($"<td class=\"actor-cell\">{actorPrefix}{slot.EntryHtml}</td>");
-                    prevCharLabel = null;
                 }
 
                 html.Append("</tr>");
@@ -1496,6 +1735,10 @@ internal sealed class CreditTreeRenderer
                         ? (string.IsNullOrEmpty(coopRole.NameJa) ? "協力" : coopRole.NameJa)
                         : "協力";
                 string cooperationLabelHtml = BuildRoleNameHtml(RoleCodeCastingCooperation, cooperationRoleName, roleMap);
+                // 「協力」の文字だけ画面に無い（屋号は画面にある）ときは、「協力」だけを全角の括弧で包んで薄く出す。
+                // 行ごと画面に無いときは下の not-on-screen で行ごと包むので重ねない。
+                if (appendedCooperation.LabelNotOnScreen && !appendedCooperation.NotOnScreen)
+                    cooperationLabelHtml = CreditRoleLabel.WrapNotOnScreenHtml(cooperationLabelHtml);
 
                 // 画面に無い「協力」は not-on-screen を付け、CSS で「協力」から屋号までを括弧で包んで薄い色で出す。
                 html.Append(appendedCooperation.NotOnScreen
@@ -1554,6 +1797,40 @@ internal sealed class CreditTreeRenderer
     }
 
     /// <summary>
+    /// 普通の役職のブロックで、併記（<see cref="CreditBlockEntry.ParallelWithEntryId"/>）の付いた名前のエントリ
+    /// （声の出演以外）を取り除いた「升になるエントリ」の並びを返す。取り除いたエントリは、相手（同じブロックの前にある
+    /// 升のエントリ）の entry_id ごとに <paramref name="followers"/> に並び順のまま集める。併記の併記（A・B・C）は先頭の A にまとめる。
+    /// 相手が同じブロックの前に無いエントリは、取り除かずに普通の升として残す。
+    /// </summary>
+    private static List<CreditBlockEntry> FoldParallelNameEntries(
+        IReadOnlyList<CreditBlockEntry> entries,
+        out Dictionary<int, List<CreditBlockEntry>> followers)
+    {
+        followers = new Dictionary<int, List<CreditBlockEntry>>();
+        var cells = new List<CreditBlockEntry>(entries.Count);
+        var headOf = new Dictionary<int, int>();
+        foreach (var e in entries)
+        {
+            if (e.EntryKind != "CHARACTER_VOICE"
+                && e.ParallelWithEntryId is int target
+                && headOf.TryGetValue(target, out int head))
+            {
+                if (!followers.TryGetValue(head, out var list))
+                {
+                    list = new List<CreditBlockEntry>();
+                    followers[head] = list;
+                }
+                list.Add(e);
+                headOf[e.EntryId] = head;
+                continue;
+            }
+            cells.Add(e);
+            headOf[e.EntryId] = e.EntryId;
+        }
+        return cells;
+    }
+
+    /// <summary>
     /// 併記のエントリの役名を、前後の字（<see cref="CreditBlockEntry.ParallelPrefix"/> /
     /// <see cref="CreditBlockEntry.ParallelSuffix"/>）つきの HTML 断片にする。
     /// 役名はキャラのページへのリンク。<see cref="CreditBlockEntry.ParallelSmall"/> なら前後の字ごと &lt;small&gt; で包む。
@@ -1566,15 +1843,17 @@ internal sealed class CreditTreeRenderer
         return e.ParallelSmall ? $"<small class=\"parallel-small\">{inner}</small>" : inner;
     }
 
-    private async Task<string> ResolveCharacterLabelAsync(CreditBlockEntry e, CancellationToken ct)
+    /// <summary>
+    /// 声の出演の役名の後ろに出すキャラのユニット（<see cref="CreditBlockEntry.CharacterUnitAliasId"/>）を、
+    /// 小さいカッコつきの HTML 断片にする（「ヤギ（サファリア）」の「（サファリア）」）。
+    /// ユニットの名義は所属のユニットと同じくリンクなしの文字で出す。ユニットが無ければ空文字。
+    /// </summary>
+    private async Task<string> BuildCharacterUnitHtmlAsync(CreditBlockEntry e)
     {
-        if (e.CharacterAliasId is int caId)
-        {
-            string? n = await _lookup.LookupCharacterAliasNameAsync(caId).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(n)) return n;
-        }
-        if (!string.IsNullOrWhiteSpace(e.RawCharacterText)) return e.RawCharacterText!;
-        return "(キャラクター未指定)";
+        if (e.CharacterUnitAliasId is not int uid) return "";
+        string? name = await _lookup.LookupPersonAliasNameAsync(uid).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(name)) return "";
+        return $"<small class=\"parallel-small\">（{Esc(name)}）</small>";
     }
 
     /// <summary>キャラ名義（character_alias）の表示名を「キャラ詳細ページへのリンク済み HTML 断片」として返す。</summary>
@@ -1590,13 +1869,13 @@ internal sealed class CreditTreeRenderer
             {
                 int? characterId = await _lookup.LookupCharacterIdFromAliasAsync(caId).ConfigureAwait(false);
                 baseHtml = characterId.HasValue
-                    ? $"<a href=\"{PathUtil.CharacterUrl(characterId.Value)}\">{Esc(name)}</a>"
-                    : Esc(name);
+                    ? $"<a href=\"{PathUtil.CharacterUrl(characterId.Value)}\">{EscCharacterName(name, e.CharacterDisplayText)}</a>"
+                    : EscCharacterName(name, e.CharacterDisplayText);
                 return PrependMisprintHtml(baseHtml, e.CharacterMisprintText);
             }
         }
         if (!string.IsNullOrWhiteSpace(e.RawCharacterText))
-            return PrependMisprintHtml(Esc(e.RawCharacterText!), e.CharacterMisprintText);
+            return PrependMisprintHtml(EscCharacterName(e.RawCharacterText!, e.CharacterDisplayText), e.CharacterMisprintText);
         return PrependMisprintHtml("(キャラクター未指定)", e.CharacterMisprintText);
     }
 
@@ -1606,6 +1885,8 @@ internal sealed class CreditTreeRenderer
         string name = e.PersonAliasId.HasValue
             ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)"
             : "(名義未指定)";
+        // 画面の表記揺れがあれば、名義の名前の代わりにそれで比べる（表記の違う行を同名として融合させない）。
+        if (!string.IsNullOrEmpty(e.PersonDisplayText)) name = e.PersonDisplayText!;
         // 所属表示は 3 パターン：
         //   両持ち (ID + override テキスト) → テキスト側を表示（リンク先は ID の企業詳細だが、ラベル経路では URL は出さない）
         //   ID のみ → 屋号マスタ名
@@ -1636,9 +1917,12 @@ internal sealed class CreditTreeRenderer
     private async Task<string> ResolvePersonWithAffiliationHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         // 表示テキスト：LookupCache.LookupPersonAliasNameAsync は pa.Name を返す。
-        string displayText = e.PersonAliasId.HasValue
-            ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)")
-            : "(名義未指定)";
+        // 画面の表記揺れ（PersonDisplayText）があれば名義の名前の代わりにそれを出す（誤記ではないので印は付けない。リンク先は名義の人物）。
+        string displayText = !string.IsNullOrEmpty(e.PersonDisplayText)
+            ? e.PersonDisplayText!
+            : e.PersonAliasId.HasValue
+                ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)")
+                : "(名義未指定)";
         string nameHtml = _staffLinkResolver.ResolveAsHtml(e.PersonAliasId, displayText);
 
         // 所属付加：括弧付きで表示。3 パターン：
@@ -1667,7 +1951,8 @@ internal sealed class CreditTreeRenderer
         }
         else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
         {
-            affilInnerHtml = Esc(e.AffiliationText!);
+            // ユニットの名義に添えたメンバーのかっこ書き（「和牛 (水田 信二・川西賢志郎)」）は、メンバーの名前の所だけ人物詳細へリンクする。
+            affilInnerHtml = BuildUnitMemberAffiliationHtml(e.PersonAliasId, e.AffiliationText!);
         }
         if (affilInnerHtml is not null)
         {
@@ -1679,6 +1964,38 @@ internal sealed class CreditTreeRenderer
         // 誤記は所属の外側、名義断片全体の左に前置（誤記は名義そのものに対する注釈であって、
         // 所属表記まで含めた塊に対するものではないため、所属より外で前置するのが意味的に整合）。
         return PrependMisprintHtml(nameHtml, e.PersonMisprintText);
+    }
+
+    /// <summary>
+    /// 所属の文字（affiliation_text）を HTML にする。名義がユニット（<see cref="BuildContext.UnitMembersByAlias"/> に人物のメンバーを持つ）なら、
+    /// 文字を区切りの字（・、／/）で分け、空白を除いてメンバーの名義の名前と同じになる所を、その名義の表記（姓と名の間の空白も名義どおり）で
+    /// 人物詳細へのリンクにする。区切りの字と、メンバーと合わない所は文字のまま。ユニットでない名義は文字をそのまま出す。
+    /// </summary>
+    private string BuildUnitMemberAffiliationHtml(int? personAliasId, string affiliationText)
+    {
+        if (personAliasId is not int unitAliasId
+            || !_ctx.UnitMembersByAlias.TryGetValue(unitAliasId, out var members))
+            return Esc(affiliationText);
+
+        static string Squash(string s) => s.Replace(" ", "").Replace("　", "");
+        var memberAliasIdByName = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var m in members)
+        {
+            if (m.MemberKind != PersonAliasMemberKind.Person || m.MemberPersonAliasId is not int paid) continue;
+            if (!_ctx.PersonAliasById.TryGetValue(paid, out var alias) || string.IsNullOrEmpty(alias.Name)) continue;
+            memberAliasIdByName.TryAdd(Squash(alias.Name), paid);
+        }
+        if (memberAliasIdByName.Count == 0) return Esc(affiliationText);
+
+        var sb = new StringBuilder();
+        foreach (var part in System.Text.RegularExpressions.Regex.Split(affiliationText, "([・、／/])"))
+        {
+            if (part.Length == 0) continue;
+            sb.Append(memberAliasIdByName.TryGetValue(Squash(part), out var memberAliasId)
+                ? _staffLinkResolver.ResolveAsHtml(memberAliasId, _ctx.PersonAliasById[memberAliasId].GetDisplayName())
+                : Esc(part));
+        }
+        return sb.ToString();
     }
 
     /// <summary>1 エントリ分の表示を「リンク済み HTML 断片」として返す。 PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT / BLANK の 6 種に対応（BLANK は空文字）。 各種別ごとにクレジット時の誤記（Person / Character / Company）を左側に前置する。</summary>
@@ -1698,7 +2015,8 @@ internal sealed class CreditTreeRenderer
                     string charName = e.CharacterAliasId.HasValue
                         ? ((await _lookup.LookupCharacterAliasNameAsync(e.CharacterAliasId.Value).ConfigureAwait(false)) ?? "(キャラクター不明)")
                         : (e.RawCharacterText ?? "(キャラクター未指定)");
-                    string charHtml = PrependMisprintHtml(Esc(charName), e.CharacterMisprintText);
+                    string charHtml = PrependMisprintHtml(EscCharacterName(charName, e.CharacterDisplayText), e.CharacterMisprintText)
+                        + await BuildCharacterUnitHtmlAsync(e).ConfigureAwait(false);
 
                     // 声優側は PERSON と同じく「名前 + (所属)」で出す（スペシャルゲストの「たくや (ザ・たっち)」など）。
                     // 人物側の誤記前置も ResolvePersonWithAffiliationHtmlAsync が行う。
@@ -1711,8 +2029,11 @@ internal sealed class CreditTreeRenderer
             case "COMPANY":
                 {
                     if (!e.CompanyAliasId.HasValue) return PrependMisprintHtml(Esc("(企業屋号未指定)"), e.CompanyMisprintText);
-                    string? name = await _lookup.LookupCompanyAliasNameAsync(e.CompanyAliasId.Value).ConfigureAwait(false);
+                    // 屋号にクレジットでの表記（display_text_override）があればそれを出す。
+                    string? name = await _lookup.LookupCompanyAliasCreditNameAsync(e.CompanyAliasId.Value).ConfigureAwait(false);
                     if (string.IsNullOrEmpty(name)) return PrependMisprintHtml(Esc("(企業屋号不明)"), e.CompanyMisprintText);
+                    // 画面の表記揺れ（CompanyDisplayText）があれば屋号の名前の代わりにそれを出す（誤記ではないので印は付けない。リンク先は名義の企業）。
+                    if (!string.IsNullOrEmpty(e.CompanyDisplayText)) name = e.CompanyDisplayText!;
                     string baseHtml = await BuildCompanyAliasHtmlAsync(e.CompanyAliasId.Value, name).ConfigureAwait(false);
                     return PrependMisprintHtml(baseHtml, e.CompanyMisprintText);
                 }

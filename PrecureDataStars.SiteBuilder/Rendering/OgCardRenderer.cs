@@ -111,23 +111,29 @@ public sealed partial class OgCardRenderer : IDisposable
 
     // ──────── 組版パラメータ ────────
 
-    /// <summary>標準レイアウトの見出しサイズ候補。上から順に試し、規定行数に収まった時点で採用する。</summary>
-    private static readonly float[] TitleSizeCandidates = { 76f, 66f, 58f, 50f };
+    // 字の大きさは組み方によらず同じ大きさから始める（空きがあっても大きくしない。カードごとに字の大きさが
+    // まちまちにならないように）。候補の先頭が標準の大きさで、入り切らないときだけ、長体（見出し）のあとで小さい候補へ下げる。
 
-    /// <summary>高密度レイアウトの見出しサイズ候補（上下の要素に場所を譲るぶん小さめ）。</summary>
-    private static readonly float[] DenseTitleSizeCandidates = { 60f, 52f, 46f, 40f };
+    /// <summary>見出しのサイズ候補（標準・高密度・疎・プロフィールの組みで共通）。先頭が標準の大きさ。</summary>
+    private static readonly float[] TitleSizeCandidates = { 64f, 58f, 52f, 46f };
 
-    /// <summary>数も帯も持たない疎なカード（エピソード）の見出しサイズ候補。見出しが主役なので大きく。</summary>
-    private static readonly float[] SparseTitleSizeCandidates = { 104f, 92f, 80f, 70f, 60f };
+    /// <summary>高密度レイアウトの見出しサイズ候補（標準と同じ）。</summary>
+    private static readonly float[] DenseTitleSizeCandidates = TitleSizeCandidates;
 
-    /// <summary>疎なカードの事実行の拡大率の候補（大きい順に試す）。</summary>
-    private static readonly float[] SparseFactScaleCandidates = { 1.7f, 1.5f, 1.3f, 1.15f, 1f, 0.9f, 0.8f, 0.7f, 0.6f };
+    /// <summary>疎なカード（作品・映画・歌など）の見出しサイズ候補（標準と同じ）。</summary>
+    private static readonly float[] SparseTitleSizeCandidates = TitleSizeCandidates;
+
+    /// <summary>ヒーロー調（ホーム）の見出し（ワードマーク）のサイズ候補。ホームだけはワードマークそのものなので大きく組む。</summary>
+    private static readonly float[] HeroTitleSizeCandidates = { 76f, 66f, 58f, 50f };
+
+    /// <summary>疎なカードの事実行の拡大率の候補。等倍が標準で、入り切らないときだけ下げる。</summary>
+    private static readonly float[] SparseFactScaleCandidates = { 1f, 0.9f, 0.8f, 0.7f, 0.6f };
 
     /// <summary>文章として組む流し込み（<see cref="OgCardSpec.InlineFactsProse"/>）が最低限ほしい行数。</summary>
     private const int ProseMinLines = 3;
 
     /// <summary>文章として組む流し込み（<see cref="OgCardSpec.InlineFactsProse"/>）の拡大率の上限。</summary>
-    private const float ProseMaxFactScale = 1.1f;
+    private const float ProseMaxFactScale = 1f;
 
     /// <summary>見出しの最大行数（標準 / 高密度）。これを超える分は末尾を省略記号で切り詰める。</summary>
     private const int TitleMaxLines = 2;
@@ -228,11 +234,11 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <summary>数の組が 1 行に収まらないときの行送り。</summary>
     private const float StatLineHeight = 64f;
 
-    /// <summary>数のほかに見せるものが無いカードで、数の字を何倍にするか。</summary>
-    private const float StatsOnlyScale = 1.7f;
+    /// <summary>数のほかに見せるものが無いカードの数の字の拡大率（ほかのカードと同じ等倍）。</summary>
+    private const float StatsOnlyScale = 1f;
 
-    /// <summary>ヒーロー調（ホーム）の数の拡大率。6 つの数を 2 行に収める。</summary>
-    private const float HeroStatsScale = 1.2f;
+    /// <summary>ヒーロー調（ホーム）の数の拡大率。意味ごとに分けた 3 行が下端に収まる範囲で大きく組む。</summary>
+    private const float HeroStatsScale = 1.35f;
 
     /// <summary>ファクト行の文字サイズ・行送り・最大行数。超過分は末尾から捨てる。</summary>
     private const float FactFontSize = 27f;
@@ -246,12 +252,12 @@ public sealed partial class OgCardRenderer : IDisposable
     /// 標準レイアウトの説明文の文字サイズと行送り。
     /// フッタまでの余白に何行入るかを実測して折り返すため、行送りは固定値で持つ。
     /// </summary>
-    private const float DescriptionFontSize = 40f;
+    private const float DescriptionFontSize = 34f;
 
     /// <summary>数だけのカード（索引・統計）に添えるリード文の字の大きさ（候補の先頭が標準）。</summary>
-    private const float NumbersOnlyLeadFontSize = 40f;
-    private static readonly float[] NumbersOnlyLeadSizeCandidates = { 40f, 36f, 32f, 28f };
-    private const float DescriptionLineHeight = 62f;
+    private const float NumbersOnlyLeadFontSize = 34f;
+    private static readonly float[] NumbersOnlyLeadSizeCandidates = { 34f, 30f, 28f };
+    private const float DescriptionLineHeight = 52f;
 
     /// <summary>
     /// ラベル＋値を 1 行に流すファクトの項目間隔と最大行数。
@@ -287,8 +293,10 @@ public sealed partial class OgCardRenderer : IDisposable
     private readonly SKTypeface _bodyTypeface;
     /// <summary>見出し書体（Noto Sans JP Bold）。サイトの h1・h2 と同じ太さ。設定で商用書体に差し替えられる。</summary>
     private readonly SKTypeface _boldTypeface;
-    /// <summary>本文の強調部（役職名などのラベル、前置きの作品名）の書体。既定は見出しと同じ。</summary>
+    /// <summary>左上の前置き（所属の作品名・種別）の書体。既定は見出しと同じ。</summary>
     private readonly SKTypeface _emphasisTypeface;
+    /// <summary>事実行の頭のラベル（役職名など）の書体。既定は前置きと同じ。</summary>
+    private readonly SKTypeface _labelTypeface;
     /// <summary>大きいピンクの数字の書体（既定は見出しと同じ）。</summary>
     private readonly SKTypeface _numberTypeface;
     /// <summary>右上の透かしの書体（既定は見出しと同じ）。</summary>
@@ -355,11 +363,15 @@ public sealed partial class OgCardRenderer : IDisposable
         HeroTitleColor = ParseThemeColor(_theme.HeroTitle, "heroTitle");
         HeroLeadColor = ParseThemeColor(_theme.HeroLead, "heroLead");
         Hairline = ParseThemeColor(_theme.Hairline, "hairline");
+        _headingFontFile = Path.GetFileName(fonts.Title);
         _fontIdentity = string.Join('|',
             Path.GetFileName(fonts.Title), Path.GetFileName(fonts.Body), Path.GetFileName(fonts.Emphasis),
             Path.GetFileName(fonts.Number), Path.GetFileName(fonts.Watermark), Path.GetFileName(fonts.Notice),
             string.Join(';', fonts.TitleCondensedPaths.Select(Path.GetFileName)),
-            fonts.ObliqueDegrees.ToString(CultureInfo.InvariantCulture));
+            fonts.ObliqueDegrees.ToString(CultureInfo.InvariantCulture),
+            Path.GetFileName(fonts.Latin), Path.GetFileName(fonts.Fallback), Path.GetFileName(fonts.Emoji),
+            Path.GetFileName(fonts.Label),
+            Path.GetFileName(fonts.ChineseFallback), Path.GetFileName(fonts.ChineseBodyFallback));
 
         var fontDir = Path.Combine(AppContext.BaseDirectory, "Fonts");
         _brandTypeface = Own(LoadTypeface(Path.Combine(fontDir, "KiwiMaru-Medium.ttf")));
@@ -370,6 +382,7 @@ public sealed partial class OgCardRenderer : IDisposable
         _bodyTypeface = Own(fonts.Body.Length > 0 ? LoadTypeface(fonts.Body) : LoadTypeface(notoPath, BodyFontWeight));
         _boldTypeface = Own(fonts.Title.Length > 0 ? LoadTypeface(fonts.Title) : LoadTypeface(notoPath, HeadingFontWeight));
         _emphasisTypeface = fonts.Emphasis.Length > 0 ? Own(LoadTypeface(fonts.Emphasis)) : _boldTypeface;
+        _labelTypeface = fonts.Label.Length > 0 ? Own(LoadTypeface(fonts.Label)) : _emphasisTypeface;
         _numberTypeface = fonts.Number.Length > 0 ? Own(LoadTypeface(fonts.Number)) : _boldTypeface;
         _watermarkTypeface = fonts.Watermark.Length > 0 ? Own(LoadTypeface(fonts.Watermark)) : _boldTypeface;
         _noticeTypeface = fonts.Notice.Length > 0 ? Own(LoadTypeface(fonts.Notice)) : _bodyTypeface;
@@ -385,8 +398,50 @@ public sealed partial class OgCardRenderer : IDisposable
         if (condensed.Count > 0)
             _condensedByHandle[_boldTypeface.Handle] = condensed.OrderByDescending(c => c.Ratio).Select(c => c.Typeface).ToList();
 
+        // ここまでに読んだのがカードの地の文の書体（見出し・本文・前置き・ラベル・数字・透かし・注意書き・コンデンス版）。
+        var cardTypefaces = _ownedTypefaces.ToList();
+        var latinTypeface = fonts.Latin.Length > 0 ? Own(LoadTypeface(fonts.Latin)) : null;
+        var fallbackTypeface = fonts.Fallback.Length > 0 ? Own(LoadTypeface(fonts.Fallback)) : null;
+        var emojiTypeface = fonts.Emoji.Length > 0 ? Own(LoadTypeface(fonts.Emoji)) : null;
+        var chineseTypeface = fonts.ChineseFallback.Length > 0 ? Own(LoadTypeface(fonts.ChineseFallback)) : null;
+        var chineseBodyTypeface = fonts.ChineseBodyFallback.Length > 0 ? Own(LoadTypeface(fonts.ChineseBodyFallback)) : null;
+
         foreach (var typeface in _ownedTypefaces)
             _shapers[typeface.Handle] = new OgTextShaper(typeface);
+
+        // 見出し・前置きの書体は、欧文の部分を欧文の書体で、字形の無い字を補いの書体で組む。
+        // 本文・数字・注意書き・ラベル・透かしの書体は、見出しと別の書体を指定したときは英数字までその書体の字で組む
+        // （本文・数字・ラベルは UD新ゴ のような字の揃った書体、注意書きは初代のエンドクレジットを模した石井ゴシックの斜体、
+        // 透かしはそれ自体の書体）。ラベルと透かしは、楽器の役職名の頭の 🎸 などの絵文字だけを絵文字の書体で組む。
+        // 作品ごとの書体（サブタイトルのテロップなど）とワードマークは、その書体だけで組む。
+        var latinShaper = latinTypeface is null ? null : _shapers[latinTypeface.Handle];
+        var fallbackShaper = fallbackTypeface is null ? null : _shapers[fallbackTypeface.Handle];
+        var emojiShaper = emojiTypeface is null ? null : _shapers[emojiTypeface.Handle];
+        // 字形の無い字の補いは、近い太さの Pr6N の書体、その次に簡体字の書体の順に探す（中国のスタッフの名前の「玮」「陈」など）。
+        var fallbackShapers = new[] { fallbackShaper, chineseTypeface is null ? null : _shapers[chineseTypeface.Handle] }
+            .OfType<OgTextShaper>().ToList();
+        var chineseBodyShaper = chineseBodyTypeface is null ? null : _shapers[chineseBodyTypeface.Handle];
+        if (latinShaper is not null || fallbackShapers.Count > 0 || emojiShaper is not null || chineseBodyShaper is not null)
+        {
+            var headingFiles = new[] { fonts.Title, fonts.Emphasis };
+            bool OwnFile(string path) => path.Length > 0 && !headingFiles.Contains(path);
+            var keepOwn = new List<SKTypeface>();
+            if (OwnFile(fonts.Body)) keepOwn.Add(_bodyTypeface);
+            if (OwnFile(fonts.Number)) keepOwn.Add(_numberTypeface);
+            if (OwnFile(fonts.Notice)) keepOwn.Add(_noticeTypeface);
+            var emojiOnly = new List<SKTypeface>();
+            if (OwnFile(fonts.Label)) emojiOnly.Add(_labelTypeface);
+            if (OwnFile(fonts.Watermark)) emojiOnly.Add(_watermarkTypeface);
+            foreach (var typeface in cardTypefaces.Where(t => t != _brandTypeface && !keepOwn.Contains(t)))
+            {
+                if (emojiOnly.Contains(typeface)) _shapers[typeface.Handle].UseSubstitutes(null, null, emojiShaper);
+                else _shapers[typeface.Handle].UseSubstitutes(latinShaper, fallbackShapers, emojiShaper);
+            }
+            // 本文・数字・注意書きを見出しと別の書体で組むときは、その書体の字のまま組み、字形の無い簡体字だけを補う。
+            if (chineseBodyShaper is not null)
+                foreach (var typeface in keepOwn.Distinct())
+                    _shapers[typeface.Handle].UseSubstitutes(null, new[] { chineseBodyShaper }, null);
+        }
         // ワードマークはサイトのヘッダと同じ見た目にする。Kiwi Maru はかなを全角のまま組む書体なので、
         // 字面詰めはかけず、ブラウザと同じく OpenType 機能（欧文の kern）だけを効かせる。
         _shapers[_brandTypeface.Handle] = new OgTextShaper(_brandTypeface, opticalTightening: false);
@@ -523,7 +578,19 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <returns>ワードマークにブランド書体で描けない文字があればその文字列、無ければ null。</returns>
     public string? Render(OgCardSpec spec, string outputFilePath)
     {
-        using var surface = SKSurface.Create(new SKImageInfo(CardWidth, CardHeight, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using var drawn = Draw(spec);
+        drawn.SavePng(outputFilePath);
+        return drawn.Warning;
+    }
+
+    /// <summary>
+    /// カードを画素まで描く（PNG にはしない）。作り置き（<see cref="Pipeline.OgCardStore"/>）は、描いた画素のハッシュが
+    /// 前と同じなら PNG を書き直さない。戻り値は使い終えたら Dispose する。
+    /// </summary>
+    /// <param name="spec">カードに載せる内容。</param>
+    public OgCardDrawing Draw(OgCardSpec spec)
+    {
+        var surface = SKSurface.Create(new SKImageInfo(CardWidth, CardHeight, SKColorType.Rgba8888, SKAlphaType.Premul));
         var canvas = surface.Canvas;
         DrawBackground(canvas);
         DrawBand(canvas, spec);
@@ -583,15 +650,7 @@ public sealed partial class OgCardRenderer : IDisposable
 
         if (!spec.HeroVoice) DrawFooter(canvas, paint, spec, contentWidth);
 
-        PathUtil.EnsureParentDirectory(outputFilePath);
-        using (var image = surface.Snapshot())
-        using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
-        using (var stream = File.Create(outputFilePath))
-        {
-            data.SaveTo(stream);
-        }
-
-        return fontWarning ?? FindMissingBrandGlyphs(_brandLabel);
+        return new OgCardDrawing(surface, surface.Snapshot(), fontWarning ?? FindMissingBrandGlyphs(_brandLabel));
     }
 
     /// <summary>
@@ -628,6 +687,28 @@ public sealed partial class OgCardRenderer : IDisposable
     /// </summary>
     private void DrawStandardBody(SKCanvas canvas, SKPaint paint, OgCardSpec spec, float contentWidth)
     {
+        // 見出しは、2 行に折っても説明文が切れずに入るなら折り、切れるなら長体で 1 行に詰める（下が空くカードを詰めた 1 行にしない）。
+        using (var recorder = new SKPictureRecorder())
+        {
+            var probe = recorder.BeginRecording(SKRect.Create(CardWidth, CardHeight));
+            DrawStandardBodyAt(probe, paint, spec, contentWidth, wrapTitle: true, out bool truncated);
+            recorder.EndRecording().Dispose();
+            if (!truncated)
+            {
+                DrawStandardBodyAt(canvas, paint, spec, contentWidth, wrapTitle: true, out _);
+                return;
+            }
+        }
+        DrawStandardBodyAt(canvas, paint, spec, contentWidth, wrapTitle: false, out _);
+    }
+
+    /// <summary>
+    /// 標準の組みを描く。<paramref name="wrapTitle"/> は見出しを 2 行に折ることを先に試すか（<see cref="FitTitleCondensed"/>）。
+    /// <paramref name="truncated"/> は説明文がフッタまでの余白に入り切らず末尾を落としたとき true。
+    /// </summary>
+    private void DrawStandardBodyAt(SKCanvas canvas, SKPaint paint, OgCardSpec spec, float contentWidth, bool wrapTitle, out bool truncated)
+    {
+        truncated = false;
         float y = 96f;
 
         // ── パンくず経路 ──
@@ -641,7 +722,7 @@ public sealed partial class OgCardRenderer : IDisposable
 
         // ── 見出し＋ピンク罫 ──
         using var titleFont = new SKFont(_boldTypeface, TitleSizeCandidates[^1]);
-        var titleLines = FitTitle(spec.Title, titleFont, paint, contentWidth, TitleSizeCandidates, TitleMaxLines);
+        var titleLines = FitTitleCondensed(spec.Title, titleFont, paint, contentWidth, TitleSizeCandidates, TitleMaxLines, wrapTitle);
 
         paint.Color = Foreground;
         foreach (var line in titleLines)
@@ -664,11 +745,13 @@ public sealed partial class OgCardRenderer : IDisposable
             y += 20f;
             float available = (FooterLineY - FooterClearance) - y;
             int maxLines = Math.Max(0, (int)(available / DescriptionLineHeight));
+            if (maxLines == 0) truncated = true;
             if (maxLines > 0)
             {
-                var lines = WrapText(spec.Subtitle, descFont, paint, descWidth, maxLines + 1);
+                var lines = WrapText(spec.Subtitle, descFont, paint, descWidth, maxLines + 1, prose: true);
                 if (lines.Count > maxLines)
                 {
+                    truncated = true;
                     lines = lines.Take(maxLines).ToList();
                     lines[^1] = Ellipsize(lines[^1] + "…", descFont, paint, descWidth);
                 }
@@ -688,6 +771,13 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <summary>カードの見出しで、外へ広く広がる光とみなす層のぼかし（字の大きさに対する比）。これ以上の層は広がりを半分にする。</summary>
     private const float CardSpreadingBlur = 0.03f;
 
+    /// <summary>
+    /// カードの見出しの黒フチの太さの上限（字の大きさに対する比）。『ふたりはプリキュアSplash☆Star』のサブタイトルの太さ。
+    /// 初代・Max Heart のフチ（0.11 前後）は 80px の字では白い字を細らせて読みにくいので、カードだけこの太さで頭打ちにする
+    /// （各話ページのテロップ画像と書体の見本は放送どおりの太さのまま）。
+    /// </summary>
+    private const float CardMaxOutlineWidth = 0.068f;
+
     /// <summary>カードのエピソードのサブタイトルの字の大きさ（固定。どの回も仮想ボディの高さをそろえ、長い題は長体で収める）。</summary>
     private const float DecoratedTitleSize = 80f;
 
@@ -695,7 +785,7 @@ public sealed partial class OgCardRenderer : IDisposable
     /// エピソードのサブタイトルを、各話のテロップ画像と同じ描き方（作品の書体・装飾・振り仮名の組み方、倍で重ねて縮める。装飾が無ければ白い字に黒フチと影）で、
     /// 決まった字の大きさ（<paramref name="size"/>）の 1 行に描き、左端を本文の左端にそろえて置く。放送の改行はせず、
     /// 行と行のあいだは字の大きさの 4 分の 1 空ける。装飾の太さ・ずれ・ぼかしは字の大きさに対する比なので、字の大きさに合わせて変わる。
-    /// 外へ広く広がる光（光彩と、ぼかしの大きいフチ・影）は広がりを半分にする。行ごとに色の組を持つグラデーション（<c>lineColors</c>）は、
+    /// 外へ広く広がる光（光彩と、ぼかしの大きいフチ・影）は広がりを半分にし、黒フチは <see cref="CardMaxOutlineWidth"/> で頭打ちにする。行ごとに色の組を持つグラデーション（<c>lineColors</c>）は、
     /// 放送の行ごとに描き分けて、その行の色の組をかける。全体が本文の幅を超えるときは横に縮めて収める。見出しの下端 Y を返す。
     /// </summary>
     /// <param name="html">ルビ付きのサブタイトル（放送の改行は <c>&lt;br&gt;</c>）。</param>
@@ -709,9 +799,15 @@ public sealed partial class OgCardRenderer : IDisposable
         static TelopDecoration Narrow(TelopDecoration d) => d with
         {
             Glow = d.Glow is null ? null : d.Glow with { Width = d.Glow.Width * 0.5f, Blur = d.Glow.Blur * 0.5f },
-            Layers = d.Layers.Select(l => l.Blur >= CardSpreadingBlur && l.Kind != TelopDecorationLayer.KindBevel
-                ? l with { Blur = l.Blur * 0.5f, Width = l.Width * 0.5f, Spread = l.Spread * 0.5f, SpreadX = l.SpreadX * 0.5f }
-                : l).ToList(),
+            Layers = d.Layers.Select(l =>
+            {
+                if (l.Blur >= CardSpreadingBlur && l.Kind != TelopDecorationLayer.KindBevel)
+                    l = l with { Blur = l.Blur * 0.5f, Width = l.Width * 0.5f, Spread = l.Spread * 0.5f, SpreadX = l.SpreadX * 0.5f };
+                // 太い黒フチは読みやすさのため、Splash☆Star の太さ（CardMaxOutlineWidth）で頭打ちにする（カードだけ）。
+                if (l.Kind == TelopDecorationLayer.KindOutline && l.Width > CardMaxOutlineWidth)
+                    l = l with { Width = CardMaxOutlineWidth };
+                return l;
+            }).ToList(),
             Ruby = d.Ruby is null ? null : Narrow(d.Ruby)
         };
         // 行ごとの色の組を、放送の i 行目の組だけにする
@@ -742,7 +838,7 @@ public sealed partial class OgCardRenderer : IDisposable
             var list = new List<TelopImage>();
             foreach (var (h, p) in pieces)
             {
-                var img = DrawTelopImage(h, fontFamily, k < 1f ? p with { LineScales = new[] { k } } : p, size);
+                var img = DrawTelopImageCached(h, fontFamily, k < 1f ? p with { LineScales = new[] { k } } : p, size);
                 if (img is not null) list.Add(img);
             }
             return list;
@@ -835,10 +931,10 @@ public sealed partial class OgCardRenderer : IDisposable
     /// 上へ積む。帯グラフは残った余白へ入れるため、見出しが 1 行でも 2 行でも全体の重心が崩れない。
     /// </summary>
     /// <returns>描いた中身の下端 Y。上下中央に据え直すときの高さ計算に使う。</returns>
-    /// <summary>高密度の組みで試す（数の拡大率, 流し込みの事実行の拡大率）の組。大きい順。</summary>
+    /// <summary>高密度の組みで試す（数の拡大率, 流し込みの事実行の拡大率）の組。等倍が標準で、入り切らないときだけ事実行を小さくする。</summary>
     private static readonly (float Stat, float Fact)[] DenseScaleCandidates =
     {
-        (1.7f, 1.5f), (1.5f, 1.3f), (1.3f, 1.15f), (1.15f, 1f), (1f, 1f)
+        (1f, 1f), (1f, 0.9f), (1f, 0.8f)
     };
 
     private float DrawDenseBody(SKCanvas canvas, SKPaint paint, OgCardSpec spec, float contentWidth, float watermarkBottom, SKTypeface titleTypeface)
@@ -849,21 +945,26 @@ public sealed partial class OgCardRenderer : IDisposable
         bool sparse = !spec.HeroVoice && spec.Badges.Count == 0 && spec.Bar.Count == 0;
         if (sparse) return DrawSparseBody(canvas, paint, spec, contentWidth, watermarkBottom, titleTypeface);
 
-        // ヒーロー調と帯グラフを持つカードは拡大しない（ヒーロー調は言葉が主役、帯は余白を自分で使う）。
-        // それ以外（商品・書籍・人物など）は、数と事実行の拡大率を大きい順に試し、下端に収まり事実行が切れない
-        // 最初の組で描く（上に寄って下半分が空いたままにならないように）。
+        // ヒーロー調と帯グラフを持つカードは決まった大きさで描く（ヒーロー調は数の大きさを固定の率で決め、帯は余白を自分で使う）。
+        // それ以外（商品・書籍・人物など）は等倍で描き、下端に収まらないか事実行が切れるときだけ事実行を小さくする
+        // （空きがあっても大きくしない）。
         if (spec.HeroVoice || spec.Bar.Count > 0)
             return DrawDenseBodyAt(canvas, paint, spec, contentWidth, watermarkBottom, titleTypeface, 1f, 1f, out _);
 
+        // 見出しは、等倍のまま 2 行に折ってもフッタの線より上に収まり事実行も切れないなら折る（下が空くカードを詰めた 1 行にしない）。
+        // 入らなければ見出しを長体で 1 行に詰め、それでも入らないときだけ事実行を小さくする。
         float floor = FooterLineY - FooterClearance;
-        foreach (var (statScale, factScale) in DenseScaleCandidates)
+        var attempts = new[] { (Wrap: true, Scale: DenseScaleCandidates[0]) }
+            .Concat(DenseScaleCandidates.Select(s => (Wrap: false, Scale: s)));
+        foreach (var (wrap, (statScale, factScale)) in attempts)
         {
             using var recorder = new SKPictureRecorder();
             var probe = recorder.BeginRecording(SKRect.Create(CardWidth, CardHeight));
-            float bottom = DrawDenseBodyAt(probe, paint, spec, contentWidth, watermarkBottom, titleTypeface, statScale, factScale, out bool truncated);
+            float bottom = DrawDenseBodyAt(probe, paint, spec, contentWidth, watermarkBottom, titleTypeface, statScale, factScale, out bool truncated, wrap);
             recorder.EndRecording().Dispose();
-            if (bottom > floor || truncated) continue;
-            return DrawDenseBodyAt(canvas, paint, spec, contentWidth, watermarkBottom, titleTypeface, statScale, factScale, out _);
+            // 2 行に折る組みは、フッタの上の余白に少し入る程度（フッタの線まで）なら入ったとみなす。
+            if (bottom > (wrap ? FooterLineY : floor) || truncated) continue;
+            return DrawDenseBodyAt(canvas, paint, spec, contentWidth, watermarkBottom, titleTypeface, statScale, factScale, out _, wrap);
         }
         return DrawDenseBodyAt(canvas, paint, spec, contentWidth, watermarkBottom, titleTypeface, 1f, 1f, out _);
     }
@@ -872,10 +973,11 @@ public sealed partial class OgCardRenderer : IDisposable
     /// 高密度の組みを、指定の拡大率で描く。<paramref name="statScaleHint"/> は数の拡大率
     /// （数だけのカードとヒーロー調は固定の率を使うので無視する）、<paramref name="factScale"/> は流し込みの事実行の拡大率。
     /// <paramref name="truncated"/> は事実行が高さに入り切らず末尾を落としたとき true。
+    /// <paramref name="wrapTitle"/> は振り仮名の無い見出しを 2 行に折ることを先に試すか（<see cref="FitTitleCondensed"/>）。
     /// </summary>
     private float DrawDenseBodyAt(
         SKCanvas canvas, SKPaint paint, OgCardSpec spec, float contentWidth, float watermarkBottom, SKTypeface titleTypeface,
-        float statScaleHint, float factScale, out bool truncated)
+        float statScaleHint, float factScale, out bool truncated, bool wrapTitle = false)
     {
         truncated = false;
         // ── 最上段（左：所属シリーズ・種別 ／ 右：放送日時などの補助） ──
@@ -919,13 +1021,14 @@ public sealed partial class OgCardRenderer : IDisposable
 
         // ── 見出し＋ピンク罫 ──
         // ルビ付き HTML があれば振り仮名つきで組む（サイト本体のサブタイトル表示と同じ読みを添える）。
-        y += 22f;
+        // ヒーロー調は前置き・見出し・タグラインを 1 つの塊に見せるため、前置きとの間を詰める。
+        y += spec.HeroVoice ? 8f : 22f;
         var rubyUnits = string.IsNullOrWhiteSpace(spec.TitleRubyHtml)
             ? new List<RubyUnit>()
             : ParseRubyUnits(spec.TitleRubyHtml);
 
         // ヒーロー調の見出しはワードマークそのものなので、標準の組みと同じ大きさまで許す。
-        var titleSizes = spec.HeroVoice ? TitleSizeCandidates : DenseTitleSizeCandidates;
+        var titleSizes = spec.HeroVoice ? HeroTitleSizeCandidates : DenseTitleSizeCandidates;
         if (rubyUnits.Count > 0)
         {
             y = DrawRubyTitle(canvas, paint, rubyUnits, PaddingLeft, y, contentWidth, titleSizes, TitleMaxLinesFor(spec), titleTypeface);
@@ -933,7 +1036,7 @@ public sealed partial class OgCardRenderer : IDisposable
         else
         {
             using var titleFont = new SKFont(spec.HeroVoice ? _brandTypeface : titleTypeface, titleSizes[^1]);
-            var titleLines = FitTitle(spec.Title, titleFont, paint, contentWidth, titleSizes, TitleMaxLinesFor(spec));
+            var titleLines = FitTitleCondensed(spec.Title, titleFont, paint, contentWidth, titleSizes, TitleMaxLinesFor(spec), wrapTitle);
             paint.Color = spec.HeroVoice ? HeroTitleColor : Foreground;
             foreach (var line in titleLines)
             {
@@ -942,6 +1045,11 @@ public sealed partial class OgCardRenderer : IDisposable
                 y += titleFont.Size * (TitleLineHeightRatio - 1f);
             }
         }
+
+        // ── 特徴の言葉（ヒーロー調。見出しのすぐ下、罫の上に小さく添える） ──
+        if (!string.IsNullOrWhiteSpace(spec.Statement))
+            y = DrawStatement(canvas, paint, spec.Statement, ResolveTypeface(spec.StatementFontFamily, _watermarkTypeface, out _), y, contentWidth);
+
         y = DrawTitleRule(canvas, paint, y, contentWidth);
 
         // ── タグライン（罫のすぐ下） ──
@@ -956,19 +1064,13 @@ public sealed partial class OgCardRenderer : IDisposable
             DrawText(canvas, Ellipsize(spec.Subtitle, leadFont, paint, contentWidth), PaddingLeft, y, SKTextAlign.Left, leadFont, paint);
         }
 
-        // ── 特徴の言葉（ヒーロー調。数の代わりに、サイトの特徴を透かしの書体の斜体で大きく） ──
-        if (!string.IsNullOrWhiteSpace(spec.Statement))
-            y = DrawStatement(canvas, paint, spec.Statement, ResolveTypeface(spec.StatementFontFamily, _watermarkTypeface, out _), y, contentWidth, FooterLineY - FooterClearance);
-
         // ── 数（大きいピンクの数字＋小さい単位） ──
-        // 数のほかに見せるものが無いカード（索引・ランディング）は、数そのものが主役になる。
-        // 通常の大きさのまま置くと面の大半が空いて間延びするので、字を大きくして紙面を持たせる。
-        // 数の下に続きがあるカード（詳細ページなど）は、続きを圧迫しないよう等倍のままにする。
+        // 数の字の大きさはどのカードも等倍（空きがあっても大きくしない）。
         bool badgesOnly = spec.Facts.Count == 0 && spec.InlineFacts.Count == 0 && spec.Bar.Count == 0;
-        // ヒーロー調（ホーム）は数が 6 つあるので、数だけのカードより一段控えて 2 行に収める。
+        // ヒーロー調（ホーム）は数そのものが名刺なので、ほかのカードより大きく組む。
         float statScale = spec.HeroVoice ? HeroStatsScale : badgesOnly ? StatsOnlyScale : statScaleHint;
         if (spec.Badges.Count > 0)
-            y = DrawStats(canvas, paint, spec.Badges, PaddingLeft, y + (spec.HeroVoice ? 40f : 16f), contentWidth, statScale);
+            y = DrawStats(canvas, paint, spec.Badges, PaddingLeft, y + (spec.HeroVoice ? 30f : 16f), contentWidth, statScale);
 
         // ── リード文（数だけのカード。数の下の空きに、ページの説明文を注意書きの書体の斜体で 3 行まで） ──
         if (spec.IsNumbersOnly && !string.IsNullOrWhiteSpace(spec.Subtitle))
@@ -983,7 +1085,7 @@ public sealed partial class OgCardRenderer : IDisposable
             {
                 leadFont.Size = size;
                 room = contentWidth - size * Math.Abs(_obliqueSkew);
-                lines = WrapText(spec.Subtitle, leadFont, paint, room, 4);
+                lines = WrapText(spec.Subtitle, leadFont, paint, room, 4, prose: true);
                 float bottom = y + 28f + lines.Count * size * 1.35f - size * 0.35f;
                 if (lines.Count <= 3 && bottom <= leadFloor) break;
             }
@@ -1109,13 +1211,39 @@ public sealed partial class OgCardRenderer : IDisposable
             ? new List<RubyUnit>()
             : ParseRubyUnits(spec.TitleRubyHtml);
 
+        // 空きがあるときだけ載せる事実行は、標準の大きさ（見出しも事実行も先頭の候補）のまま下端に収まる分だけを、
+        // 流し込みの下に別の段として足す。入らない分は捨てる（入れるために字を小さくしない）。
+        if (spec.SupplementalFacts is { Count: > 0 } supplements)
+        {
+            var fitted = spec with { SupplementalFacts = null };
+            for (int take = supplements.Count; take > 0; take--)
+            {
+                var candidate = spec with { SupplementalFacts = supplements.Take(take).ToList() };
+                using var recorder = new SKPictureRecorder();
+                var probe = recorder.BeginRecording(SKRect.Create(CardWidth, CardHeight));
+                float bottom = DrawSparseContent(probe, paint, candidate, contentWidth, startY, SparseTitleSizeCandidates[0], SparseFactScaleCandidates[0], rubyUnits, titleTypeface, out bool truncated);
+                recorder.EndRecording().Dispose();
+                if (bottom <= floor && !truncated) { fitted = candidate; break; }
+            }
+            spec = fitted;
+        }
+
         // 見出しの大きさと事実行の拡大率の組を、大きい順に試す。見出しの段 i に対して事実行は i+1 段目までを先に試し
         // （見出しだけ巨大で事実行が小さい組を避ける）、それで入らなければ見出しの段ごとに事実行を無制限に下げる
         // （長い曲名で見出しが小さくなっても、歌い手の字まで道連れに小さくしない）。事実行は切らずに全部載せる。
-        static IEnumerable<(float TitleSize, float FactScale)> Candidates()
+        // 1 行 1 項目の事実行だけを持つカード（作品の主要スタッフ）は、項目が多く行数で高さを使うので、事実行の拡大率を
+        // 先に保ち、見出しのほうから小さくする（見出しだけ大きく、役職と人名が細かくなる組みを避ける）。
+        bool stackedOnly = spec.Facts.Count > 0 && spec.InlineFacts.Count == 0;
+        IEnumerable<(float TitleSize, float FactScale)> Candidates()
         {
             var t = SparseTitleSizeCandidates;
             var f = SparseFactScaleCandidates;
+            if (stackedOnly)
+            {
+                foreach (var fs in f.Where(x => x <= 1.15f))
+                    foreach (var ts in t) yield return (ts, fs);
+                yield break;
+            }
             for (int i = 0; i < t.Length; i++)
                 for (int j = 0; j <= Math.Min(i + 1, f.Length - 1); j++) yield return (t[i], f[j]);
             for (int i = 0; i < t.Length; i++)
@@ -1244,12 +1372,29 @@ public sealed partial class OgCardRenderer : IDisposable
             truncated |= r.Truncated;
             bottom = r.Bottom;
             y = r.Bottom + lineHeight * 0.4f;
+
+            // 空きがあるときだけ載せる事実行（歌の演奏・エンジニアなど）。表のクレジットと区別できるよう、
+            // 半行ぶん空けて別の段として流し込む。収まる分だけに絞ってある（DrawSparseBody）ので、切れたら「収まらない」扱い。
+            if (spec.SupplementalFacts is { Count: > 0 } supplementalFacts)
+            {
+                float supplementFirst = y + lineHeight * 0.6f + FactFontSize * inlineScale;
+                int supplementLines = Math.Max(1, (int)((floor - supplementFirst) / lineHeight) + 1);
+                var s = DrawInlineFacts(canvas, paint, supplementalFacts, PaddingLeft, supplementFirst, contentWidth, anchorToTop: true, maxLines: supplementLines, scale: inlineScale,
+                    valueTypeface: InlineFactsTypeface(spec), verticalScale: InlineFactsVerticalScaleFor(spec));
+                truncated |= s.Truncated;
+                bottom = s.Bottom;
+                y = s.Bottom + lineHeight * 0.4f;
+            }
         }
         if (spec.Facts.Count > 0)
         {
-            float first = y + 30f + FactFontSize;
-            int maxLines = Math.Max(1, (int)((floor - first) / FactLineHeight) + 1);
-            var r = DrawStackedFacts(canvas, paint, spec.Facts, PaddingLeft, first, anchorToTop: true, maxLines: maxLines);
+            // 1 行 1 項目の事実行（作品の主要スタッフなど）も、流し込みと同じ拡大率で組む。項目は落とさず、
+            // 入り切らなければ「収まらない」扱いにして、見出しと事実行を小さい組みへ回す（下から役職が欠けないように）。
+            // 流し込みの下に続くとき（記事のタグ）は等倍のまま。
+            float stackScale = spec.InlineFacts.Count > 0 ? 1f : Math.Min(factScale, 1.15f);
+            float first = y + 30f * stackScale + FactFontSize * stackScale;
+            int maxLines = Math.Max(1, (int)((floor - first) / (FactLineHeight * stackScale)) + 1);
+            var r = DrawStackedFacts(canvas, paint, spec.Facts, PaddingLeft, first, anchorToTop: true, maxLines: maxLines, scale: stackScale);
             truncated |= r.Truncated;
             bottom = Math.Max(bottom, r.Bottom);
         }
@@ -1309,41 +1454,24 @@ public sealed partial class OgCardRenderer : IDisposable
         return ruleTop + TitleRuleHeight;
     }
 
-    /// <summary>特徴の言葉の字の大きさの候補（大きい順）。すべての行が幅に収まる最大のものを使う。</summary>
-    private static readonly float[] StatementSizeCandidates = { 150f, 136f, 124f, 112f, 100f, 88f, 76f, 64f, 52f, 44f };
-
-    /// <summary>タグラインの行送り（字の大きさに対する比）と、見出しの罫からの空き。字を大きく取るため詰めめにする。</summary>
-    private const float StatementLineHeightRatio = 1.1f;
-    private const float StatementTopGap = 30f;
+    /// <summary>タグラインの字の大きさと、見出しの下端からの空き。見出しより一回り小さく組み、見出しに寄せて置く。</summary>
+    private const float StatementFontSize = 48f;
+    private const float StatementTopGap = 12f;
 
     /// <summary>
-    /// ヒーロー調のカードの言葉（タグライン）を描き、その下端 Y を返す。行は "\n" で切り、指定の書体を
-    /// 機械的な斜体にして濃ピンクで組む。すべての行が幅に収まり、下端が <paramref name="floor"/> を超えない
-    /// 最大の字の大きさを候補から選ぶ（斜体の右への張り出しぶんは幅から控える）。
+    /// ヒーロー調のカードの言葉（タグライン）を見出しのすぐ下に 1 行で描き、その下端 Y を返す。
+    /// 指定の書体を立てたまま、見出し（濃ピンクのサイト名）と区別できるよう本文色で組む。幅に収まらなければ末尾を省略記号で切り詰める。
     /// </summary>
-    private float DrawStatement(SKCanvas canvas, SKPaint paint, string statement, SKTypeface typeface, float y, float contentWidth, float floor)
+    private float DrawStatement(SKCanvas canvas, SKPaint paint, string statement, SKTypeface typeface, float y, float contentWidth)
     {
-        var lines = statement.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
-        if (lines.Count == 0) return y;
+        string line = statement.Replace('\n', ' ').Trim();
+        if (line.Length == 0) return y;
 
-        using var font = new SKFont(typeface, StatementSizeCandidates[^1]) { SkewX = _obliqueSkew };
-        foreach (var size in StatementSizeCandidates)
-        {
-            font.Size = size;
-            float room = contentWidth - size * Math.Abs(_obliqueSkew);
-            float bottom = y + StatementTopGap + lines.Count * size * StatementLineHeightRatio - size * (StatementLineHeightRatio - 1f);
-            if (bottom <= floor && lines.All(l => Measure(font, l) <= room)) break;
-        }
-
-        paint.Color = HeroTitleColor;
-        y += StatementTopGap;
-        foreach (var line in lines)
-        {
-            y += font.Size;
-            DrawTextOutlined(canvas, line, PaddingLeft, y, SKTextAlign.Left, font, paint);
-            y += font.Size * (StatementLineHeightRatio - 1f);
-        }
-        return y - font.Size * (StatementLineHeightRatio - 1f);
+        using var font = new SKFont(typeface, StatementFontSize);
+        paint.Color = Foreground;
+        y += StatementTopGap + font.Size;
+        DrawTextOutlined(canvas, Ellipsize(line, font, paint, contentWidth), PaddingLeft, y, SKTextAlign.Left, font, paint);
+        return y;
     }
 
     /// <summary>
@@ -1458,7 +1586,7 @@ public sealed partial class OgCardRenderer : IDisposable
     /// <param name="scale">文字と行送りの拡大率（疎なカードで大きく組むため）。</param>
     private (float Top, float Bottom, bool Truncated) DrawInlineFacts(SKCanvas canvas, SKPaint paint, IReadOnlyList<OgCardFactLine> facts, float x, float anchor, float maxWidth, bool anchorToTop = false, int maxLines = InlineFactMaxLines, float scale = 1f, SKTypeface? valueTypeface = null, float verticalScale = 1f, bool prose = false)
     {
-        using var labelFont = new SKFont(_emphasisTypeface, (FactFontSize - 4f) * scale);
+        using var labelFont = new SKFont(_labelTypeface, (FactFontSize - 4f) * scale);
         // 平体は、字の大きさを率だけ下げて横方向を同じ率で広げる（字幅はそのまま、高さだけ縮む）。
         using var valueFont = new SKFont(valueTypeface ?? _bodyTypeface, FactFontSize * scale * verticalScale) { ScaleX = 1f / verticalScale };
         // クレジットに無い補足（「（藤本 記子）」）は、値より小さい字で間を空けて描く。
@@ -1580,7 +1708,7 @@ public sealed partial class OgCardRenderer : IDisposable
                     string remaining = token;
                     while (remaining.Length > 0)
                     {
-                        string chunk = TakeFittingPrefix(remaining, valueFont, paint, maxWidth - used);
+                        string chunk = TakeFittingPrefix(remaining, valueFont, paint, maxWidth - used, prose);
                         if (chunk.Length == 0)
                         {
                             if (NewLine(hang)) continue;
@@ -1596,6 +1724,15 @@ public sealed partial class OgCardRenderer : IDisposable
                         lines[^1].Add(new FactPiece(chunk, Foreground, false, 0f));
                         used += Measure(valueFont, chunk);
                         remaining = remaining[chunk.Length..];
+                        if (remaining.Length == 0) break;
+                        // 残りがあるなら、ここが折る位置。行に残った幅へ続きを詰めず（禁則で手前へ戻した字が元の行に戻ってしまう）、必ず次の行へ送る。
+                        // 文章は、折った位置に続く空白を次の行の頭に残さない。
+                        if (prose) remaining = remaining.TrimStart(' ');
+                        if (NewLine(hang)) continue;
+                        if (prose) EllipsizeLastLine(lines[^1], labelFont, valueFont, noteFont, paint, maxWidth);
+                        else truncated = true;
+                        stop = true;
+                        break;
                     }
                     if (stop) break;
                     continue;
@@ -1640,10 +1777,14 @@ public sealed partial class OgCardRenderer : IDisposable
     }
 
     /// <summary>
-    /// 指定幅に収まる最長の先頭部分を返す。切れ目が行頭禁則文字に当たる場合は 1 文字手前で切る。
+    /// 指定幅に収まる最長の先頭部分を返す。切れ目が行頭禁則文字に当たる場合は、次の行の頭が禁則でなくなるまで手前で切る。
     /// 1 文字も入らない場合は空文字（呼び出し側が改行する合図）。
     /// </summary>
-    private string TakeFittingPrefix(string text, SKFont font, SKPaint paint, float maxWidth)
+    /// <param name="prose">
+    /// 文章として折るか。true なら説明文・リード文（<see cref="WrapText"/> の文章の折り方）と同じ位置で切る
+    /// （行頭禁則の字の前・開き括弧の後ろ・欧文の単語の途中・数と単位の間を避ける）。
+    /// </param>
+    private string TakeFittingPrefix(string text, SKFont font, SKPaint paint, float maxWidth, bool prose = false)
     {
         if (maxWidth <= 0f) return "";
         if (Measure(font, text) <= maxWidth) return text;
@@ -1656,8 +1797,17 @@ public sealed partial class OgCardRenderer : IDisposable
         }
         if (take == 0) return "";
 
-        // 次の行の頭が禁則文字にならないよう 1 文字戻す。
-        if (take < text.Length && LineStartForbidden.Contains(text[take]) && take > 1) take--;
+        if (take >= text.Length) return text;
+
+        if (prose)
+        {
+            // 溢れた字の前から順に遡り、折ってよい最初の位置で切る。行の 4 割より前にしか無ければ、溢れた字の前で切る。
+            int at = LastProseBreak(text[..(take + 1)]);
+            return text[..(at < (take + 1) * 0.4f ? take : at)];
+        }
+
+        // 次の行の頭が禁則文字にならないよう戻す。「！』」のように禁則の文字が続くときは、禁則でなくなるまで繰り返す。
+        while (take > 1 && LineStartForbidden.Contains(text[take])) take--;
         return text[..take];
     }
 
@@ -1694,19 +1844,29 @@ public sealed partial class OgCardRenderer : IDisposable
     /// </param>
     /// <param name="anchorToTop">true で上から下へ、false で下から上へ積む。</param>
     /// <param name="maxLines">描画に使える行数（項目数ではなく行数）。</param>
-    private (float Top, float Bottom, bool Truncated) DrawStackedFacts(SKCanvas canvas, SKPaint paint, IReadOnlyList<OgCardFactLine> facts, float x, float anchor, bool anchorToTop = false, int maxLines = FactMaxLines)
+    /// <param name="scale">字の大きさと行送りの拡大率（疎の組みで、全項目が入るまで下げる）。</param>
+    private (float Top, float Bottom, bool Truncated) DrawStackedFacts(SKCanvas canvas, SKPaint paint, IReadOnlyList<OgCardFactLine> facts, float x, float anchor, bool anchorToTop = false, int maxLines = FactMaxLines, float scale = 1f)
     {
-        using var labelFont = new SKFont(_emphasisTypeface, FactFontSize - 3f);
-        using var valueFont = new SKFont(_bodyTypeface, FactFontSize);
-        using var subFont = new SKFont(_bodyTypeface, FactFontSize - 3f);
+        using var labelFont = new SKFont(_labelTypeface, (FactFontSize - 3f) * scale);
+        // 数で始まるラベル（記念日カレンダーの「2005年」など）は役職名ではなく数なので、ラベルの書体ではなく数字の書体で組む。
+        using var numericLabelFont = new SKFont(_numberTypeface, (FactFontSize - 3f) * scale);
+        using var valueFont = new SKFont(_bodyTypeface, FactFontSize * scale);
+        using var subFont = new SKFont(_bodyTypeface, (FactFontSize - 3f) * scale);
+        float lineHeight = FactLineHeight * scale;
+        static bool IsNumericLabel(string label) => label.Length > 0 && char.IsDigit(label[0]);
+        SKFont LabelFontFor(string label) => IsNumericLabel(label) ? numericLabelFont : labelFont;
 
         // 続き行の字下げ量は最も広いラベルに合わせる。値の左端が縦に揃うので、
         // 2 段に割れた項目も 1 つのまとまりとして読める。
-        float indent = facts
+        float widestLabel = facts
             .Where(f => !string.IsNullOrWhiteSpace(f.Label))
-            .Select(f => Measure(labelFont, f.Label))
+            .Select(f => Measure(LabelFontFor(f.Label), f.Label))
             .DefaultIfEmpty(0f)
-            .Max() + 14f;
+            .Max();
+        // 項目の並び（Items）を持つ組みは、見出しが役職名で長さがまちまちになる。長い役職名 1 つに値の幅を取られないよう、
+        // 見出しの幅に上限を置き、超える見出しは長体で（足りなければ末尾を省いて）上限に収める。
+        float labelCap = facts.Any(f => f.Items is not null) ? FactItemsLabelMaxWidth * scale : float.MaxValue;
+        float indent = Math.Min(widestLabel, labelCap) + 14f;
         // 続き行はさらに一段深く落とす。値の左端に揃えるだけだと「同じ項目の続き」に見えず、
         // 別の項目が始まったように読めてしまう。
         float continuationIndent = indent + StackedContinuationIndent;
@@ -1720,7 +1880,10 @@ public sealed partial class OgCardRenderer : IDisposable
         {
             // 値はラベルの右に流し、入りきらない分は値の左端へ揃えて折り返す。
             // 折り返しは項目の区切り（読点・スラッシュ・空白）でのみ起こすので、氏名や社名が途中で割れない。
-            var valueLines = WrapFactValue(OgCardNote.Strip(fact.Text), valueFont, paint, CardWidth - PaddingRight - (x + indent));
+            var valueLines = fact.Items is null
+                ? WrapFactValue(OgCardNote.Strip(fact.Text), valueFont, paint, CardWidth - PaddingRight - (x + indent))
+                : FitFactItems(fact, valueFont, paint, CardWidth - PaddingRight - (x + indent),
+                    Math.Min(limit, facts.Count == 1 ? FactItemsMaxLinesAlone : FactItemsMaxLines));
             var subLines = string.IsNullOrWhiteSpace(fact.SubText)
                 ? new List<string>()
                 : WrapFactValue(fact.SubText, subFont, paint, CardWidth - PaddingRight - (x + continuationIndent));
@@ -1735,10 +1898,10 @@ public sealed partial class OgCardRenderer : IDisposable
         }
         if (rendered.Count == 0) return (anchor, anchor, truncated);
 
-        float firstBaseline = anchorToTop ? anchor : anchor - (rendered.Count - 1) * FactLineHeight;
+        float firstBaseline = anchorToTop ? anchor : anchor - (rendered.Count - 1) * lineHeight;
         for (int i = 0; i < rendered.Count; i++)
         {
-            float baseline = firstBaseline + i * FactLineHeight;
+            float baseline = firstBaseline + i * lineHeight;
             var (lineIndent, head, text, isSub) = rendered[i];
             float cursor = x + lineIndent;
 
@@ -1752,14 +1915,23 @@ public sealed partial class OgCardRenderer : IDisposable
             if (head is not null && !string.IsNullOrWhiteSpace(head.Label))
             {
                 paint.Color = SKColor.TryParse(head.LabelColorHex, out var labelColor) ? labelColor : Muted;
-                DrawText(canvas, head.Label, cursor, baseline, SKTextAlign.Left, labelFont, paint);
+                var headFont = LabelFontFor(head.Label);
+                string headText = head.Label;
+                float headWidth = Measure(headFont, headText);
+                if (headWidth > labelCap)
+                {
+                    headFont.ScaleX = Math.Max(FactItemsLabelCondenseMin, labelCap / headWidth);
+                    headText = Ellipsize(headText, headFont, paint, labelCap);
+                }
+                DrawText(canvas, headText, cursor, baseline, SKTextAlign.Left, headFont, paint);
+                headFont.ScaleX = 1f;
             }
             // ラベルの有無に関わらず値の左端は揃える。折り返した続き行も同じ位置から始まるので、
             // 1 項目が何行に伸びても「どこからどこまでが 1 項目か」が縦の揃いで読める。
             paint.Color = Foreground;
             DrawText(canvas, text, x + indent, baseline, SKTextAlign.Left, valueFont, paint);
         }
-        return (firstBaseline - FactFontSize, firstBaseline + (rendered.Count - 1) * FactLineHeight, truncated);
+        return (firstBaseline - valueFont.Size, firstBaseline + (rendered.Count - 1) * lineHeight, truncated);
     }
 
     /// <summary>
@@ -1801,13 +1973,63 @@ public sealed partial class OgCardRenderer : IDisposable
             }
 
             // 区切りが無い（＝1 語が幅を超えている）。文字単位で折るしかない。
+            // 次の行の頭が行頭禁則の字（閉じ括弧・感嘆符・小書きの仮名など）になるときは、その前の字ごと次の行へ送る。
             int fit = start;
             while (fit < text.Length && Measure(font, text.AsSpan(start, fit - start + 1)) <= maxWidth) fit++;
             if (fit == start) fit = start + 1;
+            while (fit < text.Length && fit - start > 1 && LineStartForbidden.Contains(text[fit])) fit--;
             lines.Add(text[start..fit]);
             start = fit;
         }
         return lines;
+    }
+
+    /// <summary>項目の並び（<see cref="OgCardFactLine.Items"/>）を持つ事実行 1 項目が使える行数。</summary>
+    private const int FactItemsMaxLines = 2;
+
+    /// <summary>事実行がその 1 項目だけのときに使える行数（ほかの項目と場所を分け合わないので、多めに並べる）。</summary>
+    private const int FactItemsMaxLinesAlone = 4;
+
+    /// <summary>項目の並びを持つ組みでの見出しの幅の上限（等倍のとき）。</summary>
+    private const float FactItemsLabelMaxWidth = 270f;
+
+    /// <summary>上限を超える見出しを収めるときの長体の下限（横幅の率）。これでも収まらなければ末尾を省く。</summary>
+    private const float FactItemsLabelCondenseMin = 0.6f;
+
+    /// <summary>
+    /// 項目の並び（<see cref="OgCardFactLine.Items"/>）を、<paramref name="maxLines"/> 行に入るだけ先頭から並べて行に割る。
+    /// 入りきらない項目があるとき（と、渡された時点で続きがあるとき）は末尾に「ほか」と添える。
+    /// 行は項目の切れ目でだけ折る（作品名や曲名の中の読点・中黒では折らない）。1 項目だけで 1 行を超えるときに限り、その項目の中で折る。
+    /// 1 項目だけでも行数を超えるときは、その 1 項目を行数の上限で切る。
+    /// </summary>
+    private List<string> FitFactItems(OgCardFactLine fact, SKFont font, SKPaint paint, float maxWidth, int maxLines)
+    {
+        var items = fact.Items!;
+        string separator = fact.ItemsSeparator ?? "";
+        for (int count = items.Count; count >= 1; count--)
+        {
+            bool more = fact.ItemsHaveMore || count < items.Count;
+            var lines = new List<string>();
+            string current = "";
+            for (int i = 0; i < count; i++)
+            {
+                // 区切りは前の項目の後ろに付けて送り、「ほか」は最後の項目と同じ行に置く。
+                string piece = items[i] + (i < count - 1 ? separator : more ? " ほか" : "");
+                if (Measure(font, current + piece) <= maxWidth)
+                {
+                    current += piece;
+                    continue;
+                }
+                if (current.Length > 0) lines.Add(current);
+                var wrapped = WrapFactValue(piece, font, paint, maxWidth);
+                lines.AddRange(wrapped.Take(wrapped.Count - 1));
+                current = wrapped.Count > 0 ? wrapped[^1] : "";
+            }
+            if (current.Length > 0) lines.Add(current);
+            if (lines.Count <= maxLines) return lines;
+            if (count == 1) return lines.Take(maxLines).ToList();
+        }
+        return new List<string>();
     }
 
     /// <summary>事実行を折ってよい文字（この文字の直後で改行する）。項目そのものの区切りだけを許す。</summary>
@@ -1979,10 +2201,25 @@ public sealed partial class OgCardRenderer : IDisposable
     private SKColor BandColor(OgCardSpec spec)
         => SKColor.TryParse(spec.BandColorHex, out var c) ? c : AccentPink;
 
-    /// <summary>左端の色帯。カードの種別を色で見分けるための帯で、全カードに描く。</summary>
+    /// <summary>
+    /// 色帯・透かしのグラデーション（<see cref="OgCardSpec.BandGradient"/>）を、<paramref name="from"/> から <paramref name="to"/> へ塗るシェーダーにする。
+    /// 不透明度は全色 <paramref name="alpha"/>。グラデーションが無いか読めなければ null（1 色で塗る）。
+    /// </summary>
+    private static SKShader? BandGradientShader(OgCardSpec spec, SKPoint from, SKPoint to, byte alpha = 0xff)
+    {
+        if (!PrecureDataStars.Data.Text.KeyColorGradient.TryParse(spec.BandGradient, out var stops)) return null;
+        return SKShader.CreateLinearGradient(
+            from, to,
+            stops.Select(st => new SKColor(st.R, st.G, st.B, alpha)).ToArray(),
+            stops.Select(st => st.Position).ToArray(),
+            SKShaderTileMode.Clamp);
+    }
+
+    /// <summary>左端の色帯。カードの種別を色で見分けるための帯で、全カードに描く。グラデーションのプリキュアは上から下へ塗る。</summary>
     private void DrawBand(SKCanvas canvas, OgCardSpec spec)
     {
-        using var paint = new SKPaint { Color = BandColor(spec) };
+        using var shader = BandGradientShader(spec, new SKPoint(0f, 0f), new SKPoint(0f, CardHeight));
+        using var paint = new SKPaint { Color = BandColor(spec), Shader = shader };
         canvas.DrawRect(SKRect.Create(0f, 0f, BandWidth, CardHeight), paint);
     }
 
@@ -2012,6 +2249,9 @@ public sealed partial class OgCardRenderer : IDisposable
         float lineHeight = mainFont.Size * 1.08f;
         float baseline = WatermarkTop + mainFont.Size * 0.92f;
         float right = CardWidth - PaddingRight;
+        // グラデーションのプリキュアは、主の文字の左端から右端へ同じ薄さで塗る。
+        using var gradientShader = BandGradientShader(spec, new SKPoint(right - mainWidth, 0f), new SKPoint(right, 0f), 0x58);
+        if (gradientShader is not null) paint.Shader = gradientShader;
         foreach (var line in mainLines)
         {
             DrawText(canvas, line, right, baseline, SKTextAlign.Right, mainFont, paint);
@@ -2040,74 +2280,6 @@ public sealed partial class OgCardRenderer : IDisposable
             asideBaseline += asideFont.Size * 1.2f;
         }
         return Math.Max(bottom, asideBaseline - asideFont.Size * 1.2f + asideFont.Size * 0.2f);
-    }
-
-    /// <summary>
-    /// 見出しの書体を決める。<see cref="OgCardSpec.TitleFontFamily"/>（作品の本編テロップの書体名）が指定されていれば
-    /// インストール済み書体から引く。見つからなければ既定の見出し書体で組み、警告（1 枚につき 1 つ）を返す。
-    /// 書体名は「FOT-ハミング ProN B」のように重さまで含む名前なので、まずその名前で引き、
-    /// 無ければ末尾の重さを切り離して「書体の族 ＋ スタイル名」で引く（Windows が族名と重さを分けて見せる書体のため）。
-    /// </summary>
-    private SKTypeface ResolveTypeface(string fontFamily, SKTypeface fallback, out string? warning)
-    {
-        warning = null;
-        if (string.IsNullOrWhiteSpace(fontFamily)) return fallback;
-
-        var typeface = _familyTypefaces.GetOrAdd(fontFamily, family =>
-        {
-            var found = MatchInstalledTypeface(family);
-            if (found is null) return null;
-            lock (_familyLock)
-            {
-                _shapers.TryAdd(found.Handle, new OgTextShaper(found));
-                _ownedTypefaces.Add(found);
-            }
-            return found;
-        });
-        if (typeface is null)
-        {
-            warning = $"書体「{fontFamily}」がこの PC に見つからないため、既定の書体で描画しました";
-            return fallback;
-        }
-        return typeface;
-    }
-
-    /// <summary>この PC の書体ファイルの索引（name テーブルから引く）。初めて要るときに 1 度だけ作る。</summary>
-    private static readonly Lazy<InstalledFontIndex> FontIndex = new(InstalledFontIndex.Build, isThreadSafe: true);
-
-    /// <summary>書体名がこの PC で引けるか。描くときと同じ引き方（<see cref="MatchInstalledTypeface"/>）で確かめる。</summary>
-    public static bool IsTypefaceInstalled(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return false;
-        using var typeface = MatchInstalledTypeface(name);
-        return typeface is not null;
-    }
-
-    /// <summary>インストール済み書体を名前で引く。まず書体ファイルの索引（日本語名・英語名とも）、次に Windows の書体一覧。見つからなければ null。</summary>
-    private static SKTypeface? MatchInstalledTypeface(string name)
-    {
-        if (FontIndex.Value.Find(name) is { } hit)
-        {
-            var fromFile = SKTypeface.FromFile(hit.Path, hit.Index);
-            if (fromFile is not null) return fromFile;
-        }
-
-        var manager = SKFontManager.Default;
-        var direct = manager.MatchFamily(name);
-        if (direct is not null) return direct;
-
-        int cut = name.LastIndexOf(' ');
-        if (cut <= 0) return null;
-        string family = name[..cut];
-        string styleName = name[(cut + 1)..];
-        using var styles = manager.GetFontStyles(family);
-        if (styles is null || styles.Count == 0) return null;
-        for (int i = 0; i < styles.Count; i++)
-        {
-            if (string.Equals(styles.GetStyleName(i), styleName, StringComparison.OrdinalIgnoreCase))
-                return styles.CreateTypeface(i);
-        }
-        return null;
     }
 
     /// <summary>
@@ -2238,7 +2410,7 @@ public sealed partial class OgCardRenderer : IDisposable
         }
         y = DrawTitleRule(canvas, paint, y - 6f, contentWidth);
 
-        float statScale = spec.StatScale > 0f ? spec.StatScale : 1.5f;
+        float statScale = spec.StatScale > 0f ? spec.StatScale : 1f;
         if (spec.Badges.Count > 0)
             y = DrawStats(canvas, paint, spec.Badges, PaddingLeft, y + 10f, contentWidth, statScale);
 
@@ -2605,11 +2777,65 @@ public sealed partial class OgCardRenderer : IDisposable
     }
 
     /// <summary>
+    /// 見出しを組む。<paramref name="wrapFirst"/> なら、まず等幅のまま 2 行に折ることを、候補の大きい文字サイズから順に試す
+    /// （<see cref="WrapTitleTwoLines"/>。よい切れ目が無ければ折らない）。折らないときは候補の最大の文字サイズで 1 行に詰め（<see cref="CondenseToFit"/>）、
+    /// 詰めても 1 行に収まらなければ等幅に戻して <see cref="FitTitle"/> で文字サイズを下げ、規定行数に折り返す。
+    /// <paramref name="font"/> の文字サイズ・書体・長体の率は採用した組みのものに書き換わる。
+    /// </summary>
+    private List<string> FitTitleCondensed(string title, SKFont font, SKPaint paint, float maxWidth, float[] sizeCandidates, int maxLines, bool wrapFirst = false)
+    {
+        font.ScaleX = 1f;
+        if (wrapFirst && maxLines >= 2)
+        {
+            foreach (var size in sizeCandidates)
+            {
+                font.Size = size;
+                if (WrapTitleTwoLines(title, font, maxWidth) is { } wrapped) return wrapped;
+            }
+        }
+        font.Size = sizeCandidates[0];
+        if (CondenseToFit(font, () => WrapText(title, font, paint, maxWidth, 2).Count <= 1))
+            return WrapText(title, font, paint, maxWidth, 1);
+        return FitTitle(title, font, paint, maxWidth, sizeCandidates, maxLines);
+    }
+
+    /// <summary>2 行に折った見出しの 2 行目に求める最低の幅（本文の幅に対する比）。これより短い 2 行目（「100」「スト」だけ）にはしない。</summary>
+    private const float MinSecondTitleLineRatio = 0.2f;
+
+    /// <summary>
+    /// 見出しを、いまの字の大きさのまま 2 行に折る。1 行に収まればその 1 行を返す。
+    /// 切れ目は <see cref="IsPreferredBreak"/> の位置（空白・記号の後ろ、文字種の境目、カタカナ語の切れ目）のうち、
+    /// 数とそれに続く字の間（<see cref="IsTitleBreakAvoided"/>）を除いたもので、
+    /// 両方の行が幅に収まり、2 行目が <see cref="MinSecondTitleLineRatio"/> 以上の幅になる位置のうち、1 行目がいちばん長くなる所で折る。
+    /// そういう位置が無ければ（語の途中でしか折れない・2 行目が短くなる）null を返す。
+    /// </summary>
+    private List<string>? WrapTitleTwoLines(string title, SKFont font, float maxWidth)
+    {
+        if (title.Contains('\n')) return null;
+        if (Measure(font, title) <= maxWidth) return new List<string> { title };
+        for (int k = title.Length - 1; k >= 1; k--)
+        {
+            if (!IsPreferredBreak(title, k) || IsTitleBreakAvoided(title, k)) continue;
+            string first = title[..k].TrimEnd(), second = title[k..].TrimStart();
+            if (first.Length == 0 || second.Length == 0) continue;
+            float secondWidth = Measure(font, second);
+            if (secondWidth > maxWidth) break;
+            if (Measure(font, first) > maxWidth || secondWidth < maxWidth * MinSecondTitleLineRatio) continue;
+            return new List<string> { first, second };
+        }
+        return null;
+    }
+
+    /// <summary>
     /// 日本語テキストを指定幅で折り返す。単語区切りが無いため 1 文字ずつ積んで幅を測り、
     /// 溢れた時点で改行する。改行位置が行頭禁則文字に当たる場合は 1 文字前へ送る。
     /// </summary>
     /// <param name="maxLines">この行数に達したら以降は積まずに打ち切る（呼び出し側が超過を検知できるよう +1 を渡す運用）。</param>
-    private List<string> WrapText(string text, SKFont font, SKPaint paint, float maxWidth, int maxLines)
+    /// <param name="prose">
+    /// 文章（説明文・リード文）として折るか。true なら和文はどの字の間でも折って行を幅いっぱいまで詰め、
+    /// 欧文の単語の途中・数と単位の間・禁則の位置だけを避ける。false（見出し）はカタカナ語や記号の切れ目を優先して折る。
+    /// </param>
+    private List<string> WrapText(string text, SKFont font, SKPaint paint, float maxWidth, int maxLines, bool prose = false)
     {
         var lines = new List<string>();
         var current = new System.Text.StringBuilder();
@@ -2627,6 +2853,19 @@ public sealed partial class OgCardRenderer : IDisposable
 
             current.Append(ch);
             if (Measure(font, current.ToString()) <= maxWidth) continue;
+
+            if (prose)
+            {
+                // 溢れた字の前から順に遡り、折ってよい最初の位置で折る。行の 4 割より前にしか無ければ、溢れた字の前で折る。
+                string all = current.ToString();
+                int at = LastProseBreak(all);
+                if (at < all.Length * 0.4f) at = all.Length - 1;
+                lines.Add(all[..at].TrimEnd());
+                current.Clear();
+                current.Append(all[at..].TrimStart());
+                if (lines.Count >= maxLines) return lines;
+                continue;
+            }
 
             // 溢れた。行の中に「空白や記号の直後」「文字種の境目（和文と欧文、カタカナ語の切れ目）」があれば
             // そこで折る（欧文の単語やカタカナ語を途中で割らない）。行頭近くにしか無いときは文字単位で折る。
@@ -2669,14 +2908,60 @@ public sealed partial class OgCardRenderer : IDisposable
     {
         for (int k = line.Length - 1; k >= 1; k--)
         {
-            char prev = line[k - 1];
-            char next = line[k];
-            if (LineStartForbidden.Contains(next)) continue;
-            if (BreakAfter.Contains(prev) || BreakBefore.Contains(next)) return k;
-            bool prevLatin = IsLatin(prev), nextLatin = IsLatin(next);
-            if (prevLatin != nextLatin && prev != ' ' && next != ' ') return k;
-            bool prevKana = IsKatakana(prev), nextKana = IsKatakana(next);
-            if (prevKana != nextKana && !prevLatin && !nextLatin) return k;
+            if (IsPreferredBreak(line, k)) return k;
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// 見出しを 2 行に折るとき（<see cref="WrapTitleTwoLines"/>）に避ける位置か。数とその前後の字の間（「アルバム2」「4つ」。空白をはさめば折れる）、
+    /// 副題の頭の波ダッシュ（空白か行頭のあとの「~」「～」「〜」）の直後、副題の終わりの波ダッシュ（空白でない字のあとの波ダッシュ）の前、
+    /// 区切りの斜線（「/」「／」）の前（2 行目を斜線から始めない）。
+    /// </summary>
+    private static bool IsTitleBreakAvoided(string text, int k)
+    {
+        char prev = text[k - 1];
+        char next = text[k];
+        if (char.IsDigit(next) && !char.IsWhiteSpace(prev)) return true;
+        if (char.IsDigit(prev) && !char.IsWhiteSpace(next)) return true;
+        if (TitleWaveDashes.Contains(next) && !char.IsWhiteSpace(prev)) return true;
+        string rest = text[k..].TrimStart();
+        if (rest.Length > 0 && (rest[0] == '/' || rest[0] == '／')) return true;
+        return TitleWaveDashes.Contains(prev) && (k < 2 || char.IsWhiteSpace(text[k - 2]));
+    }
+
+    /// <summary>副題を囲む波ダッシュ（半角のチルダ・全角のチルダ・波ダッシュ）。</summary>
+    private const string TitleWaveDashes = "~～〜";
+
+    /// <summary>位置 <paramref name="k"/> の直前（<c>text[k - 1]</c> と <c>text[k]</c> の間）が、見出しを折るのに向いた位置か（<see cref="LastPreferredBreak"/> の候補）。</summary>
+    private static bool IsPreferredBreak(string text, int k)
+    {
+        char prev = text[k - 1];
+        char next = text[k];
+        if (LineStartForbidden.Contains(next)) return false;
+        if (BreakAfter.Contains(prev) || BreakBefore.Contains(next)) return true;
+        bool prevLatin = IsLatin(prev), nextLatin = IsLatin(next);
+        if (prevLatin != nextLatin && prev != ' ' && next != ' ') return true;
+        bool prevKana = IsKatakana(prev), nextKana = IsKatakana(next);
+        return prevKana != nextKana && !prevLatin && !nextLatin;
+    }
+
+    /// <summary>
+    /// 文章として折るとき、溢れた字（末尾の字）より前で折ってよい最後の位置（その位置の直前で折る）。無ければ -1。
+    /// 和文はどの字の間でも折れる。避けるのは、行頭禁則の字の前・開き括弧の後ろ・欧文の単語の途中・
+    /// 数と単位の間（「366 日」「4 本」。数のあとに空白を挟んでも同じ）。
+    /// </summary>
+    private static int LastProseBreak(string text)
+    {
+        for (int k = text.Length - 1; k >= 1; k--)
+        {
+            char prev = text[k - 1];
+            char next = text[k];
+            if (LineStartForbidden.Contains(next) || BreakBefore.Contains(prev)) continue;
+            // 欧文の単語（「precure-datastars」のようにハイフンでつないだものも 1 語）の途中。
+            if ((IsLatin(prev) || prev == '-') && (IsLatin(next) || next == '-')) continue;
+            if (!char.IsDigit(next) && (char.IsDigit(prev) || (prev == ' ' && k >= 2 && char.IsDigit(text[k - 2])))) continue;
+            return k;
         }
         return -1;
     }

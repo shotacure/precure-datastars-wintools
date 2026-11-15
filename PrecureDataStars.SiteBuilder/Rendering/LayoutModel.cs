@@ -40,6 +40,13 @@ public sealed class LayoutModel
     /// <summary>meta description。空なら出力しない。</summary>
     public string MetaDescription { get; set; } = "";
 
+    /// <summary>
+    /// 既定の OGP カード（<see cref="OgCard"/> を指定しないページのカード）に載せるリード文。
+    /// 空なら <see cref="MetaDescription"/> を載せる。検索結果向けの説明文はサイト名で始めるなど
+    /// カードの中では重複する書き方になるので、カード用の短い文を別に持たせるときに使う。
+    /// </summary>
+    public string OgLead { get; set; } = "";
+
     /// <summary>パンくずリスト。空なら出力しない。</summary>
     public IReadOnlyList<BreadcrumbItem> Breadcrumbs { get; set; } = Array.Empty<BreadcrumbItem>();
 
@@ -83,9 +90,6 @@ public sealed class LayoutModel
 
     /// <summary>Google Search Console の所有権確認用トークン。 PageRenderer が BuildConfig から自動補完する。空文字なら確認用メタタグを出力しない。</summary>
     public string GoogleSiteVerification { get; set; } = "";
-
-    /// <summary>Google AdSense のパブリッシャー ID（例: ca-pub-1234567890123456）。</summary>
-    public string GoogleAdSenseClientId { get; set; } = "";
 
     /// <summary>フッタの著作権表記に使う「年」の文字列。</summary>
     public string CopyrightYears { get; set; } = "";
@@ -132,8 +136,12 @@ public sealed class LayoutModel
     /// true のページのみ、フッタに「商品画像は Amazon Creators API 由来」の注記を出す。</summary>
     public bool HasAmazonImages { get; set; }
 
-    /// <summary>本文に YouTube の埋め込みプレーヤー（<c>youtube.com/embed/</c>）が含まれるか。
-    /// true のページのみ、フッタに「動画は公式の埋め込みプレーヤー経由・権利は各権利者様」の注記を出す。</summary>
+    /// <summary>本文に販売中の商品の枠の置き場（<c>data-shop-series</c>）が含まれるか。
+    /// true のページのみ、枠を描く JS を読み込み、枠が出たときだけ見せる Amazon についての注記をフッタに置く。</summary>
+    public bool HasShopBox { get; set; }
+
+    /// <summary>本文に YouTube の埋め込みプレイヤー（<c>youtube.com/embed/</c>）が含まれるか。
+    /// true のページのみ、フッタに「動画は公式の埋め込みプレイヤー経由・権利は各権利者様」の注記を出す。</summary>
     public bool HasYoutubeEmbeds { get; set; }
 
     /// <summary>グローバルナビの項目列（ヘッダ・モバイルオーバーレイ共通）。

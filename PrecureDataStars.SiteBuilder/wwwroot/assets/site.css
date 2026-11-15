@@ -17,8 +17,9 @@
   /* monospace が必要な場面（M 番号などのインライン）専用フォント変数。 */
   --font-mono: "JetBrains Mono", "Consolas", "Menlo", "Roboto Mono", monospace;
 
-  /* サイト全体の本文・見出しのベース書体（可読性の高いやわらかな日本語ゴシック）。 */
-  --font-base: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  /* サイト全体の本文・見出しのベース書体（可読性の高いやわらかな日本語ゴシック）。
+     Noto Sans JP に無い簡体字（中国のスタッフの名前の「玮」「陈」など）は、同じ設計のゴシックの Noto Sans SC で出す。 */
+  --font-base: "Noto Sans JP", "Noto Sans SC", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
   /* ブランド表記（ヘッダ・フッタのサイト名、ホーム大見出し・タグライン）専用の据え置き書体。 */
   --font-brand: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
   /* アクセント書体・装飾系。索引ページのリード文・404 見出しなど「ここぞ」の数箇所に効かせる。 */
@@ -1556,18 +1557,125 @@ a.series-card-children-title:hover {
   gap: 8px;
   margin-bottom: 4px;
 }
-/* 配信音源の再生ボタン：カードの右上に固定する。見出しが折り返しても行を増やさないよう、
-   ボタンのあるカードだけ見出し行の右側をボタンの幅だけ空ける。 */
-.theme-songs-list .ts-card {
-  position: relative;
+/* 同じ録音を OP・ED・挿入歌として使ってまとめたカード（区分が 2 つ以上）：
+   左に「区分バッジ＋使用話数」を 1 区分 1 行で縦に積み、右の曲名・サイズ・（本放送のみ）はその縦の真ん中にそろえる。 */
+.theme-songs-list .ts-headline.ts-headline-multi {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
 }
-.theme-songs-list .ts-card:has(> .ts-headline > .ts-play) > .ts-headline {
-  padding-right: 2.6em;
+.theme-songs-list .ts-kinds {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  flex: 0 0 auto;
 }
-.theme-songs-list .ts-play {
-  position: absolute;
-  top: 10px;
-  right: 12px;
+.theme-songs-list .ts-kind-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+.theme-songs-list .ts-headline-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+/* 札とボタンが 1 組だけで動画の無いカードは、その組を見出しの行の右端に置く（まとめたカードでは縦に積んだ区分の真ん中にそろえる）。 */
+.theme-songs-list .ts-sizes.ts-sizes-inline {
+  margin: 0 0 0 auto;
+  align-self: center;
+  flex: 0 0 auto;
+}
+/* 狭い画面では曲名が細い列に押し込まれるので、1 行目を「区分の積み＋再生ボタン」、2 行目を曲名・サイズに組み替える。 */
+@media (max-width: 600px) {
+  .theme-songs-list .ts-headline.ts-headline-multi {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .theme-songs-list .ts-headline-multi > .ts-kinds { order: 1; }
+  .theme-songs-list .ts-headline-multi > .ts-sizes-inline { order: 2; }
+  .theme-songs-list .ts-headline-multi > .ts-headline-main {
+    order: 3;
+    flex: 1 1 100%;
+  }
+}
+/* 配信音源の再生ボタン：サイズの札とそのサイズのボタンを 1 組にして、右寄せの列に 1 組 1 行で縦に積む（楽曲詳細と同じ形）。
+   見出しの行に入れないカードは 2 列に組み、右の列（.ts-sizes-side）をカードの上端から積む。ほかの子は左の列に上から順に入る。
+   狭い画面では 2 列をほどき、列は書いた順（動画の下・クレジットの上）に右寄せで置く。 */
+.theme-songs-list .ts-card:has(> .ts-sizes-side) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 16px;
+  align-items: start;
+}
+.theme-songs-list .ts-card:has(> .ts-sizes-side) > * {
+  grid-column: 1;
+}
+.theme-songs-list .ts-card > .ts-sizes-side {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+@media (max-width: 600px) {
+  .theme-songs-list .ts-card:has(> .ts-sizes-side) {
+    display: block;
+  }
+}
+/* サイズの札を見出しの下に 1 つ 1 行で縦に並べ、札の右にそのサイズの再生ボタンを置く。
+   札の幅がそろわなくてもボタンが縦にそろうよう、札の列とボタンの列の 2 列の格子に組む（行の li は格子に溶かす）。
+   札の付かないボタンもボタンの列に入れる。再生ボタンのあるカード（.ts-sizes-side）は列ごと右へ寄せ、札もボタンの側へ寄せる。
+   札の左はそのサイズが流れた話数の列（サイズが話によって分かれるカードだけ。無ければ幅 0）。狭い幅では話数の側を折り返す。 */
+.theme-songs-list .ts-sizes {
+  list-style: none;
+  margin: 2px 0 8px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, max-content) max-content max-content;
+  align-items: center;
+  justify-items: start;
+  /* 話数の列が空でも左に隙間が出ないよう、列の間は列の間隔でなく話数とボタンの余白で空ける。 */
+  column-gap: 0;
+  row-gap: 4px;
+}
+.theme-songs-list .ts-size-row {
+  display: contents;
+}
+.theme-songs-list .ts-size-row > .ts-size-range {
+  grid-column: 1;
+  justify-self: end;
+  text-align: right;
+  font-size: 0.82em;
+  margin-right: 8px;
+}
+.theme-songs-list .ts-size-row > .recording-tracks-kind-size {
+  grid-column: 2;
+}
+.theme-songs-list .ts-size-row > .ts-play {
+  grid-column: 3;
+  margin-left: 8px;
+}
+/* 札の付かないボタン（サイズの指定が無い回などに鳴る録音の既定の音源）の札。放送で流れたサイズとは限らないので、
+   緑の札と見分けがつくよう灰色の点線の枠にする。 */
+.theme-songs-list .recording-tracks-kind-badge.recording-tracks-kind-size.ts-size-unaired {
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed currentColor;
+  cursor: help;
+}
+.theme-songs-list .ts-sizes.ts-sizes-side {
+  width: max-content;
+  max-width: 100%;
+  margin-left: auto;
+  justify-items: end;
+  row-gap: 8px;
+}
+@media (min-width: 601px) {
+  .theme-songs-list .ts-card > .ts-sizes-side {
+    margin: 0;
+  }
 }
 .theme-songs-list .ts-kind {
   display: inline-block;
@@ -1641,11 +1749,15 @@ a.series-card-children-title:hover {
   font-weight: 500;
 }
 
-/* 備考行：ラベル無しでそのまま muted 表示。 */
-.theme-songs-list .ts-meta-notes {
-  display: block;
-  margin-left: 8px;
-  font-size: 0.88em;
+/* 歌・作家のクレジット：役職バッジ + 名義のグループを横に流す（楽曲索引のカードと同じ .staff-badges-row）。 */
+.theme-songs-list .ts-credits {
+  margin: 2px 0 0 8px;
+  font-size: 0.94em;
+}
+/* 歌の名義だけは主役級に（楽曲詳細の song-recording-vocalists と同じ哲学）。 */
+.theme-songs-list .ts-credit-vocals .ts-credit-names {
+  font-size: 1.064em;
+  font-weight: 500;
 }
 
 /* 旧テーブル形式（テンプレ側で参照しなくなったが、互換のため空定義のみ残す）。 */
@@ -1802,6 +1914,28 @@ a.series-card-children-title:hover {
 .credit-section .role  { margin-top: 6px; }
 .credit-section .role:first-child { margin-top: 0; }
 
+/* 媒体（本放送・Blu-ray・配信）によって違うカード：版の付いたカードが続くところを 1 組ずつ角丸の細い線の枠にまとめ、
+   上半分（組の前の版。「本放送」「本放送・Blu-ray」など）と下半分（組の後ろの版。「Blu-ray・配信」「配信」など）で地の色を分ける。
+   共通のカードは枠に入れない。 */
+.credit-section .card-versions {
+  margin-top: 40px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.credit-section .card-versions:first-child { margin-top: 0; }
+.credit-section .card-version { padding: 10px 14px 14px; }
+.credit-section .card-version-upper { background: #fdf1f6; }
+.credit-section .card-version-lower { background: #eef4fb; border-top: 1px solid var(--border); }
+.credit-section .card-version-label {
+  margin: 0 0 8px;
+  font-size: 0.8em;
+  font-weight: bold;
+  color: var(--muted);
+}
+.credit-section .card-version-none { margin: 0; color: var(--muted); }
+.credit-section .card-version .card:first-of-type { margin-top: 0; }
+
 /* テーブル内のブロック区切り行（グループ内のロール変わり目と同等の余白で切れ目を視覚化）。 */
 .credit-section table.fallback-table tr.block-break > td,
 .credit-section table.fallback-vc-table tr.block-break > td {
@@ -1840,6 +1974,42 @@ a.series-card-children-title:hover {
   display: flex;
   justify-content: flex-end;
 }
+/* 映画の最後の画面に題名（英題など）の行が並ぶ組み：題名の行を中央にそろえ、行ごとの字の大きさを
+   テンプレの style で --film-end-title-l1〜l6 に指定する（指定の無い行は本文と同じ大きさ）。 */
+.credit-section .film-end-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+  margin-bottom: 0.8em;
+}
+.credit-section .film-end-title > span:nth-child(1) { font-size: var(--film-end-title-l1, 1em); }
+.credit-section .film-end-title > span:nth-child(2) { font-size: var(--film-end-title-l2, 1em); }
+.credit-section .film-end-title > span:nth-child(3) { font-size: var(--film-end-title-l3, 1em); }
+.credit-section .film-end-title > span:nth-child(4) { font-size: var(--film-end-title-l4, 1em); }
+.credit-section .film-end-title > span:nth-child(5) { font-size: var(--film-end-title-l5, 1em); }
+.credit-section .film-end-title > span:nth-child(6) { font-size: var(--film-end-title-l6, 1em); }
+/* 映画の最後の画面の下の段：CJ マークを左端、© の行を中央、映倫審査番号を右端に 1 行で並べる。 */
+.credit-section .film-end-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1em;
+}
+.credit-section .film-end-row .film-end-text {
+  text-align: center;
+}
+/* 下の段の © の行と映倫審査番号は画面どおり 1 行で組む（狭い画面では折り返してはみ出しを防ぐ）。 */
+.credit-section .film-end-row .film-end-title,
+.credit-section .film-end-row .film-rating {
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .credit-section .film-end-row .film-end-title,
+  .credit-section .film-end-row .film-rating {
+    white-space: normal;
+  }
+}
 /* CJ マークの印（小さく丸囲みで出す）。 */
 .credit-section .cj-mark {
   display: inline-block;
@@ -1859,6 +2029,20 @@ a.series-card-children-title:hover {
    さらに役職名カラムの padding-right: 16px と同等の余白を inset として加える。 */
 .credit-section .role-content-header {
   margin: 0 0 8px calc(var(--credit-role-name-w, 8em) + 16px);
+}
+
+/* 主題歌のカードの歌唱で「(CV:」の頭を縦にそろえた表（役職テンプレの {SINGER:cv_align=1}）。
+   狭い幅では表をほどき、1 人 1 行で名前のすぐ後ろに「(CV:…)」を続ける。収まらないときは「(CV」の前で折る
+   （名前と「(CV:…)」はそれぞれ折らない）。 */
+@media (max-width: 640px) {
+  table.cv-align,
+  table.cv-align > tbody,
+  table.cv-align > tbody > tr {
+    display: block !important;
+  }
+  table.cv-align > tbody > tr > td {
+    display: inline-block !important;
+  }
 }
 
 /* テンプレ未定義時のフォールバック表（役職名 | エントリ右並び） */
@@ -1941,6 +2125,11 @@ a.series-card-children-title:hover {
 /* n 役連続（同じ声優が連続キャラを担当）で rowspan 結合された actor-cell は、
    既定の vertical-align: top を上書きして、結合された N 行ぶんの中央に揃える。 */
 .credit-section table.fallback-vc-table td.actor-cell[rowspan] {
+  vertical-align: middle;
+}
+/* 同じ役名が続く行で役名を真ん中に 1 回だけ書くとき、rowspan 結合された character-cell も
+   結合された N 行ぶんの中央に揃える。 */
+.credit-section table.fallback-vc-table td.character-cell[rowspan] {
   vertical-align: middle;
 }
 .credit-section table.fallback-vc-table td.character-cell.dim {
@@ -2355,6 +2544,10 @@ a.series-card-children-title:hover {
 .product-links-note {
   margin: 6px 0 0;
   font-size: 0.82em;
+}
+/* ホームの商品・書籍のカードの並びの下に置く同じ注記。並びの下の余白に食い込ませて、カードとの間を詰める。 */
+.home-product-links-note {
+  margin: -8px 0 16px;
 }
 .product-links-list {
   list-style: none;
@@ -3513,6 +3706,8 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 .site-search-result-kind-company   { background: #d1fae5; color: #065f46; }
 .site-search-result-kind-song      { background: #e0e7ff; color: #3730a3; }
 .site-search-result-kind-product   { background: #ffedd5; color: #9a3412; }
+.site-search-result-kind-role      { background: #ccfbf1; color: #115e59; }
+.site-search-result-kind-font      { background: #e5e7eb; color: #1f2937; }
 
 .site-search-result-title {
   font-size: 0.95em;
@@ -5381,6 +5576,10 @@ a.credit-card-series:focus-visible {
   font-size: 0.8em;
   color: var(--muted);
 }
+/* 会社の名義のうち、画面で小さめの字で出ている末尾（「01(ゼロワン)」の「(ゼロワン)」）。所属の表記と同じ大きさ。 */
+.credit-small-suffix {
+  font-size: 0.8em;
+}
 .credit-card-character {
   font-size: 0.92em;
   color: var(--muted);
@@ -5875,6 +6074,11 @@ a.credit-card-series:focus-visible {
 .stats-coverage {
   font-size: 0.9em;
   display: inline-block;
+}
+/* 統計ページの冒頭文の下に添える決まりごとの注記（同順位の扱い・差の符号など）。冒頭文とひと続きに見えるよう間を詰める。 */
+.stats-note {
+  margin: -0.4em 0 1.2em;
+  font-size: 0.85em;
 }
 
 /* ════════════════════════════════════════════════════════════════ シリーズ一覧 / 映画バッジ ════════════════════════════════════════════════════════════════ */
@@ -6503,9 +6707,11 @@ a.credit-card-series:focus-visible {
 .footnote:target {
   background: rgba(255, 220, 120, 0.25);
 }
+/* inline-block は親の text-indent（ぶら下げの -2.6em）を受け継ぐので、番号の箱の中では 0 に戻す */
 .footnote-no {
   display: inline-block;
   min-width: 2.4em;
+  text-indent: 0;
   font-family: var(--font-num);
 }
 .footnote-url {
@@ -6621,6 +6827,12 @@ a.credit-card-series:focus-visible {
 .external-link-x         { border-color: #0f172a; }
 .external-link-instagram { border-color: #d6249f; }
 .external-link-youtube   { border-color: #ff0000; }
+/* リンク集（lit.link など）・ブログ（note など）・ポートフォリオ（作品集）は、公式ページのグレーと見分けられる色。 */
+.external-link-link-collection { border-color: #16a34a; }
+.external-link-bluesky   { border-color: #1185fe; }
+.external-link-blog      { border-color: #ea580c; }
+.external-link-pixiv     { border-color: #0096fa; }
+.external-link-portfolio { border-color: #7c3aed; }
 .external-link-wikipedia { border-color: #a2a9b1; }
 
 /* スタッフ表：役職ラベルリンク エピソード詳細のスタッフセクション（staff-table）で、役職ラベル（脚本／絵コンテ／演出 等）を 役職統計詳細ページにリンクできるようになった。 */
@@ -6737,8 +6949,12 @@ a.credit-card-series:focus-visible {
    役職の表は先頭行の役職名セルの前に「（」、最終行の最後のセルの後に「）」を置く。テンプレ展開の役職は本文の前後に置く。
    声の出演の末尾に足す「協力」行は、「協力」のセルの前と屋号のセルの後に置く。 */
 /* 画面にはクレジットされていない筆頭の会社（credit_role_blocks.leading_company_not_on_screen）。括弧は HTML 側で付ける。 */
+/* 役職名だけが画面にはクレジットされていない行（credit_card_roles.role_label_not_on_screen）。名前・中身はふつうに出し、
+   役職名の欄と見出しだけを全角の括弧（HTML 側で付ける）で包んで薄い色で出す。 */
 .credit-section .leading-not-on-screen,
 .credit-section .leading-not-on-screen a,
+.credit-section .role-label-not-on-screen,
+.credit-section .role-label-not-on-screen a,
 .credit-section .role.not-on-screen,
 .credit-section .role.not-on-screen a,
 .credit-section tr.cooperation-row.not-on-screen > td,
@@ -7011,7 +7227,7 @@ a.credit-card-series:focus-visible {
   display: none;
 }
 /* 現在地アイテムでの件数バッジ：濃ピンク背景 + 白文字で強調。 */
-.page-section-nav-item.is-current .page-section-nav-count {
+.page-section-nav-item.is-current > a > .page-section-nav-count {
   background: var(--accent-pink);
   color: #fff;
   box-shadow:
@@ -7036,7 +7252,7 @@ a.credit-card-series:focus-visible {
               transform 0.18s ease;
 }
 /* バッジが存在するアイテム（has-count かつ count.is-empty でない）では dot を隠す。 */
-.page-section-nav-item:has(.page-section-nav-count:not(.is-empty)) .page-section-nav-dot {
+.page-section-nav-item:has(> a > .page-section-nav-count:not(.is-empty)) > a > .page-section-nav-dot {
   display: none;
 }
 
@@ -7044,7 +7260,7 @@ a.credit-card-series:focus-visible {
 .page-section-nav-item.is-passed > a {
   color: var(--fg);
 }
-.page-section-nav-item.is-passed .page-section-nav-dot {
+.page-section-nav-item.is-passed > a > .page-section-nav-dot {
   background: #fff;
   border-color: var(--accent-pink);
 }
@@ -7054,7 +7270,7 @@ a.credit-card-series:focus-visible {
   color: var(--accent-pink);
   font-weight: 600;
 }
-.page-section-nav-item.is-current .page-section-nav-dot {
+.page-section-nav-item.is-current > a > .page-section-nav-dot {
   background: var(--accent-pink);
   border-color: var(--accent-pink);
   box-shadow:
@@ -7074,6 +7290,49 @@ a.credit-card-series:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 2 段目（子の行）：親と同じ縦線の上に小さめの丸で並べ、ラベルを少し下げて小さくする。
+   開くのは現在地の親（.is-open）の下だけで、ほかの親の子の並びは閉じる。 */
+.page-section-nav-sublist {
+  list-style: none;
+  margin: 0 0 4px 0;
+  padding: 0;
+}
+.page-section-nav-item:not(.is-open) > .page-section-nav-sublist {
+  display: none;
+}
+.page-section-nav-child > a {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.page-section-nav-child .page-section-nav-dot {
+  width: 7px;
+  height: 7px;
+  border-width: 1.5px;
+}
+.page-section-nav-child .page-section-nav-label {
+  font-size: 0.8em;
+  padding-left: 0.6em;
+}
+.page-section-nav-child .page-section-nav-year {
+  font-size: 0.72em;
+}
+/* 前置きのある子の行（映画のシリーズ名の部分）は 2 段：上に前置きを 7 割の字で、下に副題。どちらも長ければ末尾を省略する。 */
+.page-section-nav-label.has-prefix {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.page-section-nav-prefix,
+.page-section-nav-main {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-section-nav-prefix {
+  font-size: 0.7em;
+  opacity: 0.85;
 }
 
 /* 縦線位置：マーカー列（grid 第 2 列）の中央を貫通させる - has-year なし: 年列 0、gap 8px、マーカー 16px → マーカー中央 = 0 + 8 + 16/2 = 16px - has-year あり: 年列 2.6em(=約 41.6px @ 16px base)、gap 8px、マーカー */
@@ -7096,7 +7355,8 @@ a.credit-card-series:focus-visible {
 
 /* セクション側のスクロールオフセット：スティッキーヘッダ（2 行構造で約 95px）ぶん、
    アンカークリック時のジャンプ位置を上に逃がす。実高さ + 約 15px のバッファで 110px。 */
-section[id] {
+section[id],
+[data-section-nav-child][id] {
   scroll-margin-top: 110px;
 }
 
@@ -7128,7 +7388,8 @@ section[id] {
 
 /* モバイル：scroll-margin-top を少し縮める（ヘッダが非固定で消えるため余白小でも見出しが隠れない）。 */
 @media (max-width: 560px) {
-  section[id] {
+  section[id],
+  [data-section-nav-child][id] {
     scroll-margin-top: 60px;
   }
 }
@@ -7172,6 +7433,24 @@ section[id] {
   background: rgba(233, 30, 99, 0.08);
   color: var(--accent-pink);
   outline: none;
+}
+/* ミラーの子の行：左のナビと同じく現在地の親の下だけを開き、1 段下げて小さめに出す。 */
+.mobile-nav-overlay-section-nav-sublist {
+  list-style: none;
+  margin: 0 0 4px 0;
+  padding: 0 0 0 14px;
+}
+.mobile-nav-overlay-section-nav-list li:not(.is-open) > .mobile-nav-overlay-section-nav-sublist {
+  display: none;
+}
+.mobile-nav-overlay-section-nav-sublist a {
+  padding: 6px 14px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.mobile-nav-overlay-section-nav-prefix {
+  display: block;
+  font-size: 0.7em;
 }
 
 /* ════════════════════════════════════════════════════════════════ モバイル時のハンバーガーメニュー（site-header は通常通り static） - デスクトップ（>768px）：site-header は非固定、左サイドにセクションナビ。 */
@@ -7410,8 +7689,9 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   color: #c71958;
   border-color: rgba(233, 30, 99, 0.42);
 }
-/* キャラクターデザイン・作画監督 = 緑 */
+/* キャラクターデザイン・衣装・プロップデザイン・作画監督 = 緑 */
 .role-badge[data-role-code="CHARACTER_DESIGN"],
+.role-badge[data-role-code="COSTUME_PROP_DESIGN"],
 .role-badge[data-role-code="ANIMATION_DIRECTOR"] {
   background: rgba(76, 163, 107, 0.14);
   color: #38784f;
@@ -7847,6 +8127,10 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 /* URL コピー — 操作系として SNS とは別格のグレー基調 */
 .share-button-copy { background: #f3f4f6; color: #1f2937; border-color: #d1d5db; }
 .share-button-copy:hover { background: #e5e7eb; color: #111827; }
+/* 引用：URL コピーと同じグレーのピル。引用ボックスを開いている間は枠を濃くする。 */
+.share-button-cite { background: #f3f4f6; color: #1f2937; border-color: #d1d5db; }
+.share-button-cite:hover { background: #e5e7eb; color: #111827; }
+.share-button-cite[aria-expanded="true"] { border-color: #6b7280; background: #e5e7eb; }
 
 /* コピー成功時のトースト。固定位置の小さなピル状ラベルでフェード表示する。 */
 .share-toast {
@@ -8321,16 +8605,6 @@ table:has(th.col-rank) tbody tr:nth-child(3) td.col-rank {
   box-shadow: inset 0 0 0 1px #d97706;
 }
 
-/* AdSense Auto Ads の CLS（Cumulative Layout Shift）抑制プレースホルダ Auto Ads が挿入する <ins class="adsbygoogle"> に対して、最低限の高さを与えておくことで 広告ロード前後でのレイアウトジャンプを軽減する目的。 */
-ins.adsbygoogle {
-  display: block;
-  min-height: 1px;
-}
-ins.adsbygoogle[data-ad-status="filled"] {
-  /* 充填された広告では何もしない（min-height をリセットして広告本来の高さに任せる）。 */
-  min-height: auto;
-}
-
 /* 404 ページ用スタイル not-found.sbn 経由で出力される /404.html 専用。 */
 .not-found-hero {
   text-align: center;
@@ -8494,6 +8768,13 @@ ins.adsbygoogle[data-ad-status="filled"] {
   /* grid の子要素になるが、自身は描画フローから消して内部の .role-badge と .key-staff-names を 親 grid に直接流す。 */
   display: contents;
 }
+/* 映画のメインスタッフの下の、映画だけで数えた担当回数。grid の全列を使う。 */
+#key-staff > .key-staff-counts {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
 .key-staff-line > .role-badge {
   /* バッジ列：右揃え。 */
   justify-self: end;
@@ -8519,29 +8800,30 @@ ins.adsbygoogle[data-ad-status="filled"] {
 /* エピソード詳細のスタッフセクション。
    1 役職 = 1 .key-staff-line（同一人物が兼ねる「絵コンテ・演出」は 1 entry 内で複数バッジを並べる仕様で、
    常に 1 セット = 1 行）。シリーズ詳細 #key-staff のような grid 縦揃えは要求されないため、セット単位で
-   flex 子として並べる：デスクトップではセット境界で wrap、モバイルでは column に倒して 1 セット = 1 行に。 */
-#staff {
+   flex 子として並べる：デスクトップではセット境界で wrap、モバイルでは column に倒して 1 セット = 1 行に。
+   ほかのページにも id="staff" の節（歴代記録のスタッフ・声優など）があるので、指定は .episode-staff の付いた節に絞る。 */
+#staff.episode-staff {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 6px 20px;
 }
 /* 見出しは flex 内でも全幅を占めてセット群の上に独立して並ぶ。 */
-#staff > h2 {
+#staff.episode-staff > h2 {
   flex-basis: 100%;
   margin-bottom: 4px;
 }
 /* グローバルの display: contents を上書きし、各 .key-staff-line を 1 つの flex 子に戻す。
    セット内（バッジ + 名義）の途中改行はセット境界以外で起きないよう nowrap で凝集する。
    行幅を超えるときは親の flex-wrap によってセット境界（次の .key-staff-line）で折り返す。 */
-#staff .key-staff-line {
+#staff.episode-staff .key-staff-line {
   display: block;
   white-space: nowrap;
 }
 /* モバイル：1 セット 1 行で縦に積む（flex 方向を column に倒す）。
    align-items を flex-start に切り替えてセットを左揃えに、gap も縦間隔だけに簡素化する。 */
 @media (max-width: 640px) {
-  #staff {
+  #staff.episode-staff {
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
@@ -8681,7 +8963,19 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .entity-row-name {
   font-weight: 600;
 }
-/* 初参加順で旧名義の行に添える、いまの名乗り（最新名義）の括弧書き。 */
+/* プリキュアの行頭に置くキーカラーの正方形（_key-swatch.sbn）。地はインラインの background（1 色か斜めのグラデーション）。
+   白や淡い色でも形が見えるよう、明暗どちらの地でも出る中間の灰色で縁取る。地が無ければ縁取りだけ。 */
+.key-swatch {
+  flex: none;
+  align-self: center;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: -2px;
+  border: 1px solid rgba(128, 128, 128, 0.5);
+  border-radius: 2px;
+  box-sizing: border-box;
+}
+/* 初参加順で旧名義の行に添える、いまの名乗りの括弧書き。 */
 .entity-row-current {
   margin-left: -4px;
   font-size: 0.88em;
@@ -8967,8 +9261,10 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .rtl-name:hover { text-decoration: none; }
 /* 役職詳細で「すべて」を見せているときの、会社とその所属の人のまとまり（ゾーン）。名前の欄に地色を敷き、
    会社の行の上に区切り線、所属の人は字下げして左に縦線を引く。帯の部分はシリーズの縞と重なるので地色を敷かない。
+   事業の引き継ぎでつながった会社の 2 つ目からの行（rtl-row-group-succ）は、前の会社と同じまとまりなので区切り線を引かない。
    個人・団体で絞り込んだときは、まとめる前の並び（--rtl-flat）に戻し、地色・字下げもしない。 */
 .creators-root[data-entity-filter="all"] .rtl-row-group-head { border-top: 1px solid var(--rtl-group-line); }
+.creators-root[data-entity-filter="all"] .rtl-row-group-head.rtl-row-group-succ { border-top: 0; }
 .creators-root[data-entity-filter="all"] .rtl-row-group-head .rtl-name,
 .creators-root[data-entity-filter="all"] .rtl-row-member .rtl-name {
   align-self: stretch;
@@ -8988,28 +9284,114 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   border-left: 1px solid var(--rtl-group-line);
 }
 .creators-root:not([data-entity-filter="all"]) .rtl-row { order: var(--rtl-flat, 0); }
-/* 年表の「TV・映画 / TVのみ / 映画のみ」（ボタンの見た目は個人・団体の絞り込みと共通）。ページのルートの data-media に合わせて、
-   TV の話・映画を描いていない行を隠す。会社の行は、「すべて」のときは所属の人に見える行があれば見出しとして残し、
-   個人・団体で絞り込んだときは自分の担当だけで決める。
-   ボタンはタブの下の段に置き、年表タブを開いているときだけ見せる。個人・団体の絞り込みの右に並ぶときは細い縦線で区切る。 */
-.rtl-media {
+/* 📺 TV・🎥 映画・🌙 オトナの出し分け（_work-kind-toggles.sbn。スタッフ一覧・役職詳細・声の出演一覧）。
+   ルートの data-wk-off に切っている種類が空白区切りで入り、行・節・役職・年表の行の data-wk（参加した種類）が、
+   切っていない種類に 1 つも当たらなければ隠す（切っている種類の組み合わせ 7 通りを、それぞれ「残りの種類がその行に無い」で書く）。
+   年表の会社の行は、「すべて」のときは所属の人に見える行があれば（data-wk-zone）見出しとして残し、
+   個人・団体で絞り込んだときは自分の担当だけで決める。 */
+[data-wk-off~="tv"] [data-wk]:not([data-wk~="movie"]):not([data-wk~="otona"]):not(.rtl-row-group-head),
+[data-wk-off~="tv"] .rtl-row-group-head[data-wk]:not([data-wk~="movie"]):not([data-wk~="otona"]):not([data-wk-zone~="movie"]):not([data-wk-zone~="otona"]),
+.creators-root[data-wk-off~="tv"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk]:not([data-wk~="movie"]):not([data-wk~="otona"]),
+[data-wk-off~="movie"] [data-wk]:not([data-wk~="tv"]):not([data-wk~="otona"]):not(.rtl-row-group-head),
+[data-wk-off~="movie"] .rtl-row-group-head[data-wk]:not([data-wk~="tv"]):not([data-wk~="otona"]):not([data-wk-zone~="tv"]):not([data-wk-zone~="otona"]),
+.creators-root[data-wk-off~="movie"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk]:not([data-wk~="tv"]):not([data-wk~="otona"]),
+[data-wk-off~="tv"][data-wk-off~="movie"] [data-wk]:not([data-wk~="otona"]):not(.rtl-row-group-head),
+[data-wk-off~="tv"][data-wk-off~="movie"] .rtl-row-group-head[data-wk]:not([data-wk~="otona"]):not([data-wk-zone~="otona"]),
+.creators-root[data-wk-off~="tv"][data-wk-off~="movie"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk]:not([data-wk~="otona"]),
+[data-wk-off~="otona"] [data-wk]:not([data-wk~="tv"]):not([data-wk~="movie"]):not(.rtl-row-group-head),
+[data-wk-off~="otona"] .rtl-row-group-head[data-wk]:not([data-wk~="tv"]):not([data-wk~="movie"]):not([data-wk-zone~="tv"]):not([data-wk-zone~="movie"]),
+.creators-root[data-wk-off~="otona"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk]:not([data-wk~="tv"]):not([data-wk~="movie"]),
+[data-wk-off~="tv"][data-wk-off~="otona"] [data-wk]:not([data-wk~="movie"]):not(.rtl-row-group-head),
+[data-wk-off~="tv"][data-wk-off~="otona"] .rtl-row-group-head[data-wk]:not([data-wk~="movie"]):not([data-wk-zone~="movie"]),
+.creators-root[data-wk-off~="tv"][data-wk-off~="otona"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk]:not([data-wk~="movie"]),
+[data-wk-off~="movie"][data-wk-off~="otona"] [data-wk]:not([data-wk~="tv"]):not(.rtl-row-group-head),
+[data-wk-off~="movie"][data-wk-off~="otona"] .rtl-row-group-head[data-wk]:not([data-wk~="tv"]):not([data-wk-zone~="tv"]),
+.creators-root[data-wk-off~="movie"][data-wk-off~="otona"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk]:not([data-wk~="tv"]),
+[data-wk-off~="tv"][data-wk-off~="movie"][data-wk-off~="otona"] [data-wk]:not(.rtl-row-group-head),
+[data-wk-off~="tv"][data-wk-off~="movie"][data-wk-off~="otona"] .rtl-row-group-head[data-wk],
+.creators-root[data-wk-off~="tv"][data-wk-off~="movie"][data-wk-off~="otona"]:not([data-entity-filter="all"]) .rtl-row-group-head[data-wk] {
+  display: none;
+}
+/* 「初めて」で節を分ける一覧（役職順・初参加順・初担当順・初出演順・キャラクター別）の行は、種類ごとにその種類で初めての作品の節に置いてある。
+   置いた種類（data-wk-own）を切っているときと、それより早い初めてを持つ種類（data-wk-after）が 1 つでも入っているときは隠す。
+   見える行が無くなった節・組（data-wk-empty。_work-kind-toggles.sbn が付ける）も隠す。 */
+[data-wk-off~="tv"] [data-wk-own="tv"],
+[data-wk-off~="movie"] [data-wk-own="movie"],
+[data-wk-off~="otona"] [data-wk-own="otona"],
+[data-wk-on~="tv"] [data-wk-after~="tv"],
+[data-wk-on~="movie"] [data-wk-after~="movie"],
+[data-wk-on~="otona"] [data-wk-after~="otona"],
+[data-wk-on] [data-wk-empty] {
+  display: none;
+}
+/* 切っている種類の札と、年表の帯・点を隠す。細線（続けて参加した期間）と所属線は種類をまたいで引くので、1 つでも切ったら隠す。 */
+[data-wk-off~="tv"] .count-badges .count-pill-tv,
+[data-wk-off~="movie"] .count-badges .count-pill-movie,
+[data-wk-off~="otona"] .count-badges .count-pill-otona,
+[data-wk-off~="tv"] .rtl-seg:not(.rtl-seg-spinoff),
+[data-wk-off~="tv"] .rtl-rel:not(.rtl-rel-spinoff),
+[data-wk-off~="movie"] .rtl-movie,
+[data-wk-off~="movie"] .rtl-rel-movie,
+[data-wk-off~="otona"] .rtl-seg-spinoff,
+[data-wk-off~="otona"] .rtl-rel-spinoff,
+[data-wk-off~="tv"] .rtl-span,
+[data-wk-off~="movie"] .rtl-span,
+[data-wk-off~="otona"] .rtl-span,
+[data-wk-off~="tv"] .rtl-aff,
+[data-wk-off~="movie"] .rtl-aff,
+[data-wk-off~="otona"] .rtl-aff {
+  display: none;
+}
+/* 凡例も、切っている種類の項目と、細線の項目を隠す。 */
+[data-wk-off~="tv"] .rtl-legend li:has(> .rtl-key-tv),
+[data-wk-off~="movie"] .rtl-legend li:has(> .rtl-key-movie),
+[data-wk-off~="otona"] .rtl-legend li:has(> .rtl-key-spinoff),
+[data-wk-off~="tv"] .rtl-legend li:has(> .rtl-key-span),
+[data-wk-off~="movie"] .rtl-legend li:has(> .rtl-key-span),
+[data-wk-off~="otona"] .rtl-legend li:has(> .rtl-key-span) {
+  display: none;
+}
+[data-wk-only="otona"] .wk-timeline-otona .rtl-legend li:has(> .rtl-key-span) { display: inline-flex; }
+/* オトナシリーズの作品ごとの帯の線表（.wk-timeline-otona）は 🌙 だけを入れているとき（ルートの data-wk-only="otona"）に見せ、
+   そのあいだ年度の帯の線表（.wk-timeline-all）を隠す。作品ごとの帯の線表の中では、細線と所属線を隠さない。 */
+.wk-timeline-otona { display: none; }
+[data-wk-only="otona"] .wk-timeline-otona { display: block; }
+[data-wk-only="otona"] .wk-timeline-all { display: none; }
+[data-wk-only="otona"] .wk-timeline-otona .rtl-span,
+[data-wk-only="otona"] .wk-timeline-otona .rtl-aff { display: block; }
+/* ボタンは段の右に寄せる。入っている種類は枠と字を濃く、切っている種類は薄くして取り消し線。最後の 1 つは切れない。 */
+.wk-toggles {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin-left: auto;
 }
-.products-tabs:not([data-active-tab="timeline"]) .rtl-media { display: none; }
-.list-toolbar > .entity-filter + .rtl-media {
-  padding-left: 12px;
-  border-left: 1px solid var(--border);
+/* 段の右端は件数の並べ替えボタンで、出し分けのボタンはその左に少しあけて並べる。「プリキュアを演じた方のみ」が左にあるときは、その右に少しあける。 */
+.list-toolbar > .precure-only ~ .wk-toggles { margin-left: 14px; }
+.list-toolbar > .wk-toggles ~ .count-sort-btn { margin-left: 14px; }
+.wk-toggle {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 0.88em;
+  cursor: pointer;
+  text-decoration: line-through;
+  opacity: 0.7;
 }
-.products-tabs[data-active-tab="timeline"] .list-toolbar:has(> .rtl-media) { display: flex; }
-[data-media="tv"] .rtl-row:not([data-tv]):not(.rtl-row-group-head),
-[data-media="movie"] .rtl-row:not([data-movie]):not(.rtl-row-group-head),
-[data-media="tv"] .rtl-row-group-head:not([data-tv]):not([data-zone-tv]),
-[data-media="movie"] .rtl-row-group-head:not([data-movie]):not([data-zone-movie]),
-.creators-root[data-media="tv"]:not([data-entity-filter="all"]) .rtl-row-group-head:not([data-tv]),
-.creators-root[data-media="movie"]:not([data-entity-filter="all"]) .rtl-row-group-head:not([data-movie]) {
-  display: none;
+.wk-toggle.is-active {
+  text-decoration: none;
+  opacity: 1;
+  color: var(--fg);
+  border-color: var(--fg);
+}
+.wk-toggle.is-last { cursor: default; }
+.wk-toggle:hover:not(.is-active) { background: var(--surface-2, rgba(0, 0, 0, 0.04)); }
+.wk-toggle:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: 2px;
 }
 .rtl-row:hover .rtl-name-text,
 .rtl-name:focus-visible .rtl-name-text { text-decoration: underline; }
@@ -9031,14 +9413,20 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   flex: 1 1 auto;
   align-self: stretch;
 }
-/* 所属線：会社の所属としてクレジットされていた期間を、帯の下に細い線で引く（まとめた会社は実線、ほかの会社は点線）。 */
+/* 所属線：会社の所属としてクレジットされていた期間を、帯の下に細い線で引く（まとめた会社は実線、ほかの会社は点線）。
+   事業の引き継ぎでつながった会社の 2 つ目からは会社ごとの色（--aff-c）で引く。違う会社の線が同じ時期に重なるときは、
+   段（--aff-lane）ごとに 3px ずつ上げる。 */
 .rtl-aff {
   position: absolute;
-  bottom: 2px;
+  bottom: calc(2px + var(--aff-lane, 0) * 3px);
   height: 0;
-  border-top: 2px solid var(--rtl-aff);
+  border-top: 2px solid var(--aff-c, var(--rtl-aff));
 }
 .rtl-aff-other { border-top-style: dotted; }
+/* 系譜の会社の行の名前に、所属線と同じ色の下線を引く（名前の幅を食わないよう、見本は置かずに下線にする）。
+   凡例の見本（.rtl-key-aff）も同じ色の線。 */
+.rtl-name-aff { box-shadow: inset 0 -2px 0 var(--aff-c, var(--rtl-aff)); }
+.rtl-key-aff { width: 18px; height: 0; border-top: 2px solid var(--key-c, var(--rtl-aff)); }
 /* 続けて担当した期間（13 週以内の間隔でつながる担当の始まりから終わりまで）の細線。 */
 .rtl-span {
   position: absolute;
@@ -9059,10 +9447,10 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   background: var(--rtl-tv);
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.85);
 }
-/* 映画（公開日の点。重なっても読めるよう地の色の輪を付ける）。 */
+/* 映画（公開日の点。重なっても読めるよう地の色の輪を付ける。違う役職の丸と重なりそうなときは --dy で上下に 3px ずらす）。TV の話の帯と重なる時期がある行は、映画を別の段に置く（.rtl-lanes-*）。 */
 .rtl-movie {
   position: absolute;
-  top: 50%;
+  top: calc(50% + var(--dy, 0) * 3px);
   width: 9px;
   height: 9px;
   margin: -4.5px 0 0 -4.5px;
@@ -9108,7 +9496,7 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 /* 関連する役職の映画（白抜きの輪。主の役職の映画の点と形で分ける）。 */
 .rtl-rel-movie {
   position: absolute;
-  top: 50%;
+  top: calc(50% + var(--dy, 0) * 3px);
   width: 9px;
   height: 9px;
   margin: -4.5px 0 0 -4.5px;
@@ -9297,6 +9685,12 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   border-color: rgba(217, 145, 32, 0.36);
   color: var(--accent-amber, #b45309);
 }
+/* 大人向け（話）= 夜空の藍の淡い色味。人物・企業詳細で、大人向けシリーズの担当話数を 🌙 で TV と分けて出す。 */
+.count-pill-otona {
+  background: rgba(63, 74, 158, 0.10);
+  border-color: rgba(63, 74, 158, 0.34);
+  color: #3f4a9e;
+}
 /* 曲（楽曲担当数）= パープル寄りの淡い色味。歌系役職ページ（作詞 / 作曲 / 編曲 / 歌唱）の担当曲数に使う。 */
 .count-pill-song {
   background: rgba(126, 87, 194, 0.10);
@@ -9352,8 +9746,7 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .creators-root[data-active-tab="roles"] .entity-filter {
   display: none;
 }
-.entity-filter-btn,
-.rtl-media-btn {
+.entity-filter-btn {
   appearance: none;
   border: 1px solid var(--border);
   background: transparent;
@@ -9363,17 +9756,14 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   font-size: 0.88em;
   cursor: pointer;
 }
-.entity-filter-btn:hover:not(.is-active),
-.rtl-media-btn:hover:not(.is-active) {
+.entity-filter-btn:hover:not(.is-active) {
   background: var(--surface-2, rgba(0, 0, 0, 0.04));
 }
-.entity-filter-btn.is-active,
-.rtl-media-btn.is-active {
+.entity-filter-btn.is-active {
   color: var(--fg);
   border-color: var(--fg);
 }
-.entity-filter-btn:focus-visible,
-.rtl-media-btn:focus-visible {
+.entity-filter-btn:focus-visible {
   outline: 2px solid var(--accent-pink, #ec4899);
   outline-offset: 2px;
 }
@@ -9386,7 +9776,8 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .creators-root[data-entity-filter="singer"] [data-entity-type="unit"],
 .creators-root[data-entity-filter="character"] [data-entity-type="unit"],
 .creators-root[data-entity-filter="unit"] [data-entity-type="singer"],
-.creators-root[data-entity-filter="unit"] [data-entity-type="character"] {
+.creators-root[data-entity-filter="unit"] [data-entity-type="character"],
+.creators-root[data-entity-filter="precure-singer"] [data-entity-type]:not([data-precure-singer]) {
   display: none;
 }
 
@@ -9406,6 +9797,17 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 }
 .creators-series-heading a:hover {
   text-decoration: underline;
+}
+
+/* スタッフ一覧の役職順タブの「TVシリーズでクレジットされた役職」「映画でのみクレジットされた役職」の大きな区切り。
+   中の作品ごとの節（.creators-series-section の h3）より一段大きく見せる。 */
+.creators-role-group {
+  margin: 0 0 32px;
+}
+.creators-role-group-heading {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 20px 0 4px;
 }
 
 /* ホーム：誕生日対応の「今日の記念日」カード ＋ 「今月のカレンダー」。
@@ -9552,9 +9954,10 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   border-color: rgba(0, 0, 0, 0.16);
   font-weight: 600;
 }
+/* キーカラーの無いキャラの誕生日チップ。凡例（.cal-legend-bday）と誕生日ラベルのピンクにそろえる。 */
 .cal-chip-plain {
-  background: #f1f1f4;
-  color: #333;
+  background: #ffd9ec;
+  color: #9b2c66;
 }
 .cal-chip-movie {
   background: #fff2d6;
@@ -9771,7 +10174,14 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 }
 .article-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
 .article-body img { max-width: 100%; height: auto; border-radius: 6px; }
-.article-body table { border-collapse: collapse; margin: 1.2em 0; font-size: 0.92em; }
+/* 長い URL・英数字の続きが本文の幅からはみ出さないよう途中で折り返す。表のセルには掛けない
+   （掛けると表が縮んで、下の横スクロールにならない）。 */
+.article-body p, .article-body li, .article-body blockquote, .article-body figcaption { overflow-wrap: anywhere; }
+/* 表は本文の幅を超えたら表だけを横にスクロールさせ、ページをはみ出させない。 */
+.article-body table {
+  display: block; max-width: 100%; overflow-x: auto;
+  border-collapse: collapse; margin: 1.2em 0; font-size: 0.92em;
+}
 .article-body th, .article-body td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
 .article-body th { background: var(--th-bg); }
 /* 本文に埋め込む部品（precure.news の記事と同じ書き方で使える。news もこの CSS を読み込む）。
@@ -9789,7 +10199,54 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 /* 画像とキャプション。 */
 .article-body figure { margin: 0 0 1.2em; }
 .article-body figcaption { font-size: 0.85em; color: var(--muted); margin-top: 0.3em; }
-/* 記事の分類をリンクにしたときは下線を出さない。 */
+/* コラムの中の「囲み」（原稿の ::: study-note … ::: が div.study-note になる）。
+   プリキュアの話題を離れて、統計などの一般の知識を解説するところに使う。方眼紙の点を敷いた淡い青の地に、
+   最初の見出しを青い札にして枠の上辺に載せ、右上にきらめきを添える。 */
+.article-body .study-note {
+  position: relative;
+  margin: 2.6em 0 2em;
+  padding: 1.9em 1.4em 0.4em;
+  border: 1px solid rgba(51, 112, 170, 0.35);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle, rgba(51, 112, 170, 0.16) 1px, transparent 1.2px) 0 0 / 16px 16px,
+    #f5f9fd;
+  box-shadow: 0 3px 0 rgba(51, 112, 170, 0.12);
+}
+/* 札は流れの中に置き、上の余白を負の値で食わせて 1 行目の中心を枠の上辺に合わせる（1 行の札の高さ 2.02em の半分）。
+   題が長くて折り返すと札が下へ伸び、本文はその下から始まる。右上のきらめきに届かないよう幅を抑える。 */
+.article-body .study-note > :is(h3, h4):first-child {
+  position: relative;
+  width: fit-content; max-width: calc(100% - 4.7em);
+  margin: -2.91em 0 0.9em -0.3em;
+  padding: 0.3em 1.1em 0.32em 2.35em;
+  font-family: var(--font-accent-deco); font-size: 1em; font-weight: 700; line-height: 1.4;
+  color: #fff; background: var(--accent-blue); border-radius: 1.01em;
+  border-bottom: none;
+  box-shadow: 0 2px 0 rgba(51, 112, 170, 0.28);
+}
+/* 札の頭の ✦ は、折り返した 2 行目が下に回り込まないよう左の余白にぶら下げ、1 行目の字の中心に合わせる。 */
+.article-body .study-note > :is(h3, h4):first-child::before {
+  content: "✦";
+  position: absolute; left: 0.95em; top: 0.3em;
+  line-height: 1.4; color: var(--accent-yellow);
+}
+.article-body .study-note::after {
+  content: "✧ ✦ ✧";
+  position: absolute; top: 0.55em; right: 1em;
+  font-size: 0.85em; letter-spacing: 0.15em; color: var(--accent-yellow);
+}
+.article-body .study-note > :last-child { margin-bottom: 1em; }
+/* Markdown の脚注（Markdig が出す div.footnotes）。上の区切りはサイトの脚注（.footnotes）の点線だけにし、
+   Markdig が先頭に入れる hr は出さない。 */
+.article-body .footnotes > hr { display: none; }
+/* 脚注の番号は本文の参照（[1]）に合わせて「[1]」の形にし、番号の幅だけぶら下げる。 */
+.article-body .footnotes ol { list-style: none; padding-left: 0; counter-reset: article-fn; }
+.article-body .footnotes li { position: relative; padding-left: 2.6em; counter-increment: article-fn; }
+.article-body .footnotes li::before {
+  content: "[" counter(article-fn) "]";
+  position: absolute; left: 0; font-family: var(--font-num);
+}/* 記事の分類をリンクにしたときは下線を出さない。 */
 a.article-tag { text-decoration: none; }
 
 /* ホームの「データ充足率」暫定表記（赤字）。BuildLabel 直下に小さく出す。追いついたら除去する。 */
@@ -9874,7 +10331,7 @@ a.article-tag { text-decoration: none; }
    同じカレンダーがサイト内で 2 通りの見え方をしないようにする。チップの中身も同じで、
    件数ではなく作品名・話数・キャラ名・氏名を載せる。相違は 3 点：
      - 日番号が日付ページへのリンク（ホームは当月なので日番号にリンクを持たない）
-     - 12 か月ぶんを縦に積むのでチップ数に上限を設け、溢れた分は「ほか n件」へ畳む
+     - カレンダーのページなので、その日の出来事は省かずに全部載せる（セルの高さは日ごとに違ってよい）
      - 升目の配列はビルド年で組み、閲覧年がずれていれば anniversary-calendar.js が
        閲覧年の配列へ組み替える（1 日の列位置・土日の色・平年 2/29 の畳み込み）
    狭い幅ではホームと同じく 1 列の日付リストへ倒す。DOM は 1 つのまま CSS だけで切り替える。 */
@@ -9940,12 +10397,6 @@ a.cal-leap-label:focus-visible {
 .anniv-cell-empty .cal-daynum {
   color: var(--muted);
   font-weight: 400;
-}
-/* 溢れた件数への導線。中身を語れないチップなので彩度を持たせず、地の色で控えめに置く。 */
-.cal-chip-more {
-  background: transparent;
-  color: var(--muted);
-  border-color: var(--border);
 }
 /* 索引冒頭の凡例。チップ実物を並べて色と種別の対応を示す。 */
 .anniv-legend {
@@ -10030,20 +10481,10 @@ a.cal-leap-label:focus-visible {
   }
 }
 
-/* 記念日カレンダー索引への動線（ホームの当月カレンダー直下）。 */
+/* 記念日カレンダー索引への動線（ホームの当月カレンダー直下）。見た目は汎用のピンクのピル（.button-link）で、ここでは置き場所だけ決める。 */
 .home-calendar-more {
-  margin: 4px 0 24px;
+  margin: 8px 0 28px;
   text-align: center;
-}
-.home-calendar-more a {
-  color: var(--muted);
-  text-decoration: none;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 2px;
-}
-.home-calendar-more a:hover {
-  color: var(--accent-pink);
-  border-bottom-color: var(--accent-pink);
 }
 
 /* クレジット履歴カード内の担当話内訳（担当話数が少ない行にだけ出る）。
@@ -10661,7 +11102,7 @@ body.has-art-track-bar {
   margin-left: auto;
 }
 /* 並べ替えボタンだけの段で、ボタンが隠れているタブ（初参加順など）では段ごと詰める。 */
-.list-toolbar:not(:has(> .entity-filter, > .sort-toggle, > .precure-only, > .count-sort-btn:not([hidden]))) {
+.list-toolbar:not(:has(> .entity-filter, > .sort-toggle, > .precure-only, > .wk-toggles, > .count-sort-btn:not([hidden]))) {
   display: none;
 }
 /* 歴代プリキュア声優の「プリキュアを演じた方のみ」（全タブに効くスイッチ）。入れるとページのルートの data-precure-only で、
@@ -10773,7 +11214,8 @@ body.has-art-track-bar {
 }
 
 /* ──────── 引用ボックス（_cite-box.sbn） ────────
-   シェアボタンの直下に置く「このページを引用する」。シェアカードと同じ角丸の箱で、色は控えめなグレー。
+   シェアボタンの直下に置く「このページを引用する」。既定で閉じていて、シェアボタンの並びの「引用」で開く。
+   シェアカードと同じ角丸の箱で、色は控えめなグレー。
    引用文は <pre> だが折り返して読める幅に収める（URL は overflow-wrap で途中改行を許す）。 */
 .cite-box {
   margin: 0 0 1.2em;
@@ -10781,23 +11223,6 @@ body.has-art-track-bar {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   background: #fafafa;
-}
-.cite-box-heading {
-  display: flex;
-  align-items: center;
-  gap: 0.45em;
-  font-size: 0.95em;
-  font-weight: 600;
-  color: #374151;
-  margin: 0 0 0.6em;
-  padding: 0;
-  border: 0;
-  letter-spacing: 0.04em;
-}
-.cite-box-heading svg {
-  width: 1.05em;
-  height: 1.05em;
-  flex: none;
 }
 .cite-box-lead {
   margin: 0 0 0.7em;
@@ -10887,7 +11312,7 @@ body.has-art-track-bar {
    #staff は flex（セットを横に並べる）なので、開閉の枠は全幅の子にして下に回す。
    閉じた状態は 1 組 1 かたまり（小さな札 × 札・「N 回目」）を区切り線で横に流し、右端に「くわしく」。
    開くとかたまりは隠れ、「閉じる」の行の左に数え方の断り、その下に組み合わせごとのカード。 */
-#staff .staff-combos {
+#staff.episode-staff .staff-combos {
   flex-basis: 100%;
   /* スマホ幅で #staff が縦並び・左寄せ（align-items: flex-start）になっても、枠は全幅に伸ばす。 */
   align-self: stretch;
@@ -10912,8 +11337,17 @@ body.has-art-track-bar {
   outline: 2px solid var(--accent-purple);
   outline-offset: 2px;
 }
-.staff-combo-minis {
+/* 閉じた状態のかたまりの行：上が役職ごと・人ごと、下が組み合わせ。 */
+.staff-combo-mini-rows {
   flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.staff-combos[open] .staff-combo-mini-rows {
+  display: none;
+}
+.staff-combo-minis {
   min-width: 0;
   display: flex;
   flex-wrap: wrap;
@@ -10921,9 +11355,6 @@ body.has-art-track-bar {
   margin: 0;
   padding: 0;
   list-style: none;
-}
-.staff-combos[open] .staff-combo-minis {
-  display: none;
 }
 .staff-combo-mini {
   display: inline-flex;
@@ -10966,24 +11397,31 @@ body.has-art-track-bar {
   font-size: 0.7em;
   margin: 0 1px;
 }
-.staff-combo-solo {
-  color: var(--muted);
-  font-size: 0.72em;
-  margin-left: 3px;
-}
 .staff-combo-count {
   font-size: 0.85em;
   color: var(--muted);
 }
+/* 回数・連続・空きは、特筆すべきもの（節目の回数・連続担当・26 週以上の空き。is-notable）だけピンク、ほかは本文の色。 */
 .staff-combo-count b {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
-  color: var(--accent-pink);
+  color: var(--fg);
   font-size: 1.15em;
+}
+.staff-combo-count.is-notable b {
+  color: var(--accent-pink);
 }
 .staff-combo-first {
   font-size: 0.78em;
   font-weight: 700;
+  color: var(--accent-pink);
+}
+.staff-combo-mini-gap {
+  font-size: 0.78em;
+  font-weight: 700;
+  color: var(--fg);
+}
+.staff-combo-mini-gap.is-notable {
   color: var(--accent-pink);
 }
 /* 数え方の断りは開いたときだけ、「閉じる」の行の左に出す（「閉じる」1 語だけの空いた行にしない）。 */
@@ -11065,7 +11503,7 @@ body.has-art-track-bar {
 .staff-combo-roles .staff-combo-x {
   font-size: 0.8em;
 }
-/* 通算：1 行で「11 回中 9 回目」。数字だけ等幅で大きくピンク、ほかは小さく、ベースラインをそろえる。 */
+/* 通算：1 行で「11 回中 9 回目」。数字だけ等幅で大きく（節目の回数だけピンク）、ほかは小さく、ベースラインをそろえる。 */
 .staff-combo-ordinal {
   display: inline-flex;
   align-items: baseline;
@@ -11083,8 +11521,11 @@ body.has-art-track-bar {
   font-variant-numeric: tabular-nums;
   font-size: 1.75em;
   font-weight: 700;
-  color: var(--accent-pink);
+  color: var(--fg);
   letter-spacing: -0.02em;
+}
+.staff-combo-ordinal.is-notable b {
+  color: var(--accent-pink);
 }
 .staff-combo-unit {
   font-size: 0.78em;
@@ -11095,10 +11536,19 @@ body.has-art-track-bar {
   font-weight: 700;
   color: var(--accent-pink);
 }
+/* 顔ぶれの行。役職ごとのカードは右端に連続担当（「3話連続」）か前の回からの空き（「1年10か月ぶり」）を添え、収まらなければ次の行の右端に回す。 */
 .staff-combo-names {
   margin: -2px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 8px;
   font-weight: 600;
   font-size: 0.95em;
+}
+.staff-combo-people {
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 .staff-combo-names .staff-combo-x {
@@ -11106,10 +11556,15 @@ body.has-art-track-bar {
   font-weight: 400;
   margin: 0 4px;
 }
-.staff-combo-both {
-  color: var(--muted);
-  font-weight: 400;
-  font-size: 0.88em;
+.staff-combo-gap {
+  margin-left: auto;
+  font-size: 0.85em;
+  font-weight: 700;
+  color: var(--fg);
+  white-space: nowrap;
+}
+.staff-combo-gap.is-notable {
+  color: var(--accent-pink);
 }
 
 /* 放送順の玉の列。等間隔に並べ、年が変わる玉の下に年を出す。今回だけ大きくピンク、前は塗り、後は白抜き。
@@ -11263,142 +11718,213 @@ a.staff-combo-nav-card:hover {
 }
 
 /* ──────── 歴代記録（/stats/records/） ────────
-   分類ごとに記録カードをグリッドで並べる。カードは順位・名前（＋添え書き）・値の 3 列。 */
-.records-grid {
+   記録 1 項目が 1 つの枠（.rec）。見出しの帯の下に中身を置く。
+   本編の尺は、対の記録（長い回と短い回、早い回と遅い回）を 1 つの枠の左右に並べ、1 位を大きい数字で、
+   2 位・3 位を小さい行で出す。左（長い・早い）はピンク、右（短い・遅い）は青で見分ける。
+   スタッフ・声優とキャラクターは 2 列に並べ、数を 1 位に対する棒の長さで比べる。 */
+.rec-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-  gap: 1em;
-  margin: 0.8em 0 1.4em;
+  gap: 1.1em;
+  margin: 0.9em 0 1.6em;
 }
-.records-card {
+.rec-grid {
+  display: grid;
+  /* 本文の幅（960px）で 2 列。狭い画面では 1 列で全幅。 */
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+  gap: 1.1em;
+  margin: 0.9em 0 1.6em;
+}
+.rec {
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 0.9em 1em 1em;
+  border-radius: 14px;
   background: #fff;
+  overflow: hidden;
 }
-.records-card-title {
-  margin: 0 0 0.6em;
-  padding: 0;
-  border: 0;
-  font-size: 1em;
-  font-weight: 600;
-}
-.records-entries {
-  list-style: none;
+.rec-title {
   margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.45em;
-}
-.records-entry {
-  display: grid;
-  grid-template-columns: 1.8em minmax(0, 1fr) auto;
-  gap: 0.5em;
-  align-items: baseline;
-}
-.records-rank {
-  font-family: var(--font-num);
+  padding: 0.55em 1.1em;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--th-bg);
+  font-size: 1em;
   font-weight: 700;
-  color: var(--accent);
-  text-align: center;
 }
-.records-entry:first-child .records-rank {
+.rec-title::before {
+  /* 帯が区切りを担うので、グローバルの h3::before（左の青丸マーカー）は出さない。 */
+  content: none;
+}
+.rec-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.rec-side {
+  --rec-color: var(--accent-pink);
+  min-width: 0;
+  padding: 1em 1.1em 0.9em;
+  display: flex;
+  flex-direction: column;
+}
+.rec-side-low {
+  --rec-color: var(--accent-blue);
+  border-left: 1px solid var(--border);
+}
+@media (max-width: 640px) {
+  .rec-sides {
+    grid-template-columns: 1fr;
+  }
+  .rec-side-low {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+/* 「長い回」「短い回」の札。 */
+.rec-kind {
+  align-self: flex-start;
+  margin: 0 0 0.7em;
+  padding: 0.05em 0.9em;
+  border-radius: 999px;
+  background: var(--rec-color);
+  color: #fff;
+  font-size: 0.8em;
+  font-weight: 700;
+}
+/* 1 位：2 位・3 位と同じ 3 列（順位・名前・値）で、名前を太く、値を大きい数字にする。値はどの行も右端にそろう。 */
+.rec-top {
+  display: grid;
+  grid-template-columns: 1.3em minmax(0, 1fr) auto;
+  column-gap: 0.5em;
+  align-items: center;
+}
+.rec-top .rec-rank {
   font-size: 1.15em;
+  color: var(--rec-color);
 }
-.records-body {
+.rec-top + .rec-top {
+  margin-top: 0.6em;
+}
+.rec-top-value {
+  font-family: var(--font-num);
+  font-size: 2em;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--rec-color);
+  white-space: nowrap;
+}
+.rec-top-body {
   min-width: 0;
 }
-.records-name {
+.rec-top-name {
+  display: block;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.rec-sub {
+  display: block;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.rec-unit {
+  margin-left: 0.15em;
+  font-family: var(--font-base);
+  font-size: 0.6em;
+  font-weight: 400;
+  color: var(--muted);
+}
+/* 2 位・3 位：順位・名前（＋添え書き）・値の 3 列。 */
+.rec-rest {
+  list-style: none;
+  margin: 0.9em 0 0;
+  padding: 0.7em 0 0;
+  border-top: 1px dashed var(--border);
+  display: grid;
+  gap: 0.45em;
+  font-size: 0.92em;
+}
+.rec-rest li {
+  display: grid;
+  grid-template-columns: 1.4em minmax(0, 1fr) auto;
+  column-gap: 0.5em;
+  align-items: baseline;
+}
+.rec-rank {
+  font-family: var(--font-num);
+  font-weight: 700;
+  color: var(--muted);
+  text-align: center;
+}
+.rec-body {
+  min-width: 0;
+}
+.rec-name {
   display: block;
   overflow-wrap: anywhere;
 }
-.records-sub {
-  display: block;
-  font-size: 0.85em;
-  color: var(--muted);
-}
-.records-role {
-  font-size: 0.85em;
-  color: var(--muted);
-}
-.records-value {
+.rec-value {
   font-family: var(--font-num);
   font-weight: 600;
   white-space: nowrap;
 }
-.records-empty {
+/* 数を棒で比べる記録（スタッフ・声優、キャラクター）。棒は 1 位を枠いっぱいにした長さ。 */
+.rec-bars {
+  list-style: none;
   margin: 0;
+  padding: 1em 1.1em 0.2em;
+  display: grid;
+  gap: 0.7em;
+}
+.rec-bars li {
+  display: grid;
+  grid-template-columns: 1.4em minmax(0, 1fr) auto;
+  column-gap: 0.5em;
+  row-gap: 0.25em;
+  align-items: baseline;
+}
+.rec-bars .rec-value {
+  font-size: 1.05em;
+  font-weight: 700;
+}
+.rec-bars .is-top .rec-rank {
+  color: var(--accent-pink);
+}
+.rec-bars .is-top .rec-name {
+  font-size: 1.1em;
+  font-weight: 600;
+}
+.rec-bars .is-top .rec-value {
+  font-size: 1.5em;
+  line-height: 1.1;
+  color: var(--accent-pink);
+}
+.rec-bar {
+  grid-column: 2 / -1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--th-bg);
+  overflow: hidden;
+}
+.rec-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent-pink);
+  opacity: 0.45;
+}
+.rec-bars .is-top .rec-bar > span {
+  opacity: 1;
+}
+.rec-empty {
+  margin: 0;
+  padding: 1em 1.1em 0;
   font-size: 0.9em;
 }
-.records-more {
-  margin: 0.7em 0 0;
+.rec-more {
+  margin: auto 0 0;
+  padding-top: 0.8em;
   font-size: 0.88em;
   text-align: right;
 }
-
-/* ──────── 本放送・配信・円盤の尺の違い（/stats/records/format-differences/） ──────── */
-.fmtdiff-count {
-  font-size: 0.7em;
-  font-weight: 400;
-  margin-left: 0.6em;
-}
-.fmtdiff-series {
-  margin: 1.4em 0 0.5em;
-  font-size: 1.02em;
-}
-.fmtdiff-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.6em;
-}
-.fmtdiff-row {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.6em 0.9em;
-}
-.fmtdiff-ep {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3em 0.6em;
-  align-items: baseline;
-  margin-bottom: 0.35em;
-}
-.fmtdiff-date {
-  font-size: 0.85em;
-}
-.fmtdiff-parts {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.25em;
-  font-size: 0.9em;
-}
-.fmtdiff-parts li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3em 1em;
-  align-items: center;
-}
-.fmtdiff-part {
-  font-weight: 600;
-  min-width: 6em;
-}
-.fmtdiff-src b {
-  font-family: var(--font-num);
-  font-weight: 600;
-}
-.fmtdiff-src i {
-  font-style: normal;
-  font-family: var(--font-num);
-  color: var(--accent);
-}
-.fmtdiff-note {
-  flex-basis: 100%;
-  color: var(--muted);
-  font-size: 0.92em;
+.rec > .rec-more {
+  padding: 0.6em 1.1em 0.8em;
 }
 
 /* ──────── ホームの商品・書籍カードの状態バッジとカウントダウン ────────
@@ -11407,4 +11933,299 @@ a.staff-combo-nav-card:hover {
 .home-product-card-badge:empty,
 .home-product-card-countdown:empty {
   display: none;
+}
+
+/* ──────── 人物詳細・企業/団体詳細の年表（基本情報の下の開閉の枠） ────────
+   閉じた状態は「年表」・参加の期間と行の数・すべての参加を 1 本にまとめた細い帯・「くわしく」を 1 行に並べる
+   （狭い画面では帯を下の行に回す）。開くと帯を隠し、役職・役柄ごとの線表（.role-timeline）を枠の中に出す。 */
+.credit-timeline {
+  margin: 1.2em 0 1.6em;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+.credit-timeline > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 0.55em 0.8em;
+  border-radius: 10px;
+}
+.credit-timeline > summary::-webkit-details-marker {
+  display: none;
+}
+.credit-timeline > summary:focus-visible {
+  outline: 2px solid var(--accent-purple);
+  outline-offset: 2px;
+}
+.ctl-label {
+  font-weight: 700;
+}
+.ctl-meta {
+  font-size: 0.85em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* 閉じた状態の帯。線表の印（.rtl-seg など）をそのまま使い、軸も開いたときの線表と同じ（参加のある期間だけ）。 */
+.ctl-mini.role-timeline {
+  flex: 1 1 12em;
+  min-width: 8em;
+  margin: 0;
+}
+.ctl-mini-track {
+  position: relative;
+  display: block;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 3px;
+}
+.ctl-mini-track > .rtl-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.ctl-mini-track .rtl-seg {
+  height: 8px;
+  margin-top: -4px;
+}
+.credit-timeline[open] .ctl-mini {
+  display: none;
+}
+.ctl-toggle {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 0.8em;
+  color: var(--muted);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.ctl-toggle::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+}
+.credit-timeline[open] .ctl-toggle::after {
+  transform: rotate(-135deg) translate(-1px, -1px);
+}
+.credit-timeline > summary:hover .ctl-toggle {
+  color: var(--accent-pink);
+}
+.credit-timeline .is-open-label,
+.credit-timeline[open] .is-closed-label {
+  display: none;
+}
+.credit-timeline[open] .is-open-label {
+  display: inline;
+}
+.ctl-body {
+  padding: 0 0.8em 0.4em;
+}
+.ctl-body .role-timeline {
+  margin-bottom: 0.6em;
+}
+@media (max-width: 640px) {
+  .ctl-mini.role-timeline {
+    order: 3;
+    flex-basis: 100%;
+  }
+}
+/* 参加のある期間だけの軸の切れ目（参加の無い期間を詰めた所）。帯の段は斜線の地、目盛りの段は「≈」。 */
+.rtl-gap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(135deg, #fff 0 3px, #e3e5ea 3px 4px);
+  border-left: 1px solid var(--rtl-grid);
+  border-right: 1px solid var(--rtl-grid);
+}
+.rtl-gap-mark {
+  position: absolute;
+  bottom: 4px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--muted);
+}
+/* 人物・企業/団体詳細の年表で、スピンオフの話の帯と凡例の見本（記念日カレンダーの 🌙 と同じ藍）。 */
+.rtl-seg-spinoff { background: #3f4a9e; }
+.rtl-key-spinoff { width: 18px; height: 10px; border-radius: 3px; background: #3f4a9e; }
+/* 段を分けた行（本線とスピンオフの両方がある行・映画が TV の話の帯と重なる時期がある行）。段は上から本線、映画、スピンオフ。
+   名前は行の真ん中のまま。段の中の印は、これまでどおり段の上下の真ん中（top: 50%）に置く。 */
+.rtl-lanes-2 { height: 40px; }
+.rtl-lanes-3 { height: 54px; }
+.rtl-lane { position: absolute; left: 0; right: 0; top: 0; height: 50%; }
+.rtl-lanes-2 .rtl-lane:nth-of-type(2) { top: 50%; }
+.rtl-lanes-3 .rtl-lane { height: 33.333%; }
+.rtl-lanes-3 .rtl-lane:nth-of-type(2) { top: 33.333%; }
+.rtl-lanes-3 .rtl-lane:nth-of-type(3) { top: 66.667%; }
+/* 人物・企業/団体詳細の年表の役職の行の印（札）。役柄の行はキャラクターの星（.rtl-badge-character）。 */
+.rtl-badge-role { background: rgba(59, 130, 196, 0.12); color: #2563a8; }
+
+/* 販売中の商品の枠（作品詳細・各話の詳細・トップページ）。中身は shop-box.js が描く。
+   商品 1 つが横長の 1 行で、行を縦に並べる（件数が変わっても高さと位置がそろう）。
+   行は左から「画像の場所／札と状態・商品名／商品詳細へのリンクと Amazon へのボタン」。行全体が Amazon へのリンク。 */
+.shop-box {
+  margin: 20px 0;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fffdf8;
+}
+.shop-box[hidden] {
+  display: none;
+}
+.shop-box-heading {
+  margin: 0 0 10px;
+  font-family: var(--font-brand);
+  font-size: 1.02em;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+.shop-box-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.shop-box-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  transition: box-shadow 0.15s ease;
+}
+.shop-box-item:hover {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+/* 行全体に重ねる透明なリンク（Amazon へ）。中の商品詳細へのリンクだけ、この上に出す。 */
+.shop-box-link {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+}
+/* 画像の場所は、画像がまだ無い商品でも同じ大きさで取る。画像は切らずに全体を見せる
+   （Blu-ray のケースは縦長、CD は正方形）。 */
+.shop-box-thumb {
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #fef3f7 0%, #fff8ec 100%);
+}
+.shop-box-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+/* 左の列に「札と状態」「商品名」を 2 段で、右の列にリンクとボタンを置く。 */
+.shop-box-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "meta  foot"
+    "title foot";
+  align-items: center;
+  column-gap: 14px;
+  row-gap: 2px;
+}
+.shop-box-meta {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78em;
+  line-height: 1.5;
+}
+.shop-box-media {
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+}
+.shop-box-status {
+  color: var(--accent);
+  font-weight: 700;
+  font-feature-settings: "palt";
+}
+/* 商品名は 1 行。入りきらない分は省く（全文はリンクの読み上げ用の名前に入っている）。 */
+.shop-box-title {
+  grid-area: title;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.95em;
+  font-weight: 600;
+  line-height: 1.5;
+  font-feature-settings: "palt";
+}
+/* ボタンを右端に置く（商品詳細へのリンクがある行も無い行も、ボタンの位置が縦にそろう）。 */
+.shop-box-foot {
+  grid-area: foot;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 12px;
+}
+.shop-box-cta {
+  padding: 5px 12px;
+  border-radius: 4px;
+  background: #ff9900;
+  color: #111;
+  font-size: 0.82em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.shop-box-detail {
+  position: relative;
+  font-size: 0.8em;
+  white-space: nowrap;
+}
+.shop-box-note {
+  margin-top: 8px;
+}
+/* 狭い画面では、商品名を 2 行まで出し、リンクとボタンを商品名の下の段に置く。 */
+@media (max-width: 640px) {
+  .shop-box-item {
+    align-items: flex-start;
+  }
+  .shop-box-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "meta"
+      "title"
+      "foot";
+    row-gap: 4px;
+  }
+  .shop-box-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+  }
+  .shop-box-foot {
+    flex-direction: row;
+  }
 }

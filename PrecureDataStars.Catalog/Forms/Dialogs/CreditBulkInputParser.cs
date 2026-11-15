@@ -14,6 +14,13 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///   <item><description>空行 → 同一役職内のブロック区切り</description></item>
 ///   <item><description><c>[XXX]</c>（行全体）→ COMPANY エントリ（位置に関係なく常に COMPANY 扱い）</description></item>
 ///   <item><description><c>[[XXX]]</c>（行全体）→ グループトップ屋号（<c>leading_company_alias_id</c>）。ブロックの最初の有意行でのみ許可、それ以外は Block 警告</description></item>
+///   <item><description><c>[[XXX]]間の字[[YYY]]後ろの字</c>（行全体）→ 2 社の連名の筆頭（2 社目 <c>leading_company2_alias_id</c>・
+///     間の字 <c>leading_company_separator</c>・後ろの字 <c>leading_company_suffix</c>）。
+///     「スタジオトゥインクル/AMGA 撮影班」は <c>[[スタジオトゥインクル]]/[[AMGA]] 撮影班</c>。
+///     2 社目なしで後ろの字だけなら <c>[[XXX]]後ろの字</c>（<c>[[AMGA]] 撮影班</c>）。後ろの字の先頭の空白は画面の表記として残す</description></item>
+///   <item><description><c>@leading_text=文字</c>（<c>[[XXX]]</c> と同じ位置の単独行）→ 会社のデータを作らない文字だけの筆頭の団体
+///     （<c>leading_text</c>。「いこーよ・アンバサダーのみなさん」など）。表示は <c>[[XXX]]</c> と同じく下の名前を字下げする。
+///     同じブロックに <c>[[XXX]]</c> とは書けない</description></item>
 ///   <item><description>タブ区切り行 → エントリ群（タブ最大数+1 = col_count）</description></item>
 ///   <item><description><c>&lt;キャラ名義&gt;声優名義</c>（VOICE_CAST 役職内）→ CHARACTER_VOICE</description></item>
 ///   <item><description><c>&lt;*キャラ名義&gt;声優名義</c>（VOICE_CAST 役職内）→ 強制新規キャラ</description></item>
@@ -35,11 +42,31 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     （<c>parallel_prefix</c> / <c>parallel_suffix</c>）と小さい字で描く指定（<c>parallel_small</c>）。
 ///     後ろの字と <c>small</c> は省略可。例: <c>&amp;{／} &lt;クマタ&gt;声優</c>（ダークマター／クマタ）、
 ///     <c>&amp;{（|）|small} &lt;キュアエール&gt;声優</c>（野乃はな（キュアエール））。</description></item>
+///   <item><description>エントリ行頭の <c>^{役名の形|声優の形} </c> プレフィクス（CHARACTER_VOICE のみ）→ 直前の行と同じ役名・同じ声優が続く行で、
+///     その名前をどう出すか（<c>same_character_layout</c> / <c>same_person_layout</c>）。各欄は <c>REPEAT</c>（毎行書く）/
+///     <c>TOP</c>（上の行に 1 回）/ <c>MIDDLE</c>（真ん中に 1 回）/ 空（直前の行の続きではない）。2 つ目の欄と <c>|</c> は省略可。
+///     ひと続きの 2 行目以降に付ける。例: <c>^{TOP} &lt;生徒&gt;山田</c>、<c>^{|MIDDLE} &lt;天宮いくと&gt;依田 菜津</c>。</description></item>
+///   <item><description>エントリ行頭の <c>~{ユニット名#p&lt;alias_id&gt;} </c> プレフィクス（CHARACTER_VOICE のみ）→ 役名の後ろに小さいカッコで出す
+///     キャラのユニットの名義（<c>character_unit_alias_id</c>）。ユニットは名義 ID で直に指し、ユニット名は人が読むための添え書き。
+///     例: <c>~{サファリア#p9001} &lt;ヤギ&gt;松井 暁波</c>（ヤギ（サファリア））。</description></item>
+///   <item><description>役名の中の <c>\n</c>（バックスラッシュと n）→ 画面の改行。名義の名前からは抜き、改行入りの役名を
+///     <c>character_display_text</c> に持つ。例: <c>&lt;てんびん座の\nプリンセス&gt;MAKO</c>（役名が画面で 2 行に折れているとき）。</description></item>
+///   <item><description>役名の <c>名義|画面の役名</c> → 画面の役名が名義の頭を省いた後ろの部分だけのとき（双子の姓の省略など）。
+///     名義は <c>|</c> の左側で引き当て、右側を <c>character_display_text</c> に持つ。例: <c>&lt;菓彩みつき|みつき&gt;宮田 俊哉</c>。</description></item>
+///   <item><description>人物名・声優名の <c>名義|画面の表記</c> → 画面に出た人物名の表記揺れ。名義は <c>|</c> の左側で引き当て、
+///     右側（名義と空白・中黒・記号の有無や位置だけが違う画面の表記）を <c>person_display_text</c> に持つ。誤記の <c>×</c> とは別。
+///     例: <c>ロメオ・アンニョンヌエボJr.|ロメオ・アンニョンヌエボ Jr.</c>。</description></item>
+///   <item><description>企業の <c>[屋号|画面の表記]</c> / <c>[屋号#alias_id|画面の表記]</c> → 画面に出た企業名の表記揺れ。屋号は <c>|</c> の左側で引き当て、
+///     右側（屋号と空白・中黒・記号の有無や位置だけが違う画面の表記）を <c>company_display_text</c> に持つ。誤記の <c>×</c>（<c>]</c> の外）とは別。
+///     COMPANY のエントリだけで使え、LOGO（<c>[屋号#CIバージョン]</c>）には付けられない。例: <c>[BUG FILMS|BUGFILMS]</c>。</description></item>
 ///   <item><description><c>@cols=N</c>（ブロック先頭の単独行）→ そのブロックの <c>col_count</c> を明示指定。
 ///     省略時は従来どおりタブ数+1 で推測。</description></item>
 ///   <item><description><c>@blank</c>（セル全体）→ 空きの升（<c>entry_kind = BLANK</c>）。複数列のブロックで、画面の並びの途中に
 ///     何も書かれていない升の位置を埋めて、後ろのエントリの列をそろえる（例: <c>@blank&lt;TAB&gt;山田 太郎</c>）。
 ///     タブの間を空けただけのセルは従来どおり読み飛ばす。行頭のセルが <c>@blank</c> の行はディレクティブ行ではなくエントリ行として読む。</description></item>
+///   <item><description><c>@continues_previous</c>（ブロック区切りの後、最初のエントリより前の単独行）→ そのブロックは前のブロックの続き
+///     （<c>continues_previous</c>）。画面では空行なしで続くのに途中の行だけ升の数が違うとき、その行を別のブロックにして付ける。
+///     表示はブロックの間の空きを入れない。役職の最初のブロックには付けられない。</description></item>
 ///   <item><description><c>@heading=文字</c> / <c>@heading_series=N</c>（ブロックの最初のエントリより前の単独行）→
 ///     そのブロックの先頭に出す見出し。<c>@heading_series=N</c> は作品（<c>series_id</c>）を指し、
 ///     <c>@heading=文字</c> は画面どおりの見出しの文字（作品の正式タイトルと表記が違うとき、または「特別出演」など作品ではない見出し）。</description></item>
@@ -98,16 +125,22 @@ public static class CreditBulkInputParser
     // 1 つ目の # の右側が非純数値（CI バージョン）の場合、aliasid グループはマッチせず ci のみが取れる。
     // 末尾の "×誤記" / "✕誤記" 後置はクレジット時の屋号誤記を記録する任意キャプチャ（misprint グループ）。
     // CI バージョン側に対しては誤記を許可しない（CI バージョン違いは別 logos 行で表現するため）。
+    // 閉じ括弧の直前の "|画面の表記"（任意、display グループ）は画面に出た企業名の表記揺れ（company_display_text）。
+    // 屋号・CI バージョンには | を含めない。
     // 単一ブラケット [XXX] と LOGO [XXX#YYY] を同じ正規表現で受け止める統合形に整理（過去は別正規表現で
     // 2 段判定していたが、alias_id 明示記法の追加で分岐が複雑化したため統合）。
     private static readonly Regex BracketEntryRegex = new(
-        @"^\[(?<name>[^\[\]#]+)(?:#(?<aliasid>\d+))?(?:#(?<ci>[^#\[\]]+))?\](?:[×✕]\s*(?<misprint>.+))?$",
+        @"^\[(?<name>[^\[\]#|]+)(?:#(?<aliasid>\d+))?(?:#(?<ci>[^#\[\]|]+))?(?:\|(?<display>[^\[\]]*))?\](?:[×✕]\s*(?<misprint>.+))?$",
         RegexOptions.Compiled);
 
     // 行全体が [[XXX]] のパターン。グループトップ屋号 (leading_company_alias_id) を
     // 明示するための専用構文。ブロック内最初の有意行でのみ許可される。
     // 単一ブラケット [XXX] とは構文上完全に区別されるため、誤読の心配なく両方を併用できる。
-    private static readonly Regex LeadingCompanyBracketRegex = new(@"^\[\[(?<name>[^\[\]]+)\]\]$", RegexOptions.Compiled);
+    // 2 社の連名は [[XXX]]間の字[[YYY]]後ろの字、1 社に後ろの字だけ付くときは [[XXX]]後ろの字。
+    // 間の字・後ろの字には角括弧とタブを含めない（間の字は空でもよい）。
+    private static readonly Regex LeadingCompanyBracketRegex = new(
+        @"^\[\[(?<name>[^\[\]]+)\]\](?:(?<sep>[^\[\]\t]*?)\[\[(?<name2>[^\[\]]+)\]\])?(?<suffix>[^\[\]\t]*)$",
+        RegexOptions.Compiled);
 
     // VOICE_CAST 構文: <キャラ>声優 / <*キャラ>声優 / <キャラ#aliasid>声優 / <*キャラ#aliasid>声優
     // - aster: 先頭の * フラグ（強制新規キャラ、モブ用途）
@@ -157,6 +190,10 @@ public static class CreditBulkInputParser
     // ディレクティブ行: @not_on_screen。直前の役職の行は画面にはクレジットされていない（credit_card_roles.not_on_screen）。
     private static readonly Regex NotOnScreenDirectiveRegex = new(@"^@not_on_screen$", RegexOptions.Compiled);
 
+    // ディレクティブ行: @label_not_on_screen。直前の役職の行は、名前は画面に出ているが役職名だけが画面に無い
+    // （credit_card_roles.role_label_not_on_screen）。@not_on_screen とは同じ役職に両方書けない。
+    private static readonly Regex LabelNotOnScreenDirectiveRegex = new(@"^@label_not_on_screen$", RegexOptions.Compiled);
+
     // ディレクティブ行: @theme_song_seq=N / @theme_song_seq=N-M。直前の役職の行で主題歌ループが出す曲を劇中順の範囲で絞る
     // （credit_card_roles.theme_song_seq）。値の形（半角数字の N か N-M）は ThemeSongSeqValueRegex で確かめる。
     private static readonly Regex ThemeSongSeqDirectiveRegex = new(@"^@theme_song_seq=(?<value>.*)$", RegexOptions.Compiled);
@@ -165,6 +202,10 @@ public static class CreditBulkInputParser
     // ディレクティブ行: @leading_not_on_screen。直前の筆頭の会社 [[XXX]] は画面にはクレジットされていない
     // （credit_role_blocks.leading_company_not_on_screen）。[[XXX]] の行のすぐ後、エントリより前に書く。
     private static readonly Regex LeadingNotOnScreenDirectiveRegex = new(@"^@leading_not_on_screen$", RegexOptions.Compiled);
+
+    // ディレクティブ行: @leading_text=文字。会社のデータを作らない文字だけの筆頭の団体（credit_role_blocks.leading_text）。
+    // [[XXX]] と同じく、ブロックの最初のエントリより前に書く。同じブロックに [[XXX]] とは書けない。
+    private static readonly Regex LeadingTextDirectiveRegex = new(@"^@leading_text=(?<value>.+)$", RegexOptions.Compiled);
 
     // 役職ヘッダ "役職名: @label=文字"。画面の役職の表記（role_label_text）を役職ヘッダと 1 行で書く。
     private static readonly Regex RoleHeadInlineLabelRegex =
@@ -187,6 +228,12 @@ public static class CreditBulkInputParser
     // カード内のどこに書いてもよい（エンコーダはカード区切り直後に出す）。
     private static readonly Regex RollDirectiveRegex = new(@"^@roll$", RegexOptions.Compiled);
 
+    // ディレクティブ行: そのカードの版（そのカードが出る媒体の組）。書かなければ共通。
+    // 媒体は broadcast（本放送）・bluray（Blu-ray）・streaming（配信）をカンマでつなぐ（@broadcast,bluray・@streaming など）。
+    // homevideo は bluray,streaming（Blu-ray・配信）の略。カード内のどこに書いてもよい（エンコーダはカード区切り直後、@roll の後に出す）。
+    private static readonly Regex MediaVersionDirectiveRegex = new(
+        @"^@(?<v>(?:broadcast|bluray|streaming|homevideo)(?:,(?:broadcast|bluray|streaming|homevideo))*)$", RegexOptions.Compiled);
+
     // ディレクティブ行: @cols=N 形式。N は 1 以上の整数。
     private static readonly Regex ColsDirectiveRegex = new(@"^@cols=(?<n>\d+)$", RegexOptions.Compiled);
 
@@ -196,6 +243,9 @@ public static class CreditBulkInputParser
     private static readonly Regex HeadingSeriesDirectiveRegex = new(@"^@heading_series=(?<n>\d+)$", RegexOptions.Compiled);
     // ディレクティブ行: @heading_italic。そのブロックの見出しを画面どおり斜体で出す（@heading / @heading_series と同じ位置に書く）。
     private static readonly Regex HeadingItalicDirectiveRegex = new(@"^@heading_italic$", RegexOptions.Compiled);
+    // ディレクティブ行: @continues_previous。そのブロックは前のブロックの続き（credit_role_blocks.continues_previous）。
+    // 空きを入れずに列数だけ変える。役職の 2 つ目以降のブロックで、最初のエントリより前に書く。
+    private static readonly Regex ContinuesPreviousDirectiveRegex = new(@"^@continues_previous$", RegexOptions.Compiled);
 
     // ディレクティブ行: @affil_layout=suffix|prefix 形式。役職ヘッダ直後に書くと、その役職の
     // 人物所属表記レイアウトを切り替える（PREFIX = 名前左の屋号列、SUFFIX = 名前右の (屋号) 後置）。
@@ -227,6 +277,18 @@ public static class CreditBulkInputParser
 
     /// <summary>同マーカーの 3 つ目の欄で、小さい字で描く指定。</summary>
     private const string ParallelSmallKeyword = "small";
+
+    /// <summary>役名の後ろに小さいカッコで出すキャラのユニットを指定するマーカー <c>~{ユニット名#p&lt;alias_id&gt;} </c> の開き。</summary>
+    private const string CharacterUnitMarkerOpen = "~{";
+
+    /// <summary>同マーカーの閉じ（閉じ括弧の後ろに半角スペース）。</summary>
+    private const string CharacterUnitMarkerClose = "} ";
+
+    /// <summary>同じ役名・同じ声優が続く行の名前の出し方を指定するマーカー <c>^{役名の形|声優の形} </c> の開き。</summary>
+    private const string SameLayoutMarkerOpen = "^{";
+
+    /// <summary>同マーカーの閉じ（閉じ括弧の後ろに半角スペース）。</summary>
+    private const string SameLayoutMarkerClose = "} ";
 
     // 行末の備考コメント区切り: 半角スペース + スラッシュ 2 個 + 半角スペース。
     // 例: "山田 太郎 // 旧名義あり" → 名前部分 "山田 太郎" + 備考 "旧名義あり"。
@@ -507,6 +569,17 @@ public static class CreditBulkInputParser
                     continue;
                 }
 
+                var mediaVersionMatch = MediaVersionDirectiveRegex.Match(trimmed);
+                if (mediaVersionMatch.Success)
+                {
+                    // カードの版（媒体の組）。1 枚目のカードでも書けるよう、未作成なら暗黙のカードを作る。
+                    EnsureScaffold(ref curCard, ref curTier, ref curGroup, result);
+                    curCard!.MediaVersion = PrecureDataStars.Data.Models.CreditMediaVersions.Normalize(
+                        mediaVersionMatch.Groups["v"].Value.Split(',')
+                            .SelectMany(t => t == "homevideo" ? new[] { "bluray", "streaming" } : new[] { t }));
+                    continue;
+                }
+
                 var colsMatch = ColsDirectiveRegex.Match(trimmed);
                 if (colsMatch.Success)
                 {
@@ -564,6 +637,40 @@ public static class CreditBulkInputParser
                     continue;
                 }
 
+                // @continues_previous : このブロックは前のブロックの続き。空きを入れずに列数だけ変える。
+                // 役職の 2 つ目以降のブロックで、最初のエントリ（屋号 [[XXX]] を含む）より前にだけ書ける。
+                if (ContinuesPreviousDirectiveRegex.IsMatch(trimmed))
+                {
+                    if (curRole is null
+                        || (curBlock is not null && (curBlock.Rows.Count > 0 || curBlock.LeadingCompanyText is not null || curBlock.LeadingText is not null)))
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @continues_previous はブロックの区切りの後、最初のエントリより前にだけ書けます。"
+                        });
+                        continue;
+                    }
+                    if (curBlock is null)
+                    {
+                        curBlock = new ParsedBlock();
+                        curRole.Blocks.Add(curBlock);
+                    }
+                    if (curRole.Blocks.IndexOf(curBlock) == 0)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @continues_previous は役職の最初のブロックには付けられません。"
+                        });
+                        continue;
+                    }
+                    curBlock.ContinuesPrevious = true;
+                    continue;
+                }
+
                 // @heading=文字 / @heading_series=N : ブロック先頭の見出し。
                 // 役職の中で、ブロックの最初のエントリ（屋号 [[XXX]] を含む）より前にだけ書ける。
                 var headingMatch = HeadingDirectiveRegex.Match(trimmed);
@@ -581,7 +688,7 @@ public static class CreditBulkInputParser
                         });
                         continue;
                     }
-                    if (curBlock is not null && (curBlock.Rows.Count > 0 || curBlock.LeadingCompanyText is not null))
+                    if (curBlock is not null && (curBlock.Rows.Count > 0 || curBlock.LeadingCompanyText is not null || curBlock.LeadingText is not null))
                     {
                         result.Warnings.Add(new ParseWarning
                         {
@@ -761,7 +868,44 @@ public static class CreditBulkInputParser
                         });
                         continue;
                     }
+                    if (curRole.RoleLabelNotOnScreen)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @not_on_screen と @label_not_on_screen は同じ役職に両方は書けません（行ごと画面に無いなら @not_on_screen だけ）。"
+                        });
+                        continue;
+                    }
                     curRole.NotOnScreen = true;
+                    continue;
+                }
+
+                // @label_not_on_screen : 直前の役職の行は、名前は画面に出ているが役職名だけが画面に無い。
+                if (LabelNotOnScreenDirectiveRegex.IsMatch(trimmed))
+                {
+                    if (curRole is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @label_not_on_screen は役職指定後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    if (curRole.NotOnScreen)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @not_on_screen と @label_not_on_screen は同じ役職に両方は書けません（行ごと画面に無いなら @not_on_screen だけ）。"
+                        });
+                        continue;
+                    }
+                    curRole.RoleLabelNotOnScreen = true;
                     continue;
                 }
 
@@ -804,6 +948,45 @@ public static class CreditBulkInputParser
                     continue;
                 }
 
+                // @leading_text=文字 : 会社のデータを作らない文字だけの筆頭の団体。[[XXX]] と同じ位置（ブロックの最初のエントリより前）に書く。
+                var leadingTextMatch = LeadingTextDirectiveRegex.Match(trimmed);
+                if (leadingTextMatch.Success)
+                {
+                    if (curRole is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @leading_text= は役職指定後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    if (curBlock is not null && (curBlock.Rows.Count > 0 || curBlock.LeadingCompanyText is not null || curBlock.LeadingText is not null))
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @leading_text= はブロックの最初のエントリより前に 1 回だけ書けます（[[XXX]] とは同じブロックに書けません）。"
+                        });
+                        continue;
+                    }
+                    if (curBlock is null)
+                    {
+                        curBlock = new ParsedBlock();
+                        curRole.Blocks.Add(curBlock);
+                    }
+                    curBlock.LeadingText = leadingTextMatch.Groups["value"].Value.Trim();
+                    // 筆頭の行はエントリではないので、[[XXX]] と同じくブロックのセットアップを続ける（@cols= はもう受け付けない）。
+                    pendingColsForBlock = false;
+                    if (pendingNotesTarget == NotesTarget.Role || pendingNotesTarget == NotesTarget.Block)
+                    {
+                        pendingNotesTarget = NotesTarget.Block;
+                    }
+                    continue;
+                }
+
                 // @leading_not_on_screen : 直前の筆頭の会社 [[XXX]] は画面にはクレジットされていない（クレジット漏れ）。
                 if (LeadingNotOnScreenDirectiveRegex.IsMatch(trimmed))
                 {
@@ -826,7 +1009,7 @@ public static class CreditBulkInputParser
                 {
                     Severity = WarningSeverity.Block,
                     LineNumber = lineNo,
-                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= / @heading= / @heading_series= / @label= / @misprint= / @pos= / @join= / @join_previous のみサポートします。"
+                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= / @heading= / @heading_series= / @leading_text= / @label= / @misprint= / @pos= / @join= / @join_previous のみサポートします。"
                 });
                 continue;
             }
@@ -988,10 +1171,20 @@ public static class CreditBulkInputParser
             var leadingBracketMatch = LeadingCompanyBracketRegex.Match(trimmed);
             if (leadingBracketMatch.Success)
             {
-                if (curBlock.Rows.Count == 0 && curBlock.LeadingCompanyText is null)
+                if (curBlock.Rows.Count == 0 && curBlock.LeadingCompanyText is null && curBlock.LeadingText is null)
                 {
                     // ブロック先頭の有意行 → leading_company として吸収。
                     curBlock.LeadingCompanyText = leadingBracketMatch.Groups["name"].Value.Trim();
+                    // 2 社の連名の 2 社目と間の字、筆頭の行の後ろの字（どれも無ければ null）。
+                    // 間の字・後ろの字は空白も画面の表記として持つので Trim しない（行末の空白は行全体の Trim で落ちる）。
+                    if (leadingBracketMatch.Groups["name2"].Success)
+                    {
+                        curBlock.LeadingCompany2Text = leadingBracketMatch.Groups["name2"].Value.Trim();
+                        string sep = leadingBracketMatch.Groups["sep"].Value;
+                        curBlock.LeadingCompanySeparator = sep.Length > 0 ? sep : null;
+                    }
+                    string suffix = leadingBracketMatch.Groups["suffix"].Value;
+                    curBlock.LeadingCompanySuffix = suffix.Length > 0 ? suffix : null;
 
                     // leading_company 行はエントリではないため、ブロックセットアップは継続する。
                     // ただし @cols= はもう受け付けない（エントリ行直前まで来ている認識のため）、
@@ -1013,6 +1206,8 @@ public static class CreditBulkInputParser
                     // 途中での [[XXX]] または重複指定 → Block 警告。
                     string reason = curBlock.LeadingCompanyText is not null
                         ? "ブロックに既に [[XXX]] のグループトップ屋号が指定されています"
+                        : curBlock.LeadingText is not null
+                        ? "ブロックに既に @leading_text= の筆頭の団体が指定されています"
                         : "[[XXX]] はブロックの最初の有意行でのみ指定できます（このブロックには既にエントリ行があります）";
                     result.Warnings.Add(new ParseWarning
                     {
@@ -1468,6 +1663,11 @@ public static class CreditBulkInputParser
     ///   <item><description>行頭 <c>&amp;{前|後|small} </c> → 併記に加えて、名前の前・後ろに付く字と小さい字の指定
     ///     （<see cref="ParsedEntry.ParallelPrefix"/> / <see cref="ParsedEntry.ParallelSuffix"/> / <see cref="ParsedEntry.ParallelSmall"/>）。
     ///     後ろの字と <c>small</c> は省略可（<c>&amp;{／} </c>、<c>&amp;{（|）|small} </c>）</description></item>
+    ///   <item><description>行頭 <c>^{役名の形|声優の形} </c> → 同じ役名・同じ声優が続く行の名前の出し方
+    ///     （<see cref="ParsedEntry.SameCharacterLayout"/> / <see cref="ParsedEntry.SamePersonLayout"/>）。各欄は REPEAT / TOP / MIDDLE / 空、
+    ///     2 つ目の欄と <c>|</c> は省略可（<c>^{TOP} </c>、<c>^{|MIDDLE} </c>、<c>^{REPEAT|MIDDLE} </c>）。CHARACTER_VOICE 以外に付いたときは警告して捨てる</description></item>
+    ///   <item><description>行頭 <c>~{ユニット名#p&lt;alias_id&gt;} </c> → 役名の後ろに小さいカッコで出すキャラのユニット
+    ///     （<see cref="ParsedEntry.CharacterUnitAliasId"/>）。CHARACTER_VOICE 以外に付いたとき・<c>#p</c> の ID が無いときは警告して捨てる</description></item>
     ///   <item><description>行末 <c> // 備考</c> → <see cref="ParsedEntry.Notes"/> に値をセット</description></item>
     /// </list>
     /// これらは順序を問わず重ねて指定可能（例: <c>🎬 &amp; 山田 // 備考</c>）。
@@ -1508,6 +1708,13 @@ public static class CreditBulkInputParser
         string? parallelPrefix = null;
         string? parallelSuffix = null;
         bool parallelSmall = false;
+        // ^{役名の形|声優の形} マーカーの値（REPEAT / TOP / MIDDLE）と、マーカーが付いていたか。
+        string? sameCharacterLayout = null;
+        string? samePersonLayout = null;
+        bool hasSameLayoutMarker = false;
+        // ~{ユニット名#p<alias_id>} マーカーのユニットの名義 ID と、マーカーが付いていたか。
+        int? characterUnitAliasId = null;
+        bool hasCharacterUnitMarker = false;
         // 何度かループして、剥がせるだけ剥がす（順序問わず）。
         bool stripped;
         do
@@ -1542,6 +1749,56 @@ public static class CreditBulkInputParser
                     stripped = true;
                 }
             }
+            // ^{役名の形|声優の形} マーカー（閉じ括弧の後ろに半角スペース必須）。同じ役名・同じ声優が続く行の名前の出し方。
+            if (cell.StartsWith(SameLayoutMarkerOpen, StringComparison.Ordinal))
+            {
+                int close = cell.IndexOf(SameLayoutMarkerClose, SameLayoutMarkerOpen.Length, StringComparison.Ordinal);
+                if (close > 0)
+                {
+                    var parts = cell.Substring(SameLayoutMarkerOpen.Length, close - SameLayoutMarkerOpen.Length).Split('|');
+                    hasSameLayoutMarker = true;
+                    sameCharacterLayout = ParseSameLayoutWord(parts.Length >= 1 ? parts[0] : "", "役名の形", lineNo, result);
+                    samePersonLayout = ParseSameLayoutWord(parts.Length >= 2 ? parts[1] : "", "声優の形", lineNo, result);
+                    if (parts.Length >= 3)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Warning,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: ^{{...}} の欄は 2 つまでです（3 つ目以降は読み捨てます）。"
+                        });
+                    }
+                    cell = cell.Substring(close + SameLayoutMarkerClose.Length).TrimStart();
+                    stripped = true;
+                }
+            }
+            // ~{ユニット名#p<alias_id>} マーカー（閉じ括弧の後ろに半角スペース必須）。役名の後ろに小さいカッコで出すキャラのユニット。
+            // ユニットは名義 ID で直に指す（ユニット名は人が読むための添え書きで、引き当てには使わない）。
+            if (cell.StartsWith(CharacterUnitMarkerOpen, StringComparison.Ordinal))
+            {
+                int close = cell.IndexOf(CharacterUnitMarkerClose, CharacterUnitMarkerOpen.Length, StringComparison.Ordinal);
+                if (close > 0)
+                {
+                    string inner = cell.Substring(CharacterUnitMarkerOpen.Length, close - CharacterUnitMarkerOpen.Length);
+                    hasCharacterUnitMarker = true;
+                    int hash = inner.LastIndexOf("#p", StringComparison.Ordinal);
+                    if (hash >= 0 && int.TryParse(inner.Substring(hash + 2), out int uid) && uid > 0)
+                    {
+                        characterUnitAliasId = uid;
+                    }
+                    else
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Warning,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: ~{{...}}（キャラのユニット）はユニットの名義 ID を「ユニット名#p<名義ID>」の形で書いてください。読み捨てます。"
+                        });
+                    }
+                    cell = cell.Substring(close + CharacterUnitMarkerClose.Length).TrimStart();
+                    stripped = true;
+                }
+            }
         } while (stripped);
 
         if (cell.Length == 0)
@@ -1550,7 +1807,7 @@ public static class CreditBulkInputParser
             {
                 Severity = WarningSeverity.Warning,
                 LineNumber = lineNo,
-                Message = $"{lineNo} 行目: マーカー（🎬 / & / //）以外の本体が空です。"
+                Message = $"{lineNo} 行目: マーカー（🎬 / & / ^ / //）以外の本体が空です。"
             });
             return null;
         }
@@ -1563,6 +1820,42 @@ public static class CreditBulkInputParser
             if (parallelPrefix is not null) e.ParallelPrefix = parallelPrefix;
             if (parallelSuffix is not null) e.ParallelSuffix = parallelSuffix;
             if (parallelSmall) e.ParallelSmall = true;
+            // 同じ役名・同じ声優が続く行の名前の出し方は声の出演の行（CHARACTER_VOICE）でだけ意味を持つ。
+            // ほかの種別に付いていたら警告して捨てる。
+            if (hasSameLayoutMarker)
+            {
+                if (e.Kind == ParsedEntryKind.CharacterVoice)
+                {
+                    e.SameCharacterLayout = sameCharacterLayout;
+                    e.SamePersonLayout = samePersonLayout;
+                }
+                else
+                {
+                    result.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Warning,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: ^{{...}}（同じ役名・同じ声優が続く行の出し方）は <キャラ>声優 の行にだけ付けられます。読み捨てます。"
+                    });
+                }
+            }
+            // キャラのユニットも声の出演の行（CHARACTER_VOICE）でだけ意味を持つ。ほかの種別に付いていたら警告して捨てる。
+            if (hasCharacterUnitMarker && characterUnitAliasId is int cu)
+            {
+                if (e.Kind == ParsedEntryKind.CharacterVoice)
+                {
+                    e.CharacterUnitAliasId = cu;
+                }
+                else
+                {
+                    result.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Warning,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: ~{{...}}（キャラのユニット）は <キャラ>声優 の行にだけ付けられます。読み捨てます。"
+                    });
+                }
+            }
             if (entryNotes is not null) e.Notes = entryNotes;
             return e;
         }
@@ -1586,6 +1879,7 @@ public static class CreditBulkInputParser
         // グループトップ屋号 (leading_company_alias_id) の指定は二重ブラケット [[XXX]] 側の別構文で、
         // 呼び出し前のブロック処理段で先に消費されているため、ここに来る時点で [[XXX]] は存在しない。
         // 末尾の "×誤記" 後置（任意）でクレジット時の屋号誤記を記録する。CI バージョン側は誤記対象外。
+        // 閉じ括弧の直前の "|画面の表記"（任意）は画面に出た企業名の表記揺れ。COMPANY だけで持ち、LOGO に付いていたら警告して捨てる。
         var bracketEntryMatch = BracketEntryRegex.Match(cell);
         if (bracketEntryMatch.Success)
         {
@@ -1609,12 +1903,28 @@ public static class CreditBulkInputParser
                 : null;
             if (string.IsNullOrEmpty(misprint)) misprint = null;
 
+            string? companyDisplay = bracketEntryMatch.Groups["display"].Success
+                ? bracketEntryMatch.Groups["display"].Value.Trim()
+                : null;
+            if (string.IsNullOrEmpty(companyDisplay)) companyDisplay = null;
+            if (companyDisplay is not null && ci is not null)
+            {
+                result.Warnings.Add(new ParseWarning
+                {
+                    Severity = WarningSeverity.Warning,
+                    LineNumber = lineNo,
+                    Message = $"{lineNo} 行目: [屋号|画面の表記] の画面の表記は COMPANY（[屋号]）にだけ付けられます。LOGO（[屋号#CIバージョン]）では読み捨てます。"
+                });
+                companyDisplay = null;
+            }
+
             return AttachModifiers(new ParsedEntry
             {
                 Kind = ci is not null ? ParsedEntryKind.Logo : ParsedEntryKind.Company,
                 CompanyRawText = companyNew,
                 CompanyOldName = companyOld,
                 CompanyMisprintText = misprint,
+                CompanyDisplayText = companyDisplay,
                 CompanyAliasIdOverride = companyAliasIdOverride,
                 LogoCiVersionLabel = ci,
                 LineNumber = lineNo,
@@ -1673,14 +1983,52 @@ public static class CreditBulkInputParser
             //   → chara_main="キュアブラック", chara_misprint="キュアブラッグ"
             //   → person_main="菊池 心",       person_misprint="菊地 心"
             // × の左側がさらに "旧 => 新" 記法の対象になり得るため、× を先に剥がす。
+            // 役名の "名義|画面の役名"（画面が名義の頭を省いた後ろの部分だけのとき）を先に剥がす。
+            // 例: <菓彩みつき|みつき>宮田 俊哉 → 名義「菓彩みつき」、画面の役名「みつき」
+            string? charaShortDisplay = null;
+            int charaDisplaySep = chara.IndexOf('|');
+            if (charaDisplaySep >= 0)
+            {
+                charaShortDisplay = chara.Substring(charaDisplaySep + 1).Trim().Replace(@"\n", "\n");
+                chara = chara.Substring(0, charaDisplaySep).Trim();
+            }
             var (charaBeforeRedirect, charaMisprint) = SplitMisprint(chara);
-            var (personBeforeRedirect, personMisprint) = SplitMisprint(personAfterAster);
+            // 声優名の "名義|画面の表記"（表記揺れ）を先に剥がしてから誤記を剥がす。
+            var (personMainAfterDisplay, personDisplay) = SplitPersonDisplay(personAfterAster);
+            var (personBeforeRedirect, personMisprint) = SplitMisprint(personMainAfterDisplay);
 
             // キャラ名・声優名それぞれに "旧 => 新" 記法を適用する。
             // キャラ名側で <キュアブラック旧 => キュアブラック新>、声優名側で 本名 旧 => 本名 新 のように
             // 独立して指定可能。両側同時の併用も許容する。
             var (charaOld, charaNew) = SplitOldNewRedirect(charaBeforeRedirect);
             var (personOld, personNew) = SplitOldNewRedirect(personBeforeRedirect);
+
+            // 役名の中の「\n」（バックスラッシュと n）は画面の改行。名義の名前からは抜き、
+            // 画面の組みどおりの役名（改行入り）として別に持つ（credit_block_entries.character_display_text）。
+            // 例: <てんびん座の\nプリンセス>MAKO → 名義「てんびん座のプリンセス」、画面の役名「てんびん座の⏎プリンセス」
+            string? charaDisplayText = null;
+            if (charaNew.Contains(@"\n"))
+            {
+                charaDisplayText = charaNew.Replace(@"\n", "\n");
+                charaNew = charaNew.Replace(@"\n", string.Empty);
+            }
+            charaOld = charaOld?.Replace(@"\n", string.Empty);
+            if (charaShortDisplay is not null)
+            {
+                if (charaDisplayText is not null
+                    || !PrecureDataStars.Data.Models.CreditBlockEntry.IsValidCharacterDisplayText(charaShortDisplay, charaNew)
+                    || charaShortDisplay.Replace("\n", string.Empty) == charaNew)
+                {
+                    result.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Block,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: 画面の役名「{charaShortDisplay.Replace("\n", @"\n")}」が名義「{charaNew}」の後ろの部分ではありません（<名義|画面の役名> は、画面が名義の頭を省いているときに使います）。"
+                    });
+                    return null;
+                }
+                charaDisplayText = charaShortDisplay;
+            }
 
             // 声優名末尾の "#数値" を person_alias_id 明示参照として抜き出す
             // （SplitMisprint / SplitOldNewRedirect の後段で実施。誤記やリダイレクトの "=>" を先に剥がしてから
@@ -1701,11 +2049,13 @@ public static class CreditBulkInputParser
                 CharacterRawText = charaNew,
                 CharacterOldName = charaOld,
                 CharacterMisprintText = charaMisprint,
+                CharacterDisplayText = charaDisplayText,
                 IsForcedNewCharacter = aster,
                 CharacterAliasIdOverride = characterAliasIdOverride,
                 PersonRawText = personPureName,
                 PersonOldName = personOld,
                 PersonMisprintText = personMisprint,
+                PersonDisplayText = personDisplay,
                 IsForcedNewPerson = isForcedNewPerson,
                 PersonAliasIdOverride = personAliasIdOverride,
                 AffiliationRawText = affRaw,
@@ -1753,7 +2103,8 @@ public static class CreditBulkInputParser
                 // 声優側の先頭 "*" 強制新規マーカーを剥がす。
                 var (personAfterAster, isForcedNewPerson) = SplitForcedNewMarker(personName);
                 // 声優名側に "名義 × 誤記" 記法を先に適用してから "旧 => 新" を適用する。
-                var (personBeforeRedirect, personMisprint) = SplitMisprint(personAfterAster);
+                var (personMainAfterDisplay, personDisplay) = SplitPersonDisplay(personAfterAster);
+                var (personBeforeRedirect, personMisprint) = SplitMisprint(personMainAfterDisplay);
                 var (personOld, personNew) = SplitOldNewRedirect(personBeforeRedirect);
                 // 末尾の #数値 を person_alias_id 明示参照として抜き出す。
                 var (personPureName, personAliasIdOverride) = SplitAliasIdOverride(personNew);
@@ -1767,6 +2118,7 @@ public static class CreditBulkInputParser
                     PersonRawText = personPureName,
                     PersonOldName = personOld,
                     PersonMisprintText = personMisprint,
+                    PersonDisplayText = personDisplay,
                     IsForcedNewPerson = isForcedNewPerson,
                     PersonAliasIdOverride = personAliasIdOverride,
                     AffiliationRawText = affRaw2,
@@ -1810,7 +2162,8 @@ public static class CreditBulkInputParser
 
             // 人物名側に "名義 × 誤記" 記法を先に適用してから "旧 => 新" を適用する。
             // 所属 "(...)" は SplitAffiliation で既に剥がれているため、× の左右は純粋に人物名表記に限られる。
-            var (personBeforeRedirect, personMisprint) = SplitMisprint(personName);
+            var (personMainAfterDisplay, personDisplay) = SplitPersonDisplay(personName);
+            var (personBeforeRedirect, personMisprint) = SplitMisprint(personMainAfterDisplay);
             var (personOld, personNew) = SplitOldNewRedirect(personBeforeRedirect);
 
             // 末尾の "#数値" を person_alias_id 明示参照として抜き出す
@@ -1828,6 +2181,7 @@ public static class CreditBulkInputParser
                 PersonRawText = personPureName,
                 PersonOldName = personOld,
                 PersonMisprintText = personMisprint,
+                PersonDisplayText = personDisplay,
                 IsForcedNewPerson = isForcedNewPerson,
                 PersonAliasIdOverride = personAliasIdOverride,
                 AffiliationRawText = affRaw3,
@@ -1849,6 +2203,25 @@ public static class CreditBulkInputParser
         // 名前ベースの素朴判定。「声の出演」「キャスト」「VOICE CAST」「Voice」を含むか。
         string n = role.DisplayName;
         return n.Contains("声") || n.Contains("キャスト") || n.Contains("CAST", StringComparison.OrdinalIgnoreCase) || n.Contains("Voice", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// <c>^{役名の形|声優の形} </c> マーカーの 1 欄を読む。REPEAT / TOP / MIDDLE（大文字小文字は問わない）を
+    /// <see cref="PrecureDataStars.Data.Models.CreditEntrySameLayouts"/> の値にして返し、空欄は null を返す。知らない語は警告して null を返す。
+    /// </summary>
+    private static string? ParseSameLayoutWord(string word, string fieldLabel, int lineNo, BulkParseResult result)
+    {
+        string w = word.Trim();
+        if (w.Length == 0) return null;
+        string upper = w.ToUpperInvariant();
+        if (PrecureDataStars.Data.Models.CreditEntrySameLayouts.IsValid(upper)) return upper;
+        result.Warnings.Add(new ParseWarning
+        {
+            Severity = WarningSeverity.Warning,
+            LineNumber = lineNo,
+            Message = $"{lineNo} 行目: ^{{...}} の{fieldLabel}「{w}」は使えません（REPEAT / TOP / MIDDLE のどれか、または空）。読み捨てます。"
+        });
+        return null;
     }
 
     /// <summary>行全体がハイフン（半角 '-'）のみで構成されるかを判定する。</summary>
@@ -2008,6 +2381,23 @@ public static class CreditBulkInputParser
         // 片側が空のセパレータ（"山田×" や "×山田"）は誤記指定なしとして扱う。
         if (left.Length == 0 || right.Length == 0) return (text.Trim(), null);
 
+        return (left, right);
+    }
+
+    /// <summary>
+    /// 「名義|画面の表記」記法を左右に分ける。左側 = 名義（マスタ参照キー）、右側 = 画面に出た人物名の表記揺れ
+    /// （名義と空白・中黒・記号の有無や位置だけが違う表記。<c>credit_block_entries.person_display_text</c>）。
+    /// 最初の <c>|</c> で切る。片側が空のときは表記揺れの指定なしとして (text, null) を返す。
+    /// <see cref="SplitMisprint"/> よりも先に呼ぶ。
+    /// </summary>
+    private static (string MainName, string? DisplayText) SplitPersonDisplay(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return (string.Empty, null);
+        int sep = text.IndexOf('|');
+        if (sep < 0) return (text, null);
+        string left = text.Substring(0, sep).Trim();
+        string right = text.Substring(sep + 1).Trim();
+        if (left.Length == 0 || right.Length == 0) return (text, null);
         return (left, right);
     }
 

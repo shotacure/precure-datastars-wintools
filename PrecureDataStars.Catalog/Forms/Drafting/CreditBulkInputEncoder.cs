@@ -29,7 +29,8 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 ///   <item><description>グループトップ屋号: <c>[[屋号]]</c>（ブロックの最初の有意行）</description></item>
 ///   <item><description>エントリ: 種別ごとの構文（PERSON は素のテキスト、CHARACTER_VOICE は <c>&lt;キャラ&gt;声優</c>、
 ///     COMPANY は <c>[屋号]</c>、LOGO は <c>[屋号#CIバージョン]</c>、TEXT は raw_text のまま）</description></item>
-///   <item><description>エントリ前後修飾子: 行頭 <c>🎬 </c>（IsBroadcastOnly）／<c>&amp; </c>（A/B 併記）、
+///   <item><description>エントリ前後修飾子: 行頭 <c>🎬 </c>（IsBroadcastOnly）／<c>&amp; </c>（A/B 併記）／
+///     <c>^{役名の形|声優の形} </c>（CHARACTER_VOICE の SameCharacterLayout / SamePersonLayout）、
 ///     行末 <c> // 備考</c>（Notes）</description></item>
 /// </list>
 /// マスタ未引きエントリ（TEXT 種別、または ID が解決不能なケース）は <c>raw_text</c> をそのまま出力する。
@@ -144,6 +145,15 @@ internal static class CreditBulkInputEncoder
         // ロールのカードは @roll 単独行を先頭に出す（カードのときは出さない）。
         if (string.Equals(card.Entity.Presentation, "ROLL", StringComparison.Ordinal))
             sb.Append("@roll").Append(LineSeparator);
+        // 版の付いたカードは、媒体の組を @ の単独行で続けて出す（共通のカードは出さない）。
+        // Blu-ray と配信の組は @homevideo、それ以外は媒体を小文字でカンマにつなぐ（@broadcast・@broadcast,bluray・@streaming など）。
+        if (card.Entity.MediaVersion is { Length: > 0 } version)
+        {
+            string directive = string.Equals(version, CreditMediaVersions.HomeVideo, StringComparison.Ordinal)
+                ? "homevideo"
+                : string.Join(",", CreditMediaVersions.Media(version).Select(m => m.ToLowerInvariant()));
+            sb.Append('@').Append(directive).Append(LineSeparator);
+        }
 
         // カード備考（@notes=...）。空文字 / null の場合は出力省略（パーサも空値を null として扱う）。
         EmitNotesDirective(card.Entity.Notes, sb);
@@ -354,6 +364,12 @@ internal static class CreditBulkInputEncoder
             sb.Append("@not_on_screen").Append(LineSeparator);
         }
 
+        // 名前は画面に出ているが役職名だけが画面に無い（@not_on_screen とは同時に立たない）。
+        if (role.Entity.RoleLabelNotOnScreen)
+        {
+            sb.Append("@label_not_on_screen").Append(LineSeparator);
+        }
+
         // 主題歌ループが出す曲を劇中順の範囲で絞る（主題歌のカードが分かれて挿入歌を振り分けるとき）。
         if (!string.IsNullOrEmpty(role.Entity.ThemeSongSeq))
         {
@@ -397,7 +413,7 @@ internal static class CreditBulkInputEncoder
         }
     }
 
-    /// <summary>1 ブロック分の本体を出力する。 出力順: <c>@cols=N</c>（必要時）→ <c>@heading_series=N</c> / <c>@heading=文字</c>（必要時）→ ブロック備考 → <c>[[leading_company]]</c>（必要時）→ エントリ行群（タブ整列）。</summary>
+    /// <summary>1 ブロック分の本体を出力する。 出力順: <c>@cols=N</c>（必要時）→ <c>@continues_previous</c>（必要時）→ <c>@heading_series=N</c> / <c>@heading=文字</c>（必要時）→ ブロック備考 → <c>[[leading_company]]</c>（必要時）→ エントリ行群（タブ整列）。</summary>
     private static async Task EncodeBlockBodyAsync(
         DraftBlock block, LookupCache cache, StringBuilder sb, CancellationToken ct)
     {
@@ -410,6 +426,12 @@ internal static class CreditBulkInputEncoder
         if (colCount > 1)
         {
             sb.Append("@cols=").Append(colCount).Append(LineSeparator);
+        }
+
+        // 前のブロックの続き（空きを入れずに列数だけ変える）。
+        if (block.Entity.ContinuesPrevious)
+        {
+            sb.Append("@continues_previous").Append(LineSeparator);
         }
 
         // ブロック先頭の見出し（作品・文字）。
@@ -437,12 +459,34 @@ internal static class CreditBulkInputEncoder
             string nameOrFallback = !string.IsNullOrEmpty(aliasName)
                 ? aliasName
                 : $"alias#{leadingId}";
-            sb.Append("[[").Append(nameOrFallback).Append("]]").Append(LineSeparator);
+            sb.Append("[[").Append(nameOrFallback).Append("]]");
+            // 2 社の連名なら同じ行に「間の字[[2 社目]]」を、後ろの字があればその後ろに続ける
+            // （[[スタジオトゥインクル]]/[[AMGA]] 撮影班）。パーサの LeadingCompanyBracketRegex と往復で同じ形。
+            if (block.Entity.LeadingCompany2AliasId is int leading2Id)
+            {
+                string? alias2Name = await cache.LookupCompanyAliasNameAsync(leading2Id);
+                string name2OrFallback = !string.IsNullOrEmpty(alias2Name)
+                    ? alias2Name
+                    : $"alias#{leading2Id}";
+                sb.Append(block.Entity.LeadingCompanySeparator ?? string.Empty)
+                  .Append("[[").Append(name2OrFallback).Append("]]");
+            }
+            if (!string.IsNullOrEmpty(block.Entity.LeadingCompanySuffix))
+            {
+                sb.Append(block.Entity.LeadingCompanySuffix);
+            }
+            sb.Append(LineSeparator);
             // 筆頭の会社が画面に出ていない（クレジット漏れ）なら、[[XXX]] のすぐ後に印を書く。
             if (block.Entity.LeadingCompanyNotOnScreen)
             {
                 sb.Append("@leading_not_on_screen").Append(LineSeparator);
             }
+        }
+        // 文字だけの筆頭の団体（leading_text）は [[XXX]] と同じ位置に @leading_text= で書く。
+        // 一括入力は同じブロックに両方を書けないので、筆頭の会社があるときは会社だけを出す（表示も会社が優先）。
+        else if (!string.IsNullOrEmpty(block.Entity.LeadingText))
+        {
+            sb.Append("@leading_text=").Append(block.Entity.LeadingText).Append(LineSeparator);
         }
 
         // エントリ群を ColCount で行に分割しながらタブ結合で出力する。
@@ -564,7 +608,7 @@ internal static class CreditBulkInputEncoder
         return false;
     }
 
-    /// <summary>1 エントリを 1 セル文字列に変換する。 行頭プレフィクス（🎬 / & ）と行末サフィックス（ // 備考）を含む完全な単一セル表現を返す。
+    /// <summary>1 エントリを 1 セル文字列に変換する。 行頭プレフィクス（🎬 / & / ^{...} / ~{...} ）と行末サフィックス（ // 備考）を含む完全な単一セル表現を返す。
     /// <paramref name="suppressAffiliation"/> = true のとき、PERSON / CHARACTER_VOICE の所属表記 <c>(屋号)</c> 後置を抑止する
     /// （PREFIX レイアウト下では所属は屋号列として左に置くため、セル本体には含めない）。</summary>
     private static async Task<string> EncodeEntryAsCellAsync(
@@ -589,7 +633,7 @@ internal static class CreditBulkInputEncoder
         // ─── 修飾子の前後付加 ───
         var sb = new StringBuilder();
 
-        // 行頭プレフィクス: 🎬（本放送限定）→ &（併記継続）の順で連結。
+        // 行頭プレフィクス: 🎬（本放送限定）→ &（併記継続）→ ^{...}（同じ役名・同じ声優が続く行の出し方）の順で連結。
         // 順序自体に意味は無いが、出力の一貫性のため固定順とする。
         if (e.IsBroadcastOnly)
         {
@@ -609,6 +653,21 @@ internal static class CreditBulkInputEncoder
             {
                 sb.Append(ParallelContinuationMarker);
             }
+        }
+        // 同じ役名・同じ声優が続く行の名前の出し方（CHARACTER_VOICE のみ）。どちらかがあれば ^{役名の形|声優の形} の形で、
+        // 併記のマーカーの後ろに置く。声優の形が無ければ 2 つ目の欄と | を省く。
+        if (e.EntryKind == "CHARACTER_VOICE" && (e.SameCharacterLayout is not null || e.SamePersonLayout is not null))
+        {
+            sb.Append("^{").Append(e.SameCharacterLayout ?? "");
+            if (e.SamePersonLayout is not null) sb.Append('|').Append(e.SamePersonLayout);
+            sb.Append("} ");
+        }
+        // 役名の後ろに小さいカッコで出すキャラのユニット（CHARACTER_VOICE のみ）。~{ユニット名#p<alias_id>} の形で、
+        // 同じ役名・同じ声優の出し方のマーカーの後ろに置く。ユニット名は人が読むための添え書きで、パーサは ID だけを読む。
+        if (e.EntryKind == "CHARACTER_VOICE" && e.CharacterUnitAliasId is int uid)
+        {
+            string uname = await cache.LookupPersonAliasNameAsync(uid) ?? "";
+            sb.Append("~{").Append(uname).Append("#p").Append(uid).Append("} ");
         }
 
         sb.Append(body);
@@ -643,6 +702,8 @@ internal static class CreditBulkInputEncoder
         // 誤記は所属より内側、人物名の直後に連結する（パーサの SplitAffiliation が末尾の (...) を先に剥がすため、
         // × は「人物名」フィールドの中で完結する必要がある）。
         string nameWithMisprint = AppendMisprintSuffix(nameWithAliasId, e.PersonMisprintText);
+        // 画面の表記揺れは誤記の後ろに「|表記」で連結する（パーサは | で先に切り、左側から誤記を剥がす）。
+        nameWithMisprint = AppendDisplaySuffix(nameWithMisprint, e.PersonDisplayText);
 
         if (suppressAffiliation) return nameWithMisprint;
         // ResolveAffiliationStringAsync は括弧込みの完全な「(...)」文字列を返す（または null）。
@@ -672,6 +733,20 @@ internal static class CreditBulkInputEncoder
 
         string charaWithAliasId = await AppendAliasIdSuffixIfAmbiguousCharacterAsync(charaName, e.CharacterAliasId, cache);
 
+        // 画面の組みどおりの役名（改行入り）があり、改行を抜くと名義の名前と同じなら、名前の部分を改行の位置に
+        // 「\n」を入れた形で書く（<てんびん座の\nプリンセス>）。画面の役名が名義の頭を省いた後ろの部分なら、
+        // 「名義|画面の役名」の形で書く（<菓彩みつき|みつき>）。名義と食い違うときは書かない（読み戻すと名義が変わるため）。
+        if (!string.IsNullOrEmpty(e.CharacterDisplayText)
+            && CreditBlockEntry.IsValidCharacterDisplayText(e.CharacterDisplayText.Replace("\r\n", "\n"), charaName))
+        {
+            string display = e.CharacterDisplayText.Replace("\r\n", "\n");
+            string displayEscaped = display.Replace("\n", @"\n");
+            string aliasIdSuffix = charaWithAliasId.Substring(charaName.Length);
+            charaWithAliasId = display.Replace("\n", string.Empty) == charaName
+                ? displayEscaped + aliasIdSuffix
+                : charaName + "|" + displayEscaped + aliasIdSuffix;
+        }
+
         string actorName = "";
         if (e.PersonAliasId is int paId)
         {
@@ -684,7 +759,7 @@ internal static class CreditBulkInputEncoder
         // キャラ側・声優側それぞれに誤記が立っていれば「×」で連結する。
         // 例: <キュアブラック×キュアブラッグ>菊池 心×菊地 心(東映アニメーション)
         string charaWithMisprint = AppendMisprintSuffix(charaWithAliasId, e.CharacterMisprintText);
-        string actorWithMisprint = AppendMisprintSuffix(actorWithAliasId, e.PersonMisprintText);
+        string actorWithMisprint = AppendDisplaySuffix(AppendMisprintSuffix(actorWithAliasId, e.PersonMisprintText), e.PersonDisplayText);
 
         string actorPart;
         if (suppressAffiliation)
@@ -700,7 +775,7 @@ internal static class CreditBulkInputEncoder
         return $"<{charaWithMisprint}>{actorPart}";
     }
 
-    /// <summary>COMPANY エントリの本体（<c>[屋号]</c> または <c>[屋号#alias_id]</c>、任意で <c>×誤記</c> を後置）を生成する。 DB に同名屋号 alias が複数存在するときのみ <c>#alias_id</c> を後置する（同名 1 件のみなら無印）。</summary>
+    /// <summary>COMPANY エントリの本体（<c>[屋号]</c> または <c>[屋号#alias_id]</c>、任意で <c>×誤記</c> を後置）を生成する。 DB に同名屋号 alias が複数存在するときのみ <c>#alias_id</c> を後置する（同名 1 件のみなら無印）。 画面に出た企業名の表記揺れ（<see cref="CreditBlockEntry.CompanyDisplayText"/>）があれば閉じ括弧の直前に <c>|画面の表記</c> を入れる（<c>[BUG FILMS|BUGFILMS]</c>）。</summary>
     private static async Task<string> BuildCompanyCellAsync(CreditBlockEntry e, LookupCache cache)
     {
         string body;
@@ -708,7 +783,7 @@ internal static class CreditBulkInputEncoder
         {
             string? name = await cache.LookupCompanyAliasNameAsync(caId);
             string nameWithAliasId = await AppendAliasIdSuffixIfAmbiguousCompanyAsync(name ?? $"alias#{caId}", caId, cache);
-            body = $"[{nameWithAliasId}]";
+            body = $"[{AppendDisplaySuffix(nameWithAliasId, e.CompanyDisplayText)}]";
         }
         else
         {
@@ -769,6 +844,13 @@ internal static class CreditBulkInputEncoder
     {
         if (string.IsNullOrEmpty(misprint)) return mainText;
         return $"{mainText}{MisprintSeparator}{misprint}";
+    }
+
+    /// <summary>人物名の表記揺れ（<see cref="CreditBlockEntry.PersonDisplayText"/>）・企業名の表記揺れ（<see cref="CreditBlockEntry.CompanyDisplayText"/>）を「名義|画面の表記」記法で連結する。NULL・空なら連結しない。</summary>
+    private static string AppendDisplaySuffix(string mainText, string? displayText)
+    {
+        if (string.IsNullOrEmpty(displayText)) return mainText;
+        return $"{mainText}|{displayText}";
     }
 
     /// <summary>所属表記を「人物名末尾に追記する括弧付き文字列」として解決する。

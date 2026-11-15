@@ -16,14 +16,14 @@
 			ビルドモードはコマンドライン引数で決まる（引数なし＝テスト、"production" オプション付き＝本番）。
 			SiteOutputDir     : 本番モードの出力先。未設定時は exe 直下 "out/site/"。
 			SiteOutputDirTest : テストモード（既定）の出力先。未設定時は exe 直下 "out/site-test/"。
-			テストモードでは GA4 / AdSense のタグと ads.txt を出力しない（ID は設定したままでよい）。
+			テストモードでは GA4 のタグを出力しない（ID は設定したままでよい）。
 		-->
 		<add key="SiteOutputDir" value="" />
 		<add key="SiteOutputDirTest" value="" />
 
 		<!--
 			サブタイトルのテロップ画像（/subtitles/）の作り置きの置き場（絶対パス）。テストと本番で共用する。
-			画像は「描画コードの印・サブタイトル・書体名・作品ごとの組み方・描き方の版」から作った鍵のファイル名で置き、同じ鍵があれば描かずに使う。
+			画像は「テロップの描画コードの印・サブタイトル・書体名・作品ごとの組み方・描き方の版」から作った鍵のファイル名で置き、同じ鍵があれば描かずに使う。14 日使われなかった画像は全体ビルドの最後に消える。
 			出力ディレクトリの中に置くと全体ビルドの最後に消されるので、その外を指すこと（中を指すと起動時に止まる）。
 			未設定なら %LOCALAPPDATA%\PrecureDataStars\SiteBuilder\subtitle-telops。環境変数は展開される。
 		-->
@@ -31,11 +31,20 @@
 
 		<!--
 			OGP カード画像（/og/）の作り置きの置き場（絶対パス）。テストと本番で共用する。
-			画像は「描画コードの印・サイト名・設定の書体のファイル名・カードの材料一式」から作った鍵のファイル名で置き、同じ鍵があれば描かずに使う。
+			「描画コードの印・サイト名・設定の書体のファイル名・カードの材料一式」から作った鍵で索引（index.json）を引き、画像は描いた画素のハッシュのファイル名で置く。索引に同じ鍵があれば描かずに使う。14 日使われなかった画像は全体ビルドの最後に消える。
 			出力ディレクトリの中に置くと全体ビルドの最後に消されるので、その外を指すこと（中を指すと起動時に止まる）。
 			未設定なら %LOCALAPPDATA%\PrecureDataStars\SiteBuilder\og-cards。環境変数は展開される。
 		-->
 		<add key="OgCardCacheDir" value="" />
+
+		<!--
+			OGP カードの見出しに載せるサブタイトルの装飾の作り置きの置き場（絶対パス）。テストと本番で共用する。
+			装飾を描いた画素を「テロップの描画コードの印・文字列・書体名・組み方・字の大きさ」から作った鍵のファイル名で置き、同じ鍵があれば描かずに使う。
+			カードの組み方のコードを変えてカードを描き直すときも、装飾はここから使う。14 日使われなかったものは全体ビルドの最後に消える。
+			出力ディレクトリの中に置くと全体ビルドの最後に消されるので、その外を指すこと（中を指すと起動時に止まる）。
+			未設定なら %LOCALAPPDATA%\PrecureDataStars\SiteBuilder\telop-pieces。環境変数は展開される。
+		-->
+		<add key="TelopPieceCacheDir" value="" />
 
 		<!--
 			読み物（記事 Markdown）原稿の置き場（絶対パス）。コードと分離したコンテンツ資産で、
@@ -83,19 +92,6 @@
 		<add key="GoogleSiteVerification" value="" />
 
 		<!--
-			Google AdSense のパブリッシャー ID（例: ca-pub-1234567890123456）。
-			設定すると全 HTML ページの <head> に AdSense ローダスクリプトが 1 行だけ出力され、
-			Google の自動広告（Auto Ads）が有効化される。広告ユニットの個別配置は不要で、
-			Google が自動的にページ内の最適な位置に広告を配置する。
-			実際に出力されるのは本番モード起動時のみ（テストモードでは設定したままでも出力されない）。
-			未設定時は本番モードでも AdSense スクリプトを出力しない。
-			本値が有効なときは、サイト接続（所有確認）用の google-adsense-account メタタグと、
-			SeoGenerator による /ads.txt も併せて出力される
-			（標準 1 行: google.com, pub-XXXXX, DIRECT, f08c47fec0942fa0）。
-		-->
-		<add key="GoogleAdSenseClientId" value="" />
-
-		<!--
 			OGP（Open Graph Protocol）の og:image に使うサイト共通既定画像。
 			絶対 URL を指定する（例: https://precure.tv/og-default.png）。
 			個別ページで OgImage の明示指定が無い場合に、本値が自動補完される。
@@ -120,24 +116,37 @@
 			空なら同梱の Noto Sans JP で描く。%LOCALAPPDATA% などの環境変数は展開される。
 			  OgCardTitleFont     : 見出し（氏名・作品名・サブタイトル）と識別子
 			  OgCardBodyFont      : 本文（値・単位・注記・年表の目盛り）
-			  OgCardEmphasisFont  : 本文の強調部（役職名などのラベル、前置きの作品名。空なら見出しと同じ）
+			  OgCardEmphasisFont  : 左上の前置き（所属の作品名・種別。空なら見出しと同じ）
+			  OgCardLabelFont     : 事実行の頭のラベル（役職名など。空なら前置きと同じ）。欧文の差し替え・補いはかけない
 			  OgCardNumberFont    : 大きいピンクの数字（空なら見出しと同じ）
-			  OgCardWatermarkFont : 右上の透かし（空なら見出しと同じ）
+			  OgCardWatermarkFont : 右上の透かし（空なら見出しと同じ）。見出しと別の書体なら、欧文の差し替え・補いはかけない
 			  OgCardTitleCondensedFonts : 見出し書体のコンデンス版（字幅を詰めた別ファイル。UD新ゴ コンデンス90〜50 など）を
 			                              「;」区切りで。見出しが 1 行に収まらないとき、長体の代わりに広い順に差し替える。
 			                              空なら長体（字形を横に縮める）で詰める
 			  OgCardNoticeFont    : 注意書き系のページ（規約・About など）の本文（空なら本文と同じ）。機械的な斜体で組む
 			  OgCardObliqueDegrees : 機械的な斜体の角度（度。右に倒す）。ホームの特徴の言葉と注意書きの本文に使う。空なら 0
+			  OgCardLatinFont     : 見出し・強調・透かしの欧文（英数字と欧文の記号）だけを差し替えて組む書体（空なら差し替えない）。
+			                        半角のアポストロフィはこの書体の「’」で組む。本文・数字・注意書きを別の書体にしたときは、その書体の欧文のまま
+			  OgCardFallbackFont  : 和文の書体に無い字を補う書体（空なら補わない）
+			  OgCardChineseFallbackFont     : 見出し側の書体と OgCardFallbackFont のどちらにも無い字（Pr6N に無い簡体字など）を補う書体（空なら補わない）
+			  OgCardChineseBodyFallbackFont : 本文・数字・注意書きの書体に無い簡体字を補う書体（空なら補わない）
+			  OgCardEmojiFont     : 絵文字（楽器の役職名の頭の 🎸 など）を組む色つきの書体（空なら地の書体のまま）
 			カーニングと詰め（kern / palt）は HarfBuzz で効かせる。
 		-->
 		<add key="OgCardTitleFont" value="" />
 		<add key="OgCardBodyFont" value="" />
 		<add key="OgCardEmphasisFont" value="" />
+		<add key="OgCardLabelFont" value="" />
 		<add key="OgCardNumberFont" value="" />
 		<add key="OgCardWatermarkFont" value="" />
 		<add key="OgCardTitleCondensedFonts" value="" />
 		<add key="OgCardNoticeFont" value="" />
 		<add key="OgCardObliqueDegrees" value="" />
+		<add key="OgCardLatinFont" value="" />
+		<add key="OgCardFallbackFont" value="" />
+		<add key="OgCardChineseFallbackFont" value="" />
+		<add key="OgCardChineseBodyFallbackFont" value="" />
+		<add key="OgCardEmojiFont" value="" />
 
 		<!--
 			Amazon アソシエイトのトラッキング ID。

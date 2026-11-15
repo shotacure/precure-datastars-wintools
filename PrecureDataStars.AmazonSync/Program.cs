@@ -32,11 +32,15 @@ namespace PrecureDataStars.AmazonSync;
 ///   <item><c>--attach-print --book-id N --print-asin X</c>: 登録済み書籍へ紙版の ASIN・ISBN・
 ///         ページ数・価格・書影を合流させる（電子だけで登録した書籍に紙版を足す用途）</item>
 ///   <item><c>--target products|books|all</c>: 巡回対象（既定 products。books は書籍の表紙のみ、all は両方）</item>
+///   <item><c>--shop-check</c>: 販売中の商品の枠の候補（series_shop_items の行と、作品に結び付く音楽商品）が Amazon で
+///         売られているかを確かめて書き戻す。<c>--all</c> を付けると全部、付けなければ手で入れた行と発売から 1 年以内の音楽商品だけ</item>
+///   <item><c>--offers</c>: <c>--asin</c> のテスト取得で、販売の状態（在庫・新品か中古か・売り手）を見るリソースを要求する</item>
 ///   <item><c>--dry-run</c>: DB 更新せず取得結果だけ表示</item>
 ///   <item>引数なし: 鮮度切れ（未取得 or 20 時間以上前）のみ取得</item>
 /// </list>
 /// </para>
-/// Creators API のレート制限（1 TPS）を順守するため、各リクエストの間に 1100 ms の sleep を入れる。
+/// 巡回では ASIN を 10 件ずつまとめて GetItems で引き、Creators API のレート制限（1 TPS）を順守するため、
+/// 各リクエストの間に 1100 ms の sleep を入れる。
 /// Amazon アソシエイトの Creators API 使用要件は、画像のリンクを最長 24 時間までしか保存させないので、
 /// 本番デプロイ（scripts/deploy.ps1）が毎回これを流し、毎日の定時デプロイで全件が 24 時間以内に取り直される。
 /// Amazon が答えたうえで画像が無かった側（ASIN が無効になった・画像が載っていない）は保存していた URL を空にし、
@@ -52,6 +56,9 @@ public static class Program
 
     /// <summary>Creators API レート制限（1 TPS）順守のためのリクエスト間隔ミリ秒。</summary>
     private const int RateLimitDelayMs = 1100;
+
+    /// <summary>GetItems 1 回に載せられる ASIN の上限。</summary>
+    private const int GetItemsBatchSize = 10;
 
     public static async Task<int> Main(string[] args)
     {
@@ -92,9 +99,11 @@ public static class Program
             // 単一 ASIN モード（接続不要のテスト用途）
             if (!string.IsNullOrWhiteSpace(singleAsin))
             {
-                Console.WriteLine($"単一 ASIN テスト取得: {singleAsin}{(extended ? "（拡張リソース）" : "")}");
+                // --offers は販売の状態（在庫・新品か中古か・売り手）を見るリソースで取る。
+                bool offers = args.Any(a => a.Equals("--offers", StringComparison.OrdinalIgnoreCase));
+                Console.WriteLine($"単一 ASIN テスト取得: {singleAsin}{(offers ? "（販売の状態）" : extended ? "（拡張リソース）" : "")}");
                 var item = await paApi.GetItemAsync(singleAsin!, CancellationToken.None,
-                    extended ? PaResourceSet.Extended : PaResourceSet.Standard);
+                    offers ? PaResourceSet.Offers : extended ? PaResourceSet.Extended : PaResourceSet.Standard);
                 if (item == null)
                 {
                     Console.WriteLine("該当商品なし、または応答が空でした。");
@@ -198,8 +207,15 @@ public static class Program
                 foreach (var c in changes) Console.WriteLine($"  - {c}");
                 return 0;
             }
+            // 販売中の商品の点検モード。枠の候補（手で入れた行と音楽商品）が Amazon で売られているかを確かめて書き戻す。
+            // --all を付けると全部、付けなければ手で入れた行と発売から 1 年以内の音楽商品だけを確かめる。
+            if (args.Any(a => a.Equals("--shop-check", StringComparison.OrdinalIgnoreCase)))
+            {
+                return await RunShopCheckAsync(paApi, factory, dryRun, all);
+            }
+
             // 巡回対象の切り替え。既定は従来どおり音楽商品のみ。
-            string target = (ReadOptionValue(args, "--target") ?? "products").ToLowerInvariant();
+            string target =(ReadOptionValue(args, "--target") ?? "products").ToLowerInvariant();
             if (target is not ("products" or "books" or "all"))
             {
                 Console.Error.WriteLine($"ERROR: --target の値が不正です: {target}（products / books / all）");
@@ -256,6 +272,10 @@ public static class Program
             Console.WriteLine($"対象商品: {targets.Count} 件 ({modeLabel})");
             if (dryRun) Console.WriteLine("(dry-run モード：DB 更新は行いません)");
 
+            // 対象の全 ASIN（デジタル・CD）を先に 10 件ずつまとめて引いておき、商品ごとの判定はその結果の表で行う。
+            var (productUrls, productEans, productFailed) = await FetchImageUrlsAsync(paApi,
+                targets.SelectMany(p => new[] { p.AmazonAsinDigital, p.AmazonAsinCd }));
+
             int ok = 0, miss = 0;
             int idx = 0;
             foreach (var prod in targets)
@@ -273,39 +293,33 @@ public static class Program
 
                 if (!string.IsNullOrWhiteSpace(prod.AmazonAsinDigital))
                 {
-                    try
-                    {
-                        var item = await paApi.GetItemAsync(prod.AmazonAsinDigital!, CancellationToken.None);
-                        if (item?.LargeImageUrl is { Length: > 0 } u) digitalUrl = u;
-                    }
-                    catch (Exception ex)
-                    {
-                        requestFailed = true;
-                        Console.WriteLine($"  ! Digital ASIN 取得失敗: {ex.Message}");
-                    }
-                    await Task.Delay(RateLimitDelayMs);
+                    if (productFailed.Contains(prod.AmazonAsinDigital!.Trim())) requestFailed = true;
+                    else digitalUrl = productUrls.GetValueOrDefault(prod.AmazonAsinDigital!.Trim());
                 }
                 if (!string.IsNullOrWhiteSpace(prod.AmazonAsinCd))
                 {
-                    try
-                    {
-                        var item = await paApi.GetItemAsync(prod.AmazonAsinCd!, CancellationToken.None);
-                        if (item?.LargeImageUrl is { Length: > 0 } u) cdUrl = u;
-                    }
-                    catch (Exception ex)
-                    {
-                        requestFailed = true;
-                        Console.WriteLine($"  ! CD ASIN 取得失敗: {ex.Message}");
-                    }
-                    await Task.Delay(RateLimitDelayMs);
+                    if (productFailed.Contains(prod.AmazonAsinCd!.Trim())) requestFailed = true;
+                    else cdUrl = productUrls.GetValueOrDefault(prod.AmazonAsinCd!.Trim());
                 }
 
                 if (requestFailed)
                 {
                     miss++;
                     Console.WriteLine("取得失敗（今の画像を残し、次の巡回で取り直す）");
+                    continue;
                 }
-                else if (digitalUrl != null || cdUrl != null)
+
+                // CD の ASIN の EAN（JAN）。画像と同じく、取り直しのたびに入れ替える（取れなければ空にする）。
+                // Amazon から取った値なので、構造化データの gtin13 には盤の mcn が無いときだけ使う。
+                string? ean = string.IsNullOrWhiteSpace(prod.AmazonAsinCd)
+                    ? null
+                    : productEans.GetValueOrDefault(prod.AmazonAsinCd!.Trim());
+                if (!dryRun && !string.Equals(ean, prod.AmazonEan, StringComparison.Ordinal))
+                {
+                    await repo.UpdateAmazonEanAsync(prod.ProductCatalogNo, ean);
+                }
+
+                if (digitalUrl != null || cdUrl != null)
                 {
                     // 採用ソース決定：upgrade モードはデジタルへ格上げ、それ以外は既存の明示選択を尊重しつつ
                     // 未選択／選択先が空ならデジタル→CD の既定優先（DecideCoverSource 参照）。
@@ -404,6 +418,10 @@ public static class Program
         Console.WriteLine($"対象書籍: {targets.Count} 件 ({(all ? "全件強制" : $"未取得・鮮度切れ {StaleHours} 時間以上")})");
         if (dryRun) Console.WriteLine("(dry-run モード：DB 更新は行いません)");
 
+        // 音楽商品と同じく、対象の全 ASIN（紙・Kindle）を先に 10 件ずつまとめて引いておく。
+        var (bookUrls, _, bookFailed) = await FetchImageUrlsAsync(paApi,
+            targets.SelectMany(b => new[] { b.AmazonAsinPrint, b.AmazonAsinKindle }));
+
         int ok = 0, miss = 0, idx = 0;
         foreach (var book in targets)
         {
@@ -417,23 +435,13 @@ public static class Program
 
             if (!string.IsNullOrWhiteSpace(book.AmazonAsinPrint))
             {
-                try
-                {
-                    var item = await paApi.GetItemAsync(book.AmazonAsinPrint!, CancellationToken.None);
-                    if (item?.LargeImageUrl is { Length: > 0 } u) printUrl = u;
-                }
-                catch (Exception ex) { requestFailed = true; Console.WriteLine($"  ! 紙 ASIN 取得失敗: {ex.Message}"); }
-                await Task.Delay(RateLimitDelayMs);
+                if (bookFailed.Contains(book.AmazonAsinPrint!.Trim())) requestFailed = true;
+                else printUrl = bookUrls.GetValueOrDefault(book.AmazonAsinPrint!.Trim());
             }
             if (!string.IsNullOrWhiteSpace(book.AmazonAsinKindle))
             {
-                try
-                {
-                    var item = await paApi.GetItemAsync(book.AmazonAsinKindle!, CancellationToken.None);
-                    if (item?.LargeImageUrl is { Length: > 0 } u) kindleUrl = u;
-                }
-                catch (Exception ex) { requestFailed = true; Console.WriteLine($"  ! Kindle ASIN 取得失敗: {ex.Message}"); }
-                await Task.Delay(RateLimitDelayMs);
+                if (bookFailed.Contains(book.AmazonAsinKindle!.Trim())) requestFailed = true;
+                else kindleUrl = bookUrls.GetValueOrDefault(book.AmazonAsinKindle!.Trim());
             }
 
             if (requestFailed)
@@ -466,6 +474,64 @@ public static class Program
         Console.WriteLine();
         Console.WriteLine($"書籍完了: 取得成功 {ok} 件 / 失敗・該当なし {miss} 件");
         return 0;
+    }
+
+    /// <summary>
+    /// ASIN を重複を除いて 10 件ずつまとめて GetItems で引き、ASIN → 大きい画像の URL の表、ASIN → EAN（JAN）の表と、
+    /// 通信・応答に失敗した ASIN の集合を返す。応答に載らなかった ASIN と画像の無い ASIN は表にも失敗にも入らない
+    /// （Amazon が答えたうえで画像が無かった扱い）。まとめた要求が失敗したときはその分を 1 件ずつ引き直し、
+    /// それでも失敗した ASIN だけを失敗に入れる（無効な ASIN が 1 つ混ざっただけで、同じ組のほかの ASIN まで
+    /// 取り直せなくなるのを避ける）。各リクエストの後に <see cref="RateLimitDelayMs"/> 待つ。
+    /// </summary>
+    private static async Task<(Dictionary<string, string> Urls, Dictionary<string, string> Eans, HashSet<string> Failed)> FetchImageUrlsAsync(
+        PaApiClient paApi, IEnumerable<string?> asins)
+    {
+        var distinct = asins
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .Select(a => a!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var urls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var eans = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var failed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var chunks = distinct.Chunk(GetItemsBatchSize).ToList();
+        Console.WriteLine($"ASIN {distinct.Count} 件を {GetItemsBatchSize} 件ずつ {chunks.Count} 回で引きます。");
+        foreach (var chunk in chunks)
+        {
+            try
+            {
+                var items = await paApi.GetItemsAsync(chunk, CancellationToken.None);
+                foreach (var item in items)
+                {
+                    if (item.Asin.Length > 0 && item.LargeImageUrl is { Length: > 0 } u) urls[item.Asin] = u;
+                    if (item.Asin.Length > 0 && item.Ean is { Length: > 0 } e) eans[item.Asin] = e.Trim();
+                }
+                await Task.Delay(RateLimitDelayMs);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  ! まとめた取得に失敗（{string.Join(", ", chunk)}）: {ex.Message}。1 件ずつ引き直します。");
+                await Task.Delay(RateLimitDelayMs);
+                foreach (var asin in chunk)
+                {
+                    try
+                    {
+                        var item = await paApi.GetItemAsync(asin, CancellationToken.None);
+                        if (item?.LargeImageUrl is { Length: > 0 } u) urls[asin] = u;
+                        if (item?.Ean is { Length: > 0 } e) eans[asin] = e.Trim();
+                    }
+                    catch (Exception ex1)
+                    {
+                        failed.Add(asin);
+                        Console.WriteLine($"  ! {asin} 取得失敗: {ex1.Message}");
+                    }
+                    await Task.Delay(RateLimitDelayMs);
+                }
+            }
+        }
+        Console.WriteLine();
+        return (urls, eans, failed);
     }
 
     /// <summary>
@@ -560,6 +626,92 @@ public static class Program
     }
 
     /// <summary>カンマ区切りの整数リストを解析する。null / 空なら空リスト。</summary>
+    /// <summary>発売からこの日数以内（発売前を含む）の音楽商品は、<c>--all</c> を付けない点検でも確かめる。</summary>
+    private const int ShopCheckRecentDays = 365;
+
+    /// <summary>
+    /// 販売中の商品の枠の候補が Amazon で売られているかを確かめ、結果を書き戻す。
+    /// 候補は、手で入れた行（series_shop_items の出す設定の行）と、作品に結び付く音楽商品（CD の ASIN があるもの）。
+    /// <paramref name="all"/> が false のときは、手で入れた行と、発売から <see cref="ShopCheckRecentDays"/> 日以内
+    /// （発売前を含む）の音楽商品だけを確かめる（定時の点検）。true のときは全部を確かめる（本番デプロイの前）。
+    /// 売られていると見なすのは、新品を Amazon.co.jp 本体が売っていて、在庫あり（残りわずかを含む）か予約受付中で、カートに入る出品があるとき
+    /// （<see cref="PaListing.IsSoldNewByAmazon"/>）。Amazon が答えたうえで商品や出品が無かった ASIN は、売られていないとする。
+    /// 通信・応答の失敗は例外のまま上げ、何も書き換えない（前の状態のまま、次の点検で確かめ直す）。
+    /// </summary>
+    private static async Task<int> RunShopCheckAsync(PaApiClient paApi, IConnectionFactory factory, bool dryRun, bool all)
+    {
+        var repo = new SeriesShopItemsRepository(factory);
+        var rows = await repo.GetEnabledAsync();
+        var products = await repo.GetProductCandidatesAsync();
+
+        // 手で入れた行の ASIN（画像もここで取り直す）と、音楽商品の ASIN。同じ ASIN が両方にあれば両方へ書く。
+        var manualTitleByAsin = rows
+            .GroupBy(r => r.Asin, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First().Title, StringComparer.Ordinal);
+        var recentFrom = DateTime.Today.AddDays(-ShopCheckRecentDays);
+        var productsByAsin = products
+            .Where(c => all || c.ReleaseDate >= recentFrom)
+            .GroupBy(c => c.Asin, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var asins = manualTitleByAsin.Keys.Concat(productsByAsin.Keys).Distinct(StringComparer.Ordinal).ToList();
+        Console.WriteLine($"販売中の商品の点検: {asins.Count} 件（手で入れた行 {manualTitleByAsin.Count}・音楽商品 {productsByAsin.Count}"
+            + $"{(all ? "" : $"〔発売から {ShopCheckRecentDays} 日以内〕")}）{(dryRun ? "（dry-run）" : "")}");
+        if (asins.Count == 0) return 0;
+
+        // 全部の ASIN の答えがそろってから書き戻す（途中で通信に失敗したら、何も書き換えない）。
+        var itemsByAsin = new Dictionary<string, PaItem>(StringComparer.Ordinal);
+        for (int i = 0; i < asins.Count; i += GetItemsBatchSize)
+        {
+            if (i > 0) await Task.Delay(RateLimitDelayMs);
+            var batch = asins.Skip(i).Take(GetItemsBatchSize).ToList();
+            foreach (var item in await paApi.GetItemsAsync(batch, CancellationToken.None, PaResourceSet.Offers))
+                itemsByAsin[item.Asin] = item;
+        }
+
+        var now = DateTime.Now;
+        int changed = 0, buyableCount = 0;
+        // Amazon.co.jp 本体の新品だが、在庫の種別で外した商品の数（種別ごと）。条件を見直す手がかりに出す。
+        var excludedByType = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        foreach (var asin in asins)
+        {
+            itemsByAsin.TryGetValue(asin, out var item);
+            var listing = item?.Listings.FirstOrDefault(l => l.IsSoldNewByAmazon);
+            bool buyable = listing != null;
+            if (buyable) buyableCount++;
+            var fromAmazon = item?.Listings.FirstOrDefault(l => l.IsNewFromAmazon);
+            if (!buyable && fromAmazon != null)
+            {
+                string type = fromAmazon.AvailabilityType ?? "(種別なし)";
+                excludedByType[type] = excludedByType.GetValueOrDefault(type) + 1;
+            }
+            // 売られていないときは、カートに入る出品（無ければ先頭の出品）の種別を記録に残す。
+            string? availabilityType = (listing
+                ?? item?.Listings.FirstOrDefault(l => l.IsBuyBoxWinner)
+                ?? item?.Listings.FirstOrDefault())?.AvailabilityType;
+
+            bool isManual = manualTitleByAsin.TryGetValue(asin, out var manualTitle);
+            productsByAsin.TryGetValue(asin, out var product);
+            bool? before = isManual ? rows.First(r => r.Asin == asin).IsBuyable : product!.IsBuyable;
+            bool stateChanged = before != buyable;
+            if (stateChanged) changed++;
+            // 記録に出すのは、状態が変わった商品だけ（全部を確かめる回は数百件になる）。
+            if (stateChanged)
+                Console.WriteLine($"  {asin}  {(buyable ? "売られている" : "売られていない")}"
+                    + $"（{availabilityType ?? (item == null ? "商品なし" : "出品なし")}）  ← 変わった  {manualTitle ?? product!.Title}");
+
+            if (dryRun) continue;
+            if (isManual)
+                await repo.UpdateCheckResultAsync(asin, buyable, availabilityType, item?.LargeImageUrl ?? item?.MediumImageUrl, now);
+            if (product != null)
+                await repo.UpsertProductStateAsync(asin, buyable, availabilityType, now);
+        }
+        if (excludedByType.Count > 0)
+            Console.WriteLine("  Amazon.co.jp 本体の新品だが、在庫の種別で外した商品: "
+                + string.Join("・", excludedByType.Select(kv => $"{kv.Key} {kv.Value} 件")));
+        Console.WriteLine($"点検を終えました（売られている {buyableCount} 件・状態が変わった商品 {changed} 件）。");
+        return 0;
+    }
+
     private static List<int> ParseIntList(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return new List<int>();

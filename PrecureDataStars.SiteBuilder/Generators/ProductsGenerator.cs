@@ -27,6 +27,12 @@ public sealed class ProductsGenerator
     /// <summary>同じ題名の商品が複数ある題名の集合（GenerateAsync が並列レンダリングの前に確定させる）。</summary>
     private HashSet<string> _duplicateTitles = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// 2 つ以上の商品の盤に出てくる mcn の集合（GenerateAsync が並列レンダリングの前に確定させる）。mcn は CD そのものの番号で、
+    /// 同じ CD を違う包装で出した版や再発売の盤では同じ値になり、商品ごとの JAN と一致しないので、gtin13 には使わない。
+    /// </summary>
+    private HashSet<string> _sharedMcns = new(StringComparer.Ordinal);
+
     private readonly BuildContext _ctx;
     private readonly PageRenderer _page;
 
@@ -231,6 +237,16 @@ public sealed class ProductsGenerator
             .Select(g => g.Key)
             .ToHashSet(StringComparer.Ordinal);
 
+        _sharedMcns = discsByProduct
+            .SelectMany(kv => kv.Value
+                .Where(d => !string.IsNullOrWhiteSpace(d.Mcn))
+                .Select(d => (Mcn: d.Mcn!.Trim(), Product: kv.Key)))
+            .Distinct()
+            .GroupBy(x => x.Mcn, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
         // 曲・劇伴の初出盤（発売の早い順に走査して最初に収録した商品）。カードの「初出 n曲」に使う。
         // 並列レンダリングの前に確定させ、以後は読み取りだけにする。
         BuildFirstReleaseIndex(allProducts, discsByProduct);
@@ -270,24 +286,22 @@ public sealed class ProductsGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = "歴代プリキュア音楽商品(CD/配信)",
-            // 本文リード行と同じ母数をカードにも置く。
-            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア音楽商品(CD/配信)")
+            PageTitle = "歴代プリキュア音楽商品",
+            // 数は商品の点数と、ディスクの媒体ごとの枚数。
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア音楽商品")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "サウンドトラックから主題歌シングルまで、プリキュアの音楽商品を発売日・収録曲・購入先とともに一覧にしました。",
-                Badges = new[]
-                {
-                    new OgCardBadge("商品", $"{products.Count}点"),
-                    new OgCardBadge("ディスク", $"{discsByProduct.Values.Sum(d => d.Count)}枚")
-                }
+                // ページの冒頭文（products-index.sbn の .lead）と同じ文。数だけはページ側で添える。
+                Subtitle = "歴代プリキュアの音楽商品（CD・配信）",
+                Badges = BuildIndexOgBadges(products.Count, discsByProduct.Values.SelectMany(d => d).ToList())
             },
-            MetaDescription = $"歴代プリキュアの音楽商品（CD・配信）{products.Count} 点 {discsByProduct.Values.Sum(d => d.Count)} 枚の一覧。サウンドトラックや主題歌シングルの発売日・収録曲・購入先をまとめました。",
+            // ページの冒頭文（products-index.sbn の .lead）と同じ文。
+            MetaDescription = $"歴代プリキュアの音楽商品（CD・配信）全 {products.Count} 点",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "歴代プリキュア音楽商品(CD/配信)", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュア音楽商品", Url = "" }
             }
         };
         _page.RenderAndWrite("/products/", "products", "products-index.sbn", content, layout);
@@ -623,6 +637,10 @@ public sealed class ProductsGenerator
         IReadOnlyDictionary<int, IReadOnlyList<(string PartCode, string SizeCode, int SeriesId, string MNoDetail)>> bgmAssignmentsByRecordingId,
         IReadOnlyDictionary<int, ProductCompany> productCompanyMap)
     {
+        // ピンポイントビルドで書かないページは、組み立てごと飛ばす。
+        string targetUrl = PathUtil.ProductUrl(product.ProductCatalogNo);
+        if (!_page.IsTarget(targetUrl)) return targetUrl;
+
         var discs = discsByProduct.TryGetValue(product.ProductCatalogNo, out var lst)
             ? lst
             : new List<Disc>();
@@ -836,7 +854,6 @@ public sealed class ProductsGenerator
                 CoverImageSource = product.CoverImageSource ?? "",
                 AmazonCdUrl = amazonCdUrl,
                 AmazonDigitalUrl = amazonDigitalUrl,
-                Notes = product.Notes ?? "",
                 OfficialUrl = product.OfficialUrl ?? ""
             },
             Discs = discViews,
@@ -846,7 +863,7 @@ public sealed class ProductsGenerator
                 : ""
         };
 
-        // 構造化データ。音楽系の商品種別なら MusicAlbum、それ以外は Product。
+        // 構造化データ。音楽系の商品種別なら MusicAlbum、それ以外は Product（価格を付けられるオファーが無ければ CreativeWork）。
         // description / numberOfTracks を追加して、検索結果のリッチスニペット候補要素を増やす。
         string baseUrl = _ctx.Config.BaseUrl;
         string productUrl = PathUtil.ProductUrl(product.ProductCatalogNo);
@@ -893,12 +910,6 @@ public sealed class ProductsGenerator
             if (!string.IsNullOrEmpty(labelPc.NameEn)) org["alternateName"] = labelPc.NameEn;
             jsonLdDict["recordLabel"] = org;
         }
-        // 商品 JAN が 13 桁の数字（= JAN/EAN-13 = schema.org の GTIN-13）なら gtin13 を出力する。
-        // JAN は複数ディスクで共通のため、複数枚組 BOX でも商品単位で一意に定まる。
-        if (productJan.Length == 13 && productJan.All(char.IsDigit))
-        {
-            jsonLdDict["gtin13"] = productJan;
-        }
         // ジャケット画像（Amazon CDN ホットリンク URL）を image に乗せる。商品詳細ページで表示している
         // 代表ジャケットと同一 URL。2 デザインを併記する商品は副ジャケットも配列で添える。未取得は出さない。
         if (!string.IsNullOrEmpty(coverPrimaryUrl))
@@ -916,9 +927,14 @@ public sealed class ProductsGenerator
         // 本体価格は税率改定に左右されない固定値で「リリース時点」の曖昧さがなく、Amazon のライブ価格でもない
         // ため PA-API の価格鮮度要件にも抵触しない。valueAddedTaxIncluded:false で税抜であることを明示する。
         // アフィリエイトタグは url に既に含まれている。
+        // offers を持つ商品は Google の「販売者のリスティング」として扱われ、image が必須になる。ジャケット画像が
+        // まだ無い商品（発売前で Amazon に画像が出ていないものなど）はオファーを出さず、画像が取れたビルドから出す。
+        // availability は発売日がビルド時点より後なら予約受付中（PreOrder）、それ以外は在庫あり（InStock）。
         var offers = new List<Dictionary<string, object?>>();
-        if (!string.IsNullOrEmpty(amazonCdUrl) && product.PriceExTax is int exTaxPrice)
+        if (!string.IsNullOrEmpty(amazonCdUrl) && product.PriceExTax is int exTaxPrice
+            && !string.IsNullOrEmpty(coverPrimaryUrl))
         {
+            bool isPreOrder = product.ReleaseDate.Date > _ctx.BuildStartedAt.Date;
             offers.Add(new Dictionary<string, object?>
             {
                 ["@type"] = "Offer",
@@ -930,13 +946,34 @@ public sealed class ProductsGenerator
                     ["priceCurrency"] = "JPY",
                     ["valueAddedTaxIncluded"] = false
                 },
-                ["availability"] = "https://schema.org/InStock",
+                ["availability"] = isPreOrder ? "https://schema.org/PreOrder" : "https://schema.org/InStock",
                 ["category"] = "Physical"
             });
         }
         if (offers.Count > 0)
         {
             jsonLdDict["offers"] = offers;
+            // Product の brand には発売元（レーベル）を載せる。
+            // 返品・送料（hasMerchantReturnPolicy・shippingDetails）は売り手（Amazon）の条件で当サイトは決められないので出さない。
+            if (!isMusicAlbum && !string.IsNullOrWhiteSpace(labelText))
+                jsonLdDict["brand"] = new Dictionary<string, object?> { ["@type"] = "Brand", ["name"] = labelText };
+            // gtin13（JAN = EAN-13）。Amazon から取った商品の EAN（products.amazon_ean）を先に、無ければ商品 JAN として出している
+            // CD 系の盤の mcn（productJan）。mcn はほかの商品の盤と同じ値なら使わない（_sharedMcns。同じ CD を違う包装で出した版など）。
+            // 13 桁でチェック数字の合うものだけを使う。
+            if (!isMusicAlbum)
+            {
+                string? gtin = IsValidGtin13(product.AmazonEan) ? product.AmazonEan!.Trim()
+                    : IsValidGtin13(productJan) && !_sharedMcns.Contains(productJan.Trim()) ? productJan.Trim()
+                    : null;
+                if (gtin is not null) jsonLdDict["gtin13"] = gtin;
+            }
+        }
+        else if (!isMusicAlbum)
+        {
+            // Product 型は offers・review・aggregateRating のどれかが無いとリッチリザルトの重要エラーになる。
+            // 価格を付けられるオファーが無い商品（特典・非売品や定価未登録のもの、ジャケット画像の無いもの）は、
+            // Product ではなく CreativeWork として出す。
+            jsonLdDict["@type"] = "CreativeWork";
         }
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + productUrl;
         var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
@@ -950,7 +987,7 @@ public sealed class ProductsGenerator
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "歴代プリキュア音楽商品(CD/配信)", Url = "/products/" },
+                new BreadcrumbItem { Label = "歴代プリキュア音楽商品", Url = "/products/" },
                 new BreadcrumbItem { Label = product.Title, Url = "" }
             },
             OgType = "website",
@@ -961,6 +998,21 @@ public sealed class ProductsGenerator
         return productUrl;
     }
 
+    /// <summary>
+    /// 一覧のカードの数。商品の点数と、ディスクの枚数を媒体ごと（CD・DVD・Blu-ray）に分けて並べる。
+    /// 枚数が 0 の媒体は出さない。CD-ROM は CD に数え、配信（DL）とその他は枚数に入れない。
+    /// </summary>
+    private static OgCardBadge[] BuildIndexOgBadges(int productCount, IReadOnlyList<Disc> discs)
+    {
+        var badges = new List<OgCardBadge> { new("商品", $"{productCount}点") };
+        int cd = discs.Count(d => d.MediaFormat is "CD" or "CD_ROM");
+        int dvd = discs.Count(d => d.MediaFormat == "DVD");
+        int bd = discs.Count(d => d.MediaFormat == "BD");
+        if (cd > 0) badges.Add(new OgCardBadge("CD", $"{cd}枚"));
+        if (dvd > 0) badges.Add(new OgCardBadge("DVD", $"{dvd}枚"));
+        if (bd > 0) badges.Add(new OgCardBadge("Blu-ray", $"{bd}枚"));
+        return badges.ToArray();
+    }
     /// <summary>
     /// 商品詳細ページの OGP カードを組み立てる。
     /// 「商品種別 → 商品名 → 量のバッジ（枚数・トラック数・収録時間・初出の曲数）→ 発売日・品番・価格 → 作曲者・収録内容の内訳」の順に置き、
@@ -1048,6 +1100,8 @@ public sealed class ProductsGenerator
     private (IReadOnlyList<OgCardFactLine> Facts, int FirstReleaseCount) BuildOgContentFacts(List<Disc> discs, string productCatalogNo)
     {
         var composerCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        // 作曲者が盤の中で初めて出た順（ディスクの順 → トラックの順 → そのトラックの credit_seq）。曲数が同じ人の並びに使う。
+        var composerFirstSeen = new Dictionary<string, int>(StringComparer.Ordinal);
         var firstRecordings = new HashSet<int>();
         var firstCues = new HashSet<(int, string)>();
         int songs = 0, karaoke = 0, bgm = 0, drama = 0, other = 0;
@@ -1077,9 +1131,12 @@ public sealed class ProductsGenerator
                         {
                             foreach (var c in credits.Where(c => string.Equals(c.CreditRole, "COMPOSITION", StringComparison.Ordinal)))
                             {
-                                if (!_ctx.PersonAliasById.TryGetValue(c.PersonAliasId, out var alias)) continue;
+                                // 名義を持たない文字だけの行（entry_kind=TEXT）は作曲者に数えない。
+                                if (c.PersonAliasId is not int composerAliasId
+                                    || !_ctx.PersonAliasById.TryGetValue(composerAliasId, out var alias)) continue;
                                 string name = alias.DisplayTextOverride ?? alias.Name;
                                 composerCounts[name] = composerCounts.TryGetValue(name, out int n) ? n + 1 : 1;
+                                composerFirstSeen.TryAdd(name, composerFirstSeen.Count);
                             }
                         }
                         break;
@@ -1096,7 +1153,7 @@ public sealed class ProductsGenerator
         var facts = new List<OgCardFactLine>();
         if (composerCounts.Count > 0)
         {
-            var composers = composerCounts.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => kv.Key).ToList();
+            var composers = composerCounts.OrderByDescending(kv => kv.Value).ThenBy(kv => composerFirstSeen[kv.Key]).Select(kv => kv.Key).ToList();
             facts.Add(new OgCardFactLine("音楽", JoinWithRest(composers)) { LabelColorHex = OgRolePalette.ColorFor("COMPOSITION") });
         }
 
@@ -1154,8 +1211,7 @@ public sealed class ProductsGenerator
     }
 
     /// <summary>
-    /// 商品詳細の meta description。「『商品名』は 2018 年 5 月 23 日発売の種別（2 枚組・4 トラック）。発売元は〇〇。
-    /// 収録曲とクレジット、品番、価格、購入先をまとめました。」の順で 140 字ほどに収める。
+    /// 商品詳細の meta description。「2018 年 5 月 23 日発売の種別（2 枚組・4 トラック）。発売元：〇〇」（商品名はページ名に出ているので入れない）。
     /// </summary>
     private static string BuildProductMetaDescription(
         Product product,
@@ -1164,25 +1220,35 @@ public sealed class ProductsGenerator
         int totalTracks)
     {
         const int targetMaxChars = 150;
-        const string tail = "収録曲とクレジット、品番、価格、購入先をまとめました。";
 
         var sb = new System.Text.StringBuilder();
-        sb.Append('『').Append(product.Title).Append("』は")
-          .Append(product.ReleaseDate.ToString("yyyy年M月d日")).Append("発売の")
+        sb.Append(product.ReleaseDate.ToString("yyyy年M月d日")).Append("発売の")
           .Append(string.IsNullOrWhiteSpace(productKindLabel) ? "音楽商品" : productKindLabel);
         var scale = new List<string>();
         if (product.DiscCount > 1) scale.Add($"{product.DiscCount}枚組");
         if (totalTracks > 0) scale.Add($"{totalTracks}トラック");
         if (scale.Count > 0) sb.Append('（').Append(string.Join("・", scale)).Append('）');
-        sb.Append('。');
 
         if (!string.IsNullOrWhiteSpace(labelText))
         {
-            string fragment = $"発売元は{labelText}。";
-            if (sb.Length + fragment.Length + tail.Length <= targetMaxChars) sb.Append(fragment);
+            string fragment = $"。発売元：{labelText}";
+            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
         }
-        sb.Append(tail);
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// JAN（EAN-13）として使える値か。13 桁の数字で、0 だけでなく、末尾のチェック数字が合うもの
+    /// （奇数桁 ×1・偶数桁 ×3 の和から求める）。
+    /// </summary>
+    private static bool IsValidGtin13(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return false;
+        string c = code.Trim();
+        if (c.Length != 13 || !c.All(char.IsAsciiDigit) || c.All(ch => ch == '0')) return false;
+        int sum = 0;
+        for (int i = 0; i < 12; i++) sum += (c[i] - '0') * (i % 2 == 0 ? 1 : 3);
+        return (10 - sum % 10) % 10 == c[12] - '0';
     }
 
     /// <summary>商品社名 ID から社名（和名）を引く（構造化 ID で解決する）。 ID が NULL、マスタ未登録、論理削除済みのいずれかの場合は空文字を返す （フリーテキストフォールバックは存在しない）。</summary>
@@ -1937,7 +2003,7 @@ public sealed class ProductsGenerator
     /// <para>
     /// 同一名義の作曲・編曲はバッジを並べて 1 セグメントに統合する
     /// （<c>[作曲][編曲] 佐藤 直紀</c> の形）。これは構造化エントリ版
-    /// <see cref="TrackCreditHtmlBuilder.BuildBgmCueCreditsSegmentsHtmlAsync"/> と同じ
+    /// <see cref="TrackCreditHtmlBuilder.BuildBgmCueCreditsSegmentsHtml"/> と同じ
     /// 視覚規則に揃えるためのもの。
     /// </para>
     /// <para>
@@ -2175,7 +2241,6 @@ public sealed class ProductsGenerator
         public string AmazonCdUrl { get; set; } = "";
         /// <summary>Amazon 商品リンク（デジタル音源向け。アフィリエイトタグ付き。ASIN 未設定なら空）。</summary>
         public string AmazonDigitalUrl { get; set; } = "";
-        public string Notes { get; set; } = "";
         /// <summary>音楽商品の公式ページ URL（任意）。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして出す。</summary>
         public string OfficialUrl { get; set; } = "";
     }

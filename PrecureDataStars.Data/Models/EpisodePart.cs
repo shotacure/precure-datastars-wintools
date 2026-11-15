@@ -21,7 +21,16 @@ public sealed class EpisodePart
     /// <summary>配信（VOD）版の尺（秒）。</summary>
     public ushort? VodLength { get; set; }
 
-    /// <summary>備考（自由テキスト）。</summary>
+    /// <summary>
+    /// 補足事項（DB 列名 supplement）。パートの中身の添え書き（「OA時提供サイドスーパー」・コーナー名など）で、
+    /// サイトのフォーマットの表の「補足事項」の列に出す。
+    /// </summary>
+    public string? Supplement { get; set; }
+
+    /// <summary>
+    /// 備考（自由テキスト、サイトには出さない）。放送の記録の道具が書く「【本放送未確認】」の印もここに置き、
+    /// サイトはこの印のある話に「調査中」の断りを出す。
+    /// </summary>
     public string? Notes { get; set; }
 
     /// <summary>レコード作成者（監査用）。</summary>

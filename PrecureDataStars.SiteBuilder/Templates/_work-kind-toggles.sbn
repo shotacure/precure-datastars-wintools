@@ -1,0 +1,91 @@
+{{## TV・映画・オトナシリーズの出し分けのボタン。スタッフ一覧・役職詳細・声の出演一覧のタブの下の段（.list-toolbar）の右に置き、全タブに効く。
+     ページのモデルの Kinds（そのページに載る参加の種類）を見て、種類が 2 つ以上あるときに、ある種類の分だけ出す。
+     ・開いたときはすべて入っている。押すとその種類を入れたり切ったりし、ルート（data-wk-on を持つ要素）の data-wk-on に
+       入っている種類を空白区切りで書く（"tv movie otona"）。最後の 1 つは切れない。
+     ・件数の順の一覧と年表の行には参加した種類（data-wk）が付いていて、入っている種類に 1 つも当たらないものは隠す。札（📺・🎥・🌙）も
+       入っている種類だけ出す（site.css。ルートの data-wk-off＝切っている種類で決める）。
+     ・「初めて」で節を分ける一覧（役職順・初参加順・初担当順・初出演順・キャラクター別）は、行を種類ごとにその種類で初めての作品の節に
+       置いてあり（data-wk-own・data-wk-after）、入っている種類の中で初めての作品の節にだけ出る（site.css）。見える行が無くなった節は隠す。
+     ・年表は、🌙 だけを入れているとき（ルートの data-wk-only="otona"）にオトナシリーズの作品ごとの帯の線表（.wk-timeline-otona）へ切り替える（site.css）。
+     ・切り替えたら wk-change（件数の並べ替えの数え直し。count-sort.js）と rtl-recount（年表の横の数の数え直し。role-timeline.js）を送る。
+     ・状態は URL の # の works に残す（view-state.js）。 ##}}
+{{~ if Kinds.Count > 1 ~}}
+<div class="wk-toggles" role="group" aria-label="TV・映画・オトナシリーズで絞り込み">
+  {{~ if Kinds.Tv ~}}<button type="button" class="wk-toggle wk-toggle-tv is-active" data-wk-toggle="tv" aria-pressed="true">📺 TV</button>{{~ end ~}}
+  {{~ if Kinds.Movie ~}}<button type="button" class="wk-toggle wk-toggle-movie is-active" data-wk-toggle="movie" aria-pressed="true">🎥 映画</button>{{~ end ~}}
+  {{~ if Kinds.Otona ~}}<button type="button" class="wk-toggle wk-toggle-otona is-active" data-wk-toggle="otona" aria-pressed="true">🌙 オトナ</button>{{~ end ~}}
+</div>
+<script>
+(function () {
+  var ORDER = ['tv', 'movie', 'otona'];
+  document.querySelectorAll('.wk-toggles').forEach(function (group) {
+    var root = group.closest('[data-wk-on]');
+    if (!root || group.getAttribute('data-wk-ready')) return;
+    group.setAttribute('data-wk-ready', '1');
+    var buttons = group.querySelectorAll('.wk-toggle');
+    function current() {
+      return (root.getAttribute('data-wk-on') || '').split(/\s+/).filter(Boolean);
+    }
+    function sync() {
+      var cur = current();
+      buttons.forEach(function (b) {
+        var active = cur.indexOf(b.getAttribute('data-wk-toggle')) >= 0;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-pressed', active ? 'true' : 'false');
+        // 最後の 1 つは切れないので、それと分かる見た目にする。
+        b.classList.toggle('is-last', active && cur.length === 1);
+      });
+      // 行・札・年表の帯の出し分け（site.css）は、切っている種類（data-wk-off）と、1 種類だけ入れているときのその種類（data-wk-only）で決める。
+      var off = [];
+      buttons.forEach(function (b) {
+        var k = b.getAttribute('data-wk-toggle');
+        if (cur.indexOf(k) < 0) off.push(k);
+      });
+      root.setAttribute('data-wk-off', off.join(' '));
+      if (cur.length === 1) { root.setAttribute('data-wk-only', cur[0]); } else { root.removeAttribute('data-wk-only'); }
+      markEmpty(cur);
+    }
+    // 「初めて」で節を分ける一覧（役職順・初参加順・初担当順・初出演順・キャラクター別）は、行を種類ごとに置いてある。
+    // 行が見えるのは、置いた種類（data-wk-own）が入っていて、それより早い種類（data-wk-after）が 1 つも入っていないとき（site.css と同じ決まり）。
+    // 見える行が無くなった節（data-wk-section）と、見える節が無くなった組（data-wk-group）に data-wk-empty を付けて隠し、
+    // 節の件数（左のもくじに出る data-section-nav-count）を見える行の数に合わせる。
+    function markEmpty(cur) {
+      root.querySelectorAll('[data-wk-section]').forEach(function (sec) {
+        var n = 0;
+        sec.querySelectorAll('[data-wk-own]').forEach(function (row) {
+          if (cur.indexOf(row.getAttribute('data-wk-own')) < 0) return;
+          var after = (row.getAttribute('data-wk-after') || '').split(/\s+/).filter(Boolean);
+          if (after.some(function (k) { return cur.indexOf(k) >= 0; })) return;
+          n++;
+        });
+        if (n === 0) { sec.setAttribute('data-wk-empty', ''); } else { sec.removeAttribute('data-wk-empty'); }
+        if (sec.hasAttribute('data-section-nav-count')) sec.setAttribute('data-section-nav-count', String(n));
+      });
+      root.querySelectorAll('[data-wk-group]').forEach(function (group) {
+        if (group.querySelector('[data-wk-section]:not([data-wk-empty])')) { group.removeAttribute('data-wk-empty'); } else { group.setAttribute('data-wk-empty', ''); }
+      });
+    }
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var kind = btn.getAttribute('data-wk-toggle');
+        var cur = current();
+        var i = cur.indexOf(kind);
+        if (i >= 0) {
+          if (cur.length <= 1) return;
+          cur.splice(i, 1);
+        } else {
+          cur.push(kind);
+        }
+        root.setAttribute('data-wk-on', ORDER.filter(function (k) { return cur.indexOf(k) >= 0; }).join(' '));
+        sync();
+        document.dispatchEvent(new CustomEvent('wk-change'));
+        document.dispatchEvent(new CustomEvent('rtl-recount'));
+      });
+    });
+    sync();
+    // 節はこのスクリプトより後ろにあるので、ページを読み終えてからもう一度そろえる（# で戻した状態にも合わせる）。
+    document.addEventListener('DOMContentLoaded', sync);
+  });
+})();
+</script>
+{{~ end ~}}

@@ -9,12 +9,12 @@
  *   tab=<data-tab>                 タブ（.tab-btn）
  *   filter=<data-entity-filter-set> 個人のみ・団体のみなどの絞り込み（.entity-filter-btn）
  *   sort=<data-sort>               並べ替え・表示の切り替え（.sort-toggle-btn。見えている切り替えのもの）
- *   media=<data-media-set>         年表の「TVのみ・映画のみ」（.rtl-media-btn）
+ *   works=tv,movie                 TV・映画・オトナの出し分けで入っている種類（.wk-toggle。全部入っていれば書かない）
  *   main=all                       年表の「主な方のみ」を切った（.rtl-filter-input。「プリキュアを演じた方のみ」を入れている間は書かない）
  *   precure=1                      歴代プリキュア声優の「プリキュアを演じた方のみ」を入れた（.precure-only-input）
  *   csort=<data-count-sort-state>  件数バッジでの並べ替え（.count-sort-btn。見えているボタンのもの。例：movie-desc）
  *   hide=movie,spring              /series/ の年度順で OFF にした区分（input[data-kind-toggle]）
- *   例：#tab=timeline&filter=person&main=all
+ *   例：#tab=timeline&filter=person&works=tv,movie&main=all
  *
  * # が「=」を含まない（セクションナビ・ページ内リンクの #セクションid）ときは、その要素を含むタブを開いてそこへ移る。
  * 書き換えは history.replaceState で行い、ブラウザの履歴は増やさない。
@@ -44,18 +44,24 @@
   function init() {
     var tabButtons = qsa('.tab-btn[data-tab]');
     var filterButtons = qsa('.entity-filter-btn[data-entity-filter-set]');
-    var mediaButtons = qsa('.rtl-media-btn[data-media-set]');
+    var workButtons = qsa('.wk-toggle[data-wk-toggle]');
     var mainInputs = qsa('.rtl-filter-input');
     var precureInputs = qsa('.precure-only-input');
     var kindInputs = qsa('input[data-kind-toggle]');
     var sortToggles = qsa('.sort-toggle');
     var countSortButtons = qsa('.count-sort-btn');
-    if (!countSortButtons.length && !tabButtons.length && !filterButtons.length && !mediaButtons.length && !mainInputs.length && !precureInputs.length && !kindInputs.length && !sortToggles.length) return;
+    if (!countSortButtons.length && !tabButtons.length && !filterButtons.length && !workButtons.length && !mainInputs.length && !precureInputs.length && !kindInputs.length && !sortToggles.length) return;
 
     // 初期状態（テンプレが is-active・checked を付けた状態）を覚えておき、それと違う項目だけを # に書く。
     var defaultTab = activeKey(tabButtons, 'data-tab');
     var defaultFilter = activeKey(filterButtons, 'data-entity-filter-set');
-    var defaultMedia = activeKey(mediaButtons, 'data-media-set');
+    // 入っている種類（.wk-toggle の is-active）を並べたもの。初期状態はすべて入っている。
+    function activeWorks() {
+      return workButtons
+        .filter(function (b) { return b.classList.contains('is-active'); })
+        .map(function (b) { return b.getAttribute('data-wk-toggle'); });
+    }
+    var defaultWorks = activeWorks().join(',');
     var defaultSorts = sortToggles.map(function (t) { return activeKey(qsa('.sort-toggle-btn', t), 'data-sort'); });
 
     function visibleSortToggle() {
@@ -106,7 +112,18 @@
         var si = visibleSortToggle();
         if (si >= 0) clickKey(qsa('.sort-toggle-btn', sortToggles[si]), 'data-sort', params.sort);
       }
-      if (params.media) clickKey(mediaButtons, 'data-media-set', params.media);
+      if (params.works) {
+        // 最後の 1 つは切れないので、入れる側を先に押してから切る側を押す。
+        var wanted = params.works.split(',');
+        workButtons.forEach(function (b) {
+          if (wanted.indexOf(b.getAttribute('data-wk-toggle')) >= 0 && !b.classList.contains('is-active')) b.click();
+        });
+        if (workButtons.some(function (b) { return wanted.indexOf(b.getAttribute('data-wk-toggle')) >= 0; })) {
+          workButtons.forEach(function (b) {
+            if (wanted.indexOf(b.getAttribute('data-wk-toggle')) < 0 && b.classList.contains('is-active')) b.click();
+          });
+        }
+      }
       if (params.main === 'all') mainInputs.forEach(function (input) { setChecked(input, false); });
       if (params.precure === '1') precureInputs.forEach(function (input) { setChecked(input, true); });
       if (params.csort) {
@@ -146,8 +163,8 @@
       if (tab && tab !== defaultTab) parts.push('tab=' + encodeURIComponent(tab));
       var filter = activeKey(filterButtons, 'data-entity-filter-set');
       if (filter && filter !== defaultFilter) parts.push('filter=' + encodeURIComponent(filter));
-      var media = activeKey(mediaButtons, 'data-media-set');
-      if (media && media !== defaultMedia) parts.push('media=' + encodeURIComponent(media));
+      var works = activeWorks().join(',');
+      if (works && works !== defaultWorks) parts.push('works=' + works);
       var si = visibleSortToggle();
       if (si >= 0) {
         var sort = activeKey(qsa('.sort-toggle-btn', sortToggles[si]), 'data-sort');
@@ -176,7 +193,7 @@
 
     // 各ボタンの処理（要素に直接付いたリスナー）が済んでから書く。
     document.addEventListener('click', function (ev) {
-      if (ev.target.closest('.tab-btn, .entity-filter-btn, .rtl-media-btn, .sort-toggle-btn')) write();
+      if (ev.target.closest('.tab-btn, .entity-filter-btn, .wk-toggle, .sort-toggle-btn')) write();
     });
     // 件数並べ替えボタンは押すと中身（押した span）を描き直すので、document で受けると押した要素がもうボタンの中に無い。
     // ボタンに直接付ける（count-sort.js のリスナーの後に付くので、並べ替えが済んでから書く）。

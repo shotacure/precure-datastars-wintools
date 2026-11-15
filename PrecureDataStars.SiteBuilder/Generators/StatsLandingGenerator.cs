@@ -61,9 +61,10 @@ public sealed class StatsLandingGenerator
             // 集計対象の話数はサイト側の都合の数なのでカードには出さず、どんなページかをリード文で示す。
             OgCard = new OgCardSpec(Kicker: "", Title: "統計")
             {
-                Subtitle = "サブタイトルの漢字率から本編の尺まで、歴代プリキュアの全話を数字で読んでみると、意外な傾向が見えてきます。"
+                // ページの冒頭文（stats-landing.sbn の .lead）と同じ文。
+                Subtitle = "サブタイトルと尺の統計、最長・最短・最多の記録"
             },
-            MetaDescription = "歴代プリキュア全話の統計。サブタイトルの文字数・漢字率・記号率と、本編パート・アバンタイトルの尺を全シリーズで集計しました。数字から見える意外な傾向をどうぞ。",
+            MetaDescription = "サブタイトルと尺の統計、最長・最短・最多の記録",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

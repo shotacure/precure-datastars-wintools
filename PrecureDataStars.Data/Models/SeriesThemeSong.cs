@@ -29,6 +29,12 @@ public sealed class SeriesThemeSong
     /// <summary>歌録音 ID（必須、→ song_recordings.song_recording_id）。</summary>
     public int SongRecordingId { get; set; }
 
+    /// <summary>その作品で流れたサイズ（→ song_size_variants.variant_code、例: "MOVIE"）。null ならサイズの指定なし。
+    /// 作品詳細の主題歌・挿入歌の一覧で、流れたサイズの札と、同じサイズの配信音源の再生ボタンを出す。
+    /// クレジット表記（役職テンプレの描画）では使わない。
+    /// 入力欄は無く SQL で入れる。保存で null を渡すと今のサイズを残す（入力欄の無い画面からの保存用）。</summary>
+    public string? SongSizeVariantCode { get; set; }
+
     /// <summary>クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。null なら誤記なし。
     /// クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名を続ける。</summary>
     public string? TitleMisprintText { get; set; }

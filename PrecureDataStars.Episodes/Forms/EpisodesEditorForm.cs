@@ -42,7 +42,8 @@ public partial class EpisodesEditorForm : Form
         public ushort? DiscLength { get; set; }           // 円盤尺
         public ushort? VodLength { get; set; }            // 配信尺
         public string? OaTime { get; set; }             // OA時刻
-        public string? Notes { get; set; }             // 備考
+        public string? Supplement { get; set; }        // 補足事項（サイトのフォーマットの表に出す）
+        public string? Notes { get; set; }             // 備考（サイトには出さない）
         public byte OriginalSeq { get; set; }  // 読み込み時のseq固定。新規は0にする
         public bool IsContentDirty { get; set; }  // 値を編集したらtrue
 
@@ -810,7 +811,7 @@ public partial class EpisodesEditorForm : Form
         ShowHtmlPreview();
     }
 
-    /// <summary>新規エピソードを仮データで生成し、画面リストに追加する。 DB には INSERT しない（保存ボタン押下時に SaveAsync が INSERT する）。 直前エピソードから話数 +1 / 放送日 +7 日を自動補完する。</summary>
+    /// <summary>新規エピソードを仮データで生成し、画面リストに追加する。 DB には INSERT しない（保存ボタン押下時に SaveAsync が INSERT する）。 直前エピソードから話数 +1 / 放送日 +7 日を自動補完する（通算の 3 列は本線の TV だけ）。</summary>
     private async Task AddAsync()
     {
         if (_currentSeries is null) return;
@@ -821,14 +822,18 @@ public partial class EpisodesEditorForm : Form
         // 直近エピソード（最後尾）を基準に +1 / +7日
         var last = _episodes.LastOrDefault();
 
+        // 通算話数・通算放送回・ニチアサ放送回は本線の TV（kind_code='TV'）だけが持つ。
+        // スピンオフなど TV 以外の作品では空のまま足す（通算が入るとサブタイトル分析などの本線の数に混ざる）。
+        bool isMainlineTv = string.Equals(_currentSeries.KindCode, "TV", StringComparison.Ordinal);
+
         var e = new Episode
         {
             EpisodeId = 0, // ← 未保存マーク（保存時に INSERT）
             SeriesId = _currentSeries.SeriesId,
             SeriesEpNo = (last?.SeriesEpNo ?? 0) + 1,
-            TotalEpNo = (last?.TotalEpNo ?? 0) + 1,
-            TotalOaNo = (last?.TotalOaNo ?? 0) + 1,
-            NitiasaOaNo = (last?.NitiasaOaNo ?? 0) + 1,
+            TotalEpNo = isMainlineTv ? (last?.TotalEpNo ?? 0) + 1 : null,
+            TotalOaNo = isMainlineTv ? (last?.TotalOaNo ?? 0) + 1 : null,
+            NitiasaOaNo = isMainlineTv ? (last?.NitiasaOaNo ?? 0) + 1 : null,
             OnAirAt = (last?.OnAirAt ?? DateTime.Now).AddDays(7),
             // 既定の放送尺 30 分。新規追加時はマスタ運用上「30 分番組」が圧倒的に多いため、
             // ここで明示的に値を入れておくと SaveAsync 時に NULL のままになることを防げる。
@@ -1575,7 +1580,16 @@ public partial class EpisodesEditorForm : Form
             ReadOnly = true
         });
 
-        // 備考
+        // 補足事項（サイトのフォーマットの表の「補足事項」の列に出る）
+        dgvParts.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = nameof(PartRow.Supplement),
+            HeaderText = "補足事項",
+            Width = 220,
+            Name = "colSupplement"
+        });
+
+        // 備考（サイトには出さない）
         dgvParts.Columns.Add(new DataGridViewTextBoxColumn
         {
             DataPropertyName = nameof(PartRow.Notes),
@@ -1796,6 +1810,7 @@ public partial class EpisodesEditorForm : Form
                 DiscLength = p.DiscLength,
                 VodLength = p.VodLength,
                 OaTime = oa_time,
+                Supplement = p.Supplement,
                 Notes = p.Notes,
                 OriginalSeq = p.EpisodeSeq
             });
@@ -1820,6 +1835,7 @@ public partial class EpisodesEditorForm : Form
             OaLength = r.OaLength,
             DiscLength = r.DiscLength,
             VodLength = r.VodLength,
+            Supplement = r.Supplement,
             Notes = r.Notes,
             CreatedBy = AuditUser,
             UpdatedBy = AuditUser
@@ -1849,6 +1865,7 @@ public partial class EpisodesEditorForm : Form
             OaLength = r.OaLength,
             DiscLength = r.DiscLength,
             VodLength = r.VodLength,
+            Supplement = r.Supplement,
             Notes = r.Notes,
             CreatedBy = AuditUser,
             UpdatedBy = AuditUser
@@ -1905,6 +1922,7 @@ public partial class EpisodesEditorForm : Form
                 DiscLength = p.DiscLength,
                 VodLength = p.VodLength,
                 OaTime = oaTime,
+                Supplement = p.Supplement,
                 Notes = p.Notes,
                 OriginalSeq = 0
             });
@@ -1935,6 +1953,7 @@ public partial class EpisodesEditorForm : Form
                              || colName == nameof(PartRow.OaLength)
                              || colName == nameof(PartRow.DiscLength)
                              || colName == nameof(PartRow.VodLength)
+                             || colName == nameof(PartRow.Supplement)
                              || colName == nameof(PartRow.Notes)))
         {
             if (dgvParts.Rows[e.RowIndex].DataBoundItem is PartRow r)
@@ -2004,6 +2023,7 @@ public partial class EpisodesEditorForm : Form
                     OaLength = r.OaLength,
                     DiscLength = r.DiscLength,
                     VodLength = r.VodLength,
+                    Supplement = r.Supplement,
                     Notes = r.Notes
                 });
                 continue;
@@ -2031,6 +2051,7 @@ public partial class EpisodesEditorForm : Form
                     OaLength = r.OaLength,
                     DiscLength = r.DiscLength,
                     VodLength = r.VodLength,
+                    Supplement = r.Supplement,
                     Notes = r.Notes
                 });
                 usedOriginalSeqs.Add(oldSeq);           // ★ 旧行は使うので削除しない
@@ -2047,6 +2068,7 @@ public partial class EpisodesEditorForm : Form
                     OaLength = r.OaLength,
                     DiscLength = r.DiscLength,
                     VodLength = r.VodLength,
+                    Supplement = r.Supplement,
                     Notes = r.Notes
                 });
                 // usedOriginalSeqs には入れない（消すので）

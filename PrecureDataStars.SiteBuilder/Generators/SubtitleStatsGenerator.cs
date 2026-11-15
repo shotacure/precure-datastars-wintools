@@ -29,7 +29,7 @@ public sealed class SubtitleStatsGenerator
     {
         _ctx = ctx;
         _page = page;
-        _repo = new SubtitleStatsRepository(factory);
+        _repo = new SubtitleStatsRepository(factory, ctx.HiddenEpisodeIds.ToList());
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -91,9 +91,10 @@ public sealed class SubtitleStatsGenerator
             OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代サブタイトル統計")
             {
                 MetaLeft = _coverageLabel,
-                Subtitle = "文字数、漢字率、記号率、よく使われる文字まで、プリキュアのサブタイトルを数字で眺めてみると、作品ごとの個性が見えてきます。"
+                // ページの冒頭文（stats-subtitles-index.sbn の .lead）と同じ文。
+                Subtitle = "サブタイトルの文字の統計"
             },
-            MetaDescription = "歴代プリキュア全話のサブタイトル統計。文字数・漢字率・記号率と、よく使われる文字を全シリーズで集計しました。作品ごとのタイトルの個性が数字で見えてきます。",
+            MetaDescription = "歴代プリキュアのサブタイトルの文字の統計",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

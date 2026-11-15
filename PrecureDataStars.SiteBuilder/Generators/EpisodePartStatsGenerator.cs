@@ -83,9 +83,10 @@ public sealed class EpisodePartStatsGenerator
             OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代エピソード尺統計")
             {
                 MetaLeft = _coverageLabel,
-                Subtitle = "アバンタイトルの長さ、A パート・B パートの尺、中 CM の入り時刻まで、本編の“尺”を全話ぶん集計しました。"
+                // ページの冒頭文（stats-episodes-index.sbn の .lead）と同じ文。
+                Subtitle = "パートの尺と中 CM の時刻"
             },
-            MetaDescription = "歴代プリキュア全話の本編の尺の統計。アバンタイトルの長さ、A パート・B パートの尺、中 CM の入り時刻を全シリーズで集計しました。長い回・短い回がひと目で分かります。",
+            MetaDescription = "歴代プリキュアのパートの尺と中 CM の時刻",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -254,6 +255,6 @@ public sealed class EpisodePartStatsGenerator
     /// <summary>エピソード尺統計の各詳細ページ用の標準レイアウトを生成する。</summary>
     private static LayoutModel MakeLayout(string pageTitle, string breadcrumbLabel)
         => StatsPageLayout.Make(
-            pageTitle, "。プリキュア全シリーズの本編の“尺”を集計した統計です。",
+            pageTitle, "。プリキュア全シリーズの本編の尺を集計した統計です。",
             "歴代エピソード尺統計", "/stats/episodes/", breadcrumbLabel);
 }

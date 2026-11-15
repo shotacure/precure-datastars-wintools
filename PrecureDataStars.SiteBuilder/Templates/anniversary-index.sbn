@@ -10,7 +10,7 @@
      狭い幅では 1 列の日付リストへ倒す（CSS 側で切り替え。DOM は 1 つのまま）。 ##}}
 <section>
   <h1>プリキュア記念日カレンダー</h1>
-  <p class="lead">歴代プリキュアの放送日・映画公開日・キャラクターとクリエイターの誕生日。エブリデイ、プリキュア。</p>
+  <p class="lead">放送日・公開日・誕生日のカレンダー</p>
   {{## 升目の曜日は DisplayYear（ビルド年）のもの。日付ページ自体は月日しか持たないので、
        どの年の曜日で組んだ面かは凡例と並べて断っておく。 ##}}
   <p class="muted anniv-legend">
@@ -45,9 +45,6 @@
           {{~ for c in d.Chips ~}}
           <a class="{{ c.CssClass }}" href="{{ c.Url }}" title="{{ c.Tooltip | html.escape }}"{{ if c.StyleAttr != "" }} style="{{ c.StyleAttr }}"{{ end }}><span class="cal-chip-emoji">{{ c.Emoji }}</span><span class="cal-chip-short">{{ c.Label | html.escape }}</span><span class="cal-chip-full">{{ c.LabelFull | html.escape }}</span></a>
           {{~ end ~}}
-          {{~ if d.OverflowCount > 0 ~}}
-          <a class="cal-chip cal-chip-more" href="{{ d.Url }}">ほか{{ d.OverflowCount }}件</a>
-          {{~ end ~}}
         </div>
         {{~ end ~}}
         {{~ if d.Count == 0 ~}}
@@ -64,9 +61,6 @@
           <div class="cal-chips">
             {{~ for c in m.LeapDay.Chips ~}}
             <a class="{{ c.CssClass }}" href="{{ c.Url }}" title="{{ c.Tooltip | html.escape }}"{{ if c.StyleAttr != "" }} style="{{ c.StyleAttr }}"{{ end }}><span class="cal-chip-emoji">{{ c.Emoji }}</span><span class="cal-chip-short">{{ c.Label | html.escape }}</span><span class="cal-chip-full">{{ c.LabelFull | html.escape }}</span></a>
-            {{~ end ~}}
-            {{~ if m.LeapDay.OverflowCount > 0 ~}}
-            <a class="cal-chip cal-chip-more" href="{{ m.LeapDay.Url }}">ほか{{ m.LeapDay.OverflowCount }}件</a>
             {{~ end ~}}
           </div>
           {{~ end ~}}

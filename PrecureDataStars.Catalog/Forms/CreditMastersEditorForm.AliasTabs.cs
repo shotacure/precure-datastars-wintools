@@ -280,6 +280,7 @@ public partial class CreditMastersEditorForm
             SetDateOrNull(dtCaFrom, chkCaFromNull, a.ValidFrom);
             SetDateOrNull(dtCaTo, chkCaToNull, a.ValidTo);
             txtCaNotes.Text = a.Notes ?? "";
+            txtCaDisplayTextOverride.Text = a.DisplayTextOverride ?? "";
         }
     }
 
@@ -291,6 +292,7 @@ public partial class CreditMastersEditorForm
         numCaPredecessor.Value = 0; numCaSuccessor.Value = 0;
         chkCaFromNull.Checked = true; chkCaToNull.Checked = true;
         txtCaNotes.Text = "";
+        txtCaDisplayTextOverride.Text = "";
     }
 
     private async Task SaveCompanyAliasAsync()
@@ -350,6 +352,7 @@ public partial class CreditMastersEditorForm
                 current.ValidFrom = chkCaFromNull.Checked ? null : dtCaFrom.Value.Date;
                 current.ValidTo = chkCaToNull.Checked ? null : dtCaTo.Value.Date;
                 current.Notes = NullIfEmpty(txtCaNotes.Text);
+                current.DisplayTextOverride = NullIfEmpty(txtCaDisplayTextOverride.Text);
                 current.UpdatedBy = Environment.UserName;
                 await _companyAliasesRepo.UpdateAsync(current);
             }
@@ -362,6 +365,7 @@ public partial class CreditMastersEditorForm
                     NameKana = NullIfEmpty(txtCaNameKana.Text),
                     NameEn = NullIfEmpty(txtCaNameEn.Text),
                     IsOfficialName = chkCaOfficialName.Checked,
+                    DisplayTextOverride = NullIfEmpty(txtCaDisplayTextOverride.Text),
                     PredecessorAliasId = pred,
                     SuccessorAliasId = succ,
                     ValidFrom = chkCaFromNull.Checked ? null : dtCaFrom.Value.Date,

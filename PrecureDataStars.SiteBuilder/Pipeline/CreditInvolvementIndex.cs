@@ -33,7 +33,7 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 ///   </item>
 ///   <item>
 ///     <description>
-///       <c>credit_role_blocks.leading_company_alias_id</c> ─ ブロック先頭企業
+///       <c>credit_role_blocks.leading_company_alias_id</c> ─ ブロック先頭企業（2 社の連名なら <c>leading_company2_alias_id</c> も）
 ///       （配下に COMPANY エントリが無くても屋号関与として記録）
 ///     </description>
 ///   </item>
@@ -197,6 +197,7 @@ public sealed class CreditInvolvementIndex
                         foreach (var crSnap in grpSnap.Roles.OrderBy(r => r.Role.OrderInGroup))
                         {
                             string roleCode = crSnap.Role.RoleCode ?? "";
+                            string? roleLabelText = string.IsNullOrWhiteSpace(crSnap.Role.RoleLabelText) ? null : crSnap.Role.RoleLabelText;
                             if (noticeRoleCodes.Contains(roleCode)) continue;
                             var blocks = crSnap.Blocks.OrderBy(b => b.Block.BlockSeq).ToList();
 
@@ -224,10 +225,26 @@ public sealed class CreditInvolvementIndex
                                         EpisodeId = scopeEpisodeId,
                                         CreditKind = credit.CreditKind,
                                         RoleCode = roleCode,
+                                        RoleLabelText = roleLabelText,
                                         Kind = InvolvementKind.LeadingCompany,
                                         IsBroadcastOnly = false,
                                         CreditSeq = leadSeq
                                     });
+                                    // 筆頭が 2 社の連名なら、2 社目（leading_company2_alias_id）も 1 社目と同じ屋号関与として記録する。
+                                    if (b.LeadingCompany2AliasId is int lead2Id && lead2Id != leadId)
+                                    {
+                                        AddCompany(lead2Id, new Involvement
+                                        {
+                                            SeriesId = seriesIdForCredit,
+                                            EpisodeId = scopeEpisodeId,
+                                            CreditKind = credit.CreditKind,
+                                            RoleCode = roleCode,
+                                            RoleLabelText = roleLabelText,
+                                            Kind = InvolvementKind.LeadingCompany,
+                                            IsBroadcastOnly = false,
+                                            CreditSeq = leadSeq
+                                        });
+                                    }
                                 }
 
                                 // ブロックの途中に TOEI ANIMATION PHILS. の屋号が置かれたとき、その後ろ（次の屋号・ロゴの手前まで）に
@@ -254,11 +271,13 @@ public sealed class CreditInvolvementIndex
                                             EpisodeId = scopeEpisodeId,
                                             CreditKind = credit.CreditKind,
                                             RoleCode = roleCode,
+                                            RoleLabelText = roleLabelText,
                                             Kind = kind,
                                             EntryKind = e.EntryKind,
                                             PersonAliasId = paid,
                                             CharacterAliasId = e.CharacterAliasId,
                                             RawCharacterText = e.RawCharacterText,
+                                            CharacterDisplayText = e.CharacterDisplayText,
                                             // 所属屋号 ID を Involvement に持ち回す。
                                             // 人物詳細ページ側でこの屋号 ID を参照して「(東映アニメーション)」のような所属併記を出す。
                                             AffiliationCompanyAliasId = e.AffiliationCompanyAliasId,
@@ -276,6 +295,7 @@ public sealed class CreditInvolvementIndex
                                                 EpisodeId = scopeEpisodeId,
                                                 CreditKind = credit.CreditKind,
                                                 RoleCode = roleCode,
+                                                RoleLabelText = roleLabelText,
                                                 Kind = InvolvementKind.Member,
                                                 EntryKind = e.EntryKind,
                                                 PersonAliasId = paid,
@@ -297,6 +317,7 @@ public sealed class CreditInvolvementIndex
                                                 EpisodeId = scopeEpisodeId,
                                                 CreditKind = credit.CreditKind,
                                                 RoleCode = roleCode,
+                                                RoleLabelText = roleLabelText,
                                                 Kind = InvolvementKind.Company,
                                                 IsBroadcastOnly = e.IsBroadcastOnly,
                                                 CreditSeq = entrySeq
@@ -327,6 +348,7 @@ public sealed class CreditInvolvementIndex
                                             EpisodeId = scopeEpisodeId,
                                             CreditKind = credit.CreditKind,
                                             RoleCode = roleCode,
+                                            RoleLabelText = roleLabelText,
                                             Kind = InvolvementKind.Member,
                                             EntryKind = e.EntryKind,
                                             PersonAliasId = memberPaid,
@@ -335,6 +357,25 @@ public sealed class CreditInvolvementIndex
                                             IsBroadcastOnly = e.IsBroadcastOnly,
                                             CreditSeq = entrySeq
                                         });
+                                        // 筆頭が 2 社の連名なら、配下の person は 2 社目のメンバーとしても数える。
+                                        if (b.LeadingCompany2AliasId is int memberLead2Id && memberLead2Id != memberLeadId)
+                                        {
+                                            AddCompany(memberLead2Id, new Involvement
+                                            {
+                                                SeriesId = seriesIdForCredit,
+                                                EpisodeId = scopeEpisodeId,
+                                                CreditKind = credit.CreditKind,
+                                                RoleCode = roleCode,
+                                                RoleLabelText = roleLabelText,
+                                                Kind = InvolvementKind.Member,
+                                                EntryKind = e.EntryKind,
+                                                PersonAliasId = memberPaid,
+                                                CharacterAliasId = e.CharacterAliasId,
+                                                AffiliationCompanyAliasId = memberLead2Id,
+                                                IsBroadcastOnly = e.IsBroadcastOnly,
+                                                CreditSeq = entrySeq
+                                            });
+                                        }
                                     }
 
                                     // 屋号エントリ（COMPANY）。
@@ -346,6 +387,7 @@ public sealed class CreditInvolvementIndex
                                             EpisodeId = scopeEpisodeId,
                                             CreditKind = credit.CreditKind,
                                             RoleCode = roleCode,
+                                            RoleLabelText = roleLabelText,
                                             Kind = InvolvementKind.Company,
                                             EntryKind = e.EntryKind,
                                             IsBroadcastOnly = e.IsBroadcastOnly,
@@ -363,6 +405,7 @@ public sealed class CreditInvolvementIndex
                                             EpisodeId = scopeEpisodeId,
                                             CreditKind = credit.CreditKind,
                                             RoleCode = roleCode,
+                                            RoleLabelText = roleLabelText,
                                             Kind = InvolvementKind.Logo,
                                             EntryKind = e.EntryKind,
                                             LogoId = lid,
@@ -386,6 +429,7 @@ public sealed class CreditInvolvementIndex
                                             EpisodeId = scopeEpisodeId,
                                             CreditKind = credit.CreditKind,
                                             RoleCode = roleCode,
+                                            RoleLabelText = roleLabelText,
                                             Kind = InvolvementKind.Member,
                                             EntryKind = e.EntryKind,
                                             PersonAliasId = tapMemberPaid,
@@ -705,6 +749,7 @@ public sealed class CreditInvolvementIndex
         // 1 テーブルにまとめており、BGM のレコードは content_kind_code='BGM' で識別する。
         // bgm 系には usage_actuality 概念は無い（episode_theme_songs だけが持つ）。
         // bgm_cues の PK は (series_id, m_no_detail) なので、cue ごとに紐付くエピソード全件にバラして集計。
+        // 名義を持たない文字だけの行（entry_kind=TEXT、person_alias_id が NULL）は人物の関与にならないので除く。
         const string sqlBgmCueCredits = """
             SELECT
               eu.episode_id              AS EpisodeId,
@@ -717,7 +762,8 @@ public sealed class CreditInvolvementIndex
               ON eu.bgm_series_id   = bcc.series_id
              AND eu.bgm_m_no_detail = bcc.m_no_detail
             JOIN episodes ep ON ep.episode_id = eu.episode_id
-            WHERE eu.content_kind_code = 'BGM';
+            WHERE eu.content_kind_code = 'BGM'
+              AND bcc.person_alias_id IS NOT NULL;
             """;
 
         await using (var conn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false))
@@ -812,6 +858,12 @@ public sealed class Involvement
     /// <summary>役職コード（例: SCREENPLAY、EPISODE_DIRECTOR、VOICE CAST、PRODUCTION）。</summary>
     public string RoleCode { get; init; } = "";
 
+    /// <summary>
+    /// 画面に出た役職の表記（credit_card_roles.role_label_text）。役職名どおりの表記なら null。
+    /// 作品のメインスタッフのバッジを画面の表記で出すのに使う（例：役職はプロデューサーで画面は「企画」）。
+    /// </summary>
+    public string? RoleLabelText { get; init; }
+
     /// <summary>関与の種別（人物 / 声優 / 屋号 / ロゴ / ブロック先頭企業）。</summary>
     public InvolvementKind Kind { get; init; }
 
@@ -842,6 +894,12 @@ public sealed class Involvement
 
     /// <summary>CHARACTER_VOICE で raw_character_text を使っている場合の生テキスト。</summary>
     public string? RawCharacterText { get; init; }
+
+    /// <summary>
+    /// CHARACTER_VOICE の画面の役名（credit_block_entries.character_display_text）。名義の名前のままなら null。
+    /// 正体を伏せた「？？？」や、名乗りの見分けを付けた「ガオウ（狼）」など、クレジットされた役名を出すのに使う。
+    /// </summary>
+    public string? CharacterDisplayText { get; init; }
 
     /// <summary>Logo 種別のときのロゴ ID。</summary>
     public int? LogoId { get; init; }
@@ -923,7 +981,7 @@ public enum InvolvementKind
     Company = 2,
     /// <summary>LOGO エントリ（ロゴ → 屋号への間接参照）。</summary>
     Logo = 3,
-    /// <summary>credit_role_blocks.leading_company_alias_id（ブロック先頭の屋号）。</summary>
+    /// <summary>credit_role_blocks.leading_company_alias_id（ブロック先頭の屋号）。2 社の連名の 2 社目（leading_company2_alias_id）も同じ種別で数える。</summary>
     LeadingCompany = 4,
     /// <summary>PERSON / CHARACTER_VOICE エントリの所属屋号としての参照。 「○○（東映アニメーション）」のような所属付きクレジット表記で、 屋号側から「当該屋号に所属していた人物名義」を逆引きできるようにする。 企業詳細ページの「メンバー履歴」セクションがこの種別で <see cref="CreditInvolvementIndex.ByCompanyAlias"/> を絞り込んで使う。</summary>
     Member = 5

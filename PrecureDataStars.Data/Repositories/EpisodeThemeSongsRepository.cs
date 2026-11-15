@@ -30,6 +30,7 @@ public sealed class EpisodeThemeSongsRepository : RepositoryBase
           seq                     AS Seq,
           usage_actuality         AS UsageActuality,
           song_recording_id       AS SongRecordingId,
+          song_size_variant_code  AS SongSizeVariantCode,
           title_misprint_text     AS TitleMisprintText,
           title_credited_text     AS TitleCreditedText,
           is_instrumental         AS IsInstrumental,
@@ -111,13 +112,14 @@ public sealed class EpisodeThemeSongsRepository : RepositoryBase
         const string sql = """
             INSERT INTO episode_theme_songs
               (episode_id, is_broadcast_only, theme_kind, seq, usage_actuality,
-               song_recording_id, title_misprint_text, title_credited_text, is_instrumental, notes, created_by, updated_by)
+               song_recording_id, song_size_variant_code, title_misprint_text, title_credited_text, is_instrumental, notes, created_by, updated_by)
             VALUES
               (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @Seq, @UsageActuality,
-               @SongRecordingId, @TitleMisprintText, @TitleCreditedText, COALESCE(@IsInstrumental, 0), @Notes, @CreatedBy, @UpdatedBy)
+               @SongRecordingId, @SongSizeVariantCode, @TitleMisprintText, @TitleCreditedText, COALESCE(@IsInstrumental, 0), @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               usage_actuality         = VALUES(usage_actuality),
               song_recording_id       = VALUES(song_recording_id),
+              song_size_variant_code  = VALUES(song_size_variant_code),
               -- 曲名の誤記は入力欄の無い画面からも保存されるので、渡されなかったとき（NULL）は今の誤記を残す
               title_misprint_text     = COALESCE(VALUES(title_misprint_text), title_misprint_text),
               -- 曲名の表記も同じく、渡されなかったとき（NULL）は今の表記を残す
@@ -147,13 +149,14 @@ public sealed class EpisodeThemeSongsRepository : RepositoryBase
         const string sql = """
             INSERT INTO episode_theme_songs
               (episode_id, is_broadcast_only, theme_kind, seq, usage_actuality,
-               song_recording_id, title_misprint_text, title_credited_text, is_instrumental, notes, created_by, updated_by)
+               song_recording_id, song_size_variant_code, title_misprint_text, title_credited_text, is_instrumental, notes, created_by, updated_by)
             VALUES
               (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @Seq, @UsageActuality,
-               @SongRecordingId, @TitleMisprintText, @TitleCreditedText, COALESCE(@IsInstrumental, 0), @Notes, @CreatedBy, @UpdatedBy)
+               @SongRecordingId, @SongSizeVariantCode, @TitleMisprintText, @TitleCreditedText, COALESCE(@IsInstrumental, 0), @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               usage_actuality         = VALUES(usage_actuality),
               song_recording_id       = VALUES(song_recording_id),
+              song_size_variant_code  = VALUES(song_size_variant_code),
               title_misprint_text     = VALUES(title_misprint_text),
               title_credited_text     = VALUES(title_credited_text),
               is_instrumental         = VALUES(is_instrumental),
@@ -181,6 +184,26 @@ public sealed class EpisodeThemeSongsRepository : RepositoryBase
             await tx.RollbackAsync(ct).ConfigureAwait(false);
             throw;
         }
+    }
+
+    /// <summary>
+    /// 前の話の OP・ED（本放送限定でない行）を、主題歌の紐付けが 1 行も無い回へそのまま写す。挿入歌は写さない。
+    /// 紐付けが 1 行でもあれば何もしない（手で入れた分を上書きしない。主キーの seq の衝突も避ける）。
+    /// 空かどうかの確認と挿入を 1 文で行うので、確認のあとに手で入れられても上書きしない。写した行数を返す。
+    /// </summary>
+    public async Task<int> CopyOpEdIfEmptyAsync(int fromEpisodeId, int toEpisodeId, string by, CancellationToken ct = default)
+    {
+        const string sql = """
+            INSERT INTO episode_theme_songs
+              (episode_id, is_broadcast_only, theme_kind, seq, usage_actuality,
+               song_recording_id, song_size_variant_code, title_misprint_text, title_credited_text, is_instrumental, notes, created_by, updated_by)
+            SELECT @toEpisodeId, 0, s.theme_kind, s.seq, s.usage_actuality,
+                   s.song_recording_id, s.song_size_variant_code, s.title_misprint_text, s.title_credited_text, s.is_instrumental, s.notes, @by, @by
+            FROM episode_theme_songs s
+            WHERE s.episode_id = @fromEpisodeId AND s.is_broadcast_only = 0 AND s.theme_kind IN ('OP','ED')
+              AND NOT EXISTS (SELECT 1 FROM episode_theme_songs x WHERE x.episode_id = @toEpisodeId);
+            """;
+        return await ExecuteAsync(sql, new { fromEpisodeId, toEpisodeId, by }, ct).ConfigureAwait(false);
     }
 
     /// <summary>4 列複合 PK で 1 件削除する。</summary>
@@ -250,10 +273,10 @@ public sealed class EpisodeThemeSongsRepository : RepositoryBase
         const string sqlInsert = """
             INSERT INTO episode_theme_songs
               (episode_id, is_broadcast_only, theme_kind, seq, usage_actuality,
-               song_recording_id, title_misprint_text, title_credited_text, is_instrumental, notes, created_by, updated_by)
+               song_recording_id, song_size_variant_code, title_misprint_text, title_credited_text, is_instrumental, notes, created_by, updated_by)
             VALUES
               (@EpisodeId, @Flag, @ThemeKind, @Seq, @UsageActuality,
-               @SongRecordingId, @TitleMisprintText, @TitleCreditedText, COALESCE(@IsInstrumental, 0), @Notes, @CreatedBy, @UpdatedBy);
+               @SongRecordingId, @SongSizeVariantCode, @TitleMisprintText, @TitleCreditedText, COALESCE(@IsInstrumental, 0), @Notes, @CreatedBy, @UpdatedBy);
             """;
 
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -283,6 +306,7 @@ public sealed class EpisodeThemeSongsRepository : RepositoryBase
                             ? EpisodeThemeSongUsageActualities.Normal
                             : r.UsageActuality,
                         SongRecordingId = r.SongRecordingId,
+                        SongSizeVariantCode = r.SongSizeVariantCode,
                         TitleMisprintText = r.TitleMisprintText,
                         TitleCreditedText = r.TitleCreditedText,
                         IsInstrumental = r.IsInstrumental,

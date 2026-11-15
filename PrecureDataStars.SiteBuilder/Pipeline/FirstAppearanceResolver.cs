@@ -78,7 +78,7 @@ public sealed record FirstAppearance(Series Series, Episode? Episode, DateTime A
         if (Episode is not null)
         {
             string url = PathUtil.EpisodeUrl(Series.Slug, Episode.SeriesEpNo);
-            return $"<a href=\"{url}\">『{title}』第{Episode.SeriesEpNo}話</a>（{JpDateFormat.Date(Episode.OnAirAt)}）";
+            return $"<a href=\"{url}\">『{title}』第{Episode.SeriesEpNo}話</a>（{JpDateFormat.BroadcastDate(Episode.OnAirAt)}）";
         }
         return $"<a href=\"{PathUtil.SeriesUrl(Series.Slug)}\">『{title}』</a>（{JpDateFormat.Date(At)}公開）";
     }
@@ -87,7 +87,7 @@ public sealed record FirstAppearance(Series Series, Episode? Episode, DateTime A
     public string ToPlainText()
     {
         if (Episode is not null)
-            return $"『{Series.Title}』第{Episode.SeriesEpNo}話（{JpDateFormat.DotDate(Episode.OnAirAt)}）";
+            return $"『{Series.Title}』第{Episode.SeriesEpNo}話（{JpDateFormat.BroadcastDotDate(Episode.OnAirAt)}）";
         return $"『{Series.Title}』（{JpDateFormat.DotDate(At)} 公開）";
     }
 }

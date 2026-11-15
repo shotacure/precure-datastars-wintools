@@ -7,14 +7,14 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// credits テーブル（クレジット本体）の CRUD リポジトリ。
-/// シリーズ単位 or エピソード単位で OP/ED 各 1 件まで保持できる
-/// （UNIQUE は <c>(series_id, credit_kind)</c> と <c>(episode_id, credit_kind)</c> の 2 本）。
+/// シリーズ単位 or エピソード単位で OP/ED 各 1 件を版（media_version）ごとに保持できる
+/// （UNIQUE は <c>(series_id, credit_kind, media_version_key)</c> と <c>(episode_id, credit_kind, media_version_key)</c> の 2 本。
+/// media_version_key は media_version の NULL を空文字にした生成列で、共通〔NULL〕のクレジットも 1 本までに抑える）。
 /// scope_kind と series_id / episode_id の整合性は DB 側のトリガー
 /// <c>trg_credits_b{i,u}_scope_consistency</c> で担保される（CHECK は MySQL 8.0 の
 /// FK 参照アクション制約 Error 3823 を回避するため使用しない）。
-/// 本放送と円盤・配信での差し替え（ロゴバージョン違い等）はクレジット単位ではなく
-/// エントリ単位（<see cref="CreditBlockEntry.IsBroadcastOnly"/>）で扱う。
-/// クレジット本体には is_broadcast_only 関連カラムを持たない。
+/// 本放送と Blu-ray・配信でフォーマットが丸ごと違う作品は版（<see cref="Credit.MediaVersion"/>）で 2 本並べ、
+/// 一部の差し替え（ロゴバージョン違い等）はエントリ単位（<see cref="CreditBlockEntry.IsBroadcastOnly"/>）で扱う。
 /// </summary>
 public sealed class CreditsRepository : RepositoryBase
 {
@@ -26,6 +26,7 @@ public sealed class CreditsRepository : RepositoryBase
           series_id     AS SeriesId,
           episode_id    AS EpisodeId,
           credit_kind   AS CreditKind,
+          media_version AS MediaVersion,
           credit_seq    AS CreditSeq,
           part_type     AS PartType,
           presentation  AS Presentation,
@@ -112,10 +113,10 @@ public sealed class CreditsRepository : RepositoryBase
     {
         const string sql = """
             INSERT INTO credits
-              (scope_kind, series_id, episode_id, credit_kind, credit_seq, part_type, presentation,
+              (scope_kind, series_id, episode_id, credit_kind, media_version, credit_seq, part_type, presentation,
                notes, created_by, updated_by)
             VALUES
-              (@ScopeKind, @SeriesId, @EpisodeId, @CreditKind,
+              (@ScopeKind, @SeriesId, @EpisodeId, @CreditKind, @MediaVersion,
                (SELECT COALESCE(MAX(c2.credit_seq), 0) + 1
                   FROM (SELECT credit_seq, series_id, episode_id FROM credits) AS c2
                  WHERE (@SeriesId  IS NOT NULL AND c2.series_id  = @SeriesId)
@@ -137,6 +138,7 @@ public sealed class CreditsRepository : RepositoryBase
               series_id     = @SeriesId,
               episode_id    = @EpisodeId,
               credit_kind   = @CreditKind,
+              media_version = @MediaVersion,
               part_type     = @PartType,
               presentation  = @Presentation,
               notes         = @Notes,

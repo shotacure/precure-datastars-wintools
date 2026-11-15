@@ -28,6 +28,10 @@ partial class CreditNewDialog
     private Label lblPartTypeCaption = null!;
     private ComboBox cboPartType = null!;
 
+    // 版（共通／本放送／Blu-ray・配信）。本放送と Blu-ray・配信でクレジットが丸ごと違う作品だけ版を選ぶ。
+    private Label lblMediaVersionCaption = null!;
+    private ComboBox cboMediaVersion = null!;
+
     private Label lblNotesCaption = null!;
     private TextBox txtNotes = null!;
 
@@ -44,7 +48,7 @@ partial class CreditNewDialog
     {
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(420, 320);
+        ClientSize = new Size(420, 354);
         Name = "CreditNewDialog";
         Text = "新規クレジット作成";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -98,18 +102,27 @@ partial class CreditNewDialog
             DropDownStyle = ComboBoxStyle.DropDownList
         };
 
+        // 版
+        lblMediaVersionCaption = new Label { Text = "版:", Location = new Point(18, 156), Size = new Size(80, 20) };
+        cboMediaVersion = new ComboBox
+        {
+            Location = new Point(110, 152),
+            Size = new Size(290, 23),
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
+
         // notes
-        lblNotesCaption = new Label { Text = "備考:", Location = new Point(18, 156), Size = new Size(70, 20) };
+        lblNotesCaption = new Label { Text = "備考:", Location = new Point(18, 190), Size = new Size(70, 20) };
         txtNotes = new TextBox
         {
-            Location = new Point(18, 178),
+            Location = new Point(18, 212),
             Size = new Size(382, 80),
             Multiline = true
         };
 
         // ボタン
-        btnOk = new Button { Text = "作成", Location = new Point(212, 272), Size = new Size(90, 30), DialogResult = DialogResult.OK };
-        btnCancel = new Button { Text = "キャンセル", Location = new Point(310, 272), Size = new Size(90, 30), DialogResult = DialogResult.Cancel };
+        btnOk = new Button { Text = "作成", Location = new Point(212, 306), Size = new Size(90, 30), DialogResult = DialogResult.OK };
+        btnCancel = new Button { Text = "キャンセル", Location = new Point(310, 306), Size = new Size(90, 30), DialogResult = DialogResult.Cancel };
 
         Controls.AddRange(new Control[]
         {
@@ -118,6 +131,7 @@ partial class CreditNewDialog
             lblCreditKindCaption, pnlCreditKind,
             lblPresentationCaption, pnlPresentation,
             lblPartTypeCaption, cboPartType,
+            lblMediaVersionCaption, cboMediaVersion,
             lblNotesCaption, txtNotes,
             btnOk, btnCancel
         });

@@ -70,6 +70,16 @@ public sealed class InstalledFontIndex
     private static string Normalize(string s)
         => s.Normalize(NormalizationForm.FormKC).Replace(" ", "").Replace("　", "");
 
+    /// <summary>
+    /// 書体の name テーブル（<paramref name="nameTable"/>）に、書体名 <paramref name="name"/> があるか。
+    /// 名前で引いた書体が、頼んだ名前の書体かを照らすのに使う（比べ方は索引と同じ）。
+    /// </summary>
+    public static bool NameTableHasName(byte[] nameTable, string name)
+    {
+        string wanted = Normalize(name);
+        return ParseNameTable(nameTable).Any(n => string.Equals(Normalize(n), wanted, StringComparison.OrdinalIgnoreCase));
+    }
+
     private void AddFile(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan);
@@ -120,7 +130,13 @@ public sealed class InstalledFontIndex
         if (nameOffset == 0 || nameLength == 0) yield break;
 
         reader.BaseStream.Seek(nameOffset, SeekOrigin.Begin);
-        var table = reader.ReadBytes((int)Math.Min(nameLength, 1 << 20));
+        foreach (var name in ParseNameTable(reader.ReadBytes((int)Math.Min(nameLength, 1 << 20))))
+            yield return name;
+    }
+
+    /// <summary>name テーブルの中身から、引くのに使える名前を列挙する（列挙する名前は <see cref="ReadNames"/> の説明のとおり）。</summary>
+    private static IEnumerable<string> ParseNameTable(byte[] table)
+    {
         if (table.Length < 6) yield break;
         ushort count = (ushort)((table[2] << 8) | table[3]);
         ushort stringOffset = (ushort)((table[4] << 8) | table[5]);

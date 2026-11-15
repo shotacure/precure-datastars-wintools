@@ -9,7 +9,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// <c>content/articles/*.md</c>（Markdown ＋ front-matter）からコラムを生成するジェネレータ。
 /// DB に依存せず、ビルド出力へコピーされた Markdown を読み、<c>/articles/{slug}/</c> と
 /// 一覧 <c>/articles/</c> を出力する。本文は Markdig で HTML 化し、既存レイアウト
-/// （ヘッダ／フッタ／ナビ／シェア／AdSense）に流し込む。記事は運営情報ページと違い
+/// （ヘッダ／フッタ／ナビ／シェア）に流し込む。記事は運営情報ページと違い
 /// シェア対象なので <see cref="LayoutModel.SuppressShareButtons"/> は立てない。
 /// <para>
 /// 本番モードでは、下書き（front-matter の <c>draft: true</c>）と、公開日時（<c>date</c>）がビルド時点より
@@ -26,6 +26,15 @@ public sealed class ArticlesGenerator
 {
     private readonly BuildContext _ctx;
     private readonly PageRenderer _page;
+
+    /// <summary>一覧のカードに題名を並べる、新しい記事の本数。</summary>
+    private const int LatestArticlesOnCard = 4;
+
+    /// <summary>記事のカードの要約を組む書体（precure.news の記事のカードの要約と同じ）。</summary>
+    private const string SummaryFontFamily = "FOT-筑紫新聞明朝 Pr6N L";
+
+    /// <summary>記事のカードの要約の平体の率（precure.news の記事のカードの要約と同じ 80%）。</summary>
+    private const float SummaryVerticalScale = 0.8f;
 
     // Markdig パイプライン。テーブル・自動リンク等の一般的な拡張を有効化する
     // （入力は内製の信頼ソースのため、サニタイズは行わない＝既存テンプレと同じ前提）。
@@ -81,11 +90,11 @@ public sealed class ArticlesGenerator
                 _ctx.Logger.Info($"下書き・公開日時前のコラム {held} 本は本番に出しません。");
         }
 
-        // 公開日降順（同日はタイトル昇順）で並べる。
+        // 公開日時（date に書いた時刻まで）の降順、同じ日時は記事の URL の名前（slug）の昇順で並べる。
         articles.Sort((a, b) =>
         {
             int cmp = b.Date.CompareTo(a.Date);
-            return cmp != 0 ? cmp : string.CompareOrdinal(a.Title, b.Title);
+            return cmp != 0 ? cmp : string.CompareOrdinal(a.Slug, b.Slug);
         });
 
         // 各記事詳細。
@@ -98,6 +107,8 @@ public sealed class ArticlesGenerator
                 // 記事メタは読み込み元で欠けている可能性があるため、表示側の非 null 前提に合わせて丸める。
                 DateLabel = a.DateLabel ?? "",
                 DateIso = a.DateIso,
+                UpdatedLabel = a.UpdatedLabel,
+                UpdatedIso = a.UpdatedIso,
                 Tags = a.Tags ?? Array.Empty<string>(),
                 BodyHtml = a.BodyHtml,
                 HasTweet = a.BodyHtml.Contains("twitter-tweet", StringComparison.Ordinal),
@@ -112,12 +123,15 @@ public sealed class ArticlesGenerator
                 // 記事は本文の量を数で語れないので、種別と日付・タグで識別できるようにする。
                 // 見出しの下に前置き（description）を文章として流し込み、入り切らなければ最後の行を「…」で切る。
                 // タグは要約に高さを回すため「音楽・データ」のように 1 行にまとめて下に置く。
+                // 要約は precure.news の記事のカードと同じ書体・平体で組む。
                 OgCard = new OgCardSpec(Kicker: "コラム", Title: a.Title)
                 {
                     KickerRight = a.DateLabel ?? "",
                     InlineFacts = string.IsNullOrWhiteSpace(a.Description)
                         ? Array.Empty<OgCardFactLine>()
                         : new[] { new OgCardFactLine("", a.Description.Trim()) },
+                    InlineFactsFontFamily = SummaryFontFamily,
+                    InlineFactsVerticalScale = SummaryVerticalScale,
                     InlineFactsProse = true,
                     Facts = a.Tags is { Count: > 0 } tags
                         ? new[] { new OgCardFactLine("", string.Join("・", tags.Take(3))) }
@@ -150,13 +164,16 @@ public sealed class ArticlesGenerator
         var indexLayout = new LayoutModel
         {
             PageTitle = "コラム",
+            // 記事の本数ではなく、新しい記事の題名を日付つきで 1 行ずつ並べる（何が読めるかがシェア先で分かるように）。
             OgCard = new OgCardSpec(Kicker: "", Title: "コラム")
             {
-                Badges = new[] { new OgCardBadge("記事", $"{articles.Count}本") }
+                Facts = articles.Take(LatestArticlesOnCard)
+                    .Select(a => new OgCardFactLine(a.DateLabel ?? "", a.Title))
+                    .ToList()
             },
             MetaDescription =
-                "プリキュアのコラム。precure.tv を運営する祥太が、歴代プリキュアを多種多様なアプローチで読み解きます。" +
-                "毎週水曜・土曜の朝 8:30 更新。",
+                // ページの冒頭文（articles-index.sbn の .articles-lead）と同じ文。
+                "precure.tvを運営する祥太による、歴代プリキュアを多種多様なアプローチで読み解いていくコラムです。毎週水曜・土曜の朝 8:30 に更新します。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -259,6 +276,24 @@ public sealed class ArticlesGenerator
             _ctx.Logger.Warn($"コラムの date を読めません（{rawDate}）: {Path.GetFileName(path)}");
         }
 
+        // 最終更新日。公開後に書き直した記事だけが "updated: 2026-11-08" のように日付だけで持つ。
+        // 公開日（date の日付）より後の日付のときだけ表示する。不正なら警告してラベル空。
+        string updatedLabel = "";
+        string updatedIso = "";
+        var rawUpdated = meta.GetValueOrDefault("updated", "").Trim();
+        if (DateTime.TryParseExact(rawUpdated, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var updated))
+        {
+            if (updated.Date > date.Date)
+            {
+                updatedLabel = $"{updated.Year}年{updated.Month}月{updated.Day}日";
+                updatedIso = updated.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            }
+        }
+        else if (!string.IsNullOrEmpty(rawUpdated))
+        {
+            _ctx.Logger.Warn($"コラムの updated を読めません（{rawUpdated}）: {Path.GetFileName(path)}");
+        }
+
         // 下書き。"draft: true" のときだけ下書き扱い（本番に出さない）。
         var isDraft = string.Equals(meta.GetValueOrDefault("draft", "").Trim(), "true", StringComparison.OrdinalIgnoreCase);
 
@@ -266,20 +301,42 @@ public sealed class ArticlesGenerator
         var tags = meta.GetValueOrDefault("tags", "")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        var bodyHtml = Markdown.ToHtml(body, MarkdownPipeline);
+        var bodyHtml = FormatFootnoteRefs(Markdown.ToHtml(SeparateAdjacentFootnoteRefs(body), MarkdownPipeline));
 
         // 素材のフォルダは原稿のファイル名に合わせる（front-matter で slug を変えても、置き場は原稿の隣のまま）。
         var assetDir = Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path));
 
-        return new Article(slug, title, description, date, dateLabel, dateIso, tags, bodyHtml, isDraft, publishAt, assetDir);
+        return new Article(slug, title, description, date, dateLabel, dateIso, updatedLabel, updatedIso, tags, bodyHtml, isDraft, publishAt, assetDir);
     }
+
+    /// <summary>
+    /// 続けて並んだ脚注の参照（<c>[^a][^b]</c>）の間に空の HTML コメントを挟む。Markdig は、既に使った脚注の参照の直後に
+    /// 別の参照が続くと、前の参照を黙って落とす。挟んだコメントは <see cref="FormatFootnoteRefs"/> で取り除く。
+    /// </summary>
+    private static string SeparateAdjacentFootnoteRefs(string markdown)
+        => AdjacentFootnoteRefRegex.Replace(markdown, "$1" + FootnoteRefSeparator);
+
+    /// <summary>
+    /// 本文の脚注の参照を「[1]」の形にする。Markdig の <c>&lt;a class="footnote-ref"&gt;&lt;sup&gt;1&lt;/sup&gt;&lt;/a&gt;</c> を
+    /// <c>&lt;sup class="fn-ref"&gt;[&lt;a class="footnote-ref"&gt;1&lt;/a&gt;]&lt;/sup&gt;</c> にし、リンクは括弧の中の番号だけにする。
+    /// 脚注の側の番号の括弧は CSS（<c>.article-body .footnotes</c>）で付ける。
+    /// </summary>
+    private static string FormatFootnoteRefs(string html)
+        => FootnoteRefRegex.Replace(html.Replace(FootnoteRefSeparator, ""), "<sup class=\"fn-ref\">[<a$1>$2</a>]</sup>");
+
+    private const string FootnoteRefSeparator = "<!---->";
+    private static readonly System.Text.RegularExpressions.Regex AdjacentFootnoteRefRegex =
+        new(@"(\[\^[^\]\s]+\])(?=\[\^)", System.Text.RegularExpressions.RegexOptions.Compiled);
+    private static readonly System.Text.RegularExpressions.Regex FootnoteRefRegex =
+        new(@"<a( [^>]*class=""footnote-ref""[^>]*)><sup>([^<]*)</sup></a>", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>原稿 1 本。<paramref name="IsDraft"/> と <paramref name="PublishAt"/> は本番に出すかどうかの判定に使う。
     /// <paramref name="DateIso"/> は time 要素の datetime 属性に入れる "yyyy-MM-dd"（日付が無ければ空）。
+    /// <paramref name="UpdatedLabel"/>・<paramref name="UpdatedIso"/> は最終更新日（公開日より後に書き直したときだけ。無ければ空）。
     /// <paramref name="AssetDir"/> は図などの素材を置くフォルダ（原稿と同じ名前。無くてもよい）。</summary>
     private sealed record Article(
         string Slug, string Title, string Description,
-        DateTime Date, string DateLabel, string DateIso, IReadOnlyList<string> Tags, string BodyHtml,
+        DateTime Date, string DateLabel, string DateIso, string UpdatedLabel, string UpdatedIso, IReadOnlyList<string> Tags, string BodyHtml,
         bool IsDraft, DateTimeOffset PublishAt, string AssetDir);
 
     // ── テンプレに渡すモデル ──
@@ -291,6 +348,10 @@ public sealed class ArticlesGenerator
         public string DateLabel { get; set; } = "";
         /// <summary>time 要素の datetime 属性（"yyyy-MM-dd"、日付が無ければ空）。</summary>
         public string DateIso { get; set; } = "";
+        /// <summary>最終更新日の表示（「2026年11月8日」）。公開後に書き直していなければ空。</summary>
+        public string UpdatedLabel { get; set; } = "";
+        /// <summary>最終更新日の time 要素の datetime 属性（"yyyy-MM-dd"、無ければ空）。</summary>
+        public string UpdatedIso { get; set; } = "";
         public IReadOnlyList<string> Tags { get; set; } = Array.Empty<string>();
         /// <summary>Markdig で HTML 化済みの本文。テンプレ側でそのまま（raw）出力する。</summary>
         public string BodyHtml { get; set; } = "";

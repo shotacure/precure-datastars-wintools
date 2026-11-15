@@ -76,14 +76,32 @@ public sealed class Person
     /// </summary>
     public string? AffiliationUrl { get; set; }
 
+    /// <summary>リンク集のページ URL（任意。lit.link・linktr.ee など）。詳細ページにアイコン付きで表示。</summary>
+    public string? LinkCollectionUrl { get; set; }
+
     /// <summary>X (Twitter) プロフィール URL（任意）。詳細ページにアイコン付きで表示。</summary>
     public string? XUrl { get; set; }
+
+    /// <summary>2 つ目の X (Twitter) プロフィール URL（任意。言語違いのアカウントなど）。詳細ページにアイコン付きで表示。</summary>
+    public string? XSubUrl { get; set; }
+
+    /// <summary>Bluesky プロフィール URL（任意）。詳細ページにアイコン付きで表示。</summary>
+    public string? BlueskyUrl { get; set; }
 
     /// <summary>Instagram プロフィール URL（任意）。詳細ページにアイコン付きで表示。</summary>
     public string? InstagramUrl { get; set; }
 
     /// <summary>YouTube チャンネル URL（任意）。詳細ページにアイコン付きで表示。</summary>
     public string? YoutubeUrl { get; set; }
+
+    /// <summary>ブログ URL（任意。note・tumblr・アメーバブログなど）。詳細ページにアイコン付きで表示。</summary>
+    public string? BlogUrl { get; set; }
+
+    /// <summary>pixiv ユーザーページ URL（任意）。詳細ページにアイコン付きで表示。</summary>
+    public string? PixivUrl { get; set; }
+
+    /// <summary>作品集のページ URL（任意。ArtStation・Behance・carrd など）。詳細ページにアイコン付きで表示。</summary>
+    public string? PortfolioUrl { get; set; }
 
     /// <summary>Wikipedia 記事 URL（任意）。本人の記事。詳細ページの「外部リンク」の最後に出す。</summary>
     public string? WikipediaUrl { get; set; }

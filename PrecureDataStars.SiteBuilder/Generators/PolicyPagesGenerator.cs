@@ -5,7 +5,7 @@ using PrecureDataStars.SiteBuilder.Rendering;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>法律・運営情報系の補助ページを生成するジェネレータ。
-/// プライバシーポリシーの文面は常に本番運用状態（GA4 + AdSense 有効）を前提とした固定記述で、
+/// プライバシーポリシーの文面は常に本番運用状態（GA4 有効）を前提とした固定記述で、
 /// ローカルテスト時の ID 未設定（タグ出力オフ）には文面を追従させない。</summary>
 public sealed class PolicyPagesGenerator
 {
@@ -37,6 +37,7 @@ public sealed class PolicyPagesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "データの出典",
+            OgLead = "エピソード・クレジット・尺・楽曲・商品・書籍・人物・キャラクターの各データの出どころと、収録の決まりを説明しています。",
             MetaDescription = $"{_ctx.Config.SiteName} に収録しているデータの出どころと、収録の決まりです。エピソード・クレジット・尺・楽曲・商品・書籍・人物・キャラクターの各データについて説明しています。",
             // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
             SuppressShareButtons = true,
@@ -60,7 +61,8 @@ public sealed class PolicyPagesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "プライバシーポリシー",
-            MetaDescription = $"{_ctx.Config.SiteName} のプライバシーポリシーです。Cookie とブラウザへの保存、アクセス解析、広告配信、外部への情報送信、お問い合わせで受け取る情報の取り扱いを説明しています。",
+            OgLead = "Cookie とブラウザへの保存、アクセス解析、広告（Amazon アソシエイト）、外部への情報送信、お問い合わせの扱いを説明しています。",
+            MetaDescription = $"{_ctx.Config.SiteName} のプライバシーポリシーです。Cookie とブラウザへの保存、アクセス解析、広告（Amazon アソシエイト）、外部への情報送信、お問い合わせで受け取る情報の取り扱いを説明しています。",
             // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
             SuppressShareButtons = true,
             Breadcrumbs = new[]
@@ -83,6 +85,7 @@ public sealed class PolicyPagesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "免責事項",
+            OgLead = "情報の正確性、著作権と商標、サブタイトル画像とフォント、当サイトの内容の利用についての免責事項です。",
             MetaDescription = $"{_ctx.Config.SiteName} の免責事項です。情報の正確性、著作権と商標、サブタイトル画像とフォント、当サイトの内容の利用、Amazon アソシエイト、準拠法と管轄を説明しています。",
             // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
             SuppressShareButtons = true,
@@ -175,6 +178,7 @@ public sealed class PolicyPagesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "お問い合わせ",
+            OgLead = "誤りのご指摘、ご意見、ご本人からの訂正、引用や取材のご依頼を受け付けています。",
             MetaDescription = $"{_ctx.Config.SiteName} へのお問い合わせページです。誤りのご指摘、ご意見、ご本人からの訂正、引用や取材のご依頼はこちらからお寄せください。",
             // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
             SuppressShareButtons = true,

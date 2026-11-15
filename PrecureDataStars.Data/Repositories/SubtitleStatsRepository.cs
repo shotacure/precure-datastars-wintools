@@ -17,7 +17,31 @@ namespace PrecureDataStars.Data.Repositories;
 /// </summary>
 public sealed class SubtitleStatsRepository : RepositoryBase
 {
-    public SubtitleStatsRepository(IConnectionFactory factory) : base(factory) { }
+    /// <summary>どの集計も TV の話だけを数える、共通の絞り込み（各 SQL の episodes e の WHERE 句の頭）。</summary>
+    private const string TvEpisodesWhere = "WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')";
+
+    /// <summary>集計から除く話の条件（<see cref="TvEpisodesWhere"/> の後ろに足す。除く話が無ければ空）。</summary>
+    private readonly string _excludedEpisodesSql;
+
+    /// <param name="factory">接続ファクトリ。</param>
+    /// <param name="excludedEpisodeIds">集計から除く話（SiteBuilder がビルドの時点でまだ出さない話）。null か空なら除かない。</param>
+    public SubtitleStatsRepository(IConnectionFactory factory, IReadOnlyCollection<int>? excludedEpisodeIds = null) : base(factory)
+    {
+        _excludedEpisodesSql = excludedEpisodeIds is { Count: > 0 } ids
+            ? $" AND e.episode_id NOT IN ({string.Join(",", ids.OrderBy(i => i))})"
+            : "";
+    }
+
+    /// <summary>
+    /// 集計の SQL を、TV の話の絞り込み（<see cref="TvEpisodesWhere"/>）に除く話の条件を足してから流す。
+    /// このクラスの集計はすべてここを通すので、絞り込みの無い SQL は誤りとして止める。
+    /// </summary>
+    private Task<IReadOnlyList<T>> QueryTvEpisodesAsync<T>(string sql, object? param = null, CancellationToken ct = default)
+    {
+        if (!sql.Contains(TvEpisodesWhere, StringComparison.Ordinal))
+            throw new InvalidOperationException("サブタイトル統計の SQL に TV の話の絞り込みがありません。");
+        return QueryListAsync<T>(sql.Replace(TvEpisodesWhere, TvEpisodesWhere + _excludedEpisodesSql, StringComparison.Ordinal), param, ct);
+    }
 
     /// <summary>文字ランキング（全文字種、出現回数の降順）TOP <paramref name="limit"/>。 同点同順（Wimbledon ランキング）。 出典 SQL：「使用文字一覧_出現数順.sql」</summary>
     public async Task<IReadOnlyList<CharRankingRow>> GetCharRankingAllAsync(int limit, CancellationToken ct = default)
@@ -44,7 +68,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                      JSON_KEYS(e.title_char_stats, '$.chars'),
                      '$[*]' COLUMNS (ch VARCHAR(191) PATH '$')
                    ) AS k
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
             ),
             grouped AS (
               SELECT
@@ -66,7 +90,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY `Rank` ASC, FirstEpisodeId ASC, `Char` ASC;
             """;
 
-        return await QueryListAsync<CharRankingRow>(sql, new { limit }, ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<CharRankingRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>漢字限定ランキング（漢字＋繰り返し記号「々」）TOP <paramref name="limit"/>。同点同順。 出典 SQL：「歴代サブタイトル漢字ランキング.sql」</summary>
@@ -88,7 +112,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                      JSON_KEYS(e.title_char_stats, '$.chars'),
                      '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')
                    ) jt
-              WHERE e.is_deleted = 0 AND jt.ch REGEXP '\\p{Han}|[々]'
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV') AND jt.ch REGEXP '\\p{Han}|[々]'
             ),
             grouped AS (
               SELECT ch AS `Char`, SUM(cnt) AS TotalCount, MIN(episode_id) AS FirstEpisodeId
@@ -107,7 +131,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY `Rank` ASC, FirstEpisodeId ASC, `Char` ASC;
             """;
 
-        return await QueryListAsync<CharRankingRow>(sql, new { limit }, ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<CharRankingRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>サブタイトル文字数ランキング（空白除く）。<paramref name="ascending"/> = true で短い順、false で長い順。TOP <paramref name="limit"/>。同点同順。 出典 SQL：「歴代サブタイトル文字数多い順/少ない順ランキング.sql」</summary>
@@ -128,7 +152,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               FROM episodes e
               LEFT JOIN series s ON s.series_id = e.series_id
               -- サブタイトル未確定（title_text NULL）の話はランキング母集団から除外する
-              WHERE e.is_deleted = 0 AND e.title_text IS NOT NULL
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV') AND e.title_text IS NOT NULL
             ),
             ranked AS (
               SELECT
@@ -142,7 +166,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
-        return await QueryListAsync<EpisodeStatRow>(sql, new { limit }, ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<EpisodeStatRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>サブタイトル漢字率ランキング（降順、TOP <paramref name="limit"/>）。同点同順。 漢字率＝（漢字＋々の文字数）÷（空白除く全文字数）。総文字数 0 のエピソードは除外。 出典 SQL：「歴代サブタイトル漢字率.sql」</summary>
@@ -160,7 +184,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
               FROM episodes e
               LEFT JOIN series s ON s.series_id = e.series_id
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
             ),
             valid AS (
               SELECT EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
@@ -183,7 +207,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
-        return await QueryListAsync<EpisodeRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<EpisodeRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -205,7 +229,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               JOIN series   s ON s.series_id = e.series_id
               JOIN JSON_TABLE(JSON_KEYS(e.title_char_stats, '$.categories'),
                               '$[*]' COLUMNS (k VARCHAR(20) PATH '$')) AS jt
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
                 AND jt.k IN ('Kanji','Hiragana','Katakana','Latin','Digits','Punct','Symbols','Emoji','Other')
             )
             SELECT
@@ -222,7 +246,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY SeriesId;
             """;
 
-        return await QueryListAsync<SeriesCharTypeRow>(sql, ct: ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<SeriesCharTypeRow>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -260,7 +284,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                    JSON_KEYS(e.title_char_stats, '$.chars'),
                    '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')
                  ) jt
-            WHERE e.is_deleted = 0
+            WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
               -- 記号判定：漢字でもひらがなでもカタカナでも英字でも数字でも空白でもない（句読点・絵文字等を含む）。
               -- 長音「ー」は Unicode ではカタカナでなくひらがな・カタカナ共通の文字なので、明示してカタカナ側に入れる
               -- （記号率・文字種別の集計に使う title_char_stats.categories もカタカナに数えている）
@@ -269,7 +293,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY s.series_id;
             """;
 
-        return await QueryListAsync<SeriesSymbolCell>(sql, ct: ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<SeriesSymbolCell>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>シリーズ別の文字 TOP5 ランキング（DENSE_RANK で「同点同順、次は連番」、各シリーズ TOP5）。 出典 SQL：「歴代シリーズ使用文字ランキング.sql」</summary>
@@ -291,7 +315,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               JOIN series   s ON s.series_id = e.series_id
               JOIN JSON_TABLE(JSON_KEYS(e.title_char_stats, '$.chars'),
                               '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')) jt
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
             ),
             ranked AS (
               SELECT
@@ -307,7 +331,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY SeriesId ASC, `Rank` ASC, `Char` ASC;
             """;
 
-        return await QueryListAsync<SeriesCharRankRow>(sql, new { topN }, ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<SeriesCharRankRow>(sql, new { topN }, ct).ConfigureAwait(false);
     }
 
     /// <summary>シリーズ別の漢字 TOP5 ランキング（漢字＋繰り返し記号「々」限定。DENSE_RANK で「同点同順、次は連番」、各シリーズ TOP5）。 文字版 <see cref="GetTopCharsBySeriesAsync"/> に既存 <see cref="GetCharRankingKanjiAsync"/> と同一の漢字フィルタを足しただけのもの。</summary>
@@ -329,7 +353,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               JOIN series   s ON s.series_id = e.series_id
               JOIN JSON_TABLE(JSON_KEYS(e.title_char_stats, '$.chars'),
                               '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')) jt
-              WHERE e.is_deleted = 0 AND jt.ch REGEXP '\\p{Han}|[々]'
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV') AND jt.ch REGEXP '\\p{Han}|[々]'
             ),
             ranked AS (
               SELECT
@@ -345,7 +369,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY SeriesId ASC, `Rank` ASC, `Char` ASC;
             """;
 
-        return await QueryListAsync<SeriesCharRankRow>(sql, new { topN }, ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<SeriesCharRankRow>(sql, new { topN }, ct).ConfigureAwait(false);
     }
 
     // DTO 群（テンプレに渡す前に Generator 側で Url など解決した派生 DTO に変換する想定）
@@ -453,7 +477,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', '')) AS Len
               FROM episodes e
               JOIN series s ON s.series_id = e.series_id
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
                 AND s.kind_code = 'TV'
                 -- サブタイトル未確定（title_text NULL）の話は集計の母集団から除外する
                 AND e.title_text IS NOT NULL
@@ -481,7 +505,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY `Rank` ASC, SeriesId ASC;
             """;
 
-        return await QueryListAsync<SeriesAverageRow>(sql, new { limit }, ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<SeriesAverageRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>サブタイトル漢字率ランキング（既存 GetKanjiRatioRankingAsync）の昇降切替版。</summary>
@@ -501,7 +525,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
               FROM episodes e
               LEFT JOIN series s ON s.series_id = e.series_id
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
             ),
             valid AS (
               SELECT EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
@@ -522,7 +546,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
-        return await QueryListAsync<EpisodeRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<EpisodeRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>シリーズ単位 漢字率ランキング（TV のみ対象）。 シリーズ漢字率＝シリーズ内エピソードの (漢字＋々) 合計 ÷ 空白除く全文字 合計。総文字数 0 のシリーズは除外。 同点同順。</summary>
@@ -538,7 +562,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
               FROM episodes e
               JOIN series s ON s.series_id = e.series_id
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
                 AND s.kind_code = 'TV'
                 -- サブタイトル未確定（title_text NULL）の話は集計の母集団から除外する
                 AND e.title_text IS NOT NULL
@@ -568,7 +592,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY `Rank` ASC, SeriesId ASC;
             """;
 
-        return await QueryListAsync<SeriesRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<SeriesRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>エピソード単位 記号率ランキング。</summary>
@@ -594,7 +618,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
               FROM episodes e
               LEFT JOIN series s ON s.series_id = e.series_id
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
             ),
             valid AS (
               SELECT EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
@@ -616,7 +640,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
-        return await QueryListAsync<EpisodeRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<EpisodeRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>シリーズ単位 記号率ランキング（テレビシリーズのみ対象）。</summary>
@@ -637,7 +661,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', '')) AS TotalCount
               FROM episodes e
               JOIN series s ON s.series_id = e.series_id
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
                 AND s.kind_code = 'TV'
                 -- サブタイトル未確定（title_text NULL）の話は集計の母集団から除外する
                 AND e.title_text IS NOT NULL
@@ -667,7 +691,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY `Rank` ASC, SeriesId ASC;
             """;
 
-        return await QueryListAsync<SeriesRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<SeriesRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>記号出現回数（全件、初使用が早い順）。 「初使用」＝各記号文字が初めて使われたエピソードの放送日。同放送日のときは episode_id 昇順。 漢字限定や TOP 100 ランキングとは違い、TOP N の切捨てはせず全記号を並べる。 戻り値には初使用エピソードのシリーズタイトル・話数・サブタイトル・放送日を含めて、 テンプレ側で「初使用」グループ列の各セルに表示できるようにする。</summary>
@@ -693,7 +717,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                      JSON_KEYS(e.title_char_stats, '$.chars'),
                      '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')
                    ) jt
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
                 -- 記号判定：漢字でもひらがなでもカタカナでも英字でも数字でも空白でもない。
                 -- 長音「ー」は Unicode ではカタカナでないので、明示してカタカナ側に入れる
                 AND jt.ch NOT REGEXP '\\p{Han}|[々]|\\p{Hiragana}|\\p{Katakana}|[ー]|[A-Za-z]|[0-9]|[ 　]'
@@ -723,7 +747,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
             ORDER BY g.FirstBroadcastDate ASC, g.FirstEpisodeId ASC, g.`Char` ASC;
             """;
 
-        return await QueryListAsync<SymbolFirstAppearRow>(sql, ct: ct).ConfigureAwait(false);
+        return await QueryTvEpisodesAsync<SymbolFirstAppearRow>(sql, ct: ct).ConfigureAwait(false);
     }
 
     // 追加 DTO

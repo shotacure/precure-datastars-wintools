@@ -124,7 +124,7 @@ public sealed class TitleCharInfoRenderer
                     var prevRevealAt = SubtitleGuardRenderer.RevealAtFor(prev.EpisodeId, _subtitleRevealAtByEpisodeId);
                     sb.Append("「").Append(SubtitleGuardRenderer.GuardPlainText(JapaneseQuotes.InQuotes(prev.TitleText), prevRevealAt)).Append("」");
                 }
-                sb.Append("(").Append(prev.OnAirAt.ToString("yyyy.M.d")).Append(")以来</span>");
+                sb.Append("(").Append(JpDateFormat.BroadcastDotDate(prev.OnAirAt)).Append(")以来</span>");
             }
             sb.Append("</span></li>\n");
         }

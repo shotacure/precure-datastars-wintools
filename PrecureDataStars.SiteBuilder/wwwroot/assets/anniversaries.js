@@ -79,6 +79,15 @@
       }
     }
 
+    // 誕生日はキャラクター → プリキュア役の声優さん（pt=0）→ メインスタッフ（pt=1）→ そのほかの人物の順、
+    // 人物は同じ段の中で本編のクレジット回数（pc）の多い順。
+    bdays.sort(function (a, b) {
+      var oa = a.k === 'cb' ? -1 : (a.pt === undefined ? 2 : a.pt);
+      var ob = b.k === 'cb' ? -1 : (b.pt === undefined ? 2 : b.pt);
+      if (oa !== ob) return oa - ob;
+      return (b.pc || 0) - (a.pc || 0);
+    });
+
     var todayItems = filterToday(eps, today);
     var weekItems = filterThisWeek(eps, today, todayItems);
 
@@ -268,7 +277,8 @@
     // /episodes/ ランディングと同一の「2024.2.4」形式（DotDate同形、月日は 0 詰めしない）。
     var dateStr = it.y + '.' + it.m + '.' + it.d;
     // メタ行：「N年前」ラベル + シリーズ名 + (放送年度)。
-    var seriesMeta = '<span class="home-anniversary-series">' + escapeHtml(it.st) + '</span>';
+    // 大人向けスピンオフの話（o）は作品名の前に 🌙 を添える。
+    var seriesMeta = '<span class="home-anniversary-series">' + (it.o ? '🌙 ' : '') + escapeHtml(it.st) + '</span>';
     if (it.sy) {
       seriesMeta += ' <span class="series-year muted">(' + escapeHtml(String(it.sy)) + ')</span>';
     }

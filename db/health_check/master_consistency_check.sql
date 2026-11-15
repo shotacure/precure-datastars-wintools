@@ -18,7 +18,7 @@
 --   A. マスタ遊離検出（紐付き先が全部消えていて宙に浮いている）
 --   B. 同名重複検出（誤統合 / 誤分割の兆候）
 --   C. キャスティング異常検出（同一キャラに複数声優、共有名義の濫用）
---   D. 補足整合性（entry_kind と紐付け列の不整合）
+--   D. 補足整合性（entry_kind と紐付け列の不整合、役職・ブロックのつなぎの印、声の出演の続く行の組み方）
 -- ============================================================================
 
 
@@ -40,7 +40,7 @@ ORDER BY p.person_id;
 
 -- A2: person_alias がどこからも参照されていない孤立 alias
 --   件数 > 0 の意味: 「person_aliases 行はあるが、person_alias_persons /
---   credit_block_entries / song_credits / song_recording_singers /
+--   credit_block_entries / song_credits / song_recording_singers / episode_theme_song_singers /
 --   bgm_cue_credits / bgm_cue_singers / musical_work_credits からも参照されていない」状態。
 --   ただし「後で使う目的で先行登録した名義」は意図的に温存されているため、
 --   この結果に出てくるすべてが異常とは限らない。マスタ管理画面で確認して、
@@ -52,6 +52,10 @@ WHERE pa.is_deleted = 0
   AND NOT EXISTS (SELECT 1 FROM credit_block_entries   p WHERE p.person_alias_id       = pa.alias_id)
   AND NOT EXISTS (SELECT 1 FROM song_credits           p WHERE p.person_alias_id       = pa.alias_id)
   AND NOT EXISTS (SELECT 1 FROM song_recording_singers p WHERE p.person_alias_id       = pa.alias_id
+                                                            OR p.voice_person_alias_id = pa.alias_id
+                                                            OR p.slash_person_alias_id = pa.alias_id
+                                                            OR p.slash_voice_person_alias_id = pa.alias_id)
+  AND NOT EXISTS (SELECT 1 FROM episode_theme_song_singers p WHERE p.person_alias_id   = pa.alias_id
                                                             OR p.voice_person_alias_id = pa.alias_id
                                                             OR p.slash_person_alias_id = pa.alias_id
                                                             OR p.slash_voice_person_alias_id = pa.alias_id)
@@ -77,13 +81,15 @@ ORDER BY c.character_id;
 
 -- A4: character_alias がどこからも参照されていない孤立 alias
 --   件数 > 0 の意味: 「character_aliases 行はあるが、credit_block_entries /
---   song_recording_singers / bgm_cue_singers / precures / person_alias_members からも
+--   song_recording_singers / episode_theme_song_singers / bgm_cue_singers / precures / person_alias_members からも
 --   参照されていない」状態。マスタ汚染の典型パターン。
 SELECT 'A4 orphan character_aliases' AS check_name, ca.alias_id, ca.character_id, ca.name
 FROM character_aliases ca
 WHERE ca.is_deleted = 0
   AND NOT EXISTS (SELECT 1 FROM credit_block_entries   p WHERE p.character_alias_id        = ca.alias_id)
   AND NOT EXISTS (SELECT 1 FROM song_recording_singers p WHERE p.character_alias_id        = ca.alias_id
+                                                            OR p.slash_character_alias_id  = ca.alias_id)
+  AND NOT EXISTS (SELECT 1 FROM episode_theme_song_singers p WHERE p.character_alias_id    = ca.alias_id
                                                             OR p.slash_character_alias_id  = ca.alias_id)
   AND NOT EXISTS (SELECT 1 FROM bgm_cue_singers        p WHERE p.character_alias_id        = ca.alias_id
                                                             OR p.slash_character_alias_id  = ca.alias_id)
@@ -301,6 +307,84 @@ WHERE ccr.join_previous = 1
          AND prev.order_in_group < ccr.order_in_group)
 ORDER BY ccr.card_role_id;
 
+-- D5: continues_previous = 1 なのに役職の中で前のブロックがない
+--   件数 > 0 の意味: 役職の最初のブロックに「前のブロックの続き」が立っている。続く相手が無いので
+--   表示上は効かないが、ブロックの分け方か印の付け先を間違えている可能性が高い。
+--   対処: クレジットの画面と照らして、ブロックの区切りか continues_previous を直す。
+SELECT 'D5 continues_previous without previous block' AS check_name,
+    crb.block_id,
+    crb.card_role_id,
+    crb.block_seq
+FROM credit_role_blocks crb
+WHERE crb.continues_previous = 1
+  AND NOT EXISTS (
+      SELECT 1 FROM credit_role_blocks prev
+       WHERE prev.card_role_id = crb.card_role_id
+         AND prev.block_seq < crb.block_seq)
+ORDER BY crb.block_id;
+
+-- D6: 画面の組みどおりの役名（character_display_text）が名義と食い違う
+--   件数 > 0 の意味: 声の出演以外のエントリに付いている、または改行を抜いた字が、キャラの名義（名義が無ければ raw_character_text）と
+--   同じ（このときは改行が要る）でも、名義の後ろの部分で名義より短い字（頭の姓などを画面で省いた役名）でもない。
+--   名義の字を直したのに画面の役名が古いまま、などのずれ。
+--   対処: クレジットの画面と照らして、character_display_text を直すか消す。
+SELECT 'D6 character_display_text mismatch' AS check_name,
+    cbe.entry_id,
+    cbe.entry_kind,
+    cbe.character_display_text,
+    COALESCE(ca.name, cbe.raw_character_text) AS character_name
+FROM credit_block_entries cbe
+LEFT JOIN character_aliases ca ON ca.alias_id = cbe.character_alias_id
+WHERE cbe.character_display_text IS NOT NULL
+  AND (cbe.entry_kind <> 'CHARACTER_VOICE'
+       OR NOT (
+            -- 役名が画面で折れている：改行を抜くと名義と同じで、改行がある
+            (CAST(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '') AS BINARY)
+                = CAST(COALESCE(ca.name, cbe.raw_character_text, '') AS BINARY)
+             AND LOCATE('\n', cbe.character_display_text) > 0)
+            -- 頭を省いた役名：改行を抜いた字が名義の後ろの部分で、名義より短い
+         OR (CHAR_LENGTH(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', ''))
+                BETWEEN 1 AND CHAR_LENGTH(COALESCE(ca.name, cbe.raw_character_text, '')) - 1
+             AND CAST(RIGHT(COALESCE(ca.name, cbe.raw_character_text, ''),
+                            CHAR_LENGTH(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', ''))) AS BINARY)
+                 = CAST(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '') AS BINARY))))
+ORDER BY cbe.entry_id;
+
+
+-- D7: 人物名の表記揺れ（person_display_text）が名義と食い違う
+--   件数 > 0 の意味: 人物・声の出演以外のエントリに付いている、名義が無い、名義と同じ字が入っている、または
+--   空白・中黒・ピリオド・ハイフン・イコール・スラッシュを除くと名義の名前と字が違う（表記揺れではなく別の名前が入った）。
+--   対処: クレジットの画面と照らして、person_display_text を直すか消す。字そのものが違うなら名義を足す。
+SELECT 'D7 person_display_text mismatch' AS check_name,
+    cbe.entry_id,
+    cbe.entry_kind,
+    cbe.person_display_text,
+    pa.name AS person_alias_name
+FROM credit_block_entries cbe
+LEFT JOIN person_aliases pa ON pa.alias_id = cbe.person_alias_id
+WHERE cbe.person_display_text IS NOT NULL AND (cbe.entry_kind NOT IN ('PERSON', 'CHARACTER_VOICE') OR pa.alias_id IS NULL OR CAST(cbe.person_display_text AS BINARY) = CAST(pa.name AS BINARY) OR CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cbe.person_display_text, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY) <> CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(pa.name, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY))
+ORDER BY cbe.entry_id;
+
+-- D8: 同じ役名・同じ声優が続く行の画面の組み方（same_character_layout / same_person_layout）の付け忘れ・付け違い
+--   件数 > 0 の意味: 同じブロックで直前の声の出演と役名（または声優）が同じなのに値が無い（描き方が決まらず毎行書かれる）、
+--   または直前の行と続いていないのに値が入っている。併記のエントリは除いて並べる。
+--   対処: クレジットの画面で、毎行書くか（REPEAT）・最初の行に 1 回か（TOP）・縦の真ん中に 1 回か（MIDDLE）を見て入れるか、値を消す。
+SELECT 'D8 same layout mismatch' AS check_name,
+    y.entry_id, y.same_character_layout, y.same_person_layout, y.plbl AS prev_character, y.lbl AS character_name, y.pp AS prev_person_alias_id, y.p AS person_alias_id
+FROM (SELECT cbe.entry_id, cbe.entry_kind, cbe.same_character_layout, cbe.same_person_layout,
+        COALESCE(ca.name, cbe.raw_character_text) AS lbl, cbe.person_alias_id AS p,
+        LAG(cbe.entry_kind) OVER w AS pk, LAG(COALESCE(ca.name, cbe.raw_character_text)) OVER w AS plbl, LAG(cbe.person_alias_id) OVER w AS pp
+      FROM credit_block_entries cbe
+      LEFT JOIN character_aliases ca ON ca.alias_id = cbe.character_alias_id
+      WHERE cbe.parallel_with_entry_id IS NULL
+      WINDOW w AS (PARTITION BY cbe.block_id, cbe.is_broadcast_only ORDER BY cbe.entry_seq)) y
+WHERE y.entry_kind = 'CHARACTER_VOICE'
+  AND ((y.same_character_layout IS NOT NULL AND NOT COALESCE(y.pk = 'CHARACTER_VOICE' AND y.lbl <=> y.plbl, FALSE))
+    OR (y.same_character_layout IS NULL AND y.pk = 'CHARACTER_VOICE' AND y.lbl = y.plbl)
+    OR (y.same_person_layout IS NOT NULL AND NOT COALESCE(y.pk = 'CHARACTER_VOICE' AND y.p <=> y.pp, FALSE))
+    OR (y.same_person_layout IS NULL AND y.pk = 'CHARACTER_VOICE' AND y.p = y.pp))
+ORDER BY y.entry_id;
+
 
 -- E1: 音楽クレジットの紐付け先が出典の盤に載っていない
 --   件数 > 0 の意味: 「music_credits の曲・録音・劇伴セッションの行が、出典の盤（source_product_catalog_no）の
@@ -332,6 +416,16 @@ WHERE sc.affiliation_display = 'COMPANY_ONLY' AND sc.affiliation_company_alias_i
 ORDER BY sc.song_id, sc.credit_role, sc.credit_seq;
 
 
+-- E3: 所属の会社名だけを出す劇伴の作家の行に、所属が無い
+--   件数 > 0 の意味: 「bgm_cue_credits.affiliation_display = 'COMPANY_ONLY' なのに、所属の会社名義も自由記述も無い」状態（E2 の劇伴版）。
+--   表示は名義に戻るが、サントラの表記（団体名だけ）と違ってしまう。会社名義が消えて SET NULL になったときなどに起きる。
+--   名義を持たない文字だけの行（entry_kind = 'TEXT'）は所属を持たないので対象外。
+SELECT 'E3 bgm_cue_credits company-only w/o affiliation' AS check_name, bcc.series_id, bcc.m_no_detail, bcc.credit_role, bcc.credit_seq, bcc.person_alias_id
+FROM bgm_cue_credits bcc
+WHERE bcc.entry_kind = 'PERSON' AND bcc.affiliation_display = 'COMPANY_ONLY' AND bcc.affiliation_company_alias_id IS NULL AND (bcc.affiliation_text IS NULL OR bcc.affiliation_text = '')
+ORDER BY bcc.series_id, bcc.m_no_detail, bcc.credit_role, bcc.credit_seq;
+
+
 -- ============================================================================
 -- 全件カウントサマリ（最後に実行すると一覧で異常箇所がわかる）
 -- ============================================================================
@@ -343,6 +437,7 @@ UNION ALL SELECT 'A2 orphan person_aliases',           COUNT(*) FROM person_alia
       AND NOT EXISTS (SELECT 1 FROM credit_block_entries   p WHERE p.person_alias_id       = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM song_credits           p WHERE p.person_alias_id       = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM song_recording_singers p WHERE p.person_alias_id       = pa.alias_id OR p.voice_person_alias_id = pa.alias_id OR p.slash_person_alias_id = pa.alias_id OR p.slash_voice_person_alias_id = pa.alias_id)
+      AND NOT EXISTS (SELECT 1 FROM episode_theme_song_singers p WHERE p.person_alias_id   = pa.alias_id OR p.voice_person_alias_id = pa.alias_id OR p.slash_person_alias_id = pa.alias_id OR p.slash_voice_person_alias_id = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM bgm_cue_credits        p WHERE p.person_alias_id       = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM bgm_cue_singers        p WHERE p.person_alias_id       = pa.alias_id OR p.voice_person_alias_id = pa.alias_id OR p.slash_person_alias_id = pa.alias_id)
       AND NOT EXISTS (SELECT 1 FROM musical_work_credits   p WHERE p.person_alias_id       = pa.alias_id)
@@ -352,6 +447,7 @@ UNION ALL SELECT 'A4 orphan character_aliases',        COUNT(*) FROM character_a
     WHERE ca.is_deleted = 0
       AND NOT EXISTS (SELECT 1 FROM credit_block_entries   p WHERE p.character_alias_id        = ca.alias_id)
       AND NOT EXISTS (SELECT 1 FROM song_recording_singers p WHERE p.character_alias_id        = ca.alias_id OR p.slash_character_alias_id = ca.alias_id)
+      AND NOT EXISTS (SELECT 1 FROM episode_theme_song_singers p WHERE p.character_alias_id    = ca.alias_id OR p.slash_character_alias_id = ca.alias_id)
       AND NOT EXISTS (SELECT 1 FROM bgm_cue_singers        p WHERE p.character_alias_id        = ca.alias_id OR p.slash_character_alias_id = ca.alias_id)
       AND NOT EXISTS (SELECT 1 FROM precures               p WHERE p.pre_transform_alias_id    = ca.alias_id OR p.transform_alias_id = ca.alias_id OR p.transform2_alias_id = ca.alias_id OR p.alt_form_alias_id = ca.alias_id)
       AND NOT EXISTS (SELECT 1 FROM person_alias_members   p WHERE p.member_character_alias_id = ca.alias_id)
@@ -376,9 +472,15 @@ UNION ALL SELECT 'D1 entry_kind mismatch',             COUNT(*) FROM credit_bloc
 UNION ALL SELECT 'D2 role_label_text same as name_ja', COUNT(*) FROM credit_card_roles ccr JOIN roles r ON r.role_code = ccr.role_code WHERE ccr.role_label_text IS NOT NULL AND CAST(ccr.role_label_text AS BINARY) = CAST(r.name_ja AS BINARY)
 UNION ALL SELECT 'D3 join_separator w/o join_previous', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_separator IS NOT NULL AND ccr.join_previous = 0
 UNION ALL SELECT 'D4 join_previous w/o previous role', COUNT(*) FROM credit_card_roles ccr WHERE ccr.join_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_card_roles prev WHERE prev.card_group_id = ccr.card_group_id AND prev.order_in_group < ccr.order_in_group)
+UNION ALL SELECT 'D5 continues_previous w/o previous block', COUNT(*) FROM credit_role_blocks crb WHERE crb.continues_previous = 1 AND NOT EXISTS (SELECT 1 FROM credit_role_blocks prev WHERE prev.card_role_id = crb.card_role_id AND prev.block_seq < crb.block_seq)
+UNION ALL SELECT 'D6 character_display_text mismatch', COUNT(*) FROM credit_block_entries cbe LEFT JOIN character_aliases ca ON ca.alias_id = cbe.character_alias_id WHERE cbe.character_display_text IS NOT NULL AND (cbe.entry_kind <> 'CHARACTER_VOICE' OR NOT ((CAST(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '') AS BINARY) = CAST(COALESCE(ca.name, cbe.raw_character_text, '') AS BINARY) AND LOCATE('\n', cbe.character_display_text) > 0) OR (CHAR_LENGTH(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '')) BETWEEN 1 AND CHAR_LENGTH(COALESCE(ca.name, cbe.raw_character_text, '')) - 1 AND CAST(RIGHT(COALESCE(ca.name, cbe.raw_character_text, ''), CHAR_LENGTH(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', ''))) AS BINARY) = CAST(REPLACE(REPLACE(cbe.character_display_text, '\r', ''), '\n', '') AS BINARY))))
+UNION ALL SELECT 'D7 person_display_text mismatch', COUNT(*) FROM credit_block_entries cbe LEFT JOIN person_aliases pa ON pa.alias_id = cbe.person_alias_id WHERE cbe.person_display_text IS NOT NULL AND (cbe.entry_kind NOT IN ('PERSON', 'CHARACTER_VOICE') OR pa.alias_id IS NULL OR CAST(cbe.person_display_text AS BINARY) = CAST(pa.name AS BINARY) OR CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(cbe.person_display_text, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY) <> CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(pa.name, ' ', ''), '　', ''), '・', ''), '･', ''), '.', ''), '．', ''), '-', ''), '‐', ''), '＝', ''), '=', ''), '/', ''), '／', '') AS BINARY))
+UNION ALL SELECT 'D8 same layout mismatch', COUNT(*) FROM (SELECT cbe.entry_id, cbe.entry_kind, cbe.same_character_layout, cbe.same_person_layout,     COALESCE(ca.name, cbe.raw_character_text) AS lbl, cbe.person_alias_id AS p,     LAG(cbe.entry_kind) OVER w AS pk, LAG(COALESCE(ca.name, cbe.raw_character_text)) OVER w AS plbl, LAG(cbe.person_alias_id) OVER w AS pp    FROM credit_block_entries cbe    LEFT JOIN character_aliases ca ON ca.alias_id = cbe.character_alias_id    WHERE cbe.parallel_with_entry_id IS NULL    WINDOW w AS (PARTITION BY cbe.block_id, cbe.is_broadcast_only ORDER BY cbe.entry_seq)) y WHERE y.entry_kind = 'CHARACTER_VOICE'  AND ((y.same_character_layout IS NOT NULL AND NOT COALESCE(y.pk = 'CHARACTER_VOICE' AND y.lbl <=> y.plbl, FALSE))   OR (y.same_character_layout IS NULL AND y.pk = 'CHARACTER_VOICE' AND y.lbl = y.plbl)   OR (y.same_person_layout IS NOT NULL AND NOT COALESCE(y.pk = 'CHARACTER_VOICE' AND y.p <=> y.pp, FALSE))   OR (y.same_person_layout IS NULL AND y.pk = 'CHARACTER_VOICE' AND y.p = y.pp))
 UNION ALL SELECT 'E1 music_credits target not on source disc', COUNT(*) FROM music_credits m
     WHERE (m.target_kind = 'SONG' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no JOIN song_recordings r ON r.song_recording_id = t.song_recording_id WHERE d.product_catalog_no = m.source_product_catalog_no AND r.song_id = m.song_id))
        OR (m.target_kind = 'SONG_RECORDING' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no WHERE d.product_catalog_no = m.source_product_catalog_no AND t.song_recording_id = m.song_recording_id))
        OR (m.target_kind = 'BGM_SESSION' AND NOT EXISTS (SELECT 1 FROM tracks t JOIN discs d ON d.catalog_no = t.catalog_no JOIN bgm_cues bc ON bc.series_id = t.bgm_series_id AND bc.m_no_detail = t.bgm_m_no_detail WHERE d.product_catalog_no = m.source_product_catalog_no AND bc.series_id = m.bgm_series_id AND bc.session_no = m.bgm_session_no))
 UNION ALL SELECT 'E2 song_credits company-only w/o affiliation', COUNT(*) FROM song_credits sc
-    WHERE sc.affiliation_display = 'COMPANY_ONLY' AND sc.affiliation_company_alias_id IS NULL AND (sc.affiliation_text IS NULL OR sc.affiliation_text = '');
+    WHERE sc.affiliation_display = 'COMPANY_ONLY' AND sc.affiliation_company_alias_id IS NULL AND (sc.affiliation_text IS NULL OR sc.affiliation_text = '')
+UNION ALL SELECT 'E3 bgm_cue_credits company-only w/o affiliation', COUNT(*) FROM bgm_cue_credits bcc
+    WHERE bcc.entry_kind = 'PERSON' AND bcc.affiliation_display = 'COMPANY_ONLY' AND bcc.affiliation_company_alias_id IS NULL AND (bcc.affiliation_text IS NULL OR bcc.affiliation_text = '');

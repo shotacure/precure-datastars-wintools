@@ -32,11 +32,23 @@ public sealed class SiteBuilderPipeline
         logger.Info($"Site name        : {config.SiteName}");
         // ビルドモードはタグ出力の有無に直結するため、毎回ログ先頭で明示する
         // （本番のつもりがテストモードのまま、の事故にすぐ気付けるように）。
-        logger.Info($"Build mode       : {(config.IsProductionMode ? "production（GA4 / AdSense / ads.txt を出力）" : "test（GA4 / AdSense / ads.txt を出力しない）")}");
+        logger.Info($"Build mode       : {(config.IsProductionMode ? "production（GA4 を出力）" : "test（GA4 を出力しない）")}");
 
         // DB 接続。各 Generator は本ファクトリを使い回す。
         // 進捗の事前予想件数算出（COUNT クエリ）でも本ファクトリを使うため、先に確保する。
         var factory = MySqlConnectionFactory.FromConnectionString(config.ConnectionString);
+
+        // 作り直さずに上げるとき（--upload-only）は、生成を飛ばして直前のドライランの出力を上げるだけにする。
+        if (config.Deploy.UploadOnly)
+        {
+            await UploadPendingAsync(config, logger, factory, stopwatch, ct).ConfigureAwait(false);
+            return;
+        }
+
+        // 全体ビルドは出力を作り直すので、前のドライランの控えを消す（控えのある出力＝ドライランで作ったままの出力に限る）。
+        // 差分だけを出すビルドは出力を書かないので、控えも残す。
+        if (string.IsNullOrEmpty(config.PageFilter) && !config.DiffOnly)
+            Deploy.PendingDeploy.Delete(config.OutputDirectory);
 
         // 22 セクション分の進捗枠を事前登録する。
         // ページ書き出し件数の予想は ctx 構築前に SQL の COUNT(*) で軽く取得する
@@ -55,6 +67,8 @@ public sealed class SiteBuilderPipeline
         // サブタイトルのテロップ画像の作り置きを確かめる。描き直しに要る書体がこの PC に無ければここで止まる
         // （出力に手を付ける前なので、前回の出力はそのまま残る）。
         SubtitleTelopPreflight.Run(ctx, config, logger);
+        // 書体の表の書体がこの PC でどう引けるかの点検は数秒かかるので、ページの生成の裏で回し、結果は OGP カードの描き上がりの後にログへ出す。
+        var fontRoutes = Task.Run(() => SubtitleTelopPreflight.DescribeFontRoutes(ctx), ct);
 
         // 出力は前回のものを残したまま、中身が変わるファイルだけ書く（OutputWriter）。全体ビルドでは最後に
         // 今回書かなかったファイル（廃止した役職詳細など、生成されなくなったページ）を消すので、出力は
@@ -62,15 +76,19 @@ public sealed class SiteBuilderPipeline
         // 削除）が正しく効く。空にしてから作り直すのに比べて、数千件のファイル作成と一掃が要らない。
         // ピンポイントビルド（--page）は差分生成なので最後の掃除もしない（対象外ページの既存出力を温存する）。
         // 出力への書き出し（転送表・静的アセット・各ページ・画像・SEO ファイル）はすべてこの窓口を通す。
-        var output = new OutputWriter(config.OutputDirectory);
-        Directory.CreateDirectory(config.OutputDirectory);
+        // 差分だけを出すビルド（--diff）では、この窓口が出力に書かず、今の出力との違いだけを控える。
+        var output = new OutputWriter(config.OutputDirectory, config.DiffOnly);
+        if (config.DiffOnly) logger.Info($"Diff only        : 出力に書き込みません（差分の中身は {OutputWriter.DiffDirectoryFor(config.OutputDirectory)}）");
+        else Directory.CreateDirectory(config.OutputDirectory);
 
         // テンプレ → ページ書き出しヘルパー。
         // 進捗バーへのページ書き出し通知も PageRenderer 経由で発火するため、reporter を渡す。
         // OGP カードのラスタライザは同梱フォントを 1 度だけ読み込んで全ページで使い回す
         // （読み取り専用の SKTypeface だけを共有するため並列レンダリングフェーズからも安全に呼べる）。
         var renderer = new ScribanRenderer();
-        using var ogCardRenderer = new OgCardRenderer(config.SiteBrandLabel, config.OgCardFonts);
+        // カードの見出しに載せるサブタイトルの装飾は、カードとは別の作り置きから使う（カードの組み方を変えても描き直さない）。
+        var telopPieceCache = new TelopImageCache(config.TelopPieceCacheDirectory, config.RefreshSubtitleTelops);
+        using var ogCardRenderer = new OgCardRenderer(config.SiteBrandLabel, config.OgCardFonts) { TelopCache = telopPieceCache };
         var pageRenderer = new PageRenderer(renderer, config, summary, output, reporter, ogCardRenderer);
 
         // スタッフ表示用の人物リンク解決ヘルパ。
@@ -97,7 +115,7 @@ public sealed class SiteBuilderPipeline
         var roleSuccessorResolver = await BuildRoleSuccessorResolverAsync(factory, ct).ConfigureAwait(false);
         // 役職詳細ページへのリンク（PathUtil.CreatorsRoleUrl）も系譜の代表へ向ける。
         PathUtil.UseRoleRepresentatives(roleSuccessorResolver);
-        // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）。クレジット・人物・企業の各ページで
+        // 役職詳細ページを持たない役職（単発のイベント映像と、オトナシリーズ以外のスピンオフだけで使う役職）。クレジット・人物・企業の各ページで
         // 役職名をリンクにしないのに使うので、系譜の Resolver の後・全ページ生成より前に 1 度だけ確定させる。
         PathUtil.UseRolesWithoutPage(CreatorListScope.RolesWithoutPage(ctx, involvementIndex, roleSuccessorResolver));
         // 役職どうしの関連（role_relations：段階・並列）。系譜の代表へ寄せて引くので Resolver の後に 1 度だけ作る。
@@ -109,6 +127,8 @@ public sealed class SiteBuilderPipeline
         // 以降 PathUtil.PersonUrl / CharacterUrl / CompanyUrl はこの台帳を引く。
         ctx.EntityUrls = await EntityUrlRegistry.BuildAsync(ctx, factory, involvementIndex, ct).ConfigureAwait(false);
         PathUtil.UseEntityUrls(ctx.EntityUrls);
+        // 左のもくじの映画の題名の分け方（テンプレートの nav_prefix / nav_main）
+        MovieNavTitle.UseSeries(ctx.SeriesById);
 
         // 旧 ID URL → 新 URL の転送表を出力へ書き出す（デプロイで S3 に上がり、Lambda@Edge が 301 に使う）。
         LegacyRedirectMapWriter.Write(output, ctx.EntityUrls.LegacyRedirects);
@@ -126,7 +146,11 @@ public sealed class SiteBuilderPipeline
 
         // 人物の誕生日を記念日カレンダーに出すかの判定。ホーム（声の出演一覧より先に作る）と記念日ページが
         // 同じ判定を使うよう、関与索引の構築直後に 1 回だけ決める。
-        ctx.BirthdayCalendar = BirthdayCalendarEligibility.Build(ctx, involvementIndex);
+        var precureVoicePersonIds = (await new PrecuresRepository(factory).GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false))
+            .Where(p => p.VoiceActorPersonId.HasValue)
+            .Select(p => p.VoiceActorPersonId!.Value)
+            .ToHashSet();
+        ctx.BirthdayCalendar = BirthdayCalendarEligibility.Build(ctx, involvementIndex, precureVoicePersonIds);
 
         // 各話のチーフ（脚本・絵コンテ・演出・作画監督・美術）の顔ぶれ索引。エピソード詳細の
         // 「組み合わせの通算回数」と歴代記録の「多く組んだ演出と作画監督」が同じ索引を読む。
@@ -279,10 +303,17 @@ public sealed class SiteBuilderPipeline
         await new EpisodePartStatsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
-        // 歴代記録（/stats/records/）と本放送・配信・円盤の尺の違い。尺のランキングはパート尺統計と同じ SQL、
+        // 歴代記録（/stats/records/）。尺のランキングはパート尺統計と同じ SQL、
         // スタッフ・キャラクターは関与索引とチーフの顔ぶれ索引から数える。
         reporter.BeginSection("records");
-        await new RecordsGenerator(ctx, pageRenderer, factory, involvementIndex, chiefStaffIndex).GenerateAsync(ct).ConfigureAwait(false);
+        await new RecordsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+        reporter.EndSection();
+
+        // OGP カードは各ページの生成と並行して描いているので、出力を走査・掃除する前に全部の描き上がりを待つ。
+        reporter.BeginSection("og_cards");
+        await pageRenderer.WaitForOgCardsAsync().ConfigureAwait(false);
+        foreach (var line in await fontRoutes.ConfigureAwait(false)) logger.Info(line);
+        reporter.PageWritten();
         reporter.EndSection();
 
         // OGP カード一覧（確認用）。全ページのカード生成が終わったあとに出力ディレクトリを走査するため、
@@ -290,11 +321,12 @@ public sealed class SiteBuilderPipeline
         // 出力の掃除より前に書いて、自分自身が掃除で消されないようにする（前回の残りのカードは走査で除く）。
         new OgGalleryGenerator(ctx, config, output).Generate();
 
-        // サイト全体の集約物（検索インデックス・sitemap / robots / ads.txt）と出力の掃除は、ピンポイントビルド
+        // サイト全体の集約物（検索インデックス・sitemap / robots）と出力の掃除は、ピンポイントビルド
         // （--page）では行わない。部分生成のため WrittenPages が当該ページのみになり、全件前提の
         // これらを上書きすると内容が壊れるため、既存ファイルをそのまま残す。
         int prunedFiles = 0;
         int staleOgCards = 0;
+        int staleTelopPieces = 0;
         if (string.IsNullOrEmpty(config.PageFilter))
         {
             // サイト内検索の静的 JSON インデックス。
@@ -306,9 +338,14 @@ public sealed class SiteBuilderPipeline
             reporter.PageWritten();
             reporter.EndSection();
 
-            // SEO 関連ファイル（sitemap.xml / robots.txt / ads.txt）。
+            // 販売中の商品のファイル（作品ごとと、トップページ用）。枠の置き場を持つページが閲覧時に読む
+            // （定時の点検も同じ中身を上げ直す）。
+            foreach (var (relativePath, json) in ShopItemsFile.BuildFiles(ctx.ShopItems, ctx.ShopProductCandidates, config.AmazonAssociateTag ?? ""))
+                output.WriteText(Path.Combine(config.OutputDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar)), json);
+
+            // SEO 関連ファイル（sitemap.xml / robots.txt）。
             // 全ページの書き出しが完了した後に PageRenderer.WrittenPages を引いて URL リストを構築するため、
-            // パイプラインの最後に実行する。ads.txt 出力と robots.txt 強化を追加。
+            // パイプラインの最後に実行する。
             // こちらも HTML ページ書き出しではないので、ダミーで PageWritten を 1 回呼ぶ。
             reporter.BeginSection("seo");
             await new SeoGenerator(ctx, config, pageRenderer, output).GenerateAsync(ct).ConfigureAwait(false);
@@ -316,15 +353,32 @@ public sealed class SiteBuilderPipeline
             reporter.EndSection();
 
             // 出力の掃除。今回の出力に属さないファイル（生成されなくなったページや画像）を消して、出力を今回の
-            // 生成物だけにする。あわせて、今回のどのページにも使わなかった OGP カードの作り置き（材料や描き方を
-            // 変える前の古い画像）も消す。全ファイルの書き出しが済んだあと、最後に行う。
+            // 生成物だけにする。あわせて、OGP カードの作り置きの索引を書き、決まった日数使われなかった行と、どの行からも
+            // 指されない画像（材料や描き方を変える前の古い画像）も消す。全ファイルの書き出しが済んだあと、最後に行う。
+            // 掃除の前に、URL が大文字小文字だけ違う形に変わったページの名前を今回の URL の形にそろえる
+            // （Windows では前回の名前のまま上書きされ、そのままデプロイすると S3 のキーが前回の形のまま残るため）。
             reporter.BeginSection("prune");
+            int caseRenamed = output.AlignNameCase();
             prunedFiles = output.PruneOrphans();
-            staleOgCards = PruneOgCardCache(config.OgCardCacheDirectory, pageRenderer.OgCardCacheKeysUsed);
-            logger.Info($"output pruned: {prunedFiles} files removed / stale og cards: {staleOgCards} removed");
+            staleOgCards = pageRenderer.FinishOgCardStore(prune: true).Images;
+            staleTelopPieces = telopPieceCache.Prune();
+            logger.Info($"output pruned: {prunedFiles} files removed / stale og cards: {staleOgCards} removed / stale telop pieces: {staleTelopPieces} removed / name case aligned: {caseRenamed}");
             reporter.PageWritten();
             reporter.EndSection();
         }
+
+        // ピンポイントビルドでも、今回描いたカードを次のビルドで使えるよう、作り置きの索引を書く（掃除はしない）。
+        if (!string.IsNullOrEmpty(config.PageFilter)) pageRenderer.FinishOgCardStore(prune: false);
+
+        // 書いたファイルの中身の印を台帳へ残す（次のビルドとデプロイが、出力を読み返さずに差分を決めるのに使う）。
+        // ピンポイントビルドは一部のファイルしか書かないので、前回までの台帳に今回の分を重ねる。
+        output.SaveLedger(keepPrevious: !string.IsNullOrEmpty(config.PageFilter));
+
+        // まだ出さない話（予告も雑誌の発売もまだの話）が出力に残っていないかの点検。出力の掃除の後に、出力の全体を照らす。
+        // 差分だけを出すビルドでは、出力が今回のビルドの中身ではないので点検しない。
+        int prereleaseHits = config.DiffOnly ? 0 : PrereleaseOutputGuard.Check(ctx, config.OutputDirectory);
+        if (ctx.HiddenEpisodes.Count > 0 && !config.DiffOnly)
+            logger.Info($"prerelease guard: まだ出さない話 {ctx.HiddenEpisodes.Count} 件を出力に照らし、{prereleaseHits} か所で見つかりました");
 
         // OGP カードの書体に関する報告を、種類ごとに 1 度だけ出す。ブランド書体に無い文字の代替描画は情報として残し、
         // 指定した書体（作品の書体の表が指す fonts.render_font_name など）がこの PC に無い場合は、気づかずに別の書体で焼いてデプロイしないよう警告にする。
@@ -335,6 +389,16 @@ public sealed class SiteBuilderPipeline
             else
                 logger.Info($"OGP カード: {message}（例: {samplePath}）");
         }
+
+        // 描くのに要る書体がこの PC で引けず、描かなかったカード。既定の書体に差し替えた画像で前回の画像を上書きしないよう、
+        // 前回の画像を残している（前回の画像が無いページはカードなし）。書体を入れると次のビルドで描かれる。
+        foreach (var (font, (kept, none, samplePath)) in pageRenderer.OgCardMissingFonts.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            logger.Warn($"OGP カード: 書体「{font}」がこの PC で引けないため、カードを描きませんでした（前回の画像を残した {kept} 枚 / カードなし {none} 枚。例: {samplePath}）");
+
+        // カードの見出しの装飾を描き直して突き合わせたら、作り置きと絵が違った。鍵に入らない理由（書体ファイルの差し替えなど）で
+        // 絵が変わっているので、ほかの作り置きも古いおそれがある。
+        foreach (var html in telopPieceCache.Mismatches)
+            logger.Warn($"OGP カード: 見出しの装飾の作り置きが、描き直した絵と違いました（描き直したほうに置き換えました。ほかの作り置きも古いおそれがあるので --refresh-telop --refresh-og で描き直してください）: {html}");
 
         // ここでプログレスバーを片付けてから最終サマリを出す。
         reporter.Finish();
@@ -361,11 +425,15 @@ public sealed class SiteBuilderPipeline
 
         // 出力ファイルの書き出し内訳と OGP カードの作り置きの効き。「変わらず」が大半なら差分の小さいビルドで、
         // デプロイの差分（MD5 比較）もそれに見合って小さくなる。
-        var (ogRendered, ogFromCache) = pageRenderer.OgCardCounts;
+        var (ogRendered, ogFromCache, ogPngsWritten) = pageRenderer.OgCardCounts;
         logger.Info($"Output files     : 書いた {output.WrittenCount} / 変わらず {output.UnchangedCount} / 消した {prunedFiles}");
-        logger.Info($"OGP cards        : 作り置き {ogFromCache} / 描いた {ogRendered} / 使わなくなった作り置き {staleOgCards} を消した");
+        logger.Info($"OGP cards        : 作り置き {ogFromCache} / 描いた {ogRendered}（うち画素が変わって PNG を書いた {ogPngsWritten}）/ {CacheIndex.UnusedDays} 日使わなかった作り置き {staleOgCards} を消した");
+        var (telopPieceHits, telopPieceDrawn) = telopPieceCache.Counts;
+        logger.Info($"Card telop pieces: 作り置き {telopPieceHits} / 描いた {telopPieceDrawn} / {TelopImageCache.UnusedDays} 日使わなかった作り置き {staleTelopPieces} を消した");
         logger.Info($"Warnings         : {logger.WarningCount}");
         logger.Info($"Elapsed          : {stopwatch.Elapsed.TotalSeconds:0.0} sec");
+
+        if (config.DiffOnly) ReportDiff(output, config, logger);
 
         // 本番デプロイ（--deploy 指定時のみ）。生成済み成果物を S3 へ差分同期し、
         // CloudFront のキャッシュを無効化する。テスト出力からのデプロイは Program 側で弾いているため、
@@ -374,6 +442,10 @@ public sealed class SiteBuilderPipeline
         {
             var deployer = new Deploy.S3DeployService(config, logger);
             bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
+
+            // 全体のドライランは、この出力を作り直さずに上げられるよう控えを書く（deploy.ps1 の本番反映が --upload-only で使う）。
+            if (config.Deploy.DryRun && string.IsNullOrEmpty(config.PageFilter))
+                ctx.EntityUrls.PendingDeploySlugs().Save(config.OutputDirectory);
 
             // 本番がこのビルドの出力と一致したら、いまの人物・キャラ・企業・ユニット URL を公開記録（published_entity_slugs）に追記する。
             // 以後のビルドで人物の表示名義・キャラ名・企業の正式名が変わって URL が変わったとき、この記録から旧 URL → 新 URL の 301 を作る。
@@ -385,6 +457,57 @@ public sealed class SiteBuilderPipeline
             }
         }
     }
+
+    /// <summary>
+    /// 差分だけを出すビルドの結果を出す。種類ごとの件数、最上位のディレクトリごとの件数、ファイルの一覧（先頭
+    /// <see cref="DiffListLimit"/> 件）をログに出し、全件の一覧を差分ディレクトリの <c>_diff.txt</c> に書く。
+    /// 一覧の各行は「＋（増える）／～（書き換わる）／－（消える）」と相対パス。
+    /// </summary>
+    private static void ReportDiff(OutputWriter output, BuildConfig config, BuildLogger logger)
+    {
+        var changes = output.Changes;
+        logger.Section("Diff");
+        int added = changes.Count(c => c.Kind == OutputChangeKind.Added);
+        int changed = changes.Count(c => c.Kind == OutputChangeKind.Changed);
+        int removed = changes.Count(c => c.Kind == OutputChangeKind.Removed);
+        if (changes.Count == 0)
+        {
+            logger.Info(string.IsNullOrEmpty(config.PageFilter)
+                ? "IDENTICAL: 今の出力と同じです（増える 0 / 書き換わる 0 / 消える 0）"
+                : "IDENTICAL: 対象のページは今の出力と同じです（増える 0 / 書き換わる 0）");
+            return;
+        }
+        logger.Info($"増える {added} / 書き換わる {changed} / 消える {removed}");
+
+        static string Mark(OutputChangeKind kind) => kind switch
+        {
+            OutputChangeKind.Added => "＋",
+            OutputChangeKind.Changed => "～",
+            _ => "－",
+        };
+        static string Top(string relativePath)
+        {
+            int slash = relativePath.IndexOf('/');
+            return slash < 0 ? "(直下)" : relativePath[..slash] + "/";
+        }
+        foreach (var group in changes.GroupBy(c => Top(c.RelativePath)).OrderBy(g => g.Key, StringComparer.Ordinal))
+            logger.Info($"  {group.Key,-16} ＋{group.Count(c => c.Kind == OutputChangeKind.Added)} ～{group.Count(c => c.Kind == OutputChangeKind.Changed)} －{group.Count(c => c.Kind == OutputChangeKind.Removed)}");
+
+        foreach (var change in changes.Take(DiffListLimit))
+            logger.Info($"{Mark(change.Kind)} {change.RelativePath}");
+        if (changes.Count > DiffListLimit)
+            logger.Info($"…ほか {changes.Count - DiffListLimit} 件");
+
+        var diffDirectory = OutputWriter.DiffDirectoryFor(config.OutputDirectory);
+        Directory.CreateDirectory(diffDirectory);
+        var listPath = Path.Combine(diffDirectory, "_diff.txt");
+        File.WriteAllLines(listPath, changes.Select(c => $"{Mark(c.Kind)} {c.RelativePath}"));
+        logger.Info($"全件の一覧: {listPath}");
+        logger.Info($"増える・書き換わるファイルの中身: {diffDirectory}");
+    }
+
+    /// <summary>差分だけを出すビルドで、ログに出すファイルの一覧の上限。</summary>
+    private const int DiffListLimit = 100;
 
     /// <summary>
     /// 進捗バーに登録する 22 セクション分のプランを、与えられた予想ページ数辞書から組み立てる。
@@ -421,11 +544,38 @@ public sealed class SiteBuilderPipeline
         yield return ("stats_landing",      "統計ランディング", 1);
         yield return ("subtitle_stats",     "字幕統計",         null);
         yield return ("episode_part_stats", "パート尺統計",     null);
-        // 歴代記録は索引 1 ページ + 尺の違い 1 ページで常に一定。
-        yield return ("records",            "歴代記録",         2);
+        // 歴代記録は索引 1 ページで常に一定。
+        yield return ("records",            "歴代記録",         1);
+        yield return ("og_cards",           "OGP カード",       1);
         yield return ("search_index",       "検索索引",         1);
         yield return ("seo",                "SEO ファイル",     1);
         yield return ("prune",              "出力の掃除",       1);
+    }
+
+    /// <summary>
+    /// 直前の全体のドライランで作った出力を、作り直さずに本番へ上げる（<c>--upload-only</c>）。
+    /// 控え（<see cref="Deploy.PendingDeploy"/>）が無ければ、出力がドライランのままか分からないので止める。
+    /// 本番がこの出力と一致したら、控えの URL を公開記録に書き、控えを消す（同じ控えで 2 度上げない）。
+    /// </summary>
+    private static async Task UploadPendingAsync(
+        BuildConfig config, BuildLogger logger, IConnectionFactory factory, Stopwatch stopwatch, CancellationToken ct)
+    {
+        var pending = Deploy.PendingDeploy.Load(config.OutputDirectory)
+            ?? throw new InvalidOperationException(
+                $"ドライランの控えがありません（{Deploy.PendingDeploy.PathFor(config.OutputDirectory)}）。"
+                + "先に --production --deploy --dry-run で全体をビルドしてください。");
+        logger.Info("Upload only      : 直前のドライランの出力を作り直さずに上げます");
+
+        var deployer = new Deploy.S3DeployService(config, logger);
+        bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
+        if (published)
+        {
+            var (persons, characters, companies, units) =
+                await EntityUrlRegistry.RecordPublishedSlugsAsync(factory, pending, ct).ConfigureAwait(false);
+            logger.Info($"Published slugs  : 公開記録に人物 URL {persons} 件・キャラ URL {characters} 件・企業 URL {companies} 件・ユニット URL {units} 件を追加");
+            Deploy.PendingDeploy.Delete(config.OutputDirectory);
+        }
+        logger.Info($"Elapsed          : {stopwatch.Elapsed.TotalSeconds:0.0} sec");
     }
 
     /// <summary>
@@ -489,27 +639,6 @@ public sealed class SiteBuilderPipeline
         result["songs"] = songsCount + 1;
 
         return result;
-    }
-
-    /// <summary>
-    /// OGP カードの作り置きのうち、今回のビルドで使わなかった鍵の画像（材料や描き方を変える前の古い画像）と、
-    /// 描きかけで残った一時ファイルを消す。戻り値は消した画像数。全体ビルドの最後に呼ぶ。
-    /// 作り置きはテストと本番で共用するので、片方でしか作らないカード（下書き・公開日時前のコラムはテストのみ）は、
-    /// もう片方のビルドで消えて次のビルドで描き直されるが、数枚なので構わない。
-    /// </summary>
-    private static int PruneOgCardCache(string cacheDir, IReadOnlySet<string> usedKeys)
-    {
-        if (!Directory.Exists(cacheDir)) return 0;
-
-        int removed = 0;
-        foreach (var file in Directory.EnumerateFiles(cacheDir, "*.png"))
-        {
-            if (usedKeys.Contains(Path.GetFileNameWithoutExtension(file))) continue;
-            File.Delete(file);
-            removed++;
-        }
-        foreach (var file in Directory.EnumerateFiles(cacheDir, "*.tmp")) File.Delete(file);
-        return removed;
     }
 
     /// <summary><c>wwwroot/</c> 配下を出力ルートに丸ごと写す（大きさと更新時刻が同じファイルは写さない）。</summary>

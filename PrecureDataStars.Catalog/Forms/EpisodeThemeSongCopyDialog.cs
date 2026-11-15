@@ -212,6 +212,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
                         ThemeKind = src.ThemeKind,
                         Seq = src.Seq,
                         SongRecordingId = src.SongRecordingId,
+                        SongSizeVariantCode = src.SongSizeVariantCode,
                         TitleMisprintText = src.TitleMisprintText,
                         TitleCreditedText = src.TitleCreditedText,
                         IsInstrumental = src.IsInstrumental,

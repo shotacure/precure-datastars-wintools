@@ -201,15 +201,21 @@ public sealed class EntityUrlRegistry
             }
             if (chosen is null && publishedPersonSlugs.TryGetValue(p.PersonId, out var publishedSlug))
             {
-                foreach (var aid in ownAliasIds)
+                // 添え書きのある人物は、添え書き付きの名前で公開しているので、それと比べる。
+                // 大文字小文字だけ違う名義（「Ryan Prajinog」と「RYAN PRAJINOG」など）があるときは、公開中の URL と
+                // 完全に一致する名義を選ぶ（URL は大文字小文字を区別するため）。一致が無ければ大文字小文字を区別せずに選ぶ。
+                foreach (var comparison in new[] { StringComparison.Ordinal, StringComparison.OrdinalIgnoreCase })
                 {
-                    // 添え書きのある人物は、添え書き付きの名前で公開しているので、それと比べる。
-                    if (ctx.PersonAliasById.TryGetValue(aid, out var a)
-                        && string.Equals(UrlSlug.FromName(WithDisambiguation(a.Name, p.Disambiguation)), publishedSlug, StringComparison.OrdinalIgnoreCase))
+                    foreach (var aid in ownAliasIds)
                     {
-                        chosen = aid;
-                        break;
+                        if (ctx.PersonAliasById.TryGetValue(aid, out var a)
+                            && string.Equals(UrlSlug.FromName(WithDisambiguation(a.Name, p.Disambiguation)), publishedSlug, comparison))
+                        {
+                            chosen = aid;
+                            break;
+                        }
                     }
+                    if (chosen is not null) break;
                 }
             }
             if (chosen is null && latestAliasIds.TryGetValue(p.PersonId, out var latest))
@@ -327,7 +333,8 @@ public sealed class EntityUrlRegistry
             }
 
             // 旧名の人物・キャラ・企業 URL の転送表。本番で公開した記録（published_entity_slugs）のうち、いまの URL と違うものを
-            // いまの URL へ転送する。同じ区分でいま別の実体がその名前の URL を使っている（ページが実在する）ときは転送しない。
+            // いまの URL へ転送する。同じ区分でいま別の実体がその名前の URL を使っている（ページが実在する）ときは転送しない
+            // （名前の衝突は大文字小文字を区別せずに見る。同じ実体の大文字小文字だけ違う旧 URL は転送する）。
             // 転送元のキーはデコード済みのスラッグで持つ（Lambda@Edge 側でリクエスト URI をデコードして引く）。
             const string publishedSql = """
                 SELECT entity_kind AS EntityKind, slug AS Slug, COALESCE(person_id, character_id, company_id, person_alias_id) AS EntityId
@@ -337,22 +344,35 @@ public sealed class EntityUrlRegistry
                 """;
             var published = await conn.QueryAsync<PublishedSlugRow>(
                 new CommandDefinition(publishedSql, cancellationToken: ct)).ConfigureAwait(false);
-            var livePersonSlugs = new HashSet<string>(reg._personSlugs.Values, StringComparer.OrdinalIgnoreCase);
-            var liveCharacterSlugs = new HashSet<string>(reg._characterSlugs.Values, StringComparer.OrdinalIgnoreCase);
-            var liveCompanySlugs = new HashSet<string>(reg._companySlugs.Values, StringComparer.OrdinalIgnoreCase);
-            var liveUnitSlugs = new HashSet<string>(reg._unitSlugs.Values, StringComparer.OrdinalIgnoreCase);
+            // いまのスラッグ → 実体 ID（大文字小文字を区別せずに引く）。同じ実体のいまのスラッグと大文字小文字だけ違う旧スラッグ
+            // （表示名義が「Ryan Prajinog」から「RYAN PRAJINOG」に変わったときなど）は、サイトの URL が大文字小文字を区別するので転送する。
+            static Dictionary<string, int> LiveOwners(Dictionary<int, string> slugs)
+            {
+                var owners = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var (id, slug) in slugs) owners.TryAdd(slug, id);
+                return owners;
+            }
+            var livePersonSlugs = LiveOwners(reg._personSlugs);
+            var liveCharacterSlugs = LiveOwners(reg._characterSlugs);
+            var liveCompanySlugs = LiveOwners(reg._companySlugs);
+            var liveUnitSlugs = LiveOwners(reg._unitSlugs);
             foreach (var row in published)
             {
-                var (section, liveSlugs, urls) = row.EntityKind switch
+                var (section, liveSlugs, currentSlugs, urls) = row.EntityKind switch
                 {
-                    "PERSON" => ("people", livePersonSlugs, reg._personUrls),
-                    "CHARACTER" => ("characters", liveCharacterSlugs, reg._characterUrls),
-                    "COMPANY" => ("companies", liveCompanySlugs, reg._companyUrls),
-                    "UNIT" => ("units", liveUnitSlugs, reg._unitUrls),
-                    _ => ("", null, null)
+                    "PERSON" => ("people", livePersonSlugs, reg._personSlugs, reg._personUrls),
+                    "CHARACTER" => ("characters", liveCharacterSlugs, reg._characterSlugs, reg._characterUrls),
+                    "COMPANY" => ("companies", liveCompanySlugs, reg._companySlugs, reg._companyUrls),
+                    "UNIT" => ("units", liveUnitSlugs, reg._unitSlugs, reg._unitUrls),
+                    _ => ("", null, null, null)
                 };
-                if (liveSlugs is null || urls is null || row.EntityId is not int eid) continue;
-                if (liveSlugs.Contains(row.Slug)) continue;
+                if (liveSlugs is null || currentSlugs is null || urls is null || row.EntityId is not int eid) continue;
+                if (liveSlugs.TryGetValue(row.Slug, out var owner))
+                {
+                    // 別の実体がいま使っている名前、または同じ実体のいまの URL そのものは転送しない。
+                    if (owner != eid) continue;
+                    if (currentSlugs.TryGetValue(eid, out var currentSlug) && string.Equals(currentSlug, row.Slug, StringComparison.Ordinal)) continue;
+                }
                 if (!urls.TryGetValue(eid, out var to)) continue;
                 reg._legacyRedirects.Add(new LegacyRedirect($"/{section}/{row.Slug}", to));
             }
@@ -360,6 +380,37 @@ public sealed class EntityUrlRegistry
 
         foreach (var (from, to) in RetiredPageRedirects)
             reg._legacyRedirects.Add(new LegacyRedirect(from, to));
+
+        // オトナシリーズだけのスタッフ一覧・声の出演一覧・役職のページ（/creators/otona/…）は、TV・映画と合わせた一覧に一本化した。
+        // 以前の URL を同じ役割のページへ転送する。役職のページは、オトナシリーズのクレジットに出る役職（系譜の代表）のうち
+        // 役職詳細を持つものの分だけ載せる（声の出演・表記のみ・主題歌の役職と歌唱系は役職詳細を持たないので載せない）。
+        reg._legacyRedirects.Add(new LegacyRedirect("/creators/otona/staff", PathUtil.CreatorsStaffUrl()));
+        reg._legacyRedirects.Add(new LegacyRedirect("/creators/otona/voice-cast", PathUtil.CreatorsVoiceCastUrl()));
+        // 本放送・配信・円盤の尺の違いのページは廃止した。入口だった歴代記録へ転送する。
+        reg._legacyRedirects.Add(new LegacyRedirect("/stats/records/format-differences", "/stats/records/"));
+        const string roleUrlPrefix = "/creators/roles/";
+        var otonaRoleUrls = index.ByPersonAlias.Values.Concat(index.ByCompanyAlias.Values).Concat(index.ByLogo.Values)
+            .SelectMany(list => list)
+            .Where(inv => ctx.IsOtonaSeries(inv.SeriesId) && !string.IsNullOrEmpty(inv.RoleCode))
+            .Select(inv => inv.RoleCode)
+            .Distinct(StringComparer.Ordinal)
+            .Where(code => ctx.RoleByCode.TryGetValue(code, out var role)
+                && role.RoleFormatKind is not ("VOICE_CAST" or "NOTICE" or "THEME_SONG")
+                && !PathUtil.IsSingerRole(code) && PathUtil.HasRolePage(code))
+            .Select(PathUtil.CreatorsRoleUrl)
+            .Where(url => url.StartsWith(roleUrlPrefix, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(url => url, StringComparer.Ordinal);
+        foreach (var url in otonaRoleUrls)
+            reg._legacyRedirects.Add(new LegacyRedirect("/creators/otona/roles/" + url[roleUrlPrefix.Length..].TrimEnd('/'), url));
+
+        // 劇伴の入っていない作品には劇伴のページ（/bgms/{slug}/）が無いので、その URL は作品のページへ転送する
+        // （以前のクロールや推測で開かれた URL を 404 にしない）。劇伴のページを作る条件は MusicGenerator と同じ（劇伴が 1 件以上）。
+        foreach (var s in ctx.Series)
+        {
+            if (ctx.BgmCuesBySeries.TryGetValue(s.SeriesId, out var cues) && cues.Count > 0) continue;
+            reg._legacyRedirects.Add(new LegacyRedirect(PathUtil.BgmsForSeriesUrl(s.Slug).TrimEnd('/'), PathUtil.SeriesUrl(s.Slug)));
+        }
 
         // 書籍は URL に使うコードの優先順（ISBN-13 → 定期刊行物コード → Kindle ASIN → 紙の ASIN）が変わると URL が変わる
         // （Kindle だけ登録していた本にあとから紙版の ISBN を入れたときなど）。その本が持つほかのコードの URL からも
@@ -415,7 +466,19 @@ public sealed class EntityUrlRegistry
     /// ユニットの URL も同じく記録する（entity_kind = UNIT、person_alias_id）。
     /// 戻り値は新たに記録した件数（人物・キャラ・企業・ユニット）。
     /// </summary>
-    public async Task<(int Persons, int Characters, int Companies, int Units)> RecordPublishedSlugsAsync(IConnectionFactory factory, CancellationToken ct)
+    public Task<(int Persons, int Characters, int Companies, int Units)> RecordPublishedSlugsAsync(IConnectionFactory factory, CancellationToken ct)
+        => RecordPublishedSlugsAsync(factory, PendingDeploySlugs(), ct);
+
+    /// <summary>いまの人物・キャラ・企業・ユニットの URL のスラッグ（公開記録に書く分）を、作り直さずに上げるときの控えにする。</summary>
+    public Deploy.PendingDeploy PendingDeploySlugs()
+        => new(new Dictionary<int, string>(_personSlugs), new Dictionary<int, string>(_characterSlugs),
+               new Dictionary<int, string>(_companySlugs), new Dictionary<int, string>(_unitSlugs));
+
+    /// <summary>
+    /// 控え（<see cref="Deploy.PendingDeploy"/>）のスラッグを公開記録に書く。中身は <see cref="RecordPublishedSlugsAsync(IConnectionFactory, CancellationToken)"/> と同じ。
+    /// </summary>
+    public static async Task<(int Persons, int Characters, int Companies, int Units)> RecordPublishedSlugsAsync(
+        IConnectionFactory factory, Deploy.PendingDeploy slugs, CancellationToken ct)
     {
         const string personSql = """
             INSERT IGNORE INTO published_entity_slugs (entity_kind, slug, person_id, last_published_at)
@@ -451,10 +514,10 @@ public sealed class EntityUrlRegistry
              WHERE entity_kind = 'UNIT' AND slug = @Slug AND person_alias_id = @EntityId
             """;
         var at = DateTime.Now;
-        var personRows = _personSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
-        var characterRows = _characterSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
-        var companyRows = _companySlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
-        var unitRows = _unitSlugs.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
+        var personRows = slugs.Persons.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
+        var characterRows = slugs.Characters.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
+        var companyRows = slugs.Companies.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
+        var unitRows = slugs.Units.Select(kv => new { Slug = kv.Value, EntityId = kv.Key, At = at }).ToList();
         await using var conn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         int persons = await conn.ExecuteAsync(new CommandDefinition(personSql, personRows, tx, cancellationToken: ct)).ConfigureAwait(false);

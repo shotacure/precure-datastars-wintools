@@ -1,12 +1,12 @@
 <section>
   <h1>歴代サブタイトル統計</h1>
   <p class="muted page-coverage">{{ CoverageLabel }}</p>
-  <p class="lead">プリキュア全シリーズのサブタイトルから文字種別・文字数・漢字率・記号率などを集計した統計です。</p>
+  <p class="lead">サブタイトルの文字の統計</p>
 </section>
 
 {{## 1 ページ 1 ランキング厳守の方針で詳細 16 ページ + 索引 1 ページ。
      リンク集を「使用文字 / 文字数 / 漢字率 / 記号率 / シリーズ別」の 5 グループに整理。
-     シリーズ別の集計はテレビシリーズのみが対象（スピンオフ・映画は除外）。
+     シリーズ別の集計はTV シリーズだけが対象で、スピンオフ・映画は含みません。
      各項目はカード全域 = 1 リンクの横長カードとして縦に並べる。
      左ボーダーをホバー時にアクセントピンクへ変色させ、押下可能性を表現する。 ##}}
 <section id="chars">
@@ -27,7 +27,7 @@
     <li>
       <a class="stats-landing-link" href="/stats/subtitles/chars/symbols-order/">
         <span class="stats-landing-link-title">記号出現回数</span>
-        <span class="stats-landing-link-desc">記号文字を初使用が早い順に並べた全件リスト。</span>
+        <span class="stats-landing-link-desc">記号文字の初使用の早い順（全件）</span>
       </a>
     </li>
   </ul>
@@ -93,31 +93,31 @@
     <li>
       <a class="stats-landing-link" href="/stats/subtitles/avg-length-by-series/">
         <span class="stats-landing-link-title">シリーズ別 平均文字数</span>
-        <span class="stats-landing-link-desc">各シリーズのサブタイトル平均文字数を多い順に並べたランキングです。</span>
+        <span class="stats-landing-link-desc">各シリーズのサブタイトル平均文字数の多い順</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/subtitles/kanji-rate-by-series/">
         <span class="stats-landing-link-title">シリーズ別 漢字率</span>
-        <span class="stats-landing-link-desc">各シリーズのサブタイトル漢字率を高い順に並べたランキングです。</span>
+        <span class="stats-landing-link-desc">各シリーズのサブタイトル漢字率の高い順</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/subtitles/symbol-rate-by-series/">
         <span class="stats-landing-link-title">シリーズ別 記号率</span>
-        <span class="stats-landing-link-desc">各シリーズのサブタイトル記号率を高い順に並べたランキングです。</span>
+        <span class="stats-landing-link-desc">各シリーズのサブタイトル記号率の高い順</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/subtitles/char-types-by-series/">
         <span class="stats-landing-link-title">シリーズ別 文字種別比率</span>
-        <span class="stats-landing-link-desc">各シリーズで漢字 / ひらがな / カタカナ / 英字 / 数字がどれくらい使われたかを、文字数と比率でまとめた一覧です。</span>
+        <span class="stats-landing-link-desc">各シリーズの漢字 / ひらがな / カタカナ / 英字 / 数字の文字数と比率</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/subtitles/symbols-by-series/">
         <span class="stats-landing-link-title">シリーズ別 記号出現回数</span>
-        <span class="stats-landing-link-desc">歴代サブタイトルから自動収集した全記号・句読点を初出順に並べ、各シリーズでの出現回数をまとめた集計表です。</span>
+        <span class="stats-landing-link-desc">歴代サブタイトルの全記号・句読点と、各シリーズでの出現回数</span>
       </a>
     </li>
     <li>

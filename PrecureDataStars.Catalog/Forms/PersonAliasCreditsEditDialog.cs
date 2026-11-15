@@ -11,19 +11,23 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// 人物名義のみで構成される作家連名（song_credits / bgm_cue_credits 両方）を編集する
+/// 人物名義で構成される作家連名（song_credits / bgm_cue_credits 両方）を編集する
 /// 汎用ダイアログ。
 /// 1 つの「対象 + 役」（例: 曲 #123 の作詞）に対する連名行リストを
 /// in-memory で編集し、OK 押下時に <see cref="ResultLines"/> プロパティ経由で
 /// 呼び出し側に返す。リポジトリ呼び出しは行わない（呼び出し側が
 /// <c>ReplaceAllByRoleAsync</c> 等でまとめて保存する）。
-/// 会社名義のリポジトリを渡したとき（歌の作家連名）だけ、名義ごとの所属（会社名義または自由記述）の欄を出す。
+/// 会社名義のリポジトリを渡したとき（歌・劇伴の作家連名）だけ、名義ごとの所属（会社名義または自由記述）の欄を出す。
+/// 文字の行を許すとき（劇伴の作家連名）だけ、名義を持たない文字だけの行（「不詳」など、人物にできない作家の表記）を
+/// 行ごとに選んで入れられる。文字の行は名義・所属を持たない。
 /// </summary>
 public partial class PersonAliasCreditsEditDialog : Form
 {
     private readonly PersonAliasesRepository _personAliasesRepo;
-    /// <summary>所属の会社名義 picker 用。null のときは所属の欄を出さない（劇伴の作家連名など）。</summary>
+    /// <summary>所属の会社名義 picker 用。null のときは所属の欄を出さない。</summary>
     private readonly CompanyAliasesRepository? _companyAliasesRepo;
+    /// <summary>名義を持たない文字だけの行を入れられるか（劇伴の作家連名のとき true）。</summary>
+    private readonly bool _allowTextLines;
     private readonly BindingList<LineRow> _lines = new();
 
     /// <summary>編集確定時の連名行リスト（OK で閉じたとき有効）。</summary>
@@ -34,19 +38,25 @@ public partial class PersonAliasCreditsEditDialog : Form
     /// <param name="initialLines">初期表示する連名行（読み取り専用）。空でもよい。</param>
     /// <param name="personAliasesRepo">名義 picker 用リポジトリ。</param>
     /// <param name="companyAliasesRepo">所属の会社名義 picker 用リポジトリ。渡したときだけ所属の欄を出す。</param>
+    /// <param name="allowTextLines">true のとき、名義を持たない文字だけの行を入れる欄（「文字の行」）を出す（劇伴の作家連名）。</param>
     public PersonAliasCreditsEditDialog(
         string title,
         IReadOnlyList<LineDto> initialLines,
         PersonAliasesRepository personAliasesRepo,
-        CompanyAliasesRepository? companyAliasesRepo = null)
+        CompanyAliasesRepository? companyAliasesRepo = null,
+        bool allowTextLines = false)
     {
         _personAliasesRepo = personAliasesRepo ?? throw new ArgumentNullException(nameof(personAliasesRepo));
         _companyAliasesRepo = companyAliasesRepo;
+        _allowTextLines = allowTextLines;
 
         InitializeComponent();
         Text = title;
 
-        // 所属の欄は歌の作家連名のときだけ使う
+        // 文字の行の欄は劇伴の作家連名のときだけ使う
+        chkTextLine.Visible = txtRawText.Visible = _allowTextLines;
+
+        // 所属の欄は歌・劇伴の作家連名のときだけ使う
         bool withAffiliation = _companyAliasesRepo is not null;
         lblAffiliation.Visible = txtAffiliationCompany.Visible = btnPickAffiliation.Visible = btnClearAffiliation.Visible = withAffiliation;
         lblAffiliationText.Visible = txtAffiliationText.Visible = withAffiliation;
@@ -66,6 +76,8 @@ public partial class PersonAliasCreditsEditDialog : Form
             _lines.Add(new LineRow
             {
                 Seq = seq++,
+                IsText = l.IsText,
+                RawText = l.RawText,
                 AliasId = l.AliasId,
                 AliasDisplay = l.AliasDisplay,
                 Separator = l.PrecedingSeparator,
@@ -82,6 +94,7 @@ public partial class PersonAliasCreditsEditDialog : Form
         btnPickAlias.Click += async (_, __) => await OnPickAliasAsync();
         btnPickAffiliation.Click += async (_, __) => await OnPickAffiliationAsync();
         btnClearAffiliation.Click += (_, __) => SetAffiliationCompany(null, "");
+        chkTextLine.CheckedChanged += (_, __) => UpdateTextLineMode();
         btnAdd.Click += (_, __) => OnAddNewLine();
         btnApply.Click += (_, __) => OnApplyLine();
         btnDelete.Click += (_, __) => OnDeleteLine();
@@ -102,12 +115,15 @@ public partial class PersonAliasCreditsEditDialog : Form
             lblSeqValue.Text = row.Seq.ToString();
             lblSeqValue.ForeColor = SystemColors.ControlText;
             txtAliasDisplay.Text = row.AliasDisplay ?? "";
-            txtAliasDisplay.Tag = row.AliasId;
+            // 文字の行は名義を持たないので、名義の欄は未選択にする（名義の行に切り替えたら選び直す）
+            txtAliasDisplay.Tag = row.IsText ? null : (object)row.AliasId;
             txtSeparator.Text = row.Separator ?? "";
             txtSeparator.Enabled = row.Seq >= 2;
             SetAffiliationCompany(row.AffiliationCompanyAliasId, row.AffiliationCompanyDisplay ?? "");
             txtAffiliationText.Text = row.AffiliationText ?? "";
             cboAffiliationMode.SelectedValue = row.AffiliationMode ?? SongCreditAffiliationDisplay.NameWithCompany;
+            chkTextLine.Checked = _allowTextLines && row.IsText;
+            txtRawText.Text = row.RawText ?? "";
             txtNotes.Text = row.Notes ?? "";
         }
         else
@@ -121,8 +137,72 @@ public partial class PersonAliasCreditsEditDialog : Form
             SetAffiliationCompany(null, "");
             txtAffiliationText.Text = "";
             cboAffiliationMode.SelectedValue = SongCreditAffiliationDisplay.NameWithCompany;
+            chkTextLine.Checked = false;
+            txtRawText.Text = "";
             txtNotes.Text = "";
         }
+        UpdateTextLineMode();
+    }
+
+    /// <summary>
+    /// 詳細パネルを「文字の行」のチェックに合わせる。文字の行では文字の欄だけを使い、名義・所属の欄は使わない
+    /// （名義の行に戻したときのために、欄の値は消さずに残す）。
+    /// </summary>
+    private void UpdateTextLineMode()
+    {
+        bool isText = _allowTextLines && chkTextLine.Checked;
+        txtRawText.Enabled = isText;
+        txtAliasDisplay.Enabled = btnPickAlias.Enabled = !isText;
+        txtAffiliationCompany.Enabled = btnPickAffiliation.Enabled = btnClearAffiliation.Enabled = !isText;
+        txtAffiliationText.Enabled = cboAffiliationMode.Enabled = !isText;
+    }
+
+    /// <summary>詳細パネルが文字の行を指しているか（文字の行を許すときだけ）。</summary>
+    private bool IsTextLineInput() => _allowTextLines && chkTextLine.Checked;
+
+    /// <summary>詳細パネルの文字の行の表記（前後の空白を除く。空なら null）。</summary>
+    private string? RawTextInput()
+        => string.IsNullOrWhiteSpace(txtRawText.Text) ? null : txtRawText.Text.Trim();
+
+    /// <summary>
+    /// 詳細パネルの名義・文字の入力を確かめる。文字の行は文字が、名義の行は名義が要る。足りなければ知らせて false。
+    /// </summary>
+    private bool ValidateNameInput(string aliasMissingMessage)
+    {
+        if (IsTextLineInput())
+        {
+            if (RawTextInput() is not null) return true;
+            MessageBox.Show("文字の行の表記が入力されていません。", "未入力", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return false;
+        }
+        if (txtAliasDisplay.Tag is int) return true;
+        MessageBox.Show(aliasMissingMessage, "未入力", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return false;
+    }
+
+    /// <summary>詳細パネルの名義・文字・所属を行に写す（文字の行は名義・所属を空にする）。</summary>
+    private void ApplyNameAndAffiliation(LineRow row)
+    {
+        if (IsTextLineInput())
+        {
+            row.IsText = true;
+            row.RawText = RawTextInput();
+            row.AliasId = 0;
+            row.AliasDisplay = null;
+            row.AffiliationCompanyAliasId = null;
+            row.AffiliationCompanyDisplay = null;
+            row.AffiliationText = null;
+            row.AffiliationMode = null;
+            return;
+        }
+        row.IsText = false;
+        row.RawText = null;
+        row.AliasId = (int)txtAliasDisplay.Tag!;
+        row.AliasDisplay = txtAliasDisplay.Text;
+        row.AffiliationCompanyAliasId = txtAffiliationCompany.Tag as int?;
+        row.AffiliationCompanyDisplay = txtAffiliationCompany.Tag is int ? txtAffiliationCompany.Text : null;
+        row.AffiliationText = AffiliationTextInput();
+        row.AffiliationMode = AffiliationModeInput();
     }
 
     /// <summary>詳細パネルの所属の会社名義を設定する（null で未設定）。</summary>
@@ -168,27 +248,18 @@ public partial class PersonAliasCreditsEditDialog : Form
     /// <summary>新規行をリスト末尾に追加し、選択中にする。</summary>
     private void OnAddNewLine()
     {
-        if (txtAliasDisplay.Tag is not int aliasId)
-        {
-            MessageBox.Show("名義が選択されていません。「選択...」から名義を選んでください。", "未入力",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
+        if (!ValidateNameInput("名義が選択されていません。「選択...」から名義を選んでください。")) return;
 
         byte newSeq = (byte)(_lines.Count + 1);
         var row = new LineRow
         {
             Seq = newSeq,
-            AliasId = aliasId,
-            AliasDisplay = txtAliasDisplay.Text,
             // seq=1 では区切りは無効化されているが、念のため強制 NULL
             Separator = newSeq >= 2 ? (string.IsNullOrWhiteSpace(txtSeparator.Text) ? null : txtSeparator.Text) : null,
-            AffiliationCompanyAliasId = txtAffiliationCompany.Tag as int?,
-            AffiliationCompanyDisplay = txtAffiliationCompany.Tag is int ? txtAffiliationCompany.Text : null,
-            AffiliationText = AffiliationTextInput(),
-            AffiliationMode = AffiliationModeInput(),
             Notes = string.IsNullOrWhiteSpace(txtNotes.Text) ? null : txtNotes.Text
         };
+        // 名義（または文字の行の文字）と所属
+        ApplyNameAndAffiliation(row);
         _lines.Add(row);
 
         // 末尾の追加行を選択
@@ -200,20 +271,12 @@ public partial class PersonAliasCreditsEditDialog : Form
     private void OnApplyLine()
     {
         if (gridLines.CurrentRow?.DataBoundItem is not LineRow row) return;
-        if (txtAliasDisplay.Tag is not int aliasId)
-        {
-            MessageBox.Show("名義が選択されていません。", "未入力", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
-        row.AliasId = aliasId;
-        row.AliasDisplay = txtAliasDisplay.Text;
+        if (!ValidateNameInput("名義が選択されていません。")) return;
+        // 名義（または文字の行の文字）と所属
+        ApplyNameAndAffiliation(row);
         row.Separator = row.Seq >= 2
             ? (string.IsNullOrWhiteSpace(txtSeparator.Text) ? null : txtSeparator.Text)
             : null;
-        row.AffiliationCompanyAliasId = txtAffiliationCompany.Tag as int?;
-        row.AffiliationCompanyDisplay = txtAffiliationCompany.Tag is int ? txtAffiliationCompany.Text : null;
-        row.AffiliationText = AffiliationTextInput();
-        row.AffiliationMode = AffiliationModeInput();
         row.Notes = string.IsNullOrWhiteSpace(txtNotes.Text) ? null : txtNotes.Text;
         _lines.ResetItem(_lines.IndexOf(row));
     }
@@ -257,6 +320,8 @@ public partial class PersonAliasCreditsEditDialog : Form
     {
         ResultLines = _lines.Select(l => new LineDto
         {
+            IsText = l.IsText,
+            RawText = l.RawText,
             AliasId = l.AliasId,
             AliasDisplay = l.AliasDisplay ?? "",
             PrecedingSeparator = l.Separator,
@@ -268,7 +333,7 @@ public partial class PersonAliasCreditsEditDialog : Form
         }).ToList();
     }
 
-    /// <summary>所属の出し方の選択肢（song_credits.affiliation_display の値と表示名）。</summary>
+    /// <summary>所属の出し方の選択肢（song_credits / bgm_cue_credits の affiliation_display の値と表示名）。</summary>
     private static readonly List<AffiliationModeItem> AffiliationModeItems = new()
     {
         new(SongCreditAffiliationDisplay.NameWithCompany, "名義＋所属（既定）"),
@@ -282,6 +347,10 @@ public partial class PersonAliasCreditsEditDialog : Form
     /// <summary>呼び出し側との受け渡し用 DTO。</summary>
     public sealed class LineDto
     {
+        /// <summary>名義を持たない文字だけの行か（劇伴の作家連名だけ。true のとき <see cref="AliasId"/> と所属は使わない）。</summary>
+        public bool IsText { get; set; }
+        /// <summary>文字の行の表記（<see cref="IsText"/> のときだけ）。</summary>
+        public string? RawText { get; set; }
         public int AliasId { get; set; }
         public string AliasDisplay { get; set; } = "";
         /// <summary>seq>=2 のとき有効。seq=1 では NULL を呼び出し側で扱う。</summary>
@@ -292,7 +361,7 @@ public partial class PersonAliasCreditsEditDialog : Form
         public string? AffiliationCompanyDisplay { get; set; }
         /// <summary>会社マスタに無い所属の自由記述。</summary>
         public string? AffiliationText { get; set; }
-        /// <summary>所属の出し方（song_credits.affiliation_display の値。null は既定の名義＋所属）。</summary>
+        /// <summary>所属の出し方（song_credits / bgm_cue_credits の affiliation_display の値。null は既定の名義＋所属）。</summary>
         public string? AffiliationMode { get; set; }
         public string? Notes { get; set; }
     }
@@ -301,13 +370,19 @@ public partial class PersonAliasCreditsEditDialog : Form
     private sealed class LineRow
     {
         public byte Seq { get; set; }
+        /// <summary>名義を持たない文字だけの行か。</summary>
+        public bool IsText { get; set; }
+        /// <summary>文字の行の表記。</summary>
+        public string? RawText { get; set; }
         public int AliasId { get; set; }
         public string? AliasDisplay { get; set; }
+        /// <summary>グリッドの「名義」列の表示（名義の行は名義、文字の行は文字に〔文字の行〕を添える）。</summary>
+        public string NameDisplay => IsText ? (RawText ?? "") + "〔文字の行〕" : AliasDisplay ?? "";
         public string? Separator { get; set; }
         public int? AffiliationCompanyAliasId { get; set; }
         public string? AffiliationCompanyDisplay { get; set; }
         public string? AffiliationText { get; set; }
-        /// <summary>所属の出し方（song_credits.affiliation_display の値。null は既定の名義＋所属）。</summary>
+        /// <summary>所属の出し方（song_credits / bgm_cue_credits の affiliation_display の値。null は既定の名義＋所属）。</summary>
         public string? AffiliationMode { get; set; }
         /// <summary>グリッドの「所属」列の表示（会社名義を優先し、無ければ自由記述）。出し方が既定でなければ〔会社名だけ〕〔名義だけ〕を添える。</summary>
         public string AffiliationDisplay

@@ -173,7 +173,7 @@ public sealed class SingerHtmlBuilder
         else
         {
             // CHARACTER_WITH_CV：「キャラ(CV:声優)」、相方ありなら「キャラ/相方キャラ(CV:声優)」。
-            // 2 人目の声優がいれば「キャラ(CV:声優1 / 声優2)」。
+            // 2 人目の声優がいれば「キャラ(CV:声優1 / 声優2)」。声優の前の記号は行の cv_label（無ければ "CV:"）。
             // 同じ連名に声優が人物として出ているとき（omitCv）は「(CV:声優)」を省く。
             string mainChar = ResolveCharacterAliasLink(s.CharacterAliasId, characterAliasMap);
             string charPart = mainChar;
@@ -186,7 +186,7 @@ public sealed class SingerHtmlBuilder
             string cv = ResolvePersonAliasLink(s.VoicePersonAliasId, personAliasMap);
             if (s.SlashVoicePersonAliasId.HasValue)
                 cv += " / " + ResolvePersonAliasLink(s.SlashVoicePersonAliasId, personAliasMap);
-            return $"{charPart}(CV:{cv})";
+            return $"{charPart}({System.Net.WebUtility.HtmlEncode(SongRecordingSingerDisplay.CvLabelOf(s.CvLabel))}{cv})";
         }
     }
 

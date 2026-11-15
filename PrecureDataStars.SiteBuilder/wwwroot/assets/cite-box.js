@@ -16,6 +16,8 @@
  *   - コピー成功時に share-buttons.js と同じ見た目のトースト（.share-toast）を一定時間表示する。
  *     シェアボタンのトースト（#shareToast）があればそれを借り、無ければ自前で 1 つ作る。
  *   - navigator.clipboard が使えない環境では textarea + document.execCommand('copy') にフォールバック。
+ *   - ボックスは既定で閉じている（hidden）。シェアボタンの並びの「引用」ボタン（aria-controls="citeBox"）で開閉し、
+ *     aria-expanded を合わせる。開いたときは引用文が見える位置までスクロールする。
  *
  * .cite-box が DOM に無いページ（ShareUrl が空だった等）では何もせず終了する。
  */
@@ -51,6 +53,21 @@
     for (var j = 0; j < buttons.length; j++) {
       buttons[j].addEventListener('click', onCopyClick);
     }
+
+    var toggles = document.querySelectorAll('[aria-controls="' + box.id + '"]');
+    for (var k = 0; k < toggles.length; k++) {
+      toggles[k].addEventListener('click', onToggleClick);
+    }
+  }
+
+  function onToggleClick(ev) {
+    var btn = ev.currentTarget;
+    var box = document.getElementById(btn.getAttribute('aria-controls'));
+    if (!box) return;
+    var open = box.hidden;
+    box.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open && box.scrollIntoView) box.scrollIntoView({ block: 'nearest' });
   }
 
   function onCopyClick(ev) {

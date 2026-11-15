@@ -67,12 +67,14 @@ public static class AnniversaryDataBuilder
             // （表示側が現在時刻と比較して出し分ける。HTML はクライアント側 JS が担当する）。
             var revealAt = SubtitleGuardRenderer.RevealAtFor(episode.EpisodeId, ctx.SubtitleRevealAtByEpisodeId);
 
+            // 記念日は放送日に置く（深夜の回は前の日。番組表・公式の表記と同じ日）
+            var broadcastDay = JpDateFormat.BroadcastDay(episode.OnAirAt);
             entries.Add(new AnniversaryEntry
             {
                 Kind = "ep",
-                Year = episode.OnAirAt.Year,
-                Month = episode.OnAirAt.Month,
-                Day = episode.OnAirAt.Day,
+                Year = broadcastDay.Year,
+                Month = broadcastDay.Month,
+                Day = broadcastDay.Day,
                 SeriesTitle = series.Title,
                 SeriesSlug = series.Slug,
                 SeriesTitleShort = string.IsNullOrEmpty(series.TitleShort) ? series.Title : series.TitleShort,
@@ -83,6 +85,7 @@ public static class AnniversaryDataBuilder
                 EpisodeUrl = PathUtil.EpisodeUrl(series.Slug, episode.SeriesEpNo),
                 IsFirstEpisode = episode.SeriesEpNo == 1,
                 IsLastEpisode = isLast,
+                IsOtona = SeriesClassifier.IsOtona(series),
                 RevealAtIso = revealAt is { } at ? SubtitleGuardRenderer.ToRevealAtIso(at) : "",
                 RevealAt = revealAt
             });
@@ -148,28 +151,28 @@ public static class AnniversaryDataBuilder
             seriesByPrecure[sp.PrecureId] = s;
         }
 
-        // ── キャラクター誕生日（PRECURE / ALLY、月日が揃っているもの）──
+        // ── キャラクター誕生日（キャラクター種別を問わず、月日が揃っているものすべて）──
         foreach (var c in characters)
         {
-            if (!(string.Equals(c.CharacterKind, "PRECURE", StringComparison.Ordinal)
-                  || string.Equals(c.CharacterKind, "ALLY", StringComparison.Ordinal))) continue;
             if (c.BirthMonth is not byte cm || c.BirthDay is not byte cd) continue;
 
-            // 既定は正式名称（precure 紐付けの無い ALLY 等）。
+            // 既定は正式名称（precure 紐付けの無い ALLY・SUPPORTING 等）。
             string displayName = c.Name;
             string keyColor = "";
+            string keyColorGradient = "";
             Series? repSeries = null;
 
             if (precureByCharacter.TryGetValue(c.CharacterId, out var pr))
             {
                 keyColor = pr.KeyColor ?? "";
+                keyColorGradient = pr.KeyColorGradient ?? "";
                 // プリキュアの誕生日は変身前名義で表示する。
                 if (aliasById.TryGetValue(pr.PreTransformAliasId, out var preA) && !string.IsNullOrEmpty(preA.Name))
                     displayName = preA.Name;
                 if (seriesByPrecure.TryGetValue(pr.PrecureId, out var sps)) repSeries = sps;
             }
 
-            var (bg, fg, bd) = KeyColorBadge.Resolve(keyColor);
+            var (bg, fg, bd) = KeyColorBadge.Resolve(keyColor, keyColorGradient);
             entries.Add(new AnniversaryEntry
             {
                 Kind = "cb",
@@ -208,7 +211,9 @@ public static class AnniversaryDataBuilder
                 PersonName = pe.FullName,
                 PersonUrl = PathUtil.PersonUrl(pe.PersonId),
                 BirthYear = birthYear,
-                IsDeceased = pe.DeathYear.HasValue
+                IsDeceased = pe.DeathYear.HasValue,
+                PersonTier = ctx.BirthdayCalendar.TierOf(pe.PersonId),
+                PersonCreditCount = ctx.BirthdayCalendar.CreditCountOf(pe.PersonId)
             });
         }
     }

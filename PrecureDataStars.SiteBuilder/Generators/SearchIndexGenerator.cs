@@ -25,6 +25,9 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description>企業（company）— 制作会社等</description></item>
 ///   <item><description>楽曲（song）— 主題歌・劇中歌</description></item>
 ///   <item><description>商品（product）— CD / Blu-ray / DVD</description></item>
+///   <item><description>書籍（book）</description></item>
+///   <item><description>役職（role）— 役職のページ（本編・オトナシリーズ・音楽制作）</description></item>
+///   <item><description>フォント（font）— 書体のページ</description></item>
 /// </list>
 /// JSON のフォーマットは検索 UI と密結合。短いキー名で容量を抑える設計：
 /// <list type="table">
@@ -34,6 +37,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><term><c>s</c></term><description>サブテキスト（属性ラベルや所属シリーズ名）。空文字可。</description></item>
 ///   <item><term><c>x</c></term><description>検索用の正規化された読み（ひらがな・小文字、空文字なら t を使う）</description></item>
 ///   <item><term><c>ra</c></term><description>サブタイトル解禁時刻（ISO 8601）。episode のうち未解禁の話のみ。それ以外は省略</description></item>
+///   <item><term><c>a</c></term><description>人物の、見出しと表記の違う名義の [表記, 照合用の正規化済み文字列（表記と読みを「|」で連結）] の並び。無ければ省略</description></item>
 /// </list>
 /// </summary>
 public sealed class SearchIndexGenerator
@@ -178,6 +182,11 @@ public sealed class SearchIndexGenerator
             var readings = new List<string> { string.IsNullOrEmpty(displayKana) ? displayName : displayKana };
             readings.Add(p.FullNameKana ?? p.FullName);
             readings.Add(p.FullName);
+            // 見出しと表記の違う名義は、表記と照合用の正規化済み文字列（表記と読みを「|」で連結）の組で別に持たせる。
+            // 検索 UI は、見出しでは当たらずこの名義で当たった人物を「山口 祐司 (やしろ 駿)」の形で出す。
+            string normalizedDisplayName = NormalizeForSearch(_ctx.EntityUrls.PersonDisplayName(p.PersonId) ?? p.FullName);
+            var altNames = new List<string[]>();
+            var seenAltNames = new HashSet<string>(StringComparer.Ordinal);
             if (_ctx.AliasIdsByPerson.TryGetValue(p.PersonId, out var aliasIds))
             {
                 foreach (var aid in aliasIds)
@@ -185,6 +194,13 @@ public sealed class SearchIndexGenerator
                     if (!_ctx.PersonAliasById.TryGetValue(aid, out var a)) continue;
                     readings.Add(a.Name);
                     if (!string.IsNullOrEmpty(a.NameKana)) readings.Add(a.NameKana);
+
+                    string normalizedAliasName = NormalizeForSearch(a.Name);
+                    if (normalizedAliasName.Length == 0 || normalizedAliasName == normalizedDisplayName) continue;
+                    if (!seenAltNames.Add(normalizedAliasName)) continue;
+                    var aliasReadings = new List<string> { normalizedAliasName };
+                    if (!string.IsNullOrEmpty(a.NameKana)) aliasReadings.Add(NormalizeForSearch(a.NameKana));
+                    altNames.Add(new[] { a.Name, string.Join("|", aliasReadings.Where(r => r.Length > 0).Distinct(StringComparer.Ordinal)) });
                 }
             }
             items.Add(new SearchIndexItem
@@ -193,7 +209,8 @@ public sealed class SearchIndexGenerator
                 t = displayName,
                 k = "person",
                 s = "",
-                x = string.Join("|", readings.Select(NormalizeForSearch).Where(r => r.Length > 0).Distinct(StringComparer.Ordinal))
+                x = string.Join("|", readings.Select(NormalizeForSearch).Where(r => r.Length > 0).Distinct(StringComparer.Ordinal)),
+                a = altNames.Count > 0 ? altNames : null
             });
         }
 
@@ -314,6 +331,23 @@ public sealed class SearchIndexGenerator
             });
         }
 
+        // ── 役職・フォント ──
+        // 役職のページ（本編・オトナシリーズ・音楽制作）と書体のページは、書いたジェネレータが BuildContext.SearchPages に積んだものを載せる。
+        // 読みのデータは無いので、題と、添えられた語（役職の歴代の名前・英語名、書体のファミリー名）を「|」区切りで照合用に持たせる。
+        // 同じ URL に 2 度書かれたページは、後から書かれたもの（出力に残っているページ）だけを載せる。
+        foreach (var page in _ctx.SearchPages.GroupBy(p => p.Url, StringComparer.Ordinal).Select(g => g.Last()))
+        {
+            items.Add(new SearchIndexItem
+            {
+                u = page.Url,
+                t = page.Title,
+                k = page.Kind,
+                s = page.Sub,
+                x = string.Join("|", new[] { page.Title }.Concat(page.SearchTexts)
+                    .Select(NormalizeForSearch).Where(r => r.Length > 0).Distinct(StringComparer.Ordinal))
+            });
+        }
+
         // 検索 JSON を /search-index.json に書き出す。インデックスは UTF-8（BOM なし）。
         // 容量削減のため、HTML 埋め込み用エスケープは緩めにし、インデント無しで出力する。
         var jsonOptions = new JsonSerializerOptions
@@ -374,5 +408,7 @@ public sealed class SearchIndexGenerator
         public string x { get; set; } = "";
         /// <summary>サブタイトル解禁時刻（ISO 8601）。未解禁のエピソードのみ設定、それ以外は出力しない。</summary>
         public string? ra { get; set; }
+        /// <summary>人物のうち、見出しと表記の違う名義の [表記, 照合用の正規化済み文字列] の並び。無い人物と人物以外は出力しない。</summary>
+        public List<string[]>? a { get; set; }
     }
 }

@@ -59,6 +59,9 @@ public sealed record AnniversaryEntry
     /// <summary>最終話かどうか（<c>series.episodes</c> のマスタ総話数に一致する回）。</summary>
     public bool IsLastEpisode { get; init; }
 
+    /// <summary>大人向けスピンオフ（種別 OTONA）の話か。カレンダーのチップは 📺 の代わりに 🌙 を付け、作品名の前にも 🌙 を添える。</summary>
+    public bool IsOtona { get; init; }
+
     /// <summary>
     /// サブタイトル解禁時刻（ISO 8601）。解禁時刻を算出できた話のみ非空。
     /// 解禁済みかどうかは示さない（直近に解禁された話も値を持つ）。
@@ -100,4 +103,13 @@ public sealed record AnniversaryEntry
     /// 記念日の日別ページの「YYYY年生まれ」は生年の事実なので、この値に関わらず出す。
     /// </summary>
     public bool IsDeceased { get; init; }
+
+    /// <summary>
+    /// 人物の段（<see cref="Pipeline.BirthdayCalendarEligibility.TierOf"/>。0 = プリキュア役の声優さん、1 = メインスタッフ、2 = そのほか）。
+    /// カレンダーのチップでは 0・1 を TV 放送より前に、2 を TV 放送の後ろに並べる。
+    /// </summary>
+    public int PersonTier { get; init; } = 2;
+
+    /// <summary>人物の本編のクレジット回数。同じ段の中では多い順に並べる。</summary>
+    public int PersonCreditCount { get; init; }
 }

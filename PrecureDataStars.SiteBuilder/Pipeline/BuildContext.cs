@@ -187,11 +187,61 @@ public sealed class BuildContext
     public string SongLinkForRecording(int songRecordingId, int songId)
         => SongRecordingAnchorUrlById.TryGetValue(songRecordingId, out var url) ? url : PathUtil.SongUrl(songId);
 
+    private IReadOnlyDictionary<int, int>? _minRecordingIdBySong;
+
+    /// <summary>
+    /// song_id → その曲の最小 song_recording_id（録音 ID は登録＝初出の順なので「その曲の初出」の代理）。
+    /// 同じ盤に入った曲どうしを並べる所で、曲に付いた音楽クレジットの並びに使う。初めて引いたときに <see cref="SongRecordingById"/> から作る。
+    /// </summary>
+    public IReadOnlyDictionary<int, int> MinRecordingIdBySong
+        => LazyInitializer.EnsureInitialized(ref _minRecordingIdBySong, () =>
+        {
+            var map = new Dictionary<int, int>();
+            foreach (var rec in SongRecordingById.Values)
+                if (!map.TryGetValue(rec.SongId, out var cur) || rec.SongRecordingId < cur)
+                    map[rec.SongId] = rec.SongRecordingId;
+            return map;
+        });
+
     /// <summary>music_class_code → <see cref="SongMusicClass"/> の全件辞書（OP / ED / イメージソング 等の楽曲種別マスタ）。 人物・キャラ詳細の「楽曲」カードが録音の種別ラベル・バッジを引くのに使う。</summary>
     public required IReadOnlyDictionary<string, SongMusicClass> MusicClassByCode { get; init; }
 
     /// <summary>role_code → <see cref="Role"/> の全件辞書。 LookupCache および CreditTreeRenderer が初回 DB 引きしていた経路を撲滅する。</summary>
     public required IReadOnlyDictionary<string, Role> RoleByCode { get; init; }
+
+    /// <summary>
+    /// 作品 ID → その作品のメインスタッフの役職（<c>series_key_staff_roles</c>、並び順の順）。
+    /// シリーズ一覧のカードのバッジと作品詳細のメインスタッフは、この行の役職だけをこの順・この色で出す。
+    /// 行の無い作品はキーを持たない（メインスタッフを出さない）。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<SeriesKeyStaffRole>> KeyStaffRolesBySeries { get; init; }
+
+    /// <summary>
+    /// 販売中の商品（<c>series_shop_items</c>）のうち、出す設定の行（並び順の順）。
+    /// 売られているかどうかにかかわらず入る（売られている行だけを枠のファイルに書く。<see cref="ShopItemsFile"/>）。
+    /// </summary>
+    public required IReadOnlyList<SeriesShopItem> ShopItems { get; init; }
+
+    /// <summary>
+    /// 販売中の商品の枠の候補になる音楽商品（作品 × 商品。作品に結び付く盤を持ち、CD の ASIN がある商品）。
+    /// 売られているかどうかにかかわらず入る。
+    /// </summary>
+    public required IReadOnlyList<ShopProductCandidate> ShopProductCandidates { get; init; }
+
+    /// <summary>
+    /// 販売中の商品の枠の置き場を出す作品の ID（手で入れた行か、候補の音楽商品がある作品）。
+    /// 作品詳細・各話の詳細は、ここにある作品のページにだけ枠の置き場を出す
+    /// （置き場の中身は閲覧時に JS が描くので、売られていない間は何も出ない）。
+    /// </summary>
+    public required IReadOnlySet<int> ShopSeriesIds { get; init; }
+
+    /// <summary>
+    /// 作品 ID → その作品の各話のスタッフの札の役職（<c>series_episode_staff_roles</c>、並び順の順）。
+    /// 作品のページのエピソード一覧・トップページのエピソード欄・/episodes/・エピソード詳細のスタッフ欄は、
+    /// この行の役職だけをこの順・この色で出す（<see cref="EpisodeStaffCards.BuildBadges"/>）。
+    /// 行の無い作品はキーを持たない（札を出さない）。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<SeriesEpisodeStaffRole>> EpisodeStaffRolesBySeries { get; init; }
 
     /// <summary>役職テンプレ（<c>role_templates</c>）を (role_code, series_id) 解決可能な形で保持。 CreditTreeRenderer が per-sibling-role で <c>RoleTemplatesRepository.ResolveAsync</c> を発火していたのを 同期辞書 lookup に置き換える。</summary>
     public required RoleTemplateResolver RoleTemplateResolver { get; init; }
@@ -219,6 +269,8 @@ public sealed class BuildContext
     /// 旧 SeriesGenerator / EpisodeGenerator はページごとに <c>CreditsRepository.GetByEpisodeAsync</c> を
     /// 発火していたが、SiteDataLoader で全件取得して episode_id でグルーピングすることで
     /// per-page の DB 往復を撲滅する。並びは credit_seq 昇順を維持。
+    /// 集計（関わった話数・役職の何回目・スタッフの抜き出しなど）の元なので、本放送版（media_version = BROADCAST）は含まない。
+    /// クレジットの表示には <see cref="CreditsByEpisodeForDisplay"/> を使う。
     /// </summary>
     public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> CreditsByEpisode { get; init; }
 
@@ -228,6 +280,21 @@ public sealed class BuildContext
     /// を発火する代わりに本辞書を使う想定。並びは credit_seq 昇順を維持。
     /// </summary>
     public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> CreditsBySeries { get; init; }
+
+    /// <summary>
+    /// episode_id → そのエピソードのクレジット（scope=EPISODE）を全版（共通・本放送・Blu-ray・配信）含めた辞書。
+    /// エピソード詳細のクレジットの描画だけに使う（本放送版は表示だけで集計には数えない）。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> CreditsByEpisodeForDisplay { get; init; }
+
+    /// <summary>series_id → そのシリーズのクレジット（scope=SERIES）を全版含めた辞書。作品詳細のクレジットの描画だけに使う。</summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> CreditsBySeriesForDisplay { get; init; }
+
+    /// <summary>
+    /// episode_id → サブタイトルの解禁前の回の仮クレジット（<c>episodes.is_provisional_credit = 1</c>）。人物ページなどから名前が先に分からないよう
+    /// <see cref="CreditsByEpisode"/> などの集計には入れず、各話の札（ぼかしの枠に入れる）だけが引く。解禁後の回の仮クレジットは通常のクレジットと同じ辞書に入る。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> ProvisionalCreditsByEpisode { get; init; }
 
     /// <summary>
     /// episode_id → そのエピソードのパート一覧（episode_seq 昇順）の事前展開辞書。
@@ -340,6 +407,12 @@ public sealed class BuildContext
     public IReadOnlySet<string>? SiteTimelineEntityUrls { get; set; }
 
     /// <summary>
+    /// サイト内検索に載せるページのうち、マスタからは書いたかどうかが決まらないもの（役職のページ・書体のページ）。
+    /// ページを書いたジェネレータが、ページを記録する逐次の所で積み（並列の処理からは積まない）、SearchIndexGenerator が検索の索引に入れる。
+    /// </summary>
+    public List<SearchPageEntry> SearchPages { get; } = new();
+
+    /// <summary>
     /// 人物の誕生日を記念日カレンダー（ホームのカレンダー・今日の記念日・記念日の日別ページ）に出すかの判定。
     /// <see cref="CreditInvolvementIndex"/> 構築直後に Pipeline が 1 度だけ詰める（ホームは声の出演一覧より先に作るため）。
     /// 未構築なら全員を出す。
@@ -362,8 +435,28 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<int, DateTimeOffset> SubtitleRevealAtByEpisodeId { get; init; }
 
     /// <summary>
+    /// ビルド時点で予告も雑誌の発売もまだの話（<see cref="Utilities.PrereleaseEpisodeFilter"/>）の episode_id。
+    /// <see cref="EpisodeById"/> などの索引からは外してあり、DB を直接引く集計（サブタイトル統計など）はこの集合で同じ話を除く。
+    /// </summary>
+    public required IReadOnlySet<int> HiddenEpisodeIds { get; init; }
+
+    /// <summary>
+    /// <see cref="HiddenEpisodeIds"/> の話の行。出力の点検（<see cref="PrereleaseOutputGuard"/>）が、
+    /// これらの話のページの URL とサブタイトルが出力に残っていないかを確かめるのに使う。
+    /// </summary>
+    public required IReadOnlyList<Episode> HiddenEpisodes { get; init; }
+
+    /// <summary>
     /// ビルドの基準時刻。サブタイトル解禁時刻の辞書を作った時刻で、ページタイトル・OGP など
     /// 後から隠せない出力で「解禁前か」を判定するときも、この時刻で比べて辞書と判定をそろえる。
     /// </summary>
     public required DateTimeOffset BuildStartedAt { get; init; }
 }
+
+/// <summary>サイト内検索に載せるページ 1 件（<see cref="BuildContext.SearchPages"/>）。</summary>
+/// <param name="Kind">検索の種別（"role"＝役職のページ / "font"＝書体のページ）。</param>
+/// <param name="Url">ページの URL。</param>
+/// <param name="Title">検索結果に出す題（役職名・書体名）。</param>
+/// <param name="Sub">検索結果で題の下に添える語（「オトナシリーズ」・メーカー名など。無ければ空文字）。</param>
+/// <param name="SearchTexts">題のほかに照合する語（役職の歴代の名前・英語名、書体のファミリー名など）。</param>
+public sealed record SearchPageEntry(string Kind, string Url, string Title, string Sub, IReadOnlyList<string> SearchTexts);

@@ -14,14 +14,15 @@
  *
  * JSON は anniversaries.js と共有。各要素は種別タグ k を持つ：
  *   ep … エピソード放送日（ts=シリーズ略称, en=話数, eu=URL,
- *         ef=1 話フラグ任意, el=最終話フラグ任意,
+ *         ef=1 話フラグ任意, el=最終話フラグ任意, o=オトナシリーズの話フラグ任意,
  *         ra=サブタイトル解禁時刻任意。未解禁ならチップの title 属性からサブタイトルを外す）
  *   mv … 映画公開日（ts=シリーズ略称, su=シリーズ URL）
  *   cb … キャラクター誕生日（pn=変身前名義/表示名, cu=URL, kc/kf/kb=バッジ色）
- *   pb … 人物誕生日（pn=氏名, pu=URL）
+ *   pb … 人物誕生日（pn=氏名, pu=URL, pt=段〔0=プリキュア役の声優さん, 1=メインスタッフ, 2=そのほか〕, pc=本編のクレジット回数）
  *
  * 1 日のセル／行内チップの優先順（上から）：
- *   キャラクター誕生日(cb) > 映画公開日(mv) > 人物誕生日(pb) > TV 放送(ep)
+ *   キャラクター誕生日(cb) > 映画公開日(mv) > プリキュア役の声優さん(pb, pt=0) > メインスタッフ(pb, pt=1) > TV 放送(ep)
+ *   > そのほかの人物(pb, pt=2)。人物は同じ段の中で本編のクレジット回数の多い順。
  *
  * 注記：カレンダーはコンパクト表示のため、ep / mv はシリーズ略称（title_short）を
  * 用いる。これは「生成出力では title_short を参照しない」サイト方針の明示例外で、
@@ -39,8 +40,14 @@
 
 
   var WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
-  // チップ優先順位（小さいほど上）。
-  var KIND_ORDER = { cb: 0, mv: 1, pb: 2, ep: 3 };
+  // チップ優先順位（小さいほど上）。人物の誕生日はプリキュア役の声優さん（pt=0）・メインスタッフ（pt=1）が TV 放送より上、
+  // そのほか（pt=2）は TV 放送の下。
+  var KIND_ORDER = { cb: 0, mv: 1, ep: 4 };
+  function chipOrder(it) {
+    if (it.k === 'pb') return it.pt === 0 ? 2 : (it.pt === 1 ? 3 : 5);
+    var o = KIND_ORDER[it.k];
+    return o === undefined ? 9 : o;
+  }
   // 狭い幅判定の閾値。site.css の旧カレンダーフォールバックと同じ 720px に合わせる。
   var MOBILE_QUERY = '(max-width: 720px)';
 
@@ -178,11 +185,13 @@
     }
   }
 
-  // 1 セル／行内のチップ並び：種別優先（cb→mv→pb→ep）、同種はシリーズ年→話数で安定的に。
+  // 1 セル／行内のチップ並び：種別優先（cb→mv→プリキュア役の声優さん→メインスタッフ→ep→そのほかの人物）、
+  // 人物は本編のクレジット回数の多い順、ほかはシリーズ年→話数で安定的に。
   function sortChips(a, b2) {
-    var oa = KIND_ORDER[a.k]; if (oa === undefined) oa = 9;
-    var ob = KIND_ORDER[b2.k]; if (ob === undefined) ob = 9;
+    var oa = chipOrder(a);
+    var ob = chipOrder(b2);
     if (oa !== ob) return oa - ob;
+    if (a.k === 'pb' && b2.k === 'pb') return (b2.pc || 0) - (a.pc || 0);
     var ya = a.sy || a.y || 0, yb = b2.sy || b2.y || 0;
     if (ya !== yb) return ya - yb;
     return (a.en || 0) - (b2.en || 0);
@@ -368,7 +377,7 @@
         + '" title="' + escapeAttr(it.pn) + '">'
         + '<span class="cal-chip-emoji">🎂</span>' + escapeHtml(it.pn) + '</a>';
     }
-    // ep（TV 放送）：テレビ絵文字 + シリーズ名 + #話数。
+    // ep（TV 放送）：テレビ絵文字 + シリーズ名 + #話数。大人向けスピンオフの話（o）も同じ配色で、絵文字だけ 🌙 にする。
     var epTitle = useFullName ? it.st : it.ts;
     var label = escapeHtml(epTitle) + '#' + escapeHtml(String(it.en));
     // 1 話（ef）／最終話（el）には強調用の追加クラスを付与する。
@@ -382,7 +391,7 @@
     var epSubtitle = revealed ? (it.et || '') : '';
     return '<a class="' + epCls + '" href="' + escapeAttr(it.eu)
       + '" title="' + escapeAttr(it.st + ' 第' + it.en + '話 ' + epSubtitle) + '">'
-      + '<span class="cal-chip-emoji">📺</span>' + label + '</a>';
+      + '<span class="cal-chip-emoji">' + (it.o ? '🌙' : '📺') + '</span>' + label + '</a>';
   }
 
   function escapeHtml(s) {

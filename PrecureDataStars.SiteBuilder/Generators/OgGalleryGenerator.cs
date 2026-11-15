@@ -19,7 +19,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// ギャラリーまで巻き込まれて読めなくなるのを避ける。
 /// </para>
 /// <para>
-/// 画像はビルド済みの出力ディレクトリを走査して集める（今回の出力として記録されたものだけ）。カード生成は各ジェネレータの中で
+/// 画像は今回の出力として記録されたものから集める（出力のディレクトリは走査しない）。カード生成は各ジェネレータの中で
 /// ページ書き出しと同時に行われるので、全ページの書き出しが終わったあとに実行する必要がある。
 /// </para>
 /// </summary>
@@ -43,14 +43,11 @@ public sealed class OgGalleryGenerator
         if (_config.IsProductionMode) return;
 
         string ogRoot = Path.Combine(_config.OutputDirectory, "og");
-        if (!Directory.Exists(ogRoot)) return;
 
         // og/{section}/{slug}.png と og/{slug}.png（ホーム等）の 2 段。
         // セクション名で束ねて、ページ種別ごとに見比べられる並びにする。
-        // 前回の出力の残り（今回は作らなかったカード。出力の掃除で消える）は載せない。
-        var groups = Directory
-            .EnumerateFiles(ogRoot, "*.png", SearchOption.AllDirectories)
-            .Where(f => _output.IsTracked(f))
+        // 今回の出力として記録したカードだけを載せる（前回の出力の残りは出力の掃除で消える）。
+        var groups = _output.TrackedFilesUnder(ogRoot, ".png")
             .Select(f => new
             {
                 Path = f,
@@ -59,6 +56,7 @@ public sealed class OgGalleryGenerator
             .GroupBy(x => x.Rel.Contains('/') ? x.Rel[..x.Rel.IndexOf('/')] : "(ルート)")
             .OrderBy(g => g.Key, StringComparer.Ordinal)
             .ToList();
+        if (groups.Count == 0) return;
 
         int total = groups.Sum(g => g.Count());
 

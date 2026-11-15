@@ -26,8 +26,11 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
           character_alias_id             AS CharacterAliasId,
           raw_character_text             AS RawCharacterText,
           person_misprint_text           AS PersonMisprintText,
+          person_display_text            AS PersonDisplayText,
           character_misprint_text        AS CharacterMisprintText,
+          character_display_text         AS CharacterDisplayText,
           company_misprint_text          AS CompanyMisprintText,
+          company_display_text           AS CompanyDisplayText,
           person_masked_text             AS PersonMaskedText,
           company_alias_id               AS CompanyAliasId,
           logo_id                        AS LogoId,
@@ -41,6 +44,9 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
           parallel_prefix                AS ParallelPrefix,
           parallel_suffix                AS ParallelSuffix,
           parallel_small                 AS ParallelSmall,
+          character_unit_alias_id        AS CharacterUnitAliasId,
+          same_character_layout          AS SameCharacterLayout,
+          same_person_layout             AS SamePersonLayout,
           notes                          AS Notes,
           created_at                     AS CreatedAt,
           updated_at                     AS UpdatedAt,
@@ -93,18 +99,20 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
             INSERT INTO credit_block_entries
               (block_id, is_broadcast_only, entry_seq, entry_kind,
                person_alias_id, character_alias_id, raw_character_text,
-               person_misprint_text, character_misprint_text, company_misprint_text, person_masked_text,
+               person_misprint_text, person_display_text, character_misprint_text, character_display_text, company_misprint_text, company_display_text, person_masked_text,
                company_alias_id, logo_id, raw_text,
                affiliation_company_alias_id, affiliation_person_alias_id, affiliation_logo_id, affiliation_text, affiliation_inline,
-               parallel_with_entry_id, parallel_prefix, parallel_suffix, parallel_small,
+               parallel_with_entry_id, parallel_prefix, parallel_suffix, parallel_small, character_unit_alias_id,
+               same_character_layout, same_person_layout,
                notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
-               @PersonMisprintText, @CharacterMisprintText, @CompanyMisprintText, @PersonMaskedText,
+               @PersonMisprintText, @PersonDisplayText, @CharacterMisprintText, @CharacterDisplayText, @CompanyMisprintText, @CompanyDisplayText, @PersonMaskedText,
                @CompanyAliasId, @LogoId, @RawText,
                @AffiliationCompanyAliasId, @AffiliationPersonAliasId, @AffiliationLogoId, @AffiliationText, @AffiliationInline,
-               @ParallelWithEntryId, @ParallelPrefix, @ParallelSuffix, @ParallelSmall,
+               @ParallelWithEntryId, @ParallelPrefix, @ParallelSuffix, @ParallelSmall, @CharacterUnitAliasId,
+               @SameCharacterLayout, @SamePersonLayout,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -125,8 +133,11 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
               character_alias_id            = @CharacterAliasId,
               raw_character_text            = @RawCharacterText,
               person_misprint_text          = @PersonMisprintText,
+              person_display_text           = @PersonDisplayText,
               character_misprint_text       = @CharacterMisprintText,
+              character_display_text        = @CharacterDisplayText,
               company_misprint_text         = @CompanyMisprintText,
+              company_display_text          = @CompanyDisplayText,
               person_masked_text            = @PersonMaskedText,
               company_alias_id              = @CompanyAliasId,
               logo_id                       = @LogoId,
@@ -140,6 +151,9 @@ public sealed class CreditBlockEntriesRepository : RepositoryBase
               parallel_prefix               = @ParallelPrefix,
               parallel_suffix               = @ParallelSuffix,
               parallel_small                = @ParallelSmall,
+              character_unit_alias_id       = @CharacterUnitAliasId,
+              same_character_layout         = @SameCharacterLayout,
+              same_person_layout            = @SamePersonLayout,
               notes                         = @Notes,
               updated_by                    = @UpdatedBy
             WHERE entry_id = @EntryId;

@@ -20,7 +20,7 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 ///     0a で Person/Character/Company（必要なら本体行 + 中間表も含む）を流し、0b で Logo を流す
 ///     （Logo の company_alias_id が同セッションの Pending CompanyAlias を指していたら 0a で得た実 ID に置換してから INSERT）。
 ///     0c で Draft 全 Block/Entry を走査し、PersonAliasId / CharacterAliasId / CompanyAliasId /
-///     AffiliationCompanyAliasId / LogoId / LeadingCompanyAliasId の負数を実 ID に張り替える。
+///     AffiliationCompanyAliasId / LogoId / LeadingCompanyAliasId / LeadingCompany2AliasId の負数を実 ID に張り替える。
 ///     ステージB（Draft 化基盤整備）で導入。ペンディング・マップが空のときは何もせず Phase 1A へ進むため、
 ///     既存の保存挙動には影響しない。</description></item>
 ///   <item><description><b>削除フェーズ 1A（エントリ）</b>：DeletedEntries バケットの既存 entry 行を DELETE。
@@ -62,6 +62,10 @@ internal sealed class CreditSaveService
     {
         if (session is null) throw new ArgumentNullException(nameof(session));
         if (session.Root is null) throw new InvalidOperationException("session.Root が null です。");
+
+        // 行ごと画面に無い印（not_on_screen）と役職名だけ画面に無い印（role_label_not_on_screen）は意味が重なるので、
+        // 同じ役職に両方は立てない。DB の CHECK 制約でも弾くが、接続を開く前に分かる言葉で止める。
+        ValidateRoleNotOnScreenFlags(session);
 
         await using var conn = await _factory.CreateOpenedAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
@@ -550,7 +554,8 @@ internal sealed class CreditSaveService
 
     private static async Task<int> InsertCardAsync(MySqlConnection conn, MySqlTransaction tx, CreditCard c, CancellationToken ct)
     {
-        // presentation（カード / ロール）はカード単位の列。Draft 側の Entity.Presentation をそのまま書く。
+        // presentation（カード / ロール）と media_version（カードの版：共通 / 本放送 / Blu-ray・配信）はカード単位の列。
+        // Draft 側の Entity.Presentation・Entity.MediaVersion をそのまま書く。
         //
         // card_seq は呼び出し側 Entity の値を尊重したいが、UI 側のフローで「新規 Card」が既存と同じ
         // card_seq=1（既定値）のまま渡ってくるケースがあり、UNIQUE(credit_id, card_seq) の
@@ -561,12 +566,12 @@ internal sealed class CreditSaveService
         // （新規 Card の所望位置が中間でも、escape → 最終番号付け の 2 段で正しく整列する）。
         // 自参照テーブルでの UPDATE 不可問題を避けるため、サブクエリを派生テーブル (cc) でラップしている。
         const string sql = """
-            INSERT INTO credit_cards (credit_id, card_seq, presentation, notes, created_by, updated_by)
+            INSERT INTO credit_cards (credit_id, card_seq, presentation, media_version, notes, created_by, updated_by)
             VALUES (@CreditId,
                     (SELECT COALESCE(MAX(cc.card_seq), 0) + 1
                        FROM (SELECT card_seq, credit_id FROM credit_cards) AS cc
                       WHERE cc.credit_id = @CreditId),
-                    @Presentation, @Notes, @CreatedBy, @UpdatedBy);
+                    @Presentation, @MediaVersion, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, c, transaction: tx, cancellationToken: ct));
@@ -595,8 +600,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertRoleAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardRole r, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, not_on_screen, theme_song_seq, notes, created_by, updated_by)
-            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @NotOnScreen, @ThemeSongSeq, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, not_on_screen, role_label_not_on_screen, theme_song_seq, notes, created_by, updated_by)
+            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @NotOnScreen, @RoleLabelNotOnScreen, @ThemeSongSeq, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, r, transaction: tx, cancellationToken: ct));
@@ -605,8 +610,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertBlockAsync(MySqlConnection conn, MySqlTransaction tx, CreditRoleBlock b, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_role_blocks (card_role_id, block_seq, col_count, leading_company_alias_id, leading_company_not_on_screen, heading_series_id, heading_text, heading_italic, notes, created_by, updated_by)
-            VALUES (@CardRoleId, @BlockSeq, @ColCount, @LeadingCompanyAliasId, @LeadingCompanyNotOnScreen, @HeadingSeriesId, @HeadingText, @HeadingItalic, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_role_blocks (card_role_id, block_seq, col_count, continues_previous, leading_company_alias_id, leading_company_not_on_screen, leading_company2_alias_id, leading_company_separator, leading_company_suffix, leading_text, heading_series_id, heading_text, heading_italic, notes, created_by, updated_by)
+            VALUES (@CardRoleId, @BlockSeq, @ColCount, @ContinuesPrevious, @LeadingCompanyAliasId, @LeadingCompanyNotOnScreen, @LeadingCompany2AliasId, @LeadingCompanySeparator, @LeadingCompanySuffix, @LeadingText, @HeadingSeriesId, @HeadingText, @HeadingItalic, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, b, transaction: tx, cancellationToken: ct));
@@ -618,18 +623,20 @@ internal sealed class CreditSaveService
             INSERT INTO credit_block_entries
               (block_id, is_broadcast_only, entry_seq, entry_kind,
                person_alias_id, character_alias_id, raw_character_text,
-               person_misprint_text, character_misprint_text, company_misprint_text, person_masked_text,
+               person_misprint_text, person_display_text, character_misprint_text, character_display_text, company_misprint_text, company_display_text, person_masked_text,
                company_alias_id, logo_id, raw_text,
                affiliation_company_alias_id, affiliation_person_alias_id, affiliation_logo_id, affiliation_text, affiliation_inline,
-               parallel_with_entry_id, parallel_prefix, parallel_suffix, parallel_small,
+               parallel_with_entry_id, parallel_prefix, parallel_suffix, parallel_small, character_unit_alias_id,
+               same_character_layout, same_person_layout,
                notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
-               @PersonMisprintText, @CharacterMisprintText, @CompanyMisprintText, @PersonMaskedText,
+               @PersonMisprintText, @PersonDisplayText, @CharacterMisprintText, @CharacterDisplayText, @CompanyMisprintText, @CompanyDisplayText, @PersonMaskedText,
                @CompanyAliasId, @LogoId, @RawText,
                @AffiliationCompanyAliasId, @AffiliationPersonAliasId, @AffiliationLogoId, @AffiliationText, @AffiliationInline,
-               @ParallelWithEntryId, @ParallelPrefix, @ParallelSuffix, @ParallelSmall,
+               @ParallelWithEntryId, @ParallelPrefix, @ParallelSuffix, @ParallelSmall, @CharacterUnitAliasId,
+               @SameCharacterLayout, @SamePersonLayout,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -642,6 +649,7 @@ internal sealed class CreditSaveService
     {
         const string sql = """
             UPDATE credits SET
+              media_version = @MediaVersion,
               presentation = @Presentation,
               part_type = @PartType,
               notes = @Notes,
@@ -660,10 +668,10 @@ internal sealed class CreditSaveService
     {
         const string sql = """
             INSERT INTO credits
-              (scope_kind, series_id, episode_id, credit_kind, credit_seq, part_type, presentation,
+              (scope_kind, series_id, episode_id, credit_kind, media_version, credit_seq, part_type, presentation,
                notes, created_by, updated_by)
             VALUES
-              (@ScopeKind, @SeriesId, @EpisodeId, @CreditKind,
+              (@ScopeKind, @SeriesId, @EpisodeId, @CreditKind, @MediaVersion,
                (SELECT COALESCE(MAX(c2.credit_seq), 0) + 1
                   FROM (SELECT credit_seq, series_id, episode_id FROM credits) AS c2
                  WHERE (@SeriesId  IS NOT NULL AND c2.series_id  = @SeriesId)
@@ -684,6 +692,7 @@ internal sealed class CreditSaveService
             UPDATE credit_cards SET
               credit_id = @CreditId,
               presentation = @Presentation,
+              media_version = @MediaVersion,
               notes = @Notes,
               updated_by = @UpdatedBy
             WHERE card_id = @CardId;
@@ -739,6 +748,7 @@ internal sealed class CreditSaveService
               join_separator     = @JoinSeparator,
               hide_role_label    = @HideRoleLabel,
               not_on_screen      = @NotOnScreen,
+              role_label_not_on_screen = @RoleLabelNotOnScreen,
               theme_song_seq     = @ThemeSongSeq,
               notes              = @Notes,
               updated_by         = @UpdatedBy
@@ -756,8 +766,13 @@ internal sealed class CreditSaveService
             UPDATE credit_role_blocks SET
               card_role_id = @CardRoleId,
               col_count = @ColCount,
+              continues_previous = @ContinuesPrevious,
               leading_company_alias_id = @LeadingCompanyAliasId,
               leading_company_not_on_screen = @LeadingCompanyNotOnScreen,
+              leading_company2_alias_id = @LeadingCompany2AliasId,
+              leading_company_separator = @LeadingCompanySeparator,
+              leading_company_suffix = @LeadingCompanySuffix,
+              leading_text = @LeadingText,
               heading_series_id = @HeadingSeriesId,
               heading_text = @HeadingText,
               heading_italic = @HeadingItalic,
@@ -783,8 +798,11 @@ internal sealed class CreditSaveService
               character_alias_id = @CharacterAliasId,
               raw_character_text = @RawCharacterText,
               person_misprint_text = @PersonMisprintText,
+              person_display_text = @PersonDisplayText,
               character_misprint_text = @CharacterMisprintText,
+              character_display_text = @CharacterDisplayText,
               company_misprint_text = @CompanyMisprintText,
+              company_display_text = @CompanyDisplayText,
               person_masked_text = @PersonMaskedText,
               company_alias_id = @CompanyAliasId,
               logo_id = @LogoId,
@@ -798,6 +816,9 @@ internal sealed class CreditSaveService
               parallel_prefix = @ParallelPrefix,
               parallel_suffix = @ParallelSuffix,
               parallel_small = @ParallelSmall,
+              character_unit_alias_id = @CharacterUnitAliasId,
+              same_character_layout = @SameCharacterLayout,
+              same_person_layout = @SamePersonLayout,
               notes = @Notes,
               updated_by = @UpdatedBy
             WHERE entry_id = @EntryId;
@@ -1090,6 +1111,15 @@ internal sealed class CreditSaveService
                                 blk.Entity.LeadingCompanyAliasId = mapped;
                                 if (blk.State == DraftState.Unchanged) blk.MarkModified();
                             }
+                            // Block.LeadingCompany2AliasId（筆頭が 2 社の連名のときの 2 社目）
+                            if (blk.Entity.LeadingCompany2AliasId is int blkLeading2 && blkLeading2 < 0)
+                            {
+                                if (!companyMap.TryGetValue(blkLeading2, out var mapped2))
+                                    throw new InvalidOperationException(
+                                        $"Phase 0c: DraftBlock の LeadingCompany2AliasId={blkLeading2} に対応する Pending CompanyAlias が見つかりません。");
+                                blk.Entity.LeadingCompany2AliasId = mapped2;
+                                if (blk.State == DraftState.Unchanged) blk.MarkModified();
+                            }
 
                             foreach (var en in blk.Entries.Where(e => e.State != DraftState.Deleted))
                             {
@@ -1099,6 +1129,29 @@ internal sealed class CreditSaveService
                     }
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// 削除予定でない全役職について、<see cref="CreditCardRole.NotOnScreen"/> と
+    /// <see cref="CreditCardRole.RoleLabelNotOnScreen"/> が同時に立っていないかを確かめる。
+    /// 立っていれば役職コードを添えて <see cref="InvalidOperationException"/> を投げ、保存を始めない。
+    /// </summary>
+    private static void ValidateRoleNotOnScreenFlags(CreditDraftSession session)
+    {
+        var conflicts = session.Root.Cards
+            .Where(c => c.State != DraftState.Deleted)
+            .SelectMany(c => c.Tiers.Where(t => t.State != DraftState.Deleted))
+            .SelectMany(t => t.Groups.Where(g => g.State != DraftState.Deleted))
+            .SelectMany(g => g.Roles.Where(r => r.State != DraftState.Deleted))
+            .Where(r => r.Entity.NotOnScreen && r.Entity.RoleLabelNotOnScreen)
+            .Select(r => r.Entity.RoleCode ?? "(役職未設定)")
+            .ToList();
+        if (conflicts.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "「画面に無い」と「役職名は画面に無い」は同じ役職に両方は立てられません（行ごと画面に無いなら「画面に無い」だけ）。対象の役職: "
+                + string.Join("、", conflicts));
         }
     }
 

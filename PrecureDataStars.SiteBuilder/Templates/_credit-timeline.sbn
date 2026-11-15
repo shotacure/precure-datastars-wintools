@@ -1,0 +1,31 @@
+{{## 年表（人物詳細・企業/団体詳細・ユニット詳細・キャラクター詳細の基本情報の下）。引数なしの include で取り込み、ページのモデルの CreditTimeline
+     （CreditTimelineView）と Timeline（その線表）を描く。ふだんは閉じた開閉の枠で置く。
+       閉じた状態は「年表」「参加の期間・声優の数（キャラクター詳細）・役職の数・役柄の数」と、すべての参加を 1 本にまとめた細い帯（CreditTimeline.Summary）と
+       右端の「くわしく」。開くと声優（人物の印）・役職（札の印）・役柄（星の印）ごとの線表（_role-timeline.sbn。参加のある期間だけの軸）を出す。
+       描ける参加が無い（CreditTimeline が null）ときは出さない。 ##}}
+  {{~ if CreditTimeline ~}}
+  <details class="credit-timeline">
+    <summary>
+      <span class="ctl-label">年表</span>
+      <span class="ctl-meta">{{ CreditTimeline.PeriodLabel }}{{ if CreditTimeline.PersonCount > 0 }}・声優 {{ CreditTimeline.PersonCount }}{{ end }}{{ if CreditTimeline.RoleCount > 0 }}・役職 {{ CreditTimeline.RoleCount }}{{ end }}{{ if CreditTimeline.CharacterCount > 0 }}・役柄 {{ CreditTimeline.CharacterCount }}{{ end }}</span>
+      {{~ if CreditTimeline.Summary ~}}
+      {{~ m = CreditTimeline.Summary ~}}
+      <span class="ctl-mini role-timeline" aria-hidden="true"><span class="ctl-mini-track">
+        {{~ for b in Timeline.Bands ~}}<span class="rtl-band{{ if b.IsAlt }} rtl-band-alt{{ end }}" style="left:{{ b.Left }}%;width:{{ b.Width }}%"></span>{{~ end ~}}
+        {{~ for g in Timeline.Gaps ~}}<span class="rtl-gap" style="left:{{ g.Left }}%;width:{{ g.Width }}%"></span>{{~ end ~}}
+        {{~ for x in m.Spans ~}}<span class="rtl-span" style="left:{{ x.Left }}%;width:{{ x.Width }}%"></span>{{~ end ~}}
+        {{~ for x in m.Segments ~}}<span class="rtl-seg" style="left:{{ x.Left }}%;width:{{ x.Width }}%"></span>{{~ end ~}}
+        {{~ for x in m.SpinOffSegments ~}}<span class="rtl-seg rtl-seg-spinoff" style="left:{{ x.Left }}%;width:{{ x.Width }}%"></span>{{~ end ~}}
+        {{~ for x in m.Movies ~}}<span class="rtl-movie" style="left:{{ x.Left }}%"></span>{{~ end ~}}
+        {{~ for x in m.Songs ~}}<span class="rtl-song" style="left:{{ x.Left }}%"></span>{{~ end ~}}
+        {{~ for x in m.Bgms ~}}<span class="rtl-bgm" style="left:{{ x.Left }}%"></span>{{~ end ~}}
+        {{~ for x in m.Products ~}}<span class="rtl-disc" style="left:{{ x.Left }}%"></span>{{~ end ~}}
+      </span></span>
+      {{~ end ~}}
+      <span class="ctl-toggle"><span class="is-closed-label">くわしく</span><span class="is-open-label">閉じる</span></span>
+    </summary>
+    <div class="ctl-body">
+    {{ include '_role-timeline.sbn' }}
+    </div>
+  </details>
+  {{~ end ~}}

@@ -19,9 +19,15 @@ public sealed class CompaniesRepository : RepositoryBase
           dissolved_date  AS DissolvedDate,
           notes           AS Notes,
           official_url    AS OfficialUrl,
+          link_collection_url AS LinkCollectionUrl,
           x_url           AS XUrl,
+          x_sub_url       AS XSubUrl,
+          bluesky_url     AS BlueskyUrl,
           instagram_url   AS InstagramUrl,
           youtube_url     AS YoutubeUrl,
+          blog_url        AS BlogUrl,
+          pixiv_url       AS PixivUrl,
+          portfolio_url   AS PortfolioUrl,
           wikipedia_url   AS WikipediaUrl,
           created_at      AS CreatedAt,
           updated_at      AS UpdatedAt,
@@ -79,11 +85,13 @@ public sealed class CompaniesRepository : RepositoryBase
         const string sql = """
             INSERT INTO companies
               (name, name_kana, name_en, founded_date, dissolved_date,
-               notes, official_url, x_url, instagram_url, youtube_url, wikipedia_url,
+               notes, official_url, link_collection_url, x_url, x_sub_url, bluesky_url,
+               instagram_url, youtube_url, blog_url, pixiv_url, portfolio_url, wikipedia_url,
                created_by, updated_by)
             VALUES
               (@Name, @NameKana, @NameEn, @FoundedDate, @DissolvedDate,
-               @Notes, @OfficialUrl, @XUrl, @InstagramUrl, @YoutubeUrl, @WikipediaUrl,
+               @Notes, @OfficialUrl, @LinkCollectionUrl, @XUrl, @XSubUrl, @BlueskyUrl,
+               @InstagramUrl, @YoutubeUrl, @BlogUrl, @PixivUrl, @PortfolioUrl, @WikipediaUrl,
                @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -103,9 +111,15 @@ public sealed class CompaniesRepository : RepositoryBase
               dissolved_date  = @DissolvedDate,
               notes           = @Notes,
               official_url    = @OfficialUrl,
+              link_collection_url = @LinkCollectionUrl,
               x_url           = @XUrl,
+              x_sub_url       = @XSubUrl,
+              bluesky_url     = @BlueskyUrl,
               instagram_url   = @InstagramUrl,
               youtube_url     = @YoutubeUrl,
+              blog_url        = @BlogUrl,
+              pixiv_url       = @PixivUrl,
+              portfolio_url   = @PortfolioUrl,
               wikipedia_url   = @WikipediaUrl,
               updated_by      = @UpdatedBy,
               is_deleted      = @IsDeleted

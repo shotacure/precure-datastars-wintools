@@ -20,6 +20,15 @@ public partial class SeriesEditorForm : Form
     private List<Series> _series = new();         // 画面上の全シリーズ（is_deleted=0）
     private Series? _current;                     // 現在編集中のシリーズ
 
+    // 作品ごとのメインスタッフの役職（series_key_staff_roles）と、各話のスタッフの札の役職（series_episode_staff_roles）
+    private readonly RolesRepository _rolesRepo;
+    private readonly SeriesKeyStaffRolesRepository _keyStaffRolesRepo;
+    private readonly SeriesEpisodeStaffRolesRepository _episodeStaffRolesRepo;
+    /// <summary>「メインスタッフ」の欄（役職・並び・バッジの色）。</summary>
+    private readonly RoleColorGridEditor _keyStaffEditor;
+    /// <summary>「エピソードの札」の欄（役職・並び・札の色）。</summary>
+    private readonly RoleColorGridEditor _episodeStaffEditor;
+
     /// <summary>親シリーズ ComboBox 用の選択肢モデル（ID + 表示テキスト）。</summary>
     private sealed class ParentOption
     {
@@ -40,16 +49,31 @@ public partial class SeriesEditorForm : Form
     /// <param name="seriesRepo">シリーズリポジトリ。</param>
     /// <param name="kindsRepo">シリーズ種別マスタリポジトリ。</param>
     /// <param name="relKindsRepo">シリーズ関係種別マスタリポジトリ。</param>
+    /// <param name="rolesRepo">役職マスタリポジトリ（メインスタッフの役職の選択肢）。</param>
+    /// <param name="keyStaffRolesRepo">作品ごとのメインスタッフの役職のリポジトリ。</param>
+    /// <param name="episodeStaffRolesRepo">作品ごとの各話のスタッフの札の役職のリポジトリ。</param>
     public SeriesEditorForm(
         SeriesRepository seriesRepo,
         SeriesKindsRepository kindsRepo,
-        SeriesRelationKindsRepository relKindsRepo)
+        SeriesRelationKindsRepository relKindsRepo,
+        RolesRepository rolesRepo,
+        SeriesKeyStaffRolesRepository keyStaffRolesRepo,
+        SeriesEpisodeStaffRolesRepository episodeStaffRolesRepo)
     {
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
         _kindsRepo = kindsRepo ?? throw new ArgumentNullException(nameof(kindsRepo));
         _relKindsRepo = relKindsRepo ?? throw new ArgumentNullException(nameof(relKindsRepo));
+        _rolesRepo = rolesRepo ?? throw new ArgumentNullException(nameof(rolesRepo));
+        _keyStaffRolesRepo = keyStaffRolesRepo ?? throw new ArgumentNullException(nameof(keyStaffRolesRepo));
+        _episodeStaffRolesRepo = episodeStaffRolesRepo ?? throw new ArgumentNullException(nameof(episodeStaffRolesRepo));
 
         InitializeComponent();
+
+        // メインスタッフの欄と、エピソードの札の欄（行を足す・消す・並べ替える・色を選ぶ操作は共通の部品）
+        _keyStaffEditor = new RoleColorGridEditor(this, dgvKeyStaff, "メインスタッフ",
+            btnKeyStaffAdd, btnKeyStaffRemove, btnKeyStaffUp, btnKeyStaffDown, btnKeyStaffColor);
+        _episodeStaffEditor = new RoleColorGridEditor(this, dgvEpisodeStaff, "エピソードの札",
+            btnEpisodeStaffAdd, btnEpisodeStaffRemove, btnEpisodeStaffUp, btnEpisodeStaffDown, btnEpisodeStaffColor);
 
         // events
         lstSeries.SelectedIndexChanged += (_, __) => BindSelected();
@@ -72,6 +96,17 @@ public partial class SeriesEditorForm : Form
 
         // テーブル由来でコンボ構築
         PopulateCombosFromLookups();
+
+        // メインスタッフの欄とエピソードの札の欄の列（役職の選択肢）と、それぞれの欄での役職ごとのいつもの色
+        var roles = await _rolesRepo.GetAllAsync();
+        var allKeyStaff = await _keyStaffRolesRepo.GetAllAsync();
+        var allEpisodeStaff = await _episodeStaffRolesRepo.GetAllAsync();
+        _keyStaffEditor.SetUsualColors(allKeyStaff.Select(r => (r.RoleCode, r.BadgeColor)));
+        _episodeStaffEditor.SetUsualColors(allEpisodeStaff.Select(r => (r.RoleCode, r.BadgeColor)));
+        _keyStaffEditor.BuildColumns(roles);
+        _episodeStaffEditor.BuildColumns(roles);
+        // 列を組む前に作品を選んでいたら、ここで読み込み直す
+        if (_current is not null) LoadStaffRoles(_current.SeriesId);
 
         // DBから全シリーズを取得
         _series = (await _seriesRepo.GetAllAsync()).ToList();
@@ -105,12 +140,13 @@ public partial class SeriesEditorForm : Form
         cmbRelation.ValueMember = nameof(ComboOption<string?>.Value);
         cmbRelation.DataSource = relOptions;
 
-        // 絵コンテと演出の出し方（series.storyboard_display）：固定の 3 択
+        // 絵コンテと演出の出し方（series.storyboard_display）：固定の 4 択
         var storyboardOptions = new List<ComboOption<string>>
         {
             new() { Value = Series.StoryboardDisplaySeparate, Text = "それぞれの役職名で出す" },
             new() { Value = Series.StoryboardDisplayMerge, Text = "いつも「演出」にまとめる（違う人なら「演出」の欄に並べる）" },
             new() { Value = Series.StoryboardDisplayMergeSamePerson, Text = "同じ人のときだけ「(絵コンテ・)演出」にまとめる" },
+            new() { Value = Series.StoryboardDisplayJoinSamePerson, Text = "同じ人のときだけ「絵コンテ・演出」にまとめる" },
         };
         cmbStoryboardDisplay.DisplayMember = nameof(ComboOption<string>.Text);
         cmbStoryboardDisplay.ValueMember = nameof(ComboOption<string>.Value);
@@ -205,6 +241,9 @@ public partial class SeriesEditorForm : Form
             cmbStoryboardDisplay.SelectedValue = Series.StoryboardDisplaySeparate;
             // 開始日の確かさも初期状態（日付まで確か）に戻す。
             cmbStartDatePrecision.SelectedValue = Series.StartDatePrecisionDay;
+            // メインスタッフの欄とエピソードの札の欄も空にする。
+            _keyStaffEditor.Clear();
+            _episodeStaffEditor.Clear();
             return;
         }
 
@@ -274,6 +313,20 @@ public partial class SeriesEditorForm : Form
         chkFilmCjMark.Checked = _current.FilmCjMark;
         // 絵コンテと演出の出し方の読み込み。
         cmbStoryboardDisplay.SelectedValue = _current.StoryboardDisplay;
+        // メインスタッフの役職と、エピソードの札の役職の読み込み。
+        LoadStaffRoles(_current.SeriesId);
+    }
+
+    /// <summary>
+    /// 指定作品のメインスタッフの役職とエピソードの札の役職を読み込んで、それぞれの欄に並べる。
+    /// 読み込み中に別の作品を選んだら結果を捨てる。列がまだ組まれていなければ（役職マスタの読み込み前）何もしない。
+    /// </summary>
+    private void LoadStaffRoles(int seriesId)
+    {
+        _ = _keyStaffEditor.LoadAsync(async () =>
+            (await _keyStaffRolesRepo.GetBySeriesAsync(seriesId)).Select(r => (r.RoleCode, r.BadgeColor)));
+        _ = _episodeStaffEditor.LoadAsync(async () =>
+            (await _episodeStaffRolesRepo.GetBySeriesAsync(seriesId)).Select(r => (r.RoleCode, r.BadgeColor)));
     }
 
     /// <summary>右ペインの編集内容を Series モデルに反映し、DB へ UPDATE する。</summary>
@@ -341,9 +394,26 @@ public partial class SeriesEditorForm : Form
             MessageBox.Show("スラッグは必須です。", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
+        // メインスタッフの欄とエピソードの札の欄（書き込む前に全部の行を確かめる）
+        var (keyStaffRows, keyStaffError) = _keyStaffEditor.Collect();
+        if (keyStaffRows is null)
+        {
+            MessageBox.Show(keyStaffError, "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        var (episodeStaffRows, episodeStaffError) = _episodeStaffEditor.Collect();
+        if (episodeStaffRows is null)
+        {
+            MessageBox.Show(episodeStaffError, "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
 
-        // 保存
+        // 保存（作品の行と、メインスタッフの役職・エピソードの札の役職の置き換え）
         await _seriesRepo.UpdateAsync(_current);
+        await _keyStaffRolesRepo.ReplaceForSeriesAsync(_current.SeriesId,
+            keyStaffRows.Select(r => new SeriesKeyStaffRole { RoleCode = r.RoleCode, BadgeColor = r.BadgeColor }).ToList(), AuditUser);
+        await _episodeStaffRolesRepo.ReplaceForSeriesAsync(_current.SeriesId,
+            episodeStaffRows.Select(r => new SeriesEpisodeStaffRole { RoleCode = r.RoleCode, BadgeColor = r.BadgeColor }).ToList(), AuditUser);
 
         // リストの表示文字（タイトル）が変化する可能性があるので再バインド
         var idx = lstSeries.SelectedIndex;

@@ -30,6 +30,7 @@ public sealed class CreditCardRolesRepository : RepositoryBase
           join_separator      AS JoinSeparator,
           hide_role_label     AS HideRoleLabel,
           not_on_screen       AS NotOnScreen,
+          role_label_not_on_screen AS RoleLabelNotOnScreen,
           theme_song_seq      AS ThemeSongSeq,
           notes               AS Notes,
           created_at          AS CreatedAt,
@@ -92,6 +93,7 @@ public sealed class CreditCardRolesRepository : RepositoryBase
               r.join_separator      AS JoinSeparator,
               r.hide_role_label     AS HideRoleLabel,
               r.not_on_screen       AS NotOnScreen,
+              r.role_label_not_on_screen AS RoleLabelNotOnScreen,
               r.theme_song_seq      AS ThemeSongSeq,
               r.notes               AS Notes,
               r.created_at          AS CreatedAt,
@@ -112,9 +114,9 @@ public sealed class CreditCardRolesRepository : RepositoryBase
     {
         const string sqlRole = """
             INSERT INTO credit_card_roles
-              (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, not_on_screen, theme_song_seq, notes, created_by, updated_by)
+              (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, not_on_screen, role_label_not_on_screen, theme_song_seq, notes, created_by, updated_by)
             VALUES
-              (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @NotOnScreen, @ThemeSongSeq, @Notes, @CreatedBy, @UpdatedBy);
+              (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @NotOnScreen, @RoleLabelNotOnScreen, @ThemeSongSeq, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         // col_count のみ既定 1 で投入する（row_count 列は持たない設計）。
@@ -149,9 +151,9 @@ public sealed class CreditCardRolesRepository : RepositoryBase
     {
         const string sql = """
             INSERT INTO credit_card_roles
-              (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, not_on_screen, theme_song_seq, notes, created_by, updated_by)
+              (card_group_id, role_code, order_in_group, affiliation_layout, role_label_text, role_misprint_text, join_previous, join_separator, hide_role_label, not_on_screen, role_label_not_on_screen, theme_song_seq, notes, created_by, updated_by)
             VALUES
-              (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @NotOnScreen, @ThemeSongSeq, @Notes, @CreatedBy, @UpdatedBy);
+              (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @RoleLabelText, @RoleMisprintText, @JoinPrevious, @JoinSeparator, @HideRoleLabel, @NotOnScreen, @RoleLabelNotOnScreen, @ThemeSongSeq, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await ExecuteScalarAsync<int>(sql, role, ct).ConfigureAwait(false);
@@ -172,6 +174,7 @@ public sealed class CreditCardRolesRepository : RepositoryBase
               join_separator     = @JoinSeparator,
               hide_role_label    = @HideRoleLabel,
               not_on_screen      = @NotOnScreen,
+              role_label_not_on_screen = @RoleLabelNotOnScreen,
               theme_song_seq     = @ThemeSongSeq,
               notes              = @Notes,
               updated_by         = @UpdatedBy

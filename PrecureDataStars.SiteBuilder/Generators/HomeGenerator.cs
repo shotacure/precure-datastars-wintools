@@ -145,8 +145,9 @@ public sealed class HomeGenerator
         var upcomingProducts = BuildUpcomingProducts(allProducts, productKindMap, discsByProductCatalogNo, _ctx.SeriesById, amazonTag, todayDate);
         var latestBooks = BuildLatestBooks(allBooks, primaryGenreLabelByBook, amazonTag, todayDate);
         var upcomingBooks = BuildUpcomingBooks(allBooks, primaryGenreLabelByBook, amazonTag, todayDate);
-        // エピソード数は、作った時点で放送済みの話だけを数える（「第N話時点の情報を表示しています」・充足率の分母とそろえる）。
-        var dbStats = await BuildDbStatsAsync(allEpisodes.Count(x => x.Episode.OnAirAt <= buildAt), ct).ConfigureAwait(false);
+        // エピソード数は、作った時点で放送済みの本線の TV の話だけを数える（「第N話時点の情報を表示しています」・充足率の分母・
+        // /episodes/ の話数とそろえる）。スピンオフの話は最新話・今後の放送には出すが、この数には入れない。
+        var dbStats = await BuildDbStatsAsync(allEpisodes.Count(x => x.Episode.OnAirAt <= buildAt && _ctx.IsMainlineTvSeries(x.Series.SeriesId)), ct).ConfigureAwait(false);
 
         // キャラクター・クリエイターのデータ充足率（暫定表記。テスト・本番とも表示）。
         var dataSufficiencyLabel = await BuildDataSufficiencyLabelAsync(ct).ConfigureAwait(false);
@@ -163,6 +164,7 @@ public sealed class HomeGenerator
         var content = new HomeContentModel
         {
             SiteName = _ctx.Config.SiteName,
+            HasShopItems = _ctx.ShopSeriesIds.Count > 0,
             SiteBrandLabel = _ctx.Config.SiteBrandLabel,
             // 最終ビルド表記は「『○○プリキュア』第n話(YYYY.M.D)時点」
             BuildLabel = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
@@ -192,27 +194,36 @@ public sealed class HomeGenerator
             // サイト名「プリキュアデータベース「precure-datastars」」が検索語を含むので、前置きは付けない
             // （PageTitle が空なら <title> は SiteBrandLabel だけで組まれる）。
             PageTitle = "",
-            MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優さん、キャラクターまで。「好き」を深掘りするための情報を、ファンの手で集めた個人運営の非公式データベースです。",
+            // 説明文はタグライン（見出しの下の「プリキュアまるごとデータベース。」）そのもの。
+            MetaDescription = "プリキュアまるごとデータベース。",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",
             JsonLd = jsonLd,
-            // ホームのカードは収録規模そのものを名刺にする。作品数・話数・楽曲数を数として並べ、
+            // ホームのカードは収録規模そのものを名刺にする。作品数・話数・楽曲数などを数として大きく並べ、
             // 「どれだけのデータが載っているサイトか」がシェア先で一目で伝わる状態にする。
-            // 見出しはサイト名ではなくタグラインを置く（サイト名はカード下部に常時出るため重複させない）。
-            // ホームのカードはサイトトップのヒーローをそのまま持ち込む。
-            // 見出しはサイト名（ヒーローの h1 と同じ）、その下にタグライン、
-            // 数はトップの統計タイルと同じ並び・同じ単位で置く。
             // ホームのカードはサイトトップのヒーローをそのまま持ち込む。
             // ヘッダのワードマークと同じく、肩書き（「プリキュアデータベース」）を小さく前に添え、固有名詞（「precure-datastars」）を
-            // 見出しにする。その下にタグライン、いずれもブランド書体の濃ピンク（.hero.hero-gradient と同値）。
-            // 数を誇る代わりに、タグライン「プリキュアまるごとデータベース。」をマティスえれがんとの斜体で大きく組む。
+            // 見出しにする。いずれもブランド書体の濃ピンク（.hero.hero-gradient と同値）。
+            // 見出しのすぐ下に、タグライン「プリキュアまるごとデータベース。」をマティスえれがんとで小さく添える。
+            // 数はトップの統計タイルから、作品（TV・映画）とエピソードを 1 段目、プリキュア・キャラクター・歌を 2 段目、
+            // クリエイター（人物と企業・団体を分けて）を 3 段目に置く。
             // ホームには透かしを置かない（サイト名そのものが主役で、添える属性が無い）。
             OgCard = new OgCardSpec(Kicker: _ctx.Config.SiteNameJa, Title: _ctx.Config.SiteName)
             {
                 HeroVoice = true,
-                // 2 行に割って、幅いっぱいまで大きく組む。
-                Statement = "プリキュアまるごと\nデータベース。",
-                StatementFontFamily = "FOT-マティスえれがんと Pro EB"
+                Statement = "プリキュアまるごとデータベース。",
+                StatementFontFamily = "FOT-マティスえれがんと Pro EB",
+                Badges = new[]
+                {
+                    new OgCardBadge("TV", $"{dbStats.TvSeriesCount}作"),
+                    new OgCardBadge("映画", $"{dbStats.MovieSeriesCount}作"),
+                    new OgCardBadge("エピソード", $"{dbStats.EpisodeCount}話"),
+                    new OgCardBadge("プリキュア", $"{dbStats.PrecuresCount}人") { NewLine = true },
+                    new OgCardBadge("キャラクター", $"{dbStats.CharactersCount}人"),
+                    new OgCardBadge("歌", $"{dbStats.SongWorksCount}曲"),
+                    new OgCardBadge("クリエイター", $"{dbStats.PersonsCount}人") { NewLine = true },
+                    new OgCardBadge("", $"{dbStats.CompaniesCount}団体")
+                }
             }
         };
 
@@ -220,9 +231,8 @@ public sealed class HomeGenerator
         _ctx.Logger.Success("/");
     }
 
-    /// <summary>サイト全体を代表する説明文。WebSite / Organization の description に共用する。</summary>
-    private const string SiteDescription =
-        "歴代プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断的に閲覧できる、個人運営の非公式ファンデータベースです。";
+    /// <summary>サイト全体を代表する説明文。WebSite / Organization の description に共用する（ホームのタグラインと同じ）。</summary>
+    private const string SiteDescription = "プリキュアまるごとデータベース。";
 
     /// <summary>運営者の公式アカウント（Schema.org の sameAs に載せる）。</summary>
     private const string OperatorXUrl = "https://x.com/shota_";
@@ -355,6 +365,7 @@ WHERE s.kind_code = 'TV' AND e.is_deleted = 0 AND e.total_ep_no IS NOT NULL
     /// </summary>
     private async Task<string> BuildBroadcastFormatLabelAsync(CancellationToken ct)
     {
+        // 本線の TV の話だけを数える（スピンオフは本放送フォーマットの調査の対象外）。
         // パートが入力されている話の総数（分母）と、そのうち「【本放送未確認】」マーカーを
         // 含むパートを 1 つでも持つ話（＝調査中表記が出る話）の数を 1 クエリで集計する。
         // BIGINT で受けるため SIGNED に明示キャストする。
@@ -366,6 +377,7 @@ SELECT
                 THEN 1 ELSE 0 END) AS SIGNED) AS UnderInvestigation
 FROM episodes e
 WHERE e.is_deleted = 0
+  AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
   AND EXISTS(SELECT 1 FROM episode_parts p WHERE p.episode_id = e.episode_id);";
 
         // 調査中（【本放送未確認】を含む）話のうち、放送日が最も古い 1 件と最も新しい 1 件。
@@ -373,6 +385,7 @@ WHERE e.is_deleted = 0
 SELECT s.title AS Title, e.series_ep_no AS Ep, e.on_air_at AS OnAirAt
 FROM episodes e JOIN series s ON s.series_id = e.series_id
 WHERE e.is_deleted = 0
+  AND s.kind_code = 'TV'
   AND EXISTS(SELECT 1 FROM episode_parts p
              WHERE p.episode_id = e.episode_id AND p.notes LIKE '%【本放送未確認】%')
 ORDER BY e.on_air_at {0}, e.episode_id {0}
@@ -387,6 +400,7 @@ SELECT
                 THEN 1 ELSE 0 END) AS SIGNED) AS UnderInvestigation
 FROM episodes e
 WHERE e.is_deleted = 0
+  AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
   AND e.on_air_at BETWEEN @from AND @to
   AND EXISTS(SELECT 1 FROM episode_parts p WHERE p.episode_id = e.episode_id);";
 
@@ -484,7 +498,7 @@ WHERE e.is_deleted = 0
     /// シリーズ単位のエピソード群（並び順は呼び出し側で確定済み）から
     /// 1 つの <see cref="HomeEpisodeSection"/> を組み立てる共通ヘルパ。
     /// 各エピソードに <see cref="_episodeStaffByIdCache"/> のスタッフサマリを引き当て、
-    /// /episodes/ と同じ 5 役職バッジ段つきの行を作る。日付は密表示用に
+    /// /episodes/ と同じ各話のスタッフの札の段つきの行を作る。日付は密表示用に
     /// 「2024.2.4」形式（<see cref="JpDateFormat.DotDate"/>）へ統一する。
     /// </summary>
     private HomeEpisodeSection BuildHomeEpisodeSection(IReadOnlyList<EpisodeWithSeries> rowsInOrder)
@@ -493,7 +507,7 @@ WHERE e.is_deleted = 0
         var series = first.Series;
         var rows = rowsInOrder.Select(x =>
         {
-            // クレジット未登録などでキャッシュに無いエピソードは全フィールド空のサマリ。
+            // クレジット未登録などでキャッシュに無いエピソードは札の無いサマリ。
             var staff = _episodeStaffByIdCache.TryGetValue(x.Episode.EpisodeId, out var ss)
                 ? ss
                 : new EpisodeStaffSummary();
@@ -506,14 +520,9 @@ WHERE e.is_deleted = 0
                 // 未解禁（前話の予告が未放送）ならガード span で包む。
                 // サブタイトル未確定話は雑誌掲載状態に応じたプレースホルダ表示になる。
                 TitleDisplayHtml = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(x.Episode.TitleRichHtml, x.Episode.TitleText, revealAt, x.Episode.MagazineSubtitleStatus),
-                OnAirDate = JpDateFormat.DotDate(x.Episode.OnAirAt),
+                OnAirDate = JpDateFormat.BroadcastDotDate(x.Episode.OnAirAt),
                 EpisodeUrl = PathUtil.EpisodeUrl(series.Slug, x.Episode.SeriesEpNo),
-                Screenplay = staff.Screenplay,
-                Storyboard = staff.Storyboard,
-                EpisodeDirector = staff.EpisodeDirector,
-                AnimationDirector = staff.AnimationDirector,
-                ArtDirector = staff.ArtDirector,
-                StoryboardDirectorMerged = staff.StoryboardDirectorMerged
+                StaffBadges = staff.Badges
             };
         }).ToList();
 
@@ -522,6 +531,7 @@ WHERE e.is_deleted = 0
             SeriesSlug = series.Slug,
             SeriesTitle = series.Title,
             SeriesStartYearLabel = series.StartDate.Year.ToString(),
+            IsOtona = SeriesClassifier.IsOtona(series),
             // セクション並べ替え用キー：呼び出し側で並び確定済みの先頭行の放送日。
             // 「最新」では降順グループの先頭=そのシリーズ最大放送日、
             // 「今後」では昇順グループの先頭=そのシリーズ最小放送日になる。
@@ -685,7 +695,9 @@ WHERE e.is_deleted = 0
         int companiesCount = (await companiesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
         int charactersCount = (await charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
         int precuresCount = (await precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
-        int songsCount = (await songRecordingsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
+        var songRecordings = await songRecordingsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        int songsCount = songRecordings.Count;
+        int songWorksCount = songRecordings.Select(r => r.SongId).Distinct().Count();
         int productsCount = (await productsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
 
         // bgm_cues / discs は Repository に GetAllAsync が無いため SQL で直接 COUNT(*)。
@@ -713,11 +725,7 @@ WHERE e.is_deleted = 0
         int movieSeriesCount = _ctx.Series.Count(s =>
             string.Equals(s.KindCode, "MOVIE",  StringComparison.Ordinal)
          || string.Equals(s.KindCode, "SPRING", StringComparison.Ordinal));
-        int spinOffSeriesCount = _ctx.Series.Count(s =>
-            string.Equals(s.KindCode, "OTONA",    StringComparison.Ordinal)
-         || string.Equals(s.KindCode, "SHORT",    StringComparison.Ordinal)
-         || string.Equals(s.KindCode, "EVENT",    StringComparison.Ordinal)
-         || string.Equals(s.KindCode, "SPIN-OFF", StringComparison.Ordinal));
+        int spinOffSeriesCount = _ctx.Series.Count(SeriesClassifier.IsSpinOff);
 
         return new DbStatsModel
         {
@@ -728,6 +736,7 @@ WHERE e.is_deleted = 0
             PrecuresCount = precuresCount,
             CharactersCount = charactersCount,
             SongsCount = songsCount,
+            SongWorksCount = songWorksCount,
             BgmsCount = bgmsCount,
             // 「N 点 M 枚」をホームの DB 統計セル内で他の統計セル（曲・劇伴 等）と同じ「数値＋ラベル」
             // ペアの並びとして見せたいので、点数（products）と枚数（discs）はそれぞれ独立した
@@ -780,6 +789,8 @@ WHERE e.is_deleted = 0
                         // 1 話／最終話のみフラグを立てる（false のときは JSON へ書き出さない）。
                         ef = e.IsFirstEpisode ? (bool?)true : null,
                         el = e.IsLastEpisode ? (bool?)true : null,
+                        // 大人向けスピンオフの話だけ印を立てる（チップは 🌙、カードは作品名の前に 🌙）。
+                        o = e.IsOtona ? (bool?)true : null,
                         // サブタイトル解禁時刻（未解禁の話のみ）。無ければ JSON へ書き出さない。
                         ra = string.IsNullOrEmpty(e.RevealAtIso) ? null : e.RevealAtIso
                     });
@@ -828,7 +839,11 @@ WHERE e.is_deleted = 0
                         pn = e.PersonName,
                         pu = e.PersonUrl,
                         // by は「今日の記念日」で年齢を添えるための生年。亡くなった人には年齢を添えないので出さない。
-                        by = e.IsDeceased ? null : e.BirthYear
+                        by = e.IsDeceased ? null : e.BirthYear,
+                        // pt は人物の段（0 = プリキュア役の声優さん、1 = メインスタッフ、2 = そのほか）、pc は本編のクレジット回数。
+                        // カレンダーと今日の記念日の並びに使う。
+                        pt = e.PersonTier,
+                        pc = e.PersonCreditCount
                     });
                     break;
             }
@@ -955,6 +970,8 @@ WHERE e.is_deleted = 0
     private sealed class HomeContentModel
     {
         public string SiteName { get; set; } = "";
+        /// <summary>販売中の商品の枠の置き場を出すか（出す設定の商品が 1 件でもあるとき）。</summary>
+        public bool HasShopItems { get; set; }
         /// <summary>可視ブランド表記（例: プリキュアデータベース「precure-datastars」）。hero の h1 に出す。</summary>
         public string SiteBrandLabel { get; set; } = "";
         /// <summary>最終ビルド表記の表示文字列（導入）。 「『○○プリキュア』第n話(YYYY.M.D)時点」のような 完成形を C# 側で組み立てて流し込む。</summary>
@@ -987,12 +1004,14 @@ WHERE e.is_deleted = 0
         public string SeriesTitle { get; set; } = "";
         /// <summary>シリーズ開始年の西暦 4 桁（見出しに薄色括弧で添える）。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
+        /// <summary>大人向けスピンオフ（種別 OTONA）の作品か。見出しの作品名の前に 🌙 を添える。</summary>
+        public bool IsOtona { get; set; }
         /// <summary>セクション（シリーズ）の並べ替え用キー。呼び出し側で並び確定済みの 先頭エピソード放送日の Ticks。最新=降順／今後=昇順でそのまま使う。 テンプレには出さない内部用。</summary>
         public long SortKeyTicks { get; set; }
         public IReadOnlyList<HomeEpisodeRow> Episodes { get; set; } = Array.Empty<HomeEpisodeRow>();
     }
 
-    /// <summary>ホームのエピソードセクション内 1 行。/episodes/ の EpisodesIndexRow と同等の 表示項目（第N話・放送日・サブタイトル・5 役職スタッフ HTML 断片）を持つ。</summary>
+    /// <summary>ホームのエピソードセクション内 1 行。/episodes/ の EpisodesIndexRow と同等の 表示項目（第N話・放送日・サブタイトル・各話のスタッフの札）を持つ。</summary>
     private sealed class HomeEpisodeRow
     {
         public int SeriesEpNo { get; set; }
@@ -1001,13 +1020,8 @@ WHERE e.is_deleted = 0
         /// <summary>放送日（密表示用「2024.2.4」形式に統一）。</summary>
         public string OnAirDate { get; set; } = "";
         public string EpisodeUrl { get; set; } = "";
-        public string Screenplay { get; set; } = "";
-        public string Storyboard { get; set; } = "";
-        public string EpisodeDirector { get; set; } = "";
-        public string AnimationDirector { get; set; } = "";
-        public string ArtDirector { get; set; } = "";
-        /// <summary>絵コンテ＝演出が同一人物のとき true（テンプレ側で 2 バッジ統合）。</summary>
-        public bool StoryboardDirectorMerged { get; set; }
+        /// <summary>その回の札（<see cref="EpisodeStaffSummary.Badges"/>。作品の表の行の順・行の色）。絵コンテ＝演出が同一人物の回は 2 バッジ並びの 1 つの札。</summary>
+        public IReadOnlyList<EpisodeStaffBadge> StaffBadges { get; set; } = Array.Empty<EpisodeStaffBadge>();
     }
 
     /// <summary>ホームのカードグリッド用 1 商品ぶんの表示 DTO。 単純な日付・タイトルに加え、ジャケット画像・購入導線（Amazon CD/デジタル）・ シリーズ表記・税込価格・状態バッジ（「予約受付中」「発売中」「本日発売」）と 「発売まで N 日」表示を計算済みの文字列として保持する。 ビルド時点での状態を焼き込む（ホームは毎日ビルド前提）。</summary>
@@ -1080,6 +1094,8 @@ WHERE e.is_deleted = 0
         public int PrecuresCount { get; set; }
         public int CharactersCount { get; set; }
         public int SongsCount { get; set; }
+        /// <summary>歌の曲数（録音を 1 つ以上持つ <c>songs</c> の数。<see cref="SongsCount"/> は録音＝バージョンの数）。OGP カードの「歌 N曲」に使う。</summary>
+        public int SongWorksCount { get; set; }
         public int BgmsCount { get; set; }
         /// <summary>音楽商品の点数（<c>products</c> 件数）。ホーム DB 統計セルでは「点」ラベルと組で表示する。</summary>
         public int MusicProductsCount { get; set; }
@@ -1114,6 +1130,7 @@ public sealed class AboutGenerator
         var layout = new LayoutModel
         {
             PageTitle = "このサイトについて",
+            OgLead = "運営者のこと、データの集め方と扱い方の方針、権利表記を説明しています。",
             MetaDescription = $"{_ctx.Config.SiteBrandLabel}について。どんなサイトか、運営者とプリキュアでの活動、データの扱い方の方針、権利表記を説明しています。",
             // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
             SuppressShareButtons = true,

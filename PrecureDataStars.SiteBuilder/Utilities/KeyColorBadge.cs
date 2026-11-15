@@ -1,3 +1,5 @@
+using PrecureDataStars.Data.Text;
+
 namespace PrecureDataStars.SiteBuilder.Utilities;
 
 /// <summary>キーカラー付きバッジ（プリキュアバッジ等）の配色解決ヘルパー。 SeriesGenerator / HomeGenerator が同一実装で個別に保持していた計算を単一定義へ集約したもの。</summary>
@@ -11,8 +13,10 @@ public static class KeyColorBadge
     /// ボーダーは文字色側に寄せた半透明色で、地色がページ背景に近いときでも輪郭を保つ。
     /// 入力が <c>#RRGGBB</c> 形式でなければ 3 値とも空文字を返し、呼び出し側で
     /// インライン色を付けない（CSS 既定の淡色／中立バッジにフォールバックする）。
+    /// グラデーション（<c>precures.key_color_gradient</c>）が読める値なら、地色はその左から右への
+    /// <c>linear-gradient</c>（CSS の <c>background</c> にそのまま入る）にし、文字色・ボーダー色は 1 色のキーカラーから決める。
     /// </summary>
-    public static (string Background, string Text, string Border) Resolve(string keyColor)
+    public static (string Background, string Text, string Border) Resolve(string keyColor, string? gradient = null)
     {
         if (string.IsNullOrEmpty(keyColor)
             || keyColor.Length != 7
@@ -51,6 +55,22 @@ public static class KeyColorBadge
         // ボーダーは文字色側へ寄せた半透明。地色がページ地と近くても輪郭が出る。
         string border = darkText ? "rgba(0, 0, 0, 0.22)" : "rgba(255, 255, 255, 0.30)";
 
-        return (keyColor, text, border);
+        string gradientCss = KeyColorGradient.ToCssLinearGradient(gradient);
+        return (gradientCss != "" ? gradientCss : keyColor, text, border);
+    }
+
+    /// <summary>
+    /// 一覧の行頭に置くキーカラーの正方形の地（CSS の <c>background</c> にそのまま入る値）。
+    /// グラデーション（<c>precures.key_color_gradient</c>）が読める値なら左上から右下への斜めの <c>linear-gradient</c>、
+    /// 無ければ 1 色のキーカラー（<c>#RRGGBB</c>）。どちらも無いか形式が違えば空文字（テンプレは縁取りだけの正方形にする）。
+    /// </summary>
+    public static string SwatchBackground(string? keyColor, string? gradient)
+    {
+        if (KeyColorGradient.TryParse(gradient, out _))
+            return $"linear-gradient(to bottom right, {gradient})";
+        if (keyColor is { Length: 7 } && keyColor[0] == '#'
+            && keyColor.AsSpan(1).IndexOfAnyExcept("0123456789ABCDEFabcdef") < 0)
+            return keyColor;
+        return "";
     }
 }

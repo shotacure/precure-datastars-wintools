@@ -14,7 +14,7 @@ namespace PrecureDataStars.Data.Models;
 /// 役職識別を roles マスタに統一する方針に基づき、任意の roles.role_code を受け入れる。
 /// 主題歌系の典型値は LYRICS / COMPOSITION / ARRANGEMENT。
 /// </summary>
-public sealed class SongCredit
+public sealed class SongCredit : IAffiliatedPersonCredit
 {
     /// <summary>対象曲 ID（→ songs.song_id）。</summary>
     public int SongId { get; set; }
@@ -27,6 +27,9 @@ public sealed class SongCredit
 
     /// <summary>名義参照（→ person_aliases.alias_id）。</summary>
     public int PersonAliasId { get; set; }
+
+    /// <summary>所属を添える作家連名の共通の形では名義を null 許容で渡す（歌の作家連名は常に名義を持つ）。</summary>
+    int? IAffiliatedPersonCredit.PersonAliasId => PersonAliasId;
 
     /// <summary>
     /// 盤に印刷された役職の表記（「原詞」など）。役職名（roles.name_ja）と違うときだけ入れる。
@@ -66,7 +69,7 @@ public sealed class SongCredit
     public string? UpdatedBy { get; set; }
 }
 
-/// <summary>song_credits.affiliation_display の値（所属の出し方）。</summary>
+/// <summary>song_credits / bgm_cue_credits の affiliation_display の値（所属の出し方）。</summary>
 public static class SongCreditAffiliationDisplay
 {
     /// <summary>名義のあとに所属を添える（「藤本 記子（Nostalgic Orchestra）」。既定）。</summary>
@@ -90,6 +93,18 @@ public static class SongCreditRoles
     public const string MedleyArrangement = "MEDLEY_ARRANGEMENT";
     /// <summary>英訳（日本語の詞を英語に訳した人。画面では「英訳詞」と出ることがある）。</summary>
     public const string LyricsTranslation = "LYRICS_TRANSLATION";
+    /// <summary>ストリングス編曲。</summary>
+    public const string StringsArrangement = "STRINGS_ARRANGEMENT";
+    /// <summary>オーケストラ編曲。</summary>
+    public const string OrchestraArrangement = "ORCHESTRA_ARRANGEMENT";
+    /// <summary>ブラスアレンジ（管楽器の編曲。画面では「ブラスアレンジ」と出る）。</summary>
+    public const string BrassArrangement = "BRASS_ARRANGEMENT";
+
+    /// <summary>
+    /// 編曲に加えて曲が持つことのある編曲の役職。曲のページの基本情報では編曲の後ろにこの順で並べ、
+    /// 主題歌のカードの役職テンプレでは <c>{SONG_CREDIT:code=…}</c> で名前を出せる。
+    /// </summary>
+    public static readonly IReadOnlyList<string> ExtraArrangements = new[] { StringsArrangement, OrchestraArrangement, BrassArrangement };
 
     /// <summary>
     /// 曲の連名行から、指定役職の盤の表記（<see cref="SongCredit.RoleLabelText"/>）を返す。

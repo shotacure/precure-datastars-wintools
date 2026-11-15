@@ -21,6 +21,7 @@
   あわせて、リポジトリに入れていないローカル専用ファイル（db/data-fixes/ の SQL、各プロジェクトの App.config、
   CLAUDE.md、docs/*.md、.claude/settings.local.json、Claude Code のメモリ）を 1 つの ZIP
   （local-files_YYYYMMDD-HHmm_内容ハッシュ.zip）にまとめる。内容（パス・サイズ・更新時刻）が前回と同じなら作らない。
+  db/data-fixes/ の画像（作業フォルダの切り抜き・拡大など。元の画像から作り直せる）は含めない。
 
   接続情報は MySQL のオプションファイル（既定 %APPDATA%\precure-datastars\backup.cnf）から読む。
   スクリプトにも引数にもパスワードを書かない。ファイルの形と backup_ro に要る権限は README
@@ -205,10 +206,15 @@ function Get-LocalOnlyFiles {
         $rel = [System.IO.Path]::GetRelativePath($repoRoot, $File.FullName) -replace '\\', '/'
         $list.Add([pscustomobject]@{ File = $File.FullName; Entry = "repo/$rel"; Length = $File.Length; LastWrite = $File.LastWriteTimeUtc })
     }
-    # データ修正 SQL（db/data-fixes/。.git/info/exclude で除外している）
+    # データ修正 SQL（db/data-fixes/。.git/info/exclude で除外している）。
+    # 作業フォルダの画像（クレジット画像の切り抜き・拡大など）は元の画像から作り直せるうえ、ZIP の大半を占めて
+    # 書き込みのたびに大きな ZIP を増やすので含めない。
+    $imageExtensions = @('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tif', '.tiff')
     $dir = Join-Path $repoRoot 'db\data-fixes'
     if (Test-Path -LiteralPath $dir) {
-        Get-ChildItem -LiteralPath $dir -Recurse -File | ForEach-Object { & $addRepoFile $_ }
+        Get-ChildItem -LiteralPath $dir -Recurse -File |
+            Where-Object { $imageExtensions -notcontains $_.Extension.ToLowerInvariant() } |
+            ForEach-Object { & $addRepoFile $_ }
     }
     # 接続文字列や API キーを持つ各プロジェクトの App.config（.gitignore で除外している）
     Get-ChildItem -LiteralPath $repoRoot -Directory -Filter 'PrecureDataStars.*' | ForEach-Object {

@@ -53,16 +53,52 @@ public sealed class CreditBlockEntry
     public string? PersonMisprintText { get; set; }
 
     /// <summary>
+    /// 画面に出た人物名の表記揺れ（DB 列名 person_display_text）。PERSON / CHARACTER_VOICE で使う。
+    /// 名義（<see cref="PersonAliasId"/>）とは空白・中黒・記号の有無や位置だけが違う画面の表記を、名義を増やさずに持つ。
+    /// 誤記ではないので印を付けず、表示は名義の名前の代わりにこの字を出す（リンク先は名義の人物のまま）。NULL は名義の名前のまま。
+    /// </summary>
+    public string? PersonDisplayText { get; set; }
+
+    /// <summary>
     /// クレジット時の誤記（キャラクター側）。CHARACTER_VOICE のときのみ意味を持つ。
     /// 用法は <see cref="PersonMisprintText"/> と同じ（NULL = 誤記なし、マスタを汚さない補助情報）。
     /// </summary>
     public string? CharacterMisprintText { get; set; }
 
     /// <summary>
+    /// 画面の組みどおりの役名（DB 列名 character_display_text）。CHARACTER_VOICE のときのみ意味を持つ。
+    /// 画面で 1 つの役名が 2 行以上に折れて出るとき、その役名を改行（LF）ごと持ち、表示は改行の位置で折って描く。
+    /// 画面の役名が名義の頭を省いた後ろの部分だけのとき（双子の姓を省いた「みつき」＝名義「菓彩みつき」など）も、画面の字を持つ。
+    /// キャラは 1 つのまま。使える字は <see cref="IsValidCharacterDisplayText"/>。NULL は名義の名前のまま描く。
+    /// </summary>
+    public string? CharacterDisplayText { get; set; }
+
+    /// <summary>
+    /// <paramref name="displayText"/> が名義 <paramref name="characterName"/> の画面の役名として使えるか。
+    /// 改行を抜いた字が、改行を含んで名義と同じ（役名が画面で折れている）か、名義の後ろの部分で名義より短い（頭の姓などを画面で省いている）とき true。
+    /// </summary>
+    public static bool IsValidCharacterDisplayText(string displayText, string characterName)
+    {
+        string flat = displayText.Replace("\r", string.Empty).Replace("\n", string.Empty);
+        if (flat.Length == 0) return false;
+        if (flat == characterName) return displayText.Contains('\n');
+        return flat.Length < characterName.Length && characterName.EndsWith(flat, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// クレジット時の誤記（企業屋号側）。COMPANY / LOGO で使う。
     /// 用法は <see cref="PersonMisprintText"/> と同じ。
     /// </summary>
     public string? CompanyMisprintText { get; set; }
+
+    /// <summary>
+    /// 画面に出た企業名の表記揺れ（DB 列名 company_display_text）。COMPANY で使う。
+    /// 名義（<see cref="CompanyAliasId"/>）とは空白・中黒・記号の有無や位置だけが違う画面の表記を、名義を増やさずに持つ
+    /// （名義「BUG FILMS」に対する画面の「BUGFILMS」など）。
+    /// 誤記ではないので印を付けず、表示は名義の名前の代わりにこの字を出す（リンク先は名義の企業のまま）。NULL は名義の名前のまま。
+    /// 用法は <see cref="PersonDisplayText"/> と同じ。
+    /// </summary>
+    public string? CompanyDisplayText { get; set; }
 
     /// <summary>
     /// 人物名の代わりに画面に出た伏せ字表記（例：声優を伏せた「謎の少女　？」の「？」）。PERSON / CHARACTER_VOICE で使う。
@@ -116,6 +152,26 @@ public sealed class CreditBlockEntry
     /// <summary>true なら併記のエントリ（前後の字を含む）を小さい字で描く。</summary>
     public bool ParallelSmall { get; set; }
 
+    /// <summary>声の出演の役名の後ろに小さいカッコで出す、キャラのユニットの名義（person_aliases.alias_id。DB 列名 character_unit_alias_id）。
+    /// 「ヤギ（サファリア）」の「サファリア」。ユニットは persons 行を持たない名義で、person_alias_members にキャラと声優の組をメンバーとして持つ。
+    /// NULL は何も出さない。CHARACTER_VOICE のときのみ意味を持つ。</summary>
+    public int? CharacterUnitAliasId { get; set; }
+
+    /// <summary>
+    /// 同じ役名が続く行の、役名の出し方（DB 列名 same_character_layout。<see cref="CreditEntrySameLayouts"/> の値）。CHARACTER_VOICE のときのみ意味を持つ。
+    /// 値のある行は、同じブロックで直前の CHARACTER_VOICE の行（声の出演の表で直前の行）と同じ役名の続き（ひと続きの 2 行目以降）であることを示す。
+    /// ひと続きの先頭の行は NULL。出し方はひと続きの 2 行目の値で決まる：
+    /// REPEAT = 毎行書く / TOP = 先頭の行に 1 回だけ書き、続きの行は空ける / MIDDLE = ひと続きの行の真ん中に 1 回だけ書く。
+    /// NULL は「直前の行の続きではない」で、ふつうに描く。
+    /// </summary>
+    public string? SameCharacterLayout { get; set; }
+
+    /// <summary>
+    /// 同じ声優が続く行の、声優名の出し方（DB 列名 same_person_layout。<see cref="CreditEntrySameLayouts"/> の値）。CHARACTER_VOICE のときのみ意味を持つ。
+    /// 用法は <see cref="SameCharacterLayout"/> と同じで、声優の側を受け持つ。
+    /// </summary>
+    public string? SamePersonLayout { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 
@@ -125,4 +181,21 @@ public sealed class CreditBlockEntry
     public DateTime? UpdatedAt { get; set; }
     public string? CreatedBy { get; set; }
     public string? UpdatedBy { get; set; }
+}
+
+/// <summary>
+/// credit_block_entries.same_character_layout / same_person_layout の値（同じ役名・同じ声優が続く行の名前の出し方）。
+/// </summary>
+public static class CreditEntrySameLayouts
+{
+    /// <summary>ひと続きの行の毎行に名前を書く。</summary>
+    public const string Repeat = "REPEAT";
+    /// <summary>ひと続きの先頭の行に 1 回だけ名前を書き、続きの行は空ける。</summary>
+    public const string Top = "TOP";
+    /// <summary>ひと続きの行の真ん中に 1 回だけ名前を書く（升を縦に結合して上下の中央にそろえる）。</summary>
+    public const string Middle = "MIDDLE";
+
+    /// <summary>許される値か（大文字小文字を区別する。NULL は別に扱う）。</summary>
+    public static bool IsValid(string? value)
+        => value is Repeat or Top or Middle;
 }

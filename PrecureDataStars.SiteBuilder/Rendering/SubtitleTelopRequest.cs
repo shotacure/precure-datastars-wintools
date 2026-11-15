@@ -124,14 +124,15 @@ public sealed record SubtitleTelopRequest(
     }
 
     /// <summary>
-    /// 作り置きの鍵（16 進 32 桁）。描画コードの印（<see cref="OgRenderSourceStamp"/>。描き方のコードを変えると変わる）・
+    /// 作り置きの鍵（16 進 32 桁）。テロップの描画コードの印（<see cref="TelopRenderSourceStamp"/>。テロップの描き方のコードを変えると変わり、
+    /// OGP カードの組み方のコードを変えても変わらない）・
     /// 描き方の版（<see cref="OgCardRenderer.TelopRenderVersion"/>）・書体名・組み方・サブタイトルのどれかが変われば変わるので、
     /// 同じ鍵の画像があれば描き直さずに使ってよい。書体はファイルの中身ではなく名前で見る。
     /// </summary>
     public string CacheKey()
     {
         var material = string.Join('\n',
-            OgRenderSourceStamp.Value,
+            TelopRenderSourceStamp.Value,
             OgCardRenderer.TelopRenderVersion.ToString(System.Globalization.CultureInfo.InvariantCulture),
             FontFamily,
             JsonSerializer.Serialize(Profile),

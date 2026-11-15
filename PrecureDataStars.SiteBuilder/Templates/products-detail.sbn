@@ -1,6 +1,6 @@
 <article>
   <p class="muted">
-    <a href="/products/">歴代プリキュア音楽商品(CD/配信)</a>
+    <a href="/products/">歴代プリキュア音楽商品</a>
   </p>
 
   <h1>{{ Product.Title | html.escape }}</h1>
@@ -84,9 +84,6 @@
         {{## JAN（= 所属ディスクの MCN。複数ディスクで共通の前提）。CD を含む商品で取得済みのときのみ。 ##}}
         {{~ if Product.Jan != "" ~}}
         <tr><th>JAN</th><td><code>{{ Product.Jan | html.escape }}</code></td></tr>
-        {{~ end ~}}
-        {{~ if Product.Notes != "" ~}}
-        <tr><th>備考</th><td>{{ Product.Notes | html.escape }}</td></tr>
         {{~ end ~}}
       </tbody>
     </table>

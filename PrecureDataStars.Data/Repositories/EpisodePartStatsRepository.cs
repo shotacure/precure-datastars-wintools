@@ -40,7 +40,7 @@ public sealed class EpisodePartStatsRepository : RepositoryBase
               JOIN episode_parts AS ep
                 ON ep.episode_id = e.episode_id
                AND ep.part_type  = @partType
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND s.kind_code = 'TV'
               GROUP BY e.episode_id, s.title, s.slug, e.series_ep_no, e.title_text
             ),
             ranked AS (
@@ -86,7 +86,7 @@ public sealed class EpisodePartStatsRepository : RepositoryBase
               FROM episodes AS e
               JOIN series AS s ON s.series_id = e.series_id
               JOIN episode_parts AS ep ON ep.episode_id = e.episode_id
-              WHERE e.is_deleted = 0
+              WHERE e.is_deleted = 0 AND s.kind_code = 'TV'
             ),
             cm2 AS (
               SELECT EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
@@ -128,7 +128,7 @@ public sealed class EpisodePartStatsRepository : RepositoryBase
             JOIN part_types    pt ON pt.part_type   = ep.part_type
             JOIN episodes      e  ON e.episode_id   = ep.episode_id
             JOIN series        s  ON s.series_id    = e.series_id
-            WHERE e.is_deleted = 0 AND ep.oa_length IS NOT NULL
+            WHERE e.is_deleted = 0 AND s.kind_code = 'TV' AND ep.oa_length IS NOT NULL
             GROUP BY s.series_id, s.title, s.slug, pt.display_order, pt.part_type, pt.name_ja
             ORDER BY s.series_id, pt.display_order;
             """;
@@ -155,7 +155,7 @@ public sealed class EpisodePartStatsRepository : RepositoryBase
               e.on_air_date  AS OnAirDate
             FROM episodes e
             JOIN series s ON s.series_id = e.series_id
-            WHERE e.is_deleted = 0
+            WHERE e.is_deleted = 0 AND s.kind_code = 'TV'
               -- (a) 何かしらのパート情報を持っている（未放送回・パート情報未入力回を除外）
               AND EXISTS (
                 SELECT 1 FROM episode_parts ep_any

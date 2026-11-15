@@ -15,8 +15,13 @@ public sealed class CreditRoleBlocksRepository : RepositoryBase
           card_role_id               AS CardRoleId,
           block_seq                  AS BlockSeq,
           col_count                  AS ColCount,
+          continues_previous         AS ContinuesPrevious,
           leading_company_alias_id   AS LeadingCompanyAliasId,
           leading_company_not_on_screen AS LeadingCompanyNotOnScreen,
+          leading_company2_alias_id  AS LeadingCompany2AliasId,
+          leading_company_separator  AS LeadingCompanySeparator,
+          leading_company_suffix     AS LeadingCompanySuffix,
+          leading_text               AS LeadingText,
           heading_series_id          AS HeadingSeriesId,
           heading_text               AS HeadingText,
           heading_italic             AS HeadingItalic,
@@ -70,11 +75,13 @@ public sealed class CreditRoleBlocksRepository : RepositoryBase
     {
         const string sql = """
             INSERT INTO credit_role_blocks
-              (card_role_id, block_seq, col_count, leading_company_alias_id, leading_company_not_on_screen,
+              (card_role_id, block_seq, col_count, continues_previous, leading_company_alias_id, leading_company_not_on_screen,
+               leading_company2_alias_id, leading_company_separator, leading_company_suffix, leading_text,
                heading_series_id, heading_text, heading_italic,
                notes, created_by, updated_by)
             VALUES
-              (@CardRoleId, @BlockSeq, @ColCount, @LeadingCompanyAliasId, @LeadingCompanyNotOnScreen,
+              (@CardRoleId, @BlockSeq, @ColCount, @ContinuesPrevious, @LeadingCompanyAliasId, @LeadingCompanyNotOnScreen,
+               @LeadingCompany2AliasId, @LeadingCompanySeparator, @LeadingCompanySuffix, @LeadingText,
                @HeadingSeriesId, @HeadingText, @HeadingItalic,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
@@ -91,8 +98,13 @@ public sealed class CreditRoleBlocksRepository : RepositoryBase
               card_role_id              = @CardRoleId,
               block_seq                 = @BlockSeq,
               col_count                 = @ColCount,
+              continues_previous        = @ContinuesPrevious,
               leading_company_alias_id  = @LeadingCompanyAliasId,
               leading_company_not_on_screen = @LeadingCompanyNotOnScreen,
+              leading_company2_alias_id = @LeadingCompany2AliasId,
+              leading_company_separator = @LeadingCompanySeparator,
+              leading_company_suffix    = @LeadingCompanySuffix,
+              leading_text              = @LeadingText,
               heading_series_id         = @HeadingSeriesId,
               heading_text              = @HeadingText,
               heading_italic            = @HeadingItalic,

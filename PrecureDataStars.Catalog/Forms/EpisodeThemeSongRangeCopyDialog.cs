@@ -238,6 +238,7 @@ public sealed partial class EpisodeThemeSongRangeCopyDialog : Form
                     ThemeKind = r.ThemeKind,
                     Seq = r.Seq,
                     SongRecordingId = r.SongRecordingId,
+                    SongSizeVariantCode = r.SongSizeVariantCode,
                     TitleMisprintText = r.TitleMisprintText,
                     TitleCreditedText = r.TitleCreditedText,
                     IsInstrumental = r.IsInstrumental,

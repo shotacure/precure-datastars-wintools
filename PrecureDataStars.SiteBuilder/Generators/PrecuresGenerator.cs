@@ -93,9 +93,9 @@ public sealed class PrecuresGenerator
             {
                 // 詳細リンク先となる character_id は変身後名義から解決する。
                 int characterId = aliasById.TryGetValue(p.TransformAliasId, out var trAlias) ? trAlias.CharacterId : 0;
-                var (ep, mv) = aliasIdsByCharacter.TryGetValue(characterId, out var aliasIds)
+                var (ep, mv, ot) = aliasIdsByCharacter.TryGetValue(characterId, out var aliasIds)
                     ? CharacterAppearanceCounter.Count(_ctx, _index, aliasIds)
-                    : (0, 0);
+                    : (0, 0, 0);
                 return new PrecureIndexRow
                 {
                     PrecureId = p.PrecureId,
@@ -105,8 +105,10 @@ public sealed class PrecuresGenerator
                     VoiceActorName = (p.VoiceActorPersonId is int vid && personsById.TryGetValue(vid, out var v))
                         ? v.FullName : "",
                     VoiceActorPersonId = p.VoiceActorPersonId,
+                    SwatchBackground = KeyColorBadge.SwatchBackground(p.KeyColor, p.KeyColorGradient),
                     EpisodeCount = ep,
                     MovieCount = mv,
+                    OtonaEpisodeCount = ot,
                     DebutSeriesId = debutSeriesByPrecure.TryGetValue(p.PrecureId, out var sid) ? sid : null,
                     Order = order
                 };
@@ -124,15 +126,17 @@ public sealed class PrecuresGenerator
                 return new PrecureDebutSection
                 {
                     SeriesHeadingLabel = series is null ? "その他" : $"{series.Title}（{series.StartDate.Year}）",
+                    SeriesTitle = series is null ? "その他" : series.Title,
+                    SeriesYearLabel = series is null ? "" : series.StartDate.Year.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     SeriesUrl = series is null ? "" : PathUtil.SeriesUrl(series.Slug),
                     Members = g.OrderBy(r => r.Order).ToList()
                 };
             })
             .ToList();
 
-        // 登場回数順タブ：登場話数と登場本数の合計が多い順、同数は登場順。
+        // 登場回数順タブ：登場話数・登場本数・大人向けスピンオフの登場話数の合計が多い順、同数は登場順。
         var countRows = rows
-            .OrderByDescending(r => r.EpisodeCount + r.MovieCount)
+            .OrderByDescending(r => r.EpisodeCount + r.MovieCount + r.OtonaEpisodeCount)
             .ThenBy(r => r.Order)
             .ToList();
 
@@ -151,11 +155,11 @@ public sealed class PrecuresGenerator
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアオールスターズ")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "歴代の変身ヒロイン（プリキュア）を登場順に、変身前後の名前と担当の声優さんとともに一覧にしました。",
-                MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
-                Badges = new[] { new OgCardBadge("変身ヒロイン", $"{rows.Count}名") }
+                // ページの冒頭文（precures-index.sbn の .lead）と同じ文。数だけはページ側で添える。
+                Subtitle = "歴代のレギュラープリキュア＋映画限定プリキュア",
+                Badges = new[] { new OgCardBadge("プリキュア", $"{rows.Count}人") }
             },
-            MetaDescription = $"歴代プリキュア（変身ヒロイン）{rows.Count} 名の一覧。登場順に、変身前後の名前と担当の声優さんをまとめました。",
+            MetaDescription = $"歴代のレギュラープリキュア＋映画限定プリキュア {rows.Count} 名",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -188,10 +192,14 @@ public sealed class PrecuresGenerator
         public string PreTransformName { get; set; } = "";
         public string VoiceActorName { get; set; } = "";
         public int? VoiceActorPersonId { get; set; }
+        /// <summary>行頭のキーカラーの正方形の地（<see cref="KeyColorBadge.SwatchBackground"/>。無ければ空文字）。</summary>
+        public string SwatchBackground { get; set; } = "";
         /// <summary>TV 系シリーズでの登場話数（キャラクター一覧と同じ数え方）。</summary>
         public int EpisodeCount { get; set; }
         /// <summary>映画系シリーズでの登場本数（1 シリーズ = 1 本）。</summary>
         public int MovieCount { get; set; }
+        /// <summary>大人向けスピンオフ（種別 OTONA）での登場話数（🌙 ピル）。</summary>
+        public int OtonaEpisodeCount { get; set; }
         /// <summary>初登場シリーズの ID（紐付くシリーズが無ければ null）。</summary>
         public int? DebutSeriesId { get; set; }
         /// <summary>登場順（precure_id 昇順での並び位置）。同数の並べ替えの安定化に使う。</summary>
@@ -203,6 +211,10 @@ public sealed class PrecuresGenerator
     {
         /// <summary>見出し（「シリーズ名（年）」。紐付くシリーズが無いプリキュアは「その他」）。</summary>
         public string SeriesHeadingLabel { get; set; } = "";
+        /// <summary>左のもくじ（section-nav.js）のラベルに使う題名だけ（「その他」のセクションは「その他」）。</summary>
+        public string SeriesTitle { get; set; } = "";
+        /// <summary>左のもくじの年の欄に出す放送開始の年（4 桁）。「その他」は空。</summary>
+        public string SeriesYearLabel { get; set; } = "";
         public string SeriesUrl { get; set; } = "";
         public IReadOnlyList<PrecureIndexRow> Members { get; set; } = Array.Empty<PrecureIndexRow>();
     }

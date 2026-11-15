@@ -25,7 +25,7 @@ public static class PathUtil
     public static void UseRoleRepresentatives(RoleSuccessorResolver resolver) => _roleRepresentative = resolver.GetRepresentative;
 
     /// <summary>
-    /// 役職詳細ページを持たない役職（系譜の代表の role_code）。単発のイベント映像・スピンオフだけで使う役職が当たる
+    /// 役職詳細ページを持たない役職（系譜の代表の role_code）。単発のイベント映像と、オトナシリーズ以外のスピンオフだけで使う役職が当たる
     /// （<see cref="Pipeline.CreatorListScope.RolesWithoutPage"/>）。<see cref="UseRolesWithoutPage"/> で差し込み、以降は読み取り専用。
     /// 未設定のあいだは空（すべての役職がページを持つ扱い）。
     /// </summary>

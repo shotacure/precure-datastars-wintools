@@ -27,7 +27,10 @@ internal static class Program
         var relKindsRepo = new SeriesRelationKindsRepository(factory);
         var partTypesRepo = new PartTypesRepository(factory);
         var magazineIssuesRepo = new MagazineIssuesRepository(factory);
+        var rolesRepo = new RolesRepository(factory);
+        var keyStaffRolesRepo = new SeriesKeyStaffRolesRepository(factory);
+        var episodeStaffRolesRepo = new SeriesEpisodeStaffRolesRepository(factory);
 
-        Application.Run(new MainForm(seriesRepo, episodesRepo, partsRepo, kindsRepo, relKindsRepo, partTypesRepo, magazineIssuesRepo));
+        Application.Run(new MainForm(seriesRepo, episodesRepo, partsRepo, kindsRepo, relKindsRepo, partTypesRepo, magazineIssuesRepo, rolesRepo, keyStaffRolesRepo, episodeStaffRolesRepo));
     }
 }

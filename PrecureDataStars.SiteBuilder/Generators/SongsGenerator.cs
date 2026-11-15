@@ -262,26 +262,28 @@ public sealed class SongsGenerator
             SeriesSections = seriesSections,
             TotalCount = allRows.Count
         };
+        // 録音を 1 つ以上持つ曲の数（一覧に行が出る曲）。
+        int songCount = recordingsBySong.Count(kv => kv.Value.Count > 0 && songById.ContainsKey(kv.Key));
         var layout = new LayoutModel
         {
-            PageTitle = "歴代プリキュアソング(歌)",
-            // 本文リード行と同じ母数をカードにも置く。
-            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアソング(歌)")
+            PageTitle = "歴代プリキュアソング",
+            // 数は曲（作品としての歌）の数と、バージョン（録音）の数。バージョン数は曲数と食い違うときだけ出す。
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアソング")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
-                Subtitle = "オープニングからキャラクターソングまで、プリキュアの歌を作詞・作曲・歌手と収録 CD とともに一覧にしました。",
-                Badges = new[]
-                {
-                    new OgCardBadge("収録", $"{allRows.Count}曲"),
-                    new OgCardBadge("作品", $"{seriesSections.Count}作")
-                }
+                // ページの冒頭文（songs-index.sbn の .lead）と同じ文。数だけはページ側で添える。
+                Subtitle = "歴代プリキュアの歌",
+                Badges = songCount == allRows.Count
+                    ? new[] { new OgCardBadge("", $"{songCount}曲") }
+                    : new[] { new OgCardBadge("", $"{songCount}曲"), new OgCardBadge("", $"{allRows.Count}ver.") }
             },
-            MetaDescription = $"歴代プリキュアの歌 {allRows.Count} 曲の一覧。オープニング・エンディングから挿入歌・キャラクターソングまで、作詞・作曲・歌手と収録 CD をまとめました。",
+            // ページの冒頭文（songs-index.sbn の .lead）と同じ文。
+            MetaDescription = $"歴代プリキュアの歌全 {allRows.Count} 曲",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "歴代プリキュアソング(歌)", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュアソング", Url = "" }
             }
         };
         _page.RenderAndWrite("/songs/", "songs", "songs-index.sbn", content, layout);
@@ -309,6 +311,10 @@ public sealed class SongsGenerator
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
     {
+        // ピンポイントビルドで書かないページは、組み立てごと飛ばす。
+        string targetUrl = PathUtil.SongUrl(song.SongId);
+        if (!_page.IsTarget(targetUrl)) return targetUrl;
+
         // 作詞・作曲・編曲：構造化 song_credits を優先、無ければ Song のフリーテキスト列にフォールバック。
         // BuildCreditRoleHtml は名義群（/people/{名前}/ リンク）の HTML を返す。
         // 行のラベル（「作詞」「作曲」「編曲」）も Role マスタを引いて
@@ -339,7 +345,7 @@ public sealed class SongsGenerator
         var includedInMedleys = BuildIncludedInMedleyViews(song.SongId);
         // この曲を使っている劇伴の曲（メドレーの劇伴など。bgm_cue_source_parts の逆引き）。
         var usedInBgmCues = BuildUsedInBgmCueViews(song.SongId);
-        // 追加の編曲（ストリングス編曲・オーケストラ編曲）は構造化行だけ（フリーテキスト列は持たない）。
+        // 追加の編曲（ストリングス編曲・オーケストラ編曲・ブラスアレンジ）は構造化行だけ（フリーテキスト列は持たない）。
         // 役職詳細ページは無いのでラベルはリンクしない。役職ごとに「バッジ + 名前」のユニットを、編曲の後ろへ並べる順に連ねる。
         var extraArrangementUnits = new System.Text.StringBuilder();
         foreach (var extraRole in ExtraArrangementRoles)
@@ -373,7 +379,7 @@ public sealed class SongsGenerator
                 singersByRecording, musicClassMap, personAliasMap, characterAliasMap);
             // 配信音源の再生ボタンは収録トラック群から組み立てる（サイズ × バージョンごと、初出盤固定）。
             // ビュー本体の組み立てとは入力が別系統なので、BuildRecordingView の引数を増やさず後付けする。
-            recordingView.PlayRows = BuildRecordingPlayRows(tracksRows);
+            recordingView.PlayRows = BuildRecordingPlayRows(tracksRows, sizeVariantMap);
             // 録音ごとの音楽クレジット（カバー等、録音ごとに違う演奏者・スタッフ。music_credits の SONG_RECORDING 紐付け）。
             // 録音ごとの音楽クレジット（カバー等）。役職ごとのユニットを横に流して並べる。
             recordingView.MusicCreditsHtml = _ctx.MusicCredits.ByRecording.TryGetValue(r.SongRecordingId, out var recMusicRows)
@@ -406,7 +412,6 @@ public sealed class SongsGenerator
                 UsedInBgmCues = usedInBgmCues,
                 ExtraArrangementUnitsHtml = extraArrangementUnitsHtml,
                 MusicCreditsHtml = songMusicCreditsHtml,
-                Notes = song.Notes ?? ""
             },
             Recordings = recordingViews
         };
@@ -418,6 +423,7 @@ public sealed class SongsGenerator
         var metaDescription = BuildSongMetaDescription(
             songTitle: song.Title,
             seriesTitle: repSeriesTitle,
+            seriesStartYearLabel: recordingViews.Count > 0 ? recordingViews[0].SeriesStartYearLabel : "",
             musicClassLabel: musicClassLabel,
             recordingViews: recordingViews,
             lyricistName: lyricistText,
@@ -454,14 +460,14 @@ public sealed class SongsGenerator
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "歴代プリキュアソング(歌)", Url = "/songs/" },
+                new BreadcrumbItem { Label = "歴代プリキュアソング", Url = "/songs/" },
                 new BreadcrumbItem { Label = song.Title, Url = "" }
             },
             OgType = "music.song",
             JsonLd = jsonLd,
             OgCard = BuildOgCard(song, BuildOgFrontCredits(song, songCreditRows, personAliasMap, characterAliasMap,
                 repRecording, repRecording is not null && singersByRecording.TryGetValue(repRecording.SongRecordingId, out var ogSingers) ? ogSingers : null),
-                musicClassLabel, repSeriesTitle)
+                BuildOgMusicCredits(song, repRecording), musicClassLabel, repSeriesTitle)
         };
         _page.RenderAndWriteFile(songUrl, "songs-detail.sbn", content, layout);
         return songUrl;
@@ -470,7 +476,7 @@ public sealed class SongsGenerator
     /// <summary>
     /// OGP カードに載せる「表のクレジット」（曲の作家と、筆頭バージョン（先頭録音）の歌い手）を、楽曲詳細の基本情報と同じ順に組む：
     /// 作詞 → 英訳詞 → 作曲 → 編曲 → ストリングス編曲・オーケストラ編曲 → メドレー編曲 → 歌 → コーラス → 台詞 → 語り。
-    /// 演奏・エンジニアなどの裏方（音楽クレジット）は載せない。無い役職は飛ばす。
+    /// 演奏・エンジニアなどの裏方（音楽クレジット）はここには入れず、空きがあるときだけ <see cref="BuildOgMusicCredits"/> で続ける。無い役職は飛ばす。
     /// 名義は構造化優先の平文（CreditText）で、会社名だけの行に添える人物の括弧は補足の印（<see cref="OgCardNote"/>）で包み、カードで小さい字に描き分ける。
     /// 項目名は盤の役職の表記（role_label_text）があればそれ、無ければ役職名。色はサイトの楽曲詳細の役職バッジと同じ。
     /// </summary>
@@ -510,6 +516,31 @@ public sealed class SongsGenerator
         return credits;
     }
 
+    /// <summary>
+    /// OGP カードに空きがあるときだけ載せる音楽クレジット（演奏・エンジニアなど）。曲に付いたもの（楽曲詳細の基本情報の
+    /// 音楽クレジット）に、筆頭バージョン（先頭録音）に付いたものを続ける。楽曲詳細と同じ並び・同じ役職表記（盤の表記があればそれ）で、名義は平文にする。
+    /// </summary>
+    private IReadOnlyList<OgCardFactLine>? BuildOgMusicCredits(Song song, SongRecording? repRecording)
+    {
+        var rows = new List<MusicCredit>();
+        if (_ctx.MusicCredits.BySong.TryGetValue(song.SongId, out var songRows)) rows.AddRange(songRows);
+        if (repRecording is not null && _ctx.MusicCredits.ByRecording.TryGetValue(repRecording.SongRecordingId, out var recordingRows)) rows.AddRange(recordingRows);
+        if (rows.Count == 0) return null;
+        var facts = MusicCreditViewBuilder.Build(_ctx, rows).Groups
+            .SelectMany(g => g.Lines)
+            .Select(line => new OgCardFactLine(
+                // 演奏系の役職は、楽曲詳細の役職バッジと同じ絵文字を頭に付ける。
+                (MusicCreditViewBuilder.RoleEmoji(line.RoleCode) is { Length: > 0 } emoji ? emoji + " " : "")
+                    + (string.IsNullOrWhiteSpace(line.PrintedRoleLabel) ? line.RoleLabel : line.PrintedRoleLabel),
+                System.Net.WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(line.NamesHtml, "<[^>]+>", "")).Trim())
+            {
+                LabelColorHex = OgRolePalette.ColorFor(line.RoleCode)
+            })
+            .Where(f => f.Text.Length > 0)
+            .ToList();
+        return facts.Count > 0 ? facts : null;
+    }
+
     /// <summary>OGP カードで歌の後ろに並べる歌い手の役職（楽曲詳細の基本情報と同じ順）。</summary>
     private static readonly (string RoleCode, string Label)[] OgSingerExtraRoles =
     {
@@ -526,6 +557,7 @@ public sealed class SongsGenerator
     private static OgCardSpec BuildOgCard(
         Song song,
         IReadOnlyList<OgCardFactLine> credits,
+        IReadOnlyList<OgCardFactLine>? musicCredits,
         string musicClassLabel,
         string repSeriesTitle)
     {
@@ -538,13 +570,17 @@ public sealed class SongsGenerator
             // 出典作品は右上の透かしで見せる。
             Watermark = repSeriesTitle ?? "",
             BandColorHex = OgCardColors.Music,
-            InlineFacts = credits
+            InlineFacts = credits,
+            // 演奏・エンジニアなどは、表のクレジットのあとに空きがあるだけ続ける。
+            SupplementalFacts = musicCredits
         };
     }
 
     /// <summary>録音 1 件分の「収録トラック・商品」行群を組み立てる（発売日 → 品番 → Disc 番 → Track 番の昇順ソート済み）。</summary>
     /// <summary>録音 1 件分の配信音源（YouTube アートトラック）再生ボタン行を組み立てる。 サイズ（フル / TV など）とパート（歌入り / カラオケなど）の組み合わせごとに 1 ボタンを出す。 同じ組み合わせが複数の盤に収録されていても音源は同一なので 1 件に絞る。採るのは初出（発売が 最も早い盤）で、それが会員限定だったときのために、誰でも再生できる盤の音源を代わりとして 併せ持たせる（どちらを鳴らすかは閲覧者の設定によってページ側で決まる）。 <paramref name="tracksRows"/> は発売日昇順に整列済みなので、先頭から順に拾えば初出になる。 バッジ HTML は代表トラックのものをそのまま使うため、サイズもパートも持たない楽曲では 空文字になり、テンプレ側はボタンだけを出す。</summary>
-    private static List<RecordingPlayRow> BuildRecordingPlayRows(List<RecordingTrackRow> tracksRows)
+    private static List<RecordingPlayRow> BuildRecordingPlayRows(
+        List<RecordingTrackRow> tracksRows,
+        IReadOnlyDictionary<string, SongSizeVariant> sizeVariantMap)
     {
         var playRows = new List<RecordingPlayRow>();
         // 組み合わせごとの出力位置。初出が会員限定だった場合に、あとから見つかった
@@ -582,11 +618,17 @@ public sealed class SongsGenerator
         }
 
         // 並びは発売日順ではなく「聴きたい順」にする。歌入りを先に、そのなかでフルサイズを先頭に置き、
-        // 残りは長い順。カラオケ等はそのあとへ同じ規則で続く。
+        // 残りはサイズの表示順（song_size_variants.display_order：TV サイズ → 歌詞 1 番・2 番 → Type.I〜V → 映画サイズ …）、
+        // サイズ未設定（とマスタに無いコード）は最後。同じサイズの中は長い順。カラオケ等はそのあとへ同じ規則で続く。
+        // 尺の近いサイズ違い（Type.I〜V など）がフレーム単位の差で入れ替わらないよう、尺より先にサイズで並べる。
         // 同着は追加順（＝発売日順）のまま（OrderBy は安定ソート）。
+        int SizeOrder(string code)
+            => code == "FULL" ? -1
+             : code.Length > 0 && sizeVariantMap.TryGetValue(code, out var sv) && sv.DisplayOrder.HasValue ? sv.DisplayOrder.Value
+             : int.MaxValue;
         return playRows
             .OrderBy(r => IsVocalPart(r.SongPartVariantCode) ? 0 : 1)
-            .ThenBy(r => r.SongSizeVariantCode == "FULL" ? 0 : 1)
+            .ThenBy(r => SizeOrder(r.SongSizeVariantCode))
             .ThenByDescending(r => r.LengthFrames)
             .ToList();
     }
@@ -845,7 +887,6 @@ public sealed class SongsGenerator
             SeriesTitle = recSeriesTitle,
             SeriesLink = recSeriesLink,
             SeriesStartYearLabel = recSeriesStartYearLabel,
-            Notes = r.Notes ?? "",
             YoutubeId = YoutubeUtil.ExtractId(r.YoutubeUrl),
             VocalistsHtml = vocalistsHtml,
             ChorusHtml = chorusHtml,
@@ -897,12 +938,13 @@ public sealed class SongsGenerator
     }
 
     /// <summary>
-    /// 楽曲詳細の meta description。「「曲名」は『作品』の種別。歌：〇〇、作詞：△△、作曲：□□。使われた話、バージョン、収録 CD、クレジットをまとめました。」
-    /// の順で 140 字ほどに収める。クレジットは「役職：名前」の表記（敬称略。歌い手はキャラクター名義のこともあるため）。
+    /// 楽曲詳細の meta description。「種別（2004年『作品』）。歌：〇〇／作詞：△△／作曲：□□」の形で 150 字ほどに収める（曲名はページ名に出ているので入れない）。
+    /// クレジットは「役職：名前」の表記（敬称略。歌い手はキャラクター名義のこともあるため）。
     /// </summary>
     private static string BuildSongMetaDescription(
         string songTitle,
         string seriesTitle,
+        string seriesStartYearLabel,
         string musicClassLabel,
         IReadOnlyList<RecordingView> recordingViews,
         string lyricistName,
@@ -911,12 +953,11 @@ public sealed class SongsGenerator
         string compositionLabel = "作曲")
     {
         const int targetMaxChars = 150;
-        const string tail = "使われた話、バージョン、収録 CD、クレジットをまとめました。";
 
         var sb = new System.Text.StringBuilder();
-        sb.Append('「').Append(JapaneseQuotes.InQuotes(songTitle)).Append("」は");
-        sb.Append(string.IsNullOrWhiteSpace(seriesTitle) ? "プリキュアシリーズ" : $"『{seriesTitle}』");
-        sb.Append('の').Append(string.IsNullOrWhiteSpace(musicClassLabel) ? "歌" : musicClassLabel).Append('。');
+        sb.Append(string.IsNullOrWhiteSpace(musicClassLabel) ? "歌" : musicClassLabel);
+        if (!string.IsNullOrWhiteSpace(seriesTitle))
+            sb.Append('（').Append(string.IsNullOrEmpty(seriesStartYearLabel) ? "" : $"{seriesStartYearLabel}年").Append('『').Append(seriesTitle).Append("』）");
 
         // 歌い手（録音をまたいで重複を除き 2 つまで）→ 作詞 → 作曲。
         var credits = new List<string>();
@@ -932,12 +973,10 @@ public sealed class SongsGenerator
         var kept = new List<string>();
         foreach (var c in credits)
         {
-            string joined = string.Join("、", kept.Append(c)) + "。";
-            if (sb.Length + joined.Length + tail.Length > targetMaxChars) break;
+            if (sb.Length + 1 + string.Join("／", kept.Append(c)).Length > targetMaxChars) break;
             kept.Add(c);
         }
-        if (kept.Count > 0) sb.Append(string.Join("、", kept)).Append('。');
-        sb.Append(tail);
+        if (kept.Count > 0) sb.Append('。').Append(string.Join("／", kept));
         return sb.ToString();
     }
 
@@ -1377,7 +1416,7 @@ public sealed class SongsGenerator
     }
 
     /// <summary>追加の編曲の役職コード（song_credits で作詞・作曲・編曲と並べて持つ）。基本情報で編曲の後ろにこの順で並べる。</summary>
-    private static readonly string[] ExtraArrangementRoles = { "STRINGS_ARRANGEMENT", "ORCHESTRA_ARRANGEMENT" };
+    private static readonly IReadOnlyList<string> ExtraArrangementRoles = SongCreditRoles.ExtraArrangements;
 
     private sealed class SongDetailModel
     {
@@ -1425,7 +1464,6 @@ public sealed class SongsGenerator
         public IReadOnlyList<BgmCueLinkView> UsedInBgmCues { get; set; } = Array.Empty<BgmCueLinkView>();
         /// <summary>曲に共通の音楽クレジット（演奏・コーラス等 / レコーディング 等）の組み立て済み HTML（出典の段落込み）。無ければ空文字。</summary>
         public string MusicCreditsHtml { get; set; } = "";
-        public string Notes { get; set; } = "";
     }
 
     /// <summary>この曲が入っているメドレーへのリンク。</summary>
@@ -1543,7 +1581,6 @@ public sealed class SongsGenerator
         public string SeriesLink { get; set; } = "";
         /// <summary>録音単位の出典シリーズの開始年（西暦 4 桁）。シリーズ名の隣に「(2023)」のように薄色で添える補助表示用。 シリーズ未解決時は空文字。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
-        public string Notes { get; set; } = "";
         /// <summary>公式 YouTube 動画 ID（<c>song_recordings.youtube_url</c> から抽出）。空文字なら動画は出さない。 ミュージックビデオの埋め込み用で、配信音源（<see cref="ArtTrackId"/>）とは別物。</summary>
         public string YoutubeId { get; set; } = "";
         /// <summary>

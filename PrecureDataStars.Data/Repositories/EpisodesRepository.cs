@@ -161,6 +161,48 @@ public sealed class EpisodesRepository : RepositoryBase
         await ExecuteAsync(sql, e, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// 外部リンクの列（あらすじ・ラインナップ・予告）が空のときだけ URL を書く（入っている値は上書きしない）。
+    /// 放送後のリンクの自動取り込み（EpisodeLinkSync）が使う。
+    /// </summary>
+    /// <param name="episodeId">エピソード ID。</param>
+    /// <param name="column">書く列。</param>
+    /// <param name="url">URL。</param>
+    /// <param name="updatedBy">updated_by に入れる名前。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    /// <returns>書いたら true（既に値が入っていた・回が無いときは false）。</returns>
+    public async Task<bool> FillLinkIfEmptyAsync(int episodeId, EpisodeLinkColumn column, string url, string updatedBy, CancellationToken ct = default)
+    {
+        // 列名は列挙から決めた固定の文字列だけを SQL に埋める。
+        string col = column switch
+        {
+            EpisodeLinkColumn.ToeiAnimSummary => "toei_anim_summary_url",
+            EpisodeLinkColumn.ToeiAnimLineup => "toei_anim_lineup_url",
+            EpisodeLinkColumn.YoutubeTrailer => "youtube_trailer_url",
+            _ => throw new ArgumentOutOfRangeException(nameof(column))
+        };
+        string sql = $"""
+            UPDATE episodes SET {col} = @url, updated_by = @updatedBy
+             WHERE episode_id = @episodeId AND is_deleted = 0 AND ({col} IS NULL OR {col} = '');
+            """;
+        return await ExecuteAsync(sql, new { episodeId, url, updatedBy }, ct).ConfigureAwait(false) > 0;
+    }
+
+    /// <summary>
+    /// サブタイトル（<c>title_text</c>）が空のときだけ、サブタイトル・ルビ付き表記・文字統計を書く（入っている値は上書きしない）。
+    /// ふりがな（<c>title_kana</c>）には触れない。放送後のリンクの自動取り込み（EpisodeLinkSync）が予告の題から入れるときに使う。
+    /// </summary>
+    /// <returns>書いたら true（既にサブタイトルが入っていた・回が無いときは false）。</returns>
+    public async Task<bool> FillTitleIfEmptyAsync(int episodeId, string titleText, string titleRichHtml, string titleCharStats, string updatedBy, CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE episodes SET title_text = @titleText, title_rich_html = @titleRichHtml, title_char_stats = @titleCharStats,
+                                updated_by = @updatedBy
+             WHERE episode_id = @episodeId AND is_deleted = 0 AND (title_text IS NULL OR title_text = '');
+            """;
+        return await ExecuteAsync(sql, new { episodeId, titleText, titleRichHtml, titleCharStats, updatedBy }, ct).ConfigureAwait(false) > 0;
+    }
+
     /// <summary>サブタイトル有無と雑誌掲載状態の整合を検証する。 サブタイトル空を許すのは掲載状態が非公開 / 未定のときのみ （DB 側 CHECK: ck_ep_title_or_magazine_reason と同一ルール）。</summary>
     /// <exception cref="ArgumentException">サブタイトル空なのに掲載状態が非公開 / 未定でない場合。</exception>
     private static void ValidateSubtitlePresence(Episode e)
@@ -174,7 +216,7 @@ public sealed class EpisodesRepository : RepositoryBase
 
     //  サブタイトル文字統計 — 初出・使用回数
 
-    /// <summary>指定した文字（title_char_stats.chars のキー）が初めて使われたエピソードを検索する。 JSON_CONTAINS_PATH を使い、全シリーズ横断で on_air_at が最も古いものを返す。</summary>
+    /// <summary>指定した文字（title_char_stats.chars のキー）が初めて使われたエピソードを検索する。 JSON_CONTAINS_PATH を使い、本線の TV シリーズ（kind_code='TV'）横断で on_air_at が最も古いものを返す（スピンオフの話は比べる相手に入れない）。</summary>
     /// <param name="key">検索する文字（書記素単位のキー文字列）。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>初出エピソードの ID と放送日時。該当なしの場合は (null, null)。</returns>
@@ -185,6 +227,7 @@ public sealed class EpisodesRepository : RepositoryBase
         FROM episodes
         WHERE is_deleted = 0
           AND title_char_stats IS NOT NULL
+          AND series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
           AND JSON_CONTAINS_PATH(title_char_stats, 'one', CONCAT('$.chars."', REPLACE(REPLACE(@key, '\\', '\\\\'), '\"', '\\\"'), '"'))
         ORDER BY on_air_at, episode_id
         LIMIT 1;
@@ -195,7 +238,7 @@ public sealed class EpisodesRepository : RepositoryBase
         return row == default ? (null, null) : (row.episode_id, row.on_air_at);
     }
 
-    /// <summary>指定した文字が使われているエピソード数（全シリーズ横断）をカウントする。</summary>
+    /// <summary>指定した文字が使われているエピソード数（本線の TV シリーズ横断。スピンオフの話は数えない）をカウントする。</summary>
     /// <param name="key">検索する文字（書記素単位のキー文字列）。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>使用エピソード数。</returns>
@@ -206,6 +249,7 @@ public sealed class EpisodesRepository : RepositoryBase
         FROM episodes
         WHERE is_deleted = 0
           AND title_char_stats IS NOT NULL
+          AND series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
           AND JSON_CONTAINS_PATH(title_char_stats, 'one', CONCAT('$.chars."', REPLACE(REPLACE(@key, '\\', '\\\\'), '\"', '\\\"'), '"'));
     """;
         return await ExecuteScalarAsync<int>(sql, new { key }, ct).ConfigureAwait(false);
@@ -275,7 +319,7 @@ me_chars AS (
   ) jt
 ),
 history AS (
-  -- 過去の出現（話単位で1回）
+  -- 過去の出現（話単位で1回）。比べる相手は本線の TV だけ（スピンオフの話は入れない）
   SELECT e.episode_id, e.series_id, e.on_air_at, e.total_ep_no, e.series_ep_no, e.title_text, jt2.ch
   FROM episodes e
   JOIN JSON_TABLE(
@@ -286,6 +330,7 @@ history AS (
   WHERE e.is_deleted = 0
     AND e.title_char_stats IS NOT NULL
     AND e.total_ep_no IS NOT NULL
+    AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
 ),
 last_prev AS (
   -- 対象話より前での最終出現

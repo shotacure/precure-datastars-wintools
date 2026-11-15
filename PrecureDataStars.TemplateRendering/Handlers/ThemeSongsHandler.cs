@@ -55,7 +55,8 @@ public static class ThemeSongsHandler
         ILookupCache lookup,
         CancellationToken ct = default,
         int? seqFrom = null,
-        int? seqTo = null)
+        int? seqTo = null,
+        bool includeBroadcastOnly = true)
     {
         // どちらか一方が指定されていれば描画対象あり。両方 null（スコープ未確定）なら空文字。
         bool hasEpisode = episodeId.HasValue && episodeId.Value > 0;
@@ -63,7 +64,7 @@ public static class ThemeSongsHandler
         if (!hasEpisode && !hasSeries) return "";
         if (columns < 1) columns = 1;
 
-        var rows = await FetchAsync(factory, episodeId, seriesId, kinds, lookup, ct).ConfigureAwait(false);
+        var rows = await FetchAsync(factory, episodeId, seriesId, kinds, lookup, ct, includeBroadcastOnly: includeBroadcastOnly).ConfigureAwait(false);
         if (seqFrom is int from && seqTo is int to)
             rows = rows.Where(r => r.Seq is byte s && s >= from && s <= to).ToList();
         if (rows.Count == 0) return "";
@@ -119,6 +120,10 @@ public static class ThemeSongsHandler
     /// <param name="kinds">theme_kind 絞り込み（OP/ED/INSERT、空なら全部）。指定順がそのまま並び順になる。</param>
     /// <param name="lookup">名義・キャラ ID → リンク化 HTML 解決インターフェース。</param>
     /// <param name="ct">キャンセルトークン。</param>
+    /// <param name="cvLabelOverride">歌唱・コーラスの声優の前に置く記号を、歌唱者の行の記号（cv_label）に代えて使う文字
+    /// （<c>{#THEME_SONGS:cv="CV."}</c>。画面の記号が盤と違う作品用）。null なら行の記号。</param>
+    /// <param name="includeBroadcastOnly">本放送だけの曲（is_broadcast_only=1）も出すか。カードの版に BROADCAST を含むときだけ true
+    /// （共通のカードと Blu-ray・配信のカードの画面には本放送だけの曲は無い。<see cref="TemplateContext.ShowsBroadcastOnlySongs"/>）。既定は true。</param>
     /// <returns>JOIN 結果の楽曲行リスト（*Html フィールド設定済み）。</returns>
     internal static async Task<IReadOnlyList<ThemeSongRow>> FetchAsync(
         IConnectionFactory factory,
@@ -126,7 +131,9 @@ public static class ThemeSongsHandler
         int? seriesId,
         IReadOnlyList<string>? kinds,
         ILookupCache lookup,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? cvLabelOverride = null,
+        bool includeBroadcastOnly = true)
     {
         bool hasEpisode = episodeId.HasValue && episodeId.Value > 0;
         bool hasSeries = seriesId.HasValue && seriesId.Value > 0;
@@ -157,13 +164,13 @@ public static class ThemeSongsHandler
         {
             sourceTable = "episode_theme_songs";
             scopeFilter = "ets.episode_id = @scopeId";
-            queryParams = new { scopeId = episodeId!.Value, kinds = effectiveKinds };
+            queryParams = new { scopeId = episodeId!.Value, kinds = effectiveKinds, includeBroadcastOnly = includeBroadcastOnly ? 1 : 0 };
         }
         else
         {
             sourceTable = "series_theme_songs";
             scopeFilter = "ets.series_id = @scopeId";
-            queryParams = new { scopeId = seriesId!.Value, kinds = effectiveKinds };
+            queryParams = new { scopeId = seriesId!.Value, kinds = effectiveKinds, includeBroadcastOnly = includeBroadcastOnly ? 1 : 0 };
         }
         // 曲の作品名（{SONG_SERIES_TITLE}）は、録音の作品（song_recordings.series_id）がクレジットの作品と違うときだけ入れる。
         // エピソードのスコープでは、そのエピソードの作品と比べる。
@@ -195,6 +202,7 @@ public static class ThemeSongsHandler
             WHERE {{scopeFilter}}
               AND ets.theme_kind IN @kinds
               AND ets.usage_actuality <> 'BROADCAST_NOT_CREDITED'
+              AND (@includeBroadcastOnly = 1 OR ets.is_broadcast_only = 0)
             ORDER BY
               ets.seq,
               ets.is_broadcast_only;
@@ -213,25 +221,46 @@ public static class ThemeSongsHandler
         // テンプレ展開は 1 エピソード当たり主題歌 2-4 件程度のため、行ごとの追加クエリで実用的に問題ない。
         var songCredits = new SongCreditsRepository(factory);
         var recordingSingers = new SongRecordingSingersRepository(factory);
+        var episodeSingers = new EpisodeThemeSongSingersRepository(factory);
         foreach (var r in rows)
         {
             if (r.SongId > 0)
             {
                 await FillSongCreditsAsync(r, songCredits, lookup, ct).ConfigureAwait(false);
             }
-            if (r.SongRecordingId > 0)
+            // エピソードのクレジットに出た歌唱者（episode_theme_song_singers）がある主題歌は、
+            // 録音の歌唱者ではなく画面に出た歌唱者で、歌・コーラスとも描く（行の無い役職は出さない）。
+            if (hasEpisode && r.ThemeKind is string kind && r.Seq is byte seq
+                && await episodeSingers.ExistsAsync(episodeId!.Value, r.IsBroadcastOnly, kind, seq, ct).ConfigureAwait(false))
+            {
+                var singerCv = new List<int>();
+                var chorusCv = new List<int>();
+                r.SingerParts = await episodeSingers.GetDisplayHtmlPartsAsync(episodeId!.Value, r.IsBroadcastOnly, kind, seq,
+                    SongRecordingSingerRoles.Vocals, lookup, cvLabelOverride, ct, singerCv).ConfigureAwait(false);
+                r.ChorusParts = await episodeSingers.GetDisplayHtmlPartsAsync(episodeId!.Value, r.IsBroadcastOnly, kind, seq,
+                    SongRecordingSingerRoles.Chorus, lookup, cvLabelOverride, ct, chorusCv).ConfigureAwait(false);
+                r.SingerCvStarts = singerCv;
+                r.ChorusCvStarts = chorusCv;
+                r.SingerHtml = EpisodeThemeSongSingersRepository.JoinHtmlParts(r.SingerParts);
+                r.ChorusHtml = EpisodeThemeSongSingersRepository.JoinHtmlParts(r.ChorusParts);
+            }
+            else if (r.SongRecordingId > 0)
             {
                 // うた：song_recording_singers から VOCALS 役職の連名を HTML 版で取得（部品も持たせる）。
-                r.SingerParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct).ConfigureAwait(false);
-                r.ChorusParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct).ConfigureAwait(false);
-                string singHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct).ConfigureAwait(false);
+                var singerCv = new List<int>();
+                var chorusCv = new List<int>();
+                r.SingerParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct, cvLabelOverride, singerCv).ConfigureAwait(false);
+                r.ChorusParts = await recordingSingers.GetDisplayHtmlPartsAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct, cvLabelOverride, chorusCv).ConfigureAwait(false);
+                r.SingerCvStarts = singerCv;
+                r.ChorusCvStarts = chorusCv;
+                string singHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct, cvLabelOverride).ConfigureAwait(false);
                 r.SingerHtml = !string.IsNullOrEmpty(singHtml)
                     ? singHtml
                     : (string.IsNullOrEmpty(r.SingerName) ? "" : System.Net.WebUtility.HtmlEncode(r.SingerName));
 
                 // コーラス：song_recording_singers から BACKING_VOCALS 役職の連名を HTML 版で取得。
                 // テンプレ側で {CHORUS} / {?CHORUS}...{/?CHORUS} として参照できる。
-                r.ChorusHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct).ConfigureAwait(false) ?? "";
+                r.ChorusHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct, cvLabelOverride).ConfigureAwait(false) ?? "";
             }
         }
 
@@ -250,6 +279,10 @@ public static class ThemeSongsHandler
         r.ComposerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Composition, lookup, ct).ConfigureAwait(false);
         r.ArrangerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.Arrangement, lookup, ct).ConfigureAwait(false);
         r.MedleyArrangerParts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false);
+        // 名義のあとに所属を添えた部品（テンプレの {LYRICIST} / {COMPOSER} / {ARRANGER} で使う）。
+        r.LyricistAffParts = await songCredits.GetDisplayHtmlPartsWithAffiliationAsync(r.SongId, SongCreditRoles.Lyrics, lookup, ct).ConfigureAwait(false);
+        r.ComposerAffParts = await songCredits.GetDisplayHtmlPartsWithAffiliationAsync(r.SongId, SongCreditRoles.Composition, lookup, ct).ConfigureAwait(false);
+        r.ArrangerAffParts = await songCredits.GetDisplayHtmlPartsWithAffiliationAsync(r.SongId, SongCreditRoles.Arrangement, lookup, ct).ConfigureAwait(false);
         string lyrHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.Lyrics, lookup, ct).ConfigureAwait(false);
         r.LyricistHtml = !string.IsNullOrEmpty(lyrHtml)
             ? lyrHtml
@@ -269,6 +302,15 @@ public static class ThemeSongsHandler
 
         // メドレー編曲：構造化行だけ（フリーテキスト列は持たない）。無い曲は空文字列。
         r.MedleyArrangerHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.MedleyArrangement, lookup, ct).ConfigureAwait(false) ?? "";
+
+        // 追加の編曲（ストリングス編曲・オーケストラ編曲・ブラスアレンジ）：構造化行だけ。テンプレの {SONG_CREDIT:code=…} の値。
+        foreach (var extraRole in SongCreditRoles.ExtraArrangements)
+        {
+            string html = await songCredits.GetDisplayHtmlAsync(r.SongId, extraRole, lookup, ct).ConfigureAwait(false) ?? "";
+            if (html.Length == 0) continue;
+            var parts = await songCredits.GetDisplayHtmlPartsAsync(r.SongId, extraRole, lookup, ct).ConfigureAwait(false);
+            r.ExtraCredits[extraRole] = (html, parts);
+        }
 
         // 会社名だけを出す行の実際の人物（役職ごと）。会社名のあとの括弧に使う。
         r.CompanyOnlyPeople = await songCredits.GetCompanyOnlyPeopleHtmlAsync(r.SongId, lookup, ct).ConfigureAwait(false);
@@ -320,8 +362,9 @@ public static class ThemeSongsHandler
     /// <summary>
     /// 会社名だけの行（所属の出し方が COMPANY_ONLY）の会社名のあとに添える、実際の人物の小さい括弧の HTML。
     /// 1 行にまとめた役職の中にいるとき（<see cref="ThemeSongRow.MergedCreditRoles"/>）は、まとめた役職ぶんの人物を並べ、
-    /// 役職ごとに人が分かれるなら役職を添える（「（作詞・作曲：藤本 記子、編曲：福富 雅之）」。同じ人の役職は「・」でまとめ、人の間は「、」）。
-    /// 人物が 1 人だけ、または役職が 1 つだけのときは名前だけを「・」で並べる（「（藤本 記子）」）。
+    /// 役職ごとに人が分かれるなら、同じ役職の組の人をまとめて役職を添える（「（作詞・作曲：藤本 記子、編曲：福富 雅之）」。
+    /// 役職は「・」でまとめ、組の中の人は「・」、組の間は「、」）。
+    /// 全員が同じ役職の組（人物が 1 人だけ・役職が 1 つだけのときを含む）なら、名前だけを「・」で並べる（「（馬瀬 みさき・堀本 陸）」）。
     /// 名前はリンク化済み HTML（人物詳細へ）。会社名だけの行が無ければ空文字。
     /// </summary>
     internal static string CompanyOnlyPeopleSuffixHtml(ThemeSongRow? song, string role)
@@ -340,10 +383,20 @@ public static class ThemeSongsHandler
             }
         }
         if (people.Count == 0) return "";
-        string inner = people.Count == 1 || roles.Count == 1
-            ? string.Join("・", people.Select(p => p.Html))
-            : string.Join("、", people.Select(p =>
-                string.Join("・", p.Roles.Select(r => WriterRoleLabels.TryGetValue(r, out var l) ? l : r)) + "：" + p.Html));
+        // 役職の組（並びは役職テンプレの順）ごとに人をまとめる。組が 1 つだけ（全員が同じ役職）なら名前だけを並べる。
+        var groups = new List<(string Key, List<string> Roles, List<string> Names)>();
+        foreach (var p in people)
+        {
+            var ordered = roles.Where(p.Roles.Contains).ToList();
+            string key = string.Join(",", ordered);
+            int at = groups.FindIndex(g => g.Key == key);
+            if (at < 0) groups.Add((key, ordered, new List<string> { p.Html }));
+            else groups[at].Names.Add(p.Html);
+        }
+        string inner = groups.Count == 1
+            ? string.Join("・", groups[0].Names)
+            : string.Join("、", groups.Select(g =>
+                string.Join("・", g.Roles.Select(r => WriterRoleLabels.TryGetValue(r, out var l) ? l : r)) + "：" + string.Join("・", g.Names)));
         return $"<span class=\"staff-primary-name muted\">（{inner}）</span>";
     }
 
@@ -490,6 +543,11 @@ public static class ThemeSongsHandler
         public string MedleyArrangerHtml { get; set; } = "";
         /// <summary>英訳（<c>LYRICS_TRANSLATION</c>）連名のリンク化済み HTML。無ければ空文字列。テンプレ側で <c>{LYRICS_TRANSLATOR}</c> として参照する。</summary>
         public string LyricsTranslatorHtml { get; set; } = "";
+        /// <summary>
+        /// 追加の編曲（<see cref="SongCreditRoles.ExtraArrangements"/>）の役職コード → 連名のリンク化済み HTML と名義ごとの部品。
+        /// その役職の構造化行がある役職だけ入る。テンプレ側で <c>{SONG_CREDIT:code=BRASS_ARRANGEMENT}</c> として参照する。
+        /// </summary>
+        public Dictionary<string, (string Html, IReadOnlyList<(string Sep, string Html)> Parts)> ExtraCredits { get; } = new(StringComparer.Ordinal);
         public string SingerHtml { get; set; } = "";
 
         /// <summary>コーラス（<c>BACKING_VOCALS</c>）連名のリンク化済み HTML。 該当録音にコーラス歌唱者が居なければ空文字列。テンプレ側で <c>{CHORUS}</c> として参照する。</summary>
@@ -505,6 +563,17 @@ public static class ThemeSongsHandler
         public IReadOnlyList<(string Sep, string Html)> LyricsTranslatorParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> SingerParts { get; set; } = Array.Empty<(string, string)>();
         public IReadOnlyList<(string Sep, string Html)> ChorusParts { get; set; } = Array.Empty<(string, string)>();
+        // 歌・コーラスの部品ごとに「(CV:…)」が始まる HTML 上の位置（無ければ -1）。部品と同じ順・同じ数。
+        // 役職テンプレの {SINGER:cv_align=1} で、名前と「(CV:…)」を別の欄に分けて縦にそろえるときに使う。
+        public IReadOnlyList<int> SingerCvStarts { get; set; } = Array.Empty<int>();
+        public IReadOnlyList<int> ChorusCvStarts { get; set; } = Array.Empty<int>();
+
+        // ── 名義ごとの部品（名義のあとに所属を添えたもの）──
+        // 所属の出し方が NAME_WITH_COMPANY の行は名義のあとに「(所属)」を添える（同じ所属が続くときは最後の名義のあとにだけ）。
+        // 役職テンプレの {LYRICIST} / {COMPOSER} / {ARRANGER} の値。所属を添えない行は名義だけ。構造化クレジットが無い曲は空。
+        public IReadOnlyList<(string Sep, string Html)> LyricistAffParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> ComposerAffParts { get; set; } = Array.Empty<(string, string)>();
+        public IReadOnlyList<(string Sep, string Html)> ArrangerAffParts { get; set; } = Array.Empty<(string, string)>();
 
         /// <summary>
         /// 所属の出し方が「会社名だけ」の行の実際の人物（役職コード → (名義 ID, リンク化済み HTML) の並び）。
@@ -514,7 +583,7 @@ public static class ThemeSongsHandler
             = new Dictionary<string, IReadOnlyList<(int, string)>>();
 
         /// <summary>
-        /// テンプレの展開中だけ使う：いま <c>{?SAME_LYRICIST_COMPOSER_ARRANGER}</c> / <c>{?SAME_COMPOSER_ARRANGER}</c> の中にいるとき、
+        /// テンプレの展開中だけ使う：いま <c>{?SAME_LYRICIST_COMPOSER_ARRANGER}</c> / <c>{?SAME_LYRICIST_COMPOSER}</c> / <c>{?SAME_COMPOSER_ARRANGER}</c> の中にいるとき、
         /// その 1 行にまとめた役職の並び。外では null。人物の括弧に役職を添えるかの判断に使う。
         /// </summary>
         public IReadOnlyList<string>? MergedCreditRoles { get; set; }

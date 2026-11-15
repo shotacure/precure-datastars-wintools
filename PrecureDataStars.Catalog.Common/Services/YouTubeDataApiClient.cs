@@ -11,10 +11,12 @@ using System.Threading.Tasks;
 namespace PrecureDataStars.Catalog.Common.Services;
 
 /// <summary>
-/// YouTube Data API v3 の薄いクライアント。配信音源（アートトラック）の取り込みに必要な
-/// 2 つの読み取り操作だけを扱う。
+/// YouTube Data API v3 の薄いクライアント。配信音源（アートトラック）の取り込みと、
+/// 放送後のリンクの取り込み（EpisodeLinkSync の予告探し）に必要な読み取り操作だけを扱う。
 /// <list type="bullet">
 ///   <item><see cref="GetPlaylistItemsAsync"/>：アルバムのプレイリストを全件展開する（50 件 1 ユニット）。</item>
+///   <item><see cref="GetPlaylistHeadAsync"/>：プレイリストの先頭の 1 ページだけを読む（1 回 1 ユニット）。
+///     チャンネルのアップロードの再生リスト（<c>UU...</c>）は新しい順に並ぶので、新着を見るのに使う。</item>
 ///   <item><see cref="GetVideoDetailsAsync"/>：動画の埋め込み可否・地域制限・再生時間を取得する（50 件 1 ユニット）。</item>
 /// </list>
 /// <para>
@@ -25,6 +27,8 @@ namespace PrecureDataStars.Catalog.Common.Services;
 /// <para>
 /// 日次クォータは既定 10,000 ユニット。本クライアントが使う 2 操作はいずれも 50 件 1 ユニットなので、
 /// 全商品（400 点弱）を取り込んでも消費は十数ユニットに収まる。
+/// 同じキーを使う EpisodeLinkSync の日曜の見張りは <see cref="GetPlaylistHeadAsync"/> を 5 秒おきに 3 時間呼ぶので
+/// 2,160 ユニットほど使うが、合わせても既定のクォータに収まる。
 /// </para>
 /// </summary>
 public sealed class YouTubeDataApiClient : IDisposable
@@ -32,6 +36,11 @@ public sealed class YouTubeDataApiClient : IDisposable
     private const string BaseUrl = "https://www.googleapis.com/youtube/v3/";
     /// <summary>playlistItems / videos とも 1 リクエストの上限は 50 件。</summary>
     private const int PageSize = 50;
+    /// <summary>
+    /// <see cref="GetVideoDetailsAsync"/> で同時に送る要求の数。1 要求の往復待ちが大半なので、50 件ずつの要求を
+    /// この本数まで同時に送る。消費するユニット数は送り方によらず要求の数（50 件ごとに 1）のまま。
+    /// </summary>
+    private const int VideoDetailsConcurrency = 8;
 
     private readonly HttpClient _http;
     private readonly string _apiKey;
@@ -64,25 +73,7 @@ public sealed class YouTubeDataApiClient : IDisposable
 
             using var doc = await GetJsonAsync(url, ct).ConfigureAwait(false);
             var root = doc.RootElement;
-
-            if (root.TryGetProperty("items", out var items))
-            {
-                foreach (var item in items.EnumerateArray())
-                {
-                    if (!item.TryGetProperty("snippet", out var sn)) continue;
-
-                    string videoId = sn.TryGetProperty("resourceId", out var res)
-                        && res.TryGetProperty("videoId", out var vid) ? (vid.GetString() ?? "") : "";
-                    if (videoId.Length == 0) continue;
-
-                    results.Add(new YouTubePlaylistVideo
-                    {
-                        Position = sn.TryGetProperty("position", out var pos) ? pos.GetInt32() : results.Count,
-                        VideoId = videoId,
-                        Title = sn.TryGetProperty("title", out var ti) ? (ti.GetString() ?? "") : ""
-                    });
-                }
-            }
+            AddPlaylistItems(root, results);
 
             pageToken = root.TryGetProperty("nextPageToken", out var np) ? np.GetString() : null;
         }
@@ -92,59 +83,114 @@ public sealed class YouTubeDataApiClient : IDisposable
         return results.OrderBy(v => v.Position).ToList();
     }
 
+    /// <summary>プレイリストの先頭の 1 ページだけ（最大 <paramref name="maxResults"/> 件）を position 昇順で取得する。
+    /// ページはめくらないので、消費は 1 回 1 ユニット。チャンネルのアップロードの再生リスト（<c>UU...</c>）は
+    /// 新しい順に並ぶので、新着の数本を見るのに使う。</summary>
+    /// <param name="playlistId">プレイリスト ID。</param>
+    /// <param name="maxResults">読む件数（1〜50）。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task<IReadOnlyList<YouTubePlaylistVideo>> GetPlaylistHeadAsync(
+        string playlistId, int maxResults, CancellationToken ct = default)
+    {
+        int size = Math.Clamp(maxResults, 1, PageSize);
+        string url = $"{BaseUrl}playlistItems?part=snippet&maxResults={size}"
+                   + $"&playlistId={Uri.EscapeDataString(playlistId)}&key={Uri.EscapeDataString(_apiKey)}";
+
+        using var doc = await GetJsonAsync(url, ct).ConfigureAwait(false);
+        var results = new List<YouTubePlaylistVideo>();
+        AddPlaylistItems(doc.RootElement, results);
+        return results.OrderBy(v => v.Position).ToList();
+    }
+
+    /// <summary>playlistItems の応答の 1 ページ分の <c>items</c> を <paramref name="results"/> に足す。動画 ID の無い項目は飛ばす。</summary>
+    private static void AddPlaylistItems(JsonElement root, List<YouTubePlaylistVideo> results)
+    {
+        if (!root.TryGetProperty("items", out var items)) return;
+        foreach (var item in items.EnumerateArray())
+        {
+            if (!item.TryGetProperty("snippet", out var sn)) continue;
+
+            string videoId = sn.TryGetProperty("resourceId", out var res)
+                && res.TryGetProperty("videoId", out var vid) ? (vid.GetString() ?? "") : "";
+            if (videoId.Length == 0) continue;
+
+            results.Add(new YouTubePlaylistVideo
+            {
+                Position = sn.TryGetProperty("position", out var pos) ? pos.GetInt32() : results.Count,
+                VideoId = videoId,
+                Title = sn.TryGetProperty("title", out var ti) ? (ti.GetString() ?? "") : ""
+            });
+        }
+    }
+
     /// <summary>動画の埋め込み可否（<c>status.embeddable</c>）と再生時間（<c>contentDetails.duration</c>）を まとめて取得する。埋め込み可否は権利者が外部サイトでの再生を許可していない音源を掲載しない判定に、 再生時間はトラックとの対応付けに使う。地域制限は日本で再生できない音源を見分けるのに使う。 応答に含まれない動画 ID（削除・非公開など）は戻り値に現れない。</summary>
-    /// <param name="videoIds">対象の動画 ID。50 件ずつに分割して問い合わせる。</param>
+    /// <param name="videoIds">対象の動画 ID。50 件ずつに分割し、<see cref="VideoDetailsConcurrency"/> 本まで同時に問い合わせる。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task<IReadOnlyDictionary<string, YouTubeVideoDetail>> GetVideoDetailsAsync(
         IEnumerable<string> videoIds, CancellationToken ct = default)
     {
-        var map = new Dictionary<string, YouTubeVideoDetail>(StringComparer.Ordinal);
         var distinct = videoIds.Where(id => !string.IsNullOrEmpty(id)).Distinct(StringComparer.Ordinal).ToList();
+        var chunks = distinct.Chunk(PageSize).ToList();
+        var partials = new IReadOnlyList<KeyValuePair<string, YouTubeVideoDetail>>[chunks.Count];
 
-        for (int offset = 0; offset < distinct.Count; offset += PageSize)
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, chunks.Count),
+            new ParallelOptions { MaxDegreeOfParallelism = VideoDetailsConcurrency, CancellationToken = ct },
+            async (i, token) => partials[i] = await GetVideoDetailsChunkAsync(chunks[i], token).ConfigureAwait(false))
+            .ConfigureAwait(false);
+
+        // 要求ごとの結果を、分割した順に 1 つの表へまとめる（同じ ID は後の要求の値で上書き。distinct 済みなので重ならない）。
+        var map = new Dictionary<string, YouTubeVideoDetail>(StringComparer.Ordinal);
+        foreach (var part in partials)
+            foreach (var (id, detail) in part) map[id] = detail;
+        return map;
+    }
+
+    /// <summary><see cref="GetVideoDetailsAsync"/> の 1 要求ぶん（50 件まで）を問い合わせ、応答に含まれた動画の詳細を返す。</summary>
+    private async Task<IReadOnlyList<KeyValuePair<string, YouTubeVideoDetail>>> GetVideoDetailsChunkAsync(
+        IEnumerable<string> chunk, CancellationToken ct)
+    {
+        var found = new List<KeyValuePair<string, YouTubeVideoDetail>>();
+        string url = $"{BaseUrl}videos?part=status,contentDetails&id={Uri.EscapeDataString(string.Join(",", chunk))}"
+                   + $"&key={Uri.EscapeDataString(_apiKey)}";
+
+        using var doc = await GetJsonAsync(url, ct).ConfigureAwait(false);
+        if (!doc.RootElement.TryGetProperty("items", out var items)) return found;
+
+        foreach (var item in items.EnumerateArray())
         {
-            var chunk = distinct.Skip(offset).Take(PageSize);
-            string url = $"{BaseUrl}videos?part=status,contentDetails&id={Uri.EscapeDataString(string.Join(",", chunk))}"
-                       + $"&key={Uri.EscapeDataString(_apiKey)}";
+            string id = item.TryGetProperty("id", out var idEl) ? (idEl.GetString() ?? "") : "";
+            if (id.Length == 0) continue;
 
-            using var doc = await GetJsonAsync(url, ct).ConfigureAwait(false);
-            if (!doc.RootElement.TryGetProperty("items", out var items)) continue;
+            bool embeddable = item.TryGetProperty("status", out var st)
+                && st.TryGetProperty("embeddable", out var em)
+                && em.ValueKind == JsonValueKind.True;
 
-            foreach (var item in items.EnumerateArray())
+            // 処理が終わっていない・却下された動画は、応答には現れても再生できない。
+            bool processed = !(item.TryGetProperty("status", out var st2)
+                && st2.TryGetProperty("uploadStatus", out var us)
+                && !string.Equals(us.GetString(), "processed", StringComparison.Ordinal));
+
+            int? seconds = null;
+            bool blockedInJapan = false;
+            if (item.TryGetProperty("contentDetails", out var cd))
             {
-                string id = item.TryGetProperty("id", out var idEl) ? (idEl.GetString() ?? "") : "";
-                if (id.Length == 0) continue;
-
-                bool embeddable = item.TryGetProperty("status", out var st)
-                    && st.TryGetProperty("embeddable", out var em)
-                    && em.ValueKind == JsonValueKind.True;
-
-                // 処理が終わっていない・却下された動画は、応答には現れても再生できない。
-                bool processed = !(item.TryGetProperty("status", out var st2)
-                    && st2.TryGetProperty("uploadStatus", out var us)
-                    && !string.Equals(us.GetString(), "processed", StringComparison.Ordinal));
-
-                int? seconds = null;
-                bool blockedInJapan = false;
-                if (item.TryGetProperty("contentDetails", out var cd))
-                {
-                    if (cd.TryGetProperty("duration", out var du))
-                        seconds = ParseIso8601Seconds(du.GetString());
-                    if (cd.TryGetProperty("regionRestriction", out var rr))
-                        blockedInJapan = IsBlockedIn(rr, RegionJapan);
-                }
-
-                map[id] = new YouTubeVideoDetail
-                {
-                    Embeddable = embeddable,
-                    DurationSeconds = seconds,
-                    BlockedInJapan = blockedInJapan,
-                    Processed = processed
-                };
+                if (cd.TryGetProperty("duration", out var du))
+                    seconds = ParseIso8601Seconds(du.GetString());
+                if (cd.TryGetProperty("regionRestriction", out var rr))
+                    blockedInJapan = IsBlockedIn(rr, RegionJapan);
             }
+
+            found.Add(new(id, new YouTubeVideoDetail
+            {
+                Embeddable = embeddable,
+                DurationSeconds = seconds,
+                BlockedInJapan = blockedInJapan,
+                Processed = processed
+            }));
         }
 
-        return map;
+        return found;
     }
 
     /// <summary>サイトの閲覧者がいる地域（ISO 3166-1 alpha-2）。地域制限はこの地域で再生できるかだけを見る。</summary>

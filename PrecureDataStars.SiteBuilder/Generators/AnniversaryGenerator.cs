@@ -91,7 +91,6 @@ public sealed class AnniversaryGenerator
                     Url = dayUrl,
                     Count = dayEntries.Count,
                     Chips = chips,
-                    OverflowCount = Math.Max(0, dayEntries.Count - chips.Count),
                     MdKey = $"{month}-{day}",
                     DowClass = hasCell ? DowClassOf(displayYear, month, day) : "",
                     DowLabel = hasCell ? WeekdayLabels[(int)new DateTime(displayYear, month, day).DayOfWeek] : ""
@@ -132,6 +131,8 @@ public sealed class AnniversaryGenerator
     private void RenderDayPage(int month, int day, IReadOnlyList<AnniversaryEntry> dayEntries, DateTimeOffset now)
     {
         string url = PathUtil.AnniversaryUrl(month, day);
+        // ピンポイントビルドで書かないページは、組み立てごと飛ばす。
+        if (!_page.IsTarget(url)) return;
         string dateLabel = $"{month}月{day}日";
 
         // 出来事は種別ごとに束ねる。エピソードと映画は「古い順」に並べて、
@@ -139,7 +140,11 @@ public sealed class AnniversaryGenerator
         var episodes = dayEntries.Where(e => e.Kind == "ep").OrderBy(e => e.Year).ThenBy(e => e.EpisodeNo).ToList();
         var movies = dayEntries.Where(e => e.Kind == "mv").OrderBy(e => e.Year).ToList();
         var characterBirthdays = dayEntries.Where(e => e.Kind == "cb").ToList();
-        var personBirthdays = dayEntries.Where(e => e.Kind == "pb").ToList();
+        // 人物の誕生日はプリキュア役の声優さん → メインスタッフ → そのほか、同じ段は本編のクレジット回数の多い順。
+        var personBirthdays = dayEntries.Where(e => e.Kind == "pb")
+            .OrderBy(e => e.PersonTier)
+            .ThenByDescending(e => e.PersonCreditCount)
+            .ToList();
 
         var content = new DayContentModel
         {
@@ -154,6 +159,7 @@ public sealed class AnniversaryGenerator
                 EpisodeUrl = e.EpisodeUrl,
                 IsFirstEpisode = e.IsFirstEpisode,
                 IsLastEpisode = e.IsLastEpisode,
+                IsOtona = e.IsOtona,
                 RevealAt = e.RevealAt,
                 // ページ本文は他のエピソード一覧と同じくガード span で包み、解禁判定は
                 // subtitle-embargo.js に委ねる（静的ページでも解禁時刻を過ぎれば自動で現れる）。
@@ -199,7 +205,8 @@ public sealed class AnniversaryGenerator
                 EpisodeNo = e.EpisodeNo,
                 TitleGuardedHtml = e.TitleGuardedHtml,
                 IsFirstEpisode = e.IsFirstEpisode,
-                IsLastEpisode = e.IsLastEpisode
+                IsLastEpisode = e.IsLastEpisode,
+                IsOtona = e.IsOtona
             })
             .Concat(content.Movies.Select(m => new TimelineRow
             {
@@ -240,7 +247,7 @@ public sealed class AnniversaryGenerator
         _page.RenderAndWrite(url, "anniversary", "anniversary-day.sbn", content, layout);
     }
 
-    /// <summary>日付別ページの meta description。「M月D日のプリキュア。出来事の内訳。何のページか。」</summary>
+    /// <summary>日付別ページの meta description。「M月D日のプリキュア：出来事の内訳」。</summary>
     private static string BuildMetaDescription(string dateLabel, int episodes, int movies, int characterBirthdays, int personBirthdays)
     {
         var parts = new List<string>();
@@ -249,15 +256,15 @@ public sealed class AnniversaryGenerator
         if (characterBirthdays > 0) parts.Add($"キャラクター {characterBirthdays} 人の誕生日");
         if (personBirthdays > 0) parts.Add($"クリエイター {personBirthdays} 人の誕生日");
 
-        const string tail = "歴代の放送日・公開日・誕生日を日付ごとにまとめた記念日カレンダーです。";
         return parts.Count == 0
-            ? $"{dateLabel}のプリキュア。この日の出来事は、いまのところ登録がありません。{tail}"
-            : $"{dateLabel}のプリキュア。{string.Join("、", parts)}。{tail}";
+            ? $"{dateLabel}のプリキュア：この日の出来事は、いまのところ登録がありません"
+            : $"{dateLabel}のプリキュア：{string.Join("、", parts)}";
     }
 
     /// <summary>
     /// 日付別ページの OGP カード。
-    /// 出来事そのものを年代順に並べる。件数のバッジは置かない——この日付で読み手が知りたいのは
+    /// 出来事そのものを、ページのカレンダーと同じ順（キャラクターの誕生日 → 映画の公開 → クリエイターの誕生日 → TV の放送、
+    /// 種別の中は年代順）に並べる。件数のバッジは置かない——この日付で読み手が知りたいのは
     /// 「何件あったか」ではなく「何があったか」なので、限られた面積は出来事の中身に使う。
     /// 収まりきらない場合は最後の行を「ほか n件」に替えて、省いた事実があることを明示する。
     /// </summary>
@@ -269,47 +276,44 @@ public sealed class AnniversaryGenerator
         IReadOnlyList<BirthdayRow> personBirthdays,
         DateTimeOffset now)
     {
-        // 出来事を年代順に 1 本の列へまとめる（誕生日は年を持たないので末尾へ回す）。
+        // 出来事を、ページのカレンダー（BuildDayChips）と同じ種別の順に 1 本の列へまとめる。
+        // 行数に入り切らないときは後ろが「ほか n件」に回るので、誕生日が先に残る。
         var timeline = new List<OgCardFactLine>();
-        timeline.AddRange(episodes
-            .Concat<object>(movies)
-            .Select(x => x switch
-            {
-                // TV エピソードは「作品名」と「話数・サブタイトル」を 2 段に割る。
-                // 1 行に押し込むと長いサブタイトルが必ず切れるため。
-                EpisodeRow e => (Year: e.Year, Line: new OgCardFactLine($"{e.Year}年", $"『{e.SeriesTitle}』")
-                {
-                    SubText = FormatEpisodeDetail(e, now)
-                }),
-                // 映画は作品名だけで公開だと分かるので「公開」は書かない。
-                MovieRow m => (Year: m.Year, Line: new OgCardFactLine($"{m.Year}年", $"『{m.Title}』")),
-                _ => (Year: 0, Line: new OgCardFactLine("", ""))
-            })
-            .OrderBy(x => x.Year)
-            .Select(x => x.Line));
-
         foreach (var b in characterBirthdays)
             timeline.Add(new OgCardFactLine("誕生日", string.IsNullOrWhiteSpace(b.SeriesTitle) ? b.Name : $"{b.Name}（{b.SeriesTitle}）"));
+        // 映画は作品名だけで公開だと分かるので「公開」は書かない。
+        foreach (var m in movies.OrderBy(m => m.Year))
+            timeline.Add(new OgCardFactLine($"{m.Year}年", $"『{m.Title}』"));
         foreach (var b in personBirthdays)
             timeline.Add(new OgCardFactLine("誕生日", b.Name));
+        // TV エピソードは作品名に続けて話数・サブタイトルを 1 行に置く（2 段に割ると 1 件で 2 行を使い、入る件数が半分になる）。
+        // 幅に入り切らなければ値の左端にそろえて折り返す。
+        foreach (var e in episodes.OrderBy(e => e.Year))
+            timeline.Add(new OgCardFactLine($"{e.Year}年", $"『{e.SeriesTitle}』{FormatEpisodeDetail(e, now)}"));
 
-        // カードに積める行数はレンダラが余白から決めるが、生成側でも上限を設けて
-        // 「その日の主だった出来事」に絞る。溢れる場合は残件数の行に替えて、隠した事実の存在を伝える。
-        const int maxLines = 7;
-        var facts = timeline.Count <= maxLines
-            ? timeline
-            : timeline.Take(maxLines - 1)
-                .Append(new OgCardFactLine("", $"ほか {timeline.Count - (maxLines - 1)} 件"))
-                .ToList();
+        // 「その日の主だった出来事」を、カードに等倍の字で入る行数までに絞る（1 件 1 行で数える。折り返した項目が
+        // 高さを超えるときはレンダラが字を小さくする）。溢れる場合は残件数の行に替えて、隠した事実の存在を伝える。
+        const int maxLines = 9;
+        var facts = new List<OgCardFactLine>();
+        int used = 0;
+        for (int i = 0; i < timeline.Count; i++)
+        {
+            int need = string.IsNullOrEmpty(timeline[i].SubText) ? 1 : 2;
+            int reserve = i + 1 < timeline.Count ? 1 : 0;
+            if (used + need + reserve > maxLines)
+            {
+                facts.Add(new OgCardFactLine("", $"ほか {timeline.Count - i} 件"));
+                break;
+            }
+            facts.Add(timeline[i]);
+            used += need;
+        }
 
-        // 主役は日付。「◯月◯日のプリキュア」と言い換えず、日付を大きく置いて
-        // 何があった日かは下の年表そのものに語らせる。
-        // 透かしは月日（「2/1」）。日付のカードであることが縮小表示でも分かる。
-        var md = System.Text.RegularExpressions.Regex.Match(dateLabel, @"(\d+)月(\d+)日");
+        // 主役は日付。「◯月◯日のプリキュア」と言い換えず、日付を見出しに置いて
+        // 何があった日かは下の年表そのものに語らせる。見出しと同じ月日になる透かしは置かない（見出しを下へ押し、年表の高さを削る）。
         return new OgCardSpec(Kicker: "", Title: dateLabel, Subtitle: "プリキュアのできごと")
         {
-            Facts = facts,
-            Watermark = md.Success ? $"{md.Groups[1].Value}/{md.Groups[2].Value}" : ""
+            Facts = facts
         };
     }
 
@@ -331,16 +335,17 @@ public sealed class AnniversaryGenerator
         var layout = new LayoutModel
         {
             PageTitle = "プリキュア記念日カレンダー",
-            MetaDescription = $"プリキュアの記念日カレンダー。歴代の放送日・映画の公開日、キャラクターとクリエイターの方々の誕生日 {totalEntries} 件を、366 日の日付ごとにまとめました。今日は何の日かがすぐ分かります。",
+            MetaDescription = "プリキュアの放送日・公開日・誕生日のカレンダー",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "記念日", Url = "" }
             },
+            // 収録件数はサイト側の都合の数なのでカードには出さず、どんなページかをリード文で示す。
             OgCard = new OgCardSpec(Kicker: "", Title: "プリキュア記念日カレンダー")
             {
-                Subtitle = "放送日・公開日・誕生日を、1 年 366 日の日付ごとに並べました。今日は、プリキュアの何の日でしょう。",
-                Badges = new[] { new OgCardBadge("収録", $"{totalEntries}件") }
+                // ページの冒頭文（anniversary-index.sbn・anniversary-day.sbn の .lead）と同じ文。
+                Subtitle = "放送日・公開日・誕生日のカレンダー"
             }
         };
 
@@ -349,29 +354,23 @@ public sealed class AnniversaryGenerator
 
     /// <summary>
     /// 1 日ぶんのチップを、ホームの当月カレンダーと同じ並び順
-    /// （キャラクター誕生日 → 映画公開 → 人物誕生日 → TV 放送）で組み立てる。
-    /// 12 か月ぶんを 1 面に並べる都合でセルの高さを揃えたいので上限を設け、
-    /// 溢れた分は「ほか n件」として日付ページへ送る。
+    /// （キャラクター誕生日 → 映画公開 → プリキュア役の声優さんの誕生日 → メインスタッフの誕生日 → TV 放送 → そのほかの人物の誕生日。
+    /// 人物は同じ段の中で本編のクレジット回数の多い順）で組み立てる。
+    /// カレンダーのページなので、その日の出来事は省かずに全部載せる。
     /// </summary>
     private static IReadOnlyList<DayChip> BuildDayChips(IReadOnlyList<AnniversaryEntry> dayEntries, DateTimeOffset now)
     {
-        // 1 セルに積める上限。多い日（同じ月日に何年ぶんも放送がある日）でも
-        // グリッドの行高がここで頭打ちになる。ホームの当月カレンダーが 1 日あたり
-        // 出す枚数（同時期に放送していたシリーズ数ぶん）と釣り合う値にしてある。
-        const int MaxChips = 6;
-
         static int Order(AnniversaryEntry e) => e.Kind switch
         {
             "cb" => 0,
             "mv" => 1,
-            "pb" => 2,
-            _ => 3
+            "pb" => e.PersonTier switch { 0 => 2, 1 => 3, _ => 5 },
+            _ => 4
         };
 
         var chips = new List<DayChip>();
-        foreach (var e in dayEntries.OrderBy(Order).ThenBy(e => e.Year ?? 0).ThenBy(e => e.EpisodeNo))
+        foreach (var e in dayEntries.OrderBy(Order).ThenByDescending(e => e.PersonCreditCount).ThenBy(e => e.Year ?? 0).ThenBy(e => e.EpisodeNo))
         {
-            if (chips.Count >= MaxChips) break;
             chips.Add(e.Kind switch
             {
                 "cb" => new DayChip
@@ -413,7 +412,7 @@ public sealed class AnniversaryGenerator
     }
 
     /// <summary>
-    /// TV 放送のチップ。第 1 話・最終話は強調クラスを足す。
+    /// TV 放送のチップ。第 1 話・最終話は強調クラスを足す。大人向けスピンオフの話も TV 放送と同じ配色で、📺 の代わりに 🌙 を付けて見分ける。
     /// ツールチップはネイティブ表示のため CSS でぼかせない。未解禁の話はサブタイトルを含めない。
     /// </summary>
     private static DayChip BuildEpisodeChip(AnniversaryEntry e, DateTimeOffset now)
@@ -430,7 +429,7 @@ public sealed class AnniversaryGenerator
         return new DayChip
         {
             CssClass = cls,
-            Emoji = "📺",
+            Emoji = e.IsOtona ? "🌙" : "📺",
             Label = $"{e.SeriesTitleShort}#{e.EpisodeNo}",
             LabelFull = $"{e.SeriesTitle}#{e.EpisodeNo}",
             Url = e.EpisodeUrl,
@@ -467,6 +466,8 @@ public sealed class AnniversaryGenerator
         public string EpisodeUrl { get; set; } = "";
         public bool IsFirstEpisode { get; set; }
         public bool IsLastEpisode { get; set; }
+        /// <summary>大人向けスピンオフ（種別 OTONA）の話か。作品名の前に 🌙 を添える。</summary>
+        public bool IsOtona { get; set; }
         /// <summary>
         /// サブタイトルが解禁前かどうか。true の話は題名を出さない。
         /// サイト本体は解禁時刻で自動解除されるぼかしを掛けているが、記念日ページは過去年と
@@ -500,6 +501,8 @@ public sealed class AnniversaryGenerator
         public string TitleGuardedHtml { get; set; } = "";
         public bool IsFirstEpisode { get; set; }
         public bool IsLastEpisode { get; set; }
+        /// <summary>大人向けスピンオフ（種別 OTONA）の話か。作品名の前に 🌙 を添える。</summary>
+        public bool IsOtona { get; set; }
     }
 
     private sealed class MovieRow
@@ -557,8 +560,6 @@ public sealed class AnniversaryGenerator
         public int Count { get; set; }
         /// <summary>セルに載せるチップ（ホームの当月カレンダーと同じ意匠・同じ並び順）。</summary>
         public IReadOnlyList<DayChip> Chips { get; set; } = Array.Empty<DayChip>();
-        /// <summary>セルに載りきらなかった件数。0 なら「ほか n件」を出さない。</summary>
-        public int OverflowCount { get; set; }
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using PrecureDataStars.Data.Models;
+using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Pipeline;
 
@@ -69,6 +70,41 @@ public static class BuildContextLookupExtensions
         => ctx.SeriesById.TryGetValue(seriesId, out var s)
            && ctx.SeriesKindByCode.TryGetValue(s.KindCode, out var sk)
            && string.Equals(sk.CreditAttachTo, "SERIES", StringComparison.Ordinal);
+
+    /// <summary>
+    /// 本線の TV シリーズ（kind_code='TV'）かを判定する。通算・記録・統計・ホームの数・📺 の話数など、
+    /// 本線の数・集計の母集合はこれで絞る（スピンオフの話を混ぜない）。未登録シリーズは <c>false</c>。
+    /// </summary>
+    public static bool IsMainlineTvSeries(this BuildContext ctx, int seriesId)
+        => ctx.SeriesById.TryGetValue(seriesId, out var s) && string.Equals(s.KindCode, "TV", StringComparison.Ordinal);
+
+    /// <summary>
+    /// その日に放送していた本線の TV シリーズ（kind_code='TV' のうち、放送開始日がその日以前で最も新しいもの）の series_id。
+    /// 放送開始日が同じなら series_id の小さい方。最初のシリーズの放送開始より前の日付は null。
+    /// 盤（商品）を、発売日の時点で放送していた作品に置くのに使う。
+    /// </summary>
+    public static int? MainlineTvSeriesOnAir(this BuildContext ctx, DateOnly date)
+        => ctx.Series
+            .Where(s => string.Equals(s.KindCode, "TV", StringComparison.Ordinal) && s.StartDate <= date)
+            .OrderByDescending(s => s.StartDate)
+            .ThenBy(s => s.SeriesId)
+            .Select(s => (int?)s.SeriesId)
+            .FirstOrDefault();
+
+    /// <summary>
+    /// スピンオフ（<see cref="SeriesClassifier.IsSpinOff"/>：大人向け・ショート・スピンオフ）かを判定する。
+    /// 人物・企業のページの担当量の札では、大人向け（<see cref="IsOtonaSeries"/>）は 🌙 で数え、
+    /// それ以外のスピンオフ（ショート・スピンオフ）はどの札にも数えない。未登録シリーズは <c>false</c>。
+    /// </summary>
+    public static bool IsSpinOffSeries(this BuildContext ctx, int seriesId)
+        => ctx.SeriesById.TryGetValue(seriesId, out var s) && SeriesClassifier.IsSpinOff(s);
+
+    /// <summary>
+    /// 大人向けスピンオフ（<see cref="SeriesClassifier.IsOtona"/>）かを判定する。人物・企業のページで、大人向けスピンオフの参加話数を
+    /// 🌙 の札で TV・映画と分けて数えるのに使う。未登録シリーズは <c>false</c>。
+    /// </summary>
+    public static bool IsOtonaSeries(this BuildContext ctx, int seriesId)
+        => ctx.SeriesById.TryGetValue(seriesId, out var s) && SeriesClassifier.IsOtona(s);
 
     /// <summary>録音の出典シリーズ開始日を引く。出典が無い録音は末尾扱い（<see cref="DateOnly.MaxValue"/>）。 「歌った録音」の選択（複数あれば出典シリーズが最も早いものを採る）に使う。</summary>
     public static DateOnly RecordingSeriesStart(this BuildContext ctx, SongRecording rec)

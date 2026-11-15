@@ -20,8 +20,6 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description><c>/robots.txt</c> — 通常クローラへの全許可 + sitemap.xml への参照に加え、
 ///     リソース消費の大きい外部クローラ（AI 学習スクレイパ系・バックリンク収集系）への
 ///     個別 Disallow を主要検索エンジンには控えめな <c>Crawl-delay</c> を付ける。</description></item>
-///   <item><description><c>/ads.txt</c> — Google AdSense のパブリッシャー ID が設定されているときに
-///     IAB 標準形式の 1 行（DIRECT 関係）を出力する。</description></item>
 /// </list>
 /// BaseUrl が空の場合は sitemap.xml の <c>&lt;loc&gt;</c> 値が組み立てられないため、
 /// 警告ログを出力したうえで sitemap.xml は生成せず robots.txt のみ書き出す（クロールを許可するか
@@ -40,34 +38,38 @@ public sealed class SeoGenerator
     /// <summary>
     /// <c>robots.txt</c> で個別に <c>Disallow: /</c> を当てる外部クローラの User-Agent 一覧。
     /// <list type="bullet">
-    ///   <item>前半：AI 学習・LLM データ収集系（GPTBot / ClaudeBot 等）。本サイトのコンテンツは
-    ///     ファン個人の収集物であり、商用 AI モデル学習への無断利用は意図しないため明示拒否する。</item>
+    ///   <item>前半：AI 学習・LLM データ収集系。AI の学習に使ってよいのは OpenAI（ChatGPT）と Anthropic（Claude）だけにするため、
+    ///     両社以外の学習用クローラ（CCBot / Google-Extended / Meta-ExternalAgent 等）を明示拒否する。</item>
     ///   <item>後半：バックリンク・SEO 解析系（AhrefsBot / SemrushBot / MJ12bot 等）。サイトの解析データを
     ///     商用販売する目的のクローラで、本サイトに対するメリットが無くサーバ負荷だけがかかるため拒否。</item>
     /// </list>
-    /// 一方で AI「検索」系（OAI-SearchBot / PerplexityBot）は本リストに含めない。これらは学習用の
-    /// 収集ではなく回答への引用元としてページを読みに来るクローラで、拒否すると AI 検索経由の
-    /// 露出と流入が構造的にゼロになるため、通常の検索エンジンと同じ扱いで許可する
-    /// （学習系の GPTBot / ClaudeBot / Google-Extended 等は拒否したまま維持する）。
+    /// OpenAI と Anthropic のクローラは本リストに含めず、<c>User-agent: *</c> の全許可で通す
+    /// （OpenAI：GPTBot〔学習〕・ChatGPT-User〔利用者の操作で開く〕・OAI-SearchBot〔検索〕。
+    /// Anthropic：ClaudeBot〔学習〕・Claude-User〔利用者の操作で開く〕・Claude-SearchBot〔検索〕・旧名の anthropic-ai / Claude-Web）。
+    /// AI「検索」系の PerplexityBot も、学習用の収集ではなく回答への引用元としてページを読みに来るクローラなので、
+    /// 通常の検索エンジンと同じ扱いで許可する。
     /// 紳士協定であり強制力は無いが、最初のリクエスト前に robots.txt を読む行儀の良いクローラには有効。
     /// </summary>
     private static readonly string[] BlockedCrawlerUserAgents = new[]
     {
-        // ── AI 学習・LLM データ収集系 ──
-        "GPTBot",
-        "ChatGPT-User",
-        "ClaudeBot",
-        "anthropic-ai",
-        "Claude-Web",
+        // ── AI 学習・LLM データ収集系（OpenAI と Anthropic 以外） ──
         "CCBot",
         "Google-Extended",
         "Applebot-Extended",
         "Bytespider",
         "FacebookBot",
+        "Meta-ExternalAgent",
         "Diffbot",
         "Omgilibot",
         "Omgili",
         "cohere-ai",
+        "cohere-training-data-crawler",
+        "AI2Bot",
+        "Ai2Bot-Dolma",
+        "PanguBot",
+        "Timpibot",
+        "ImagesiftBot",
+        "img2dataset",
         // ── バックリンク・SEO 解析系 ──
         "AhrefsBot",
         "SemrushBot",
@@ -83,9 +85,6 @@ public sealed class SeoGenerator
 
     /// <summary>主要検索エンジン向けに付ける Crawl-delay 値（秒）。</summary>
     private const int MainCrawlerCrawlDelaySeconds = 10;
-
-    /// <summary>AdSense の <c>ads.txt</c> に書く Google 公式の関係識別子。 IAB 仕様で固定値の TAG-ID 部分。AdSense のパブリッシャ全員が共通で使う。</summary>
-    private const string GoogleAdSenseAdsTxtTagId = "f08c47fec0942fa0";
 
     public SeoGenerator(BuildContext ctx, BuildConfig config, PageRenderer pageRenderer, OutputWriter output)
     {
@@ -103,16 +102,13 @@ public sealed class SeoGenerator
         {
             _ctx.Logger.Info("BaseUrl が未設定のため sitemap.xml の生成をスキップします（robots.txt のみ書き出し）。");
             WriteRobotsTxt(includeSitemap: false);
-            WriteAdsTxtIfConfigured();
             return Task.CompletedTask;
         }
 
         WriteSitemapXml();
         WriteRobotsTxt(includeSitemap: true);
-        WriteAdsTxtIfConfigured();
 
-        _ctx.Logger.Success($"SEO: sitemap.xml ({_pageRenderer.WrittenPages.Count} URL) + robots.txt"
-            + (string.IsNullOrEmpty(_config.GoogleAdSenseClientId) ? "" : " + ads.txt"));
+        _ctx.Logger.Success($"SEO: sitemap.xml ({_pageRenderer.WrittenPages.Count} URL) + robots.txt");
         return Task.CompletedTask;
     }
 
@@ -129,7 +125,9 @@ public sealed class SeoGenerator
             .ToList();
         var manifest = new SitemapLastmodManifest(
             SitemapLastmodManifest.DeriveManifestPath(_config.OutputDirectory));
-        var lastmod = manifest.Resolve(pages, buildTimeIso);
+        // 印は各ページを書く時に取ってあるので、出力のファイルを読み返さない。
+        // 差分だけを出すビルドでは、控えを進めない（次の本当のビルドで、変わったページの更新日が進むように）。
+        var lastmod = manifest.Resolve(pages, buildTimeIso, _output.Md5Of, save: !_config.DiffOnly);
         _ctx.Logger.Info(
             $"sitemap lastmod: 据え置き {lastmod.Unchanged} / 更新 {lastmod.Changed} / 新規 {lastmod.Added}");
 
@@ -207,8 +205,9 @@ public sealed class SeoGenerator
 
         // 個別ブロックの説明コメント。robots.txt はコメント許容なので、運用者にも意図が伝わるよう付記。
         sb.AppendLine("# precure-datastars robots.txt");
-        sb.AppendLine("# 個別 User-agent ブロックは AI 学習・SEO 解析系の高負荷クローラに対する明示拒否です。");
-        sb.AppendLine("# AI 検索系（OAI-SearchBot / PerplexityBot）は引用元として読みに来るため許可しています。");
+        sb.AppendLine("# AI の学習に使ってよいのは OpenAI（ChatGPT）と Anthropic（Claude）のクローラだけです。");
+        sb.AppendLine("# 個別 User-agent ブロックは、それ以外の AI 学習系と SEO 解析系のクローラに対する明示拒否です。");
+        sb.AppendLine("# AI 検索系（OAI-SearchBot / Claude-SearchBot / PerplexityBot）は引用元として読みに来るため許可しています。");
         sb.AppendLine("# 紳士協定であり強制力はありません（実流量制御は別途 CDN / WAF 側で行います）。");
         sb.AppendLine();
 
@@ -241,45 +240,5 @@ public sealed class SeoGenerator
         }
 
         _output.WriteText(Path.Combine(_config.OutputDirectory, "robots.txt"), sb.ToString());
-    }
-
-    /// <summary>
-    /// <c>/ads.txt</c> を書き出す。
-    /// IAB の Authorized Digital Sellers 仕様に従い、Google AdSense のパブリッシャー ID が
-    /// 設定されているときだけ「<c>google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0</c>」の
-    /// 標準 1 行を出力する。AdSense クライアント ID は App.config の <c>GoogleAdSenseClientId</c> 値
-    /// （<c>ca-pub-XXXXXXXXXXXXXXXX</c> 形式）から接頭辞 <c>ca-</c> を除いた <c>pub-XXXXXXXXXXXXXXXX</c>
-    /// 部分を sellers ID として使う。
-    /// 未設定時は ads.txt を生成しない。設定があっても <c>pub-</c> で始まる形に正規化できない値の場合は
-    /// 警告を出して書き出しを見送る（不正な ads.txt は AdSense 審査で警告対象となるため）。
-    /// </summary>
-    private void WriteAdsTxtIfConfigured()
-    {
-        var clientId = _config.GoogleAdSenseClientId;
-        if (string.IsNullOrEmpty(clientId)) return;
-
-        // "ca-pub-XXXX..." → "pub-XXXX..." に正規化（既に "pub-" で始まる入力にも対応）。
-        string sellersId;
-        if (clientId.StartsWith("ca-pub-", StringComparison.OrdinalIgnoreCase))
-        {
-            sellersId = clientId.Substring("ca-".Length);
-        }
-        else if (clientId.StartsWith("pub-", StringComparison.OrdinalIgnoreCase))
-        {
-            sellersId = clientId;
-        }
-        else
-        {
-            _ctx.Logger.Warn(
-                $"GoogleAdSenseClientId='{clientId}' が pub-/ca-pub- 形式ではないため ads.txt の生成をスキップします。");
-            return;
-        }
-
-        var sb = new StringBuilder();
-        // 1 行目はコメント（運用者向け）。空行を挟むと一部のクローラが警告するため挟まない。
-        sb.AppendLine("# precure-datastars ads.txt");
-        sb.AppendLine($"google.com, {sellersId}, DIRECT, {GoogleAdSenseAdsTxtTagId}");
-
-        _output.WriteText(Path.Combine(_config.OutputDirectory, "ads.txt"), sb.ToString());
     }
 }

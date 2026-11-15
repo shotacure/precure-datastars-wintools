@@ -352,6 +352,7 @@ public sealed partial class RoleAliasUsageRepository
 
     /// <summary>「指定 <paramref name="leadingCompanyAliasId"/> がブロックトップ屋号として設定されていた
     /// 過去ブロックの PERSON エントリ」を <see cref="RoleAliasUsage"/> サンプル点として返す。
+    /// 筆頭が 2 社の連名のブロックでは、2 社目（<c>leading_company2_alias_id</c>）に設定されていたブロックも含める。
     /// 役職クラスタ・アンカー日付窓は <see cref="GetRecentPersonAliasUsagesAsync"/> と同じ条件で絞る。
     /// 「ブロック先頭に屋号 [[X]] を入れた → 過去同屋号ブロックの所属人物だけを優先候補に出す」用途。
     /// 戻り値は呼び出し側で alias_id 単位に集約してスコアリングする（<see cref="RankUsages"/> 互換）。</summary>
@@ -375,7 +376,8 @@ public sealed partial class RoleAliasUsageRepository
             FROM credit_block_entries e
             JOIN person_aliases       pa ON pa.alias_id      = e.person_alias_id
             JOIN credit_role_blocks   rb ON rb.block_id      = e.block_id
-                                        AND rb.leading_company_alias_id = @LeadingCompanyAliasId
+                                        AND (rb.leading_company_alias_id  = @LeadingCompanyAliasId
+                                             OR rb.leading_company2_alias_id = @LeadingCompanyAliasId)
             JOIN credit_card_roles    cr ON cr.card_role_id  = rb.card_role_id
             JOIN credit_card_groups   cg ON cg.card_group_id = cr.card_group_id
             JOIN credit_card_tiers    ct ON ct.card_tier_id  = cg.card_tier_id

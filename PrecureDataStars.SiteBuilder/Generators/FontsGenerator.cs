@@ -46,30 +46,36 @@ public sealed class FontsGenerator
             .OrderBy(s => s.StartDate).ThenBy(s => s.SeriesId).ToList();
         var sections = seriesList.Select(BuildSeriesSection).ToList();
 
-        GenerateIndex(sections);
         var families = usages.Select(u => _ctx.FontById[u.FontId]).DistinctBy(f => f.FontId)
             .GroupBy(f => f.PageFamilyName, StringComparer.Ordinal)
             .Select(g => g.OrderBy(f => WeightOrder(f.Weight)).ThenBy(f => FamilyWeightOrder(f.FamilyName)).ToList()).ToList();
+        int fontCount = families.Sum(f => f.Count);
+
+        GenerateIndex(sections, families.Count, fontCount);
         foreach (var family in families)
             foreach (var font in family)
                 GenerateFont(font, family, sections);
 
-        int fontCount = families.Sum(f => f.Count);
         _ctx.Logger.Success($"fonts: {1 + fontCount} ページ（作品 {sections.Count}・書体 {fontCount}）");
     }
 
     // ════════════════════ /fonts/ ════════════════════
 
-    private void GenerateIndex(IReadOnlyList<FontSeriesSection> sections)
+    /// <param name="familyCount">載せる書体（ファミリー）の数。</param>
+    /// <param name="fontCount">載せる書体のウェイト（ファミリーとウェイトの組）の数。</param>
+    private void GenerateIndex(IReadOnlyList<FontSeriesSection> sections, int familyCount, int fontCount)
     {
         var content = new FontsIndexModel { SeriesSections = sections.Where(s => s.Cards.Count > 0).ToList() };
         var layout = new LayoutModel
         {
             PageTitle = "歴代タイトル字幕フォント",
-            // カードは見出しを大きく組む標準の組み方（数は載せず、リード文で中身を伝える。リード文は文の切れ目で改行する）
+            // カードは書体（ファミリー）とウェイトの数を出し、その下にリード文で中身を伝える（リード文は文の切れ目で改行する）。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代タイトル字幕フォント",
-                Subtitle: "歴代プリキュアTVシリーズのOP・EDのクレジットと歌詞、\nサブタイトルの字幕フォントの一覧です。\n書体見本のほか、公式と同じフォントを使用した組見本もあります。"),
-            MetaDescription = $"歴代プリキュアのタイトル字幕フォント一覧。OP・ED のクレジットと歌詞、サブタイトルに使われた書体を、{content.SeriesSections.Count} 作品ごとに放送の画面を模した見本つきでまとめました。",
+                Subtitle: "歴代プリキュアの字幕フォント")
+            {
+                Badges = new[] { new OgCardBadge("書体", $"{familyCount}ファミリー"), new OgCardBadge("", $"{fontCount}ウェイト") }
+            },
+            MetaDescription = "歴代プリキュアの字幕フォント",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -168,12 +174,12 @@ public sealed class FontsGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = $"{first.DisplayName}（フォント）",
+            PageTitle = first.DisplayName,
             // カードは右上の透かしに「フォント」、見出しに見本を描いた書体名とウェイト（代用で描く書体は代用の書体。作品で使われた書体名と代用の旨はページに出す）、
             // その右にメーカー名（写研の書体は「写研・モリサワ」）、その下に書体見本と同じ字をその書体で装飾なしで並べる
             // （左に「愛」「永」、右にひらがな・カタカナ・漢字 2 行）。描く書体の無い書体は見出しと説明文だけ
             OgCard = new OgCardSpec(Kicker: "", Title: string.IsNullOrWhiteSpace(first.RenderFontName) ? first.DisplayName : first.RenderDisplayName,
-                Subtitle: string.IsNullOrWhiteSpace(first.RenderFontName) ? $"{foundry}の書体。歴代プリキュアで使われた作品と場所を、見本つきでまとめました。" : VendorLabel(first))
+                Subtitle: string.IsNullOrWhiteSpace(first.RenderFontName) ? $"{foundry}の書体。歴代プリキュアで使われた作品と場所（見本つき）" : VendorLabel(first))
             {
                 Watermark = "フォント",
                 Specimen = string.IsNullOrWhiteSpace(first.RenderFontName) ? null : new OgCardSpecimen(first.RenderFontName, "愛永",
@@ -183,7 +189,7 @@ public sealed class FontsGenerator
                         FontSampleRequests.SpecimenBottomLeft[..8], FontSampleRequests.SpecimenBottomLeft[8..]
                     })
             },
-            MetaDescription = $"{first.DisplayName}（{foundry}）が使われた歴代プリキュアの作品と場所（OP・ED のクレジットと歌詞、サブタイトル）を、書体見本と放送の画面を模した見本つきでまとめました。",
+            MetaDescription = $"{first.DisplayName}（{foundry}）が使われた歴代プリキュアの作品と場所（OP・ED のクレジットと歌詞、サブタイトル／書体見本・組見本つき）",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -192,6 +198,9 @@ public sealed class FontsGenerator
             }
         };
         _page.RenderAndWrite(url, "fonts", "fonts-detail.sbn", content, layout);
+        // サイト内検索に書体のページを載せる。題は書体名とウェイト、下にメーカー名。まとめる書体名（ファミリー）でも当たるようにする。
+        _ctx.SearchPages.Add(new SearchPageEntry("font", url, first.DisplayName, foundry,
+            new[] { first.FamilyName, first.PageFamilyName }.Distinct(StringComparer.Ordinal).ToList()));
     }
 
     /// <summary>

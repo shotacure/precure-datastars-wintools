@@ -17,6 +17,8 @@ public sealed class CompanyAliasesRepository : RepositoryBase
           name_kana             AS NameKana,
           name_en               AS NameEn,
           is_official_name      AS IsOfficialName,
+          display_text_override AS DisplayTextOverride,
+          credit_small_suffix   AS CreditSmallSuffix,
           predecessor_alias_id  AS PredecessorAliasId,
           successor_alias_id    AS SuccessorAliasId,
           valid_from            AS ValidFrom,
@@ -147,10 +149,10 @@ public sealed class CompanyAliasesRepository : RepositoryBase
         // name_en 列を追加。
         const string sql = """
             INSERT INTO company_aliases
-              (company_id, name, name_kana, name_en, is_official_name, predecessor_alias_id, successor_alias_id,
+              (company_id, name, name_kana, name_en, is_official_name, display_text_override, predecessor_alias_id, successor_alias_id,
                valid_from, valid_to, notes, created_by, updated_by)
             VALUES
-              (@CompanyId, @Name, @NameKana, @NameEn, @IsOfficialName, @PredecessorAliasId, @SuccessorAliasId,
+              (@CompanyId, @Name, @NameKana, @NameEn, @IsOfficialName, @DisplayTextOverride, @PredecessorAliasId, @SuccessorAliasId,
                @ValidFrom, @ValidTo, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -169,6 +171,7 @@ public sealed class CompanyAliasesRepository : RepositoryBase
               name_kana             = @NameKana,
               name_en               = @NameEn,
               is_official_name      = @IsOfficialName,
+              display_text_override = @DisplayTextOverride,
               predecessor_alias_id  = @PredecessorAliasId,
               successor_alias_id    = @SuccessorAliasId,
               valid_from            = @ValidFrom,

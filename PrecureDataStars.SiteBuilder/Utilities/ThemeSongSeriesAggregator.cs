@@ -48,6 +48,8 @@ public static class ThemeSongSeriesAggregator
 
         // (theme_kind, song_recording_id, is_broadcast_only) → 使用話数の集合。
         var episodeNosByGroup = new Dictionary<(string ThemeKind, int SongRecordingId, bool IsBroadcastOnly), HashSet<int>>();
+        // 同じキー → その回で流れたサイズ（話数・劇中順・サイズコード。サイズの指定が無い話は null）。再生ボタンとサイズの並びに使う。
+        var sizeUsesByGroup = new Dictionary<(string ThemeKind, int SongRecordingId, bool IsBroadcastOnly), List<(int EpNo, int Seq, string? SizeCode)>>();
         // theme_kind → 本放送限定行が押さえている話数の集合（差し替え区間の附記に使う）。
         var broadcastOnlyEpisodeNosByKind = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
         // theme_kind → 既定行（is_broadcast_only=0）が登録されている話数の集合。
@@ -71,6 +73,13 @@ public static class ThemeSongSeriesAggregator
                     episodeNosByGroup[key] = nos;
                 }
                 nos.Add(ep.SeriesEpNo);
+
+                if (!sizeUsesByGroup.TryGetValue(key, out var sizeUses))
+                {
+                    sizeUses = new List<(int EpNo, int Seq, string? SizeCode)>();
+                    sizeUsesByGroup[key] = sizeUses;
+                }
+                sizeUses.Add((ep.SeriesEpNo, t.Seq, string.IsNullOrEmpty(t.SongSizeVariantCode) ? null : t.SongSizeVariantCode));
 
                 var byKind = t.IsBroadcastOnly ? broadcastOnlyEpisodeNosByKind : defaultEpisodeNosByKind;
                 if (!byKind.TryGetValue(t.ThemeKind, out var kindNos))
@@ -108,10 +117,23 @@ public static class ThemeSongSeriesAggregator
                 // 集約前に CREDITED_NOT_BROADCAST を除外済みなので、後段ビルダの同名フィルタには掛からない値を渡す。
                 // 表示に効くのはこのフィルタだけで、区分ラベルは theme_kind から引かれる。
                 UsageActuality: EpisodeThemeSongUsageActualities.Normal,
-                // 備考は話ごとの記述なのでシリーズ単位には畳まない。
-                Notes: null,
                 EpisodeRangeLabel: BuildRangeLabel(
-                    kv.Value, allEpisodeNos, isBroadcastOnly, broadcastOnlyNos, defaultNos)));
+                    kv.Value, allEpisodeNos, isBroadcastOnly, broadcastOnlyNos, defaultNos),
+                // 使ったサイズを使った順（話数 → 劇中順）に重複なしで。
+                SizeVariantCodes: sizeUsesByGroup[kv.Key]
+                    .OrderBy(u => u.EpNo)
+                    .ThenBy(u => u.Seq)
+                    .Select(u => u.SizeCode)
+                    .Distinct()
+                    .ToList(),
+                // サイズごとの流れた話数（サイズの札の左に出す）。サイズの指定が無い話は入れない。
+                SizeEpisodeNos: sizeUsesByGroup[kv.Key]
+                    .Where(u => u.SizeCode is not null)
+                    .GroupBy(u => u.SizeCode!, StringComparer.Ordinal)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => (IReadOnlyCollection<int>)g.Select(u => u.EpNo).ToHashSet(),
+                        StringComparer.Ordinal)));
         }
         return result;
     }

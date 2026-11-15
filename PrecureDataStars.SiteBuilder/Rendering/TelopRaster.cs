@@ -110,6 +110,30 @@ internal static class TelopRaster
                 // 横のグラデーションの傾き：行の高さの中ほどからの縦のずれに応じて横の位置をずらす
                 float slope = vertical ? 0f : MathF.Tan(gradient.Tilt * MathF.PI / 180f);
                 float midY = (rangeV.Lo + rangeV.Hi) / 2f;
+                if (gradient.Radial)
+                {
+                    // 環状：中心からの距離を半径で割って 0〜1。場面の画像では置く位置から求めた中心と半径（Line）、
+                    // それ以外はこの画像の字の範囲の中心と、そこからいちばん遠い角までの距離に倍率を掛けた半径
+                    float cx, cy, radius;
+                    if (gradient.Line is { Count: 4 } rl)
+                    {
+                        cx = rl[0]; cy = rl[1];
+                        radius = MathF.Sqrt((rl[2] - rl[0]) * (rl[2] - rl[0]) + (rl[3] - rl[1]) * (rl[3] - rl[1]));
+                    }
+                    else
+                    {
+                        cx = (rangeH.Lo + rangeH.Hi) / 2f; cy = (rangeV.Lo + rangeV.Hi) / 2f;
+                        float hw = (rangeH.Hi - rangeH.Lo) / 2f, hh = (rangeV.Hi - rangeV.Lo) / 2f;
+                        radius = MathF.Sqrt(hw * hw + hh * hh) * gradient.Radius;
+                    }
+                    radius = Math.Max(1f, radius);
+                    return i =>
+                    {
+                        float ddx = i % width - cx, ddy = i / width - cy;
+                        float t = Math.Clamp(MathF.Sqrt(ddx * ddx + ddy * ddy) / radius, 0f, 1f);
+                        return Interpolate(stops, pos, t);
+                    };
+                }
                 if (gradient.Angle is float axisDeg && gradient.Period > 0f)
                 {
                     // 傾けた軸の繰り返し：字のある範囲の左上の角からの、軸の向きへの射影を繰り返しの長さで折り返す

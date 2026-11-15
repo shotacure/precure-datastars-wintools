@@ -31,6 +31,10 @@
 .PARAMETER WorkRoot
   基準出力・現在出力を置く作業ディレクトリ。既定は %TEMP%\pds-site-verify。
 
+.PARAMETER SiteBuilderArgs
+  SiteBuilder に足して渡す引数。画像の描き方の経路を変えたときは --refresh-og / --refresh-telop を渡し、
+  作り置きを写すのでなく描いた画像どうしを比べる。
+
 .EXAMPLE
   .\scripts\verify-site-output.ps1 -Mode baseline
   変更前の基準出力を生成する。
@@ -45,7 +49,9 @@ param(
     [ValidateSet('baseline', 'compare')]
     [string]$Mode,
 
-    [string]$WorkRoot = (Join-Path $env:TEMP 'pds-site-verify')
+    [string]$WorkRoot = (Join-Path $env:TEMP 'pds-site-verify'),
+
+    [string[]]$SiteBuilderArgs = @()
 )
 
 # cmdlet の失敗は即停止。native（dotnet / SiteBuilder.exe）の失敗は $LASTEXITCODE で個別判定する。
@@ -89,7 +95,7 @@ try {
     $cfg.Save($cfgPath)
 
     # --- 3) フルビルド実行（本番モード・デプロイなし＝ローカル出力のみ） ---
-    & $exePath --production
+    & $exePath --production @SiteBuilderArgs
     if ($LASTEXITCODE -ne 0) { throw "SiteBuilder の実行が失敗しました (exit $LASTEXITCODE)。" }
 }
 finally {

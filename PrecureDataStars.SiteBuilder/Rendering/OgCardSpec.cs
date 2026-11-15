@@ -69,8 +69,8 @@ public sealed record OgCardSpec(
     public bool HeroVoice { get; init; }
 
     /// <summary>
-    /// ヒーロー調のカードで、見出しの下に大きく組む言葉（タグライン）。改行は "\n" で指定する。
-    /// <see cref="StatementFontFamily"/> の書体（無ければ透かしの書体）を機械的な斜体にして、数を並べる代わりに置く。
+    /// ヒーロー調のカードで、見出しのすぐ下（罫の上）に小さく添える言葉（タグライン）。1 行で組む。
+    /// <see cref="StatementFontFamily"/> の書体（無ければ透かしの書体）を立てたまま濃ピンクで描く。
     /// </summary>
     public string Statement { get; init; } = "";
 
@@ -116,6 +116,14 @@ public sealed record OgCardSpec(
     public IReadOnlyList<OgCardFactLine> InlineFacts { get; init; } = Array.Empty<OgCardFactLine>();
 
     /// <summary>
+    /// 流し込みの事実行（<see cref="InlineFacts"/>）の後ろに、空きがあるときだけ続けて載せる事実行（歌の演奏・エンジニアなど）。
+    /// 疎の組みで、標準の字の大きさのまま下端に収まる分だけを先頭から載せる（入れるために字を小さくしない）。
+    /// null なら無し。null のときは JSON に出さず、既存のカードの作り置きの鍵を変えない。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<OgCardFactLine>? SupplementalFacts { get; init; }
+
+    /// <summary>
     /// 1 行 1 項目で積むファクト行。<see cref="InlineFacts"/> と違い項目ごとに改行する。
     /// 値が長くて 1 行に流し込めない種類の情報に使う。
     /// </summary>
@@ -127,6 +135,14 @@ public sealed record OgCardSpec(
     /// 空ならアクセントのピンク。透かしと年表の地色にも同じ色を使う。
     /// </summary>
     public string BandColorHex { get; init; } = "";
+
+    /// <summary>
+    /// 色帯と透かしを 1 色ではなくグラデーションで塗るときの色の並び（<c>precures.key_color_gradient</c> の形式。
+    /// 「<c>#RRGGBB 位置%</c>」をカンマでつないだもの）。色帯は上から下へ、透かしは左から右へ塗る。
+    /// 年表の地色など 1 色が要る所は <see cref="BandColorHex"/> を使う。null か読めない値なら 1 色で塗る。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? BandGradient { get; init; }
 
     /// <summary>
     /// 右上に薄く大きく置く透かしの文字。縮小表示でも「何のカードか」が形で伝わるようにする。
@@ -158,7 +174,7 @@ public sealed record OgCardSpec(
     /// </summary>
     public IReadOnlyList<OgCardFactLine> FootFacts { get; init; } = Array.Empty<OgCardFactLine>();
 
-    /// <summary>プロフィール組みでの数の拡大率。0 なら既定（1.8 倍）。</summary>
+    /// <summary>プロフィール組みでの数の拡大率。0 なら既定（等倍）。</summary>
     public float StatScale { get; init; }
 
     /// <summary>
@@ -345,6 +361,23 @@ public sealed record OgCardFactLine(string Label, string Text)
     /// 2 段に分けて全部見せるための枠。1 行 1 項目で積む <see cref="OgCardSpec.Facts"/> でのみ使う。
     /// </summary>
     public string SubText { get; init; } = "";
+
+    /// <summary>
+    /// 値を「同じ種類の項目の並び」として渡す指定（役職ごとの作品名、歌った曲名など）。非 null なら <see cref="Text"/> の代わりに使う。
+    /// 描画の側が、先頭から入るだけ（項目あたりの行数の上限まで）並べ、入りきらない分があれば末尾に「ほか」と添える。
+    /// 大事な項目から順に並べて渡す。1 行 1 項目で積む <see cref="OgCardSpec.Facts"/> でのみ使う。
+    /// null のときは JSON に出さず、既存のカードの作り置きの鍵を変えない。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? Items { get; init; }
+
+    /// <summary><see cref="Items"/> に入れなかった項目がまだあるか。true なら全部入っても末尾に「ほか」と添える。</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ItemsHaveMore { get; init; }
+
+    /// <summary><see cref="Items"/> のあいだに挟む区切り。null なら挟まない（『』や「」で括った名前はそのまま続けて並べる）。</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ItemsSeparator { get; init; }
 }
 
 /// <summary>
@@ -421,7 +454,7 @@ public static class OgRolePalette
         "SERIES_COMPOSITION" or "SCREENPLAY" => "#3b82c4",
         "STORYBOARD" => "#2ea7ad",
         "SERIES_DIRECTOR" or "EPISODE_DIRECTOR" or "DIRECTOR" => "#e91e63",
-        "CHARACTER_DESIGN" or "ANIMATION_DIRECTOR" => "#4ca36b",
+        "CHARACTER_DESIGN" or "COSTUME_PROP_DESIGN" or "ANIMATION_DIRECTOR" => "#4ca36b",
         "ART_DESIGN" or "ART_DIRECTOR" or "ART_DIRECTOR_TV" => "#d4a017",
         // 楽曲の役職（サイトの楽曲詳細のバッジと同じ 4 色）。
         "LYRICS" or "LYRICS_TRANSLATION" => "#c0354c",
@@ -460,5 +493,19 @@ public static class OgCardColors
         if (l < 22f) l = 30f;
         if (s < 45f) s = 45f;
         return SkiaSharp.SKColor.FromHsl(h, s, l).ToString();
+    }
+
+    /// <summary>
+    /// キーカラーのグラデーション（<c>precures.key_color_gradient</c>）の各色を <see cref="ForKeyColor"/> と同じ濃さへ寄せ、
+    /// 同じ形式（「<c>#RRGGBB 位置%</c>」をカンマでつないだもの）で返す。読めなければ null。
+    /// </summary>
+    public static string? ForKeyColorGradient(string? gradient)
+    {
+        if (!PrecureDataStars.Data.Text.KeyColorGradient.TryParse(gradient, out var stops)) return null;
+        return string.Join(", ", stops.Select(st =>
+        {
+            var c = SkiaSharp.SKColor.Parse(ForKeyColor(st.Hex));
+            return $"#{c.Red:X2}{c.Green:X2}{c.Blue:X2} {(int)Math.Round(st.Position * 100f)}%";
+        }));
     }
 }

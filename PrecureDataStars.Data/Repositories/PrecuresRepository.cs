@@ -20,6 +20,7 @@ public sealed class PrecuresRepository : RepositoryBase
           counts_only_when_transformed AS CountsOnlyWhenTransformed,
           voice_actor_person_id   AS VoiceActorPersonId,
           key_color               AS KeyColor,
+          key_color_gradient      AS KeyColorGradient,
           skin_color_h            AS SkinColorH,
           skin_color_s            AS SkinColorS,
           skin_color_l            AS SkinColorL,
@@ -72,7 +73,7 @@ public sealed class PrecuresRepository : RepositoryBase
             INSERT INTO precures
               (pre_transform_alias_id, transform_alias_id, transform2_alias_id, alt_form_alias_id,
                voice_actor_person_id,
-               key_color,
+               key_color, key_color_gradient,
                skin_color_h, skin_color_s, skin_color_l,
                skin_color_r, skin_color_g, skin_color_b,
                school, school_class, family_business, notes,
@@ -80,7 +81,7 @@ public sealed class PrecuresRepository : RepositoryBase
             VALUES
               (@PreTransformAliasId, @TransformAliasId, @Transform2AliasId, @AltFormAliasId,
                @VoiceActorPersonId,
-               @KeyColor,
+               @KeyColor, @KeyColorGradient,
                @SkinColorH, @SkinColorS, @SkinColorL,
                @SkinColorR, @SkinColorG, @SkinColorB,
                @School, @SchoolClass, @FamilyBusiness, @Notes,
@@ -102,6 +103,7 @@ public sealed class PrecuresRepository : RepositoryBase
               alt_form_alias_id      = @AltFormAliasId,
               voice_actor_person_id  = @VoiceActorPersonId,
               key_color              = @KeyColor,
+              key_color_gradient     = @KeyColorGradient,
               skin_color_h           = @SkinColorH,
               skin_color_s           = @SkinColorS,
               skin_color_l           = @SkinColorL,

@@ -278,6 +278,8 @@ public sealed class EpisodeGenerator
                 }
                 sList.Add(sum);
 
+                // 歴代の分布は本線の TV の話だけで作る（スピンオフの話はその作品の中の分布にだけ入れる）
+                if (!_ctx.IsMainlineTvSeries(ep.SeriesId)) continue;
                 if (!globalValues.TryGetValue(grp.Key, out var gList))
                 {
                     globalValues[grp.Key] = gList = new List<int>();
@@ -322,6 +324,10 @@ public sealed class EpisodeGenerator
     /// サマリ・sitemap 記録は呼び出し側が逐次フェーズで行う）。</summary>
     private async Task<string> RenderOneAsync(Series series, Episode ep, CancellationToken ct)
     {
+        // ピンポイントビルドで書かないページは、組み立てごと飛ばす。
+        string targetUrl = PathUtil.EpisodeUrl(series.Slug, ep.SeriesEpNo);
+        if (!_page.IsTarget(targetUrl)) return targetUrl;
+
         // 同シリーズ内の前後話を引き当てる（一覧から自分のインデックスを探す）。
         var siblings = _ctx.EpisodesBySeries[series.SeriesId];
         var idx = -1;
@@ -385,7 +391,9 @@ public sealed class EpisodeGenerator
         // 全エピソード分の偏差値は SiteDataLoader でビルド開始時に 1 度だけ算出して
         // BuildContext に詰めてあるので、本ループでは episode_id 経由の辞書参照に切り替える
         // （per-page で全件 CTE 集計を繰り返さないため）。
-        var partLengthStats = _ctx.PartLengthStatsByEpisode.TryGetValue(ep.EpisodeId, out var cachedPartStats)
+        // スピンオフの話は本線の歴代の順位・偏差値の母集合に入らないので、尺の偏差値表と記録バッジを出さない。
+        bool isMainlineEpisode = _ctx.IsMainlineTvSeries(series.SeriesId);
+        var partLengthStats = isMainlineEpisode && _ctx.PartLengthStatsByEpisode.TryGetValue(ep.EpisodeId, out var cachedPartStats)
             ? cachedPartStats
             : (IReadOnlyList<EpisodePartsRepository.PartLengthStat>)Array.Empty<EpisodePartsRepository.PartLengthStat>();
         // カード見出しに出す「この回の実尺」。統計の母集団と同じく OA 尺をパート種別ごとに合算する
@@ -442,12 +450,13 @@ public sealed class EpisodeGenerator
 
         // 文字情報 HTML を作る（既存 BuildTitleInformationPerCharAsync の移植）。
         // 解禁前の話も作り、題名の文字そのものが並ぶので、テンプレ側で解禁時刻つきの枠に入れて隠す。
+        // サブタイトル分析（初登場の文字・ここだけの文字など）は本線の TV の話を母集合にするので、スピンオフの話には出さない。
         string titleCharInfoHtml = "";
-        if (!string.IsNullOrEmpty(ep.TitleCharStats))
+        if (isMainlineEpisode && !string.IsNullOrEmpty(ep.TitleCharStats))
         {
             titleCharInfoHtml = await _titleCharInfo.RenderAsync(ep, ct).ConfigureAwait(false);
         }
-        else if (!string.IsNullOrEmpty(ep.TitleText))
+        else if (isMainlineEpisode && !string.IsNullOrEmpty(ep.TitleText))
         {
             // サブタイトル未確定（誌面で未定 / 非公開）の話は統計対象が存在しないため警告しない。
             // 統計を作れるはずなのに欠けている話だけを警告に残す。
@@ -481,6 +490,15 @@ public sealed class EpisodeGenerator
             .OrderBy(c => KindOrder(c.CreditKind))
             .ThenBy(c => c.CreditKind, StringComparer.Ordinal)
             .ToList();
+        // 描画は全版（本放送版を含む）。同じ種別の中は 共通 → 本放送 → Blu-ray・配信 の順。
+        var displayCredits = (_ctx.CreditsByEpisodeForDisplay.TryGetValue(ep.EpisodeId, out var cachedDisplayCredits)
+                ? cachedDisplayCredits
+                : (IReadOnlyList<Credit>)Array.Empty<Credit>())
+            .Where(c => !c.IsDeleted)
+            .OrderBy(c => KindOrder(c.CreditKind))
+            .ThenBy(c => c.CreditKind, StringComparer.Ordinal)
+            .ThenBy(c => CreditMediaVersions.SortOrder(c.MediaVersion))
+            .ToList();
 
         // credit_kinds マスタから日本語名（"オープニングクレジット" / "エンディングクレジット" 等）を取り出す。
         // プレビュー側の RenderOneCreditFromDbAsync と同じ参照ルート。
@@ -491,22 +509,33 @@ public sealed class EpisodeGenerator
         }
 
         var creditBlocks = new List<CreditBlockView>();
-        foreach (var c in credits)
+        foreach (var c in displayCredits)
         {
             var html = await _creditRenderer.RenderAsync(c, _ctx.Logger, ct).ConfigureAwait(false);
             creditBlocks.Add(new CreditBlockView
             {
-                CreditKindLabel = _creditKindLabelMap.TryGetValue(c.CreditKind, out var nm) ? nm : c.CreditKind,
+                CreditKindLabel = CreditHeadingLabel(c, _creditKindLabelMap),
                 Html = html
             });
         }
 
-        // スタッフ情報（クレジット階層から脚本／絵コンテ／演出／作画監督／美術監督を抽出）。
+        // スタッフ情報（クレジット階層から、作品の表の行のある役職を抽出）。
         // クレジットセクションとは別に「主要スタッフ」セクションとして上部基本情報の近くに出す。
-        var staffRows = BuildStaffRows(credits);
+        // 仮クレジットの回は仮の credits（ページのクレジットには出さない）を足して札を作り、解禁前の話は名前をぼかしの枠に入れる。
+        var staffCredits = _ctx.ProvisionalCreditsByEpisode.TryGetValue(ep.EpisodeId, out var provisionalCredits)
+            ? credits.Concat(provisionalCredits.Where(c => !c.IsDeleted)).ToList()
+            : credits;
+        var staffRows = BuildStaffRows(staffCredits, series, ownRevealAt);
 
         // チーフの組み合わせの通算回数（絵コンテと演出 / 演出と作画監督 / 脚本・演出・作画監督）。スタッフ行の下に開閉の枠で添える。
         var staffCombos = BuildStaffCombos(series, ep);
+        // 開閉の枠の中のカードは、役職ごと・人ごとのカード（何回目・前の回からどれくらいぶり）を先に、組み合わせのカードを後に並べる。
+        var staffRoleCards = BuildStaffRoleCards(series, ep);
+        // 数え方の断り。トップのデータ充足率と同じく「『作品名』第N話まで」で、クレジットのある最新の TV の話を基準にする。
+        string staffComboNote = _ctx.CreditCoverageEpisode is { } coverage
+            ? $"（『{coverage.Series.Title}』第{coverage.Episode.SeriesEpNo}話までのデータで数えています）"
+            : "";
+        var staffComboCards = staffRoleCards.Concat(staffCombos).ToList();
 
         // 使用音声（episode_uses）セクションをパート別に構築。
         var episodeUseSections = await BuildEpisodeUsesViewAsync(ep.EpisodeId, ct).ConfigureAwait(false);
@@ -597,6 +626,7 @@ public sealed class EpisodeGenerator
         // テンプレートに渡すモデル。
         var content = new EpisodeContentModel
         {
+            ShopSeriesId = _ctx.ShopSeriesIds.Contains(series.SeriesId) ? series.SeriesId : 0,
             Series = new SeriesRefView
             {
                 Slug = series.Slug,
@@ -630,8 +660,7 @@ public sealed class EpisodeGenerator
                 // 埋め込み iframe 用に YouTube URL から動画 ID を抽出する（失敗時は空文字）。
                 YoutubeId = YoutubeUtil.ExtractId(ep.YoutubeTrailerUrl),
                 SpecialYoutubeTrailerUrl = ep.YoutubeSpecialTrailerUrl ?? "",
-                SpecialYoutubeId = YoutubeUtil.ExtractId(ep.YoutubeSpecialTrailerUrl),
-                Notes = BroadcastNoteText.ForDisplay(ep.Notes)
+                SpecialYoutubeId = YoutubeUtil.ExtractId(ep.YoutubeSpecialTrailerUrl)
             },
             FormatTable = formatTable,
             TitleCharInfoHtml = titleCharInfoHtml,
@@ -643,6 +672,9 @@ public sealed class EpisodeGenerator
             CreditBlocks = creditBlocks,
             Staff = staffRows,
             StaffCombos = staffCombos,
+            StaffRoleCards = staffRoleCards,
+            StaffComboNote = staffComboNote,
+            StaffComboCards = staffComboCards,
             RecordBadges = recordBadges,
             EpisodeUseSections = episodeUseSections,
             Totals = totalsItems,
@@ -675,7 +707,9 @@ public sealed class EpisodeGenerator
         // 単純な定型文「N話のフォーマット表・スタッフ・主題歌情報」だと全エピソードで重複コンテンツ化し、
         // SERP の CTR にも反映されにくいため、放送日・主要スタッフ 2 役職・OP/ED の楽曲名まで含めて
         // 個別性の高い 140 字目安の説明文を作る。
-        var metaDescription = BuildMetaDescription(series, ep, staffRows);
+        // 解禁前の話は、ぼかしの外に出る meta description と JSON-LD にスタッフ名を載せない。
+        var staffRowsForMeta = ownEmbargoed ? Array.Empty<StaffRow>() : staffRows;
+        var metaDescription = BuildMetaDescription(series, ep, staffRowsForMeta);
 
         // エピソード詳細の構造化データは Schema.org の TVEpisode 型。
         string baseUrl = _ctx.Config.BaseUrl;
@@ -708,7 +742,7 @@ public sealed class EpisodeGenerator
         // 脚本役職の人物を creator プロパティに、それぞれ Person 型の配列として埋め込む。
         // 単独役職に複数人いる場合は配列、1 人だけでも配列のまま渡す（Schema.org 仕様上いずれも有効）。
         // 人物が居ない場合は当該プロパティを出力しない。
-        var directorPersons = ExtractDirectorPersons(staffRows);
+        var directorPersons = ExtractDirectorPersons(staffRowsForMeta);
         if (directorPersons.Count > 0)
         {
             jsonLdDict["director"] = directorPersons
@@ -719,7 +753,7 @@ public sealed class EpisodeGenerator
                 })
                 .ToArray();
         }
-        var screenplayPersons = ExtractScreenplayPersons(staffRows);
+        var screenplayPersons = ExtractScreenplayPersons(staffRowsForMeta);
         if (screenplayPersons.Count > 0)
         {
             // 脚本は creator ロールでラップ（"脚本" という日本語の役職名を roleName に明示）。
@@ -807,7 +841,7 @@ public sealed class EpisodeGenerator
         {
             // 区切りの「・」は色を持たせず、役職名だけを色分けする。
             if (parts.Count > 0) parts.Add(new OgCardLabelPart("・", ""));
-            parts.Add(new OgCardLabelPart(link.Label, OgRolePalette.ColorFor(link.Code)));
+            parts.Add(new OgCardLabelPart(link.Label, link.ColorHex));
         }
         return parts;
     }
@@ -828,8 +862,8 @@ public sealed class EpisodeGenerator
             .Where(s => !string.IsNullOrWhiteSpace(s.NamesLine))
             .Select(s => new OgCardFactLine(s.RoleLabel, StripTags(s.NamesLine))
             {
-                // 役職名の色はサイトの役職バッジと同じ配色に揃える。
-                LabelColorHex = OgRolePalette.ColorFor(s.RoleCode),
+                // 役職名の色はサイトの役職バッジと同じ色（作品の表の行の色）に揃える。
+                LabelColorHex = s.ColorHex,
                 // 「絵コンテ・演出」のような統合行は RoleCode を持たないので、
                 // 構成役職ごとに色を分けた断片として組む（束ねた全体が無彩色に落ちるのを防ぐ）。
                 LabelParts = BuildLabelParts(s)
@@ -841,8 +875,8 @@ public sealed class EpisodeGenerator
             Kicker: "",
             // サブタイトル未確定話は誌面文言のプレースホルダをそのまま主題に据える。
             Title: string.IsNullOrEmpty(ep.TitleText) ? ep.TitleDisplayText : ep.TitleText,
-            // 放送「日」まで。時刻はカード上で読ませたい情報ではないので落とす。
-            Subtitle: JpDateFormat.Date(ep.OnAirAt))
+            // 放送日と放送枠（「2004年2月1日 8:30〜9:00」、深夜の回は前の日の「26:00〜26:30」）。枠の長さ（episodes.duration_minutes）が無い話は開始の時刻だけ。
+            Subtitle: JpDateFormat.BroadcastDateTime(ep.OnAirAt, ep.DurationMinutes))
         {
             // サブタイトルはサイト本体と同じくルビ付きで組む（title_rich_html が無い話は素で組まれる）。
             TitleRubyHtml = ep.TitleRichHtml ?? "",
@@ -919,6 +953,14 @@ public sealed class EpisodeGenerator
                 : Array.Empty<SongRecordingSinger>());
 
         var rows = new List<ThemeSongRow>(themes.Count);
+        // 同じ録音を OP・ED・挿入歌として何度か使った回は、カードを 1 枚にまとめる。
+        // まとめるのは録音・インストゥルメンタルの印・本放送限定の印がすべて同じ行だけ（どれかが違えば見出しの書き方が変わるので別のカード）。
+        // 2 回目以降の行は、最初の行のカードに区分バッジ・サイズ・再生ボタン・備考だけを足す。
+        var rowByUsageKey = new Dictionary<(int SongRecordingId, bool IsInstrumental, bool IsBroadcastOnly), ThemeSongRow>();
+        // サイズコード → サイズの名前（song_size_variants.name_ja）。
+        var sizeLabelByCode = _sizeVariantMap is null
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            : _sizeVariantMap.ToDictionary(kv => kv.Key, kv => kv.Value.NameJa, StringComparer.Ordinal);
         // seq 列が劇中順を表すため、Seq 昇順だけで劇中で流れる順番に並ぶ
         // （OP/ED/INSERT を区別する独自ソートは不要）。
         // 同じ枠の本放送 / 円盤・配信 差し替え（2 行並立）は、先に流れた本放送限定行を先に置く。
@@ -947,6 +989,25 @@ public sealed class EpisodeGenerator
                 ? classNameJa
                 : t.ThemeKind;
 
+            // その回で流れたサイズの名前（song_size_variants.name_ja）。サイズの指定が無ければ空でサイズを出さない。
+            string sizeLabel = !string.IsNullOrEmpty(t.SongSizeVariantCode)
+                && sizeLabelByCode.TryGetValue(t.SongSizeVariantCode!, out var sizeName)
+                    ? sizeName
+                    : "";
+
+            // 再生ボタンで鳴らす配信音源（その回のサイズの音源があればそれ。無ければ歌入りで本編のサイズを優先。カラオケしか無ければ無し）。
+            ThemeSongPlay? play = ThemeSongCardParts.ResolvePlay(
+                _ctx.ThemeArtTracks, t.SongRecordingId, t.SongSizeVariantCode, sizeLabelByCode);
+
+            var usageKey = (t.SongRecordingId, t.IsInstrumental == true, t.IsBroadcastOnly);
+            if (rowByUsageKey.TryGetValue(usageKey, out var mergedRow))
+            {
+                ThemeSongCardParts.AddKind(mergedRow.Kinds, new ThemeSongKindEntry { Label = kindLabel });
+                ThemeSongCardParts.AddDistinct(mergedRow.SizeLabels, sizeLabel);
+                ThemeSongCardParts.AddPlay(mergedRow.Plays, play);
+                continue;
+            }
+
             // 楽曲詳細ページへのリンク URL を組み立てる（song_id が引けたときだけ）。
             // 録音単位のアンカー URL（筆頭録音はページ先頭、それ以外は #recording-N）。
             int? songId = song?.SongId;
@@ -964,9 +1025,10 @@ public sealed class EpisodeGenerator
             string arrangementRoleLabelHtml = "";
             string medleyArrangementHtml = "";
             string medleyArrangementRoleLabelHtml = "";
+            IReadOnlyList<SongCredit> credits = Array.Empty<SongCredit>();
             if (song is not null)
             {
-                var credits = await GetSongCreditsAsync(song.SongId).ConfigureAwait(false);
+                credits = await GetSongCreditsAsync(song.SongId).ConfigureAwait(false);
                 lyricsHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap);
                 compositionHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Composition, song.ComposerName, personAliasMap);
                 arrangementHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Arrangement, song.ArrangerName, personAliasMap);
@@ -1027,11 +1089,8 @@ public sealed class EpisodeGenerator
                 ? SongDisplayTitle.Build(song.Title, rec?.VariantLabel)
                 : "(曲名未登録)";
 
-            // 再生ボタンで鳴らす配信音源（歌入りで本編のサイズを優先。カラオケしか無ければ無し）。
-            ThemeArtTrack? artTrack = _ctx.ThemeArtTracks.ByRecording.TryGetValue(t.SongRecordingId, out var at) ? at : null;
-            rows.Add(new ThemeSongRow
+            var row = new ThemeSongRow
             {
-                KindLabel = kindLabel,
                 Title = displayTitle,
                 SongTitle = song?.Title ?? "",
                 SongLink = songLink,
@@ -1053,15 +1112,17 @@ public sealed class EpisodeGenerator
                 DialogueRoleLabelHtml = dialogueRoleLabelHtml,
                 SpokenWordHtml = spokenWordHtml,
                 SpokenWordRoleLabelHtml = spokenWordRoleLabelHtml,
-                Notes = t.Notes ?? "",
+                CreditBadgesHtml = ThemeSongCreditBadges.Build(roleMap, credits,
+                    vocalistsHtml, chorusHtml, dialogueHtml, spokenWordHtml,
+                    lyricsHtml, compositionHtml, arrangementHtml, medleyArrangementHtml),
                 IsBroadcastOnly = t.IsBroadcastOnly,
-                IsInstrumental = t.IsInstrumental == true,
-                ArtTrackId = artTrack?.ArtTrackId ?? "",
-                ArtTrackPremiumOnly = artTrack?.PremiumOnly ?? false,
-                ArtTrackSourceAlbum = artTrack?.SourceAlbum ?? "",
-                ArtTrackAltId = artTrack?.AltArtTrackId ?? "",
-                ArtTrackAltSourceAlbum = artTrack?.AltSourceAlbum ?? ""
-            });
+                IsInstrumental = t.IsInstrumental == true
+            };
+            row.Kinds.Add(new ThemeSongKindEntry { Label = kindLabel });
+            ThemeSongCardParts.AddDistinct(row.SizeLabels, sizeLabel);
+            ThemeSongCardParts.AddPlay(row.Plays, play);
+            rowByUsageKey[usageKey] = row;
+            rows.Add(row);
         }
         return rows;
     }
@@ -1236,7 +1297,7 @@ public sealed class EpisodeGenerator
                     var subParts = new List<string> { mNoLabel };
                     string composerText = CreditText.BgmCueCreditNames(
                         _ctx.BgmCueCreditsByCue.TryGetValue((cue.SeriesId, cue.MNoDetail), out var cueCredits) ? cueCredits : null,
-                        "COMPOSITION", cue.ComposerName, _ctx.PersonAliasById);
+                        "COMPOSITION", cue.ComposerName, _ctx.PersonAliasById, _ctx.CompanyAliasById);
                     if (!string.IsNullOrEmpty(composerText)) subParts.Add($"作曲: {composerText}");
                     subTitle = string.Join(" / ", subParts);
                 }
@@ -1277,42 +1338,37 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>
-    /// エピソード詳細の meta description。「『作品』第N話「サブタイトル」（放送日）。役職：名前（主要 3 役職）。何をまとめたページか。」
-    /// の順で、検索結果に出る 140 字ほどに収める。クレジットは「役職：名前」の表記（敬称略）。
+    /// エピソード詳細の meta description。「放送日。役職：名前／役職：名前／役職：名前」（主要 3 役職。敬称略）を 150 字ほどに収める。
+    /// 作品名・話数・サブタイトルはページ名に出ているので入れない。
     /// 主題歌はシリーズ単位で全話共通なので、その話固有の情報ではないため載せない。
     /// </summary>
     private static string BuildMetaDescription(Series series, Episode ep, IReadOnlyList<StaffRow> staffRows)
     {
         const int targetMaxChars = 150;
-        const string tail = "各話スタッフ、主題歌・挿入歌、パート構成をまとめました。";
 
         var sb = new System.Text.StringBuilder();
-        sb.Append('『').Append(series.Title).Append("』第").Append(ep.SeriesEpNo).Append('話');
-        if (!string.IsNullOrWhiteSpace(ep.TitleText)) sb.Append('「').Append(JapaneseQuotes.InQuotes(ep.TitleText)).Append('」');
-        sb.Append('（').Append(ep.OnAirAt.ToString("yyyy年M月d日")).Append("放送）。");
+        sb.Append(JpDateFormat.BroadcastDate(ep.OnAirAt)).Append("放送");
 
-        // 主要スタッフ（最大 3 役職）。末尾の一文を残せる範囲で足す。
         var credits = new List<string>();
         foreach (var staff in staffRows)
         {
             if (credits.Count >= 3) break;
             if (string.IsNullOrWhiteSpace(staff.NamesLine)) continue;
             string seg = $"{staff.RoleLabel}：{StripHtmlTags(staff.NamesLine)}";
-            string joined = string.Join("、", credits.Append(seg)) + "。";
-            if (sb.Length + joined.Length + tail.Length > targetMaxChars) break;
+            if (sb.Length + 1 + string.Join("／", credits.Append(seg)).Length > targetMaxChars) break;
             credits.Add(seg);
         }
-        if (credits.Count > 0) sb.Append(string.Join("、", credits)).Append('。');
-        sb.Append(tail);
+        if (credits.Count > 0) sb.Append('。').Append(string.Join("／", credits));
         return sb.ToString();
     }
 
-    /// <summary>スタッフ行群から「演出」役職の人物名一覧を取り出す。</summary>
+    /// <summary>スタッフ行群から「演出」役職（役職コード EPISODE_DIRECTOR。単独行か、絵コンテ（STORYBOARD）との統合行）の人物名一覧を取り出す。</summary>
     private static List<string> ExtractDirectorPersons(IReadOnlyList<StaffRow> staffRows)
     {
         foreach (var row in staffRows)
         {
-            if (row.RoleLabel == "演出" || row.RoleLabel == "絵コンテ・演出")
+            if (row.RoleCode == EpisodeStaffCards.EpisodeDirectorCode
+                || row.SubRoleLinks.Any(l => l.Code == EpisodeStaffCards.EpisodeDirectorCode))
             {
                 return SplitNamesLine(row.NamesLine);
             }
@@ -1320,12 +1376,15 @@ public sealed class EpisodeGenerator
         return new List<string>();
     }
 
-    /// <summary>スタッフ行群から「脚本」役職の人物名一覧を取り出す。</summary>
+    /// <summary>脚本の役職コード（JSON-LD の creator に載せる役職）。</summary>
+    private const string ScreenplayRoleCode = "SCREENPLAY";
+
+    /// <summary>スタッフ行群から「脚本」役職（役職コード SCREENPLAY）の人物名一覧を取り出す。</summary>
     private static List<string> ExtractScreenplayPersons(IReadOnlyList<StaffRow> staffRows)
     {
         foreach (var row in staffRows)
         {
-            if (row.RoleLabel == "脚本")
+            if (row.RoleCode == ScreenplayRoleCode)
             {
                 return SplitNamesLine(row.NamesLine);
             }
@@ -1338,11 +1397,13 @@ public sealed class EpisodeGenerator
     ///。空白要素は除外、各人名の前後空白も除去する。
     /// 注意：<see cref="StaffRow.NamesLine"/> は実体としては <c>&lt;a href="..."&gt;人名&lt;/a&gt;</c> でラップされた
     /// HTML 断片の連結である。本メソッドの結果は JSON-LD の Person.name 値として使われるため、
-    /// 各エントリから HTML タグを除去してプレーンテキスト化する。
+    /// 各エントリから会社の括弧（<see cref="EpisodeStaffCards.AffiliationCssClass"/> の span）を除き、HTML タグを除去してプレーンテキスト化する。
     /// </summary>
     private static List<string> SplitNamesLine(string namesLine)
     {
         if (string.IsNullOrEmpty(namesLine)) return new List<string>();
+        namesLine = System.Text.RegularExpressions.Regex.Replace(
+            namesLine, "<span class=\"" + EpisodeStaffCards.AffiliationCssClass + "[^\"]*\">.*?</span>", "");
         return namesLine.Split('、', StringSplitOptions.RemoveEmptyEntries)
             .Select(n => StripHtmlTags(n).Trim())
             .Where(n => !string.IsNullOrEmpty(n))
@@ -1439,7 +1500,7 @@ public sealed class EpisodeGenerator
     /// 組み合わせごとに <see cref="EpisodeChiefStaffIndex.Lookup"/> で通算情報を引き、閉じた状態の 1 かたまり
     /// （役職の札と「通算 N 回目」。初回は「初顔合わせ」）と、開いた状態のカード（顔ぶれ・放送順の玉の列・
     /// 前回と次回のミニカード）の材料にする。構成役職のどれかが無い回（未収録・該当役職なし）は出さない。
-    /// 絵コンテと演出を同じ方が兼ねた回は「兼任」として、顔ぶれを「名前 (絵コンテ・演出兼任)」と書く。
+    /// 絵コンテと演出を同じ方が兼ねた回は組み合わせとして出さない（兼任は珍しくないので、数えて見せる意味が薄い）。
     /// </summary>
     private IReadOnlyList<StaffComboRow> BuildStaffCombos(Series series, Episode ep)
     {
@@ -1449,31 +1510,27 @@ public sealed class EpisodeGenerator
             var occurrence = _chiefIndex.Lookup(combo, ep.EpisodeId);
             if (occurrence is null) continue;
 
-            // 兼任：組み合わせの役職がすべて同じ顔ぶれ（絵コンテと演出を同じ方が担当）。
+            // 兼任：組み合わせの役職がすべて同じ顔ぶれ（絵コンテと演出を同じ方が担当）。出さない。
             bool isSolo = occurrence.Members.Count > 1
                 && occurrence.Members.All(m => m.Persons.Select(p => p.Key)
                     .SequenceEqual(occurrence.Members[0].Persons.Select(p => p.Key)));
+            if (isSolo) continue;
 
             var badges = combo.ChiefRoles
-                .Select(r => (Code: ChiefRoleCode(r), Label: EpisodeChiefRoles.Label(r)))
-                .Select(r => new StaffComboBadge { Code = r.Code, Label = r.Label, Url = CreatorsRoleUrlFor(r.Code, r.Label) ?? "" })
+                .Select(r => ChiefRoleBadge(r, series))
                 .ToList();
 
-            string NamesOf(ChiefComboMember m) => string.Join("、", m.Persons.Select(p => string.IsNullOrEmpty(p.Url)
-                ? $"<span class=\"staff-name\">{HtmlUtil.Escape(p.Name)}</span>"
-                : $"<a class=\"staff-name\" href=\"{p.Url}\">{HtmlUtil.Escape(p.Name)}</a>"));
-            string namesHtml = isSolo
-                ? $"{NamesOf(occurrence.Members[0])} <span class=\"staff-combo-both\">({string.Join("・", badges.Select(b => b.Label))}兼任)</span>"
-                : string.Join("<span class=\"staff-combo-x\">×</span>", occurrence.Members.Select(NamesOf));
+            string namesHtml = string.Join("<span class=\"staff-combo-x\">×</span>",
+                occurrence.Members.Select(m => string.Join("、", m.Persons.Select(ChiefPersonHtml))));
 
             int current = occurrence.Ordinal - 1;
             rows.Add(new StaffComboRow
             {
                 Label = combo.Label,
                 Badges = badges,
-                IsSolo = isSolo,
                 Ordinal = occurrence.Ordinal,
                 Total = occurrence.Total,
+                FirstLabel = "初顔合わせ",
                 NamesHtml = namesHtml,
                 Beads = BuildComboBeads(occurrence.EpisodeIds, current),
                 IsDense = Math.Min(occurrence.Total, ComboBeadsMax) > ComboBeadsDense,
@@ -1483,6 +1540,91 @@ public sealed class EpisodeGenerator
         }
         return rows;
     }
+
+    /// <summary>
+    /// スタッフセクションの「くわしく」に並べる、チーフの役職ごと・人ごとのカード（その方がその役職を担当したのは何回目か、
+    /// 放送順で直前の話から続けての担当なら「N話連続」、間が空いたなら前に担当した回からどれくらい空いたか）を組み立てる。<see cref="EpisodeChiefStaffIndex.RoleOccurrences"/> の並び
+    /// （脚本 → 絵コンテ → 演出 → 作画監督 → 美術、同じ役職の中はクレジットの順）で、カードの作りは組み合わせのカードと同じ。
+    /// 初めての回は「初担当」。
+    /// </summary>
+    private IReadOnlyList<StaffComboRow> BuildStaffRoleCards(Series series, Episode ep)
+    {
+        var rows = new List<StaffComboRow>();
+        foreach (var occurrence in _chiefIndex.RoleOccurrences(ep.EpisodeId))
+        {
+            // 放送順で直前の話からの連続担当は「N話連続」、間が空いたときは前に担当した回からの空き。
+            // 赤で目立たせるのは、連続担当（2 話以上）と、26 週以上空いたときだけ。
+            string gapLabel = "";
+            bool isGapNotable = false;
+            if (occurrence.Streak >= 2)
+            {
+                gapLabel = $"{occurrence.Streak}話連続";
+                isGapNotable = true;
+            }
+            else if (occurrence.PreviousEpisodeId is int prevEpId
+                && _ctx.EpisodeById.TryGetValue(prevEpId, out var prevEp))
+            {
+                gapLabel = GapSinceLabel(prevEp.OnAirAt, ep.OnAirAt);
+                isGapNotable = IsLongGap(prevEp.OnAirAt, ep.OnAirAt);
+            }
+
+            rows.Add(new StaffComboRow
+            {
+                Label = $"{occurrence.RoleLabel} {occurrence.Person.Name}",
+                Badges = new[] { ChiefRoleBadge(occurrence.ChiefRole, series) },
+                Ordinal = occurrence.Ordinal,
+                Total = occurrence.Total,
+                FirstLabel = "初担当",
+                GapLabel = gapLabel,
+                IsGapNotable = isGapNotable,
+                NamesHtml = ChiefPersonHtml(occurrence.Person),
+                Beads = BuildComboBeads(occurrence.EpisodeIds, occurrence.Ordinal - 1),
+                IsDense = Math.Min(occurrence.Total, ComboBeadsMax) > ComboBeadsDense,
+                Prev = occurrence.PreviousEpisodeId is int prevId ? ComboNavOf(series, prevId) : null,
+                Next = occurrence.NextEpisodeId is int nextId ? ComboNavOf(series, nextId) : null
+            });
+        }
+        return rows;
+    }
+
+    /// <summary>赤で目立たせる長い空きのしきい（週）。前に担当した回から 26 週以上空いたら目立たせる。</summary>
+    internal const int NotableGapWeeks = 26;
+
+    /// <summary>前の回から今回までの空きが、赤で目立たせる長さ（<see cref="NotableGapWeeks"/> 週以上）か。日差は <see cref="GapSinceLabel"/> と同じく放送日で数える。</summary>
+    internal static bool IsLongGap(DateTime previousOnAirAt, DateTime currentOnAirAt)
+        => (JpDateFormat.BroadcastDay(currentOnAirAt) - JpDateFormat.BroadcastDay(previousOnAirAt)).TotalDays >= NotableGapWeeks * 7;
+
+    /// <summary>赤で目立たせる節目の回数か（10・25・50 回目、そのあとは 50 回ごと）。初めての回は別の文（初担当・初顔合わせ）で目立たせる。</summary>
+    internal static bool IsMilestoneOrdinal(int ordinal)
+        => ordinal == 10 || ordinal == 25 || (ordinal >= 50 && ordinal % 50 == 0);
+
+    /// <summary>
+    /// 前の回から今回までの空きを「N年Mか月ぶり」「Mか月ぶり」「N週ぶり」で返す。
+    /// 月数はサブタイトル文字情報の「ぶり」と同じく、放送日の日差 ÷ 30.4375 の四捨五入。
+    /// 12 か月以上は「N年Mか月ぶり」（M = 0 でも省略しない）、1 か月未満（四捨五入で 0）は週で数え、1 週に満たなければ空文字。
+    /// </summary>
+    internal static string GapSinceLabel(DateTime previousOnAirAt, DateTime currentOnAirAt)
+    {
+        double days = (JpDateFormat.BroadcastDay(currentOnAirAt) - JpDateFormat.BroadcastDay(previousOnAirAt)).TotalDays;
+        int months = (int)Math.Round(days / 30.4375);
+        if (months >= 12) return $"{months / 12}年{months % 12}か月ぶり";
+        if (months >= 1) return $"{months}か月ぶり";
+        int weeks = (int)(days / 7);
+        return weeks >= 1 ? $"{weeks}週ぶり" : "";
+    }
+
+    /// <summary>チーフの区分 → カードの役職の札（色・表示名・役職のページ）。</summary>
+    private StaffComboBadge ChiefRoleBadge(int chiefRole, Series series)
+    {
+        string code = ChiefRoleCode(chiefRole);
+        string label = EpisodeChiefRoles.Label(chiefRole);
+        return new StaffComboBadge { Code = code, Label = label, Url = CreatorsRoleUrlFor(code, label, series) ?? "" };
+    }
+
+    /// <summary>カードの顔ぶれの 1 人（人物ページがあればリンク）。</summary>
+    private static string ChiefPersonHtml(ChiefPerson p) => string.IsNullOrEmpty(p.Url)
+        ? $"<span class=\"staff-name\">{HtmlUtil.Escape(p.Name)}</span>"
+        : $"<a class=\"staff-name\" href=\"{p.Url}\">{HtmlUtil.Escape(p.Name)}</a>";
 
     /// <summary>チーフの区分 → 役職の札の色とリンク先に使う役職コード（スタッフ行の札と同じ）。</summary>
     private static string ChiefRoleCode(int chiefRole) => chiefRole switch
@@ -1544,7 +1686,7 @@ public sealed class EpisodeGenerator
             beads.Add(new ComboBead
             {
                 Url = PathUtil.EpisodeUrl(owner.Slug, target.SeriesEpNo),
-                Label = $"{i + 1} 回目：『{owner.Title}』 第{target.SeriesEpNo}話（{target.OnAirAt:yyyy年M月d日}）",
+                Label = $"{i + 1} 回目：『{owner.Title}』 第{target.SeriesEpNo}話（{JpDateFormat.BroadcastDate(target.OnAirAt)}）",
                 State = i < current ? "is-past" : i == current ? "is-current" : "is-future",
                 YearLabel = !showYear ? "" : shortYear ? (year % 100).ToString("00") : year.ToString()
             });
@@ -1563,162 +1705,83 @@ public sealed class EpisodeGenerator
             Url = PathUtil.EpisodeUrl(owner.Slug, target.SeriesEpNo),
             EpisodeLabel = $"第{target.SeriesEpNo}話",
             SeriesTitle = owner.SeriesId == current.SeriesId ? "" : owner.Title,
-            Title = $"『{owner.Title}』 第{target.SeriesEpNo}話（{target.OnAirAt:yyyy年M月d日}）"
+            Title = $"『{owner.Title}』 第{target.SeriesEpNo}話（{JpDateFormat.BroadcastDate(target.OnAirAt)}）"
         };
     }
 
-    /// <summary>主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。</summary>
-    private IReadOnlyList<StaffRow> BuildStaffRows(IReadOnlyList<Credit> credits)
+    /// <summary>
+    /// クレジットの見出し（credit_kinds の日本語名）。版のあるクレジットは「オープニングクレジット（本放送）」のように版を添える。
+    /// 作品詳細（SeriesGenerator）の SERIES スコープのクレジットの見出しにも使う。
+    /// </summary>
+    internal static string CreditHeadingLabel(Credit c, IReadOnlyDictionary<string, string> kindLabelMap)
+    {
+        string label = kindLabelMap.TryGetValue(c.CreditKind, out var nm) ? nm : c.CreditKind;
+        return c.MediaVersion is null ? label : $"{label}（{CreditMediaVersions.LabelOf(c.MediaVersion)}）";
+    }
+
+    /// <summary>
+    /// 主要スタッフ（各話のスタッフの札）の表示行を構築する。
+    /// 札に出す役職・並び・色は作品の表（<see cref="BuildContext.EpisodeStaffRolesBySeries"/>）の行で、
+    /// 読むカードと札の組み立ては <see cref="EpisodeStaffCards.BuildBadges"/>（作品のページのエピソード一覧と共通）。
+    /// 行の無い作品は空（スタッフ欄を出さない）。
+    /// </summary>
+    private IReadOnlyList<StaffRow> BuildStaffRows(IReadOnlyList<Credit> credits, Series series, DateTimeOffset? revealAt)
     {
         // 役職マスタは BuildContext で事前展開済み（role_code → Role）。
         _roleMap ??= _ctx.RoleByCode;
 
-        // スタッフセクションは脚本／絵コンテ／演出／作画監督／美術 の 5 役職を
-        // 別々のラインで出すが、絵コンテと演出が同じ人物（同じ集合）になった場合だけ
-        // 「絵コンテ・演出」の 1 ラインに統合する。そのため一旦は役職コード単位で
-        // (重複判定キー → 表示用 HTML) のペアリストとして集めておき、最後に行 DTO を組み立てる。
-        // 抽出対象役職と、役職コード／表示名の候補。
-        // role_code がリポジトリ内の役職マスタに実在する値を直接指定する。
-        // 加えて name_ja 側でもマッチを許容するので、マスタが今後追加・改名されても拾いやすい。
-        var staffSpecs = new[]
-        {
-            new StaffSpec("脚本",     new[] { "SCREENPLAY" },         new[] { "脚本" }),
-            new StaffSpec("絵コンテ", new[] { "STORYBOARD" },         new[] { "絵コンテ" }),
-            new StaffSpec("演出",     new[] { "EPISODE_DIRECTOR" },   new[] { "演出" }),
-            new StaffSpec("作画監督", new[] { "ANIMATION_DIRECTOR" }, new[] { "作画監督" }),
-            new StaffSpec("美術",     new[] { "ART_DIRECTOR" },       new[] { "美術" })
-        };
-
-        // 役職コード → スタッフ仕様の逆引きを 1 度だけ作る。
-        // role_code がコード候補に一致、または当該 role の name_ja が表示名候補のいずれかに一致するとき採用。
-        var roleCodeToSpec = new Dictionary<string, StaffSpec>(StringComparer.Ordinal);
-        foreach (var (code, role) in _roleMap)
-        {
-            foreach (var spec in staffSpecs)
-            {
-                if (spec.RoleCodeCandidates.Contains(code, StringComparer.Ordinal)
-                    || (role.NameJa is { } nm && spec.RoleNameCandidates.Contains(nm, StringComparer.Ordinal)))
-                {
-                    if (!roleCodeToSpec.ContainsKey(code))
-                        roleCodeToSpec[code] = spec;
-                }
-            }
-        }
-
-        // 仕様ラベル → 集めた人物名（HTML 断片）のリスト。
         // 重複判定キーは PERSON エントリなら "P:{alias_id}"、TEXT エントリなら "T:{raw_text}" とし、
-        // リンク化の有無に関わらず同一エントリを 1 度だけ表示するようにする。
-        // 絵コンテと演出の同一性判定にも使うため、キー集合（HashSet<string>）も保持しておく。
-        var collected = staffSpecs.ToDictionary(s => s.Label, _ => new List<string>(), StringComparer.Ordinal);
-        var seen = staffSpecs.ToDictionary(s => s.Label, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
-
-        // クレジット → カード → tier → group → cardRole の順で走査して、
-        // ヒット役職配下の PERSON エントリの名義を引く。
+        // リンク化の有無に関わらず同一エントリを 1 度だけ表示する。絵コンテと演出の同一性判定にも同じキーの集合を使う。
         // 階層 6 段は SiteDataLoader が事前展開済みの BuildContext.CreditTree スナップショットを辿る
         // （旧実装はページごとに階層別 GetBy*Async を発火しており、エピソード数 × 階層分の
-        // DB 往復が走っていた）。スナップショット各層は per-id 取得時と同一の並び順を保持しているが、
-        // 旧経路と同じ明示ソートを保険として残す。
-        foreach (var credit in credits)
-        {
-            if (!_ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cardSnapshots)) continue;
-            foreach (var cardSnap in cardSnapshots.OrderBy(c => c.Card.CardSeq))
-            {
-                foreach (var tierSnap in cardSnap.Tiers.OrderBy(t => t.Tier.TierNo))
-                {
-                    foreach (var grpSnap in tierSnap.Groups.OrderBy(g => g.Group.GroupNo))
-                    {
-                        foreach (var crSnap in grpSnap.Roles.OrderBy(r => r.Role.OrderInGroup))
-                        {
-                            var cr = crSnap.Role;
-                            if (cr.RoleCode is null) continue;
-                            if (!roleCodeToSpec.TryGetValue(cr.RoleCode, out var spec)) continue;
+        // DB 往復が走っていた）。
+        var badges = EpisodeStaffCards.BuildBadges(
+            credits,
+            _ctx.CreditTree.CardsByCreditId,
+            _ctx.EpisodeStaffRolesBySeries.TryGetValue(series.SeriesId, out var staffRoles) ? staffRoles : null,
+            _roleMap,
+            ResolveStaffEntry,
+            _ctx.CompanyAliasById,
+            _ctx.LogoById)
+            .Select(b => new EpisodeStaffBadge { Roles = b.Roles, NamesHtml = SubtitleGuardRenderer.GuardRichHtml(b.NamesHtml, revealAt) })
+            .ToList();
 
-                            // 配下のブロックとエントリを引いて、PERSON エントリの名義のみを集める。
-                            foreach (var blockSnap in crSnap.Blocks.OrderBy(b => b.Block.BlockSeq))
-                            {
-                                var entries = blockSnap.Entries
-                                    .Where(e => !e.IsBroadcastOnly)
-                                    .OrderBy(e => e.EntrySeq);
-                                foreach (var e in entries)
-                                {
-                                    var (key, html) = ResolveStaffEntry(e);
-                                    if (string.IsNullOrEmpty(html)) continue;
-                                    if (seen[spec.Label].Add(key))
-                                        collected[spec.Label].Add(html);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 絵コンテ・演出が同一集合（同じ重複キー集合）の場合、1 ラインに統合する。
-        // 例：絵コンテ＝伊藤 尚往、演出＝伊藤 尚往 → 「絵コンテ・演出 伊藤 尚往」
-        // 異なる場合は 2 行に分ける（絵コンテ A、演出 B）。
-        // 統合判定はキー集合の集合比較で行う（HTML 表現の文字列比較だと alias の表示揺れに弱いため）。
-        bool storyboardDirectorMerged =
-            seen["絵コンテ"].Count > 0
-            && seen["演出"].Count > 0
-            && seen["絵コンテ"].SetEquals(seen["演出"]);
-
-        // 役職コード解決：表示順は仕様の配列順を踏襲。各行の RoleUrl は系譜代表 role_code の役職統計ページ。
-        // 統合行 (絵コンテ・演出) のときは特例的に「絵コンテ用 URL」と「演出用 URL」の両方を保持し、
-        // テンプレ側で「絵コンテ」「演出」それぞれを別リンクとして描画できるようにする。
-        string? RoleUrl(string label) => label switch
-        {
-            "脚本" => CreatorsRoleUrlFor("SCREENPLAY", "脚本"),
-            "絵コンテ" => CreatorsRoleUrlFor("STORYBOARD", "絵コンテ"),
-            "演出" => CreatorsRoleUrlFor("EPISODE_DIRECTOR", "演出"),
-            "作画監督" => CreatorsRoleUrlFor("ANIMATION_DIRECTOR", "作画監督"),
-            "美術" => CreatorsRoleUrlFor("ART_DIRECTOR_TV", "美術"),
-            _ => null
-        };
-
-        // 仕様の並び順で、エントリのある役職だけ DTO 化。
-        // HTML 断片を「、」で連結した文字列を NamesLine に詰める。テンプレ側では html.escape を
+        // 札 1 つを 1 行にする。HTML 断片を「、」で連結した文字列を NamesLine に詰める。テンプレ側では html.escape を
         // かけずにそのまま出力する（PERSON エントリは既に <a> タグでラップ済み、TEXT は escape 済み）。
-        var rows = new List<StaffRow>();
-        foreach (var spec in staffSpecs)
+        var rows = new List<StaffRow>(badges.Count);
+        foreach (var b in badges)
         {
-            var names = collected[spec.Label];
-            if (names.Count == 0) continue;
-
-            // 統合モード中は絵コンテ単体／演出単体ではなく、絵コンテ位置で 1 行だけ出す（演出はスキップ）。
-            if (storyboardDirectorMerged)
+            if (b.Roles.Count >= 2)
             {
-                if (spec.Label == "演出") continue;
-                if (spec.Label == "絵コンテ")
+                // 絵コンテ・演出が同一集合（同じ重複キー集合）の回は、絵コンテの位置で 1 行だけ出す。
+                // 例：絵コンテ＝伊藤 尚往、演出＝伊藤 尚往 → 「絵コンテ・演出 伊藤 尚往」
+                rows.Add(new StaffRow
                 {
-                    rows.Add(new StaffRow
-                    {
-                        // 表示ラベル文字列は「絵コンテ・演出」。テンプレ側でリンク分割するため、
-                        // 構成役職それぞれの URL を SubRoleLinks にも詰める。
-                        RoleLabel = "絵コンテ・演出",
-                        // 統合行では RoleCode は空文字（テンプレ側は SubRoleLinks の各 Code を使う）。
-                        RoleCode = "",
-                        RoleUrl = "",
-                        SubRoleLinks = new List<StaffRoleLink>
-                        {
-                            new StaffRoleLink { Code = "STORYBOARD",        Label = "絵コンテ", Url = RoleUrl("絵コンテ") ?? "" },
-                            new StaffRoleLink { Code = "EPISODE_DIRECTOR",  Label = "演出",     Url = RoleUrl("演出")     ?? "" }
-                        },
-                        NamesLine = string.Join("、", names)
-                    });
-                    continue;
-                }
+                    // 表示ラベル文字列は「絵コンテ・演出」。テンプレ側でリンク分割するため、
+                    // 構成役職それぞれの URL を SubRoleLinks にも詰める。
+                    RoleLabel = string.Join("・", b.Roles.Select(r => r.Label)),
+                    // 統合行では RoleCode は空文字（テンプレ側は SubRoleLinks の各 Code を使う）。
+                    RoleCode = "",
+                    RoleUrl = "",
+                    SubRoleLinks = b.Roles
+                        .Select(r => new StaffRoleLink { Code = r.RoleCode, Label = r.Label, Url = r.RoleUrl, BadgeStyle = r.BadgeStyle, ColorHex = r.ColorHex })
+                        .ToList(),
+                    NamesLine = b.NamesHtml
+                });
+                continue;
             }
 
-            // 通常モード：1 役職 1 行で素直に出す。
+            // 通常：1 役職 1 行で素直に出す。札の文字・色・リンク先は札のまま。
+            var role = b.Roles[0];
             rows.Add(new StaffRow
             {
-                RoleLabel = spec.Label,
-                // RoleCode はバッジの data-role-code に使う。staffSpecs では RoleCodeCandidates の
-                // 先頭が代表コード（"SCREENPLAY" / "STORYBOARD" / 等）になる。
-                RoleCode = spec.RoleCodeCandidates.Length > 0 ? spec.RoleCodeCandidates[0] : "",
-                RoleUrl = RoleUrl(spec.Label) ?? "",
+                RoleLabel = role.Label,
+                RoleCode = role.RoleCode,
+                RoleUrl = role.RoleUrl,
+                BadgeStyle = role.BadgeStyle,
+                ColorHex = role.ColorHex,
                 SubRoleLinks = Array.Empty<StaffRoleLink>(),
-                NamesLine = string.Join("、", names)
+                NamesLine = b.NamesHtml
             });
         }
         return rows;
@@ -1731,8 +1794,12 @@ public sealed class EpisodeGenerator
     /// 2) 含まれていなければ表示名候補（"脚本" 等）でマスタを走査し、ヒットしたコードのクラスタ代表を採用。
     /// 3) どちらでも引けないときは <c>null</c>（テンプレ側でリンク化を抑止）。
     /// </summary>
-    private string? CreatorsRoleUrlFor(string preferredRoleCode, string fallbackNameJa)
+    private string? CreatorsRoleUrlFor(string preferredRoleCode, string fallbackNameJa, Series series)
     {
+        // オトナシリーズの作品で美術（ART_DIRECTOR_TV）の札を引かれたときは、オトナシリーズのクレジットの役職が美術監督（ART_DIRECTOR）なので、美術監督の役職詳細を指す。
+        if (_ctx.IsOtonaSeries(series.SeriesId) && string.Equals(preferredRoleCode, "ART_DIRECTOR_TV", StringComparison.Ordinal)
+            && PathUtil.HasRolePage("ART_DIRECTOR"))
+            return PathUtil.CreatorsRoleUrl("ART_DIRECTOR");
         // 役職マスタが未ロードならリンク化スキップ（直前段で必ずロードしているはずだが念のため）。
         if (_roleMap is null) return null;
 
@@ -1762,7 +1829,7 @@ public sealed class EpisodeGenerator
     /// 変換し、TEXT エントリは HTML エスケープのみ施したプレーンテキストにする。
     /// 重複判定キーは PERSON なら <c>"P:{alias_id}"</c>、TEXT なら <c>"T:{raw_text}"</c>。
     /// それ以外（CHARACTER_VOICE / COMPANY / LOGO）は空文字 + 空 HTML を返して呼び出し元で除外する。
-    /// 所属（屋号）は表示しない（スタッフ一覧は素朴に「役職 — 名前、名前、名前」で出す方針）。
+    /// 返すのは名前だけ。会社の括弧は札を組む側（<see cref="EpisodeStaffCards.AffiliationSuffixHtml"/>）が後ろに添える。
     /// 名義の解決は BuildContext.PersonAliasById（削除済み込みの全件辞書）への同期 lookup で行う
     /// （per-id GetByIdAsync の DB 往復を撲滅。旧経路の GetByIdAsync も削除済み名義を返す仕様だったため
     /// 解決結果は同一）。
@@ -1812,18 +1879,10 @@ public sealed class EpisodeGenerator
         }
     }
 
-    /// <summary>スタッフ役職の判定スペック。</summary>
-    private sealed record StaffSpec(string Label, string[] RoleCodeCandidates, string[] RoleNameCandidates);
-
-    /// <summary>放送日時を「2004年2月1日 8:30〜9:00」または「2004年2月1日 8:30」フォーマットで返す。 <paramref name="durationMinutes"/> が NULL（尺未登録）の場合は終了時刻を表示しない。 尺登録済みの場合は分単位で加算した終了時刻も併記する。 時刻部分は <c>H:mm</c>（先頭ゼロなし、分は 2 桁）。</summary>
+    /// <summary>放送日時を「2004年2月1日 8:30〜9:00」または「2004年2月1日 8:30」フォーマットで返す。 <paramref name="durationMinutes"/> が NULL（尺未登録）の場合は終了時刻を表示しない。 尺登録済みの場合は分単位で加算した終了時刻も併記する。 時刻部分は <c>H:mm</c>（先頭ゼロなし、分は 2 桁）。
+    /// 深夜の回（開始が <see cref="JpDateFormat.LateNightEndHour"/> 時より前）は前の日の放送として、時刻に 24 を足して書く（「2025年1月11日 26:00〜26:30」）。</summary>
     private static string FormatJpDateTimeWithDuration(DateTime dt, byte? durationMinutes)
-    {
-        string head = $"{dt.Year}年{dt.Month}月{dt.Day}日 {dt.Hour}:{dt.Minute:D2}";
-        if (!durationMinutes.HasValue || durationMinutes.Value == 0) return head;
-
-        var endDt = dt.AddMinutes(durationMinutes.Value);
-        return $"{head}〜{endDt.Hour}:{endDt.Minute:D2}";
-    }
+        => JpDateFormat.BroadcastDateTime(dt, durationMinutes);
 
     /// <summary>
     /// subtitle-display（サブタイトル本表示ブロック）の中身を組み立てる。
@@ -1931,6 +1990,8 @@ public sealed class EpisodeGenerator
     private sealed class EpisodeContentModel
     {
         public SeriesRefView Series { get; set; } = new();
+        /// <summary>販売中の商品の枠の置き場に書く作品 ID。この話の作品に出す設定の商品が無ければ 0（置き場を出さない）。</summary>
+        public int ShopSeriesId { get; set; }
         public EpisodeView Episode { get; set; } = new();
         public FormatTableModel FormatTable { get; set; } = new();
         public string TitleCharInfoHtml { get; set; } = "";
@@ -1948,8 +2009,14 @@ public sealed class EpisodeGenerator
         public IReadOnlyList<CreditBlockView> CreditBlocks { get; set; } = Array.Empty<CreditBlockView>();
         /// <summary>主要スタッフ情報（脚本／絵コンテ／演出／作画監督／美術）。クレジット階層から抽出した抜粋。</summary>
         public IReadOnlyList<StaffRow> Staff { get; set; } = Array.Empty<StaffRow>();
-        /// <summary>チーフの組み合わせの通算回数（絵コンテと演出 / 演出と作画監督 / 脚本・演出・作画監督）。構成役職が揃わない組み合わせは入らない。</summary>
+        /// <summary>チーフの組み合わせの通算回数（絵コンテと演出 / 演出と作画監督 / 脚本・演出・作画監督）。構成役職が揃わない組み合わせと、絵コンテと演出の兼任は入らない。</summary>
         public IReadOnlyList<StaffComboRow> StaffCombos { get; set; } = Array.Empty<StaffComboRow>();
+        /// <summary>チーフの役職ごと・人ごとの通算回数（閉じた状態では組み合わせの行の上に 1 人 1 かたまりで出す）。</summary>
+        public IReadOnlyList<StaffComboRow> StaffRoleCards { get; set; } = Array.Empty<StaffComboRow>();
+        /// <summary>「くわしく」を開いたときの数え方の断り（「（『○○プリキュア』第N話までのデータで数えています）」）。基準の話が無ければ空文字。</summary>
+        public string StaffComboNote { get; set; } = "";
+        /// <summary>「くわしく」の中のカード（役職ごと・人ごとのカード → 組み合わせのカードの順）。</summary>
+        public IReadOnlyList<StaffComboRow> StaffComboCards { get; set; } = Array.Empty<StaffComboRow>();
         /// <summary>h1 直下の歴代記録バッジ。歴代 10 位以内、またはシリーズ内で最長・最短の尺を持つ回だけ非空。</summary>
         public IReadOnlyList<RecordBadge> RecordBadges { get; set; } = Array.Empty<RecordBadge>();
         /// <summary>使用音声セクション。episode_uses をパート別にグルーピングしたもの。 0 件のエピソードでは空配列で、テンプレ側でセクション自体を非表示にする。</summary>
@@ -2019,11 +2086,17 @@ public sealed class EpisodeGenerator
     /// <summary>主要スタッフ 1 行（役職名 + 人物名のリスト）。</summary>
     private sealed class StaffRow
     {
-        /// <summary>表示用役職名（"脚本" / "絵コンテ" / "演出" / "作画監督" / "美術" / "絵コンテ・演出"）。</summary>
+        /// <summary>表示用役職名（札の文字。"脚本" / "絵コンテ" / "演出" / "総作画監督" / "作画監督" / "美術" / 統合行の "絵コンテ・演出" など）。</summary>
         public string RoleLabel { get; set; } = "";
 
-        /// <summary>役職代表コード。</summary>
+        /// <summary>役職コード（バッジの data-role-code）。統合行は空文字。</summary>
         public string RoleCode { get; set; } = "";
+
+        /// <summary>バッジの style 属性の値（作品の表の行の色から作った地・字・枠の色）。統合行は空文字（<see cref="SubRoleLinks"/> の各値を使う）。</summary>
+        public string BadgeStyle { get; set; } = "";
+
+        /// <summary>作品の表の行の色（<c>#rrggbb</c>）。OGP カードの役職名の色。統合行は空文字。</summary>
+        public string ColorHex { get; set; } = "";
 
         /// <summary>役職統計詳細ページの URL。<c>"/creators/roles/{rep_role_code}/"</c> 形式。 空文字のときはテンプレ側でリンク化せずプレーンテキスト表示。 「絵コンテ・演出」統合行ではこの値ではなく <see cref="SubRoleLinks"/> を使う。</summary>
         public string RoleUrl { get; set; } = "";
@@ -2038,33 +2111,43 @@ public sealed class EpisodeGenerator
     /// <summary>統合ラベル「絵コンテ・演出」を分割描画するためのリンク 1 件分。 テンプレ側では <c>&lt;a href="{Url}"&gt;{Label}&lt;/a&gt;</c> として埋め込む。</summary>
     private sealed class StaffRoleLink
     {
-        /// <summary>役職代表コード。</summary>
+        /// <summary>役職コード（バッジの data-role-code）。</summary>
         public string Code { get; set; } = "";
         public string Label { get; set; } = "";
         public string Url { get; set; } = "";
+        /// <summary>バッジの style 属性の値（作品の表の行の色から作った地・字・枠の色）。</summary>
+        public string BadgeStyle { get; set; } = "";
+        /// <summary>作品の表の行の色（<c>#rrggbb</c>）。OGP カードの役職名の色。</summary>
+        public string ColorHex { get; set; } = "";
     }
 
     /// <summary>
-    /// チーフの組み合わせの通算回数 1 件。閉じた状態は「[絵コンテ]×[演出] 2 回目」、開いた状態はカード
-    /// （「3 回中 2 回目」・顔ぶれ・放送順の玉の列・前回と次回のミニカード）。
+    /// チーフの組み合わせの通算回数、または役職ごと・人ごとの通算回数 1 件。
+    /// 組み合わせは閉じた状態で「[絵コンテ]×[演出] 2 回目」、開いた状態はどちらもカード
+    /// （「3 回中 2 回目」・顔ぶれ・放送順の玉の列・前回と次回のミニカード。役職ごとのカードは前の回からの空きも）。
     /// </summary>
     private sealed class StaffComboRow
     {
-        /// <summary>組み合わせの名前（「絵コンテと演出」「演出と作画監督」「脚本・演出・作画監督」）。読み上げ用。</summary>
+        /// <summary>カードの名前（組み合わせは「絵コンテと演出」など、役職ごとは「演出 志水 淳児」）。読み上げ用。</summary>
         public string Label { get; set; } = "";
-        /// <summary>組み合わせの役職の札（組み合わせの役職の順）。</summary>
+        /// <summary>役職の札（組み合わせは組み合わせの役職の順、役職ごとは 1 つ）。</summary>
         public IReadOnlyList<StaffComboBadge> Badges { get; set; } = Array.Empty<StaffComboBadge>();
-        /// <summary>絵コンテと演出を同じ方が兼ねた回か。札を × でつながず「兼任」と添える。</summary>
-        public bool IsSolo { get; set; }
         /// <summary>この話が何回目か（1 始まり）。</summary>
         public int Ordinal { get; set; }
         /// <summary>収録済みの範囲での登場回数。</summary>
         public int Total { get; set; }
-        /// <summary>初めての組み合わせ（「初顔合わせ」）か。</summary>
+        /// <summary>初めての回か。</summary>
         public bool IsFirst => Ordinal == 1;
-        /// <summary>顔ぶれ（人物ページへのリンク済み HTML 断片。兼任は「名前 (絵コンテ・演出兼任)」）。</summary>
-        public string NamesHtml { get; set; } = "";
-        /// <summary>放送順の玉の列。</summary>
+        /// <summary>回数を赤で目立たせるか（節目の回数。<see cref="IsMilestoneOrdinal"/>）。</summary>
+        public bool IsOrdinalNotable => IsMilestoneOrdinal(Ordinal);
+        /// <summary>初めての回に回数の代わりに出す文（組み合わせは「初顔合わせ」、役職ごとは「初担当」）。</summary>
+        public string FirstLabel { get; set; } = "";
+        /// <summary>連続担当（「3話連続」）か前の回からの空き（「1年10か月ぶり」など）。役職ごとのカードだけ。無ければ空文字。</summary>
+        public string GapLabel { get; set; } = "";
+        /// <summary><see cref="GapLabel"/> を赤で目立たせるか（連続担当と、26 週以上の空き）。</summary>
+        public bool IsGapNotable { get; set; }
+        /// <summary>顔ぶれ（人物ページへのリンク済み HTML 断片）。</summary>
+        public string NamesHtml { get; set; } = "";        /// <summary>放送順の玉の列。</summary>
         public IReadOnlyList<ComboBead> Beads { get; set; } = Array.Empty<ComboBead>();
         /// <summary>玉を小さく描くか（玉が多い列）。</summary>
         public bool IsDense { get; set; }
@@ -2176,7 +2259,6 @@ public sealed class EpisodeGenerator
         /// <summary>特別予告（本放送時）の YouTube URL と抽出済み動画 ID。ID が空なら詳細ページに特別予告ブロックを出さない。</summary>
         public string SpecialYoutubeTrailerUrl { get; set; } = "";
         public string SpecialYoutubeId { get; set; } = "";
-        public string Notes { get; set; } = "";
         /// <summary>サブタイトル未確定話のプレースホルダ（（サブタイトル「未定」）等）。確定話では空文字。 非空のときテンプレ側は h1 の鉤括弧を出さず「第N話（サブタイトル「未定」）」の形で描画する。</summary>
         public string SubtitlePlaceholder { get; set; } = "";
     }
@@ -2214,8 +2296,8 @@ public sealed class EpisodeGenerator
     /// <summary>主題歌 1 行（テーブルではなく縦リスト 1 行表現）の DTO。</summary>
     private sealed class ThemeSongRow
     {
-        /// <summary>区分ラベル（"OP" / "ED" / "挿入歌"）。</summary>
-        public string KindLabel { get; set; } = "";
+        /// <summary>区分バッジの並び（"オープニング主題歌" / "エンディング主題歌" / "挿入歌"）。同じ録音を何度か使った回は使った順に複数。</summary>
+        public List<ThemeSongKindEntry> Kinds { get; } = new();
         /// <summary>楽曲タイトル。テンプレ側で <c>「タイトル」</c> のようにカギ括弧で括る。
         /// 「親 song.title + 半角SP + variant_label 接尾辞」で組む（SongsGenerator displayTitle 慣例）。</summary>
         public string Title { get; set; } = "";
@@ -2228,22 +2310,18 @@ public sealed class EpisodeGenerator
         public string VariantLabel { get; set; } = "";
         /// <summary>歌唱者の平文（<see cref="CreditText.Vocalists"/> で構造化優先に解決済み。構造化行が無ければ <c>song_recordings.singer_name</c>）。 画面表示は <see cref="VocalistsHtml"/> を使う。</summary>
         public string SingerName { get; set; } = "";
-        /// <summary>備考（任意）。</summary>
-        public string Notes { get; set; } = "";
         /// <summary>本放送限定フラグ（「（本放送のみ）」を末尾に併記する）。</summary>
         public bool IsBroadcastOnly { get; set; }
         /// <summary>この回ではインストゥルメンタルで使った印（曲名の後ろ、カギ括弧の内側に「（インストゥルメンタル）」を添える）。</summary>
         public bool IsInstrumental { get; set; }
-        /// <summary>再生ボタンで鳴らす配信音源（<see cref="BuildContext.ThemeArtTracks"/> が選んだもの）。無ければ空文字でボタンを出さない。</summary>
-        public string ArtTrackId { get; set; } = "";
-        /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>
-        public bool ArtTrackPremiumOnly { get; set; }
-        /// <summary>音源が入っている盤の表記（プレイヤーの補足に出す）。</summary>
-        public string ArtTrackSourceAlbum { get; set; } = "";
-        /// <summary>会員限定のときの代わり（誰でも再生できる同じサイズの音源）。無ければ空文字。</summary>
-        public string ArtTrackAltId { get; set; } = "";
-        /// <summary>代わりの音源が入っている盤の表記。</summary>
-        public string ArtTrackAltSourceAlbum { get; set; } = "";
+        /// <summary>その回で流れたサイズの名前の並び（例: "TVサイズ Type.I"）。違うサイズだけを使った順に。曲名の後ろに緑のピルで出す。空なら出さない。</summary>
+        public List<string> SizeLabels { get; } = new();
+        /// <summary>再生ボタンの並び（サイズごと・使った順。鳴らす音源が同じなら 1 つ）。空ならボタンを出さない。</summary>
+        public List<ThemeSongPlay> Plays { get; } = new();
+        /// <summary>サイズの札を縦に並べる行（札が 2 つ以上のときだけ。札ごとにそのサイズの再生ボタン）。</summary>
+        public List<ThemeSongSizeRow> SizeRows => ThemeSongCardParts.SizeRows(SizeLabels, Plays);
+        /// <summary>カードの右上に置く再生ボタン（札を縦に並べるときは、どの札にも当たらないものだけ）。</summary>
+        public List<ThemeSongPlay> LoosePlays => ThemeSongCardParts.LoosePlays(SizeLabels, Plays);
 
         // ── 構造化クレジット由来の HTML 群 ──
         /// <summary>作詞の表示用 HTML。</summary>
@@ -2278,6 +2356,9 @@ public sealed class EpisodeGenerator
         public string SpokenWordHtml { get; set; } = "";
         /// <summary>「語り」役職ラベル HTML。 <see cref="SpokenWordHtml"/> が非空のときだけセットされる。</summary>
         public string SpokenWordRoleLabelHtml { get; set; } = "";
+        /// <summary>歌・作家の「役職バッジ + 名義」の並び（<see cref="ThemeSongCreditBadges.Build"/>）。テンプレはこれを
+        /// <c>.staff-badges-row</c> の中に置く。名義がすべて空なら空文字。</summary>
+        public string CreditBadgesHtml { get; set; } = "";
     }
 
     private sealed class CreditBlockView

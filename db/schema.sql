@@ -30,6 +30,7 @@ CREATE TABLE `episode_parts` (
   `oa_length` smallint unsigned DEFAULT NULL,
   `disc_length` smallint unsigned DEFAULT NULL,
   `vod_length` smallint unsigned DEFAULT NULL,
+  `supplement` varchar(255) DEFAULT NULL COMMENT '補足事項。パートの中身の添え書き（提供サイドスーパー・コーナー名など）で、サイトのフォーマットの表に出す',
   `notes` varchar(255) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -75,6 +76,7 @@ CREATE TABLE `episodes` (
   `youtube_special_trailer_url` varchar(1024) DEFAULT NULL,
   `magazine_subtitle_status` enum('PUBLISHED','NOT_DISCLOSED','UNDECIDED','NOT_LISTED') DEFAULT NULL COMMENT 'アニメ雑誌でのサブタイトル掲載状態（NULL=データなし）',
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `is_provisional_credit` tinyint NOT NULL DEFAULT 0 COMMENT '1=この回の credits は正式入力までの仮（ページに出さず、各話の札・メインスタッフにだけ使う）',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
@@ -268,7 +270,8 @@ CREATE TABLE `series` (
   --                      「演出」の欄に「A (絵コンテ)」「B (演出)」と並べる（TV の無印〜ドキドキ!）
   --   MERGE_SAME_PERSON  同じ人のときだけ「(絵コンテ・)演出 ｜ 名前」にまとめ、違う人ならそれぞれの役職名で出す
   --                      （TV のハピネスチャージ以降）
-  `storyboard_display` enum('SEPARATE','MERGE','MERGE_SAME_PERSON') NOT NULL DEFAULT 'SEPARATE' COMMENT '絵コンテと演出の出し方（SEPARATE=役職名ごと / MERGE=いつも演出にまとめる / MERGE_SAME_PERSON=同じ人のときだけまとめる）',
+  `storyboard_display` enum('SEPARATE','MERGE','MERGE_SAME_PERSON','JOIN_SAME_PERSON') NOT NULL DEFAULT 'SEPARATE' COMMENT '絵コンテと演出の出し方（SEPARATE=役職名ごと / MERGE=いつも演出にまとめる / MERGE_SAME_PERSON=同じ顔ぶれのときだけ(絵コンテ・)演出にまとめる / JOIN_SAME_PERSON=同じ顔ぶれのときだけ絵コンテ・演出にまとめる）',
+  `is_provisional_credit` tinyint NOT NULL DEFAULT 0 COMMENT '1=この作品の credits は正式入力までの仮（ページに出さず、メインスタッフにだけ使う）',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
@@ -788,6 +791,9 @@ CREATE TABLE `products` (
   `cover_image_source` varchar(16) DEFAULT NULL,
   `cover_image_show_both` tinyint(1) NOT NULL DEFAULT '0',
   `cover_image_fetched_at` datetime DEFAULT NULL,
+  -- Amazon の CD の ASIN から取った EAN（JAN、13 桁）。画像と同じ GetItems で取り、画像と同じく毎日取り直す。
+  -- 構造化データの gtin13 に使う（盤の mcn があればそちらが先）。
+  `amazon_ean` varchar(13) DEFAULT NULL COMMENT 'Amazon の CD の ASIN から取った EAN（JAN）。画像と同じく毎日取り直す',
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションに公式ページとして出す。
   `official_url` varchar(1024) DEFAULT NULL,
@@ -1604,12 +1610,20 @@ CREATE TABLE `persons` (
   `notes`            text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションにアイコン付きで並ぶ。
   -- official_url は本人の公式サイト、affiliation_url は所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ。
+  -- link_collection_url はリンク集（lit.link・linktr.ee など）、blog_url はブログ（note・tumblr など）。
+  -- x_sub_url は 2 つ目の X アカウント、portfolio_url は作品集のページ（ArtStation・Behance・carrd など）。
   -- wikipedia_url は本人の Wikipedia 記事で、外部リンクの最後に出す。
   `official_url`     varchar(1024) DEFAULT NULL COMMENT '本人の公式サイト URL（詳細ページに外部リンクとして表示）',
   `affiliation_url`  varchar(1024) DEFAULT NULL COMMENT '所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ URL',
+  `link_collection_url` varchar(1024) DEFAULT NULL COMMENT 'リンク集のページ URL（lit.link・linktr.ee など）',
   `x_url`            varchar(1024) DEFAULT NULL,
+  `x_sub_url`        varchar(1024) DEFAULT NULL COMMENT '2 つ目の X (Twitter) プロフィール URL（言語違いなど）',
+  `bluesky_url`      varchar(1024) DEFAULT NULL COMMENT 'Bluesky プロフィール URL',
   `instagram_url`    varchar(1024) DEFAULT NULL,
   `youtube_url`      varchar(1024) DEFAULT NULL,
+  `blog_url`         varchar(1024) DEFAULT NULL COMMENT 'ブログ URL（note・tumblr など）',
+  `pixiv_url`        varchar(1024) DEFAULT NULL COMMENT 'pixiv ユーザーページ URL',
+  `portfolio_url`    varchar(1024) DEFAULT NULL COMMENT '作品集のページ URL（ArtStation・Behance・carrd など）',
   `wikipedia_url`    varchar(1024) DEFAULT NULL,
   `created_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1806,11 +1820,18 @@ CREATE TABLE `companies` (
   `dissolved_date`  date         DEFAULT NULL,
   `notes`           text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションにアイコン付きで並ぶ。
+  -- link_collection_url はリンク集、blog_url はブログ、x_sub_url は 2 つ目の X アカウント、portfolio_url は作品集のページ。
   -- wikipedia_url は企業の Wikipedia 記事で、外部リンクの最後に出す。
   `official_url`    varchar(1024) DEFAULT NULL,
+  `link_collection_url` varchar(1024) DEFAULT NULL COMMENT 'リンク集のページ URL（lit.link・linktr.ee など）',
   `x_url`           varchar(1024) DEFAULT NULL,
+  `x_sub_url`       varchar(1024) DEFAULT NULL COMMENT '2 つ目の X (Twitter) アカウント URL（言語違いなど）',
+  `bluesky_url`     varchar(1024) DEFAULT NULL COMMENT 'Bluesky アカウント URL',
   `instagram_url`   varchar(1024) DEFAULT NULL,
   `youtube_url`     varchar(1024) DEFAULT NULL,
+  `blog_url`        varchar(1024) DEFAULT NULL COMMENT 'ブログ URL（note など）',
+  `pixiv_url`       varchar(1024) DEFAULT NULL COMMENT 'pixiv ユーザーページ URL',
+  `portfolio_url`   varchar(1024) DEFAULT NULL COMMENT '作品集のページ URL（ArtStation・Behance など）',
   `wikipedia_url`   varchar(1024) DEFAULT NULL,
   `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1840,6 +1861,8 @@ CREATE TABLE `company_aliases` (
   `name_kana`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `name_en`               varchar(128) DEFAULT NULL,
   `is_official_name`      tinyint NOT NULL DEFAULT 0 COMMENT '1 なら正式名（社名）の名義。企業詳細の商号履歴に出す',
+  `display_text_override` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'クレジットでの表記（会社・ロゴのエントリ）。NULL は名義の名前で出す',
+  `credit_small_suffix`   varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'クレジットの表記の末尾のうち画面で小さめの字で出ている部分。NULL は名前全体をそのまま出す',
   `predecessor_alias_id`  int          DEFAULT NULL,
   `successor_alias_id`    int          DEFAULT NULL,
   `valid_from`            date         DEFAULT NULL,
@@ -2164,6 +2187,7 @@ CREATE TABLE `precures` (
   `counts_only_when_transformed` tinyint(1)   NOT NULL DEFAULT '0',  -- 1=作品単位の作品のプリキュアの欄で、その作品の series_precures に行がある作品（変身した作品）でだけ数える（キュアモフルン）
   `voice_actor_person_id`  int                DEFAULT NULL,
   `key_color`              char(7)            DEFAULT NULL,  -- シリーズ一覧プリキュアバッジの地色（#RRGGBB、NULL=未設定）
+  `key_color_gradient`     varchar(512)       DEFAULT NULL,  -- キーカラーのグラデーション（「#RRGGBB 位置%」をカンマでつないだ左から右への色の並び、NULL=1 色のキーカラーだけ）
   `skin_color_h`           smallint unsigned  DEFAULT NULL,
   `skin_color_s`           tinyint unsigned   DEFAULT NULL,
   `skin_color_l`           tinyint unsigned   DEFAULT NULL,
@@ -2191,6 +2215,7 @@ CREATE TABLE `precures` (
   CONSTRAINT `fk_precures_alt_form`       FOREIGN KEY (`alt_form_alias_id`)      REFERENCES `character_aliases` (`alias_id`)  ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_precures_voice_actor`    FOREIGN KEY (`voice_actor_person_id`)  REFERENCES `persons`           (`person_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_precures_key_color`      CHECK (`key_color`  IS NULL OR (`key_color`  REGEXP '^#[0-9A-Fa-f]{6}$')),
+  CONSTRAINT `ck_precures_key_color_gradient` CHECK (`key_color_gradient` IS NULL OR (`key_color_gradient` REGEXP '^#[0-9A-Fa-f]{6} [0-9]{1,3}%(, #[0-9A-Fa-f]{6} [0-9]{1,3}%)+$')),
   CONSTRAINT `ck_precures_skin_h`         CHECK (`skin_color_h` IS NULL OR (`skin_color_h` BETWEEN 0 AND 360)),
   CONSTRAINT `ck_precures_skin_s`         CHECK (`skin_color_s` IS NULL OR (`skin_color_s` BETWEEN 0 AND 100)),
   CONSTRAINT `ck_precures_skin_l`         CHECK (`skin_color_l` IS NULL OR (`skin_color_l` BETWEEN 0 AND 100))
@@ -2341,6 +2366,124 @@ CREATE TABLE `roles` (
 -- 取り除いて運用すること。
 
 --
+-- 作品ごとのメインスタッフの役職
+--
+-- シリーズ一覧のカードのバッジと、作品詳細のメインスタッフ（と作品詳細の OGP カード）は、
+-- この表に行のある役職だけを display_order の順に、badge_color の色で出す。
+-- 行の無い作品にはメインスタッフを出さない。バッジの地・枠・字の色は badge_color から作る。
+--
+
+DROP TABLE IF EXISTS `series_key_staff_roles`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `series_key_staff_roles` (
+  `series_id`     int              NOT NULL COMMENT '作品',
+  `role_code`     varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'メインスタッフとして出す役職',
+  `display_order` tinyint unsigned NOT NULL COMMENT '作品の中の並び順（小さいほど先）',
+  `badge_color`   char(7)          NOT NULL COMMENT 'バッジの色（#rrggbb の小文字）',
+  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`    varchar(64) DEFAULT NULL,
+  `updated_by`    varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`series_id`, `role_code`),
+  KEY `ix_series_key_staff_roles_role` (`role_code`),
+  CONSTRAINT `fk_series_key_staff_roles_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_series_key_staff_roles_role` FOREIGN KEY (`role_code`) REFERENCES `roles` (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `ck_series_key_staff_roles_color` CHECK (regexp_like(`badge_color`, '^#[0-9a-f]{6}$', 'c'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='作品ごとのメインスタッフの役職（シリーズ一覧のバッジ・作品詳細のメインスタッフ）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- 音楽商品が Amazon で売られているかの状態
+--
+-- 「販売中の商品」の枠は、作品に結び付く音楽商品のうち、CD の ASIN があり、この表で売られているとされた商品を
+-- 候補にする。状態は AmazonSync（--shop-check）が Creators API で確かめて書く。
+--
+
+DROP TABLE IF EXISTS `product_shop_states`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `product_shop_states` (
+  `product_catalog_no` varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '商品',
+  `is_buyable`         tinyint(1)   NOT NULL COMMENT '売られているか（1＝候補にする・0＝しない）',
+  `availability_type`  varchar(32)  DEFAULT NULL COMMENT 'Amazon が返した在庫の種別（IN_STOCK・PREORDER など）',
+  `checked_at`         datetime     NOT NULL COMMENT '最後に確かめた時刻',
+  PRIMARY KEY (`product_catalog_no`),
+  CONSTRAINT `fk_product_shop_states_product` FOREIGN KEY (`product_catalog_no`) REFERENCES `products` (`product_catalog_no`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='音楽商品が Amazon で売られているかの状態（販売中の商品の枠の候補）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- 作品ごとの販売中の商品
+--
+-- 「販売中の商品」の枠の候補のうち、手で入れる行（商品の表に無い Blu-ray など）。
+-- is_enabled が 1 で is_buyable が 1 の行だけが候補になる（作品に結び付く音楽商品は product_shop_states）。
+-- is_buyable・availability_type・image_url・checked_at は、AmazonSync（--shop-check）が
+-- Creators API で確かめて書き戻す。
+--
+
+DROP TABLE IF EXISTS `series_shop_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `series_shop_items` (
+  `shop_item_id`       int               NOT NULL AUTO_INCREMENT,
+  `series_id`          int               NOT NULL COMMENT '作品',
+  `asin`               varchar(16)       NOT NULL COMMENT 'Amazon の ASIN',
+  `title`              varchar(255)      CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL COMMENT '枠に出す商品名',
+  `media_label`        varchar(32)       NOT NULL COMMENT '媒体の札（Blu-ray・CD など）',
+  `product_catalog_no` varchar(32)       CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT '音楽商品なら、その商品。商品詳細へのリンクに使う',
+  `release_date`       date              DEFAULT NULL COMMENT '発売日（予約受付中の行に添える）',
+  `display_order`      smallint unsigned NOT NULL COMMENT '並び順（小さいほど先）',
+  `is_enabled`         tinyint(1)        NOT NULL DEFAULT '1' COMMENT '0 にすると、売られていても出さない',
+  `is_buyable`         tinyint(1)        DEFAULT NULL COMMENT '売られているか（1＝出す・0＝出さない・NULL＝まだ確かめていない）',
+  `availability_type`  varchar(32)       DEFAULT NULL COMMENT 'Amazon が返した在庫の種別（IN_STOCK・PREORDER など）',
+  `image_url`          varchar(512)      DEFAULT NULL COMMENT '商品画像の URL（Amazon のもの。確かめるたびに取り直す）',
+  `checked_at`         datetime          DEFAULT NULL COMMENT '最後に確かめた時刻',
+  `created_at`         timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`         timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`         varchar(64) DEFAULT NULL,
+  `updated_by`         varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`shop_item_id`),
+  UNIQUE KEY `uq_series_shop_items_series_asin` (`series_id`, `asin`),
+  KEY `ix_series_shop_items_product` (`product_catalog_no`),
+  CONSTRAINT `fk_series_shop_items_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_series_shop_items_product` FOREIGN KEY (`product_catalog_no`) REFERENCES `products` (`product_catalog_no`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='作品ごとの販売中の商品（作品詳細・各話の詳細・トップページの枠）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- 作品ごとの各話のスタッフの札の役職
+--
+-- 作品のページのエピソード一覧・トップページのエピソード欄・/episodes/・エピソード詳細のスタッフ欄
+-- （と各話の OGP カード）は、この表に行のある役職だけを display_order の順に、badge_color の色で出す。
+-- 行の無い作品には札を出さない。札の地・枠・字の色は badge_color から作る。
+--
+
+DROP TABLE IF EXISTS `series_episode_staff_roles`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `series_episode_staff_roles` (
+  `series_id`     int              NOT NULL COMMENT '作品',
+  `role_code`     varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '各話の札に出す役職',
+  `display_order` tinyint unsigned NOT NULL COMMENT '作品の中の並び順（小さいほど先）',
+  `badge_color`   char(7)          NOT NULL COMMENT '札の色（#rrggbb の小文字）',
+  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`    varchar(64) DEFAULT NULL,
+  `updated_by`    varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`series_id`, `role_code`),
+  KEY `ix_series_episode_staff_roles_role` (`role_code`),
+  CONSTRAINT `fk_series_episode_staff_roles_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_series_episode_staff_roles_role` FOREIGN KEY (`role_code`) REFERENCES `roles` (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `ck_series_episode_staff_roles_color` CHECK (regexp_like(`badge_color`, '^#[0-9a-f]{6}$', 'c'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='作品ごとの各話のスタッフの札の役職（エピソード一覧・トップ・エピソード詳細・/episodes/）';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- 役職系譜の関係テーブル
 --
 -- 役職の系譜（変更元 → 変更先）は分裂・併合を含む多対多の関係なので、
@@ -2406,10 +2549,12 @@ CREATE TABLE `role_relations` (
 
 --
 -- Table structure for table `role_templates`
--- 役職テンプレート。既定テンプレ（全シリーズ共通）とシリーズ別上書きを単一テーブルで管理する。
+-- 役職テンプレート。既定テンプレ（全シリーズ共通）とシリーズ別・エピソード別の上書きを単一テーブルで管理する。
 --   - series_id IS NULL ：既定テンプレ（全シリーズ共通）
---   - series_id IS NOT NULL：そのシリーズ専用のテンプレ
--- 解決ロジック：(role_code, series_id) で検索 → 無ければ (role_code, NULL) フォールバック。
+--   - series_id IS NOT NULL, episode_id IS NULL：そのシリーズ専用のテンプレ
+--   - episode_id IS NOT NULL：そのエピソード専用のテンプレ（series_id はそのエピソードのシリーズ）。
+--     同じシリーズの中で、回によって画面の書式（項目の見出しなど）が違うときに使う
+-- 解決ロジック：(role_code, episode_id) で検索 → (role_code, series_id) → 無ければ (role_code, NULL) フォールバック。
 -- 期間制限（valid_from/valid_to）は持たない。
 --
 DROP TABLE IF EXISTS `role_templates`;
@@ -2419,6 +2564,7 @@ CREATE TABLE `role_templates` (
   `template_id`     int          NOT NULL AUTO_INCREMENT,
   `role_code`       varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `series_id`       int              NULL,
+  `episode_id`      int              NULL COMMENT 'エピソード別のテンプレのエピソード（NULL=シリーズ別または既定）。series_id はそのエピソードのシリーズ',
   `format_template` text         NOT NULL,
   `content_header_override` varchar(256) NULL COMMENT 'コンテンツ領域に出すヘッダ文字列（左カラム役職名の代替）。非 NULL のときレンダラがヘッダを出力して左カラム役職名を抑止する。',
   `notes`           text             NULL,
@@ -2427,20 +2573,23 @@ CREATE TABLE `role_templates` (
   `created_by`      varchar(64)      NULL,
   `updated_by`      varchar(64)      NULL,
   PRIMARY KEY (`template_id`),
-  UNIQUE KEY `uk_role_templates_role_series` (`role_code`,`series_id`),
+  UNIQUE KEY `uk_role_templates_role_series_episode` (`role_code`,`series_id`,`episode_id`),
   KEY `ix_role_templates_role` (`role_code`),
   KEY `ix_role_templates_series` (`series_id`),
+  KEY `ix_role_templates_episode` (`episode_id`),
   CONSTRAINT `fk_role_templates_role`   FOREIGN KEY (`role_code`) REFERENCES `roles`  (`role_code`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_role_templates_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT `fk_role_templates_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_role_templates_episode` FOREIGN KEY (`episode_id`) REFERENCES `episodes` (`episode_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `credits`
--- クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で OP/ED 各 1 件まで。
--- 本放送と円盤・配信の差し替えは個々のエントリ単位（credit_block_entries.is_broadcast_only）で
--- 行うため、クレジット本体（クレジット 1 件 = OP または ED の役職構成）には
--- 本放送限定フラグを持たせない。
+-- クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で、OP/ED 各 1 件を版（media_version）ごとに持つ。
+-- 版は NULL（共通）が通常。本放送と Blu-ray・配信でクレジットのフォーマットが丸ごと違う作品（オトナシリーズ）だけ、
+-- 同じ回・同じ種類を BROADCAST（本放送）と HOME_VIDEO（Blu-ray・配信）の 2 本で並べる。
+-- SiteBuilder の集計は共通と Blu-ray・配信版だけで数え、本放送版は表示だけに使う。
+-- 一部の差し替え（ロゴバージョン違い等）は個々のエントリ単位（credit_block_entries.is_broadcast_only）で行う。
 -- scope=SERIES なら series_id 必須・episode_id NULL、scope=EPISODE はその逆。
 -- part_type が NULL の行は「規定位置（part_types.default_credit_kind が
 -- credit_kind と一致するパート）で流れる」を意味する。
@@ -2460,6 +2609,11 @@ CREATE TABLE `credits` (
   `series_id`         int                                                          DEFAULT NULL,
   `episode_id`        int                                                          DEFAULT NULL,
   `credit_kind`       varchar(16)                                                  NOT NULL,
+  -- 版：そのクレジットが出る媒体の組（BROADCAST = 本放送、BLURAY = Blu-ray、STREAMING = 配信。例 'BLURAY,STREAMING'）。NULL = 共通。
+  `media_version`     set('BROADCAST','BLURAY','STREAMING')                        DEFAULT NULL,
+  -- 一意制約用の生成列。MySQL の UNIQUE は NULL どうしを衝突させないため、NULL を空文字にして
+  -- 共通（NULL）のクレジットも同じ回・同じ種類で 1 本までに抑える。
+  `media_version_key` varchar(32) GENERATED ALWAYS AS (IFNULL(`media_version`, '')) STORED,
   -- 同一スコープ（同一エピソード／同一シリーズ）内でのクレジットの表示順。
   -- credits はクレジット階層の最上位だが、従来は順序カラムを持たず
   -- credit_kind の暗黙順（OP→ED）に依存していた。OP より ED を先に流す回や
@@ -2475,8 +2629,8 @@ CREATE TABLE `credits` (
   `updated_by`        varchar(64)  DEFAULT NULL,
   `is_deleted`        tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`credit_id`),
-  UNIQUE KEY `uq_credit_series_kind`  (`series_id`,`credit_kind`),
-  UNIQUE KEY `uq_credit_episode_kind` (`episode_id`,`credit_kind`),
+  UNIQUE KEY `uq_credit_series_kind_version`  (`series_id`,`credit_kind`,`media_version_key`),
+  UNIQUE KEY `uq_credit_episode_kind_version` (`episode_id`,`credit_kind`,`media_version_key`),
   -- 同一スコープ内で credit_seq を一意にし、表示順の重複・破綻を防ぐ。
   -- series_id / episode_id は排他（scope_kind で一方のみ非 NULL）なので
   -- NULL を含む行同士は MySQL の UNIQUE では衝突しない（想定どおり）。
@@ -2508,6 +2662,10 @@ CREATE TABLE `credit_cards` (
   -- 1 つのクレジットの中でカード → ロール → カードと切り替わるため、カード単位で持つ。
   -- ロール部分は ROLL のカード 1 枚で表す。credits.presentation はクレジット全体の主な見せ方。
   `presentation` enum('CARDS','ROLL') NOT NULL DEFAULT 'CARDS' COMMENT 'カードの見せ方（CARDS=カード / ROLL=ロール）',
+  -- カードの版：そのカードが出る媒体の組（BROADCAST = 本放送、BLURAY = Blu-ray、STREAMING = 配信。NULL = 共通）。
+  -- 媒体によって違うカードだけ版を付け、2 つの版のカードを隣どうしに並べる。サイトは 1 組ずつ枠を作り、組の前の版を上・後ろの版を下に描く。
+  -- 集計は組の後ろの版が本体（前の版のカードは、後ろの版のカードにいない人だけを数える）。
+  `media_version` set('BROADCAST','BLURAY','STREAMING') DEFAULT NULL COMMENT 'カードの版（そのカードが出る媒体の組。BROADCAST=本放送、BLURAY=Blu-ray、STREAMING=配信、NULL=共通）',
   `notes`      text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2617,6 +2775,10 @@ CREATE TABLE `credit_card_roles` (
   `hide_role_label` tinyint                                              NOT NULL DEFAULT 0,
   -- 1 ならこの行は画面にはクレジットされていない（クレジット漏れ）。データは入れて集計・関与に数え、表示だけ括弧で包んで示す。
   `not_on_screen`  tinyint                                               NOT NULL DEFAULT 0,
+  -- 1 ならこの行の役職名（見出し）だけが画面にはクレジットされていない。名前・中身は画面に出ている
+  -- （例：ED の原画の末尾に 1 人だけで出ている人が、実質は「料理作監」の担当）。データは入れて集計・関与に数え、
+  -- 表示では役職名だけを全角の括弧で包んで薄くし、名前はふつうに出す。not_on_screen と同じ行に両方は立てない。
+  `role_label_not_on_screen` tinyint                                     NOT NULL DEFAULT 0 COMMENT '1 ならこの行の役職名だけが画面にはクレジットされていない（名前は画面にある。表示は役職名だけ括弧で示す）',
   -- 主題歌ループが出す曲を絞る劇中順の範囲（"N" か "N-M"。episode_theme_songs.seq / series_theme_songs.seq）。NULL なら絞らない。
   -- その役職の行で役職テンプレートの {#THEME_SONGS} ループ（旧 {THEME_SONGS} も）が出す曲を、この範囲の曲だけにする
   -- （テンプレート側の seq= と両方あれば両方を満たす曲だけ）。主題歌の形式（roles.role_format_kind='THEME_SONG'）の役職でだけ意味を持つ。
@@ -2632,7 +2794,8 @@ CREATE TABLE `credit_card_roles` (
   KEY `ix_card_role_role` (`role_code`),
   CONSTRAINT `fk_card_role_group` FOREIGN KEY (`card_group_id`) REFERENCES `credit_card_groups` (`card_group_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_card_role_role`  FOREIGN KEY (`role_code`)     REFERENCES `roles`              (`role_code`)     ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `ck_card_role_order_pos` CHECK ((`order_in_group` >= 1))
+  CONSTRAINT `ck_card_role_order_pos` CHECK ((`order_in_group` >= 1)),
+  CONSTRAINT `ck_card_role_not_on_screen_exclusive` CHECK ((not(((`not_on_screen` = 1) and (`role_label_not_on_screen` = 1)))))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -2642,6 +2805,8 @@ CREATE TABLE `credit_card_roles` (
 -- col_count はブロック内エントリを「何カラムで並べるか」の表示意図を保持する列。
 -- 行数はカラム数とエントリ数の従属関係で実行時に決まるため、独立した行数列は持たない。
 -- leading_company_alias_id にはブロック先頭に企業名を出すケースの企業名義を入れる。
+-- leading_company2_alias_id は筆頭に 2 社が連名で出るときの 2 社目、leading_company_separator はその 2 社の間の字、
+-- leading_company_suffix は筆頭の会社名の後ろに付く字（「スタジオトゥインクル/AMGA 撮影班」の「/」と「 撮影班」）。
 -- heading_series_id / heading_text はブロック先頭の見出し（映画の声の出演の作品ごとのまとまりの頭に出る作品名、
 -- 「特別出演」など）。作品を指すときは heading_series_id、画面の表記が作品の正式タイトルと違うときや
 -- 作品ではない見出しは heading_text に画面どおりの文字を入れる。
@@ -2655,8 +2820,13 @@ CREATE TABLE `credit_role_blocks` (
   `card_role_id`              int             NOT NULL,
   `block_seq`                 tinyint unsigned NOT NULL,
   `col_count`                 tinyint unsigned NOT NULL DEFAULT '1',
+  `continues_previous`        tinyint(1)      NOT NULL DEFAULT 0 COMMENT '1 なら前のブロックの続き。間に空きを入れず、列数だけ変えて続ける（役職の最初のブロックには付けない）',
   `leading_company_alias_id`  int             DEFAULT NULL,
   `leading_company_not_on_screen` tinyint      NOT NULL DEFAULT 0 COMMENT '1 なら筆頭の会社は画面にはクレジットされていない（クレジット漏れ）。表示だけ括弧で包む',
+  `leading_company2_alias_id` int             DEFAULT NULL COMMENT '筆頭の 2 社目の会社名義（company_aliases.alias_id）。2 社が連名で出るときの 2 社目。所属・集計に数える',
+  `leading_company_separator` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '筆頭の 2 社の間に出す字（画面の表記どおり。例 "/"）',
+  `leading_company_suffix`    varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '筆頭の会社名の後ろに付く字（画面の表記どおり。例 " 撮影班"）。1 社だけのときも使える',
+  `leading_text`              varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'ブロックの筆頭の団体を文字だけで持つ（画面の表記どおり）。会社のデータは作らず、表示は筆頭の会社と同じく下の名前を字下げする',
   `heading_series_id`         int             DEFAULT NULL COMMENT 'ブロック先頭の見出しにする作品（series.series_id）。映画の声の出演の作品ごとのまとまりなど',
   `heading_text`              varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'ブロック先頭の見出しの文字（画面の表記どおり）。NULL なら作品の正式タイトル',
   `heading_italic`            tinyint(1) NOT NULL DEFAULT 0 COMMENT 'ブロック先頭の見出しを斜体で出すか（画面どおり）',
@@ -2668,9 +2838,11 @@ CREATE TABLE `credit_role_blocks` (
   PRIMARY KEY (`block_id`),
   UNIQUE KEY `uq_block_card_role_seq` (`card_role_id`,`block_seq`),
   KEY `ix_block_lead_company` (`leading_company_alias_id`),
+  KEY `ix_block_lead_company2` (`leading_company2_alias_id`),
   KEY `fk_block_heading_series` (`heading_series_id`),
   CONSTRAINT `fk_block_card_role`    FOREIGN KEY (`card_role_id`)             REFERENCES `credit_card_roles` (`card_role_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_block_lead_company` FOREIGN KEY (`leading_company_alias_id`) REFERENCES `company_aliases`   (`alias_id`)     ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_block_lead_company2` FOREIGN KEY (`leading_company2_alias_id`) REFERENCES `company_aliases` (`alias_id`)    ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_block_heading_series` FOREIGN KEY (`heading_series_id`)      REFERENCES `series`            (`series_id`)    ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_block_seq_pos`       CHECK ((`block_seq` >= 1)),
   CONSTRAINT `ck_block_col_count_pos` CHECK ((`col_count` >= 1))
@@ -2693,6 +2865,7 @@ CREATE TABLE `credit_role_blocks` (
 -- parallel_with_entry_id は「A / B」併記の相手 entry を自参照する任意フィールド。
 -- 併記のエントリは独立した行にならず、相手（同じブロックの前のエントリ）の行に並べて描く。
 -- 前後に付く字は parallel_prefix / parallel_suffix、小さい字で描くかは parallel_small。
+-- character_unit_alias_id は声の出演の役名の後ろに小さいカッコで出すキャラのユニットの名義。
 --
 DROP TABLE IF EXISTS `credit_block_entries`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -2710,8 +2883,16 @@ CREATE TABLE `credit_block_entries` (
   --   NULL = 誤記なし。値があれば誤記あり（フラグは設けない）。マスタは汚さず、エントリ単位で完結させる。
   --   表示は「打ち消し線で誤記」 + 半角SP + 「正名義」を並べる運用（CreditPreviewRenderer / CreditTreeRenderer）。
   `person_misprint_text`           varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `person_display_text`            varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '画面に出た人物名の表記揺れ。名義と空白・記号だけが違うときだけ。誤記ではない。NULL は名義の名前のまま',
   `character_misprint_text`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `character_display_text`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '画面の組みどおりの役名。役名が画面で折れているとき（改行入り。改行を抜いた字はキャラの名義と同じ）か、画面が名義の頭を省いた後ろの部分だけのとき（名義より短い）。NULL は名義の名前のまま',
+  -- 同じブロックで直前の CHARACTER_VOICE と役名・声優が同じ行の、画面での出し方。まとまりの最初の行と、前の行と続かない行は NULL。
+  --   REPEAT = 毎行書く / TOP = まとまりの最初の行に 1 回だけ書き、以降の行は空き / MIDDLE = まとまりの縦の真ん中に 1 回だけ書く。
+  --   描き方はこの値だけで決める（文字が同じかどうかでは決めない）。CHARACTER_VOICE のエントリにだけ付ける（ck_entry_same_layout_voice）。
+  `same_character_layout`          enum('REPEAT','TOP','MIDDLE') DEFAULT NULL COMMENT '前の行と同じ役名のときの画面の組み方（REPEAT=毎行書く / TOP=最初の行に 1 回 / MIDDLE=縦の真ん中に 1 回）。前の行と続かない行は NULL',
+  `same_person_layout`             enum('REPEAT','TOP','MIDDLE') DEFAULT NULL COMMENT '前の行と同じ声優のときの画面の組み方（REPEAT=毎行書く / TOP=最初の行に 1 回 / MIDDLE=縦の真ん中に 1 回）。前の行と続かない行は NULL',
   `company_misprint_text`          varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `company_display_text`           varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '画面に出た企業名の表記揺れ。名義と空白・記号だけが違うときだけ。誤記ではない。NULL は名義の名前のまま',
   -- 人物名の代わりに画面に出た伏せ字表記（「謎の少女　？」の「？」など）。NULL = 伏せ字なし。
   --   名義（person_alias_id）は本来の人物に紐付けたまま持ち、表示は「伏せ字 (正名義)」の形にする。
   `person_masked_text`             varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -2735,7 +2916,11 @@ CREATE TABLE `credit_block_entries` (
   `parallel_suffix`                varchar(8)   CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   -- 1 なら併記のエントリ（前後の字を含む）を小さい字で描く。
   `parallel_small`                 tinyint(1)      NOT NULL DEFAULT 0,
-  `notes`                          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  -- 声の出演の役名の後ろに小さいカッコで出すキャラのユニットの名義（「ヤギ（サファリア）」の「サファリア」）。
+  --   ユニットは persons 行を持たない名義で、person_alias_members にキャラと声優の組をメンバーとして持つ。NULL は出さない。
+--   CHARACTER_VOICE のエントリにだけ付ける（外部キーの SET NULL があり CHECK 制約に使えないので、入力の側で守る）。
+  `character_unit_alias_id`        int             DEFAULT NULL COMMENT '声の出演の役名の後ろに小さいカッコで出すキャラのユニットの名義（person_aliases）。NULL は出さない',
+  `notes`                        text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`                     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`                     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`                     varchar(64)  DEFAULT NULL,
@@ -2753,6 +2938,7 @@ CREATE TABLE `credit_block_entries` (
   KEY `ix_be_aff_person`     (`affiliation_person_alias_id`),
   KEY `ix_be_aff_logo`       (`affiliation_logo_id`),
   KEY `ix_be_parallel`       (`parallel_with_entry_id`),
+  KEY `ix_be_character_unit` (`character_unit_alias_id`),
   CONSTRAINT `fk_be_block`             FOREIGN KEY (`block_id`)                     REFERENCES `credit_role_blocks`   (`block_id`)          ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_be_person_alias`      FOREIGN KEY (`person_alias_id`)              REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_character_alias`   FOREIGN KEY (`character_alias_id`)           REFERENCES `character_aliases`    (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
@@ -2762,7 +2948,9 @@ CREATE TABLE `credit_block_entries` (
   CONSTRAINT `fk_be_aff_person_alias`  FOREIGN KEY (`affiliation_person_alias_id`)  REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_aff_logo`          FOREIGN KEY (`affiliation_logo_id`)          REFERENCES `logos`                (`logo_id`)           ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_parallel`          FOREIGN KEY (`parallel_with_entry_id`)       REFERENCES `credit_block_entries` (`entry_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `ck_be_seq_pos` CHECK ((`entry_seq` >= 1))
+  CONSTRAINT `fk_be_character_unit_alias` FOREIGN KEY (`character_unit_alias_id`)   REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `ck_be_seq_pos` CHECK ((`entry_seq` >= 1)),
+  CONSTRAINT `ck_entry_same_layout_voice` CHECK ((`entry_kind` = 'CHARACTER_VOICE') OR (`same_character_layout` IS NULL AND `same_person_layout` IS NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -2787,6 +2975,10 @@ CREATE TABLE `episode_theme_songs` (
   `seq`                     tinyint unsigned                                     NOT NULL DEFAULT '0',
   `usage_actuality`         enum('NORMAL','BROADCAST_NOT_CREDITED','CREDITED_NOT_BROADCAST') NOT NULL DEFAULT 'NORMAL',
   `song_recording_id`       int                                                  NOT NULL,
+  -- その回で流れたサイズ（→ song_size_variants）。NULL なら指定なし。
+  -- エピソード詳細の主題歌・挿入歌の一覧で曲名の後ろにサイズの名前を添え、再生ボタンは同じサイズの配信音源を優先する。
+  -- シリーズ詳細は録音ごとにまとめるのでサイズを出さない。クレジットのカードでも使わない（画面の表記どおり）。
+  `song_size_variant_code`  varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'その回で流れたサイズ（→ song_size_variants）。NULL なら指定なし',
   -- クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。NULL なら誤記なし。
   -- クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名（songs.title）を続ける。
   `title_misprint_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -2803,8 +2995,78 @@ CREATE TABLE `episode_theme_songs` (
   `updated_by`              varchar(64)  DEFAULT NULL,
   PRIMARY KEY (`episode_id`,`is_broadcast_only`,`theme_kind`,`seq`),
   KEY `ix_ets_song_recording` (`song_recording_id`),
+  KEY `ix_ets_song_size` (`song_size_variant_code`),
   CONSTRAINT `fk_ets_episode`        FOREIGN KEY (`episode_id`)             REFERENCES `episodes`        (`episode_id`)        ON DELETE CASCADE  ON UPDATE CASCADE,
-  CONSTRAINT `fk_ets_song_recording` FOREIGN KEY (`song_recording_id`)      REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_ets_song_recording` FOREIGN KEY (`song_recording_id`)      REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_ets_song_size`      FOREIGN KEY (`song_size_variant_code`) REFERENCES `song_size_variants` (`variant_code`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `episode_theme_song_singers`
+-- エピソードのクレジットの主題歌のカードに出た歌唱者。使った録音の歌唱者（song_recording_singers）と
+-- 画面の歌唱者が違うときに、画面に出た歌唱者を名義でつないで持つ。行の形は song_recording_singers と同じで、
+-- episode_theme_songs の 1 行（episode_id, is_broadcast_only, theme_kind, seq）に連なる。
+-- 行がある主題歌は、クレジットのカードの歌（VOCALS）・コーラス（BACKING_VOCALS）をこちらで描く
+-- （主題歌・挿入歌の一覧など、録音の情報として出す所は録音の歌唱者のまま）。
+--
+DROP TABLE IF EXISTS `episode_theme_song_singers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `episode_theme_song_singers` (
+  `episode_id`                int              NOT NULL,
+  `is_broadcast_only`         tinyint(1)       NOT NULL DEFAULT 0,
+  `theme_kind`                enum('OP','ED','INSERT') NOT NULL,
+  `seq`                       tinyint unsigned NOT NULL,
+  `role_code`                 varchar(64)      NOT NULL DEFAULT 'VOCALS',
+  `singer_seq`                tinyint unsigned NOT NULL,
+  `billing_kind`              enum('PERSON','CHARACTER_WITH_CV') NOT NULL,
+  `person_alias_id`           int              DEFAULT NULL,
+  `character_alias_id`        int              DEFAULT NULL,
+  `voice_person_alias_id`     int              DEFAULT NULL,
+  `slash_person_alias_id`     int              DEFAULT NULL,
+  `slash_character_alias_id`  int              DEFAULT NULL,
+  `slash_voice_person_alias_id` int            DEFAULT NULL,
+  `voice_masked_text`         varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '声優名を伏せて出た画面の字（「？？？」など）。NULL なら伏せていない。声優の名義は正体の人につないだまま持つ',
+  `preceding_separator`       varchar(8)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `affiliation_text`          varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `cv_label`                  varchar(8)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `notes`                     text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`                varchar(64)      DEFAULT NULL,
+  `updated_by`                varchar(64)      DEFAULT NULL,
+  PRIMARY KEY (`episode_id`, `is_broadcast_only`, `theme_kind`, `seq`, `role_code`, `singer_seq`),
+  KEY `ix_etss_role`            (`role_code`),
+  KEY `ix_etss_person`          (`person_alias_id`),
+  KEY `ix_etss_character`       (`character_alias_id`),
+  KEY `ix_etss_voice`           (`voice_person_alias_id`),
+  KEY `ix_etss_slash_person`    (`slash_person_alias_id`),
+  KEY `ix_etss_slash_character` (`slash_character_alias_id`),
+  KEY `ix_etss_slash_voice`     (`slash_voice_person_alias_id`),
+  CONSTRAINT `ck_etss_seq_pos` CHECK (`singer_seq` >= 1),
+  CONSTRAINT `ck_etss_kind_columns` CHECK (
+       (`billing_kind` = 'PERSON'
+          AND `person_alias_id`       IS NOT NULL
+          AND `character_alias_id`    IS NULL
+          AND `voice_person_alias_id` IS NULL
+          AND `slash_character_alias_id` IS NULL
+          AND `slash_voice_person_alias_id` IS NULL)
+    OR (`billing_kind` = 'CHARACTER_WITH_CV'
+          AND `character_alias_id`    IS NOT NULL
+          AND `voice_person_alias_id` IS NOT NULL
+          AND `person_alias_id`       IS NULL
+          AND `slash_person_alias_id` IS NULL)
+  ),
+  CONSTRAINT `fk_etss_theme_song`      FOREIGN KEY (`episode_id`, `is_broadcast_only`, `theme_kind`, `seq`)
+                                       REFERENCES `episode_theme_songs` (`episode_id`, `is_broadcast_only`, `theme_kind`, `seq`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_etss_role`            FOREIGN KEY (`role_code`)                REFERENCES `roles`             (`role_code`)         ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_etss_person`          FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_etss_character`       FOREIGN KEY (`character_alias_id`)       REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_etss_voice`           FOREIGN KEY (`voice_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_etss_slash_person`    FOREIGN KEY (`slash_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_etss_slash_character` FOREIGN KEY (`slash_character_alias_id`) REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_etss_slash_voice`     FOREIGN KEY (`slash_voice_person_alias_id`) REFERENCES `person_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -2825,6 +3087,8 @@ CREATE TABLE `series_theme_songs` (
   `seq`                     tinyint unsigned                                     NOT NULL DEFAULT '0',
   `usage_actuality`         enum('NORMAL','BROADCAST_NOT_CREDITED','CREDITED_NOT_BROADCAST') NOT NULL DEFAULT 'NORMAL',
   `song_recording_id`       int                                                  NOT NULL,
+  -- その作品で流れたサイズ（→ song_size_variants）。NULL なら指定なし。
+  `song_size_variant_code`  varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'その作品で流れたサイズ（→ song_size_variants）。NULL なら指定なし',
   -- クレジットの画面に出た曲名の誤記（画面の曲名を丸ごと、文字もそのまま）。NULL なら誤記なし。
   -- クレジットの主題歌の行でだけ、取り消し線で出してから正しい曲名（songs.title）を続ける。
   `title_misprint_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -2841,8 +3105,10 @@ CREATE TABLE `series_theme_songs` (
   `updated_by`              varchar(64)  DEFAULT NULL,
   PRIMARY KEY (`series_id`,`is_broadcast_only`,`theme_kind`,`seq`),
   KEY `ix_sts_song_recording` (`song_recording_id`),
+  KEY `ix_sts_song_size` (`song_size_variant_code`),
   CONSTRAINT `fk_sts_series`         FOREIGN KEY (`series_id`)         REFERENCES `series`          (`series_id`)         ON DELETE CASCADE  ON UPDATE CASCADE,
-  CONSTRAINT `fk_sts_song_recording` FOREIGN KEY (`song_recording_id`) REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_sts_song_recording` FOREIGN KEY (`song_recording_id`) REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_sts_song_size`      FOREIGN KEY (`song_size_variant_code`) REFERENCES `song_size_variants` (`variant_code`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -3285,6 +3551,8 @@ CREATE TABLE `song_recording_singers` (
   `slash_voice_person_alias_id` int            DEFAULT NULL,
   `preceding_separator`       varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `affiliation_text`          varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- CHARACTER_WITH_CV 行の声優の前に置く記号（「キャラ(CV:声優)」の "CV:" を初出盤の表記どおりに。例: "CV."）。NULL なら "CV:"。
+  `cv_label`                  varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   -- PERSON 行の名義がユニット名義のとき、表示でユニット名の後ろにメンバーを括弧書きで展開するか（1=展開）。
   -- 同じユニットでも歌の行では展開し、コーラスの行では名前だけ出す、のように行ごとに選ぶ。
   `expand_unit_members`       tinyint(1)       NOT NULL DEFAULT 0,
@@ -3418,8 +3686,13 @@ CREATE TABLE `bgm_cue_credits` (
   `m_no_detail`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `credit_role`         varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `credit_seq`          tinyint unsigned NOT NULL,
-  `person_alias_id`     int              NOT NULL,
+  `entry_kind`          enum('PERSON','TEXT') NOT NULL DEFAULT 'PERSON' COMMENT '行の種類（PERSON＝名義の行 / TEXT＝名義を持たない文字だけの行）',
+  `person_alias_id`     int              DEFAULT NULL COMMENT 'PERSON の行の名義（person_aliases.alias_id）。TEXT の行では NULL',
+  `raw_text`            varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'TEXT の行の表記（「不詳」など）',
   `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `affiliation_company_alias_id` int DEFAULT NULL COMMENT '名義に添える所属の会社名義（company_aliases.alias_id）',
+  `affiliation_text`    varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '会社マスタに無い所属の自由記述（会社名義があればそちらを使う）',
+  `affiliation_display` enum('NAME_WITH_COMPANY','COMPANY_ONLY','NAME_ONLY') NOT NULL DEFAULT 'NAME_WITH_COMPANY' COMMENT '所属の出し方（名義＋所属 / 所属の会社名だけ / 名義だけ）',
   `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -3429,12 +3702,59 @@ CREATE TABLE `bgm_cue_credits` (
   KEY `ix_bgm_cue_credits_alias` (`person_alias_id`),
   KEY `ix_bgm_cue_credits_role` (`credit_role`),
   KEY `ix_bgm_cue_credits_cue` (`series_id`, `m_no_detail`),
+  KEY `ix_bgm_cue_credits_aff_company` (`affiliation_company_alias_id`),
   CONSTRAINT `ck_bgm_cue_credits_seq_pos` CHECK (`credit_seq` >= 1),
   CONSTRAINT `fk_bgm_cue_credits_cue`   FOREIGN KEY (`series_id`, `m_no_detail`) REFERENCES `bgm_cues` (`series_id`, `m_no_detail`) ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_bgm_cue_credits_alias` FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases` (`alias_id`)            ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `fk_bgm_cue_credits_role`  FOREIGN KEY (`credit_role`)              REFERENCES `roles`          (`role_code`)           ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_bgm_cue_credits_role`  FOREIGN KEY (`credit_role`)              REFERENCES `roles`          (`role_code`)           ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_bgm_cue_credits_aff_company` FOREIGN KEY (`affiliation_company_alias_id`) REFERENCES `company_aliases` (`alias_id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Triggers for table `bgm_cue_credits`
+-- 行の種類（entry_kind）と名義・文字・所属の列の整合性は、credit_block_entries と同じく
+-- BEFORE INSERT/UPDATE トリガーで担保する（MySQL 8.0 では FK の参照アクション列を CHECK に含められないため）。
+--   PERSON … person_alias_id 必須、raw_text は NULL
+--   TEXT   … raw_text 必須（空文字不可）、person_alias_id・affiliation_company_alias_id・affiliation_text は NULL
+--
+
+DROP TRIGGER IF EXISTS `trg_bgm_cue_credits_bi_consistency`;
+DROP TRIGGER IF EXISTS `trg_bgm_cue_credits_bu_consistency`;
+
+DELIMITER ;;
+
+CREATE TRIGGER `trg_bgm_cue_credits_bi_consistency`
+BEFORE INSERT ON `bgm_cue_credits`
+FOR EACH ROW
+BEGIN
+  IF NEW.entry_kind = 'PERSON' AND (NEW.person_alias_id IS NULL OR NEW.raw_text IS NOT NULL) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'bgm_cue_credits: entry_kind=PERSON requires person_alias_id and no raw_text';
+  END IF;
+  IF NEW.entry_kind = 'TEXT' AND (NEW.raw_text IS NULL OR NEW.raw_text = '' OR NEW.person_alias_id IS NOT NULL
+                                  OR NEW.affiliation_company_alias_id IS NOT NULL OR NEW.affiliation_text IS NOT NULL) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'bgm_cue_credits: entry_kind=TEXT requires non-empty raw_text and no person_alias_id / affiliation';
+  END IF;
+END;;
+
+CREATE TRIGGER `trg_bgm_cue_credits_bu_consistency`
+BEFORE UPDATE ON `bgm_cue_credits`
+FOR EACH ROW
+BEGIN
+  IF NEW.entry_kind = 'PERSON' AND (NEW.person_alias_id IS NULL OR NEW.raw_text IS NOT NULL) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'bgm_cue_credits: entry_kind=PERSON requires person_alias_id and no raw_text';
+  END IF;
+  IF NEW.entry_kind = 'TEXT' AND (NEW.raw_text IS NULL OR NEW.raw_text = '' OR NEW.person_alias_id IS NOT NULL
+                                  OR NEW.affiliation_company_alias_id IS NOT NULL OR NEW.affiliation_text IS NOT NULL) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'bgm_cue_credits: entry_kind=TEXT requires non-empty raw_text and no person_alias_id / affiliation';
+  END IF;
+END;;
+
+DELIMITER ;
 
 --
 -- Table structure for table `bgm_cue_singers`

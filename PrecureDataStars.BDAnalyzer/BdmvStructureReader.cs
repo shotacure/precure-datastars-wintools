@@ -525,6 +525,8 @@ namespace PrecureDataStars.BDAnalyzer
             if (Directory.Exists(playlistDir))
                 foreach (var f in Directory.EnumerateFiles(playlistDir, "*.mpls").OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
                     ms.Write(File.ReadAllBytes(f));
+            // 何も読めなかったときのハッシュはどの盤でも同じ値になり、別の盤の記録を上書きしてしまうので鍵にしない
+            if (ms.Length == 0) throw new InvalidOperationException("管理ファイル（index.bdmv・MovieObject.bdmv・.mpls）を 1 つも読めないので、ディスク ID を決められません。ディスクを入れ直してください。");
             return Convert.ToHexString(sha.ComputeHash(ms.ToArray()), 0, 16);
         }
 

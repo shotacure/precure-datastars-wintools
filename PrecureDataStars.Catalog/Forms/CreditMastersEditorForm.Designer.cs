@@ -54,14 +54,24 @@ partial class CreditMastersEditorForm
     /// <summary>本名義（persons.primary_alias_id）の選択。先頭は「指定なし」、続けてその人物の名義。</summary>
     private ComboBox cboPPrimaryAlias = null!;
     private TextBox txtPNotes = null!;
-    // 外部リンク 6 列。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示する。
+    // 外部リンク 12 列。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示する。
     // Wikipedia だけは内部値として保持はするがサイト UI からはリンクしない（schema.org sameAs 等の将来用途のメモ）。
     private TextBox txtPOfficialUrl = null!;
     // 所属先（事務所・会社・楽団など）のサイトにある本人のプロフィールページ。本人の公式サイトとは別の欄。
     private TextBox txtPAffiliationUrl = null!;
+    // リンク集（lit.link・linktr.ee など）。本人の公式サイトとは別の欄。
+    private TextBox txtPLinkCollectionUrl = null!;
     private TextBox txtPXUrl = null!;
+    // 2 つ目の X アカウント（言語違いなど）。
+    private TextBox txtPXSubUrl = null!;
+    private TextBox txtPBlueskyUrl = null!;
     private TextBox txtPInstagramUrl = null!;
     private TextBox txtPYoutubeUrl = null!;
+    // ブログ（note・tumblr・アメーバブログなど）。本人の公式サイトとは別の欄。
+    private TextBox txtPBlogUrl = null!;
+    private TextBox txtPPixivUrl = null!;
+    // 作品集のページ（ArtStation・Behance・carrd など）。
+    private TextBox txtPPortfolioUrl = null!;
     private TextBox txtPWikipediaUrl = null!;
     // 誕生日入力欄（生年 NUD ＋「不明」チェック・公開可否コンボ・月／日コンボ）。
     private NumericUpDown nudPBirthYear = null!;
@@ -91,11 +101,17 @@ partial class CreditMastersEditorForm
     private DateTimePicker dtCDissolved = null!;
     private CheckBox chkCDissolvedNull = null!;
     private TextBox txtCNotes = null!;
-    // 外部リンク 5 列（人物と同じ並び）。
+    // 外部リンク 11 列（人物と同じ並び。所属先の欄は無い）。
     private TextBox txtCOfficialUrl = null!;
+    private TextBox txtCLinkCollectionUrl = null!;
     private TextBox txtCXUrl = null!;
+    private TextBox txtCXSubUrl = null!;
+    private TextBox txtCBlueskyUrl = null!;
     private TextBox txtCInstagramUrl = null!;
     private TextBox txtCYoutubeUrl = null!;
+    private TextBox txtCBlogUrl = null!;
+    private TextBox txtCPixivUrl = null!;
+    private TextBox txtCPortfolioUrl = null!;
     private TextBox txtCWikipediaUrl = null!;
     private Button btnNewCompany = null!;
     private Button btnSaveCompany = null!;
@@ -157,6 +173,7 @@ partial class CreditMastersEditorForm
     private ComboBox cboOvRole = null!;
     // 詳細パネルのシリーズ選択コンボ（「（既定 / 全シリーズ）」または特定シリーズ）
     private ComboBox cboOvTemplateSeries = null!;
+    private NumericUpDown numOvTemplateEpisodeNo = null!;
     private DateTimePicker dtOvFrom = null!;
     private DateTimePicker dtOvTo = null!;
     private CheckBox chkOvToNull = null!;
@@ -173,6 +190,8 @@ partial class CreditMastersEditorForm
     private CheckBox chkEtsBroadcastOnly = null!;
     private NumericUpDown numEtsInsertSeq = null!;
     private NumericUpDown numEtsSongRecordingId = null!;
+    // その回で流れたサイズ（先頭の「（指定なし）」が NULL）
+    private ComboBox cboEtsSize = null!;
     private TextBox txtEtsNotes = null!;
     private Button btnSaveEts = null!;
     private Button btnDeleteEts = null!;
@@ -239,6 +258,7 @@ partial class CreditMastersEditorForm
     private DateTimePicker dtCaTo = null!;
     private CheckBox chkCaToNull = null!;
     private TextBox txtCaNotes = null!;
+    private TextBox txtCaDisplayTextOverride = null!;  // クレジットでの表記（会社・ロゴのエントリ。空なら屋号名）
     private Button btnNewCompanyAlias = null!;
     private Button btnSaveCompanyAlias = null!;
     private Button btnDeleteCompanyAlias = null!;
@@ -580,21 +600,30 @@ partial class CreditMastersEditorForm
         txtPNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtPNotes);
 
-        // 外部リンク 6 行。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示。
+        // 外部リンク 12 行。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして、この並びで表示。
         // 公式ページは本人の公式サイト、所属先のページは事務所・会社・楽団などのサイトにある本人のプロフィール。
+        // リンク集（lit.link など）・ブログ（note など）・作品集（ArtStation など）は公式ページの欄に入れず、それぞれの欄へ。
         // Wikipedia は内部値として保持するのみで、サイト UI からはリンクしない。
-        txtPOfficialUrl = new TextBox(); txtPAffiliationUrl = new TextBox(); txtPXUrl = new TextBox();
-        txtPInstagramUrl = new TextBox(); txtPYoutubeUrl = new TextBox(); txtPWikipediaUrl = new TextBox();
-        AddLabeledControl(pnl, "公式ページ URL",  txtPOfficialUrl,    18, 368, inputWidth: 450);
-        AddLabeledControl(pnl, "所属先のページ",  txtPAffiliationUrl, 18, 400, inputWidth: 450);
-        AddLabeledControl(pnl, "X (Twitter)",     txtPXUrl,           18, 432, inputWidth: 450);
-        AddLabeledControl(pnl, "Instagram",       txtPInstagramUrl,   18, 464, inputWidth: 450);
-        AddLabeledControl(pnl, "YouTube",         txtPYoutubeUrl,     18, 496, inputWidth: 450);
-        AddLabeledControl(pnl, "Wikipedia", txtPWikipediaUrl,         18, 528, inputWidth: 450);
+        txtPOfficialUrl = new TextBox(); txtPAffiliationUrl = new TextBox(); txtPLinkCollectionUrl = new TextBox();
+        txtPXUrl = new TextBox(); txtPXSubUrl = new TextBox(); txtPBlueskyUrl = new TextBox();
+        txtPInstagramUrl = new TextBox(); txtPYoutubeUrl = new TextBox(); txtPBlogUrl = new TextBox();
+        txtPPixivUrl = new TextBox(); txtPPortfolioUrl = new TextBox(); txtPWikipediaUrl = new TextBox();
+        AddLabeledControl(pnl, "公式ページ URL",  txtPOfficialUrl,       18, 368, inputWidth: 450);
+        AddLabeledControl(pnl, "所属先のページ",  txtPAffiliationUrl,    18, 400, inputWidth: 450);
+        AddLabeledControl(pnl, "リンク集",        txtPLinkCollectionUrl, 18, 432, inputWidth: 450);
+        AddLabeledControl(pnl, "X (Twitter)",     txtPXUrl,              18, 464, inputWidth: 450);
+        AddLabeledControl(pnl, "X (2 つ目)",      txtPXSubUrl,           18, 496, inputWidth: 450);
+        AddLabeledControl(pnl, "Bluesky",         txtPBlueskyUrl,        18, 528, inputWidth: 450);
+        AddLabeledControl(pnl, "Instagram",       txtPInstagramUrl,      18, 560, inputWidth: 450);
+        AddLabeledControl(pnl, "YouTube",         txtPYoutubeUrl,        18, 592, inputWidth: 450);
+        AddLabeledControl(pnl, "ブログ",          txtPBlogUrl,           18, 624, inputWidth: 450);
+        AddLabeledControl(pnl, "pixiv",           txtPPixivUrl,          18, 656, inputWidth: 450);
+        AddLabeledControl(pnl, "ポートフォリオ",  txtPPortfolioUrl,      18, 688, inputWidth: 450);
+        AddLabeledControl(pnl, "Wikipedia", txtPWikipediaUrl,            18, 720, inputWidth: 450);
 
         // 同姓同名の別人を見分ける添え書き（例: 声優 / 背景美術）。サイトの URL と見出しに「名前 (添え書き)」で添える。
         txtPDisambiguation = new TextBox();
-        AddLabeledControl(pnl, "添え書き",        txtPDisambiguation, 18, 560, inputWidth: 200);
+        AddLabeledControl(pnl, "添え書き",        txtPDisambiguation, 18, 752, inputWidth: 200);
 
         btnNewPerson = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSavePerson = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };
@@ -620,7 +649,8 @@ partial class CreditMastersEditorForm
         gridCompanies = new DataGridView { Dock = DockStyle.Top, Height = 340 };
         ConfigureListGrid(gridCompanies);
 
-        var pnl = new Panel { Dock = DockStyle.Fill, Padding = new Padding(18) };
+        // 外部リンクの行が下の一覧の高さを越えるので、人物タブと同じくスクロールできるようにする。
+        var pnl = new Panel { Dock = DockStyle.Fill, Padding = new Padding(18), AutoScroll = true };
         txtCName = new TextBox(); txtCNameKana = new TextBox(); txtCNameEn = new TextBox();
         dtCFounded = new DateTimePicker(); chkCFoundedNull = new CheckBox();
         dtCDissolved = new DateTimePicker(); chkCDissolvedNull = new CheckBox();
@@ -637,14 +667,22 @@ partial class CreditMastersEditorForm
         txtCNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtCNotes);
 
-        // 外部リンク 5 行（人物タブと並びを揃える）。Wikipedia は内部値のみ。
-        txtCOfficialUrl = new TextBox(); txtCXUrl = new TextBox(); txtCInstagramUrl = new TextBox();
-        txtCYoutubeUrl = new TextBox(); txtCWikipediaUrl = new TextBox();
-        AddLabeledControl(pnl, "公式ページ URL",  txtCOfficialUrl,  18, 268, inputWidth: 450);
-        AddLabeledControl(pnl, "X (Twitter)",     txtCXUrl,         18, 300, inputWidth: 450);
-        AddLabeledControl(pnl, "Instagram",       txtCInstagramUrl, 18, 332, inputWidth: 450);
-        AddLabeledControl(pnl, "YouTube",         txtCYoutubeUrl,   18, 364, inputWidth: 450);
-        AddLabeledControl(pnl, "Wikipedia", txtCWikipediaUrl,        18, 396, inputWidth: 450);
+        // 外部リンク 11 行（人物タブと並びを揃える）。Wikipedia は内部値のみ。
+        txtCOfficialUrl = new TextBox(); txtCLinkCollectionUrl = new TextBox(); txtCXUrl = new TextBox();
+        txtCXSubUrl = new TextBox(); txtCBlueskyUrl = new TextBox(); txtCInstagramUrl = new TextBox();
+        txtCYoutubeUrl = new TextBox(); txtCBlogUrl = new TextBox(); txtCPixivUrl = new TextBox();
+        txtCPortfolioUrl = new TextBox(); txtCWikipediaUrl = new TextBox();
+        AddLabeledControl(pnl, "公式ページ URL",  txtCOfficialUrl,       18, 268, inputWidth: 450);
+        AddLabeledControl(pnl, "リンク集",        txtCLinkCollectionUrl, 18, 300, inputWidth: 450);
+        AddLabeledControl(pnl, "X (Twitter)",     txtCXUrl,              18, 332, inputWidth: 450);
+        AddLabeledControl(pnl, "X (2 つ目)",      txtCXSubUrl,           18, 364, inputWidth: 450);
+        AddLabeledControl(pnl, "Bluesky",         txtCBlueskyUrl,        18, 396, inputWidth: 450);
+        AddLabeledControl(pnl, "Instagram",       txtCInstagramUrl,      18, 428, inputWidth: 450);
+        AddLabeledControl(pnl, "YouTube",         txtCYoutubeUrl,        18, 460, inputWidth: 450);
+        AddLabeledControl(pnl, "ブログ",          txtCBlogUrl,           18, 492, inputWidth: 450);
+        AddLabeledControl(pnl, "pixiv",           txtCPixivUrl,          18, 524, inputWidth: 450);
+        AddLabeledControl(pnl, "ポートフォリオ",  txtCPortfolioUrl,      18, 556, inputWidth: 450);
+        AddLabeledControl(pnl, "Wikipedia", txtCWikipediaUrl,            18, 588, inputWidth: 450);
 
         btnNewCompany = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSaveCompany = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };
@@ -893,6 +931,11 @@ partial class CreditMastersEditorForm
         // ここではシリーズ・書式テンプレ・備考だけを配置する。役職は上のコンボに従う。
         AddLabeledControl(pnl, "シリーズ", cboOvTemplateSeries, 18, 18, inputWidth: 360);
 
+        // 話数（そのシリーズの中の 1 話だけに効くテンプレにするとき）。0 ならシリーズ全体（または既定）のテンプレ。
+        // 同じシリーズの中で、回によって画面の書式（項目の見出しなど）が違うときに使う。
+        numOvTemplateEpisodeNo = new NumericUpDown { Minimum = 0, Maximum = 999, Value = 0 };
+        AddLabeledControl(pnl, "話数（0=全話）", numOvTemplateEpisodeNo, 520, 18, inputWidth: 80);
+
         var lblFmt = new Label { Text = "書式テンプレ", Location = new Point(18, 54), Size = new Size(110, 20) };
         txtOvFormatTemplate.Location = new Point(132, 50);
         txtOvFormatTemplate.Size = new Size(900, 160);
@@ -967,6 +1010,7 @@ partial class CreditMastersEditorForm
         numEtsInsertSeq = new NumericUpDown { Maximum = 255 };
         numEtsSongRecordingId = new NumericUpDown { Maximum = 9_999_999 };
         txtEtsNotes = new TextBox { Multiline = true };
+        cboEtsSize = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
 
         // 編集パネルの先頭に本放送限定チェックを配置（種別より上）。
         // これは PK の一部なので、ユーザーは「どの行（既定 / 本放送限定）を編集しているか」を
@@ -984,10 +1028,13 @@ partial class CreditMastersEditorForm
         };
         pnl.Controls.Add(btnPickEtsSongRecordingId);
 
+        // その回で流れたサイズ（エピソード詳細の主題歌の一覧で曲名の後ろに出す。指定なしならサイズを出さない）
+        AddLabeledControl(pnl, "サイズ",                cboEtsSize,                18, 146, inputWidth: 200);
+
         // 備考欄を上に詰めた。
         // レーベル名はクレジット側の COMPANY エントリで持つ運用に整理（episode_theme_songs は楽曲の事実だけ）。
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, 150), Size = new Size(110, 20) };
-        txtEtsNotes.Location = new Point(132, 146);
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, 182), Size = new Size(110, 20) };
+        txtEtsNotes.Location = new Point(132, 178);
         txtEtsNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtEtsNotes);
 
@@ -1290,6 +1337,7 @@ partial class CreditMastersEditorForm
         dtCaFrom = new DateTimePicker(); chkCaFromNull = new CheckBox();
         dtCaTo = new DateTimePicker(); chkCaToNull = new CheckBox();
         txtCaNotes = new TextBox { Multiline = true };
+        txtCaDisplayTextOverride = new TextBox();
 
         AddLabeledControl(pnl, "屋号名",        txtCaName,        18,  18, inputWidth: 320);
         // 正式名（社名）の名義の印。企業詳細の「商号履歴」には印の付いた名義だけを出す。
@@ -1324,6 +1372,9 @@ partial class CreditMastersEditorForm
         txtCaNotes.Location = new Point(132, 242);
         txtCaNotes.Size = new Size(450, 60);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtCaNotes);
+
+        // クレジットでの表記。会社・ロゴのエントリで屋号名の代わりに出す（文字の無いロゴの屋号「プリキュア15周年」を「(プリキュア15周年ロゴ)」と出すなど）。
+        AddLabeledControl(pnl, "クレジット表記", txtCaDisplayTextOverride, 18, 310, inputWidth: 320);
 
         btnNewCompanyAlias = new Button { Text = "新規",       Location = new Point(620, 18), Size = new Size(140, 28) };
         btnSaveCompanyAlias = new Button { Text = "保存 / 更新", Location = new Point(620, 50), Size = new Size(140, 28) };

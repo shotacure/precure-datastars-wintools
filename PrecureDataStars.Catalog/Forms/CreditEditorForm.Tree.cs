@@ -73,7 +73,9 @@ public partial class CreditEditorForm
         foreach (var draftCard in _draftSession.Root.Cards.Where(c => c.State != DraftState.Deleted))
         {
             var card = draftCard.Entity;
-            var cardNode = new TreeNode($"📂 Card #{cardDisplayIndex}{(string.IsNullOrEmpty(card.Notes) ? "" : "  " + card.Notes)}")
+            // 版の付いたカード（本放送 / Blu-ray・配信）は番号の後ろに版を添える。共通のカードは何も付けない。
+            string cardVersionLabel = card.MediaVersion is null ? "" : $" [{CreditMediaVersions.LabelOf(card.MediaVersion)}]";
+            var cardNode = new TreeNode($"📂 Card #{cardDisplayIndex}{cardVersionLabel}{(string.IsNullOrEmpty(card.Notes) ? "" : "  " + card.Notes)}")
             {
                 Tag = new NodeTag(NodeKind.Card, draftCard.CurrentId, draftCard)
             };
@@ -139,7 +141,7 @@ public partial class CreditEditorForm
                             {
                                 seriesIdForResolve = null;
                             }
-                            var tpl = await _roleTemplatesRepo.ResolveAsync(role.RoleCode!, seriesIdForResolve);
+                            var tpl = await _roleTemplatesRepo.ResolveAsync(role.RoleCode!, seriesIdForResolve, episodeId: _currentCredit?.EpisodeId);
                             int columns = ExtractThemeSongsColumns(tpl?.FormatTemplate);
                             if (columns >= 2) roleNote = $"  [横 {columns} カラム表示指定]";
                         }
@@ -151,6 +153,8 @@ public partial class CreditEditorForm
                         if (role.JoinPrevious) roleNote += $"  [直前の役職とまとめる 区切り「{Dialogs.JoinedRoleLabelText.EncodeLineBreaks(role.JoinSeparator ?? "")}」]";
                         if (role.HideRoleLabel) roleNote += "  [役職名を出さない]";
                         if (role.NotOnScreen) roleNote += "  [画面に無い]";
+                        // 名前は画面に出ているが役職名だけが画面に無い行（role_label_not_on_screen）。
+                        if (role.RoleLabelNotOnScreen) roleNote += "  [役職名は画面に無い]";
                         // 主題歌ループが出す曲を劇中順の範囲で絞る指定（theme_song_seq）。
                         if (!string.IsNullOrEmpty(role.ThemeSongSeq)) roleNote += $"  [曲 {role.ThemeSongSeq}]";
 
@@ -187,7 +191,21 @@ public partial class CreditEditorForm
                                 string? lname = await _lookupCache.LookupCompanyAliasNameAsync(lcid);
                                 if (!string.IsNullOrEmpty(lname)) leadingLabel = $"  先頭=「{lname}」";
                                 else leadingLabel = $"  先頭=#{lcid}";
+                                // 2 社の連名なら 2 社目と間の字を、後ろの字があればそれを、区別がつくように並べる。
+                                if (block.LeadingCompany2AliasId is int lcid2)
+                                {
+                                    string? lname2 = await _lookupCache.LookupCompanyAliasNameAsync(lcid2);
+                                    leadingLabel += !string.IsNullOrEmpty(lname2) ? $"＋「{lname2}」" : $"＋#{lcid2}";
+                                    leadingLabel += $" 間=「{block.LeadingCompanySeparator}」";
+                                }
+                                if (!string.IsNullOrEmpty(block.LeadingCompanySuffix))
+                                    leadingLabel += $" 後ろ=「{block.LeadingCompanySuffix}」";
                                 if (block.LeadingCompanyNotOnScreen) leadingLabel += " [画面に無い]";
+                            }
+                            else if (!string.IsNullOrEmpty(block.LeadingText))
+                            {
+                                // 文字だけの筆頭の団体（会社のデータは持たない）。
+                                leadingLabel = $"  先頭=「{block.LeadingText}」[文字]";
                             }
 
                             // ブロック先頭の見出し（作品名・「特別出演」など）があればラベルに併記する。
@@ -203,15 +221,19 @@ public partial class CreditEditorForm
                             }
                             if (headingLabel.Length > 0 && block.HeadingItalic) headingLabel += "（斜体）";
 
+                            // 前のブロックの続き（空きを入れずに列数だけ変える）なら印を添える。
+                            string continuesLabel = block.ContinuesPrevious ? "  [続き]" : "";
+
                             var blockNode = new TreeNode(
-                                $"🔵 Block #{blockDisplayIndex}  ({block.ColCount} cols, {entries.Count} entries){headingLabel}{leadingLabel}")
+                                $"🔵 Block #{blockDisplayIndex}  ({block.ColCount} cols, {entries.Count} entries){continuesLabel}{headingLabel}{leadingLabel}")
                             {
                                 Tag = new NodeTag(NodeKind.Block, draftBlock.CurrentId, draftBlock)
                             };
                             // ブロック先頭屋号が Pending（負数 ID）なら、ブロックノード全体を赤色で警告表示。
                             // HTML プレビュー側の ⚠ 赤太字と意味論を揃える（TreeView は文字単位の色変えが
                             // 標準では出来ないためノード全体を塗る方針、ユーザー指定）。
-                            if (block.LeadingCompanyAliasId is int lid && lid < 0)
+                            if ((block.LeadingCompanyAliasId is int lid && lid < 0)
+                                || (block.LeadingCompany2AliasId is int lid2 && lid2 < 0))
                             {
                                 blockNode.ForeColor = PendingNodeColor;
                             }

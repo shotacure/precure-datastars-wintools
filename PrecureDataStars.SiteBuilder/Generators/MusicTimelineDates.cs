@@ -1,3 +1,4 @@
+using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Pipeline;
 
@@ -167,6 +168,26 @@ internal sealed class MusicTimelineCollector
     /// <summary>盤（商品）の参加を足す。</summary>
     public void AddProduct((char Kind, int Id) key, string productCatalogNo)
         => Of(key).Products.Add(productCatalogNo);
+
+    /// <summary>音楽クレジット 1 行を、担当先（曲・録音・劇伴の録音回・盤）の単位で足す。</summary>
+    public void AddMusicCredit((char Kind, int Id) key, MusicCredit r)
+    {
+        switch (r.TargetKind)
+        {
+            case MusicCreditTargetKinds.Song when r.SongId is int sid:
+                AddSong(key, sid);
+                break;
+            case MusicCreditTargetKinds.SongRecording when r.SongRecordingId is int rid && _ctx.SongRecordingById.TryGetValue(rid, out var rec):
+                AddSong(key, rec.SongId, rid);
+                break;
+            case MusicCreditTargetKinds.BgmSession when r.BgmSeriesId is int bsid:
+                AddSession(key, bsid, r.BgmSessionNo ?? 0);
+                break;
+            case MusicCreditTargetKinds.Product when r.ProductCatalogNo is string pc:
+                AddProduct(key, pc);
+                break;
+        }
+    }
 
     /// <summary>
     /// キーの参加を年表の入力にする。名前・リンク先・並びのキーは呼び出し側が渡す。参加が無ければ null。

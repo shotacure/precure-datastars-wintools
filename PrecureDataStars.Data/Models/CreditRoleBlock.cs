@@ -31,6 +31,13 @@ public sealed class CreditRoleBlock
     /// <summary>表示列数（既定 1、DB 列名 col_count）。1 ならエントリは縦並び、2 以上で横カラム表示。</summary>
     public byte ColCount { get; set; } = 1;
 
+    /// <summary>
+    /// 前のブロックの続きか（DB 列名 continues_previous）。画面では空行なしで続くのに途中の行だけ升の数が違うとき、
+    /// 列数の違う行を別のブロックに分けてこの印を付ける。表示はブロックの間の空きを入れず、前の行にそのまま続ける。
+    /// 役職の最初のブロックには付けない。
+    /// </summary>
+    public bool ContinuesPrevious { get; set; }
+
     /// <summary>ブロック先頭に出す企業名義 ID（→ company_aliases.alias_id、任意）。</summary>
     public int? LeadingCompanyAliasId { get; set; }
 
@@ -39,6 +46,37 @@ public sealed class CreditRoleBlock
     /// 会社はデータとして入れて所属・集計に数え、表示だけ「（三晃プロダクション）」と括弧で包んで薄い色で示す。
     /// </summary>
     public bool LeadingCompanyNotOnScreen { get; set; }
+
+    /// <summary>
+    /// 筆頭の 2 社目の企業名義 ID（→ company_aliases.alias_id、任意、DB 列名 leading_company2_alias_id）。
+    /// 「スタジオトゥインクル/AMGA 撮影班」のように、筆頭に 2 社が連名で出るときの 2 社目。
+    /// <see cref="LeadingCompanyAliasId"/> と同じく会社のページへリンクし、所属・集計にも数える。
+    /// 1 社目（<see cref="LeadingCompanyAliasId"/>）が無いときは使わない。
+    /// </summary>
+    public int? LeadingCompany2AliasId { get; set; }
+
+    /// <summary>
+    /// 筆頭の 2 社の間に出す字（任意、DB 列名 leading_company_separator、画面の表記どおり。例 "/"）。
+    /// <see cref="LeadingCompany2AliasId"/> があるときだけ意味を持つ。
+    /// </summary>
+    public string? LeadingCompanySeparator { get; set; }
+
+    /// <summary>
+    /// 筆頭の会社名の後ろに付く字（任意、DB 列名 leading_company_suffix、画面の表記どおり。例 " 撮影班"）。
+    /// 2 社のときは 2 社目の後ろ、1 社だけのときは 1 社目の後ろに出す。リンクは付けない。
+    /// </summary>
+    public string? LeadingCompanySuffix { get; set; }
+
+    /// <summary>
+    /// ブロックの筆頭の団体を文字だけで持つ（任意、DB 列名 leading_text、画面の表記どおり）。
+    /// 「いこーよ・アンバサダーのみなさん」のように、会社・団体のデータを作らないまとまりの頭の名前。
+    /// 表示は筆頭の会社と同じく 1 行に出して下の名前を字下げするが、リンクは付けず、所属・集計にも数えない。
+    /// <see cref="LeadingCompanyAliasId"/> と同時には使わない（両方あるときは会社を出す）。
+    /// </summary>
+    public string? LeadingText { get; set; }
+
+    /// <summary>筆頭（会社または文字だけの団体）を持つか。</summary>
+    public bool HasLeading => LeadingCompanyAliasId is not null || !string.IsNullOrEmpty(LeadingText);
 
     /// <summary>
     /// ブロック先頭の見出しにする作品 ID（→ series.series_id、任意）。

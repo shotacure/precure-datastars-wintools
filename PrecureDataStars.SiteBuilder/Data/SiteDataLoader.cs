@@ -1,3 +1,4 @@
+using Dapper;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -82,7 +83,36 @@ public static class SiteDataLoader
         // 旧版は seriesAll の foreach で per-series GetBySeriesAsync を 60+ 回発火する N+1 だった。
         // GetAllAsync は (series_id, series_ep_no) 昇順で返すため、GroupBy 結果はそのまま per-series 取得と
         // 同等の並び順になる。
-        var allEpisodes = await episodesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var loadedEpisodes = await episodesRepo.GetAllAsync(ct).ConfigureAwait(false);
+
+        // アニメ雑誌の号マスタ：号の年月昇順の全件。エピソード詳細の
+        // 「アニメ雑誌サブタイトル掲載」セクションで放送日 → 号の解決（MagazineIssueResolver）に使い、
+        // 下の「まだ明らかになっていない話」の判定にも使う。
+        var magazineIssues = await magazineIssuesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        logger.Info($"magazine_issues: {magazineIssues.Count} 号");
+
+        // ビルドの基準の時刻。予告・雑誌の発売で明らかになったかどうかはこの時刻で決める
+        // （テストビルドだけ --as-of で差し替えられる）。
+        var buildStartedAt = config.AsOf ?? DateTimeOffset.Now;
+        if (config.AsOf is { } asOf) logger.Info($"build time (--as-of): {asOf:yyyy-MM-dd HH:mm zzz}");
+
+        // サブタイトル解禁時刻の事前計算（DB アクセスなし。前話の on_air_at から算出するだけ）。
+        // /series/{slug}/{n}/・/episodes/・ホーム・統計 7 系統・検索インデックスなど、サブタイトルが
+        // 出現しうる全ページがこの辞書を参照する。実装は SubtitleEmbargoCalculator（Utilities）を参照。
+        // 前話の放送日から求めるので、下で外す話も含めた全件から作る。
+        var subtitleRevealAtByEpisodeId = SubtitleEmbargoCalculator.Build(loadedEpisodes, buildStartedAt);
+
+        // 予告も雑誌の発売もまだの話は、ビルドの時点で無い話として扱い、以後のすべての索引から外す（PrereleaseEpisodeFilter）。
+        // 発売前の号の掲載状態も消す。DB を直接引く集計は HiddenEpisodeIds で同じ話を除き、出力の点検で残っていないか確かめる。
+        var hiddenEpisodeIds = PrereleaseEpisodeFilter.FindHidden(loadedEpisodes, subtitleRevealAtByEpisodeId, magazineIssues, buildStartedAt);
+        var allEpisodes = loadedEpisodes.Where(e => !hiddenEpisodeIds.Contains(e.EpisodeId)).ToList();
+        int clearedMagazineStatuses = PrereleaseEpisodeFilter.ClearUnreleasedMagazineStatuses(allEpisodes, magazineIssues, buildStartedAt);
+        subtitleRevealAtByEpisodeId = subtitleRevealAtByEpisodeId
+            .Where(kv => !hiddenEpisodeIds.Contains(kv.Key))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+        logger.Info($"subtitle_embargo: {subtitleRevealAtByEpisodeId.Count} エピソードが解禁待ち圏内");
+        logger.Info($"prerelease: 予告・雑誌の発売前で出さない話 {hiddenEpisodeIds.Count} 件、発売前の号の掲載状態を消した話 {clearedMagazineStatuses} 件");
+
         var episodesBySeries = allEpisodes
             .GroupBy(e => e.SeriesId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Episode>)g.ToList());
@@ -123,13 +153,10 @@ public static class SiteDataLoader
         // 全エピソード分のパート尺偏差値・順位を 1 度だけ算出する。
         // EpisodeGenerator が per-page で全件 CTE 集計を繰り返さないよう、
         // 結果を episode_id 単位の辞書に格納してビルドコンテキストで共有する。
-        var partLengthStatsByEpisode = await episodePartsRepo.GetAllPartLengthStatsAsync(ct).ConfigureAwait(false);
+        var partLengthStatsByEpisode = (await episodePartsRepo.GetAllPartLengthStatsAsync(ct).ConfigureAwait(false))
+            .Where(kv => !hiddenEpisodeIds.Contains(kv.Key))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
         logger.Info($"part_length_stats: {partLengthStatsByEpisode.Count} エピソード分を事前計算");
-
-        // アニメ雑誌の号マスタ：号の年月昇順の全件。エピソード詳細の
-        // 「アニメ雑誌サブタイトル掲載」セクションで放送日 → 号の解決（MagazineIssueResolver）に使う。
-        var magazineIssues = await magazineIssuesRepo.GetAllAsync(ct).ConfigureAwait(false);
-        logger.Info($"magazine_issues: {magazineIssues.Count} 号");
 
         // 作品で使われた書体のマスタと、作品のどこにどの書体を使ったか：書体のページ・見本の画像・
         // 免責事項の「使用フォントの一覧」がここから引く（サブタイトルのテロップ画像の書体は SeriesRepository が同じ表から引く）。
@@ -137,13 +164,6 @@ public static class SiteDataLoader
         var fontById = fonts.ToDictionary(f => f.FontId);
         var fontUsages = await fontsRepo.GetAllUsagesAsync(ct).ConfigureAwait(false);
         logger.Info($"fonts: {fonts.Count} 書体 / series_font_usages: {fontUsages.Count} 行");
-
-        // サブタイトル解禁時刻の事前計算（DB アクセスなし。前話の on_air_at から算出するだけ）。
-        // /series/{slug}/{n}/・/episodes/・ホーム・統計 7 系統・検索インデックスなど、サブタイトルが
-        // 出現しうる全ページがこの辞書を参照する。実装は SubtitleEmbargoCalculator（Utilities）を参照。
-        var buildStartedAt = DateTimeOffset.Now;
-        var subtitleRevealAtByEpisodeId = SubtitleEmbargoCalculator.Build(allEpisodes, buildStartedAt);
-        logger.Info($"subtitle_embargo: {subtitleRevealAtByEpisodeId.Count} エピソードが解禁待ち圏内");
 
         // サブタイトル文字統計の事前展開（DB アクセスなし、ロード済み episodes の title_char_stats JSON を C# 側でパース）。
         // TitleCharInfoRenderer がページごとに JSON_CONTAINS_PATH 全表走査を文字数分繰り返さないよう、
@@ -154,13 +174,17 @@ public static class SiteDataLoader
         // エピソード詳細ページが per-page で引いていた 3 テーブル（パート / 主題歌 / 使用音声）を
         // 全件ロードして episode_id 単位の辞書に事前グルーピングする。各 GetAllAsync の ORDER BY は
         // (episode_id, per-id 取得時と同じ並び) になっており、GroupBy 結果は per-id 取得と同一順を保つ。
+        // 出さない話（hiddenEpisodeIds）の行は、どの辞書にも入れない。
         var episodePartsByEpisode = (await episodePartsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .Where(p => !hiddenEpisodeIds.Contains(p.EpisodeId))
             .GroupBy(p => p.EpisodeId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodePart>)g.ToList());
         var themeSongsByEpisode = (await episodeThemeSongsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .Where(t => !hiddenEpisodeIds.Contains(t.EpisodeId))
             .GroupBy(t => t.EpisodeId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodeThemeSong>)g.ToList());
         var episodeUsesByEpisode = (await episodeUsesRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .Where(u => !hiddenEpisodeIds.Contains(u.EpisodeId))
             .GroupBy(u => u.EpisodeId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodeUse>)g.ToList());
         logger.Info($"episode_parts: {episodePartsByEpisode.Count} ep / episode_theme_songs: {themeSongsByEpisode.Count} ep / episode_uses: {episodeUsesByEpisode.Count} ep");
@@ -272,19 +296,56 @@ public static class SiteDataLoader
         // ビルド開始時に 1 度だけ走らせて BuildContext 経由で全 Generator から参照できるようにする。
         var creditTreeIndex = await CreditTreeIndex.BuildAsync(
             creditCardsRepo, creditCardTiersRepo, creditCardGroupsRepo,
-            creditCardRolesRepo, creditRoleBlocksRepo, creditBlockEntriesRepo, ct).ConfigureAwait(false);
+            creditCardRolesRepo, creditRoleBlocksRepo, creditBlockEntriesRepo, ct, personAliasPersonsRepo).ConfigureAwait(false);
         logger.Info($"credit_tree: {creditTreeIndex.CardsByCreditId.Count} クレジット分を事前展開");
 
         // 全 credits 行を 1 度の SELECT で取得して episode_id / series_id 単位でグルーピング。
         // SeriesGenerator の per-episode 6 階層 DB ループの起点 GetByEpisodeAsync を撲滅するため、
         // および EpisodeGenerator が per-page で同じ呼び出しを発火していた経路も同時に置き換える前提。
-        var allCredits = await creditsRepo.GetAllAsync(ct).ConfigureAwait(false);
-        var creditsByEpisode = allCredits
+        var allCreditsIncludingProvisional = (await creditsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .Where(c => c.EpisodeId is not int eid || !hiddenEpisodeIds.Contains(eid))
+            .ToList();
+        // 仮クレジットのスコープ（回・作品。is_provisional_credit=1）の credits は、ページのクレジット欄には出さない（表示用の辞書から外す）が、
+        // 集計（各話の札・メインスタッフ・人物ページ・統計）には通常のクレジットと同じく数える。
+        // ただしサブタイトルの解禁前の回は、人物ページなどから名前が先に分からないよう集計にも入れず、
+        // 各話の札だけがぼかして使う（ProvisionalCreditsByEpisode）。
+        HashSet<int> provisionalEpisodeIds, provisionalSeriesIds;
+        await using (var provConn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false))
+        {
+            provisionalEpisodeIds = (await provConn.QueryAsync<int>(new CommandDefinition(
+                "SELECT episode_id FROM episodes WHERE is_provisional_credit = 1 AND is_deleted = 0", cancellationToken: ct))).ToHashSet();
+            provisionalSeriesIds = (await provConn.QueryAsync<int>(new CommandDefinition(
+                "SELECT series_id FROM series WHERE is_provisional_credit = 1 AND is_deleted = 0", cancellationToken: ct))).ToHashSet();
+        }
+        bool IsProvisionalCredit(Credit c) =>
+            (c.EpisodeId is int pe && provisionalEpisodeIds.Contains(pe))
+            || (c.EpisodeId is null && c.SeriesId is int ps && provisionalSeriesIds.Contains(ps));
+        // 解禁前の回の仮クレジット（集計に入れない）。
+        bool IsEmbargoedProvisional(Credit c) =>
+            c.EpisodeId is int pe && provisionalEpisodeIds.Contains(pe) && subtitleRevealAtByEpisodeId.ContainsKey(pe);
+        var allCredits = allCreditsIncludingProvisional.Where(c => !IsEmbargoedProvisional(c)).ToList();
+        var provisionalCreditsByEpisode = allCreditsIncludingProvisional
+            .Where(IsEmbargoedProvisional)
+            .GroupBy(c => c.EpisodeId!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
+        // 表示用（エピソード詳細・作品詳細のクレジット）は全版、集計用は本放送版を除いた共通と Blu-ray・配信版だけ。
+        var creditsByEpisodeForDisplay = allCredits
+            .Where(c => !IsProvisionalCredit(c))
             .Where(c => c.EpisodeId.HasValue)
             .GroupBy(c => c.EpisodeId!.Value)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
-        var creditsBySeries = allCredits
+        var creditsBySeriesForDisplay = allCredits
+            .Where(c => !IsProvisionalCredit(c))
             .Where(c => string.Equals(c.ScopeKind, "SERIES", StringComparison.Ordinal) && c.SeriesId.HasValue)
+            .GroupBy(c => c.SeriesId!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
+        var creditsByEpisode = allCredits
+            .Where(c => c.EpisodeId.HasValue && CreditMediaVersions.CountsForStats(c.MediaVersion))
+            .GroupBy(c => c.EpisodeId!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
+        var creditsBySeries = allCredits
+            .Where(c => string.Equals(c.ScopeKind, "SERIES", StringComparison.Ordinal) && c.SeriesId.HasValue
+                        && CreditMediaVersions.CountsForStats(c.MediaVersion))
             .GroupBy(c => c.SeriesId!.Value)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
         logger.Info($"credits: episode_scope={creditsByEpisode.Count} ep, series_scope={creditsBySeries.Count} series");
@@ -334,6 +395,22 @@ public static class SiteDataLoader
         var roleTemplateResolver = new RoleTemplateResolver(allRoleTemplates);
         logger.Info($"role masters: roles={roleByCode.Count}, role_templates={allRoleTemplates.Count}");
 
+        // 作品ごとのメインスタッフの役職（並び順の順。リポジトリが series_id → display_order で返す）。
+        var keyStaffRolesBySeries = (await new SeriesKeyStaffRolesRepository(factory).GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(r => r.SeriesId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<SeriesKeyStaffRole>)g.ToList());
+
+        // 販売中の商品のうち、出す設定の行（並び順の順）。
+        var shopItemsRepo = new SeriesShopItemsRepository(factory);
+        var shopItems = await shopItemsRepo.GetEnabledAsync(ct).ConfigureAwait(false);
+        // 枠の候補になる音楽商品（作品 × 商品）。
+        var shopProductCandidates = await shopItemsRepo.GetProductCandidatesAsync(ct).ConfigureAwait(false);
+
+        // 作品ごとの各話のスタッフの札の役職（並び順の順。リポジトリが series_id → display_order で返す）。
+        var episodeStaffRolesBySeries = (await new SeriesEpisodeStaffRolesRepository(factory).GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(r => r.SeriesId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<SeriesEpisodeStaffRole>)g.ToList());
+
         // 家族関係を character_id 単位でグルーピング。CharactersGenerator / PrecuresGenerator の
         // per-character GetByCharacterAsync を撲滅する。
         var familyRelationsByCharacter = (await familyRepo.GetAllAsync(ct).ConfigureAwait(false))
@@ -359,13 +436,20 @@ public static class SiteDataLoader
         // 歌の作家連名に印刷された所属（「岡部 啓一（MONACA）」）を、盤の音楽クレジットと同じ形の行に写す。
         // 企業詳細の「所属としてクレジットされた方々」に載せるため。根拠の盤は、その曲の録音が最初に入った商品
         // （ディスクは商品の発売日順に並んでいるので、最初に見つかった商品）。
+        // 劇伴の作家連名に印刷された所属（「福富 雅之（Nostalgic Orchestra）」）も同じ形の行に写す。紐付け先はその劇伴のセッション、
+        // 根拠の盤はその劇伴が最初に入った商品。
         var firstProductBySong = new Dictionary<int, string>();
+        var firstProductByCue = new Dictionary<(int SeriesId, string MNoDetail), string>();
         foreach (var disc in allDiscs)
         {
             if (!tracksByCatalogNo.TryGetValue(disc.CatalogNo, out var discTracks)) continue;
             foreach (var t in discTracks)
+            {
                 if (t.SongRecordingId is int rid && songRecordingById.TryGetValue(rid, out var rec))
                     firstProductBySong.TryAdd(rec.SongId, disc.ProductCatalogNo);
+                if (t.BgmSeriesId is int bsid && !string.IsNullOrEmpty(t.BgmMNoDetail))
+                    firstProductByCue.TryAdd((bsid, t.BgmMNoDetail), disc.ProductCatalogNo);
+            }
         }
         var songCreditAffiliationRows = songCreditsBySong.Values
             .SelectMany(list => list)
@@ -382,12 +466,33 @@ public static class SiteDataLoader
                 SourceProductCatalogNo = firstProductBySong.TryGetValue(c.SongId, out var firstProduct) ? firstProduct : null
             })
             .ToList();
+        // 劇伴のセッションは cue から引く（論理削除された劇伴の曲は bgm_cues に載らないので、その行は捨てる）。
+        var sessionNoByCue = bgmCuesBySeries.Values
+            .SelectMany(list => list)
+            .ToDictionary(c => (c.SeriesId, c.MNoDetail), c => c.SessionNo);
+        var bgmCueCreditAffiliationRows = bgmCueCreditsByCue
+            .SelectMany(kv => kv.Value)
+            .Where(c => c.AffiliationCompanyAliasId.HasValue && c.PersonAliasId.HasValue
+                        && sessionNoByCue.ContainsKey((c.SeriesId, c.MNoDetail)))
+            .Select(c => new MusicCredit
+            {
+                TargetKind = MusicCreditTargetKinds.BgmSession,
+                BgmSeriesId = c.SeriesId,
+                BgmSessionNo = sessionNoByCue[(c.SeriesId, c.MNoDetail)],
+                RoleCode = c.CreditRole,
+                CreditSeq = c.CreditSeq,
+                EntryKind = "PERSON",
+                PersonAliasId = c.PersonAliasId,
+                AffiliationCompanyAliasId = c.AffiliationCompanyAliasId,
+                SourceProductCatalogNo = firstProductByCue.TryGetValue((c.SeriesId, c.MNoDetail), out var firstProduct) ? firstProduct : null
+            })
+            .ToList();
         var musicCredits = new MusicCreditIndex(
             await musicCreditsRepo.GetAllAsync(ct).ConfigureAwait(false),
             allProducts,
             await bgmSessionsRepo.GetAllAsync(ct).ConfigureAwait(false),
             allDiscs,
-            songCreditAffiliationRows);
+            songCreditAffiliationRows.Concat(bgmCueCreditAffiliationRows).ToList());
         // 主題歌の再生ボタン用に、録音ごとに鳴らす配信音源を選んでおく。
         var themeArtTracks = new ThemeArtTrackIndex(tracksByCatalogNo, allDiscs.ToList(), allProducts.ToList());
         // 歌の一覧の再生ボタン用は、曲を通して聴けるようフルサイズを優先して選ぶ。
@@ -413,6 +518,8 @@ public static class SiteDataLoader
             SeriesById = seriesById,
             LatestAiredTvEpisode = latestAired,
             SubtitleRevealAtByEpisodeId = subtitleRevealAtByEpisodeId,
+            HiddenEpisodeIds = hiddenEpisodeIds,
+            HiddenEpisodes = loadedEpisodes.Where(e => hiddenEpisodeIds.Contains(e.EpisodeId)).ToList(),
             BuildStartedAt = buildStartedAt,
             PartLengthStatsByEpisode = partLengthStatsByEpisode,
             TitleCharIndex = titleCharIndex,
@@ -436,6 +543,9 @@ public static class SiteDataLoader
             CreditTree = creditTreeIndex,
             CreditsByEpisode = creditsByEpisode,
             CreditsBySeries = creditsBySeries,
+            CreditsByEpisodeForDisplay = creditsByEpisodeForDisplay,
+            CreditsBySeriesForDisplay = creditsBySeriesForDisplay,
+            ProvisionalCreditsByEpisode = provisionalCreditsByEpisode,
             PersonAliasById = personAliasById,
             CharacterAliasById = characterAliasById,
             CompanyAliasById = companyAliasById,
@@ -445,6 +555,11 @@ public static class SiteDataLoader
             SongRecordingAnchorUrlById = songRecordingAnchorUrlById,
             MusicClassByCode = musicClassByCode,
             RoleByCode = roleByCode,
+            KeyStaffRolesBySeries = keyStaffRolesBySeries,
+            ShopItems = shopItems,
+            ShopProductCandidates = shopProductCandidates,
+            ShopSeriesIds = ShopItemsFile.SeriesIds(shopItems, shopProductCandidates),
+            EpisodeStaffRolesBySeries = episodeStaffRolesBySeries,
             RoleTemplateResolver = roleTemplateResolver,
             FamilyRelationsByCharacter = familyRelationsByCharacter,
             AliasIdsByPerson = aliasIdsByPerson,

@@ -161,6 +161,11 @@ public partial class CreditMastersEditorForm
             var rows = await _roleTemplatesRepo.GetByRoleAsync(roleCode);
             // 表示用 DTO（series 名付き）に変換してグリッドへ
             var seriesNameMap = (await _seriesRepo.GetAllAsync()).ToDictionary(s => s.SeriesId, s => s.Title);
+            // エピソード別のテンプレの話数（episode_id → シリーズ内話数）。エピソード別の行があるシリーズだけ引く。
+            var episodeNoMap = new Dictionary<int, int>();
+            foreach (int sid in rows.Where(t => t.EpisodeId.HasValue && t.SeriesId.HasValue).Select(t => t.SeriesId!.Value).Distinct())
+                foreach (var ep in await _episodesRepo.GetBySeriesAsync(sid))
+                    episodeNoMap[ep.EpisodeId] = ep.SeriesEpNo;
             var rowsView = rows.Select(t => new RoleTemplateRow
             {
                 TemplateId = t.TemplateId,
@@ -169,6 +174,7 @@ public partial class CreditMastersEditorForm
                 SeriesLabel = t.SeriesId.HasValue
                     ? (seriesNameMap.TryGetValue(t.SeriesId.Value, out var nm) ? $"#{t.SeriesId} {nm}" : $"#{t.SeriesId}")
                     : "（既定 / 全シリーズ）",
+                EpisodeNo = t.EpisodeId is int eid && episodeNoMap.TryGetValue(eid, out int no) ? no : null,
                 FormatTemplate = t.FormatTemplate,
                 Notes = t.Notes
             }).ToList();
@@ -192,6 +198,7 @@ public partial class CreditMastersEditorForm
             {
                 cboOvTemplateSeries.SelectedIndex = 0; // 「（既定 / 全シリーズ）」エントリ
             }
+            numOvTemplateEpisodeNo.Value = row.EpisodeNo ?? 0;
             // DB 由来文字列の改行コードを Windows 形式 (\r\n) に正規化してから TextBox にセット。
             // TextBox は内部的に \r\n 改行が前提のコントロールで、\n 単独の文字列を Text プロパティにセットすると
             // 改行が反映されず 1 行表示になることがある。逆に、ユーザーが Enter で打った改行は \r\n となるため
@@ -208,6 +215,7 @@ public partial class CreditMastersEditorForm
         // グリッド選択を解除（既存行を上書きしないように）
         gridRoleOverrides.ClearSelection();
         if (cboOvTemplateSeries.Items.Count > 0) cboOvTemplateSeries.SelectedIndex = 0;
+        numOvTemplateEpisodeNo.Value = 0;
         txtOvFormatTemplate.Clear();
         txtOvNotes.Clear();
         txtOvFormatTemplate.Focus();
@@ -230,10 +238,24 @@ public partial class CreditMastersEditorForm
             int? seriesId = null;
             if (cboOvTemplateSeries.SelectedItem is IdLabel<int?> item) seriesId = item.Id;
 
+            // 話数が入っていれば、そのシリーズのその話だけに効くテンプレにする。
+            int? episodeId = null;
+            int episodeNo = (int)numOvTemplateEpisodeNo.Value;
+            if (episodeNo > 0)
+            {
+                if (seriesId is not int sid)
+                { MessageBox.Show(this, "話数を指定するときはシリーズも選択してください。"); return; }
+                var ep = (await _episodesRepo.GetBySeriesAsync(sid)).FirstOrDefault(e => e.SeriesEpNo == episodeNo);
+                if (ep is null)
+                { MessageBox.Show(this, $"このシリーズに第{episodeNo}話がありません。"); return; }
+                episodeId = ep.EpisodeId;
+            }
+
             var t = new RoleTemplate
             {
                 RoleCode = roleCode,
                 SeriesId = seriesId,
+                EpisodeId = episodeId,
                 FormatTemplate = txtOvFormatTemplate.Text,  // 改行を保持するため Trim しない
                 Notes = NullIfEmpty(txtOvNotes.Text),
                 CreatedBy = Environment.UserName,
@@ -253,7 +275,8 @@ public partial class CreditMastersEditorForm
         {
             if (gridRoleOverrides.CurrentRow?.DataBoundItem is not RoleTemplateRow row)
             { MessageBox.Show(this, "削除対象を選択してください。"); return; }
-            string label = row.SeriesId.HasValue ? $"({row.RoleCode}, series_id={row.SeriesId})" : $"({row.RoleCode}, 既定)";
+            string label = row.EpisodeNo.HasValue ? $"({row.RoleCode}, series_id={row.SeriesId}, 第{row.EpisodeNo}話)"
+                         : row.SeriesId.HasValue ? $"({row.RoleCode}, series_id={row.SeriesId})" : $"({row.RoleCode}, 既定)";
             if (MessageBox.Show(this,
                 $"{label} のテンプレを削除しますか？", "確認",
                 MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
@@ -264,13 +287,15 @@ public partial class CreditMastersEditorForm
         catch (Exception ex) { this.ShowError(ex); }
     }
 
-    /// <summary>「役職テンプレート」タブの DataGridView 表示用 DTO（series_id を解決済みのラベルとして持つ）。</summary>
+    /// <summary>「役職テンプレート」タブの DataGridView 表示用 DTO（series_id を解決済みのラベルとして、episode_id をシリーズ内話数として持つ）。</summary>
     private sealed class RoleTemplateRow
     {
         public int TemplateId { get; set; }
         public string RoleCode { get; set; } = "";
         public int? SeriesId { get; set; }
         public string SeriesLabel { get; set; } = "";
+        /// <summary>エピソード別のテンプレのシリーズ内話数（シリーズ別・既定のテンプレは null）。</summary>
+        public int? EpisodeNo { get; set; }
         public string FormatTemplate { get; set; } = "";
         public string? Notes { get; set; }
     }

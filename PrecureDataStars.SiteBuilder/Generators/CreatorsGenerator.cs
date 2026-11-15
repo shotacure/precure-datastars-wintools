@@ -20,11 +20,15 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     のタブで切り替える役職詳細。担当の移り変わりの線表（<see cref="RoleTimelineBuilder"/>）を年表タブに置く。</description></item>
 ///   <item><description><c>/creators/voice-cast/</c> … 五十音順 / キャラクター順 /
 ///     初出演順 / 出演回数順 の 4 タブで声優を並べ、出演の移り変わりの線表を年表タブに置く。</description></item>
+///   <item><description>上の 3 種類のページ（スタッフ一覧・役職詳細・声の出演一覧）は、TV・映画・オトナシリーズ（種別 OTONA）のクレジットを
+///     合わせて載せ、タブの右上の 📺 TV・🎥 映画・🌙 オトナのボタンで、見せる種類を閲覧者が切り替える（_work-kind-toggles.sbn）。
+///     行と節には参加した種類（data-wk）を付け、入っている種類に 1 つも当たらない行・節は隠す（site.css）。
+///     🌙 だけを入れているときの年表は、オトナシリーズの作品 1 本ずつの帯の線表に切り替える。</description></item>
 /// </list>
 /// 集計の骨格：
 /// <list type="bullet">
-///   <item><description>役職詳細・スタッフ一覧・声の出演一覧は、レギュラーの TV シリーズと映画（秋映画・春映画・併映の短編）の
-///     クレジットだけで集計する（<see cref="CreatorListScope"/>）。単発のイベント映像とスピンオフは含めない。
+///   <item><description>役職詳細・スタッフ一覧・声の出演一覧は、レギュラーの TV シリーズ・映画（秋映画・春映画・併映の短編）・オトナシリーズの
+///     クレジットで集計する（<see cref="CreatorListScope"/>）。単発のイベント映像と、オトナシリーズ以外のスピンオフは含めない。
 ///     歌唱・音楽制作は作品の種類によらず全楽曲・全音楽クレジットを集計する。</description></item>
 ///   <item><description>役職詳細：(エンティティ × RoleCluster × EpisodeId) で重複排除。
 ///     RoleCluster は系譜（<c>role_successions</c>）でまとまる役職群を 1 単位とする。
@@ -44,8 +48,8 @@ public sealed class CreatorsGenerator
 
     /// <summary>
     /// 役職詳細・スタッフ一覧・声の出演一覧の集計に使う関与インデックス。
-    /// 本編（<see cref="CreatorListScope"/> の範囲のシリーズ）の関与だけを残した写しで、
-    /// 単発のイベント映像とスピンオフのクレジットはこれらの一覧に入れない（作品詳細・人物・企業のページには出る）。
+    /// 一覧の範囲（<see cref="CreatorListScope"/>。TV・映画・オトナシリーズ）の関与だけを残した写しで、
+    /// 単発のイベント映像と、オトナシリーズ以外のスピンオフのクレジットはこれらの一覧に入れない（作品詳細・人物・企業のページには出る）。
     /// </summary>
     private readonly CreditInvolvementIndex _index;
 
@@ -62,6 +66,7 @@ public sealed class CreatorsGenerator
     private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
     private readonly CompaniesRepository _companiesRepo;
     private readonly CompanyAliasesRepository _companyAliasesRepo;
+    private readonly CompanyRelationsRepository _companyRelationsRepo;
     private readonly LogosRepository _logosRepo;
     private readonly CharactersRepository _charactersRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
@@ -78,6 +83,15 @@ public sealed class CreatorsGenerator
 
     /// <summary>company_id → 全クレジット横断で最後に使われた company_alias_id（<see cref="BuildLatestAliasMaps"/> で確定）。</summary>
     private readonly Dictionary<int, int> _latestCompanyAliasId = new();
+
+    /// <summary>
+    /// company_id → 事業の引き継ぎ（company_relations の SUCCESSOR）でつながった系譜の代表（系譜の中で最も小さい company_id）。
+    /// 系譜を持たない企業は入れない。役職詳細の年表で、系譜の企業を並べてひとまとめにし、所属の人をその下にまとめるのに使う。
+    /// </summary>
+    private readonly Dictionary<int, int> _companyLineageRoot = new();
+
+    /// <summary>company_id → 前身の企業（SUCCESSOR の from 側）と関係の言い回し。年表の内訳に「前身：企業名」を添えるのに使う。</summary>
+    private readonly Dictionary<int, List<(int CompanyId, string Name, string? Label)>> _companyPredecessors = new();
 
     /// <summary>
     /// 楽曲の作家 3 役職（作詞・作曲・編曲）の表示順。これらの役職の /creators/roles/{code}/ ページは、
@@ -118,6 +132,7 @@ public sealed class CreatorsGenerator
         _personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
         _companiesRepo = new CompaniesRepository(factory);
         _companyAliasesRepo = new CompanyAliasesRepository(factory);
+        _companyRelationsRepo = new CompanyRelationsRepository(factory);
         _logosRepo = new LogosRepository(factory);
         _charactersRepo = new CharactersRepository(factory);
         _characterAliasesRepo = new CharacterAliasesRepository(factory);
@@ -129,16 +144,162 @@ public sealed class CreatorsGenerator
     }
 
     /// <summary>各一覧に載せた人物・企業/団体の記録。生成の最後に <see cref="BuildContext.CreatorLists"/> へ差し込む。</summary>
+    /// <summary>
+    /// 役職詳細の並列フェーズで、役職 1 つから得たもの。記録と索引への積み上げは、あとで役職の順に逐次で行う。
+    /// </summary>
+    private sealed class RoleOutcome
+    {
+        /// <summary>書き出した役職詳細ページの URL（書かなかったときは null）。</summary>
+        public string? WrittenUrl { get; set; }
+        /// <summary>音楽制作ページの役職タブに積む行（作家の役職のとき）。</summary>
+        public RoleIndexEntry? MusicEntry { get; init; }
+        /// <summary>役職と、系譜でまとめた構成役職（作家の役職以外）。サイト内検索に歴代の役職名を載せるのに使う。</summary>
+        public (Role Role, HashSet<string> MemberCodes)? StaffCluster { get; init; }
+        /// <summary>スタッフ一覧の役職順タブに積む行（役職詳細を書いたとき）。</summary>
+        public RoleIndexEntry? StaffEntry { get; set; }
+        /// <summary>音楽の役職詳細を持つ役職で、作品のクレジットの担当（音楽の役職詳細の「作品のクレジット」に載せる）。それ以外は null。</summary>
+        public EntityRowSet? CreditRowSetForMusic { get; set; }
+    }
+
+    /// <summary>
+    /// ページに載る参加の種類（TV・映画・オトナシリーズ）。タブの右上のボタン（_work-kind-toggles.sbn）は、ページにある種類が 2 つ以上のときに、
+    /// ある種類の分だけ出す。開いたときはある種類がすべて入った状態で、ルートの data-wk-on に入っている種類を空白区切りで持つ。
+    /// </summary>
+    private sealed class WorkKinds
+    {
+        public bool Tv { get; init; }
+        public bool Movie { get; init; }
+        public bool Otona { get; init; }
+        /// <summary>ページにある種類の数。</summary>
+        public int Count => (Tv ? 1 : 0) + (Movie ? 1 : 0) + (Otona ? 1 : 0);
+        /// <summary>ページにある種類がオトナシリーズだけか（年表を作品ごとの帯の線表だけにする）。</summary>
+        public bool OnlyOtona => Otona && !Tv && !Movie;
+        /// <summary>ページにある種類（"tv movie otona" の形。ルートの data-wk-on の初期値）。</summary>
+        public string Tokens => KindTokens(Tv, Movie, Otona);
+    }
+
+    /// <summary>参加の種類の名前（並びは TV → 映画 → オトナシリーズ。配列の添字で種類を表す所で使う）。</summary>
+    private static readonly string[] WorkKindNames = { "tv", "movie", "otona" };
+
+    /// <summary>
+    /// 「初めて」で節を分ける一覧（役職順・初参加順・初担当順・初出演順・キャラクター別）の行の置き方。
+    /// 行は参加した種類ごとに 1 つずつ、その種類で初めての作品の節に置く（<c>data-wk-own</c> にその種類）。その種類より早い初めてを持つ
+    /// ほかの種類を <c>data-wk-after</c> に並べ、それらが 1 つでも入っているあいだは隠す（site.css）。こうすると、どの種類を入れているときも、
+    /// 入っている種類の中で初めての作品の節にだけ行が出る。
+    /// </summary>
+    /// <param name="keys">種類（<see cref="WorkKindNames"/> の添字）ごとの、初めての位置（並べ替えキー）。その種類の参加が無ければ null。</param>
+    /// <param name="own">行を置く種類の添字。</param>
+    /// <returns><paramref name="own"/> より早い初めてを持つ種類（空白区切り。同じ位置なら並びの前の種類を早いとみなす）。無ければ空文字。</returns>
+    private static string EarlierKinds<TKey>(TKey?[] keys, int own) where TKey : struct, IComparable<TKey>
+    {
+        var mine = keys[own]!.Value;
+        var earlier = new List<string>();
+        for (int k = 0; k < keys.Length; k++)
+        {
+            if (k == own || keys[k] is not { } other) continue;
+            int c = other.CompareTo(mine);
+            if (c < 0 || (c == 0 && k < own)) earlier.Add(WorkKindNames[k]);
+        }
+        return string.Join(" ", earlier);
+    }
+
+    /// <summary>参加の種類を "tv movie otona" の形（空白区切り）にする。行・節の data-wk と、ルートの data-wk-on に使う。</summary>
+    private static string KindTokens(bool tv, bool movie, bool otona)
+        => string.Join(" ", new[] { tv ? "tv" : null, movie ? "movie" : null, otona ? "otona" : null }.Where(t => t is not null));
+
+    /// <summary>
+    /// 年表の候補から、オトナシリーズの参加だけを残した写しを作る（オトナシリーズの話が無い候補は外す）。
+    /// 🌙 だけを入れているときに見せる、作品ごとの帯の線表（<see cref="RoleTimelineBuilder.ForSeriesBands"/>）の入力にする。
+    /// 関連する役職の担当・企業の所属としての担当も、オトナシリーズの話だけを残す。
+    /// </summary>
+    private List<RoleTimelineEntity> OtonaOnlyEntities(IEnumerable<RoleTimelineEntity> entities)
+    {
+        List<(int SeriesId, int EpisodeId)> Otona(IEnumerable<(int SeriesId, int EpisodeId)> eps)
+            => eps.Where(k => _ctx.IsOtonaSeries(k.SeriesId)).ToList();
+
+        var result = new List<RoleTimelineEntity>();
+        foreach (var e in entities)
+        {
+            var episodes = Otona(e.Episodes);
+            if (episodes.Count == 0) continue;
+            result.Add(new RoleTimelineEntity
+            {
+                EntityKind = e.EntityKind,
+                EntityName = e.EntityName,
+                EntitySubLabel = e.EntitySubLabel,
+                EntityUrl = e.EntityUrl,
+                FirstSortPos = e.FirstSortPos,
+                HasOpeningCredit = e.HasOpeningCredit,
+                GroupKey = e.GroupKey,
+                CompanyKey = e.CompanyKey,
+                MemberOf = e.MemberOf,
+                Affiliations = e.Affiliations
+                    .Select(a => new RoleTimelineAffiliation
+                    {
+                        GroupKey = a.GroupKey,
+                        CompanyKey = a.CompanyKey,
+                        CompanyName = a.CompanyName,
+                        Episodes = Otona(a.Episodes)
+                    })
+                    .Where(a => a.Episodes.Count > 0)
+                    .ToList(),
+                Episodes = episodes,
+                SeriesNotes = e.SeriesNotes,
+                RelatedRoles = e.RelatedRoles
+                    .Select(r => new RoleTimelineRelatedRole
+                    {
+                        Lane = r.Lane,
+                        RoleCode = r.RoleCode,
+                        RoleName = r.RoleName,
+                        SortOrder = r.SortOrder,
+                        Episodes = Otona(r.Episodes)
+                    })
+                    .Where(r => r.Episodes.Count > 0)
+                    .ToList()
+            });
+        }
+        return result;
+    }
+
     private readonly CreatorListMembership _lists = new();
+
+    /// <summary>
+    /// 音楽の役職詳細を持つ役職（role_code）ごとの、作品のクレジットの担当。役職詳細の並列フェーズで積み、GenerateMusicProduction が
+    /// 音楽の役職詳細の「作品のクレジット」に載せる。
+    /// </summary>
+    private readonly Dictionary<string, EntityRowSet> _creditRowSetsByMusicRole = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 音楽の役職詳細（/creators/roles/{code}/。GenerateMusicProduction が書く）を持つ役職。音楽クレジットの区分を持つ役職のうち、
+    /// 歌唱系と楽曲の作家（作詞・作曲・編曲）を除き、音楽クレジットか曲のクレジットに人物・企業/団体の名義の行があるもの。
+    /// </summary>
+    private HashSet<string> MusicPageRoleCodes(
+        IReadOnlyList<Role> allRoles, IReadOnlyList<SongCredit> allSongCredits, IReadOnlyDictionary<int, int> personIdByAlias)
+    {
+        var withEntity = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var mc in _ctx.MusicCredits.BySong.Values.Concat(_ctx.MusicCredits.ByRecording.Values)
+                     .Concat(_ctx.MusicCredits.BySession.Values).Concat(_ctx.MusicCredits.ByProduct.Values).SelectMany(list => list))
+            if (EntityKeyOf(mc, personIdByAlias) is not null) withEntity.Add(mc.RoleCode);
+        foreach (var sc in allSongCredits)
+            if (PersonKey(sc.PersonAliasId, personIdByAlias) is not null) withEntity.Add(sc.CreditRole);
+        return allRoles
+            .Where(r => !string.IsNullOrEmpty(r.MusicCreditGroup)
+                        && !PathUtil.IsSingerRole(r.RoleCode)
+                        && Array.IndexOf(SongCreditRoleOrder, r.RoleCode) < 0
+                        && withEntity.Contains(r.RoleCode))
+            .Select(r => r.RoleCode)
+            .ToHashSet(StringComparer.Ordinal);
+    }
     /// <summary>役職詳細・声の出演一覧の年表に主な方の行として載った人物・企業/団体の URL（OGP カードの年表を出すかの判定に渡す）。</summary>
     private readonly HashSet<string> _siteTimelineEntityUrls = new(StringComparer.Ordinal);
 
-    /// <summary>役職詳細・声の出演一覧の年表に主な方として載った行の URL を記録し、年表をそのまま返す。</summary>
+    /// <summary>役職詳細・声の出演一覧の年表に主な方として載った行のうち、本編（TV か映画）に参加した方の URL を記録し、年表をそのまま返す。役職詳細から並列に呼ばれるので記録は排他する。</summary>
     private RoleTimelineModel? RecordTimelineRows(RoleTimelineModel? timeline)
     {
         if (timeline is not null)
-            foreach (var row in timeline.Rows)
-                if (row.IsMain && !string.IsNullOrEmpty(row.EntityUrl)) _siteTimelineEntityUrls.Add(row.EntityUrl);
+            lock (_siteTimelineEntityUrls)
+                foreach (var row in timeline.Rows)
+                    if (row.IsMain && (row.HasTv || row.HasMovie) && !string.IsNullOrEmpty(row.EntityUrl)) _siteTimelineEntityUrls.Add(row.EntityUrl);
         return timeline;
     }
 
@@ -152,6 +313,7 @@ public sealed class CreatorsGenerator
         var allCompanies = (await _companiesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allCompanyAliases = (await _companyAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allLogos = (await _logosRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+        var allCompanyRelations = await _companyRelationsRepo.GetAllAsync(ct).ConfigureAwait(false);
 
         // 人物と紐付く全 alias_id は SiteDataLoader が BuildContext.AliasIdsByPerson に
         // 全件辞書化済み。旧コードは人物数（~5,000）分の GetByPersonAsync を順次発火する
@@ -187,11 +349,26 @@ public sealed class CreatorsGenerator
 
         // 「担当回数順」の行表記に使う、人物・企業ごとの最後に使われた名義を先に確定させる。
         BuildLatestAliasMaps(aliasIdsByPersonId, companyAliasesByCompany, logosByCompanyAlias);
+        BuildCompanyLineages(allCompanyRelations, companyById);
 
         // ── 役職詳細ページ群を生成し、あわせて「役職順」タブ用の索引エントリも構築 ──
         var roleIndexEntries = new List<RoleIndexEntry>();
         // 役職詳細・声の出演の線表。軸（期間・シリーズの帯）は共通なので 1 度だけ確定させる。
-        var roleTimeline = new RoleTimelineBuilder(_ctx);
+        // クレジットを収録したオトナシリーズの話が本編の収録範囲より後まであれば、軸をそこまで伸ばす。
+        var otonaCreditedSeries = _ctx.Series
+            .Where(sr => _ctx.IsOtonaSeries(sr.SeriesId)
+                && _ctx.EpisodesBySeries.TryGetValue(sr.SeriesId, out var eps)
+                && eps.Any(e => _ctx.CreditsByEpisode.ContainsKey(e.EpisodeId)))
+            .ToList();
+        DateOnly? otonaLast = otonaCreditedSeries
+            .SelectMany(sr => _ctx.EpisodesBySeries[sr.SeriesId])
+            .Where(e => _ctx.CreditsByEpisode.ContainsKey(e.EpisodeId))
+            .Select(e => (DateOnly?)e.OnAirDate.AddDays(7))
+            .Max();
+        var roleTimeline = new RoleTimelineBuilder(_ctx, otonaLast);
+        // 🌙 だけを入れているときの線表の軸：オトナシリーズの作品 1 本ずつの帯（帯の幅はその作品の第 1 話から最終話の放送枠まで）。
+        // 帯にするのはクレジットを収録した作品だけ。
+        var otonaTimeline = RoleTimelineBuilder.ForSeriesBands(_ctx, otonaCreditedSeries);
         // 音楽制作ページの役職タブ用（作詞・作曲・編曲の役職詳細への入口）。
         var musicRoleEntries = new List<RoleIndexEntry>();
 
@@ -207,18 +384,43 @@ public sealed class CreatorsGenerator
         // 音楽の年表（作詞・作曲・編曲・音楽の役職詳細・音楽制作・歌唱）で歌・劇伴・盤を時期に置くための日付。
         var musicDates = await MusicTimelineDates.LoadAsync(_ctx, _discsRepo, _productsRepo, ct).ConfigureAwait(false);
 
-        foreach (var role in rankableRoles)
+        var allCharacters = (await _charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+        var allCharacterAliases = (await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+        var allPrecures = (await _precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+
+        // 役職の集計対象：系譜のクラスタの全 role_code（自分を含む）。
+        // VOICE_CAST はクラスタ内に混在する想定はないが念のため除外する。
+        HashSet<string> MemberCodesOf(Role role)
+            => _resolver.GetClusterMembers(role.RoleCode)
+                .Where(c => roleByCode.TryGetValue(c, out var rr)
+                            && !string.Equals(rr.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal))
+                .ToHashSet(StringComparer.Ordinal);
+
+        // 音楽の役職詳細（GenerateMusicProduction が書く）を持つ役職。作品のクレジットにも出る役職は、スタッフの役職詳細を別に書かず、
+        // 作品のクレジットの担当を音楽の役職詳細に「作品のクレジット」として載せる（同じ URL に 2 つのページを書かない）。
+        var musicPageRoles = MusicPageRoleCodes(allRoles, allSongCredits, personIdByAlias);
+
+        // 役職 → その役職の関与がある人物・企業の索引。並列の集計から読むだけなので、並列のループの前に確定させる。
+        BuildRoleEntityIndex(aliasIdsByPersonId, companyAliasesByCompany, logosByCompanyAlias);
+
+        // 役職ごとの集計と役職詳細ページの書き出しは、役職どうしで独立なので並列に行い、結果を役職の順の配列に置く。
+        // ページを書いた記録（サマリ・進捗・sitemap）と索引への積み上げは、そのあと役職の順で逐次に行う
+        // （各話と同じ 2 相方式。sitemap.xml の並びと索引の順をビルドごとに揺らさない）。
+        var roleOutcomes = new RoleOutcome?[rankableRoles.Count];
+        Parallel.For(0, rankableRoles.Count, i =>
         {
+            var role = rankableRoles[i];
+
             // 主題歌・挿入歌（THEME_SONG 形式）の役職は専用の人物集計ページを持たない。
             // クレジット階層では {THEME_SONGS} として曲そのものを出し（曲詳細へリンク）、歌スタッフの
             // 集計は歌系 4 役職（作詞/作曲/編曲/歌唱）の専用ページが担うため、役職詳細ページも
             // 「役職順」索引エントリも作らない（CreditTreeRenderer 側でも役職ラベルはリンク化しない）。
             if (string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
-                continue;
+                return;
 
             // 歌唱系の役職（歌・コーラス・台詞）は役職詳細を作らず、歌唱ページに集約する。
             if (PathUtil.IsSingerRole(role.RoleCode))
-                continue;
+                return;
 
             // 楽曲の作家 3 役職は専用集計に分岐。本編クレジット階層を介さず、song_credits から
             // 人物別の「担当曲数」を直接数える。スタッフ一覧の役職順タブには載せず、音楽制作ページの役職タブに並べる。
@@ -226,25 +428,26 @@ public sealed class CreatorsGenerator
             {
                 var songRows = BuildSongRoleRows(role.RoleCode, allSongCredits, allSingers,
                     personIdByAlias, personById);
-                if (songRows.Count == 0) continue;
-                GenerateSongRoleDetail(role, songRows, musicDates);
-                musicRoleEntries.Add(new RoleIndexEntry
+                if (songRows.Count == 0) return;
+                roleOutcomes[i] = new RoleOutcome
                 {
-                    RoleNameJa = role.NameJa,
-                    RoleUrl = PathUtil.CreatorsRoleUrl(role.RoleCode),
-                    PersonCount = songRows.Count,
-                    RoleNameKey = role.RoleCode
-                });
-                continue;
+                    WrittenUrl = GenerateSongRoleDetail(role, songRows, musicDates),
+                    MusicEntry = new RoleIndexEntry
+                    {
+                        RoleNameJa = role.NameJa,
+                        RoleUrl = PathUtil.CreatorsRoleUrl(role.RoleCode),
+                        PersonCount = songRows.Count,
+                        RoleNameKey = role.RoleCode
+                    }
+                };
+                return;
             }
 
             // クラスタ全 role_code（自分を含む）を集計対象とする。
-            // VOICE_CAST はクラスタ内に混在する想定はないが念のため除外する。
-            var memberCodes = _resolver.GetClusterMembers(role.RoleCode)
-                .Where(c => roleByCode.TryGetValue(c, out var rr)
-                            && !string.Equals(rr.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal))
-                .ToHashSet(StringComparer.Ordinal);
+            var memberCodes = MemberCodesOf(role);
 
+            var outcome = new RoleOutcome { StaffCluster = (role, memberCodes) };
+            roleOutcomes[i] = outcome;
             var rowSet = BuildRoleEntityRows(
                 role.RoleCode, memberCodes, roleByCode, aliasIdsByPersonId, allPersons,
                 companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById);
@@ -253,54 +456,37 @@ public sealed class CreatorsGenerator
 
             // 一度もクレジットのない役職は出さない方針：関与エンティティが 0 件なら
             // 役職詳細ページも生成せず、「役職順」タブの索引（roleIndexEntries）にも積まない。
-            if (rows.Count == 0) continue;
+            if (rows.Count == 0) return;
 
-            int personCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal));
-            int companyCount = rows.Count - personCount;
+            // 音楽の役職詳細を持つ役職は、作品のクレジットの担当をそちらへ渡す（ページは音楽の側で書く）。
+            if (musicPageRoles.Contains(role.RoleCode))
+                outcome.CreditRowSetForMusic = rowSet;
+            else
+                outcome.WrittenUrl = GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline, otonaTimeline);
 
-            GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline);
+            // 役職詳細ページへのリンクは PathUtil 経由で組み立て、URL パス上のコードを
+            // 小文字化する。テンプレ側はこの組み立て済み URL のみ参照する。
+            outcome.StaffEntry = BuildRoleIndexEntry(role, rows, PathUtil.CreatorsRoleUrl(role.RoleCode));
+        });
 
-            // 役職順タブの並べ替えキー：この役職が最も早くクレジットされた
-            long roleSortStart = long.MaxValue;
-            int roleSortEpNo = int.MaxValue;
-            long roleSortPos = long.MaxValue;
-            foreach (var er in rows)
+        for (int i = 0; i < roleOutcomes.Length; i++)
+        {
+            var outcome = roleOutcomes[i];
+            if (outcome is null) continue;
+            if (outcome.WrittenUrl is not null)
             {
-                if (er.FirstSortStart < roleSortStart
-                    || (er.FirstSortStart == roleSortStart && er.FirstSortEpNo < roleSortEpNo)
-                    || (er.FirstSortStart == roleSortStart && er.FirstSortEpNo == roleSortEpNo
-                        && er.FirstSortPos < roleSortPos))
-                {
-                    roleSortStart = er.FirstSortStart;
-                    roleSortEpNo = er.FirstSortEpNo;
-                    roleSortPos = er.FirstSortPos;
-                }
+                _page.RecordWritten(outcome.WrittenUrl, "creators");
+                // サイト内検索に役職のページを載せる。楽曲の作家の役職は音楽制作ページから入るページなので、その旨を添える。
+                _ctx.SearchPages.Add(outcome.StaffCluster is { } written
+                    ? RoleSearchEntry(written.Role, outcome.WrittenUrl, "", written.MemberCodes, roleByCode)
+                    : RoleSearchEntry(rankableRoles[i], outcome.WrittenUrl, MusicRoleSearchSub, null, roleByCode));
             }
-
-            roleIndexEntries.Add(new RoleIndexEntry
-            {
-                RoleNameJa = role.NameJa,
-                // 役職詳細ページへのリンクは PathUtil 経由で組み立て、URL パス上のコードを
-                // 小文字化する。テンプレ側はこの組み立て済み URL のみ参照する。
-                RoleUrl = PathUtil.CreatorsRoleUrl(role.RoleCode),
-                PersonCount = personCount,
-                CompanyCount = companyCount,
-                SortStart = roleSortStart,
-                SortEpNo = roleSortEpNo,
-                SortPos = roleSortPos,
-                RoleNameKey = role.RoleCode,
-                // TV 系シリーズ（credit_attach_to='EPISODE'）のクレジットが 1 件も無い役職は「映画のみ」。
-                IsMovieOnly = rows.All(r => r.EpisodeCount == 0)
-            });
+            if (outcome.MusicEntry is not null) musicRoleEntries.Add(outcome.MusicEntry);
+            if (outcome.StaffEntry is not null) roleIndexEntries.Add(outcome.StaffEntry);
+            if (outcome.CreditRowSetForMusic is not null) _creditRowSetsByMusicRole[rankableRoles[i].RoleCode] = outcome.CreditRowSetForMusic;
         }
 
-        // 役職順：最も早くクレジットされた (放送開始, 話数, クレジット階層位置) の昇順。
-        roleIndexEntries = roleIndexEntries
-            .OrderBy(e => e.SortStart)
-            .ThenBy(e => e.SortEpNo)
-            .ThenBy(e => e.SortPos)
-            .ThenBy(e => e.RoleNameKey, StringComparer.Ordinal)
-            .ToList();
+        roleIndexEntries = OrderRoleIndexEntries(roleIndexEntries);
 
         // ── スタッフ一覧（/creators/staff/） ──
         GenerateStaff(roleIndexEntries, aliasIdsByPersonId, allPersons, personById,
@@ -308,9 +494,6 @@ public sealed class CreatorsGenerator
             rankableRoles, roleByCode, out int staffPersonCount, out int staffCompanyCount);
 
         // ── 声の出演（/creators/voice-cast/） ──
-        var allCharacters = (await _charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
-        var allCharacterAliases = (await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
-        var allPrecures = (await _precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         // プリキュアのマスタに入っているキャラ（変身前・変身後・2 段目の変身・別形態の名義のキャラ）。
         // 歴代プリキュア声優の「プリキュアを演じた方のみ」で、このキャラを演じた方を見分けるのに使う。
         // 値はプリキュアのマスタの順（precure_id 順の 1 始まり）で、年表の「プリキュアを演じた方のみ」の並びに使う。
@@ -323,7 +506,7 @@ public sealed class CreatorsGenerator
                 if (aliasId is int a && _ctx.CharacterAliasById.TryGetValue(a, out var ca))
                     precureOrderByCharacter.TryAdd(ca.CharacterId, precureOrder);
         }
-        GenerateVoiceCast(aliasIdsByPersonId, allPersons, allCharacters, allCharacterAliases, roleTimeline,
+        GenerateVoiceCast(aliasIdsByPersonId, allPersons, allCharacters, allCharacterAliases, roleTimeline, otonaTimeline,
             precureOrderByCharacter, out int voiceCastCount);
 
         // ── 音楽制作（/creators/music-production/）・歌唱（/creators/singers/） ──
@@ -363,7 +546,188 @@ public sealed class CreatorsGenerator
             $"creators: {rankableRoles.Count} 役職詳細 + スタッフ + 声の出演 + 音楽制作 + 歌唱 + ランディング");
     }
 
+    /// <summary>
+    /// スタッフ一覧の役職順タブの 1 行（役職名・人数・社数と並べ替えキー）を、その役職の行群から組み立てる。
+    /// 並べ替えキーは、この役職が最も早くクレジットされた (放送開始, 話数, クレジット階層位置)。
+    /// その最も早い行の作品（題・URL・年）と、本線の TV・映画・オトナシリーズの関与だけで見た最も早い行の作品を、役職順タブの節分け
+    /// （<see cref="SectionRolesByFirstSeries"/>。種類ごとに、その種類で初めての作品の節に置く）に使う。
+    /// </summary>
+    /// <param name="roleUrl">役職名のリンク先。役職詳細ページが無い役職は空文字（テンプレはリンクせずに名前だけ出す）。</param>
+    private static RoleIndexEntry BuildRoleIndexEntry(Role role, IReadOnlyList<EntityRow> rows, string roleUrl)
+    {
+        int personCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal));
+        int companyCount = rows.Count - personCount;
+
+        long roleSortStart = long.MaxValue;
+        int roleSortEpNo = int.MaxValue;
+        long roleSortPos = long.MaxValue;
+        EntityRow? firstRow = null;
+        EntityRow? firstTvRow = null;
+        RoleFirstCredit? firstMovie = null;
+        RoleFirstCredit? firstOtona = null;
+        foreach (var er in rows)
+        {
+            if (er.FirstTvSortStart != long.MaxValue
+                && (firstTvRow is null
+                    || er.FirstTvSortStart < firstTvRow.FirstTvSortStart
+                    || (er.FirstTvSortStart == firstTvRow.FirstTvSortStart && er.FirstTvSortEpNo < firstTvRow.FirstTvSortEpNo)
+                    || (er.FirstTvSortStart == firstTvRow.FirstTvSortStart && er.FirstTvSortEpNo == firstTvRow.FirstTvSortEpNo
+                        && er.FirstTvSortPos < firstTvRow.FirstTvSortPos)))
+            {
+                firstTvRow = er;
+            }
+            if (er.FirstMovie is not null
+                && (firstMovie is null
+                    || (er.FirstMovie.SortStart, er.FirstMovie.EpNo, er.FirstMovie.Pos).CompareTo((firstMovie.SortStart, firstMovie.EpNo, firstMovie.Pos)) < 0))
+            {
+                firstMovie = er.FirstMovie;
+            }
+            if (er.FirstOtona is not null
+                && (firstOtona is null
+                    || (er.FirstOtona.SortStart, er.FirstOtona.EpNo, er.FirstOtona.Pos).CompareTo((firstOtona.SortStart, firstOtona.EpNo, firstOtona.Pos)) < 0))
+            {
+                firstOtona = er.FirstOtona;
+            }
+            if (er.FirstSortStart < roleSortStart
+                || (er.FirstSortStart == roleSortStart && er.FirstSortEpNo < roleSortEpNo)
+                || (er.FirstSortStart == roleSortStart && er.FirstSortEpNo == roleSortEpNo
+                    && er.FirstSortPos < roleSortPos))
+            {
+                roleSortStart = er.FirstSortStart;
+                roleSortEpNo = er.FirstSortEpNo;
+                roleSortPos = er.FirstSortPos;
+                firstRow = er;
+            }
+        }
+
+        return new RoleIndexEntry
+        {
+            RoleNameJa = role.NameJa,
+            RoleUrl = roleUrl,
+            PersonCount = personCount,
+            CompanyCount = companyCount,
+            SortStart = roleSortStart,
+            SortEpNo = roleSortEpNo,
+            SortPos = roleSortPos,
+            RoleNameKey = role.RoleCode,
+            FirstSeriesId = firstRow?.FirstSeriesId,
+            FirstSeriesTitle = firstRow?.FirstSeriesTitle ?? "",
+            FirstSeriesUrl = firstRow?.FirstSeriesUrl ?? "",
+            FirstSeriesYearLabel = firstRow?.FirstSeriesYearLabel ?? "",
+            FirstTv = firstTvRow is null ? null : new RoleFirstCredit(
+                firstTvRow.FirstTvSortStart, firstTvRow.FirstTvSortEpNo, firstTvRow.FirstTvSortPos,
+                firstTvRow.FirstTvSeriesId, firstTvRow.FirstTvSeriesTitle, firstTvRow.FirstTvSeriesUrl, firstTvRow.FirstTvSeriesYearLabel),
+            FirstMovie = firstMovie,
+            FirstOtona = firstOtona,
+            Kinds = KindTokens(rows.Any(r => r.EpisodeCount > 0), rows.Any(r => r.MovieCount > 0), rows.Any(r => r.OtonaEpisodeCount > 0))
+        };
+    }
+
+    /// <summary>役職順：最も早くクレジットされた (放送開始, 話数, クレジット階層位置) の昇順。</summary>
+    private static List<RoleIndexEntry> OrderRoleIndexEntries(IEnumerable<RoleIndexEntry> entries)
+        => entries
+            .OrderBy(e => e.SortStart)
+            .ThenBy(e => e.SortEpNo)
+            .ThenBy(e => e.SortPos)
+            .ThenBy(e => e.RoleNameKey, StringComparer.Ordinal)
+            .ToList();
+
+    /// <summary>
+    /// 役職順タブの役職を、<paramref name="firstOf"/> で選んだ「初めてクレジットされた回」の作品ごとの節に束ねる
+    /// （TV の組は TV で初めての回、映画の組は初めての映画、オトナシリーズの組はオトナシリーズで初めての回）。
+    /// 節は作品の放送開始・公開順（同じ日の作品どうしは series_id 順）で、同じ作品の役職は 1 つの節にまとめる
+    /// （併映の作品のように同じ日の作品の役職が交互に並んでも、節が切れない）。
+    /// 節の中は初めて出た回のクレジットの順。節の見出しは初参加順タブと同じ「作品名（年）」。
+    /// </summary>
+    private static List<RoleSeriesSection> SectionRolesByFirstSeries(IEnumerable<RoleIndexEntry> entries, Func<RoleIndexEntry, RoleFirstCredit> firstOf)
+        => entries
+            .Select(e => (Entry: e, First: firstOf(e)))
+            .OrderBy(x => x.First.SortStart)
+            .ThenBy(x => x.First.EpNo)
+            .ThenBy(x => x.First.Pos)
+            .ThenBy(x => x.Entry.RoleNameKey, StringComparer.Ordinal)
+            .Select((x, index) => (x.Entry, x.First, Index: index))
+            .GroupBy(x => (x.First.SortStart, x.First.SeriesId, x.First.SeriesTitle))
+            .OrderBy(g => g.Key.SortStart)
+            .ThenBy(g => g.Key.SeriesId ?? int.MaxValue)
+            .ThenBy(g => g.Min(x => x.Index))
+            .Select(g =>
+            {
+                var f = g.First().First;
+                return new RoleSeriesSection
+                {
+                    SeriesTitle = f.SeriesTitle,
+                    SeriesUrl = f.SeriesUrl,
+                    SeriesYearLabel = f.SeriesYearLabel,
+                    SeriesHeadingLabel = string.IsNullOrEmpty(f.SeriesYearLabel)
+                        ? f.SeriesTitle
+                        : $"{f.SeriesTitle}（{f.SeriesYearLabel}）",
+                    SortStart = f.SortStart,
+                    Roles = g.OrderBy(x => x.Index).Select(x => x.Entry).ToList()
+                };
+            })
+            .ToList();
+
+    /// <summary>スタッフ一覧の題（h1・パンくず・OGP カード）。</summary>
+    private const string StaffPageTitle = "歴代プリキュアスタッフ";
+    /// <summary>スタッフ一覧の meta description と OGP カードのリード文。</summary>
+    private const string StaffPageLead = "プリキュアのTVシリーズと映画を作ってきた方々";
+    /// <summary>声の出演一覧の題（h1・パンくず・OGP カード）。</summary>
+    private const string VoiceCastPageTitle = "歴代プリキュア声優";
+    /// <summary>声の出演一覧の meta description と OGP カードのリード文。</summary>
+    private const string VoiceCastPageLead = "プリキュアのTVシリーズと映画に出演した方々";
+
     // 役職詳細
+
+    /// <summary>役職（role_code）→ 本編のクレジットでその役職の関与がある人物の person_id。<see cref="BuildRoleEntityIndex"/> が作る。</summary>
+    private readonly Dictionary<string, HashSet<int>> _personIdsByRoleCode = new(StringComparer.Ordinal);
+    /// <summary>役職（role_code）→ 本編のクレジットでその役職の関与（屋号・ロゴ・先頭企業）がある企業の company_id。<see cref="BuildRoleEntityIndex"/> が作る。</summary>
+    private readonly Dictionary<string, HashSet<int>> _companyIdsByRoleCode = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 役職 → その役職の関与がある人物・企業の索引（<see cref="_personIdsByRoleCode"/> / <see cref="_companyIdsByRoleCode"/>）を作る。
+    /// 役職詳細の集計（<see cref="BuildRoleEntityRows"/>）が、役職ごとに全人物・全企業の全クレジットを見直さずに済むようにする。
+    /// 主題歌・挿入歌の使用を経由した関与（曲の作家・歌唱）は、役職詳細の集計対象ではないので入れない。
+    /// </summary>
+    private void BuildRoleEntityIndex(
+        IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
+        IReadOnlyDictionary<int, List<int>> companyAliasesByCompany,
+        IReadOnlyDictionary<int, List<int>> logosByCompanyAlias)
+    {
+        _personIdsByRoleCode.Clear();
+        _companyIdsByRoleCode.Clear();
+        static void Note(Dictionary<string, HashSet<int>> map, IReadOnlyList<Involvement> invs, int entityId)
+        {
+            foreach (var inv in invs)
+            {
+                if (inv.EntryKind is "SONG_CREDIT" or "RECORDING_SINGER" || string.IsNullOrEmpty(inv.RoleCode)) continue;
+                if (!map.TryGetValue(inv.RoleCode, out var set)) map[inv.RoleCode] = set = new HashSet<int>();
+                set.Add(entityId);
+            }
+        }
+        foreach (var (personId, aliasIds) in aliasIdsByPersonId)
+            foreach (var aid in aliasIds)
+                if (_index.ByPersonAlias.TryGetValue(aid, out var invs)) Note(_personIdsByRoleCode, invs, personId);
+        foreach (var (companyId, aliasIds) in companyAliasesByCompany)
+        {
+            foreach (var aid in aliasIds)
+            {
+                if (_index.ByCompanyAlias.TryGetValue(aid, out var invs)) Note(_companyIdsByRoleCode, invs, companyId);
+                if (!logosByCompanyAlias.TryGetValue(aid, out var logoIds)) continue;
+                foreach (var logoId in logoIds)
+                    if (_index.ByLogo.TryGetValue(logoId, out var logoInvs)) Note(_companyIdsByRoleCode, logoInvs, companyId);
+            }
+        }
+    }
+
+    /// <summary>役職クラスタ <paramref name="memberCodes"/> のどれかの関与がある人物（または企業）の ID を、索引 <paramref name="map"/> から集める。</summary>
+    private static HashSet<int> EntityIdsOfRoles(Dictionary<string, HashSet<int>> map, IReadOnlySet<string> memberCodes)
+    {
+        var ids = new HashSet<int>();
+        foreach (var code in memberCodes)
+            if (map.TryGetValue(code, out var set)) ids.UnionWith(set);
+        return ids;
+    }
 
     /// <summary>1 役職クラスタに関わった人物・企業/団体を 1 リストに混在させた行群を作る。</summary>
     private EntityRowSet BuildRoleEntityRows(
@@ -376,13 +740,27 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<int, List<int>> logosByCompanyAlias,
         IReadOnlyList<Company> allCompanies,
         IReadOnlyDictionary<int, CompanyAlias> companyAliasById)
-        => BuildEntityRowSet(
-            inv => memberCodes.Contains(inv.RoleCode) ? inv.RoleCode : null,
+    {
+        // 関連する役職の判定は、ページの役職と関与の役職だけで決まるので、関与の役職ごとに 1 度だけ引く。
+        var relatedByRoleCode = new Dictionary<string, RelatedRoleKey?>(StringComparer.Ordinal);
+        return BuildEntityRowSet(
+            // 主題歌・挿入歌の使用を経由した関与（曲の作家・歌唱）は数えない（スタッフ一覧と同じ）。曲のクレジットは音楽の役職詳細に出る。
+            inv => inv.EntryKind is not ("SONG_CREDIT" or "RECORDING_SINGER") && memberCodes.Contains(inv.RoleCode) ? inv.RoleCode : null,
             aliasIdsByPersonId, allPersons, companyAliasesByCompany, logosByCompanyAlias,
             allCompanies, companyAliasById, repNameMap: null, withWorksTooltip: true,
             roleUsageNote: agg => BuildRoleUsageNote(agg, pageRoleCode, roleByCode),
-            related: inv => RelatedRoleOf(pageRoleCode, inv, roleByCode),
-            groupMembers: true);
+            related: inv =>
+            {
+                if (!inv.IsMainCredit || string.IsNullOrEmpty(inv.RoleCode)) return null;
+                if (!relatedByRoleCode.TryGetValue(inv.RoleCode, out var key))
+                    relatedByRoleCode[inv.RoleCode] = key = RelatedRoleOf(pageRoleCode, inv, roleByCode);
+                return key;
+            },
+            groupMembers: true,
+            // 集計対象の関与が 1 件も無い人物・企業は行にならないので、この役職クラスタの関与がある人物・企業だけを見る。
+            personIds: EntityIdsOfRoles(_personIdsByRoleCode, memberCodes),
+            companyIds: EntityIdsOfRoles(_companyIdsByRoleCode, memberCodes));
+    }
 
     /// <summary>
     /// 役職詳細の年表に重ねる関連する役職の判定。本編のクレジットで、ページの役職と関連（段階・並列）でつながった
@@ -429,6 +807,9 @@ public sealed class CreatorsGenerator
     /// <param name="repNameMap">役職ラベル（スタッフ一覧用）を作るときの「代表 role_code → 役職名」。null なら役職ラベルを作らない。</param>
     /// <param name="withWorksTooltip">行リンクに担当作品一覧の tooltip を付けるか（役職詳細用）。</param>
     /// <param name="groupMembers">年表で会社とその所属の人をまとめるか（役職詳細用。所属は <see cref="BuildMemberOf"/>）。</param>
+    /// <param name="personIds">見る人物の絞り込み（集計対象の関与を持ちうる人物の person_id）。null なら全人物を見る。
+    /// 集計対象の関与（<paramref name="accept"/> が null でない関与）を持つ人物は必ず含めること。</param>
+    /// <param name="companyIds">見る企業の絞り込み（<paramref name="personIds"/> と同じ決まり）。null なら全企業を見る。</param>
     private EntityRowSet BuildEntityRowSet(
         Func<Involvement, string?> accept,
         IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
@@ -441,7 +822,9 @@ public sealed class CreatorsGenerator
         bool withWorksTooltip,
         Func<EntityAggregate, string>? roleUsageNote = null,
         Func<Involvement, RelatedRoleKey?>? related = null,
-        bool groupMembers = false)
+        bool groupMembers = false,
+        IReadOnlySet<int>? personIds = null,
+        IReadOnlySet<int>? companyIds = null)
     {
         var set = new EntityRowSet();
         var memberOf = groupMembers
@@ -459,6 +842,7 @@ public sealed class CreatorsGenerator
         // 人物。
         foreach (var p in allPersons)
         {
+            if (personIds is not null && !personIds.Contains(p.PersonId)) continue;
             if (!aliasIdsByPersonId.TryGetValue(p.PersonId, out var aliasIds)) continue;
 
             var agg = new EntityAggregate(this);
@@ -503,6 +887,7 @@ public sealed class CreatorsGenerator
         // 企業・団体。
         foreach (var c in allCompanies)
         {
+            if (companyIds is not null && !companyIds.Contains(c.CompanyId)) continue;
             if (!companyAliasesByCompany.TryGetValue(c.CompanyId, out var aliasIds)) continue;
 
             var agg = new EntityAggregate(this);
@@ -532,9 +917,12 @@ public sealed class CreatorsGenerator
                 ? AliasLabel(latestAid)
                 : (c.Name, c.NameKana ?? "");
             // 企業の屋号は改名に限らず、雑誌名・部門名など並立する別名義も多いので、初参加行に最新屋号は添えない。
+            // 年表の見出しの鍵は系譜の鍵（系譜の企業は同じ鍵で並べてひとまとめにする）。
             AppendEntityRows(set, agg, "company", c.CompanyId, PathUtil.CompanyUrl(c.CompanyId),
                 latest, AliasLabel, _ => false, repNameMap, withWorksTooltip, roleUsageNote,
-                groupKey: groupMembers ? CompanyGroupKey(c.CompanyId) : "");
+                groupKey: groupMembers ? CompanyLineageKey(c.CompanyId) : "",
+                companyKey: groupMembers ? CompanyGroupKey(c.CompanyId) : "",
+                entitySubLabel: groupMembers ? PredecessorLabel(c.CompanyId, companyAliasById) : "");
         }
 
         return set;
@@ -544,13 +932,73 @@ public sealed class CreatorsGenerator
     private static string CompanyGroupKey(int companyId)
         => "company:" + companyId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>年表で人物をまとめる所属先の企業と、企業ごとの所属としてクレジットされた担当（<see cref="BuildMemberOf"/>）。</summary>
+    /// <summary>企業の系譜の鍵。系譜を持つ企業は系譜の代表の鍵、持たない企業は自分の鍵（<see cref="CompanyGroupKey"/>）。</summary>
+    private string CompanyLineageKey(int companyId)
+        => CompanyGroupKey(LineageRootOf(companyId));
+
+    /// <summary>企業の系譜の代表の company_id（系譜を持たなければ自分）。</summary>
+    private int LineageRootOf(int companyId)
+        => _companyLineageRoot.TryGetValue(companyId, out var root) ? root : companyId;
+
+    /// <summary>
+    /// 事業の引き継ぎ（company_relations の SUCCESSOR）で企業の系譜を組む（<see cref="_companyLineageRoot"/> /
+    /// <see cref="_companyPredecessors"/>）。引き継ぎでつながった企業は向きを問わず 1 つの系譜にし、系譜の中で最も小さい
+    /// company_id を代表にする。両端のどちらかが公開対象でない関係は使わない。所属（PARENT）は系譜にしない。
+    /// </summary>
+    private void BuildCompanyLineages(IReadOnlyList<CompanyRelation> relations, IReadOnlyDictionary<int, Company> companyById)
+    {
+        _companyLineageRoot.Clear();
+        _companyPredecessors.Clear();
+        var parent = new Dictionary<int, int>();
+        int Find(int x)
+        {
+            while (parent.TryGetValue(x, out var p) && p != x) x = p;
+            return x;
+        }
+        foreach (var r in relations)
+        {
+            if (!string.Equals(r.RelationKind, CompanyRelationKinds.Successor, StringComparison.Ordinal)) continue;
+            if (r.FromCompanyId == r.ToCompanyId) continue;
+            if (!companyById.ContainsKey(r.FromCompanyId) || !companyById.ContainsKey(r.ToCompanyId)) continue;
+            parent.TryAdd(r.FromCompanyId, r.FromCompanyId);
+            parent.TryAdd(r.ToCompanyId, r.ToCompanyId);
+            int a = Find(r.FromCompanyId), b = Find(r.ToCompanyId);
+            if (a != b) parent[Math.Max(a, b)] = Math.Min(a, b);
+            if (!_companyPredecessors.TryGetValue(r.ToCompanyId, out var preds))
+                _companyPredecessors[r.ToCompanyId] = preds = new List<(int, string, string?)>();
+            preds.Add((r.FromCompanyId, companyById[r.FromCompanyId].Name, r.RelationLabel));
+        }
+        foreach (var id in parent.Keys) _companyLineageRoot[id] = Find(id);
+    }
+
+    /// <summary>
+    /// 年表の内訳で企業の名前の下に添える前身の 1 行（「前身（会社分割）：朝日放送」の形。言い回しが無ければ「前身：…」）。
+    /// 前身の企業名は全クレジット横断で最後に使われた屋号（クレジットが無ければ正式名称）。前身が 2 つ以上なら「、」でつなぐ。前身が無ければ空文字。
+    /// </summary>
+    private string PredecessorLabel(int companyId, IReadOnlyDictionary<int, CompanyAlias> companyAliasById)
+    {
+        if (!_companyPredecessors.TryGetValue(companyId, out var preds)) return "";
+        return string.Join("、", preds.Select(p =>
+        {
+            string name = _latestCompanyAliasId.TryGetValue(p.CompanyId, out var aid) && companyAliasById.TryGetValue(aid, out var a)
+                ? a.Name
+                : p.Name;
+            string head = string.IsNullOrWhiteSpace(p.Label) ? "前身" : $"前身（{p.Label}）";
+            return $"{head}：{name}";
+        }));
+    }
+
+    /// <summary>
+    /// 年表で人物をまとめる所属先（企業の系譜の代表の company_id。系譜を持たない企業はその企業）と、
+    /// 企業ごとの所属としてクレジットされた担当（<see cref="BuildMemberOf"/>）。
+    /// </summary>
     private sealed record PersonMembership(int CompanyId, IReadOnlyList<RoleTimelineAffiliation> Affiliations);
 
     /// <summary>
     /// 人物 → 所属（person_id → 所属先の企業と企業ごとの所属の担当）。集計対象の関与（<paramref name="accept"/>）のうち、企業の所属として
     /// クレジットされたもの（所属屋号付きのエントリと、先頭企業ブロックの配下のエントリ。いずれも企業側の Member 関与）を企業ごとに集め、
     /// 年表でまとめる企業は、2 社以上に所属したことがある人なら所属の回数の多い企業（同じ数なら先にクレジットされた企業）にする。
+    /// 事業の引き継ぎでつながった企業（<see cref="_companyLineageRoot"/>）は 1 つの系譜として回数を合わせ、まとめる先は系譜の代表にする。
     /// 企業ごとの担当（TV の話・映画）は、年表の所属線と内訳の「所属：」の行に使う。企業名は全クレジット横断で最後に使われた屋号。
     /// </summary>
     private Dictionary<int, PersonMembership> BuildMemberOf(
@@ -596,13 +1044,15 @@ public sealed class CreatorsGenerator
             .ToDictionary(
                 g => g.Key,
                 g => new PersonMembership(
-                    g.OrderByDescending(kv => kv.Value.Count)
-                     .ThenBy(kv => kv.Value.First)
-                     .ThenBy(kv => kv.Key.CompanyId)
-                     .First().Key.CompanyId,
+                    g.GroupBy(kv => LineageRootOf(kv.Key.CompanyId))
+                     .OrderByDescending(lg => lg.Sum(kv => kv.Value.Count))
+                     .ThenBy(lg => lg.Min(kv => kv.Value.First))
+                     .ThenBy(lg => lg.Key)
+                     .First().Key,
                     g.Select(kv => new RoleTimelineAffiliation
                     {
-                        GroupKey = CompanyGroupKey(kv.Key.CompanyId),
+                        GroupKey = CompanyLineageKey(kv.Key.CompanyId),
+                        CompanyKey = CompanyGroupKey(kv.Key.CompanyId),
                         CompanyName = CompanyName(kv.Key.CompanyId),
                         Episodes = kv.Value.Episodes,
                         MovieSeriesIds = kv.Value.Movies
@@ -625,6 +1075,8 @@ public sealed class CreatorsGenerator
     /// <param name="groupKey">年表で所属の人をまとめる見出しの鍵（企業の行。まとめないなら空文字）。</param>
     /// <param name="memberOf">年表で所属先としてまとめる企業の鍵（人物の行。所属していなければ空文字）。</param>
     /// <param name="affiliations">年表の所属線に描く、企業ごとの所属としてクレジットされた担当（人物の行。無ければ null）。</param>
+    /// <param name="companyKey">年表で企業の行の、その企業自身の鍵（系譜の企業の所属線の色分けに使う。企業以外は空文字）。</param>
+    /// <param name="entitySubLabel">年表の内訳で名前の下に添える 1 行（企業の前身など。無ければ空文字）。</param>
     private void AppendEntityRows(
         EntityRowSet set, EntityAggregate agg, string entityKind, int entityId, string url,
         (string Name, string Kana) latest, Func<int, (string Name, string Kana)> aliasLabel,
@@ -632,25 +1084,40 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<string, string>? repNameMap, bool withWorksTooltip,
         Func<EntityAggregate, string>? roleUsageNote,
         string groupKey = "", string memberOf = "",
-        IReadOnlyList<RoleTimelineAffiliation>? affiliations = null)
+        IReadOnlyList<RoleTimelineAffiliation>? affiliations = null,
+        string companyKey = "", string entitySubLabel = "")
     {
         string tooltip = withWorksTooltip ? BuildWorksTooltip(agg.EpisodeKeys, agg.MovieSeriesIds) : "";
         string rolesLabel = repNameMap is null ? "" : BuildRolesLabel(agg.EarliestByRep, repNameMap);
         string usageNote = roleUsageNote?.Invoke(agg) ?? "";
+        // 話数は本線の TV（📺）とオトナシリーズ（🌙）に分けて数える。
+        int otonaEpisodes = agg.EpisodeKeys.Count(k => _ctx.IsOtonaSeries(k.seriesId));
+        int tvEpisodes = agg.EpisodeKeys.Count - otonaEpisodes;
 
         var countRow = MakeEntityRow(entityKind, entityId, latest.Name, latest.Kana, url,
-            agg.EpisodeKeys.Count, agg.MovieSeriesIds.Count, agg.SeriesIds.Count, agg.First, tooltip);
+            tvEpisodes, agg.MovieSeriesIds.Count, otonaEpisodes, agg.SeriesIds.Count, agg.First, tooltip);
+        countRow.FirstMovie = agg.FirstMovie.ToRoleFirstCredit();
+        countRow.FirstOtona = agg.FirstOtona.ToRoleFirstCredit();
         countRow.RolesLabel = rolesLabel;
         countRow.RoleUsageNote = usageNote;
+        countRow.FirstTvSeriesId = agg.FirstTv.SeriesId;
+        countRow.FirstTvSeriesTitle = agg.FirstTv.SeriesTitle;
+        countRow.FirstTvSeriesUrl = agg.FirstTv.SeriesUrl;
+        countRow.FirstTvSeriesYearLabel = agg.FirstTv.SeriesYearLabel;
+        countRow.FirstTvSortStart = agg.FirstTv.SortStartTicks;
+        countRow.FirstTvSortEpNo = agg.FirstTv.SortEpNo;
+        countRow.FirstTvSortPos = agg.FirstTv.SortCreditPos;
         set.CountRows.Add(countRow);
         set.TimelineEntities.Add(new RoleTimelineEntity
         {
             EntityKind = entityKind,
             EntityName = latest.Name,
+            EntitySubLabel = entitySubLabel,
             EntityUrl = url,
             FirstSortPos = countRow.FirstSortPos,
             HasOpeningCredit = agg.HasOpeningCredit,
             GroupKey = groupKey,
+            CompanyKey = companyKey,
             MemberOf = memberOf,
             Affiliations = affiliations ?? Array.Empty<RoleTimelineAffiliation>(),
             Episodes = agg.EpisodeKeys,
@@ -668,19 +1135,27 @@ public sealed class CreatorsGenerator
                 .ToList()
         });
 
-        foreach (var (aid, first) in agg.FirstByAlias)
+        // 初参加順の行は、名義ごと・参加した種類ごとに 1 つずつ、その名義がその種類で初めて出た作品の節に置く（EarlierKinds）。
+        foreach (var (aid, byKind) in agg.FirstByAlias)
         {
             var label = aliasLabel(aid);
-            var debutRow = MakeEntityRow(entityKind, entityId, label.Name, label.Kana, url,
-                agg.EpisodeKeys.Count, agg.MovieSeriesIds.Count, agg.SeriesIds.Count, first, tooltip);
-            debutRow.RolesLabel = rolesLabel;
-            debutRow.RoleUsageNote = usageNote;
-            // TV 系のクレジットで使われた旧名義で置いた初参加行には、いまの名乗り（表示名義）を括弧で添えて
-            // 同一人物と分かるようにする（添えるかは noteCurrentName が決める。企業は常に添えない）。
-            // 逆向き（表示名義の行に旧名義を添える）はしない。
-            if (!string.Equals(label.Name, latest.Name, StringComparison.Ordinal) && noteCurrentName(aid))
-                debutRow.CurrentNameNote = latest.Name;
-            set.DebutRows.Add(debutRow);
+            var keys = byKind.Select(f => f.HasValue ? f.Key : ((long Start, int SeriesId, int EpNo, long Pos)?)null).ToArray();
+            for (int k = 0; k < byKind.Length; k++)
+            {
+                if (!byKind[k].HasValue) continue;
+                var debutRow = MakeEntityRow(entityKind, entityId, label.Name, label.Kana, url,
+                    tvEpisodes, agg.MovieSeriesIds.Count, otonaEpisodes, agg.SeriesIds.Count, byKind[k], tooltip);
+                debutRow.RolesLabel = rolesLabel;
+                debutRow.RoleUsageNote = usageNote;
+                debutRow.WkOwn = WorkKindNames[k];
+                debutRow.WkAfter = EarlierKinds(keys, k);
+                // TV 系のクレジットで使われた旧名義で置いた初参加行には、いまの名乗り（表示名義）を括弧で添えて
+                // 同一人物と分かるようにする（添えるかは noteCurrentName が決める。企業は常に添えない）。
+                // 逆向き（表示名義の行に旧名義を添える）はしない。
+                if (!string.Equals(label.Name, latest.Name, StringComparison.Ordinal) && noteCurrentName(aid))
+                    debutRow.CurrentNameNote = latest.Name;
+                set.DebutRows.Add(debutRow);
+            }
         }
     }
 
@@ -755,14 +1230,30 @@ public sealed class CreatorsGenerator
         => LatestAliasResolver.CreditOrderKey(_ctx, inv);
 
     /// <summary>/creators/roles/{rep_role_code}/ を 3 タブ（五十音順 / 初参加順 / 担当回数順）で書き出し、担当の移り変わりの線表を年表タブに置く。</summary>
-    private void GenerateRoleDetail(
+    private string GenerateRoleDetail(
         Role role,
         IReadOnlySet<string> memberCodes,
         IReadOnlyDictionary<string, Role> roleByCode,
         EntityRowSet rowSet,
-        RoleTimelineBuilder roleTimeline)
+        RoleTimelineBuilder roleTimeline,
+        RoleTimelineBuilder otonaTimeline)
     {
         var rows = rowSet.CountRows;
+        var kinds = new WorkKinds
+        {
+            Tv = rows.Any(r => r.EpisodeCount > 0),
+            Movie = rows.Any(r => r.MovieCount > 0),
+            Otona = rows.Any(r => r.OtonaEpisodeCount > 0)
+        };
+        // 年表：TV・映画・オトナシリーズを重ねた年度の帯の線表と、🌙 だけを入れているときに見せるオトナシリーズの作品ごとの帯の線表。
+        // オトナシリーズだけの役職は、作品ごとの帯の線表だけを出す。年表の凡例の関連する役職は役職詳細へリンクする。
+        var timelineRules = RoleTimelineRules.Staff with { RelatedRoleUrl = PathUtil.CreatorsRoleUrl };
+        var timeline = kinds.OnlyOtona
+            ? otonaTimeline.Build(rowSet.TimelineEntities, timelineRules)
+            : RecordTimelineRows(roleTimeline.Build(rowSet.TimelineEntities, timelineRules));
+        var otonaOnlyTimeline = kinds.Otona && !kinds.OnlyOtona
+            ? otonaTimeline.Build(OtonaOnlyEntities(rowSet.TimelineEntities), timelineRules)
+            : null;
 
         // クラスタ歴代名（自分自身を除く別役職名、display_order 昇順）。
         // 閲覧者向けに日本語の役職名のみを並べる（内部の役職コードは出さない）。
@@ -786,29 +1277,35 @@ public sealed class CreatorsGenerator
             CountRows = SortByCount(rows),
             AlternateNames = alternateNames,
             NameHistory = BuildRoleNameHistory(memberCodes, roleByCode),
-            Timeline = RecordTimelineRows(roleTimeline.Build(rowSet.TimelineEntities, RoleTimelineRules.Staff)),
+            // 年表に主な方の行として載った記録（OGP カードの年表の判定）は、本編に参加した方にだけ付ける（RecordTimelineRows）。
+            Timeline = timeline,
+            OtonaTimeline = otonaOnlyTimeline,
+            Kinds = kinds,
             CoverageLabel = _ctx.CreditCoverageLabel,
             // 個人と団体が両方そろっているときだけ entity-filter を出すための件数（片方だけの役職では絞り込みが無意味）。
             PersonCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal)),
-            CompanyCount = rows.Count(r => string.Equals(r.EntityKind, "company", StringComparison.Ordinal))
+            CompanyCount = rows.Count(r => string.Equals(r.EntityKind, "company", StringComparison.Ordinal)),
+            StaffUrl = PathUtil.CreatorsStaffUrl()
         };
         var layout = new LayoutModel
         {
-            PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した方々（人物・企業・団体）を一覧にしました。初参加順・担当回数順で並べ替えられます。",
-            OgCard = BuildRoleOgCard(role, content.PersonCount, content.CompanyCount, rows, rowSet.TimelineEntities, alternateNames),
+            PageTitle = role.NameJa,
+            MetaDescription = $"歴代プリキュアシリーズで「{role.NameJa}」を担当した方々（人物・企業・団体）",
+            OgCard = BuildRoleOgCard(role, $"歴代プリキュアシリーズで「{role.NameJa}」を担当した方々（人物・企業・団体）", rowSet.TimelineEntities, alternateNames),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代クリエイター", Url = PathUtil.CreatorsLandingUrl() },
-                new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = PathUtil.CreatorsStaffUrl() },
+                new BreadcrumbItem { Label = StaffPageTitle, Url = PathUtil.CreatorsStaffUrl() },
                 new BreadcrumbItem { Label = role.NameJa, Url = "" }
             }
         };
         // 出力先パスもリンク生成と同一の PathUtil.CreatorsRoleUrl を通すことで、
         // URL パス上のコード小文字化と出力ディレクトリ名を必ず一致させる。
-        _page.RenderAndWrite(PathUtil.CreatorsRoleUrl(role.RoleCode), "creators",
-            "creators-role-detail.sbn", content, layout);
+        // 役職ごとに並列で呼ばれるので、書き出しまでにとどめ、記録（RecordWritten）は呼び出し側が役職の順で行う。
+        var url = PathUtil.CreatorsRoleUrl(role.RoleCode);
+        _page.RenderAndWriteFile(url, "creators-role-detail.sbn", content, layout);
+        return url;
     }
 
     /// <summary>
@@ -832,7 +1329,7 @@ public sealed class CreatorsGenerator
                 usageByCode[inv.RoleCode] = u;
             }
             bool isMovie = _ctx.IsMovieKindSeries(inv.SeriesId);
-            u.Usage.Offer(inv, isMovie, CreditOrderKey(inv));
+            u.Usage.Offer(inv, isMovie, _ctx.IsOtonaSeries(inv.SeriesId), CreditOrderKey(inv));
             if (!u.EpNosBySeries.TryGetValue(inv.SeriesId, out var epNos))
             {
                 epNos = new HashSet<int>();
@@ -855,6 +1352,7 @@ public sealed class CreatorsGenerator
                 RoleNameJa = roleByCode.TryGetValue(kv.Key, out var r) ? r.NameJa : kv.Key,
                 EpisodeCount = kv.Value.Usage.EpisodeCount,
                 MovieCount = kv.Value.Usage.MovieCount,
+                OtonaEpisodeCount = kv.Value.Usage.OtonaEpisodeCount,
                 Works = kv.Value.EpNosBySeries
                     .Where(w => _ctx.SeriesById.ContainsKey(w.Key))
                     .Select(w => (Series: _ctx.SeriesById[w.Key], EpNos: w.Value))
@@ -906,8 +1404,10 @@ public sealed class CreatorsGenerator
         var songsByPerson = new Dictionary<int, HashSet<int>>();
         // 人物ごとの初参加 recording_id（関与した録音／曲の最小 recording_id）。
         var debutRecIdByPerson = new Dictionary<int, int>();
+        // 人物ごとの初参加の録音での連名の位置（作詞・作曲・編曲は song_credits.credit_seq、歌は singer_seq）。
+        var debutSeqByPerson = new Dictionary<int, int>();
 
-        void Add(int? aliasId, int songId, int recordingId)
+        void Add(int? aliasId, int songId, int recordingId, int seq)
         {
             if (aliasId is not int aid) return;
             if (!personIdByAlias.TryGetValue(aid, out var pid)) return;
@@ -917,10 +1417,19 @@ public sealed class CreatorsGenerator
                 songsByPerson[pid] = set;
             }
             set.Add(songId);
-            if (recordingId > 0
-                && (!debutRecIdByPerson.TryGetValue(pid, out var cur) || recordingId < cur))
+            if (recordingId > 0)
             {
-                debutRecIdByPerson[pid] = recordingId;
+                // 初参加の録音が同じなら、連名の前の位置を残す。
+                bool has = debutRecIdByPerson.TryGetValue(pid, out var cur);
+                if (!has || recordingId < cur)
+                {
+                    debutRecIdByPerson[pid] = recordingId;
+                    debutSeqByPerson[pid] = seq;
+                }
+                else if (recordingId == cur && seq < debutSeqByPerson[pid])
+                {
+                    debutSeqByPerson[pid] = seq;
+                }
             }
         }
 
@@ -934,7 +1443,7 @@ public sealed class CreatorsGenerator
                 // 歌唱は録音単位なので recording_id を直接使う。
                 // 主名義・スラッシュ相方・キャラ歌唱の声優に加え、ユニット名義のメンバー（人物 / キャラの声優）まで展開する。
                 foreach (var p in _ctx.ExpandSingerParticipants(s))
-                    Add(p.PersonAliasId, songId, s.SongRecordingId);
+                    Add(p.PersonAliasId, songId, s.SongRecordingId, s.SingerSeq);
             }
         }
         else
@@ -943,7 +1452,7 @@ public sealed class CreatorsGenerator
             {
                 if (!string.Equals(c.CreditRole, roleCode, StringComparison.Ordinal)) continue;
                 int recId = minRecIdBySong.TryGetValue(c.SongId, out var r) ? r : 0;
-                Add(c.PersonAliasId, c.SongId, recId);
+                Add(c.PersonAliasId, c.SongId, recId, c.CreditSeq);
             }
         }
 
@@ -961,7 +1470,11 @@ public sealed class CreatorsGenerator
                 PersonUrl = PathUtil.PersonUrl(kv.Key),
                 SongCount = kv.Value.Count,
                 // 初参加順の代理キー。未取得は末尾に送るため int.MaxValue。
-                DebutRecordingId = debutRecIdByPerson.TryGetValue(kv.Key, out var dr) ? dr : int.MaxValue
+                DebutRecordingId = debutRecIdByPerson.TryGetValue(kv.Key, out var dr) ? dr : int.MaxValue,
+                DebutSeq = debutSeqByPerson.TryGetValue(kv.Key, out var ds) ? ds : int.MaxValue,
+                // 初担当順の節：この役職で初めて担当した録音の出典シリーズ（TV・映画を問わない）。
+                DebutSeriesId = debutRecIdByPerson.TryGetValue(kv.Key, out var dr2)
+                                && _ctx.SongRecordingById.TryGetValue(dr2, out var debutRec) ? debutRec.SeriesId : null
             });
         }
         return rows;
@@ -971,13 +1484,14 @@ public sealed class CreatorsGenerator
     /// 歌系役職 1 種の専用ページ <c>/creators/roles/{code}/</c> を「五十音順 / 担当曲数順」の 2 タブで書き出し、
     /// 担当した曲を初めて盤に収められた日に置いた線表を年表タブに置く（1 年間に 2 曲以上担当した人）。
     /// </summary>
-    private void GenerateSongRoleDetail(Role role, List<SongRoleRow> rows, MusicTimelineDates musicDates)
+    private string GenerateSongRoleDetail(Role role, List<SongRoleRow> rows, MusicTimelineDates musicDates)
     {
         var collector = new MusicTimelineCollector(_ctx, musicDates);
         foreach (var r in rows)
             foreach (var songId in r.SongIds)
                 collector.AddSong(('P', r.PersonId), songId);
-        var timelineEntities = rows
+        // 年表の行は初担当順（連名の順まで）で渡し、同じ日付・同じ録音の行はこの並びで並べる。
+        var timelineEntities = SortSongRowsByDebut(rows)
             .Select(r => collector.ToEntity(('P', r.PersonId), "person", r.PersonName, r.PersonUrl, r.DebutRecordingId))
             .OfType<RoleTimelineEntity>()
             .ToList();
@@ -989,6 +1503,8 @@ public sealed class CreatorsGenerator
             // 読みデータが揃ったら KanaRows の行のコメントを外して五十音順タブを復活させられる。
             // KanaRows = SortSongRowsByKana(rows),
             DebutRows = SortSongRowsByDebut(rows),
+            // 初担当順は、この役職で初めて担当した録音の作品ごとの節に分ける（TV・映画を混ぜた放送開始・公開順）。
+            DebutSections = BuildDebutSeriesSections(SortSongRowsByDebut(rows), r => r.DebutSeriesId),
             CountRows = SortSongRowsByCount(rows),
             Timeline = new RoleTimelineBuilder(_ctx, RoleTimelineBuilder.ExtendToFor(timelineEntities))
                 .Build(timelineEntities, RoleTimelineRules.SongWriter),
@@ -996,12 +1512,13 @@ public sealed class CreatorsGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアの歌で役職「{role.NameJa}」を担当した方々を一覧にしました。初参加順・担当曲数順で並べ替えられます。",
+            PageTitle = role.NameJa,
+            MetaDescription = $"歴代プリキュアの歌で「{role.NameJa}」を担当した方々",
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 new[] { new OgCardBadge("人物", $"{rows.Count}人") },
-                new[] { new OgCardFactLine("集計元", "歌のクレジット（劇中歌・キャラクターソングを含む）") }, MusicCoverageLabel),
+                new[] { new OgCardFactLine("集計元", "歌のクレジット（劇中歌・キャラクターソングを含む）") }, MusicCoverageLabel,
+                watermark: MusicRoleWatermark),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1010,8 +1527,10 @@ public sealed class CreatorsGenerator
                 new BreadcrumbItem { Label = role.NameJa, Url = "" }
             }
         };
-        _page.RenderAndWrite(PathUtil.CreatorsRoleUrl(role.RoleCode), "creators",
-            "creators-song-role-detail.sbn", content, layout);
+        // 役職ごとに並列で呼ばれるので、書き出しまでにとどめ、記録（RecordWritten）は呼び出し側が役職の順で行う。
+        var url = PathUtil.CreatorsRoleUrl(role.RoleCode);
+        _page.RenderAndWriteFile(url, "creators-song-role-detail.sbn", content, layout);
+        return url;
     }
 
     /// <summary>五十音順：読み昇順（空読みは末尾） → 名前。</summary>
@@ -1021,18 +1540,19 @@ public sealed class CreatorsGenerator
         .ThenBy(r => r.PersonName, StringComparer.Ordinal)
         .ToList();
 
-    /// <summary>初参加順：最小 recording_id 昇順（recording_id はほぼ時系列の代理）→ 読み → 名前。 読みデータ未整備の暫定で五十音順の代替に使う既定タブ。</summary>
+    /// <summary>初参加順：最小 recording_id 昇順（recording_id はほぼ時系列の代理）→ その録音での連名の順 → person_id。 読みデータ未整備の暫定で五十音順の代替に使う既定タブ。</summary>
     private static List<SongRoleRow> SortSongRowsByDebut(IEnumerable<SongRoleRow> rows) => rows
         .OrderBy(r => r.DebutRecordingId)
-        .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
-        .ThenBy(r => r.PersonName, StringComparer.Ordinal)
+        .ThenBy(r => r.DebutSeq)
+        .ThenBy(r => r.PersonId)
         .ToList();
 
-    /// <summary>担当曲数順：曲数降順 → 読み → 名前（順位は付けない）。</summary>
+    /// <summary>担当曲数順：曲数降順 → 初参加順（<see cref="SortSongRowsByDebut"/> と同じキー）（順位は付けない）。</summary>
     private static List<SongRoleRow> SortSongRowsByCount(IEnumerable<SongRoleRow> rows) => rows
         .OrderByDescending(r => r.SongCount)
-        .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
-        .ThenBy(r => r.PersonName, StringComparer.Ordinal)
+        .ThenBy(r => r.DebutRecordingId)
+        .ThenBy(r => r.DebutSeq)
+        .ThenBy(r => r.PersonId)
         .ToList();
 
     // 音楽制作
@@ -1075,19 +1595,21 @@ public sealed class CreatorsGenerator
             .ToList();
 
         // ── 歌（詞曲）：作詞・作曲・編曲（song_credits と、曲に付いた音楽クレジットの作詞・作曲・編曲） ──
+        //    同じ曲で初参加の人・団体は、song_credits（作詞 → 作曲 → 編曲の役割順、同じ役割は credit_seq）→ 曲に付いた音楽クレジット
+        //    → 録音に付いた音楽クレジット（録音 ID → credit_seq）の順。
         var songWritingAcc = new MusicEntityAccumulator();
         foreach (var c in allSongCredits)
             if (IsGroup(c.CreditRole, MusicCreditGroups.Writing) && PersonKey(c.PersonAliasId, personIdByAlias) is { } key)
-                AddSong(songWritingAcc, key, c.SongId, c.CreditRole, minRecIdBySong);
+                AddSong(songWritingAcc, key, c.SongId, c.CreditRole, minRecIdBySong, 0, SongCreditRoleRank(c.CreditRole) * 1000L + c.CreditSeq);
         foreach (var (songId, r) in songTargetRows)
             if (IsGroup(r.RoleCode, MusicCreditGroups.Writing) && EntityKeyOf(r, personIdByAlias) is { } key)
-                AddSong(songWritingAcc, key, songId, r.RoleCode, minRecIdBySong);
+                AddSong(songWritingAcc, key, songId, r.RoleCode, minRecIdBySong, SongTargetRank(r), r.CreditSeq);
 
         // ── 歌（演奏）：曲に付いた音楽クレジットの演奏・コーラス等 ──
         var songPerformanceAcc = new MusicEntityAccumulator();
         foreach (var (songId, r) in songTargetRows)
             if (IsGroup(r.RoleCode, MusicCreditGroups.Performance) && EntityKeyOf(r, personIdByAlias) is { } key)
-                AddSong(songPerformanceAcc, key, songId, r.RoleCode, minRecIdBySong);
+                AddSong(songPerformanceAcc, key, songId, r.RoleCode, minRecIdBySong, SongTargetRank(r), r.CreditSeq);
         // 歌唱ページの歌手に載らない人の本人名義での歌唱（コーラスだけ・名前の出ないユニットのメンバーだけ）は、
         // その歌唱役職（歌・コーラス等）で演奏側に載せる。キャラクターとしての歌唱は歌唱ページが受け持つ。
         foreach (var s in allSingers)
@@ -1096,29 +1618,45 @@ public sealed class CreatorsGenerator
             foreach (var p in _ctx.ExpandSingerParticipants(s))
                 if (p.CharacterAliasId is null && p.PersonAliasId is int paid
                     && personIdByAlias.TryGetValue(paid, out var pid) && !leadSingers.Contains(pid))
-                    AddSong(songPerformanceAcc, ('P', pid), rec.SongId, s.RoleCode, minRecIdBySong);
+                    // 歌唱の連名（singer_seq）は、同じ録音の音楽クレジットの後に置く。
+                    AddSong(songPerformanceAcc, ('P', pid), rec.SongId, s.RoleCode, minRecIdBySong,
+                        RecordingTargetRank(s.SongRecordingId), 100_000L + s.SingerSeq);
         }
 
         // ── 劇伴（作編曲）：bgm_cue_credits と、劇伴セッションに付いた音楽クレジットの作詞・作曲・編曲 ──
+        //    名義を持たない文字だけの行（entry_kind=TEXT）は人物に数えない。
+        //    同じ作品で初参加の人は、録音回（session_no）→ その回の音楽クレジット（credit_seq）→ その回の曲（seq_in_session）の
+        //    作曲 → 編曲（credit_seq）の順。
+        var cuePosByKey = new Dictionary<(int SeriesId, string MNoDetail), (byte SessionNo, int SeqInSession)>();
+        foreach (var (cueSeriesId, cues) in _ctx.BgmCuesBySeries)
+            foreach (var cue in cues)
+                cuePosByKey[(cueSeriesId, cue.MNoDetail)] = (cue.SessionNo, cue.SeqInSession);
         var bgmWritingAcc = new MusicEntityAccumulator();
         foreach (var (cueKey, credits) in _ctx.BgmCueCreditsByCue)
+        {
+            long cueTarget = cuePosByKey.TryGetValue(cueKey, out var cuePos)
+                ? SessionTargetRank(cuePos.SessionNo) + 1 + cuePos.SeqInSession
+                : long.MaxValue;
             foreach (var c in credits)
-                if (PersonKey(c.PersonAliasId, personIdByAlias) is { } key)
-                    AddSeries(bgmWritingAcc, key, cueKey.SeriesId, c.CreditRole, bgm: true);
+                if (c.PersonAliasId is int bgmAliasId && PersonKey(bgmAliasId, personIdByAlias) is { } key)
+                    AddSeries(bgmWritingAcc, key, cueKey.SeriesId, c.CreditRole, bgm: true, cueTarget, BgmCueRoleRank(c.CreditRole) * 1000L + c.CreditSeq);
+        }
         foreach (var (sessionKey, rows) in _ctx.MusicCredits.BySession)
             foreach (var r in rows)
                 if (IsGroup(r.RoleCode, MusicCreditGroups.Writing) && EntityKeyOf(r, personIdByAlias) is { } key)
-                    AddSeries(bgmWritingAcc, key, sessionKey.SeriesId, r.RoleCode, bgm: true);
+                    AddSeries(bgmWritingAcc, key, sessionKey.SeriesId, r.RoleCode, bgm: true, SessionTargetRank(sessionKey.SessionNo), r.CreditSeq);
 
         // ── 劇伴（演奏）：劇伴セッションに付いた音楽クレジットの演奏・コーラス等 ──
+        //    同じ作品で初参加の人は、録音回（session_no）→ その回の音楽クレジットの順（credit_seq）。
         var bgmPerformanceAcc = new MusicEntityAccumulator();
         foreach (var (sessionKey, rows) in _ctx.MusicCredits.BySession)
             foreach (var r in rows)
                 if (IsGroup(r.RoleCode, MusicCreditGroups.Performance) && EntityKeyOf(r, personIdByAlias) is { } key)
-                    AddSeries(bgmPerformanceAcc, key, sessionKey.SeriesId, r.RoleCode, bgm: true);
+                    AddSeries(bgmPerformanceAcc, key, sessionKey.SeriesId, r.RoleCode, bgm: true, SessionTargetRank(sessionKey.SessionNo), r.CreditSeq);
 
         // ── 制作：レコーディング・音盤製作。曲・劇伴セッションに付いたものは作品単位、盤に付いたものは盤（商品）単位で数える。
-        //    盤の分の初参加は、ディスクに登録されたシリーズで決める。 ──
+        //    盤の分の初参加は、ディスクに登録されたシリーズで決める。
+        //    同じ作品で初参加の人・団体は、根拠の盤の発売日 → 紐付け先（MusicCreditViewBuilder.TargetOrder）→ その音楽クレジットの順（credit_seq）。 ──
         var productionAcc = new MusicEntityAccumulator();
         foreach (var r in _ctx.MusicCredits.BySong.Values.Concat(_ctx.MusicCredits.ByRecording.Values)
                      .Concat(_ctx.MusicCredits.BySession.Values).Concat(_ctx.MusicCredits.ByProduct.Values).SelectMany(x => x))
@@ -1126,12 +1664,14 @@ public sealed class CreatorsGenerator
             if (!IsGroup(r.RoleCode, MusicCreditGroups.Recording) && !IsGroup(r.RoleCode, MusicCreditGroups.Release)) continue;
             if (EntityKeyOf(r, personIdByAlias) is not { } key) continue;
             int? sid = SeriesOfMusicCredit(r, minRecIdBySong);
+            long sourceDate = MusicCreditViewBuilder.DescribeTarget(_ctx, r)?.Sort.Ticks ?? long.MaxValue;
+            long pos = (MusicCreditViewBuilder.TargetOrder(_ctx, r) << 16) + r.CreditSeq;
             if (r.TargetKind == MusicCreditTargetKinds.Product && r.ProductCatalogNo is string catalogNo)
             {
-                if (sid is int psid) AddSeries(productionAcc, key, psid, r.RoleCode, bgm: false, productCatalogNo: catalogNo);
-                else productionAcc.Add(key, 0, r.RoleCode, long.MaxValue, "", "", null, product: catalogNo);
+                if (sid is int psid) AddSeries(productionAcc, key, psid, r.RoleCode, bgm: false, sourceDate, pos, productCatalogNo: catalogNo);
+                else productionAcc.Add(key, 0, r.RoleCode, new MusicDebutKey(long.MaxValue, long.MaxValue, sourceDate, pos), "", "", null, product: catalogNo);
             }
-            else if (sid is int wsid) AddSeries(productionAcc, key, wsid, r.RoleCode, bgm: false);
+            else if (sid is int wsid) AddSeries(productionAcc, key, wsid, r.RoleCode, bgm: false, sourceDate, pos);
         }
 
         var allEntities = new[] { songWritingAcc, songPerformanceAcc, bgmWritingAcc, bgmPerformanceAcc, productionAcc }
@@ -1163,12 +1703,12 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア音楽制作",
-            MetaDescription = "歴代プリキュアの音楽制作スタッフ一覧。作詞・作曲・編曲から演奏・エンジニアまで、歌・劇伴・音盤のクレジットに名前のある方々（人物・団体）を役職ごとにまとめました。",
+            MetaDescription = "プリキュアの歌と音楽を作ってきた方々",
             OgCard = BuildCreatorsOgCard(
                 "歴代プリキュア音楽制作",
                 BuildEntityBadges(personCount, companyCount),
-                Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
-                "作詞・作曲・編曲から演奏・エンジニアまで、プリキュアの歌と劇伴、音盤を作った方々を一覧にしました。"),
+                Array.Empty<OgCardFactLine>(),
+                "プリキュアの歌と音楽を作ってきた方々"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1179,48 +1719,76 @@ public sealed class CreatorsGenerator
         _page.RenderAndWrite(PathUtil.CreatorsMusicProductionUrl(), "creators",
             "creators-music-production.sbn", content, layout);
 
-        void AddSong(MusicEntityAccumulator acc, (char Kind, int Id) key, int songId, string roleCode, IReadOnlyDictionary<int, int> minRec)
+        // 初参加のキーは（曲の最小録音 ID, 0, target, pos）。target・pos は同じ曲の中の並び（紐付け先の順とクレジットの位置）。
+        void AddSong(MusicEntityAccumulator acc, (char Kind, int Id) key, int songId, string roleCode, IReadOnlyDictionary<int, int> minRec, long target, long pos)
         {
             long sort = minRec.TryGetValue(songId, out var rid) ? rid : long.MaxValue;
             string label = _ctx.SongById.TryGetValue(songId, out var song) ? song.Title : "";
             int? seriesId = minRec.TryGetValue(songId, out var firstRec) && _ctx.SongRecordingById.TryGetValue(firstRec, out var rec)
                 ? rec.SeriesId : null;
-            acc.Add(key, songId, roleCode, sort, label, PathUtil.SongUrl(songId), seriesId);
+            acc.Add(key, songId, roleCode, new MusicDebutKey(sort, 0, target, pos), label, PathUtil.SongUrl(songId), seriesId);
         }
 
         // productCatalogNo を渡すと、作品ではなくその盤（商品）の参加として数える（初参加は作品で決める）。
-        void AddSeries(MusicEntityAccumulator acc, (char Kind, int Id) key, int seriesId, string roleCode, bool bgm, string? productCatalogNo = null)
+        // 初参加のキーは（放送開始日, series_id, target, pos）。target・pos は同じ作品の中の並び（録音回とクレジットの位置など）。
+        void AddSeries(MusicEntityAccumulator acc, (char Kind, int Id) key, int seriesId, string roleCode, bool bgm, long target, long pos, string? productCatalogNo = null)
         {
             if (!_ctx.SeriesById.TryGetValue(seriesId, out var series)) return;
             // 劇伴のタブは初参加の作品を劇伴詳細へ、制作のタブはシリーズ詳細へリンクする。
             string url = bgm ? PathUtil.BgmsForSeriesUrl(series.Slug) : PathUtil.SeriesUrl(series.Slug);
-            acc.Add(key, seriesId, roleCode, _ctx.SeriesStartDate(seriesId).DayNumber, series.Title, url, seriesId, productCatalogNo);
+            acc.Add(key, seriesId, roleCode, new MusicDebutKey(_ctx.SeriesStartDate(seriesId).DayNumber, seriesId, target, pos),
+                series.Title, url, seriesId, productCatalogNo);
         }
     }
 
-    /// <summary>音楽クレジット 1 行を、年表の入力に担当先（曲・録音・劇伴の録音回・盤）の単位で足す。</summary>
-    private void AddMusicCreditToTimeline(MusicTimelineCollector timeline, (char Kind, int Id) key, MusicCredit r)
+    /// <summary>song_credits の役割の順（作詞 → 作曲 → 編曲 → メドレー編曲 → そのほか）。同じ曲で初参加の人の並びに使う。</summary>
+    private static int SongCreditRoleRank(string roleCode)
     {
-        switch (r.TargetKind)
+        int i = Array.IndexOf(SongCreditRoleOrder, roleCode);
+        return i >= 0 ? i : SongCreditRoleOrder.Length;
+    }
+
+    /// <summary>bgm_cue_credits の役割の順（作曲 → 編曲 → そのほか）。</summary>
+    private static int BgmCueRoleRank(string roleCode) => roleCode switch
+    {
+        BgmCueCreditRoles.Composition => 0,
+        BgmCueCreditRoles.Arrangement => 1,
+        _ => 2
+    };
+
+    /// <summary>録音回（session_no）の並べ替えの値。録音回の音楽クレジットはこの値、その回の曲の作家はこの値 + 1 + seq_in_session に置く。</summary>
+    private static long SessionTargetRank(int sessionNo) => sessionNo * 1_000_000L;
+
+    /// <summary>録音に付いたクレジットの並べ替えの値（曲に付いた音楽クレジット＝1 の後ろに、録音 ID の順で置く）。</summary>
+    private static long RecordingTargetRank(int recordingId) => 2L + recordingId;
+
+    /// <summary>曲・録音に付いた音楽クレジット行の、同じ曲の中の紐付け先の並べ替えの値（曲＝1、録音＝<see cref="RecordingTargetRank"/>）。</summary>
+    private static long SongTargetRank(MusicCredit r)
+        => r.TargetKind == MusicCreditTargetKinds.SongRecording && r.SongRecordingId is int rid ? RecordingTargetRank(rid) : 1L;
+
+    /// <summary>
+    /// 音楽制作ページ・音楽の役職詳細の初参加の並べ替えキー。<see cref="Sort"/>（曲の最小録音 ID、または作品の放送開始日・盤の発売日）→
+    /// <see cref="Unit"/>（作品の series_id など）→ <see cref="Target"/>（同じ単位の中の紐付け先の順。録音回・録音など）→
+    /// <see cref="Pos"/>（クレジットの位置）の順に比べる。
+    /// </summary>
+    private readonly record struct MusicDebutKey(long Sort, long Unit, long Target, long Pos) : IComparable<MusicDebutKey>
+    {
+        public static readonly MusicDebutKey Max = new(long.MaxValue, long.MaxValue, long.MaxValue, long.MaxValue);
+
+        public int CompareTo(MusicDebutKey other)
         {
-            case MusicCreditTargetKinds.Song when r.SongId is int sid:
-                timeline.AddSong(key, sid);
-                break;
-            case MusicCreditTargetKinds.SongRecording when r.SongRecordingId is int rid && _ctx.SongRecordingById.TryGetValue(rid, out var rec):
-                timeline.AddSong(key, rec.SongId, rid);
-                break;
-            case MusicCreditTargetKinds.BgmSession when r.BgmSeriesId is int bsid:
-                timeline.AddSession(key, bsid, r.BgmSessionNo ?? 0);
-                break;
-            case MusicCreditTargetKinds.Product when r.ProductCatalogNo is string pc:
-                timeline.AddProduct(key, pc);
-                break;
+            int c = Sort.CompareTo(other.Sort);
+            if (c != 0) return c;
+            c = Unit.CompareTo(other.Unit);
+            if (c != 0) return c;
+            c = Target.CompareTo(other.Target);
+            return c != 0 ? c : Pos.CompareTo(other.Pos);
         }
     }
 
     /// <summary>
     /// 音楽クレジット 1 行の作品（シリーズ）。曲は初出録音の出典シリーズ、録音はその出典シリーズ、劇伴セッションはそのシリーズ、
-    /// 盤はディスクに登録されたシリーズ。解決できなければ null。
+    /// 盤は発売日に放送していた本線の TV シリーズ（<see cref="SeriesOfProduct"/>）。解決できなければ null。
     /// </summary>
     private int? SeriesOfMusicCredit(MusicCredit r, IReadOnlyDictionary<int, int> minRecIdBySong) => r.TargetKind switch
     {
@@ -1229,10 +1797,23 @@ public sealed class CreatorsGenerator
         MusicCreditTargetKinds.SongRecording when r.SongRecordingId is int rid2
                                                   && _ctx.SongRecordingById.TryGetValue(rid2, out var rec2) => rec2.SeriesId,
         MusicCreditTargetKinds.BgmSession => r.BgmSeriesId,
-        MusicCreditTargetKinds.Product when r.ProductCatalogNo is string pc
-                                            && _ctx.MusicCredits.SeriesIdByProduct.TryGetValue(pc, out var psid) => psid,
+        MusicCreditTargetKinds.Product when r.ProductCatalogNo is string pc => SeriesOfProduct(pc),
         _ => null
     };
+
+    /// <summary>
+    /// 盤（商品）の作品。発売日に放送していた本線の TV シリーズ（<see cref="BuildContextLookupExtensions.MainlineTvSeriesOnAir"/>）に置く。
+    /// 何年分かをまとめた BOX やコレクション（1 枚目のディスクが古い作品のもの）を、収録した最も古い作品ではなく、出た時期の作品に置くため。
+    /// 発売日が分からない・最初の TV シリーズより前なら、ディスクに登録されたシリーズ（ディスク番号が最小のもの）。
+    /// </summary>
+    private int? SeriesOfProduct(string catalogNo)
+    {
+        if (_ctx.MusicCredits.ProductByCatalogNo.TryGetValue(catalogNo, out var product)
+            && product.ReleaseDate != default
+            && _ctx.MainlineTvSeriesOnAir(DateOnly.FromDateTime(product.ReleaseDate)) is int onAir)
+            return onAir;
+        return _ctx.MusicCredits.SeriesIdByProduct.TryGetValue(catalogNo, out var psid) ? psid : null;
+    }
 
     /// <summary>
     /// 音楽制作ページの一覧タブ 1 つ分（初参加順のシリーズ別セクションと、多い順の一覧）を組み立てる。
@@ -1247,10 +1828,13 @@ public sealed class CreatorsGenerator
             Label = label,
             IsByWork = byWork,
             CountSortLabel = byWork ? "参加作品数" : "参加曲数",
+            // 初参加順：初参加のキー（MusicDebutKey）→ 人物・団体の ID。
             DebutSections = BuildDebutSeriesSections(
-                rows.OrderBy(r => r.DebutSort).ThenBy(r => r.NameKana, StringComparer.Ordinal).ThenBy(r => r.Name, StringComparer.Ordinal).ToList(),
+                rows.OrderBy(r => r.DebutKey).ThenBy(r => r.EntityKind, StringComparer.Ordinal).ThenBy(r => r.EntityId).ToList(),
                 r => r.DebutSeriesId),
-            CountRows = rows.OrderByDescending(r => r.Count).ThenBy(r => r.NameKana, StringComparer.Ordinal).ThenBy(r => r.Name, StringComparer.Ordinal).ToList()
+            // 多い順：参加数の多い順 → 初参加順。
+            CountRows = rows.OrderByDescending(r => r.Count).ThenBy(r => r.DebutKey)
+                .ThenBy(r => r.EntityKind, StringComparer.Ordinal).ThenBy(r => r.EntityId).ToList()
         };
     }
 
@@ -1292,12 +1876,13 @@ public sealed class CreatorsGenerator
                 }
                 var rows = musicRowsByRole.TryGetValue(role.RoleCode, out var mr) ? mr : new List<MusicCredit>();
                 var songCreditRows = allSongCredits.Where(c => string.Equals(c.CreditRole, role.RoleCode, StringComparison.Ordinal)).ToList();
-                var detail = BuildMusicRoleDetailRows(rows, songCreditRows, personIdByAlias, personById, minRecIdBySong, musicDates);
+                _creditRowSetsByMusicRole.TryGetValue(role.RoleCode, out var creditRowSet);
+                var detail = BuildMusicRoleDetailRows(rows, songCreditRows, personIdByAlias, personById, minRecIdBySong, musicDates, creditRowSet);
                 if (detail.Count == 0) continue;
                 GenerateMusicRoleDetail(role, detail);
                 entries.Add(new RoleIndexEntry
                 {
-                    RoleNameJa = role.NameJa,
+                    RoleNameJa = MusicCreditViewBuilder.MusicPageRoleName(_ctx, role.RoleCode),
                     RoleUrl = PathUtil.CreatorsRoleUrl(role.RoleCode),
                     PersonCount = detail.Count(d => d.EntityKind == "person"),
                     CompanyCount = detail.Count(d => d.EntityKind == "company"),
@@ -1322,9 +1907,12 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<int, int> personIdByAlias,
         IReadOnlyDictionary<int, Person> personById,
         IReadOnlyDictionary<int, int> minRecIdBySong,
-        MusicTimelineDates musicDates)
+        MusicTimelineDates musicDates,
+        EntityRowSet? creditRowSet = null)
     {
         var accByEntity = new Dictionary<(char Kind, int Id), MusicRoleTargetAccumulator>();
+        // 作品のクレジットの担当（役職が作品のクレジットにも出るとき）。年表に TV の話・映画を重ねるのに使う。
+        var creditEntityByKey = new Dictionary<(char Kind, int Id), RoleTimelineEntity>();
         // 年表タブの入力（担当先を曲・録音回・盤の単位で、初めて盤に収められた日・発売日に置く）。
         var timeline = new MusicTimelineCollector(_ctx, musicDates);
         MusicRoleTargetAccumulator AccOf((char Kind, int Id) key)
@@ -1343,24 +1931,25 @@ public sealed class CreatorsGenerator
         {
             if (EntityKeyOf(r, personIdByAlias) is not { } key) continue;
             if (MusicCreditViewBuilder.DescribeTarget(_ctx, r) is not { } t) continue;
-            AddMusicCreditToTimeline(timeline, key, r);
+            timeline.AddMusicCredit(key, r);
             var acc = AccOf(key);
+            // 同じ日付の担当先どうしは、紐付け先の順（盤そのもの → 録音回 → 曲・録音の録音 ID）→ その音楽クレジットの順（credit_seq）。
+            long target = MusicCreditViewBuilder.TargetOrder(_ctx, r);
             switch (r.TargetKind)
             {
                 case MusicCreditTargetKinds.BgmSession when r.BgmSeriesId is int bsid:
                     acc.AddBgm(bsid, r.BgmSessionNo ?? 0,
                         _ctx.MusicCredits.SessionByKey.TryGetValue((bsid, r.BgmSessionNo ?? 0), out var session) ? session.SessionName : "",
-                        t.Sort);
+                        t.Sort, target, r.CreditSeq);
                     break;
                 case MusicCreditTargetKinds.Song when r.SongId is int sid:
-                    acc.AddSong(sid, t.Title, t.Url, t.Sort, SeriesOfSong(sid));
+                    acc.AddSong(sid, t.Title, t.Url, t.Sort, SeriesOfSong(sid), target, r.CreditSeq);
                     break;
                 case MusicCreditTargetKinds.SongRecording when r.SongRecordingId is int rid && _ctx.SongRecordingById.TryGetValue(rid, out var rec):
-                    acc.AddSong(rec.SongId, t.Title, t.Url, t.Sort, rec.SeriesId);
+                    acc.AddSong(rec.SongId, t.Title, t.Url, t.Sort, rec.SeriesId, target, r.CreditSeq);
                     break;
                 case MusicCreditTargetKinds.Product when r.ProductCatalogNo is string pc:
-                    acc.AddProduct(pc, t.Title, t.Url, t.Sort,
-                        _ctx.MusicCredits.SeriesIdByProduct.TryGetValue(pc, out var psid) ? psid : null);
+                    acc.AddProduct(pc, t.Title, t.Url, t.Sort, SeriesOfProduct(pc), target, r.CreditSeq);
                     break;
             }
         }
@@ -1368,18 +1957,42 @@ public sealed class CreatorsGenerator
         {
             if (PersonKey(c.PersonAliasId, personIdByAlias) is not { } key) continue;
             if (!_ctx.SongById.TryGetValue(c.SongId, out var song)) continue;
-            AccOf(key).AddSong(c.SongId, song.Title, PathUtil.SongUrl(c.SongId), DateTime.MaxValue, SeriesOfSong(c.SongId));
+            long target = minRecIdBySong.TryGetValue(c.SongId, out var minRec) ? 1_000L + minRec : int.MaxValue;
+            AccOf(key).AddSong(c.SongId, song.Title, PathUtil.SongUrl(c.SongId), DateTime.MaxValue, SeriesOfSong(c.SongId), target, c.CreditSeq);
             timeline.AddSong(key, c.SongId);
         }
 
-        var result = new List<MusicRoleDetailRow>();
+        // 作品のクレジットの担当（TV の話・映画・オトナシリーズの話）。行と年表の入力は同じ並びで 1 件ずつ対になっている。
+        if (creditRowSet is not null)
+        {
+            for (int i = 0; i < creditRowSet.CountRows.Count && i < creditRowSet.TimelineEntities.Count; i++)
+            {
+                var row = creditRowSet.CountRows[i];
+                var ce = creditRowSet.TimelineEntities[i];
+                (char Kind, int Id) key = string.Equals(row.EntityKind, "person", StringComparison.Ordinal) ? ('P', row.EntityId) : ('C', row.EntityId);
+                var acc = AccOf(key);
+                // 同じ日の作品どうしは、話数 → 初めてクレジットされた話の中の位置（行の FirstSortPos）の順。
+                foreach (var (sid, eid) in ce.Episodes)
+                {
+                    if (eid == 0 || !_ctx.EpisodeById.TryGetValue(eid, out var ep)) continue;
+                    acc.AddCreditEpisode(sid, ep.SeriesEpNo, ep.OnAirDate.ToDateTime(TimeOnly.MinValue), row.FirstSortPos);
+                }
+                foreach (var sid in ce.MovieSeriesIds)
+                    if (_ctx.SeriesById.TryGetValue(sid, out var mv)) acc.AddCreditMovie(sid, mv.StartDate.ToDateTime(TimeOnly.MinValue), row.FirstSortPos);
+                creditEntityByKey[key] = ce;
+            }
+        }
+
+        var built = new List<(MusicRoleDetailRow Row, (char Kind, int Id) Key, (string Kind, string Name, string Kana, string Url) Ent,
+            (DateTime Sort, int? SeriesId, long Target, long Pos) Debut)>();
         foreach (var (key, acc) in accByEntity)
         {
             if (ResolveMusicEntity(key, personById) is not { } ent) continue;
-            // 劇伴は作品の放送・公開順、歌と盤は根拠の盤の発売日順に並べる。
+            // 劇伴は作品の放送・公開順（同じ日は series_id の順）、歌と盤は根拠の盤の発売日順に並べる。
             var bgm = acc.Bgm
                 .Where(kv => _ctx.SeriesById.ContainsKey(kv.Key))
                 .OrderBy(kv => _ctx.SeriesStartDate(kv.Key).DayNumber)
+                .ThenBy(kv => kv.Key)
                 .Select(kv => new MusicRoleTarget
                 {
                     Title = _ctx.SeriesById[kv.Key].Title,
@@ -1387,50 +2000,114 @@ public sealed class CreatorsGenerator
                     Sub = string.Join("・", kv.Value.Sessions.OrderBy(s => s.Key).Select(s => s.Value).Where(n => n.Length > 0))
                 })
                 .ToList();
+            // 同じ日付の歌は盤の中の順（録音 ID の順）、盤は品番の順（リンク先の URL が品番）。
             static List<MusicRoleTarget> Ordered(IEnumerable<MusicRoleTargetAccumulator.Item> items) => items
-                .OrderBy(i => i.Sort).ThenBy(i => i.Title, StringComparer.Ordinal)
+                .OrderBy(i => i.Sort).ThenBy(i => i.Order).ThenBy(i => i.Url, StringComparer.Ordinal)
                 .Select(i => new MusicRoleTarget { Title = i.Title, Url = i.Url })
                 .ToList();
-            var bgmSeries = acc.Bgm.Keys.Where(_ctx.SeriesById.ContainsKey).ToList();
+            // 作品のクレジット：1 作品 1 行（TV 系は担当した話数の範囲を添える）。作品の放送・公開順。
+            var credits = acc.CreditEpisodes.Keys.Concat(acc.CreditMovies)
+                .Distinct()
+                .Where(_ctx.SeriesById.ContainsKey)
+                .OrderBy(sid => _ctx.SeriesStartDate(sid).DayNumber)
+                .ThenBy(sid => sid)
+                .Select(sid => new MusicRoleTarget
+                {
+                    Title = _ctx.SeriesById[sid].Title,
+                    Url = PathUtil.SeriesUrl(_ctx.SeriesById[sid].Slug),
+                    Sub = acc.CreditEpisodes.TryGetValue(sid, out var nos) ? EpisodeRangeCompressor.Compress(nos) : ""
+                })
+                .ToList();
+            // 作品の数は、劇伴の作品と作品のクレジットの作品を合わせて数える（同じ作品は 1 つ）。本線の TV（📺）・映画（🎥）・オトナシリーズ（🌙）に分ける。
+            var works = acc.Bgm.Keys.Concat(acc.CreditEpisodes.Keys).Concat(acc.CreditMovies)
+                .Where(_ctx.SeriesById.ContainsKey)
+                .ToHashSet();
             var row = new MusicRoleDetailRow
             {
                 EntityKind = ent.Kind,
+                EntityId = key.Id,
                 Name = ent.Name,
                 NameKana = ent.Kana,
                 Url = ent.Url,
+                CreditItems = credits,
                 BgmItems = bgm,
                 SongItems = Ordered(acc.Songs.Values),
                 ProductItems = Ordered(acc.Products.Values),
-                TvWorkCount = bgmSeries.Count(sid => !_ctx.IsMovieKindSeries(sid)),
-                MovieWorkCount = bgmSeries.Count(sid => _ctx.IsMovieKindSeries(sid)),
+                TvWorkCount = works.Count(sid => !_ctx.IsMovieKindSeries(sid) && !_ctx.IsOtonaSeries(sid)),
+                MovieWorkCount = works.Count(sid => _ctx.IsMovieKindSeries(sid)),
+                OtonaWorkCount = works.Count(sid => _ctx.IsOtonaSeries(sid)),
                 SongCount = acc.SongIds.Count,
                 ProductCount = acc.Products.Count
             };
-            row.Count = row.TvWorkCount + row.MovieWorkCount + row.SongCount + row.ProductCount;
+            row.Count = row.TvWorkCount + row.MovieWorkCount + row.OtonaWorkCount + row.SongCount + row.ProductCount;
             if (row.Count == 0) continue;
-            // 初参加：日付が最も早い担当先（同日・日付不明はシリーズの放送開始が早い方）。
+            // 初参加：日付が最も早い担当先（同日・日付不明はシリーズの放送開始が早い方 → series_id → 紐付け先の順 → クレジットの位置）。
             var debut = acc.Candidates
                 .OrderBy(c => c.Sort)
-                .ThenBy(c => c.SeriesId is int sid && _ctx.SeriesById.ContainsKey(sid) ? _ctx.SeriesStartDate(sid).DayNumber : int.MaxValue)
+                .ThenBy(c => SeriesStartOrMax(c.SeriesId))
+                .ThenBy(c => c.SeriesId ?? int.MaxValue)
+                .ThenBy(c => c.Target)
+                .ThenBy(c => c.Pos)
                 .First();
             row.FirstSort = debut.Sort;
             row.DebutSeriesId = debut.SeriesId;
-            row.TimelineEntity = timeline.ToEntity(key, ent.Kind, ent.Name, ent.Url, debut.Sort.Ticks);
+            built.Add((row, key, ent, debut));
+        }
+
+        // 行の並び：初参加の日付 → 作品の放送開始日 → series_id → 紐付け先の順 → クレジットの位置 → 人物・団体の ID。
+        var ordered = built
+            .OrderBy(b => b.Debut.Sort)
+            .ThenBy(b => SeriesStartOrMax(b.Debut.SeriesId))
+            .ThenBy(b => b.Debut.SeriesId ?? int.MaxValue)
+            .ThenBy(b => b.Debut.Target)
+            .ThenBy(b => b.Debut.Pos)
+            .ThenBy(b => b.Row.EntityKind, StringComparer.Ordinal)
+            .ThenBy(b => b.Row.EntityId)
+            .ToList();
+        var result = new List<MusicRoleDetailRow>(ordered.Count);
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            var (row, key, ent, _) = ordered[i];
+            // 年表で最初と最後の参加が同じ行どうしは、この一覧の並び（i）で並べる。
+            row.TimelineEntity = WithCreditEpisodes(
+                timeline.ToEntity(key, ent.Kind, ent.Name, ent.Url, i),
+                creditEntityByKey.TryGetValue(key, out var creditEntity) ? creditEntity : null,
+                ent.Kind, ent.Name, ent.Url, i);
+            row.DebutRank = i;
             result.Add(row);
         }
-        return result
-            .OrderBy(r => r.FirstSort)
-            .ThenBy(r => r.DebutSeriesId is int sid && _ctx.SeriesById.ContainsKey(sid) ? _ctx.SeriesStartDate(sid).DayNumber : int.MaxValue)
-            .ThenBy(r => r.NameKana, StringComparer.Ordinal)
-            .ThenBy(r => r.Name, StringComparer.Ordinal)
-            .ToList();
+        return result;
+
+        int SeriesStartOrMax(int? seriesId)
+            => seriesId is int sid && _ctx.SeriesById.ContainsKey(sid) ? _ctx.SeriesStartDate(sid).DayNumber : int.MaxValue;
     }
 
-    /// <summary>音楽クレジットの役職詳細で、人物・団体 1 つ分の担当先（劇伴・歌・盤）を集める。</summary>
+    /// <summary>
+    /// 音楽の役職詳細の年表の入力に、作品のクレジットの担当（TV の話・映画）を重ねる。どちらかが無ければもう片方をもとに作る。両方無ければ null。
+    /// </summary>
+    private static RoleTimelineEntity? WithCreditEpisodes(
+        RoleTimelineEntity? music, RoleTimelineEntity? credit, string kind, string name, string url, long firstSortPos)
+    {
+        if (credit is null) return music;
+        return new RoleTimelineEntity
+        {
+            EntityKind = kind,
+            EntityName = name,
+            EntityUrl = url,
+            FirstSortPos = firstSortPos,
+            Episodes = credit.Episodes,
+            MovieSeriesIds = credit.MovieSeriesIds,
+            Songs = music?.Songs ?? Array.Empty<RoleTimelinePoint>(),
+            Bgms = music?.Bgms ?? Array.Empty<RoleTimelinePoint>(),
+            Products = music?.Products ?? Array.Empty<RoleTimelinePoint>()
+        };
+    }
+
+    /// <summary>音楽クレジットの役職詳細で、人物・団体 1 つ分の担当先（作品のクレジット・劇伴・歌・盤）を集める。</summary>
     private sealed class MusicRoleTargetAccumulator
     {
-        /// <summary>担当先 1 件（歌・盤）。同じリンク先は日付の早い方を残す。</summary>
-        public sealed record Item(string Title, string Url, DateTime Sort);
+        /// <summary>担当先 1 件（歌・盤）。同じリンク先は日付の早い方を残す。<see cref="Order"/> は同じ日付の担当先の並び（歌は録音 ID、盤は 0）。</summary>
+        public sealed record Item(string Title, string Url, DateTime Sort, long Order);
 
         /// <summary>劇伴の作品（series_id）ごとの録音回（session_no → 録音回の名前）。</summary>
         public sealed class BgmWork
@@ -1442,10 +2119,34 @@ public sealed class CreatorsGenerator
         public readonly Dictionary<string, Item> Songs = new(StringComparer.Ordinal);
         public readonly HashSet<int> SongIds = new();
         public readonly Dictionary<string, Item> Products = new(StringComparer.Ordinal);
-        /// <summary>初参加の候補（担当先ごとの日付と作品）。</summary>
-        public readonly List<(DateTime Sort, int? SeriesId)> Candidates = new();
+        /// <summary>
+        /// 初参加の候補（担当先ごとの日付と作品、同じ日付の中の並び）。Target は紐付け先の順（作品のクレジットは話数、音楽クレジットは
+        /// <see cref="MusicCreditViewBuilder.TargetOrder"/>）、Pos はクレジットの位置（作品のクレジットは初めての話の中の位置、音楽クレジットは credit_seq）。
+        /// </summary>
+        public readonly List<(DateTime Sort, int? SeriesId, long Target, long Pos)> Candidates = new();
+        /// <summary>作品のクレジットで担当した TV 系の話（series_id → 話数）。</summary>
+        public readonly Dictionary<int, SortedSet<int>> CreditEpisodes = new();
+        /// <summary>作品のクレジットで担当した映画（series_id）。</summary>
+        public readonly HashSet<int> CreditMovies = new();
 
-        public void AddBgm(int seriesId, int sessionNo, string sessionName, DateTime sort)
+        public void AddCreditEpisode(int seriesId, int epNo, DateTime sort, long pos)
+        {
+            if (!CreditEpisodes.TryGetValue(seriesId, out var nos))
+            {
+                nos = new SortedSet<int>();
+                CreditEpisodes[seriesId] = nos;
+            }
+            nos.Add(epNo);
+            Candidates.Add((sort, seriesId, epNo, pos));
+        }
+
+        public void AddCreditMovie(int seriesId, DateTime sort, long pos)
+        {
+            CreditMovies.Add(seriesId);
+            Candidates.Add((sort, seriesId, 0, pos));
+        }
+
+        public void AddBgm(int seriesId, int sessionNo, string sessionName, DateTime sort, long target, long pos)
         {
             if (!Bgm.TryGetValue(seriesId, out var work))
             {
@@ -1453,26 +2154,26 @@ public sealed class CreatorsGenerator
                 Bgm[seriesId] = work;
             }
             work.Sessions[sessionNo] = sessionName;
-            Candidates.Add((sort, seriesId));
+            Candidates.Add((sort, seriesId, target, pos));
         }
 
-        public void AddSong(int songId, string title, string url, DateTime sort, int? seriesId)
+        public void AddSong(int songId, string title, string url, DateTime sort, int? seriesId, long target, long pos)
         {
             SongIds.Add(songId);
-            AddItem(Songs, title, url, sort);
-            Candidates.Add((sort, seriesId));
+            AddItem(Songs, title, url, sort, target);
+            Candidates.Add((sort, seriesId, target, pos));
         }
 
-        public void AddProduct(string catalogNo, string title, string url, DateTime sort, int? seriesId)
+        public void AddProduct(string catalogNo, string title, string url, DateTime sort, int? seriesId, long target, long pos)
         {
-            if (!Products.TryGetValue(catalogNo, out var cur) || sort < cur.Sort) Products[catalogNo] = new Item(title, url, sort);
-            Candidates.Add((sort, seriesId));
+            if (!Products.TryGetValue(catalogNo, out var cur) || sort < cur.Sort) Products[catalogNo] = new Item(title, url, sort, 0);
+            Candidates.Add((sort, seriesId, target, pos));
         }
 
-        private static void AddItem(Dictionary<string, Item> map, string title, string url, DateTime sort)
+        private static void AddItem(Dictionary<string, Item> map, string title, string url, DateTime sort, long order)
         {
             string k = url + "|" + title;
-            if (!map.TryGetValue(k, out var cur) || sort < cur.Sort) map[k] = new Item(title, url, sort);
+            if (!map.TryGetValue(k, out var cur) || sort < cur.Sort || (sort == cur.Sort && order < cur.Order)) map[k] = new Item(title, url, sort, order);
         }
     }
 
@@ -1488,10 +2189,10 @@ public sealed class CreatorsGenerator
             RoleNameJa = role.NameJa,
             GroupLabel = MusicCreditGroups.Label(role.MusicCreditGroup ?? ""),
             DebutSections = BuildDebutSeriesSections(rows, r => r.DebutSeriesId),
+            // 参加数の多い順 → 初参加順（BuildMusicRoleDetailRows の並び）。
             CountRows = rows
                 .OrderByDescending(r => r.Count)
-                .ThenBy(r => r.NameKana, StringComparer.Ordinal)
-                .ThenBy(r => r.Name, StringComparer.Ordinal)
+                .ThenBy(r => r.DebutRank)
                 .ToList(),
             Timeline = new RoleTimelineBuilder(_ctx, RoleTimelineBuilder.ExtendToFor(timelineEntities))
                 .Build(timelineEntities, RoleTimelineRules.MusicRole),
@@ -1501,12 +2202,13 @@ public sealed class CreatorsGenerator
         int companies = rows.Count - persons;
         var layout = new LayoutModel
         {
-            PageTitle = $"{role.NameJa}（クリエイター）",
-            MetaDescription = $"歴代プリキュアの歌・劇伴・音盤で「{role.NameJa}」を担当した方々（人物・団体）を一覧にしました。",
+            PageTitle = role.NameJa,
+            MetaDescription = $"歴代プリキュアの歌・劇伴・音盤で「{role.NameJa}」を担当した方々（人物・団体）",
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 BuildEntityBadges(persons, companies),
-                new[] { new OgCardFactLine("集計元", "歌・劇伴・音盤のクレジット") }, MusicCoverageLabel),
+                new[] { new OgCardFactLine("集計元", "歌・劇伴・音盤のクレジット") },
+                watermark: MusicRoleWatermark),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1517,6 +2219,31 @@ public sealed class CreatorsGenerator
         };
         _page.RenderAndWrite(PathUtil.CreatorsRoleUrl(role.RoleCode), "creators",
             "creators-music-role-detail.sbn", content, layout);
+        _ctx.SearchPages.Add(RoleSearchEntry(role, PathUtil.CreatorsRoleUrl(role.RoleCode), MusicRoleSearchSub, null, null));
+    }
+
+    /// <summary>サイト内検索の結果で、音楽制作ページから入る役職のページ（楽曲の作家・音楽の役職）の役職名の下に添える語。</summary>
+    private const string MusicRoleSearchSub = "音楽制作";
+
+    /// <summary>
+    /// サイト内検索に載せる役職のページ 1 件。題は役職名で、英語名と、系譜でまとめた歴代の役職名（<paramref name="memberCodes"/>）でも当たるようにする。
+    /// </summary>
+    /// <param name="sub">役職名の下に添える語（オトナシリーズの役職のページは「オトナシリーズ」、音楽制作の役職は「音楽制作」、本編は空文字）。</param>
+    private static SearchPageEntry RoleSearchEntry(
+        Role role, string url, string sub, IEnumerable<string>? memberCodes, IReadOnlyDictionary<string, Role>? roleByCode)
+    {
+        var texts = new List<string>();
+        if (!string.IsNullOrEmpty(role.NameEn)) texts.Add(role.NameEn);
+        if (memberCodes is not null && roleByCode is not null)
+        {
+            foreach (var code in memberCodes.OrderBy(c => c, StringComparer.Ordinal))
+            {
+                if (string.Equals(code, role.RoleCode, StringComparison.Ordinal) || !roleByCode.TryGetValue(code, out var member)) continue;
+                texts.Add(member.NameJa);
+                if (!string.IsNullOrEmpty(member.NameEn)) texts.Add(member.NameEn);
+            }
+        }
+        return new SearchPageEntry("role", url, role.NameJa, sub, texts);
     }
 
     /// <summary>人物名義 → 人物キー（'P', person_id）。人物に紐付かない名義は null。</summary>
@@ -1559,6 +2286,7 @@ public sealed class CreatorsGenerator
             rows.Add(new MusicEntityRow
             {
                 EntityKind = ent.Kind,
+                EntityId = key.Id,
                 Name = ent.Name,
                 NameKana = ent.Kana,
                 Url = ent.Url,
@@ -1567,14 +2295,14 @@ public sealed class CreatorsGenerator
                 TvWorkCount = v.Units.Count(sid => !_ctx.IsMovieKindSeries(sid)),
                 MovieWorkCount = v.Units.Count(sid => _ctx.IsMovieKindSeries(sid)),
                 ProductCount = v.Products.Count,
-                DebutSort = v.DebutSort,
+                DebutKey = v.DebutKey,
                 DebutLabel = v.DebutLabel,
                 DebutUrl = v.DebutUrl,
                 DebutSeriesId = v.DebutSeriesId,
                 Roles = v.Roles
                     .Select(code => (Code: code, Order: _ctx.RoleByCode.TryGetValue(code, out var role) ? role.DisplayOrder ?? ushort.MaxValue : ushort.MaxValue))
                     .OrderBy(x => x.Order)
-                    .Select(x => new MusicRoleBadge { Code = x.Code, Label = MusicCreditViewBuilder.BadgeLabel(_ctx, x.Code) })
+                    .Select(x => new MusicRoleBadge { Code = x.Code, Label = MusicCreditViewBuilder.MusicPageBadgeLabel(_ctx, x.Code) })
                     .ToList()
             });
         }
@@ -1593,14 +2321,15 @@ public sealed class CreatorsGenerator
             /// <summary>盤（商品）単位の参加（制作のタブの盤に付いたクレジット。代表品番）。</summary>
             public readonly HashSet<string> Products = new(StringComparer.Ordinal);
             public readonly HashSet<string> Roles = new(StringComparer.Ordinal);
-            public long DebutSort = long.MaxValue;
+            public MusicDebutKey DebutKey = MusicDebutKey.Max;
             public string DebutLabel = "";
             public string DebutUrl = "";
             public int? DebutSeriesId;
         }
 
         /// <summary>参加を 1 件足す。<paramref name="product"/> を渡すと <paramref name="unit"/> ではなくその盤の参加として数える。</summary>
-        public void Add((char Kind, int Id) key, int unit, string roleCode, long sort, string label, string url, int? seriesId, string? product = null)
+        /// <remarks>初参加は、キー（<see cref="MusicDebutKey"/>）の最も小さい参加。</remarks>
+        public void Add((char Kind, int Id) key, int unit, string roleCode, MusicDebutKey sort, string label, string url, int? seriesId, string? product = null)
         {
             if (!ByEntity.TryGetValue(key, out var p))
             {
@@ -1610,9 +2339,9 @@ public sealed class CreatorsGenerator
             if (product is null) p.Units.Add(unit);
             else p.Products.Add(product);
             p.Roles.Add(roleCode);
-            if (sort < p.DebutSort)
+            if (sort.CompareTo(p.DebutKey) < 0)
             {
-                p.DebutSort = sort;
+                p.DebutKey = sort;
                 p.DebutLabel = label;
                 p.DebutUrl = url;
                 p.DebutSeriesId = seriesId;
@@ -1659,12 +2388,43 @@ public sealed class CreatorsGenerator
     }
 
     /// <summary>
+    /// プリキュアシンガーの人物（person_id）。本線の TV シリーズの各話の主題歌（OP・ED。本放送だけの主題歌を除く）に使われた録音で、
+    /// 本人の名義（人物につながる名義。主名義かスラッシュの相方）で歌（VOCALS）を担当した人物。
+    /// キャラクターの名義で歌った声優と、人物につながらない名義（団体・ユニット）は含めない。
+    /// </summary>
+    private HashSet<int> PrecureSingerPersons(
+        IReadOnlyList<SongRecordingSinger> allSingers,
+        IReadOnlyDictionary<int, int> personIdByAlias)
+    {
+        var themeRecordings = new HashSet<int>();
+        foreach (var (episodeId, themeSongs) in _ctx.ThemeSongsByEpisode)
+        {
+            if (!_ctx.EpisodeById.TryGetValue(episodeId, out var ep) || !_ctx.IsMainlineTvSeries(ep.SeriesId)) continue;
+            foreach (var t in themeSongs)
+                if (!t.IsBroadcastOnly && t.ThemeKind is "OP" or "ED") themeRecordings.Add(t.SongRecordingId);
+        }
+
+        var persons = new HashSet<int>();
+        foreach (var s in allSingers)
+        {
+            if (s.BillingKind != SingerBillingKind.Person
+                || !string.Equals(s.RoleCode, "VOCALS", StringComparison.Ordinal)
+                || !themeRecordings.Contains(s.SongRecordingId)) continue;
+            foreach (var aliasId in new[] { s.PersonAliasId, s.SlashPersonAliasId })
+                if (aliasId is int id && personIdByAlias.TryGetValue(id, out var personId)) persons.Add(personId);
+        }
+        return persons;
+    }
+
+    /// <summary>
     /// <c>/creators/singers/</c> を 2 タブ（初参加順 / 参加曲数順）で書き出す。
     /// 歌・コーラス・台詞の別を問わず、録音の歌唱者行（song_recording_singers）をユニットのメンバーまで展開し
     /// （<see cref="BuildContextLookupExtensions.ExpandSingerParticipants(BuildContext, SongRecordingSinger)"/>）、
     /// 「歌手」（人物単位。本人名義での参加）と「キャラクター」（キャラ × 声優の組ごと）と「ユニット」（人物の行を持たない名義。
     /// ユニット詳細 /units/{名前}/ を持つもの）の行を 1 つのリストに並べる。
     /// 行には種別（data-entity-type = singer / character / unit）を持たせ、タブの下の絞り込みで出し分ける。
+    /// 歌手とユニットの行のうちプリキュアシンガー（<see cref="PrecureSingerPersons"/>）には印（data-precure-singer）を付け、
+    /// 「プリキュアシンガーのみ」で出し分ける。
     /// 歌手の行は <paramref name="leadSingers"/>（<see cref="LeadSingerPersons"/>）の人だけで、
     /// その人のコーラスや名前の出ないユニットでの参加も曲数・初参加に数える。参加曲数は song_id 単位で重複排除する。
     /// 年表タブには、一覧の行すべてを載せた参加の移り変わりの線表を置く（歌は録音が初めて盤に収められた日）。
@@ -1683,12 +2443,13 @@ public sealed class CreatorsGenerator
         // 線表用：行ごとに参加した録音（歌手は person_id、キャラクターは (character_id, 声優 person_id) ごと）。
         var singerRecs = new Dictionary<int, HashSet<int>>();
         var charRecs = new Dictionary<(int CharId, int PersonId), HashSet<int>>();
-        // (character_id, 声優 person_id) → (最初に参加した名義, 最小 recording_id, その曲, 曲集合)
-        var charAcc = new Dictionary<(int CharId, int PersonId), (int FirstAliasId, int FirstRecId, int FirstSongId, HashSet<int> Songs)>();
-        // ユニットの名義 → (最小 recording_id, その曲, 曲集合)。行の名義そのもの（主名義・スラッシュの相方）がユニットのときに数える。
-        var unitAcc = new Dictionary<int, (int FirstRecId, int FirstSongId, HashSet<int> Songs)>();
+        // (character_id, 声優 person_id) → (最初に参加した名義, 最小 recording_id, その録音での singer_seq, その曲, 曲集合)
+        var charAcc = new Dictionary<(int CharId, int PersonId), (int FirstAliasId, int FirstRecId, int FirstSeq, int FirstSongId, HashSet<int> Songs)>();
+        // ユニットの名義 → (最小 recording_id, その録音での singer_seq, その曲, 曲集合)。行の名義そのもの（主名義・スラッシュの相方）がユニットのときに数える。
+        var unitAcc = new Dictionary<int, (int FirstRecId, int FirstSeq, int FirstSongId, HashSet<int> Songs)>();
         var unitRecs = new Dictionary<int, HashSet<int>>();
 
+        // 録音 → 役職 → 歌唱の連名の順（singer_seq）に流すので、同じ録音では連名の前の行が先に初参加として残る。
         foreach (var s in allSingers.OrderBy(x => x.SongRecordingId).ThenBy(x => x.RoleCode, StringComparer.Ordinal).ThenBy(x => x.SingerSeq))
         {
             if (!_ctx.SongRecordingById.TryGetValue(s.SongRecordingId, out var rec)) continue;
@@ -1696,9 +2457,9 @@ public sealed class CreatorsGenerator
             {
                 if (unitAliasId is not int uaid || PathUtil.UnitUrl(uaid) is null) continue;
                 if (!unitAcc.TryGetValue(uaid, out var u))
-                    u = (s.SongRecordingId, rec.SongId, new HashSet<int>());
+                    u = (s.SongRecordingId, s.SingerSeq, rec.SongId, new HashSet<int>());
                 else if (s.SongRecordingId < u.FirstRecId)
-                    u = (s.SongRecordingId, rec.SongId, u.Songs);
+                    u = (s.SongRecordingId, s.SingerSeq, rec.SongId, u.Songs);
                 u.Songs.Add(rec.SongId);
                 unitAcc[uaid] = u;
                 AddRecording(unitRecs, uaid, s.SongRecordingId);
@@ -1710,7 +2471,7 @@ public sealed class CreatorsGenerator
                 {
                     if (leadSingers.Contains(pid))
                     {
-                        singerAcc.Add(pid, rec.SongId, s.SongRecordingId, s.RoleCode);
+                        singerAcc.Add(pid, rec.SongId, s.SongRecordingId, s.RoleCode, s.SingerSeq);
                         AddRecording(singerRecs, pid, s.SongRecordingId);
                     }
                     continue;
@@ -1718,9 +2479,9 @@ public sealed class CreatorsGenerator
                 if (!_ctx.CharacterAliasById.TryGetValue(caid, out var ca)) continue;
                 var key = (ca.CharacterId, pid);
                 if (!charAcc.TryGetValue(key, out var cur))
-                    cur = (caid, s.SongRecordingId, rec.SongId, new HashSet<int>());
+                    cur = (caid, s.SongRecordingId, s.SingerSeq, rec.SongId, new HashSet<int>());
                 else if (s.SongRecordingId < cur.FirstRecId)
-                    cur = (caid, s.SongRecordingId, rec.SongId, cur.Songs);
+                    cur = (caid, s.SongRecordingId, s.SingerSeq, rec.SongId, cur.Songs);
                 cur.Songs.Add(rec.SongId);
                 charAcc[key] = cur;
                 AddRecording(charRecs, key, s.SongRecordingId);
@@ -1749,6 +2510,8 @@ public sealed class CreatorsGenerator
                 Url = r.PersonUrl,
                 SongCount = r.SongCount,
                 DebutRecordingId = r.DebutRecordingId,
+                DebutSeq = r.DebutSeq,
+                EntityId = r.PersonId,
                 DebutSeriesId = r.DebutSeriesId,
                 DebutSongTitle = r.DebutSongTitle,
                 DebutSongUrl = r.DebutSongUrl
@@ -1785,6 +2548,9 @@ public sealed class CreatorsGenerator
                 VoiceUrl = PathUtil.PersonUrl(pid),
                 SongCount = v.Songs.Count,
                 DebutRecordingId = v.FirstRecId,
+                DebutSeq = v.FirstSeq,
+                EntityId = charId,
+                VoicePersonId = pid,
                 DebutSeriesId = _ctx.SongRecordingById.TryGetValue(v.FirstRecId, out var fr) ? fr.SeriesId : null,
                 DebutSongTitle = _ctx.SongById.TryGetValue(v.FirstSongId, out var song) ? song.Title : "",
                 DebutSongUrl = PathUtil.SongUrl(v.FirstSongId)
@@ -1812,6 +2578,8 @@ public sealed class CreatorsGenerator
                 Url = unitUrl,
                 SongCount = v.Songs.Count,
                 DebutRecordingId = v.FirstRecId,
+                DebutSeq = v.FirstSeq,
+                EntityId = unitAliasId,
                 DebutSeriesId = _ctx.SongRecordingById.TryGetValue(v.FirstRecId, out var ufr) ? ufr.SeriesId : null,
                 DebutSongTitle = _ctx.SongById.TryGetValue(v.FirstSongId, out var usong) ? usong.Title : "",
                 DebutSongUrl = PathUtil.SongUrl(v.FirstSongId)
@@ -1826,33 +2594,60 @@ public sealed class CreatorsGenerator
             .Distinct()
             .Count();
 
-        // 同じ録音で初参加した行は、歌手 → ユニット → キャラクターの順に並べる。
+        // プリキュアシンガーの印。歌手の行は本人、ユニットの行はメンバーが全員プリキュアシンガーの人物のもの。
+        var precureSingers = PrecureSingerPersons(allSingers, personIdByAlias);
+        var precureSingerUrls = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var r in rows)
+        {
+            r.IsPrecureSinger = r.EntityKind switch
+            {
+                "singer" => precureSingers.Contains(r.EntityId),
+                "unit" => _ctx.UnitMembersByAlias.TryGetValue(r.EntityId, out var members) && members.Count > 0
+                    && members.All(m => m.MemberKind == PersonAliasMemberKind.Person
+                        && m.MemberPersonAliasId is int memberAliasId
+                        && personIdByAlias.TryGetValue(memberAliasId, out var memberPersonId)
+                        && precureSingers.Contains(memberPersonId)),
+                _ => false
+            };
+            if (r.IsPrecureSinger) precureSingerUrls.Add(r.Url);
+        }
+
+        // 同じ録音で初参加した行は、歌手 → ユニット → キャラクターの順、その中は歌唱の連名の順（singer_seq）→ ID の順に並べる。
         var debutRows = rows
             .OrderBy(r => r.DebutRecordingId)
             .ThenBy(r => r.EntityKind == "singer" ? 0 : r.EntityKind == "unit" ? 1 : 2)
-            .ThenBy(r => r.NameKana, StringComparer.Ordinal)
-            .ThenBy(r => r.Name, StringComparer.Ordinal)
+            .ThenBy(r => r.DebutSeq)
+            .ThenBy(r => r.EntityId)
+            .ThenBy(r => r.VoicePersonId)
             .ToList();
+        // 参加曲数の多い順 → 初参加順（上と同じキー）。
         var countRows = rows
             .OrderByDescending(r => r.SongCount)
             .ThenBy(r => r.DebutRecordingId)
-            .ThenBy(r => r.NameKana, StringComparer.Ordinal)
-            .ThenBy(r => r.Name, StringComparer.Ordinal)
+            .ThenBy(r => r.EntityKind == "singer" ? 0 : r.EntityKind == "unit" ? 1 : 2)
+            .ThenBy(r => r.DebutSeq)
+            .ThenBy(r => r.EntityId)
+            .ThenBy(r => r.VoicePersonId)
             .ToList();
 
         // 年表タブの線表（一覧の行すべて）。軸は最後の歌まで伸ばす。
         var timelineBuilder = new RoleTimelineBuilder(_ctx, RoleTimelineBuilder.ExtendToFor(timelineEntities));
+        var singersTimeline = timelineBuilder.Build(timelineEntities, RoleTimelineRules.Singers);
+        // 線表の行にも、一覧と同じプリキュアシンガーの印を付ける（行はリンク先で突き合わせる）。
+        if (singersTimeline is not null)
+            foreach (var row in singersTimeline.Rows)
+                if (row.EntityKind != "character" && precureSingerUrls.Contains(row.EntityUrl)) row.IsPrecureSinger = true;
         var content = new SingersModel
         {
             DebutSections = BuildDebutSeriesSections(debutRows, r => r.DebutSeriesId),
             CountRows = countRows,
-            Timeline = timelineBuilder.Build(timelineEntities, RoleTimelineRules.Singers),
+            Timeline = singersTimeline,
             CoverageLabel = MusicCoverageLabel
         };
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア歌唱",
-            MetaDescription = "歴代プリキュアの歌手一覧。主題歌・挿入歌・キャラクターソングを歌った方々とキャラクター・ユニットを、初参加の曲と参加曲数とともにまとめました。",
+            MetaDescription = "プリキュアを歌ってきた方々",
             OgCard = BuildCreatorsOgCard(
                 "歴代プリキュア歌唱",
                 new[]
@@ -1861,8 +2656,8 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("キャラクター", $"{characterCount}組"),
                     new OgCardBadge("ユニット", $"{unitCount}組")
                 },
-                Array.Empty<OgCardFactLine>(), MusicCoverageLabel,
-                "主題歌からキャラクターソングまで、プリキュアの歌を歌った方々とキャラクターを一覧にしました。"),
+                Array.Empty<OgCardFactLine>(),
+                "プリキュアを歌ってきた方々"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1918,17 +2713,20 @@ public sealed class CreatorsGenerator
 
     /// <summary>
     /// 初参加順の行を、初参加シリーズごとのセクション（「シリーズ名（年）」見出し、シリーズ詳細へのリンク）にまとめる。
-    /// セクションはシリーズの放送開始日順、セクション内は渡された行の順。シリーズが分からない行は末尾の「その他」にまとめる。
+    /// セクションはシリーズの放送開始日順（同じ日は series_id の順。本編が併映の短編より先）、セクション内は渡された行の順。
+    /// シリーズが分からない行は末尾の「その他」にまとめる。
     /// </summary>
     private List<DebutSeriesSection> BuildDebutSeriesSections<T>(IReadOnlyList<T> orderedRows, Func<T, int?> seriesIdOf) where T : class
         => orderedRows
             .Select((row, index) => (Row: row, Index: index, SeriesId: seriesIdOf(row) is int sid && _ctx.SeriesById.ContainsKey(sid) ? sid : (int?)null))
             .GroupBy(x => x.SeriesId)
             .OrderBy(g => g.Key is int sid ? _ctx.SeriesStartDate(sid).DayNumber : int.MaxValue)
-            .ThenBy(g => g.Min(x => x.Index))
+            .ThenBy(g => g.Key ?? int.MaxValue)
             .Select(g => new DebutSeriesSection
             {
                 SeriesHeadingLabel = g.Key is int sid ? SeriesHeadingLabel(sid) : "その他",
+                SeriesTitle = g.Key is int sid3 ? _ctx.SeriesById[sid3].Title : "その他",
+                SeriesYearLabel = g.Key is int sid4 ? _ctx.SeriesById[sid4].StartDate.Year.ToString(System.Globalization.CultureInfo.InvariantCulture) : "",
                 SeriesUrl = g.Key is int sid2 ? PathUtil.SeriesUrl(_ctx.SeriesById[sid2].Slug) : "",
                 Members = g.OrderBy(x => x.Index).Select(x => (object)x.Row).ToList()
             })
@@ -1938,6 +2736,10 @@ public sealed class CreatorsGenerator
     private sealed class DebutSeriesSection
     {
         public string SeriesHeadingLabel { get; set; } = "";
+        /// <summary>左のもくじ（section-nav.js）のラベルに使う題名だけ（「その他」のセクションは「その他」）。</summary>
+        public string SeriesTitle { get; set; } = "";
+        /// <summary>左のもくじの年の欄に出す放送開始・公開の年（4 桁）。「その他」は空。</summary>
+        public string SeriesYearLabel { get; set; } = "";
         public string SeriesUrl { get; set; } = "";
         public IReadOnlyList<object> Members { get; set; } = Array.Empty<object>();
     }
@@ -1957,15 +2759,16 @@ public sealed class CreatorsGenerator
     /// <summary>人物ごとの楽曲参加（曲集合・最小 recording_id・初参加曲・関わった役職）を集める。</summary>
     private sealed class SongParticipationAccumulator
     {
-        public readonly Dictionary<int, (HashSet<int> Songs, int DebutRecId, int DebutSongId, HashSet<string> Roles)> ByPerson = new();
+        /// <summary>人物 → (曲集合, 最小 recording_id, その録音での歌唱の連名の位置 singer_seq, その曲, 役職)。</summary>
+        public readonly Dictionary<int, (HashSet<int> Songs, int DebutRecId, int DebutSeq, int DebutSongId, HashSet<string> Roles)> ByPerson = new();
 
-        public void Add(int personId, int songId, int recordingId, string roleCode)
+        public void Add(int personId, int songId, int recordingId, string roleCode, int seq)
         {
             if (!ByPerson.TryGetValue(personId, out var cur))
-                cur = (new HashSet<int>(), int.MaxValue, 0, new HashSet<string>(StringComparer.Ordinal));
+                cur = (new HashSet<int>(), int.MaxValue, int.MaxValue, 0, new HashSet<string>(StringComparer.Ordinal));
             cur.Songs.Add(songId);
             cur.Roles.Add(roleCode);
-            if (recordingId < cur.DebutRecId) cur = (cur.Songs, recordingId, songId, cur.Roles);
+            if (recordingId < cur.DebutRecId) cur = (cur.Songs, recordingId, seq, songId, cur.Roles);
             ByPerson[personId] = cur;
         }
     }
@@ -1994,6 +2797,7 @@ public sealed class CreatorsGenerator
                 PersonUrl = PathUtil.PersonUrl(pid),
                 SongCount = v.Songs.Count,
                 DebutRecordingId = v.DebutRecId,
+                DebutSeq = v.DebutSeq,
                 DebutSeriesId = _ctx.SongRecordingById.TryGetValue(v.DebutRecId, out var debutRec) ? debutRec.SeriesId : null,
                 DebutSongTitle = _ctx.SongById.TryGetValue(v.DebutSongId, out var song) ? song.Title : "",
                 DebutSongUrl = v.DebutSongId > 0 ? PathUtil.SongUrl(v.DebutSongId) : "",
@@ -2006,6 +2810,8 @@ public sealed class CreatorsGenerator
     // スタッフ一覧
 
     /// <summary><c>/creators/staff/</c> を 4 タブで書き出す。 役職順タブは役職名 + 人数/社数の索引（各役職詳細への入口）。 それ以外の 3 タブは全役職横断の人物・企業/団体の混在一覧。</summary>
+    /// <param name="staffPersonCount">一覧に載せた人物の数（入口のカードに出す）。</param>
+    /// <param name="staffCompanyCount">一覧に載せた企業・団体の数。</param>
     private void GenerateStaff(
         IReadOnlyList<RoleIndexEntry> roleIndexEntries,
         IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
@@ -2021,25 +2827,13 @@ public sealed class CreatorsGenerator
         out int staffPersonCount,
         out int staffCompanyCount)
     {
-        // 内訳・役職ラベルに使う「代表 role_code → 代表 NameJa」マップ。
-        var repNameMap = rankableRoles.ToDictionary(r => r.RoleCode, r => r.NameJa, StringComparer.Ordinal);
-
-        // 全 non-VOICE_CAST 役職を横断し、エピソード単位で重複排除（複数役職の兼任も 1 回扱い）。
-        // 役職ラベルは代表 role_code で束ね、最早出現順に全列挙する。
-        // 主題歌・挿入歌の使用を経由した関与（楽曲の作家・歌唱）は数えない。本編クレジットに載ったスタッフだけの一覧にし、
-        // 楽曲の作家・歌唱は音楽制作・歌唱ページに分ける。
-        var rowSet = BuildEntityRowSet(
-            inv =>
-            {
-                if (inv.EntryKind is "SONG_CREDIT" or "RECORDING_SINGER") return null;
-                string rep = _resolver.GetRepresentative(inv.RoleCode);
-                return repNameMap.ContainsKey(rep) ? rep : null; // VOICE_CAST 等は対象外
-            },
-            aliasIdsByPersonId, allPersons, companyAliasesByCompany, logosByCompanyAlias,
-            allCompanies, companyAliasById, repNameMap, withWorksTooltip: false);
+        var rowSet = BuildStaffRowSet(rankableRoles, aliasIdsByPersonId, allPersons,
+            companyAliasesByCompany, logosByCompanyAlias, allCompanies, companyAliasById);
         var rows = rowSet.CountRows;
+        // 一覧に載った方の記録（人物・企業のパンくず、誕生日の判定に使う）は、本編（TV か映画）に参加した方だけに付ける。
         foreach (var r in rows)
         {
+            if (r.EpisodeCount == 0 && r.MovieCount == 0) continue;
             if (string.Equals(r.EntityKind, "person", StringComparison.Ordinal)) _lists.StaffPersons.Add(r.EntityId);
             else _lists.StaffCompanies.Add(r.EntityId);
         }
@@ -2050,8 +2844,15 @@ public sealed class CreatorsGenerator
         var content = new StaffModel
         {
             Roles = roleIndexEntries,
-            TvRoles = roleIndexEntries.Where(e => !e.IsMovieOnly).ToList(),
-            MovieOnlyRoles = roleIndexEntries.Where(e => e.IsMovieOnly).ToList(),
+            // 役職は、クレジットされた種類ごとに 1 つずつ、その種類で初めての作品の節に置く。TV の組は本線の TV でクレジットされた役職、
+            // 映画の組は映画でクレジットされた役職（TV でもクレジットされた役職は、📺 を入れているあいだ隠す）、
+            // オトナシリーズの組はオトナシリーズでクレジットされた役職（TV か映画でもクレジットされた役職は、それらを入れているあいだ隠す）。
+            RoleTvSections = SectionRolesByFirstSeries(
+                roleIndexEntries.Where(e => e.FirstTv is not null).Select(e => e.Placed("tv", "")), e => e.FirstTv!),
+            RoleMovieSections = SectionRolesByFirstSeries(
+                roleIndexEntries.Where(e => e.FirstMovie is not null).Select(e => e.Placed("movie", KindTokens(e.FirstTv is not null, false, false))), e => e.FirstMovie!),
+            RoleOtonaSections = SectionRolesByFirstSeries(
+                roleIndexEntries.Where(e => e.FirstOtona is not null).Select(e => e.Placed("otona", KindTokens(e.FirstTv is not null, e.FirstMovie is not null, false))), e => e.FirstOtona!),
             TotalRoles = roleIndexEntries.Count,
             // 五十音順タブは読み（kana）データ未整備のため一旦無効化。テンプレ側もコメントアウト済み。
             // データが揃ったら下行のコメントを外して復活させる（KanaRows は未設定＝空のまま）。
@@ -2061,26 +2862,61 @@ public sealed class CreatorsGenerator
             CountRows = SortByCount(rows),
             PersonCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal)),
             CompanyCount = rows.Count(r => string.Equals(r.EntityKind, "company", StringComparison.Ordinal)),
-            CoverageLabel = _ctx.CreditCoverageLabel
+            CoverageLabel = _ctx.CreditCoverageLabel,
+            PageTitle = StaffPageTitle,
+            Kinds = new WorkKinds
+            {
+                Tv = rows.Any(r => r.EpisodeCount > 0),
+                Movie = rows.Any(r => r.MovieCount > 0),
+                Otona = rows.Any(r => r.OtonaEpisodeCount > 0)
+            }
         };
         var layout = new LayoutModel
         {
-            PageTitle = "歴代プリキュアスタッフ",
-            MetaDescription = "歴代プリキュアのスタッフ一覧。脚本・演出・作画監督から制作会社まで、プリキュアを支えてきた方々（人物・企業・団体）を役職ごとにまとめました。参加話数や初参加の作品で並べ替えられます。",
+            PageTitle = StaffPageTitle,
+            MetaDescription = StaffPageLead,
             OgCard = BuildCreatorsOgCard(
-                "歴代プリキュアスタッフ",
+                StaffPageTitle,
                 BuildEntityBadges(content.PersonCount, content.CompanyCount),
-                Array.Empty<OgCardFactLine>(), null,
-                "脚本・演出・作画から制作会社まで、プリキュアを支えてきた方々（人物・企業・団体）を役職ごとに一覧にしました。"),
+                Array.Empty<OgCardFactLine>(),
+                StaffPageLead),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代クリエイター", Url = PathUtil.CreatorsLandingUrl() },
-                new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = "" }
+                new BreadcrumbItem { Label = StaffPageTitle, Url = "" }
             }
         };
         _page.RenderAndWrite(PathUtil.CreatorsStaffUrl(), "creators",
             "creators-staff.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// スタッフ一覧の行群（いまの <see cref="_index"/> の範囲）。全 non-VOICE_CAST 役職を横断し、エピソード単位で重複排除（複数役職の兼任も 1 回扱い）。
+    /// 役職ラベルは代表 role_code で束ね、最早出現順に全列挙する。
+    /// 主題歌・挿入歌の使用を経由した関与（楽曲の作家・歌唱）は数えない。本編クレジットに載ったスタッフだけの一覧にし、
+    /// 楽曲の作家・歌唱は音楽制作・歌唱ページに分ける。
+    /// </summary>
+    private EntityRowSet BuildStaffRowSet(
+        IReadOnlyList<Role> rankableRoles,
+        IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
+        IReadOnlyList<Person> allPersons,
+        IReadOnlyDictionary<int, List<int>> companyAliasesByCompany,
+        IReadOnlyDictionary<int, List<int>> logosByCompanyAlias,
+        IReadOnlyList<Company> allCompanies,
+        IReadOnlyDictionary<int, CompanyAlias> companyAliasById)
+    {
+        // 内訳・役職ラベルに使う「代表 role_code → 代表 NameJa」マップ。
+        var repNameMap = rankableRoles.ToDictionary(r => r.RoleCode, r => r.NameJa, StringComparer.Ordinal);
+        return BuildEntityRowSet(
+            inv =>
+            {
+                if (inv.EntryKind is "SONG_CREDIT" or "RECORDING_SINGER") return null;
+                string rep = _resolver.GetRepresentative(inv.RoleCode);
+                return repNameMap.ContainsKey(rep) ? rep : null; // VOICE_CAST 等は対象外
+            },
+            aliasIdsByPersonId, allPersons, companyAliasesByCompany, logosByCompanyAlias,
+            allCompanies, companyAliasById, repNameMap, withWorksTooltip: false);
     }
 
     // 声の出演
@@ -2095,12 +2931,15 @@ public sealed class CreatorsGenerator
     /// 1 行の「出演話数」は当該 (声優 × シリーズ × キャラ) の重複排除済みエピソード数。
     /// シリーズ全体スコープ（episode_id=null）のみのクレジットも 1 行として残す（話数は «—» 表示）。
     /// </summary>
+    /// <param name="timelineBuilder">年表の軸（年度の帯。TV・映画・オトナシリーズを重ねる線表）。</param>
+    /// <param name="otonaTimelineBuilder">🌙 だけを入れているときに見せる線表の軸（オトナシリーズの作品ごとの帯）。</param>
     private void GenerateVoiceCast(
         IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
         IReadOnlyList<Person> allPersons,
         IReadOnlyList<Character> allCharacters,
         IReadOnlyList<CharacterAlias> allCharacterAliases,
         RoleTimelineBuilder timelineBuilder,
+        RoleTimelineBuilder otonaTimelineBuilder,
         IReadOnlyDictionary<int, int> precureOrderByCharacter,
         out int voiceCastCount)
     {
@@ -2138,10 +2977,12 @@ public sealed class CreatorsGenerator
         // 初出演順（シリーズセクション）：声優 1 人につき「初めて参加したシリーズ」のセクションに
         // 1 回だけ載せる（debutRows は人単位の 1 行に集約済み）。行の添え書きは初出演時のキャラ、
         // 話数は全シリーズ・全キャラ通算（重複排除）。
+        // 節は放送開始・公開日 → series_id の順（同じ日の映画と併映の短編は本編が先）。
+        // 節の中は初めての話数 → その話のクレジットの位置 → person_id の順。
         var debutSections = debutRows
-            .GroupBy(r => (r.SeriesSortStart, r.SeriesTitle, r.SeriesUrl, r.SeriesYearLabel))
+            .GroupBy(r => (r.SeriesSortStart, r.SeriesId, r.SeriesTitle, r.SeriesUrl, r.SeriesYearLabel))
             .OrderBy(g => g.Key.SeriesSortStart)
-            .ThenBy(g => g.Key.SeriesTitle, StringComparer.Ordinal)
+            .ThenBy(g => g.Key.SeriesId)
             .Select(g => new VoiceSeriesSection
             {
                 SeriesTitle = g.Key.SeriesTitle,
@@ -2149,12 +2990,13 @@ public sealed class CreatorsGenerator
                 SeriesHeadingLabel = string.IsNullOrEmpty(g.Key.SeriesYearLabel)
                     ? g.Key.SeriesTitle
                     : $"{g.Key.SeriesTitle}（{g.Key.SeriesYearLabel}）",
+                SeriesYearLabel = g.Key.SeriesYearLabel,
                 SortStart = g.Key.SeriesSortStart,
                 Members = g
                     .OrderBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
                     .ThenBy(r => r.EarliestPos)
-                    .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
-                    .ThenBy(r => r.CharacterNameKana, StringComparer.Ordinal)
+                    .ThenBy(r => r.PersonId)
+                    .ThenBy(r => r.CharacterId)
                     .ToList()
             })
             .ToList();
@@ -2162,16 +3004,47 @@ public sealed class CreatorsGenerator
         // 出演回数順（セクション無し）：声優 1 人 = 1 行（countAggRows に集約済み）。
         // 話数は全シリーズ・全キャラ通算（重複排除）。添え書きは代表キャラ（クレジット話数最多）で、
         // 他のキャラもあるときはテンプレ側で「他」が付く。
-        // 並びは話数降順 → 初登場シリーズ → 最早話数 → クレジット出現位置 → 声優読み。
+        // 並びは話数降順 → 初登場シリーズ（放送開始日 → series_id）→ 最早話数 → クレジット出現位置 → person_id。
         var countRows = countAggRows
             .OrderByDescending(r => r.EpisodeCount)
+            .ThenByDescending(r => r.OtonaEpisodeCount)
             .ThenBy(r => r.SeriesSortStart)
+            .ThenBy(r => r.SeriesId)
             .ThenBy(r => r.EarliestEpNo)
             .ThenBy(r => r.EarliestPos)
-            .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
-            .ThenBy(r => r.PersonName, StringComparer.Ordinal)
+            .ThenBy(r => r.PersonId)
             .ToList();
-        foreach (var r in countRows) _lists.VoiceCastPersons.Add(r.PersonId);
+        // 一覧に載った方の記録（人物のパンくず、誕生日の判定に使う）は、本編（TV か映画）に出演した方だけに付ける。
+        foreach (var r in countRows)
+            if (r.HasTv || r.HasMovie) _lists.VoiceCastPersons.Add(r.PersonId);
+
+        // クレジット役柄数順（セクション無し）：声優 1 人 = 1 行（出演回数順と同じ行）。演じたキャラの数を、本線の TV シリーズの話に出たキャラ・
+        // 映画に出たキャラ・オトナシリーズの話に出たキャラに分けて数える（同じキャラは名義・シリーズをまたいで 1 役）。話数の無いシリーズ全体の
+        // クレジットだけの方は数えない。並びは TV のキャラ数 → 映画のキャラ数 → オトナシリーズのキャラ数 → 出演回数順と同じ初登場の順。
+        var charCountByPerson = rows
+            .GroupBy(r => r.PersonId)
+            .ToDictionary(g => g.Key, g => (
+                Tv: g.Where(r => r.EpisodeCount > 0).Select(r => r.CharacterId).Distinct().Count(),
+                Movie: g.Where(r => r.MovieCount > 0).Select(r => r.CharacterId).Distinct().Count(),
+                Otona: g.Where(r => r.OtonaEpisodeCount > 0).Select(r => r.CharacterId).Distinct().Count()));
+        foreach (var r in countRows)
+            if (charCountByPerson.TryGetValue(r.PersonId, out var cc))
+            {
+                r.TvCharacterCount = cc.Tv;
+                r.MovieCharacterCount = cc.Movie;
+                r.OtonaCharacterCount = cc.Otona;
+            }
+        var charCountRows = countRows
+            .Where(r => r.TvCharacterCount + r.MovieCharacterCount + r.OtonaCharacterCount > 0)
+            .OrderByDescending(r => r.TvCharacterCount)
+            .ThenByDescending(r => r.MovieCharacterCount)
+            .ThenByDescending(r => r.OtonaCharacterCount)
+            .ThenBy(r => r.SeriesSortStart)
+            .ThenBy(r => r.SeriesId)
+            .ThenBy(r => r.EarliestEpNo)
+            .ThenBy(r => r.EarliestPos)
+            .ThenBy(r => r.PersonId)
+            .ToList();
 
         // 「プリキュアを演じた方のみ」：プリキュアのマスタのキャラを演じたことがある方を、全タブの行に印を付ける
         // （キャラクター別タブでも、その方が演じたほかのキャラの行を含めて残す）。
@@ -2191,19 +3064,30 @@ public sealed class CreatorsGenerator
             int prevAll = 0, prevPrecure = 0;
             foreach (var r in sec.Members)
             {
-                if (r.EarliestEpNo <= 0)
+                bool showAll, showPrecure;
+                if (r.WkAfter != "")
                 {
-                    prevAll = 0;
-                    if (r.IsPrecureCast) prevPrecure = 0;
-                    continue;
+                    // ほかの種類を切ったときだけ出る行（開いたときは隠れている）は、前後の行との比べをせず、いつも添える。
+                    if (r.EarliestEpNo <= 0) continue;
+                    showAll = true;
+                    showPrecure = r.IsPrecureCast;
                 }
-                bool showAll = r.EarliestEpNo != prevAll;
-                prevAll = r.EarliestEpNo;
-                bool showPrecure = false;
-                if (r.IsPrecureCast)
+                else
                 {
-                    showPrecure = r.EarliestEpNo != prevPrecure;
-                    prevPrecure = r.EarliestEpNo;
+                    if (r.EarliestEpNo <= 0)
+                    {
+                        prevAll = 0;
+                        if (r.IsPrecureCast) prevPrecure = 0;
+                        continue;
+                    }
+                    showAll = r.EarliestEpNo != prevAll;
+                    prevAll = r.EarliestEpNo;
+                    showPrecure = false;
+                    if (r.IsPrecureCast)
+                    {
+                        showPrecure = r.EarliestEpNo != prevPrecure;
+                        prevPrecure = r.EarliestEpNo;
+                    }
                 }
                 if (!showAll && !showPrecure) continue;
                 if (!_ctx.EpisodesBySeries.TryGetValue(r.SeriesId, out var seriesEpisodes)
@@ -2220,14 +3104,30 @@ public sealed class CreatorsGenerator
             .Where(r => precureOrderByPerson.ContainsKey(r.PersonId))
             .GroupBy(r => r.PersonUrl, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => precureOrderByPerson[g.First().PersonId], StringComparer.Ordinal);
-        var timeline = RecordTimelineRows(timelineBuilder.Build(timelineEntities, RoleTimelineRules.VoiceCast));
-        if (timeline is not null)
-            foreach (var row in timeline.Rows)
+        var kinds = new WorkKinds
+        {
+            Tv = countRows.Any(r => r.HasTv),
+            Movie = countRows.Any(r => r.HasMovie),
+            Otona = countRows.Any(r => r.HasOtona)
+        };
+        // 年表：TV・映画・オトナシリーズを重ねた年度の帯の線表と、🌙 だけを入れているときに見せるオトナシリーズの作品ごとの帯の線表。
+        // 年表に主な方として載った記録（OGP カードの年表の判定）は、本編に出演した方にだけ付ける（RecordTimelineRows）。
+        var timeline = kinds.OnlyOtona
+            ? otonaTimelineBuilder.Build(timelineEntities, RoleTimelineRules.VoiceCast)
+            : RecordTimelineRows(timelineBuilder.Build(timelineEntities, RoleTimelineRules.VoiceCast));
+        var otonaOnlyTimeline = kinds.Otona && !kinds.OnlyOtona
+            ? otonaTimelineBuilder.Build(OtonaOnlyEntities(timelineEntities), RoleTimelineRules.VoiceCast)
+            : null;
+        foreach (var tl in new[] { timeline, otonaOnlyTimeline })
+        {
+            if (tl is null) continue;
+            foreach (var row in tl.Rows)
                 if (precureOrderByUrl.TryGetValue(row.EntityUrl, out int order))
                 {
                     row.IsPrecureCast = true;
                     row.PrecureOrder = order;
                 }
+        }
 
         var content = new VoiceCastModel
         {
@@ -2236,28 +3136,32 @@ public sealed class CreatorsGenerator
             // KanaRows = kanaRows,
             DebutSections = debutSections,
             CountRows = countRows,
+            CharacterCountRows = charCountRows,
             // 年表タブの線表（1 年間に 4 回以上出演した声優）。
             Timeline = timeline,
+            OtonaTimeline = otonaOnlyTimeline,
+            Kinds = kinds,
             CoverageLabel = _ctx.CreditCoverageLabel,
-            PrecureCount = precureOrderByCharacter.Values.Distinct().Count()
+            PrecureCount = precureOrderByCharacter.Values.Distinct().Count(),
+            PageTitle = VoiceCastPageTitle
         };
         var layout = new LayoutModel
         {
-            PageTitle = "歴代プリキュア声優",
-            MetaDescription = "歴代プリキュアの声優さん一覧。キャラクターを演じた声優さんを作品ごと・役ごとにまとめました。初出演の作品や出演話数で並べ替えられます。",
+            PageTitle = VoiceCastPageTitle,
+            MetaDescription = VoiceCastPageLead,
             OgCard = BuildCreatorsOgCard(
-                "歴代プリキュア声優",
+                VoiceCastPageTitle,
                 new[]
                 {
                     new OgCardBadge("声優", $"{countRows.Count}人")
                 },
-                Array.Empty<OgCardFactLine>(), null,
-                "あのキャラの声は誰？ プリキュアのキャラクターを演じた声優さんを、作品ごと・役ごとに一覧にしました。"),
+                Array.Empty<OgCardFactLine>(),
+                VoiceCastPageLead),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代クリエイター", Url = PathUtil.CreatorsLandingUrl() },
-                new BreadcrumbItem { Label = "歴代プリキュア声優", Url = "" }
+                new BreadcrumbItem { Label = VoiceCastPageTitle, Url = "" }
             }
         };
         _page.RenderAndWrite(PathUtil.CreatorsVoiceCastUrl(), "creators",
@@ -2400,12 +3304,20 @@ public sealed class CreatorsGenerator
                             }
                         }
                     }
+                    else if (acc.BestEpNo == int.MaxValue && inv.CreditPos < acc.BestPos)
+                    {
+                        // 話の無い作品まるごとのクレジット（映画など）は、そのクレジットの中の位置で並べる。
+                        // 同じ作品に話のクレジットもあれば、そちらの最早話数と位置が優先する（上の分岐で上書きされる）。
+                        acc.BestPos = inv.CreditPos;
+                    }
                     bucket[key] = acc;
                 }
             }
 
             var personRows = new List<VoiceCastRow>();
             var personEpisodeKeys = new HashSet<(int SeriesId, int EpNo)>();
+            // 人単位のオトナシリーズの出演の話。🌙 の札に使う（本線の TV の話とは分けて数える）。
+            var personOtonaKeys = new HashSet<(int SeriesId, int EpNo)>();
             // 人単位の映画本数（映画系シリーズの distinct 数）。初出演順・出演話数タブの 🎥 ピルに使う。
             var personMovieSeries = new HashSet<int>();
 
@@ -2422,6 +3334,7 @@ public sealed class CreatorsGenerator
                 long earliestPos = kv.Value.BestPos;
                 // 映画系シリーズ（series_kinds.credit_attach_to='SERIES'）は 1 シリーズ = 1 本として数える。
                 bool isMovie = _ctx.IsMovieKindSeries(seriesId);
+                bool isOtona = _ctx.IsOtonaSeries(seriesId);
 
                 var row = new VoiceCastRow
                 {
@@ -2440,19 +3353,23 @@ public sealed class CreatorsGenerator
                     CharacterNameKana = ch.NameKana ?? "",
                     CharacterUrl = PathUtil.CharacterUrl(ch.CharacterId),
                     CharacterId = ch.CharacterId,
-                    EpisodeCount = epNos.Count,
+                    EpisodeCount = isOtona ? 0 : epNos.Count,
+                    OtonaEpisodeCount = isOtona ? epNos.Count : 0,
                     MovieCount = isMovie ? 1 : 0,
+                    HasTv = !isMovie && !isOtona,
+                    HasMovie = isMovie,
+                    HasOtona = isOtona,
                     EarliestEpNo = earliestEpNo,
                     EarliestPos = earliestPos
                 };
                 rows.Add(row);
                 personRows.Add(row);
-                foreach (var no in epNos) personEpisodeKeys.Add((seriesId, no));
+                foreach (var no in epNos) (isOtona ? personOtonaKeys : personEpisodeKeys).Add((seriesId, no));
                 if (isMovie) personMovieSeries.Add(seriesId);
                 distinctPersons.Add(p.PersonId);
             }
 
-            AppendPersonDebutAndCountRows(personRows, personEpisodeKeys, personMovieSeries,
+            AppendPersonDebutAndCountRows(personRows, personEpisodeKeys, personOtonaKeys, personMovieSeries,
                 debutRows, countAggRows);
 
             if (personRows.Count > 0)
@@ -2480,6 +3397,7 @@ public sealed class CreatorsGenerator
                     // 初めて出演した話（最も早いシリーズの最も早い話）の中でのクレジットの位置。
                     FirstSortPos = personRows
                         .OrderBy(r => r.SeriesSortStart)
+                        .ThenBy(r => r.SeriesId)
                         .ThenBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
                         .ThenBy(r => r.EarliestPos)
                         .First().EarliestPos,
@@ -2497,40 +3415,56 @@ public sealed class CreatorsGenerator
     private static void AppendPersonDebutAndCountRows(
         List<VoiceCastRow> personRows,
         HashSet<(int SeriesId, int EpNo)> personEpisodeKeys,
+        HashSet<(int SeriesId, int EpNo)> personOtonaKeys,
         HashSet<int> personMovieSeries,
         List<VoiceCastRow> debutRows,
         List<VoiceCastRow> countAggRows)
     {
-        // 初出演順タブ用の 1 行：この声優が最初に参加したシリーズ・キャラの行をベースに、
+        // 初出演順タブ用の行：この声優が最初に出演したシリーズ・キャラの行をベースに、
         // 話数だけを全シリーズ・全キャラ通算（重複排除）へ差し替えたコピーを作る。
-        // 「初出演順に載るべきはその声優が初めて参加したシリーズ」のため、人単位で 1 回だけ載せる。
+        // 出演した種類（本線の TV・映画・オトナシリーズ）ごとに 1 つずつ、その種類で初めて出演したシリーズの節に置く（EarlierKinds）。
         if (personRows.Count > 0)
         {
-            var debutSource = personRows
-                .OrderBy(r => r.SeriesSortStart)
-                .ThenBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
-                .ThenBy(r => r.EarliestPos)
-                .First();
-            debutRows.Add(new VoiceCastRow
+            var debutSources = new Func<VoiceCastRow, bool>[] { r => r.HasTv, r => r.HasMovie, r => r.HasOtona }
+                .Select(has => personRows
+                    .Where(has)
+                    .OrderBy(r => r.SeriesSortStart)
+                    .ThenBy(r => r.SeriesId)
+                    .ThenBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
+                    .ThenBy(r => r.EarliestPos)
+                    .FirstOrDefault())
+                .ToArray();
+            var debutKeys = debutSources.Select(DebutKey).ToArray();
+            for (int k = 0; k < debutSources.Length; k++)
             {
-                PersonName = debutSource.PersonName,
-                PersonNameKana = debutSource.PersonNameKana,
-                PersonUrl = debutSource.PersonUrl,
-                PersonId = debutSource.PersonId,
-                SeriesId = debutSource.SeriesId,
-                SeriesTitle = debutSource.SeriesTitle,
-                SeriesUrl = debutSource.SeriesUrl,
-                SeriesYearLabel = debutSource.SeriesYearLabel,
-                SeriesSortStart = debutSource.SeriesSortStart,
-                CharacterName = debutSource.CharacterName,
-                CharacterNameKana = debutSource.CharacterNameKana,
-                CharacterUrl = debutSource.CharacterUrl,
-                CharacterId = debutSource.CharacterId,
-                EpisodeCount = personEpisodeKeys.Count,
-                MovieCount = personMovieSeries.Count,
-                EarliestEpNo = debutSource.EarliestEpNo,
-                EarliestPos = debutSource.EarliestPos
-            });
+                if (debutSources[k] is not { } debutSource) continue;
+                debutRows.Add(new VoiceCastRow
+                {
+                    PersonName = debutSource.PersonName,
+                    PersonNameKana = debutSource.PersonNameKana,
+                    PersonUrl = debutSource.PersonUrl,
+                    PersonId = debutSource.PersonId,
+                    SeriesId = debutSource.SeriesId,
+                    SeriesTitle = debutSource.SeriesTitle,
+                    SeriesUrl = debutSource.SeriesUrl,
+                    SeriesYearLabel = debutSource.SeriesYearLabel,
+                    SeriesSortStart = debutSource.SeriesSortStart,
+                    CharacterName = debutSource.CharacterName,
+                    CharacterNameKana = debutSource.CharacterNameKana,
+                    CharacterUrl = debutSource.CharacterUrl,
+                    CharacterId = debutSource.CharacterId,
+                    EpisodeCount = personEpisodeKeys.Count,
+                    OtonaEpisodeCount = personOtonaKeys.Count,
+                    MovieCount = personMovieSeries.Count,
+                    HasTv = personRows.Any(r => r.HasTv),
+                    HasMovie = personRows.Any(r => r.HasMovie),
+                    HasOtona = personRows.Any(r => r.HasOtona),
+                    EarliestEpNo = debutSource.EarliestEpNo,
+                    EarliestPos = debutSource.EarliestPos,
+                    WkOwn = WorkKindNames[k],
+                    WkAfter = EarlierKinds(debutKeys, k)
+                });
+            }
 
             // 出演回数順タブ用の 1 行：声優単位の通算（重複排除）話数。
             // 代表キャラ＝クレジット話数が最も多いキャラ（同数なら初登場が早い方）。
@@ -2538,15 +3472,17 @@ public sealed class CreatorsGenerator
                 .GroupBy(r => r.CharacterId)
                 .Select(cg => new
                 {
-                    Total = cg.Sum(r => r.EpisodeCount),
+                    Total = cg.Sum(r => r.EpisodeCount + r.OtonaEpisodeCount),
                     First = cg
                         .OrderBy(r => r.SeriesSortStart)
+                        .ThenBy(r => r.SeriesId)
                         .ThenBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
                         .ThenBy(r => r.EarliestPos)
                         .First()
                 })
                 .OrderByDescending(c => c.Total)
                 .ThenBy(c => c.First.SeriesSortStart)
+                .ThenBy(c => c.First.SeriesId)
                 .ThenBy(c => c.First.EarliestEpNo == 0 ? int.MaxValue : c.First.EarliestEpNo)
                 .ThenBy(c => c.First.EarliestPos)
                 .ToList();
@@ -2557,6 +3493,7 @@ public sealed class CreatorsGenerator
                 PersonName = rep.PersonName,
                 PersonNameKana = rep.PersonNameKana,
                 PersonUrl = rep.PersonUrl,
+                SeriesId = rep.SeriesId,
                 SeriesTitle = rep.SeriesTitle,
                 SeriesUrl = rep.SeriesUrl,
                 SeriesYearLabel = rep.SeriesYearLabel,
@@ -2566,13 +3503,21 @@ public sealed class CreatorsGenerator
                 CharacterUrl = rep.CharacterUrl,
                 CharacterId = rep.CharacterId,
                 EpisodeCount = personEpisodeKeys.Count,
+                OtonaEpisodeCount = personOtonaKeys.Count,
                 MovieCount = personMovieSeries.Count,
+                HasTv = personRows.Any(r => r.HasTv),
+                HasMovie = personRows.Any(r => r.HasMovie),
+                HasOtona = personRows.Any(r => r.HasOtona),
                 EarliestEpNo = rep.EarliestEpNo,
                 EarliestPos = rep.EarliestPos,
                 HasOtherCharacters = byChar.Count > 1
             });
         }
     }
+
+    /// <summary>行の初めての位置の並べ替えキー（シリーズの放送開始日・series_id・話数・クレジットの位置。話数の無い行は末尾扱い）。行が無ければ null。</summary>
+    private static (long Start, int SeriesId, int EpNo, long Pos)? DebutKey(VoiceCastRow? r)
+        => r is null ? null : (r.SeriesSortStart, r.SeriesId, r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo, r.EarliestPos);
 
     /// <summary>キャラクター順タブ：キャラクター 1 体 = 1 行に集約し、初出シリーズごとのセクションに束ねる。</summary>
     private static List<VoiceSeriesSection> BuildCharacterSections(List<VoiceCastRow> rows)
@@ -2581,7 +3526,7 @@ public sealed class CreatorsGenerator
         // 各キャラは「最初にクレジットされたシリーズ」のセクションに 1 回だけ載せる
         // （映画などで再登場しても重複表示しない）。役名は代表名義（rows.CharacterName に
         // 格納済みの最頻 alias）。CV はそのキャラを最も多く演じた声優を代表とし、他の声優も
-        // 居れば「他」を付ける。担当数はキャラ通算で TV 話（📺）と映画 本（🎥）を併記する。
+        // 居れば「他」を付ける。担当数はキャラ通算で TV 話（📺）・映画 本（🎥）・オトナシリーズの話（🌙）を併記する。
         var perCharRows = rows
             .GroupBy(r => r.CharacterId)
             .Select(cg =>
@@ -2593,51 +3538,75 @@ public sealed class CreatorsGenerator
                     .Select(pg => new
                     {
                         Rep = pg.OrderBy(r => r.SeriesSortStart)
+                                .ThenBy(r => r.SeriesId)
                                 .ThenBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
                                 .ThenBy(r => r.EarliestPos)
                                 .First(),
-                        Weight = pg.Sum(r => r.EpisodeCount + r.MovieCount)
+                        Weight = pg.Sum(r => r.EpisodeCount + r.OtonaEpisodeCount + r.MovieCount)
                     })
                     .OrderByDescending(x => x.Weight)
                     .ThenBy(x => x.Rep.SeriesSortStart)
+                    .ThenBy(x => x.Rep.SeriesId)
                     .ThenBy(x => x.Rep.EarliestEpNo == 0 ? int.MaxValue : x.Rep.EarliestEpNo)
                     .ThenBy(x => x.Rep.EarliestPos)
                     .ToList();
                 var repPerson = byPerson[0].Rep;
-                // キャラの初出（セクション配置・並び順の基準）。
-                var debut = charRows
-                    .OrderBy(r => r.SeriesSortStart)
-                    .ThenBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
-                    .ThenBy(r => r.EarliestPos)
-                    .First();
                 int tvTotal = charRows.Sum(r => r.EpisodeCount);
+                int otonaTotal = charRows.Sum(r => r.OtonaEpisodeCount);
                 int movieTotal = charRows.Where(r => r.MovieCount > 0)
                     .Select(r => r.SeriesId).Distinct().Count();
-                return new VoiceCastRow
-                {
-                    PersonName = repPerson.PersonName,
-                    PersonUrl = repPerson.PersonUrl,
-                    PersonId = repPerson.PersonId,
-                    SeriesTitle = debut.SeriesTitle,
-                    SeriesUrl = debut.SeriesUrl,
-                    SeriesYearLabel = debut.SeriesYearLabel,
-                    SeriesSortStart = debut.SeriesSortStart,
-                    CharacterName = debut.CharacterName,
-                    CharacterUrl = debut.CharacterUrl,
-                    CharacterId = debut.CharacterId,
-                    EpisodeCount = tvTotal,
-                    MovieCount = movieTotal,
-                    EarliestEpNo = debut.EarliestEpNo,
-                    EarliestPos = debut.EarliestPos,
-                    HasOtherPersons = byPerson.Count > 1
-                };
+                // キャラの初出（セクション配置・並び順の基準）。出演のある種類（本線の TV・映画・オトナシリーズ）ごとに 1 つずつ、
+                // その種類で初めてクレジットされたシリーズの節に置く（EarlierKinds）。
+                var debuts = new Func<VoiceCastRow, bool>[] { r => r.HasTv, r => r.HasMovie, r => r.HasOtona }
+                    .Select(has => charRows
+                        .Where(has)
+                        .OrderBy(r => r.SeriesSortStart)
+                        .ThenBy(r => r.SeriesId)
+                        .ThenBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
+                        .ThenBy(r => r.EarliestPos)
+                        .FirstOrDefault())
+                    .ToArray();
+                var debutKeys = debuts.Select(DebutKey).ToArray();
+                return Enumerable.Range(0, debuts.Length)
+                    .Where(k => debuts[k] is not null)
+                    .Select(k =>
+                    {
+                        var debut = debuts[k]!;
+                        return new VoiceCastRow
+                        {
+                            PersonName = repPerson.PersonName,
+                            PersonUrl = repPerson.PersonUrl,
+                            PersonId = repPerson.PersonId,
+                            SeriesId = debut.SeriesId,
+                            SeriesTitle = debut.SeriesTitle,
+                            SeriesUrl = debut.SeriesUrl,
+                            SeriesYearLabel = debut.SeriesYearLabel,
+                            SeriesSortStart = debut.SeriesSortStart,
+                            CharacterName = debut.CharacterName,
+                            CharacterUrl = debut.CharacterUrl,
+                            CharacterId = debut.CharacterId,
+                            EpisodeCount = tvTotal,
+                            OtonaEpisodeCount = otonaTotal,
+                            MovieCount = movieTotal,
+                            HasTv = charRows.Any(r => r.HasTv),
+                            HasMovie = charRows.Any(r => r.HasMovie),
+                            HasOtona = charRows.Any(r => r.HasOtona),
+                            EarliestEpNo = debut.EarliestEpNo,
+                            EarliestPos = debut.EarliestPos,
+                            HasOtherPersons = byPerson.Count > 1,
+                            WkOwn = WorkKindNames[k],
+                            WkAfter = EarlierKinds(debutKeys, k)
+                        };
+                    });
             })
+            .SelectMany(x => x)
             .ToList();
 
+        // 節は放送開始・公開日 → series_id の順（同じ日の映画と併映の短編は本編が先）。
         var charSections = perCharRows
-            .GroupBy(r => (r.SeriesSortStart, r.SeriesTitle, r.SeriesUrl, r.SeriesYearLabel))
+            .GroupBy(r => (r.SeriesSortStart, r.SeriesId, r.SeriesTitle, r.SeriesUrl, r.SeriesYearLabel))
             .OrderBy(g => g.Key.SeriesSortStart)
-            .ThenBy(g => g.Key.SeriesTitle, StringComparer.Ordinal)
+            .ThenBy(g => g.Key.SeriesId)
             .Select(g => new VoiceSeriesSection
             {
                 SeriesTitle = g.Key.SeriesTitle,
@@ -2645,12 +3614,13 @@ public sealed class CreatorsGenerator
                 SeriesHeadingLabel = string.IsNullOrEmpty(g.Key.SeriesYearLabel)
                     ? g.Key.SeriesTitle
                     : $"{g.Key.SeriesTitle}（{g.Key.SeriesYearLabel}）",
+                SeriesYearLabel = g.Key.SeriesYearLabel,
                 SortStart = g.Key.SeriesSortStart,
-                // キャラの並び＝そのキャラが最初にクレジットされた位置（クレジット出現順）。
+                // キャラの並び＝そのキャラが最初にクレジットされた位置（クレジット出現順）。同じ位置は character_id の順。
                 Members = g
                     .OrderBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
                     .ThenBy(r => r.EarliestPos)
-                    .ThenBy(r => r.CharacterName, StringComparer.Ordinal)
+                    .ThenBy(r => r.CharacterId)
                     .ToList()
             })
             .ToList();
@@ -2675,7 +3645,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代クリエイター",
-            MetaDescription = "歴代プリキュアのクリエイター一覧。脚本・演出・作画から制作会社までのスタッフの方々、キャラクターを演じた声優さん、歌を作り歌った方々を、作品ごと・役職ごとにまとめました。",
+            MetaDescription = "歴代プリキュアを作ってきた方々",
             OgCard = BuildCreatorsOgCard(
                 "歴代クリエイター",
                 new[]
@@ -2685,8 +3655,9 @@ public sealed class CreatorsGenerator
                     new OgCardBadge("音楽制作", $"{musicProductionPersonCount}名・{musicProductionCompanyCount}団体"),
                     new OgCardBadge("歌唱", $"{singerCount}人")
                 },
-                Array.Empty<OgCardFactLine>(), null,
-                "脚本・演出・作画から制作会社、声優さん、作詞・作曲・歌手の方々まで、プリキュアを作り上げた方々をまとめて一覧にしました。"),
+                Array.Empty<OgCardFactLine>(),
+                // ページの冒頭文（creators-landing.sbn の .lead）と同じ文。
+                "歴代プリキュアを作ってきた方々"),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -2708,13 +3679,16 @@ public sealed class CreatorsGenerator
     /// <param name="coverageLabel">基準点ラベル。null なら本編クレジットの収録範囲（<see cref="BuildContext.CreditCoverageLabel"/>）。</param>
     /// <summary>
     /// 役職詳細の OGP カード（人物・企業と同じプロフィール組み）。
-    /// 「役職名 → 人物数・団体数と、この役職がクレジットされた TV の話数・映画の本数 → 担当の多い順の顔ぶれ →
-    /// この役職が置かれていた期間の年表 → 別称・初出」の順に置く。透かしは初出の年。
-    /// 役職名と人数だけでは「いつからある役職で、誰の仕事か」が伝わらないため、顔ぶれと期間で役職の輪郭を示す。
+    /// 「役職名 → 何の一覧か（1 文）→ 別称・初出」の順に置く。
+    /// シェアされた先で「開くと何が分かるか」が伝わればよいので、役職についての事実（別称・初出）だけを添える。
+    /// クレジットされた作品の一覧は出さない（原画のようにどの作品にも出る役職では、ほぼ全作品が並ぶだけになるため）。
+    /// 透かしは役職の区分（本編の役職は「スタッフ」、声の出演の役職は「声の出演」。音楽の役職のページは「ミュージック」＝<see cref="MusicRoleWatermark"/>）。
+    /// 人数・話数と担当者の名前は出さない（数はクレジットの入力が進むたびに変わり、役職のカードに特定の人の名前が並ぶと誰のカードかが紛れるため）。
     /// </summary>
     private OgCardSpec BuildRoleOgCard(
-        Role role, int personCount, int companyCount,
-        IReadOnlyList<EntityRow> rows, IReadOnlyList<RoleTimelineEntity> entities,
+        Role role,
+        string lead,
+        IReadOnlyList<RoleTimelineEntity> entities,
         IReadOnlyList<AlternateNameItem> alternateNames)
     {
         // この役職がクレジットされた話・映画（担当者をまたいで 1 話・1 本に畳む）。
@@ -2726,54 +3700,13 @@ public sealed class CreatorsGenerator
             foreach (var sid in e.MovieSeriesIds) movies.Add(sid);
         }
 
-        var badges = new List<OgCardBadge>(BuildEntityBadges(personCount, companyCount));
-        if (episodes.Count > 0) badges.Add(new OgCardBadge("TV", $"{episodes.Count}話"));
-        if (movies.Count > 0) badges.Add(new OgCardBadge("映画", $"{movies.Count}本"));
-
-        // 担当の多い順に 4 者まで。「名前 n話 / n本」を読点で並べる。
-        var top = rows.OrderByDescending(r => r.TotalCount).ThenBy(r => r.FirstSortStart).ThenBy(r => r.FirstSortEpNo).Take(4).ToList();
-        var facts = new List<OgCardFactLine>();
-        if (top.Count > 0)
-        {
-            facts.Add(new OgCardFactLine("担当の多い順", string.Join("、", top.Select(r =>
-            {
-                string count = (r.EpisodeCount, r.MovieCount) switch
-                {
-                    (> 0, > 0) => $"{r.EpisodeCount}話 / {r.MovieCount}本",
-                    (> 0, _) => $"{r.EpisodeCount}話",
-                    _ => $"{r.MovieCount}本"
-                };
-                return $"{r.EntityName} {count}";
-            }))));
-        }
-
-        // この役職が置かれていた期間：作品ごとに、クレジットされた最初の話から最後の話まで（映画は公開日の点）。
-        var segments = new List<OgCardTimelineSegment>();
-        foreach (var g in episodes.GroupBy(k => k.SeriesId))
-        {
-            DateOnly? first = null, last = null;
-            foreach (var (sid, eid) in g)
-            {
-                if (!_ctx.EpisodeById.TryGetValue(eid, out var ep)) continue;
-                if (first is null || ep.OnAirDate < first) first = ep.OnAirDate;
-                if (last is null || ep.OnAirDate > last) last = ep.OnAirDate;
-            }
-            if (first is DateOnly f && last is DateOnly l)
-                segments.Add(new OgCardTimelineSegment(f, l.AddDays(7), OgCardColors.Staff));
-        }
-        foreach (var sid in movies)
-        {
-            if (_ctx.SeriesById.TryGetValue(sid, out var mv))
-                segments.Add(new OgCardTimelineSegment(mv.StartDate, mv.StartDate, OgCardColors.Staff));
-        }
-
-        // 初出：この役職が最初にクレジットされた話（映画なら公開日）。透かしはその年。
+        // 初出は、この役職が最初にクレジットされた話（映画なら公開日）。
         (DateOnly Date, string Text)? debut = null;
         foreach (var (sid, eid) in episodes)
         {
             if (!_ctx.EpisodeById.TryGetValue(eid, out var ep) || !_ctx.SeriesById.TryGetValue(sid, out var s)) continue;
             if (debut is null || ep.OnAirDate < debut.Value.Date)
-                debut = (ep.OnAirDate, $"『{s.Title}』第{ep.SeriesEpNo}話({ep.OnAirDate:yyyy.M.d})");
+                debut = (ep.OnAirDate, $"『{s.Title}』第{ep.SeriesEpNo}話({JpDateFormat.BroadcastDotDate(ep.OnAirAt)})");
         }
         foreach (var sid in movies)
         {
@@ -2785,25 +3718,28 @@ public sealed class CreatorsGenerator
         var foot = new List<OgCardFactLine>();
         if (alternateNames.Count > 0)
             foot.Add(new OgCardFactLine("別称", string.Join("・", alternateNames.Select(a => a.RoleNameJa))));
-        if (debut is not null) foot.Add(new OgCardFactLine("初出", debut.Value.Text));
+        if (debut is not null)
+            foot.Add(new OgCardFactLine("初出", debut.Value.Text));
 
         return new OgCardSpec(Kicker: "", Title: role.NameJa)
         {
-            MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
             BandColorHex = OgCardColors.Staff,
-            Badges = badges,
-            InlineFacts = facts,
-            Watermark = debut is null ? "" : debut.Value.Date.Year.ToString(),
-            Timeline = segments.OrderBy(s => s.Start).ToList(),
-            TimelineEnd = OgCareerCardParts.TimelineEndFor(_ctx, segments),
+            Facts = new[] { new OgCardFactLine("", lead) },
+            Watermark = string.Equals(role.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal) ? "声の出演" : "スタッフ",
             FootFacts = foot
         };
     }
 
-    private OgCardSpec BuildCreatorsOgCard(string title, IReadOnlyList<OgCardBadge> badges, IReadOnlyList<OgCardFactLine> facts, string? coverageLabel = null, string lead = "") =>
+
+    /// <summary>音楽の役職（作詞・作曲・演奏など）の詳細ページのカードの透かし。本編の役職の「スタッフ」と対になる区分。</summary>
+    private const string MusicRoleWatermark = "ミュージック";
+
+    private OgCardSpec BuildCreatorsOgCard(string title, IReadOnlyList<OgCardBadge> badges, IReadOnlyList<OgCardFactLine> facts, string lead = "", string watermark = "") =>
         new(Kicker: "", Title: title)
         {
-            MetaLeft = OgCoverageLabel.Compact(coverageLabel ?? _ctx.CreditCoverageLabel),
+            // 役職の区分など（空なら出さない）。
+            Watermark = watermark,
+            // 基準点（〜時点）の注記はカードに載せない（放送のたびに日付が変わり、カードが毎週描き直しになる。ページの本文には出す）。
             // どんなページかのリード文（数の下に添える）。
             Subtitle = lead,
             Badges = badges,
@@ -2819,10 +3755,10 @@ public sealed class CreatorsGenerator
         return badges.ToArray();
     }
 
-    /// <summary>エンティティ 1 行分を組み立てる。初参加ソート用に <see cref="FirstCreditAccumulator"/> から最早シリーズ情報を移す。 担当量は TV 系（話）と映画系（本）を分けて持つ（テンプレ側で「N 話・M 本」併記）。</summary>
+    /// <summary>エンティティ 1 行分を組み立てる。初参加ソート用に <see cref="FirstCreditAccumulator"/> から最早シリーズ情報を移す。 担当量は本線の TV（話）・映画（本）・オトナシリーズ（話）を分けて持つ（テンプレ側で 📺・🎥・🌙 の札を並べる）。</summary>
     private static EntityRow MakeEntityRow(
         string entityKind, int entityId, string name, string nameKana,
-        string url, int episodeCount, int movieCount, int seriesCount, FirstCreditAccumulator first,
+        string url, int episodeCount, int movieCount, int otonaEpisodeCount, int seriesCount, FirstCreditAccumulator first,
         string worksTooltip = "")
     {
         return new EntityRow
@@ -2834,8 +3770,10 @@ public sealed class CreatorsGenerator
             EntityUrl = url,
             EpisodeCount = episodeCount,
             MovieCount = movieCount,
+            OtonaEpisodeCount = otonaEpisodeCount,
             SeriesCount = seriesCount,
             WorksTooltip = worksTooltip,
+            FirstSeriesId = first.SeriesId,
             FirstSeriesTitle = first.SeriesTitle,
             FirstSeriesUrl = first.SeriesUrl,
             FirstSeriesYearLabel = first.SeriesYearLabel,
@@ -2864,52 +3802,51 @@ public sealed class CreatorsGenerator
             tvCountBySeries[sid] = n + 1;
         }
 
-        // (seriesId, ラベル) のリストを作り、放送開始日 → シリーズ名で安定ソート。
-        var works = new List<(long sortStart, string title, string label)>();
+        // (seriesId, ラベル) のリストを作り、放送開始日 → series_id（同じ日の映画と併映の短編は本編が先）で並べる。
+        var works = new List<(long sortStart, int seriesId, string label)>();
         foreach (var kv in tvCountBySeries)
         {
             if (!_ctx.SeriesById.TryGetValue(kv.Key, out var s)) continue;
-            works.Add((_ctx.SeriesStartDate(kv.Key).DayNumber, s.Title, $"{s.Title}（{kv.Value}話）"));
+            works.Add((_ctx.SeriesStartDate(kv.Key).DayNumber, kv.Key, $"{s.Title}（{kv.Value}話）"));
         }
         foreach (var sid in movieSeriesIds)
         {
             if (!_ctx.SeriesById.TryGetValue(sid, out var s)) continue;
-            works.Add((_ctx.SeriesStartDate(sid).DayNumber, s.Title, $"{s.Title}（映画）"));
+            works.Add((_ctx.SeriesStartDate(sid).DayNumber, sid, $"{s.Title}（映画）"));
         }
 
         if (works.Count == 0) return "";
         return string.Join("／", works
             .OrderBy(w => w.sortStart)
-            .ThenBy(w => w.title, StringComparer.Ordinal)
+            .ThenBy(w => w.seriesId)
             .Select(w => w.label));
     }
 
-    /// <summary>代表 role_code ごとに、その役職で最も早い (Start, EpNo, CreditSeq) を更新する。 同じ話数内で同点のときはクレジット出現位置が早い役職を上位に扱う。</summary>
+    /// <summary>代表 role_code ごとに、その役職で最も早い (Start, SeriesId, EpNo, CreditSeq) を更新する。 同じ日の作品は series_id の順（本編が併映の短編より先）、同じ話数内で同点のときはクレジット出現位置が早い役職を上位に扱う。</summary>
     private void OfferEarliestRole(
-        Dictionary<string, (DateOnly Start, int EpNo, long Pos)> earliestByRep, string rep, Involvement inv)
+        Dictionary<string, (DateOnly Start, int SeriesId, int EpNo, long Pos)> earliestByRep, string rep, Involvement inv)
     {
         var start = _ctx.SeriesStartDate(inv.SeriesId);
         int epNo = inv.EpisodeId is int eid
             ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
             : 0; // シリーズスコープは最早扱い
         long pos = inv.CreditPos;
-        if (!earliestByRep.TryGetValue(rep, out var cur)
-            || start < cur.Start
-            || (start == cur.Start && epNo < cur.EpNo)
-            || (start == cur.Start && epNo == cur.EpNo && pos < cur.Pos))
+        var key = (start, inv.SeriesId, epNo, pos);
+        if (!earliestByRep.TryGetValue(rep, out var cur) || key.CompareTo(cur) < 0)
         {
-            earliestByRep[rep] = (start, epNo, pos);
+            earliestByRep[rep] = key;
         }
     }
 
     /// <summary>クレジットされた代表役職を最早出現順に「・」で全列挙した役職ラベルを作る。</summary>
     private static string BuildRolesLabel(
-        Dictionary<string, (DateOnly Start, int EpNo, long Pos)> earliestByRep,
+        Dictionary<string, (DateOnly Start, int SeriesId, int EpNo, long Pos)> earliestByRep,
         IReadOnlyDictionary<string, string> repNameMap)
     {
         if (earliestByRep.Count == 0) return "";
         var ordered = earliestByRep
             .OrderBy(kv => kv.Value.Start)
+            .ThenBy(kv => kv.Value.SeriesId)
             .ThenBy(kv => kv.Value.EpNo)
             .ThenBy(kv => kv.Value.Pos)
             .Select(kv => repNameMap.TryGetValue(kv.Key, out var nm) ? nm : kv.Key)
@@ -2925,57 +3862,51 @@ public sealed class CreatorsGenerator
         .ThenBy(r => r.EntityName, StringComparer.Ordinal)
         .ToList();
 
-    /// <summary>初参加順：最早 (シリーズ放送開始, 話数, クレジット出現位置) → 読み → 名前。 同じ話数内で同点のときは、そのエピソードで最初にクレジットされた位置順に並ぶ。</summary>
+    /// <summary>初参加順：最早 (シリーズ放送開始, series_id, 話数, クレジット出現位置) → 種別 → person_id / company_id。 同じ話数内で同点のときは、そのエピソードで最初にクレジットされた位置順に並ぶ。</summary>
     private static List<EntityRow> SortByDebut(IEnumerable<EntityRow> rows) => rows
         .OrderBy(r => r.FirstSortStart)
+        .ThenBy(r => r.FirstSeriesId ?? int.MaxValue)
         .ThenBy(r => r.FirstSortEpNo)
         .ThenBy(r => r.FirstSortPos)
-        .ThenBy(r => r.EntityNameKana, StringComparer.Ordinal)
-        .ThenBy(r => r.EntityName, StringComparer.Ordinal)
+        .ThenBy(r => r.EntityKind, StringComparer.Ordinal)
+        .ThenBy(r => r.EntityId)
         .ToList();
 
-    /// <summary>担当回数順：担当量降順（TV 話 + 映画本の単純合算 <see cref="EntityRow.TotalCount"/>） → 最早クレジット (放送開始, 話数, クレジット出現位置) → 読み → 名前（順位は付けない）。 五十音順以外（並びのルールが完全には一意に決まらないタブ）では、クレジット 出現位置を暗黙の副ソートキーとして効かせ、同点行の並びを安定させる方針。 ここでは担当量が同数の行を、初出が早い順 → そのエピソード内のクレジット 記載位置順に整える。</summary>
+    /// <summary>担当回数順：担当量降順（TV 話 + 映画本 + オトナシリーズの話の単純合算 <see cref="EntityRow.TotalCount"/>） → 最早クレジット (放送開始, series_id, 話数, クレジット出現位置) → 種別 → person_id / company_id（順位は付けない）。 五十音順以外（並びのルールが完全には一意に決まらないタブ）では、クレジット 出現位置を暗黙の副ソートキーとして効かせ、同点行の並びを安定させる方針。 ここでは担当量が同数の行を、初出が早い順 → そのエピソード内のクレジット 記載位置順に整える。</summary>
     private static List<EntityRow> SortByCount(IEnumerable<EntityRow> rows) => rows
         .OrderByDescending(r => r.TotalCount)
         .ThenBy(r => r.FirstSortStart)
+        .ThenBy(r => r.FirstSeriesId ?? int.MaxValue)
         .ThenBy(r => r.FirstSortEpNo)
         .ThenBy(r => r.FirstSortPos)
-        .ThenBy(r => r.EntityNameKana, StringComparer.Ordinal)
-        .ThenBy(r => r.EntityName, StringComparer.Ordinal)
+        .ThenBy(r => r.EntityKind, StringComparer.Ordinal)
+        .ThenBy(r => r.EntityId)
         .ToList();
 
-    /// <summary>初参加順を「初参加シリーズ」ごとのセクションに束ねる。 セクションはシリーズ放送開始日順、セクション内は SortByDebut と同じ クレジット順（話数 → クレジット出現位置 → 読み → 名前）。 各行のシリーズ名・年は重複するためセクション見出しへ移し、行からは出さない。</summary>
+    /// <summary>初参加順を「初参加シリーズ」ごとのセクションに束ねる。 セクションはシリーズ放送開始日順（同じ日の作品どうしは series_id 順）、セクション内は SortByDebut と同じ クレジット順（話数 → クレジット出現位置 → 種別 → ID）。 同じ作品の行は 1 つのセクションにまとめる（併映の作品のように同じ日の作品の行が交互に並んでも、セクションが切れない）。 各行のシリーズ名・年は重複するためセクション見出しへ移し、行からは出さない。</summary>
     private static List<EntitySeriesSection> SectionByDebut(IEnumerable<EntityRow> rows)
-    {
-        var ordered = SortByDebut(rows);
-        var sections = new List<EntitySeriesSection>();
-        EntitySeriesSection? current = null;
-        foreach (var r in ordered)
-        {
-            // 初参加シリーズの識別は (放送開始シリアル, シリーズ名) で十分
-            // （同日開始の別シリーズが理論上あり得るためタイトルも併用）。
-            string headLabel = r.FirstSeriesTitle;
-            if (!string.IsNullOrEmpty(r.FirstSeriesYearLabel))
-                headLabel += $"（{r.FirstSeriesYearLabel}）";
-
-            if (current is null
-                || current.SortStart != r.FirstSortStart
-                || !string.Equals(current.SeriesTitle, r.FirstSeriesTitle, StringComparison.Ordinal))
+        => SortByDebut(rows)
+            .Select((r, index) => (Row: r, Index: index))
+            .GroupBy(x => (x.Row.FirstSortStart, x.Row.FirstSeriesId, x.Row.FirstSeriesTitle))
+            .OrderBy(g => g.Key.FirstSortStart)
+            .ThenBy(g => g.Key.FirstSeriesId ?? int.MaxValue)
+            .ThenBy(g => g.Min(x => x.Index))
+            .Select(g =>
             {
-                current = new EntitySeriesSection
+                var r = g.First().Row;
+                return new EntitySeriesSection
                 {
                     SeriesTitle = r.FirstSeriesTitle,
                     SeriesUrl = r.FirstSeriesUrl,
-                    SeriesHeadingLabel = headLabel,
+                    SeriesHeadingLabel = string.IsNullOrEmpty(r.FirstSeriesYearLabel)
+                        ? r.FirstSeriesTitle
+                        : $"{r.FirstSeriesTitle}（{r.FirstSeriesYearLabel}）",
+                    SeriesYearLabel = r.FirstSeriesYearLabel,
                     SortStart = r.FirstSortStart,
-                    Members = new List<EntityRow>()
+                    Members = g.OrderBy(x => x.Index).Select(x => x.Row).ToList()
                 };
-                sections.Add(current);
-            }
-            ((List<EntityRow>)current.Members).Add(r);
-        }
-        return sections;
-    }
+            })
+            .ToList();
 
     /// <summary>
     /// 関与の最早 (シリーズ放送開始日, シリーズ内話数, クレジット出現位置) を畳み込みで保持し、
@@ -3003,9 +3934,12 @@ public sealed class CreatorsGenerator
                 : 0;
             // クレジット階層の位置は (CreditSeq, CreditSubSeq) の辞書順。
             long pos = inv.CreditPos;
+            // 放送開始日 → series_id（同じ日の映画と併映の短編は本編が先）→ 話数 → クレジットの位置の順で最も早いものを残す。
+            int bestSeriesId = _bestSeriesId ?? int.MaxValue;
             if (start < _bestStart
-                || (start == _bestStart && epNo < _bestEpNo)
-                || (start == _bestStart && epNo == _bestEpNo && pos < _bestPos))
+                || (start == _bestStart && inv.SeriesId < bestSeriesId)
+                || (start == _bestStart && inv.SeriesId == bestSeriesId && epNo < _bestEpNo)
+                || (start == _bestStart && inv.SeriesId == bestSeriesId && epNo == _bestEpNo && pos < _bestPos))
             {
                 _bestStart = start;
                 _bestEpNo = epNo;
@@ -3017,6 +3951,8 @@ public sealed class CreatorsGenerator
         private Series? BestSeries
             => _bestSeriesId is int id && _ctx.SeriesById.TryGetValue(id, out var s) ? s : null;
 
+        /// <summary>最早の作品の series_id（分からなければ null）。初参加順・役職順の節を作品ごとにまとめるのに使う。</summary>
+        public int? SeriesId => BestSeries?.SeriesId;
         public string SeriesTitle => BestSeries?.Title ?? "";
         public string SeriesUrl => BestSeries is { } s ? PathUtil.SeriesUrl(s.Slug) : "";
         public string SeriesYearLabel
@@ -3030,6 +3966,17 @@ public sealed class CreatorsGenerator
 
         /// <summary>ソート用：最早エピソード内でそのエンティティが最初にクレジットされた 階層位置 (CreditSeq, CreditSubSeq) を畳んだ合成キー。 「同じ話数内ではクレジット記載位置順」を厳密に表す。</summary>
         public long SortCreditPos => _bestSeriesId is null ? long.MaxValue : _bestPos;
+
+        /// <summary>関与を 1 件でも受け取ったか。</summary>
+        public bool HasValue => _bestSeriesId is not null;
+
+        /// <summary>最早の位置の並べ替えキー（放送開始日シリアル・series_id・話数・クレジット階層位置）。</summary>
+        public (long Start, int SeriesId, int EpNo, long Pos) Key => (SortStartTicks, _bestSeriesId ?? int.MaxValue, SortEpNo, SortCreditPos);
+
+        /// <summary>役職順タブの節分けに使う形（並べ替えキーと作品の題・URL・年）。関与を 1 件も受け取っていなければ null。</summary>
+        public RoleFirstCredit? ToRoleFirstCredit()
+            => _bestSeriesId is null ? null
+                : new RoleFirstCredit(SortStartTicks, SortEpNo, SortCreditPos, SeriesId, SeriesTitle, SeriesUrl, SeriesYearLabel);
     }
 
     /// <summary>
@@ -3040,16 +3987,19 @@ public sealed class CreatorsGenerator
     private sealed class EntityAggregate
     {
         private readonly CreatorsGenerator _owner;
-        private readonly Dictionary<int, FirstCreditAccumulator> _firstByAlias = new();
+        private readonly Dictionary<int, FirstCreditAccumulator[]> _firstByAlias = new();
         private readonly List<int> _aliasOrder = new();
 
         public EntityAggregate(CreatorsGenerator owner)
         {
             _owner = owner;
             First = new FirstCreditAccumulator(owner._ctx);
+            FirstTv = new FirstCreditAccumulator(owner._ctx);
+            FirstMovie = new FirstCreditAccumulator(owner._ctx);
+            FirstOtona = new FirstCreditAccumulator(owner._ctx);
         }
 
-        /// <summary>TV 系シリーズの参加（(seriesId, episodeId) で重複排除 → 話数）。</summary>
+        /// <summary>TV 系シリーズ（本線の TV とオトナシリーズ）の参加（(seriesId, episodeId) で重複排除 → 話数）。</summary>
         public HashSet<(int seriesId, int episodeId)> EpisodeKeys { get; } = new();
 
         /// <summary>映画系シリーズの参加（seriesId で重複排除 → 本数、1 シリーズ = 1 本）。</summary>
@@ -3063,8 +4013,17 @@ public sealed class CreatorsGenerator
         /// <summary>エンティティ全体の最早関与。</summary>
         public FirstCreditAccumulator First { get; }
 
-        /// <summary>役職ラベル用：代表 role_code → その役職で最も早い (Start, EpNo, Pos)。</summary>
-        public Dictionary<string, (DateOnly Start, int EpNo, long Pos)> EarliestByRep { get; } = new(StringComparer.Ordinal);
+        /// <summary>本線の TV シリーズの関与だけで見た最早関与（スタッフ一覧の役職順タブで、TV の節を TV で初めての作品で分けるのに使う。オトナシリーズは入れない）。</summary>
+        public FirstCreditAccumulator FirstTv { get; }
+
+        /// <summary>映画系シリーズの関与だけで見た最早関与（スタッフ一覧の役職順タブで、映画の節を初めての映画で分けるのに使う）。</summary>
+        public FirstCreditAccumulator FirstMovie { get; }
+
+        /// <summary>オトナシリーズの関与だけで見た最早関与（スタッフ一覧の役職順タブで、オトナシリーズの節を初めての作品で分けるのに使う）。</summary>
+        public FirstCreditAccumulator FirstOtona { get; }
+
+        /// <summary>役職ラベル用：代表 role_code → その役職で最も早い (Start, SeriesId, EpNo, Pos)。</summary>
+        public Dictionary<string, (DateOnly Start, int SeriesId, int EpNo, long Pos)> EarliestByRep { get; } = new(StringComparer.Ordinal);
 
         /// <summary>クレジットされた表記（系譜でまとめる前の role_code）ごとの担当数と最早位置。役職詳細の行の添え書き用。</summary>
         public Dictionary<string, RoleCodeUsage> UsageByRoleCode { get; } = new(StringComparer.Ordinal);
@@ -3074,8 +4033,8 @@ public sealed class CreatorsGenerator
         /// </summary>
         public Dictionary<RelatedRoleKey, (HashSet<(int SeriesId, int EpisodeId)> Episodes, HashSet<int> Movies)> RelatedRoles { get; } = new();
 
-        /// <summary>集計対象の関与を 1 件でも持った名義ごとの最早関与（名義を初めて受け取った順）。</summary>
-        public IEnumerable<(int AliasId, FirstCreditAccumulator First)> FirstByAlias
+        /// <summary>集計対象の関与を 1 件でも持った名義ごとの、種類（<see cref="WorkKindNames"/> の添字）ごとの最早関与（名義を初めて受け取った順）。</summary>
+        public IEnumerable<(int AliasId, FirstCreditAccumulator[] ByKind)> FirstByAlias
             => _aliasOrder.Select(aid => (aid, _firstByAlias[aid]));
 
         public bool IsEmpty => EpisodeKeys.Count == 0 && MovieSeriesIds.Count == 0;
@@ -3094,20 +4053,23 @@ public sealed class CreatorsGenerator
                 EpisodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
             SeriesIds.Add(inv.SeriesId);
             First.Offer(inv);
+            bool isOtona = _owner._ctx.IsOtonaSeries(inv.SeriesId);
+            int kind = isMovie ? 1 : isOtona ? 2 : 0;
+            (kind switch { 0 => FirstTv, 1 => FirstMovie, _ => FirstOtona }).Offer(inv);
             if (!_firstByAlias.TryGetValue(aliasId, out var aliasFirst))
             {
-                aliasFirst = new FirstCreditAccumulator(_owner._ctx);
+                aliasFirst = WorkKindNames.Select(_ => new FirstCreditAccumulator(_owner._ctx)).ToArray();
                 _firstByAlias[aliasId] = aliasFirst;
                 _aliasOrder.Add(aliasId);
             }
-            aliasFirst.Offer(inv);
+            aliasFirst[kind].Offer(inv);
             _owner.OfferEarliestRole(EarliestByRep, rep, inv);
             if (!UsageByRoleCode.TryGetValue(inv.RoleCode, out var usage))
             {
                 usage = new RoleCodeUsage();
                 UsageByRoleCode[inv.RoleCode] = usage;
             }
-            usage.Offer(inv, _owner._ctx.IsMovieKindSeries(inv.SeriesId), _owner.CreditOrderKey(inv));
+            usage.Offer(inv, isMovie, isOtona, _owner.CreditOrderKey(inv));
         }
 
         /// <summary>関連する役職（<paramref name="key"/>）の関与を 1 件積む（年表に重ねるだけで、担当の集計には入れない）。</summary>
@@ -3128,28 +4090,32 @@ public sealed class CreatorsGenerator
     /// <summary>役職詳細の年表に重ねる関連する役職 1 つ（ページの役職から見た関連の種類・系譜の代表 role_code・役職名・役職マスタの表示順）。</summary>
     private readonly record struct RelatedRoleKey(RoleRelationLane Lane, string RoleCode, string RoleName, int SortOrder);
 
-    /// <summary>1 つの表記（role_code）での担当数（TV 系は話、映画系は本で重複排除）と、最も早くクレジットされた位置。</summary>
+    /// <summary>1 つの表記（role_code）での担当数（本線の TV・オトナシリーズは話、映画系は本で重複排除）と、最も早くクレジットされた位置。</summary>
     private sealed class RoleCodeUsage
     {
         private readonly HashSet<(int SeriesId, int EpisodeId)> _episodes = new();
         private readonly HashSet<int> _movies = new();
+        private readonly HashSet<(int SeriesId, int EpisodeId)> _otonaEpisodes = new();
 
         /// <summary>最も早くクレジットされた (シリーズ放送開始日, 話数, クレジット出現位置)。</summary>
         public (long Start, int EpNo, long Pos) First { get; private set; } = (long.MaxValue, int.MaxValue, long.MaxValue);
 
         /// <summary>担当数（話数 + 本数）。</summary>
-        public int Count => _episodes.Count + _movies.Count;
+        public int Count => _episodes.Count + _movies.Count + _otonaEpisodes.Count;
 
-        /// <summary>TV 系シリーズでの担当話数。</summary>
+        /// <summary>本線の TV シリーズでの担当話数。</summary>
         public int EpisodeCount => _episodes.Count;
+
+        /// <summary>オトナシリーズでの担当話数。</summary>
+        public int OtonaEpisodeCount => _otonaEpisodes.Count;
 
         /// <summary>映画系シリーズでの担当本数。</summary>
         public int MovieCount => _movies.Count;
 
-        public void Offer(Involvement inv, bool isMovie, (long Start, int EpNo, long Pos) key)
+        public void Offer(Involvement inv, bool isMovie, bool isOtona, (long Start, int EpNo, long Pos) key)
         {
             if (isMovie) _movies.Add(inv.SeriesId);
-            else _episodes.Add((inv.SeriesId, inv.EpisodeId ?? 0));
+            else (isOtona ? _otonaEpisodes : _episodes).Add((inv.SeriesId, inv.EpisodeId ?? 0));
             if (key.CompareTo(First) < 0) First = key;
         }
     }
@@ -3229,7 +4195,10 @@ public sealed class CreatorsGenerator
         public int MovieWorkCount { get; set; }
         /// <summary>制作タブで、盤（商品）に付いたクレジットの盤の数（💿）。</summary>
         public int ProductCount { get; set; }
-        public long DebutSort { get; set; }
+        /// <summary>person_id / company_id（初参加のキーが同じ行の並べ替えに使う）。</summary>
+        public int EntityId { get; set; }
+        /// <summary>初参加の並べ替えキー（<see cref="MusicDebutKey"/>）。</summary>
+        public MusicDebutKey DebutKey { get; set; } = MusicDebutKey.Max;
         /// <summary>初参加の曲名・作品名とリンク先。</summary>
         public string DebutLabel { get; set; } = "";
         public string DebutUrl { get; set; } = "";
@@ -3268,18 +4237,28 @@ public sealed class CreatorsGenerator
         public string Name { get; set; } = "";
         public string NameKana { get; set; } = "";
         public string Url { get; set; } = "";
+        /// <summary>person_id / company_id（初参加が同じ行の並べ替えに使う）。</summary>
+        public int EntityId { get; set; }
         /// <summary>初参加の担当先の日付（根拠の盤の発売日）と作品。</summary>
         public DateTime FirstSort { get; set; }
         public int? DebutSeriesId { get; set; }
-        /// <summary>劇伴を担当した TV 系の作品数（📺）と映画系の本数（🎥）。</summary>
+        /// <summary>初参加順の一覧での位置（0 始まり）。参加数順で参加数が同じ行の並べ替えに使う。</summary>
+        public int DebutRank { get; set; }
+        /// <summary>
+        /// 担当した作品の数。劇伴の作品と作品のクレジットの作品を合わせて数え（同じ作品は 1 つ）、本線の TV シリーズ（📺）・映画（🎥）・
+        /// オトナシリーズ（🌙）に分ける。
+        /// </summary>
         public int TvWorkCount { get; set; }
         public int MovieWorkCount { get; set; }
+        public int OtonaWorkCount { get; set; }
         /// <summary>担当した歌の曲数（🎵。録音違いは 1 曲に数える）。</summary>
         public int SongCount { get; set; }
         /// <summary>担当した盤の点数（💿）。</summary>
         public int ProductCount { get; set; }
-        /// <summary>件数の合計（📺 + 🎥 + 🎵 + 💿）。参加数順の並べ替えに使う。</summary>
+        /// <summary>件数の合計（📺 + 🎥 + 🌙 + 🎵 + 💿）。参加数順の並べ替えに使う。</summary>
         public int Count { get; set; }
+        /// <summary>作品のクレジット：1 作品 1 行（Sub は TV 系で担当した話数の範囲。映画は空）。</summary>
+        public IReadOnlyList<MusicRoleTarget> CreditItems { get; set; } = Array.Empty<MusicRoleTarget>();
         /// <summary>劇伴：1 作品 1 行（Sub は担当した録音回を「・」でつないだもの）。</summary>
         public IReadOnlyList<MusicRoleTarget> BgmItems { get; set; } = Array.Empty<MusicRoleTarget>();
         /// <summary>歌：曲・録音ごとに 1 行。</summary>
@@ -3311,6 +4290,8 @@ public sealed class CreatorsGenerator
     /// <summary>歌唱ページの 1 行。歌手（人物単位）またはキャラクター（キャラ × 声優の組）。</summary>
     private sealed class SingerListRow
     {
+        /// <summary>プリキュアシンガー（<see cref="PrecureSingerPersons"/> の人物と、その人物だけのユニット）の行か（行の data-precure-singer）。</summary>
+        public bool IsPrecureSinger { get; set; }
         /// <summary>"singer" / "character"（絞り込み用の data-entity-type と行頭アイコンの出し分け）。</summary>
         public string EntityKind { get; set; } = "";
         /// <summary>歌手は人物名（表示名義）、キャラクターは「変身前 / 変身後」または最初に歌ったときの名義。</summary>
@@ -3323,6 +4304,12 @@ public sealed class CreatorsGenerator
         public int SongCount { get; set; }
         /// <summary>初参加の録音（最小 recording_id）と、その出典シリーズ・曲。</summary>
         public int DebutRecordingId { get; set; }
+        /// <summary>初参加の録音での歌唱の連名の位置（song_recording_singers.singer_seq。未取得は int.MaxValue）。</summary>
+        public int DebutSeq { get; set; } = int.MaxValue;
+        /// <summary>同じ録音・同じ位置の行の並べ替えに使う ID（歌手は person_id、キャラクターは character_id、ユニットは名義の ID）。</summary>
+        public int EntityId { get; set; }
+        /// <summary>キャラクターの行の声優の person_id（同じキャラを別の声優が演じた行の並べ替えに使う。ほかの行は 0）。</summary>
+        public int VoicePersonId { get; set; }
         public int? DebutSeriesId { get; set; }
         public string DebutSongTitle { get; set; } = "";
         public string DebutSongUrl { get; set; } = "";
@@ -3331,10 +4318,15 @@ public sealed class CreatorsGenerator
     private sealed class StaffModel
     {
         public IReadOnlyList<RoleIndexEntry> Roles { get; set; } = Array.Empty<RoleIndexEntry>();
-        /// <summary>役職順タブの前半：TV 系シリーズで 1 度でもクレジットされた役職。</summary>
-        public IReadOnlyList<RoleIndexEntry> TvRoles { get; set; } = Array.Empty<RoleIndexEntry>();
-        /// <summary>役職順タブの後半：映画系シリーズでのみクレジットされた役職（別セクション）。</summary>
-        public IReadOnlyList<RoleIndexEntry> MovieOnlyRoles { get; set; } = Array.Empty<RoleIndexEntry>();
+        /// <summary>役職順タブの前半：TV 系シリーズで 1 度でもクレジットされた役職を、TV で初めてクレジットされた作品ごとの節に束ねたもの。</summary>
+        public IReadOnlyList<RoleSeriesSection> RoleTvSections { get; set; } = Array.Empty<RoleSeriesSection>();
+        /// <summary>役職順タブの中ほど：本線の TV に無く映画系シリーズでクレジットされた役職を、初めてクレジットされた映画ごとの節に束ねたもの。</summary>
+        public IReadOnlyList<RoleSeriesSection> RoleMovieSections { get; set; } = Array.Empty<RoleSeriesSection>();
+        /// <summary>役職順タブの後半：オトナシリーズでのみクレジットされた役職を、初めてクレジットされた作品ごとの節に束ねたもの。</summary>
+        public IReadOnlyList<RoleSeriesSection> RoleOtonaSections { get; set; } = Array.Empty<RoleSeriesSection>();
+        /// <summary>映画の組・オトナシリーズの組に、開いたとき（すべての種類が入っているとき）に見える節が無いか（組の data-wk-empty）。</summary>
+        public bool RoleMovieDefaultEmpty => RoleMovieSections.All(s => s.DefaultEmpty);
+        public bool RoleOtonaDefaultEmpty => RoleOtonaSections.All(s => s.DefaultEmpty);
         public int TotalRoles { get; set; }
         public IReadOnlyList<EntityRow> KanaRows { get; set; } = Array.Empty<EntityRow>();
         /// <summary>初参加順は初参加シリーズごとのセクションに束ねる。</summary>
@@ -3343,6 +4335,10 @@ public sealed class CreatorsGenerator
         public int PersonCount { get; set; }
         public int CompanyCount { get; set; }
         public string CoverageLabel { get; set; } = "";
+        /// <summary>ページの題（h1）。</summary>
+        public string PageTitle { get; set; } = "";
+        /// <summary>ページに載る参加の種類（タブの右上の TV・映画・オトナのボタン）。</summary>
+        public WorkKinds Kinds { get; set; } = new();
     }
 
     private sealed class RoleDetailModel
@@ -3363,6 +4359,12 @@ public sealed class CreatorsGenerator
         /// <summary>個人・団体の件数。両方 &gt; 0 のときだけ entity-filter（すべて / 個人のみ / 団体のみ）をテンプレで表示する（片方だけの役職では絞り込みが無意味なため）。</summary>
         public int PersonCount { get; set; }
         public int CompanyCount { get; set; }
+        /// <summary>見出しの上に置くスタッフ一覧へのリンク。</summary>
+        public string StaffUrl { get; set; } = "";
+        /// <summary>🌙 だけを入れているときに見せる線表（オトナシリーズの作品ごとの帯）。オトナシリーズの担当が無い役職と、オトナシリーズだけの役職（<see cref="Timeline"/> がこの線表になる）は null。</summary>
+        public RoleTimelineModel? OtonaTimeline { get; set; }
+        /// <summary>ページに載る参加の種類（タブの右上の TV・映画・オトナのボタン）。</summary>
+        public WorkKinds Kinds { get; set; } = new();
     }
 
     /// <summary>歌系役職詳細ページ用の表示モデル。 既存 <see cref="RoleDetailModel"/> と並列に置く別 DTO。初参加順タブは持たない。</summary>
@@ -3370,8 +4372,10 @@ public sealed class CreatorsGenerator
     {
         public string RoleNameJa { get; set; } = "";
         public IReadOnlyList<SongRoleRow> KanaRows { get; set; } = Array.Empty<SongRoleRow>();
-        /// <summary>初参加順（recording_id 順）の行。五十音順の代替として既定タブに使う。</summary>
+        /// <summary>初担当順（recording_id 順）の行。五十音順の代替として既定タブに使う。</summary>
         public IReadOnlyList<SongRoleRow> DebutRows { get; set; } = Array.Empty<SongRoleRow>();
+        /// <summary>初担当順の行を、この役職で初めて担当した録音の作品ごとの節に束ねたもの（TV・映画を混ぜた放送開始・公開順）。</summary>
+        public IReadOnlyList<DebutSeriesSection> DebutSections { get; set; } = Array.Empty<DebutSeriesSection>();
         public IReadOnlyList<SongRoleRow> CountRows { get; set; } = Array.Empty<SongRoleRow>();
         /// <summary>年表タブ（切り替え）の線表。載せる行が無ければ null（年表を出さない）。</summary>
         public RoleTimelineModel? Timeline { get; set; }
@@ -3390,6 +4394,8 @@ public sealed class CreatorsGenerator
         public int SongCount { get; set; }
         /// <summary>初参加順の代理ソートキー。当該役職で関与した録音／曲の最小 recording_id（未取得は int.MaxValue）。</summary>
         public int DebutRecordingId { get; set; }
+        /// <summary>初参加の録音での連名の位置（song_credits.credit_seq・song_recording_singers.singer_seq。未取得は int.MaxValue）。同じ録音で初参加の人の並びに使う。</summary>
+        public int DebutSeq { get; set; } = int.MaxValue;
         /// <summary>初参加の録音の出典シリーズ（初参加順のシリーズ別セクション用。不明なら null）。</summary>
         public int? DebutSeriesId { get; set; }
         /// <summary>初参加の曲名と曲詳細 URL（音楽制作・歌唱ページで添える。役職詳細では空）。</summary>
@@ -3414,8 +4420,58 @@ public sealed class CreatorsGenerator
         public long SortPos { get; set; }
         /// <summary>完全同点時の安定化キー（内部 role_code。表示には用いない）。</summary>
         public string RoleNameKey { get; set; } = "";
-        /// <summary>映画系シリーズでのみクレジットされた役職なら true（役職順タブで別セクションに分ける）。</summary>
-        public bool IsMovieOnly { get; set; }
+        /// <summary>この役職が初めてクレジットされた作品の series_id（分からなければ null）。</summary>
+        public int? FirstSeriesId { get; set; }
+        /// <summary>この役職が初めてクレジットされた作品の題（役職順タブの節の見出し）。</summary>
+        public string FirstSeriesTitle { get; set; } = "";
+        /// <summary>この役職が初めてクレジットされた作品のページの URL。</summary>
+        public string FirstSeriesUrl { get; set; } = "";
+        /// <summary>この役職が初めてクレジットされた作品の放送開始・公開の年（4 桁）。</summary>
+        public string FirstSeriesYearLabel { get; set; } = "";
+        /// <summary>この役職が初めてクレジットされた回（TV・映画を問わない）。</summary>
+        public RoleFirstCredit First => new(SortStart, SortEpNo, SortPos, FirstSeriesId, FirstSeriesTitle, FirstSeriesUrl, FirstSeriesYearLabel);
+        /// <summary>この役職が本線の TV シリーズで初めてクレジットされた回。本線の TV のクレジットが 1 件も無い役職は null。</summary>
+        public RoleFirstCredit? FirstTv { get; set; }
+        /// <summary>この役職が映画で初めてクレジットされた回。映画のクレジットが 1 件も無い役職は null。</summary>
+        public RoleFirstCredit? FirstMovie { get; set; }
+        /// <summary>この役職がオトナシリーズで初めてクレジットされた回。オトナシリーズのクレジットが 1 件も無い役職は null。</summary>
+        public RoleFirstCredit? FirstOtona { get; set; }
+        /// <summary>この役職がクレジットされた参加の種類（"tv movie otona" の形）。</summary>
+        public string Kinds { get; set; } = "";
+        /// <summary>「初めて」で節を分ける一覧の行で、この行を置いた種類（"tv" / "movie" / "otona"。行の data-wk-own）。それ以外の行は空文字。</summary>
+        public string WkOwn { get; set; } = "";
+        /// <summary>この行の種類より早い初めてを持つ種類（空白区切り。行の data-wk-after。入っているあいだはこの行を隠す）。無ければ空文字。</summary>
+        public string WkAfter { get; set; } = "";
+        /// <summary>役職順タブの節に置く写し（置いた種類と、入っているあいだ隠す種類を付ける）。</summary>
+        public RoleIndexEntry Placed(string own, string after)
+        {
+            var copy = (RoleIndexEntry)MemberwiseClone();
+            copy.WkOwn = own;
+            copy.WkAfter = after;
+            return copy;
+        }
+    }
+
+    /// <summary>役職が初めてクレジットされた回（並べ替えキーと、その作品の題・URL・年）。役職順タブの節分けに使う。</summary>
+    private sealed record RoleFirstCredit(
+        long SortStart, int EpNo, long Pos, int? SeriesId, string SeriesTitle, string SeriesUrl, string SeriesYearLabel);
+
+    /// <summary>役職順タブの、初めてクレジットされた作品ごとの節 1 つ分。</summary>
+    private sealed class RoleSeriesSection
+    {
+        public string SeriesTitle { get; set; } = "";
+        /// <summary>左のもくじ（section-nav.js）の年の欄に出す放送開始・公開の年（4 桁）。分からなければ空。</summary>
+        public string SeriesYearLabel { get; set; } = "";
+        public string SeriesUrl { get; set; } = "";
+        /// <summary>「作品名（年）」整形済み見出しラベル。</summary>
+        public string SeriesHeadingLabel { get; set; } = "";
+        /// <summary>節の区切りの判定用（放送開始日シリアル）。</summary>
+        public long SortStart { get; set; }
+        public IReadOnlyList<RoleIndexEntry> Roles { get; set; } = Array.Empty<RoleIndexEntry>();
+        /// <summary>開いたとき（すべての種類が入っているとき）に見える行の数（左のもくじの件数）。</summary>
+        public int DefaultCount => Roles.Count(m => m.WkAfter == "");
+        /// <summary>開いたときに見える行が無い節か（節の data-wk-empty。ほかの種類を切ったときだけ出る行しか無い）。</summary>
+        public bool DefaultEmpty => DefaultCount == 0;
     }
 
     private sealed class AlternateNameItem
@@ -3427,8 +4483,10 @@ public sealed class CreatorsGenerator
     private sealed class RoleNameHistoryItem
     {
         public string RoleNameJa { get; set; } = "";
-        /// <summary>この表記での TV 系の担当話数（全担当者の (シリーズ, 話) で重複を除いた数）。</summary>
+        /// <summary>この表記での本線の TV の担当話数（全担当者の (シリーズ, 話) で重複を除いた数）。</summary>
         public int EpisodeCount { get; set; }
+        /// <summary>この表記でのオトナシリーズの担当話数。</summary>
+        public int OtonaEpisodeCount { get; set; }
         /// <summary>この表記での映画系の担当本数。</summary>
         public int MovieCount { get; set; }
         /// <summary>この表記でクレジットされた作品（放送・公開順）。</summary>
@@ -3454,12 +4512,16 @@ public sealed class CreatorsGenerator
         /// <summary>初参加順の行を旧名義で置いたときの、いまの名乗り（人物の表示名義）。添えない行は空文字。 テンプレ側で名前の後ろに括弧書きで添える。</summary>
         public string CurrentNameNote { get; set; } = "";
         public string EntityUrl { get; set; } = "";
-        /// <summary>TV 系シリーズ（series_kinds.credit_attach_to='EPISODE'）での担当エピソード合計数。</summary>
+        /// <summary>本線の TV シリーズでの担当エピソード合計数（📺）。</summary>
         public int EpisodeCount { get; set; }
-        /// <summary>映画系シリーズ（series_kinds.credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）での担当本数（1 シリーズ = 1 本）。</summary>
+        /// <summary>映画系シリーズ（series_kinds.credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING）での担当本数（1 シリーズ = 1 本。🎥）。</summary>
         public int MovieCount { get; set; }
-        /// <summary>担当の総量（<see cref="EpisodeCount"/> + <see cref="MovieCount"/>）。担当多い順タブのソートキー兼テンプレ存在判定用。</summary>
-        public int TotalCount => EpisodeCount + MovieCount;
+        /// <summary>オトナシリーズでの担当エピソード合計数（🌙）。</summary>
+        public int OtonaEpisodeCount { get; set; }
+        /// <summary>担当の総量（<see cref="EpisodeCount"/> + <see cref="MovieCount"/> + <see cref="OtonaEpisodeCount"/>）。担当多い順タブのソートキー兼テンプレ存在判定用。</summary>
+        public int TotalCount => EpisodeCount + MovieCount + OtonaEpisodeCount;
+        /// <summary>参加した種類（"tv movie otona" の形。行の data-wk。タブの右上のボタンで入っている種類に 1 つも当たらない行は隠す）。</summary>
+        public string Kinds => KindTokens(EpisodeCount > 0, MovieCount > 0, OtonaEpisodeCount > 0);
         /// <summary>"担当 N 話・M 本" / "担当 N 話" / "担当 M 本" の単位付き表記。両方ゼロなら空文字。
         /// 「担当」の動詞を冠して、エピソードの話数（#N・第N話）と数量の「N 話」を読み分けられるようにする。</summary>
         public string CountLabel => (EpisodeCount, MovieCount) switch
@@ -3481,6 +4543,8 @@ public sealed class CreatorsGenerator
         public string RolesLabel { get; set; } = "";
         /// <summary>役職詳細の行に添える「表記ごとの担当数」（<see cref="BuildRoleUsageNote"/>）。添えない行は空文字。</summary>
         public string RoleUsageNote { get; set; } = "";
+        /// <summary>初めてクレジットされた作品の series_id（分からなければ null）。</summary>
+        public int? FirstSeriesId { get; set; }
         public string FirstSeriesTitle { get; set; } = "";
         public string FirstSeriesUrl { get; set; } = "";
         public string FirstSeriesYearLabel { get; set; } = "";
@@ -3488,18 +4552,41 @@ public sealed class CreatorsGenerator
         public int FirstSortEpNo { get; set; }
         /// <summary>最早エピソード内でこのエンティティが最初にクレジットされた階層位置を (CreditSeq, CreditSubSeq) で畳んだ合成キー。</summary>
         public long FirstSortPos { get; set; }
+        /// <summary>映画の関与だけで見た最早の回（エンティティごとの行だけ。スタッフ一覧の役職順タブの映画の節分け用）。映画の関与が無ければ null。</summary>
+        public RoleFirstCredit? FirstMovie { get; set; }
+        /// <summary>オトナシリーズの関与だけで見た最早の回（エンティティごとの行だけ。スタッフ一覧の役職順タブのオトナシリーズの節分け用）。無ければ null。</summary>
+        public RoleFirstCredit? FirstOtona { get; set; }
+        /// <summary>「初めて」で節を分ける一覧の行で、この行を置いた種類（"tv" / "movie" / "otona"。行の data-wk-own）。それ以外の行は空文字。</summary>
+        public string WkOwn { get; set; } = "";
+        /// <summary>この行の種類より早い初めてを持つ種類（空白区切り。行の data-wk-after。入っているあいだはこの行を隠す）。無ければ空文字。</summary>
+        public string WkAfter { get; set; } = "";
+        /// <summary>本線の TV シリーズの関与だけで見た最早の作品（エンティティごとの行だけ。スタッフ一覧の役職順タブの TV の節分け用）。TV の関与が無ければ null。</summary>
+        public int? FirstTvSeriesId { get; set; }
+        public string FirstTvSeriesTitle { get; set; } = "";
+        public string FirstTvSeriesUrl { get; set; } = "";
+        public string FirstTvSeriesYearLabel { get; set; } = "";
+        /// <summary>TV 系の最早関与の並べ替えキー（放送開始日シリアル・話数・クレジット階層位置）。TV の関与が無ければ最大値。</summary>
+        public long FirstTvSortStart { get; set; } = long.MaxValue;
+        public int FirstTvSortEpNo { get; set; } = int.MaxValue;
+        public long FirstTvSortPos { get; set; } = long.MaxValue;
     }
 
     /// <summary>初参加順タブを「初参加シリーズ」ごとに束ねるセクション。 シリーズ名・年は見出しに集約し、配下行（<see cref="Members"/>）からは出さない。</summary>
     private sealed class EntitySeriesSection
     {
         public string SeriesTitle { get; set; } = "";
+        /// <summary>左のもくじ（section-nav.js）の年の欄に出す放送開始・公開の年（4 桁）。分からなければ空。</summary>
+        public string SeriesYearLabel { get; set; } = "";
         public string SeriesUrl { get; set; } = "";
         /// <summary>「シリーズ名（年）」整形済み見出しラベル。</summary>
         public string SeriesHeadingLabel { get; set; } = "";
         /// <summary>セクション並び替え用（放送開始日シリアル）。</summary>
         public long SortStart { get; set; }
         public IReadOnlyList<EntityRow> Members { get; set; } = Array.Empty<EntityRow>();
+        /// <summary>開いたとき（すべての種類が入っているとき）に見える行の数（左のもくじの件数）。</summary>
+        public int DefaultCount => Members.Count(m => m.WkAfter == "");
+        /// <summary>開いたときに見える行が無い節か（節の data-wk-empty。ほかの種類を切ったときだけ出る行しか無い）。</summary>
+        public bool DefaultEmpty => DefaultCount == 0;
     }
 
     private sealed class VoiceCastModel
@@ -3510,23 +4597,37 @@ public sealed class CreatorsGenerator
         /// <summary>初出演順：シリーズごとのセクション。</summary>
         public IReadOnlyList<VoiceSeriesSection> DebutSections { get; set; } = Array.Empty<VoiceSeriesSection>();
         public IReadOnlyList<VoiceCastRow> CountRows { get; set; } = Array.Empty<VoiceCastRow>();
+        /// <summary>クレジット役柄数順タブの行（声優 1 人 = 1 行。TV シリーズで演じたキャラの数の多い順）。</summary>
+        public IReadOnlyList<VoiceCastRow> CharacterCountRows { get; set; } = Array.Empty<VoiceCastRow>();
         /// <summary>年表タブの線表。載せる声優が居ないときは null（年表タブを出さない）。</summary>
         public RoleTimelineModel? Timeline { get; set; }
         public string CoverageLabel { get; set; } = "";
         /// <summary>プリキュアのマスタのプリキュアの人数（「プリキュアを演じた方のみ」の ? の説明に出す）。</summary>
         public int PrecureCount { get; set; }
+        /// <summary>ページの題（h1）。</summary>
+        public string PageTitle { get; set; } = "";
+        /// <summary>🌙 だけを入れているときに見せる線表（オトナシリーズの作品ごとの帯）。オトナシリーズの出演が無いとき・オトナシリーズだけのときは null。</summary>
+        public RoleTimelineModel? OtonaTimeline { get; set; }
+        /// <summary>ページに載る参加の種類（タブの右上の TV・映画・オトナのボタン）。</summary>
+        public WorkKinds Kinds { get; set; } = new();
     }
 
     /// <summary>声の出演のシリーズ別セクション（キャラクター順・初出演順タブで使用）。 シリーズ名・年は見出しに集約し、配下行からはシリーズ情報を出さない。</summary>
     private sealed class VoiceSeriesSection
     {
         public string SeriesTitle { get; set; } = "";
+        /// <summary>左のもくじ（section-nav.js）の年の欄に出す放送開始・公開の年（4 桁）。分からなければ空。</summary>
+        public string SeriesYearLabel { get; set; } = "";
         public string SeriesUrl { get; set; } = "";
         public string SeriesHeadingLabel { get; set; } = "";
         public long SortStart { get; set; }
         public IReadOnlyList<VoiceCastRow> Members { get; set; } = Array.Empty<VoiceCastRow>();
         /// <summary>プリキュアを演じた方の行を含むか（「プリキュアを演じた方のみ」のときもセクションを残すか）。</summary>
         public bool HasPrecureCast => Members.Any(m => m.IsPrecureCast);
+        /// <summary>開いたとき（すべての種類が入っているとき）に見える行の数（左のもくじの件数）。</summary>
+        public int DefaultCount => Members.Count(m => m.WkAfter == "");
+        /// <summary>開いたときに見える行が無い節か（節の data-wk-empty。ほかの種類を切ったときだけ出る行しか無い）。</summary>
+        public bool DefaultEmpty => DefaultCount == 0;
     }
 
     /// <summary>(声優 × シリーズ × キャラ) 1 組分の表示行。別シリーズ・別キャラはそれぞれ別行になり、 その都度キャラ名・シリーズ名が出る。</summary>
@@ -3549,7 +4650,7 @@ public sealed class CreatorsGenerator
         public string CharacterUrl { get; set; } = "";
         /// <summary>キャラクター順タブでキャラを主単位にグルーピングするための ID。</summary>
         public int CharacterId { get; set; }
-        /// <summary>当該 (声優 × シリーズ × キャラ) の重複排除済み出演話数（0 = シリーズ全体スコープのみ）。</summary>
+        /// <summary>当該 (声優 × シリーズ × キャラ) の重複排除済み出演話数（本線の TV の話。0 = シリーズ全体スコープのみ、または本線の TV ではない行）。</summary>
         public int EpisodeCount { get; set; }
         /// <summary>映画系シリーズ（series_kinds.credit_attach_to='SERIES'）での担当本数（1 シリーズ = 1 本）。</summary>
         public int MovieCount { get; set; }
@@ -3563,6 +4664,24 @@ public sealed class CreatorsGenerator
         /// <summary>出演回数順タブ（声優単位の集約行）専用：代表キャラ以外にも演じたキャラが
         /// 居るとき true。テンプレ側で「（キャラ 役 他）」の「他」を付ける。</summary>
         public bool HasOtherCharacters { get; set; }
+        /// <summary>クレジット役柄数順タブ（声優単位の集約行）専用：本線の TV シリーズの話で演じたキャラの数。</summary>
+        public int TvCharacterCount { get; set; }
+        /// <summary>クレジット役柄数順タブ（声優単位の集約行）専用：映画で演じたキャラの数。</summary>
+        public int MovieCharacterCount { get; set; }
+        /// <summary>オトナシリーズでの出演の話数（🌙）。</summary>
+        public int OtonaEpisodeCount { get; set; }
+        /// <summary>クレジット役柄数順タブ（声優単位の集約行）専用：オトナシリーズの話で演じたキャラの数。</summary>
+        public int OtonaCharacterCount { get; set; }
+        /// <summary>本線の TV シリーズ・映画・オトナシリーズに出演があるか（行の data-wk。話数の無いシリーズ全体のクレジットだけでも立つ）。</summary>
+        public bool HasTv { get; set; }
+        public bool HasMovie { get; set; }
+        public bool HasOtona { get; set; }
+        /// <summary>出演した種類（"tv movie otona" の形。行の data-wk）。</summary>
+        public string Kinds => KindTokens(HasTv, HasMovie, HasOtona);
+        /// <summary>「初めて」で節を分ける一覧の行で、この行を置いた種類（"tv" / "movie" / "otona"。行の data-wk-own）。それ以外の行は空文字。</summary>
+        public string WkOwn { get; set; } = "";
+        /// <summary>この行の種類より早い初めてを持つ種類（空白区切り。行の data-wk-after。入っているあいだはこの行を隠す）。無ければ空文字。</summary>
+        public string WkAfter { get; set; } = "";
         /// <summary>この行の声優がプリキュア（プリキュアのマスタのキャラ）を演じたことがあるか。「プリキュアを演じた方のみ」の絞り込みに使う。</summary>
         public bool IsPrecureCast { get; set; }
         /// <summary>初出演順タブ専用：初めて出演した話（「第N話「サブタイトル」」）。同じセクションで直前の行と同じ話なら空。</summary>

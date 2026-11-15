@@ -25,7 +25,7 @@ public sealed class MusicCreditIndex
     public IReadOnlyDictionary<int, IReadOnlyList<MusicCredit>> ByCompanyAlias { get; }
     /// <summary>
     /// 所属の屋号（affiliation_company_alias_id）→ その屋号を所属として添えた名義の行。企業詳細の「所属スタッフのクレジット」に使う。
-    /// 歌の作家連名（song_credits）に印刷された所属も、同じ形の行に写して含める（コンストラクタの songCreditAffiliationRows）。
+    /// 歌・劇伴の作家連名（song_credits / bgm_cue_credits）に印刷された所属も、同じ形の行に写して含める（コンストラクタの creditAffiliationRows）。
     /// </summary>
     public IReadOnlyDictionary<int, IReadOnlyList<MusicCredit>> ByAffiliationCompanyAlias { get; }
 
@@ -35,7 +35,7 @@ public sealed class MusicCreditIndex
     /// <summary>(series_id, session_no) → 劇伴セッション。</summary>
     public IReadOnlyDictionary<(int SeriesId, byte SessionNo), BgmSession> SessionByKey { get; }
 
-    /// <summary>product_catalog_no → 作品（ディスクに登録されたシリーズのうち、ディスク番号が最小のもの）。音楽制作ページの作品数の集計に使う。</summary>
+    /// <summary>product_catalog_no → 作品（ディスクに登録されたシリーズのうち、ディスク番号が最小のもの）。音楽制作ページ・音楽の役職詳細で、発売日から作品を決められない盤の初参加の節に使う。</summary>
     public IReadOnlyDictionary<string, int> SeriesIdByProduct { get; }
 
     public int Count { get; }
@@ -47,12 +47,13 @@ public sealed class MusicCreditIndex
     /// </summary>
     public string CoverageLabel { get; }
 
-    /// <param name="songCreditAffiliationRows">
-    /// 歌の作家連名のうち所属の会社名義を持つ行を、音楽クレジットの形（紐付け先は曲）に写したもの。
-    /// <see cref="ByAffiliationCompanyAlias"/> にだけ加え、件数や名義・曲ごとの索引には含めない（曲・人物の表示は song_credits 側で出すため）。
+    /// <param name="creditAffiliationRows">
+    /// 歌・劇伴の作家連名のうち所属の会社名義を持つ行を、音楽クレジットの形（紐付け先は歌なら曲、劇伴ならその劇伴のセッション）に写したもの。
+    /// <see cref="ByAffiliationCompanyAlias"/> にだけ加え、件数や名義・曲・セッションごとの索引には含めない
+    /// （曲・劇伴・人物の表示は song_credits / bgm_cue_credits 側で出すため）。
     /// </param>
     public MusicCreditIndex(IReadOnlyList<MusicCredit> rows, IReadOnlyList<Product> products, IReadOnlyList<BgmSession> sessions, IReadOnlyList<Disc> discs,
-        IReadOnlyList<MusicCredit>? songCreditAffiliationRows = null)
+        IReadOnlyList<MusicCredit>? creditAffiliationRows = null)
     {
         SeriesIdByProduct = discs
             .Where(d => d.SeriesId.HasValue)
@@ -80,7 +81,7 @@ public sealed class MusicCreditIndex
         ByPersonAlias = Group(rows.Where(r => r.PersonAliasId.HasValue), r => r.PersonAliasId!.Value);
         ByCharacterAlias = Group(rows.Where(r => r.CharacterAliasId.HasValue), r => r.CharacterAliasId!.Value);
         ByCompanyAlias = Group(rows.Where(r => r.CompanyAliasId.HasValue), r => r.CompanyAliasId!.Value);
-        ByAffiliationCompanyAlias = Group(rows.Concat(songCreditAffiliationRows ?? Array.Empty<MusicCredit>())
+        ByAffiliationCompanyAlias = Group(rows.Concat(creditAffiliationRows ?? Array.Empty<MusicCredit>())
             .Where(r => r.AffiliationCompanyAliasId.HasValue), r => r.AffiliationCompanyAliasId!.Value);
         ProductByCatalogNo = products.GroupBy(p => p.ProductCatalogNo, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
@@ -244,6 +245,10 @@ public static class MusicCreditViewBuilder
         ["CHORUS_DIRECTION"] = "🎶",
     };
 
+    /// <summary>演奏系の役職の絵文字（<see cref="RoleEmojiByCode"/>）。無い役職は空文字。OGP カードの役職名にも同じものを付ける。</summary>
+    public static string RoleEmoji(string roleCode)
+        => RoleEmojiByCode.TryGetValue(roleCode, out var emoji) ? emoji : "";
+
     /// <summary>バッジに出す役職名（演奏系の役職は絵文字 + 半角スペース + 役職名、それ以外は役職名）。</summary>
     public static string BadgeLabel(BuildContext ctx, string roleCode)
         => RoleEmojiByCode.TryGetValue(roleCode, out var emoji) ? $"{emoji} {RoleName(ctx, roleCode)}" : RoleName(ctx, roleCode);
@@ -252,10 +257,33 @@ public static class MusicCreditViewBuilder
     public static string RoleName(BuildContext ctx, string roleCode)
         => ctx.RoleByCode.TryGetValue(roleCode, out var role) && !string.IsNullOrEmpty(role.NameJa) ? role.NameJa : roleCode;
 
+    /// <summary>
+    /// 作品のクレジットの役職と同じ名前の音楽の役職に、役職マスタで付けている見分けの括弧書き（「スペシャルサンクス（音楽）」の「（音楽）」）。
+    /// 役職のページの題や人物・企業のページの見出しのように、作品のクレジットの役職と並ぶ所では付けたまま出す。
+    /// </summary>
+    private const string MusicRoleSuffix = "（音楽）";
+
+    /// <summary>
+    /// 音楽のクレジットだけが並ぶ所（盤・曲・劇伴のページのクレジットの表、音楽制作のページ）で出す役職名。括弧書きの「（音楽）」
+    /// （<see cref="MusicRoleSuffix"/>）は、ここでは何も見分けないので外す。
+    /// </summary>
+    public static string MusicPageRoleName(BuildContext ctx, string roleCode)
+    {
+        string name = RoleName(ctx, roleCode);
+        return name.Length > MusicRoleSuffix.Length && name.EndsWith(MusicRoleSuffix, StringComparison.Ordinal)
+            ? name[..^MusicRoleSuffix.Length]
+            : name;
+    }
+
+    /// <summary>音楽のクレジットだけが並ぶ所のバッジに出す役職名（<see cref="BadgeLabel"/> と同じ形で、役職名は <see cref="MusicPageRoleName"/>）。</summary>
+    public static string MusicPageBadgeLabel(BuildContext ctx, string roleCode)
+        => RoleEmojiByCode.TryGetValue(roleCode, out var emoji) ? $"{emoji} {MusicPageRoleName(ctx, roleCode)}" : MusicPageRoleName(ctx, roleCode);
+
     private static MusicCreditLineView BuildLine(BuildContext ctx, string roleCode, IReadOnlyList<MusicCredit> rows)
     {
-        string roleName = RoleName(ctx, roleCode);
-        string badgeName = BadgeLabel(ctx, roleCode);
+        // クレジットの表は音楽のクレジットだけが並ぶので、役職名の見分けの「（音楽）」は外す。
+        string roleName = MusicPageRoleName(ctx, roleCode);
+        string badgeName = MusicPageBadgeLabel(ctx, roleCode);
         var notes = rows.Select(r => r.EnsembleNote).Where(n => !string.IsNullOrEmpty(n)).Distinct(StringComparer.Ordinal).ToList();
         string label = notes.Count > 0 ? $"{badgeName}（{string.Join("、", notes)}）" : badgeName;
         string printedRole = rows.Select(r => r.RoleLabelText).FirstOrDefault(t => !string.IsNullOrEmpty(t)) ?? "";
@@ -360,6 +388,20 @@ public static class MusicCreditViewBuilder
                 return null;
         }
     }
+
+    /// <summary>
+    /// 音楽クレジット行の紐付け先の並べ替えの値（同じ日付の盤の中の並び）。盤そのもの（0）→ 録音回（session_no）→
+    /// 曲・録音（1000 + 録音 ID。曲はその曲の最小録音 ID）の順。同じ盤に入った曲どうしは録音 ID の順になる。
+    /// 紐付け先が解決できない行は最後（int.MaxValue）。
+    /// </summary>
+    public static long TargetOrder(BuildContext ctx, MusicCredit r) => r.TargetKind switch
+    {
+        MusicCreditTargetKinds.Product => 0,
+        MusicCreditTargetKinds.BgmSession => r.BgmSessionNo ?? 0,
+        MusicCreditTargetKinds.SongRecording when r.SongRecordingId is int rid => 1_000L + rid,
+        MusicCreditTargetKinds.Song when r.SongId is int sid && ctx.MinRecordingIdBySong.TryGetValue(sid, out var mr) => 1_000L + mr,
+        _ => int.MaxValue
+    };
 
     /// <summary>
     /// 別名義でのクレジットに、人物の本名義（人物詳細の見出しと同じ名義）を括弧で添える HTML。

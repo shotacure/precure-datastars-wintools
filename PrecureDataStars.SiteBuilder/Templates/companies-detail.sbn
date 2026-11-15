@@ -19,8 +19,8 @@
   {{## 基本情報はファクトタイル表現（エピソード・シリーズ詳細と共通の意匠）。
        正式名称（Company.Name）と読み（NameKana）は h1・直下の読み行に出しているため、
        ここでは重複表示しない。英語表記（NameEn）は内部データとして保持するが Web 上では出さない。
-       設立・解散・備考が一切無いときはセクションごと省く（空の見出しだけ残さない）。 ##}}
-  {{~ if Company.FoundedDate != "" || Company.DissolvedDate != "" || Company.Notes != "" ~}}
+       設立・解散がどちらも無いときはセクションごと省く（空の見出しだけ残さない）。DB の備考はサイトに出さない。 ##}}
+  {{~ if Company.FoundedDate != "" || Company.DissolvedDate != "" ~}}
   <section id="basic-info">
     <h2>基本情報</h2>
     <div class="fact-grid">
@@ -36,15 +36,11 @@
         <span class="fact-value">{{ Company.DissolvedDate }}{{ Sources.Refs.Dissolved }}</span>
       </div>
       {{~ end ~}}
-      {{~ if Company.Notes != "" ~}}
-      <div class="fact">
-        <span class="fact-label">備考</span>
-        <span class="fact-value is-wrap">{{ Company.Notes | html.escape }}</span>
-      </div>
-      {{~ end ~}}
     </div>
   </section>
   {{~ end ~}}
+
+{{ include '_credit-timeline.sbn' ~}}
 
   {{## 商号履歴。正式名（社名）の名義（company_aliases.is_official_name）を古い順に「期間 ｜ 商号」の表で出す。
        基本情報の下に置き、正式名の名義が 2 つ以上あるときだけ出す。 ##}}
@@ -130,12 +126,12 @@
   {{~ if (array.size InvolvementSections) > 0 || (array.size InvolvementGroups) > 0 ~}}
   <section id="credits">
     <h2>クレジット
-      <span class="muted role-count"><span class="count-badges">{{~ if CreditEpisodeCountTotal > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ CreditEpisodeCountTotal }}</span>{{~ end ~}}{{~ if CreditMovieCountTotal > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ CreditMovieCountTotal }}</span>{{~ end ~}}</span></span>
+      <span class="muted role-count"><span class="count-badges">{{~ if CreditEpisodeCountTotal > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ CreditEpisodeCountTotal }}</span>{{~ end ~}}{{~ if CreditMovieCountTotal > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ CreditMovieCountTotal }}</span>{{~ end ~}}{{~ if CreditOtonaEpisodeCountTotal > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ CreditOtonaEpisodeCountTotal }}</span>{{~ end ~}}</span></span>
     </h2>
     {{~ if (array.size InvolvementSections) > 0 ~}}
     {{~ for s in InvolvementSections ~}}
     <h3 class="alias-section-heading">{{ s.AliasName | html.escape }}<span class="muted alias-section-note"> 名義</span>
-      <span class="muted role-count"><span class="count-badges">{{~ if s.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ s.EpisodeCount }}</span>{{~ end ~}}{{~ if s.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ s.MovieCount }}</span>{{~ end ~}}</span></span>
+      <span class="muted role-count"><span class="count-badges">{{~ if s.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ s.EpisodeCount }}</span>{{~ end ~}}{{~ if s.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ s.MovieCount }}</span>{{~ end ~}}{{~ if s.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ s.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
     </h3>
     {{~ for g in s.Groups ~}}
     <h4 class="credit-role-heading">
@@ -144,7 +140,7 @@
       {{~ else ~}}
       <span class="credit-role-link">{{ g.RoleLabel | html.escape }}</span>
       {{~ end ~}}
-      <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}</span></span>
+      <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}{{~ if g.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ g.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
     </h4>
     <ul class="credit-card-list">
       {{~ for r in g.SeriesRows ~}}
@@ -187,7 +183,7 @@
       {{~ else ~}}
       <span class="credit-role-link">{{ g.RoleLabel | html.escape }}</span>
       {{~ end ~}}
-      <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}</span></span>
+      <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}{{~ if g.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ g.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
     </h3>
     <ul class="credit-card-list">
       {{~ for r in g.SeriesRows ~}}
@@ -241,25 +237,25 @@
     <h2>メンバー履歴{{ Sources.Refs.Members }}</h2>
     <p class="muted">この企業・団体の屋号を所属としてクレジットされた方々の名義の一覧です。</p>
     {{## 屋号 → 人物 → 役職 → 作品（話数）の入れ子。人物は person 単位（名義違いは 1 人に統合、表示は最頻名義）、
-         並びは初クレジット順。人物・役職の横に担当回数ピル（📺＝TV 話数 / 🎥＝映画本数。エピソード番号ではなく
+         並びは初クレジット順。人物・役職の横に担当回数ピル（📺＝TV 話数 / 🎥＝映画本数 / 🌙＝オトナシリーズの話数。エピソード番号ではなく
          担当した回数）。作品は 1 行ずつ・話数を可視表示（概観できるよう隠さない）。役職は初クレジット順で、
          動画→作画監督→演出 のような変遷が追える。 ##}}
     {{~ for sec in MemberHistory ~}}
     <h3 class="alias-section-heading">{{ sec.AliasName | html.escape }}<span class="muted alias-section-note"> 名義</span>
-      <span class="muted role-count"><span class="count-badges">{{~ if sec.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ sec.EpisodeCount }}</span>{{~ end ~}}{{~ if sec.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ sec.MovieCount }}</span>{{~ end ~}}</span></span>
+      <span class="muted role-count"><span class="count-badges">{{~ if sec.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ sec.EpisodeCount }}</span>{{~ end ~}}{{~ if sec.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ sec.MovieCount }}</span>{{~ end ~}}{{~ if sec.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ sec.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
     </h3>
     {{~ for pr in sec.Persons ~}}
     <div class="member-person-block">
       <div class="member-person-head">
         <a class="member-person-name" href="{{ person_url pr.PersonId }}">{{ pr.PersonName | html.escape }}</a>
-        <span class="count-badges">{{~ if pr.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ pr.EpisodeCount }}</span>{{~ end ~}}{{~ if pr.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ pr.MovieCount }}</span>{{~ end ~}}</span>
+        <span class="count-badges">{{~ if pr.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ pr.EpisodeCount }}</span>{{~ end ~}}{{~ if pr.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ pr.MovieCount }}</span>{{~ end ~}}{{~ if pr.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ pr.OtonaEpisodeCount }}</span>{{~ end ~}}</span>
       </div>
       {{~ for rg in pr.Roles ~}}
       <div class="member-role-group">
         <div class="member-role-head">
           <span class="member-role-label">{{ rg.RoleNameJa | html.escape }}</span>
           {{~ if (array.size pr.Roles) > 1 ~}}
-          <span class="count-badges">{{~ if rg.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ rg.EpisodeCount }}</span>{{~ end ~}}{{~ if rg.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ rg.MovieCount }}</span>{{~ end ~}}</span>
+          <span class="count-badges">{{~ if rg.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ rg.EpisodeCount }}</span>{{~ end ~}}{{~ if rg.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ rg.MovieCount }}</span>{{~ end ~}}{{~ if rg.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ rg.OtonaEpisodeCount }}</span>{{~ end ~}}</span>
           {{~ end ~}}
         </div>
         <ul class="credit-card-list">
@@ -373,23 +369,42 @@
   </section>
   {{~ end ~}}
 
-  {{## 外部リンクセクション。詳細ページの末尾に置く。Company.OfficialUrl / XUrl / InstagramUrl / YoutubeUrl / WikipediaUrl が
-       一つでもあれば表示。Wikipedia は企業の記事で、並びの最後に置く。 ##}}
-  {{~ if Company.OfficialUrl != "" || Company.XUrl != "" || Company.InstagramUrl != "" || Company.YoutubeUrl != "" || Company.WikipediaUrl != "" ~}}
+  {{## 外部リンクセクション。詳細ページの末尾に置く。Company の外部リンクの URL が一つでもあれば表示。
+       並びは 公式ページ → リンク集 → X → X 2 → Bluesky → Instagram → YouTube → ブログ → pixiv → ポートフォリオ → Wikipedia。
+       Wikipedia は企業の記事で、並びの最後に置く。 ##}}
+  {{~ if Company.OfficialUrl != "" || Company.LinkCollectionUrl != "" || Company.XUrl != "" || Company.XSubUrl != "" || Company.BlueskyUrl != "" || Company.InstagramUrl != "" || Company.YoutubeUrl != "" || Company.BlogUrl != "" || Company.PixivUrl != "" || Company.PortfolioUrl != "" || Company.WikipediaUrl != "" ~}}
   <section id="external-links">
     <h2>外部リンク</h2>
     <ul class="external-links">
       {{~ if Company.OfficialUrl != "" ~}}
       <li><a class="external-link external-link-official" href="{{ Company.OfficialUrl }}" target="_blank" rel="noopener nofollow">公式ページ</a></li>
       {{~ end ~}}
+      {{~ if Company.LinkCollectionUrl != "" ~}}
+      <li><a class="external-link external-link-link-collection" href="{{ Company.LinkCollectionUrl }}" target="_blank" rel="noopener nofollow">リンク集</a></li>
+      {{~ end ~}}
       {{~ if Company.XUrl != "" ~}}
       <li><a class="external-link external-link-x" href="{{ Company.XUrl }}" target="_blank" rel="noopener nofollow">X (Twitter)</a></li>
+      {{~ end ~}}
+      {{~ if Company.XSubUrl != "" ~}}
+      <li><a class="external-link external-link-x" href="{{ Company.XSubUrl }}" target="_blank" rel="noopener nofollow">X (Twitter) 2</a></li>
+      {{~ end ~}}
+      {{~ if Company.BlueskyUrl != "" ~}}
+      <li><a class="external-link external-link-bluesky" href="{{ Company.BlueskyUrl }}" target="_blank" rel="noopener nofollow">Bluesky</a></li>
       {{~ end ~}}
       {{~ if Company.InstagramUrl != "" ~}}
       <li><a class="external-link external-link-instagram" href="{{ Company.InstagramUrl }}" target="_blank" rel="noopener nofollow">Instagram</a></li>
       {{~ end ~}}
       {{~ if Company.YoutubeUrl != "" ~}}
       <li><a class="external-link external-link-youtube" href="{{ Company.YoutubeUrl }}" target="_blank" rel="noopener nofollow">YouTube</a></li>
+      {{~ end ~}}
+      {{~ if Company.BlogUrl != "" ~}}
+      <li><a class="external-link external-link-blog" href="{{ Company.BlogUrl }}" target="_blank" rel="noopener nofollow">ブログ</a></li>
+      {{~ end ~}}
+      {{~ if Company.PixivUrl != "" ~}}
+      <li><a class="external-link external-link-pixiv" href="{{ Company.PixivUrl }}" target="_blank" rel="noopener nofollow">pixiv</a></li>
+      {{~ end ~}}
+      {{~ if Company.PortfolioUrl != "" ~}}
+      <li><a class="external-link external-link-portfolio" href="{{ Company.PortfolioUrl }}" target="_blank" rel="noopener nofollow">ポートフォリオ</a></li>
       {{~ end ~}}
       {{~ if Company.WikipediaUrl != "" ~}}
       <li><a class="external-link external-link-wikipedia" href="{{ Company.WikipediaUrl }}" target="_blank" rel="noopener nofollow">Wikipedia</a></li>

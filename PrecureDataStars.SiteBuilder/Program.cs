@@ -4,15 +4,20 @@ using PrecureDataStars.SiteBuilder.Pipeline;
 namespace PrecureDataStars.SiteBuilder;
 
 /// <summary>SiteBuilder のエントリポイント。
-/// <c>--test</c> でテストモード（テスト用ディレクトリへ、GA4 / AdSense / ads.txt なしで生成）、
+/// <c>--test</c> でテストモード（テスト用ディレクトリへ、GA4 なしで生成）、
 /// <c>--production</c> で本番モード（本番ディレクトリへ全出力込みで生成）。
 /// どちらも指定しないときは、端末からの対話実行なら 1 回だけテスト／本番／本番＋デプロイを聞く（Enter = テスト）。
 /// スクリプトやパイプ経由（標準入力か標準出力がリダイレクト）なら聞かずにテストモード。
 /// <c>--production --deploy</c> でビルド後に S3 へ差分同期＋CloudFront キャッシュ削除まで実行する。
 /// <c>--dry-run</c> は変更計画のみ表示（無変更）、<c>--yes</c> は削除前確認の省略。
+/// <c>--upload-only</c> はサイトを作り直さず、直前の全体のドライランで作った出力をそのまま上げる（<c>--production --deploy</c> と併用）。
 /// <c>--refresh-telop</c> はサブタイトルのテロップ画像を、<c>--refresh-og</c> は OGP カード画像を、作り置きを使わずに描き直す
 /// （<c>--page</c> と併用すれば対象のページだけ）。
-/// <c>--og-cards &lt;一覧.json&gt; &lt;出力先&gt;</c> は、DB を使わずに一覧のカードだけを同じ描き方で描く（precure.news 用。<see cref="OgCardBatch"/>）。</summary>
+/// <c>--og-cards &lt;一覧.json&gt; &lt;出力先&gt;</c> は、DB を使わずに一覧のカードだけを同じ描き方で描く（precure.news 用。<see cref="OgCardBatch"/>）。
+/// <c>--as-of &lt;時刻&gt;</c> はテストビルドの基準時刻を差し替える（<c>--test</c> と併用）。
+/// <c>--diff</c> は出力に書き込まず、今の出力との差分（増える・書き換わる・消えるファイル）だけを出す。
+/// <c>--magazine-release-today</c> は、今日がアニメ雑誌の号の発売日かを終了コードで返す（<see cref="MagazineReleaseCheck"/>）。
+/// <c>--publish-shop-items</c> は、販売中の商品のファイルだけを本番に上げ直す（<see cref="ShopItemsPublisher"/>）。</summary>
 internal static class Program
 {
     private static async Task<int> Main(string[] args)
@@ -34,6 +39,29 @@ internal static class Program
                 return OgCardBatch.Run(args[1], args[2]);
             }
 
+            // 今日がアニメ雑誌の号の発売日かを確かめる起動方法（発売日 0:00 の定時デプロイが、ビルドするかを決めるのに使う）。
+            if (args.Length > 0 && string.Equals(args[0], "--magazine-release-today", StringComparison.OrdinalIgnoreCase))
+            {
+                if (args.Length != 1)
+                {
+                    PrintUsage();
+                    return 2;
+                }
+                return await MagazineReleaseCheck.RunAsync().ConfigureAwait(false);
+            }
+
+            // 販売中の商品のファイルだけを本番に上げ直す起動方法（定時の点検が、Amazon に確かめた直後に呼ぶ）。サイトは作らない。
+            if (args.Length > 0 && string.Equals(args[0], "--publish-shop-items", StringComparison.OrdinalIgnoreCase))
+            {
+                bool shopDryRun = args.Length == 2 && string.Equals(args[1], "--dry-run", StringComparison.OrdinalIgnoreCase);
+                if (args.Length > 2 || (args.Length == 2 && !shopDryRun))
+                {
+                    PrintUsage();
+                    return 2;
+                }
+                return await ShopItemsPublisher.RunAsync(shopDryRun).ConfigureAwait(false);
+            }
+
             // ビルドモード・デプロイ意図はコマンドライン引数で決める（App.config では決めない）。
             // 既定はテストモード：うっかり普通に起動しても本番ディレクトリ・本番タグには触れない。
             bool isProduction = false;
@@ -43,11 +71,28 @@ internal static class Program
             bool skipConfirm = false;
             bool refreshTelop = false;
             bool refreshOg = false;
+            bool uploadOnly = false;
             string pageFilter = "";
             bool expectPageValue = false;
+            DateTimeOffset? asOf = null;
+            bool expectAsOfValue = false;
+            bool diffOnly = false;
             foreach (var a in args)
             {
-                if (expectPageValue)
+                if (expectAsOfValue)
+                {
+                    // 直前の "--as-of" に続く値（ビルドの基準時刻。日本時間の "2026-11-10T00:00" の形）。
+                    if (!DateTime.TryParseExact(a, new[] { "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd" },
+                            System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var local))
+                    {
+                        Console.Error.WriteLine($"--as-of の時刻を読めません: {a}（例: 2026-11-10T00:00。日本時間）");
+                        PrintUsage();
+                        return 2;
+                    }
+                    asOf = new DateTimeOffset(local, TimeSpan.FromHours(9));
+                    expectAsOfValue = false;
+                }
+                else if (expectPageValue)
                 {
                     // 直前の "--page" に続く値（生成対象のページ URL パス断片。例: /privacy/）。
                     pageFilter = a;
@@ -69,6 +114,12 @@ internal static class Program
                     refreshTelop = true;
                 else if (string.Equals(a, "--refresh-og", StringComparison.OrdinalIgnoreCase))
                     refreshOg = true;
+                else if (string.Equals(a, "--upload-only", StringComparison.OrdinalIgnoreCase))
+                    uploadOnly = true;
+                else if (string.Equals(a, "--as-of", StringComparison.OrdinalIgnoreCase))
+                    expectAsOfValue = true;
+                else if (string.Equals(a, "--diff", StringComparison.OrdinalIgnoreCase))
+                    diffOnly = true;
                 else
                 {
                     Console.Error.WriteLine($"不明な引数: {a}");
@@ -79,6 +130,12 @@ internal static class Program
             if (expectPageValue)
             {
                 Console.Error.WriteLine("--page にはページの URL パス（例: /privacy/）を指定してください。");
+                PrintUsage();
+                return 2;
+            }
+            if (expectAsOfValue)
+            {
+                Console.Error.WriteLine("--as-of にはビルドの基準時刻（例: 2026-11-10T00:00。日本時間）を指定してください。");
                 PrintUsage();
                 return 2;
             }
@@ -114,11 +171,35 @@ internal static class Program
                 return 2;
             }
 
+            // --upload-only は作り直さずに上げるだけなので、全体のビルドの本番デプロイとしてだけ使える。
+            if (uploadOnly && (!deploy || dryRun || !string.IsNullOrEmpty(pageFilter) || refreshTelop || refreshOg))
+            {
+                Console.Error.WriteLine("--upload-only は --production --deploy と併用し、--dry-run / --page / --refresh-* とは併用しないでください。");
+                PrintUsage();
+                return 2;
+            }
+
+            // --diff は出力に書き込まないので、その出力を上げるデプロイとは併用できない。
+            if (diffOnly && deploy)
+            {
+                Console.Error.WriteLine("--diff は --deploy と併用できません（出力に書き込まないので、上げるものがありません）。");
+                PrintUsage();
+                return 2;
+            }
+
             var deployOptions = deploy
-                ? new DeployRuntimeOptions(Requested: true, DryRun: dryRun, SkipConfirm: skipConfirm)
+                ? new DeployRuntimeOptions(Requested: true, DryRun: dryRun, SkipConfirm: skipConfirm, UploadOnly: uploadOnly)
                 : DeployRuntimeOptions.None;
 
-            var config = BuildConfig.FromAppConfig(isProduction, deployOptions, pageFilter, refreshTelop, refreshOg);
+            // 基準時刻の差し替えはテストビルドだけ（本番に、今と違う時刻の判定で作ったページを出さない）。
+            if (asOf is not null && !isTest)
+            {
+                Console.Error.WriteLine("--as-of は --test と併用してください（本番ビルドでは基準時刻を差し替えられません）。");
+                PrintUsage();
+                return 2;
+            }
+
+            var config = BuildConfig.FromAppConfig(isProduction, deployOptions, pageFilter, refreshTelop, refreshOg, asOf, diffOnly);
             var pipeline = new SiteBuilderPipeline();
             await pipeline.RunAsync(config).ConfigureAwait(false);
             return 0;
@@ -162,19 +243,28 @@ internal static class Program
     /// <summary>使い方の表示。引数エラー時に共通で出す。</summary>
     private static void PrintUsage()
     {
-        Console.Error.WriteLine("使い方: PrecureDataStars.SiteBuilder [--test | --production] [--page <path>] [--refresh-telop] [--refresh-og] [--deploy [--dry-run] [--yes]]");
+        Console.Error.WriteLine("使い方: PrecureDataStars.SiteBuilder [--test | --production] [--page <path>] [--diff] [--refresh-telop] [--refresh-og] [--deploy [--dry-run | --upload-only] [--yes]]");
         Console.Error.WriteLine("  引数なし     : 端末からの対話実行ならテスト／本番ビルドだけ／本番ビルド＋デプロイを 1 回聞く（Enter = テスト）。");
         Console.Error.WriteLine("                 デプロイを選ぶと --production --deploy と同じ（削除があれば一覧を出して y/N で確かめる）。スクリプトやパイプ経由ならテストモード");
-        Console.Error.WriteLine("  --test       : テストモード（SiteOutputDirTest へ、GA4 / AdSense / ads.txt なし）。問い合わせを出さない");
-        Console.Error.WriteLine("  --production : 本番モード（SiteOutputDir へ、GA4 / AdSense / ads.txt あり）");
+        Console.Error.WriteLine("  --test       : テストモード（SiteOutputDirTest へ、GA4 なし）。問い合わせを出さない");
+        Console.Error.WriteLine("  --production : 本番モード（SiteOutputDir へ、GA4 あり）");
         Console.Error.WriteLine("  --page <path>: ピンポイントビルド。URL パスに <path> を含むページだけを生成（例: /privacy/）。");
         Console.Error.WriteLine("                 sitemap / 検索インデックスは再生成せず、--deploy 時も削除は行わない（部分生成の安全策）。");
+        Console.Error.WriteLine("  --diff       : 出力に書き込まず、今の出力との差分（増える・書き換わる・消えるファイル）の一覧だけを出す。");
+        Console.Error.WriteLine("                 増える・書き換わるファイルの中身は、出力の隣の「<出力>.diff」に置く（--deploy とは併用できない）");
         Console.Error.WriteLine("  --refresh-telop : サブタイトルのテロップ画像を作り置きを使わずに描き直す（--page と併用すれば対象の話だけ）");
         Console.Error.WriteLine("  --refresh-og    : OGP カード画像を作り置きを使わずに描き直す（--page と併用すれば対象のページだけ）");
         Console.Error.WriteLine("  --deploy     : 本番ビルド後に S3 へ差分同期＋CloudFront キャッシュ削除（--production 必須）");
         Console.Error.WriteLine("  --dry-run    : デプロイ計画のみ表示（S3 / CloudFront を変更しない。--deploy と併用）");
         Console.Error.WriteLine("  --yes        : 削除前の確認をスキップ（--deploy と併用）");
+        Console.Error.WriteLine("  --upload-only: サイトを作り直さず、直前の全体のドライランの出力をそのまま上げる（--deploy と併用）");
+        Console.Error.WriteLine("  --as-of <時刻>: ビルドの基準時刻を差し替える（日本時間。例: 2026-11-10T00:00。--test と併用）。");
+        Console.Error.WriteLine("                 予告・雑誌の発売の前と後でページがどう変わるかを確かめる");
         Console.Error.WriteLine("別の使い方: PrecureDataStars.SiteBuilder --og-cards <一覧.json> <出力先>");
         Console.Error.WriteLine("  一覧のカードだけを、このサイトと同じ描き方・書体で PNG にする（DB を使わない。precure.news 用）");
+        Console.Error.WriteLine("別の使い方: PrecureDataStars.SiteBuilder --magazine-release-today");
+        Console.Error.WriteLine("  今日がアニメ雑誌の号の発売日なら終了コード 0、そうでなければ 3（発売日 0:00 の定時デプロイが使う）");
+        Console.Error.WriteLine("別の使い方: PrecureDataStars.SiteBuilder --publish-shop-items [--dry-run]");
+        Console.Error.WriteLine("  販売中の商品のファイルを DB の行から組み立て、本番のファイルと違うときだけ上げ直す（サイトは作らない。定時の点検が使う）");
     }
 }

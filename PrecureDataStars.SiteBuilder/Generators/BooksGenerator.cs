@@ -94,6 +94,8 @@ public sealed class BooksGenerator
 
         foreach (var (book, row) in books.Zip(rows))
         {
+            // ピンポイントビルドで書かないページは、組み立てごと飛ばす。
+            if (!_page.IsTarget(row.Url)) continue;
             RenderDetail(book, row, seriesIdsByBook, genreLinksByBook, creditsByBook,
                 genreByCode, roleByCode, companyById, aliasById);
         }
@@ -116,18 +118,20 @@ public sealed class BooksGenerator
 
         var layout = new LayoutModel
         {
-            PageTitle = "プリキュアの書籍(本・Kindle)",
+            PageTitle = "プリキュアの書籍",
             // 本文リード行と同じ母数をカードにも置く。
-            OgCard = new OgCardSpec(Kicker: "", Title: "プリキュアの書籍(本・Kindle)")
+            OgCard = new OgCardSpec(Kicker: "", Title: "プリキュアの書籍")
             {
-                Subtitle = "設定資料集からファンブック、絵本、楽譜まで、プリキュアの本を紙と Kindle の購入先とともに一覧にしました。",
+                // ページの冒頭文（books-index.sbn の .lead）と同じ文。数だけはページ側で添える。
+                Subtitle = "コミック版からファンブックまで、プリキュアの書籍",
                 Badges = new[] { new OgCardBadge("書籍", $"{rows.Count}件") }
             },
-            MetaDescription = $"プリキュア関連の書籍 {rows.Count} 件の一覧。設定資料集・ファンブック・絵本・楽譜まで、紙と Kindle の購入先、発売日、出版社をまとめました。",
+            // ページの冒頭文（books-index.sbn の .lead）と同じ文。
+            MetaDescription = $"コミック版からファンブックまで、プリキュアの書籍全 {rows.Count} 件",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "プリキュアの書籍(本・Kindle)", Url = "" }
+                new BreadcrumbItem { Label = "プリキュアの書籍", Url = "" }
             }
         };
 
@@ -304,7 +308,6 @@ public sealed class BooksGenerator
                 // 判型は人手で整えた trim_size を優先し、無ければ Amazon 由来の装丁表記で代替する。
                 FormatLabel = !string.IsNullOrEmpty(book.TrimSize) ? book.TrimSize! : (book.BindingText ?? ""),
                 EditionLabel = FormatEditionLabel(book),
-                Notes = book.Notes ?? "",
                 OfficialUrl = book.OfficialUrl ?? ""
             },
             GenreLabels = genreRows,
@@ -316,8 +319,8 @@ public sealed class BooksGenerator
         {
             PageTitle = book.Title,
             MetaDescription = BuildDetailDescription(book, publisher, row.PrimaryGenreLabel),
-            // 商品詳細と同じ組み方。ジャンルを前置きに、量（ページ・価格・判型・電子）をバッジに、
-            // 発売日・出版社・クレジット（著・編集・イラストなど）を事実行に。透かしは関連する作品（無ければ発売年）で、
+            // ジャンルを前置きに、発売日・出版社・判型・ページ数・電子版・ISBN・クレジット（著・編集・イラストなど）を事実行に
+            // （大きな数のバッジは置かない）。透かしは関連する作品（無ければ発売年）で、
             // 右上は透かしに譲るので発売日は上段に置かない。
             // 関連する作品が複数なら、作品名を 1 行 1 作品で添える。ジャンルは前置きに出すので事実行では繰り返さない。
             OgCard = new OgCardSpec(
@@ -326,8 +329,7 @@ public sealed class BooksGenerator
             {
                 BandColorHex = OgCardColors.Book,
                 Watermark = seriesRows.Count > 0 ? seriesRows[0].Title : book.ReleaseDate.Year.ToString(),
-                Badges = BuildBookOgBadges(book),
-                InlineFacts = BuildBookOgFacts(FormatDateLong(book.ReleaseDate), book.Isbn13 ?? "", publisher, creditRows),
+                InlineFacts = BuildBookOgFacts(book, FormatDateLong(book.ReleaseDate), book.Isbn13 ?? "", publisher, creditRows),
                 Facts = seriesRows.Count > 1
                     ? seriesRows.Select(s => new OgCardFactLine("", $"『{s.Title}』")).ToArray()
                     : Array.Empty<OgCardFactLine>()
@@ -335,7 +337,7 @@ public sealed class BooksGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "プリキュアの書籍(本・Kindle)", Url = "/books/" },
+                new BreadcrumbItem { Label = "プリキュアの書籍", Url = "/books/" },
                 new BreadcrumbItem { Label = book.Title, Url = "" }
             }
         };
@@ -416,31 +418,25 @@ public sealed class BooksGenerator
     }
 
     /// <summary>詳細ページの meta description。書名・ジャンル・出版社・発売日を 1 文に畳む。</summary>
-    /// <summary>書籍カードの数バッジ。ページ数・判型・Kindle の有無など、数として語れるものだけを置く（価格は出さない）。</summary>
-    private static OgCardBadge[] BuildBookOgBadges(Book book)
-    {
-        var badges = new List<OgCardBadge>();
-        if (book.PageCount is ushort pages && pages > 0) badges.Add(new OgCardBadge("ページ", $"{pages}"));
-        if (!string.IsNullOrWhiteSpace(book.TrimSize)) badges.Add(new OgCardBadge("判型", book.TrimSize!));
-        if (book.ReleaseDateKindle.HasValue) badges.Add(new OgCardBadge("電子", "Kindle あり"));
-        return badges.ToArray();
-    }
-
     /// <summary>
-    /// 書籍カードの事実行。発売日・ISBN・出版社と、役職ごとのクレジット（著・監修・イラストなど。役職マスタの順）。
+    /// 書籍カードの事実行。発売日・出版社・判型・ページ数・電子版の有無・ISBN と、役職ごとのクレジット（著・監修・イラストなど。役職マスタの順）。
+    /// ページ数や判型は誇る数ではなく本の仕様なので、大きな数にせず本文と同じ事実行に置く（価格は出さない）。
     /// ISBN は同名の改訂版や判型違いを見分ける鍵なので、音楽商品の品番と同じく事実行に置く。
     /// </summary>
-    private static OgCardFactLine[] BuildBookOgFacts(string releaseDate, string isbn13, string publisher, IReadOnlyList<BookCreditGroup> creditRows)
+    private static OgCardFactLine[] BuildBookOgFacts(Book book, string releaseDate, string isbn13, string publisher, IReadOnlyList<BookCreditGroup> creditRows)
     {
         var facts = new List<OgCardFactLine> { new("発売", releaseDate) };
-        if (!string.IsNullOrWhiteSpace(isbn13)) facts.Add(new OgCardFactLine("ISBN", isbn13));
         if (!string.IsNullOrWhiteSpace(publisher)) facts.Add(new OgCardFactLine("出版社", publisher));
+        if (!string.IsNullOrWhiteSpace(book.TrimSize)) facts.Add(new OgCardFactLine("判型", book.TrimSize!));
+        if (book.PageCount is ushort pages && pages > 0) facts.Add(new OgCardFactLine("ページ", $"{pages}"));
+        if (book.ReleaseDateKindle.HasValue) facts.Add(new OgCardFactLine("電子版", "Kindle"));
+        if (!string.IsNullOrWhiteSpace(isbn13)) facts.Add(new OgCardFactLine("ISBN", isbn13));
         foreach (var g in creditRows)
             if (!string.IsNullOrWhiteSpace(g.NamesText)) facts.Add(new OgCardFactLine(g.RoleLabel, g.NamesText));
         return facts.ToArray();
     }
 
-    /// <summary>書籍詳細の meta description。「『書名』（ジャンル／出版社／発売年月）。判型・ページ数・ISBN・収録シリーズと購入先をまとめました。」</summary>
+    /// <summary>書籍詳細の meta description。「ジャンル／出版社／発売年月」（書名はページ名に出ているので入れない）。</summary>
     private static string BuildDetailDescription(Book book, string publisher, string genreLabel)
     {
         var parts = new List<string>();
@@ -448,8 +444,7 @@ public sealed class BooksGenerator
         if (publisher.Length > 0) parts.Add(publisher);
         parts.Add($"{book.ReleaseDate.Year}年{book.ReleaseDate.Month}月発売");
 
-        return $"『{book.Title}』（{string.Join("／", parts)}）。"
-             + "判型・ページ数・ISBN・収録シリーズと、紙版・Kindle 版の購入先をまとめました。";
+        return string.Join("／", parts);
     }
 }
 
@@ -600,8 +595,6 @@ public sealed class BookDetailView
     /// <summary>版構成ラベル（紙・Kindle / 紙 / Kindle）。</summary>
     public string EditionLabel { get; set; } = "";
 
-    /// <summary>備考。</summary>
-    public string Notes { get; set; } = "";
 
     /// <summary>公式ページ URL。</summary>
     public string OfficialUrl { get; set; } = "";

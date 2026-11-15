@@ -44,6 +44,14 @@ public sealed class Precure
     /// <summary>シリーズ一覧のプリキュアバッジ地色（<c>#RRGGBB</c> 形式、任意）。 未設定（<c>null</c>）のプリキュアはサイト側で中立の淡色バッジにフォールバックする。 文字色は地色の輝度から自動算出するため、本値には地色のみを保持する。</summary>
     public string? KeyColor { get; set; }
 
+    /// <summary>
+    /// キーカラーのグラデーション（任意）。「<c>#RRGGBB 位置%</c>」をカンマと空白でつないだ左から右への色の並び
+    /// （例: <c>#F1346E 1%, #FF65F8 19%</c>）。色見本が 1 色の塗りでないプリキュア用で、サイトは札の地色・OGP カードの色帯を
+    /// このグラデーションで塗る。文字色の明るさの判定など 1 色が要る所は <see cref="KeyColor"/> を使う。
+    /// 形式は DB の CHECK 制約 <c>ck_precures_key_color_gradient</c> で担保する。
+    /// </summary>
+    public string? KeyColorGradient { get; set; }
+
     /// <summary>肌色 H 値（0-360、任意）。</summary>
     public ushort? SkinColorH { get; set; }
 

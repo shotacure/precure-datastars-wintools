@@ -60,6 +60,10 @@ internal sealed class LookupCache : ILookupCache
         _factory = factory;
     }
 
+    /// <summary>役職名のリンク先。役職詳細を持つ役職なら役職詳細、無ければ null（リンクしない）。</summary>
+    private static string? RoleLinkUrl(string roleCode)
+        => PathUtil.HasRolePage(roleCode) ? PathUtil.CreatorsRoleUrl(roleCode) : null;
+
     /// <summary>人物名義のリンク化を担う <see cref="Utilities.StaffNameLinkResolver"/> を後注入する。 LookupCache を構築するタイミングでは <c>StaffNameLinkResolver</c> がまだ初期化されていないため、 パイプライン側で順番に組み立ててから本メソッドで結びつける。</summary>
     public void SetStaffLinkResolver(Utilities.StaffNameLinkResolver resolver)
     {
@@ -130,11 +134,11 @@ internal sealed class LookupCache : ILookupCache
         return Task.FromResult<string?>($"<a href=\"{PathUtil.CharacterUrl(ca.CharacterId)}\">{escapedName}</a>");
     }
 
-    /// <summary>企業屋号 ID → リンク化済み HTML 断片。 屋号 → 親企業の company_id を解決し、<c>&lt;a href="/companies/{company_id}/"&gt;屋号名&lt;/a&gt;</c> を返す。親企業が引けないときは HTML エスケープしただけのプレーンテキストにフォールバック。</summary>
+    /// <summary>企業屋号 ID → リンク化済み HTML 断片。 屋号 → 親企業の company_id を解決し、<c>&lt;a href="/companies/{company_id}/"&gt;屋号名&lt;/a&gt;</c> を返す。屋号名はクレジットでの表記（display_text_override）があればそれ。親企業が引けないときは HTML エスケープしただけのプレーンテキストにフォールバック。</summary>
     public Task<string?> LookupCompanyAliasHtmlAsync(int aliasId)
     {
         if (!_companyAliasById.TryGetValue(aliasId, out var ca)) return Task.FromResult<string?>(null);
-        var name = ca.Name;
+        var name = ca.CreditDisplayName();
         if (string.IsNullOrEmpty(name)) return Task.FromResult<string?>(null);
         var escapedName = System.Net.WebUtility.HtmlEncode(name);
         if (ca.CompanyId > 0)
@@ -144,12 +148,12 @@ internal sealed class LookupCache : ILookupCache
         return Task.FromResult<string?>(escapedName);
     }
 
-    /// <summary>ロゴ ID → リンク化済み HTML 断片。</summary>
+    /// <summary>ロゴ ID → リンク化済み HTML 断片。表示は親屋号の名前（クレジットでの表記があればそれ）。</summary>
     public Task<string?> LookupLogoHtmlAsync(int logoId)
     {
         if (!_logoById.TryGetValue(logoId, out var lg)) return Task.FromResult<string?>(null);
         if (!_companyAliasById.TryGetValue(lg.CompanyAliasId, out var ca)) return Task.FromResult<string?>(null);
-        var escapedName = System.Net.WebUtility.HtmlEncode(ca.Name ?? "");
+        var escapedName = System.Net.WebUtility.HtmlEncode(ca.CreditDisplayName());
         if (ca.CompanyId > 0)
         {
             return Task.FromResult<string?>($"<a href=\"{PathUtil.CompanyUrl(ca.CompanyId)}\">{escapedName}</a>");
@@ -181,9 +185,10 @@ internal sealed class LookupCache : ILookupCache
         if (string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
             return Task.FromResult<string?>(escapedName);
         // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）も平文で返す。
-        if (!PathUtil.HasRolePage(roleCode))
+        // オトナシリーズの写しでは、オトナシリーズの役職のページを持つ役職をそちらへリンクする（RoleLinkUrl）。
+        if (RoleLinkUrl(roleCode) is not string url)
             return Task.FromResult<string?>(escapedName);
-        return Task.FromResult<string?>($"<a href=\"{PathUtil.CreatorsRoleUrl(roleCode)}\">{escapedName}</a>");
+        return Task.FromResult<string?>($"<a href=\"{url}\">{escapedName}</a>");
     }
 
     /// <summary>
@@ -205,10 +210,19 @@ internal sealed class LookupCache : ILookupCache
         if (string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
             return Task.FromResult<string?>(escapedLabel);
         // 役職詳細ページを持たない役職（単発のイベント映像・スピンオフだけで使う役職）も平文で返す。
-        if (!PathUtil.HasRolePage(roleCode))
+        // オトナシリーズの写しでは、オトナシリーズの役職のページを持つ役職をそちらへリンクする（RoleLinkUrl）。
+        if (RoleLinkUrl(roleCode) is not string url)
             return Task.FromResult<string?>(escapedLabel);
-        return Task.FromResult<string?>($"<a href=\"{PathUtil.CreatorsRoleUrl(roleCode)}\">{escapedLabel}</a>");
+        return Task.FromResult<string?>($"<a href=\"{url}\">{escapedLabel}</a>");
     }
+
+    /// <summary>屋号（company_alias）→ クレジットの表記の末尾のうち画面で小さめの字で出ている部分（<see cref="CompanyAlias.CreditSmallSuffix"/>）。無ければ null。</summary>
+    internal string? LookupCompanyAliasCreditSmallSuffix(int aliasId)
+        => _companyAliasById.TryGetValue(aliasId, out var ca) && !string.IsNullOrEmpty(ca.CreditSmallSuffix) ? ca.CreditSmallSuffix : null;
+
+    /// <summary>屋号（company_alias）→ クレジットの会社・ロゴのエントリに出す名前（クレジットでの表記があればそれ、無ければ名義の名前）。未登録なら null。</summary>
+    internal Task<string?> LookupCompanyAliasCreditNameAsync(int aliasId)
+        => Task.FromResult<string?>(_companyAliasById.TryGetValue(aliasId, out var ca) ? ca.CreditDisplayName() : null);
 
     /// <summary>レンダリング用のロゴエンティティ取得。</summary>
     internal Task<Logo?> GetLogoForRenderingAsync(int logoId)

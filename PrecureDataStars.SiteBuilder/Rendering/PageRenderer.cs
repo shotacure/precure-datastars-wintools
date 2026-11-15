@@ -58,11 +58,30 @@ public sealed class PageRenderer
     /// <summary>出力ディレクトリへの書き出しの窓口（変わらないファイルは書かず、今回の出力に属するファイルを記録する）。</summary>
     private readonly OutputWriter _output;
 
-    /// <summary>今回のビルドで使った OGP カードの作り置きの鍵。全体ビルドの最後に、使わなかった作り置きを消すのに使う。</summary>
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _ogCardKeysUsed = new(StringComparer.Ordinal);
+    /// <summary>
+    /// 書体がこの PC で引けず、描かなかったカードの記録（書体名 → 前回の画像を残した枚数・カードなしにした枚数・最初に出たページ）。
+    /// 並列レンダリングフェーズから積まれるため <see cref="_ogCardGlyphLock"/> で保護し、ビルド終了後にパイプラインが警告として出す。
+    /// </summary>
+    private readonly Dictionary<string, (int Kept, int None, string SamplePath)> _ogCardMissingFonts = new(StringComparer.Ordinal);
+
+    /// <summary>OGP カード画像の作り置き（鍵 → 画素のハッシュ → PNG の 2 段）。レンダラが無ければ null。</summary>
+    private readonly OgCardStore? _ogCardStore;
 
     private int _ogCardsRendered;
     private int _ogCardsFromCache;
+
+    /// <summary>
+    /// 描きかけの OGP カード（作り置きの鍵 → 描く仕事）。同じ鍵のカードは 1 度だけ描き、描き上がった画像を各ページの出力へ写す。
+    /// 描く仕事は <see cref="_ogCardDrawGate"/> の数までスレッドプールで同時に進み、ページの生成はその描き上がりを待たずに先へ進む。
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task<OgCardDrawn>>> _ogCardJobs = new(StringComparer.Ordinal);
+    /// <summary>描いたカードを各ページの出力へ置く仕事。<see cref="WaitForOgCardsAsync"/> で全部の完了を待つ。</summary>
+    private readonly System.Collections.Concurrent.ConcurrentBag<Task> _ogCardPlacements = new();
+    /// <summary>カードを同時に描く数（論理コア数）。カードの描画は CPU だけを使う。</summary>
+    private readonly SemaphoreSlim _ogCardDrawGate = new(Environment.ProcessorCount);
+
+    /// <summary>描き上がったカードの画像ファイルと、それが作り置きか（false なら書体が無く既定の書体で描いた、作り置きに入れない一時ファイル）。</summary>
+    private sealed record OgCardDrawn(string File, bool Cached);
 
     public PageRenderer(ScribanRenderer renderer, BuildConfig config, BuildSummary summary, OutputWriter output, ProgressReporter? reporter = null, OgCardRenderer? ogCardRenderer = null)
     {
@@ -72,14 +91,31 @@ public sealed class PageRenderer
         _output = output;
         _reporter = reporter;
         _ogCardRenderer = ogCardRenderer;
+        _ogCardStore = ogCardRenderer is null ? null : new OgCardStore(config.OgCardCacheDirectory, config.RefreshOgCards);
         _copyrightYears = BuildCopyrightYearsString(config.PublishedYear, DateTime.Now.Year);
     }
 
-    /// <summary>今回のビルドで使った OGP カードの作り置きの鍵（ファイル名から拡張子を除いたもの）。</summary>
-    public IReadOnlySet<string> OgCardCacheKeysUsed => _ogCardKeysUsed.Keys.ToHashSet(StringComparer.Ordinal);
+    /// <summary>
+    /// OGP カードを描いた枚数、作り置きで済ませた枚数、新しく書いた PNG の枚数（描いたが、同じ画素の PNG がすでにあった分は含まない）。
+    /// ビルド後のサマリ用。
+    /// </summary>
+    public (int Rendered, int FromCache, int PngsWritten) OgCardCounts => (_ogCardsRendered, _ogCardsFromCache, _ogCardStore?.PngsWritten ?? 0);
 
-    /// <summary>OGP カードを描いた枚数と、作り置きで済ませた枚数。ビルド後のサマリ用。</summary>
-    public (int Rendered, int FromCache) OgCardCounts => (_ogCardsRendered, _ogCardsFromCache);
+    /// <summary>
+    /// OGP カードの作り置きの索引を書く。全カードの描き上がり（<see cref="WaitForOgCardsAsync"/>）の後に呼ぶ。
+    /// <paramref name="prune"/>（全体ビルド）なら、決まった日数使われなかった行と、どの行からも指されない画像を消す。
+    /// 戻り値は落とした行の数と消した画像の数。
+    /// </summary>
+    public (int Entries, int Images) FinishOgCardStore(bool prune) => _ogCardStore?.Finish(prune) ?? (0, 0);
+
+    /// <summary>
+    /// 書体がこの PC で引けず、描かなかったカード（書体名 → 前回の画像を残した枚数・カードなしにした枚数・最初に出たページ）。
+    /// ビルド後の警告出力用。
+    /// </summary>
+    public IReadOnlyDictionary<string, (int Kept, int None, string SamplePath)> OgCardMissingFonts
+    {
+        get { lock (_ogCardGlyphLock) return new Dictionary<string, (int, int, string)>(_ogCardMissingFonts, StringComparer.Ordinal); }
+    }
 
     /// <summary>ブランド書体で描けなかった文字 → 最初に検出したページ URL。ビルド後の警告出力用。</summary>
     public IReadOnlyDictionary<string, string> OgCardGlyphWarnings
@@ -89,7 +125,7 @@ public sealed class PageRenderer
 
     /// <summary>
     /// Generator がカードを指定しなかったページ向けの既定 OGP カードを組み立てる。
-    /// ページ名を見出しに、パンくず経路をその上に、meta description を本文に充てる
+    /// ページ名を見出しに、パンくず経路をその上に、カード用のリード文（無ければ meta description）を本文に充てる
     /// （索引・統計・規約ページなど、詳細ページのような構造化データを持たない面が対象）。
     /// ページ名を持たないページ（ホーム相当）は Generator 側で明示的に組む前提のため何も返さない。
     /// </summary>
@@ -105,23 +141,26 @@ public sealed class PageRenderer
             .Select(b => b.Label)
             .Where(l => !string.IsNullOrWhiteSpace(l)));
 
-        return new OgCardSpec(trail, layoutMeta.PageTitle, Subtitle: layoutMeta.MetaDescription);
+        return new OgCardSpec(trail, layoutMeta.PageTitle,
+            Subtitle: string.IsNullOrWhiteSpace(layoutMeta.OgLead) ? layoutMeta.MetaDescription : layoutMeta.OgLead);
     }
 
     /// <summary>
     /// ページ専用の OGP カード画像を出力へ置き、その絶対 URL を返す。
     /// 出力パスは canonical パスを畳んだもの（<c>/people/高橋任治/</c> → <c>/og/people/高橋任治.png</c>、
     /// ルートは <c>/og/home.png</c>）。
-    /// 画像は作り置き（<see cref="BuildConfig.OgCardCacheDirectory"/> の <c>{鍵}.png</c>。鍵は
-    /// <see cref="OgCardRenderer.CacheKey"/>）から写し、同じ鍵の作り置きが無いとき（と <c>--refresh-og</c> のとき）だけ
-    /// 描いて作り置きに足す。指定の書体が無く既定の書体で描いたカードは作り置きに入れず出力へ直接置く
-    /// （書体を入れた次のビルドで描き直されるように）。
+    /// 画像は作り置き（<see cref="OgCardStore"/>。鍵 <see cref="OgCardRenderer.CacheKey"/> から描いた画素のハッシュを引き、
+    /// その名前の PNG を使う）から写し、同じ鍵の作り置きが無いとき（と <c>--refresh-og</c> のとき）だけ
+    /// 描いて作り置きに足す。描くのに要る書体がこの PC で引けないカードは描かず（既定の書体に差し替えて描かない）、
+    /// 出力に前回の画像があればそれを残し、無ければカードなし（空文字を返す。ページは既定の OGP 画像になる）にする。
+    /// 作り置きのあるカードはその場で写し、描くカードは描く仕事に回して URL だけを先に返す（描き上がると出力へ写す）。
+    /// 出力にカードがそろうのは <see cref="WaitForOgCardsAsync"/> の後。
     /// 出力先はページごとに異なり、作り置きへは一時ファイルに描いてから置き換えるので、並列フェーズから呼んで安全。
     /// BaseUrl 未設定時は絶対 URL を組めないため何もせず空文字を返す。
     /// </summary>
     private string RenderOgCard(OgCardSpec spec, string canonicalPath)
     {
-        if (_ogCardRenderer is null || string.IsNullOrEmpty(_config.BaseUrl) || !spec.IsRenderable) return "";
+        if (_ogCardRenderer is null || _ogCardStore is null || string.IsNullOrEmpty(_config.BaseUrl) || !spec.IsRenderable) return "";
 
         var relativePath = OgCardRelativePath(canonicalPath);
         // 名前ベースの canonical（パーセントエンコード済み）はデコードしたファイル名で書き出し、URL はエンコード形のまま返す。
@@ -129,33 +168,91 @@ public sealed class PageRenderer
             PathUtil.DecodePath(relativePath).Replace('/', Path.DirectorySeparatorChar));
 
         var key = _ogCardRenderer.CacheKey(spec);
-        _ogCardKeysUsed.TryAdd(key, 0);
-        var cacheFile = Path.Combine(_config.OgCardCacheDirectory, key + ".png");
-        if (_config.RefreshOgCards || !File.Exists(cacheFile))
+        // 同じ鍵のカードを描いている途中なら、描き上がりを待って写す。
+        var cacheFile = _ogCardJobs.ContainsKey(key) ? null : _ogCardStore.TryGet(key);
+        if (cacheFile is null)
         {
-            Directory.CreateDirectory(_config.OgCardCacheDirectory);
-            var tempFile = $"{cacheFile}.{Guid.NewGuid():N}.tmp";
-            var missing = _ogCardRenderer.Render(spec, tempFile);
-            Interlocked.Increment(ref _ogCardsRendered);
-            if (missing is not null)
+            // 描くのに要る書体が引けなければ描かない。前回の画像を今回の出力として残す（掃除で消されないよう記録する）。
+            var missingFonts = _ogCardJobs.ContainsKey(key) ? Array.Empty<string>() : _ogCardRenderer.MissingTypefaces(spec);
+            if (missingFonts.Count > 0)
             {
-                lock (_ogCardGlyphLock) _ogCardGlyphWarnings.TryAdd(missing, canonicalPath);
+                bool kept = File.Exists(outputFile);
+                if (kept) _output.Register(outputFile);
+                lock (_ogCardGlyphLock)
+                {
+                    foreach (var font in missingFonts)
+                    {
+                        var cur = _ogCardMissingFonts.TryGetValue(font, out var c) ? c : (Kept: 0, None: 0, SamplePath: canonicalPath);
+                        _ogCardMissingFonts[font] = (cur.Kept + (kept ? 1 : 0), cur.None + (kept ? 0 : 1), cur.SamplePath);
+                    }
+                }
+                return kept ? $"{_config.BaseUrl}/{relativePath}" : "";
             }
-            if (OgCardRenderer.IsTypefaceWarning(missing))
-            {
-                PathUtil.EnsureParentDirectory(outputFile);
-                File.Move(tempFile, outputFile, overwrite: true);
-                _output.Register(outputFile);
-                return $"{_config.BaseUrl}/{relativePath}";
-            }
-            File.Move(tempFile, cacheFile, overwrite: true);
+
+            var renderer = _ogCardRenderer;
+            var store = _ogCardStore;
+            var job = _ogCardJobs.GetOrAdd(key, _ => new Lazy<Task<OgCardDrawn>>(
+                () => Task.Run(() => DrawOgCardAsync(renderer, store, spec, key, canonicalPath))));
+            _ogCardPlacements.Add(PlaceOgCardAsync(job.Value, outputFile));
         }
         else
         {
             Interlocked.Increment(ref _ogCardsFromCache);
+            _output.CopyFrom(cacheFile, outputFile);
         }
-        _output.CopyFrom(cacheFile, outputFile);
         return $"{_config.BaseUrl}/{relativePath}";
+    }
+
+    /// <summary>
+    /// カードを 1 枚、画素まで描いて作り置きに入れる（同じ画素の PNG がすでにあれば、PNG は書かない）。
+    /// 指定の書体が無く既定の書体で描いたカードは作り置きに入れず、一時ファイルに書いて返す
+    /// （書体を入れた次のビルドで描き直されるように。一時ファイルは <see cref="WaitForOgCardsAsync"/> が写し終えた後に消す）。
+    /// </summary>
+    private async Task<OgCardDrawn> DrawOgCardAsync(OgCardRenderer renderer, OgCardStore store, OgCardSpec spec, string key, string canonicalPath)
+    {
+        await _ogCardDrawGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            using var drawn = renderer.Draw(spec);
+            Interlocked.Increment(ref _ogCardsRendered);
+            if (drawn.Warning is { } missing)
+            {
+                lock (_ogCardGlyphLock) _ogCardGlyphWarnings.TryAdd(missing, canonicalPath);
+            }
+            if (OgCardRenderer.IsTypefaceWarning(drawn.Warning))
+            {
+                Directory.CreateDirectory(_config.OgCardCacheDirectory);
+                var tempFile = Path.Combine(_config.OgCardCacheDirectory, $"{key}.{Guid.NewGuid():N}.tmp");
+                drawn.SavePng(tempFile);
+                return new OgCardDrawn(tempFile, Cached: false);
+            }
+            return new OgCardDrawn(store.Put(key, drawn), Cached: true);
+        }
+        finally
+        {
+            _ogCardDrawGate.Release();
+        }
+    }
+
+    /// <summary>描き上がったカードを、そのページの出力へ写す。</summary>
+    private async Task PlaceOgCardAsync(Task<OgCardDrawn> job, string outputFile)
+    {
+        var drawn = await job.ConfigureAwait(false);
+        _output.CopyFrom(drawn.File, outputFile);
+    }
+
+    /// <summary>
+    /// 描く仕事に回した OGP カードがすべて描き上がり、各ページの出力へ写し終わるのを待つ。全ページの生成の後、
+    /// 出力を走査・掃除する前に呼ぶ。描く途中の失敗はここで例外として上がる。
+    /// </summary>
+    public async Task WaitForOgCardsAsync()
+    {
+        await Task.WhenAll(_ogCardPlacements).ConfigureAwait(false);
+        foreach (var job in _ogCardJobs.Values)
+        {
+            var drawn = await job.Value.ConfigureAwait(false);
+            if (!drawn.Cached) File.Delete(drawn.File);
+        }
     }
 
     /// <summary>
@@ -227,6 +324,14 @@ public sealed class PageRenderer
     private bool ShouldWrite(string urlPath)
         => _config.MatchesPageFilter(urlPath);
 
+    /// <summary>
+    /// <paramref name="urlPath"/> のページを今回のビルドで書くか（ピンポイントビルドの対象か。全体ビルドでは常に true）。
+    /// 詳細ページを 1 件ずつ作る Generator は、モデルを組み立てる前にこれを見て、書かないページは組み立てごと飛ばす
+    /// （書き出しの直前で捨てると、1 ページだけのビルドでも全ページぶんの集計が走る）。
+    /// 飛ばしてよいのは、そのページを作る処理がほかのページの材料を残さないものに限る。
+    /// </summary>
+    public bool IsTarget(string urlPath) => ShouldWrite(urlPath);
+
     /// <summary>コンテンツテンプレを <paramref name="contentModel"/> で 1 度レンダリング → レイアウトに包んでファイル保存する。</summary>
     /// <param name="urlPath">サイト内 URL パス（先頭スラッシュ付き、末尾スラッシュ付き）。</param>
     /// <param name="section">サマリ用セクションラベル（"home" / "series" / "episodes" 等）。</param>
@@ -265,7 +370,7 @@ public sealed class PageRenderer
         // コンテンツ部分を先にレンダリング → そのまま HTML 文字列として layout の Content に詰める。
         var contentHtml = _renderer.Render(contentTemplate, contentModel);
 
-        // 共通項（SiteName / BaseUrl / OGP / GA4 / AdSense / 著作権年 / パンくず JSON-LD）を
+        // 共通項（SiteName / BaseUrl / OGP / GA4 / 著作権年 / パンくず JSON-LD）を
         // config から補完する。CanonicalPath が未指定なら本ページの urlPath を充てる。
         ApplyCommonLayoutDefaults(layoutMeta, urlPath);
 
@@ -288,6 +393,8 @@ public sealed class PageRenderer
         // （免責事項のように本文で Amazon に言及しただけのページでは発火させない）。
         layoutMeta.HasAmazonAffiliateLinks = AmazonAffiliateLinkRegex.IsMatch(contentHtml);
         layoutMeta.HasAmazonImages = contentHtml.Contains("media-amazon.com", StringComparison.Ordinal);
+        // 販売中の商品の枠の置き場。枠の中身（Amazon のリンクと画像）は JS が後から描くので、置き場の有無で見る。
+        layoutMeta.HasShopBox = contentHtml.Contains("data-shop-series=", StringComparison.Ordinal);
         // YouTube 公式動画の埋め込み（エピソード詳細の次回予告等）があるページにも同様の権利注記を出す。
         layoutMeta.HasYoutubeEmbeds = contentHtml.Contains("youtube.com/embed/", StringComparison.Ordinal);
 
@@ -422,7 +529,7 @@ public sealed class PageRenderer
     /// レイアウト共通メタの自動補完。<see cref="RenderAndWrite"/> と
     /// <see cref="RenderAndWriteToOutputFile"/> の双方から呼ぶ共通処理。
     /// 補完対象は SiteName / BaseUrl / CanonicalPath / OgType / OgImage /
-    /// Ga4MeasurementId / GoogleSiteVerification / GoogleAdSenseClientId /
+    /// Ga4MeasurementId / GoogleSiteVerification /
     /// CopyrightYears と、パンくず由来の BreadcrumbList JSON-LD。いずれも
     /// 呼び出し側で未指定（空）のプロパティだけを config 値や算出値で埋める
     /// （明示設定があればそれを優先）。
@@ -477,9 +584,6 @@ public sealed class PageRenderer
             layoutMeta.Ga4MeasurementId = _config.Ga4MeasurementId;
         if (string.IsNullOrEmpty(layoutMeta.GoogleSiteVerification))
             layoutMeta.GoogleSiteVerification = _config.GoogleSiteVerification;
-        // AdSense クライアント ID も同様に config から自動補完。
-        if (string.IsNullOrEmpty(layoutMeta.GoogleAdSenseClientId))
-            layoutMeta.GoogleAdSenseClientId = _config.GoogleAdSenseClientId;
         // 著作権表記年。コンストラクタで算出済みの値を毎ページ同じ内容で詰める。
         // Generator から個別指定する想定は無いが、もし明示設定があればそちらを優先する。
         if (string.IsNullOrEmpty(layoutMeta.CopyrightYears))

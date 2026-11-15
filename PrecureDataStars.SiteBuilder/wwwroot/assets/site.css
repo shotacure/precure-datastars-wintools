@@ -9589,6 +9589,13 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   margin-left: -6px;
   white-space: nowrap;
 }
+/* 歴代プリキュア声優のコンビ・グループの行で、名前の直後に添えるメンバー「（水田 信二、川西 賢志郎）」。 */
+.entity-row-members {
+  font-size: 0.9em;
+}
+.entity-row > .entity-row-members {
+  margin-left: -6px;
+}
 /* 行ホバーで遷移先（主エンティティ名）に下線を出し、行全体がクリックできることを示す。 */
 .entity-row:hover a.entity-row-name {
   text-decoration: underline;

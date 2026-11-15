@@ -92,7 +92,7 @@ internal static class Program
             var factory = MySqlConnectionFactory.FromConnectionString(cs);
             using var youtube = new YouTubeDataApiClient(apiKey);
             using var web = new WebProbe(youtube, Log);
-            var service = new EpisodeLinkSyncService(new EpisodesRepository(factory), new SeriesRepository(factory), web, dryRun, Log, Status);
+            var service = new EpisodeLinkSyncService(new EpisodesRepository(factory), new SeriesRepository(factory), new EpisodeThemeSongsRepository(factory), web, dryRun, Log, Status);
 
             Log($"放送後のリンクの取り込み{(watch ? "（見続ける）" : "")}{(dryRun ? "（書かない）" : "")}");
             if (watch)

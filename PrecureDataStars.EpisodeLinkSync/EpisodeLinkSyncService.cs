@@ -16,6 +16,8 @@ namespace PrecureDataStars.EpisodeLinkSync;
 ///   <item>予告（<c>youtube_trailer_url</c>）：プリキュア公式 YouTube チャンネルの新着（Data API で読むアップロードの再生リストの先頭）から、題が
 ///     「{作品名}　第N話 予告「{サブタイトル}」」のものを拾う。予告の題のサブタイトルが DB の <c>title_text</c> と違うときは書かずに知らせる。
 ///     その回が DB に無いときは、1 回だけ見て回るときは回を作らずに知らせる（休止の週があり、放送日を機械では決められないため）。</item>
+///   <item>主題歌（<c>episode_theme_songs</c>）：放送済みで紐付けが 1 行も無い回に、前の回の OP・ED を写す（挿入歌は写さない。
+///     前の回が本放送限定の曲を持たず OP・ED が 1 つずつのときだけ。<see cref="TryCopyThemeSongsAsync"/>）。</item>
 ///   <item>日曜の見続ける回だけは、次の回の予告が出たときに、その回が DB に無ければ予告の題から回を仮で作り、
 ///     回はあるのにサブタイトルが空ならサブタイトルを仮で入れる（<see cref="CreateFromTrailerAsync"/>・<see cref="FillTitleFromTrailerAsync"/>）。
 ///     作った・入れたことは知らせ、ふりがな・ルビ・放送日は祥太さんが確かめる。</item>
@@ -46,6 +48,7 @@ public sealed class EpisodeLinkSyncService
 
     private readonly EpisodesRepository _episodes;
     private readonly SeriesRepository _series;
+    private readonly EpisodeThemeSongsRepository _themes;
     private readonly WebProbe _web;
     private readonly bool _dryRun;
     private readonly Action<string> _log;
@@ -53,9 +56,10 @@ public sealed class EpisodeLinkSyncService
     private readonly HashSet<string> _noticed = new(StringComparer.Ordinal);
 
     /// <param name="status">見続ける間の「いま何を待っているか」の 1 行を出す先（ログには残さない。窓のいちばん下で書き換える）。</param>
-    public EpisodeLinkSyncService(EpisodesRepository episodes, SeriesRepository series, WebProbe web, bool dryRun,
+    public EpisodeLinkSyncService(EpisodesRepository episodes, SeriesRepository series, EpisodeThemeSongsRepository themes, WebProbe web, bool dryRun,
         Action<string> log, Action<string> status)
     {
+        _themes = themes;
         _episodes = episodes;
         _series = series;
         _web = web;
@@ -83,6 +87,9 @@ public sealed class EpisodeLinkSyncService
 
         /// <summary>予告を待つ次の回の話数。</summary>
         public int NextNo => Target.SeriesEpNo + 1;
+
+        /// <summary>主題歌を前の話から写す手順を試した。</summary>
+        internal bool ThemeTried { get; set; }
 
         /// <summary>あらすじのページの URL が入った（入っていた）。</summary>
         public bool SummaryDone { get; internal set; }
@@ -135,8 +142,10 @@ public sealed class EpisodeLinkSyncService
             .ToList();
         _log($"見る回：{window.Count} 話（{now - PastWindow:M/d}〜{now + FutureWindow:M/d} に放送の TV）");
 
-        foreach (var ep in window.Where(e => e.OnAirAt <= now))
+        foreach (var ep in window.Where(e => e.OnAirAt <= now).OrderBy(e => e.OnAirAt))
         {
+            // 前の回から順に写すので、続けて空の回があっても 1 回の見回りで埋まる。
+            await TryCopyThemeSongsAsync(snap, ep, ct).ConfigureAwait(false);
             if (string.IsNullOrEmpty(ep.ToeiAnimSummaryUrl))
                 await TryPageAsync(snap, ep, EpisodeLinkColumn.ToeiAnimSummary, ct).ConfigureAwait(false);
             if (string.IsNullOrEmpty(ep.ToeiAnimLineupUrl))
@@ -221,6 +230,12 @@ public sealed class EpisodeLinkSyncService
             return;
         }
 
+        // 主題歌は放送が終わったあとの最初の 1 回だけ試す（空なら前の話の OP・ED を写す）。
+        if (!session.ThemeTried && ep.OnAirAt <= DateTime.Now)
+        {
+            session.ThemeTried = true;
+            await TryCopyThemeSongsAsync(snap, ep, ct).ConfigureAwait(false);
+        }
         if (!session.SummaryDone)
         {
             session.SummaryDone = !string.IsNullOrEmpty(ep.ToeiAnimSummaryUrl)
@@ -273,6 +288,47 @@ public sealed class EpisodeLinkSyncService
         var left = until - DateTime.Now;
         if (left < TimeSpan.Zero) left = TimeSpan.Zero;
         return $"待っています：{string.Join("・", waiting)}　{until:HH:mm} まであと {(int)left.TotalHours}:{left.Minutes:00}";
+    }
+
+    /// <summary>主題歌を写せなかったことを知らせる範囲（放送からこの日数まで）。毎日の見回りが同じことを何日も知らせ続けないよう、それより古い回はログだけにする。</summary>
+    private static readonly TimeSpan ThemeNoticeWindow = TimeSpan.FromDays(2);
+
+    /// <summary>
+    /// 放送済みの回に主題歌の紐付けが 1 行も無ければ、前の回の OP・ED を写す（挿入歌は写さない）。
+    /// 前の回が「本放送限定の曲を持たず、OP と ED が 1 つずつ」のときだけ写し、そうでなければ（本放送限定の ED の週の前後など）
+    /// 写さずに知らせる。紐付けが 1 行でもある回は何もしない。写した回は、ED が前の回と同じかを祥太さんが確かめる。
+    /// </summary>
+    private async Task TryCopyThemeSongsAsync(Snapshot snap, Episode ep, CancellationToken ct)
+    {
+        if (!snap.IsTv(ep) || ep.OnAirAt > DateTime.Now) return;
+        var prev = snap.Find(ep.SeriesId, ep.SeriesEpNo - 1);
+        if (prev is null) return;
+        if ((await _themes.GetByEpisodeAsync(ep.EpisodeId, ct).ConfigureAwait(false)).Count > 0) return;
+
+        string what = $"{snap.SeriesById[ep.SeriesId].Title} 第{ep.SeriesEpNo}話の主題歌";
+        var prevRows = await _themes.GetByEpisodeAsync(prev.EpisodeId, ct).ConfigureAwait(false);
+        int ops = prevRows.Count(r => !r.IsBroadcastOnly && r.ThemeKind == "OP");
+        int eds = prevRows.Count(r => !r.IsBroadcastOnly && r.ThemeKind == "ED");
+        if (prevRows.Any(r => r.IsBroadcastOnly) || ops != 1 || eds != 1)
+        {
+            string why = $"前の話（第{prev.SeriesEpNo}話）が、本放送限定の曲を持たず OP・ED が 1 つずつ、の形ではないので";
+            if (DateTime.Now - ep.OnAirAt <= ThemeNoticeWindow)
+                Notice($"theme-skip:{ep.EpisodeId}", $"{what}が空ですが、{why}写していません。手で入れてください。");
+            else
+                _log($"{what}が空ですが、{why}写していません。");
+            return;
+        }
+
+        if (_dryRun)
+        {
+            _log($"{what}を前の話の OP・ED から写します（書かずに試しています）：episode {prev.EpisodeId} → {ep.EpisodeId}");
+            return;
+        }
+        int n = await _themes.CopyOpEdIfEmptyAsync(prev.EpisodeId, ep.EpisodeId, UpdatedBy, ct).ConfigureAwait(false);
+        if (n == 0) return;
+        WrittenCount += n;
+        _log($"{what}を前の話の OP・ED から写しました：episode {prev.EpisodeId} → {ep.EpisodeId}（{n} 行）");
+        Notice($"theme-copy:{ep.EpisodeId}", $"{what}は、前の話の OP・ED を写しました。違っていれば直してください（episode {ep.EpisodeId}）。");
     }
 
     /// <summary>あらすじ・ラインナップのページを組んで確かめ、あれば書く。書いた（またはもう入っていた）ら true。</summary>

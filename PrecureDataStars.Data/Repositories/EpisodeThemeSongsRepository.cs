@@ -186,6 +186,26 @@ public sealed class EpisodeThemeSongsRepository : RepositoryBase
         }
     }
 
+    /// <summary>
+    /// 前の話の OP・ED（本放送限定でない行）を、主題歌の紐付けが 1 行も無い回へそのまま写す。挿入歌は写さない。
+    /// 紐付けが 1 行でもあれば何もしない（手で入れた分を上書きしない。主キーの seq の衝突も避ける）。
+    /// 空かどうかの確認と挿入を 1 文で行うので、確認のあとに手で入れられても上書きしない。写した行数を返す。
+    /// </summary>
+    public async Task<int> CopyOpEdIfEmptyAsync(int fromEpisodeId, int toEpisodeId, string by, CancellationToken ct = default)
+    {
+        const string sql = """
+            INSERT INTO episode_theme_songs
+              (episode_id, is_broadcast_only, theme_kind, seq, usage_actuality,
+               song_recording_id, song_size_variant_code, title_misprint_text, title_credited_text, is_instrumental, notes, created_by, updated_by)
+            SELECT @toEpisodeId, 0, s.theme_kind, s.seq, s.usage_actuality,
+                   s.song_recording_id, s.song_size_variant_code, s.title_misprint_text, s.title_credited_text, s.is_instrumental, s.notes, @by, @by
+            FROM episode_theme_songs s
+            WHERE s.episode_id = @fromEpisodeId AND s.is_broadcast_only = 0 AND s.theme_kind IN ('OP','ED')
+              AND NOT EXISTS (SELECT 1 FROM episode_theme_songs x WHERE x.episode_id = @toEpisodeId);
+            """;
+        return await ExecuteAsync(sql, new { fromEpisodeId, toEpisodeId, by }, ct).ConfigureAwait(false);
+    }
+
     /// <summary>4 列複合 PK で 1 件削除する。</summary>
     public async Task DeleteAsync(
         int episodeId, bool isBroadcastOnly, string themeKind, byte seq,

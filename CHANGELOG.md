@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：企業詳細のロゴの「クレジット範囲」を、作品の種別ごとの行にまとめた**（`CompaniesGenerator.BuildLogoCreditRangeLines`・`LogoCreditRangeLine`〔新規〕・`BuildContext.ProvisionalSeriesIds`〔新規〕・`SiteDataLoader`・`companies-detail.sbn`・`site.css`）：作品を 1 つずつ並べるのをやめ、TV・映画・イベント・オトナ・スピンオフの行に分けた。作品全体に載っている作品が公開順に続く所は、「最初の題名 から 最後の題名 まで（n 作品）」と出す。公開日が同じ映画は 1 つに数え、どれか 1 本に載っていれば載っているものとする。各話にクレジットが付く作品は、クレジットの入っている回（仮クレジットの回を除く）のすべてに載っていれば作品全体として扱い、載っていない回があるときだけ話数の範囲を添える。仮クレジットの作品は、載っていない作品に数えない。その種別の、クレジットの入っている作品すべてに載っている行は、先頭に【全作】を付ける。
+
 - **サイト：ホームの「キャラクターおよびクリエイターのデータ充足率」の赤字表示をやめた**（`HomeGenerator`・`home.sbn`）：充足率が 100% に張り付いて算出の意味がなくなったため、表示と計算（`BuildDataSufficiencyLabelAsync`・`HomeContentModel.DataSufficiencyLabel`）を除いた。
 
 - **サイト：歴代記録 `/stats/records/` で、仮クレジットの回を数えないようにした**（`BuildContext.ProvisionalEpisodeIds`〔新規〕・`SiteDataLoader`・`RecordsGenerator`）：1 話のクレジット（声の出演人数・参加スタッフ数）と、スタッフの記録（担当話数・初担当）から、仮クレジット（`episodes.is_provisional_credit = 1`）の回を外す。

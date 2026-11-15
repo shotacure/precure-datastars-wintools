@@ -303,6 +303,12 @@ public sealed class BuildContext
     public required IReadOnlySet<int> ProvisionalEpisodeIds { get; init; }
 
     /// <summary>
+    /// 仮クレジット（<c>series.is_provisional_credit = 1</c>）の作品の series_id。
+    /// 企業詳細のロゴのクレジット範囲は、仮のクレジットを「載っていない作品」に数えないためにこの集合の作品を飛ばす。
+    /// </summary>
+    public required IReadOnlySet<int> ProvisionalSeriesIds { get; init; }
+
+    /// <summary>
     /// episode_id → そのエピソードのパート一覧（episode_seq 昇順）の事前展開辞書。
     /// 旧 EpisodeGenerator はページごとに <c>EpisodePartsRepository.GetByEpisodeAsync</c> を発火していたが、
     /// SiteDataLoader で全件取得して episode_id でグルーピングし、per-page の DB 往復を撲滅する。

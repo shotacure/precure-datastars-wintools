@@ -6854,12 +6854,24 @@ a.credit-card-series:focus-visible {
   font-size: 0.88em;
 }
 
-/* 企業詳細：ロゴ下のクレジット範囲注記 「クレジット範囲：キミとアイドルプリキュア♪ #1〜14」のような注記。 */
+/* 企業詳細：ロゴ下のクレジット範囲注記。見出し「クレジット範囲」の下に、作品の種別ごとの行
+   （「TV　ふたりはプリキュア から … まで（3 作品）、名探偵プリキュア！ #1〜14」）を並べる。 */
 .logo-credit-range {
   margin-left: 1em;
   font-size: 0.82em;
   line-height: 1.5;
   margin-top: 2px;
+}
+/* 種別の見出しの列は、いちばん長い見出しの幅にそろえる。 */
+.logo-credit-range-lines {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 0.8em;
+  margin: 0 0 0 1em;
+}
+.logo-credit-range-lines dt,
+.logo-credit-range-lines dd {
+  margin: 0;
 }
 
 /* 企業詳細：ロゴタイプ（ロゴを持つ屋号）のカードリスト。 */

@@ -106,8 +106,16 @@
             {{~ if l.ValidFrom != "" || l.ValidTo != "" ~}}
             <span class="muted">（{{ l.ValidFrom }} 〜 {{ l.ValidTo }}）</span>
             {{~ end ~}}
-            {{~ if l.CreditRangeLabel != "" ~}}
-            <div class="logo-credit-range muted">クレジット範囲：{{ l.CreditRangeLabel | html.escape }}</div>
+            {{~ if l.CreditRangeLines.size > 0 ~}}
+            <div class="logo-credit-range muted">
+              <div class="logo-credit-range-head">クレジット範囲</div>
+              <dl class="logo-credit-range-lines">
+                {{~ for r in l.CreditRangeLines ~}}
+                <dt>{{ r.KindLabel | html.escape }}</dt>
+                <dd>{{ r.Text | html.escape }}</dd>
+                {{~ end ~}}
+              </dl>
+            </div>
             {{~ end ~}}
           </li>
           {{~ end ~}}

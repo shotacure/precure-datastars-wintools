@@ -388,13 +388,23 @@ public sealed class PageRenderer
         if (string.IsNullOrEmpty(layoutMeta.ShareHashtags))
             layoutMeta.ShareHashtags = DefaultShareHashtags;
 
+        // 作品詳細・各話の詳細の「この作品の Blu-ray・CD」の枠の置き場は、本文から取り出してシェアボタン・引用ボックスの下に出す
+        // （_layout.sbn の ShopBoxHtml）。トップページの枠（class に home-section が付く）は本文に残す。
+        var shopBoxMatch = ShopBoxPlaceholderRegex.Match(contentHtml);
+        if (shopBoxMatch.Success)
+        {
+            layoutMeta.ShopBoxHtml = shopBoxMatch.Value;
+            contentHtml = contentHtml.Remove(shopBoxMatch.Index, shopBoxMatch.Length);
+        }
+
         // Amazon 由来要素の有無をコンテンツ HTML から自動検出し、フッタ注記の出し分けに使う。
         // アフィリエイト参加表明はアソシエイトタグ付き URL（?tag= / &tag=）を含むページだけが対象
         // （免責事項のように本文で Amazon に言及しただけのページでは発火させない）。
         layoutMeta.HasAmazonAffiliateLinks = AmazonAffiliateLinkRegex.IsMatch(contentHtml);
         layoutMeta.HasAmazonImages = contentHtml.Contains("media-amazon.com", StringComparison.Ordinal);
         // 販売中の商品の枠の置き場。枠の中身（Amazon のリンクと画像）は JS が後から描くので、置き場の有無で見る。
-        layoutMeta.HasShopBox = contentHtml.Contains("data-shop-series=", StringComparison.Ordinal);
+        layoutMeta.HasShopBox = !string.IsNullOrEmpty(layoutMeta.ShopBoxHtml)
+            || contentHtml.Contains("data-shop-series=", StringComparison.Ordinal);
         // YouTube 公式動画の埋め込み（エピソード詳細の次回予告等）があるページにも同様の権利注記を出す。
         layoutMeta.HasYoutubeEmbeds = contentHtml.Contains("youtube.com/embed/", StringComparison.Ordinal);
 
@@ -406,6 +416,11 @@ public sealed class PageRenderer
     /// <summary>アソシエイトタグ付き Amazon リンクの検出用正規表現（href 値内の ?tag= / &amp;tag= を要求）。</summary>
     private static readonly System.Text.RegularExpressions.Regex AmazonAffiliateLinkRegex =
         new(@"amazon\.co\.jp/[^""']*[?&]tag=", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>作品詳細・各話の詳細の販売中の商品の枠の置き場（class が shop-box だけのもの。トップページの home-section 付きは対象外）。</summary>
+    private static readonly System.Text.RegularExpressions.Regex ShopBoxPlaceholderRegex =
+        new(@"[ 	]*<aside class=""shop-box""[^>]*></aside>[ 	]*?
+?", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>
     /// レンダリング済みの最終 HTML をファイルへ書き出し（中身が前回と同じなら書かない）、サマリ・進捗・sitemap 記録を更新する。

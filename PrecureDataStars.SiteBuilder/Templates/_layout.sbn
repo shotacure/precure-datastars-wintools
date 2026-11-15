@@ -321,6 +321,13 @@ gtag('config', '{{ Ga4MeasurementId }}');
      共通パーシャル _cite-box.sbn。「このページを引用する」の引用文（テキスト / Cite web テンプレート）と
      コピーボタンを、シェアボタンの直下に置く。表示条件はシェアボタンと同じ（ShareUrl が非空）。 ##}}
 {{ include '_cite-box.sbn' }}
+
+{{## ──────── この作品の Blu-ray・CD ────────
+     作品詳細・各話の詳細の販売中の商品の枠の置き場。本文のあとのシェアボタン・引用ボックスの下に出す
+     （PageRenderer が本文から取り出して ShopBoxHtml に入れる。中身は shop-box.js が描く）。 ##}}
+{{~ if ShopBoxHtml != "" ~}}
+{{ ShopBoxHtml }}
+{{~ end ~}}
 </main>
 
 {{## ──────── ページフッター ────────

@@ -222,6 +222,10 @@ public sealed class RecordsGenerator
     /// <summary>全体の順位のページに載せる件数（100 位が同点なら全件）。</summary>
     private const int RankingLimit = 100;
 
+    /// <summary>仮クレジット（<c>episodes.is_provisional_credit = 1</c>）の回の関与か。歴代記録には、正式に入れ終えていない回を数えない。</summary>
+    private bool IsProvisionalEpisode(Involvement inv)
+        => inv.EpisodeId is int episodeId && _ctx.ProvisionalEpisodeIds.Contains(episodeId);
+
     /// <summary>1 話のクレジットの数。<see cref="VoicePeople"/> は声の出演の声優の人数、<see cref="Staff"/> はスタッフの人と会社を合わせた数。</summary>
     private sealed record EpisodeCreditCount(Episode Episode, int VoicePeople, int Staff);
 
@@ -257,7 +261,7 @@ public sealed class RecordsGenerator
         bool Eligible(Involvement inv, out int episodeId)
         {
             episodeId = inv.EpisodeId ?? 0;
-            return inv.EpisodeId is not null && !inv.IsBroadcastOnly && _ctx.IsMainlineTvSeries(inv.SeriesId);
+            return inv.EpisodeId is not null && !inv.IsBroadcastOnly && _ctx.IsMainlineTvSeries(inv.SeriesId) && !IsProvisionalEpisode(inv);
         }
         static void Add(Dictionary<int, HashSet<string>> map, int episodeId, string key)
         {
@@ -458,6 +462,8 @@ public sealed class RecordsGenerator
                 foreach (var inv in invs)
                 {
                     if (inv.EpisodeId is not int episodeId) continue;
+                    // 仮クレジットの回は数えない
+                    if (_ctx.ProvisionalEpisodeIds.Contains(episodeId)) continue;
                     // 記録は本線の TV の話だけで数える（映画系・スピンオフは入れない）
                     if (!_ctx.IsMainlineTvSeries(inv.SeriesId)) continue;
                     if (inv.IsVoiceCast)
@@ -587,23 +593,16 @@ public sealed class RecordsGenerator
             .ToDictionary(g => g.Key, g => g.Select(a => a.AliasId).ToList());
 
         // First は初登場のクレジットの位置（放送開始日 → series_id → 話数 → クレジットの位置）。同じ数のキャラの並びに使う。
-        var rows = new List<(Character Character, int Episodes, int Movies, int Works, int OtonaWorks, int SpinOffWorks, (long Start, int SeriesId, int EpNo, long Pos) First)>();
+        var rows = new List<(Character Character, int Episodes, int Movies, int OtonaEpisodes, (long Start, int SeriesId, int EpNo, long Pos) First)>();
         // キャラクター一覧の登場回数順のリスト（個別ページを持つキャラ）に 🌙 の札が出るか。出るときは件数バッジでの
         // 並べ替えの合計に 🌙 も入る（count-sort.js）ので、「もっと見る」のリンクに書く並べ替えの値が変わる。
-        bool countListHasOtona = false;
         foreach (var c in characters)
         {
             if (!aliasesByCharacter.TryGetValue(c.CharacterId, out var aliasIds)) continue;
             // 話数・本数は本線の TV と映画だけで数える（大人向けスピンオフの話数は使わない）。
             var (episodes, movies, otonaEpisodes) = CharacterAppearanceCounter.Count(_ctx, _involvements, aliasIds);
-            if (otonaEpisodes > 0 && !_ctx.EntityUrls.IsGuestCharacter(c.CharacterId)) countListHasOtona = true;
 
-            // 登場作品数：声の出演のクレジットがあるシリーズを 1 作品と数える。スピンオフ（大人向けを含む）も 1 作品に数え、
-            // 併映の短編は親映画に含める。
-            var works = new HashSet<int>();
-            // 添え書きでは、オトナシリーズとそれ以外のスピンオフを分けて数える（サイトでの呼び名が違う）。
-            var otonaWorks = new HashSet<int>();
-            var spinOffWorks = new HashSet<int>();
+            // 並びの同順位は、声の出演で最初にクレジットされた位置が早い順にする。
             var first = (Start: long.MaxValue, SeriesId: int.MaxValue, EpNo: int.MaxValue, Pos: long.MaxValue);
             foreach (var aliasId in aliasIds)
             {
@@ -613,32 +612,30 @@ public sealed class RecordsGenerator
                     if (!_ctx.SeriesById.TryGetValue(inv.SeriesId, out var series)) continue;
                     var key = CreditKey(inv);
                     if (key.CompareTo(first) < 0) first = key;
-                    if (SeriesClassifier.IsOtona(series)) otonaWorks.Add(series.SeriesId);
-                    else if (SeriesClassifier.IsSpinOff(series)) spinOffWorks.Add(series.SeriesId);
-                    works.Add(SeriesClassifier.IsMovieShortChild(series) && series.ParentSeriesId is int parentId ? parentId : series.SeriesId);
                 }
             }
-            if (works.Count == 0) continue;
-            rows.Add((c, episodes, movies, works.Count, otonaWorks.Count, spinOffWorks.Count, first));
+            // 声の出演のクレジットが 1 つも無いキャラは載せない。
+            if (first.SeriesId == int.MaxValue) continue;
+            rows.Add((c, episodes, movies, otonaEpisodes, first));
         }
 
-        // 「もっと見る」はキャラクター一覧の登場回数順のタブへ。TV シリーズの登場話数は 📺 の多い順、登場作品数は
-        // 件数バッジの合計（📺🎥。🌙 の札があれば 🌙 も含む）の多い順に並べた状態（view-state.js の #tab= / csort=）を開く。
+        // 「もっと見る」はキャラクター一覧の登場回数順のタブへ。TV シリーズの登場話数は 📺 の多い順、映画登場数は
+        // 🎥 の多い順に並べた状態（view-state.js の #tab= / csort=）を開く。
         string countTabUrl = "/characters/#tab=count";
         string tvSortUrl = countTabUrl + "&csort=tv-desc";
-        string totalSortUrl = countTabUrl + (countListHasOtona ? "&csort=tv_movie_otona-desc" : "&csort=tv_movie-desc");
+        string movieSortUrl = countTabUrl + "&csort=movie-desc";
         var items = new List<RecordItem>
         {
             TopCharacters("character-episodes", "TVシリーズ登場話数が多いキャラクター", rows
                 .OrderByDescending(r => r.Episodes).ThenByDescending(r => r.Movies).ThenBy(r => r.First).ThenBy(r => r.Character.CharacterId)
                 .Select(r => (r.Character, r.Episodes, "話", "")),
                 tvSortUrl),
-            TopCharacters("character-works", "登場作品数が多いキャラクター", rows
-                .OrderByDescending(r => r.Works).ThenByDescending(r => r.Episodes).ThenBy(r => r.First).ThenBy(r => r.Character.CharacterId)
-                .Select(r => (r.Character, r.Works, "作品",
-                    $"TV {r.Episodes}話・映画 {r.Movies}本" + (r.OtonaWorks > 0 ? $"・オトナ {r.OtonaWorks}作品" : "")
-                        + (r.SpinOffWorks > 0 ? $"・スピンオフ {r.SpinOffWorks}作品" : ""))),
-                totalSortUrl)
+            // 映画は 1 本ずつ数えられる単位なので「本」で出す。TV とオトナシリーズは話数を添える。
+            TopCharacters("character-movies", "映画登場数が多いキャラクター", rows
+                .OrderByDescending(r => r.Movies).ThenByDescending(r => r.Episodes).ThenBy(r => r.First).ThenBy(r => r.Character.CharacterId)
+                .Select(r => (r.Character, r.Movies, "本",
+                    $"TV {r.Episodes}話" + (r.OtonaEpisodes > 0 ? $"・オトナ {r.OtonaEpisodes}話" : ""))),
+                movieSortUrl)
         };
 
         return new RecordGroup

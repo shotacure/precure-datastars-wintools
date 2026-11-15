@@ -297,6 +297,12 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> ProvisionalCreditsByEpisode { get; init; }
 
     /// <summary>
+    /// 仮クレジット（<c>episodes.is_provisional_credit = 1</c>）の回の episode_id（解禁前・解禁後を問わず全部）。
+    /// 歴代記録 <c>/stats/records/</c> は、仮のクレジットを数えないためにこの集合の回を外す。
+    /// </summary>
+    public required IReadOnlySet<int> ProvisionalEpisodeIds { get; init; }
+
+    /// <summary>
     /// episode_id → そのエピソードのパート一覧（episode_seq 昇順）の事前展開辞書。
     /// 旧 EpisodeGenerator はページごとに <c>EpisodePartsRepository.GetByEpisodeAsync</c> を発火していたが、
     /// SiteDataLoader で全件取得して episode_id でグルーピングし、per-page の DB 往復を撲滅する。

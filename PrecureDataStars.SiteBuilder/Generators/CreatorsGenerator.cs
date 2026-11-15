@@ -1239,11 +1239,17 @@ public sealed class CreatorsGenerator
         RoleTimelineBuilder otonaTimeline)
     {
         var rows = rowSet.CountRows;
+        // 年表に重ねる関連する役職（前後・並列の役職）の担当の種類も、ボタンの出る種類に数える
+        // （自分の担当に映画が無くても、関連する役職に映画があれば 🎥 のボタンで帯・輪を出し入れできるように）。
+        var relatedRoles = rowSet.TimelineEntities.SelectMany(e => e.RelatedRoles).ToList();
         var kinds = new WorkKinds
         {
-            Tv = rows.Any(r => r.EpisodeCount > 0),
-            Movie = rows.Any(r => r.MovieCount > 0),
+            Tv = rows.Any(r => r.EpisodeCount > 0)
+                 || relatedRoles.Any(rr => rr.Episodes.Any(ep => ep.EpisodeId != 0 && !_ctx.IsOtonaSeries(ep.SeriesId))),
+            Movie = rows.Any(r => r.MovieCount > 0)
+                    || relatedRoles.Any(rr => rr.MovieSeriesIds.Count > 0),
             Otona = rows.Any(r => r.OtonaEpisodeCount > 0)
+                    || relatedRoles.Any(rr => rr.Episodes.Any(ep => ep.EpisodeId != 0 && _ctx.IsOtonaSeries(ep.SeriesId)))
         };
         // 年表：TV・映画・オトナシリーズを重ねた年度の帯の線表と、🌙 だけを入れているときに見せるオトナシリーズの作品ごとの帯の線表。
         // オトナシリーズだけの役職は、作品ごとの帯の線表だけを出す。年表の凡例の関連する役職は役職詳細へリンクする。

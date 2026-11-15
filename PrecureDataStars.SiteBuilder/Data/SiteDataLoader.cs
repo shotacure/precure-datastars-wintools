@@ -546,6 +546,7 @@ public static class SiteDataLoader
             CreditsByEpisodeForDisplay = creditsByEpisodeForDisplay,
             CreditsBySeriesForDisplay = creditsBySeriesForDisplay,
             ProvisionalCreditsByEpisode = provisionalCreditsByEpisode,
+            ProvisionalEpisodeIds = provisionalEpisodeIds,
             PersonAliasById = personAliasById,
             CharacterAliasById = characterAliasById,
             CompanyAliasById = companyAliasById,

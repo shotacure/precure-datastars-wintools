@@ -12066,6 +12066,22 @@ a.staff-combo-nav-card:hover {
 .rtl-lanes-3 .rtl-lane { height: 33.333%; }
 .rtl-lanes-3 .rtl-lane:nth-of-type(2) { top: 33.333%; }
 .rtl-lanes-3 .rtl-lane:nth-of-type(3) { top: 66.667%; }
+/* 段はボタン（ルートの data-wk-off＝切っている種類）に連動する。🎥 を切れば映画の段、🌙 を切ればスピンオフの段を畳み、残った段数に合わせて
+   行の高さと段の位置を詰める（段を 1 つにした行は、段を分けない行と同じ高さ）。 */
+[data-wk-off~="movie"] .rtl-lane-movie,
+[data-wk-off~="otona"] .rtl-lane-spin { display: none; }
+[data-wk-off~="movie"] .rtl-lanes-2.rtl-has-movie-lane,
+[data-wk-off~="otona"] .rtl-lanes-2.rtl-has-spin-lane,
+[data-wk-off~="movie"][data-wk-off~="otona"] .rtl-lanes-3 { height: 26px; }
+[data-wk-off~="movie"] .rtl-lanes-2.rtl-has-movie-lane .rtl-lane,
+[data-wk-off~="otona"] .rtl-lanes-2.rtl-has-spin-lane .rtl-lane,
+[data-wk-off~="movie"][data-wk-off~="otona"] .rtl-lanes-3 .rtl-lane { height: 100%; }
+[data-wk-off~="movie"]:not([data-wk-off~="otona"]) .rtl-lanes-3,
+[data-wk-off~="otona"]:not([data-wk-off~="movie"]) .rtl-lanes-3 { height: 40px; }
+[data-wk-off~="movie"]:not([data-wk-off~="otona"]) .rtl-lanes-3 .rtl-lane,
+[data-wk-off~="otona"]:not([data-wk-off~="movie"]) .rtl-lanes-3 .rtl-lane { height: 50%; }
+[data-wk-off~="movie"]:not([data-wk-off~="otona"]) .rtl-lanes-3 .rtl-lane-spin,
+[data-wk-off~="otona"]:not([data-wk-off~="movie"]) .rtl-lanes-3 .rtl-lane-movie { top: 50%; }
 /* 人物・企業/団体詳細の年表の役職の行の印（札）。役柄の行はキャラクターの星（.rtl-badge-character）。 */
 .rtl-badge-role { background: rgba(59, 130, 196, 0.12); color: #2563a8; }
 

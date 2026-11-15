@@ -2,6 +2,14 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### 開発中（次回リリース）
+
+- **サイト：歴代記録 `/stats/records/` で、仮クレジットの回を数えないようにした**（`BuildContext.ProvisionalEpisodeIds`〔新規〕・`SiteDataLoader`・`RecordsGenerator`）：1 話のクレジット（声の出演人数・参加スタッフ数）と、スタッフの記録（担当話数・初担当）から、仮クレジット（`episodes.is_provisional_credit = 1`）の回を外す。
+
+- **サイト：歴代記録のキャラクターの記録を、登場作品数から映画登場数に変えた**（`RecordsGenerator.BuildCharacterGroup`）：「登場作品数が多いキャラクター」をやめ、「映画登場数が多いキャラクター」を本数で出す。添え書きは「TV N話・オトナ N話」で、オトナシリーズも話数で数える。
+
+- **サイト：役職詳細の年表で、前後・並列の役職の担当も TV・映画・オトナのボタンに追随するようにした**（`CreatorsGenerator.GenerateRoleDetail`・`RoleTimelineBuilder`〔凡例の関連する役職の項目に参加の種類 `WorkKinds`・`BandWorkKinds`〕・`_role-timeline.sbn`）：ボタンの出る種類（ページの `Kinds`）に、関連する役職の担当の種類も数える。自分の担当に映画が無くても、前後の役職に映画があれば 🎥 のボタンが出て、白抜きの輪を出し入れできる。凡例の関連する役職の見本と項目は、切っている種類しか無ければ隠れる。
+
 ### v1.21.0 (2026-11-15)
 
 - **EpisodeLinkSync：放送後に、主題歌の紐付けが空の回へ前の話の OP・ED を写すようにした**（`EpisodeLinkSyncService.TryCopyThemeSongsAsync`〔新規〕・`EpisodeThemeSongsRepository.CopyOpEdIfEmptyAsync`〔新規〕・`Program`）：放送済みで `episode_theme_songs` が 1 行も無い TV の回に、前の話の OP・ED を写す。挿入歌は写さない。前の話が本放送限定の曲を持たず OP・ED が 1 つずつのときだけ写し、そうでなければ写さずに知らせる。日曜の見続ける回では放送後の最初の 1 回、毎日の見回りでは範囲内の放送済みの回を古い順に見る。写したときは、前の話と同じかを確かめるよう通知する。

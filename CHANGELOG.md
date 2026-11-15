@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：ホームの「キャラクターおよびクリエイターのデータ充足率」の赤字表示をやめた**（`HomeGenerator`・`home.sbn`）：充足率が 100% に張り付いて算出の意味がなくなったため、表示と計算（`BuildDataSufficiencyLabelAsync`・`HomeContentModel.DataSufficiencyLabel`）を除いた。
+
 - **サイト：歴代記録 `/stats/records/` で、仮クレジットの回を数えないようにした**（`BuildContext.ProvisionalEpisodeIds`〔新規〕・`SiteDataLoader`・`RecordsGenerator`）：1 話のクレジット（声の出演人数・参加スタッフ数）と、スタッフの記録（担当話数・初担当）から、仮クレジット（`episodes.is_provisional_credit = 1`）の回を外す。
 
 - **サイト：歴代記録のキャラクターの記録を、登場作品数から映画登場数に変えた**（`RecordsGenerator.BuildCharacterGroup`）：「登場作品数が多いキャラクター」をやめ、「映画登場数が多いキャラクター」を本数で出す。添え書きは「TV N話・オトナ N話」で、オトナシリーズも話数で数える。

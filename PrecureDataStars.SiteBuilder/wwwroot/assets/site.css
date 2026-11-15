@@ -10249,7 +10249,7 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 }/* 記事の分類をリンクにしたときは下線を出さない。 */
 a.article-tag { text-decoration: none; }
 
-/* ホームの「データ充足率」暫定表記（赤字）。BuildLabel 直下に小さく出す。追いついたら除去する。 */
+/* ホームの暫定表記（赤字）。BuildLabel 直下に小さく出す。追いついたら除去する。 */
 .home-data-sufficiency {
   margin: 0.1em 0 0;
   color: #c0392b;

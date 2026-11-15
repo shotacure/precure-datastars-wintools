@@ -531,7 +531,7 @@ public sealed class EpisodeGenerator
         var staffCombos = BuildStaffCombos(series, ep);
         // 開閉の枠の中のカードは、役職ごと・人ごとのカード（何回目・前の回からどれくらいぶり）を先に、組み合わせのカードを後に並べる。
         var staffRoleCards = BuildStaffRoleCards(series, ep);
-        // 数え方の断り。トップのデータ充足率と同じく「『作品名』第N話まで」で、クレジットのある最新の TV の話を基準にする。
+        // 数え方の断り。「『作品名』第N話まで」で、クレジットのある最新の TV の話を基準にする。
         string staffComboNote = _ctx.CreditCoverageEpisode is { } coverage
             ? $"（『{coverage.Series.Title}』第{coverage.Episode.SeriesEpNo}話までのデータで数えています）"
             : "";

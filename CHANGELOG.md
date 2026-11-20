@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **DB・サイト・Catalog：1 トラックに複数の曲・版が入っている盤で、それぞれがトラックのどこからどこまでかを持てるようにした**（マイグレーション `v1.21.1_add_track_sub_range.sql`・`tracks.sub_start_frames`〔新規〕・`sub_length_frames`〔新規〕・`Track`・`TracksRepository`・`TracksEditorForm`・`MusicGenerator.LoadBgmCueRecordingsAsync`）：トラックの先頭からの開始位置と長さを、枝番（`sub_order`）の行ごとにフレーム（1/75 秒）で持つ。トラック全体の位置と長さ（`start_lba`・`length_frames`）は、これまでどおり枝番 0 の行に持つ。劇伴詳細ページの尺は、長さが入っていればその曲・版だけの長さで出す（2 つの版を 1 トラックに入れた盤で、1 つ目にトラック全体の長さが出て、2 つ目には尺が出ていなかった）。Catalog のトラック編集に「トラック内 開始」「トラック内 長さ」の欄を足した（編集するのは枝番 0 の行の値）。
+
 - **サイト：コラムの脚注の番号を押したとき、飛び先が固定ヘッダの裏に隠れないようにした**（`site.css`）：脚注の行と本文側の脚注番号に、見出しと同じ `scroll-margin-top`（110px、幅 560px 以下は 60px）を付けた。脚注の「↩」で本文へ戻るときも、戻り先の行が隠れない。
 
 - **サイト：歴代プリキュア声優 `/creators/voice-cast/` に、コンビ・グループの名前でクレジットされた出演を出すようにした**（`CreatorsGenerator.BuildVoiceCastRows`・`GenerateVoiceCast`・`VoiceCastUnitMember`〔新規〕・`creators-voice-cast.sbn`・`site.css`）：人物に結び付かないコンビ・グループの名義は、どのタブにも出ていなかった。その名前のまま 1 行にまとめ、コンビ・グループのページへリンクする。名前の後ろにメンバーを括弧で添え、それぞれの人物ページへリンクする。メンバーの人物の行にはしない。声優の人数には数えない。

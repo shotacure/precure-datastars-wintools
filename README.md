@@ -1987,6 +1987,8 @@ series_relation_kinds ──┘    │            │
 | `track_title_override` | VARCHAR(255) NULL | トラック固有タイトル上書き |
 | `start_lba` | INT UNSIGNED NULL | 開始 LBA（親行のみ） |
 | `length_frames` | INT UNSIGNED NULL | 尺（フレーム、親行のみ） |
+| `sub_start_frames` | INT UNSIGNED NULL | 1 トラックに複数の曲・版が入っているとき、この行の曲・版がトラックの先頭から何フレーム目で始まるか（1/75 秒。枝番の行にも持てる。分からなければ NULL） |
+| `sub_length_frames` | INT UNSIGNED NULL | 1 トラックに複数の曲・版が入っているとき、この行の曲・版の長さ（フレーム。枝番の行にも持てる。分からなければ NULL）。入っていれば、劇伴詳細ページの尺はこの長さで出す。Catalog のトラック編集の「トラック内 開始」「トラック内 長さ」で、枝番 0 の行の値を編集する |
 | `isrc` | CHAR(12) NULL | ISRC（親行のみ） |
 | `is_data_track` / `has_pre_emphasis` / `is_copy_permitted` | BOOL DEFAULT 0 | CD フラグ（親行のみ） |
 | `cd_text_title` / `cd_text_performer` | VARCHAR(255) NULL | CD-Text トラック情報（親行のみ） |

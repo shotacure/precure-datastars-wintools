@@ -61,6 +61,15 @@ public sealed class Track
     /// <summary>尺（フレーム数。CD-DA は 1/75 秒単位、BD/DVD は秒×75 に換算して格納）。</summary>
     public uint? LengthFrames { get; set; }
 
+    /// <summary>
+    /// 1 トラックに複数の曲・版が入っているとき、この行の曲・版がトラックの先頭から何フレーム目で始まるか（1/75 秒）。
+    /// <see cref="StartLba"/>・<see cref="LengthFrames"/> と違い、<see cref="SubOrder"/>&gt;0 の行にも持てる。分からなければ NULL。
+    /// </summary>
+    public uint? SubStartFrames { get; set; }
+
+    /// <summary>1 トラックに複数の曲・版が入っているとき、この行の曲・版の長さ（フレーム。1/75 秒）。分からなければ NULL。</summary>
+    public uint? SubLengthFrames { get; set; }
+
     /// <summary>ISRC（International Standard Recording Code、12 文字）。</summary>
     public string? Isrc { get; set; }
 

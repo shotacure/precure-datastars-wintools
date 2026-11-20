@@ -1190,6 +1190,10 @@ CREATE TABLE `tracks` (
   `track_title_override` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `start_lba` int unsigned DEFAULT NULL,
   `length_frames` int unsigned DEFAULT NULL,
+  -- 1 トラックに複数の曲・版が入っているとき、この行の曲・版がトラックのどこからどこまでか（フレーム。1/75 秒）。
+  -- start_lba・length_frames と違い、枝番（sub_order > 0）の行にも持てる。分からなければ NULL。
+  `sub_start_frames` int unsigned DEFAULT NULL COMMENT '1 トラックに複数の曲・版が入っているとき、この行の曲・版がトラックの先頭から何フレーム目で始まるか（1/75 秒）。分からなければ NULL',
+  `sub_length_frames` int unsigned DEFAULT NULL COMMENT '1 トラックに複数の曲・版が入っているとき、この行の曲・版の長さ（フレーム。1/75 秒）。分からなければ NULL',
   `isrc` char(12) DEFAULT NULL,
   `is_data_track` tinyint(1) NOT NULL DEFAULT '0',
   `has_pre_emphasis` tinyint(1) NOT NULL DEFAULT '0',

@@ -125,6 +125,8 @@ public sealed class MusicGenerator
         // tracks.length_frames は CD のフレーム単位尺（75 frames = 1 秒）。劇伴詳細ページの
         // cue カードヘッダに出す「尺」は、リスト先頭（発売日昇順で最も古い = 初出盤）の
         // トラック length_frames を秒に換算して表示する。
+        // 1 トラックに複数の曲・版が入っている盤で、トラックの中の区切り（sub_length_frames）が入っていれば、
+        // その曲・版だけの長さを使う（枝番の行にも尺が出る）。
         // 流通元を替えて同じ中身のまま再発売された盤（Reissues）のトラックは、行にすると初回盤と二重に並ぶので
         // 同じトラックの初回盤の行に、本行と同じ「{盤の略称}-Tr.{N}」の書き方で添える（歌の詳細も同じ）。
         // ORDER BY は安定タイブレーク前提（発売日 → 品番 → トラック番号 → サブ順）。
@@ -148,7 +150,7 @@ public sealed class MusicGenerator
                    t.track_no          AS TrackNo,
                    t.sub_order         AS SubOrder,
                    COALESCE(t.track_title_override, '') AS TrackTitle,
-                   t.length_frames     AS LengthFrames,
+                   COALESCE(t.sub_length_frames, t.length_frames) AS LengthFrames,
                    t.youtube_art_track_id AS YoutubeArtTrackId,
                    t.youtube_embeddable   AS YoutubeEmbeddable,
                    t.youtube_playability  AS YoutubePlayability,
@@ -174,7 +176,7 @@ public sealed class MusicGenerator
                    t.track_no          AS TrackNo,
                    t.sub_order         AS SubOrder,
                    COALESCE(t.track_title_override, '') AS TrackTitle,
-                   t.length_frames     AS LengthFrames,
+                   COALESCE(t.sub_length_frames, t.length_frames) AS LengthFrames,
                    t.youtube_art_track_id AS YoutubeArtTrackId,
                    t.youtube_embeddable   AS YoutubeEmbeddable,
                    t.youtube_playability  AS YoutubePlayability,

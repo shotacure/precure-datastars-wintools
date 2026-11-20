@@ -244,6 +244,8 @@ public partial class TracksEditorForm : Form
         txtTrackTitleOverride.Text = t.TrackTitleOverride ?? "";
         numStartLba.Value = t.StartLba ?? 0;
         numLengthFrames.Value = t.LengthFrames ?? 0;
+        numSubStartFrames.Value = t.SubStartFrames ?? 0;
+        numSubLengthFrames.Value = t.SubLengthFrames ?? 0;
         txtIsrc.Text = t.Isrc ?? "";
         txtCdTextTitle.Text = t.CdTextTitle ?? "";
         txtCdTextPerformer.Text = t.CdTextPerformer ?? "";
@@ -312,6 +314,8 @@ public partial class TracksEditorForm : Form
         txtTrackTitleOverride.Text = "";
         numStartLba.Value = 0;
         numLengthFrames.Value = 0;
+        numSubStartFrames.Value = 0;
+        numSubLengthFrames.Value = 0;
         txtIsrc.Text = "";
         txtCdTextTitle.Text = "";
         txtCdTextPerformer.Text = "";
@@ -508,6 +512,9 @@ public partial class TracksEditorForm : Form
                 TrackTitleOverride = FormHelpers.NullIfEmpty(txtTrackTitleOverride.Text),
                 StartLba = numStartLba.Value == 0 ? null : (uint)numStartLba.Value,
                 LengthFrames = numLengthFrames.Value == 0 ? null : (uint)numLengthFrames.Value,
+                // トラック内の区切りは、長さが入っているときだけ持つ（先頭から始まる行の開始位置は 0）
+                SubStartFrames = numSubLengthFrames.Value == 0 ? null : (uint)numSubStartFrames.Value,
+                SubLengthFrames = numSubLengthFrames.Value == 0 ? null : (uint)numSubLengthFrames.Value,
                 Isrc = FormHelpers.NullIfEmpty(txtIsrc.Text),
                 CdTextTitle = FormHelpers.NullIfEmpty(txtCdTextTitle.Text),
                 CdTextPerformer = FormHelpers.NullIfEmpty(txtCdTextPerformer.Text),

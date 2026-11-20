@@ -12264,3 +12264,8 @@ a.staff-combo-nav-card:hover {
     flex-direction: row;
   }
 }
+
+/* ギリシア語の本文。Noto Sans JP にはアクセントや気息記号の付いた字が無く、字ごとに別の書体になるので、
+   lang="el"（現代ギリシア語）か lang="grc"（古典ギリシア語）を付けた所は Noto Sans で組む。
+   原稿では <span lang="grc">μάγοι</span> のように書く（書体の読み込みは _layout.sbn）。 */
+:lang(el), :lang(grc) { font-family: "Noto Sans", var(--font-base); }

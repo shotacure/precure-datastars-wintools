@@ -10265,7 +10265,19 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .article-body .footnotes li::before {
   content: "[" counter(article-fn) "]";
   position: absolute; left: 0; font-family: var(--font-num);
-}/* 記事の分類をリンクにしたときは下線を出さない。 */
+}
+/* 脚注の番号と「↩」で飛んだ先が、固定ヘッダの裏に潜らないようにする（見出しと同じ余白）。 */
+.article-body .footnotes li[id],
+.article-body a.footnote-ref[id] {
+  scroll-margin-top: 110px;
+}
+@media (max-width: 560px) {
+  .article-body .footnotes li[id],
+  .article-body a.footnote-ref[id] {
+    scroll-margin-top: 60px;
+  }
+}
+/* 記事の分類をリンクにしたときは下線を出さない。 */
 a.article-tag { text-decoration: none; }
 
 /* ホームの暫定表記（赤字）。BuildLabel 直下に小さく出す。追いついたら除去する。 */

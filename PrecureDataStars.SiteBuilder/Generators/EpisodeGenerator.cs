@@ -134,7 +134,7 @@ public sealed class EpisodeGenerator
 
         // サブタイトル文字情報の初出 / 唯一 / N年Mか月ぶり判定は、ビルド開始時に SiteDataLoader が
         // 1 度だけ構築した TitleCharIndex（BuildContext 共有）への辞書参照で完結させる。
-        _titleCharInfo = new TitleCharInfoRenderer(_ctx.TitleCharIndex, _ctx.SubtitleRevealAtByEpisodeId);
+        _titleCharInfo = new TitleCharInfoRenderer(_ctx.TitleCharIndex, _ctx.SubtitleRevealAtByEpisodeId, _ctx.SeriesById);
 
         // クレジットレンダラ：Catalog 側 CreditPreviewRenderer と同一仕様。
         // 名義／屋号／ロゴ／キャラ／役職の ID → 名前解決はすべて SiteDataLoader が事前展開した

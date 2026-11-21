@@ -20,10 +20,14 @@ public sealed class TitleCharInfoRenderer
     private readonly TitleCharIndex _index;
     private readonly IReadOnlyDictionary<int, DateTimeOffset> _subtitleRevealAtByEpisodeId;
 
-    public TitleCharInfoRenderer(TitleCharIndex index, IReadOnlyDictionary<int, DateTimeOffset> subtitleRevealAtByEpisodeId)
+    /// <summary>直前の登場エピソードへのリンクを組むための、シリーズ ID → シリーズ。</summary>
+    private readonly IReadOnlyDictionary<int, Series> _seriesById;
+
+    public TitleCharInfoRenderer(TitleCharIndex index, IReadOnlyDictionary<int, DateTimeOffset> subtitleRevealAtByEpisodeId, IReadOnlyDictionary<int, Series> seriesById)
     {
         _index = index;
         _subtitleRevealAtByEpisodeId = subtitleRevealAtByEpisodeId;
+        _seriesById = seriesById;
     }
 
     /// <summary>指定エピソードの文字情報 HTML を返す。情報が無い場合は空文字。</summary>
@@ -116,16 +120,27 @@ public sealed class TitleCharInfoRenderer
 
                 sb.Append("<span class=\"charinfo-count\">")
                   .Append(episodesSince).Append("話ぶり・").Append(occurrenceIndex).Append("回目</span></span>");
+                // 『』の中身は直前の登場シリーズへ、「」の中身はそのエピソードへリンクする（シリーズが引けないときはリンクなし）。
                 sb.Append("<span class=\"charinfo-detail muted\">");
+                bool hasPrevLink = _seriesById.TryGetValue(prev.SeriesId, out var prevSeries);
                 if (!string.IsNullOrEmpty(prev.SeriesTitle))
                 {
-                    sb.Append("『").Append(HtmlUtil.Escape(prev.SeriesTitle)).Append("』")
-                      .Append("第").Append(prev.SeriesEpNo).Append("話");
+                    sb.Append("『");
+                    if (hasPrevLink)
+                        sb.Append("<a class=\"charinfo-detail-link\" href=\"").Append(HtmlUtil.Escape(PathUtil.SeriesUrl(prevSeries!.Slug))).Append("\">");
+                    sb.Append(HtmlUtil.Escape(prev.SeriesTitle));
+                    if (hasPrevLink) sb.Append("</a>");
+                    sb.Append("』第").Append(prev.SeriesEpNo).Append("話");
                 }
                 if (!string.IsNullOrEmpty(prev.TitleText))
                 {
                     var prevRevealAt = SubtitleGuardRenderer.RevealAtFor(prev.EpisodeId, _subtitleRevealAtByEpisodeId);
-                    sb.Append("「").Append(SubtitleGuardRenderer.GuardPlainText(JapaneseQuotes.InQuotes(prev.TitleText), prevRevealAt)).Append("」");
+                    sb.Append("「");
+                    if (hasPrevLink)
+                        sb.Append("<a class=\"charinfo-detail-link\" href=\"").Append(HtmlUtil.Escape(PathUtil.EpisodeUrl(prevSeries!.Slug, prev.SeriesEpNo))).Append("\">");
+                    sb.Append(SubtitleGuardRenderer.GuardPlainText(JapaneseQuotes.InQuotes(prev.TitleText), prevRevealAt));
+                    if (hasPrevLink) sb.Append("</a>");
+                    sb.Append("」");
                 }
                 sb.Append("(").Append(JpDateFormat.BroadcastDotDate(prev.OnAirAt)).Append(")以来</span>");
             }

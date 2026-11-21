@@ -1361,6 +1361,8 @@ a.series-card-children-title:hover {
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+.charinfo-detail-link { color: inherit; text-decoration: none; }
+.charinfo-detail-link:hover { color: var(--accent, #a31a5b); text-decoration: underline; }
 @media (max-width: 560px) {
   .charinfo-item.is-revival { max-width: none; }
 }

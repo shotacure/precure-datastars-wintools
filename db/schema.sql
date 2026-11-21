@@ -77,6 +77,7 @@ CREATE TABLE `episodes` (
   `magazine_subtitle_status` enum('PUBLISHED','NOT_DISCLOSED','UNDECIDED','NOT_LISTED') DEFAULT NULL COMMENT 'アニメ雑誌でのサブタイトル掲載状態（NULL=データなし）',
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `is_provisional_credit` tinyint NOT NULL DEFAULT 0 COMMENT '1=この回の credits は正式入力までの仮（ページに出さず、各話の札・メインスタッフにだけ使う）',
+  `is_uses_published` tinyint NOT NULL DEFAULT 0 COMMENT '1=この回の使用曲の記録（episode_uses）をサイトに出す。0 の回は、行があっても出さない',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
@@ -3158,8 +3159,11 @@ CREATE TABLE `episode_uses` (
   `scene_label`       varchar(255)       CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL
                                                                 COMMENT '使用シーンの説明（例: ほのかとなぎさの再会）',
   `duration_seconds`  smallint unsigned  DEFAULT NULL            COMMENT '使用尺（秒）',
+  `part_offset_ms` int unsigned DEFAULT NULL COMMENT 'パートの頭から使用が始まるまでの位置（ミリ秒）。分からなければ NULL',
+  `duration_ms` int unsigned DEFAULT NULL COMMENT '使用尺（ミリ秒）。分からなければ NULL。duration_seconds は秒の値',
   `notes`             varchar(1024)      DEFAULT NULL            COMMENT '備考',
   `is_broadcast_only` tinyint(1)         NOT NULL DEFAULT 0      COMMENT '本放送のみ使用された場合に立てるフラグ',
+  `is_listed` tinyint NOT NULL DEFAULT 1 COMMENT '1=使用曲の一覧に載せる行、0=記録だけして一覧には載せない行（OP・ED・予告などのパートの行は行ごとに選ぶ）',
 
   -- 監査
   `created_at`        timestamp          NULL DEFAULT CURRENT_TIMESTAMP,

@@ -183,8 +183,17 @@ public static class SiteDataLoader
             .Where(t => !hiddenEpisodeIds.Contains(t.EpisodeId))
             .GroupBy(t => t.EpisodeId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodeThemeSong>)g.ToList());
+        // 使用曲の記録は、出してよいと印を付けた回（episodes.is_uses_published = 1）の、一覧に載せる行（is_listed = 1）だけを読む。
+        // 印の無い回の行は確かめ終える前のものなので、あっても出さない。載せない行（OP・ED・予告などで選ばなかった行）も出さない。
+        HashSet<int> usesPublishedEpisodeIds;
+        await using (var usesConn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false))
+        {
+            usesPublishedEpisodeIds = (await usesConn.QueryAsync<int>(new CommandDefinition(
+                "SELECT episode_id FROM episodes WHERE is_uses_published = 1 AND is_deleted = 0", cancellationToken: ct))).ToHashSet();
+        }
         var episodeUsesByEpisode = (await episodeUsesRepo.GetAllAsync(ct).ConfigureAwait(false))
             .Where(u => !hiddenEpisodeIds.Contains(u.EpisodeId))
+            .Where(u => usesPublishedEpisodeIds.Contains(u.EpisodeId) && u.IsListed)
             .GroupBy(u => u.EpisodeId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodeUse>)g.ToList());
         logger.Info($"episode_parts: {episodePartsByEpisode.Count} ep / episode_theme_songs: {themeSongsByEpisode.Count} ep / episode_uses: {episodeUsesByEpisode.Count} ep");

@@ -763,6 +763,21 @@ public sealed class MusicGenerator
                         .Select(c => (Cue: c, Row: BuildCueRow(c)))
                         .ToList();
 
+                    // 作曲・編曲のバッジは、音源のある曲の過半が同じ顔ぶれなら、セッションの見出しの下に 1 回だけ出す。
+                    // 同じ顔ぶれの曲のカードからはバッジを外し、違う曲のカードにだけ残す。
+                    IReadOnlyList<BgmStaffGroup> commonStaffGroups = Array.Empty<BgmStaffGroup>();
+                    var producedRows = cueRows.Where(x => !x.Row.IsMissing).Select(x => x.Row).ToList();
+                    var topStaff = producedRows
+                        .Where(r => r.StaffGroups.Count > 0)
+                        .GroupBy(r => StaffGroupsKey(r.StaffGroups), StringComparer.Ordinal)
+                        .OrderByDescending(x => x.Count())
+                        .FirstOrDefault();
+                    if (topStaff is not null && topStaff.Count() * 2 > producedRows.Count)
+                    {
+                        commonStaffGroups = topStaff.First().StaffGroups;
+                        foreach (var r in topStaff) r.StaffGroups = Array.Empty<BgmStaffGroup>();
+                    }
+
                     // セクション無しの cue は見出し名 "" のグループとして扱う（テンプレで h3 を出さない）。
                     // null を先頭に並べるため、キーは section_no を int 化して null を -1 に倒す。
                     var groups = cueRows
@@ -786,6 +801,7 @@ public sealed class MusicGenerator
                         MusicCreditsHtml = _ctx.MusicCredits.BySession.TryGetValue((seriesId, g.Key), out var sessionMusicRows)
                             ? MusicCreditHtml.Render(MusicCreditViewBuilder.Build(_ctx, sessionMusicRows))
                             : "",
+                        CommonStaffGroups = commonStaffGroups,
                         Groups = groups
                     };
                 })
@@ -956,6 +972,14 @@ public sealed class MusicGenerator
             _page.RenderAndWrite($"/bgms/{s.Slug}/", "music", "bgms-detail.sbn", content, layout);
         }
     }
+
+    /// <summary>
+    /// スタッフグループの並びを、顔ぶれが同じかを比べるための文字列にする（役職コードと、名義 HTML かメンバーの名前・人物 ID）。
+    /// </summary>
+    private static string StaffGroupsKey(IReadOnlyList<BgmStaffGroup> groups)
+        => string.Join("\u001e", groups.Select(g =>
+            string.Join(",", g.Roles.Select(r => r.RoleCode)) + "\u001f"
+            + (g.NamesHtml.Length > 0 ? g.NamesHtml : string.Join("\u001f", g.Members.Select(m => m.Name + "#" + m.PersonId)))));
 
     /// <summary>
     /// 劇伴詳細の曲のカードに出す作曲・編曲のスタッフグループを組み立てる。
@@ -1357,6 +1381,11 @@ public sealed class MusicGenerator
         public string Caption { get; set; } = "";
         /// <summary>このセッションの演奏・レコーディングのクレジット（組み立て済み HTML）。無ければ空文字。</summary>
         public string MusicCreditsHtml { get; set; } = "";
+        /// <summary>
+        /// セッションの見出しの下に 1 回だけ出す作曲・編曲のバッジ群（音源のある曲の過半が同じ顔ぶれのとき）。無ければ空。
+        /// これと同じ顔ぶれの曲は <see cref="BgmCueRow.StaffGroups"/> が空になる。
+        /// </summary>
+        public IReadOnlyList<BgmStaffGroup> CommonStaffGroups { get; set; } = Array.Empty<BgmStaffGroup>();
         /// <summary>
         /// セッション内のセクション単位のまとまり（section_no 昇順）。セクションを持たないセッションでは
         /// 見出し名 "" のグループ 1 つだけになり、テンプレ側は小見出しを出さずに従来どおり並べる。

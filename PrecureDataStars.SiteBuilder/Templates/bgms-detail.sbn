@@ -15,33 +15,37 @@
      この明示によって左サイドのセクションナビ（タイムラインナビ）には SessionName だけが入り、
      caption がナビ表示へ漏れ込むのを防ぐ。
 
-     セッション内の各 cue は 1 枚のカードとして縦に並べる（旧来の <table> はカード化に伴い廃止）。
+     セッション内の各 cue は 1 枚の横に細長いカードとして縦に並べる。
      カード構造：
        <li id="{AnchorId}"> 商品詳細ページからのアンカーリンク先（/bgms/{slug}/#cue-... でジャンプ）
          <div class="bgm-cue-card">
-           <div class="bgm-cue-card-head">          M番号 + メニュー + 尺
+           <div class="bgm-cue-card-head">          1 行目：M番号 / メニュー（+ この曲だけのスタッフ）/ 尺 / 再生ボタン
              <span class="bgm-cue-mno">M001</span>
-             <span class="bgm-cue-menu">メニュータイトル</span>
+             <div class="bgm-cue-body">
+               <span class="bgm-cue-menu">メニュータイトル</span>
+               <span class="bgm-cue-card-staff staff-badges-row">  作曲・編曲バッジ群・歌い手
+                 <span class="staff-badge-group">
+                   <span class="role-badge role-badge-sm" data-role-code="...">作曲</span>
+                   <a class="staff-name" href="/people/{名前}/">名義</a>    PersonId あれば <a>、無ければ <span>
+                                                           構造化行のある役職は組み立て済みの NamesHtml（所属・文字の行を含む）をそのまま出す
+                 </span>
+               </span>
+             </div>
              <span class="bgm-cue-length">1:23</span>
+             <button class="bgm-cue-play">           配信音源があるときだけ
            </div>
-           <div class="bgm-cue-card-staff staff-badges-row">  作曲・編曲バッジ群（劇伴一覧と同じ形式）
-             <span class="staff-badge-group">
-               <span class="role-badge role-badge-sm" data-role-code="...">作曲</span>
-               <a class="staff-name" href="/people/{名前}/">名義</a>    PersonId あれば <a>、無ければ <span>
-                                                       構造化行のある役職は組み立て済みの NamesHtml（所属・文字の行を含む）をそのまま出す
-             </span>
-             ...
-           </div>
-           <ul class="bgm-cue-card-recordings">  収録盤リスト（発売日昇順、disc.title_short ベース）
+           <ul class="bgm-cue-card-recordings">  2 行目：収録盤（発売日昇順、disc.title_short ベース）を横に並べて折り返す
              <li>
-               <a class="bgm-rec-disc" href="/products/{catalog}/" title="...">{disc.title_short}</a>
-               ｜ Tr.N ｜ {track_title}
+               <a class="bgm-rec-line" href="/products/{catalog}/#track-…">{disc.title_short}-Tr.N 「{track_title}」</a>
+               <a class="bgm-rec-reissue">再発売盤 …</a>   初回盤のすぐ後ろに添える
              </li>
              ...
            </ul>
            もしくは「（未収録）」のラベル
          </div>
        </li>
+     作曲・編曲のバッジは、セッションの音源のある曲の過半が同じ顔ぶれなら、セッションの見出しの下に 1 回だけ出し
+     （sec.CommonStaffGroups）、それと違う曲のカードにだけ出す（同じ顔ぶれの曲は c.StaffGroups が空）。
      仮 M 番号 cue（IsTempMNo=true）はカード装飾を通常 cue と揃えた上で、ヘッダの主役表記を
      「M番号 → 収録タイトル」に差し替える特殊扱いとなる。具体的には bgm-cue-mno スロットへ
      MenuFallbackTitle（初出盤のトラックタイトル）を入れて主役化し、bgm-cue-menu スロットへは
@@ -51,6 +55,9 @@
      欠番 cue（IsMissing=true、番号はあるが音源が制作されていない）は bgm-cue-card に is-missing を足した
      グレーのカードで、M 番号と「欠番」バッジ、判明しているときだけメニューを出す。
      収録盤・スタッフ・再生ボタンは持たない。 ##}}
+{{## スタッフバッジ 1 グループ（役職バッジ + 名義）。セッションの見出しの下と曲のカードで共用する。
+     構造化行のある役職は NamesHtml（credit_seq 順の名義・所属・文字の行を組み立て済みの HTML）を出し、無ければメンバー列を並べる。 ##}}
+{{~ func bgm_staff_group(g) ~}}<span class="staff-badge-group">{{~ for role in g.Roles ~}}<span class="role-badge role-badge-sm" data-role-code="{{ role.RoleCode }}">{{ role.RoleLabel | html.escape }}</span>{{~ end ~}}{{~ if g.NamesHtml != "" ~}}{{ g.NamesHtml }}{{~ else ~}}{{~ for m in g.Members ~}}{{~ if m.PersonId ~}}<a class="staff-name" href="{{ person_url m.PersonId }}">{{ m.Name | html.escape }}</a>{{~ else ~}}<span class="staff-name">{{ m.Name | html.escape }}</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}{{~ end ~}}</span>{{~ end ~}}
 {{~ for sec in Sessions ~}}
 <section id="session-{{ for.index + 1 }}" class="bgm-session" data-section-nav-label="{{ sec.SessionName | html.escape }}">
   <h2>
@@ -59,6 +66,10 @@
     <span class="bgm-session-caption">{{ sec.Caption | html.escape }}</span>
     {{~ end ~}}
   </h2>
+  {{## このセッションの曲の過半に共通する作曲・編曲。曲のカードには、これと違う顔ぶれの曲にだけバッジを出す。 ##}}
+  {{~ if (array.size sec.CommonStaffGroups) > 0 ~}}
+  <div class="staff-badges-row bgm-session-common-staff">{{~ for g in sec.CommonStaffGroups ~}}{{ bgm_staff_group g }}{{~ end ~}}</div>
+  {{~ end ~}}
   {{## このセッションの演奏者・録音側スタッフ。一覧が長くなるので既定では閉じておく。 ##}}
   {{~ if sec.MusicCreditsHtml != "" ~}}
   <details class="bgm-session-credits">
@@ -94,57 +105,46 @@
     {{~ else ~}}
     <li id="{{ c.AnchorId }}"{{ if c.ArtTrackId != "" }} data-art-track-row{{ end }}>
       <div class="bgm-cue-card">
-        <div class="bgm-cue-card-head{{ if c.ArtTrackId != "" }} has-art-track{{ end }}">
-          {{## 配信音源があるときだけ再生ボタンを置く。M 番号バッジ自体は置換しない
+        <div class="bgm-cue-card-head">
+          {{## bgm-cue-mno スロット（カードの左端・太字）。通常 cue は MNoDetail（M001 等）をそのまま入れる。
+               仮 M 番号 cue（IsTempMNo=true）は MNoDetail が内部管理用ダミー値で表に出せないため、ここには何も出さず、
+               代わりに MenuFallbackTitle（初出盤のトラックタイトル）を下の bgm-cue-body の先頭に主役として入れる。 ##}}
+          {{~ if !c.IsTempMNo && c.MNoDetail != "" ~}}
+          <span class="bgm-cue-mno mono">{{ c.MNoDetail | html.escape }}</span>
+          {{~ end ~}}
+          <div class="bgm-cue-body{{ if c.IsTempMNo }} is-wide{{ end }}">
+            {{## 仮 M 番号 cue は、M番号の列を使わず、初出盤のトラックタイトル（太字）と固定ラベル「(Mナンバー不明)」
+                 （カッコは半角）を同じ行に並べる。通常 cue は MenuTitle をそのまま入れる。 ##}}
+            {{~ if c.IsTempMNo ~}}
+            {{~ if c.MenuFallbackTitle != "" ~}}<span class="bgm-cue-mno is-title">{{ c.MenuFallbackTitle | html.escape }}</span>{{~ end ~}}
+            <span class="bgm-cue-menu is-unknown">(Mナンバー不明)</span>
+            {{~ else ~}}
+            <span class="bgm-cue-menu">{{ c.MenuTitle | html.escape }}</span>
+            {{~ end ~}}
+            {{## スタッフ：セッションの見出しの下にまとめた顔ぶれと違う曲だけの作曲・編曲のバッジ群に続けて、
+                 歌い手（スキャットなど。SingersHtml はリンク化済みの HTML）を並べる。メニューの後ろに同じ行で流す。 ##}}
+            {{~ if (array.size c.StaffGroups) > 0 || c.SingersHtml != "" ~}}
+            <span class="bgm-cue-card-staff staff-badges-row">
+              {{~ for g in c.StaffGroups ~}}{{ bgm_staff_group g }}{{~ end ~}}
+              {{~ if c.SingersHtml != "" ~}}{{ c.SingersHtml }}{{~ end ~}}
+            </span>
+            {{~ end ~}}
+          </div>
+          {{~ if c.LengthLabel != "" ~}}
+          <span class="bgm-cue-length mono">{{ c.LengthLabel }}</span>
+          {{~ end ~}}
+          {{## 配信音源があるときだけ、尺の右に再生ボタンを置く。M 番号バッジ自体は置換しない
                （M001 / M205a / D03 / V15 と桁も形も可変で、読ませたい情報そのもののため）。
-               配置はヘッダ grid の 2 行目・右列、つまり尺表示の真下。左端に置くと 1 行目の
-               左列を占有してカードが縦に伸びるため、既存の余白の中に収まる位置へ寄せる。
-               has-art-track が付いたヘッダではメニュータイトルの列span を 1 列目までに狭め、
-               ボタンとの重なりを避ける。 ##}}
+               ボタンの列は音源の無い曲でも空けておき、尺の位置をカードの間でそろえる。
+               尺と再生ボタンは、カードの上下の真ん中に置く。 ##}}
           {{~ if c.ArtTrackId != "" ~}}
           <button type="button" class="bgm-cue-play art-track-play{{ if c.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ c.ArtTrackId | html.escape }}"{{ if c.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }}{{ if c.AltArtTrackId != "" }} data-art-track-alt-id="{{ c.AltArtTrackId | html.escape }}" data-art-track-alt-sub="{{ c.AltArtTrackAlbum | html.escape }}"{{ end }} data-art-track-title="{{ if c.IsTempMNo }}{{ c.MenuFallbackTitle | html.escape }}{{ else }}{{ c.MNoDetail | html.escape }} {{ c.MenuTitle | html.escape }}{{ end }}" data-art-track-sub="{{ if c.ArtTrackAlbum != '' }}{{ c.ArtTrackAlbum | html.escape }}{{ else }}{{ SeriesTitle | html.escape }}{{ end }}" aria-label="この劇伴を再生{{ if c.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if c.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>
           {{~ end ~}}
-          {{## bgm-cue-mno スロット（カードの主役・太字大字）の値選択。
-               通常 cue は MNoDetail（M001 等）をそのまま入れる。
-               仮 M 番号 cue（IsTempMNo=true）は MNoDetail が内部管理用ダミー値で表に出せないため、
-               代わりに MenuFallbackTitle（初出盤のトラックタイトル）を主役として入れる。
-               MenuFallbackTitle まで空のときは見出し行に何も出さない（理論上は稀）。 ##}}
-          {{~ if c.IsTempMNo ~}}
-            {{~ if c.MenuFallbackTitle != "" ~}}
-            <span class="bgm-cue-mno mono">{{ c.MenuFallbackTitle | html.escape }}</span>
-            {{~ end ~}}
-          {{~ else ~}}
-            {{~ if c.MNoDetail != "" ~}}
-            <span class="bgm-cue-mno mono">{{ c.MNoDetail | html.escape }}</span>
-            {{~ end ~}}
-          {{~ end ~}}
-          {{## bgm-cue-menu スロット（muted 通常字、メニュータイトル位置）の値選択。
-               通常 cue は MenuTitle をそのまま入れる。
-               仮 M 番号 cue は M 番号自体が未確定であることを示す固定ラベル「(Mナンバー不明)」を入れる
-               （カッコは半角）。 ##}}
-          {{~ if c.IsTempMNo ~}}
-            <span class="bgm-cue-menu">(Mナンバー不明)</span>
-          {{~ else ~}}
-            <span class="bgm-cue-menu">{{ c.MenuTitle | html.escape }}</span>
-          {{~ end ~}}
-          {{~ if c.LengthLabel != "" ~}}
-          <span class="bgm-cue-length mono muted">{{ c.LengthLabel }}</span>
-          {{~ end ~}}
         </div>
-        {{## スタッフの行：作曲・編曲のバッジ群に続けて、歌い手（スキャットなど。SingersHtml はリンク化済みの HTML）を並べる。
-             構造化行のある役職は NamesHtml（credit_seq 順の名義・所属・文字の行を組み立て済みの HTML）を出し、無ければメンバー列を並べる。 ##}}
-        {{~ if (array.size c.StaffGroups) > 0 || c.SingersHtml != "" ~}}
-        <div class="bgm-cue-card-staff staff-badges-row">
-          {{~ for g in c.StaffGroups ~}}
-          <span class="staff-badge-group">{{~ for role in g.Roles ~}}<span class="role-badge role-badge-sm" data-role-code="{{ role.RoleCode }}">{{ role.RoleLabel | html.escape }}</span>{{~ end ~}}{{~ if g.NamesHtml != "" ~}}{{ g.NamesHtml }}{{~ else ~}}{{~ for m in g.Members ~}}{{~ if m.PersonId ~}}<a class="staff-name" href="{{ person_url m.PersonId }}">{{ m.Name | html.escape }}</a>{{~ else ~}}<span class="staff-name">{{ m.Name | html.escape }}</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}{{~ end ~}}</span>
-          {{~ end ~}}
-          {{~ if c.SingersHtml != "" ~}}{{ c.SingersHtml }}{{~ end ~}}
-        </div>
-        {{~ end ~}}
         {{## この曲が使っている曲（歌・曲（著作物））。開け閉めの枠「使われている曲（N 曲）」に、流れる順の番号付きリストで
              曲名と作家を並べる（SourcesHtml は組み立て済みの HTML。歌は曲詳細へリンク、曲（著作物）は曲名と作家だけ）。 ##}}
         {{~ if c.SourcesHtml != "" ~}}{{ c.SourcesHtml }}{{~ end ~}}
-        {{## 収録盤リスト。フォーマットは
+        {{## 収録盤リスト。収録盤を横に並べ、入りきらなければ折り返す。フォーマットは
               {disc.title_short}-Tr.{N} 「{track_title}」
             で、行全体を 1 つのリンク <a> としてラップする。リンク先は商品詳細ページの
             当該トラック行へのアンカー（/products/{catalog}/#track-{discCatalog}-{trackNo}-{subOrder}）。
@@ -167,7 +167,7 @@
               <span class="bgm-rec-title">「{{ r.TrackTitle | in_quotes | html.escape }}」</span>
               {{~ end ~}}
             </a>
-            {{## 流通元を替えて同じ中身のまま再発売された盤の同じトラック（行には出さない）を、本行と同じ書き方で初回盤の行に添え、
+            {{## 流通元を替えて同じ中身のまま再発売された盤の同じトラック（行には出さない）を、本行と同じ書き方で初回盤のすぐ後ろに添え、
                  再発売盤の該当トラックへリンクする。 ##}}
             {{~ if r.ReissueNote != "" ~}}
             <a class="bgm-rec-reissue muted" href="{{ r.ReissueUrl }}">{{ r.ReissueNote | html.escape }}</a>

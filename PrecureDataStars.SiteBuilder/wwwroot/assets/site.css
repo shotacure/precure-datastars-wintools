@@ -3322,19 +3322,21 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   white-space: nowrap;
 }
 
-/* /bgms/{slug}/ 劇伴詳細：cue カードリスト。1 cue = 1 カード。
-   構造：ヘッダ (M番号+メニュー+尺) / スタッフバッジ行 (作曲・編曲) / 収録盤リスト。
-   仮 M 番号 cue もカード装飾は通常 cue と同じで、ヘッダの主役表記だけが
+/* /bgms/{slug}/ 劇伴詳細：cue カードリスト。1 cue = 1 枚の横に細長いカード。
+   構造：1 行目 (M番号 / メニュー + この曲だけのスタッフ)、2 行目 (収録盤を横に並べて折り返す)、右端に尺と再生ボタン。
+   仮 M 番号 cue もカード装飾は通常 cue と同じで、左端の表記だけが
    「M番号 → 初出盤トラックタイトル」に差し替わる（テンプレ側のスロット入れ替えで実現）。
    カード自体はリンク化しない。 */
 .bgm-cue-card-list {
   list-style: none;
-  margin: 8px 0 24px;
+  margin: 8px 0 20px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
+  /* M番号の列の幅（カードの grid の 1 列目の最小の幅）。 */
+  --bgm-mno-w: 4.6rem;
 }
 .bgm-cue-card-list > li {
   display: block;
@@ -3354,8 +3356,16 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   0%   { background-color: var(--hl, #fff7d6); }
   100% { background-color: transparent; }
 }
+/* カードは「M番号 / 本文 / 尺 / 再生ボタン」の 4 列 grid。1 行目の入れ物（.bgm-cue-card-head）は
+   display: contents にして、中身をカードの grid に直接並べる。2 行目以降（収録盤など）は本文の列に置き、
+   メニューの頭とそろえる。尺と再生ボタンは全部の行にまたがらせて、カードの上下の真ん中に置く。
+   再生ボタンの列は音源の無い曲でも空けておき、尺の位置をカードの間でそろえる。 */
 .bgm-cue-card {
-  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: minmax(var(--bgm-mno-w), max-content) minmax(0, 1fr) auto 1.9em;
+  align-items: center;
+  column-gap: 14px;
+  padding: 5px 12px 6px;
   border: 1px solid var(--border);
   border-left-width: 4px;
   border-radius: 6px;
@@ -3363,60 +3373,75 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   min-width: 0;
   overflow: hidden;
 }
-
-/* カードヘッダ：1 行目=M番号+尺、2 行目=メニュー の固定 2 行 grid。
-   尺は右上に固定（grid-row:1; column:2; justify-self:end）。 */
 .bgm-cue-card-head {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: baseline;
-  gap: 2px 14px;
-  min-width: 0;
+  display: contents;
 }
 .bgm-cue-mno {
-  /* M番号は cue カードの主役。本文色・太字・大きめ（基準 1em の倍）。
-     1 行目の左列。長文時は折り返しを許可。 */
-  grid-row: 1;
+  /* M番号はカードの左端に太字で置く。列の幅より長い M番号（M10(15″A) など）のカードは、その M番号の幅まで列を広げる。 */
   grid-column: 1;
-  font-size: 2em;
+  grid-row: 1;
+  font-size: 1.15em;
   font-weight: 700;
   color: var(--fg);
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  line-height: 1.3;
   overflow-wrap: anywhere;
+}
+/* メニューと、この曲だけのスタッフを同じ行に流す（入りきらなければスタッフが次の行へ落ちる）。 */
+.bgm-cue-body {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 14px;
   min-width: 0;
 }
-.bgm-cue-length {
-  /* 尺は常に 1 行目の右上固定。M番号の長さに関わらずスペースを確保する。 */
-  grid-row: 1;
-  grid-column: 2;
-  justify-self: end;
-  align-self: start;
-  font-size: 1.15em;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  color: var(--fg);
-  /* 1 行目のベースラインがメインの M番号文字に揃うよう、ちょい下げ調整。 */
-  margin-top: 0.3em;
+/* 仮 M 番号の曲：M番号の列を使わず、初出盤のトラックタイトル（太字）から本文を始める。 */
+.bgm-cue-body.is-wide {
+  grid-column: 1 / span 2;
+}
+.bgm-cue-body .bgm-cue-mno.is-title {
+  font-size: 1em;
 }
 .bgm-cue-menu {
-  /* メニュータイトル（曲名）。M番号を主役にする方針なので、控えめに muted で通常字。
-     常に 2 行目、全幅で表示。長文時の折り返しを許可。 */
-  grid-row: 2;
-  grid-column: 1 / -1;
-  font-weight: 400;
-  color: var(--muted);
+  color: var(--fg);
   min-width: 0;
   overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.bgm-cue-menu.is-unknown {
+  color: var(--muted);
+  font-size: 0.88em;
+}
+.bgm-cue-length {
+  grid-column: 3;
+  grid-row: 1 / span 4;
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+/* セッションの見出しの下にまとめて出す作曲・編曲（そのセッションの曲の過半に共通する顔ぶれ）。 */
+.bgm-session-common-staff {
+  margin: 6px 0 2px;
+  font-size: 0.9em;
+}
+.bgm-session-common-staff .staff-name {
+  color: inherit;
+  text-decoration: none;
+}
+.bgm-session-common-staff a.staff-name:hover,
+.bgm-session-common-staff a.staff-name:focus-visible {
+  text-decoration: underline;
 }
 
 /* スタッフバッジ行：劇伴一覧と同じ .staff-badges-row レイアウトを継承。
    カード文脈での微調整として、上下余白を 1 段詰める。 */
 .bgm-cue-card-staff {
-  margin-top: 6px;
-  font-size: 0.88em;
-  line-height: 1.7;
+  font-size: 0.85em;
+  line-height: 1.6;
   min-width: 0;
 }
 /* 人物名（staff-name）：プレーンテキスト（<span>）と人物リンク（<a>）の両ケースを同じ見た目に。
@@ -3431,32 +3456,31 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   text-decoration: underline;
 }
 
-/* 収録盤リスト。1 行 1 収録盤、行全体が 1 つのリンク（商品詳細ページへ）。
+/* 収録盤リスト。収録盤を横に並べて折り返す。1 収録盤が 1 つのリンク（商品詳細ページへ）。
    青色のリンク表示は撤廃し、本文色のテキストとして並べる。ホバー時のみ控えめに
-   背景色を当てて「クリック可能」を示す。 */
+   背景色を当てて「クリック可能」を示す。本文の列に置いて、メニューの頭とそろえる。 */
 .bgm-cue-card-recordings {
+  grid-column: 2;
   list-style: none;
-  margin: 6px 0 0;
+  margin: 0;
   padding: 0;
-  font-size: 0.88em;
-  line-height: 1.6;
+  font-size: 0.82em;
+  line-height: 1.5;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: wrap;
+  gap: 0 16px;
 }
 .bgm-cue-card-recordings > li {
-  display: block;
   list-style: none;
   /* 長文の disc.title_short やトラックタイトルが続く場合に折り返せるよう、min-width: 0。 */
   min-width: 0;
   overflow-wrap: anywhere;
 }
-/* 行全体リンク。block 表示で行全幅をヒット領域にし、テキスト色・装飾は控えめに。 */
+/* 収録盤 1 つのリンク。テキスト色・装飾は控えめに。 */
 .bgm-rec-line {
-  display: block;
   color: var(--fg);
   text-decoration: none;
-  padding: 2px 4px;
+  padding: 1px 4px;
   margin: 0 -4px;
   border-radius: 4px;
   transition: background-color 120ms ease;
@@ -3466,7 +3490,8 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   background-color: var(--surface-2, #fff7fb);
   text-decoration: none;
 }
-/* 初回盤の行に添える再発売盤の同じトラック（「再発売盤 無印 OST1(再)-Tr.3」）。行の下に一段下げて小さく出し、再発売盤の該当トラックへリンクする。 */
+/* 初回盤に添える再発売盤の同じトラック（「再発売盤 無印 OST1(再)-Tr.3」）。初回盤のすぐ後ろに小さく出し、再発売盤の該当トラックへリンクする。
+   楽曲詳細（.recording-tracks-reissue）は、行の下に一段下げて出す。 */
 .bgm-rec-reissue,
 .recording-tracks-reissue {
   display: inline-block;
@@ -3474,7 +3499,7 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   text-decoration: none;
 }
 .bgm-rec-reissue {
-  margin-left: 1em;
+  margin-left: 0.6em;
 }
 .recording-tracks-reissue {
   margin: 4px 0 0 14px;
@@ -3495,18 +3520,23 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   color: var(--fg);
 }
 
-/* 未収録の cue：シンプルな muted ラベル。 */
+/* 未収録の cue：シンプルな muted ラベル。収録盤と同じ位置に出す。 */
 .bgm-cue-card-unrecorded {
-  margin-top: 6px;
-  font-size: 0.88em;
+  grid-column: 2;
+  font-size: 0.82em;
 }
 .bgm-cue-unrecorded-label {
   color: var(--muted);
 }
+/* 使われている曲の開け閉めの枠も、収録盤と同じ列に置く。 */
+.bgm-cue-card > .bgm-cue-sources {
+  grid-column: 2;
+  margin: 0;
+}
 
 /* 欠番の cue（番号はあるが音源が制作されていない）：グレー地・点線枠で音源のあるカードと区別し、
-   M 番号も muted に落とす。右上（通常は尺の位置）に「欠番」バッジを置く。
-   メニューが判明している欠番だけメニュー行が出る。 */
+   M 番号も muted に落とす。右端（通常は尺と再生ボタンの位置）に「欠番」バッジを置く。
+   メニューが判明している欠番だけメニューが出る。 */
 .bgm-cue-card.is-missing {
   background: var(--th-bg);
   border-style: dashed;
@@ -3514,29 +3544,36 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 .bgm-cue-card.is-missing .bgm-cue-mno {
   color: var(--muted);
 }
+.bgm-cue-card.is-missing .bgm-cue-menu {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--muted);
+}
 .bgm-cue-missing-badge {
   grid-row: 1;
-  grid-column: 2;
+  grid-column: 3 / -1;
   justify-self: end;
-  align-self: start;
-  margin-top: 0.3em;
-  padding: 1px 8px;
+  padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg);
   color: var(--muted);
-  font-size: 0.85em;
+  font-size: 0.8em;
   white-space: nowrap;
 }
 
-/* モバイル幅：基本構造（M番号 + 尺の 1 行目、メニューの 2 行目）はそのまま維持。
-   M番号フォントだけ画面幅とのバランスを取って一段抑え、尺サイズも調整する。 */
+/* モバイル幅：M番号の列を狭め、2 行目以降を M番号の列から始めてカードの幅をいっぱいに使う。 */
 @media (max-width: 640px) {
-  .bgm-cue-mno {
-    font-size: 1.7em;
+  .bgm-cue-card-list {
+    --bgm-mno-w: 3.4rem;
   }
-  .bgm-cue-length {
-    font-size: 1.05em;
+  .bgm-cue-card {
+    column-gap: 8px;
+  }
+  .bgm-cue-card-recordings,
+  .bgm-cue-card-unrecorded,
+  .bgm-cue-card > .bgm-cue-sources {
+    grid-column: 1 / span 2;
   }
 }
 
@@ -10914,7 +10951,7 @@ a.cal-leap-label:focus-visible {
        番号バッジそのものを button 化したもの。見た目は span 版と共有し、
        ここでは button の既定スタイルを打ち消すだけに留める。
      - 劇伴 cue（.bgm-cue-play）
-       M 番号の左に置く独立ボタン。M 番号は桁も形も可変で読ませたい情報なので、
+       尺の右に置く独立ボタン。M 番号は桁も形も可変で読ませたい情報なので、
        バッジを置換せず専用ボタンを足す形にしている。
 
    プレイヤー本体は art-track-player.js が画面下部に生成する sticky バー。
@@ -10924,7 +10961,7 @@ a.cal-leap-label:focus-visible {
 
 /* --- 再生ボタン（アルバム・劇伴で共通の見た目） ---
    トラック番号や M 番号は「何曲目か」を読む情報であって押す対象ではないので、
-   バッジ自体は再生ボタンにしない。どちらのカードでも尺表示の真下に独立したボタンを置き、
+   バッジ自体は再生ボタンにしない。アルバムのカードでは尺表示の真下、劇伴のカードでは尺の右に独立したボタンを置き、
    サイト全体で再生ボタンの居場所と見た目を揃える。 */
 button.art-track-play {
   appearance: none;
@@ -10978,16 +11015,12 @@ button.art-track-play.is-playing::before {
   grid-column: 1;
 }
 
-/* 劇伴 cue カード：ヘッダ grid の 2 行目・右列（尺表示の真下）。 */
+/* 劇伴 cue カード：右端（尺の右）。尺と同じく全部の行にまたがらせて、カードの上下の真ん中に置く。 */
 .bgm-cue-play {
-  grid-row: 2;
-  grid-column: 2;
+  grid-column: 4;
+  grid-row: 1 / span 4;
   justify-self: end;
-  align-self: start;
-}
-/* 同上の理由でメニュータイトルの全幅 span を 1 列目までに狭める。 */
-.bgm-cue-card-head.has-art-track .bgm-cue-menu {
-  grid-column: 1;
+  font-size: 0.9em;
 }
 
 /* 再生中の行・カードを淡く示す。:target のジャンプ先ハイライト（--hl）と

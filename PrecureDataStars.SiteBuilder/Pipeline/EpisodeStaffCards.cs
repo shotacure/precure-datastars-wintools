@@ -160,16 +160,17 @@ public static class EpisodeStaffCards
     {
         string inner = "";
         if (e.AffiliationCompanyAliasId is int affAlias)
-            inner = CompanyLinkHtml(affAlias, companyAliasById);
+            // 所属の文字（affiliation_text）もあれば、クレジットの表と同じく文字を出す（リンク先は名義の会社）。
+            inner = CompanyLinkHtml(affAlias, companyAliasById, e.AffiliationText);
         else if (e.AffiliationLogoId is int logoId && logoById.TryGetValue(logoId, out var logo))
             inner = CompanyLinkHtml(logo.CompanyAliasId, companyAliasById);
         else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
             inner = HtmlUtil.Escape(e.AffiliationText.Trim());
         else if (block.LeadingCompanyAliasId is int lead)
         {
-            inner = CompanyLinkHtml(lead, companyAliasById);
+            inner = CompanyLinkHtml(lead, companyAliasById, block.LeadingCompanyDisplayText);
             if (block.LeadingCompany2AliasId is int lead2)
-                inner += HtmlUtil.Escape(block.LeadingCompanySeparator ?? "") + CompanyLinkHtml(lead2, companyAliasById);
+                inner += HtmlUtil.Escape(block.LeadingCompanySeparator ?? "") + CompanyLinkHtml(lead2, companyAliasById, block.LeadingCompany2DisplayText);
             inner += HtmlUtil.Escape(block.LeadingCompanySuffix ?? "");
         }
         else if (!string.IsNullOrWhiteSpace(block.LeadingText))
@@ -178,13 +179,17 @@ public static class EpisodeStaffCards
         return inner.Length == 0 ? "" : $"<span class=\"{AffiliationCssClass} muted\">（{inner}）</span>";
     }
 
-    /// <summary>屋号 1 つの HTML（会社のページへのリンク）。屋号が引けなければ空文字。</summary>
-    private static string CompanyLinkHtml(int aliasId, IReadOnlyDictionary<int, CompanyAlias> companyAliasById)
+    /// <summary>
+    /// 屋号 1 つの HTML（会社のページへのリンク）。屋号が引けなければ空文字。
+    /// <paramref name="displayText"/>（画面の表記）があれば名義の名前の代わりにそれを出す。
+    /// </summary>
+    private static string CompanyLinkHtml(int aliasId, IReadOnlyDictionary<int, CompanyAlias> companyAliasById, string? displayText = null)
     {
         if (!companyAliasById.TryGetValue(aliasId, out var ca) || string.IsNullOrEmpty(ca.Name)) return "";
+        string label = !string.IsNullOrWhiteSpace(displayText) ? displayText.Trim() : ca.Name;
         return ca.CompanyId > 0
-            ? $"<a class=\"staff-name\" href=\"{HtmlUtil.Escape(PathUtil.CompanyUrl(ca.CompanyId))}\">{HtmlUtil.Escape(ca.Name)}</a>"
-            : HtmlUtil.Escape(ca.Name);
+            ? $"<a class=\"staff-name\" href=\"{HtmlUtil.Escape(PathUtil.CompanyUrl(ca.CompanyId))}\">{HtmlUtil.Escape(label)}</a>"
+            : HtmlUtil.Escape(label);
     }
 
     private static EpisodeStaffBadgeRole ToRole(Bucket b) => new()

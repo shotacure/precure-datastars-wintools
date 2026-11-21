@@ -616,13 +616,14 @@ public static class RoleTemplateRenderer
                     // HTML 版を取得することで企業詳細ページへの <a href> リンクが入る。
                     // SiteBuilder 側 LookupCache はリンク化済み HTML を、Catalog 側は HTML エスケープした
                     // プレーンテキストを返す（ILookupCache のデフォルト実装にフォールバック）。
-                    var name = await lookup.LookupCompanyAliasHtmlAsync(leadId).ConfigureAwait(false);
+                    // 画面の表記（leading_company_display_text）があれば名義の名前の代わりにそれを出す（リンク先は名義の会社）。
+                    var name = await lookup.LookupCompanyAliasHtmlAsync(leadId, currentBlock.Block.LeadingCompanyDisplayText).ConfigureAwait(false);
                     if (string.IsNullOrEmpty(name)) return "";
                     // 筆頭が 2 社の連名なら「社名1 + 間の字 + 社名2」、後ろの字があれば続ける（字はエスケープして出す）。
                     var leadSb = new StringBuilder(name);
                     if (currentBlock.Block.LeadingCompany2AliasId is int lead2Id)
                     {
-                        var name2 = await lookup.LookupCompanyAliasHtmlAsync(lead2Id).ConfigureAwait(false);
+                        var name2 = await lookup.LookupCompanyAliasHtmlAsync(lead2Id, currentBlock.Block.LeadingCompany2DisplayText).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(name2))
                         {
                             leadSb.Append(System.Net.WebUtility.HtmlEncode(currentBlock.Block.LeadingCompanySeparator ?? ""))
@@ -641,7 +642,8 @@ public static class RoleTemplateRenderer
                     foreach (var e in currentBlock.Entries.Where(x => x.EntryKind == "COMPANY" && x.CompanyAliasId.HasValue))
                     {
                         // HTML 版で取得。<a href="/companies/{id}/">屋号名</a> が返る。
-                        var n = await lookup.LookupCompanyAliasHtmlAsync(e.CompanyAliasId!.Value).ConfigureAwait(false);
+                        // 画面の表記（company_display_text）があれば屋号名の代わりにそれを出す。
+                        var n = await lookup.LookupCompanyAliasHtmlAsync(e.CompanyAliasId!.Value, e.CompanyDisplayText).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(n)) names.Add(n!);
                     }
                     if (names.Count == 0) return "";

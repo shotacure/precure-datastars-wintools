@@ -135,6 +135,17 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>企業屋号 ID → リンク化済み HTML 断片。 屋号 → 親企業の company_id を解決し、<c>&lt;a href="/companies/{company_id}/"&gt;屋号名&lt;/a&gt;</c> を返す。屋号名はクレジットでの表記（display_text_override）があればそれ。親企業が引けないときは HTML エスケープしただけのプレーンテキストにフォールバック。</summary>
+    /// <summary>企業屋号 ID と画面の表記 → 企業詳細へのリンク化済み HTML 断片。表記が空なら屋号名（<see cref="LookupCompanyAliasHtmlAsync(int)"/> と同じ）。</summary>
+    public Task<string?> LookupCompanyAliasHtmlAsync(int aliasId, string? displayText)
+    {
+        if (string.IsNullOrEmpty(displayText)) return LookupCompanyAliasHtmlAsync(aliasId);
+        if (!_companyAliasById.TryGetValue(aliasId, out var ca)) return Task.FromResult<string?>(null);
+        var escapedName = System.Net.WebUtility.HtmlEncode(displayText);
+        return Task.FromResult<string?>(ca.CompanyId > 0
+            ? $"<a href=\"{PathUtil.CompanyUrl(ca.CompanyId)}\">{escapedName}</a>"
+            : escapedName);
+    }
+
     public Task<string?> LookupCompanyAliasHtmlAsync(int aliasId)
     {
         if (!_companyAliasById.TryGetValue(aliasId, out var ca)) return Task.FromResult<string?>(null);

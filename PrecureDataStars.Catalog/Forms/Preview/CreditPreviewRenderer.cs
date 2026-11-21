@@ -338,6 +338,8 @@ internal sealed class CreditPreviewRenderer
         if (block.LeadingCompany2AliasId is int lead2Id)
         {
             string? name2 = await _lookup.LookupCompanyAliasNameAsync(lead2Id);
+            if (!string.IsNullOrEmpty(name2) && !string.IsNullOrEmpty(block.LeadingCompany2DisplayText))
+                name2 = block.LeadingCompany2DisplayText;
             if (!string.IsNullOrEmpty(name2))
                 name = name + (block.LeadingCompanySeparator ?? "") + name2;
         }
@@ -1966,6 +1968,9 @@ internal sealed class CreditPreviewRenderer
             if (bs.Block.LeadingCompanyAliasId is int leadId)
             {
                 leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId);
+                // 画面の表記（leading_company_display_text）があれば、SiteBuilder と同じく名義の名前の代わりにそれを出す。
+                if (!string.IsNullOrEmpty(leadingCompanyName) && !string.IsNullOrEmpty(bs.Block.LeadingCompanyDisplayText))
+                    leadingCompanyName = bs.Block.LeadingCompanyDisplayText;
                 // 2 社目（間の字つき）と後ろの字を、SiteBuilder と同じく筆頭の行に続ける。
                 if (!string.IsNullOrEmpty(leadingCompanyName))
                     leadingCompanyName = await AppendLeadingCompanyRestAsync(bs.Block, leadingCompanyName);
@@ -2120,6 +2125,9 @@ internal sealed class CreditPreviewRenderer
             if (bs.Block.LeadingCompanyAliasId is int leadId)
             {
                 leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId);
+                // 画面の表記（leading_company_display_text）があれば、SiteBuilder と同じく名義の名前の代わりにそれを出す。
+                if (!string.IsNullOrEmpty(leadingCompanyName) && !string.IsNullOrEmpty(bs.Block.LeadingCompanyDisplayText))
+                    leadingCompanyName = bs.Block.LeadingCompanyDisplayText;
                 // 2 社目（間の字つき）と後ろの字を、SiteBuilder と同じく筆頭の行に続ける。
                 if (!string.IsNullOrEmpty(leadingCompanyName))
                     leadingCompanyName = await AppendLeadingCompanyRestAsync(bs.Block, leadingCompanyName);

@@ -181,6 +181,8 @@ internal sealed class CreditTreeRenderer
         if (block.LeadingCompany2AliasId is int lead2Id)
         {
             string? name2 = await _lookup.LookupCompanyAliasNameAsync(lead2Id).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(name2) && !string.IsNullOrEmpty(block.LeadingCompany2DisplayText))
+                name2 = block.LeadingCompany2DisplayText;
             if (!string.IsNullOrEmpty(name2))
             {
                 string sep = block.LeadingCompanySeparator ?? "";
@@ -1379,6 +1381,9 @@ internal sealed class CreditTreeRenderer
             if (bs.Block.LeadingCompanyAliasId is int leadId)
             {
                 leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId).ConfigureAwait(false);
+                // 画面の表記（leading_company_display_text）があれば名義の名前の代わりにそれを出す（リンク先は名義の会社）。
+                if (!string.IsNullOrEmpty(leadingCompanyName) && !string.IsNullOrEmpty(bs.Block.LeadingCompanyDisplayText))
+                    leadingCompanyName = bs.Block.LeadingCompanyDisplayText;
                 if (!string.IsNullOrEmpty(leadingCompanyName))
                 {
                     leadingCompanyHtml = await BuildCompanyAliasHtmlAsync(leadId, leadingCompanyName).ConfigureAwait(false);
@@ -1532,6 +1537,9 @@ internal sealed class CreditTreeRenderer
             if (bs.Block.LeadingCompanyAliasId is int leadId)
             {
                 leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId).ConfigureAwait(false);
+                // 画面の表記（leading_company_display_text）があれば名義の名前の代わりにそれを出す（リンク先は名義の会社）。
+                if (!string.IsNullOrEmpty(leadingCompanyName) && !string.IsNullOrEmpty(bs.Block.LeadingCompanyDisplayText))
+                    leadingCompanyName = bs.Block.LeadingCompanyDisplayText;
                 if (!string.IsNullOrEmpty(leadingCompanyName))
                 {
                     leadingCompanyHtml = await BuildCompanyAliasHtmlAsync(leadId, leadingCompanyName).ConfigureAwait(false);

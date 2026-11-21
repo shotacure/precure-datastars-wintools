@@ -37,7 +37,7 @@
            <ul class="bgm-cue-card-recordings">  2 行目：収録盤（発売日昇順、disc.title_short ベース）を横に並べて折り返す
              <li>
                <a class="bgm-rec-line" href="/products/{catalog}/#track-…">{disc.title_short}-Tr.N 「{track_title}」</a>
-               <a class="bgm-rec-reissue">再発売盤 …</a>   初回盤のすぐ後ろに添える
+               (<a class="bgm-rec-reissue">再発盤</a>)   再発売盤があれば、初回盤のすぐ後ろに添える
              </li>
              ...
            </ul>
@@ -158,20 +158,12 @@
         <ul class="bgm-cue-card-recordings">
           {{~ for r in c.Recordings ~}}
           <li>
-            <a class="bgm-rec-line" href="/products/{{ r.ProductCatalogNo }}/#track-{{ r.DiscCatalogNo }}-{{ r.TrackNo }}-{{ r.SubOrder }}" title="{{ r.ProductTitleFull | html.escape }}">
-              {{## 再生ボタンで実際に鳴る盤に ♪ 印を付ける。同じ cue でも盤によって尺が違うため、
-                   どの音源が鳴るかは省略せず明示する。 ##}}
-              {{~ if r.IsArtTrackSource ~}}<span class="bgm-rec-source-mark" title="この盤の音源を再生します">♪</span>{{~ end ~}}
-              <span class="bgm-rec-disc-track">{{ r.DiscTitleShort | html.escape }}-Tr.{{ r.TrackNo }}</span>
-              {{~ if r.TrackTitle != "" && c.IsTempMNo == false ~}}
-              <span class="bgm-rec-title">「{{ r.TrackTitle | in_quotes | html.escape }}」</span>
-              {{~ end ~}}
-            </a>
-            {{## 流通元を替えて同じ中身のまま再発売された盤の同じトラック（行には出さない）を、本行と同じ書き方で初回盤のすぐ後ろに添え、
-                 再発売盤の該当トラックへリンクする。 ##}}
-            {{~ if r.ReissueNote != "" ~}}
-            <a class="bgm-rec-reissue muted" href="{{ r.ReissueUrl }}">{{ r.ReissueNote | html.escape }}</a>
-            {{~ end ~}}
+            {{## 収録盤 1 つ。行は商品詳細の該当トラックへのリンク（盤の名前-Tr.N「トラックタイトル」）。
+                 再生ボタンで実際に鳴る盤に ♪ 印を付ける。同じ cue でも盤によって尺が違うため、
+                 どの音源が鳴るかは省略せず明示する。
+                 流通元を替えて同じ中身のまま再発売された盤があるときは、トラック番号もトラックタイトルも同じなので行を分けず、
+                 初回盤のすぐ後ろに「(再発盤)」とだけ添える。「再発盤」は再発売盤の該当トラックへのリンクで、括弧はリンクにしない。 ##}}
+            <a class="bgm-rec-line" href="/products/{{ r.ProductCatalogNo }}/#track-{{ r.DiscCatalogNo }}-{{ r.TrackNo }}-{{ r.SubOrder }}" title="{{ r.ProductTitleFull | html.escape }}">{{~ if r.IsArtTrackSource ~}}<span class="bgm-rec-source-mark" title="この盤の音源を再生します">♪</span>{{~ end ~}}<span class="bgm-rec-disc-track">{{ r.DiscTitleShort | html.escape }}-Tr.{{ r.TrackNo }}</span>{{~ if r.TrackTitle != "" && c.IsTempMNo == false ~}}<span class="bgm-rec-title">「{{ r.TrackTitle | in_quotes | html.escape }}」</span>{{~ end ~}}</a>{{~ if r.ReissueUrl != "" ~}}<span class="bgm-rec-reissue-wrap">(<a class="bgm-rec-reissue" href="{{ r.ReissueUrl }}" title="{{ r.ReissueDiscTitle | html.escape }}-Tr.{{ r.TrackNo }}">再発盤</a>)</span>{{~ end ~}}
           </li>
           {{~ end ~}}
         </ul>

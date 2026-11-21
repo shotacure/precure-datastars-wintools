@@ -157,7 +157,7 @@ public static class BgmCueRecordingsLoader
                 if (firstPressNo is null) continue;
                 var firstPressRow = list.FirstOrDefault(x => x.ProductCatalogNo == firstPressNo && x.TrackNo == rec.TrackNo && x.SubOrder == rec.SubOrder);
                 if (firstPressRow is null) continue;
-                firstPressRow.ReissueNote = $"再発売盤 {rec.DiscTitleShort}-Tr.{rec.TrackNo}";
+                firstPressRow.ReissueDiscTitle = rec.DiscTitleShort.Length > 0 ? rec.DiscTitleShort : rec.ProductTitleFull;
                 firstPressRow.ReissueUrl = $"/products/{rec.ProductCatalogNo}/#track-{rec.DiscCatalogNo}-{rec.TrackNo}-{rec.SubOrder}";
                 list.Remove(rec);
             }
@@ -267,9 +267,9 @@ public sealed class BgmCueRecording
     public string ArtTrackId { get; set; } = "";
     /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>
     public bool ArtTrackPremiumOnly { get; set; }
-    /// <summary>初回盤の行に添える再発売盤の同じトラック（「再発売盤 無印 OST1(再)-Tr.3」）。それ以外は空文字。</summary>
-    public string ReissueNote { get; set; } = "";
-    /// <summary>再発売盤の商品詳細の該当トラックへの URL（<see cref="ReissueNote"/> があるときだけ）。</summary>
+    /// <summary>初回盤の行に添える再発売盤（同じトラック番号・同じトラックタイトル）の盤の名前（「無印 OST1(再)」）。それ以外は空文字。</summary>
+    public string ReissueDiscTitle { get; set; } = "";
+    /// <summary>再発売盤の商品詳細の該当トラックへの URL（<see cref="ReissueDiscTitle"/> があるときだけ）。</summary>
     public string ReissueUrl { get; set; } = "";
     /// <summary>
     /// この行が cue の再生音源として採用された盤かどうか。収録盤リストで ♪ 印を出す判定に使う。

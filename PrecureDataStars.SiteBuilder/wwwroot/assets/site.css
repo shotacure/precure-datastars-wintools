@@ -3490,19 +3490,24 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   background-color: var(--surface-2, #fff7fb);
   text-decoration: none;
 }
-/* 初回盤に添える再発売盤の同じトラック（「再発売盤 無印 OST1(再)-Tr.3」）。初回盤のすぐ後ろに小さく出し、再発売盤の該当トラックへリンクする。
-   楽曲詳細（.recording-tracks-reissue）は、行の下に一段下げて出す。 */
-.bgm-rec-reissue,
-.recording-tracks-reissue {
-  display: inline-block;
-  font-size: 0.88em;
-  text-decoration: none;
+/* 再発売盤のある収録盤は、初回盤のすぐ後ろに「(再発盤)」とだけ添える。「再発盤」は再発売盤の該当トラックへのリンクで、
+   括弧（.bgm-rec-reissue-wrap の地の文字）はリンクにしない。 */
+.bgm-rec-reissue-wrap {
+  margin-left: 0.5em;
+  color: var(--muted);
+  font-size: 0.92em;
+  white-space: nowrap;
 }
 .bgm-rec-reissue {
-  margin-left: 0.6em;
+  color: var(--muted);
+  text-decoration: none;
 }
+/* 楽曲詳細の収録盤のカードの下に添える再発売盤の同じトラック。一段下げて小さく出し、再発売盤の該当トラックへリンクする。 */
 .recording-tracks-reissue {
+  display: inline-block;
   margin: 4px 0 0 14px;
+  font-size: 0.88em;
+  text-decoration: none;
 }
 .bgm-rec-reissue:hover,
 .bgm-rec-reissue:focus-visible,

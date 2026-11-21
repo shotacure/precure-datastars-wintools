@@ -1551,7 +1551,7 @@ public sealed class EpisodeGenerator
     /// <summary>
     /// スタッフセクションに添える「チーフの組み合わせの通算回数」を組み立てる。
     /// 組み合わせごとに <see cref="EpisodeChiefStaffIndex.Lookup"/> で通算情報を引き、閉じた状態の 1 かたまり
-    /// （役職の札と「通算 N 回目」。初回は「初顔合わせ」）と、開いた状態のカード（顔ぶれ・放送順の玉の列・
+    /// （役職の札と「通算 N 回目」。初回は「初」）と、開いた状態のカード（顔ぶれ・放送順の玉の列・
     /// 前回と次回のミニカード）の材料にする。構成役職のどれかが無い回（未収録・該当役職なし）は出さない。
     /// 絵コンテと演出を同じ方が兼ねた回は組み合わせとして出さない（兼任は珍しくないので、数えて見せる意味が薄い）。
     /// </summary>
@@ -1583,7 +1583,7 @@ public sealed class EpisodeGenerator
                 Badges = badges,
                 Ordinal = occurrence.Ordinal,
                 Total = occurrence.Total,
-                FirstLabel = "初顔合わせ",
+                FirstLabel = "初",
                 NamesHtml = namesHtml,
                 Beads = BuildComboBeads(occurrence.EpisodeIds, current),
                 IsDense = Math.Min(occurrence.Total, ComboBeadsMax) > ComboBeadsDense,
@@ -1647,7 +1647,7 @@ public sealed class EpisodeGenerator
     internal static bool IsLongGap(DateTime previousOnAirAt, DateTime currentOnAirAt)
         => (JpDateFormat.BroadcastDay(currentOnAirAt) - JpDateFormat.BroadcastDay(previousOnAirAt)).TotalDays >= NotableGapWeeks * 7;
 
-    /// <summary>赤で目立たせる節目の回数か（10・25・50 回目、そのあとは 50 回ごと）。初めての回は別の文（初担当・初顔合わせ）で目立たせる。</summary>
+    /// <summary>赤で目立たせる節目の回数か（10・25・50 回目、そのあとは 50 回ごと）。初めての回は別の文（初担当・初）で目立たせる。</summary>
     internal static bool IsMilestoneOrdinal(int ordinal)
         => ordinal == 10 || ordinal == 25 || (ordinal >= 50 && ordinal % 50 == 0);
 
@@ -2234,7 +2234,7 @@ public sealed class EpisodeGenerator
         public bool IsFirst => Ordinal == 1;
         /// <summary>回数を赤で目立たせるか（節目の回数。<see cref="IsMilestoneOrdinal"/>）。</summary>
         public bool IsOrdinalNotable => IsMilestoneOrdinal(Ordinal);
-        /// <summary>初めての回に回数の代わりに出す文（組み合わせは「初顔合わせ」、役職ごとは「初担当」）。</summary>
+        /// <summary>初めての回に回数の代わりに出す文（組み合わせは「初」、役職ごとは「初担当」）。</summary>
         public string FirstLabel { get; set; } = "";
         /// <summary>連続担当（「3話連続」）か前の回からの空き（「1年10か月ぶり」など）。役職ごとのカードだけ。無ければ空文字。</summary>
         public string GapLabel { get; set; } = "";

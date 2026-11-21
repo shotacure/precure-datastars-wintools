@@ -11865,7 +11865,7 @@ body.has-art-track-bar {
   display: grid;
   place-items: center;
 }
-/* 1 回きりの組み合わせ（初顔合わせ）は、玉を列の中央に置く。 */
+/* 1 回きりの組み合わせ（初）は、玉を列の中央に置く。 */
 .staff-combo-beads li:only-child {
   margin: 0 auto;
 }

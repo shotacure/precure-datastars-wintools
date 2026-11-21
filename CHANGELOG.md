@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：エピソード詳細のスタッフの組み合わせで、初めての回の表記を「初顔合わせ」から「初」に改めた**（`EpisodeGenerator.BuildStaffCombos`）：閉じた状態の 1 行と、開いた状態のカードの両方。役職ごとのカードの「初担当」はそのまま。
+
 - **クレジット：ブロックの筆頭の会社に、画面に出た会社名の表記を持てるようにした**（マイグレーション `v1.21.1_add_leading_company_display_text.sql`・`credit_role_blocks.leading_company_display_text`〔新規〕・`leading_company2_display_text`〔新規〕・`CreditRoleBlock`・`CreditRoleBlocksRepository`・`ILookupCache.LookupCompanyAliasHtmlAsync`〔新規の多重定義〕・SiteBuilder の `LookupCache` / `CreditTreeRenderer` / `CreditTreeIndex` / `EpisodeStaffCards`・TemplateRendering の `RoleTemplateRenderer` / `RoleJoinComparer`・Catalog の `CreditPreviewRenderer`・`CreditBulkInputParser`・`CreditBulkInputEncoder`・`BulkParseResult`・`CreditBulkApplyService`・`CreditDraftLoader`・`CreditSaveService`）：エントリの `company_display_text` と同じく、名義と空白・中黒・記号だけが違う画面の表記を、筆頭の 1 社目・2 社目ごとに持つ。サイトのクレジット・Catalog のプレビュー・`{LEADING_COMPANY}`・各話のスタッフの札は、名義の名前の代わりにこの表記を出す（リンク先と集計は名義の会社のまま）。一括入力は `[[屋号|画面の表記]]`。あわせて、役職テンプレートの `{COMPANIES}` がエントリの `company_display_text` を出すようにし、各話のスタッフの札の所属は、会社名義と所属の文字（`affiliation_text`）の両方があるとき、クレジットの表と同じく文字を出すようにした。
 
 - **バックアップ：書き込みのたびに増えていたバックアップを減らした**（`scripts/backup-db.ps1`・`-KeepLabeledDays`〔新規〕）：DB へ書き込む前のラベル付きの実行ではダンプだけ取り、ローカル専用ファイルの ZIP は作らない（ZIP はラベルなしの実行で作る）。ZIP には `db/data-fixes/` の作業フォルダ `*_work/` の中間ファイルと `__pycache__`・`.pyc`・`.bak` を入れない（元の画像と最後に流した SQL から作り直せる）。間引きではラベル付きのダンプを 7 日で消す（これまでは消さなかった）。ZIP は直近 30 日の分も 1 日に 1 つ（その日で最も新しいもの）だけ残す。

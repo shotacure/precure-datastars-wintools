@@ -153,8 +153,8 @@ dotnet run --project PrecureDataStars.Catalog
 
 **仕組み**
 
-- `backup-db.ps1`：稼働中のまま整合性のとれたダンプ（`--single-transaction`）を取って gzip 圧縮し、`precure_datastars_YYYYMMDD-HHmm[_ラベル].sql.gz` の名前で保存先（`backup-settings.json` の `localDir`）に置き、同じものをミラー先（`mirrorDir`。別のドライブやクラウドの同期フォルダ）へ写す。ミラー先のドライブが無いときは警告だけ出し、写せなかった分は次回の実行で写す。ダンプの先頭にはダンプ時点の binlog の座標をコメントで記録し（`--source-data=2`）、同じ瞬間に binlog を切り替える（`--flush-logs`）。中身の大きいテーブル（`-DataExcludedTables`。既定は CD の音の特徴量 `track_audio_fingerprints`。元のディスクから取り直せる）は表の定義だけ取って中身は取らず、ダンプの末尾に `--no-data` のダンプとして足す。あわせて、リポジトリに入れていないローカル専用ファイル（`db/data-fixes/`、各プロジェクトの `App.config`、`CLAUDE.md`、`docs/*.md`、`.claude/settings.local.json`、Claude Code のメモリ）を `local-files_YYYYMMDD-HHmm_<内容ハッシュ>.zip` にまとめる（内容が前回と同じなら作らない。`db/data-fixes/` の画像は元の画像から作り直せるので含めない）。結果は保存先の `backup.log` に 1 行ずつ追記する。
-- 世代の間引き：ファイル名の日時で判定し、保存先・ミラー先とも同じ規則で消す。直近 30 日（`-KeepAllDays`）はすべて残し、それより前は週に 1 つ（その週で最も古いもの）を 1 年（`-KeepWeeklyDays`）まで、さらに前は月に 1 つ（その月で最も古いもの）を無期限に残す。ラベル付き（手動）のダンプと、種類ごとの最新の 1 つは消さない。`-NoPrune` で間引きをしない。
+- `backup-db.ps1`：稼働中のまま整合性のとれたダンプ（`--single-transaction`）を取って gzip 圧縮し、`precure_datastars_YYYYMMDD-HHmm[_ラベル].sql.gz` の名前で保存先（`backup-settings.json` の `localDir`）に置き、同じものをミラー先（`mirrorDir`。別のドライブやクラウドの同期フォルダ）へ写す。ミラー先のドライブが無いときは警告だけ出し、写せなかった分は次回の実行で写す。ダンプの先頭にはダンプ時点の binlog の座標をコメントで記録し（`--source-data=2`）、同じ瞬間に binlog を切り替える（`--flush-logs`）。中身の大きいテーブル（`-DataExcludedTables`。既定は CD の音の特徴量 `track_audio_fingerprints`。元のディスクから取り直せる）は表の定義だけ取って中身は取らず、ダンプの末尾に `--no-data` のダンプとして足す。あわせて、リポジトリに入れていないローカル専用ファイル（`db/data-fixes/`、各プロジェクトの `App.config`、`CLAUDE.md`、`docs/*.md`、`.claude/settings.local.json`、Claude Code のメモリ）を `local-files_YYYYMMDD-HHmm_<内容ハッシュ>.zip` にまとめる。この ZIP はラベルなしの実行（毎日の自動実行など）でだけ作り、内容が前回と同じなら作らない。`db/data-fixes/` のうち、元の画像と最後に流した SQL から作り直せるもの（画像、作業フォルダ `*_work/` の中間ファイル、`__pycache__`・`.pyc`・`.bak`）は含めない。結果は保存先の `backup.log` に 1 行ずつ追記する。
+- 世代の間引き：ファイル名の日時で判定し、保存先・ミラー先とも同じ規則で消す。直近 30 日（`-KeepAllDays`）は、無印のダンプはすべて、ローカル専用ファイルの ZIP は 1 日に 1 つ（その日で最も新しいもの）を残す。それより前は週に 1 つ（その週で最も古いもの）を 1 年（`-KeepWeeklyDays`）まで、さらに前は月に 1 つ（その月で最も古いもの）を無期限に残す。ラベル付き（手動）のダンプは 7 日（`-KeepLabeledDays`）で消す。それより前の時点には無印のダンプとサーバの binlog から戻せる。種類ごとの最新の 1 つは消さない。`-NoPrune` で間引きをしない。
 - サーバの binlog（`log_bin=ON`、ROW 形式、30 日保持）と組み合わせると、ダンプ以後の任意の時点まで戻せる。binlog は DB と同じディスクにあるので、守れるのは操作ミスまでで、ディスク故障にはダンプのミラーで備える。
 - `restore-db.ps1`：既定では検証用スキーマ `precure_datastars_restore_test` に復元し、本番とテーブルごとの行数と `CHECKSUM TABLE` を突き合わせて表にし（バックアップで中身を取っていないテーブルは「中身は対象外」として不一致に数えない）、終わったら検証用スキーマを消す（復元の訓練。仕組みを入れたときと月 1 回）。検証用の流し込みは binlog に残さない。`-ToProduction` で本番スキーマそのものを置き換える（直前に `-Label before-restore` の退避を取り、スキーマ名の入力で確認する）。接続は Catalog の `App.config` の root 接続文字列を読んで使う。
 
@@ -201,7 +201,7 @@ port=3306
 
 **手動で取る**
 
-DB へ書き込む作業（クレジットの投入・欠番詰め・マイグレーション・データ修正）の前に、印をつけて取る：
+DB へ書き込む作業（クレジットの投入・欠番詰め・マイグレーション・データ修正）の前に、印をつけて取る（ダンプだけ取り、ローカル専用ファイルの ZIP は作らない）：
 
 ```powershell
 .\scripts\backup-db.ps1 -Label before-hs12

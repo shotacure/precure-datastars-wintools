@@ -21,18 +21,23 @@
   あわせて、リポジトリに入れていないローカル専用ファイル（db/data-fixes/ の SQL、各プロジェクトの App.config、
   CLAUDE.md、docs/*.md、.claude/settings.local.json、Claude Code のメモリ）を 1 つの ZIP
   （local-files_YYYYMMDD-HHmm_内容ハッシュ.zip）にまとめる。内容（パス・サイズ・更新時刻）が前回と同じなら作らない。
-  db/data-fixes/ の画像（作業フォルダの切り抜き・拡大など。元の画像から作り直せる）は含めない。
+  ZIP を作るのはラベルなしの実行（毎日の自動実行など）だけで、DB へ書き込む前のラベル付きの実行ではダンプだけ取る。
+  db/data-fixes/ のうち、元の画像と最後に流した SQL から作り直せるもの（画像、作業フォルダ *_work/ の中間ファイル、
+  __pycache__・.pyc・.bak）は含めない。
 
   接続情報は MySQL のオプションファイル（既定 %APPDATA%\precure-datastars\backup.cnf）から読む。
   スクリプトにも引数にもパスワードを書かない。ファイルの形と backup_ro に要る権限は README
   「データベースのバックアップと復元」を参照。
 
   世代は、ファイル名の日時を見て間引く（保存先・ミラー先とも同じ規則）：
-    - 直近 30 日（-KeepAllDays）はすべて残す（サーバの binlog の保持期間と同じ範囲）
+    - 無印のダンプは、直近 30 日（-KeepAllDays）はすべて残す（サーバの binlog の保持期間と同じ範囲）。
+      ローカル専用ファイルの ZIP は、直近 30 日は 1 日に 1 つ（その日で最も新しいもの）を残す
     - それより前は週に 1 つ（その週で最も古いもの）を 1 年（-KeepWeeklyDays）まで残す
     - さらに前は月に 1 つ（その月で最も古いもの）を無期限に残す
-    - ラベル付き（手動）のダンプと、種類ごとの最新の 1 つは消さない
-  間引きの対象は無印のダンプとローカル専用ファイルの ZIP。backup.log は消さない。-NoPrune で間引きをしない。
+    - ラベル付き（手動）のダンプは 7 日（-KeepLabeledDays）で消す。それより前の時点へは、無印のダンプと
+      サーバの binlog から戻せる
+    - 種類ごとの最新の 1 つは消さない
+  backup.log は消さない。-NoPrune で間引きをしない。
   結果は保存先の backup.log に 1 行ずつ追記する（タスクスケジューラからの実行は画面が無いので、これが記録になる）。
 
 .PARAMETER Label
@@ -66,6 +71,9 @@
 
 .PARAMETER KeepWeeklyDays
   この日数以内の分は週に 1 つ残す（それより前は月に 1 つ）。既定 365。
+
+.PARAMETER KeepLabeledDays
+  ラベル付き（手動）のダンプを残す日数。既定 7。
 
 .PARAMETER Database
   ダンプするスキーマ名。既定 precure_datastars。
@@ -105,6 +113,8 @@ param(
     [int]$KeepAllDays = 30,
     [ValidateRange(1, 36500)]
     [int]$KeepWeeklyDays = 365,
+    [ValidateRange(1, 36500)]
+    [int]$KeepLabeledDays = 7,
     [string]$Database = 'precure_datastars',
     [string]$CnfPath = (Join-Path $env:APPDATA 'precure-datastars\backup.cnf'),
     [string]$MysqlDumpPath = 'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe',
@@ -208,12 +218,20 @@ function Get-LocalOnlyFiles {
     }
     # データ修正 SQL（db/data-fixes/。.git/info/exclude で除外している）。
     # 作業フォルダの画像（クレジット画像の切り抜き・拡大など）は元の画像から作り直せるうえ、ZIP の大半を占めて
-    # 書き込みのたびに大きな ZIP を増やすので含めない。
-    $imageExtensions = @('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tif', '.tiff')
+    # 書き込みのたびに大きな ZIP を増やすので含めない。作業フォルダ（*_work/）の中間ファイル（OCR の結果・突き合わせ
+    # の表・使い捨てのスクリプト）も、元の画像と最後に流した SQL から作り直せるので含めない。
+    # Python のキャッシュ（__pycache__・.pyc）と編集前の控え（.bak）も含めない。
+    $excludedExtensions = @('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tif', '.tiff', '.pyc', '.bak')
     $dir = Join-Path $repoRoot 'db\data-fixes'
     if (Test-Path -LiteralPath $dir) {
         Get-ChildItem -LiteralPath $dir -Recurse -File |
-            Where-Object { $imageExtensions -notcontains $_.Extension.ToLowerInvariant() } |
+            Where-Object {
+                if ($excludedExtensions -contains $_.Extension.ToLowerInvariant()) { return $false }
+                # db/data-fixes/ からの相対パスのフォルダ部分に、*_work か __pycache__ があれば外す
+                $relDir = [System.IO.Path]::GetRelativePath($dir, $_.DirectoryName)
+                $segments = if ($relDir -eq '.') { @() } else { $relDir -split '[\\/]' }
+                -not ($segments | Where-Object { $_ -like '*_work' -or $_ -eq '__pycache__' })
+            } |
             ForEach-Object { & $addRepoFile $_ }
     }
     # 接続文字列や API キーを持つ各プロジェクトの App.config（.gitignore で除外している）
@@ -244,35 +262,55 @@ function Get-LocalOnlyFiles {
 }
 
 # 世代の間引き。ファイル名の日時（yyyyMMdd-HHmm）で判定するので、コピーで更新時刻が変わっても同じ結果になる。
-# 直近 KeepAllDays 日はすべて、それより前は週に 1 つ（その週で最も古いもの）を KeepWeeklyDays 日まで、
-# さらに前は月に 1 つ（その月で最も古いもの）を無期限に残す。種類ごとの最新の 1 つは必ず残す。
-# 対象は無印のダンプとローカル専用ファイルの ZIP だけ（ラベル付きのダンプと backup.log は触らない）。
+# 無印のダンプは直近 KeepAllDays 日はすべて、ローカル専用ファイルの ZIP は直近 KeepAllDays 日は 1 日に 1 つ
+# （その日で最も新しいもの）を残す。それより前は週に 1 つ（その週で最も古いもの）を KeepWeeklyDays 日まで、
+# さらに前は月に 1 つ（その月で最も古いもの）を無期限に残す。ラベル付きのダンプは KeepLabeledDays 日を過ぎたら消す。
+# 種類ごとの最新の 1 つは必ず残す。backup.log は触らない。
 # 消したファイル名の一覧を返す。
 function Invoke-Prune {
     param([string]$Dir, [datetime]$Now)
     $deleted = [System.Collections.Generic.List[string]]::new()
     if (-not (Test-Path -LiteralPath $Dir)) { return , $deleted.ToArray() }
-    $patterns = @(
-        ('^' + [regex]::Escape($Database) + '_(\d{8})-(\d{4})\.sql\.gz$'),   # 無印（自動）のダンプ
-        '^local-files_(\d{8})-(\d{4})_[0-9a-f]{8}\.zip$'                       # ローカル専用ファイルの ZIP
+    # Mode：All = 直近はすべて残す、Daily = 直近は 1 日に 1 つ残す、Labeled = 期限内だけ残す
+    $kinds = @(
+        @{ Mode = 'All';     Pattern = ('^' + [regex]::Escape($Database) + '_(\d{8})-(\d{4})\.sql\.gz$') },             # 無印（自動）のダンプ
+        @{ Mode = 'Daily';   Pattern = '^local-files_(\d{8})-(\d{4})_[0-9a-f]{8}\.zip$' },                               # ローカル専用ファイルの ZIP
+        @{ Mode = 'Labeled'; Pattern = ('^' + [regex]::Escape($Database) + '_(\d{8})-(\d{4})_[A-Za-z0-9_-]+\.sql\.gz$') } # ラベル付き（手動）のダンプ
     )
-    foreach ($pattern in $patterns) {
+    foreach ($kind in $kinds) {
         $items = foreach ($f in (Get-ChildItem -LiteralPath $Dir -File)) {
-            $m = [regex]::Match($f.Name, $pattern)
+            $m = [regex]::Match($f.Name, $kind.Pattern)
             if (-not $m.Success) { continue }
             $date = [datetime]::ParseExact($m.Groups[1].Value + $m.Groups[2].Value, 'yyyyMMddHHmm', [cultureinfo]::InvariantCulture)
             [pscustomobject]@{ File = $f; Date = $date }
         }
-        $items = @($items | Sort-Object Date)
+        # 同じ分（HHmm）のものはファイル名の順で並べ、「その日で最も新しいもの」が毎回同じになるようにする
+        $items = @($items | Sort-Object Date, { $_.File.Name })
         if ($items.Count -le 1) { continue }
         $keep = [System.Collections.Generic.HashSet[string]]::new()
         $null = $keep.Add($items[-1].File.FullName)   # 最新の 1 つは必ず残す
+        if ($kind.Mode -eq 'Labeled') {
+            foreach ($it in $items) {
+                if (($Now - $it.Date).TotalDays -le $KeepLabeledDays) { $null = $keep.Add($it.File.FullName) }
+            }
+        }
+        $daySeen = @{}
         $weekSeen = @{}
         $monthSeen = @{}
+        # 直近の 1 日に 1 つは「その日で最も新しいもの」なので、新しい順に見る
+        if ($kind.Mode -eq 'Daily') {
+            for ($i = $items.Count - 1; $i -ge 0; $i--) {
+                $it = $items[$i]
+                if (($Now - $it.Date).TotalDays -gt $KeepAllDays) { continue }
+                $dk = $it.Date.ToString('yyyyMMdd')
+                if (-not $daySeen.ContainsKey($dk)) { $daySeen[$dk] = $true; $null = $keep.Add($it.File.FullName) }
+            }
+        }
         foreach ($it in $items) {
+            if ($kind.Mode -eq 'Labeled') { break }
             $age = ($Now - $it.Date).TotalDays
             if ($age -le $KeepAllDays) {
-                $null = $keep.Add($it.File.FullName)
+                if ($kind.Mode -eq 'All') { $null = $keep.Add($it.File.FullName) }
             }
             elseif ($age -le $KeepWeeklyDays) {
                 # ISO 週（月曜始まり）ごとに最も古いものを残す
@@ -387,8 +425,9 @@ try {
     Write-Host ("  dump   : {0}  ({1} → {2}, {3:N1}s{4})" -f (Split-Path -Leaf $gzPath), (Format-Size $rawSize), (Format-Size $gzSize), $sw.Elapsed.TotalSeconds, $binlogDisplay)
 
     # --- 3. ローカル専用ファイルの ZIP ---
-    $filesNote = 'skip'
-    if (-not $NoLocalFiles) {
+    # DB へ書き込む前のラベル付きの実行ではダンプだけ取る（ZIP は毎日の実行で取る。書き込みのたびに増やさない）
+    $filesNote = if ($Label -and -not $NoLocalFiles) { 'skip (labeled)' } else { 'skip' }
+    if (-not $NoLocalFiles -and -not $Label) {
         $files = @(Get-LocalOnlyFiles)
         if ($files.Count -gt 0) {
             # 内容の指紋（パス・サイズ・更新時刻）。前回と同じならファイルを増やさない。

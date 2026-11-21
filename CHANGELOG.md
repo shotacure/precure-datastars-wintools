@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **DB：話を持たない作品（映画など）の使用曲の記録を、作品ごとに持てるようにした**（マイグレーション `v1.21.1_add_series_uses.sql`・`series_uses`〔新規〕・`series.is_uses_published`〔新規〕）：`series_uses` は、話ごとの `episode_uses` と同じ列を、作品と使用順で持つ。パートが無いので、使用が始まる位置は、作品の本編の頭からのミリ秒（`offset_ms`）で持つ。サイトに出すかの印は作品ごとの `series.is_uses_published` で、既存の作品は 0（出さない）で始まる。サイトはこの表をまだ読まない。
+
 - **サイト：エピソード詳細のサブタイトル分析で、「N年Mか月ぶり」のカードの前回の話を、シリーズとエピソードへのリンクにした**（`TitleCharInfoRenderer`・`EpisodeGenerator`・`site.css`）：「『○○プリキュア』第N話「サブタイトル」(日付)以来」のうち、『』の中のシリーズ名はそのシリーズのページへ、「」の中のサブタイトルはその回の詳細ページへリンクする。サブタイトルのネタバレ防止の伏せ字はそのまま。リンクの文字色はカードの薄色のまま、マウスを載せたときだけ下線を出す。
 
 - **DB・サイト：話の中の使用曲の記録に、パートの中での位置とミリ秒の尺を持てるようにし、サイトに出す回を印で選ぶようにした**（マイグレーション `v1.21.1_add_episode_use_position.sql`・`episode_uses.part_offset_ms`〔新規〕・`duration_ms`〔新規〕・`episodes.is_uses_published`〔新規〕・`EpisodeUse`・`EpisodeUsesRepository`・`SiteDataLoader`）：`part_offset_ms` はパートの頭から使用が始まるまでの位置、`duration_ms` は使用尺で、どちらもミリ秒（秒の `duration_seconds` はそのまま残す）。使用曲の記録は確かめ終える前でも入れておけるように、サイトが読むのは `episodes.is_uses_published = 1` の回の、一覧に載せる行（`episode_uses.is_listed = 1`〔新規。マイグレーション `v1.21.1_add_episode_use_listed.sql`〕）だけにした。OP・ED・予告などのパートの行は、記録しておいて、載せるかを行ごとに選べる。これまでは、行があればエピソード詳細に全パートぶんが出る作りだった（記録はまだ 0 件なので、出力は変わらない）。

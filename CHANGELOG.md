@@ -10,6 +10,8 @@
 
 - **サイト：歴代プリキュア声優 `/creators/voice-cast/` に、コンビ・グループの名前でクレジットされた出演を出すようにした**（`CreatorsGenerator.BuildVoiceCastRows`・`GenerateVoiceCast`・`VoiceCastUnitMember`〔新規〕・`creators-voice-cast.sbn`・`site.css`）：人物に結び付かないコンビ・グループの名義は、どのタブにも出ていなかった。その名前のまま 1 行にまとめ、コンビ・グループのページへリンクする。名前の後ろにメンバーを括弧で添え、それぞれの人物ページへリンクする。メンバーの人物の行にはしない。声優の人数には数えない。
 
+- **サイト・Catalog：本放送の版の主題歌のカードで、本放送だけの曲を既定の曲の代わりに出すようにした**（`ThemeSongsHandler.FetchAsync`・`RoleTemplateRenderer` の `{BROADCAST_ONLY}`〔新規〕・`last_sep`〔新規〕・`JoinWithSeparators`〔新規〕）：版に `BROADCAST` を含むカードでは、同じ区分・同じ位置に本放送だけの曲があれば既定の曲を出さない（これまでは 2 曲とも並んでいた）。テンプレでは `{?BROADCAST_ONLY}` で本放送だけの曲の行を書き分けられ、連名は `sep` と一緒に `last_sep` を書くと最後の名義の前だけ別の文字でつなげる。
+
 - **サイト：「初めて」で節を分ける一覧で、どの参加が先かを実際の日付で比べるようにした**（`CreatorsGenerator.FirstCreditAccumulator`・`BuildRoleIndexEntry` の役職の初めて・`VoiceCastRow.FirstDay`〔新規〕・`EntityRow.FirstSortWhen`〔新規〕）：スタッフ一覧と役職詳細の初参加順・役職順、歴代プリキュア声優の初出演順・キャラクター別が対象。これまでは作品の放送開始日・公開日で比べていたので、TV の途中の回で初めて出た方が、その回より前に公開された映画にも出ていると、TV の節に置かれていた。各話のクレジットはその回の放送日、作品まるごとのクレジットは作品の公開日・放送開始日で比べる。節の並びは今までどおり作品の放送開始日・公開日の順。
 
 - **サイト：企業詳細のロゴの「クレジット範囲」を、作品の種別ごとの行にまとめた**（`CompaniesGenerator.BuildLogoCreditRangeLines`・`LogoCreditRangeLine`〔新規〕・`BuildContext.ProvisionalSeriesIds`〔新規〕・`SiteDataLoader`・`companies-detail.sbn`・`site.css`）：作品を 1 つずつ並べるのをやめ、TV・映画・イベント・オトナ・スピンオフの行に分けた。作品全体に載っている作品が公開順に続く所は、「最初の題名 から 最後の題名 まで（n 作品）」と出す。公開日が同じ映画は 1 つに数え、どれか 1 本に載っていれば載っているものとする。各話にクレジットが付く作品は、クレジットの入っている回（仮クレジットの回を除く）のすべてに載っていれば作品全体として扱い、載っていない回があるときだけ話数の範囲を添える。仮クレジットの作品は、載っていない作品に数えない。その種別の、クレジットの入っている作品すべてに載っている行は、先頭に【全作】を付ける。

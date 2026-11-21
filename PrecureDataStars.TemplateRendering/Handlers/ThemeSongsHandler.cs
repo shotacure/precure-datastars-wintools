@@ -123,7 +123,8 @@ public static class ThemeSongsHandler
     /// <param name="cvLabelOverride">歌唱・コーラスの声優の前に置く記号を、歌唱者の行の記号（cv_label）に代えて使う文字
     /// （<c>{#THEME_SONGS:cv="CV."}</c>。画面の記号が盤と違う作品用）。null なら行の記号。</param>
     /// <param name="includeBroadcastOnly">本放送だけの曲（is_broadcast_only=1）も出すか。カードの版に BROADCAST を含むときだけ true
-    /// （共通のカードと Blu-ray・配信のカードの画面には本放送だけの曲は無い。<see cref="TemplateContext.ShowsBroadcastOnlySongs"/>）。既定は true。</param>
+    /// （共通のカードと Blu-ray・配信のカードの画面には本放送だけの曲は無い。<see cref="TemplateContext.ShowsBroadcastOnlySongs"/>）。既定は true。
+    /// true のとき、同じ区分・同じ位置に本放送だけの曲がある既定の曲は出さない（本放送の画面ではその曲に置き換わっている）。</param>
     /// <returns>JOIN 結果の楽曲行リスト（*Html フィールド設定済み）。</returns>
     internal static async Task<IReadOnlyList<ThemeSongRow>> FetchAsync(
         IConnectionFactory factory,
@@ -151,6 +152,8 @@ public static class ThemeSongsHandler
         // （OP/INSERT/ED 区別なくエピソード単位の劇中順）」に統一。並び順も ets.seq
         // 単独でソートし、kinds パラメータはフィルタとしてのみ使用する。同位置に
         // 既定行と本放送限定行があれば既定行（is_broadcast_only=0）を先に。
+        // 本放送だけの曲も出すカード（版に BROADCAST を含むカード）では、同じ区分・同じ位置に本放送だけの曲
+        // （クレジットに出たもの）があれば既定行を外す。本放送の画面には、既定の曲の代わりにその曲が出ているため。
         // song_id / song_recording_id も取得して、後段の構造化クレジット解決に使う。
         // usage_actuality 列を取得し、
         //   - 'BROADCAST_NOT_CREDITED' はクレジット側に出さない方針なので WHERE で除外
@@ -203,6 +206,17 @@ public static class ThemeSongsHandler
               AND ets.theme_kind IN @kinds
               AND ets.usage_actuality <> 'BROADCAST_NOT_CREDITED'
               AND (@includeBroadcastOnly = 1 OR ets.is_broadcast_only = 0)
+              AND NOT (
+                    @includeBroadcastOnly = 1
+                AND ets.is_broadcast_only = 0
+                AND EXISTS (
+                      SELECT 1
+                      FROM {{sourceTable}} bo
+                      WHERE {{scopeFilter.Replace("ets.", "bo.")}}
+                        AND bo.theme_kind = ets.theme_kind
+                        AND bo.seq = ets.seq
+                        AND bo.is_broadcast_only = 1
+                        AND bo.usage_actuality <> 'BROADCAST_NOT_CREDITED'))
             ORDER BY
               ets.seq,
               ets.is_broadcast_only;

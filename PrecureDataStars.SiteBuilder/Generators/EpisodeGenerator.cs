@@ -89,6 +89,11 @@ public sealed class EpisodeGenerator
     private IReadOnlyDictionary<string, SongSizeVariant>? _sizeVariantMap;
     private IReadOnlyDictionary<string, SongPartVariant>? _partVariantMap;
 
+    // ── BGM リストの劇伴の行で引く辞書（使用曲の記録が 1 件でもあるビルドでだけ、並列フェーズの前に組む） ──
+    // (series_id, m_no_detail) → 劇伴の曲、同じキー → 収録盤（発売日昇順。先頭が初出盤）。
+    private IReadOnlyDictionary<(int SeriesId, string MNoDetail), BgmCue>? _bgmCueByKey;
+    private IReadOnlyDictionary<(int SeriesId, string MNoDetail), List<BgmCueRecording>>? _bgmCueRecordings;
+
     // ── パート尺ヒストグラム（偏差値ゲージの背景分布）のキャッシュ ──
     // 偏差値 25〜75 を等幅ビンに割った棒高さ %（0〜100）の配列。シリーズ内スコープは
     // (series_id, part_type)、歴代全体スコープは part_type をキーに持つ。
@@ -218,6 +223,19 @@ public sealed class EpisodeGenerator
         {
             _partVariantMap = (await _songPartVariantsRepo.GetAllAsync(ct).ConfigureAwait(false))
                 .ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
+        }
+        if (_bgmCueByKey is null)
+        {
+            var cueByKey = new Dictionary<(int SeriesId, string MNoDetail), BgmCue>();
+            foreach (var cue in _ctx.BgmCuesBySeries.Values.SelectMany(x => x)) cueByKey[(cue.SeriesId, cue.MNoDetail)] = cue;
+            _bgmCueByKey = cueByKey;
+        }
+        if (_bgmCueRecordings is null)
+        {
+            // 収録盤は、使用曲の記録を出す回があるときだけ読む（無ければ空の辞書）。
+            _bgmCueRecordings = _ctx.EpisodeUsesByEpisode.Count > 0
+                ? await BgmCueRecordingsLoader.LoadAsync(_factory, ct).ConfigureAwait(false)
+                : new Dictionary<(int SeriesId, string MNoDetail), List<BgmCueRecording>>();
         }
         if (_seriesPartHist is null || _globalPartHist is null)
         {
@@ -537,8 +555,8 @@ public sealed class EpisodeGenerator
             : "";
         var staffComboCards = staffRoleCards.Concat(staffCombos).ToList();
 
-        // 使用音声（episode_uses）セクションをパート別に構築。
-        var episodeUseSections = await BuildEpisodeUsesViewAsync(ep.EpisodeId, ct).ConfigureAwait(false);
+        // BGM リスト（episode_uses）。パートごとのまとまりに、アバンからの通し番号を振る。
+        var bgmList = BuildEpisodeBgmList(ep.EpisodeId);
 
         // 通算情報を 1 行にまとめる（基本情報を整理して行数を抑える）。
         // ラベルは「話数」「回数」を含めない短縮形（単位は値側の「第N話」「N話」「N回」が持つため、
@@ -676,7 +694,7 @@ public sealed class EpisodeGenerator
             StaffComboNote = staffComboNote,
             StaffComboCards = staffComboCards,
             RecordBadges = recordBadges,
-            EpisodeUseSections = episodeUseSections,
+            BgmList = bgmList,
             Totals = totalsItems,
             BuildPointCaption = buildPointCaption,
             SubtitleBuildPointCaption = _subtitleBuildPointCaption ?? "",
@@ -1151,180 +1169,215 @@ public sealed class EpisodeGenerator
             (row, text) => _staffLinkResolver.ResolveAsHtml(row.PersonAliasId, text));
     }
 
-    /// <summary>当該エピソードの episode_uses 行群をパート別にグルーピングして表示用 DTO に変換する。</summary>
-    private async Task<IReadOnlyList<EpisodeUseSection>> BuildEpisodeUsesViewAsync(int episodeId, CancellationToken ct)
+    /// <summary>
+    /// 当該エピソードの episode_uses 行群を、BGM リスト（パートごとのまとまり・アバンからの通し番号）の表示用 DTO に変換する。
+    /// 作曲・編曲の札は、劇伴の行でいちばん多い顔ぶれを見出しの下に 1 回だけ出し、それと違う行にだけ行の札を出す。
+    /// 参照するのは読み取り専用の BuildContext 辞書と、並列フェーズの前に確定させたキャッシュだけ。
+    /// </summary>
+    private EpisodeBgmList BuildEpisodeBgmList(int episodeId)
     {
         var uses = _ctx.EpisodeUsesByEpisode.TryGetValue(episodeId, out var cachedUses)
             ? cachedUses
             : Array.Empty<EpisodeUse>();
-        if (uses.Count == 0) return Array.Empty<EpisodeUseSection>();
+        if (uses.Count == 0) return EpisodeBgmList.Empty;
 
-        // 表示ラベル解決用マスタ 3 種は初回参照時に 1 度だけロードしてビルド全体で使い回す
-        // （旧実装は使用音声を持つエピソードごとに毎回 GetAllAsync を発火していた）。
-        if (_trackKindMap is null)
-        {
-            _trackKindMap = (await _trackContentKindsRepo.GetAllAsync(ct).ConfigureAwait(false))
-                .ToDictionary(k => k.KindCode, StringComparer.Ordinal);
-        }
-        if (_sizeVariantMap is null)
-        {
-            _sizeVariantMap = (await _songSizeVariantsRepo.GetAllAsync(ct).ConfigureAwait(false))
-                .ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
-        }
-        if (_partVariantMap is null)
-        {
-            _partVariantMap = (await _songPartVariantsRepo.GetAllAsync(ct).ConfigureAwait(false))
-                .ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
-        }
-        var trackKindMap = _trackKindMap;
-        var sizeVariantMap = _sizeVariantMap;
-        var partVariantMap = _partVariantMap;
-        // パート種別マスタは BuildContext で事前展開済み（part_type → PartType）。
         var partTypeMap = _ctx.PartTypeByCode;
+        int PartOrder(string partKind)
+            => partTypeMap.TryGetValue(partKind, out var pt) ? (pt.DisplayOrder ?? byte.MaxValue) : byte.MaxValue;
 
-        // 楽曲・劇伴の参照は BuildContext で全件辞書化済み。本セクションで必要な ID 群だけを
-        // ローカル辞書に切り出して使う（既存テンプレ側の引き方を温存するため）。
-        var songRecIds = uses.Where(u => u.SongRecordingId.HasValue).Select(u => u.SongRecordingId!.Value).Distinct().ToList();
-        var songRecCache = new Dictionary<int, SongRecording>();
-        var songCache = new Dictionary<int, Song>();
-        foreach (var rid in songRecIds)
+        // パートの表示順 → パートの中の使用順に並べ、通し番号をアバンから続けて振る。
+        // 枝番（sub_order > 0）の行は、同じ使用の続きとして同じ番号に「-枝番」を添える。
+        var groups = new List<EpisodeBgmGroup>();
+        var bgmRows = new List<EpisodeBgmRow>();
+        int no = 0;
+        foreach (var g in uses.GroupBy(u => u.PartKind).OrderBy(g => PartOrder(g.Key)))
         {
-            if (!_ctx.SongRecordingById.TryGetValue(rid, out var rec)) continue;
-            songRecCache[rid] = rec;
-            if (!songCache.ContainsKey(rec.SongId)
-                && _ctx.SongById.TryGetValue(rec.SongId, out var song))
+            var rows = new List<EpisodeBgmRow>();
+            int lastUseOrder = -1;
+            foreach (var u in g.OrderBy(u => u.UseOrder).ThenBy(u => u.SubOrder))
             {
-                songCache[rec.SongId] = song;
+                if (u.UseOrder != lastUseOrder) { no++; lastUseOrder = u.UseOrder; }
+                var row = BuildEpisodeBgmRow(u);
+                row.NoLabel = u.SubOrder > 0 ? $"{no}-{u.SubOrder}" : no.ToString();
+                rows.Add(row);
+                if (row.Kind == "BGM") bgmRows.Add(row);
+            }
+            groups.Add(new EpisodeBgmGroup
+            {
+                PartLabel = partTypeMap.TryGetValue(g.Key, out var pt) ? pt.NameJa : g.Key,
+                Rows = rows
+            });
+        }
+
+        // 見出しの下にまとめる顔ぶれ：劇伴の行の過半が同じ札のとき、その札を 1 回だけ出す。
+        string commonStaffHtml = "";
+        var top = bgmRows.Where(r => r.StaffHtml.Length > 0)
+            .GroupBy(r => r.StaffHtml, StringComparer.Ordinal)
+            .OrderByDescending(x => x.Count())
+            .FirstOrDefault();
+        if (top is not null && top.Count() * 2 > bgmRows.Count)
+        {
+            commonStaffHtml = top.Key;
+            foreach (var r in bgmRows)
+            {
+                if (string.Equals(r.StaffHtml, commonStaffHtml, StringComparison.Ordinal)) r.StaffHtml = "";
             }
         }
 
-        // BGM cue 参照は (series_id, m_no_detail) で複合。BuildContext.BgmCuesBySeries から
-        // 必要シリーズ分のみ取り出してローカルマップ化する。
-        var bgmSeriesIds = uses
-            .Where(u => u.BgmSeriesId.HasValue && !string.IsNullOrEmpty(u.BgmMNoDetail))
-            .Select(u => u.BgmSeriesId!.Value)
-            .Distinct()
-            .ToList();
-        var bgmCueMap = new Dictionary<(int seriesId, string mNoDetail), BgmCue>();
-        foreach (var sid in bgmSeriesIds)
+        return new EpisodeBgmList
         {
-            if (!_ctx.BgmCuesBySeries.TryGetValue(sid, out var cues)) continue;
-            foreach (var cue in cues)
-                bgmCueMap[(cue.SeriesId, cue.MNoDetail)] = cue;
-        }
-
-        // パート種別ごとにグルーピングして DTO 化。
-        var sections = uses
-            .GroupBy(u => u.PartKind)
-            .Select(g =>
-            {
-                string label = partTypeMap.TryGetValue(g.Key, out var pt) ? pt.NameJa : g.Key;
-                int order = partTypeMap.TryGetValue(g.Key, out var pt2) ? (pt2.DisplayOrder ?? byte.MaxValue) : byte.MaxValue;
-
-                var rows = g.OrderBy(u => u.UseOrder)
-                            .ThenBy(u => u.SubOrder)
-                            .Select(u => BuildEpisodeUseRow(u, trackKindMap, sizeVariantMap, partVariantMap, songRecCache, songCache, bgmCueMap, _ctx.SongRecordingAnchorUrlById))
-                            .ToList();
-
-                return new { Order = order, Section = new EpisodeUseSection { PartLabel = label, Uses = rows } };
-            })
-            .OrderBy(x => x.Order)
-            .Select(x => x.Section)
-            .ToList();
-
-        return sections;
+            Groups = groups,
+            CommonStaffHtml = commonStaffHtml,
+            HasPlay = groups.Any(x => x.Rows.Any(r => r.ArtTrackId.Length > 0))
+        };
     }
 
     /// <summary>
-    /// 1 つの <see cref="EpisodeUse"/> 行を表示用 <see cref="EpisodeUseRow"/> に変換する。
-    /// 副題に出す歌唱者・劇伴の作曲者は <see cref="CreditText"/> で構造化優先に解決した平文を使う
-    /// （構造化行が無いときだけ singer_name / composer_name のフリーテキスト）。
-    /// 参照するのは読み取り専用の BuildContext 辞書のみで、並列レンダリングから呼んでも安全。
+    /// 1 つの <see cref="EpisodeUse"/> 行を BGM リストの 1 行（<see cref="EpisodeBgmRow"/>）に変換する。
+    /// 劇伴の行は M ナンバー・メニュー・作曲と編曲の札・初出盤のトラック・配信音源を、歌の行は曲名（楽曲詳細へのリンク）と
+    /// 歌唱者・サイズなどの添え書きを持つ。配信音源の盤の決め方は劇伴詳細の曲のカードと同じ
+    /// （初出盤。初出盤に無ければ音源のある最古の盤。会員限定なら誰でも再生できる盤を代わりに控える）。
     /// </summary>
-    private EpisodeUseRow BuildEpisodeUseRow(
-        EpisodeUse u,
-        IReadOnlyDictionary<string, TrackContentKind> trackKindMap,
-        IReadOnlyDictionary<string, SongSizeVariant> sizeVariantMap,
-        IReadOnlyDictionary<string, SongPartVariant> partVariantMap,
-        IReadOnlyDictionary<int, SongRecording> songRecCache,
-        IReadOnlyDictionary<int, Song> songCache,
-        IReadOnlyDictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap,
-        IReadOnlyDictionary<int, string> songRecordingAnchorUrlById)
+    private EpisodeBgmRow BuildEpisodeBgmRow(EpisodeUse u)
     {
-        string contentKindLabel = trackKindMap.TryGetValue(u.ContentKindCode, out var ck) ? ck.NameJa : u.ContentKindCode;
-        string title = "";
-        string subTitle = "";
-        string songLink = "";
+        var row = new EpisodeBgmRow
+        {
+            Kind = u.ContentKindCode,
+            KindLabel = _trackKindMap!.TryGetValue(u.ContentKindCode, out var ck) ? ck.NameJa : u.ContentKindCode,
+            DurationLabel = FormatDurationSeconds(u.DurationSeconds),
+            IsBroadcastOnly = u.IsBroadcastOnly
+        };
 
         switch (u.ContentKindCode)
         {
             case "SONG":
-                if (u.SongRecordingId is int rid && songRecCache.TryGetValue(rid, out var rec)
-                    && songCache.TryGetValue(rec.SongId, out var song))
+                if (u.SongRecordingId is int rid && _ctx.SongRecordingById.TryGetValue(rid, out var rec)
+                    && _ctx.SongById.TryGetValue(rec.SongId, out var song))
                 {
                     // タイトル：use_title_override があればそちら優先（特殊表記用）、なければ歌のタイトル。
-                    title = !string.IsNullOrEmpty(u.UseTitleOverride) ? u.UseTitleOverride! : song.Title;
+                    row.Title = !string.IsNullOrEmpty(u.UseTitleOverride) ? u.UseTitleOverride! : song.Title;
                     // 録音単位のアンカー URL（筆頭録音はページ先頭、それ以外は #recording-N）。
-                    songLink = songRecordingAnchorUrlById.TryGetValue(rid, out var anchorUrl) ? anchorUrl : PathUtil.SongUrl(song.SongId);
+                    row.SongLink = _ctx.SongRecordingAnchorUrlById.TryGetValue(rid, out var anchorUrl) ? anchorUrl : PathUtil.SongUrl(song.SongId);
                     var subParts = new List<string>();
                     string singerText = CreditText.Vocalists(
                         _ctx.SingersByRecording.TryGetValue(rid, out var recSingers) ? recSingers : null,
                         rec.SingerName, _ctx.PersonAliasById, _ctx.CharacterAliasById, _ctx.UnitMembersByAlias);
                     if (!string.IsNullOrEmpty(singerText)) subParts.Add(singerText);
                     if (!string.IsNullOrEmpty(u.SongSizeVariantCode)
-                        && sizeVariantMap.TryGetValue(u.SongSizeVariantCode!, out var sv))
+                        && _sizeVariantMap!.TryGetValue(u.SongSizeVariantCode!, out var sv))
                         subParts.Add(sv.NameJa);
                     if (!string.IsNullOrEmpty(u.SongPartVariantCode)
-                        && partVariantMap.TryGetValue(u.SongPartVariantCode!, out var pv))
+                        && _partVariantMap!.TryGetValue(u.SongPartVariantCode!, out var pv))
                         subParts.Add(pv.NameJa);
                     if (!string.IsNullOrEmpty(rec.VariantLabel)) subParts.Add(rec.VariantLabel!);
-                    subTitle = string.Join(" / ", subParts);
+                    row.SubTitle = string.Join(" / ", subParts);
                 }
                 else
                 {
-                    title = u.UseTitleOverride ?? "(歌情報未登録)";
+                    row.Title = u.UseTitleOverride ?? "(歌情報未登録)";
                 }
                 break;
 
             case "BGM":
                 if (u.BgmSeriesId is int bsid && u.BgmMNoDetail is string mnd
-                    && bgmCueMap.TryGetValue((bsid, mnd), out var cue))
+                    && _bgmCueByKey!.TryGetValue((bsid, mnd), out var cue))
                 {
-                    string mNoLabel = cue.IsTempMNo ? "(Mナンバー不明)" : cue.MNoDetail;
-                    title = !string.IsNullOrEmpty(u.UseTitleOverride)
-                        ? u.UseTitleOverride!
-                        : (cue.MenuTitle ?? "(タイトル未登録)");
-                    var subParts = new List<string> { mNoLabel };
-                    string composerText = CreditText.BgmCueCreditNames(
-                        _ctx.BgmCueCreditsByCue.TryGetValue((cue.SeriesId, cue.MNoDetail), out var cueCredits) ? cueCredits : null,
-                        "COMPOSITION", cue.ComposerName, _ctx.PersonAliasById, _ctx.CompanyAliasById);
-                    if (!string.IsNullOrEmpty(composerText)) subParts.Add($"作曲: {composerText}");
-                    subTitle = string.Join(" / ", subParts);
+                    var recs = _bgmCueRecordings!.TryGetValue((bsid, mnd), out var list)
+                        ? list
+                        : (IReadOnlyList<BgmCueRecording>)Array.Empty<BgmCueRecording>();
+                    var first = recs.Count > 0 ? recs[0] : null;
+
+                    // 仮 M 番号の曲は M ナンバーを出さず、メニューが無ければ初出盤のトラックタイトルで代える。
+                    row.MNo = cue.IsTempMNo ? "" : cue.MNoDetail;
+                    row.IsTempMNo = cue.IsTempMNo;
+                    row.Title = !string.IsNullOrEmpty(u.UseTitleOverride) ? u.UseTitleOverride!
+                        : !string.IsNullOrEmpty(cue.MenuTitle) ? cue.MenuTitle!
+                        : cue.IsTempMNo && first is not null && first.TrackTitle.Length > 0 ? first.TrackTitle
+                        : "(タイトル未登録)";
+                    row.StaffHtml = BuildBgmCueStaffBadgesHtml(cue);
+                    // 劇伴詳細（/bgms/{作品}/）の、この曲のカードへのリンク。
+                    if (_ctx.SeriesById.TryGetValue(cue.SeriesId, out var cueSeries))
+                        row.CueUrl = PathUtil.BgmCueAnchorUrl(cueSeries.Slug, cue.MNoDetail);
+
+                    if (first is not null)
+                    {
+                        string discName = first.DiscTitleShort.Length > 0
+                            ? first.DiscTitleShort
+                            : SongsGenerator.FormatAlbumLabel(first.ProductTitleFull, first.DiscTitle, first.DiscNoInSet);
+                        row.DiscLabel = $"{discName}-Tr.{first.TrackNo}";
+                        row.DiscUrl = $"/products/{first.ProductCatalogNo}/#track-{first.DiscCatalogNo}-{first.TrackNo}-{first.SubOrder}";
+                        row.DiscTitleFull = first.ProductTitleFull;
+                        row.TrackTitle = first.TrackTitle;
+                    }
+
+                    var artSource = recs.FirstOrDefault(x => x.ArtTrackId.Length > 0);
+                    var artAlt = artSource is { ArtTrackPremiumOnly: true }
+                        ? recs.FirstOrDefault(x => x.ArtTrackId.Length > 0 && !x.ArtTrackPremiumOnly)
+                        : null;
+                    if (artSource is not null)
+                    {
+                        row.ArtTrackId = artSource.ArtTrackId;
+                        row.ArtTrackPremiumOnly = artSource.ArtTrackPremiumOnly;
+                        row.ArtTrackAlbum = SongsGenerator.FormatAlbumLabel(artSource.ProductTitleFull, artSource.DiscTitle, artSource.DiscNoInSet);
+                        row.PlayTitle = cue.IsTempMNo ? row.Title : $"{cue.MNoDetail} {row.Title}";
+                    }
+                    if (artAlt is not null)
+                    {
+                        row.AltArtTrackId = artAlt.ArtTrackId;
+                        row.AltArtTrackAlbum = SongsGenerator.FormatAlbumLabel(artAlt.ProductTitleFull, artAlt.DiscTitle, artAlt.DiscNoInSet);
+                    }
                 }
                 else
                 {
-                    title = u.UseTitleOverride ?? "(劇伴情報未登録)";
+                    row.Title = u.UseTitleOverride ?? "(劇伴情報未登録)";
                 }
                 break;
 
             default:
                 // DRAMA / RADIO / JINGLE / OTHER 等。
-                title = u.UseTitleOverride ?? "";
+                row.Title = u.UseTitleOverride ?? "";
                 break;
         }
+        return row;
+    }
 
-        return new EpisodeUseRow
+    /// <summary>
+    /// 劇伴の曲 1 件の作曲・編曲を「役職バッジ + 名義」のグループ（<c>.staff-badge-group</c>）の並びにした HTML。
+    /// 構造化行（bgm_cue_credits）のある役職は credit_seq 順の名義（人物詳細へのリンク・所属つき）、無い役職は
+    /// フリーテキスト（composer_name / arranger_name）の名前。作曲と編曲の名義が同じなら札を並べて名義を 1 回だけ出す。
+    /// どちらも空なら空文字。
+    /// </summary>
+    private string BuildBgmCueStaffBadgesHtml(BgmCue cue)
+    {
+        string NamesHtml(string role, string? freeText)
         {
-            UseOrder = u.UseOrder,
-            SubOrder = u.SubOrder,
-            ContentKindLabel = contentKindLabel,
-            Title = title,
-            SubTitle = subTitle,
-            SceneLabel = u.SceneLabel ?? "",
-            DurationLabel = FormatDurationSeconds(u.DurationSeconds),
-            SongLink = songLink,
-            IsBroadcastOnly = u.IsBroadcastOnly
-        };
+            var rows = _ctx.BgmCueCreditsByCue.TryGetValue((cue.SeriesId, cue.MNoDetail), out var credits)
+                ? credits.Where(r => string.Equals(r.CreditRole, role, StringComparison.Ordinal)).OrderBy(r => r.CreditSeq).ToList()
+                : new List<BgmCueCredit>();
+            if (rows.Count == 0)
+            {
+                return string.IsNullOrWhiteSpace(freeText) ? "" : $"<span class=\"staff-name\">{HtmlUtil.Escape(freeText)}</span>";
+            }
+            string NameOf(BgmCueCredit r)
+                => r.IsText ? (r.RawText ?? "")
+                 : r.PersonAliasId is int id && _ctx.PersonAliasById.TryGetValue(id, out var pa) ? pa.GetDisplayName() : "";
+            string LinkHtml(BgmCueCredit r, string text)
+                => r.IsText ? $"<span class=\"staff-name\">{HtmlUtil.Escape(text)}</span>" : _staffLinkResolver.ResolveAsHtml(r.PersonAliasId, text);
+            return SongCreditAffiliation.BuildNamesHtml(rows, _ctx.CompanyAliasById, r => LinkHtml(r, NameOf(r)), NameOf, LinkHtml, "、");
+        }
+
+        string composer = NamesHtml(BgmCueCreditRoles.Composition, cue.ComposerName);
+        string arranger = NamesHtml(BgmCueCreditRoles.Arrangement, cue.ArrangerName);
+        const string composerBadge = "<span class=\"role-badge role-badge-sm\" data-role-code=\"COMPOSITION\">作曲</span>";
+        const string arrangerBadge = "<span class=\"role-badge role-badge-sm\" data-role-code=\"ARRANGEMENT\">編曲</span>";
+        static string Group(string badges, string names) => $"<span class=\"staff-badge-group\">{badges}{names}</span>";
+
+        if (composer.Length > 0 && string.Equals(composer, arranger, StringComparison.Ordinal))
+            return Group(composerBadge + arrangerBadge, composer);
+        var sb = new System.Text.StringBuilder();
+        if (composer.Length > 0) sb.Append(Group(composerBadge, composer));
+        if (arranger.Length > 0) sb.Append(Group(arrangerBadge, arranger));
+        return sb.ToString();
     }
 
     /// <summary>使用尺の秒数を「m:ss」表記に整形。NULL は空文字。</summary>
@@ -2019,8 +2072,8 @@ public sealed class EpisodeGenerator
         public IReadOnlyList<StaffComboRow> StaffComboCards { get; set; } = Array.Empty<StaffComboRow>();
         /// <summary>h1 直下の歴代記録バッジ。歴代 10 位以内、またはシリーズ内で最長・最短の尺を持つ回だけ非空。</summary>
         public IReadOnlyList<RecordBadge> RecordBadges { get; set; } = Array.Empty<RecordBadge>();
-        /// <summary>使用音声セクション。episode_uses をパート別にグルーピングしたもの。 0 件のエピソードでは空配列で、テンプレ側でセクション自体を非表示にする。</summary>
-        public IReadOnlyList<EpisodeUseSection> EpisodeUseSections { get; set; } = Array.Empty<EpisodeUseSection>();
+        /// <summary>BGM リスト（episode_uses をパートごとにまとめ、アバンからの通し番号を振ったもの）。使用曲の記録が無い回は空で、テンプレ側で節ごと出さない。</summary>
+        public EpisodeBgmList BgmList { get; set; } = EpisodeBgmList.Empty;
         /// <summary>通算情報の項目列（シリーズ内話数 + 全シリーズ通算 + ニチアサ通算 等）。テンプレ側で放送日時と並ぶファクトタイルとして描画。</summary>
         public IReadOnlyList<TotalsItem> Totals { get; set; } = Array.Empty<TotalsItem>();
         /// <summary>ビルド時刻時点の参照点キャプション（例：「『キミとアイドルプリキュア♪』第14話(2026.5.3)時点」）。 毎週変動するセクションの右下注記に出す。</summary>
@@ -2053,32 +2106,73 @@ public sealed class EpisodeGenerator
         public IReadOnlyList<PaginationItem> Pagination { get; set; } = Array.Empty<PaginationItem>();
     }
 
-    /// <summary>使用音声セクションのパート別グループ 1 件分。</summary>
-    private sealed class EpisodeUseSection
+    /// <summary>エピソード詳細の BGM リスト（その回で流れた劇伴・歌などを、流れた順に並べたもの）。</summary>
+    private sealed class EpisodeBgmList
     {
-        /// <summary>パート種別の表示ラベル（例: "アバン"、"Aパート"）。</summary>
-        public string PartLabel { get; set; } = "";
-        /// <summary>このパート内の使用音声行（use_order, sub_order 昇順）。</summary>
-        public IReadOnlyList<EpisodeUseRow> Uses { get; set; } = Array.Empty<EpisodeUseRow>();
+        /// <summary>使用曲の記録が無い回の空のリスト。</summary>
+        public static readonly EpisodeBgmList Empty = new();
+        /// <summary>パートごとのまとまり（パートの表示順）。0 件ならテンプレ側で節ごと出さない。</summary>
+        public IReadOnlyList<EpisodeBgmGroup> Groups { get; set; } = Array.Empty<EpisodeBgmGroup>();
+        /// <summary>見出しの下に 1 回だけ出す作曲・編曲の札（劇伴の行の過半が同じ顔ぶれのとき）。無ければ空文字。</summary>
+        public string CommonStaffHtml { get; set; } = "";
+        /// <summary>再生ボタンを持つ行が 1 つでもあるか（再生スクリプトを読み込むかの判定）。</summary>
+        public bool HasPlay { get; set; }
     }
 
-    /// <summary>使用音声 1 行分。SONG なら歌詳細リンク付き、BGM なら M 番号 + メニュータイトル、その他はテキスト。</summary>
-    private sealed class EpisodeUseRow
+    /// <summary>BGM リストのパート 1 つ分。</summary>
+    private sealed class EpisodeBgmGroup
     {
-        public byte UseOrder { get; set; }
-        public byte SubOrder { get; set; }
-        /// <summary>内容種別の表示ラベル（"歌"、"劇伴"、"ドラマ" 等）。</summary>
-        public string ContentKindLabel { get; set; } = "";
-        /// <summary>主表示テキスト（歌のタイトル、劇伴のメニュータイトル、テキスト系の override 文字列など）。</summary>
+        /// <summary>パート種別の表示ラベル（例: "アバンタイトル"、"Aパート"）。</summary>
+        public string PartLabel { get; set; } = "";
+        /// <summary>このパートの行（use_order, sub_order 昇順）。</summary>
+        public IReadOnlyList<EpisodeBgmRow> Rows { get; set; } = Array.Empty<EpisodeBgmRow>();
+    }
+
+    /// <summary>BGM リストの 1 行。劇伴なら M ナンバー・メニュー・初出盤のトラック・配信音源、歌なら曲名と楽曲詳細へのリンク。</summary>
+    private sealed class EpisodeBgmRow
+    {
+        /// <summary>アバンからの通し番号（枝番の行は「5-1」）。</summary>
+        public string NoLabel { get; set; } = "";
+        /// <summary>内容種別コード（"BGM" / "SONG" / "DRAMA" など）。番号の丸の色と、M ナンバーの位置の出し分けに使う。</summary>
+        public string Kind { get; set; } = "";
+        /// <summary>内容種別の表示ラベル（"歌"、"劇伴"、"ドラマ" 等）。劇伴でない行で、M ナンバーの位置に札として出す。</summary>
+        public string KindLabel { get; set; } = "";
+        /// <summary>M ナンバー（劇伴の行だけ。仮 M 番号の曲と劇伴でない行は空文字）。</summary>
+        public string MNo { get; set; } = "";
+        /// <summary>仮 M 番号の曲か（M ナンバーの位置に「不明」と出す）。</summary>
+        public bool IsTempMNo { get; set; }
+        /// <summary>劇伴のメニュー、歌のタイトル、テキスト系の override 文字列など。</summary>
         public string Title { get; set; } = "";
-        /// <summary>補助情報（歌唱者・サイズ・パート・M 番号・作曲など）。</summary>
+        /// <summary>歌の行の添え書き（歌唱者・サイズ・パートなど）。劇伴の行は空文字。</summary>
         public string SubTitle { get; set; } = "";
-        /// <summary>シーン説明（任意）。</summary>
-        public string SceneLabel { get; set; } = "";
-        /// <summary>使用尺ラベル（"m:ss" 形式）。秒数情報がなければ空文字。</summary>
-        public string DurationLabel { get; set; } = "";
-        /// <summary>SONG 行のときの楽曲詳細ページへのリンク（それ以外は空）。</summary>
+        /// <summary>歌の行の楽曲詳細ページへのリンク（それ以外は空）。</summary>
         public string SongLink { get; set; } = "";
+        /// <summary>劇伴の行の、劇伴詳細のその曲のカードへのリンク（それ以外は空）。カード全体のリンク先。</summary>
+        public string CueUrl { get; set; } = "";
+        /// <summary>この行にだけ出す作曲・編曲の札（見出しの下にまとめた顔ぶれと同じ行は空文字）。</summary>
+        public string StaffHtml { get; set; } = "";
+        /// <summary>初出盤のトラック（「{盤の略称}-Tr.{N}」）。収録盤が無ければ空文字。</summary>
+        public string DiscLabel { get; set; } = "";
+        /// <summary>初出盤の商品詳細の該当トラックへの URL。</summary>
+        public string DiscUrl { get; set; } = "";
+        /// <summary>初出盤の商品名（リンクの title 属性）。</summary>
+        public string DiscTitleFull { get; set; } = "";
+        /// <summary>初出盤でのトラックタイトル。無ければ空文字。</summary>
+        public string TrackTitle { get; set; } = "";
+        /// <summary>その回で流れた長さ（"m:ss" 形式）。秒数情報がなければ空文字。</summary>
+        public string DurationLabel { get; set; } = "";
+        /// <summary>配信音源（YouTube アートトラック）の動画 ID。空なら再生ボタンを出さない。</summary>
+        public string ArtTrackId { get; set; } = "";
+        /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>
+        public bool ArtTrackPremiumOnly { get; set; }
+        /// <summary>実際に鳴る音源が収録されているアルバム（プレイヤーの副題）。</summary>
+        public string ArtTrackAlbum { get; set; } = "";
+        /// <summary>音源が会員限定だったときの代わり（誰でも再生できる別の盤の同じ曲）。無ければ空文字。</summary>
+        public string AltArtTrackId { get; set; } = "";
+        /// <summary>代わりの音源が収録されているアルバム。</summary>
+        public string AltArtTrackAlbum { get; set; } = "";
+        /// <summary>プレイヤーに出す曲名（「M14 なぎさのテーマ」）。</summary>
+        public string PlayTitle { get; set; } = "";
         /// <summary>本放送限定フラグ（「本放送のみ」を末尾に表示）。</summary>
         public bool IsBroadcastOnly { get; set; }
     }

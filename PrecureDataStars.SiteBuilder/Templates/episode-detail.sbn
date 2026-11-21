@@ -13,7 +13,7 @@
 
   {{## エピソード詳細では、サブタイトル文字情報・パート尺統計の各セクション末尾に出る
        BuildPointCaption（参照点キャプション）で「いま現在の参照点」を案内する。
-       それ以外の要素（基本情報・クレジット・主題歌・使用音声 等）は登録の有無で表示が切り替わるだけで
+       それ以外の要素（基本情報・クレジット・主題歌・BGMリスト 等）は登録の有無で表示が切り替わるだけで
        カバレッジ概念が当てはまらないため、ページ全体宣言は不要。 ##}}
 
   {{## 上部の前後話カードリンク（おしゃれな枠付きカード）。
@@ -266,172 +266,6 @@
   </section>
   {{~ end ~}}
 
-  {{## 主題歌・挿入歌（クレジットの直前）。
-       - 旧 1 行表示（「OP「タイトル」　うた：歌唱者　TV size」）から、複数行リッチ表示に拡張。
-         - 楽曲詳細ページと同じ構造化クレジット由来の HTML を流用し、作詞・作曲・編曲・歌の各行に
-           役職名（/creators/roles/{rep}/ 行きアンカー）＋ 名義（/people/{名前}/ または /characters/{名前}/ 行き
-           アンカー）をリンク化して表示する。構造化が無い項目はフォールバックの平文（リンクなし）。
-         - 各楽曲は「ts-card」というカード型の箱に入れ、タイトル行とメタ行を縦に並べる。
-       本放送限定行は「（本放送のみ）」を末尾につける。
-       楽曲タイトルは SongLink が引けていれば <a> でラップして詳細ページへリンク。
-       KindLabel は OP / ED / 挿入歌 の表示文字列（コード値そのままではない）に正規化済み。 ##}}
-  {{~ if (array.size ThemeSongs) > 0 ~}}
-  {{## 配信音源の再生ボタンはカードの右寄せの列に置く（サイズごとに 1 つ、使った順。歌入りで本編のサイズを優先し、カラオケしか無ければ出さない）。
-       リストは押した 1 件だけ鳴らす（同じ曲の本放送版・配信版が並ぶことがあるため、連続再生はしない）。 ##}}
-  {{~ has_theme_play = false ~}}
-  {{~ for t in ThemeSongs ~}}{{~ if (array.size t.Plays) > 0 ~}}{{~ has_theme_play = true ~}}{{~ end ~}}{{~ end ~}}
-  <section id="theme-songs">
-    <h2>主題歌・挿入歌</h2>
-    <ul class="theme-songs-list"{{ if has_theme_play }} data-art-track-list data-art-track-mode="single"{{ end }}>
-      {{## 配信音源の再生ボタン 1 つ（p は再生ボタン、曲名はいまのカードの t.Title）。サイズの札の右のボタンと、札の付かないボタンで使う。 ##}}
-      {{~ func ts_play_button(p) ~}}<button type="button" class="art-track-play ts-play{{ if p.PremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ p.ArtTrackId | html.escape }}"{{ if p.PremiumOnly }} data-art-track-premium="1"{{ end }}{{ if p.AltArtTrackId != "" }} data-art-track-alt-id="{{ p.AltArtTrackId | html.escape }}" data-art-track-alt-sub="{{ p.AltSourceAlbum | html.escape }}"{{ end }} data-art-track-title="{{ t.Title | html.escape }}" data-art-track-sub="{{ p.SourceAlbum | html.escape }}" aria-label="{{ t.Title | html.escape }}{{ if p.DisplaySizeLabel != "" }}（{{ p.DisplaySizeLabel | html.escape }}）{{ end }} を再生{{ if p.PremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if p.PremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}{{ if p.DisplaySizeLabel != "" }}{{ p.DisplaySizeLabel | html.escape }}の{{ end }}配信音源を再生{{ if p.SizeLabel == "" }}（放送で流れたサイズとは限りません）{{ end }}{{ end }}"></button>{{~ end ~}}
-      {{~ for t in ThemeSongs ~}}
-      {{~ multi_kind = (array.size t.Kinds) > 1 ~}}
-      <li class="ts-card">
-        {{## 1 行目：[OP/ED/挿入歌バッジ…] 「タイトル（インストゥルメンタル）」[TVサイズ Type.I…]（本放送のみ）
-             同じ録音をこの回で OP・ED・挿入歌として何度か使ったときは 1 枚のカードにまとめ、区分バッジ・サイズを使った順に並べる。
-             サイズはその回で流れたサイズの指定がある行だけ（episode_theme_songs.song_size_variant_code）を、楽曲詳細と同じ緑のピルで出す。
-             区分が 2 つ以上のカードは、左に区分バッジを 1 区分 1 行で縦に積み、右の曲名・サイズ・（本放送のみ）をその縦の真ん中にそろえて
-             1 行に組む（シリーズ詳細と同じ .ts-headline-multi）。 ##}}
-        {{## 再生ボタン群。サイズの札とそのサイズのボタンを 1 組にして 1 組 1 行で縦に積み、右寄せでボタンを右端の一直線にそろえる
-             （シリーズ詳細・楽曲詳細と同じ形。札の付かないボタンは、実際に鳴る音源のサイズの札を付けた行として後ろに足す）。
-             1 組だけなら見出しの行の右端（.ts-sizes-inline）、2 組以上ならカードを 2 列に組み、右の列にカードの上端から積む
-             （狭い画面では 2 列をほどき、見出しの下に右寄せ）。再生ボタンが 1 つも無いカードは、札を左に縦に並べるだけ（.ts-sizes）。 ##}}
-        {{~ side_count = (array.size t.SizeRows) + (array.size t.LoosePlays) ~}}
-        {{~ has_play = (array.size t.LoosePlays) > 0 ~}}
-        {{~ for sr in t.SizeRows ~}}{{~ if sr.Play ~}}{{~ has_play = true ~}}{{~ end ~}}{{~ end ~}}
-        {{~ side_inline = has_play && side_count == 1 ~}}
-        {{~ capture side_html ~}}{{~ for sr in t.SizeRows ~}}<li class="ts-size-row"><span class="recording-tracks-kind-badge recording-tracks-kind-size">{{ sr.Label | html.escape }}</span>{{~ if sr.Play ~}}{{ ts_play_button sr.Play }}{{~ end ~}}</li>{{~ end ~}}{{~ for p in t.LoosePlays ~}}<li class="ts-size-row">{{~ if p.SourceSizeLabel != "" ~}}<span class="recording-tracks-kind-badge recording-tracks-kind-size ts-size-unaired" title="放送で流れたサイズとは限らない音源">{{ p.SourceSizeLabel | html.escape }}</span>{{~ end ~}}{{ ts_play_button p }}</li>{{~ end ~}}{{~ end ~}}
-        <div class="ts-headline{{ if multi_kind }} ts-headline-multi{{ end }}">
-          {{~ if multi_kind ~}}
-          <div class="ts-kinds">
-            {{~ for k in t.Kinds ~}}<div class="ts-kind-row"><span class="ts-kind">{{ k.Label | html.escape }}</span></div>{{~ end ~}}
-          </div>
-          <div class="ts-headline-main">
-          {{~ else ~}}
-          <span class="ts-kind">{{ t.Kinds[0].Label | html.escape }}</span>
-          {{~ end ~}}
-          <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | in_quotes | html.escape }}</a>{{~ else ~}}{{ t.Title | in_quotes | html.escape }}{{~ end ~}}{{~ if t.IsInstrumental ~}}（インストゥルメンタル）{{~ end ~}}」</span>
-          {{~ if (array.size t.SizeRows) == 0 ~}}{{~ for sz in t.SizeLabels ~}}<span class="recording-tracks-kind-badge recording-tracks-kind-size">{{ sz | html.escape }}</span>{{~ end ~}}{{~ end ~}}
-          {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
-          {{~ if multi_kind ~}}
-          </div>
-          {{~ end ~}}
-          {{~ if side_inline ~}}<ul class="ts-sizes ts-sizes-side ts-sizes-inline">{{ side_html }}</ul>{{~ end ~}}
-        </div>
-        {{## 違うサイズを 2 つ以上使ったカード（デパプリの ED の Type.I〜IV など）は、サイズの札を見出しの下に縦に並べ、
-             札の右にそのサイズの音源の再生ボタンを置く（その音源が無ければ札だけ）。再生ボタンがあれば右寄せ。 ##}}
-        {{~ if has_play && !side_inline ~}}
-        <ul class="ts-sizes ts-sizes-side">{{ side_html }}</ul>
-        {{~ else if !has_play && (array.size t.SizeRows) > 0 ~}}
-        <ul class="ts-sizes">{{ side_html }}</ul>
-        {{~ end ~}}
-        {{## 2 行目以降：歌・作詞・作曲・編曲 のクレジット。
-             楽曲索引のカードと同じ「役職バッジ + 名義」のグループを横に流す（ThemeSongCreditBadges）。
-             歌は主役級のため先頭に置く。名義が同じ隣り合う作家の役職は [作詞][作曲] のようにまとめる。
-             バッジは役職詳細・歌唱ページへのリンク。名義がすべて空なら行ごと出さない。 ##}}
-        {{~ if t.CreditBadgesHtml != "" ~}}
-        <div class="staff-badges-row ts-credits">{{ t.CreditBadgesHtml }}</div>
-        {{~ end ~}}
-      </li>
-      {{~ end ~}}
-    </ul>
-  </section>
-  {{~ if has_theme_play ~}}
-  <script src="{{ asset_url "/assets/art-track-player.js" }}" defer></script>
-  {{~ end ~}}
-  {{~ end ~}}
-
-  {{## 使用音声（episode_uses をパート別にグルーピングして表示）。
-       SONG / BGM / DRAMA / RADIO / JINGLE / OTHER の 6 種別を統一フォーマットで一覧化する。
-       SONG 行は楽曲詳細ページへのリンク付き。仮 M 番号は既にジェネレータ側で「(Mナンバー不明)」に
-       差し替えられた状態で来る。データ未登録のエピソードではセクション自体が非表示。 ##}}
-  {{~ if (array.size EpisodeUseSections) > 0 ~}}
-  <section id="episode-uses">
-    <h2>使用音声</h2>
-    <p class="muted">このエピソード内で流れた歌・劇伴・ドラマなどです。</p>
-    {{~ for s in EpisodeUseSections ~}}
-    <h3 class="episode-use-part">{{ s.PartLabel | html.escape }}</h3>
-    <table class="episode-use-table">
-      <thead>
-        <tr>
-          <th class="col-no">No.</th>
-          <th class="col-kind">種別</th>
-          <th class="col-title">タイトル</th>
-          <th class="col-sub">補足</th>
-          <th class="col-scene">シーン</th>
-          <th class="col-duration">尺</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for u in s.Uses ~}}
-        <tr>
-          <td class="col-no">{{ u.UseOrder }}{{ if u.SubOrder > 0 }}-{{ u.SubOrder }}{{ end }}</td>
-          <td class="col-kind muted">{{ u.ContentKindLabel | html.escape }}</td>
-          <td class="col-title">
-            {{~ if u.SongLink != "" ~}}
-            <a href="{{ u.SongLink }}">{{ u.Title | html.escape }}</a>
-            {{~ else ~}}
-            {{ u.Title | html.escape }}
-            {{~ end ~}}
-            {{~ if u.IsBroadcastOnly ~}}<span class="muted">（本放送のみ）</span>{{~ end ~}}
-          </td>
-          <td class="col-sub muted">{{ u.SubTitle | html.escape }}</td>
-          <td class="col-scene muted">{{ u.SceneLabel | html.escape }}</td>
-          <td class="col-duration muted">{{ u.DurationLabel }}</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
-    {{~ end ~}}
-  </section>
-  {{~ end ~}}
-
-  {{## クレジット階層 ##}}
-  {{~ if (array.size CreditBlocks) > 0 ~}}
-  <section id="credits" class="credit-section">
-    <h2>クレジット</h2>
-    {{~ for c in CreditBlocks ~}}
-    <h3 class="credit-kind-heading">{{ c.CreditKindLabel | html.escape }}</h3>
-    {{ c.Html }}
-    {{~ end ~}}
-  </section>
-  {{~ end ~}}
-
-  {{## アニメ雑誌サブタイトル掲載。掲載状態フラグが登録され、担当号（放送日を発売日で挟む
-       連続 2 号の前側）が確定したエピソードだけに出す。状態バッジ＋号・発売日の小書き。 ##}}
-  {{~ if MagazineStatusLabel != "" ~}}
-  <section id="magazine-subtitle">
-    <h2>アニメ雑誌サブタイトル掲載<span class="help-tip" tabindex="0">?<span class="help-tip-text">放送前に発売されるアニメ雑誌が、このエピソードのサブタイトルを掲載していたかどうかの記録です。「非公開」は誌面でサブタイトル非公開と案内されたこと、「未定」は誌面で未定と案内されたこと、「掲載なし」はその号にこの作品の枠自体が無かったことを表します。</span></span></h2>
-    <p class="magazine-subtitle-line">
-      <span class="magazine-subtitle-badge {{ MagazineStatusClass }}">{{ MagazineStatusLabel | html.escape }}</span>
-      <span class="magazine-subtitle-issue">{{ MagazineIssueLabel | html.escape }}</span>
-    </p>
-  </section>
-  {{~ end ~}}
-
-  {{## サブタイトル文字情報。説明文は見出し横の「?」ツールチップに格納し、
-       「いま現在の参照点」注記はエリア右下に小さく出す
-       （カバレッジが結果に直接効くセクションなので参照点表記を維持する）。
-       中身は TitleCharInfoRenderer が生成する <li class="charinfo-item"> 列
-       （グリフのボックス＋初出/唯一/N年ぶりバッジ＋復活詳細）。
-       解禁前の話は題名の文字そのものが並ぶので、節に解禁時刻を付け、解禁されるか閲覧者が先の題を見る設定にするまで
-       節ごと隠す（subtitle-embargo.js が is-revealed を付け外しする）。 ##}}
-  {{~ if TitleCharInfoHtml != "" ~}}
-  <section id="subtitle-char-info"{{ if TitleCharInfoRevealAt != "" }} class="subtitle-char-info-guard" data-reveal-at="{{ TitleCharInfoRevealAt }}"{{ end }}>
-    <h2>サブタイトル分析<span class="help-tip" tabindex="0">?<span class="help-tip-text">サブタイトルに使われている文字を 1 文字ずつ取り出して、プリキュアシリーズの中で「初登場の文字」「ここでしか使われていない文字」「久しぶりに登場した文字」を見つけ出します。</span></span></h2>
-    <ul class="charinfo-list">
-{{ TitleCharInfoHtml }}
-    </ul>
-    {{## 参照点はパート尺統計（最新放送済話基準の BuildPointCaption）と異なり、
-         サブタイトル登録済みの最終話基準（先行登録された未放送話も比較対象に入るため）。
-         放送済みなら書式は BuildPointCaption と同一、参照点がまだ放送前なら「第N話(YYYY.M.D放送予定)まで」。 ##}}
-    {{~ if SubtitleBuildPointCaption != "" ~}}
-    <p class="section-refpoint">（{{ SubtitleBuildPointCaption | html.escape }}）</p>
-    {{~ end ~}}
-  </section>
-  {{~ end ~}}
-
   {{## フォーマット（メディア別タイムラインバー + 詳細テーブル）。
        3 本のバーは「最長メディア = 100%」の同一スケール。本放送だけ CM が挟まる・
        BD では予告が落ちる、といったメディア差が長さと色でそのまま見える。
@@ -562,6 +396,187 @@
     </div>
     {{~ if BuildPointCaption != "" ~}}
     <p class="section-refpoint">（{{ BuildPointCaption | html.escape }}）</p>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
+  {{## サブタイトル文字情報。説明文は見出し横の「?」ツールチップに格納し、
+       「いま現在の参照点」注記はエリア右下に小さく出す
+       （カバレッジが結果に直接効くセクションなので参照点表記を維持する）。
+       中身は TitleCharInfoRenderer が生成する <li class="charinfo-item"> 列
+       （グリフのボックス＋初出/唯一/N年ぶりバッジ＋復活詳細）。
+       解禁前の話は題名の文字そのものが並ぶので、節に解禁時刻を付け、解禁されるか閲覧者が先の題を見る設定にするまで
+       節ごと隠す（subtitle-embargo.js が is-revealed を付け外しする）。 ##}}
+  {{~ if TitleCharInfoHtml != "" ~}}
+  <section id="subtitle-char-info"{{ if TitleCharInfoRevealAt != "" }} class="subtitle-char-info-guard" data-reveal-at="{{ TitleCharInfoRevealAt }}"{{ end }}>
+    <h2>サブタイトル分析<span class="help-tip" tabindex="0">?<span class="help-tip-text">サブタイトルに使われている文字を 1 文字ずつ取り出して、プリキュアシリーズの中で「初登場の文字」「ここでしか使われていない文字」「久しぶりに登場した文字」を見つけ出します。</span></span></h2>
+    <ul class="charinfo-list">
+{{ TitleCharInfoHtml }}
+    </ul>
+    {{## 参照点はパート尺統計（最新放送済話基準の BuildPointCaption）と異なり、
+         サブタイトル登録済みの最終話基準（先行登録された未放送話も比較対象に入るため）。
+         放送済みなら書式は BuildPointCaption と同一、参照点がまだ放送前なら「第N話(YYYY.M.D放送予定)まで」。 ##}}
+    {{~ if SubtitleBuildPointCaption != "" ~}}
+    <p class="section-refpoint">（{{ SubtitleBuildPointCaption | html.escape }}）</p>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
+  {{## アニメ雑誌サブタイトル掲載。掲載状態フラグが登録され、担当号（放送日を発売日で挟む
+       連続 2 号の前側）が確定したエピソードだけに出す。状態バッジ＋号・発売日の小書き。 ##}}
+  {{~ if MagazineStatusLabel != "" ~}}
+  <section id="magazine-subtitle">
+    <h2>アニメ雑誌サブタイトル掲載<span class="help-tip" tabindex="0">?<span class="help-tip-text">放送前に発売されるアニメ雑誌が、このエピソードのサブタイトルを掲載していたかどうかの記録です。「非公開」は誌面でサブタイトル非公開と案内されたこと、「未定」は誌面で未定と案内されたこと、「掲載なし」はその号にこの作品の枠自体が無かったことを表します。</span></span></h2>
+    <p class="magazine-subtitle-line">
+      <span class="magazine-subtitle-badge {{ MagazineStatusClass }}">{{ MagazineStatusLabel | html.escape }}</span>
+      <span class="magazine-subtitle-issue">{{ MagazineIssueLabel | html.escape }}</span>
+    </p>
+  </section>
+  {{~ end ~}}
+
+  {{## 主題歌・挿入歌。
+       - 旧 1 行表示（「OP「タイトル」　うた：歌唱者　TV size」）から、複数行リッチ表示に拡張。
+         - 楽曲詳細ページと同じ構造化クレジット由来の HTML を流用し、作詞・作曲・編曲・歌の各行に
+           役職名（/creators/roles/{rep}/ 行きアンカー）＋ 名義（/people/{名前}/ または /characters/{名前}/ 行き
+           アンカー）をリンク化して表示する。構造化が無い項目はフォールバックの平文（リンクなし）。
+         - 各楽曲は「ts-card」というカード型の箱に入れ、タイトル行とメタ行を縦に並べる。
+       本放送限定行は「（本放送のみ）」を末尾につける。
+       楽曲タイトルは SongLink が引けていれば <a> でラップして詳細ページへリンク。
+       KindLabel は OP / ED / 挿入歌 の表示文字列（コード値そのままではない）に正規化済み。 ##}}
+  {{## 再生スクリプトをこのページでもう読み込んだか（主題歌・挿入歌の節と BGMリストの節で二重に読み込まない）。 ##}}
+  {{~ theme_play_loaded = false ~}}
+  {{~ if (array.size ThemeSongs) > 0 ~}}
+  {{## 配信音源の再生ボタンはカードの右寄せの列に置く（サイズごとに 1 つ、使った順。歌入りで本編のサイズを優先し、カラオケしか無ければ出さない）。
+       リストは押した 1 件だけ鳴らす（同じ曲の本放送版・配信版が並ぶことがあるため、連続再生はしない）。 ##}}
+  {{~ has_theme_play = false ~}}
+  {{~ for t in ThemeSongs ~}}{{~ if (array.size t.Plays) > 0 ~}}{{~ has_theme_play = true ~}}{{~ end ~}}{{~ end ~}}
+  <section id="theme-songs">
+    <h2>主題歌・挿入歌</h2>
+    <ul class="theme-songs-list"{{ if has_theme_play }} data-art-track-list data-art-track-mode="single"{{ end }}>
+      {{## 配信音源の再生ボタン 1 つ（p は再生ボタン、曲名はいまのカードの t.Title）。サイズの札の右のボタンと、札の付かないボタンで使う。 ##}}
+      {{~ func ts_play_button(p) ~}}<button type="button" class="art-track-play ts-play{{ if p.PremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ p.ArtTrackId | html.escape }}"{{ if p.PremiumOnly }} data-art-track-premium="1"{{ end }}{{ if p.AltArtTrackId != "" }} data-art-track-alt-id="{{ p.AltArtTrackId | html.escape }}" data-art-track-alt-sub="{{ p.AltSourceAlbum | html.escape }}"{{ end }} data-art-track-title="{{ t.Title | html.escape }}" data-art-track-sub="{{ p.SourceAlbum | html.escape }}" aria-label="{{ t.Title | html.escape }}{{ if p.DisplaySizeLabel != "" }}（{{ p.DisplaySizeLabel | html.escape }}）{{ end }} を再生{{ if p.PremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if p.PremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}{{ if p.DisplaySizeLabel != "" }}{{ p.DisplaySizeLabel | html.escape }}の{{ end }}配信音源を再生{{ if p.SizeLabel == "" }}（放送で流れたサイズとは限りません）{{ end }}{{ end }}"></button>{{~ end ~}}
+      {{~ for t in ThemeSongs ~}}
+      {{~ multi_kind = (array.size t.Kinds) > 1 ~}}
+      <li class="ts-card">
+        {{## 1 行目：[OP/ED/挿入歌バッジ…] 「タイトル（インストゥルメンタル）」[TVサイズ Type.I…]（本放送のみ）
+             同じ録音をこの回で OP・ED・挿入歌として何度か使ったときは 1 枚のカードにまとめ、区分バッジ・サイズを使った順に並べる。
+             サイズはその回で流れたサイズの指定がある行だけ（episode_theme_songs.song_size_variant_code）を、楽曲詳細と同じ緑のピルで出す。
+             区分が 2 つ以上のカードは、左に区分バッジを 1 区分 1 行で縦に積み、右の曲名・サイズ・（本放送のみ）をその縦の真ん中にそろえて
+             1 行に組む（シリーズ詳細と同じ .ts-headline-multi）。 ##}}
+        {{## 再生ボタン群。サイズの札とそのサイズのボタンを 1 組にして 1 組 1 行で縦に積み、右寄せでボタンを右端の一直線にそろえる
+             （シリーズ詳細・楽曲詳細と同じ形。札の付かないボタンは、実際に鳴る音源のサイズの札を付けた行として後ろに足す）。
+             1 組だけなら見出しの行の右端（.ts-sizes-inline）、2 組以上ならカードを 2 列に組み、右の列にカードの上端から積む
+             （狭い画面では 2 列をほどき、見出しの下に右寄せ）。再生ボタンが 1 つも無いカードは、札を左に縦に並べるだけ（.ts-sizes）。 ##}}
+        {{~ side_count = (array.size t.SizeRows) + (array.size t.LoosePlays) ~}}
+        {{~ has_play = (array.size t.LoosePlays) > 0 ~}}
+        {{~ for sr in t.SizeRows ~}}{{~ if sr.Play ~}}{{~ has_play = true ~}}{{~ end ~}}{{~ end ~}}
+        {{~ side_inline = has_play && side_count == 1 ~}}
+        {{~ capture side_html ~}}{{~ for sr in t.SizeRows ~}}<li class="ts-size-row"><span class="recording-tracks-kind-badge recording-tracks-kind-size">{{ sr.Label | html.escape }}</span>{{~ if sr.Play ~}}{{ ts_play_button sr.Play }}{{~ end ~}}</li>{{~ end ~}}{{~ for p in t.LoosePlays ~}}<li class="ts-size-row">{{~ if p.SourceSizeLabel != "" ~}}<span class="recording-tracks-kind-badge recording-tracks-kind-size ts-size-unaired" title="放送で流れたサイズとは限らない音源">{{ p.SourceSizeLabel | html.escape }}</span>{{~ end ~}}{{ ts_play_button p }}</li>{{~ end ~}}{{~ end ~}}
+        <div class="ts-headline{{ if multi_kind }} ts-headline-multi{{ end }}">
+          {{~ if multi_kind ~}}
+          <div class="ts-kinds">
+            {{~ for k in t.Kinds ~}}<div class="ts-kind-row"><span class="ts-kind">{{ k.Label | html.escape }}</span></div>{{~ end ~}}
+          </div>
+          <div class="ts-headline-main">
+          {{~ else ~}}
+          <span class="ts-kind">{{ t.Kinds[0].Label | html.escape }}</span>
+          {{~ end ~}}
+          <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | in_quotes | html.escape }}</a>{{~ else ~}}{{ t.Title | in_quotes | html.escape }}{{~ end ~}}{{~ if t.IsInstrumental ~}}（インストゥルメンタル）{{~ end ~}}」</span>
+          {{~ if (array.size t.SizeRows) == 0 ~}}{{~ for sz in t.SizeLabels ~}}<span class="recording-tracks-kind-badge recording-tracks-kind-size">{{ sz | html.escape }}</span>{{~ end ~}}{{~ end ~}}
+          {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
+          {{~ if multi_kind ~}}
+          </div>
+          {{~ end ~}}
+          {{~ if side_inline ~}}<ul class="ts-sizes ts-sizes-side ts-sizes-inline">{{ side_html }}</ul>{{~ end ~}}
+        </div>
+        {{## 違うサイズを 2 つ以上使ったカード（デパプリの ED の Type.I〜IV など）は、サイズの札を見出しの下に縦に並べ、
+             札の右にそのサイズの音源の再生ボタンを置く（その音源が無ければ札だけ）。再生ボタンがあれば右寄せ。 ##}}
+        {{~ if has_play && !side_inline ~}}
+        <ul class="ts-sizes ts-sizes-side">{{ side_html }}</ul>
+        {{~ else if !has_play && (array.size t.SizeRows) > 0 ~}}
+        <ul class="ts-sizes">{{ side_html }}</ul>
+        {{~ end ~}}
+        {{## 2 行目以降：歌・作詞・作曲・編曲 のクレジット。
+             楽曲索引のカードと同じ「役職バッジ + 名義」のグループを横に流す（ThemeSongCreditBadges）。
+             歌は主役級のため先頭に置く。名義が同じ隣り合う作家の役職は [作詞][作曲] のようにまとめる。
+             バッジは役職詳細・歌唱ページへのリンク。名義がすべて空なら行ごと出さない。 ##}}
+        {{~ if t.CreditBadgesHtml != "" ~}}
+        <div class="staff-badges-row ts-credits">{{ t.CreditBadgesHtml }}</div>
+        {{~ end ~}}
+      </li>
+      {{~ end ~}}
+    </ul>
+  </section>
+  {{~ if has_theme_play ~}}
+  {{~ theme_play_loaded = true ~}}
+  <script src="{{ asset_url "/assets/art-track-player.js" }}" defer></script>
+  {{~ end ~}}
+  {{~ end ~}}
+
+  {{## BGMリスト（その回で流れた劇伴・歌などを、流れた順に並べる。使用曲の記録を出す回だけ）。
+       商品詳細の収録トラックと同じ、横に細長いカードを 1 行ずつ並べる。パート（アバンタイトル・Aパート・Bパート…）は
+       カードの列の間の細い区切りで、通し番号はアバンから最後まで続けて振る。
+       カードの並びは「通し番号 / Mナンバー / メニュー / 初出盤のトラック / その回で流れた長さ / 再生ボタン」
+       （狭い画面では初出盤のトラックを 2 行目に落とす）。歌などの劇伴でない行は、Mナンバーの位置に種別の札を出す。
+       作曲・編曲の札は、劇伴の行の過半が同じ顔ぶれなら見出しの下に 1 回だけ出し（BgmList.CommonStaffHtml）、
+       それと違う行にだけメニューの後ろに出す（StaffHtml。どちらも組み立て済みの HTML）。
+       劇伴の行はカード全体が劇伴詳細のその曲のカードへのリンク、歌の行はカード全体が楽曲詳細へのリンク
+       （メニュー・曲名の a の ::before をカード全域に広げる。初出盤のトラックのリンク・再生ボタン・作曲と編曲の名義のリンクは
+       その上の層に置き、それぞれのリンク先・動作のまま）。
+       再生ボタンは初出盤の配信音源を鳴らし（無ければ音源のある最古の盤）、押した行からリストの終わりまで続けて再生する
+       （data-art-track-mode="continuous"。その回の BGM を流れた順に聴ける）。 ##}}
+  {{~ if (array.size BgmList.Groups) > 0 ~}}
+  <section id="episode-uses">
+    <h2>BGMリスト</h2>
+    {{~ if BgmList.CommonStaffHtml != "" ~}}
+    <div class="staff-badges-row ep-bgm-common-staff">{{ BgmList.CommonStaffHtml }}</div>
+    {{~ end ~}}
+    <div class="ep-bgm"{{ if BgmList.HasPlay }} data-art-track-list data-art-track-mode="continuous"{{ end }}>
+      {{~ for g in BgmList.Groups ~}}
+      <h3 class="ep-bgm-part">{{ g.PartLabel | html.escape }}</h3>
+      <ul class="ep-bgm-list">
+        {{~ for r in g.Rows ~}}
+        <li class="ep-bgm-card"{{ if r.ArtTrackId != "" }} data-art-track-row{{ end }}>
+          <span class="ep-bgm-no" data-kind="{{ r.Kind }}">{{ r.NoLabel }}</span>
+          {{~ if r.MNo != "" ~}}
+          <span class="ep-bgm-mno">{{ r.MNo | html.escape }}</span>
+          {{~ else if r.IsTempMNo ~}}
+          <span class="ep-bgm-mno is-unknown" title="Mナンバー不明">不明</span>
+          {{~ else ~}}
+          <span class="ep-bgm-mno is-kind">{{ r.KindLabel | html.escape }}</span>
+          {{~ end ~}}
+          <span class="ep-bgm-menu">
+            {{~ if r.SongLink != "" ~}}<a class="ep-bgm-title ep-bgm-card-link" href="{{ r.SongLink }}">{{ r.Title | html.escape }}</a>{{~ else if r.CueUrl != "" ~}}<a class="ep-bgm-title ep-bgm-card-link" href="{{ r.CueUrl }}">{{ r.Title | html.escape }}</a>{{~ else ~}}<span class="ep-bgm-title">{{ r.Title | html.escape }}</span>{{~ end ~}}
+            {{~ if r.IsBroadcastOnly ~}}<span class="ep-bgm-note muted">（本放送のみ）</span>{{~ end ~}}
+            {{~ if r.SubTitle != "" ~}}<span class="ep-bgm-note muted">{{ r.SubTitle | html.escape }}</span>{{~ end ~}}
+            {{~ if r.StaffHtml != "" ~}}<span class="staff-badges-row ep-bgm-staff">{{ r.StaffHtml }}</span>{{~ end ~}}
+          </span>
+          {{~ if r.DiscLabel != "" ~}}
+          <a class="ep-bgm-disc" href="{{ r.DiscUrl }}" title="{{ r.DiscTitleFull | html.escape }}"><span class="ep-bgm-disc-track">{{ r.DiscLabel | html.escape }}</span>{{~ if r.TrackTitle != "" ~}}<span class="ep-bgm-track-title">「{{ r.TrackTitle | in_quotes | html.escape }}」</span>{{~ end ~}}</a>
+          {{~ end ~}}
+          <span class="ep-bgm-length">{{ r.DurationLabel }}</span>
+          {{~ if r.ArtTrackId != "" ~}}
+          <button type="button" class="ep-bgm-play art-track-play{{ if r.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ r.ArtTrackId | html.escape }}"{{ if r.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }}{{ if r.AltArtTrackId != "" }} data-art-track-alt-id="{{ r.AltArtTrackId | html.escape }}" data-art-track-alt-sub="{{ r.AltArtTrackAlbum | html.escape }}"{{ end }} data-art-track-title="{{ r.PlayTitle | html.escape }}" data-art-track-sub="{{ r.ArtTrackAlbum | html.escape }}" aria-label="{{ r.PlayTitle | html.escape }} を再生{{ if r.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if r.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>
+          {{~ end ~}}
+        </li>
+        {{~ end ~}}
+      </ul>
+      {{~ end ~}}
+    </div>
+  </section>
+  {{## 主題歌・挿入歌の節が再生スクリプトを読み込んでいない回でだけ、ここで読み込む。 ##}}
+  {{~ if BgmList.HasPlay && !theme_play_loaded ~}}
+  <script src="{{ asset_url "/assets/art-track-player.js" }}" defer></script>
+  {{~ end ~}}
+  {{~ end ~}}
+
+  {{## クレジット階層 ##}}
+  {{~ if (array.size CreditBlocks) > 0 ~}}
+  <section id="credits" class="credit-section">
+    <h2>クレジット</h2>
+    {{~ for c in CreditBlocks ~}}
+    <h3 class="credit-kind-heading">{{ c.CreditKindLabel | html.escape }}</h3>
+    {{ c.Html }}
     {{~ end ~}}
   </section>
   {{~ end ~}}

@@ -1274,42 +1274,80 @@ a.series-card-children-title:hover {
 }
 
 /* ──────────────────── エピソード詳細：サブタイトル分析 ──────────────────── */
-/* 1 文字 = 1 行。左にグリフのボックス、右にバッジ（初出 = 黄 / 唯一 = ピンク / N年ぶり = 青）と
-   復活詳細の補足テキストを並べる。 */
+/* 1 文字 = 1 タイル。タイルを横に流して折り返す（文字が多い題でも縦に伸びない）。
+   初出・唯一だけの文字は、グリフのボックスの下にバッジ（初出 = 黄 / 唯一 = ピンク）を付けた小さいタイル。
+   N年ぶりの文字（.is-revival）は横長のカードで、グリフの右の 1 行目にバッジ（青）と「N話ぶり・M回目」、
+   2 行目に直前の登場エピソードを薄色で添える。カードは小さいタイルの後ろにまとめて並べる。 */
 .charinfo-list {
   list-style: none;
   margin: 12px 0 0;
   padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
 }
 .charinfo-item {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 4.2em;
+  padding: 8px 8px 7px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg, #fff);
+}
+.charinfo-item.is-revival {
+  order: 1;
+  flex: 1 1 300px;
+  max-width: 440px;
+  flex-direction: row;
   align-items: center;
   gap: 10px;
-  padding: 3px 0;
+  padding: 8px 12px 8px 8px;
 }
 .charinfo-glyph {
   flex: 0 0 auto;
-  width: 2.1em;
-  height: 2.1em;
+  width: 2em;
+  height: 2em;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1em;
+  font-size: 1.35em;
   font-weight: 600;
+  line-height: 1;
   background: var(--table-stripe);
-  border: 1px solid var(--border);
   border-radius: 6px;
 }
 .charinfo-info {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  justify-content: center;
+  gap: 3px;
   min-width: 0;
+}
+.charinfo-item.is-revival .charinfo-info {
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.charinfo-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+.charinfo-count {
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .charinfo-info .badge {
   display: inline-block;
-  font-size: 0.75em;
+  font-size: 0.72em;
   padding: 1px 6px;
   border-radius: 3px;
   border: 1px solid;
@@ -1318,7 +1356,14 @@ a.series-card-children-title:hover {
 .charinfo-info .badge-first   { background: var(--hl); color: #8a6d00; border-color: #e5d375; }
 .charinfo-info .badge-uniq    { background: #ffe6f1; color: #a31a5b; border-color: #f4b8d6; }
 .charinfo-info .badge-revival { background: #e5f0fa; color: #1d5e96; border-color: #b9d7ef; }
-.charinfo-detail { font-size: 0.85em; }
+.charinfo-detail {
+  font-size: 0.78em;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 560px) {
+  .charinfo-item.is-revival { max-width: none; }
+}
 
 /* ──────────────────── エピソード詳細：パート尺統計情報 ──────────────────── */
 /* パートごとの 1 カードに「実尺 / シリーズ内 / 歴代全体」をまとめる。チップと
@@ -3537,54 +3582,205 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   white-space: nowrap;
 }
 
-/* ──────────────────── エピソード詳細：使用音声 ──────────────────── */
-.episode-use-part {
-  margin-top: 14px;
-  margin-bottom: 4px;
-  font-size: 1em;
-  color: #374151;
-  border-bottom: 1px solid #e5e7eb;
-  padding-bottom: 2px;
+/* ──────────────────── エピソード詳細：BGMリスト ──────────────────── */
+/* その回で流れた劇伴・歌を、流れた順に 1 行 1 枚の横に細長いカードで並べる（商品詳細の収録トラックのカードと同じ調子）。
+   カードの列は「通し番号 / Mナンバー / メニュー / 初出盤のトラック / その回で流れた長さ / 再生ボタン」。
+   パートの見出し（.ep-bgm-part）は、カードの列の間の細い区切り。 */
+.ep-bgm-common-staff {
+  margin: 4px 0 2px;
+  font-size: 0.9em;
 }
-.episode-use-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 4px 0 10px;
+.ep-bgm-common-staff a,
+.ep-bgm-staff a {
+  color: inherit;
+  text-decoration: none;
 }
-.episode-use-table th,
-.episode-use-table td {
-  padding: 4px 10px;
+.ep-bgm-common-staff a:hover,
+.ep-bgm-common-staff a:focus-visible,
+.ep-bgm-staff a:hover,
+.ep-bgm-staff a:focus-visible {
+  text-decoration: underline;
+}
+h3.ep-bgm-part {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 5px;
+  padding: 0;
+  border: 0;
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+h3.ep-bgm-part::before {
+  content: none;
+}
+h3.ep-bgm-part::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--border);
+}
+.ep-bgm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ep-bgm-card {
+  display: grid;
+  grid-template-columns: 1.9em 4.2em minmax(0, 1fr) minmax(0, 1.25fr) 2.8em 1.9em;
+  align-items: center;
+  column-gap: 10px;
+  padding: 5px 10px 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg, #fff);
+  /* カード全体のリンク（a.ep-bgm-card-link::before）を重ねる基準。 */
+  position: relative;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.ep-bgm-card[data-art-track-row].is-playing {
+  background: var(--hl);
+  box-shadow: inset 3px 0 0 var(--accent-pink);
+}
+/* 通し番号：商品詳細のトラック番号と同じ丸（劇伴 = 緑、歌 = ピンク、そのほか = 青）。 */
+.ep-bgm-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9em;
+  height: 1.9em;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: #fff;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.8em;
+  line-height: 1;
+  white-space: nowrap;
+}
+.ep-bgm-no[data-kind="BGM"] { background: #22c55e; }
+.ep-bgm-no[data-kind="SONG"] { background: var(--accent-pink, #ec4899); }
+.ep-bgm-mno {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 1.05em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ep-bgm-mno.is-unknown,
+.ep-bgm-mno.is-kind {
+  font-family: inherit;
+  font-size: 0.78em;
+  font-weight: 500;
+  color: var(--muted);
+}
+.ep-bgm-menu {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+.ep-bgm-title {
+  color: var(--fg);
+}
+/* カード全体のリンク：メニュー・曲名の a の ::before を透明のままカード全域に広げる（商品詳細のトラックのカードと同じ作り）。
+   初出盤のトラックのリンク・再生ボタン・作曲と編曲の名義のリンクは、その上の層に置いて別々に押せるようにする。 */
+a.ep-bgm-card-link,
+a.ep-bgm-card-link:hover,
+a.ep-bgm-card-link:focus-visible {
+  color: var(--fg);
+  text-decoration: none;
+}
+a.ep-bgm-card-link::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 6px;
+}
+.ep-bgm-card:has(a.ep-bgm-card-link:hover),
+.ep-bgm-card:has(a.ep-bgm-card-link:focus-visible) {
+  border-color: var(--accent-pink);
+  background: var(--surface-2, #fff7fb);
+}
+.ep-bgm-disc,
+.ep-bgm-play,
+.ep-bgm-staff a {
+  position: relative;
+  z-index: 2;
+}
+.ep-bgm-note {
+  margin-left: 0.5em;
+  font-size: 0.82em;
+}
+.ep-bgm-staff {
+  display: inline-flex;
+  margin-left: 0.6em;
+  font-size: 0.85em;
+  line-height: 1.5;
   vertical-align: baseline;
 }
-.episode-use-table th.col-no,
-.episode-use-table td.col-no {
-  width: 4em;
+.ep-bgm-disc {
+  grid-column: 4;
+  min-width: 0;
+  font-size: 0.85em;
+  line-height: 1.4;
+  color: var(--fg);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.ep-bgm-disc:hover .ep-bgm-track-title,
+.ep-bgm-disc:focus-visible .ep-bgm-track-title {
+  text-decoration: underline;
+}
+.ep-bgm-disc-track {
+  margin-right: 0.4em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.ep-bgm-length {
+  grid-column: 5;
   text-align: right;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
+  color: var(--muted);
   white-space: nowrap;
 }
-.episode-use-table th.col-kind,
-.episode-use-table td.col-kind { width: 5em; }
-.episode-use-table th.col-title,
-.episode-use-table td.col-title { width: auto; }
-.episode-use-table th.col-sub,
-.episode-use-table td.col-sub {
-  width: 18em;
-  font-size: 0.92em;
+.ep-bgm-play {
+  grid-column: 6;
+  font-size: 0.85em;
 }
-.episode-use-table th.col-scene,
-.episode-use-table td.col-scene {
-  width: 14em;
-  font-size: 0.92em;
+/* 再生ボタンが 1 つも無いリストでは、再生ボタンの列を取らない。 */
+.ep-bgm:not([data-art-track-list]) .ep-bgm-card {
+  grid-template-columns: 1.9em 4.2em minmax(0, 1fr) minmax(0, 1.25fr) 2.8em;
 }
-.episode-use-table th.col-duration,
-.episode-use-table td.col-duration {
-  width: 5em;
-  text-align: right;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+/* 狭い画面：初出盤のトラックを 2 行目（メニューの下）に落とす。 */
+@media (max-width: 720px) {
+  .ep-bgm-card {
+    grid-template-columns: 1.9em 3.6em minmax(0, 1fr) 2.8em 1.9em;
+    column-gap: 8px;
+    row-gap: 1px;
+  }
+  .ep-bgm-no,
+  .ep-bgm-mno,
+  .ep-bgm-length,
+  .ep-bgm-play {
+    grid-row: 1 / span 2;
+  }
+  .ep-bgm-menu { grid-column: 3; grid-row: 1; }
+  .ep-bgm-disc { grid-column: 3; grid-row: 2; }
+  .ep-bgm-length { grid-column: 4; }
+  .ep-bgm-play { grid-column: 5; }
+  .ep-bgm:not([data-art-track-list]) .ep-bgm-card {
+    grid-template-columns: 1.9em 3.6em minmax(0, 1fr) 2.8em;
+  }
 }
 
 /* ──────────────────── サイト内検索ボックス（ヘッダ右端） ──────────────────── */

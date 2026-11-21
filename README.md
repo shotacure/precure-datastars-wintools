@@ -981,6 +981,7 @@ Role: PRODUCTION 制作 (order 2)
 - **テンプレ DSL の曲の作品名**：`{#THEME_SONGS}` の中の `{SONG_SERIES_TITLE}` は、曲の作品（録音の作品 `song_recordings.series_id`）の正式タイトル。クレジットの作品と同じ作品の曲なら空なので、オールスターズ映画の劇中歌のように他の作品の曲にだけ作品名の見出しを付けるときに `{?SONG_SERIES_TITLE}{SONG_SERIES_TITLE}{/?SONG_SERIES_TITLE}` と書く
 - **テンプレ DSL の本放送だけの曲**：版に `BROADCAST` を含むカードでは、同じ区分（OP・ED・挿入歌）・同じ位置（`seq`）に本放送だけの曲（`is_broadcast_only` = 1。`usage_actuality` が `BROADCAST_NOT_CREDITED` の行は除く）があれば、既定の曲の代わりにその曲だけを出す。`{BROADCAST_ONLY}` は曲のループの中で、本放送だけの曲なら "1"、違えば空。`{?BROADCAST_ONLY}…{/?BROADCAST_ONLY}` と `{?!BROADCAST_ONLY}…{/?!BROADCAST_ONLY}` で、既定の曲と行の形が違う曲を書き分ける
 - **テンプレ DSL の連名の最後の区切り**：連名のプレースホルダで `sep="…"` と一緒に `last_sep="…"` を書くと、名義が 3 つ以上のとき、最後の名義の前だけその文字でつなぐ。`{ARRANGER:sep="<br>",last_sep="・"}` は、3 人の編曲を「1 人目（改行）2 人目・3 人目」と出す
+- **テンプレ DSL の本放送のカード**：`{BROADCAST_CARD}` は、版に `BROADCAST` を含むカードの中なら "1"、共通のカードと Blu-ray・配信のカードでは空。`{?BROADCAST_CARD}…{/?BROADCAST_CARD}` と `{?!BROADCAST_CARD}…{/?!BROADCAST_CARD}` で、曲の外の役職（LABEL など）の表記を本放送のカードだけ変える。曲の行の書き分けは `{BROADCAST_ONLY}`
 - **テンプレ DSL の `{PRODUCT:kind=…}` の表示の差し替え**：`{PRODUCT:kind=OST_MOVIE}` は作品に紐付くその種別の商品を 1 件引いて、商品名で商品詳細へリンクする。`label=…` を付けると、リンク先はそのまま表示の文字だけを差し替える（画面の表記が盤の商品名と違う作品用。`label` 内の `{SERIES_TITLE}` は作品の正式タイトルに置き換わる。例：`{PRODUCT:kind=OST_MOVIE,label=「{SERIES_TITLE}」Music Line オリジナル・サントラ}`）
 - **テンプレ DSL の `{#BLOCKS:first|rest|last}`** はブロックの位置指定ループ。`{#BLOCKS}`（filter なし）は全ブロック
 

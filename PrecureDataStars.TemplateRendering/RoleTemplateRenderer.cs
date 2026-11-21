@@ -51,6 +51,8 @@ namespace PrecureDataStars.TemplateRendering;
 ///     （<c>sep="&lt;br&gt;",last_sep="・"</c> で、最後の 2 人を同じ行に並べる）。
 ///     <c>{BROADCAST_ONLY}</c> は本放送だけの曲なら "1"、違えば空で、<c>{?BROADCAST_ONLY}</c> / <c>{?!BROADCAST_ONLY}</c> で
 ///     本放送の版のカードに出る曲の行の形を書き分ける。本放送の版のカードでは、同じ区分・同じ位置に本放送だけの曲があれば既定の曲は出ない。
+///     <c>{BROADCAST_CARD}</c> は版に BROADCAST を含むカードの中なら "1"、違えば空で、<c>{?BROADCAST_CARD}</c> / <c>{?!BROADCAST_CARD}</c> で
+///     曲の外の役職（LABEL など）の表記を本放送のカードだけ変える。
 ///     <c>{SINGER}</c> / <c>{CHORUS}</c> は <c>cv_align=1</c> で、1 人 1 行に並べて「(CV:…)」の頭を縦にそろえる
 ///     （名前と「(CV:…)」を 2 列の格子に分ける。名義が 2 つ以上のときだけ）。
 ///     <c>{SINGER}</c> / <c>{CHORUS}</c> は <c>member_sep="…"</c> で、ユニット名義のメンバーのあいだの区切り（既定は「・」）を作品の画面の字にする
@@ -559,6 +561,10 @@ public static class RoleTemplateRenderer
                 // 本放送だけの曲（is_broadcast_only=1）なら "1"。本放送の版のカードで、既定の曲と行の形
                 // （連名の改行の位置など）が違う曲を書き分ける作品用。
                 return currentSong is { IsBroadcastOnly: 1 } ? "1" : "";
+            case "BROADCAST_CARD":
+                // 版に BROADCAST を含むカード（本放送の画面のカード）の中なら "1"、共通のカードと Blu-ray・配信のカードでは空。
+                // 曲の外（LABEL など）で、本放送のカードだけ表記の形を変える作品・話用（例：レーベルを括弧で囲む）。
+                return ctx.ShowsBroadcastOnlySongs ? "1" : "";
             case "MEDLEY_ARRANGER":
                 // 楽曲スコープ：メドレー編曲の連名（リンク化済み HTML）。無い曲は空文字列で、
                 // テンプレ側で {?MEDLEY_ARRANGER}メドレー編曲:{MEDLEY_ARRANGER}{/?MEDLEY_ARRANGER} のように条件展開できる。

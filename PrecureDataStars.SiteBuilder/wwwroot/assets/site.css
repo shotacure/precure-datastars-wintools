@@ -10586,6 +10586,45 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   padding: 1px 8px;
   border-radius: 999px;
 }
+/* 記念日の枠を縦に詰める：見出しの上の余白を減らし、誕生日の札は「誕生日 名前」の 1 行にして横に並べる。 */
+.home-section-anniversary h2 { margin-top: 10px; }
+.home-anniversary-list {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.home-anniversary-card { flex: 1 1 100%; }
+.home-anniversary-card-bday { flex: 0 1 auto; }
+.home-anniversary-card-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+  padding: 6px 12px;
+}
+.home-anniversary-card-meta { margin-bottom: 0; }
+/* エピソードの札は「N年前・作品（年）・第N話・題名・放送日」を 1 行に並べる（放送日は右端）。
+   狭い画面では、上の段に「N年前・作品」、下の段に題名と話数・放送日の、いまの 2 段のままにする。 */
+@media (min-width: 641px) {
+  .home-anniversary-card-main {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .home-anniversary-card .ep-row-main {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .home-anniversary-card .ep-row-no-date { display: contents; }
+  .home-anniversary-card .ep-row-main > .ep-row-title {
+    order: 2;
+    flex: 1 1 0;
+  }
+  .home-anniversary-card .ep-row-no-date .ep-row-date {
+    order: 3;
+    margin-top: 0;
+  }
+}
+
 /* キャラ誕生日カード内のキーカラーバッジ（<span>）。 */
 .home-bday-badge {
   display: inline-block;

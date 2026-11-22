@@ -104,7 +104,7 @@ public sealed class MusicGenerator
 
         GenerateMusicLanding(allRecs.Count, allProducts.Count, discsCount, cuesBySeries, ct);
         GenerateMusicPlayback();
-        GenerateBgmIndex(cuesBySeries, recordingsByBgmCue, creditAliasesByBgmCue);
+        GenerateBgmIndex(cuesBySeries, sessionsBySeries, recordingsByBgmCue, creditAliasesByBgmCue);
         await GenerateBgmDetailPagesAsync(cuesBySeries, sessionsBySeries, sectionsBySession, recordingsByBgmCue, creditAliasesByBgmCue, ct).ConfigureAwait(false);
 
         _ctx.Logger.Success($"music landing + bgms index + {cuesBySeries.Count} シリーズ詳細");
@@ -323,6 +323,7 @@ public sealed class MusicGenerator
     /// </summary>
     private void GenerateBgmIndex(
         IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> cuesBySeries,
+        IReadOnlyDictionary<int, List<BgmSession>> sessionsBySeries,
         IReadOnlyDictionary<(int SeriesId, string MNoDetail), List<BgmCueRecording>> recordingsByBgmCue,
         IReadOnlyDictionary<(int SeriesId, string MNoDetail, string Role), List<BgmCueCreditAlias>> creditAliasesByBgmCue)
     {
@@ -395,7 +396,11 @@ public sealed class MusicGenerator
                 SongCount = songCount,
                 CueCount = cueCount,
                 CountsLabel = countsLabel,
-                StaffGroups = staffGroups
+                StaffGroups = staffGroups,
+                // 録音の日付とスタジオ（bgm_sessions.caption。「2004.1.10～14 SoundCity」の形）。録音の回の順で、入っている回だけ。
+                RecordingNotes = sessionsBySeries.TryGetValue(s.SeriesId, out var sessions)
+                    ? sessions.Where(x => !string.IsNullOrWhiteSpace(x.Caption)).Select(x => x.Caption!.Trim()).ToList()
+                    : new List<string>()
             });
         }
 
@@ -1304,6 +1309,9 @@ public sealed class MusicGenerator
         public string CountsLabel { get; set; } = "";
         /// <summary>カード内に並べるスタッフグループ。複数の役職バッジを連続して持てる（作曲・編曲が同一人物のとき統合表示するため）。空のときはスタッフ表示を出さない。</summary>
         public IReadOnlyList<BgmStaffGroup> StaffGroups { get; set; } = Array.Empty<BgmStaffGroup>();
+
+        /// <summary>録音の日付とスタジオ（録音の回ごと。記録のある回だけ）。スタッフの行の右に並べる。</summary>
+        public IReadOnlyList<string> RecordingNotes { get; set; } = Array.Empty<string>();
     }
 
     /// <summary>

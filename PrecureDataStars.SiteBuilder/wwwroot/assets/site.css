@@ -6149,6 +6149,53 @@ a.credit-card-series:focus-visible {
   align-items: center;
   gap: 8px;
 }
+/* 劇伴の一覧の行を縦に詰める：行の上下の余白と行の間、題名とスタッフの行の間を減らす。
+   題名は見出しの飾り（左の帯・下線）を付けず、右に曲数とバージョン数の札（ほかの一覧と同じ大きさ）を置く。 */
+.bgms-card-list { gap: 4px; }
+/* 行は 2 列：左に題名とスタッフの 2 段、右に件数の札。札は 2 段ぶんの高さの上下の中央に置く
+   （題名の行の入れ物 .bgms-card-head は箱を外し、中の題名と札を行の格子に直に置く）。 */
+.bgms-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 16px;
+  padding: 5px 12px;
+}
+.bgms-card-head { display: contents; }
+.bgms-card-counts {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+.bgms-card-staff { grid-column: 1; }
+/* 狭い画面では、札は題名の右に置き、スタッフと録音の行は全幅を使う。役職ごとのかたまりは途中で折らない。 */
+@media (max-width: 640px) {
+  .bgms-card-counts { grid-row: 1; }
+  .bgms-card-staff { grid-column: 1 / -1; }
+}
+.bgms-card-staff .staff-badge-group { white-space: nowrap; }
+.bgms-card-title {
+  /* 狭い画面でも、題名の右に件数の札を置く（放送期間の行が無くなったので、題名を全幅にしない）。 */
+  grid-column: 1;
+  padding: 0;
+  border: 0;
+  font-size: 1em;
+}
+.bgms-card-counts {
+  font-family: inherit;
+  font-size: 1em;
+}
+.bgms-card-staff {
+  margin-top: 0;
+  font-size: 0.82em;
+}
+/* 録音の日付とスタジオ：スタッフの右に並べる。 */
+.bgms-card-rec { color: var(--muted); }
+.bgms-card-rec-badge {
+  background: #f1f2f4;
+  color: #4b5563;
+  border-color: #d5d8dd;
+}
+
 /* 歌の一覧の行を縦に詰める：行の上下の余白と行の間、題名と作詞・作曲の行の間を減らす（題名の下に作詞・作曲の行、の 2 段は変えない）。
    種別の札と再生ボタンは、行の上下の中央に置く。 */
 .songs-card-list { gap: 4px; }

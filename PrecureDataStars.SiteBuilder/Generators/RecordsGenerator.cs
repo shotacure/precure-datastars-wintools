@@ -402,24 +402,34 @@ public sealed class RecordsGenerator
     /// <summary>1 話のクレジットの全体の順位（上位 100 件、100 位が同点なら全件）を 1 ページ書き出す。</summary>
     private void GenerateEpisodeCreditRanking(IReadOnlyList<EpisodeCreditCount> counts, EpisodeCreditMetric metric, bool most, string coverage)
     {
-        var ranked = RankEpisodeCredits(counts, metric, most, RankingLimit);
+        // 全部の話を順位付けし、上位 100 件（100 位が同点なら全件）を行に、全体を分布の図にする。
+        var all = RankEpisodeCredits(counts, metric, most, int.MaxValue);
+        var ranked = all.Where(x => x.Rank <= RankingLimit).ToList();
+        // 題名の下に、数の横棒を添える（いちばん多い回が端まで届く長さ）。
+        int maxValue = all.Count > 0 ? all.Max(x => x.Value) : 0;
         var rows = StatsEpisodeRows.Build(_ctx, ranked.Select(x =>
         {
             var ep = x.Row.Episode;
             var series = _ctx.SeriesById[ep.SeriesId];
             return new StatsEpisodeInput(series.Slug, ep.SeriesEpNo, series.Title, _ctx.StartYearLabelBySlug(series.Slug),
-                true, x.Rank, $"{x.Value}{metric.Unit}", ep.TitleText);
+                true, x.Rank, $"{x.Value}{metric.Unit}", ep.TitleText)
+            {
+                ValueUnit = metric.Unit,
+                MeterHtml = StatsRankingView.BarHtml(x.Value, maxValue)
+            };
         }));
         string orderLabel = most ? "多い順" : "少ない順";
         string title = $"{metric.Label} {orderLabel} TOP 100";
-        var content = new
-        {
-            Title = title,
-            Lead = $"TV シリーズで{metric.Label}が{(most ? "多い" : "少ない")}回の上位 100 件",
-            Note = metric.Lead + "Blu-ray のクレジットで数え、主題歌・挿入歌のクレジットは入れません。",
-            CoverageLabel = coverage,
-            Rows = rows
-        };
+        string chart = StatsRankingView.CountHistogram(
+            all.Select(x => (double)x.Value).ToList(), ranked.Select(x => (double)x.Value).ToList(), descending: most, metric.Unit,
+            $"プリキュア TV シリーズ各話の{metric.Label}の分布。このランキングに入った話を濃い色で示す");
+        var content = StatsRankingView.Build(_ctx, rows, coverage, metric.Label,
+            chartSvg: chart,
+            chartHeading: $"全 {all.Count:N0} 話の分布",
+            chartNote: $"{metric.Label}ごとの話数です。平均は {(all.Count > 0 ? all.Average(x => (double)x.Value) : 0):0.0}{metric.Unit}。濃い色が、このランキングに入った話です。",
+            title: title,
+            lead: $"TV シリーズで{metric.Label}が{(most ? "多い" : "少ない")}回の上位 100 件",
+            note: metric.Lead + "Blu-ray のクレジットで数え、主題歌・挿入歌のクレジットは入れません。");
         var layout = StatsPageLayout.Make(
             title, "。プリキュアの TV シリーズの OP・ED のクレジットから数えた記録です。",
             "歴代記録", IndexUrl, $"{metric.Label} {orderLabel}");

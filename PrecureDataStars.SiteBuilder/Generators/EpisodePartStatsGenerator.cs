@@ -8,6 +8,8 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// エピソード尺・CM 入り時刻統計のページ群を生成するジェネレータ。
+/// 順位のページの本体（上位 3 件の枠・分布の図・作品別の内訳・行）は <see cref="StatsRankingView"/> で組み、
+/// 各行に放送枠の帯（<see cref="StatsPartBand"/>）と歴代の偏差値を添える。
 /// 1 ページ 1 ランキング厳守の方針で、7 詳細ページ + 1 ランディングの 8 ページ構成。
 /// <list type="bullet">
 ///   <item><description>Aパート尺 長い順 / 短い順</description></item>
@@ -102,10 +104,7 @@ public sealed class EpisodePartStatsGenerator
     /// <summary>A / Bパート尺ランキングを 1 ページ生成。</summary>
     private async Task GeneratePartLengthAsync(CancellationToken ct, string partType, string partLabel, bool ascending)
     {
-        var rows = await _repo.GetPartLengthRankingAsync(partType, ascending, Limit, ct).ConfigureAwait(false);
-        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
-            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
-            true, r.Rank, FormatMmSs(r.LengthSeconds), r.TitleText)));
+        var view = await BuildPartLengthViewAsync(ct, partType, partLabel, ascending).ConfigureAwait(false);
 
         // URL スラッグ：part-a / part-b、longest / shortest
         string partSlug = partType.ToLowerInvariant().Replace("part_", "part-");  // part-a / part-b
@@ -115,18 +114,49 @@ public sealed class EpisodePartStatsGenerator
         string templateName = $"stats-episodes-{partSlug}-{orderSlug}.sbn";
 
         var layout = MakeLayout($"{partLabel}尺 {orderLabel} TOP 100", $"{partLabel}尺 {orderLabel}");
-        _page.RenderAndWrite(url, "stats", templateName, new { Rows = view, CoverageLabel = _coverageLabel }, layout);
+        _page.RenderAndWrite(url, "stats", templateName, view, layout);
     }
+
+    /// <summary>
+    /// パートの尺のランキング 1 ページぶんのモデルを組む。全部の話の尺を 1 回で引き、上位 100 件（100 位が同点なら全件）を行に、
+    /// 全体を分布の図にする。各行には放送枠の帯（対象のパートを濃く塗る）と、歴代の偏差値を添える。
+    /// 偏差値は各話のページと同じ式（本線の TV の全話を母集団にした平均と標準偏差）。
+    /// </summary>
+    private async Task<StatsRankingView> BuildPartLengthViewAsync(CancellationToken ct, string partType, string partLabel, bool ascending)
+    {
+        var all = await _repo.GetPartLengthRankingAsync(partType, ascending, int.MaxValue, ct).ConfigureAwait(false);
+        var ranked = all.Where(r => r.Rank <= Limit).ToList();
+        var allValues = all.Select(r => r.LengthSeconds).ToList();
+        var (mean, std) = StatsRankingView.MeanStd(allValues);
+
+        var rows = StatsEpisodeRows.Build(_ctx, ranked.Select(r => new StatsEpisodeInput(
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
+            true, r.Rank, FormatMmSs(r.LengthSeconds), r.TitleText)
+        {
+            MeterHtml = StatsPartBand.Build(_ctx, r.EpisodeId, partType),
+            PodiumMeterHtml = StatsPartBand.Build(_ctx, r.EpisodeId, partType, PodiumBandLabelSeconds),
+            DetailLabel = StatsRankingView.HensachiLabel(r.LengthSeconds, mean, std)
+        }));
+
+        string chart = StatsRankingView.TimeHistogram(
+            allValues, ranked.Select(r => r.LengthSeconds).ToList(), descending: !ascending, FormatMmSs,
+            $"プリキュア TV シリーズ全話の{partLabel}の尺の分布。このランキングに入った話を濃い色で示す");
+        return StatsRankingView.Build(_ctx, rows, _coverageLabel, partLabel,
+            chartSvg: chart,
+            chartHeading: $"全 {all.Count:N0} 話の分布",
+            chartNote: $"{partLabel}の尺ごとの話数です。平均は {FormatMmSs(mean)}。濃い色が、このランキングに入った話です。",
+            bandHighlightPartType: partType, hasBand: true);
+    }
+
+    /// <summary>上位 3 件の枠の太い帯で、この秒数以上のパートに名前を書く。</summary>
+    private const int PodiumBandLabelSeconds = 80;
 
     // アバンタイトル
 
     /// <summary>アバンタイトル尺ランキング 1 ページ。</summary>
     private async Task GenerateAvantLengthAsync(CancellationToken ct, bool ascending)
     {
-        var rows = await _repo.GetPartLengthRankingAsync("AVANT", ascending, Limit, ct).ConfigureAwait(false);
-        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
-            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
-            true, r.Rank, FormatMmSs(r.LengthSeconds), r.TitleText)));
+        var view = await BuildPartLengthViewAsync(ct, "AVANT", "アバンタイトル", ascending).ConfigureAwait(false);
 
         string orderSlug = ascending ? "shortest" : "longest";
         string orderLabel = ascending ? "短い順" : "長い順";
@@ -134,7 +164,7 @@ public sealed class EpisodePartStatsGenerator
         string templateName = $"stats-episodes-avant-{orderSlug}.sbn";
 
         var layout = MakeLayout($"アバンタイトル尺 {orderLabel} TOP 100", $"アバンタイトル尺 {orderLabel}");
-        _page.RenderAndWrite(url, "stats", templateName, new { Rows = view, CoverageLabel = _coverageLabel }, layout);
+        _page.RenderAndWrite(url, "stats", templateName, view, layout);
     }
 
     /// <summary>アバンタイトルが設定されていないエピソード（アバンスキップ回）の一覧を放映順に全件出力する。 件数制限なし（アバンスキップ回はそんなに多くないはずなので TOP 100 で打ち切らない）。</summary>
@@ -143,32 +173,51 @@ public sealed class EpisodePartStatsGenerator
         var rows = await _repo.GetEpisodesWithoutPartAsync("AVANT", ct).ConfigureAwait(false);
         // アバンスキップ回は指標値を持たない。放映順の全件に 1 始まりの回次連番を振り、
         // 左パネルは番号のみ表示（HasValue=false ＝ ValueLabel 空で本ビルダーが判定）。
+        // 帯は濃く塗るパートを持たず、番組が OP から始まる並びをそのまま見せる。
         var view = StatsEpisodeRows.Build(_ctx, rows.Select((r, i) => new StatsEpisodeInput(
             r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
-            true, i + 1, "", r.TitleText)));
+            true, i + 1, "", r.TitleText)
+        {
+            MeterHtml = StatsPartBand.Build(_ctx, r.EpisodeId, "")
+        }));
 
         var layout = MakeLayout("アバンタイトルスキップ回", "アバンスキップ回");
-        _page.RenderAndWrite("/stats/episodes/avant/skipped/", "stats", "stats-episodes-avant-skipped.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
+        var model = StatsRankingView.Build(_ctx, view, _coverageLabel, "", usePodium: false, hasBand: true);
+        _page.RenderAndWrite("/stats/episodes/avant/skipped/", "stats", "stats-episodes-avant-skipped.sbn", model, layout);
     }
 
     // 中 CM 入り時刻
 
     private async Task GenerateMidCmAsync(CancellationToken ct, bool ascending)
     {
-        var rows = await _repo.GetCmTimeRankingAsync(ascending, Limit, ct).ConfigureAwait(false);
+        var all = await _repo.GetCmTimeRankingAsync(ascending, int.MaxValue, ct).ConfigureAwait(false);
+        var ranked = all.Where(r => r.Rank <= Limit).ToList();
+        var allValues = all.Select(r => r.Cm2OffsetSeconds).ToList();
+        // 偏差値はパートの尺と同じ式で、番組開始から中 CM までの秒数について求める。
+        var (mean, std) = StatsRankingView.MeanStd(allValues);
+
         // 絶対時刻のみ指標値に渡す（表記は「h:mm:ss」、先頭時の零埋め無し）。
-        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
+        var view = StatsEpisodeRows.Build(_ctx, ranked.Select(r => new StatsEpisodeInput(
             r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
-            true, r.Rank, FormatAbsoluteTime(r.Cm2OffsetSeconds), r.TitleText)));
+            true, r.Rank, FormatAbsoluteTime(r.Cm2OffsetSeconds), r.TitleText)
+        {
+            MeterHtml = StatsPartBand.Build(_ctx, r.EpisodeId, "CM2"),
+            PodiumMeterHtml = StatsPartBand.Build(_ctx, r.EpisodeId, "CM2", PodiumBandLabelSeconds),
+            DetailLabel = StatsRankingView.HensachiLabel(r.Cm2OffsetSeconds, mean, std)
+        }));
 
         string slug = ascending ? "earliest" : "latest";
         string label = ascending ? "早い順" : "遅い順";
         string url = $"/stats/episodes/midcm/{slug}/";
-        var content = new
-        {
-            Rows = view,
-            CoverageLabel = _coverageLabel
-        };
+        string chart = StatsRankingView.TimeHistogram(
+            allValues, ranked.Select(r => r.Cm2OffsetSeconds).ToList(), descending: !ascending, FormatAbsoluteTime,
+            "プリキュア TV シリーズ全話の中 CM 入りの時刻の分布。このランキングに入った話を濃い色で示す",
+            tickFormat: FormatAbsoluteHourMinute, clockTime: true);
+        var content = StatsRankingView.Build(_ctx, view, _coverageLabel, "中 CM 入り",
+            chartSvg: chart,
+            chartHeading: $"全 {all.Count:N0} 話の分布",
+            chartNote: $"中 CM に入った時刻ごとの話数です。平均は {FormatAbsoluteTime(mean)}。濃い色が、このランキングに入った話です。",
+            bandHighlightPartType: "CM2", hasBand: true);
         var layout = MakeLayout($"中 CM 入り {label} TOP 100", $"中 CM 入り {label}");
         _page.RenderAndWrite(url, "stats", $"stats-episodes-midcm-{slug}.sbn", content, layout);
     }
@@ -248,8 +297,15 @@ public sealed class EpisodePartStatsGenerator
     /// <summary>番組開始（08:30:00）から経過 N 秒の絶対時刻を「h:mm:ss」表記で返す。 時の部分は零埋めしない。 例：番組開始から 38 分 30 秒経過 → 9:08:30。</summary>
     private static string FormatAbsoluteTime(double offsetSeconds)
     {
-        var t = ProgramStart + TimeSpan.FromSeconds(offsetSeconds);
+        var t = ProgramStart + TimeSpan.FromSeconds(Math.Round(offsetSeconds));
         return $"{t.Hours}:{t.Minutes:D2}:{t.Seconds:D2}";
+    }
+
+    /// <summary>番組開始から経過 N 秒の絶対時刻を「h:mm」表記で返す（分布の図の目盛り用。分ちょうどの値に使う）。</summary>
+    private static string FormatAbsoluteHourMinute(double offsetSeconds)
+    {
+        var t = ProgramStart + TimeSpan.FromSeconds(Math.Round(offsetSeconds));
+        return $"{t.Hours}:{t.Minutes:D2}";
     }
 
     /// <summary>エピソード尺統計の各詳細ページ用の標準レイアウトを生成する。</summary>

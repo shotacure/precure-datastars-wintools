@@ -1,0 +1,101 @@
+{{## 統計のエピソード単位のランキングのページの本体（パートの尺・中 CM 入り・アバンスキップ回・サブタイトルの文字数/漢字率/記号率・
+     1 話のクレジット）。StatsRankingView で渡る。上から、上位 3 件の枠（Podium）・全部の話の分布の図（ChartSvg）・
+     作品別の内訳（Breakdown）・4 位からの行（Rows）。
+     行は左に順位と値のパネル、右に作品名と題名で、題名の下に図（MeterHtml：1 字 1 マスの並び、または放送枠の帯）と内訳を添える。
+     上位 3 件の枠は 3 位までの全件で、単独 1 位（IsFirst）だけ全幅の大きい枠にする。同点が多くて 3 位までが多すぎるページと、
+     順位を持たない一覧では Podium が空で、全部の行を Rows に並べる。 ##}}
+{{~ func band_legend ~}}
+  {{~ if (array.size BandLegend) > 0 ~}}
+  <p class="stats-band-legend">
+    {{~ for l in BandLegend ~}}
+    <span><i class="{{ l.Class }}"></i>{{ l.Label | html.escape }}</span>
+    {{~ end ~}}
+  </p>
+  {{~ end ~}}
+{{~ end ~}}
+{{~ if (array.size Podium) > 0 ~}}
+<section>
+  {{ band_legend }}
+  <div class="stats-podium">
+    {{~ for r in Podium ~}}
+    <article class="stats-podium-card{{ if r.IsFirst }} is-first{{ end }}">
+      <div class="stats-podium-rank"><span>{{ r.RankNo }}</span>位</div>
+      <div class="stats-podium-body">
+        <div class="stats-ep-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a> <span class="stats-ep-year">({{ r.SeriesStartYearLabel }})</span> <span class="ep-row-no">第{{ r.SeriesEpNo }}話</span></div>
+        <a class="stats-ep-title stats-podium-title" href="{{ r.EpisodeUrl }}">{{ r.TitleHtml }}</a>
+      </div>
+      <div class="stats-podium-value">{{ r.ValueNumber | html.escape }}{{~ if r.ValueUnit != "" ~}}<span class="rec-unit">{{ r.ValueUnit | html.escape }}</span>{{~ end ~}}<span class="stats-podium-sub">{{ ValueCaption | html.escape }}</span></div>
+      {{~ if r.PodiumMeterHtml != "" || r.DetailLabel != "" ~}}
+      <div class="stats-ep-extra">
+        {{~ if r.DetailLabel != "" ~}}<span class="stats-series-detail">{{ r.DetailLabel | html.escape }}</span>{{~ end ~}}
+        {{ r.PodiumMeterHtml }}
+      </div>
+      {{~ end ~}}
+    </article>
+    {{~ end ~}}
+  </div>
+</section>
+{{~ end ~}}
+
+{{~ if ChartSvg != "" ~}}
+<section>
+  <h2>{{ ChartHeading | html.escape }}</h2>
+  <p class="muted stats-note">{{ ChartNote | html.escape }}</p>
+  {{## 図は幅が狭いと字が読めなくなるので、スマホの幅では図だけを横スクロールさせる。 ##}}
+  <div class="stats-chart-scroll">
+    <div class="stats-chart">{{ ChartSvg }}</div>
+  </div>
+</section>
+{{~ end ~}}
+
+{{~ if (array.size Breakdown) > 0 ~}}
+<section>
+  <h2>作品別の内訳</h2>
+  <p class="muted stats-note">{{ BreakdownNote | html.escape }}</p>
+  <ol class="stats-brk">
+    {{~ for b in Breakdown ~}}
+    <li{{ if b.Count == 0 }} class="is-zero"{{ end }}>
+      <span class="stats-brk-name"><a href="{{ b.SeriesUrl }}">{{ b.SeriesTitle | html.escape }}</a> <span class="stats-ep-year">({{ b.SeriesStartYearLabel }})</span></span>
+      <span class="stats-brk-count">{{ b.Count }}<span class="stats-brk-unit">話</span></span>
+      <span class="rec-bar"><span style="width: {{ b.BarPercent }}%"></span></span>
+    </li>
+    {{~ end ~}}
+  </ol>
+</section>
+{{~ end ~}}
+
+<section>
+  {{~ if RestHeading != "" ~}}
+  <h2>{{ RestHeading | html.escape }}</h2>
+  {{~ end ~}}
+  {{~ if (array.size Podium) == 0 || RestHeading != "" ~}}
+  {{ band_legend }}
+  {{~ end ~}}
+  <ol class="stats-ep-list">
+    {{~ for r in Rows ~}}
+    <li class="stats-ep-row{{~ if !r.HasRank ~}} no-rank{{~ end ~}}">
+      {{~ if r.HasRank ~}}
+      <div class="stats-ep-rank">
+        <span class="stats-ep-rank-no">{{ r.RankLabel }}</span>
+        {{~ if r.HasValue ~}}<span class="stats-ep-rank-val">{{ r.ValueLabel }}</span>{{~ end ~}}
+      </div>
+      {{~ end ~}}
+      <div class="stats-ep-body">
+        <div class="stats-ep-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a> <span class="stats-ep-year">({{ r.SeriesStartYearLabel }})</span></div>
+        <div class="stats-ep-line2">
+          <span class="ep-row-no-date">
+            <span class="ep-row-no">第{{ r.SeriesEpNo }}話</span>
+          </span>
+          <a class="stats-ep-title" href="{{ r.EpisodeUrl }}">{{ r.TitleHtml }}</a>
+        </div>
+        {{~ if r.MeterHtml != "" || r.DetailLabel != "" ~}}
+        <div class="stats-ep-extra">
+          {{~ if r.DetailLabel != "" ~}}<span class="stats-series-detail">{{ r.DetailLabel | html.escape }}</span>{{~ end ~}}
+          {{ r.MeterHtml }}
+        </div>
+        {{~ end ~}}
+      </div>
+    </li>
+    {{~ end ~}}
+  </ol>
+</section>

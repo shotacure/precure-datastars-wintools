@@ -6296,6 +6296,244 @@ a.credit-card-series:focus-visible {
   }
 }
 
+/* ── エピソード単位のランキング：上位 3 件の枠・題名の印・1 字 1 マス・放送枠の帯・作品別の内訳 ── */
+
+/* 上位 3 件の枠。単独 1 位は全幅、ほかは半分ずつ。枠の作りは歴代記録（.rec）と同じ。 */
+.stats-podium {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.1em;
+  margin: 0.9em 0 1.6em;
+}
+.stats-podium-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 1em;
+  row-gap: 0.8em;
+  align-items: center;
+  padding: 1em 1.2em;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+.stats-podium-card.is-first {
+  grid-column: 1 / -1;
+  padding: 1.4em 1.6em;
+  border-color: var(--accent);
+  background: rgba(233, 30, 99, 0.04);
+}
+.stats-podium-rank {
+  font-size: 0.85em;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.stats-podium-rank span {
+  font-family: var(--font-num);
+  font-size: 2.6em;
+  line-height: 1;
+  margin-right: 0.05em;
+}
+.is-first .stats-podium-rank span { font-size: 4.2em; }
+.stats-podium-body { min-width: 0; }
+.stats-podium-body .ep-row-no {
+  margin-left: 0.6em;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.stats-podium-title {
+  display: block;
+  font-size: 1.3em;
+  line-height: 1.7;
+}
+.is-first .stats-podium-title { font-size: 1.9em; }
+.stats-podium-value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 2em;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--accent);
+  text-align: right;
+  white-space: nowrap;
+}
+.is-first .stats-podium-value { font-size: 3em; }
+.stats-podium-sub {
+  display: block;
+  margin-top: 0.3em;
+  font-family: var(--font-base);
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+.stats-podium-card .stats-ep-extra {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* 数えた字（漢字・記号）に色を付ける。印のある題名は、ほかの字を細くして差を出す。 */
+.stats-ep-title .stats-hit {
+  color: var(--accent);
+  font-weight: 700;
+}
+.stats-ep-title:has(.stats-hit) { font-weight: 400; }
+
+/* 題名の下に添える図と内訳。行では題名の左端にそろえる。 */
+.stats-ep-extra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 7px 0 0 calc(3.9em + 12px);
+}
+/* 値の横棒（人数など）。 */
+.stats-ep-extra .stats-series-bar { flex: 1 1 100%; }
+/* 1 字 1 マス。数えた字のマスだけ塗る。 */
+.stats-cells {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.stats-cells i {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: #e6e7ea;
+}
+.stats-cells i.on { background: var(--accent); }
+.is-first .stats-cells i {
+  width: 18px;
+  height: 18px;
+}
+
+/* 1 話ぶんの放送枠の帯（幅は 30 分）。そのページの対象のパートだけ濃く塗る。
+   帯の左端を全行でそろえるため、帯の前の内訳（偏差値）は幅を固定する。 */
+.stats-band {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  gap: 1px;
+  height: 12px;
+}
+.stats-ep-extra:has(.stats-band) {
+  flex-wrap: nowrap;
+}
+.stats-ep-extra:has(.stats-band) .stats-series-detail {
+  flex: 0 0 7.6em;
+}
+.stats-band span {
+  min-width: 0;
+  border-radius: 2px;
+}
+.stats-band b { display: none; }
+.stats-podium-card .stats-band { height: 30px; }
+.stats-podium-card.is-first .stats-band { height: 40px; }
+/* パートの名前は、単独 1 位の太い帯だけに書く。ほかの枠では対象のパートの名前だけ。 */
+.stats-podium-card .stats-band .sb-hit b,
+.stats-podium-card.is-first .stats-band b {
+  display: block;
+  padding-left: 7px;
+  font-size: 0.75rem;
+  line-height: 30px;
+  white-space: nowrap;
+  overflow: hidden;
+  color: #fff;
+}
+.stats-podium-card.is-first .stats-band b {
+  font-size: 0.82rem;
+  line-height: 40px;
+}
+.stats-podium-card:not(.is-first) .stats-band .sb-narrow b { display: none; }
+.sb-hit { background: var(--accent); }
+.sb-song { background: #9dbfe8; }
+.sb-main { background: #b4b3ae; }
+.sb-cm { background: #efeeea; }
+.sb-misc { background: #dbdad5; }
+.stats-band-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0 0 8px;
+  font-size: 0.82em;
+  color: var(--muted);
+}
+.stats-band-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.stats-band-legend i {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* 作品別の内訳。放送順の 2 段組みで、棒は歴代記録（.rec-bar）と同じ。 */
+.stats-brk {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  columns: 2;
+  column-gap: 2.4em;
+}
+.stats-brk li {
+  break-inside: avoid;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.6em;
+  row-gap: 2px;
+  align-items: baseline;
+  padding: 4px 0;
+  font-size: 0.92em;
+}
+.stats-brk-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stats-brk-count {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.stats-brk-unit {
+  margin-left: 0.15em;
+  font-family: var(--font-base);
+  font-size: 0.8em;
+  font-weight: 400;
+  color: var(--muted);
+}
+.stats-brk .rec-bar { grid-column: 1 / -1; }
+.stats-brk .rec-bar > span { opacity: 0.72; }
+.stats-brk .is-zero .stats-brk-count {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .stats-podium { grid-template-columns: 1fr; }
+  .stats-podium-card { grid-template-columns: auto minmax(0, 1fr); }
+  .stats-podium-value {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+  .stats-podium-sub {
+    display: inline;
+    margin-left: 0.6em;
+  }
+  .is-first .stats-podium-title { font-size: 1.4em; }
+  .is-first .stats-podium-rank span { font-size: 3em; }
+  .stats-ep-extra { margin-left: 0; }
+  .stats-ep-extra:has(.stats-band) { flex-wrap: wrap; }
+  .stats-ep-extra:has(.stats-band) .stats-series-detail { flex: 0 0 100%; }
+  .stats-band { flex: 1 1 100%; }
+  .stats-brk { columns: 1; }
+}
+
 /* episode 版テーブルでも col-epcount / col-firstdate を使えるように同じスタイルを共有 */
 .stats-episode-ranking-table th.col-firstdate,
 .stats-episode-ranking-table td.col-firstdate,

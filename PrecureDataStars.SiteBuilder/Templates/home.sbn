@@ -99,6 +99,7 @@
     <button type="button" class="cal-nav-btn cal-nav-next" id="home-calendar-next" aria-label="次の月">›</button>
   </div>
   <div id="home-calendar-grid"></div>
+  {{## 月グリッド（PC の幅）では、キャラクター誕生日のほかは件数にたたみ、週ごとに開閉する（calendar.js）。 ##}}
   <p class="muted home-calendar-legend">
     <span class="cal-legend cal-legend-bday">キャラクター誕生日</span>
     <span class="cal-legend cal-legend-movie">映画公開</span>

@@ -24,6 +24,13 @@
  *   キャラクター誕生日(cb) > 映画公開日(mv) > プリキュア役の声優さん(pb, pt=0) > メインスタッフ(pb, pt=1) > TV 放送(ep)
  *   > そのほかの人物(pb, pt=2)。人物は同じ段の中で本編のクレジット回数の多い順。
  *
+ * 月グリッドでは、ふだんはキャラクター誕生日のチップだけを出し、ほか（映画公開・人物誕生日・TV 放送）は
+ * 種別ごとの件数（🎥1 🎂2 📺4）にたたむ。週（グリッドの 1 行）にマウスを載せるとその週のチップが開き、
+ * それより下の週は閉じる（上の週は、閉じるとマウスの下の行がずれるので開いたままにする）。
+ * カレンダーからマウスが出たら、今日のある週だけ残して閉じる。今日のある週は最初から開いておく。
+ * マウスの無い端末（タブレットなど）では、スクロールのたびに、画面の縦のまんなかにいちばん近い週を開く。
+ * 開閉は CSS の grid-template-rows の遷移でなめらかに動かす（site.css の .cal-fold）。
+ *
  * 注記：カレンダーはコンパクト表示のため、ep / mv はシリーズ略称（title_short）を
  * 用いる。これは「生成出力では title_short を参照しない」サイト方針の明示例外で、
  * 当カレンダー UI に限り適用する（README に明記）。
@@ -127,7 +134,73 @@
       mq.addListener(onModeChange);
     }
 
+    bindWeekFolding(grid);
     render();
+  }
+
+  // 月グリッドの週の開閉。グリッドの入れ物に 1 回だけ結線する（中身は描き直しのたびに入れ替わるため）。
+  function bindWeekFolding(grid) {
+    var hoverTimer = 0;
+    function cells() { return grid.querySelectorAll('.cal-cell[data-week]'); }
+    function weekOf(target) {
+      var cell = target && target.closest ? target.closest('.cal-cell[data-week]') : null;
+      return cell ? parseInt(cell.getAttribute('data-week'), 10) : -1;
+    }
+    // week の週を開き、それより下の週を閉じる（今日の週は閉じない）。
+    function openWeek(week) {
+      var list = cells();
+      for (var i = 0; i < list.length; i++) {
+        var w = parseInt(list[i].getAttribute('data-week'), 10);
+        if (w === week) list[i].classList.add('is-open');
+        else if (w > week && !list[i].hasAttribute('data-today-week')) list[i].classList.remove('is-open');
+      }
+    }
+    // 今日の週だけ残して閉じる。
+    function closeAll() {
+      var list = cells();
+      for (var i = 0; i < list.length; i++) {
+        if (!list[i].hasAttribute('data-today-week')) list[i].classList.remove('is-open');
+      }
+    }
+
+    if (window.matchMedia && window.matchMedia('(hover: hover)').matches) {
+      grid.addEventListener('mouseover', function (ev) {
+        var week = weekOf(ev.target);
+        if (week < 0) return;
+        // 行を横切るだけのときに開かないよう、少しだけ待つ。
+        clearTimeout(hoverTimer);
+        hoverTimer = setTimeout(function () { openWeek(week); }, 90);
+      });
+      grid.addEventListener('mouseleave', function () {
+        clearTimeout(hoverTimer);
+        closeAll();
+      });
+    } else {
+      // マウスの無い端末（タブレットなど）：スクロールのたびに、画面の縦のまんなかにいちばん近い週を開く。
+      // カレンダーが画面の外にあるときは、今日の週だけ残して閉じる。
+      var ticking = false;
+      var onScroll = function () {
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(function () {
+          ticking = false;
+          var list = cells();
+          if (!list.length) return;
+          var rect = grid.getBoundingClientRect();
+          var mid = window.innerHeight / 2;
+          if (rect.bottom < 0 || rect.top > window.innerHeight) { closeAll(); return; }
+          var best = -1;
+          var bestDist = Infinity;
+          for (var i = 0; i < list.length; i++) {
+            var r = list[i].getBoundingClientRect();
+            var dist = Math.abs((r.top + r.bottom) / 2 - mid);
+            if (dist < bestDist) { bestDist = dist; best = parseInt(list[i].getAttribute('data-week'), 10); }
+          }
+          if (best >= 0) openWeek(best);
+        });
+      };
+      window.addEventListener('scroll', onScroll, { passive: true });
+    }
   }
 
   function isMobile() {
@@ -212,45 +285,82 @@
       html += '<div class="cal-cell cal-cell-empty"></div>';
     }
     // 日セル。
+    // 今日のある週（グリッドの行）。最初から開いておく。当月以外を表示しているときは -1。
+    var todayWeek = todayDay > 0 ? Math.floor((firstDow + todayDay - 1) / 7) : -1;
     for (var d = 1; d <= daysInMonth; d++) {
       var dow = new Date(year, month - 1, d).getDay();
+      var week = Math.floor((firstDow + d - 1) / 7);
       var cls = 'cal-cell';
       if (d === todayDay) cls += ' cal-today';
       if (dow === 0) cls += ' cal-sun';
       if (dow === 6) cls += ' cal-sat';
+      if (week === todayWeek) cls += ' is-open';
 
-      html += '<div class="' + cls + '">';
+      html += '<div class="' + cls + '" data-week="' + week + '"' + (week === todayWeek ? ' data-today-week' : '') + '>';
       html += '<div class="cal-daynum">' + d + '</div>';
 
-      var list = byDay[d];
-      if (list && list.length) {
-        list.sort(sortChips);
-        html += '<div class="cal-chips">';
-        for (var c = 0; c < list.length; c++) {
-          html += renderChip(list[c]);
-        }
-        html += '</div>';
+      // キャラクター誕生日はいつも出す。ほかのチップは、週が開いているときだけ出す側（more）へ回す。
+      var list = byDay[d] || [];
+      list.sort(sortChips);
+      var always = '';
+      var more = '';
+      var counts = { mv: 0, pb: 0, ep: 0, ot: 0 };
+      for (var c = 0; c < list.length; c++) {
+        var chip = renderChip(list[c]);
+        if (list[c].k === 'cb') { always += chip; continue; }
+        more += chip;
+        countChip(counts, list[c]);
       }
+      if (always) html += '<div class="cal-chips">' + always + '</div>';
 
       // 平年の 2 月で 2/29 のデータがあれば、2/28 セル末尾に「(2/29)」見出し付きで併記する。
-      // 単独の 29 日セルを足すとグリッドが崩れるため、月末セル内に小ブロックとして寄せる。
+      // 単独の 29 日セルを足すとグリッドが崩れるため、月末セル内に小ブロックとして寄せる（開いている側に入れる）。
+      var leapHtml = '';
       if (month === 2 && d === 28 && daysInMonth === 28) {
         var leap = byDay[29];
         if (leap && leap.length) {
           leap.sort(sortChips);
-          html += '<div class="cal-leap-section">';
-          html += '<div class="cal-leap-label">(2/29)</div>';
-          html += '<div class="cal-chips">';
+          leapHtml += '<div class="cal-leap-section">';
+          leapHtml += '<div class="cal-leap-label">(2/29)</div>';
+          leapHtml += '<div class="cal-chips">';
           for (var lc = 0; lc < leap.length; lc++) {
-            html += renderChip(leap[lc]);
+            leapHtml += renderChip(leap[lc]);
+            countChip(counts, leap[lc]);
           }
-          html += '</div>';
-          html += '</div>';
+          leapHtml += '</div>';
+          leapHtml += '</div>';
         }
+      }
+
+      if (more || leapHtml) {
+        // たたんでいる間の件数（種別ごと）と、開いたときのチップ。どちらも .cal-fold の中に入れ、高さの遷移で入れ替える。
+        html += '<div class="cal-fold cal-fold-count"><div class="cal-fold-inner"><div class="cal-counts" aria-hidden="true">' + renderCounts(counts) + '</div></div></div>';
+        html += '<div class="cal-fold cal-fold-more"><div class="cal-fold-inner">'
+          + (more ? '<div class="cal-chips">' + more + '</div>' : '') + leapHtml + '</div></div>';
       }
       html += '</div>';
     }
     html += '</div>';
+    return html;
+  }
+
+  // たたんだチップを種別ごとに数える（映画・人物誕生日・TV 放送・オトナシリーズの放送）。
+  function countChip(counts, it) {
+    if (it.k === 'mv') counts.mv++;
+    else if (it.k === 'pb') counts.pb++;
+    else if (it.k === 'ep') { if (it.o) counts.ot++; else counts.ep++; }
+  }
+
+  // 件数の表記。種別ごとに、開いたときのチップと同じ色の小さな札に絵文字と数を入れる（0 件の種別は出さない）。
+  function renderCounts(counts) {
+    var html = '';
+    function add(cls, emoji, n) {
+      if (n > 0) html += '<span class="cal-count ' + cls + '"><span class="cal-chip-emoji">' + emoji + '</span>' + n + '</span>';
+    }
+    add('cal-chip-movie', '🎥', counts.mv);
+    add('cal-chip-person', '🎂', counts.pb);
+    add('cal-chip-ep', '📺', counts.ep);
+    add('cal-chip-ep', '🌙', counts.ot);
     return html;
   }
 

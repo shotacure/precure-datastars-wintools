@@ -8697,6 +8697,19 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   font-family: var(--font-brand);
 }
 
+/* ホームの冒頭の枠と数の札を縦に詰める：枠の上下の余白と、見出し・リードの間を狭くし、数の札は低い 1 行の札にする。 */
+.hero.hero-gradient { padding: 1em 1.4em 0.9em; }
+.hero.hero-gradient h1 { margin: 0 0 0.35em; }
+.hero.hero-gradient .home-lead-row,
+.hero.hero-gradient .home-lead-row p { margin: 0; }
+.home-stats-compact { margin-top: 12px; }
+.home-db-stats.home-db-stats-compact { gap: 6px 8px; }
+.home-db-stats.home-db-stats-compact li { padding: 1px 8px; }
+.home-db-stats.home-db-stats-compact .home-db-stats-value {
+  margin-top: 0;
+  font-size: 1.15em;
+}
+
 /* 姉妹サイトのカード（ホーム上部。precure.news のホームも同じクラスで precure.tv へのカードを置く）。
    1920×640(3:1) の不透明バナーをカード全域に敷き、角丸でクリップして
    淡い境界線＋影で「クリックできる 1 枚」に見せる。ホバー/フォーカスでわずかにリフトして
@@ -10602,6 +10615,8 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   padding: 6px 12px;
 }
 .home-anniversary-card-meta { margin-bottom: 0; }
+/* 札の頭の種別の絵文字（🎂 誕生日・📺 TV 放送・🌙 オトナシリーズ）。カレンダーのチップと同じ。 */
+.home-anniversary-emoji { margin-right: 4px; }
 /* エピソードの札は「N年前・作品（年）・第N話・題名・放送日」を 1 行に並べる（放送日は右端）。
    狭い画面では、上の段に「N年前・作品」、下の段に題名と話数・放送日の、いまの 2 段のままにする。 */
 @media (min-width: 641px) {
@@ -10816,6 +10831,52 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   line-height: 1;
 }
 .cal-chip:hover { filter: brightness(0.97); }
+
+/* 月グリッドの週の開閉。ふだんはキャラクター誕生日のチップと、ほかの種別の件数だけを出し、
+   開いた週（calendar.js が .is-open を付ける）では件数をたたんで、ほかのチップを出す。
+   高さは grid-template-rows の 0fr ↔ 1fr の遷移で、なめらかに伸び縮みさせる。 */
+.cal-cell { min-height: 58px; }
+.cal-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease;
+}
+.cal-fold-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.cal-fold-count,
+.cal-cell.is-open .cal-fold-more {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.cal-cell.is-open .cal-fold-count {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+.cal-chips + .cal-fold .cal-fold-inner > :first-child { margin-top: 3px; }
+.cal-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+/* 件数の札：色は開いたときのチップ（.cal-chip-movie / -person / -ep）と同じ。 */
+.cal-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px 1px 5px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-family: var(--font-num);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cal-fold { transition: none; }
+}
 
 /* カレンダー凡例 */
 .home-calendar-legend {

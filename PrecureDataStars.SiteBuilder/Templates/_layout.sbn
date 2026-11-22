@@ -153,10 +153,14 @@ gtag('config', '{{ Ga4MeasurementId }}');
 <div id="mobileNavOverlay" class="mobile-nav-overlay" hidden role="dialog" aria-modal="true" aria-label="メニュー">
   {{## 背景の暗幕。クリックで閉じる。data 属性で mobile-nav.js が拾う。 ##}}
   <div class="mobile-nav-overlay-backdrop" data-mobile-nav-close></div>
-  {{## 右からスライドインするパネル本体。グローバルナビとサイト内検索ボックス（モバイル時のみ
-       JS で本パネル内に移設される）を縦並びで提示。 ##}}
+  {{## 右からスライドインするパネル本体。上から、サイト内検索ボックス（モバイル時のみ JS で本パネル内に移設される）・
+       グローバルナビ（2 列）・このページのもくじ。 ##}}
   <nav class="mobile-nav-overlay-panel" aria-label="グローバルナビ">
     <button type="button" class="mobile-nav-overlay-close" data-mobile-nav-close aria-label="閉じる">✕</button>
+    {{## モバイル時の検索ボックス受け皿。パネルのいちばん上（閉じるボタンの左）に置く。
+         mobile-nav.js が画面幅 ≤768px のときヘッダ内の .site-search を DOM ごとここに移動する。
+         このため本ブロック自体は空のまま。デスクトップ幅では空のまま見えない（パネル自体が非表示）。 ##}}
+    <div class="mobile-nav-overlay-search"></div>
     {{## 項目列は LayoutModel.NavItems（PageRenderer がヘッダナビと共通で組み立て、
          現在ページの所属セクションに IsActive を立てる）。先頭のホームだけ固定で足す。 ##}}
     <ul class="mobile-nav-overlay-list">
@@ -174,10 +178,6 @@ gtag('config', '{{ Ga4MeasurementId }}');
       <h3 class="mobile-nav-overlay-section-nav-heading">もくじ</h3>
       <ul class="mobile-nav-overlay-section-nav-list"></ul>
     </div>
-    {{## モバイル時の検索ボックス受け皿。
-         mobile-nav.js が画面幅 ≤768px のときヘッダ内の .site-search を DOM ごとここに移動する。
-         このため本ブロック自体は空のまま。デスクトップ幅では空のまま見えない（パネル自体が非表示）。 ##}}
-    <div class="mobile-nav-overlay-search"></div>
   </nav>
 </div>
 

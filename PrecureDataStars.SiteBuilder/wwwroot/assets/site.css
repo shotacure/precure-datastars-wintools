@@ -8340,6 +8340,44 @@ body.mobile-nav-open {
   border-top: 1px solid var(--border);
 }
 
+/* メニューを詰める：検索をいちばん上（閉じるボタンの左）に置き、グローバルナビは 2 列に並べ、
+   項目の上下の余白を減らす。押す所の高さは 40px ほどを保つ。 */
+.mobile-nav-overlay-panel {
+  padding: 12px 14px 20px;
+  gap: 10px;
+}
+.mobile-nav-overlay-search {
+  order: -1;
+  margin: 0 46px 0 0;
+  padding: 0;
+  border-top: 0;
+}
+.mobile-nav-overlay-list {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 2px 6px;
+}
+.mobile-nav-overlay-list a {
+  padding: 8px 8px;
+  font-size: 0.95em;
+  white-space: nowrap;
+}
+.mobile-nav-overlay-list li.nav-sep-before {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  padding-top: 4px;
+}
+.mobile-nav-overlay-section-nav {
+  margin-top: 0;
+  padding-top: 10px;
+}
+.mobile-nav-overlay-section-nav-heading {
+  margin-bottom: 4px;
+  padding-left: 10px;
+}
+.mobile-nav-overlay-section-nav-list a { padding: 8px 10px; }
+.mobile-nav-overlay-section-nav-sublist a { padding: 6px 10px; }
+
 /* ──────────────── モバイル時の構造調整（≤768px） ──────────────── */
 @media (max-width: 768px) {
   /* モバイルでは site-header を非固定に戻す。 */
@@ -10847,14 +10885,16 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   overflow: hidden;
 }
 .cal-fold-count,
-.cal-cell.is-open .cal-fold-more {
+.is-open > .cal-fold-more {
   grid-template-rows: 1fr;
   opacity: 1;
 }
-.cal-cell.is-open .cal-fold-count {
+.is-open > .cal-fold-count {
   grid-template-rows: 0fr;
   opacity: 0;
 }
+/* 上の行をすぐ閉じるとき（calendar.js がスクロール位置を合わせる間）は動きを付けない。 */
+.cal-no-anim > .cal-fold { transition: none; }
 .cal-chips + .cal-fold .cal-fold-inner > :first-child { margin-top: 3px; }
 .cal-counts {
   display: flex;

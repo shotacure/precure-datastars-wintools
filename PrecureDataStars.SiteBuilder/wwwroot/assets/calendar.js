@@ -28,8 +28,10 @@
  * 種別ごとの件数（🎥1 🎂2 📺4）にたたむ。週（グリッドの 1 行）にマウスを載せるとその週のチップが開き、
  * それより下の週は閉じる（上の週は、閉じるとマウスの下の行がずれるので開いたままにする）。
  * カレンダーからマウスが出たら、全部の週を閉じる。今日のある週も、最初はたたんでおく。
- * タッチだけの端末（タブレットなど。マウスやペンが 1 つも無い端末）では、スクロールのたびに、画面の縦のまんなかにいちばん近い週を開く。
- * PC では、タッチ対応でもマウスを載せたときだけ開く。
+ * 7 日縦並び（狭い幅）でも同じく、キャラクター誕生日のほかは件数にたたみ、スクロールのたびに、
+ * 画面の縦のまんなかにいちばん近い日だけを開いて、ほかの日は閉じる。
+ * タッチだけの端末（タブレットなど。マウスやペンが 1 つも無い端末）の月グリッドも、まんなかの週だけを開く。
+ * PC の月グリッドでは、タッチ対応でもマウスを載せたときだけ開く。
  * 開閉は CSS の grid-template-rows の遷移でなめらかに動かす（site.css の .cal-fold）。
  *
  * 注記：カレンダーはコンパクト表示のため、ep / mv はシリーズ略称（title_short）を
@@ -75,6 +77,8 @@
   var rollDay = 0;
   // ビューポートが狭いかを返す matchMedia。両モードの切替を駆動する。
   var mq = null;
+  // 描き直しのあとに呼ぶ関数（画面のまんなかの行を開き直す。bindWeekFolding が返す）。
+  var afterRender = null;
 
   function init() {
     var dataEl = document.getElementById('home-anniversary-data');
@@ -135,19 +139,20 @@
       mq.addListener(onModeChange);
     }
 
-    bindWeekFolding(grid);
+    afterRender = bindWeekFolding(grid);
     render();
   }
 
-  // 月グリッドの週の開閉。グリッドの入れ物に 1 回だけ結線する（中身は描き直しのたびに入れ替わるため）。
+  // 行（月グリッドの週、7 日縦並びの 1 日）の開閉。入れ物に 1 回だけ結線する（中身は描き直しのたびに入れ替わるため）。
+  // 描き直しのあとに呼ぶ関数（画面のまんなかの行を開き直す）を返す。
   function bindWeekFolding(grid) {
     var hoverTimer = 0;
-    function cells() { return grid.querySelectorAll('.cal-cell[data-week]'); }
+    function cells() { return grid.querySelectorAll('[data-week]'); }
     function weekOf(target) {
-      var cell = target && target.closest ? target.closest('.cal-cell[data-week]') : null;
+      var cell = target && target.closest ? target.closest('[data-week]') : null;
       return cell ? parseInt(cell.getAttribute('data-week'), 10) : -1;
     }
-    // week の週を開き、それより下の週を閉じる。
+    // week の行を開き、それより下の行を閉じる（マウス用。上の行は、閉じるとマウスの下の行がずれるので開いたままにする）。
     function openWeek(week) {
       var list = cells();
       for (var i = 0; i < list.length; i++) {
@@ -156,58 +161,94 @@
         else if (w > week) list[i].classList.remove('is-open');
       }
     }
-    // 全部の週を閉じる。
+    // 全部の行を閉じる。
     function closeAll() {
       var list = cells();
       for (var i = 0; i < list.length; i++) list[i].classList.remove('is-open');
     }
+    // week の行だけを開き、ほかを全部閉じる（スクロール用）。上の行を閉じると下がずり上がるので、
+    // 上の行は動きを付けずにすぐ閉じ、開く行の位置が変わらないよう、ずれた分だけスクロール位置を戻す。
+    function openOnly(week) {
+      var list = cells();
+      var anchor = null;
+      var changed = false;
+      for (var i = 0; i < list.length; i++) {
+        var w = parseInt(list[i].getAttribute('data-week'), 10);
+        if (w === week) {
+          if (!anchor) anchor = list[i];
+          if (!list[i].classList.contains('is-open')) changed = true;
+        } else if (list[i].classList.contains('is-open')) {
+          changed = true;
+        }
+      }
+      if (!anchor || !changed) return;
+      var topBefore = anchor.getBoundingClientRect().top;
+      for (var j = 0; j < list.length; j++) {
+        var wj = parseInt(list[j].getAttribute('data-week'), 10);
+        if (wj === week) {
+          list[j].classList.add('is-open');
+        } else if (list[j].classList.contains('is-open')) {
+          if (wj < week) list[j].classList.add('cal-no-anim');
+          list[j].classList.remove('is-open');
+        }
+      }
+      var shift = anchor.getBoundingClientRect().top - topBefore;
+      if (shift !== 0) window.scrollBy(0, shift);
+      window.requestAnimationFrame(function () {
+        for (var k = 0; k < list.length; k++) list[k].classList.remove('cal-no-anim');
+      });
+    }
 
     // マウスの動きには、端末の種類を問わず必ず反応する（タッチ対応の PC は、ブラウザが「マウスなし」と
     // 申告することがあるので、申告では分けない）。
-    {
-      grid.addEventListener('mouseover', function (ev) {
-        var week = weekOf(ev.target);
-        if (week < 0) return;
-        // 行を横切るだけのときに開かないよう、少しだけ待つ。
-        clearTimeout(hoverTimer);
-        hoverTimer = setTimeout(function () { openWeek(week); }, 90);
-      });
-      grid.addEventListener('mouseleave', function () {
-        clearTimeout(hoverTimer);
-        closeAll();
-      });
-    }
-    // タッチだけの端末（タブレットなど）に限って：スクロールのたびに、画面の縦のまんなかにいちばん近い週を開く。
-    // マウスやペンのような細かい操作の手段が 1 つでもある端末（PC。タッチ対応の PC を含む）では、この動きを付けない。
+    grid.addEventListener('mouseover', function (ev) {
+      if (centerMode()) return;
+      var week = weekOf(ev.target);
+      if (week < 0) return;
+      // 行を横切るだけのときに開かないよう、少しだけ待つ。
+      clearTimeout(hoverTimer);
+      hoverTimer = setTimeout(function () { openWeek(week); }, 90);
+    });
+    grid.addEventListener('mouseleave', function () {
+      if (centerMode()) return;
+      clearTimeout(hoverTimer);
+      closeAll();
+    });
+
+    // 画面の縦のまんなかにいちばん近い行だけを開く動き。7 日縦並び（狭い幅）と、タッチだけの端末（タブレットなど。
+    // マウスやペンのような細かい操作の手段が 1 つも無い端末）の月グリッドで使う。PC の月グリッドでは使わない。
     var touchOnly = window.matchMedia
       && window.matchMedia('(any-pointer: coarse)').matches
       && !window.matchMedia('(any-pointer: fine)').matches
       && !window.matchMedia('(any-hover: hover)').matches;
-    if (touchOnly) {
-      // カレンダーが画面の外にあるときは、全部の週を閉じる。
-      var ticking = false;
-      var onScroll = function () {
-        if (ticking) return;
-        ticking = true;
-        window.requestAnimationFrame(function () {
-          ticking = false;
-          var list = cells();
-          if (!list.length) return;
-          var rect = grid.getBoundingClientRect();
-          var mid = window.innerHeight / 2;
-          if (rect.bottom < 0 || rect.top > window.innerHeight) { closeAll(); return; }
-          var best = -1;
-          var bestDist = Infinity;
-          for (var i = 0; i < list.length; i++) {
-            var r = list[i].getBoundingClientRect();
-            var dist = Math.abs((r.top + r.bottom) / 2 - mid);
-            if (dist < bestDist) { bestDist = dist; best = parseInt(list[i].getAttribute('data-week'), 10); }
-          }
-          if (best >= 0) openWeek(best);
-        });
-      };
-      window.addEventListener('scroll', onScroll, { passive: true });
+    function centerMode() { return isMobile() || touchOnly; }
+
+    var ticking = false;
+    function openCentered() {
+      if (!centerMode()) return;
+      var list = cells();
+      if (!list.length) return;
+      var rect = grid.getBoundingClientRect();
+      if (rect.bottom < 0 || rect.top > window.innerHeight) { closeAll(); return; }
+      var mid = window.innerHeight / 2;
+      var best = -1;
+      var bestDist = Infinity;
+      for (var i = 0; i < list.length; i++) {
+        var r = list[i].getBoundingClientRect();
+        var dist = Math.abs((r.top + r.bottom) / 2 - mid);
+        if (dist < bestDist) { bestDist = dist; best = parseInt(list[i].getAttribute('data-week'), 10); }
+      }
+      if (best >= 0) openOnly(best);
     }
+    window.addEventListener('scroll', function () {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(function () {
+        ticking = false;
+        openCentered();
+      });
+    }, { passive: true });
+    return openCentered;
   }
 
   function isMobile() {
@@ -263,6 +304,7 @@
         ? REAL_DAY : 0;
       grid.innerHTML = buildGrid(viewYear, viewMonth, todayDay, byDay);
     }
+    if (afterRender) afterRender();
   }
 
   // 1 セル／行内のチップ並び：種別優先（cb→mv→プリキュア役の声優さん→メインスタッフ→ep→そのほかの人物）、
@@ -404,7 +446,7 @@
       if (dow === 0) cls += ' cal-sun';
       if (dow === 6) cls += ' cal-sat';
 
-      html += '<div class="' + cls + '">';
+      html += '<div class="' + cls + '" data-week="' + i + '">';
       html += '<div class="cal-day-head">';
       if (isToday) {
         html += '<span class="cal-day-today-mark">今日</span>';
@@ -413,9 +455,20 @@
       html += '<span class="cal-day-dow">(' + WEEKDAYS[dow] + ')</span>';
       html += '</div>';
 
+      // 月グリッドと同じく、キャラクター誕生日はいつも出し、ほかは件数にたたんで、開いた行でだけ出す。
+      var always = '';
+      var more = '';
+      var counts = { mv: 0, pb: 0, ep: 0, ot: 0 };
+      for (var c = 0; c < list.length; c++) {
+        var chip = renderChip(list[c], true);
+        if (list[c].k === 'cb') { always += chip; continue; }
+        more += chip;
+        countChip(counts, list[c]);
+      }
+
       // 表示窓の中に「平年の 2/28」が入ったら、その行末尾に 2/29 のチップを併記する
-      // （月グリッド側の併記ロジックと同じ振る舞いを縦並び側でも維持）。
-      var renderedLeap = false;
+      // （月グリッド側の併記ロジックと同じ振る舞いを縦並び側でも維持。開いた側に入れる）。
+      var leapHtml = '';
       if (m === 2 && d === 28 && !isLeapYear(y)) {
         var leap = [];
         for (var lk = 0; lk < ALL_ITEMS.length; lk++) {
@@ -424,31 +477,25 @@
         }
         if (leap.length) {
           leap.sort(sortChips);
-          if (list.length) {
-            html += '<div class="cal-chips">';
-            for (var c1 = 0; c1 < list.length; c1++) html += renderChip(list[c1]);
-            html += '</div>';
-          }
-          html += '<div class="cal-leap-section">';
-          html += '<div class="cal-leap-label">(2/29)</div>';
-          html += '<div class="cal-chips">';
+          leapHtml += '<div class="cal-leap-section">';
+          leapHtml += '<div class="cal-leap-label">(2/29)</div>';
+          leapHtml += '<div class="cal-chips">';
           for (var lc = 0; lc < leap.length; lc++) {
-            html += renderChip(leap[lc], true);
+            leapHtml += renderChip(leap[lc], true);
+            countChip(counts, leap[lc]);
           }
-          html += '</div>';
-          html += '</div>';
-          renderedLeap = true;
+          leapHtml += '</div>';
+          leapHtml += '</div>';
         }
       }
 
-      if (!renderedLeap) {
-        if (list.length) {
-          html += '<div class="cal-chips">';
-          for (var c = 0; c < list.length; c++) html += renderChip(list[c], true);
-          html += '</div>';
-        } else {
-          html += '<div class="cal-day-empty">—</div>';
-        }
+      if (always) html += '<div class="cal-chips">' + always + '</div>';
+      if (more || leapHtml) {
+        html += '<div class="cal-fold cal-fold-count"><div class="cal-fold-inner"><div class="cal-counts" aria-hidden="true">' + renderCounts(counts) + '</div></div></div>';
+        html += '<div class="cal-fold cal-fold-more"><div class="cal-fold-inner">'
+          + (more ? '<div class="cal-chips">' + more + '</div>' : '') + leapHtml + '</div></div>';
+      } else if (!always) {
+        html += '<div class="cal-day-empty">—</div>';
       }
 
       html += '</div>';

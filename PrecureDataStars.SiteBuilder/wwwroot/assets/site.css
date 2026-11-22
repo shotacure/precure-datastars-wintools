@@ -10637,6 +10637,54 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   padding: 1px 8px;
   border-radius: 999px;
 }
+/* ホームの「今後の放送予定」「最新エピソード」を縦に詰める（/episodes/ と同じ部品の、ホームだけの組み方）。
+   話数・放送日・題名・スタッフを、列をそろえて横に並べる（題名は改行を入れずに出す）。
+   スタッフはどの回も 2 行に固定する（1 行目が脚本・絵コンテ・演出、2 行目が作画監督・美術）。行ごとに折れ方が変わらないように、
+   作画監督の組の前で必ず行を替える。狭い画面（640px 以下）は元の縦積みのままで、スタッフの 2 行だけ同じにする。 */
+.home-section .episodes-index-list .ep-row .staff-badges-row {
+  gap: 0 8px;
+  line-height: 1.75;
+}
+/* 役職ごとのかたまり（札と名前）は途中で折らない。行に入りきらないときは、かたまりごと次の行へ回る。 */
+.home-section .episodes-index-list .staff-badge-group { white-space: nowrap; }
+/* 作画監督の組の前で必ず行を替える：行いっぱいの幅を持つ空の要素を、作画監督より前・それ以外より後ろに置く。 */
+.home-section .episodes-index-list .ep-row .staff-badges-row::after {
+  content: "";
+  flex-basis: 100%;
+  order: 1;
+}
+.home-section .episodes-index-list .staff-badge-group:has(> [data-role-code="ANIMATION_DIRECTOR"]),
+.home-section .episodes-index-list .staff-badge-group:has(> [data-role-code="ANIMATION_DIRECTOR"]) ~ .staff-badge-group {
+  order: 2;
+}
+.home-section .episodes-index-heading { padding: 5px 14px; }
+/* 題名は改行を入れずに 1 行で出す。 */
+.home-section .ep-row-title br { display: none; }
+@media (min-width: 641px) {
+  /* 1 話の行を 3 列（話数と放送日・題名・スタッフ）にする。列の幅はどの行も同じで、スタッフの 2 行に対して
+     左の 2 列（話数と放送日・題名）は上下の中央に置く。 */
+  .home-section .episodes-index-list .ep-row { padding: 2px 0; }
+  .home-section .episodes-index-list .ep-row-main {
+    grid-template-columns: 10.6em minmax(0, 1fr) 23.5rem;
+    gap: 0 14px;
+    align-items: center;
+  }
+  /* 話数と放送日は幅を決めて横に並べる（放送日の桁数で話数の位置がずれないように）。 */
+  .home-section .episodes-index-list .ep-row-no-date {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .home-section .episodes-index-list .ep-row-no-date .ep-row-no { flex: 0 0 3.7em; }
+  .home-section .episodes-index-list .ep-row-no-date .ep-row-date {
+    flex: 0 0 6.4em;
+    margin-top: 0;
+    text-align: left;
+  }
+  /* スタッフの無い行（放送予定）は、題名を右端まで使う。 */
+  .home-section .episodes-index-list .ep-row-main > .ep-row-title:last-child { grid-column: span 2; }
+}
+
 /* 記念日の枠を縦に詰める：見出しの上の余白を減らし、誕生日の札は「誕生日 名前」の 1 行にして横に並べる。 */
 .home-section-anniversary h2 { margin-top: 10px; }
 .home-anniversary-list {
@@ -10870,10 +10918,22 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 }
 .cal-chip:hover { filter: brightness(0.97); }
 
-/* 月グリッドの週の開閉。ふだんはキャラクター誕生日のチップと、ほかの種別の件数だけを出し、
-   開いた週（calendar.js が .is-open を付ける）では件数をたたんで、ほかのチップを出す。
+/* 行（月グリッドの週、7 日縦並びの 1 日）の開閉。ふだんはキャラクター誕生日のチップと、日付の右のほかの種別の件数だけを出し、
+   開いた行（calendar.js が .is-open を付ける）では件数を薄く消して、ほかのチップを出す。
    高さは grid-template-rows の 0fr ↔ 1fr の遷移で、なめらかに伸び縮みさせる。 */
-.cal-cell { min-height: 58px; }
+.cal-cell { min-height: 46px; }
+.cal-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+/* 日付は幅をそろえた枠の中で中央に置く（1 桁の日と 2 桁の日で、右の件数の札の始まる位置をそろえる）。 */
+.cal-head .cal-daynum {
+  flex: 0 0 1.5em;
+  margin-bottom: 0;
+  text-align: center;
+}
 .cal-fold {
   display: grid;
   grid-template-rows: 0fr;
@@ -10884,51 +10944,112 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   min-height: 0;
   overflow: hidden;
 }
-.cal-fold-count,
 .is-open > .cal-fold-more {
   grid-template-rows: 1fr;
   opacity: 1;
 }
-.is-open > .cal-fold-count {
-  grid-template-rows: 0fr;
-  opacity: 0;
-}
 /* 上の行をすぐ閉じるとき（calendar.js がスクロール位置を合わせる間）は動きを付けない。 */
 .cal-no-anim > .cal-fold { transition: none; }
 .cal-chips + .cal-fold .cal-fold-inner > :first-child { margin-top: 3px; }
+/* 件数の札：日付の右に並べる。色は開いたときのチップ（.cal-chip-movie / -person / -ep）と同じ。
+   ふつうは 3 つ並ぶ大きさ。4 種別（映画・人物誕生日・TV 放送・オトナシリーズ）とも出る日だけ、
+   4 つ並んでも 1 つのマスに収まる小さい札にする（.cal-counts-4）。 */
 .cal-counts {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
+  gap: 1px;
+  min-width: 0;
+  transition: opacity 0.24s ease;
 }
-/* 件数の札：色は開いたときのチップ（.cal-chip-movie / -person / -ep）と同じ。
-   1 つのマスに 3 つ並ぶよう、左右の余白と絵文字の右の間を詰める。 */
-.cal-count .cal-chip-emoji { margin-right: 2px; }
+.is-open .cal-counts { opacity: 0; }
 .cal-count {
   display: inline-flex;
   align-items: center;
-  padding: 1px 5px 1px 3px;
+  padding: 0 3px 0 2px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 7px;
   font-family: var(--font-num);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.45;
   white-space: nowrap;
 }
-@media (prefers-reduced-motion: reduce) {
-  .cal-fold { transition: none; }
+.cal-count .cal-chip-emoji {
+  margin-right: 1px;
+  font-size: 0.7rem;
 }
-/* 本文の幅が狭まる画面（月の表示は幅 720px より広い画面）でも 3 つ並ぶよう、件数の札をさらに詰める。 */
+.cal-cell .cal-counts-4 { gap: 0; }
+.cal-cell .cal-counts-4 .cal-count {
+  padding: 0;
+  font-size: 0.58rem;
+}
+.cal-cell .cal-counts-4 .cal-chip-emoji {
+  margin-right: 0;
+  font-size: 0.6rem;
+}
+/* マスの幅が狭まる画面では、3 つの札も小さい札にする。 */
 @media (max-width: 1000px) {
-  .cal-count {
-    padding: 1px 3px 1px 2px;
-    font-size: 0.64rem;
+  .cal-cell .cal-count {
+    padding: 0 1px;
+    font-size: 0.6rem;
   }
-  .cal-count .cal-chip-emoji {
-    margin-right: 1px;
-    font-size: 0.68rem;
+  .cal-cell .cal-count .cal-chip-emoji {
+    margin-right: 0;
+    font-size: 0.62rem;
   }
+}
+.cal-day-head .cal-counts { margin-left: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  .cal-fold,
+  .cal-counts { transition: none; }
+}
+
+/* 「全部開く」のボタン：月名の行の右端に置く。押してある間（.is-on）は色を付け、山形を上向きにする。 */
+.home-calendar-nav { position: relative; }
+.cal-expand-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px 5px 9px;
+  border: 1px solid #e3c4d3;
+  border-radius: 999px;
+  background: #fff;
+  color: #c2557a;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.cal-expand-btn:hover {
+  background: #fff1f6;
+  border-color: #f48fb1;
+}
+.cal-expand-btn:focus-visible {
+  outline: 2px solid #f48fb1;
+  outline-offset: 2px;
+}
+.cal-expand-btn.is-on {
+  background: #c2557a;
+  border-color: #c2557a;
+  color: #fff;
+}
+.cal-expand-icon { transition: transform 0.24s ease; }
+.cal-expand-btn.is-on .cal-expand-icon { transform: rotate(180deg); }
+/* 狭い画面では、月名と重ならないよう山形だけの丸いボタンにする。 */
+@media (max-width: 720px) {
+  .cal-expand-btn {
+    padding: 0;
+    width: 34px;
+    height: 34px;
+    justify-content: center;
+  }
+  .cal-expand-label { display: none; }
 }
 
 /* カレンダー凡例 */

@@ -1382,7 +1382,8 @@ public sealed class PersonsGenerator
         if (cores.Count == 0) return Array.Empty<PersonSongCard>();
 
         // 共通中間表現から人物詳細用 DTO へ射影。役職バッジは役職統計ページ
-        // （/creators/roles/{code}/）への URL 付きバッジ（RoleBadgeView）に変換する。
+        // （/creators/roles/{code}/。歌唱系は歌唱ページ）への URL 付きバッジ（RoleBadgeView）に変換する。
+        // 役職の詳細ページが無い役職は URL を空にして、札を文字だけで出す（PathUtil.SongCardRoleBadgeUrl）。
         var cards = new List<PersonSongCard>(cores.Count);
         foreach (var core in cores)
         {
@@ -1403,7 +1404,7 @@ public sealed class PersonsGenerator
                     {
                         Code = b.Code,
                         Label = b.Label,
-                        Url = PathUtil.CreatorsRoleUrl(b.Code),
+                        Url = PathUtil.SongCardRoleBadgeUrl(b.Code),
                         DisplayOrder = b.DisplayOrder
                     })
                     .ToList()
@@ -1693,7 +1694,7 @@ public sealed class PersonsGenerator
                         {
                             Code = code,
                             Label = MusicCreditViewBuilder.RoleName(_ctx, code),
-                            Url = "",
+                            Url = PathUtil.MusicRoleBadgeUrl(code),
                             DisplayOrder = _roleMap!.TryGetValue(code, out var role) ? role.DisplayOrder ?? 0 : 0
                         })
                         .OrderBy(b => b.DisplayOrder)
@@ -1725,7 +1726,7 @@ public sealed class PersonsGenerator
                 {
                     Code = rg.Key,
                     Label = MusicCreditViewBuilder.BadgeLabel(_ctx, rg.Key),
-                    Url = "",
+                    Url = PathUtil.MusicRoleBadgeUrl(rg.Key),
                     DisplayOrder = _roleMap!.TryGetValue(rg.Key, out var role) ? role.DisplayOrder ?? 0 : 0
                 })
                 .OrderBy(b => b.DisplayOrder)

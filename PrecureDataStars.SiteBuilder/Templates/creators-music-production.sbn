@@ -77,7 +77,7 @@
           {{~ for e in sec.Members ~}}
           <li class="entity-row">
             <a class="entity-row-name" href="{{ e.Url }}">{{ e.Name | html.escape }}</a>
-            <span class="music-role-badges">{{~ for b in e.Roles ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>
+            <span class="music-role-badges">{{~ for b in e.Roles ~}}{{~ if b.Url != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ b.Code }}" href="{{ b.Url }}">{{ b.Label | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}{{~ end ~}}</span>
             {{~ if e.DebutLabel != "" ~}}<span class="entity-row-sub muted">初参加：<a href="{{ e.DebutUrl }}">{{ e.DebutLabel | html.escape }}</a></span>{{~ end ~}}
             <span class="entity-row-count"><span class="count-badges">{{~ if t.IsByWork ~}}{{~ if e.TvWorkCount > 0 ~}}<span class="count-pill count-pill-tv" title="TVシリーズ {{ e.TvWorkCount }} 作品">📺 {{ e.TvWorkCount }}</span>{{~ end ~}}{{~ if e.MovieWorkCount > 0 ~}}<span class="count-pill count-pill-movie" title="映画 {{ e.MovieWorkCount }} 本">🎥 {{ e.MovieWorkCount }}</span>{{~ end ~}}{{~ if e.ProductCount > 0 ~}}<span class="count-pill count-pill-cd" title="音盤 {{ e.ProductCount }} 点">💿 {{ e.ProductCount }}</span>{{~ end ~}}{{~ else ~}}<span class="count-pill count-pill-song">🎵 {{ e.Count }}</span>{{~ end ~}}</span></span>
           </li>
@@ -90,7 +90,7 @@
       {{~ for e in t.CountRows ~}}
       <li class="entity-row">
         <a class="entity-row-name" href="{{ e.Url }}">{{ e.Name | html.escape }}</a>
-        <span class="music-role-badges">{{~ for b in e.Roles ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>
+        <span class="music-role-badges">{{~ for b in e.Roles ~}}{{~ if b.Url != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ b.Code }}" href="{{ b.Url }}">{{ b.Label | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}{{~ end ~}}</span>
         <span class="entity-row-count"><span class="count-badges">{{~ if t.IsByWork ~}}{{~ if e.TvWorkCount > 0 ~}}<span class="count-pill count-pill-tv" title="TVシリーズ {{ e.TvWorkCount }} 作品">📺 {{ e.TvWorkCount }}</span>{{~ end ~}}{{~ if e.MovieWorkCount > 0 ~}}<span class="count-pill count-pill-movie" title="映画 {{ e.MovieWorkCount }} 本">🎥 {{ e.MovieWorkCount }}</span>{{~ end ~}}{{~ if e.ProductCount > 0 ~}}<span class="count-pill count-pill-cd" title="音盤 {{ e.ProductCount }} 点">💿 {{ e.ProductCount }}</span>{{~ end ~}}{{~ else ~}}<span class="count-pill count-pill-song">🎵 {{ e.Count }}</span>{{~ end ~}}</span></span>
       </li>
       {{~ end ~}}

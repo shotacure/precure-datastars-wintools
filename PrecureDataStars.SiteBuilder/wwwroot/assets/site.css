@@ -5871,25 +5871,50 @@ a.credit-card-series:focus-visible {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 10px;
 }
+/* 歌・劇伴のカード（人物・キャラのページ）。カード自身は <li>。カード全体クリックは内部の絶対配置
+   .person-song-card-link（透明 <a>）で実現するので <a> の入れ子を作らず、内部の役職の札
+   <a class="role-badge">（役職詳細）はオーバーレイより上に置いて個別クリックを受ける（.songs-card と同じパターン）。 */
 .person-song-card {
   display: block;
-}
-.person-song-card-link {
-  display: block;
+  position: relative;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   /* 種別クラス .cat-* があればその淡色（--cat-tint）、無ければ白背景。 */
   background: var(--cat-tint, #fff);
-  text-decoration: none;
   color: inherit;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.person-song-card-link:hover,
-.person-song-card-link:focus-visible {
+.person-song-card:hover,
+.person-song-card:focus-within {
   border-color: var(--accent-pink);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-  /* グローバル a:hover { text-decoration: underline } をカード全域で抑止。 */
+}
+/* オーバーレイリンク：絶対配置の透明 <a>（z-index:0）。カードの余白のクリックで曲・劇伴のページへ。 */
+.person-song-card-link {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 8px;
+  text-decoration: none;
+  color: transparent;
+}
+.person-song-card-link:focus-visible {
+  outline: 2px solid var(--accent-pink);
+  outline-offset: -2px;
+}
+/* カードの中身はオーバーレイより上に重ね、クリックはオーバーレイへ透過させる。中の <a>（役職の札）だけクリックを拾う。 */
+.person-song-card-body {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.person-song-card-body a {
+  pointer-events: auto;
+}
+/* 役職の札は色付きの背景があるので下線は不要（a.role-badge:hover の変化でホバーを示す）。 */
+.person-song-card a.role-badge {
   text-decoration: none;
 }
 /* 役職バッジ群（左）＋種別バッジ（右上）を 1 行に並べるヘッダ。 */

@@ -35,6 +35,31 @@ public static class PathUtil
     public static void UseRolesWithoutPage(IReadOnlySet<string> roleCodes) => _rolesWithoutPage = roleCodes;
 
     /// <summary>
+    /// 音楽の役職詳細ページ（/creators/roles/{code}/）を持つ役職（<see cref="Pipeline.MusicRolePages.Compute"/>）。
+    /// <see cref="UseMusicRolePages"/> で差し込み、以降は読み取り専用。未設定のあいだは空（音楽の役職の札をリンクにしない）。
+    /// </summary>
+    private static IReadOnlySet<string> _musicRolePages = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>音楽の役職詳細ページを持つ役職の集合を差し込む（ページ生成より前に 1 度だけ呼ぶ）。</summary>
+    public static void UseMusicRolePages(IReadOnlySet<string> roleCodes) => _musicRolePages = roleCodes;
+
+    /// <summary>
+    /// 音楽クレジットの役職の札（楽器・エンジニア・スタジオなど）のリンク先。歌唱系の役職は歌唱ページ、
+    /// 音楽の役職詳細ページを持つ役職はそのページ、それ以外（劇伴の作曲・編曲、人物・団体の行が無い役職）は空文字（リンクしない）。
+    /// </summary>
+    public static string MusicRoleBadgeUrl(string roleCode)
+        => IsSingerRole(roleCode) ? CreatorsSingersUrl()
+         : _musicRolePages.Contains(roleCode) ? CreatorsRoleUrl(roleCode)
+         : "";
+
+    /// <summary>
+    /// 歌のカード（人物・キャラのページ）の役職の札のリンク先。作詞・作曲・編曲と歌唱系は <see cref="SongRoleBadgeUrl"/>、
+    /// それ以外の役職（ストリングス編曲など）は <see cref="MusicRoleBadgeUrl"/>。
+    /// </summary>
+    public static string SongCardRoleBadgeUrl(string roleCode)
+        => SongRoleBadgeUrl(roleCode) is { Length: > 0 } url ? url : MusicRoleBadgeUrl(roleCode);
+
+    /// <summary>
     /// 役職名を役職詳細ページ（<see cref="CreatorsRoleUrl"/>）へのリンクにしてよいか。系譜の代表で判定する。
     /// 歌唱系の役職は歌唱ページを指すので常に true。役職名を出す側は false のとき文字だけで出す。
     /// </summary>

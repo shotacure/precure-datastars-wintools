@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：音楽クレジットの役職バッジを役職詳細へのリンクにし、オール・インストゥルメンツを楽器の最後に「他」で出す**（`MusicCreditIndex.cs`・`MusicRolePages`〔新規〕・`PathUtil.MusicRoleBadgeUrl`・`PathUtil.SongCardRoleBadgeUrl`〔新規〕・`SiteBuilderPipeline`・`CreatorsGenerator`・`PersonsGenerator`・`CharactersGenerator`・`CompaniesGenerator`・`_music-credits.sbn`・`characters-detail.sbn`・`companies-detail.sbn`・`creators-music-production.sbn`・`site.css`）：曲・録音・劇伴・盤のクレジット欄、人物詳細とキャラクター詳細の曲・劇伴のカード、人物詳細の音楽クレジットの行、企業詳細の音楽クレジットの役職名、音楽制作一覧で、楽器・エンジニアなどの役職バッジを役職詳細（歌唱系は歌唱ページ）へのリンクにした。役職詳細を持たない役職と劇伴の作曲・編曲は文字だけで出す。役職詳細を持つ役職の決め方は `MusicRolePages` に移し、役職詳細を書く側とリンクを付ける側で同じ決め方を使う。曲・劇伴のカードは、カード全体のリンクを透明に重ねる形に組み替え、中に役職バッジのリンクを置けるようにした。オール・インストゥルメンツは、書かれていない楽器を打ち込みと同じ人が受け持ったという意味なので、クレジット欄では楽器の最後の行の後ろに「他」のバッジで置く。楽器の行が 1 つも無い曲は役職名のまま出す。
+
 - **サイト：劇伴の一覧に録音の日付とスタジオを出し、行を縦に詰めた**（`MusicGenerator.GenerateBgmIndex`・`BgmIndexRow.RecordingNotes`〔新規〕・`bgms-index.sbn`・`site.css`）：スタッフ（音楽）の右に、録音の回ごとの日付とスタジオ（`bgm_sessions.caption`。記録のある回だけ）を「録音」の札つきで並べる。放送期間・公開日は出さない。曲数とバージョン数の札は、ほかの一覧と同じ大きさにした。題名の見出しの飾りを外し、行の余白を減らした。
 
 - **サイト：歌の一覧の行を縦に詰め、種別の札と再生ボタンを上下の中央に置いた**（`site.css`）：行の上下の余白と行の間、題名と作詞・作曲の行の間を減らした。題名の下に作詞・作曲の行を置く 2 段の組みは変えていない。

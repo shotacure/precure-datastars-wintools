@@ -665,7 +665,7 @@ public sealed class CompaniesGenerator
         {
             var kinds = BuildMusicKinds(company, rg.ToList(), withAliasNote: true);
             if (kinds.Count == 0) continue;
-            var group = new CompanyMusicRoleGroup { RoleCode = rg.Key, RoleLabel = MusicCreditViewBuilder.RoleName(_ctx, rg.Key), Kinds = kinds };
+            var group = new CompanyMusicRoleGroup { RoleCode = rg.Key, RoleLabel = MusicCreditViewBuilder.RoleName(_ctx, rg.Key), RoleUrl = PathUtil.MusicRoleBadgeUrl(rg.Key), Kinds = kinds };
             group.Counts.AddRange(kinds.Select(k => k.Counts));
             result.Add((RoleOrder(rg.Key), group));
         }
@@ -717,6 +717,7 @@ public sealed class CompaniesGenerator
             {
                 RoleCode = rg.Key,
                 RoleLabel = MusicCreditViewBuilder.RoleName(_ctx, rg.Key),
+                RoleUrl = PathUtil.MusicRoleBadgeUrl(rg.Key),
                 Persons = persons
                     .OrderBy(p => p.First)
                     .ThenBy(p => p.Id > 0 ? 0 : 1)
@@ -1613,6 +1614,8 @@ public sealed class CompaniesGenerator
     {
         public string RoleCode { get; set; } = "";
         public string RoleLabel { get; set; } = "";
+        /// <summary>役職名のリンク先（役職の詳細ページ。無ければ空文字で、役職名は文字だけ）。</summary>
+        public string RoleUrl { get; set; } = "";
         public IReadOnlyList<CompanyMusicKindSection> Kinds { get; set; } = Array.Empty<CompanyMusicKindSection>();
         public IReadOnlyList<CompanyMusicMemberPerson> Persons { get; set; } = Array.Empty<CompanyMusicMemberPerson>();
         public MusicCountSet Counts { get; } = new();

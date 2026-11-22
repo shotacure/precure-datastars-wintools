@@ -182,11 +182,12 @@
     <ul class="person-songs-card-list">
       {{~ for c in SongCards ~}}
       <li class="person-song-card cat-{{ c.BadgeClassSuffix }}">
-        <a class="person-song-card-link" href="{{ c.SongUrl }}">
+        <a class="person-song-card-link" href="{{ c.SongUrl }}" aria-label="{{ c.Title | html.escape }}"></a>
+        <div class="person-song-card-body">
           <div class="person-song-card-head">
             <div class="person-song-card-roles">
               {{~ for b in c.Roles ~}}
-              <span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>
+              {{~ if b.Url != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ b.Code }}" href="{{ b.Url }}">{{ b.Label | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}
               {{~ end ~}}
             </div>
             {{~ if c.BadgeClassSuffix != "" ~}}
@@ -200,16 +201,17 @@
             {{~ if c.SeriesStartYearLabel != "" ~}}<span class="series-year">({{ c.SeriesStartYearLabel }})</span>{{~ end ~}}
           </div>
           {{~ end ~}}
-        </a>
+        </div>
       </li>
       {{~ end ~}}
       {{~ for c in BgmCards ~}}
       <li class="person-song-card">
-        <a class="person-song-card-link" href="{{ c.Url }}">
+        <a class="person-song-card-link" href="{{ c.Url }}" aria-label="{{ c.Title | html.escape }}"></a>
+        <div class="person-song-card-body">
           <div class="person-song-card-head">
             <div class="person-song-card-roles">
               {{~ for b in c.Roles ~}}
-              <span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>
+              {{~ if b.Url != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ b.Code }}" href="{{ b.Url }}">{{ b.Label | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}
               {{~ end ~}}
             </div>
             <span class="songs-card-badge person-song-cat-badge">劇伴</span>
@@ -220,7 +222,7 @@
             {{~ if c.SeriesStartYearLabel != "" ~}}<span class="series-year">({{ c.SeriesStartYearLabel }})</span>{{~ end ~}}
             {{~ if c.MNoDetail != "" ~}} <span class="mono">{{ c.MNoDetail | html.escape }}</span>{{~ end ~}}
           </div>
-        </a>
+        </div>
       </li>
       {{~ end ~}}
     </ul>

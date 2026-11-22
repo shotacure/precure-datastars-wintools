@@ -272,24 +272,9 @@ public sealed class CreatorsGenerator
     /// <summary>
     /// 音楽の役職詳細（/creators/roles/{code}/。GenerateMusicProduction が書く）を持つ役職。音楽クレジットの区分を持つ役職のうち、
     /// 歌唱系と楽曲の作家（作詞・作曲・編曲）を除き、音楽クレジットか曲のクレジットに人物・企業/団体の名義の行があるもの。
+    /// 役職の札のリンク（<see cref="PathUtil.MusicRoleBadgeUrl"/>）と同じ集合にするため、決め方は <see cref="MusicRolePages.Compute"/> に置く。
     /// </summary>
-    private HashSet<string> MusicPageRoleCodes(
-        IReadOnlyList<Role> allRoles, IReadOnlyList<SongCredit> allSongCredits, IReadOnlyDictionary<int, int> personIdByAlias)
-    {
-        var withEntity = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var mc in _ctx.MusicCredits.BySong.Values.Concat(_ctx.MusicCredits.ByRecording.Values)
-                     .Concat(_ctx.MusicCredits.BySession.Values).Concat(_ctx.MusicCredits.ByProduct.Values).SelectMany(list => list))
-            if (EntityKeyOf(mc, personIdByAlias) is not null) withEntity.Add(mc.RoleCode);
-        foreach (var sc in allSongCredits)
-            if (PersonKey(sc.PersonAliasId, personIdByAlias) is not null) withEntity.Add(sc.CreditRole);
-        return allRoles
-            .Where(r => !string.IsNullOrEmpty(r.MusicCreditGroup)
-                        && !PathUtil.IsSingerRole(r.RoleCode)
-                        && Array.IndexOf(SongCreditRoleOrder, r.RoleCode) < 0
-                        && withEntity.Contains(r.RoleCode))
-            .Select(r => r.RoleCode)
-            .ToHashSet(StringComparer.Ordinal);
-    }
+    private HashSet<string> MusicPageRoleCodes() => MusicRolePages.Compute(_ctx);
     /// <summary>役職詳細・声の出演一覧の年表に主な方の行として載った人物・企業/団体の URL（OGP カードの年表を出すかの判定に渡す）。</summary>
     private readonly HashSet<string> _siteTimelineEntityUrls = new(StringComparer.Ordinal);
 
@@ -398,7 +383,7 @@ public sealed class CreatorsGenerator
 
         // 音楽の役職詳細（GenerateMusicProduction が書く）を持つ役職。作品のクレジットにも出る役職は、スタッフの役職詳細を別に書かず、
         // 作品のクレジットの担当を音楽の役職詳細に「作品のクレジット」として載せる（同じ URL に 2 つのページを書かない）。
-        var musicPageRoles = MusicPageRoleCodes(allRoles, allSongCredits, personIdByAlias);
+        var musicPageRoles = MusicPageRoleCodes();
 
         // 役職 → その役職の関与がある人物・企業の索引。並列の集計から読むだけなので、並列のループの前に確定させる。
         BuildRoleEntityIndex(aliasIdsByPersonId, companyAliasesByCompany, logosByCompanyAlias);
@@ -1829,7 +1814,9 @@ public sealed class CreatorsGenerator
     /// </summary>
     private MusicListTab BuildMusicListTab(string key, string label, MusicEntityAccumulator acc, IReadOnlyDictionary<int, Person> personById, bool byWork)
     {
-        var rows = BuildMusicEntityRows(acc, personById);
+        // 役職の札のリンク先：歌のタブは作詞・作曲・編曲・歌唱も役職詳細へ、劇伴・制作のタブは音楽の役職詳細だけ
+        // （劇伴の作曲・編曲の役職詳細は歌の作家の一覧なのでリンクしない）。
+        var rows = BuildMusicEntityRows(acc, personById, byWork ? PathUtil.MusicRoleBadgeUrl : PathUtil.SongCardRoleBadgeUrl);
         return new MusicListTab
         {
             Key = key,
@@ -2284,8 +2271,8 @@ public sealed class CreatorsGenerator
         return ("company", companyAlias.Name, companyAlias.NameKana ?? "", PathUtil.CompanyUrl(key.Id));
     }
 
-    /// <summary>歌・劇伴タブの行を、人物・団体ごとの参加数・初参加・役職で組み立てる。</summary>
-    private List<MusicEntityRow> BuildMusicEntityRows(MusicEntityAccumulator acc, IReadOnlyDictionary<int, Person> personById)
+    /// <summary>歌・劇伴タブの行を、人物・団体ごとの参加数・初参加・役職で組み立てる。役職の札のリンク先は <paramref name="roleUrl"/> で引く（空文字なら文字だけ）。</summary>
+    private List<MusicEntityRow> BuildMusicEntityRows(MusicEntityAccumulator acc, IReadOnlyDictionary<int, Person> personById, Func<string, string> roleUrl)
     {
         var rows = new List<MusicEntityRow>(acc.ByEntity.Count);
         foreach (var (key, v) in acc.ByEntity)
@@ -2310,7 +2297,7 @@ public sealed class CreatorsGenerator
                 Roles = v.Roles
                     .Select(code => (Code: code, Order: _ctx.RoleByCode.TryGetValue(code, out var role) ? role.DisplayOrder ?? ushort.MaxValue : ushort.MaxValue))
                     .OrderBy(x => x.Order)
-                    .Select(x => new MusicRoleBadge { Code = x.Code, Label = MusicCreditViewBuilder.MusicPageBadgeLabel(_ctx, x.Code) })
+                    .Select(x => new MusicRoleBadge { Code = x.Code, Label = MusicCreditViewBuilder.MusicPageBadgeLabel(_ctx, x.Code), Url = roleUrl(x.Code) })
                     .ToList()
             });
         }
@@ -4282,6 +4269,8 @@ public sealed class CreatorsGenerator
     {
         public string Code { get; set; } = "";
         public string Label { get; set; } = "";
+        /// <summary>役職の札のリンク先（役職の詳細ページが無ければ空文字で、札は文字だけ）。</summary>
+        public string Url { get; set; } = "";
     }
 
     /// <summary>音楽クレジットの役職詳細ページの表示モデル。</summary>

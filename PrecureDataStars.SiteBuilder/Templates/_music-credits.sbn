@@ -28,11 +28,12 @@
             <ul class="person-songs-card-list">
               {{~ for c in k.SongCards ~}}
               <li class="person-song-card cat-{{ c.BadgeClassSuffix }}">
-                <a class="person-song-card-link" href="{{ c.SongUrl }}">
+                <a class="person-song-card-link" href="{{ c.SongUrl }}" aria-label="{{ c.Title | html.escape }}"></a>
+                <div class="person-song-card-body">
                   <div class="person-song-card-head">
                     <div class="person-song-card-roles">
                       {{~ for b in c.Roles ~}}
-                      <span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>
+                      {{~ if b.Url != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ b.Code }}" href="{{ b.Url }}">{{ b.Label | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}
                       {{~ end ~}}
                     </div>
                     {{~ if c.BadgeClassSuffix != "" ~}}
@@ -47,7 +48,7 @@
                     {{~ if c.SeriesStartYearLabel != "" ~}}<span class="series-year">({{ c.SeriesStartYearLabel }})</span>{{~ end ~}}
                   </div>
                   {{~ end ~}}
-                </a>
+                </div>
               </li>
               {{~ end ~}}
             </ul>
@@ -56,7 +57,7 @@
             <ul class="music-credit-item-list">
               {{~ for it in k.Items ~}}
               <li class="music-credit-item">
-                <span class="music-credit-item-roles">{{~ for b in it.Roles ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>
+                <span class="music-credit-item-roles">{{~ for b in it.Roles ~}}{{~ if b.Url != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ b.Code }}" href="{{ b.Url }}">{{ b.Label | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}{{~ end ~}}</span>
                 <a class="music-credit-item-title" href="{{ it.Url }}">{{ it.Title | html.escape }}</a>
                 {{~ if it.SubLabel != "" ~}}<span class="muted music-credit-item-sub">{{ it.SubLabel | html.escape }}</span>{{~ end ~}}
                 {{~ if it.AliasNote != "" ~}}<span class="muted music-credit-item-sub">（{{ it.AliasNote | html.escape }}）</span>{{~ end ~}}

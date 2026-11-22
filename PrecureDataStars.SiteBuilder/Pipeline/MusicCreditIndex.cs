@@ -132,6 +132,8 @@ public sealed class MusicCreditLineView
     public string RoleLabel { get; init; } = "";
     /// <summary>盤の役職の印刷表記（役職名と違うときだけ。記録用で、表には出さない）。</summary>
     public string PrintedRoleLabel { get; init; } = "";
+    /// <summary>役職の札のリンク先（<see cref="PathUtil.MusicRoleBadgeUrl"/>。役職の詳細ページが無ければ空文字で、札は文字だけ）。</summary>
+    public string RoleUrl { get; init; } = "";
     /// <summary>名義の並び（リンク・区切り・所属を含む組み立て済み HTML）。</summary>
     public string NamesHtml { get; init; } = "";
 }
@@ -175,6 +177,7 @@ public static class MusicCreditViewBuilder
                 .GroupBy(r => r.RoleCode, StringComparer.Ordinal)
                 .Select(g => BuildLine(ctx, g.Key, g.ToList()))
                 .ToList();
+            if (group == MusicCreditGroups.Performance) lines = PlaceAllInstrumentsAfterInstruments(ctx, lines);
             groups.Add(new MusicCreditGroupView
             {
                 GroupCode = group,
@@ -195,6 +198,49 @@ public static class MusicCreditViewBuilder
 
         return new MusicCreditBlockView { Groups = groups, Sources = sources };
     }
+
+    /// <summary>オール・インストゥルメンツ（書かれていない諸楽器を、打ち込みと同じ人が受け持ったという意味の役職）。</summary>
+    private const string AllInstrumentsRoleCode = "ALL_INSTRUMENTS";
+
+    /// <summary>クレジットの表でオール・インストゥルメンツの札に出す名前（楽器の並びの最後に「ほかの楽器」の意味で置く）。</summary>
+    private const string AllInstrumentsShortLabel = "他";
+
+    /// <summary>楽器の役職の表示順の下限（シンセサイザー〜ストリングス・演奏が 2200 番台。歌唱系は 900 番台）。上限はオール・インストゥルメンツの表示順。</summary>
+    private const int InstrumentDisplayOrderFrom = 2200;
+
+    /// <summary>
+    /// 演奏・コーラス等の行のうち、オール・インストゥルメンツの行を、札の名前を「他」にして楽器の最後の行の後ろへ移す。
+    /// 楽器は、役職の表示順が <see cref="InstrumentDisplayOrderFrom"/> 以上でオール・インストゥルメンツより前の役職。
+    /// 楽器の行が 1 つも無いときは、「他」では意味が通らないので役職名のまま元の位置に置く。
+    /// </summary>
+    private static List<MusicCreditLineView> PlaceAllInstrumentsAfterInstruments(BuildContext ctx, List<MusicCreditLineView> lines)
+    {
+        int index = lines.FindIndex(l => l.RoleCode == AllInstrumentsRoleCode);
+        if (index < 0) return lines;
+        int allOrder = DisplayOrderOf(ctx, AllInstrumentsRoleCode);
+        bool IsInstrument(MusicCreditLineView l)
+        {
+            int order = DisplayOrderOf(ctx, l.RoleCode);
+            return order >= InstrumentDisplayOrderFrom && order < allOrder;
+        }
+        var line = lines[index];
+        var rest = lines.Where((_, i) => i != index).ToList();
+        int lastInstrument = rest.FindLastIndex(IsInstrument);
+        if (lastInstrument < 0) return lines;
+        rest.Insert(lastInstrument + 1, new MusicCreditLineView
+        {
+            RoleCode = line.RoleCode,
+            RoleLabel = AllInstrumentsShortLabel,
+            PrintedRoleLabel = "",
+            RoleUrl = line.RoleUrl,
+            NamesHtml = line.NamesHtml
+        });
+        return rest;
+    }
+
+    /// <summary>役職の表示順（役職マスタに無い・表示順が空なら int.MaxValue）。</summary>
+    private static int DisplayOrderOf(BuildContext ctx, string roleCode)
+        => ctx.RoleByCode.TryGetValue(roleCode, out var role) && role.DisplayOrder is ushort d ? d : int.MaxValue;
 
     /// <summary>役職の音楽クレジット区分。役職マスタに区分が無い役職は演奏・コーラス等として扱う。</summary>
     public static string GroupOf(BuildContext ctx, string roleCode)
@@ -305,6 +351,7 @@ public static class MusicCreditViewBuilder
             RoleCode = roleCode,
             RoleLabel = label,
             PrintedRoleLabel = printedRole,
+            RoleUrl = PathUtil.MusicRoleBadgeUrl(roleCode),
             NamesHtml = sb.ToString()
         };
     }
@@ -445,10 +492,16 @@ public static class MusicCreditHtml
         {
             foreach (var line in g.Lines)
             {
-                sb.Append("<span class=\"staff-badge-group music-credit-unit\">")
-                  .Append("<span class=\"role-badge role-badge-sm\" data-role-code=\"").Append(HtmlUtil.Escape(line.RoleCode)).Append("\">")
-                  .Append(HtmlUtil.Escape(line.RoleLabel)).Append("</span>")
-                  .Append(line.NamesHtml)
+                // 役職の札は、役職の詳細ページがあればそこへのリンク、無ければ文字だけ。
+                sb.Append("<span class=\"staff-badge-group music-credit-unit\">");
+                if (line.RoleUrl.Length > 0)
+                    sb.Append("<a class=\"role-badge role-badge-sm\" data-role-code=\"").Append(HtmlUtil.Escape(line.RoleCode))
+                      .Append("\" href=\"").Append(HtmlUtil.Escape(line.RoleUrl)).Append("\">")
+                      .Append(HtmlUtil.Escape(line.RoleLabel)).Append("</a>");
+                else
+                    sb.Append("<span class=\"role-badge role-badge-sm\" data-role-code=\"").Append(HtmlUtil.Escape(line.RoleCode)).Append("\">")
+                      .Append(HtmlUtil.Escape(line.RoleLabel)).Append("</span>");
+                sb.Append(line.NamesHtml)
                   .Append("</span>");
             }
         }
@@ -477,5 +530,47 @@ public static class MusicCreditHtml
     {
         if (block.IsEmpty) return "";
         return "<div class=\"music-credit-block\">" + RenderUnits(block) + RenderSources(block) + "</div>";
+    }
+}
+
+/// <summary>
+/// 音楽の役職詳細ページ（/creators/roles/{code}/。CreatorsGenerator.GenerateMusicProduction が書く）を持つ役職の決め方。
+/// 音楽クレジットの区分を持つ役職のうち、歌唱系と楽曲の作家（作詞・作曲・編曲・メドレー編曲）を除き、
+/// 音楽クレジットか曲のクレジットに人物・企業/団体の名義の行があるもの。
+/// ページを書く側（CreatorsGenerator）と、役職の札をリンクにする側（<see cref="PathUtil.MusicRoleBadgeUrl"/>）が同じ集合を使う。
+/// </summary>
+public static class MusicRolePages
+{
+    /// <summary>楽曲の作家の役職（役職詳細は歌の作家の一覧で、音楽の役職詳細は持たない）。</summary>
+    private static readonly string[] SongWriterRoles =
+    {
+        SongCreditRoles.Lyrics,
+        SongCreditRoles.Composition,
+        SongCreditRoles.Arrangement,
+        SongCreditRoles.MedleyArrangement,
+    };
+
+    /// <summary>音楽の役職詳細ページを持つ役職の集合を組み立てる（ページ生成より前に 1 度だけ呼ぶ）。</summary>
+    public static HashSet<string> Compute(BuildContext ctx)
+    {
+        var withEntity = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var mc in ctx.MusicCredits.BySong.Values.Concat(ctx.MusicCredits.ByRecording.Values)
+                     .Concat(ctx.MusicCredits.BySession.Values).Concat(ctx.MusicCredits.ByProduct.Values).SelectMany(list => list))
+        {
+            // 人物に紐付く名義か、企業/団体に紐付く屋号の行（キャラ・自由記述の行は数えない）。
+            bool hasEntity = mc.PersonAliasId is int pa
+                ? ctx.PersonIdByAlias.ContainsKey(pa)
+                : mc.CompanyAliasId is int ca && ctx.CompanyAliasById.TryGetValue(ca, out var alias) && alias.CompanyId > 0;
+            if (hasEntity) withEntity.Add(mc.RoleCode);
+        }
+        foreach (var sc in ctx.SongCreditsBySong.Values.SelectMany(list => list))
+            if (ctx.PersonIdByAlias.ContainsKey(sc.PersonAliasId)) withEntity.Add(sc.CreditRole);
+        return ctx.RoleByCode.Values
+            .Where(r => !string.IsNullOrEmpty(r.MusicCreditGroup)
+                        && !PathUtil.IsSingerRole(r.RoleCode)
+                        && Array.IndexOf(SongWriterRoles, r.RoleCode) < 0
+                        && withEntity.Contains(r.RoleCode))
+            .Select(r => r.RoleCode)
+            .ToHashSet(StringComparer.Ordinal);
     }
 }

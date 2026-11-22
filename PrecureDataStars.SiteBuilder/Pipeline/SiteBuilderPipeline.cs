@@ -118,6 +118,9 @@ public sealed class SiteBuilderPipeline
         // 役職詳細ページを持たない役職（単発のイベント映像と、オトナシリーズ以外のスピンオフだけで使う役職）。クレジット・人物・企業の各ページで
         // 役職名をリンクにしないのに使うので、系譜の Resolver の後・全ページ生成より前に 1 度だけ確定させる。
         PathUtil.UseRolesWithoutPage(CreatorListScope.RolesWithoutPage(ctx, involvementIndex, roleSuccessorResolver));
+        // 音楽の役職詳細ページを持つ役職。曲・劇伴・盤・人物・企業などの各ページで音楽の役職の札をリンクにするかに使うので、
+        // 全ページ生成より前に 1 度だけ確定させる（役職詳細を書く CreatorsGenerator も同じ決め方を使う）。
+        PathUtil.UseMusicRolePages(MusicRolePages.Compute(ctx));
         // 役職どうしの関連（role_relations：段階・並列）。系譜の代表へ寄せて引くので Resolver の後に 1 度だけ作る。
         // CreatorsGenerator が役職詳細の年表に関連する役職の担当を重ねるのに使う。
         var roleRelationIndex = await BuildRoleRelationIndexAsync(factory, roleSuccessorResolver, ct).ConfigureAwait(false);

@@ -843,7 +843,7 @@ public sealed class CharactersGenerator
             _ctx, aliasIds, _charSongRolesByAlias, _charSungRecordingByAlias, null, _ctx.RoleByCode);
         if (cores.Count == 0) return Array.Empty<CharacterSongCard>();
 
-        // 共通中間表現からキャラ詳細用 DTO へ射影（役職バッジは URL なしの SongRoleBadge）。
+        // 共通中間表現からキャラ詳細用 DTO へ射影（役職バッジは役職詳細・歌唱ページへの URL 付きの SongRoleBadge）。
         // ソート：歌った録音の recording_id 昇順（カタログ登場順）→ song_id。人物詳細の楽曲と同じ流儀。
         var cards = new List<CharacterSongCard>(cores.Count);
         foreach (var core in cores.OrderBy(c => c.SortRecordingId).ThenBy(c => c.SongId))
@@ -860,7 +860,7 @@ public sealed class CharactersGenerator
                 MusicClassLabel = core.MusicClassLabel,
                 BadgeClassSuffix = core.BadgeClassSuffix,
                 Roles = core.Roles
-                    .Select(b => new SongRoleBadge { Code = b.Code, Label = b.Label, DisplayOrder = b.DisplayOrder })
+                    .Select(b => new SongRoleBadge { Code = b.Code, Label = b.Label, Url = PathUtil.SongCardRoleBadgeUrl(b.Code), DisplayOrder = b.DisplayOrder })
                     .ToList()
             });
         }
@@ -902,6 +902,7 @@ public sealed class CharactersGenerator
                     {
                         Code = code,
                         Label = _ctx.RoleByCode.TryGetValue(code, out var role) && !string.IsNullOrEmpty(role.NameJa) ? role.NameJa : code,
+                        Url = PathUtil.MusicRoleBadgeUrl(code),
                         DisplayOrder = _ctx.RoleByCode.TryGetValue(code, out var r2) ? r2.DisplayOrder ?? 0 : 0
                     })
                     .OrderBy(b => b.DisplayOrder)
@@ -1249,6 +1250,8 @@ public sealed class CharactersGenerator
     {
         public string Code { get; set; } = "";
         public string Label { get; set; } = "";
+        /// <summary>役職の札のリンク先（役職詳細・歌唱ページ。役職の詳細ページが無ければ空文字で、札は文字だけ）。</summary>
+        public string Url { get; set; } = "";
         public int DisplayOrder { get; set; }
     }
 

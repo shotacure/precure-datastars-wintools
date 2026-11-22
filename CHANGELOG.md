@@ -4,6 +4,10 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：コラムの一覧を、書き直した記事が上へ上がる並びにした**（`ArticlesGenerator`・`Article.LastActiveAt`〔新規〕・`articles-index.sbn`）：公開日時と最終更新日（原稿の `updated`）のうち新しいほうの順に並べる。最終更新日は日付だけなので、その日の 0:00 として比べる。書き直した記事のカードには、記事のページと同じく、公開日の後ろに「（2026年11月22日更新）」と添える。一覧の OGP カードの 4 本も同じ並びにし、書き直した記事の日付は最終更新日にした。記事のページの「前の記事・次の記事」は公開日時の順のまま。
+
+- **サイト：テストビルドのコラムの一覧で、まだ公開していない原稿のカードに「未公開」の札と点線の枠を付けた**（`ArticlesGenerator.UnpublishedLabelOf`〔新規〕・`articles-index.sbn`・`site.css` の `.article-card.is-unpublished`・`.article-card-unpublished`〔新規〕）：下書きは「未公開（下書き）」、日付の無い原稿は「未公開（日付なし）」、公開日時が先の原稿は「未公開（11月25日 8:30 公開）」と出す。本番ビルドの一覧には付けない。同じ CSS を使う precure.news のテストビルドの一覧も同じ見た目になる。
+
 - **サイト：音楽クレジットの役職バッジを役職詳細へのリンクにし、オール・インストゥルメンツを楽器の最後に「他」で出す**（`MusicCreditIndex.cs`・`MusicRolePages`〔新規〕・`PathUtil.MusicRoleBadgeUrl`・`PathUtil.SongCardRoleBadgeUrl`〔新規〕・`SiteBuilderPipeline`・`CreatorsGenerator`・`PersonsGenerator`・`CharactersGenerator`・`CompaniesGenerator`・`_music-credits.sbn`・`characters-detail.sbn`・`companies-detail.sbn`・`creators-music-production.sbn`・`site.css`）：曲・録音・劇伴・盤のクレジット欄、人物詳細とキャラクター詳細の曲・劇伴のカード、人物詳細の音楽クレジットの行、企業詳細の音楽クレジットの役職名、音楽制作一覧で、楽器・エンジニアなどの役職バッジを役職詳細（歌唱系は歌唱ページ）へのリンクにした。役職詳細を持たない役職と劇伴の作曲・編曲は文字だけで出す。役職詳細を持つ役職の決め方は `MusicRolePages` に移し、役職詳細を書く側とリンクを付ける側で同じ決め方を使う。曲・劇伴のカードは、カード全体のリンクを透明に重ねる形に組み替え、中に役職バッジのリンクを置けるようにした。オール・インストゥルメンツは、書かれていない楽器を打ち込みと同じ人が受け持ったという意味なので、クレジット欄では楽器の最後の行の後ろに「他」のバッジで置く。楽器の行が 1 つも無い曲は役職名のまま出す。
 
 - **サイト：劇伴の一覧に録音の日付とスタジオを出し、行を縦に詰めた**（`MusicGenerator.GenerateBgmIndex`・`BgmIndexRow.RecordingNotes`〔新規〕・`bgms-index.sbn`・`site.css`）：スタッフ（音楽）の右に、録音の回ごとの日付とスタジオ（`bgm_sessions.caption`。記録のある回だけ）を「録音」の札つきで並べる。放送期間・公開日は出さない。曲数とバージョン数の札は、ほかの一覧と同じ大きさにした。題名の見出しの飾りを外し、行の余白を減らした。

@@ -148,27 +148,41 @@ public sealed class ArticlesGenerator
             CopyAssets(a);
         }
 
-        // 一覧ページ。
+        // 一覧ページ。公開日時と最終更新日のうち新しいほう（Article.LastActiveAt）の降順に並べ、
+        // 公開後に書き直した記事を上へ上げる。同じ日時は公開日時の降順、それも同じなら slug の昇順。
+        // 記事のページの前後の記事は、上の公開順のまま（書き直すたびに前後が入れ替わらないように）。
+        var floated = articles.ToList();
+        floated.Sort((a, b) =>
+        {
+            int cmp = b.LastActiveAt.CompareTo(a.LastActiveAt);
+            if (cmp == 0) cmp = b.Date.CompareTo(a.Date);
+            return cmp != 0 ? cmp : string.CompareOrdinal(a.Slug, b.Slug);
+        });
         var indexModel = new ArticlesIndexModel
         {
-            Articles = articles.Select(a => new ArticleSummary
+            Articles = floated.Select(a => new ArticleSummary
             {
                 Title = a.Title,
                 Description = a.Description,
                 Url = $"/articles/{a.Slug}/",
                 DateLabel = a.DateLabel,
                 DateIso = a.DateIso,
+                UpdatedLabel = a.UpdatedLabel,
+                UpdatedIso = a.UpdatedIso,
                 Tags = a.Tags,
+                // 未公開の印はテストビルドだけ。本番では、日付の無い原稿も公開済みとして並ぶので印を付けない。
+                UnpublishedLabel = _ctx.Config.IsProductionMode ? "" : UnpublishedLabelOf(a, DateTimeOffset.Now),
             }).ToList(),
         };
         var indexLayout = new LayoutModel
         {
             PageTitle = "コラム",
             // 記事の本数ではなく、新しい記事の題名を日付つきで 1 行ずつ並べる（何が読めるかがシェア先で分かるように）。
+            // 並びは一覧と同じで、書き直した記事の日付は最終更新日にする（上から新しい順に読めるように）。
             OgCard = new OgCardSpec(Kicker: "", Title: "コラム")
             {
-                Facts = articles.Take(LatestArticlesOnCard)
-                    .Select(a => new OgCardFactLine(a.DateLabel ?? "", a.Title))
+                Facts = floated.Take(LatestArticlesOnCard)
+                    .Select(a => new OgCardFactLine(a.UpdatedLabel != "" ? a.UpdatedLabel : a.DateLabel ?? "", a.Title))
                     .ToList()
             },
             MetaDescription =
@@ -278,8 +292,10 @@ public sealed class ArticlesGenerator
 
         // 最終更新日。公開後に書き直した記事だけが "updated: 2026-11-08" のように日付だけで持つ。
         // 公開日（date の日付）より後の日付のときだけ表示する。不正なら警告してラベル空。
+        // 一覧の並びに使う日時（lastActiveAt）は、表示する最終更新日があればその日の 0:00、無ければ公開日時。
         string updatedLabel = "";
         string updatedIso = "";
+        DateTime lastActiveAt = date;
         var rawUpdated = meta.GetValueOrDefault("updated", "").Trim();
         if (DateTime.TryParseExact(rawUpdated, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var updated))
         {
@@ -287,6 +303,7 @@ public sealed class ArticlesGenerator
             {
                 updatedLabel = $"{updated.Year}年{updated.Month}月{updated.Day}日";
                 updatedIso = updated.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                lastActiveAt = updated.Date;
             }
         }
         else if (!string.IsNullOrEmpty(rawUpdated))
@@ -306,7 +323,7 @@ public sealed class ArticlesGenerator
         // 素材のフォルダは原稿のファイル名に合わせる（front-matter で slug を変えても、置き場は原稿の隣のまま）。
         var assetDir = Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path));
 
-        return new Article(slug, title, description, date, dateLabel, dateIso, updatedLabel, updatedIso, tags, bodyHtml, isDraft, publishAt, assetDir);
+        return new Article(slug, title, description, date, dateLabel, dateIso, updatedLabel, updatedIso, lastActiveAt, tags, bodyHtml, isDraft, publishAt, assetDir);
     }
 
     /// <summary>
@@ -333,10 +350,12 @@ public sealed class ArticlesGenerator
     /// <summary>原稿 1 本。<paramref name="IsDraft"/> と <paramref name="PublishAt"/> は本番に出すかどうかの判定に使う。
     /// <paramref name="DateIso"/> は time 要素の datetime 属性に入れる "yyyy-MM-dd"（日付が無ければ空）。
     /// <paramref name="UpdatedLabel"/>・<paramref name="UpdatedIso"/> は最終更新日（公開日より後に書き直したときだけ。無ければ空）。
+    /// <paramref name="LastActiveAt"/> は一覧の並びに使う日時（最終更新日があればその日の 0:00、無ければ公開日時）。
     /// <paramref name="AssetDir"/> は図などの素材を置くフォルダ（原稿と同じ名前。無くてもよい）。</summary>
     private sealed record Article(
         string Slug, string Title, string Description,
-        DateTime Date, string DateLabel, string DateIso, string UpdatedLabel, string UpdatedIso, IReadOnlyList<string> Tags, string BodyHtml,
+        DateTime Date, string DateLabel, string DateIso, string UpdatedLabel, string UpdatedIso, DateTime LastActiveAt,
+        IReadOnlyList<string> Tags, string BodyHtml,
         bool IsDraft, DateTimeOffset PublishAt, string AssetDir);
 
     // ── テンプレに渡すモデル ──
@@ -370,6 +389,22 @@ public sealed class ArticlesGenerator
         public string Url { get; set; } = "";
     }
 
+    /// <summary>
+    /// まだ公開されていない原稿に付ける一覧の印の文言。公開済みなら空。
+    /// 下書き・公開日時前の原稿が一覧に並ぶのはテストビルドだけなので、本番の一覧には出ない。
+    /// </summary>
+    private static string UnpublishedLabelOf(Article a, DateTimeOffset now)
+    {
+        if (a.IsDraft) return "未公開（下書き）";
+        if (a.PublishAt == DateTimeOffset.MinValue) return "未公開（日付なし）";
+        if (a.PublishAt > now)
+        {
+            var d = a.PublishAt.LocalDateTime;
+            return $"未公開（{d.Month}月{d.Day}日 {d:H:mm} 公開）";
+        }
+        return "";
+    }
+
     /// <summary>一覧テンプレ（articles-index.sbn）に渡すモデル。</summary>
     private sealed class ArticlesIndexModel
     {
@@ -385,6 +420,12 @@ public sealed class ArticlesGenerator
         public string DateLabel { get; set; } = "";
         /// <summary>time 要素の datetime 属性（"yyyy-MM-dd"、日付が無ければ空）。</summary>
         public string DateIso { get; set; } = "";
+        /// <summary>最終更新日の表示（「2026年11月8日」）。公開後に書き直していなければ空。</summary>
+        public string UpdatedLabel { get; set; } = "";
+        /// <summary>最終更新日の time 要素の datetime 属性（"yyyy-MM-dd"、無ければ空）。</summary>
+        public string UpdatedIso { get; set; } = "";
         public IReadOnlyList<string> Tags { get; set; } = Array.Empty<string>();
+        /// <summary>未公開の原稿に付ける印の文言（テストビルドの一覧だけ。公開済みなら空）。</summary>
+        public string UnpublishedLabel { get; set; } = "";
     }
 }

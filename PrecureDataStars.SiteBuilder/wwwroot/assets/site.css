@@ -11368,6 +11368,22 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   /* グローバル a:hover { text-decoration: underline } をカード全域で抑止。 */
   text-decoration: none;
 }
+/* まだ公開していない原稿のカード（テストビルドの一覧だけに出る。precure.news の一覧も同じクラスを使う）。 */
+.article-card.is-unpublished {
+  border: 2px dashed var(--accent-yellow);
+  background: rgba(212, 160, 23, 0.10);
+}
+.article-card-unpublished {
+  display: inline-block;
+  margin: 0 0 0.6em;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--accent-yellow);
+  color: #fff;
+  font-size: 0.78em;
+  font-weight: 700;
+  line-height: 1.6;
+}
 .article-card-title { margin: 0 0 0.4em; font-size: 1.1em; line-height: 1.4; color: var(--fg); }
 .article-card-date { margin: 0 0 0.5em; font-size: 0.8em; color: var(--muted); }
 .article-card-desc { margin: 0 0 0.6em; font-size: 0.9em; color: var(--muted); line-height: 1.6; }

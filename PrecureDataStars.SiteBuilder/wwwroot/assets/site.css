@@ -2504,6 +2504,42 @@ a.series-card-children-title:hover {
 .products-card-badge.products-card-kind-vocal-best        { background: #e07ab0; } /* ボーカルベスト */
 .products-card-badge.products-card-kind-seasonal-event    { background: #cf6a4c; } /* 季節行事 */
 .products-card-badge.products-card-kind-other             { background: #94a3b8; } /* その他 */
+/* 映画の種別は、元の種別（主題歌シングル・ボーカルアルバム）を少し明るくした色（サントラと同じ決め方）。 */
+.products-card-badge.products-card-kind-theme-single-movie { background: #f0707f; } /* 映画主題歌シングル */
+.products-card-badge.products-card-kind-vocal-album-movie  { background: #e378b8; } /* 映画ボーカルアルバム */
+.products-card-badge.products-card-kind-vocal-best-box     { background: #c9569a; } /* ボーカルベストBOX */
+.products-card-badge.products-card-kind-singer-best        { background: #8f6ad6; } /* プリキュアシンガーズベスト */
+.products-card-badge.products-card-kind-collection         { background: #2f9bb2; } /* コレクション */
+.products-card-badge.products-card-kind-collabo            { background: #7a9a3a; } /* コラボ */
+.products-card-badge.products-card-kind-memorial           { background: #9a7a5a; } /* メモリアルアルバム */
+.products-card-badge.products-card-kind-cd-book            { background: #3fa0d0; } /* CDえほん */
+
+/* 商品一覧の行を縦に詰める：ジャケットを小さくし、行の上下の余白と行の間を減らす。 */
+.products-card-list { gap: 4px; }
+.products-card { padding: 5px 12px 5px 8px; }
+.products-card-grid {
+  grid-template-columns: 44px 1fr auto;
+  column-gap: 12px;
+  align-items: center;
+}
+.products-card-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 5px;
+}
+.products-card-title {
+  font-size: 1em;
+  line-height: 1.35;
+}
+.products-card-meta {
+  margin-top: 0;
+  font-size: 0.8em;
+  line-height: 1.45;
+}
+.products-card-badge-cell {
+  align-self: center;
+  padding-top: 0;
+}
 
 /* 商品索引：≤640px の縦積み。2 列 grid を縦並びに反転してバッジをタイトル上に移動。
    meta 行の不自然な flex 折り返しを回避するため。楽曲索引 (.songs-card-grid) の

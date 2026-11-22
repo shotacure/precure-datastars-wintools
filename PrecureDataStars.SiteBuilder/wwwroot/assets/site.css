@@ -6238,46 +6238,62 @@ a.credit-card-series:focus-visible {
   color: var(--text-muted, #666);
 }
 
-/* シリーズ単位ランキング表（episode 版 .stats-episode-ranking-table と同一構造で運用） */
-.stats-series-ranking-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-block: 1rem;
-  font-variant-numeric: tabular-nums;
-}
-.stats-series-ranking-table th,
-.stats-series-ranking-table td {
-  padding: 0.4em 0.6em;
-  border-bottom: 1px solid var(--border-color, #e5e5e5);
-  vertical-align: middle;
-}
-.stats-series-ranking-table th {
-  background-color: var(--bg-subtle, #f5f5f5);
+/* シリーズ別の順位のページ（平均文字数・漢字率・記号率）。行はエピソード単位のランキング
+   （.stats-ep-row）と同じ作りで、作品名の下に値の横棒と内訳を置く。 */
+.stats-series-row .stats-ep-series {
+  font-size: 1.05em;
   font-weight: 600;
-  text-align: left;
+  margin-bottom: 8px;
 }
-.stats-series-ranking-table th.col-rank,
-.stats-series-ranking-table td.col-rank {
-  width: 4em;
-  text-align: right;
+.stats-series-row .stats-ep-year {
+  font-weight: 400;
+}
+.stats-series-meter {
+  display: grid;
+  grid-template-columns: 1fr 15em;
+  gap: 14px;
+  align-items: center;
+}
+/* 横棒：いちばん大きい値の行が端まで届く。 */
+.stats-series-bar {
+  display: block;
+  height: 10px;
+  background: #f1f2f4;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.stats-series-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  opacity: 0.72;
+  border-radius: 5px;
+}
+.stats-series-detail {
+  color: var(--muted);
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
-}
-.stats-series-ranking-table th.col-series,
-.stats-series-ranking-table td.col-series {
-  min-width: 12em;
-}
-.stats-series-ranking-table th.col-value,
-.stats-series-ranking-table td.col-value {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
   white-space: nowrap;
 }
-.stats-series-ranking-table th.col-epcount,
-.stats-series-ranking-table td.col-epcount {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  width: 5em;
+/* 冒頭のグラフ。幅が狭い画面では図の幅を保ち、図だけを横スクロールさせる。 */
+.stats-chart-scroll {
+  overflow-x: auto;
+  margin: 8px 0 16px;
+}
+.stats-chart {
+  min-width: 680px;
+}
+.stats-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+@media (max-width: 640px) {
+  .stats-series-meter {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
 }
 
 /* episode 版テーブルでも col-epcount / col-firstdate を使えるように同じスタイルを共有 */

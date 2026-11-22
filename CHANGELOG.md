@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：サブタイトル統計のシリーズ別の順位のページにグラフを載せ、表を行の並びに替えた**（`StatsSeriesCharts`〔新規〕・`_stats-series-rank.sbn`〔新規〕・`SubtitleStatsRepository.GetTitleLengthsBySeriesAsync`〔新規〕・`SubtitleStatsGenerator`・`stats-subtitles-avg-length-by-series.sbn`・`stats-subtitles-kanji-rate-by-series.sbn`・`stats-subtitles-symbol-rate-by-series.sbn`・`site.css`）：平均文字数・漢字率・記号率の 3 ページが対象。冒頭文の下に、放送開始年を横軸にしたグラフを置く。平均文字数のページは各話の文字数の箱ひげ図（最小値・最大値・四分位範囲・中央値・平均値・最頻値）、漢字率と記号率のページは作品ごとの率の折れ線グラフで、ビルドのたびに集計値から描く。表はエピソード単位のランキングと同じ行の作り（左に順位と値、右に作品名と年度）に替え、値の横棒と内訳（話数、または分子と分母）を添えた。スマホの幅でも行が横にはみ出さない。
+
 - **サイト：エピソード詳細のスタッフの組み合わせで、初めての回の表記を「初顔合わせ」から「初」に改めた**（`EpisodeGenerator.BuildStaffCombos`）：閉じた状態の 1 行と、開いた状態のカードの両方。役職ごとのカードの「初担当」はそのまま。
 
 - **クレジット：ブロックの筆頭の会社に、画面に出た会社名の表記を持てるようにした**（マイグレーション `v1.21.1_add_leading_company_display_text.sql`・`credit_role_blocks.leading_company_display_text`〔新規〕・`leading_company2_display_text`〔新規〕・`CreditRoleBlock`・`CreditRoleBlocksRepository`・`ILookupCache.LookupCompanyAliasHtmlAsync`〔新規の多重定義〕・SiteBuilder の `LookupCache` / `CreditTreeRenderer` / `CreditTreeIndex` / `EpisodeStaffCards`・TemplateRendering の `RoleTemplateRenderer` / `RoleJoinComparer`・Catalog の `CreditPreviewRenderer`・`CreditBulkInputParser`・`CreditBulkInputEncoder`・`BulkParseResult`・`CreditBulkApplyService`・`CreditDraftLoader`・`CreditSaveService`）：エントリの `company_display_text` と同じく、名義と空白・中黒・記号だけが違う画面の表記を、筆頭の 1 社目・2 社目ごとに持つ。サイトのクレジット・Catalog のプレビュー・`{LEADING_COMPANY}`・各話のスタッフの札は、名義の名前の代わりにこの表記を出す（リンク先と集計は名義の会社のまま）。一括入力は `[[屋号|画面の表記]]`。あわせて、役職テンプレートの `{COMPANIES}` がエントリの `company_display_text` を出すようにし、各話のスタッフの札の所属は、会社名義と所属の文字（`affiliation_text`）の両方があるとき、クレジットの表と同じく文字を出すようにした。

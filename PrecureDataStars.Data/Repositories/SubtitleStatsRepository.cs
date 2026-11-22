@@ -508,6 +508,27 @@ public sealed class SubtitleStatsRepository : RepositoryBase
         return await QueryTvEpisodesAsync<SeriesAverageRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// TV シリーズの各話のサブタイトルの文字数（空白を除く）を、話ごとに 1 行で返す。
+    /// 母集団は <see cref="GetSeriesAverageLengthAsync"/> と同じ（サブタイトル未確定の話は除く）。
+    /// 作品ごとの分布（最小値・四分位数・中央値・最大値・最頻値）は、呼び出し側がこの行から求める。
+    /// </summary>
+    public async Task<IReadOnlyList<SeriesTitleLengthRow>> GetTitleLengthsBySeriesAsync(CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT
+              e.series_id AS SeriesId,
+              CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', '')) AS Len
+            FROM episodes e
+            WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
+              -- サブタイトル未確定（title_text NULL）の話は集計の母集団から除外する
+              AND e.title_text IS NOT NULL
+            ORDER BY e.series_id, e.episode_id;
+            """;
+
+        return await QueryTvEpisodesAsync<SeriesTitleLengthRow>(sql, ct: ct).ConfigureAwait(false);
+    }
+
     /// <summary>サブタイトル漢字率ランキング（既存 GetKanjiRatioRankingAsync）の昇降切替版。</summary>
     /// <param name="ascending">true で低い順、false で高い順。</param>
     public async Task<IReadOnlyList<EpisodeRatioRow>> GetKanjiRateEpisodeAsync(bool ascending, int limit, CancellationToken ct = default)
@@ -763,6 +784,14 @@ public sealed class SubtitleStatsRepository : RepositoryBase
         public double Average { get; set; }
         /// <summary>サンプル件数（シリーズ内のエピソード数）。表示参考用。</summary>
         public int EpisodeCount { get; set; }
+    }
+
+    /// <summary>1 話ぶんのサブタイトルの文字数（作品ごとの分布を求める材料）。</summary>
+    public sealed class SeriesTitleLengthRow
+    {
+        public int SeriesId { get; set; }
+        /// <summary>空白を除いた文字数。</summary>
+        public int Len { get; set; }
     }
 
     /// <summary>シリーズ単位の比率ランキング 1 行（漢字率・記号率など）。</summary>

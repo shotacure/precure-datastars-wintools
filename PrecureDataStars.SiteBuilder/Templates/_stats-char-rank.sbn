@@ -18,7 +18,7 @@
 </section>
 
 <section>
-  <h2>順位と、作品ごとの使われ方</h2>
+  <h2>順位とシリーズ頻度</h2>
   <p class="muted stats-note">マスは TV シリーズを放送順に並べたもので、その字が多く使われた作品ほど高く、濃い色です。色は 5 年ごとに替えていて、各色の最後が 5・10・15・20 周年の年の作品です。</p>
   <div class="stats-char-head" aria-hidden="true">
     <span class="stats-strip">

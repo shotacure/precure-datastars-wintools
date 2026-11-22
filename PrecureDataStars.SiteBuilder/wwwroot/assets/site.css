@@ -6149,6 +6149,17 @@ a.credit-card-series:focus-visible {
   align-items: center;
   gap: 8px;
 }
+/* 歌の一覧の行を縦に詰める：行の上下の余白と行の間、題名と作詞・作曲の行の間を減らす（題名の下に作詞・作曲の行、の 2 段は変えない）。
+   種別の札と再生ボタンは、行の上下の中央に置く。 */
+.songs-card-list { gap: 4px; }
+.songs-card { padding: 5px 12px; }
+.songs-card-grid { align-items: center; }
+.songs-card-title { font-size: 1em; }
+.songs-card .staff-badges-row { margin-top: 0; }
+.songs-card-badge-cell {
+  align-self: center;
+  padding-top: 0;
+}
 /* 歌の一覧のカードの再生ボタン。カードの中身はクリックを透過する（pointer-events: none）ので、ボタンだけ拾う。 */
 .songs-card-play {
   pointer-events: auto;

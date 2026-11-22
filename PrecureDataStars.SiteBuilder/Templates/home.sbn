@@ -235,7 +235,7 @@
           {{~ else ~}}
           <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
           {{~ end ~}}
-          <span class="home-product-card-badge{{~ if p.ReleaseStatusLabel != "" ~}} home-product-card-badge-upcoming{{~ end ~}}">{{ p.ReleaseStatusLabel | html.escape }}</span>
+          <span class="home-product-card-badge{{ if p.ReleaseStatusLabel != "" }} home-product-card-badge-upcoming{{ end }}">{{ p.ReleaseStatusLabel | html.escape }}</span>
         </div>
         <div class="home-product-card-body">
           <h3 class="home-product-card-title">{{ p.Title | html.escape }}</h3>
@@ -286,7 +286,7 @@
           {{~ else ~}}
           <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
           {{~ end ~}}
-          <span class="home-product-card-badge{{~ if p.ReleaseStatusLabel != "" ~}} home-product-card-badge-released{{~ end ~}}">{{ p.ReleaseStatusLabel | html.escape }}</span>
+          <span class="home-product-card-badge{{ if p.ReleaseStatusLabel != "" }} home-product-card-badge-released{{ end }}">{{ p.ReleaseStatusLabel | html.escape }}</span>
         </div>
         <div class="home-product-card-body">
           <h3 class="home-product-card-title">{{ p.Title | html.escape }}</h3>
@@ -339,7 +339,7 @@
           {{~ else ~}}
           <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
           {{~ end ~}}
-          <span class="home-product-card-badge{{~ if b.ReleaseStatusLabel != "" ~}} home-product-card-badge-upcoming{{~ end ~}}">{{ b.ReleaseStatusLabel | html.escape }}</span>
+          <span class="home-product-card-badge{{ if b.ReleaseStatusLabel != "" }} home-product-card-badge-upcoming{{ end }}">{{ b.ReleaseStatusLabel | html.escape }}</span>
         </div>
         <div class="home-product-card-body">
           <h3 class="home-product-card-title">{{ b.Title | html.escape }}</h3>
@@ -387,7 +387,7 @@
           {{~ else ~}}
           <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
           {{~ end ~}}
-          <span class="home-product-card-badge{{~ if b.ReleaseStatusLabel != "" ~}} home-product-card-badge-released{{~ end ~}}">{{ b.ReleaseStatusLabel | html.escape }}</span>
+          <span class="home-product-card-badge{{ if b.ReleaseStatusLabel != "" }} home-product-card-badge-released{{ end }}">{{ b.ReleaseStatusLabel | html.escape }}</span>
         </div>
         <div class="home-product-card-body">
           <h3 class="home-product-card-title">{{ b.Title | html.escape }}</h3>

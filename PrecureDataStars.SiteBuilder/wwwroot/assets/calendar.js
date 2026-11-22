@@ -25,13 +25,12 @@
  *   > そのほかの人物(pb, pt=2)。人物は同じ段の中で本編のクレジット回数の多い順。
  *
  * 月グリッドでは、ふだんはキャラクター誕生日のチップだけを出し、ほか（映画公開・人物誕生日・TV 放送）は
- * 種別ごとの件数（🎥1 🎂2 📺4）にたたむ。週（グリッドの 1 行）にマウスを載せるとその週のチップだけが開き、
- * ほかの週は閉じる（上の週を閉じると下がずり上がるので、上の週は動きを付けずにすぐ閉じ、ずれた分だけスクロール位置を合わせる）。
- * カレンダーからマウスが出たら、全部の週を閉じる。今日のある週も、最初はたたんでおく。
- * 7 日縦並び（狭い幅）でも同じく、キャラクター誕生日のほかは件数にたたみ、スクロールのたびに、
- * 画面の縦のまんなかにいちばん近い日だけを開いて、ほかの日は閉じる。
- * タッチだけの端末（タブレットなど。マウスやペンが 1 つも無い端末）の月グリッドも、まんなかの週だけを開く。
- * PC の月グリッドでは、タッチ対応でもマウスを載せたときだけ開く。
+ * 種別ごとの件数（🎥1 🎂2 📺4）にたたんで、日付の右に並べる。
+ * 7 日縦並び（狭い幅）でも同じく、キャラクター誕生日のほかは件数にたたむ。
+ * たたんだ行は、月名の行の右端の「全部開く」のボタンで開く（PC では、開閉はこのボタンだけ）。
+ * 7 日縦並びと、タッチだけの端末（タブレットなど。マウスやペンが 1 つも無い端末）の月グリッドでは、ボタンを押していない間、
+ * スクロールのたびに、画面の縦のまんなかにいちばん近い行だけを開いて、ほかの行は閉じる
+ * （上の行を閉じると下がずり上がるので、上の行は動きを付けずにすぐ閉じ、ずれた分だけスクロール位置を合わせる）。
  * 月名の行の右端に「全部開く」のボタンを置く。押すと全部の行が開いたままになり（もう一度押すとたたむ）、
  * その間はマウスやスクロールでは開閉しない。押した状態は端末に覚えておく。
  * 開閉は CSS の grid-template-rows の遷移でなめらかに動かす（site.css の .cal-fold）。
@@ -148,7 +147,6 @@
   // 行（月グリッドの週、7 日縦並びの 1 日）の開閉。入れ物に 1 回だけ結線する（中身は描き直しのたびに入れ替わるため）。
   // 描き直しのあとに呼ぶ関数（画面のまんなかの行を開き直す）を返す。
   function bindWeekFolding(grid) {
-    var hoverTimer = 0;
     // 「全部開く」のボタンを押した状態か。押してある間は全部の行を開いたままにし、マウスやスクロールでは開閉しない。
     // 次に来たときも同じ状態で始められるよう、端末に覚えておく（覚えられない設定の端末では、そのページの間だけ）。
     var EXPAND_KEY = 'pcds.calendar.expandAll';
@@ -186,16 +184,12 @@
       if (!expandAll) openCentered();
     }
     function cells() { return grid.querySelectorAll('[data-week]'); }
-    function weekOf(target) {
-      var cell = target && target.closest ? target.closest('[data-week]') : null;
-      return cell ? parseInt(cell.getAttribute('data-week'), 10) : -1;
-    }
     // 全部の行を閉じる。
     function closeAll() {
       var list = cells();
       for (var i = 0; i < list.length; i++) list[i].classList.remove('is-open');
     }
-    // week の行だけを開き、ほかを全部閉じる（マウスを載せたとき・スクロールのとき共通）。上の行を閉じると下がずり上がるので、
+    // week の行だけを開き、ほかを全部閉じる（スクロール用）。上の行を閉じると下がずり上がるので、
     // 上の行は動きを付けずにすぐ閉じ、開く行の位置が変わらないよう、ずれた分だけスクロール位置を戻す。
     function openOnly(week) {
       var list = cells();
@@ -228,24 +222,9 @@
       });
     }
 
-    // マウスの動きには、端末の種類を問わず必ず反応する（タッチ対応の PC は、ブラウザが「マウスなし」と
-    // 申告することがあるので、申告では分けない）。
-    grid.addEventListener('mouseover', function (ev) {
-      if (expandAll || centerMode()) return;
-      var week = weekOf(ev.target);
-      if (week < 0) return;
-      // 行を横切るだけのときに開かないよう、少しだけ待つ。
-      clearTimeout(hoverTimer);
-      hoverTimer = setTimeout(function () { openOnly(week); }, 90);
-    });
-    grid.addEventListener('mouseleave', function () {
-      if (expandAll || centerMode()) return;
-      clearTimeout(hoverTimer);
-      closeAll();
-    });
-
     // 画面の縦のまんなかにいちばん近い行だけを開く動き。7 日縦並び（狭い幅）と、タッチだけの端末（タブレットなど。
-    // マウスやペンのような細かい操作の手段が 1 つも無い端末）の月グリッドで使う。PC の月グリッドでは使わない。
+    // マウスやペンのような細かい操作の手段が 1 つも無い端末）の月グリッドで使う。PC の月グリッドでは使わず、
+    // 開閉は「全部開く」のボタンだけで行う。
     var touchOnly = window.matchMedia
       && window.matchMedia('(any-pointer: coarse)').matches
       && !window.matchMedia('(any-pointer: fine)').matches

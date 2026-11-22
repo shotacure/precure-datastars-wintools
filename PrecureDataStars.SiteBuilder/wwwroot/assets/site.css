@@ -10859,13 +10859,15 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .cal-counts {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: 2px;
 }
-/* 件数の札：色は開いたときのチップ（.cal-chip-movie / -person / -ep）と同じ。 */
+/* 件数の札：色は開いたときのチップ（.cal-chip-movie / -person / -ep）と同じ。
+   1 つのマスに 3 つ並ぶよう、左右の余白と絵文字の右の間を詰める。 */
+.cal-count .cal-chip-emoji { margin-right: 2px; }
 .cal-count {
   display: inline-flex;
   align-items: center;
-  padding: 1px 7px 1px 5px;
+  padding: 1px 5px 1px 3px;
   border: 1px solid transparent;
   border-radius: 8px;
   font-family: var(--font-num);
@@ -10876,6 +10878,17 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cal-fold { transition: none; }
+}
+/* 本文の幅が狭まる画面（月の表示は幅 720px より広い画面）でも 3 つ並ぶよう、件数の札をさらに詰める。 */
+@media (max-width: 1000px) {
+  .cal-count {
+    padding: 1px 3px 1px 2px;
+    font-size: 0.64rem;
+  }
+  .cal-count .cal-chip-emoji {
+    margin-right: 1px;
+    font-size: 0.68rem;
+  }
 }
 
 /* カレンダー凡例 */

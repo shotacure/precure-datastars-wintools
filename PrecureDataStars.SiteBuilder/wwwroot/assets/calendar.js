@@ -27,7 +27,7 @@
  * 月グリッドでは、ふだんはキャラクター誕生日のチップだけを出し、ほか（映画公開・人物誕生日・TV 放送）は
  * 種別ごとの件数（🎥1 🎂2 📺4）にたたむ。週（グリッドの 1 行）にマウスを載せるとその週のチップが開き、
  * それより下の週は閉じる（上の週は、閉じるとマウスの下の行がずれるので開いたままにする）。
- * カレンダーからマウスが出たら、今日のある週だけ残して閉じる。今日のある週は最初から開いておく。
+ * カレンダーからマウスが出たら、全部の週を閉じる。今日のある週も、最初はたたんでおく。
  * タッチだけの端末（タブレットなど。マウスやペンが 1 つも無い端末）では、スクロールのたびに、画面の縦のまんなかにいちばん近い週を開く。
  * PC では、タッチ対応でもマウスを載せたときだけ開く。
  * 開閉は CSS の grid-template-rows の遷移でなめらかに動かす（site.css の .cal-fold）。
@@ -147,21 +147,19 @@
       var cell = target && target.closest ? target.closest('.cal-cell[data-week]') : null;
       return cell ? parseInt(cell.getAttribute('data-week'), 10) : -1;
     }
-    // week の週を開き、それより下の週を閉じる（今日の週は閉じない）。
+    // week の週を開き、それより下の週を閉じる。
     function openWeek(week) {
       var list = cells();
       for (var i = 0; i < list.length; i++) {
         var w = parseInt(list[i].getAttribute('data-week'), 10);
         if (w === week) list[i].classList.add('is-open');
-        else if (w > week && !list[i].hasAttribute('data-today-week')) list[i].classList.remove('is-open');
+        else if (w > week) list[i].classList.remove('is-open');
       }
     }
-    // 今日の週だけ残して閉じる。
+    // 全部の週を閉じる。
     function closeAll() {
       var list = cells();
-      for (var i = 0; i < list.length; i++) {
-        if (!list[i].hasAttribute('data-today-week')) list[i].classList.remove('is-open');
-      }
+      for (var i = 0; i < list.length; i++) list[i].classList.remove('is-open');
     }
 
     // マウスの動きには、端末の種類を問わず必ず反応する（タッチ対応の PC は、ブラウザが「マウスなし」と
@@ -186,7 +184,7 @@
       && !window.matchMedia('(any-pointer: fine)').matches
       && !window.matchMedia('(any-hover: hover)').matches;
     if (touchOnly) {
-      // カレンダーが画面の外にあるときは、今日の週だけ残して閉じる。
+      // カレンダーが画面の外にあるときは、全部の週を閉じる。
       var ticking = false;
       var onScroll = function () {
         if (ticking) return;
@@ -294,8 +292,6 @@
       html += '<div class="cal-cell cal-cell-empty"></div>';
     }
     // 日セル。
-    // 今日のある週（グリッドの行）。最初から開いておく。当月以外を表示しているときは -1。
-    var todayWeek = todayDay > 0 ? Math.floor((firstDow + todayDay - 1) / 7) : -1;
     for (var d = 1; d <= daysInMonth; d++) {
       var dow = new Date(year, month - 1, d).getDay();
       var week = Math.floor((firstDow + d - 1) / 7);
@@ -303,9 +299,8 @@
       if (d === todayDay) cls += ' cal-today';
       if (dow === 0) cls += ' cal-sun';
       if (dow === 6) cls += ' cal-sat';
-      if (week === todayWeek) cls += ' is-open';
 
-      html += '<div class="' + cls + '" data-week="' + week + '"' + (week === todayWeek ? ' data-today-week' : '') + '>';
+      html += '<div class="' + cls + '" data-week="' + week + '">';
       html += '<div class="cal-daynum">' + d + '</div>';
 
       // キャラクター誕生日はいつも出す。ほかのチップは、週が開いているときだけ出す側（more）へ回す。

@@ -11449,6 +11449,35 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 /* 画像とキャプション。 */
 .article-body figure { margin: 0 0 1.2em; }
 .article-body figcaption { font-size: 0.85em; color: var(--muted); margin-top: 0.3em; }
+/* 写真（figure.photo）。本文の幅より小さめに置き、紙焼きの写真のような白い枠を付ける。
+   クリックすると photo-modal.js が画面いっぱいに拡大する。precure.news の写真も同じ class 名で、この CSS を使う。 */
+.article-body figure.photo {
+  width: min(100%, 520px); box-sizing: border-box; margin: 1.6em auto;
+  padding: 10px 10px 8px; background: #ffffff;
+  border: 1px solid var(--border); border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+.article-body figure.photo .photo-link { display: block; cursor: zoom-in; border-radius: 2px; }
+.article-body figure.photo .photo-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.article-body figure.photo img { display: block; width: 100%; height: auto; border-radius: 2px; }
+.article-body figure.photo figcaption { margin-top: 8px; text-align: center; line-height: 1.5; }
+/* 写真の拡大表示（photo-modal.js が body の末尾に足す dialog）。 */
+dialog.photo-modal {
+  width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 16px;
+  border: 0; background: transparent; cursor: zoom-out;
+  display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  box-sizing: border-box;
+}
+dialog.photo-modal[open] { display: flex; }
+dialog.photo-modal::backdrop { background: rgba(0, 0, 0, 0.85); }
+.photo-modal-img { max-width: 100%; max-height: calc(100dvh - 90px); min-height: 0; object-fit: contain; border-radius: 4px; background: #ffffff; }
+.photo-modal-caption { margin: 0; color: #ffffff; font-size: 0.9rem; text-align: center; }
+.photo-modal-close {
+  position: fixed; top: 12px; right: 12px; width: 40px; height: 40px;
+  border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.92); color: #1a1a1a;
+  font-size: 1.4rem; line-height: 1; cursor: pointer;
+}
+.photo-modal-close:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
 /* コラムの中の「囲み」（原稿の ::: study-note … ::: が div.study-note になる）。
    プリキュアの話題を離れて、統計などの一般の知識を解説するところに使う。方眼紙の点を敷いた淡い青の地に、
    最初の見出しを青い札にして枠の上辺に載せ、右上にきらめきを添える。 */

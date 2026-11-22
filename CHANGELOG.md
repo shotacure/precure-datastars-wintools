@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：コラムの写真を枠つきで小さめに置き、クリックで拡大するようにした**（`ArticlesGenerator.WrapPhotos`〔新規〕・`ArticleContentModel.HasPhoto`〔新規〕・`article-detail.sbn`・`photo-modal.js`〔新規〕・`site.css` の `figure.photo`・`dialog.photo-modal`）：原稿で 1 行に単独で `![説明](photo.jpg "キャプション"){.photo}` と書いた画像を `<figure class="photo">` にし、最大 520px の幅で、白い枠を付けて中央に置く。写真をクリックすると画面いっぱいに拡大し、もう一度のクリック・閉じるボタン・Esc で閉じる。JS は写真がある記事だけ読み込み、JS が動かないときはリンクで元の画像が開く。`{.photo}` を付けない画像（図など）は変わらない。class 名と組みは precure.news の写真と同じにした。
+
 - **サイト：コラムの一覧を、書き直した記事が上へ上がる並びにした**（`ArticlesGenerator`・`Article.LastActiveAt`〔新規〕・`articles-index.sbn`）：公開日時と最終更新日（原稿の `updated`）のうち新しいほうの順に並べる。最終更新日は日付だけなので、その日の 0:00 として比べる。書き直した記事のカードには、記事のページと同じく、公開日の後ろに「（2026年11月22日更新）」と添える。一覧の OGP カードの 4 本も同じ並びにし、書き直した記事の日付は最終更新日にした。記事のページの「前の記事・次の記事」は公開日時の順のまま。
 
 - **サイト：テストビルドのコラムの一覧で、まだ公開していない原稿のカードに「未公開」の札と点線の枠を付けた**（`ArticlesGenerator.UnpublishedLabelOf`〔新規〕・`articles-index.sbn`・`site.css` の `.article-card.is-unpublished`・`.article-card-unpublished`〔新規〕）：下書きは「未公開（下書き）」、日付の無い原稿は「未公開（日付なし）」、公開日時が先の原稿は「未公開（11月25日 8:30 公開）」と出す。本番ビルドの一覧には付けない。同じ CSS を使う precure.news のテストビルドの一覧も同じ見た目になる。

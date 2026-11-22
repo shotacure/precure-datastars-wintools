@@ -112,6 +112,7 @@ public sealed class ArticlesGenerator
                 Tags = a.Tags ?? Array.Empty<string>(),
                 BodyHtml = a.BodyHtml,
                 HasTweet = a.BodyHtml.Contains("twitter-tweet", StringComparison.Ordinal),
+                HasPhoto = a.BodyHtml.Contains(PhotoFigureOpen, StringComparison.Ordinal),
                 // 並びは新しい順なので、1 つ後ろが古い記事（前の記事）、1 つ前が新しい記事（次の記事）。
                 Prev = i + 1 < articles.Count ? ToLink(articles[i + 1]) : null,
                 Next = i > 0 ? ToLink(articles[i - 1]) : null,
@@ -318,7 +319,7 @@ public sealed class ArticlesGenerator
         var tags = meta.GetValueOrDefault("tags", "")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        var bodyHtml = FormatFootnoteRefs(Markdown.ToHtml(SeparateAdjacentFootnoteRefs(body), MarkdownPipeline));
+        var bodyHtml = WrapPhotos(FormatFootnoteRefs(Markdown.ToHtml(SeparateAdjacentFootnoteRefs(body), MarkdownPipeline)));
 
         // 素材のフォルダは原稿のファイル名に合わせる（front-matter で slug を変えても、置き場は原稿の隣のまま）。
         var assetDir = Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path));
@@ -340,6 +341,40 @@ public sealed class ArticlesGenerator
     /// </summary>
     private static string FormatFootnoteRefs(string html)
         => FootnoteRefRegex.Replace(html.Replace(FootnoteRefSeparator, ""), "<sup class=\"fn-ref\">[<a$1>$2</a>]</sup>");
+
+    /// <summary>
+    /// 本文の写真を、枠つきで小さめに置く形（<c>figure.photo</c>）にする。原稿で 1 行に単独で書いた
+    /// <c>![説明](写真.jpg "キャプション"){.photo}</c> を Markdig は <c>&lt;p&gt;&lt;img class="photo" …&gt;&lt;/p&gt;</c> にするので、それを
+    /// <c>&lt;figure class="photo"&gt;&lt;a class="photo-link" href="写真"&gt;&lt;img …&gt;&lt;/a&gt;&lt;figcaption&gt;キャプション&lt;/figcaption&gt;&lt;/figure&gt;</c> に組み替える。
+    /// キャプション（画像の title）は省ける。<c>{.photo}</c> の無い画像（図など）には手を入れない。
+    /// class 名と組みは precure.news の写真と同じで、見た目は site.css の <c>figure.photo</c>、クリックでの拡大は photo-modal.js が受け持つ。
+    /// </summary>
+    private static string WrapPhotos(string html)
+        => PhotoParagraphRegex.Replace(html, m =>
+        {
+            var attrs = m.Groups[1].Value;
+            // class が photo だけの画像を写真として扱う（Markdig は {.photo} を class="photo" で出す）。
+            if (ImgAttr(attrs, "class") != "photo") return m.Value;
+            var src = ImgAttr(attrs, "src");
+            if (src == "") return m.Value;
+            // 値は Markdig が HTML の属性として逃がし済みなので、そのまま属性と本文に置ける。
+            var alt = ImgAttr(attrs, "alt");
+            var caption = ImgAttr(attrs, "title");
+            var figcaption = caption != "" ? $"<figcaption>{caption}</figcaption>" : "";
+            return $"{PhotoFigureOpen}><a class=\"photo-link\" href=\"{src}\"><img src=\"{src}\" alt=\"{alt}\" loading=\"lazy\" decoding=\"async\"></a>{figcaption}</figure>";
+        });
+
+    /// <summary>img 要素の属性の並びから、名前の合う属性の値（逃がし済みのまま）を取り出す。無ければ空。</summary>
+    private static string ImgAttr(string attrs, string name)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(attrs, $@"(?:^|\s){name}=""([^""]*)""");
+        return m.Success ? m.Groups[1].Value : "";
+    }
+
+    /// <summary>写真の figure の開きタグの頭。本文に写真があるかの判定（<see cref="ArticleContentModel.HasPhoto"/>）にも使う。</summary>
+    private const string PhotoFigureOpen = "<figure class=\"photo\"";
+    private static readonly System.Text.RegularExpressions.Regex PhotoParagraphRegex =
+        new(@"<p><img\s([^>]*?)\s*/?></p>", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private const string FootnoteRefSeparator = "<!---->";
     private static readonly System.Text.RegularExpressions.Regex AdjacentFootnoteRefRegex =
@@ -376,6 +411,8 @@ public sealed class ArticlesGenerator
         public string BodyHtml { get; set; } = "";
         /// <summary>本文に X の埋め込み（blockquote.twitter-tweet）があるか。あれば X の読み込みスクリプトを置く。</summary>
         public bool HasTweet { get; set; }
+        /// <summary>本文に写真（figure.photo）があるか。あれば、クリックで拡大する photo-modal.js を置く。</summary>
+        public bool HasPhoto { get; set; }
         /// <summary>1 つ古い記事（「← 前の記事」）。最も古い記事では null。</summary>
         public ArticleLink? Prev { get; set; }
         /// <summary>1 つ新しい記事（「次の記事 →」）。最新の記事では null。</summary>

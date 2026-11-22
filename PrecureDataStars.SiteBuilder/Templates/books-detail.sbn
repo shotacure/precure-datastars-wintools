@@ -80,37 +80,29 @@
       </div>
     </div>
     {{## 購入のリンク。ジャケットと基本情報の段の下に、トップの「Blu-ray・CD のご案内」と同じ行の作り（.shop-box）で並べる。
-         行全体が Amazon へのリンク（rel="nofollow sponsored noopener" + target=_blank）。
+         商品は 1 行にまとめ、右にボタンを並べる（登録のある版だけ）。ボタンが Amazon へのリンク（rel="nofollow sponsored noopener" + target=_blank）。
          購入リンクは Amazon アソシエイトの広告なので、枠の下で広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。
          この枠は shop-box.js が描く枠（data-shop-series を持つ）ではなく、テンプレートがそのまま出す。 ##}}
     {{~ if Book.AmazonPrintUrl != "" || Book.AmazonKindleUrl != "" ~}}
-    <aside class="shop-box product-buy" aria-label="購入・閲覧">
-      <p class="shop-box-heading">購入・閲覧</p>
+    {{## 見出しは、買う以外の版（Kindle）があるときだけ「購入・閲覧」、無ければ「購入」。 ##}}
+    {{~ buy_heading = Book.AmazonKindleUrl != "" ? "購入・閲覧" : "購入" ~}}
+    <aside class="shop-box product-buy" aria-label="{{ buy_heading }}">
+      <p class="shop-box-heading">{{ buy_heading }}</p>
       <ul class="shop-box-list">
-          {{~ if Book.AmazonPrintUrl != "" ~}}
           <li class="shop-box-item">
-            <a class="shop-box-link" href="{{ Book.AmazonPrintUrl }}" target="_blank" rel="nofollow sponsored noopener"
-               aria-label="{{ Book.Title | html.escape }}（紙。Amazon で買う）"></a>
             <span class="shop-box-thumb">{{ if Book.CoverImageUrl != "" }}<img src="{{ Book.CoverImageUrl }}" alt="" loading="lazy" decoding="async">{{ end }}</span>
             <div class="shop-box-body">
-              <div class="shop-box-meta"><span class="shop-box-media">紙</span></div>
               <span class="shop-box-title">{{ Book.Title | html.escape }}</span>
-              <div class="shop-box-foot"><span class="shop-box-cta">Amazon で買う</span></div>
+              <div class="shop-box-foot">
+                {{~ if Book.AmazonPrintUrl != "" ~}}
+                <a class="shop-box-cta" href="{{ Book.AmazonPrintUrl }}" target="_blank" rel="nofollow sponsored noopener">Amazon で買う (紙)</a>
+                {{~ end ~}}
+                {{~ if Book.AmazonKindleUrl != "" ~}}
+                <a class="shop-box-cta" href="{{ Book.AmazonKindleUrl }}" target="_blank" rel="nofollow sponsored noopener">Kindle で読む</a>
+                {{~ end ~}}
+              </div>
             </div>
           </li>
-          {{~ end ~}}
-          {{~ if Book.AmazonKindleUrl != "" ~}}
-          <li class="shop-box-item">
-            <a class="shop-box-link" href="{{ Book.AmazonKindleUrl }}" target="_blank" rel="nofollow sponsored noopener"
-               aria-label="{{ Book.Title | html.escape }}（Kindle。Kindle で読む）"></a>
-            <span class="shop-box-thumb">{{ if Book.CoverImageUrl != "" }}<img src="{{ Book.CoverImageUrl }}" alt="" loading="lazy" decoding="async">{{ end }}</span>
-            <div class="shop-box-body">
-              <div class="shop-box-meta"><span class="shop-box-media">Kindle</span></div>
-              <span class="shop-box-title">{{ Book.Title | html.escape }}</span>
-              <div class="shop-box-foot"><span class="shop-box-cta">Kindle で読む</span></div>
-            </div>
-          </li>
-          {{~ end ~}}
       </ul>
       <p class="muted product-links-note shop-box-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
     </aside>

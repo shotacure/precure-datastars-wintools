@@ -70,37 +70,29 @@
       </div>
     </div>
     {{## 購入のリンク。ジャケットと基本情報の段の下に、トップの「Blu-ray・CD のご案内」と同じ行の作り（.shop-box）で並べる。
-         行全体が Amazon へのリンク（rel="nofollow sponsored noopener" + target=_blank）。
+         商品は 1 行にまとめ、右にボタンを並べる（登録のある版だけ）。ボタンが Amazon へのリンク（rel="nofollow sponsored noopener" + target=_blank）。
          購入リンクは Amazon アソシエイトの広告なので、枠の下で広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。
          この枠は shop-box.js が描く枠（data-shop-series を持つ）ではなく、テンプレートがそのまま出す。 ##}}
     {{~ if Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" ~}}
-    <aside class="shop-box product-buy" aria-label="購入・試聴">
-      <p class="shop-box-heading">購入・試聴</p>
+    {{## 見出しは、買う以外の版（デジタル）があるときだけ「購入・試聴」、無ければ「購入」。 ##}}
+    {{~ buy_heading = Product.AmazonDigitalUrl != "" ? "購入・試聴" : "購入" ~}}
+    <aside class="shop-box product-buy" aria-label="{{ buy_heading }}">
+      <p class="shop-box-heading">{{ buy_heading }}</p>
       <ul class="shop-box-list">
-          {{~ if Product.AmazonCdUrl != "" ~}}
           <li class="shop-box-item">
-            <a class="shop-box-link" href="{{ Product.AmazonCdUrl }}" target="_blank" rel="nofollow sponsored noopener"
-               aria-label="{{ Product.Title | html.escape }}（CD。Amazon で買う）"></a>
             <span class="shop-box-thumb">{{ if Product.CoverImageUrl != "" }}<img src="{{ Product.CoverImageUrl }}" alt="" loading="lazy" decoding="async">{{ end }}</span>
             <div class="shop-box-body">
-              <div class="shop-box-meta"><span class="shop-box-media">CD</span></div>
               <span class="shop-box-title">{{ Product.Title | html.escape }}</span>
-              <div class="shop-box-foot"><span class="shop-box-cta">Amazon で買う</span></div>
+              <div class="shop-box-foot">
+                {{~ if Product.AmazonCdUrl != "" ~}}
+                <a class="shop-box-cta" href="{{ Product.AmazonCdUrl }}" target="_blank" rel="nofollow sponsored noopener">Amazon で買う (CD)</a>
+                {{~ end ~}}
+                {{~ if Product.AmazonDigitalUrl != "" ~}}
+                <a class="shop-box-cta" href="{{ Product.AmazonDigitalUrl }}" target="_blank" rel="nofollow sponsored noopener">Amazon で聴く (デジタル)</a>
+                {{~ end ~}}
+              </div>
             </div>
           </li>
-          {{~ end ~}}
-          {{~ if Product.AmazonDigitalUrl != "" ~}}
-          <li class="shop-box-item">
-            <a class="shop-box-link" href="{{ Product.AmazonDigitalUrl }}" target="_blank" rel="nofollow sponsored noopener"
-               aria-label="{{ Product.Title | html.escape }}（デジタル。Amazon で聴く）"></a>
-            <span class="shop-box-thumb">{{ if Product.CoverImageUrl != "" }}<img src="{{ Product.CoverImageUrl }}" alt="" loading="lazy" decoding="async">{{ end }}</span>
-            <div class="shop-box-body">
-              <div class="shop-box-meta"><span class="shop-box-media">デジタル</span></div>
-              <span class="shop-box-title">{{ Product.Title | html.escape }}</span>
-              <div class="shop-box-foot"><span class="shop-box-cta">Amazon で聴く</span></div>
-            </div>
-          </li>
-          {{~ end ~}}
       </ul>
       <p class="muted product-links-note shop-box-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
     </aside>

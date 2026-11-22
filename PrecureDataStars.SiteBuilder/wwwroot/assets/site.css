@@ -13090,6 +13090,23 @@ a.staff-combo-nav-card:hover {
 /* 購入のリンクの枠（.shop-box と同じ作り）は、ジャケットと基本情報の段のすぐ下に置く。 */
 .product-head { margin-bottom: 14px; }
 .product-buy { margin: 0 0 24px; }
+/* 商品は 1 行で、右にボタンを左から並べる。ボタンそのものがリンク。 */
+.product-buy .shop-box-body {
+  grid-template-areas: "title foot";
+}
+.product-buy .shop-box-foot {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.product-buy a.shop-box-cta {
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+.product-buy a.shop-box-cta:hover { opacity: 0.85; }
+@media (max-width: 640px) {
+  .product-buy .shop-box-body { grid-template-areas: "title" "foot"; }
+}
 @media (max-width: 640px) {
   .product-head {
     flex-direction: column;

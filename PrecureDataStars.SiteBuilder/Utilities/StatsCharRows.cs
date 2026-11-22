@@ -12,8 +12,8 @@ public sealed class StatsCharSeriesCell
     /// <summary>マウスを載せたときの説明（「2011年『スイートプリキュア♪』：21 回」）。</summary>
     public string Title { get; init; } = "";
 
-    /// <summary>棒の色（「216, 27, 96」の形。5 年ごとに 2 色を交互に使う）。style 属性用。</summary>
-    public string Rgb { get; init; } = StatsCharRows.BlockRgb(0);
+    /// <summary>棒の色（「216, 27, 96」の形。5 作目ごとの作品だけ別の色）。style 属性用。</summary>
+    public string Rgb { get; init; } = StatsCharRows.SeriesRgb(0);
 
     /// <summary>マスの高さ（%。その字がいちばん多く使われた作品を 100 とする）。0 回は空文字（CSS の細い線のまま）。</summary>
     public string Height { get; init; } = "";
@@ -149,15 +149,15 @@ public static class StatsCharRows
     }
 
     /// <summary>
-    /// 作品ごとの棒の色。最初の作品の年から 5 年ごとに、ピンクと青を交互に使う（1〜5 年目・6〜10 年目…）。
-    /// 各色の最後の 1 本が、5・10・15・20 周年の年の作品になる。
+    /// 作品ごとの棒の色。5 作目ごとの作品（5・10・15・20 作目…）だけ青、ほかはピンク。
+    /// 棒の列の中で、節目の作品の位置が分かるようにする。
     /// </summary>
-    /// <param name="yearOffset">最初の作品の放送開始年からの年数（0 始まり）。</param>
-    public static string BlockRgb(int yearOffset)
-        => (Math.Max(0, yearOffset) / 5) % 2 == 0 ? "216, 27, 96" : "51, 112, 170";
+    /// <param name="index">放送順に並べた作品の番号（0 始まり）。</param>
+    public static string SeriesRgb(int index)
+        => IsFifthSeries(index) ? "51, 112, 170" : "216, 27, 96";
 
-    /// <summary>5 年ごとの区切りの最後の年（5・10・15・20 周年の年）か。</summary>
-    public static bool IsAnniversaryOffset(int yearOffset) => yearOffset >= 0 && yearOffset % 5 == 4;
+    /// <summary>5 作目ごとの作品（5・10・15・20 作目…）か。</summary>
+    public static bool IsFifthSeries(int index) => index >= 0 && index % 5 == 4;
 
     /// <summary>続いている同じ順位の行を 1 つにまとめる。</summary>
     public static List<StatsCharGroup> BuildGroups(List<StatsCharRow> rows)
@@ -209,7 +209,7 @@ public static class StatsCharRows
                 Height = n > 0 && peak > 0
                     ? Math.Max(14.0, n * 100.0 / peak).ToString("0", CultureInfo.InvariantCulture)
                     : "",
-                Rgb = BlockRgb(series[i].Year - series[0].Year),
+                Rgb = SeriesRgb(i),
                 Title = $"{series[i].Year}年『{series[i].Title}』：{n:N0} 回"
             });
         }

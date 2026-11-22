@@ -6693,9 +6693,13 @@ a.credit-card-series:focus-visible {
   font-size: 0.62em;
   font-style: normal;
   text-align: center;
+  color: var(--muted);
 }
-/* 5・10・15・20 周年の年は太くする。 */
-.stats-char-head .stats-strip i.is-anniv { font-weight: 800; }
+/* 5 作目ごとの作品（5・10・15・20 作目）の年は、棒と同じ青の太字にする。 */
+.stats-char-head .stats-strip i.is-fifth {
+  font-weight: 800;
+  color: var(--accent-blue);
+}
 
 /* シリーズ別 文字種別比率：作品ごとの 100% の積み上げ横棒。 */
 .stats-ct-list {

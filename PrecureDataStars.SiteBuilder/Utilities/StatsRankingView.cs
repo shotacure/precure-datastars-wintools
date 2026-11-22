@@ -14,6 +14,25 @@ public sealed class StatsBreakdownRow
     public string BarPercent { get; init; } = "0";
 }
 
+/// <summary>
+/// 順位の行のひとまとまり（同じ順位の話）。左のパネル（順位と値）は 1 つだけ出し、右に話を縦に並べる。
+/// 同点の話が続いても、同じ値のパネルを話の数だけ繰り返さない。
+/// </summary>
+public sealed class StatsRankGroup
+{
+    /// <summary>順位を持つか（持たない行は左のパネルを出さない）。</summary>
+    public bool HasRank { get; init; }
+    public string RankLabel { get; init; } = "";
+    public string ValueLabel { get; init; } = "";
+    public bool HasValue { get; init; }
+
+    /// <summary>同じ順位の話の数（「104 話」。1 話だけなら空）。</summary>
+    public string CountLabel { get; init; } = "";
+
+    /// <summary>このまとまりの話（放送順など、渡された並びのまま）。</summary>
+    public List<StatsEpisodeRow> Entries { get; init; } = new();
+}
+
 /// <summary>放送枠の帯の凡例の 1 項目。</summary>
 public sealed class StatsBandLegendItem
 {
@@ -36,6 +55,9 @@ public sealed class StatsRankingView
     /// <summary>行の並び（上位 3 件の枠に出した行を除く）。</summary>
     public List<StatsEpisodeRow> Rows { get; init; } = new();
 
+    /// <summary>行の並びを、同じ順位ごとにまとめたもの（テンプレートはこちらを描く）。</summary>
+    public List<StatsRankGroup> Groups { get; init; } = new();
+
     /// <summary>行の並びの見出し（「4 位から」。上位 3 件の枠を出さないページでは空）。</summary>
     public string RestHeading { get; init; } = "";
 
@@ -50,6 +72,12 @@ public sealed class StatsRankingView
     /// <summary>作品別の内訳（放送順。ランキングに 1 話も無い作品も並べる）。</summary>
     public List<StatsBreakdownRow> Breakdown { get; init; } = new();
     public string BreakdownNote { get; init; } = "";
+
+    /// <summary>
+    /// サブタイトルそのものを扱うページか（サブタイトル統計の順位のページ）。true なら、題名を統計の対象の字と同じ
+    /// 太い明朝体で出す（テンプレートが <c>is-subtitle-stats</c> を付ける）。
+    /// </summary>
+    public bool SubtitleStats { get; init; }
 
     /// <summary>放送枠の帯の凡例（帯を出さないページでは空）。</summary>
     public List<StatsBandLegendItem> BandLegend { get; init; } = new();
@@ -71,7 +99,7 @@ public sealed class StatsRankingView
         BuildContext ctx, List<StatsEpisodeRow> rows, string coverageLabel, string valueCaption,
         bool usePodium = true, string chartSvg = "", string chartHeading = "", string chartNote = "",
         string bandHighlightPartType = "", bool hasBand = false,
-        string title = "", string lead = "", string note = "")
+        string title = "", string lead = "", string note = "", bool subtitleStats = false)
     {
         var podium = usePodium ? rows.Where(r => r.RankNo is >= 1 and <= 3).ToList() : new List<StatsEpisodeRow>();
         if (podium.Count == 0 || podium.Count > PodiumMaxCards) podium = new List<StatsEpisodeRow>();
@@ -83,6 +111,8 @@ public sealed class StatsRankingView
             CoverageLabel = coverageLabel,
             Podium = podium,
             Rows = rest,
+            Groups = BuildGroups(rest),
+            SubtitleStats = subtitleStats,
             RestHeading = podium.Count > 0 && rest.Count > 0 ? "4 位から" : "",
             ValueCaption = valueCaption,
             ChartSvg = chartSvg,
@@ -95,6 +125,31 @@ public sealed class StatsRankingView
             Lead = lead,
             Note = note
         };
+    }
+
+    /// <summary>続いている同じ順位の行を 1 つにまとめる。順位を持たない行は 1 行ずつ。</summary>
+    private static List<StatsRankGroup> BuildGroups(List<StatsEpisodeRow> rows)
+    {
+        var groups = new List<StatsRankGroup>();
+        int i = 0;
+        while (i < rows.Count)
+        {
+            var head = rows[i];
+            int j = i + 1;
+            if (head.HasRank)
+                while (j < rows.Count && rows[j].HasRank && rows[j].RankNo == head.RankNo) j++;
+            groups.Add(new StatsRankGroup
+            {
+                HasRank = head.HasRank,
+                RankLabel = head.HasRank ? head.RankNo.ToString(CultureInfo.InvariantCulture) : "",
+                ValueLabel = head.ValueLabel,
+                HasValue = head.HasValue,
+                CountLabel = j - i >= 2 ? $"{j - i:N0} 話" : "",
+                Entries = rows.GetRange(i, j - i)
+            });
+            i = j;
+        }
+        return groups;
     }
 
     /// <summary>本線の TV シリーズを放送順に並べ、行の並びの中の話数を数える。</summary>

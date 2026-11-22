@@ -25,7 +25,7 @@
 <section>
   <h2>初使用の回と、作品ごとの使われ方</h2>
   <p class="muted stats-note">マスは TV シリーズを放送順（左が 2004 年）に並べたもので、その記号が多く使われた作品ほど高く、濃い色です。</p>
-  <ol class="stats-ep-list">
+  <ol class="stats-ep-list is-subtitle-stats">
     {{~ for r in Rows ~}}
     <li class="stats-ep-row stats-symbol-row">
       <div class="stats-ep-rank value-only">

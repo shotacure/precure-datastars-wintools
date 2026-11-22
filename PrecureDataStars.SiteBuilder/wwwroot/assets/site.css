@@ -6374,6 +6374,29 @@ a.credit-card-series:focus-visible {
   margin: 0;
 }
 
+/* 同じ順位の話をまとめた行：左のパネルは 1 つで、右に話を縦に並べる。話と話の間は点線で区切る。
+   パネルには話数を添え、スクロールの間は固定ヘッダの下に留める。 */
+.stats-ep-entries { min-width: 0; }
+.stats-ep-entries .stats-ep-body + .stats-ep-body {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dotted #e5e7eb;
+}
+.stats-ep-row.is-tied { align-items: start; }
+.stats-ep-row.is-tied .stats-ep-rank {
+  position: sticky;
+  top: 118px;
+}
+.stats-ep-rank-count {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  text-align: right;
+  font-family: var(--font-base);
+  font-size: 0.46em;
+  font-weight: 400;
+  color: var(--muted);
+}
+
 /* 数えた字（漢字・記号）に色を付ける。印のある題名は、ほかの字を細くして差を出す。 */
 .stats-ep-title .stats-hit {
   color: var(--accent);
@@ -6548,7 +6571,10 @@ a.credit-card-series:focus-visible {
   font-weight: 700;
   color: #fff;
 }
-/* 統計で扱う対象の字（札・行の字・表の中の字）は、太い明朝体で出す。説明の文は本文の書体のまま。 */
+/* 統計で扱う対象の字（札・行の字・表の中の字・サブタイトル統計のページの題名）は、太い明朝体で出す。
+   説明の文は本文の書体のまま。 */
+.is-subtitle-stats .stats-ep-title,
+.is-subtitle-stats .stats-ep-title:has(.stats-hit),
 .stats-cloud span,
 .stats-char-glyph,
 .stats-by-series-topchars-table td.col-topchar code,
@@ -6743,6 +6769,7 @@ a.credit-card-series:focus-visible {
   .is-first .stats-podium-title { font-size: 1.4em; }
   .is-first .stats-podium-rank span { font-size: 3em; }
   .stats-ep-extra { margin-left: 0; }
+  .stats-ep-row.is-tied .stats-ep-rank { position: static; }
   .stats-ep-extra:has(.stats-band) { flex-wrap: wrap; }
   .stats-ep-extra:has(.stats-band) .stats-series-detail { flex: 0 0 100%; }
   .stats-band { flex: 1 1 100%; }

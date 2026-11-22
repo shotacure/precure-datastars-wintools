@@ -221,7 +221,8 @@ public sealed class SubtitleStatsGenerator
         var view = StatsRankingView.Build(_ctx, rows, _coverageLabel, "文字数",
             chartSvg: chart,
             chartHeading: $"全 {all.Count:N0} 話の分布",
-            chartNote: $"サブタイトルの文字数ごとの話数です。平均は {(all.Count > 0 ? all.Average(r => (double)r.Value) : 0):0.0} 文字。濃い色が TOP 100 の話です。");
+            chartNote: $"サブタイトルの文字数ごとの話数です。平均は {(all.Count > 0 ? all.Average(r => (double)r.Value) : 0):0.0} 文字。濃い色が TOP 100 の話です。",
+            subtitleStats: true);
         var layout = MakeLayout($"エピソード単位 文字数 {label} TOP 100", $"文字数 {label}");
         _page.RenderAndWrite(url, "stats", $"stats-subtitles-length-episode-{slug}.sbn", view, layout);
     }
@@ -254,7 +255,8 @@ public sealed class SubtitleStatsGenerator
         return StatsRankingView.Build(_ctx, rows, _coverageLabel, valueName,
             chartSvg: chart,
             chartHeading: $"全 {all.Count:N0} 話の分布",
-            chartNote: $"{valueName}を 5% きざみで数えた話数です。濃い色が TOP 100 の話です。");
+            chartNote: $"{valueName}を 5% きざみで数えた話数です。濃い色が TOP 100 の話です。",
+            subtitleStats: true);
     }
 
     /// <summary>シリーズ別 平均文字数（多い順）。 「シリーズ単位 多い順 / 少ない順」の 2 ページから多い順 1 ページに集約し、 「シリーズ別」グループの 1 つとして再配置。少ない順は同じテーブルの逆順なので削除。</summary>

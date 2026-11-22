@@ -1,6 +1,6 @@
 {{## 統計のエピソード単位のランキングのページの本体（パートの尺・中 CM 入り・アバンスキップ回・サブタイトルの文字数/漢字率/記号率・
      1 話のクレジット）。StatsRankingView で渡る。上から、上位 3 件の枠（Podium）・全部の話の分布の図（ChartSvg）・
-     作品別の内訳（Breakdown）・4 位からの行（Rows）。
+     作品別の内訳（Breakdown）・4 位からの行（Groups：同じ順位の話をまとめたもの）。
      行は左に順位と値のパネル、右に作品名と題名で、題名の下に図（MeterHtml：1 字 1 マスの並び、または放送枠の帯）と内訳を添える。
      上位 3 件の枠は 3 位までの全件で、単独 1 位（IsFirst）だけ全幅の大きい枠にする。同点が多くて 3 位までが多すぎるページと、
      順位を持たない一覧では Podium が空で、全部の行を Rows に並べる。 ##}}
@@ -16,7 +16,7 @@
 {{~ if (array.size Podium) > 0 ~}}
 <section>
   {{ band_legend }}
-  <div class="stats-podium">
+  <div class="stats-podium{{ if SubtitleStats }} is-subtitle-stats{{ end }}">
     {{~ for r in Podium ~}}
     <article class="stats-podium-card{{ if r.IsFirst }} is-first{{ end }}">
       <div class="stats-podium-rank"><span>{{ r.RankNo }}</span>位</div>
@@ -71,27 +71,33 @@
   {{~ if (array.size Podium) == 0 || RestHeading != "" ~}}
   {{ band_legend }}
   {{~ end ~}}
-  <ol class="stats-ep-list">
-    {{~ for r in Rows ~}}
-    <li class="stats-ep-row{{~ if !r.HasRank ~}} no-rank{{~ end ~}}">
-      {{~ if r.HasRank ~}}
+  {{## 同じ順位の話は 1 つの行にまとめ、左のパネル（順位・値・話数）は 1 回だけ出す。話が多いときは、スクロールの間パネルを上に留める。 ##}}
+  <ol class="stats-ep-list{{ if SubtitleStats }} is-subtitle-stats{{ end }}">
+    {{~ for g in Groups ~}}
+    <li class="stats-ep-row{{ if !g.HasRank }} no-rank{{ end }}{{ if (array.size g.Entries) > 1 }} is-tied{{ end }}">
+      {{~ if g.HasRank ~}}
       <div class="stats-ep-rank">
-        <span class="stats-ep-rank-no">{{ r.RankLabel }}</span>
-        {{~ if r.HasValue ~}}<span class="stats-ep-rank-val">{{ r.ValueLabel }}</span>{{~ end ~}}
+        <span class="stats-ep-rank-no">{{ g.RankLabel }}</span>
+        {{~ if g.HasValue ~}}<span class="stats-ep-rank-val">{{ g.ValueLabel }}</span>{{~ end ~}}
+        {{~ if g.CountLabel != "" ~}}<span class="stats-ep-rank-count">{{ g.CountLabel }}</span>{{~ end ~}}
       </div>
       {{~ end ~}}
-      <div class="stats-ep-body">
-        <div class="stats-ep-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a> <span class="stats-ep-year">({{ r.SeriesStartYearLabel }})</span></div>
-        <div class="stats-ep-line2">
-          <span class="ep-row-no-date">
-            <span class="ep-row-no">第{{ r.SeriesEpNo }}話</span>
-          </span>
-          <a class="stats-ep-title" href="{{ r.EpisodeUrl }}">{{ r.TitleHtml }}</a>
-        </div>
-        {{~ if r.MeterHtml != "" || r.DetailLabel != "" ~}}
-        <div class="stats-ep-extra">
-          {{~ if r.DetailLabel != "" ~}}<span class="stats-series-detail">{{ r.DetailLabel | html.escape }}</span>{{~ end ~}}
-          {{ r.MeterHtml }}
+      <div class="stats-ep-entries">
+        {{~ for r in g.Entries ~}}
+        <div class="stats-ep-body">
+          <div class="stats-ep-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a> <span class="stats-ep-year">({{ r.SeriesStartYearLabel }})</span></div>
+          <div class="stats-ep-line2">
+            <span class="ep-row-no-date">
+              <span class="ep-row-no">第{{ r.SeriesEpNo }}話</span>
+            </span>
+            <a class="stats-ep-title" href="{{ r.EpisodeUrl }}">{{ r.TitleHtml }}</a>
+          </div>
+          {{~ if r.MeterHtml != "" || r.DetailLabel != "" ~}}
+          <div class="stats-ep-extra">
+            {{~ if r.DetailLabel != "" ~}}<span class="stats-series-detail">{{ r.DetailLabel | html.escape }}</span>{{~ end ~}}
+            {{ r.MeterHtml }}
+          </div>
+          {{~ end ~}}
         </div>
         {{~ end ~}}
       </div>

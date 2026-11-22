@@ -31,6 +31,18 @@ public sealed class StatsRankGroup
 
     /// <summary>このまとまりの話（放送順など、渡された並びのまま）。</summary>
     public List<StatsEpisodeRow> Entries { get; init; } = new();
+
+    /// <summary>このまとまりの話を、続いている同じ作品ごとに束ねたもの（作品名は束ごとに 1 回だけ出す）。</summary>
+    public List<StatsSeriesBlock> Blocks { get; init; } = new();
+}
+
+/// <summary>同じ順位の中で続いている、同じ作品の話の束。</summary>
+public sealed class StatsSeriesBlock
+{
+    public string SeriesTitle { get; init; } = "";
+    public string SeriesUrl { get; init; } = "";
+    public string SeriesStartYearLabel { get; init; } = "";
+    public List<StatsEpisodeRow> Entries { get; init; } = new();
 }
 
 /// <summary>放送枠の帯の凡例の 1 項目。</summary>
@@ -145,11 +157,34 @@ public sealed class StatsRankingView
                 ValueLabel = head.ValueLabel,
                 HasValue = head.HasValue,
                 CountLabel = j - i >= 2 ? $"{j - i:N0} 話" : "",
-                Entries = rows.GetRange(i, j - i)
+                Entries = rows.GetRange(i, j - i),
+                Blocks = BuildBlocks(rows.GetRange(i, j - i))
             });
             i = j;
         }
         return groups;
+    }
+
+    /// <summary>続いている同じ作品の話を束ねる（並びは変えない）。</summary>
+    private static List<StatsSeriesBlock> BuildBlocks(List<StatsEpisodeRow> entries)
+    {
+        var blocks = new List<StatsSeriesBlock>();
+        foreach (var e in entries)
+        {
+            if (blocks.Count > 0 && blocks[^1].Entries[0].SeriesSlug == e.SeriesSlug)
+            {
+                blocks[^1].Entries.Add(e);
+                continue;
+            }
+            blocks.Add(new StatsSeriesBlock
+            {
+                SeriesTitle = e.SeriesTitle,
+                SeriesUrl = e.SeriesUrl,
+                SeriesStartYearLabel = e.SeriesStartYearLabel,
+                Entries = new List<StatsEpisodeRow> { e }
+            });
+        }
+        return blocks;
     }
 
     /// <summary>本線の TV シリーズを放送順に並べ、行の並びの中の話数を数える。</summary>

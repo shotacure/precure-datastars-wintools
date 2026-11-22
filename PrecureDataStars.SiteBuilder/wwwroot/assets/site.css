@@ -6382,6 +6382,8 @@ a.credit-card-series:focus-visible {
   padding-top: 12px;
   border-top: 1px dotted #e5e7eb;
 }
+/* 同じ作品の話が続く束：作品名の下に話を並べる。 */
+.stats-ep-entry + .stats-ep-entry { margin-top: 8px; }
 .stats-ep-row.is-tied { align-items: start; }
 .stats-ep-row.is-tied .stats-ep-rank {
   position: sticky;

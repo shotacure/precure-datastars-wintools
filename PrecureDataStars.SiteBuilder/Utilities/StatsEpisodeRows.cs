@@ -161,6 +161,12 @@ public static class StatsEpisodeRows
                 StatsTitleMark.Symbol => $"記号 {marked.Cells.Count(c => c)} / 全 {marked.Cells.Count} 字",
                 _ => ""
             };
+            // 数えた字が 1 つも無い回（漢字率・記号率が 0%）は、塗るマスが無いので、マスも内訳も出さない。
+            if (it.MeterHtml is null && it.Mark is StatsTitleMark.Kanji or StatsTitleMark.Symbol && !marked.Cells.Any(c => c))
+            {
+                meterHtml = "";
+                detailLabel = "";
+            }
             string unit = it.ValueUnit ?? "";
             string valueNumber = unit.Length > 0 && it.ValueLabel.EndsWith(unit, StringComparison.Ordinal)
                 ? it.ValueLabel[..^unit.Length]

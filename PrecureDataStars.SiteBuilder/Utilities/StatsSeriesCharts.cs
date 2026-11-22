@@ -82,18 +82,24 @@ public static class StatsSeriesCharts
     /// <param name="items">作品の並び（放送開始年の昇順）。</param>
     /// <param name="unit">値の単位（縦軸の上と説明に出す。「文字」など）。</param>
     /// <param name="ariaLabel">図の代替テキスト。</param>
-    public static string BuildBoxPlot(IReadOnlyList<StatsBoxPlotItem> items, string unit, string ariaLabel)
+    /// <param name="step">縦軸の目盛りの刻み。</param>
+    /// <param name="format">値の表記（秒数を <c>m:ss</c> にするなど）。null なら数のまま。</param>
+    /// <param name="showModes">最頻値の三角を描くか（秒数のように値がばらける図では描かない）。</param>
+    /// <param name="fromZero">縦軸を 0 から始めるか。false なら、いちばん小さい値を刻みへ切り下げた値から。</param>
+    public static string BuildBoxPlot(IReadOnlyList<StatsBoxPlotItem> items, string unit, string ariaLabel,
+        int step = 5, Func<double, string>? format = null, bool showModes = true, bool fromZero = true)
     {
         if (items.Count == 0) return "";
+        format ??= Num;
 
         var stats = items.Select(i => BoxStats.From(i.Values)).ToList();
         int overallMax = stats.Max(s => s.Max);
         int overallMin = stats.Min(s => s.Min);
 
-        // 縦軸は 0 から、最大値を 5 刻みへ切り上げた値まで。
-        const int step = 5;
-        int top = Math.Max(step, (int)Math.Ceiling(overallMax / (double)step) * step);
-        double Y(double v) => PlotBottom - (PlotBottom - PlotTop) * v / top;
+        // 縦軸は 0（または最小値を刻みへ切り下げた値）から、最大値を刻みへ切り上げた値まで。
+        int bottom = fromZero ? 0 : (int)Math.Floor(overallMin / (double)step) * step;
+        int top = Math.Max(bottom + step, (int)Math.Ceiling(overallMax / (double)step) * step);
+        double Y(double v) => PlotBottom - (PlotBottom - PlotTop) * (v - bottom) / (top - bottom);
         double colWidth = (PlotRight - PlotLeft) / items.Count;
         double X(int i) => PlotLeft + colWidth * (i + 0.5);
 
@@ -113,14 +119,17 @@ public static class StatsSeriesCharts
         sb.Append(Line(468, ly, 486, ly, Ink, 1.5));
         sb.Append(Circle(477, ly, Paper, Ink));
         sb.Append(Text(492, ly + 5, 13, Sub, "平均値"));
-        sb.Append($"<path d=\"M553,{F(ly)} l6.6,-5.5 v11 z\" fill=\"{Orange}\"/>");
-        sb.Append(Text(567, ly + 5, 13, Sub, "最頻値（複数あれば全部）"));
+        if (showModes)
+        {
+            sb.Append($"<path d=\"M553,{F(ly)} l6.6,-5.5 v11 z\" fill=\"{Orange}\"/>");
+            sb.Append(Text(567, ly + 5, 13, Sub, "最頻値（複数あれば全部）"));
+        }
 
         // 目盛り
-        for (int v = 0; v <= top; v += step)
+        for (int v = bottom; v <= top; v += step)
         {
             sb.Append(Line(PlotLeft, Y(v), PlotRight, Y(v), Grid, 1));
-            sb.Append(Text(PlotLeft - 8, Y(v) + 5, 13, Sub, v.ToString(CultureInfo.InvariantCulture), "end"));
+            sb.Append(Text(PlotLeft - 8, Y(v) + 5, 13, Sub, format(v), "end"));
         }
         sb.Append(Text(PlotLeft - 8, PlotTop - 18, 13, Sub, unit, "end"));
 
@@ -134,17 +143,20 @@ public static class StatsSeriesCharts
             bool isMin = s.Min == overallMin;
 
             sb.Append("<g><title>").Append(Esc(
-                $"{it.Year}年『{it.SeriesTitle}』：最短 {s.Min}・中央値 {Num(s.Median)}・平均 {s.Mean:0.0}・最長 {s.Max}・最頻値 {string.Join("・", s.Modes)}"))
+                showModes
+                    ? $"{it.Year}年『{it.SeriesTitle}』：最短 {format(s.Min)}・中央値 {format(s.Median)}・平均 {s.Mean:0.0}・最長 {format(s.Max)}・最頻値 {string.Join("・", s.Modes)}"
+                    : $"{it.Year}年『{it.SeriesTitle}』：最短 {format(s.Min)}・中央値 {format(s.Median)}・平均 {format(s.Mean)}・最長 {format(s.Max)}"))
               .Append("</title>");
             sb.Append(Line(x, Y(s.Max), x, Y(s.Min), Sub, 1.5));
             sb.Append(isMin ? Line(x - 6, Y(s.Min), x + 6, Y(s.Min), Red, 2.5) : Line(x - 4, Y(s.Min), x + 4, Y(s.Min), Sub, 1.5));
             sb.Append(isMax ? Line(x - 6, Y(s.Max), x + 6, Y(s.Max), Red, 2.5) : Line(x - 4, Y(s.Max), x + 4, Y(s.Max), Sub, 1.5));
             sb.Append($"<rect x=\"{F(x - 7)}\" y=\"{F(Y(s.Q3))}\" width=\"14\" height=\"{F(Y(s.Q1) - Y(s.Q3))}\" fill=\"{BlueFill}\" stroke=\"{Blue}\" stroke-width=\"1\"/>");
             sb.Append(Line(x - 7, Y(s.Median), x + 7, Y(s.Median), Blue, 3));
-            foreach (int m in s.Modes)
-                sb.Append($"<path d=\"M{F(x + 9)},{F(Y(m))} l5.4,-4.5 v9 z\" fill=\"{Orange}\"/>");
-            sb.Append(ValueLabel(x, Y(s.Max) - 7, s.Max.ToString(CultureInfo.InvariantCulture), isMax));
-            sb.Append(ValueLabel(x, Y(s.Min) + 16, s.Min.ToString(CultureInfo.InvariantCulture), isMin));
+            if (showModes)
+                foreach (int m in s.Modes)
+                    sb.Append($"<path d=\"M{F(x + 9)},{F(Y(m))} l5.4,-4.5 v9 z\" fill=\"{Orange}\"/>");
+            sb.Append(ValueLabel(x, Y(s.Max) - 7, format(s.Max), isMax));
+            sb.Append(ValueLabel(x, Y(s.Min) + 16, format(s.Min), isMin));
             sb.Append("</g>");
             sb.Append(YearLabel(x, it.Year));
         }

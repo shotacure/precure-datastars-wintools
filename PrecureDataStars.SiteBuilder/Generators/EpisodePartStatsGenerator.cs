@@ -266,9 +266,40 @@ public sealed class EpisodePartStatsGenerator
             .OrderBy(x => x.SeriesId)
             .ToList();
 
-        var content = new { Groups = groups, CoverageLabel = _coverageLabel };
+        var content = new { Groups = groups, Charts = BuildSeriesPartCharts(), CoverageLabel = _coverageLabel };
         var layout = MakeLayout("シリーズ × パート別 平均/最短/最長", "シリーズ × パート別");
         _page.RenderAndWrite("/stats/episodes/series-summary/", "stats", "stats-episodes-series-summary.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// 冒頭の箱ひげ図（アバンタイトル・A パート・B パート）。本線の TV シリーズを放送開始の早い順に並べ、
+    /// 各話のそのパートの尺（OA。同じ種別が複数あれば合計）の分布を作品ごとに描く。
+    /// </summary>
+    private List<object> BuildSeriesPartCharts()
+    {
+        var charts = new List<object>();
+        foreach (var (partType, label) in new[] { ("AVANT", "アバンタイトル"), ("PART_A", "Aパート"), ("PART_B", "Bパート") })
+        {
+            var bySeries = new Dictionary<int, List<int>>();
+            foreach (var (episodeId, parts) in _ctx.EpisodePartsByEpisode)
+            {
+                if (!_ctx.EpisodeById.TryGetValue(episodeId, out var ep) || !_ctx.IsMainlineTvSeries(ep.SeriesId)) continue;
+                var own = parts.Where(p => p.PartType == partType && p.OaLength.HasValue).ToList();
+                if (own.Count == 0) continue;
+                if (!bySeries.TryGetValue(ep.SeriesId, out var list)) bySeries[ep.SeriesId] = list = new List<int>();
+                list.Add(own.Sum(p => (int)p.OaLength!.Value));
+            }
+            var boxes = bySeries
+                .Select(kv => (Series: _ctx.SeriesById[kv.Key], Values: kv.Value))
+                .OrderBy(x => x.Series.StartDate).ThenBy(x => x.Series.SeriesId)
+                .Select(x => new StatsBoxPlotItem(x.Series.StartDate.Year, x.Series.Title, x.Values))
+                .ToList();
+            string svg = StatsSeriesCharts.BuildBoxPlot(boxes, "尺",
+                $"TV シリーズごとの{label}の尺の箱ひげ図。放送開始年の順に、最小値・最大値・四分位範囲・中央値・平均値を表す",
+                step: 60, format: FormatMmSs, showModes: false, fromZero: partType == "AVANT");
+            if (svg.Length > 0) charts.Add(new { Label = label, Svg = svg });
+        }
+        return charts;
     }
 
     // 整形ヘルパー

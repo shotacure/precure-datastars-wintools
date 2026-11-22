@@ -111,8 +111,8 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateCharsAllAsync(CancellationToken ct)
     {
         var rows = await _repo.GetCharRankingAllAsync(Limit, ct).ConfigureAwait(false);
-        var view = StatsCharRows.Build(rows.Select(r => new StatsCharInput(r.Rank, r.TotalCount, r.Char)));
-        var content = new { Rows = view, CoverageLabel = _coverageLabel };
+        var (podium, rest) = StatsCharRows.SplitPodium(StatsCharRows.Build(rows.Select(r => new StatsCharInput(r.Rank, r.TotalCount, r.Char))));
+        var content = new { Podium = podium, Rows = rest, CoverageLabel = _coverageLabel };
         var layout = MakeLayout("使用文字 TOP 100（全文字）", "全文字");
         _page.RenderAndWrite("/stats/subtitles/chars/all/", "stats", "stats-subtitles-chars-all.sbn", content, layout);
     }
@@ -120,8 +120,8 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateCharsKanjiAsync(CancellationToken ct)
     {
         var rows = await _repo.GetCharRankingKanjiAsync(Limit, ct).ConfigureAwait(false);
-        var view = StatsCharRows.Build(rows.Select(r => new StatsCharInput(r.Rank, r.TotalCount, r.Char)));
-        var content = new { Rows = view, CoverageLabel = _coverageLabel };
+        var (podium, rest) = StatsCharRows.SplitPodium(StatsCharRows.Build(rows.Select(r => new StatsCharInput(r.Rank, r.TotalCount, r.Char))));
+        var content = new { Podium = podium, Rows = rest, CoverageLabel = _coverageLabel };
         var layout = MakeLayout("使用文字 TOP 100（漢字限定）", "漢字限定");
         _page.RenderAndWrite("/stats/subtitles/chars/kanji/", "stats", "stats-subtitles-chars-kanji.sbn", content, layout);
     }
@@ -399,6 +399,7 @@ public sealed class SubtitleStatsGenerator
         var cellMap = cells.ToDictionary(
             c => (c.SeriesId, c.Char),
             c => c.Cnt);
+        long maxCell = cells.Count > 0 ? cells.Max(c => c.Cnt) : 0;
 
         // 3) シリーズごとに、列順序と同じ並びでセル値配列を組み立てる。
         //    シリーズ並びは cells を SeriesId 昇順でグルーピングして拾う
@@ -412,8 +413,10 @@ public sealed class SubtitleStatsGenerator
                 SeriesStartYearLabel = _ctx.StartYearLabelBySlug(g.Key.SeriesSlug),
                 // 列順序（symbolChars）と同じインデックス対応で、当該シリーズの当該記号カウントを並べる。
                 // セルが無い（=その記号が一度も使われていない）ケースは 0。
+                // セルは回数と、回数に応じた地色の濃さ（表でいちばん多い回数を最も濃くする。0 回は塗らない）。
                 Cells = symbolChars
                     .Select(ch => cellMap.TryGetValue((g.Key.SeriesId, ch), out var v) ? v : 0L)
+                    .Select(n => new { N = n, Shade = CellShade(n, maxCell) })
                     .ToList()
             })
             .ToList();
@@ -430,6 +433,15 @@ public sealed class SubtitleStatsGenerator
         var layout = MakeLayout($"シリーズ別 記号 {symbolCount} 種出現回数", "シリーズ別 記号出現回数");
         _page.RenderAndWrite("/stats/subtitles/symbols-by-series/", "stats", "stats-subtitles-symbols-by-series.sbn", content, layout);
     }
+
+    /// <summary>
+    /// 記号の出現回数の表の、セルの地色の濃さ（アクセント色の不透明度。style 属性用）。少ない回数でも色が見えるよう、
+    /// 回数の比の平方根で濃くする。0 回は空文字（塗らない）。
+    /// </summary>
+    private static string CellShade(long n, long max)
+        => n <= 0 || max <= 0
+            ? ""
+            : (0.08 + 0.52 * Math.Sqrt(n / (double)max)).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>シリーズ別 TOP5 文字（DENSE_RANK で「同点同順、次は連番」、各シリーズ TOP5）。</summary>
     private async Task GenerateTopCharsBySeriesAsync(CancellationToken ct)

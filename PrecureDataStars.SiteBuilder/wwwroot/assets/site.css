@@ -6514,6 +6514,67 @@ a.credit-card-series:focus-visible {
   color: var(--muted);
 }
 
+/* 使用文字 TOP 100：大きな字の右に、出現回数の横棒。 */
+.stats-char-body {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+.stats-char-body .stats-series-bar { flex: 1 1 0; }
+/* 上位 3 件の枠：順位・大きな字・出現回数。 */
+.stats-podium-char { grid-template-columns: auto 1fr auto; }
+.stats-podium-char .stats-char-glyph {
+  justify-self: center;
+  font-size: 3.6em;
+}
+.stats-podium-char.is-first .stats-char-glyph { font-size: 5.6em; }
+
+/* シリーズ別 文字種別比率：作品ごとの 100% の積み上げ横棒。 */
+.stats-ct-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+}
+.stats-ct-list li {
+  display: grid;
+  grid-template-columns: 17em minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 5px 0;
+}
+.stats-ct-name {
+  font-size: 0.92em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stats-ct-bar {
+  display: flex;
+  gap: 1px;
+  height: 24px;
+}
+.stats-ct-bar span {
+  min-width: 0;
+  border-radius: 2px;
+}
+.stats-ct-bar b {
+  display: block;
+  padding-left: 6px;
+  font-family: var(--font-num);
+  font-size: 0.72rem;
+  line-height: 24px;
+  white-space: nowrap;
+  overflow: hidden;
+  color: #fff;
+}
+.ct-kanji { background: var(--accent-pink); }
+.ct-hiragana { background: var(--accent-blue); }
+.ct-katakana { background: var(--accent-green); }
+.ct-latin { background: var(--accent-yellow); }
+.ct-digits { background: var(--accent-purple); }
+.ct-symbols { background: var(--accent-teal); }
+
 @media (max-width: 640px) {
   .stats-podium { grid-template-columns: 1fr; }
   .stats-podium-card { grid-template-columns: auto minmax(0, 1fr); }
@@ -6532,6 +6593,10 @@ a.credit-card-series:focus-visible {
   .stats-ep-extra:has(.stats-band) .stats-series-detail { flex: 0 0 100%; }
   .stats-band { flex: 1 1 100%; }
   .stats-brk { columns: 1; }
+  .stats-ct-list li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
 }
 
 /* episode 版テーブルでも col-epcount / col-firstdate を使えるように同じスタイルを共有 */

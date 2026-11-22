@@ -4,7 +4,33 @@
   <p class="lead">プリキュア各シリーズのサブタイトルに使われた文字種別（漢字 / ひらがな / カタカナ / 英字 / 数字 / 記号）ごとの文字数と、シリーズ内の空白を除いた全文字に対する比率。記号は句読点・記号・絵文字などで、長音「ー」はカタカナに数えます。</p>
 </section>
 
+{{## 作品ごとの 100% の積み上げ横棒。区切りの幅は文字数の比で、8% 以上の区切りに率を書く。数は下の表に出す。 ##}}
+{{~ func ct_seg(cls, name, count, percent) ~}}
+{{~ if count > 0 ~}}<span class="{{ cls }}" style="flex: {{ count }} 0 0" title="{{ name }} {{ percent | math.format "0.0" }}%">{{~ if percent >= 8 ~}}<b>{{ percent | math.format "0" }}%</b>{{~ end ~}}</span>{{~ end ~}}
+{{~ end ~}}
 <section>
+  <p class="stats-band-legend">
+    <span><i class="ct-kanji"></i>漢字</span>
+    <span><i class="ct-hiragana"></i>ひらがな</span>
+    <span><i class="ct-katakana"></i>カタカナ</span>
+    <span><i class="ct-latin"></i>英字</span>
+    <span><i class="ct-digits"></i>数字</span>
+    <span><i class="ct-symbols"></i>記号</span>
+  </p>
+  <ol class="stats-ct-list">
+    {{~ for r in Rows ~}}
+    <li>
+      <span class="stats-ct-name"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a> <span class="stats-ep-year">({{ r.SeriesStartYearLabel }})</span></span>
+      <span class="stats-ct-bar" role="img" aria-label="{{ r.SeriesTitle | html.escape }}の文字種別の比率">
+        {{ ct_seg "ct-kanji" "漢字" r.Kanji r.KanjiPercent }}{{ ct_seg "ct-hiragana" "ひらがな" r.Hiragana r.HiraganaPercent }}{{ ct_seg "ct-katakana" "カタカナ" r.Katakana r.KatakanaPercent }}{{ ct_seg "ct-latin" "英字" r.Latin r.LatinPercent }}{{ ct_seg "ct-digits" "数字" r.Digits r.DigitsPercent }}{{ ct_seg "ct-symbols" "記号" r.Symbols r.SymbolsPercent }}
+      </span>
+    </li>
+    {{~ end ~}}
+  </ol>
+</section>
+
+<section>
+  <h2>文字数と比率の表</h2>
   {{## スマホの幅でも表だけを横スクロールさせ、ページ全体を横にはみ出させない。 ##}}
   <div class="stats-table-scroll">
     <table class="stats-by-series-types-table">

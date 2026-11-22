@@ -1,0 +1,36 @@
+{{## 使用文字 TOP 100（全文字・漢字限定）の本体。上位 3 件の枠（Podium）と、4 位からの行（Rows）。
+     行は左に順位と出現回数のパネル、右に大きな字と、出現回数の横棒（1 位が端まで届く長さ）。
+     上位 3 件の枠は 3 位までの全件で、単独 1 位（IsFirst）だけ全幅の大きい枠にする。 ##}}
+{{~ if (array.size Podium) > 0 ~}}
+<section>
+  <div class="stats-podium">
+    {{~ for r in Podium ~}}
+    <article class="stats-podium-card stats-podium-char{{ if r.IsFirst }} is-first{{ end }}">
+      <div class="stats-podium-rank"><span>{{ r.RankNo }}</span>位</div>
+      <div class="stats-char-glyph">{{ r.Char | html.escape }}</div>
+      <div class="stats-podium-value">{{ r.ValueLabel }}<span class="rec-unit">回</span></div>
+    </article>
+    {{~ end ~}}
+  </div>
+</section>
+{{~ end ~}}
+
+<section>
+  {{~ if (array.size Podium) > 0 ~}}
+  <h2>4 位から</h2>
+  {{~ end ~}}
+  <ol class="stats-ep-list">
+    {{~ for r in Rows ~}}
+    <li class="stats-ep-row stats-char-row">
+      <div class="stats-ep-rank">
+        <span class="stats-ep-rank-no">{{ r.RankLabel }}</span>
+        <span class="stats-ep-rank-val">{{ r.ValueLabel }}</span>
+      </div>
+      <div class="stats-char-body">
+        <div class="stats-char-glyph">{{ r.Char | html.escape }}</div>
+        <span class="stats-series-bar" aria-hidden="true"><span class="stats-series-bar-fill" style="width: {{ r.BarPercent }}%"></span></span>
+      </div>
+    </li>
+    {{~ end ~}}
+  </ol>
+</section>

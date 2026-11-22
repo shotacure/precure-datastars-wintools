@@ -25,8 +25,8 @@
  *   > そのほかの人物(pb, pt=2)。人物は同じ段の中で本編のクレジット回数の多い順。
  *
  * 月グリッドでは、ふだんはキャラクター誕生日のチップだけを出し、ほか（映画公開・人物誕生日・TV 放送）は
- * 種別ごとの件数（🎥1 🎂2 📺4）にたたむ。週（グリッドの 1 行）にマウスを載せるとその週のチップが開き、
- * それより下の週は閉じる（上の週は、閉じるとマウスの下の行がずれるので開いたままにする）。
+ * 種別ごとの件数（🎥1 🎂2 📺4）にたたむ。週（グリッドの 1 行）にマウスを載せるとその週のチップだけが開き、
+ * ほかの週は閉じる（上の週を閉じると下がずり上がるので、上の週は動きを付けずにすぐ閉じ、ずれた分だけスクロール位置を合わせる）。
  * カレンダーからマウスが出たら、全部の週を閉じる。今日のある週も、最初はたたんでおく。
  * 7 日縦並び（狭い幅）でも同じく、キャラクター誕生日のほかは件数にたたみ、スクロールのたびに、
  * 画面の縦のまんなかにいちばん近い日だけを開いて、ほかの日は閉じる。
@@ -152,21 +152,12 @@
       var cell = target && target.closest ? target.closest('[data-week]') : null;
       return cell ? parseInt(cell.getAttribute('data-week'), 10) : -1;
     }
-    // week の行を開き、それより下の行を閉じる（マウス用。上の行は、閉じるとマウスの下の行がずれるので開いたままにする）。
-    function openWeek(week) {
-      var list = cells();
-      for (var i = 0; i < list.length; i++) {
-        var w = parseInt(list[i].getAttribute('data-week'), 10);
-        if (w === week) list[i].classList.add('is-open');
-        else if (w > week) list[i].classList.remove('is-open');
-      }
-    }
     // 全部の行を閉じる。
     function closeAll() {
       var list = cells();
       for (var i = 0; i < list.length; i++) list[i].classList.remove('is-open');
     }
-    // week の行だけを開き、ほかを全部閉じる（スクロール用）。上の行を閉じると下がずり上がるので、
+    // week の行だけを開き、ほかを全部閉じる（マウスを載せたとき・スクロールのとき共通）。上の行を閉じると下がずり上がるので、
     // 上の行は動きを付けずにすぐ閉じ、開く行の位置が変わらないよう、ずれた分だけスクロール位置を戻す。
     function openOnly(week) {
       var list = cells();
@@ -207,7 +198,7 @@
       if (week < 0) return;
       // 行を横切るだけのときに開かないよう、少しだけ待つ。
       clearTimeout(hoverTimer);
-      hoverTimer = setTimeout(function () { openWeek(week); }, 90);
+      hoverTimer = setTimeout(function () { openOnly(week); }, 90);
     });
     grid.addEventListener('mouseleave', function () {
       if (centerMode()) return;

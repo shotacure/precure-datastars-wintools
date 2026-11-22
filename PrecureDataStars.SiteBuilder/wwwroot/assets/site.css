@@ -6375,7 +6375,7 @@ a.credit-card-series:focus-visible {
 }
 
 /* 同じ順位の話をまとめた行：左のパネルは 1 つで、右に話を縦に並べる。話と話の間は点線で区切る。
-   パネルには話数を添え、スクロールの間は固定ヘッダの下に留める。 */
+   パネルは、スクロールの間は固定ヘッダの下に留める。 */
 .stats-ep-entries { min-width: 0; }
 .stats-ep-entries .stats-ep-body + .stats-ep-body {
   margin-top: 12px;
@@ -6388,15 +6388,6 @@ a.credit-card-series:focus-visible {
 .stats-ep-row.is-tied .stats-ep-rank {
   position: sticky;
   top: 118px;
-}
-.stats-ep-rank-count {
-  grid-column: 1 / -1;
-  margin-top: 4px;
-  text-align: right;
-  font-family: var(--font-base);
-  font-size: 0.46em;
-  font-weight: 400;
-  color: var(--muted);
 }
 
 /* 数えた字（漢字・記号）に色を付ける。印のある題名は、ほかの字を細くして差を出す。 */
@@ -6598,10 +6589,6 @@ a.credit-card-series:focus-visible {
 .kg-j { --kg: #7e57c2; }
 .kg-x { --kg: #6b7280; }
 [class*="kg-"] { background: var(--kg); }
-.stats-char-list .stats-char-glyph[class*="kg-"] {
-  background: none;
-  color: var(--kg);
-}
 /* 記号の初使用のページの頭の図：記号の札を初使用の年ごとにまとめ、札の下に年を書く。 */
 .stats-symline {
   display: flex;
@@ -6656,17 +6643,14 @@ a.credit-card-series:focus-visible {
   gap: 16px;
   min-width: 0;
 }
+.stats-char-list .stats-char-body + .stats-char-body { margin-top: 8px; }
+/* 行の字は、頭の図と同じ色の地に白い字の札にする。 */
 .stats-char-list .stats-char-glyph {
   flex: 0 0 auto;
-  font-size: 1.9em;
-  background: none;
+  font-size: 1.55em;
+  border-radius: 6px;
+  color: #fff;
 }
-.stats-char-list .stats-char-glyph.ct-kanji { color: var(--accent-pink); }
-.stats-char-list .stats-char-glyph.ct-hiragana { color: var(--accent-blue); }
-.stats-char-list .stats-char-glyph.ct-katakana { color: var(--accent-green); }
-.stats-char-list .stats-char-glyph.ct-latin { color: var(--accent-yellow); }
-.stats-char-list .stats-char-glyph.ct-digits { color: var(--accent-purple); }
-.stats-char-list .stats-char-glyph.ct-symbols { color: var(--accent-teal); }
 /* 作品ごとの棒の列（放送順）。棒の高さと濃さが、その作品で使われた回数。0 回は底の細い線だけ。 */
 .stats-strip {
   flex: 0 1 auto;
@@ -6699,7 +6683,7 @@ a.credit-card-series:focus-visible {
 .stats-char-head .stats-strip {
   grid-column: 2;
   justify-content: start;
-  margin-left: calc(1.9em * 1.5 + 16px);
+  margin-left: calc(1.55em * 1.5 + 16px);
 }
 .stats-char-head .stats-strip { height: auto; }
 .stats-char-head .stats-strip i {
@@ -6709,8 +6693,9 @@ a.credit-card-series:focus-visible {
   font-size: 0.62em;
   font-style: normal;
   text-align: center;
-  color: var(--muted);
 }
+/* 5・10・15・20 周年の年は太くする。 */
+.stats-char-head .stats-strip i.is-anniv { font-weight: 800; }
 
 /* シリーズ別 文字種別比率：作品ごとの 100% の積み上げ横棒。 */
 .stats-ct-list {

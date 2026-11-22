@@ -19,25 +19,30 @@
 
 <section>
   <h2>順位と、作品ごとの使われ方</h2>
-  <p class="muted stats-note">マスは TV シリーズを放送順に並べたもので、その字が多く使われた作品ほど高く、濃い色です。</p>
+  <p class="muted stats-note">マスは TV シリーズを放送順に並べたもので、その字が多く使われた作品ほど高く、濃い色です。色は 5 年ごとに替えていて、各色の最後が 5・10・15・20 周年の年の作品です。</p>
   <div class="stats-char-head" aria-hidden="true">
     <span class="stats-strip">
-      {{~ for y in SeriesYears ~}}<i>{{ y }}</i>{{~ end ~}}
+      {{~ for y in SeriesYears ~}}<i{{ if y.IsAnniversary }} class="is-anniv"{{ end }} style="color: rgb({{ y.Rgb }})">{{ y.Label }}</i>{{~ end ~}}
     </span>
   </div>
+  {{## 同じ順位（同じ出現回数）の字は 1 つの行にまとめ、左のパネル（順位・出現回数）は 1 回だけ出す。 ##}}
   <ol class="stats-ep-list stats-char-list">
-    {{~ for r in Rows ~}}
-    <li class="stats-ep-row stats-char-row">
+    {{~ for g in Groups ~}}
+    <li class="stats-ep-row stats-char-row{{ if (array.size g.Entries) > 1 }} is-tied{{ end }}">
       <div class="stats-ep-rank">
-        <span class="stats-ep-rank-no">{{ r.RankLabel }}</span>
-        <span class="stats-ep-rank-val">{{ r.ValueLabel }}</span>
+        <span class="stats-ep-rank-no">{{ g.RankLabel }}</span>
+        <span class="stats-ep-rank-val">{{ g.ValueLabel }}</span>
       </div>
-      <div class="stats-char-body">
-        <div class="stats-char-glyph {{ r.TypeClass }}">{{ r.Char | html.escape }}</div>
-        <span class="stats-strip">
-          {{~ for c in r.SeriesCells ~}}<i title="{{ c.Title | html.escape }}"{{ if c.Shade != "" }} style="height: {{ c.Height }}%; background: rgba(216, 27, 96, {{ c.Shade }})"{{ end }}></i>{{~ end ~}}
-        </span>
-        <span class="stats-series-detail stats-char-peak">{{ r.PeakLabel | html.escape }}</span>
+      <div class="stats-ep-entries">
+        {{~ for r in g.Entries ~}}
+        <div class="stats-char-body">
+          <div class="stats-char-glyph {{ r.TypeClass }}">{{ r.Char | html.escape }}</div>
+          <span class="stats-strip">
+            {{~ for c in r.SeriesCells ~}}<i title="{{ c.Title | html.escape }}"{{ if c.Shade != "" }} style="height: {{ c.Height }}%; background: rgba({{ c.Rgb }}, {{ c.Shade }})"{{ end }}></i>{{~ end ~}}
+          </span>
+          <span class="stats-series-detail stats-char-peak">{{ r.PeakLabel | html.escape }}</span>
+        </div>
+        {{~ end ~}}
       </div>
     </li>
     {{~ end ~}}

@@ -26,9 +26,6 @@ public sealed class StatsRankGroup
     public string ValueLabel { get; init; } = "";
     public bool HasValue { get; init; }
 
-    /// <summary>同じ順位の話の数（「104 話」。1 話だけなら空）。</summary>
-    public string CountLabel { get; init; } = "";
-
     /// <summary>このまとまりの話（放送順など、渡された並びのまま）。</summary>
     public List<StatsEpisodeRow> Entries { get; init; } = new();
 
@@ -156,7 +153,6 @@ public sealed class StatsRankingView
                 RankLabel = head.HasRank ? head.RankNo.ToString(CultureInfo.InvariantCulture) : "",
                 ValueLabel = head.ValueLabel,
                 HasValue = head.HasValue,
-                CountLabel = j - i >= 2 ? $"{j - i:N0} 話" : "",
                 Entries = rows.GetRange(i, j - i),
                 Blocks = BuildBlocks(rows.GetRange(i, j - i))
             });

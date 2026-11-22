@@ -71,7 +71,7 @@
   {{~ if (array.size Podium) == 0 || RestHeading != "" ~}}
   {{ band_legend }}
   {{~ end ~}}
-  {{## 同じ順位の話は 1 つの行にまとめ、左のパネル（順位・値・話数）は 1 回だけ出す。話が多いときは、スクロールの間パネルを上に留める。 ##}}
+  {{## 同じ順位の話は 1 つの行にまとめ、左のパネル（順位・値）は 1 回だけ出す。話が多いときは、スクロールの間パネルを上に留める。 ##}}
   <ol class="stats-ep-list{{ if SubtitleStats }} is-subtitle-stats{{ end }}">
     {{~ for g in Groups ~}}
     <li class="stats-ep-row{{ if !g.HasRank }} no-rank{{ end }}{{ if (array.size g.Entries) > 1 }} is-tied{{ end }}">
@@ -79,7 +79,6 @@
       <div class="stats-ep-rank">
         <span class="stats-ep-rank-no">{{ g.RankLabel }}</span>
         {{~ if g.HasValue ~}}<span class="stats-ep-rank-val">{{ g.ValueLabel }}</span>{{~ end ~}}
-        {{~ if g.CountLabel != "" ~}}<span class="stats-ep-rank-count">{{ g.CountLabel }}</span>{{~ end ~}}
       </div>
       {{~ end ~}}
       <div class="stats-ep-entries">

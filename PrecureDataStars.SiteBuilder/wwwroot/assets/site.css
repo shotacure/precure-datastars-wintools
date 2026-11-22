@@ -8362,6 +8362,8 @@ body.mobile-nav-open {
   font-size: 0.95em;
   white-space: nowrap;
 }
+/* 検索ボックスの無いサイト（precure.news）では、ナビが閉じるボタンのすぐ下から始まるので、ボタンの分だけ右を空ける。 */
+.mobile-nav-overlay-close + .mobile-nav-overlay-list { padding-right: 46px; }
 .mobile-nav-overlay-list li.nav-sep-before {
   grid-column: 1 / -1;
   margin-top: 4px;
@@ -12981,6 +12983,28 @@ a.staff-combo-nav-card:hover {
 .home-product-card-badge:empty,
 .home-product-card-countdown:empty {
   display: none;
+}
+
+/* ──────── 商品詳細・書籍詳細の頭を詰める ────────
+   ジャケット（表紙）を左に寄せ、右の空きに購入リンクと「基本情報」の表を回り込ませる。
+   画像を 2 枚並べる商品（.product-cover-both）と、狭い画面（720px 以下）では、元の縦の並びのまま。 */
+@media (min-width: 721px) {
+  .product-media:has(> .product-cover:not(.product-cover-both)) {
+    display: block;
+    margin-bottom: 0;
+  }
+  .product-media:has(> .product-cover:not(.product-cover-both)) > .product-cover {
+    float: left;
+    margin: 0 24px 16px 0;
+  }
+  .product-media:has(> .product-cover:not(.product-cover-both)) > .product-links {
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  /* 表は、ジャケットの右に残った幅を使う（回り込みの外へはみ出さないよう、節を独立した枠にする）。 */
+  .product-media:has(> .product-cover:not(.product-cover-both)) + #basic-info { overflow: hidden; }
+  .product-media:has(> .product-cover:not(.product-cover-both)) + #basic-info > h2 { margin-top: 0; }
+  .product-media:has(> .product-cover:not(.product-cover-both)) + #basic-info ~ section { clear: both; }
 }
 
 /* ──────── ホームの商品・書籍カードを縦に詰める ────────

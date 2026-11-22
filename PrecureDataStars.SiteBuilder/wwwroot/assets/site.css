@@ -6408,6 +6408,21 @@ a.credit-card-series:focus-visible {
   width: 18px;
   height: 18px;
 }
+/* 文字数のマス（全部のマスが対象）：淡い色の小さいマスを 5 個ずつに区切り、数を読み取りやすくする。 */
+.stats-cells.is-count { gap: 2px; }
+.stats-cells.is-count i,
+.stats-cells.is-count i.on {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: rgba(216, 27, 96, 0.34);
+}
+.stats-cells.is-count i:nth-child(5n) { margin-right: 5px; }
+.is-first .stats-cells.is-count i,
+.is-first .stats-cells.is-count i.on {
+  width: 12px;
+  height: 12px;
+}
 
 /* 1 話ぶんの放送枠の帯（幅は 30 分）。そのページの対象のパートだけ濃く塗る。
    帯の左端を全行でそろえるため、帯の前の内訳（偏差値）は幅を固定する。 */
@@ -6514,21 +6529,94 @@ a.credit-card-series:focus-visible {
   color: var(--muted);
 }
 
-/* 使用文字 TOP 100：大きな字の右に、出現回数の横棒。 */
+/* 使用文字 TOP 100：頭の字の一覧図。順位の順に札を並べ、回数が多い字ほど大きい。札の色は字の種類。 */
+.stats-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 8px 0 20px;
+}
+.stats-cloud span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: 0.14em;
+  line-height: 1;
+  font-weight: 700;
+  color: #fff;
+}
+/* 字の種類が 1 つだけのページ：淡い地に色の字。 */
+.stats-cloud.is-mono span {
+  background: rgba(216, 27, 96, 0.09);
+  color: var(--accent);
+}
+/* 順位の行：字を小さめにして行を詰め、右に作品ごとの使われ方のマスと、いちばん多く使われた作品を置く。 */
+.stats-char-list .stats-ep-row { padding: 6px 0; }
+.stats-char-list .stats-ep-rank {
+  padding: 6px 14px;
+  font-size: 1.3em;
+}
 .stats-char-body {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
   min-width: 0;
 }
-.stats-char-body .stats-series-bar { flex: 1 1 0; }
-/* 上位 3 件の枠：順位・大きな字・出現回数。 */
-.stats-podium-char { grid-template-columns: auto 1fr auto; }
-.stats-podium-char .stats-char-glyph {
-  justify-self: center;
-  font-size: 3.6em;
+.stats-char-list .stats-char-glyph {
+  flex: 0 0 auto;
+  font-size: 1.9em;
+  background: none;
 }
-.stats-podium-char.is-first .stats-char-glyph { font-size: 5.6em; }
+.stats-char-list .stats-char-glyph.ct-kanji { color: var(--accent-pink); }
+.stats-char-list .stats-char-glyph.ct-hiragana { color: var(--accent-blue); }
+.stats-char-list .stats-char-glyph.ct-katakana { color: var(--accent-green); }
+.stats-char-list .stats-char-glyph.ct-latin { color: var(--accent-yellow); }
+.stats-char-list .stats-char-glyph.ct-digits { color: var(--accent-purple); }
+.stats-char-list .stats-char-glyph.ct-symbols { color: var(--accent-teal); }
+/* 作品ごとのマスの列（放送順）。0 回のマスは薄い地色のまま。 */
+.stats-strip {
+  flex: 0 1 auto;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(8px, 13px);
+  gap: 2px;
+}
+.stats-strip i {
+  height: 22px;
+  border-radius: 2px;
+  background: #f1f2f4;
+}
+.stats-char-peak {
+  flex: 1 1 0;
+  min-width: 0;
+  font-family: var(--font-base);
+  font-size: 0.8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* マスの列の見出し（放送開始年の下 2 桁）。行のマスの列と同じ位置に置く。 */
+.stats-char-head {
+  display: grid;
+  grid-template-columns: 12em 1fr;
+  gap: 18px;
+}
+.stats-char-head .stats-strip {
+  grid-column: 2;
+  justify-content: start;
+  margin-left: calc(1.9em * 1.5 + 16px);
+}
+.stats-char-head .stats-strip i {
+  height: auto;
+  background: none;
+  font-family: var(--font-num);
+  font-size: 0.62em;
+  font-style: normal;
+  text-align: center;
+  color: var(--muted);
+}
 
 /* シリーズ別 文字種別比率：作品ごとの 100% の積み上げ横棒。 */
 .stats-ct-list {
@@ -6597,6 +6685,11 @@ a.credit-card-series:focus-visible {
     grid-template-columns: 1fr;
     gap: 2px;
   }
+  .stats-cloud { font-size: 0.62em; }
+  .stats-char-head { display: none; }
+  .stats-char-body { flex-wrap: wrap; gap: 6px 12px; }
+  .stats-strip { flex: 1 1 0; grid-auto-columns: minmax(0, 1fr); }
+  .stats-char-peak { flex: 1 1 100%; }
 }
 
 /* episode 版テーブルでも col-epcount / col-firstdate を使えるように同じスタイルを共有 */

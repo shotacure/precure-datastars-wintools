@@ -296,6 +296,41 @@ public sealed class SubtitleStatsRepository : RepositoryBase
         return await QueryTvEpisodesAsync<SeriesSymbolCell>(sql, ct: ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// シリーズ × 文字の出現回数セルを、全部の文字について取得する（<see cref="GetSeriesSymbolCellsAsync"/> の、記号に絞らない版）。
+    /// 使用文字のランキングで、字ごとに「どの作品で何回使われたか」を出すのに使う。
+    /// 戻り値はフラットなセル行群（1 行 = 1 シリーズ内の 1 文字のカウント）。
+    /// </summary>
+    public async Task<IReadOnlyList<SeriesSymbolCell>> GetSeriesCharCellsAsync(CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT
+              s.series_id  AS SeriesId,
+              s.title      AS SeriesTitle,
+              s.slug       AS SeriesSlug,
+              jt.ch        AS `Char`,
+              SUM(
+                CAST(
+                  JSON_EXTRACT(
+                    e.title_char_stats,
+                    CONCAT('$.chars."', REPLACE(jt.ch, '"', '\\"'), '"')
+                  ) AS UNSIGNED
+                )
+              ) AS Cnt
+            FROM episodes e
+            JOIN series   s ON s.series_id = e.series_id
+            JOIN JSON_TABLE(
+                   JSON_KEYS(e.title_char_stats, '$.chars'),
+                   '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')
+                 ) jt
+            WHERE e.is_deleted = 0 AND e.series_id IN (SELECT series_id FROM series WHERE kind_code = 'TV')
+            GROUP BY s.series_id, s.title, s.slug, CONVERT(jt.ch USING utf8mb4) COLLATE utf8mb4_bin, jt.ch
+            ORDER BY s.series_id;
+            """;
+
+        return await QueryTvEpisodesAsync<SeriesSymbolCell>(sql, ct: ct).ConfigureAwait(false);
+    }
+
     /// <summary>シリーズ別の文字 TOP5 ランキング（DENSE_RANK で「同点同順、次は連番」、各シリーズ TOP5）。 出典 SQL：「歴代シリーズ使用文字ランキング.sql」</summary>
     public async Task<IReadOnlyList<SeriesCharRankRow>> GetTopCharsBySeriesAsync(int topN, CancellationToken ct = default)
     {

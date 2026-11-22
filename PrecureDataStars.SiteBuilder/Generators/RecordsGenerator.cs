@@ -421,12 +421,12 @@ public sealed class RecordsGenerator
         string orderLabel = most ? "多い順" : "少ない順";
         string title = $"{metric.Label} {orderLabel} TOP 100";
         string chart = StatsRankingView.CountHistogram(
-            all.Select(x => (double)x.Value).ToList(), ranked.Select(x => (double)x.Value).ToList(), descending: most, metric.Unit,
-            $"プリキュア TV シリーズ各話の{metric.Label}の分布。このランキングに入った話を濃い色で示す");
+            all.Select(x => (double)x.Value).ToList(), ranked.Select(x => (double)x.Value).ToList(), all.Where(x => x.Rank <= 10).Select(x => (double)x.Value).ToList(), descending: most, metric.Unit,
+            $"プリキュア TV シリーズ各話の{metric.Label}の分布。TOP 100 の話を濃い色で示す");
         var content = StatsRankingView.Build(_ctx, rows, coverage, metric.Label,
             chartSvg: chart,
             chartHeading: $"全 {all.Count:N0} 話の分布",
-            chartNote: $"{metric.Label}ごとの話数です。平均は {(all.Count > 0 ? all.Average(x => (double)x.Value) : 0):0.0}{metric.Unit}。濃い色が、このランキングに入った話です。",
+            chartNote: $"{metric.Label}ごとの話数です。平均は {(all.Count > 0 ? all.Average(x => (double)x.Value) : 0):0.0}{metric.Unit}。濃い色が TOP 100 の話です。",
             title: title,
             lead: $"TV シリーズで{metric.Label}が{(most ? "多い" : "少ない")}回の上位 100 件",
             note: metric.Lead + "Blu-ray のクレジットで数え、主題歌・挿入歌のクレジットは入れません。");

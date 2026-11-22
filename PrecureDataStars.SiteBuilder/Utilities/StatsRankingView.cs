@@ -161,11 +161,11 @@ public sealed class StatsRankingView
     /// <summary>
     /// 秒数の分布の図。棒は 10 秒きざみ（範囲が広いときは 20・30 秒）、目盛りは 1 分ごと。図の上に偏差値の位置を添える。
     /// </summary>
-    /// <param name="descending">ランキングが大きい順か（境目の線の説明が「から」「まで」で変わる）。</param>
+    /// <param name="descending">ランキングが大きい順か（境目の線の説明が「以上」「以下」で変わる）。</param>
     /// <param name="format">秒数の表記（<c>m:ss</c>、または放送時刻）。</param>
     /// <param name="clockTime">値が時刻か（境目の線の説明を「以降」「以前」にする。尺なら「以上」「以下」）。</param>
     /// <param name="tickFormat">目盛りの表記（分ちょうどの値だけが渡る）。null なら <paramref name="format"/> と同じ。</param>
-    public static string TimeHistogram(IReadOnlyList<double> all, IReadOnlyList<double> ranked, bool descending,
+    public static string TimeHistogram(IReadOnlyList<double> all, IReadOnlyList<double> ranked, IReadOnlyList<double> top10, bool descending,
         Func<double, string> format, string ariaLabel, Func<double, string>? tickFormat = null, bool clockTime = false)
     {
         tickFormat ??= format;
@@ -193,7 +193,7 @@ public sealed class StatsRankingView
             BinCount = bins,
             Ticks = ticks,
             BinLabel = i => $"{format(lo + width * i)}〜{format(lo + width * (i + 1) - 1)}",
-            Cut = CutMark(ranked, descending, format, upperEdge: 1, clockTime ? "以降" : "以上", clockTime ? "以前" : "以下"),
+            Cuts = CutMarks(ranked, top10, descending, format, upperEdge: 1, clockTime ? "以降" : "以上", clockTime ? "以前" : "以下"),
             TopMarks = marks,
             TopMarksCaption = "偏差値",
             AriaLabel = ariaLabel
@@ -201,7 +201,7 @@ public sealed class StatsRankingView
     }
 
     /// <summary>個数（文字数・人数）の分布の図。棒は 1 つの数ごと（範囲が広いときは 2・5 ごと）。</summary>
-    public static string CountHistogram(IReadOnlyList<double> all, IReadOnlyList<double> ranked, bool descending,
+    public static string CountHistogram(IReadOnlyList<double> all, IReadOnlyList<double> ranked, IReadOnlyList<double> top10, bool descending,
         string unit, string ariaLabel)
     {
         if (all.Count == 0) return "";
@@ -226,13 +226,13 @@ public sealed class StatsRankingView
             BinCount = bins,
             Ticks = ticks,
             BinLabel = i => width == 1 ? Fmt(lo + i) : $"{Fmt(lo + width * i)}〜{Fmt(lo + width * (i + 1) - 1)}",
-            Cut = CutMark(ranked, descending, Fmt, upperEdge: 1),
+            Cuts = CutMarks(ranked, top10, descending, Fmt, upperEdge: 1),
             AriaLabel = ariaLabel
         });
     }
 
     /// <summary>率（%）の分布の図。棒は 5% きざみ、目盛りは 20% ごと。100% は最後の棒に入れる。</summary>
-    public static string PercentHistogram(IReadOnlyList<double> all, IReadOnlyList<double> ranked, bool descending, string ariaLabel)
+    public static string PercentHistogram(IReadOnlyList<double> all, IReadOnlyList<double> ranked, IReadOnlyList<double> top10, bool descending, string ariaLabel)
     {
         if (all.Count == 0) return "";
         string Fmt(double v) => v.ToString("0.0", CultureInfo.InvariantCulture) + "%";
@@ -247,21 +247,34 @@ public sealed class StatsRankingView
             BinCount = 20,
             Ticks = ticks,
             BinLabel = i => i == 19 ? "95〜100%" : $"{i * 5}%〜{i * 5 + 5}% 未満",
-            Cut = CutMark(ranked, descending, Fmt, upperEdge: 0),
+            Cuts = CutMarks(ranked, top10, descending, Fmt, upperEdge: 0),
             AriaLabel = ariaLabel
         });
     }
 
     /// <summary>
-    /// ランキングの境目の線。大きい順ならランキングの中のいちばん小さい値に引いて「〜 以上」、
-    /// 小さい順ならいちばん大きい値（の棒の右端）に引いて「〜 以下」と添える。
+    /// ランキングの境目の線（TOP 100 と TOP 10）。大きい順なら、その範囲のいちばん小さい値に引いて「TOP 100：2:09 以上」、
+    /// 小さい順ならいちばん大きい値（の棒の右端）に引いて「TOP 100：6:26 以下」と添える。
+    /// TOP 10 の境目が TOP 100 と同じ値なら（同点が多いとき）、TOP 10 の線は引かない。
     /// </summary>
-    private static StatsAxisMark? CutMark(IReadOnlyList<double> ranked, bool descending, Func<double, string> format, double upperEdge,
-        string fromWord = "以上", string toWord = "以下")
+    /// <param name="ranked">TOP 100 に入った話の値（100 位が同点なら全件）。</param>
+    /// <param name="top10">TOP 10 に入った話の値（10 位が同点なら全件）。</param>
+    private static IReadOnlyList<StatsAxisMark> CutMarks(IReadOnlyList<double> ranked, IReadOnlyList<double> top10, bool descending,
+        Func<double, string> format, double upperEdge, string fromWord = "以上", string toWord = "以下")
     {
-        if (ranked.Count == 0) return null;
-        return descending
-            ? new StatsAxisMark(ranked.Min(), $"ランキングは {format(ranked.Min())} {fromWord}")
-            : new StatsAxisMark(ranked.Max() + upperEdge, $"ランキングは {format(ranked.Max())} {toWord}");
+        var marks = new List<StatsAxisMark>();
+        void Add(string name, IReadOnlyList<double> values)
+        {
+            if (values.Count == 0) return;
+            double edge = descending ? values.Min() : values.Max();
+            var mark = descending
+                ? new StatsAxisMark(edge, $"{name}：{format(edge)} {fromWord}")
+                : new StatsAxisMark(edge + upperEdge, $"{name}：{format(edge)} {toWord}");
+            if (marks.Count > 0 && marks[^1].Value == mark.Value) return;
+            marks.Add(mark);
+        }
+        Add("TOP 100", ranked);
+        Add("TOP 10", top10);
+        return marks;
     }
 }

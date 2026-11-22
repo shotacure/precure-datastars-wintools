@@ -39,8 +39,8 @@ public sealed class StatsHistogramSpec
     public required IReadOnlyList<StatsAxisMark> Ticks { get; init; }
     /// <summary>棒にマウスを載せたときの説明に出す、棒の範囲の名前（棒の番号から作る。「1:20〜1:29」など）。</summary>
     public required Func<int, string> BinLabel { get; init; }
-    /// <summary>ランキングの境目に引く線の位置と、その説明。線を引かないときは null。</summary>
-    public StatsAxisMark? Cut { get; init; }
+    /// <summary>ランキングの境目に引く線の位置と、その説明（TOP 100 と TOP 10 の順）。線を引かないときは空。</summary>
+    public IReadOnlyList<StatsAxisMark> Cuts { get; init; } = Array.Empty<StatsAxisMark>();
     /// <summary>図の上に添える印（偏差値 50・60・70 の位置など）。</summary>
     public IReadOnlyList<StatsAxisMark> TopMarks { get; init; } = Array.Empty<StatsAxisMark>();
     /// <summary>図の上の印の並びの名前（「偏差値」。印の行の左端に書く）。</summary>
@@ -244,7 +244,7 @@ public static class StatsSeriesCharts
 
     /// <summary>
     /// 全部の話の値の分布を棒で描き、ランキングに入った話の分を濃い色で塗る。縦軸は話数。
-    /// 境目の線（<see cref="StatsHistogramSpec.Cut"/>）と、図の上の印（<see cref="StatsHistogramSpec.TopMarks"/>）を重ねる。
+    /// 境目の線（<see cref="StatsHistogramSpec.Cuts"/>）と、図の上の印（<see cref="StatsHistogramSpec.TopMarks"/>）を重ねる。
     /// </summary>
     public static string BuildHistogram(StatsHistogramSpec spec)
     {
@@ -303,7 +303,7 @@ public static class StatsSeriesCharts
             double h = Math.Max(H(n), 2.5);
             double hr = r == 0 ? 0 : r == n ? h : Math.Max(H(r), 2.5);
             sb.Append("<g><title>").Append(Esc(r > 0
-                ? $"{spec.BinLabel(i)}：{n} 話（うちランキング {r} 話）"
+                ? $"{spec.BinLabel(i)}：{n} 話（うち TOP 100 は {r} 話）"
                 : $"{spec.BinLabel(i)}：{n} 話")).Append("</title>");
             if (h - hr > 0)
                 sb.Append($"<rect x=\"{F(x)}\" y=\"{F(HistBottom - h)}\" width=\"{F(w)}\" height=\"{F(h - hr)}\" fill=\"{Bar}\"/>");
@@ -322,12 +322,19 @@ public static class StatsSeriesCharts
             sb.Append(Text(x, HistBottom + 22, 12, Sub, t.Label, anchor));
         }
 
-        if (spec.Cut is { } cut)
+        // 境目の線。線を全部引いてから説明を書く（説明の字のふちで、下の線を隠す）。
+        // 説明は線ごとに段をずらし、線どうしが近くても字が重ならないようにする。
+        foreach (var cut in spec.Cuts)
         {
             double x = Math.Clamp(X(cut.Value), HistLeft, HistRight);
             sb.Append($"<line x1=\"{F(x)}\" y1=\"{F(HistTop)}\" x2=\"{F(x)}\" y2=\"{F(HistBottom)}\" stroke=\"{Red}\" stroke-width=\"1.5\" stroke-dasharray=\"5 3\"/>");
+        }
+        for (int i = 0; i < spec.Cuts.Count; i++)
+        {
+            var cut = spec.Cuts[i];
+            double x = Math.Clamp(X(cut.Value), HistLeft, HistRight);
             bool left = x > (HistLeft + HistRight) / 2;
-            sb.Append($"<text x=\"{F(left ? x - 8 : x + 8)}\" y=\"{F(HistTop + 14)}\" font-size=\"13\" font-weight=\"700\" fill=\"{Red}\" stroke=\"{Paper}\" stroke-width=\"4\" paint-order=\"stroke\" text-anchor=\"{(left ? "end" : "start")}\">{Esc(cut.Label)}</text>");
+            sb.Append($"<text x=\"{F(left ? x - 8 : x + 8)}\" y=\"{F(HistTop + 14 + 18 * i)}\" font-size=\"13\" font-weight=\"700\" fill=\"{Red}\" stroke=\"{Paper}\" stroke-width=\"4\" paint-order=\"stroke\" text-anchor=\"{(left ? "end" : "start")}\">{Esc(cut.Label)}</text>");
         }
 
         sb.Append("</svg>");

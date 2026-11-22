@@ -1,11 +1,23 @@
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace PrecureDataStars.SiteBuilder.Utilities;
+
+/// <summary>作品ごとの使われ方の列の 1 マス（その作品でその字が何回使われたか）。</summary>
+public sealed class StatsCharSeriesCell
+{
+    /// <summary>マスの地色の濃さ（アクセント色の不透明度。その字がいちばん多く使われた作品を最も濃くする）。0 回は空文字（塗らない）。</summary>
+    public string Shade { get; init; } = "";
+
+    /// <summary>マウスを載せたときの説明（「2011年『スイートプリキュア♪』：21 回」）。</summary>
+    public string Title { get; init; } = "";
+}
 
 /// <summary>
 /// 使用文字 TOP100（全文字／漢字限定）の脱テーブルレイアウト 1 行分のビューモデル。
 /// 左ブロックはエピソード単位統計ページと共通の <c>stats-ep-rank</c> アクセントパネル
-/// （順位＋指標値＝出現回数）を再利用し、右ブロックに対象文字を超特大表示する。
+/// （順位＋指標値＝出現回数）を再利用し、右ブロックに対象文字と、作品ごとの使われ方の列を置く。
+/// 同じ行を、ページの頭の字の一覧図（回数が多い字ほど大きい札）にも使う。
 /// </summary>
 public sealed class StatsCharRow
 {
@@ -18,14 +30,20 @@ public sealed class StatsCharRow
     /// <summary>対象文字（テンプレ側でエスケープ）。</summary>
     public string Char { get; init; } = "";
 
-    /// <summary>順位の数（同率の 2 件目以降も入る）。上位 3 件の枠の判定と表示に使う。</summary>
-    public int RankNo { get; init; }
+    /// <summary>字の種類の色の CSS クラス（<c>ct-kanji</c> など）。</summary>
+    public string TypeClass { get; init; } = "";
 
-    /// <summary>出現回数の横棒の長さ（1 位を 100 とした %）。style 属性用。</summary>
-    public string BarPercent { get; init; } = "0";
+    /// <summary>字の一覧図での札の字の大きさ（em。回数の比の平方根で決める）。style 属性用。</summary>
+    public string CloudSize { get; init; } = "1";
 
-    /// <summary>上位 3 件の枠で、この行を全幅の大きい枠にするか（単独 1 位のとき）。</summary>
-    public bool IsFirst { get; set; }
+    /// <summary>字の一覧図の札にマウスを載せたときの説明（「3 位：1,739 回」）。</summary>
+    public string CloudTitle { get; init; } = "";
+
+    /// <summary>作品ごとの使われ方（本線の TV シリーズを放送順に並べたマス）。作品ごとの回数を渡さなかったときは空。</summary>
+    public List<StatsCharSeriesCell> SeriesCells { get; init; } = new();
+
+    /// <summary>いちばん多く使われた作品の説明（「最多：スイートプリキュア♪ 21 回」）。無ければ空。</summary>
+    public string PeakLabel { get; init; } = "";
 }
 
 /// <summary>1 行分の入力（順位は呼び出し側で確定済みの Wimbledon 順位。表示用の同率ブランク化は本ビルダーが行う）。</summary>
@@ -43,6 +61,12 @@ public readonly struct StatsCharInput
     public string Char { get; }
 }
 
+/// <summary>作品ごとの使われ方の列に並べる 1 作品（放送順に渡す）。</summary>
+/// <param name="SeriesId">作品。</param>
+/// <param name="Title">作品名。</param>
+/// <param name="Year">放送開始年。</param>
+public readonly record struct StatsCharSeries(int SeriesId, string Title, int Year);
+
 /// <summary>
 /// <see cref="StatsCharRow"/> 群を組み立てる共有ビルダー。同率順位（直前行と
 /// <see cref="StatsCharInput.Rank"/> が等しい）の 2 件目以降の順位を空文字にする処理を集約し、
@@ -50,11 +74,20 @@ public readonly struct StatsCharInput
 /// </summary>
 public static class StatsCharRows
 {
+    /// <summary>字の一覧図の札の字の大きさ（em）の下限と上限。</summary>
+    private const double CloudMinEm = 1.0;
+    private const double CloudMaxEm = 5.2;
+
     /// <summary>
     /// 入力列（順位昇順で並んでいる前提）から表示行を生成する。
     /// 同率順位の 2 件目以降は順位を空文字にする（指標値は常に表示）。
     /// </summary>
-    public static List<StatsCharRow> Build(IEnumerable<StatsCharInput> items)
+    /// <param name="series">作品ごとの使われ方の列に並べる作品（放送順）。</param>
+    /// <param name="countBySeriesChar">(作品, 字) → 回数。字は序数で比べる。</param>
+    public static List<StatsCharRow> Build(
+        IEnumerable<StatsCharInput> items,
+        IReadOnlyList<StatsCharSeries>? series = null,
+        IReadOnlyDictionary<(int SeriesId, string Char), long>? countBySeriesChar = null)
     {
         var list = new List<StatsCharRow>();
         bool havePrev = false;
@@ -68,28 +101,46 @@ public static class StatsCharRows
             prevRank = it.Rank;
             havePrev = true;
 
+            // 作品ごとのマス：その字がいちばん多く使われた作品を最も濃くする（字ごとに濃さの物差しを取る）。
+            var cells = new List<StatsCharSeriesCell>();
+            string peakLabel = "";
+            if (series is not null && countBySeriesChar is not null)
+            {
+                var counts = series.Select(s => countBySeriesChar.TryGetValue((s.SeriesId, it.Char), out var n) ? n : 0L).ToList();
+                long peak = counts.Count > 0 ? counts.Max() : 0;
+                for (int i = 0; i < series.Count; i++)
+                {
+                    long n = counts[i];
+                    cells.Add(new StatsCharSeriesCell
+                    {
+                        Shade = n > 0 && peak > 0
+                            ? (0.10 + 0.90 * n / (double)peak).ToString("0.00", CultureInfo.InvariantCulture)
+                            : "",
+                        Title = $"{series[i].Year}年『{series[i].Title}』：{n:N0} 回"
+                    });
+                }
+                if (peak > 0)
+                {
+                    int at = counts.IndexOf(peak);
+                    peakLabel = $"最多：{series[at].Title} {peak:N0} 回";
+                }
+            }
+
             list.Add(new StatsCharRow
             {
                 RankLabel = rankLabel,
                 ValueLabel = it.TotalCount.ToString(),
                 Char = it.Char,
-                RankNo = it.Rank,
-                BarPercent = (max > 0 ? it.TotalCount * 100.0 / max : 0.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)
+                TypeClass = StatsTitleMarker.TypeClass(it.Char),
+                CloudSize = (max > 0
+                    ? CloudMinEm + (CloudMaxEm - CloudMinEm) * Math.Sqrt(it.TotalCount / (double)max)
+                    : CloudMinEm).ToString("0.00", CultureInfo.InvariantCulture),
+                CloudTitle = $"{it.Rank} 位：{it.TotalCount:N0} 回",
+                SeriesCells = cells,
+                PeakLabel = peakLabel
             });
         }
 
         return list;
-    }
-
-    /// <summary>
-    /// 行の並びを、上位 3 件の枠に出す行（3 位までの全件。6 件を超えるなら枠を出さない）と、残りの行に分ける。
-    /// 単独 1 位の行には <see cref="StatsCharRow.IsFirst"/> を立てる。エピソード単位の順位のページ（<see cref="StatsRankingView"/>）と同じ決まり。
-    /// </summary>
-    public static (List<StatsCharRow> Podium, List<StatsCharRow> Rows) SplitPodium(List<StatsCharRow> rows)
-    {
-        var podium = rows.Where(r => r.RankNo is >= 1 and <= 3).ToList();
-        if (podium.Count == 0 || podium.Count > 6) return (new List<StatsCharRow>(), rows);
-        if (podium.Count(r => r.RankNo == 1) == 1) podium[0].IsFirst = true;
-        return (podium, rows.Where(r => !(r.RankNo is >= 1 and <= 3)).ToList());
     }
 }

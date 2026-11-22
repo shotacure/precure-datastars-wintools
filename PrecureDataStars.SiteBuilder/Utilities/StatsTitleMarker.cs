@@ -123,14 +123,34 @@ public static class StatsTitleMarker
     }
 
     /// <summary>1 字 1 マスの並び。数える対象の字のマスに <c>on</c> を付ける。字が無ければ空文字。</summary>
-    public static string BuildCellsHtml(IReadOnlyList<bool> cells)
+    /// <param name="countStyle">
+    /// 全部のマスが対象の並び（文字数）か。true なら <c>is-count</c> を付け、CSS で淡い色の小さいマスを 5 個ずつに区切って並べる
+    /// （濃い色のマスが何十個も続くと行がうるさくなるため）。
+    /// </param>
+    public static string BuildCellsHtml(IReadOnlyList<bool> cells, bool countStyle = false)
     {
         if (cells.Count == 0) return "";
         var sb = new StringBuilder(40 + cells.Count * 18);
-        sb.Append("<span class=\"stats-cells\" aria-hidden=\"true\">");
+        sb.Append(countStyle ? "<span class=\"stats-cells is-count\" aria-hidden=\"true\">" : "<span class=\"stats-cells\" aria-hidden=\"true\">");
         foreach (bool on in cells) sb.Append(on ? "<i class=\"on\"></i>" : "<i></i>");
         sb.Append("</span>");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// 字の種類の色の CSS クラス（文字種別比率のページの 6 色：<c>ct-kanji</c>・<c>ct-hiragana</c>・<c>ct-katakana</c>・
+    /// <c>ct-latin</c>・<c>ct-digits</c>・<c>ct-symbols</c>）。漢字は「々」を含む。ほかは文字統計と同じ順に当てる。
+    /// </summary>
+    public static string TypeClass(string ch)
+    {
+        if (string.IsNullOrEmpty(ch)) return "ct-symbols";
+        if (IsKanji(ch)) return "ct-kanji";
+        if (IsSymbol(ch)) return "ct-symbols";
+        string g = ch.Normalize(NormalizationForm.FormKC);
+        if (RxHira.IsMatch(g)) return "ct-hiragana";
+        if (RxKata.IsMatch(g)) return "ct-katakana";
+        if (RxDigit.IsMatch(g)) return "ct-digits";
+        return "ct-latin";
     }
 
     private static bool IsSpace(string ch)

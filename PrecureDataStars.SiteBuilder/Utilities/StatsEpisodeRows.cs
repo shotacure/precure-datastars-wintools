@@ -154,7 +154,7 @@ public static class StatsEpisodeRows
                     ep?.TitleRichHtml,
                     !string.IsNullOrEmpty(ep?.TitleText) ? ep!.TitleText : it.TitleTextFallback),
                 it.Mark);
-            string meterHtml = it.MeterHtml ?? StatsTitleMarker.BuildCellsHtml(marked.Cells);
+            string meterHtml = it.MeterHtml ?? StatsTitleMarker.BuildCellsHtml(marked.Cells, countStyle: it.Mark == StatsTitleMark.All);
             string detailLabel = it.DetailLabel ?? it.Mark switch
             {
                 StatsTitleMark.Kanji => $"漢字 {marked.Cells.Count(c => c)} / 全 {marked.Cells.Count} 字",

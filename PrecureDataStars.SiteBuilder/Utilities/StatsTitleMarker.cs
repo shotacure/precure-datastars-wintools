@@ -50,6 +50,33 @@ public static class StatsTitleMarker
     {
         if (mark == StatsTitleMark.None || string.IsNullOrEmpty(titleHtml))
             return new Result(titleHtml, Array.Empty<bool>());
+        return MarkCore(titleHtml, mark switch
+        {
+            StatsTitleMark.All => _ => true,
+            StatsTitleMark.Kanji => IsKanji,
+            _ => IsSymbol
+        }, wrap: mark != StatsTitleMark.All);
+    }
+
+    /// <summary>
+    /// <paramref name="titleHtml"/> の中の、<paramref name="ch"/> と同じ字（文字統計と同じ正規化をかけて比べる。
+    /// 全角の「！」と半角の「!」は同じ字）を <c>span.stats-hit</c> で包む。
+    /// </summary>
+    public static Result MarkChar(string titleHtml, string ch)
+    {
+        if (string.IsNullOrEmpty(titleHtml) || string.IsNullOrEmpty(ch))
+            return new Result(titleHtml, Array.Empty<bool>());
+        string target = NormalizeForStats(ch);
+        return MarkCore(titleHtml, unit => NormalizeForStats(unit) == target, wrap: true);
+    }
+
+    /// <summary>文字統計（<c>title_char_stats</c>）と同じ正規化：NFKC と波ダッシュの統一。</summary>
+    private static string NormalizeForStats(string ch)
+        => ch.Normalize(NormalizationForm.FormKC).Replace('\u301C', '〜').Replace('\uFF5E', '〜');
+
+    /// <summary>字を先頭から見て、<paramref name="isHit"/> の字を対象として数え、<paramref name="wrap"/> なら <c>span.stats-hit</c> で包む。</summary>
+    private static Result MarkCore(string titleHtml, Func<string, bool> isHit, bool wrap)
+    {
 
         var cells = new List<bool>();
         var sb = new StringBuilder(titleHtml.Length + 64);
@@ -99,15 +126,10 @@ public static class StatsTitleMarker
                     continue;
                 }
 
-                bool hit = mark switch
-                {
-                    StatsTitleMark.All => true,
-                    StatsTitleMark.Kanji => IsKanji(ch),
-                    _ => IsSymbol(ch)
-                };
+                bool hit = isHit(ch);
                 cells.Add(hit);
 
-                if (hit && mark != StatsTitleMark.All)
+                if (hit && wrap)
                 {
                     if (!open) { sb.Append("<span class=\"stats-hit\">"); open = true; }
                 }
@@ -173,7 +195,7 @@ public static class StatsTitleMarker
     private static bool IsSymbol(string ch)
     {
         // 文字統計と同じ正規化（NFKC と波ダッシュの統一）をかけてから種類を見る。
-        string g = ch.Normalize(NormalizationForm.FormKC).Replace('〜', '〜').Replace('～', '〜');
+        string g = NormalizeForStats(ch);
         if (g.Length == 0) return false;
         if (RxEmoji.IsMatch(g) || RxPunct.IsMatch(g) || RxSymbol.IsMatch(g)) return true;
         return !(RxHira.IsMatch(g) || RxKata.IsMatch(g) || RxKanji.IsMatch(g) || RxDigit.IsMatch(g) || RxLatin.IsMatch(g));

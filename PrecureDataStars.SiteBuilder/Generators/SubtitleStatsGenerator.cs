@@ -111,7 +111,7 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateCharsAllAsync(CancellationToken ct)
     {
         var rows = await _repo.GetCharRankingAllAsync(Limit, ct).ConfigureAwait(false);
-        var content = await BuildCharRankingContentAsync(rows, showTypeLegend: true, ct).ConfigureAwait(false);
+        var content = await BuildCharRankingContentAsync(rows, kanjiGrades: false, ct).ConfigureAwait(false);
         var layout = MakeLayout("使用文字 TOP 100（全文字）", "全文字");
         _page.RenderAndWrite("/stats/subtitles/chars/all/", "stats", "stats-subtitles-chars-all.sbn", content, layout);
     }
@@ -119,7 +119,7 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateCharsKanjiAsync(CancellationToken ct)
     {
         var rows = await _repo.GetCharRankingKanjiAsync(Limit, ct).ConfigureAwait(false);
-        var content = await BuildCharRankingContentAsync(rows, showTypeLegend: false, ct).ConfigureAwait(false);
+        var content = await BuildCharRankingContentAsync(rows, kanjiGrades: true, ct).ConfigureAwait(false);
         var layout = MakeLayout("使用文字 TOP 100（漢字限定）", "漢字限定");
         _page.RenderAndWrite("/stats/subtitles/chars/kanji/", "stats", "stats-subtitles-chars-kanji.sbn", content, layout);
     }
@@ -131,9 +131,36 @@ public sealed class SubtitleStatsGenerator
     /// 使用文字のランキング（全文字・漢字限定）のページのモデルを組む。頭に字の一覧図（回数が多い字ほど大きい札）、
     /// 下に順位の行。行には、本線の TV シリーズを放送順に並べた作品ごとの使われ方のマスと、いちばん多く使われた作品を添える。
     /// </summary>
-    /// <param name="showTypeLegend">字の種類の色の凡例を出すか（漢字だけのページでは出さない）。</param>
+    /// <param name="kanjiGrades">
+    /// 札と字の色を、習う学年・中学以降の常用漢字・常用漢字でない字で分けるか（漢字限定のページ）。false なら字の種類で分ける。
+    /// </param>
     private async Task<object> BuildCharRankingContentAsync(
-        IReadOnlyList<SubtitleStatsRepository.CharRankingRow> rows, bool showTypeLegend, CancellationToken ct)
+        IReadOnlyList<SubtitleStatsRepository.CharRankingRow> rows, bool kanjiGrades, CancellationToken ct)
+    {
+        var (series, counts) = await LoadSeriesCharCountsAsync(ct).ConfigureAwait(false);
+        var view = StatsCharRows.Build(rows.Select(r => new StatsCharInput(r.Rank, r.TotalCount, r.Char)), series, counts,
+            kanjiGrades ? KanjiGrades.ClassOf : null);
+        var legend = kanjiGrades
+            ? KanjiGrades.Legend
+            : new[]
+            {
+                ("ct-kanji", "漢字"), ("ct-hiragana", "ひらがな"), ("ct-katakana", "カタカナ"),
+                ("ct-latin", "英字"), ("ct-digits", "数字"), ("ct-symbols", "記号")
+            };
+        return new
+        {
+            Rows = view,
+            // 作品ごとのマスの列の見出し（放送開始年の下 2 桁）。
+            SeriesYears = series.Select(s => (s.Year % 100).ToString("00")).ToList(),
+            // 色の凡例：一覧に出てくる区分だけ出す。
+            Legend = legend.Where(l => view.Any(v => v.TypeClass == l.Item1))
+                .Select(l => new { Class = l.Item1, Label = l.Item2 }).ToList(),
+            CoverageLabel = _coverageLabel
+        };
+    }
+
+    /// <summary>作品ごとの使われ方の列の材料：本線の TV シリーズ（放送順）と、作品 × 字の出現回数。</summary>
+    private async Task<(List<StatsCharSeries> Series, IReadOnlyDictionary<(int SeriesId, string Char), long> Counts)> LoadSeriesCharCountsAsync(CancellationToken ct)
     {
         _seriesCharCounts ??= (await _repo.GetSeriesCharCellsAsync(ct).ConfigureAwait(false))
             .GroupBy(c => (c.SeriesId, c.Char))
@@ -143,26 +170,29 @@ public sealed class SubtitleStatsGenerator
             .OrderBy(s => s.StartDate).ThenBy(s => s.SeriesId)
             .Select(s => new StatsCharSeries(s.SeriesId, s.Title, s.StartDate.Year))
             .ToList();
-        var view = StatsCharRows.Build(rows.Select(r => new StatsCharInput(r.Rank, r.TotalCount, r.Char)), series, _seriesCharCounts);
-        return new
-        {
-            Rows = view,
-            // 作品ごとのマスの列の見出し（放送開始年の下 2 桁）。
-            SeriesYears = series.Select(s => (s.Year % 100).ToString("00")).ToList(),
-            ShowTypeLegend = showTypeLegend,
-            CoverageLabel = _coverageLabel
-        };
+        return (series, _seriesCharCounts);
     }
 
     private async Task GenerateSymbolsByFirstAppearAsync(CancellationToken ct)
     {
         var rows = await _repo.GetSymbolsByFirstAppearAsync(ct).ConfigureAwait(false);
+        var (series, counts) = await LoadSeriesCharCountsAsync(ct).ConfigureAwait(false);
         // 初使用が早い順（リポジトリの順序）を保ったまま、使用文字 TOP100 と同じ大グリフ＋出現回数
         // パネル＋初使用エピソード（シリーズ・第N話(放送日)・ルビ付きサブタイトル）の脱テーブル行へ。
         var view = StatsSymbolRows.Build(_ctx, rows.Select(r => new StatsSymbolInput(
             r.Char, r.TotalCount, r.FirstSeriesSlug, r.FirstSeriesEpNo, r.FirstSeriesTitle,
-            _ctx.StartYearLabelBySlug(r.FirstSeriesSlug), r.FirstBroadcastDate, r.FirstTitleText)));
-        var content = new { Rows = view, CoverageLabel = _coverageLabel };
+            _ctx.StartYearLabelBySlug(r.FirstSeriesSlug), r.FirstBroadcastDate, r.FirstTitleText)), series, counts);
+        // 頭の図：記号を初使用の年ごとにまとめる（年の早い順。年の中は初使用の早い順のまま）。
+        var years = view.GroupBy(v => v.FirstYear)
+            .OrderBy(g => g.Key)
+            .Select(g => new { Year = g.Key > 0 ? g.Key.ToString() : "", Symbols = g.ToList() })
+            .ToList();
+        var content = new
+        {
+            Rows = view,
+            Years = years,
+            CoverageLabel = _coverageLabel
+        };
         var layout = MakeLayout("記号出現回数・初使用エピソード", "記号出現回数・初使用エピソード");
         _page.RenderAndWrite("/stats/subtitles/chars/symbols-order/", "stats", "stats-subtitles-chars-symbols-order.sbn", content, layout);
     }

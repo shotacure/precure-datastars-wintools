@@ -1,21 +1,16 @@
 {{## 使用文字 TOP 100（全文字・漢字限定）の本体。頭に字の一覧図、下に順位の行（Rows）。
-     字の一覧図は、順位の順に札を並べ、回数が多い字ほど札を大きくする（CloudSize）。札の色は字の種類（TypeClass）。
+     字の一覧図は、順位の順に札を並べ、回数が多い字ほど札を大きくする（CloudSize）。札の色（TypeClass）は、全文字のページが字の種類、
+     漢字限定のページが習う学年・中学以降の常用漢字・常用漢字でない字。凡例（Legend）は一覧に出てくる区分だけ。
      行は左に順位と出現回数のパネル、右に字と、作品ごとの使われ方のマス（SeriesCells：本線の TV シリーズを放送順に。
-     その字がいちばん多く使われた作品が最も濃い）と、いちばん多く使われた作品（PeakLabel）。
+     その字がいちばん多く使われた作品が最も濃く、最も高い）と、いちばん多く使われた作品（PeakLabel）。
      マスの列の上には、放送開始年の下 2 桁（SeriesYears）を 1 回だけ出す。 ##}}
 <section>
-  {{~ if ShowTypeLegend ~}}
   <p class="stats-band-legend">
-    <span><i class="ct-kanji"></i>漢字</span>
-    <span><i class="ct-hiragana"></i>ひらがな</span>
-    <span><i class="ct-katakana"></i>カタカナ</span>
-    <span><i class="ct-latin"></i>英字</span>
-    <span><i class="ct-digits"></i>数字</span>
-    <span><i class="ct-symbols"></i>記号</span>
+    {{~ for l in Legend ~}}
+    <span><i class="{{ l.Class }}"></i>{{ l.Label | html.escape }}</span>
+    {{~ end ~}}
   </p>
-  {{~ end ~}}
-  {{## 字の種類が 1 つだけのページ（漢字限定）は、濃い色の札が並ぶとうるさいので、淡い地に色の字の札にする（is-mono）。 ##}}
-  <div class="stats-cloud{{ if !ShowTypeLegend }} is-mono{{ end }}" role="img" aria-label="出現回数の多い字ほど大きく並べた図">
+  <div class="stats-cloud" role="img" aria-label="出現回数の多い字ほど大きく並べた図">
     {{~ for r in Rows ~}}
     <span class="{{ r.TypeClass }}" style="font-size: {{ r.CloudSize }}em" title="{{ r.CloudTitle }}">{{ r.Char | html.escape }}</span>
     {{~ end ~}}
@@ -24,7 +19,7 @@
 
 <section>
   <h2>順位と、作品ごとの使われ方</h2>
-  <p class="muted stats-note">マスは TV シリーズを放送順に並べたもので、その字が多く使われた作品ほど濃い色です。</p>
+  <p class="muted stats-note">マスは TV シリーズを放送順に並べたもので、その字が多く使われた作品ほど高く、濃い色です。</p>
   <div class="stats-char-head" aria-hidden="true">
     <span class="stats-strip">
       {{~ for y in SeriesYears ~}}<i>{{ y }}</i>{{~ end ~}}
@@ -40,7 +35,7 @@
       <div class="stats-char-body">
         <div class="stats-char-glyph {{ r.TypeClass }}">{{ r.Char | html.escape }}</div>
         <span class="stats-strip">
-          {{~ for c in r.SeriesCells ~}}<i title="{{ c.Title | html.escape }}"{{ if c.Shade != "" }} style="background: rgba(216, 27, 96, {{ c.Shade }})"{{ end }}></i>{{~ end ~}}
+          {{~ for c in r.SeriesCells ~}}<i title="{{ c.Title | html.escape }}"{{ if c.Shade != "" }} style="height: {{ c.Height }}%; background: rgba(216, 27, 96, {{ c.Shade }})"{{ end }}></i>{{~ end ~}}
         </span>
         <span class="stats-series-detail stats-char-peak">{{ r.PeakLabel | html.escape }}</span>
       </div>

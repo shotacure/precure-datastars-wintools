@@ -6548,11 +6548,74 @@ a.credit-card-series:focus-visible {
   font-weight: 700;
   color: #fff;
 }
-/* 字の種類が 1 つだけのページ：淡い地に色の字。 */
-.stats-cloud.is-mono span {
-  background: rgba(216, 27, 96, 0.09);
-  color: var(--accent);
+/* 統計で扱う対象の字（札・行の字・表の中の字）は、太い明朝体で出す。説明の文は本文の書体のまま。 */
+.stats-cloud span,
+.stats-char-glyph,
+.stats-by-series-topchars-table td.col-topchar code,
+.stats-by-series-symbols-table th.col-sym {
+  font-family: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  font-weight: 800;
 }
+.stats-by-series-topchars-table td.col-topchar code {
+  font-size: 1.25em;
+  background: none;
+}
+/* 漢字限定のページの色：習う学年（小 1〜小 6）・中学以降の常用漢字・常用漢字でない字。 */
+.kg-1 { --kg: #d81b60; }
+.kg-2 { --kg: #e0762f; }
+.kg-3 { --kg: #c99712; }
+.kg-4 { --kg: #4ca36b; }
+.kg-5 { --kg: #2ea7ad; }
+.kg-6 { --kg: #3370aa; }
+.kg-j { --kg: #7e57c2; }
+.kg-x { --kg: #6b7280; }
+[class*="kg-"] { background: var(--kg); }
+.stats-char-list .stats-char-glyph[class*="kg-"] {
+  background: none;
+  color: var(--kg);
+}
+/* 記号の初使用のページの頭の図：記号の札を初使用の年ごとにまとめ、札の下に年を書く。 */
+.stats-symline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 22px;
+  margin: 8px 0 20px;
+}
+.stats-symline-year {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding-bottom: 2px;
+  border-bottom: 2px solid var(--border);
+}
+/* 「！」が飛び抜けて多く、札が大きくなりすぎるので、この図では札を全体に小さくする。 */
+.stats-symline-year .stats-cloud {
+  margin: 0;
+  align-items: flex-end;
+  font-size: 0.72em;
+}
+.stats-symline-year b {
+  font-family: var(--font-num);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+/* 記号の初使用のページの行：記号は色の札にし、題名の下に作品ごとのマスと最多の作品を置く。 */
+.stats-symbol-row .stats-char-glyph.ct-symbols {
+  border-radius: 8px;
+  font-size: 2.2em;
+  color: #fff;
+}
+.stats-symbol-extra {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  margin-top: 7px;
+}
+.stats-symbol-extra .stats-strip { height: 22px; }
 /* 順位の行：字を小さめにして行を詰め、右に作品ごとの使われ方のマスと、いちばん多く使われた作品を置く。 */
 .stats-char-list .stats-ep-row { padding: 6px 0; }
 .stats-char-list .stats-ep-rank {
@@ -6576,18 +6639,20 @@ a.credit-card-series:focus-visible {
 .stats-char-list .stats-char-glyph.ct-latin { color: var(--accent-yellow); }
 .stats-char-list .stats-char-glyph.ct-digits { color: var(--accent-purple); }
 .stats-char-list .stats-char-glyph.ct-symbols { color: var(--accent-teal); }
-/* 作品ごとのマスの列（放送順）。0 回のマスは薄い地色のまま。 */
+/* 作品ごとの棒の列（放送順）。棒の高さと濃さが、その作品で使われた回数。0 回は底の細い線だけ。 */
 .stats-strip {
   flex: 0 1 auto;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(8px, 13px);
+  align-items: end;
   gap: 2px;
+  height: 30px;
 }
 .stats-strip i {
-  height: 22px;
-  border-radius: 2px;
-  background: #f1f2f4;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: #e6e7ea;
 }
 .stats-char-peak {
   flex: 1 1 0;
@@ -6608,6 +6673,7 @@ a.credit-card-series:focus-visible {
   justify-content: start;
   margin-left: calc(1.9em * 1.5 + 16px);
 }
+.stats-char-head .stats-strip { height: auto; }
 .stats-char-head .stats-strip i {
   height: auto;
   background: none;

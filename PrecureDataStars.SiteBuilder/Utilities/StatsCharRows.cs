@@ -11,6 +11,9 @@ public sealed class StatsCharSeriesCell
 
     /// <summary>マウスを載せたときの説明（「2011年『スイートプリキュア♪』：21 回」）。</summary>
     public string Title { get; init; } = "";
+
+    /// <summary>マスの高さ（%。その字がいちばん多く使われた作品を 100 とする）。0 回は空文字（CSS の細い線のまま）。</summary>
+    public string Height { get; init; } = "";
 }
 
 /// <summary>
@@ -30,10 +33,10 @@ public sealed class StatsCharRow
     /// <summary>対象文字（テンプレ側でエスケープ）。</summary>
     public string Char { get; init; } = "";
 
-    /// <summary>字の種類の色の CSS クラス（<c>ct-kanji</c> など）。</summary>
+    /// <summary>札と字の色の CSS クラス（全文字のページは字の種類 <c>ct-kanji</c> など、漢字限定のページは習う学年 <c>kg-1</c> など）。</summary>
     public string TypeClass { get; init; } = "";
 
-    /// <summary>字の一覧図での札の字の大きさ（em。回数の比の平方根で決める）。style 属性用。</summary>
+    /// <summary>字の一覧図での札の字の大きさ（em。回数が多い字ほど大きい）。style 属性用。</summary>
     public string CloudSize { get; init; } = "1";
 
     /// <summary>字の一覧図の札にマウスを載せたときの説明（「3 位：1,739 回」）。</summary>
@@ -75,8 +78,11 @@ public readonly record struct StatsCharSeries(int SeriesId, string Title, int Ye
 public static class StatsCharRows
 {
     /// <summary>字の一覧図の札の字の大きさ（em）の下限と上限。</summary>
-    private const double CloudMinEm = 1.0;
-    private const double CloudMaxEm = 5.2;
+    private const double CloudMinEm = 0.95;
+    private const double CloudMaxEm = 8.0;
+
+    /// <summary>札の大きさを決める、回数の比に掛ける指数。1 に近いほど、多い字と少ない字の大きさの差が開く。</summary>
+    private const double CloudPower = 0.8;
 
     /// <summary>
     /// 入力列（順位昇順で並んでいる前提）から表示行を生成する。
@@ -84,11 +90,14 @@ public static class StatsCharRows
     /// </summary>
     /// <param name="series">作品ごとの使われ方の列に並べる作品（放送順）。</param>
     /// <param name="countBySeriesChar">(作品, 字) → 回数。字は序数で比べる。</param>
+    /// <param name="typeClass">字 → 札の色の CSS クラス。null なら字の種類（<see cref="StatsTitleMarker.TypeClass"/>）。</param>
     public static List<StatsCharRow> Build(
         IEnumerable<StatsCharInput> items,
         IReadOnlyList<StatsCharSeries>? series = null,
-        IReadOnlyDictionary<(int SeriesId, string Char), long>? countBySeriesChar = null)
+        IReadOnlyDictionary<(int SeriesId, string Char), long>? countBySeriesChar = null,
+        Func<string, string>? typeClass = null)
     {
+        typeClass ??= StatsTitleMarker.TypeClass;
         var list = new List<StatsCharRow>();
         bool havePrev = false;
         int prevRank = 0;
@@ -101,40 +110,17 @@ public static class StatsCharRows
             prevRank = it.Rank;
             havePrev = true;
 
-            // 作品ごとのマス：その字がいちばん多く使われた作品を最も濃くする（字ごとに濃さの物差しを取る）。
-            var cells = new List<StatsCharSeriesCell>();
-            string peakLabel = "";
-            if (series is not null && countBySeriesChar is not null)
-            {
-                var counts = series.Select(s => countBySeriesChar.TryGetValue((s.SeriesId, it.Char), out var n) ? n : 0L).ToList();
-                long peak = counts.Count > 0 ? counts.Max() : 0;
-                for (int i = 0; i < series.Count; i++)
-                {
-                    long n = counts[i];
-                    cells.Add(new StatsCharSeriesCell
-                    {
-                        Shade = n > 0 && peak > 0
-                            ? (0.10 + 0.90 * n / (double)peak).ToString("0.00", CultureInfo.InvariantCulture)
-                            : "",
-                        Title = $"{series[i].Year}年『{series[i].Title}』：{n:N0} 回"
-                    });
-                }
-                if (peak > 0)
-                {
-                    int at = counts.IndexOf(peak);
-                    peakLabel = $"最多：{series[at].Title} {peak:N0} 回";
-                }
-            }
+            var (cells, peakLabel) = series is not null && countBySeriesChar is not null
+                ? BuildSeriesCells(series, countBySeriesChar, it.Char)
+                : (new List<StatsCharSeriesCell>(), "");
 
             list.Add(new StatsCharRow
             {
                 RankLabel = rankLabel,
                 ValueLabel = it.TotalCount.ToString(),
                 Char = it.Char,
-                TypeClass = StatsTitleMarker.TypeClass(it.Char),
-                CloudSize = (max > 0
-                    ? CloudMinEm + (CloudMaxEm - CloudMinEm) * Math.Sqrt(it.TotalCount / (double)max)
-                    : CloudMinEm).ToString("0.00", CultureInfo.InvariantCulture),
+                TypeClass = typeClass(it.Char),
+                CloudSize = CloudSize(it.TotalCount, max),
                 CloudTitle = $"{it.Rank} 位：{it.TotalCount:N0} 回",
                 SeriesCells = cells,
                 PeakLabel = peakLabel
@@ -142,5 +128,42 @@ public static class StatsCharRows
         }
 
         return list;
+    }
+
+    /// <summary>字の一覧図での札の字の大きさ（em）。回数の比の <see cref="CloudPower"/> 乗で、下限から上限の間に取る。style 属性用。</summary>
+    public static string CloudSize(long count, long max)
+        => (max > 0
+            ? CloudMinEm + (CloudMaxEm - CloudMinEm) * Math.Pow(count / (double)max, CloudPower)
+            : CloudMinEm).ToString("0.00", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// 作品ごとの使われ方のマスと、いちばん多く使われた作品の説明を組む。
+    /// マスの濃さは、その字がいちばん多く使われた作品を最も濃くする（字ごとに濃さの物差しを取る）。
+    /// </summary>
+    public static (List<StatsCharSeriesCell> Cells, string PeakLabel) BuildSeriesCells(
+        IReadOnlyList<StatsCharSeries> series,
+        IReadOnlyDictionary<(int SeriesId, string Char), long> countBySeriesChar,
+        string ch)
+    {
+        var cells = new List<StatsCharSeriesCell>();
+        var counts = series.Select(s => countBySeriesChar.TryGetValue((s.SeriesId, ch), out var n) ? n : 0L).ToList();
+        long peak = counts.Count > 0 ? counts.Max() : 0;
+        for (int i = 0; i < series.Count; i++)
+        {
+            long n = counts[i];
+            cells.Add(new StatsCharSeriesCell
+            {
+                Shade = n > 0 && peak > 0
+                    ? (0.10 + 0.90 * n / (double)peak).ToString("0.00", CultureInfo.InvariantCulture)
+                    : "",
+                // 少ない回数でも棒が見えるよう、高さの下限を持たせる。
+                Height = n > 0 && peak > 0
+                    ? Math.Max(14.0, n * 100.0 / peak).ToString("0", CultureInfo.InvariantCulture)
+                    : "",
+                Title = $"{series[i].Year}年『{series[i].Title}』：{n:N0} 回"
+            });
+        }
+        string peakLabel = peak > 0 ? $"最多：{series[counts.IndexOf(peak)].Title} {peak:N0} 回" : "";
+        return (cells, peakLabel);
     }
 }

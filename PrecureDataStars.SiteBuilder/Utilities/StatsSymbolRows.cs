@@ -39,6 +39,21 @@ public sealed class StatsSymbolRow
 
     /// <summary>初使用エピソード詳細ページ URL。</summary>
     public string EpisodeUrl { get; init; } = "";
+
+    /// <summary>初使用の年（頭の図で、記号を年ごとにまとめるのに使う）。分からなければ 0。</summary>
+    public int FirstYear { get; init; }
+
+    /// <summary>頭の図での札の字の大きさ（em。回数が多い記号ほど大きい）。style 属性用。</summary>
+    public string CloudSize { get; init; } = "1";
+
+    /// <summary>頭の図の札にマウスを載せたときの説明（「1,739 回（初使用 2004.2.1）」）。</summary>
+    public string CloudTitle { get; init; } = "";
+
+    /// <summary>作品ごとの使われ方（本線の TV シリーズを放送順に並べたマス）。</summary>
+    public List<StatsCharSeriesCell> SeriesCells { get; init; } = new();
+
+    /// <summary>いちばん多く使われた作品の説明（「最多：スイートプリキュア♪ 21 回」）。無ければ空。</summary>
+    public string PeakLabel { get; init; } = "";
 }
 
 /// <summary>1 行分の入力（記号 / 出現回数 / 初使用エピソード情報）。</summary>
@@ -77,11 +92,17 @@ public readonly struct StatsSymbolInput
 /// </summary>
 public static class StatsSymbolRows
 {
-    public static List<StatsSymbolRow> Build(BuildContext ctx, IEnumerable<StatsSymbolInput> items)
+    /// <param name="series">作品ごとの使われ方の列に並べる作品（放送順）。</param>
+    /// <param name="countBySeriesChar">(作品, 字) → 回数。</param>
+    public static List<StatsSymbolRow> Build(BuildContext ctx, IEnumerable<StatsSymbolInput> items,
+        IReadOnlyList<StatsCharSeries>? series = null,
+        IReadOnlyDictionary<(int SeriesId, string Char), long>? countBySeriesChar = null)
     {
         var list = new List<StatsSymbolRow>();
+        var source = items.ToList();
+        long max = source.Count > 0 ? source.Max(i => i.TotalCount) : 0;
 
-        foreach (var it in items)
+        foreach (var it in source)
         {
             var ep = ctx.LookupEpisodeBySeriesEpNo(it.FirstSeriesSlug, it.FirstSeriesEpNo);
 
@@ -89,6 +110,9 @@ public static class StatsSymbolRows
             DateOnly? d = it.FirstBroadcastDate
                           ?? (ep is null ? (DateOnly?)null : DateOnly.FromDateTime(ep.OnAirAt));
             string firstDate = d is { } dt ? $"{dt.Year}.{dt.Month}.{dt.Day}" : "";
+            var (cells, peakLabel) = series is not null && countBySeriesChar is not null
+                ? StatsCharRows.BuildSeriesCells(series, countBySeriesChar, it.Char)
+                : (new List<StatsCharSeriesCell>(), "");
 
             list.Add(new StatsSymbolRow
             {
@@ -99,10 +123,18 @@ public static class StatsSymbolRows
                 SeriesStartYearLabel = it.FirstSeriesStartYearLabel,
                 EpNoLabel = $"第{it.FirstSeriesEpNo}話",
                 FirstDateLabel = firstDate,
+                FirstYear = d?.Year ?? 0,
+                CloudSize = StatsCharRows.CloudSize(it.TotalCount, max),
+                CloudTitle = $"{it.TotalCount:N0} 回（初使用 {firstDate}）",
+                SeriesCells = cells,
+                PeakLabel = peakLabel,
+                // 初使用の回の題名は、その記号に色を付ける（公開前の伏せの枠で包む前の HTML に当てる）。
                 TitleHtml = SubtitleGuardRenderer.GuardRichHtml(
-                    StatsEpisodeRows.BuildTitleHtml(
-                        ep?.TitleRichHtml,
-                        !string.IsNullOrEmpty(ep?.TitleText) ? ep!.TitleText : it.FirstTitleTextFallback),
+                    StatsTitleMarker.MarkChar(
+                        StatsEpisodeRows.BuildTitleHtml(
+                            ep?.TitleRichHtml,
+                            !string.IsNullOrEmpty(ep?.TitleText) ? ep!.TitleText : it.FirstTitleTextFallback),
+                        it.Char).Html,
                     ep != null ? SubtitleGuardRenderer.RevealAtFor(ep.EpisodeId, ctx.SubtitleRevealAtByEpisodeId) : null),
                 EpisodeUrl = PathUtil.EpisodeUrl(it.FirstSeriesSlug, it.FirstSeriesEpNo)
             });

@@ -20,83 +20,101 @@
        外部リンクは rel="nofollow sponsored noopener" + target=_blank。
        紙・Kindle の 2 系統を並列に並べ、ASIN が登録されている方だけボタンを出す。
        画像出典・ホットリンクの注意書きは /disclaimer/ に集約している。 ##}}
-  {{~ if Book.CoverImageUrl != "" || Book.AmazonPrintUrl != "" || Book.AmazonKindleUrl != "" ~}}
-  <section id="book-media" class="product-media">
-    {{~ if Book.CoverImageUrl != "" ~}}
-    {{## 表紙は代表 1 枚が基本。紙と Kindle で書影が異なり「両方表示」が設定された書籍では
-         Book.CoverImageSecondaryUrl が入り、2 枚並べて表示する。 ##}}
-    <div class="product-cover{{ if Book.CoverImageSecondaryUrl != "" }} product-cover-both{{ end }}">
-      <img src="{{ Book.CoverImageUrl }}" alt="{{ Book.Title | html.escape }} 表紙画像"
-           loading="lazy" decoding="async">
-      {{~ if Book.CoverImageSecondaryUrl != "" ~}}
-      <img src="{{ Book.CoverImageSecondaryUrl }}" alt="{{ Book.Title | html.escape }} 表紙画像（別版）"
-           loading="lazy" decoding="async">
-      {{~ end ~}}
-    </div>
-    {{~ end ~}}
-    {{~ if Book.AmazonPrintUrl != "" || Book.AmazonKindleUrl != "" ~}}
-    <div class="product-links">
-      <p class="muted product-links-label">購入・閲覧</p>
-      <ul class="product-links-list">
-        {{~ if Book.AmazonPrintUrl != "" ~}}
-        <li><a class="product-link product-link-amazon" href="{{ Book.AmazonPrintUrl }}"
-               target="_blank" rel="nofollow sponsored noopener">Amazon で買う (紙)</a></li>
-        {{~ end ~}}
-        {{~ if Book.AmazonKindleUrl != "" ~}}
-        <li><a class="product-link product-link-amazon" href="{{ Book.AmazonKindleUrl }}"
-               target="_blank" rel="nofollow sponsored noopener">Kindle で読む</a></li>
-        {{~ end ~}}
-      </ul>
-      {{## 購入リンクは Amazon アソシエイトの広告なので、リンクのそばで広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。 ##}}
-      <p class="muted product-links-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
-    </div>
-    {{~ end ~}}
-  </section>
-  {{~ end ~}}
 
   {{## 基本情報。Amazon ASIN の生 ID 行は出さない
        （閲覧者にとっての情報価値が薄く、購入リンクから直接遷移できるため）。 ##}}
   <section id="basic-info">
     <h2>基本情報</h2>
-    <table>
-      <tbody>
-        <tr><th>書名</th><td>{{ Book.Title | html.escape }}</td></tr>
-        <tr><th>版</th><td>{{ Book.EditionLabel | html.escape }}</td></tr>
-        <tr><th>発売日</th><td>{{ Book.ReleaseDate }}</td></tr>
+    {{## 見出しの下の段：左にジャケット（表紙）、右に「項目名と値」の並び。画像の無い商品は、項目の並びだけになる。 ##}}
+    <div class="product-head">
+      {{~ if Book.CoverImageUrl != "" ~}}
+      {{## 表紙は代表 1 枚が基本。紙と Kindle で書影が異なり「両方表示」が設定された書籍では
+           Book.CoverImageSecondaryUrl が入り、2 枚並べて表示する。 ##}}
+      <div class="product-cover{{ if Book.CoverImageSecondaryUrl != "" }} product-cover-both{{ end }}">
+        <img src="{{ Book.CoverImageUrl }}" alt="{{ Book.Title | html.escape }} 表紙画像"
+             loading="lazy" decoding="async">
+        {{~ if Book.CoverImageSecondaryUrl != "" ~}}
+        <img src="{{ Book.CoverImageSecondaryUrl }}" alt="{{ Book.Title | html.escape }} 表紙画像（別版）"
+             loading="lazy" decoding="async">
+        {{~ end ~}}
+      </div>
+      {{~ end ~}}
+      <div class="product-head-main">
+        <dl class="fact-list">
+        <div><dt>書名</dt><dd>{{ Book.Title | html.escape }}</dd></div>
+        <div><dt>版</dt><dd>{{ Book.EditionLabel | html.escape }}</dd></div>
+        <div><dt>発売日</dt><dd>{{ Book.ReleaseDate }}</dd></div>
         {{## Kindle 版が後日配信の書籍だけ、電子版の配信日を別行で出す。 ##}}
         {{~ if Book.ReleaseDateKindle != "" ~}}
-        <tr><th>Kindle 版配信日</th><td>{{ Book.ReleaseDateKindle }}</td></tr>
+        <div><dt>Kindle 版配信日</dt><dd>{{ Book.ReleaseDateKindle }}</dd></div>
         {{~ end ~}}
         {{~ if Book.Publisher != "" ~}}
-        <tr><th>出版社</th><td>{{ Book.Publisher | html.escape }}</td></tr>
+        <div><dt>出版社</dt><dd>{{ Book.Publisher | html.escape }}</dd></div>
         {{~ end ~}}
         {{~ if Book.FormatLabel != "" ~}}
-        <tr><th>判型</th><td>{{ Book.FormatLabel | html.escape }}</td></tr>
+        <div><dt>判型</dt><dd>{{ Book.FormatLabel | html.escape }}</dd></div>
         {{~ end ~}}
         {{~ if Book.PageCountLabel != "" ~}}
-        <tr><th>ページ数</th><td>{{ Book.PageCountLabel | html.escape }}</td></tr>
+        <div><dt>ページ数</dt><dd>{{ Book.PageCountLabel | html.escape }}</dd></div>
         {{~ end ~}}
         {{~ if Book.Isbn13 != "" ~}}
-        <tr><th>ISBN</th><td><code>{{ Book.Isbn13 | html.escape }}</code></td></tr>
+        <div><dt>ISBN</dt><dd><code>{{ Book.Isbn13 | html.escape }}</code></dd></div>
         {{~ end ~}}
         {{## ISBN-10 と書籍 JAN の 2 段目は DB に持たず、ISBN-13・Cコード・税抜価格から導いた値。 ##}}
         {{~ if Book.Isbn10 != "" ~}}
-        <tr><th>ISBN-10</th><td><code>{{ Book.Isbn10 | html.escape }}</code></td></tr>
+        <div><dt>ISBN-10</dt><dd><code>{{ Book.Isbn10 | html.escape }}</code></dd></div>
         {{~ end ~}}
         {{~ if Book.CCode != "" ~}}
-        <tr><th>Cコード</th><td><code>{{ Book.CCode | html.escape }}</code></td></tr>
+        <div><dt>Cコード</dt><dd><code>{{ Book.CCode | html.escape }}</code></dd></div>
         {{~ end ~}}
         {{~ if Book.BookJanSecondRow != "" ~}}
-        <tr><th>書籍JANコード（2段目）</th><td><code>{{ Book.BookJanSecondRow | html.escape }}</code></td></tr>
+        <div><dt>書籍JANコード（2段目）</dt><dd><code>{{ Book.BookJanSecondRow | html.escape }}</code></dd></div>
         {{~ end ~}}
         {{~ if Book.MagazineCode != "" ~}}
-        <tr><th>雑誌コード</th><td><code>{{ Book.MagazineCode | html.escape }}</code></td></tr>
+        <div><dt>雑誌コード</dt><dd><code>{{ Book.MagazineCode | html.escape }}</code></dd></div>
         {{~ end ~}}
         {{~ if Book.PeriodicalCode != "" ~}}
-        <tr><th>定期刊行物コード</th><td><code>{{ Book.PeriodicalCode | html.escape }}</code></td></tr>
+        <div><dt>定期刊行物コード</dt><dd><code>{{ Book.PeriodicalCode | html.escape }}</code></dd></div>
         {{~ end ~}}
-      </tbody>
-    </table>
+        </dl>
+      </div>
+    </div>
+    {{## 購入のリンク。ジャケットと基本情報の段の下に、トップの「Blu-ray・CD のご案内」と同じ行の作り（.shop-box）で並べる。
+         行全体が Amazon へのリンク（rel="nofollow sponsored noopener" + target=_blank）。
+         購入リンクは Amazon アソシエイトの広告なので、枠の下で広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。
+         この枠は shop-box.js が描く枠（data-shop-series を持つ）ではなく、テンプレートがそのまま出す。 ##}}
+    {{~ if Book.AmazonPrintUrl != "" || Book.AmazonKindleUrl != "" ~}}
+    <aside class="shop-box product-buy" aria-label="購入・閲覧">
+      <p class="shop-box-heading">購入・閲覧</p>
+      <ul class="shop-box-list">
+          {{~ if Book.AmazonPrintUrl != "" ~}}
+          <li class="shop-box-item">
+            <a class="shop-box-link" href="{{ Book.AmazonPrintUrl }}" target="_blank" rel="nofollow sponsored noopener"
+               aria-label="{{ Book.Title | html.escape }}（紙。Amazon で買う）"></a>
+            <span class="shop-box-thumb">{{ if Book.CoverImageUrl != "" }}<img src="{{ Book.CoverImageUrl }}" alt="" loading="lazy" decoding="async">{{ end }}</span>
+            <div class="shop-box-body">
+              <div class="shop-box-meta"><span class="shop-box-media">紙</span></div>
+              <span class="shop-box-title">{{ Book.Title | html.escape }}</span>
+              <div class="shop-box-foot"><span class="shop-box-cta">Amazon で買う</span></div>
+            </div>
+          </li>
+          {{~ end ~}}
+          {{~ if Book.AmazonKindleUrl != "" ~}}
+          <li class="shop-box-item">
+            <a class="shop-box-link" href="{{ Book.AmazonKindleUrl }}" target="_blank" rel="nofollow sponsored noopener"
+               aria-label="{{ Book.Title | html.escape }}（Kindle。Kindle で読む）"></a>
+            <span class="shop-box-thumb">{{ if Book.CoverImageUrl != "" }}<img src="{{ Book.CoverImageUrl }}" alt="" loading="lazy" decoding="async">{{ end }}</span>
+            <div class="shop-box-body">
+              <div class="shop-box-meta"><span class="shop-box-media">Kindle</span></div>
+              <span class="shop-box-title">{{ Book.Title | html.escape }}</span>
+              <div class="shop-box-foot"><span class="shop-box-cta">Kindle で読む</span></div>
+            </div>
+          </li>
+          {{~ end ~}}
+      </ul>
+      <p class="muted product-links-note shop-box-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
+    </aside>
+    {{~ end ~}}
   </section>
 
   {{## クレジット。役職ごとに 1 行、名義は「／」区切り。

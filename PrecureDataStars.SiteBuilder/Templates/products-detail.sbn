@@ -16,77 +16,95 @@
        ジャケット画像は Amazon CDN を直接参照するホットリンク（Amazon 一本運用、Apple Music / Spotify /
        iTunes Search API 系は撤去済み）。画像出典・ホットリンクに関する注意書きは画像直下には出さず、
        /disclaimer/（免責事項）ページに集約している。 ##}}
-  {{~ if Product.CoverImageUrl != "" || Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" ~}}
-  <section id="product-media" class="product-media">
-    {{~ if Product.CoverImageUrl != "" ~}}
-    {{## ジャケット画像。代表 1 枚が基本だが、CD/デジタルでデザインが異なり「両方表示」が
-         設定された商品では Product.CoverImageSecondaryUrl が入り、2 枚並べて表示する。 ##}}
-    <div class="product-cover{{ if Product.CoverImageSecondaryUrl != "" }} product-cover-both{{ end }}">
-      <img src="{{ Product.CoverImageUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像"
-           loading="lazy" decoding="async">
-      {{~ if Product.CoverImageSecondaryUrl != "" ~}}
-      <img src="{{ Product.CoverImageSecondaryUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像（別デザイン）"
-           loading="lazy" decoding="async">
-      {{~ end ~}}
-    </div>
-    {{~ end ~}}
-    {{~ if Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" ~}}
-    <div class="product-links">
-      <p class="muted product-links-label">購入・試聴</p>
-      <ul class="product-links-list">
-        {{~ if Product.AmazonCdUrl != "" ~}}
-        <li><a class="product-link product-link-amazon" href="{{ Product.AmazonCdUrl }}"
-               target="_blank" rel="nofollow sponsored noopener">Amazon で買う (CD)</a></li>
-        {{~ end ~}}
-        {{~ if Product.AmazonDigitalUrl != "" ~}}
-        <li><a class="product-link product-link-amazon" href="{{ Product.AmazonDigitalUrl }}"
-               target="_blank" rel="nofollow sponsored noopener">Amazon で聴く (デジタル)</a></li>
-        {{~ end ~}}
-      </ul>
-      {{## 購入リンクは Amazon アソシエイトの広告なので、リンクのそばで広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。 ##}}
-      <p class="muted product-links-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
-    </div>
-    {{~ end ~}}
-  </section>
-  {{~ end ~}}
 
   {{## 基本情報。Amazon ASIN の生 ID 行は出さない
        （閲覧者にとっての情報価値が薄く、購入・試聴リンクから直接遷移できるため）。 ##}}
   <section id="basic-info">
     <h2>基本情報</h2>
-    <table>
-      <tbody>
-        <tr><th>品番</th><td><code>{{ Product.ProductCatalogNo | html.escape }}</code></td></tr>
-        <tr><th>タイトル</th><td>{{ Product.Title | html.escape }}</td></tr>
-        {{## 英語タイトルは閲覧 UI から非表示。 ##}}
-        <tr><th>商品種別</th><td>{{ Product.ProductKindLabel | html.escape }}</td></tr>
-        <tr><th>発売日</th><td>{{ Product.ReleaseDate }}</td></tr>
-        {{~ if Product.PriceIncTax != "" ~}}
-        <tr><th>価格</th><td>{{ Product.PriceIncTax }} 円（税込）{{ if Product.PriceExTax != "" }} / {{ Product.PriceExTax }} 円（税抜）{{ end }}</td></tr>
+    {{## 見出しの下の段：左にジャケット（表紙）、右に「項目名と値」の並び。画像の無い商品は、項目の並びだけになる。 ##}}
+    <div class="product-head">
+      {{~ if Product.CoverImageUrl != "" ~}}
+      {{## ジャケット画像。代表 1 枚が基本だが、CD/デジタルでデザインが異なり「両方表示」が
+           設定された商品では Product.CoverImageSecondaryUrl が入り、2 枚並べて表示する。 ##}}
+      <div class="product-cover{{ if Product.CoverImageSecondaryUrl != "" }} product-cover-both{{ end }}">
+        <img src="{{ Product.CoverImageUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像"
+             loading="lazy" decoding="async">
+        {{~ if Product.CoverImageSecondaryUrl != "" ~}}
+        <img src="{{ Product.CoverImageSecondaryUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像（別デザイン）"
+             loading="lazy" decoding="async">
         {{~ end ~}}
-        <tr><th>枚数</th><td>{{ Product.DiscCount }} 枚</td></tr>
+      </div>
+      {{~ end ~}}
+      <div class="product-head-main">
+        <dl class="fact-list">
+        <div><dt>品番</dt><dd><code>{{ Product.ProductCatalogNo | html.escape }}</code></dd></div>
+        <div><dt>タイトル</dt><dd>{{ Product.Title | html.escape }}</dd></div>
+        {{## 英語タイトルは閲覧 UI から非表示。 ##}}
+        <div><dt>商品種別</dt><dd>{{ Product.ProductKindLabel | html.escape }}</dd></div>
+        <div><dt>発売日</dt><dd>{{ Product.ReleaseDate }}</dd></div>
+        {{~ if Product.PriceIncTax != "" ~}}
+        <div><dt>価格</dt><dd>{{ Product.PriceIncTax }} 円（税込）{{ if Product.PriceExTax != "" }} / {{ Product.PriceExTax }} 円（税抜）{{ end }}</dd></div>
+        {{~ end ~}}
+        <div><dt>枚数</dt><dd>{{ Product.DiscCount }} 枚</dd></div>
         {{## 発売元・販売元は商品社名マスタ（product_companies）の構造化 ID から
              解決した和名を表示する。日本の音楽商品の実務慣習に合わせ、表示用語は
              「発売元 = レーベル名（LabelText）」「販売元 = 販売元社名（DistributorText）」の 2 行に集約。
              マスタ未紐付け or 論理削除済みなら空文字 → 行ごと非表示。 ##}}
         {{~ if Product.LabelText != "" ~}}
-        <tr><th>発売元</th><td>{{ Product.LabelText | html.escape }}</td></tr>
+        <div><dt>発売元</dt><dd>{{ Product.LabelText | html.escape }}</dd></div>
         {{~ end ~}}
         {{~ if Product.DistributorText != "" ~}}
-        <tr><th>販売元</th><td>{{ Product.DistributorText | html.escape }}</td></tr>
+        <div><dt>販売元</dt><dd>{{ Product.DistributorText | html.escape }}</dd></div>
         {{~ end ~}}
         {{## 収録時間：所属ディスクの total_length を ms に揃えて合算した値を「m分ss秒.cc」で表示。
              小数部は .micro-fraction（80% フォント・muted）でトラック尺と同じ意匠。
              1 枚も尺取得済みでない商品は TotalLengthLabel が空文字なので行ごと非表示。 ##}}
         {{~ if Product.TotalLengthLabel != "" ~}}
-        <tr><th>収録時間</th><td>{{ Product.TotalLengthLabel }}{{ if Product.TotalLengthFraction != "" }}<span class="micro-fraction">{{ Product.TotalLengthFraction }}</span>{{ end }}</td></tr>
+        <div><dt>収録時間</dt><dd>{{ Product.TotalLengthLabel }}{{ if Product.TotalLengthFraction != "" }}<span class="micro-fraction">{{ Product.TotalLengthFraction }}</span>{{ end }}</dd></div>
         {{~ end ~}}
         {{## JAN（= 所属ディスクの MCN。複数ディスクで共通の前提）。CD を含む商品で取得済みのときのみ。 ##}}
         {{~ if Product.Jan != "" ~}}
-        <tr><th>JAN</th><td><code>{{ Product.Jan | html.escape }}</code></td></tr>
+        <div><dt>JAN</dt><dd><code>{{ Product.Jan | html.escape }}</code></dd></div>
         {{~ end ~}}
-      </tbody>
-    </table>
+        </dl>
+      </div>
+    </div>
+    {{## 購入のリンク。ジャケットと基本情報の段の下に、トップの「Blu-ray・CD のご案内」と同じ行の作り（.shop-box）で並べる。
+         行全体が Amazon へのリンク（rel="nofollow sponsored noopener" + target=_blank）。
+         購入リンクは Amazon アソシエイトの広告なので、枠の下で広告である旨を示す（景品表示法のステルスマーケティング規制への対応）。
+         この枠は shop-box.js が描く枠（data-shop-series を持つ）ではなく、テンプレートがそのまま出す。 ##}}
+    {{~ if Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" ~}}
+    <aside class="shop-box product-buy" aria-label="購入・試聴">
+      <p class="shop-box-heading">購入・試聴</p>
+      <ul class="shop-box-list">
+          {{~ if Product.AmazonCdUrl != "" ~}}
+          <li class="shop-box-item">
+            <a class="shop-box-link" href="{{ Product.AmazonCdUrl }}" target="_blank" rel="nofollow sponsored noopener"
+               aria-label="{{ Product.Title | html.escape }}（CD。Amazon で買う）"></a>
+            <span class="shop-box-thumb">{{ if Product.CoverImageUrl != "" }}<img src="{{ Product.CoverImageUrl }}" alt="" loading="lazy" decoding="async">{{ end }}</span>
+            <div class="shop-box-body">
+              <div class="shop-box-meta"><span class="shop-box-media">CD</span></div>
+              <span class="shop-box-title">{{ Product.Title | html.escape }}</span>
+              <div class="shop-box-foot"><span class="shop-box-cta">Amazon で買う</span></div>
+            </div>
+          </li>
+          {{~ end ~}}
+          {{~ if Product.AmazonDigitalUrl != "" ~}}
+          <li class="shop-box-item">
+            <a class="shop-box-link" href="{{ Product.AmazonDigitalUrl }}" target="_blank" rel="nofollow sponsored noopener"
+               aria-label="{{ Product.Title | html.escape }}（デジタル。Amazon で聴く）"></a>
+            <span class="shop-box-thumb">{{ if Product.CoverImageUrl != "" }}<img src="{{ Product.CoverImageUrl }}" alt="" loading="lazy" decoding="async">{{ end }}</span>
+            <div class="shop-box-body">
+              <div class="shop-box-meta"><span class="shop-box-media">デジタル</span></div>
+              <span class="shop-box-title">{{ Product.Title | html.escape }}</span>
+              <div class="shop-box-foot"><span class="shop-box-cta">Amazon で聴く</span></div>
+            </div>
+          </li>
+          {{~ end ~}}
+      </ul>
+      <p class="muted product-links-note shop-box-note">Amazon アソシエイトのリンク（広告）です。購入があると当サイトに紹介料が支払われます。</p>
+    </aside>
+    {{~ end ~}}
   </section>
 
   {{## ディスク一覧。複数枚組では各ディスクのトラック表を順に出す。

@@ -8380,6 +8380,79 @@ body.mobile-nav-open {
 .mobile-nav-overlay-section-nav-list a { padding: 8px 10px; }
 .mobile-nav-overlay-section-nav-sublist a { padding: 6px 10px; }
 
+/* メニューの下の「新しい記事」の一覧（precure.news のメニューで使う）。
+   1 件は、左に日付（月.日を大きく、年を小さく）、右に種別の札と題名。件と件の間は点線で区切る。 */
+.mobile-nav-posts {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.mobile-nav-posts-heading {
+  margin: 0 0 4px;
+  padding: 2px 0 2px 10px;
+  border-left: 4px solid var(--accent);
+  font-family: var(--font-brand);
+  font-size: 0.95em;
+  font-weight: 500;
+  color: var(--accent);
+}
+.mobile-nav-posts-heading::before { content: none; }
+.mobile-nav-posts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.mobile-nav-posts-list li + li { border-top: 1px dotted #e5e7eb; }
+.mobile-nav-posts-list a {
+  display: grid;
+  grid-template-columns: 3.2em minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 8px 6px;
+  border-radius: 6px;
+  color: var(--fg);
+  text-decoration: none;
+}
+.mobile-nav-posts-list a:hover,
+.mobile-nav-posts-list a:focus-visible {
+  background: rgba(233, 30, 99, 0.06);
+  outline: none;
+}
+.mobile-nav-posts-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  color: var(--accent);
+}
+.mobile-nav-posts-date b { font-size: 0.95em; }
+.mobile-nav-posts-date small {
+  font-size: 0.66em;
+  color: var(--muted);
+}
+.mobile-nav-posts-body { min-width: 0; }
+.mobile-nav-posts-kind {
+  display: inline-block;
+  margin-bottom: 2px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.66em;
+  line-height: 1.6;
+  color: var(--muted);
+}
+/* 題名は 2 行まで。入りきらない分は省く。 */
+.mobile-nav-posts-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.9em;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
 /* ──────────────── モバイル時の構造調整（≤768px） ──────────────── */
 @media (max-width: 768px) {
   /* モバイルでは site-header を非固定に戻す。 */
@@ -12985,26 +13058,43 @@ a.staff-combo-nav-card:hover {
   display: none;
 }
 
-/* ──────── 商品詳細・書籍詳細の頭を詰める ────────
-   ジャケット（表紙）を左に寄せ、右の空きに購入リンクと「基本情報」の表を回り込ませる。
-   画像を 2 枚並べる商品（.product-cover-both）と、狭い画面（720px 以下）では、元の縦の並びのまま。 */
-@media (min-width: 721px) {
-  .product-media:has(> .product-cover:not(.product-cover-both)) {
-    display: block;
-    margin-bottom: 0;
+/* ──────── 商品詳細・書籍詳細の「基本情報」 ────────
+   見出しの下に、左にジャケット（表紙）、右に「項目名と値」の並び（罫線なし）と購入リンクを置く。
+   狭い画面（640px 以下）では縦に積む。 */
+.product-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+  margin: 12px 0 24px;
+}
+.product-head:has(.product-cover-both) { flex-wrap: wrap; }
+.product-head-main {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.fact-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 7px 18px;
+  align-items: baseline;
+  margin: 0 0 18px;
+}
+.fact-list > div { display: contents; }
+.fact-list dt {
+  font-size: 0.88em;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.fact-list dd { margin: 0; }
+/* 購入のリンクの枠（.shop-box と同じ作り）は、ジャケットと基本情報の段のすぐ下に置く。 */
+.product-head { margin-bottom: 14px; }
+.product-buy { margin: 0 0 24px; }
+@media (max-width: 640px) {
+  .product-head {
+    flex-direction: column;
+    gap: 14px;
   }
-  .product-media:has(> .product-cover:not(.product-cover-both)) > .product-cover {
-    float: left;
-    margin: 0 24px 16px 0;
-  }
-  .product-media:has(> .product-cover:not(.product-cover-both)) > .product-links {
-    overflow: hidden;
-    margin-bottom: 14px;
-  }
-  /* 表は、ジャケットの右に残った幅を使う（回り込みの外へはみ出さないよう、節を独立した枠にする）。 */
-  .product-media:has(> .product-cover:not(.product-cover-both)) + #basic-info { overflow: hidden; }
-  .product-media:has(> .product-cover:not(.product-cover-both)) + #basic-info > h2 { margin-top: 0; }
-  .product-media:has(> .product-cover:not(.product-cover-both)) + #basic-info ~ section { clear: both; }
 }
 
 /* ──────── ホームの商品・書籍カードを縦に詰める ────────

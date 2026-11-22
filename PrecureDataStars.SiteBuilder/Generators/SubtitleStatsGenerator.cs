@@ -152,11 +152,11 @@ public sealed class SubtitleStatsGenerator
             Rows = view,
             // 順位の行は、同じ順位（同じ出現回数）の字をまとめて描く。
             Groups = StatsCharRows.BuildGroups(view),
-            // 作品ごとの棒の列の見出し（放送開始年の下 2 桁。5 作目ごとの作品の年は、棒と同じ青の太字にする）。
+            // 作品ごとの棒の列の見出し（放送開始年の下 2 桁。棒と同じ位置に 5 作ごとの区切りの線を引く）。
             SeriesYears = series.Select((s, i) => new
             {
                 Label = (s.Year % 100).ToString("00"),
-                IsFifth = StatsCharRows.IsFifthSeries(i)
+                Sep = StatsCharRows.SeparatorClass(i)
             }).ToList(),
             // 色の凡例：一覧に出てくる区分だけ出す。
             Legend = legend.Where(l => view.Any(v => v.TypeClass == l.Item1))

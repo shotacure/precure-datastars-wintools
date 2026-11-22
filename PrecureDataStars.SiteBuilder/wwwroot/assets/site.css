@@ -6695,11 +6695,22 @@ a.credit-card-series:focus-visible {
   text-align: center;
   color: var(--muted);
 }
-/* 5 作目ごとの作品（5・10・15・20 作目）の年は、棒と同じ青の太字にする。 */
-.stats-char-head .stats-strip i.is-fifth {
-  font-weight: 800;
-  color: var(--accent-blue);
+/* 5 作ごとの区切りの線：棒と棒のすきまに、列の高さいっぱいの赤い細い線を引く。5 年の区切りは点線、10 年の区切りは破線。 */
+.stats-strip { --strip-h: 30px; }
+.stats-symbol-extra .stats-strip { --strip-h: 22px; }
+.stats-char-head .stats-strip { --strip-h: 100%; }
+.stats-strip i.sep5,
+.stats-strip i.sep10 { position: relative; }
+.stats-strip i.sep5::before,
+.stats-strip i.sep10::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  bottom: 0;
+  height: var(--strip-h);
+  border-left: 1px dotted #c0143c;
 }
+.stats-strip i.sep10::before { border-left-style: dashed; }
 
 /* シリーズ別 文字種別比率：作品ごとの 100% の積み上げ横棒。 */
 .stats-ct-list {

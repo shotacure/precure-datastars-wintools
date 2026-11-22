@@ -24,7 +24,7 @@
 
 <section>
   <h2>初使用の回とシリーズ頻度</h2>
-  <p class="muted stats-note">マスは TV シリーズを放送順（左が 2004 年）に並べたもので、その記号が多く使われた作品ほど高く、濃い色です。青い棒は 5・10・15・20 作目の作品です。</p>
+  <p class="muted stats-note">マスは TV シリーズを放送順（左が 2004 年）に並べたもので、その記号が多く使われた作品ほど高く、濃い色です。赤い点線は 5 年ごと、破線は 10 年ごとの区切りです。</p>
   <ol class="stats-ep-list is-subtitle-stats">
     {{~ for r in Rows ~}}
     <li class="stats-ep-row stats-symbol-row">
@@ -41,7 +41,7 @@
         </div>
         <div class="stats-symbol-extra">
           <span class="stats-strip">
-            {{~ for c in r.SeriesCells ~}}<i title="{{ c.Title | html.escape }}"{{ if c.Shade != "" }} style="height: {{ c.Height }}%; background: rgba({{ c.Rgb }}, {{ c.Shade }})"{{ end }}></i>{{~ end ~}}
+            {{~ for c in r.SeriesCells ~}}<i{{ if c.Sep != "" }} class="{{ c.Sep }}"{{ end }} title="{{ c.Title | html.escape }}"{{ if c.Shade != "" }} style="height: {{ c.Height }}%; background: rgba(216, 27, 96, {{ c.Shade }})"{{ end }}></i>{{~ end ~}}
           </span>
           <span class="stats-series-detail stats-char-peak">{{ r.PeakLabel | html.escape }}</span>
         </div>

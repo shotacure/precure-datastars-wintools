@@ -12,8 +12,11 @@ public sealed class StatsCharSeriesCell
     /// <summary>マウスを載せたときの説明（「2011年『スイートプリキュア♪』：21 回」）。</summary>
     public string Title { get; init; } = "";
 
-    /// <summary>棒の色（「216, 27, 96」の形。5 作目ごとの作品だけ別の色）。style 属性用。</summary>
-    public string Rgb { get; init; } = StatsCharRows.SeriesRgb(0);
+    /// <summary>
+    /// この棒の左に引く区切りの線の CSS クラス。5 作ごとの区切り（6・16 作目の左）は <c>sep5</c>（点線）、
+    /// 10 作ごとの区切り（11・21 作目の左）は <c>sep10</c>（破線）。区切りでなければ空。
+    /// </summary>
+    public string Sep { get; init; } = "";
 
     /// <summary>マスの高さ（%。その字がいちばん多く使われた作品を 100 とする）。0 回は空文字（CSS の細い線のまま）。</summary>
     public string Height { get; init; } = "";
@@ -149,15 +152,11 @@ public static class StatsCharRows
     }
 
     /// <summary>
-    /// 作品ごとの棒の色。5 作目ごとの作品（5・10・15・20 作目…）だけ青、ほかはピンク。
-    /// 棒の列の中で、節目の作品の位置が分かるようにする。
+    /// 棒の左に引く区切りの線のクラス。放送順の 5 作ごとに線を引き、棒の列の中で 5 年・10 年の節目の位置が分かるようにする。
     /// </summary>
     /// <param name="index">放送順に並べた作品の番号（0 始まり）。</param>
-    public static string SeriesRgb(int index)
-        => IsFifthSeries(index) ? "51, 112, 170" : "216, 27, 96";
-
-    /// <summary>5 作目ごとの作品（5・10・15・20 作目…）か。</summary>
-    public static bool IsFifthSeries(int index) => index >= 0 && index % 5 == 4;
+    public static string SeparatorClass(int index)
+        => index <= 0 || index % 5 != 0 ? "" : index % 10 == 0 ? "sep10" : "sep5";
 
     /// <summary>続いている同じ順位の行を 1 つにまとめる。</summary>
     public static List<StatsCharGroup> BuildGroups(List<StatsCharRow> rows)
@@ -209,7 +208,7 @@ public static class StatsCharRows
                 Height = n > 0 && peak > 0
                     ? Math.Max(14.0, n * 100.0 / peak).ToString("0", CultureInfo.InvariantCulture)
                     : "",
-                Rgb = SeriesRgb(i),
+                Sep = SeparatorClass(i),
                 Title = $"{series[i].Year}年『{series[i].Title}』：{n:N0} 回"
             });
         }

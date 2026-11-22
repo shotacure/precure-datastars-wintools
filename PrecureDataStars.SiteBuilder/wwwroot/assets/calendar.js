@@ -28,7 +28,8 @@
  * 種別ごとの件数（🎥1 🎂2 📺4）にたたむ。週（グリッドの 1 行）にマウスを載せるとその週のチップが開き、
  * それより下の週は閉じる（上の週は、閉じるとマウスの下の行がずれるので開いたままにする）。
  * カレンダーからマウスが出たら、今日のある週だけ残して閉じる。今日のある週は最初から開いておく。
- * マウスの無い端末（タブレットなど）では、スクロールのたびに、画面の縦のまんなかにいちばん近い週を開く。
+ * タッチだけの端末（タブレットなど。マウスやペンが 1 つも無い端末）では、スクロールのたびに、画面の縦のまんなかにいちばん近い週を開く。
+ * PC では、タッチ対応でもマウスを載せたときだけ開く。
  * 開閉は CSS の grid-template-rows の遷移でなめらかに動かす（site.css の .cal-fold）。
  *
  * 注記：カレンダーはコンパクト表示のため、ep / mv はシリーズ略称（title_short）を
@@ -163,7 +164,9 @@
       }
     }
 
-    if (window.matchMedia && window.matchMedia('(hover: hover)').matches) {
+    // マウスの動きには、端末の種類を問わず必ず反応する（タッチ対応の PC は、ブラウザが「マウスなし」と
+    // 申告することがあるので、申告では分けない）。
+    {
       grid.addEventListener('mouseover', function (ev) {
         var week = weekOf(ev.target);
         if (week < 0) return;
@@ -175,8 +178,14 @@
         clearTimeout(hoverTimer);
         closeAll();
       });
-    } else {
-      // マウスの無い端末（タブレットなど）：スクロールのたびに、画面の縦のまんなかにいちばん近い週を開く。
+    }
+    // タッチだけの端末（タブレットなど）に限って：スクロールのたびに、画面の縦のまんなかにいちばん近い週を開く。
+    // マウスやペンのような細かい操作の手段が 1 つでもある端末（PC。タッチ対応の PC を含む）では、この動きを付けない。
+    var touchOnly = window.matchMedia
+      && window.matchMedia('(any-pointer: coarse)').matches
+      && !window.matchMedia('(any-pointer: fine)').matches
+      && !window.matchMedia('(any-hover: hover)').matches;
+    if (touchOnly) {
       // カレンダーが画面の外にあるときは、今日の週だけ残して閉じる。
       var ticking = false;
       var onScroll = function () {

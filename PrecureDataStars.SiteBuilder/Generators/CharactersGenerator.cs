@@ -329,8 +329,14 @@ public sealed class CharactersGenerator
                 // （単発キャラの置き場の作品は所属シリーズと同じ決め方なので、ここで数えれば足りる）。
                 int guestCount = g.Count(e => _ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId));
 
+                // 「その他」にまとめると行が増えない作品（種別ごとの欄に並べたときに増える行が「その他」のブロック以下）は、
+                // まとめずに種別ごとの欄へ名前だけを並べる。個別ページは持たないので、リンクは付けない。
+                bool expandGuests = guestCount > 0 && !isOther && ShouldExpandGuests(
+                    g.Where(e => !e.Unaired && !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId)).Select(e => e.Ch.CharacterKind),
+                    g.Where(e => _ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId)).Select(e => e.Ch.CharacterKind));
+
                 var kindGroups = g
-                    .Where(e => !e.Unaired && !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId))
+                    .Where(e => !e.Unaired && (expandGuests || !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId)))
                     .GroupBy(e => e.Ch.CharacterKind)
                     .OrderBy(kg => KindOrder(kg.Key))
                     .ThenBy(kg => kg.Key, StringComparer.Ordinal)
@@ -352,7 +358,8 @@ public sealed class CharactersGenerator
                                 EpisodeCount = x.Ep,
                                 MovieCount = x.Mv,
                                 OtonaEpisodeCount = x.Ot,
-                                HasInvolvement = x.Has
+                                HasInvolvement = x.Has,
+                                NoLink = _ctx.EntityUrls.IsGuestCharacter(x.Ch.CharacterId)
                             })
                             .ToList()
                     })
@@ -371,7 +378,7 @@ public sealed class CharactersGenerator
                         MemberCount = g.Count(),
                         KindGroups = kindGroups,
                         GuestCount = guestCount,
-                        GuestPageUrl = guestCount > 0 && !isOther ? PathUtil.GuestCharactersUrl(series!.Slug) : "",
+                        GuestPageUrl = guestCount > 0 && !isOther && !expandGuests ? PathUtil.GuestCharactersUrl(series!.Slug) : "",
                         BatonMembers = batonRowsByFromSeries.TryGetValue(seriesId, out var batonRows)
                             ? batonRows
                             : Array.Empty<CharacterIndexRow>(),
@@ -1183,6 +1190,30 @@ public sealed class CharactersGenerator
             ? $"<a href=\"{PathUtil.PersonUrl(pid)}\">{HtmlUtil.Escape(displayName)}</a>"
             : HtmlUtil.Escape(displayName);
 
+    /// <summary>キャラクター一覧の 1 行に並ぶキャラの数（画面の幅によって変わるので、広い画面の列数に合わせている）。</summary>
+    private const int IndexGridColumns = 3;
+
+    /// <summary>「その他」の小見出し 1 行と、「その他のキャラクター」の 1 行を合わせた、一覧での行数。</summary>
+    private const int CollectedBlockRows = 2;
+
+    /// <summary>
+    /// 作品の「その他」（個別ページを持たないキャラ）を、まとめずに種別ごとの欄へ並べるか。
+    /// 並べたときに増える一覧の行数（すでにある種別は列に足した分の行、新しい種別は小見出しと行）が、
+    /// 「その他」のブロックの行数（<see cref="CollectedBlockRows"/>）以下なら並べる（まとめるほうが行を取る）。
+    /// </summary>
+    private static bool ShouldExpandGuests(IEnumerable<string> ownKinds, IEnumerable<string> guestKinds)
+    {
+        static int Rows(int count) => (count + IndexGridColumns - 1) / IndexGridColumns;
+        var own = ownKinds.GroupBy(k => k).ToDictionary(g => g.Key, g => g.Count());
+        int added = 0;
+        foreach (var g in guestKinds.GroupBy(k => k))
+        {
+            int m = own.TryGetValue(g.Key, out var n) ? n : 0;
+            added += m == 0 ? 1 + Rows(g.Count()) : Rows(m + g.Count()) - Rows(m);
+        }
+        return added <= CollectedBlockRows;
+    }
+
     // ─── テンプレ用 DTO 群 ───
 
     private sealed class CharactersIndexModel
@@ -1269,6 +1300,8 @@ public sealed class CharactersGenerator
         public int CharacterId { get; set; }
         public string Name { get; set; } = "";
         public string NameKana { get; set; } = "";
+        /// <summary>個別ページを持たず、「その他」を展開して名前だけを並べる行か（リンクを付けない）。</summary>
+        public bool NoLink { get; set; }
         /// <summary>TV 系シリーズ（credit_attach_to='EPISODE'）での登場話数合計（全作品横断）。</summary>
         public int EpisodeCount { get; set; }
         /// <summary>映画系シリーズ（credit_attach_to='SERIES'）での登場本数（1 シリーズ = 1 本、全作品横断）。</summary>

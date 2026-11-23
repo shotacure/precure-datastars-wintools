@@ -305,6 +305,26 @@ public sealed class CharactersGenerator
                 // 単発キャラは種別サブセクションに並べず、末尾のゲストキャラクターページへのリンク 1 行にまとめる
                 // （単発キャラの置き場の作品は所属シリーズと同じ決め方なので、ここで数えれば足りる）。
                 int guestCount = g.Count(e => _ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId));
+                // 単発キャラが少ない作品（GuestListMax 人以下）は、リンク 1 行にまとめずに名前をそのまま並べる（クレジット順）。
+                // 個別ページは持たないままなので、リンク先はゲストキャラクターページの登場話。
+                var guestMembers = guestCount is > 0 and <= GuestListMax
+                    ? g.Where(e => _ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId))
+                        .OrderBy(x => x.Key.Start)
+                        .ThenBy(x => x.Key.EpNo)
+                        .ThenBy(x => x.Key.Seq)
+                        .ThenBy(x => x.Ch.CharacterId)
+                        .Select(x => new CharacterIndexRow
+                        {
+                            CharacterId = x.Ch.CharacterId,
+                            Name = x.Ch.Name,
+                            NameKana = x.Ch.NameKana ?? "",
+                            EpisodeCount = x.Ep,
+                            MovieCount = x.Mv,
+                            OtonaEpisodeCount = x.Ot,
+                            HasInvolvement = x.Has
+                        })
+                        .ToList()
+                    : new List<CharacterIndexRow>();
 
                 var kindGroups = g
                     .Where(e => !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId))
@@ -348,6 +368,7 @@ public sealed class CharactersGenerator
                         MemberCount = g.Count(),
                         KindGroups = kindGroups,
                         GuestCount = guestCount,
+                        GuestMembers = guestMembers,
                         GuestPageUrl = guestCount > 0 && !isOther ? PathUtil.GuestCharactersUrl(series!.Slug) : "",
                         BatonMembers = batonRowsByFromSeries.TryGetValue(seriesId, out var batonRows)
                             ? batonRows
@@ -1147,6 +1168,9 @@ public sealed class CharactersGenerator
             ? $"<a href=\"{PathUtil.PersonUrl(pid)}\">{HtmlUtil.Escape(displayName)}</a>"
             : HtmlUtil.Escape(displayName);
 
+    /// <summary>キャラクター索引で、単発キャラをリンク 1 行にまとめずに名前を並べる上限の人数（1 作品あたり）。</summary>
+    private const int GuestListMax = 3;
+
     // ─── テンプレ用 DTO 群 ───
 
     private sealed class CharactersIndexModel
@@ -1173,6 +1197,9 @@ public sealed class CharactersGenerator
         public IReadOnlyList<CharacterKindSubsection> KindGroups { get; set; } = Array.Empty<CharacterKindSubsection>();
         /// <summary>当該シリーズの単発キャラ数（種別サブセクションには並べず、ゲストキャラクターページへのリンクで示す）。</summary>
         public int GuestCount { get; set; }
+        /// <summary>小見出し「その他」に名前をそのまま並べる単発キャラ（当該シリーズの単発キャラが
+        /// <see cref="GuestListMax"/> 人以下のときだけ。それより多ければ空で、リンク 1 行にまとめる）。</summary>
+        public IReadOnlyList<CharacterIndexRow> GuestMembers { get; set; } = Array.Empty<CharacterIndexRow>();
         /// <summary>当該シリーズのゲストキャラクターページ URL（単発キャラが居なければ空）。</summary>
         public string GuestPageUrl { get; set; } = "";
         /// <summary>当該シリーズの最終話にだけ顔を出した、次の TV シリーズのキャラ（小見出し「最終話バトンタッチ」に並べる。

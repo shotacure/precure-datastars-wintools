@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：本編に登場しないキャラクターを、家族関係でつながる作品の欄の末尾に「本編未登場」として出すようにした**（`CharactersGenerator.GenerateIndex`・`CharacterSeriesSection.UnairedMembers`〔新規〕・`characters-index.sbn`）：声の出演のクレジットが 1 つも無いキャラクターは、家族関係でつながるキャラクターの所属シリーズ（複数あれば始まりがいちばん早い作品）の欄の末尾に、小見出し「本編未登場」で並べる。見出しの人数には数える。これまで末尾の「その他（未登場）」に離れていた一条克彦は『フレッシュプリキュア！』、花咲ふたばは『ハートキャッチプリキュア！』の欄に入る。
+
 - **サイト：映画の公開に合わせて TV シリーズに 1 話だけ顔を出した映画のキャラクターを、映画のキャラクターとして出すようにした**（`CharacterHomeResolver`〔`BatonTouchResolver` から改名〕・`CharacterHomeKind`〔新規〕・`CharactersGenerator.GenerateIndex`・`CharacterSeriesSection.TieInMembers`〔新規〕・`EntityUrlRegistry.DetectGuestCharacters`・`characters-index.sbn`）：声の出演で最初に登場した作品が TV シリーズで、その作品での登場が 1 話だけ、かつその回の放送の前後 42 日以内に公開された映画（種別 `MOVIE`）に登場しているキャラクターは、その映画を所属にする。キャラクター一覧では映画の種別のセクションに並べ、顔を出した TV シリーズの欄には末尾の小見出し「映画タイアップ」にも並べる（個別ページを持つキャラクターだけ。見出しの人数には数えない）。個別ページを持たないキャラクターの置き場、名前が衝突したときに URL へ添える出身作品、OGP カードの透かしの作品名も同じ決め方にした。キャラクター詳細の「初登場」は TV の回のまま。最終話バトンタッチの判定も同じ部品にまとめた。
 
 - **サイト：前の TV シリーズの最終話にだけ顔を出した次のシリーズのキャラクターを、次のシリーズのキャラクターとして出すようにした**（`BatonTouchResolver`〔新規〕・`CharactersGenerator.GenerateIndex`・`CharacterSeriesSection.BatonMembers`〔新規〕・`EntityUrlRegistry.DetectGuestCharacters`・`QualifyCollidingCharacterNames`・`characters-index.sbn`）：声の出演で最初に登場した作品が TV シリーズで、その作品での登場が最終話の 1 話だけ、かつ次に始まる TV シリーズの第 1 話に登場しているキャラクターは、次の TV シリーズを所属にする。キャラクター一覧では次のシリーズの種別のセクションに並べ、顔を出した前の作品の欄には末尾の小見出し「最終話バトンタッチ」にも並べる（個別ページを持つキャラクターだけ。見出しの人数には数えない）。個別ページを持たないキャラクターの置き場、名前が衝突したときに URL へ添える出身作品、OGP カードの透かしの作品名も同じ決め方にした。キャラクター詳細の「初登場」は最終話のまま。

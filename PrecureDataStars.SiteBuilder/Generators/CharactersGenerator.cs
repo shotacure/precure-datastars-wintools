@@ -259,8 +259,30 @@ public sealed class CharactersGenerator
                 var baton = BatonOf(c.CharacterId);
                 var firstKey = FirstCreditKey(c.CharacterId);
                 var key = baton is null ? firstKey : FirstCreditKey(c.CharacterId, baton.HomeSeriesId);
-                return (Ch: c, Key: key, Baton: baton, FromKey: firstKey, Ep: ep, Mv: mv, Ot: ot, Has: HasAnyInvolvement(c.CharacterId));
+                return (Ch: c, Key: key, Baton: baton, FromKey: firstKey, Ep: ep, Mv: mv, Ot: ot, Has: HasAnyInvolvement(c.CharacterId), Unaired: false);
             })
+            .ToList();
+
+        // 本編未登場のキャラ（声の出演のクレジットが 1 つも無い）は、家族関係でつながるキャラの所属シリーズ
+        // （複数あれば放送・公開の始まりがいちばん早いもの）の欄の末尾に、小見出し「本編未登場」で並べる。
+        // つながるキャラの所属シリーズも決まらないキャラだけが、末尾の「その他（未登場）」に残る。
+        var seriesByCharacter = entries
+            .Where(e => e.Key.SeriesId != 0 && _ctx.SeriesById.ContainsKey(e.Key.SeriesId))
+            .ToDictionary(e => e.Ch.CharacterId, e => e.Key.SeriesId);
+        int RelativeSeriesId(int characterId) =>
+            (_ctx.FamilyRelationsByCharacter.TryGetValue(characterId, out var relations)
+                ? relations
+                : Array.Empty<CharacterFamilyRelation>())
+            .Select(r => seriesByCharacter.TryGetValue(r.RelatedCharacterId, out var sid) ? sid : 0)
+            .Where(sid => sid != 0)
+            .OrderBy(sid => _ctx.SeriesStartDate(sid))
+            .ThenBy(sid => sid)
+            .FirstOrDefault();
+        entries = entries
+            .Select(e => e.Key.SeriesId == 0 && RelativeSeriesId(e.Ch.CharacterId) is int home and not 0
+                ? (e.Ch, Key: (Start: long.MaxValue, EpNo: int.MaxValue, Seq: int.MaxValue, SeriesId: home),
+                   e.Baton, e.FromKey, e.Ep, e.Mv, e.Ot, e.Has, Unaired: true)
+                : e)
             .ToList();
 
         // 顔を出した TV シリーズ → そこへ並べるキャラの行（クレジット順）。個別ページを持つキャラだけを並べる
@@ -308,7 +330,7 @@ public sealed class CharactersGenerator
                 int guestCount = g.Count(e => _ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId));
 
                 var kindGroups = g
-                    .Where(e => !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId))
+                    .Where(e => !e.Unaired && !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId))
                     .GroupBy(e => e.Ch.CharacterKind)
                     .OrderBy(kg => KindOrder(kg.Key))
                     .ThenBy(kg => kg.Key, StringComparer.Ordinal)
@@ -355,7 +377,20 @@ public sealed class CharactersGenerator
                             : Array.Empty<CharacterIndexRow>(),
                         TieInMembers = tieInRowsByFromSeries.TryGetValue(seriesId, out var tieInRows)
                             ? tieInRows
-                            : Array.Empty<CharacterIndexRow>()
+                            : Array.Empty<CharacterIndexRow>(),
+                        UnairedMembers = g.Where(e => e.Unaired)
+                            .OrderBy(x => x.Ch.CharacterId)
+                            .Select(x => new CharacterIndexRow
+                            {
+                                CharacterId = x.Ch.CharacterId,
+                                Name = x.Ch.Name,
+                                NameKana = x.Ch.NameKana ?? "",
+                                EpisodeCount = x.Ep,
+                                MovieCount = x.Mv,
+                                OtonaEpisodeCount = x.Ot,
+                                HasInvolvement = x.Has
+                            })
+                            .ToList()
                     }
                 };
             })
@@ -1182,6 +1217,9 @@ public sealed class CharactersGenerator
         /// <summary>映画の公開の前に当該シリーズへ 1 話だけ顔を出した、映画のキャラ（小見出し「映画タイアップ」に並べる。
         /// 所属は映画なので <see cref="MemberCount"/> には数えない。居なければ空）。</summary>
         public IReadOnlyList<CharacterIndexRow> TieInMembers { get; set; } = Array.Empty<CharacterIndexRow>();
+        /// <summary>本編に登場しない（声の出演のクレジットが無い）が、家族関係でこのシリーズのキャラとつながるキャラ
+        /// （小見出し「本編未登場」。欄の末尾に並べる。<see cref="MemberCount"/> には数える）。</summary>
+        public IReadOnlyList<CharacterIndexRow> UnairedMembers { get; set; } = Array.Empty<CharacterIndexRow>();
     }
 
     /// <summary>ゲストキャラクターページ（1 シリーズ分）の表示モデル。</summary>

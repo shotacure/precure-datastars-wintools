@@ -11537,6 +11537,28 @@ dialog.photo-modal::backdrop { background: rgba(0, 0, 0, 0.85); }
     scroll-margin-top: 60px;
   }
 }
+/* 本文のすぐ後の「ほかのコラム」。題名と公開日を 1 行ずつ並べ、最後にコラムの一覧への入口を置く。 */
+.article-more {
+  margin: 2.4em 0 2em;
+  padding: 14px 18px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.article-more-heading { margin: 0 0 0.5em; padding: 0; border: 0; font-size: 1em; color: var(--muted); }
+.article-more-list { list-style: none; margin: 0; padding: 0; }
+.article-more-list li + li { border-top: 1px dotted var(--border); }
+.article-more-link {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px;
+  padding: 0.55em 0;
+  text-decoration: none; color: inherit;
+}
+.article-more-link:hover .article-more-title,
+.article-more-link:focus-visible .article-more-title { color: var(--accent-pink); text-decoration: underline; }
+.article-more-link:hover { text-decoration: none; }
+.article-more-title { font-weight: 700; line-height: 1.5; }
+.article-more-date { font-size: 0.8em; color: var(--muted); white-space: nowrap; }
+.article-more-all { margin: 0.7em 0 0; font-size: 0.9em; text-align: right; }
 /* 記事の分類をリンクにしたときは下線を出さない。 */
 a.article-tag { text-decoration: none; }
 

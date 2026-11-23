@@ -101,6 +101,7 @@ public sealed class ArticlesGenerator
         for (int i = 0; i < articles.Count; i++)
         {
             var a = articles[i];
+            var (mainHtml, footnotesHtml) = SplitFootnotes(a.BodyHtml);
             var content = new ArticleContentModel
             {
                 Title = a.Title,
@@ -110,7 +111,10 @@ public sealed class ArticlesGenerator
                 UpdatedLabel = a.UpdatedLabel,
                 UpdatedIso = a.UpdatedIso,
                 Tags = a.Tags ?? Array.Empty<string>(),
-                BodyHtml = a.BodyHtml,
+                BodyHtml = mainHtml,
+                FootnotesHtml = footnotesHtml,
+                // ほかのコラムは公開日時の新しい順に、この記事を除いて上から並べる。
+                MoreArticles = articles.Where(x => !ReferenceEquals(x, a)).Take(MoreArticlesMax).Select(ToMoreLink).ToList(),
                 HasTweet = a.BodyHtml.Contains("twitter-tweet", StringComparison.Ordinal),
                 HasPhoto = a.BodyHtml.Contains(PhotoFigureOpen, StringComparison.Ordinal),
                 // 並びは新しい順なので、1 つ後ろが古い記事（前の記事）、1 つ前が新しい記事（次の記事）。
@@ -226,6 +230,31 @@ public sealed class ArticlesGenerator
 
     /// <summary>前後の記事カードに出す 1 件分を作る。</summary>
     private static ArticleLink ToLink(Article a) => new() { Title = a.Title, Url = $"/articles/{a.Slug}/" };
+
+    /// <summary>本文の後の「ほかのコラム」に並べる記事の数。</summary>
+    private const int MoreArticlesMax = 3;
+
+    /// <summary>「ほかのコラム」に出す 1 件分を作る（題名と公開日）。</summary>
+    private static ArticleLink ToMoreLink(Article a) => new()
+    {
+        Title = a.Title,
+        Url = $"/articles/{a.Slug}/",
+        DateLabel = a.DateLabel ?? "",
+        DateIso = a.DateIso,
+    };
+
+    /// <summary>Markdig が本文の末尾に出す脚注のかたまりの開きタグ。</summary>
+    private const string FootnotesOpen = "<div class=\"footnotes\">";
+
+    /// <summary>
+    /// HTML 化した本文を、本文と脚注のかたまり（<c>div.footnotes</c>）に分ける。
+    /// 「ほかのコラム」の案内を、長い脚注の下ではなく本文のすぐ後に置くため。脚注が無ければ後ろは空。
+    /// </summary>
+    private static (string Main, string Footnotes) SplitFootnotes(string bodyHtml)
+    {
+        int at = bodyHtml.LastIndexOf(FootnotesOpen, StringComparison.Ordinal);
+        return at < 0 ? (bodyHtml, "") : (bodyHtml[..at], bodyHtml[at..]);
+    }
 
     /// <summary>front-matter をパースし、本文を Markdig で HTML 化して <see cref="Article"/> を返す。
     /// タイトル欠落時は警告して null（スキップ）。</summary>
@@ -407,8 +436,12 @@ public sealed class ArticlesGenerator
         /// <summary>最終更新日の time 要素の datetime 属性（"yyyy-MM-dd"、無ければ空）。</summary>
         public string UpdatedIso { get; set; } = "";
         public IReadOnlyList<string> Tags { get; set; } = Array.Empty<string>();
-        /// <summary>Markdig で HTML 化済みの本文。テンプレ側でそのまま（raw）出力する。</summary>
+        /// <summary>Markdig で HTML 化済みの本文（脚注のかたまりを除く）。テンプレ側でそのまま（raw）出力する。</summary>
         public string BodyHtml { get; set; } = "";
+        /// <summary>本文の末尾の脚注のかたまり（<c>div.footnotes</c>）。脚注の無い記事では空。</summary>
+        public string FootnotesHtml { get; set; } = "";
+        /// <summary>本文のすぐ後に並べる、ほかのコラム（公開日時の新しい順）。ほかに記事が無ければ空。</summary>
+        public IReadOnlyList<ArticleLink> MoreArticles { get; set; } = Array.Empty<ArticleLink>();
         /// <summary>本文に X の埋め込み（blockquote.twitter-tweet）があるか。あれば X の読み込みスクリプトを置く。</summary>
         public bool HasTweet { get; set; }
         /// <summary>本文に写真（figure.photo）があるか。あれば、クリックで拡大する photo-modal.js を置く。</summary>
@@ -419,11 +452,15 @@ public sealed class ArticlesGenerator
         public ArticleLink? Next { get; set; }
     }
 
-    /// <summary>前後の記事カードの 1 件分。</summary>
+    /// <summary>前後の記事カードと「ほかのコラム」の 1 件分。</summary>
     private sealed class ArticleLink
     {
         public string Title { get; set; } = "";
         public string Url { get; set; } = "";
+        /// <summary>公開日の表示（「ほかのコラム」だけで使う。前後の記事カードでは空）。</summary>
+        public string DateLabel { get; set; } = "";
+        /// <summary>公開日の time 要素の datetime 属性（"yyyy-MM-dd"、無ければ空）。</summary>
+        public string DateIso { get; set; } = "";
     }
 
     /// <summary>

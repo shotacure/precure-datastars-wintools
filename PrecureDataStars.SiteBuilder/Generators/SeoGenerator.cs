@@ -38,23 +38,23 @@ public sealed class SeoGenerator
     /// <summary>
     /// <c>robots.txt</c> で個別に <c>Disallow: /</c> を当てる外部クローラの User-Agent 一覧。
     /// <list type="bullet">
-    ///   <item>前半：AI 学習・LLM データ収集系。AI の学習に使ってよいのは OpenAI（ChatGPT）と Anthropic（Claude）だけにするため、
-    ///     両社以外の学習用クローラ（CCBot / Google-Extended / Meta-ExternalAgent 等）を明示拒否する。</item>
+    ///   <item>前半：AI 学習・LLM データ収集系。AI の学習に使ってよいのは OpenAI（ChatGPT）・Anthropic（Claude）・Google（Gemini）だけにするため、
+    ///     3 社以外の学習用クローラ（CCBot / Applebot-Extended / Meta-ExternalAgent 等）を明示拒否する。</item>
     ///   <item>後半：バックリンク・SEO 解析系（AhrefsBot / SemrushBot / MJ12bot 等）。サイトの解析データを
     ///     商用販売する目的のクローラで、本サイトに対するメリットが無くサーバ負荷だけがかかるため拒否。</item>
     /// </list>
-    /// OpenAI と Anthropic のクローラは本リストに含めず、<c>User-agent: *</c> の全許可で通す
+    /// OpenAI・Anthropic・Google のクローラは本リストに含めず、<c>User-agent: *</c> の全許可で通す
     /// （OpenAI：GPTBot〔学習〕・ChatGPT-User〔利用者の操作で開く〕・OAI-SearchBot〔検索〕。
-    /// Anthropic：ClaudeBot〔学習〕・Claude-User〔利用者の操作で開く〕・Claude-SearchBot〔検索〕・旧名の anthropic-ai / Claude-Web）。
+    /// Anthropic：ClaudeBot〔学習〕・Claude-User〔利用者の操作で開く〕・Claude-SearchBot〔検索〕・旧名の anthropic-ai / Claude-Web。
+    /// Google：Google-Extended〔Gemini の学習と回答の根拠に使ってよいかの印。取りに来るのは Googlebot〕）。
     /// AI「検索」系の PerplexityBot も、学習用の収集ではなく回答への引用元としてページを読みに来るクローラなので、
     /// 通常の検索エンジンと同じ扱いで許可する。
     /// 紳士協定であり強制力は無いが、最初のリクエスト前に robots.txt を読む行儀の良いクローラには有効。
     /// </summary>
     private static readonly string[] BlockedCrawlerUserAgents = new[]
     {
-        // ── AI 学習・LLM データ収集系（OpenAI と Anthropic 以外） ──
+        // ── AI 学習・LLM データ収集系（OpenAI・Anthropic・Google 以外） ──
         "CCBot",
-        "Google-Extended",
         "Applebot-Extended",
         "Bytespider",
         "FacebookBot",
@@ -205,7 +205,7 @@ public sealed class SeoGenerator
 
         // 個別ブロックの説明コメント。robots.txt はコメント許容なので、運用者にも意図が伝わるよう付記。
         sb.AppendLine("# precure-datastars robots.txt");
-        sb.AppendLine("# AI の学習に使ってよいのは OpenAI（ChatGPT）と Anthropic（Claude）のクローラだけです。");
+        sb.AppendLine("# AI の学習に使ってよいのは OpenAI（ChatGPT）・Anthropic（Claude）・Google（Gemini）のクローラだけです。");
         sb.AppendLine("# 個別 User-agent ブロックは、それ以外の AI 学習系と SEO 解析系のクローラに対する明示拒否です。");
         sb.AppendLine("# AI 検索系（OAI-SearchBot / Claude-SearchBot / PerplexityBot）は引用元として読みに来るため許可しています。");
         sb.AppendLine("# 紳士協定であり強制力はありません（実流量制御は別途 CDN / WAF 側で行います）。");

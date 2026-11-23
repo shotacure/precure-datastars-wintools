@@ -175,8 +175,8 @@ public sealed class CharactersGenerator
     }
 
     /// <summary><c>/characters/</c>（キャラクター索引）。所属シリーズ（最早登場シリーズ）で大セクションに分け、シリーズ内は種別（character_kind）サブセクション → クレジット順で並べる。所属未確定（クレジット皆無）は末尾「その他」。
-    /// 最終話バトンタッチのキャラクター（<see cref="BatonTouchResolver"/>）は、本来の作品（次の TV シリーズ）を所属シリーズにし、
-    /// 顔を出した前の作品の大セクションにも、末尾の小見出し「最終話バトンタッチ」で並べる。</summary>
+    /// 最終話バトンタッチと映画タイアップのキャラクター（<see cref="CharacterHomeResolver"/>）は、本来の作品（次の TV シリーズ・映画）を
+    /// 所属シリーズにし、顔を出した TV シリーズの大セクションにも、末尾の小見出し「最終話バトンタッチ」「映画タイアップ」で並べる。</summary>
     private void GenerateIndex(
         IReadOnlyList<Character> characters,
         IReadOnlyDictionary<int, List<CharacterAlias>> aliasesByCharacter,
@@ -202,7 +202,7 @@ public sealed class CharactersGenerator
         // CreditSeq は CreditInvolvementIndex がクレジット階層の表示順
         // （credit_kind → credit_id → card_seq → … → entry_seq）で採番した 0 始まりの出現連番。
         // クレジットが一切無いキャラは SeriesId=0（末尾「その他」セクション送り）。
-        // onlySeriesId を渡すと、その作品の中での最も早い位置を返す（最終話バトンタッチのキャラを本来の作品の中で並べるときに使う）。
+        // onlySeriesId を渡すと、その作品の中での最も早い位置を返す（最終話バトンタッチ・映画タイアップのキャラを本来の作品の中で並べるときに使う）。
         (long Start, int EpNo, int Seq, int SeriesId) FirstCreditKey(int characterId, int? onlySeriesId = null)
         {
             long bestStart = long.MaxValue;
@@ -240,17 +240,18 @@ public sealed class CharactersGenerator
             return (bestStart, bestEpNo, bestSeq, bestSeriesId);
         }
 
-        // 最終話バトンタッチ（前の TV シリーズの最終話にだけ顔を出した、次の TV シリーズのキャラ）かどうか。
-        BatonTouch? BatonOf(int characterId) =>
+        // 最終話バトンタッチ（前の TV シリーズの最終話にだけ顔を出した、次の TV シリーズのキャラ）か、
+        // 映画タイアップ（映画の公開の前に TV シリーズへ 1 話だけ顔を出した、映画のキャラ）かどうか。
+        CharacterHome? BatonOf(int characterId) =>
             aliasesByCharacter.TryGetValue(characterId, out var aliases)
-                ? BatonTouchResolver.Resolve(_ctx, aliases
+                ? CharacterHomeResolver.Resolve(_ctx, aliases
                     .Where(a => _index.VoiceCastByCharacterAlias.ContainsKey(a.AliasId))
                     .SelectMany(a => _index.VoiceCastByCharacterAlias[a.AliasId]))
                 : null;
 
         // 各キャラを 1 度だけ集計してワーキングエントリ化（重い lookup の二度引きを避ける）。
-        // Key は所属シリーズとその中での並びのキー。最終話バトンタッチのキャラは本来の作品を所属にし、並びも本来の作品の中での位置にする。
-        // FromKey は最終話バトンタッチのキャラの、顔を出した前の作品での位置（小見出し「最終話バトンタッチ」の並びに使う）。
+        // Key は所属シリーズとその中での並びのキー。最終話バトンタッチ・映画タイアップのキャラは本来の作品を所属にし、並びも本来の作品の中での位置にする。
+        // FromKey はそのキャラの、顔を出した TV シリーズでの位置（小見出し「最終話バトンタッチ」「映画タイアップ」の並びに使う）。
         var entries = characters
             .Select(c =>
             {
@@ -262,10 +263,10 @@ public sealed class CharactersGenerator
             })
             .ToList();
 
-        // 顔を出した前の作品 → 最終話バトンタッチのキャラの行（クレジット順）。個別ページを持たないキャラも並べる
-        // （リンク先は本来の作品の「その他のキャラクター」のページ）。
-        var batonRowsByFromSeries = entries
-            .Where(e => e.Baton is not null)
+        // 顔を出した TV シリーズ → そこへ並べるキャラの行（クレジット順）。個別ページを持たないキャラも並べる
+        // （リンク先は本来の作品の「その他のキャラクター」のページ）。最終話バトンタッチと映画タイアップで別々に持つ。
+        Dictionary<int, IReadOnlyList<CharacterIndexRow>> RowsByFromSeries(CharacterHomeKind kind) => entries
+            .Where(e => e.Baton is not null && e.Baton.Kind == kind)
             .GroupBy(e => e.Baton!.FromSeriesId)
             .ToDictionary(
                 g => g.Key,
@@ -283,6 +284,8 @@ public sealed class CharactersGenerator
                         HasInvolvement = x.Has
                     })
                     .ToList());
+        var batonRowsByFromSeries = RowsByFromSeries(CharacterHomeKind.FinalEpisodeBaton);
+        var tieInRowsByFromSeries = RowsByFromSeries(CharacterHomeKind.MovieTieIn);
 
         byte KindOrder(string kindCode) =>
             kindMap.TryGetValue(kindCode, out var k) ? (k.DisplayOrder ?? byte.MaxValue) : byte.MaxValue;
@@ -348,6 +351,9 @@ public sealed class CharactersGenerator
                         GuestPageUrl = guestCount > 0 && !isOther ? PathUtil.GuestCharactersUrl(series!.Slug) : "",
                         BatonMembers = batonRowsByFromSeries.TryGetValue(seriesId, out var batonRows)
                             ? batonRows
+                            : Array.Empty<CharacterIndexRow>(),
+                        TieInMembers = tieInRowsByFromSeries.TryGetValue(seriesId, out var tieInRows)
+                            ? tieInRows
                             : Array.Empty<CharacterIndexRow>()
                     }
                 };
@@ -560,7 +566,7 @@ public sealed class CharactersGenerator
             OgType = "profile",
             JsonLd = jsonLd,
             OgCard = BuildOgCard(character, content, firstAppearance,
-                BatonTouchResolver.Resolve(_ctx,
+                CharacterHomeResolver.Resolve(_ctx,
                     aliasIds.Where(_index.VoiceCastByCharacterAlias.ContainsKey)
                             .SelectMany(id => _index.VoiceCastByCharacterAlias[id])),
                 keyColor, keyColorGradient)
@@ -681,7 +687,7 @@ public sealed class CharactersGenerator
         Character character,
         CharacterDetailModel content,
         FirstAppearance? firstAppearance,
-        BatonTouch? baton,
+        CharacterHome? baton,
         string keyColor,
         string? keyColorGradient)
     {
@@ -699,7 +705,7 @@ public sealed class CharactersGenerator
         string bandColor = string.IsNullOrEmpty(keyColor) ? OgCardColors.Character : OgCardColors.ForKeyColor(keyColor);
 
         // 透かしは出身作品（初登場の作品。収録範囲外で初登場が決まらないときは声の出演履歴の最初の作品）。
-        // 最終話バトンタッチのキャラは、本来の作品（次の TV シリーズ）。
+        // 最終話バトンタッチ・映画タイアップのキャラは、本来の作品（次の TV シリーズ・映画）。
         string originTitle = (baton is not null && _ctx.SeriesById.TryGetValue(baton.HomeSeriesId, out var homeSeries) ? homeSeries.Title : null)
             ?? firstAppearance?.Series.Title
             ?? content.VoiceCastRows.Select(v => v.SeriesTitle).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t))
@@ -1172,6 +1178,9 @@ public sealed class CharactersGenerator
         /// <summary>当該シリーズの最終話にだけ顔を出した、次の TV シリーズのキャラ（小見出し「最終話バトンタッチ」に並べる。
         /// 所属は次のシリーズなので <see cref="MemberCount"/> には数えない。居なければ空）。</summary>
         public IReadOnlyList<CharacterIndexRow> BatonMembers { get; set; } = Array.Empty<CharacterIndexRow>();
+        /// <summary>映画の公開の前に当該シリーズへ 1 話だけ顔を出した、映画のキャラ（小見出し「映画タイアップ」に並べる。
+        /// 所属は映画なので <see cref="MemberCount"/> には数えない。居なければ空）。</summary>
+        public IReadOnlyList<CharacterIndexRow> TieInMembers { get; set; } = Array.Empty<CharacterIndexRow>();
     }
 
     /// <summary>ゲストキャラクターページ（1 シリーズ分）の表示モデル。</summary>

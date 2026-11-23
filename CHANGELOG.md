@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：プライバシーポリシーに「アクセスログについて」の節を足した**（`privacy.sbn`）：配信サーバー（Amazon CloudFront）がアクセスの日時・閲覧した URL・IP アドレス・ブラウザの種類・参照元のページを記録していること、使い道（不審な大量アクセスへの対処・障害の調査・配信の負荷の把握）、30 日で消えることを、「アクセス解析ツールについて」の次に書いた。
+
 - **サイト：robots.txt で、Google（Gemini）にも AI の学習を許可した**（`SeoGenerator.BlockedCrawlerUserAgents`・robots.txt の頭のコメント）：`Google-Extended` を断るのをやめ、`User-agent: *` の全許可で通す。AI の学習に使ってよいクローラは OpenAI・Anthropic・Google の 3 社になる。ほかの会社の学習用クローラと SEO 解析系のクローラは今までどおり断る。
 
 - **サイト：コラムの本文のすぐ後に「ほかのコラム」の案内を置いた**（`ArticlesGenerator.SplitFootnotes`〔新規〕・`ArticleContentModel.FootnotesHtml`・`MoreArticles`〔新規〕・`article-detail.sbn`・`site.css` の `.article-more`〔新規〕）：本文と脚注の間に枠を置き、この記事を除いた公開日時の新しい順の 3 本の題名と公開日、コラムの一覧へのリンクを並べる。これまで次の記事への入口は脚注の下の「前の記事・次の記事」だけで、脚注の長い記事では本文を読み終えた位置から遠かった。脚注は枠の後に、今までと同じ体裁で続く。「前の記事・次の記事」のカードは変わらない。

@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：前の TV シリーズの最終話にだけ顔を出した次のシリーズのキャラクターを、次のシリーズのキャラクターとして出すようにした**（`BatonTouchResolver`〔新規〕・`CharactersGenerator.GenerateIndex`・`CharacterSeriesSection.BatonMembers`〔新規〕・`EntityUrlRegistry.DetectGuestCharacters`・`QualifyCollidingCharacterNames`・`characters-index.sbn`）：声の出演で最初に登場した作品が TV シリーズで、その作品での登場が最終話の 1 話だけ、かつ次に始まる TV シリーズの第 1 話に登場しているキャラクターは、次の TV シリーズを所属にする。キャラクター一覧では次のシリーズの種別のセクションに並べ、顔を出した前の作品の欄には末尾の小見出し「最終話バトンタッチ」にも並べる（見出しの人数には数えない）。個別ページを持たないキャラクターの置き場、名前が衝突したときに URL へ添える出身作品、OGP カードの透かしの作品名も同じ決め方にした。キャラクター詳細の「初登場」は最終話のまま。
+
 - **サイト：コラムの写真を枠つきで小さめに置き、クリックで拡大するようにした**（`ArticlesGenerator.WrapPhotos`〔新規〕・`ArticleContentModel.HasPhoto`〔新規〕・`article-detail.sbn`・`photo-modal.js`〔新規〕・`site.css` の `figure.photo`・`dialog.photo-modal`）：原稿で 1 行に単独で `![説明](photo.jpg "キャプション"){.photo}` と書いた画像を `<figure class="photo">` にし、最大 520px の幅で、白い枠を付けて中央に置く。写真をクリックすると画面いっぱいに拡大し、もう一度のクリック・閉じるボタン・Esc で閉じる。JS は写真がある記事だけ読み込み、JS が動かないときはリンクで元の画像が開く。`{.photo}` を付けない画像（図など）は変わらない。class 名と組みは precure.news の写真と同じにした。
 
 - **サイト：コラムの一覧を、書き直した記事が上へ上がる並びにした**（`ArticlesGenerator`・`Article.LastActiveAt`〔新規〕・`articles-index.sbn`）：公開日時と最終更新日（原稿の `updated`）のうち新しいほうの順に並べる。最終更新日は日付だけなので、その日の 0:00 として比べる。書き直した記事のカードには、記事のページと同じく、公開日の後ろに「（2026年11月22日更新）」と添える。一覧の OGP カードの 4 本も同じ並びにし、書き直した記事の日付は最終更新日にした。記事のページの「前の記事・次の記事」は公開日時の順のまま。

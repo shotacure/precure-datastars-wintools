@@ -799,6 +799,8 @@ public sealed class PersonsGenerator
     /// 役職は役職マスタの表示順（クレジットの並び。シリーズディレクター・プロデューサーなど主要な役職ほど前）で並べ、
     /// 各役職の作品は担当量（話数。映画や作品単位の関与は 1 本）の多い順に 2 作まで選び、年の順に並べる。
     /// 声の出演は「キャラ名役（2016年『作品』）」で、いちばん多く演じた役を言う。年は作品の放送開始・公開の年。
+    /// ほかにも役があれば「キャラ名役（2016年『作品』）ほか 3 役」、役は 1 つでほかの作品にも出ていれば
+    /// 「キャラ名役（2016年『作品』ほか 2 作品）」と、残りの数を添える。
     /// 本編のクレジットが無く音楽のクレジットだけの人は、音楽の区分ごとの曲数・枚数（「作曲：歌 12 曲・劇伴 40 曲」）。
     /// </summary>
     private static string BuildPersonMetaDescription(
@@ -813,6 +815,20 @@ public sealed class PersonsGenerator
         static int RowWeight(InvolvementSeriesRow r) => r.Episodes.Count > 0 ? r.Episodes.Count : 1;
         static IEnumerable<string> Characters(InvolvementSeriesRow r)
             => r.CharacterNames.Split('、', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        // 役の数え方。同じキャラクターの別の名前（変身前と変身後など）を 2 役に数えないよう、キャラクター詳細へのリンク先で見分ける。
+        // 個別ページを持たないキャラクター（リンク先が作品ごとのまとめのページ）と、リンクの無い名前は、名前で見分ける。
+        static IEnumerable<string> CharacterKeys(InvolvementSeriesRow r)
+        {
+            var names = r.CharacterNames.Split('、', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var links = r.CharacterNamesHtml.Split('、', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            for (int i = 0; i < names.Length; i++)
+            {
+                var href = i < links.Length && names.Length == links.Length ? CharacterHrefRegex.Match(links[i]) : System.Text.RegularExpressions.Match.Empty;
+                yield return href.Success && !href.Groups[1].Value.Contains("/guests/", StringComparison.Ordinal)
+                    ? href.Groups[1].Value
+                    : "name:" + names[i];
+            }
+        }
         int RoleOrder(InvolvementGroup g)
             => roleByCode.TryGetValue(g.RoleCode, out var role) && role.DisplayOrder is ushort o ? o : int.MaxValue;
 
@@ -853,8 +869,13 @@ public sealed class PersonsGenerator
                     string character = works[0].Rows.SelectMany(Characters).FirstOrDefault() ?? "";
                     if (character.Length > 0)
                     {
-                        bool more = works.Count > 1 || g.SeriesRows.SelectMany(Characters).Distinct(StringComparer.Ordinal).Count() > 1;
-                        entries.Add($"{character}役（{Work(works[0].Year, works[0].Title)}{(more ? "ほか" : "")}）");
+                        // 「ほか」だけで済ませず、残りの役の数（役が 1 つなら残りの作品の数）を言う。
+                        int otherRoles = g.SeriesRows.SelectMany(CharacterKeys).Distinct(StringComparer.Ordinal).Count() - 1;
+                        int otherWorks = works.Count - 1;
+                        string work = Work(works[0].Year, works[0].Title);
+                        entries.Add(otherRoles > 0 ? $"{character}役（{work}）ほか {otherRoles} 役"
+                            : otherWorks > 0 ? $"{character}役（{work}ほか {otherWorks} 作品）"
+                            : $"{character}役（{work}）");
                         continue;
                     }
                 }
@@ -865,6 +886,10 @@ public sealed class PersonsGenerator
         string text = JoinWithin(entries, targetMaxChars);
         return text.Length > 0 ? text : $"{displayName}さん";
     }
+
+    /// <summary>声の出演の行のキャラクター名のリンク（<see cref="InvolvementSeriesRow.CharacterNamesHtml"/>）から、リンク先を取り出す。</summary>
+    private static readonly System.Text.RegularExpressions.Regex CharacterHrefRegex =
+        new(@"href=""([^""#]+)", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>項目を「／」でつなぎ、<paramref name="maxChars"/> を越える手前で止める（1 つ目は長くても入れる）。</summary>
     private static string JoinWithin(IEnumerable<string> entries, int maxChars)

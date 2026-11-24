@@ -574,7 +574,8 @@ public sealed class CharactersGenerator
         };
 
         // MetaDescription を実データから動的構築する。
-        var metaDescription = BuildCharacterMetaDescription(character.Name, kindLabel, voiceRows);
+        var metaDescription = BuildCharacterMetaDescription(character.Name, kindLabel, voiceRows,
+            voiceRows.Count > 0 ? "" : BuildFamilyFragment(familyRows, aliasesByCharacter, personAliasById));
 
         // キャラクター詳細の構造化データは Schema.org の Person 型で代用する。
         string baseUrl = _ctx.Config.BaseUrl;
@@ -817,11 +818,13 @@ public sealed class CharactersGenerator
 
     /// <summary>
     /// キャラクター詳細の meta description。「種別（2004年『作品』、2005年『作品』ほか）。声：△△」（名前はページ名に出ているので入れない）。
+    /// 声の出演のクレジットが無いキャラクターは、作品も声も言えないので、<paramref name="familyFragment"/>（家族関係）を種別の後ろに添える。
     /// </summary>
     private static string BuildCharacterMetaDescription(
         string characterName,
         string kindLabel,
-        IReadOnlyList<VoiceCastRow> voiceRows)
+        IReadOnlyList<VoiceCastRow> voiceRows,
+        string familyFragment)
     {
         const int targetMaxChars = 150;
 
@@ -850,7 +853,35 @@ public sealed class CharactersGenerator
             string fragment = "。声：" + string.Join("、", voices.Take(2)) + (voices.Count > 2 ? "ほか" : "");
             if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
         }
+        if (familyFragment.Length > 0 && sb.Length + 1 + familyFragment.Length <= targetMaxChars)
+            sb.Append('。').Append(familyFragment);
         return sb.Length > 0 ? sb.ToString() : characterName;
+    }
+
+    /// <summary>
+    /// 声の出演のクレジットが無いキャラクターの説明文に添える家族関係。「姉：花咲つぼみ / キュアブロッサム（2010年『作品』）、祖母：花咲薫子」の形で、
+    /// 家族関係の欄の並びの上から 2 人まで。1 人目には、その家族が声の出演で最初に登場した作品を添える（どの作品の家族かが分かるように）。
+    /// </summary>
+    private string BuildFamilyFragment(
+        IReadOnlyList<FamilyRelationRow> familyRows,
+        IReadOnlyDictionary<int, List<CharacterAlias>> aliasesByCharacter,
+        IReadOnlyDictionary<int, PersonAlias> personAliasById)
+    {
+        if (familyRows.Count == 0) return "";
+        var parts = new List<string>();
+        foreach (var f in familyRows.Take(2))
+        {
+            string part = $"{f.RelationLabel}：{f.RelatedCharacterName}";
+            if (parts.Count == 0 && aliasesByCharacter.TryGetValue(f.RelatedCharacterId, out var relAliases))
+            {
+                var first = BuildVoiceCastRows(relAliases.Select(a => a.AliasId).ToList(), relAliases.ToDictionary(a => a.AliasId), personAliasById)
+                    .FirstOrDefault(v => !string.IsNullOrEmpty(v.SeriesTitle));
+                if (first is not null)
+                    part += first.SeriesStartYearLabel.Length > 0 ? $"（{first.SeriesStartYearLabel}年『{first.SeriesTitle}』）" : $"（『{first.SeriesTitle}』）";
+            }
+            parts.Add(part);
+        }
+        return string.Join("、", parts) + (familyRows.Count > 2 ? "ほか" : "");
     }
 
     /// <summary>

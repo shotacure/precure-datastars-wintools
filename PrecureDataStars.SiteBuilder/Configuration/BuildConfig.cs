@@ -79,6 +79,10 @@ public sealed class BuildConfig
     /// App.config の <c>CloudFrontDistributionId</c>。空文字なら invalidation をスキップする。</summary>
     public string CloudFrontDistributionId { get; }
 
+    /// <summary>旧 URL の転送表を同期する CloudFront KeyValueStore の ARN。
+    /// App.config の <c>CloudFrontKeyValueStoreArn</c>。空文字なら同期をスキップする。</summary>
+    public string CloudFrontKeyValueStoreArn { get; init; } = "";
+
     /// <summary>デプロイの「削除（orphan 掃除）」対象から除外するキー接頭辞の一覧。
     /// App.config の <c>AwsDeployProtectedPrefixes</c>（カンマ区切り）。手動配置物を守るための安全弁で、
     /// 既定は空（生成物に無い S3 オブジェクトはすべて削除候補）。</summary>
@@ -339,6 +343,7 @@ public sealed class BuildConfig
         var awsRegion = (ConfigurationManager.AppSettings["AwsRegion"] ?? "").Trim();
         var awsProfile = (ConfigurationManager.AppSettings["AwsProfile"] ?? "").Trim();
         var cfDist = (ConfigurationManager.AppSettings["CloudFrontDistributionId"] ?? "").Trim();
+        var kvsArn = (ConfigurationManager.AppSettings["CloudFrontKeyValueStoreArn"] ?? "").Trim();
 
         // 削除保護の接頭辞リスト（カンマ区切り）。空要素は除外する。
         var rawProtected = ConfigurationManager.AppSettings["AwsDeployProtectedPrefixes"] ?? "";
@@ -377,6 +382,9 @@ public sealed class BuildConfig
             effectiveGa4, gsv.Trim(), publishedYear,
             defaultOg, amazonTag, ogFonts, isProductionMode,
             awsBucket, awsRegion, awsProfile, cfDist, protectedPrefixes, deploy,
-            pageFilter ?? "", telopCacheDir, refreshSubtitleTelops, ogCardCacheDir, refreshOgCards, telopPieceCacheDir, asOf, diffOnly);
+            pageFilter ?? "", telopCacheDir, refreshSubtitleTelops, ogCardCacheDir, refreshOgCards, telopPieceCacheDir, asOf, diffOnly)
+        {
+            CloudFrontKeyValueStoreArn = kvsArn,
+        };
     }
 }

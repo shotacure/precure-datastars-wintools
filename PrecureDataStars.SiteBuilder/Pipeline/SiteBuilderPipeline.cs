@@ -133,7 +133,7 @@ public sealed class SiteBuilderPipeline
         // 左のもくじの映画の題名の分け方（テンプレートの nav_prefix / nav_main）
         MovieNavTitle.UseSeries(ctx.SeriesById);
 
-        // 旧 ID URL → 新 URL の転送表を出力へ書き出す（デプロイで S3 に上がり、Lambda@Edge が 301 に使う）。
+        // 旧 ID URL → 新 URL の転送表を出力へ書き出す（本番デプロイが CloudFront の KeyValueStore へ同期し、CloudFront Function が 301 に使う）。
         LegacyRedirectMapWriter.Write(output, ctx.EntityUrls.LegacyRedirects);
 
         // クレジット横断のカバレッジラベルをここで 1 回だけ算出して BuildContext に詰める。
@@ -445,6 +445,7 @@ public sealed class SiteBuilderPipeline
         {
             var deployer = new Deploy.S3DeployService(config, logger);
             bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
+            await SyncRedirectStoreAsync(config, logger, ct).ConfigureAwait(false);
 
             // 全体のドライランは、この出力を作り直さずに上げられるよう控えを書く（deploy.ps1 の本番反映が --upload-only で使う）。
             if (config.Deploy.DryRun && string.IsNullOrEmpty(config.PageFilter))
@@ -560,6 +561,22 @@ public sealed class SiteBuilderPipeline
     /// 控え（<see cref="Deploy.PendingDeploy"/>）が無ければ、出力がドライランのままか分からないので止める。
     /// 本番がこの出力と一致したら、控えの URL を公開記録に書き、控えを消す（同じ控えで 2 度上げない）。
     /// </summary>
+    /// <summary>
+    /// 旧 URL の転送表を CloudFront の KeyValueStore へ同期する（同期先が未設定なら何もしない）。
+    /// 同期に失敗しても、サイト本体の反映と公開記録は止めず、警告として知らせる（転送表は次のデプロイで追いつく）。
+    /// </summary>
+    private static async Task SyncRedirectStoreAsync(BuildConfig config, BuildLogger logger, CancellationToken ct)
+    {
+        try
+        {
+            await new Deploy.KeyValueStoreSyncService(config, logger).RunAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.Warn($"転送表の KeyValueStore への同期に失敗しました: {ex.Message}");
+        }
+    }
+
     private static async Task UploadPendingAsync(
         BuildConfig config, BuildLogger logger, IConnectionFactory factory, Stopwatch stopwatch, CancellationToken ct)
     {
@@ -571,6 +588,7 @@ public sealed class SiteBuilderPipeline
 
         var deployer = new Deploy.S3DeployService(config, logger);
         bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
+        await SyncRedirectStoreAsync(config, logger, ct).ConfigureAwait(false);
         if (published)
         {
             var (persons, characters, companies, units) =

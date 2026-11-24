@@ -41,7 +41,8 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 ///     そのページの登場話アンカー（<c>#ep{話数}</c>、映画はアンカー無し）を指す。</description></item>
 ///   <item><description>旧 ID URL から新 URL への対応表（<see cref="LegacyRedirects"/>）も併せて作る。旧 ID は
 ///     URL を切り替えた時点で凍結した台帳 <c>legacy_entity_ids</c> から引き（ID を振り直しても旧 URL は元の実体を指す）、
-///     サイト出力の <c>_edge/legacy-redirects.json</c> に書き出して、origin-request の Lambda@Edge が 301 転送に使う
+///     サイト出力の <c>_edge/legacy-redirects.json</c> に書き出す。本番デプロイがこの表を CloudFront の KeyValueStore へ同期し、
+///     viewer-request の CloudFront Function が 301 転送に使う
 ///     （<see cref="Utilities.LegacyRedirectMapWriter"/>）。</description></item>
 /// </list>
 /// </summary>
@@ -335,7 +336,7 @@ public sealed class EntityUrlRegistry
             // 旧名の人物・キャラ・企業 URL の転送表。本番で公開した記録（published_entity_slugs）のうち、いまの URL と違うものを
             // いまの URL へ転送する。同じ区分でいま別の実体がその名前の URL を使っている（ページが実在する）ときは転送しない
             // （名前の衝突は大文字小文字を区別せずに見る。同じ実体の大文字小文字だけ違う旧 URL は転送する）。
-            // 転送元のキーはデコード済みのスラッグで持つ（Lambda@Edge 側でリクエスト URI をデコードして引く）。
+            // 転送元のキーはデコード済みのスラッグで持つ（KeyValueStore へ同期するときにパーセントエンコードした形にする）。
             const string publishedSql = """
                 SELECT entity_kind AS EntityKind, slug AS Slug, COALESCE(person_id, character_id, company_id, person_alias_id) AS EntityId
                   FROM published_entity_slugs

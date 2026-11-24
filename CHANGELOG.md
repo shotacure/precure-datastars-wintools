@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：旧 URL の 301 転送を、Lambda@Edge から CloudFront Function と KeyValueStore に置き換えた**（`KeyValueStoreSyncService`〔新規〕・`BuildConfig.CloudFrontKeyValueStoreArn`〔新規〕・`SiteBuilderPipeline.SyncRedirectStoreAsync`〔新規〕・`scripts/cloudfront/viewer-request.js`・`scripts/lambda-edge/legacy-redirect/index.mjs`〔削除〕・`App.config.sample`・`Directory.Packages.props`）：本番デプロイは、S3 への反映の後に、転送表（`_edge/legacy-redirects.json`）を CloudFront の KeyValueStore へ差分で同期する。同期先は App.config の `CloudFrontKeyValueStoreArn` で、空なら同期しない。viewer-request の CloudFront Function が KeyValueStore を引いて 301 を返す。origin-request の Lambda@Edge は使わなくなり、コードをリポジトリから消した。Function は転送表に載る区分（persons・people・characters・companies・units・books・creators・bgms・stats）の URL をすべて引くので、これまで Lambda@Edge の判定に入っておらず転送されていなかった旧 URL（`/creators/otona/roles/{code}/`・`/creators/otona/staff/`・`/creators/otona/voice-cast/`・`/stats/records/format-differences/`）も転送される。Function のランタイムは文字の正規化ができないので、名前に濁点・半濁点などがある行は、合成前の形（NFD）のキーも KeyValueStore に入れる。参照に `AWSSDK.CloudFrontKeyValueStore` と `AWSSDK.Extensions.CrtIntegration` を足した。
+
 - **サイト：プライバシーポリシーに「アクセスログについて」の節を足した**（`privacy.sbn`）：配信サーバー（Amazon CloudFront）がアクセスの日時・閲覧した URL・IP アドレス・ブラウザの種類・参照元のページを記録していること、使い道（不審な大量アクセスへの対処・障害の調査・配信の負荷の把握）、30 日で消えることを、「アクセス解析ツールについて」の次に書いた。
 
 - **サイト：robots.txt で、Google（Gemini）にも AI の学習を許可した**（`SeoGenerator.BlockedCrawlerUserAgents`・robots.txt の頭のコメント）：`Google-Extended` を断るのをやめ、`User-agent: *` の全許可で通す。AI の学習に使ってよいクローラは OpenAI・Anthropic・Google の 3 社になる。ほかの会社の学習用クローラと SEO 解析系のクローラは今までどおり断る。

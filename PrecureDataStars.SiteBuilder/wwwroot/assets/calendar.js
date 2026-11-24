@@ -27,12 +27,8 @@
  * 月グリッドでは、ふだんはキャラクター誕生日のチップだけを出し、ほか（映画公開・人物誕生日・TV 放送）は
  * 種別ごとの件数（🎥1 🎂2 📺4）にたたんで、日付の右に並べる。
  * 7 日縦並び（狭い幅）でも同じく、キャラクター誕生日のほかは件数にたたむ。
- * たたんだ行は、月名の行の右端の「全部開く」のボタンで開く（PC では、開閉はこのボタンだけ）。
- * 7 日縦並びと、タッチだけの端末（タブレットなど。マウスやペンが 1 つも無い端末）の月グリッドでは、ボタンを押していない間、
- * スクロールのたびに、画面の縦のまんなかにいちばん近い行だけを開いて、ほかの行は閉じる
- * （上の行を閉じると下がずり上がるので、上の行は動きを付けずにすぐ閉じ、ずれた分だけスクロール位置を合わせる）。
- * 月名の行の右端に「全部開く」のボタンを置く。押すと全部の行が開いたままになり（もう一度押すとたたむ）、
- * その間はマウスやスクロールでは開閉しない。押した状態は端末に覚えておく。
+ * たたんだ行は、月名の行の右端の「全部開く」のボタンだけで開く（押すと全部の行が開いたままになり、もう一度押すとたたむ。
+ * スクロールやマウスでは開閉しない）。押した状態は端末に覚えておく。
  * 開閉は CSS の grid-template-rows の遷移でなめらかに動かす（site.css の .cal-fold）。
  *
  * 注記：カレンダーはコンパクト表示のため、ep / mv はシリーズ略称（title_short）を
@@ -181,82 +177,9 @@
       }
       var list = cells();
       for (var i = 0; i < list.length; i++) list[i].classList.toggle('is-open', expandAll);
-      if (!expandAll) openCentered();
     }
     function cells() { return grid.querySelectorAll('[data-week]'); }
-    // 全部の行を閉じる。
-    function closeAll() {
-      var list = cells();
-      for (var i = 0; i < list.length; i++) list[i].classList.remove('is-open');
-    }
-    // week の行だけを開き、ほかを全部閉じる（スクロール用）。上の行を閉じると下がずり上がるので、
-    // 上の行は動きを付けずにすぐ閉じ、開く行の位置が変わらないよう、ずれた分だけスクロール位置を戻す。
-    function openOnly(week) {
-      var list = cells();
-      var anchor = null;
-      var changed = false;
-      for (var i = 0; i < list.length; i++) {
-        var w = parseInt(list[i].getAttribute('data-week'), 10);
-        if (w === week) {
-          if (!anchor) anchor = list[i];
-          if (!list[i].classList.contains('is-open')) changed = true;
-        } else if (list[i].classList.contains('is-open')) {
-          changed = true;
-        }
-      }
-      if (!anchor || !changed) return;
-      var topBefore = anchor.getBoundingClientRect().top;
-      for (var j = 0; j < list.length; j++) {
-        var wj = parseInt(list[j].getAttribute('data-week'), 10);
-        if (wj === week) {
-          list[j].classList.add('is-open');
-        } else if (list[j].classList.contains('is-open')) {
-          if (wj < week) list[j].classList.add('cal-no-anim');
-          list[j].classList.remove('is-open');
-        }
-      }
-      var shift = anchor.getBoundingClientRect().top - topBefore;
-      if (shift !== 0) window.scrollBy(0, shift);
-      window.requestAnimationFrame(function () {
-        for (var k = 0; k < list.length; k++) list[k].classList.remove('cal-no-anim');
-      });
-    }
-
-    // 画面の縦のまんなかにいちばん近い行だけを開く動き。7 日縦並び（狭い幅）と、タッチだけの端末（タブレットなど。
-    // マウスやペンのような細かい操作の手段が 1 つも無い端末）の月グリッドで使う。PC の月グリッドでは使わず、
-    // 開閉は「全部開く」のボタンだけで行う。
-    var touchOnly = window.matchMedia
-      && window.matchMedia('(any-pointer: coarse)').matches
-      && !window.matchMedia('(any-pointer: fine)').matches
-      && !window.matchMedia('(any-hover: hover)').matches;
-    function centerMode() { return isMobile() || touchOnly; }
-
-    var ticking = false;
-    function openCentered() {
-      if (expandAll || !centerMode()) return;
-      var list = cells();
-      if (!list.length) return;
-      var rect = grid.getBoundingClientRect();
-      if (rect.bottom < 0 || rect.top > window.innerHeight) { closeAll(); return; }
-      var mid = window.innerHeight / 2;
-      var best = -1;
-      var bestDist = Infinity;
-      for (var i = 0; i < list.length; i++) {
-        var r = list[i].getBoundingClientRect();
-        var dist = Math.abs((r.top + r.bottom) / 2 - mid);
-        if (dist < bestDist) { bestDist = dist; best = parseInt(list[i].getAttribute('data-week'), 10); }
-      }
-      if (best >= 0) openOnly(best);
-    }
-    window.addEventListener('scroll', function () {
-      if (ticking) return;
-      ticking = true;
-      window.requestAnimationFrame(function () {
-        ticking = false;
-        openCentered();
-      });
-    }, { passive: true });
-    // 描き直しのあと：全部開く状態なら全部の行を開き、そうでなければ画面のまんなかの行を開き直す。
+    // 描き直しのあと：全部開く状態なら全部の行を開き、そうでなければ全部の行をたたむ。
     return applyExpand;
   }
 

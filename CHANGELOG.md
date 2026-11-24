@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：トップのカレンダーの自動展開をやめた**（`calendar.js`・`site.css`）：スマホの縦並びとタッチだけの端末で、スクロールのたびに画面のまんなかの行が開閉してスクロールの邪魔になっていたので、この動きを外した。行の開閉は「全部開く」のボタンだけにした。
+
 - **サイト：人物とキャラクターの説明文（meta description）に、残りの役の数と家族関係を足した**（`PersonsGenerator.BuildPersonMetaDescription`・`CharactersGenerator.BuildCharacterMetaDescription`・`CharactersGenerator.BuildFamilyFragment`〔新規〕）：人物詳細の声の出演は、これまで「メップル役（2004年『ふたりはプリキュア』ほか）」と、残りを「ほか」だけで済ませていた。ほかにも役があれば「コロン役（2010年『ハートキャッチプリキュア！』）ほか 1 役」、役は 1 つでほかの作品にも出ていれば「メップル役（2004年『ふたりはプリキュア』ほか 9 作品）」と、数を言う。役はキャラクター単位で数え、同じキャラクターの別の名前を 2 役に数えない。キャラクター詳細は、声の出演のクレジットが無いキャラクターの説明文が種別だけだったので、家族関係を上から 2 人まで添える（「とりまく人々。姉：花咲つぼみ / キュアブロッサム（2010年『ハートキャッチプリキュア！』）、祖母：花咲薫子ほか」）。JSON-LD の description も同じ文になる。
 
 - **サイト：旧 URL の 301 転送を、Lambda@Edge から CloudFront Function と KeyValueStore に置き換えた**（`KeyValueStoreSyncService`〔新規〕・`BuildConfig.CloudFrontKeyValueStoreArn`〔新規〕・`SiteBuilderPipeline.SyncRedirectStoreAsync`〔新規〕・`scripts/cloudfront/viewer-request.js`・`scripts/lambda-edge/legacy-redirect/index.mjs`〔削除〕・`App.config.sample`・`Directory.Packages.props`）：本番デプロイは、S3 への反映の後に、転送表（`_edge/legacy-redirects.json`）を CloudFront の KeyValueStore へ差分で同期する。同期先は App.config の `CloudFrontKeyValueStoreArn` で、空なら同期しない。viewer-request の CloudFront Function が KeyValueStore を引いて 301 を返す。origin-request の Lambda@Edge は使わなくなり、コードをリポジトリから消した。Function は転送表に載る区分（persons・people・characters・companies・units・books・creators・bgms・stats）の URL をすべて引くので、これまで Lambda@Edge の判定に入っておらず転送されていなかった旧 URL（`/creators/otona/roles/{code}/`・`/creators/otona/staff/`・`/creators/otona/voice-cast/`・`/stats/records/format-differences/`）も転送される。Function のランタイムは文字の正規化ができないので、名前に濁点・半濁点などがある行は、合成前の形（NFD）のキーも KeyValueStore に入れる。参照に `AWSSDK.CloudFrontKeyValueStore` と `AWSSDK.Extensions.CrtIntegration` を足した。

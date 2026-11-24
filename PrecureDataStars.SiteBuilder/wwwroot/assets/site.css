@@ -11142,8 +11142,6 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   grid-template-rows: 1fr;
   opacity: 1;
 }
-/* 上の行をすぐ閉じるとき（calendar.js がスクロール位置を合わせる間）は動きを付けない。 */
-.cal-no-anim > .cal-fold { transition: none; }
 .cal-chips + .cal-fold .cal-fold-inner > :first-child { margin-top: 3px; }
 /* 件数の札：日付の右に並べる。色は開いたときのチップ（.cal-chip-movie / -person / -ep）と同じ。
    ふつうは 3 つ並ぶ大きさ。4 種別（映画・人物誕生日・TV 放送・オトナシリーズ）とも出る日だけ、

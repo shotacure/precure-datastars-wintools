@@ -14,7 +14,7 @@ namespace PrecureDataStars.SiteBuilder.Deploy;
 /// <para>
 /// 転送表は、ビルドがサイト出力の <c>_edge/legacy-redirects.json</c>（<see cref="LegacyRedirectMapWriter"/>）に書き出したものを読む。
 /// 直前のドライランの出力をそのまま上げるデプロイ（作り直さない）でも、同じ表を使える。
-/// viewer-request の CloudFront Function（<c>scripts/cloudfront/viewer-request.js</c>）が、この KeyValueStore を引いて 301 を返す。
+/// viewer-request の CloudFront Function（コードはリポジトリの外で管理する）が、この KeyValueStore を引いて 301 を返す。
 /// </para>
 /// <list type="bullet">
 ///   <item><description>同期先は App.config の <c>CloudFrontKeyValueStoreArn</c>。空なら何もしない。</description></item>

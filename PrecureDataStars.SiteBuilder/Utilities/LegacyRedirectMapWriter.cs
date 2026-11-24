@@ -10,7 +10,7 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// <list type="bullet">
 ///   <item><description>本番デプロイが、この表を CloudFront の KeyValueStore へ差分で同期する
 ///     （<see cref="Deploy.KeyValueStoreSyncService"/>）。viewer-request の CloudFront Function
-///     （<c>scripts/cloudfront/viewer-request.js</c>）が KeyValueStore を引いて 301 を返す。
+///     （コードはリポジトリの外で管理する）が KeyValueStore を引いて 301 を返す。
 ///     ファイルそのものも通常のデプロイ（S3 差分同期）でバケットへ上がる。</description></item>
 ///   <item><description>形式は <c>{"/persons/123": "/people/%E9%AB%98…/", …}</c>。キーは末尾スラッシュ無しの旧パス、
 ///     値はパーセントエンコード済みの新 URL（ゲストキャラはアンカー付き）。キー順に並べて出力を決定的にする。</description></item>

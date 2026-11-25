@@ -122,8 +122,39 @@
 {{~ end ~}}
 
 {{## ──────── Google Analytics 4（任意） ────────
-     gtag.js のローダ → タグ初期化の 2 段。GA4 メジャメント ID が空なら一切出力しない。 ##}}
+     計測しない端末の判定 → gtag.js のローダ → タグ初期化の 3 段。GA4 メジャメント ID が空なら一切出力しない。
+     判定は次の 2 つで、どちらかに当たれば Google 公式のオプトアウト（window['ga-disable-<ID>'] = true）を
+     タグ初期化より前に立てて、GA に何も送らない。
+       - ページのホスト名が BaseUrl のホスト名と違う（本番の出力フォルダを手元のサーバーで開いたとき）
+       - その端末の localStorage に印 pcds-ga-off がある。印は、どのページでも ?notrack=1 を付けて開くと付き、
+         ?notrack=0 で外れる。付け外しの後は、アドレスバーから notrack の指定を消す（そのまま共有されないように）
+     計測しないときは <html> に data-ga-off を立て、フッターの断り（.footer-ga-off）を CSS で出す。
+     IP アドレスでの除外は、手元の回線の IP が毎回変わるので使わない。 ##}}
 {{~ if Ga4MeasurementId != "" ~}}
+<script>
+(function () {
+  var off = false;
+  try {
+    var params = new URLSearchParams(location.search);
+    var flag = params.get('notrack');
+    if (flag === '1') localStorage.setItem('pcds-ga-off', '1');
+    else if (flag === '0') localStorage.removeItem('pcds-ga-off');
+    if (flag !== null) {
+      params.delete('notrack');
+      var rest = params.toString();
+      history.replaceState(history.state, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+    }
+    off = localStorage.getItem('pcds-ga-off') === '1';
+  } catch (e) { }
+  var siteHost = '';
+  try { siteHost = new URL('{{ BaseUrl }}').hostname; } catch (e) { }
+  if (location.hostname !== siteHost) off = true;
+  if (off) {
+    window['ga-disable-{{ Ga4MeasurementId }}'] = true;
+    document.documentElement.setAttribute('data-ga-off', '');
+  }
+})();
+</script>
 <script async src="https://www.googletagmanager.com/gtag/js?id={{ Ga4MeasurementId }}"></script>
 <script>
 window.dataLayer = window.dataLayer || [];
@@ -419,6 +450,10 @@ gtag('config', '{{ Ga4MeasurementId }}');
       {{~ end ~}}
     </div>
     <p class="footer-copyright">© {{ CopyrightYears }} Shota (SHOWTIME).</p>
+    {{## 計測しない端末だけに出す断り。<head> の GA4 の判定が <html> に data-ga-off を立てたときだけ CSS で見せる。 ##}}
+    {{~ if Ga4MeasurementId != "" ~}}
+    <p class="footer-ga-off">この端末からの閲覧はアクセス解析の計測から外しています。</p>
+    {{~ end ~}}
   </div>
 </footer>
 {{## サイト内検索の JS。

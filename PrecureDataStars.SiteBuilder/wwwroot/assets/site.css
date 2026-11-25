@@ -352,6 +352,16 @@ a:hover { text-decoration: underline; }
   font-variant-numeric: tabular-nums;
   color: var(--fg);
 }
+/* 計測しない端末だけに出す断り。<html data-ga-off> は _layout.sbn の GA4 の判定が立てる。 */
+.footer-ga-off {
+  display: none;
+  margin: 6px 0 0;
+  font-size: 0.8em;
+  color: var(--muted);
+}
+html[data-ga-off] .footer-ga-off {
+  display: block;
+}
 
 /* ──────────────────── パンくず ──────────────────── */
 .breadcrumbs ol {

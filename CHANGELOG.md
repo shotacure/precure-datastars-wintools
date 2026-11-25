@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：手元で開いたページと、計測しない印のある端末からは、GA4 に送らないようにした**（`_layout.sbn`・`site.css` の `.footer-ga-off`〔新規〕）：本番のタグの前に判定を置き、どちらかに当たれば Google のオプトアウトの仕組み（`window['ga-disable-<ID>'] = true`）でタグを止める。1 つ目の判定はページのホスト名が `SiteBaseUrl` のホスト名と違うかどうかで、本番の出力フォルダを手元のサーバーで開いた閲覧が参照元 127.0.0.1 として数字に混ざっていたのを防ぐ。2 つ目の判定はその端末の localStorage に印（`pcds-ga-off`）があるかどうかで、印はどのページでも `?notrack=1` を付けて開くと付き、`?notrack=0` で外れる。付け外しをした後、アドレスバーからは `notrack` の指定だけを消す。計測しない端末では、フッターの © の下に「この端末からの閲覧はアクセス解析の計測から外しています。」と出す。テストモードには GA4 のタグが出ないので、出力は変わらない。
+
 - **サイト：robots.txt で、どのクローラにも全体を許可した**（`SeoGenerator`・`BlockedCrawlerUserAgents`〔削除〕・`MainCrawlerCrawlDelaySeconds`〔削除〕）：AI の学習用（OpenAI・Anthropic・Google 以外）と SEO 解析系の 26 のクローラへの `Disallow`、Bing・Yahoo（Slurp）・DuckDuckGo への `Crawl-delay`、頭の説明のコメントをやめ、`User-agent: *` の全許可と sitemap.xml の場所だけを書き出す。名乗って取りに来るクローラは、目的や量で分けずに通す。
 
 - **サイト：CloudFront Function のコードをリポジトリから外した**（`scripts/cloudfront/viewer-request.js`〔削除〕・`KeyValueStoreSyncService`・`LegacyRedirectMapWriter` のコメント・README）：viewer-request の CloudFront Function に、人の閲覧からは来ない形のリクエストを断る判定を入れたため、コードはリポジトリの外で管理する。旧 URL の転送・`/_edge/` の 404・index の書き換えの動きは README のとおりで変わらない。

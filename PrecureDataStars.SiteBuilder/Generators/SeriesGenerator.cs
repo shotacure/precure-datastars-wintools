@@ -729,7 +729,7 @@ public sealed class SeriesGenerator
                     // 実話数が総話数に満たない継続中シリーズは「（見込）」を別 span で付与できるよう、
                     // 終了日が確定済みなら期間側にも見込み注記を出す（継続中＝EndDate=null は
                     // 期間が「〜」止めなので注記は総話数側のみ）。
-                    PeriodEstimateNote = (estimated && s.EndDate.HasValue) ? EstimateNote : "",
+                    PeriodEstimateNote = JpDateFormat.PeriodIsEstimated(s, estimated, DateOnly.FromDateTime(DateTime.Now)) ? EstimateNote : "",
                     EpisodesLabel = s.Episodes.HasValue ? $"全 {s.Episodes.Value} 話" : "",
                     EpisodesEstimateNote = (estimated && s.Episodes.HasValue) ? EstimateNote : "",
                     PrecureBadges = BuildPrecureBadges(precureRows),
@@ -1274,7 +1274,7 @@ public sealed class SeriesGenerator
             KindLabel = LookupKindLabel(s),
             Period = seriesPeriod,
             PeriodLabel = periodLabel,
-            PeriodEstimateNote = (seriesEstimated && s.EndDate.HasValue) ? EstimateNote : "",
+            PeriodEstimateNote = JpDateFormat.PeriodIsEstimated(s, seriesEstimated, DateOnly.FromDateTime(DateTime.Now)) ? EstimateNote : "",
             Episodes = s.Episodes?.ToString() ?? "",
             EpisodesEstimateNote = (seriesEstimated && s.Episodes.HasValue) ? EstimateNote : "",
             RunTimeSeconds = FormatRuntimeSeconds(s.RunTimeSeconds),
@@ -1288,7 +1288,7 @@ public sealed class SeriesGenerator
             // 構造で描画するための見出し情報（単一シリーズなのでセクションは 1 個）。
             EpisodeSectionStartYearLabel = s.StartDate.Year.ToString(),
             EpisodeSectionPeriod = seriesPeriod,
-            EpisodeSectionPeriodEstimateNote = (seriesEstimated && s.EndDate.HasValue) ? EstimateNote : "",
+            EpisodeSectionPeriodEstimateNote = JpDateFormat.PeriodIsEstimated(s, seriesEstimated, DateOnly.FromDateTime(DateTime.Now)) ? EstimateNote : "",
             EpisodeSectionTotalLabel = episodeSectionTotalLabel,
             EpisodeSectionTotalEstimateNote = (seriesEstimated && s.Episodes.HasValue) ? EstimateNote : ""
         };

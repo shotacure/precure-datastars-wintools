@@ -75,6 +75,14 @@ public static class JpDateFormat
         => PlannedStartWhen(s) + (broadcast ? "放送予定" : "公開予定");
 
     /// <summary>
+    /// 期間の表記に「（見込）」を添えるか。話数が見込み（<paramref name="episodesEstimated"/>）のシリーズで、
+    /// 終了日が入っている（その日も見込み）か、開始日がまだ来ていない（開始日も見込み）ときに添える。
+    /// 放送が始まって終了日が未定のシリーズは、開始日が確定しているので添えない。
+    /// </summary>
+    public static bool PeriodIsEstimated(Series s, bool episodesEstimated, DateOnly today)
+        => episodesEstimated && (s.EndDate.HasValue || s.StartDate > today);
+
+    /// <summary>
     /// 開始日を、開始日の確かさ（<see cref="Series.StartDatePrecision"/>）までで切った表記。
     /// 年だけなら「2027年」、年月なら「2027年7月」、日付まで確かなら「2027年2月7日」。
     /// </summary>

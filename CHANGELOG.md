@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：robots.txt で、どのクローラにも全体を許可した**（`SeoGenerator`・`BlockedCrawlerUserAgents`〔削除〕・`MainCrawlerCrawlDelaySeconds`〔削除〕）：AI の学習用（OpenAI・Anthropic・Google 以外）と SEO 解析系の 26 のクローラへの `Disallow`、Bing・Yahoo（Slurp）・DuckDuckGo への `Crawl-delay`、頭の説明のコメントをやめ、`User-agent: *` の全許可と sitemap.xml の場所だけを書き出す。名乗って取りに来るクローラは、目的や量で分けずに通す。
+
 - **サイト：CloudFront Function のコードをリポジトリから外した**（`scripts/cloudfront/viewer-request.js`〔削除〕・`KeyValueStoreSyncService`・`LegacyRedirectMapWriter` のコメント・README）：viewer-request の CloudFront Function に、人の閲覧からは来ない形のリクエストを断る判定を入れたため、コードはリポジトリの外で管理する。旧 URL の転送・`/_edge/` の 404・index の書き換えの動きは README のとおりで変わらない。
 
 - **サイト：記念日カレンダーのページに、月ごとのもくじを出した**（`anniversary-index.sbn`）：12 か月の各 section に id を付け、左のもくじ（スマホではメニューの中）に「1月」〜「12月」が並ぶようにした。もくじに余計な項目が出ないよう、外側の section は div にした。

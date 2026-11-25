@@ -1578,7 +1578,7 @@ public sealed class SeriesGenerator
         string runTimeMinutes = runTimeSeconds is ushort sec && sec > 0 ? $"{(int)Math.Round(sec / 60.0)}分" : "";
         string periodLine = isMovieLike
             ? string.Join("・", new[] { view.Period.Length > 0 ? $"{view.Period}公開" : "", runTimeMinutes }.Where(x => x.Length > 0))
-            : $"{view.Period}　全{view.Episodes}話";
+            : $"{view.Period}　全{view.Episodes}話{view.EpisodesEstimateNote}";
 
         // 主要スタッフは役職ごとに全員を出す。連名を落とすと「誰が作ったか」の答えが変わってしまう。
         // 役職名の色はエピソードカードと同じくサイトの役職バッジの配色に揃える。

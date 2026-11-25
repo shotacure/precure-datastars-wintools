@@ -443,7 +443,7 @@ WHERE e.is_deleted = 0
             .ToList();
 
         // まだエピソードの行が 1 話も無い、これから始まる TV シリーズは、話の一覧の代わりに
-        // 開始の予定（「2027年 放送開始予定」など）だけの節を、枠の最後に開始日の順で足す。
+        // 開始の予定（「2027年 放送開始見込」など）だけの節を、枠の最後に開始日の順で足す。
         // 非公開（論理削除）の作品は BuildContext に読み込まれないので出ない。
         var seriesWithEpisodes = allEpisodes.Select(x => x.Series.SeriesId).ToHashSet();
         var todayDate = DateOnly.FromDateTime(today);
@@ -460,7 +460,7 @@ WHERE e.is_deleted = 0
                 SeriesStartYearLabel = s.StartDate.Year.ToString(),
                 IsOtona = SeriesClassifier.IsOtona(s),
                 SortKeyTicks = s.StartDate.ToDateTime(TimeOnly.MinValue).Ticks,
-                PlannedStartLabel = $"{JpDateFormat.PlannedStartWhen(s)} 放送開始予定"
+                PlannedStartLabel = $"{JpDateFormat.PlannedStartWhen(s)} 放送開始見込"
             });
         }
         return sections;
@@ -979,7 +979,7 @@ WHERE e.is_deleted = 0
         public long SortKeyTicks { get; set; }
         public IReadOnlyList<HomeEpisodeRow> Episodes { get; set; } = Array.Empty<HomeEpisodeRow>();
         /// <summary>
-        /// エピソードの行がまだ無い、これから始まる TV シリーズの節だけが持つ開始の予定（「2027年 放送開始予定」など）。
+        /// エピソードの行がまだ無い、これから始まる TV シリーズの節だけが持つ開始の見込み（「2027年 放送開始見込」など）。
         /// 非空ならテンプレートは話の一覧の代わりにこの 1 行を出す。
         /// </summary>
         public string PlannedStartLabel { get; set; } = "";

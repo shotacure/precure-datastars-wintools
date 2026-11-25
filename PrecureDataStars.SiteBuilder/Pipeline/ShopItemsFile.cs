@@ -28,7 +28,7 @@ internal static class ShopItemsFile
     public const string HomeFileStem = "home";
 
     /// <summary>1 つの枠に出す商品の上限。</summary>
-    public const int MaxItems = 4;
+    public const int MaxItems = 5;
 
     /// <summary>発売済みの商品の中で先に出す種別（ボーカルベストとサントラ）。</summary>
     private static readonly HashSet<string> PreferredKindCodes = new(StringComparer.Ordinal)

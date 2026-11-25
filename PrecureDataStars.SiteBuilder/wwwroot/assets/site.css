@@ -7245,6 +7245,12 @@ a.credit-card-series:focus-visible {
   margin: 0;
   padding: 8px 14px 12px;
 }
+/* ホームの「今後の放送予定」で、エピソードの行がまだ無い作品の節に、話の一覧の代わりに出す開始の予定の 1 行。 */
+.home-planned-start {
+  margin: 0;
+  padding: 10px 14px 12px;
+  color: var(--muted);
+}
 .episodes-index-list li {
   display: grid;
   grid-template-columns: 4.2em 1fr 13em;

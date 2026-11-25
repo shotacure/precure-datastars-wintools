@@ -138,6 +138,10 @@
       <span class="muted series-year">({{ sec.SeriesStartYearLabel }})</span>
       {{~ end ~}}
     </h2>
+    {{## エピソードの行がまだ無い、これから始まる TV シリーズの節は、話の一覧の代わりに開始の予定だけを出す。 ##}}
+    {{~ if sec.PlannedStartLabel != "" ~}}
+    <p class="home-planned-start">{{ sec.PlannedStartLabel | html.escape }}</p>
+    {{~ else ~}}
     <ol class="episodes-index-list">
       {{~ for e in sec.Episodes ~}}
       <li class="ep-row">
@@ -158,6 +162,7 @@
       </li>
       {{~ end ~}}
     </ol>
+    {{~ end ~}}
   </section>
   {{~ end ~}}
 </section>

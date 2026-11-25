@@ -430,7 +430,7 @@ WHERE e.is_deleted = 0
             .Take(UpcomingEpisodesMax)
             .ToList();
         // セクション順は各シリーズ内の最小放送日昇順、セクション内エピソードは放送日昇順。
-        return picked
+        var sections = picked
             .GroupBy(x => x.Series.SeriesId)
             .Select(g =>
             {
@@ -441,6 +441,29 @@ WHERE e.is_deleted = 0
             })
             .OrderBy(sec => sec.SortKeyTicks)
             .ToList();
+
+        // まだエピソードの行が 1 話も無い、これから始まる TV シリーズは、話の一覧の代わりに
+        // 開始の予定（「2027年 放送開始予定」など）だけの節を、枠の最後に開始日の順で足す。
+        // 非公開（論理削除）の作品は BuildContext に読み込まれないので出ない。
+        var seriesWithEpisodes = allEpisodes.Select(x => x.Series.SeriesId).ToHashSet();
+        var todayDate = DateOnly.FromDateTime(today);
+        var plannedSeries = _ctx.SeriesById.Values
+            .Where(s => s.KindCode == "TV" && s.StartDate > todayDate && !seriesWithEpisodes.Contains(s.SeriesId))
+            .OrderBy(s => s.StartDate)
+            .ThenBy(s => s.SeriesId);
+        foreach (var s in plannedSeries)
+        {
+            sections.Add(new HomeEpisodeSection
+            {
+                SeriesSlug = s.Slug,
+                SeriesTitle = s.Title,
+                SeriesStartYearLabel = s.StartDate.Year.ToString(),
+                IsOtona = SeriesClassifier.IsOtona(s),
+                SortKeyTicks = s.StartDate.ToDateTime(TimeOnly.MinValue).Ticks,
+                PlannedStartLabel = $"{JpDateFormat.PlannedStartWhen(s)} 放送開始予定"
+            });
+        }
+        return sections;
     }
 
     /// <summary>
@@ -955,6 +978,11 @@ WHERE e.is_deleted = 0
         /// <summary>セクション（シリーズ）の並べ替え用キー。呼び出し側で並び確定済みの 先頭エピソード放送日の Ticks。最新=降順／今後=昇順でそのまま使う。 テンプレには出さない内部用。</summary>
         public long SortKeyTicks { get; set; }
         public IReadOnlyList<HomeEpisodeRow> Episodes { get; set; } = Array.Empty<HomeEpisodeRow>();
+        /// <summary>
+        /// エピソードの行がまだ無い、これから始まる TV シリーズの節だけが持つ開始の予定（「2027年 放送開始予定」など）。
+        /// 非空ならテンプレートは話の一覧の代わりにこの 1 行を出す。
+        /// </summary>
+        public string PlannedStartLabel { get; set; } = "";
     }
 
     /// <summary>ホームのエピソードセクション内 1 行。/episodes/ の EpisodesIndexRow と同等の 表示項目（第N話・放送日・サブタイトル・各話のスタッフの札）を持つ。</summary>

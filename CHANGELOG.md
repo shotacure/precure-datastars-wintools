@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：ホームの「今後の放送予定」に、エピソードの行がまだ無い次の TV シリーズを出すようにした**（`HomeGenerator.BuildUpcomingEpisodeSections`・`HomeEpisodeSection.PlannedStartLabel`〔新規〕・`JpDateFormat.PlannedStartWhen`〔新規〕・`home.sbn`・`site.css` の `.home-planned-start`〔新規〕）：これまでは放送日が先のエピソードから節を作っていたので、エピソードの行が無い作品は出なかった。開始日が先で、エピソードの行が 1 話も無い公開中の TV シリーズを、枠の最後に開始日の順で足し、話の一覧の代わりに「2027年 放送開始予定」のような開始の予定を 1 行だけ出す。開始の予定は、開始日の確かさの列に合わせて年・年月・年月日で書く。年月日の書き方は、作品一覧などの「2027年放送予定」（`JpDateFormat.PlannedStart`）と同じ部品から作る。
+
 - **サイト：手元で開いたページと、計測しない印のある端末からは、GA4 に送らないようにした**（`_layout.sbn`・`site.css` の `.footer-ga-off`〔新規〕）：本番のタグの前に判定を置き、どちらかに当たれば Google のオプトアウトの仕組み（`window['ga-disable-<ID>'] = true`）でタグを止める。1 つ目の判定はページのホスト名が `SiteBaseUrl` のホスト名と違うかどうかで、本番の出力フォルダを手元のサーバーで開いた閲覧が参照元 127.0.0.1 として数字に混ざっていたのを防ぐ。2 つ目の判定はその端末の localStorage に印（`pcds-ga-off`）があるかどうかで、印はどのページでも `?notrack=1` を付けて開くと付き、`?notrack=0` で外れる。付け外しをした後、アドレスバーからは `notrack` の指定だけを消す。計測しない端末では、フッターの © の下に「この端末からの閲覧はアクセス解析の計測から外しています。」と出す。テストモードには GA4 のタグが出ないので、出力は変わらない。
 
 - **サイト：robots.txt で、どのクローラにも全体を許可した**（`SeoGenerator`・`BlockedCrawlerUserAgents`〔削除〕・`MainCrawlerCrawlDelaySeconds`〔削除〕）：AI の学習用（OpenAI・Anthropic・Google 以外）と SEO 解析系の 26 のクローラへの `Disallow`、Bing・Yahoo（Slurp）・DuckDuckGo への `Crawl-delay`、頭の説明のコメントをやめ、`User-agent: *` の全許可と sitemap.xml の場所だけを書き出す。名乗って取りに来るクローラは、目的や量で分けずに通す。

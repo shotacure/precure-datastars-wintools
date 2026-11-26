@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **デプロイ：本番に触れる前に、出す中身を点検して止める**（`scripts/deploy.ps1`）：道具のビルドの直後に、wintools の作業フォルダにコミットしていない変更が無いかと、SiteBuilder の bin のテンプレートと wwwroot が元のファイルとバイト単位で同じかを見る。合わなければ、ドライランも本番反映もせずに止める（`-Force` でも飛ばさない）。元のファイルを古い更新時刻のまま戻すと、bin に書き換えたほうが残り、本番に出るため。
+
 - **サイト：サイトマップの更新日と IndexNow を、中身の変化だけで判定する**（`StableContentHash`・`SitemapLastmodManifest`・`PageRenderer.StableHashOf`〔新規〕・`SeoGenerator`）：CSS の区画分けや画像の写しの直しで、データは変わらないのに全ページの更新日が進み、IndexNow も 1 万件ずつ送っていた。印を取るときに、head の CSS・JS・書体の読み込み、版の印 `?v=`、画像の `srcset` などと自前の画像のファイル名を伏せる。伏せ方の版を控えに残し、版の違う初回は前の版のしかたで比べて、印だけを取り直す。
 
 - **サイト：販売中の商品の枠の画像を、Amazon の小さい画像（160px）にした**（`product_shop_states.image_url`〔新規の列〕・`SeriesShopItemsRepository`・`AmazonSync --shop-check`）：枠の画像は 52px で出すのに、Amazon の大きい画像（500px）を読んでいた。販売中の点検で、Amazon の API が返す小さい画像（medium）を残し、枠はそれを出す（まだ点検していない音楽商品は、これまでどおり商品の代表の画像）。マイグレーションは `db/migrations/v1.22.1_add_product_shop_image_url.sql`。

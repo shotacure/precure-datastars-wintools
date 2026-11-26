@@ -145,6 +145,57 @@ try {
     $amazonSyncExe  = Get-ToolExe 'PrecureDataStars.AmazonSync'
     Write-Host ""
 
+    # --- 準備: 出す中身の点検（本番に触れる前に止める） ---
+    # 本番に出すのは、コミット済みのコードと、それをビルドした出力だけにする。どちらかが合わなければ、何も上げずに止める
+    # （ドライランでも止める。安全ゲートと違い -Force でも飛ばさない）。
+    #   1. wintools の作業フォルダに、コミットしていない変更（変更・追加・削除。git が無視するファイルは除く）が無いか。
+    #      試験のために書き換えたファイルや、書きかけの直しを本番に出さないため（コラムの原稿の content のリポジトリは見ない。
+    #      下書きのコラムが未コミットのまま置いてあるのは普通で、下書きは本番に出ない）。
+    #   2. SiteBuilder の bin のテンプレート（Templates）と静的ファイル（wwwroot）が、元のファイルとバイト単位で同じか。
+    #      ビルドはファイルの更新時刻で写すかを決めるので、元のファイルを古い更新時刻のまま戻すと、bin に書き換えたほうが残る
+    #      （11-26 に、試験で about のテンプレートに足した 1 語が bin に残り、本番に出た）。bin にだけあるファイルも止める
+    #      （wwwroot の古いファイルは、そのまま本番に上がるため）。
+    Write-Host "[準備] 出す中身の点検（未コミットの変更・bin と元のファイル）" -ForegroundColor Yellow
+    $releaseProblems = @()
+    $uncommitted = @(& git -C $repoRoot status --porcelain)
+    if ($LASTEXITCODE -ne 0) { $releaseProblems += "git status を読めませんでした" }
+    elseif ($uncommitted.Count -gt 0) {
+        $releaseProblems += "コミットしていない変更が $($uncommitted.Count) 件あります: " + (($uncommitted | Select-Object -First 5 | ForEach-Object { $_.Trim() }) -join ' / ')
+    }
+    $siteBuilderSrc = Join-Path $repoRoot 'PrecureDataStars.SiteBuilder'
+    $siteBuilderBin = Split-Path $siteBuilderExe
+    foreach ($folder in 'Templates', 'wwwroot') {
+        $srcDir = Join-Path $siteBuilderSrc $folder
+        $binDir = Join-Path $siteBuilderBin $folder
+        $srcFiles = @{}
+        Get-ChildItem -LiteralPath $srcDir -Recurse -File | ForEach-Object { $srcFiles[$_.FullName.Substring($srcDir.Length)] = $_.FullName }
+        $binFiles = @{}
+        if (Test-Path -LiteralPath $binDir) {
+            Get-ChildItem -LiteralPath $binDir -Recurse -File | ForEach-Object { $binFiles[$_.FullName.Substring($binDir.Length)] = $_.FullName }
+        }
+        $mismatched = @()
+        foreach ($rel in $srcFiles.Keys) {
+            if (-not $binFiles.ContainsKey($rel)) { $mismatched += "bin に無い $folder$rel"; continue }
+            if ((Get-FileHash -LiteralPath $srcFiles[$rel] -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $binFiles[$rel] -Algorithm SHA256).Hash) {
+                $mismatched += "元と違う $folder$rel"
+            }
+        }
+        foreach ($rel in $binFiles.Keys) {
+            if (-not $srcFiles.ContainsKey($rel)) { $mismatched += "bin にだけある $folder$rel" }
+        }
+        if ($mismatched.Count -gt 0) {
+            $releaseProblems += "bin の $folder が元のファイルと $($mismatched.Count) 件違います: " + (($mismatched | Select-Object -First 5) -join ' / ')
+        }
+    }
+    if ($releaseProblems.Count -gt 0) {
+        $releaseProblems | ForEach-Object { Write-Host "  !!! $_" -ForegroundColor Red; Write-DeployLog "  出す中身の点検：$_" }
+        Write-Host "  コミットしてから流し直してください。bin が違うときは、元のファイルを git checkout で戻してから道具をビルドし直してください。" -ForegroundColor Red
+        $deployResult = "出す中身の点検で止めました（$($releaseProblems.Count) 件）"
+        throw "出す中身の点検で止めました：$($releaseProblems -join ' ／ ')"
+    }
+    Write-Host "  未コミットの変更なし・bin のテンプレートと wwwroot は元のファイルと同じ" -ForegroundColor Green
+    Write-Host ""
+
     # --- 準備: 配信音源の再確認と Amazon の画像の取り直し（同時に流す） ---
     # 配信音源の再確認（ArtTrackRefresh）は tracks と products の取り込み状態だけを、Amazon の画像の取り直し（AmazonSync）は
     # 商品・書籍の画像 URL だけを書くので、互いに待たずに同時に流す。出力はそれぞれ一時ファイルに取り、終わってから順に出す
@@ -337,8 +388,8 @@ try {
     Write-Host ""
     $deployResult = "反映しました（upload $uploadCount / delete $deleteCount）"
 } catch {
-    # ゲートで止めたときは理由をもう書いてあるので、それ以外の失敗だけ理由を残す。
-    if ($deployResult -notlike '安全ゲート*') { $deployResult = "失敗しました：$($_.Exception.Message)" }
+    # ゲートと出す中身の点検で止めたときは理由をもう書いてあるので、それ以外の失敗だけ理由を残す。
+    if ($deployResult -notlike '安全ゲート*' -and $deployResult -notlike '出す中身の点検*') { $deployResult = "失敗しました：$($_.Exception.Message)" }
     throw
 } finally {
     $elapsed = (Get-Date) - $deployStarted

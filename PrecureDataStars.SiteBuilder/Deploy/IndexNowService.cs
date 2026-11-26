@@ -85,7 +85,9 @@ public sealed class IndexNowService
     internal static List<string> SelectUrls(
         IReadOnlyList<(string Key, bool IsNew)> uploaded, ChangedPages? changed, string baseUrl, int maxUrls, out int pageCount)
     {
-        var changedSet = changed is null ? null : new HashSet<string>(changed.Added.Concat(changed.Changed), StringComparer.Ordinal);
+        // 一覧の URL パスはサイトマップと同じくパーセントエンコードした形、S3 のキーはデコードした形なので、デコードした形で照らす。
+        var changedSet = changed is null ? null
+            : new HashSet<string>(changed.Added.Concat(changed.Changed).Select(Uri.UnescapeDataString), StringComparer.Ordinal);
         var pages = uploaded
             .Where(u => u.Key == "index.html" || u.Key.EndsWith("/index.html", StringComparison.Ordinal))
             .Where(u => !SkippedPrefixes.Any(p => u.Key.StartsWith(p, StringComparison.Ordinal)))
@@ -99,7 +101,7 @@ public sealed class IndexNowService
             .ToList();
     }
 
-    /// <summary>S3 のキー（<c>people/名前/index.html</c>）をサイトマップと同じ URL パス（<c>/people/名前/</c>。エンコードしない）にする。</summary>
+    /// <summary>S3 のキー（<c>people/名前/index.html</c>）を URL パス（<c>/people/名前/</c>。デコードした形のまま）にする。</summary>
     private static string ToUrlPath(string key)
         => key == "index.html" ? "/" : "/" + key[..^"index.html".Length];
 

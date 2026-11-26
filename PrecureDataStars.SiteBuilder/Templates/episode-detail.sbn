@@ -242,7 +242,7 @@
             {{~ if bd.IsGap ~}}
             <li class="is-gap" aria-hidden="true">…</li>
             {{~ else ~}}
-            <li class="{{ bd.State }}"><a href="{{ bd.Url }}" title="{{ bd.Label | html.escape }}" aria-label="{{ bd.Label | html.escape }}"{{ if bd.State == "is-current" }} aria-current="page"{{ end }}></a>{{~ if bd.YearLabel != "" ~}}<span class="staff-combo-year">{{ bd.YearLabel }}</span>{{~ end ~}}</li>
+            <li class="{{ bd.State }}"><a href="{{ bd.Url }}" title="{{ bd.Label | html.escape }}"{{ if bd.State == "is-current" }} aria-current="page"{{ end }}><span class="visually-hidden">{{ bd.Label | html.escape }}</span></a>{{~ if bd.YearLabel != "" ~}}<span class="staff-combo-year">{{ bd.YearLabel }}</span>{{~ end ~}}</li>
             {{~ end ~}}
             {{~ end ~}}
           </ol>

@@ -43,7 +43,7 @@
       <ul class="entity-list">
         {{~ for p in s.Members ~}}
         <li class="entity-row">
-          <a class="entity-row-link" href="{{ character_url p.CharacterId }}" aria-label="{{ p.TransformName | html.escape }}"></a>
+          <a class="entity-row-link" href="{{ character_url p.CharacterId }}"><span class="visually-hidden">{{ p.TransformName | html.escape }}</span></a>
           {{ include '_key-swatch.sbn' }}
           <a class="entity-row-name" href="{{ character_url p.CharacterId }}">{{ p.TransformName | html.escape }}</a>
           <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }}{{~ if p.VoiceActorName != "" ~}} (CV: {{~ if p.VoiceActorPersonId ~}}<a href="{{ person_url p.VoiceActorPersonId }}">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}}){{~ end ~}}</span>
@@ -61,7 +61,7 @@
     <ul class="entity-list" id="precures-count-list">
       {{~ for p in CountRows ~}}
       <li class="entity-row">
-        <a class="entity-row-link" href="{{ character_url p.CharacterId }}" aria-label="{{ p.TransformName | html.escape }}"></a>
+        <a class="entity-row-link" href="{{ character_url p.CharacterId }}"><span class="visually-hidden">{{ p.TransformName | html.escape }}</span></a>
         {{ include '_key-swatch.sbn' }}
         <a class="entity-row-name" href="{{ character_url p.CharacterId }}">{{ p.TransformName | html.escape }}</a>
         <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }}{{~ if p.VoiceActorName != "" ~}} (CV: {{~ if p.VoiceActorPersonId ~}}<a href="{{ person_url p.VoiceActorPersonId }}">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}}){{~ end ~}}</span>

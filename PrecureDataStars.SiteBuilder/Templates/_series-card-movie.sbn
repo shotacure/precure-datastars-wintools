@@ -1,7 +1,7 @@
 {{## /series/ の映画のカード（種類順・年度順で共用）。呼び出し側で変数 m に MovieSeriesRow を入れてから include する。
      本体（シーズンのバッジ・公開日・尺）・出たプリキュア（クレジットの声の出演から）・メインスタッフ・併映の子作品。 ##}}
 <div class="series-card">
-  <a class="bgms-card-link" href="/series/{{ m.Slug }}/" aria-label="{{ m.Title | html.escape }}"></a>
+  <a class="bgms-card-link" href="/series/{{ m.Slug }}/"><span class="visually-hidden">{{ m.Title | html.escape }}</span></a>
   <div class="series-card-head">
     <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ m.Title | html.escape }}</h3>
     <div class="series-card-meta muted">

@@ -252,6 +252,21 @@ a:hover { text-decoration: underline; }
   color: var(--muted);
   font-size: 0.92em;
 }
+/* 画面には出さず、読み上げと検索エンジンにだけ渡す文字。行・カード全体を覆う透明なリンク
+   （.entity-row-link・.bgms-card-link・.songs-card-link・.person-song-card-link など）の中に名前を置き、
+   リンクの文字（アンカーテキスト）にする。 */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .subtitle-embargo-switch-input {
   position: absolute;
   width: 1px;
@@ -5547,7 +5562,7 @@ body.subtitle-embargo-dialog-open {
 }
 /* カード全体クリック：絶対配置の透明 <a>、z-index:0。
    後段で .bgms-card-staff を z-index:1 で上に重ね、名前クリックは人物リンクへ渡す。
-   aria-label はテンプレ側でシリーズ名を付与。 */
+   リンクの文字は、テンプレ側で中に置く見えないシリーズ名（.visually-hidden）。 */
 .bgms-card-link {
   /* inline 既定のままだと、空のリンクでも inline ボックスが生成されて
      周辺レイアウトに微妙な影響（特にリスト先頭で「• のような点が見える」現象）を

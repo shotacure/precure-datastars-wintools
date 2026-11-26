@@ -15,7 +15,7 @@
      スタッフ名内のリンク（人物詳細へ）はオーバーレイより上位 z-index に置くことで
      ピンポイントでクリック可能になる（カード余白クリック → 劇伴詳細、名前クリック → 人物詳細）。
      カード内は以下の積み構造：
-       1. .bgms-card-link（透明オーバーレイ、aria-label でリンク先を読み上げ可能に）
+       1. .bgms-card-link（透明オーバーレイ。中に見えない作品名〔.visually-hidden〕を持ち、リンクの文字として読み上げと検索エンジンに渡す）
        2. ヘッダ行（.bgms-card-head）：タイトル／件数（曲数とバージョン数の札。ほかの一覧と同じ大きさ）
           - CountsLabel は曲数とバージョン数が一致すると「N 曲」のみ、異なれば「N 曲 M ver.」になる（Generator 側で整形済み）
        3. スタッフ表示（.bgms-card-staff、staff-badges-row）：
@@ -36,7 +36,7 @@
              data-section-nav-title="{{ r.SeriesTitle | html.escape }}"
              data-section-nav-year="{{ r.SeriesStartYearLabel }}"
              data-section-nav-count="{{ r.SongCount }}">
-      <a class="bgms-card-link" href="/bgms/{{ r.SeriesSlug }}/" aria-label="{{ r.SeriesTitle | html.escape }}"></a>
+      <a class="bgms-card-link" href="/bgms/{{ r.SeriesSlug }}/"><span class="visually-hidden">{{ r.SeriesTitle | html.escape }}</span></a>
       <div class="bgms-card-head">
         <h2 class="bgms-card-title">{{ r.SeriesTitle | html.escape }}</h2>
         {{## 件数は曲数(🎵 SongCount)を常時、バージョン数(CueCount)は曲数と異なるときだけ「N ver.」ピルで併記。 ##}}

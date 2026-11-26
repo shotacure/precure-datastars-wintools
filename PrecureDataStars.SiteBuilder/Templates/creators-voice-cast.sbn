@@ -82,7 +82,7 @@
       <ul class="entity-list">
         {{~ for r in s.Members ~}}
         <li class="entity-row"{{ if r.IsPrecureCast }} data-precure-cast{{ end }} data-wk-own="{{ r.WkOwn }}"{{ if r.WkAfter != "" }} data-wk-after="{{ r.WkAfter }}"{{ end }}>
-          <a class="entity-row-link" href="{{ r.CharacterUrl }}" aria-label="{{ r.CharacterName | html.escape }}"></a>
+          <a class="entity-row-link" href="{{ r.CharacterUrl }}"><span class="visually-hidden">{{ r.CharacterName | html.escape }}</span></a>
           <a class="entity-row-name" href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a>
           <span class="entity-row-sub muted">(CV: <a href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>{{ if r.UnitMembers.size > 0 }}<span class="entity-row-members">（{{ for m in r.UnitMembers }}{{ if !for.first }}、{{ end }}{{ if m.Url != "" }}<a href="{{ m.Url }}">{{ m.Name | html.escape }}</a>{{ else }}{{ m.Name | html.escape }}{{ end }}{{ end }}）</span>{{ end }}{{ if r.HasOtherPersons }} 他{{ end }})</span>
           <span class="entity-row-count">{{~ if r.EpisodeCount > 0 || r.MovieCount > 0 || r.OtonaEpisodeCount > 0 ~}}<span class="count-badges">{{~ if r.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ r.EpisodeCount }}</span>{{~ end ~}}{{~ if r.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCount }}</span>{{~ end ~}}{{~ if r.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ r.OtonaEpisodeCount }}</span>{{~ end ~}}</span>{{~ else ~}}<span class="muted">—</span>{{~ end ~}}</span>
@@ -105,7 +105,7 @@
     <ul class="entity-list">
       {{~ for r in KanaRows ~}}
       <li class="entity-row"{{ if r.IsPrecureCast }} data-precure-cast{{ end }} data-wk="{{ r.Kinds }}">
-        <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
+        <a class="entity-row-link" href="{{ r.PersonUrl }}"><span class="visually-hidden">{{ r.PersonName | html.escape }}</span></a>
         <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>{{ if r.UnitMembers.size > 0 }}
         <span class="entity-row-members muted">（{{ for m in r.UnitMembers }}{{ if !for.first }}、{{ end }}{{ if m.Url != "" }}<a href="{{ m.Url }}">{{ m.Name | html.escape }}</a>{{ else }}{{ m.Name | html.escape }}{{ end }}{{ end }}）</span>{{ end }}
         <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役)</span>
@@ -143,7 +143,7 @@
       <ul class="entity-list">
         {{~ for r in s.Members ~}}
         <li class="entity-row"{{ if r.IsPrecureCast }} data-precure-cast{{ end }} data-wk-own="{{ r.WkOwn }}"{{ if r.WkAfter != "" }} data-wk-after="{{ r.WkAfter }}"{{ end }}>
-          <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
+          <a class="entity-row-link" href="{{ r.PersonUrl }}"><span class="visually-hidden">{{ r.PersonName | html.escape }}</span></a>
           <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>{{ if r.UnitMembers.size > 0 }}
         <span class="entity-row-members muted">（{{ for m in r.UnitMembers }}{{ if !for.first }}、{{ end }}{{ if m.Url != "" }}<a href="{{ m.Url }}">{{ m.Name | html.escape }}</a>{{ else }}{{ m.Name | html.escape }}{{ end }}{{ end }}）</span>{{ end }}
           <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役){{ if r.DebutEpisodeLabel != "" }}<a class="entity-row-debut{{ if r.DebutShowAll }} debut-all{{ end }}{{ if r.DebutShowPrecure }} debut-precure{{ end }}" href="{{ r.DebutEpisodeUrl }}">{{ r.DebutEpisodeLabel | html.escape }}</a>{{ end }}</span>
@@ -165,7 +165,7 @@
     <ul class="entity-list" id="vc-count-list">
       {{~ for r in CountRows ~}}
       <li class="entity-row"{{ if r.IsPrecureCast }} data-precure-cast{{ end }} data-wk="{{ r.Kinds }}">
-        <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
+        <a class="entity-row-link" href="{{ r.PersonUrl }}"><span class="visually-hidden">{{ r.PersonName | html.escape }}</span></a>
         <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>{{ if r.UnitMembers.size > 0 }}
         <span class="entity-row-members muted">（{{ for m in r.UnitMembers }}{{ if !for.first }}、{{ end }}{{ if m.Url != "" }}<a href="{{ m.Url }}">{{ m.Name | html.escape }}</a>{{ else }}{{ m.Name | html.escape }}{{ end }}{{ end }}）</span>{{ end }}
         <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役{{ if r.HasOtherCharacters }} 他{{ end }})</span>
@@ -187,7 +187,7 @@
     <ul class="entity-list" id="vc-charcount-list">
       {{~ for r in CharacterCountRows ~}}
       <li class="entity-row"{{ if r.IsPrecureCast }} data-precure-cast{{ end }} data-wk="{{ r.Kinds }}">
-        <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
+        <a class="entity-row-link" href="{{ r.PersonUrl }}"><span class="visually-hidden">{{ r.PersonName | html.escape }}</span></a>
         <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>{{ if r.UnitMembers.size > 0 }}
         <span class="entity-row-members muted">（{{ for m in r.UnitMembers }}{{ if !for.first }}、{{ end }}{{ if m.Url != "" }}<a href="{{ m.Url }}">{{ m.Name | html.escape }}</a>{{ else }}{{ m.Name | html.escape }}{{ end }}{{ end }}）</span>{{ end }}
         <span class="entity-row-count"><span class="count-badges">{{~ if r.TvCharacterCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ r.TvCharacterCount }}役</span>{{~ end ~}}{{~ if r.MovieCharacterCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ r.MovieCharacterCount }}役</span>{{~ end ~}}{{~ if r.OtonaCharacterCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ r.OtonaCharacterCount }}役</span>{{~ end ~}}</span></span>

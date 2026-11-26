@@ -28,7 +28,7 @@
             <ul class="person-songs-card-list">
               {{~ for c in k.SongCards ~}}
               <li class="person-song-card cat-{{ c.BadgeClassSuffix }}">
-                <a class="person-song-card-link" href="{{ c.SongUrl }}" aria-label="{{ c.Title | html.escape }}"></a>
+                <a class="person-song-card-link" href="{{ c.SongUrl }}"><span class="visually-hidden">{{ c.Title | html.escape }}</span></a>
                 <div class="person-song-card-body">
                   <div class="person-song-card-head">
                     <div class="person-song-card-roles">

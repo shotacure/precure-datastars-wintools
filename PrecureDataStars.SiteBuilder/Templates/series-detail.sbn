@@ -106,7 +106,7 @@
     <ul class="entity-list">
       {{~ for r in RelatedWorks ~}}
       <li class="entity-row">
-        <a class="entity-row-link" href="/series/{{ r.Slug }}/" aria-label="{{ r.Title | html.escape }}"></a>
+        <a class="entity-row-link" href="/series/{{ r.Slug }}/"><span class="visually-hidden">{{ r.Title | html.escape }}</span></a>
         {{~ if r.RelationLabelJa != "" ~}}
         <span class="relation-badge" data-relation-code="{{ r.RelationCode }}">{{ r.RelationLabelJa | html.escape }}</span>
         {{~ end ~}}
@@ -130,7 +130,7 @@
     <ul class="entity-list">
       {{~ for p in Precures ~}}
       <li class="entity-row">
-        <a class="entity-row-link" href="{{ character_url p.CharacterId }}" aria-label="{{ p.TransformName | html.escape }}"></a>
+        <a class="entity-row-link" href="{{ character_url p.CharacterId }}"><span class="visually-hidden">{{ p.TransformName | html.escape }}</span></a>
         {{ include '_key-swatch.sbn' }}
         <a class="entity-row-name" href="{{ character_url p.CharacterId }}">{{~ if p.PreTransformName != "" ~}}{{ p.PreTransformName | html.escape }} / {{ end }}{{ p.TransformName | html.escape }}</a>
         {{~ if p.VoiceActorName != "" ~}}

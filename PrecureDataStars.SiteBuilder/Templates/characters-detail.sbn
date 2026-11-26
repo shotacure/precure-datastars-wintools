@@ -125,7 +125,7 @@
     <ul class="entity-list">
       {{~ for f in FamilyRelations ~}}
       <li class="entity-row">
-        <a class="entity-row-link" href="{{ character_url f.RelatedCharacterId }}" aria-label="{{ f.RelatedCharacterName | html.escape }}"></a>
+        <a class="entity-row-link" href="{{ character_url f.RelatedCharacterId }}"><span class="visually-hidden">{{ f.RelatedCharacterName | html.escape }}</span></a>
         <span class="tag-badge">{{ f.RelationLabel | html.escape }}</span>
         <a class="entity-row-name" href="{{ character_url f.RelatedCharacterId }}">{{ f.RelatedCharacterName | html.escape }}</a>
       </li>
@@ -179,7 +179,7 @@
     <ul class="person-songs-card-list">
       {{~ for c in SongCards ~}}
       <li class="person-song-card cat-{{ c.BadgeClassSuffix }}">
-        <a class="person-song-card-link" href="{{ c.SongUrl }}" aria-label="{{ c.Title | html.escape }}"></a>
+        <a class="person-song-card-link" href="{{ c.SongUrl }}"><span class="visually-hidden">{{ c.Title | html.escape }}</span></a>
         <div class="person-song-card-body">
           <div class="person-song-card-head">
             <div class="person-song-card-roles">
@@ -203,7 +203,7 @@
       {{~ end ~}}
       {{~ for c in BgmCards ~}}
       <li class="person-song-card">
-        <a class="person-song-card-link" href="{{ c.Url }}" aria-label="{{ c.Title | html.escape }}"></a>
+        <a class="person-song-card-link" href="{{ c.Url }}"><span class="visually-hidden">{{ c.Title | html.escape }}</span></a>
         <div class="person-song-card-body">
           <div class="person-song-card-head">
             <div class="person-song-card-roles">

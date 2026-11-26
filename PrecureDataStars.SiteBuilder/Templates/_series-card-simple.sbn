@@ -3,7 +3,7 @@
      プリキュアのバッジとスタッフのバッジ（どちらも組まれている作品だけ。今はオトナシリーズの作品で、
      プリキュアはクレジットの声の出演から、スタッフは作品詳細のメインスタッフと同じ役職）。描き方は TV のカードと同じ。 ##}}
 <div class="series-card">
-  <a class="bgms-card-link" href="/series/{{ s.Slug }}/" aria-label="{{ s.Title | html.escape }}"></a>
+  <a class="bgms-card-link" href="/series/{{ s.Slug }}/"><span class="visually-hidden">{{ s.Title | html.escape }}</span></a>
   <div class="series-card-head">
     <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ s.Title | html.escape }}</h3>
     <div class="series-card-meta muted">

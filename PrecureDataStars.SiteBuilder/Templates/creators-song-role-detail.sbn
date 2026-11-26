@@ -51,7 +51,7 @@
     <ul class="entity-list entity-list-grid">
       {{~ for e in KanaRows ~}}
       <li class="entity-row">
-        <a class="entity-row-link" href="{{ e.PersonUrl }}" aria-label="{{ e.PersonName | html.escape }}"></a>
+        <a class="entity-row-link" href="{{ e.PersonUrl }}"><span class="visually-hidden">{{ e.PersonName | html.escape }}</span></a>
         <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
         <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-song">🎵 {{ e.SongCount }}</span></span></span>
       </li>
@@ -79,7 +79,7 @@
       <ul class="entity-list entity-list-grid">
         {{~ for e in sec.Members ~}}
         <li class="entity-row">
-          <a class="entity-row-link" href="{{ e.PersonUrl }}" aria-label="{{ e.PersonName | html.escape }}"></a>
+          <a class="entity-row-link" href="{{ e.PersonUrl }}"><span class="visually-hidden">{{ e.PersonName | html.escape }}</span></a>
           <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
           <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-song">🎵 {{ e.SongCount }}</span></span></span>
         </li>
@@ -99,7 +99,7 @@
     <ul class="entity-list entity-list-grid" id="song-role-count-list">
       {{~ for e in CountRows ~}}
       <li class="entity-row">
-        <a class="entity-row-link" href="{{ e.PersonUrl }}" aria-label="{{ e.PersonName | html.escape }}"></a>
+        <a class="entity-row-link" href="{{ e.PersonUrl }}"><span class="visually-hidden">{{ e.PersonName | html.escape }}</span></a>
         <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
         <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-song">🎵 {{ e.SongCount }}</span></span></span>
       </li>

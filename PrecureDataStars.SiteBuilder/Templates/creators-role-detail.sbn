@@ -89,7 +89,7 @@
     <ul class="entity-list entity-list-grid">
       {{~ for e in KanaRows ~}}
       <li class="entity-row" data-entity-type="{{ e.EntityKind }}" data-wk="{{ e.Kinds }}">
-        <a class="entity-row-link" href="{{ e.EntityUrl }}" aria-label="{{ e.EntityName | html.escape }}"{{ if e.WorksTooltip != "" }} title="{{ e.WorksTooltip | html.escape }}"{{ end }}></a>
+        <a class="entity-row-link" href="{{ e.EntityUrl }}"{{ if e.WorksTooltip != "" }} title="{{ e.WorksTooltip | html.escape }}"{{ end }}><span class="visually-hidden">{{ e.EntityName | html.escape }}</span></a>
         {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person" aria-label="個人" title="個人"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
         {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
         <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
@@ -123,7 +123,7 @@
       <ul class="entity-list entity-list-grid">
         {{~ for e in s.Members ~}}
         <li class="entity-row" data-entity-type="{{ e.EntityKind }}" data-wk-own="{{ e.WkOwn }}"{{ if e.WkAfter != "" }} data-wk-after="{{ e.WkAfter }}"{{ end }}>
-          <a class="entity-row-link" href="{{ e.EntityUrl }}" aria-label="{{ e.EntityName | html.escape }}"{{ if e.WorksTooltip != "" }} title="{{ e.WorksTooltip | html.escape }}"{{ end }}></a>
+          <a class="entity-row-link" href="{{ e.EntityUrl }}"{{ if e.WorksTooltip != "" }} title="{{ e.WorksTooltip | html.escape }}"{{ end }}><span class="visually-hidden">{{ e.EntityName | html.escape }}</span></a>
           {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person" aria-label="個人" title="個人"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
           {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
           <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
@@ -146,7 +146,7 @@
     <ul class="entity-list entity-list-grid" id="role-count-list">
       {{~ for e in CountRows ~}}
       <li class="entity-row" data-entity-type="{{ e.EntityKind }}" data-wk="{{ e.Kinds }}">
-        <a class="entity-row-link" href="{{ e.EntityUrl }}" aria-label="{{ e.EntityName | html.escape }}"{{ if e.WorksTooltip != "" }} title="{{ e.WorksTooltip | html.escape }}"{{ end }}></a>
+        <a class="entity-row-link" href="{{ e.EntityUrl }}"{{ if e.WorksTooltip != "" }} title="{{ e.WorksTooltip | html.escape }}"{{ end }}><span class="visually-hidden">{{ e.EntityName | html.escape }}</span></a>
         {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person" aria-label="個人" title="個人"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
         {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
         <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}

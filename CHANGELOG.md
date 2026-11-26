@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：行・カード全体を覆う透明なリンクに、画面に見えない名前を入れた**（`site.css` の `.visually-hidden`〔新規〕・`precures-index.sbn`・`characters-index.sbn`・`characters-detail.sbn`・`creators-*.sbn`・`series-detail.sbn`・`_series-card-*.sbn`・`bgms-index.sbn`・`songs-index.sbn`・`_music-credits.sbn`・`_staff-role-row.sbn`・`episode-detail.sbn`）：一覧の行や作品・歌のカードのリンクは中身が空で、名前を aria-label にだけ持っていたので、検索エンジンにはリンクの文字が無かった。名前をリンクの中の見えない文字にし、aria-label を外した。見た目は変わらない。
+
 - **サイト：YouTube の動画を、再生ボタンが押されてから読み込むようにした**（`_youtube-facade.sbn`〔新規〕・`yt-facade.js`〔新規〕・`episode-detail.sbn`・`series-detail.sbn`・`songs-detail.sbn`・`_layout.sbn`・`site.css` の `.yt-facade`〔新規〕）：エピソードの予告・作品の本予告・主題歌の録音の動画は、ページを開いた時点で埋め込みのプレイヤーを読み込んでいた（1 本で約 1MB、作品詳細では数 MB）。最初はサムネイルと再生ボタンだけを出し、押されたらその場でプレイヤーに差し替えて再生する。スクリプトが動かない環境では、これまでどおりのプレイヤーを出す。
 
 - **サイト：Web フォントの CSS を、ページに要る書体と字だけに絞り、画面の表示を止めずに読むようにした**（`WebFontPlan`〔新規〕・`LayoutModel.WebFontCssUrls`・`WebFontDesktopCssUrl`〔新規〕・`PageRenderer`・`_layout.sbn`・`site.css` の `--font-base`）：Google Fonts の 7 書体を全ページで 1 本の CSS（圧縮して約 400KB）にまとめて読み、届くまで画面が出なかった。本文の書体は端末に入っているものを先に当て（iPhone・iPad・Mac はヒラギノ）、Noto Sans JP はマウスで操作する端末だけで読む。Kiwi Maru と DotGothic16 は出す文言の字だけに絞り、Kaisei Decol・Shippori Mincho・Noto Sans SC・Noto Sans は要るページだけで読む。CSS はスクリプトで足して読むので、届くまでは端末の書体で出る。

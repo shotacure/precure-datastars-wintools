@@ -213,7 +213,10 @@ public sealed class ArticlesGenerator
         {
             string published = a.PublishAt.ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
             node["datePublished"] = published;
-            node["dateModified"] = a.UpdatedIso != "" ? a.UpdatedIso : published;
+            // 更新日は日付だけで持つので、公開と同じ 8:30（日本時間）の日時にして、公開日時と同じ形で出す。
+            node["dateModified"] = a.UpdatedIso != ""
+                ? $"{a.UpdatedIso}T{UpdatedTimeOfDay:hh\\:mm\\:ss}+09:00"
+                : published;
         }
         var author = new Dictionary<string, object?>
         {
@@ -239,6 +242,9 @@ public sealed class ArticlesGenerator
         node["publisher"] = publisher;
         return node;
     }
+
+    /// <summary>最終更新日（updated。日付だけ）の時刻。コラムの公開と同じ朝 8:30（日本時間）とみなす。</summary>
+    private static readonly TimeSpan UpdatedTimeOfDay = new(8, 30, 0);
 
     /// <summary>前後の記事カードに出す 1 件分を作る。</summary>
     private static ArticleLink ToLink(Article a) => new() { Title = a.Title, Url = $"/articles/{a.Slug}/" };
@@ -380,7 +386,8 @@ public sealed class ArticlesGenerator
 
         // 最終更新日。公開後に書き直した記事だけが "updated: 2026-11-08" のように日付だけで持つ。
         // 公開日（date の日付）より後の日付のときだけ表示する。不正なら警告してラベル空。
-        // 一覧の並びに使う日時（lastActiveAt）は、表示する最終更新日があればその日の 0:00、無ければ公開日時。
+        // 更新はコラムの公開と同じ朝 8:30（日本時間）に出すものとして、時刻はその日の 8:30 とみなす（UpdatedTimeOfDay）。
+        // 一覧の並びに使う日時（lastActiveAt）は、表示する最終更新日があればその日の 8:30、無ければ公開日時。
         string updatedLabel = "";
         string updatedIso = "";
         DateTime lastActiveAt = date;
@@ -391,7 +398,7 @@ public sealed class ArticlesGenerator
             {
                 updatedLabel = $"{updated.Year}年{updated.Month}月{updated.Day}日";
                 updatedIso = updated.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-                lastActiveAt = updated.Date;
+                lastActiveAt = updated.Date + UpdatedTimeOfDay;
             }
         }
         else if (!string.IsNullOrEmpty(rawUpdated))

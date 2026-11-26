@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：コラムの記事に Article の構造化データを足した**（`ArticlesGenerator.BuildArticleJsonLd`〔新規〕・`LayoutModel.JsonLdWithOgImage`〔新規〕・`PageRenderer`・`HomeGenerator.OperatorXUrl`）：コラムの詳細ページの JSON-LD はパンくずだけだった。題・前置き・公開日時・更新日・書き手（運営者）・発行元・画像（その記事の OGP カード 1200×630）・記事の URL を持つ `Article` を出す。画像は OGP カードの URL が決まった後に足す。
+
 - **サイト：行・カード全体を覆う透明なリンクに、画面に見えない名前を入れた**（`site.css` の `.visually-hidden`〔新規〕・`precures-index.sbn`・`characters-index.sbn`・`characters-detail.sbn`・`creators-*.sbn`・`series-detail.sbn`・`_series-card-*.sbn`・`bgms-index.sbn`・`songs-index.sbn`・`_music-credits.sbn`・`_staff-role-row.sbn`・`episode-detail.sbn`）：一覧の行や作品・歌のカードのリンクは中身が空で、名前を aria-label にだけ持っていたので、検索エンジンにはリンクの文字が無かった。名前をリンクの中の見えない文字にし、aria-label を外した。見た目は変わらない。
 
 - **サイト：404 以外の全ページの head に `<meta name="robots" content="max-image-preview:large">` を出す**（`_layout.sbn`）：検索結果と Google Discover で、OGP カードを大きな画像で出してよいと伝える。

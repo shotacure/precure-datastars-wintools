@@ -78,6 +78,13 @@ public sealed class LayoutModel
     public string JsonLd { get; set; } = "";
 
     /// <summary>
+    /// 画像（image）にこのページの OGP カードを入れてから <see cref="JsonLd"/> にする JSON-LD のノード（コラムの Article など）。
+    /// OGP カードの URL は <see cref="PageRenderer"/> が描くときに決まるので、Generator は辞書のまま渡し、
+    /// PageRenderer が og:image を決めた後に image を足して文字列にする。<see cref="JsonLd"/> が入っていれば使わない。
+    /// </summary>
+    public Dictionary<string, object?>? JsonLdWithOgImage { get; set; }
+
+    /// <summary>
     /// パンくず由来の Schema.org <c>BreadcrumbList</c> 構造化データ。
     /// <see cref="Breadcrumbs"/> が 1 件以上あるとき <see cref="PageRenderer"/> が自動生成して詰める。
     /// <c>_layout.sbn</c> 側では本値が空でないときに専用の

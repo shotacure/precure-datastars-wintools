@@ -108,6 +108,8 @@ public sealed class ArticlesGenerator
                     new BreadcrumbItem { Label = "コラム", Url = "/articles/" },
                     new BreadcrumbItem { Label = a.Title, Url = "" },
                 },
+                // 記事であることを示す構造化データ。画像（OGP カード）は PageRenderer が描いた後に足す。
+                JsonLdWithOgImage = BuildArticleJsonLd(a),
             };
             _page.RenderAndWrite($"/articles/{a.Slug}/", "articles", "article-detail.sbn", content, layout);
             CopyAssets(a);
@@ -186,6 +188,56 @@ public sealed class ArticlesGenerator
             copied++;
         }
         if (copied > 0) _ctx.Logger.Info($"コラム {a.Slug} の素材 {copied} 件を写しました。");
+    }
+
+    /// <summary>
+    /// コラムの詳細ページの Schema.org Article（JSON-LD のノード）を組み立てる。
+    /// 書き手はサイトの運営者（祥太。about のページと X）、発行元はトップの構造化データの Organization（<c>/#organization</c>）。
+    /// 公開日時は front-matter の date（時刻と時差つき）、更新日時は updated があればその日、無ければ公開日時。
+    /// 画像（image）は OGP カードで、<see cref="LayoutModel.JsonLdWithOgImage"/> として渡し、PageRenderer が足す。
+    /// サイトの URL（BaseUrl）が無いビルドでは、URL を持つ項目を出さない。
+    /// </summary>
+    private Dictionary<string, object?> BuildArticleJsonLd(Article a)
+    {
+        string baseUrl = _ctx.Config.BaseUrl;
+        string siteName = string.IsNullOrEmpty(_ctx.Config.SiteNameJa) ? _ctx.Config.SiteName : _ctx.Config.SiteNameJa;
+        var node = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "Article",
+            ["headline"] = a.Title,
+            ["description"] = string.IsNullOrWhiteSpace(a.Description) ? null : a.Description.Trim(),
+            ["inLanguage"] = "ja",
+        };
+        if (a.PublishAt != DateTimeOffset.MinValue)
+        {
+            string published = a.PublishAt.ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
+            node["datePublished"] = published;
+            node["dateModified"] = a.UpdatedIso != "" ? a.UpdatedIso : published;
+        }
+        var author = new Dictionary<string, object?>
+        {
+            ["@type"] = "Person",
+            ["name"] = "祥太",
+            ["sameAs"] = new[] { HomeGenerator.OperatorXUrl },
+        };
+        var publisher = new Dictionary<string, object?>
+        {
+            ["@type"] = "Organization",
+            ["name"] = siteName,
+        };
+        if (!string.IsNullOrEmpty(baseUrl))
+        {
+            string pageUrl = $"{baseUrl}/articles/{a.Slug}/";
+            node["url"] = pageUrl;
+            node["mainEntityOfPage"] = new Dictionary<string, object?> { ["@type"] = "WebPage", ["@id"] = pageUrl };
+            author["url"] = baseUrl + "/about/";
+            publisher["@id"] = baseUrl + "/#organization";
+            publisher["url"] = baseUrl + "/";
+        }
+        node["author"] = author;
+        node["publisher"] = publisher;
+        return node;
     }
 
     /// <summary>前後の記事カードに出す 1 件分を作る。</summary>

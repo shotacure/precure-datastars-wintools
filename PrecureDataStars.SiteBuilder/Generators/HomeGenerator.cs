@@ -230,8 +230,8 @@ public sealed class HomeGenerator
     /// <summary>サイト全体を代表する説明文。WebSite / Organization の description に共用する（ホームのタグラインと同じ）。</summary>
     private const string SiteDescription = "プリキュアまるごとデータベース。";
 
-    /// <summary>運営者の公式アカウント（Schema.org の sameAs に載せる）。</summary>
-    private const string OperatorXUrl = "https://x.com/shota_";
+    /// <summary>運営者の公式アカウント（Schema.org の sameAs に載せる。コラムの Article の author でも使う）。</summary>
+    internal const string OperatorXUrl = "https://x.com/shota_";
 
     /// <summary>
     /// ホーム用 JSON-LD（<c>@graph</c>）を組み立てる。含めるノードは 2 つ：

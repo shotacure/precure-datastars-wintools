@@ -608,6 +608,24 @@ public sealed class PageRenderer
             layoutMeta.OgImageWidth = OgCardRenderer.CardWidth;
             layoutMeta.OgImageHeight = OgCardRenderer.CardHeight;
         }
+        // 画像に OGP カードを入れる JSON-LD（コラムの Article など）は、og:image が決まったここで image を足して文字列にする。
+        // 寸法の判っている自前カードは ImageObject に幅と高さを添え、それ以外は URL だけを入れる。
+        if (layoutMeta.JsonLdWithOgImage is { } jsonLdNode && string.IsNullOrEmpty(layoutMeta.JsonLd))
+        {
+            if (!string.IsNullOrEmpty(layoutMeta.OgImage))
+            {
+                jsonLdNode["image"] = layoutMeta.OgImageWidth > 0
+                    ? new Dictionary<string, object?>
+                    {
+                        ["@type"] = "ImageObject",
+                        ["url"] = layoutMeta.OgImage,
+                        ["width"] = layoutMeta.OgImageWidth,
+                        ["height"] = layoutMeta.OgImageHeight,
+                    }
+                    : layoutMeta.OgImage;
+            }
+            layoutMeta.JsonLd = JsonLdBuilder.Serialize(jsonLdNode);
+        }
         // GA4 / Search Console は config から自動補完（layoutMeta 側では指定不要）。
         if (string.IsNullOrEmpty(layoutMeta.Ga4MeasurementId))
             layoutMeta.Ga4MeasurementId = _config.Ga4MeasurementId;

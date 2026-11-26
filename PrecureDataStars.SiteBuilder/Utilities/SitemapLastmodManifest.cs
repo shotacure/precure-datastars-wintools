@@ -13,7 +13,8 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// という状態を避け、Google に対して信頼できる再クロール優先度シグナルを返す。
 /// マニフェストは出力ディレクトリの兄弟ファイル（出力ツリー外＝デプロイ対象外）に置き、出力先
 /// （本番／テスト）ごとに独立させる。初回（マニフェスト無し）は全ページが新規扱い＝当該ビルド時刻に
-/// なり、以降のビルドで収束する。ハッシュは MD5（デプロイの ETag/MD5 差分判定と同じ理屈）。
+/// なり、以降のビルドで収束する。ハッシュは MD5 で、中身の変化ではない部分（毎週変わる部分、CSS・JS・画像の指し先）を伏せて取る
+/// （<see cref="StableContentHash"/>）。伏せ方の版を控えに残し、版の違う初回は一つ前の版のしかたで比べて印だけを取り直す。
 /// </summary>
 public sealed class SitemapLastmodManifest
 {
@@ -58,19 +59,25 @@ public sealed class SitemapLastmodManifest
     /// </summary>
     /// <param name="pages">(URL パス, 出力ファイルの絶対パス) の列。書き出し順。</param>
     /// <param name="buildTimeIso">変化／新規ページに付ける当該ビルドの時刻（ISO-8601 / W3C Datetime）。</param>
-    /// <param name="hashOf">
-    /// 出力ファイルの絶対パス → 中身の MD5（16 進）。書く時に取った印を渡す（<c>OutputWriter.Md5Of</c>）。
-    /// null を返したファイルと、省いたときは、ファイルを読んで求める。
+    /// <param name="hashesOf">
+    /// (URL パス, 出力ファイルの絶対パス) → 中身の印（大文字の 16 進）。今の判定のしかたの印（<c>Current</c>）と、
+    /// 一つ前の版のしかたの印（<c>Legacy</c>）。取れないときは空文字（「変わった」扱い）。
     /// </param>
+    /// <param name="version">今の判定のしかたの版（<see cref="StableContentHash.Version"/>）。控えに残す。</param>
     /// <param name="save">解決後の状態をマニフェストに保存するか。</param>
     public LastmodResolveResult Resolve(
         IReadOnlyList<(string UrlPath, string OutputFilePath)> pages,
         string buildTimeIso,
-        Func<string, string?>? hashOf = null,
+        Func<string, string, (string Current, string Legacy)> hashesOf,
+        int version,
         bool save = true)
     {
         var previous = LoadPrevious();
-        var next = new Dictionary<string, ManifestEntry>(pages.Count, StringComparer.Ordinal);
+        // 控えの判定のしかたの版（無い控えは版 1）。版が違う初回は、前回の印と一つ前の版のしかたの印で比べ（中身の変わったページだけ進める）、
+        // 控えの印を今の版のしかたに取り直す。しかたを変えただけで全ページの更新日が進まないようにするため。
+        int previousVersion = previous.Remove(VersionKey, out var versionEntry) && int.TryParse(versionEntry.Hash, out var v) ? v : 1;
+        bool rebaseline = previous.Count > 0 && previousVersion != version;
+        var next = new Dictionary<string, ManifestEntry>(pages.Count + 1, StringComparer.Ordinal);
         var lastmodByUrl = new Dictionary<string, string>(pages.Count, StringComparer.Ordinal);
         int unchanged = 0, changed = 0, added = 0;
         var addedUrls = new List<string>();
@@ -79,11 +86,12 @@ public sealed class SitemapLastmodManifest
         foreach (var (urlPath, outputFilePath) in pages)
         {
             // マニフェストの印は大文字の 16 進で持つ。
-            string hash = hashOf?.Invoke(outputFilePath)?.ToUpperInvariant() ?? ComputeFileHashOrEmpty(outputFilePath);
+            var (current, legacy) = hashesOf(urlPath, outputFilePath);
+            string compare = rebaseline ? legacy : current;
             string lastmod;
             // ハッシュが取得でき、かつ前回と一致したページだけ lastmod を据え置く。
             // ハッシュ取得不可（ファイル欠落など）は安全側で「変化扱い」＝当該ビルド時刻にする。
-            if (hash.Length > 0 && previous.TryGetValue(urlPath, out var prev) && prev.Hash == hash)
+            if (compare.Length > 0 && previous.TryGetValue(urlPath, out var prev) && prev.Hash == compare)
             {
                 lastmod = prev.Lastmod;
                 unchanged++;
@@ -94,9 +102,10 @@ public sealed class SitemapLastmodManifest
                 if (previous.ContainsKey(urlPath)) { changed++; changedUrls.Add(urlPath); }
                 else { added++; addedUrls.Add(urlPath); }
             }
-            next[urlPath] = new ManifestEntry { Hash = hash, Lastmod = lastmod };
+            next[urlPath] = new ManifestEntry { Hash = current, Lastmod = lastmod };
             lastmodByUrl[urlPath] = lastmod;
         }
+        next[VersionKey] = new ManifestEntry { Hash = version.ToString(System.Globalization.CultureInfo.InvariantCulture), Lastmod = "" };
 
         if (save)
         {
@@ -108,9 +117,14 @@ public sealed class SitemapLastmodManifest
             LastmodByUrl = lastmodByUrl,
             Unchanged = unchanged,
             Changed = changed,
-            Added = added
+            Added = added,
+            Rebaselined = rebaseline,
+            PreviousVersion = previousVersion,
         };
     }
+
+    /// <summary>控えの中で、判定のしかたの版を持つ行の鍵（URL パスは「/」で始まるので重ならない）。</summary>
+    private const string VersionKey = "$version";
 
     /// <summary>前回マニフェストを読み込む。未生成・破損時は空（＝全ページ新規扱い）で安全側に倒す。</summary>
     private Dictionary<string, ManifestEntry> LoadPrevious()
@@ -147,20 +161,6 @@ public sealed class SitemapLastmodManifest
         File.WriteAllText(_manifestPath, JsonSerializer.Serialize(entries));
     }
 
-    /// <summary>出力ファイルの MD5 を 16 進文字列で返す。読めない場合は空文字（呼び出し側で変化扱い）。</summary>
-    private static string ComputeFileHashOrEmpty(string filePath)
-    {
-        try
-        {
-            using var stream = File.OpenRead(filePath);
-            return Convert.ToHexString(MD5.HashData(stream));
-        }
-        catch
-        {
-            return "";
-        }
-    }
-
     /// <summary>マニフェストの 1 エントリ。JSON を小さく保つため短いキー名（h / m）でシリアライズする。</summary>
     private sealed class ManifestEntry
     {
@@ -190,4 +190,10 @@ public sealed class LastmodResolveResult
 
     /// <summary>前回マニフェストに無かった新規ページ数（当該ビルド時刻が入る）。</summary>
     public int Added { get; init; }
+
+    /// <summary>判定のしかたの版が控えと違ったので、一つ前の版のしかたで比べ、印を今の版に取り直したか。</summary>
+    public bool Rebaselined { get; init; }
+
+    /// <summary>控えに残っていた判定のしかたの版（控えに版が無ければ 1）。</summary>
+    public int PreviousVersion { get; init; }
 }

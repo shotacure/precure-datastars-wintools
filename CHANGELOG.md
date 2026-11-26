@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：サイトマップの更新日と IndexNow を、中身の変化だけで判定する**（`StableContentHash`・`SitemapLastmodManifest`・`PageRenderer.StableHashOf`〔新規〕・`SeoGenerator`）：CSS の区画分けや画像の写しの直しで、データは変わらないのに全ページの更新日が進み、IndexNow も 1 万件ずつ送っていた。印を取るときに、head の CSS・JS・書体の読み込み、版の印 `?v=`、画像の `srcset` などと自前の画像のファイル名を伏せる。伏せ方の版を控えに残し、版の違う初回は前の版のしかたで比べて、印だけを取り直す。
+
 - **サイト：販売中の商品の枠の画像を、Amazon の小さい画像（160px）にした**（`product_shop_states.image_url`〔新規の列〕・`SeriesShopItemsRepository`・`AmazonSync --shop-check`）：枠の画像は 52px で出すのに、Amazon の大きい画像（500px）を読んでいた。販売中の点検で、Amazon の API が返す小さい画像（medium）を残し、枠はそれを出す（まだ点検していない音楽商品は、これまでどおり商品の代表の画像）。マイグレーションは `db/migrations/v1.22.1_add_product_shop_image_url.sql`。
 
 - **サイト：エピソード詳細の次回予告と作品詳細の本予告の YouTube のサムネイルを、後回しにせず先に読む**（`_youtube-facade.sbn`・`episode-detail.sbn`・`series-detail.sbn`）：サムネイルに `loading="lazy"` が付いていて、スマホで最初の画面にいちばん大きく出るこの画像の読み込みが遅れていた。最初の画面に出る 2 か所だけ `fetchpriority="high"` にし、ほかの動画は後回しのままにする。

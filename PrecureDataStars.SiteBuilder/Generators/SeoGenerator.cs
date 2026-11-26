@@ -74,15 +74,20 @@ public sealed class SeoGenerator
             .ToList();
         var manifest = new SitemapLastmodManifest(
             SitemapLastmodManifest.DeriveManifestPath(_config.OutputDirectory));
-        // 印は各ページを書く時に取ってあるので、出力のファイルを読み返さない。
+        // 印は各ページを書く時に取ってあるので（PageRenderer.StableHashOf）、出力のファイルを読み返さない（取っていないページだけ読む）。
         // 差分だけを出すビルドでは、控えを進めない（次の本当のビルドで、変わったページの更新日が進むように）。
-        // 「中身が変わったか」は、ほかの回のデータで毎週変わる部分（<!--volatile--> の囲み）を伏せて比べる（StableContentHash）。
-        var urlByFile = pages.ToDictionary(p => p.Item2, p => p.UrlPath, StringComparer.OrdinalIgnoreCase);
-        string? HashOf(string file) => StableContentHash.Compute(
-            file, urlByFile.TryGetValue(file, out var url) && StableContentHash.MayHaveMarkers(url), _output.Md5Of);
-        var lastmod = manifest.Resolve(pages, buildTimeIso, HashOf, save: !_config.DiffOnly);
+        // 「中身が変わったか」は、ほかの回のデータで毎週変わる部分（<!--volatile--> の囲み）と、CSS・JS・画像の指し先のような
+        // 見た目と速さの直しで変わる部分を伏せて比べる（StableContentHash）。
+        (string Current, string Legacy) HashesOf(string urlPath, string file)
+            => _pageRenderer.StableHashOf(urlPath)
+               ?? (StableContentHash.FromFile(file),
+                   StableContentHash.LegacyFromFile(file, StableContentHash.MayHaveMarkers(urlPath), _output.Md5Of));
+        var lastmod = manifest.Resolve(pages, buildTimeIso, HashesOf, StableContentHash.Version, save: !_config.DiffOnly);
         _ctx.Logger.Info(
-            $"sitemap lastmod: 据え置き {lastmod.Unchanged} / 更新 {lastmod.Changed} / 新規 {lastmod.Added}");
+            $"sitemap lastmod: 据え置き {lastmod.Unchanged} / 更新 {lastmod.Changed} / 新規 {lastmod.Added}"
+            + (lastmod.Rebaselined
+                ? $"（判定のしかたが版 {lastmod.PreviousVersion} → {StableContentHash.Version} に変わったので、前の版のしかたで比べ、控えの印を取り直した）"
+                : ""));
 
         var settings = new XmlWriterSettings
         {

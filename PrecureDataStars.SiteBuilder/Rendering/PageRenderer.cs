@@ -467,9 +467,29 @@ public sealed class PageRenderer
     {
         if (!ShouldWrite(urlPath)) return;
         _output.WriteText(PathUtil.ToOutputFilePath(_config.OutputDirectory, urlPath), pageHtml);
+        RememberStableHash(urlPath, pageHtml);
 
         RecordWritten(urlPath, section);
     }
+
+    /// <summary>
+    /// ページ（URL パス）→ 中身の変化を判定する印（今の版と前の版。<see cref="StableContentHash"/>）。サイトマップの更新日を決めるのに使う。
+    /// 書くときに手元の HTML から取るので、出力のファイルを読み返さない。並列の描画から書くので並行辞書。
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Current, string Legacy)> _stableHashes = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 書き出すページの中身の印を控える。サイトマップを作る全体ビルドだけで取る（一部だけのビルドでは使わない）。
+    /// </summary>
+    private void RememberStableHash(string urlPath, string pageHtml)
+    {
+        if (!string.IsNullOrEmpty(_config.PageFilter)) return;
+        _stableHashes[urlPath] = (StableContentHash.FromHtml(pageHtml), StableContentHash.LegacyFromHtml(pageHtml));
+    }
+
+    /// <summary>書くときに控えたページの中身の印（今の版と前の版）。控えていないページは null。</summary>
+    public (string Current, string Legacy)? StableHashOf(string urlPath)
+        => _stableHashes.TryGetValue(urlPath, out var hashes) ? hashes : null;
 
     /// <summary>
     /// ページに添えるファイル（コラムの図など）を、ページと同じディレクトリへ写す。<paramref name="pageUrlPath"/> はページの URL
@@ -500,6 +520,7 @@ public sealed class PageRenderer
         if (!ShouldWrite(urlPath)) return;
         var pageHtml = RenderToHtml(urlPath, contentTemplate, contentModel, layoutMeta);
         _output.WriteText(PathUtil.ToOutputFilePath(_config.OutputDirectory, urlPath), pageHtml);
+        RememberStableHash(urlPath, pageHtml);
     }
 
     /// <summary>

@@ -12916,6 +12916,8 @@ body.has-art-track-bar {
 .staff-combo-card {
   min-width: 0;
   display: grid;
+  /* 列の幅はカードの幅に固定する（玉の並びなど、中身の最小の幅でカードより広げない）。 */
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 8px;
   padding: 12px 14px;
@@ -13033,7 +13035,9 @@ body.has-art-track-bar {
 }
 .staff-combo-beads li {
   position: relative;
-  flex: 0 0 auto;
+  /* 回数が多くて玉の並びがカードの幅を超えるときだけ、玉の間を詰める（玉どうしが少し重なる）。 */
+  flex: 0 1 auto;
+  min-width: 0;
   height: 16px;
   display: grid;
   place-items: center;

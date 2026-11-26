@@ -2414,6 +2414,7 @@ CREATE TABLE `product_shop_states` (
   `product_catalog_no` varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '商品',
   `is_buyable`         tinyint(1)   NOT NULL COMMENT '売られているか（1＝候補にする・0＝しない）',
   `availability_type`  varchar(32)  DEFAULT NULL COMMENT 'Amazon が返した在庫の種別（IN_STOCK・PREORDER など）',
+  `image_url`          varchar(512) DEFAULT NULL COMMENT '販売中の商品の枠に出す画像の URL（Amazon の小さい画像 medium。確かめるたびに取り直す）',
   `checked_at`         datetime     NOT NULL COMMENT '最後に確かめた時刻',
   PRIMARY KEY (`product_catalog_no`),
   CONSTRAINT `fk_product_shop_states_product` FOREIGN KEY (`product_catalog_no`) REFERENCES `products` (`product_catalog_no`) ON DELETE CASCADE ON UPDATE CASCADE

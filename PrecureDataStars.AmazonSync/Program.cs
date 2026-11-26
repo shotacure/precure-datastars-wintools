@@ -700,10 +700,13 @@ public static class Program
                     + $"（{availabilityType ?? (item == null ? "商品なし" : "出品なし")}）  ← 変わった  {manualTitle ?? product!.Title}");
 
             if (dryRun) continue;
+            // 枠の画像は 52px で出すので、Amazon が返す小さい画像（medium。160px）を残す（無ければ large）。
+            // 画像の画素は表示の幅の 3 倍までを目安にする（SiteBuilder/CLAUDE.md「画像の画素の大きさ」）。
+            var shopImageUrl = item?.MediumImageUrl ?? item?.LargeImageUrl;
             if (isManual)
-                await repo.UpdateCheckResultAsync(asin, buyable, availabilityType, item?.LargeImageUrl ?? item?.MediumImageUrl, now);
+                await repo.UpdateCheckResultAsync(asin, buyable, availabilityType, shopImageUrl, now);
             if (product != null)
-                await repo.UpsertProductStateAsync(asin, buyable, availabilityType, now);
+                await repo.UpsertProductStateAsync(asin, buyable, availabilityType, shopImageUrl, now);
         }
         if (excludedByType.Count > 0)
             Console.WriteLine("  Amazon.co.jp 本体の新品だが、在庫の種別で外した商品: "

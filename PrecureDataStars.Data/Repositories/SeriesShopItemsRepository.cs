@@ -53,7 +53,7 @@ public sealed class SeriesShopItemsRepository : RepositoryBase
     /// <param name="asin">確かめた ASIN。</param>
     /// <param name="isBuyable">売られているか。</param>
     /// <param name="availabilityType">Amazon が返した在庫の種別。出品が無いときは null。</param>
-    /// <param name="imageUrl">商品画像の URL。返らなかったときは null（保存していた URL も消す）。</param>
+    /// <param name="imageUrl">商品画像の URL（枠は 52px で出すので、Amazon の小さい画像 medium を渡す）。返らなかったときは null（保存していた URL も消す）。</param>
     /// <param name="checkedAt">確かめた時刻。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task UpdateCheckResultAsync(
@@ -75,7 +75,8 @@ public sealed class SeriesShopItemsRepository : RepositoryBase
     /// <summary>
     /// 枠の候補になる音楽商品を、作品 × 商品の行で取得する（作品 ID → 発売日 → 品番の順）。
     /// 作品に結び付く盤を持ち、CD の ASIN がある商品が対象。販売の状態（<c>product_shop_states</c>）は、
-    /// まだ確かめていない商品では null になる。画像は商品の代表の画像（採用ソースの側、無ければもう片方）。
+    /// まだ確かめていない商品では null になる。画像は、販売中の点検で残した小さい画像（<c>product_shop_states.image_url</c>。
+    /// 枠は 52px で出すので Amazon の medium）があればそれ、無ければ商品の代表の画像（採用ソースの側、無ければもう片方）。
     /// </summary>
     public async Task<IReadOnlyList<ShopProductCandidate>> GetProductCandidatesAsync(CancellationToken ct = default)
     {
@@ -87,10 +88,11 @@ public sealed class SeriesShopItemsRepository : RepositoryBase
                    p.product_kind_code    AS KindCode,
                    p.release_date         AS ReleaseDate,
                    p.amazon_asin_cd       AS Asin,
-                   CASE p.cover_image_source
-                     WHEN 'amazon_cd' THEN COALESCE(p.cover_image_url_cd, p.cover_image_url_digital)
-                     ELSE COALESCE(p.cover_image_url_digital, p.cover_image_url_cd)
-                   END                    AS ImageUrl,
+                   COALESCE(s.image_url,
+                     CASE p.cover_image_source
+                       WHEN 'amazon_cd' THEN COALESCE(p.cover_image_url_cd, p.cover_image_url_digital)
+                       ELSE COALESCE(p.cover_image_url_digital, p.cover_image_url_cd)
+                     END)                 AS ImageUrl,
                    s.is_buyable           AS IsBuyable,
                    s.availability_type    AS AvailabilityType
               FROM products p
@@ -111,22 +113,24 @@ public sealed class SeriesShopItemsRepository : RepositoryBase
     /// <param name="asin">確かめた CD の ASIN。</param>
     /// <param name="isBuyable">売られているか。</param>
     /// <param name="availabilityType">Amazon が返した在庫の種別。出品が無いときは null。</param>
+    /// <param name="imageUrl">枠に出す画像の URL（Amazon の小さい画像 medium）。返らなかったときは null（枠は商品の代表の画像を出す）。</param>
     /// <param name="checkedAt">確かめた時刻。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task UpsertProductStateAsync(
-        string asin, bool isBuyable, string? availabilityType, DateTime checkedAt, CancellationToken ct = default)
+        string asin, bool isBuyable, string? availabilityType, string? imageUrl, DateTime checkedAt, CancellationToken ct = default)
     {
         const string sql = """
-            INSERT INTO product_shop_states (product_catalog_no, is_buyable, availability_type, checked_at)
-            SELECT p.product_catalog_no, @isBuyable, @availabilityType, @checkedAt
+            INSERT INTO product_shop_states (product_catalog_no, is_buyable, availability_type, image_url, checked_at)
+            SELECT p.product_catalog_no, @isBuyable, @availabilityType, @imageUrl, @checkedAt
               FROM products p
              WHERE p.amazon_asin_cd = @asin AND p.is_deleted = 0
             ON DUPLICATE KEY UPDATE
                    is_buyable        = VALUES(is_buyable),
                    availability_type = VALUES(availability_type),
+                   image_url         = VALUES(image_url),
                    checked_at        = VALUES(checked_at);
             """;
 
-        await ExecuteAsync(sql, new { asin, isBuyable, availabilityType, checkedAt }, ct).ConfigureAwait(false);
+        await ExecuteAsync(sql, new { asin, isBuyable, availabilityType, imageUrl, checkedAt }, ct).ConfigureAwait(false);
     }
 }

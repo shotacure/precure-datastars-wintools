@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：販売中の商品の枠の画像を、Amazon の小さい画像（160px）にした**（`product_shop_states.image_url`〔新規の列〕・`SeriesShopItemsRepository`・`AmazonSync --shop-check`）：枠の画像は 52px で出すのに、Amazon の大きい画像（500px）を読んでいた。販売中の点検で、Amazon の API が返す小さい画像（medium）を残し、枠はそれを出す（まだ点検していない音楽商品は、これまでどおり商品の代表の画像）。マイグレーションは `db/migrations/v1.22.1_add_product_shop_image_url.sql`。
+
 - **サイト：エピソード詳細の次回予告と作品詳細の本予告の YouTube のサムネイルを、後回しにせず先に読む**（`_youtube-facade.sbn`・`episode-detail.sbn`・`series-detail.sbn`）：サムネイルに `loading="lazy"` が付いていて、スマホで最初の画面にいちばん大きく出るこの画像の読み込みが遅れていた。最初の画面に出る 2 か所だけ `fetchpriority="high"` にし、ほかの動画は後回しのままにする。
 
 - **サイト：姉妹サイトのバナーを、表示の幅に合う小さい写しで出す**（`home.sbn`・`_layout.sbn`・`wwwroot/assets/all-stars-banner-{400,680,1020}.webp`〔新規〕・`showtime-banner-{400,680}.webp`〔新規〕）：トップとフッターのバナーは、最大 340px・200px の幅で出すのに、1920×640 の元の画像（いえるかなクイズは 197KB）を読んでいた。スマホのトップでは、これがいちばん大きい要素で、表示の遅さの元だった。幅に合う写しを `srcset` で選ばせ、トップのバナーは先に読ませる。

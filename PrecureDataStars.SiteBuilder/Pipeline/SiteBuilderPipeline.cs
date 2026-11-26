@@ -446,6 +446,9 @@ public sealed class SiteBuilderPipeline
             var deployer = new Deploy.S3DeployService(config, logger);
             bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
             await SyncRedirectStoreAsync(config, logger, ct).ConfigureAwait(false);
+            // 新しく出た・書き換わったページを IndexNow へ送る（鍵が未設定なら何もしない）。
+            if (published && !config.Deploy.DryRun)
+                await new Deploy.IndexNowService(config, logger).RunAsync(deployer.UploadedKeys, ct).ConfigureAwait(false);
 
             // 全体のドライランは、この出力を作り直さずに上げられるよう控えを書く（deploy.ps1 の本番反映が --upload-only で使う）。
             if (config.Deploy.DryRun && string.IsNullOrEmpty(config.PageFilter))
@@ -589,6 +592,9 @@ public sealed class SiteBuilderPipeline
         var deployer = new Deploy.S3DeployService(config, logger);
         bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
         await SyncRedirectStoreAsync(config, logger, ct).ConfigureAwait(false);
+        // 新しく出た・書き換わったページを IndexNow へ送る（鍵が未設定なら何もしない）。
+        if (published)
+            await new Deploy.IndexNowService(config, logger).RunAsync(deployer.UploadedKeys, ct).ConfigureAwait(false);
         if (published)
         {
             var (persons, characters, companies, units) =

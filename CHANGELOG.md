@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：本番デプロイの後に、新しく出た・書き換わったページの URL を IndexNow へ送る**（`IndexNowService`〔新規〕・`S3DeployService.UploadedKeys`〔新規〕・`SeoGenerator.WriteIndexNowKeyFile`〔新規〕・`BuildConfig.IndexNowKey`・`IndexNowMaxUrls`〔新規〕）：App.config の `IndexNowKey` に鍵を書くと、ビルドがサイト直下に鍵のファイルを書き、デプロイで上げたページの URL を、新しく出たページを先に上限（既定 10,000）まで送る。送れなくても警告にとどめる。
+
 - **サイト：作品詳細に「関連記事」の節を足した**（`series_related_links`〔新規の表〕・`SeriesRelatedLink`・`SeriesRelatedLinksRepository`〔新規〕・`SeriesGenerator.BuildRelatedArticles`〔新規〕・`series-detail.sbn`・`site.css`）：手で入れた関連記事（precure.news の記事、その作品が主題のコラムなど）を、外部サイトの節の前に並び順で並べる。別のサイトの記事は新しいタブで開く。行の作りはコラムの「ほかのコラム」と同じ部品で、題の脇にサイトの名前と日付を出す。マイグレーションは `db/migrations/v1.21.1_series_related_links.sql`。
 
 - **サイト：話数が見込みの作品の説明文（meta description）を「（全 50 話の見込み）」にした**（`SeriesGenerator.BuildSeriesMetaDescription`）：本文の「（見込）」と同じく、見込みの話数を言い切らない。og:description・twitter:description も同じ文。

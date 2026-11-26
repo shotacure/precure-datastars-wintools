@@ -172,6 +172,10 @@
 				CloudFrontKeyValueStoreArn : 旧 URL の転送表を同期する CloudFront KeyValueStore の ARN
 				                           （例: arn:aws:cloudfront::123456789012:key-value-store/xxxxxxxx-…）。
 				                           空なら同期をスキップ。
+				IndexNowKey : IndexNow の鍵（英数字とハイフンの 8〜128 字。git に入れない）。空なら IndexNow を使わない。
+				              設定すると、ビルドがサイト直下に {鍵}.txt を書き、本番デプロイの後に
+				              新しく出た・書き換わったページの URL を IndexNow へ送る。
+				IndexNowMaxUrls : 1 回のデプロイで送る URL の上限（既定・最大 10000）。新しく出たページを先に送る。
 				AwsDeployProtectedPrefixes : 削除（orphan 掃除）対象から除外するキー接頭辞のカンマ区切り。
 				                           手動配置物を守るための安全弁。通常は空でよい。
 		-->
@@ -181,5 +185,7 @@
 		<add key="CloudFrontDistributionId" value="" />
 		<add key="CloudFrontKeyValueStoreArn" value="" />
 		<add key="AwsDeployProtectedPrefixes" value="" />
+		<add key="IndexNowKey" value="" />
+		<add key="IndexNowMaxUrls" value="10000" />
 	</appSettings>
 </configuration>

@@ -55,6 +55,7 @@ public sealed class SeoGenerator
 
         WriteSitemapXml();
         WriteRobotsTxt(includeSitemap: true);
+        WriteIndexNowKeyFile();
 
         _ctx.Logger.Success($"SEO: sitemap.xml ({_pageRenderer.WrittenPages.Count} URL) + robots.txt");
         return Task.CompletedTask;
@@ -143,6 +144,16 @@ public sealed class SeoGenerator
 
         // 索引ページ・統計ページは低め。
         return 0.5;
+    }
+
+    /// <summary>
+    /// IndexNow の鍵のファイル（<c>/{鍵}.txt</c>。中身は鍵そのもの）を書き出す。IndexNow の受け手は、送られた鍵がこの場所に
+    /// 置かれているかでサイトの持ち主を確かめる。鍵が未設定なら書かない。
+    /// </summary>
+    private void WriteIndexNowKeyFile()
+    {
+        if (string.IsNullOrEmpty(_config.IndexNowKey)) return;
+        _output.WriteText(Path.Combine(_config.OutputDirectory, _config.IndexNowKey + ".txt"), _config.IndexNowKey);
     }
 
     /// <summary>/robots.txt を書き出す。すべてのクローラに全体を許可し、sitemap.xml の場所を添える。</summary>

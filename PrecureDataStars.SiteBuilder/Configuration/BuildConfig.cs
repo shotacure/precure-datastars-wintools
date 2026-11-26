@@ -83,6 +83,14 @@ public sealed class BuildConfig
     /// App.config の <c>CloudFrontKeyValueStoreArn</c>。空文字なら同期をスキップする。</summary>
     public string CloudFrontKeyValueStoreArn { get; init; } = "";
 
+    /// <summary>IndexNow の鍵（英数字とハイフン、8〜128 字）。App.config の <c>IndexNowKey</c>。
+    /// 空なら IndexNow を使わない（鍵のファイルも書かず、デプロイの後に送らない）。</summary>
+    public string IndexNowKey { get; init; } = "";
+
+    /// <summary>1 回のデプロイで IndexNow へ送る URL の上限（App.config の <c>IndexNowMaxUrls</c>。既定 10,000＝1 回の送信の上限）。
+    /// 超えるときは、新しく出たページを先に、続けて書き換わったページをパスの順に送る。</summary>
+    public int IndexNowMaxUrls { get; init; } = 10000;
+
     /// <summary>デプロイの「削除（orphan 掃除）」対象から除外するキー接頭辞の一覧。
     /// App.config の <c>AwsDeployProtectedPrefixes</c>（カンマ区切り）。手動配置物を守るための安全弁で、
     /// 既定は空（生成物に無い S3 オブジェクトはすべて削除候補）。</summary>
@@ -344,6 +352,15 @@ public sealed class BuildConfig
         var awsProfile = (ConfigurationManager.AppSettings["AwsProfile"] ?? "").Trim();
         var cfDist = (ConfigurationManager.AppSettings["CloudFrontDistributionId"] ?? "").Trim();
         var kvsArn = (ConfigurationManager.AppSettings["CloudFrontKeyValueStoreArn"] ?? "").Trim();
+        // IndexNow の鍵と、1 回のデプロイで送る URL の上限（不正な鍵は使わない）。
+        var indexNowKey = (ConfigurationManager.AppSettings["IndexNowKey"] ?? "").Trim();
+        if (indexNowKey.Length > 0 && !System.Text.RegularExpressions.Regex.IsMatch(indexNowKey, "^[A-Za-z0-9-]{8,128}$"))
+        {
+            Console.Error.WriteLine("IndexNowKey は英数字とハイフンの 8〜128 字で書いてください（IndexNow は使いません）。");
+            indexNowKey = "";
+        }
+        int indexNowMaxUrls = int.TryParse(ConfigurationManager.AppSettings["IndexNowMaxUrls"], out var maxUrls) && maxUrls > 0
+            ? Math.Min(maxUrls, 10000) : 10000;
 
         // 削除保護の接頭辞リスト（カンマ区切り）。空要素は除外する。
         var rawProtected = ConfigurationManager.AppSettings["AwsDeployProtectedPrefixes"] ?? "";
@@ -385,6 +402,8 @@ public sealed class BuildConfig
             pageFilter ?? "", telopCacheDir, refreshSubtitleTelops, ogCardCacheDir, refreshOgCards, telopPieceCacheDir, asOf, diffOnly)
         {
             CloudFrontKeyValueStoreArn = kvsArn,
+            IndexNowKey = indexNowKey,
+            IndexNowMaxUrls = indexNowMaxUrls,
         };
     }
 }

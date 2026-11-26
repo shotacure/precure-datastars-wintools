@@ -84,6 +84,36 @@ function Get-ToolExe([string]$name) {
 # OGP カードを除いた削除がこの件数を超えたら、生成の不具合を疑って反映を止める。
 $MassDeleteLimit = 100
 
+# --- デプロイの記録 ---
+# 手で流した回も定時の回（scheduled-deploy.ps1 が環境変数 PRECURE_DEPLOY_TRIGGER=scheduled を付けて呼ぶ）も、
+# 1 回ごとに始め・差分・結果を %LOCALAPPDATA%\precure-datastars\deploy.log へ追記する。
+# 「いつ・どのコミットで・何件上げたか」を後から引けるようにするため（画面の出力は残らないので）。
+# 定時の回の出力の全文は、これまでどおり scheduled-deploy.log にある。
+$deployLogDir = Join-Path $env:LOCALAPPDATA 'precure-datastars'
+New-Item -ItemType Directory -Force -Path $deployLogDir | Out-Null
+$deployLogPath = Join-Path $deployLogDir 'deploy.log'
+function Write-DeployLog([string]$message) {
+    $line = "{0}  {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $message
+    try { Add-Content -LiteralPath $deployLogPath -Value $line -Encoding UTF8 } catch { }
+}
+# リポジトリの今のコミットと未コミットの変更の件数を「abc1234（未コミット 0 件）」の形で返す。読めなければ「不明」。
+function Get-RepoState([string]$path) {
+    try {
+        if (-not (Test-Path (Join-Path $path '.git'))) { return '不明' }
+        $commit = (& git -C $path rev-parse --short HEAD 2>$null)
+        $dirty = @(& git -C $path status --porcelain 2>$null).Count
+        if (-not $commit) { return '不明' }
+        return "$($commit.Trim())（未コミット $dirty 件）"
+    } catch { return '不明' }
+}
+$deployTrigger = if ($env:PRECURE_DEPLOY_TRIGGER -eq 'scheduled') { '定時' } else { '手動' }
+$deployMode = if ($DryRunOnly) { 'ドライランのみ' } elseif ($Force) { '反映（-Force）' } else { '反映' }
+# コラムの原稿（articles/）は content のリポジトリから読まれるので、そちらのコミットも残す。
+$contentRepo = Join-Path (Split-Path -Parent $repoRoot) 'precure-datastars-content'
+$deployStarted = Get-Date
+# 結果の 1 行。ゲートで止めた・差分なしなどの分かれ目で書き換え、最後に finally で記録する。
+$deployResult = '途中で止まりました'
+
 Write-Host ""
 Write-Host "=== precure.tv 本番デプロイ ===" -ForegroundColor Cyan
 Write-Host ""
@@ -100,6 +130,9 @@ try {
 } catch [System.Threading.AbandonedMutexException] {
     Write-Host "  前のデプロイが鍵を返さずに終わっていました。引き継いで続けます。" -ForegroundColor DarkYellow
 }
+
+Write-DeployLog ("=== デプロイを始めます（{0}・{1}）wintools {2} / content {3} ===" -f `
+    $deployTrigger, $deployMode, (Get-RepoState $repoRoot), (Get-RepoState $contentRepo))
 
 try {
 
@@ -186,6 +219,7 @@ try {
 
     Write-Host ""
     Write-Host ("  差分: upload {0} / delete {1} / unchanged {2} / 警告 {3}" -f $uploadCount, $deleteCount, $unchangedCount, $warnDisplay) -ForegroundColor Cyan
+    Write-DeployLog ("  差分: upload {0} / delete {1} / unchanged {2} / 警告 {3}" -f $uploadCount, $deleteCount, $unchangedCount, $warnDisplay)
 
     # --- サイトの文章の点検（知らせるだけ。止めない） ---
     # ドライランで作った本番の出力を、文章の決まり（結びの重なり・問いかけ・内部用語など）に照らす。
@@ -229,6 +263,7 @@ try {
         Show-CopyCheck
         Write-Host ""
         Write-Host "  -DryRunOnly のため、反映は行いません。" -ForegroundColor DarkGray
+        $deployResult = 'ドライランだけ（反映していません）'
         return
     }
 
@@ -237,6 +272,7 @@ try {
         Show-CopyCheck
         Write-Host ""
         Write-Host "  差分なし（upload 0 / delete 0）。反映する変更はありません。" -ForegroundColor Green
+        $deployResult = '差分なし（反映する変更がありません）'
         return
     }
 
@@ -253,6 +289,7 @@ try {
         $blockReasons | ForEach-Object { Write-Host "    - $_" -ForegroundColor Red }
         Write-Host "    内容を確認し、意図的なら -Force を付けて再実行してください。" -ForegroundColor Red
         Show-CopyCheck
+        $deployResult = "安全ゲートで止めました（$($blockReasons -join ' / ')）"
         throw "Deploy aborted by safety gate（削除/警告あり）。"
     }
     if ($blockReasons.Count -gt 0 -and $Force) {
@@ -274,7 +311,14 @@ try {
     Write-Host ""
     Write-Host "Done — precure.tv に反映しました。" -ForegroundColor Green
     Write-Host ""
+    $deployResult = "反映しました（upload $uploadCount / delete $deleteCount）"
+} catch {
+    # ゲートで止めたときは理由をもう書いてあるので、それ以外の失敗だけ理由を残す。
+    if ($deployResult -notlike '安全ゲート*') { $deployResult = "失敗しました：$($_.Exception.Message)" }
+    throw
 } finally {
+    $elapsed = (Get-Date) - $deployStarted
+    Write-DeployLog ("=== デプロイを終えました：{0}（{1:N0} 分 {2} 秒） ===" -f $deployResult, [math]::Floor($elapsed.TotalMinutes), $elapsed.Seconds)
     $deployLock.ReleaseMutex()
     $deployLock.Dispose()
 }

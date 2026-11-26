@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **デプロイ：手で流した本番デプロイも記録に残す**（`scripts/deploy.ps1`・`scripts/scheduled-deploy.ps1`）：記録が残るのは定時デプロイの分（`scheduled-deploy.log`）だけで、手で流した分は画面に出すだけだった。`deploy.ps1` が 1 回ごとに `%LOCALAPPDATA%\precure-datastars\deploy.log` へ追記する。書くのは、始めた時刻、手動か定時か、wintools と content のコミット、差分の件数、結果、かかった時間。定時の回は `scheduled-deploy.ps1` が環境変数で呼び出し元を伝える。
+
 - **サイト：コラムの最終更新日（`updated`）を、その日の 8:30（日本時間）として扱う**（`ArticlesGenerator`）：構造化データの dateModified を、日付だけの形から公開日時と同じ「2026-11-26T08:30:00+09:00」の形にした。コラムの一覧の並びでも、最終更新日を 0:00 ではなく 8:30 として比べる。
 
 - **サイト：コラムの記事に Article の構造化データを足した**（`ArticlesGenerator.BuildArticleJsonLd`〔新規〕・`LayoutModel.JsonLdWithOgImage`〔新規〕・`PageRenderer`・`HomeGenerator.OperatorXUrl`）：コラムの詳細ページの JSON-LD はパンくずだけだった。題・前置き・公開日時・更新日・書き手（運営者）・発行元・画像（その記事の OGP カード 1200×630）・記事の URL を持つ `Article` を出す。画像は OGP カードの URL が決まった後に足す。

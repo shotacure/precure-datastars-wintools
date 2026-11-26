@@ -104,6 +104,8 @@ try {
     }
 
     # deploy.ps1 の出力はすべてログにも残す（ゲートで止まった理由・差分の件数を後から読めるように）。
+    # deploy.ps1 が自分の記録（deploy.log）に「定時」と書けるよう、呼び出し元を環境変数で渡す。
+    $env:PRECURE_DEPLOY_TRIGGER = 'scheduled'
     $deployArgs = @{}
     if ($DryRunOnly) { $deployArgs['DryRunOnly'] = $true; Write-Log "差分の確認だけを行います（-DryRunOnly）。" }
     & (Join-Path $repoRoot 'scripts/deploy.ps1') @deployArgs *>&1 | ForEach-Object {

@@ -8848,12 +8848,19 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   color: var(--muted);
 }
 /* 1 人分のスタッフ表記（名義 + 所属屋号 + 担当話数 範囲ラベル）を 1 ユニットとして扱い、
-   ユニット途中での改行を抑止する。連名間の 、 区切りはこのユニットの外側に置くため、
-   行幅を超えるときは 、 の直後で素直に改行される（、 は kinsoku で行頭禁則のため、
-   常に前行末尾に残る）。シリーズ一覧 TV サブ行の staff-badge-group 内連名と、
+   ユニット途中での改行を抑止する。行幅を超えるときは、ユニットとユニットの間（、 の直後）で改行される。
+   シリーズ一覧 TV サブ行の staff-badge-group 内連名と、
    シリーズ詳細メインスタッフ key-staff-names 内連名の両方に使う共通クラス。 */
 .staff-member-group {
   display: inline-block;
+  max-width: 100%;
+  white-space: normal;
+}
+/* ユニットの中の名義・今の名前・所属屋号・範囲ラベルは、それぞれの途中で改行しない。
+   ユニット自体は inline-block なので、行に収まるうちは丸ごと次の行へ送られ、中で改行するのは
+   ユニットが 1 行より長いときだけ。そのときは今の名前・範囲ラベルの前（テンプレートの <wbr>）か、
+   所属屋号の括弧の前で改行する。連名の 、 はユニットの中の末尾に置き、行頭に 、 だけが来ないようにする。 */
+.staff-member-group > * {
   white-space: nowrap;
 }
 
@@ -9943,6 +9950,14 @@ table:has(th.col-rank) tbody tr:nth-child(3) td.col-rank {
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
+  }
+  /* 1 セット 1 行に積むので、画面の幅を超えるセットはセットの中で折り返す。
+     改行は名義の切れ目（、 の後・バッジと名義の間）だけで起こし、名義の途中では切らない。 */
+  #staff.episode-staff .key-staff-line {
+    white-space: normal;
+  }
+  #staff.episode-staff .key-staff-line a {
+    white-space: nowrap;
   }
 }
 
@@ -13801,6 +13816,9 @@ a.staff-combo-nav-card:hover {
   }
   .shop-box-foot {
     flex-direction: row;
+    /* 幅の狭い画面で、商品詳細へのリンクがボタンの横に入らなければ下の段へ送る。 */
+    flex-wrap: wrap;
+    row-gap: 4px;
   }
 }
 

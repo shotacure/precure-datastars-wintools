@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：統計と歴代記録の OGP カードから「時点」を外した**（`EpisodePartStatsGenerator`・`SubtitleStatsGenerator`・`RecordsGenerator`・`OgCoverageLabel`〔削除〕）：歴代サブタイトル統計・歴代エピソード尺統計・歴代記録のカードの右下に出していた「『作品名』第N話(日付)時点」を出さない。
+
 - **サイト：人物・キャラクターなどのページから「時点」の書き添えを外し、更新日の判定でエピソード詳細の毎週変わる部分を伏せる**（`persons-detail.sbn`・`characters-*.sbn`・`companies-detail.sbn`・`units-detail.sbn`・`creators-*.sbn`・`precures-index.sbn`・各生成プログラムの `CoverageLabel`〔削除〕・`episode-detail.sbn`・`StableContentHash`〔新規〕・`SitemapLastmodManifest.LoadChangedList`〔新規〕・`IndexNowService`）：「時点」の書き添えは統計とエピソード詳細にだけ残す。エピソード詳細の、ほかの回のデータで毎週変わる部分（歴代記録のバッジ・スタッフの通算回数・パート尺の順位・サブタイトルの文字の初出など）を目印で囲み、サイトマップの更新日を決めるときだけ伏せて比べる。IndexNow へ送るのは、このビルドで更新日が進んだページだけにした。
 
 - **サイト：本番デプロイの後に、新しく出た・書き換わったページの URL を IndexNow へ送る**（`IndexNowService`〔新規〕・`S3DeployService.UploadedKeys`〔新規〕・`SeoGenerator.WriteIndexNowKeyFile`〔新規〕・`BuildConfig.IndexNowKey`・`IndexNowMaxUrls`〔新規〕）：App.config の `IndexNowKey` に鍵を書くと、ビルドがサイト直下に鍵のファイルを書き、デプロイで上げたページの URL を、新しく出たページを先に上限（既定 10,000）まで送る。送れなくても警告にとどめる。

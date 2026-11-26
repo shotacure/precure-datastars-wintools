@@ -84,7 +84,6 @@ public sealed class EpisodePartStatsGenerator
             PageTitle = "歴代エピソード尺統計",
             OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代エピソード尺統計")
             {
-                MetaLeft = _coverageLabel,
                 // ページの冒頭文（stats-episodes-index.sbn の .lead）と同じ文。
                 Subtitle = "パートの尺と中 CM の時刻"
             },

@@ -428,20 +428,6 @@ public static class OgCardNote
 public sealed record OgCardLabelPart(string Text, string ColorHex);
 
 /// <summary>
-/// サイト共通のカバレッジ表記（「『○○』第N話(YYYY.M.D)時点」）を、カードの狭い一行に収まる長さへ詰める。
-/// カードは前置き行の右端に置くため、「〜時点」より後ろに続く文があれば落とす。
-/// </summary>
-public static class OgCoverageLabel
-{
-    public static string Compact(string coverageLabel)
-    {
-        if (string.IsNullOrWhiteSpace(coverageLabel)) return "";
-        int cut = coverageLabel.IndexOf("時点", StringComparison.Ordinal);
-        return cut < 0 ? coverageLabel : coverageLabel[..(cut + 2)];
-    }
-}
-
-/// <summary>
 /// 役職コードから項目名の色を引く。サイトの <c>.role-badge[data-role-code]</c> と同じ配色にして、
 /// カードとページで同じ役職が同じ色に見える状態を保つ。
 /// 未マッピングの役職は空文字（＝カード側で補助色にフォールバック）。

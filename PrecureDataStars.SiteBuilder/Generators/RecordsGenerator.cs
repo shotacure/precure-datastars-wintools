@@ -74,7 +74,7 @@ public sealed class RecordsGenerator
             await BuildCharacterGroupAsync(creditCoverage, ct).ConfigureAwait(false)
         };
 
-        GenerateIndex(groups, partsCoverage);
+        GenerateIndex(groups);
 
         // 1 話のクレジットの全体の順位（上位 100 件）。声の出演人数と参加スタッフ数を、それぞれ多い順と少ない順で。
         foreach (var metric in EpisodeCreditMetrics)
@@ -88,7 +88,7 @@ public sealed class RecordsGenerator
 
     // ── 歴代記録（索引） ──
 
-    private void GenerateIndex(IReadOnlyList<RecordGroup> groups, string partsCoverage)
+    private void GenerateIndex(IReadOnlyList<RecordGroup> groups)
     {
         var content = new RecordsIndexModel
         {
@@ -100,7 +100,6 @@ public sealed class RecordsGenerator
             // カードは記録を並べず、どんなページかをリード文で示す（記録の項目数はサイト側の都合の数なので出さない）。
             OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代記録")
             {
-                MetaLeft = OgCoverageLabel.Compact(partsCoverage),
                 // ページの冒頭文（stats-records-index.sbn の .lead）と同じ文。
                 Subtitle = "最長・最短・最多・最少の上位 3 位"
             },

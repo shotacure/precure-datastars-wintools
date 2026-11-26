@@ -90,7 +90,6 @@ public sealed class SubtitleStatsGenerator
             PageTitle = "歴代サブタイトル統計",
             OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代サブタイトル統計")
             {
-                MetaLeft = _coverageLabel,
                 // ページの冒頭文（stats-subtitles-index.sbn の .lead）と同じ文。
                 Subtitle = "サブタイトルの文字の統計"
             },

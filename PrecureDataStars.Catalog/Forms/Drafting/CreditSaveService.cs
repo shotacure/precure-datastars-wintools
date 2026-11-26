@@ -610,8 +610,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertBlockAsync(MySqlConnection conn, MySqlTransaction tx, CreditRoleBlock b, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_role_blocks (card_role_id, block_seq, col_count, continues_previous, leading_company_alias_id, leading_company_not_on_screen, leading_company2_alias_id, leading_company_separator, leading_company_suffix, leading_text, heading_series_id, heading_text, heading_italic, notes, created_by, updated_by)
-            VALUES (@CardRoleId, @BlockSeq, @ColCount, @ContinuesPrevious, @LeadingCompanyAliasId, @LeadingCompanyNotOnScreen, @LeadingCompany2AliasId, @LeadingCompanySeparator, @LeadingCompanySuffix, @LeadingText, @HeadingSeriesId, @HeadingText, @HeadingItalic, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_role_blocks (card_role_id, block_seq, col_count, continues_previous, leading_company_alias_id, leading_company_display_text, leading_company_not_on_screen, leading_company2_alias_id, leading_company2_display_text, leading_company_separator, leading_company_suffix, leading_text, heading_series_id, heading_text, heading_italic, notes, created_by, updated_by)
+            VALUES (@CardRoleId, @BlockSeq, @ColCount, @ContinuesPrevious, @LeadingCompanyAliasId, @LeadingCompanyDisplayText, @LeadingCompanyNotOnScreen, @LeadingCompany2AliasId, @LeadingCompany2DisplayText, @LeadingCompanySeparator, @LeadingCompanySuffix, @LeadingText, @HeadingSeriesId, @HeadingText, @HeadingItalic, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, b, transaction: tx, cancellationToken: ct));
@@ -768,8 +768,10 @@ internal sealed class CreditSaveService
               col_count = @ColCount,
               continues_previous = @ContinuesPrevious,
               leading_company_alias_id = @LeadingCompanyAliasId,
+              leading_company_display_text = @LeadingCompanyDisplayText,
               leading_company_not_on_screen = @LeadingCompanyNotOnScreen,
               leading_company2_alias_id = @LeadingCompany2AliasId,
+              leading_company2_display_text = @LeadingCompany2DisplayText,
               leading_company_separator = @LeadingCompanySeparator,
               leading_company_suffix = @LeadingCompanySuffix,
               leading_text = @LeadingText,

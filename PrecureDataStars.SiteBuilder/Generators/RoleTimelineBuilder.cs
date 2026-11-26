@@ -421,10 +421,18 @@ internal sealed class RoleTimelineBuilder
         {
             bool hasTv = g.Items.Any(x => x.Episodes.Any(ep => ep.EpisodeId != 0));
             bool hasMovie = g.Items.Any(x => x.MovieSeriesIds.Count > 0);
+            // 帯の見本は、本線の TV の話（📺）かスピンオフの話（🌙）の担当があるときに出る。ボタンで切っている種類に合わせて
+            // 見本と項目を隠すための参加の種類（_role-timeline.sbn が data-wk に書く）。
+            var bandKinds = g.Items.SelectMany(x => x.Episodes).Where(ep => ep.EpisodeId != 0)
+                .Select(ep => _ctx.IsSpinOffSeries(ep.SeriesId) ? "otona" : "tv").Distinct().ToList();
+            var itemKinds = new List<string>(bandKinds);
+            if (hasMovie) itemKinds.Add("movie");
             legend.Add(new RoleTimelineLegendItem
             {
                 Kind = hasTv ? "rel" : "rel-movie",
                 ExtraKind = hasTv && hasMovie ? "rel-movie" : "",
+                WorkKinds = string.Join(' ', itemKinds),
+                BandWorkKinds = string.Join(' ', bandKinds),
                 Color = relatedColors.TryGetValue(g.Role.RoleCode, out var c) ? c : "",
                 Label = g.Role.RoleName,
                 Url = (rules.RelatedRoleUrl ?? PathUtil.CreatorsRoleUrl)(g.Role.RoleCode)
@@ -1284,6 +1292,10 @@ internal sealed class RoleTimelineLegendItem
     /// "rel-movie" を並べる）。無ければ空文字。
     /// </summary>
     public string ExtraKind { get; set; } = "";
+    /// <summary>関連する役職の項目が表す参加の種類（"tv movie otona" の部分集合。空白区切り）。切っている種類しか無い項目を隠すのに使う。それ以外の項目では空文字。</summary>
+    public string WorkKinds { get; set; } = "";
+    /// <summary>関連する役職の帯の見本が表す参加の種類（"tv" と "otona" の部分集合）。映画の輪の見本は常に "movie"。帯の見本が無ければ空文字。</summary>
+    public string BandWorkKinds { get; set; } = "";
     public string Label { get; set; } = "";
     /// <summary>関連する役職の見本の色（CSS の色）。それ以外の項目では空文字。</summary>
     public string Color { get; set; } = "";

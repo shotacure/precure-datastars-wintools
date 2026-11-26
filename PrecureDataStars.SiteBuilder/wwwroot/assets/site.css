@@ -352,6 +352,16 @@ a:hover { text-decoration: underline; }
   font-variant-numeric: tabular-nums;
   color: var(--fg);
 }
+/* 計測しない端末だけに出す断り。<html data-ga-off> は _layout.sbn の GA4 の判定が立てる。 */
+.footer-ga-off {
+  display: none;
+  margin: 6px 0 0;
+  font-size: 0.8em;
+  color: var(--muted);
+}
+html[data-ga-off] .footer-ga-off {
+  display: block;
+}
 
 /* ──────────────────── パンくず ──────────────────── */
 .breadcrumbs ol {
@@ -1274,42 +1284,80 @@ a.series-card-children-title:hover {
 }
 
 /* ──────────────────── エピソード詳細：サブタイトル分析 ──────────────────── */
-/* 1 文字 = 1 行。左にグリフのボックス、右にバッジ（初出 = 黄 / 唯一 = ピンク / N年ぶり = 青）と
-   復活詳細の補足テキストを並べる。 */
+/* 1 文字 = 1 タイル。タイルを横に流して折り返す（文字が多い題でも縦に伸びない）。
+   初出・唯一だけの文字は、グリフのボックスの下にバッジ（初出 = 黄 / 唯一 = ピンク）を付けた小さいタイル。
+   N年ぶりの文字（.is-revival）は横長のカードで、グリフの右の 1 行目にバッジ（青）と「N話ぶり・M回目」、
+   2 行目に直前の登場エピソードを薄色で添える。カードは小さいタイルの後ろにまとめて並べる。 */
 .charinfo-list {
   list-style: none;
   margin: 12px 0 0;
   padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
 }
 .charinfo-item {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 4.2em;
+  padding: 8px 8px 7px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg, #fff);
+}
+.charinfo-item.is-revival {
+  order: 1;
+  flex: 1 1 300px;
+  max-width: 440px;
+  flex-direction: row;
   align-items: center;
   gap: 10px;
-  padding: 3px 0;
+  padding: 8px 12px 8px 8px;
 }
 .charinfo-glyph {
   flex: 0 0 auto;
-  width: 2.1em;
-  height: 2.1em;
+  width: 2em;
+  height: 2em;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1em;
+  font-size: 1.35em;
   font-weight: 600;
+  line-height: 1;
   background: var(--table-stripe);
-  border: 1px solid var(--border);
   border-radius: 6px;
 }
 .charinfo-info {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  justify-content: center;
+  gap: 3px;
   min-width: 0;
+}
+.charinfo-item.is-revival .charinfo-info {
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.charinfo-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+.charinfo-count {
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .charinfo-info .badge {
   display: inline-block;
-  font-size: 0.75em;
+  font-size: 0.72em;
   padding: 1px 6px;
   border-radius: 3px;
   border: 1px solid;
@@ -1318,7 +1366,16 @@ a.series-card-children-title:hover {
 .charinfo-info .badge-first   { background: var(--hl); color: #8a6d00; border-color: #e5d375; }
 .charinfo-info .badge-uniq    { background: #ffe6f1; color: #a31a5b; border-color: #f4b8d6; }
 .charinfo-info .badge-revival { background: #e5f0fa; color: #1d5e96; border-color: #b9d7ef; }
-.charinfo-detail { font-size: 0.85em; }
+.charinfo-detail {
+  font-size: 0.78em;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.charinfo-detail-link { color: inherit; text-decoration: none; }
+.charinfo-detail-link:hover { color: var(--accent, #a31a5b); text-decoration: underline; }
+@media (max-width: 560px) {
+  .charinfo-item.is-revival { max-width: none; }
+}
 
 /* ──────────────────── エピソード詳細：パート尺統計情報 ──────────────────── */
 /* パートごとの 1 カードに「実尺 / シリーズ内 / 歴代全体」をまとめる。チップと
@@ -2457,6 +2514,42 @@ a.series-card-children-title:hover {
 .products-card-badge.products-card-kind-vocal-best        { background: #e07ab0; } /* ボーカルベスト */
 .products-card-badge.products-card-kind-seasonal-event    { background: #cf6a4c; } /* 季節行事 */
 .products-card-badge.products-card-kind-other             { background: #94a3b8; } /* その他 */
+/* 映画の種別は、元の種別（主題歌シングル・ボーカルアルバム）を少し明るくした色（サントラと同じ決め方）。 */
+.products-card-badge.products-card-kind-theme-single-movie { background: #f0707f; } /* 映画主題歌シングル */
+.products-card-badge.products-card-kind-vocal-album-movie  { background: #e378b8; } /* 映画ボーカルアルバム */
+.products-card-badge.products-card-kind-vocal-best-box     { background: #c9569a; } /* ボーカルベストBOX */
+.products-card-badge.products-card-kind-singer-best        { background: #8f6ad6; } /* プリキュアシンガーズベスト */
+.products-card-badge.products-card-kind-collection         { background: #2f9bb2; } /* コレクション */
+.products-card-badge.products-card-kind-collabo            { background: #7a9a3a; } /* コラボ */
+.products-card-badge.products-card-kind-memorial           { background: #9a7a5a; } /* メモリアルアルバム */
+.products-card-badge.products-card-kind-cd-book            { background: #3fa0d0; } /* CDえほん */
+
+/* 商品一覧の行を縦に詰める：ジャケットを小さくし、行の上下の余白と行の間を減らす。 */
+.products-card-list { gap: 4px; }
+.products-card { padding: 5px 12px 5px 8px; }
+.products-card-grid {
+  grid-template-columns: 44px 1fr auto;
+  column-gap: 12px;
+  align-items: center;
+}
+.products-card-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 5px;
+}
+.products-card-title {
+  font-size: 1em;
+  line-height: 1.35;
+}
+.products-card-meta {
+  margin-top: 0;
+  font-size: 0.8em;
+  line-height: 1.45;
+}
+.products-card-badge-cell {
+  align-self: center;
+  padding-top: 0;
+}
 
 /* 商品索引：≤640px の縦積み。2 列 grid を縦並びに反転してバッジをタイトル上に移動。
    meta 行の不自然な flex 折り返しを回避するため。楽曲索引 (.songs-card-grid) の
@@ -3277,19 +3370,21 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   white-space: nowrap;
 }
 
-/* /bgms/{slug}/ 劇伴詳細：cue カードリスト。1 cue = 1 カード。
-   構造：ヘッダ (M番号+メニュー+尺) / スタッフバッジ行 (作曲・編曲) / 収録盤リスト。
-   仮 M 番号 cue もカード装飾は通常 cue と同じで、ヘッダの主役表記だけが
+/* /bgms/{slug}/ 劇伴詳細：cue カードリスト。1 cue = 1 枚の横に細長いカード。
+   構造：1 行目 (M番号 / メニュー + この曲だけのスタッフ)、2 行目 (収録盤を横に並べて折り返す)、右端に尺と再生ボタン。
+   仮 M 番号 cue もカード装飾は通常 cue と同じで、左端の表記だけが
    「M番号 → 初出盤トラックタイトル」に差し替わる（テンプレ側のスロット入れ替えで実現）。
    カード自体はリンク化しない。 */
 .bgm-cue-card-list {
   list-style: none;
-  margin: 8px 0 24px;
+  margin: 8px 0 20px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
+  /* M番号の列の幅（カードの grid の 1 列目の最小の幅）。 */
+  --bgm-mno-w: 4.6rem;
 }
 .bgm-cue-card-list > li {
   display: block;
@@ -3309,8 +3404,16 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   0%   { background-color: var(--hl, #fff7d6); }
   100% { background-color: transparent; }
 }
+/* カードは「M番号 / 本文 / 尺 / 再生ボタン」の 4 列 grid。1 行目の入れ物（.bgm-cue-card-head）は
+   display: contents にして、中身をカードの grid に直接並べる。2 行目以降（収録盤など）は本文の列に置き、
+   メニューの頭とそろえる。尺と再生ボタンは全部の行にまたがらせて、カードの上下の真ん中に置く。
+   再生ボタンの列は音源の無い曲でも空けておき、尺の位置をカードの間でそろえる。 */
 .bgm-cue-card {
-  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: minmax(var(--bgm-mno-w), max-content) minmax(0, 1fr) auto 1.9em;
+  align-items: center;
+  column-gap: 14px;
+  padding: 5px 12px 6px;
   border: 1px solid var(--border);
   border-left-width: 4px;
   border-radius: 6px;
@@ -3318,60 +3421,75 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   min-width: 0;
   overflow: hidden;
 }
-
-/* カードヘッダ：1 行目=M番号+尺、2 行目=メニュー の固定 2 行 grid。
-   尺は右上に固定（grid-row:1; column:2; justify-self:end）。 */
 .bgm-cue-card-head {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: baseline;
-  gap: 2px 14px;
-  min-width: 0;
+  display: contents;
 }
 .bgm-cue-mno {
-  /* M番号は cue カードの主役。本文色・太字・大きめ（基準 1em の倍）。
-     1 行目の左列。長文時は折り返しを許可。 */
-  grid-row: 1;
+  /* M番号はカードの左端に太字で置く。列の幅より長い M番号（M10(15″A) など）のカードは、その M番号の幅まで列を広げる。 */
   grid-column: 1;
-  font-size: 2em;
+  grid-row: 1;
+  font-size: 1.15em;
   font-weight: 700;
   color: var(--fg);
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  line-height: 1.3;
   overflow-wrap: anywhere;
+}
+/* メニューと、この曲だけのスタッフを同じ行に流す（入りきらなければスタッフが次の行へ落ちる）。 */
+.bgm-cue-body {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 14px;
   min-width: 0;
 }
-.bgm-cue-length {
-  /* 尺は常に 1 行目の右上固定。M番号の長さに関わらずスペースを確保する。 */
-  grid-row: 1;
-  grid-column: 2;
-  justify-self: end;
-  align-self: start;
-  font-size: 1.15em;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  color: var(--fg);
-  /* 1 行目のベースラインがメインの M番号文字に揃うよう、ちょい下げ調整。 */
-  margin-top: 0.3em;
+/* 仮 M 番号の曲：M番号の列を使わず、初出盤のトラックタイトル（太字）から本文を始める。 */
+.bgm-cue-body.is-wide {
+  grid-column: 1 / span 2;
+}
+.bgm-cue-body .bgm-cue-mno.is-title {
+  font-size: 1em;
 }
 .bgm-cue-menu {
-  /* メニュータイトル（曲名）。M番号を主役にする方針なので、控えめに muted で通常字。
-     常に 2 行目、全幅で表示。長文時の折り返しを許可。 */
-  grid-row: 2;
-  grid-column: 1 / -1;
-  font-weight: 400;
-  color: var(--muted);
+  color: var(--fg);
   min-width: 0;
   overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.bgm-cue-menu.is-unknown {
+  color: var(--muted);
+  font-size: 0.88em;
+}
+.bgm-cue-length {
+  grid-column: 3;
+  grid-row: 1 / span 4;
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+/* セッションの見出しの下にまとめて出す作曲・編曲（そのセッションの曲の過半に共通する顔ぶれ）。 */
+.bgm-session-common-staff {
+  margin: 6px 0 2px;
+  font-size: 0.9em;
+}
+.bgm-session-common-staff .staff-name {
+  color: inherit;
+  text-decoration: none;
+}
+.bgm-session-common-staff a.staff-name:hover,
+.bgm-session-common-staff a.staff-name:focus-visible {
+  text-decoration: underline;
 }
 
 /* スタッフバッジ行：劇伴一覧と同じ .staff-badges-row レイアウトを継承。
    カード文脈での微調整として、上下余白を 1 段詰める。 */
 .bgm-cue-card-staff {
-  margin-top: 6px;
-  font-size: 0.88em;
-  line-height: 1.7;
+  font-size: 0.85em;
+  line-height: 1.6;
   min-width: 0;
 }
 /* 人物名（staff-name）：プレーンテキスト（<span>）と人物リンク（<a>）の両ケースを同じ見た目に。
@@ -3386,32 +3504,31 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   text-decoration: underline;
 }
 
-/* 収録盤リスト。1 行 1 収録盤、行全体が 1 つのリンク（商品詳細ページへ）。
+/* 収録盤リスト。収録盤を横に並べて折り返す。1 収録盤が 1 つのリンク（商品詳細ページへ）。
    青色のリンク表示は撤廃し、本文色のテキストとして並べる。ホバー時のみ控えめに
-   背景色を当てて「クリック可能」を示す。 */
+   背景色を当てて「クリック可能」を示す。本文の列に置いて、メニューの頭とそろえる。 */
 .bgm-cue-card-recordings {
+  grid-column: 2;
   list-style: none;
-  margin: 6px 0 0;
+  margin: 0;
   padding: 0;
-  font-size: 0.88em;
-  line-height: 1.6;
+  font-size: 0.82em;
+  line-height: 1.5;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: wrap;
+  gap: 0 16px;
 }
 .bgm-cue-card-recordings > li {
-  display: block;
   list-style: none;
   /* 長文の disc.title_short やトラックタイトルが続く場合に折り返せるよう、min-width: 0。 */
   min-width: 0;
   overflow-wrap: anywhere;
 }
-/* 行全体リンク。block 表示で行全幅をヒット領域にし、テキスト色・装飾は控えめに。 */
+/* 収録盤 1 つのリンク。テキスト色・装飾は控えめに。 */
 .bgm-rec-line {
-  display: block;
   color: var(--fg);
   text-decoration: none;
-  padding: 2px 4px;
+  padding: 1px 4px;
   margin: 0 -4px;
   border-radius: 4px;
   transition: background-color 120ms ease;
@@ -3421,18 +3538,24 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   background-color: var(--surface-2, #fff7fb);
   text-decoration: none;
 }
-/* 初回盤の行に添える再発売盤の同じトラック（「再発売盤 無印 OST1(再)-Tr.3」）。行の下に一段下げて小さく出し、再発売盤の該当トラックへリンクする。 */
-.bgm-rec-reissue,
-.recording-tracks-reissue {
-  display: inline-block;
-  font-size: 0.88em;
-  text-decoration: none;
+/* 再発売盤のある収録盤は、初回盤のすぐ後ろに「(再発盤)」とだけ添える。「再発盤」は再発売盤の該当トラックへのリンクで、
+   括弧（.bgm-rec-reissue-wrap の地の文字）はリンクにしない。 */
+.bgm-rec-reissue-wrap {
+  margin-left: 0.5em;
+  color: var(--muted);
+  font-size: 0.92em;
+  white-space: nowrap;
 }
 .bgm-rec-reissue {
-  margin-left: 1em;
+  color: var(--muted);
+  text-decoration: none;
 }
+/* 楽曲詳細の収録盤のカードの下に添える再発売盤の同じトラック。一段下げて小さく出し、再発売盤の該当トラックへリンクする。 */
 .recording-tracks-reissue {
+  display: inline-block;
   margin: 4px 0 0 14px;
+  font-size: 0.88em;
+  text-decoration: none;
 }
 .bgm-rec-reissue:hover,
 .bgm-rec-reissue:focus-visible,
@@ -3450,18 +3573,23 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   color: var(--fg);
 }
 
-/* 未収録の cue：シンプルな muted ラベル。 */
+/* 未収録の cue：シンプルな muted ラベル。収録盤と同じ位置に出す。 */
 .bgm-cue-card-unrecorded {
-  margin-top: 6px;
-  font-size: 0.88em;
+  grid-column: 2;
+  font-size: 0.82em;
 }
 .bgm-cue-unrecorded-label {
   color: var(--muted);
 }
+/* 使われている曲の開け閉めの枠も、収録盤と同じ列に置く。 */
+.bgm-cue-card > .bgm-cue-sources {
+  grid-column: 2;
+  margin: 0;
+}
 
 /* 欠番の cue（番号はあるが音源が制作されていない）：グレー地・点線枠で音源のあるカードと区別し、
-   M 番号も muted に落とす。右上（通常は尺の位置）に「欠番」バッジを置く。
-   メニューが判明している欠番だけメニュー行が出る。 */
+   M 番号も muted に落とす。右端（通常は尺と再生ボタンの位置）に「欠番」バッジを置く。
+   メニューが判明している欠番だけメニューが出る。 */
 .bgm-cue-card.is-missing {
   background: var(--th-bg);
   border-style: dashed;
@@ -3469,29 +3597,36 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 .bgm-cue-card.is-missing .bgm-cue-mno {
   color: var(--muted);
 }
+.bgm-cue-card.is-missing .bgm-cue-menu {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--muted);
+}
 .bgm-cue-missing-badge {
   grid-row: 1;
-  grid-column: 2;
+  grid-column: 3 / -1;
   justify-self: end;
-  align-self: start;
-  margin-top: 0.3em;
-  padding: 1px 8px;
+  padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg);
   color: var(--muted);
-  font-size: 0.85em;
+  font-size: 0.8em;
   white-space: nowrap;
 }
 
-/* モバイル幅：基本構造（M番号 + 尺の 1 行目、メニューの 2 行目）はそのまま維持。
-   M番号フォントだけ画面幅とのバランスを取って一段抑え、尺サイズも調整する。 */
+/* モバイル幅：M番号の列を狭め、2 行目以降を M番号の列から始めてカードの幅をいっぱいに使う。 */
 @media (max-width: 640px) {
-  .bgm-cue-mno {
-    font-size: 1.7em;
+  .bgm-cue-card-list {
+    --bgm-mno-w: 3.4rem;
   }
-  .bgm-cue-length {
-    font-size: 1.05em;
+  .bgm-cue-card {
+    column-gap: 8px;
+  }
+  .bgm-cue-card-recordings,
+  .bgm-cue-card-unrecorded,
+  .bgm-cue-card > .bgm-cue-sources {
+    grid-column: 1 / span 2;
   }
 }
 
@@ -3537,54 +3672,205 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   white-space: nowrap;
 }
 
-/* ──────────────────── エピソード詳細：使用音声 ──────────────────── */
-.episode-use-part {
-  margin-top: 14px;
-  margin-bottom: 4px;
-  font-size: 1em;
-  color: #374151;
-  border-bottom: 1px solid #e5e7eb;
-  padding-bottom: 2px;
+/* ──────────────────── エピソード詳細：BGMリスト ──────────────────── */
+/* その回で流れた劇伴・歌を、流れた順に 1 行 1 枚の横に細長いカードで並べる（商品詳細の収録トラックのカードと同じ調子）。
+   カードの列は「通し番号 / Mナンバー / メニュー / 初出盤のトラック / その回で流れた長さ / 再生ボタン」。
+   パートの見出し（.ep-bgm-part）は、カードの列の間の細い区切り。 */
+.ep-bgm-common-staff {
+  margin: 4px 0 2px;
+  font-size: 0.9em;
 }
-.episode-use-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 4px 0 10px;
+.ep-bgm-common-staff a,
+.ep-bgm-staff a {
+  color: inherit;
+  text-decoration: none;
 }
-.episode-use-table th,
-.episode-use-table td {
-  padding: 4px 10px;
+.ep-bgm-common-staff a:hover,
+.ep-bgm-common-staff a:focus-visible,
+.ep-bgm-staff a:hover,
+.ep-bgm-staff a:focus-visible {
+  text-decoration: underline;
+}
+h3.ep-bgm-part {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 5px;
+  padding: 0;
+  border: 0;
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+h3.ep-bgm-part::before {
+  content: none;
+}
+h3.ep-bgm-part::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--border);
+}
+.ep-bgm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ep-bgm-card {
+  display: grid;
+  grid-template-columns: 1.9em 4.2em minmax(0, 1fr) minmax(0, 1.25fr) 2.8em 1.9em;
+  align-items: center;
+  column-gap: 10px;
+  padding: 5px 10px 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg, #fff);
+  /* カード全体のリンク（a.ep-bgm-card-link::before）を重ねる基準。 */
+  position: relative;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.ep-bgm-card[data-art-track-row].is-playing {
+  background: var(--hl);
+  box-shadow: inset 3px 0 0 var(--accent-pink);
+}
+/* 通し番号：商品詳細のトラック番号と同じ丸（劇伴 = 緑、歌 = ピンク、そのほか = 青）。 */
+.ep-bgm-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9em;
+  height: 1.9em;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: #fff;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.8em;
+  line-height: 1;
+  white-space: nowrap;
+}
+.ep-bgm-no[data-kind="BGM"] { background: #22c55e; }
+.ep-bgm-no[data-kind="SONG"] { background: var(--accent-pink, #ec4899); }
+.ep-bgm-mno {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 1.05em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ep-bgm-mno.is-unknown,
+.ep-bgm-mno.is-kind {
+  font-family: inherit;
+  font-size: 0.78em;
+  font-weight: 500;
+  color: var(--muted);
+}
+.ep-bgm-menu {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+.ep-bgm-title {
+  color: var(--fg);
+}
+/* カード全体のリンク：メニュー・曲名の a の ::before を透明のままカード全域に広げる（商品詳細のトラックのカードと同じ作り）。
+   初出盤のトラックのリンク・再生ボタン・作曲と編曲の名義のリンクは、その上の層に置いて別々に押せるようにする。 */
+a.ep-bgm-card-link,
+a.ep-bgm-card-link:hover,
+a.ep-bgm-card-link:focus-visible {
+  color: var(--fg);
+  text-decoration: none;
+}
+a.ep-bgm-card-link::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 6px;
+}
+.ep-bgm-card:has(a.ep-bgm-card-link:hover),
+.ep-bgm-card:has(a.ep-bgm-card-link:focus-visible) {
+  border-color: var(--accent-pink);
+  background: var(--surface-2, #fff7fb);
+}
+.ep-bgm-disc,
+.ep-bgm-play,
+.ep-bgm-staff a {
+  position: relative;
+  z-index: 2;
+}
+.ep-bgm-note {
+  margin-left: 0.5em;
+  font-size: 0.82em;
+}
+.ep-bgm-staff {
+  display: inline-flex;
+  margin-left: 0.6em;
+  font-size: 0.85em;
+  line-height: 1.5;
   vertical-align: baseline;
 }
-.episode-use-table th.col-no,
-.episode-use-table td.col-no {
-  width: 4em;
+.ep-bgm-disc {
+  grid-column: 4;
+  min-width: 0;
+  font-size: 0.85em;
+  line-height: 1.4;
+  color: var(--fg);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.ep-bgm-disc:hover .ep-bgm-track-title,
+.ep-bgm-disc:focus-visible .ep-bgm-track-title {
+  text-decoration: underline;
+}
+.ep-bgm-disc-track {
+  margin-right: 0.4em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.ep-bgm-length {
+  grid-column: 5;
   text-align: right;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
+  color: var(--muted);
   white-space: nowrap;
 }
-.episode-use-table th.col-kind,
-.episode-use-table td.col-kind { width: 5em; }
-.episode-use-table th.col-title,
-.episode-use-table td.col-title { width: auto; }
-.episode-use-table th.col-sub,
-.episode-use-table td.col-sub {
-  width: 18em;
-  font-size: 0.92em;
+.ep-bgm-play {
+  grid-column: 6;
+  font-size: 0.85em;
 }
-.episode-use-table th.col-scene,
-.episode-use-table td.col-scene {
-  width: 14em;
-  font-size: 0.92em;
+/* 再生ボタンが 1 つも無いリストでは、再生ボタンの列を取らない。 */
+.ep-bgm:not([data-art-track-list]) .ep-bgm-card {
+  grid-template-columns: 1.9em 4.2em minmax(0, 1fr) minmax(0, 1.25fr) 2.8em;
 }
-.episode-use-table th.col-duration,
-.episode-use-table td.col-duration {
-  width: 5em;
-  text-align: right;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+/* 狭い画面：初出盤のトラックを 2 行目（メニューの下）に落とす。 */
+@media (max-width: 720px) {
+  .ep-bgm-card {
+    grid-template-columns: 1.9em 3.6em minmax(0, 1fr) 2.8em 1.9em;
+    column-gap: 8px;
+    row-gap: 1px;
+  }
+  .ep-bgm-no,
+  .ep-bgm-mno,
+  .ep-bgm-length,
+  .ep-bgm-play {
+    grid-row: 1 / span 2;
+  }
+  .ep-bgm-menu { grid-column: 3; grid-row: 1; }
+  .ep-bgm-disc { grid-column: 3; grid-row: 2; }
+  .ep-bgm-length { grid-column: 4; }
+  .ep-bgm-play { grid-column: 5; }
+  .ep-bgm:not([data-art-track-list]) .ep-bgm-card {
+    grid-template-columns: 1.9em 3.6em minmax(0, 1fr) 2.8em;
+  }
 }
 
 /* ──────────────────── サイト内検索ボックス（ヘッダ右端） ──────────────────── */
@@ -5595,25 +5881,50 @@ a.credit-card-series:focus-visible {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 10px;
 }
+/* 歌・劇伴のカード（人物・キャラのページ）。カード自身は <li>。カード全体クリックは内部の絶対配置
+   .person-song-card-link（透明 <a>）で実現するので <a> の入れ子を作らず、内部の役職の札
+   <a class="role-badge">（役職詳細）はオーバーレイより上に置いて個別クリックを受ける（.songs-card と同じパターン）。 */
 .person-song-card {
   display: block;
-}
-.person-song-card-link {
-  display: block;
+  position: relative;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   /* 種別クラス .cat-* があればその淡色（--cat-tint）、無ければ白背景。 */
   background: var(--cat-tint, #fff);
-  text-decoration: none;
   color: inherit;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.person-song-card-link:hover,
-.person-song-card-link:focus-visible {
+.person-song-card:hover,
+.person-song-card:focus-within {
   border-color: var(--accent-pink);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-  /* グローバル a:hover { text-decoration: underline } をカード全域で抑止。 */
+}
+/* オーバーレイリンク：絶対配置の透明 <a>（z-index:0）。カードの余白のクリックで曲・劇伴のページへ。 */
+.person-song-card-link {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 8px;
+  text-decoration: none;
+  color: transparent;
+}
+.person-song-card-link:focus-visible {
+  outline: 2px solid var(--accent-pink);
+  outline-offset: -2px;
+}
+/* カードの中身はオーバーレイより上に重ね、クリックはオーバーレイへ透過させる。中の <a>（役職の札）だけクリックを拾う。 */
+.person-song-card-body {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.person-song-card-body a {
+  pointer-events: auto;
+}
+/* 役職の札は色付きの背景があるので下線は不要（a.role-badge:hover の変化でホバーを示す）。 */
+.person-song-card a.role-badge {
   text-decoration: none;
 }
 /* 役職バッジ群（左）＋種別バッジ（右上）を 1 行に並べるヘッダ。 */
@@ -5873,6 +6184,64 @@ a.credit-card-series:focus-visible {
   align-items: center;
   gap: 8px;
 }
+/* 劇伴の一覧の行を縦に詰める：行の上下の余白と行の間、題名とスタッフの行の間を減らす。
+   題名は見出しの飾り（左の帯・下線）を付けず、右に曲数とバージョン数の札（ほかの一覧と同じ大きさ）を置く。 */
+.bgms-card-list { gap: 4px; }
+/* 行は 2 列：左に題名とスタッフの 2 段、右に件数の札。札は 2 段ぶんの高さの上下の中央に置く
+   （題名の行の入れ物 .bgms-card-head は箱を外し、中の題名と札を行の格子に直に置く）。 */
+.bgms-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 16px;
+  padding: 5px 12px;
+}
+.bgms-card-head { display: contents; }
+.bgms-card-counts {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+.bgms-card-staff { grid-column: 1; }
+/* 狭い画面では、札は題名の右に置き、スタッフと録音の行は全幅を使う。役職ごとのかたまりは途中で折らない。 */
+@media (max-width: 640px) {
+  .bgms-card-counts { grid-row: 1; }
+  .bgms-card-staff { grid-column: 1 / -1; }
+}
+.bgms-card-staff .staff-badge-group { white-space: nowrap; }
+.bgms-card-title {
+  /* 狭い画面でも、題名の右に件数の札を置く（放送期間の行が無くなったので、題名を全幅にしない）。 */
+  grid-column: 1;
+  padding: 0;
+  border: 0;
+  font-size: 1em;
+}
+.bgms-card-counts {
+  font-family: inherit;
+  font-size: 1em;
+}
+.bgms-card-staff {
+  margin-top: 0;
+  font-size: 0.82em;
+}
+/* 録音の日付とスタジオ：スタッフの右に並べる。 */
+.bgms-card-rec { color: var(--muted); }
+.bgms-card-rec-badge {
+  background: #f1f2f4;
+  color: #4b5563;
+  border-color: #d5d8dd;
+}
+
+/* 歌の一覧の行を縦に詰める：行の上下の余白と行の間、題名と作詞・作曲の行の間を減らす（題名の下に作詞・作曲の行、の 2 段は変えない）。
+   種別の札と再生ボタンは、行の上下の中央に置く。 */
+.songs-card-list { gap: 4px; }
+.songs-card { padding: 5px 12px; }
+.songs-card-grid { align-items: center; }
+.songs-card-title { font-size: 1em; }
+.songs-card .staff-badges-row { margin-top: 0; }
+.songs-card-badge-cell {
+  align-self: center;
+  padding-top: 0;
+}
 /* 歌の一覧のカードの再生ボタン。カードの中身はクリックを透過する（pointer-events: none）ので、ボタンだけ拾う。 */
 .songs-card-play {
   pointer-events: auto;
@@ -5998,46 +6367,553 @@ a.credit-card-series:focus-visible {
   color: var(--text-muted, #666);
 }
 
-/* シリーズ単位ランキング表（episode 版 .stats-episode-ranking-table と同一構造で運用） */
-.stats-series-ranking-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-block: 1rem;
-  font-variant-numeric: tabular-nums;
-}
-.stats-series-ranking-table th,
-.stats-series-ranking-table td {
-  padding: 0.4em 0.6em;
-  border-bottom: 1px solid var(--border-color, #e5e5e5);
-  vertical-align: middle;
-}
-.stats-series-ranking-table th {
-  background-color: var(--bg-subtle, #f5f5f5);
+/* シリーズ別の順位のページ（平均文字数・漢字率・記号率）。行はエピソード単位のランキング
+   （.stats-ep-row）と同じ作りで、作品名の下に値の横棒と内訳を置く。 */
+.stats-series-row .stats-ep-series {
+  font-size: 1.05em;
   font-weight: 600;
-  text-align: left;
+  margin-bottom: 8px;
 }
-.stats-series-ranking-table th.col-rank,
-.stats-series-ranking-table td.col-rank {
-  width: 4em;
-  text-align: right;
+.stats-series-row .stats-ep-year {
+  font-weight: 400;
+}
+.stats-series-meter {
+  display: grid;
+  grid-template-columns: 1fr 15em;
+  gap: 14px;
+  align-items: center;
+}
+/* 横棒：いちばん大きい値の行が端まで届く。 */
+.stats-series-bar {
+  display: block;
+  height: 10px;
+  background: #f1f2f4;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.stats-series-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  opacity: 0.72;
+  border-radius: 5px;
+}
+.stats-series-detail {
+  color: var(--muted);
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
-}
-.stats-series-ranking-table th.col-series,
-.stats-series-ranking-table td.col-series {
-  min-width: 12em;
-}
-.stats-series-ranking-table th.col-value,
-.stats-series-ranking-table td.col-value {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
   white-space: nowrap;
 }
-.stats-series-ranking-table th.col-epcount,
-.stats-series-ranking-table td.col-epcount {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+/* 冒頭のグラフ。幅が狭い画面では図の幅を保ち、図だけを横スクロールさせる。 */
+.stats-chart-scroll {
+  overflow-x: auto;
+  margin: 8px 0 16px;
+}
+.stats-chart {
+  min-width: 680px;
+}
+.stats-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+@media (max-width: 640px) {
+  .stats-series-meter {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+/* ── エピソード単位のランキング：上位 3 件の枠・題名の印・1 字 1 マス・放送枠の帯・作品別の内訳 ── */
+
+/* 上位 3 件の枠。単独 1 位は全幅、ほかは半分ずつ。枠の作りは歴代記録（.rec）と同じ。 */
+.stats-podium {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.1em;
+  margin: 0.9em 0 1.6em;
+}
+.stats-podium-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 1em;
+  row-gap: 0.8em;
+  align-items: center;
+  padding: 1em 1.2em;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+.stats-podium-card.is-first {
+  grid-column: 1 / -1;
+  padding: 1.4em 1.6em;
+  border-color: var(--accent);
+  background: rgba(233, 30, 99, 0.04);
+}
+.stats-podium-rank {
+  font-size: 0.85em;
+  font-weight: 700;
+  color: var(--accent);
   white-space: nowrap;
-  width: 5em;
+}
+.stats-podium-rank span {
+  font-family: var(--font-num);
+  font-size: 2.6em;
+  line-height: 1;
+  margin-right: 0.05em;
+}
+.is-first .stats-podium-rank span { font-size: 4.2em; }
+.stats-podium-body { min-width: 0; }
+.stats-podium-body .ep-row-no {
+  margin-left: 0.6em;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.stats-podium-title {
+  display: block;
+  font-size: 1.3em;
+  line-height: 1.7;
+}
+.is-first .stats-podium-title { font-size: 1.9em; }
+.stats-podium-value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 2em;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--accent);
+  text-align: right;
+  white-space: nowrap;
+}
+.is-first .stats-podium-value { font-size: 3em; }
+.stats-podium-sub {
+  display: block;
+  margin-top: 0.3em;
+  font-family: var(--font-base);
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+.stats-podium-card .stats-ep-extra {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* 同じ順位の話をまとめた行：左のパネルは 1 つで、右に話を縦に並べる。話と話の間は点線で区切る。
+   パネルは、スクロールの間は固定ヘッダの下に留める。 */
+.stats-ep-entries { min-width: 0; }
+.stats-ep-entries .stats-ep-body + .stats-ep-body {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dotted #e5e7eb;
+}
+/* 同じ作品の話が続く束：作品名の下に話を並べる。 */
+.stats-ep-entry + .stats-ep-entry { margin-top: 8px; }
+.stats-ep-row.is-tied { align-items: start; }
+.stats-ep-row.is-tied .stats-ep-rank {
+  position: sticky;
+  top: 118px;
+}
+
+/* 数えた字（漢字・記号）に色を付ける。印のある題名は、ほかの字を細くして差を出す。 */
+.stats-ep-title .stats-hit {
+  color: var(--accent);
+  font-weight: 700;
+}
+.stats-ep-title:has(.stats-hit) { font-weight: 400; }
+
+/* 題名の下に添える図と内訳。行では題名の左端にそろえる。 */
+.stats-ep-extra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 7px 0 0 calc(3.9em + 12px);
+}
+/* 値の横棒（人数など）。 */
+.stats-ep-extra .stats-series-bar { flex: 1 1 100%; }
+/* 1 字 1 マス。数えた字のマスだけ塗る。 */
+.stats-cells {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.stats-cells i {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: #e6e7ea;
+}
+.stats-cells i.on { background: var(--accent); }
+.is-first .stats-cells i {
+  width: 18px;
+  height: 18px;
+}
+/* 文字数のマス（全部のマスが対象）：淡い色の小さいマスを 5 個ずつに区切り、数を読み取りやすくする。 */
+.stats-cells.is-count { gap: 2px; }
+.stats-cells.is-count i,
+.stats-cells.is-count i.on {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: rgba(216, 27, 96, 0.34);
+}
+.stats-cells.is-count i:nth-child(5n) { margin-right: 5px; }
+.is-first .stats-cells.is-count i,
+.is-first .stats-cells.is-count i.on {
+  width: 12px;
+  height: 12px;
+}
+
+/* 1 話ぶんの放送枠の帯（幅は 30 分）。そのページの対象のパートだけ濃く塗る。
+   帯の左端を全行でそろえるため、帯の前の内訳（偏差値）は幅を固定する。 */
+.stats-band {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  gap: 1px;
+  height: 12px;
+}
+.stats-ep-extra:has(.stats-band) {
+  flex-wrap: nowrap;
+}
+.stats-ep-extra:has(.stats-band) .stats-series-detail {
+  flex: 0 0 7.6em;
+}
+.stats-band span {
+  min-width: 0;
+  border-radius: 2px;
+}
+.stats-band b { display: none; }
+.stats-podium-card .stats-band { height: 30px; }
+.stats-podium-card.is-first .stats-band { height: 40px; }
+/* パートの名前は、単独 1 位の太い帯だけに書く。ほかの枠では対象のパートの名前だけ。 */
+.stats-podium-card .stats-band .sb-hit b,
+.stats-podium-card.is-first .stats-band b {
+  display: block;
+  padding-left: 7px;
+  font-size: 0.75rem;
+  line-height: 30px;
+  white-space: nowrap;
+  overflow: hidden;
+  color: #fff;
+}
+.stats-podium-card.is-first .stats-band b {
+  font-size: 0.82rem;
+  line-height: 40px;
+}
+.stats-podium-card:not(.is-first) .stats-band .sb-narrow b { display: none; }
+.sb-hit { background: var(--accent); }
+.sb-song { background: #9dbfe8; }
+.sb-main { background: #b4b3ae; }
+.sb-cm { background: #efeeea; }
+.sb-misc { background: #dbdad5; }
+.stats-band-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0 0 8px;
+  font-size: 0.82em;
+  color: var(--muted);
+}
+.stats-band-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.stats-band-legend i {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* 作品別の内訳。放送順の 2 段組みで、棒は歴代記録（.rec-bar）と同じ。 */
+.stats-brk {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  columns: 2;
+  column-gap: 2.4em;
+}
+.stats-brk li {
+  break-inside: avoid;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.6em;
+  row-gap: 2px;
+  align-items: baseline;
+  padding: 4px 0;
+  font-size: 0.92em;
+}
+.stats-brk-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stats-brk-count {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.stats-brk-unit {
+  margin-left: 0.15em;
+  font-family: var(--font-base);
+  font-size: 0.8em;
+  font-weight: 400;
+  color: var(--muted);
+}
+.stats-brk .rec-bar { grid-column: 1 / -1; }
+.stats-brk .rec-bar > span { opacity: 0.72; }
+.stats-brk .is-zero .stats-brk-count {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* 使用文字 TOP 100：頭の字の一覧図。順位の順に札を並べ、回数が多い字ほど大きい。札の色は字の種類。 */
+.stats-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 8px 0 20px;
+}
+.stats-cloud span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: 0.14em;
+  line-height: 1;
+  font-weight: 700;
+  color: #fff;
+}
+/* 統計で扱う対象の字（札・行の字・表の中の字・サブタイトル統計のページの題名）は、太い明朝体で出す。
+   説明の文は本文の書体のまま。 */
+.is-subtitle-stats .stats-ep-title,
+.is-subtitle-stats .stats-ep-title:has(.stats-hit),
+.stats-cloud span,
+.stats-char-glyph,
+.stats-by-series-topchars-table td.col-topchar code,
+.stats-by-series-symbols-table th.col-sym {
+  font-family: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  font-weight: 800;
+}
+.stats-by-series-topchars-table td.col-topchar code {
+  font-size: 1.25em;
+  background: none;
+}
+/* 漢字限定のページの色：習う学年（小 1〜小 6）・中学以降の常用漢字・常用漢字でない字。 */
+.kg-1 { --kg: #d81b60; }
+.kg-2 { --kg: #e0762f; }
+.kg-3 { --kg: #c99712; }
+.kg-4 { --kg: #4ca36b; }
+.kg-5 { --kg: #2ea7ad; }
+.kg-6 { --kg: #3370aa; }
+.kg-j { --kg: #7e57c2; }
+.kg-x { --kg: #6b7280; }
+[class*="kg-"] { background: var(--kg); }
+/* 記号の初使用のページの頭の図：記号の札を初使用の年ごとにまとめ、札の下に年を書く。 */
+.stats-symline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 22px;
+  margin: 8px 0 20px;
+}
+.stats-symline-year {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding-bottom: 2px;
+  border-bottom: 2px solid var(--border);
+}
+/* 「！」が飛び抜けて多く、札が大きくなりすぎるので、この図では札を全体に小さくする。 */
+.stats-symline-year .stats-cloud {
+  margin: 0;
+  align-items: flex-end;
+  font-size: 0.72em;
+}
+.stats-symline-year b {
+  font-family: var(--font-num);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+/* 記号の初使用のページの行：記号は色の札にし、題名の下に作品ごとのマスと最多の作品を置く。 */
+.stats-symbol-row .stats-char-glyph.ct-symbols {
+  border-radius: 8px;
+  font-size: 2.2em;
+  color: #fff;
+}
+.stats-symbol-extra {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  margin-top: 7px;
+}
+.stats-symbol-extra .stats-strip { height: 22px; }
+/* 順位の行：字を小さめにして行を詰め、右に作品ごとの使われ方のマスと、いちばん多く使われた作品を置く。 */
+.stats-char-list .stats-ep-row { padding: 6px 0; }
+.stats-char-list .stats-ep-rank {
+  padding: 6px 14px;
+  font-size: 1.3em;
+}
+.stats-char-body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.stats-char-list .stats-char-body + .stats-char-body { margin-top: 8px; }
+/* 行の字は、頭の図と同じ色の地に白い字の札にする。 */
+.stats-char-list .stats-char-glyph {
+  flex: 0 0 auto;
+  font-size: 1.55em;
+  border-radius: 6px;
+  color: #fff;
+}
+/* 作品ごとの棒の列（放送順）。棒の高さと濃さが、その作品で使われた回数。0 回は底の細い線だけ。 */
+.stats-strip {
+  flex: 0 1 auto;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(8px, 13px);
+  align-items: end;
+  gap: 2px;
+  height: 30px;
+}
+.stats-strip i {
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: #e6e7ea;
+}
+.stats-char-peak {
+  flex: 1 1 0;
+  min-width: 0;
+  font-family: var(--font-base);
+  font-size: 0.8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* マスの列の見出し（放送開始年の下 2 桁）。行のマスの列と同じ位置に置く。 */
+.stats-char-head {
+  display: grid;
+  grid-template-columns: 12em 1fr;
+  gap: 18px;
+}
+.stats-char-head .stats-strip {
+  grid-column: 2;
+  justify-content: start;
+  margin-left: calc(1.55em * 1.5 + 16px);
+}
+.stats-char-head .stats-strip { height: auto; }
+.stats-char-head .stats-strip i {
+  height: auto;
+  background: none;
+  font-family: var(--font-num);
+  font-size: 0.62em;
+  font-style: normal;
+  text-align: center;
+  color: var(--muted);
+}
+/* 5 作ごとの区切りの線：棒と棒のすきまに、列の高さいっぱいの赤い細い線を引く。5 年の区切りは点線、10 年の区切りは破線。 */
+.stats-strip { --strip-h: 30px; }
+.stats-symbol-extra .stats-strip { --strip-h: 22px; }
+.stats-char-head .stats-strip { --strip-h: 100%; }
+.stats-strip i.sep5,
+.stats-strip i.sep10 { position: relative; }
+.stats-strip i.sep5::before,
+.stats-strip i.sep10::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  bottom: 0;
+  height: var(--strip-h);
+  border-left: 1px dotted #c0143c;
+}
+.stats-strip i.sep10::before { border-left-style: dashed; }
+
+/* シリーズ別 文字種別比率：作品ごとの 100% の積み上げ横棒。 */
+.stats-ct-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+}
+.stats-ct-list li {
+  display: grid;
+  grid-template-columns: 17em minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 5px 0;
+}
+.stats-ct-name {
+  font-size: 0.92em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stats-ct-bar {
+  display: flex;
+  gap: 1px;
+  height: 24px;
+}
+.stats-ct-bar span {
+  min-width: 0;
+  border-radius: 2px;
+}
+.stats-ct-bar b {
+  display: block;
+  padding-left: 6px;
+  font-family: var(--font-num);
+  font-size: 0.72rem;
+  line-height: 24px;
+  white-space: nowrap;
+  overflow: hidden;
+  color: #fff;
+}
+.ct-kanji { background: var(--accent-pink); }
+.ct-hiragana { background: var(--accent-blue); }
+.ct-katakana { background: var(--accent-green); }
+.ct-latin { background: var(--accent-yellow); }
+.ct-digits { background: var(--accent-purple); }
+.ct-symbols { background: var(--accent-teal); }
+
+@media (max-width: 640px) {
+  .stats-podium { grid-template-columns: 1fr; }
+  .stats-podium-card { grid-template-columns: auto minmax(0, 1fr); }
+  .stats-podium-value {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+  .stats-podium-sub {
+    display: inline;
+    margin-left: 0.6em;
+  }
+  .is-first .stats-podium-title { font-size: 1.4em; }
+  .is-first .stats-podium-rank span { font-size: 3em; }
+  .stats-ep-extra { margin-left: 0; }
+  .stats-ep-row.is-tied .stats-ep-rank { position: static; }
+  .stats-ep-extra:has(.stats-band) { flex-wrap: wrap; }
+  .stats-ep-extra:has(.stats-band) .stats-series-detail { flex: 0 0 100%; }
+  .stats-band { flex: 1 1 100%; }
+  .stats-brk { columns: 1; }
+  .stats-ct-list li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .stats-cloud { font-size: 0.62em; }
+  .stats-char-head { display: none; }
+  .stats-char-body { flex-wrap: wrap; gap: 6px 12px; }
+  .stats-strip { flex: 1 1 0; grid-auto-columns: minmax(0, 1fr); }
+  .stats-char-peak { flex: 1 1 100%; }
 }
 
 /* episode 版テーブルでも col-epcount / col-firstdate を使えるように同じスタイルを共有 */
@@ -6368,6 +7244,12 @@ a.credit-card-series:focus-visible {
   list-style: none;
   margin: 0;
   padding: 8px 14px 12px;
+}
+/* ホームの「今後の放送予定」で、エピソードの行がまだ無い作品の節に、話の一覧の代わりに出す開始の予定の 1 行。 */
+.home-planned-start {
+  margin: 0;
+  padding: 10px 14px 12px;
+  color: var(--muted);
 }
 .episodes-index-list li {
   display: grid;
@@ -6854,12 +7736,24 @@ a.credit-card-series:focus-visible {
   font-size: 0.88em;
 }
 
-/* 企業詳細：ロゴ下のクレジット範囲注記 「クレジット範囲：キミとアイドルプリキュア♪ #1〜14」のような注記。 */
+/* 企業詳細：ロゴ下のクレジット範囲注記。見出し「クレジット範囲」の下に、作品の種別ごとの行
+   （「TV　ふたりはプリキュア から … まで（3 作品）、名探偵プリキュア！ #1〜14」）を並べる。 */
 .logo-credit-range {
   margin-left: 1em;
   font-size: 0.82em;
   line-height: 1.5;
   margin-top: 2px;
+}
+/* 種別の見出しの列は、いちばん長い見出しの幅にそろえる。 */
+.logo-credit-range-lines {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 0.8em;
+  margin: 0 0 0 1em;
+}
+.logo-credit-range-lines dt,
+.logo-credit-range-lines dd {
+  margin: 0;
 }
 
 /* 企業詳細：ロゴタイプ（ロゴを持つ屋号）のカードリスト。 */
@@ -7581,6 +8475,119 @@ body.mobile-nav-open {
   border-top: 1px solid var(--border);
 }
 
+/* メニューを詰める：検索をいちばん上（閉じるボタンの左）に置き、グローバルナビは 2 列に並べ、
+   項目の上下の余白を減らす。押す所の高さは 40px ほどを保つ。 */
+.mobile-nav-overlay-panel {
+  padding: 12px 14px 20px;
+  gap: 10px;
+}
+.mobile-nav-overlay-search {
+  order: -1;
+  margin: 0 46px 0 0;
+  padding: 0;
+  border-top: 0;
+}
+.mobile-nav-overlay-list {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 2px 6px;
+}
+.mobile-nav-overlay-list a {
+  padding: 8px 8px;
+  font-size: 0.95em;
+  white-space: nowrap;
+}
+/* 検索ボックスの無いサイト（precure.news）では、ナビが閉じるボタンのすぐ下から始まるので、ボタンの分だけ右を空ける。 */
+.mobile-nav-overlay-close + .mobile-nav-overlay-list { padding-right: 46px; }
+.mobile-nav-overlay-list li.nav-sep-before {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  padding-top: 4px;
+}
+.mobile-nav-overlay-section-nav {
+  margin-top: 0;
+  padding-top: 10px;
+}
+.mobile-nav-overlay-section-nav-heading {
+  margin-bottom: 4px;
+  padding-left: 10px;
+}
+.mobile-nav-overlay-section-nav-list a { padding: 8px 10px; }
+.mobile-nav-overlay-section-nav-sublist a { padding: 6px 10px; }
+
+/* メニューの下の「新しい記事」の一覧（precure.news のメニューで使う）。
+   1 件は、左に日付（月.日を大きく、年を小さく）、右に種別の札と題名。件と件の間は点線で区切る。 */
+.mobile-nav-posts {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.mobile-nav-posts-heading {
+  margin: 0 0 4px;
+  padding: 2px 0 2px 10px;
+  border-left: 4px solid var(--accent);
+  font-family: var(--font-brand);
+  font-size: 0.95em;
+  font-weight: 500;
+  color: var(--accent);
+}
+.mobile-nav-posts-heading::before { content: none; }
+.mobile-nav-posts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.mobile-nav-posts-list li + li { border-top: 1px dotted #e5e7eb; }
+.mobile-nav-posts-list a {
+  display: grid;
+  grid-template-columns: 3.2em minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 8px 6px;
+  border-radius: 6px;
+  color: var(--fg);
+  text-decoration: none;
+}
+.mobile-nav-posts-list a:hover,
+.mobile-nav-posts-list a:focus-visible {
+  background: rgba(233, 30, 99, 0.06);
+  outline: none;
+}
+.mobile-nav-posts-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  color: var(--accent);
+}
+.mobile-nav-posts-date b { font-size: 0.95em; }
+.mobile-nav-posts-date small {
+  font-size: 0.66em;
+  color: var(--muted);
+}
+.mobile-nav-posts-body { min-width: 0; }
+.mobile-nav-posts-kind {
+  display: inline-block;
+  margin-bottom: 2px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.66em;
+  line-height: 1.6;
+  color: var(--muted);
+}
+/* 題名は 2 行まで。入りきらない分は省く。 */
+.mobile-nav-posts-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.9em;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
 /* ──────────────── モバイル時の構造調整（≤768px） ──────────────── */
 @media (max-width: 768px) {
   /* モバイルでは site-header を非固定に戻す。 */
@@ -7936,6 +8943,19 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   /* ホームのタグライン（プリキュアまるごとデータベース。）もブランド書体を据え置く。
      他ページの .lead はアクセント書体（Kaisei Decol）だが、ここだけブランド側に上書きする。 */
   font-family: var(--font-brand);
+}
+
+/* ホームの冒頭の枠と数の札を縦に詰める：枠の上下の余白と、見出し・リードの間を狭くし、数の札は低い 1 行の札にする。 */
+.hero.hero-gradient { padding: 1em 1.4em 0.9em; }
+.hero.hero-gradient h1 { margin: 0 0 0.35em; }
+.hero.hero-gradient .home-lead-row,
+.hero.hero-gradient .home-lead-row p { margin: 0; }
+.home-stats-compact { margin-top: 12px; }
+.home-db-stats.home-db-stats-compact { gap: 6px 8px; }
+.home-db-stats.home-db-stats-compact li { padding: 1px 8px; }
+.home-db-stats.home-db-stats-compact .home-db-stats-value {
+  margin-top: 0;
+  font-size: 1.15em;
 }
 
 /* 姉妹サイトのカード（ホーム上部。precure.news のホームも同じクラスで precure.tv へのカードを置く）。
@@ -9577,6 +10597,13 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   margin-left: -6px;
   white-space: nowrap;
 }
+/* 歴代プリキュア声優のコンビ・グループの行で、名前の直後に添えるメンバー「（水田 信二、川西 賢志郎）」。 */
+.entity-row-members {
+  font-size: 0.9em;
+}
+.entity-row > .entity-row-members {
+  margin-left: -6px;
+}
 /* 行ホバーで遷移先（主エンティティ名）に下線を出し、行全体がクリックできることを示す。 */
 .entity-row:hover a.entity-row-name {
   text-decoration: underline;
@@ -9820,6 +10847,95 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   padding: 1px 8px;
   border-radius: 999px;
 }
+/* ホームの「今後の放送予定」「最新エピソード」を縦に詰める（/episodes/ と同じ部品の、ホームだけの組み方）。
+   話数・放送日・題名・スタッフを、列をそろえて横に並べる（題名は改行を入れずに出す）。
+   スタッフはどの回も 2 行に固定する（1 行目が脚本・絵コンテ・演出、2 行目が作画監督・美術）。行ごとに折れ方が変わらないように、
+   作画監督の組の前で必ず行を替える。狭い画面（640px 以下）は元の縦積みのままで、スタッフの 2 行だけ同じにする。 */
+.home-section .episodes-index-list .ep-row .staff-badges-row {
+  gap: 0 8px;
+  line-height: 1.75;
+}
+/* 役職ごとのかたまり（札と名前）は途中で折らない。行に入りきらないときは、かたまりごと次の行へ回る。 */
+.home-section .episodes-index-list .staff-badge-group { white-space: nowrap; }
+/* 作画監督の組の前で必ず行を替える：行いっぱいの幅を持つ空の要素を、作画監督より前・それ以外より後ろに置く。 */
+.home-section .episodes-index-list .ep-row .staff-badges-row::after {
+  content: "";
+  flex-basis: 100%;
+  order: 1;
+}
+.home-section .episodes-index-list .staff-badge-group:has(> [data-role-code="ANIMATION_DIRECTOR"]),
+.home-section .episodes-index-list .staff-badge-group:has(> [data-role-code="ANIMATION_DIRECTOR"]) ~ .staff-badge-group {
+  order: 2;
+}
+.home-section .episodes-index-heading { padding: 5px 14px; }
+/* 題名は改行を入れずに 1 行で出す。 */
+.home-section .ep-row-title br { display: none; }
+@media (min-width: 641px) {
+  /* 1 話の行を 3 列（話数と放送日・題名・スタッフ）にする。列の幅はどの行も同じで、スタッフの 2 行に対して
+     左の 2 列（話数と放送日・題名）は上下の中央に置く。 */
+  .home-section .episodes-index-list .ep-row { padding: 2px 0; }
+  .home-section .episodes-index-list .ep-row-main {
+    grid-template-columns: 10.6em minmax(0, 1fr) 23.5rem;
+    gap: 0 14px;
+    align-items: center;
+  }
+  /* 話数と放送日は幅を決めて横に並べる（放送日の桁数で話数の位置がずれないように）。 */
+  .home-section .episodes-index-list .ep-row-no-date {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .home-section .episodes-index-list .ep-row-no-date .ep-row-no { flex: 0 0 3.7em; }
+  .home-section .episodes-index-list .ep-row-no-date .ep-row-date {
+    flex: 0 0 6.4em;
+    margin-top: 0;
+    text-align: left;
+  }
+  /* スタッフの無い行（放送予定）は、題名を右端まで使う。 */
+  .home-section .episodes-index-list .ep-row-main > .ep-row-title:last-child { grid-column: span 2; }
+}
+
+/* 記念日の枠を縦に詰める：見出しの上の余白を減らし、誕生日の札は「誕生日 名前」の 1 行にして横に並べる。 */
+.home-section-anniversary h2 { margin-top: 10px; }
+.home-anniversary-list {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.home-anniversary-card { flex: 1 1 100%; }
+.home-anniversary-card-bday { flex: 0 1 auto; }
+.home-anniversary-card-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+  padding: 6px 12px;
+}
+.home-anniversary-card-meta { margin-bottom: 0; }
+/* 札の頭の種別の絵文字（🎂 誕生日・📺 TV 放送・🌙 オトナシリーズ）。カレンダーのチップと同じ。 */
+.home-anniversary-emoji { margin-right: 4px; }
+/* エピソードの札は「N年前・作品（年）・第N話・題名・放送日」を 1 行に並べる（放送日は右端）。
+   狭い画面では、上の段に「N年前・作品」、下の段に題名と話数・放送日の、いまの 2 段のままにする。 */
+@media (min-width: 641px) {
+  .home-anniversary-card-main {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .home-anniversary-card .ep-row-main {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .home-anniversary-card .ep-row-no-date { display: contents; }
+  .home-anniversary-card .ep-row-main > .ep-row-title {
+    order: 2;
+    flex: 1 1 0;
+  }
+  .home-anniversary-card .ep-row-no-date .ep-row-date {
+    order: 3;
+    margin-top: 0;
+  }
+}
+
 /* キャラ誕生日カード内のキーカラーバッジ（<span>）。 */
 .home-bday-badge {
   display: inline-block;
@@ -10012,6 +11128,138 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 }
 .cal-chip:hover { filter: brightness(0.97); }
 
+/* 行（月グリッドの週、7 日縦並びの 1 日）の開閉。ふだんはキャラクター誕生日のチップと、日付の右のほかの種別の件数だけを出し、
+   開いた行（calendar.js が .is-open を付ける）では件数を薄く消して、ほかのチップを出す。
+   高さは grid-template-rows の 0fr ↔ 1fr の遷移で、なめらかに伸び縮みさせる。 */
+.cal-cell { min-height: 46px; }
+.cal-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+/* 日付は幅をそろえた枠の中で中央に置く（1 桁の日と 2 桁の日で、右の件数の札の始まる位置をそろえる）。 */
+.cal-head .cal-daynum {
+  flex: 0 0 1.5em;
+  margin-bottom: 0;
+  text-align: center;
+}
+.cal-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease;
+}
+.cal-fold-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.is-open > .cal-fold-more {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.cal-chips + .cal-fold .cal-fold-inner > :first-child { margin-top: 3px; }
+/* 件数の札：日付の右に並べる。色は開いたときのチップ（.cal-chip-movie / -person / -ep）と同じ。
+   ふつうは 3 つ並ぶ大きさ。4 種別（映画・人物誕生日・TV 放送・オトナシリーズ）とも出る日だけ、
+   4 つ並んでも 1 つのマスに収まる小さい札にする（.cal-counts-4）。 */
+.cal-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  min-width: 0;
+  transition: opacity 0.24s ease;
+}
+.is-open .cal-counts { opacity: 0; }
+.cal-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 3px 0 2px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-family: var(--font-num);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+.cal-count .cal-chip-emoji {
+  margin-right: 1px;
+  font-size: 0.7rem;
+}
+.cal-cell .cal-counts-4 { gap: 0; }
+.cal-cell .cal-counts-4 .cal-count {
+  padding: 0;
+  font-size: 0.58rem;
+}
+.cal-cell .cal-counts-4 .cal-chip-emoji {
+  margin-right: 0;
+  font-size: 0.6rem;
+}
+/* マスの幅が狭まる画面では、3 つの札も小さい札にする。 */
+@media (max-width: 1000px) {
+  .cal-cell .cal-count {
+    padding: 0 1px;
+    font-size: 0.6rem;
+  }
+  .cal-cell .cal-count .cal-chip-emoji {
+    margin-right: 0;
+    font-size: 0.62rem;
+  }
+}
+.cal-day-head .cal-counts { margin-left: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  .cal-fold,
+  .cal-counts { transition: none; }
+}
+
+/* 「全部開く」のボタン：月名の行の右端に置く。押してある間（.is-on）は色を付け、山形を上向きにする。 */
+.home-calendar-nav { position: relative; }
+.cal-expand-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px 5px 9px;
+  border: 1px solid #e3c4d3;
+  border-radius: 999px;
+  background: #fff;
+  color: #c2557a;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.cal-expand-btn:hover {
+  background: #fff1f6;
+  border-color: #f48fb1;
+}
+.cal-expand-btn:focus-visible {
+  outline: 2px solid #f48fb1;
+  outline-offset: 2px;
+}
+.cal-expand-btn.is-on {
+  background: #c2557a;
+  border-color: #c2557a;
+  color: #fff;
+}
+.cal-expand-icon { transition: transform 0.24s ease; }
+.cal-expand-btn.is-on .cal-expand-icon { transform: rotate(180deg); }
+/* 狭い画面では、月名と重ならないよう山形だけの丸いボタンにする。 */
+@media (max-width: 720px) {
+  .cal-expand-btn {
+    padding: 0;
+    width: 34px;
+    height: 34px;
+    justify-content: center;
+  }
+  .cal-expand-label { display: none; }
+}
+
 /* カレンダー凡例 */
 .home-calendar-legend {
   margin-top: 10px;
@@ -10134,6 +11382,22 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   /* グローバル a:hover { text-decoration: underline } をカード全域で抑止。 */
   text-decoration: none;
 }
+/* まだ公開していない原稿のカード（テストビルドの一覧だけに出る。precure.news の一覧も同じクラスを使う）。 */
+.article-card.is-unpublished {
+  border: 2px dashed var(--accent-yellow);
+  background: rgba(212, 160, 23, 0.10);
+}
+.article-card-unpublished {
+  display: inline-block;
+  margin: 0 0 0.6em;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--accent-yellow);
+  color: #fff;
+  font-size: 0.78em;
+  font-weight: 700;
+  line-height: 1.6;
+}
 .article-card-title { margin: 0 0 0.4em; font-size: 1.1em; line-height: 1.4; color: var(--fg); }
 .article-card-date { margin: 0 0 0.5em; font-size: 0.8em; color: var(--muted); }
 .article-card-desc { margin: 0 0 0.6em; font-size: 0.9em; color: var(--muted); line-height: 1.6; }
@@ -10199,6 +11463,35 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 /* 画像とキャプション。 */
 .article-body figure { margin: 0 0 1.2em; }
 .article-body figcaption { font-size: 0.85em; color: var(--muted); margin-top: 0.3em; }
+/* 写真（figure.photo）。本文の幅より小さめに置き、紙焼きの写真のような白い枠を付ける。
+   クリックすると photo-modal.js が画面いっぱいに拡大する。precure.news の写真も同じ class 名で、この CSS を使う。 */
+.article-body figure.photo {
+  width: min(100%, 520px); box-sizing: border-box; margin: 1.6em auto;
+  padding: 10px 10px 8px; background: #ffffff;
+  border: 1px solid var(--border); border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+.article-body figure.photo .photo-link { display: block; cursor: zoom-in; border-radius: 2px; }
+.article-body figure.photo .photo-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.article-body figure.photo img { display: block; width: 100%; height: auto; border-radius: 2px; }
+.article-body figure.photo figcaption { margin-top: 8px; text-align: center; line-height: 1.5; }
+/* 写真の拡大表示（photo-modal.js が body の末尾に足す dialog）。 */
+dialog.photo-modal {
+  width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 16px;
+  border: 0; background: transparent; cursor: zoom-out;
+  display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  box-sizing: border-box;
+}
+dialog.photo-modal[open] { display: flex; }
+dialog.photo-modal::backdrop { background: rgba(0, 0, 0, 0.85); }
+.photo-modal-img { max-width: 100%; max-height: calc(100dvh - 90px); min-height: 0; object-fit: contain; border-radius: 4px; background: #ffffff; }
+.photo-modal-caption { margin: 0; color: #ffffff; font-size: 0.9rem; text-align: center; }
+.photo-modal-close {
+  position: fixed; top: 12px; right: 12px; width: 40px; height: 40px;
+  border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.92); color: #1a1a1a;
+  font-size: 1.4rem; line-height: 1; cursor: pointer;
+}
+.photo-modal-close:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
 /* コラムの中の「囲み」（原稿の ::: study-note … ::: が div.study-note になる）。
    プリキュアの話題を離れて、統計などの一般の知識を解説するところに使う。方眼紙の点を敷いた淡い青の地に、
    最初の見出しを青い札にして枠の上辺に載せ、右上にきらめきを添える。 */
@@ -10246,10 +11539,50 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 .article-body .footnotes li::before {
   content: "[" counter(article-fn) "]";
   position: absolute; left: 0; font-family: var(--font-num);
-}/* 記事の分類をリンクにしたときは下線を出さない。 */
+}
+/* 脚注の番号と「↩」で飛んだ先が、固定ヘッダの裏に潜らないようにする（見出しと同じ余白）。 */
+.article-body .footnotes li[id],
+.article-body a.footnote-ref[id] {
+  scroll-margin-top: 110px;
+}
+@media (max-width: 560px) {
+  .article-body .footnotes li[id],
+  .article-body a.footnote-ref[id] {
+    scroll-margin-top: 60px;
+  }
+}
+/* 本文のすぐ後の「ほかのコラム」。題名と公開日を 1 行ずつ並べ、最後にコラムの一覧への入口を置く。 */
+.article-more {
+  margin: 2.4em 0 2em;
+  padding: 14px 18px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.article-more-heading { margin: 0 0 0.5em; padding: 0; border: 0; font-size: 1em; color: var(--muted); }
+.article-more-list { list-style: none; margin: 0; padding: 0; }
+.article-more-list li + li { border-top: 1px dotted var(--border); }
+.article-more-link {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px;
+  padding: 0.55em 0;
+  text-decoration: none; color: inherit;
+}
+.article-more-link:hover .article-more-title,
+.article-more-link:focus-visible .article-more-title { color: var(--accent-pink); text-decoration: underline; }
+.article-more-link:hover { text-decoration: none; }
+.article-more-title { font-weight: 700; line-height: 1.5; }
+.article-more-date { font-size: 0.8em; color: var(--muted); white-space: nowrap; }
+.article-more-all { margin: 0.7em 0 0; font-size: 0.9em; text-align: right; }
+/* 作品詳細の「関連記事」。行は「ほかのコラム」と同じ部品で、題の脇にサイトの名前と日付を並べる。 */
+.related-articles-meta { display: inline-flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.related-articles-site {
+  font-size: 0.75em; color: var(--muted);
+  padding: 0 6px; border: 1px solid var(--border); border-radius: 4px;
+}
+/* 記事の分類をリンクにしたときは下線を出さない。 */
 a.article-tag { text-decoration: none; }
 
-/* ホームの「データ充足率」暫定表記（赤字）。BuildLabel 直下に小さく出す。追いついたら除去する。 */
+/* ホームの暫定表記（赤字）。BuildLabel 直下に小さく出す。追いついたら除去する。 */
 .home-data-sufficiency {
   margin: 0.1em 0 0;
   color: #c0392b;
@@ -10687,7 +12020,7 @@ a.cal-leap-label:focus-visible {
        番号バッジそのものを button 化したもの。見た目は span 版と共有し、
        ここでは button の既定スタイルを打ち消すだけに留める。
      - 劇伴 cue（.bgm-cue-play）
-       M 番号の左に置く独立ボタン。M 番号は桁も形も可変で読ませたい情報なので、
+       尺の右に置く独立ボタン。M 番号は桁も形も可変で読ませたい情報なので、
        バッジを置換せず専用ボタンを足す形にしている。
 
    プレイヤー本体は art-track-player.js が画面下部に生成する sticky バー。
@@ -10697,7 +12030,7 @@ a.cal-leap-label:focus-visible {
 
 /* --- 再生ボタン（アルバム・劇伴で共通の見た目） ---
    トラック番号や M 番号は「何曲目か」を読む情報であって押す対象ではないので、
-   バッジ自体は再生ボタンにしない。どちらのカードでも尺表示の真下に独立したボタンを置き、
+   バッジ自体は再生ボタンにしない。アルバムのカードでは尺表示の真下、劇伴のカードでは尺の右に独立したボタンを置き、
    サイト全体で再生ボタンの居場所と見た目を揃える。 */
 button.art-track-play {
   appearance: none;
@@ -10751,16 +12084,12 @@ button.art-track-play.is-playing::before {
   grid-column: 1;
 }
 
-/* 劇伴 cue カード：ヘッダ grid の 2 行目・右列（尺表示の真下）。 */
+/* 劇伴 cue カード：右端（尺の右）。尺と同じく全部の行にまたがらせて、カードの上下の真ん中に置く。 */
 .bgm-cue-play {
-  grid-row: 2;
-  grid-column: 2;
+  grid-column: 4;
+  grid-row: 1 / span 4;
   justify-self: end;
-  align-self: start;
-}
-/* 同上の理由でメニュータイトルの全幅 span を 1 列目までに狭める。 */
-.bgm-cue-card-head.has-art-track .bgm-cue-menu {
-  grid-column: 1;
+  font-size: 0.9em;
 }
 
 /* 再生中の行・カードを淡く示す。:target のジャンプ先ハイライト（--hl）と
@@ -11598,7 +12927,7 @@ body.has-art-track-bar {
   display: grid;
   place-items: center;
 }
-/* 1 回きりの組み合わせ（初顔合わせ）は、玉を列の中央に置く。 */
+/* 1 回きりの組み合わせ（初）は、玉を列の中央に置く。 */
 .staff-combo-beads li:only-child {
   margin: 0 auto;
 }
@@ -11935,6 +13264,127 @@ a.staff-combo-nav-card:hover {
   display: none;
 }
 
+/* ──────── 商品詳細・書籍詳細の「基本情報」 ────────
+   見出しの下に、左にジャケット（表紙）、右に「項目名と値」の並び（罫線なし）と購入リンクを置く。
+   狭い画面（640px 以下）では縦に積む。 */
+.product-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+  margin: 12px 0 24px;
+}
+.product-head:has(.product-cover-both) { flex-wrap: wrap; }
+.product-head-main {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.fact-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 7px 18px;
+  align-items: baseline;
+  margin: 0 0 18px;
+}
+.fact-list > div { display: contents; }
+.fact-list dt {
+  font-size: 0.88em;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.fact-list dd { margin: 0; }
+/* 購入のリンクの枠（.shop-box と同じ作り）は、ジャケットと基本情報の段のすぐ下に置く。 */
+.product-head { margin-bottom: 14px; }
+.product-buy { margin: 0 0 24px; }
+/* 商品は 1 行で、右にボタンを左から並べる。ボタンそのものがリンク。 */
+.product-buy .shop-box-body {
+  grid-template-areas: "title foot";
+}
+.product-buy .shop-box-foot {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.product-buy a.shop-box-cta {
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+.product-buy a.shop-box-cta:hover { opacity: 0.85; }
+@media (max-width: 640px) {
+  .product-buy .shop-box-body { grid-template-areas: "title" "foot"; }
+}
+@media (max-width: 640px) {
+  .product-head {
+    flex-direction: column;
+    gap: 14px;
+  }
+}
+
+/* ──────── ホームの商品・書籍カードを縦に詰める ────────
+   ジャケットの大きさは変えず、下の文字の部分を詰める：題名は 2 行まで、発売日と価格は 1 行に並べ、購入のボタンを低くする。 */
+.home-product-card-body {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 8px 12px 6px;
+}
+.home-product-card-title {
+  flex: 1 1 100%;
+  -webkit-line-clamp: 2;
+}
+.home-product-card-price { margin-left: auto; }
+.home-product-card-links { padding: 6px 12px 8px; }
+.home-product-card-cta { padding: 4px 6px; }
+
+/* ジャケット画像がまだ無い商品は、大きな空の枠を出さず、横 1 行の札にする（ご案内の枠の行と同じ並び）：
+   小さな空の枠・「予約受付中」の印・題名と発売日と価格・購入のボタン。格子の全幅を使う。 */
+.home-product-card:has(.home-product-card-noimage) {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+}
+.home-product-card:has(.home-product-card-noimage) .home-product-card-link {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 12px;
+}
+.home-product-card:has(.home-product-card-noimage) .home-product-card-thumb { display: contents; }
+.home-product-card-noimage {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #fef3f7 0%, #fff8ec 100%);
+  font-size: 0;
+}
+.home-product-card:has(.home-product-card-noimage) .home-product-card-badge {
+  position: static;
+  flex: 0 0 auto;
+  box-shadow: none;
+  white-space: nowrap;
+}
+.home-product-card:has(.home-product-card-noimage) .home-product-card-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+}
+.home-product-card:has(.home-product-card-noimage) .home-product-card-price { margin-left: 0; }
+.home-product-card:has(.home-product-card-noimage) .home-product-card-links {
+  flex: 0 0 auto;
+  display: flex;
+  padding: 8px 12px;
+  border-top: 0;
+}
+.home-product-card:has(.home-product-card-noimage) .home-product-card-cta { padding: 6px 14px; }
+@media (max-width: 640px) {
+  .home-product-card:has(.home-product-card-noimage) { flex-wrap: wrap; }
+  .home-product-card:has(.home-product-card-noimage) .home-product-card-link { flex: 1 1 100%; }
+  .home-product-card:has(.home-product-card-noimage) .home-product-card-links { padding-top: 0; }
+}
+
 /* ──────── 人物詳細・企業/団体詳細の年表（基本情報の下の開閉の枠） ────────
    閉じた状態は「年表」・参加の期間と行の数・すべての参加を 1 本にまとめた細い帯・「くわしく」を 1 行に並べる
    （狭い画面では帯を下の行に回す）。開くと帯を隠し、役職・役柄ごとの線表（.role-timeline）を枠の中に出す。 */
@@ -12066,6 +13516,22 @@ a.staff-combo-nav-card:hover {
 .rtl-lanes-3 .rtl-lane { height: 33.333%; }
 .rtl-lanes-3 .rtl-lane:nth-of-type(2) { top: 33.333%; }
 .rtl-lanes-3 .rtl-lane:nth-of-type(3) { top: 66.667%; }
+/* 段はボタン（ルートの data-wk-off＝切っている種類）に連動する。🎥 を切れば映画の段、🌙 を切ればスピンオフの段を畳み、残った段数に合わせて
+   行の高さと段の位置を詰める（段を 1 つにした行は、段を分けない行と同じ高さ）。 */
+[data-wk-off~="movie"] .rtl-lane-movie,
+[data-wk-off~="otona"] .rtl-lane-spin { display: none; }
+[data-wk-off~="movie"] .rtl-lanes-2.rtl-has-movie-lane,
+[data-wk-off~="otona"] .rtl-lanes-2.rtl-has-spin-lane,
+[data-wk-off~="movie"][data-wk-off~="otona"] .rtl-lanes-3 { height: 26px; }
+[data-wk-off~="movie"] .rtl-lanes-2.rtl-has-movie-lane .rtl-lane,
+[data-wk-off~="otona"] .rtl-lanes-2.rtl-has-spin-lane .rtl-lane,
+[data-wk-off~="movie"][data-wk-off~="otona"] .rtl-lanes-3 .rtl-lane { height: 100%; }
+[data-wk-off~="movie"]:not([data-wk-off~="otona"]) .rtl-lanes-3,
+[data-wk-off~="otona"]:not([data-wk-off~="movie"]) .rtl-lanes-3 { height: 40px; }
+[data-wk-off~="movie"]:not([data-wk-off~="otona"]) .rtl-lanes-3 .rtl-lane,
+[data-wk-off~="otona"]:not([data-wk-off~="movie"]) .rtl-lanes-3 .rtl-lane { height: 50%; }
+[data-wk-off~="movie"]:not([data-wk-off~="otona"]) .rtl-lanes-3 .rtl-lane-spin,
+[data-wk-off~="otona"]:not([data-wk-off~="movie"]) .rtl-lanes-3 .rtl-lane-movie { top: 50%; }
 /* 人物・企業/団体詳細の年表の役職の行の印（札）。役柄の行はキャラクターの星（.rtl-badge-character）。 */
 .rtl-badge-role { background: rgba(59, 130, 196, 0.12); color: #2563a8; }
 
@@ -12229,3 +13695,8 @@ a.staff-combo-nav-card:hover {
     flex-direction: row;
   }
 }
+
+/* ギリシア語の本文。Noto Sans JP にはアクセントや気息記号の付いた字が無く、字ごとに別の書体になるので、
+   lang="el"（現代ギリシア語）か lang="grc"（古典ギリシア語）を付けた所は Noto Sans で組む。
+   原稿では <span lang="grc">μάγοι</span> のように書く（書体の読み込みは _layout.sbn）。 */
+:lang(el), :lang(grc) { font-family: "Noto Sans", var(--font-base); }

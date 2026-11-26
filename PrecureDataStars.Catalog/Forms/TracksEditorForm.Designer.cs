@@ -44,6 +44,8 @@ partial class TracksEditorForm
     private Label lblTitleOverride = null!;
     private NumericUpDown numStartLba = null!;
     private NumericUpDown numLengthFrames = null!;
+    private NumericUpDown numSubStartFrames = null!;
+    private NumericUpDown numSubLengthFrames = null!;
     private TextBox txtIsrc = null!;
     private TextBox txtCdTextTitle = null!;
     private TextBox txtCdTextPerformer = null!;
@@ -107,6 +109,8 @@ partial class TracksEditorForm
         lblTitleOverride = new Label();
         numStartLba = new NumericUpDown();
         numLengthFrames = new NumericUpDown();
+        numSubStartFrames = new NumericUpDown();
+        numSubLengthFrames = new NumericUpDown();
         txtIsrc = new TextBox();
         txtCdTextTitle = new TextBox();
         txtCdTextPerformer = new TextBox();
@@ -302,6 +306,9 @@ partial class TracksEditorForm
         // その他の物理情報
         AddRow(pnlTrackDetail, "StartLBA", numStartLba, ty, lw, fw); numStartLba.Maximum = 999999999; ty += rh;
         AddRow(pnlTrackDetail, "尺(フレーム)", numLengthFrames, ty, lw, fw); numLengthFrames.Maximum = 999999999; ty += rh;
+        // 1 トラックに複数の曲・版が入っているときの、このトラックの 1 つ目（枝番 0）の区切り
+        AddRow(pnlTrackDetail, "トラック内 開始", numSubStartFrames, ty, lw, fw); numSubStartFrames.Maximum = 999999999; ty += rh;
+        AddRow(pnlTrackDetail, "トラック内 長さ", numSubLengthFrames, ty, lw, fw); numSubLengthFrames.Maximum = 999999999; ty += rh;
         AddRow(pnlTrackDetail, "ISRC", txtIsrc, ty, lw, fw); ty += rh;
         AddRow(pnlTrackDetail, "CD-Text Title", txtCdTextTitle, ty, lw, fw); ty += rh;
         AddRow(pnlTrackDetail, "CD-Text Performer", txtCdTextPerformer, ty, lw, fw); ty += rh;

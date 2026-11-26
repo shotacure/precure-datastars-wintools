@@ -5,6 +5,17 @@
   <p class="muted stats-note">平均の小数部分は小さく表示（例 <span class="micro-fraction">.222</span>）。</p>
 </section>
 
+{{## 冒頭の箱ひげ図（Charts：アバンタイトル・A パート・B パート）。横軸は TV シリーズの放送開始年。
+     図は幅が狭いと字が読めなくなるので、スマホの幅では図だけを横スクロールさせる。 ##}}
+{{~ for c in Charts ~}}
+<section id="chart-{{ for.index + 1 }}">
+  <h2>{{ c.Label | html.escape }}の尺の移り変わり</h2>
+  <div class="stats-chart-scroll">
+    <div class="stats-chart">{{ c.Svg }}</div>
+  </div>
+</section>
+{{~ end ~}}
+
 {{## 旧 stats-episodes-by-series.sbn を引き継いで series-summary.sbn にリネーム。
      平均値の小数部分のみ <span class="micro-fraction"> でフォント縮小表記する仕様を追加。 ##}}
 {{## 作品ごとの section には、左のもくじ（section-nav.js）の id・ラベル（題名。映画は nav_prefix / nav_main で上の段と副題）・年を付ける。 ##}}

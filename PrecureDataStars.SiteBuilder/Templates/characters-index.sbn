@@ -1,5 +1,4 @@
 <h1>歴代キャラクター</h1>
-<p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 <p class="lead">
   プリキュア・妖精たち・敵・とりまく人々、歴代のキャラクター全 {{ TotalCount }} 名
@@ -59,11 +58,16 @@
   <ul class="entity-list entity-list-grid">
     {{~ for c in kg.Members ~}}
     <li class="entity-row">
+      {{## 「その他」を展開した行（個別ページを持たないキャラ）は、名前だけでリンクを付けない。 ##}}
+      {{~ if c.NoLink ~}}
+      <span class="entity-row-name">{{ c.Name | html.escape }}</span>
+      {{~ else ~}}
       <a class="entity-row-link" href="{{ character_url c.CharacterId }}" aria-label="{{ c.Name | html.escape }}"></a>
       {{~ if c.HasInvolvement ~}}
       <a class="entity-row-name" href="{{ character_url c.CharacterId }}">{{ c.Name | html.escape }}</a>
       {{~ else ~}}
       <a class="entity-row-name muted" href="{{ character_url c.CharacterId }}">{{ c.Name | html.escape }}</a>
+      {{~ end ~}}
       {{~ end ~}}
       <span class="entity-row-count">{{ if c.EpisodeCount > 0 || c.MovieCount > 0 || c.OtonaEpisodeCount > 0 }}<span class="count-badges">{{~ if c.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ c.EpisodeCount }}</span>{{~ end ~}}{{~ if c.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ c.MovieCount }}</span>{{~ end ~}}{{~ if c.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ c.OtonaEpisodeCount }}</span>{{~ end ~}}</span>{{ else }}<span class="muted">—</span>{{ end }}</span>
     </li>
@@ -81,6 +85,48 @@
       <a class="entity-row-name" href="{{ s.GuestPageUrl }}">その他のキャラクター</a>
       <span class="entity-row-count"><span class="count-badges"><span class="count-pill count-pill-person" title="人数"><svg class="count-pill-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg>{{ s.GuestCount }}</span></span></span>
     </li>
+  </ul>
+  {{~ end ~}}
+  {{## この作品の最終話にだけ顔を出した、次の TV シリーズのキャラクター。所属は次の作品で、そちらの種別サブセクションにも並ぶ。
+       見出しの人数には数えない。 ##}}
+  {{~ if (array.size s.BatonMembers) > 0 ~}}
+  <h3>最終話バトンタッチ</h3>
+  <ul class="entity-list entity-list-grid">
+    {{~ for c in s.BatonMembers ~}}
+    <li class="entity-row">
+      <a class="entity-row-link" href="{{ character_url c.CharacterId }}" aria-label="{{ c.Name | html.escape }}"></a>
+      <a class="entity-row-name" href="{{ character_url c.CharacterId }}">{{ c.Name | html.escape }}</a>
+      <span class="entity-row-count">{{ if c.EpisodeCount > 0 || c.MovieCount > 0 || c.OtonaEpisodeCount > 0 }}<span class="count-badges">{{~ if c.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ c.EpisodeCount }}</span>{{~ end ~}}{{~ if c.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ c.MovieCount }}</span>{{~ end ~}}{{~ if c.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ c.OtonaEpisodeCount }}</span>{{~ end ~}}</span>{{ else }}<span class="muted">—</span>{{ end }}</span>
+    </li>
+    {{~ end ~}}
+  </ul>
+  {{~ end ~}}
+  {{## 映画の公開の前にこの作品へ 1 話だけ顔を出した、映画のキャラクター。所属は映画で、そちらの種別サブセクションにも並ぶ。
+       見出しの人数には数えない。 ##}}
+  {{~ if (array.size s.TieInMembers) > 0 ~}}
+  <h3>映画タイアップ</h3>
+  <ul class="entity-list entity-list-grid">
+    {{~ for c in s.TieInMembers ~}}
+    <li class="entity-row">
+      <a class="entity-row-link" href="{{ character_url c.CharacterId }}" aria-label="{{ c.Name | html.escape }}"></a>
+      <a class="entity-row-name" href="{{ character_url c.CharacterId }}">{{ c.Name | html.escape }}</a>
+      <span class="entity-row-count">{{ if c.EpisodeCount > 0 || c.MovieCount > 0 || c.OtonaEpisodeCount > 0 }}<span class="count-badges">{{~ if c.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ c.EpisodeCount }}</span>{{~ end ~}}{{~ if c.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ c.MovieCount }}</span>{{~ end ~}}{{~ if c.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ c.OtonaEpisodeCount }}</span>{{~ end ~}}</span>{{ else }}<span class="muted">—</span>{{ end }}</span>
+    </li>
+    {{~ end ~}}
+  </ul>
+  {{~ end ~}}
+  {{## 本編に登場しない（声の出演のクレジットが無い）キャラクター。家族関係でこの作品のキャラクターとつながる。欄の末尾に置く。
+       見出しの人数には数えない。 ##}}
+  {{~ if (array.size s.UnairedMembers) > 0 ~}}
+  <h3>本編未登場</h3>
+  <ul class="entity-list entity-list-grid">
+    {{~ for c in s.UnairedMembers ~}}
+    <li class="entity-row">
+      <a class="entity-row-link" href="{{ character_url c.CharacterId }}" aria-label="{{ c.Name | html.escape }}"></a>
+      <a class="entity-row-name" href="{{ character_url c.CharacterId }}">{{ c.Name | html.escape }}</a>
+      <span class="entity-row-count">{{ if c.EpisodeCount > 0 || c.MovieCount > 0 || c.OtonaEpisodeCount > 0 }}<span class="count-badges">{{~ if c.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ c.EpisodeCount }}</span>{{~ end ~}}{{~ if c.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ c.MovieCount }}</span>{{~ end ~}}{{~ if c.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ c.OtonaEpisodeCount }}</span>{{~ end ~}}</span>{{ else }}<span class="muted">—</span>{{ end }}</span>
+    </li>
+    {{~ end ~}}
   </ul>
   {{~ end ~}}
 </section>

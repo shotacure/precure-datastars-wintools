@@ -69,11 +69,20 @@ public sealed class EpisodeUse
     /// <summary>使用尺（秒）。任意。</summary>
     public ushort? DurationSeconds { get; set; }
 
+    /// <summary>パートの頭から使用が始まるまでの位置（ミリ秒）。分からなければ NULL。</summary>
+    public uint? PartOffsetMs { get; set; }
+
+    /// <summary>使用尺（ミリ秒）。分からなければ NULL。<see cref="DurationSeconds"/> は秒の値。</summary>
+    public uint? DurationMs { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 
     /// <summary>本放送のみ使用された場合のフラグ。</summary>
     public bool IsBroadcastOnly { get; set; }
+
+    /// <summary>使用曲の一覧に載せる行か。0 の行は、記録だけして一覧には載せない（OP・ED・予告などのパートの行は行ごとに選ぶ）。</summary>
+    public bool IsListed { get; set; } = true;
 
     // ── 監査 ──
 

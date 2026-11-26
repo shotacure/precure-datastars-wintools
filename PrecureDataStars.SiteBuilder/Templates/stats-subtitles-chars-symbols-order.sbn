@@ -4,20 +4,46 @@
   <p class="lead">プリキュア全シリーズのサブタイトルに使われた記号文字（初使用の早い順・全件。長音「ー」はカタカナに数えるので含めません）。各記号の出現回数と初出エピソード（シリーズ・話数・放送日・サブタイトル）。放送日が同じ場合は話数の順。</p>
 </section>
 
+{{## 頭の図：記号の札を初使用の年ごとにまとめて並べる（Years）。回数が多い記号ほど札が大きい（CloudSize）。
+     行は、出現回数のパネル・記号・初使用の回（題名の中のその記号に色）。題名の下に、作品ごとの使われ方のマス
+     （SeriesCells：本線の TV シリーズを放送順に。その記号がいちばん多く使われた作品が最も濃く、最も高い）と、いちばん多く使われた作品。 ##}}
 <section>
-  <ol class="stats-ep-list">
+  <div class="stats-symline" role="img" aria-label="記号を初使用の年ごとに並べた図。出現回数の多い記号ほど大きい">
+    {{~ for y in Years ~}}
+    <div class="stats-symline-year">
+      <span class="stats-cloud">
+        {{~ for r in y.Symbols ~}}
+        <span class="ct-symbols" style="font-size: {{ r.CloudSize }}em" title="{{ r.CloudTitle }}">{{ r.Char | html.escape }}</span>
+        {{~ end ~}}
+      </span>
+      <b>{{ y.Year }}</b>
+    </div>
+    {{~ end ~}}
+  </div>
+</section>
+
+<section>
+  <h2>初使用の回とシリーズ頻度</h2>
+  <p class="muted stats-note">マスは TV シリーズを放送順（左が 2004 年）に並べたもので、その記号が多く使われた作品ほど高く、濃い色です。赤い点線は 5 年ごと、破線は 10 年ごとの区切りです。</p>
+  <ol class="stats-ep-list is-subtitle-stats">
     {{~ for r in Rows ~}}
     <li class="stats-ep-row stats-symbol-row">
       <div class="stats-ep-rank value-only">
         <span class="stats-ep-rank-val">{{ r.ValueLabel }}</span>
       </div>
-      <div class="stats-char-glyph">{{ r.Char | html.escape }}</div>
+      <div class="stats-char-glyph ct-symbols">{{ r.Char | html.escape }}</div>
       <div class="stats-ep-body">
         <div class="stats-ep-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a> <span class="stats-ep-year">({{ r.SeriesStartYearLabel }})</span></div>
         <div class="stats-ep-line2">
           <span class="ep-row-date">{{ r.FirstDateLabel }}</span>
           <span class="ep-row-no">{{ r.EpNoLabel }}</span>
           <a class="stats-ep-title" href="{{ r.EpisodeUrl }}">{{ r.TitleHtml }}</a>
+        </div>
+        <div class="stats-symbol-extra">
+          <span class="stats-strip">
+            {{~ for c in r.SeriesCells ~}}<i{{ if c.Sep != "" }} class="{{ c.Sep }}"{{ end }} title="{{ c.Title | html.escape }}"{{ if c.Shade != "" }} style="height: {{ c.Height }}%; background: rgba(216, 27, 96, {{ c.Shade }})"{{ end }}></i>{{~ end ~}}
+          </span>
+          <span class="stats-series-detail stats-char-peak">{{ r.PeakLabel | html.escape }}</span>
         </div>
       </div>
     </li>

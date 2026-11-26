@@ -17,16 +17,15 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     永続マニフェストと突き合わせ、内容が実際に変わったビルドの時刻だけを採用する（不変ページは前回値を
 ///     据え置く。<see cref="SitemapLastmodManifest"/> 参照）。priority は
 ///     セクション種別から導出（ホーム=1.0、シリーズ・エピソード=0.8、それ以外=0.5）。</description></item>
-///   <item><description><c>/robots.txt</c> — 通常クローラへの全許可 + sitemap.xml への参照に加え、
-///     リソース消費の大きい外部クローラ（AI 学習スクレイパ系・バックリンク収集系）への
-///     個別 Disallow を主要検索エンジンには控えめな <c>Crawl-delay</c> を付ける。</description></item>
+///   <item><description><c>/robots.txt</c> — すべてのクローラへの全許可 + sitemap.xml への参照。
+///     名乗って取りに来るクローラ（検索エンジン・AI 検索・AI の学習・SEO 解析・SNS のプレビューなど）は、
+///     量や目的で分けずにどれも通す。個別の <c>Disallow</c> や <c>Crawl-delay</c> は付けない。</description></item>
 /// </list>
 /// BaseUrl が空の場合は sitemap.xml の <c>&lt;loc&gt;</c> 値が組み立てられないため、
 /// 警告ログを出力したうえで sitemap.xml は生成せず robots.txt のみ書き出す（クロールを許可するか
 /// 禁止するかはクローラ任せ）。
-/// 注意：本ジェネレータが出力する <c>robots.txt</c> はあくまで紳士協定であり、悪意のあるクローラを
-/// 強制的に止める手段ではない。実運用での流量制限は CDN（Cloudflare 等）や WAF のレートリミット
-/// 機能で別途行うことを前提とする。
+/// 注意：<c>robots.txt</c> は紳士協定であり、悪意のあるリクエストを止める手段ではない。
+/// 正体を偽ったり探りを入れたりするリクエストは、配信の側（CDN）で断る。
 /// </summary>
 public sealed class SeoGenerator
 {
@@ -34,57 +33,6 @@ public sealed class SeoGenerator
     private readonly BuildConfig _config;
     private readonly PageRenderer _pageRenderer;
     private readonly OutputWriter _output;
-
-    /// <summary>
-    /// <c>robots.txt</c> で個別に <c>Disallow: /</c> を当てる外部クローラの User-Agent 一覧。
-    /// <list type="bullet">
-    ///   <item>前半：AI 学習・LLM データ収集系。AI の学習に使ってよいのは OpenAI（ChatGPT）と Anthropic（Claude）だけにするため、
-    ///     両社以外の学習用クローラ（CCBot / Google-Extended / Meta-ExternalAgent 等）を明示拒否する。</item>
-    ///   <item>後半：バックリンク・SEO 解析系（AhrefsBot / SemrushBot / MJ12bot 等）。サイトの解析データを
-    ///     商用販売する目的のクローラで、本サイトに対するメリットが無くサーバ負荷だけがかかるため拒否。</item>
-    /// </list>
-    /// OpenAI と Anthropic のクローラは本リストに含めず、<c>User-agent: *</c> の全許可で通す
-    /// （OpenAI：GPTBot〔学習〕・ChatGPT-User〔利用者の操作で開く〕・OAI-SearchBot〔検索〕。
-    /// Anthropic：ClaudeBot〔学習〕・Claude-User〔利用者の操作で開く〕・Claude-SearchBot〔検索〕・旧名の anthropic-ai / Claude-Web）。
-    /// AI「検索」系の PerplexityBot も、学習用の収集ではなく回答への引用元としてページを読みに来るクローラなので、
-    /// 通常の検索エンジンと同じ扱いで許可する。
-    /// 紳士協定であり強制力は無いが、最初のリクエスト前に robots.txt を読む行儀の良いクローラには有効。
-    /// </summary>
-    private static readonly string[] BlockedCrawlerUserAgents = new[]
-    {
-        // ── AI 学習・LLM データ収集系（OpenAI と Anthropic 以外） ──
-        "CCBot",
-        "Google-Extended",
-        "Applebot-Extended",
-        "Bytespider",
-        "FacebookBot",
-        "Meta-ExternalAgent",
-        "Diffbot",
-        "Omgilibot",
-        "Omgili",
-        "cohere-ai",
-        "cohere-training-data-crawler",
-        "AI2Bot",
-        "Ai2Bot-Dolma",
-        "PanguBot",
-        "Timpibot",
-        "ImagesiftBot",
-        "img2dataset",
-        // ── バックリンク・SEO 解析系 ──
-        "AhrefsBot",
-        "SemrushBot",
-        "MJ12bot",
-        "DotBot",
-        "PetalBot",
-        "BLEXBot",
-        "DataForSeoBot",
-        "SeznamBot",
-        "rogerbot",
-        "AspiegelBot",
-    };
-
-    /// <summary>主要検索エンジン向けに付ける Crawl-delay 値（秒）。</summary>
-    private const int MainCrawlerCrawlDelaySeconds = 10;
 
     public SeoGenerator(BuildContext ctx, BuildConfig config, PageRenderer pageRenderer, OutputWriter output)
     {
@@ -107,6 +55,7 @@ public sealed class SeoGenerator
 
         WriteSitemapXml();
         WriteRobotsTxt(includeSitemap: true);
+        WriteIndexNowKeyFile();
 
         _ctx.Logger.Success($"SEO: sitemap.xml ({_pageRenderer.WrittenPages.Count} URL) + robots.txt");
         return Task.CompletedTask;
@@ -127,7 +76,11 @@ public sealed class SeoGenerator
             SitemapLastmodManifest.DeriveManifestPath(_config.OutputDirectory));
         // 印は各ページを書く時に取ってあるので、出力のファイルを読み返さない。
         // 差分だけを出すビルドでは、控えを進めない（次の本当のビルドで、変わったページの更新日が進むように）。
-        var lastmod = manifest.Resolve(pages, buildTimeIso, _output.Md5Of, save: !_config.DiffOnly);
+        // 「中身が変わったか」は、ほかの回のデータで毎週変わる部分（<!--volatile--> の囲み）を伏せて比べる（StableContentHash）。
+        var urlByFile = pages.ToDictionary(p => p.Item2, p => p.UrlPath, StringComparer.OrdinalIgnoreCase);
+        string? HashOf(string file) => StableContentHash.Compute(
+            file, urlByFile.TryGetValue(file, out var url) && StableContentHash.MayHaveMarkers(url), _output.Md5Of);
+        var lastmod = manifest.Resolve(pages, buildTimeIso, HashOf, save: !_config.DiffOnly);
         _ctx.Logger.Info(
             $"sitemap lastmod: 据え置き {lastmod.Unchanged} / 更新 {lastmod.Changed} / 新規 {lastmod.Added}");
 
@@ -197,40 +150,22 @@ public sealed class SeoGenerator
         return 0.5;
     }
 
-    /// <summary>/robots.txt を書き出す（内容を拡張）。</summary>
+    /// <summary>
+    /// IndexNow の鍵のファイル（<c>/{鍵}.txt</c>。中身は鍵そのもの）を書き出す。IndexNow の受け手は、送られた鍵がこの場所に
+    /// 置かれているかでサイトの持ち主を確かめる。鍵が未設定なら書かない。
+    /// </summary>
+    private void WriteIndexNowKeyFile()
+    {
+        if (string.IsNullOrEmpty(_config.IndexNowKey)) return;
+        _output.WriteText(Path.Combine(_config.OutputDirectory, _config.IndexNowKey + ".txt"), _config.IndexNowKey);
+    }
+
+    /// <summary>/robots.txt を書き出す。すべてのクローラに全体を許可し、sitemap.xml の場所を添える。</summary>
     /// <param name="includeSitemap">true なら sitemap.xml への参照行を含める。BaseUrl 未設定時は false を渡す。</param>
     private void WriteRobotsTxt(bool includeSitemap)
     {
         var sb = new StringBuilder();
 
-        // 個別ブロックの説明コメント。robots.txt はコメント許容なので、運用者にも意図が伝わるよう付記。
-        sb.AppendLine("# precure-datastars robots.txt");
-        sb.AppendLine("# AI の学習に使ってよいのは OpenAI（ChatGPT）と Anthropic（Claude）のクローラだけです。");
-        sb.AppendLine("# 個別 User-agent ブロックは、それ以外の AI 学習系と SEO 解析系のクローラに対する明示拒否です。");
-        sb.AppendLine("# AI 検索系（OAI-SearchBot / Claude-SearchBot / PerplexityBot）は引用元として読みに来るため許可しています。");
-        sb.AppendLine("# 紳士協定であり強制力はありません（実流量制御は別途 CDN / WAF 側で行います）。");
-        sb.AppendLine();
-
-        // ブロック 1：個別クローラの拒否（1 UA あたり 2 行：User-agent と Disallow）。
-        foreach (var ua in BlockedCrawlerUserAgents)
-        {
-            sb.AppendLine($"User-agent: {ua}");
-            sb.AppendLine("Disallow: /");
-            sb.AppendLine();
-        }
-
-        // ブロック 2：主要検索エンジンへの Crawl-delay（Google は無視するが、Bing 等は尊重）。
-        sb.AppendLine($"User-agent: Bingbot");
-        sb.AppendLine($"Crawl-delay: {MainCrawlerCrawlDelaySeconds}");
-        sb.AppendLine();
-        sb.AppendLine($"User-agent: Slurp");
-        sb.AppendLine($"Crawl-delay: {MainCrawlerCrawlDelaySeconds}");
-        sb.AppendLine();
-        sb.AppendLine($"User-agent: DuckDuckBot");
-        sb.AppendLine($"Crawl-delay: {MainCrawlerCrawlDelaySeconds}");
-        sb.AppendLine();
-
-        // ブロック 3：その他すべて許可 + サイトマップ参照。
         sb.AppendLine("User-agent: *");
         sb.AppendLine("Allow: /");
         sb.AppendLine();

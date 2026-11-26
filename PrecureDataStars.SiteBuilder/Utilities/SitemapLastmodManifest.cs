@@ -30,6 +30,27 @@ public sealed class SitemapLastmodManifest
         => outputDirectory.TrimEnd('/', '\\') + ".lastmod-manifest.json";
 
     /// <summary>
+    /// 直前の解決で更新日が進んだページ（新規と変化）の一覧を置くパス（マニフェストと同じく出力ツリーの外）。
+    /// 例: <c>D:\web\precure.tv\</c> → <c>D:\web\precure.tv.lastmod-changed.json</c>。IndexNow へ送るページを選ぶのに使う。
+    /// </summary>
+    public static string DeriveChangedListPath(string outputDirectory)
+        => outputDirectory.TrimEnd('/', '\\') + ".lastmod-changed.json";
+
+    /// <summary>直前の解決で更新日が進んだページの一覧を読む。無い・読めないときは null。</summary>
+    public static ChangedPages? LoadChangedList(string outputDirectory)
+    {
+        try
+        {
+            var path = DeriveChangedListPath(outputDirectory);
+            return File.Exists(path) ? JsonSerializer.Deserialize<ChangedPages>(File.ReadAllText(path)) : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// 各ページの出力ファイルのハッシュを前回マニフェストと突き合わせ、URL ごとの lastmod を解決する。
     /// 解決後の状態を新しいマニフェストとして保存する（今ビルドに存在するページのみを残すため、
     /// 生成されなくなったページのエントリは自然に脱落する）。<paramref name="save"/> が false なら保存しない
@@ -52,6 +73,8 @@ public sealed class SitemapLastmodManifest
         var next = new Dictionary<string, ManifestEntry>(pages.Count, StringComparer.Ordinal);
         var lastmodByUrl = new Dictionary<string, string>(pages.Count, StringComparer.Ordinal);
         int unchanged = 0, changed = 0, added = 0;
+        var addedUrls = new List<string>();
+        var changedUrls = new List<string>();
 
         foreach (var (urlPath, outputFilePath) in pages)
         {
@@ -68,13 +91,18 @@ public sealed class SitemapLastmodManifest
             else
             {
                 lastmod = buildTimeIso;
-                if (previous.ContainsKey(urlPath)) changed++; else added++;
+                if (previous.ContainsKey(urlPath)) { changed++; changedUrls.Add(urlPath); }
+                else { added++; addedUrls.Add(urlPath); }
             }
             next[urlPath] = new ManifestEntry { Hash = hash, Lastmod = lastmod };
             lastmodByUrl[urlPath] = lastmod;
         }
 
-        if (save) Save(next);
+        if (save)
+        {
+            Save(next);
+            SaveChangedList(new ChangedPages { Added = addedUrls, Changed = changedUrls });
+        }
         return new LastmodResolveResult
         {
             LastmodByUrl = lastmodByUrl,
@@ -101,6 +129,16 @@ public sealed class SitemapLastmodManifest
             // 破損していても全ページの lastmod が当該ビルド時刻になるだけで、害は無い。
             return new(StringComparer.Ordinal);
         }
+    }
+
+    /// <summary>更新日が進んだページの一覧を、マニフェストの隣（<c>….lastmod-changed.json</c>）に書く。</summary>
+    private void SaveChangedList(ChangedPages pages)
+    {
+        const string manifestSuffix = ".lastmod-manifest.json";
+        var path = _manifestPath.EndsWith(manifestSuffix, StringComparison.Ordinal)
+            ? _manifestPath[..^manifestSuffix.Length] + ".lastmod-changed.json"
+            : _manifestPath + ".changed.json";
+        File.WriteAllText(path, JsonSerializer.Serialize(pages));
     }
 
     private void Save(Dictionary<string, ManifestEntry> entries)
@@ -132,6 +170,13 @@ public sealed class SitemapLastmodManifest
 }
 
 /// <summary>lastmod 解決の結果（URL→lastmod とビルド内訳カウント）。</summary>
+/// <summary>直前の解決で更新日が進んだページの URL パス（新規・変化。それぞれ書き出し順）。</summary>
+public sealed class ChangedPages
+{
+    [JsonPropertyName("added")] public List<string> Added { get; set; } = new();
+    [JsonPropertyName("changed")] public List<string> Changed { get; set; } = new();
+}
+
 public sealed class LastmodResolveResult
 {
     /// <summary>URL パス → 解決済み lastmod（ISO-8601 文字列）。</summary>

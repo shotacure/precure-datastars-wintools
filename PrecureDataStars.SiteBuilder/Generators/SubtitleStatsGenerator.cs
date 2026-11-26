@@ -90,7 +90,6 @@ public sealed class SubtitleStatsGenerator
             PageTitle = "歴代サブタイトル統計",
             OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代サブタイトル統計")
             {
-                MetaLeft = _coverageLabel,
                 // ページの冒頭文（stats-subtitles-index.sbn の .lead）と同じ文。
                 Subtitle = "サブタイトルの文字の統計"
             },
@@ -111,8 +110,7 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateCharsAllAsync(CancellationToken ct)
     {
         var rows = await _repo.GetCharRankingAllAsync(Limit, ct).ConfigureAwait(false);
-        var view = StatsCharRows.Build(rows.Select(r => new StatsCharInput(r.Rank, r.TotalCount, r.Char)));
-        var content = new { Rows = view, CoverageLabel = _coverageLabel };
+        var content = await BuildCharRankingContentAsync(rows, kanjiGrades: false, ct).ConfigureAwait(false);
         var layout = MakeLayout("使用文字 TOP 100（全文字）", "全文字");
         _page.RenderAndWrite("/stats/subtitles/chars/all/", "stats", "stats-subtitles-chars-all.sbn", content, layout);
     }
@@ -120,21 +118,86 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateCharsKanjiAsync(CancellationToken ct)
     {
         var rows = await _repo.GetCharRankingKanjiAsync(Limit, ct).ConfigureAwait(false);
-        var view = StatsCharRows.Build(rows.Select(r => new StatsCharInput(r.Rank, r.TotalCount, r.Char)));
-        var content = new { Rows = view, CoverageLabel = _coverageLabel };
+        var content = await BuildCharRankingContentAsync(rows, kanjiGrades: true, ct).ConfigureAwait(false);
         var layout = MakeLayout("使用文字 TOP 100（漢字限定）", "漢字限定");
         _page.RenderAndWrite("/stats/subtitles/chars/kanji/", "stats", "stats-subtitles-chars-kanji.sbn", content, layout);
+    }
+
+    /// <summary>作品 × 字の出現回数（使用文字の 2 ページで共有する。最初に使うときに 1 回だけ引く）。</summary>
+    private IReadOnlyDictionary<(int SeriesId, string Char), long>? _seriesCharCounts;
+
+    /// <summary>
+    /// 使用文字のランキング（全文字・漢字限定）のページのモデルを組む。頭に字の一覧図（回数が多い字ほど大きい札）、
+    /// 下に順位の行。行には、本線の TV シリーズを放送順に並べた作品ごとの使われ方のマスと、いちばん多く使われた作品を添える。
+    /// </summary>
+    /// <param name="kanjiGrades">
+    /// 札と字の色を、習う学年・中学以降の常用漢字・常用漢字でない字で分けるか（漢字限定のページ）。false なら字の種類で分ける。
+    /// </param>
+    private async Task<object> BuildCharRankingContentAsync(
+        IReadOnlyList<SubtitleStatsRepository.CharRankingRow> rows, bool kanjiGrades, CancellationToken ct)
+    {
+        var (series, counts) = await LoadSeriesCharCountsAsync(ct).ConfigureAwait(false);
+        var view = StatsCharRows.Build(rows.Select(r => new StatsCharInput(r.Rank, r.TotalCount, r.Char)), series, counts,
+            kanjiGrades ? KanjiGrades.ClassOf : null);
+        var legend = kanjiGrades
+            ? KanjiGrades.Legend
+            : new[]
+            {
+                ("ct-kanji", "漢字"), ("ct-hiragana", "ひらがな"), ("ct-katakana", "カタカナ"),
+                ("ct-latin", "英字"), ("ct-digits", "数字"), ("ct-symbols", "記号")
+            };
+        return new
+        {
+            Rows = view,
+            // 順位の行は、同じ順位（同じ出現回数）の字をまとめて描く。
+            Groups = StatsCharRows.BuildGroups(view),
+            // 作品ごとの棒の列の見出し（放送開始年の下 2 桁。棒と同じ位置に 5 作ごとの区切りの線を引く）。
+            SeriesYears = series.Select((s, i) => new
+            {
+                Label = (s.Year % 100).ToString("00"),
+                Sep = StatsCharRows.SeparatorClass(i)
+            }).ToList(),
+            // 色の凡例：一覧に出てくる区分だけ出す。
+            Legend = legend.Where(l => view.Any(v => v.TypeClass == l.Item1))
+                .Select(l => new { Class = l.Item1, Label = l.Item2 }).ToList(),
+            CoverageLabel = _coverageLabel
+        };
+    }
+
+    /// <summary>作品ごとの使われ方の列の材料：本線の TV シリーズ（放送順）と、作品 × 字の出現回数。</summary>
+    private async Task<(List<StatsCharSeries> Series, IReadOnlyDictionary<(int SeriesId, string Char), long> Counts)> LoadSeriesCharCountsAsync(CancellationToken ct)
+    {
+        _seriesCharCounts ??= (await _repo.GetSeriesCharCellsAsync(ct).ConfigureAwait(false))
+            .GroupBy(c => (c.SeriesId, c.Char))
+            .ToDictionary(g => g.Key, g => g.Sum(c => c.Cnt));
+        var series = _ctx.SeriesById.Values
+            .Where(s => _ctx.IsMainlineTvSeries(s.SeriesId))
+            .OrderBy(s => s.StartDate).ThenBy(s => s.SeriesId)
+            .Select(s => new StatsCharSeries(s.SeriesId, s.Title, s.StartDate.Year))
+            .ToList();
+        return (series, _seriesCharCounts);
     }
 
     private async Task GenerateSymbolsByFirstAppearAsync(CancellationToken ct)
     {
         var rows = await _repo.GetSymbolsByFirstAppearAsync(ct).ConfigureAwait(false);
+        var (series, counts) = await LoadSeriesCharCountsAsync(ct).ConfigureAwait(false);
         // 初使用が早い順（リポジトリの順序）を保ったまま、使用文字 TOP100 と同じ大グリフ＋出現回数
         // パネル＋初使用エピソード（シリーズ・第N話(放送日)・ルビ付きサブタイトル）の脱テーブル行へ。
         var view = StatsSymbolRows.Build(_ctx, rows.Select(r => new StatsSymbolInput(
             r.Char, r.TotalCount, r.FirstSeriesSlug, r.FirstSeriesEpNo, r.FirstSeriesTitle,
-            _ctx.StartYearLabelBySlug(r.FirstSeriesSlug), r.FirstBroadcastDate, r.FirstTitleText)));
-        var content = new { Rows = view, CoverageLabel = _coverageLabel };
+            _ctx.StartYearLabelBySlug(r.FirstSeriesSlug), r.FirstBroadcastDate, r.FirstTitleText)), series, counts);
+        // 頭の図：記号を初使用の年ごとにまとめる（年の早い順。年の中は初使用の早い順のまま）。
+        var years = view.GroupBy(v => v.FirstYear)
+            .OrderBy(g => g.Key)
+            .Select(g => new { Year = g.Key > 0 ? g.Key.ToString() : "", Symbols = g.ToList() })
+            .ToList();
+        var content = new
+        {
+            Rows = view,
+            Years = years,
+            CoverageLabel = _coverageLabel
+        };
         var layout = MakeLayout("記号出現回数・初使用エピソード", "記号出現回数・初使用エピソード");
         _page.RenderAndWrite("/stats/subtitles/chars/symbols-order/", "stats", "stats-subtitles-chars-symbols-order.sbn", content, layout);
     }
@@ -143,101 +206,194 @@ public sealed class SubtitleStatsGenerator
 
     private async Task GenerateLengthEpisodeAsync(CancellationToken ct, bool ascending)
     {
-        var rows = await _repo.GetTitleLengthRankingAsync(ascending, Limit, ct).ConfigureAwait(false);
-        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
+        // 全部の話の文字数を 1 回で引き、上位 100 件（100 位が同点なら全件）を行に、全体を分布の図にする。
+        var all = await _repo.GetTitleLengthRankingAsync(ascending, int.MaxValue, ct).ConfigureAwait(false);
+        var ranked = all.Where(r => r.Rank <= Limit).ToList();
+        // 題名の下に 1 字 1 マスを並べる。全部のマスを塗るので、マスの列の長さが文字数になる。
+        var rows = StatsEpisodeRows.Build(_ctx, ranked.Select(r => new StatsEpisodeInput(
             r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
-            true, r.Rank, r.Value.ToString(), r.TitleText)));
+            true, r.Rank, r.Value.ToString(), r.TitleText)
+        {
+            ValueUnit = "文字",
+            Mark = StatsTitleMark.All
+        }));
         string slug = ascending ? "least" : "most";
         string label = ascending ? "少ない順" : "多い順";
         string url = $"/stats/subtitles/length/episode/{slug}/";
+        string chart = StatsRankingView.CountHistogram(
+            all.Select(r => (double)r.Value).ToList(), ranked.Select(r => (double)r.Value).ToList(), all.Where(r => r.Rank <= 10).Select(r => (double)r.Value).ToList(), descending: !ascending, "",
+            "プリキュア TV シリーズ全話のサブタイトルの文字数の分布。TOP 100 の話を濃い色で示す");
+        var view = StatsRankingView.Build(_ctx, rows, _coverageLabel, "文字数",
+            chartSvg: chart,
+            chartHeading: $"全 {all.Count:N0} 話の分布",
+            chartNote: $"サブタイトルの文字数ごとの話数です。平均は {(all.Count > 0 ? all.Average(r => (double)r.Value) : 0):0.0} 文字。濃い色が TOP 100 の話です。",
+            subtitleStats: true);
         var layout = MakeLayout($"エピソード単位 文字数 {label} TOP 100", $"文字数 {label}");
-        _page.RenderAndWrite(url, "stats", $"stats-subtitles-length-episode-{slug}.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
+        _page.RenderAndWrite(url, "stats", $"stats-subtitles-length-episode-{slug}.sbn", view, layout);
+    }
+
+    /// <summary>
+    /// エピソード単位の率（漢字率・記号率）のランキング 1 ページぶんのモデルを組む。行の題名は、数えた字（漢字・記号）に色を付け、
+    /// 題名の下に 1 字 1 マス（数えた字のマスだけ塗る）と内訳を添える。全部の話の率を分布の図にする。
+    /// </summary>
+    /// <param name="all">全部の話の行（順位の昇順）。</param>
+    /// <param name="valueName">率の名前（「漢字率」など）。</param>
+    /// <param name="numeratorName">分子の名前（「漢字」など）。</param>
+    private StatsRankingView BuildRatioEpisodeView(
+        IReadOnlyList<SubtitleStatsRepository.EpisodeRatioRow> all, bool ascending, StatsTitleMark mark, string valueName, string numeratorName)
+    {
+        var ranked = all.Where(r => r.Rank <= Limit).ToList();
+        // 指標値は率の百分率（小数 1 桁＋%）。内訳は集計と同じ数（分子 / 空白を除いた全文字数）。
+        var rows = StatsEpisodeRows.Build(_ctx, ranked.Select(r => new StatsEpisodeInput(
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
+            true, r.Rank, RatioPercent(r.KanjiCount, r.TotalCount).ToString("0.0") + "%", r.TitleText)
+        {
+            ValueUnit = "%",
+            Mark = mark,
+            DetailLabel = $"{numeratorName} {r.KanjiCount} / 全 {r.TotalCount} 字"
+        }));
+        string chart = StatsRankingView.PercentHistogram(
+            all.Select(r => RatioPercent(r.KanjiCount, r.TotalCount)).ToList(),
+            ranked.Select(r => RatioPercent(r.KanjiCount, r.TotalCount)).ToList(),
+            all.Where(r => r.Rank <= 10).Select(r => RatioPercent(r.KanjiCount, r.TotalCount)).ToList(), descending: !ascending,
+            $"プリキュア TV シリーズ全話のサブタイトルの{valueName}の分布。TOP 100 の話を濃い色で示す");
+        return StatsRankingView.Build(_ctx, rows, _coverageLabel, valueName,
+            chartSvg: chart,
+            chartHeading: $"全 {all.Count:N0} 話の分布",
+            chartNote: $"{valueName}を 5% きざみで数えた話数です。濃い色が TOP 100 の話です。",
+            subtitleStats: true);
     }
 
     /// <summary>シリーズ別 平均文字数（多い順）。 「シリーズ単位 多い順 / 少ない順」の 2 ページから多い順 1 ページに集約し、 「シリーズ別」グループの 1 つとして再配置。少ない順は同じテーブルの逆順なので削除。</summary>
     private async Task GenerateAvgLengthBySeriesAsync(CancellationToken ct)
     {
         var rows = await _repo.GetSeriesAverageLengthAsync(ascending: false, Limit, ct).ConfigureAwait(false);
-        // シリーズ URL 解決と平均値ラベル整形（小数 1 桁）
-        var view = rows.Select(r => new
-        {
-            r.Rank,
-            r.SeriesTitle,
-            SeriesStartYearLabel = _ctx.StartYearLabelBySlug(r.SeriesSlug),
-            r.EpisodeCount,
-            SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
-            AverageLabel = r.Average.ToString("0.0")
-        }).ToList();
+        // 順位の行：値は平均文字数（小数 1 桁）、内訳は話数。
+        var view = BuildSeriesRankRows(rows.Select(r => new SeriesRankInput(
+            r.Rank, r.SeriesSlug, r.SeriesTitle, r.Average, r.Average.ToString("0.0"), $"{r.EpisodeCount} 話")));
+
+        // 冒頭の箱ひげ図：各話の文字数を作品ごとに束ね、放送開始の早い順に並べる。
+        var lengths = await _repo.GetTitleLengthsBySeriesAsync(ct).ConfigureAwait(false);
+        var boxes = lengths
+            .GroupBy(l => l.SeriesId)
+            .Where(g => _ctx.SeriesById.ContainsKey(g.Key))
+            .Select(g => (Series: _ctx.SeriesById[g.Key], Values: g.Select(l => l.Len).ToList()))
+            .OrderBy(x => x.Series.StartDate)
+            .Select(x => new StatsBoxPlotItem(x.Series.StartDate.Year, x.Series.Title, x.Values))
+            .ToList();
+        string chart = StatsSeriesCharts.BuildBoxPlot(boxes, "文字",
+            "TV シリーズごとのサブタイトルの文字数の箱ひげ図。放送開始年の順に、最小値・最大値・四分位範囲・中央値・平均値・最頻値を表す");
+
         var layout = MakeLayout("シリーズ別 平均文字数", "シリーズ別 平均文字数");
-        _page.RenderAndWrite("/stats/subtitles/avg-length-by-series/", "stats", "stats-subtitles-avg-length-by-series.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
+        _page.RenderAndWrite("/stats/subtitles/avg-length-by-series/", "stats", "stats-subtitles-avg-length-by-series.sbn", new { Rows = view, ChartSvg = chart, CoverageLabel = _coverageLabel }, layout);
+    }
+
+    /// <summary>シリーズ別の順位のページ（平均文字数・漢字率・記号率）の 1 行ぶんの材料。</summary>
+    /// <param name="Rank">順位（同点は同じ順位）。</param>
+    /// <param name="Value">値（横棒の長さを決める）。</param>
+    /// <param name="ValueLabel">値の表記（「16.3」「21.3%」など）。</param>
+    /// <param name="DetailLabel">値の内訳（「49 話」「漢字 312 / 総文字数 901」など）。</param>
+    private readonly record struct SeriesRankInput(int Rank, string SeriesSlug, string SeriesTitle, double Value, string ValueLabel, string DetailLabel);
+
+    /// <summary>
+    /// シリーズ別の順位のページの行を組み立てる（順位の昇順で渡す）。エピソード単位のランキングと同じく、
+    /// 同じ順位が続く 2 件目からは順位を空にする。横棒は、いちばん大きい値を 100% とした長さ。
+    /// </summary>
+    private List<object> BuildSeriesRankRows(IEnumerable<SeriesRankInput> items)
+    {
+        var list = items.ToList();
+        double max = list.Count > 0 ? list.Max(i => i.Value) : 0.0;
+        var rows = new List<object>(list.Count);
+        int? prevRank = null;
+        foreach (var it in list)
+        {
+            rows.Add(new
+            {
+                RankLabel = prevRank == it.Rank ? "" : it.Rank.ToString(),
+                it.ValueLabel,
+                it.SeriesTitle,
+                SeriesUrl = PathUtil.SeriesUrl(it.SeriesSlug),
+                SeriesStartYearLabel = _ctx.StartYearLabelBySlug(it.SeriesSlug),
+                BarPercent = (max > 0 ? it.Value * 100.0 / max : 0.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture),
+                it.DetailLabel
+            });
+            prevRank = it.Rank;
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// シリーズ別の率（漢字率・記号率）のページの、順位の行と冒頭の折れ線グラフを組み立てる。
+    /// 率は分子・分母から求め直す（<see cref="RatioPercent"/>）。グラフは放送開始の早い順。
+    /// </summary>
+    /// <param name="valueName">率の名前（「漢字率」など）。</param>
+    /// <param name="numeratorName">分子の名前（「漢字」など）。</param>
+    private (List<object> Rows, string ChartSvg) BuildSeriesRatioView(
+        IReadOnlyList<SubtitleStatsRepository.SeriesRatioRow> rows, string valueName, string numeratorName)
+    {
+        string Detail(SubtitleStatsRepository.SeriesRatioRow r) => $"{numeratorName} {r.KanjiCount:N0} / 総文字数 {r.TotalCount:N0}";
+
+        var view = BuildSeriesRankRows(rows.Select(r =>
+        {
+            double pct = RatioPercent(r.KanjiCount, r.TotalCount);
+            return new SeriesRankInput(r.Rank, r.SeriesSlug, r.SeriesTitle, pct, pct.ToString("0.0") + "%", Detail(r));
+        }));
+
+        var points = rows
+            .Where(r => _ctx.SeriesById.ContainsKey(r.SeriesId))
+            .Select(r => (Series: _ctx.SeriesById[r.SeriesId], Row: r))
+            .OrderBy(x => x.Series.StartDate)
+            .Select(x => new StatsLineChartItem(
+                x.Series.StartDate.Year, x.Series.Title, RatioPercent(x.Row.KanjiCount, x.Row.TotalCount), Detail(x.Row)))
+            .ToList();
+        string chart = StatsSeriesCharts.BuildLineChart(points, valueName, "%",
+            $"TV シリーズごとのサブタイトルの{valueName}の折れ線グラフ。放送開始年の順に並べている");
+
+        return (view, chart);
     }
 
     // 漢字率
 
     private async Task GenerateKanjiRateEpisodeAsync(CancellationToken ct, bool ascending)
     {
-        var rows = await _repo.GetKanjiRateEpisodeAsync(ascending, Limit, ct).ConfigureAwait(false);
-        // 指標値は漢字率の百分率（小数 1 桁＋%）。漢字/総文字数の内訳はエピソード詳細側に委ねる。
-        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
-            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
-            true, r.Rank, RatioPercent(r.KanjiCount, r.TotalCount).ToString("0.0") + "%", r.TitleText)));
+        var all = await _repo.GetKanjiRateEpisodeAsync(ascending, int.MaxValue, ct).ConfigureAwait(false);
+        var view = BuildRatioEpisodeView(all, ascending, StatsTitleMark.Kanji, "漢字率", "漢字");
         string slug = ascending ? "least" : "most";
         string label = ascending ? "低い順" : "高い順";
         string url = $"/stats/subtitles/kanji-rate/episode/{slug}/";
         var layout = MakeLayout($"エピソード単位 漢字率 {label} TOP 100", $"漢字率 {label}");
-        _page.RenderAndWrite(url, "stats", $"stats-subtitles-kanji-rate-episode-{slug}.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
+        _page.RenderAndWrite(url, "stats", $"stats-subtitles-kanji-rate-episode-{slug}.sbn", view, layout);
     }
 
     /// <summary>シリーズ別 漢字率（高い順）。 「シリーズ単位 高い順 / 低い順」の 2 ページから高い順 1 ページに集約し、 「シリーズ別」グループの 1 つとして再配置。低い順は同じテーブルの逆順なので削除。</summary>
     private async Task GenerateKanjiRateBySeriesAsync(CancellationToken ct)
     {
         var rows = await _repo.GetKanjiRateSeriesAsync(ascending: false, Limit, ct).ConfigureAwait(false);
-        var view = rows.Select(r => new
-        {
-            r.Rank,
-            r.SeriesTitle,
-            SeriesStartYearLabel = _ctx.StartYearLabelBySlug(r.SeriesSlug),
-            r.KanjiCount,
-            r.TotalCount,
-            SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
-            RatioPercent = RatioPercent(r.KanjiCount, r.TotalCount)
-        }).ToList();
+        var (view, chart) = BuildSeriesRatioView(rows, "漢字率", "漢字");
         var layout = MakeLayout("シリーズ別 漢字率", "シリーズ別 漢字率");
-        _page.RenderAndWrite("/stats/subtitles/kanji-rate-by-series/", "stats", "stats-subtitles-kanji-rate-by-series.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
+        _page.RenderAndWrite("/stats/subtitles/kanji-rate-by-series/", "stats", "stats-subtitles-kanji-rate-by-series.sbn", new { Rows = view, ChartSvg = chart, CoverageLabel = _coverageLabel }, layout);
     }
 
     // 記号率
 
     private async Task GenerateSymbolRateEpisodeAsync(CancellationToken ct, bool ascending)
     {
-        var rows = await _repo.GetSymbolRateEpisodeAsync(ascending, Limit, ct).ConfigureAwait(false);
-        // 指標値は記号率の百分率（小数 1 桁＋%）。記号/総文字数の内訳はエピソード詳細側に委ねる。
-        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
-            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
-            true, r.Rank, RatioPercent(r.KanjiCount, r.TotalCount).ToString("0.0") + "%", r.TitleText)));
+        var all = await _repo.GetSymbolRateEpisodeAsync(ascending, int.MaxValue, ct).ConfigureAwait(false);
+        var view = BuildRatioEpisodeView(all, ascending, StatsTitleMark.Symbol, "記号率", "記号");
         string slug = ascending ? "least" : "most";
         string label = ascending ? "低い順" : "高い順";
         string url = $"/stats/subtitles/symbol-rate/episode/{slug}/";
         var layout = MakeLayout($"エピソード単位 記号率 {label} TOP 100", $"記号率 {label}");
-        _page.RenderAndWrite(url, "stats", $"stats-subtitles-symbol-rate-episode-{slug}.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
+        _page.RenderAndWrite(url, "stats", $"stats-subtitles-symbol-rate-episode-{slug}.sbn", view, layout);
     }
 
     /// <summary>シリーズ別 記号率（高い順）。 「シリーズ単位 高い順 / 低い順」の 2 ページから高い順 1 ページに集約し、 「シリーズ別」グループの 1 つとして再配置。低い順は同じテーブルの逆順なので削除。</summary>
     private async Task GenerateSymbolRateBySeriesAsync(CancellationToken ct)
     {
         var rows = await _repo.GetSymbolRateSeriesAsync(ascending: false, Limit, ct).ConfigureAwait(false);
-        var view = rows.Select(r => new
-        {
-            r.Rank,
-            r.SeriesTitle,
-            SeriesStartYearLabel = _ctx.StartYearLabelBySlug(r.SeriesSlug),
-            r.KanjiCount,
-            r.TotalCount,
-            SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
-            RatioPercent = RatioPercent(r.KanjiCount, r.TotalCount)
-        }).ToList();
+        var (view, chart) = BuildSeriesRatioView(rows, "記号率", "記号");
         var layout = MakeLayout("シリーズ別 記号率", "シリーズ別 記号率");
-        _page.RenderAndWrite("/stats/subtitles/symbol-rate-by-series/", "stats", "stats-subtitles-symbol-rate-by-series.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
+        _page.RenderAndWrite("/stats/subtitles/symbol-rate-by-series/", "stats", "stats-subtitles-symbol-rate-by-series.sbn", new { Rows = view, ChartSvg = chart, CoverageLabel = _coverageLabel }, layout);
     }
 
     // シリーズ別 集計表 3 ページ（分割、平均文字数・漢字率・記号率の 3 ページと並ぶ）
@@ -309,6 +465,7 @@ public sealed class SubtitleStatsGenerator
         var cellMap = cells.ToDictionary(
             c => (c.SeriesId, c.Char),
             c => c.Cnt);
+        long maxCell = cells.Count > 0 ? cells.Max(c => c.Cnt) : 0;
 
         // 3) シリーズごとに、列順序と同じ並びでセル値配列を組み立てる。
         //    シリーズ並びは cells を SeriesId 昇順でグルーピングして拾う
@@ -322,8 +479,10 @@ public sealed class SubtitleStatsGenerator
                 SeriesStartYearLabel = _ctx.StartYearLabelBySlug(g.Key.SeriesSlug),
                 // 列順序（symbolChars）と同じインデックス対応で、当該シリーズの当該記号カウントを並べる。
                 // セルが無い（=その記号が一度も使われていない）ケースは 0。
+                // セルは回数と、回数に応じた地色の濃さ（表でいちばん多い回数を最も濃くする。0 回は塗らない）。
                 Cells = symbolChars
                     .Select(ch => cellMap.TryGetValue((g.Key.SeriesId, ch), out var v) ? v : 0L)
+                    .Select(n => new { N = n, Shade = CellShade(n, maxCell) })
                     .ToList()
             })
             .ToList();
@@ -340,6 +499,15 @@ public sealed class SubtitleStatsGenerator
         var layout = MakeLayout($"シリーズ別 記号 {symbolCount} 種出現回数", "シリーズ別 記号出現回数");
         _page.RenderAndWrite("/stats/subtitles/symbols-by-series/", "stats", "stats-subtitles-symbols-by-series.sbn", content, layout);
     }
+
+    /// <summary>
+    /// 記号の出現回数の表の、セルの地色の濃さ（アクセント色の不透明度。style 属性用）。少ない回数でも色が見えるよう、
+    /// 回数の比の平方根で濃くする。0 回は空文字（塗らない）。
+    /// </summary>
+    private static string CellShade(long n, long max)
+        => n <= 0 || max <= 0
+            ? ""
+            : (0.08 + 0.52 * Math.Sqrt(n / (double)max)).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>シリーズ別 TOP5 文字（DENSE_RANK で「同点同順、次は連番」、各シリーズ TOP5）。</summary>
     private async Task GenerateTopCharsBySeriesAsync(CancellationToken ct)

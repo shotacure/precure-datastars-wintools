@@ -20,10 +20,14 @@ public sealed class TitleCharInfoRenderer
     private readonly TitleCharIndex _index;
     private readonly IReadOnlyDictionary<int, DateTimeOffset> _subtitleRevealAtByEpisodeId;
 
-    public TitleCharInfoRenderer(TitleCharIndex index, IReadOnlyDictionary<int, DateTimeOffset> subtitleRevealAtByEpisodeId)
+    /// <summary>直前の登場エピソードへのリンクを組むための、シリーズ ID → シリーズ。</summary>
+    private readonly IReadOnlyDictionary<int, Series> _seriesById;
+
+    public TitleCharInfoRenderer(TitleCharIndex index, IReadOnlyDictionary<int, DateTimeOffset> subtitleRevealAtByEpisodeId, IReadOnlyDictionary<int, Series> seriesById)
     {
         _index = index;
         _subtitleRevealAtByEpisodeId = subtitleRevealAtByEpisodeId;
+        _seriesById = seriesById;
     }
 
     /// <summary>指定エピソードの文字情報 HTML を返す。情報が無い場合は空文字。</summary>
@@ -99,9 +103,11 @@ public sealed class TitleCharInfoRenderer
 
             if (!hasFirst && !hasUnique && !hasRevival) continue;
 
-            // 1 文字 = 1 行アイテム。グリフのボックスの右にバッジ（初出 / 唯一 / N年ぶり）を並べ、
-            // 復活の詳細（何話ぶり・何回目・直前の登場エピソード）は薄色の補足テキストで添える。
-            sb.Append("<li class=\"charinfo-item\"><span class=\"charinfo-glyph\">")
+            // 1 文字 = 1 タイル（横に流して折り返す）。初出・唯一だけの文字は、グリフのボックスの下にバッジを付けた小さいタイル。
+            // N年ぶりの文字は横長のカード（is-revival）で、グリフの右の 1 行目にバッジと「N話ぶり・M回目」、
+            // 2 行目に直前の登場エピソードを薄色で添える。
+            sb.Append(hasRevival && prev is not null ? "<li class=\"charinfo-item is-revival\">" : "<li class=\"charinfo-item\">")
+              .Append("<span class=\"charinfo-glyph\">")
               .Append(HtmlUtil.Escape(c))
               .Append("</span><span class=\"charinfo-info\">");
             if (hasFirst) sb.Append("<span class=\"badge badge-first\">初出</span>");
@@ -109,20 +115,32 @@ public sealed class TitleCharInfoRenderer
             if (hasRevival && prev is not null)
             {
                 // 「N年Mか月ぶり」は M = 0 でも省略しない（経過月数の情報を取りこぼさない）。
-                sb.Append("<span class=\"badge badge-revival\">")
+                sb.Append("<span class=\"charinfo-head\"><span class=\"badge badge-revival\">")
                   .Append(yearsRev).Append("年").Append(monthsRev).Append("か月ぶり</span>");
 
-                sb.Append("<span class=\"charinfo-detail muted\">(")
-                  .Append(episodesSince).Append("話ぶり・").Append(occurrenceIndex).Append("回目) ");
+                sb.Append("<span class=\"charinfo-count\">")
+                  .Append(episodesSince).Append("話ぶり・").Append(occurrenceIndex).Append("回目</span></span>");
+                // 『』の中身は直前の登場シリーズへ、「」の中身はそのエピソードへリンクする（シリーズが引けないときはリンクなし）。
+                sb.Append("<span class=\"charinfo-detail muted\">");
+                bool hasPrevLink = _seriesById.TryGetValue(prev.SeriesId, out var prevSeries);
                 if (!string.IsNullOrEmpty(prev.SeriesTitle))
                 {
-                    sb.Append("『").Append(HtmlUtil.Escape(prev.SeriesTitle)).Append("』")
-                      .Append("第").Append(prev.SeriesEpNo).Append("話");
+                    sb.Append("『");
+                    if (hasPrevLink)
+                        sb.Append("<a class=\"charinfo-detail-link\" href=\"").Append(HtmlUtil.Escape(PathUtil.SeriesUrl(prevSeries!.Slug))).Append("\">");
+                    sb.Append(HtmlUtil.Escape(prev.SeriesTitle));
+                    if (hasPrevLink) sb.Append("</a>");
+                    sb.Append("』第").Append(prev.SeriesEpNo).Append("話");
                 }
                 if (!string.IsNullOrEmpty(prev.TitleText))
                 {
                     var prevRevealAt = SubtitleGuardRenderer.RevealAtFor(prev.EpisodeId, _subtitleRevealAtByEpisodeId);
-                    sb.Append("「").Append(SubtitleGuardRenderer.GuardPlainText(JapaneseQuotes.InQuotes(prev.TitleText), prevRevealAt)).Append("」");
+                    sb.Append("「");
+                    if (hasPrevLink)
+                        sb.Append("<a class=\"charinfo-detail-link\" href=\"").Append(HtmlUtil.Escape(PathUtil.EpisodeUrl(prevSeries!.Slug, prev.SeriesEpNo))).Append("\">");
+                    sb.Append(SubtitleGuardRenderer.GuardPlainText(JapaneseQuotes.InQuotes(prev.TitleText), prevRevealAt));
+                    if (hasPrevLink) sb.Append("</a>");
+                    sb.Append("」");
                 }
                 sb.Append("(").Append(JpDateFormat.BroadcastDotDate(prev.OnAirAt)).Append(")以来</span>");
             }

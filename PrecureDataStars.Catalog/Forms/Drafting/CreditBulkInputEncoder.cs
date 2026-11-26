@@ -459,7 +459,7 @@ internal static class CreditBulkInputEncoder
             string nameOrFallback = !string.IsNullOrEmpty(aliasName)
                 ? aliasName
                 : $"alias#{leadingId}";
-            sb.Append("[[").Append(nameOrFallback).Append("]]");
+            sb.Append("[[").Append(AppendDisplaySuffix(nameOrFallback, block.Entity.LeadingCompanyDisplayText)).Append("]]");
             // 2 社の連名なら同じ行に「間の字[[2 社目]]」を、後ろの字があればその後ろに続ける
             // （[[スタジオトゥインクル]]/[[AMGA]] 撮影班）。パーサの LeadingCompanyBracketRegex と往復で同じ形。
             if (block.Entity.LeadingCompany2AliasId is int leading2Id)
@@ -469,7 +469,7 @@ internal static class CreditBulkInputEncoder
                     ? alias2Name
                     : $"alias#{leading2Id}";
                 sb.Append(block.Entity.LeadingCompanySeparator ?? string.Empty)
-                  .Append("[[").Append(name2OrFallback).Append("]]");
+                  .Append("[[").Append(AppendDisplaySuffix(name2OrFallback, block.Entity.LeadingCompany2DisplayText)).Append("]]");
             }
             if (!string.IsNullOrEmpty(block.Entity.LeadingCompanySuffix))
             {

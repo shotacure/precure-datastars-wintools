@@ -5,15 +5,11 @@
   {{## タグラインは「プリキュアまるごとブック」へのオマージュ。OG 既定画像（og-default.svg）の
        文言とも一致させている。変更時は両方をセットで見直すこと。 ##}}
   {{## リードと「〇〇第N話(日付)時点」を 1 行に並べる入れ物（PC は時点を右寄せ、スマホは時点をリードの下へ）。
-       並びは site.css の .home-lead-row。充足率の行は入れ物の外で、常にこの下に出る。 ##}}
+       並びは site.css の .home-lead-row。 ##}}
   <div class="home-lead-row">
     <p class="lead">プリキュアまるごとデータベース。</p>
     <p class="muted home-build-info">{{ BuildLabel }}</p>
   </div>
-  {{~ if DataSufficiencyLabel != "" ~}}
-  {{## キャラクター・クリエイターのデータ充足率（暫定表記・赤字）。追いついたら除去する。 ##}}
-  <p class="home-data-sufficiency">{{ DataSufficiencyLabel }}</p>
-  {{~ end ~}}
   {{## 本放送フォーマットの調査完了率（暫定表記・赤字）。調査完了率が 100% に到達して役目を終えたため、
        下記ブロックを無効化して非表示にしている（再表示時は if 条件を BroadcastFormatLabel != "" に戻す）。 ##}}
   {{~ if false ~}}
@@ -103,6 +99,7 @@
     <button type="button" class="cal-nav-btn cal-nav-next" id="home-calendar-next" aria-label="次の月">›</button>
   </div>
   <div id="home-calendar-grid"></div>
+  {{## 月グリッド（PC の幅）では、キャラクター誕生日のほかは件数にたたみ、週ごとに開閉する（calendar.js）。 ##}}
   <p class="muted home-calendar-legend">
     <span class="cal-legend cal-legend-bday">キャラクター誕生日</span>
     <span class="cal-legend cal-legend-movie">映画公開</span>
@@ -141,6 +138,10 @@
       <span class="muted series-year">({{ sec.SeriesStartYearLabel }})</span>
       {{~ end ~}}
     </h2>
+    {{## エピソードの行がまだ無い、これから始まる TV シリーズの節は、話の一覧の代わりに開始の予定だけを出す。 ##}}
+    {{~ if sec.PlannedStartLabel != "" ~}}
+    <p class="home-planned-start">{{ sec.PlannedStartLabel | html.escape }}</p>
+    {{~ else ~}}
     <ol class="episodes-index-list">
       {{~ for e in sec.Episodes ~}}
       <li class="ep-row">
@@ -161,6 +162,7 @@
       </li>
       {{~ end ~}}
     </ol>
+    {{~ end ~}}
   </section>
   {{~ end ~}}
 </section>
@@ -238,7 +240,7 @@
           {{~ else ~}}
           <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
           {{~ end ~}}
-          <span class="home-product-card-badge{{~ if p.ReleaseStatusLabel != "" ~}} home-product-card-badge-upcoming{{~ end ~}}">{{ p.ReleaseStatusLabel | html.escape }}</span>
+          <span class="home-product-card-badge{{ if p.ReleaseStatusLabel != "" }} home-product-card-badge-upcoming{{ end }}">{{ p.ReleaseStatusLabel | html.escape }}</span>
         </div>
         <div class="home-product-card-body">
           <h3 class="home-product-card-title">{{ p.Title | html.escape }}</h3>
@@ -289,7 +291,7 @@
           {{~ else ~}}
           <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
           {{~ end ~}}
-          <span class="home-product-card-badge{{~ if p.ReleaseStatusLabel != "" ~}} home-product-card-badge-released{{~ end ~}}">{{ p.ReleaseStatusLabel | html.escape }}</span>
+          <span class="home-product-card-badge{{ if p.ReleaseStatusLabel != "" }} home-product-card-badge-released{{ end }}">{{ p.ReleaseStatusLabel | html.escape }}</span>
         </div>
         <div class="home-product-card-body">
           <h3 class="home-product-card-title">{{ p.Title | html.escape }}</h3>
@@ -342,7 +344,7 @@
           {{~ else ~}}
           <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
           {{~ end ~}}
-          <span class="home-product-card-badge{{~ if b.ReleaseStatusLabel != "" ~}} home-product-card-badge-upcoming{{~ end ~}}">{{ b.ReleaseStatusLabel | html.escape }}</span>
+          <span class="home-product-card-badge{{ if b.ReleaseStatusLabel != "" }} home-product-card-badge-upcoming{{ end }}">{{ b.ReleaseStatusLabel | html.escape }}</span>
         </div>
         <div class="home-product-card-body">
           <h3 class="home-product-card-title">{{ b.Title | html.escape }}</h3>
@@ -390,7 +392,7 @@
           {{~ else ~}}
           <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
           {{~ end ~}}
-          <span class="home-product-card-badge{{~ if b.ReleaseStatusLabel != "" ~}} home-product-card-badge-released{{~ end ~}}">{{ b.ReleaseStatusLabel | html.escape }}</span>
+          <span class="home-product-card-badge{{ if b.ReleaseStatusLabel != "" }} home-product-card-badge-released{{ end }}">{{ b.ReleaseStatusLabel | html.escape }}</span>
         </div>
         <div class="home-product-card-body">
           <h3 class="home-product-card-title">{{ b.Title | html.escape }}</h3>

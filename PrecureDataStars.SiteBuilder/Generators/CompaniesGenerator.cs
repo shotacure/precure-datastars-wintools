@@ -227,7 +227,7 @@ public sealed class CompaniesGenerator
         {
             foreach (var lv in av.Logos)
             {
-                lv.CreditRangeLabel = BuildLogoCreditRangeLabel(lv.LogoId);
+                lv.CreditRangeLines = BuildLogoCreditRangeLines(lv.LogoId);
             }
         }
 
@@ -311,9 +311,7 @@ public sealed class CompaniesGenerator
             MusicOwnRoles = musicOwnRoles,
             MusicMemberRoles = musicMemberRoles,
             MusicTotal = musicTotal,
-            MusicCoverageLabel = _ctx.MusicCredits.CoverageLabel,
             Sources = _sourcesByCompany.TryGetValue(company.CompanyId, out var sources) ? sources : EntitySourceFootnotes.Empty,
-            CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 企業詳細の構造化データは Schema.org の Organization 型。
         string baseUrl = _ctx.Config.BaseUrl;
@@ -517,69 +515,129 @@ public sealed class CompaniesGenerator
         }
     }
 
-    /// <summary>指定ロゴ ID がクレジットされたシリーズ・話数範囲の小書きキャプションを組み立てる。</summary>
-    private string BuildLogoCreditRangeLabel(int logoId)
+    /// <summary>クレジット範囲の注記で、作品の種別（<c>series.kind_code</c>）をまとめる行と、その並び。</summary>
+    private static readonly (string Label, string[] KindCodes)[] CreditRangeKindGroups =
     {
-        if (!_index.ByLogo.TryGetValue(logoId, out var invs) || invs.Count == 0)
-            return "";
+        ("TV", new[] { "TV" }),
+        ("映画", new[] { "MOVIE", "SPRING", "MOVIE_SHORT" }),
+        ("イベント", new[] { "EVENT" }),
+        ("オトナ", new[] { "OTONA" }),
+        ("スピンオフ", new[] { "SHORT", "SPIN-OFF" }),
+    };
 
-        // シリーズ単位に集約：シリーズ ID → (シリーズ全体スコープか, 話数集合)。
-        var bySeries = new Dictionary<int, (bool HasSeriesScope, HashSet<int> EpisodeNos)>();
+    /// <summary>
+    /// 指定ロゴ ID がクレジットされた範囲の注記を、作品の種別ごとの行（TV・映画・イベント・オトナ・スピンオフ）で組み立てる。
+    /// <list type="bullet">
+    ///   <item>同時に上映された作品（公開日が同じ映画）は 1 つの単位に束ね、どれか 1 本に載っていれば、その単位に載っているものとする。題名は併映短編でない作品の題名。</item>
+    ///   <item>各話にクレジットが付く作品は、クレジットの入っている回（仮クレジットの回を除く）のすべてに載っていれば、作品全体に載っているものとする。
+    ///     載っていない回があるときだけ、話数の範囲を添える。</item>
+    ///   <item>作品全体に載っている単位が公開順に続く所は、「最初の題名 から 最後の題名 まで（n 作品）」にまとめる。
+    ///     クレジットがまだ入っていない単位は、続きを切らずに飛ばす。</item>
+    ///   <item>その種別の、クレジットの入っている作品すべてに載っている行は、先頭に【全作】を付ける。</item>
+    /// </list>
+    /// 略称（series.title_short）は使わず、常に正式タイトルで出す。
+    /// </summary>
+    private IReadOnlyList<LogoCreditRangeLine> BuildLogoCreditRangeLines(int logoId)
+    {
+        var lines = new List<LogoCreditRangeLine>();
+        if (!_index.ByLogo.TryGetValue(logoId, out var invs) || invs.Count == 0)
+            return lines;
+
+        // このロゴが載った作品：シリーズ ID → (作品単位のクレジットに載ったか, 載った回の episode_id)。
+        var bySeries = new Dictionary<int, (bool HasSeriesScope, HashSet<int> EpisodeIds)>();
         foreach (var inv in invs)
         {
             if (!bySeries.TryGetValue(inv.SeriesId, out var entry))
-            {
                 entry = (false, new HashSet<int>());
-                bySeries[inv.SeriesId] = entry;
-            }
-            if (inv.EpisodeId is int eid)
-            {
-                var ep = _ctx.LookupEpisode(inv.SeriesId, eid);
-                if (ep is not null) entry.EpisodeNos.Add(ep.SeriesEpNo);
-                bySeries[inv.SeriesId] = entry;
-            }
-            else
-            {
-                entry.HasSeriesScope = true;
-                bySeries[inv.SeriesId] = entry;
-            }
+            if (inv.EpisodeId is int eid) entry.EpisodeIds.Add(eid);
+            else entry.HasSeriesScope = true;
+            bySeries[inv.SeriesId] = entry;
         }
 
-        // 放送開始日昇順でシリーズを並べ、各シリーズの表示文字列を作る。
-        // 後段：略称（series.title_short）は生成・UI ともに使わない。常に正式タイトル。
-        var parts = new List<string>();
-        foreach (var (seriesId, entry) in bySeries.OrderBy(kv => _ctx.SeriesStartDate(kv.Key)))
+        // 同時に上映された作品を束ねる：映画の種別どうしで公開日が同じ作品を 1 つの単位にする。
+        // 単位の題名は、併映短編でない作品（無ければ先頭の作品）の題名。映画でない作品は 1 作品で 1 単位。
+        var movieKinds = CreditRangeKindGroups.First(g => g.Label == "映画").KindCodes;
+        var units = _ctx.SeriesById.Values
+            .GroupBy(s => movieKinds.Contains(s.KindCode, StringComparer.Ordinal)
+                ? $"M{_ctx.SeriesStartDate(s.SeriesId).DayNumber}"
+                : $"S{s.SeriesId}")
+            .Select(g =>
+            {
+                var members = g.OrderBy(s => s.SeriesId).ToList();
+                var root = members.FirstOrDefault(s => !string.Equals(s.KindCode, "MOVIE_SHORT", StringComparison.Ordinal)) ?? members[0];
+                return (Root: root, Members: members);
+            })
+            .OrderBy(u => _ctx.SeriesStartDate(u.Root.SeriesId))
+            .ThenBy(u => u.Root.SeriesId)
+            .ToList();
+
+        foreach (var (label, kindCodes) in CreditRangeKindGroups)
         {
-            if (!_ctx.SeriesById.TryGetValue(seriesId, out var series)) continue;
-            string title = series.Title;
-
-            // シリーズ全体スコープが含まれていれば優先（最も広い範囲表現）。
-            if (entry.HasSeriesScope)
+            var parts = new List<string>();
+            // 作品全体に載っている単位の、いま続いている並び（題名）。
+            var run = new List<string>();
+            // その種別の、クレジットの入っている単位すべてで、作品全体に載っているか。
+            bool allFull = true;
+            void FlushRun()
             {
-                parts.Add($"{title}（シリーズ全体）");
-                continue;
+                if (run.Count == 1) parts.Add(run[0]);
+                else if (run.Count >= 2) parts.Add($"{run[0]} から {run[^1]} まで（{run.Count} 作品）");
+                run.Clear();
             }
 
-            if (entry.EpisodeNos.Count == 0) continue;
-
-            // シリーズ内全話か判定。
-            var allEpNos = _ctx.EpisodesBySeries.TryGetValue(seriesId, out var allEps)
-                ? allEps.Select(e => e.SeriesEpNo).ToList()
-                : new List<int>();
-            bool isAll = allEpNos.Count > 0 && entry.EpisodeNos.SetEquals(allEpNos);
-
-            if (isAll)
+            foreach (var (root, members) in units)
             {
-                parts.Add($"{title}（全話）");
+                if (!kindCodes.Contains(root.KindCode, StringComparer.Ordinal)) continue;
+
+                bool full = false;        // 単位のどれか 1 本で、作品全体に載っている
+                bool hasCredits = false;  // 単位のどれか 1 本に、クレジットが入っている
+                var partials = new List<string>();
+                foreach (var s in members)
+                {
+                    // クレジットの入っている回（仮クレジットの回を除く）。
+                    var creditedEpisodes = _ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)
+                        ? eps.Where(e => _ctx.CreditsByEpisode.ContainsKey(e.EpisodeId) && !_ctx.ProvisionalEpisodeIds.Contains(e.EpisodeId)).ToList()
+                        : new List<Episode>();
+                    // 作品単位のクレジットは、仮クレジットの作品を数えない。
+                    if (creditedEpisodes.Count > 0
+                        || (_ctx.CreditsBySeries.ContainsKey(s.SeriesId) && !_ctx.ProvisionalSeriesIds.Contains(s.SeriesId)))
+                        hasCredits = true;
+
+                    if (!bySeries.TryGetValue(s.SeriesId, out var entry)) continue;
+                    if (entry.HasSeriesScope || creditedEpisodes.All(e => entry.EpisodeIds.Contains(e.EpisodeId)))
+                    {
+                        full = true;
+                        continue;
+                    }
+                    var epNos = creditedEpisodes.Where(e => entry.EpisodeIds.Contains(e.EpisodeId)).Select(e => e.SeriesEpNo).ToList();
+                    if (epNos.Count > 0) partials.Add($"{s.Title} {EpisodeRangeCompressor.Compress(epNos)}");
+                }
+
+                if (full)
+                {
+                    run.Add(root.Title);
+                }
+                else if (partials.Count > 0)
+                {
+                    allFull = false;
+                    FlushRun();
+                    parts.AddRange(partials);
+                }
+                else if (hasCredits)
+                {
+                    // クレジットは入っているが、このロゴは載っていない：続きをここで切る。
+                    allFull = false;
+                    FlushRun();
+                }
             }
-            else
-            {
-                string range = EpisodeRangeCompressor.Compress(entry.EpisodeNos);
-                parts.Add($"{title} {range}");
-            }
+            FlushRun();
+
+            // その種別の、クレジットの入っている作品すべてに載っているときは、先頭に【全作】を付ける。
+            if (parts.Count > 0)
+                lines.Add(new LogoCreditRangeLine { KindLabel = label, Text = (allFull ? "【全作】" : "") + string.Join("、", parts) });
         }
 
-        return string.Join("、", parts);
+        return lines;
     }
 
     /// <summary>音楽クレジットの紐付け先の枠（歌 / 劇伴 / 音盤）と、その並び。</summary>
@@ -605,7 +663,7 @@ public sealed class CompaniesGenerator
         {
             var kinds = BuildMusicKinds(company, rg.ToList(), withAliasNote: true);
             if (kinds.Count == 0) continue;
-            var group = new CompanyMusicRoleGroup { RoleCode = rg.Key, RoleLabel = MusicCreditViewBuilder.RoleName(_ctx, rg.Key), Kinds = kinds };
+            var group = new CompanyMusicRoleGroup { RoleCode = rg.Key, RoleLabel = MusicCreditViewBuilder.RoleName(_ctx, rg.Key), RoleUrl = PathUtil.MusicRoleBadgeUrl(rg.Key), Kinds = kinds };
             group.Counts.AddRange(kinds.Select(k => k.Counts));
             result.Add((RoleOrder(rg.Key), group));
         }
@@ -657,6 +715,7 @@ public sealed class CompaniesGenerator
             {
                 RoleCode = rg.Key,
                 RoleLabel = MusicCreditViewBuilder.RoleName(_ctx, rg.Key),
+                RoleUrl = PathUtil.MusicRoleBadgeUrl(rg.Key),
                 Persons = persons
                     .OrderBy(p => p.First)
                     .ThenBy(p => p.Id > 0 ? 0 : 1)
@@ -1283,8 +1342,6 @@ public sealed class CompaniesGenerator
         public IReadOnlyList<CompanyMusicRoleGroup> MusicMemberRoles { get; set; } = Array.Empty<CompanyMusicRoleGroup>();
         /// <summary>音楽クレジットの見出しの札（全体で重複を除いた曲数・劇伴の件数・盤数）。</summary>
         public MusicCountSet MusicTotal { get; set; } = new();
-        /// <summary>音楽クレジットの基準点ラベル（クレジット確認済みの最新の盤）。</summary>
-        public string MusicCoverageLabel { get; set; } = "";
         public CompanyView Company { get; set; } = new();
         /// <summary>関係のある団体（前身・後継・所属・傘下）。無ければ空（テンプレ側はセクションごと出さない）。</summary>
         public IReadOnlyList<CompanyRelationView> Relations { get; set; } = Array.Empty<CompanyRelationView>();
@@ -1309,8 +1366,6 @@ public sealed class CompaniesGenerator
         public IReadOnlyList<MemberHistoryAliasSection> MemberHistory { get; set; } = Array.Empty<MemberHistoryAliasSection>();
         /// <summary>プロフィールの出典（ページの一番下の脚注と、本文の項目に付ける番号）。脚注が無ければ脚注の欄を出さない。</summary>
         public EntitySourceFootnotes Sources { get; set; } = EntitySourceFootnotes.Empty;
-        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>メンバー履歴：屋号（所属ブランド）1 件分のセクション。見出し＝屋号名、配下に人物ブロック。</summary>
@@ -1488,8 +1543,15 @@ public sealed class CompaniesGenerator
         public string ValidFrom { get; set; } = "";
         public string ValidTo { get; set; } = "";
         public string Description { get; set; } = "";
-        /// <summary>当該ロゴがクレジットされたシリーズ・話数範囲の小書き注記。</summary>
-        public string CreditRangeLabel { get; set; } = "";
+        /// <summary>当該ロゴがクレジットされた範囲の小書き注記。作品の種別ごとに 1 行（載っていない種別の行は無い）。</summary>
+        public IReadOnlyList<LogoCreditRangeLine> CreditRangeLines { get; set; } = Array.Empty<LogoCreditRangeLine>();
+    }
+
+    /// <summary>クレジット範囲の注記の 1 行。種別の見出し（TV・映画・イベント・オトナ・スピンオフ）と、その種別で載った作品の並び。</summary>
+    public sealed class LogoCreditRangeLine
+    {
+        public string KindLabel { get; set; } = "";
+        public string Text { get; set; } = "";
     }
     /// <summary>
     /// 音楽クレジットの件数の札（🎵 曲 / 🎼 劇伴 / 💿 盤）。上の段（役職・見出し）で合計するときも重複を除けるよう、数えたキーを持つ。
@@ -1546,6 +1608,8 @@ public sealed class CompaniesGenerator
     {
         public string RoleCode { get; set; } = "";
         public string RoleLabel { get; set; } = "";
+        /// <summary>役職名のリンク先（役職の詳細ページ。無ければ空文字で、役職名は文字だけ）。</summary>
+        public string RoleUrl { get; set; } = "";
         public IReadOnlyList<CompanyMusicKindSection> Kinds { get; set; } = Array.Empty<CompanyMusicKindSection>();
         public IReadOnlyList<CompanyMusicMemberPerson> Persons { get; set; } = Array.Empty<CompanyMusicMemberPerson>();
         public MusicCountSet Counts { get; } = new();

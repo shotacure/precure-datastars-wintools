@@ -174,7 +174,9 @@ public sealed class CharactersGenerator
         _ctx.Logger.Success($"characters: 索引 1 + 詳細 {detailCount} + ゲスト {guestPageCount} ページ");
     }
 
-    /// <summary><c>/characters/</c>（キャラクター索引）。所属シリーズ（最早登場シリーズ）で大セクションに分け、シリーズ内は種別（character_kind）サブセクション → クレジット順で並べる。所属未確定（クレジット皆無）は末尾「その他」。</summary>
+    /// <summary><c>/characters/</c>（キャラクター索引）。所属シリーズ（最早登場シリーズ）で大セクションに分け、シリーズ内は種別（character_kind）サブセクション → クレジット順で並べる。所属未確定（クレジット皆無）は末尾「その他」。
+    /// 最終話バトンタッチと映画タイアップのキャラクター（<see cref="CharacterHomeResolver"/>）は、本来の作品（次の TV シリーズ・映画）を
+    /// 所属シリーズにし、顔を出した TV シリーズの大セクションにも、末尾の小見出し「最終話バトンタッチ」「映画タイアップ」で並べる。</summary>
     private void GenerateIndex(
         IReadOnlyList<Character> characters,
         IReadOnlyDictionary<int, List<CharacterAlias>> aliasesByCharacter,
@@ -200,7 +202,8 @@ public sealed class CharactersGenerator
         // CreditSeq は CreditInvolvementIndex がクレジット階層の表示順
         // （credit_kind → credit_id → card_seq → … → entry_seq）で採番した 0 始まりの出現連番。
         // クレジットが一切無いキャラは SeriesId=0（末尾「その他」セクション送り）。
-        (long Start, int EpNo, int Seq, int SeriesId) FirstCreditKey(int characterId)
+        // onlySeriesId を渡すと、その作品の中での最も早い位置を返す（最終話バトンタッチ・映画タイアップのキャラを本来の作品の中で並べるときに使う）。
+        (long Start, int EpNo, int Seq, int SeriesId) FirstCreditKey(int characterId, int? onlySeriesId = null)
         {
             long bestStart = long.MaxValue;
             int bestEpNo = int.MaxValue;
@@ -214,6 +217,7 @@ public sealed class CharactersGenerator
                 if (!_index.VoiceCastByCharacterAlias.TryGetValue(a.AliasId, out var invs)) continue;
                 foreach (var inv in invs)
                 {
+                    if (onlySeriesId is int only && inv.SeriesId != only) continue;
                     long start = _ctx.SeriesStartDate(inv.SeriesId).DayNumber;
                     int epNo = inv.EpisodeId is int eid
                         ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
@@ -236,14 +240,75 @@ public sealed class CharactersGenerator
             return (bestStart, bestEpNo, bestSeq, bestSeriesId);
         }
 
+        // 最終話バトンタッチ（前の TV シリーズの最終話にだけ顔を出した、次の TV シリーズのキャラ）か、
+        // 映画タイアップ（映画の公開の前に TV シリーズへ 1 話だけ顔を出した、映画のキャラ）かどうか。
+        CharacterHome? BatonOf(int characterId) =>
+            aliasesByCharacter.TryGetValue(characterId, out var aliases)
+                ? CharacterHomeResolver.Resolve(_ctx, aliases
+                    .Where(a => _index.VoiceCastByCharacterAlias.ContainsKey(a.AliasId))
+                    .SelectMany(a => _index.VoiceCastByCharacterAlias[a.AliasId]))
+                : null;
+
         // 各キャラを 1 度だけ集計してワーキングエントリ化（重い lookup の二度引きを避ける）。
+        // Key は所属シリーズとその中での並びのキー。最終話バトンタッチ・映画タイアップのキャラは本来の作品を所属にし、並びも本来の作品の中での位置にする。
+        // FromKey はそのキャラの、顔を出した TV シリーズでの位置（小見出し「最終話バトンタッチ」「映画タイアップ」の並びに使う）。
         var entries = characters
             .Select(c =>
             {
                 var (ep, mv, ot) = CountAppearances(c.CharacterId);
-                return (Ch: c, Key: FirstCreditKey(c.CharacterId), Ep: ep, Mv: mv, Ot: ot, Has: HasAnyInvolvement(c.CharacterId));
+                var baton = BatonOf(c.CharacterId);
+                var firstKey = FirstCreditKey(c.CharacterId);
+                var key = baton is null ? firstKey : FirstCreditKey(c.CharacterId, baton.HomeSeriesId);
+                return (Ch: c, Key: key, Baton: baton, FromKey: firstKey, Ep: ep, Mv: mv, Ot: ot, Has: HasAnyInvolvement(c.CharacterId), Unaired: false);
             })
             .ToList();
+
+        // 本編未登場のキャラ（声の出演のクレジットが 1 つも無い）は、家族関係でつながるキャラの所属シリーズ
+        // （複数あれば放送・公開の始まりがいちばん早いもの）の欄の末尾に、小見出し「本編未登場」で並べる。
+        // つながるキャラの所属シリーズも決まらないキャラだけが、末尾の「その他（未登場）」に残る。
+        var seriesByCharacter = entries
+            .Where(e => e.Key.SeriesId != 0 && _ctx.SeriesById.ContainsKey(e.Key.SeriesId))
+            .ToDictionary(e => e.Ch.CharacterId, e => e.Key.SeriesId);
+        int RelativeSeriesId(int characterId) =>
+            (_ctx.FamilyRelationsByCharacter.TryGetValue(characterId, out var relations)
+                ? relations
+                : Array.Empty<CharacterFamilyRelation>())
+            .Select(r => seriesByCharacter.TryGetValue(r.RelatedCharacterId, out var sid) ? sid : 0)
+            .Where(sid => sid != 0)
+            .OrderBy(sid => _ctx.SeriesStartDate(sid))
+            .ThenBy(sid => sid)
+            .FirstOrDefault();
+        entries = entries
+            .Select(e => e.Key.SeriesId == 0 && RelativeSeriesId(e.Ch.CharacterId) is int home and not 0
+                ? (e.Ch, Key: (Start: long.MaxValue, EpNo: int.MaxValue, Seq: int.MaxValue, SeriesId: home),
+                   e.Baton, e.FromKey, e.Ep, e.Mv, e.Ot, e.Has, Unaired: true)
+                : e)
+            .ToList();
+
+        // 顔を出した TV シリーズ → そこへ並べるキャラの行（クレジット順）。個別ページを持つキャラだけを並べる
+        // （個別ページを持たないキャラは、本来の作品の「その他のキャラクター」のページにまとまっている）。
+        // 最終話バトンタッチと映画タイアップで別々に持つ。
+        Dictionary<int, IReadOnlyList<CharacterIndexRow>> RowsByFromSeries(CharacterHomeKind kind) => entries
+            .Where(e => e.Baton is not null && e.Baton.Kind == kind && !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId))
+            .GroupBy(e => e.Baton!.FromSeriesId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<CharacterIndexRow>)g
+                    .OrderBy(x => x.FromKey.Seq)
+                    .ThenBy(x => x.Ch.CharacterId)
+                    .Select(x => new CharacterIndexRow
+                    {
+                        CharacterId = x.Ch.CharacterId,
+                        Name = x.Ch.Name,
+                        NameKana = x.Ch.NameKana ?? "",
+                        EpisodeCount = x.Ep,
+                        MovieCount = x.Mv,
+                        OtonaEpisodeCount = x.Ot,
+                        HasInvolvement = x.Has
+                    })
+                    .ToList());
+        var batonRowsByFromSeries = RowsByFromSeries(CharacterHomeKind.FinalEpisodeBaton);
+        var tieInRowsByFromSeries = RowsByFromSeries(CharacterHomeKind.MovieTieIn);
 
         byte KindOrder(string kindCode) =>
             kindMap.TryGetValue(kindCode, out var k) ? (k.DisplayOrder ?? byte.MaxValue) : byte.MaxValue;
@@ -261,11 +326,17 @@ public sealed class CharactersGenerator
                 var series = isOther ? null : _ctx.SeriesById[seriesId];
 
                 // 単発キャラは種別サブセクションに並べず、末尾のゲストキャラクターページへのリンク 1 行にまとめる
-                // （単発キャラの所属シリーズは唯一の登場シリーズ＝最早登場シリーズなので、ここで数えれば足りる）。
+                // （単発キャラの置き場の作品は所属シリーズと同じ決め方なので、ここで数えれば足りる）。
                 int guestCount = g.Count(e => _ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId));
 
+                // 「その他」にまとめると行が増えない作品（種別ごとの欄に並べたときに増える行が「その他」のブロック以下）は、
+                // まとめずに種別ごとの欄へ名前だけを並べる。個別ページは持たないので、リンクは付けない。
+                bool expandGuests = guestCount > 0 && !isOther && ShouldExpandGuests(
+                    g.Where(e => !e.Unaired && !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId)).Select(e => e.Ch.CharacterKind),
+                    g.Where(e => _ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId)).Select(e => e.Ch.CharacterKind));
+
                 var kindGroups = g
-                    .Where(e => !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId))
+                    .Where(e => !e.Unaired && (expandGuests || !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId)))
                     .GroupBy(e => e.Ch.CharacterKind)
                     .OrderBy(kg => KindOrder(kg.Key))
                     .ThenBy(kg => kg.Key, StringComparer.Ordinal)
@@ -287,7 +358,8 @@ public sealed class CharactersGenerator
                                 EpisodeCount = x.Ep,
                                 MovieCount = x.Mv,
                                 OtonaEpisodeCount = x.Ot,
-                                HasInvolvement = x.Has
+                                HasInvolvement = x.Has,
+                                NoLink = _ctx.EntityUrls.IsGuestCharacter(x.Ch.CharacterId)
                             })
                             .ToList()
                     })
@@ -306,7 +378,26 @@ public sealed class CharactersGenerator
                         MemberCount = g.Count(),
                         KindGroups = kindGroups,
                         GuestCount = guestCount,
-                        GuestPageUrl = guestCount > 0 && !isOther ? PathUtil.GuestCharactersUrl(series!.Slug) : ""
+                        GuestPageUrl = guestCount > 0 && !isOther && !expandGuests ? PathUtil.GuestCharactersUrl(series!.Slug) : "",
+                        BatonMembers = batonRowsByFromSeries.TryGetValue(seriesId, out var batonRows)
+                            ? batonRows
+                            : Array.Empty<CharacterIndexRow>(),
+                        TieInMembers = tieInRowsByFromSeries.TryGetValue(seriesId, out var tieInRows)
+                            ? tieInRows
+                            : Array.Empty<CharacterIndexRow>(),
+                        UnairedMembers = g.Where(e => e.Unaired)
+                            .OrderBy(x => x.Ch.CharacterId)
+                            .Select(x => new CharacterIndexRow
+                            {
+                                CharacterId = x.Ch.CharacterId,
+                                Name = x.Ch.Name,
+                                NameKana = x.Ch.NameKana ?? "",
+                                EpisodeCount = x.Ep,
+                                MovieCount = x.Mv,
+                                OtonaEpisodeCount = x.Ot,
+                                HasInvolvement = x.Has
+                            })
+                            .ToList()
                     }
                 };
             })
@@ -343,7 +434,6 @@ public sealed class CharactersGenerator
             Sections = sections,
             CountRows = countRows,
             TotalCount = characters.Count,
-            CoverageLabel = _ctx.CreditCoverageLabel
         };
         var layout = new LayoutModel
         {
@@ -479,11 +569,11 @@ public sealed class CharactersGenerator
             // このキャラが劇伴で声を出した曲（bgm_cue_singers。スキャットなど）。
             BgmCards = BuildCharacterBgmCards(aliasIds),
             PrecureProfile = precureProfile,
-            CoverageLabel = _ctx.CreditCoverageLabel
         };
 
         // MetaDescription を実データから動的構築する。
-        var metaDescription = BuildCharacterMetaDescription(character.Name, kindLabel, voiceRows);
+        var metaDescription = BuildCharacterMetaDescription(character.Name, kindLabel, voiceRows,
+            voiceRows.Count > 0 ? "" : BuildFamilyFragment(familyRows, aliasesByCharacter, personAliasById));
 
         // キャラクター詳細の構造化データは Schema.org の Person 型で代用する。
         string baseUrl = _ctx.Config.BaseUrl;
@@ -517,7 +607,11 @@ public sealed class CharactersGenerator
             },
             OgType = "profile",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(character, content, firstAppearance, keyColor, keyColorGradient)
+            OgCard = BuildOgCard(character, content, firstAppearance,
+                CharacterHomeResolver.Resolve(_ctx,
+                    aliasIds.Where(_index.VoiceCastByCharacterAlias.ContainsKey)
+                            .SelectMany(id => _index.VoiceCastByCharacterAlias[id])),
+                keyColor, keyColorGradient)
         };
         _page.RenderAndWrite(PathUtil.CharacterUrl(character.CharacterId), "characters", "characters-detail.sbn", content, layout);
     }
@@ -595,7 +689,6 @@ public sealed class CharactersGenerator
                 SeriesStartYearLabel = series.StartDate.Year.ToString(),
                 GuestCount = rows.Count,
                 Groups = groups,
-                CoverageLabel = _ctx.CreditCoverageLabel
             };
             string title = $"『{series.Title}』のその他のキャラクター";
             var layout = new LayoutModel
@@ -635,6 +728,7 @@ public sealed class CharactersGenerator
         Character character,
         CharacterDetailModel content,
         FirstAppearance? firstAppearance,
+        CharacterHome? baton,
         string keyColor,
         string? keyColorGradient)
     {
@@ -652,7 +746,9 @@ public sealed class CharactersGenerator
         string bandColor = string.IsNullOrEmpty(keyColor) ? OgCardColors.Character : OgCardColors.ForKeyColor(keyColor);
 
         // 透かしは出身作品（初登場の作品。収録範囲外で初登場が決まらないときは声の出演履歴の最初の作品）。
-        string originTitle = firstAppearance?.Series.Title
+        // 最終話バトンタッチ・映画タイアップのキャラは、本来の作品（次の TV シリーズ・映画）。
+        string originTitle = (baton is not null && _ctx.SeriesById.TryGetValue(baton.HomeSeriesId, out var homeSeries) ? homeSeries.Title : null)
+            ?? firstAppearance?.Series.Title
             ?? content.VoiceCastRows.Select(v => v.SeriesTitle).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t))
             ?? "";
 
@@ -719,11 +815,13 @@ public sealed class CharactersGenerator
 
     /// <summary>
     /// キャラクター詳細の meta description。「種別（2004年『作品』、2005年『作品』ほか）。声：△△」（名前はページ名に出ているので入れない）。
+    /// 声の出演のクレジットが無いキャラクターは、作品も声も言えないので、<paramref name="familyFragment"/>（家族関係）を種別の後ろに添える。
     /// </summary>
     private static string BuildCharacterMetaDescription(
         string characterName,
         string kindLabel,
-        IReadOnlyList<VoiceCastRow> voiceRows)
+        IReadOnlyList<VoiceCastRow> voiceRows,
+        string familyFragment)
     {
         const int targetMaxChars = 150;
 
@@ -752,7 +850,35 @@ public sealed class CharactersGenerator
             string fragment = "。声：" + string.Join("、", voices.Take(2)) + (voices.Count > 2 ? "ほか" : "");
             if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
         }
+        if (familyFragment.Length > 0 && sb.Length + 1 + familyFragment.Length <= targetMaxChars)
+            sb.Append('。').Append(familyFragment);
         return sb.Length > 0 ? sb.ToString() : characterName;
+    }
+
+    /// <summary>
+    /// 声の出演のクレジットが無いキャラクターの説明文に添える家族関係。「姉：花咲つぼみ / キュアブロッサム（2010年『作品』）、祖母：花咲薫子」の形で、
+    /// 家族関係の欄の並びの上から 2 人まで。1 人目には、その家族が声の出演で最初に登場した作品を添える（どの作品の家族かが分かるように）。
+    /// </summary>
+    private string BuildFamilyFragment(
+        IReadOnlyList<FamilyRelationRow> familyRows,
+        IReadOnlyDictionary<int, List<CharacterAlias>> aliasesByCharacter,
+        IReadOnlyDictionary<int, PersonAlias> personAliasById)
+    {
+        if (familyRows.Count == 0) return "";
+        var parts = new List<string>();
+        foreach (var f in familyRows.Take(2))
+        {
+            string part = $"{f.RelationLabel}：{f.RelatedCharacterName}";
+            if (parts.Count == 0 && aliasesByCharacter.TryGetValue(f.RelatedCharacterId, out var relAliases))
+            {
+                var first = BuildVoiceCastRows(relAliases.Select(a => a.AliasId).ToList(), relAliases.ToDictionary(a => a.AliasId), personAliasById)
+                    .FirstOrDefault(v => !string.IsNullOrEmpty(v.SeriesTitle));
+                if (first is not null)
+                    part += first.SeriesStartYearLabel.Length > 0 ? $"（{first.SeriesStartYearLabel}年『{first.SeriesTitle}』）" : $"（『{first.SeriesTitle}』）";
+            }
+            parts.Add(part);
+        }
+        return string.Join("、", parts) + (familyRows.Count > 2 ? "ほか" : "");
     }
 
     /// <summary>
@@ -843,7 +969,7 @@ public sealed class CharactersGenerator
             _ctx, aliasIds, _charSongRolesByAlias, _charSungRecordingByAlias, null, _ctx.RoleByCode);
         if (cores.Count == 0) return Array.Empty<CharacterSongCard>();
 
-        // 共通中間表現からキャラ詳細用 DTO へ射影（役職バッジは URL なしの SongRoleBadge）。
+        // 共通中間表現からキャラ詳細用 DTO へ射影（役職バッジは役職詳細・歌唱ページへの URL 付きの SongRoleBadge）。
         // ソート：歌った録音の recording_id 昇順（カタログ登場順）→ song_id。人物詳細の楽曲と同じ流儀。
         var cards = new List<CharacterSongCard>(cores.Count);
         foreach (var core in cores.OrderBy(c => c.SortRecordingId).ThenBy(c => c.SongId))
@@ -860,7 +986,7 @@ public sealed class CharactersGenerator
                 MusicClassLabel = core.MusicClassLabel,
                 BadgeClassSuffix = core.BadgeClassSuffix,
                 Roles = core.Roles
-                    .Select(b => new SongRoleBadge { Code = b.Code, Label = b.Label, DisplayOrder = b.DisplayOrder })
+                    .Select(b => new SongRoleBadge { Code = b.Code, Label = b.Label, Url = PathUtil.SongCardRoleBadgeUrl(b.Code), DisplayOrder = b.DisplayOrder })
                     .ToList()
             });
         }
@@ -902,6 +1028,7 @@ public sealed class CharactersGenerator
                     {
                         Code = code,
                         Label = _ctx.RoleByCode.TryGetValue(code, out var role) && !string.IsNullOrEmpty(role.NameJa) ? role.NameJa : code,
+                        Url = PathUtil.MusicRoleBadgeUrl(code),
                         DisplayOrder = _ctx.RoleByCode.TryGetValue(code, out var r2) ? r2.DisplayOrder ?? 0 : 0
                     })
                     .OrderBy(b => b.DisplayOrder)
@@ -1091,6 +1218,30 @@ public sealed class CharactersGenerator
             ? $"<a href=\"{PathUtil.PersonUrl(pid)}\">{HtmlUtil.Escape(displayName)}</a>"
             : HtmlUtil.Escape(displayName);
 
+    /// <summary>キャラクター一覧の 1 行に並ぶキャラの数（画面の幅によって変わるので、広い画面の列数に合わせている）。</summary>
+    private const int IndexGridColumns = 3;
+
+    /// <summary>「その他」の小見出し 1 行と、「その他のキャラクター」の 1 行を合わせた、一覧での行数。</summary>
+    private const int CollectedBlockRows = 2;
+
+    /// <summary>
+    /// 作品の「その他」（個別ページを持たないキャラ）を、まとめずに種別ごとの欄へ並べるか。
+    /// 並べたときに増える一覧の行数（すでにある種別は列に足した分の行、新しい種別は小見出しと行）が、
+    /// 「その他」のブロックの行数（<see cref="CollectedBlockRows"/>）以下なら並べる（まとめるほうが行を取る）。
+    /// </summary>
+    private static bool ShouldExpandGuests(IEnumerable<string> ownKinds, IEnumerable<string> guestKinds)
+    {
+        static int Rows(int count) => (count + IndexGridColumns - 1) / IndexGridColumns;
+        var own = ownKinds.GroupBy(k => k).ToDictionary(g => g.Key, g => g.Count());
+        int added = 0;
+        foreach (var g in guestKinds.GroupBy(k => k))
+        {
+            int m = own.TryGetValue(g.Key, out var n) ? n : 0;
+            added += m == 0 ? 1 + Rows(g.Count()) : Rows(m + g.Count()) - Rows(m);
+        }
+        return added <= CollectedBlockRows;
+    }
+
     // ─── テンプレ用 DTO 群 ───
 
     private sealed class CharactersIndexModel
@@ -1100,8 +1251,6 @@ public sealed class CharactersGenerator
         /// <summary>登場回数順タブの行（個別ページを持つキャラ、登場話数と登場本数の合計が多い順）。</summary>
         public IReadOnlyList<CharacterIndexRow> CountRows { get; set; } = Array.Empty<CharacterIndexRow>();
         public int TotalCount { get; set; }
-        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の lead 段落末尾に表示する。</summary>
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>シリーズ単位の大セクション。配下に種別サブセクションをぶら下げる。</summary>
@@ -1119,6 +1268,15 @@ public sealed class CharactersGenerator
         public int GuestCount { get; set; }
         /// <summary>当該シリーズのゲストキャラクターページ URL（単発キャラが居なければ空）。</summary>
         public string GuestPageUrl { get; set; } = "";
+        /// <summary>当該シリーズの最終話にだけ顔を出した、次の TV シリーズのキャラ（小見出し「最終話バトンタッチ」に並べる。
+        /// 所属は次のシリーズなので <see cref="MemberCount"/> には数えない。居なければ空）。</summary>
+        public IReadOnlyList<CharacterIndexRow> BatonMembers { get; set; } = Array.Empty<CharacterIndexRow>();
+        /// <summary>映画の公開の前に当該シリーズへ 1 話だけ顔を出した、映画のキャラ（小見出し「映画タイアップ」に並べる。
+        /// 所属は映画なので <see cref="MemberCount"/> には数えない。居なければ空）。</summary>
+        public IReadOnlyList<CharacterIndexRow> TieInMembers { get; set; } = Array.Empty<CharacterIndexRow>();
+        /// <summary>本編に登場しない（声の出演のクレジットが無い）が、家族関係でこのシリーズのキャラとつながるキャラ
+        /// （小見出し「本編未登場」。欄の末尾に並べる。<see cref="MemberCount"/> には数える）。</summary>
+        public IReadOnlyList<CharacterIndexRow> UnairedMembers { get; set; } = Array.Empty<CharacterIndexRow>();
     }
 
     /// <summary>ゲストキャラクターページ（1 シリーズ分）の表示モデル。</summary>
@@ -1130,7 +1288,6 @@ public sealed class CharactersGenerator
         public int GuestCount { get; set; }
         /// <summary>登場話ごとのグループ（話数昇順。映画系はグループ 1 つ）。</summary>
         public IReadOnlyList<GuestEpisodeGroup> Groups { get; set; } = Array.Empty<GuestEpisodeGroup>();
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>ゲストキャラクターページ内の登場話 1 つ分。</summary>
@@ -1168,6 +1325,8 @@ public sealed class CharactersGenerator
         public int CharacterId { get; set; }
         public string Name { get; set; } = "";
         public string NameKana { get; set; } = "";
+        /// <summary>個別ページを持たず、「その他」を展開して名前だけを並べる行か（リンクを付けない）。</summary>
+        public bool NoLink { get; set; }
         /// <summary>TV 系シリーズ（credit_attach_to='EPISODE'）での登場話数合計（全作品横断）。</summary>
         public int EpisodeCount { get; set; }
         /// <summary>映画系シリーズ（credit_attach_to='SERIES'）での登場本数（1 シリーズ = 1 本、全作品横断）。</summary>
@@ -1208,8 +1367,6 @@ public sealed class CharactersGenerator
         public IReadOnlyList<CharacterBgmCard> BgmCards { get; set; } = Array.Empty<CharacterBgmCard>();
         /// <summary>PRECURE 種別かつ precures レコードに紐付くキャラのみ詰まる。 それ以外は null（テンプレ側でプリキュア情報セクションごと非表示）。</summary>
         public PrecureProfileView? PrecureProfile { get; set; }
-        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>キャラが歌った楽曲カード 1 件（人物詳細の <c>person-song-card</c> マークアップを共用）。</summary>
@@ -1249,6 +1406,8 @@ public sealed class CharactersGenerator
     {
         public string Code { get; set; } = "";
         public string Label { get; set; } = "";
+        /// <summary>役職の札のリンク先（役職詳細・歌唱ページ。役職の詳細ページが無ければ空文字で、札は文字だけ）。</summary>
+        public string Url { get; set; } = "";
         public int DisplayOrder { get; set; }
     }
 

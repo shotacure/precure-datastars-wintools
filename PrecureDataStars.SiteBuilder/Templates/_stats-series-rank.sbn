@@ -1,0 +1,30 @@
+{{## シリーズ別の順位のページ（平均文字数・漢字率・記号率）の本体。冒頭のグラフ（ChartSvg）と順位の行（Rows）。
+     行はエピソード単位のランキングと同じ作り（左に順位と値のパネル、右に作品名）で、下段に値の横棒と内訳を置く。 ##}}
+{{~ if ChartSvg != "" ~}}
+<section>
+  {{## 図は幅が狭いと字が読めなくなるので、スマホの幅では図だけを横スクロールさせる。 ##}}
+  <div class="stats-chart-scroll">
+    <div class="stats-chart">{{ ChartSvg }}</div>
+  </div>
+</section>
+{{~ end ~}}
+
+<section>
+  <ol class="stats-ep-list">
+    {{~ for r in Rows ~}}
+    <li class="stats-ep-row stats-series-row">
+      <div class="stats-ep-rank">
+        <span class="stats-ep-rank-no">{{ r.RankLabel }}</span>
+        <span class="stats-ep-rank-val">{{ r.ValueLabel }}</span>
+      </div>
+      <div class="stats-ep-body">
+        <div class="stats-ep-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a> <span class="stats-ep-year">({{ r.SeriesStartYearLabel }})</span></div>
+        <div class="stats-series-meter">
+          <span class="stats-series-bar" aria-hidden="true"><span class="stats-series-bar-fill" style="width: {{ r.BarPercent }}%"></span></span>
+          <span class="stats-series-detail">{{ r.DetailLabel }}</span>
+        </div>
+      </div>
+    </li>
+    {{~ end ~}}
+  </ol>
+</section>

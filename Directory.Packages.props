@@ -11,6 +11,8 @@
 
   <ItemGroup>
     <PackageVersion Include="AWSSDK.CloudFront" Version="4.0.17.4" />
+    <PackageVersion Include="AWSSDK.CloudFrontKeyValueStore" Version="4.0.100.26" />
+    <PackageVersion Include="AWSSDK.Extensions.CrtIntegration" Version="4.0.100.25" />
     <PackageVersion Include="AWSSDK.S3" Version="4.0.24.4" />
     <PackageVersion Include="Dapper" Version="2.1.72" />
     <PackageVersion Include="LibVLCSharp" Version="3.9.3" />

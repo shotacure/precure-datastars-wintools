@@ -38,8 +38,11 @@ public sealed class EpisodeUsesRepository : RepositoryBase
           use_title_override       AS UseTitleOverride,
           scene_label              AS SceneLabel,
           duration_seconds         AS DurationSeconds,
+          part_offset_ms           AS PartOffsetMs,
+          duration_ms              AS DurationMs,
           notes                    AS Notes,
           is_broadcast_only        AS IsBroadcastOnly,
+          is_listed                AS IsListed,
           created_at               AS CreatedAt,
           updated_at               AS UpdatedAt,
           created_by               AS CreatedBy,
@@ -107,15 +110,15 @@ public sealed class EpisodeUsesRepository : RepositoryBase
               (episode_id, part_kind, use_order, sub_order, content_kind_code,
                song_recording_id, song_size_variant_code, song_part_variant_code,
                bgm_series_id, bgm_m_no_detail,
-               use_title_override, scene_label, duration_seconds,
-               notes, is_broadcast_only,
+               use_title_override, scene_label, duration_seconds, part_offset_ms, duration_ms,
+               notes, is_broadcast_only, is_listed,
                created_by, updated_by)
             VALUES
               (@EpisodeId, @PartKind, @UseOrder, @SubOrder, @ContentKindCode,
                @SongRecordingId, @SongSizeVariantCode, @SongPartVariantCode,
                @BgmSeriesId, @BgmMNoDetail,
-               @UseTitleOverride, @SceneLabel, @DurationSeconds,
-               @Notes, @IsBroadcastOnly,
+               @UseTitleOverride, @SceneLabel, @DurationSeconds, @PartOffsetMs, @DurationMs,
+               @Notes, @IsBroadcastOnly, @IsListed,
                @CreatedBy, @UpdatedBy);
             """;
 

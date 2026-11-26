@@ -42,6 +42,18 @@ public interface ILookupCache
     /// <summary>企業屋号 ID から「企業詳細ページへリンク化済みの HTML 断片」を返す。</summary>
     Task<string?> LookupCompanyAliasHtmlAsync(int aliasId);
 
+    /// <summary>
+    /// 企業屋号 ID と画面に出た会社名の表記から HTML 断片を返す。表記が空なら <see cref="LookupCompanyAliasHtmlAsync(int)"/> と同じ。
+    /// 表記があるときは、名義が引ける場合だけ表記を出す（リンク先は名義の会社）。既定の実装は表記を HTML エスケープしただけ（リンクなし）で、
+    /// SiteBuilder 側は企業詳細へのリンクにする。
+    /// </summary>
+    async Task<string?> LookupCompanyAliasHtmlAsync(int aliasId, string? displayText)
+    {
+        var baseHtml = await LookupCompanyAliasHtmlAsync(aliasId).ConfigureAwait(false);
+        if (baseHtml is null || string.IsNullOrEmpty(displayText)) return baseHtml;
+        return System.Net.WebUtility.HtmlEncode(displayText);
+    }
+
     /// <summary>ロゴ ID から「親屋号名 + 企業詳細リンク」相当のリンク化済み HTML 断片を返す。</summary>
     Task<string?> LookupLogoHtmlAsync(int logoId);
 

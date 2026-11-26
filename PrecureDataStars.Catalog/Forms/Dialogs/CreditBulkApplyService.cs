@@ -712,6 +712,7 @@ public sealed class CreditBulkApplyService
                         if (leadingAliasId.HasValue)
                         {
                             block.Entity.LeadingCompanyAliasId = leadingAliasId;
+                            block.Entity.LeadingCompanyDisplayText = pb.LeadingCompanyDisplayText;
                         }
                         else
                         {
@@ -937,6 +938,7 @@ public sealed class CreditBulkApplyService
             if (leadingAliasId.HasValue)
             {
                 block.Entity.LeadingCompanyAliasId = leadingAliasId;
+                block.Entity.LeadingCompanyDisplayText = pb.LeadingCompanyDisplayText;
             }
             else
             {
@@ -976,6 +978,7 @@ public sealed class CreditBulkApplyService
         if (lead2AliasId.HasValue)
         {
             block.Entity.LeadingCompany2AliasId = lead2AliasId;
+            block.Entity.LeadingCompany2DisplayText = pb.LeadingCompany2DisplayText;
             block.Entity.LeadingCompanySeparator = pb.LeadingCompanySeparator;
         }
         else
@@ -2652,6 +2655,17 @@ public sealed class CreditBulkApplyService
                     InfoMessages.Add($"ブロック先頭企業の 2 社目 [{newBlock.LeadingCompany2Text}] を登録できませんでした。Draft の値は変更しません。");
                 }
             }
+        }
+
+        // 筆頭の会社の画面の表記の比較（名義が解決できているときだけ持つ）。
+        string? newLeadDisplay = draftBlock.Entity.LeadingCompanyAliasId.HasValue ? newBlock.LeadingCompanyDisplayText : null;
+        string? newLead2Display = draftBlock.Entity.LeadingCompany2AliasId.HasValue ? newBlock.LeadingCompany2DisplayText : null;
+        if (!string.Equals(draftBlock.Entity.LeadingCompanyDisplayText, newLeadDisplay, StringComparison.Ordinal)
+            || !string.Equals(draftBlock.Entity.LeadingCompany2DisplayText, newLead2Display, StringComparison.Ordinal))
+        {
+            draftBlock.Entity.LeadingCompanyDisplayText = newLeadDisplay;
+            draftBlock.Entity.LeadingCompany2DisplayText = newLead2Display;
+            draftBlock.MarkModified();
         }
 
         // 筆頭の 2 社の間の字・後ろの字の比較。

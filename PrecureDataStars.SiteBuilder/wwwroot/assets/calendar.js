@@ -24,6 +24,13 @@
  *   キャラクター誕生日(cb) > 映画公開日(mv) > プリキュア役の声優さん(pb, pt=0) > メインスタッフ(pb, pt=1) > TV 放送(ep)
  *   > そのほかの人物(pb, pt=2)。人物は同じ段の中で本編のクレジット回数の多い順。
  *
+ * 月グリッドでは、ふだんはキャラクター誕生日のチップだけを出し、ほか（映画公開・人物誕生日・TV 放送）は
+ * 種別ごとの件数（🎥1 🎂2 📺4）にたたんで、日付の右に並べる。
+ * 7 日縦並び（狭い幅）でも同じく、キャラクター誕生日のほかは件数にたたむ。
+ * たたんだ行は、月名の行の右端の「全部開く」のボタンだけで開く（押すと全部の行が開いたままになり、もう一度押すとたたむ。
+ * スクロールやマウスでは開閉しない）。押した状態は端末に覚えておく。
+ * 開閉は CSS の grid-template-rows の遷移でなめらかに動かす（site.css の .cal-fold）。
+ *
  * 注記：カレンダーはコンパクト表示のため、ep / mv はシリーズ略称（title_short）を
  * 用いる。これは「生成出力では title_short を参照しない」サイト方針の明示例外で、
  * 当カレンダー UI に限り適用する（README に明記）。
@@ -67,6 +74,8 @@
   var rollDay = 0;
   // ビューポートが狭いかを返す matchMedia。両モードの切替を駆動する。
   var mq = null;
+  // 描き直しのあとに呼ぶ関数（行の開閉をいまの状態に合わせ直す。bindWeekFolding が返す）。
+  var afterRender = null;
 
   function init() {
     var dataEl = document.getElementById('home-anniversary-data');
@@ -127,7 +136,51 @@
       mq.addListener(onModeChange);
     }
 
+    afterRender = bindWeekFolding(grid);
     render();
+  }
+
+  // 行（月グリッドの週、7 日縦並びの 1 日）の開閉。入れ物に 1 回だけ結線する（中身は描き直しのたびに入れ替わるため）。
+  // 描き直しのあとに呼ぶ関数（画面のまんなかの行を開き直す）を返す。
+  function bindWeekFolding(grid) {
+    // 「全部開く」のボタンを押した状態か。押してある間は全部の行を開いたままにし、マウスやスクロールでは開閉しない。
+    // 次に来たときも同じ状態で始められるよう、端末に覚えておく（覚えられない設定の端末では、そのページの間だけ）。
+    var EXPAND_KEY = 'pcds.calendar.expandAll';
+    var expandAll = false;
+    try { expandAll = window.localStorage.getItem(EXPAND_KEY) === '1'; } catch (e) { expandAll = false; }
+    var expandBtn = buildExpandButton();
+    function buildExpandButton() {
+      var nav = document.querySelector('#home-calendar .home-calendar-nav');
+      if (!nav) return null;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'cal-expand-btn';
+      // 二重の山形（下向き＝開く、上向き＝たたむ）と、短い言葉を並べる。
+      btn.innerHTML = '<svg class="cal-expand-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">'
+        + '<path d="M3 3.5l5 4 5-4M3 8.5l5 4 5-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        + '<span class="cal-expand-label"></span>';
+      btn.addEventListener('click', function () {
+        expandAll = !expandAll;
+        try { window.localStorage.setItem(EXPAND_KEY, expandAll ? '1' : '0'); } catch (e) { /* 覚えられなくても動きは変えない */ }
+        applyExpand();
+      });
+      nav.appendChild(btn);
+      return btn;
+    }
+    // ボタンの見た目と、行の開閉を、いまの状態に合わせる。
+    function applyExpand() {
+      if (expandBtn) {
+        expandBtn.setAttribute('aria-pressed', expandAll ? 'true' : 'false');
+        expandBtn.classList.toggle('is-on', expandAll);
+        expandBtn.querySelector('.cal-expand-label').textContent = expandAll ? 'たたむ' : '全部開く';
+        expandBtn.setAttribute('aria-label', expandAll ? '予定をたたむ' : '予定を全部開く');
+      }
+      var list = cells();
+      for (var i = 0; i < list.length; i++) list[i].classList.toggle('is-open', expandAll);
+    }
+    function cells() { return grid.querySelectorAll('[data-week]'); }
+    // 描き直しのあと：全部開く状態なら全部の行を開き、そうでなければ全部の行をたたむ。
+    return applyExpand;
   }
 
   function isMobile() {
@@ -183,6 +236,7 @@
         ? REAL_DAY : 0;
       grid.innerHTML = buildGrid(viewYear, viewMonth, todayDay, byDay);
     }
+    if (afterRender) afterRender();
   }
 
   // 1 セル／行内のチップ並び：種別優先（cb→mv→プリキュア役の声優さん→メインスタッフ→ep→そのほかの人物）、
@@ -214,43 +268,85 @@
     // 日セル。
     for (var d = 1; d <= daysInMonth; d++) {
       var dow = new Date(year, month - 1, d).getDay();
+      var week = Math.floor((firstDow + d - 1) / 7);
       var cls = 'cal-cell';
       if (d === todayDay) cls += ' cal-today';
       if (dow === 0) cls += ' cal-sun';
       if (dow === 6) cls += ' cal-sat';
 
-      html += '<div class="' + cls + '">';
-      html += '<div class="cal-daynum">' + d + '</div>';
+      html += '<div class="' + cls + '" data-week="' + week + '">';
 
-      var list = byDay[d];
-      if (list && list.length) {
-        list.sort(sortChips);
-        html += '<div class="cal-chips">';
-        for (var c = 0; c < list.length; c++) {
-          html += renderChip(list[c]);
-        }
-        html += '</div>';
+      // キャラクター誕生日はいつも出す。ほかのチップは、週が開いているときだけ出す側（more）へ回す。
+      var list = byDay[d] || [];
+      list.sort(sortChips);
+      var always = '';
+      var more = '';
+      var counts = { mv: 0, pb: 0, ep: 0, ot: 0 };
+      for (var c = 0; c < list.length; c++) {
+        var chip = renderChip(list[c]);
+        if (list[c].k === 'cb') { always += chip; continue; }
+        more += chip;
+        countChip(counts, list[c]);
       }
 
       // 平年の 2 月で 2/29 のデータがあれば、2/28 セル末尾に「(2/29)」見出し付きで併記する。
-      // 単独の 29 日セルを足すとグリッドが崩れるため、月末セル内に小ブロックとして寄せる。
+      // 単独の 29 日セルを足すとグリッドが崩れるため、月末セル内に小ブロックとして寄せる（開いている側に入れる）。
+      var leapHtml = '';
       if (month === 2 && d === 28 && daysInMonth === 28) {
         var leap = byDay[29];
         if (leap && leap.length) {
           leap.sort(sortChips);
-          html += '<div class="cal-leap-section">';
-          html += '<div class="cal-leap-label">(2/29)</div>';
-          html += '<div class="cal-chips">';
+          leapHtml += '<div class="cal-leap-section">';
+          leapHtml += '<div class="cal-leap-label">(2/29)</div>';
+          leapHtml += '<div class="cal-chips">';
           for (var lc = 0; lc < leap.length; lc++) {
-            html += renderChip(leap[lc]);
+            leapHtml += renderChip(leap[lc]);
+            countChip(counts, leap[lc]);
           }
-          html += '</div>';
-          html += '</div>';
+          leapHtml += '</div>';
+          leapHtml += '</div>';
         }
+      }
+
+      // 日付の行：日付の右に、たたんでいる分の件数（種別ごと）を並べる。件数は、行が開いている間は薄く消す。
+      html += '<div class="cal-head"><div class="cal-daynum">' + d + '</div>'
+        + ((more || leapHtml) ? '<div class="' + countsClass(counts) + '" aria-hidden="true">' + renderCounts(counts) + '</div>' : '')
+        + '</div>';
+      if (always) html += '<div class="cal-chips">' + always + '</div>';
+      if (more || leapHtml) {
+        // 開いたときのチップ。.cal-fold の中に入れ、高さの遷移で出し入れする。
+        html += '<div class="cal-fold cal-fold-more"><div class="cal-fold-inner">'
+          + (more ? '<div class="cal-chips">' + more + '</div>' : '') + leapHtml + '</div></div>';
       }
       html += '</div>';
     }
     html += '</div>';
+    return html;
+  }
+
+  // たたんだチップを種別ごとに数える（映画・人物誕生日・TV 放送・オトナシリーズの放送）。
+  function countChip(counts, it) {
+    if (it.k === 'mv') counts.mv++;
+    else if (it.k === 'pb') counts.pb++;
+    else if (it.k === 'ep') { if (it.o) counts.ot++; else counts.ep++; }
+  }
+
+  // 件数の並びのクラス。4 種別とも出る日だけ、1 つのマスに収まるよう小さい札にする（cal-counts-4）。
+  function countsClass(counts) {
+    var kinds = (counts.mv > 0 ? 1 : 0) + (counts.pb > 0 ? 1 : 0) + (counts.ep > 0 ? 1 : 0) + (counts.ot > 0 ? 1 : 0);
+    return kinds >= 4 ? 'cal-counts cal-counts-4' : 'cal-counts';
+  }
+
+  // 件数の表記。種別ごとに、開いたときのチップと同じ色の小さな札に絵文字と数を入れる（0 件の種別は出さない）。
+  function renderCounts(counts) {
+    var html = '';
+    function add(cls, emoji, n) {
+      if (n > 0) html += '<span class="cal-count ' + cls + '"><span class="cal-chip-emoji">' + emoji + '</span>' + n + '</span>';
+    }
+    add('cal-chip-movie', '🎥', counts.mv);
+    add('cal-chip-person', '🎂', counts.pb);
+    add('cal-chip-ep', '📺', counts.ep);
+    add('cal-chip-ep', '🌙', counts.ot);
     return html;
   }
 
@@ -290,18 +386,20 @@
       if (dow === 0) cls += ' cal-sun';
       if (dow === 6) cls += ' cal-sat';
 
-      html += '<div class="' + cls + '">';
-      html += '<div class="cal-day-head">';
-      if (isToday) {
-        html += '<span class="cal-day-today-mark">今日</span>';
+      // 月グリッドと同じく、キャラクター誕生日はいつも出し、ほかは件数にたたんで、開いた行でだけ出す。
+      var always = '';
+      var more = '';
+      var counts = { mv: 0, pb: 0, ep: 0, ot: 0 };
+      for (var c = 0; c < list.length; c++) {
+        var chip = renderChip(list[c], true);
+        if (list[c].k === 'cb') { always += chip; continue; }
+        more += chip;
+        countChip(counts, list[c]);
       }
-      html += '<span class="cal-day-md">' + m + '/' + d + '</span>';
-      html += '<span class="cal-day-dow">(' + WEEKDAYS[dow] + ')</span>';
-      html += '</div>';
 
       // 表示窓の中に「平年の 2/28」が入ったら、その行末尾に 2/29 のチップを併記する
-      // （月グリッド側の併記ロジックと同じ振る舞いを縦並び側でも維持）。
-      var renderedLeap = false;
+      // （月グリッド側の併記ロジックと同じ振る舞いを縦並び側でも維持。開いた側に入れる）。
+      var leapHtml = '';
       if (m === 2 && d === 28 && !isLeapYear(y)) {
         var leap = [];
         for (var lk = 0; lk < ALL_ITEMS.length; lk++) {
@@ -310,31 +408,35 @@
         }
         if (leap.length) {
           leap.sort(sortChips);
-          if (list.length) {
-            html += '<div class="cal-chips">';
-            for (var c1 = 0; c1 < list.length; c1++) html += renderChip(list[c1]);
-            html += '</div>';
-          }
-          html += '<div class="cal-leap-section">';
-          html += '<div class="cal-leap-label">(2/29)</div>';
-          html += '<div class="cal-chips">';
+          leapHtml += '<div class="cal-leap-section">';
+          leapHtml += '<div class="cal-leap-label">(2/29)</div>';
+          leapHtml += '<div class="cal-chips">';
           for (var lc = 0; lc < leap.length; lc++) {
-            html += renderChip(leap[lc], true);
+            leapHtml += renderChip(leap[lc], true);
+            countChip(counts, leap[lc]);
           }
-          html += '</div>';
-          html += '</div>';
-          renderedLeap = true;
+          leapHtml += '</div>';
+          leapHtml += '</div>';
         }
       }
 
-      if (!renderedLeap) {
-        if (list.length) {
-          html += '<div class="cal-chips">';
-          for (var c = 0; c < list.length; c++) html += renderChip(list[c], true);
-          html += '</div>';
-        } else {
-          html += '<div class="cal-day-empty">—</div>';
-        }
+      // 見出しの行：「(今日マーク？) {m}/{d} ({曜})」の右に、たたんでいる分の件数を並べる。
+      html += '<div class="' + cls + '" data-week="' + i + '">';
+      html += '<div class="cal-day-head">';
+      if (isToday) {
+        html += '<span class="cal-day-today-mark">今日</span>';
+      }
+      html += '<span class="cal-day-md">' + m + '/' + d + '</span>';
+      html += '<span class="cal-day-dow">(' + WEEKDAYS[dow] + ')</span>';
+      if (more || leapHtml) html += '<span class="' + countsClass(counts) + '" aria-hidden="true">' + renderCounts(counts) + '</span>';
+      html += '</div>';
+
+      if (always) html += '<div class="cal-chips">' + always + '</div>';
+      if (more || leapHtml) {
+        html += '<div class="cal-fold cal-fold-more"><div class="cal-fold-inner">'
+          + (more ? '<div class="cal-chips">' + more + '</div>' : '') + leapHtml + '</div></div>';
+      } else if (!always) {
+        html += '<div class="cal-day-empty">—</div>';
       }
 
       html += '</div>';

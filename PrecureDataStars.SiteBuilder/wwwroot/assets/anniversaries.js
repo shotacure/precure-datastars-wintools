@@ -200,7 +200,7 @@
         + '<li class="home-anniversary-card home-anniversary-card-bday">'
         + '<a class="home-anniversary-card-link" href="' + escapeAttr(it.pu) + '">'
         + '<div class="home-anniversary-card-meta">'
-        + '<span class="home-anniversary-label home-anniversary-label-bday">誕生日</span>'
+        + '<span class="home-anniversary-label home-anniversary-label-bday"><span class="home-anniversary-emoji" aria-hidden="true">🎂</span>誕生日</span>'
         + '</div>'
         + '<div class="home-anniversary-card-main">'
         + '<span class="home-anniversary-person-name">' + escapeHtml(it.pn) + '</span>'
@@ -232,7 +232,7 @@
       + '<li class="home-anniversary-card home-anniversary-card-bday">'
       + '<a class="home-anniversary-card-link" href="' + escapeAttr(it.cu) + '">'
       + '<div class="home-anniversary-card-meta">'
-      + '<span class="home-anniversary-label home-anniversary-label-bday">誕生日</span>'
+      + '<span class="home-anniversary-label home-anniversary-label-bday"><span class="home-anniversary-emoji" aria-hidden="true">🎂</span>誕生日</span>'
       + seriesLine
       + '</div>'
       + '<div class="home-anniversary-card-main">' + badge + '</div>'
@@ -266,7 +266,7 @@
    * 内部はネストアンカー禁止のため、従来 <a> でリンクしていたシリーズ名・
    * サブタイトルは <span> 化する（クレジットカード / 楽曲カードと同じ流儀）。
    * 構造：
-   *   meta（上段）: 「N年前」ラベル + シリーズ名 + (放送年度)
+   *   meta（上段）: 種別の絵文字 + 「N年前」ラベル + シリーズ名 + (放送年度)
    *   main（下段）: 「第N話 / 放送日 / サブタイトル」の ep-row レイアウト
    * /episodes/ ランディングや episodes-index-section と同じ .ep-row 系
    * クラスを内部で流用する（左の第N話＋日付ブロックは ep-row-no-date）。
@@ -276,9 +276,9 @@
     var it = opts.item;
     // /episodes/ ランディングと同一の「2024.2.4」形式（DotDate同形、月日は 0 詰めしない）。
     var dateStr = it.y + '.' + it.m + '.' + it.d;
-    // メタ行：「N年前」ラベル + シリーズ名 + (放送年度)。
-    // 大人向けスピンオフの話（o）は作品名の前に 🌙 を添える。
-    var seriesMeta = '<span class="home-anniversary-series">' + (it.o ? '🌙 ' : '') + escapeHtml(it.st) + '</span>';
+    // メタ行：種別の絵文字 + 「N年前」ラベル + シリーズ名 + (放送年度)。
+    // 絵文字はカレンダーのチップと同じで、TV 放送は 📺、大人向けスピンオフの話（o）は 🌙。
+    var seriesMeta = '<span class="home-anniversary-series">' + escapeHtml(it.st) + '</span>';
     if (it.sy) {
       seriesMeta += ' <span class="series-year muted">(' + escapeHtml(String(it.sy)) + ')</span>';
     }
@@ -286,7 +286,7 @@
       + '<li class="home-anniversary-card">'
       + '<a class="home-anniversary-card-link" href="' + escapeAttr(it.eu) + '">'
       + '<div class="home-anniversary-card-meta">'
-      + '<span class="home-anniversary-label">' + escapeHtml(opts.labelText) + '</span>'
+      + '<span class="home-anniversary-label"><span class="home-anniversary-emoji" aria-hidden="true">' + (it.o ? '🌙' : '📺') + '</span>' + escapeHtml(opts.labelText) + '</span>'
       + seriesMeta
       + '</div>'
       + '<div class="home-anniversary-card-main">'

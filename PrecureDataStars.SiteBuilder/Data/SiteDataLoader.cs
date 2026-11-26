@@ -183,8 +183,17 @@ public static class SiteDataLoader
             .Where(t => !hiddenEpisodeIds.Contains(t.EpisodeId))
             .GroupBy(t => t.EpisodeId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodeThemeSong>)g.ToList());
+        // 使用曲の記録は、出してよいと印を付けた回（episodes.is_uses_published = 1）の、一覧に載せる行（is_listed = 1）だけを読む。
+        // 印の無い回の行は確かめ終える前のものなので、あっても出さない。載せない行（OP・ED・予告などで選ばなかった行）も出さない。
+        HashSet<int> usesPublishedEpisodeIds;
+        await using (var usesConn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false))
+        {
+            usesPublishedEpisodeIds = (await usesConn.QueryAsync<int>(new CommandDefinition(
+                "SELECT episode_id FROM episodes WHERE is_uses_published = 1 AND is_deleted = 0", cancellationToken: ct))).ToHashSet();
+        }
         var episodeUsesByEpisode = (await episodeUsesRepo.GetAllAsync(ct).ConfigureAwait(false))
             .Where(u => !hiddenEpisodeIds.Contains(u.EpisodeId))
+            .Where(u => usesPublishedEpisodeIds.Contains(u.EpisodeId) && u.IsListed)
             .GroupBy(u => u.EpisodeId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodeUse>)g.ToList());
         logger.Info($"episode_parts: {episodePartsByEpisode.Count} ep / episode_theme_songs: {themeSongsByEpisode.Count} ep / episode_uses: {episodeUsesByEpisode.Count} ep");
@@ -406,6 +415,11 @@ public static class SiteDataLoader
         // 枠の候補になる音楽商品（作品 × 商品）。
         var shopProductCandidates = await shopItemsRepo.GetProductCandidatesAsync(ct).ConfigureAwait(false);
 
+        // 作品ごとの関連記事のうち、出す設定の行（リポジトリが series_id → 並び順で返す）。
+        var relatedLinksBySeries = (await new SeriesRelatedLinksRepository(factory).GetEnabledAsync(ct).ConfigureAwait(false))
+            .GroupBy(r => r.SeriesId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<SeriesRelatedLink>)g.ToList());
+
         // 作品ごとの各話のスタッフの札の役職（並び順の順。リポジトリが series_id → display_order で返す）。
         var episodeStaffRolesBySeries = (await new SeriesEpisodeStaffRolesRepository(factory).GetAllAsync(ct).ConfigureAwait(false))
             .GroupBy(r => r.SeriesId)
@@ -546,6 +560,8 @@ public static class SiteDataLoader
             CreditsByEpisodeForDisplay = creditsByEpisodeForDisplay,
             CreditsBySeriesForDisplay = creditsBySeriesForDisplay,
             ProvisionalCreditsByEpisode = provisionalCreditsByEpisode,
+            ProvisionalEpisodeIds = provisionalEpisodeIds,
+            ProvisionalSeriesIds = provisionalSeriesIds,
             PersonAliasById = personAliasById,
             CharacterAliasById = characterAliasById,
             CompanyAliasById = companyAliasById,
@@ -558,6 +574,7 @@ public static class SiteDataLoader
             KeyStaffRolesBySeries = keyStaffRolesBySeries,
             ShopItems = shopItems,
             ShopProductCandidates = shopProductCandidates,
+            RelatedLinksBySeries = relatedLinksBySeries,
             ShopSeriesIds = ShopItemsFile.SeriesIds(shopItems, shopProductCandidates),
             EpisodeStaffRolesBySeries = episodeStaffRolesBySeries,
             RoleTemplateResolver = roleTemplateResolver,

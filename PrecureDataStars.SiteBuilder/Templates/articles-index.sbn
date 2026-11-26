@@ -1,4 +1,5 @@
 {{## /articles/ — コラムの一覧。ArticlesGenerator から ArticlesIndexModel で渡る。
+     並びは、公開日時と最終更新日のうち新しいほうの順（書き直した記事が上へ上がる）。
      記事カードはカード全体が 1 つのリンク（内部に別リンクを持たないためオーバーレイ不要）。 ##}}
 <h1>コラム</h1>
 <p class="articles-lead muted">precure.tvを運営する祥太による、歴代プリキュアを多種多様なアプローチで読み解いていくコラムです。毎週水曜・土曜の朝 8:30 に更新します。</p>
@@ -8,10 +9,14 @@
 {{~ else ~}}
 <div class="article-card-grid">
   {{~ for a in Articles ~}}
-  <a class="article-card" href="{{ a.Url }}">
+  <a class="article-card{{ if a.UnpublishedLabel != "" }} is-unpublished{{ end }}" href="{{ a.Url }}">
+    {{~ if a.UnpublishedLabel != "" ~}}
+    <p class="article-card-unpublished">{{ a.UnpublishedLabel }}</p>
+    {{~ end ~}}
     <h2 class="article-card-title">{{ a.Title | html.escape }}</h2>
     {{~ if a.DateLabel != "" ~}}
-    <p class="article-card-date"><time{{ if a.DateIso != "" }} datetime="{{ a.DateIso }}"{{ end }}>{{ a.DateLabel }}</time></p>
+    {{## 公開後に書き直した記事は、記事のページと同じく、公開日の後ろに最終更新日をかっこ書きで添える。 ##}}
+    <p class="article-card-date"><time{{ if a.DateIso != "" }} datetime="{{ a.DateIso }}"{{ end }}>{{ a.DateLabel }}</time>{{ if a.UpdatedLabel != "" }}（<time datetime="{{ a.UpdatedIso }}">{{ a.UpdatedLabel }}</time>更新）{{ end }}</p>
     {{~ end ~}}
     {{~ if a.Description != "" ~}}
     <p class="article-card-desc">{{ a.Description | html.escape }}</p>

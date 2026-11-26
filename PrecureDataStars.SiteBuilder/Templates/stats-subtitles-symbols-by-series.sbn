@@ -1,12 +1,12 @@
 <section>
   <h1>シリーズ別 記号 {{ SymbolCount }} 種出現回数</h1>
   <p class="muted page-coverage">{{ CoverageLabel }}</p>
-  <p class="lead">プリキュア全シリーズのサブタイトルに現れた記号・句読点 {{ SymbolCount }} 種の集計表（初出順。長音「ー」はカタカナに数えるので含めません）。出現回数が 0 のセルは空欄。</p>
+  <p class="lead">プリキュア全シリーズのサブタイトルに現れた記号・句読点 {{ SymbolCount }} 種の集計表（初出順。長音「ー」はカタカナに数えるので含めません）。出現回数が 0 のセルは空欄。回数の多いセルほど濃い色です。</p>
 </section>
 
 {{## 列ヘッダと本体セルを動的描画に変更。
      ・Symbols は記号配列（初出順）。SymbolCount は array.size Symbols と同値の検証済みカウント。
-     ・Rows.Cells は Symbols と同じインデックス対応で並んだセル値配列（無関与記号は 0）。
+     ・Rows.Cells は Symbols と同じインデックス対応で並んだセル（N＝回数。無関与記号は 0。Shade＝回数に応じた地色の濃さ）。
      ・thead は Symbols を for 展開して `<th>` を出し、tbody は Rows × Cells で `<td>` を出す。
      ・横スクロールは既存 .stats-symbols-scroll CSS をそのまま流用（記号数が増えても破綻しない）。 ##}}
 <section>
@@ -27,7 +27,7 @@
           <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
           <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
           {{~ for c in r.Cells ~}}
-          <td class="col-sym">{{ if c > 0 }}{{ c }}{{ end }}</td>
+          <td class="col-sym"{{ if c.Shade != "" }} style="background: rgba(216, 27, 96, {{ c.Shade }})"{{ end }}>{{ if c.N > 0 }}{{ c.N }}{{ end }}</td>
           {{~ end ~}}
         </tr>
         {{~ end ~}}

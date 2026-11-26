@@ -2,6 +2,132 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### v1.22.0 (2026-11-26)
+
+- **サイト：統計と歴代記録の OGP カードから「時点」を外した**（`EpisodePartStatsGenerator`・`SubtitleStatsGenerator`・`RecordsGenerator`・`OgCoverageLabel`〔削除〕）：歴代サブタイトル統計・歴代エピソード尺統計・歴代記録のカードの右下に出していた「『作品名』第N話(日付)時点」を出さない。
+
+- **サイト：人物・キャラクターなどのページから「時点」の書き添えを外し、更新日の判定でエピソード詳細の毎週変わる部分を伏せる**（`persons-detail.sbn`・`characters-*.sbn`・`companies-detail.sbn`・`units-detail.sbn`・`creators-*.sbn`・`precures-index.sbn`・各生成プログラムの `CoverageLabel`〔削除〕・`episode-detail.sbn`・`StableContentHash`〔新規〕・`SitemapLastmodManifest.LoadChangedList`〔新規〕・`IndexNowService`）：「時点」の書き添えは統計とエピソード詳細にだけ残す。エピソード詳細の、ほかの回のデータで毎週変わる部分（歴代記録のバッジ・スタッフの通算回数・パート尺の順位・サブタイトルの文字の初出など）を目印で囲み、サイトマップの更新日を決めるときだけ伏せて比べる。IndexNow へ送るのは、このビルドで更新日が進んだページだけにした。
+
+- **サイト：本番デプロイの後に、新しく出た・書き換わったページの URL を IndexNow へ送る**（`IndexNowService`〔新規〕・`S3DeployService.UploadedKeys`〔新規〕・`SeoGenerator.WriteIndexNowKeyFile`〔新規〕・`BuildConfig.IndexNowKey`・`IndexNowMaxUrls`〔新規〕）：App.config の `IndexNowKey` に鍵を書くと、ビルドがサイト直下に鍵のファイルを書き、デプロイで上げたページの URL を、新しく出たページを先に上限（既定 10,000）まで送る。送れなくても警告にとどめる。
+
+- **サイト：作品詳細に「関連記事」の節を足した**（`series_related_links`〔新規の表〕・`SeriesRelatedLink`・`SeriesRelatedLinksRepository`〔新規〕・`SeriesGenerator.BuildRelatedArticles`〔新規〕・`series-detail.sbn`・`site.css`）：手で入れた関連記事（precure.news の記事、その作品が主題のコラムなど）を、外部サイトの節の前に並び順で並べる。別のサイトの記事は新しいタブで開く。行の作りはコラムの「ほかのコラム」と同じ部品で、題の脇にサイトの名前と日付を出す。マイグレーションは `db/migrations/v1.21.1_series_related_links.sql`。
+
+- **サイト：話数が見込みの作品の説明文（meta description）を「（全 50 話の見込み）」にした**（`SeriesGenerator.BuildSeriesMetaDescription`）：本文の「（見込）」と同じく、見込みの話数を言い切らない。og:description・twitter:description も同じ文。
+
+- **サイト：開始日がまだ来ていない TV シリーズの期間にも「（見込）」を添えた**（`JpDateFormat.PeriodIsEstimated`・`SeriesGenerator`・`EpisodesIndexGenerator`）：話数が見込みのシリーズの期間は、終了日が入っているときだけ「（見込）」だった。開始日がまだ来ていないときも添え、作品詳細の「期間」と作品一覧のカードで「2027年2月7日 〜（見込）」と出す。放送が始まって終了日が未定のシリーズは、開始日が確定しているので添えない。
+
+- **サイト：作品詳細の OGP カードで、話数が見込みのときは「全50話（見込）」と出す**（`SeriesGenerator.BuildOgCard`）：作品一覧・作品詳細と同じく、終了日が未定で話数が入っている TV シリーズの話数に「（見込）」を添える。
+
+- **サイト：「販売中の商品」の枠に出す商品を、最大 4 件から最大 5 件にした**（`ShopItemsFile.MaxItems`・`shop-box.js`）：作品詳細・各話の詳細・トップページの枠の共通の上限。選ぶ順は変えていない。
+
+- **サイト：トップの「今後の放送予定」で、これから始まる TV シリーズの開始を「放送開始見込」と表記した**（`HomeGenerator.BuildUpcomingEpisodeSections`）：エピソードがまだ 1 話も無い TV シリーズの節は、「2027年2月7日 放送開始見込」のように出す（以前は「放送開始予定」）。
+
+- **サイト：ホームの「今後の放送予定」に、エピソードの行がまだ無い次の TV シリーズを出すようにした**（`HomeGenerator.BuildUpcomingEpisodeSections`・`HomeEpisodeSection.PlannedStartLabel`〔新規〕・`JpDateFormat.PlannedStartWhen`〔新規〕・`home.sbn`・`site.css` の `.home-planned-start`〔新規〕）：これまでは放送日が先のエピソードから節を作っていたので、エピソードの行が無い作品は出なかった。開始日が先で、エピソードの行が 1 話も無い公開中の TV シリーズを、枠の最後に開始日の順で足し、話の一覧の代わりに「2027年 放送開始予定」のような開始の予定を 1 行だけ出す。開始の予定は、開始日の確かさの列に合わせて年・年月・年月日で書く。年月日の書き方は、作品一覧などの「2027年放送予定」（`JpDateFormat.PlannedStart`）と同じ部品から作る。
+
+- **サイト：手元で開いたページと、計測しない印のある端末からは、GA4 に送らないようにした**（`_layout.sbn`・`site.css` の `.footer-ga-off`〔新規〕）：本番のタグの前に判定を置き、どちらかに当たれば Google のオプトアウトの仕組み（`window['ga-disable-<ID>'] = true`）でタグを止める。1 つ目の判定はページのホスト名が `SiteBaseUrl` のホスト名と違うかどうかで、本番の出力フォルダを手元のサーバーで開いた閲覧が参照元 127.0.0.1 として数字に混ざっていたのを防ぐ。2 つ目の判定はその端末の localStorage に印（`pcds-ga-off`）があるかどうかで、印はどのページでも `?notrack=1` を付けて開くと付き、`?notrack=0` で外れる。付け外しをした後、アドレスバーからは `notrack` の指定だけを消す。計測しない端末では、フッターの © の下に「この端末からの閲覧はアクセス解析の計測から外しています。」と出す。テストモードには GA4 のタグが出ないので、出力は変わらない。
+
+- **サイト：robots.txt で、どのクローラにも全体を許可した**（`SeoGenerator`・`BlockedCrawlerUserAgents`〔削除〕・`MainCrawlerCrawlDelaySeconds`〔削除〕）：AI の学習用（OpenAI・Anthropic・Google 以外）と SEO 解析系の 26 のクローラへの `Disallow`、Bing・Yahoo（Slurp）・DuckDuckGo への `Crawl-delay`、頭の説明のコメントをやめ、`User-agent: *` の全許可と sitemap.xml の場所だけを書き出す。名乗って取りに来るクローラは、目的や量で分けずに通す。
+
+- **サイト：CloudFront Function のコードをリポジトリから外した**（`scripts/cloudfront/viewer-request.js`〔削除〕・`KeyValueStoreSyncService`・`LegacyRedirectMapWriter` のコメント・README）：viewer-request の CloudFront Function に、人の閲覧からは来ない形のリクエストを断る判定を入れたため、コードはリポジトリの外で管理する。旧 URL の転送・`/_edge/` の 404・index の書き換えの動きは README のとおりで変わらない。
+
+- **サイト：記念日カレンダーのページに、月ごとのもくじを出した**（`anniversary-index.sbn`）：12 か月の各 section に id を付け、左のもくじ（スマホではメニューの中）に「1月」〜「12月」が並ぶようにした。もくじに余計な項目が出ないよう、外側の section は div にした。
+
+- **サイト：トップのカレンダーの自動展開をやめた**（`calendar.js`・`site.css`）：スマホの縦並びとタッチだけの端末で、スクロールのたびに画面のまんなかの行が開閉してスクロールの邪魔になっていたので、この動きを外した。行の開閉は「全部開く」のボタンだけにした。
+
+- **サイト：人物とキャラクターの説明文（meta description）に、残りの役の数と家族関係を足した**（`PersonsGenerator.BuildPersonMetaDescription`・`CharactersGenerator.BuildCharacterMetaDescription`・`CharactersGenerator.BuildFamilyFragment`〔新規〕）：人物詳細の声の出演は、これまで「メップル役（2004年『ふたりはプリキュア』ほか）」と、残りを「ほか」だけで済ませていた。ほかにも役があれば「コロン役（2010年『ハートキャッチプリキュア！』）ほか 1 役」、役は 1 つでほかの作品にも出ていれば「メップル役（2004年『ふたりはプリキュア』ほか 9 作品）」と、数を言う。役はキャラクター単位で数え、同じキャラクターの別の名前を 2 役に数えない。キャラクター詳細は、声の出演のクレジットが無いキャラクターの説明文が種別だけだったので、家族関係を上から 2 人まで添える（「とりまく人々。姉：花咲つぼみ / キュアブロッサム（2010年『ハートキャッチプリキュア！』）、祖母：花咲薫子ほか」）。JSON-LD の description も同じ文になる。
+
+- **サイト：旧 URL の 301 転送を、Lambda@Edge から CloudFront Function と KeyValueStore に置き換えた**（`KeyValueStoreSyncService`〔新規〕・`BuildConfig.CloudFrontKeyValueStoreArn`〔新規〕・`SiteBuilderPipeline.SyncRedirectStoreAsync`〔新規〕・`scripts/cloudfront/viewer-request.js`・`scripts/lambda-edge/legacy-redirect/index.mjs`〔削除〕・`App.config.sample`・`Directory.Packages.props`）：本番デプロイは、S3 への反映の後に、転送表（`_edge/legacy-redirects.json`）を CloudFront の KeyValueStore へ差分で同期する。同期先は App.config の `CloudFrontKeyValueStoreArn` で、空なら同期しない。viewer-request の CloudFront Function が KeyValueStore を引いて 301 を返す。origin-request の Lambda@Edge は使わなくなり、コードをリポジトリから消した。Function は転送表に載る区分（persons・people・characters・companies・units・books・creators・bgms・stats）の URL をすべて引くので、これまで Lambda@Edge の判定に入っておらず転送されていなかった旧 URL（`/creators/otona/roles/{code}/`・`/creators/otona/staff/`・`/creators/otona/voice-cast/`・`/stats/records/format-differences/`）も転送される。Function のランタイムは文字の正規化ができないので、名前に濁点・半濁点などがある行は、合成前の形（NFD）のキーも KeyValueStore に入れる。参照に `AWSSDK.CloudFrontKeyValueStore` と `AWSSDK.Extensions.CrtIntegration` を足した。
+
+- **サイト：プライバシーポリシーに「アクセスログについて」の節を足した**（`privacy.sbn`）：配信サーバー（Amazon CloudFront）がアクセスの日時・閲覧した URL・IP アドレス・ブラウザの種類・参照元のページを記録していること、使い道（不審な大量アクセスへの対処・障害の調査・配信の負荷の把握）、30 日で消えることを、「アクセス解析ツールについて」の次に書いた。
+
+- **サイト：robots.txt で、Google（Gemini）にも AI の学習を許可した**（`SeoGenerator.BlockedCrawlerUserAgents`・robots.txt の頭のコメント）：`Google-Extended` を断るのをやめ、`User-agent: *` の全許可で通す。AI の学習に使ってよいクローラは OpenAI・Anthropic・Google の 3 社になる。ほかの会社の学習用クローラと SEO 解析系のクローラは今までどおり断る。
+
+- **サイト：コラムの本文のすぐ後に「ほかのコラム」の案内を置いた**（`ArticlesGenerator.SplitFootnotes`〔新規〕・`ArticleContentModel.FootnotesHtml`・`MoreArticles`〔新規〕・`article-detail.sbn`・`site.css` の `.article-more`〔新規〕）：本文と脚注の間に枠を置き、この記事を除いた公開日時の新しい順の 3 本の題名と公開日、コラムの一覧へのリンクを並べる。これまで次の記事への入口は脚注の下の「前の記事・次の記事」だけで、脚注の長い記事では本文を読み終えた位置から遠かった。脚注は枠の後に、今までと同じ体裁で続く。「前の記事・次の記事」のカードは変わらない。
+
+- **サイト：キャラクター一覧の「その他」を、まとめると行が増えない作品では展開するようにした**（`CharactersGenerator.GenerateIndex`・`CharactersGenerator.ShouldExpandGuests`〔新規〕・`CharacterIndexRow.NoLink`〔新規〕・`characters-index.sbn`）：個別ページを持たないキャラクターをまとめた「その他」（小見出しと 1 行）が、種別ごとの欄へ名前を並べたときに増える行数（1 行を 3 人として数える）以下で済む作品は、「その他」を出さず、そのキャラクターの名前を種別ごとの欄へ並べる。個別ページは作らず、リンクも付けない。「その他のキャラクター」のページと、各ページからそのページへのリンクは変わらない。
+
+- **サイト：本編に登場しないキャラクターを、家族関係でつながる作品の欄の末尾に「本編未登場」として出すようにした**（`CharactersGenerator.GenerateIndex`・`CharacterSeriesSection.UnairedMembers`〔新規〕・`characters-index.sbn`）：声の出演のクレジットが 1 つも無いキャラクターは、家族関係でつながるキャラクターの所属シリーズ（複数あれば始まりがいちばん早い作品）の欄の末尾に、小見出し「本編未登場」で並べる。見出しの人数には数える。これまで末尾の「その他（未登場）」に離れていた一条克彦は『フレッシュプリキュア！』、花咲ふたばは『ハートキャッチプリキュア！』の欄に入る。
+
+- **サイト：映画の公開に合わせて TV シリーズに 1 話だけ顔を出した映画のキャラクターを、映画のキャラクターとして出すようにした**（`CharacterHomeResolver`〔`BatonTouchResolver` から改名〕・`CharacterHomeKind`〔新規〕・`CharactersGenerator.GenerateIndex`・`CharacterSeriesSection.TieInMembers`〔新規〕・`EntityUrlRegistry.DetectGuestCharacters`・`characters-index.sbn`）：声の出演で最初に登場した作品が TV シリーズで、その作品での登場が 1 話だけ、かつその回の放送の前後 42 日以内に公開された映画（種別 `MOVIE`）に登場しているキャラクターは、その映画を所属にする。キャラクター一覧では映画の種別のセクションに並べ、顔を出した TV シリーズの欄には末尾の小見出し「映画タイアップ」にも並べる（個別ページを持つキャラクターだけ。見出しの人数には数えない）。個別ページを持たないキャラクターの置き場、名前が衝突したときに URL へ添える出身作品、OGP カードの透かしの作品名も同じ決め方にした。キャラクター詳細の「初登場」は TV の回のまま。最終話バトンタッチの判定も同じ部品にまとめた。
+
+- **サイト：前の TV シリーズの最終話にだけ顔を出した次のシリーズのキャラクターを、次のシリーズのキャラクターとして出すようにした**（`BatonTouchResolver`〔新規〕・`CharactersGenerator.GenerateIndex`・`CharacterSeriesSection.BatonMembers`〔新規〕・`EntityUrlRegistry.DetectGuestCharacters`・`QualifyCollidingCharacterNames`・`characters-index.sbn`）：声の出演で最初に登場した作品が TV シリーズで、その作品での登場が最終話の 1 話だけ、かつ次に始まる TV シリーズの第 1 話に登場しているキャラクターは、次の TV シリーズを所属にする。キャラクター一覧では次のシリーズの種別のセクションに並べ、顔を出した前の作品の欄には末尾の小見出し「最終話バトンタッチ」にも並べる（個別ページを持つキャラクターだけ。見出しの人数には数えない）。個別ページを持たないキャラクターの置き場、名前が衝突したときに URL へ添える出身作品、OGP カードの透かしの作品名も同じ決め方にした。キャラクター詳細の「初登場」は最終話のまま。
+
+- **サイト：コラムの写真を枠つきで小さめに置き、クリックで拡大するようにした**（`ArticlesGenerator.WrapPhotos`〔新規〕・`ArticleContentModel.HasPhoto`〔新規〕・`article-detail.sbn`・`photo-modal.js`〔新規〕・`site.css` の `figure.photo`・`dialog.photo-modal`）：原稿で 1 行に単独で `![説明](photo.jpg "キャプション"){.photo}` と書いた画像を `<figure class="photo">` にし、最大 520px の幅で、白い枠を付けて中央に置く。写真をクリックすると画面いっぱいに拡大し、もう一度のクリック・閉じるボタン・Esc で閉じる。JS は写真がある記事だけ読み込み、JS が動かないときはリンクで元の画像が開く。`{.photo}` を付けない画像（図など）は変わらない。class 名と組みは precure.news の写真と同じにした。
+
+- **サイト：コラムの一覧を、書き直した記事が上へ上がる並びにした**（`ArticlesGenerator`・`Article.LastActiveAt`〔新規〕・`articles-index.sbn`）：公開日時と最終更新日（原稿の `updated`）のうち新しいほうの順に並べる。最終更新日は日付だけなので、その日の 0:00 として比べる。書き直した記事のカードには、記事のページと同じく、公開日の後ろに「（2026年11月22日更新）」と添える。一覧の OGP カードの 4 本も同じ並びにし、書き直した記事の日付は最終更新日にした。記事のページの「前の記事・次の記事」は公開日時の順のまま。
+
+- **サイト：テストビルドのコラムの一覧で、まだ公開していない原稿のカードに「未公開」の札と点線の枠を付けた**（`ArticlesGenerator.UnpublishedLabelOf`〔新規〕・`articles-index.sbn`・`site.css` の `.article-card.is-unpublished`・`.article-card-unpublished`〔新規〕）：下書きは「未公開（下書き）」、日付の無い原稿は「未公開（日付なし）」、公開日時が先の原稿は「未公開（11月25日 8:30 公開）」と出す。本番ビルドの一覧には付けない。同じ CSS を使う precure.news のテストビルドの一覧も同じ見た目になる。
+
+- **サイト：音楽クレジットの役職バッジを役職詳細へのリンクにし、オール・インストゥルメンツを楽器の最後に「他」で出す**（`MusicCreditIndex.cs`・`MusicRolePages`〔新規〕・`PathUtil.MusicRoleBadgeUrl`・`PathUtil.SongCardRoleBadgeUrl`〔新規〕・`SiteBuilderPipeline`・`CreatorsGenerator`・`PersonsGenerator`・`CharactersGenerator`・`CompaniesGenerator`・`_music-credits.sbn`・`characters-detail.sbn`・`companies-detail.sbn`・`creators-music-production.sbn`・`site.css`）：曲・録音・劇伴・盤のクレジット欄、人物詳細とキャラクター詳細の曲・劇伴のカード、人物詳細の音楽クレジットの行、企業詳細の音楽クレジットの役職名、音楽制作一覧で、楽器・エンジニアなどの役職バッジを役職詳細（歌唱系は歌唱ページ）へのリンクにした。役職詳細を持たない役職と劇伴の作曲・編曲は文字だけで出す。役職詳細を持つ役職の決め方は `MusicRolePages` に移し、役職詳細を書く側とリンクを付ける側で同じ決め方を使う。曲・劇伴のカードは、カード全体のリンクを透明に重ねる形に組み替え、中に役職バッジのリンクを置けるようにした。オール・インストゥルメンツは、書かれていない楽器を打ち込みと同じ人が受け持ったという意味なので、クレジット欄では楽器の最後の行の後ろに「他」のバッジで置く。楽器の行が 1 つも無い曲は役職名のまま出す。
+
+- **サイト：劇伴の一覧に録音の日付とスタジオを出し、行を縦に詰めた**（`MusicGenerator.GenerateBgmIndex`・`BgmIndexRow.RecordingNotes`〔新規〕・`bgms-index.sbn`・`site.css`）：スタッフ（音楽）の右に、録音の回ごとの日付とスタジオ（`bgm_sessions.caption`。記録のある回だけ）を「録音」の札つきで並べる。放送期間・公開日は出さない。曲数とバージョン数の札は、ほかの一覧と同じ大きさにした。題名の見出しの飾りを外し、行の余白を減らした。
+
+- **サイト：歌の一覧の行を縦に詰め、種別の札と再生ボタンを上下の中央に置いた**（`site.css`）：行の上下の余白と行の間、題名と作詞・作曲の行の間を減らした。題名の下に作詞・作曲の行を置く 2 段の組みは変えていない。
+
+- **サイト：商品一覧の行を縦に詰め、色の無かった種別の札に色を付けた**（`site.css`）：ジャケットを 44px にして行の余白を減らし、ジャケット・文字・札を上下の中央にそろえた。映画主題歌シングル・映画ボーカルアルバム・ボーカルベストBOX・プリキュアシンガーズベスト・コレクション・コラボ・メモリアルアルバム・CDえほんの札は、色の指定が無く灰色で出ていたので色を付けた（映画の種別は、元の種別を少し明るくした色）。
+
+- **サイト：商品詳細・書籍詳細の「基本情報」を、ジャケットと項目の並びの組みに作り替えた**（`products-detail.sbn`・`books-detail.sbn`・`site.css`）：表をやめ、見出しの下の段で、左にジャケット（表紙）、右に「項目名と値」の並びを置く。購入のリンクはその段の下に、トップの「Blu-ray・CD のご案内」と同じ枠で置き、商品 1 行の右に版ごとのボタンを並べる（見出しは、デジタル版・Kindle 版が無ければ「購入」）。画像と購入リンクだけの節（もくじに id がそのまま出ていた）は無くした。スマホのメニューは、検索ボックスの無いサイト（precure.news）でナビが閉じるボタンに重ならないようにし、メニューの下に並べる「新しい記事」の一覧の見た目を足した。
+
+- **サイト：トップの商品・書籍のカードを縦に詰め、画像の無い商品を横 1 行の札にした**（`home.sbn`・`site.css`）：ジャケットの大きさは変えず、題名を 2 行まで、発売日と価格を 1 行にした。ジャケット画像がまだ無い商品は、大きな空の枠の代わりに横 1 行の札で出す。「予約受付中」などの印のクラス名がつながって色が付かなかったのも直した。
+
+- **サイト：トップのカレンダーの PC での開閉を「全部開く」のボタンだけにした**（`calendar.js`）：マウスを載せた週を開く動きをやめた。スマホの縦並びとタッチだけの端末では、画面のまんなかの行を開く動きを残す。
+
+- **サイト：トップの「今後の放送予定」「最新エピソード」を縦に詰めた**（`site.css`）：話数と放送日を横に並べ、題名は改行を入れずに出す。スタッフはどの回も 2 行（脚本・絵コンテ・演出／作画監督・美術）に固定し、役職ごとのかたまりの途中では折らない。話数と放送日・題名は上下の中央に置く。
+
+- **サイト：トップのカレンダーの件数を日付の右に移し、「全部開く」のボタンを付けた**（`calendar.js`・`site.css`）：件数の札は日付の右に並べ、日付は幅をそろえた枠の中で中央に置く。4 種別とも出る日だけ、4 つ並ぶ小さい札にする。月名の行の右端のボタンを押すと、全部の行が開いたままになる（押した状態は端末に覚えておく）。
+
+- **サイト：スマホのメニューを詰め、検索をいちばん上に置いた**（`_layout.sbn`・`site.css`）：検索ボックスをパネルのいちばん上（閉じるボタンの左）に移し、グローバルナビを 2 列に並べ、項目の上下の余白を減らした。
+
+- **サイト：スマホのカレンダー（今日から 7 日間の縦並び）も、キャラクター誕生日のほかを件数にたたんだ**（`calendar.js`・`site.css`）：スクロールのたびに、画面のまんなかにいちばん近い日だけを開き、ほかの日は閉じる。タッチだけの端末の月の表示も、まんなかの週だけを開く。
+
+- **サイト：トップの冒頭とカレンダーを縦に詰めた**（`calendar.js`・`anniversaries.js`・`home.sbn`・`site.css`）：冒頭の枠の上下の余白を減らし、数の札を低い 1 行の札にした。カレンダーの月の表示は、ふだんはキャラクター誕生日のチップだけを出して、映画公開・人物誕生日・TV 放送を種別ごとの件数の札にたたむ。週にマウスを載せると（タッチだけの端末では、画面のまんなかに来ると）その週が開き、開閉は高さの遷移でなめらかに動く。今日のある週も、最初はたたんでおく。「今日の記念日」の札の頭には、種別の絵文字を付けた。
+
+- **サイト：トップの「今日の記念日」の枠を縦に詰めた**（`site.css`）：誕生日の札は「誕生日 名前」の 1 行にして横に並べ、エピソードの札は「N年前・作品（年）・第N話・題名・放送日」を 1 行に並べる（幅 640px 以下では 2 段のまま）。見出しの上の余白も減らした。
+
+- **サイト：統計の使用文字 TOP 100・シリーズ別の表・シリーズ × パート別のページに図を添えた**（`_stats-char-rank.sbn`〔新規〕・`StatsCharRows`・`StatsSeriesCharts.BuildBoxPlot`・`SubtitleStatsGenerator`・`EpisodePartStatsGenerator`・`stats-subtitles-char-types-by-series.sbn`・`stats-subtitles-symbols-by-series.sbn`・`stats-episodes-series-summary.sbn`・`site.css`）：使用文字 TOP 100（全文字・漢字限定）は、頭に 100 字の札を並べた図（出現回数が多い字ほど大きく、全文字のページは字の種類で色を分ける）を置き、順位の行に作品ごとの使われ方の棒（TV シリーズを放送順に並べ、その字が多く使われた作品ほど高く、濃い）と、いちばん多く使われた作品を添えた（`SubtitleStatsRepository.GetSeriesCharCellsAsync`〔新規〕）。行は同じ順位の字を 1 つにまとめ（`StatsCharGroup`〔新規〕）、字を頭の図と同じ白抜きの札で出し、棒の列に 5 年ごとの区切りの線（5 年は点線、10 年は破線）を引いた。漢字限定のページの札は、小学校で習う学年・中学以降で習う常用漢字・常用漢字でない字で色を分けた（`KanjiGrades`〔新規〕）。記号出現回数・初使用エピソードは、頭に記号の札を初使用の年ごとにまとめた図を置き、初使用の回の題名の中のその記号に色を付け、作品ごとの棒を添えた。統計で扱う対象の字と、サブタイトル統計のページに出すサブタイトルは Shippori Mincho の ExtraBold で出すようにした。シリーズ別 文字種別比率は表の上に作品ごとの 100% の積み上げ横棒を並べた。シリーズ別 記号出現回数の表は回数の多いセルほど地色を濃くした。シリーズ × パート別は冒頭にアバンタイトル・A パート・B パートの尺の箱ひげ図（横軸は TV シリーズの放送開始年）を置いた。箱ひげ図を描く処理は目盛りの刻み・値の表記・最頻値の有無・縦軸の下端を選べるようにした。
+
+- **サイト：統計のエピソード単位の順位のページを、上位 3 件の枠・分布の図・作品別の内訳・行の並びに組み替えた**（`StatsRankingView`〔新規〕・`StatsTitleMarker`〔新規〕・`StatsPartBand`〔新規〕・`StatsSeriesCharts.BuildHistogram`〔新規〕・`_stats-episode-rank.sbn`〔新規〕・`StatsEpisodeRows`・`EpisodePartStatsGenerator`・`SubtitleStatsGenerator`・`RecordsGenerator`・`site.css`）：対象はパートの尺（アバンタイトル・A パート・B パートの長い順と短い順）、中 CM 入りの早い順と遅い順、サブタイトルの文字数・漢字率・記号率の多い順と少ない順、歴代記録の 1 話のクレジット（声の出演人数・参加スタッフ数）の多い順と少ない順の 18 ページ。3 位までを大きい枠で出し（3 位までが 7 件以上になるページでは出さない）、全部の話の分布の図で上位 100 件に入った話を濃い色で示して TOP 100 と TOP 10 の境目に線を引き、順位に入った話数を作品ごとの横棒で出す。行の題名の下には漢字率・記号率・文字数では 1 字 1 マスの並び（漢字率・記号率は題名の数えた字にも色を付ける。文字数は淡い色のマスを 5 個ずつに区切る）を、尺と中 CM 入りではその回の放送枠の帯（対象のパートを濃く塗る）と歴代の偏差値を、1 話のクレジットでは数の横棒を添える。中 CM 入りの偏差値は番組開始から中 CM までの秒数について、パートの尺と同じ式で求める。4 位からの行は同じ順位の話を 1 つの行にまとめ、順位と値のパネルを 1 回だけ出すようにした（`StatsRankGroup`〔新規〕）。同じ順位の中で同じ作品の話が続く所は作品名を 1 回だけ出し（`StatsSeriesBlock`〔新規〕）、漢字率・記号率が 0% の回はマスと内訳を出さない。アバンタイトルスキップ回の一覧にも作品別の内訳と放送枠の帯を添えた。集計の SQL は変えず、同じクエリを件数の上限なしで呼んで全部の話の値を得ている。
+
+- **サイト：サブタイトル統計のシリーズ別の順位のページにグラフを載せ、表を行の並びに替えた**（`StatsSeriesCharts`〔新規〕・`_stats-series-rank.sbn`〔新規〕・`SubtitleStatsRepository.GetTitleLengthsBySeriesAsync`〔新規〕・`SubtitleStatsGenerator`・`stats-subtitles-avg-length-by-series.sbn`・`stats-subtitles-kanji-rate-by-series.sbn`・`stats-subtitles-symbol-rate-by-series.sbn`・`site.css`）：平均文字数・漢字率・記号率の 3 ページが対象。冒頭文の下に、放送開始年を横軸にしたグラフを置く。平均文字数のページは各話の文字数の箱ひげ図（最小値・最大値・四分位範囲・中央値・平均値・最頻値）、漢字率と記号率のページは作品ごとの率の折れ線グラフで、ビルドのたびに集計値から描く。表はエピソード単位のランキングと同じ行の作り（左に順位と値、右に作品名と年度）に替え、値の横棒と内訳（話数、または分子と分母）を添えた。スマホの幅でも行が横にはみ出さない。
+
+- **サイト：エピソード詳細のスタッフの組み合わせで、初めての回の表記を「初顔合わせ」から「初」に改めた**（`EpisodeGenerator.BuildStaffCombos`）：閉じた状態の 1 行と、開いた状態のカードの両方。役職ごとのカードの「初担当」はそのまま。
+
+- **クレジット：ブロックの筆頭の会社に、画面に出た会社名の表記を持てるようにした**（マイグレーション `v1.21.1_add_leading_company_display_text.sql`・`credit_role_blocks.leading_company_display_text`〔新規〕・`leading_company2_display_text`〔新規〕・`CreditRoleBlock`・`CreditRoleBlocksRepository`・`ILookupCache.LookupCompanyAliasHtmlAsync`〔新規の多重定義〕・SiteBuilder の `LookupCache` / `CreditTreeRenderer` / `CreditTreeIndex` / `EpisodeStaffCards`・TemplateRendering の `RoleTemplateRenderer` / `RoleJoinComparer`・Catalog の `CreditPreviewRenderer`・`CreditBulkInputParser`・`CreditBulkInputEncoder`・`BulkParseResult`・`CreditBulkApplyService`・`CreditDraftLoader`・`CreditSaveService`）：エントリの `company_display_text` と同じく、名義と空白・中黒・記号だけが違う画面の表記を、筆頭の 1 社目・2 社目ごとに持つ。サイトのクレジット・Catalog のプレビュー・`{LEADING_COMPANY}`・各話のスタッフの札は、名義の名前の代わりにこの表記を出す（リンク先と集計は名義の会社のまま）。一括入力は `[[屋号|画面の表記]]`。あわせて、役職テンプレートの `{COMPANIES}` がエントリの `company_display_text` を出すようにし、各話のスタッフの札の所属は、会社名義と所属の文字（`affiliation_text`）の両方があるとき、クレジットの表と同じく文字を出すようにした。
+
+- **バックアップ：書き込みのたびに増えていたバックアップを減らした**（`scripts/backup-db.ps1`・`-KeepLabeledDays`〔新規〕）：DB へ書き込む前のラベル付きの実行ではダンプだけ取り、ローカル専用ファイルの ZIP は作らない（ZIP はラベルなしの実行で作る）。ZIP には `db/data-fixes/` の作業フォルダ `*_work/` の中間ファイルと `__pycache__`・`.pyc`・`.bak` を入れない（元の画像と最後に流した SQL から作り直せる）。間引きではラベル付きのダンプを 7 日で消す（これまでは消さなかった）。ZIP は直近 30 日の分も 1 日に 1 つ（その日で最も新しいもの）だけ残す。
+
+- **DB：話を持たない作品（映画など）の使用曲の記録を、作品ごとに持てるようにした**（マイグレーション `v1.21.1_add_series_uses.sql`・`series_uses`〔新規〕・`series.is_uses_published`〔新規〕）：`series_uses` は、話ごとの `episode_uses` と同じ列を、作品と使用順で持つ。パートが無いので、使用が始まる位置は、作品の本編の頭からのミリ秒（`offset_ms`）で持つ。サイトに出すかの印は作品ごとの `series.is_uses_published` で、既存の作品は 0（出さない）で始まる。サイトはこの表をまだ読まない。
+
+- **サイト：エピソード詳細のサブタイトル分析で、「N年Mか月ぶり」のカードの前回の話を、シリーズとエピソードへのリンクにした**（`TitleCharInfoRenderer`・`EpisodeGenerator`・`site.css`）：「『○○プリキュア』第N話「サブタイトル」(日付)以来」のうち、『』の中のシリーズ名はそのシリーズのページへ、「」の中のサブタイトルはその回の詳細ページへリンクする。サブタイトルのネタバレ防止の伏せ字はそのまま。リンクの文字色はカードの薄色のまま、マウスを載せたときだけ下線を出す。
+
+- **DB・サイト：話の中の使用曲の記録に、パートの中での位置とミリ秒の尺を持てるようにし、サイトに出す回を印で選ぶようにした**（マイグレーション `v1.21.1_add_episode_use_position.sql`・`episode_uses.part_offset_ms`〔新規〕・`duration_ms`〔新規〕・`episodes.is_uses_published`〔新規〕・`EpisodeUse`・`EpisodeUsesRepository`・`SiteDataLoader`）：`part_offset_ms` はパートの頭から使用が始まるまでの位置、`duration_ms` は使用尺で、どちらもミリ秒（秒の `duration_seconds` はそのまま残す）。使用曲の記録は確かめ終える前でも入れておけるように、サイトが読むのは `episodes.is_uses_published = 1` の回の、一覧に載せる行（`episode_uses.is_listed = 1`〔新規。マイグレーション `v1.21.1_add_episode_use_listed.sql`〕）だけにした。OP・ED・予告などのパートの行は、記録しておいて、載せるかを行ごとに選べる。これまでは、行があればエピソード詳細に全パートぶんが出る作りだった（記録はまだ 0 件なので、出力は変わらない）。
+
+- **サイト：劇伴詳細 `/bgms/{作品}/` の曲のカードを、横に細長い形に詰めた**（`MusicGenerator.GenerateBgmDetailPagesAsync`・`StaffGroupsKey`〔新規〕・`BgmSessionSection.CommonStaffGroups`〔新規〕・`bgms-detail.sbn`・`site.css`）：M ナンバー・メニュー・スタッフ・収録盤を 1 段ずつ縦に積むのをやめ、1 行目に M ナンバーとメニュー、2 行目に収録盤を横に並べる（入りきらなければ折り返す。再発売盤は行を分けず、初回盤のすぐ後ろに「(再発盤)」とだけ添えて、再発売盤の該当トラックへリンクする）。尺と再生ボタンはカードの右端で、上下の真ん中に置く。M ナンバーの字は、メニューより少し大きい太字にした。作曲・編曲のバッジは、セッションの音源のある曲の過半が同じ顔ぶれなら、セッションの見出しの下に 1 回だけ出し、違う顔ぶれの曲にだけメニューの後ろに出す。
+
+- **サイト：エピソード詳細の使用曲の一覧を「BGMリスト」に改め、節の並びとサブタイトル分析の組み方を変えた**（`EpisodeGenerator.BuildEpisodeBgmList`〔新規〕・`BuildBgmCueStaffBadgesHtml`〔新規〕・`BgmCueRecordingsLoader`〔新規。`MusicGenerator` から移した〕・`TitleCharInfoRenderer`・`episode-detail.sbn`・`site.css`）：使用曲の一覧は、見出しを「使用音声」から「BGMリスト」に変え、説明の文を除いた。パートごとの表をやめ、1 行 1 枚の横に細長いカードに、通し番号・M ナンバー・メニュー・初出盤のトラック・その回で流れた長さ・再生ボタンを並べる。通し番号はアバンタイトルから最後まで続けて振り、パートはカードの列の間の区切りで示す。種別とシーンの列は除いた。劇伴のカードは全体が劇伴詳細のその曲へのリンクで、初出盤のトラックは商品詳細の該当トラックへリンクする。作曲・編曲は役職の札で出し、劇伴の行の過半が同じ顔ぶれなら見出しの下に 1 回だけ出して、違う行にだけその行の札を出す。再生ボタンが鳴らす音源の決め方は劇伴詳細と同じ（初出盤の配信音源。無ければ音源のある最古の盤）で、押した行からリストの終わりまで続けて再生する。節の並びは、基本情報 → スタッフ → フォーマット → パート尺統計 → サブタイトル分析 → アニメ雑誌サブタイトル掲載 → 主題歌・挿入歌 → BGMリスト → クレジット → 外部サイトの順にした。サブタイトル分析は、1 文字 1 行で縦に積むのをやめ、文字のタイルを横に並べて折り返す。初出・唯一だけの文字は字の箱の下にバッジを付けた小さいタイル、1 年以上ぶりの文字は横長のカードで、字の箱の右にバッジと「N話ぶり・M回目」、その下に前回の話を出す。使わなくなった `CreditText.BgmCueCreditNames` を除いた。
+
+- **DB・サイト・Catalog：1 トラックに複数の曲・版が入っている盤で、それぞれがトラックのどこからどこまでかを持てるようにした**（マイグレーション `v1.21.1_add_track_sub_range.sql`・`tracks.sub_start_frames`〔新規〕・`sub_length_frames`〔新規〕・`Track`・`TracksRepository`・`TracksEditorForm`・`MusicGenerator.LoadBgmCueRecordingsAsync`）：トラックの先頭からの開始位置と長さを、枝番（`sub_order`）の行ごとにフレーム（1/75 秒）で持つ。トラック全体の位置と長さ（`start_lba`・`length_frames`）は、これまでどおり枝番 0 の行に持つ。劇伴詳細ページの尺は、長さが入っていればその曲・版だけの長さで出す（2 つの版を 1 トラックに入れた盤で、1 つ目にトラック全体の長さが出て、2 つ目には尺が出ていなかった）。Catalog のトラック編集に「トラック内 開始」「トラック内 長さ」の欄を足した（編集するのは枝番 0 の行の値）。
+
+- **サイト：コラムの脚注の番号を押したとき、飛び先が固定ヘッダの裏に隠れないようにした**（`site.css`）：脚注の行と本文側の脚注番号に、見出しと同じ `scroll-margin-top`（110px、幅 560px 以下は 60px）を付けた。脚注の「↩」で本文へ戻るときも、戻り先の行が隠れない。
+
+- **サイト：歴代プリキュア声優 `/creators/voice-cast/` に、コンビ・グループの名前でクレジットされた出演を出すようにした**（`CreatorsGenerator.BuildVoiceCastRows`・`GenerateVoiceCast`・`VoiceCastUnitMember`〔新規〕・`creators-voice-cast.sbn`・`site.css`）：人物に結び付かないコンビ・グループの名義は、どのタブにも出ていなかった。その名前のまま 1 行にまとめ、コンビ・グループのページへリンクする。名前の後ろにメンバーを括弧で添え、それぞれの人物ページへリンクする。メンバーの人物の行にはしない。声優の人数には数えない。
+
+- **サイト・Catalog：本放送の版の主題歌のカードで、本放送だけの曲を既定の曲の代わりに出すようにした**（`ThemeSongsHandler.FetchAsync`・`RoleTemplateRenderer` の `{BROADCAST_ONLY}`〔新規〕・`last_sep`〔新規〕・`JoinWithSeparators`〔新規〕）：版に `BROADCAST` を含むカードでは、同じ区分・同じ位置に本放送だけの曲があれば既定の曲を出さない（これまでは 2 曲とも並んでいた）。テンプレでは `{?BROADCAST_ONLY}` で本放送だけの曲の行を書き分けられ、連名は `sep` と一緒に `last_sep` を書くと最後の名義の前だけ別の文字でつなげる。
+
+- **サイト・Catalog：役職テンプレで、本放送の版のカードの中かどうかを条件にできるようにした**（`RoleTemplateRenderer` の `{BROADCAST_CARD}`〔新規〕）：版に `BROADCAST` を含むカードの中なら "1"、共通のカードと Blu-ray・配信のカードでは空になり、`{?BROADCAST_CARD}` / `{?!BROADCAST_CARD}` で曲の外の役職（レーベルなど）の表記を本放送のカードだけ変えられる。ひろがるスカイ！プリキュア #33・#34 の LABEL の回専用テンプレで、本放送のカードのレーベルだけを括弧で囲んで出す（括弧はリンクの外）。
+
+- **サイト：「初めて」で節を分ける一覧で、どの参加が先かを実際の日付で比べるようにした**（`CreatorsGenerator.FirstCreditAccumulator`・`BuildRoleIndexEntry` の役職の初めて・`VoiceCastRow.FirstDay`〔新規〕・`EntityRow.FirstSortWhen`〔新規〕）：スタッフ一覧と役職詳細の初参加順・役職順、歴代プリキュア声優の初出演順・キャラクター別が対象。これまでは作品の放送開始日・公開日で比べていたので、TV の途中の回で初めて出た方が、その回より前に公開された映画にも出ていると、TV の節に置かれていた。各話のクレジットはその回の放送日、作品まるごとのクレジットは作品の公開日・放送開始日で比べる。節の並びは今までどおり作品の放送開始日・公開日の順。
+
+- **サイト：企業詳細のロゴの「クレジット範囲」を、作品の種別ごとの行にまとめた**（`CompaniesGenerator.BuildLogoCreditRangeLines`・`LogoCreditRangeLine`〔新規〕・`BuildContext.ProvisionalSeriesIds`〔新規〕・`SiteDataLoader`・`companies-detail.sbn`・`site.css`）：作品を 1 つずつ並べるのをやめ、TV・映画・イベント・オトナ・スピンオフの行に分けた。作品全体に載っている作品が公開順に続く所は、「最初の題名 から 最後の題名 まで（n 作品）」と出す。公開日が同じ映画は 1 つに数え、どれか 1 本に載っていれば載っているものとする。各話にクレジットが付く作品は、クレジットの入っている回（仮クレジットの回を除く）のすべてに載っていれば作品全体として扱い、載っていない回があるときだけ話数の範囲を添える。仮クレジットの作品は、載っていない作品に数えない。その種別の、クレジットの入っている作品すべてに載っている行は、先頭に【全作】を付ける。
+
+- **サイト：ホームの「キャラクターおよびクリエイターのデータ充足率」の赤字表示をやめた**（`HomeGenerator`・`home.sbn`）：充足率が 100% に張り付いて算出の意味がなくなったため、表示と計算（`BuildDataSufficiencyLabelAsync`・`HomeContentModel.DataSufficiencyLabel`）を除いた。
+
+- **サイト：歴代記録 `/stats/records/` で、仮クレジットの回を数えないようにした**（`BuildContext.ProvisionalEpisodeIds`〔新規〕・`SiteDataLoader`・`RecordsGenerator`）：1 話のクレジット（声の出演人数・参加スタッフ数）と、スタッフの記録（担当話数・初担当）から、仮クレジット（`episodes.is_provisional_credit = 1`）の回を外す。
+
+- **サイト：歴代記録のキャラクターの記録を、登場作品数から映画登場数に変えた**（`RecordsGenerator.BuildCharacterGroup`）：「登場作品数が多いキャラクター」をやめ、「映画登場数が多いキャラクター」を本数で出す。添え書きは「TV N話・オトナ N話」で、オトナシリーズも話数で数える。
+
+- **サイト：役職詳細の年表で、前後・並列の役職の担当も TV・映画・オトナのボタンに追随するようにした**（`CreatorsGenerator.GenerateRoleDetail`・`RoleTimelineBuilder`〔凡例の関連する役職の項目に参加の種類 `WorkKinds`・`BandWorkKinds`〕・`_role-timeline.sbn`）：ボタンの出る種類（ページの `Kinds`）に、関連する役職の担当の種類も数える。自分の担当に映画が無くても、前後の役職に映画があれば 🎥 のボタンが出て、白抜きの輪を出し入れできる。凡例の関連する役職の見本と項目は、切っている種類しか無ければ隠れる。
+
 ### v1.21.0 (2026-11-15)
 
 - **EpisodeLinkSync：放送後に、主題歌の紐付けが空の回へ前の話の OP・ED を写すようにした**（`EpisodeLinkSyncService.TryCopyThemeSongsAsync`〔新規〕・`EpisodeThemeSongsRepository.CopyOpEdIfEmptyAsync`〔新規〕・`Program`）：放送済みで `episode_theme_songs` が 1 行も無い TV の回に、前の話の OP・ED を写す。挿入歌は写さない。前の話が本放送限定の曲を持たず OP・ED が 1 つずつのときだけ写し、そうでなければ写さずに知らせる。日曜の見続ける回では放送後の最初の 1 回、毎日の見回りでは範囲内の放送済みの回を古い順に見る。写したときは、前の話と同じかを確かめるよう通知する。

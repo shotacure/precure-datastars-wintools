@@ -199,6 +199,18 @@ public static class CreditBulkInputParser
     private static readonly Regex ThemeSongSeqDirectiveRegex = new(@"^@theme_song_seq=(?<value>.*)$", RegexOptions.Compiled);
     private static readonly Regex ThemeSongSeqValueRegex = new(@"^(?<from>[0-9]+)(?:-(?<to>[0-9]+))?$", RegexOptions.Compiled);
 
+    /// <summary>
+    /// 筆頭の会社の括弧の中身を「名義」と「画面の表記」に分ける。<c>名義|画面の表記</c> の最後の <c>|</c> で分け、
+    /// <c>|</c> が無いか後ろが空なら画面の表記は null。名義側の <c>OLD=&gt;NEW</c> のリダイレクト記法はそのまま残す。
+    /// </summary>
+    private static (string Name, string? Display) SplitLeadingCompanyDisplay(string raw)
+    {
+        int bar = raw.LastIndexOf('|');
+        if (bar < 0) return (raw.Trim(), null);
+        string display = raw[(bar + 1)..].Trim();
+        return (raw[..bar].Trim(), display.Length > 0 ? display : null);
+    }
+
     // ディレクティブ行: @leading_not_on_screen。直前の筆頭の会社 [[XXX]] は画面にはクレジットされていない
     // （credit_role_blocks.leading_company_not_on_screen）。[[XXX]] の行のすぐ後、エントリより前に書く。
     private static readonly Regex LeadingNotOnScreenDirectiveRegex = new(@"^@leading_not_on_screen$", RegexOptions.Compiled);
@@ -1174,12 +1186,15 @@ public static class CreditBulkInputParser
                 if (curBlock.Rows.Count == 0 && curBlock.LeadingCompanyText is null && curBlock.LeadingText is null)
                 {
                     // ブロック先頭の有意行 → leading_company として吸収。
-                    curBlock.LeadingCompanyText = leadingBracketMatch.Groups["name"].Value.Trim();
+                    // [[名義|画面の表記]] の | の後ろは、画面に出た会社名の表記（名義と空白・記号だけ違うとき）。
+                    (curBlock.LeadingCompanyText, curBlock.LeadingCompanyDisplayText) =
+                        SplitLeadingCompanyDisplay(leadingBracketMatch.Groups["name"].Value);
                     // 2 社の連名の 2 社目と間の字、筆頭の行の後ろの字（どれも無ければ null）。
                     // 間の字・後ろの字は空白も画面の表記として持つので Trim しない（行末の空白は行全体の Trim で落ちる）。
                     if (leadingBracketMatch.Groups["name2"].Success)
                     {
-                        curBlock.LeadingCompany2Text = leadingBracketMatch.Groups["name2"].Value.Trim();
+                        (curBlock.LeadingCompany2Text, curBlock.LeadingCompany2DisplayText) =
+                            SplitLeadingCompanyDisplay(leadingBracketMatch.Groups["name2"].Value);
                         string sep = leadingBracketMatch.Groups["sep"].Value;
                         curBlock.LeadingCompanySeparator = sep.Length > 0 ? sep : null;
                     }

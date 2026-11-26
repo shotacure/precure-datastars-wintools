@@ -42,6 +42,12 @@ public sealed class CreditRoleBlock
     public int? LeadingCompanyAliasId { get; set; }
 
     /// <summary>
+    /// 筆頭の 1 社目の画面に出た会社名の表記（DB 列名 leading_company_display_text）。
+    /// 名義と空白・記号だけが違うときだけ入れ、NULL なら名義の名前で出す。表示はこの表記、リンク先と集計は名義の会社のまま。
+    /// </summary>
+    public string? LeadingCompanyDisplayText { get; set; }
+
+    /// <summary>
     /// 筆頭の会社（<see cref="LeadingCompanyAliasId"/>）が画面にはクレジットされていない（クレジット漏れ）か。
     /// 会社はデータとして入れて所属・集計に数え、表示だけ「（三晃プロダクション）」と括弧で包んで薄い色で示す。
     /// </summary>
@@ -54,6 +60,12 @@ public sealed class CreditRoleBlock
     /// 1 社目（<see cref="LeadingCompanyAliasId"/>）が無いときは使わない。
     /// </summary>
     public int? LeadingCompany2AliasId { get; set; }
+
+    /// <summary>
+    /// 筆頭の 2 社目の画面に出た会社名の表記（DB 列名 leading_company2_display_text）。
+    /// 名義と空白・記号だけが違うときだけ入れ、NULL なら名義の名前で出す。
+    /// </summary>
+    public string? LeadingCompany2DisplayText { get; set; }
 
     /// <summary>
     /// 筆頭の 2 社の間に出す字（任意、DB 列名 leading_company_separator、画面の表記どおり。例 "/"）。

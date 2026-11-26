@@ -84,7 +84,7 @@
      5 ファミリーを 1 リクエストにまとめ、preconnect で読み込みを高速化する。 ##}}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&family=Kiwi+Maru:wght@400;500&family=Kaisei+Decol:wght@400;500;700&family=DotGothic16&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Sans:wght@400;700&family=Kiwi+Maru:wght@400;500&family=Kaisei+Decol:wght@400;500;700&family=DotGothic16&family=Shippori+Mincho:wght@800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ asset_url "/assets/site.css" }}">
 
 {{## ──────── ダイアログのキーボード操作（フォーカスを中に閉じ込め、閉じたら戻す） ────────
@@ -122,8 +122,39 @@
 {{~ end ~}}
 
 {{## ──────── Google Analytics 4（任意） ────────
-     gtag.js のローダ → タグ初期化の 2 段。GA4 メジャメント ID が空なら一切出力しない。 ##}}
+     計測しない端末の判定 → gtag.js のローダ → タグ初期化の 3 段。GA4 メジャメント ID が空なら一切出力しない。
+     判定は次の 2 つで、どちらかに当たれば Google 公式のオプトアウト（window['ga-disable-<ID>'] = true）を
+     タグ初期化より前に立てて、GA に何も送らない。
+       - ページのホスト名が BaseUrl のホスト名と違う（本番の出力フォルダを手元のサーバーで開いたとき）
+       - その端末の localStorage に印 pcds-ga-off がある。印は、どのページでも ?notrack=1 を付けて開くと付き、
+         ?notrack=0 で外れる。付け外しの後は、アドレスバーから notrack の指定を消す（そのまま共有されないように）
+     計測しないときは <html> に data-ga-off を立て、フッターの断り（.footer-ga-off）を CSS で出す。
+     IP アドレスでの除外は、手元の回線の IP が毎回変わるので使わない。 ##}}
 {{~ if Ga4MeasurementId != "" ~}}
+<script>
+(function () {
+  var off = false;
+  try {
+    var params = new URLSearchParams(location.search);
+    var flag = params.get('notrack');
+    if (flag === '1') localStorage.setItem('pcds-ga-off', '1');
+    else if (flag === '0') localStorage.removeItem('pcds-ga-off');
+    if (flag !== null) {
+      params.delete('notrack');
+      var rest = params.toString();
+      history.replaceState(history.state, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+    }
+    off = localStorage.getItem('pcds-ga-off') === '1';
+  } catch (e) { }
+  var siteHost = '';
+  try { siteHost = new URL('{{ BaseUrl }}').hostname; } catch (e) { }
+  if (location.hostname !== siteHost) off = true;
+  if (off) {
+    window['ga-disable-{{ Ga4MeasurementId }}'] = true;
+    document.documentElement.setAttribute('data-ga-off', '');
+  }
+})();
+</script>
 <script async src="https://www.googletagmanager.com/gtag/js?id={{ Ga4MeasurementId }}"></script>
 <script>
 window.dataLayer = window.dataLayer || [];
@@ -153,10 +184,14 @@ gtag('config', '{{ Ga4MeasurementId }}');
 <div id="mobileNavOverlay" class="mobile-nav-overlay" hidden role="dialog" aria-modal="true" aria-label="メニュー">
   {{## 背景の暗幕。クリックで閉じる。data 属性で mobile-nav.js が拾う。 ##}}
   <div class="mobile-nav-overlay-backdrop" data-mobile-nav-close></div>
-  {{## 右からスライドインするパネル本体。グローバルナビとサイト内検索ボックス（モバイル時のみ
-       JS で本パネル内に移設される）を縦並びで提示。 ##}}
+  {{## 右からスライドインするパネル本体。上から、サイト内検索ボックス（モバイル時のみ JS で本パネル内に移設される）・
+       グローバルナビ（2 列）・このページのもくじ。 ##}}
   <nav class="mobile-nav-overlay-panel" aria-label="グローバルナビ">
     <button type="button" class="mobile-nav-overlay-close" data-mobile-nav-close aria-label="閉じる">✕</button>
+    {{## モバイル時の検索ボックス受け皿。パネルのいちばん上（閉じるボタンの左）に置く。
+         mobile-nav.js が画面幅 ≤768px のときヘッダ内の .site-search を DOM ごとここに移動する。
+         このため本ブロック自体は空のまま。デスクトップ幅では空のまま見えない（パネル自体が非表示）。 ##}}
+    <div class="mobile-nav-overlay-search"></div>
     {{## 項目列は LayoutModel.NavItems（PageRenderer がヘッダナビと共通で組み立て、
          現在ページの所属セクションに IsActive を立てる）。先頭のホームだけ固定で足す。 ##}}
     <ul class="mobile-nav-overlay-list">
@@ -174,10 +209,6 @@ gtag('config', '{{ Ga4MeasurementId }}');
       <h3 class="mobile-nav-overlay-section-nav-heading">もくじ</h3>
       <ul class="mobile-nav-overlay-section-nav-list"></ul>
     </div>
-    {{## モバイル時の検索ボックス受け皿。
-         mobile-nav.js が画面幅 ≤768px のときヘッダ内の .site-search を DOM ごとここに移動する。
-         このため本ブロック自体は空のまま。デスクトップ幅では空のまま見えない（パネル自体が非表示）。 ##}}
-    <div class="mobile-nav-overlay-search"></div>
   </nav>
 </div>
 
@@ -321,6 +352,13 @@ gtag('config', '{{ Ga4MeasurementId }}');
      共通パーシャル _cite-box.sbn。「このページを引用する」の引用文（テキスト / Cite web テンプレート）と
      コピーボタンを、シェアボタンの直下に置く。表示条件はシェアボタンと同じ（ShareUrl が非空）。 ##}}
 {{ include '_cite-box.sbn' }}
+
+{{## ──────── この作品の Blu-ray・CD ────────
+     作品詳細・各話の詳細の販売中の商品の枠の置き場。本文のあとのシェアボタン・引用ボックスの下に出す
+     （PageRenderer が本文から取り出して ShopBoxHtml に入れる。中身は shop-box.js が描く）。 ##}}
+{{~ if ShopBoxHtml != "" ~}}
+{{ ShopBoxHtml }}
+{{~ end ~}}
 </main>
 
 {{## ──────── ページフッター ────────
@@ -412,6 +450,10 @@ gtag('config', '{{ Ga4MeasurementId }}');
       {{~ end ~}}
     </div>
     <p class="footer-copyright">© {{ CopyrightYears }} Shota (SHOWTIME).</p>
+    {{## 計測しない端末だけに出す断り。<head> の GA4 の判定が <html> に data-ga-off を立てたときだけ CSS で見せる。 ##}}
+    {{~ if Ga4MeasurementId != "" ~}}
+    <p class="footer-ga-off">この端末からの閲覧はアクセス解析の計測から外しています。</p>
+    {{~ end ~}}
   </div>
 </footer>
 {{## サイト内検索の JS。

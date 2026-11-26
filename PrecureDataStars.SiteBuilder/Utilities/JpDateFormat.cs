@@ -72,15 +72,29 @@ public static class JpDateFormat
     /// 日付まで確かな作品に使ったときも、年月日の「2027年2月7日放送予定」を返す。
     /// </summary>
     public static string PlannedStart(Series s, bool broadcast)
+        => PlannedStartWhen(s) + (broadcast ? "放送予定" : "公開予定");
+
+    /// <summary>
+    /// 期間の表記に「（見込）」を添えるか。話数が見込み（<paramref name="episodesEstimated"/>）のシリーズで、
+    /// 終了日が入っている（その日も見込み）か、開始日がまだ来ていない（開始日も見込み）ときに添える。
+    /// 放送が始まって終了日が未定のシリーズは、開始日が確定しているので添えない。
+    /// </summary>
+    public static bool PeriodIsEstimated(Series s, bool episodesEstimated, DateOnly today)
+        => episodesEstimated && (s.EndDate.HasValue || s.StartDate > today);
+
+    /// <summary>
+    /// 開始日を、開始日の確かさ（<see cref="Series.StartDatePrecision"/>）までで切った表記。
+    /// 年だけなら「2027年」、年月なら「2027年7月」、日付まで確かなら「2027年2月7日」。
+    /// </summary>
+    public static string PlannedStartWhen(Series s)
     {
         var d = s.StartDate;
-        string when = s.StartDatePrecision switch
+        return s.StartDatePrecision switch
         {
             Series.StartDatePrecisionYear => $"{d.Year}年",
             Series.StartDatePrecisionMonth => $"{d.Year}年{d.Month}月",
             _ => $"{d.Year}年{d.Month}月{d.Day}日",
         };
-        return when + (broadcast ? "放送予定" : "公開予定");
     }
 
     /// <summary>「2024.2.4」形式（ドット区切り・0 詰めなし）。 スタッフ段との同居など、密表示を要する文脈で使う。</summary>

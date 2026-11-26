@@ -46,6 +46,30 @@ public sealed class StatsEpisodeRow
 
     /// <summary>エピソード詳細ページ URL。</summary>
     public string EpisodeUrl { get; init; } = "";
+
+    /// <summary>順位の数（同率の 2 件目以降も入る）。順位を持たない行は 0。上位 3 件の枠の判定と表示に使う。</summary>
+    public int RankNo { get; init; }
+
+    /// <summary>指標値の数の部分（「87.5」「7:50」「23」）。上位 3 件の枠で大きく出す。</summary>
+    public string ValueNumber { get; init; } = "";
+
+    /// <summary>指標値の単位（「%」「文字」「人」など。無ければ空）。</summary>
+    public string ValueUnit { get; init; } = "";
+
+    /// <summary>シリーズのスラッグ（作品別の内訳を数えるのに使う）。</summary>
+    public string SeriesSlug { get; init; } = "";
+
+    /// <summary>題名の下に添える図の HTML（1 字 1 マスの並び、または放送枠の帯）。無ければ空。</summary>
+    public string MeterHtml { get; init; } = "";
+
+    /// <summary>上位 3 件の枠に出す図の HTML（帯はパート名入り）。無ければ <see cref="MeterHtml"/> を使う。</summary>
+    public string PodiumMeterHtml { get; init; } = "";
+
+    /// <summary>図に添える内訳（「漢字 7 / 全 8 字」「偏差値 72.43」など。無ければ空）。</summary>
+    public string DetailLabel { get; init; } = "";
+
+    /// <summary>上位 3 件の枠で、この行を全幅の大きい枠にするか（単独 1 位のとき）。</summary>
+    public bool IsFirst { get; set; }
 }
 
 /// <summary>1 行分の入力（順位は呼び出し側で確定済みの Wimbledon 順位、表示用の同率ブランク化は本ビルダーが行う）。</summary>
@@ -72,6 +96,21 @@ public readonly struct StatsEpisodeInput
     public int Rank { get; }
     public string ValueLabel { get; }
     public string TitleTextFallback { get; }
+
+    /// <summary>指標値の単位（<see cref="ValueLabel"/> の末尾に付いていれば、数の部分と分けて持つ）。</summary>
+    public string? ValueUnit { get; init; }
+
+    /// <summary>題名のどの字に印を付けるか。印の対象から 1 字 1 マスの並びも作る。</summary>
+    public StatsTitleMark Mark { get; init; }
+
+    /// <summary>題名の下に添える図の HTML（放送枠の帯など）。<see cref="Mark"/> のマスより優先する。</summary>
+    public string? MeterHtml { get; init; }
+
+    /// <summary>上位 3 件の枠に出す図の HTML（帯はパート名入り）。</summary>
+    public string? PodiumMeterHtml { get; init; }
+
+    /// <summary>図に添える内訳。null で、<see cref="Mark"/> が漢字・記号のときは「漢字 7 / 全 8 字」の形を自動で作る。</summary>
+    public string? DetailLabel { get; init; }
 }
 
 /// <summary>
@@ -109,8 +148,39 @@ public static class StatsEpisodeRows
 
             var ep = ctx.LookupEpisodeBySeriesEpNo(it.SeriesSlug, it.SeriesEpNo);
 
+            // 題名の、数える対象の字に印を付ける（公開前の伏せの枠で包む前の HTML に当てる）。
+            var marked = StatsTitleMarker.Mark(
+                BuildTitleHtml(
+                    ep?.TitleRichHtml,
+                    !string.IsNullOrEmpty(ep?.TitleText) ? ep!.TitleText : it.TitleTextFallback),
+                it.Mark);
+            string meterHtml = it.MeterHtml ?? StatsTitleMarker.BuildCellsHtml(marked.Cells, countStyle: it.Mark == StatsTitleMark.All);
+            string detailLabel = it.DetailLabel ?? it.Mark switch
+            {
+                StatsTitleMark.Kanji => $"漢字 {marked.Cells.Count(c => c)} / 全 {marked.Cells.Count} 字",
+                StatsTitleMark.Symbol => $"記号 {marked.Cells.Count(c => c)} / 全 {marked.Cells.Count} 字",
+                _ => ""
+            };
+            // 数えた字が 1 つも無い回（漢字率・記号率が 0%）は、塗るマスが無いので、マスも内訳も出さない。
+            if (it.MeterHtml is null && it.Mark is StatsTitleMark.Kanji or StatsTitleMark.Symbol && !marked.Cells.Any(c => c))
+            {
+                meterHtml = "";
+                detailLabel = "";
+            }
+            string unit = it.ValueUnit ?? "";
+            string valueNumber = unit.Length > 0 && it.ValueLabel.EndsWith(unit, StringComparison.Ordinal)
+                ? it.ValueLabel[..^unit.Length]
+                : it.ValueLabel;
+
             list.Add(new StatsEpisodeRow
             {
+                RankNo = it.HasRank ? it.Rank : 0,
+                ValueNumber = valueNumber,
+                ValueUnit = unit,
+                SeriesSlug = it.SeriesSlug,
+                MeterHtml = meterHtml,
+                PodiumMeterHtml = it.PodiumMeterHtml ?? meterHtml,
+                DetailLabel = detailLabel,
                 HasRank = it.HasRank,
                 RankLabel = rankLabel,
                 ValueLabel = it.ValueLabel,
@@ -120,9 +190,7 @@ public static class StatsEpisodeRows
                 SeriesStartYearLabel = it.SeriesStartYearLabel,
                 SeriesEpNo = it.SeriesEpNo,
                 TitleHtml = SubtitleGuardRenderer.GuardRichHtml(
-                    BuildTitleHtml(
-                        ep?.TitleRichHtml,
-                        !string.IsNullOrEmpty(ep?.TitleText) ? ep!.TitleText : it.TitleTextFallback),
+                    marked.Html,
                     ep != null ? SubtitleGuardRenderer.RevealAtFor(ep.EpisodeId, ctx.SubtitleRevealAtByEpisodeId) : null),
                 EpisodeUrl = PathUtil.EpisodeUrl(it.SeriesSlug, it.SeriesEpNo)
             });

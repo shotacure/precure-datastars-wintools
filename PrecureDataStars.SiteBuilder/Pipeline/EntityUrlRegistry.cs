@@ -41,7 +41,8 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 ///     そのページの登場話アンカー（<c>#ep{話数}</c>、映画はアンカー無し）を指す。</description></item>
 ///   <item><description>旧 ID URL から新 URL への対応表（<see cref="LegacyRedirects"/>）も併せて作る。旧 ID は
 ///     URL を切り替えた時点で凍結した台帳 <c>legacy_entity_ids</c> から引き（ID を振り直しても旧 URL は元の実体を指す）、
-///     サイト出力の <c>_edge/legacy-redirects.json</c> に書き出して、origin-request の Lambda@Edge が 301 転送に使う
+///     サイト出力の <c>_edge/legacy-redirects.json</c> に書き出す。本番デプロイがこの表を CloudFront の KeyValueStore へ同期し、
+///     viewer-request の CloudFront Function が 301 転送に使う
 ///     （<see cref="Utilities.LegacyRedirectMapWriter"/>）。</description></item>
 /// </list>
 /// </summary>
@@ -335,7 +336,7 @@ public sealed class EntityUrlRegistry
             // 旧名の人物・キャラ・企業 URL の転送表。本番で公開した記録（published_entity_slugs）のうち、いまの URL と違うものを
             // いまの URL へ転送する。同じ区分でいま別の実体がその名前の URL を使っている（ページが実在する）ときは転送しない
             // （名前の衝突は大文字小文字を区別せずに見る。同じ実体の大文字小文字だけ違う旧 URL は転送する）。
-            // 転送元のキーはデコード済みのスラッグで持つ（Lambda@Edge 側でリクエスト URI をデコードして引く）。
+            // 転送元のキーはデコード済みのスラッグで持つ（KeyValueStore へ同期するときにパーセントエンコードした形にする）。
             const string publishedSql = """
                 SELECT entity_kind AS EntityKind, slug AS Slug, COALESCE(person_id, character_id, company_id, person_alias_id) AS EntityId
                   FROM published_entity_slugs
@@ -559,9 +560,12 @@ public sealed class EntityUrlRegistry
             list.AddRange(invs);
         }
         // 出身作品は登場した作品のうち放送・公開の始まりがいちばん早いもの（クレジットの収録範囲では絞らない）。
+        // 最終話バトンタッチ・映画タイアップのキャラは、本来の作品（次の TV シリーズ・映画）。
         string? OriginTitle(int characterId)
         {
             if (!involvementsByCharacter.TryGetValue(characterId, out var invs)) return null;
+            if (CharacterHomeResolver.Resolve(ctx, invs) is { } shifted && ctx.SeriesById.TryGetValue(shifted.HomeSeriesId, out var home))
+                return home.Title;
             return invs
                 .Select(i => ctx.SeriesById.TryGetValue(i.SeriesId, out var series) ? series : null)
                 .Where(series => series is not null)
@@ -636,6 +640,7 @@ public sealed class EntityUrlRegistry
     /// 単発キャラ（個別ページを持たず「その他のキャラクター」のページにまとめるキャラ）を決める。
     /// キャラの印 <c>characters.has_own_page = 0</c> だけで決め、種別・歌唱・家族関係・登場回数は見ない。
     /// 置き場所は声の出演での最初の登場（作品の開始日 → 話数の順。映画系は作品単位）。
+    /// 最終話バトンタッチ・映画タイアップのキャラ（<see cref="CharacterHomeResolver"/>）は、本来の作品（次の TV シリーズの第 1 話・映画）。
     /// 声の出演での登場が 1 つも無いキャラは、置き場所が無いので印にかかわらず個別ページのままにする。
     /// </summary>
     private static IEnumerable<(int CharacterId, GuestPlacement Placement)> DetectGuestCharacters(
@@ -673,6 +678,14 @@ public sealed class EntityUrlRegistry
                 .ThenBy(a => a.EpNo ?? 0)
                 .ThenBy(a => a.SeriesId)
                 .First();
+            if (CharacterHomeResolver.Resolve(ctx, set) is { } home)
+            {
+                int? homeEpNo = home.HomeEpisodeId is int homeEpisodeId
+                    ? ctx.LookupEpisode(home.HomeSeriesId, homeEpisodeId)?.SeriesEpNo
+                    : null;
+                yield return (c.CharacterId, new GuestPlacement(home.HomeSeriesId, home.HomeEpisodeId, homeEpNo));
+                continue;
+            }
             yield return (c.CharacterId, new GuestPlacement(first.SeriesId, first.EpisodeId, first.EpNo));
         }
     }
@@ -694,7 +707,8 @@ internal sealed class PublishedSlugRow
     public int? EntityId { get; set; }
 }
 
-/// <summary>単発キャラを置く登場位置（声の出演での最初の登場。映画系は EpisodeId / SeriesEpNo が null）。</summary>
+/// <summary>単発キャラを置く登場位置（声の出演での最初の登場。映画系は EpisodeId / SeriesEpNo が null。
+/// 最終話バトンタッチのキャラは本来の作品の第 1 話、映画タイアップのキャラは映画）。</summary>
 public sealed record GuestPlacement(int SeriesId, int? EpisodeId, int? SeriesEpNo);
 
 /// <summary>旧 URL（末尾スラッシュ無しのパス。例 <c>/persons/123</c>、旧名の人物・キャラ・企業は <c>/people/{デコード済みスラッグ}</c>・<c>/characters/{デコード済みスラッグ}</c>・<c>/companies/{デコード済みスラッグ}</c>）→ 新 URL（パーセントエンコード済み、アンカー付きもあり）。</summary>

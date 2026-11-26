@@ -22,9 +22,10 @@
   </p>
 </section>
 
-<section id="anniv-calendar" class="anniv-year" data-cal-year="{{ DisplayYear }}">
+{{## もくじ（section-nav.js）に載せるのは月の section だけにするので、外側は id を持つ section にせず div にする。 ##}}
+<div id="anniv-calendar" class="anniv-year" data-cal-year="{{ DisplayYear }}">
   {{~ for m in Months ~}}
-  <section class="anniv-month">
+  <section class="anniv-month" id="month-{{ m.Month }}">
     <h2>{{ m.Label }}</h2>
     <div class="cal-grid anniv-cal-grid" data-month="{{ m.Month }}">
       {{## 曜日見出し。ホームの当月カレンダーと同じ日曜始まり。 ##}}
@@ -71,5 +72,5 @@
     </div>
   </section>
   {{~ end ~}}
-</section>
+</div>
 <script src="{{ asset_url "/assets/anniversary-calendar.js" }}" defer></script>

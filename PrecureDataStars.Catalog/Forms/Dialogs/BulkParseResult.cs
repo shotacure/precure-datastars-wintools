@@ -173,6 +173,15 @@ public sealed class ParsedBlock
     /// </summary>
     public string? LeadingCompany2Text { get; set; }
 
+    /// <summary>
+    /// 筆頭の 1 社目の画面の表記（<c>[[名義|画面の表記]]</c> の <c>|</c> の後ろ）。
+    /// 適用時に <c>credit_role_blocks.leading_company_display_text</c> に入れる。無ければ null。
+    /// </summary>
+    public string? LeadingCompanyDisplayText { get; set; }
+
+    /// <summary>筆頭の 2 社目の画面の表記（<c>credit_role_blocks.leading_company2_display_text</c>）。無ければ null。</summary>
+    public string? LeadingCompany2DisplayText { get; set; }
+
     /// <summary>筆頭の 2 社の間の字（<c>credit_role_blocks.leading_company_separator</c>）。2 社目が無いときは null。空文字も null にする。</summary>
     public string? LeadingCompanySeparator { get; set; }
 

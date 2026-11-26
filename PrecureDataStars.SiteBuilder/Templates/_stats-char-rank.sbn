@@ -1,0 +1,50 @@
+{{## 使用文字 TOP 100（全文字・漢字限定）の本体。頭に字の一覧図、下に順位の行（Rows）。
+     字の一覧図は、順位の順に札を並べ、回数が多い字ほど札を大きくする（CloudSize）。札の色（TypeClass）は、全文字のページが字の種類、
+     漢字限定のページが習う学年・中学以降の常用漢字・常用漢字でない字。凡例（Legend）は一覧に出てくる区分だけ。
+     行は左に順位と出現回数のパネル、右に字と、作品ごとの使われ方のマス（SeriesCells：本線の TV シリーズを放送順に。
+     その字がいちばん多く使われた作品が最も濃く、最も高い）と、いちばん多く使われた作品（PeakLabel）。
+     マスの列の上には、放送開始年の下 2 桁（SeriesYears）を 1 回だけ出す。 ##}}
+<section>
+  <p class="stats-band-legend">
+    {{~ for l in Legend ~}}
+    <span><i class="{{ l.Class }}"></i>{{ l.Label | html.escape }}</span>
+    {{~ end ~}}
+  </p>
+  <div class="stats-cloud" role="img" aria-label="出現回数の多い字ほど大きく並べた図">
+    {{~ for r in Rows ~}}
+    <span class="{{ r.TypeClass }}" style="font-size: {{ r.CloudSize }}em" title="{{ r.CloudTitle }}">{{ r.Char | html.escape }}</span>
+    {{~ end ~}}
+  </div>
+</section>
+
+<section>
+  <h2>順位とシリーズ頻度</h2>
+  <p class="muted stats-note">マスは TV シリーズを放送順に並べたもので、その字が多く使われた作品ほど高く、濃い色です。赤い点線は 5 年ごと、破線は 10 年ごとの区切りです。</p>
+  <div class="stats-char-head" aria-hidden="true">
+    <span class="stats-strip">
+      {{~ for y in SeriesYears ~}}<i{{ if y.Sep != "" }} class="{{ y.Sep }}"{{ end }}>{{ y.Label }}</i>{{~ end ~}}
+    </span>
+  </div>
+  {{## 同じ順位（同じ出現回数）の字は 1 つの行にまとめ、左のパネル（順位・出現回数）は 1 回だけ出す。 ##}}
+  <ol class="stats-ep-list stats-char-list">
+    {{~ for g in Groups ~}}
+    <li class="stats-ep-row stats-char-row{{ if (array.size g.Entries) > 1 }} is-tied{{ end }}">
+      <div class="stats-ep-rank">
+        <span class="stats-ep-rank-no">{{ g.RankLabel }}</span>
+        <span class="stats-ep-rank-val">{{ g.ValueLabel }}</span>
+      </div>
+      <div class="stats-ep-entries">
+        {{~ for r in g.Entries ~}}
+        <div class="stats-char-body">
+          <div class="stats-char-glyph {{ r.TypeClass }}">{{ r.Char | html.escape }}</div>
+          <span class="stats-strip">
+            {{~ for c in r.SeriesCells ~}}<i{{ if c.Sep != "" }} class="{{ c.Sep }}"{{ end }} title="{{ c.Title | html.escape }}"{{ if c.Shade != "" }} style="height: {{ c.Height }}%; background: rgba(216, 27, 96, {{ c.Shade }})"{{ end }}></i>{{~ end ~}}
+          </span>
+          <span class="stats-series-detail stats-char-peak">{{ r.PeakLabel | html.escape }}</span>
+        </div>
+        {{~ end ~}}
+      </div>
+    </li>
+    {{~ end ~}}
+  </ol>
+</section>

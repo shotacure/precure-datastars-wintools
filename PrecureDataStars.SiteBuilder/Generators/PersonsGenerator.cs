@@ -343,7 +343,6 @@ public sealed class PersonsGenerator
             : new List<Involvement>();
         var creditTimeline = _timelineBuilder!.BuildForPerson(
             aliasIds, unitMainInvolvements, BuildPersonInvolvementGroups(aliasIds, IsMainInvolvement));
-        string coverageLabel = string.IsNullOrEmpty(_ctx.MusicCredits.CoverageLabel) ? _ctx.CreditCoverageLabel : _ctx.MusicCredits.CoverageLabel;
 
         var content = new UnitDetailModel
         {
@@ -357,7 +356,6 @@ public sealed class PersonsGenerator
             CreditTimeline = creditTimeline,
             Timeline = creditTimeline?.Timeline,
             IsSinger = isSinger,
-            CoverageLabel = coverageLabel
         };
         int songCount = content.MusicSongTotal;
 
@@ -616,7 +614,6 @@ public sealed class PersonsGenerator
             Sources = _sourcesByPerson!.TryGetValue(person.PersonId, out var sources)
                 ? sources
                 : EntitySourceFootnotes.Empty,
-            CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 人物詳細の構造化データは Schema.org の Person 型。
         string baseUrl = _ctx.Config.BaseUrl;
@@ -799,6 +796,8 @@ public sealed class PersonsGenerator
     /// 役職は役職マスタの表示順（クレジットの並び。シリーズディレクター・プロデューサーなど主要な役職ほど前）で並べ、
     /// 各役職の作品は担当量（話数。映画や作品単位の関与は 1 本）の多い順に 2 作まで選び、年の順に並べる。
     /// 声の出演は「キャラ名役（2016年『作品』）」で、いちばん多く演じた役を言う。年は作品の放送開始・公開の年。
+    /// ほかにも役があれば「キャラ名役（2016年『作品』）ほか 3 役」、役は 1 つでほかの作品にも出ていれば
+    /// 「キャラ名役（2016年『作品』ほか 2 作品）」と、残りの数を添える。
     /// 本編のクレジットが無く音楽のクレジットだけの人は、音楽の区分ごとの曲数・枚数（「作曲：歌 12 曲・劇伴 40 曲」）。
     /// </summary>
     private static string BuildPersonMetaDescription(
@@ -813,6 +812,20 @@ public sealed class PersonsGenerator
         static int RowWeight(InvolvementSeriesRow r) => r.Episodes.Count > 0 ? r.Episodes.Count : 1;
         static IEnumerable<string> Characters(InvolvementSeriesRow r)
             => r.CharacterNames.Split('、', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        // 役の数え方。同じキャラクターの別の名前（変身前と変身後など）を 2 役に数えないよう、キャラクター詳細へのリンク先で見分ける。
+        // 個別ページを持たないキャラクター（リンク先が作品ごとのまとめのページ）と、リンクの無い名前は、名前で見分ける。
+        static IEnumerable<string> CharacterKeys(InvolvementSeriesRow r)
+        {
+            var names = r.CharacterNames.Split('、', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var links = r.CharacterNamesHtml.Split('、', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            for (int i = 0; i < names.Length; i++)
+            {
+                var href = i < links.Length && names.Length == links.Length ? CharacterHrefRegex.Match(links[i]) : System.Text.RegularExpressions.Match.Empty;
+                yield return href.Success && !href.Groups[1].Value.Contains("/guests/", StringComparison.Ordinal)
+                    ? href.Groups[1].Value
+                    : "name:" + names[i];
+            }
+        }
         int RoleOrder(InvolvementGroup g)
             => roleByCode.TryGetValue(g.RoleCode, out var role) && role.DisplayOrder is ushort o ? o : int.MaxValue;
 
@@ -853,8 +866,13 @@ public sealed class PersonsGenerator
                     string character = works[0].Rows.SelectMany(Characters).FirstOrDefault() ?? "";
                     if (character.Length > 0)
                     {
-                        bool more = works.Count > 1 || g.SeriesRows.SelectMany(Characters).Distinct(StringComparer.Ordinal).Count() > 1;
-                        entries.Add($"{character}役（{Work(works[0].Year, works[0].Title)}{(more ? "ほか" : "")}）");
+                        // 「ほか」だけで済ませず、残りの役の数（役が 1 つなら残りの作品の数）を言う。
+                        int otherRoles = g.SeriesRows.SelectMany(CharacterKeys).Distinct(StringComparer.Ordinal).Count() - 1;
+                        int otherWorks = works.Count - 1;
+                        string work = Work(works[0].Year, works[0].Title);
+                        entries.Add(otherRoles > 0 ? $"{character}役（{work}）ほか {otherRoles} 役"
+                            : otherWorks > 0 ? $"{character}役（{work}ほか {otherWorks} 作品）"
+                            : $"{character}役（{work}）");
                         continue;
                     }
                 }
@@ -865,6 +883,10 @@ public sealed class PersonsGenerator
         string text = JoinWithin(entries, targetMaxChars);
         return text.Length > 0 ? text : $"{displayName}さん";
     }
+
+    /// <summary>声の出演の行のキャラクター名のリンク（<see cref="InvolvementSeriesRow.CharacterNamesHtml"/>）から、リンク先を取り出す。</summary>
+    private static readonly System.Text.RegularExpressions.Regex CharacterHrefRegex =
+        new(@"href=""([^""#]+)", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>項目を「／」でつなぎ、<paramref name="maxChars"/> を越える手前で止める（1 つ目は長くても入れる）。</summary>
     private static string JoinWithin(IEnumerable<string> entries, int maxChars)
@@ -1382,7 +1404,8 @@ public sealed class PersonsGenerator
         if (cores.Count == 0) return Array.Empty<PersonSongCard>();
 
         // 共通中間表現から人物詳細用 DTO へ射影。役職バッジは役職統計ページ
-        // （/creators/roles/{code}/）への URL 付きバッジ（RoleBadgeView）に変換する。
+        // （/creators/roles/{code}/。歌唱系は歌唱ページ）への URL 付きバッジ（RoleBadgeView）に変換する。
+        // 役職の詳細ページが無い役職は URL を空にして、札を文字だけで出す（PathUtil.SongCardRoleBadgeUrl）。
         var cards = new List<PersonSongCard>(cores.Count);
         foreach (var core in cores)
         {
@@ -1403,7 +1426,7 @@ public sealed class PersonsGenerator
                     {
                         Code = b.Code,
                         Label = b.Label,
-                        Url = PathUtil.CreatorsRoleUrl(b.Code),
+                        Url = PathUtil.SongCardRoleBadgeUrl(b.Code),
                         DisplayOrder = b.DisplayOrder
                     })
                     .ToList()
@@ -1693,7 +1716,7 @@ public sealed class PersonsGenerator
                         {
                             Code = code,
                             Label = MusicCreditViewBuilder.RoleName(_ctx, code),
-                            Url = "",
+                            Url = PathUtil.MusicRoleBadgeUrl(code),
                             DisplayOrder = _roleMap!.TryGetValue(code, out var role) ? role.DisplayOrder ?? 0 : 0
                         })
                         .OrderBy(b => b.DisplayOrder)
@@ -1725,7 +1748,7 @@ public sealed class PersonsGenerator
                 {
                     Code = rg.Key,
                     Label = MusicCreditViewBuilder.BadgeLabel(_ctx, rg.Key),
-                    Url = "",
+                    Url = PathUtil.MusicRoleBadgeUrl(rg.Key),
                     DisplayOrder = _roleMap!.TryGetValue(rg.Key, out var role) ? role.DisplayOrder ?? 0 : 0
                 })
                 .OrderBy(b => b.DisplayOrder)
@@ -1849,7 +1872,6 @@ public sealed class PersonsGenerator
         public int MusicDiscTotal => MusicSections.SelectMany(s => s.DiscKeys).Distinct(StringComparer.Ordinal).Count();
         /// <summary>歌唱者（歌・コーラス・台詞）として参加したユニットか。</summary>
         public bool IsSinger { get; set; }
-        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class UnitView
@@ -1898,8 +1920,6 @@ public sealed class PersonsGenerator
         public IReadOnlyList<PositionGroupView> PositionGroups { get; set; } = Array.Empty<PositionGroupView>();
         /// <summary>プロフィールの出典（ページの一番下の脚注と、本文の項目に付ける番号）。脚注が無ければ脚注の欄を出さない。</summary>
         public EntitySourceFootnotes Sources { get; set; } = EntitySourceFootnotes.Empty;
-        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>役職履歴の、同じ会社が続く行のまとまり（見出し「役職履歴（会社名）」と表 1 つ）。</summary>

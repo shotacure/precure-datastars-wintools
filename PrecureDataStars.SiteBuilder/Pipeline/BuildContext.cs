@@ -229,6 +229,13 @@ public sealed class BuildContext
     public required IReadOnlyList<ShopProductCandidate> ShopProductCandidates { get; init; }
 
     /// <summary>
+    /// 作品ごとの関連記事（<c>series_related_links</c> の出す設定の行。作品 ID → 並び順の順の行）。
+    /// 作品詳細の「関連記事」の節に並び順で出す。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<SeriesRelatedLink>> RelatedLinksBySeries { get; init; }
+
+
+    /// <summary>
     /// 販売中の商品の枠の置き場を出す作品の ID（手で入れた行か、候補の音楽商品がある作品）。
     /// 作品詳細・各話の詳細は、ここにある作品のページにだけ枠の置き場を出す
     /// （置き場の中身は閲覧時に JS が描くので、売られていない間は何も出ない）。
@@ -295,6 +302,18 @@ public sealed class BuildContext
     /// <see cref="CreditsByEpisode"/> などの集計には入れず、各話の札（ぼかしの枠に入れる）だけが引く。解禁後の回の仮クレジットは通常のクレジットと同じ辞書に入る。
     /// </summary>
     public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> ProvisionalCreditsByEpisode { get; init; }
+
+    /// <summary>
+    /// 仮クレジット（<c>episodes.is_provisional_credit = 1</c>）の回の episode_id（解禁前・解禁後を問わず全部）。
+    /// 歴代記録 <c>/stats/records/</c> は、仮のクレジットを数えないためにこの集合の回を外す。
+    /// </summary>
+    public required IReadOnlySet<int> ProvisionalEpisodeIds { get; init; }
+
+    /// <summary>
+    /// 仮クレジット（<c>series.is_provisional_credit = 1</c>）の作品の series_id。
+    /// 企業詳細のロゴのクレジット範囲は、仮のクレジットを「載っていない作品」に数えないためにこの集合の作品を飛ばす。
+    /// </summary>
+    public required IReadOnlySet<int> ProvisionalSeriesIds { get; init; }
 
     /// <summary>
     /// episode_id → そのエピソードのパート一覧（episode_seq 昇順）の事前展開辞書。

@@ -23,7 +23,9 @@ public static class RoleJoinComparer
             sb.Append("|B").Append(bs.Block.ColCount).Append(':').Append(bs.Block.LeadingCompanyAliasId)
               .Append(':').Append(bs.Block.LeadingCompany2AliasId)
               .Append(':').Append(bs.Block.LeadingCompanySeparator)
-              .Append(':').Append(bs.Block.LeadingCompanySuffix);
+              .Append(':').Append(bs.Block.LeadingCompanySuffix)
+              .Append(':').Append(bs.Block.LeadingCompanyDisplayText)
+              .Append(':').Append(bs.Block.LeadingCompany2DisplayText);
             foreach (var e in bs.Entries)
             {
                 sb.Append("|E").Append(e.EntryKind)

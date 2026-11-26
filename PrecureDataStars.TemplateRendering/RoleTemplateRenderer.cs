@@ -47,6 +47,12 @@ namespace PrecureDataStars.TemplateRendering;
 ///     連名のプレースホルダ（<c>{LYRICIST}</c> / <c>{COMPOSER}</c> / <c>{ARRANGER}</c> / <c>{MEDLEY_ARRANGER}</c> /
 ///     <c>{SINGER}</c> / <c>{CHORUS}</c>）は <c>sep="…"</c> で名義の間の区切りを差し替えられる（DB の区切りの代わりに
 ///     テンプレの文字を HTML のまま入れる。<c>sep="&lt;br&gt;"</c> で改行）。構造化クレジットが無い曲には効かない。
+///     <c>sep</c> と一緒に <c>last_sep="…"</c> を書くと、名義が 3 つ以上のとき最後の名義の前だけその文字にする
+///     （<c>sep="&lt;br&gt;",last_sep="・"</c> で、最後の 2 人を同じ行に並べる）。
+///     <c>{BROADCAST_ONLY}</c> は本放送だけの曲なら "1"、違えば空で、<c>{?BROADCAST_ONLY}</c> / <c>{?!BROADCAST_ONLY}</c> で
+///     本放送の版のカードに出る曲の行の形を書き分ける。本放送の版のカードでは、同じ区分・同じ位置に本放送だけの曲があれば既定の曲は出ない。
+///     <c>{BROADCAST_CARD}</c> は版に BROADCAST を含むカードの中なら "1"、違えば空で、<c>{?BROADCAST_CARD}</c> / <c>{?!BROADCAST_CARD}</c> で
+///     曲の外の役職（LABEL など）の表記を本放送のカードだけ変える。
 ///     <c>{SINGER}</c> / <c>{CHORUS}</c> は <c>cv_align=1</c> で、1 人 1 行に並べて「(CV:…)」の頭を縦にそろえる
 ///     （名前と「(CV:…)」を 2 列の格子に分ける。名義が 2 つ以上のときだけ）。
 ///     <c>{SINGER}</c> / <c>{CHORUS}</c> は <c>member_sep="…"</c> で、ユニット名義のメンバーのあいだの区切り（既定は「・」）を作品の画面の字にする
@@ -84,13 +90,24 @@ public static class RoleTemplateRenderer
             && ph.Options.TryGetValue("cv_align", out var align) && align == "1")
             html = CvAlignedHtml(parts, cvStarts);
         else if (parts is { Count: > 1 } && ph.Options.TryGetValue("sep", out var sep))
-            html = string.Join(sep, parts.Select(p => p.Html));
+            html = JoinWithSeparators(parts.Select(p => p.Html).ToList(), sep, ph);
         else
             html = joinedHtml ?? "";
         // member_sep：ユニット名義のメンバーのあいだの区切り（既定は「・」）を、作品の画面の字に差し替える。
         if (ph.Options.TryGetValue("member_sep", out var memberSep))
             html = html.Replace(SongRecordingSingersRepository.UnitMemberSeparatorHtml, System.Net.WebUtility.HtmlEncode(memberSep));
         return html;
+    }
+
+    /// <summary>
+    /// 連名を <c>sep="…"</c> の文字でつなぐ。<c>last_sep="…"</c> があり名義が 3 つ以上なら、最後の名義の前だけその文字にする
+    /// （「亀山耕一郎（改行）村田 昭・水谷広実」のように、最後の 2 人を同じ行に並べる画面用）。どちらも HTML のまま入れる。
+    /// </summary>
+    private static string JoinWithSeparators(IReadOnlyList<string> htmls, string sep, PlaceholderNode ph)
+    {
+        if (htmls.Count < 3 || !ph.Options.TryGetValue("last_sep", out var lastSep))
+            return string.Join(sep, htmls);
+        return string.Join(sep, htmls.Take(htmls.Count - 1)) + lastSep + htmls[^1];
     }
 
     /// <summary>
@@ -131,7 +148,7 @@ public static class RoleTemplateRenderer
         if (affParts is { Count: > 0 })
         {
             if (affParts.Count > 1 && ph.Options.TryGetValue("sep", out var sep))
-                return string.Join(sep, affParts.Select(p => p.Html));
+                return JoinWithSeparators(affParts.Select(p => p.Html).ToList(), sep, ph);
             return string.Concat(affParts.Select(p => System.Net.WebUtility.HtmlEncode(p.Sep) + p.Html));
         }
         return NamesHtml(ph, joinedHtml, parts);
@@ -540,6 +557,14 @@ public static class RoleTemplateRenderer
                 // 画面が曲名に「（インストゥルメンタル）」を添え、「作曲・編曲」を 1 行にして
                 // 「オリジナルボーカル曲」の見出しの下に元の歌の歌手を出す作品用。
                 return currentSong is { IsInstrumental: true } ? "1" : "";
+            case "BROADCAST_ONLY":
+                // 本放送だけの曲（is_broadcast_only=1）なら "1"。本放送の版のカードで、既定の曲と行の形
+                // （連名の改行の位置など）が違う曲を書き分ける作品用。
+                return currentSong is { IsBroadcastOnly: 1 } ? "1" : "";
+            case "BROADCAST_CARD":
+                // 版に BROADCAST を含むカード（本放送の画面のカード）の中なら "1"、共通のカードと Blu-ray・配信のカードでは空。
+                // 曲の外（LABEL など）で、本放送のカードだけ表記の形を変える作品・話用（例：レーベルを括弧で囲む）。
+                return ctx.ShowsBroadcastOnlySongs ? "1" : "";
             case "MEDLEY_ARRANGER":
                 // 楽曲スコープ：メドレー編曲の連名（リンク化済み HTML）。無い曲は空文字列で、
                 // テンプレ側で {?MEDLEY_ARRANGER}メドレー編曲:{MEDLEY_ARRANGER}{/?MEDLEY_ARRANGER} のように条件展開できる。
@@ -591,13 +616,14 @@ public static class RoleTemplateRenderer
                     // HTML 版を取得することで企業詳細ページへの <a href> リンクが入る。
                     // SiteBuilder 側 LookupCache はリンク化済み HTML を、Catalog 側は HTML エスケープした
                     // プレーンテキストを返す（ILookupCache のデフォルト実装にフォールバック）。
-                    var name = await lookup.LookupCompanyAliasHtmlAsync(leadId).ConfigureAwait(false);
+                    // 画面の表記（leading_company_display_text）があれば名義の名前の代わりにそれを出す（リンク先は名義の会社）。
+                    var name = await lookup.LookupCompanyAliasHtmlAsync(leadId, currentBlock.Block.LeadingCompanyDisplayText).ConfigureAwait(false);
                     if (string.IsNullOrEmpty(name)) return "";
                     // 筆頭が 2 社の連名なら「社名1 + 間の字 + 社名2」、後ろの字があれば続ける（字はエスケープして出す）。
                     var leadSb = new StringBuilder(name);
                     if (currentBlock.Block.LeadingCompany2AliasId is int lead2Id)
                     {
-                        var name2 = await lookup.LookupCompanyAliasHtmlAsync(lead2Id).ConfigureAwait(false);
+                        var name2 = await lookup.LookupCompanyAliasHtmlAsync(lead2Id, currentBlock.Block.LeadingCompany2DisplayText).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(name2))
                         {
                             leadSb.Append(System.Net.WebUtility.HtmlEncode(currentBlock.Block.LeadingCompanySeparator ?? ""))
@@ -616,7 +642,8 @@ public static class RoleTemplateRenderer
                     foreach (var e in currentBlock.Entries.Where(x => x.EntryKind == "COMPANY" && x.CompanyAliasId.HasValue))
                     {
                         // HTML 版で取得。<a href="/companies/{id}/">屋号名</a> が返る。
-                        var n = await lookup.LookupCompanyAliasHtmlAsync(e.CompanyAliasId!.Value).ConfigureAwait(false);
+                        // 画面の表記（company_display_text）があれば屋号名の代わりにそれを出す。
+                        var n = await lookup.LookupCompanyAliasHtmlAsync(e.CompanyAliasId!.Value, e.CompanyDisplayText).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(n)) names.Add(n!);
                     }
                     if (names.Count == 0) return "";

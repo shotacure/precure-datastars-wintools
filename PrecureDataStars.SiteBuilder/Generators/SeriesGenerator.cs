@@ -729,7 +729,7 @@ public sealed class SeriesGenerator
                     // 実話数が総話数に満たない継続中シリーズは「（見込）」を別 span で付与できるよう、
                     // 終了日が確定済みなら期間側にも見込み注記を出す（継続中＝EndDate=null は
                     // 期間が「〜」止めなので注記は総話数側のみ）。
-                    PeriodEstimateNote = (estimated && s.EndDate.HasValue) ? EstimateNote : "",
+                    PeriodEstimateNote = JpDateFormat.PeriodIsEstimated(s, estimated, DateOnly.FromDateTime(DateTime.Now)) ? EstimateNote : "",
                     EpisodesLabel = s.Episodes.HasValue ? $"全 {s.Episodes.Value} 話" : "",
                     EpisodesEstimateNote = (estimated && s.Episodes.HasValue) ? EstimateNote : "",
                     PrecureBadges = BuildPrecureBadges(precureRows),
@@ -1274,7 +1274,7 @@ public sealed class SeriesGenerator
             KindLabel = LookupKindLabel(s),
             Period = seriesPeriod,
             PeriodLabel = periodLabel,
-            PeriodEstimateNote = (seriesEstimated && s.EndDate.HasValue) ? EstimateNote : "",
+            PeriodEstimateNote = JpDateFormat.PeriodIsEstimated(s, seriesEstimated, DateOnly.FromDateTime(DateTime.Now)) ? EstimateNote : "",
             Episodes = s.Episodes?.ToString() ?? "",
             EpisodesEstimateNote = (seriesEstimated && s.Episodes.HasValue) ? EstimateNote : "",
             RunTimeSeconds = FormatRuntimeSeconds(s.RunTimeSeconds),
@@ -1288,7 +1288,7 @@ public sealed class SeriesGenerator
             // 構造で描画するための見出し情報（単一シリーズなのでセクションは 1 個）。
             EpisodeSectionStartYearLabel = s.StartDate.Year.ToString(),
             EpisodeSectionPeriod = seriesPeriod,
-            EpisodeSectionPeriodEstimateNote = (seriesEstimated && s.EndDate.HasValue) ? EstimateNote : "",
+            EpisodeSectionPeriodEstimateNote = JpDateFormat.PeriodIsEstimated(s, seriesEstimated, DateOnly.FromDateTime(DateTime.Now)) ? EstimateNote : "",
             EpisodeSectionTotalLabel = episodeSectionTotalLabel,
             EpisodeSectionTotalEstimateNote = (seriesEstimated && s.Episodes.HasValue) ? EstimateNote : ""
         };
@@ -1435,6 +1435,7 @@ public sealed class SeriesGenerator
         {
             Series = seriesView,
             ShopSeriesId = _ctx.ShopSeriesIds.Contains(s.SeriesId) ? s.SeriesId : 0,
+            RelatedArticles = BuildRelatedArticles(s),
             BgmLinks = bgmLinks,
             Episodes = epRows,
             RelatedWorks = relatedWorks,
@@ -1458,7 +1459,7 @@ public sealed class SeriesGenerator
         // 説明文を実データから動的構築する。
         // 「シリーズ名・放送開始年・話数・主役プリキュア声優」を含めて、SERP / OGP / Twitter Card で
         // シリーズ単位の個別性が立つようにする。140 字目安。
-        var metaDescription = BuildSeriesMetaDescription(s, precureRows);
+        var metaDescription = BuildSeriesMetaDescription(s, precureRows, seriesEstimated);
 
         // JSON-LD（TVSeries / Movie）
         // 後段：略称（series.title_short）は生成・UI ともに一切使わない方針。
@@ -1578,7 +1579,7 @@ public sealed class SeriesGenerator
         string runTimeMinutes = runTimeSeconds is ushort sec && sec > 0 ? $"{(int)Math.Round(sec / 60.0)}分" : "";
         string periodLine = isMovieLike
             ? string.Join("・", new[] { view.Period.Length > 0 ? $"{view.Period}公開" : "", runTimeMinutes }.Where(x => x.Length > 0))
-            : $"{view.Period}　全{view.Episodes}話";
+            : $"{view.Period}　全{view.Episodes}話{view.EpisodesEstimateNote}";
 
         // 主要スタッフは役職ごとに全員を出す。連名を落とすと「誰が作ったか」の答えが変わってしまう。
         // 役職名の色はエピソードカードと同じくサイトの役職バッジの配色に揃える。
@@ -1622,10 +1623,12 @@ public sealed class SeriesGenerator
     /// <summary>
     /// シリーズ詳細の meta description。「2004 年 2 月放送開始の TV シリーズ（全 49 話）。キュアブラック（声：本名 陽子）、キュアホワイト（声：ゆかな）ほか」
     /// の形で 150 字ほどに収める（作品名はページ名に出ているので入れない）。
+    /// 話数が見込み（<paramref name="episodesEstimated"/>）の作品は、本文の「（見込）」と同じく言い切らずに「（全 50 話の見込み）」とする。
     /// </summary>
     private static string BuildSeriesMetaDescription(
         Series s,
-        IReadOnlyList<SeriesPrecureRow> precureRows)
+        IReadOnlyList<SeriesPrecureRow> precureRows,
+        bool episodesEstimated)
     {
         const int targetMaxChars = 150;
         bool isMovie = s.KindCode == "MOVIE" || s.KindCode == "MOVIE_SHORT" || s.KindCode == "SPRING";
@@ -1645,7 +1648,8 @@ public sealed class SeriesGenerator
         else
         {
             sb.Append("放送開始の TV シリーズ");
-            if (s.Episodes.HasValue && s.Episodes.Value > 0) sb.Append("（全 ").Append(s.Episodes.Value).Append(" 話）");
+            if (s.Episodes.HasValue && s.Episodes.Value > 0)
+                sb.Append("（全 ").Append(s.Episodes.Value).Append(episodesEstimated ? " 話の見込み）" : " 話）");
         }
 
         // プリキュア（最大 2 名）：変身名（声：声優）。
@@ -2228,11 +2232,56 @@ public sealed class SeriesGenerator
         public string RelationLabelJa { get; set; } = "";
     }
 
+    /// <summary>
+    /// 作品詳細の「関連記事」の節の行を組み立てる。手で入れた関連記事（<c>series_related_links</c>。precure.news の記事、
+    /// その作品が主題のコラムなど）を並び順で並べる。同じ URL は先に出たほうだけを残す。
+    /// </summary>
+    private IReadOnlyList<RelatedArticleRow> BuildRelatedArticles(Series s)
+    {
+        var rows = new List<RelatedArticleRow>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        if (_ctx.RelatedLinksBySeries.TryGetValue(s.SeriesId, out var links))
+        {
+            foreach (var l in links)
+            {
+                if (!seen.Add(l.Url)) continue;
+                rows.Add(new RelatedArticleRow
+                {
+                    Title = l.Title,
+                    Url = l.Url,
+                    SiteLabel = l.SiteLabel,
+                    DateLabel = l.PublishedOn is DateTime d ? $"{d.Year}年{d.Month}月{d.Day}日" : "",
+                    DateIso = l.PublishedOn?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) ?? "",
+                    // 別のサイトの記事は、外部サイトの節と同じく新しいタブで開く。
+                    IsExternal = l.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase),
+                });
+            }
+        }
+        return rows;
+    }
+
+    /// <summary>作品詳細の「関連記事」の節の 1 行。</summary>
+    private sealed class RelatedArticleRow
+    {
+        public string Title { get; set; } = "";
+        public string Url { get; set; } = "";
+        /// <summary>サイトの名前（precure.news・コラムなど）。題の脇に小さく出す。</summary>
+        public string SiteLabel { get; set; } = "";
+        /// <summary>記事の日付の表示（無ければ空）。</summary>
+        public string DateLabel { get; set; } = "";
+        /// <summary>time 要素の datetime 属性（"yyyy-MM-dd"。無ければ空）。</summary>
+        public string DateIso { get; set; } = "";
+        /// <summary>別のサイトの記事か（新しいタブで開く）。</summary>
+        public bool IsExternal { get; set; }
+    }
+
     private sealed class SeriesDetailModel
     {
         public SeriesDetailView Series { get; set; } = new();
         /// <summary>販売中の商品の枠の置き場に書く作品 ID。この作品に出す設定の商品が無ければ 0（置き場を出さない）。</summary>
         public int ShopSeriesId { get; set; }
+        /// <summary>「関連記事」の節の行（手で入れた関連記事の並び順）。空なら節ごと出さない。</summary>
+        public IReadOnlyList<RelatedArticleRow> RelatedArticles { get; set; } = Array.Empty<RelatedArticleRow>();
         /// <summary>「劇伴」節のボタン（劇伴一覧ページがある自作品・子作品の分）。空なら節ごと出さない。</summary>
         public IReadOnlyList<BgmLinkRow> BgmLinks { get; set; } = Array.Empty<BgmLinkRow>();
         public IReadOnlyList<EpisodeIndexRow> Episodes { get; set; } = Array.Empty<EpisodeIndexRow>();

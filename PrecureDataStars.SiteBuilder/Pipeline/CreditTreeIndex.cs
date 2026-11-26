@@ -239,7 +239,9 @@ public sealed class CreditTreeIndex
     {
         BlockId = b.BlockId, CardRoleId = b.CardRoleId, BlockSeq = b.BlockSeq, ColCount = b.ColCount,
         ContinuesPrevious = b.ContinuesPrevious, LeadingCompanyAliasId = b.LeadingCompanyAliasId,
+        LeadingCompanyDisplayText = b.LeadingCompanyDisplayText,
         LeadingCompanyNotOnScreen = b.LeadingCompanyNotOnScreen, LeadingCompany2AliasId = b.LeadingCompany2AliasId,
+        LeadingCompany2DisplayText = b.LeadingCompany2DisplayText,
         LeadingCompanySeparator = b.LeadingCompanySeparator, LeadingCompanySuffix = b.LeadingCompanySuffix,
         LeadingText = b.LeadingText, HeadingSeriesId = b.HeadingSeriesId, HeadingText = b.HeadingText,
         HeadingItalic = b.HeadingItalic, Notes = b.Notes, CreatedAt = b.CreatedAt, UpdatedAt = b.UpdatedAt,

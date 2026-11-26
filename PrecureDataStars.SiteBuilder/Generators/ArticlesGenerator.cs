@@ -55,52 +55,13 @@ public sealed class ArticlesGenerator
     public void Generate()
     {
         _ctx.Logger.Section("Generating articles");
-
-        // 原稿の置き場は App.config の ArticlesContentDir（コードと分離した外部ディレクトリ）。
-        var dir = _ctx.Config.ArticlesContentDir;
-
-        var articles = new List<Article>();
-        if (string.IsNullOrEmpty(dir))
-        {
-            _ctx.Logger.Warn("ArticlesContentDir が未設定のため、コラムは 0 件として継続します。");
-        }
-        else if (!Directory.Exists(dir))
-        {
-            _ctx.Logger.Warn($"記事ディレクトリが見つかりません: {dir}（記事 0 件として継続）");
-        }
-        else
-        {
-            // 公開日時の判定はビルド開始時点の 1 回の現在時刻で行い、ページごとに判定がずれないようにする。
-            var now = DateTimeOffset.Now;
-            int held = 0;
-            foreach (var path in Directory.EnumerateFiles(dir, "*.md", SearchOption.TopDirectoryOnly))
-            {
-                var article = ParseArticle(path);
-                if (article is null) continue;
-
-                // 本番では下書きと公開日時前の原稿を出さない（テストでは出す）。
-                if (_ctx.Config.IsProductionMode && (article.IsDraft || article.PublishAt > now))
-                {
-                    held++;
-                    continue;
-                }
-                articles.Add(article);
-            }
-            if (held > 0)
-                _ctx.Logger.Info($"下書き・公開日時前のコラム {held} 本は本番に出しません。");
-        }
-
-        // 公開日時（date に書いた時刻まで）の降順、同じ日時は記事の URL の名前（slug）の昇順で並べる。
-        articles.Sort((a, b) =>
-        {
-            int cmp = b.Date.CompareTo(a.Date);
-            return cmp != 0 ? cmp : string.CompareOrdinal(a.Slug, b.Slug);
-        });
+        var articles = LoadArticles();
 
         // 各記事詳細。
         for (int i = 0; i < articles.Count; i++)
         {
             var a = articles[i];
+            var (mainHtml, footnotesHtml) = SplitFootnotes(a.BodyHtml);
             var content = new ArticleContentModel
             {
                 Title = a.Title,
@@ -110,8 +71,12 @@ public sealed class ArticlesGenerator
                 UpdatedLabel = a.UpdatedLabel,
                 UpdatedIso = a.UpdatedIso,
                 Tags = a.Tags ?? Array.Empty<string>(),
-                BodyHtml = a.BodyHtml,
+                BodyHtml = mainHtml,
+                FootnotesHtml = footnotesHtml,
+                // ほかのコラムは公開日時の新しい順に、この記事を除いて上から並べる。
+                MoreArticles = articles.Where(x => !ReferenceEquals(x, a)).Take(MoreArticlesMax).Select(ToMoreLink).ToList(),
                 HasTweet = a.BodyHtml.Contains("twitter-tweet", StringComparison.Ordinal),
+                HasPhoto = a.BodyHtml.Contains(PhotoFigureOpen, StringComparison.Ordinal),
                 // 並びは新しい順なので、1 つ後ろが古い記事（前の記事）、1 つ前が新しい記事（次の記事）。
                 Prev = i + 1 < articles.Count ? ToLink(articles[i + 1]) : null,
                 Next = i > 0 ? ToLink(articles[i - 1]) : null,
@@ -148,27 +113,41 @@ public sealed class ArticlesGenerator
             CopyAssets(a);
         }
 
-        // 一覧ページ。
+        // 一覧ページ。公開日時と最終更新日のうち新しいほう（Article.LastActiveAt）の降順に並べ、
+        // 公開後に書き直した記事を上へ上げる。同じ日時は公開日時の降順、それも同じなら slug の昇順。
+        // 記事のページの前後の記事は、上の公開順のまま（書き直すたびに前後が入れ替わらないように）。
+        var floated = articles.ToList();
+        floated.Sort((a, b) =>
+        {
+            int cmp = b.LastActiveAt.CompareTo(a.LastActiveAt);
+            if (cmp == 0) cmp = b.Date.CompareTo(a.Date);
+            return cmp != 0 ? cmp : string.CompareOrdinal(a.Slug, b.Slug);
+        });
         var indexModel = new ArticlesIndexModel
         {
-            Articles = articles.Select(a => new ArticleSummary
+            Articles = floated.Select(a => new ArticleSummary
             {
                 Title = a.Title,
                 Description = a.Description,
                 Url = $"/articles/{a.Slug}/",
                 DateLabel = a.DateLabel,
                 DateIso = a.DateIso,
+                UpdatedLabel = a.UpdatedLabel,
+                UpdatedIso = a.UpdatedIso,
                 Tags = a.Tags,
+                // 未公開の印はテストビルドだけ。本番では、日付の無い原稿も公開済みとして並ぶので印を付けない。
+                UnpublishedLabel = _ctx.Config.IsProductionMode ? "" : UnpublishedLabelOf(a, DateTimeOffset.Now),
             }).ToList(),
         };
         var indexLayout = new LayoutModel
         {
             PageTitle = "コラム",
             // 記事の本数ではなく、新しい記事の題名を日付つきで 1 行ずつ並べる（何が読めるかがシェア先で分かるように）。
+            // 並びは一覧と同じで、書き直した記事の日付は最終更新日にする（上から新しい順に読めるように）。
             OgCard = new OgCardSpec(Kicker: "", Title: "コラム")
             {
-                Facts = articles.Take(LatestArticlesOnCard)
-                    .Select(a => new OgCardFactLine(a.DateLabel ?? "", a.Title))
+                Facts = floated.Take(LatestArticlesOnCard)
+                    .Select(a => new OgCardFactLine(a.UpdatedLabel != "" ? a.UpdatedLabel : a.DateLabel ?? "", a.Title))
                     .ToList()
             },
             MetaDescription =
@@ -211,6 +190,77 @@ public sealed class ArticlesGenerator
 
     /// <summary>前後の記事カードに出す 1 件分を作る。</summary>
     private static ArticleLink ToLink(Article a) => new() { Title = a.Title, Url = $"/articles/{a.Slug}/" };
+
+    /// <summary>本文の後の「ほかのコラム」に並べる記事の数。</summary>
+    private const int MoreArticlesMax = 3;
+
+    /// <summary>「ほかのコラム」に出す 1 件分を作る（題名と公開日）。</summary>
+    private static ArticleLink ToMoreLink(Article a) => new()
+    {
+        Title = a.Title,
+        Url = $"/articles/{a.Slug}/",
+        DateLabel = a.DateLabel ?? "",
+        DateIso = a.DateIso,
+    };
+
+    /// <summary>Markdig が本文の末尾に出す脚注のかたまりの開きタグ。</summary>
+    private const string FootnotesOpen = "<div class=\"footnotes\">";
+
+    /// <summary>
+    /// HTML 化した本文を、本文と脚注のかたまり（<c>div.footnotes</c>）に分ける。
+    /// 「ほかのコラム」の案内を、長い脚注の下ではなく本文のすぐ後に置くため。脚注が無ければ後ろは空。
+    /// </summary>
+    private static (string Main, string Footnotes) SplitFootnotes(string bodyHtml)
+    {
+        int at = bodyHtml.LastIndexOf(FootnotesOpen, StringComparison.Ordinal);
+        return at < 0 ? (bodyHtml, "") : (bodyHtml[..at], bodyHtml[at..]);
+    }
+
+    /// <summary>原稿を読み込み、本番では下書きと公開日時前の原稿を外して、公開日時の新しい順に並べて返す。</summary>
+    private List<Article> LoadArticles()
+    {
+        // 原稿の置き場は App.config の ArticlesContentDir（コードと分離した外部ディレクトリ）。
+        var dir = _ctx.Config.ArticlesContentDir;
+
+        var articles = new List<Article>();
+        if (string.IsNullOrEmpty(dir))
+        {
+            _ctx.Logger.Warn("ArticlesContentDir が未設定のため、コラムは 0 件として継続します。");
+        }
+        else if (!Directory.Exists(dir))
+        {
+            _ctx.Logger.Warn($"記事ディレクトリが見つかりません: {dir}（記事 0 件として継続）");
+        }
+        else
+        {
+            // 公開日時の判定はビルド開始時点の 1 回の現在時刻で行い、ページごとに判定がずれないようにする。
+            var now = DateTimeOffset.Now;
+            int held = 0;
+            foreach (var path in Directory.EnumerateFiles(dir, "*.md", SearchOption.TopDirectoryOnly))
+            {
+                var article = ParseArticle(path);
+                if (article is null) continue;
+
+                // 本番では下書きと公開日時前の原稿を出さない（テストでは出す）。
+                if (_ctx.Config.IsProductionMode && (article.IsDraft || article.PublishAt > now))
+                {
+                    held++;
+                    continue;
+                }
+                articles.Add(article);
+            }
+            if (held > 0)
+                _ctx.Logger.Info($"下書き・公開日時前のコラム {held} 本は本番に出しません。");
+        }
+
+        // 公開日時（date に書いた時刻まで）の降順、同じ日時は記事の URL の名前（slug）の昇順で並べる。
+        articles.Sort((a, b) =>
+        {
+            int cmp = b.Date.CompareTo(a.Date);
+            return cmp != 0 ? cmp : string.CompareOrdinal(a.Slug, b.Slug);
+        });
+        return articles;
+    }
 
     /// <summary>front-matter をパースし、本文を Markdig で HTML 化して <see cref="Article"/> を返す。
     /// タイトル欠落時は警告して null（スキップ）。</summary>
@@ -278,8 +328,10 @@ public sealed class ArticlesGenerator
 
         // 最終更新日。公開後に書き直した記事だけが "updated: 2026-11-08" のように日付だけで持つ。
         // 公開日（date の日付）より後の日付のときだけ表示する。不正なら警告してラベル空。
+        // 一覧の並びに使う日時（lastActiveAt）は、表示する最終更新日があればその日の 0:00、無ければ公開日時。
         string updatedLabel = "";
         string updatedIso = "";
+        DateTime lastActiveAt = date;
         var rawUpdated = meta.GetValueOrDefault("updated", "").Trim();
         if (DateTime.TryParseExact(rawUpdated, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var updated))
         {
@@ -287,6 +339,7 @@ public sealed class ArticlesGenerator
             {
                 updatedLabel = $"{updated.Year}年{updated.Month}月{updated.Day}日";
                 updatedIso = updated.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                lastActiveAt = updated.Date;
             }
         }
         else if (!string.IsNullOrEmpty(rawUpdated))
@@ -301,12 +354,12 @@ public sealed class ArticlesGenerator
         var tags = meta.GetValueOrDefault("tags", "")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        var bodyHtml = FormatFootnoteRefs(Markdown.ToHtml(SeparateAdjacentFootnoteRefs(body), MarkdownPipeline));
+        var bodyHtml = WrapPhotos(FormatFootnoteRefs(Markdown.ToHtml(SeparateAdjacentFootnoteRefs(body), MarkdownPipeline)));
 
         // 素材のフォルダは原稿のファイル名に合わせる（front-matter で slug を変えても、置き場は原稿の隣のまま）。
         var assetDir = Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path));
 
-        return new Article(slug, title, description, date, dateLabel, dateIso, updatedLabel, updatedIso, tags, bodyHtml, isDraft, publishAt, assetDir);
+        return new Article(slug, title, description, date, dateLabel, dateIso, updatedLabel, updatedIso, lastActiveAt, tags, bodyHtml, isDraft, publishAt, assetDir);
     }
 
     /// <summary>
@@ -324,6 +377,40 @@ public sealed class ArticlesGenerator
     private static string FormatFootnoteRefs(string html)
         => FootnoteRefRegex.Replace(html.Replace(FootnoteRefSeparator, ""), "<sup class=\"fn-ref\">[<a$1>$2</a>]</sup>");
 
+    /// <summary>
+    /// 本文の写真を、枠つきで小さめに置く形（<c>figure.photo</c>）にする。原稿で 1 行に単独で書いた
+    /// <c>![説明](写真.jpg "キャプション"){.photo}</c> を Markdig は <c>&lt;p&gt;&lt;img class="photo" …&gt;&lt;/p&gt;</c> にするので、それを
+    /// <c>&lt;figure class="photo"&gt;&lt;a class="photo-link" href="写真"&gt;&lt;img …&gt;&lt;/a&gt;&lt;figcaption&gt;キャプション&lt;/figcaption&gt;&lt;/figure&gt;</c> に組み替える。
+    /// キャプション（画像の title）は省ける。<c>{.photo}</c> の無い画像（図など）には手を入れない。
+    /// class 名と組みは precure.news の写真と同じで、見た目は site.css の <c>figure.photo</c>、クリックでの拡大は photo-modal.js が受け持つ。
+    /// </summary>
+    private static string WrapPhotos(string html)
+        => PhotoParagraphRegex.Replace(html, m =>
+        {
+            var attrs = m.Groups[1].Value;
+            // class が photo だけの画像を写真として扱う（Markdig は {.photo} を class="photo" で出す）。
+            if (ImgAttr(attrs, "class") != "photo") return m.Value;
+            var src = ImgAttr(attrs, "src");
+            if (src == "") return m.Value;
+            // 値は Markdig が HTML の属性として逃がし済みなので、そのまま属性と本文に置ける。
+            var alt = ImgAttr(attrs, "alt");
+            var caption = ImgAttr(attrs, "title");
+            var figcaption = caption != "" ? $"<figcaption>{caption}</figcaption>" : "";
+            return $"{PhotoFigureOpen}><a class=\"photo-link\" href=\"{src}\"><img src=\"{src}\" alt=\"{alt}\" loading=\"lazy\" decoding=\"async\"></a>{figcaption}</figure>";
+        });
+
+    /// <summary>img 要素の属性の並びから、名前の合う属性の値（逃がし済みのまま）を取り出す。無ければ空。</summary>
+    private static string ImgAttr(string attrs, string name)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(attrs, $@"(?:^|\s){name}=""([^""]*)""");
+        return m.Success ? m.Groups[1].Value : "";
+    }
+
+    /// <summary>写真の figure の開きタグの頭。本文に写真があるかの判定（<see cref="ArticleContentModel.HasPhoto"/>）にも使う。</summary>
+    private const string PhotoFigureOpen = "<figure class=\"photo\"";
+    private static readonly System.Text.RegularExpressions.Regex PhotoParagraphRegex =
+        new(@"<p><img\s([^>]*?)\s*/?></p>", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     private const string FootnoteRefSeparator = "<!---->";
     private static readonly System.Text.RegularExpressions.Regex AdjacentFootnoteRefRegex =
         new(@"(\[\^[^\]\s]+\])(?=\[\^)", System.Text.RegularExpressions.RegexOptions.Compiled);
@@ -333,10 +420,12 @@ public sealed class ArticlesGenerator
     /// <summary>原稿 1 本。<paramref name="IsDraft"/> と <paramref name="PublishAt"/> は本番に出すかどうかの判定に使う。
     /// <paramref name="DateIso"/> は time 要素の datetime 属性に入れる "yyyy-MM-dd"（日付が無ければ空）。
     /// <paramref name="UpdatedLabel"/>・<paramref name="UpdatedIso"/> は最終更新日（公開日より後に書き直したときだけ。無ければ空）。
+    /// <paramref name="LastActiveAt"/> は一覧の並びに使う日時（最終更新日があればその日の 0:00、無ければ公開日時）。
     /// <paramref name="AssetDir"/> は図などの素材を置くフォルダ（原稿と同じ名前。無くてもよい）。</summary>
     private sealed record Article(
         string Slug, string Title, string Description,
-        DateTime Date, string DateLabel, string DateIso, string UpdatedLabel, string UpdatedIso, IReadOnlyList<string> Tags, string BodyHtml,
+        DateTime Date, string DateLabel, string DateIso, string UpdatedLabel, string UpdatedIso, DateTime LastActiveAt,
+        IReadOnlyList<string> Tags, string BodyHtml,
         bool IsDraft, DateTimeOffset PublishAt, string AssetDir);
 
     // ── テンプレに渡すモデル ──
@@ -353,21 +442,47 @@ public sealed class ArticlesGenerator
         /// <summary>最終更新日の time 要素の datetime 属性（"yyyy-MM-dd"、無ければ空）。</summary>
         public string UpdatedIso { get; set; } = "";
         public IReadOnlyList<string> Tags { get; set; } = Array.Empty<string>();
-        /// <summary>Markdig で HTML 化済みの本文。テンプレ側でそのまま（raw）出力する。</summary>
+        /// <summary>Markdig で HTML 化済みの本文（脚注のかたまりを除く）。テンプレ側でそのまま（raw）出力する。</summary>
         public string BodyHtml { get; set; } = "";
+        /// <summary>本文の末尾の脚注のかたまり（<c>div.footnotes</c>）。脚注の無い記事では空。</summary>
+        public string FootnotesHtml { get; set; } = "";
+        /// <summary>本文のすぐ後に並べる、ほかのコラム（公開日時の新しい順）。ほかに記事が無ければ空。</summary>
+        public IReadOnlyList<ArticleLink> MoreArticles { get; set; } = Array.Empty<ArticleLink>();
         /// <summary>本文に X の埋め込み（blockquote.twitter-tweet）があるか。あれば X の読み込みスクリプトを置く。</summary>
         public bool HasTweet { get; set; }
+        /// <summary>本文に写真（figure.photo）があるか。あれば、クリックで拡大する photo-modal.js を置く。</summary>
+        public bool HasPhoto { get; set; }
         /// <summary>1 つ古い記事（「← 前の記事」）。最も古い記事では null。</summary>
         public ArticleLink? Prev { get; set; }
         /// <summary>1 つ新しい記事（「次の記事 →」）。最新の記事では null。</summary>
         public ArticleLink? Next { get; set; }
     }
 
-    /// <summary>前後の記事カードの 1 件分。</summary>
+    /// <summary>前後の記事カードと「ほかのコラム」の 1 件分。</summary>
     private sealed class ArticleLink
     {
         public string Title { get; set; } = "";
         public string Url { get; set; } = "";
+        /// <summary>公開日の表示（「ほかのコラム」だけで使う。前後の記事カードでは空）。</summary>
+        public string DateLabel { get; set; } = "";
+        /// <summary>公開日の time 要素の datetime 属性（"yyyy-MM-dd"、無ければ空）。</summary>
+        public string DateIso { get; set; } = "";
+    }
+
+    /// <summary>
+    /// まだ公開されていない原稿に付ける一覧の印の文言。公開済みなら空。
+    /// 下書き・公開日時前の原稿が一覧に並ぶのはテストビルドだけなので、本番の一覧には出ない。
+    /// </summary>
+    private static string UnpublishedLabelOf(Article a, DateTimeOffset now)
+    {
+        if (a.IsDraft) return "未公開（下書き）";
+        if (a.PublishAt == DateTimeOffset.MinValue) return "未公開（日付なし）";
+        if (a.PublishAt > now)
+        {
+            var d = a.PublishAt.LocalDateTime;
+            return $"未公開（{d.Month}月{d.Day}日 {d:H:mm} 公開）";
+        }
+        return "";
     }
 
     /// <summary>一覧テンプレ（articles-index.sbn）に渡すモデル。</summary>
@@ -385,6 +500,12 @@ public sealed class ArticlesGenerator
         public string DateLabel { get; set; } = "";
         /// <summary>time 要素の datetime 属性（"yyyy-MM-dd"、日付が無ければ空）。</summary>
         public string DateIso { get; set; } = "";
+        /// <summary>最終更新日の表示（「2026年11月8日」）。公開後に書き直していなければ空。</summary>
+        public string UpdatedLabel { get; set; } = "";
+        /// <summary>最終更新日の time 要素の datetime 属性（"yyyy-MM-dd"、無ければ空）。</summary>
+        public string UpdatedIso { get; set; } = "";
         public IReadOnlyList<string> Tags { get; set; } = Array.Empty<string>();
+        /// <summary>未公開の原稿に付ける印の文言（テストビルドの一覧だけ。公開済みなら空）。</summary>
+        public string UnpublishedLabel { get; set; } = "";
     }
 }

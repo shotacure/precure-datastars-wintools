@@ -48,6 +48,12 @@ public sealed class S3DeployService
     /// </summary>
     private const int ListSplitDepth = 1;
 
+    /// <summary>
+    /// 直前の <see cref="RunAsync"/> で本番に上げたファイル（S3 のキーと、新しく出たものか）。アップロードの順（パスの順）。
+    /// dry-run や差分が無かったときは空。IndexNow へ送るページを選ぶのに使う。
+    /// </summary>
+    public IReadOnlyList<(string Key, bool IsNew)> UploadedKeys { get; private set; } = Array.Empty<(string, bool)>();
+
     public S3DeployService(BuildConfig config, BuildLogger logger)
     {
         _config = config;
@@ -157,6 +163,7 @@ public sealed class S3DeployService
         {
             await UploadAllAsync(s3, bucket, toUpload, ct).ConfigureAwait(false);
             _logger.Success($"アップロード完了: {toUpload.Count} ファイル");
+            UploadedKeys = toUpload.Select(u => (u.Key, !s3Etags.ContainsKey(u.Key))).ToList();
         }
 
         // 8) orphan 削除（最大 1000 件/バッチ）。

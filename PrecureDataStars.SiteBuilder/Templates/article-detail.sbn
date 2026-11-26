@@ -18,6 +18,31 @@
   <div class="article-body">
     {{ BodyHtml }}
   </div>
+  {{## 本文のすぐ後に、ほかのコラムとコラムの一覧への案内を置く（長い脚注の下まで読まなくても次へ進めるように）。 ##}}
+  {{~ if (array.size MoreArticles) > 0 ~}}
+  <aside class="article-more" aria-label="ほかのコラム">
+    <h2 class="article-more-heading">ほかのコラム</h2>
+    <ul class="article-more-list">
+      {{~ for m in MoreArticles ~}}
+      <li>
+        <a class="article-more-link" href="{{ m.Url }}">
+          <span class="article-more-title">{{ m.Title | html.escape }}</span>
+          {{~ if m.DateLabel != "" ~}}
+          <time class="article-more-date"{{ if m.DateIso != "" }} datetime="{{ m.DateIso }}"{{ end }}>{{ m.DateLabel }}</time>
+          {{~ end ~}}
+        </a>
+      </li>
+      {{~ end ~}}
+    </ul>
+    <p class="article-more-all"><a href="/articles/">コラムの一覧 →</a></p>
+  </aside>
+  {{~ end ~}}
+  {{~ if FootnotesHtml != "" ~}}
+  {{## 脚注は本文と同じ組み（.article-body の脚注の体裁）で、案内の後に続ける。 ##}}
+  <div class="article-body article-footnotes">
+    {{ FootnotesHtml }}
+  </div>
+  {{~ end ~}}
   {{## 前後の記事。前後話カードと同じ形で、左が古い記事、右が新しい記事（precure.news の記事ページと同じ）。
        無い側（最初／最新の記事）は文言を置かず枠だけ薄く出す。 ##}}
   <nav class="ep-prev-next-cards ep-prev-next-cards-bottom" aria-label="前後の記事">
@@ -48,4 +73,8 @@
 {{~ if HasTweet ~}}
 {{## 本文に X の埋め込み（blockquote.twitter-tweet）がある記事だけ、X の読み込みスクリプトを置く。 ##}}
 <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+{{~ end ~}}
+{{~ if HasPhoto ~}}
+{{## 本文に写真（figure.photo）がある記事だけ、クリックで拡大する JS を置く。 ##}}
+<script src="{{ asset_url "/assets/photo-modal.js" }}" defer></script>
 {{~ end ~}}

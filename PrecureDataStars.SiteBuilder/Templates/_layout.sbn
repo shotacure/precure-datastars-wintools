@@ -446,11 +446,16 @@ gtag('config', '{{ Ga4MeasurementId }}');
           <span class="sister-site-text-card-en">precure-news-stage</span>
         </a>
         <a class="footer-sister-link" href="https://all-stars.precure.tv/" target="_blank" rel="noopener noreferrer">
-          <img class="footer-sister-banner" src="/assets/all-stars-banner.webp" width="1920" height="640"
+          {{## フッターのバナー（いえるかなクイズ・SHOWTIME）は 200px の幅で出るので、元の 1920px ではなく、幅に合う写し（400・680px）を選ばせる。 ##}}
+          <img class="footer-sister-banner" src="/assets/all-stars-banner-400.webp"
+               srcset="/assets/all-stars-banner-400.webp 400w, /assets/all-stars-banner-680.webp 680w"
+               sizes="200px" width="1920" height="640"
                alt="プリキュアオールスターズ いえるかなクイズ（姉妹サイト）" decoding="async" loading="lazy">
         </a>
         <a class="footer-sister-link" href="https://showtime.precure.tv/" target="_blank" rel="noopener noreferrer">
-          <img class="footer-sister-banner" src="/assets/showtime-banner.webp" width="1920" height="640"
+          <img class="footer-sister-banner" src="/assets/showtime-banner-400.webp"
+               srcset="/assets/showtime-banner-400.webp 400w, /assets/showtime-banner-680.webp 680w"
+               sizes="200px" width="1920" height="640"
                alt="SHOWTIME ―ショウタイム―（同人誌・お仕事／姉妹サイト）" decoding="async" loading="lazy">
         </a>
       </nav>

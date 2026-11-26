@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：姉妹サイトのバナーを、表示の幅に合う小さい写しで出す**（`home.sbn`・`_layout.sbn`・`wwwroot/assets/all-stars-banner-{400,680,1020}.webp`〔新規〕・`showtime-banner-{400,680}.webp`〔新規〕）：トップとフッターのバナーは、最大 340px・200px の幅で出すのに、1920×640 の元の画像（いえるかなクイズは 197KB）を読んでいた。スマホのトップでは、これがいちばん大きい要素で、表示の遅さの元だった。幅に合う写しを `srcset` で選ばせ、トップのバナーは先に読ませる。
+
 - **サイト：ページが読む CSS を、区画ごとに当たりうる規則だけにした**（`CssBundler`〔新規〕・`CssBundlePlan`〔新規〕・`CssBundleManifest`〔新規〕・`PageRenderer`・`SiteBuilderPipeline`・`LayoutModel.CssUrl`〔新規〕・`BuildConfig.CssBundles`〔新規〕・`_layout.sbn`・`S3DeployService`・`scripts/deploy.ps1`・`scripts/verify-site-output.ps1`・`scripts/verify-css-bundles.mjs`〔新規〕）：これまでは、全ページが site.css（圧縮前 486KB、gzip 120KB）を丸ごと読み、読み終えるまで画面が出なかった。書くのは site.css 1 本のままで、ビルドが区画ごとの CSS（`/assets/css/{区画}.css`。トップ・作品・人と会社・キャラクター・音楽と商品・統計・コラム・記念日・書体・案内の 10 本、gzip で 7.6〜18.5KB）を作る。ページは自分の区画の 1 本だけを読む。
   - 区画の CSS にはその区画のページの HTML と、そのページが読む JS に出る語で当たりうる規則だけを、site.css の順番のまま入れる。
   - 区画の CSS は Cache-Control を 5 分にする。変わったときは CloudFront の消し込みを `/assets/css/*` の 1 本にまとめる。

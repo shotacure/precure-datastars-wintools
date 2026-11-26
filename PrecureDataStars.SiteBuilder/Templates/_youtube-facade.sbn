@@ -1,0 +1,15 @@
+{{## YouTube の公式動画の置き場（エピソードの予告・作品の本予告・主題歌の録音の動画）。
+     呼ぶ側で yt_id（動画 ID）と yt_title（動画の題。iframe の title と再生ボタンの読み上げに使う）を入れてから include する。
+     最初はサムネイル（i.ytimg.com の hqdefault）と再生ボタンだけを出し、押されたら yt-facade.js が埋め込みのプレイヤー
+     （youtube.com/embed/、自動再生つき）に差し替える。プレイヤーの JS（1 本で約 1MB）を、押されるまで読まないため。
+     スクリプトが動かない環境では noscript のプレイヤーをそのまま出す（フッタの YouTube の注記もこの URL で判定している）。 ##}}
+<div class="yt-facade" data-yt-id="{{ yt_id }}" data-yt-title="{{ yt_title | html.escape }}">
+  <button type="button" class="yt-facade-play" aria-label="動画「{{ yt_title | html.escape }}」を再生">
+    <img src="https://i.ytimg.com/vi/{{ yt_id }}/hqdefault.jpg" alt="" width="480" height="360" loading="lazy" decoding="async">
+  </button>
+  <noscript><iframe width="560" height="315"
+    src="https://www.youtube.com/embed/{{ yt_id }}"
+    title="{{ yt_title | html.escape }}" frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></noscript>
+</div>

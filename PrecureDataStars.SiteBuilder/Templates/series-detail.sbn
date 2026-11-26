@@ -41,11 +41,8 @@
        series.youtube_trailer_url の登録があるシリーズにだけ出す。 ##}}
   {{~ if Series.YoutubeTrailerId != "" ~}}
   <div class="youtube-trailer">
-    <iframe width="560" height="315"
-      src="https://www.youtube.com/embed/{{ Series.YoutubeTrailerId }}"
-      title="本予告" frameborder="0"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+    {{~ yt_id = Series.YoutubeTrailerId; yt_title = "本予告" ~}}
+    {{ include '_youtube-facade.sbn' }}
   </div>
   {{~ end ~}}
 
@@ -232,14 +229,11 @@
           {{~ end ~}}
           {{~ if side_inline ~}}<ul class="ts-sizes ts-sizes-side ts-sizes-inline">{{ side_html }}</ul>{{~ end ~}}
         </div>
-        {{## 録音の公式 YouTube 動画（URL 登録があるときだけ）。エピソード予告と同じ iframe 埋め込み。 ##}}
+        {{## 録音の公式 YouTube 動画（URL 登録があるときだけ）。エピソード予告と同じ置き場（_youtube-facade.sbn）。 ##}}
         {{~ capture video_html ~}}
         <div class="youtube-embed ts-youtube">
-          <iframe width="560" height="315"
-            src="https://www.youtube.com/embed/{{ t.YoutubeId }}"
-            title="{{ t.Title | html.escape }}" frameborder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+          {{~ yt_id = t.YoutubeId; yt_title = t.Title ~}}
+          {{ include '_youtube-facade.sbn' }}
         </div>
         {{~ end ~}}
         {{~ if has_play && !side_inline ~}}

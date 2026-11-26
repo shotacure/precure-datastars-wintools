@@ -114,11 +114,8 @@
   {{## YouTube 予告（見出しなし、基本情報の前に置く） ##}}
   {{~ if Episode.YoutubeId != "" ~}}
   <div class="youtube-trailer">
-    <iframe width="560" height="315"
-      src="https://www.youtube.com/embed/{{ Episode.YoutubeId }}"
-      title="次回予告" frameborder="0"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+    {{~ yt_id = Episode.YoutubeId; yt_title = "次回予告" ~}}
+    {{ include '_youtube-facade.sbn' }}
   </div>
   {{~ end ~}}
 
@@ -127,11 +124,8 @@
   {{~ if Episode.SpecialYoutubeId != "" ~}}
   <h3>特別予告 (本放送時)</h3>
   <div class="youtube-trailer">
-    <iframe width="560" height="315"
-      src="https://www.youtube.com/embed/{{ Episode.SpecialYoutubeId }}"
-      title="特別予告 (本放送時)" frameborder="0"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+    {{~ yt_id = Episode.SpecialYoutubeId; yt_title = "特別予告 (本放送時)" ~}}
+    {{ include '_youtube-facade.sbn' }}
   </div>
   {{~ end ~}}
 

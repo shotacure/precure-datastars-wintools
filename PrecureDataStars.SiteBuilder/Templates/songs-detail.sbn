@@ -123,16 +123,13 @@
       <span class="song-recording-plays">{{ play_buttons }}</span>
       {{~ end ~}}
     </h2>
-    {{## 公式 YouTube 動画（録音に URL 登録があるときだけ）。エピソード予告と同じ iframe 埋め込み。 ##}}
+    {{## 公式 YouTube 動画（録音に URL 登録があるときだけ）。エピソード予告と同じ置き場（_youtube-facade.sbn）。 ##}}
     {{~ if r.YoutubeId != "" || ((array.size r.PlayRows) > 0 && !inline_plays) ~}}
     <div class="song-recording-media">
       {{~ if r.YoutubeId != "" ~}}
       <div class="youtube-embed">
-        <iframe width="560" height="315"
-          src="https://www.youtube.com/embed/{{ r.YoutubeId }}"
-          title="{{ r.DisplayTitle | html.escape }}" frameborder="0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+        {{~ yt_id = r.YoutubeId; yt_title = r.DisplayTitle ~}}
+        {{ include '_youtube-facade.sbn' }}
       </div>
       {{~ end ~}}
       {{~ if (array.size r.PlayRows) > 0 && !inline_plays ~}}

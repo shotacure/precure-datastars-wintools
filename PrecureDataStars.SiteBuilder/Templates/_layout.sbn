@@ -493,5 +493,10 @@ gtag('config', '{{ Ga4MeasurementId }}');
 {{~ if HasShopBox ~}}
 <script src="{{ asset_url "/assets/shop-box.js" }}" defer></script>
 {{~ end ~}}
+{{## YouTube の動画の JS。最初はサムネイルと再生ボタンだけを出しておき（_youtube-facade.sbn）、押されたときに埋め込みのプレイヤーへ差し替える。
+     動画のあるページだけで読み込む。 ##}}
+{{~ if HasYoutubeEmbeds ~}}
+<script src="{{ asset_url "/assets/yt-facade.js" }}" defer></script>
+{{~ end ~}}
 </body>
 </html>

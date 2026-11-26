@@ -90,7 +90,9 @@
      スクリプトが動かない環境では noscript の <link> で全部を読む。 ##}}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="{{ asset_url "/assets/site.css" }}">
+{{## ページが読む CSS。区画ごとの CSS（/assets/css/{区画}.css。そのページの種類で当たりうる規則だけを site.css から抜き出したもの。
+     CssBundler がビルドのたびに作る）か、全部入りの site.css。どちらにするかは PageRenderer がテンプレートから決めて CssUrl に入れる。 ##}}
+<link rel="stylesheet" href="{{ if CssUrl != "" }}{{ CssUrl | html.escape }}{{ else }}{{ asset_url "/assets/site.css" }}{{ end }}">
 <script>
 (function () {
   var head = document.head;
@@ -487,10 +489,15 @@ gtag('config', '{{ Ga4MeasurementId }}');
 <script src="{{ asset_url "/assets/search.js" }}" defer></script>
 {{## セクションナビの JS。
      defer で読み込み、<nav id="pageSectionNav"> を起点に id 付きセクションを走査して
-     チップストリップを自動構築する。スクロールスパイとタブ切替追従もここで担う。 ##}}
+     チップストリップを自動構築する。スクロールスパイとタブ切替追従もここで担う。
+     id 付きのセクションが 2 つ以上あるページだけで読む（ScriptPlan。目次の置き場は最初から隠してある）。 ##}}
+{{~ if NeedsSectionNav ~}}
 <script src="{{ asset_url "/assets/section-nav.js" }}" defer></script>
-{{## 件数バッジでの並べ替えボタン（.count-sort-btn）の JS。ボタンの無いページでは何もしない。 ##}}
+{{~ end ~}}
+{{## 件数バッジでの並べ替えボタン（.count-sort-btn）の JS。ボタンのあるページだけで読む（ScriptPlan）。 ##}}
+{{~ if NeedsCountSort ~}}
 <script src="{{ asset_url "/assets/count-sort.js" }}" defer></script>
+{{~ end ~}}
 {{## モバイル用ハンバーガーメニューの開閉 JS。
      #mobileNavToggle のクリック → #mobileNavOverlay 表示・aria-expanded 切替、
      背景クリック・✕ ボタン・Escape キーで閉じる挙動と、モバイル幅（≤768px）でのみ
@@ -501,15 +508,19 @@ gtag('config', '{{ Ga4MeasurementId }}');
      .credit-section 内の全 td.role-name / td.character-cell の最大幅を測定し、
      CSS 変数 --credit-role-name-w / --credit-character-cell-w をセクションに書き込んで
      縦軸を揃える。ResizeObserver でウィンドウ幅変化にも追従する。
-     .credit-section が無いページでは何もせず終了するため、グローバルに defer 読み込みする。 ##}}
+     .credit-section のあるページ（エピソード詳細・作品詳細）だけで読む（ScriptPlan）。 ##}}
+{{~ if NeedsCreditAlign ~}}
 <script src="{{ asset_url "/assets/credit-align.js" }}" defer></script>
+{{~ end ~}}
 {{## SNS シェアボタンの JS。
      クリップボードコピーボタンと、コピー成功時のトースト表示を担う。
      .share-buttons が無いページでは何もせず終了する。 ##}}
 <script src="{{ asset_url "/assets/share-buttons.js" }}" defer></script>
 {{## ホームの商品・書籍カードの「発売まで N 日」と状態バッジを閲覧日基準に更新する JS。
-     data-release-date を持つ要素が無いページでは何もせず終了する。 ##}}
+     data-release-date を持つ要素のあるページ（トップ）だけで読む（ScriptPlan）。 ##}}
+{{~ if NeedsReleaseCountdown ~}}
 <script src="{{ asset_url "/assets/release-countdown.js" }}" defer></script>
+{{~ end ~}}
 {{## 引用ボックスの JS。
      引用文の参照日を仮の表記「YYYY-MM-DD」から閲覧日へ差し替え、引用文のコピーとトースト表示を担う。
      .cite-box が無いページでは何もせず終了する。 ##}}

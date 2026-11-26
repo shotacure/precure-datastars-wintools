@@ -83,8 +83,15 @@ public sealed class PageRenderer
     /// <summary>描き上がったカードの画像ファイルと、それが作り置きか（false なら書体が無く既定の書体で描いた、作り置きに入れない一時ファイル）。</summary>
     private sealed record OgCardDrawn(string File, bool Cached);
 
-    public PageRenderer(ScribanRenderer renderer, BuildConfig config, BuildSummary summary, OutputWriter output, ProgressReporter? reporter = null, OgCardRenderer? ogCardRenderer = null)
+    /// <summary>
+    /// 区画ごとの CSS を作る仕組み。ページが読む CSS の URL を決め、描き上がった HTML の語を集める。
+    /// null のとき（区画を使わない呼び出し方）は、全ページが全部入りの site.css を読む。
+    /// </summary>
+    private readonly CssBundler? _cssBundler;
+
+    public PageRenderer(ScribanRenderer renderer, BuildConfig config, BuildSummary summary, OutputWriter output, ProgressReporter? reporter = null, OgCardRenderer? ogCardRenderer = null, CssBundler? cssBundler = null)
     {
+        _cssBundler = cssBundler;
         _renderer = renderer;
         _config = config;
         _summary = summary;
@@ -409,10 +416,25 @@ public sealed class PageRenderer
         layoutMeta.HasYoutubeEmbeds = contentHtml.Contains("youtube.com/embed/", StringComparison.Ordinal);
         // 読み込む Web フォントは本文に出る要素から決める。
         ApplyWebFonts(layoutMeta, contentHtml, isNotFoundPage: false);
+        // 読む CSS（区画ごとの CSS か全部入りの site.css）と、要るページだけで読む JS を決める。
+        ApplyAssetPlan(layoutMeta, contentTemplate, contentHtml);
 
         layoutMeta.Content = contentHtml;
 
-        return _renderer.Render("_layout.sbn", layoutMeta);
+        var pageHtml = _renderer.Render("_layout.sbn", layoutMeta);
+        // 描き上がったページ（レイアウト込み）に出る語を、区画の CSS を作る材料として集める。
+        _cssBundler?.Collect(contentTemplate, urlPath, pageHtml);
+        return pageHtml;
+    }
+
+    /// <summary>
+    /// ページが読む CSS の URL（<see cref="CssBundler.CssUrlFor"/>）と、要るページだけで読む JS の印（<see cref="ScriptPlan"/>）を決めて詰める。
+    /// レイアウトを描く前に呼ぶ。本文（<paramref name="contentHtml"/>）はレイアウトに包む前のもの。
+    /// </summary>
+    private void ApplyAssetPlan(LayoutModel layoutMeta, string contentTemplate, string contentHtml)
+    {
+        layoutMeta.CssUrl = _cssBundler?.CssUrlFor(contentTemplate) ?? AssetUrl.Versioned("/assets/site.css");
+        ScriptPlan.Apply(layoutMeta, contentHtml, _config.ScriptPlanEnabled);
     }
 
     /// <summary>
@@ -542,10 +564,12 @@ public sealed class PageRenderer
         // BreadcrumbList JSON-LD は共通ヘルパ内で通常通り組み立てる（パンくず未指定なら出力されない）。
         // このルートで書き出すのは 404 ページなので、見出しの飾りの書体（Kaisei Decol）を読む。
         ApplyWebFonts(layoutMeta, contentHtml, isNotFoundPage: true);
+        ApplyAssetPlan(layoutMeta, contentTemplate, contentHtml);
 
         layoutMeta.Content = contentHtml;
 
         var pageHtml = _renderer.Render("_layout.sbn", layoutMeta);
+        _cssBundler?.Collect(contentTemplate, canonicalPath, pageHtml);
 
         _output.WriteText(Path.Combine(_config.OutputDirectory, outputFileName), pageHtml);
 

@@ -326,14 +326,24 @@ public sealed class S3DeployService
         }
 
         var paths = new HashSet<string>(StringComparer.Ordinal);
+        // 区画ごとの CSS（assets/css/ の下）は、URL に ?v= を付けて読まれる。キャッシュのキーに問い合わせ文字列が入っていても
+        // 付いた写しごと消えるよう、個別のパスではなく末尾に * を付けた 1 本（/assets/css/*）にまとめる。数は 100 件の閾値に入れない。
+        bool cssBundlesChanged = false;
         foreach (var key in changedKeys)
+        {
+            if (key.StartsWith(Rendering.CssBundler.BundleDirectory + "/", StringComparison.Ordinal))
+            {
+                cssBundlesChanged = true;
+                continue;
+            }
             foreach (var p in InvalidationPathsForKey(key))
                 paths.Add(p);
+        }
 
-        if (paths.Count == 0)
+        if (paths.Count == 0 && !cssBundlesChanged)
             return;
 
-        // 変更パスが多いときはワイルドカード 1 本に倒す（課金は 1 パス・全エッジ更新）。
+        // 変更パスが多いときはワイルドカード 1 本に倒す（課金は 1 パス・全エッジ更新）。/* は区画の CSS も含むので、/assets/css/* は足さない。
         List<string> items;
         if (paths.Count > InvalidationWildcardThreshold)
         {
@@ -343,6 +353,8 @@ public sealed class S3DeployService
         else
         {
             items = paths.OrderBy(p => p, StringComparer.Ordinal).ToList();
+            // * はパスをエンコードした後で付ける（EscapeDataString を通すと %2A になるため）。
+            if (cssBundlesChanged) items.Add("/" + Rendering.CssBundler.BundleDirectory + "/*");
             _logger.Info($"Invalidation     : {items.Count} パス");
         }
 
@@ -433,13 +445,17 @@ public sealed class S3DeployService
 
     /// <summary>拡張子に応じた Cache-Control を返す。
     /// HTML は短命（更新を早く反映）、sitemap / robots / 検索インデックス等も短命寄り、
-    /// その他の静的アセット（css / js / 画像 / フォント）は 1 日。固定ファイル名のため、
+    /// 区画ごとの CSS（assets/css/）は 5 分、その他の静的アセット（css / js / 画像 / フォント）は 1 日。固定ファイル名のため、
     /// 更新はデプロイ時 invalidation でエッジへ押し出す。</summary>
     internal static string CacheControlFor(string key)
     {
         // 販売中の商品のファイルは、売り切れ・再入荷をすぐ枠に映すため HTML と同じ短さにする。
         if (key.StartsWith(Pipeline.ShopItemsFile.DirectoryName + "/", StringComparison.Ordinal))
             return "public, max-age=60";
+        // 区画ごとの CSS は、版の印が同じまま中身が増えることがある（その区画で初めて使われた部品の規則が足される）。
+        // 古い写しを持つ端末でその部品の見た目が付かない時間を短くするため、ほかの CSS（1 日）より短くする。
+        if (key.StartsWith(Rendering.CssBundler.BundleDirectory + "/", StringComparison.Ordinal))
+            return "public, max-age=300";
         var ext = Path.GetExtension(key).ToLowerInvariant();
         if (ext == ".html")
             return "public, max-age=60";

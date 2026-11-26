@@ -91,6 +91,18 @@ public sealed class BuildConfig
     /// 超えるときは、新しく出たページを先に、続けて書き換わったページをパスの順に送る。</summary>
     public int IndexNowMaxUrls { get; init; } = 10000;
 
+    /// <summary>
+    /// 区画ごとの CSS（<c>/assets/css/{区画}.css</c>。<see cref="Rendering.CssBundler"/>）を配るか。App.config の <c>CssBundles</c>（既定 true）。
+    /// false にすると、全ページが全部入りの <c>/assets/site.css</c> を読む形に戻る。
+    /// </summary>
+    public bool CssBundles { get; init; } = true;
+
+    /// <summary>
+    /// JS を要るページだけで読むか（<see cref="Rendering.ScriptPlan"/>）。App.config の <c>ScriptPlan</c>（既定 true）。
+    /// false にすると、レイアウトの JS を全ページで読む形に戻る。CSS とは壊れ方が別なので、スイッチを分けてある。
+    /// </summary>
+    public bool ScriptPlanEnabled { get; init; } = true;
+
     /// <summary>デプロイの「削除（orphan 掃除）」対象から除外するキー接頭辞の一覧。
     /// App.config の <c>AwsDeployProtectedPrefixes</c>（カンマ区切り）。手動配置物を守るための安全弁で、
     /// 既定は空（生成物に無い S3 オブジェクトはすべて削除候補）。</summary>
@@ -404,6 +416,12 @@ public sealed class BuildConfig
             CloudFrontKeyValueStoreArn = kvsArn,
             IndexNowKey = indexNowKey,
             IndexNowMaxUrls = indexNowMaxUrls,
+            CssBundles = ReadSwitch("CssBundles"),
+            ScriptPlanEnabled = ReadSwitch("ScriptPlan"),
         };
+
+        // 既定で有効なスイッチ。「false」と書いたときだけ切る（書いていない・読めないときは有効）。
+        static bool ReadSwitch(string key)
+            => !bool.TryParse((ConfigurationManager.AppSettings[key] ?? "").Trim(), out var value) || value;
     }
 }

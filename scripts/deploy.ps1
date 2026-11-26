@@ -221,6 +221,30 @@ try {
     Write-Host ("  差分: upload {0} / delete {1} / unchanged {2} / 警告 {3}" -f $uploadCount, $deleteCount, $unchangedCount, $warnDisplay) -ForegroundColor Cyan
     Write-DeployLog ("  差分: upload {0} / delete {1} / unchanged {2} / 警告 {3}" -f $uploadCount, $deleteCount, $unchangedCount, $warnDisplay)
 
+    # --- 区画ごとの CSS の大きさと知らせ（SiteBuilder の CssBundler が出す行） ---
+    # 大きさの行（「CSS 区画：」）は記録に写す。知らせの行（「CSS 区画の知らせ：」。区画が急に小さくなった・site.css の点検に当たって
+    # 全部入りに戻した）は、公開は止めずに記録へ写し、定時の回では Windows の通知も出す（人のいない時間に気づけるように）。
+    $cssNotices = @()
+    foreach ($line in $dryOutput) {
+        $text = "$line".Trim()
+        if ($text.StartsWith('CSS 区画の知らせ：')) { $cssNotices += $text; Write-DeployLog "  $text" }
+        elseif ($text.StartsWith('CSS 区画：')) { Write-DeployLog "  $text" }
+    }
+    if ($cssNotices.Count -gt 0) {
+        Write-Host ""
+        $cssNotices | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkYellow }
+        if ($deployTrigger -eq '定時') {
+            try {
+                . (Join-Path $PSScriptRoot 'show-toast.ps1')
+                Show-Toast -Title 'precure.tv の CSS の区画についての知らせ' `
+                    -Body ("{0}　{1}" -f (Get-Date -Format 'M/d HH:mm'), ($cssNotices[0] -replace '^CSS 区画の知らせ：', '')) `
+                    -Foot "記録: $deployLogPath"
+            } catch {
+                Write-DeployLog "  通知を出せませんでした：$($_.Exception.Message)"
+            }
+        }
+    }
+
     # --- サイトの文章の点検（知らせるだけ。止めない） ---
     # ドライランで作った本番の出力を、文章の決まり（結びの重なり・問いかけ・内部用語など）に照らす。
     # 出力を読むだけなので、本番反映（出力を読んで上げるだけ）と同時に回し、結果は反映の後に出す。

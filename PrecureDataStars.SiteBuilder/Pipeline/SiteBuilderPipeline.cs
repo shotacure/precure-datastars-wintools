@@ -50,6 +50,10 @@ public sealed class SiteBuilderPipeline
         if (string.IsNullOrEmpty(config.PageFilter) && !config.DiffOnly)
             Deploy.PendingDeploy.Delete(config.OutputDirectory);
 
+        // 区画ごとの CSS の仕組み。site.css を切り分けて点検し、版の印を決める。wwwroot を読むだけなので、DB を読む前に済ませる
+        // （点検に当たったら、全ページが全部入りの site.css を読む形で続ける。本番の一部だけのビルドで控えが使えなければ、ここで止まる）。
+        var cssBundler = CssBundler.Create(config, logger);
+
         // 22 セクション分の進捗枠を事前登録する。
         // ページ書き出し件数の予想は ctx 構築前に SQL の COUNT(*) で軽く取得する
         // （DB の統計から即返るため数十ミリ秒で完了）。事前に予想できないセクションは null
@@ -89,7 +93,7 @@ public sealed class SiteBuilderPipeline
         // カードの見出しに載せるサブタイトルの装飾は、カードとは別の作り置きから使う（カードの組み方を変えても描き直さない）。
         var telopPieceCache = new TelopImageCache(config.TelopPieceCacheDirectory, config.RefreshSubtitleTelops);
         using var ogCardRenderer = new OgCardRenderer(config.SiteBrandLabel, config.OgCardFonts) { TelopCache = telopPieceCache };
-        var pageRenderer = new PageRenderer(renderer, config, summary, output, reporter, ogCardRenderer);
+        var pageRenderer = new PageRenderer(renderer, config, summary, output, reporter, ogCardRenderer, cssBundler);
 
         // スタッフ表示用の人物リンク解決ヘルパ。
         var staffLinkResolver = await StaffNameLinkResolver.CreateAsync(factory, ct).ConfigureAwait(false);
@@ -323,6 +327,10 @@ public sealed class SiteBuilderPipeline
         // ページ書き出しがすべて済んだこの位置で実行する。テストモードでのみ書き出す。
         // 出力の掃除より前に書いて、自分自身が掃除で消されないようにする（前回の残りのカードは走査で除く）。
         new OgGalleryGenerator(ctx, config, output).Generate();
+
+        // 区画ごとの CSS（/assets/css/{区画}.css）。全ページの語が集まったこの位置で作る。一部だけのビルドでも作り
+        // （前回の控えの語に今回の分を足す）、出力の掃除より前に書いて、掃除で消されないようにする。
+        cssBundler.Finish(output);
 
         // サイト全体の集約物（検索インデックス・sitemap / robots）と出力の掃除は、ピンポイントビルド
         // （--page）では行わない。部分生成のため WrittenPages が当該ページのみになり、全件前提の

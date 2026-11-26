@@ -87,6 +87,10 @@ try {
     # あるため、パッチは常に「ビルドの後」に当てる。
     Write-Host "[2/3] 出力先を一時ディレクトリへ切り替えて SiteBuilder を実行" -ForegroundColor Yellow
     if (Test-Path $targetDir) { Remove-Item $targetDir -Recurse -Force -Confirm:$false }
+    # 区画ごとの CSS の控え（出力の隣）も消す。残っていると、同じ版の印のあいだは前の回の語が足されるので、
+    # 基準と今の出力で区画の CSS の作られ方がそろわず、判定を誤る。
+    $cssManifest = "$targetDir.css-bundles.json"
+    if (Test-Path $cssManifest) { Remove-Item $cssManifest -Force -Confirm:$false }
 
     [xml]$cfg = Get-Content $cfgPath -Raw
     $outNode = $cfg.configuration.appSettings.add | Where-Object { $_.key -eq 'SiteOutputDir' }

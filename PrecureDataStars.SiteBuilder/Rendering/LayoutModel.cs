@@ -155,6 +155,26 @@ public sealed class LayoutModel
     /// true のページのみ、フッタに「動画は公式の埋め込みプレイヤー経由・権利は各権利者様」の注記を出す。</summary>
     public bool HasYoutubeEmbeds { get; set; }
 
+    // ── CSS と JS の読み分け（PageRenderer がテンプレートと本文から決めて詰める） ──
+
+    /// <summary>
+    /// ページが読む CSS の URL。区画ごとの CSS（<c>/assets/css/{区画}.css?v=印</c>。<see cref="CssBundler"/>）か、全部入りの <c>/assets/site.css</c>。
+    /// 空なら _layout.sbn が全部入りの site.css を読む。
+    /// </summary>
+    public string CssUrl { get; set; } = "";
+
+    /// <summary>件数バッジでの並べ替えの JS（count-sort.js）を読むか（<see cref="ScriptPlan"/>）。</summary>
+    public bool NeedsCountSort { get; set; } = true;
+
+    /// <summary>クレジット表の列の幅そろえの JS（credit-align.js）を読むか（<see cref="ScriptPlan"/>）。</summary>
+    public bool NeedsCreditAlign { get; set; } = true;
+
+    /// <summary>発売までの日数の JS（release-countdown.js）を読むか（<see cref="ScriptPlan"/>）。</summary>
+    public bool NeedsReleaseCountdown { get; set; } = true;
+
+    /// <summary>目次の JS（section-nav.js）を読むか（<see cref="ScriptPlan"/>）。</summary>
+    public bool NeedsSectionNav { get; set; } = true;
+
     // ── Web フォント（PageRenderer が本文から決めて詰める。中身は WebFontPlan） ──
 
     /// <summary>全端末で読む Google Fonts の CSS の URL（ブランド書体・数字の書体を字で絞ったものと、要素のあるページだけの飾りの書体）。</summary>

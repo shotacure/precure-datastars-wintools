@@ -4,6 +4,14 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：ページが読む CSS を、区画ごとに当たりうる規則だけにした**（`CssBundler`〔新規〕・`CssBundlePlan`〔新規〕・`CssBundleManifest`〔新規〕・`PageRenderer`・`SiteBuilderPipeline`・`LayoutModel.CssUrl`〔新規〕・`BuildConfig.CssBundles`〔新規〕・`_layout.sbn`・`S3DeployService`・`scripts/deploy.ps1`・`scripts/verify-site-output.ps1`・`scripts/verify-css-bundles.mjs`〔新規〕）：これまでは、全ページが site.css（圧縮前 486KB、gzip 120KB）を丸ごと読み、読み終えるまで画面が出なかった。書くのは site.css 1 本のままで、ビルドが区画ごとの CSS（`/assets/css/{区画}.css`。トップ・作品・人と会社・キャラクター・音楽と商品・統計・コラム・記念日・書体・案内の 10 本、gzip で 7.6〜18.5KB）を作る。ページは自分の区画の 1 本だけを読む。
+  - 区画の CSS にはその区画のページの HTML と、そのページが読む JS に出る語で当たりうる規則だけを、site.css の順番のまま入れる。
+  - 区画の CSS は Cache-Control を 5 分にする。変わったときは CloudFront の消し込みを `/assets/css/*` の 1 本にまとめる。
+  - 確かめの道具 `verify-css-bundles.mjs` を足した。
+  - App.config の `CssBundles=false` で元に戻る。
+
+- **サイト：目次・件数バッジの並べ替え・クレジット表の列の幅そろえ・発売までの日数の JS を、要るページだけで読む**（`ScriptPlan`〔新規〕・`LayoutModel.Needs*`〔新規〕・`BuildConfig.ScriptPlanEnabled`〔新規〕・`_layout.sbn`）：全ページで読んでいた 4 本を、本文にその JS が扱う要素があるページだけで読む。App.config の `ScriptPlan=false` で元に戻る。
+
 - **デプロイ：手で流した本番デプロイも記録に残す**（`scripts/deploy.ps1`・`scripts/scheduled-deploy.ps1`）：記録が残るのは定時デプロイの分（`scheduled-deploy.log`）だけで、手で流した分は画面に出すだけだった。`deploy.ps1` が 1 回ごとに `%LOCALAPPDATA%\precure-datastars\deploy.log` へ追記する。書くのは、始めた時刻、手動か定時か、wintools と content のコミット、差分の件数、結果、かかった時間。定時の回は `scheduled-deploy.ps1` が環境変数で呼び出し元を伝える。
 
 - **サイト：コラムの最終更新日（`updated`）を、その日の 8:30（日本時間）として扱う**（`ArticlesGenerator`）：構造化データの dateModified を、日付だけの形から公開日時と同じ「2026-11-26T08:30:00+09:00」の形にした。コラムの一覧の並びでも、最終更新日を 0:00 ではなく 8:30 として比べる。

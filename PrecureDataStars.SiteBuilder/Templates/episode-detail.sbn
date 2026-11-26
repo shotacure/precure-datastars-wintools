@@ -114,8 +114,9 @@
   {{## YouTube 予告（見出しなし、基本情報の前に置く） ##}}
   {{~ if Episode.YoutubeId != "" ~}}
   <div class="youtube-trailer">
-    {{~ yt_id = Episode.YoutubeId; yt_title = "次回予告" ~}}
+    {{~ yt_id = Episode.YoutubeId; yt_title = "次回予告"; yt_eager = true ~}}
     {{ include '_youtube-facade.sbn' }}
+    {{~ yt_eager = false ~}}
   </div>
   {{~ end ~}}
 

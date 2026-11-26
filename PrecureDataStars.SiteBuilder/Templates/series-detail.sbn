@@ -41,8 +41,9 @@
        series.youtube_trailer_url の登録があるシリーズにだけ出す。 ##}}
   {{~ if Series.YoutubeTrailerId != "" ~}}
   <div class="youtube-trailer">
-    {{~ yt_id = Series.YoutubeTrailerId; yt_title = "本予告" ~}}
+    {{~ yt_id = Series.YoutubeTrailerId; yt_title = "本予告"; yt_eager = true ~}}
     {{ include '_youtube-facade.sbn' }}
+    {{~ yt_eager = false ~}}
   </div>
   {{~ end ~}}
 

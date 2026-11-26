@@ -413,6 +413,16 @@ public sealed class EntityUrlRegistry
             reg._legacyRedirects.Add(new LegacyRedirect(PathUtil.BgmsForSeriesUrl(s.Slug).TrimEnd('/'), PathUtil.SeriesUrl(s.Slug)));
         }
 
+        // ゲストキャラクターのページ（/characters/guests/{slug}/）は、単発キャラのいる作品にだけ作る。単発キャラがほかの作品にも
+        // 出てゲストから外れると、その作品のページが無くなるので、ページの無い作品の URL は作品のページへ転送する
+        // （以前のクロールやサイトマップで知られた URL を 404 にしない）。ページを作る条件は CharactersGenerator と同じ。
+        var guestSeriesIds = reg.GuestCharacterIdsBySeries.Keys.ToHashSet();
+        foreach (var s in ctx.Series)
+        {
+            if (guestSeriesIds.Contains(s.SeriesId)) continue;
+            reg._legacyRedirects.Add(new LegacyRedirect(PathUtil.GuestCharactersUrl(s.Slug).TrimEnd('/'), PathUtil.SeriesUrl(s.Slug)));
+        }
+
         // 書籍は URL に使うコードの優先順（ISBN-13 → 定期刊行物コード → Kindle ASIN → 紙の ASIN）が変わると URL が変わる
         // （Kindle だけ登録していた本にあとから紙版の ISBN を入れたときなど）。その本が持つほかのコードの URL からも
         // いまの URL へ転送して、以前のコードで公開していたページを 404 にしない。ほかの本がいまそのコードの URL を

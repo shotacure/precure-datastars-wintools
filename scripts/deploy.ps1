@@ -148,19 +148,43 @@ try {
     # --- 準備: 出す中身の点検（本番に触れる前に止める） ---
     # 本番に出すのは、コミット済みのコードと、それをビルドした出力だけにする。どちらかが合わなければ、何も上げずに止める
     # （ドライランでも止める。安全ゲートと違い -Force でも飛ばさない）。
-    #   1. wintools の作業フォルダに、コミットしていない変更（変更・追加・削除。git が無視するファイルは除く）が無いか。
-    #      試験のために書き換えたファイルや、書きかけの直しを本番に出さないため（コラムの原稿の content のリポジトリは見ない。
-    #      下書きのコラムが未コミットのまま置いてあるのは普通で、下書きは本番に出ない）。
+    #   1. サイトの中身に効く所に、コミットしていない変更（変更・追加・削除。git が無視するファイルは除く）が無いか。
+    #      試験のために書き換えたファイルや、書きかけの直しを本番に出さないため。サイトの中身に効く所は、デプロイでビルドする道具
+    #      （deploy-tools.slnf）と、その参照をたどった部品のプロジェクトのフォルダ、ビルドの設定（Directory.Build.props・Directory.Packages.props）。
+    #      README・CHANGELOG・道具のスクリプトなど、サイトに出ない所の書きかけでは止めない。コラムの原稿の content のリポジトリも見ない
+    #      （下書きのコラムが未コミットのまま置いてあるのは普通で、下書きは本番に出ない）。
     #   2. SiteBuilder の bin のテンプレート（Templates）と静的ファイル（wwwroot）が、元のファイルとバイト単位で同じか。
     #      ビルドはファイルの更新時刻で写すかを決めるので、元のファイルを古い更新時刻のまま戻すと、bin に書き換えたほうが残る
     #      （11-26 に、試験で about のテンプレートに足した 1 語が bin に残り、本番に出た）。bin にだけあるファイルも止める
     #      （wwwroot の古いファイルは、そのまま本番に上がるため）。
     Write-Host "[準備] 出す中身の点検（未コミットの変更・bin と元のファイル）" -ForegroundColor Yellow
     $releaseProblems = @()
-    $uncommitted = @(& git -C $repoRoot status --porcelain)
+    # サイトの中身に効く所（リポジトリの直下からの相対パスの頭）。道具のプロジェクトから、ProjectReference をたどって部品のフォルダを集める。
+    $sitePrefixes = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $projectQueue = [System.Collections.Generic.Queue[string]]::new()
+    ((Get-Content -LiteralPath $toolsFilter -Raw | ConvertFrom-Json).solution.projects) | ForEach-Object { $projectQueue.Enqueue((Join-Path $repoRoot $_)) }
+    while ($projectQueue.Count -gt 0) {
+        $projectPath = [System.IO.Path]::GetFullPath($projectQueue.Dequeue())
+        $projectDir = Split-Path $projectPath
+        $relativeDir = [System.IO.Path]::GetRelativePath($repoRoot, $projectDir).Replace('\', '/') + '/'
+        if (-not $sitePrefixes.Add($relativeDir)) { continue }
+        $references = ([xml](Get-Content -LiteralPath $projectPath -Raw)).Project.ItemGroup.ProjectReference.Include | Where-Object { $_ }
+        foreach ($reference in $references) { $projectQueue.Enqueue((Join-Path $projectDir $reference)) }
+    }
+    $siteFiles = @('Directory.Build.props', 'Directory.Packages.props')
+    # 日本語のファイル名もそのまま読めるよう、パスを引用符で囲まない形で出す。
+    $statusLines = @(& git -C $repoRoot -c core.quotepath=false status --porcelain)
     if ($LASTEXITCODE -ne 0) { $releaseProblems += "git status を読めませんでした" }
-    elseif ($uncommitted.Count -gt 0) {
-        $releaseProblems += "コミットしていない変更が $($uncommitted.Count) 件あります: " + (($uncommitted | Select-Object -First 5 | ForEach-Object { $_.Trim() }) -join ' / ')
+    else {
+        $uncommitted = @($statusLines | Where-Object {
+            # 「XY パス」の形。名前を変えたときは「XY 元 -> 先」なので、先を見る。
+            $path = $_.Substring(3); if ($path.Contains(' -> ')) { $path = $path.Split(' -> ')[-1] }
+            $path = $path.Trim('"')
+            ($siteFiles -contains $path) -or (@($sitePrefixes | Where-Object { $path.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0)
+        })
+        if ($uncommitted.Count -gt 0) {
+            $releaseProblems += "サイトの中身に効く所に、コミットしていない変更が $($uncommitted.Count) 件あります: " + (($uncommitted | Select-Object -First 5 | ForEach-Object { $_.Trim() }) -join ' / ')
+        }
     }
     $siteBuilderSrc = Join-Path $repoRoot 'PrecureDataStars.SiteBuilder'
     $siteBuilderBin = Split-Path $siteBuilderExe
@@ -193,7 +217,7 @@ try {
         $deployResult = "出す中身の点検で止めました（$($releaseProblems.Count) 件）"
         throw "出す中身の点検で止めました：$($releaseProblems -join ' ／ ')"
     }
-    Write-Host "  未コミットの変更なし・bin のテンプレートと wwwroot は元のファイルと同じ" -ForegroundColor Green
+    Write-Host "  サイトの中身に効く所（$(@($sitePrefixes).Count) プロジェクト・ビルドの設定）に未コミットの変更なし・bin のテンプレートと wwwroot は元のファイルと同じ" -ForegroundColor Green
     Write-Host ""
 
     # --- 準備: 配信音源の再確認と Amazon の画像の取り直し（同時に流す） ---

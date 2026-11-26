@@ -5425,9 +5425,12 @@ body.subtitle-embargo-dialog-open {
   gap: 24px;
   margin: 24px 0;
 }
-/* 音楽製作一覧の行で、担当した役職（作詞・作曲・編曲）をバッジで並べる。名前・初参加曲との間に余白を取る。 */
+/* 音楽製作一覧の行で、担当した役職（作詞・作曲・編曲）をバッジで並べる。名前・初参加曲との間に余白を取る。
+   役職の多い人は、画面の幅に収まらない分を次の行へ折り返す（狭い画面で右へはみ出さないように）。 */
 .music-role-badges {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 4px;
   margin: 0 8px;
   vertical-align: middle;
@@ -5946,6 +5949,10 @@ a.credit-card-series:focus-visible {
   font-variant-numeric: tabular-nums;
   font-size: 0.9em;
   white-space: nowrap;
+}
+/* 狭い画面では、話数の並び（#1～2, #6～11, …）が長い人でカードの右へはみ出さないよう、「, 」の区切りで折り返す。 */
+@media (max-width: 640px) {
+  .credit-card-range { white-space: normal; }
 }
 .credit-card-affiliation {
   font-size: 0.8em;

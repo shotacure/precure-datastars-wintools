@@ -52,41 +52,10 @@ public sealed class ArticlesGenerator
         _page = page;
     }
 
-    /// <summary>読み込んで並べた原稿（<see cref="Load"/> が詰める。読み込む前は null）。</summary>
-    private List<Article>? _articles;
-
-    /// <summary>作品ページの URL（<c>/series/{slug}/</c>。サイトの絶対 URL でも相対でも）を本文の href から拾う。</summary>
-    private static readonly System.Text.RegularExpressions.Regex SeriesHrefRegex =
-        new(@"href=""(?:https://precure\.tv)?/series/([^/""#?]+)/", System.Text.RegularExpressions.RegexOptions.Compiled);
-
-    /// <summary>
-    /// 原稿を読み込んで並べ、作品ページへリンクしているコラムの一覧（<see cref="BuildContext.ArticlesBySeriesSlug"/>）を詰める。
-    /// 作品詳細の「関連記事」の節に使うので、作品詳細を作る前に呼ぶ。<see cref="Generate"/> は読み込み済みの原稿を使う。
-    /// </summary>
-    public void Load()
-    {
-        _articles = LoadArticles();
-
-        var bySlug = new Dictionary<string, List<SeriesArticleRef>>(StringComparer.Ordinal);
-        foreach (var a in _articles)
-        {
-            // 1 本の中で同じ作品へ何度リンクしていても 1 回だけ数える。並びは原稿の並び（公開日時の新しい順）のまま。
-            var slugs = SeriesHrefRegex.Matches(a.BodyHtml)
-                .Select(m => Uri.UnescapeDataString(m.Groups[1].Value))
-                .Distinct(StringComparer.Ordinal);
-            foreach (var slug in slugs)
-            {
-                if (!bySlug.TryGetValue(slug, out var list)) bySlug[slug] = list = new List<SeriesArticleRef>();
-                list.Add(new SeriesArticleRef(a.Title, $"/articles/{a.Slug}/", a.DateLabel ?? "", a.DateIso ?? ""));
-            }
-        }
-        _ctx.ArticlesBySeriesSlug = bySlug.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<SeriesArticleRef>)kv.Value, StringComparer.Ordinal);
-    }
-
     public void Generate()
     {
         _ctx.Logger.Section("Generating articles");
-        var articles = _articles ?? LoadArticles();
+        var articles = LoadArticles();
 
         // 各記事詳細。
         for (int i = 0; i < articles.Count; i++)

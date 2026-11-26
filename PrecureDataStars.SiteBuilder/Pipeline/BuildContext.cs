@@ -230,17 +230,10 @@ public sealed class BuildContext
 
     /// <summary>
     /// 作品ごとの関連記事（<c>series_related_links</c> の出す設定の行。作品 ID → 並び順の順の行）。
-    /// 作品詳細の「関連記事」の節で、コラムの自動の一覧（<see cref="ArticlesBySeriesSlug"/>）より先に並べる。
+    /// 作品詳細の「関連記事」の節に並び順で出す。
     /// </summary>
     public required IReadOnlyDictionary<int, IReadOnlyList<SeriesRelatedLink>> RelatedLinksBySeries { get; init; }
 
-    /// <summary>
-    /// 作品ページ（<c>/series/{slug}/</c>）へリンクしているコラム（作品の slug → 公開日時の新しい順）。
-    /// <c>ArticlesGenerator.Load</c> が、作品詳細を作る前に詰める（本番では下書きと公開日時前のコラムを数えない）。
-    /// コラムを読み込む前は空。
-    /// </summary>
-    public IReadOnlyDictionary<string, IReadOnlyList<SeriesArticleRef>> ArticlesBySeriesSlug { get; set; }
-        = new Dictionary<string, IReadOnlyList<SeriesArticleRef>>(StringComparer.Ordinal);
 
     /// <summary>
     /// 販売中の商品の枠の置き場を出す作品の ID（手で入れた行か、候補の音楽商品がある作品）。

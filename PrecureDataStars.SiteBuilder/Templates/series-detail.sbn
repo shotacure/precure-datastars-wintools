@@ -373,7 +373,7 @@
   </section>
   {{~ end ~}}
 
-  {{## 関連記事。手で入れた関連記事（precure.news の記事など、別のサイトのもの）と、この作品ページへリンクしているコラムを並べる。
+  {{## 関連記事。手で入れた関連記事（series_related_links。precure.news の記事、その作品が主題のコラムなど）を並び順で並べる。
        行の作りはコラムの「ほかのコラム」（.article-more-*）と同じ部品。別のサイトの記事は新しいタブで開く。 ##}}
   {{~ if RelatedArticles.size > 0 ~}}
   <section id="related-articles">

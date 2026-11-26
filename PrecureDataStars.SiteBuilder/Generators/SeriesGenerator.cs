@@ -2233,9 +2233,8 @@ public sealed class SeriesGenerator
     }
 
     /// <summary>
-    /// 作品詳細の「関連記事」の節の行を組み立てる。先に手で入れた関連記事（<c>series_related_links</c>。precure.news の記事など、
-    /// 別のサイトのもの）を並び順で、続けてこの作品ページへリンクしているコラムを公開日時の新しい順で並べる。
-    /// 同じ URL は先に出たほうだけを残す。
+    /// 作品詳細の「関連記事」の節の行を組み立てる。手で入れた関連記事（<c>series_related_links</c>。precure.news の記事、
+    /// その作品が主題のコラムなど）を並び順で並べる。同じ URL は先に出たほうだけを残す。
     /// </summary>
     private IReadOnlyList<RelatedArticleRow> BuildRelatedArticles(Series s)
     {
@@ -2255,21 +2254,6 @@ public sealed class SeriesGenerator
                     DateIso = l.PublishedOn?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) ?? "",
                     // 別のサイトの記事は、外部サイトの節と同じく新しいタブで開く。
                     IsExternal = l.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase),
-                });
-            }
-        }
-        if (_ctx.ArticlesBySeriesSlug.TryGetValue(s.Slug, out var articles))
-        {
-            foreach (var a in articles)
-            {
-                if (!seen.Add(a.Url)) continue;
-                rows.Add(new RelatedArticleRow
-                {
-                    Title = a.Title,
-                    Url = a.Url,
-                    SiteLabel = "コラム",
-                    DateLabel = a.DateLabel,
-                    DateIso = a.DateIso,
                 });
             }
         }
@@ -2296,7 +2280,7 @@ public sealed class SeriesGenerator
         public SeriesDetailView Series { get; set; } = new();
         /// <summary>販売中の商品の枠の置き場に書く作品 ID。この作品に出す設定の商品が無ければ 0（置き場を出さない）。</summary>
         public int ShopSeriesId { get; set; }
-        /// <summary>「関連記事」の節の行（手で入れた関連記事 → この作品ページへリンクしているコラムの順）。空なら節ごと出さない。</summary>
+        /// <summary>「関連記事」の節の行（手で入れた関連記事の並び順）。空なら節ごと出さない。</summary>
         public IReadOnlyList<RelatedArticleRow> RelatedArticles { get; set; } = Array.Empty<RelatedArticleRow>();
         /// <summary>「劇伴」節のボタン（劇伴一覧ページがある自作品・子作品の分）。空なら節ごと出さない。</summary>
         public IReadOnlyList<BgmLinkRow> BgmLinks { get; set; } = Array.Empty<BgmLinkRow>();

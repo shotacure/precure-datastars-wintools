@@ -1304,7 +1304,7 @@ DB の各表の備考（`notes` 列。企業・商品・人物・ユニット・
 #### D. テンプレートとスタイル
 
 - テンプレートエンジン: Scriban（`Templates/*.sbn`）
-- 共通レイアウト: `_layout.sbn`（ヘッダ・フッタ・パンくず・canonical タグ・OGP メタ等を吸収）
+- 共通レイアウト: `_layout.sbn`（ヘッダ・フッタ・パンくず・canonical タグ・OGP メタ等を吸収）。404 以外の全ページの head に `<meta name="robots" content="max-image-preview:large">` を出し、検索結果と Google Discover で OGP カード（1200×630）を大きく出してよいと伝える
 - 行・カード全体を覆う透明なリンク（`.entity-row-link`・`.bgms-card-link`・`.songs-card-link`・`.person-song-card-link`、エピソード詳細のスタッフの組み合わせの年表の点）は、中に画面に見えない名前（`<span class="visually-hidden">`）を持ち、それがリンクの文字（読み上げと検索エンジンへのアンカーテキスト）になる。aria-label は付けない
 - レンダリングは 2 段階: 各 Generator が「コンテンツテンプレ」を model でレンダリング → 結果 HTML を `LayoutModel.Content` に詰めて `_layout.sbn` を再レンダリング
 - スタイル: `wwwroot/assets/site.css` 1 ファイル。CSS フレームワーク不採用、最低限の素朴スタイル。CSS 変数で色を管理

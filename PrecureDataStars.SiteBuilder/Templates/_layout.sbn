@@ -11,6 +11,10 @@
 {{~ if MetaDescription != "" ~}}
 <meta name="description" content="{{ MetaDescription | html.escape }}">
 {{~ end ~}}
+{{## 検索結果・Google Discover で大きな画像（OGP カード 1200×630）を出してよいと伝える。404 ページ（SuppressCanonical）には出さない。 ##}}
+{{~ if !SuppressCanonical ~}}
+<meta name="robots" content="max-image-preview:large">
+{{~ end ~}}
 
 {{## ──────── ファビコン & ブランドカラー ────────
      SVG ファビコンはモダンブラウザの大半が対応しており、スケーラブルかつ軽量。

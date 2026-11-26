@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：話数が見込みの作品の説明文（meta description）を「（全 50 話の見込み）」にした**（`SeriesGenerator.BuildSeriesMetaDescription`）：本文の「（見込）」と同じく、見込みの話数を言い切らない。og:description・twitter:description も同じ文。
+
 - **サイト：開始日がまだ来ていない TV シリーズの期間にも「（見込）」を添えた**（`JpDateFormat.PeriodIsEstimated`・`SeriesGenerator`・`EpisodesIndexGenerator`）：話数が見込みのシリーズの期間は、終了日が入っているときだけ「（見込）」だった。開始日がまだ来ていないときも添え、作品詳細の「期間」と作品一覧のカードで「2027年2月7日 〜（見込）」と出す。放送が始まって終了日が未定のシリーズは、開始日が確定しているので添えない。
 
 - **サイト：作品詳細の OGP カードで、話数が見込みのときは「全50話（見込）」と出す**（`SeriesGenerator.BuildOgCard`）：作品一覧・作品詳細と同じく、終了日が未定で話数が入っている TV シリーズの話数に「（見込）」を添える。

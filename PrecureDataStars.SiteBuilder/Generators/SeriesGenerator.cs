@@ -1458,7 +1458,7 @@ public sealed class SeriesGenerator
         // 説明文を実データから動的構築する。
         // 「シリーズ名・放送開始年・話数・主役プリキュア声優」を含めて、SERP / OGP / Twitter Card で
         // シリーズ単位の個別性が立つようにする。140 字目安。
-        var metaDescription = BuildSeriesMetaDescription(s, precureRows);
+        var metaDescription = BuildSeriesMetaDescription(s, precureRows, seriesEstimated);
 
         // JSON-LD（TVSeries / Movie）
         // 後段：略称（series.title_short）は生成・UI ともに一切使わない方針。
@@ -1622,10 +1622,12 @@ public sealed class SeriesGenerator
     /// <summary>
     /// シリーズ詳細の meta description。「2004 年 2 月放送開始の TV シリーズ（全 49 話）。キュアブラック（声：本名 陽子）、キュアホワイト（声：ゆかな）ほか」
     /// の形で 150 字ほどに収める（作品名はページ名に出ているので入れない）。
+    /// 話数が見込み（<paramref name="episodesEstimated"/>）の作品は、本文の「（見込）」と同じく言い切らずに「（全 50 話の見込み）」とする。
     /// </summary>
     private static string BuildSeriesMetaDescription(
         Series s,
-        IReadOnlyList<SeriesPrecureRow> precureRows)
+        IReadOnlyList<SeriesPrecureRow> precureRows,
+        bool episodesEstimated)
     {
         const int targetMaxChars = 150;
         bool isMovie = s.KindCode == "MOVIE" || s.KindCode == "MOVIE_SHORT" || s.KindCode == "SPRING";
@@ -1645,7 +1647,8 @@ public sealed class SeriesGenerator
         else
         {
             sb.Append("放送開始の TV シリーズ");
-            if (s.Episodes.HasValue && s.Episodes.Value > 0) sb.Append("（全 ").Append(s.Episodes.Value).Append(" 話）");
+            if (s.Episodes.HasValue && s.Episodes.Value > 0)
+                sb.Append("（全 ").Append(s.Episodes.Value).Append(episodesEstimated ? " 話の見込み）" : " 話）");
         }
 
         // プリキュア（最大 2 名）：変身名（声：声優）。

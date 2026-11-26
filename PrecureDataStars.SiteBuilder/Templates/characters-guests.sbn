@@ -3,7 +3,6 @@
 </p>
 
 <h1>『{{ SeriesTitle | html.escape }}』のその他のキャラクター</h1>
-<p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 <p class="lead">
   <a href="{{ SeriesUrl }}">{{ SeriesTitle | html.escape }}</a><span class="muted series-year">({{ SeriesStartYearLabel }})</span>のその他のキャラクター {{ GuestCount }} 名

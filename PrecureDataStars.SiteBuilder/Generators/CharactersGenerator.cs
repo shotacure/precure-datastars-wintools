@@ -434,7 +434,6 @@ public sealed class CharactersGenerator
             Sections = sections,
             CountRows = countRows,
             TotalCount = characters.Count,
-            CoverageLabel = _ctx.CreditCoverageLabel
         };
         var layout = new LayoutModel
         {
@@ -570,7 +569,6 @@ public sealed class CharactersGenerator
             // このキャラが劇伴で声を出した曲（bgm_cue_singers。スキャットなど）。
             BgmCards = BuildCharacterBgmCards(aliasIds),
             PrecureProfile = precureProfile,
-            CoverageLabel = _ctx.CreditCoverageLabel
         };
 
         // MetaDescription を実データから動的構築する。
@@ -691,7 +689,6 @@ public sealed class CharactersGenerator
                 SeriesStartYearLabel = series.StartDate.Year.ToString(),
                 GuestCount = rows.Count,
                 Groups = groups,
-                CoverageLabel = _ctx.CreditCoverageLabel
             };
             string title = $"『{series.Title}』のその他のキャラクター";
             var layout = new LayoutModel
@@ -1254,8 +1251,6 @@ public sealed class CharactersGenerator
         /// <summary>登場回数順タブの行（個別ページを持つキャラ、登場話数と登場本数の合計が多い順）。</summary>
         public IReadOnlyList<CharacterIndexRow> CountRows { get; set; } = Array.Empty<CharacterIndexRow>();
         public int TotalCount { get; set; }
-        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の lead 段落末尾に表示する。</summary>
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>シリーズ単位の大セクション。配下に種別サブセクションをぶら下げる。</summary>
@@ -1293,7 +1288,6 @@ public sealed class CharactersGenerator
         public int GuestCount { get; set; }
         /// <summary>登場話ごとのグループ（話数昇順。映画系はグループ 1 つ）。</summary>
         public IReadOnlyList<GuestEpisodeGroup> Groups { get; set; } = Array.Empty<GuestEpisodeGroup>();
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>ゲストキャラクターページ内の登場話 1 つ分。</summary>
@@ -1373,8 +1367,6 @@ public sealed class CharactersGenerator
         public IReadOnlyList<CharacterBgmCard> BgmCards { get; set; } = Array.Empty<CharacterBgmCard>();
         /// <summary>PRECURE 種別かつ precures レコードに紐付くキャラのみ詰まる。 それ以外は null（テンプレ側でプリキュア情報セクションごと非表示）。</summary>
         public PrecureProfileView? PrecureProfile { get; set; }
-        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>キャラが歌った楽曲カード 1 件（人物詳細の <c>person-song-card</c> マークアップを共用）。</summary>

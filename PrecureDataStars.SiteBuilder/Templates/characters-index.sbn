@@ -1,5 +1,4 @@
 <h1>歴代キャラクター</h1>
-<p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 <p class="lead">
   プリキュア・妖精たち・敵・とりまく人々、歴代のキャラクター全 {{ TotalCount }} 名

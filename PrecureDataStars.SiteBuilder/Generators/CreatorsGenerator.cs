@@ -1274,7 +1274,6 @@ public sealed class CreatorsGenerator
             Timeline = timeline,
             OtonaTimeline = otonaOnlyTimeline,
             Kinds = kinds,
-            CoverageLabel = _ctx.CreditCoverageLabel,
             // 個人と団体が両方そろっているときだけ entity-filter を出すための件数（片方だけの役職では絞り込みが無意味）。
             PersonCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal)),
             CompanyCount = rows.Count(r => string.Equals(r.EntityKind, "company", StringComparison.Ordinal)),
@@ -1501,7 +1500,6 @@ public sealed class CreatorsGenerator
             CountRows = SortSongRowsByCount(rows),
             Timeline = new RoleTimelineBuilder(_ctx, RoleTimelineBuilder.ExtendToFor(timelineEntities))
                 .Build(timelineEntities, RoleTimelineRules.SongWriter),
-            CoverageLabel = MusicCoverageLabel
         };
         var layout = new LayoutModel
         {
@@ -1691,7 +1689,6 @@ public sealed class CreatorsGenerator
                 BuildMusicListTab("bgm-performance", "劇伴（演奏）", bgmPerformanceAcc, personById, byWork: true),
                 BuildMusicListTab("production", "制作", productionAcc, personById, byWork: true),
             },
-            CoverageLabel = MusicCoverageLabel
         };
         var layout = new LayoutModel
         {
@@ -2191,7 +2188,6 @@ public sealed class CreatorsGenerator
                 .ToList(),
             Timeline = new RoleTimelineBuilder(_ctx, RoleTimelineBuilder.ExtendToFor(timelineEntities))
                 .Build(timelineEntities, RoleTimelineRules.MusicRole),
-            CoverageLabel = MusicCoverageLabel
         };
         int persons = rows.Count(r => r.EntityKind == "person");
         int companies = rows.Count - persons;
@@ -2637,7 +2633,6 @@ public sealed class CreatorsGenerator
             DebutSections = BuildDebutSeriesSections(debutRows, r => r.DebutSeriesId),
             CountRows = countRows,
             Timeline = singersTimeline,
-            CoverageLabel = MusicCoverageLabel
         };
         var layout = new LayoutModel
         {
@@ -2857,7 +2852,6 @@ public sealed class CreatorsGenerator
             CountRows = SortByCount(rows),
             PersonCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal)),
             CompanyCount = rows.Count(r => string.Equals(r.EntityKind, "company", StringComparison.Ordinal)),
-            CoverageLabel = _ctx.CreditCoverageLabel,
             PageTitle = StaffPageTitle,
             Kinds = new WorkKinds
             {
@@ -3162,7 +3156,6 @@ public sealed class CreatorsGenerator
             Timeline = timeline,
             OtonaTimeline = otonaOnlyTimeline,
             Kinds = kinds,
-            CoverageLabel = _ctx.CreditCoverageLabel,
             PrecureCount = precureOrderByCharacter.Values.Distinct().Count(),
             PageTitle = VoiceCastPageTitle
         };
@@ -4212,7 +4205,6 @@ public sealed class CreatorsGenerator
         public IReadOnlyList<MusicRoleSection> RoleSections { get; set; } = Array.Empty<MusicRoleSection>();
         /// <summary>一覧タブ（歌（詞曲）/ 歌（演奏）/ 劇伴（作編曲）/ 劇伴（演奏）/ 制作）。</summary>
         public IReadOnlyList<MusicListTab> Tabs { get; set; } = Array.Empty<MusicListTab>();
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>音楽制作ページの一覧タブ 1 つ分。</summary>
@@ -4285,7 +4277,6 @@ public sealed class CreatorsGenerator
         public IReadOnlyList<MusicRoleDetailRow> CountRows { get; set; } = Array.Empty<MusicRoleDetailRow>();
         /// <summary>年表タブ（切り替え）の線表。載せる行が無ければ null（年表を出さない）。</summary>
         public RoleTimelineModel? Timeline { get; set; }
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>音楽クレジットの役職詳細の 1 行（人物または団体と、その担当先）。</summary>
@@ -4344,7 +4335,6 @@ public sealed class CreatorsGenerator
         public IReadOnlyList<SingerListRow> CountRows { get; set; } = Array.Empty<SingerListRow>();
         /// <summary>年表タブの線表（一覧の行すべて。歌手・キャラクターの絞り込みにも従う）。行が無ければ null（年表タブを出さない）。</summary>
         public RoleTimelineModel? Timeline { get; set; }
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>歌唱ページの 1 行。歌手（人物単位）またはキャラクター（キャラ × 声優の組）。</summary>
@@ -4394,7 +4384,6 @@ public sealed class CreatorsGenerator
         public IReadOnlyList<EntityRow> CountRows { get; set; } = Array.Empty<EntityRow>();
         public int PersonCount { get; set; }
         public int CompanyCount { get; set; }
-        public string CoverageLabel { get; set; } = "";
         /// <summary>ページの題（h1）。</summary>
         public string PageTitle { get; set; } = "";
         /// <summary>ページに載る参加の種類（タブの右上の TV・映画・オトナのボタン）。</summary>
@@ -4415,7 +4404,6 @@ public sealed class CreatorsGenerator
         public IReadOnlyList<RoleNameHistoryItem> NameHistory { get; set; } = Array.Empty<RoleNameHistoryItem>();
         /// <summary>年表タブの担当の移り変わりの線表。載せる人物・企業/団体が居ないときは null（年表タブを出さない）。</summary>
         public RoleTimelineModel? Timeline { get; set; }
-        public string CoverageLabel { get; set; } = "";
         /// <summary>個人・団体の件数。両方 &gt; 0 のときだけ entity-filter（すべて / 個人のみ / 団体のみ）をテンプレで表示する（片方だけの役職では絞り込みが無意味なため）。</summary>
         public int PersonCount { get; set; }
         public int CompanyCount { get; set; }
@@ -4439,7 +4427,6 @@ public sealed class CreatorsGenerator
         public IReadOnlyList<SongRoleRow> CountRows { get; set; } = Array.Empty<SongRoleRow>();
         /// <summary>年表タブ（切り替え）の線表。載せる行が無ければ null（年表を出さない）。</summary>
         public RoleTimelineModel? Timeline { get; set; }
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>歌系役職詳細ページの 1 行（人物単位）。 「担当曲数」は当該役職で関与した distinct song_id の数。</summary>
@@ -4664,7 +4651,6 @@ public sealed class CreatorsGenerator
         public IReadOnlyList<VoiceCastRow> CharacterCountRows { get; set; } = Array.Empty<VoiceCastRow>();
         /// <summary>年表タブの線表。載せる声優が居ないときは null（年表タブを出さない）。</summary>
         public RoleTimelineModel? Timeline { get; set; }
-        public string CoverageLabel { get; set; } = "";
         /// <summary>プリキュアのマスタのプリキュアの人数（「プリキュアを演じた方のみ」の ? の説明に出す）。</summary>
         public int PrecureCount { get; set; }
         /// <summary>ページの題（h1）。</summary>

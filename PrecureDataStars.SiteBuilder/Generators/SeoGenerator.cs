@@ -76,7 +76,11 @@ public sealed class SeoGenerator
             SitemapLastmodManifest.DeriveManifestPath(_config.OutputDirectory));
         // 印は各ページを書く時に取ってあるので、出力のファイルを読み返さない。
         // 差分だけを出すビルドでは、控えを進めない（次の本当のビルドで、変わったページの更新日が進むように）。
-        var lastmod = manifest.Resolve(pages, buildTimeIso, _output.Md5Of, save: !_config.DiffOnly);
+        // 「中身が変わったか」は、ほかの回のデータで毎週変わる部分（<!--volatile--> の囲み）を伏せて比べる（StableContentHash）。
+        var urlByFile = pages.ToDictionary(p => p.Item2, p => p.UrlPath, StringComparer.OrdinalIgnoreCase);
+        string? HashOf(string file) => StableContentHash.Compute(
+            file, urlByFile.TryGetValue(file, out var url) && StableContentHash.MayHaveMarkers(url), _output.Md5Of);
+        var lastmod = manifest.Resolve(pages, buildTimeIso, HashOf, save: !_config.DiffOnly);
         _ctx.Logger.Info(
             $"sitemap lastmod: 据え置き {lastmod.Unchanged} / 更新 {lastmod.Changed} / 新規 {lastmod.Added}");
 

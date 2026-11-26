@@ -311,9 +311,7 @@ public sealed class CompaniesGenerator
             MusicOwnRoles = musicOwnRoles,
             MusicMemberRoles = musicMemberRoles,
             MusicTotal = musicTotal,
-            MusicCoverageLabel = _ctx.MusicCredits.CoverageLabel,
             Sources = _sourcesByCompany.TryGetValue(company.CompanyId, out var sources) ? sources : EntitySourceFootnotes.Empty,
-            CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 企業詳細の構造化データは Schema.org の Organization 型。
         string baseUrl = _ctx.Config.BaseUrl;
@@ -1344,8 +1342,6 @@ public sealed class CompaniesGenerator
         public IReadOnlyList<CompanyMusicRoleGroup> MusicMemberRoles { get; set; } = Array.Empty<CompanyMusicRoleGroup>();
         /// <summary>音楽クレジットの見出しの札（全体で重複を除いた曲数・劇伴の件数・盤数）。</summary>
         public MusicCountSet MusicTotal { get; set; } = new();
-        /// <summary>音楽クレジットの基準点ラベル（クレジット確認済みの最新の盤）。</summary>
-        public string MusicCoverageLabel { get; set; } = "";
         public CompanyView Company { get; set; } = new();
         /// <summary>関係のある団体（前身・後継・所属・傘下）。無ければ空（テンプレ側はセクションごと出さない）。</summary>
         public IReadOnlyList<CompanyRelationView> Relations { get; set; } = Array.Empty<CompanyRelationView>();
@@ -1370,8 +1366,6 @@ public sealed class CompaniesGenerator
         public IReadOnlyList<MemberHistoryAliasSection> MemberHistory { get; set; } = Array.Empty<MemberHistoryAliasSection>();
         /// <summary>プロフィールの出典（ページの一番下の脚注と、本文の項目に付ける番号）。脚注が無ければ脚注の欄を出さない。</summary>
         public EntitySourceFootnotes Sources { get; set; } = EntitySourceFootnotes.Empty;
-        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>メンバー履歴：屋号（所属ブランド）1 件分のセクション。見出し＝屋号名、配下に人物ブロック。</summary>

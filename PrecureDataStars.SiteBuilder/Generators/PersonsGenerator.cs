@@ -343,7 +343,6 @@ public sealed class PersonsGenerator
             : new List<Involvement>();
         var creditTimeline = _timelineBuilder!.BuildForPerson(
             aliasIds, unitMainInvolvements, BuildPersonInvolvementGroups(aliasIds, IsMainInvolvement));
-        string coverageLabel = string.IsNullOrEmpty(_ctx.MusicCredits.CoverageLabel) ? _ctx.CreditCoverageLabel : _ctx.MusicCredits.CoverageLabel;
 
         var content = new UnitDetailModel
         {
@@ -357,7 +356,6 @@ public sealed class PersonsGenerator
             CreditTimeline = creditTimeline,
             Timeline = creditTimeline?.Timeline,
             IsSinger = isSinger,
-            CoverageLabel = coverageLabel
         };
         int songCount = content.MusicSongTotal;
 
@@ -616,7 +614,6 @@ public sealed class PersonsGenerator
             Sources = _sourcesByPerson!.TryGetValue(person.PersonId, out var sources)
                 ? sources
                 : EntitySourceFootnotes.Empty,
-            CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 人物詳細の構造化データは Schema.org の Person 型。
         string baseUrl = _ctx.Config.BaseUrl;
@@ -1875,7 +1872,6 @@ public sealed class PersonsGenerator
         public int MusicDiscTotal => MusicSections.SelectMany(s => s.DiscKeys).Distinct(StringComparer.Ordinal).Count();
         /// <summary>歌唱者（歌・コーラス・台詞）として参加したユニットか。</summary>
         public bool IsSinger { get; set; }
-        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class UnitView
@@ -1924,8 +1920,6 @@ public sealed class PersonsGenerator
         public IReadOnlyList<PositionGroupView> PositionGroups { get; set; } = Array.Empty<PositionGroupView>();
         /// <summary>プロフィールの出典（ページの一番下の脚注と、本文の項目に付ける番号）。脚注が無ければ脚注の欄を出さない。</summary>
         public EntitySourceFootnotes Sources { get; set; } = EntitySourceFootnotes.Empty;
-        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>役職履歴の、同じ会社が続く行のまとまり（見出し「役職履歴（会社名）」と表 1 つ）。</summary>

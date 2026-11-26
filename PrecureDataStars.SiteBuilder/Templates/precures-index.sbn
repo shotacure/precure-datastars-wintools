@@ -1,5 +1,4 @@
 <h1>歴代プリキュアオールスターズ</h1>
-<p class="muted page-coverage">{{ CoverageLabel }}</p>
 
 <p class="lead">
   歴代のレギュラープリキュア＋映画限定プリキュア {{ TotalCount }} 名

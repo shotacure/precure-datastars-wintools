@@ -175,6 +175,11 @@ public sealed class SiteBuilderPipeline
         // 「最新エピソード」を /episodes/ と同じ episodes-index-section 構造で描画する）と
         // /episodes/ ランディングの両方へ渡す。HomeGenerator がスタッフバッジ段を出すために
         // SeriesGenerator より後に実行する必要があるため、起動順を SeriesGenerator → Home に変更した。
+        // コラムは作品詳細より先に読み込む（作品詳細の「関連記事」の節に、その作品ページへリンクしているコラムを並べるため）。
+        // ページを書き出すのは後ろの「articles」の段。
+        var articlesGenerator = new ArticlesGenerator(ctx, pageRenderer);
+        articlesGenerator.Load();
+
         reporter.BeginSection("series");
         var seriesGenerator = new SeriesGenerator(ctx, pageRenderer, factory, staffLinkResolver, involvementIndex, roleSuccessorResolver);
         await seriesGenerator.GenerateAsync(ct).ConfigureAwait(false);
@@ -196,7 +201,7 @@ public sealed class SiteBuilderPipeline
         // DB に依存せず、ArticlesContentDir の Markdown を読んで生成する静的コンテンツ。
         // 本番では下書きと公開日時前の原稿を出さない（判定は ArticlesGenerator 側）。
         reporter.BeginSection("articles");
-        new ArticlesGenerator(ctx, pageRenderer).Generate();
+        articlesGenerator.Generate();
         reporter.EndSection();
 
         // フォントのページ（/fonts/ ＋ /fonts/{書体とウェイト}/）。作品の書体の表と書体のマスタ（BuildContext 由来）だけで作り、

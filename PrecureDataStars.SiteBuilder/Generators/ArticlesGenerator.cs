@@ -52,50 +52,41 @@ public sealed class ArticlesGenerator
         _page = page;
     }
 
+    /// <summary>読み込んで並べた原稿（<see cref="Load"/> が詰める。読み込む前は null）。</summary>
+    private List<Article>? _articles;
+
+    /// <summary>作品ページの URL（<c>/series/{slug}/</c>。サイトの絶対 URL でも相対でも）を本文の href から拾う。</summary>
+    private static readonly System.Text.RegularExpressions.Regex SeriesHrefRegex =
+        new(@"href=""(?:https://precure\.tv)?/series/([^/""#?]+)/", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// 原稿を読み込んで並べ、作品ページへリンクしているコラムの一覧（<see cref="BuildContext.ArticlesBySeriesSlug"/>）を詰める。
+    /// 作品詳細の「関連記事」の節に使うので、作品詳細を作る前に呼ぶ。<see cref="Generate"/> は読み込み済みの原稿を使う。
+    /// </summary>
+    public void Load()
+    {
+        _articles = LoadArticles();
+
+        var bySlug = new Dictionary<string, List<SeriesArticleRef>>(StringComparer.Ordinal);
+        foreach (var a in _articles)
+        {
+            // 1 本の中で同じ作品へ何度リンクしていても 1 回だけ数える。並びは原稿の並び（公開日時の新しい順）のまま。
+            var slugs = SeriesHrefRegex.Matches(a.BodyHtml)
+                .Select(m => Uri.UnescapeDataString(m.Groups[1].Value))
+                .Distinct(StringComparer.Ordinal);
+            foreach (var slug in slugs)
+            {
+                if (!bySlug.TryGetValue(slug, out var list)) bySlug[slug] = list = new List<SeriesArticleRef>();
+                list.Add(new SeriesArticleRef(a.Title, $"/articles/{a.Slug}/", a.DateLabel ?? "", a.DateIso ?? ""));
+            }
+        }
+        _ctx.ArticlesBySeriesSlug = bySlug.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<SeriesArticleRef>)kv.Value, StringComparer.Ordinal);
+    }
+
     public void Generate()
     {
         _ctx.Logger.Section("Generating articles");
-
-        // 原稿の置き場は App.config の ArticlesContentDir（コードと分離した外部ディレクトリ）。
-        var dir = _ctx.Config.ArticlesContentDir;
-
-        var articles = new List<Article>();
-        if (string.IsNullOrEmpty(dir))
-        {
-            _ctx.Logger.Warn("ArticlesContentDir が未設定のため、コラムは 0 件として継続します。");
-        }
-        else if (!Directory.Exists(dir))
-        {
-            _ctx.Logger.Warn($"記事ディレクトリが見つかりません: {dir}（記事 0 件として継続）");
-        }
-        else
-        {
-            // 公開日時の判定はビルド開始時点の 1 回の現在時刻で行い、ページごとに判定がずれないようにする。
-            var now = DateTimeOffset.Now;
-            int held = 0;
-            foreach (var path in Directory.EnumerateFiles(dir, "*.md", SearchOption.TopDirectoryOnly))
-            {
-                var article = ParseArticle(path);
-                if (article is null) continue;
-
-                // 本番では下書きと公開日時前の原稿を出さない（テストでは出す）。
-                if (_ctx.Config.IsProductionMode && (article.IsDraft || article.PublishAt > now))
-                {
-                    held++;
-                    continue;
-                }
-                articles.Add(article);
-            }
-            if (held > 0)
-                _ctx.Logger.Info($"下書き・公開日時前のコラム {held} 本は本番に出しません。");
-        }
-
-        // 公開日時（date に書いた時刻まで）の降順、同じ日時は記事の URL の名前（slug）の昇順で並べる。
-        articles.Sort((a, b) =>
-        {
-            int cmp = b.Date.CompareTo(a.Date);
-            return cmp != 0 ? cmp : string.CompareOrdinal(a.Slug, b.Slug);
-        });
+        var articles = _articles ?? LoadArticles();
 
         // 各記事詳細。
         for (int i = 0; i < articles.Count; i++)
@@ -254,6 +245,52 @@ public sealed class ArticlesGenerator
     {
         int at = bodyHtml.LastIndexOf(FootnotesOpen, StringComparison.Ordinal);
         return at < 0 ? (bodyHtml, "") : (bodyHtml[..at], bodyHtml[at..]);
+    }
+
+    /// <summary>原稿を読み込み、本番では下書きと公開日時前の原稿を外して、公開日時の新しい順に並べて返す。</summary>
+    private List<Article> LoadArticles()
+    {
+        // 原稿の置き場は App.config の ArticlesContentDir（コードと分離した外部ディレクトリ）。
+        var dir = _ctx.Config.ArticlesContentDir;
+
+        var articles = new List<Article>();
+        if (string.IsNullOrEmpty(dir))
+        {
+            _ctx.Logger.Warn("ArticlesContentDir が未設定のため、コラムは 0 件として継続します。");
+        }
+        else if (!Directory.Exists(dir))
+        {
+            _ctx.Logger.Warn($"記事ディレクトリが見つかりません: {dir}（記事 0 件として継続）");
+        }
+        else
+        {
+            // 公開日時の判定はビルド開始時点の 1 回の現在時刻で行い、ページごとに判定がずれないようにする。
+            var now = DateTimeOffset.Now;
+            int held = 0;
+            foreach (var path in Directory.EnumerateFiles(dir, "*.md", SearchOption.TopDirectoryOnly))
+            {
+                var article = ParseArticle(path);
+                if (article is null) continue;
+
+                // 本番では下書きと公開日時前の原稿を出さない（テストでは出す）。
+                if (_ctx.Config.IsProductionMode && (article.IsDraft || article.PublishAt > now))
+                {
+                    held++;
+                    continue;
+                }
+                articles.Add(article);
+            }
+            if (held > 0)
+                _ctx.Logger.Info($"下書き・公開日時前のコラム {held} 本は本番に出しません。");
+        }
+
+        // 公開日時（date に書いた時刻まで）の降順、同じ日時は記事の URL の名前（slug）の昇順で並べる。
+        articles.Sort((a, b) =>
+        {
+            int cmp = b.Date.CompareTo(a.Date);
+            return cmp != 0 ? cmp : string.CompareOrdinal(a.Slug, b.Slug);
+        });
+        return articles;
     }
 
     /// <summary>front-matter をパースし、本文を Markdig で HTML 化して <see cref="Article"/> を返す。

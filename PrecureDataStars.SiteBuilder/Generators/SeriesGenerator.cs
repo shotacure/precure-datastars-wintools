@@ -1435,6 +1435,7 @@ public sealed class SeriesGenerator
         {
             Series = seriesView,
             ShopSeriesId = _ctx.ShopSeriesIds.Contains(s.SeriesId) ? s.SeriesId : 0,
+            RelatedArticles = BuildRelatedArticles(s),
             BgmLinks = bgmLinks,
             Episodes = epRows,
             RelatedWorks = relatedWorks,
@@ -2231,11 +2232,72 @@ public sealed class SeriesGenerator
         public string RelationLabelJa { get; set; } = "";
     }
 
+    /// <summary>
+    /// 作品詳細の「関連記事」の節の行を組み立てる。先に手で入れた関連記事（<c>series_related_links</c>。precure.news の記事など、
+    /// 別のサイトのもの）を並び順で、続けてこの作品ページへリンクしているコラムを公開日時の新しい順で並べる。
+    /// 同じ URL は先に出たほうだけを残す。
+    /// </summary>
+    private IReadOnlyList<RelatedArticleRow> BuildRelatedArticles(Series s)
+    {
+        var rows = new List<RelatedArticleRow>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        if (_ctx.RelatedLinksBySeries.TryGetValue(s.SeriesId, out var links))
+        {
+            foreach (var l in links)
+            {
+                if (!seen.Add(l.Url)) continue;
+                rows.Add(new RelatedArticleRow
+                {
+                    Title = l.Title,
+                    Url = l.Url,
+                    SiteLabel = l.SiteLabel,
+                    DateLabel = l.PublishedOn is DateTime d ? $"{d.Year}年{d.Month}月{d.Day}日" : "",
+                    DateIso = l.PublishedOn?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) ?? "",
+                    // 別のサイトの記事は、外部サイトの節と同じく新しいタブで開く。
+                    IsExternal = l.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase),
+                });
+            }
+        }
+        if (_ctx.ArticlesBySeriesSlug.TryGetValue(s.Slug, out var articles))
+        {
+            foreach (var a in articles)
+            {
+                if (!seen.Add(a.Url)) continue;
+                rows.Add(new RelatedArticleRow
+                {
+                    Title = a.Title,
+                    Url = a.Url,
+                    SiteLabel = "コラム",
+                    DateLabel = a.DateLabel,
+                    DateIso = a.DateIso,
+                });
+            }
+        }
+        return rows;
+    }
+
+    /// <summary>作品詳細の「関連記事」の節の 1 行。</summary>
+    private sealed class RelatedArticleRow
+    {
+        public string Title { get; set; } = "";
+        public string Url { get; set; } = "";
+        /// <summary>サイトの名前（precure.news・コラムなど）。題の脇に小さく出す。</summary>
+        public string SiteLabel { get; set; } = "";
+        /// <summary>記事の日付の表示（無ければ空）。</summary>
+        public string DateLabel { get; set; } = "";
+        /// <summary>time 要素の datetime 属性（"yyyy-MM-dd"。無ければ空）。</summary>
+        public string DateIso { get; set; } = "";
+        /// <summary>別のサイトの記事か（新しいタブで開く）。</summary>
+        public bool IsExternal { get; set; }
+    }
+
     private sealed class SeriesDetailModel
     {
         public SeriesDetailView Series { get; set; } = new();
         /// <summary>販売中の商品の枠の置き場に書く作品 ID。この作品に出す設定の商品が無ければ 0（置き場を出さない）。</summary>
         public int ShopSeriesId { get; set; }
+        /// <summary>「関連記事」の節の行（手で入れた関連記事 → この作品ページへリンクしているコラムの順）。空なら節ごと出さない。</summary>
+        public IReadOnlyList<RelatedArticleRow> RelatedArticles { get; set; } = Array.Empty<RelatedArticleRow>();
         /// <summary>「劇伴」節のボタン（劇伴一覧ページがある自作品・子作品の分）。空なら節ごと出さない。</summary>
         public IReadOnlyList<BgmLinkRow> BgmLinks { get; set; } = Array.Empty<BgmLinkRow>();
         public IReadOnlyList<EpisodeIndexRow> Episodes { get; set; } = Array.Empty<EpisodeIndexRow>();

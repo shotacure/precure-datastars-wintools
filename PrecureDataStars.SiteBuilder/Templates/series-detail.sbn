@@ -373,6 +373,27 @@
   </section>
   {{~ end ~}}
 
+  {{## 関連記事。手で入れた関連記事（precure.news の記事など、別のサイトのもの）と、この作品ページへリンクしているコラムを並べる。
+       行の作りはコラムの「ほかのコラム」（.article-more-*）と同じ部品。別のサイトの記事は新しいタブで開く。 ##}}
+  {{~ if RelatedArticles.size > 0 ~}}
+  <section id="related-articles">
+    <h2>関連記事</h2>
+    <ul class="article-more-list related-articles-list">
+      {{~ for r in RelatedArticles ~}}
+      <li>
+        <a class="article-more-link" href="{{ r.Url }}"{{ if r.IsExternal }} target="_blank" rel="noopener"{{ end }}>
+          <span class="article-more-title">{{ r.Title | html.escape }}</span>
+          <span class="related-articles-meta">
+            {{~ if r.SiteLabel != "" ~}}<span class="related-articles-site">{{ r.SiteLabel | html.escape }}</span>{{~ end ~}}
+            {{~ if r.DateLabel != "" ~}}<time class="article-more-date"{{ if r.DateIso != "" }} datetime="{{ r.DateIso }}"{{ end }}>{{ r.DateLabel }}</time>{{~ end ~}}
+          </span>
+        </a>
+      </li>
+      {{~ end ~}}
+    </ul>
+  </section>
+  {{~ end ~}}
+
   {{## 外部サイト。
        マーケティング観点で「自サイト内コンテンツ → 関連リンク」の順で誘導する方が、ページ内回遊が伸びやすい。
        本サイトでの体験を一通り読み終えた読者を、東映アニメーション・朝日放送・Amazon Prime Video の

@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：作品詳細に「関連記事」の節を足した**（`series_related_links`〔新規の表〕・`SeriesRelatedLink`・`SeriesRelatedLinksRepository`〔新規〕・`ArticlesGenerator.Load`〔新規〕・`SeriesGenerator.BuildRelatedArticles`〔新規〕・`series-detail.sbn`・`site.css`）：手で入れた関連記事（precure.news の記事など、別のサイトのもの。新しいタブで開く）と、本文からその作品ページへリンクしているコラム（自動）を、外部サイトの節の前に並べる。コラムは作品詳細より先に読み込むようにした。行の作りはコラムの「ほかのコラム」と同じ部品で、題の脇にサイトの名前と日付を出す。マイグレーションは `db/migrations/v1.21.1_series_related_links.sql`。
+
 - **サイト：話数が見込みの作品の説明文（meta description）を「（全 50 話の見込み）」にした**（`SeriesGenerator.BuildSeriesMetaDescription`）：本文の「（見込）」と同じく、見込みの話数を言い切らない。og:description・twitter:description も同じ文。
 
 - **サイト：開始日がまだ来ていない TV シリーズの期間にも「（見込）」を添えた**（`JpDateFormat.PeriodIsEstimated`・`SeriesGenerator`・`EpisodesIndexGenerator`）：話数が見込みのシリーズの期間は、終了日が入っているときだけ「（見込）」だった。開始日がまだ来ていないときも添え、作品詳細の「期間」と作品一覧のカードで「2027年2月7日 〜（見込）」と出す。放送が始まって終了日が未定のシリーズは、開始日が確定しているので添えない。

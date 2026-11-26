@@ -415,6 +415,11 @@ public static class SiteDataLoader
         // 枠の候補になる音楽商品（作品 × 商品）。
         var shopProductCandidates = await shopItemsRepo.GetProductCandidatesAsync(ct).ConfigureAwait(false);
 
+        // 作品ごとの関連記事のうち、出す設定の行（リポジトリが series_id → 並び順で返す）。
+        var relatedLinksBySeries = (await new SeriesRelatedLinksRepository(factory).GetEnabledAsync(ct).ConfigureAwait(false))
+            .GroupBy(r => r.SeriesId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<SeriesRelatedLink>)g.ToList());
+
         // 作品ごとの各話のスタッフの札の役職（並び順の順。リポジトリが series_id → display_order で返す）。
         var episodeStaffRolesBySeries = (await new SeriesEpisodeStaffRolesRepository(factory).GetAllAsync(ct).ConfigureAwait(false))
             .GroupBy(r => r.SeriesId)
@@ -569,6 +574,7 @@ public static class SiteDataLoader
             KeyStaffRolesBySeries = keyStaffRolesBySeries,
             ShopItems = shopItems,
             ShopProductCandidates = shopProductCandidates,
+            RelatedLinksBySeries = relatedLinksBySeries,
             ShopSeriesIds = ShopItemsFile.SeriesIds(shopItems, shopProductCandidates),
             EpisodeStaffRolesBySeries = episodeStaffRolesBySeries,
             RoleTemplateResolver = roleTemplateResolver,

@@ -11573,6 +11573,12 @@ dialog.photo-modal::backdrop { background: rgba(0, 0, 0, 0.85); }
 .article-more-title { font-weight: 700; line-height: 1.5; }
 .article-more-date { font-size: 0.8em; color: var(--muted); white-space: nowrap; }
 .article-more-all { margin: 0.7em 0 0; font-size: 0.9em; text-align: right; }
+/* 作品詳細の「関連記事」。行は「ほかのコラム」と同じ部品で、題の脇にサイトの名前と日付を並べる。 */
+.related-articles-meta { display: inline-flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.related-articles-site {
+  font-size: 0.75em; color: var(--muted);
+  padding: 0 6px; border: 1px solid var(--border); border-radius: 4px;
+}
 /* 記事の分類をリンクにしたときは下線を出さない。 */
 a.article-tag { text-decoration: none; }
 

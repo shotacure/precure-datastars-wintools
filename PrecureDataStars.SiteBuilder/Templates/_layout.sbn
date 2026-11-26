@@ -80,12 +80,34 @@
 {{## Google Fonts: 本文・見出しのベースは Noto Sans JP（可読性の高い日本語ゴシック）。
      ブランド表記（ヘッダ・フッタのサイト名、ホーム大見出し・タグライン）は Kiwi Maru を据え置き、
      Kaisei Decol（やわらかい装飾系）と DotGothic16（ドット/デジタル系）を「ここぞ」のアクセントに使う。
-     Noto Sans SC は Noto Sans JP に無い簡体字を補うだけで、字の範囲ごとに分けて配られるので、その字のあるページでだけ読み込まれる。
-     5 ファミリーを 1 リクエストにまとめ、preconnect で読み込みを高速化する。 ##}}
+     どの書体の CSS をどのページで読むかは WebFontPlan が本文から決める（WebFontCssUrls・WebFontDesktopCssUrl）。
+     CSS はスクリプトで <link> を足して読むので、届くまで画面の表示を止めない（届くまでは端末の書体で出し、届いたら差し替わる）。
+     本文の Noto Sans JP ほか（WebFontDesktopCssUrl）は、マウスで操作する端末だけで読む。スマホ・タブレットは端末の日本語の書体で出す。
+     スクリプトが動かない環境では noscript の <link> で全部を読む。 ##}}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Sans:wght@400;700&family=Kiwi+Maru:wght@400;500&family=Kaisei+Decol:wght@400;500;700&family=DotGothic16&family=Shippori+Mincho:wght@800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ asset_url "/assets/site.css" }}">
+<script>
+(function () {
+  var head = document.head;
+  function add(href) {
+    var l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = href;
+    head.appendChild(l);
+  }
+  {{~ for u in WebFontCssUrls ~}}
+  add('{{ u }}');
+  {{~ end ~}}
+  if (window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches) add('{{ WebFontDesktopCssUrl }}');
+})();
+</script>
+<noscript>
+{{~ for u in WebFontCssUrls ~}}
+<link rel="stylesheet" href="{{ u | html.escape }}">
+{{~ end ~}}
+<link rel="stylesheet" href="{{ WebFontDesktopCssUrl | html.escape }}">
+</noscript>
 
 {{## ──────── ダイアログのキーボード操作（フォーカスを中に閉じ込め、閉じたら戻す） ────────
      subtitle-embargo.js・art-track-pref.js・mobile-nav.js が window.PCDS.focusTrap を使うので、それらより前に置く。 ##}}

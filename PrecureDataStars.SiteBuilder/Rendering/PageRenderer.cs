@@ -407,10 +407,22 @@ public sealed class PageRenderer
             || contentHtml.Contains("data-shop-series=", StringComparison.Ordinal);
         // YouTube 公式動画の埋め込み（エピソード詳細の次回予告等）があるページにも同様の権利注記を出す。
         layoutMeta.HasYoutubeEmbeds = contentHtml.Contains("youtube.com/embed/", StringComparison.Ordinal);
+        // 読み込む Web フォントは本文に出る要素から決める。
+        ApplyWebFonts(layoutMeta, contentHtml, isNotFoundPage: false);
 
         layoutMeta.Content = contentHtml;
 
         return _renderer.Render("_layout.sbn", layoutMeta);
+    }
+
+    /// <summary>
+    /// ページで読む Web フォントの CSS の URL を <see cref="WebFontPlan"/> で決めて詰める。
+    /// サイト名（ブランド書体で出す字）を使うので、<see cref="ApplyCommonLayoutDefaults"/> の後に呼ぶ。
+    /// </summary>
+    private static void ApplyWebFonts(LayoutModel layoutMeta, string contentHtml, bool isNotFoundPage)
+    {
+        layoutMeta.WebFontCssUrls = WebFontPlan.CommonCssUrls(contentHtml, layoutMeta, isNotFoundPage);
+        layoutMeta.WebFontDesktopCssUrl = WebFontPlan.DesktopCssUrl(contentHtml);
     }
 
     /// <summary>アソシエイトタグ付き Amazon リンクの検出用正規表現（href 値内の ?tag= / &amp;tag= を要求）。</summary>
@@ -528,6 +540,8 @@ public sealed class PageRenderer
         // 仕様にあわせる（ShareText / ShareHashtags も既定で空文字のままにしておく）。
         // ※ シェアボタンを出したい特例ページがあれば、呼び出し側で ShareUrl 等を明示すること。
         // BreadcrumbList JSON-LD は共通ヘルパ内で通常通り組み立てる（パンくず未指定なら出力されない）。
+        // このルートで書き出すのは 404 ページなので、見出しの飾りの書体（Kaisei Decol）を読む。
+        ApplyWebFonts(layoutMeta, contentHtml, isNotFoundPage: true);
 
         layoutMeta.Content = contentHtml;
 

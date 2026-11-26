@@ -17,10 +17,17 @@
   /* monospace が必要な場面（M 番号などのインライン）専用フォント変数。 */
   --font-mono: "JetBrains Mono", "Consolas", "Menlo", "Roboto Mono", monospace;
 
-  /* サイト全体の本文・見出しのベース書体（可読性の高いやわらかな日本語ゴシック）。
-     Noto Sans JP に無い簡体字（中国のスタッフの名前の「玮」「陈」など）は、同じ設計のゴシックの Noto Sans SC で出す。 */
-  --font-base: "Noto Sans JP", "Noto Sans SC", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
-  /* ブランド表記（ヘッダ・フッタのサイト名、ホーム大見出し・タグライン）専用の据え置き書体。 */
+  /* サイト全体の本文・見出しのベース書体（可読性の高い日本語ゴシック）。
+     端末に入っている書体を先に当て、Web フォントを落とさずに済む端末を増やす：iPhone・iPad・Mac はヒラギノ。
+     ヒラギノの無い端末のうち、マウスで操作する端末（Windows など）は Web フォントの Noto Sans JP で出す。
+     スマホ・タブレット（Android など）では Noto Sans JP の CSS を読まないので（_layout.sbn・WebFontPlan）、
+     system-ui（Android は Noto Sans JP と同じ設計の Noto Sans CJK）で出す。
+     Noto Sans JP に無い簡体字（中国のスタッフの名前の「玮」「陈」など）は、同じ設計のゴシックの Noto Sans SC で出す
+     （その字のあるページでだけ読む）。 */
+  --font-base: "Hiragino Sans", "Noto Sans JP", "Noto Sans SC", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  /* ブランド表記（ヘッダ・フッタのサイト名、ホーム大見出し・タグライン）専用の据え置き書体。
+     この書体と --font-accent-dot は、出す文言の字だけに絞って読む（WebFontPlan の BrandTexts・DotTexts）。
+     新しい所に使うときは、そこに文言を足す。 */
   --font-brand: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
   /* アクセント書体・装飾系。索引ページのリード文・404 見出しなど「ここぞ」の数箇所に効かせる。 */
   --font-accent-deco: "Kaisei Decol", "Hiragino Mincho ProN", serif;

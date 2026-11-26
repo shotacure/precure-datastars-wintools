@@ -148,6 +148,14 @@ public sealed class LayoutModel
     /// true のページのみ、フッタに「動画は公式の埋め込みプレイヤー経由・権利は各権利者様」の注記を出す。</summary>
     public bool HasYoutubeEmbeds { get; set; }
 
+    // ── Web フォント（PageRenderer が本文から決めて詰める。中身は WebFontPlan） ──
+
+    /// <summary>全端末で読む Google Fonts の CSS の URL（ブランド書体・数字の書体を字で絞ったものと、要素のあるページだけの飾りの書体）。</summary>
+    public IReadOnlyList<string> WebFontCssUrls { get; set; } = Array.Empty<string>();
+
+    /// <summary>マウスで操作する端末だけで読む本文の書体（Noto Sans JP ほか）の CSS の URL。</summary>
+    public string WebFontDesktopCssUrl { get; set; } = "";
+
     /// <summary>グローバルナビの項目列（ヘッダ・モバイルオーバーレイ共通）。
     /// <see cref="PageRenderer"/> が現在ページの URL パスから IsActive を解決して詰める。</summary>
     public IReadOnlyList<NavItem> NavItems { get; set; } = Array.Empty<NavItem>();

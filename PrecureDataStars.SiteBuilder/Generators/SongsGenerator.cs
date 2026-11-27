@@ -257,13 +257,12 @@ public sealed class SongsGenerator
             .ThenBy(s => s.SortSeriesId)
             .ToList();
 
-        // 録音を 1 つ以上持つ曲の数（一覧に行が出る曲）。ページの冒頭文・meta description・カードのバッジの「曲」はこの数。
+        // 録音を 1 つ以上持つ曲の数（一覧に行が出る曲）。カードのバッジの「曲」はこの数（ページの冒頭文・meta description の「全 N 曲」は録音の数）。
         int songCount = recordingsBySong.Count(kv => kv.Value.Count > 0 && songById.ContainsKey(kv.Key));
         var content = new SongsIndexModel
         {
             SeriesSections = seriesSections,
-            TotalCount = allRows.Count,
-            SongCount = songCount
+            TotalCount = allRows.Count
         };
         var layout = new LayoutModel
         {
@@ -280,7 +279,8 @@ public sealed class SongsGenerator
                     : new[] { new OgCardBadge("", $"{songCount}曲"), new OgCardBadge("", $"{allRows.Count}ver.") }
             },
             // ページの冒頭文（songs-index.sbn の .lead）と同じ文。
-            MetaDescription = $"主題歌・挿入歌・キャラクターソング 全 {songCount} 曲",
+            // 「全 N 曲」は録音（歌唱ごとのバージョン）の数で数える。このサイトの「曲」（作詞・作曲・編曲の単位）とは別で、一般に「歌」と呼ばれる数。
+            MetaDescription = $"主題歌・挿入歌・キャラクターソング 全 {allRows.Count} 曲",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1362,8 +1362,6 @@ public sealed class SongsGenerator
         public IReadOnlyList<SongSeriesSection> SeriesSections { get; set; } = Array.Empty<SongSeriesSection>();
         /// <summary>総 recording 件数。</summary>
         public int TotalCount { get; set; }
-        /// <summary>録音を 1 つ以上持つ曲の数（ページの冒頭文の「全 N 曲」）。</summary>
-        public int SongCount { get; set; }
     }
 
     /// <summary>

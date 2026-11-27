@@ -5944,15 +5944,13 @@ a.credit-card-series:focus-visible {
   color: var(--accent-pink);
   text-decoration: underline;
 }
+/* 話数の並び（#1～2, #6～11, …）。カードに収まらない長い並びは、画面の幅にかかわらず「, 」の区切りで折り返す
+   （収まる並びは 1 行のまま）。 */
 .credit-card-range {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 0.9em;
-  white-space: nowrap;
-}
-/* 狭い画面では、話数の並び（#1～2, #6～11, …）が長い人でカードの右へはみ出さないよう、「, 」の区切りで折り返す。 */
-@media (max-width: 640px) {
-  .credit-card-range { white-space: normal; }
+  white-space: normal;
 }
 .credit-card-affiliation {
   font-size: 0.8em;

@@ -257,33 +257,35 @@ public sealed class SongsGenerator
             .ThenBy(s => s.SortSeriesId)
             .ToList();
 
+        // 録音を 1 つ以上持つ曲の数（一覧に行が出る曲）。ページの冒頭文・meta description・カードのバッジの「曲」はこの数。
+        int songCount = recordingsBySong.Count(kv => kv.Value.Count > 0 && songById.ContainsKey(kv.Key));
         var content = new SongsIndexModel
         {
             SeriesSections = seriesSections,
-            TotalCount = allRows.Count
+            TotalCount = allRows.Count,
+            SongCount = songCount
         };
-        // 録音を 1 つ以上持つ曲の数（一覧に行が出る曲）。
-        int songCount = recordingsBySong.Count(kv => kv.Value.Count > 0 && songById.ContainsKey(kv.Key));
         var layout = new LayoutModel
         {
-            PageTitle = "歴代プリキュアソング",
+            // 題は検索で打たれる「一覧」を含める。ほかのページのパンくずの「歴代プリキュアソング」は短い名で残す。
+            PageTitle = "歴代プリキュアソング一覧",
             // 数は曲（作品としての歌）の数と、バージョン（録音）の数。バージョン数は曲数と食い違うときだけ出す。
-            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアソング")
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアソング一覧")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（songs-index.sbn の .lead）と同じ文。数だけはページ側で添える。
-                Subtitle = "歴代プリキュアの歌",
+                Subtitle = "主題歌・挿入歌・キャラクターソング",
                 Badges = songCount == allRows.Count
                     ? new[] { new OgCardBadge("", $"{songCount}曲") }
                     : new[] { new OgCardBadge("", $"{songCount}曲"), new OgCardBadge("", $"{allRows.Count}ver.") }
             },
             // ページの冒頭文（songs-index.sbn の .lead）と同じ文。
-            MetaDescription = $"歴代プリキュアの歌全 {allRows.Count} 曲",
+            MetaDescription = $"主題歌・挿入歌・キャラクターソング 全 {songCount} 曲",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "歴代プリキュアソング", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュアソング一覧", Url = "" }
             }
         };
         _page.RenderAndWrite("/songs/", "songs", "songs-index.sbn", content, layout);
@@ -1360,6 +1362,8 @@ public sealed class SongsGenerator
         public IReadOnlyList<SongSeriesSection> SeriesSections { get; set; } = Array.Empty<SongSeriesSection>();
         /// <summary>総 recording 件数。</summary>
         public int TotalCount { get; set; }
+        /// <summary>録音を 1 つ以上持つ曲の数（ページの冒頭文の「全 N 曲」）。</summary>
+        public int SongCount { get; set; }
     }
 
     /// <summary>

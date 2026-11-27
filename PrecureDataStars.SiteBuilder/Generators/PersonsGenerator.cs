@@ -884,7 +884,16 @@ public sealed class PersonsGenerator
                         continue;
                     }
                 }
-                entries.Add($"{g.RoleLabel}（{string.Join("、", works.Take(2).OrderBy(w => w.Year, StringComparer.Ordinal).Select(w => Work(w.Year, w.Title)))}{(works.Count > 2 ? "ほか" : "")}）");
+                // 1 作品で関わった話が 3 話以下なら、話数を添える（「原画（2026年『名探偵プリキュア！』第12話）」）。
+                // 少しだけ関わった方の説明文が作品名だけになり、どの回の方か分からないのを避ける。4 話以上と映画は作品名だけ。
+                static string WorkWithEpisodes(string year, string title, List<InvolvementSeriesRow> rows)
+                {
+                    var eps = rows.SelectMany(r => r.Episodes).Select(e => e.SeriesEpNo).Where(n => n > 0).Distinct().OrderBy(n => n).ToList();
+                    return eps.Count is > 0 and <= 3
+                        ? Work(year, title) + string.Join("・", eps.Select(n => $"第{n}話"))
+                        : Work(year, title);
+                }
+                entries.Add($"{g.RoleLabel}（{string.Join("、", works.Take(2).OrderBy(w => w.Year, StringComparer.Ordinal).Select(w => WorkWithEpisodes(w.Year, w.Title, w.Rows)))}{(works.Count > 2 ? "ほか" : "")}）");
             }
         }
 

@@ -597,7 +597,9 @@ public sealed class CharactersGenerator
 
         var layout = new LayoutModel
         {
-            PageTitle = BuildCharacterPageTitle(character.Name, voiceRows),
+            // 敵は「ザケンナー」のように作品をまたいで探される名前が多いので、括弧の頭に初めて出た作品名を入れる。
+            PageTitle = BuildCharacterPageTitle(character.Name, voiceRows,
+                string.Equals(character.CharacterKind, "VILLAIN", StringComparison.Ordinal) ? firstAppearance?.Series.Title : null),
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
@@ -795,8 +797,10 @@ public sealed class CharactersGenerator
     /// 検索で「キャラ名＋声優名」の組み合わせに当たるよう、「{キャラ名}(CV:{声優1}、{声優2})」の形にする。
     /// 声優は <see cref="VoiceCastRow.VoiceActorNames"/>（連名連結）を「、」で割って出現順に重複排除し、最大 2 名。
     /// 3 名以上なら末尾に「ほか」を添える。声優が 1 人もいなければキャラ名のみ。
+    /// <paramref name="seriesTitle"/>（敵の初登場の作品名）があれば括弧の頭に入れる：「ザケンナー(ふたりはプリキュア・CV:上別府 仁資、滝 知史)」、
+    /// 声優がいなければ「ザケンナー(ふたりはプリキュア)」。
     /// </summary>
-    private static string BuildCharacterPageTitle(string characterName, IReadOnlyList<VoiceCastRow> voiceRows)
+    private static string BuildCharacterPageTitle(string characterName, IReadOnlyList<VoiceCastRow> voiceRows, string? seriesTitle = null)
     {
         var voiceActors = voiceRows
             .SelectMany(v => string.IsNullOrEmpty(v.VoiceActorNames)
@@ -806,11 +810,12 @@ public sealed class CharactersGenerator
             .Where(n => !string.IsNullOrEmpty(n))
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        if (voiceActors.Count == 0) return characterName;
+        string series = string.IsNullOrWhiteSpace(seriesTitle) ? "" : seriesTitle!.Trim();
+        if (voiceActors.Count == 0) return series.Length > 0 ? $"{characterName}({series})" : characterName;
 
         string cv = string.Join("、", voiceActors.Take(2));
         if (voiceActors.Count > 2) cv += "ほか";
-        return $"{characterName}(CV:{cv})";
+        return series.Length > 0 ? $"{characterName}({series}・CV:{cv})" : $"{characterName}(CV:{cv})";
     }
 
     /// <summary>

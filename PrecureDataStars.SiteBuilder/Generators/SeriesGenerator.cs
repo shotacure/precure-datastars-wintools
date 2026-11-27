@@ -1514,6 +1514,8 @@ public sealed class SeriesGenerator
             ["inLanguage"] = "ja",
             ["genre"] = "アニメ"
         };
+        // 読み（series.title_kana）は別名として載せる（題の字と検索で打たれる字が違う作品のため）。略称は載せない。
+        if (!string.IsNullOrWhiteSpace(s.TitleKana)) jsonLdDict["alternateName"] = s.TitleKana!.Trim();
         // 開始日が年や年月までしか確かでない作品（月日が仮）は startDate を出さない。
         if (s.IsStartDateExact) jsonLdDict["startDate"] = s.StartDate.ToString("yyyy-MM-dd");
         if (s.EndDate.HasValue) jsonLdDict["endDate"] = s.EndDate.Value.ToString("yyyy-MM-dd");
@@ -1685,6 +1687,10 @@ public sealed class SeriesGenerator
         string kindPhrase = isWebShort ? "のショートアニメ" : "の TV シリーズ";
 
         var sb = new System.Text.StringBuilder();
+        // 読み（series.title_kana）のある作品は、頭に「『作品名』（読み）。」を置く。題の字と検索で打たれる字が違う作品
+        // （『ファンたじっくプリキュア！』は「ファンタジックプリキュア」で探される）を、説明文でも見つけられるようにする。
+        if (!string.IsNullOrWhiteSpace(s.TitleKana))
+            sb.Append('『').Append(s.Title).Append("』（").Append(s.TitleKana!.Trim()).Append("）。");
         if (!s.IsStartDateExact)
         {
             // 開始日が年や年月までしか確かでない作品：「2027年放送予定の TV シリーズ」「2027年7月公開予定の映画」

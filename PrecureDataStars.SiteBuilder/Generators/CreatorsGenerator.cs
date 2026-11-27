@@ -659,10 +659,13 @@ public sealed class CreatorsGenerator
     private const string StaffPageTitle = "歴代プリキュアスタッフ";
     /// <summary>スタッフ一覧の meta description と OGP カードのリード文。</summary>
     private const string StaffPageLead = "プリキュアのTVシリーズと映画を作ってきた方々";
-    /// <summary>声の出演一覧の題（h1・パンくず・OGP カード）。</summary>
-    private const string VoiceCastPageTitle = "歴代プリキュア声優";
-    /// <summary>声の出演一覧の meta description と OGP カードのリード文。</summary>
-    private const string VoiceCastPageLead = "プリキュアのTVシリーズと映画に出演した方々";
+    /// <summary>声の出演一覧の題（h1・パンくず・OGP カード）。検索で打たれる「声優一覧」を題に含める。</summary>
+    private const string VoiceCastPageTitle = "歴代プリキュア声優一覧";
+    /// <summary>声の出演一覧の OGP カードのリード文。meta description はこの文に人数を足したもの（<see cref="VoiceCastMetaDescription"/>）。</summary>
+    private const string VoiceCastPageLead = "TV シリーズと映画の声優さん（役名つき）";
+
+    /// <summary>声の出演一覧の meta description（カードのリード文と同じ文に人数を入れる。数はカードの文には入れずバッジで出す）。</summary>
+    private static string VoiceCastMetaDescription(int voiceActorCount) => $"TV シリーズと映画の声優さん {voiceActorCount} 名（役名つき）";
 
     // 役職詳細
 
@@ -3162,7 +3165,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = VoiceCastPageTitle,
-            MetaDescription = VoiceCastPageLead,
+            MetaDescription = VoiceCastMetaDescription(countRows.Count),
             OgCard = BuildCreatorsOgCard(
                 VoiceCastPageTitle,
                 new[]

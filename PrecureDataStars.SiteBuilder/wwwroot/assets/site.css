@@ -4636,6 +4636,14 @@ body.subtitle-embargo-dialog-open {
 .stats-by-series-parts-table td.col-part {
   width: 12em;
 }
+/* スマホの幅で表が width:100% に合わせて縮み、見出しやパート名を 1〜2 字ずつに刻まないよう、
+   見出しは 1 行に保ち、パート名は字ごとでなく語の切れ目で折る。収まらない分は .stats-table-scroll で横に送る。 */
+.stats-by-series-parts-table th {
+  white-space: nowrap;
+}
+.stats-by-series-parts-table td {
+  word-break: keep-all;
+}
 .stats-by-series-parts-table th.col-num,
 .stats-by-series-parts-table td.col-num {
   width: 7em;
@@ -11639,6 +11647,10 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
 }
 .article-body th, .article-body td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
 .article-body th { background: var(--th-bg); }
+/* 表が本文の幅まで列を細くして字を 1〜2 字ずつに刻まないよう、見出しは 1 行に保ち、
+   セルの日本語は字ごとでなく空白・句読点・括弧の所で折る。収まらない分は上の横スクロールで読む。 */
+.article-body th { white-space: nowrap; }
+.article-body td { word-break: keep-all; }
 /* 本文に埋め込む部品（precure.news の記事と同じ書き方で使える。news もこの CSS を読み込む）。
    埋め込み動画は横幅いっぱいの 16:9。 */
 .article-body .video-embed { position: relative; aspect-ratio: 16 / 9; margin: 0 0 1.2em; }

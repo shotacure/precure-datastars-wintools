@@ -665,7 +665,7 @@ public sealed class CreatorsGenerator
     private const string VoiceCastPageLead = "歴代プリキュアのTVシリーズと映画に出演した方々";
 
     /// <summary>声の出演一覧の meta description（検索で打たれる「声優」と人数・中身が分かる形。見出しのように読むラベルなので「さん」は付けない）。</summary>
-    private static string VoiceCastMetaDescription(int voiceActorCount) => $"TV シリーズと映画の声優 {voiceActorCount} 名（役名つき）";
+    private static string VoiceCastMetaDescription(int voiceActorCount) => $"TV シリーズと映画の声優 {voiceActorCount} 名";
 
     // 役職詳細
 

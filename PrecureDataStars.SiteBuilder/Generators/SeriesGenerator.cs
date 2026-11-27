@@ -1550,7 +1550,7 @@ public sealed class SeriesGenerator
             },
             OgType = s.KindCode == "MOVIE" ? "video.movie" : "video.tv_show",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(content, s.StartDate.Year, s.RunTimeSeconds)
+            OgCard = BuildOgCard(content, s.StartDate.Year, s.RunTimeSeconds, s.KindCode)
         };
 
         _page.RenderAndWrite(seriesUrl, "series", "series-detail.sbn", content, layout);
@@ -1606,15 +1606,23 @@ public sealed class SeriesGenerator
     /// 作品名だけでは分からない規模と座組がカード内で読み取れるようにする。
     /// 話数は大きな数にせず期間の行に添える（数に 1 段使うと、主要スタッフが入り切らずに欠ける）。
     /// </summary>
-    private static OgCardSpec BuildOgCard(SeriesDetailModel content, int startYear, ushort? runTimeSeconds)
+    private static OgCardSpec BuildOgCard(SeriesDetailModel content, int startYear, ushort? runTimeSeconds, string kindCode)
     {
         var view = content.Series;
+        // 透かしに年を添えるのは、毎年作られる TV・映画（と、その流れのオトナシリーズ）だけ。単発のイベント映像・スピンオフ・
+        // 配信のショートアニメ（ぷちきゅあ）は、年を添えず種別だけにする。
+        bool watermarkWithoutYear = kindCode is "EVENT" or "SPIN-OFF" or "SHORT";
 
         // 話数を持たない作品（映画など）は、TV の各話カードと同じ組み（題名・公開日・主要スタッフだけを大きく）にする。
         bool isMovieLike = string.IsNullOrWhiteSpace(view.Episodes);
         // 上映時間は分の単位で足りる（秒まで出すとカードの 1 行が重くなる）。
         string runTimeMinutes = runTimeSeconds is ushort sec && sec > 0 ? $"{(int)Math.Round(sec / 60.0)}分" : "";
-        string periodLine = isMovieLike
+        // 話を専用の表に持つ作品（ぷちきゅあ）は YouTube で毎週配信する作品。日付の行は「公開」ではなく、配信した最新の話数を添える。
+        var petitcureEpisodes = content.PetitcureEpisodes;
+        bool isWebShort = petitcureEpisodes.Count > 0;
+        string periodLine = isWebShort
+            ? $"{view.Period}　{petitcureEpisodes[^1].EpLabel.Split('・')[^1]} まで配信"
+            : isMovieLike
             ? string.Join("・", new[] { view.Period.Length > 0 ? $"{view.Period}公開" : "", runTimeMinutes }.Where(x => x.Length > 0))
             : $"{view.Period}　全{view.Episodes}話{view.EpisodesEstimateNote}";
 
@@ -1640,7 +1648,7 @@ public sealed class SeriesGenerator
                 Subtitle = periodLine,
                 InlineFacts = staff,
                 BandColorHex = OgCardColors.Episode,
-                Watermark = startYear + (string.IsNullOrWhiteSpace(view.KindLabel) ? "映画" : view.KindLabel)
+                Watermark = (watermarkWithoutYear ? "" : startYear.ToString()) + (string.IsNullOrWhiteSpace(view.KindLabel) ? "映画" : view.KindLabel)
             };
         }
 
@@ -1652,8 +1660,8 @@ public sealed class SeriesGenerator
             Subtitle = periodLine,
             InlineFacts = staff,
             BandColorHex = OgCardColors.Episode,
-            // 透かしは放送開始年。23 年続くシリーズのどこかが、縮小表示でも分かる。
-            Watermark = startYear.ToString()
+            // 透かしは放送開始年。23 年続くシリーズのどこかが、縮小表示でも分かる（年を添えない種別は種別の名前）。
+            Watermark = watermarkWithoutYear && !string.IsNullOrWhiteSpace(view.KindLabel) ? view.KindLabel : startYear.ToString()
         };
     }
 

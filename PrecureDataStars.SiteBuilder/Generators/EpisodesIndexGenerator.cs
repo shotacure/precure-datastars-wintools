@@ -107,8 +107,17 @@ public sealed class EpisodesIndexGenerator
             });
         }
 
+        // 役職バッジの色は、行ごとの style 属性ではなくページに 1 回だけ書く（1,100 話を超える行の HTML を軽くするため）。
+        // style の値（色ごとに同じ文字列）に、出てきた順の印 rb1・rb2…を振る。
+        var badgeClasses = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var style in sections.SelectMany(sec => sec.Episodes).SelectMany(e => e.StaffBadges).SelectMany(b => b.Roles)
+                     .Select(r => r.BadgeStyle).Where(st => !string.IsNullOrEmpty(st)))
+            if (!badgeClasses.ContainsKey(style)) badgeClasses[style] = "rb" + (badgeClasses.Count + 1);
+
         var content = new EpisodesIndexModel
         {
+            BadgeClasses = badgeClasses,
+            BadgeClassRules = badgeClasses.Select(kv => new BadgeClassRule { Name = kv.Value, Style = kv.Key }).ToList(),
             Sections = sections,
             TotalSeriesCount = sections.Count,
             TotalEpisodeCount = totalEpisodes
@@ -146,9 +155,20 @@ public sealed class EpisodesIndexGenerator
 
     private sealed class EpisodesIndexModel
     {
+        /// <summary>役職バッジの色の印（style の値 → rbN）。テンプレートがバッジの class に付ける。</summary>
+        public IReadOnlyDictionary<string, string> BadgeClasses { get; set; } = new Dictionary<string, string>();
+        /// <summary>色の印ごとの決まり（ページの &lt;style&gt; に 1 回だけ書く）。</summary>
+        public IReadOnlyList<BadgeClassRule> BadgeClassRules { get; set; } = Array.Empty<BadgeClassRule>();
         public IReadOnlyList<EpisodesIndexSection> Sections { get; set; } = Array.Empty<EpisodesIndexSection>();
         public int TotalSeriesCount { get; set; }
         public int TotalEpisodeCount { get; set; }
+    }
+
+    /// <summary>役職バッジの色の印 1 つ（印の名前と、その色の style の値）。</summary>
+    private sealed class BadgeClassRule
+    {
+        public string Name { get; set; } = "";
+        public string Style { get; set; } = "";
     }
 
     private sealed class EpisodesIndexSection

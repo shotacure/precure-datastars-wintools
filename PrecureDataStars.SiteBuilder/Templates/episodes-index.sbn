@@ -20,54 +20,60 @@
      各エピソード行を「メイン段 + スタッフ段」の 2 段構成に拡張。
        - メイン段 .ep-row-main : 第N話 / サブタイトル / 放送日（2024.2.4 形式に短縮）
        - スタッフ段 .staff-badges-row : 脚本・絵コンテ・演出・作画監督・美術 を色付きバッジで横並び
-     スタッフ段はサブタイトル右の空白だった領域を埋める。 ##}}
+     スタッフ段はサブタイトル右の空白だった領域を埋める。
+
+     このページは 1,100 話を超える行を 1 枚に並べるので、HTML を軽く保つ（検索エンジンが読むのは先頭の 2MB まで）。
+       - 役職バッジの色は、行ごとの style 属性ではなく、下の <style> に色ごとの決まりを 1 回だけ書き、バッジにはその印（rbN）を付ける。
+         色は作品の表（series_episode_staff_roles）から生成側が作った style の値そのもの（BadgeClasses：style の値 → 印）。
+       - バッジに data-role-code は付けない（このページでは CSS も JS も使わない）。
+       - 行のマークアップは字下げしない（下のループの中は行頭から書く）。ループの中のコメントは、出力に空行を残さないよう、前後の空白を取る形のタグで書く。 ##}}
+<style>
+{{~ for c in BadgeClassRules ~}}
+.episodes-index-list a.role-badge.{{ c.Name }}{ {{~ c.Style ~}} }
+{{~ end ~}}
+</style>
 {{~ for sec in Sections ~}}
-<section id="series-{{ sec.SeriesSlug }}"
-         class="episodes-index-section"
-         data-section-nav-label="{{ sec.SeriesTitle | html.escape }}"
-         data-section-nav-year="{{ sec.SeriesStartYearLabel }}"
-         data-section-nav-count="{{ array.size sec.Episodes }}">
-  <h2 class="episodes-index-heading">
-    <a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
-    {{~ if sec.SeriesStartYearLabel != "" ~}}
-    <span class="muted series-year">({{ sec.SeriesStartYearLabel }})</span>
-    {{~ end ~}}
-    <span class="episodes-index-period muted">{{ sec.Period }}{{~ if sec.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ sec.PeriodEstimateNote }}</span>{{~ end ~}}</span>
-    {{~ if sec.TotalEpisodesLabel != "" ~}}
-    <span class="episodes-index-count muted">{{ sec.TotalEpisodesLabel }}{{~ if sec.TotalEpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ sec.TotalEpisodesEstimateNote }}</span>{{~ end ~}}</span>
-    {{~ end ~}}
-  </h2>
-  <ol class="episodes-index-list">
-    {{~ for e in sec.Episodes ~}}
-    <li class="ep-row">
-      {{## /episodes/ 専用の 3 列レイアウト。
-           ・左列：第N話 + 放送日 を縦積みでひとブロック化（.ep-row-no-date）
-           ・中央列：サブタイトル
-           ・右列：スタッフバッジ群（CSS で font-size 0.7em に縮小、現状比約 70%）
-           この組み替えで、サブタイトル右の空白だった領域にスタッフが横並びで入る。 ##}}
-      <div class="ep-row-main">
-        <div class="ep-row-no-date">
-          <span class="ep-row-no">第{{ e.SeriesEpNo }}話</span>
-          <span class="ep-row-date">{{ e.OnAirDate }}</span>
-        </div>
-        <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{ e.TitleDisplayHtml }}</a>
-        {{## スタッフ列：作品の表（series_episode_staff_roles）の行のある役職を、行の順に色付きバッジ + 人物名（既に <a> リンク済み HTML）で並べる。
-             バッジの文字・色（style 属性）・リンク先は生成側が札ごとに渡す（e.StaffBadges の各 Roles）。
-             絵コンテ＝演出（同一人物）の回は、1 つの札に 2 バッジ並び + 名前 1 回に統合済み。
-             札が無い場合はスタッフ列ごと描画しない（クレジット未登録・表に行の無い作品）。
-             空のときも grid 列は確保されるので、列幅は崩れない。
-             役職バッジはシリーズ詳細のエピソード一覧・ホームと同じく、役職詳細ページへのリンクにする。
-             バッジ色分け用の data-role-code 属性は CSS セレクタの都合上、実コード（大文字）のまま保持する。 ##}}
-        {{~ if (array.size e.StaffBadges) > 0 ~}}
-        <div class="staff-badges-row">
-          {{~ for b in e.StaffBadges ~}}
-          <span class="staff-badge-group">{{~ for r in b.Roles ~}}<a class="role-badge role-badge-sm" data-role-code="{{ r.RoleCode }}"{{ if r.BadgeStyle != "" }} style="{{ r.BadgeStyle }}"{{ end }} href="{{ r.RoleUrl }}">{{ r.Label | html.escape }}</a>{{~ end ~}}{{ b.NamesHtml }}</span>
-          {{~ end ~}}
-        </div>
-        {{~ end ~}}
-      </div>
-    </li>
-    {{~ end ~}}
-  </ol>
+<section id="series-{{ sec.SeriesSlug }}" class="episodes-index-section" data-section-nav-label="{{ sec.SeriesTitle | html.escape }}" data-section-nav-year="{{ sec.SeriesStartYearLabel }}" data-section-nav-count="{{ array.size sec.Episodes }}">
+<h2 class="episodes-index-heading">
+<a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
+{{~ if sec.SeriesStartYearLabel != "" ~}}
+<span class="muted series-year">({{ sec.SeriesStartYearLabel }})</span>
+{{~ end ~}}
+<span class="episodes-index-period muted">{{ sec.Period }}{{~ if sec.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ sec.PeriodEstimateNote }}</span>{{~ end ~}}</span>
+{{~ if sec.TotalEpisodesLabel != "" ~}}
+<span class="episodes-index-count muted">{{ sec.TotalEpisodesLabel }}{{~ if sec.TotalEpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ sec.TotalEpisodesEstimateNote }}</span>{{~ end ~}}</span>
+{{~ end ~}}
+</h2>
+<ol class="episodes-index-list">
+{{~ ## /episodes/ 専用の 3 列レイアウト。
+     ・左列：第N話 + 放送日 を縦積みでひとブロック化（.ep-row-no-date）
+     ・中央列：サブタイトル
+     ・右列：スタッフバッジ群（CSS で font-size 0.7em に縮小、現状比約 70%）
+     この組み替えで、サブタイトル右の空白だった領域にスタッフが横並びで入る。
+     スタッフ列：作品の表（series_episode_staff_roles）の行のある役職を、行の順に色付きバッジ + 人物名（既に <a> リンク済み HTML）で並べる。
+     バッジの文字・色の印（rbN）・リンク先は生成側が札ごとに渡す（e.StaffBadges の各 Roles と BadgeClasses）。
+     絵コンテ＝演出（同一人物）の回は、1 つの札に 2 バッジ並び + 名前 1 回に統合済み。
+     札が無い場合はスタッフ列ごと描画しない（クレジット未登録・表に行の無い作品）。
+     空のときも grid 列は確保されるので、列幅は崩れない。
+     役職バッジはシリーズ詳細のエピソード一覧・ホームと同じく、役職詳細ページへのリンクにする。 ## ~}}
+{{~ for e in sec.Episodes ~}}
+<li class="ep-row">
+<div class="ep-row-main">
+<div class="ep-row-no-date">
+<span class="ep-row-no">第{{ e.SeriesEpNo }}話</span>
+<span class="ep-row-date">{{ e.OnAirDate }}</span>
+</div>
+<a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{ e.TitleDisplayHtml }}</a>
+{{~ if (array.size e.StaffBadges) > 0 ~}}
+<div class="staff-badges-row">
+{{~ for b in e.StaffBadges ~}}
+<span class="staff-badge-group">{{~ for r in b.Roles ~}}<a class="role-badge role-badge-sm{{ if r.BadgeStyle != "" }} {{ BadgeClasses[r.BadgeStyle] }}{{ end }}" href="{{ r.RoleUrl }}">{{ r.Label | html.escape }}</a>{{~ end ~}}{{ b.NamesHtml }}</span>
+{{~ end ~}}
+</div>
+{{~ end ~}}
+</div>
+</li>
+{{~ end ~}}
+</ol>
 </section>
 {{~ end ~}}

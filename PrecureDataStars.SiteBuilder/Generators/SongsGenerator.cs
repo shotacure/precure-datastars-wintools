@@ -273,7 +273,7 @@ public sealed class SongsGenerator
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（songs-index.sbn の .lead）と同じ文。数だけはページ側で添える。
-                Subtitle = "主題歌・挿入歌・キャラクターソング",
+                Subtitle = "歴代プリキュアの歌",
                 Badges = songCount == allRows.Count
                     ? new[] { new OgCardBadge("", $"{songCount}曲") }
                     : new[] { new OgCardBadge("", $"{songCount}曲"), new OgCardBadge("", $"{allRows.Count}ver.") }

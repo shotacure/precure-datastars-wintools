@@ -4,7 +4,7 @@
 
 ### 開発中（次回リリース）
 
-- **サイト：検索に出ても選ばれにくかったページの、題と説明文を直した**（`CreatorsGenerator`・`SongsGenerator`・`songs-index.sbn`・`PersonsGenerator`・`CharactersGenerator`・`SeriesGenerator`）：声優一覧は題を「歴代プリキュア声優一覧」に、meta description を「TV シリーズと映画の声優さん 1200 名（役名つき）」にした（数は生成）。歌の一覧は題を「歴代プリキュアソング一覧」に、冒頭文と meta description を「主題歌・挿入歌・キャラクターソング 全 757 曲」にした（数は録音の数。ほかのページのパンくずは「歴代プリキュアソング」のまま）。人物の meta description は役職の行の作品で関わった話が 3 話以下なら話数を添える（「原画（2026年『名探偵プリキュア！』第41話）」）。敵のキャラクターの題は括弧の頭に初めて出た作品名を入れる（「ザケンナー(ふたりはプリキュア・CV:上別府 仁資、滝 知史)」）。作品の読み（`series.title_kana`）がある作品は、meta description の頭に「『作品名』（読み）。」を置き、構造化データの `alternateName` に読みを載せる。
+- **サイト：検索に出ても選ばれにくかったページの、題と説明文を直した**（`CreatorsGenerator`・`SongsGenerator`・`songs-index.sbn`・`PersonsGenerator`・`CharactersGenerator`・`SeriesGenerator`）：声優一覧は題を「歴代プリキュア声優一覧」に、meta description を「TV シリーズと映画の声優 1200 名（役名つき）」にした（数は生成。OGP カードのリード文は前のまま）。歌の一覧は題を「歴代プリキュアソング一覧」に、冒頭文と meta description を「主題歌・挿入歌・キャラクターソング 全 757 曲」にした（数は録音の数。OGP カードのリード文と、ほかのページのパンくずの「歴代プリキュアソング」は前のまま）。人物の meta description は役職の行の作品で関わった話が 3 話以下なら話数を添える（「原画（2026年『名探偵プリキュア！』第41話）」）。敵のキャラクターの題は括弧の頭に初めて出た作品名を入れる（「ザケンナー(ふたりはプリキュア・CV:上別府 仁資、滝 知史)」）。作品の読み（`series.title_kana`）がある作品は、meta description の頭に「『作品名』（読み）。」を置き、構造化データの `alternateName` に読みを載せる。
 
 - **サイト：開始日の決まっていない作品の OGP カードの日付の行に「公開」を足さない**（`SeriesGenerator.BuildOgCard`）：デュアルシャドウのカードが「2027年放送予定公開」と言葉が重なっていた。期間が「〜予定」で終わるときは、そのまま「2027年放送予定」と出す。
 

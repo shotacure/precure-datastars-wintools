@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：ぷちきゅあだけに関わった人物・企業/団体と、ぷちきゅあの作品詳細の説明文（meta description）に中身を入れた**（`PetitcureSectionBuilder.MetaDescriptionEntries`〔新規〕・`PersonsGenerator`・`CompaniesGenerator`・`SeriesGenerator`）：本編クレジットも音楽クレジットも無い人物・企業/団体の説明文が名前だけだったので、ぷちきゅあの役職を作品ごとに「制作管理、キャラクターリグ（2025年『ぷちきゅあ 〜Precure Fairies〜』）」の形で入れる（数には使わない）。作品詳細は「2025年4月配信開始のショートアニメ（#86 まで配信）」のように、配信した最新の話数を添える。
+
 - **サイト：ゲストキャラクターのページが無い作品の `/characters/guests/{作品}/` を、作品のページへ 301 で転送するようにした**（`EntityUrlRegistry`）：ゲストのページは単発キャラのいる作品にだけ作るので、単発キャラがほかの作品にも出てゲストから外れると、その作品のページが無くなり、前に知られた URL が 404 になっていた。劇伴の無い作品の `/bgms/{作品}/` と同じ形で、ページの無い作品の URL を転送表に載せる。
 
 - **サイト：ショートアニメ「ぷちきゅあ」の話とスタッフを、作品詳細と人物・企業/団体の詳細に出す**（`PetitcureRepository`〔新規〕・`PetitcureIndex`〔新規〕・`PetitcureSectionBuilder`〔新規〕・`BuildContext.Petitcure`・`SiteDataLoader`・`SeriesGenerator`・`PersonsGenerator`・`CompaniesGenerator`・`MusicGenerator`・`InvolvementGroup.ShallowCopy`・`series-detail.sbn`・`_series-card-simple.sbn`・`site.css`）：専用の表に入れた話・動画・概要欄のスタッフを読み、本編クレジットの関与索引とは別の索引に持つ。担当の数の札・OGP カード・初担当・年表・説明文・クリエイターの一覧・役職詳細には入れない。

@@ -630,7 +630,9 @@ public sealed class PersonsGenerator
 
         // MetaDescription を実データから組み立てる。
         // 「{人名}は、プリキュアシリーズで{役職1}({N話})・{役職2}({N話})などを担当。」を骨格にする。
-        var metaDescription = BuildPersonMetaDescription(displayName, involvementGroups, musicSections, _ctx.RoleByCode);
+        var metaDescription = BuildPersonMetaDescription(displayName, involvementGroups, musicSections, _ctx.RoleByCode,
+            PetitcureSectionBuilder.MetaDescriptionEntries(_ctx, aliasIds
+                .SelectMany(id => _ctx.Petitcure.StaffByPersonAlias.TryGetValue(id, out var rows) ? rows : Array.Empty<PetitcureVideoStaff>())));
 
         // jobTitle は involvementGroups の RoleLabel（役職名 / 例：「監督」「脚本」）から
         // 担当話数の多い順で上位 3 件のラベルを取り出す。Count は当該役職での担当エピソード数。
@@ -803,12 +805,14 @@ public sealed class PersonsGenerator
     /// ほかにも役があれば「キャラ名役（2016年『作品』）ほか 3 役」、役は 1 つでほかの作品にも出ていれば
     /// 「キャラ名役（2016年『作品』ほか 2 作品）」と、残りの数を添える。
     /// 本編のクレジットが無く音楽のクレジットだけの人は、音楽の区分ごとの曲数・枚数（「作曲：歌 12 曲・劇伴 40 曲」）。
+    /// どちらも無くぷちきゅあだけに関わった人は、ぷちきゅあの役職（<paramref name="petitcureEntries"/>。数には使わない）。
     /// </summary>
     private static string BuildPersonMetaDescription(
         string displayName,
         IReadOnlyList<InvolvementGroup> involvementGroups,
         IReadOnlyList<PersonMusicSection> musicSections,
-        IReadOnlyDictionary<string, Role> roleByCode)
+        IReadOnlyDictionary<string, Role> roleByCode,
+        IReadOnlyList<string> petitcureEntries)
     {
         const int targetMaxChars = 150;
 
@@ -885,6 +889,7 @@ public sealed class PersonsGenerator
         }
 
         string text = JoinWithin(entries, targetMaxChars);
+        if (text.Length == 0) text = JoinWithin(petitcureEntries, targetMaxChars);
         return text.Length > 0 ? text : $"{displayName}さん";
     }
 

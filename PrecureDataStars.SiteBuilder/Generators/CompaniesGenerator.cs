@@ -331,7 +331,9 @@ public sealed class CompaniesGenerator
         // 「{会社名}は、プリキュアシリーズで{役職1}({N作品})・{役職2}({N作品})などを担当した企業・団体。」を骨格にする。
         // ページの名前（meta description・JSON-LD・パンくず・共有用の画像）は、見出し・title と同じ正式名にそろえる。
         // 代表屋号（略称など）は JSON-LD の別名（alternateName）に入る。
-        var metaDescription = BuildCompanyMetaDescription(company.Name, groups, _ctx.RoleByCode);
+        var metaDescription = BuildCompanyMetaDescription(company.Name, groups, _ctx.RoleByCode,
+            PetitcureSectionBuilder.MetaDescriptionEntries(_ctx, aliases
+                .SelectMany(a => _ctx.Petitcure.StaffByCompanyAlias.TryGetValue(a.AliasId, out var rows) ? rows : Array.Empty<PetitcureVideoStaff>())));
 
         var jsonLdDict = new Dictionary<string, object?>
         {
@@ -441,7 +443,8 @@ public sealed class CompaniesGenerator
     private static string BuildCompanyMetaDescription(
         string displayName,
         IReadOnlyList<InvolvementGroup> involvementGroups,
-        IReadOnlyDictionary<string, Role> roleByCode)
+        IReadOnlyDictionary<string, Role> roleByCode,
+        IReadOnlyList<string> petitcureEntries)
     {
         const int targetMaxChars = 150;
         static int RowWeight(InvolvementSeriesRow r) => r.Episodes.Count > 0 ? r.Episodes.Count : 1;
@@ -464,6 +467,16 @@ public sealed class CompaniesGenerator
             if (sb.Length > 0 && sb.Length + 1 + entry.Length > targetMaxChars) break;
             if (sb.Length > 0) sb.Append('／');
             sb.Append(entry);
+        }
+        // 本編クレジットが無く、ぷちきゅあだけに関わった企業・団体は、ぷちきゅあの役職（数には使わない）。
+        if (sb.Length == 0)
+        {
+            foreach (var entry in petitcureEntries)
+            {
+                if (sb.Length > 0 && sb.Length + 1 + entry.Length > targetMaxChars) break;
+                if (sb.Length > 0) sb.Append('／');
+                sb.Append(entry);
+            }
         }
         return sb.Length > 0 ? sb.ToString() : displayName;
     }

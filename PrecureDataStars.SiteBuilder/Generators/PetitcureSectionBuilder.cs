@@ -291,6 +291,16 @@ internal static class PetitcureSectionBuilder
     internal static IEnumerable<string> RoleParts(string roleLabelText)
         => roleLabelText.Split('・', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+    /// <summary>
+    /// 本編クレジットも音楽クレジットも無く、ぷちきゅあだけに関わった人物・企業/団体の meta description の項目
+    /// （「制作管理、キャラクターリグ（2025年『ぷちきゅあ 〜Precure Fairies〜』）」）。作品ごとに 1 項目で、役職は担当の多い順に「、」でつなぐ。
+    /// 数には使わず、説明文だけに使う。
+    /// </summary>
+    internal static IReadOnlyList<string> MetaDescriptionEntries(BuildContext ctx, IEnumerable<PetitcureVideoStaff> rows)
+        => BuildInvolvementRows(ctx, rows)
+            .Select(inv => $"{string.Join("、", inv.Roles.Select(r => r.RoleLabel))}（{ctx.SeriesById[inv.SeriesId].StartDate.Year}年『{inv.SeriesTitle}』）")
+            .ToList();
+
     /// <summary>名前のまとめの鍵：名義につながっていれば名義、つながっていなければ書かれたままの文字。</summary>
     private static string NameKey(PetitcureVideoStaff s)
         => s.PersonAliasId is int pa ? $"P{pa}" : s.CompanyAliasId is int ca ? $"C{ca}" : $"T{s.NameText}";

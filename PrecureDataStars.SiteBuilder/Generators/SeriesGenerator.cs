@@ -1495,7 +1495,8 @@ public sealed class SeriesGenerator
         // 説明文を実データから動的構築する。
         // 「シリーズ名・放送開始年・話数・主役プリキュア声優」を含めて、SERP / OGP / Twitter Card で
         // シリーズ単位の個別性が立つようにする。140 字目安。
-        var metaDescription = BuildSeriesMetaDescription(s, precureRows, seriesEstimated, petitcureEpisodeRows.Count > 0);
+        var metaDescription = BuildSeriesMetaDescription(s, precureRows, seriesEstimated, petitcureEpisodeRows.Count > 0,
+            _ctx.Petitcure.EpisodesBySeries.TryGetValue(s.SeriesId, out var petitcureEps) && petitcureEps.Count > 0 ? petitcureEps.Max(e => (int)e.EpNo) : 0);
 
         // JSON-LD（TVSeries / Movie）
         // 後段：略称（series.title_short）は生成・UI ともに一切使わない方針。
@@ -1660,13 +1661,14 @@ public sealed class SeriesGenerator
     /// シリーズ詳細の meta description。「2004 年 2 月放送開始の TV シリーズ（全 49 話）。キュアブラック（声：本名 陽子）、キュアホワイト（声：ゆかな）ほか」
     /// の形で 150 字ほどに収める（作品名はページ名に出ているので入れない）。
     /// 話数が見込み（<paramref name="episodesEstimated"/>）の作品は、本文の「（見込）」と同じく言い切らずに「（全 50 話の見込み）」とする。
-    /// YouTube で配信するショートアニメ（<paramref name="isWebShort"/>。ぷちきゅあ）は「2025 年 4 月配信開始のショートアニメ」とする。
+    /// YouTube で配信するショートアニメ（<paramref name="isWebShort"/>。ぷちきゅあ）は「2025 年 4 月配信開始のショートアニメ（#86 まで配信）」とする（配信した最新の話数は <paramref name="webShortLatestEpNo"/>）。
     /// </summary>
     private static string BuildSeriesMetaDescription(
         Series s,
         IReadOnlyList<SeriesPrecureRow> precureRows,
         bool episodesEstimated,
-        bool isWebShort = false)
+        bool isWebShort = false,
+        int webShortLatestEpNo = 0)
     {
         const int targetMaxChars = 150;
         bool isMovie = s.KindCode == "MOVIE" || s.KindCode == "MOVIE_SHORT" || s.KindCode == "SPRING";
@@ -1688,6 +1690,9 @@ public sealed class SeriesGenerator
         else
         {
             sb.Append(isWebShort ? "配信開始のショートアニメ" : "放送開始の TV シリーズ");
+            // 配信中のショートアニメは、配信した最新の話数を添える（「（#86 まで配信）」）。
+            if (isWebShort && webShortLatestEpNo > 0)
+                sb.Append("（#").Append(webShortLatestEpNo).Append(" まで配信）");
             if (s.Episodes.HasValue && s.Episodes.Value > 0)
                 sb.Append("（全 ").Append(s.Episodes.Value).Append(episodesEstimated ? " 話の見込み）" : " 話）");
         }

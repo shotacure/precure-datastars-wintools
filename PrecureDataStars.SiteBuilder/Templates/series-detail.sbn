@@ -46,6 +46,14 @@
     {{~ yt_eager = false ~}}
   </div>
   {{~ end ~}}
+  {{~ if PetitcureLatestVideoId != "" ~}}
+  {{## ぷちきゅあ（話を専用の表に持つ作品）のいちばん新しい話の動画。本予告と同じく見出しなしで基本情報の前に置く。 ##}}
+  <div class="youtube-trailer">
+    {{~ yt_id = PetitcureLatestVideoId; yt_title = PetitcureLatestVideoTitle; yt_eager = true ~}}
+    {{ include '_youtube-facade.sbn' }}
+    {{~ yt_eager = false ~}}
+  </div>
+  {{~ end ~}}
 
   {{## 基本情報はエピソード詳細と同じファクトタイル表現（旧: 縦テーブル）。
        タイトルは長くなり得るのでタイル値の折返しを許可する（is-wrap）。 ##}}
@@ -74,6 +82,13 @@
       <div class="fact">
         <span class="fact-label">{{ Series.RunTimeLabel }}</span>
         <span class="fact-value">{{ Series.RunTimeSeconds }}</span>
+      </div>
+      {{~ end ~}}
+      {{~ if PetitcureScheduleLabel != "" ~}}
+      {{## ぷちきゅあ（話を専用の表に持つ作品）の配信の曜日と時刻（「毎週木曜 18:30」）。各話のページを持たないので、時刻はここに出す。 ##}}
+      <div class="fact">
+        <span class="fact-label">配信</span>
+        <span class="fact-value">{{ PetitcureScheduleLabel }}</span>
       </div>
       {{~ end ~}}
     </div>
@@ -161,7 +176,7 @@
     <h2>メインスタッフ</h2>
     {{~ for ks in KeyStaffSections ~}}
     <div class="key-staff-line">
-      <a class="role-badge role-badge-sm" data-role-code="{{ ks.RoleCode }}"{{ if ks.BadgeStyle != "" }} style="{{ ks.BadgeStyle }}"{{ end }} href="{{ ks.RoleUrl }}">{{ ks.RoleLabel | html.escape }}</a>
+      {{ if ks.RoleUrl != "" }}<a class="role-badge role-badge-sm" data-role-code="{{ ks.RoleCode }}"{{ if ks.BadgeStyle != "" }} style="{{ ks.BadgeStyle }}"{{ end }} href="{{ ks.RoleUrl }}">{{ ks.RoleLabel | html.escape }}</a>{{ else }}<span class="role-badge role-badge-sm"{{ if ks.BadgeStyle != "" }} style="{{ ks.BadgeStyle }}"{{ end }}>{{ ks.RoleLabel | html.escape }}</span>{{ end }}
       {{~ if ks.NamesSharedWithPrevious == false ~}}
       <span class="key-staff-names"{{ if ks.NamesRowSpan > 1 }} style="grid-row: span {{ ks.NamesRowSpan }}; align-self: center;"{{ end }}>{{~ for m in ks.Members ~}}<span class="staff-member-group"><a class="key-staff-name" href="{{ person_url m.PersonId }}">{{ m.FullName | html.escape }}</a>{{~ if m.CurrentNameNote != "" ~}}<wbr><span class="staff-current-name"> ({{ m.CurrentNameNote | html.escape }})</span>{{~ end ~}}{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if m.RangeLabel != "" ~}}<wbr><span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}</span>{{~ end ~}}</span>
       {{~ end ~}}
@@ -255,6 +270,42 @@
   <script src="{{ asset_url "/assets/art-track-player.js" }}" defer></script>
   {{~ end ~}}
   {{~ end ~}}
+  {{~ if (array.size PetitcureEpisodes) > 0 ~}}
+  {{## ぷちきゅあ（話を専用の表に持つ作品）のエピソード一覧。主題歌の後、スタッフの前に置く（TV の作品と同じく 主題歌 → エピソード一覧 の順）。
+       1 本の動画を 1 行で並べる（1 本に 2 話入る動画は「#1・#2」の 1 行。列は行をまたいでそろえる）。いちばん新しい話の動画はページの頭に埋め込む。
+       列は 話数・公開の日付・長さ・YouTube の動画へのリンク・題の飾りの言葉。動画は 1 本ずつ埋め込まない
+       （話の数だけサムネイルを読むと重くなるため）。各話の詳細ページは無いので、話数はリンクにしない。
+       この作品では、下の通常のエピソード一覧は出さない。 ##}}
+  <section id="episode-list">
+    <h2>エピソード一覧</h2>
+    <ol class="petitcure-ep-list">
+      {{~ for e in PetitcureEpisodes ~}}
+      <li class="petitcure-ep">
+        <span class="petitcure-ep-no">{{ e.EpLabel }}</span>
+        <span class="petitcure-ep-published">{{ e.PublishedLabel }}</span>
+        <span class="petitcure-ep-duration">{{ e.DurationLabel }}</span>
+        <span class="petitcure-ep-video">{{~ if e.VideoUrl != "" ~}}<a class="external-link external-link-youtube" href="{{ e.VideoUrl }}" target="_blank" rel="noopener">YouTube</a>{{~ end ~}}</span>
+        <span class="petitcure-ep-note">{{ e.Decoration | html.escape }}</span>
+      </li>
+      {{~ end ~}}
+    </ol>
+  </section>
+  {{~ end ~}}
+  {{~ if (array.size PetitcureStaff) > 0 ~}}
+  {{## ぷちきゅあのスタッフ（YouTube の動画の概要欄の「今回のスタッフ」から）。
+       メインスタッフと同じ 2 列の組み（左に役職、右に名前）。役職は概要欄の役職名を「・」で分けたもので、役職詳細へはリンクしない。
+       名前は名義があれば詳細ページへのリンク、無ければ書かれたままの文字で、1 人ずつ行を分ける（「、」でつながない）。
+       全話を担当した名前は話数を添えない。 ##}}
+  <section id="petitcure-staff">
+    <h2>スタッフ</h2>
+    {{~ for ps in PetitcureStaff ~}}
+    <div class="key-staff-line">
+      <span class="role-badge role-badge-sm petitcure-role">{{ ps.RoleLabel | html.escape }}</span>
+      <span class="key-staff-names">{{~ for m in ps.Members ~}}<span class="staff-member-group">{{ m.NameHtml }}{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if m.RangeLabel != "" ~}}<wbr><span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}</span>{{~ end ~}}</span>
+    </div>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
 
   {{## SERIES スコープのクレジット階層。EpisodeGenerator と同一の credit-section 構造で、
        credit_kind 単位（OP / ED / 特典等）に h3 見出し + 描画済み HTML を並べる。
@@ -311,7 +362,7 @@
        サブタイトルは共通の .ep-row-title（CSS で太字）。TitleDisplayHtml はルビ付き優先・
        無ければエスケープ平文で、未解禁なら subtitle-embargo.js 用のガード span 込み。絵コンテ＝演出が同一人物
        の回は、札（StaffBadges）の中でバッジ 2 個並び + 名前 1 回に統合済み。 ##}}
-  {{~ if Series.HasEpisodeList ~}}
+  {{~ if Series.HasEpisodeList && (array.size PetitcureEpisodes) == 0 ~}}
   <section id="episode-list">
     <h2>エピソード一覧</h2>
     {{~ if (array.size Episodes) == 0 ~}}

@@ -7,6 +7,9 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// <summary>役職別の関与グループ（行構造はシリーズ単位 + 話数圧縮）。</summary>
 internal sealed class InvolvementGroup
 {
+    /// <summary>浅い写し（表示用に行を足すとき、元の欄を年表・説明文の組み立てに使ったまま残すため）。</summary>
+    internal InvolvementGroup ShallowCopy() => (InvolvementGroup)MemberwiseClone();
+
     public string RoleCode { get; set; } = "";
     public string RoleLabel { get; set; } = "";
     /// <summary>役職統計ページ（/creators/roles/{code}/）への URL。役職コードが空（カテゴリプレフィックス + 役職なし）のときは空文字。</summary>

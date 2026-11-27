@@ -457,8 +457,9 @@ public sealed class MusicGenerator
             var firstEpisode = _ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)
                 ? eps.FirstOrDefault(e => e.SeriesEpNo == 1)
                 : null;
-            if (firstEpisode is null
-                || !_ctx.CreditsByEpisode.TryGetValue(firstEpisode.EpisodeId, out var epCredits))
+            // 放送の話の無い作品（ぷちきゅあ）は、YouTube の動画の概要欄のスタッフの「音楽」を使う。
+            if (firstEpisode is null) return BuildBgmStaffFromPetitcure(s, singlePersonIdByAlias);
+            if (!_ctx.CreditsByEpisode.TryGetValue(firstEpisode.EpisodeId, out var epCredits))
                 return null;
             credits = epCredits.Where(c => string.Equals(c.CreditKind, "OP", StringComparison.Ordinal));
         }
@@ -503,6 +504,45 @@ public sealed class MusicGenerator
             }
         }
 
+        if (members.Count == 0) return null;
+        return new[]
+        {
+            new BgmStaffGroup
+            {
+                Roles = new[] { new BgmRoleBadge { RoleCode = MainCreditMusicRoleCode, RoleLabel = "音楽" } },
+                Members = members
+            }
+        };
+    }
+
+    /// <summary>
+    /// ぷちきゅあ（話を専用の表に持つ作品）の劇伴のスタッフ行。動画の概要欄のスタッフのうち役職「音楽」の名前を、
+    /// 最初に出た順に [音楽] の 1 グループで返す（本編クレジットの「音楽」と同じ出し方）。無ければ null。
+    /// </summary>
+    private IReadOnlyList<BgmStaffGroup>? BuildBgmStaffFromPetitcure(
+        Series s,
+        IReadOnlyDictionary<int, int> singlePersonIdByAlias)
+    {
+        if (!_ctx.Petitcure.StaffBySeries.TryGetValue(s.SeriesId, out var staff)) return null;
+        var members = new List<BgmKeyStaffEntry>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var row in staff.Where(r => PetitcureSectionBuilder.RoleParts(r.RoleLabelText).Contains("音楽")))
+        {
+            if (row.PersonAliasId is int aliasId && _ctx.PersonAliasById.TryGetValue(aliasId, out var alias))
+            {
+                if (!seen.Add($"alias:{aliasId}")) continue;
+                members.Add(new BgmKeyStaffEntry
+                {
+                    Name = alias.GetDisplayName(),
+                    PersonId = singlePersonIdByAlias.TryGetValue(aliasId, out var personId) ? personId : null
+                });
+            }
+            else
+            {
+                if (!seen.Add($"text:{row.NameText}")) continue;
+                members.Add(new BgmKeyStaffEntry { Name = row.NameText, PersonId = null });
+            }
+        }
         if (members.Count == 0) return null;
         return new[]
         {

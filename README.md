@@ -1264,6 +1264,20 @@ DB の各表の備考（`notes` 列。企業・商品・人物・ユニット・
 
 楽曲詳細（`/songs/{id}/`）の各録音セクション（h2 の直下、歌・出典の行より上）と、シリーズ詳細「主題歌・挿入歌」の `ts-card`（見出し行の直下）には、録音の `youtube_url` から抽出した動画 ID で YouTube の動画（560×315、狭幅では 100% 幅・16:9、`div.youtube-embed`）を置く。エピソード予告と同じ置き場（`_youtube-facade.sbn`）で、最初はサムネイルと再生ボタンだけを出し、押されたら `yt-facade.js` が埋め込みのプレイヤー（自動再生つき）に差し替える（プレイヤーの JS を押されるまで読まない。スクリプトが動かない環境では `<noscript>` のプレイヤーを出す）。サムネイルは後回しで読む（`loading="lazy"`）。ただし、ページの最初の画面に出るエピソード詳細の次回予告と作品詳細の本予告は、呼ぶ側で `yt_eager` を立てて先に読む（`fetchpriority="high"`。スマホではこれがいちばん大きい要素になる）。URL 未登録または ID を抽出できない録音には何も出さない。動画 ID の抽出はエピソード予告と共通の `YoutubeUtil.ExtractId`。
 
+##### ショートアニメ「ぷちきゅあ」の作品詳細と、人物・企業/団体の詳細
+
+ぷちきゅあは YouTube で配信する短い作品で、話・動画・スタッフを専用の表（下の「ぷちきゅあ系テーブル」）に持ち、`PetitcureIndex` に読み込む。この索引は本編クレジットの関与索引（`CreditInvolvementIndex`）にも音楽クレジットの索引にも混ぜない。そのため、担当の数の札・OGP カード・初担当・年表・説明文・クリエイターの一覧・役職詳細のどれにも入らない。表示の行は `PetitcureSectionBuilder` で組む。役職は概要欄の役職名を「・」で分けたもの（「コンテ・演出」は「コンテ」と「演出」の両方に入る）で、役職詳細へはリンクしない。
+
+- 作品詳細（`/series/petitcure/`）は、いちばん新しい話の動画（ページの先頭）→ 基本情報 → メインスタッフ → 主題歌・挿入歌 → エピソード一覧 → スタッフ、の順に出す。
+  - 基本情報の「配信」の欄には話の動画の公開の時刻のうち、いちばん多い曜日と時刻を「毎週木曜 18:30」の形で出す。
+  - メインスタッフはシリーズ構成・ディレクター・コンセプトアート・音楽の 4 つ（`PetitcureSectionBuilder.KeyStaffSpecs`。札の色は TV の同じ系統の役職にそろえる）。人物の名義につながった名前だけを出す。作品一覧のカードにも同じ顔ぶれを出す。
+  - 主題歌・挿入歌は話を持たないので映画と同じく `series_theme_songs` から引く。
+  - エピソード一覧は 1 本の動画を 1 行にして、話数（`#1・#2` のように 1 本に入る話をまとめる）・公開の日付・長さ・YouTube の動画へのリンク・題に付く飾りの言葉を並べる。列は行をまたいでそろえる（`grid-template-columns: subgrid`）。各話の詳細ページは作らない。
+  - スタッフは役職ごとに 1 行で、名前を 1 人ずつ行を分けて並べ、全話を担当していない名前には担当した話数を添える。名前は名義につながっていれば人物・企業/団体の詳細へリンクし、つながっていなければ書かれたままの文字で出す。
+  - meta description は「2025年4月配信開始のショートアニメ」の形にする。
+- 人物・企業/団体の詳細では本編クレジットの役職の欄にぷちきゅあのカードを混ぜる（`PetitcureSectionBuilder.MergeIntoGroups`）。同じ名前の役職の欄があればそこへ作品の開始日の順に入れ、無ければ同じ形の欄を後ろに足す。混ぜるのは表示用の写しだけで、年表・説明文・構造化データの役職は本編クレジットだけの欄から作る。企業/団体のメンバー履歴にはその企業・団体を所属として添えて載る人も混ぜる。
+- 劇伴の一覧のカードの作家は本編クレジットの「音楽」の代わりに、概要欄のスタッフの「音楽」を [音楽] で出す。
+
 ##### 継続中シリーズと放送見込み（未完）表記
 
 `series_kinds.credit_attach_to='EPISODE'` のシリーズ（TV / SPIN-OFF / OTONA / SHORT）は、終了日（`end_date`）が未設定なら期間を「2025年2月2日 〜」と「〜」止めで継続中を示す（`JpDateFormat.PeriodOrOngoing`）。`credit_attach_to='SERIES'` のシリーズ（MOVIE / MOVIE_SHORT / SPRING / EVENT）は単一時点扱いで `end_date` が `NULL` でも開始日単独表記のまま。シリーズ詳細ページの基本情報テーブル左セルも同じ方針に揃え、EPISODE 系は「期間」、SERIES 系は「公開」を `<th>` に出す。
@@ -2452,6 +2466,51 @@ PlayItem が参照するのに CLIPINF の無いクリップは、`bd_clips` に
 **Amazon から取り込める属性**: Creators API の拡張リソースで、寄与者（ロール付き全件）・出版社・ページ数・装丁・出版日・ISBN・カテゴリが取れる。ISBN-13 は `externalIds.eans` から採り、接頭辞 978 / 979 を持つものだけを受け入れる（ムック等では書籍 JAN が返るため）。**紙の価格は取り込まない**：`offersV2` が返すのは現在の出品価格であって定価ではなく、絶版書ではマーケットプレイスの中古値が乗る。Kindle の価格も取り込まない：Amazon の売値で、Creators API 使用要件は画像でない内容の保存を最長 24 時間に限り、表示するなら取得時刻と免責の文を隣に出すよう求める。サイトは書籍の価格（紙・Kindle とも）を詳細ページ・一覧・ホームのカード・OGP カードのどこにも出さない。
 
 ---
+
+### ぷちきゅあ系テーブル
+
+ショートアニメ「ぷちきゅあ」（YouTube で配信、サブタイトルなし、スタッフは動画の概要欄に記載）の話・動画・スタッフを持つ 4 表。放送の話（`episodes`）と画面のクレジット（`credits` から始まる 6 階層）には入れない。人物・企業/団体の名義だけ既存の `person_aliases` / `company_aliases` につなぐ。行は SQL で入れる（マイグレーションは `db/migrations/v1.22.1_add_petitcure_tables.sql`）。
+
+#### `petitcure_episodes` — 話
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `petitcure_episode_id` | INT PK AUTO_INCREMENT | 話の ID |
+| `series_id` | INT FK → `series` | 作品 |
+| `ep_no` | SMALLINT UNSIGNED | 作品の中の話数（`series_id` と組で一意） |
+| `title_decoration` | VARCHAR(255) NULL | YouTube の題に付く飾りの言葉（「【おやすみ用】眠れない夜に…」など） |
+
+#### `petitcure_videos` — YouTube の動画
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `video_id` | VARCHAR(16) PK | YouTube の動画 ID（大文字小文字を区別） |
+| `channel` | ENUM | `PETITCURE`（ぷちきゅあ公式チャンネル）/ `PRECURE_OFFICIAL`（プリキュア公式YouTubeチャンネル）/ `TOEI_ANIMATION` |
+| `video_kind` | ENUM | `MAIN`（通常の動画）/ `SHORT`（ショート動画） |
+| `title_text` | VARCHAR(255) | YouTube の題（そのまま） |
+| `published_at` | DATETIME | 公開の時刻（日本時間、秒まで） |
+| `duration_seconds` | INT UNSIGNED NULL | 長さ（秒） |
+| `description_text` | TEXT NULL | 概要欄の全文（スタッフの出典。サイトには出さない） |
+| `fetched_at` | DATETIME NULL | 題・概要欄を取った日時 |
+
+#### `petitcure_video_episodes` — 動画 ↔ 話
+
+`video_id` と `petitcure_episode_id` の組（PK）。1 本に 2 話入る動画は 2 行になる。
+
+#### `petitcure_video_staff` — 動画の概要欄のスタッフ
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `staff_id` | INT PK AUTO_INCREMENT | 行の ID |
+| `video_id` | VARCHAR(16) FK → `petitcure_videos` | 動画 |
+| `display_order` | SMALLINT UNSIGNED | 概要欄の中の並び順（`video_id` と組で一意） |
+| `role_label_text` | VARCHAR(64) | 概要欄の役職名（書かれたまま。「コンテ・演出」など） |
+| `role_code` | VARCHAR(64) NULL FK → `roles` | 役職マスタの役職（使っていない。役職は書かれたままの文字で出す） |
+| `name_text` | VARCHAR(255) | 概要欄の名前（書かれたまま） |
+| `person_alias_id` | INT NULL FK → `person_aliases` | 人物の名義 |
+| `company_alias_id` | INT NULL FK → `company_aliases` | 企業/団体の名義（人物の名義と両方は埋めない。参照アクション付きの列は CHECK に使えないので登録側で守る） |
+| `affiliation_text` | VARCHAR(255) NULL | 名前に添えた所属（書かれたまま。括弧は除く） |
+| `affiliation_company_alias_id` | INT NULL FK → `company_aliases` | 所属の企業/団体の名義 |
 
 ### ディスク照合ロジック
 

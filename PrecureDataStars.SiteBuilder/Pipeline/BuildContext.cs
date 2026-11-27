@@ -234,6 +234,12 @@ public sealed class BuildContext
     /// </summary>
     public required IReadOnlyDictionary<int, IReadOnlyList<SeriesRelatedLink>> RelatedLinksBySeries { get; init; }
 
+    /// <summary>
+    /// ショートアニメ「ぷちきゅあ」の話・動画・概要欄のスタッフの索引。本編クレジットの関与索引とは別に持ち、
+    /// 作品詳細と人物・企業の詳細の専用の節だけが引く（集計には入れない）。
+    /// </summary>
+    public required PetitcureIndex Petitcure { get; init; }
+
 
     /// <summary>
     /// 販売中の商品の枠の置き場を出す作品の ID（手で入れた行か、候補の音楽商品がある作品）。

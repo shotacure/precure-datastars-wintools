@@ -544,6 +544,10 @@ public sealed class PersonsGenerator
         // 人物でも、クレジットされた当時の名義が分かるようにする。それ以外はテンプレ側が involvementGroups のフラット表示を使う。
         var involvementSections = BuildPersonAliasInvolvementSections(creditAliasIds, aliasById, displayName);
 
+        // 表示用の欄には、ぷちきゅあ（YouTube の動画の概要欄のスタッフ）の行も混ぜる（PetitcureSectionBuilder.MergeIntoGroups）。
+        // 年表・説明文・構造化データの役職・担当の数・OGP カードは、上の本編クレジットだけの欄と関与から作る（ぷちきゅあを数えない）。
+        var (displayGroups, displaySections) = MergePetitcure(aliasIds, aliasById, involvementGroups, involvementSections);
+
         // クレジット合計バッジは role 別 EpisodeCount の単純合算ではなく distinct 話数・本数で出す。
         // 同一名義が同じ話数に複数役職でクレジットされている場合、role ごとの EpisodeCount を
         // 合算すると同じ話数を二重に数えてしまうため、全名義の関与を再度 InvolvementRowBuilder に
@@ -597,15 +601,15 @@ public sealed class PersonsGenerator
                 PortfolioUrl = person.PortfolioUrl ?? "",
                 WikipediaUrl = person.WikipediaUrl ?? ""
             },
-            InvolvementGroups = involvementGroups,
-            InvolvementSections = involvementSections,
+            InvolvementGroups = displayGroups,
+            InvolvementSections = displaySections,
             CreditEpisodeCountTotal = creditEpisodeCountTotal,
             CreditMovieCountTotal = creditMovieCountTotal,
             CreditOtonaEpisodeCountTotal = creditOtonaEpisodeCountTotal,
             CreditTimeline = creditTimeline,
             Timeline = creditTimeline?.Timeline,
             MusicSections = musicSections,
-            NotableWorks = _notableWorksByPerson!.TryGetValue(person.PersonId, out var works)
+            NotableWorks =_notableWorksByPerson!.TryGetValue(person.PersonId, out var works)
                 ? works
                 : Array.Empty<NotableWorkView>(),
             PositionGroups = _positionGroupsByPerson!.TryGetValue(person.PersonId, out var positionGroups)
@@ -938,6 +942,46 @@ public sealed class PersonsGenerator
             ValidFrom = JpDateFormat.NullableDate(a.ValidFrom),
             ValidTo = JpDateFormat.NullableDate(a.ValidTo),
         }).ToList();
+    }
+
+    /// <summary>
+    /// 人物詳細の表示用の役職の欄に、ぷちきゅあの行を混ぜる。名義ごとの節に分けて出す人物は、その名義の節に混ぜる
+    /// （節が無い名義は、その名義の節を後ろに足す）。渡された欄・節は書き換えない。ぷちきゅあの行が無ければそのまま返す。
+    /// </summary>
+    private (IReadOnlyList<InvolvementGroup> Groups, IReadOnlyList<AliasInvolvementSection> Sections) MergePetitcure(
+        IReadOnlyList<int> aliasIds,
+        IReadOnlyDictionary<int, PersonAlias> aliasById,
+        IReadOnlyList<InvolvementGroup> groups,
+        IReadOnlyList<AliasInvolvementSection> sections)
+    {
+        var rowsByAlias = aliasIds
+            .Where(_ctx.Petitcure.StaffByPersonAlias.ContainsKey)
+            .Select(id => (AliasId: id, Rows: _ctx.Petitcure.StaffByPersonAlias[id]))
+            .ToList();
+        if (rowsByAlias.Count == 0) return (groups, sections);
+
+        var mergedGroups = PetitcureSectionBuilder.MergeIntoGroups(_ctx, groups, rowsByAlias.SelectMany(x => x.Rows));
+        if (sections.Count == 0) return (mergedGroups, sections);
+
+        var mergedSections = sections.ToList();
+        foreach (var (aliasId, rows) in rowsByAlias)
+        {
+            string aliasName = aliasById.TryGetValue(aliasId, out var a) ? (a.DisplayTextOverride ?? a.Name) : "";
+            int index = mergedSections.FindIndex(x => string.Equals(x.AliasName, aliasName, StringComparison.Ordinal));
+            var section = index < 0
+                ? new AliasInvolvementSection { AliasName = aliasName }
+                : new AliasInvolvementSection
+                {
+                    AliasName = mergedSections[index].AliasName,
+                    Groups = mergedSections[index].Groups,
+                    EpisodeCount = mergedSections[index].EpisodeCount,
+                    MovieCount = mergedSections[index].MovieCount,
+                    OtonaEpisodeCount = mergedSections[index].OtonaEpisodeCount,
+                };
+            section.Groups = PetitcureSectionBuilder.MergeIntoGroups(_ctx, section.Groups, rows);
+            if (index < 0) mergedSections.Add(section); else mergedSections[index] = section;
+        }
+        return (mergedGroups, mergedSections);
     }
 
     /// <summary>

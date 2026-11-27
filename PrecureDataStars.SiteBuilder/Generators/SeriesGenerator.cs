@@ -685,10 +685,19 @@ public sealed class SeriesGenerator
     /// <summary>指定シリーズのメインスタッフサマリ（役職グループのリスト）を返す。 データ無しのときは空リストを返す。</summary>
     private IReadOnlyList<KeyStaffRoleGroup> GetKeyStaffSummary(int seriesId)
     {
-        if (_keyStaffSummaryBySeriesCache is null) return Array.Empty<KeyStaffRoleGroup>();
-        return _keyStaffSummaryBySeriesCache.TryGetValue(seriesId, out var g)
-            ? g
-            : Array.Empty<KeyStaffRoleGroup>();
+        if (_keyStaffSummaryBySeriesCache is not null && _keyStaffSummaryBySeriesCache.TryGetValue(seriesId, out var g))
+            return g;
+        // 本編クレジットの無いぷちきゅあは、YouTube の動画の概要欄のスタッフから組む（役職詳細へはリンクしない）。
+        return PetitcureSectionBuilder.BuildKeyStaff(_ctx, seriesId)
+            .Select(line => new KeyStaffRoleGroup
+            {
+                RoleLabel = line.RoleLabel,
+                BadgeStyle = RoleBadgeColor.InlineStyle(line.Color),
+                Members = line.Members
+                    .Select(m => new KeyStaffMember { PersonId = m.PersonId, DisplayName = m.Name, AffiliationLabel = m.AffiliationLabel })
+                    .ToList()
+            })
+            .ToList();
     }
 
     /// <summary>
@@ -1159,6 +1168,12 @@ public sealed class SeriesGenerator
             }
         }
 
+        // ぷちきゅあ（話・動画・概要欄のスタッフを専用の表に持つ作品）。放送の話の表には話が無いので、
+        // エピソード一覧とスタッフは専用の索引から組む。どの数にも入れない。
+        var petitcureEpisodeRows = PetitcureSectionBuilder.BuildEpisodeRows(_ctx, s.SeriesId);
+        var petitcureLatest = PetitcureSectionBuilder.LatestVideo(_ctx, s.SeriesId);
+        var petitcureStaffLines = PetitcureSectionBuilder.BuildStaffLines(_ctx, s.SeriesId);
+
         // 関連シリーズ（自分が親で、配下にいる作品）を 2 つのカテゴリに分ける。
         if (_relationKindReverseLabelMapCache is null || _relationKindForwardLabelMapCache is null)
         {
@@ -1300,6 +1315,21 @@ public sealed class SeriesGenerator
 
         // メインスタッフセクション。
         var keyStaffSections = await BuildMainStaffSectionsAsync(s, eps, ct).ConfigureAwait(false);
+        // 本編クレジットの無いぷちきゅあは、YouTube の動画の概要欄のスタッフからメインスタッフを組む（役職詳細へはリンクしない）。
+        if (keyStaffSections.Count == 0)
+        {
+            keyStaffSections = PetitcureSectionBuilder.BuildKeyStaff(_ctx, s.SeriesId)
+                .Select(line => new KeyStaffSection
+                {
+                    RoleLabel = line.RoleLabel,
+                    BadgeColor = line.Color,
+                    BadgeStyle = RoleBadgeColor.InlineStyle(line.Color),
+                    Members = line.Members
+                        .Select(m => new MainStaffRow { PersonId = m.PersonId, FullName = m.Name, AffiliationLabel = m.AffiliationLabel, RangeLabel = m.RangeLabel })
+                        .ToList()
+                })
+                .ToList();
+        }
         MarkSharedKeyStaffNames(keyStaffSections);
         var keyStaffCounts = BuildMovieKeyStaffCounts(s, keyStaffSections);
 
@@ -1352,10 +1382,11 @@ public sealed class SeriesGenerator
         //   - 映画系列（series_kinds.credit_attach_to='SERIES'）……series_theme_songs をそのまま使う
         //   - エピソードを持つ系列（同 'EPISODE'：TV / SPIN-OFF / OTONA / SHORT）
         //     ……episode_theme_songs をシリーズ単位に集約し、使用話数を範囲ラベルとして添える
+        //   - 話を専用の表に持つ作品（ぷちきゅあ）……放送の話が無いので、映画系列と同じく series_theme_songs を使う
         // 後者は BuildContext.ThemeSongsByEpisode（SiteDataLoader が全件展開済み）だけで完結するので
         // DB 往復は発生しない。
         IReadOnlyList<ThemeSongDescriptor> themeDescriptors;
-        if (hasEpisodes)
+        if (hasEpisodes && petitcureEpisodeRows.Count == 0)
         {
             themeDescriptors = ThemeSongSeriesAggregator.Build(eps, _ctx.ThemeSongsByEpisode);
         }
@@ -1438,6 +1469,11 @@ public sealed class SeriesGenerator
             RelatedArticles = BuildRelatedArticles(s),
             BgmLinks = bgmLinks,
             Episodes = epRows,
+            PetitcureEpisodes = petitcureEpisodeRows,
+            PetitcureLatestVideoId = petitcureLatest?.VideoId ?? "",
+            PetitcureLatestVideoTitle = petitcureLatest?.TitleText ?? "",
+            PetitcureStaff = petitcureStaffLines,
+            PetitcureScheduleLabel = PetitcureSectionBuilder.ScheduleLabel(_ctx, s.SeriesId),
             RelatedWorks = relatedWorks,
             Parent = parent,
             KeyStaffSections = keyStaffSections,
@@ -1459,7 +1495,7 @@ public sealed class SeriesGenerator
         // 説明文を実データから動的構築する。
         // 「シリーズ名・放送開始年・話数・主役プリキュア声優」を含めて、SERP / OGP / Twitter Card で
         // シリーズ単位の個別性が立つようにする。140 字目安。
-        var metaDescription = BuildSeriesMetaDescription(s, precureRows, seriesEstimated);
+        var metaDescription = BuildSeriesMetaDescription(s, precureRows, seriesEstimated, petitcureEpisodeRows.Count > 0);
 
         // JSON-LD（TVSeries / Movie）
         // 後段：略称（series.title_short）は生成・UI ともに一切使わない方針。
@@ -1624,20 +1660,24 @@ public sealed class SeriesGenerator
     /// シリーズ詳細の meta description。「2004 年 2 月放送開始の TV シリーズ（全 49 話）。キュアブラック（声：本名 陽子）、キュアホワイト（声：ゆかな）ほか」
     /// の形で 150 字ほどに収める（作品名はページ名に出ているので入れない）。
     /// 話数が見込み（<paramref name="episodesEstimated"/>）の作品は、本文の「（見込）」と同じく言い切らずに「（全 50 話の見込み）」とする。
+    /// YouTube で配信するショートアニメ（<paramref name="isWebShort"/>。ぷちきゅあ）は「2025 年 4 月配信開始のショートアニメ」とする。
     /// </summary>
     private static string BuildSeriesMetaDescription(
         Series s,
         IReadOnlyList<SeriesPrecureRow> precureRows,
-        bool episodesEstimated)
+        bool episodesEstimated,
+        bool isWebShort = false)
     {
         const int targetMaxChars = 150;
         bool isMovie = s.KindCode == "MOVIE" || s.KindCode == "MOVIE_SHORT" || s.KindCode == "SPRING";
+        // 話を専用の表に持つ作品（ぷちきゅあ）は YouTube で配信するショートアニメ。
+        string kindPhrase = isWebShort ? "のショートアニメ" : "の TV シリーズ";
 
         var sb = new System.Text.StringBuilder();
         if (!s.IsStartDateExact)
         {
             // 開始日が年や年月までしか確かでない作品：「2027年放送予定の TV シリーズ」「2027年7月公開予定の映画」
-            sb.Append(JpDateFormat.PlannedStart(s, broadcast: !isMovie)).Append(isMovie ? "の映画" : "の TV シリーズ");
+            sb.Append(JpDateFormat.PlannedStart(s, broadcast: !isMovie)).Append(isMovie ? "の映画" : kindPhrase);
             return sb.ToString();
         }
         sb.Append(s.StartDate.Year).Append('年').Append(s.StartDate.Month).Append('月');
@@ -1647,7 +1687,7 @@ public sealed class SeriesGenerator
         }
         else
         {
-            sb.Append("放送開始の TV シリーズ");
+            sb.Append(isWebShort ? "配信開始のショートアニメ" : "放送開始の TV シリーズ");
             if (s.Episodes.HasValue && s.Episodes.Value > 0)
                 sb.Append("（全 ").Append(s.Episodes.Value).Append(episodesEstimated ? " 話の見込み）" : " 話）");
         }
@@ -2284,6 +2324,18 @@ public sealed class SeriesGenerator
         public IReadOnlyList<RelatedArticleRow> RelatedArticles { get; set; } = Array.Empty<RelatedArticleRow>();
         /// <summary>「劇伴」節のボタン（劇伴一覧ページがある自作品・子作品の分）。空なら節ごと出さない。</summary>
         public IReadOnlyList<BgmLinkRow> BgmLinks { get; set; } = Array.Empty<BgmLinkRow>();
+        /// <summary>
+        /// ぷちきゅあ（専用の表に話を持つ作品）の「エピソード一覧」の行。空なら通常のエピソード一覧（<see cref="Episodes"/>）を出す。
+        /// </summary>
+        public IReadOnlyList<PetitcureEpisodeRow> PetitcureEpisodes { get; set; } = Array.Empty<PetitcureEpisodeRow>();
+        /// <summary>ぷちきゅあの基本情報の「配信」の欄（「毎週木曜 18:30」）。無ければ空（欄を出さない）。</summary>
+        public string PetitcureScheduleLabel { get; set; } = "";
+        /// <summary>ぷちきゅあのページの頭に埋め込む、いちばん新しい話の動画の ID。無ければ空。</summary>
+        public string PetitcureLatestVideoId { get; set; } = "";
+        /// <summary>上の動画の題（埋め込みの title と再生ボタンの読み上げに使う）。</summary>
+        public string PetitcureLatestVideoTitle { get; set; } = "";
+        /// <summary>ぷちきゅあの「スタッフ」の節の行（概要欄の役職名ごと）。空なら節ごと出さない。</summary>
+        public IReadOnlyList<PetitcureStaffLine> PetitcureStaff { get; set; } = Array.Empty<PetitcureStaffLine>();
         public IReadOnlyList<EpisodeIndexRow> Episodes { get; set; } = Array.Empty<EpisodeIndexRow>();
         /// <summary>
         /// 「関連作品」セクション用。

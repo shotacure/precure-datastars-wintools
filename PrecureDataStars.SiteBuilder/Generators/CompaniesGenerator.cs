@@ -257,6 +257,10 @@ public sealed class CompaniesGenerator
         // (人物 × 所属屋号 × シリーズ) の 3 軸で 1 行ずつまとめて、シリーズ放送開始日 → 人物読み の順で並べる。
         var memberHistory = BuildMemberHistory(aliases);
 
+        // 表示用の欄には、ぷちきゅあ（YouTube の動画の概要欄のスタッフ）の行も混ぜる（PetitcureSectionBuilder.MergeIntoGroups）。
+        // 年表・説明文・担当の数・OGP カードは、本編クレジットだけの欄と関与から作る（ぷちきゅあを数えない）。
+        var (displayGroups, displaySections) = MergePetitcure(aliases, groups, involvementSections);
+
         // 音盤の音楽クレジット。会社そのものが載っている行と、人物の所属として載っている行を分けて出す。
         var musicOwnRoles = BuildMusicOwnRoles(company, aliases);
         var musicMemberRoles = BuildMusicMemberRoles(company, aliases);
@@ -299,15 +303,16 @@ public sealed class CompaniesGenerator
                 WikipediaUrl = company.WikipediaUrl ?? ""
             },
             Relations = relations,
-            InvolvementGroups = groups,
-            InvolvementSections = involvementSections,
+            InvolvementGroups = displayGroups,
+            InvolvementSections = displaySections,
             CreditTimeline = creditTimeline,
             Timeline = creditTimeline?.Timeline,
             CreditEpisodeCountTotal = creditEpisodeCountTotal,
             CreditMovieCountTotal = creditMovieCountTotal,
             CreditOtonaEpisodeCountTotal = creditOtonaEpisodeCountTotal,
             LogoAliases = logoAliases,
-            MemberHistory = memberHistory,
+            // メンバー履歴には、ぷちきゅあで所属として載る人も混ぜる（担当の数には入れない）。
+            MemberHistory = MergePetitcureMembers(aliases, memberHistory),
             MusicOwnRoles = musicOwnRoles,
             MusicMemberRoles = musicMemberRoles,
             MusicTotal = musicTotal,
@@ -788,6 +793,128 @@ public sealed class CompaniesGenerator
             .Distinct(StringComparer.Ordinal)
             .ToList();
         return names.Count == 0 ? "" : $"{string.Join("・", names)} 名義";
+    }
+
+    /// <summary>
+    /// 企業・団体の詳細の表示用の役職の欄に、ぷちきゅあでこの企業・団体の名前で載る行を混ぜる。名義ごとの節に分けて出す企業・団体は、
+    /// その名義の節に混ぜる（節が無い名義は後ろに足す）。渡された欄・節は書き換えない。行が無ければそのまま返す。
+    /// </summary>
+    private (IReadOnlyList<InvolvementGroup> Groups, IReadOnlyList<AliasInvolvementSection> Sections) MergePetitcure(
+        IReadOnlyList<CompanyAlias> aliases,
+        IReadOnlyList<InvolvementGroup> groups,
+        IReadOnlyList<AliasInvolvementSection> sections)
+    {
+        var rowsByAlias = aliases
+            .Where(a => _ctx.Petitcure.StaffByCompanyAlias.ContainsKey(a.AliasId))
+            .Select(a => (Alias: a, Rows: _ctx.Petitcure.StaffByCompanyAlias[a.AliasId]))
+            .ToList();
+        if (rowsByAlias.Count == 0) return (groups, sections);
+
+        var mergedGroups = PetitcureSectionBuilder.MergeIntoGroups(_ctx, groups, rowsByAlias.SelectMany(x => x.Rows));
+        if (sections.Count == 0) return (mergedGroups, sections);
+
+        var mergedSections = sections.ToList();
+        foreach (var (alias, rows) in rowsByAlias)
+        {
+            string aliasName = alias.Name ?? "";
+            int index = mergedSections.FindIndex(x => string.Equals(x.AliasName, aliasName, StringComparison.Ordinal));
+            var section = index < 0
+                ? new AliasInvolvementSection { AliasName = aliasName }
+                : new AliasInvolvementSection
+                {
+                    AliasName = mergedSections[index].AliasName,
+                    Groups = mergedSections[index].Groups,
+                    EpisodeCount = mergedSections[index].EpisodeCount,
+                    MovieCount = mergedSections[index].MovieCount,
+                    OtonaEpisodeCount = mergedSections[index].OtonaEpisodeCount,
+                };
+            section.Groups = PetitcureSectionBuilder.MergeIntoGroups(_ctx, section.Groups, rows);
+            if (index < 0) mergedSections.Add(section); else mergedSections[index] = section;
+        }
+        return (mergedGroups, mergedSections);
+    }
+
+    /// <summary>
+    /// メンバー履歴に、ぷちきゅあでこの企業・団体を所属として添えて載る人を混ぜる。人物の名義につながった行だけを使う
+    /// （人物の詳細へリンクするため）。屋号の節 → 人物 → 役職（概要欄の役職名を「・」で分けたもの）→ 作品の形で、既にある
+    /// 人物・役職には作品を足し、無ければ足す。人物・役職・屋号の担当の数には入れない。渡された節は書き換えない。
+    /// </summary>
+    private IReadOnlyList<MemberHistoryAliasSection> MergePetitcureMembers(
+        IReadOnlyList<CompanyAlias> aliases, IReadOnlyList<MemberHistoryAliasSection> history)
+    {
+        var result = history.ToList();
+        foreach (var alias in aliases)
+        {
+            if (!_ctx.Petitcure.StaffByAffiliationCompanyAlias.TryGetValue(alias.AliasId, out var rows)) continue;
+            var byPerson = rows
+                .Where(r => r.PersonAliasId is int pa && _ctx.PersonIdByAlias.ContainsKey(pa))
+                .GroupBy(r => _ctx.PersonIdByAlias[r.PersonAliasId!.Value])
+                .ToList();
+            if (byPerson.Count == 0) continue;
+
+            string aliasName = alias.Name ?? "";
+            int secIndex = result.FindIndex(x => string.Equals(x.AliasName, aliasName, StringComparison.Ordinal));
+            var old = secIndex < 0 ? null : result[secIndex];
+            var persons = (old?.Persons ?? Array.Empty<MemberHistoryPersonRow>()).ToList();
+            foreach (var person in byPerson)
+            {
+                int pIndex = persons.FindIndex(x => x.PersonId == person.Key);
+                var oldPerson = pIndex < 0 ? null : persons[pIndex];
+                var firstAlias = _ctx.PersonAliasById.TryGetValue(person.First().PersonAliasId!.Value, out var pa) ? pa : null;
+                var roles = (oldPerson?.Roles ?? Array.Empty<MemberHistoryRoleGroup>()).ToList();
+                foreach (var inv in PetitcureSectionBuilder.BuildInvolvementRows(_ctx, person))
+                {
+                    var series = _ctx.SeriesById[inv.SeriesId];
+                    foreach (var role in inv.Roles)
+                    {
+                        var work = new MemberHistoryWork
+                        {
+                            SeriesTitle = series.Title,
+                            SeriesSlug = series.Slug,
+                            SeriesId = series.SeriesId,
+                            SeriesStartYearLabel = series.StartDate.Year.ToString(),
+                            IsMovie = false,
+                            IsAllEpisodes = role.IsAllEpisodes,
+                            RangeLabel = role.IsAllEpisodes ? "" : role.RangeLabel,
+                        };
+                        int rIndex = roles.FindIndex(x => string.Equals(x.RoleNameJa, role.RoleLabel, StringComparison.Ordinal));
+                        var oldRole = rIndex < 0 ? null : roles[rIndex];
+                        var works = (oldRole?.Works ?? Array.Empty<MemberHistoryWork>()).ToList();
+                        int at = works.FindIndex(w => _ctx.SeriesStartDate(w.SeriesId) > series.StartDate);
+                        works.Insert(at < 0 ? works.Count : at, work);
+                        var newRole = new MemberHistoryRoleGroup
+                        {
+                            RoleNameJa = role.RoleLabel,
+                            EpisodeCount = oldRole?.EpisodeCount ?? 0,
+                            MovieCount = oldRole?.MovieCount ?? 0,
+                            OtonaEpisodeCount = oldRole?.OtonaEpisodeCount ?? 0,
+                            Works = works,
+                        };
+                        if (rIndex < 0) roles.Add(newRole); else roles[rIndex] = newRole;
+                    }
+                }
+                var newPerson = new MemberHistoryPersonRow
+                {
+                    PersonId = person.Key,
+                    PersonName = oldPerson?.PersonName ?? firstAlias?.GetDisplayName() ?? person.First().NameText,
+                    EpisodeCount = oldPerson?.EpisodeCount ?? 0,
+                    MovieCount = oldPerson?.MovieCount ?? 0,
+                    OtonaEpisodeCount = oldPerson?.OtonaEpisodeCount ?? 0,
+                    Roles = roles,
+                };
+                if (pIndex < 0) persons.Add(newPerson); else persons[pIndex] = newPerson;
+            }
+            var newSection = new MemberHistoryAliasSection
+            {
+                AliasName = aliasName,
+                Persons = persons,
+                EpisodeCount = old?.EpisodeCount ?? 0,
+                MovieCount = old?.MovieCount ?? 0,
+                OtonaEpisodeCount = old?.OtonaEpisodeCount ?? 0,
+            };
+            if (secIndex < 0) result.Add(newSection); else result[secIndex] = newSection;
+        }
+        return result;
     }
 
     /// <summary>

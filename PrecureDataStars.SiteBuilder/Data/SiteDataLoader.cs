@@ -420,6 +420,14 @@ public static class SiteDataLoader
             .GroupBy(r => r.SeriesId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<SeriesRelatedLink>)g.ToList());
 
+        // ショートアニメ「ぷちきゅあ」の話・動画・概要欄のスタッフ。集計には混ぜず、作品詳細と人物・企業の詳細の専用の節だけが引く。
+        var petitcureRepo = new PetitcureRepository(factory);
+        var petitcure = new PetitcureIndex(
+            await petitcureRepo.GetEpisodesAsync(ct).ConfigureAwait(false),
+            await petitcureRepo.GetVideosAsync(ct).ConfigureAwait(false),
+            await petitcureRepo.GetVideoEpisodesAsync(ct).ConfigureAwait(false),
+            await petitcureRepo.GetStaffAsync(ct).ConfigureAwait(false));
+
         // 作品ごとの各話のスタッフの札の役職（並び順の順。リポジトリが series_id → display_order で返す）。
         var episodeStaffRolesBySeries = (await new SeriesEpisodeStaffRolesRepository(factory).GetAllAsync(ct).ConfigureAwait(false))
             .GroupBy(r => r.SeriesId)
@@ -575,6 +583,7 @@ public static class SiteDataLoader
             ShopItems = shopItems,
             ShopProductCandidates = shopProductCandidates,
             RelatedLinksBySeries = relatedLinksBySeries,
+            Petitcure = petitcure,
             ShopSeriesIds = ShopItemsFile.SeriesIds(shopItems, shopProductCandidates),
             EpisodeStaffRolesBySeries = episodeStaffRolesBySeries,
             RoleTemplateResolver = roleTemplateResolver,

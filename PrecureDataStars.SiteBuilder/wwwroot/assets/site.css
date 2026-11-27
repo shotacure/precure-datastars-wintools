@@ -9918,6 +9918,88 @@ table:has(th.col-rank) tbody tr:nth-child(3) td.col-rank {
   font-size: 0.85em;
 }
 
+/* シリーズ詳細：ぷちきゅあのスタッフ（YouTube の概要欄から）。メインスタッフと同じ 2 列の grid。
+   役職は概要欄の文字のままで、役職詳細へのリンクを持たない。 */
+#petitcure-staff {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 8px;
+  row-gap: 4px;
+  /* 名前の組（inline-block）は最後の行がベースラインになるので、ベースラインでそろえると、名前が何行にもわたる役職の札が
+     下の行に付く。札と名前は同じ行の高さ（1.8）なので、上端でそろえる。 */
+  align-items: start;
+}
+#petitcure-staff > h2 {
+  grid-column: 1 / -1;
+}
+/* 名前は 1 人ずつ行を分ける。話数の並びが 1 行より長い名前が多いので、並びの中の「, 」でも折り返す。 */
+#petitcure-staff .staff-member-group {
+  display: block;
+}
+#petitcure-staff .staff-member-group > .key-staff-range {
+  white-space: normal;
+}
+
+/* シリーズ詳細：ぷちきゅあのエピソード一覧。1 本の動画を 1 行で並べる（新しい話の動画はページの頭の .youtube-trailer）。
+   各話の一覧（.ep-row）と同じく枠線を持たず点線で区切り、列（話数・公開の日付・長さ・動画へのリンク）は
+   一覧の grid の列を各行が subgrid で共有して縦にそろえる。 */
+.petitcure-ep-list {
+  display: grid;
+  grid-template-columns: max-content max-content max-content max-content minmax(0, 1fr);
+  column-gap: 16px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.petitcure-ep-list > .petitcure-ep {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px dotted #e5e7eb;
+}
+.petitcure-ep-no {
+  font-weight: 700;
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.petitcure-ep-published,
+.petitcure-ep-duration {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.petitcure-ep-duration {
+  text-align: right;
+}
+.petitcure-ep-video .external-link {
+  margin: 0;
+  padding: 0 8px;
+  font-size: 0.78em;
+}
+.petitcure-ep-note {
+  min-width: 0;
+  font-size: 0.9em;
+}
+@media (max-width: 640px) {
+  .petitcure-ep-list {
+    column-gap: 10px;
+  }
+  /* 狭い画面では題の飾りの言葉を次の行に回す（列は 4 つのまま）。 */
+  .petitcure-ep-list {
+    grid-template-columns: max-content max-content max-content max-content;
+  }
+  .petitcure-ep-note:empty {
+    display: none;
+  }
+  .petitcure-ep-note {
+    grid-column: 1 / -1;
+  }
+}
+
 /* エピソード詳細のスタッフセクション。
    1 役職 = 1 .key-staff-line（同一人物が兼ねる「絵コンテ・演出」は 1 entry 内で複数バッジを並べる仕様で、
    常に 1 セット = 1 行）。シリーズ詳細 #key-staff のような grid 縦揃えは要求されないため、セット単位で

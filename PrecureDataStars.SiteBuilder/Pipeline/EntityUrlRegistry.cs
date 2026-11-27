@@ -61,6 +61,7 @@ public sealed class EntityUrlRegistry
     /// （「システム管理」と出ていた作品の表記は role_label_text で残している）。
     /// 3D の「アニメーションスーパーバイザー」（ANIMATION_SUPERVISOR_3D）は役職コードを CG_ANIMATION_SUPERVISOR
     /// （CGアニメーションスーパーバイザー）に改めた（「アニメーションスーパーバイザー」と出ていた作品の表記は role_label_text で残している）。
+    /// スタッフ一覧の初参加順・参加回数順は、ページを分けていたときの 2 ページ目からの URL を、そのタブのページへ送る。
     /// 転送先の役職ページは系譜の代表で決まるので、使うたびに組み立てる（系譜の読み込みより前に作らない）。
     /// </summary>
     private static (string From, string To)[] RetiredPageRedirects => new[]
@@ -71,6 +72,12 @@ public sealed class EntityUrlRegistry
         ("/creators/roles/art_setting", PathUtil.CreatorsRoleUrl("ART_DESIGN")),
         ("/creators/roles/system_administration_3d", PathUtil.CreatorsRoleUrl("CG_TECHNICAL_SUPPORT")),
         ("/creators/roles/animation_supervisor_3d", PathUtil.CreatorsRoleUrl("CG_ANIMATION_SUPERVISOR")),
+        ("/creators/staff/debut/2", PathUtil.CreatorsStaffUrl() + "debut/"),
+        ("/creators/staff/debut/3", PathUtil.CreatorsStaffUrl() + "debut/"),
+        ("/creators/staff/debut/4", PathUtil.CreatorsStaffUrl() + "debut/"),
+        ("/creators/staff/debut/5", PathUtil.CreatorsStaffUrl() + "debut/"),
+        ("/creators/staff/count/2", PathUtil.CreatorsStaffUrl() + "count/"),
+        ("/creators/staff/count/3", PathUtil.CreatorsStaffUrl() + "count/"),
     };
 
     private readonly Dictionary<int, string> _personUrls = new();

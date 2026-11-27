@@ -2028,22 +2028,6 @@ a.series-card-children-title:hover {
 .ep-pagination-bottom {
   margin-top: 24px;
 }
-/* 行の多い一覧のページ送り（スタッフ一覧の初参加順・参加回数順）。札の見た目は話数のページ送りと同じで、一覧の上と下に出す。
-   全行を読み足した後（ルートの data-paged-all。view-state.js）は隠す。上のページ送りは場所を残して見えなくし（読んでいる行と
-   タブの帯の位置を動かさない）、下のページ送り（一覧のパネルの後ろ）は場所ごと消す。 */
-.list-pager {
-  margin: 12px 0;
-}
-[data-paged-all] .list-pager {
-  visibility: hidden;
-}
-[data-paged-all] .tab-panel ~ .list-pager {
-  display: none;
-}
-/* 残りのページの行を読み足している間（ルートの data-paged-loading）は、一覧を薄くする（出ているのは開いているページの行だけの結果）。 */
-[data-paged-loading] .entity-list {
-  opacity: 0.45;
-}
 
 /* ════════════════════════════════════════════════════════════════ クレジット階層（プレビュー完全準拠） Catalog 側 CreditPreviewRenderer の <style> ブロックをそのまま移植。 */
 .credit-section {

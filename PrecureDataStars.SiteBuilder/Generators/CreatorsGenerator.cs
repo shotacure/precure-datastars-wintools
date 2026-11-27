@@ -2911,8 +2911,153 @@ public sealed class CreatorsGenerator
                 new BreadcrumbItem { Label = StaffPageTitle, Url = "" }
             }
         };
-        _page.RenderAndWrite(PathUtil.CreatorsStaffUrl(), "creators",
-            "creators-staff.sbn", content, layout);
+        // タブは 1 つが 1 ページ。役職順が /creators/staff/、初参加順・参加回数順はその下のページ（全タブを 1 枚に入れると 14MB になる）。
+        // 初参加順・参加回数順は行が多いので、さらにページを分ける（検索エンジンが読むのは HTML の先頭 2MB まで。1 ページ 1.8MB 以下に収める）。
+        // 題はタブの名前（2 ページ目からはページの番号も）を括弧で添え、meta description・パンくず・見出しは同じ。OGP カードは役職順のページの 1 枚を使い回す。
+        string staffUrl = PathUtil.CreatorsStaffUrl();
+        content.TabUrls = new Dictionary<string, string>
+        {
+            ["roles"] = staffUrl,
+            ["debut"] = staffUrl + "debut/",
+            ["count"] = staffUrl + "count/"
+        };
+        content.ActiveTab = "roles";
+        _page.RenderAndWrite(staffUrl, "creators", "creators-staff.sbn", content, layout);
+        string staffOgImage = layout.OgImage;
+        string PageUrl(string tab, int pageNo) => pageNo == 1 ? content.TabUrls[tab] : $"{content.TabUrls[tab]}{pageNo}/";
+        LayoutModel TabLayout(string tabLabel, int pageNo) => new()
+        {
+            PageTitle = pageNo == 1 ? $"{StaffPageTitle}（{tabLabel}）" : $"{StaffPageTitle}（{tabLabel}・{pageNo}ページ目）",
+            MetaDescription = StaffPageLead,
+            OgImage = staffOgImage,
+            Breadcrumbs = layout.Breadcrumbs
+        };
+
+        // ── 初参加順：年の切れ目でページを分ける（同じ年の作品は同じページに入れる。ページ送りの札に出す年の幅が、ページどうしで重ならない）。
+        //    節の id（debut-N）は全ページを通した番号で、どの節がどのページにあるかはビルドのたびに決まる。
+        //    ほかのページの節は、左のもくじ用の印（行き先の URL つき）だけを置く。
+        var debutSections = content.DebutSections;
+        // 節を年ごとの組にまとめる（節は放送開始・公開の順。年の分からない節は前の組に入れる）。
+        var debutYearGroups = new List<List<int>>();
+        for (int si = 0; si < debutSections.Count; si++)
+        {
+            string year = debutSections[si].SeriesYearLabel;
+            bool sameGroup = debutYearGroups.Count > 0
+                && (year == "" || year == debutSections[debutYearGroups[^1][0]].SeriesYearLabel);
+            if (sameGroup) debutYearGroups[^1].Add(si);
+            else debutYearGroups.Add(new List<int> { si });
+        }
+        var debutPages = SplitIntoPages(debutYearGroups,
+                group => group.Sum(si => StaffSectionBytes + debutSections[si].Members.Sum(EstimateStaffRowBytes)))
+            .Select(groups => groups.SelectMany(gi => debutYearGroups[gi]).ToList())
+            .ToList();
+        for (int pi = 0; pi < debutPages.Count; pi++)
+        {
+            foreach (int si in debutPages[pi])
+            {
+                var sec = debutSections[si];
+                sec.Index = si + 1;
+                sec.PageNo = pi + 1;
+                sec.NavHref = $"{PageUrl("debut", pi + 1)}#debut-{si + 1}";
+                sec.NavCounts = WkVisibleCounts(sec.Members);
+            }
+        }
+        content.ActiveTab = "debut";
+        for (int pi = 0; pi < debutPages.Count; pi++)
+        {
+            content.PageNo = pi + 1;
+            // ページ送りの札は、そのページの作品の年の幅（「2004〜2011」）。年が分からなければページの番号。
+            content.Pager = debutPages.Select((secs, i) =>
+            {
+                var years = secs.Select(si => debutSections[si].SeriesYearLabel).Where(y => y != "").ToList();
+                string label = years.Count == 0 ? (i + 1).ToString()
+                    : years[0] == years[^1] ? years[0] : $"{years[0]}〜{years[^1]}";
+                return new StaffPagerItem { Label = label, Url = PageUrl("debut", i + 1), IsCurrent = i == pi };
+            }).ToList();
+            _page.RenderAndWrite(PageUrl("debut", pi + 1), "creators", "creators-staff.sbn", content, TabLayout("初参加順", pi + 1));
+        }
+
+        // ── 参加回数順：開いたときの並び（件数の並べ替えボタンの最初の状態＝最初の種類の多い順。count-sort.js）の順に切る。
+        //    行にはもとの並び（担当の総量の順）の番号（data-i）を付け、絞り込み・並べ替えで全行を読み足したときに、もとの並びへ戻せるようにする。
+        var countAll = content.CountRows;
+        for (int i = 0; i < countAll.Count; i++) countAll[i].CountIndex = i;
+        Func<EntityRow, int> firstKind = content.Kinds.Tv ? r => r.EpisodeCount
+            : content.Kinds.Movie ? r => r.MovieCount
+            : r => r.OtonaEpisodeCount;
+        var countShown = countAll
+            .OrderBy(r => firstKind(r) > 0 ? 0 : 1)
+            .ThenByDescending(r => firstKind(r))
+            .ThenBy(r => r.CountIndex)
+            .ToList();
+        var countPages = SplitIntoPages(countShown, EstimateStaffRowBytes);
+        content.ActiveTab = "count";
+        content.CountPageUrls = string.Join(" ", countPages.Select((_, i) => PageUrl("count", i + 1)));
+        for (int pi = 0; pi < countPages.Count; pi++)
+        {
+            content.PageNo = pi + 1;
+            content.CountRows = countPages[pi].Select(i => countShown[i]).ToList();
+            content.Pager = countPages.Select((_, i) => new StaffPagerItem
+            {
+                Label = (i + 1).ToString(),
+                Url = PageUrl("count", i + 1),
+                IsCurrent = i == pi
+            }).ToList();
+            _page.RenderAndWrite(PageUrl("count", pi + 1), "creators", "creators-staff.sbn", content, TabLayout("参加回数順", pi + 1));
+        }
+    }
+
+    /// <summary>スタッフ一覧の 1 ページの行の分の上限（バイト。見積もり）。タブの帯・もくじ用の印・レイアウトの分を足しても 1 ページ 1.8MB 以下に収まる値。</summary>
+    private const int StaffPageRowBytesBudget = 1_650_000;
+    /// <summary>初参加順の節 1 つの、行を除いた分（見出しともくじ用の属性。バイトの見積もり）。</summary>
+    private const int StaffSectionBytes = 700;
+
+    /// <summary>スタッフ一覧の 1 行の HTML の大きさの見積もり（バイト）。行ごとに変わる名前・URL・役職の並びの長さに、決まった分を足す。</summary>
+    private static int EstimateStaffRowBytes(EntityRow r)
+        => 500
+           + System.Text.Encoding.UTF8.GetByteCount(r.EntityName)
+           + System.Text.Encoding.UTF8.GetByteCount(r.EntityUrl)
+           + System.Text.Encoding.UTF8.GetByteCount(r.RolesLabel)
+           + System.Text.Encoding.UTF8.GetByteCount(r.CurrentNameNote);
+
+    /// <summary>並びを、前から順に、見積もりの大きさの合計が <see cref="StaffPageRowBytesBudget"/> を超えない範囲でページに分ける（各ページは要素の番号の並び。1 つで上限を超える要素は 1 ページに 1 つ）。</summary>
+    private static List<List<int>> SplitIntoPages<T>(IReadOnlyList<T> items, Func<T, int> estimateBytes)
+    {
+        var pages = new List<List<int>> { new() };
+        int used = 0;
+        for (int i = 0; i < items.Count; i++)
+        {
+            int size = estimateBytes(items[i]);
+            if (used + size > StaffPageRowBytesBudget && pages[^1].Count > 0)
+            {
+                pages.Add(new List<int>());
+                used = 0;
+            }
+            pages[^1].Add(i);
+            used += size;
+        }
+        return pages;
+    }
+
+    /// <summary>
+    /// 「初めて」で分けた節の、TV・映画・オトナの入れ方ごとの見える行の数（コンマ区切りの 7 つ。入っている種類を TV=1・映画=2・オトナ=4 で足した 1〜7 の順）。
+    /// 行が見えるのは、置いた種類（<see cref="EntityRow.WkOwn"/>）が入っていて、それより早い種類（<see cref="EntityRow.WkAfter"/>）が 1 つも入っていないとき（_work-kind-toggles.sbn と同じ決まり）。
+    /// ほかのページにある節の、左のもくじの件数と、並べるかどうかに使う（section-nav.js）。個人・団体の絞り込みは数えない（このページにある節も、絞り込みでは隠れない）。
+    /// </summary>
+    private static string WkVisibleCounts(IReadOnlyList<EntityRow> members)
+    {
+        static int Bit(string kind) => kind switch { "tv" => 1, "movie" => 2, "otona" => 4, _ => 0 };
+        var counts = new int[7];
+        foreach (var m in members)
+        {
+            int own = Bit(m.WkOwn);
+            int after = m.WkAfter.Split(' ', StringSplitOptions.RemoveEmptyEntries).Sum(Bit);
+            for (int mask = 1; mask <= 7; mask++)
+            {
+                if ((own != 0 && (mask & own) == 0) || (mask & after) != 0) continue;
+                counts[mask - 1]++;
+            }
+        }
+        return string.Join(",", counts);
     }
 
     /// <summary>
@@ -4400,8 +4545,26 @@ public sealed class CreatorsGenerator
         public string DebutSongUrl { get; set; } = "";
     }
 
+    /// <summary>スタッフ一覧のページ送りの札 1 つ。</summary>
+    private sealed class StaffPagerItem
+    {
+        public string Label { get; set; } = "";
+        public string Url { get; set; } = "";
+        public bool IsCurrent { get; set; }
+    }
+
     private sealed class StaffModel
     {
+        /// <summary>このページに出すタブ（roles＝役職順 / debut＝初参加順 / count＝参加回数順）。タブは 1 つが 1 ページ。</summary>
+        public string ActiveTab { get; set; } = "roles";
+        /// <summary>タブ → そのタブのページの URL（タブの帯のリンク先）。</summary>
+        public IReadOnlyDictionary<string, string> TabUrls { get; set; } = new Dictionary<string, string>();
+        /// <summary>このページの番号（1 から。初参加順・参加回数順はページを分ける）。</summary>
+        public int PageNo { get; set; } = 1;
+        /// <summary>ページ送りの札（1 ページだけのタブは空）。</summary>
+        public IReadOnlyList<StaffPagerItem> Pager { get; set; } = Array.Empty<StaffPagerItem>();
+        /// <summary>参加回数順の全ページの URL（空白区切り。絞り込み・並べ替えのときに、残りのページの行を読み足す先。view-state.js）。</summary>
+        public string CountPageUrls { get; set; } = "";
         public IReadOnlyList<RoleIndexEntry> Roles { get; set; } = Array.Empty<RoleIndexEntry>();
         /// <summary>役職順タブの前半：TV 系シリーズで 1 度でもクレジットされた役職を、TV で初めてクレジットされた作品ごとの節に束ねたもの。</summary>
         public IReadOnlyList<RoleSeriesSection> RoleTvSections { get; set; } = Array.Empty<RoleSeriesSection>();
@@ -4601,6 +4764,8 @@ public sealed class CreatorsGenerator
         /// <summary>オトナシリーズでの担当エピソード合計数（🌙）。</summary>
         public int OtonaEpisodeCount { get; set; }
         /// <summary>担当の総量（<see cref="EpisodeCount"/> + <see cref="MovieCount"/> + <see cref="OtonaEpisodeCount"/>）。担当多い順タブのソートキー兼テンプレ存在判定用。</summary>
+        /// <summary>参加回数順のもとの並び（担当の総量の順）での番号（0 から。行の data-i）。ページを分ける一覧だけが入れる。</summary>
+        public int CountIndex { get; set; }
         public int TotalCount => EpisodeCount + MovieCount + OtonaEpisodeCount;
         /// <summary>参加した種類（"tv movie otona" の形。行の data-wk。タブの右上のボタンで入っている種類に 1 つも当たらない行は隠す）。</summary>
         public string Kinds => KindTokens(EpisodeCount > 0, MovieCount > 0, OtonaEpisodeCount > 0);
@@ -4670,6 +4835,14 @@ public sealed class CreatorsGenerator
         public IReadOnlyList<EntityRow> Members { get; set; } = Array.Empty<EntityRow>();
         /// <summary>開いたとき（すべての種類が入っているとき）に見える行の数（左のもくじの件数）。</summary>
         public int DefaultCount => Members.Count(m => m.WkAfter == "");
+        /// <summary>全ページを通した節の番号（1 から。節の id「debut-N」）。ページを分ける一覧だけが入れる。</summary>
+        public int Index { get; set; }
+        /// <summary>この節があるページの番号（1 から）。ページを分ける一覧だけが入れる。</summary>
+        public int PageNo { get; set; }
+        /// <summary>この節への行き先（その節のあるページの URL と #id）。ほかのページのもくじ用の印に書く。</summary>
+        public string NavHref { get; set; } = "";
+        /// <summary>TV・映画・オトナの入れ方ごとの見える行の数（<see cref="WkVisibleCounts"/>）。ほかのページのもくじ用の印に書く。</summary>
+        public string NavCounts { get; set; } = "";
         /// <summary>開いたときに見える行が無い節か（節の data-wk-empty。ほかの種類を切ったときだけ出る行しか無い）。</summary>
         public bool DefaultEmpty => DefaultCount == 0;
     }

@@ -10,33 +10,33 @@
      ・五十音順 / 初参加順 / 参加回数順タブ：人物と企業・団体を 1 リストに混在させた
        一覧。行ごとに「個人 / 団体」バッジで区別し、上部の絞り込みトグルで
        個人のみ・団体のみに切り替えられる（data-entity-filter を CSS で解決）。
-     ・タブ切替は /products/ や旧 /persons/ と同じインライン JS（外部 JS を増やさない）。
+     ・タブは 1 つが 1 ページ（役職順＝/creators/staff/、初参加順＝/creators/staff/debut/、参加回数順＝/creators/staff/count/）。
+       このテンプレートは ActiveTab のタブの中身だけを出す（全タブを 1 枚に入れると HTML が 14MB になり、検索エンジンが読む先頭 2MB に収まらない）。
+       タブの帯はリンクで、押すとそのページへ移る。絞り込みの状態と帯の位置の引き継ぎ・先読みは view-state.js。
+     ・初参加順・参加回数順は行が多いので、さらにページを分け、一覧の上と下にページ送り（.list-pager）を出す（どのページも HTML を 2MB 未満に保つ）。
+       初参加順は年の切れ目で分け（同じ年の作品は同じページ）、ほかのページにある節は、左のもくじ用の印（data-section-nav-href）だけを置く。
+       参加回数順は開いたときの並びの順に分け、絞り込み・切り替え・並べ替えを押したら、残りのページの行を読み足して全行の一覧にする（view-state.js）。
+     ・行は軽く書く：アイコンは下の <svg> の symbol を <use> で使い回し、行全体のリンクは名前のリンク（.row-link）を行いっぱいに広げて兼ねる（site.css）。
+       行のマークアップは字下げしない。
      ・人物・企業/団体に対して「順位」「ランキング」の語は用いない。並べ替えは
        あくまで一覧の見せ方であり、担当話数の多寡を優劣として扱わない。
      ・3 つのエンティティタブはテーブル構造が同一だが、Scriban のパラメータ付き
        include は本プロジェクトで未採用（_share-buttons.sbn のみ無引数 include）なので、
        堅牢性を優先して各パネルにテーブルマークアップを直接展開する。 ##}}
-<div class="creators-root creators-tabs products-tabs" data-entity-filter="all" data-active-tab="roles" data-wk-on="{{ Kinds.Tokens }}">
-  <div class="tabs" role="tablist" aria-label="スタッフ一覧の並べ替え">
-    <button type="button" class="tab-btn is-active" data-tab="roles"
-            role="tab" aria-selected="true" aria-controls="staff-tab-panel-roles">
-      役職<span class="tab-sfx">順</span>
-    </button>
+<svg class="icon-sprite" width="0" height="0" aria-hidden="true"><symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></symbol><symbol id="i-company" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></symbol></svg>
+<script type="speculationrules">{"prerender":[{"where":{"selector_matches":"a.tab-btn[data-tab-page]:not(.is-active), .list-pager a"},"eagerness":"moderate"}]}</script>
+<div class="creators-root creators-tabs products-tabs" data-entity-filter="all" data-active-tab="{{ ActiveTab }}" data-wk-on="{{ Kinds.Tokens }}">
+  <nav class="tabs" aria-label="スタッフ一覧の並べ替え">
+    <a class="tab-btn{{ if ActiveTab == "roles" }} is-active{{ end }}" href="{{ TabUrls.roles }}" data-tab-page="roles" data-tab-anchors="roles-"{{ if ActiveTab == "roles" }} aria-current="page"{{ end }}>役職<span class="tab-sfx">順</span></a>
     {{## 五十音順タブは読み（kana）データ未整備のため一旦無効化。データが揃ったらこのコメントを外して復活させる。
     <button type="button" class="tab-btn" data-tab="kana"
             role="tab" aria-selected="false" aria-controls="staff-tab-panel-kana">
       五十音<span class="tab-sfx">順</span>
     </button>
     ##}}
-    <button type="button" class="tab-btn" data-tab="debut"
-            role="tab" aria-selected="false" aria-controls="staff-tab-panel-debut">
-      初参加<span class="tab-sfx">順</span>
-    </button>
-    <button type="button" class="tab-btn" data-tab="count"
-            role="tab" aria-selected="false" aria-controls="staff-tab-panel-count">
-      参加回数<span class="tab-sfx">順</span>
-    </button>
-  </div>
+    <a class="tab-btn{{ if ActiveTab == "debut" }} is-active{{ end }}" href="{{ TabUrls.debut }}" data-tab-page="debut" data-tab-anchors="debut-"{{ if ActiveTab == "debut" }} aria-current="page"{{ end }}>初参加<span class="tab-sfx">順</span></a>
+    <a class="tab-btn{{ if ActiveTab == "count" }} is-active{{ end }}" href="{{ TabUrls.count }}" data-tab-page="count" data-tab-anchors="staff-count-"{{ if ActiveTab == "count" }} aria-current="page"{{ end }}>参加回数<span class="tab-sfx">順</span></a>
+  </nav>
 
   {{## 個人 / 団体 の絞り込みトグル。役職順タブは「役職名＋人数」の索引で
        エンティティ行を持たないため、このトグルは無意味になる。よって役職順タブが
@@ -55,9 +55,33 @@
   <button type="button" class="count-sort-btn" data-count-sort-for="staff-count-list" hidden></button>
   </div>
 
-  {{## ──────── 役職順パネル（既定） ──────── ##}}
+  {{## ページ送り。一覧の上と下に同じものを出す（1 ページだけのタブには出さない）。札の見た目は各話のページ送り（.ep-pagination）と同じ。
+       リンクの data-carry-state は、移るときに絞り込みの状態を預ける印（view-state.js）。 ##}}
+  {{~ capture pager ~}}
+  {{~ if (array.size Pager) > 1 ~}}
+  <nav class="ep-pagination list-pager" aria-label="ページ送り">
+    <ul>
+      {{~ if PageNo > 1 ~}}<li class="page-prev"><a href="{{ Pager[PageNo - 2].Url }}" rel="prev" title="前のページ" data-carry-state>«</a></li>
+      {{~ else ~}}<li class="page-prev disabled"><span>«</span></li>
+      {{~ end ~}}
+      {{~ for p in Pager ~}}
+      {{~ if p.IsCurrent ~}}<li><span class="current" aria-current="page">{{ p.Label }}</span></li>
+      {{~ else ~}}<li><a href="{{ p.Url }}" data-carry-state>{{ p.Label }}</a></li>
+      {{~ end ~}}
+      {{~ end ~}}
+      {{~ if PageNo < (array.size Pager) ~}}<li class="page-next"><a href="{{ Pager[PageNo].Url }}" rel="next" title="次のページ" data-carry-state>»</a></li>
+      {{~ else ~}}<li class="page-next disabled"><span>»</span></li>
+      {{~ end ~}}
+    </ul>
+  </nav>
+  {{~ end ~}}
+  {{~ end ~}}
+  {{ pager }}
+
+  {{## ──────── 役職順パネル（/creators/staff/） ──────── ##}}
+  {{~ if ActiveTab == "roles" ~}}
   <div class="tab-panel is-active" id="staff-tab-panel-roles"
-       data-tab-panel="roles" role="tabpanel">
+       data-tab-panel="roles">
     {{~ if (array.size Roles) == 0 ~}}
     <p class="empty-row">クレジット情報のある役職がまだ登録されていません。</p>
     {{~ else ~}}
@@ -145,6 +169,7 @@
     {{~ end ~}}
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
   {{## 五十音順パネルは読み（kana）データ未整備のため if false で一旦無効化。データが揃ったら if false を外して復活。 ##}}
   {{~ if false ~}}
@@ -170,14 +195,18 @@
   </div>
   {{~ end ~}}
 
-  {{## ──────── 初参加順パネル（初参加シリーズごとのセクション） ──────── ##}}
-  <div class="tab-panel" id="staff-tab-panel-debut"
-       data-tab-panel="debut" role="tabpanel" hidden>
+  {{## ──────── 初参加順パネル（/creators/staff/debut/。初参加シリーズごとのセクション） ──────── ##}}
+  {{~ if ActiveTab == "debut" ~}}
+  <div class="tab-panel is-active" id="staff-tab-panel-debut"
+       data-tab-panel="debut">
     {{~ if (array.size DebutSections) == 0 ~}}
     <p class="empty-row">該当するスタッフがまだ登録されていません。</p>
     {{~ else ~}}
     {{~ for s in DebutSections ~}}
-    <section class="creators-series-section" id="debut-{{ for.index + 1 }}" data-wk-section{{ if s.DefaultEmpty }} data-wk-empty{{ end }}
+    {{~ if s.PageNo != PageNo ~}}
+    <span hidden id="debut-{{ s.Index }}" data-section-nav-href="{{ s.NavHref }}" data-section-nav-label="{{ (nav_main s.SeriesTitle) | html.escape }}" data-section-nav-prefix="{{ (nav_prefix s.SeriesTitle) | html.escape }}" data-section-nav-title="{{ s.SeriesTitle | html.escape }}" data-section-nav-year="{{ s.SeriesYearLabel }}" data-section-nav-count="{{ s.DefaultCount }}" data-nav-counts="{{ s.NavCounts }}"></span>
+    {{~ else ~}}
+    <section class="creators-series-section" id="debut-{{ s.Index }}" data-wk-section{{ if s.DefaultEmpty }} data-wk-empty{{ end }}
              data-section-nav-label="{{ (nav_main s.SeriesTitle) | html.escape }}"
              data-section-nav-prefix="{{ (nav_prefix s.SeriesTitle) | html.escape }}"
              data-section-nav-title="{{ s.SeriesTitle | html.escape }}"
@@ -189,70 +218,57 @@
         {{~ else ~}}{{ s.SeriesHeadingLabel | html.escape }}{{~ end ~}}
       </h2>
       <ul class="entity-list">
-        {{~ for e in s.Members ~}}
-        <li class="entity-row" data-entity-type="{{ e.EntityKind }}" data-wk-own="{{ e.WkOwn }}"{{ if e.WkAfter != "" }} data-wk-after="{{ e.WkAfter }}"{{ end }}>
-          <a class="entity-row-link" href="{{ e.EntityUrl }}"><span class="visually-hidden">{{ e.EntityName | html.escape }}</span></a>
-          {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person" aria-label="個人" title="個人"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
-          {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
-          <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
-          <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
-          <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}{{~ if e.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ e.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
-        </li>
-        {{~ end ~}}
+{{~ for e in s.Members ~}}
+<li class="entity-row" data-entity-type="{{ e.EntityKind }}" data-wk-own="{{ e.WkOwn }}"{{ if e.WkAfter != "" }} data-wk-after="{{ e.WkAfter }}"{{ end }}>
+{{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person" aria-label="個人" title="個人"><svg class="entity-badge-icon" aria-hidden="true"><use href="#i-person"/></svg></span>
+{{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" aria-hidden="true"><use href="#i-company"/></svg></span>
+{{~ end ~}}
+<a class="entity-row-name row-link" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
+<span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
+<span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}{{~ if e.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ e.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
+</li>
+{{~ end ~}}
       </ul>
     </section>
     {{~ end ~}}
     {{~ end ~}}
+    {{~ end ~}}
   </div>
 
-  {{## ──────── 参加回数順パネル ──────── ##}}
-  <div class="tab-panel" id="staff-tab-panel-count"
-       data-tab-panel="count" role="tabpanel" hidden>
+  {{~ end ~}}
+
+  {{## ──────── 参加回数順パネル（/creators/staff/count/） ──────── ##}}
+  {{~ if ActiveTab == "count" ~}}
+  <div class="tab-panel is-active" id="staff-tab-panel-count"
+       data-tab-panel="count">
     {{~ if (array.size CountRows) == 0 ~}}
     <p class="empty-row">該当するスタッフがまだ登録されていません。</p>
     {{~ else ~}}
-    <ul class="entity-list" id="staff-count-list">
-      {{~ for e in CountRows ~}}
-      <li class="entity-row" data-entity-type="{{ e.EntityKind }}" data-wk="{{ e.Kinds }}">
-        <a class="entity-row-link" href="{{ e.EntityUrl }}"><span class="visually-hidden">{{ e.EntityName | html.escape }}</span></a>
-        {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person" aria-label="個人" title="個人"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
-        {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
-        <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
-        <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
-        <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}{{~ if e.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ e.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
-      </li>
-      {{~ end ~}}
+    <ul class="entity-list" id="staff-count-list" data-paged-list data-page="{{ PageNo }}" data-page-urls="{{ CountPageUrls }}">
+{{~ for e in CountRows ~}}
+<li class="entity-row" data-entity-type="{{ e.EntityKind }}" data-wk="{{ e.Kinds }}" data-i="{{ e.CountIndex }}">
+{{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person" aria-label="個人" title="個人"><svg class="entity-badge-icon" aria-hidden="true"><use href="#i-person"/></svg></span>
+{{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" aria-hidden="true"><use href="#i-company"/></svg></span>
+{{~ end ~}}
+<a class="entity-row-name row-link" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>{{~ if e.CurrentNameNote != "" ~}}<span class="entity-row-current muted">（{{ e.CurrentNameNote | html.escape }}）</span>{{~ end ~}}
+<span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
+<span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}{{~ if e.OtonaEpisodeCount > 0 ~}}<span class="count-pill count-pill-otona">🌙 {{ e.OtonaEpisodeCount }}</span>{{~ end ~}}</span></span>
+</li>
+{{~ end ~}}
     </ul>
     {{~ end ~}}
   </div>
+  {{~ end ~}}
+  {{ pager }}
 </div>
 
-{{## タブ切替 + 個人/団体トグルのクライアントスクリプト（インライン、外部 JS を増やさない）。
+{{## 個人/団体トグルのクライアントスクリプト（インライン、外部 JS を増やさない）。
      スコープは .creators-tabs 内に閉じる。トグルはルートの data-entity-filter を
      書き換えるだけで、行の出し分けは site.css 側のセレクタが解決する。 ##}}
 <script>
 (function () {
   var root = document.querySelector('.creators-tabs');
   if (!root) return;
-
-  var buttons = root.querySelectorAll('.tab-btn');
-  var panels  = root.querySelectorAll('.tab-panel');
-  buttons.forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var key = btn.getAttribute('data-tab');
-      root.setAttribute('data-active-tab', key);
-      buttons.forEach(function (b) {
-        var active = b.getAttribute('data-tab') === key;
-        b.classList.toggle('is-active', active);
-        b.setAttribute('aria-selected', active ? 'true' : 'false');
-      });
-      panels.forEach(function (p) {
-        var active = p.getAttribute('data-tab-panel') === key;
-        p.classList.toggle('is-active', active);
-        if (active) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
-      });
-    });
-  });
 
   var filterButtons = root.querySelectorAll('.entity-filter-btn');
   filterButtons.forEach(function (btn) {

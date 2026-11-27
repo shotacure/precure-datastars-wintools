@@ -2028,6 +2028,22 @@ a.series-card-children-title:hover {
 .ep-pagination-bottom {
   margin-top: 24px;
 }
+/* 行の多い一覧のページ送り（スタッフ一覧の初参加順・参加回数順）。札の見た目は話数のページ送りと同じで、一覧の上と下に出す。
+   全行を読み足した後（ルートの data-paged-all。view-state.js）は隠す。上のページ送りは場所を残して見えなくし（読んでいる行と
+   タブの帯の位置を動かさない）、下のページ送り（一覧のパネルの後ろ）は場所ごと消す。 */
+.list-pager {
+  margin: 12px 0;
+}
+[data-paged-all] .list-pager {
+  visibility: hidden;
+}
+[data-paged-all] .tab-panel ~ .list-pager {
+  display: none;
+}
+/* 残りのページの行を読み足している間（ルートの data-paged-loading）は、一覧を薄くする（出ているのは開いているページの行だけの結果）。 */
+[data-paged-loading] .entity-list {
+  opacity: 0.45;
+}
 
 /* ════════════════════════════════════════════════════════════════ クレジット階層（プレビュー完全準拠） Catalog 側 CreditPreviewRenderer の <style> ブロックをそのまま移植。 */
 .credit-section {
@@ -2452,6 +2468,16 @@ a.series-card-children-title:hover {
 .products-tabs .tab-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+/* タブが 1 つ 1 ページの一覧（スタッフ一覧など）は、タブの帯がリンク。ボタンのタブと同じ見た目にする。 */
+.products-tabs a.tab-btn,
+.products-tabs a.tab-btn:hover {
+  /* ボタンは中の字を縦の真ん中に置くので、リンクも同じに置く（選ばれていないタブは下の枠が無いぶん箱が 2px 高い）。
+     中の字と .tab-sfx を 1 行のまま保つため flex にはせず、ブロックの align-content で寄せる。 */
+  display: block;
+  align-content: center;
+  box-sizing: border-box;
+  text-decoration: none;
 }
 /* パネルは既定で非表示。 */
 .products-tabs .tab-panel { display: none; }
@@ -10182,6 +10208,25 @@ table:has(th.col-rank) tbody tr:nth-child(3) td.col-rank {
 .entity-row-name {
   font-weight: 600;
 }
+/* 行を覆う透明なリンク（.entity-row-link）を置かない行：名前のリンクを行いっぱいに広げて、行のどこを押しても開くようにする。
+   名前のリンクは位置を持たせず、::after を行（position: relative）いっぱいに敷く。行のほかの中身は pointer-events: none で
+   クリックを下の ::after へ通し、中の個別のリンクは上に重なって各自の先へ届く（オーバーレイのリンクと同じ決まり）。 */
+.entity-row > a.row-link {
+  position: static;
+}
+.entity-row > a.row-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.entity-row > a.row-link:focus-visible {
+  outline: none;
+}
+.entity-row > a.row-link:focus-visible::after {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: -2px;
+}
 /* プリキュアの行頭に置くキーカラーの正方形（_key-swatch.sbn）。地はインラインの background（1 色か斜めのグラデーション）。
    白や淡い色でも形が見えるよう、明暗どちらの地でも出る中間の灰色で縁取る。地が無ければ縁取りだけ。 */
 .key-swatch {
@@ -10855,6 +10900,14 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   width: 13px;
   height: 13px;
   display: block;
+  fill: currentColor;
+}
+/* アイコンの形の置き場（<symbol> を <use> で使い回す。行ごとに同じ SVG を書かないため）。場所を取らない。 */
+.icon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
 }
 .entity-badge-person {
   background: var(--accent-pink-weak, #fce7f3);

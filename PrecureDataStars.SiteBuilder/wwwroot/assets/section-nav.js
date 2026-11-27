@@ -28,6 +28,9 @@
  *     data-section-nav-title があればホバーの全文をそれにする。
  *     子の行を開くのは現在地の section だけ（.is-open）で、ほかの section の子は閉じておく。
  *     現在地は、帯の中に子の要素があればその子と親、無ければ section で決める。子の印の無いページは 1 段のまま。
+ *   - ページを分けた一覧：ほかのページにある節は、テンプレートが印（id と data-section-nav-href を持つ隠した要素。ラベル・年・件数は
+ *     section と同じ属性）を節の並びの位置に置く。印はリンクだけの行（押すとそのページのその節へ移る）として並べ、現在地の判定には使わない。
+ *     件数は TV・映画・オトナの今の入れ方に合わせ（data-nav-counts）、見える行の無い節の印は並べない。リンクには data-carry-state を付ける（絞り込みの状態を預けて移る。view-state.js）。
  *   - スムーススクロールは「ナビ内クリックで遷移した場合のみ」プログラム的に
  *     scrollTo({ behavior: 'smooth' }) で行う。CSS の html { scroll-behavior: smooth } は
  *     使わない方針（URL 直リンクや戻る／進むナビ起因のスクロールでもアニメーションが
@@ -68,11 +71,41 @@
     var items = [];
     var hasAnyYear = false;
     var hasAnyCount = false;
-    var nodes = scope.querySelectorAll('section[id]');
+    var nodes = scope.querySelectorAll('section[id], [data-section-nav-href][id]');
     for (var i = 0; i < nodes.length; i++) {
       var sec = nodes[i];
       var id = sec.getAttribute('id') || '';
       if (!id) continue;
+
+      // ほかのページにある節の印（リンクだけの行）。件数は、TV・映画・オトナの今の入れ方（ルートの data-wk-on）に合うものを
+      // data-nav-counts（入れ方ごとの見える行の数。TV=1・映画=2・オトナ=4 で足した 1〜7 の順）から取り、見える行が無ければ並べない
+      // （このページにある節と同じ決まり。個人・団体の絞り込みでは隠さない）。
+      var href = sec.getAttribute('data-section-nav-href') || '';
+      if (href) {
+        var stubYear = sec.getAttribute('data-section-nav-year') || '';
+        var stubCount = sec.getAttribute('data-section-nav-count') || '';
+        var navCounts = sec.getAttribute('data-nav-counts') || '';
+        var wkRoot = navCounts ? sec.closest('[data-wk-on]') : null;
+        if (wkRoot) {
+          var mask = 0;
+          (wkRoot.getAttribute('data-wk-on') || '').split(/\s+/).forEach(function (k) {
+            mask |= k === 'tv' ? 1 : k === 'movie' ? 2 : k === 'otona' ? 4 : 0;
+          });
+          if (mask) {
+            var visible = parseInt(navCounts.split(',')[mask - 1], 10) || 0;
+            if (visible === 0) continue;
+            stubCount = String(visible);
+          }
+        }
+        if (stubYear) hasAnyYear = true;
+        if (stubCount) hasAnyCount = true;
+        items.push({
+          id: id, href: href, label: sec.getAttribute('data-section-nav-label') || id,
+          prefix: sec.getAttribute('data-section-nav-prefix') || '', title: sec.getAttribute('data-section-nav-title') || '',
+          year: stubYear, count: stubCount, element: null, children: []
+        });
+        continue;
+      }
 
       // 非表示要素は除外。offsetParent が null なら自身か祖先のいずれかが display:none。
       if (sec.offsetParent === null) continue;
@@ -144,8 +177,14 @@
     li.className = item.isChild ? 'page-section-nav-item page-section-nav-child' : 'page-section-nav-item';
 
     var a = document.createElement('a');
-    a.href = '#' + item.id;
-    a.setAttribute('data-target-id', item.id);
+    if (item.href) {
+      // ほかのページにある節：そのページへ移るリンク（ページ内のスクロールはしない）。
+      a.href = item.href;
+      a.setAttribute('data-carry-state', '');
+    } else {
+      a.href = '#' + item.id;
+      a.setAttribute('data-target-id', item.id);
+    }
     // ラベルが長いと CSS の text-overflow で末尾省略されるため、フル文字列を title 属性に保持。
     // ホバー時にツールチップで全部が見えるようにする（全文が別にある子の行はその全文）。
     a.setAttribute('title', item.title || item.label);
@@ -203,8 +242,13 @@
   function buildMobileMirrorItem(item) {
     var li = document.createElement('li');
     var a = document.createElement('a');
-    a.href = '#' + item.id;
-    a.setAttribute('data-target-id', item.id);
+    if (item.href) {
+      a.href = item.href;
+      a.setAttribute('data-carry-state', '');
+    } else {
+      a.href = '#' + item.id;
+      a.setAttribute('data-target-id', item.id);
+    }
     if (item.prefix) {
       // 前置きのある行は左のナビと同じく 2 段
       var pre = document.createElement('span');
@@ -461,8 +505,10 @@
       threshold: 0
     });
 
-    for (var m = 0; m < items.length; m++) {
-      currentObserver.observe(items[m].element);
+    // このページにある節（ほかのページの節の印は、現在地の判定にも進捗にも使わない）。
+    var here = items.filter(function (it) { return it.element; });
+    for (var m = 0; m < here.length; m++) {
+      currentObserver.observe(here[m].element);
     }
     for (var mo = 0; mo < allChildren.length; mo++) {
       currentObserver.observe(allChildren[mo].element);
@@ -470,7 +516,9 @@
 
     // 初期ハイライト：URL に #fragment があればそれ（子の id なら親も）を、無ければ最初のセクションを current にする。
     var initial = resolveId(items, (location.hash || '').replace(/^#/, ''));
-    if (!initial) initial = { parentId: items[0].id, childId: null };
+    if (!initial || !here.some(function (it) { return it.id === initial.parentId; })) {
+      initial = { parentId: (here[0] || items[0]).id, childId: null };
+    }
     setCurrent(items, initial.parentId, initial.childId);
 
     // スクロール進捗ゲージ：ナビの縦線左半分を、現在のスクロール位置に応じて
@@ -487,8 +535,9 @@
       rafScheduled = true;
       window.requestAnimationFrame(function () {
         rafScheduled = false;
-        var firstSec = items[0].element;
-        var lastSec  = items[items.length - 1].element;
+        if (here.length === 0) return;
+        var firstSec = here[0].element;
+        var lastSec  = here[here.length - 1].element;
         var firstTop = firstSec.getBoundingClientRect().top + window.scrollY;
         var lastRect = lastSec.getBoundingClientRect();
         var lastBottom = lastRect.top + window.scrollY + lastRect.height;
@@ -498,7 +547,7 @@
         list.style.setProperty('--progress', pct.toFixed(2) + '%');
         // 最初の節の上端が現在地の帯より下にある（ページ先頭付近にいる）ときは、どの節も帯に入らず
         // IntersectionObserver が現在地を更新しないので、最初の節を現在地にする。
-        if (pos < 0) setCurrent(items, items[0].id, null);
+        if (pos < 0) setCurrent(items, here[0].id, null);
       });
     };
     window.addEventListener('scroll', scrollProgressHandler, { passive: true });

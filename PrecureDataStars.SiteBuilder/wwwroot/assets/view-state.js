@@ -20,6 +20,21 @@
  * 書き換えは history.replaceState で行い、ブラウザの履歴は増やさない。
  * 件数バッジでの並べ替え（count-sort.js）は、開いたときに見えているボタンを状態が合うまで押して戻す
  * （count-sort.js の準備が済んでから行うため、ほかの項目を戻した後に回す）。
+ *
+ * タブが 1 つ 1 ページの一覧（タブの帯がリンク a.tab-btn[data-tab-page]。スタッフ一覧など）：
+ *   - タブを押して移るとき、今の # の状態（絞り込みなど）と、タブの帯の画面の中の高さを sessionStorage に預け、
+ *     移った先で # に戻し、帯が同じ高さに来るようにスクロールを合わせる（その場で切り替わったように見せる）。
+ *   - 前の URL のタブの指定（#tab=debut）や、別のタブにあるセクションへのリンク（#debut-3。リンクの data-tab-anchors が id の頭）で
+ *     開かれたら、そのタブのページへ移す。
+ *   - 先読み：ページの speculationrules（対応するブラウザは、リンクに乗せたときに先に描いておく）。対応しないブラウザでは、
+ *     リンクに乗せた・触れたときに <link rel="prefetch"> を足す。先に描かれたページは、表示されるまで状態の復元を待つ。
+ *   - 行の多いタブはさらにページを分ける。ページ送り（.list-pager）と、左のもくじの「ほかのページにある節」へのリンクは
+ *     a[data-carry-state] で、タブと同じく今の # の状態を預けて移る。節の id（#debut-3）で開かれて預かった状態もあるときは、
+ *     # を状態に替えて戻し、その後でその節へ移る。開いた id がほかのページにある節の印（data-section-nav-href）なら、そのページへ移す。
+ *   - 順番を全行で決める一覧（[data-paged-list]。参加回数順）は、開いたときの並びの順にページを分けてある。個人・団体の絞り込み、
+ *     TV・映画・オトナの切り替え、件数の並べ替えを押したら、残りのページ（data-page-urls）の HTML から行を読み足し、もとの並び
+ *     （data-i）に戻して全行の一覧にする（ページ送りは隠す）。読み足せなかったときは、開いているページの行のまま働く。
+ *     ボタンに乗せた・触れた時点で残りのページを先に読み始め、押してから読み足しが済むまでは一覧を薄くする（data-paged-loading）。
  */
 (function () {
   'use strict';
@@ -41,7 +56,191 @@
     return null;
   }
 
+  var CARRY_KEY = 'tabPageCarry';
+
+  // タブのページどうしの受け渡し。移る前に預け、移った先で受け取る（20 秒より古いものは使わない）。
+  function takeCarry() {
+    try {
+      var v = sessionStorage.getItem(CARRY_KEY);
+      if (!v) return null;
+      sessionStorage.removeItem(CARRY_KEY);
+      var c = JSON.parse(v);
+      return c && Date.now() - c.t < 20000 ? c : null;
+    } catch (e) { return null; }
+  }
+
+  // # の状態から tab= を除いたもの（タブはページの URL が持つ）。
+  function hashWithoutTab(raw) {
+    return raw.split('&').filter(function (kv) { return kv && kv.indexOf('tab=') !== 0; }).join('&');
+  }
+
+  // タブの帯がリンクのページの準備。別のタブのページへ移したら true（その先の処理は要らない）。
+  function initTabPages() {
+    var links = qsa('a.tab-btn[data-tab-page]');
+    if (!links.length) return false;
+    var raw = (location.hash || '').replace(/^#/, '');
+
+    // 前の URL のタブの指定・別のタブにあるセクションへのリンクは、そのタブのページへ移す。
+    if (raw.indexOf('=') >= 0) {
+      var m = /(?:^|&)tab=([^&]*)/.exec(raw);
+      if (m) {
+        var rest = hashWithoutTab(raw);
+        for (var i = 0; i < links.length; i++) {
+          if (links[i].getAttribute('data-tab-page') === m[1] && !links[i].classList.contains('is-active')) {
+            location.replace(links[i].getAttribute('href') + (rest ? '#' + rest : ''));
+            return true;
+          }
+        }
+        try { history.replaceState(history.state, '', location.pathname + location.search + (rest ? '#' + rest : '')); } catch (e) { /* 残さない */ }
+      }
+    } else if (raw) {
+      var id = raw;
+      try { id = decodeURIComponent(raw); } catch (e) { /* そのまま */ }
+      var el = document.getElementById(id);
+      // ほかのページにある節の印なら、その節のあるページへ移す（預かった状態は移った先で受け取る）。
+      if (el && el.getAttribute('data-section-nav-href')) {
+        location.replace(el.getAttribute('data-section-nav-href'));
+        return true;
+      }
+      if (!el) {
+        for (var j = 0; j < links.length; j++) {
+          var prefixes = (links[j].getAttribute('data-tab-anchors') || '').split(/\s+/).filter(Boolean);
+          if (!links[j].classList.contains('is-active') && prefixes.some(function (p) { return id.indexOf(p) === 0; })) {
+            location.replace(links[j].getAttribute('href') + '#' + raw);
+            return true;
+          }
+        }
+      }
+    }
+
+    // 前のタブのページから預かった状態と帯の高さを戻す。
+    var carry = takeCarry();
+    var bar = links[0].parentElement;
+    // 節の id で開かれた（左のもくじから別のページの節へ移った）か。
+    var anchor = raw && raw.indexOf('=') < 0 ? raw : '';
+    if (carry) {
+      if (carry.hash && raw.indexOf('=') < 0) {
+        try { history.replaceState(history.state, '', location.pathname + location.search + '#' + carry.hash); } catch (e) { /* 残さない */ }
+        if (anchor) {
+          // 状態を戻すと行が隠れて節の位置が変わるので、戻し終えてからその節へ移る。
+          setTimeout(function () {
+            var target = null;
+            try { target = document.getElementById(decodeURIComponent(anchor)); } catch (e) { target = null; }
+            if (target) target.scrollIntoView();
+          }, 0);
+        }
+      }
+      if (!anchor && typeof carry.top === 'number' && bar) {
+        window.scrollTo(0, Math.max(0, window.scrollY + bar.getBoundingClientRect().top - carry.top));
+      }
+    }
+
+    // 移るときに預ける（リンクの先は書き換えない。先に描かれたページと同じ URL で開くため）。
+    // ページ送り・もくじのリンクは後から描かれるものもあるので、document で受ける。
+    document.addEventListener('click', function (ev) {
+      var a = ev.target.closest ? ev.target.closest('a.tab-btn[data-tab-page], a[data-carry-state]') : null;
+      if (!a) return;
+      var top = bar ? bar.getBoundingClientRect().top : 0;
+      // ページ送りを一覧の下で押したとき（帯が画面の上へ出ている）は、移った先で帯が見える高さに置く
+      // （固定のヘッダーの下。section-nav.js の上端の空きと同じ値）。
+      if (top < 0 && !a.classList.contains('tab-btn')) top = window.matchMedia('(max-width: 768px)').matches ? 30 : 110;
+      try {
+        sessionStorage.setItem(CARRY_KEY, JSON.stringify({
+          hash: hashWithoutTab((location.hash || '').replace(/^#/, '')),
+          top: top,
+          t: Date.now()
+        }));
+      } catch (e) { /* 預けられない環境では引き継がない */ }
+    });
+
+    // 先読み（speculationrules に対応しないブラウザ）。
+    if (!(window.HTMLScriptElement && HTMLScriptElement.supports && HTMLScriptElement.supports('speculationrules'))) {
+      links.concat(qsa('.list-pager a')).forEach(function (a) {
+        if (a.classList.contains('is-active')) return;
+        var done = false;
+        function prefetch() {
+          if (done) return;
+          done = true;
+          var l = document.createElement('link');
+          l.rel = 'prefetch';
+          l.href = a.getAttribute('href');
+          document.head.appendChild(l);
+        }
+        a.addEventListener('pointerenter', prefetch);
+        a.addEventListener('touchstart', prefetch, { passive: true });
+      });
+    }
+    return false;
+  }
+
+  // 順番を全行で決める一覧（[data-paged-list]）：絞り込み・切り替え・並べ替えが押されたら、残りのページの行を読み足して全行の一覧にする。
+  function initPagedList() {
+    var list = document.querySelector('[data-paged-list]');
+    if (!list || !window.fetch || !window.DOMParser) return;
+    var urls = (list.getAttribute('data-page-urls') || '').split(/\s+/).filter(Boolean);
+    var own = parseInt(list.getAttribute('data-page'), 10) - 1;
+    if (urls.length < 2 || !(own >= 0)) return;
+    var root = list.closest('[data-entity-filter]') || list.parentElement;
+    var loading = null; // 残りのページの行を読む Promise（読み始めたら入る。失敗したら null に戻して、次にもう一度試す）
+    var state = 0; // 0＝まだ / 1＝読み足し中 / 2＝済み
+    function isRow(el) { return el.tagName === 'LI'; }
+    // 残りのページの行を読む。ボタンに乗せた・触れた時点で先に読み始め、押した時にはそろっているようにする。
+    function load() {
+      if (!loading) {
+        loading = Promise.all(urls.map(function (url, i) {
+          if (i === own) return null;
+          return fetch(url)
+            .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.text(); })
+            .then(function (html) {
+              return new DOMParser().parseFromString(html, 'text/html').querySelectorAll('[data-paged-list] > li');
+            });
+        }));
+        loading.catch(function () { loading = null; });
+      }
+      return loading;
+    }
+    function expand() {
+      if (state) return;
+      state = 1;
+      // 読み足しが済むまでは、開いているページの行だけの結果が出ている。途中だと分かるよう一覧を薄くする（site.css）。
+      root.setAttribute('data-paged-loading', '');
+      load().then(function (sets) {
+        var rows = Array.prototype.filter.call(list.children, isRow);
+        sets.forEach(function (set) {
+          if (!set) return;
+          for (var i = 0; i < set.length; i++) rows.push(document.importNode(set[i], true));
+        });
+        // もとの並び（担当の総量の順）に戻す。並べ替えボタンは、この並びを同じ数の行の順に使う（count-sort.js）。
+        rows.sort(function (a, b) { return Number(a.getAttribute('data-i')) - Number(b.getAttribute('data-i')); });
+        var frag = document.createDocumentFragment();
+        rows.forEach(function (li) { frag.appendChild(li); });
+        list.appendChild(frag);
+        state = 2;
+        // ページ送りを隠す（site.css）。読み足しが済むまでは出したままにし、失敗したら次に押されたときにもう一度試す。
+        root.removeAttribute('data-paged-loading');
+        root.setAttribute('data-paged-all', '');
+        document.dispatchEvent(new CustomEvent('paged-list-expanded'));
+      }).catch(function () {
+        state = 0;
+        root.removeAttribute('data-paged-loading');
+      });
+    }
+    var TRIGGERS = '.entity-filter-btn, .wk-toggle, .count-sort-btn';
+    function onHint(ev) {
+      if (state === 0 && ev.target.closest && ev.target.closest(TRIGGERS)) load();
+    }
+    document.addEventListener('pointerover', onHint, { passive: true });
+    document.addEventListener('touchstart', onHint, { passive: true });
+    document.addEventListener('focusin', onHint);
+    // 各ボタンの処理より先に受ける（開いたときに # の状態を戻す押し方でも始まる）。
+    document.addEventListener('click', function (ev) {
+      if (ev.target.closest && ev.target.closest(TRIGGERS)) expand();
+    }, true);
+  }
+
   function init() {
+    if (initTabPages()) return;
+    initPagedList();
     var tabButtons = qsa('.tab-btn[data-tab]');
     var filterButtons = qsa('.entity-filter-btn[data-entity-filter-set]');
     var workButtons = qsa('.wk-toggle[data-wk-toggle]');
@@ -208,6 +407,11 @@
   var started = false;
   function start() {
     if (started) return;
+    // 先に描かれている間（speculationrules の prerender）は、表示されてから始める（預かった状態は表示のときに届く）。
+    if (document.prerendering) {
+      document.addEventListener('prerenderingchange', start, { once: true });
+      return;
+    }
     started = true;
     init();
   }

@@ -15,6 +15,7 @@
  * ・TV・映画・オトナの出し分けのボタン（_work-kind-toggles.sbn）で切っている種類の札は数えない。ボタンが押されたら（wk-change）、
  *   入っている種類だけで並べ替えの段階を組み直し、最初の状態に戻す。
  * ・ページ出力は増やさず、並べ替えはこのスクリプトの中だけで行う（外部ライブラリなし）。
+ * ・ページを分けた一覧が残りのページの行を読み足したら（paged-list-expanded。view-state.js）、行を数え直し、今の並べ替えのまま全行を並べ直す。
  * ・今の並べ替えをボタンの data-count-sort-state に「tv-desc」「tv_movie-asc」「none」の形で書き、最初の状態を
  *   data-count-sort-default に控える。URL の # に残すのは view-state.js（押して状態を合わせる）。
  */
@@ -59,14 +60,19 @@
 
     // 行ごとの件数ともとの並び順を控える。
     var present = {};
-    var rowsByList = lists.map(function (list) {
-      return Array.prototype.filter.call(list.children, function (c) { return c.tagName === 'LI'; })
-        .map(function (li, i) {
-          var counts = readCounts(li);
-          Object.keys(counts).forEach(function (k) { present[k] = true; });
-          return { el: li, index: i, counts: counts };
-        });
-    });
+    var rowsByList = [];
+    function collect() {
+      present = {};
+      rowsByList = lists.map(function (list) {
+        return Array.prototype.filter.call(list.children, function (c) { return c.tagName === 'LI'; })
+          .map(function (li, i) {
+            var counts = readCounts(li);
+            Object.keys(counts).forEach(function (k) { present[k] = true; });
+            return { el: li, index: i, counts: counts };
+          });
+      });
+    }
+    collect();
     if (!KINDS.some(function (k) { return present[k.key]; })) return null;
 
     // TV・映画・オトナの出し分けのボタンで切っている種類（ルートの data-wk-on に無い種類）は、並べ替えに使わない。
@@ -175,6 +181,16 @@
     btn.setAttribute('data-count-sort-default', stateKey(states[pos]));
     document.addEventListener('wk-change', function () {
       build();
+      apply();
+    });
+    // 行が読み足されたら（もとの並びの順に入っている）、数え直して、今の並べ替えのまま並べ直す。
+    document.addEventListener('paged-list-expanded', function () {
+      var key = stateKey(states[pos]);
+      collect();
+      build();
+      for (var i = 0; i < states.length; i++) {
+        if (stateKey(states[i]) === key) { pos = i; break; }
+      }
       apply();
     });
     return refreshVisibility;

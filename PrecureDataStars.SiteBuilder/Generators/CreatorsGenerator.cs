@@ -662,7 +662,7 @@ public sealed class CreatorsGenerator
     /// <summary>声の出演一覧の題（h1・パンくず・OGP カード）。検索で打たれる「声優一覧」を題に含める。</summary>
     private const string VoiceCastPageTitle = "歴代プリキュア声優一覧";
     /// <summary>声の出演一覧の OGP カードのリード文。</summary>
-    private const string VoiceCastPageLead = "プリキュアのTVシリーズと映画に出演した方々";
+    private const string VoiceCastPageLead = "歴代プリキュアのTVシリーズと映画に出演した方々";
 
     /// <summary>声の出演一覧の meta description（検索で打たれる「声優」と人数・中身が分かる形。見出しのように読むラベルなので「さん」は付けない）。</summary>
     private static string VoiceCastMetaDescription(int voiceActorCount) => $"TV シリーズと映画の声優 {voiceActorCount} 名（役名つき）";

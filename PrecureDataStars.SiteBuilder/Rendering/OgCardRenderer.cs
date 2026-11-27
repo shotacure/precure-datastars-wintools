@@ -1576,6 +1576,8 @@ public sealed partial class OgCardRenderer : IDisposable
     /// 折り返しは語の境目で行う。値は「、」「／」の直後で語に割り、ラベルと最初の語は同じ行に置く
     /// （ラベルだけが行末に残らないように）。1 語が行幅を超えるときだけ文字単位で折る。
     /// 氏名の中（姓と名のあいだの空白）では折らないので、1 人の名前が 2 行に割れて別人に見えることがない。
+    /// 1 行に入らず中で折った項目の後ろには、ほかの項目を同じ行に続けず、次の項目は次の行の頭から始める
+    /// （折った項目の 2 行目に別の役職が並ぶと、どこまでがどの役職の担当者か読めなくなるため）。
     /// </para>
     /// </summary>
     /// <param name="anchor">
@@ -1602,6 +1604,8 @@ public sealed partial class OgCardRenderer : IDisposable
         float used = 0f;
         bool truncated = false;
         int limit = Math.Max(1, maxLines);
+        // 直前の項目が 1 行に入らず中で折った項目なら、次の項目は次の行の頭から始める。
+        bool previousWrapped = false;
 
         bool NewLine(float indent = 0f)
         {
@@ -1651,8 +1655,9 @@ public sealed partial class OgCardRenderer : IDisposable
             float firstTokenWidth = atomic ? valueWidth : (tokens.Count > 0 ? RunWidth(tokens[0]) : 0f);
 
             // 1 行に入らない長い項目（文章を除く）は行頭から始め、項目の中で折るときは値の始まり（ラベルの幅）へ字下げする。
+            // 直前の項目を中で折ったときも、この項目は次の行の頭から始める（折った項目と同じ行に並べない）。
             float hang = atomic || prose ? 0f : labelWidth;
-            if (!atomic && !prose && used > 0f)
+            if ((!atomic && !prose || previousWrapped) && used > 0f)
             {
                 if (!NewLine()) { truncated = true; break; }
             }
@@ -1741,6 +1746,7 @@ public sealed partial class OgCardRenderer : IDisposable
                 used += width;
             }
             if (stop) break;
+            previousWrapped = !atomic && !prose;
         }
 
         var (top, bottom) = FinishInlineFacts(canvas, paint, lines, indents, labelFont, valueFont, noteFont, x, anchor, anchorToTop, lineHeight);

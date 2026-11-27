@@ -1623,7 +1623,8 @@ public sealed class SeriesGenerator
         string periodLine = isWebShort
             ? $"{view.Period}　{petitcureEpisodes[^1].EpLabel.Split('・')[^1]} まで配信"
             : isMovieLike
-            ? string.Join("・", new[] { view.Period.Length > 0 ? $"{view.Period}公開" : "", runTimeMinutes }.Where(x => x.Length > 0))
+            // 開始日がまだ決まっていない作品の期間は「2027年放送予定」の形で言い切っているので、「公開」を足さない。
+            ? string.Join("・", new[] { view.Period.Length == 0 ? "" : view.Period.EndsWith("予定", StringComparison.Ordinal) ? view.Period : $"{view.Period}公開", runTimeMinutes }.Where(x => x.Length > 0))
             : $"{view.Period}　全{view.Episodes}話{view.EpisodesEstimateNote}";
 
         // 主要スタッフは役職ごとに全員を出す。連名を落とすと「誰が作ったか」の答えが変わってしまう。

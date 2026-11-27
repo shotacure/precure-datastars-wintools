@@ -84,6 +84,12 @@ public sealed class PersonsGenerator
     /// 作詞・作曲・編曲（曲単位の仕事）だけの曲は本索引に乗らず、従来どおり曲の代表録音から出典を解決する。</summary>
     private IReadOnlyDictionary<int, IReadOnlyDictionary<int, SongRecording>>? _sungRecordingByAlias;
 
+    /// <summary>
+    /// 名義（person_alias_id）→ 曲（song_id）→ その名義が歌唱者の行（歌・コーラス・台詞）で参加した録音の ID。
+    /// 音楽クレジットの「歌」の数は録音（歌唱ごとのバージョン）で数えるので、歌唱・コーラスの枠はここで録音を引く。
+    /// </summary>
+    private IReadOnlyDictionary<int, IReadOnlyDictionary<int, IReadOnlySet<int>>>? _sungRecordingIdsByAlias;
+
     /// <summary>本人の名義で歌（VOCALS。コーラスは除く）を担当した人物名義（ユニットの PERSON メンバーを含む。キャラクターの名義で歌った声優は含めない）。
     /// OGP カードで、声の出演をしたことのある歌手と、歌うこともある声優を分けるのに使う（<see cref="IsSinger"/>）。</summary>
     private HashSet<int>? _ownNameVocalAliases;
@@ -197,6 +203,7 @@ public sealed class PersonsGenerator
             // 歌った録音を alias × song_id 単位で記録する（出典・版をカードで正確に出すため）。
             // 同一曲を複数録音で歌っている場合は出典シリーズが最も早い録音を採用する。
             var sungRecByAlias = new Dictionary<int, Dictionary<int, SongRecording>>();
+            var sungRecIdsByAlias = new Dictionary<int, Dictionary<int, HashSet<int>>>();
             var ownNameVocal = new HashSet<int>();
             void AddSungRecording(int aliasId, SongRecording rec)
             {
@@ -223,6 +230,11 @@ public sealed class PersonsGenerator
                         if (p.PersonAliasId is not int paid || !seenInRow.Add(paid)) continue;
                         AddSingerSong(paid, rec.SongId, s.RoleCode);
                         AddSungRecording(paid, rec);
+                        if (!sungRecIdsByAlias.TryGetValue(paid, out var recsBySong))
+                            sungRecIdsByAlias[paid] = recsBySong = new Dictionary<int, HashSet<int>>();
+                        if (!recsBySong.TryGetValue(rec.SongId, out var recIds))
+                            recsBySong[rec.SongId] = recIds = new HashSet<int>();
+                        recIds.Add(rec.SongRecordingId);
                         if (p.CharacterAliasId is null && string.Equals(s.RoleCode, "VOCALS", StringComparison.Ordinal))
                             ownNameVocal.Add(paid);
                     }
@@ -234,6 +246,9 @@ public sealed class PersonsGenerator
             _sungRecordingByAlias = sungRecByAlias.ToDictionary(
                 kv => kv.Key,
                 kv => (IReadOnlyDictionary<int, SongRecording>)kv.Value);
+            _sungRecordingIdsByAlias = sungRecIdsByAlias.ToDictionary(
+                kv => kv.Key,
+                kv => (IReadOnlyDictionary<int, IReadOnlySet<int>>)kv.Value.ToDictionary(x => x.Key, x => (IReadOnlySet<int>)x.Value));
             _ownNameVocalAliases = ownNameVocal;
         }
 
@@ -1522,6 +1537,22 @@ public sealed class PersonsGenerator
     /// </list>
     /// 何も無い区分は出さない。
     /// </summary>
+    /// <summary>「歌」の数を数えるキー（録音 1 つ = 1 曲）。</summary>
+    private static string RecordingKey(int songRecordingId) => "rec:" + songRecordingId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>曲のすべての録音のキー（作詞・作曲・編曲や、曲に付いた音楽クレジットの数え方）。</summary>
+    private IEnumerable<string> AllRecordingKeys(int songId)
+        => _recordingsBySong is not null && _recordingsBySong.TryGetValue(songId, out var recs)
+            ? recs.Select(r => RecordingKey(r.SongRecordingId))
+            : Array.Empty<string>();
+
+    /// <summary>その人（名義の並び）が歌唱者の行で参加した、曲の録音のキー（歌唱・コーラスの数え方）。</summary>
+    private IEnumerable<string> SungRecordingKeys(IReadOnlyList<int> aliasIds, int songId)
+        => aliasIds
+            .Where(id => _sungRecordingIdsByAlias is not null && _sungRecordingIdsByAlias.ContainsKey(id))
+            .SelectMany(id => _sungRecordingIdsByAlias![id].TryGetValue(songId, out var recIds) ? recIds : (IEnumerable<int>)Array.Empty<int>())
+            .Select(RecordingKey);
+
     private IReadOnlyList<PersonMusicSection> BuildPersonMusicSections(IReadOnlyList<int> aliasIds, IReadOnlyList<PersonSongCard> songCards, string displayName)
     {
         var bgmGroups = BuildPersonInvolvementGroups(aliasIds, inv => inv.EntryKind == "BGM_CUE_CREDIT");
@@ -1598,8 +1629,14 @@ public sealed class PersonsGenerator
 
             var discItems = BuildMusicCreditItems(productRows.Where(r => InGroup(r.RoleCode)), displayName);
 
-            var songKeys = cards.Select(c => MusicCreditCounting.Key(MusicCreditCounting.Song, c.SongUrl, ""))
-                .Concat(songItems.Select(it => MusicCreditCounting.Key(MusicCreditCounting.Song, it.Url, it.SubLabel)))
+            // 「歌」の数は録音（歌唱ごとのバージョン）で数える。作詞・作曲・編曲の曲はその曲のすべての録音、
+            // 歌唱・コーラスの曲はその人が歌った録音、曲・録音に付いた音楽クレジットはその録音（曲に付いたものは曲のすべての録音）。
+            var songKeys = cards.SelectMany(c => label is "歌唱" or "コーラスのみ"
+                    ? SungRecordingKeys(aliasIds, c.SongId)
+                    : AllRecordingKeys(c.SongId))
+                .Concat(songRows.Where(r => InGroup(r.RoleCode)).SelectMany(r => r.SongRecordingId is int recId
+                    ? new[] { RecordingKey(recId) }
+                    : r.SongId is int sid ? AllRecordingKeys(sid) : Array.Empty<string>()))
                 .ToHashSet(StringComparer.Ordinal);
             var bgmKeys = bgmItems.Select(it => MusicCreditCounting.Key(MusicCreditCounting.Bgm, it.Url, it.SubLabel)).ToHashSet(StringComparer.Ordinal);
             var discKeys = discItems.Select(it => MusicCreditCounting.Key(MusicCreditCounting.Disc, it.Url, it.SubLabel)).ToHashSet(StringComparer.Ordinal);

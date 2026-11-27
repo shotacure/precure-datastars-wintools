@@ -216,7 +216,8 @@ public sealed class HomeGenerator
                     new OgCardBadge("エピソード", $"{dbStats.EpisodeCount}話"),
                     new OgCardBadge("プリキュア", $"{dbStats.PrecuresCount}人") { NewLine = true },
                     new OgCardBadge("キャラクター", $"{dbStats.CharactersCount}人"),
-                    new OgCardBadge("歌", $"{dbStats.SongWorksCount}曲"),
+                    // 表に出す歌の「曲」は録音（歌唱ごとのバージョン）の数。作詞・作曲・編曲の単位の曲の数は出さない。
+                    new OgCardBadge("歌", $"{dbStats.SongsCount}曲"),
                     new OgCardBadge("クリエイター", $"{dbStats.PersonsCount}人") { NewLine = true },
                     new OgCardBadge("", $"{dbStats.CompaniesCount}団体")
                 }
@@ -669,7 +670,6 @@ WHERE e.is_deleted = 0
         int precuresCount = (await precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
         var songRecordings = await songRecordingsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
         int songsCount = songRecordings.Count;
-        int songWorksCount = songRecordings.Select(r => r.SongId).Distinct().Count();
         int productsCount = (await productsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
 
         // bgm_cues / discs は Repository に GetAllAsync が無いため SQL で直接 COUNT(*)。
@@ -708,7 +708,6 @@ WHERE e.is_deleted = 0
             PrecuresCount = precuresCount,
             CharactersCount = charactersCount,
             SongsCount = songsCount,
-            SongWorksCount = songWorksCount,
             BgmsCount = bgmsCount,
             // 「N 点 M 枚」をホームの DB 統計セル内で他の統計セル（曲・劇伴 等）と同じ「数値＋ラベル」
             // ペアの並びとして見せたいので、点数（products）と枚数（discs）はそれぞれ独立した
@@ -1068,8 +1067,6 @@ WHERE e.is_deleted = 0
         public int PrecuresCount { get; set; }
         public int CharactersCount { get; set; }
         public int SongsCount { get; set; }
-        /// <summary>歌の曲数（録音を 1 つ以上持つ <c>songs</c> の数。<see cref="SongsCount"/> は録音＝バージョンの数）。OGP カードの「歌 N曲」に使う。</summary>
-        public int SongWorksCount { get; set; }
         public int BgmsCount { get; set; }
         /// <summary>音楽商品の点数（<c>products</c> 件数）。ホーム DB 統計セルでは「点」ラベルと組で表示する。</summary>
         public int MusicProductsCount { get; set; }

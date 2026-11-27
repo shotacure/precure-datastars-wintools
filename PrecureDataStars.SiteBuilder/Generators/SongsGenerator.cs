@@ -257,8 +257,6 @@ public sealed class SongsGenerator
             .ThenBy(s => s.SortSeriesId)
             .ToList();
 
-        // 録音を 1 つ以上持つ曲の数（一覧に行が出る曲）。カードのバッジの「曲」はこの数（ページの冒頭文・meta description の「全 N 曲」は録音の数）。
-        int songCount = recordingsBySong.Count(kv => kv.Value.Count > 0 && songById.ContainsKey(kv.Key));
         var content = new SongsIndexModel
         {
             SeriesSections = seriesSections,
@@ -268,15 +266,13 @@ public sealed class SongsGenerator
         {
             // 題は検索で打たれる「一覧」を含める。ほかのページのパンくずの「歴代プリキュアソング」は短い名で残す。
             PageTitle = "歴代プリキュアソング一覧",
-            // 数は曲（作品としての歌）の数と、バージョン（録音）の数。バージョン数は曲数と食い違うときだけ出す。
+            // 数は録音（歌唱ごとのバージョン）の数で、表には「曲」として出す。作詞・作曲・編曲の単位の曲の数は出さない。
             OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアソング一覧")
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（songs-index.sbn の .lead）と同じ文。数だけはページ側で添える。
                 Subtitle = "歴代プリキュアの歌",
-                Badges = songCount == allRows.Count
-                    ? new[] { new OgCardBadge("", $"{songCount}曲") }
-                    : new[] { new OgCardBadge("", $"{songCount}曲"), new OgCardBadge("", $"{allRows.Count}ver.") }
+                Badges = new[] { new OgCardBadge("", $"{allRows.Count}曲") }
             },
             // ページの冒頭文（songs-index.sbn の .lead）と同じ文。
             // 「全 N 曲」は録音（歌唱ごとのバージョン）の数で数える。このサイトの「曲」（作詞・作曲・編曲の単位）とは別で、一般に「歌」と呼ばれる数。

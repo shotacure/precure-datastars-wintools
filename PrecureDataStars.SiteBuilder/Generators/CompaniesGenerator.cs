@@ -762,6 +762,9 @@ public sealed class CompaniesGenerator
         {
             // Order は同じ日付の行の並び（劇伴は series_id → 録音回、歌は盤の中の順＝録音 ID、盤は 0 で、その後ろは品番を含む URL の順）。
             var items = new List<(DateTime Sort, (long Series, long Target) Order, string Key, string? CatalogNo, CompanyMusicItem Item)>();
+            // 「歌」の数は録音（歌唱ごとのバージョン）で数える（並びは曲ごとの 1 行のまま）。録音に付いたクレジットはその録音、
+            // 曲に付いたクレジットはその曲のすべての録音。劇伴・盤は並びの行の数のまま。
+            var songRecordingKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (var g in rows.Where(r => kinds.Contains(r.TargetKind))
                          .GroupBy(r => (r.TargetKind, r.SongId, r.SongRecordingId, r.BgmSeriesId, r.BgmSessionNo, r.ProductCatalogNo)))
             {
@@ -769,6 +772,12 @@ public sealed class CompaniesGenerator
                 string aliasNote = withAliasNote
                     ? CompanyAliasNote(company, g.Where(r => r.CompanyAliasId.HasValue).Select(r => r.CompanyAliasId!.Value))
                     : "";
+                if (label == MusicCreditCounting.Song)
+                {
+                    if (g.Key.SongRecordingId is int recId) songRecordingKeys.Add("rec:" + recId);
+                    else if (g.Key.SongId is int songId)
+                        foreach (var recIdOfSong in RecordingIdsOfSong(songId)) songRecordingKeys.Add("rec:" + recIdOfSong);
+                }
                 items.Add((t.Sort, (g.Key.BgmSeriesId ?? 0, MusicCreditViewBuilder.TargetOrder(_ctx, g.First())),
                     MusicCreditCounting.Key(label, t.Url, t.Sub), g.Key.ProductCatalogNo,
                     new CompanyMusicItem { Title = t.Title, Url = t.Url, SubLabel = t.Sub, AliasNote = aliasNote }));
@@ -786,13 +795,25 @@ public sealed class CompaniesGenerator
             var section = new CompanyMusicKindSection
             {
                 Label = label,
-                CountLabel = MusicCreditCounting.CountLabel(label, merged.Count),
+                CountLabel = MusicCreditCounting.CountLabel(label, label == MusicCreditCounting.Song ? songRecordingKeys.Count : merged.Count),
                 Items = merged.OrderBy(x => x.Sort).ThenBy(x => x.Order).ThenBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Item).ToList()
             };
-            section.Counts.Add(label, merged.Select(x => x.Key));
+            section.Counts.Add(label, label == MusicCreditCounting.Song ? songRecordingKeys : merged.Select(x => x.Key));
             sections.Add(section);
         }
         return sections;
+    }
+
+    /// <summary>曲（song_id）→ その曲の録音の ID。「歌」の数を録音で数えるときに引く（初めて使うときに作る）。</summary>
+    private Dictionary<int, List<int>>? _recordingIdsBySong;
+
+    /// <summary>曲のすべての録音の ID。</summary>
+    private IReadOnlyList<int> RecordingIdsOfSong(int songId)
+    {
+        _recordingIdsBySong ??= _ctx.SongRecordingById.Values
+            .GroupBy(r => r.SongId)
+            .ToDictionary(g => g.Key, g => g.Select(r => r.SongRecordingId).ToList());
+        return _recordingIdsBySong.TryGetValue(songId, out var ids) ? ids : (IReadOnlyList<int>)Array.Empty<int>();
     }
 
     /// <summary>使われた屋号のうち、正式名と違うもの（空白の違いを除く）を「〇〇・〇〇 名義」で返す（無ければ空文字）。</summary>

@@ -1463,7 +1463,8 @@ public sealed class CreatorsGenerator
                 PersonName = _ctx.EntityUrls.PersonDisplayLabel(p.PersonId) ?? p.FullName,
                 PersonNameKana = _ctx.EntityUrls.PersonDisplayKana(p.PersonId) ?? (p.FullNameKana ?? ""),
                 PersonUrl = PathUtil.PersonUrl(kv.Key),
-                SongCount = kv.Value.Count,
+                // 表に出す「曲」の数は、担当した曲の録音（歌唱ごとのバージョン）の数。
+                SongCount = kv.Value.Sum(songId => RecordingIdsOfSong(songId).Count),
                 // 初参加順の代理キー。未取得は末尾に送るため int.MaxValue。
                 DebutRecordingId = debutRecIdByPerson.TryGetValue(kv.Key, out var dr) ? dr : int.MaxValue,
                 DebutSeq = debutSeqByPerson.TryGetValue(kv.Key, out var ds) ? ds : int.MaxValue,
@@ -1594,16 +1595,16 @@ public sealed class CreatorsGenerator
         var songWritingAcc = new MusicEntityAccumulator();
         foreach (var c in allSongCredits)
             if (IsGroup(c.CreditRole, MusicCreditGroups.Writing) && PersonKey(c.PersonAliasId, personIdByAlias) is { } key)
-                AddSong(songWritingAcc, key, c.SongId, c.CreditRole, minRecIdBySong, 0, SongCreditRoleRank(c.CreditRole) * 1000L + c.CreditSeq);
+                AddSong(songWritingAcc, key, c.SongId, c.CreditRole, minRecIdBySong, 0, SongCreditRoleRank(c.CreditRole) * 1000L + c.CreditSeq, RecordingIdsOfSong(c.SongId));
         foreach (var (songId, r) in songTargetRows)
             if (IsGroup(r.RoleCode, MusicCreditGroups.Writing) && EntityKeyOf(r, personIdByAlias) is { } key)
-                AddSong(songWritingAcc, key, songId, r.RoleCode, minRecIdBySong, SongTargetRank(r), r.CreditSeq);
+                AddSong(songWritingAcc, key, songId, r.RoleCode, minRecIdBySong, SongTargetRank(r), r.CreditSeq, r.SongRecordingId is int wrid ? new[] { wrid } : RecordingIdsOfSong(songId));
 
         // ── 歌（演奏）：曲に付いた音楽クレジットの演奏・コーラス等 ──
         var songPerformanceAcc = new MusicEntityAccumulator();
         foreach (var (songId, r) in songTargetRows)
             if (IsGroup(r.RoleCode, MusicCreditGroups.Performance) && EntityKeyOf(r, personIdByAlias) is { } key)
-                AddSong(songPerformanceAcc, key, songId, r.RoleCode, minRecIdBySong, SongTargetRank(r), r.CreditSeq);
+                AddSong(songPerformanceAcc, key, songId, r.RoleCode, minRecIdBySong, SongTargetRank(r), r.CreditSeq, r.SongRecordingId is int prid ? new[] { prid } : RecordingIdsOfSong(songId));
         // 歌唱ページの歌手に載らない人の本人名義での歌唱（コーラスだけ・名前の出ないユニットのメンバーだけ）は、
         // その歌唱役職（歌・コーラス等）で演奏側に載せる。キャラクターとしての歌唱は歌唱ページが受け持つ。
         foreach (var s in allSingers)
@@ -1614,7 +1615,7 @@ public sealed class CreatorsGenerator
                     && personIdByAlias.TryGetValue(paid, out var pid) && !leadSingers.Contains(pid))
                     // 歌唱の連名（singer_seq）は、同じ録音の音楽クレジットの後に置く。
                     AddSong(songPerformanceAcc, ('P', pid), rec.SongId, s.RoleCode, minRecIdBySong,
-                        RecordingTargetRank(s.SongRecordingId), 100_000L + s.SingerSeq);
+                        RecordingTargetRank(s.SongRecordingId), 100_000L + s.SingerSeq, new[] { s.SongRecordingId });
         }
 
         // ── 劇伴（作編曲）：bgm_cue_credits と、劇伴セッションに付いた音楽クレジットの作詞・作曲・編曲 ──
@@ -1713,13 +1714,14 @@ public sealed class CreatorsGenerator
             "creators-music-production.sbn", content, layout);
 
         // 初参加のキーは（曲の最小録音 ID, 0, target, pos）。target・pos は同じ曲の中の並び（紐付け先の順とクレジットの位置）。
-        void AddSong(MusicEntityAccumulator acc, (char Kind, int Id) key, int songId, string roleCode, IReadOnlyDictionary<int, int> minRec, long target, long pos)
+        // recordings は、その参加で数える録音（曲に付いた担当はその曲のすべての録音、録音に付いた担当はその録音）。
+        void AddSong(MusicEntityAccumulator acc, (char Kind, int Id) key, int songId, string roleCode, IReadOnlyDictionary<int, int> minRec, long target, long pos, IEnumerable<int> recordings)
         {
             long sort = minRec.TryGetValue(songId, out var rid) ? rid : long.MaxValue;
             string label = _ctx.SongById.TryGetValue(songId, out var song) ? song.Title : "";
             int? seriesId = minRec.TryGetValue(songId, out var firstRec) && _ctx.SongRecordingById.TryGetValue(firstRec, out var rec)
                 ? rec.SeriesId : null;
-            acc.Add(key, songId, roleCode, new MusicDebutKey(sort, 0, target, pos), label, PathUtil.SongUrl(songId), seriesId);
+            acc.Add(key, songId, roleCode, new MusicDebutKey(sort, 0, target, pos), label, PathUtil.SongUrl(songId), seriesId, recordings: recordings);
         }
 
         // productCatalogNo を渡すと、作品ではなくその盤（商品）の参加として数える（初参加は作品で決める）。
@@ -1816,7 +1818,7 @@ public sealed class CreatorsGenerator
     {
         // 役職の札のリンク先：歌のタブは作詞・作曲・編曲・歌唱も役職詳細へ、劇伴・制作のタブは音楽の役職詳細だけ
         // （劇伴の作曲・編曲の役職詳細は歌の作家の一覧なのでリンクしない）。
-        var rows = BuildMusicEntityRows(acc, personById, byWork ? PathUtil.MusicRoleBadgeUrl : PathUtil.SongCardRoleBadgeUrl);
+        var rows = BuildMusicEntityRows(acc, personById, byWork ? PathUtil.MusicRoleBadgeUrl : PathUtil.SongCardRoleBadgeUrl, byWork);
         return new MusicListTab
         {
             Key = key,
@@ -1938,10 +1940,10 @@ public sealed class CreatorsGenerator
                         t.Sort, target, r.CreditSeq);
                     break;
                 case MusicCreditTargetKinds.Song when r.SongId is int sid:
-                    acc.AddSong(sid, t.Title, t.Url, t.Sort, SeriesOfSong(sid), target, r.CreditSeq);
+                    acc.AddSong(sid, RecordingIdsOfSong(sid), t.Title, t.Url, t.Sort, SeriesOfSong(sid), target, r.CreditSeq);
                     break;
                 case MusicCreditTargetKinds.SongRecording when r.SongRecordingId is int rid && _ctx.SongRecordingById.TryGetValue(rid, out var rec):
-                    acc.AddSong(rec.SongId, t.Title, t.Url, t.Sort, rec.SeriesId, target, r.CreditSeq);
+                    acc.AddSong(rec.SongId, new[] { rid }, t.Title, t.Url, t.Sort, rec.SeriesId, target, r.CreditSeq);
                     break;
                 case MusicCreditTargetKinds.Product when r.ProductCatalogNo is string pc:
                     acc.AddProduct(pc, t.Title, t.Url, t.Sort, SeriesOfProduct(pc), target, r.CreditSeq);
@@ -1953,7 +1955,7 @@ public sealed class CreatorsGenerator
             if (PersonKey(c.PersonAliasId, personIdByAlias) is not { } key) continue;
             if (!_ctx.SongById.TryGetValue(c.SongId, out var song)) continue;
             long target = minRecIdBySong.TryGetValue(c.SongId, out var minRec) ? 1_000L + minRec : int.MaxValue;
-            AccOf(key).AddSong(c.SongId, song.Title, PathUtil.SongUrl(c.SongId), DateTime.MaxValue, SeriesOfSong(c.SongId), target, c.CreditSeq);
+            AccOf(key).AddSong(c.SongId, RecordingIdsOfSong(c.SongId), song.Title, PathUtil.SongUrl(c.SongId), DateTime.MaxValue, SeriesOfSong(c.SongId), target, c.CreditSeq);
             timeline.AddSong(key, c.SongId);
         }
 
@@ -2031,7 +2033,8 @@ public sealed class CreatorsGenerator
                 TvWorkCount = works.Count(sid => !_ctx.IsMovieKindSeries(sid) && !_ctx.IsOtonaSeries(sid)),
                 MovieWorkCount = works.Count(sid => _ctx.IsMovieKindSeries(sid)),
                 OtonaWorkCount = works.Count(sid => _ctx.IsOtonaSeries(sid)),
-                SongCount = acc.SongIds.Count,
+                // 表に出す「曲」の数は録音の数。
+                SongCount = acc.RecordingIds.Count,
                 ProductCount = acc.Products.Count
             };
             row.Count = row.TvWorkCount + row.MovieWorkCount + row.OtonaWorkCount + row.SongCount + row.ProductCount;
@@ -2113,6 +2116,8 @@ public sealed class CreatorsGenerator
         public readonly Dictionary<int, BgmWork> Bgm = new();
         public readonly Dictionary<string, Item> Songs = new(StringComparer.Ordinal);
         public readonly HashSet<int> SongIds = new();
+        /// <summary>担当した録音の ID（表に出す「曲」の数はこの数）。</summary>
+        public readonly HashSet<int> RecordingIds = new();
         public readonly Dictionary<string, Item> Products = new(StringComparer.Ordinal);
         /// <summary>
         /// 初参加の候補（担当先ごとの日付と作品、同じ日付の中の並び）。Target は紐付け先の順（作品のクレジットは話数、音楽クレジットは
@@ -2152,9 +2157,10 @@ public sealed class CreatorsGenerator
             Candidates.Add((sort, seriesId, target, pos));
         }
 
-        public void AddSong(int songId, string title, string url, DateTime sort, int? seriesId, long target, long pos)
+        public void AddSong(int songId, IEnumerable<int> recordingIds, string title, string url, DateTime sort, int? seriesId, long target, long pos)
         {
             SongIds.Add(songId);
+            RecordingIds.UnionWith(recordingIds);
             AddItem(Songs, title, url, sort, target);
             Candidates.Add((sort, seriesId, target, pos));
         }
@@ -2271,7 +2277,8 @@ public sealed class CreatorsGenerator
     }
 
     /// <summary>歌・劇伴タブの行を、人物・団体ごとの参加数・初参加・役職で組み立てる。役職の札のリンク先は <paramref name="roleUrl"/> で引く（空文字なら文字だけ）。</summary>
-    private List<MusicEntityRow> BuildMusicEntityRows(MusicEntityAccumulator acc, IReadOnlyDictionary<int, Person> personById, Func<string, string> roleUrl)
+    /// <remarks>歌のタブ（<paramref name="byWork"/> が偽）の件数は、参加した録音の数（表に出す「曲」の数）。作品単位のタブは作品と盤の数。</remarks>
+    private List<MusicEntityRow> BuildMusicEntityRows(MusicEntityAccumulator acc, IReadOnlyDictionary<int, Person> personById, Func<string, string> roleUrl, bool byWork)
     {
         var rows = new List<MusicEntityRow>(acc.ByEntity.Count);
         foreach (var (key, v) in acc.ByEntity)
@@ -2284,7 +2291,7 @@ public sealed class CreatorsGenerator
                 Name = ent.Name,
                 NameKana = ent.Kana,
                 Url = ent.Url,
-                Count = v.Units.Count + v.Products.Count,
+                Count = (byWork ? v.Units.Count : v.Recordings.Count) + v.Products.Count,
                 // 作品単位のタブでは作品を TV 系と映画系に分けて数える（歌のタブでは使わない）。
                 TvWorkCount = v.Units.Count(sid => !_ctx.IsMovieKindSeries(sid)),
                 MovieWorkCount = v.Units.Count(sid => _ctx.IsMovieKindSeries(sid)),
@@ -2312,6 +2319,8 @@ public sealed class CreatorsGenerator
         {
             /// <summary>参加単位（歌のタブは song_id、劇伴・制作のタブは series_id）。</summary>
             public readonly HashSet<int> Units = new();
+            /// <summary>歌のタブの参加した録音の ID（表に出す「曲」の数はこの数）。</summary>
+            public readonly HashSet<int> Recordings = new();
             /// <summary>盤（商品）単位の参加（制作のタブの盤に付いたクレジット。代表品番）。</summary>
             public readonly HashSet<string> Products = new(StringComparer.Ordinal);
             public readonly HashSet<string> Roles = new(StringComparer.Ordinal);
@@ -2323,7 +2332,7 @@ public sealed class CreatorsGenerator
 
         /// <summary>参加を 1 件足す。<paramref name="product"/> を渡すと <paramref name="unit"/> ではなくその盤の参加として数える。</summary>
         /// <remarks>初参加は、キー（<see cref="MusicDebutKey"/>）の最も小さい参加。</remarks>
-        public void Add((char Kind, int Id) key, int unit, string roleCode, MusicDebutKey sort, string label, string url, int? seriesId, string? product = null)
+        public void Add((char Kind, int Id) key, int unit, string roleCode, MusicDebutKey sort, string label, string url, int? seriesId, string? product = null, IEnumerable<int>? recordings = null)
         {
             if (!ByEntity.TryGetValue(key, out var p))
             {
@@ -2332,6 +2341,7 @@ public sealed class CreatorsGenerator
             }
             if (product is null) p.Units.Add(unit);
             else p.Products.Add(product);
+            if (recordings is not null) p.Recordings.UnionWith(recordings);
             p.Roles.Add(roleCode);
             if (sort.CompareTo(p.DebutKey) < 0)
             {
@@ -2540,7 +2550,8 @@ public sealed class CreatorsGenerator
                 Url = PathUtil.CharacterUrl(charId),
                 VoiceName = voiceName,
                 VoiceUrl = PathUtil.PersonUrl(pid),
-                SongCount = v.Songs.Count,
+                // 表に出す「曲」の数は、そのキャラクターで歌った録音の数。
+                SongCount = charRecs.TryGetValue((charId, pid), out var cRecs) ? cRecs.Count : 0,
                 DebutRecordingId = v.FirstRecId,
                 DebutSeq = v.FirstSeq,
                 EntityId = charId,
@@ -2570,7 +2581,8 @@ public sealed class CreatorsGenerator
                 Name = ua.Name,
                 NameKana = ua.NameKana ?? "",
                 Url = unitUrl,
-                SongCount = v.Songs.Count,
+                // 表に出す「曲」の数は、そのユニットの名義で参加した録音の数。
+                SongCount = unitRecs.TryGetValue(unitAliasId, out var uRecs) ? uRecs.Count : 0,
                 DebutRecordingId = v.FirstRecId,
                 DebutSeq = v.FirstSeq,
                 EntityId = unitAliasId,
@@ -2749,16 +2761,35 @@ public sealed class CreatorsGenerator
         return map;
     }
 
+    /// <summary>曲（song_id）→ その曲の録音の ID。表に出す歌の「曲」の数は録音（歌唱ごとのバージョン）で数えるので、
+    /// 曲の単位で集めた担当（作詞・作曲・編曲、曲に付いた音楽クレジット）はここで録音に広げて数える。役職のページは並行で作るので、
+    /// <see cref="System.Threading.LazyInitializer"/> で 1 度だけ作る。</summary>
+    private Dictionary<int, IReadOnlyList<int>>? _recordingIdsBySong;
+
+    /// <summary>曲のすべての録音の ID。</summary>
+    private IReadOnlyList<int> RecordingIdsOfSong(int songId)
+    {
+        var map = System.Threading.LazyInitializer.EnsureInitialized(ref _recordingIdsBySong, () => _ctx.SongRecordingById.Values
+            .GroupBy(r => r.SongId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<int>)g.Select(r => r.SongRecordingId).ToList()));
+        return map.TryGetValue(songId, out var ids) ? ids : Array.Empty<int>();
+    }
+
     /// <summary>人物ごとの楽曲参加（曲集合・最小 recording_id・初参加曲・関わった役職）を集める。</summary>
     private sealed class SongParticipationAccumulator
     {
         /// <summary>人物 → (曲集合, 最小 recording_id, その録音での歌唱の連名の位置 singer_seq, その曲, 役職)。</summary>
         public readonly Dictionary<int, (HashSet<int> Songs, int DebutRecId, int DebutSeq, int DebutSongId, HashSet<string> Roles)> ByPerson = new();
 
+        /// <summary>人物 → 参加した録音の ID（表に出す「曲」の数はこの数）。</summary>
+        public readonly Dictionary<int, HashSet<int>> RecordingsByPerson = new();
+
         public void Add(int personId, int songId, int recordingId, string roleCode, int seq)
         {
             if (!ByPerson.TryGetValue(personId, out var cur))
                 cur = (new HashSet<int>(), int.MaxValue, int.MaxValue, 0, new HashSet<string>(StringComparer.Ordinal));
+            if (!RecordingsByPerson.TryGetValue(personId, out var recs)) RecordingsByPerson[personId] = recs = new HashSet<int>();
+            recs.Add(recordingId);
             cur.Songs.Add(songId);
             cur.Roles.Add(roleCode);
             if (recordingId < cur.DebutRecId) cur = (cur.Songs, recordingId, seq, songId, cur.Roles);
@@ -2788,7 +2819,8 @@ public sealed class CreatorsGenerator
                 PersonName = _ctx.EntityUrls.PersonDisplayLabel(pid) ?? p.FullName,
                 PersonNameKana = _ctx.EntityUrls.PersonDisplayKana(pid) ?? (p.FullNameKana ?? ""),
                 PersonUrl = PathUtil.PersonUrl(pid),
-                SongCount = v.Songs.Count,
+                // 表に出す「曲」の数は、参加した録音の数。
+                SongCount = acc.RecordingsByPerson.TryGetValue(pid, out var recs) ? recs.Count : 0,
                 DebutRecordingId = v.DebutRecId,
                 DebutSeq = v.DebutSeq,
                 DebutSeriesId = _ctx.SongRecordingById.TryGetValue(v.DebutRecId, out var debutRec) ? debutRec.SeriesId : null,

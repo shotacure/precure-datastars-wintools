@@ -9,6 +9,8 @@
     送ったもの（sentAt あり）は後ろに送った日時の新しい順。
   - 書くときは鍵のファイル（index-queue.lock）で順番を取り、別の名前に書いてから入れ替える。
   URL は後ろに並べる・-File に 1 行 1 本で書く・-Stdin を付けて標準入力に 1 行 1 本で流す、のどれでも渡せる（まとめて渡してよい）。
+  -MarkSent を付けると、足す代わりに「送った」の印を付ける：渡した URL の送っていない項目の sentAt に今の時刻（-SentAt で日時を指定できる）を書く。
+  一覧に送っていない項目が無い URL は、足してから印を付ける。一覧を手で書き換えると本番デプロイと書き合いになるので、印はこの道具で付ける。
 
 .EXAMPLE
   pwsh -NoProfile -File scripts/index-queue-add.ps1 -Kind ニュース https://precure.news/2026/11/28/foo/ https://precure.news/2026/11/28/bar/
@@ -16,6 +18,8 @@
   printf '%s\n' "$url1" "$url2" | pwsh -NoProfile -File scripts/index-queue-add.ps1 -Stdin -Kind ニュース -Reason 新規
 .EXAMPLE
   pwsh -NoProfile -File scripts/index-queue-add.ps1 -File new-urls.txt
+.EXAMPLE
+  pwsh -NoProfile -File scripts/index-queue-add.ps1 -MarkSent -SentAt 2026-11-29T10:00:00+09:00 https://precure.tv/series/2026tv/43/
 #>
 [CmdletBinding(PositionalBinding = $false)]
 param(
@@ -29,6 +33,10 @@ param(
     [string]$QueueDirectory = (Join-Path $env:LOCALAPPDATA 'precure-datastars'),
     # 標準入力から 1 行 1 本の URL を読む（付けたときだけ読む。付けないと標準入力は見ない）。
     [switch]$Stdin,
+    # 足す代わりに、渡した URL に「送った」の印（sentAt）を付ける。
+    [switch]$MarkSent,
+    # -MarkSent で書く送った日時（例 2026-11-29T10:00:00+09:00）。空なら今の時刻。
+    [string]$SentAt = '',
     # 足す URL（絶対 URL）。名前を付けずに後ろへ空白区切りで並べる（pwsh -File で呼ぶときはカンマで並べない。1 本の文字として渡る）。
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$Url = @()
@@ -46,6 +54,12 @@ if ($Stdin) {
     while ($null -ne ($line = [Console]::In.ReadLine())) { if ($line.Trim()) { $urls.Add($line.Trim()) } }
 }
 if ($urls.Count -eq 0) { Write-Host 'Index queue      : 足す URL がありません'; exit 0 }
+$sentAtText = (Get-Date).ToString("yyyy-MM-dd'T'HH:mm:sszzz")
+if ($SentAt) {
+    $parsed = [DateTimeOffset]::MinValue
+    if (-not [DateTimeOffset]::TryParse($SentAt, [ref]$parsed)) { throw "-SentAt の日時が読めません：$SentAt" }
+    $sentAtText = $parsed.ToString("yyyy-MM-dd'T'HH:mm:sszzz")
+}
 
 # --- 段と種類（SiteBuilder の Deploy.IndexQueue.Classify と同じ表） ---
 function Get-QueueClass([string]$absoluteUrl) {
@@ -91,17 +105,22 @@ try {
 
     $foundAt = (Get-Date).ToString("yyyy-MM-dd'T'HH:mm:sszzz")
     $added = 0
+    $marked = 0
     foreach ($u in $urls) {
-        if (-not $unsent.Add($u)) { continue }
+        if ($MarkSent) {
+            # 送っていない項目に印を付ける。無ければ、足してから印を付ける。
+            $target = $items | Where-Object { $_.url -eq $u -and -not $_.sentAt } | Select-Object -First 1
+            if ($target) { $target.sentAt = $sentAtText; $marked++; continue }
+        } elseif (-not $unsent.Add($u)) { continue }
         $class = Get-QueueClass $u
         $items.Add([pscustomobject][ordered]@{
             url = $u
             kind = $(if ($Kind) { $Kind } else { $class.Kind })
             reason = $Reason
             foundAt = $foundAt
-            sentAt = $null
+            sentAt = $(if ($MarkSent) { $sentAtText } else { $null })
         })
-        $added++
+        if ($MarkSent) { $marked++ } else { $added++ }
     }
 
     # 送った後 90 日を過ぎたものは消し、並べ直す。
@@ -118,7 +137,11 @@ try {
     $temp = "$queuePath.tmp"
     [System.IO.File]::WriteAllText($temp, $json, (New-Object System.Text.UTF8Encoding($false)))
     Move-Item -LiteralPath $temp -Destination $queuePath -Force
-    Write-Host ("Index queue      : {0} 件を足した（渡した {1} 件のうち、送っていない同じ URL を除く。未送信 {2} 件）" -f $added, $urls.Count, $unsentItems.Count)
+    if ($MarkSent) {
+        Write-Host ("Index queue      : {0} 件に送った印（{1}）を付けた（未送信 {2} 件）" -f $marked, $sentAtText, $unsentItems.Count)
+    } else {
+        Write-Host ("Index queue      : {0} 件を足した（渡した {1} 件のうち、送っていない同じ URL を除く。未送信 {2} 件）" -f $added, $urls.Count, $unsentItems.Count)
+    }
 } finally {
     $lock.Dispose()
     Remove-Item -LiteralPath $lockPath -ErrorAction SilentlyContinue

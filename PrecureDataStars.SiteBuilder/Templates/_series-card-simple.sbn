@@ -8,7 +8,7 @@
     <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ s.Title | html.escape }}</h3>
     <div class="series-card-meta muted">
       <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ s.Period }}</span>{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
-      <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ s.EpisodesLabel }}</span>{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
+      <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ s.EpisodesLabel }}{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span></span>
     </div>
   </div>
   {{~ if (array.size s.PrecureBadges) > 0 || (array.size s.KeyStaffSummary) > 0 ~}}

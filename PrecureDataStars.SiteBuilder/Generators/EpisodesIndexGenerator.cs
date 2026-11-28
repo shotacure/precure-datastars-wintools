@@ -102,7 +102,8 @@ public sealed class EpisodesIndexGenerator
                 Period = JpDateFormat.SeriesPeriod(s, ongoing: true),
                 PeriodEstimateNote = JpDateFormat.PeriodIsEstimated(s, estimated, today) ? "（見込）" : "",
                 TotalEpisodesLabel = totalLabel,
-                TotalEpisodesEstimateNote = (estimated && s.Episodes.HasValue) ? "（見込）" : "",
+                // 予定の総話数は「全 49 話見込」の形（括弧を付けない。期間の「（見込）」とは別）。
+                TotalEpisodesEstimateNote = (estimated && s.Episodes.HasValue) ? "見込" : "",
                 Episodes = rows
             });
         }
@@ -131,7 +132,7 @@ public sealed class EpisodesIndexGenerator
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（episodes-index.sbn の .lead）と同じ文。数だけはページ側で添える。
-                Subtitle = "歴代 TV シリーズの全話",
+                Subtitle = "歴代 TV シリーズの各話",
                 Badges = new[]
                 {
                     new OgCardBadge("作品", $"{sections.Count}作"),

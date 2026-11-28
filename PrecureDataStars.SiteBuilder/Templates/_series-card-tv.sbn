@@ -6,7 +6,7 @@
     <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ tv.Title | html.escape }}</h3>
     <div class="series-card-meta muted">
       <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ tv.Period }}</span>{{~ if tv.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ tv.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
-      <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ tv.EpisodesLabel }}</span>{{~ if tv.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ tv.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
+      <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ tv.EpisodesLabel }}{{~ if tv.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ tv.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span></span>
     </div>
   </div>
   {{~ if (array.size tv.PrecureBadges) > 0 || (array.size tv.KeyStaffSummary) > 0 ~}}

@@ -75,7 +75,7 @@
       {{~ if Series.Episodes != "" ~}}
       <div class="fact">
         <span class="fact-label">話数</span>
-        <span class="fact-value">{{ Series.Episodes }} 話{{~ if Series.EpisodesEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.EpisodesEstimateNote }}</span>{{~ end ~}}</span>
+        <span class="fact-value">{{ if Series.EpisodesEstimateNote != "" }}全 {{ end }}{{ Series.Episodes }} 話{{~ if Series.EpisodesEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.EpisodesEstimateNote }}</span>{{~ end ~}}</span>
       </div>
       {{~ end ~}}
       {{~ if Series.RunTimeSeconds != "" ~}}

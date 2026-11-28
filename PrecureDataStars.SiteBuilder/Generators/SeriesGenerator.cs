@@ -755,7 +755,7 @@ public sealed class SeriesGenerator
                     // 期間が「〜」止めなので注記は総話数側のみ）。
                     PeriodEstimateNote = JpDateFormat.PeriodIsEstimated(s, estimated, DateOnly.FromDateTime(DateTime.Now)) ? EstimateNote : "",
                     EpisodesLabel = s.Episodes.HasValue ? $"全 {s.Episodes.Value} 話" : "",
-                    EpisodesEstimateNote = (estimated && s.Episodes.HasValue) ? EstimateNote : "",
+                    EpisodesEstimateNote = (estimated && s.Episodes.HasValue) ? EpisodesEstimateSuffix : "",
                     PrecureBadges = BuildPrecureBadges(precureRows),
                     KeyStaffSummary = GetKeyStaffSummary(s.SeriesId)
                 };
@@ -765,6 +765,9 @@ public sealed class SeriesGenerator
 
     /// <summary>放送見込み注記の表示文字列（「（見込）」）。テンプレ側で nowrap の別 span に入れて列幅のガタつきを防ぐ。</summary>
     private const string EstimateNote = "（見込）";
+
+    /// <summary>放送中・放送前の作品の予定の総話数に添える「見込」（「全 49 話見込」の形。期間に添える <see cref="EstimateNote"/> と違い括弧を付けない）。</summary>
+    private const string EpisodesEstimateSuffix = "見込";
 
     /// <summary>
     /// 「総話数見込み」判定。ビルド時点で終了していない（<c>end_date</c> が NULL もしくは
@@ -1085,7 +1088,7 @@ public sealed class SeriesGenerator
             {
                 // カードのリード文（どんなページか。数の代わり、または数の下に添える）。
                 // ページの冒頭文（series-index.sbn の .lead）と同じ文。数だけはページ側で添える。
-                Subtitle = "初代から最新作まで、TV シリーズ・映画・スピンオフ 全作品",
+                Subtitle = "初代から最新作まで、TV シリーズ・映画・スピンオフ大集合",
                 Badges = new[]
                 {
                     new OgCardBadge("TV", $"{tvRows.Count}作"),
@@ -1309,7 +1312,7 @@ public sealed class SeriesGenerator
             PeriodLabel = periodLabel,
             PeriodEstimateNote = JpDateFormat.PeriodIsEstimated(s, seriesEstimated, DateOnly.FromDateTime(DateTime.Now)) ? EstimateNote : "",
             Episodes = s.Episodes?.ToString() ?? "",
-            EpisodesEstimateNote = (seriesEstimated && s.Episodes.HasValue) ? EstimateNote : "",
+            EpisodesEstimateNote = (seriesEstimated && s.Episodes.HasValue) ? EpisodesEstimateSuffix : "",
             RunTimeSeconds = FormatRuntimeSeconds(s.RunTimeSeconds),
             RunTimeLabel = runTimeLabel,            ToeiAnimOfficialSiteUrl = s.ToeiAnimOfficialSiteUrl ?? "",
             ToeiAnimLineupUrl = s.ToeiAnimLineupUrl ?? "",
@@ -1727,7 +1730,7 @@ public sealed class SeriesGenerator
             if (isWebShort && webShortLatestEpNo > 0)
                 sb.Append("（#").Append(webShortLatestEpNo).Append(" まで配信）");
             if (s.Episodes.HasValue && s.Episodes.Value > 0)
-                sb.Append("（全 ").Append(s.Episodes.Value).Append(episodesEstimated ? " 話の見込み）" : " 話）");
+                sb.Append("（全 ").Append(s.Episodes.Value).Append(episodesEstimated ? " 話見込）" : " 話）");
         }
 
         // プリキュア（最大 2 名）：変身名（声：声優）。

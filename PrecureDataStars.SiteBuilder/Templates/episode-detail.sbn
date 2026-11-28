@@ -129,6 +129,18 @@
     {{ include '_youtube-facade.sbn' }}
   </div>
   {{~ end ~}}
+  {{~## コーナーの動画（毎話のコーナーを公式チャンネルが上げた動画。episode_part_videos）。特別予告の下に、パートごとに
+       h3 見出し（パートの添え書き＝コーナーの名前）と動画を置く。1 つのパートに 2 本あるときは、見出しは 1 つで動画を順に並べる。
+       動画の無い回には何も出さない。 ##~}}
+  {{~ for g in Episode.CornerVideos ~}}
+  <h3>{{ g.Heading | html.escape }}</h3>
+  {{~ for v in g.Videos ~}}
+  <div class="youtube-trailer">
+    {{~ yt_id = v.YoutubeId; yt_title = v.Title ~}}
+    {{ include '_youtube-facade.sbn' }}
+  </div>
+  {{~ end ~}}
+  {{~ end ~}}
 
   {{## 基本情報。放送日時と通算情報（シリーズ内 / 全プリキュアTV通算 /
        全プリキュアTV通算放送 / 全ニチアサ通算放送）をファクトタイルの横並びで出す。

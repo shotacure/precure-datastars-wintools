@@ -6,7 +6,7 @@
 -- 通算話数・通算放送回（total_ep_no ほか）は専用の列が持つので、この道具は触らない。
 --
 -- エピソードの ID を参照する列：
---   ON UPDATE CASCADE で追従する … credits / episode_parts / episode_theme_songs / episode_uses / bd_playlists
+--   ON UPDATE CASCADE で追従する … credits / episode_parts / episode_part_videos（episode_parts から） / episode_theme_songs / episode_uses / bd_playlists
 --   外部キーが無く、ここで書き換える … bd_chapters.episode_id
 -- 新しい参照列を足したら、下の「前後の照合」と「bd_chapters の書き換え」に同じように足す。
 --
@@ -53,6 +53,9 @@ BEGIN
     SELECT 'episode_parts', COUNT(*), COALESCE(SUM(CRC32(CONCAT_WS('|', e.series_id, e.series_ep_no, t.episode_seq))), 0)
       FROM episode_parts t JOIN episodes e ON e.episode_id = t.episode_id
     UNION ALL
+    SELECT 'episode_part_videos', COUNT(*), COALESCE(SUM(CRC32(CONCAT_WS('|', e.series_id, e.series_ep_no, t.episode_seq, t.video_seq, t.video_id))), 0)
+      FROM episode_part_videos t JOIN episodes e ON e.episode_id = t.episode_id
+    UNION ALL
     SELECT 'episode_theme_songs', COUNT(*), COALESCE(SUM(CRC32(CONCAT_WS('|', e.series_id, e.series_ep_no, t.is_broadcast_only, t.theme_kind, t.seq))), 0)
       FROM episode_theme_songs t JOIN episodes e ON e.episode_id = t.episode_id
     UNION ALL
@@ -87,6 +90,9 @@ BEGIN
     UNION ALL
     SELECT 'episode_parts', COUNT(*), COALESCE(SUM(CRC32(CONCAT_WS('|', e.series_id, e.series_ep_no, t.episode_seq))), 0)
       FROM episode_parts t JOIN episodes e ON e.episode_id = t.episode_id
+    UNION ALL
+    SELECT 'episode_part_videos', COUNT(*), COALESCE(SUM(CRC32(CONCAT_WS('|', e.series_id, e.series_ep_no, t.episode_seq, t.video_seq, t.video_id))), 0)
+      FROM episode_part_videos t JOIN episodes e ON e.episode_id = t.episode_id
     UNION ALL
     SELECT 'episode_theme_songs', COUNT(*), COALESCE(SUM(CRC32(CONCAT_WS('|', e.series_id, e.series_ep_no, t.is_broadcast_only, t.theme_kind, t.seq))), 0)
       FROM episode_theme_songs t JOIN episodes e ON e.episode_id = t.episode_id

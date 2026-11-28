@@ -678,7 +678,8 @@ public sealed class EpisodeGenerator
                 // 埋め込み iframe 用に YouTube URL から動画 ID を抽出する（失敗時は空文字）。
                 YoutubeId = YoutubeUtil.ExtractId(ep.YoutubeTrailerUrl),
                 SpecialYoutubeTrailerUrl = ep.YoutubeSpecialTrailerUrl ?? "",
-                SpecialYoutubeId = YoutubeUtil.ExtractId(ep.YoutubeSpecialTrailerUrl)
+                SpecialYoutubeId = YoutubeUtil.ExtractId(ep.YoutubeSpecialTrailerUrl),
+                CornerVideos = BuildCornerVideos(ep.EpisodeId)
             },
             FormatTable = formatTable,
             TitleCharInfoHtml = titleCharInfoHtml,
@@ -2340,6 +2341,44 @@ public sealed class EpisodeGenerator
         public string TitleShort { get; set; } = "";
     }
 
+    /// <summary>エピソード詳細のコーナーの動画の 1 パート分（見出しと、video_seq の順の動画）。</summary>
+    private sealed class CornerVideoGroup
+    {
+        public string Heading { get; set; } = "";
+        public IReadOnlyList<CornerVideo> Videos { get; set; } = Array.Empty<CornerVideo>();
+    }
+
+    private sealed class CornerVideo
+    {
+        public string YoutubeId { get; set; } = "";
+        public string Title { get; set; } = "";
+    }
+
+    /// <summary>
+    /// その回のパートに結び付けた YouTube の動画を、パートごとにまとめる（パートの順。パートの中は video_seq の順＝本放送のものが先）。
+    /// 見出しはパートの添え書き（supplement。コーナーの名前）。添え書きが無いパートは、動画の題を見出しにする。
+    /// </summary>
+    private IReadOnlyList<CornerVideoGroup> BuildCornerVideos(int episodeId)
+    {
+        if (!_ctx.PartVideosByEpisode.TryGetValue(episodeId, out var videos) || videos.Count == 0)
+            return Array.Empty<CornerVideoGroup>();
+        _ctx.EpisodePartsByEpisode.TryGetValue(episodeId, out var parts);
+        return videos
+            .GroupBy(v => v.EpisodeSeq)
+            .OrderBy(g => g.Key)
+            .Select(g =>
+            {
+                var part = parts?.FirstOrDefault(p => p.EpisodeSeq == g.Key);
+                var ordered = g.OrderBy(v => v.VideoSeq).ToList();
+                return new CornerVideoGroup
+                {
+                    Heading = !string.IsNullOrWhiteSpace(part?.Supplement) ? part!.Supplement!.Trim() : ordered[0].TitleText,
+                    Videos = ordered.Select(v => new CornerVideo { YoutubeId = v.VideoId, Title = v.TitleText }).ToList()
+                };
+            })
+            .ToList();
+    }
+
     private sealed class EpisodeView
     {
         public int SeriesEpNo { get; set; }
@@ -2374,6 +2413,8 @@ public sealed class EpisodeGenerator
         /// <summary>特別予告（本放送時）の YouTube URL と抽出済み動画 ID。ID が空なら詳細ページに特別予告ブロックを出さない。</summary>
         public string SpecialYoutubeTrailerUrl { get; set; } = "";
         public string SpecialYoutubeId { get; set; } = "";
+        /// <summary>パートに結び付けたコーナーの動画（パートの順。見出しはパートの添え書き）。無い回は空で、何も出さない。</summary>
+        public IReadOnlyList<CornerVideoGroup> CornerVideos { get; set; } = Array.Empty<CornerVideoGroup>();
         /// <summary>サブタイトル未確定話のプレースホルダ（（サブタイトル「未定」）等）。確定話では空文字。 非空のときテンプレ側は h1 の鉤括弧を出さず「第N話（サブタイトル「未定」）」の形で描画する。</summary>
         public string SubtitlePlaceholder { get; set; } = "";
     }

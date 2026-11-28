@@ -2994,6 +2994,35 @@ CREATE TABLE `credit_block_entries` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `episode_part_videos`
+--
+
+DROP TABLE IF EXISTS `episode_part_videos`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `episode_part_videos` (
+  `episode_id`       int NOT NULL,
+  `episode_seq`      tinyint unsigned NOT NULL COMMENT 'episode_parts の行（パートの順）',
+  `video_seq`        tinyint unsigned NOT NULL DEFAULT '1' COMMENT 'パートの中の動画の順（1＝本放送のもの、2 からは別の ver.）',
+  `video_id`         varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'YouTube の動画 ID',
+  `channel`          enum('PETITCURE','PRECURE_OFFICIAL','TOEI_ANIMATION') NOT NULL COMMENT '投稿したチャンネル',
+  `title_text`       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL COMMENT 'YouTube の題（そのまま）',
+  `published_at`     datetime DEFAULT NULL COMMENT '公開の時刻（日本時間）',
+  `duration_seconds` int unsigned DEFAULT NULL COMMENT '長さ（秒）',
+  `notes`            text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`       varchar(64) DEFAULT NULL,
+  `updated_by`       varchar(64) DEFAULT NULL,
+  `is_deleted`       tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`episode_id`,`episode_seq`,`video_seq`),
+  UNIQUE KEY `uq_episode_part_videos_video` (`video_id`),
+  CONSTRAINT `fk_episode_part_videos_part` FOREIGN KEY (`episode_id`, `episode_seq`) REFERENCES `episode_parts` (`episode_id`, `episode_seq`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `ck_episode_part_videos_seq` CHECK ((`video_seq` >= 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `episode_theme_songs`
 -- 各エピソードに紐づく OP 主題歌（最大 1）／ED 主題歌（最大 1）／挿入歌（複数可）。
 -- is_broadcast_only=1 の追加行は本放送限定の例外的な主題歌を持たせたい場合に使う。

@@ -333,6 +333,24 @@ public static class SiteDataLoader
         bool IsEmbargoedProvisional(Credit c) =>
             c.EpisodeId is int pe && provisionalEpisodeIds.Contains(pe) && subtitleRevealAtByEpisodeId.ContainsKey(pe);
         var allCredits = allCreditsIncludingProvisional.Where(c => !IsEmbargoedProvisional(c)).ToList();
+        // 各話のパートに結び付けた YouTube の動画（コーナーの動画）。表がまだ無い DB では空として扱う。
+        IReadOnlyDictionary<int, IReadOnlyList<EpisodePartVideo>> partVideosByEpisode;
+        await using (var videoConn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false))
+        {
+            bool hasTable = await videoConn.ExecuteScalarAsync<long>(new CommandDefinition(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'episode_part_videos'",
+                cancellationToken: ct)).ConfigureAwait(false) > 0;
+            var partVideos = hasTable
+                ? (await videoConn.QueryAsync<EpisodePartVideo>(new CommandDefinition(
+                    "SELECT episode_id AS EpisodeId, episode_seq AS EpisodeSeq, video_seq AS VideoSeq, video_id AS VideoId, title_text AS TitleText "
+                    + "FROM episode_part_videos WHERE is_deleted = 0 ORDER BY episode_id, episode_seq, video_seq",
+                    cancellationToken: ct)).ConfigureAwait(false)).ToList()
+                : new List<EpisodePartVideo>();
+            partVideosByEpisode = partVideos
+                .Where(v => !hiddenEpisodeIds.Contains(v.EpisodeId))
+                .GroupBy(v => v.EpisodeId)
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodePartVideo>)g.ToList());
+        }
         var provisionalCreditsByEpisode = allCreditsIncludingProvisional
             .Where(IsEmbargoedProvisional)
             .GroupBy(c => c.EpisodeId!.Value)
@@ -568,6 +586,7 @@ public static class SiteDataLoader
             CreditsByEpisodeForDisplay = creditsByEpisodeForDisplay,
             CreditsBySeriesForDisplay = creditsBySeriesForDisplay,
             ProvisionalCreditsByEpisode = provisionalCreditsByEpisode,
+            PartVideosByEpisode = partVideosByEpisode,
             ProvisionalEpisodeIds = provisionalEpisodeIds,
             ProvisionalSeriesIds = provisionalSeriesIds,
             PersonAliasById = personAliasById,

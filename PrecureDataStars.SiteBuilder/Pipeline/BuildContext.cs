@@ -310,6 +310,13 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> ProvisionalCreditsByEpisode { get; init; }
 
     /// <summary>
+    /// episode_id → その回のパートに結び付けた YouTube の動画（<c>episode_part_videos</c>。パートの順 → 動画の順）。
+    /// エピソード詳細の特別予告の下に、コーナーの動画として出す。表の無い DB では空。
+    /// </summary>
+    public IReadOnlyDictionary<int, IReadOnlyList<Data.EpisodePartVideo>> PartVideosByEpisode { get; init; }
+        = new Dictionary<int, IReadOnlyList<Data.EpisodePartVideo>>();
+
+    /// <summary>
     /// 仮クレジット（<c>episodes.is_provisional_credit = 1</c>）の回の episode_id（解禁前・解禁後を問わず全部）。
     /// 歴代記録 <c>/stats/records/</c> は、仮のクレジットを数えないためにこの集合の回を外す。
     /// </summary>

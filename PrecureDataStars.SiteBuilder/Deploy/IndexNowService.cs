@@ -14,7 +14,8 @@ namespace PrecureDataStars.SiteBuilder.Deploy;
 ///   更新日の一覧が無いときは、上げたページをすべて対象にする。URL は <c>{BaseUrl}/{フォルダ}/</c> の形にする。</item>
 ///   <item>新しく出たページを先に、続けて書き換わったページを、上限（<see cref="BuildConfig.IndexNowMaxUrls"/>）まで送る。</item>
 ///   <item>鍵（<see cref="BuildConfig.IndexNowKey"/>）が未設定なら何もしない。鍵のファイル（<c>/{鍵}.txt</c>）は SeoGenerator が書き出す。</item>
-///   <item>送れなかったときは警告にとどめ、デプロイの結果は変えない（次のデプロイで書き換わったページはまた送られる）。</item>
+///   <item>送れなかったときは警告にとどめ、デプロイの結果は変えない。更新日が進んだページの一覧は、送り終えたときだけ空にする
+///   （送れなかったら一覧が残り、次のデプロイで送り直す。<see cref="SitemapLastmodManifest.ClearChangedList"/>）。</item>
 /// </list>
 /// </summary>
 public sealed class IndexNowService
@@ -33,17 +34,21 @@ public sealed class IndexNowService
         _logger = logger;
     }
 
-    /// <summary>上げたファイル（S3 のキーと、新しく出たものか）から、送るページの URL を選んで送る。</summary>
-    public async Task RunAsync(IReadOnlyList<(string Key, bool IsNew)> uploaded, CancellationToken ct = default)
+    /// <summary>
+    /// 上げたファイル（S3 のキーと、新しく出たものか）から、送るページの URL を選んで送る。
+    /// 送り終えた（送るページが無い・鍵が未設定を含む）なら true、送れなかったら false を返す
+    /// （false のときは、更新日が進んだページの一覧を残して、次のデプロイで送り直す）。
+    /// </summary>
+    public async Task<bool> RunAsync(IReadOnlyList<(string Key, bool IsNew)> uploaded, CancellationToken ct = default)
     {
-        if (string.IsNullOrEmpty(_config.IndexNowKey) || string.IsNullOrEmpty(_config.BaseUrl)) return;
+        if (string.IsNullOrEmpty(_config.IndexNowKey) || string.IsNullOrEmpty(_config.BaseUrl)) return true;
 
         var changed = SitemapLastmodManifest.LoadChangedList(_config.OutputDirectory);
         var urls = SelectUrls(uploaded, changed, _config.BaseUrl, _config.IndexNowMaxUrls, out int pageCount);
         if (urls.Count == 0)
         {
             _logger.Info("IndexNow         : 送るページなし");
-            return;
+            return true;
         }
 
         var host = new Uri(_config.BaseUrl).Host;
@@ -64,16 +69,19 @@ public sealed class IndexNowService
             {
                 string capped = urls.Count < pageCount ? $"（送る候補 {pageCount} 件のうち、新しく出たページを先に上限まで）" : "";
                 _logger.Info($"IndexNow         : {urls.Count} 件を送りました{capped}（HTTP {(int)res.StatusCode}）");
+                return true;
             }
             else
             {
                 var text = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
                 _logger.Warn($"IndexNow へ送れませんでした（HTTP {(int)res.StatusCode}）: {Shorten(text)}");
+                return false;
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             _logger.Warn($"IndexNow へ送れませんでした: {ex.Message}");
+            return false;
         }
     }
 

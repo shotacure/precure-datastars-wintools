@@ -82,7 +82,9 @@ public sealed class SeoGenerator
             => _pageRenderer.StableHashOf(urlPath)
                ?? (StableContentHash.FromFile(file),
                    StableContentHash.LegacyFromFile(file, StableContentHash.MayHaveMarkers(urlPath), _output.Md5Of));
-        var lastmod = manifest.Resolve(pages, buildTimeIso, HashesOf, StableContentHash.Version, save: !_config.DiffOnly);
+        // 本番の出力では、更新日が進んだページの一覧を本番に上げて IndexNow へ送り終えるまで足していく（ドライランだけの回の分も送るため）。
+        var lastmod = manifest.Resolve(pages, buildTimeIso, HashesOf, StableContentHash.Version,
+            save: !_config.DiffOnly, accumulateChanged: _config.IsProductionMode);
         _ctx.Logger.Info(
             $"sitemap lastmod: 据え置き {lastmod.Unchanged} / 更新 {lastmod.Changed} / 新規 {lastmod.Added}"
             + (lastmod.Rebaselined

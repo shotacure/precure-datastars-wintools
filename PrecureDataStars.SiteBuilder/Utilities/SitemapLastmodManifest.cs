@@ -37,7 +37,23 @@ public sealed class SitemapLastmodManifest
     public static string DeriveChangedListPath(string outputDirectory)
         => outputDirectory.TrimEnd('/', '\\') + ".lastmod-changed.json";
 
-    /// <summary>直前の解決で更新日が進んだページの一覧を読む。無い・読めないときは null。</summary>
+    /// <summary>
+    /// 更新日が進んだページの一覧を空にする（本番に上げて IndexNow へ送り終えた後）。書けなくても止めない
+    /// （次のデプロイで同じページをもう一度送るだけ）。
+    /// </summary>
+    public static void ClearChangedList(string outputDirectory)
+    {
+        try
+        {
+            File.WriteAllText(DeriveChangedListPath(outputDirectory), JsonSerializer.Serialize(new ChangedPages()));
+        }
+        catch
+        {
+            // 空にできなくても、次のデプロイで同じページを送り直すだけで害は無い。
+        }
+    }
+
+    /// <summary>更新日が進んだページの一覧を読む。無い・読めないときは null。</summary>
     public static ChangedPages? LoadChangedList(string outputDirectory)
     {
         try
@@ -65,12 +81,18 @@ public sealed class SitemapLastmodManifest
     /// </param>
     /// <param name="version">今の判定のしかたの版（<see cref="StableContentHash.Version"/>）。控えに残す。</param>
     /// <param name="save">解決後の状態をマニフェストに保存するか。</param>
+    /// <param name="accumulateChanged">
+    /// 更新日が進んだページの一覧を、上書きせずに前の一覧へ足すか（本番の出力。一覧は本番に上げて IndexNow へ送り終えたら
+    /// <see cref="ClearChangedList"/> で空にする）。ドライランだけの回が控えを進めても、次に本番へ上げる回でそのページを送れるようにする。
+    /// 前の一覧のページのうち、今回の出力に無いものは外す。false なら今回進んだページだけで上書きする（テスト出力）。
+    /// </param>
     public LastmodResolveResult Resolve(
         IReadOnlyList<(string UrlPath, string OutputFilePath)> pages,
         string buildTimeIso,
         Func<string, string, (string Current, string Legacy)> hashesOf,
         int version,
-        bool save = true)
+        bool save = true,
+        bool accumulateChanged = false)
     {
         var previous = LoadPrevious();
         // 控えの判定のしかたの版（無い控えは版 1）。版が違う初回は、前回の印と一つ前の版のしかたの印で比べ（中身の変わったページだけ進める）、
@@ -110,7 +132,9 @@ public sealed class SitemapLastmodManifest
         if (save)
         {
             Save(next);
-            SaveChangedList(new ChangedPages { Added = addedUrls, Changed = changedUrls });
+            var list = new ChangedPages { Added = addedUrls, Changed = changedUrls };
+            if (accumulateChanged) list = MergeChanged(LoadChangedListAt(ChangedListPath()), list, lastmodByUrl);
+            SaveChangedList(list);
         }
         return new LastmodResolveResult
         {
@@ -147,12 +171,42 @@ public sealed class SitemapLastmodManifest
 
     /// <summary>更新日が進んだページの一覧を、マニフェストの隣（<c>….lastmod-changed.json</c>）に書く。</summary>
     private void SaveChangedList(ChangedPages pages)
+        => File.WriteAllText(ChangedListPath(), JsonSerializer.Serialize(pages));
+
+    /// <summary>更新日が進んだページの一覧のパス（マニフェストの隣）。</summary>
+    private string ChangedListPath()
     {
         const string manifestSuffix = ".lastmod-manifest.json";
-        var path = _manifestPath.EndsWith(manifestSuffix, StringComparison.Ordinal)
+        return _manifestPath.EndsWith(manifestSuffix, StringComparison.Ordinal)
             ? _manifestPath[..^manifestSuffix.Length] + ".lastmod-changed.json"
             : _manifestPath + ".changed.json";
-        File.WriteAllText(path, JsonSerializer.Serialize(pages));
+    }
+
+    private static ChangedPages? LoadChangedListAt(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? JsonSerializer.Deserialize<ChangedPages>(File.ReadAllText(path)) : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 前の一覧に今回の一覧を足す（前の一覧のページを先に、それぞれ並びのまま）。今回の出力に無いページは外し、
+    /// 新しく出たページと書き換わったページの両方に載るページは、新しく出たページの側にだけ残す。
+    /// </summary>
+    internal static ChangedPages MergeChanged(ChangedPages? previous, ChangedPages current, IReadOnlyDictionary<string, string> pagesNow)
+    {
+        if (previous is null) return current;
+        var added = previous.Added.Concat(current.Added)
+            .Where(pagesNow.ContainsKey).Distinct(StringComparer.Ordinal).ToList();
+        var addedSet = new HashSet<string>(added, StringComparer.Ordinal);
+        var changed = previous.Changed.Concat(current.Changed)
+            .Where(u => pagesNow.ContainsKey(u) && !addedSet.Contains(u)).Distinct(StringComparer.Ordinal).ToList();
+        return new ChangedPages { Added = added, Changed = changed };
     }
 
     private void Save(Dictionary<string, ManifestEntry> entries)

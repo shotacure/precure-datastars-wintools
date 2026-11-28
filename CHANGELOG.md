@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **SiteBuilder：ドライランだけの回の後に本番へ上げると、更新日が進んだページが IndexNow へ送られないのを直した**（`SitemapLastmodManifest`・`SeoGenerator`・`IndexNowService`・`SiteBuilderPipeline`）：ドライランだけの回も控えを進めるので、続く本番の回では「変わったページ無し」になっていた。本番の出力では、更新日が進んだページの一覧を上書きせずに足していき、本番に上げて IndexNow へ送り終えたら空にする。送れなかったときは一覧を残し、次のデプロイで送り直す。
 - **サイト：商品のページの ISRC のポップアップの見出しを「同じ曲・サイズ・パートで ISRC が違う収録」にした**（`ProductsGenerator`）：歌のトラックの見出しは「同じ録音・サイズ・パートで ISRC が違う収録」だった。
 - **サイト：スタッフ一覧（/creators/staff/）の 3 つのタブを、タブごとのページに分けた**（`CreatorsGenerator`・`creators-staff.sbn`・`view-state.js`・`count-sort.js`・`site.css`・`EntityUrlRegistry`）：3 つのタブを 1 枚に入れていて HTML が 14.4MB あり、検索エンジンが読む先頭 2MB に役職順の途中までしか入っていなかった。役職順は `/creators/staff/`（0.46MB）、初参加順は `/creators/staff/debut/`、参加回数順は `/creators/staff/count/` にした。タブの帯の見た目と位置、文言・行の並び・数は変えていない。
   - 初参加順と参加回数順は、それぞれ 1 ページに全行を載せる。個人・団体の絞り込み、TV・映画・オトナの切り替え、件数の並べ替えはそのページの中で全行にかかる。

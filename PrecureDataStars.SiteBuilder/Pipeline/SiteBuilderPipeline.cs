@@ -455,8 +455,10 @@ public sealed class SiteBuilderPipeline
             bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
             await SyncRedirectStoreAsync(config, logger, ct).ConfigureAwait(false);
             // 新しく出た・書き換わったページを IndexNow へ送る（鍵が未設定なら何もしない）。
-            if (published && !config.Deploy.DryRun)
-                await new Deploy.IndexNowService(config, logger).RunAsync(deployer.UploadedKeys, ct).ConfigureAwait(false);
+            // 送り終えたら、更新日が進んだページの一覧を空にする（送れなかったら残して、次のデプロイで送り直す）。
+            if (published && !config.Deploy.DryRun
+                && await new Deploy.IndexNowService(config, logger).RunAsync(deployer.UploadedKeys, ct).ConfigureAwait(false))
+                SitemapLastmodManifest.ClearChangedList(config.OutputDirectory);
 
             // 全体のドライランは、この出力を作り直さずに上げられるよう控えを書く（deploy.ps1 の本番反映が --upload-only で使う）。
             if (config.Deploy.DryRun && string.IsNullOrEmpty(config.PageFilter))
@@ -601,8 +603,9 @@ public sealed class SiteBuilderPipeline
         bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
         await SyncRedirectStoreAsync(config, logger, ct).ConfigureAwait(false);
         // 新しく出た・書き換わったページを IndexNow へ送る（鍵が未設定なら何もしない）。
-        if (published)
-            await new Deploy.IndexNowService(config, logger).RunAsync(deployer.UploadedKeys, ct).ConfigureAwait(false);
+        // 送り終えたら、更新日が進んだページの一覧を空にする（送れなかったら残して、次のデプロイで送り直す）。
+        if (published && await new Deploy.IndexNowService(config, logger).RunAsync(deployer.UploadedKeys, ct).ConfigureAwait(false))
+            SitemapLastmodManifest.ClearChangedList(config.OutputDirectory);
         if (published)
         {
             var (persons, characters, companies, units) =

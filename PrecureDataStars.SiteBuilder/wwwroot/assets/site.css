@@ -8845,6 +8845,24 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 .staff-badge-group .role-badge {
   margin-right: 4px;
 }
+/* 役職の札の後ろの名前の並びを包んだもの（.staff-names。エピソード一覧・作品のエピソード一覧・トップの話のカード・エピソード詳細のスタッフ）。
+   札と名前の並びを横に置き、名前の並びが 2 行以上になるときも、2 行目から札の右（1 行目の名前の書き出し）にそろえる（札の下へ回り込ませない）。
+   1 人の名前（並びの直下の a）は途中で折らず、折るのは名前と名前の間（、の後）だけ（名前を枠にすると、枠と「、」の間でも折れて「、」が行の頭に来る）。
+   役職ごとのかたまりは 1 つの四角なので、2 行にわたった役職の後ろに別の役職は続かない。 */
+.staff-badge-group:has(> .staff-names) {
+  display: flex;
+  align-items: baseline;
+}
+.staff-badge-group:has(> .staff-names) > .role-badge {
+  flex: none;
+}
+.staff-names {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.staff-names > a {
+  white-space: nowrap;
+}
 .staff-name {
   color: var(--fg);
 }

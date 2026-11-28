@@ -394,7 +394,7 @@
             {{~ if (array.size e.StaffBadges) > 0 ~}}
             <div class="staff-badges-row">
               {{~ for b in e.StaffBadges ~}}
-              <span class="staff-badge-group">{{~ for r in b.Roles ~}}<a class="role-badge role-badge-sm" data-role-code="{{ r.RoleCode }}"{{ if r.BadgeStyle != "" }} style="{{ r.BadgeStyle }}"{{ end }} href="{{ r.RoleUrl }}">{{ r.Label | html.escape }}</a>{{~ end ~}}{{ b.NamesHtml }}</span>
+              <span class="staff-badge-group">{{~ for r in b.Roles ~}}<a class="role-badge role-badge-sm" data-role-code="{{ r.RoleCode }}"{{ if r.BadgeStyle != "" }} style="{{ r.BadgeStyle }}"{{ end }} href="{{ r.RoleUrl }}">{{ r.Label | html.escape }}</a>{{~ end ~}}<span class="staff-names">{{ b.NamesHtml }}</span></span>
               {{~ end ~}}
             </div>
             {{~ end ~}}

@@ -12979,6 +12979,10 @@ body.has-art-track-bar {
   line-height: 1.5;
   border-radius: 7px;
 }
+.staff-combo-mini-name {
+  /* 畳んだ一覧の札の後ろの名前（字だけ。開閉のボタンの中なのでリンクにしない）。項目ごと途中で折らない（.staff-combo-mini の nowrap）。 */
+  color: var(--fg);
+}
 .staff-combo-x {
   color: var(--muted);
   font-size: 0.7em;

@@ -215,7 +215,7 @@
           {{~ if (array.size StaffRoleCards) > 0 ~}}
           <ul class="staff-combo-minis">
             {{~ for c in StaffRoleCards ~}}
-            <li class="staff-combo-mini" aria-label="{{ c.Label | html.escape }}"><span class="staff-combo-mini-roles">{{~ for b in c.Badges ~}}<span class="role-badge role-badge-xs" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>{{~ if c.IsFirst ~}}<span class="staff-combo-first">{{ c.FirstLabel }}</span>{{~ else ~}}<span class="staff-combo-count{{ if c.IsOrdinalNotable }} is-notable{{ end }}"><b>{{ c.Ordinal }}</b> 回目</span>{{~ end ~}}{{~ if c.GapLabel != "" ~}}<span class="staff-combo-mini-gap{{ if c.IsGapNotable }} is-notable{{ end }}">{{ c.GapLabel }}</span>{{~ end ~}}</li>
+            <li class="staff-combo-mini" aria-label="{{ c.Label | html.escape }}"><span class="staff-combo-mini-roles">{{~ for b in c.Badges ~}}<span class="role-badge role-badge-xs" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>{{~ end ~}}</span>{{~ if c.MiniName != "" ~}}<span class="staff-combo-mini-name">{{ c.MiniName | html.escape }}</span>{{~ end ~}}{{~ if c.IsFirst ~}}<span class="staff-combo-first">{{ c.FirstLabel }}</span>{{~ else ~}}<span class="staff-combo-count{{ if c.IsOrdinalNotable }} is-notable{{ end }}"><b>{{ c.Ordinal }}</b> 回目</span>{{~ end ~}}{{~ if c.GapLabel != "" ~}}<span class="staff-combo-mini-gap{{ if c.IsGapNotable }} is-notable{{ end }}">{{ c.GapLabel }}</span>{{~ end ~}}</li>
             {{~ end ~}}
           </ul>
           {{~ end ~}}

@@ -1568,6 +1568,8 @@ public sealed class EpisodeGenerator
                 && occurrence.Members.All(m => m.Persons.Select(p => p.Key)
                     .SequenceEqual(occurrence.Members[0].Persons.Select(p => p.Key)));
             if (isSolo) continue;
+            // 2 人以上いる役職を含む組み合わせ（その顔ぶれでの「初」は当たり前で、意味が無い）。出さない。
+            if (occurrence.Members.Any(m => m.Persons.Count > 1)) continue;
 
             var badges = combo.ChiefRoles
                 .Select(r => ChiefRoleBadge(r, series))
@@ -1631,6 +1633,7 @@ public sealed class EpisodeGenerator
                 GapLabel = gapLabel,
                 IsGapNotable = isGapNotable,
                 NamesHtml = ChiefPersonHtml(occurrence.Person),
+                MiniName = occurrence.Person.Name,
                 Beads = BuildComboBeads(occurrence.EpisodeIds, occurrence.Ordinal - 1),
                 IsDense = Math.Min(occurrence.Total, ComboBeadsMax) > ComboBeadsDense,
                 Prev = occurrence.PreviousEpisodeId is int prevId ? ComboNavOf(series, prevId) : null,
@@ -2222,6 +2225,8 @@ public sealed class EpisodeGenerator
     /// </summary>
     private sealed class StaffComboRow
     {
+        /// <summary>畳んだ一覧で札の後ろに出す名前（字だけ。役職ごと・人ごとの項目だけ。組み合わせの項目は空）。</summary>
+        public string MiniName { get; set; } = "";
         /// <summary>カードの名前（組み合わせは「絵コンテと演出」など、役職ごとは「演出 志水 淳児」）。読み上げ用。</summary>
         public string Label { get; set; } = "";
         /// <summary>役職の札（組み合わせは組み合わせの役職の順、役職ごとは 1 つ）。</summary>

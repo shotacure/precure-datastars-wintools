@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **デプロイ：本番に上げた後、更新日が進んだページがある回だけ、Search Console の API でサイトマップを送り直す**（`SearchConsoleSitemapService`〔新規〕・`BuildConfig.SearchConsoleKeyFile`・`SearchConsoleSite`〔新規〕・`deploy.ps1`）：送れなくてもデプロイは止めず、成功・失敗の 1 行をデプロイの記録に写す。
+- **デプロイ：検索エンジンへ手で送る URL の順番待ちの一覧（`index-queue.json`）を、本番に上げ終えたデプロイのたびに足す**（`IndexQueue`〔新規〕・`BuildConfig.IndexQueueDirectory`〔新規〕・`scripts/index-queue-add.ps1`〔新規〕）：新しく出た URL と、段階（サブタイトル・仮のクレジット・放送後のクレジット）の上がった各話のページを、種類の段ごとに並べる。ほかの手順からは `index-queue-add.ps1` で同じ一覧に足す。
 - **サイト：役職のページの題を「歴代プリキュアの脚本一覧」の形にした**（`CreatorsGenerator`）：今までは役職名だけだった。タブを別のページにした役職は「歴代プリキュアの原画一覧（担当回数順）」。見出し・パンくず・OGP カードは役職名のまま。
 - **サイト：トップの meta description に収録の数を続けた**（`HomeGenerator`）：今まではタグライン「プリキュアまるごとデータベース。」だけだった。数はトップの OGP カードの札と同じ数え方。
 - **サイト：作品一覧・プリキュア一覧・キャラクター一覧・役職のページに、ItemList の構造化データを置いた**（`ItemListJsonLd`）：役職のページは担当の多い順に上から 50 件と全体の件数。

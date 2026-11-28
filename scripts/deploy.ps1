@@ -400,8 +400,13 @@ try {
     # サイトは作り直さず、ドライランで作った出力をそのまま上げる（ゲートで見た差分と同じものが上がる）。
     Write-Host ""
     Write-Host "[2/2] 本番反映（--production --deploy --yes --upload-only）" -ForegroundColor Yellow
-    & $siteBuilderExe --production --deploy --yes --upload-only
+    & $siteBuilderExe --production --deploy --yes --upload-only | Tee-Object -Variable uploadOutput
     $uploadExit = $LASTEXITCODE
+    # Search Console へのサイトマップの送り直しと、手で送る URL の順番待ちの一覧の結果（SiteBuilder の 1 行ずつ）を記録に写す。
+    foreach ($line in $uploadOutput) {
+        $text = "$line".Trim()
+        if ($text -match '(Sitemap 送信|Index queue)\s*:') { Write-DeployLog "  $text" }
+    }
     Show-CopyCheck
     if ($uploadExit -ne 0) {
         throw "本番反映が失敗しました (exit $uploadExit)。"

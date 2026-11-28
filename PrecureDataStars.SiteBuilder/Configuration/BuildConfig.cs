@@ -91,6 +91,19 @@ public sealed class BuildConfig
     /// 超えるときは、新しく出たページを先に、続けて書き換わったページをパスの順に送る。</summary>
     public int IndexNowMaxUrls { get; init; } = 10000;
 
+    /// <summary>Search Console へサイトマップを送るときに使うサービスアカウントの鍵（JSON）のパス（App.config の <c>SearchConsoleKeyFile</c>）。
+    /// 空なら送らない。<c>%APPDATA%</c> などの環境変数を書いてよい。</summary>
+    public string SearchConsoleKeyFile { get; init; } = "";
+
+    /// <summary>サイトマップを送る Search Console のプロパティ（App.config の <c>SearchConsoleSite</c>。例 <c>sc-domain:precure.tv</c>）。空なら送らない。</summary>
+    public string SearchConsoleSite { get; init; } = "";
+
+    /// <summary>
+    /// 検索エンジンへ手で送る URL の順番待ちの一覧（<c>index-queue.json</c>）と、各話の段階の控え（<c>index-queue-state.json</c>）を置くフォルダ
+    /// （App.config の <c>IndexQueueDirectory</c>。環境変数を書いてよい）。空なら一覧を書かない。
+    /// </summary>
+    public string IndexQueueDirectory { get; init; } = "";
+
     /// <summary>
     /// 区画ごとの CSS（<c>/assets/css/{区画}.css</c>。<see cref="Rendering.CssBundler"/>）を配るか。App.config の <c>CssBundles</c>（既定 true）。
     /// false にすると、全ページが全部入りの <c>/assets/site.css</c> を読む形に戻る。
@@ -373,6 +386,10 @@ public sealed class BuildConfig
         }
         int indexNowMaxUrls = int.TryParse(ConfigurationManager.AppSettings["IndexNowMaxUrls"], out var maxUrls) && maxUrls > 0
             ? Math.Min(maxUrls, 10000) : 10000;
+        // Search Console へのサイトマップの送り直しと、手で送る URL の順番待ちの一覧（どれも空なら使わない）。
+        var searchConsoleKeyFile = Environment.ExpandEnvironmentVariables((ConfigurationManager.AppSettings["SearchConsoleKeyFile"] ?? "").Trim());
+        var searchConsoleSite = (ConfigurationManager.AppSettings["SearchConsoleSite"] ?? "").Trim();
+        var indexQueueDirectory = Environment.ExpandEnvironmentVariables((ConfigurationManager.AppSettings["IndexQueueDirectory"] ?? "").Trim());
 
         // 削除保護の接頭辞リスト（カンマ区切り）。空要素は除外する。
         var rawProtected = ConfigurationManager.AppSettings["AwsDeployProtectedPrefixes"] ?? "";
@@ -416,6 +433,9 @@ public sealed class BuildConfig
             CloudFrontKeyValueStoreArn = kvsArn,
             IndexNowKey = indexNowKey,
             IndexNowMaxUrls = indexNowMaxUrls,
+            SearchConsoleKeyFile = searchConsoleKeyFile,
+            SearchConsoleSite = searchConsoleSite,
+            IndexQueueDirectory = indexQueueDirectory,
             CssBundles = ReadSwitch("CssBundles"),
             ScriptPlanEnabled = ReadSwitch("ScriptPlan"),
         };

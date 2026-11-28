@@ -176,6 +176,12 @@
 				              設定すると、ビルドがサイト直下に {鍵}.txt を書き、本番デプロイの後に
 				              新しく出た・書き換わったページの URL を IndexNow へ送る。
 				IndexNowMaxUrls : 1 回のデプロイで送る URL の上限（既定・最大 10000）。新しく出たページを先に送る。
+				SearchConsoleKeyFile : Search Console へサイトマップを送り直すときのサービスアカウントの鍵（JSON）のパス
+				                       （例: %APPDATA%\…\service-account.json。環境変数を書いてよい。鍵の中身は git に入れない）。
+				                       空なら送らない。送るにはサービスアカウントにプロパティの「フル」の権限が要る。
+				SearchConsoleSite : サイトマップを送る Search Console のプロパティ（例: sc-domain:example.com）。空なら送らない。
+				IndexQueueDirectory : 検索エンジンへ手で送る URL の順番待ちの一覧（index-queue.json）と、各話の段階の控え
+				                      （index-queue-state.json）を置くフォルダ（例: %LOCALAPPDATA%\…。環境変数を書いてよい）。空なら一覧を書かない。
 				AwsDeployProtectedPrefixes : 削除（orphan 掃除）対象から除外するキー接頭辞のカンマ区切り。
 				                           手動配置物を守るための安全弁。通常は空でよい。
 		-->
@@ -187,5 +193,8 @@
 		<add key="AwsDeployProtectedPrefixes" value="" />
 		<add key="IndexNowKey" value="" />
 		<add key="IndexNowMaxUrls" value="10000" />
+		<add key="SearchConsoleKeyFile" value="" />
+		<add key="SearchConsoleSite" value="" />
+		<add key="IndexQueueDirectory" value="" />
 	</appSettings>
 </configuration>

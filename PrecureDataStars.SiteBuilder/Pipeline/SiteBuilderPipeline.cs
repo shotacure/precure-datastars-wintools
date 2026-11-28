@@ -449,11 +449,16 @@ public sealed class SiteBuilderPipeline
         // 本番デプロイ（--deploy 指定時のみ）。生成済み成果物を S3 へ差分同期し、
         // CloudFront のキャッシュを無効化する。テスト出力からのデプロイは Program 側で弾いているため、
         // ここに到達する時点で必ず本番ビルドの出力ディレクトリを対象にしている。
+        // 本番のビルドでは、各話のページの段階（サブタイトル・クレジットの入り具合）を出力の隣に控える
+        // （上げ終えたときに、段階の上がった回を手で送る URL の順番待ちの一覧へ足す。Deploy.IndexQueue）。
+        if (config.IsProductionMode) Deploy.IndexQueue.SaveEpisodeStages(ctx, config);
+
         if (config.Deploy.Requested)
         {
             var deployer = new Deploy.S3DeployService(config, logger);
             bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
             await SyncRedirectStoreAsync(config, logger, ct).ConfigureAwait(false);
+            if (published && !config.Deploy.DryRun) await AfterPublishAsync(config, logger, ct).ConfigureAwait(false);
             // 新しく出た・書き換わったページを IndexNow へ送る（鍵が未設定なら何もしない）。
             // 送り終えたら、更新日が進んだページの一覧を空にする（送れなかったら残して、次のデプロイで送り直す）。
             if (published && !config.Deploy.DryRun
@@ -590,6 +595,18 @@ public sealed class SiteBuilderPipeline
         }
     }
 
+    /// <summary>
+    /// 本番に上げ終えた後、IndexNow の前に行うこと（IndexNow を送り終えると更新日が進んだページの一覧が空になるので、その前に読む）：
+    /// 更新日が進んだページがあれば Search Console へサイトマップを送り直し、手で送る URL の順番待ちの一覧へ足す。どちらも失敗してもデプロイは止めない。
+    /// </summary>
+    private static async Task AfterPublishAsync(BuildConfig config, BuildLogger logger, CancellationToken ct)
+    {
+        var changed = SitemapLastmodManifest.LoadChangedList(config.OutputDirectory);
+        int pagesChanged = changed is null ? 0 : changed.Added.Count + changed.Changed.Count;
+        await new Deploy.SearchConsoleSitemapService(config, logger).RunAsync(pagesChanged, ct).ConfigureAwait(false);
+        Deploy.IndexQueue.RecordAfterPublish(config, logger, changed);
+    }
+
     private static async Task UploadPendingAsync(
         BuildConfig config, BuildLogger logger, IConnectionFactory factory, Stopwatch stopwatch, CancellationToken ct)
     {
@@ -602,6 +619,7 @@ public sealed class SiteBuilderPipeline
         var deployer = new Deploy.S3DeployService(config, logger);
         bool published = await deployer.RunAsync(ct).ConfigureAwait(false);
         await SyncRedirectStoreAsync(config, logger, ct).ConfigureAwait(false);
+        if (published) await AfterPublishAsync(config, logger, ct).ConfigureAwait(false);
         // 新しく出た・書き換わったページを IndexNow へ送る（鍵が未設定なら何もしない）。
         // 送り終えたら、更新日が進んだページの一覧を空にする（送れなかったら残して、次のデプロイで送り直す）。
         if (published && await new Deploy.IndexNowService(config, logger).RunAsync(deployer.UploadedKeys, ct).ConfigureAwait(false))

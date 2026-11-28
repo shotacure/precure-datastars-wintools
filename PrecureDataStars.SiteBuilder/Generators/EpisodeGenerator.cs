@@ -1633,7 +1633,7 @@ public sealed class EpisodeGenerator
                 GapLabel = gapLabel,
                 IsGapNotable = isGapNotable,
                 NamesHtml = ChiefPersonHtml(occurrence.Person),
-                MiniName = occurrence.Person.Name,
+                MiniName = occurrence.Person.CreditedName ?? occurrence.Person.Name,
                 Beads = BuildComboBeads(occurrence.EpisodeIds, occurrence.Ordinal - 1),
                 IsDense = Math.Min(occurrence.Total, ComboBeadsMax) > ComboBeadsDense,
                 Prev = occurrence.PreviousEpisodeId is int prevId ? ComboNavOf(series, prevId) : null,
@@ -1678,9 +1678,19 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>カードの顔ぶれの 1 人（人物ページがあればリンク）。</summary>
-    private static string ChiefPersonHtml(ChiefPerson p) => string.IsNullOrEmpty(p.Url)
-        ? $"<span class=\"staff-name\">{HtmlUtil.Escape(p.Name)}</span>"
-        : $"<a class=\"staff-name\" href=\"{p.Url}\">{HtmlUtil.Escape(p.Name)}</a>";
+    /// <summary>
+    /// 担当回数のカード（役職ごと・組み合わせ）の名前を、その回にクレジットされた名義で出すか。false なら今の名乗り（表示名義）で出す。
+    /// 閉じた状態の一覧の名前は、これにかかわらずその回の名義で出す（スタッフ欄と同じ名前）。
+    /// </summary>
+    private const bool ChiefCardsUseCreditedName = false;
+
+    private static string ChiefPersonHtml(ChiefPerson p)
+    {
+        string name = ChiefCardsUseCreditedName ? p.CreditedName ?? p.Name : p.Name;
+        return string.IsNullOrEmpty(p.Url)
+            ? $"<span class=\"staff-name\">{HtmlUtil.Escape(name)}</span>"
+            : $"<a class=\"staff-name\" href=\"{p.Url}\">{HtmlUtil.Escape(name)}</a>";
+    }
 
     /// <summary>チーフの区分 → 役職の札の色とリンク先に使う役職コード（スタッフ行の札と同じ）。</summary>
     private static string ChiefRoleCode(int chiefRole) => chiefRole switch

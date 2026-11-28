@@ -51,21 +51,29 @@ public sealed class EpisodeChiefStaffIndex
     /// <summary>エピソード ID → 本線の TV の全話（クレジットの有無を問わない）を放送順に並べたときの位置（0 始まり）。連続担当の判定に使う。</summary>
     private readonly IReadOnlyDictionary<int, int> _broadcastPosition;
 
-    /// <summary>顔ぶれキー → 表示用（名前とリンク先）。</summary>
+    /// <summary>顔ぶれキー → 表示用（名前とリンク先）。名前は今の名乗り（表示名義）で、回ごとの表示には <see cref="_creditedNames"/> を優先する。</summary>
     private readonly IReadOnlyDictionary<string, ChiefPerson> _people;
+
+    /// <summary>
+    /// (エピソード ID, 顔ぶれキー) → その回にクレジットされた名義の表記（エピソード詳細のスタッフ欄と同じ。改名した方も当時の名前）。
+    /// 数え方は人物（顔ぶれキー）単位のまま、カードと畳んだ一覧に出す名前だけをこれにする。
+    /// </summary>
+    private readonly IReadOnlyDictionary<(int EpisodeId, string Key), string> _creditedNames;
 
     private EpisodeChiefStaffIndex(
         IReadOnlyDictionary<int, IReadOnlyDictionary<int, IReadOnlyList<string>>> chiefsByEpisode,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<int>>> occurrences,
         IReadOnlyDictionary<(int ChiefRole, string Key), IReadOnlyList<int>> roleRuns,
         IReadOnlyDictionary<int, int> broadcastPosition,
-        IReadOnlyDictionary<string, ChiefPerson> people)
+        IReadOnlyDictionary<string, ChiefPerson> people,
+        IReadOnlyDictionary<(int EpisodeId, string Key), string> creditedNames)
     {
         _chiefsByEpisode = chiefsByEpisode;
         _occurrences = occurrences;
         _roleRuns = roleRuns;
         _broadcastPosition = broadcastPosition;
         _people = people;
+        _creditedNames = creditedNames;
     }
 
     /// <summary>空の索引（クレジット未収録時のフォールバック）。</summary>
@@ -74,7 +82,8 @@ public sealed class EpisodeChiefStaffIndex
         new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<int>>>(),
         new Dictionary<(int ChiefRole, string Key), IReadOnlyList<int>>(),
         new Dictionary<int, int>(),
-        new Dictionary<string, ChiefPerson>());
+        new Dictionary<string, ChiefPerson>(),
+        new Dictionary<(int EpisodeId, string Key), string>());
 
     /// <summary>
     /// BuildContext のクレジット階層スナップショットから索引を組み立てる。
@@ -83,6 +92,7 @@ public sealed class EpisodeChiefStaffIndex
     public static EpisodeChiefStaffIndex Build(BuildContext ctx)
     {
         var people = new Dictionary<string, ChiefPerson>(StringComparer.Ordinal);
+        var creditedNames = new Dictionary<(int EpisodeId, string Key), string>();
         var chiefsByEpisode = new Dictionary<int, IReadOnlyDictionary<int, IReadOnlyList<string>>>();
 
         // 放送順に並べた本線の TV の全話。映画系（SERIES 単位のクレジット）とスピンオフの話は「話」の数え上げに入れない。
@@ -129,6 +139,8 @@ public sealed class EpisodeChiefStaffIndex
                         var person = ResolvePerson(ctx, entry);
                         if (person is null) continue;
                         people.TryAdd(person.Key, person);
+                        // その回にクレジットされた名義（同じ回に同じ方が 2 度出たら、先に出たもの）。
+                        creditedNames.TryAdd((ep.EpisodeId, person.Key), CreditedName(ctx, entry) ?? person.Name);
                         if (!byRole.TryGetValue(chiefNo, out var keys))
                         {
                             keys = new List<string>();
@@ -191,7 +203,8 @@ public sealed class EpisodeChiefStaffIndex
             chiefsByEpisode, occurrences,
             roleRuns.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<int>)kv.Value),
             broadcastPosition,
-            people);
+            people,
+            creditedNames);
     }
 
     /// <summary>
@@ -214,7 +227,7 @@ public sealed class EpisodeChiefStaffIndex
                     if (list[i] == episodeId) { index = i; break; }
                 }
                 if (index < 0) continue;
-                var person = _people.TryGetValue(key, out var p) ? p : new ChiefPerson(key, key, "");
+                var person = PersonIn(episodeId, key);
 
                 // 連続担当：放送順で直前の話もこの方がこの役職なら続けてさかのぼる（休止をはさんでも話の並びで数える）。
                 int streak = 1;
@@ -264,18 +277,18 @@ public sealed class EpisodeChiefStaffIndex
             PreviousEpisodeId: index > 0 ? list[index - 1] : null,
             NextEpisodeId: index + 1 < list.Count ? list[index + 1] : null,
             EpisodeIds: list,
-            Members: MembersOf(combo, signature));
+            Members: MembersOf(combo, signature, episodeId));
     }
 
-    /// <summary>顔ぶれ署名から、役職ごとの人物リストを復元する（表示用）。</summary>
-    private IReadOnlyList<ChiefComboMember> MembersOf(ChiefCombo combo, string signature)
+    /// <summary>顔ぶれ署名から、役職ごとの人物リストを復元する（表示用。名前は <paramref name="episodeId"/> の回にクレジットされた名義）。</summary>
+    private IReadOnlyList<ChiefComboMember> MembersOf(ChiefCombo combo, string signature, int episodeId)
     {
         var parts = signature.Split('|');
         var members = new List<ChiefComboMember>();
         for (int i = 0; i < combo.ChiefRoles.Count && i < parts.Length; i++)
         {
             var persons = parts[i].Split('+')
-                .Select(k => _people.TryGetValue(k, out var p) ? p : new ChiefPerson(k, k, ""))
+                .Select(k => PersonIn(episodeId, k))
                 .ToList();
             members.Add(new ChiefComboMember(combo.ChiefRoles[i], EpisodeChiefRoles.Label(combo.ChiefRoles[i]), persons));
         }
@@ -292,6 +305,32 @@ public sealed class EpisodeChiefStaffIndex
             parts[i] = string.Join("+", keys.OrderBy(k => k, StringComparer.Ordinal));
         }
         return string.Join("|", parts);
+    }
+
+    /// <summary>顔ぶれキーの表示用。名前は今の名乗り（表示名義）のまま、その回にクレジットされた名義を CreditedName に添える。</summary>
+    private ChiefPerson PersonIn(int episodeId, string key)
+    {
+        var person = _people.TryGetValue(key, out var p) ? p : new ChiefPerson(key, key, "");
+        return _creditedNames.TryGetValue((episodeId, key), out var name) && !string.IsNullOrEmpty(name)
+            ? person with { CreditedName = name }
+            : person;
+    }
+
+    /// <summary>エントリ 1 件の、クレジットされた名義の表記（PERSON は名義の表記、TEXT は生テキスト）。取れなければ null。</summary>
+    private static string? CreditedName(BuildContext ctx, CreditBlockEntry entry)
+    {
+        switch (entry.EntryKind)
+        {
+            case "PERSON":
+                if (entry.PersonAliasId is not int aliasId || !ctx.PersonAliasById.TryGetValue(aliasId, out var alias)) return null;
+                string name = alias.DisplayTextOverride ?? alias.Name ?? "";
+                return name.Length > 0 ? name : null;
+            case "TEXT":
+                string? raw = entry.RawText?.Trim();
+                return string.IsNullOrEmpty(raw) ? null : raw;
+            default:
+                return null;
+        }
     }
 
     /// <summary>
@@ -358,4 +397,8 @@ public sealed record ChiefRoleOccurrence(
 public sealed record ChiefComboMember(int ChiefRole, string RoleLabel, IReadOnlyList<ChiefPerson> Persons);
 
 /// <summary>顔ぶれの 1 人。<see cref="Url"/> が空なら人物ページを持たない（名義のみ・テキストのみ）。</summary>
-public sealed record ChiefPerson(string Key, string Name, string Url);
+/// <summary>
+/// チーフの顔ぶれの 1 人。<see cref="Name"/> は今の名乗り（表示名義）、<see cref="CreditedName"/> はその回にクレジットされた名義
+/// （回を決めて引いたときだけ入る。改名した方は当時の名前）。
+/// </summary>
+public sealed record ChiefPerson(string Key, string Name, string Url, string? CreditedName = null);

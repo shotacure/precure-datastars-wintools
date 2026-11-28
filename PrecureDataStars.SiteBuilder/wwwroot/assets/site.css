@@ -12934,28 +12934,34 @@ body.has-art-track-bar {
 .staff-combos[open] .staff-combo-mini-rows {
   display: none;
 }
+/* 項目の間の区切りの線は、項目の左の隙間の真ん中に置く（項目の外。position: absolute）。行の頭に来た項目の線は並びの左の外に出るので、
+   並びの overflow: hidden で隠す（線は項目の間だけに見え、折り返した行の頭には残らない）。 */
 .staff-combo-minis {
   min-width: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
+  gap: 4px 25px;
   margin: 0;
   padding: 0;
   list-style: none;
+  overflow: hidden;
 }
 .staff-combo-mini {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   white-space: nowrap;
   font-size: 0.9em;
 }
-.staff-combo-mini + .staff-combo-mini::before {
+.staff-combo-mini::before {
   content: "";
-  align-self: stretch;
+  position: absolute;
+  left: -13px;
+  top: 3px;
+  bottom: 3px;
   width: 1px;
   background: var(--border);
-  margin: 3px 6px 3px 0;
 }
 /* スマホ幅：折り返した行の頭に区切り線が残らないよう、1 組 1 行に縦に並べて区切り線を出さない。 */
 @media (max-width: 640px) {
@@ -12963,7 +12969,11 @@ body.has-art-track-bar {
     flex-direction: column;
     gap: 2px;
   }
-  .staff-combo-mini + .staff-combo-mini::before {
+  /* 縦に並べて線を出さないので、項目を隠さない（長い名前の項目が並びの幅を越えても切らない）。 */
+  .staff-combo-minis {
+    overflow: visible;
+  }
+  .staff-combo-mini::before {
     display: none;
   }
 }

@@ -18,6 +18,8 @@
  *   - navigator.clipboard が使えない環境では textarea + document.execCommand('copy') にフォールバック。
  *   - ボックスは既定で閉じている（hidden）。シェアボタンの並びの「引用」ボタン（aria-controls="citeBox"）で開閉し、
  *     aria-expanded を合わせる。開いたときは引用文が見える位置までスクロールする。
+ *   - 引用文の中のページの URL（canonical の URL）に、今のアドレスの # の後ろ（並べ替え・絞り込みの状態など）があれば付ける。
+ *     開いたときとコピーするときに作り直す（# が無いときはテンプレートの URL のまま）。
  *
  * .cite-box が DOM に無いページ（ShareUrl が空だった等）では何もせず終了する。
  */
@@ -31,6 +33,20 @@
   }
 
   var toastTimer = null;
+  // 引用文の中のページの URL（canonical）と、それを含む文字の所（元の文字を控える）。値は init で入れる
+  // （init はこの行より先に呼ばれることがあるので、ここで値を入れない）。
+  var pageUrl;
+  var urlNodes;
+
+  /** 引用文の中のページの URL に、今のアドレスの # の後ろを付ける（# が無いときは元に戻す）。 */
+  function refreshUrls() {
+    if (!urlNodes) return;
+    var h = location.hash || '';
+    var url = h.length > 1 ? pageUrl + h : pageUrl;
+    for (var i = 0; i < urlNodes.length; i++) {
+      urlNodes[i].node.data = urlNodes[i].orig.split(pageUrl).join(url);
+    }
+  }
 
   function pad2(n) {
     return n < 10 ? '0' + n : String(n);
@@ -54,6 +70,18 @@
       buttons[j].addEventListener('click', onCopyClick);
     }
 
+    // 引用文の中のページの URL の文字の所を控える（開いたとき・コピーのときに今の # を付けて書き直す）。
+    var canonical = document.querySelector('link[rel="canonical"]');
+    pageUrl = canonical ? canonical.getAttribute('href') || '' : '';
+    urlNodes = [];
+    if (pageUrl) {
+      var walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+      var node;
+      while ((node = walker.nextNode())) {
+        if (node.data.indexOf(pageUrl) >= 0) urlNodes.push({ node: node, orig: node.data });
+      }
+    }
+
     var toggles = document.querySelectorAll('[aria-controls="' + box.id + '"]');
     for (var k = 0; k < toggles.length; k++) {
       toggles[k].addEventListener('click', onToggleClick);
@@ -65,6 +93,7 @@
     var box = document.getElementById(btn.getAttribute('aria-controls'));
     if (!box) return;
     var open = box.hidden;
+    if (open) refreshUrls();
     box.hidden = !open;
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
     if (open && box.scrollIntoView) box.scrollIntoView({ block: 'nearest' });
@@ -74,6 +103,7 @@
     var btn = ev.currentTarget;
     var target = document.getElementById(btn.getAttribute('data-cite-copy'));
     if (!target) return;
+    refreshUrls();
     // <pre> 内の改行・連続空白は見た目の都合なので、1 行に畳んでからコピーする。
     var text = (target.textContent || '').replace(/\s+/g, ' ').trim();
     copyText(text, function () {

@@ -340,9 +340,14 @@ public static class SiteDataLoader
             bool hasTable = await videoConn.ExecuteScalarAsync<long>(new CommandDefinition(
                 "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'episode_part_videos'",
                 cancellationToken: ct)).ConfigureAwait(false) > 0;
+            // 見出し・添え書きの列（後から足した列）がまだ無い DB では、空として読む。
+            bool hasHeading = hasTable && await videoConn.ExecuteScalarAsync<long>(new CommandDefinition(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'episode_part_videos' AND COLUMN_NAME = 'note_text'",
+                cancellationToken: ct)).ConfigureAwait(false) > 0;
             var partVideos = hasTable
                 ? (await videoConn.QueryAsync<EpisodePartVideo>(new CommandDefinition(
-                    "SELECT episode_id AS EpisodeId, episode_seq AS EpisodeSeq, video_seq AS VideoSeq, video_id AS VideoId, title_text AS TitleText "
+                    "SELECT episode_id AS EpisodeId, episode_seq AS EpisodeSeq, video_seq AS VideoSeq, video_id AS VideoId, title_text AS TitleText, "
+                    + (hasHeading ? "heading_text AS HeadingText, note_text AS NoteText " : "NULL AS HeadingText, NULL AS NoteText ")
                     + "FROM episode_part_videos WHERE is_deleted = 0 ORDER BY episode_id, episode_seq, video_seq",
                     cancellationToken: ct)).ConfigureAwait(false)).ToList()
                 : new List<EpisodePartVideo>();

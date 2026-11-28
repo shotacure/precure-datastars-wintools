@@ -2341,11 +2341,13 @@ public sealed class EpisodeGenerator
         public string TitleShort { get; set; } = "";
     }
 
-    /// <summary>エピソード詳細のコーナーの動画の 1 パート分（見出しと、video_seq の順の動画）。</summary>
+    /// <summary>エピソード詳細のコーナーの動画の 1 見出し分（見出しと、video_seq の順の動画と、下に添える 1 行）。</summary>
     private sealed class CornerVideoGroup
     {
         public string Heading { get; set; } = "";
         public IReadOnlyList<CornerVideo> Videos { get; set; } = Array.Empty<CornerVideo>();
+        /// <summary>動画の下に添える 1 行（空なら出さない）。</summary>
+        public string Note { get; set; } = "";
     }
 
     private sealed class CornerVideo
@@ -2355,26 +2357,29 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>
-    /// その回のパートに結び付けた YouTube の動画を、パートごとにまとめる（パートの順。パートの中は video_seq の順＝本放送のものが先）。
-    /// 見出しはパートの添え書き（supplement。コーナーの名前）。添え書きが無いパートは、動画の題を見出しにする。
+    /// その回のパートに結び付けた YouTube の動画を、見出しごとにまとめる（パートの順。同じパートでも見出しが違えば分ける。
+    /// まとまりの中は video_seq の順＝本放送のものが先）。見出しは動画の行の見出し（heading_text）、無ければパートの添え書き
+    /// （supplement。コーナーの名前）、それも無ければ動画の題。動画の行の添え書き（note_text）は、まとまりの動画の下に 1 行で出す。
     /// </summary>
     private IReadOnlyList<CornerVideoGroup> BuildCornerVideos(int episodeId)
     {
         if (!_ctx.PartVideosByEpisode.TryGetValue(episodeId, out var videos) || videos.Count == 0)
             return Array.Empty<CornerVideoGroup>();
         _ctx.EpisodePartsByEpisode.TryGetValue(episodeId, out var parts);
+        string HeadingOf(Data.EpisodePartVideo v)
+        {
+            if (!string.IsNullOrWhiteSpace(v.HeadingText)) return v.HeadingText!.Trim();
+            var part = parts?.FirstOrDefault(p => p.EpisodeSeq == v.EpisodeSeq);
+            return !string.IsNullOrWhiteSpace(part?.Supplement) ? part!.Supplement!.Trim() : v.TitleText;
+        }
         return videos
-            .GroupBy(v => v.EpisodeSeq)
-            .OrderBy(g => g.Key)
-            .Select(g =>
+            .OrderBy(v => v.EpisodeSeq).ThenBy(v => v.VideoSeq)
+            .GroupBy(v => (v.EpisodeSeq, Heading: HeadingOf(v)))
+            .Select(g => new CornerVideoGroup
             {
-                var part = parts?.FirstOrDefault(p => p.EpisodeSeq == g.Key);
-                var ordered = g.OrderBy(v => v.VideoSeq).ToList();
-                return new CornerVideoGroup
-                {
-                    Heading = !string.IsNullOrWhiteSpace(part?.Supplement) ? part!.Supplement!.Trim() : ordered[0].TitleText,
-                    Videos = ordered.Select(v => new CornerVideo { YoutubeId = v.VideoId, Title = v.TitleText }).ToList()
-                };
+                Heading = g.Key.Heading,
+                Videos = g.Select(v => new CornerVideo { YoutubeId = v.VideoId, Title = v.TitleText }).ToList(),
+                Note = g.Select(v => v.NoteText?.Trim()).FirstOrDefault(n => !string.IsNullOrEmpty(n)) ?? ""
             })
             .ToList();
     }

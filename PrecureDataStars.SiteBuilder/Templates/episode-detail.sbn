@@ -140,6 +140,9 @@
     {{ include '_youtube-facade.sbn' }}
   </div>
   {{~ end ~}}
+  {{~ if g.Note != "" ~}}
+  <p class="muted">{{ g.Note | html.escape }}</p>
+  {{~ end ~}}
   {{~ end ~}}
 
   {{## 基本情報。放送日時と通算情報（シリーズ内 / 全プリキュアTV通算 /

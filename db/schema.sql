@@ -3007,6 +3007,8 @@ CREATE TABLE `episode_part_videos` (
   `video_id`         varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'YouTube の動画 ID',
   `channel`          enum('PETITCURE','PRECURE_OFFICIAL','TOEI_ANIMATION') NOT NULL COMMENT '投稿したチャンネル',
   `title_text`       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL COMMENT 'YouTube の題（そのまま）',
+  `heading_text`     varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '見出し（空ならパートの添え書き）',
+  `note_text`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT '動画の下に添える 1 行（空なら添えない）',
   `published_at`     datetime DEFAULT NULL COMMENT '公開の時刻（日本時間）',
   `duration_seconds` int unsigned DEFAULT NULL COMMENT '長さ（秒）',
   `notes`            text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,

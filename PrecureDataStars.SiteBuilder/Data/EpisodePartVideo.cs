@@ -15,4 +15,8 @@ public sealed class EpisodePartVideo
     public string VideoId { get; set; } = "";
     /// <summary>YouTube の題（そのまま）。</summary>
     public string TitleText { get; set; } = "";
+    /// <summary>見出し（空ならパートの添え書き）。本放送ではコーナーが告知に差し替わった回の動画などに使う。</summary>
+    public string? HeadingText { get; set; }
+    /// <summary>動画の下に添える 1 行（「本放送では〜が流れました」など。空なら添えない）。</summary>
+    public string? NoteText { get; set; }
 }

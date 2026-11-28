@@ -11,7 +11,7 @@
 {{## 単発キャラ（characters.has_own_page = 0 のキャラ。最初に登場した作品・話に置く）は個別ページを持たず、ここに集約する。
      各見出しの id="ep{話数}" がキャラへのリンク（/characters/guests/{slug}/#ep{話数}）の着地点。
      話数見出しはエピソード詳細へリンクし、サブタイトルは解禁制御の対象なので出さない。
-     VoiceActorsHtml は人物詳細へのリンク済み HTML 断片なので html.escape をかけない。 ##}}
+     VoiceActorsHtml は人物詳細へのリンク済み HTML 断片なので html.escape をかけない（名義が今の名乗りと違えば小書きつき。名前の途中で折らない）。 ##}}
 {{~ for g in Groups ~}}
 <section class="creators-series-section"{{ if g.Anchor != "" }} id="{{ g.Anchor }}"{{ end }}>
   <h2 class="creators-series-heading">
@@ -24,7 +24,7 @@
     <li class="entity-row is-static">
       <span class="entity-row-name">{{ c.Name | html.escape }}</span>
       {{~ if c.KindLabel != "" ~}}<span class="character-kind-badge" data-kind="{{ c.KindCode | html.escape }}">{{ c.KindLabel | html.escape }}</span>{{~ end ~}}
-      {{~ if c.VoiceActorsHtml != "" ~}}<span class="entity-row-sub muted">CV: {{ c.VoiceActorsHtml }}</span>{{~ end ~}}
+      {{~ if c.VoiceActorsHtml != "" ~}}<span class="entity-row-sub muted">CV: <span class="staff-names">{{ c.VoiceActorsHtml }}</span></span>{{~ end ~}}
     </li>
     {{~ end ~}}
   </ul>

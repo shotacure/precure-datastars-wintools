@@ -5818,6 +5818,38 @@ a.staff-name:focus-visible {
   font-size: 0.92em;
   color: var(--muted);
 }
+/* キャラクター詳細の声の出演履歴：作品の行の後ろに置く開閉の一覧「登場した回」（1 話 1 行で「第N話「題」 放送日」）。
+   作品の行と一覧を 1 つのかたまりに見せるため、間の点線は引かず、一覧の下に引く。 */
+.involvement-list .involvement-row:has(+ .involvement-episodes) {
+  border-bottom: none;
+}
+.involvement-list .involvement-episodes {
+  padding: 0 0 6px;
+  border-bottom: 1px dotted var(--border);
+}
+.involvement-list .involvement-episodes:last-child {
+  border-bottom: none;
+}
+.involvement-list .involvement-episodes summary {
+  cursor: pointer;
+  width: fit-content;
+  font-size: 0.9em;
+  color: var(--muted);
+}
+.involvement-episode-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 0 0 1.2em;
+  font-size: 0.9em;
+  line-height: 1.6;
+}
+.involvement-episode-list > li > span {
+  /* 放送日。数字の幅をそろえ、日付の途中で折らない。 */
+  color: var(--muted);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 
 /* メンバー履歴：屋号 → 役職（クレジット履歴と共用の alias-section-heading / role-section-heading）の下に、
    人物 1 名 = 1 行で「人物名リンク → 担当作品（インライン）」を並べる。役職見出しの下に一段
@@ -8873,7 +8905,7 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   font-size: 0.8em;
   color: var(--muted);
 }
-/* クレジットの名義が今の名乗り（本名義）と違うときに添える今の名乗り（「上野 ケン (玖遠 らぎ)」の括弧）。所属屋号（0.8em）ほどではなく少し小さく。
+/* クレジットの名義が今の名乗りと違うときに添える今の名乗り（「上野 ケン (玖遠 らぎ)」の括弧）。所属屋号（0.8em）ほどではなく少し小さく。
    要約の欄のどこでも同じ形（AliasNote）。括弧の中で折らない。スタッフの欄（.staff-names）では名義との間をふつうの空白にして、
    名義と括弧を合わせて欄の 1 行に収まらないときだけ、その間で折る（ほかの欄は改行しない空白）。 */
 .staff-current-name {

@@ -32,6 +32,8 @@ public sealed class CharactersGenerator
     /// <c>GenerateAsync</c> の冒頭で 1 度だけ詰め、声の出演履歴とゲストキャラクターページで使い回す。
     /// 人物に紐付かない名義（ユニット名義など）はキーを持たず、リンクなしの文字で出す。</summary>
     private Dictionary<int, int> _personIdByAlias = new();
+    /// <summary>人物が 1 人だけの名義（共同名義を除く）。声優の名義に今の名乗りを小さく添えるか（<see cref="AliasNote"/>）の判定に使う。</summary>
+    private HashSet<int> _singlePersonAliasIds = new();
 
     private readonly CharactersRepository _charactersRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
@@ -73,9 +75,14 @@ public sealed class CharactersGenerator
         _ctx.Logger.Section("Generating characters");
 
         _personIdByAlias = new Dictionary<int, int>();
+        var personCountByAlias = new Dictionary<int, int>();
         foreach (var (personId, personAliasIds) in _ctx.AliasIdsByPerson)
             foreach (var aid in personAliasIds)
+            {
                 _personIdByAlias.TryAdd(aid, personId);
+                personCountByAlias[aid] = personCountByAlias.GetValueOrDefault(aid) + 1;
+            }
+        _singlePersonAliasIds = personCountByAlias.Where(kv => kv.Value == 1).Select(kv => kv.Key).ToHashSet();
 
         var allCharacters = (await _charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allAliases = (await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
@@ -573,7 +580,8 @@ public sealed class CharactersGenerator
 
         // MetaDescription を実データから動的構築する。
         var metaDescription = BuildCharacterMetaDescription(character.Name, kindLabel, voiceRows,
-            voiceRows.Count > 0 ? "" : BuildFamilyFragment(familyRows, aliasesByCharacter, personAliasById));
+            voiceRows.Count > 0 ? "" : BuildFamilyFragment(familyRows, aliasesByCharacter, personAliasById),
+            AppearanceFragment(CharacterAppearanceCounter.Count(_ctx, _index, aliasIds)));
 
         // キャラクター詳細の構造化データは Schema.org の Person 型で代用する。
         string baseUrl = _ctx.Config.BaseUrl;
@@ -655,7 +663,7 @@ public sealed class CharactersGenerator
                     if (inv.PersonAliasId is not int paid || !personAliasById.TryGetValue(paid, out var pa)) continue;
                     string nm = pa.DisplayTextOverride ?? pa.Name;
                     if (string.IsNullOrEmpty(nm) || !seenActor.Add(nm)) continue;
-                    actorLinks.Add(PersonLinkHtml(paid, nm));
+                    actorLinks.Add(PersonLinkWithNoteHtml(paid, nm));
                 }
 
                 rows.Add((placement, invs.Count > 0 ? invs[0].CreditSeq : int.MaxValue, characterId, new GuestCharacterRow
@@ -819,14 +827,15 @@ public sealed class CharactersGenerator
     }
 
     /// <summary>
-    /// キャラクター詳細の meta description。「種別（2004年『作品』、2005年『作品』ほか）。声：△△」（名前はページ名に出ているので入れない）。
+    /// キャラクター詳細の meta description。「種別（2004年『作品』、2005年『作品』ほか）。声：△△。TV 計 6 話・映画 計 2 本に登場」（名前はページ名に出ているので入れない）。
     /// 声の出演のクレジットが無いキャラクターは、作品も声も言えないので、<paramref name="familyFragment"/>（家族関係）を種別の後ろに添える。
     /// </summary>
     private static string BuildCharacterMetaDescription(
         string characterName,
         string kindLabel,
         IReadOnlyList<VoiceCastRow> voiceRows,
-        string familyFragment)
+        string familyFragment,
+        string appearanceFragment)
     {
         const int targetMaxChars = 150;
 
@@ -857,7 +866,23 @@ public sealed class CharactersGenerator
         }
         if (familyFragment.Length > 0 && sb.Length + 1 + familyFragment.Length <= targetMaxChars)
             sb.Append('。').Append(familyFragment);
+        if (appearanceFragment.Length > 0 && sb.Length + 1 + appearanceFragment.Length <= targetMaxChars)
+            sb.Append('。').Append(appearanceFragment);
         return sb.Length > 0 ? sb.ToString() : characterName;
+    }
+
+    /// <summary>
+    /// meta description の末尾に添える登場の数（「TV 計 6 話・映画 計 2 本・オトナ 計 3 話に登場」。「計」は、作品の第 N 話と読まれないため）。
+    /// 数え方はキャラクター一覧の件数の札と同じ（<see cref="CharacterAppearanceCounter"/>：本線の TV の話・映画の本数・オトナシリーズの話）。
+    /// 0 の種類は書かない。どれも 0 なら空文字。
+    /// </summary>
+    private static string AppearanceFragment((int Episode, int Movie, int OtonaEpisode) count)
+    {
+        var parts = new List<string>();
+        if (count.Episode > 0) parts.Add($"TV 計 {count.Episode} 話");
+        if (count.Movie > 0) parts.Add($"映画 計 {count.Movie} 本");
+        if (count.OtonaEpisode > 0) parts.Add($"オトナ 計 {count.OtonaEpisode} 話");
+        return parts.Count == 0 ? "" : string.Join("・", parts) + "に登場";
     }
 
     /// <summary>
@@ -1113,9 +1138,9 @@ public sealed class CharactersGenerator
                     {
                         if (act is { } e)
                         {
-                            if (e.Seen.Add(nm)) { e.Names.Add(nm); e.Links.Add(PersonLinkHtml(paid, nm)); }
+                            if (e.Seen.Add(nm)) { e.Names.Add(nm); e.Links.Add(PersonLinkWithNoteHtml(paid, nm)); }
                         }
-                        else if (seenScopeActor.Add(nm)) { seriesScopeActorNames.Add(nm); seriesScopeActorLinks.Add(PersonLinkHtml(paid, nm)); }
+                        else if (seenScopeActor.Add(nm)) { seriesScopeActorNames.Add(nm); seriesScopeActorLinks.Add(PersonLinkWithNoteHtml(paid, nm)); }
                     }
                 }
                 if (inv.CharacterAliasId is int caid && aliasById.TryGetValue(caid, out var ca))
@@ -1185,8 +1210,41 @@ public sealed class CharactersGenerator
                     VoiceActorsHtml = string.Join("、", g.First.Links)
                 });
             }
+
+            // 作品の最後の行に、この作品で演じた話の一覧（声優の組をまたいで話の順に全部）を持たせる。
+            // テンプレートは作品の行の後ろに開閉の一覧「登場した回」として出す。
+            if (episodeActs.Count > 0 && rows.Count > 0)
+                rows[^1].SeriesEpisodes = BuildEpisodeItems(series, episodeActs.Keys);
         }
         return rows;
+    }
+
+    /// <summary>
+    /// 声の出演履歴の「登場した回」の 1 行ずつ（話数・サブタイトル・放送日・各話のページへのリンク）。
+    /// サブタイトルはエピソード一覧と同じ部品で組む（解禁前の回はぼかし、未確定の回はアニメ雑誌の掲載状態の案内）。
+    /// 放送日はエピソード一覧と同じ放送日（深夜の回は前の日）の「2004.2.1」の形。
+    /// </summary>
+    private List<CharacterEpisodeItem> BuildEpisodeItems(Series series, IEnumerable<int> seriesEpNos)
+    {
+        var byNo = _ctx.EpisodesBySeries.TryGetValue(series.SeriesId, out var eps)
+            ? eps.GroupBy(e => e.SeriesEpNo).ToDictionary(g => g.Key, g => g.First())
+            : new Dictionary<int, Episode>();
+        var items = new List<CharacterEpisodeItem>();
+        foreach (var no in seriesEpNos.OrderBy(n => n))
+        {
+            if (!byNo.TryGetValue(no, out var ep)) continue;
+            var revealAt = SubtitleGuardRenderer.RevealAtFor(ep.EpisodeId, _ctx.SubtitleRevealAtByEpisodeId);
+            string title = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(null, ep.TitleText, revealAt, ep.MagazineSubtitleStatus);
+            items.Add(new CharacterEpisodeItem
+            {
+                Url = PathUtil.EpisodeUrl(series.Slug, no),
+                EpNo = no,
+                // 題があるときは「第N話「題」」、未確定の案内（括弧書き）のときは「第N話 （…）」。
+                TitleHtml = string.IsNullOrEmpty(ep.TitleText) ? " " + title : "「" + title + "」",
+                Date = JpDateFormat.BroadcastDotDate(ep.OnAirAt)
+            });
+        }
+        return items;
     }
 
     /// <summary>
@@ -1222,6 +1280,18 @@ public sealed class CharactersGenerator
         => _personIdByAlias.TryGetValue(personAliasId, out var pid)
             ? $"<a href=\"{PathUtil.PersonUrl(pid)}\">{HtmlUtil.Escape(displayName)}</a>"
             : HtmlUtil.Escape(displayName);
+
+    /// <summary>
+    /// <see cref="PersonLinkHtml"/> に、クレジットの名義が今の名乗り（表示名義）と違うときだけ今の名乗りを小さく添えたもの
+    /// （要約の欄の決まり。<see cref="AliasNote"/>。共同名義と、空白・中黒だけの違いには添えない）。声の出演履歴と「その他のキャラクター」の声優に使う。
+    /// </summary>
+    private string PersonLinkWithNoteHtml(int personAliasId, string displayName)
+    {
+        string html = PersonLinkHtml(personAliasId, displayName);
+        if (!_singlePersonAliasIds.Contains(personAliasId) || !_personIdByAlias.TryGetValue(personAliasId, out var pid)) return html;
+        string? current = _ctx.EntityUrls.PersonDisplayName(pid);
+        return AliasNote.Differs(displayName, current) ? html + AliasNote.Html(current!) : html;
+    }
 
     /// <summary>キャラクター一覧の 1 行に並ぶキャラの数（画面の幅によって変わるので、広い画面の列数に合わせている）。</summary>
     private const int IndexGridColumns = 3;
@@ -1484,5 +1554,20 @@ public sealed class CharactersGenerator
         /// <summary><see cref="VoiceActorNames"/> と同じ並びで、各声優名を人物詳細へのリンクにした HTML 断片（「、」連結）。
         /// 人物に紐付かない名義はリンクなしの文字。エスケープ済みなのでテンプレ側で html.escape をかけない。</summary>
         public string VoiceActorsHtml { get; set; } = "";
+        /// <summary>作品の最後の行だけに持たせる、この作品で演じた話の一覧（話の順）。それ以外の行と映画・シリーズ全体の行は空。</summary>
+        public List<CharacterEpisodeItem> SeriesEpisodes { get; set; } = new();
+    }
+
+    /// <summary>声の出演履歴の「登場した回」の 1 行。</summary>
+    private sealed class CharacterEpisodeItem
+    {
+        /// <summary>各話のページの URL。</summary>
+        public string Url { get; set; } = "";
+        /// <summary>作品の中の話数。</summary>
+        public int EpNo { get; set; }
+        /// <summary>話数の後ろに続ける題の HTML（「「題」」か、未確定の案内。解禁前はぼかしの枠つき。エスケープ済み）。</summary>
+        public string TitleHtml { get; set; } = "";
+        /// <summary>放送日（「2004.2.1」の形）。</summary>
+        public string Date { get; set; } = "";
     }
 }

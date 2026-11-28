@@ -858,25 +858,10 @@ public sealed class CreatorsGenerator
             var latest = _ctx.EntityUrls.DisplayPersonAliasId(p.PersonId) is int latestAid
                 ? AliasLabel(latestAid)
                 : (p.FullName, p.FullNameKana ?? "");
-            // 初参加行に表示名義を括弧で添える名義か。
-            //   - TV 系のクレジットで使われた旧名義（改名など）は添える。
-            //   - 映画だけで使われた名義は基本は名義変更ではないので添えないが、映画が初出でラテン文字で書かれた名義
-            //     （例：TAP スタッフの「FRANCIS P.CANEDA」）は、TV 系に別の名義（カタカナ表記など）があれば添えて同一人物と分かるようにする。
-            //   - 判定は本編のクレジットだけで行う（主題歌・挿入歌の作家・歌唱や劇伴の作曲・編曲は見ない）。
-            bool personHasTv = aliasIds.Any(a => _index.ByPersonAlias.TryGetValue(a, out var ai)
-                                                 && ai.Any(inv => inv.IsMainCredit && !_ctx.IsMovieKindSeries(inv.SeriesId)));
-            bool NoteCurrentName(int aid)
-            {
-                if (!_index.ByPersonAlias.TryGetValue(aid, out var all)) return false;
-                var invs = all.Where(inv => inv.IsMainCredit).ToList();
-                if (invs.Count == 0) return false;
-                if (invs.Any(inv => !_ctx.IsMovieKindSeries(inv.SeriesId))) return true;
-                if (!personHasTv || !_ctx.PersonAliasById.TryGetValue(aid, out var a) || !IsLatinName(a.Name)) return false;
-                var first = invs.MinBy(inv => CreditOrderKey(inv))!;
-                return _ctx.IsMovieKindSeries(first.SeriesId);
-            }
+            // 初参加行に表示名義を添える決まりは、作品のページのメインスタッフと同じ（AliasNote）：
+            //   名義が表示名義と違えば、TV・映画を問わず添える（空白・中黒の違いだけなら添えない）。
             AppendEntityRows(set, agg, "person", p.PersonId, PathUtil.PersonUrl(p.PersonId),
-                latest, AliasLabel, NoteCurrentName, repNameMap, withWorksTooltip, roleUsageNote,
+                latest, AliasLabel, _ => true, repNameMap, withWorksTooltip, roleUsageNote,
                 memberOf: memberOf.TryGetValue(p.PersonId, out var membership) ? CompanyGroupKey(membership.CompanyId) : "",
                 affiliations: membership?.Affiliations);
         }
@@ -1146,10 +1131,10 @@ public sealed class CreatorsGenerator
                 debutRow.RoleUsageNote = usageNote;
                 debutRow.WkOwn = WorkKindNames[k];
                 debutRow.WkAfter = EarlierKinds(keys, k);
-                // TV 系のクレジットで使われた旧名義で置いた初参加行には、いまの名乗り（表示名義）を括弧で添えて
+                // 表示名義と違う名義で置いた初参加行には、いまの名乗り（表示名義）を括弧で添えて
                 // 同一人物と分かるようにする（添えるかは noteCurrentName が決める。企業は常に添えない）。
                 // 逆向き（表示名義の行に旧名義を添える）はしない。
-                if (!string.Equals(label.Name, latest.Name, StringComparison.Ordinal) && noteCurrentName(aid))
+                if (AliasNote.Differs(label.Name, latest.Name) && noteCurrentName(aid))
                     debutRow.CurrentNameNote = latest.Name;
                 set.DebutRows.Add(debutRow);
             }
@@ -3438,6 +3423,8 @@ public sealed class CreatorsGenerator
                 (HashSet<int> EpNos, int BestEpNo, long BestPos)>();
             // 線表用：出演した TV 系の話 (series_id, episode_id)。
             var timelineEpisodes = new HashSet<(int SeriesId, int EpisodeId)>();
+            // (作品, キャラ) → その作品でいちばん早くクレジットされた名義（話数 → クレジットの中の位置の順。行の名前に使う）。
+            var creditedAliasByKey = new Dictionary<(int SeriesId, int CharacterId), (int EpNo, long Pos, int AliasId)>();
 
             foreach (var aid in aliasIds)
             {
@@ -3450,6 +3437,10 @@ public sealed class CreatorsGenerator
                     if (!aliasToCharId.TryGetValue(caId, out var charId)) continue;
 
                     var key = (inv.SeriesId, charId);
+                    int creditEpNo = inv.EpisodeId is int ceid && _ctx.LookupEpisode(inv.SeriesId, ceid) is { } cep ? cep.SeriesEpNo : int.MaxValue; // 作品まるごとのクレジットは話のクレジットの後
+                    if (!creditedAliasByKey.TryGetValue(key, out var firstAlias)
+                        || creditEpNo < firstAlias.EpNo || (creditEpNo == firstAlias.EpNo && inv.CreditPos < firstAlias.Pos))
+                        creditedAliasByKey[key] = (creditEpNo, inv.CreditPos, aid);
                     if (!bucket.TryGetValue(key, out var acc))
                     {
                         acc = (new HashSet<int>(), int.MaxValue, long.MaxValue);
@@ -3511,9 +3502,20 @@ public sealed class CreatorsGenerator
                 bool isMovie = _ctx.IsMovieKindSeries(seriesId);
                 bool isOtona = _ctx.IsOtonaSeries(seriesId);
 
+                // 行の作品でクレジットされた名義（本名義と違えば後ろに本名義を小さく添える。AliasNote）。人物ごとにまとめた行は本名義のまま。
+                // 本名義と比べるのは、同姓同名の別人を見分ける添え書きの無い名乗り。違わないときは今までどおり添え書きつきの名前（p.Name）を出す。
+                string creditedName = creditedAliasByKey.TryGetValue(kv.Key, out var ca)
+                    && _ctx.PersonAliasById.TryGetValue(ca.AliasId, out var creditedAlias)
+                    && !string.IsNullOrEmpty(creditedAlias.GetDisplayName())
+                        ? creditedAlias.GetDisplayName()
+                        : p.Name;
+                string currentPlain = _ctx.EntityUrls.PersonDisplayName(p.Id) ?? p.Name;
+                bool creditedDiffers = AliasNote.Differs(creditedName, currentPlain);
                 var row = new VoiceCastRow
                 {
                     PersonName = p.Name,
+                    CreditedName = creditedDiffers ? creditedName : p.Name,
+                    CurrentNameNote = creditedDiffers ? currentPlain : "",
                     PersonNameKana = p.Kana,
                     PersonUrl = p.Url,
                     PersonId = p.Id,
@@ -3617,6 +3619,8 @@ public sealed class CreatorsGenerator
                 debutRows.Add(new VoiceCastRow
                 {
                     PersonName = debutSource.PersonName,
+                    CreditedName = debutSource.CreditedName,
+                    CurrentNameNote = debutSource.CurrentNameNote,
                     PersonNameKana = debutSource.PersonNameKana,
                     PersonUrl = debutSource.PersonUrl,
                     PersonId = debutSource.PersonId,
@@ -4835,7 +4839,14 @@ public sealed class CreatorsGenerator
     /// <summary>(声優 × シリーズ × キャラ) 1 組分の表示行。別シリーズ・別キャラはそれぞれ別行になり、 その都度キャラ名・シリーズ名が出る。</summary>
     private sealed class VoiceCastRow
     {
+        /// <summary>人物の本名義（今の名乗り）。人物ごとにまとめた行（出演回数順・クレジット役柄数順）はこれを出す。</summary>
         public string PersonName { get; set; } = "";
+        /// <summary>行の作品でクレジットされた名義（作品のある行〔キャラクター別・初出演順〕に出す。空なら PersonName）。</summary>
+        public string CreditedName { get; set; } = "";
+        /// <summary>CreditedName が本名義と違うときに後ろに小さく添える本名義（同じなら空）。</summary>
+        public string CurrentNameNote { get; set; } = "";
+        /// <summary>作品のある行に出す名前（CreditedName、無ければ PersonName）。</summary>
+        public string ShownName => string.IsNullOrEmpty(CreditedName) ? PersonName : CreditedName;
         public string PersonNameKana { get; set; } = "";
         public string PersonUrl { get; set; } = "";
         /// <summary>声優の person_id（キャラクター別タブで代表 CV をまとめるためのグルーピングキー）。</summary>

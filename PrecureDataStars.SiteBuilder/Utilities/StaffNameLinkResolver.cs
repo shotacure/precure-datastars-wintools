@@ -53,6 +53,10 @@ public sealed class StaffNameLinkResolver
     ///   <item><description>複数人物（共有 alias）: <c>&lt;a href="..."&gt;{displayText}[1]&lt;/a&gt; &lt;a href="..."&gt;{displayText}[2]&lt;/a&gt;</c>（半角スペース区切り）</description></item>
     /// </list>
     /// </returns>
+    /// <summary>名義に結び付く人物が 1 人だけならその person_id、0 人や 2 人以上（共同名義）なら null。</summary>
+    public int? SinglePersonId(int personAliasId)
+        => _personIdsByAliasId.TryGetValue(personAliasId, out var ids) && ids.Count == 1 ? ids[0] : null;
+
     public string ResolveAsHtml(int? personAliasId, string? displayText)
     {
         if (string.IsNullOrEmpty(displayText)) return "";

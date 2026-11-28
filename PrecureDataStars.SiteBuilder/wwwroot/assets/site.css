@@ -8873,9 +8873,11 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   font-size: 0.8em;
   color: var(--muted);
 }
-/* クレジットの名義が今の名乗りと違うときに添える今の名乗り（「上野 ケン (玖遠 らぎ)」の括弧）。所属屋号（0.8em）ほどではなく少し小さく。 */
+/* クレジットの名義が今の名乗り（本名義）と違うときに添える今の名乗り（「上野 ケン (玖遠 らぎ)」の括弧）。所属屋号（0.8em）ほどではなく少し小さく。
+   要約の欄のどこでも同じ形（AliasNote）。括弧の中で折らない（名義との間は改行しない空白）。 */
 .staff-current-name {
   font-size: 0.9em;
+  white-space: nowrap;
 }
 /* 声優などを伏せてクレジットされた行（「？」）の後ろに添える、正名義の括弧部分。 */
 .staff-masked-actual {

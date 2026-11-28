@@ -866,7 +866,7 @@ public sealed class EpisodeGenerator
 
     /// <summary>タグを含み得る表示文字列から素のテキストだけを取り出す（カードは画像なのでマークアップを持てない）。</summary>
     private static string StripTags(string html) =>
-        System.Net.WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", "")).Trim();
+        System.Net.WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(AliasNote.StripNotes(html), "<[^>]+>", "")).Trim();
 
     /// <summary>
     /// エピソード詳細ページの OGP カードを組み立てる。
@@ -1473,7 +1473,8 @@ public sealed class EpisodeGenerator
     private static string StripHtmlTags(string s)
     {
         if (string.IsNullOrEmpty(s)) return s;
-        return System.Text.RegularExpressions.Regex.Replace(s, "<[^>]*>", "");
+        // 名前に添えた本名義の小書き（AliasNote）は、名義のまま出す所（meta description・構造化データ）には入れない。
+        return System.Text.RegularExpressions.Regex.Replace(AliasNote.StripNotes(s), "<[^>]*>", "");
     }
 
     /// <summary>
@@ -1681,8 +1682,7 @@ public sealed class EpisodeGenerator
     /// <summary>カードの顔ぶれの 1 人（人物ページがあればリンク）。</summary>
     /// <summary>
     /// 担当回数のカード（役職ごと・組み合わせ）の 1 人分。名前はその回にクレジットされた名義で、それが今の名乗りと違うときは
-    /// 後ろに今の名乗りを小さく添える（作品のページのメインスタッフと同じ「上野 ケン (玖遠 らぎ)」の形・.staff-current-name）。
-    /// 名義と添えた今の名乗りは途中で折らない 1 かたまり（.staff-member-group）にする。
+    /// 後ろに今の名乗りを小さく添える（作品のページのメインスタッフと同じ「上野 ケン (玖遠 らぎ)」の形。<see cref="AliasNote"/>）。
     /// </summary>
     private static string ChiefPersonHtml(ChiefPerson p)
     {
@@ -1690,8 +1690,7 @@ public sealed class EpisodeGenerator
         string link = string.IsNullOrEmpty(p.Url)
             ? $"<span class=\"staff-name\">{name}</span>"
             : $"<a class=\"staff-name\" href=\"{p.Url}\">{name}</a>";
-        if (string.IsNullOrEmpty(p.CurrentNote)) return link;
-        return $"<span class=\"staff-member-group\">{link}<span class=\"staff-current-name\"> ({HtmlUtil.Escape(p.CurrentNote)})</span></span>";
+        return string.IsNullOrEmpty(p.CurrentNote) ? link : link + AliasNote.Html(p.CurrentNote);
     }
 
     /// <summary>チーフの区分 → 役職の札の色とリンク先に使う役職コード（スタッフ行の札と同じ）。</summary>
@@ -1913,6 +1912,9 @@ public sealed class EpisodeGenerator
                     string? displayText = pa?.DisplayTextOverride ?? pa?.Name;
                     if (string.IsNullOrEmpty(displayText)) return ("", "");
                     string html = _staffLinkResolver.ResolveAsHtml(pid, displayText);
+                    // 要約の欄なので、名義が本名義と違えば後ろに本名義を小さく添える（AliasNote）。
+                    if (AliasNote.CurrentNameFor(_ctx, _staffLinkResolver, pid, displayText) is string current)
+                        html += AliasNote.Html(current);
                     return ($"P:{pid}", html);
                 }
                 return ("", "");

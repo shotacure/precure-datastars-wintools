@@ -316,17 +316,9 @@ public sealed class EpisodeChiefStaffIndex
     {
         var person = _people.TryGetValue(key, out var p) ? p : new ChiefPerson(key, key, "");
         if (!_creditedNames.TryGetValue((episodeId, key), out var name) || string.IsNullOrEmpty(name)) return person;
-        string? note = NameKeyIgnoringSeparators(name) == NameKeyIgnoringSeparators(person.Name) ? null : person.Name;
+        // 本名義を添えるのは、人物 1 人の顔ぶれ（P{person_id}）で、名義と本名義が表記の揺れだけでない違いのあるときだけ（AliasNote）。
+        string? note = key.StartsWith("P", StringComparison.Ordinal) && AliasNote.Differs(name, person.Name) ? person.Name : null;
         return person with { CreditedName = name, CurrentNote = note };
-    }
-
-    /// <summary>空白（半角・全角）と中黒（・／･）を除いた名前（表記の揺れだけの違いを同じとみなすため）。</summary>
-    private static string NameKeyIgnoringSeparators(string name)
-    {
-        var sb = new System.Text.StringBuilder(name.Length);
-        foreach (var ch in name)
-            if (ch is not (' ' or '　' or '・' or '･')) sb.Append(ch);
-        return sb.ToString();
     }
 
     /// <summary>エントリ 1 件の、クレジットされた名義の表記（PERSON は名義の表記、TEXT は生テキスト）。取れなければ null。</summary>

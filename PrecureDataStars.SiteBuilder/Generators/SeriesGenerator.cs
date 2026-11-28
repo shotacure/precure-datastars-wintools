@@ -1794,6 +1794,9 @@ public sealed class SeriesGenerator
                     string? displayText = pa?.DisplayTextOverride ?? pa?.Name;
                     if (string.IsNullOrEmpty(displayText)) return ("", "");
                     string html = _staffLinkResolver.ResolveAsHtml(pid, displayText);
+                    // 要約の欄なので、名義が本名義と違えば後ろに本名義を小さく添える（AliasNote）。
+                    if (AliasNote.CurrentNameFor(_ctx, _staffLinkResolver, pid, displayText) is string current)
+                        html += AliasNote.Html(current);
                     return ($"P:{pid}", html);
                 }
                 return ("", "");

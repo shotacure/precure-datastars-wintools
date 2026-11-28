@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **サイト：TV の作品の、話が出る前の公式の発表（作品に付く仮のクレジット）を、話数なしの行として出し、本編に出た回から人・キャラごとにクレジットの実績へ切り替えるようにした**（`CreditInvolvementIndex`・`SeriesGenerator`・`CreatorsGenerator`・`CharactersGenerator`・`InvolvementRowBuilder`）：作品の数には入れ、話・回の数には入れない。メインスタッフには範囲なしで並ぶ。今までは TV の作品に付くクレジットを「(シリーズ全体)」の行として出し、スタッフ一覧などでは 1 話と数えていた。
 - **デプロイ：順番待ちの一覧で、スタッフ一覧・声優一覧など /creators/ の下の一覧のページを「役職」の段に並べるようにした**（`IndexQueue`・`index-queue-add.ps1`）：今までは「そのほか」で、盤・曲より後ろだった。
 - **デプロイ：`index-queue-add.ps1` に、送った URL へ「送った」の印を付ける `-MarkSent`（日時は `-SentAt`）を足した**：一覧を手で書き換えると本番デプロイと書き合いになるため。
 - **デプロイ：本番に上げた後、更新日が進んだページがある回だけ、Search Console の API でサイトマップを送り直す**（`SearchConsoleSitemapService`〔新規〕・`BuildConfig.SearchConsoleKeyFile`・`SearchConsoleSite`〔新規〕・`deploy.ps1`）：送れなくてもデプロイは止めず、成功・失敗の 1 行をデプロイの記録に写す。

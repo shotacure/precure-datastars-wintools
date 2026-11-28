@@ -90,11 +90,10 @@ internal static class InvolvementRowBuilder
             // 呼び出し側固有の付加情報（演じたキャラ名・所属屋号ラベル）を解決する。フック未指定なら全て空文字。
             var extras = extrasResolver is null ? InvolvementSeriesRowExtras.Empty : extrasResolver(bySeries);
 
-            // (a) シリーズ全体スコープの 1 行（あれば先に出す）。
-            // 映画系シリーズ（credit_attach_to='SERIES'）はそもそも全クレジットが series 直付けの
-            // 「シリーズ全体」相当なので、わざわざ「（シリーズ全体）」ラベルを併記する意味がない
-            // （見出しの「N 本」表記＋シリーズ名で十分自明）。TV 系シリーズに稀に出る series-scope
-            // クレジットだけ「（シリーズ全体）」を出して、エピソード単位の行と区別する。
+            // (a) シリーズ全体スコープの 1 行（あれば先に出す）。範囲の札は付けない。
+            // 映画系シリーズ（credit_attach_to='SERIES'）はそもそも全クレジットが series 直付けで、見出しの「N 本」表記＋シリーズ名で十分自明。
+            // TV 系シリーズの series-scope クレジットは、話が出る前の公式の発表（作品に付く仮のクレジット）で、
+            // 話数なしの「作品と役職」の行として出す（その作品で話のクレジットが入った人は、索引の側で実績の行に切り替わっている）。
             if (hasSeriesScope)
             {
                 seriesRows.Add(new InvolvementSeriesRow
@@ -105,7 +104,7 @@ internal static class InvolvementRowBuilder
                     // テンプレ側（persons-detail.sbn / companies-detail.sbn）が
                     // "({{ RangeLabel }})" と括弧で包むため、ここでは括弧を含まない素のラベルにする
                     // （含めると二重括弧になる）。
-                    RangeLabel = isMovieKindSeries ? "" : "シリーズ全体",
+                    RangeLabel = "",
                     IsAllEpisodes = false,
                     CharacterNames = extras.SeriesScopeCharacterNames,
                     CharacterNamesHtml = extras.SeriesScopeCharacterNamesHtml,

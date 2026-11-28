@@ -1090,10 +1090,8 @@ public sealed class CharactersGenerator
         {
             if (!_ctx.SeriesById.TryGetValue(bySeries.Key, out var series)) continue;
 
-            // 映画系（series_kinds.credit_attach_to='SERIES'）はそもそも全クレジットが
-            // シリーズ全体相当なので「（シリーズ全体）」ラベルを併記する意味がない
-            // （InvolvementRowBuilder と同じ判定・同じ理由）。
-            bool isMovieKindSeries = _ctx.IsMovieKindSeries(bySeries.Key);
+            // 作品に付くクレジット（映画のクレジットと、TV の作品の話が出る前の公式の発表）の行には範囲の札を付けない
+            // （InvolvementRowBuilder と同じ。TV の作品は、そのキャラに話のクレジットが入ると索引の側で実績の行に切り替わる）。
 
             // シリーズ内全話数（全話判定用）
             var allSeriesEpNos = _ctx.EpisodesBySeries.TryGetValue(bySeries.Key, out var allEps)
@@ -1160,9 +1158,7 @@ public sealed class CharactersGenerator
                     SeriesSlug = series.Slug,
                     SeriesTitle = series.Title,
                     SeriesStartYearLabel = series.StartDate.Year.ToString(),
-                    // テンプレ側（characters-detail.sbn）が "({{ RangeLabel }})" と括弧で包むため、
-                    // ここでは括弧を含まない素のラベルにする（含めると二重括弧になる）。
-                    RangeLabel = isMovieKindSeries ? "" : "シリーズ全体",
+                    RangeLabel = "",
                     IsAllEpisodes = false,
                     AliasNames = string.Join("、", seriesScopeAliasNames),
                     VoiceActorNames = string.Join("、", seriesScopeActorNames),
@@ -1562,7 +1558,7 @@ public sealed class CharactersGenerator
         public string SeriesTitle { get; set; } = "";
         /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。 声の出演履歴リストでシリーズ名の隣に薄色括弧で添える表現に使う。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
-        /// <summary>話数圧縮表記。例：「#1〜4, 8」。全話のときは空文字（テンプレ側で「(全話)」マークを別表示）。 シリーズ全体スコープのときは「シリーズ全体」のような任意ラベルを入れる（括弧は含めない。 テンプレ側が "({{ RangeLabel }})" と括弧で包むため、ここで括弧を含めると二重になる）。</summary>
+        /// <summary>話数圧縮表記。例：「#1〜4, 8」。全話のときは空文字（テンプレ側で「(全話)」マークを別表示）。 作品に付くクレジット（映画・TV の作品の話が出る前の発表）の行は空（範囲の札を付けない）。括弧は含めない（テンプレ側が "({{ RangeLabel }})" と括弧で包む）。</summary>
         public string RangeLabel { get; set; } = "";
         /// <summary>シリーズ内の全話を担当しているフラグ。テンプレで「(全話)」マークを出すかの判定。</summary>
         public bool IsAllEpisodes { get; set; }

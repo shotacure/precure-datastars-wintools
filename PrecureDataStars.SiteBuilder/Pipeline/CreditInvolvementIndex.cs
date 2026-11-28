@@ -798,11 +798,58 @@ public sealed class CreditInvolvementIndex
         // ── 集計サマリ ──
         ctx.Logger.Info($"  scanned: {totalEntries} entries → person aliases={personIdx.Count}, company aliases={companyIdx.Count}, logos={logoIdx.Count}, character aliases={characterIdx.Count}");
 
+        // TV の作品（話に付くクレジットの作品）の、作品に付くクレジット（放送前の発表）の行は、
+        // その作品で同じ人・同じキャラ・同じ会社に話のクレジットが 1 本でもあれば外す（実績に切り替わる）。
+        int prunedAnnounced = PruneAnnouncedSeriesCredits(ctx, personIdx,
+            aid => ctx.PersonIdByAlias.TryGetValue(aid, out var pid) ? pid : -aid, voicePerCharacter: true);
+        prunedAnnounced += PruneAnnouncedSeriesCredits(ctx, characterIdx,
+            aid => ctx.CharacterAliasById.TryGetValue(aid, out var ca) ? ca.CharacterId : -aid, voicePerCharacter: false);
+        prunedAnnounced += PruneAnnouncedSeriesCredits(ctx, companyIdx,
+            aid => ctx.CompanyAliasById.TryGetValue(aid, out var co) ? co.CompanyId : -aid, voicePerCharacter: false);
+        if (prunedAnnounced > 0)
+            ctx.Logger.Info($"  announced series credits: 話のクレジットに切り替わった {prunedAnnounced} 件を外した");
+
         return new CreditInvolvementIndex(
             personIdx.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<Involvement>)kv.Value),
             companyIdx.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<Involvement>)kv.Value),
             logoIdx.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<Involvement>)kv.Value),
             characterIdx.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<Involvement>)kv.Value));
+    }
+
+    /// <summary>
+    /// TV の作品に付くクレジット（話が出る前の公式の発表を、作品に付く仮のクレジットとして入れたもの）を、人・キャラ・会社ごとに実績へ切り替える。
+    /// 名義を <paramref name="entityOf"/> で人物・キャラ・会社にまとめ、同じ作品でその相手に話のクレジット（本編のクレジット）が 1 本でもあれば、
+    /// その作品の作品に付くクレジットの関与を外す。話のクレジットが無い相手は残り、話数なしの行として出る（話数・回数には入らない）。
+    /// 人物の声の出演は、演じたキャラごとに見る（<paramref name="voicePerCharacter"/>。発表された役のうち、まだ話に出ていない役は話数なしのまま）。
+    /// 映画など作品に付くクレジットが本来の作品は見ない。外した件数を返す。
+    /// </summary>
+    private static int PruneAnnouncedSeriesCredits(
+        BuildContext ctx, Dictionary<int, List<Involvement>> index, Func<int, int> entityOf, bool voicePerCharacter)
+    {
+        (int Entity, int SeriesId, int CharacterId) KeyOf(int aliasId, Involvement inv)
+        {
+            int characterId = voicePerCharacter && inv.IsVoiceCast && inv.CharacterAliasId is int caid
+                && ctx.CharacterAliasById.TryGetValue(caid, out var ca) ? ca.CharacterId : 0;
+            return (entityOf(aliasId), inv.SeriesId, characterId);
+        }
+        bool IsAnnounced(Involvement inv)
+            => inv.EpisodeId is null && inv.IsMainCredit && !ctx.IsMovieKindSeries(inv.SeriesId);
+
+        // 話のクレジットのある（相手・作品・キャラ）の組。作品に付くクレジットの無い作品は見なくてよいので、先に作品を絞る。
+        var announcedSeries = index.Values.SelectMany(l => l).Where(IsAnnounced).Select(i => i.SeriesId).ToHashSet();
+        if (announcedSeries.Count == 0) return 0;
+        var credited = new HashSet<(int, int, int)>();
+        foreach (var (aid, list) in index)
+            foreach (var inv in list)
+                if (inv.EpisodeId is not null && inv.IsMainCredit && announcedSeries.Contains(inv.SeriesId))
+                    credited.Add(KeyOf(aid, inv));
+
+        int removed = 0;
+        foreach (var (aid, list) in index)
+            removed += list.RemoveAll(inv => IsAnnounced(inv) && credited.Contains(KeyOf(aid, inv)));
+        // 外して空になった名義は索引から除く（ほかの関与の無い名義を「関与あり」と数えない）。
+        foreach (var aid in index.Where(kv => kv.Value.Count == 0).Select(kv => kv.Key).ToList()) index.Remove(aid);
+        return removed;
     }
 
     /// <summary>TOEI ANIMATION PHILS., INC.（Toei Phils.・TAP）の会社 ID。</summary>

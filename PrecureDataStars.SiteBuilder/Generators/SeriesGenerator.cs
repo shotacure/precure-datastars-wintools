@@ -550,6 +550,21 @@ public sealed class SeriesGenerator
                                     firstRoleLabel = inv.RoleLabelText;
                                 }
                             }
+                            else if (inv.EpisodeId is null)
+                            {
+                                // TV の作品に付くクレジット（話が出る前の公式の発表）にだけいる人は、話のクレジットから出た人の後ろに並べる
+                                // （話のクレジットが入った人は、索引の側で作品に付くクレジットが外れている。BuildMainStaffSectionsAsync と同じ）。
+                                NoteCreditedAlias(creditedAliases, aid, (AnnouncedSortEpNo, inv.CreditSeq, inv.CreditSubSeq));
+                                if (AnnouncedSortEpNo < sortEpNo
+                                    || (AnnouncedSortEpNo == sortEpNo && inv.CreditSeq < sortCreditSeq)
+                                    || (AnnouncedSortEpNo == sortEpNo && inv.CreditSeq == sortCreditSeq && inv.CreditSubSeq < sortCreditSubSeq))
+                                {
+                                    sortEpNo = AnnouncedSortEpNo;
+                                    sortCreditSeq = inv.CreditSeq;
+                                    sortCreditSubSeq = inv.CreditSubSeq;
+                                    firstRoleLabel = inv.RoleLabelText;
+                                }
+                            }
                             else if (inv.EpisodeId is int eid && epNoByEpId!.TryGetValue(eid, out var n))
                             {
                                 NoteCreditedAlias(creditedAliases, aid, (n, inv.CreditSeq, inv.CreditSubSeq));
@@ -1897,6 +1912,12 @@ public sealed class SeriesGenerator
         return map;
     }
 
+    /// <summary>
+    /// TV のメインスタッフで、話数なしの人（作品に付くクレジット＝話が出る前の公式の発表にだけいる人）を並べるときの仮の話数。
+    /// 話のクレジットから出た人（実在の話数）より後ろに来るよう、どの話数よりも大きく、映画の 0 とも重ならない値にする。
+    /// </summary>
+    private const int AnnouncedSortEpNo = int.MaxValue - 1;
+
     private async Task<IReadOnlyList<KeyStaffSection>> BuildMainStaffSectionsAsync(
         Series series, IReadOnlyList<Episode> eps, CancellationToken ct)
     {
@@ -1972,6 +1993,9 @@ public sealed class SeriesGenerator
                 int sortCreditSubSeq = int.MaxValue;
                 // 映画系で 1 件でも該当 Involvement が見つかったか（episodeNos に頼らない判定）。
                 bool foundMovieInvolvement = false;
+                // TV で、作品に付くクレジット（話が出る前の公式の発表）にだけいる人か。話のクレジットが入った人は、
+                // 索引の側（CreditInvolvementIndex）で作品に付くクレジットが外れているので、ここに来るのは話数なしの人だけ。
+                bool foundAnnouncedInvolvement = false;
                 // 最も早いクレジットでの、画面の役職の表記（役職名どおりなら null）。
                 string? firstRoleLabel = null;
                 // この作品のこの役職でクレジットされた名義と、それぞれが最初に出た所（名乗りは当時の名義で出す）
@@ -1995,6 +2019,21 @@ public sealed class SeriesGenerator
                                 || (0 == sortEpNo && inv.CreditSeq == sortCreditSeq && inv.CreditSubSeq < sortCreditSubSeq))
                             {
                                 sortEpNo = 0;
+                                sortCreditSeq = inv.CreditSeq;
+                                sortCreditSubSeq = inv.CreditSubSeq;
+                                firstRoleLabel = inv.RoleLabelText;
+                            }
+                        }
+                        else if (inv.EpisodeId is null)
+                        {
+                            // 話数なしの人は、話のクレジットから出た人の後ろに、作品に付くクレジットの順で並べる。
+                            foundAnnouncedInvolvement = true;
+                            NoteCreditedAlias(creditedAliases, aid, (AnnouncedSortEpNo, inv.CreditSeq, inv.CreditSubSeq));
+                            if (AnnouncedSortEpNo < sortEpNo
+                                || (AnnouncedSortEpNo == sortEpNo && inv.CreditSeq < sortCreditSeq)
+                                || (AnnouncedSortEpNo == sortEpNo && inv.CreditSeq == sortCreditSeq && inv.CreditSubSeq < sortCreditSubSeq))
+                            {
+                                sortEpNo = AnnouncedSortEpNo;
                                 sortCreditSeq = inv.CreditSeq;
                                 sortCreditSubSeq = inv.CreditSubSeq;
                                 firstRoleLabel = inv.RoleLabelText;
@@ -2027,8 +2066,8 @@ public sealed class SeriesGenerator
                         }
                     }
                 }
-                // 該当者除外判定：TV は episode 関与 0 件、映画は SERIES 関与 0 件で除外。
-                if (isMovieKind ? !foundMovieInvolvement : episodeNos.Count == 0) continue;
+                // 該当者除外判定：TV は episode 関与と発表の関与がどちらも 0 件、映画は SERIES 関与 0 件で除外。
+                if (isMovieKind ? !foundMovieInvolvement : episodeNos.Count == 0 && !foundAnnouncedInvolvement) continue;
 
                 // OP のクレジットが無い回は、引き継ぎ元の回の OP にこの人がいれば、出た回に数える（範囲の判断の中だけ）。
                 var rangeEpisodeNos = episodeNos;
@@ -2042,7 +2081,8 @@ public sealed class SeriesGenerator
                 bool isAllEpisodes = isTvLike
                     && allEpisodeNos.Count > 0
                     && rangeEpisodeNos.SetEquals(allEpisodeNos);
-                string rangeLabel = isMovieKind || isAllEpisodes
+                // 話数なしの人（作品に付くクレジットだけの人）も範囲を付けない。
+                string rangeLabel = isMovieKind || isAllEpisodes || rangeEpisodeNos.Count == 0
                     ? string.Empty
                     : EpisodeRangeCompressor.Compress(rangeEpisodeNos);
 

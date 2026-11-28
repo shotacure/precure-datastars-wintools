@@ -1013,7 +1013,8 @@ public sealed class CreatorsGenerator
                     var order = CreditOrderKey(inv);
                     if (t.Count == 1 || order.CompareTo(t.First) < 0) t.First = order;
                     if (_ctx.IsMovieKindSeries(inv.SeriesId)) t.Movies.Add(inv.SeriesId);
-                    else t.Episodes.Add((inv.SeriesId, inv.EpisodeId ?? 0));
+                    // TV の作品に付くクレジット（話が出る前の公式の発表）は話を持たないので、話の数には入れない（作品の数には入る）。
+                    else if (inv.EpisodeId is int tallyEpisodeId) t.Episodes.Add((inv.SeriesId, tallyEpisodeId));
                 }
             }
         }
@@ -4253,8 +4254,9 @@ public sealed class CreatorsGenerator
             bool isMovie = _owner._ctx.IsMovieKindSeries(inv.SeriesId);
             if (isMovie)
                 MovieSeriesIds.Add(inv.SeriesId);
-            else
-                EpisodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
+            // TV の作品に付くクレジット（話が出る前の公式の発表）は話を持たないので、話の数には入れない（作品の数には入る）。
+            else if (inv.EpisodeId is int episodeId)
+                EpisodeKeys.Add((inv.SeriesId, episodeId));
             SeriesIds.Add(inv.SeriesId);
             First.Offer(inv);
             bool isOtona = _owner._ctx.IsOtonaSeries(inv.SeriesId);
@@ -4286,8 +4288,9 @@ public sealed class CreatorsGenerator
             }
             if (_owner._ctx.IsMovieKindSeries(inv.SeriesId))
                 bucket.Movies.Add(inv.SeriesId);
-            else
-                bucket.Episodes.Add((inv.SeriesId, inv.EpisodeId ?? 0));
+            // TV の作品に付くクレジット（話が出る前の公式の発表）は話を持たないので、話の数には入れない（作品の数には入る）。
+            else if (inv.EpisodeId is int episodeId)
+                bucket.Episodes.Add((inv.SeriesId, episodeId));
         }
     }
 
@@ -4319,7 +4322,8 @@ public sealed class CreatorsGenerator
         public void Offer(Involvement inv, bool isMovie, bool isOtona, (long Start, int EpNo, long Pos) key)
         {
             if (isMovie) _movies.Add(inv.SeriesId);
-            else (isOtona ? _otonaEpisodes : _episodes).Add((inv.SeriesId, inv.EpisodeId ?? 0));
+            // TV の作品に付くクレジット（話が出る前の公式の発表）は話を持たないので、話の数には入れない（作品の数には入る）。
+            else if (inv.EpisodeId is int episodeId) (isOtona ? _otonaEpisodes : _episodes).Add((inv.SeriesId, episodeId));
             if (key.CompareTo(First) < 0) First = key;
         }
     }

@@ -5,8 +5,22 @@
      ・一覧タブ（Tabs）：歌（詞曲）/ 歌（演奏）/ 劇伴（作編曲）/ 劇伴（演奏）/ 制作。歌は曲数（🎵）、劇伴と制作は作品数を
        TV シリーズ（📺）と映画（🎥）に分けて出す。制作の盤（商品）に付いたクレジットは盤の数（💿）で出す。
      ・一覧タブの中は「初参加順（シリーズ別セクション）/ 多い順」を小さな切り替えで並べ替える（data-sort-panel）。
-     ・タブ切替はスタッフ一覧と同じインライン JS。 ##}}
-<div class="creators-root creators-tabs products-tabs">
+     ・タブ切替はスタッフ一覧と同じインライン JS。
+     ・タブは 1 つが 1 ページ（役職＝/creators/music-production/、一覧タブは /creators/music-production/{Key}/）。
+       TabBaseUrl があるときは、タブの帯をリンク（a.tab-btn[data-tab-page]。先読みと状態の引き継ぎは view-state.js）にし、
+       ActiveTab のタブの中身だけを出す。TabBaseUrl が空のときは 1 ページの中でタブを切り替える。 ##}}
+{{~ if TabBaseUrl != "" ~}}
+<script type="speculationrules">{"prerender":[{"where":{"selector_matches":"a.tab-btn[data-tab-page]:not(.is-active)"},"eagerness":"moderate"}]}</script>
+{{~ end ~}}
+<div class="creators-root creators-tabs products-tabs"{{ if TabBaseUrl != "" }} data-active-tab="{{ ActiveTab }}"{{ end }}>
+  {{~ if TabBaseUrl != "" ~}}
+  <nav class="tabs" aria-label="音楽制作一覧の切り替え">
+    <a class="tab-btn{{ if ActiveTab == "roles" }} is-active{{ end }}" href="{{ TabBaseUrl }}" data-tab-page="roles" data-tab-anchors="music-roles-"{{ if ActiveTab == "roles" }} aria-current="page"{{ end }}>役職</a>
+    {{~ for t in Tabs ~}}
+    <a class="tab-btn{{ if ActiveTab == t.Key }} is-active{{ end }}" href="{{ TabBaseUrl }}{{ t.Key }}/" data-tab-page="{{ t.Key }}" data-tab-anchors="debut-{{ t.Key }}- music-count-{{ t.Key }}"{{ if ActiveTab == t.Key }} aria-current="page"{{ end }}>{{ t.Label | html.escape }}</a>
+    {{~ end ~}}
+  </nav>
+  {{~ else ~}}
   <div class="tabs" role="tablist" aria-label="音楽制作一覧の切り替え">
     <button type="button" class="tab-btn is-active" data-tab="roles"
             role="tab" aria-selected="true" aria-controls="music-tab-panel-roles">
@@ -19,8 +33,10 @@
     </button>
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
   {{## ──────── 役職パネル（既定） ──────── ##}}
+  {{~ if TabBaseUrl == "" || ActiveTab == "roles" ~}}
   <div class="tab-panel is-active" id="music-tab-panel-roles"
        data-tab-panel="roles" role="tabpanel">
     {{~ if (array.size RoleSections) == 0 ~}}
@@ -47,11 +63,13 @@
     {{~ end ~}}
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
   {{## ──────── 一覧パネル（歌（詞曲）/ 歌（演奏）/ 劇伴（作編曲）/ 劇伴（演奏）/ 制作） ──────── ##}}
   {{~ for t in Tabs ~}}
-  <div class="tab-panel" id="music-tab-panel-{{ t.Key }}"
-       data-tab-panel="{{ t.Key }}" role="tabpanel" hidden>
+  {{~ if TabBaseUrl == "" || ActiveTab == t.Key ~}}
+  <div class="tab-panel{{ if ActiveTab == t.Key }} is-active{{ end }}" id="music-tab-panel-{{ t.Key }}"
+       data-tab-panel="{{ t.Key }}" role="tabpanel"{{ if ActiveTab != t.Key }} hidden{{ end }}>
     {{~ if (array.size t.CountRows) == 0 ~}}
     <p class="empty-row">このクレジット情報はまだ登録されていません。</p>
     {{~ else ~}}
@@ -97,6 +115,7 @@
     {{~ end ~}}
   </div>
   {{~ end ~}}
+  {{~ end ~}}
 </div>
 
 <script>
@@ -104,7 +123,7 @@
   var root = document.querySelector('.creators-tabs');
   if (!root) return;
 
-  var buttons = root.querySelectorAll('.tab-btn');
+  var buttons = root.querySelectorAll('.tab-btn{{ if TabBaseUrl != "" }}[data-tab]{{ end }}');
   var panels  = root.querySelectorAll('.tab-panel');
   buttons.forEach(function (btn) {
     btn.addEventListener('click', function () {

@@ -7,8 +7,24 @@
      行粒度は (声優 × シリーズ × キャラ)。テーブル構造が同一のパネルは Scriban の
      パラメータ付き include を避けて各パネルに直接展開する（スタッフ一覧と同方針）。
      「順位」「ランキング」の語・順位列は用いない。出演話数 0 は
-     シリーズ全体スコープのみのクレジット（話数 «—»）。 ##}}
-<div class="creators-tabs products-tabs" data-wk-on="{{ Kinds.Tokens }}">
+     シリーズ全体スコープのみのクレジット（話数 «—»）。
+     タブは 1 つが 1 ページ（キャラクター別＝/creators/voice-cast/、ほかはその下）。タブの帯はリンク（a.tab-btn[data-tab-page]。
+     絞り込みの状態の引き継ぎと先読みは view-state.js）で、ActiveTab のタブの中身だけを出す。TabUrls が無いときは 1 ページの中でタブを切り替える。 ##}}
+{{~ if TabUrls ~}}
+<script type="speculationrules">{"prerender":[{"where":{"selector_matches":"a.tab-btn[data-tab-page]:not(.is-active)"},"eagerness":"moderate"}]}</script>
+{{~ end ~}}
+<div class="creators-tabs products-tabs" data-wk-on="{{ Kinds.Tokens }}"{{ if TabUrls }} data-active-tab="{{ ActiveTab }}"{{ end }}>
+  {{~ if TabUrls ~}}
+  <nav class="tabs" aria-label="声の出演一覧の並べ替え">
+    <a class="tab-btn{{ if ActiveTab == "character" }} is-active{{ end }}" href="{{ TabUrls.character }}" data-tab-page="character" data-tab-anchors="chars-"{{ if ActiveTab == "character" }} aria-current="page"{{ end }}>キャラクター別</a>
+    <a class="tab-btn{{ if ActiveTab == "debut" }} is-active{{ end }}" href="{{ TabUrls.debut }}" data-tab-page="debut" data-tab-anchors="debut-"{{ if ActiveTab == "debut" }} aria-current="page"{{ end }}>初出演<span class="tab-sfx">順</span></a>
+    <a class="tab-btn{{ if ActiveTab == "count" }} is-active{{ end }}" href="{{ TabUrls.count }}" data-tab-page="count" data-tab-anchors="vc-count-"{{ if ActiveTab == "count" }} aria-current="page"{{ end }}>出演回数<span class="tab-sfx">順</span></a>
+    <a class="tab-btn{{ if ActiveTab == "charcount" }} is-active{{ end }}" href="{{ TabUrls.charcount }}" data-tab-page="charcount" data-tab-anchors="vc-charcount-"{{ if ActiveTab == "charcount" }} aria-current="page"{{ end }}>クレジット役柄数<span class="tab-sfx">順</span></a>
+    {{~ if TabUrls.timeline ~}}
+    <a class="tab-btn{{ if ActiveTab == "timeline" }} is-active{{ end }}" href="{{ TabUrls.timeline }}" data-tab-page="timeline" data-tab-anchors="vc-tab-panel-timeline"{{ if ActiveTab == "timeline" }} aria-current="page"{{ end }}>年表</a>
+    {{~ end ~}}
+  </nav>
+  {{~ else ~}}
   <div class="tabs" role="tablist" aria-label="声の出演一覧の並べ替え">
     <button type="button" class="tab-btn is-active" data-tab="character"
             role="tab" aria-selected="true" aria-controls="vc-tab-panel-character">
@@ -39,6 +55,7 @@
     </button>
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
   <div class="list-toolbar">
   {{## 「プリキュアを演じた方のみ」のスイッチ。全タブに効く。入れるとルート（.products-tabs）に data-precure-only を付け、
@@ -59,6 +76,7 @@
   </div>
 
   {{## ──────── キャラクター順パネル（既定・シリーズセクション） ──────── ##}}
+  {{~ if !TabUrls || ActiveTab == "character" ~}}
   <div class="tab-panel is-active" id="vc-tab-panel-character"
        data-tab-panel="character" role="tabpanel">
     {{~ if (array.size CharacterSections) == 0 ~}}
@@ -93,6 +111,7 @@
     {{~ end ~}}
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
   {{## 五十音順パネルは読み（kana）データ未整備のため if false で一旦無効化。データが揃ったら if false を外して復活。 ##}}
   {{~ if false ~}}
@@ -118,8 +137,9 @@
   {{~ end ~}}
 
   {{## ──────── 初出演順パネル（シリーズセクション） ──────── ##}}
-  <div class="tab-panel" id="vc-tab-panel-debut"
-       data-tab-panel="debut" role="tabpanel" hidden>
+  {{~ if !TabUrls || ActiveTab == "debut" ~}}
+  <div class="tab-panel{{ if ActiveTab == "debut" }} is-active{{ end }}" id="vc-tab-panel-debut"
+       data-tab-panel="debut" role="tabpanel"{{ if ActiveTab != "debut" }} hidden{{ end }}>
     {{~ if (array.size DebutSections) == 0 ~}}
     <p class="empty-row">声の出演がまだ登録されていません。</p>
     {{~ else ~}}
@@ -155,10 +175,12 @@
     {{~ end ~}}
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
   {{## ──────── 出演回数順パネル（セクション無し） ──────── ##}}
-  <div class="tab-panel" id="vc-tab-panel-count"
-       data-tab-panel="count" role="tabpanel" hidden>
+  {{~ if !TabUrls || ActiveTab == "count" ~}}
+  <div class="tab-panel{{ if ActiveTab == "count" }} is-active{{ end }}" id="vc-tab-panel-count"
+       data-tab-panel="count" role="tabpanel"{{ if ActiveTab != "count" }} hidden{{ end }}>
     {{~ if (array.size CountRows) == 0 ~}}
     <p class="empty-row">声の出演がまだ登録されていません。</p>
     {{~ else ~}}
@@ -175,12 +197,14 @@
     </ul>
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
   {{## ──────── クレジット役柄数順パネル（セクション無し） ────────
        声優 1 人 = 1 行。札は演じたキャラの数で、TV シリーズの話に出たキャラ（📺）・映画に出たキャラ（🎥）・
        オトナシリーズの話に出たキャラ（🌙）に分ける。件数の並べ替え（count-sort.js）は出演回数順とは別のボタンで持つ。 ##}}
-  <div class="tab-panel" id="vc-tab-panel-charcount"
-       data-tab-panel="charcount" role="tabpanel" hidden>
+  {{~ if !TabUrls || ActiveTab == "charcount" ~}}
+  <div class="tab-panel{{ if ActiveTab == "charcount" }} is-active{{ end }}" id="vc-tab-panel-charcount"
+       data-tab-panel="charcount" role="tabpanel"{{ if ActiveTab != "charcount" }} hidden{{ end }}>
     {{~ if (array.size CharacterCountRows) == 0 ~}}
     <p class="empty-row">声の出演がまだ登録されていません。</p>
     {{~ else ~}}
@@ -196,13 +220,14 @@
     </ul>
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
   {{## ──────── 年表パネル（出演の移り変わりの線表。中身は _role-timeline.sbn） ──────── ##}}
   {{## オトナシリーズの出演があるとき（OtonaTimeline）は、線表を 2 つ持つ。TV・映画・オトナシリーズを重ねた年度の帯の線表（.wk-timeline-all）と、
        🌙 だけを入れているときに見せる、オトナシリーズの作品ごとの帯の線表（.wk-timeline-otona）。出し分けは site.css。 ##}}
-  {{~ if Timeline ~}}
-  <div class="tab-panel" id="vc-tab-panel-timeline"
-       data-tab-panel="timeline" role="tabpanel" hidden>
+  {{~ if Timeline && (!TabUrls || ActiveTab == "timeline") ~}}
+  <div class="tab-panel{{ if ActiveTab == "timeline" }} is-active{{ end }}" id="vc-tab-panel-timeline"
+       data-tab-panel="timeline" role="tabpanel"{{ if ActiveTab != "timeline" }} hidden{{ end }}>
     {{~ if OtonaTimeline ~}}
     <div class="wk-timeline-all">
     {{ include '_role-timeline.sbn' }}
@@ -223,7 +248,7 @@
 (function () {
   var root = document.querySelector('.creators-tabs');
   if (!root) return;
-  var buttons = root.querySelectorAll('.tab-btn');
+  var buttons = root.querySelectorAll('.tab-btn{{ if TabUrls }}[data-tab]{{ end }}');
   var panels  = root.querySelectorAll('.tab-panel');
   buttons.forEach(function (btn) {
     btn.addEventListener('click', function () {

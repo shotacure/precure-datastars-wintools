@@ -37,8 +37,23 @@
 {{## 役職詳細。人物・企業/団体を 1 リストに混在させ、行ごとに「個人 / 団体」バッジで区別。
      上部トグルで個人のみ・団体のみに絞れる。3 タブはテーブル構造が同一だが、
      パラメータ付き include を避けて各パネルにテーブルを直接展開する（スタッフ一覧と同方針）。
-     「順位」「ランキング」の語・順位列は用いない。 ##}}
-<div class="creators-root creators-tabs products-tabs" data-entity-filter="all" data-wk-on="{{ Kinds.Tokens }}">
+     「順位」「ランキング」の語・順位列は用いない。
+     行の多い役職（TabUrls がある役職）は、タブを 1 つずつ別のページにする（初担当順＝今の URL、担当回数順・年表はその下）。
+     そのときはタブの帯をリンク（a.tab-btn[data-tab-page]。絞り込みの状態の引き継ぎと先読みは view-state.js）にし、ActiveTab のタブの中身だけを出す。
+     TabUrls が無い役職は、1 ページの中でタブを切り替える。 ##}}
+{{~ if TabUrls ~}}
+<script type="speculationrules">{"prerender":[{"where":{"selector_matches":"a.tab-btn[data-tab-page]:not(.is-active)"},"eagerness":"moderate"}]}</script>
+{{~ end ~}}
+<div class="creators-root creators-tabs products-tabs" data-entity-filter="all" data-wk-on="{{ Kinds.Tokens }}"{{ if TabUrls }} data-active-tab="{{ ActiveTab }}"{{ end }}>
+  {{~ if TabUrls ~}}
+  <nav class="tabs" aria-label="役職別一覧の並べ替え">
+    <a class="tab-btn{{ if ActiveTab == "debut" }} is-active{{ end }}" href="{{ TabUrls.debut }}" data-tab-page="debut" data-tab-anchors="debut-"{{ if ActiveTab == "debut" }} aria-current="page"{{ end }}>初担当<span class="tab-sfx">順</span></a>
+    <a class="tab-btn{{ if ActiveTab == "count" }} is-active{{ end }}" href="{{ TabUrls.count }}" data-tab-page="count" data-tab-anchors="role-count-"{{ if ActiveTab == "count" }} aria-current="page"{{ end }}>担当回数<span class="tab-sfx">順</span></a>
+    {{~ if TabUrls.timeline ~}}
+    <a class="tab-btn{{ if ActiveTab == "timeline" }} is-active{{ end }}" href="{{ TabUrls.timeline }}" data-tab-page="timeline" data-tab-anchors="role-tab-panel-timeline"{{ if ActiveTab == "timeline" }} aria-current="page"{{ end }}>年表</a>
+    {{~ end ~}}
+  </nav>
+  {{~ else ~}}
   <div class="tabs" role="tablist" aria-label="役職別一覧の並べ替え">
     {{## 五十音順タブは読み（kana）データ未整備のため一旦無効化。既定タブは初担当順へ繰り上げ。
          データが揃ったらこのコメントを外し、初担当順ボタンの is-active / aria-selected を戻す。
@@ -62,6 +77,7 @@
     </button>
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
   {{## 個人と団体が両方あるときだけ絞り込みフィルタを出す。片方だけの役職（脚本＝個人のみ等）では無意味なので非表示。 ##}}
   <div class="list-toolbar">
@@ -103,6 +119,7 @@
   {{~ end ~}}
 
   {{## ──────── 初担当順パネル（この役職で初めて担当した作品ごとのセクション。五十音順無効化に伴い既定タブ） ──────── ##}}
+  {{~ if !TabUrls || ActiveTab == "debut" ~}}
   <div class="tab-panel is-active" id="role-tab-panel-debut"
        data-tab-panel="debut" role="tabpanel">
     {{~ if (array.size DebutSections) == 0 ~}}
@@ -136,10 +153,12 @@
     {{~ end ~}}
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
   {{## ──────── 担当回数順パネル ──────── ##}}
-  <div class="tab-panel" id="role-tab-panel-count"
-       data-tab-panel="count" role="tabpanel" hidden>
+  {{~ if !TabUrls || ActiveTab == "count" ~}}
+  <div class="tab-panel{{ if ActiveTab == "count" }} is-active{{ end }}" id="role-tab-panel-count"
+       data-tab-panel="count" role="tabpanel"{{ if ActiveTab != "count" }} hidden{{ end }}>
     {{~ if (array.size CountRows) == 0 ~}}
     <p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
     {{~ else ~}}
@@ -157,14 +176,15 @@
     </ul>
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
   {{## ──────── 年表パネル（担当の移り変わりの線表。中身は _role-timeline.sbn） ────────
        オトナシリーズの担当がある役職（OtonaTimeline）は、線表を 2 つ持つ。TV・映画・オトナシリーズを重ねた年度の帯の線表（.wk-timeline-all）と、
        🌙 だけを入れているときに見せる、オトナシリーズの作品ごとの帯の線表（.wk-timeline-otona）。出し分けは site.css。
        2 つ目は、同じ部品をモデルの Timeline を差し替えて描く（role-timeline.js の読み込みは 1 つ目だけ）。 ##}}
-  {{~ if Timeline ~}}
-  <div class="tab-panel" id="role-tab-panel-timeline"
-       data-tab-panel="timeline" role="tabpanel" hidden>
+  {{~ if Timeline && (!TabUrls || ActiveTab == "timeline") ~}}
+  <div class="tab-panel{{ if ActiveTab == "timeline" }} is-active{{ end }}" id="role-tab-panel-timeline"
+       data-tab-panel="timeline" role="tabpanel"{{ if ActiveTab != "timeline" }} hidden{{ end }}>
     {{~ if OtonaTimeline ~}}
     <div class="wk-timeline-all">
     {{ include '_role-timeline.sbn' }}
@@ -186,7 +206,7 @@
   var root = document.querySelector('.creators-tabs');
   if (!root) return;
 
-  var buttons = root.querySelectorAll('.tab-btn');
+  var buttons = root.querySelectorAll('.tab-btn{{ if TabUrls }}[data-tab]{{ end }}');
   var panels  = root.querySelectorAll('.tab-panel');
   buttons.forEach(function (btn) {
     btn.addEventListener('click', function () {

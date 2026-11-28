@@ -151,6 +151,8 @@ public sealed class CreatorsGenerator
     {
         /// <summary>書き出した役職詳細ページの URL（書かなかったときは null）。</summary>
         public string? WrittenUrl { get; set; }
+        /// <summary>タブごとにページを分けた役職の、既定のタブのページより後に書いたページの URL（タブの順）。</summary>
+        public IReadOnlyList<string> ExtraTabUrls { get; set; } = Array.Empty<string>();
         /// <summary>音楽制作ページの役職タブに積む行（作家の役職のとき）。</summary>
         public RoleIndexEntry? MusicEntry { get; init; }
         /// <summary>役職と、系譜でまとめた構成役職（作家の役職以外）。サイト内検索に歴代の役職名を載せるのに使う。</summary>
@@ -447,7 +449,11 @@ public sealed class CreatorsGenerator
             if (musicPageRoles.Contains(role.RoleCode))
                 outcome.CreditRowSetForMusic = rowSet;
             else
-                outcome.WrittenUrl = GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline, otonaTimeline);
+            {
+                var urls = GenerateRoleDetail(role, memberCodes, roleByCode, rowSet, roleTimeline, otonaTimeline);
+                outcome.WrittenUrl = urls[0];
+                outcome.ExtraTabUrls = urls.Skip(1).ToList();
+            }
 
             // 役職詳細ページへのリンクは PathUtil 経由で組み立て、URL パス上のコードを
             // 小文字化する。テンプレ側はこの組み立て済み URL のみ参照する。
@@ -461,6 +467,7 @@ public sealed class CreatorsGenerator
             if (outcome.WrittenUrl is not null)
             {
                 _page.RecordWritten(outcome.WrittenUrl, "creators");
+                foreach (var tabUrl in outcome.ExtraTabUrls) _page.RecordWritten(tabUrl, "creators");
                 // サイト内検索に役職のページを載せる。楽曲の作家の役職は音楽制作ページから入るページなので、その旨を添える。
                 _ctx.SearchPages.Add(outcome.StaffCluster is { } written
                     ? RoleSearchEntry(written.Role, outcome.WrittenUrl, "", written.MemberCodes, roleByCode)
@@ -1220,7 +1227,7 @@ public sealed class CreatorsGenerator
         => LatestAliasResolver.CreditOrderKey(_ctx, inv);
 
     /// <summary>/creators/roles/{rep_role_code}/ を 3 タブ（五十音順 / 初参加順 / 担当回数順）で書き出し、担当の移り変わりの線表を年表タブに置く。</summary>
-    private string GenerateRoleDetail(
+    private IReadOnlyList<string> GenerateRoleDetail(
         Role role,
         IReadOnlySet<string> memberCodes,
         IReadOnlyDictionary<string, Role> roleByCode,
@@ -1299,9 +1306,43 @@ public sealed class CreatorsGenerator
         // URL パス上のコード小文字化と出力ディレクトリ名を必ず一致させる。
         // 役職ごとに並列で呼ばれるので、書き出しまでにとどめ、記録（RecordWritten）は呼び出し側が役職の順で行う。
         var url = PathUtil.CreatorsRoleUrl(role.RoleCode);
+        if (!TabPagedRoleCodes.Contains(role.RoleCode))
+        {
+            _page.RenderAndWriteFile(url, "creators-role-detail.sbn", content, layout);
+            return new[] { url };
+        }
+
+        // 行の多い役職は、タブを 1 つずつ別のページにする（初担当順＝今の URL、担当回数順・年表はその下）。
+        // 題はタブの名前を括弧で添え（既定のタブは添えない）、meta description・パンくず・OGP カードはタブどうしで同じ。
+        var tabUrls = new Dictionary<string, string> { ["debut"] = url, ["count"] = url + "count/" };
+        if (content.Timeline is not null) tabUrls["timeline"] = url + "timeline/";
+        content.TabUrls = tabUrls;
+        content.ActiveTab = "debut";
         _page.RenderAndWriteFile(url, "creators-role-detail.sbn", content, layout);
-        return url;
+        var written = new List<string> { url };
+        foreach (var (tab, label) in new[] { ("count", "担当回数順"), ("timeline", "年表") })
+        {
+            if (!tabUrls.TryGetValue(tab, out var tabUrl)) continue;
+            content.ActiveTab = tab;
+            _page.RenderAndWriteFile(tabUrl, "creators-role-detail.sbn", content, new LayoutModel
+            {
+                PageTitle = $"{role.NameJa}（{label}）",
+                MetaDescription = layout.MetaDescription,
+                OgImage = layout.OgImage,
+                Breadcrumbs = layout.Breadcrumbs
+            });
+            written.Add(tabUrl);
+        }
+        return written;
     }
+
+    /// <summary>
+    /// タブを 1 つずつ別のページにする役職（行が多く、1 ページに入れると HTML が数 MB になるもの）。ほかの役職は 1 ページの中でタブを切り替える。
+    /// </summary>
+    private static readonly HashSet<string> TabPagedRoleCodes = new(StringComparer.Ordinal)
+    {
+        "KEY_ANIMATION", "BACKGROUND_ART", "IN_BETWEEN_ANIMATION"
+    };
 
     /// <summary>
     /// 系譜でまとめた役職の「役職名の変遷」。系譜の各表記（role_code）について、その表記でクレジットされた
@@ -1710,8 +1751,23 @@ public sealed class CreatorsGenerator
                 new BreadcrumbItem { Label = "歴代プリキュア音楽制作", Url = "" }
             }
         };
-        _page.RenderAndWrite(PathUtil.CreatorsMusicProductionUrl(), "creators",
-            "creators-music-production.sbn", content, layout);
+        // タブは 1 つが 1 ページ（役職＝今の URL、一覧タブはその下の /{Key}/）。題はタブの名前を括弧で添え（既定のタブは添えない）、
+        // meta description・パンくず・OGP カードはタブどうしで同じ。
+        string mpUrl = PathUtil.CreatorsMusicProductionUrl();
+        content.TabBaseUrl = mpUrl;
+        content.ActiveTab = "roles";
+        _page.RenderAndWrite(mpUrl, "creators", "creators-music-production.sbn", content, layout);
+        foreach (var tab in content.Tabs)
+        {
+            content.ActiveTab = tab.Key;
+            _page.RenderAndWrite($"{mpUrl}{tab.Key}/", "creators", "creators-music-production.sbn", content, new LayoutModel
+            {
+                PageTitle = $"{layout.PageTitle}（{tab.Label}）",
+                MetaDescription = layout.MetaDescription,
+                OgImage = layout.OgImage,
+                Breadcrumbs = layout.Breadcrumbs
+            });
+        }
 
         // 初参加のキーは（曲の最小録音 ID, 0, target, pos）。target・pos は同じ曲の中の並び（紐付け先の順とクレジットの位置）。
         // recordings は、その参加で数える録音（曲に付いた担当はその曲のすべての録音、録音に付いた担当はその録音）。
@@ -3235,8 +3291,25 @@ public sealed class CreatorsGenerator
                 new BreadcrumbItem { Label = VoiceCastPageTitle, Url = "" }
             }
         };
-        _page.RenderAndWrite(PathUtil.CreatorsVoiceCastUrl(), "creators",
-            "creators-voice-cast.sbn", content, layout);
+        // タブは 1 つが 1 ページ（キャラクター別＝今の URL、ほかはその下。HTML が 6MB を超え、検索エンジンが読む先頭 2MB に収まらないため）。
+        // 題はタブの名前を括弧で添え（既定のタブは添えない）、meta description・パンくず・OGP カードはタブどうしで同じ。
+        string vcUrl = PathUtil.CreatorsVoiceCastUrl();
+        var vcTabs = new List<(string Key, string Label)> { ("character", ""), ("debut", "初出演順"), ("count", "出演回数順"), ("charcount", "クレジット役柄数順") };
+        if (content.Timeline is not null) vcTabs.Add(("timeline", "年表"));
+        content.TabUrls = vcTabs.ToDictionary(t => t.Key, t => t.Key == "character" ? vcUrl : $"{vcUrl}{t.Key}/");
+        content.ActiveTab = "character";
+        _page.RenderAndWrite(vcUrl, "creators", "creators-voice-cast.sbn", content, layout);
+        foreach (var (key, label) in vcTabs.Skip(1))
+        {
+            content.ActiveTab = key;
+            _page.RenderAndWrite(content.TabUrls[key], "creators", "creators-voice-cast.sbn", content, new LayoutModel
+            {
+                PageTitle = $"{VoiceCastPageTitle}（{label}）",
+                MetaDescription = layout.MetaDescription,
+                OgImage = layout.OgImage,
+                Breadcrumbs = layout.Breadcrumbs
+            });
+        }
     }
 
     /// <summary>各キャラクターの役名の代表名義（最も多くクレジットされた character_alias 名）を求める。</summary>
@@ -4258,6 +4331,10 @@ public sealed class CreatorsGenerator
     /// <summary>音楽制作ページの表示モデル。</summary>
     private sealed class SongPersonListModel
     {
+        /// <summary>タブのページの頭の URL（役職タブのページ。一覧タブは その下の /{Key}/）。空なら 1 ページの中でタブを切り替える。</summary>
+        public string TabBaseUrl { get; set; } = "";
+        /// <summary>このページに出すタブ（roles か一覧タブの Key）。<see cref="TabBaseUrl"/> があるときだけ使う。</summary>
+        public string ActiveTab { get; set; } = "";
         /// <summary>役職タブ：音楽クレジットの区分ごとの役職（各役職詳細への入口、人数つき）。</summary>
         public IReadOnlyList<MusicRoleSection> RoleSections { get; set; } = Array.Empty<MusicRoleSection>();
         /// <summary>一覧タブ（歌（詞曲）/ 歌（演奏）/ 劇伴（作編曲）/ 劇伴（演奏）/ 制作）。</summary>
@@ -4454,6 +4531,10 @@ public sealed class CreatorsGenerator
     private sealed class RoleDetailModel
     {
         public string RoleNameJa { get; set; } = "";
+        /// <summary>タブ → そのタブのページの URL（タブを 1 つずつ別のページにする役職だけ。ほかの役職は null で、1 ページの中でタブを切り替える）。</summary>
+        public IReadOnlyDictionary<string, string>? TabUrls { get; set; }
+        /// <summary>このページに出すタブ（debut / count / timeline）。<see cref="TabUrls"/> があるときだけ使う。</summary>
+        public string ActiveTab { get; set; } = "";
         public IReadOnlyList<EntityRow> KanaRows { get; set; } = Array.Empty<EntityRow>();
         /// <summary>初参加順は初参加シリーズごとのセクションに束ねる。</summary>
         public IReadOnlyList<EntitySeriesSection> DebutSections { get; set; } = Array.Empty<EntitySeriesSection>();
@@ -4702,6 +4783,10 @@ public sealed class CreatorsGenerator
 
     private sealed class VoiceCastModel
     {
+        /// <summary>タブ → そのタブのページの URL。null なら 1 ページの中でタブを切り替える。</summary>
+        public IReadOnlyDictionary<string, string>? TabUrls { get; set; }
+        /// <summary>このページに出すタブ（character / debut / count / charcount / timeline）。<see cref="TabUrls"/> があるときだけ使う。</summary>
+        public string ActiveTab { get; set; } = "";
         /// <summary>キャラクター順（既定タブ）：シリーズごとのセクション。</summary>
         public IReadOnlyList<VoiceSeriesSection> CharacterSections { get; set; } = Array.Empty<VoiceSeriesSection>();
         public IReadOnlyList<VoiceCastRow> KanaRows { get; set; } = Array.Empty<VoiceCastRow>();

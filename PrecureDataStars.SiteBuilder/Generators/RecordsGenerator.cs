@@ -528,12 +528,12 @@ public sealed class RecordsGenerator
         }
         items.Add(TopPersons("voice-episodes", "声の出演が多い声優さん", "話",
             stats.Select(kv => (kv.Key, kv.Value.VoiceEpisodes.Count, kv.Value.FirstVoice)),
-            // 声の出演一覧の出演回数順のタブを開いた状態へリンクする。
-            PathUtil.CreatorsVoiceCastUrl() + "#tab=count", "声の出演一覧を見る"));
+            // 声の出演一覧の出演回数順のタブのページへリンクする。
+            PathUtil.CreatorsVoiceCastUrl() + "count/", "声の出演一覧を見る"));
         items.Add(TopPersons("voice-characters", "クレジットされた役柄が多い声優さん", "役",
             stats.Select(kv => (kv.Key, kv.Value.Characters.Count, kv.Value.FirstVoice)),
             // 声の出演一覧のクレジット役柄数順のタブを、TV シリーズで演じたキャラの数（📺）の多い順にした状態へリンクする。
-            PathUtil.CreatorsVoiceCastUrl() + "#tab=charcount&csort=tv-desc", "声の出演一覧を見る"));
+            PathUtil.CreatorsVoiceCastUrl() + "charcount/#csort=tv-desc", "声の出演一覧を見る"));
 
         return new RecordGroup
         {

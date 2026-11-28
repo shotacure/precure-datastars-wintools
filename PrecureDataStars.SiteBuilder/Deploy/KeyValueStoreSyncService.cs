@@ -22,6 +22,11 @@ namespace PrecureDataStars.SiteBuilder.Deploy;
 ///     名前に濁点・半濁点などがある行は、合成前の形（NFD）のキーも並べて入れる。</description></item>
 ///   <item><description>KeyValueStore の今の中身を一覧し、増えた・値が変わったキーを書き、表から消えたキーを消す。
 ///     ドライランでは件数を出すだけで書かない。</description></item>
+///   <item><description>中身の一覧（50 キーずつの読み出し）は、前に同期を確かめたときから何も変わっていなければ飛ばす。
+///     確かめたときの「手元の転送表の印（SHA-256）」と「KeyValueStore の版の印（ETag）と件数」を、出力の隣の
+///     <c>….kvs-sync.json</c>（出力の外なので上げない）に残し、次の同期では KeyValueStore の版の印と件数だけを 1 回で問い合わせて、
+///     3 つとも同じなら読まない。どれかが違う（表が変わった・KeyValueStore が手で直された）か、控えが無い・読めないときは全部読む。
+///     控えを残すのは、全部読んで差分が無かったとき（ドライランでも）と、書き終えたときだけ。</description></item>
 ///   <item><description>ピンポイントビルド（<c>--page</c>）の出力には転送表の全体が無いことがあるので、同期しない。</description></item>
 /// </list>
 /// 認証は <see cref="BuildConfig.AwsProfile"/> の名前付きプロファイル。KeyValueStore の API は署名に SigV4A を使うため、
@@ -40,6 +45,52 @@ public sealed class KeyValueStoreSyncService
 
     private readonly BuildConfig _config;
     private readonly BuildLogger _logger;
+
+    /// <summary>前に同期を確かめたときの控え（<see cref="RecordPathFor"/>）。</summary>
+    private sealed class SyncRecord
+    {
+        public string Arn { get; set; } = "";
+        public string TableHash { get; set; } = "";
+        public string ETag { get; set; } = "";
+        public long ItemCount { get; set; } = -1;
+    }
+
+    /// <summary>同期の控えのパス（出力の隣。出力のフォルダ名の後ろに <c>.kvs-sync.json</c> を付けたファイル）。</summary>
+    public static string RecordPathFor(string outputDirectory)
+        => outputDirectory.TrimEnd('/', '\\') + ".kvs-sync.json";
+
+    private static SyncRecord? LoadRecord(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? JsonSerializer.Deserialize<SyncRecord>(File.ReadAllText(path)) : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void SaveRecord(string path, SyncRecord record)
+    {
+        try
+        {
+            File.WriteAllText(path, JsonSerializer.Serialize(record));
+        }
+        catch (Exception ex)
+        {
+            // 残せなくても、次の同期で全部読むだけ。
+            _logger.Warn($"転送表の同期の控えを書けませんでした（次の同期は全部読みます）: {ex.Message}");
+        }
+    }
+
+    /// <summary>KeyValueStore に入れるキーと値の組の印（同期先の ARN も含める）。</summary>
+    private static string TableHashOf(string arn, SortedDictionary<string, string> desired)
+    {
+        var sb = new StringBuilder(arn).Append('\n');
+        foreach (var (k, v) in desired) sb.Append(k).Append('\t').Append(v).Append('\n');
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
+    }
 
     public KeyValueStoreSyncService(BuildConfig config, BuildLogger logger)
     {
@@ -112,6 +163,22 @@ public sealed class KeyValueStoreSyncService
             ? new AmazonCloudFrontKeyValueStoreClient(RegionEndpoint.USEast1)
             : new AmazonCloudFrontKeyValueStoreClient(credentials, RegionEndpoint.USEast1);
 
+        // 前に同期を確かめたときから、手元の表も KeyValueStore も変わっていなければ、中身を読まずに終える。
+        string recordPath = RecordPathFor(_config.OutputDirectory);
+        string tableHash = TableHashOf(arn, desired);
+        var describe = await client.DescribeKeyValueStoreAsync(new DescribeKeyValueStoreRequest { KvsARN = arn }, ct).ConfigureAwait(false);
+        long storeCount = (long?)describe.ItemCount ?? -1;
+        var record = LoadRecord(recordPath);
+        if (record is not null
+            && string.Equals(record.Arn, arn, StringComparison.Ordinal)
+            && string.Equals(record.TableHash, tableHash, StringComparison.Ordinal)
+            && !string.IsNullOrEmpty(describe.ETag) && string.Equals(record.ETag, describe.ETag, StringComparison.Ordinal)
+            && storeCount >= 0 && record.ItemCount == storeCount)
+        {
+            _logger.Info($"Redirect store   : 転送表 {source.Count} 件（キー {desired.Count} 件）/ 前の同期から転送表も KeyValueStore も変わっていないので、中身を読まずに終えます。");
+            return;
+        }
+
         // いまの中身を全件読む。
         var current = new Dictionary<string, string>(StringComparer.Ordinal);
         string? next = null;
@@ -134,7 +201,11 @@ public sealed class KeyValueStoreSyncService
             .ToList();
 
         _logger.Info($"Redirect store   : 転送表 {source.Count} 件（キー {desired.Count} 件）/ 書く {puts.Count} / 消す {deletes.Count} / 変わらず {desired.Count - puts.Count}");
-        if (puts.Count == 0 && deletes.Count == 0) return;
+        if (puts.Count == 0 && deletes.Count == 0)
+        {
+            SaveRecord(recordPath, new SyncRecord { Arn = arn, TableHash = tableHash, ETag = describe.ETag ?? "", ItemCount = storeCount });
+            return;
+        }
 
         if (_config.Deploy.DryRun)
         {
@@ -143,7 +214,7 @@ public sealed class KeyValueStoreSyncService
         }
 
         // 書き換えは 50 キーずつ。応答の ETag を次の回の IfMatch に渡す。
-        var etag = (await client.DescribeKeyValueStoreAsync(new DescribeKeyValueStoreRequest { KvsARN = arn }, ct).ConfigureAwait(false)).ETag;
+        var etag = describe.ETag;
         int p = 0, d = 0;
         while (p < puts.Count || d < deletes.Count)
         {
@@ -161,5 +232,7 @@ public sealed class KeyValueStoreSyncService
             d += deleteBatch.Count;
         }
         _logger.Success($"転送表を KeyValueStore へ同期しました（書いた {puts.Count} / 消した {deletes.Count}）。");
+        // 書いた後の版の印と件数を控える（件数の反映が遅れて次の問い合わせと合わなければ、次の同期で 1 度全部読んで控え直す）。
+        SaveRecord(recordPath, new SyncRecord { Arn = arn, TableHash = tableHash, ETag = etag ?? "", ItemCount = desired.Count });
     }
 }

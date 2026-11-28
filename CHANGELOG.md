@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **SiteBuilder：転送表の KeyValueStore への同期で、前に同期を確かめたときから何も変わっていなければ中身を読まないようにした**（`KeyValueStoreSyncService`）：同期のたびに KeyValueStore のキー 1,553 個を 50 個ずつ全部読んでいた（1 回の本番デプロイで約 64 回の問い合わせ）。手元の転送表の印と、KeyValueStore の ETag・件数を `{出力ディレクトリ}.kvs-sync.json` に残し、3 つとも同じなら問い合わせ 1 回で終える。どれかが違う・控えが無いときは今までどおり全部読む。
 - **SiteBuilder：ドライランだけの回の後に本番へ上げると、更新日が進んだページが IndexNow へ送られないのを直した**（`SitemapLastmodManifest`・`SeoGenerator`・`IndexNowService`・`SiteBuilderPipeline`）：ドライランだけの回も控えを進めるので、続く本番の回では「変わったページ無し」になっていた。本番の出力では、更新日が進んだページの一覧を上書きせずに足していき、本番に上げて IndexNow へ送り終えたら空にする。送れなかったときは一覧を残し、次のデプロイで送り直す。
 - **サイト：商品のページの ISRC のポップアップの見出しを「同じ曲・サイズ・パートで ISRC が違う収録」にした**（`ProductsGenerator`）：歌のトラックの見出しは「同じ録音・サイズ・パートで ISRC が違う収録」だった。
 - **サイト：スタッフ一覧（/creators/staff/）の 3 つのタブを、タブごとのページに分けた**（`CreatorsGenerator`・`creators-staff.sbn`・`view-state.js`・`count-sort.js`・`site.css`・`EntityUrlRegistry`）：3 つのタブを 1 枚に入れていて HTML が 14.4MB あり、検索エンジンが読む先頭 2MB に役職順の途中までしか入っていなかった。役職順は `/creators/staff/`（0.46MB）、初参加順は `/creators/staff/debut/`、参加回数順は `/creators/staff/count/` にした。タブの帯の見た目と位置、文言・行の並び・数は変えていない。

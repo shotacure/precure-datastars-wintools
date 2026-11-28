@@ -191,10 +191,10 @@ public sealed class HomeGenerator
             // （PageTitle が空なら <title> は SiteBrandLabel だけで組まれる）。
             PageTitle = "",
             // 説明文はタグライン（見出しの下の「プリキュアまるごとデータベース。」）に、収録の数を続けたもの。
-            // 数はトップの OGP カードの札と同じ数え方（話は放送済みの本線の TV の話、歌は録音の数、クリエイターは人物）で、ビルドのたびに出し直す。
+            // 数はトップの OGP カードの札と同じ数え方（話は放送済みの本線の TV の話、歌は録音の数、クリエイターは人物の数と企業・団体の数）で、ビルドのたびに出し直す。
             // JSON-LD の WebSite の説明はタグラインのまま。
             MetaDescription = $"プリキュアまるごとデータベース。TVシリーズ {dbStats.TvSeriesCount} 作 {dbStats.EpisodeCount} 話・映画 {dbStats.MovieSeriesCount} 作・"
-                + $"プリキュア {dbStats.PrecuresCount} 人・キャラクター {dbStats.CharactersCount} 人・歌 {dbStats.SongsCount} 曲・クリエイター {dbStats.PersonsCount} 人",
+                + $"プリキュア {dbStats.PrecuresCount} 人・キャラクター {dbStats.CharactersCount} 人・歌 {dbStats.SongsCount} 曲・クリエイター {dbStats.PersonsCount} 人・{dbStats.CompaniesCount} 団体",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",
             JsonLd = jsonLd,

@@ -1535,7 +1535,7 @@ public sealed class ProductsGenerator
         if (t.ContentKindCode == "SONG" && t.SongRecordingId is int recordingId)
         {
             _isrcPeersBySongAudio.TryGetValue((recordingId, t.SongSizeVariantCode ?? "", t.SongPartVariantCode ?? ""), out audioPeers);
-            differentHeading = "同じ録音・サイズ・パートで ISRC が違う収録";
+            differentHeading = "同じ曲・サイズ・パートで ISRC が違う収録";
         }
         else if (t.ContentKindCode == "BGM" && t.BgmSeriesId is int seriesId && !string.IsNullOrEmpty(t.BgmMNoDetail))
         {

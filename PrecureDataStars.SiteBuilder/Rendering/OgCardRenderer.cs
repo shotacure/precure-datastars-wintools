@@ -231,6 +231,9 @@ public sealed partial class OgCardRenderer : IDisposable
     private const float StatLabelFontSize = 24f;
     private const float StatGap = 38f;
 
+    /// <summary>1 つの札の中で、数と単位の組が 2 つ以上続くときの組の間（「24作 1109話」の「作」と「1109」の間）。</summary>
+    private const float StatPairGap = 12f;
+
     /// <summary>数の組が 1 行に収まらないときの行送り。</summary>
     private const float StatLineHeight = 64f;
 
@@ -280,6 +283,24 @@ public sealed partial class OgCardRenderer : IDisposable
     /// </summary>
     private static readonly System.Text.RegularExpressions.Regex CountValueRegex =
         new(@"^([0-9][0-9,]*)([^0-9]*)$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// 数と単位の組が空白をはさんで 2 つ以上続く値（トップの「24作 1109話」）。組ごとに、数を大きく・単位を小さく描く。
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex CountPairsValueRegex =
+        new(@"^([0-9][0-9,]*[^0-9\s]+)(\s+[0-9][0-9,]*[^0-9\s]+)+$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>札の値を、描く組（数と単位）に分ける。数で始まらない値（品番・尺など）は 1 語のまま。</summary>
+    private static List<(string Number, string Unit)> SplitCountValue(string value)
+    {
+        if (CountPairsValueRegex.IsMatch(value))
+            return value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Select(part => CountValueRegex.Match(part))
+                .Select(m => (m.Groups[1].Value, m.Groups[2].Value))
+                .ToList();
+        var match = CountValueRegex.Match(value);
+        return new List<(string, string)> { match.Success ? (match.Groups[1].Value, match.Groups[2].Value) : (value, "") };
+    }
 
     /// <summary>注意書き系のページの本文の書体（石井ゴシックなど）。機械的な斜体で組む。無ければ本文の書体。</summary>
     private readonly SKTypeface _noticeTypeface;
@@ -1492,15 +1513,18 @@ public sealed partial class OgCardRenderer : IDisposable
         foreach (var badge in badges)
         {
             // 収まらない場合は次の行へ送る（ホームのように数を 8 個並べるカードがあるため）。
-            var match = CountValueRegex.Match(badge.Value);
-            string number = match.Success ? match.Groups[1].Value : badge.Value;
-            string unit = match.Success ? match.Groups[2].Value : "";
+            // 値は数と単位の組に分ける（ふつうは 1 組。「24作 1109話」のように 2 組以上なら、組の間を少し空けて続ける）。
+            var pairs = SplitCountValue(badge.Value);
 
             // 収まらない組は落とす（幅を測ってから描く）。
             float width = 0f;
             if (!string.IsNullOrWhiteSpace(badge.Label)) width += Measure(labelFont, badge.Label) + 10f;
-            width += Measure(valueFont, number);
-            if (unit.Length > 0) width += Measure(unitFont, unit) + 3f;
+            for (int i = 0; i < pairs.Count; i++)
+            {
+                if (i > 0) width += StatPairGap * scale;
+                width += Measure(valueFont, pairs[i].Number);
+                if (pairs[i].Unit.Length > 0) width += Measure(unitFont, pairs[i].Unit) + 3f;
+            }
             if (badge.Fraction.Length > 0) width += Measure(unitFont, badge.Fraction);
             if (badge.Tail.Length > 0) width += Measure(labelFont, badge.Tail);
 
@@ -1524,16 +1548,20 @@ public sealed partial class OgCardRenderer : IDisposable
                 cursor += Measure(labelFont, badge.Label) + 10f;
             }
 
-            paint.Color = AccentPink;
-            DrawText(canvas, number, cursor, baseline, SKTextAlign.Left, valueFont, paint);
-            cursor += Measure(valueFont, number);
-
-            if (unit.Length > 0)
+            for (int i = 0; i < pairs.Count; i++)
             {
-                paint.Color = Muted;
-                cursor += 3f;
-                DrawText(canvas, unit, cursor, baseline, SKTextAlign.Left, unitFont, paint);
-                cursor += Measure(unitFont, unit);
+                if (i > 0) cursor += StatPairGap * scale;
+                paint.Color = AccentPink;
+                DrawText(canvas, pairs[i].Number, cursor, baseline, SKTextAlign.Left, valueFont, paint);
+                cursor += Measure(valueFont, pairs[i].Number);
+
+                if (pairs[i].Unit.Length > 0)
+                {
+                    paint.Color = Muted;
+                    cursor += 3f;
+                    DrawText(canvas, pairs[i].Unit, cursor, baseline, SKTextAlign.Left, unitFont, paint);
+                    cursor += Measure(unitFont, pairs[i].Unit);
+                }
             }
 
             // 端数は数の一部なので色は数と同じまま、大きさだけ落として続ける。

@@ -190,8 +190,11 @@ public sealed class HomeGenerator
             // サイト名「プリキュアデータベース「precure-datastars」」が検索語を含むので、前置きは付けない
             // （PageTitle が空なら <title> は SiteBrandLabel だけで組まれる）。
             PageTitle = "",
-            // 説明文はタグライン（見出しの下の「プリキュアまるごとデータベース。」）そのもの。
-            MetaDescription = "プリキュアまるごとデータベース。",
+            // 説明文はタグライン（見出しの下の「プリキュアまるごとデータベース。」）に、収録の数を続けたもの。
+            // 数はトップの OGP カードの札と同じ数え方（話は放送済みの本線の TV の話、歌は録音の数、クリエイターは人物）で、ビルドのたびに出し直す。
+            // JSON-LD の WebSite の説明はタグラインのまま。
+            MetaDescription = $"プリキュアまるごとデータベース。TVシリーズ {dbStats.TvSeriesCount} 作 {dbStats.EpisodeCount} 話・映画 {dbStats.MovieSeriesCount} 作・"
+                + $"プリキュア {dbStats.PrecuresCount} 人・キャラクター {dbStats.CharactersCount} 人・歌 {dbStats.SongsCount} 曲・クリエイター {dbStats.PersonsCount} 人",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",
             JsonLd = jsonLd,
@@ -201,7 +204,7 @@ public sealed class HomeGenerator
             // ヘッダのワードマークと同じく、肩書き（「プリキュアデータベース」）を小さく前に添え、固有名詞（「precure-datastars」）を
             // 見出しにする。いずれもブランド書体の濃ピンク（.hero.hero-gradient と同値）。
             // 見出しのすぐ下に、タグライン「プリキュアまるごとデータベース。」をマティスえれがんとで小さく添える。
-            // 数はトップの統計タイルから、作品（TV・映画）とエピソードを 1 段目、プリキュア・キャラクター・歌を 2 段目、
+            // 数はトップの統計タイルから、作品（TV は作品の数と話の数を 1 つの札に）・映画を 1 段目、プリキュア・キャラクター・歌を 2 段目、
             // クリエイター（人物と企業・団体を分けて）を 3 段目に置く。
             // ホームには透かしを置かない（サイト名そのものが主役で、添える属性が無い）。
             OgCard = new OgCardSpec(Kicker: _ctx.Config.SiteNameJa, Title: _ctx.Config.SiteName)
@@ -211,9 +214,9 @@ public sealed class HomeGenerator
                 StatementFontFamily = "FOT-マティスえれがんと Pro EB",
                 Badges = new[]
                 {
-                    new OgCardBadge("TV", $"{dbStats.TvSeriesCount}作"),
+                    // TV シリーズの作品の数と話の数（放送済みの本線の TV の話）は 1 つの札にまとめる。
+                    new OgCardBadge("TV", $"{dbStats.TvSeriesCount}作 {dbStats.EpisodeCount}話"),
                     new OgCardBadge("映画", $"{dbStats.MovieSeriesCount}作"),
-                    new OgCardBadge("エピソード", $"{dbStats.EpisodeCount}話"),
                     new OgCardBadge("プリキュア", $"{dbStats.PrecuresCount}人") { NewLine = true },
                     new OgCardBadge("キャラクター", $"{dbStats.CharactersCount}人"),
                     // 表に出す歌の「曲」は録音（歌唱ごとのバージョン）の数。作詞・作曲・編曲の単位の曲の数は出さない。

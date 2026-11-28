@@ -1276,8 +1276,9 @@ public sealed class CreatorsGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = role.NameJa,
+            PageTitle = RoleListTitle(role.NameJa),
             MetaDescription = $"歴代プリキュアシリーズで「{role.NameJa}」を担当した方々（人物・企業・団体）",
+            JsonLd = RoleItemListJsonLd(role.NameJa, content.CountRows.Select(r => (r.EntityUrl, r.EntityName)), content.CountRows.Count),
             OgCard = BuildRoleOgCard(role, $"歴代プリキュアシリーズで「{role.NameJa}」を担当した方々（人物・企業・団体）", rowSet.TimelineEntities, alternateNames),
             Breadcrumbs = new[]
             {
@@ -1311,7 +1312,7 @@ public sealed class CreatorsGenerator
             content.ActiveTab = tab;
             _page.RenderAndWriteFile(tabUrl, "creators-role-detail.sbn", content, new LayoutModel
             {
-                PageTitle = $"{role.NameJa}（{label}）",
+                PageTitle = $"{RoleListTitle(role.NameJa)}（{label}）",
                 MetaDescription = layout.MetaDescription,
                 OgImage = layout.OgImage,
                 Breadcrumbs = layout.Breadcrumbs
@@ -1328,6 +1329,22 @@ public sealed class CreatorsGenerator
     {
         "KEY_ANIMATION", "BACKGROUND_ART", "IN_BETWEEN_ANIMATION"
     };
+
+    /// <summary>
+    /// 役職のページ（本編のスタッフ・歌・音楽）の題（<c>&lt;title&gt;</c>・og:title）。「歴代プリキュアの脚本一覧」の形で、
+    /// タブを別のページにした役職は後ろにタブの名前を括弧で添える。見出し（h1）・パンくず・OGP カードは役職名のまま。
+    /// </summary>
+    private static string RoleListTitle(string roleName) => $"歴代プリキュアの{roleName}一覧";
+
+    /// <summary>役職のページの ItemList に入れる人・団体の数の上限（行の多い役職で HTML を重くしないため。全体の件数は numberOfItems で出す）。</summary>
+    private const int RoleItemListMax = 50;
+
+    /// <summary>
+    /// 役職のページの ItemList の構造化データ。担当の多い順（担当回数順のタブの並び）に上から <see cref="RoleItemListMax"/> 件まで、
+    /// 人物・企業・団体のページの URL と名前を入れ、全体の件数を添える。
+    /// </summary>
+    private string RoleItemListJsonLd(string roleName, IEnumerable<(string Url, string Name)> countOrder, int total)
+        => ItemListJsonLd.Build(_ctx.Config.BaseUrl, RoleListTitle(roleName), countOrder.Take(RoleItemListMax), total);
 
     /// <summary>
     /// 系譜でまとめた役職の「役職名の変遷」。系譜の各表記（role_code）について、その表記でクレジットされた
@@ -1533,8 +1550,9 @@ public sealed class CreatorsGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = role.NameJa,
+            PageTitle = RoleListTitle(role.NameJa),
             MetaDescription = $"歴代プリキュアの歌で「{role.NameJa}」を担当した方々",
+            JsonLd = RoleItemListJsonLd(role.NameJa, content.CountRows.Select(r => (r.PersonUrl, r.PersonName)), content.CountRows.Count),
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 new[] { new OgCardBadge("人物", $"{rows.Count}人") },
@@ -2243,8 +2261,9 @@ public sealed class CreatorsGenerator
         int companies = rows.Count - persons;
         var layout = new LayoutModel
         {
-            PageTitle = role.NameJa,
+            PageTitle = RoleListTitle(role.NameJa),
             MetaDescription = $"歴代プリキュアの歌・劇伴・音盤で「{role.NameJa}」を担当した方々（人物・団体）",
+            JsonLd = RoleItemListJsonLd(role.NameJa, content.CountRows.Select(r => (r.Url, r.Name)), content.CountRows.Count),
             OgCard = BuildCreatorsOgCard(
                 role.NameJa,
                 BuildEntityBadges(persons, companies),

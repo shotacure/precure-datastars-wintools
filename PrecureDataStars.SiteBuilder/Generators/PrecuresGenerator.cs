@@ -159,6 +159,9 @@ public sealed class PrecuresGenerator
                 Badges = new[] { new OgCardBadge("プリキュア", $"{rows.Count}人") }
             },
             MetaDescription = $"歴代のレギュラープリキュア＋映画限定プリキュア {rows.Count} 名",
+            // 一覧の構造化データ（ItemList）：一覧の並び（登場順）に、キャラクターのページの URL と変身後の名前で。
+            JsonLd = ItemListJsonLd.Build(_ctx.Config.BaseUrl, "歴代プリキュアオールスターズ",
+                rows.Select(r => (PathUtil.CharacterUrl(r.CharacterId), string.IsNullOrEmpty(r.TransformName) ? r.PreTransformName : r.TransformName))),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

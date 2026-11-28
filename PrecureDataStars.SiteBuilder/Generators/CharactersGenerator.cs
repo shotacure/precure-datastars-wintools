@@ -459,6 +459,8 @@ public sealed class CharactersGenerator
             },
             // ページの冒頭文（characters-index.sbn の .lead）と同じ文。
             MetaDescription = $"プリキュア・妖精たち・敵・とりまく人々、歴代のキャラクター全 {characters.Count} 名",
+            // 一覧の構造化データ（ItemList）：一覧の並び（作品ごとの節の順）に、個別のページを持つキャラと「その他のキャラクター」のページ。
+            JsonLd = ItemListJsonLd.Build(_ctx.Config.BaseUrl, "歴代キャラクター", IndexItemListItems(sections)),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1291,6 +1293,25 @@ public sealed class CharactersGenerator
         if (!_singlePersonAliasIds.Contains(personAliasId) || !_personIdByAlias.TryGetValue(personAliasId, out var pid)) return html;
         string? current = _ctx.EntityUrls.PersonDisplayName(pid);
         return AliasNote.Differs(displayName, current) ? html + AliasNote.Html(current!) : html;
+    }
+
+    /// <summary>
+    /// キャラクター一覧の ItemList の項目。一覧の並び（作品ごとの節 → 種別ごとの欄 → その他のキャラクター → 最終話バトンタッチ・映画タイアップ → 放送前）で、
+    /// 個別のページを持つキャラ（キャラクターのページ）と「その他のキャラクター」のページを入れる。
+    /// 個別のページを持たないキャラ（その他のキャラクターのページの中の行）は入れない。同じキャラが 2 つの節に出ても 1 つにする（<see cref="ItemListJsonLd"/>）。
+    /// </summary>
+    private IEnumerable<(string Url, string Name)> IndexItemListItems(IEnumerable<CharacterSeriesSection> sections)
+    {
+        foreach (var s in sections)
+        {
+            IEnumerable<CharacterIndexRow> Linked(IEnumerable<CharacterIndexRow> rows)
+                => rows.Where(r => !r.NoLink && !_ctx.EntityUrls.IsGuestCharacter(r.CharacterId));
+            foreach (var kg in s.KindGroups)
+                foreach (var r in Linked(kg.Members)) yield return (PathUtil.CharacterUrl(r.CharacterId), r.Name);
+            if (s.GuestPageUrl != "") yield return (s.GuestPageUrl, $"『{s.SeriesTitle}』のその他のキャラクター");
+            foreach (var r in Linked(s.BatonMembers.Concat(s.TieInMembers).Concat(s.UnairedMembers)))
+                yield return (PathUtil.CharacterUrl(r.CharacterId), r.Name);
+        }
     }
 
     /// <summary>キャラクター一覧の 1 行に並ぶキャラの数（画面の幅によって変わるので、広い画面の列数に合わせている）。</summary>

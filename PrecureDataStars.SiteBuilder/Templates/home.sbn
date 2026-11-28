@@ -29,13 +29,13 @@
      劇伴は bgm_cues の行数（仮 M 番号も含む）。
      音楽商品は他のセル（曲・劇伴 等）と同じ「数値＋ラベル」スタイルを 2 ペア並べる構成で、
      点数（products = N 点）と枚数（discs = M 枚）を 1 つの <a> 内に併記する。
-     エピソードはサイト内に専用一覧ページ /episodes/ を用意してそこへリンクする。 ##}}
+     エピソードはサイト内に専用一覧ページ /episodes/ を用意してそこへリンクする（数は放送済みの本線の TV の話で、ラベルは「TVシリーズの話」）。 ##}}
 <section id="db-stats" class="home-section home-stats-compact" data-section-nav-label="データベース統計">
   <ul class="home-db-stats home-db-stats-compact">
     <li><a class="home-db-stats-link" href="/series/#tv-series"><span class="home-db-stats-value">{{ DbStats.TvSeriesCount }}</span><span class="home-db-stats-label">TVシリーズ</span></a></li>
     <li><a class="home-db-stats-link" href="/series/#movies"><span class="home-db-stats-value">{{ DbStats.MovieSeriesCount }}</span><span class="home-db-stats-label">映画</span></a></li>
     <li><a class="home-db-stats-link" href="/series/#otona"><span class="home-db-stats-value">{{ DbStats.SpinOffSeriesCount }}</span><span class="home-db-stats-label">スピンオフ</span></a></li>
-    <li><a class="home-db-stats-link" href="/episodes/"><span class="home-db-stats-value">{{ DbStats.EpisodeCount }}</span><span class="home-db-stats-label">エピソード</span></a></li>
+    <li><a class="home-db-stats-link" href="/episodes/"><span class="home-db-stats-value">{{ DbStats.EpisodeCount }}</span><span class="home-db-stats-label">TVシリーズの話</span></a></li>
     <li><a class="home-db-stats-link" href="/precures/"><span class="home-db-stats-value">{{ DbStats.PrecuresCount }}</span><span class="home-db-stats-label">プリキュア</span></a></li>
     <li><a class="home-db-stats-link" href="/characters/"><span class="home-db-stats-value">{{ DbStats.CharactersCount }}</span><span class="home-db-stats-label">キャラクター</span></a></li>
     <li><a class="home-db-stats-link" href="/songs/"><span class="home-db-stats-value">{{ DbStats.SongsCount }}</span><span class="home-db-stats-label">歌</span></a></li>

@@ -6,7 +6,8 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// 要約の欄（スタッフ欄・エピソード一覧・担当回数の欄・役職のページ・スタッフ一覧・声優一覧など）で、クレジットされた名義の後ろに
 /// 本名義（今の名乗り・表示名義）を小さく添える決まり。作品のページのメインスタッフ（<c>SeriesGenerator.CreditedAliasLabel</c>）と同じ：
 /// 名義と本名義が、空白（半角・全角）と中黒（・／･）の違いだけなら添えない。添える形は「名義 (本名義)」（<c>.staff-current-name</c>。
-/// 名義と括弧の間は改行しない空白にして、名義と小書きを途中で折らない）。当時のクレジットそのもの（OP・ED・楽曲）には使わない。
+/// 名義と小書きの間はふつうの空白。名義と小書きを合わせて欄の 1 行より長いときに、ここで折ってはみ出さないようにする。
+/// 名義と小書きのそれぞれは途中で折らない）。当時のクレジットそのもの（OP・ED・楽曲）には使わない。
 /// </summary>
 public static class AliasNote
 {
@@ -36,9 +37,9 @@ public static class AliasNote
     /// （エピソード詳細の meta description・OGP カード・構造化データ）に使う。
     /// </summary>
     public static string StripNotes(string html)
-        => System.Text.RegularExpressions.Regex.Replace(html, "<span class=\"staff-current-name\">[^<]*</span>", "");
+        => System.Text.RegularExpressions.Regex.Replace(html, " ?<span class=\"staff-current-name\">[^<]*</span>", "");
 
-    /// <summary>添える小書きの HTML（「 (本名義)」。名義との間は改行しない空白）。</summary>
+    /// <summary>添える小書きの HTML（「 (本名義)」。名義との間はふつうの空白で、欄の幅が足りないときだけここで折れる）。</summary>
     public static string Html(string current)
-        => $"<span class=\"staff-current-name\"> ({HtmlUtil.Escape(current)})</span>";
+        => $" <span class=\"staff-current-name\">({HtmlUtil.Escape(current)})</span>";
 }

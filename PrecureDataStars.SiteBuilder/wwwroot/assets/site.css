@@ -8874,7 +8874,8 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   color: var(--muted);
 }
 /* クレジットの名義が今の名乗り（本名義）と違うときに添える今の名乗り（「上野 ケン (玖遠 らぎ)」の括弧）。所属屋号（0.8em）ほどではなく少し小さく。
-   要約の欄のどこでも同じ形（AliasNote）。括弧の中で折らない（名義との間は改行しない空白）。 */
+   要約の欄のどこでも同じ形（AliasNote）。括弧の中で折らない。スタッフの欄（.staff-names）では名義との間をふつうの空白にして、
+   名義と括弧を合わせて欄の 1 行に収まらないときだけ、その間で折る（ほかの欄は改行しない空白）。 */
 .staff-current-name {
   font-size: 0.9em;
   white-space: nowrap;
@@ -11111,8 +11112,11 @@ a.rtl-tick:hover { color: var(--accent); text-decoration: none; }
   gap: 0 8px;
   line-height: 1.75;
 }
-/* 役職ごとのかたまり（札と名前）は途中で折らない。行に入りきらないときは、かたまりごと次の行へ回る。 */
+/* 役職ごとのかたまり（札と名前）は途中で折らない。行に入りきらないときは、かたまりごと次の行へ回る。
+   かたまりが 1 行の幅より長いとき（作画監督が何人もいる回など）だけ、名前の並びを「、」の後で折る
+   （名前の並びは札の右にそろい、1 人の名前は途中で折らない。上の .staff-names の決まり）。 */
 .home-section .episodes-index-list .staff-badge-group { white-space: nowrap; }
+.home-section .episodes-index-list .staff-badge-group > .staff-names { white-space: normal; }
 /* 作画監督の組の前で必ず行を替える：行いっぱいの幅を持つ空の要素を、作画監督より前・それ以外より後ろに置く。 */
 .home-section .episodes-index-list .ep-row .staff-badges-row::after {
   content: "";

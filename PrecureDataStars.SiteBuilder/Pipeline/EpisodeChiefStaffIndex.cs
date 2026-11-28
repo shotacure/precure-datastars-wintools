@@ -307,13 +307,26 @@ public sealed class EpisodeChiefStaffIndex
         return string.Join("|", parts);
     }
 
-    /// <summary>顔ぶれキーの表示用。名前は今の名乗り（表示名義）のまま、その回にクレジットされた名義を CreditedName に添える。</summary>
+    /// <summary>
+    /// 顔ぶれキーの表示用。<see cref="ChiefPerson.Name"/> は今の名乗り（表示名義）のまま、その回にクレジットされた名義を CreditedName に、
+    /// それが今の名乗りと違うとき（空白・中黒の違いだけは同じとみなす）の今の名乗りを CurrentNote に入れる
+    /// （作品のページのメインスタッフの「上野 ケン (玖遠 らぎ)」と同じ決まり）。
+    /// </summary>
     private ChiefPerson PersonIn(int episodeId, string key)
     {
         var person = _people.TryGetValue(key, out var p) ? p : new ChiefPerson(key, key, "");
-        return _creditedNames.TryGetValue((episodeId, key), out var name) && !string.IsNullOrEmpty(name)
-            ? person with { CreditedName = name }
-            : person;
+        if (!_creditedNames.TryGetValue((episodeId, key), out var name) || string.IsNullOrEmpty(name)) return person;
+        string? note = NameKeyIgnoringSeparators(name) == NameKeyIgnoringSeparators(person.Name) ? null : person.Name;
+        return person with { CreditedName = name, CurrentNote = note };
+    }
+
+    /// <summary>空白（半角・全角）と中黒（・／･）を除いた名前（表記の揺れだけの違いを同じとみなすため）。</summary>
+    private static string NameKeyIgnoringSeparators(string name)
+    {
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (var ch in name)
+            if (ch is not (' ' or '　' or '・' or '･')) sb.Append(ch);
+        return sb.ToString();
     }
 
     /// <summary>エントリ 1 件の、クレジットされた名義の表記（PERSON は名義の表記、TEXT は生テキスト）。取れなければ null。</summary>
@@ -323,7 +336,7 @@ public sealed class EpisodeChiefStaffIndex
         {
             case "PERSON":
                 if (entry.PersonAliasId is not int aliasId || !ctx.PersonAliasById.TryGetValue(aliasId, out var alias)) return null;
-                string name = alias.DisplayTextOverride ?? alias.Name ?? "";
+                string name = alias.GetDisplayName() ?? "";
                 return name.Length > 0 ? name : null;
             case "TEXT":
                 string? raw = entry.RawText?.Trim();
@@ -399,6 +412,6 @@ public sealed record ChiefComboMember(int ChiefRole, string RoleLabel, IReadOnly
 /// <summary>顔ぶれの 1 人。<see cref="Url"/> が空なら人物ページを持たない（名義のみ・テキストのみ）。</summary>
 /// <summary>
 /// チーフの顔ぶれの 1 人。<see cref="Name"/> は今の名乗り（表示名義）、<see cref="CreditedName"/> はその回にクレジットされた名義
-/// （回を決めて引いたときだけ入る。改名した方は当時の名前）。
+/// （回を決めて引いたときだけ入る。改名した方は当時の名前）、<see cref="CurrentNote"/> はクレジットの名義が今の名乗りと違うときの今の名乗り。
 /// </summary>
-public sealed record ChiefPerson(string Key, string Name, string Url, string? CreditedName = null);
+public sealed record ChiefPerson(string Key, string Name, string Url, string? CreditedName = null, string? CurrentNote = null);

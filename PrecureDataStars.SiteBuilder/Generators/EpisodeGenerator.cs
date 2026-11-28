@@ -1634,6 +1634,7 @@ public sealed class EpisodeGenerator
                 IsGapNotable = isGapNotable,
                 NamesHtml = ChiefPersonHtml(occurrence.Person),
                 MiniName = occurrence.Person.CreditedName ?? occurrence.Person.Name,
+                MiniCurrentNote = occurrence.Person.CurrentNote ?? "",
                 Beads = BuildComboBeads(occurrence.EpisodeIds, occurrence.Ordinal - 1),
                 IsDense = Math.Min(occurrence.Total, ComboBeadsMax) > ComboBeadsDense,
                 Prev = occurrence.PreviousEpisodeId is int prevId ? ComboNavOf(series, prevId) : null,
@@ -1679,17 +1680,18 @@ public sealed class EpisodeGenerator
 
     /// <summary>カードの顔ぶれの 1 人（人物ページがあればリンク）。</summary>
     /// <summary>
-    /// 担当回数のカード（役職ごと・組み合わせ）の名前を、その回にクレジットされた名義で出すか。false なら今の名乗り（表示名義）で出す。
-    /// 閉じた状態の一覧の名前は、これにかかわらずその回の名義で出す（スタッフ欄と同じ名前）。
+    /// 担当回数のカード（役職ごと・組み合わせ）の 1 人分。名前はその回にクレジットされた名義で、それが今の名乗りと違うときは
+    /// 後ろに今の名乗りを小さく添える（作品のページのメインスタッフと同じ「上野 ケン (玖遠 らぎ)」の形・.staff-current-name）。
+    /// 名義と添えた今の名乗りは途中で折らない 1 かたまり（.staff-member-group）にする。
     /// </summary>
-    private const bool ChiefCardsUseCreditedName = false;
-
     private static string ChiefPersonHtml(ChiefPerson p)
     {
-        string name = ChiefCardsUseCreditedName ? p.CreditedName ?? p.Name : p.Name;
-        return string.IsNullOrEmpty(p.Url)
-            ? $"<span class=\"staff-name\">{HtmlUtil.Escape(name)}</span>"
-            : $"<a class=\"staff-name\" href=\"{p.Url}\">{HtmlUtil.Escape(name)}</a>";
+        string name = HtmlUtil.Escape(p.CreditedName ?? p.Name);
+        string link = string.IsNullOrEmpty(p.Url)
+            ? $"<span class=\"staff-name\">{name}</span>"
+            : $"<a class=\"staff-name\" href=\"{p.Url}\">{name}</a>";
+        if (string.IsNullOrEmpty(p.CurrentNote)) return link;
+        return $"<span class=\"staff-member-group\">{link}<span class=\"staff-current-name\"> ({HtmlUtil.Escape(p.CurrentNote)})</span></span>";
     }
 
     /// <summary>チーフの区分 → 役職の札の色とリンク先に使う役職コード（スタッフ行の札と同じ）。</summary>
@@ -2235,8 +2237,10 @@ public sealed class EpisodeGenerator
     /// </summary>
     private sealed class StaffComboRow
     {
-        /// <summary>畳んだ一覧で札の後ろに出す名前（字だけ。役職ごと・人ごとの項目だけ。組み合わせの項目は空）。</summary>
+        /// <summary>畳んだ一覧で札の後ろに出す名前（字だけ。その回にクレジットされた名義。役職ごと・人ごとの項目だけ。組み合わせの項目は空）。</summary>
         public string MiniName { get; set; } = "";
+        /// <summary>畳んだ一覧の名前が今の名乗りと違うときに、後ろに小さく添える今の名乗り（同じなら空）。</summary>
+        public string MiniCurrentNote { get; set; } = "";
         /// <summary>カードの名前（組み合わせは「絵コンテと演出」など、役職ごとは「演出 志水 淳児」）。読み上げ用。</summary>
         public string Label { get; set; } = "";
         /// <summary>役職の札（組み合わせは組み合わせの役職の順、役職ごとは 1 つ）。</summary>

@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **デプロイ：順番待ちの一覧で、スタッフ一覧・声優一覧など /creators/ の下の一覧のページを「役職」の段に並べるようにした**（`IndexQueue`・`index-queue-add.ps1`）：今までは「そのほか」で、盤・曲より後ろだった。
 - **デプロイ：`index-queue-add.ps1` に、送った URL へ「送った」の印を付ける `-MarkSent`（日時は `-SentAt`）を足した**：一覧を手で書き換えると本番デプロイと書き合いになるため。
 - **デプロイ：本番に上げた後、更新日が進んだページがある回だけ、Search Console の API でサイトマップを送り直す**（`SearchConsoleSitemapService`〔新規〕・`BuildConfig.SearchConsoleKeyFile`・`SearchConsoleSite`〔新規〕・`deploy.ps1`）：送れなくてもデプロイは止めず、成功・失敗の 1 行をデプロイの記録に写す。
 - **デプロイ：検索エンジンへ手で送る URL の順番待ちの一覧（`index-queue.json`）を、本番に上げ終えたデプロイのたびに足す**（`IndexQueue`〔新規〕・`BuildConfig.IndexQueueDirectory`〔新規〕・`scripts/index-queue-add.ps1`〔新規〕）：新しく出た URL と、段階（サブタイトル・仮のクレジット・放送後のクレジット）の上がった各話のページを、種類の段ごとに並べる。ほかの手順からは `index-queue-add.ps1` で同じ一覧に足す。

@@ -175,7 +175,7 @@ public static class IndexQueue
 
     /// <summary>
     /// URL のパスから、並びの段と種類を決める（<c>scripts/index-queue-add.ps1</c> と同じ表）。
-    /// 0＝コラム・ニュース、1＝シリーズ、2＝エピソード、3＝人物・団体・キャラ、4＝役職、5＝盤・曲、6＝そのほか。
+    /// 0＝コラム・ニュース、1＝シリーズ、2＝エピソード、3＝人物・団体・キャラ、4＝役職と /creators/ の下の一覧、5＝盤・曲、6＝そのほか。
     /// </summary>
     public static (int Tier, string Kind) Classify(string path)
     {
@@ -187,6 +187,8 @@ public static class IndexQueue
         if (path.StartsWith("/units/", StringComparison.Ordinal)) return (3, "ユニット");
         if (path.StartsWith("/characters/", StringComparison.Ordinal)) return (3, "キャラ");
         if (path.StartsWith("/creators/roles/", StringComparison.Ordinal)) return (4, "役職");
+        // スタッフ一覧・声優一覧など、/creators/ の下のほかの一覧のページも役職と同じ段に置く。
+        if (path.StartsWith("/creators/", StringComparison.Ordinal)) return (4, "一覧");
         if (path.StartsWith("/products/", StringComparison.Ordinal)) return (5, "盤");
         if (path.StartsWith("/songs/", StringComparison.Ordinal)) return (5, "曲");
         return (6, "そのほか");

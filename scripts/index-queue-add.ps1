@@ -75,6 +75,8 @@ function Get-QueueClass([string]$absoluteUrl) {
     if ($p.StartsWith('/units/')) { return @{ Tier = 3; Kind = 'ユニット' } }
     if ($p.StartsWith('/characters/')) { return @{ Tier = 3; Kind = 'キャラ' } }
     if ($p.StartsWith('/creators/roles/')) { return @{ Tier = 4; Kind = '役職' } }
+    # スタッフ一覧・声優一覧など、/creators/ の下のほかの一覧のページも役職と同じ段に置く。
+    if ($p.StartsWith('/creators/')) { return @{ Tier = 4; Kind = '一覧' } }
     if ($p.StartsWith('/products/')) { return @{ Tier = 5; Kind = '盤' } }
     if ($p.StartsWith('/songs/')) { return @{ Tier = 5; Kind = '曲' } }
     return @{ Tier = 6; Kind = 'そのほか' }

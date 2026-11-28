@@ -424,7 +424,7 @@ public sealed class RecordsGenerator
             $"プリキュア TV シリーズ各話の{metric.Label}の分布。TOP 100 の話を濃い色で示す");
         var content = StatsRankingView.Build(_ctx, rows, coverage, metric.Label,
             chartSvg: chart,
-            chartHeading: $"全 {all.Count:N0} 話の分布",
+            chartHeading: $"{all.Count:N0} 話の分布",
             chartNote: $"{metric.Label}ごとの話数です。平均は {(all.Count > 0 ? all.Average(x => (double)x.Value) : 0):0.0}{metric.Unit}。濃い色が TOP 100 の話です。",
             title: title,
             lead: $"TV シリーズで{metric.Label}が{(most ? "多い" : "少ない")}回の上位 100 件",

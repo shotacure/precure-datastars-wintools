@@ -1094,7 +1094,7 @@ public sealed class SeriesGenerator
                 }
             },
             // ページの冒頭文（series-index.sbn の .lead）と同じ文。
-            MetaDescription = $"初代から最新作まで、TV シリーズ・映画・スピンオフ 全 {_ctx.Series.Count} 作品"
+            MetaDescription = $"初代から最新作まで、TV シリーズ・映画・スピンオフ {_ctx.Series.Count} 作品"
                 + (movieShortCount > 0 ? $"（同時上映の短編 {movieShortCount} 本を含む）" : ""),
             // 一覧の構造化データ（ItemList）：全作品を放送開始・公開の順に、作品のページの URL と正式タイトルで。
             JsonLd = ItemListJsonLd.Build(_ctx.Config.BaseUrl, "歴代プリキュアシリーズ",

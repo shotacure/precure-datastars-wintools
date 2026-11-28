@@ -276,7 +276,7 @@ public sealed class SongsGenerator
             },
             // ページの冒頭文（songs-index.sbn の .lead）と同じ文。
             // 「全 N 曲」は録音（歌唱ごとのバージョン）の数で数える。このサイトの「曲」（作詞・作曲・編曲の単位）とは別で、一般に「歌」と呼ばれる数。
-            MetaDescription = $"主題歌・挿入歌・キャラクターソング 全 {allRows.Count} 曲",
+            MetaDescription = $"主題歌・挿入歌・キャラクターソング {allRows.Count} 曲",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

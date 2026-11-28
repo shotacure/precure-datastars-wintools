@@ -296,7 +296,7 @@ public sealed class ProductsGenerator
                 Badges = BuildIndexOgBadges(products.Count, discsByProduct.Values.SelectMany(d => d).ToList())
             },
             // ページの冒頭文（products-index.sbn の .lead）と同じ文。
-            MetaDescription = $"歴代プリキュアの音楽商品（CD・配信）全 {products.Count} 点",
+            MetaDescription = $"歴代プリキュアの音楽商品（CD・配信）{products.Count} 点",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

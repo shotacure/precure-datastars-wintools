@@ -127,7 +127,7 @@ public sealed class BooksGenerator
                 Badges = new[] { new OgCardBadge("書籍", $"{rows.Count}件") }
             },
             // ページの冒頭文（books-index.sbn の .lead）と同じ文。
-            MetaDescription = $"コミック版からファンブックまで、プリキュアの書籍全 {rows.Count} 件",
+            MetaDescription = $"コミック版からファンブックまで、プリキュアの書籍 {rows.Count} 件",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

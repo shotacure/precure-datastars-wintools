@@ -142,7 +142,7 @@ public sealed class EpisodePartStatsGenerator
             $"プリキュア TV シリーズ全話の{partLabel}の尺の分布。TOP 100 の話を濃い色で示す");
         return StatsRankingView.Build(_ctx, rows, _coverageLabel, partLabel,
             chartSvg: chart,
-            chartHeading: $"全 {all.Count:N0} 話の分布",
+            chartHeading: $"{all.Count:N0} 話の分布",
             chartNote: $"{partLabel}の尺ごとの話数です。平均は {FormatMmSs(mean)}。濃い色が TOP 100 の話です。",
             bandHighlightPartType: partType, hasBand: true);
     }
@@ -214,7 +214,7 @@ public sealed class EpisodePartStatsGenerator
             tickFormat: FormatAbsoluteHourMinute, clockTime: true);
         var content = StatsRankingView.Build(_ctx, view, _coverageLabel, "中 CM 入り",
             chartSvg: chart,
-            chartHeading: $"全 {all.Count:N0} 話の分布",
+            chartHeading: $"{all.Count:N0} 話の分布",
             chartNote: $"中 CM に入った時刻ごとの話数です。平均は {FormatAbsoluteTime(mean)}。濃い色が TOP 100 の話です。",
             bandHighlightPartType: "CM2", hasBand: true);
         var layout = MakeLayout($"中 CM 入り {label} TOP 100", $"中 CM 入り {label}");

@@ -458,7 +458,7 @@ public sealed class CharactersGenerator
                 }
             },
             // ページの冒頭文（characters-index.sbn の .lead）と同じ文。
-            MetaDescription = $"プリキュア・妖精たち・敵・とりまく人々、歴代のキャラクター全 {characters.Count} 名",
+            MetaDescription = $"プリキュア・妖精たち・敵・とりまく人々、歴代のキャラクター {characters.Count} 名",
             // 一覧の構造化データ（ItemList）：一覧の並び（作品ごとの節の順）に、個別のページを持つキャラと「その他のキャラクター」のページ。
             JsonLd = ItemListJsonLd.Build(_ctx.Config.BaseUrl, "歴代キャラクター", IndexItemListItems(sections)),
             Breadcrumbs = new[]

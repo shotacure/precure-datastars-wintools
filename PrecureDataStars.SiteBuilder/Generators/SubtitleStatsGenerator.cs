@@ -225,7 +225,7 @@ public sealed class SubtitleStatsGenerator
             "プリキュア TV シリーズ全話のサブタイトルの文字数の分布。TOP 100 の話を濃い色で示す");
         var view = StatsRankingView.Build(_ctx, rows, _coverageLabel, "文字数",
             chartSvg: chart,
-            chartHeading: $"全 {all.Count:N0} 話の分布",
+            chartHeading: $"{all.Count:N0} 話の分布",
             chartNote: $"サブタイトルの文字数ごとの話数です。平均は {(all.Count > 0 ? all.Average(r => (double)r.Value) : 0):0.0} 文字。濃い色が TOP 100 の話です。",
             subtitleStats: true);
         var layout = MakeLayout($"エピソード単位 文字数 {label} TOP 100", $"文字数 {label}");
@@ -259,7 +259,7 @@ public sealed class SubtitleStatsGenerator
             $"プリキュア TV シリーズ全話のサブタイトルの{valueName}の分布。TOP 100 の話を濃い色で示す");
         return StatsRankingView.Build(_ctx, rows, _coverageLabel, valueName,
             chartSvg: chart,
-            chartHeading: $"全 {all.Count:N0} 話の分布",
+            chartHeading: $"{all.Count:N0} 話の分布",
             chartNote: $"{valueName}を 5% きざみで数えた話数です。濃い色が TOP 100 の話です。",
             subtitleStats: true);
     }

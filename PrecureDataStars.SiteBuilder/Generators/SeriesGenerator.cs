@@ -1872,6 +1872,25 @@ public sealed class SeriesGenerator
     }
 
     /// <summary>メインスタッフセクション群を構築する。 TV 系（credit_attach_to='EPISODE'）はエピソードスコープ Involvement から、 映画系（credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）は SERIES スコープ Involvement から集計する。役職・並び・バッジの色は作品の行（<see cref="KeyStaffRoleSpecsFor"/>）で、行の無い作品は空。</summary>
+    /// <summary>
+    /// 作品の回のうち OP のクレジット（<see cref="BuildContext.CreditsByEpisode"/> の CreditKind="OP"）が無い回について、
+    /// 引き継ぎ元の回（それより前で OP のクレジットがある最後の回）の話数を返す。前に OP のある回が無い回は載せない。
+    /// メインスタッフの範囲の判断だけで使う。
+    /// </summary>
+    private Dictionary<int, int> OpInheritanceFor(IReadOnlyList<Episode> eps)
+    {
+        var map = new Dictionary<int, int>();
+        int? lastOp = null;
+        foreach (var ep in eps.OrderBy(e => e.SeriesEpNo))
+        {
+            bool hasOp = _ctx.CreditsByEpisode.TryGetValue(ep.EpisodeId, out var credits)
+                         && credits.Any(c => string.Equals(c.CreditKind, "OP", StringComparison.Ordinal));
+            if (hasOp) lastOp = ep.SeriesEpNo;
+            else if (lastOp is int from && from != ep.SeriesEpNo) map[ep.SeriesEpNo] = from;
+        }
+        return map;
+    }
+
     private async Task<IReadOnlyList<KeyStaffSection>> BuildMainStaffSectionsAsync(
         Series series, IReadOnlyList<Episode> eps, CancellationToken ct)
     {
@@ -1916,6 +1935,10 @@ public sealed class SeriesGenerator
         var epNoByEpId = isTvLike
             ? eps.ToDictionary(e => e.EpisodeId, e => e.SeriesEpNo)
             : new Dictionary<int, int>();
+        // 範囲（全話か、どの回か）の判断では、OP のクレジットが無い回は前の回の OP が続いているとみなす
+        // （放送中の作品の、クレジットをまだ入れていない先の回や、ED だけの仮クレジットの回で、全員に範囲が付かないように）。
+        // 回の話数 → 引き継ぎ元の回の話数（それより前で OP のクレジットがある最後の回）。前に OP のある回が無ければ引き継がない。
+        var opInheritFrom = isTvLike ? OpInheritanceFor(eps) : new Dictionary<int, int>();
 
         var sections = new List<KeyStaffSection>();
 
@@ -1930,6 +1953,8 @@ public sealed class SeriesGenerator
                 if (!_aliasIdsByPersonIdCache.TryGetValue(p.PersonId, out var aliasIds)) continue;
 
                 var episodeNos = new HashSet<int>();
+                // この役職で OP にクレジットされた回（OP の無い回へ引き継ぐ元）。
+                var opEpisodeNos = new HashSet<int>();
                 // 所属屋号 alias_id の出現回数辞書（最頻 ID を「(屋号)」併記の表示元として採用）。
                 var affiliationCounts = new Dictionary<int, int>();
                 // クレジット順ソートキーの lex min。
@@ -1973,6 +1998,7 @@ public sealed class SeriesGenerator
                             && epNoByEpId.TryGetValue(eid, out var epNo))
                         {
                             episodeNos.Add(epNo);
+                            if (string.Equals(inv.CreditKind, "OP", StringComparison.Ordinal)) opEpisodeNos.Add(epNo);
                             NoteCreditedAlias(creditedAliases, aid, (epNo, inv.CreditSeq, inv.CreditSubSeq));
                             // (EpisodeNo, CreditSeq, CreditSubSeq) の辞書順比較で lex min を更新。
                             if (epNo < sortEpNo
@@ -1998,13 +2024,21 @@ public sealed class SeriesGenerator
                 // 該当者除外判定：TV は episode 関与 0 件、映画は SERIES 関与 0 件で除外。
                 if (isMovieKind ? !foundMovieInvolvement : episodeNos.Count == 0) continue;
 
+                // OP のクレジットが無い回は、引き継ぎ元の回の OP にこの人がいれば、出た回に数える（範囲の判断の中だけ）。
+                var rangeEpisodeNos = episodeNos;
+                if (opInheritFrom.Count > 0 && opEpisodeNos.Count > 0)
+                {
+                    rangeEpisodeNos = new HashSet<int>(episodeNos);
+                    foreach (var (target, source) in opInheritFrom)
+                        if (opEpisodeNos.Contains(source)) rangeEpisodeNos.Add(target);
+                }
                 // 映画は話数集合を持たないので RangeLabel は常に空（テンプレ側で「(範囲)」非表示）。
                 bool isAllEpisodes = isTvLike
                     && allEpisodeNos.Count > 0
-                    && episodeNos.SetEquals(allEpisodeNos);
+                    && rangeEpisodeNos.SetEquals(allEpisodeNos);
                 string rangeLabel = isMovieKind || isAllEpisodes
                     ? string.Empty
-                    : EpisodeRangeCompressor.Compress(episodeNos);
+                    : EpisodeRangeCompressor.Compress(rangeEpisodeNos);
 
                 // 最頻所属屋号（同点は alias_id 昇順でタイブレーク）。
                 // 一覧サブ行の KeyStaffMember.AffiliationLabel と同じ規律で揃える。
